@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include "materialifevaluatortest.h"
 #include "materialsourcetest.h"
+#include "materialparsertest.h"
 #include "tokensplittertest.h"
 #include "tokenstreamtest.h"
 
@@ -30,6 +31,11 @@ int main( int argc, char **argv ) {
 		result |= QTest::qExec( &materialIfEvaluatorTest, argc, argv );
 	}
 
+	{
+		MaterialParserTest materialParserTest;
+		result |= QTest::qExec( &materialParserTest, argc, argv );
+	}
+
 	return result;
 }
 
@@ -38,6 +44,15 @@ void Com_Printf( const char *fmt, ... ) {
 	va_start( va, fmt );
 	vprintf( fmt, va );
 	va_end( va );
+}
+
+void Sys_Error( const char *fmt, ... ) {
+	va_list va;
+	va_start( va, fmt );
+	vprintf( fmt, va );
+	va_end( va );
+	fflush( stdout );
+	abort();
 }
 
 int Q_vsnprintfz( char *buffer, size_t size, const char *fmt, va_list va ) {

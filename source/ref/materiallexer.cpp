@@ -48,6 +48,7 @@ public:
 		add( "Square"_asView, Func::Square );
 		add( "Sawtooth"_asView, Func::Sawtooth );
 		add( "InvSawtooth"_asView, Func::InvSawtooth );
+		add( "InverseSawtooth"_asView, Func::InvSawtooth );
 		add( "Noize"_asView, Func::Noize );
 		add( "DistanceRamp"_asView, Func::DistanceRamp );
 	}
@@ -202,9 +203,11 @@ public:
 	RgbGenMatcher() noexcept {
 		add( "Identity"_asView, RgbGen::Identity );
 		add( "IdentityLighting"_asView, RgbGen::Identity );
+		add( "LightingIdentity"_asView, RgbGen::Identity );
 		add( "Wave"_asView, RgbGen::Wave );
 		add( "ColorWave"_asView, RgbGen::ColorWave );
 		add( "Custom"_asView, RgbGen::Custom );
+		add( "CustomWave"_asView, RgbGen::Custom );
 		add( "TeamColor"_asView, RgbGen::Custom );
 		add( "CustomColorWave"_asView, RgbGen::Custom );
 		add( "TeamColorWave"_asView, RgbGen::CustomWave );
@@ -437,6 +440,8 @@ void MaterialLexer::parseVectorOrFill( float *dest, size_t numElems, float defau
 	if( auto maybeFirstToken = getNextTokenInLine() ) {
 		if( ( *maybeFirstToken ).equals( wsw::StringView( "(" ) ) ) {
 			hadParenAtStart = true;
+		} else {
+			unGetToken();
 		}
 	}
 

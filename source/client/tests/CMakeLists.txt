@@ -13,11 +13,15 @@ add_executable(
         clienttest
         "main.cpp"
         "materialifevaluatortest.cpp"
+        "materialparsertest.cpp"
         "materialsourcetest.cpp"
         "tokensplittertest.cpp"
         "tokenstreamtest.cpp"
+        "../../gameshared/q_math.cpp"
+        "../../qcommon/hash.cpp"
         "../../ref/materialifevaluator.cpp"
         "../../ref/materiallexer.cpp"
+        "../../ref/materialparser.cpp"
         "../../ref/materialsource.cpp")
 
 add_test(NAME clienttest COMMAND clienttest)

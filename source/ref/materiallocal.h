@@ -668,6 +668,8 @@ struct shaderfunc_s;
 struct image_s;
 
 class MaterialParser {
+	friend class ParserTestWrapper;
+
 	MaterialCache *const materialCache;
 	MaterialLexer defaultLexer;
 	MaterialLexer *lexer;
@@ -704,6 +706,10 @@ class MaterialParser {
 	bool noFiltering { false };
 
 	bool hasLightmapPass { false };
+
+	bool allowUnknownEntries { true };
+
+	bool m_strict { false };
 
 	[[nodiscard]]
 	auto currPass() -> shaderpass_t * {

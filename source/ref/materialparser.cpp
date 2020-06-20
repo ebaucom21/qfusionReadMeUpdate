@@ -73,7 +73,9 @@ auto MaterialParser::exec() -> shader_t * {
 		if( !token.equals( wsw::StringView( "{" ) ) ) {
 			lexer->unGetToken();
 			if( !parseKey() ) {
-				Com_Printf( "Failed to parse a key\n" );
+				wsw::String tokenString( token.data(), token.size() );
+				assert( name.isZeroTerminated() );
+				Com_Printf( S_COLOR_YELLOW "Failed to parse a key `%s` in %s\n", tokenString.data(), name.data() );
 				return nullptr;
 			}
 
@@ -91,7 +93,7 @@ auto MaterialParser::exec() -> shader_t * {
 		memset( newPass, 0, sizeof( shaderpass_t ) );
 
 		if( !parsePass() ) {
-			Com_Printf( S_COLOR_YELLOW "Failed to parse a pass\n" );
+			Com_Printf( S_COLOR_YELLOW "Failed to parse a pass in %s\n", name.data() );
 			return nullptr;
 		}
 
@@ -152,7 +154,8 @@ bool MaterialParser::parsePass() {
 		}
 
 		if( !parsePassKey() ) {
-			Com_Printf( "Failed to parse a key\n" );
+			wsw::String s( token.data(), token.size() );
+			Com_Printf( "Failed to parse a key (len=%d) %s in %s\n", (int)token.size(), s.data(), name.data() );
 			return false;
 		}
 
@@ -164,7 +167,7 @@ bool MaterialParser::parsePass() {
 bool MaterialParser::parsePassKey() {
 	std::optional<PassKey> maybeKey = lexer->getPassKey();
 	if( !maybeKey ) {
-		return true;
+		return allowUnknownEntries;
 	}
 
 	switch( *maybeKey ) {
@@ -214,7 +217,7 @@ bool MaterialParser::parsePassKey() {
 bool MaterialParser::parseKey() {
 	std::optional<MaterialKey> maybeKey = lexer->getMaterialKey();
 	if( !maybeKey ) {
-		return true;
+		return allowUnknownEntries;
 	}
 
 	switch( *maybeKey ) {
@@ -369,21 +372,17 @@ bool MaterialParser::parseBlendFunc() {
 		return true;
 	}
 
-	// We have to preserve the former behaviour.
-	// Don't interrupt in case of failure, skip a token instead and use a default value
 	std::optional<SrcBlend> maybeSrcBlend = lexer->getSrcBlend();
-	if( !maybeSrcBlend ) {
-		(void)lexer->getNextTokenInLine();
+	if( !maybeSrcBlend && m_strict ) {
+		return false;
 	}
 
 	std::optional<DstBlend> maybeDstBlend = lexer->getDstBlend();
-	if( !maybeDstBlend ) {
-		(void)lexer->getNextTokenInLine();
+	if( !maybeDstBlend && m_strict ) {
+		return false;
 	}
 
-	pass->flags |= (int)maybeSrcBlend.value_or( SrcBlend::One );
-	pass->flags |= (int)maybeDstBlend.value_or( DstBlend::One );
-
+	pass->flags |= ( (int)maybeSrcBlend.value_or( SrcBlend::One ) | (int)maybeDstBlend.value_or( DstBlend::One ) );
 	return true;
 }
 
@@ -394,7 +393,7 @@ bool MaterialParser::parseDepthFunc() {
 	}
 
 	auto *const pass = currPass();
-	pass->flags &= ~(GLSTATE_DEPTHFUNC_EQ|GLSTATE_DEPTHFUNC_GT);
+	pass->flags &= ~( GLSTATE_DEPTHFUNC_EQ|GLSTATE_DEPTHFUNC_GT );
 	if( *maybeFunc == DepthFunc::EQ ) {
 		pass->flags |= GLSTATE_DEPTHFUNC_EQ;
 	} else if( *maybeFunc == DepthFunc::GT ) {
@@ -654,7 +653,7 @@ bool MaterialParser::parseMaterial() {
 
 	// I assume materials are only applied to lightmapped surfaces
 
-	for(;;) {
+	for(;; ) {
 		const auto maybeToken = lexer->getNextTokenInLine();
 		if( !maybeToken ) {
 			break;
@@ -686,6 +685,7 @@ bool MaterialParser::parseMaterial() {
 				} else {
 					pass->images[i] = rsh.whiteTexture;
 				}
+				break;
 			}
 		}
 	}
@@ -1181,15 +1181,12 @@ bool MaterialParser::parseForceWorldOutlines() {
 
 bool MaterialParser::parseFunc( shaderfunc_t *func ) {
 	if( auto maybeFunc = lexer->getFunc() ) {
+		func->type = (unsigned)*maybeFunc;
 		lexer->getVectorOrFill<4>( func->args, 0.0f );
 		return true;
 	}
 	return false;
 }
-
-
-
-
 
 bool MaterialParser::parseIf() {
 	if( auto maybeCondition = parseCondition() ) {
