@@ -887,6 +887,12 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	trap_ConfigString( CS_SCOREBOARD_SCHEMA, "" );
 	trap_ConfigString( CS_MATCHNAME, "" );
 	trap_ConfigString( CS_MATCHSCORE, "" );
+	trap_ConfigString( CS_GAMETYPE_OPTIONS_TITLE, "" );
+
+	// reset gametype options
+	for( i = 0; i < MAX_GAMETYPE_OPTIONS; i++ ) {
+		trap_ConfigString( CS_GAMETYPE_OPTIONS + i, "" );
+	}
 
 	// reset map messages
 	for( i = 0; i < MAX_HELPMESSAGES; i++ ) {

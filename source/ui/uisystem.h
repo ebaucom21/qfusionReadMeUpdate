@@ -75,6 +75,8 @@ public:
 								  	 const std::pair<wsw::StringView, int> *actionsBegin,
 								  	 const std::pair<wsw::StringView, int> *actionsEnd ) = 0;
 
+	virtual void handleOptionsStatusCommand( const wsw::StringView &status ) = 0;
+
 	[[nodiscard]]
 	virtual bool isShown() const = 0;
 };

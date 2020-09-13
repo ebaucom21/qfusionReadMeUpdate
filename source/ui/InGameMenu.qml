@@ -12,6 +12,9 @@ Rectangle {
 
     readonly property real heightFrac: (Math.min(1080, rootItem.height - 720)) / (1080 - 720)
 
+    // Reserve some space for a slight default expansion of an active button
+    readonly property real tabButtonWidth: (tabBar.width - 8) / (gametypeOptionsModel.available ? 4 : 3)
+
     Rectangle {
         width: parent.width
         height: tabBar.implicitHeight
@@ -32,16 +35,25 @@ Rectangle {
             }
 
             TabButton {
+                width: tabButtonWidth
                 text: "General"
                 readonly property var component: generalComponent
             }
             TabButton {
+                width: tabButtonWidth
                 text: "Chat"
                 readonly property var component: chatComponent
             }
             TabButton {
+                width: tabButtonWidth
                 text: "Callvotes"
                 readonly property var component: callvotesComponent
+            }
+            TabButton {
+                visible: gametypeOptionsModel.available
+                width: visible ? tabButtonWidth : 0
+                text: gametypeOptionsModel.tabTitle
+                readonly property var component: gametypeOptionsComponent
             }
 
             onCurrentItemChanged: stackView.replace(currentItem.component)
@@ -83,6 +95,20 @@ Rectangle {
     Component {
         id: callvotesComponent
         InGameCallvotesPage {}
+    }
+
+    Component {
+        id: gametypeOptionsComponent
+        InGameGametypeOptionsPage {}
+    }
+
+    Connections {
+        target: gametypeOptionsModel
+        onAvailableChanged: {
+            if (!available) {
+                stackView.replace(generalComponent)
+            }
+        }
     }
 
     onVisibleChanged: {

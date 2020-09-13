@@ -29,6 +29,7 @@
         <file>InGameCallvoteScalarSelector.qml</file>
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
+        <file>InGameGametypeOptionsPage.qml</file>
         <file>InGameGeneralPage.qml</file>
         <file>InGameMenu.qml</file>
         <file>InGameButton.qml</file>
@@ -57,6 +58,7 @@
         <file>ScoreboardSpecsPane.qml</file>
         <file>ScoreboardTable.qml</file>
         <file>ScoreboardTeamPane.qml</file>
+        <file>SelectableGametypeOption.qml</file>
         <file>SelectableLabel.qml</file>
         <file>ServerBrowserCard.qml</file>
         <file>ServerBrowserPlayersList.qml</file>

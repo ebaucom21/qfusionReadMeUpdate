@@ -251,10 +251,7 @@ auto CallvotesModelProxy::parseAndAddOptions( const wsw::StringView &encodedOpti
 }
 
 void CallvotesModelProxy::handleConfigString( unsigned configStringNum, const wsw::StringView &string ) {
-	// Should not happen
-	if( configStringNum < CS_CALLVOTEINFOS || configStringNum >= CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS ) {
-		return;
-	}
+	assert( configStringNum - CS_CALLVOTEINFOS < MAX_CALLVOTEINFOS );
 
 	if( configStringNum % 4 != wsw::ConfigStringStorage::kCallvoteFieldStatus ) {
 		return;

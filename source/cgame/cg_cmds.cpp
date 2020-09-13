@@ -778,6 +778,12 @@ static void CG_SC_ActionRequest() {
 	}
 }
 
+static void CG_SC_OptionsStatus() {
+	if( Cmd_Argc() == 2 ) {
+		wsw::ui::UISystem::instance()->handleOptionsStatusCommand( wsw::StringView( Cmd_Argv( 1 ) ) );
+	}
+}
+
 static void CG_SC_PlaySound() {
 	if( Cmd_Argc() < 2 ) {
 		return;
@@ -815,6 +821,7 @@ static const svcmd_t cg_svcmds[] =
 	{ "aw", CG_SC_AddAward },
 	{ "arq", CG_SC_ActionRequest },
 	{ "ply", CG_SC_PlaySound },
+	{ "optionsstatus", CG_SC_OptionsStatus },
 
 	{ NULL }
 };

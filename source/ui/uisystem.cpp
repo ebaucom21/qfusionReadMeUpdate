@@ -8,6 +8,7 @@
 #include "callvotesmodel.h"
 #include "chatmodel.h"
 #include "demos.h"
+#include "gametypeoptionsmodel.h"
 #include "gametypesmodel.h"
 #include "nativelydrawnitems.h"
 #include "playersmodel.h"
@@ -98,6 +99,8 @@ public:
 						  	 const wsw::StringView &title, const wsw::StringView &actionDesc,
 						  	 const std::pair<wsw::StringView, int> *actionsBegin,
 						  	 const std::pair<wsw::StringView, int> *actionsEnd );
+
+	void handleOptionsStatusCommand( const wsw::StringView &status );
 
 	[[nodiscard]]
 	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
@@ -238,6 +241,8 @@ private:
 	DemosResolver m_demosResolver;
 	DemosModel m_demosModel { &m_demosResolver };
 	DemoPlayer m_demoPlayer { this };
+
+	GametypeOptionsModel m_gametypeOptionsModel;
 
 	PlayersModel m_playersModel;
 
@@ -552,6 +557,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	qmlRegisterUncreatableType<ServerListModel>( "net.warsow", 2, 6, "ServerListModel", reason );
 	qmlRegisterUncreatableType<DemosResolver>( "net.warsow", 2, 6, "DemosResolver", reason );
 	qmlRegisterUncreatableType<DemoPlayer>( "net.warsow", 2, 6, "DemoPlayer", reason );
+	qmlRegisterUncreatableType<GametypeOptionsModel>( "net.warsow", 2, 6, "GametypeOptionsModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
 
@@ -580,6 +586,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "demoPlayer", &m_demoPlayer );
 	context->setContextProperty( "playersModel", &m_playersModel );
 	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
+	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -851,6 +858,7 @@ void QtUISystem::checkPropertyChanges() {
 			}
 			m_callvotesModel.reload();
 			m_scoreboardModel.reload();
+			m_gametypeOptionsModel.reload();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
 			setActiveMenuMask( ConnectionScreen, 0 );
 		}
@@ -1463,6 +1471,10 @@ void QtUISystem::touchActionRequest( const wsw::StringView &tag, unsigned int ti
 									 const std::pair<wsw::StringView, int> *actionsBegin,
 									 const std::pair<wsw::StringView, int> *actionsEnd ) {
 	m_actionRequestsModel.touch( tag, timeout, title, actionDesc, actionsBegin, actionsEnd );
+}
+
+void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
+	m_gametypeOptionsModel.handleOptionsStatusCommand( status );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {
