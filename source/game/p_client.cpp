@@ -762,9 +762,6 @@ void ClientBegin( edict_t *ent ) {
 	client->level.respawnCount = 0; // clear respawncount
 	client->connecting = false;
 
-	// schedule the next scoreboard update
-	client->level.scoreboard_time = game.realtime + scoreboardInterval - ( game.realtime % scoreboardInterval );
-
 	G_ClientEndSnapFrame( ent ); // make sure all view stuff is valid
 
 	// let the gametype scripts now this client just entered the level

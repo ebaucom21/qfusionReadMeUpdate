@@ -40,7 +40,8 @@ void SNAP_WriteFrameSnapToClient( const struct ginfo_s *gi, struct client_s *cli
 
 void SNAP_BuildClientFrameSnap( struct cmodel_state_s *cms, struct ginfo_s *gi, int64_t frameNum, int64_t timeStamp,
 								struct fatvis_s *fatvis, struct client_s *client,
-								game_state_t *gameState, struct client_entities_s *client_entities, int snapHintFlags );
+								const game_state_t *gameState, const ReplicatedScoreboardData *scoreboardData,
+								struct client_entities_s *client_entities, int snapHintFlags );
 
 void SNAP_FreeClientFrames( struct client_s *client );
 

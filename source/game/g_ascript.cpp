@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "g_as_local.h"
+#include "scoreboard.h"
 
 //=======================================================================
 
@@ -38,8 +39,8 @@ static const asEnumVal_t asConfigstringEnumVals[] =
 	ASLIB_ENUM_VAL( CS_GAMETYPEVERSION ),
 	ASLIB_ENUM_VAL( CS_GAMETYPEAUTHOR ),
 	ASLIB_ENUM_VAL( CS_AUTORECORDSTATE ),
-	ASLIB_ENUM_VAL( CS_SCB_PLAYERTAB_LAYOUT ),
-	ASLIB_ENUM_VAL( CS_SCB_PLAYERTAB_TITLES ),
+	ASLIB_ENUM_VAL( CS_SCOREBOARD_ASSETS ),
+	ASLIB_ENUM_VAL( CS_SCOREBOARD_SCHEMA ),
 	ASLIB_ENUM_VAL( CS_TEAM_ALPHA_NAME ),
 	ASLIB_ENUM_VAL( CS_TEAM_BETA_NAME ),
 	ASLIB_ENUM_VAL( CS_MAXCLIENTS ),
@@ -1391,6 +1392,65 @@ static const asClassDescriptor_t asRunStatusQueryClassDescriptor =
 	NULL, NULL                  /* string factory hack */
 };
 
+static const asFuncdef_t scoreboard_Funcdefs[] = { ASLIB_FUNCDEF_NULL };
+static const asBehavior_t scoreboard_Behaviors[] = { ASLIB_BEHAVIOR_NULL };
+static const asProperty_t scoreboard_Properties[] = { ASLIB_PROPERTY_NULL };
+
+static void scoreboard_beginDefiningSchema( wsw::g::Scoreboard *scb ) {
+	scb->beginDefiningSchema();
+}
+
+static void scoreboard_endDefiningSchema( wsw::g::Scoreboard *scb ) {
+	scb->endDefiningSchema();
+}
+
+static unsigned scoreboard_registerAsset( const asstring_t *asset, wsw::g::Scoreboard *scb ) {
+	return scb->registerAsset( wsw::StringView( asset->buffer, asset->len ) );
+}
+
+static unsigned scoreboard_registerNumberColumn( const asstring_t *asset, wsw::g::Scoreboard *scb ) {
+	return scb->registerNumberColumn( wsw::StringView( asset->buffer, asset->len ) );
+}
+
+static unsigned scoreboard_registerIconColumn( const asstring_t *asset, wsw::g::Scoreboard *scb ) {
+	return scb->registerIconColumn( wsw::StringView( asset->buffer, asset->len ) );
+}
+
+static void scoreboard_setPlayerIcon( const gclient_t *client, unsigned slot, unsigned asset, wsw::g::Scoreboard *scb ) {
+	scb->setPlayerIcon( client, slot, asset );
+}
+
+static void scoreboard_setPlayerNumber( const gclient_t *client, unsigned slot, int number, wsw::g::Scoreboard *scb ) {
+	scb->setPlayerNumber( client, slot, number );
+}
+
+static const asMethod_t scoreboard_Methods[] =
+{
+	{ ASLIB_FUNCTION_DECL( void, beginDefiningSchema, () ), asFUNCTION( scoreboard_beginDefiningSchema ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( void, endDefiningSchema, () ), asFUNCTION( scoreboard_endDefiningSchema ), asCALL_CDECL_OBJLAST },
+
+	{ ASLIB_FUNCTION_DECL( uint, registerAsset, (const String @) ), asFUNCTION( scoreboard_registerAsset ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( uint, registerNumberColumn, (const String @) ), asFUNCTION( scoreboard_registerNumberColumn ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( uint, registerIconColumn, (const String @) ), asFUNCTION( scoreboard_registerIconColumn ), asCALL_CDECL_OBJLAST },
+
+	{ ASLIB_FUNCTION_DECL( void, setPlayerIcon, (const Client @, uint, uint) ), asFUNCTION( scoreboard_setPlayerIcon ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( void, setPlayerNumber, (const Client @, uint, uint) ), asFUNCTION( scoreboard_setPlayerNumber ), asCALL_CDECL_OBJLAST },
+
+	ASLIB_METHOD_NULL
+};
+
+static const asClassDescriptor_t asScoreboardClassDescriptor = {
+	"Scoreboard",
+	asOBJ_REF | asOBJ_NOHANDLE,
+	sizeof( wsw::g::Scoreboard ),
+	scoreboard_Funcdefs,
+	scoreboard_Behaviors,
+	scoreboard_Methods,
+	scoreboard_Properties,
+
+	NULL, NULL
+};
+
 //=======================================================================
 
 // CLASS: Client
@@ -2453,6 +2513,7 @@ static const asClassDescriptor_t * const asGameClassesDescriptors[] =
 	&asTeamListClassDescriptor,
 	&asScoreStatsClassDescriptor,
 	&asRunStatusQueryClassDescriptor,
+	&asScoreboardClassDescriptor,
 	&asGameClientDescriptor,
 	&asGameEntityClassDescriptor,
 
@@ -3636,6 +3697,10 @@ static void G_InitializeGameModuleSyntax( asIScriptEngine *asEngine ) {
 
 	// register global properties
 	G_asRegisterGlobalProperties( asEngine, asGlobProps, "" );
+
+	if( asEngine->RegisterGlobalProperty( "Scoreboard scoreboard", wsw::g::Scoreboard::instance() ) < 0 ) {
+		G_Error( "Failed to register the script scoreboard instance" );
+	}
 }
 
 /*

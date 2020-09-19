@@ -29,7 +29,7 @@ static void GT_ResetScriptData( void ) {
 	level.gametype.thinkRulesFunc = NULL;
 	level.gametype.playerRespawnFunc = NULL;
 	level.gametype.scoreEventFunc = NULL;
-	level.gametype.scoreboardMessageFunc = NULL;
+	level.gametype.updateScoreboardFunc = NULL;
 	level.gametype.selectSpawnPointFunc = NULL;
 	level.gametype.clientCommandFunc = NULL;
 	level.gametype.shutdownFunc = NULL;
@@ -227,40 +227,22 @@ void GT_asCallScoreEvent( gclient_t *client, const char *score_event, const char
 	qasStringRelease( s2 );
 }
 
-//"String @GT_ScoreboardMessage( uint maxlen )"
-// The result is stored in scoreboardString.
-void GT_asCallScoreboardMessage( unsigned int maxlen ) {
-	asstring_t *string;
-	int error;
-	asIScriptContext *ctx;
-
-	scoreboardString[0] = 0;
-
-	if( !level.gametype.scoreboardMessageFunc ) {
+void GT_asCallUpdateScoreboard() {
+	if( !level.gametype.updateScoreboardFunc ) {
 		return;
 	}
 
-	ctx = qasAcquireContext( GAME_AS_ENGINE() );
-
-	error = ctx->Prepare( static_cast<asIScriptFunction *>( level.gametype.scoreboardMessageFunc ) );
+	asIScriptContext *ctx = qasAcquireContext( GAME_AS_ENGINE() );
+	int error = ctx->Prepare( static_cast<asIScriptFunction *>( level.gametype.updateScoreboardFunc ) );
 	if( error < 0 ) {
 		return;
 	}
 
 	// Now we need to pass the parameters to the script function.
-	ctx->SetArgDWord( 0, maxlen );
-
 	error = ctx->Execute();
 	if( G_ExecutionErrorReport( error ) ) {
 		GT_asShutdownScript();
 	}
-
-	string = ( asstring_t * )ctx->GetReturnObject();
-	if( !string || !string->len || !string->buffer ) {
-		return;
-	}
-
-	Q_strncpyz( scoreboardString, string->buffer, sizeof( scoreboardString ) );
 }
 
 //"Entity @GT_SelectSpawnPoint( Entity @ent )"
@@ -386,7 +368,7 @@ static bool G_asInitializeGametypeScript( asIScriptModule *asModule ) {
 		{ &lgt->thinkRulesFunc, "void GT_ThinkRules()" },
 		{ &lgt->playerRespawnFunc, "void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )" },
 		{ &lgt->scoreEventFunc, "void GT_ScoreEvent( Client @client, const String &score_event, const String &args )" },
-		{ &lgt->scoreboardMessageFunc, "String @GT_ScoreboardMessage( uint maxlen )" },
+		{ &lgt->updateScoreboardFunc, "void GT_UpdateScoreboard()" },
 		{ &lgt->selectSpawnPointFunc, "Entity @GT_SelectSpawnPoint( Entity @ent )" },
 		{ &lgt->clientCommandFunc, "bool GT_Command( Client @client, const String &cmdString, const String &argsString, int argc )" },
 		{ &lgt->shutdownFunc, "void GT_Shutdown()" }

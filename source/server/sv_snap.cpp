@@ -124,6 +124,11 @@ static void SNAP_WriteDeltaGameStateToClient( const client_snapshot_t *from, con
 	MSG_WriteDeltaGameState( msg, from ? &from->gameState : nullptr, &to->gameState );
 }
 
+static void SNAP_WriteDeltaScoreboardDataToClient( const client_snapshot_t *from, const client_snapshot_t *to, msg_t *msg ) {
+	MSG_WriteUint8( msg, svc_scoreboard );
+	MSG_WriteDeltaScoreboardData( msg, from ? &from->scoreboardData : nullptr, &to->scoreboardData );
+}
+
 /*
 * SNAP_WritePlayerstateToClient
 */
@@ -340,6 +345,7 @@ void SNAP_WriteFrameSnapToClient( const ginfo_t *gi, client_t *client, msg_t *ms
 	MSG_WriteData( msg, frame->areabits, frame->areabytes );
 
 	SNAP_WriteDeltaGameStateToClient( oldframe, frame, msg );
+	SNAP_WriteDeltaScoreboardDataToClient( oldframe, frame, msg );
 
 	// delta encode the playerstate
 	for( int i = 0; i < frame->numplayers; i++ ) {
@@ -791,10 +797,13 @@ static void SNAP_BuildSnapEntitiesList( cmodel_state_t *cms, ginfo_t *gi,
 * Decides which entities are going to be visible to the client, and
 * copies off the playerstat and areabits.
 */
-void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameNum, int64_t timeStamp,
-								fatvis_t *fatvis, client_t *client,
-								game_state_t *gameState, client_entities_t *client_entities, int snapHintFlags ) {
+void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameNum,
+								int64_t timeStamp, fatvis_t *fatvis, client_t *client,
+								const game_state_t *gameState,
+								const ReplicatedScoreboardData *scoreboardData,
+								client_entities_t *client_entities, int snapHintFlags ) {
 	assert( gameState );
+	assert( scoreboardData );
 
 	edict_t *clent = client->edict;
 	if( clent && !clent->r.client ) {   // allow nullptr ent for server record
@@ -891,6 +900,7 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 
 	// store current match state information
 	frame->gameState = *gameState;
+	frame->scoreboardData = *scoreboardData;
 
 	//=============================
 

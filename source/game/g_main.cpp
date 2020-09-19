@@ -21,13 +21,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <new>
 
 #include "g_local.h"
+#include "scoreboard.h"
 
 game_locals_t game;
 level_locals_t level;
 spawn_temp_t st;
-
-struct mempool_s *gamepool;
-struct mempool_s *levelpool;
 
 int meansOfDeath;
 
@@ -364,6 +362,9 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	// weapon items
 	GS_InitWeapons();
 
+	// AS initialization implies having an initialized scoreboard so we can pass the instance address
+	wsw::g::Scoreboard::init();
+
 	// init AS engine
 	G_asInitGameModuleEngine();
 }
@@ -384,6 +385,8 @@ void G_Shutdown( void ) {
 	G_asShutdownMapScript();
 	GT_asShutdownScript();
 	G_asShutdownGameModuleEngine();
+
+	wsw::g::Scoreboard::shutdown();
 
 	AI_AfterLevelScriptShutdown();
 

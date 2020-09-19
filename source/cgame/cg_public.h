@@ -62,6 +62,7 @@ typedef struct snapshot_s {
 	int numplayers;
 	player_state_t playerState;
 	player_state_t playerStates[MAX_CLIENTS];
+	ReplicatedScoreboardData scoreboardData;
 	int numEntities;
 	entity_state_t parsedEntities[MAX_PARSE_ENTITIES];
 	game_state_t gameState;

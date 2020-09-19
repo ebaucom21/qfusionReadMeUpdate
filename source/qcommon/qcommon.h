@@ -95,6 +95,7 @@ void MSG_WriteDeltaUsercmd( msg_t *sb, const struct usercmd_s *from, struct user
 void MSG_WriteDeltaEntity( msg_t *msg, const struct entity_state_s *from, const struct entity_state_s *to, bool force );
 void MSG_WriteDeltaPlayerState( msg_t *msg, const player_state_t *ops, const player_state_t *ps );
 void MSG_WriteDeltaGameState( msg_t *msg, const game_state_t *from, const game_state_t *to );
+void MSG_WriteDeltaScoreboardData( msg_t *msg, const ReplicatedScoreboardData *from, const ReplicatedScoreboardData *to );
 void MSG_WriteDir( msg_t *sb, vec3_t vector );
 void MSG_WriteDeltaStruct( msg_t *msg, const void *from, const void *to, const msg_field_t *fields, size_t numFields );
 
@@ -117,6 +118,7 @@ int MSG_ReadEntityNumber( msg_t *msg, bool *remove, unsigned *byteMask );
 void MSG_ReadDeltaEntity( msg_t *msg, const entity_state_t *from, entity_state_t *to, int number, unsigned byteMask );
 void MSG_ReadDeltaPlayerState( msg_t *msg, const player_state_t *ops, player_state_t *ps );
 void MSG_ReadDeltaGameState( msg_t *msg, const game_state_t *from, game_state_t *to );
+void MSG_ReadDeltaScoreboardData( msg_t *msg, const ReplicatedScoreboardData *from, ReplicatedScoreboardData *to );
 void MSG_ReadDir( msg_t *sb, vec3_t vector );
 void MSG_ReadData( msg_t *sb, void *buffer, size_t length );
 void MSG_ReadDeltaStruct( msg_t *msg, const void *from, void *to, size_t size, const msg_field_t *fields, size_t numFields );
@@ -208,6 +210,7 @@ enum svc_ops_e {
 	svc_packetentities,     // [...]
 	svc_gamecommands,
 	svc_match,
+	svc_scoreboard,
 	svc_clcack,
 	svc_servercs,           //tmp jalfixme : send reliable commands as unreliable
 	svc_frame,

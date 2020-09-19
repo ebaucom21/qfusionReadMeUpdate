@@ -858,7 +858,7 @@ void MSG_WriteDeltaStruct( msg_t *msg, const void *from, const void *to, const m
 	unsigned byteMask;
 	uint8_t fieldMask[32] = { 0 };
 
-	assert( numFields < 256 );
+	assert( numFields >= 0 && numFields < 256 );
 	if( numFields > 256 ) {
 		Com_Error( ERR_FATAL, "MSG_WriteDeltaStruct: numFields == %" PRIu32, (unsigned)numFields );
 	}
@@ -884,7 +884,7 @@ void MSG_ReadDeltaStruct( msg_t *msg, const void *from, void *to, size_t size, c
 	unsigned byteMask;
 	uint8_t fieldMask[32] = { 0 };
 
-	assert( numFields < 256 );
+	assert( numFields >= 0 && numFields < 256 );
 	if( numFields > 256 ) {
 		Com_Error( ERR_FATAL, "MSG_ReadDeltaStruct: numFields == %" PRIu32, (unsigned)numFields );
 	}
@@ -1234,4 +1234,37 @@ void MSG_ReadDeltaGameState( msg_t *msg, const game_state_t *from, game_state_t 
 	}
 
 	MSG_ReadDeltaStruct( msg, from, to, sizeof( game_state_t ), fields, numFields );
+}
+
+static const msg_field_t raw_scoreboard_msg_fields[] = {
+	{
+		offsetof( ReplicatedScoreboardData, alphaScore ),
+		32, 1, WIRE_BASE128
+	},
+	{
+		offsetof( ReplicatedScoreboardData, betaScore ),
+		32, 1, WIRE_BASE128
+	},
+	{
+		offsetof( ReplicatedScoreboardData, scores ),
+		32, MAX_CLIENTS, WIRE_BASE128
+	},
+	{
+		offsetof( ReplicatedScoreboardData, values ),
+		16, MAX_CLIENTS * ReplicatedScoreboardData::kMaxShortSlots, WIRE_BASE128
+	},
+};
+
+static const ReplicatedScoreboardData scoreboardBaseline {};
+
+void MSG_WriteDeltaScoreboardData( msg_t *msg, const ReplicatedScoreboardData *from, const ReplicatedScoreboardData *to ) {
+	const int numFields = (int)( std::end( raw_scoreboard_msg_fields ) - std::begin( raw_scoreboard_msg_fields ) );
+	from = from ? from : &scoreboardBaseline;
+	MSG_WriteDeltaStruct( msg, from, to, raw_scoreboard_msg_fields, numFields );
+}
+
+void MSG_ReadDeltaScoreboardData( msg_t *msg, const ReplicatedScoreboardData *from, ReplicatedScoreboardData *to ) {
+	const int numFields = (int)( std::end( raw_scoreboard_msg_fields ) - std::begin( raw_scoreboard_msg_fields ) );
+	from = from ? from : &scoreboardBaseline;
+	MSG_ReadDeltaStruct( msg, from, to, sizeof( ReplicatedScoreboardData ), raw_scoreboard_msg_fields, numFields );
 }

@@ -442,8 +442,8 @@ void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags ) {
 	}
 
 	svs.fatvis.skyorg = skyorg;     // HACK HACK HACK
-	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime,
-							   &svs.fatvis, client, ge->GetGameState(),
+	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime, &svs.fatvis,
+							   client, ge->GetGameState(), ge->GetRawScoreboardData(),
 							   &svs.client_entities, snapHintFlags );
 	svs.fatvis.skyorg = NULL;
 }

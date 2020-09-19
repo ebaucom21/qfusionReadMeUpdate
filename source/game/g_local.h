@@ -489,7 +489,7 @@ void GT_asCallThinkRules( void );
 void GT_asCallPlayerKilled( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point, int mod );
 void GT_asCallPlayerRespawn( edict_t *ent, int old_team, int new_team );
 void GT_asCallScoreEvent( gclient_t *client, const char *score_event, const char *args );
-void GT_asCallScoreboardMessage( unsigned int maxlen );
+void GT_asCallUpdateScoreboard();
 edict_t *GT_asCallSelectSpawnPoint( edict_t *ent );
 bool GT_asCallGameCommand( gclient_t *client, const char *cmd, const char *args, int argc );
 bool GT_asCallBotStatus( edict_t *ent );
@@ -986,17 +986,8 @@ void G_ClientDamageFeedback( edict_t *ent );
 // p_hud.c
 //
 
-//scoreboards string
-extern char scoreboardString[MAX_STRING_CHARS];
-extern const unsigned int scoreboardInterval;
-#define SCOREBOARD_MSG_MAXSIZE ( MAX_STRING_CHARS - 8 ) //I know, I know, doesn't make sense having a bigger string than the maxsize value
-
-void MoveClientToIntermission( edict_t *client );
 void G_SetClientStats( edict_t *ent );
 void G_Snap_UpdateWeaponListMessages( void );
-void G_ScoreboardMessage_AddSpectators( void );
-void G_ScoreboardMessage_AddChasers( int entnum, int entnum_self );
-void G_UpdateScoreBoardMessages( void );
 
 //
 // g_phys.c
@@ -1023,8 +1014,11 @@ void    G_Init( unsigned int seed, unsigned int framemsec, int protocol, const c
 void    G_Shutdown( void );
 void    G_ExitLevel( void );
 void G_RestartLevel( void );
-game_state_t *G_GetGameState( void );
+
 void    G_Timeout_Reset( void );
+
+const game_state_t *G_GetGameState();
+const ReplicatedScoreboardData *G_GetScoreboardData();
 
 bool G_AllowDownload( edict_t *ent, const char *requestname, const char *uploadname );
 
@@ -1200,7 +1194,6 @@ typedef struct client_levelreset_s {
 
 	score_stats_t stats;
 	bool showscores;
-	int64_t scoreboard_time;		// when scoreboard was last sent
 	bool showPLinks;				// bot debug
 
 	// flood protection
@@ -1227,7 +1220,6 @@ typedef struct client_levelreset_s {
 		stats.Clear();
 
 		showscores = false;
-		scoreboard_time = 0;
 		showPLinks = false;
 
 		flood_locktill = 0;

@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "scoreboard.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/wswstringsplitter.h"
 
@@ -143,7 +144,7 @@ cvar_t *g_gametypes_list;
 /*
 * G_GetGameState
 */
-game_state_t *G_GetGameState( void ) {
+const game_state_t *G_GetGameState( void ) {
 	return &gs.gameState;
 }
 
@@ -1419,7 +1420,7 @@ void G_RunGametype( void ) {
 	G_Teams_UpdateMembersList();
 	G_Match_CheckStateAbort();
 
-	G_UpdateScoreBoardMessages();
+	wsw::g::Scoreboard::instance()->update();
 
 	//check gametype specific rules
 	GT_asCallThinkRules();

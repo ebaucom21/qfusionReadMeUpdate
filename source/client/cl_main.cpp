@@ -1472,7 +1472,7 @@ void CL_RequestNextDownload( void ) {
 				break;
 			}
 			const auto maybeConfigString = cl.configStrings.get( precache_check );
-			if( maybeConfigString ) {
+			if( !maybeConfigString ) {
 				break;
 			}
 

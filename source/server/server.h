@@ -122,6 +122,7 @@ typedef struct {
 	int64_t sentTimeStamp;         // time at what this frame snap was sent to the clients
 	unsigned int UcmdExecuted;
 	game_state_t gameState;
+	ReplicatedScoreboardData scoreboardData;
 } client_snapshot_t;
 
 typedef struct {

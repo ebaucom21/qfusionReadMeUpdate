@@ -606,7 +606,7 @@ typedef struct {
 	void *thinkRulesFunc;
 	void *playerRespawnFunc;
 	void *scoreEventFunc;
-	void *scoreboardMessageFunc;
+	void *updateScoreboardFunc;
 	void *selectSpawnPointFunc;
 	void *clientCommandFunc;
 	void *shutdownFunc;

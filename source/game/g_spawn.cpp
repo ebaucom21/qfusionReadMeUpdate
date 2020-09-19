@@ -883,8 +883,8 @@ void G_InitLevel( char *mapname, char *entities, int entstrlen, int64_t levelTim
 	trap_ConfigString( CS_AUDIOTRACK, "" );
 	trap_ConfigString( CS_STATNUMS, va( "%i %i %i", STAT_SCORE, STAT_HEALTH, STAT_LAST_KILLER ) );
 	trap_ConfigString( CS_POWERUPEFFECTS, va( "%i %i %i %i", EF_QUAD, EF_SHELL, EF_CARRIER, EF_REGEN ) );
-	trap_ConfigString( CS_SCB_PLAYERTAB_LAYOUT, "" );
-	trap_ConfigString( CS_SCB_PLAYERTAB_TITLES, "" );
+	trap_ConfigString( CS_SCOREBOARD_ASSETS, "" );
+	trap_ConfigString( CS_SCOREBOARD_SCHEMA, "" );
 	trap_ConfigString( CS_MATCHNAME, "" );
 	trap_ConfigString( CS_MATCHSCORE, "" );
 

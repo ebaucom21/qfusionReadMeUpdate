@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/cvar.h"
 #include "../qcommon/qcommon.h"
 #include "../ref/frontend.h"
+#include "../ui/uisystem.h"
 #include "../client/snd_public.h"
 
 static void CG_UpdateEntities( void );
@@ -368,6 +369,7 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	}
 
 	CG_UpdatePlayerState();
+	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData );
 
 	for( i = 0; i < frame->numEntities; i++ )
 		CG_NewPacketEntityState( &frame->parsedEntities[i & ( MAX_PARSE_ENTITIES - 1 )] );

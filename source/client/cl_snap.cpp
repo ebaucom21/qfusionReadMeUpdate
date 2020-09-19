@@ -76,6 +76,10 @@ static void SNAP_ParsePlayerstate( msg_t *msg, const player_state_t *oldstate, p
 	MSG_ReadDeltaPlayerState( msg, oldstate, state );
 }
 
+static void SNAP_ParseScoreboard( msg_t *msg, snapshot_t *oldframe, snapshot_t *newframe ) {
+	MSG_ReadDeltaScoreboardData( msg, oldframe ? &oldframe->scoreboardData : NULL, &newframe->scoreboardData );
+}
+
 /*
 * SNAP_ParseDeltaEntity
 *
@@ -419,6 +423,11 @@ snapshot_t *SNAP_ParseFrame( msg_t *msg, snapshot_t *lastFrame, int *suppressCou
 		Com_Error( ERR_DROP, "SNAP_ParseFrame: not match info" );
 	}
 	SNAP_ParseDeltaGameState( msg, deltaframe, newframe );
+	cmd = MSG_ReadUint8( msg );
+	if( cmd != svc_scoreboard ) {
+		Com_Error( ERR_DROP, "SNAP_ParseFrame: not scoreboard" );
+	}
+	SNAP_ParseScoreboard( msg, deltaframe, newframe );
 
 	// read playerinfos
 	numplayers = 0;

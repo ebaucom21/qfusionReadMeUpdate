@@ -288,7 +288,7 @@ void Info_CleanValue( const char *in, char *out, size_t outsize );
 //
 // per-level limits
 //
-#define MAX_CLIENTS                 64          // absolute limit
+#define MAX_CLIENTS                 32          // absolute limit
 #define MAX_EDICTS                  1024        // must change protocol to increase more
 #define MAX_LIGHTSTYLES             256
 #define MAX_MODELS                  1024        // these are sent over the net as shorts

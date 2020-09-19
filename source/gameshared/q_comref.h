@@ -173,19 +173,19 @@ typedef struct {
 #define CS_GAMETYPEAUTHOR   14
 #define CS_AUTORECORDSTATE  15
 
-#define CS_SCB_PLAYERTAB_LAYOUT 16
-#define CS_SCB_PLAYERTAB_TITLES 17
+#define CS_SCOREBOARD_ASSETS 16
+#define CS_SCOREBOARD_SCHEMA 17
 
-#define CS_TEAM_SPECTATOR_NAME 18
-#define CS_TEAM_PLAYERS_NAME 19
-#define CS_TEAM_ALPHA_NAME  20
-#define CS_TEAM_BETA_NAME   21
+#define CS_TEAM_SPECTATOR_NAME 21
+#define CS_TEAM_PLAYERS_NAME 22
+#define CS_TEAM_ALPHA_NAME  23
+#define CS_TEAM_BETA_NAME   24
 
-#define CS_MATCHNAME        22
-#define CS_MATCHSCORE       23
-#define CS_MATCHUUID        24
+#define CS_MATCHNAME        25
+#define CS_MATCHSCORE       26
+#define CS_MATCHUUID        27
 
-#define CS_ACTIVE_CALLVOTE  25
+#define CS_ACTIVE_CALLVOTE  28
 
 #define CS_WORLDMODEL       30
 #define CS_MAPCHECKSUM      31      // for catching cheater maps
@@ -207,6 +207,38 @@ typedef struct {
 #define CS_HELPMESSAGES     ( CS_MMPLAYERINFOS + MAX_MMPLAYERINFOS ) // for localizable messages, that got a special place on the HUD
 
 #define MAX_CONFIGSTRINGS   ( CS_HELPMESSAGES + MAX_HELPMESSAGES )
+
+namespace wsw {
+
+class ScoreboardShared {
+protected:
+	enum ColumnKind {
+		Nickname,
+		Clan,
+		Score,
+		Ping,
+		Number,
+		Icon
+	};
+
+	[[nodiscard]]
+	static bool isSeparateSlotSpaceKind( ColumnKind kind ) {
+		return kind < Ping;
+	}
+
+	// Account for 0-characters space while setting data limits
+	// (there is an assumptions that strings are kept in wsw::StringSpanStaticStorage)
+
+	static constexpr unsigned kMaxColumns = 8;
+	static constexpr unsigned kMaxTitleLen = 12;
+	static constexpr unsigned kTitleDataLimit = 64 + kMaxColumns;
+	static constexpr unsigned kMaxAssets = 16;
+	static constexpr unsigned kAssetDataLimit = 256 + kMaxAssets;
+	static constexpr unsigned kMaxShortSlots = 7;
+	static constexpr unsigned kNumBuiltinColumns = 4;
+};
+
+}
 
 //==============================================
 
@@ -415,6 +447,39 @@ typedef enum {
 typedef struct {
 	int64_t stats[MAX_GAME_STATS];
 } game_state_t;
+
+struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
+	int alphaScore;
+	int betaScore;
+	int scores[MAX_CLIENTS];
+	short values[MAX_CLIENTS * kMaxShortSlots];
+
+	using wsw::ScoreboardShared::kMaxShortSlots;
+
+	void setPlayerScore( unsigned playerNum, int score ) {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		values[kMaxShortSlots * playerNum] = score;
+	}
+
+	[[nodiscard]]
+	auto getPlayerScore( unsigned playerNum ) const -> int {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		return values[kMaxShortSlots * playerNum];
+	}
+
+	void setPlayerShort( unsigned playerNum, unsigned slot, int16_t value ) {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		assert( slot < (unsigned)kMaxShortSlots );
+		values[kMaxShortSlots * playerNum + slot] = value;
+	}
+
+	[[nodiscard]]
+	auto getPlayerShort( unsigned playerNum, unsigned slot ) const -> int16_t {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		assert( slot < (unsigned)kMaxShortSlots );
+		return values[kMaxShortSlots * playerNum + slot];
+	}
+};
 
 //==============================================
 

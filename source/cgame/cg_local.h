@@ -783,7 +783,6 @@ inline void CG_ToggleScores_f( void ) {}
 inline void CG_ScoresOn_f( void ) {}
 inline void CG_ScoresOff_f( void ) {}
 inline bool CG_ExecuteScoreboardTemplateLayout( char *s ) { return false; }
-inline void SCR_UpdateScoreboardMessage( const char *string ) {}
 inline void SCR_UpdatePlayerStatsMessage( const char *string ) {}
 inline bool CG_IsScoreboardShown( void ) { return false; }
 

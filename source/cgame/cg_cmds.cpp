@@ -172,16 +172,10 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 		}
 	} else if( i >= CS_WEAPONDEFS && i < CS_WEAPONDEFS + MAX_WEAPONDEFS ) {
 		CG_OverrideWeapondef( i - CS_WEAPONDEFS, string.data() );
-	} else if( i >= CS_CALLVOTEINFOS && i < CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS ) {
-		wsw::ui::UISystem::instance()->handleConfigString( i, string );
 	}
-}
 
-/*
-* CG_SC_Scoreboard
-*/
-static void CG_SC_Scoreboard( void ) {
-	SCR_UpdateScoreboardMessage( Cmd_Argv( 1 ) );
+	// Let the UI system decide whether it could handle the config string as well
+	wsw::ui::UISystem::instance()->handleConfigString( i, string );
 }
 
 /*
@@ -843,7 +837,6 @@ static const svcmd_t cg_svcmds[] =
 	{ "cp", CG_SC_CenterPrint },
 	{ "cpf", CG_SC_CenterPrintFormat },
 	{ "obry", CG_SC_Obituary },
-	{ "scb", CG_SC_Scoreboard },
 	{ "plstats", CG_SC_PlayerStats },
 	{ "mm", CG_SC_MatchMessage },
 	{ "mapmsg", CG_SC_HelpMessage },
