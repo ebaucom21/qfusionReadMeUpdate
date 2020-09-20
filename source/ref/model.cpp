@@ -866,27 +866,6 @@ void Mod_CreateVertexBufferObjects( model_t *mod ) {
 }
 
 /*
-* Mod_CreateSkydome
-*/
-static void Mod_CreateSkydome( model_t *mod ) {
-	unsigned int i, j;
-	mbrushmodel_t *loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
-
-	for( i = 0; i < loadbmodel->numsubmodels; i++ ) {
-		mmodel_t *bm = loadbmodel->submodels + i;
-		msurface_t *surf = loadbmodel->surfaces + bm->firstModelSurface;
-
-		for( j = 0; j < bm->numModelSurfaces; j++ ) {
-			if( R_SurfPotentiallyVisible( surf ) && ( surf->shader->flags & SHADER_SKY ) ) {
-				loadbmodel->skydome = R_CreateSkydome( mod );
-				return;
-			}
-			surf++;
-		}
-	}
-}
-
-/*
 * Mod_FinalizeBrushModel
 */
 static void Mod_FinalizeBrushModel( model_t *model ) {
@@ -897,8 +876,6 @@ static void Mod_FinalizeBrushModel( model_t *model ) {
 	Mod_CreateVertexBufferObjects( model );
 
 	Mod_SetupSubmodels( model );
-
-	Mod_CreateSkydome( model );
 }
 
 /*
@@ -930,10 +907,6 @@ static void Mod_TouchBrushModel( model_t *model ) {
 		if( loadbmodel->fogs[i].shader ) {
 			R_TouchShader( loadbmodel->fogs[i].shader );
 		}
-	}
-
-	if( loadbmodel->skydome ) {
-		R_TouchSkydome( loadbmodel->skydome );
 	}
 
 	R_TouchLightmapImages( model );

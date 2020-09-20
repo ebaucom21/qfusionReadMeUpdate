@@ -28,7 +28,6 @@ enum {
 	,IT_CLAMP           = 1 << 0
 	,IT_NOMIPMAP        = 1 << 1
 	,IT_NOPICMIP        = 1 << 2
-	,IT_SKY             = 1 << 3
 	,IT_CUBEMAP         = 1 << 4
 	,IT_FLIPX           = 1 << 5
 	,IT_FLIPY           = 1 << 6

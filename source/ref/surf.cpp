@@ -70,7 +70,7 @@ bool R_SurfPotentiallyLit( const msurface_t *surf ) {
 		return false;
 	}
 	shader = surf->shader;
-	if( ( shader->flags & SHADER_SKY ) || !shader->numpasses ) {
+	if( !shader->numpasses ) {
 		return false;
 	}
 	return ( surf->mesh.numVerts != 0 /* && (surf->facetype != FACETYPE_TRISURF)*/ );
@@ -197,7 +197,6 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 	const shader_t *shader = drawSurf->shader;
 	const mfog_t *fog = drawSurf->fog;
 	portalSurface_t *portalSurface = NULL;
-	bool sky, portal;
 	unsigned drawOrder = 0;
 	unsigned sliceIndex = drawSurf - rsh.worldBrushModel->drawSurfaces;
 
@@ -205,30 +204,7 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 		return true;
 	}
 
-	sky = ( shader->flags & SHADER_SKY ) != 0;
-	portal = ( shader->flags & SHADER_PORTAL ) != 0;
-
-	if( sky ) {
-		if( R_FASTSKY() ) {
-			return false;
-		}
-
-		if( rn.refdef.rdflags & RDF_SKYPORTALINVIEW ) {
-			portalSurface = R_AddSkyportalSurface( e, shader, drawSurf );
-		}
-
-		drawSurf->dlightBits = 0;
-		drawSurf->visFrame = rf.frameCount;
-		drawSurf->listSurf = R_AddSurfToDrawList( rn.meshlist, e, fog, shader, 0, drawOrder, portalSurface, drawSurf );
-
-		R_AddSkySurfToDrawList( rn.meshlist, shader, portalSurface, &rn.skyDrawSurface );
-
-		R_AddDrawListVBOSlice( rn.meshlist, sliceIndex, 0, 0, 0, 0 );
-	
-		rf.stats.c_world_draw_surfs++;
-		return true;
-	}
-
+	const bool portal = ( shader->flags & SHADER_PORTAL ) != 0;
 	if( portal ) {
 		portalSurface = R_AddPortalSurface( e, shader, drawSurf );
 	}
@@ -243,7 +219,7 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 	}
 
 	if( portalSurface && !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
-		R_AddSurfToDrawList( rn.portalmasklist, e, NULL, rsh.skyShader, 0, 0, NULL, drawSurf );
+		R_AddSurfToDrawList( rn.portalmasklist, e, NULL, NULL, 0, 0, NULL, drawSurf );
 	}
 
 	R_AddDrawListVBOSlice( rn.meshlist, sliceIndex, 0, 0, 0, 0 );
@@ -257,20 +233,10 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 * R_ClipSpecialWorldSurf
 */
 static bool R_ClipSpecialWorldSurf( drawSurfaceBSP_t *drawSurf, const msurface_t *surf, const vec3_t origin, float *pdist ) {
-	bool sky, portal;
 	portalSurface_t *portalSurface = NULL;
 	const shader_t *shader = drawSurf->shader;
 
-	sky = ( shader->flags & SHADER_SKY ) != 0;
-	portal = ( shader->flags & SHADER_PORTAL ) != 0;
-
-	if( sky ) {
-		if( R_ClipSkySurface( &rn.skyDrawSurface, surf ) ) {
-			return true;
-		}
-		return false;
-	}
-
+	const bool portal = ( shader->flags & SHADER_PORTAL ) != 0;
 	if( portal ) {
 		portalSurface = R_GetDrawListSurfPortal( drawSurf->listSurf );
 	}
@@ -327,7 +293,7 @@ static void R_UpdateSurfaceInDrawList( drawSurfaceBSP_t *drawSurf, unsigned int 
 	end = drawSurf->firstWorldSurface + drawSurf->numWorldSurfaces;
 	surf = rsh.worldBrushModel->surfaces + drawSurf->firstWorldSurface;
 
-	special = ( drawSurf->shader->flags & (SHADER_SKY|SHADER_PORTAL) ) != 0;
+	special = ( drawSurf->shader->flags & (SHADER_PORTAL) ) != 0;
 
 	for( i = drawSurf->firstWorldSurface; i < end; i++ ) {
 		if( rf.worldSurfVis[i] ) {

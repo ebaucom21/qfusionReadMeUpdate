@@ -94,15 +94,6 @@ void R_TouchShader( shader_t *s ) {
 			}
 		}
 	}
-
-	if( s->flags & SHADER_SKY ) {
-		// touch sky images for this shader
-		for( image_t *image: s->skyboxImages ) {
-			if( image ) {
-				R_TouchImage( image, s->imagetags );
-			}
-		}
-	}
 }
 
 void MaterialCache::freeUnusedMaterialsByType( const shaderType_e *types, unsigned int numTypes ) {
@@ -650,30 +641,6 @@ auto MaterialCache::newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName
 	return s;
 }
 
-auto MaterialCache::newSkyBoxMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
-
-	shader_t *s = initMaterial( SHADER_TYPE_SKYBOX, cleanName, memSpec );
-
-	s->vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
-	s->sort = SHADER_SORT_SKY;
-	s->flags = SHADER_CULL_FRONT | SHADER_SKY;
-	s->numpasses = 1;
-	s->passes = passSpec.get( s );
-
-	auto *pass = &s->passes[0];
-	pass->rgbgen.type = RGB_GEN_IDENTITY;
-	pass->alphagen.type = ALPHA_GEN_IDENTITY;
-	pass->tcgen = TC_GEN_BASE;
-	pass->flags = SHADERPASS_SKYBOXSIDE;
-	// the actual image will be picked at rendering time based on skyside number
-	pass->images[0] = rsh.whiteTexture;
-
-	return s;
-}
-
 auto MaterialCache::newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t * {
 	MemSpecBuilder memSpec;
 	memSpec.add<shaderpass_t>();
@@ -724,8 +691,6 @@ auto MaterialCache::newDefaultMaterial( int type, const wsw::HashedStringView &c
 			return newDefault2DLikeMaterial( type, cleanName, name );
 		case SHADER_TYPE_OPAQUE_ENV:
 			return newOpaqueEnvMaterial( cleanName, name );
-		case SHADER_TYPE_SKYBOX:
-			return newSkyBoxMaterial( cleanName, name );
 		case SHADER_TYPE_FOG:
 			return newFogMaterial( cleanName, name );
 	}

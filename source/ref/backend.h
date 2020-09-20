@@ -87,8 +87,6 @@ void RB_SetLightstyle( const struct superLightStyle_s *lightStyle );
 void RB_SetDlightBits( unsigned int dlightBits );
 void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights );
 void RB_SetPortalSurface( const struct portalSurface_s *portalSurface );
-void RB_SetSkyboxShader( const shader_t *shader );
-void RB_SetSkyboxSide( int side );
 void RB_SetRenderFlags( int flags );
 void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure );
 void RB_SetShaderStateMask( int ANDmask, int ORmask );

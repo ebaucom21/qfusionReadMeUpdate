@@ -145,9 +145,6 @@ typedef struct r_backend_s {
 	unsigned int currentDlightBits;
 	unsigned int currentShadowBits;
 
-	const shader_t *skyboxShader;
-	int skyboxSide;
-
 	// shader state
 	const shader_t *currentShader;
 	double currentShaderTime;

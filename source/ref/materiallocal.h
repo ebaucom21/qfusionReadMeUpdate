@@ -628,7 +628,6 @@ class MaterialCache {
 	auto newDefaultDiffuseMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newDefault2DLikeMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
-	auto newSkyBoxMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 public:
 	MaterialCache();

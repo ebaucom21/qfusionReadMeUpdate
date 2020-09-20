@@ -241,13 +241,7 @@ static float RB_TransformFogPlanes( const mfog_t *fog, vec3_t fogNormal,
 	dist = PlaneDiff( rb.cameraOrigin, fog->visibleplane );
 	scale = e->scale;
 
-	if( rb.currentShader->flags & SHADER_SKY ) {
-		if( dist > 0 ) {
-			VectorMA( rb.cameraOrigin, -dist, fogPlane->normal, viewtofog );
-		} else {
-			VectorCopy( rb.cameraOrigin, viewtofog );
-		}
-	} else if( e->rtype == RT_MODEL ) {
+	if( e->rtype == RT_MODEL ) {
 		VectorCopy( e->origin, viewtofog );
 	} else {
 		VectorClear( viewtofog );
@@ -492,10 +486,6 @@ static inline const image_t *RB_ShaderpassTex( const shaderpass_t *pass ) {
 	if( pass->flags & SHADERPASS_PORTALMAP ) {
 		return rb.currentPortalSurface && rb.currentPortalSurface->texures[0] ?
 			   rb.currentPortalSurface->texures[0] : rsh.blackTexture;
-	}
-
-	if( ( pass->flags & SHADERPASS_SKYBOXSIDE ) && rb.skyboxShader && rb.skyboxSide >= 0 ) {
-		return rb.skyboxShader->skyboxImages[rb.skyboxSide];
 	}
 
 	const image_t *tex = pass->images[0];
@@ -1771,9 +1761,6 @@ void RB_BindShader( const entity_t *e, const shader_t *shader, const mfog_t *fog
 
 	rb.currentPortalSurface = NULL;
 
-	rb.skyboxShader = NULL;
-	rb.skyboxSide = -1;
-
 	if( !e ) {
 		rb.currentShaderTime = rb.nullEnt.shaderTime * 0.001;
 		rb.alphaHack = false;
@@ -1867,26 +1854,6 @@ void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights ) {
 void RB_SetPortalSurface( const portalSurface_t *portalSurface ) {
 	assert( rb.currentShader != NULL );
 	rb.currentPortalSurface = portalSurface;
-	rb.dirtyUniformState = true;
-}
-
-/*
-* RB_SetSkyboxShader
-*/
-void RB_SetSkyboxShader( const shader_t *shader ) {
-	rb.skyboxShader = shader;
-	rb.dirtyUniformState = true;
-}
-
-/*
-* RB_SetSkyboxSide
-*/
-void RB_SetSkyboxSide( int side ) {
-	if( side < 0 || side >= 6 ) {
-		rb.skyboxSide = -1;
-	} else {
-		rb.skyboxSide = side;
-	}
 	rb.dirtyUniformState = true;
 }
 
@@ -2191,7 +2158,7 @@ void RB_DrawShadedElements( void ) {
 		shaderpass_t *fogPass = &r_GLSLpasses[BUILTIN_GLSLPASS_FOG];
 
 		fogPass->images[0] = rsh.whiteTexture;
-		if( !rb.currentShader->numpasses || rb.currentShader->fog_dist || ( rb.currentShader->flags & SHADER_SKY ) ) {
+		if( !rb.currentShader->numpasses || rb.currentShader->fog_dist ) {
 			fogPass->flags &= ~GLSTATE_DEPTHFUNC_EQ;
 		} else {
 			fogPass->flags |= GLSTATE_DEPTHFUNC_EQ;

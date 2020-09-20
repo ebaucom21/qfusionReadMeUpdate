@@ -106,7 +106,6 @@ cvar_t *r_texturemode;
 cvar_t *r_texturefilter;
 cvar_t *r_texturecompression;
 cvar_t *r_picmip;
-cvar_t *r_skymip;
 cvar_t *r_nobind;
 cvar_t *r_polyblend;
 cvar_t *r_lockpvs;
@@ -506,7 +505,6 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_lockpvs = Cvar_Get( "r_lockpvs", "0", CVAR_CHEAT );
 	r_nobind = Cvar_Get( "r_nobind", "0", 0 );
 	r_picmip = Cvar_Get( "r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
-	r_skymip = Cvar_Get( "r_skymip", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
 	r_polyblend = Cvar_Get( "r_polyblend", "1", 0 );
 
 	r_brightness = Cvar_Get( "r_brightness", "0", CVAR_ARCHIVE );
@@ -897,7 +895,6 @@ static void R_InitVolatileAssets( void ) {
 
 	auto *materialCache = MaterialCache::instance();
 	rsh.envShader = materialCache->loadDefaultMaterial( wsw::StringView( "$environment" ), SHADER_TYPE_OPAQUE_ENV );
-	rsh.skyShader = materialCache->loadDefaultMaterial( wsw::StringView( "$skybox" ), SHADER_TYPE_SKYBOX );
 	rsh.whiteShader = materialCache->loadDefaultMaterial( wsw::StringView( "$whiteimage" ), SHADER_TYPE_2D );
 	rsh.emptyFogShader = materialCache->loadDefaultMaterial( wsw::StringView( "$emptyfog" ), SHADER_TYPE_FOG );
 

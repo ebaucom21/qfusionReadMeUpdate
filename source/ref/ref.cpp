@@ -1098,8 +1098,6 @@ void R_RenderView( const refdef_t *fd ) {
 
 	ClearBounds( rn.visMins, rn.visMaxs );
 
-	R_ClearSky( &rn.skyDrawSurface );
-
 	if( r_novis->integer ) {
 		rn.renderFlags |= RF_NOVIS;
 	}

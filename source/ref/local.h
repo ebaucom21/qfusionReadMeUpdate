@@ -264,7 +264,6 @@ typedef struct {
 	refScreenTexSet_t st, stf;
 
 	shader_t        *envShader;
-	shader_t        *skyShader;
 	shader_t        *whiteShader;
 	shader_t        *emptyFogShader;
 
@@ -529,7 +528,6 @@ extern cvar_t *r_texturecompression;
 extern cvar_t *r_mode;
 extern cvar_t *r_nobind;
 extern cvar_t *r_picmip;
-extern cvar_t *r_skymip;
 extern cvar_t *r_polyblend;
 extern cvar_t *r_lockpvs;
 extern cvar_t *r_screenshot_fmtstr;
@@ -890,37 +888,6 @@ vattribmask_t R_UploadVBOInstancesData( mesh_vbo_t *vbo, int instOffset, int num
 void        R_FreeVBOsByTag( vbo_tag_t tag );
 void        R_FreeUnusedVBOs( void );
 void        R_ShutdownVBO( void );
-
-//
-// r_sky.c
-//
-
-enum {
-	SKYBOX_RIGHT,
-	SKYBOX_LEFT,
-	SKYBOX_FRONT,
-	SKYBOX_BACK,
-	SKYBOX_TOP,
-	SKYBOX_BOTTOM       // not used for skydome, but is used for skybox
-};
-
-struct skydome_s *R_CreateSkydome( model_t *model );
-void        R_TouchSkydome( struct skydome_s *skydome );
-void        R_DrawSkySurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, 
-	                       unsigned int shadowBits, drawSurfaceSky_t *drawSurf );
-void        R_ClearSky( drawSurfaceSky_t *drawSurf );
-
-/**
-* Maps world surface to skybox side
-*
-* @param fa world surface
-* @return returns true if surface has been successfully mapped to skybox axis
-*/
-bool        R_ClipSkySurface( drawSurfaceSky_t *drawSurf, const msurface_t *fa );
-void        *R_AddSkySurfToDrawList( drawList_t *list, const shader_t *shader, const portalSurface_t *portalSurf, 
-	                                 drawSurfaceSky_t *drawSurf );
-
-//====================================================================
 
 typedef struct {
 	int overbrightBits;                     // map specific overbright bits

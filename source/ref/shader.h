@@ -38,7 +38,6 @@ typedef enum {
 	SHADER_TYPE_CORONA          = 5,
 	SHADER_TYPE_OPAQUE_ENV      = 6,
 	SHADER_TYPE_VIDEO           = 7,
-	SHADER_TYPE_SKYBOX          = 8,
 	SHADER_TYPE_FOG             = 9,
 	SHADER_TYPE_2D_LINEAR       = 10,
 } shaderType_e;
@@ -48,7 +47,6 @@ typedef enum {
 // shader flags
 enum {
 	SHADER_DEPTHWRITE               = 1 << 0,
-	SHADER_SKY                      = 1 << 1,
 	SHADER_CULL_FRONT               = 1 << 2,
 	SHADER_CULL_BACK                = 1 << 3,
 	SHADER_POLYGONOFFSET            = 1 << 4,
@@ -292,9 +290,6 @@ typedef struct alignas( 8 ) shader_s {
 	float offsetmappingScale { 0.0f };
 
 	float portalDistance { 0.0f };
-
-	float skyHeight { 0.0f };
-	struct image_s *skyboxImages[6] { nullptr };
 } shader_t;
 
 #define     Shader_UseTextureFog( s ) ( ( ( s )->sort <= SHADER_SORT_FOG && \

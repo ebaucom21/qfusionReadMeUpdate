@@ -366,8 +366,6 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	NULL,
 	/* ST_BSP */
 	( drawSurf_cb ) & R_DrawBSPSurf,
-	/* ST_SKY */
-	( drawSurf_cb ) & R_DrawSkySurf,
 	/* ST_ALIAS */
 	( drawSurf_cb ) & R_DrawAliasSurf,
 	/* ST_SKELETAL */
@@ -387,8 +385,6 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	/* ST_NONE */
 	NULL,
 	/* ST_BSP */
-	NULL,
-	/* ST_SKY */
 	NULL,
 	/* ST_ALIAS */
 	NULL,
@@ -500,7 +496,7 @@ static void _R_DrawSurfaces( drawList_t *list ) {
 
 			// sky and things that don't use depth test use infinite projection matrix
 			// to not pollute the farclip
-			infiniteProj = entity->renderfx & RF_NODEPTHTEST ? true : ( shader->flags & SHADER_SKY ? true : false );
+			infiniteProj = entity->renderfx & RF_NODEPTHTEST ? true : false;
 			if( infiniteProj != prevInfiniteProj ) {
 				RB_FlushDynamicMeshes();
 				batchFlushed = true;

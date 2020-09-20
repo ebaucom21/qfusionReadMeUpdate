@@ -1659,7 +1659,7 @@ static void Mod_Finish( const lump_t *faces, const lump_t *light, vec3_t gridSiz
 		}
 
 		if( globalFog && surf->mesh.numVerts != 0 && surf->fog != testFog ) {
-			if( shader && !( shader->flags & SHADER_SKY ) && !shader->fog_dist ) {
+			if( shader && !shader->fog_dist ) {
 				globalFog = false;
 			}
 		}

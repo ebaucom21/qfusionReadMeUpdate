@@ -1298,10 +1298,6 @@ bool MaterialParser::getBoolConditionVarValue( BoolConditionVar var ) {
 int MaterialParser::buildVertexAttribs() {
 	int attribs = VATTRIB_POSITION_BIT;
 
-	if( flags & SHADER_SKY ) {
-		attribs |= VATTRIB_TEXCOORDS_BIT;
-	}
-
 	for( const auto &deform: deforms ) {
 		attribs |= getDeformVertexAttribs( deform );
 	}
@@ -1435,9 +1431,6 @@ void MaterialParser::fixFlagsAndSortingOrder() {
 		}
 	}
 
-	if( flags & SHADER_SKY ) {
-		sort = SHADER_SORT_SKY;
-	}
 	if( ( flags & SHADER_POLYGONOFFSET ) && !sort ) {
 		sort = SHADER_SORT_DECAL;
 	}
@@ -1464,11 +1457,7 @@ void MaterialParser::fixFlagsAndSortingOrder() {
 			}
 		}
 		if( pass.flags & GLSTATE_DEPTHWRITE ) {
-			if( flags & SHADER_SKY ) {
-				pass.flags &= ~GLSTATE_DEPTHWRITE;
-			} else {
-				flags |= SHADER_DEPTHWRITE;
-			}
+			flags |= SHADER_DEPTHWRITE;
 		}
 
 		// disable r_drawflat for shaders with customizable color passes
@@ -1623,7 +1612,6 @@ shader_t *MaterialParser::build() {
 int MaterialParser::getImageFlags() {
 	int flags = 0;
 
-	flags |= ( ( flags & SHADER_SKY ) ? IT_SKY : 0 );
 	flags |= ( noMipMaps ? IT_NOMIPMAP : 0 );
 	flags |= ( noPicMip ? IT_NOPICMIP : 0 );
 	flags |= ( noCompress ? IT_NOCOMPRESS : 0 );

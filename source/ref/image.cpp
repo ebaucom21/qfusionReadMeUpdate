@@ -400,7 +400,7 @@ static int R_ScaledImageSize( int width, int height, int *scaledWidth, int *scal
 
 	if( !( flags & IT_NOPICMIP ) ) {
 		// let people sample down the sky textures for speed
-		int picmip = ( flags & IT_SKY ) ? r_skymip->integer : r_picmip->integer;
+		int picmip = r_picmip->integer;
 		while( ( mip < picmip ) && ( ( width > minmipsize ) || ( height > minmipsize ) ) ) {
 			++mip;
 			width >>= 1;
