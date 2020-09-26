@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_program.c - OpenGL Shading Language support
 
 #include "local.h"
+#include "program.h"
 #include "../qcommon/q_trie.h"
 #include "../qcommon/qcommon.h"
 

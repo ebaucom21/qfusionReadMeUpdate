@@ -1,5 +1,6 @@
 #include "materiallocal.h"
 #include "local.h"
+#include "program.h"
 #include "shader.h"
 
 #include "../qcommon/hash.h"

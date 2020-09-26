@@ -22,7 +22,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_main.c
 
 #include "local.h"
-#include "../qcommon/qcommon.h"
+#include "program.h"
+#include "frontend.h"
+#include "materiallocal.h"
+#include "../qcommon/hash.h"
+#include "../qcommon/singletonholder.h"
 #include <algorithm>
 
 r_globals_t rf;
@@ -1633,4 +1637,5208 @@ int R_LoadFile_( const char *path, int flags, void **buffer, const char *filenam
 */
 void R_FreeFile_( void *buffer, const char *filename, int fileline ) {
 	Q_free( buffer );
+}
+
+/*
+ * R_Localtime
+ */
+static struct tm *R_Localtime( const time_t time, struct tm* _tm ) {
+#ifdef _WIN32
+	struct tm* __tm = localtime( &time );
+	*_tm = *__tm;
+#else
+	localtime_r( &time, _tm );
+#endif
+	return _tm;
+}
+
+/*
+* R_TakeScreenShot
+*/
+void R_TakeScreenShot( const char *path, const char *name, const char *fmtString, int x, int y, int w, int h, bool silent ) {
+	const char *extension;
+	size_t path_size = strlen( path ) + 1;
+	char *checkname = NULL;
+	size_t checkname_size = 0;
+	int quality;
+
+	if( !R_IsRenderingToScreen() ) {
+		return;
+	}
+
+	if( r_screenshot_jpeg->integer ) {
+		extension = ".jpg";
+		quality = r_screenshot_jpeg_quality->integer;
+	} else {
+		extension = ".tga";
+		quality = 100;
+	}
+
+	if( name && name[0] && Q_stricmp( name, "*" ) ) {
+		if( !COM_ValidateRelativeFilename( name ) ) {
+			Com_Printf( "Invalid filename\n" );
+			return;
+		}
+
+		checkname_size = ( path_size - 1 ) + strlen( name ) + strlen( extension ) + 1;
+		checkname = (char *)alloca( checkname_size );
+		Q_snprintfz( checkname, checkname_size, "%s%s", path, name );
+		COM_DefaultExtension( checkname, extension, checkname_size );
+	}
+
+	//
+	// find a file name to save it to
+	//
+	if( !checkname ) {
+		const int maxFiles = 100000;
+		static int lastIndex = 0;
+		bool addIndex = false;
+		char timestampString[MAX_QPATH];
+		static char lastFmtString[MAX_QPATH];
+		struct tm newtime;
+
+		R_Localtime( time( NULL ), &newtime );
+		strftime( timestampString, sizeof( timestampString ), fmtString, &newtime );
+
+		checkname_size = ( path_size - 1 ) + strlen( timestampString ) + 5 + 1 + strlen( extension );
+		checkname = (char *)alloca( checkname_size );
+
+		// if the string format is a constant or file already exists then iterate
+		if( !*fmtString || !strcmp( timestampString, fmtString ) ) {
+			addIndex = true;
+
+			// force a rescan in case some vars have changed..
+			if( strcmp( lastFmtString, fmtString ) ) {
+				lastIndex = 0;
+				Q_strncpyz( lastFmtString, fmtString, sizeof( lastFmtString ) );
+				r_screenshot_fmtstr->modified = false;
+			}
+			if( r_screenshot_jpeg->modified ) {
+				lastIndex = 0;
+				r_screenshot_jpeg->modified = false;
+			}
+		} else {
+			Q_snprintfz( checkname, checkname_size, "%s%s%s", path, timestampString, extension );
+			if( FS_FOpenAbsoluteFile( checkname, NULL, FS_READ ) != -1 ) {
+				lastIndex = 0;
+				addIndex = true;
+			}
+		}
+
+		for( ; addIndex && lastIndex < maxFiles; lastIndex++ ) {
+			Q_snprintfz( checkname, checkname_size, "%s%s%05i%s", path, timestampString, lastIndex, extension );
+			if( FS_FOpenAbsoluteFile( checkname, NULL, FS_READ ) == -1 ) {
+				break; // file doesn't exist
+			}
+		}
+
+		if( lastIndex == maxFiles ) {
+			Com_Printf( "Couldn't create a file\n" );
+			return;
+		}
+
+		lastIndex++;
+	}
+
+	R_ScreenShot( checkname, x, y, w, h, quality, silent );
+}
+
+/*
+* R_ScreenShot_f
+*/
+void R_ScreenShot_f( void ) {
+	int i;
+	const char *name;
+	size_t path_size;
+	char *path;
+	char timestamp_str[MAX_QPATH];
+	struct tm newtime;
+
+	R_Localtime( time( NULL ), &newtime );
+
+	name = Cmd_Argv( 1 );
+
+	path_size = strlen( FS_WriteDirectory() ) + 1 /* '/' */ + strlen( "/screenshots/" ) + 1;
+	path = (char *)alloca( path_size );
+	Q_snprintfz( path, path_size, "%s/screenshots/", FS_WriteDirectory() );
+
+	// validate timestamp string
+	for( i = 0; i < 2; i++ ) {
+		strftime( timestamp_str, sizeof( timestamp_str ), r_screenshot_fmtstr->string, &newtime );
+		if( !COM_ValidateRelativeFilename( timestamp_str ) ) {
+			Cvar_ForceSet( r_screenshot_fmtstr->name, r_screenshot_fmtstr->dvalue );
+		} else {
+			break;
+		}
+	}
+
+	// hm... shouldn't really happen, but check anyway
+	if( i == 2 ) {
+		Cvar_ForceSet( r_screenshot_fmtstr->name, glConfig.screenshotPrefix );
+	}
+
+	RF_ScreenShot( path, name, r_screenshot_fmtstr->string,
+				   Cmd_Argc() >= 3 && !Q_stricmp( Cmd_Argv( 2 ), "silent" ) ? true : false );
+}
+
+#include "local.h"
+#include "../qcommon/qcommon.h"
+#include <algorithm>
+
+#define WORLDSURF_DIST 1024.0f                  // hack the draw order for world surfaces
+
+static vec3_t modelOrg;                         // relative to view point
+
+//==================================================================================
+
+/*
+* R_SurfPotentiallyVisible
+*/
+bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
+	const shader_t *shader = surf->shader;
+	if( surf->flags & SURF_NODRAW ) {
+		return false;
+	}
+	if( !surf->mesh.numVerts ) {
+		return false;
+	}
+	if( !shader ) {
+		return false;
+	}
+	return true;
+}
+
+/*
+* R_SurfPotentiallyShadowed
+*/
+bool R_SurfPotentiallyShadowed( const msurface_t *surf ) {
+	if( surf->flags & ( SURF_SKY | SURF_NODLIGHT | SURF_NODRAW ) ) {
+		return false;
+	}
+	if( ( surf->shader->sort >= SHADER_SORT_OPAQUE ) && ( surf->shader->sort <= SHADER_SORT_ALPHATEST ) ) {
+		return true;
+	}
+	return false;
+}
+
+/*
+* R_SurfPotentiallyLit
+*/
+bool R_SurfPotentiallyLit( const msurface_t *surf ) {
+	const shader_t *shader;
+
+	if( surf->flags & ( SURF_SKY | SURF_NODLIGHT | SURF_NODRAW ) ) {
+		return false;
+	}
+	shader = surf->shader;
+	if( !shader->numpasses ) {
+		return false;
+	}
+	return ( surf->mesh.numVerts != 0 /* && (surf->facetype != FACETYPE_TRISURF)*/ );
+}
+
+/*
+* R_CullSurface
+*/
+bool R_CullSurface( const entity_t *e, const msurface_t *surf, unsigned int clipflags ) {
+	return ( clipflags && R_CullBox( surf->mins, surf->maxs, clipflags ) );
+}
+
+/*
+* R_SurfaceDlightBits
+*/
+static unsigned int R_SurfaceDlightBits( const msurface_t *surf, unsigned int checkDlightBits ) {
+	float dist;
+	unsigned int surfDlightBits = 0;
+
+	if( !R_SurfPotentiallyLit( surf ) ) {
+		return 0;
+	}
+
+	// TODO: This is totally wrong! Lights should mark affected surfaces in their radius on their own!
+
+	const auto *scene = Scene::Instance();
+	const Scene::LightNumType *rangeBegin, *rangeEnd;
+	scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
+	// Caution: bits correspond to indices in range now!
+	uint32_t mask = 1;
+	for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter, mask <<= 1 ) {
+		// TODO: This condition seems to be pointless
+		if( checkDlightBits & mask ) {
+			const auto *__restrict lt = scene->ProgramLightForNum( *iter );
+			// TODO: Avoid doing this and keep separate lists of planar and other surfaces
+			switch( surf->facetype ) {
+				case FACETYPE_PLANAR:
+					dist = DotProduct( lt->center, surf->plane ) - surf->plane[3];
+					if( dist > -lt->radius && dist < lt->radius ) {
+						surfDlightBits |= mask;
+					}
+					break;
+				case FACETYPE_PATCH:
+				case FACETYPE_TRISURF:
+				case FACETYPE_FOLIAGE:
+					if( BoundsAndSphereIntersect( surf->mins, surf->maxs, lt->center, lt->radius ) ) {
+						surfDlightBits |= mask;
+					}
+					break;
+			}
+			checkDlightBits &= ~mask;
+			if( !checkDlightBits ) {
+				break;
+			}
+		}
+	}
+
+	return surfDlightBits;
+}
+
+/*
+* R_DrawBSPSurf
+*/
+void R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int entShadowBits, drawSurfaceBSP_t *drawSurf ) {
+	const vboSlice_t *slice;
+	const vboSlice_t *shadowSlice;
+	static const vboSlice_t nullSlice = { 0 };
+	int firstVert, firstElem;
+	int numVerts, numElems;
+	unsigned dlightBits;
+
+	slice = R_GetDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
+	shadowSlice = R_GetDrawListVBOSlice( rn.meshlist, rsh.worldBrushModel->numDrawSurfaces + ( drawSurf - rsh.worldBrushModel->drawSurfaces ) );
+	if( !shadowSlice ) {
+		shadowSlice = &nullSlice;
+	}
+
+	assert( slice != NULL );
+	if( !slice ) {
+		return;
+	}
+
+	// shadowBits are shared for all rendering instances (normal view, portals, etc)
+	dlightBits = drawSurf->dlightBits;
+
+	// if either shadow slice is empty or shadowBits is 0, then we must pass the surface unshadowed
+
+	numVerts = slice->numVerts;
+	numElems = slice->numElems;
+	firstVert = drawSurf->firstVboVert + slice->firstVert;
+	firstElem = drawSurf->firstVboElem + slice->firstElem;
+
+	if( !numVerts ) {
+		return;
+	}
+
+	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
+
+	RB_SetDlightBits( dlightBits );
+
+	RB_SetLightstyle( drawSurf->superLightStyle );
+
+	if( drawSurf->numInstances ) {
+		RB_DrawElementsInstanced( firstVert, numVerts, firstElem, numElems,
+								  drawSurf->numInstances, drawSurf->instances );
+	} else {
+		RB_DrawElements( firstVert, numVerts, firstElem, numElems );
+	}
+}
+
+/*
+* R_AddSurfaceVBOSlice
+*/
+static void R_AddSurfaceVBOSlice( drawList_t *list, drawSurfaceBSP_t *drawSurf, const msurface_t *surf, int offset ) {
+	R_AddDrawListVBOSlice( list, offset + drawSurf - rsh.worldBrushModel->drawSurfaces,
+						   surf->mesh.numVerts, surf->mesh.numElems,
+						   surf->firstDrawSurfVert, surf->firstDrawSurfElem );
+}
+
+/*
+* R_AddSurfaceToDrawList
+*/
+static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSurf ) {
+	const shader_t *shader = drawSurf->shader;
+	const mfog_t *fog = drawSurf->fog;
+	portalSurface_t *portalSurface = NULL;
+	unsigned drawOrder = 0;
+	unsigned sliceIndex = drawSurf - rsh.worldBrushModel->drawSurfaces;
+
+	if( drawSurf->visFrame == rf.frameCount ) {
+		return true;
+	}
+
+	const bool portal = ( shader->flags & SHADER_PORTAL ) != 0;
+	if( portal ) {
+		portalSurface = R_AddPortalSurface( e, shader, drawSurf );
+	}
+
+	drawOrder = R_PackOpaqueOrder( fog, shader, drawSurf->numLightmaps, false );
+
+	drawSurf->dlightBits = 0;
+	drawSurf->visFrame = rf.frameCount;
+	drawSurf->listSurf = R_AddSurfToDrawList( rn.meshlist, e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
+	if( !drawSurf->listSurf ) {
+		return false;
+	}
+
+	if( portalSurface && !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
+		R_AddSurfToDrawList( rn.portalmasklist, e, NULL, NULL, 0, 0, NULL, drawSurf );
+	}
+
+	R_AddDrawListVBOSlice( rn.meshlist, sliceIndex, 0, 0, 0, 0 );
+	R_AddDrawListVBOSlice( rn.meshlist, sliceIndex + rsh.worldBrushModel->numDrawSurfaces, 0, 0, 0, 0 );
+
+	rf.stats.c_world_draw_surfs++;
+	return true;
+}
+
+/*
+* R_ClipSpecialWorldSurf
+*/
+static bool R_ClipSpecialWorldSurf( drawSurfaceBSP_t *drawSurf, const msurface_t *surf, const vec3_t origin, float *pdist ) {
+	portalSurface_t *portalSurface = NULL;
+	const shader_t *shader = drawSurf->shader;
+
+	const bool portal = ( shader->flags & SHADER_PORTAL ) != 0;
+	if( portal ) {
+		portalSurface = R_GetDrawListSurfPortal( drawSurf->listSurf );
+	}
+
+	if( portalSurface != NULL ) {
+		vec3_t centre;
+		float dist = 0;
+
+		if( origin ) {
+			VectorCopy( origin, centre );
+		} else {
+			VectorAdd( surf->mins, surf->maxs, centre );
+			VectorScale( centre, 0.5, centre );
+		}
+		dist = Distance( rn.refdef.vieworg, centre );
+
+		// draw portals in front-to-back order
+		dist = 1024 - dist / 100.0f;
+		if( dist < 1 ) {
+			dist = 1;
+		}
+
+		R_UpdatePortalSurface( portalSurface, &surf->mesh, surf->mins, surf->maxs, shader, drawSurf );
+
+		*pdist = dist;
+	}
+
+	return true;
+}
+
+/*
+* R_UpdateSurfaceInDrawList
+*
+* Walk the list of visible world surfaces and prepare the final VBO slice and draw order bits.
+* For sky surfaces, skybox clipping is also performed.
+*/
+static void R_UpdateSurfaceInDrawList( drawSurfaceBSP_t *drawSurf, unsigned int dlightBits, const vec3_t origin ) {
+	unsigned i, end;
+	float dist = 0;
+	bool special;
+	msurface_t *surf;
+	unsigned dlightFrame;
+	unsigned curDlightBits;
+	msurface_t *firstVisSurf, *lastVisSurf;
+
+	if( !drawSurf->listSurf ) {
+		return;
+	}
+
+	firstVisSurf = lastVisSurf = NULL;
+
+	curDlightBits = dlightFrame = 0;
+
+	end = drawSurf->firstWorldSurface + drawSurf->numWorldSurfaces;
+	surf = rsh.worldBrushModel->surfaces + drawSurf->firstWorldSurface;
+
+	special = ( drawSurf->shader->flags & (SHADER_PORTAL) ) != 0;
+
+	for( i = drawSurf->firstWorldSurface; i < end; i++ ) {
+		if( rf.worldSurfVis[i] ) {
+			float sdist = 0;
+			unsigned int checkDlightBits = dlightBits & ~curDlightBits;
+
+			if( special && !R_ClipSpecialWorldSurf( drawSurf, surf, origin, &sdist ) ) {
+				// clipped away
+				continue;
+			}
+
+			if( sdist > sdist )
+				dist = sdist;
+
+			if( checkDlightBits )
+				checkDlightBits = R_SurfaceDlightBits( surf, checkDlightBits );
+
+			// dynamic lights that affect the surface
+			if( checkDlightBits ) {
+				// ignore dlights that have already been marked as affectors
+				if( dlightFrame == rsc.frameCount ) {
+					curDlightBits |= checkDlightBits;
+				} else {
+					dlightFrame = rsc.frameCount;
+					curDlightBits = checkDlightBits;
+				}
+			}
+
+			// surfaces are sorted by their firstDrawVert index so to cut the final slice
+			// we only need to note the first and the last surface
+			if( firstVisSurf == NULL )
+				firstVisSurf = surf;
+			lastVisSurf = surf;
+		}
+		surf++;
+	}
+
+	if( dlightFrame == rsc.frameCount ) {
+		drawSurf->dlightBits = curDlightBits;
+		drawSurf->dlightFrame = dlightFrame;
+	}
+
+	// prepare the slice
+	if( firstVisSurf ) {
+		bool dlight = dlightFrame == rsc.frameCount;
+
+		R_AddSurfaceVBOSlice( rn.meshlist, drawSurf, firstVisSurf, 0 );
+
+		if( lastVisSurf != firstVisSurf )
+			R_AddSurfaceVBOSlice( rn.meshlist, drawSurf, lastVisSurf, 0 );
+
+		// update the distance sorting key if it's a portal surface or a normal dlit surface
+		if( dist != 0 || dlight ) {
+			int drawOrder = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, dlight );
+			if( dist == 0 )
+				dist = WORLDSURF_DIST;
+			R_UpdateDrawSurfDistKey( drawSurf->listSurf, 0, drawSurf->shader, dist, drawOrder );
+		}
+	}
+}
+
+/*
+=============================================================
+
+BRUSH MODELS
+
+=============================================================
+*/
+
+/*
+* R_BrushModelBBox
+*/
+float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated ) {
+	int i;
+	const model_t   *model = e->model;
+
+	if( !Matrix3_Compare( e->axis, axis_identity ) ) {
+		if( rotated ) {
+			*rotated = true;
+		}
+		for( i = 0; i < 3; i++ ) {
+			mins[i] = e->origin[i] - model->radius * e->scale;
+			maxs[i] = e->origin[i] + model->radius * e->scale;
+		}
+		return model->radius * e->scale;
+	} else {
+		if( rotated ) {
+			*rotated = false;
+		}
+		VectorMA( e->origin, e->scale, model->mins, mins );
+		VectorMA( e->origin, e->scale, model->maxs, maxs );
+		return RadiusFromBounds( mins, maxs );
+	}
+}
+
+#define R_TransformPointToModelSpace( e,rotate,in,out ) \
+	VectorSubtract( in, ( e )->origin, out ); \
+	if( rotated ) { \
+		vec3_t temp; \
+		VectorCopy( out, temp ); \
+		Matrix3_TransformVector( ( e )->axis, temp, out ); \
+	}
+
+/*
+* R_AddBrushModelToDrawList
+*/
+bool R_AddBrushModelToDrawList( const entity_t *e ) {
+	unsigned int i;
+	vec3_t origin;
+	vec3_t bmins, bmaxs;
+	bool rotated;
+	model_t *model = e->model;
+	mbrushmodel_t *bmodel = ( mbrushmodel_t * )model->extradata;
+	mfog_t *fog;
+	float radius;
+	unsigned dlightBits;
+
+	if( bmodel->numModelDrawSurfaces == 0 ) {
+		return false;
+	}
+
+	radius = R_BrushModelBBox( e, bmins, bmaxs, &rotated );
+
+	if( R_CullModelEntity( e, bmins, bmaxs, radius, rotated, false ) ) {
+		return false;
+	}
+
+	VectorAdd( e->model->mins, e->model->maxs, origin );
+	VectorMA( e->origin, 0.5, origin, origin );
+
+	// TODO: Unused?
+	fog = R_FogForBounds( bmins, bmaxs );
+
+	R_TransformPointToModelSpace( e, rotated, rn.refdef.vieworg, modelOrg );
+
+	const auto *scene = Scene::Instance();
+	// TODO: Lights should mark models they affect on their own!
+
+	// check dynamic lights that matter in the instance against the model
+	dlightBits = 0;
+
+	const Scene::LightNumType *rangeBegin, *rangeEnd;
+	scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
+	unsigned mask = 1;
+	for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter, mask <<= 1 ) {
+		const auto *light = scene->ProgramLightForNum( *iter );
+		if( !BoundsAndSphereIntersect( bmins, bmaxs, light->center, light->radius ) ) {
+			continue;
+		}
+		dlightBits |= mask;
+	}
+
+	dlightBits &= rn.dlightBits;
+
+	for( i = 0; i < bmodel->numModelSurfaces; i++ ) {
+		unsigned s = bmodel->firstModelSurface + i;
+		msurface_t *surf = rsh.worldBrushModel->surfaces + s;
+
+		if( !surf->drawSurf ) {
+			continue;
+		}
+		if( R_CullSurface( e, surf, 0 ) ) {
+			continue;
+		}
+
+		rf.worldSurfVis[s] = 1;
+		rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
+	}
+
+	for( i = 0; i < bmodel->numModelDrawSurfaces; i++ ) {
+		unsigned s = bmodel->firstModelDrawSurface + i;
+		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + s;
+
+		if( rf.worldDrawSurfVis[s] ) {
+			R_AddSurfaceToDrawList( e, drawSurf );
+
+			R_UpdateSurfaceInDrawList( drawSurf, dlightBits, origin );
+		}
+	}
+
+	return true;
+}
+
+/*
+=============================================================
+
+WORLD MODEL
+
+=============================================================
+*/
+
+/*
+* R_PostCullVisLeaves
+*/
+static void R_PostCullVisLeaves( void ) {
+	unsigned i, j;
+	mleaf_t *leaf;
+
+	for( i = 0; i < rsh.worldBrushModel->numvisleafs; i++ ) {
+		if( !rf.worldLeafVis[i] ) {
+			continue;
+		}
+
+		leaf = rsh.worldBrushModel->visleafs[i];
+
+		// add leaf bounds to view bounds
+		for( j = 0; j < 3; j++ ) {
+			rn.visMins[j] = std::min( rn.visMins[j], leaf->mins[j] );
+			rn.visMaxs[j] = std::max( rn.visMaxs[j], leaf->maxs[j] );
+		}
+
+		rf.stats.c_world_leafs++;
+	}
+}
+
+/*
+* R_CullVisLeaves
+*/
+static void R_CullVisLeaves( unsigned firstLeaf, unsigned numLeaves, unsigned clipFlags ) {
+	unsigned i, j;
+	mleaf_t *leaf;
+	uint8_t *pvs;
+	uint8_t *areabits;
+	int arearowbytes, areabytes;
+	bool novis;
+
+	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		return;
+	}
+
+	novis = rn.renderFlags & RF_NOVIS || rf.viewcluster == -1 || !rsh.worldBrushModel->pvs;
+	arearowbytes = ( ( rsh.worldBrushModel->numareas + 7 ) / 8 );
+	areabytes = arearowbytes;
+#ifdef AREAPORTALS_MATRIX
+	areabytes *= rsh.worldBrushModel->numareas;
+#endif
+
+	pvs = Mod_ClusterPVS( rf.viewcluster, rsh.worldModel );
+	if( rf.viewarea > -1 && rn.refdef.areabits )
+#ifdef AREAPORTALS_MATRIX
+	{ areabits = rn.refdef.areabits + rf.viewarea * arearowbytes;}
+#else
+		{ areabits = rn.refdef.areabits;}
+#endif
+	else {
+		areabits = NULL;
+	}
+
+	for( i = 0; i < numLeaves; i++ ) {
+		int clipped;
+		unsigned bit, testFlags;
+		cplane_t *clipplane;
+		unsigned l = firstLeaf + i;
+
+		leaf = rsh.worldBrushModel->visleafs[l];
+		if( !novis ) {
+			// check for door connected areas
+			if( areabits ) {
+				if( leaf->area < 0 || !( areabits[leaf->area >> 3] & ( 1 << ( leaf->area & 7 ) ) ) ) {
+					continue; // not visible
+				}
+			}
+
+			if( !( pvs[leaf->cluster >> 3] & ( 1 << ( leaf->cluster & 7 ) ) ) ) {
+				continue; // not visible
+			}
+		}
+
+		// track leaves, which are entirely inside the frustum
+		clipped = 0;
+		testFlags = clipFlags;
+		for( j = sizeof( rn.frustum ) / sizeof( rn.frustum[0] ), bit = 1, clipplane = rn.frustum; j > 0; j--, bit <<= 1, clipplane++ ) {
+			if( testFlags & bit ) {
+				clipped = BoxOnPlaneSide( leaf->mins, leaf->maxs, clipplane );
+				if( clipped == 2 ) {
+					break;
+				} else if( clipped == 1 ) {
+					testFlags &= ~bit; // node is entirely on screen
+				}
+			}
+		}
+
+		if( clipped == 2 ) {
+			continue; // fully clipped
+		}
+
+		if( testFlags == 0 ) {
+			// fully visible
+			for( j = 0; j < leaf->numVisSurfaces; j++ ) {
+				assert( leaf->visSurfaces[j] < rf.numWorldSurfVis );
+				rf.worldSurfFullVis[leaf->visSurfaces[j]] = 1;
+			}
+		} else {
+			// partly visible
+			for( j = 0; j < leaf->numVisSurfaces; j++ ) {
+				assert( leaf->visSurfaces[j] < rf.numWorldSurfVis );
+				rf.worldSurfVis[leaf->visSurfaces[j]] = 1;
+			}
+		}
+
+		rf.worldLeafVis[l] = 1;
+	}
+}
+
+/*
+* R_CullVisSurfaces
+*/
+static void R_CullVisSurfaces( unsigned firstSurf, unsigned numSurfs, unsigned clipFlags ) {
+	unsigned i;
+	unsigned end;
+	msurface_t *surf;
+
+	end = firstSurf + numSurfs;
+	surf = rsh.worldBrushModel->surfaces + firstSurf;
+
+	for( i = firstSurf; i < end; i++ ) {
+		if( rf.worldSurfVis[i] ) {
+			// the surface is at partly visible in at least one leaf, frustum cull it
+			if( R_CullSurface( rsc.worldent, surf, clipFlags ) ) {
+				rf.worldSurfVis[i] = 0;
+			}
+			rf.worldSurfFullVis[i] = 0;
+		}
+		else {
+			if( rf.worldSurfFullVis[i] ) {
+				// a fully visible surface, mark as visible
+				rf.worldSurfVis[i] = 1;
+			}
+		}
+
+		if( rf.worldSurfVis[i] ) {
+			if( !surf->drawSurf )
+				rf.worldSurfVis[i] = 0;
+			else
+				rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
+		}
+
+		surf++;
+	}
+}
+
+/*
+* R_AddVisSurfaces
+*/
+static void R_AddVisSurfaces( unsigned dlightBits, unsigned shadowBits ) {
+
+	unsigned i;
+
+	for( i = 0; i < rsh.worldBrushModel->numModelDrawSurfaces; i++ ) {
+		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + i;
+
+		if( !rf.worldDrawSurfVis[i] ) {
+			continue;
+		}
+
+		R_AddSurfaceToDrawList( rsc.worldent, drawSurf );
+	}
+}
+
+/*
+* R_AddWorldDrawSurfaces
+*/
+static void R_AddWorldDrawSurfaces( unsigned firstDrawSurf, unsigned numDrawSurfs ) {
+	unsigned i;
+
+	for( i = 0; i < numDrawSurfs; i++ ) {
+		unsigned s = firstDrawSurf + i;
+		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + s;
+
+		if( !rf.worldDrawSurfVis[s] ) {
+			continue;
+		}
+
+		R_UpdateSurfaceInDrawList( drawSurf, rn.dlightBits, NULL );
+	}
+}
+
+/*
+* R_DrawWorld
+*/
+void R_DrawWorld( void ) {
+	unsigned int i;
+	int clipFlags;
+	int64_t msec = 0, msec2 = 0;
+	unsigned int dlightBits;
+	unsigned int shadowBits;
+	bool worldOutlines;
+	bool speeds = r_speeds->integer != 0;
+
+	assert( rf.numWorldSurfVis >= rsh.worldBrushModel->numsurfaces );
+	assert( rf.numWorldLeafVis >= rsh.worldBrushModel->numvisleafs );
+
+	if( !r_drawworld->integer ) {
+		return;
+	}
+	if( !rsh.worldModel ) {
+		return;
+	}
+	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		return;
+	}
+
+	VectorCopy( rn.refdef.vieworg, modelOrg );
+
+	worldOutlines = mapConfig.forceWorldOutlines || ( rn.refdef.rdflags & RDF_WORLDOUTLINES );
+
+	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
+		rsc.worldent->outlineHeight = std::max( 0.0f, r_outlines_world->value );
+	} else {
+		rsc.worldent->outlineHeight = 0;
+	}
+	Vector4Copy( mapConfig.outlineColor, rsc.worldent->outlineColor );
+
+	clipFlags = rn.clipFlags;
+	dlightBits = 0;
+	shadowBits = 0;
+
+	if( r_nocull->integer ) {
+		clipFlags = 0;
+	}
+
+	// cull dynamic lights
+	rn.dlightBits = Scene::Instance()->CullLights( clipFlags );
+
+	// BEGIN t_world_node
+	if( speeds ) {
+		msec = Sys_Milliseconds();
+	}
+
+	if( rsh.worldBrushModel->numvisleafs > rsh.worldBrushModel->numsurfaces ) {
+		memset( (void *)rf.worldSurfVis, 1, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
+		memset( (void *)rf.worldSurfFullVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
+		memset( (void *)rf.worldLeafVis, 1, rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
+		memset( (void *)rf.worldDrawSurfVis, 0, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
+	} else {
+		memset( (void *)rf.worldSurfVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
+		memset( (void *)rf.worldSurfFullVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
+		memset( (void *)rf.worldLeafVis, 0, rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
+		memset( (void *)rf.worldDrawSurfVis, 0, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
+
+		if( r_speeds->integer ) {
+			msec2 = Sys_Milliseconds();
+		}
+
+		//
+		// cull leafs
+		//
+		R_CullVisLeaves( 0, rsh.worldBrushModel->numvisleafs, clipFlags );
+
+		if( speeds ) {
+			rf.stats.t_cull_world_nodes += Sys_Milliseconds() - msec2;
+		}
+	}
+
+	//
+	// cull surfaces and do some background work on computed vis leafs
+	//
+	if( speeds ) {
+		msec2 = Sys_Milliseconds();
+	}
+
+	R_CullVisSurfaces( 0, rsh.worldBrushModel->numModelSurfaces, clipFlags );
+
+	R_PostCullVisLeaves();
+
+	if( speeds ) {
+		rf.stats.t_cull_world_surfs += Sys_Milliseconds() - msec2;
+	}
+
+	//
+	// add visible surfaces to draw list
+	//
+	if( speeds ) {
+		msec2 = Sys_Milliseconds();
+	}
+	R_AddVisSurfaces( dlightBits, shadowBits );
+
+	R_AddWorldDrawSurfaces( 0, rsh.worldBrushModel->numModelDrawSurfaces );
+
+	if( speeds ) {
+		for( i = 0; i < rsh.worldBrushModel->numsurfaces; i++ ) {
+			if( rf.worldSurfVis[i] ) {
+				rf.stats.c_brush_polys++;
+			}
+		}
+	}
+
+	// END t_world_node
+	if( speeds ) {
+		rf.stats.t_world_node += Sys_Milliseconds() - msec;
+	}
+}
+
+drawList_t r_worldlist;
+drawList_t r_shadowlist;
+drawList_t r_portalmasklist;
+drawList_t r_portallist, r_skyportallist;
+
+/*
+* R_InitDrawList
+*/
+void R_InitDrawList( drawList_t *list ) {
+	memset( list, 0, sizeof( *list ) );
+}
+
+/*
+* R_InitDrawLists
+*/
+void R_InitDrawLists( void ) {
+	R_InitDrawList( &r_worldlist );
+	R_InitDrawList( &r_portalmasklist );
+	R_InitDrawList( &r_portallist );
+	R_InitDrawList( &r_skyportallist );
+	R_InitDrawList( &r_shadowlist );
+}
+
+/*
+* R_ClearDrawList
+*/
+void R_ClearDrawList( drawList_t *list ) {
+	if( !list ) {
+		return;
+	}
+
+	// clear counters
+	list->numDrawSurfs = 0;
+
+	// clear VBO slices
+	if( list->vboSlices ) {
+		memset( list->vboSlices, 0, sizeof( *list->vboSlices ) * list->maxVboSlices );
+	}
+}
+
+/*
+* R_ReserveDrawSurfaces
+*/
+static void R_ReserveDrawSurfaces( drawList_t *list, int minMeshes ) {
+	int oldSize, newSize;
+	sortedDrawSurf_t *newDs;
+	sortedDrawSurf_t *ds = list->drawSurfs;
+	int maxMeshes = list->maxDrawSurfs;
+
+	oldSize = maxMeshes;
+	newSize = std::max( minMeshes, oldSize * 2 );
+
+	newDs = (sortedDrawSurf_t *)Q_malloc( newSize * sizeof( sortedDrawSurf_t ) );
+	if( ds ) {
+		memcpy( newDs, ds, oldSize * sizeof( sortedDrawSurf_t ) );
+		Q_free( ds );
+	}
+
+	list->drawSurfs = newDs;
+	list->maxDrawSurfs = newSize;
+}
+
+/*
+* R_PackDistKey
+*/
+static int R_PackDistKey( int renderFx, const shader_t *shader, float dist, unsigned order ) {
+	int shaderSort;
+
+	shaderSort = shader->sort;
+
+	if( renderFx & RF_WEAPONMODEL ) {
+		bool depthWrite = ( shader->flags & SHADER_DEPTHWRITE ) ? true : false;
+
+		if( renderFx & RF_NOCOLORWRITE ) {
+			// depth-pass for alpha-blended weapon:
+			// write to depth but do not write to color
+			if( !depthWrite ) {
+				return 0;
+			}
+			// reorder the mesh to be drawn after everything else
+			// but before the blend-pass for the weapon
+			shaderSort = SHADER_SORT_WEAPON;
+		} else if( renderFx & RF_ALPHAHACK ) {
+			// blend-pass for the weapon:
+			// meshes that do not write to depth, are rendered as additives,
+			// meshes that were previously added as SHADER_SORT_WEAPON (see above)
+			// are now added to the very end of the list
+			shaderSort = depthWrite ? SHADER_SORT_WEAPON2 : SHADER_SORT_ADDITIVE;
+		}
+	} else if( renderFx & RF_ALPHAHACK ) {
+		// force shader sort to additive
+		shaderSort = SHADER_SORT_ADDITIVE;
+	}
+
+	return ( shaderSort << 26 ) | ( std::max( 0x400 - (int)dist, 0 ) << 15 ) | ( order & 0x7FFF );
+}
+
+/*
+* R_PackSortKey
+*/
+static unsigned int R_PackSortKey( unsigned int shaderNum, int fogNum,
+								   int portalNum, unsigned int entNum ) {
+	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
+		   ( ( ( portalNum + 1 ) & 0x1F ) << 5 ) | ( (unsigned int)( fogNum + 1 ) & 0x1F );
+}
+
+/*
+* R_UnpackSortKey
+*/
+static void R_UnpackSortKey( unsigned int sortKey, unsigned int *shaderNum, int *fogNum,
+							 int *portalNum, unsigned int *entNum ) {
+	*shaderNum = ( sortKey >> 21 ) & 0x7FF;
+	*entNum = ( sortKey >> 10 ) & 0x7FF;
+	*portalNum = (signed int)( ( sortKey >> 5 ) & 0x1F ) - 1;
+	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
+}
+
+/*
+* R_PackOpaqueOrder
+*
+* Returns sort order for opaque objects.
+*/
+unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
+	int order = 0;
+
+	// shader order
+	if( shader != NULL ) {
+		order = R_PackShaderOrder( shader );
+	}
+	// group by dlight
+	if( dlight ) {
+		order |= 0x40;
+	}
+	// group by dlight
+	if( fog != NULL ) {
+		order |= 0x80;
+	}
+	// group by lightmaps
+	order |= ( (MAX_LIGHTMAPS - numLightmaps) << 10 );
+
+	return order;
+}
+
+/*
+* R_AddSurfToDrawList
+*
+* Calculate sortkey and store info used for batching and sorting.
+* All 3D-geometry passes this function.
+*/
+void *R_AddSurfToDrawList( drawList_t *list, const entity_t *e, const mfog_t *fog, const shader_t *shader,
+						   float dist, unsigned int order, const portalSurface_t *portalSurf, void *drawSurf ) {
+	int distKey;
+	sortedDrawSurf_t *sds;
+
+	if( !list || !shader ) {
+		return NULL;
+	}
+	if( ( rn.renderFlags & RF_SHADOWMAPVIEW ) && Shader_ReadDepth( shader ) ) {
+		return NULL;
+	}
+	if( !rsh.worldBrushModel ) {
+		fog = NULL;
+	}
+
+	distKey = R_PackDistKey( e->renderfx, shader, dist, order );
+	if( !distKey ) {
+		return NULL;
+	}
+
+	// reallocate if numDrawSurfs
+	if( list->numDrawSurfs >= list->maxDrawSurfs ) {
+		int minMeshes = MIN_RENDER_MESHES;
+		if( rsh.worldBrushModel ) {
+			minMeshes += rsh.worldBrushModel->numDrawSurfaces;
+		}
+		R_ReserveDrawSurfaces( list, minMeshes );
+	}
+
+	sds = &list->drawSurfs[list->numDrawSurfs++];
+	sds->drawSurf = ( drawSurfaceType_t * )drawSurf;
+	sds->sortKey = R_PackSortKey( shader->id, fog ? fog - rsh.worldBrushModel->fogs : -1,
+								  portalSurf ? portalSurf - rn.portalSurfaces : -1, R_ENT2NUM( e ) );
+	sds->distKey = distKey;
+
+	return sds;
+}
+
+/*
+* R_UpdateDrawSurfDistKey
+*/
+void R_UpdateDrawSurfDistKey( void *psds, int renderFx, const shader_t *shader, float dist, unsigned order ) {
+	auto *sds = (sortedDrawSurf_t *)psds;
+	sds->distKey = R_PackDistKey( renderFx, shader, dist, order );
+}
+
+/*
+* R_GetDrawListSurfPortal
+*/
+portalSurface_t *R_GetDrawListSurfPortal( void *psds ) {
+	auto *sds = (sortedDrawSurf_t *)psds;
+	unsigned int sortKey = sds->sortKey;
+	unsigned int shaderNum;
+	unsigned int entNum;
+	int portalNum, fogNum;
+
+	R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
+
+	return portalNum >= 0 ? rn.portalSurfaces + portalNum : NULL;
+}
+
+/*
+* R_DrawSurfCompare
+*
+* Comparison callback function for R_SortDrawList
+*/
+static int R_DrawSurfCompare( const sortedDrawSurf_t *sbs1, const sortedDrawSurf_t *sbs2 ) {
+	if( sbs1->distKey > sbs2->distKey ) {
+		return 1;
+	}
+	if( sbs2->distKey > sbs1->distKey ) {
+		return -1;
+	}
+
+	if( sbs1->sortKey > sbs2->sortKey ) {
+		return 1;
+	}
+	if( sbs2->sortKey > sbs1->sortKey ) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+* R_SortDrawList
+*
+* Regular quicksort. Note that for all kinds of transparent meshes
+* you probably want to set distance or draw order to prevent flickering
+* due to quicksort's unstable nature.
+*/
+void R_SortDrawList( drawList_t *list ) {
+	if( r_draworder->integer ) {
+		return;
+	}
+	qsort( list->drawSurfs, list->numDrawSurfs, sizeof( sortedDrawSurf_t ),
+		   ( int ( * )( const void *, const void * ) )R_DrawSurfCompare );
+}
+
+/*
+* R_ReserveVBOSlices
+*
+* Ensures there's enough space to store the minSlices amount of slices
+* plus some more.
+*/
+static void R_ReserveVBOSlices( drawList_t *list, unsigned int minSlices ) {
+	unsigned int oldSize, newSize;
+	vboSlice_t *slices, *newSlices;
+
+	oldSize = list->maxVboSlices;
+	newSize = std::max( minSlices, oldSize * 2 );
+
+	slices = list->vboSlices;
+	newSlices = (vboSlice_t *)Q_malloc( newSize * sizeof( vboSlice_t ) );
+	if( slices ) {
+		memcpy( newSlices, slices, oldSize * sizeof( vboSlice_t ) );
+		Q_free( slices );
+	}
+
+	list->vboSlices = newSlices;
+	list->maxVboSlices = newSize;
+}
+
+/*
+* R_AddDrawListVBOSlice
+*/
+void R_AddDrawListVBOSlice( drawList_t *list, unsigned int index, unsigned int numVerts, unsigned int numElems,
+							unsigned int firstVert, unsigned int firstElem ) {
+	vboSlice_t *slice;
+
+	if( index >= list->maxVboSlices ) {
+		unsigned int minSlices = index + 1;
+		if( rsh.worldBrushModel ) {
+			minSlices = std::max( rsh.worldBrushModel->numDrawSurfaces, minSlices );
+		}
+		R_ReserveVBOSlices( list, minSlices );
+	}
+
+	slice = &list->vboSlices[index];
+	if( !slice->numVerts ) {
+		// initialize the slice
+		slice->firstVert = firstVert;
+		slice->firstElem = firstElem;
+		slice->numVerts = numVerts;
+		slice->numElems = numElems;
+	} else {
+		if( firstVert < slice->firstVert ) {
+			// prepend
+			slice->numVerts = slice->numVerts + slice->firstVert - firstVert;
+			slice->numElems = slice->numElems + slice->firstElem - firstElem;
+
+			slice->firstVert = firstVert;
+			slice->firstElem = firstElem;
+		} else {
+			// append
+			slice->numVerts = std::max( slice->numVerts, numVerts + firstVert - slice->firstVert );
+			slice->numElems = std::max( slice->numElems, numElems + firstElem - slice->firstElem );
+		}
+	}
+}
+
+/*
+* R_GetDrawListVBOSlice
+*/
+vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index ) {
+	if( index >= list->maxVboSlices ) {
+		return NULL;
+	}
+	return &list->vboSlices[index];
+}
+
+/*
+* R_GetDrawListVBOSliceCounts
+*
+* The initial values are not reset
+*/
+void R_GetVBOSliceCounts( drawList_t *list, unsigned *numSliceVerts, unsigned *numSliceElems ) {
+	unsigned i;
+
+	for( i = 0; i < list->maxVboSlices; i++ ) {
+		*numSliceVerts += list->vboSlices[i].numVerts;
+
+		*numSliceElems += list->vboSlices[i].numElems;
+	}
+}
+
+static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
+	{
+		/* ST_NONE */
+		NULL,
+		/* ST_BSP */
+		( drawSurf_cb ) & R_DrawBSPSurf,
+		/* ST_ALIAS */
+		( drawSurf_cb ) & R_DrawAliasSurf,
+		/* ST_SKELETAL */
+		( drawSurf_cb ) & R_DrawSkeletalSurf,
+		/* ST_SPRITE */
+		NULL,
+		/* ST_POLY */
+		NULL,
+		/* ST_CORONA */
+		NULL,
+		/* ST_NULLMODEL */
+		( drawSurf_cb ) & R_DrawNullSurf,
+	};
+
+static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
+	{
+		/* ST_NONE */
+		NULL,
+		/* ST_BSP */
+		NULL,
+		/* ST_ALIAS */
+		NULL,
+		/* ST_SKELETAL */
+		NULL,
+		/* ST_SPRITE */
+		( batchDrawSurf_cb ) & R_BatchSpriteSurf,
+		/* ST_POLY */
+		( batchDrawSurf_cb ) & R_BatchPolySurf,
+		/* ST_CORONA */
+		( batchDrawSurf_cb ) & R_BatchCoronaSurf,
+		/* ST_NULLMODEL */
+		NULL,
+	};
+
+/*
+* R_DrawSurfaces
+*/
+static void _R_DrawSurfaces( drawList_t *list ) {
+	unsigned int i;
+	unsigned int sortKey;
+	unsigned int shaderNum = 0, prevShaderNum = MAX_SHADERS;
+	unsigned int entNum = 0, prevEntNum = MAX_REF_ENTITIES;
+	int portalNum = -1, prevPortalNum = -100500;
+	int fogNum = -1, prevFogNum = -100500;
+	sortedDrawSurf_t *sds;
+	int drawSurfType;
+	bool batchDrawSurf = false, prevBatchDrawSurf = false;
+	const shader_t *shader;
+	const entity_t *entity;
+	const mfog_t *fog;
+	const portalSurface_t *portalSurface;
+	float depthmin = 0.0f, depthmax = 0.0f;
+	bool depthHack = false, cullHack = false;
+	bool infiniteProj = false, prevInfiniteProj = false;
+	bool depthWrite = false;
+	bool depthCopied = false;
+	bool batchFlushed = true, batchOpaque = false;
+	int entityFX = 0, prevEntityFX = -1;
+	mat4_t projectionMatrix;
+	int riFBO = 0;
+
+	if( !list->numDrawSurfs ) {
+		return;
+	}
+
+	riFBO = RB_BoundFrameBufferObject();
+
+	RB_SetScreenImageSet( rn.st );
+
+	for( i = 0; i < list->numDrawSurfs; i++ ) {
+		sds = list->drawSurfs + i;
+		sortKey = sds->sortKey;
+		drawSurfType = *(int *)sds->drawSurf;
+
+		assert( drawSurfType > ST_NONE && drawSurfType < ST_MAX_TYPES );
+
+		batchDrawSurf = ( r_batchDrawSurfCb[drawSurfType] ? true : false );
+
+		// decode draw surface properties
+		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
+
+		shader = MaterialCache::instance()->getMaterialById( shaderNum );
+		entity = R_NUM2ENT( entNum );
+		fog = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : NULL;
+		portalSurface = portalNum >= 0 ? rn.portalSurfaces + portalNum : NULL;
+		entityFX = entity->renderfx;
+		depthWrite = shader->flags & SHADER_DEPTHWRITE ? true : false;
+
+		// see if we need to reset mesh properties in the backend
+		if( !prevBatchDrawSurf || shaderNum != prevShaderNum || fogNum != prevFogNum ||
+			portalNum != prevPortalNum ||
+			( entNum != prevEntNum && !( shader->flags & SHADER_ENTITY_MERGABLE ) ) ||
+			entityFX != prevEntityFX ) {
+
+			if( prevBatchDrawSurf && !batchDrawSurf ) {
+				RB_FlushDynamicMeshes();
+				batchFlushed = true;
+			}
+
+			// hack the depth range to prevent view model from poking into walls
+			if( entity->flags & RF_WEAPONMODEL ) {
+				if( !depthHack ) {
+					RB_FlushDynamicMeshes();
+					batchFlushed = true;
+					depthHack = true;
+					RB_GetDepthRange( &depthmin, &depthmax );
+					RB_DepthRange( depthmin, depthmin + 0.3 * ( depthmax - depthmin ) );
+				}
+			} else {
+				if( depthHack ) {
+					RB_FlushDynamicMeshes();
+					batchFlushed = true;
+					depthHack = false;
+					RB_DepthRange( depthmin, depthmax );
+				}
+			}
+
+			if( entNum != prevEntNum ) {
+				// backface culling for left-handed weapons
+				bool oldCullHack = cullHack;
+				cullHack = ( ( entity->flags & RF_CULLHACK ) ? true : false );
+				if( cullHack != oldCullHack ) {
+					RB_FlushDynamicMeshes();
+					batchFlushed = true;
+					RB_FlipFrontFace();
+				}
+			}
+
+			// sky and things that don't use depth test use infinite projection matrix
+			// to not pollute the farclip
+			infiniteProj = entity->renderfx & RF_NODEPTHTEST ? true : false;
+			if( infiniteProj != prevInfiniteProj ) {
+				RB_FlushDynamicMeshes();
+				batchFlushed = true;
+				if( infiniteProj ) {
+					Matrix4_Copy( rn.projectionMatrix, projectionMatrix );
+					Matrix4_PerspectiveProjectionToInfinity( Z_NEAR, projectionMatrix, glConfig.depthEpsilon );
+					RB_LoadProjectionMatrix( projectionMatrix );
+				} else {
+					RB_LoadProjectionMatrix( rn.projectionMatrix );
+				}
+			}
+
+			if( batchFlushed ) {
+				batchOpaque = false;
+			}
+
+			if( !depthWrite && !depthCopied && Shader_ReadDepth( shader ) ) {
+				// ignore portals because oblique frustum messes up the depth values
+				if( ( rn.renderFlags & RF_SOFT_PARTICLES ) && !( rn.renderFlags & RF_CLIPPLANE ) ) {
+					int fbo = RB_BoundFrameBufferObject();
+					if( RFB_HasDepthRenderBuffer( fbo ) && rn.st->screenTexCopy ) {
+						// draw all dynamic surfaces that write depth before copying
+						if( batchOpaque ) {
+							batchOpaque = false;
+							RB_FlushDynamicMeshes();
+							batchFlushed = true;
+						}
+						// this also resolves the multisampling fbo
+						rn.multisampleDepthResolved = true;
+						RB_BlitFrameBufferObject( fbo, rn.st->screenTexCopy->fbo, GL_DEPTH_BUFFER_BIT, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
+					}
+				}
+
+				depthCopied = true;
+			}
+
+			if( batchDrawSurf ) {
+				// don't transform batched surfaces
+				if( !prevBatchDrawSurf ) {
+					RB_LoadObjectMatrix( mat4x4_identity );
+				}
+			} else {
+				if( ( entNum != prevEntNum ) || prevBatchDrawSurf ) {
+					if( shader->flags & SHADER_AUTOSPRITE ) {
+						R_TranslateForEntity( entity );
+					} else {
+						R_TransformForEntity( entity );
+					}
+				}
+			}
+
+			if( !batchDrawSurf ) {
+				assert( r_drawSurfCb[drawSurfType] );
+
+				RB_BindShader( entity, shader, fog );
+				RB_SetPortalSurface( portalSurface );
+
+				r_drawSurfCb[drawSurfType]( entity, shader, fog, portalSurface, 0, sds->drawSurf );
+			}
+
+			prevShaderNum = shaderNum;
+			prevEntNum = entNum;
+			prevFogNum = fogNum;
+			prevBatchDrawSurf = batchDrawSurf;
+			prevPortalNum = portalNum;
+			prevInfiniteProj = infiniteProj;
+			prevEntityFX = entityFX;
+		}
+
+		if( batchDrawSurf ) {
+			r_batchDrawSurfCb[drawSurfType]( entity, shader, fog, portalSurface, 0, sds->drawSurf );
+			batchFlushed = false;
+			if( depthWrite ) {
+				batchOpaque = true;
+			}
+		}
+	}
+
+	if( batchDrawSurf ) {
+		RB_FlushDynamicMeshes();
+	}
+	if( depthHack ) {
+		RB_DepthRange( depthmin, depthmax );
+	}
+	if( cullHack ) {
+		RB_FlipFrontFace();
+	}
+
+	RB_BindFrameBufferObject( riFBO );
+}
+
+/*
+* R_DrawSurfaces
+*/
+void R_DrawSurfaces( drawList_t *list ) {
+	bool triOutlines;
+
+	triOutlines = RB_EnableTriangleOutlines( false );
+	if( !triOutlines ) {
+		// do not recurse into normal mode when rendering triangle outlines
+		_R_DrawSurfaces( list );
+	}
+	RB_EnableTriangleOutlines( triOutlines );
+}
+
+/*
+* R_DrawOutlinedSurfaces
+*/
+void R_DrawOutlinedSurfaces( drawList_t *list ) {
+	bool triOutlines;
+
+	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		return;
+	}
+
+	// properly store and restore the state, as the
+	// R_DrawOutlinedSurfaces calls can be nested
+	triOutlines = RB_EnableTriangleOutlines( true );
+	_R_DrawSurfaces( list );
+	RB_EnableTriangleOutlines( triOutlines );
+}
+
+/*
+* R_CopyOffsetElements
+*/
+void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems ) {
+	int i;
+
+	for( i = 0; i < numElems; i++, inelems++, outelems++ ) {
+		*outelems = vertsOffset + *inelems;
+	}
+}
+
+/*
+* R_CopyOffsetTriangles
+*/
+void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems ) {
+	int i;
+	int numTris = numElems / 3;
+
+	for( i = 0; i < numTris; i++, inelems += 3, outelems += 3 ) {
+		outelems[0] = vertsOffset + inelems[0];
+		outelems[1] = vertsOffset + inelems[1];
+		outelems[2] = vertsOffset + inelems[2];
+	}
+}
+
+/*
+* R_BuildTrifanElements
+*/
+void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems ) {
+	int i;
+
+	for( i = 2; i < numVerts; i++, elems += 3 ) {
+		elems[0] = vertsOffset;
+		elems[1] = vertsOffset + i - 1;
+		elems[2] = vertsOffset + i;
+	}
+}
+
+/*
+* R_BuildTangentVectors
+*/
+void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsArray,
+							vec2_t *stArray, int numTris, elem_t *elems, vec4_t *sVectorsArray ) {
+	int i, j;
+	float d, *v[3], *tc[3];
+	vec_t *s, *t, *n;
+	vec3_t stvec[3], cross;
+	vec3_t stackTVectorsArray[128];
+	vec3_t *tVectorsArray;
+
+	if( numVertexes > sizeof( stackTVectorsArray ) / sizeof( stackTVectorsArray[0] ) ) {
+		tVectorsArray = (vec3_t *)Q_malloc( sizeof( vec3_t ) * numVertexes );
+	} else {
+		tVectorsArray = stackTVectorsArray;
+	}
+
+	// assuming arrays have already been allocated
+	// this also does some nice precaching
+	memset( sVectorsArray, 0, numVertexes * sizeof( *sVectorsArray ) );
+	memset( tVectorsArray, 0, numVertexes * sizeof( *tVectorsArray ) );
+
+	for( i = 0; i < numTris; i++, elems += 3 ) {
+		for( j = 0; j < 3; j++ ) {
+			v[j] = ( float * )( xyzArray + elems[j] );
+			tc[j] = ( float * )( stArray + elems[j] );
+		}
+
+		// calculate two mostly perpendicular edge directions
+		VectorSubtract( v[1], v[0], stvec[0] );
+		VectorSubtract( v[2], v[0], stvec[1] );
+
+		// we have two edge directions, we can calculate the normal then
+		CrossProduct( stvec[1], stvec[0], cross );
+
+		for( j = 0; j < 3; j++ ) {
+			stvec[0][j] = ( ( tc[1][1] - tc[0][1] ) * ( v[2][j] - v[0][j] ) - ( tc[2][1] - tc[0][1] ) * ( v[1][j] - v[0][j] ) );
+			stvec[1][j] = ( ( tc[1][0] - tc[0][0] ) * ( v[2][j] - v[0][j] ) - ( tc[2][0] - tc[0][0] ) * ( v[1][j] - v[0][j] ) );
+		}
+
+		// inverse tangent vectors if their cross product goes in the opposite
+		// direction to triangle normal
+		CrossProduct( stvec[1], stvec[0], stvec[2] );
+		if( DotProduct( stvec[2], cross ) < 0 ) {
+			VectorInverse( stvec[0] );
+			VectorInverse( stvec[1] );
+		}
+
+		for( j = 0; j < 3; j++ ) {
+			VectorAdd( sVectorsArray[elems[j]], stvec[0], sVectorsArray[elems[j]] );
+			VectorAdd( tVectorsArray[elems[j]], stvec[1], tVectorsArray[elems[j]] );
+		}
+	}
+
+	// normalize
+	for( i = 0, s = *sVectorsArray, t = *tVectorsArray, n = *normalsArray; i < numVertexes; i++, s += 4, t += 3, n += 4 ) {
+		// keep s\t vectors perpendicular
+		d = -DotProduct( s, n );
+		VectorMA( s, d, n, s );
+		VectorNormalize( s );
+
+		d = -DotProduct( t, n );
+		VectorMA( t, d, n, t );
+
+		// store polarity of t-vector in the 4-th coordinate of s-vector
+		CrossProduct( n, s, cross );
+		if( DotProduct( cross, t ) < 0 ) {
+			s[3] = -1;
+		} else {
+			s[3] = 1;
+		}
+	}
+
+	if( tVectorsArray != stackTVectorsArray ) {
+		Q_free( tVectorsArray );
+	}
+}
+
+enum {
+	PPFX_SOFT_PARTICLES,
+	PPFX_TONE_MAPPING,
+	PPFX_COLOR_CORRECTION,
+	PPFX_OVERBRIGHT_TARGET,
+	PPFX_BLOOM,
+	PPFX_FXAA,
+	PPFX_BLUR,
+};
+
+enum {
+	PPFX_BIT_SOFT_PARTICLES = RF_BIT( PPFX_SOFT_PARTICLES ),
+	PPFX_BIT_TONE_MAPPING = RF_BIT( PPFX_TONE_MAPPING ),
+	PPFX_BIT_COLOR_CORRECTION = RF_BIT( PPFX_COLOR_CORRECTION ),
+	PPFX_BIT_OVERBRIGHT_TARGET = RF_BIT( PPFX_OVERBRIGHT_TARGET ),
+	PPFX_BIT_BLOOM = RF_BIT( PPFX_BLOOM ),
+	PPFX_BIT_FXAA = RF_BIT( PPFX_FXAA ),
+	PPFX_BIT_BLUR = RF_BIT( PPFX_BLUR ),
+};
+
+/*
+* R_ClearScene
+*/
+void R_ClearScene( void ) {
+	rsc.numLocalEntities = 0;
+	rsc.numPolys = 0;
+
+	rsc.worldent = R_NUM2ENT( rsc.numLocalEntities );
+	rsc.worldent->scale = 1.0f;
+	rsc.worldent->model = rsh.worldModel;
+	rsc.worldent->rtype = RT_MODEL;
+	Matrix3_Identity( rsc.worldent->axis );
+	rsc.numLocalEntities++;
+
+	rsc.polyent = R_NUM2ENT( rsc.numLocalEntities );
+	rsc.polyent->scale = 1.0f;
+	rsc.polyent->model = NULL;
+	rsc.polyent->rtype = RT_MODEL;
+	Matrix3_Identity( rsc.polyent->axis );
+	rsc.numLocalEntities++;
+
+	rsc.skyent = R_NUM2ENT( rsc.numLocalEntities );
+	*rsc.skyent = *rsc.worldent;
+	rsc.numLocalEntities++;
+
+	rsc.numEntities = rsc.numLocalEntities;
+
+	rsc.numBmodelEntities = 0;
+
+	rsc.frameCount++;
+
+	R_ClearSkeletalCache();
+
+	Scene::Instance()->Clear();
+}
+
+/*
+* R_AddEntityToScene
+*/
+void R_AddEntityToScene( const entity_t *ent ) {
+	if( !r_drawentities->integer ) {
+		return;
+	}
+
+	if( ( ( rsc.numEntities - rsc.numLocalEntities ) < MAX_ENTITIES ) && ent ) {
+		int eNum = rsc.numEntities;
+		entity_t *de = R_NUM2ENT( eNum );
+
+		*de = *ent;
+		if( r_outlines_scale->value <= 0 ) {
+			de->outlineHeight = 0;
+		}
+
+		if( de->rtype == RT_MODEL ) {
+			if( de->model && de->model->type == mod_brush ) {
+				rsc.bmodelEntities[rsc.numBmodelEntities++] = de;
+			}
+			if( !( de->renderfx & RF_NOSHADOW ) ) {
+				// TODO
+			}
+		} else if( de->rtype == RT_SPRITE ) {
+			// simplifies further checks
+			de->model = NULL;
+		}
+
+		if( de->renderfx & RF_ALPHAHACK ) {
+			if( de->shaderRGBA[3] == 255 ) {
+				de->renderfx &= ~RF_ALPHAHACK;
+			}
+		}
+
+		rsc.numEntities++;
+
+		// add invisible fake entity for depth write
+		if( ( de->renderfx & ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) == ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) {
+			entity_t tent = *ent;
+			tent.renderfx &= ~RF_ALPHAHACK;
+			tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
+			R_AddEntityToScene( &tent );
+		}
+	}
+}
+
+static SingletonHolder<Scene> sceneInstanceHolder;
+
+void Scene::Init() {
+	sceneInstanceHolder.Init();
+}
+
+void Scene::Shutdown() {
+	sceneInstanceHolder.Shutdown();
+}
+
+Scene *Scene::Instance() {
+	return sceneInstanceHolder.Instance();
+}
+
+void Scene::InitVolatileAssets() {
+	coronaShader = MaterialCache::instance()->loadDefaultMaterial( wsw::StringView( "$corona" ), SHADER_TYPE_CORONA );
+}
+
+void Scene::DestroyVolatileAssets() {
+	coronaShader = nullptr;
+}
+
+void Scene::AddLight( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
+	assert( r || g || b );
+	assert( programIntensity || coronaIntensity );
+	assert( coronaIntensity >= 0 );
+	assert( programIntensity >= 0 );
+
+	vec3_t color { r, g, b };
+	if( r_lighting_grayscale->integer ) {
+		float grey = ColorGrayscale( color );
+		color[0] = color[1] = color[2] = bound( 0, grey, 1 );
+	}
+
+	// TODO: We can share culling information for program lights and coronae even if radii do not match
+
+	const int cvarValue = r_dynamiclight->integer;
+	if( ( cvarValue & ~1 ) && coronaIntensity && numCoronaLights < MAX_CORONA_LIGHTS ) {
+		new( &coronaLights[numCoronaLights++] )Light( org, color, coronaIntensity );
+	}
+
+	if( ( cvarValue & 1 ) && programIntensity && numProgramLights < MAX_PROGRAM_LIGHTS ) {
+		new( &programLights[numProgramLights++] )Light( org, color, programIntensity );
+	}
+}
+
+void Scene::DynLightDirForOrigin( const vec_t *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal ) {
+	if( !( r_dynamiclight->integer & 1 ) ) {
+		return;
+	}
+
+	vec3_t direction;
+	bool anyDlights = false;
+
+	// TODO: We can avoid doing a loop over all lights
+	// if there's a spatial hierarchy for most entities that receive dlights
+
+	const auto *__restrict lights = programLights;
+	const LightNumType *__restrict nums = drawnProgramLightNums;
+	for( int i = 0; i < numDrawnProgramLights; i++ ) {
+		const auto *__restrict dl = lights + nums[i];
+		const float squareDist = DistanceSquared( dl->center, origin );
+		const float threshold = dl->radius + radius;
+		if( squareDist > threshold * threshold ) {
+			continue;
+		}
+
+		// Start computing invThreshold so hopefully the result is ready to the moment of its usage
+		const float invThreshold = 1.0f / threshold;
+
+		// TODO: Mark as "unlikely"
+		if( squareDist < 0.001f ) {
+			continue;
+		}
+
+		VectorSubtract( dl->center, origin, direction );
+		const float invDist = Q_RSqrt( squareDist );
+		VectorScale( direction, invDist, direction );
+
+		if( !anyDlights ) {
+			VectorNormalizeFast( dir );
+			anyDlights = true;
+		}
+
+		const float dist = Q_Rcp( invDist );
+		const float add = 1.0f - ( dist * invThreshold );
+		const float dist2 = add * 0.5f / dist;
+		for( int j = 0; j < 3; j++ ) {
+			const float dot = dl->color[j] * add;
+			diffuseLocal[j] += dot;
+			ambientLocal[j] += dot * 0.05f;
+			dir[j] += direction[j] * dist2;
+		}
+	}
+}
+
+uint32_t Scene::CullLights( unsigned clipFlags ) {
+	if( rn.renderFlags & RF_ENVVIEW ) {
+		return 0;
+	}
+
+	if( r_fullbright->integer ) {
+		return 0;
+	}
+
+	const int cvarValue = r_dynamiclight->integer;
+	if( !cvarValue ) {
+		return 0;
+	}
+
+	if( cvarValue & ~1 ) {
+		for( int i = 0; i < numCoronaLights; ++i ) {
+			const auto &light = coronaLights[i];
+			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
+				continue;
+			}
+			drawnCoronaLightNums[numDrawnCoronaLights++] = (LightNumType)i;
+		}
+	}
+
+	if( !( cvarValue & 1 ) ) {
+		return 0;
+	}
+
+	// TODO: Use PVS as well..
+	// TODO: Mark surfaces that the light has an impact on during PVS BSP traversal
+	// TODO: Cull world nodes / surfaces prior to this so we do not have to test light impact on culled surfaces
+
+	if( numProgramLights <= MAX_DLIGHTS ) {
+		for( int i = 0; i < numProgramLights; ++i ) {
+			const auto &light = programLights[i];
+			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
+				continue;
+			}
+			drawnProgramLightNums[numDrawnProgramLights++] = (LightNumType)i;
+		}
+		return BitsForNumberOfLights( numDrawnProgramLights );
+	}
+
+	int numCulledLights = 0;
+	for( int i = 0; i < numProgramLights; ++i ) {
+		const auto &light = programLights[i];
+		if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
+			continue;
+		}
+		drawnProgramLightNums[numCulledLights++] = (LightNumType)i;
+	}
+
+	if( numCulledLights <= MAX_DLIGHTS ) {
+		numDrawnProgramLights = numCulledLights;
+		return BitsForNumberOfLights( numDrawnProgramLights );
+	}
+
+	// TODO: We can reuse computed distances for further surface sorting...
+
+	struct LightAndScore {
+		int num;
+		float score;
+
+		LightAndScore() = default;
+		LightAndScore( int num_, float score_ ): num( num_ ), score( score_ ) {}
+		bool operator<( const LightAndScore &that ) const { return score < that.score; }
+	};
+
+	// TODO: Use a proper component layout and SIMD distance (dot) computations here
+
+	int numSortedLights = 0;
+	LightAndScore sortedLights[MAX_PROGRAM_LIGHTS];
+	for( int i = 0; i < numCulledLights; ++i ) {
+		const int num = drawnProgramLightNums[i];
+		const Light *light = &programLights[num];
+		float score = Q_RSqrt( DistanceSquared( light->center, rn.viewOrigin ) ) * light->radius;
+		new( &sortedLights[numSortedLights++] )LightAndScore( num, score );
+		std::push_heap( sortedLights, sortedLights + numSortedLights );
+	}
+
+	numDrawnProgramLights = 0;
+	while( numDrawnProgramLights < MAX_DLIGHTS ) {
+		std::pop_heap( sortedLights, sortedLights + numSortedLights );
+		assert( numSortedLights > 0 );
+		numSortedLights--;
+		int num = sortedLights[numSortedLights].num;
+		drawnProgramLightNums[numDrawnProgramLights++] = num;
+	}
+
+	assert( numDrawnProgramLights == MAX_DLIGHTS );
+	return BitsForNumberOfLights( MAX_DLIGHTS );
+}
+
+void Scene::DrawCoronae() {
+	if( !( r_dynamiclight->integer & ~1 ) ) {
+		return;
+	}
+
+	const auto *__restrict nums = drawnCoronaLightNums;
+	const auto *__restrict lights = coronaLights;
+	const float *__restrict viewOrigin = rn.viewOrigin;
+	auto *__restrict meshList = rn.meshlist;
+	auto *__restrict polyEnt = rsc.polyent;
+
+	bool hasManyFogs = false;
+	mfog_t *fog = nullptr;
+	if( !( rn.renderFlags & RF_SHADOWMAPVIEW ) &&  !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		if( rsh.worldModel && rsh.worldBrushModel->numfogs ) {
+			if( auto *globalFog = rsh.worldBrushModel->globalfog ) {
+				fog = globalFog;
+			} else {
+				hasManyFogs = true;
+			}
+		}
+	}
+
+	const auto numLights = numDrawnCoronaLights;
+	if( !hasManyFogs ) {
+		for( int i = 0; i < numLights; ++i ) {
+			const auto *light = &lights[nums[i]];
+			const float distance = Q_Rcp( Q_RSqrt( DistanceSquared( viewOrigin, light->center ) ) );
+			// TODO: All this stuff below should use restrict qualifiers
+			R_AddSurfToDrawList( meshList, polyEnt, fog, coronaShader, distance, 0, nullptr, &coronaSurfs[i] );
+		}
+		return;
+	}
+
+	for( int i = 0; i < numLights; i++ ) {
+		const auto *light = &lights[nums[i]];
+		const float distance = Q_Rcp( Q_RSqrt( DistanceSquared( viewOrigin, light->center ) ) );
+		// TODO: We can skip some tests even in this case
+		fog = R_FogForSphere( light->center, 1 );
+		R_AddSurfToDrawList( meshList, polyEnt, fog, coronaShader, distance, 0, nullptr, &coronaSurfs[i] );
+	}
+}
+
+/*
+* R_AddPolyToScene
+*/
+void R_AddPolyToScene( const poly_t *poly ) {
+	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
+
+	if( ( rsc.numPolys < MAX_POLYS ) && poly && poly->numverts ) {
+		drawSurfacePoly_t *dp = &rsc.polys[rsc.numPolys];
+
+		assert( poly->shader != NULL );
+		if( !poly->shader ) {
+			return;
+		}
+
+		dp->type = ST_POLY;
+		dp->shader = poly->shader;
+		dp->numVerts = std::min( poly->numverts, MAX_POLY_VERTS );
+		dp->xyzArray = poly->verts;
+		dp->normalsArray = poly->normals;
+		dp->stArray = poly->stcoords;
+		dp->colorsArray = poly->colors;
+		dp->numElems = poly->numelems;
+		dp->elems = ( elem_t * )poly->elems;
+		dp->fogNum = poly->fognum;
+
+		// if fogNum is unset, we need to find the volume for polygon bounds
+		if( !dp->fogNum ) {
+			int i;
+			mfog_t *fog;
+			vec3_t dpmins, dpmaxs;
+
+			ClearBounds( dpmins, dpmaxs );
+
+			for( i = 0; i < dp->numVerts; i++ ) {
+				AddPointToBounds( dp->xyzArray[i], dpmins, dpmaxs );
+			}
+
+			fog = R_FogForBounds( dpmins, dpmaxs );
+			dp->fogNum = ( fog ? fog - rsh.worldBrushModel->fogs + 1 : -1 );
+		}
+
+		rsc.numPolys++;
+	}
+}
+
+/*
+* R_AddLightStyleToScene
+*/
+void R_AddLightStyleToScene( int style, float r, float g, float b ) {
+	lightstyle_t *ls;
+
+	if( style < 0 || style >= MAX_LIGHTSTYLES ) {
+		Com_Error( ERR_DROP, "R_AddLightStyleToScene: bad light style %i", style );
+		return;
+	}
+
+	ls = &rsc.lightStyles[style];
+	ls->rgb[0] = std::max( 0.0f, r );
+	ls->rgb[1] = std::max( 0.0f, g );
+	ls->rgb[2] = std::max( 0.0f, b );
+}
+
+static const wsw::HashedStringView kBuiltinPostProcessing( "$builtinpostprocessing" );
+
+/*
+* R_BlitTextureToScrFbo
+*/
+static void R_BlitTextureToScrFbo( const refdef_t *fd, image_t *image, int dstFbo,
+								   int program_type, const vec4_t color, int blendMask, int numShaderImages, image_t **shaderImages,
+								   int iParam0 ) {
+	int x, y;
+	int w, h, fw, fh;
+	static shaderpass_t p;
+	static shader_t s;
+	int i;
+	static tcmod_t tcmod;
+	mat4_t m;
+
+	assert( rsh.postProcessingVBO );
+	if( numShaderImages >= MAX_SHADER_IMAGES ) {
+		numShaderImages = MAX_SHADER_IMAGES;
+	}
+
+	// blit + flip using a static mesh to avoid redundant buffer uploads
+	// (also using custom PP effects like FXAA with the stream VBO causes
+	// Adreno to mark the VBO as "slow" (due to some weird bug)
+	// for the rest of the frame and drop FPS to 10-20).
+	RB_FlushDynamicMeshes();
+
+	RB_BindFrameBufferObject( dstFbo );
+
+	if( !dstFbo ) {
+		// default framebuffer
+		// set the viewport to full resolution
+		// but keep the scissoring region
+		x = fd->x;
+		y = fd->y;
+		w = fw = fd->width;
+		h = fh = fd->height;
+		RB_Viewport( 0, 0, glConfig.width, glConfig.height );
+		RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
+	} else {
+		// aux framebuffer
+		// set the viewport to full resolution of the framebuffer (without the NPOT padding if there's one)
+		// draw quad on the whole framebuffer texture
+		// set scissor to default framebuffer resolution
+		image_t *cb = RFB_GetObjectTextureAttachment( dstFbo, false, 0 );
+		x = 0;
+		y = 0;
+		w = fw = rf.frameBufferWidth;
+		h = fh = rf.frameBufferHeight;
+		if( cb ) {
+			fw = cb->upload_width;
+			fh = cb->upload_height;
+		}
+		RB_Viewport( 0, 0, w, h );
+		RB_Scissor( 0, 0, glConfig.width, glConfig.height );
+	}
+
+	s.vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
+	s.sort = SHADER_SORT_NEAREST;
+	s.numpasses = 1;
+	s.name = kBuiltinPostProcessing;
+	s.passes = &p;
+
+	p.rgbgen.type = RGB_GEN_IDENTITY;
+	p.alphagen.type = ALPHA_GEN_IDENTITY;
+	p.tcgen = TC_GEN_NONE;
+	p.images[0] = image;
+	for( i = 1; i < numShaderImages + 1; i++ ) {
+		if( i >= MAX_SHADER_IMAGES ) {
+			break;
+		}
+		p.images[i] = shaderImages[i - 1];
+	}
+	for( ; i < MAX_SHADER_IMAGES; i++ )
+		p.images[i] = NULL;
+	p.flags = blendMask | SHADERPASS_NOSRGB;
+	p.program_type = program_type;
+	p.anim_numframes = iParam0;
+
+	if( !dstFbo ) {
+		tcmod.type = TC_MOD_TRANSFORM;
+		tcmod.args[0] = ( float )( w ) / ( float )( image->upload_width );
+		tcmod.args[1] = ( float )( h ) / ( float )( image->upload_height );
+		tcmod.args[4] = ( float )( x ) / ( float )( image->upload_width );
+		tcmod.args[5] = ( float )( image->upload_height - h - y ) / ( float )( image->upload_height );
+		p.numtcmods = 1;
+		p.tcmods = &tcmod;
+	} else {
+		p.numtcmods = 0;
+	}
+
+	Matrix4_Identity( m );
+	Matrix4_Scale2D( m, fw, fh );
+	Matrix4_Translate2D( m, x, y );
+	RB_LoadObjectMatrix( m );
+
+	RB_BindShader( NULL, &s, NULL );
+	RB_BindVBO( rsh.postProcessingVBO->index, GL_TRIANGLES );
+	RB_DrawElements( 0, 4, 0, 6 );
+
+	RB_LoadObjectMatrix( mat4x4_identity );
+
+	// restore 2D viewport and scissor
+	RB_Viewport( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight );
+	RB_Scissor( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight );
+}
+
+/*
+* R_BlurTextureToScrFbo
+*
+* Performs Kawase blur which approximates standard Gaussian blur in multiple passes.
+* Supposedly performs better on high resolution inputs.
+*/
+static image_t *R_BlurTextureToScrFbo( const refdef_t *fd, image_t *image, image_t *otherImage ) {
+	unsigned i;
+	image_t *images[2];
+	const int kernel35x35[] =
+		{ 0, 1, 2, 2, 3 };     //  equivalent to 35x35 kernel
+	;
+	const int kernel63x63[] =
+		{ 0, 1, 2, 3, 4, 4, 5 }     // equivalent to 63x63 kernel
+	;
+	const int *kernel;
+	unsigned numPasses;
+
+	if( true ) {
+		kernel = kernel63x63;
+		numPasses = sizeof( kernel63x63 ) / sizeof( kernel63x63[0] );
+	} else {
+		kernel = kernel35x35;
+		numPasses = sizeof( kernel35x35 ) / sizeof( kernel35x35[0] );
+	}
+
+	images[0] = image;
+	images[1] = otherImage;
+	for( i = 0; i < numPasses; i++ ) {
+		R_BlitTextureToScrFbo( fd, images[i & 1], images[( i + 1 ) & 1]->fbo, GLSL_PROGRAM_TYPE_KAWASE_BLUR,
+							   colorWhite, 0, 0, NULL, kernel[i] );
+	}
+
+	return images[( i + 1 ) & 1];
+}
+
+/*
+* R_RenderScene
+*/
+void R_RenderScene( const refdef_t *fd ) {
+	int l;
+	int fbFlags = 0;
+	int ppFrontBuffer = 0;
+	int samples = 0;
+	image_t *ppSource;
+	shader_t *cc;
+	image_t *bloomTex[NUM_BLOOM_LODS];
+
+	if( r_norefresh->integer ) {
+		return;
+	}
+
+	R_Set2DMode( false );
+
+	RB_SetTime( fd->time );
+
+	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+		rsc.refdef = *fd;
+	}
+
+	rn.refdef = *fd;
+	if( !rn.refdef.minLight ) {
+		rn.refdef.minLight = 0.1f;
+	}
+
+	fd = &rn.refdef;
+
+	rn.renderFlags = RF_NONE;
+
+	rn.farClip = R_DefaultFarClip();
+	rn.clipFlags = 15;
+	if( rsh.worldModel && !( fd->rdflags & RDF_NOWORLDMODEL ) && rsh.worldBrushModel->globalfog ) {
+		rn.clipFlags |= 16;
+	}
+	rn.meshlist = &r_worldlist;
+	rn.portalmasklist = &r_portalmasklist;
+	rn.dlightBits = 0;
+
+	rn.st = &rsh.st;
+	rn.renderTarget = 0;
+	rn.multisampleDepthResolved = false;
+
+	fbFlags = 0;
+	cc = rn.refdef.colorCorrection;
+	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] && cc->passes[0].images[0] != rsh.noTexture ) ) {
+		cc = NULL;
+	}
+
+	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+		samples = bound( 0, r_samples->integer, glConfig.maxFramebufferSamples );
+
+		if( glConfig.sSRGB && rsh.stf.screenTex ) {
+			rn.st = &rsh.stf;
+		}
+
+		// reload the multisample framebuffer if needed
+		if( samples > 0 && (  !rn.st->multisampleTarget || RFB_GetSamples( rn.st->multisampleTarget ) != samples ) ) {
+			int width, height;
+			R_GetRenderBufferSize( glConfig.width, glConfig.height, 0, IT_SPECIAL, &width, &height );
+
+			if( rn.st->multisampleTarget ) {
+				RFB_UnregisterObject( rn.st->multisampleTarget );
+			}
+			rn.st->multisampleTarget = RFB_RegisterObject( width, height, true, true, glConfig.stencilBits != 0, true,
+														   samples, rn.st == &rsh.stf );
+		}
+
+		// ignore r_samples values below 2 or if we failed to allocate the multisample fb
+		if( samples > 1 && rn.st->multisampleTarget != 0 ) {
+			rn.renderTarget = rn.st->multisampleTarget;
+		} else {
+			samples = 0;
+		}
+
+		if( r_soft_particles->integer && ( rn.st->screenTex != NULL ) ) {
+			// use FBO with depth renderbuffer attached
+			if( !rn.renderTarget ) {
+				rn.renderTarget = rn.st->screenTex->fbo;
+			}
+			rn.renderFlags |= RF_SOFT_PARTICLES;
+			fbFlags |= PPFX_BIT_SOFT_PARTICLES;
+		}
+
+		if( rn.st->screenPPCopies[0] && rn.st->screenPPCopies[1] ) {
+			int oldFlags = fbFlags;
+
+			if( rn.st == &rsh.stf ) {
+				fbFlags |= PPFX_BIT_TONE_MAPPING | PPFX_BIT_COLOR_CORRECTION;
+			}
+			if( cc ) {
+				fbFlags |= PPFX_BIT_COLOR_CORRECTION;
+			}
+			if( r_fxaa->integer ) {
+				fbFlags |= PPFX_BIT_FXAA;
+			}
+			if( r_bloom->integer && rn.st == &rsh.stf && rsh.st.screenBloomLodTex[NUM_BLOOM_LODS - 1][1] ) {
+				fbFlags |= PPFX_BIT_OVERBRIGHT_TARGET | PPFX_BIT_COLOR_CORRECTION;
+			}
+			if( fd->rdflags & RDF_BLURRED ) {
+				fbFlags |= PPFX_BIT_BLUR;
+				fbFlags &= ~PPFX_BIT_FXAA;
+			}
+
+			if( fbFlags != oldFlags ) {
+				// use a FBO without a depth renderbuffer attached, unless we need one for soft particles
+				if( !rn.renderTarget ) {
+					rn.renderTarget = rn.st->screenPPCopies[0]->fbo;
+					ppFrontBuffer = 1;
+				}
+			}
+		}
+	}
+
+	// clip new scissor region to the one currently set
+	Vector4Set( rn.scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
+	Vector4Set( rn.viewport, fd->x, fd->y, fd->width, fd->height );
+	VectorCopy( fd->vieworg, rn.pvsOrigin );
+	VectorCopy( fd->vieworg, rn.lodOrigin );
+
+	R_BindFrameBufferObject( 0 );
+
+	R_RenderView( fd );
+
+	R_RenderDebugSurface( fd );
+
+	R_BindFrameBufferObject( 0 );
+
+	R_Set2DMode( true );
+
+	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+		QMutex_Lock( rf.speedsMsgLock );
+		R_WriteSpeedsMessage( rf.speedsMsg, sizeof( rf.speedsMsg ) );
+		QMutex_Unlock( rf.speedsMsgLock );
+	}
+
+	// blit and blend framebuffers in proper order
+
+	// resolve the multisample framebuffer
+	if( samples > 0 ) {
+		int bits = GL_COLOR_BUFFER_BIT;
+
+		if( !rn.multisampleDepthResolved ) {
+			bits |= GL_DEPTH_BUFFER_BIT;
+			rn.multisampleDepthResolved = true;
+		}
+
+		RB_BlitFrameBufferObject( rn.renderTarget, rn.st->screenTexCopy->fbo, bits, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
+		ppSource = rn.st->screenTexCopy;
+	} else {
+		if( rn.renderTarget ) {
+			ppSource = RFB_GetObjectTextureAttachment( rn.renderTarget, false, 0 );
+		} else {
+			ppSource = NULL;
+		}
+	}
+
+	if( fbFlags == PPFX_BIT_SOFT_PARTICLES ) {
+		// only blit soft particles directly when we don't have any other post processing
+		// otherwise use the soft particles FBO as the base texture on the next layer
+		// to avoid wasting time on resolves and the fragment shader to blit to a temp texture
+		R_BlitTextureToScrFbo( fd,
+							   ppSource, 0,
+							   GLSL_PROGRAM_TYPE_NONE,
+							   colorWhite, 0,
+							   0, NULL, 0 );
+		return;
+	}
+
+	fbFlags &= ~PPFX_BIT_SOFT_PARTICLES;
+
+	// apply tone mapping (and possibly color correction too, if not doing the bloom as well)
+	if( fbFlags & PPFX_BIT_TONE_MAPPING ) {
+		unsigned numImages = 0;
+		image_t *images[MAX_SHADER_IMAGES] = { NULL };
+		image_t *dest;
+
+		fbFlags &= ~PPFX_BIT_TONE_MAPPING;
+		dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // LDR
+
+		if( fbFlags & PPFX_BIT_OVERBRIGHT_TARGET ) {
+			fbFlags &= ~PPFX_BIT_OVERBRIGHT_TARGET;
+
+			if( !RFB_AttachTextureToObject( dest->fbo, false, 1, rsh.st.screenOverbrightTex ) ) {
+				dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // re-evaluate
+			} else {
+				fbFlags |= PPFX_BIT_BLOOM;
+			}
+		}
+
+		if( fbFlags & PPFX_BIT_BLOOM ) {
+			images[1] = rsh.st.screenOverbrightTex;
+			numImages = 2;
+		} else if( cc ) {
+			images[0] = cc->passes[0].images[0];
+			numImages = 2;
+			fbFlags &= ~PPFX_BIT_COLOR_CORRECTION;
+			dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // re-evaluate
+			cc = NULL;
+		}
+
+		R_BlitTextureToScrFbo( fd,
+							   ppSource, dest ? dest->fbo : 0,
+							   GLSL_PROGRAM_TYPE_COLOR_CORRECTION,
+							   colorWhite, 0,
+							   numImages, images, 0 );
+
+		ppFrontBuffer ^= 1;
+		ppSource = dest;
+
+		if( fbFlags & PPFX_BIT_BLOOM ) {
+			// detach
+			RFB_AttachTextureToObject( dest->fbo, false, 1, NULL );
+		}
+	}
+
+	// apply bloom
+	if( fbFlags & PPFX_BIT_BLOOM ) {
+		image_t *src;
+
+		// continously downscale and blur
+		src = rsh.st.screenOverbrightTex;
+		for( l = 0; l < NUM_BLOOM_LODS; l++ ) {
+			// halve the resolution
+			R_BlitTextureToScrFbo( fd,
+								   src, rsh.st.screenBloomLodTex[l][0]->fbo,
+								   GLSL_PROGRAM_TYPE_NONE,
+								   colorWhite, 0,
+								   0, NULL, 0 );
+
+			src = R_BlurTextureToScrFbo( fd, rsh.st.screenBloomLodTex[l][0], rsh.st.screenBloomLodTex[l][1] );
+			bloomTex[l] = src;
+		}
+	}
+
+	// apply color correction
+	if( fbFlags & PPFX_BIT_COLOR_CORRECTION ) {
+		image_t *dest;
+		unsigned numImages = 0;
+		image_t *images[MAX_SHADER_IMAGES] = { NULL };
+
+		fbFlags &= ~PPFX_BIT_COLOR_CORRECTION;
+		if( fbFlags & PPFX_BIT_BLOOM ) {
+			memcpy( images + 2, bloomTex, sizeof( image_t * ) * NUM_BLOOM_LODS );
+			fbFlags &= ~PPFX_BIT_BLOOM;
+		}
+		images[0] = cc ? cc->passes[0].images[0] : NULL;
+		numImages = MAX_SHADER_IMAGES;
+
+		dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL;
+		R_BlitTextureToScrFbo( fd,
+							   ppSource, dest ? dest->fbo : 0,
+							   GLSL_PROGRAM_TYPE_COLOR_CORRECTION,
+							   colorWhite, 0,
+							   numImages, images, 0 );
+
+		ppFrontBuffer ^= 1;
+		ppSource = dest;
+	}
+
+	// apply FXAA
+	if( fbFlags & PPFX_BIT_FXAA ) {
+		assert( fbFlags == PPFX_BIT_FXAA );
+
+		// not that FXAA only works on LDR input
+		R_BlitTextureToScrFbo( fd,
+							   ppSource, 0,
+							   GLSL_PROGRAM_TYPE_FXAA,
+							   colorWhite, 0,
+							   0, NULL, 0 );
+		return;
+	}
+
+	if( fbFlags & PPFX_BIT_BLUR ) {
+		ppSource = R_BlurTextureToScrFbo( fd, ppSource, rsh.st.screenPPCopies[ppFrontBuffer] );
+		R_BlitTextureToScrFbo( fd,
+							   ppSource, 0,
+							   GLSL_PROGRAM_TYPE_NONE,
+							   colorWhite, 0,
+							   0, NULL, 0 );
+	}
+}
+
+/*
+* R_BlurScreen
+*/
+void R_BlurScreen( void ) {
+	refdef_t dummy, *fd;
+	image_t *ppSource;
+
+	fd = &dummy;
+	memset( fd, 0, sizeof( *fd ) );
+	fd->width = rf.frameBufferWidth;
+	fd->height = rf.frameBufferHeight;
+
+	RB_FlushDynamicMeshes();
+
+	RB_BlitFrameBufferObject( 0, rsh.st.screenPPCopies[0]->fbo, GL_COLOR_BUFFER_BIT, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
+
+	ppSource = R_BlurTextureToScrFbo( fd, rsh.st.screenPPCopies[0], rsh.st.screenPPCopies[1] );
+
+	R_BlitTextureToScrFbo( fd, ppSource, 0, GLSL_PROGRAM_TYPE_NONE, colorWhite, 0, 0, NULL, 0 );
+}
+
+/*
+* R_BatchPolySurf
+*/
+void R_BatchPolySurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfacePoly_t *poly ) {
+	mesh_t mesh;
+
+	mesh.elems = poly->elems;
+	mesh.numElems = poly->numElems;
+	mesh.numVerts = poly->numVerts;
+	mesh.xyzArray = poly->xyzArray;
+	mesh.normalsArray = poly->normalsArray;
+	mesh.lmstArray[0] = NULL;
+	mesh.lmlayersArray[0] = NULL;
+	mesh.stArray = poly->stArray;
+	mesh.colorsArray[0] = poly->colorsArray;
+	mesh.colorsArray[1] = NULL;
+	mesh.sVectorsArray = NULL;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
+/*
+* R_DrawPolys
+*/
+void R_DrawPolys( void ) {
+	unsigned int i;
+	drawSurfacePoly_t *p;
+	mfog_t *fog;
+
+	if( rn.renderFlags & RF_ENVVIEW ) {
+		return;
+	}
+
+	for( i = 0; i < rsc.numPolys; i++ ) {
+		p = rsc.polys + i;
+		if( p->fogNum <= 0 || (unsigned)p->fogNum > rsh.worldBrushModel->numfogs ) {
+			fog = NULL;
+		} else {
+			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
+		}
+
+		if( !R_AddSurfToDrawList( rn.meshlist, rsc.polyent, fog, p->shader, 0, i, NULL, p ) ) {
+			continue;
+		}
+	}
+}
+
+/*
+* R_DrawStretchPoly
+*/
+void R_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset ) {
+	mesh_t mesh;
+	vec4_t translated[256];
+
+	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
+
+	if( !poly || !poly->numverts || !poly->shader ) {
+		return;
+	}
+
+	memset( &mesh, 0, sizeof( mesh ) );
+	mesh.numVerts = poly->numverts;
+	mesh.xyzArray = poly->verts;
+	mesh.normalsArray = poly->normals;
+	mesh.stArray = poly->stcoords;
+	mesh.colorsArray[0] = poly->colors;
+	mesh.numElems = poly->numelems;
+	mesh.elems = ( elem_t * )poly->elems;
+
+	if( ( x_offset || y_offset ) && ( poly->numverts <= ( sizeof( translated ) / sizeof( translated[0] ) ) ) ) {
+		int i;
+		const vec_t *src = poly->verts[0];
+		vec_t *dest = translated[0];
+
+		for( i = 0; i < poly->numverts; i++, src += 4, dest += 4 ) {
+			dest[0] = src[0] + x_offset;
+			dest[1] = src[1] + y_offset;
+			dest[2] = src[2];
+			dest[3] = src[3];
+		}
+
+		x_offset = 0;
+		y_offset = 0;
+
+		mesh.xyzArray = translated;
+	}
+
+	RB_AddDynamicMesh( NULL, poly->shader, NULL, NULL, 0, &mesh, GL_TRIANGLES, x_offset, y_offset );
+}
+
+/*
+* R_SurfPotentiallyFragmented
+*/
+bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {
+	if( surf->flags & ( SURF_NOMARKS | SURF_NOIMPACT | SURF_NODRAW ) ) {
+		return false;
+	}
+	return ( ( surf->facetype == FACETYPE_PLANAR )
+			 || ( surf->facetype == FACETYPE_PATCH )
+		/* || (surf->facetype == FACETYPE_TRISURF)*/ );
+}
+
+/*
+* R_BatchCoronaSurf
+*/
+void R_BatchCoronaSurf( const entity_t *e, const shader_t *shader,
+						const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf ) {
+	int i;
+	vec3_t origin, point;
+	vec3_t v_left, v_up;
+
+	auto *const light = Scene::Instance()->LightForCoronaSurf( drawSurf );
+
+	float radius = light->radius;
+	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	byte_vec4_t colors[4];
+	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+	mesh_t mesh;
+
+	VectorCopy( light->center, origin );
+
+	VectorCopy( &rn.viewAxis[AXIS_RIGHT], v_left );
+	VectorCopy( &rn.viewAxis[AXIS_UP], v_up );
+
+	if( rn.renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		VectorInverse( v_left );
+	}
+
+	VectorMA( origin, -radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[0] );
+	VectorMA( point, -radius, v_left, xyz[3] );
+
+	VectorMA( origin, radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[1] );
+	VectorMA( point, -radius, v_left, xyz[2] );
+
+	Vector4Set( colors[0],
+				bound( 0, light->color[0] * 96, 255 ),
+				bound( 0, light->color[1] * 96, 255 ),
+				bound( 0, light->color[2] * 96, 255 ),
+				255 );
+	for( i = 1; i < 4; i++ )
+		Vector4Copy( colors[0], colors[i] );
+
+	memset( &mesh, 0, sizeof( mesh ) );
+	mesh.numElems = 6;
+	mesh.elems = elems;
+	mesh.numVerts = 4;
+	mesh.xyzArray = xyz;
+	mesh.normalsArray = normals;
+	mesh.stArray = texcoords;
+	mesh.colorsArray[0] = colors;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
+
+
+//===================================================================
+
+/*
+* R_LightForOrigin
+*/
+void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius, bool noWorldLight ) {
+	int i, j;
+	int k, s;
+	int vi[3], elem[4];
+	float t[8];
+	vec3_t vf, vf2, tdir;
+	vec3_t ambientLocal, diffuseLocal;
+	vec_t *gridSize, *gridMins;
+	int *gridBounds;
+	mgridlight_t lightarray[8];
+	lightstyle_t *lightStyles = rsc.lightStyles;
+
+	VectorSet( ambientLocal, 0, 0, 0 );
+	VectorSet( diffuseLocal, 0, 0, 0 );
+
+	if( noWorldLight ) {
+		VectorSet( dir, 0.0f, 0.0f, 0.0f );
+		goto dynamic;
+	}
+	if( !rsh.worldModel || !rsh.worldBrushModel->lightgrid || !rsh.worldBrushModel->numlightgridelems ) {
+		VectorSet( dir, 0.1f, 0.2f, 0.7f );
+		goto dynamic;
+	}
+
+	gridSize = rsh.worldBrushModel->gridSize;
+	gridMins = rsh.worldBrushModel->gridMins;
+	gridBounds = rsh.worldBrushModel->gridBounds;
+
+	for( i = 0; i < 3; i++ ) {
+		vf[i] = ( origin[i] - gridMins[i] ) / gridSize[i];
+		vi[i] = (int)vf[i];
+		vf[i] = vf[i] - floor( vf[i] );
+		vf2[i] = 1.0f - vf[i];
+	}
+
+	elem[0] = vi[2] * gridBounds[3] + vi[1] * gridBounds[0] + vi[0];
+	elem[1] = elem[0] + gridBounds[0];
+	elem[2] = elem[0] + gridBounds[3];
+	elem[3] = elem[2] + gridBounds[0];
+
+	for( i = 0; i < 4; i++ ) {
+		lightarray[i * 2 + 0] = rsh.worldBrushModel->lightgrid[rsh.worldBrushModel->lightarray[bound( 0, elem[i] + 0,
+																									  (int)rsh.worldBrushModel->numlightarrayelems - 1 )]];
+		lightarray[i * 2 + 1] = rsh.worldBrushModel->lightgrid[rsh.worldBrushModel->lightarray[bound( 1, elem[i] + 1,
+																									  (int)rsh.worldBrushModel->numlightarrayelems - 1 )]];
+	}
+
+	t[0] = vf2[0] * vf2[1] * vf2[2];
+	t[1] = vf[0] * vf2[1] * vf2[2];
+	t[2] = vf2[0] * vf[1] * vf2[2];
+	t[3] = vf[0] * vf[1] * vf2[2];
+	t[4] = vf2[0] * vf2[1] * vf[2];
+	t[5] = vf[0] * vf2[1] * vf[2];
+	t[6] = vf2[0] * vf[1] * vf[2];
+	t[7] = vf[0] * vf[1] * vf[2];
+
+	VectorClear( dir );
+
+	for( i = 0; i < 4; i++ ) {
+		R_LatLongToNorm( lightarray[i * 2].direction, tdir );
+		VectorScale( tdir, t[i * 2], tdir );
+		for( k = 0; k < MAX_LIGHTMAPS && ( s = lightarray[i * 2].styles[k] ) != 255; k++ ) {
+			dir[0] += lightStyles[s].rgb[0] * tdir[0];
+			dir[1] += lightStyles[s].rgb[1] * tdir[1];
+			dir[2] += lightStyles[s].rgb[2] * tdir[2];
+		}
+
+		R_LatLongToNorm( lightarray[i * 2 + 1].direction, tdir );
+		VectorScale( tdir, t[i * 2 + 1], tdir );
+		for( k = 0; k < MAX_LIGHTMAPS && ( s = lightarray[i * 2 + 1].styles[k] ) != 255; k++ ) {
+			dir[0] += lightStyles[s].rgb[0] * tdir[0];
+			dir[1] += lightStyles[s].rgb[1] * tdir[1];
+			dir[2] += lightStyles[s].rgb[2] * tdir[2];
+		}
+	}
+
+	for( j = 0; j < 3; j++ ) {
+		if( ambient ) {
+			for( i = 0; i < 4; i++ ) {
+				for( k = 0; k < MAX_LIGHTMAPS; k++ ) {
+					if( ( s = lightarray[i * 2].styles[k] ) != 255 ) {
+						ambientLocal[j] += t[i * 2] * lightarray[i * 2].ambient[k][j] * lightStyles[s].rgb[j];
+					}
+					if( ( s = lightarray[i * 2 + 1].styles[k] ) != 255 ) {
+						ambientLocal[j] += t[i * 2 + 1] * lightarray[i * 2 + 1].ambient[k][j] * lightStyles[s].rgb[j];
+					}
+				}
+			}
+		}
+		if( diffuse || radius ) {
+			for( i = 0; i < 4; i++ ) {
+				for( k = 0; k < MAX_LIGHTMAPS; k++ ) {
+					if( ( s = lightarray[i * 2].styles[k] ) != 255 ) {
+						diffuseLocal[j] += t[i * 2] * lightarray[i * 2].diffuse[k][j] * lightStyles[s].rgb[j];
+					}
+					if( ( s = lightarray[i * 2 + 1].styles[k] ) != 255 ) {
+						diffuseLocal[j] += t[i * 2 + 1] * lightarray[i * 2 + 1].diffuse[k][j] * lightStyles[s].rgb[j];
+					}
+				}
+			}
+		}
+	}
+
+	// convert to grayscale
+	if( r_lighting_grayscale->integer ) {
+		vec_t grey;
+
+		if( ambient ) {
+			grey = ColorGrayscale( ambientLocal );
+			ambientLocal[0] = ambientLocal[1] = ambientLocal[2] = bound( 0, grey, 255 );
+		}
+
+		if( diffuse || radius ) {
+			grey = ColorGrayscale( diffuseLocal );
+			diffuseLocal[0] = diffuseLocal[1] = diffuseLocal[2] = bound( 0, grey, 255 );
+		}
+	}
+
+	dynamic:
+	// add dynamic lights
+	if( radius ) {
+		Scene::Instance()->DynLightDirForOrigin( origin, radius, dir, diffuseLocal, ambientLocal );
+	}
+
+	VectorNormalizeFast( dir );
+
+	if( r_fullbright->integer ) {
+		VectorSet( ambientLocal, 1, 1, 1 );
+		VectorSet( diffuseLocal, 1, 1, 1 );
+	} else {
+		float scale = ( 1 << mapConfig.overbrightBits ) / 255.0f;
+
+		for( i = 0; i < 3; i++ )
+			ambientLocal[i] = ambientLocal[i] * scale * bound( 0.0f, r_lighting_ambientscale->value, 1.0f );
+		ColorNormalize( ambientLocal, ambientLocal );
+
+		for( i = 0; i < 3; i++ )
+			diffuseLocal[i] = diffuseLocal[i] * scale * bound( 0.0f, r_lighting_directedscale->value, 1.0f );
+		ColorNormalize( diffuseLocal, diffuseLocal );
+	}
+
+	if( ambient ) {
+		VectorCopy( ambientLocal, ambient );
+		ambient[3] = 1.0f;
+	}
+
+	if( diffuse ) {
+		VectorCopy( diffuseLocal, diffuse );
+		diffuse[3] = 1.0f;
+	}
+}
+
+/*
+* R_LightExposureForOrigin
+*/
+float R_LightExposureForOrigin( const vec3_t origin ) {
+	int i;
+	vec3_t dir;
+	vec4_t ambient, diffuse;
+	//vec4_t total;
+
+	R_LightForOrigin( origin, dir, ambient, diffuse, 0.1f, false );
+
+	for( i = 0; i < 3; i++ ) {
+		ambient[i] = R_LinearFloatFromsRGBFloat( ambient[i] );
+		diffuse[i] = R_LinearFloatFromsRGBFloat( diffuse[i] );
+	}
+
+	return r_hdr_exposure->value;
+
+	//if( r_lighting_grayscale->integer ) {
+	//	return ambient[0] + diffuse[0];
+	//}
+	//Vector4Add( ambient, diffuse, total );
+	//return log( ( ColorGrayscale( total ) + 1.0f ) * r_hdr_exposure->value )*//*ColorGrayscale( total ) * *//*exp( mapConfig.averageLightingIntensity ) * r_hdr_exposure->value;
+}
+
+/*
+=============================================================================
+
+LIGHTMAP ALLOCATION
+
+=============================================================================
+*/
+
+#define MAX_LIGHTMAP_IMAGES     1024
+
+static uint8_t *r_lightmapBuffer;
+static int r_lightmapBufferSize;
+static image_t *r_lightmapTextures[MAX_LIGHTMAP_IMAGES];
+static int r_numUploadedLightmaps;
+static int r_maxLightmapBlockSize;
+
+/*
+* R_BuildLightmap
+*/
+static void R_BuildLightmap( int w, int h, bool deluxe, const uint8_t *data, uint8_t *dest, int blockWidth, int samples ) {
+	int x, y;
+	uint8_t *rgba;
+
+	if( !data || ( r_fullbright->integer && !deluxe ) ) {
+		int val = deluxe ? 127 : 255;
+		for( y = 0; y < h; y++ )
+			memset( dest + y * blockWidth, val, w * samples * sizeof( *dest ) );
+		return;
+	}
+
+	if( deluxe || !r_lighting_grayscale->integer ) { // samples == LIGHTMAP_BYTES in this case
+		int wB = w * LIGHTMAP_BYTES;
+		for( y = 0, rgba = dest; y < h; y++, data += wB, rgba += blockWidth )
+			memcpy( rgba, data, wB );
+		return;
+	}
+
+	if( r_lighting_grayscale->integer ) {
+		for( y = 0; y < h; y++ ) {
+			for( x = 0, rgba = dest + y * blockWidth; x < w; x++, data += LIGHTMAP_BYTES, rgba += samples ) {
+				rgba[0] = bound( 0, ColorGrayscale( data ), 255 );
+				if( samples > 1 ) {
+					rgba[1] = rgba[0];
+					rgba[2] = rgba[0];
+				}
+			}
+		}
+	} else {
+		for( y = 0; y < h; y++ ) {
+			for( x = 0, rgba = dest + y * blockWidth; x < w; x++, data += LIGHTMAP_BYTES, rgba += samples ) {
+				rgba[0] = data[0];
+				if( samples > 1 ) {
+					rgba[1] = data[1];
+					rgba[2] = data[2];
+				}
+			}
+		}
+	}
+}
+
+/*
+* R_UploadLightmap
+*/
+static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int samples, bool deluxe ) {
+	image_t *image;
+	char uploadName[128];
+
+	if( !name || !data ) {
+		return r_numUploadedLightmaps;
+	}
+	if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
+		// not sure what I'm supposed to do here.. an unrealistic scenario
+		Com_Printf( S_COLOR_YELLOW "Warning: r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES\n" );
+		return 0;
+	}
+
+	Q_snprintfz( uploadName, sizeof( uploadName ), "%s%i", name, r_numUploadedLightmaps );
+
+	image = R_LoadImage( uploadName, (uint8_t **)( &data ), w, h, IT_SPECIAL, 1, IMAGE_TAG_GENERIC, samples );
+	r_lightmapTextures[r_numUploadedLightmaps] = image;
+
+	return r_numUploadedLightmaps++;
+}
+
+/*
+* R_PackLightmaps
+*/
+static int R_PackLightmaps( int num, int w, int h, int dataSize, int stride, int samples, bool deluxe,
+							const char *name, const uint8_t *data, mlightmapRect_t *rects ) {
+	int i, x, y, root;
+	uint8_t *block;
+	int lightmapNum;
+	int rectX, rectY, rectW, rectH, rectSize;
+	int maxX, maxY, max, xStride;
+	double tw, th, tx, ty;
+	mlightmapRect_t *rect;
+
+	maxX = r_maxLightmapBlockSize / w;
+	maxY = r_maxLightmapBlockSize / h;
+	max = std::min( maxX, maxY );
+
+	Com_DPrintf( "Packing %i lightmap(s) -> ", num );
+
+	if( !max || num == 1 || !mapConfig.lightmapsPacking ) {
+		// process as it is
+		R_BuildLightmap( w, h, deluxe, data, r_lightmapBuffer, w * samples, samples );
+
+		lightmapNum = R_UploadLightmap( name, r_lightmapBuffer, w, h, samples, deluxe );
+		if( rects ) {
+			rects[0].texNum = lightmapNum;
+			rects[0].texLayer = 0;
+
+			// this is not a real texture matrix, but who cares?
+			rects[0].texMatrix[0][0] = 1; rects[0].texMatrix[0][1] = 0;
+			rects[0].texMatrix[1][0] = 1; rects[0].texMatrix[1][1] = 0;
+		}
+
+		Com_DPrintf( "\n" );
+
+		return 1;
+	}
+
+	// find the nearest square block size
+	root = ( int )sqrt( (float)num );
+	if( root > max ) {
+		root = max;
+	}
+
+	// keep row size a power of two
+	for( i = 1; i < root; i <<= 1 ) ;
+	if( i > root ) {
+		i >>= 1;
+	}
+	root = i;
+
+	num -= root * root;
+	rectX = rectY = root;
+
+	if( maxY > maxX ) {
+		for(; ( num >= root ) && ( rectY < maxY ); rectY++, num -= root ) {
+		}
+
+		//if( !glConfig.ext.texture_non_power_of_two )
+		{
+			// sample down if not a power of two
+			for( y = 1; y < rectY; y <<= 1 ) ;
+			if( y > rectY ) {
+				y >>= 1;
+			}
+			rectY = y;
+		}
+	} else {
+		for(; ( num >= root ) && ( rectX < maxX ); rectX++, num -= root ) {
+		}
+
+		//if( !glConfig.ext.texture_non_power_of_two )
+		{
+			// sample down if not a power of two
+			for( x = 1; x < rectX; x <<= 1 ) ;
+			if( x > rectX ) {
+				x >>= 1;
+			}
+			rectX = x;
+		}
+	}
+
+	tw = 1.0 / (double)rectX;
+	th = 1.0 / (double)rectY;
+
+	xStride = w * samples;
+	rectW = rectX * w;
+	rectH = rectY * h;
+	rectSize = rectW * rectH * samples * sizeof( *r_lightmapBuffer );
+	if( rectSize > r_lightmapBufferSize ) {
+		if( r_lightmapBuffer ) {
+			Q_free( r_lightmapBuffer );
+		}
+		r_lightmapBuffer = (uint8_t *)Q_malloc( rectSize );
+		memset( r_lightmapBuffer, 255, rectSize );
+		r_lightmapBufferSize = rectSize;
+	}
+
+	Com_DPrintf( "%ix%i : %ix%i\n", rectX, rectY, rectW, rectH );
+
+	block = r_lightmapBuffer;
+	for( y = 0, ty = 0.0, num = 0, rect = rects; y < rectY; y++, ty += th, block += rectX * xStride * h ) {
+		for( x = 0, tx = 0.0; x < rectX; x++, tx += tw, num++, data += dataSize * stride ) {
+			R_BuildLightmap( w, h,
+							 mapConfig.deluxeMappingEnabled && ( num & 1 ) ? true : false,
+							 data, block + x * xStride, rectX * xStride, samples );
+
+			// this is not a real texture matrix, but who cares?
+			if( rects ) {
+				rect->texMatrix[0][0] = tw; rect->texMatrix[0][1] = tx;
+				rect->texMatrix[1][0] = th; rect->texMatrix[1][1] = ty;
+				rect += stride;
+			}
+		}
+	}
+
+	lightmapNum = R_UploadLightmap( name, r_lightmapBuffer, rectW, rectH, samples, deluxe );
+	if( rects ) {
+		for( i = 0, rect = rects; i < num; i++, rect += stride ) {
+			rect->texNum = lightmapNum;
+			rect->texLayer = 0;
+		}
+	}
+
+	if( rectW > mapConfig.maxLightmapSize ) {
+		mapConfig.maxLightmapSize = rectW;
+	}
+	if( rectH > mapConfig.maxLightmapSize ) {
+		mapConfig.maxLightmapSize = rectH;
+	}
+
+	return num;
+}
+
+/*
+* R_BuildLightmaps
+*/
+void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8_t *data, mlightmapRect_t *rects ) {
+	int i, j, p;
+	int numBlocks = numLightmaps;
+	int samples;
+	int layerWidth, size;
+	mbrushmodel_t *loadbmodel;
+
+	assert( mod );
+
+	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
+
+	samples = ( ( r_lighting_grayscale->integer && !mapConfig.deluxeMappingEnabled ) ? 1 : LIGHTMAP_BYTES );
+
+	layerWidth = w * ( 1 + ( int )mapConfig.deluxeMappingEnabled );
+
+	mapConfig.maxLightmapSize = 0;
+	mapConfig.lightmapArrays = mapConfig.lightmapsPacking
+							   && glConfig.ext.texture_array
+							   && ( glConfig.maxVertexAttribs > VATTRIB_LMLAYERS0123 )
+							   && ( glConfig.maxVaryingFloats >= ( 9 * 4 ) ) // 9th varying is required by material shaders
+							   && ( layerWidth <= glConfig.maxTextureSize ) && ( h <= glConfig.maxTextureSize );
+
+	if( mapConfig.lightmapArrays ) {
+		mapConfig.maxLightmapSize = layerWidth;
+
+		size = layerWidth * h;
+	} else {
+		if( !mapConfig.lightmapsPacking ) {
+			size = std::max( w, h );
+		} else {
+			for( size = 1; ( size < r_lighting_maxlmblocksize->integer )
+						   && ( size < glConfig.maxTextureSize ); size <<= 1 ) ;
+		}
+
+		if( mapConfig.deluxeMappingEnabled && ( ( size == w ) || ( size == h ) ) ) {
+			Com_Printf( S_COLOR_YELLOW "Lightmap blocks larger than %ix%i aren't supported"
+						", deluxemaps will be disabled\n", size, size );
+			mapConfig.deluxeMappingEnabled = false;
+		}
+
+		r_maxLightmapBlockSize = size;
+
+		size = w * h;
+	}
+
+	r_lightmapBufferSize = size * samples;
+	r_lightmapBuffer = (uint8_t *)Q_malloc( r_lightmapBufferSize );
+	r_numUploadedLightmaps = 0;
+
+	if( mapConfig.lightmapArrays ) {
+		int numLayers = std::min( glConfig.maxTextureLayers, 256 ); // layer index is a uint8_t
+		int layer = 0;
+		int lightmapNum = 0;
+		image_t *image = NULL;
+		mlightmapRect_t *rect = rects;
+		int blockSize = w * h * LIGHTMAP_BYTES;
+		float texScale = 1.0f;
+		char tempbuf[16];
+
+		if( mapConfig.deluxeMaps ) {
+			numLightmaps /= 2;
+		}
+
+		if( mapConfig.deluxeMappingEnabled ) {
+			texScale = 0.5f;
+		}
+
+		for( i = 0; i < numLightmaps; i++ ) {
+			if( !layer ) {
+				if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
+					// not sure what I'm supposed to do here.. an unrealistic scenario
+					Com_Printf( S_COLOR_YELLOW "Warning: r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES\n" );
+					break;
+				}
+				lightmapNum = r_numUploadedLightmaps++;
+				image = R_Create3DImage( va_r( tempbuf, sizeof( tempbuf ), "*lm%i", lightmapNum ), layerWidth, h,
+										 ( ( i + numLayers ) <= numLightmaps ) ? numLayers : numLightmaps % numLayers,
+										 IT_SPECIAL, IMAGE_TAG_GENERIC, samples, true );
+				r_lightmapTextures[lightmapNum] = image;
+			}
+
+			R_BuildLightmap( w, h, false, data, r_lightmapBuffer, layerWidth * samples, samples );
+			data += blockSize;
+
+			rect->texNum = lightmapNum;
+			rect->texLayer = layer;
+			// this is not a real texture matrix, but who cares?
+			rect->texMatrix[0][0] = texScale; rect->texMatrix[0][1] = 0.0f;
+			rect->texMatrix[1][0] = 1.0f; rect->texMatrix[1][1] = 0.0f;
+			++rect;
+
+			if( mapConfig.deluxeMappingEnabled ) {
+				R_BuildLightmap( w, h, true, data, r_lightmapBuffer + w * samples, layerWidth * samples, samples );
+			}
+
+			if( mapConfig.deluxeMaps ) {
+				data += blockSize;
+				++rect;
+			}
+
+			R_ReplaceImageLayer( image, layer, &r_lightmapBuffer );
+
+			++layer;
+			if( layer == numLayers ) {
+				layer = 0;
+			}
+		}
+	} else {
+		int stride = 1;
+		int dataRowSize = size * LIGHTMAP_BYTES;
+
+		if( mapConfig.deluxeMaps && !mapConfig.deluxeMappingEnabled ) {
+			stride = 2;
+			numLightmaps /= 2;
+		}
+
+		for( i = 0, j = 0; i < numBlocks; i += p * stride, j += p ) {
+			p = R_PackLightmaps( numLightmaps - j, w, h, dataRowSize, stride, samples,
+								 false, "*lm", data + j * dataRowSize * stride, &rects[i] );
+		}
+	}
+
+	if( r_lightmapBuffer ) {
+		Q_free( r_lightmapBuffer );
+	}
+
+	loadbmodel->lightmapImages = (image_t **)Q_malloc( sizeof( *loadbmodel->lightmapImages ) * r_numUploadedLightmaps );
+	memcpy( loadbmodel->lightmapImages, r_lightmapTextures,
+			sizeof( *loadbmodel->lightmapImages ) * r_numUploadedLightmaps );
+	loadbmodel->numLightmapImages = r_numUploadedLightmaps;
+
+	Com_DPrintf( "Packed %i lightmap blocks into %i texture(s)\n", numBlocks, r_numUploadedLightmaps );
+}
+
+/*
+* R_TouchLightmapImages
+*/
+void R_TouchLightmapImages( model_t *mod ) {
+	unsigned int i;
+	mbrushmodel_t *loadbmodel;
+
+	assert( mod );
+
+	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
+
+	for( i = 0; i < loadbmodel->numLightmapImages; i++ ) {
+		R_TouchImage( loadbmodel->lightmapImages[i], IMAGE_TAG_GENERIC );
+	}
+}
+
+/*
+=============================================================================
+
+LIGHT STYLE MANAGEMENT
+
+=============================================================================
+*/
+
+/*
+* R_InitLightStyles
+*/
+void R_InitLightStyles( model_t *mod ) {
+	int i;
+	mbrushmodel_t *loadbmodel;
+
+	assert( mod );
+
+	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
+	loadbmodel->superLightStyles = (superLightStyle_t *)Q_malloc( sizeof( *loadbmodel->superLightStyles ) * MAX_LIGHTSTYLES );
+	loadbmodel->numSuperLightStyles = 0;
+
+	for( i = 0; i < MAX_LIGHTSTYLES; i++ ) {
+		rsc.lightStyles[i].rgb[0] = 1;
+		rsc.lightStyles[i].rgb[1] = 1;
+		rsc.lightStyles[i].rgb[2] = 1;
+	}
+}
+
+/*
+* R_AddSuperLightStyle
+*/
+superLightStyle_t *R_AddSuperLightStyle( model_t *mod, const int *lightmaps,
+										 const uint8_t *lightmapStyles, const uint8_t *vertexStyles, mlightmapRect_t **lmRects ) {
+	unsigned int i, j;
+	superLightStyle_t *sls;
+	mbrushmodel_t *loadbmodel;
+
+	assert( mod );
+
+	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
+
+	for( i = 0, sls = loadbmodel->superLightStyles; i < loadbmodel->numSuperLightStyles; i++, sls++ ) {
+		for( j = 0; j < MAX_LIGHTMAPS; j++ )
+			if( sls->lightmapNum[j] != lightmaps[j] ||
+				sls->lightmapStyles[j] != lightmapStyles[j] ||
+				sls->vertexStyles[j] != vertexStyles[j] ) {
+				break;
+			}
+		if( j == MAX_LIGHTMAPS ) {
+			return sls;
+		}
+	}
+
+	if( loadbmodel->numSuperLightStyles == MAX_SUPER_STYLES ) {
+		Com_Error( ERR_DROP, "R_AddSuperLightStyle: r_numSuperLightStyles == MAX_SUPER_STYLES" );
+	}
+	loadbmodel->numSuperLightStyles++;
+
+	sls->vattribs = 0;
+	for( j = 0; j < MAX_LIGHTMAPS; j++ ) {
+		sls->lightmapNum[j] = lightmaps[j];
+		sls->lightmapStyles[j] = lightmapStyles[j];
+		sls->vertexStyles[j] = vertexStyles[j];
+
+		if( lmRects && lmRects[j] && ( lightmaps[j] != -1 ) ) {
+			sls->stOffset[j][0] = lmRects[j]->texMatrix[0][0];
+			sls->stOffset[j][1] = lmRects[j]->texMatrix[1][0];
+		} else {
+			sls->stOffset[j][0] = 0;
+			sls->stOffset[j][0] = 0;
+		}
+
+		if( lightmapStyles[j] != 255 ) {
+			sls->vattribs |= ( VATTRIB_LMCOORDS0_BIT << j );
+			if( mapConfig.lightmapArrays && !( j & 3 ) ) {
+				sls->vattribs |= VATTRIB_LMLAYERS0123_BIT << ( j >> 2 );
+			}
+		}
+	}
+
+	return sls;
+}
+
+/*
+* R_SuperLightStylesCmp
+*
+* Compare function for qsort
+*/
+static int R_SuperLightStylesCmp( superLightStyle_t *sls1, superLightStyle_t *sls2 ) {
+	int i;
+
+	for( i = 0; i < MAX_LIGHTMAPS; i++ ) { // compare lightmaps
+		if( sls2->lightmapNum[i] > sls1->lightmapNum[i] ) {
+			return 1;
+		} else if( sls1->lightmapNum[i] > sls2->lightmapNum[i] ) {
+			return -1;
+		}
+	}
+
+	for( i = 0; i < MAX_LIGHTMAPS; i++ ) { // compare lightmap styles
+		if( sls2->lightmapStyles[i] > sls1->lightmapStyles[i] ) {
+			return 1;
+		} else if( sls1->lightmapStyles[i] > sls2->lightmapStyles[i] ) {
+			return -1;
+		}
+	}
+
+	for( i = 0; i < MAX_LIGHTMAPS; i++ ) { // compare vertex styles
+		if( sls2->vertexStyles[i] > sls1->vertexStyles[i] ) {
+			return 1;
+		} else if( sls1->vertexStyles[i] > sls2->vertexStyles[i] ) {
+			return -1;
+		}
+	}
+
+	return 0; // equal
+}
+
+/*
+* R_SortSuperLightStyles
+*/
+void R_SortSuperLightStyles( model_t *mod ) {
+	mbrushmodel_t *loadbmodel;
+
+	assert( mod );
+
+	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
+	qsort( loadbmodel->superLightStyles, loadbmodel->numSuperLightStyles,
+		   sizeof( superLightStyle_t ), ( int ( * )( const void *, const void * ) )R_SuperLightStylesCmp );
+}
+
+static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal );
+
+/*
+* R_AddPortalSurface
+*/
+portalSurface_t *R_AddPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) {
+	portalSurface_t *portalSurface;
+	bool depthPortal;
+
+	if( !shader ) {
+		return NULL;
+	}
+
+	depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
+	if( R_FASTSKY() && depthPortal ) {
+		return NULL;
+	}
+
+	if( rn.numPortalSurfaces == MAX_PORTAL_SURFACES ) {
+		// not enough space
+		return NULL;
+	}
+
+	portalSurface = &rn.portalSurfaces[rn.numPortalSurfaces++];
+	memset( portalSurface, 0, sizeof( portalSurface_t ) );
+	portalSurface->entity = ent;
+	portalSurface->shader = shader;
+	portalSurface->skyPortal = NULL;
+	ClearBounds( portalSurface->mins, portalSurface->maxs );
+	memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
+
+	if( depthPortal ) {
+		rn.numDepthPortalSurfaces++;
+	}
+
+	return portalSurface;
+}
+
+/*
+* R_UpdatePortalSurface
+*/
+void R_UpdatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
+							const vec3_t mins, const vec3_t maxs, const shader_t *shader, void *drawSurf ) {
+	unsigned int i;
+	float dist;
+	cplane_t plane, untransformed_plane;
+	vec3_t v[3];
+	const entity_t *ent;
+
+	if( !mesh || !portalSurface ) {
+		return;
+	}
+
+	ent = portalSurface->entity;
+
+	for( i = 0; i < 3; i++ ) {
+		VectorCopy( mesh->xyzArray[mesh->elems[i]], v[i] );
+	}
+
+	PlaneFromPoints( v, &untransformed_plane );
+	untransformed_plane.dist += DotProduct( ent->origin, untransformed_plane.normal );
+	untransformed_plane.dist += 1; // nudge along the normal a bit
+	CategorizePlane( &untransformed_plane );
+
+	if( shader->flags & SHADER_AUTOSPRITE ) {
+		vec3_t centre;
+
+		// autosprites are quads, facing the viewer
+		if( mesh->numVerts < 4 ) {
+			return;
+		}
+
+		// compute centre as average of 4 vertices
+		VectorCopy( mesh->xyzArray[mesh->elems[3]], centre );
+		for( i = 0; i < 3; i++ )
+			VectorAdd( centre, v[i], centre );
+		VectorMA( ent->origin, 0.25, centre, centre );
+
+		VectorNegate( &rn.viewAxis[AXIS_FORWARD], plane.normal );
+		plane.dist = DotProduct( plane.normal, centre );
+		CategorizePlane( &plane );
+	} else {
+		vec3_t temp;
+		mat3_t entity_rotation;
+
+		// regular surfaces
+		if( !Matrix3_Compare( ent->axis, axis_identity ) ) {
+			Matrix3_Transpose( ent->axis, entity_rotation );
+
+			for( i = 0; i < 3; i++ ) {
+				VectorCopy( v[i], temp );
+				Matrix3_TransformVector( entity_rotation, temp, v[i] );
+				VectorMA( ent->origin, ent->scale, v[i], v[i] );
+			}
+
+			PlaneFromPoints( v, &plane );
+			CategorizePlane( &plane );
+		} else {
+			plane = untransformed_plane;
+		}
+	}
+
+	if( ( dist = PlaneDiff( rn.viewOrigin, &plane ) ) <= BACKFACE_EPSILON ) {
+		// behind the portal plane
+		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
+			return;
+		}
+
+		// we need to render the backplane view
+	}
+
+	// check if portal view is opaque due to alphagen portal
+	if( shader->portalDistance && dist > shader->portalDistance ) {
+		return;
+	}
+
+	portalSurface->plane = plane;
+	portalSurface->untransformed_plane = untransformed_plane;
+
+	AddPointToBounds( mins, portalSurface->mins, portalSurface->maxs );
+	AddPointToBounds( maxs, portalSurface->mins, portalSurface->maxs );
+	VectorAdd( portalSurface->mins, portalSurface->maxs, portalSurface->centre );
+	VectorScale( portalSurface->centre, 0.5, portalSurface->centre );
+}
+
+/*
+* R_DrawPortalSurface
+*
+* Renders the portal view and captures the results from framebuffer if
+* we need to do a $portalmap stage. Note that for $portalmaps we must
+* use a different viewport.
+*/
+static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
+	unsigned int i;
+	int x, y, w, h;
+	float dist, d, best_d;
+	vec3_t viewerOrigin;
+	vec3_t origin;
+	mat3_t axis;
+	entity_t *ent, *best;
+	cplane_t *portal_plane = &portalSurface->plane, *untransformed_plane = &portalSurface->untransformed_plane;
+	const shader_t *shader = portalSurface->shader;
+	vec_t *portal_centre = portalSurface->centre;
+	bool mirror, refraction = false;
+	image_t *captureTexture;
+	int captureTextureId = -1;
+	int prevRenderFlags = 0;
+	bool prevFlipped;
+	bool doReflection, doRefraction;
+	image_t *portalTexures[2] = { NULL, NULL };
+
+	doReflection = doRefraction = true;
+	if( shader->flags & SHADER_PORTAL_CAPTURE ) {
+		shaderpass_t *pass;
+
+		captureTexture = NULL;
+		captureTextureId = 0;
+
+		for( i = 0, pass = shader->passes; i < shader->numpasses; i++, pass++ ) {
+			if( pass->program_type == GLSL_PROGRAM_TYPE_DISTORTION ) {
+				if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 1 ) ) {
+					doRefraction = false;
+				} else if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 0 ) ) {
+					doReflection = false;
+				}
+				break;
+			}
+		}
+	} else {
+		captureTexture = NULL;
+		captureTextureId = -1;
+	}
+
+	x = y = 0;
+	w = rn.refdef.width;
+	h = rn.refdef.height;
+
+	dist = PlaneDiff( rn.viewOrigin, portal_plane );
+	if( dist <= BACKFACE_EPSILON || !doReflection ) {
+		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) || !doRefraction ) {
+			return;
+		}
+
+		// even if we're behind the portal, we still need to capture
+		// the second portal image for refraction
+		refraction = true;
+		captureTexture = NULL;
+		captureTextureId = 1;
+		if( dist < 0 ) {
+			VectorInverse( portal_plane->normal );
+			portal_plane->dist = -portal_plane->dist;
+		}
+	}
+
+	mirror = true; // default to mirror view
+	// it is stupid IMO that mirrors require a RT_PORTALSURFACE entity
+
+	best = NULL;
+	best_d = 100000000;
+	for( i = rsc.numLocalEntities; i < rsc.numEntities; i++ ) {
+		ent = R_NUM2ENT( i );
+		if( ent->rtype != RT_PORTALSURFACE ) {
+			continue;
+		}
+
+		d = PlaneDiff( ent->origin, untransformed_plane );
+		if( ( d >= -64 ) && ( d <= 64 ) ) {
+			d = Distance( ent->origin, portal_centre );
+			if( d < best_d ) {
+				best = ent;
+				best_d = d;
+			}
+		}
+	}
+
+	if( best == NULL ) {
+		if( captureTextureId < 0 ) {
+			// still do a push&pop because to ensure the clean state
+			if( R_PushRefInst() ) {
+				R_PopRefInst();
+			}
+			return;
+		}
+	} else {
+		if( !VectorCompare( best->origin, best->origin2 ) ) { // portal
+			mirror = false;
+		}
+		best->rtype = NUM_RTYPES;
+	}
+
+	prevRenderFlags = rn.renderFlags;
+	prevFlipped = ( rn.refdef.rdflags & RDF_FLIPPED ) != 0;
+	if( !R_PushRefInst() ) {
+		return;
+	}
+
+	VectorCopy( rn.viewOrigin, viewerOrigin );
+	if( prevFlipped ) {
+		VectorInverse( &rn.viewAxis[AXIS_RIGHT] );
+	}
+
+	setup_and_render:
+
+	if( refraction ) {
+		VectorInverse( portal_plane->normal );
+		portal_plane->dist = -portal_plane->dist;
+		CategorizePlane( portal_plane );
+		VectorCopy( rn.viewOrigin, origin );
+		Matrix3_Copy( rn.refdef.viewaxis, axis );
+		VectorCopy( viewerOrigin, rn.pvsOrigin );
+
+		rn.renderFlags |= RF_PORTALVIEW;
+		if( prevFlipped ) {
+			rn.renderFlags |= RF_FLIPFRONTFACE;
+		}
+	} else if( mirror ) {
+		VectorReflect( rn.viewOrigin, portal_plane->normal, portal_plane->dist, origin );
+
+		VectorReflect( &rn.viewAxis[AXIS_FORWARD], portal_plane->normal, 0, &axis[AXIS_FORWARD] );
+		VectorReflect( &rn.viewAxis[AXIS_RIGHT], portal_plane->normal, 0, &axis[AXIS_RIGHT] );
+		VectorReflect( &rn.viewAxis[AXIS_UP], portal_plane->normal, 0, &axis[AXIS_UP] );
+
+		Matrix3_Normalize( axis );
+
+		VectorCopy( viewerOrigin, rn.pvsOrigin );
+
+		rn.renderFlags = ( prevRenderFlags ^ RF_FLIPFRONTFACE ) | RF_MIRRORVIEW;
+	} else {
+		vec3_t tvec;
+		mat3_t A, B, C, rot;
+
+		// build world-to-portal rotation matrix
+		VectorNegate( portal_plane->normal, tvec );
+		NormalVectorToAxis( tvec, A );
+
+		// build portal_dest-to-world rotation matrix
+		ByteToDir( best->frame, tvec );
+		NormalVectorToAxis( tvec, B );
+		Matrix3_Transpose( B, C );
+
+		// multiply to get world-to-world rotation matrix
+		Matrix3_Multiply( C, A, rot );
+
+		// translate view origin
+		VectorSubtract( rn.viewOrigin, best->origin, tvec );
+		Matrix3_TransformVector( rot, tvec, origin );
+		VectorAdd( origin, best->origin2, origin );
+
+		Matrix3_Transpose( A, B );
+		Matrix3_Multiply( rn.viewAxis, B, rot );
+		Matrix3_Multiply( best->axis, rot, B );
+		Matrix3_Transpose( C, A );
+		Matrix3_Multiply( B, A, axis );
+
+		// set up portal_plane
+		VectorCopy( &axis[AXIS_FORWARD], portal_plane->normal );
+		portal_plane->dist = DotProduct( best->origin2, portal_plane->normal );
+		CategorizePlane( portal_plane );
+
+		// for portals, vis data is taken from portal origin, not
+		// view origin, because the view point moves around and
+		// might fly into (or behind) a wall
+		VectorCopy( best->origin2, rn.pvsOrigin );
+		VectorCopy( best->origin2, rn.lodOrigin );
+
+		rn.renderFlags |= RF_PORTALVIEW;
+
+		// ignore entities, if asked politely
+		if( best->renderfx & RF_NOPORTALENTS ) {
+			rn.renderFlags |= RF_ENVVIEW;
+		}
+		if( prevFlipped ) {
+			rn.renderFlags |= RF_FLIPFRONTFACE;
+		}
+	}
+
+	rn.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_FLIPPED );
+
+	rn.meshlist = &r_portallist;
+	rn.portalmasklist = NULL;
+
+	rn.renderFlags |= RF_CLIPPLANE;
+	rn.renderFlags &= ~RF_SOFT_PARTICLES;
+	rn.clipPlane = *portal_plane;
+
+	rn.farClip = R_DefaultFarClip();
+
+	rn.clipFlags |= ( 1 << 5 );
+	rn.frustum[5] = *portal_plane;
+	CategorizePlane( &rn.frustum[5] );
+
+	// if we want to render to a texture, initialize texture
+	// but do not try to render to it more than once
+	if( captureTextureId >= 0 ) {
+		int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
+
+		captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
+											 rsc.frameCount );
+		portalTexures[captureTextureId] = captureTexture;
+
+		if( !captureTexture ) {
+			// couldn't register a slot for this plane
+			goto done;
+		}
+
+		x = y = 0;
+		w = captureTexture->upload_width;
+		h = captureTexture->upload_height;
+		rn.refdef.width = w;
+		rn.refdef.height = h;
+		rn.refdef.x = 0;
+		rn.refdef.y = 0;
+		rn.renderTarget = captureTexture->fbo;
+		rn.renderFlags |= RF_PORTAL_CAPTURE;
+		Vector4Set( rn.viewport, rn.refdef.x + x, rn.refdef.y + y, w, h );
+		Vector4Set( rn.scissor, rn.refdef.x + x, rn.refdef.y + y, w, h );
+	} else {
+		rn.renderFlags &= ~RF_PORTAL_CAPTURE;
+	}
+
+	VectorCopy( origin, rn.refdef.vieworg );
+	Matrix3_Copy( axis, rn.refdef.viewaxis );
+
+	R_RenderView( &rn.refdef );
+
+	if( doRefraction && !refraction && ( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
+		rn.renderFlags = prevRenderFlags;
+		refraction = true;
+		captureTexture = NULL;
+		captureTextureId = 1;
+		goto setup_and_render;
+	}
+
+	done:
+	portalSurface->texures[0] = portalTexures[0];
+	portalSurface->texures[1] = portalTexures[1];
+
+	R_PopRefInst();
+}
+
+/*
+* R_DrawPortalsDepthMask
+*
+* Renders portal or sky surfaces from the BSP tree to depth buffer. Each rendered pixel
+* receives the depth value of 1.0, everything else is cleared to 0.0.
+*
+* The depth buffer is then preserved for portal render stage to minimize overdraw.
+*/
+static void R_DrawPortalsDepthMask( void ) {
+	float depthmin, depthmax;
+
+	if( !rn.portalmasklist || !rn.portalmasklist->numDrawSurfs ) {
+		return;
+	}
+
+	RB_GetDepthRange( &depthmin, &depthmax );
+
+	RB_ClearDepth( depthmin );
+	RB_Clear( GL_DEPTH_BUFFER_BIT, 0, 0, 0, 0 );
+	RB_SetShaderStateMask( ~0, GLSTATE_DEPTHWRITE | GLSTATE_DEPTHFUNC_GT | GLSTATE_NO_COLORWRITE );
+	RB_DepthRange( depthmax, depthmax );
+
+	R_DrawSurfaces( rn.portalmasklist );
+
+	RB_DepthRange( depthmin, depthmax );
+	RB_ClearDepth( depthmax );
+	RB_SetShaderStateMask( ~0, 0 );
+}
+
+/*
+* R_DrawPortals
+*/
+void R_DrawPortals( void ) {
+	unsigned int i;
+
+	if( rf.viewcluster == -1 ) {
+		return;
+	}
+
+	if( !( rn.renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW | RF_SHADOWMAPVIEW ) ) ) {
+		R_DrawPortalsDepthMask();
+
+		// render skyportal
+		if( rn.skyportalSurface ) {
+			portalSurface_t *ps = rn.skyportalSurface;
+			R_DrawSkyportal( ps->entity, ps->skyPortal );
+		}
+
+		// render regular portals
+		for( i = 0; i < rn.numPortalSurfaces; i++ ) {
+			portalSurface_t ps = rn.portalSurfaces[i];
+			if( !ps.skyPortal ) {
+				R_DrawPortalSurface( &ps );
+				rn.portalSurfaces[i] = ps;
+			}
+		}
+	}
+}
+
+/*
+* R_AddSkyportalSurface
+*/
+portalSurface_t *R_AddSkyportalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) {
+	portalSurface_t *portalSurface;
+
+	if( rn.skyportalSurface ) {
+		portalSurface = rn.skyportalSurface;
+	} else if( rn.numPortalSurfaces == MAX_PORTAL_SURFACES ) {
+		// not enough space
+		return NULL;
+	} else {
+		portalSurface = &rn.portalSurfaces[rn.numPortalSurfaces++];
+		memset( portalSurface, 0, sizeof( *portalSurface ) );
+		rn.skyportalSurface = portalSurface;
+		rn.numDepthPortalSurfaces++;
+	}
+
+	R_AddSurfToDrawList( rn.portalmasklist, ent, NULL, NULL, 0, 0, NULL, drawSurf );
+
+	portalSurface->entity = ent;
+	portalSurface->shader = shader;
+	portalSurface->skyPortal = &rn.refdef.skyportal;
+	return rn.skyportalSurface;
+}
+
+/*
+* R_DrawSkyportal
+*/
+static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal ) {
+	if( !R_PushRefInst() ) {
+		return;
+	}
+
+	rn.renderFlags = ( rn.renderFlags | RF_PORTALVIEW );
+	//rn.renderFlags &= ~RF_SOFT_PARTICLES;
+	VectorCopy( skyportal->vieworg, rn.pvsOrigin );
+
+	rn.farClip = R_DefaultFarClip();
+
+	rn.clipFlags = 15;
+	rn.meshlist = &r_skyportallist;
+	rn.portalmasklist = NULL;
+	//Vector4Set( rn.scissor, rn.refdef.x + x, rn.refdef.y + y, w, h );
+
+	if( skyportal->noEnts ) {
+		rn.renderFlags |= RF_ENVVIEW;
+	}
+
+	if( skyportal->scale ) {
+		vec3_t centre, diff;
+
+		VectorAdd( rsh.worldModel->mins, rsh.worldModel->maxs, centre );
+		VectorScale( centre, 0.5f, centre );
+		VectorSubtract( centre, rn.viewOrigin, diff );
+		VectorMA( skyportal->vieworg, -skyportal->scale, diff, rn.refdef.vieworg );
+	} else {
+		VectorCopy( skyportal->vieworg, rn.refdef.vieworg );
+	}
+
+	// FIXME
+	if( !VectorCompare( skyportal->viewanglesOffset, vec3_origin ) ) {
+		vec3_t angles;
+		mat3_t axis;
+
+		Matrix3_Copy( rn.refdef.viewaxis, axis );
+		VectorInverse( &axis[AXIS_RIGHT] );
+		Matrix3_ToAngles( axis, angles );
+
+		VectorAdd( angles, skyportal->viewanglesOffset, angles );
+		AnglesToAxis( angles, axis );
+		Matrix3_Copy( axis, rn.refdef.viewaxis );
+	}
+
+	rn.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_SKYPORTALINVIEW );
+	if( skyportal->fov ) {
+		rn.refdef.fov_x = skyportal->fov;
+		rn.refdef.fov_y = CalcFov( rn.refdef.fov_x, rn.refdef.width, rn.refdef.height );
+		AdjustFov( &rn.refdef.fov_x, &rn.refdef.fov_y, glConfig.width, glConfig.height, false );
+	}
+
+	R_RenderView( &rn.refdef );
+
+	// restore modelview and projection matrices, scissoring, etc for the main view
+	R_PopRefInst();
+}
+
+static ref_frontend_t rrf;
+
+
+/*
+* RF_AdapterShutdown
+*/
+static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
+	R_ReleaseBuiltinScreenImages();
+
+	RB_Shutdown();
+
+	RFB_Shutdown();
+
+	if( adapter->GLcontext ) {
+		GLimp_SharedContext_Destroy( adapter->GLcontext, NULL );
+	}
+
+	GLimp_EnableMultithreadedRendering( false );
+
+	memset( adapter, 0, sizeof( *adapter ) );
+}
+
+/*
+* RF_AdapterInit
+*/
+static bool RF_AdapterInit( ref_frontendAdapter_t *adapter ) {
+	RB_Init();
+
+	RFB_Init();
+
+	R_InitBuiltinScreenImages();
+
+	R_BindFrameBufferObject( 0 );
+
+	return true;
+}
+
+rserr_t RF_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
+				 int iconResource, const int *iconXPM,
+				 void *hinstance, void *wndproc, void *parenthWnd,
+				 bool verbose ) {
+	rserr_t err;
+
+	memset( &rrf, 0, sizeof( rrf ) );
+
+	err = R_Init( applicationName, screenshotPrefix, startupColor,
+				  iconResource, iconXPM, hinstance, wndproc, parenthWnd, verbose );
+	if( err != rserr_ok ) {
+		return err;
+	}
+
+	return rserr_ok;
+}
+
+rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless ) {
+	rserr_t err;
+
+	if( glConfig.width == width && glConfig.height == height && glConfig.fullScreen != fullScreen ) {
+		return GLimp_SetFullscreenMode( displayFrequency, fullScreen );
+	}
+
+	RF_AdapterShutdown( &rrf.adapter );
+
+	err = R_SetMode( x, y, width, height, displayFrequency, fullScreen, borderless );
+	if( err != rserr_ok ) {
+		return err;
+	}
+
+	memset( rrf.customColors, 255, sizeof( rrf.customColors ) );
+
+	rrf.adapter.owner = (void *)&rrf;
+	if( RF_AdapterInit( &rrf.adapter ) != true ) {
+		return rserr_unknown;
+	}
+
+	return rserr_ok;
+}
+
+rserr_t RF_SetWindow( void *hinstance, void *wndproc, void *parenthWnd ) {
+	rserr_t err;
+	bool surfaceChangePending = false;
+
+	err = GLimp_SetWindow( hinstance, wndproc, parenthWnd, &surfaceChangePending );
+
+	if( err == rserr_ok && surfaceChangePending ) {
+		GLimp_UpdatePendingWindowSurface();
+	}
+
+	return err;
+}
+
+void RF_AppActivate( bool active, bool minimize, bool destroy ) {
+	R_Flush();
+	GLimp_AppActivate( active, minimize, destroy );
+}
+
+void RF_Shutdown( bool verbose ) {
+	RF_AdapterShutdown( &rrf.adapter );
+
+	memset( &rrf, 0, sizeof( rrf ) );
+
+	R_Shutdown( verbose );
+}
+
+static void RF_CheckCvars( void ) {
+	// update gamma
+	if( r_gamma->modified ) {
+		r_gamma->modified = false;
+		R_SetGamma( r_gamma->value );
+	}
+
+	if( r_texturefilter->modified ) {
+		r_texturefilter->modified = false;
+		R_AnisotropicFilter( r_texturefilter->integer );
+	}
+
+	if( r_wallcolor->modified || r_floorcolor->modified ) {
+		vec3_t wallColor, floorColor;
+
+		sscanf( r_wallcolor->string,  "%3f %3f %3f", &wallColor[0], &wallColor[1], &wallColor[2] );
+		sscanf( r_floorcolor->string, "%3f %3f %3f", &floorColor[0], &floorColor[1], &floorColor[2] );
+
+		r_wallcolor->modified = r_floorcolor->modified = false;
+
+		R_SetWallFloorColors( wallColor, floorColor );
+	}
+
+	// texturemode stuff
+	if( r_texturemode->modified ) {
+		r_texturemode->modified = false;
+		R_TextureMode( r_texturemode->string );
+	}
+
+	// keep r_outlines_cutoff value in sane bounds to prevent wallhacking
+	if( r_outlines_scale->modified ) {
+		if( r_outlines_scale->value < 0 ) {
+			Cvar_ForceSet( r_outlines_scale->name, "0" );
+		} else if( r_outlines_scale->value > 3 ) {
+			Cvar_ForceSet( r_outlines_scale->name, "3" );
+		}
+		r_outlines_scale->modified = false;
+	}
+}
+
+void RF_BeginFrame( bool forceClear, bool forceVsync, bool uncappedFPS ) {
+	int swapInterval;
+
+	RF_CheckCvars();
+
+	rrf.adapter.noWait = uncappedFPS;
+
+	R_DataSync();
+
+	swapInterval = r_swapinterval->integer || forceVsync ? 1 : 0;
+	clamp_low( swapInterval, r_swapinterval_min->integer );
+
+	R_BeginFrame( forceClear, swapInterval );
+}
+
+void RF_EndFrame( void ) {
+	R_EndFrame();
+}
+
+void RF_BeginRegistration( void ) {
+	// sync to the backend thread to ensure it's not using old assets for drawing
+	R_BeginRegistration();
+
+	R_DeferDataSync();
+	R_DataSync();
+
+	RB_BeginRegistration();
+}
+
+void RF_EndRegistration( void ) {
+	R_EndRegistration();
+
+	R_DeferDataSync();
+	R_DataSync();
+
+	RB_EndRegistration();
+
+	RFB_FreeUnusedObjects();
+}
+
+void RF_RegisterWorldModel( const char *model ) {
+	R_RegisterWorldModel( model );
+}
+
+void RF_ClearScene( void ) {
+	R_ClearScene();
+}
+
+void RF_Finish( void ) {
+}
+
+void RF_AddEntityToScene( const entity_t *ent ) {
+	R_AddEntityToScene( ent );
+}
+
+void RF_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
+	if( !r_dynamiclight->integer ) {
+		return;
+	}
+
+	// Do a sanity check before submitting the command
+
+	if( !( ( (bool)programIntensity | (bool)coronaIntensity ) ) ) {
+		return;
+	}
+
+	if( !( (bool)r | (bool)g | (bool)b ) ) {
+		return;
+	}
+
+	Scene::Instance()->AddLight( org, programIntensity, coronaIntensity, r, g, b );
+}
+
+void RF_AddPolyToScene( const poly_t *poly ) {
+	R_AddPolyToScene( poly );
+}
+
+void RF_AddLightStyleToScene( int style, float r, float g, float b ) {
+	R_AddLightStyleToScene( style, r, g, b );
+}
+
+void RF_RenderScene( const refdef_t *fd ) {
+	R_RenderScene( fd );
+}
+
+void RF_BlurScreen( void ) {
+	R_BlurScreen();
+}
+
+void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
+						const vec4_t color, const shader_t *shader ) {
+	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
+}
+
+void RF_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, float angle,
+							   const vec4_t color, const shader_t *shader ) {
+	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, angle, color, shader );
+}
+
+void RF_DrawExternalTextureOverlay( GLuint externalTexNum ) {
+	R_DrawExternalTextureOverlay( externalTexNum );
+}
+
+void RF_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset ) {
+	R_DrawStretchPoly( poly, x_offset, y_offset );
+}
+
+void RF_SetScissor( int x, int y, int w, int h ) {
+	R_Scissor( x, y, w, h );
+	Vector4Set( rrf.scissor, x, y, w, h );
+}
+
+void RF_GetScissor( int *x, int *y, int *w, int *h ) {
+	if( x ) {
+		*x = rrf.scissor[0];
+	}
+	if( y ) {
+		*y = rrf.scissor[1];
+	}
+	if( w ) {
+		*w = rrf.scissor[2];
+	}
+	if( h ) {
+		*h = rrf.scissor[3];
+	}
+}
+
+void RF_ResetScissor( void ) {
+	R_ResetScissor();
+	Vector4Set( rrf.scissor, 0, 0, glConfig.width, glConfig.height );
+}
+
+void RF_SetCustomColor( int num, int r, int g, int b ) {
+	byte_vec4_t rgba;
+
+	Vector4Set( rgba, r, g, b, 255 );
+
+	if( *(int *)rgba != *(int *)rrf.customColors[num] ) {
+		R_SetCustomColor( num, r, g, b );
+		*(int *)rrf.customColors[num] = *(int *)rgba;
+	}
+}
+
+/*
+void RF_IssueScreenShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, const char *fmtstring, bool silent ) {
+	RF_IssueEnvScreenShotReliableCmd( cmdpipe, REF_PIPE_CMD_SCREEN_SHOT, path, name, fmtstring, 0, 0, glConfig.width, glConfig.height, 0, silent, true );
+}
+
+void RF_IssueEnvShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, unsigned pixels ) {
+	RF_IssueEnvScreenShotReliableCmd( cmdpipe, REF_PIPE_CMD_ENV_SHOT, path, name, "", 0, 0, glConfig.width, glConfig.height, pixels, false, false );
+}
+
+void RF_IssueAviShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, int x, int y, int w, int h ) {
+}*/
+
+void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent ) {
+	if( RF_RenderingEnabled() ) {
+		R_TakeScreenShot( path, name, fmtstring, 0, 0, glConfig.width, glConfig.height, silent );
+	}
+}
+
+bool RF_RenderingEnabled( void ) {
+	return GLimp_RenderingEnabled();
+}
+
+const char *RF_GetSpeedsMessage( char *out, size_t size ) {
+	QMutex_Lock( rf.speedsMsgLock );
+	Q_strncpyz( out, rf.speedsMsg, size );
+	QMutex_Unlock( rf.speedsMsgLock );
+	return out;
+}
+
+int RF_GetAverageFrametime( void ) {
+	return rf.frameTime.average;
+}
+
+void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data ) {
+	R_ReplaceRawSubPic( shader, x, y, width, height, data );
+}
+
+void RF_TransformVectorToScreen( const refdef_t *rd, const vec3_t in, vec2_t out ) {
+	mat4_t p, m;
+	vec4_t temp, temp2;
+
+	if( !rd || !in || !out ) {
+		return;
+	}
+
+	temp[0] = in[0];
+	temp[1] = in[1];
+	temp[2] = in[2];
+	temp[3] = 1.0f;
+
+	if( rd->rdflags & RDF_USEORTHO ) {
+		Matrix4_OrthogonalProjection( rd->ortho_x, rd->ortho_x, rd->ortho_y, rd->ortho_y,
+									  -4096.0f, 4096.0f, p );
+	} else {
+		Matrix4_InfinitePerspectiveProjection( rd->fov_x, rd->fov_y, Z_NEAR, p, glConfig.depthEpsilon );
+	}
+
+	if( rd->rdflags & RDF_FLIPPED ) {
+		p[0] = -p[0];
+	}
+
+	Matrix4_Modelview( rd->vieworg, rd->viewaxis, m );
+
+	Matrix4_Multiply_Vector( m, temp, temp2 );
+	Matrix4_Multiply_Vector( p, temp2, temp );
+
+	if( !temp[3] ) {
+		return;
+	}
+
+	out[0] = rd->x + ( temp[0] / temp[3] + 1.0f ) * rd->width * 0.5f;
+	out[1] = glConfig.height - ( rd->y + ( temp[1] / temp[3] + 1.0f ) * rd->height * 0.5f );
+}
+
+bool RF_LerpTag( orientation_t *orient, const model_t *mod, int oldframe, int frame, float lerpfrac, const char *name ) {
+	if( !orient ) {
+		return false;
+	}
+
+	VectorClear( orient->origin );
+	Matrix3_Identity( orient->axis );
+
+	if( !name ) {
+		return false;
+	}
+
+	if( mod->type == mod_skeletal ) {
+		return R_SkeletalModelLerpTag( orient, (const mskmodel_t *)mod->extradata, oldframe, frame, lerpfrac, name );
+	}
+	if( mod->type == mod_alias ) {
+		return R_AliasModelLerpTag( orient, (const maliasmodel_t *)mod->extradata, oldframe, frame, lerpfrac, name );
+	}
+
+	return false;
+}
+
+void RF_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius ) {
+	R_LightForOrigin( origin, dir, ambient, diffuse, radius, false );
+}
+
+glconfig_t glConfig;
+
+r_shared_t rsh;
+
+cvar_t *r_norefresh;
+cvar_t *r_drawentities;
+cvar_t *r_drawworld;
+cvar_t *r_speeds;
+cvar_t *r_drawelements;
+cvar_t *r_fullbright;
+cvar_t *r_lightmap;
+cvar_t *r_novis;
+cvar_t *r_nocull;
+cvar_t *r_lerpmodels;
+cvar_t *r_brightness;
+cvar_t *r_sRGB;
+
+cvar_t *r_dynamiclight;
+cvar_t *r_detailtextures;
+cvar_t *r_subdivisions;
+cvar_t *r_showtris;
+cvar_t *r_shownormals;
+cvar_t *r_draworder;
+
+cvar_t *r_fastsky;
+cvar_t *r_portalonly;
+cvar_t *r_portalmaps;
+cvar_t *r_portalmaps_maxtexsize;
+
+cvar_t *r_lighting_deluxemapping;
+cvar_t *r_lighting_specular;
+cvar_t *r_lighting_glossintensity;
+cvar_t *r_lighting_glossexponent;
+cvar_t *r_lighting_ambientscale;
+cvar_t *r_lighting_directedscale;
+cvar_t *r_lighting_packlightmaps;
+cvar_t *r_lighting_maxlmblocksize;
+cvar_t *r_lighting_vertexlight;
+cvar_t *r_lighting_maxglsldlights;
+cvar_t *r_lighting_grayscale;
+cvar_t *r_lighting_intensity;
+
+cvar_t *r_offsetmapping;
+cvar_t *r_offsetmapping_scale;
+cvar_t *r_offsetmapping_reliefmapping;
+
+cvar_t *r_shadows;
+cvar_t *r_shadows_alpha;
+cvar_t *r_shadows_nudge;
+cvar_t *r_shadows_projection_distance;
+cvar_t *r_shadows_maxtexsize;
+cvar_t *r_shadows_pcf;
+cvar_t *r_shadows_self_shadow;
+cvar_t *r_shadows_dither;
+
+cvar_t *r_outlines_world;
+cvar_t *r_outlines_scale;
+cvar_t *r_outlines_cutoff;
+
+cvar_t *r_soft_particles;
+cvar_t *r_soft_particles_scale;
+
+cvar_t *r_hdr;
+cvar_t *r_hdr_gamma;
+cvar_t *r_hdr_exposure;
+
+cvar_t *r_bloom;
+
+cvar_t *r_fxaa;
+cvar_t *r_samples;
+
+cvar_t *r_lodbias;
+cvar_t *r_lodscale;
+
+cvar_t *r_stencilbits;
+cvar_t *r_gamma;
+cvar_t *r_texturemode;
+cvar_t *r_texturefilter;
+cvar_t *r_texturecompression;
+cvar_t *r_picmip;
+cvar_t *r_nobind;
+cvar_t *r_polyblend;
+cvar_t *r_lockpvs;
+cvar_t *r_screenshot_fmtstr;
+cvar_t *r_screenshot_jpeg;
+cvar_t *r_screenshot_jpeg_quality;
+cvar_t *r_swapinterval;
+cvar_t *r_swapinterval_min;
+
+cvar_t *r_temp1;
+
+cvar_t *r_drawflat;
+cvar_t *r_wallcolor;
+cvar_t *r_floorcolor;
+
+cvar_t *r_usenotexture;
+
+cvar_t *r_maxglslbones;
+
+cvar_t *gl_driver;
+cvar_t *gl_cull;
+cvar_t *r_multithreading;
+
+cvar_t *r_showShaderCache;
+
+static bool r_verbose;
+static bool r_postinit;
+
+static void R_FinalizeGLExtensions( void );
+
+static void R_InitVolatileAssets( void );
+static void R_DestroyVolatileAssets( void );
+
+//=======================================================================
+
+#define GLINF_FOFS( x ) offsetof( glextinfo_t,x )
+#define GLINF_EXMRK() GLINF_FOFS( _extMarker )
+#define GLINF_FROM( from,ofs ) ( *( (char *)from + ofs ) )
+
+typedef struct {
+	const char *name;               // constant pointer to constant string
+	void **pointer;                 // constant pointer to function's pointer (function itself)
+} gl_extension_func_t;
+
+typedef struct {
+	const char * prefix;            // constant pointer to constant string
+	const char * name;
+	const char * cvar_default;
+	bool cvar_readonly;
+	bool mandatory;
+	gl_extension_func_t *funcs;     // constant pointer to array of functions
+	size_t offset;                  // offset to respective variable
+	size_t depOffset;               // offset to required pre-initialized variable
+} gl_extension_t;
+
+#define GL_EXTENSION_FUNC_EXT( name,func ) { name, (void ** const)func }
+#define GL_EXTENSION_FUNC( name ) GL_EXTENSION_FUNC_EXT( "gl"#name,&( qgl ## name ) )
+
+/* GL_ARB_get_program_binary */
+static const gl_extension_func_t gl_ext_get_program_binary_ARB_funcs[] =
+	{
+		GL_EXTENSION_FUNC( ProgramParameteri )
+		,GL_EXTENSION_FUNC( GetProgramBinary )
+		,GL_EXTENSION_FUNC( ProgramBinary )
+
+		,GL_EXTENSION_FUNC_EXT( NULL,NULL )
+	};
+
+#ifndef USE_SDL2
+
+#ifdef GLX_VERSION
+
+/* GLX_SGI_swap_control */
+static const gl_extension_func_t glx_ext_swap_control_SGI_funcs[] =
+{
+	GL_EXTENSION_FUNC_EXT( "glXSwapIntervalSGI",&qglXSwapIntervalSGI )
+
+	,GL_EXTENSION_FUNC_EXT( NULL,NULL )
+};
+
+#endif
+
+#endif // USE_SDL2
+
+#undef GL_EXTENSION_FUNC
+#undef GL_EXTENSION_FUNC_EXT
+
+//=======================================================================
+
+#define GL_EXTENSION_EXT( pre,name,val,ro,mnd,funcs,dep ) { #pre, #name, #val, ro, mnd, (gl_extension_func_t * const)funcs, GLINF_FOFS( name ), GLINF_FOFS( dep ) }
+#define GL_EXTENSION( pre,name,ro,mnd,funcs ) GL_EXTENSION_EXT( pre,name,1,ro,mnd,funcs,_extMarker )
+
+//
+// OpenGL extensions list
+//
+// short notation: vendor, name, default value, list of functions
+// extended notation: vendor, name, default value, list of functions, required extension
+static const gl_extension_t gl_extensions_decl[] =
+	{
+		GL_EXTENSION( ARB, get_program_binary, false, false, &gl_ext_get_program_binary_ARB_funcs )
+		,GL_EXTENSION( ARB, ES3_compatibility, false, false, NULL )
+		,GL_EXTENSION( EXT, texture_array, false, false, NULL )
+		,GL_EXTENSION( ARB, gpu_shader5, false, false, NULL )
+
+		// memory info
+		,GL_EXTENSION( NVX, gpu_memory_info, true, false, NULL )
+		,GL_EXTENSION( ATI, meminfo, true, false, NULL )
+
+		,GL_EXTENSION( EXT, texture_filter_anisotropic, true, false, NULL )
+		,GL_EXTENSION( EXT, bgra, true, false, NULL )
+
+#ifndef USE_SDL2
+		#ifdef GLX_VERSION
+	,GL_EXTENSION( GLX_SGI, swap_control, true, false, &glx_ext_swap_control_SGI_funcs )
+#endif
+#endif
+	};
+
+static const int num_gl_extensions = sizeof( gl_extensions_decl ) / sizeof( gl_extensions_decl[0] );
+
+#undef GL_EXTENSION
+#undef GL_EXTENSION_EXT
+
+static bool isExtensionSupported( const char *ext ) {
+	GLint numExtensions;
+	qglGetIntegerv( GL_NUM_EXTENSIONS, &numExtensions );
+	// CBA to speed it up as this is required only on starting up
+	for( unsigned i = 0; i < numExtensions; ++i ) {
+		if( !Q_stricmp( ext, (const char *)qglGetStringi( GL_EXTENSIONS, i ) ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool isPlatformExtensionSupported( const char *ext ) {
+	return strstr( qglGetGLWExtensionsString(), ext ) != nullptr;
+}
+
+/*
+* R_RegisterGLExtensions
+*/
+static bool R_RegisterGLExtensions( void ) {
+	int i;
+	char *var, name[128];
+	cvar_t *cvar;
+	cvar_flag_t cvar_flags;
+	gl_extension_func_t *func;
+	const gl_extension_t *extension;
+
+	memset( &glConfig.ext, 0, sizeof( glextinfo_t ) );
+
+	for( i = 0, extension = gl_extensions_decl; i < num_gl_extensions; i++, extension++ ) {
+		Q_snprintfz( name, sizeof( name ), "gl_ext_%s", extension->name );
+
+		// register a cvar and check if this extension is explicitly disabled
+		cvar_flags = CVAR_ARCHIVE | CVAR_LATCH_VIDEO;
+#ifdef PUBLIC_BUILD
+		if( extension->cvar_readonly ) {
+			cvar_flags |= CVAR_READONLY;
+		}
+#endif
+
+		cvar = Cvar_Get( name, extension->cvar_default ? extension->cvar_default : "0", cvar_flags );
+		if( !cvar->integer ) {
+			continue;
+		}
+
+		// an alternative extension of higher priority is available so ignore this one
+		var = &( GLINF_FROM( &glConfig.ext, extension->offset ) );
+		if( *var ) {
+			continue;
+		}
+
+		// required extension is not available, ignore
+		if( extension->depOffset != GLINF_EXMRK() && !GLINF_FROM( &glConfig.ext, extension->depOffset ) ) {
+			continue;
+		}
+
+		// let's see what the driver's got to say about this...
+		if( *extension->prefix ) {
+			auto testFunc = isExtensionSupported;
+			for( const char *prefix : { "WGL", "GLX", "EGL" } ) {
+				if( !strncmp( extension->prefix, prefix, 3 ) ) {
+					testFunc = isPlatformExtensionSupported;
+					break;
+				}
+			}
+
+			Q_snprintfz( name, sizeof( name ), "%s_%s", extension->prefix, extension->name );
+			if( !testFunc( name ) ) {
+				continue;
+			}
+		}
+
+		// initialize function pointers
+		func = extension->funcs;
+		if( func ) {
+			do {
+				*( func->pointer ) = ( void * )qglGetProcAddress( (const GLubyte *)func->name );
+				if( !*( func->pointer ) ) {
+					break;
+				}
+			} while( ( ++func )->name );
+
+			// some function is missing
+			if( func->name ) {
+				gl_extension_func_t *func2 = extension->funcs;
+
+				// whine about buggy driver
+				if( *extension->prefix ) {
+					Com_Printf( "R_RegisterGLExtensions: broken %s support, contact your video card vendor\n",
+								cvar->name );
+				}
+
+				// reset previously initialized functions back to NULL
+				do {
+					*( func2->pointer ) = NULL;
+				} while( ( ++func2 )->name && func2 != func );
+
+				continue;
+			}
+		}
+
+		// mark extension as available
+		*var = true;
+
+	}
+
+	for( i = 0, extension = gl_extensions_decl; i < num_gl_extensions; i++, extension++ ) {
+		if( !extension->mandatory ) {
+			continue;
+		}
+
+		var = &( GLINF_FROM( &glConfig.ext, extension->offset ) );
+
+		if( !*var ) {
+			Sys_Error( "R_RegisterGLExtensions: '%s_%s' is not available, aborting\n",
+					   extension->prefix, extension->name );
+			return false;
+		}
+	}
+
+	R_FinalizeGLExtensions();
+	return true;
+}
+
+/*
+* R_PrintGLExtensionsInfo
+*/
+static void R_PrintGLExtensionsInfo( void ) {
+	int i;
+	size_t lastOffset;
+	const gl_extension_t *extension;
+
+	for( i = 0, lastOffset = 0, extension = gl_extensions_decl; i < num_gl_extensions; i++, extension++ ) {
+		if( lastOffset != extension->offset ) {
+			lastOffset = extension->offset;
+			Com_Printf( "%s: %s\n", extension->name, GLINF_FROM( &glConfig.ext, lastOffset ) ? "enabled" : "disabled" );
+		}
+	}
+}
+
+/*
+* R_FinalizeGLExtensions
+*
+* Verify correctness of values provided by the driver, init some variables
+*/
+static void R_FinalizeGLExtensions( void ) {
+	int versionMajor, versionMinor;
+	cvar_t *cvar;
+	char tmp[128];
+
+	versionMajor = versionMinor = 0;
+	sscanf( glConfig.versionString, "%d.%d", &versionMajor, &versionMinor );
+	glConfig.version = versionMajor * 100 + versionMinor * 10;
+
+	glConfig.maxTextureSize = 0;
+	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &glConfig.maxTextureSize );
+	if( glConfig.maxTextureSize <= 0 ) {
+		glConfig.maxTextureSize = 256;
+	}
+	glConfig.maxTextureSize = 1 << Q_log2( glConfig.maxTextureSize );
+
+	Cvar_Get( "gl_max_texture_size", "0", CVAR_READONLY );
+	Cvar_ForceSet( "gl_max_texture_size", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureSize ) );
+
+	/* GL_ARB_texture_cube_map */
+	glConfig.maxTextureCubemapSize = 0;
+	qglGetIntegerv( GL_MAX_CUBE_MAP_TEXTURE_SIZE, &glConfig.maxTextureCubemapSize );
+	glConfig.maxTextureCubemapSize = 1 << Q_log2( glConfig.maxTextureCubemapSize );
+
+	/* GL_ARB_multitexture */
+	glConfig.maxTextureUnits = 1;
+	qglGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS, &glConfig.maxTextureUnits );
+	Q_clamp( glConfig.maxTextureUnits, 1, MAX_TEXTURE_UNITS );
+
+	/* GL_EXT_framebuffer_object */
+	glConfig.maxRenderbufferSize = 0;
+	qglGetIntegerv( GL_MAX_RENDERBUFFER_SIZE, &glConfig.maxRenderbufferSize );
+	glConfig.maxRenderbufferSize = 1 << Q_log2( glConfig.maxRenderbufferSize );
+	if( glConfig.maxRenderbufferSize > glConfig.maxTextureSize ) {
+		glConfig.maxRenderbufferSize = glConfig.maxTextureSize;
+	}
+
+	/* GL_EXT_texture_filter_anisotropic */
+	glConfig.maxTextureFilterAnisotropic = 0;
+	if( isExtensionSupported( "GL_EXT_texture_filter_anisotropic" ) ) {
+		qglGetIntegerv( GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &glConfig.maxTextureFilterAnisotropic );
+	}
+
+	/* GL_EXT_texture3D and GL_EXT_texture_array */
+	qglGetIntegerv( GL_MAX_3D_TEXTURE_SIZE, &glConfig.maxTexture3DSize );
+
+	glConfig.maxTextureLayers = 0;
+	if( glConfig.ext.texture_array ) {
+		qglGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS_EXT, &glConfig.maxTextureLayers );
+	}
+
+	versionMajor = versionMinor = 0;
+	sscanf( glConfig.shadingLanguageVersionString, "%d.%d", &versionMajor, &versionMinor );
+	glConfig.shadingLanguageVersion = versionMajor * 100 + versionMinor;
+
+	glConfig.maxVertexUniformComponents = glConfig.maxFragmentUniformComponents = 0;
+	glConfig.maxVaryingFloats = 0;
+
+	qglGetIntegerv( GL_MAX_VERTEX_ATTRIBS, &glConfig.maxVertexAttribs );
+	qglGetIntegerv( GL_MAX_VERTEX_UNIFORM_COMPONENTS, &glConfig.maxVertexUniformComponents );
+	qglGetIntegerv( GL_MAX_VARYING_FLOATS, &glConfig.maxVaryingFloats );
+	qglGetIntegerv( GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &glConfig.maxFragmentUniformComponents );
+
+	// keep the maximum number of bones we can do in GLSL sane
+	if( r_maxglslbones->integer > MAX_GLSL_UNIFORM_BONES ) {
+		Cvar_ForceSet( r_maxglslbones->name, r_maxglslbones->dvalue );
+	}
+
+	// require GLSL 1.20+ for GPU skinning
+	if( glConfig.shadingLanguageVersion >= 120 ) {
+		// the maximum amount of bones we can handle in a vertex shader (2 vec4 uniforms per vertex)
+		glConfig.maxGLSLBones = bound( 0, glConfig.maxVertexUniformComponents / 8 - 19, r_maxglslbones->integer );
+	} else {
+		glConfig.maxGLSLBones = 0;
+	}
+
+	glConfig.depthEpsilon = 1.0 / ( 1 << 22 );
+
+	glConfig.sSRGB = r_sRGB->integer;
+
+	cvar = Cvar_Get( "gl_ext_vertex_buffer_object_hack", "0", CVAR_ARCHIVE | CVAR_NOSET );
+	if( cvar && !cvar->integer ) {
+		Cvar_ForceSet( cvar->name, "1" );
+		Cvar_ForceSet( "gl_ext_vertex_buffer_object", "1" );
+	}
+
+	qglGetIntegerv( GL_MAX_SAMPLES, &glConfig.maxFramebufferSamples );
+
+	Cvar_Get( "r_texturefilter_max", "0", CVAR_READONLY );
+	Cvar_ForceSet( "r_texturefilter_max", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureFilterAnisotropic ) );
+
+	Cvar_Get( "r_soft_particles_available", "1", CVAR_READONLY );
+
+	// don't allow too high values for lightmap block size as they negatively impact performance
+	if( r_lighting_maxlmblocksize->integer > glConfig.maxTextureSize / 4 &&
+		!( glConfig.maxTextureSize / 4 < std::min( QF_LIGHTMAP_WIDTH,QF_LIGHTMAP_HEIGHT ) * 2 ) ) {
+		Cvar_ForceSet( "r_lighting_maxlmblocksize", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureSize / 4 ) );
+	}
+}
+
+/*
+* R_FillStartupBackgroundColor
+*
+* Fills the window with a color during the initialization.
+*/
+static void R_FillStartupBackgroundColor( float r, float g, float b ) {
+	qglClearColor( r, g, b, 1.0 );
+	GLimp_BeginFrame();
+	qglClear( GL_COLOR_BUFFER_BIT );
+	qglFinish();
+	GLimp_EndFrame();
+}
+
+static void R_Register( const char *screenshotsPrefix ) {
+	char tmp[128];
+	const qgl_driverinfo_t *driver;
+
+	r_norefresh = Cvar_Get( "r_norefresh", "0", 0 );
+	r_fullbright = Cvar_Get( "r_fullbright", "0", CVAR_LATCH_VIDEO );
+	r_lightmap = Cvar_Get( "r_lightmap", "0", 0 );
+	r_drawentities = Cvar_Get( "r_drawentities", "1", CVAR_CHEAT );
+	r_drawworld = Cvar_Get( "r_drawworld", "1", CVAR_CHEAT );
+	r_novis = Cvar_Get( "r_novis", "0", 0 );
+	r_nocull = Cvar_Get( "r_nocull", "0", 0 );
+	r_lerpmodels = Cvar_Get( "r_lerpmodels", "1", 0 );
+	r_speeds = Cvar_Get( "r_speeds", "0", 0 );
+	r_drawelements = Cvar_Get( "r_drawelements", "1", 0 );
+	r_showtris = Cvar_Get( "r_showtris", "0", CVAR_CHEAT );
+	r_lockpvs = Cvar_Get( "r_lockpvs", "0", CVAR_CHEAT );
+	r_nobind = Cvar_Get( "r_nobind", "0", 0 );
+	r_picmip = Cvar_Get( "r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_polyblend = Cvar_Get( "r_polyblend", "1", 0 );
+
+	r_brightness = Cvar_Get( "r_brightness", "0", CVAR_ARCHIVE );
+	r_sRGB = Cvar_Get( "r_sRGB", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+
+	r_detailtextures = Cvar_Get( "r_detailtextures", "1", CVAR_ARCHIVE );
+
+	r_dynamiclight = Cvar_Get( "r_dynamiclight", "-1", CVAR_ARCHIVE );
+	r_subdivisions = Cvar_Get( "r_subdivisions", STR_TOSTR( SUBDIVISIONS_DEFAULT ), CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_shownormals = Cvar_Get( "r_shownormals", "0", CVAR_CHEAT );
+	r_draworder = Cvar_Get( "r_draworder", "0", CVAR_CHEAT );
+
+	r_fastsky = Cvar_Get( "r_fastsky", "0", CVAR_ARCHIVE );
+	r_portalonly = Cvar_Get( "r_portalonly", "0", 0 );
+	r_portalmaps = Cvar_Get( "r_portalmaps", "1", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_portalmaps_maxtexsize = Cvar_Get( "r_portalmaps_maxtexsize", "1024", CVAR_ARCHIVE );
+
+	r_lighting_deluxemapping = Cvar_Get( "r_lighting_deluxemapping", "1", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_specular = Cvar_Get( "r_lighting_specular", "1", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_glossintensity = Cvar_Get( "r_lighting_glossintensity", "1.5", CVAR_ARCHIVE );
+	r_lighting_glossexponent = Cvar_Get( "r_lighting_glossexponent", "24", CVAR_ARCHIVE );
+	r_lighting_ambientscale = Cvar_Get( "r_lighting_ambientscale", "1", 0 );
+	r_lighting_directedscale = Cvar_Get( "r_lighting_directedscale", "1", 0 );
+
+	r_lighting_packlightmaps = Cvar_Get( "r_lighting_packlightmaps", "1", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_maxlmblocksize = Cvar_Get( "r_lighting_maxlmblocksize", "2048", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_vertexlight = Cvar_Get( "r_lighting_vertexlight", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_maxglsldlights = Cvar_Get( "r_lighting_maxglsldlights", "16", CVAR_ARCHIVE );
+	r_lighting_grayscale = Cvar_Get( "r_lighting_grayscale", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_lighting_intensity = Cvar_Get( "r_lighting_intensity", "1.75", CVAR_ARCHIVE );
+
+	r_offsetmapping = Cvar_Get( "r_offsetmapping", "2", CVAR_ARCHIVE );
+	r_offsetmapping_scale = Cvar_Get( "r_offsetmapping_scale", "0.02", CVAR_ARCHIVE );
+	r_offsetmapping_reliefmapping = Cvar_Get( "r_offsetmapping_reliefmapping", "0", CVAR_ARCHIVE );
+
+#ifdef CGAMEGETLIGHTORIGIN
+	r_shadows = Cvar_Get( "cg_shadows", "1", CVAR_ARCHIVE );
+#else
+	r_shadows = Cvar_Get( "r_shadows", "0", CVAR_ARCHIVE );
+#endif
+	r_shadows_alpha = Cvar_Get( "r_shadows_alpha", "0.7", CVAR_ARCHIVE );
+	r_shadows_nudge = Cvar_Get( "r_shadows_nudge", "1", CVAR_ARCHIVE );
+	r_shadows_projection_distance = Cvar_Get( "r_shadows_projection_distance", "64", CVAR_CHEAT );
+	r_shadows_maxtexsize = Cvar_Get( "r_shadows_maxtexsize", "64", CVAR_ARCHIVE );
+	r_shadows_pcf = Cvar_Get( "r_shadows_pcf", "1", CVAR_ARCHIVE );
+	r_shadows_self_shadow = Cvar_Get( "r_shadows_self_shadow", "0", CVAR_ARCHIVE );
+	r_shadows_dither = Cvar_Get( "r_shadows_dither", "0", CVAR_ARCHIVE );
+
+	r_outlines_world = Cvar_Get( "r_outlines_world", "1.8", CVAR_ARCHIVE );
+	r_outlines_scale = Cvar_Get( "r_outlines_scale", "1", CVAR_ARCHIVE );
+	r_outlines_cutoff = Cvar_Get( "r_outlines_cutoff", "712", CVAR_ARCHIVE );
+
+	r_soft_particles = Cvar_Get( "r_soft_particles", "1", CVAR_ARCHIVE );
+	r_soft_particles_scale = Cvar_Get( "r_soft_particles_scale", "0.02", CVAR_ARCHIVE );
+
+	r_hdr = Cvar_Get( "r_hdr", "1", CVAR_ARCHIVE );
+	r_hdr_gamma = Cvar_Get( "r_hdr_gamma", "2.2", CVAR_ARCHIVE );
+	r_hdr_exposure = Cvar_Get( "r_hdr_exposure", "1.0", CVAR_ARCHIVE );
+
+	r_bloom = Cvar_Get( "r_bloom", "1", CVAR_ARCHIVE );
+
+	r_fxaa = Cvar_Get( "r_fxaa", "0", CVAR_ARCHIVE );
+	r_samples = Cvar_Get( "r_samples", "0", CVAR_ARCHIVE );
+
+	r_lodbias = Cvar_Get( "r_lodbias", "0", CVAR_ARCHIVE );
+	r_lodscale = Cvar_Get( "r_lodscale", "5.0", CVAR_ARCHIVE );
+
+	r_gamma = Cvar_Get( "r_gamma", "1.0", CVAR_ARCHIVE );
+	r_texturemode = Cvar_Get( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
+	r_texturefilter = Cvar_Get( "r_texturefilter", "4", CVAR_ARCHIVE );
+	r_texturecompression = Cvar_Get( "r_texturecompression", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_stencilbits = Cvar_Get( "r_stencilbits", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+
+	r_screenshot_jpeg = Cvar_Get( "r_screenshot_jpeg", "1", CVAR_ARCHIVE );
+	r_screenshot_jpeg_quality = Cvar_Get( "r_screenshot_jpeg_quality", "90", CVAR_ARCHIVE );
+	r_screenshot_fmtstr = Cvar_Get( "r_screenshot_fmtstr", va_r( tmp, sizeof( tmp ), "%s%%y%%m%%d_%%H%%M%%S", screenshotsPrefix ), CVAR_ARCHIVE );
+
+#if defined( GLX_VERSION ) && !defined( USE_SDL2 )
+	r_swapinterval = Cvar_Get( "r_swapinterval", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+#else
+	r_swapinterval = Cvar_Get( "r_swapinterval", "0", CVAR_ARCHIVE );
+#endif
+	r_swapinterval_min = Cvar_Get( "r_swapinterval_min", "0", CVAR_READONLY ); // exposes vsync support to UI
+
+	r_temp1 = Cvar_Get( "r_temp1", "0", 0 );
+
+	r_drawflat = Cvar_Get( "r_drawflat", "0", CVAR_ARCHIVE );
+	r_wallcolor = Cvar_Get( "r_wallcolor", "255 255 255", CVAR_ARCHIVE );
+	r_floorcolor = Cvar_Get( "r_floorcolor", "255 153 0", CVAR_ARCHIVE );
+
+	// make sure we rebuild our 3D texture after vid_restart
+	r_wallcolor->modified = r_floorcolor->modified = true;
+
+	// set to 1 to enable use of the checkerboard texture for missing world and model images
+	r_usenotexture = Cvar_Get( "r_usenotexture", "0", CVAR_ARCHIVE );
+
+	r_maxglslbones = Cvar_Get( "r_maxglslbones", STR_TOSTR( MAX_GLSL_UNIFORM_BONES ), CVAR_LATCH_VIDEO );
+
+	r_multithreading = Cvar_Get( "r_multithreading", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+
+	r_showShaderCache = Cvar_Get( "r_showShaderCache", "1", CVAR_ARCHIVE );
+
+	gl_cull = Cvar_Get( "gl_cull", "1", 0 );
+
+	driver = QGL_GetDriverInfo();
+	if( driver && driver->dllcvarname ) {
+		gl_driver = Cvar_Get( driver->dllcvarname, driver->dllname, CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	} else {
+		gl_driver = NULL;
+	}
+
+	Cmd_AddCommand( "screenshot", R_ScreenShot_f );
+}
+
+static void R_PrintInfo() {
+	Com_Printf( "\n" );
+	Com_Printf( "GL_VENDOR: %s\n", glConfig.vendorString );
+	Com_Printf( "GL_RENDERER: %s\n", glConfig.rendererString );
+	Com_Printf( "GL_VERSION: %s\n", glConfig.versionString );
+	Com_Printf( "GL_SHADING_LANGUAGE_VERSION: %s\n", glConfig.shadingLanguageVersionString );
+
+	Com_Printf( "GL_EXTENSIONS:\n" );
+	GLint numExtensions;
+	qglGetIntegerv( GL_NUM_EXTENSIONS, &numExtensions );
+	for( int i = 0; i < numExtensions; ++i ) {
+		Com_Printf( "%s ", (const char *)qglGetStringi( GL_EXTENSIONS, i ) );
+	}
+	Com_Printf( "\n" );
+
+	Com_Printf( "GLXW_EXTENSIONS:\n%s\n", qglGetGLWExtensionsString() );
+
+	Com_Printf( "GL_MAX_TEXTURE_SIZE: %i\n", glConfig.maxTextureSize );
+	Com_Printf( "GL_MAX_TEXTURE_IMAGE_UNITS: %i\n", glConfig.maxTextureUnits );
+	Com_Printf( "GL_MAX_CUBE_MAP_TEXTURE_SIZE: %i\n", glConfig.maxTextureCubemapSize );
+	Com_Printf( "GL_MAX_3D_TEXTURE_SIZE: %i\n", glConfig.maxTexture3DSize );
+	if( glConfig.ext.texture_array ) {
+		Com_Printf( "GL_MAX_ARRAY_TEXTURE_LAYERS: %i\n", glConfig.maxTextureLayers );
+	}
+	if( glConfig.ext.texture_filter_anisotropic ) {
+		Com_Printf( "GL_MAX_TEXTURE_MAX_ANISOTROPY: %i\n", glConfig.maxTextureFilterAnisotropic );
+	}
+	Com_Printf( "GL_MAX_RENDERBUFFER_SIZE: %i\n", glConfig.maxRenderbufferSize );
+	Com_Printf( "GL_MAX_VARYING_FLOATS: %i\n", glConfig.maxVaryingFloats );
+	Com_Printf( "GL_MAX_VERTEX_UNIFORM_COMPONENTS: %i\n", glConfig.maxVertexUniformComponents );
+	Com_Printf( "GL_MAX_VERTEX_ATTRIBS: %i\n", glConfig.maxVertexAttribs );
+	Com_Printf( "GL_MAX_FRAGMENT_UNIFORM_COMPONENTS: %i\n", glConfig.maxFragmentUniformComponents );
+	Com_Printf( "GL_MAX_SAMPLES: %i\n", glConfig.maxFramebufferSamples );
+	Com_Printf( "\n" );
+
+	Com_Printf( "mode: %ix%i%s\n", glConfig.width, glConfig.height,
+				glConfig.fullScreen ? ", fullscreen" : ", windowed" );
+	Com_Printf( "picmip: %i\n", r_picmip->integer );
+	Com_Printf( "texturemode: %s\n", r_texturemode->string );
+	Com_Printf( "anisotropic filtering: %i\n", r_texturefilter->integer );
+	Com_Printf( "vertical sync: %s\n", ( r_swapinterval->integer || r_swapinterval_min->integer ) ? "enabled" : "disabled" );
+
+	R_PrintGLExtensionsInfo();
+}
+
+/*
+* R_GLVersionHash
+*/
+static unsigned R_GLVersionHash( const char *vendorString,
+								 const char *rendererString, const char *versionString ) {
+	uint8_t *tmp;
+	size_t csize;
+	size_t tmp_size, pos;
+	unsigned hash;
+
+	tmp_size = strlen( vendorString ) + strlen( rendererString ) +
+			   strlen( versionString ) + strlen( ARCH ) + 1;
+
+	pos = 0;
+	tmp = (uint8_t *)Q_malloc( tmp_size );
+
+	csize = strlen( vendorString );
+	memcpy( tmp + pos, vendorString, csize );
+	pos += csize;
+
+	csize = strlen( rendererString );
+	memcpy( tmp + pos, rendererString, csize );
+	pos += csize;
+
+	csize = strlen( versionString );
+	memcpy( tmp + pos, versionString, csize );
+	pos += csize;
+
+	// shaders are not compatible between 32-bit and 64-bit at least on Nvidia
+	csize = strlen( ARCH );
+	memcpy( tmp + pos, ARCH, csize );
+	pos += csize;
+
+	hash = COM_SuperFastHash( tmp, tmp_size, tmp_size );
+
+	Q_free( tmp );
+
+	return hash;
+}
+
+/*
+* R_Init
+*/
+rserr_t R_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
+				int iconResource, const int *iconXPM,
+				void *hinstance, void *wndproc, void *parenthWnd,
+				bool verbose ) {
+	const qgl_driverinfo_t *driver;
+	const char *dllname = "";
+	qgl_initerr_t initerr;
+
+	r_verbose = verbose;
+
+	r_postinit = true;
+
+	if( !applicationName ) {
+		applicationName = "Qfusion";
+	}
+	if( !screenshotPrefix ) {
+		screenshotPrefix = "";
+	}
+
+	R_Register( screenshotPrefix );
+
+	memset( &glConfig, 0, sizeof( glConfig ) );
+
+	// initialize our QGL dynamic bindings
+	driver = QGL_GetDriverInfo();
+	if( driver ) {
+		dllname = driver->dllname;
+	}
+	init_qgl:
+	initerr = QGL_Init( gl_driver ? gl_driver->string : dllname );
+	if( initerr != qgl_initerr_ok ) {
+		QGL_Shutdown();
+		Com_Printf( "ref_gl::R_Init() - could not load \"%s\"\n", gl_driver ? gl_driver->string : dllname );
+
+		if( ( initerr == qgl_initerr_invalid_driver ) && gl_driver && strcmp( gl_driver->string, dllname ) ) {
+			Cvar_ForceSet( gl_driver->name, dllname );
+			goto init_qgl;
+		}
+
+		return rserr_invalid_driver;
+	}
+
+	// initialize OS-specific parts of OpenGL
+	if( !GLimp_Init( applicationName, hinstance, wndproc, parenthWnd, iconResource, iconXPM ) ) {
+		QGL_Shutdown();
+		return rserr_unknown;
+	}
+
+	// FIXME: move this elsewhere?
+	glConfig.applicationName = Q_strdup( applicationName );
+	glConfig.screenshotPrefix = Q_strdup( screenshotPrefix );
+	glConfig.startupColor = startupColor;
+
+	return rserr_ok;
+}
+
+/*
+* R_PostInit
+*/
+static rserr_t R_PostInit( void ) {
+	int i;
+	GLenum glerr;
+
+	if( QGL_PostInit() != qgl_initerr_ok ) {
+		return rserr_unknown;
+	}
+
+	glConfig.hwGamma = GLimp_GetGammaRamp( GAMMARAMP_STRIDE, &glConfig.gammaRampSize, glConfig.originalGammaRamp );
+	if( glConfig.hwGamma ) {
+		r_gamma->modified = true;
+	}
+
+	/*
+	** get our various GL strings
+	*/
+	glConfig.vendorString = (const char *)qglGetString( GL_VENDOR );
+	glConfig.rendererString = (const char *)qglGetString( GL_RENDERER );
+	glConfig.versionString = (const char *)qglGetString( GL_VERSION );
+	glConfig.shadingLanguageVersionString = (const char *)qglGetString( GL_SHADING_LANGUAGE_VERSION );
+
+	if( !glConfig.vendorString ) {
+		glConfig.vendorString = "";
+	}
+	if( !glConfig.rendererString ) {
+		glConfig.rendererString = "";
+	}
+	if( !glConfig.versionString ) {
+		glConfig.versionString = "";
+	}
+	if( !glConfig.shadingLanguageVersionString ) {
+		glConfig.shadingLanguageVersionString = "";
+	}
+
+	glConfig.versionHash = R_GLVersionHash( glConfig.vendorString, glConfig.rendererString,
+											glConfig.versionString );
+
+	memset( &rsh, 0, sizeof( rsh ) );
+	memset( &rf, 0, sizeof( rf ) );
+
+	rsh.registrationSequence = 1;
+	rsh.registrationOpen = false;
+
+	rsh.worldModelSequence = 1;
+
+	for( i = 0; i < 256; i++ )
+		rsh.sinTableByte[i] = sin( (float)i / 255.0 * M_TWOPI );
+
+	rf.frameTime.average = 1;
+	rf.swapInterval = -1;
+	rf.speedsMsgLock = QMutex_Create();
+	rf.debugSurfaceLock = QMutex_Create();
+
+	R_InitDrawLists();
+
+	if( !R_RegisterGLExtensions() ) {
+		QGL_Shutdown();
+		return rserr_unknown;
+	}
+
+	R_SetSwapInterval( 0, -1 );
+
+	R_FillStartupBackgroundColor( COLOR_R( glConfig.startupColor ) / 255.0f,
+								  COLOR_G( glConfig.startupColor ) / 255.0f, COLOR_B( glConfig.startupColor ) / 255.0f );
+
+	R_TextureMode( r_texturemode->string );
+
+	R_AnisotropicFilter( r_texturefilter->integer );
+
+	if( r_verbose ) {
+		R_PrintInfo();
+	}
+
+	// load and compile GLSL programs
+	RP_Init();
+
+	R_InitVBO();
+
+	R_InitImages();
+
+	MaterialCache::init();
+
+	R_InitSkinFiles();
+
+	R_InitModels();
+
+	Scene::Init();
+
+	R_ClearScene();
+
+	R_InitVolatileAssets();
+
+	R_ClearRefInstStack();
+
+	glerr = qglGetError();
+	if( glerr != GL_NO_ERROR ) {
+		Com_Printf( "glGetError() = 0x%x\n", glerr );
+	}
+
+	return rserr_ok;
+}
+
+rserr_t R_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless ) {
+	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, fullScreen, borderless );
+	if( err != rserr_ok ) {
+		Com_Printf( "Could not GLimp_SetMode()\n" );
+		return err;
+	}
+
+	if( r_postinit ) {
+		err = R_PostInit();
+		r_postinit = false;
+	}
+
+	return err;
+}
+
+/*
+* R_InitVolatileAssets
+*/
+static void R_InitVolatileAssets( void ) {
+	// init volatile data
+	R_InitSkeletalCache();
+	R_InitCustomColors();
+
+	Scene::Instance()->InitVolatileAssets();
+
+	auto *materialCache = MaterialCache::instance();
+	rsh.envShader = materialCache->loadDefaultMaterial( wsw::StringView( "$environment" ), SHADER_TYPE_OPAQUE_ENV );
+	rsh.whiteShader = materialCache->loadDefaultMaterial( wsw::StringView( "$whiteimage" ), SHADER_TYPE_2D );
+	rsh.emptyFogShader = materialCache->loadDefaultMaterial( wsw::StringView( "$emptyfog" ), SHADER_TYPE_FOG );
+
+	if( !rsh.nullVBO ) {
+		rsh.nullVBO = R_InitNullModelVBO();
+	} else {
+		R_TouchMeshVBO( rsh.nullVBO );
+	}
+
+	if( !rsh.postProcessingVBO ) {
+		rsh.postProcessingVBO = R_InitPostProcessingVBO();
+	} else {
+		R_TouchMeshVBO( rsh.postProcessingVBO );
+	}
+}
+
+/*
+* R_DestroyVolatileAssets
+*/
+static void R_DestroyVolatileAssets( void ) {
+	Scene::Instance()->DestroyVolatileAssets();
+
+	// kill volatile data
+	R_ShutdownCustomColors();
+	R_ShutdownSkeletalCache();
+}
+
+/*
+* R_BeginRegistration
+*/
+void R_BeginRegistration( void ) {
+	R_DestroyVolatileAssets();
+
+	rsh.registrationSequence++;
+	if( !rsh.registrationSequence ) {
+		// make sure assumption that an asset is free it its registrationSequence is 0
+		// since rsh.registrationSequence never equals 0
+		rsh.registrationSequence = 1;
+	}
+	rsh.registrationOpen = true;
+
+	R_InitVolatileAssets();
+
+	R_DeferDataSync();
+
+	R_DataSync();
+}
+
+/*
+* R_EndRegistration
+*/
+void R_EndRegistration( void ) {
+	if( rsh.registrationOpen == false ) {
+		return;
+	}
+
+	rsh.registrationOpen = false;
+
+	R_FreeUnusedModels();
+	R_FreeUnusedVBOs();
+	R_FreeUnusedSkinFiles();
+
+	MaterialCache::instance()->freeUnusedMaterials();
+
+	R_FreeUnusedImages();
+
+	R_DeferDataSync();
+
+	R_DataSync();
+}
+
+/*
+* R_Shutdown
+*/
+void R_Shutdown( bool verbose ) {
+	Cmd_RemoveCommand( "screenshot" );
+
+	// free shaders, models, etc.
+
+	R_DestroyVolatileAssets();
+
+	Scene::Shutdown();
+
+	R_ShutdownModels();
+
+	R_ShutdownSkinFiles();
+
+	R_ShutdownVBO();
+
+	MaterialCache::shutdown();
+
+	R_ShutdownImages();
+
+	// destroy compiled GLSL programs
+	RP_Shutdown();
+
+	// restore original gamma
+	if( glConfig.hwGamma ) {
+		GLimp_SetGammaRamp( GAMMARAMP_STRIDE, glConfig.gammaRampSize, glConfig.originalGammaRamp );
+	}
+
+	QMutex_Destroy( &rf.speedsMsgLock );
+	QMutex_Destroy( &rf.debugSurfaceLock );
+
+	// shut down OS specific OpenGL stuff like contexts, etc.
+	GLimp_Shutdown();
+
+	// shutdown our QGL subsystem
+	QGL_Shutdown();
 }

@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_shader.c
 
 #include "local.h"
+#include "program.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"

@@ -70,14 +70,635 @@ typedef struct superLightStyle_s {
 
 #include "glimp.h"
 #include "surface.h"
-#include "image.h"
-#include "mesh.h"
+
+#include "../qcommon/wswstdtypes.h"
+
+enum {
+	IT_NONE
+	,IT_CLAMP           = 1 << 0
+	,IT_NOMIPMAP        = 1 << 1
+	,IT_NOPICMIP        = 1 << 2
+	,IT_CUBEMAP         = 1 << 4
+	,IT_FLIPX           = 1 << 5
+	,IT_FLIPY           = 1 << 6
+	,IT_FLIPDIAGONAL    = 1 << 7      // when used alone, equals to rotating 90 CW and flipping X; with FLIPX|Y, 90 CCW and flipping X
+	,IT_NOCOMPRESS      = 1 << 8
+	,IT_DEPTH           = 1 << 9
+	,IT_NORMALMAP       = 1 << 10
+	,IT_FRAMEBUFFER     = 1 << 11
+	,IT_DEPTHRB         = 1 << 12     // framebuffer has a depth renderbuffer
+	,IT_NOFILTERING     = 1 << 13
+	,IT_ALPHAMASK       = 1 << 14     // image only contains an alpha mask
+	,IT_BGRA            = 1 << 15
+	,IT_SYNC            = 1 << 16     // load image synchronously
+	,IT_DEPTHCOMPARE    = 1 << 17
+	,IT_ARRAY           = 1 << 18
+	,IT_3D              = 1 << 19
+	,IT_STENCIL         = 1 << 20     // for IT_DEPTH or IT_DEPTHRB textures, whether there's stencil
+	,IT_NO_DATA_SYNC    = 1 << 21     // owned by the drawing thread, do not sync in the frontend thread
+	,IT_FLOAT           = 1 << 22
+	,IT_SRGB            = 1 << 23
+	,IT_WAL             = 1 << 24
+	,IT_MIPTEX          = 1 << 25
+	,IT_MIPTEX_FULLBRIGHT = 1 << 26
+	,IT_LEFTHALF        = 1 << 27
+	,IT_RIGHTHALF       = 1 << 28
+
+};
+
+/**
+ * These flags don't effect the actual usage and purpose of the image.
+ * They are ignored when searching for an image.
+ * The loader threads may modify these flags (but no other flags),
+ * so they must not be used for anything that has a long-term effect.
+ */
+#define IT_LOADFLAGS        ( IT_ALPHAMASK | IT_BGRA | IT_SYNC | IT_SRGB )
+
+#define IT_SPECIAL          ( IT_CLAMP | IT_NOMIPMAP | IT_NOPICMIP | IT_NOCOMPRESS )
+#define IT_SKYFLAGS         ( IT_SKY | IT_NOMIPMAP | IT_CLAMP | IT_SYNC )
+
+/**
+ * Image usage tags, to allow certain images to be freed separately.
+ */
+enum {
+	IMAGE_TAG_GENERIC   = 1 << 0      // Images that don't fall into any other category.
+	,IMAGE_TAG_BUILTIN  = 1 << 1      // Internal ref images that must not be released.
+	,IMAGE_TAG_WORLD    = 1 << 2      // World textures.
+};
+
+typedef struct image_s {
+	char            *name;                      // game path, not including extension
+	int registrationSequence;
+	volatile bool loaded;
+	volatile bool missing;
+
+	char extension[8];                          // file extension
+	int flags;
+	GLuint texnum;                              // gl texture binding
+	int width, height;                          // source image
+	int layers;                                 // texture array size
+	int upload_width,
+		upload_height;                          // after power of two and picmip
+	int minmipsize;                             // size of the smallest mipmap that should be used
+	int samples;
+	int fbo;                                    // frame buffer object texture is attached to
+	unsigned int framenum;                      // rf.frameCount texture was updated (rendered to)
+	int tags;                                   // usage tags of the image
+	struct image_s  *next, *prev;
+} image_t;
+
+void R_InitImages( void );
+int R_TextureTarget( int flags, int *uploadTarget );
+void R_TouchImage( image_t *image, int tags );
+void R_FreeUnusedImagesByTags( int tags );
+void R_FreeUnusedImages( void );
+void R_InitBuiltinScreenImages( void );
+void R_ReleaseBuiltinScreenImages( void );
+void R_ShutdownImages( void );
+void R_GetRenderBufferSize( const int inWidth, const int inHeight,
+							const int inLimit, const int flags, int *outWidth, int *outHeight );
+void R_InitViewportTexture( image_t **texture, const char *name, int id,
+							int viewportWidth, int viewportHeight, int size, int flags, int tags, int samples );
+image_t *R_GetPortalTexture( int viewportWidth, int viewportHeight, int flags, unsigned frameNum );
+void R_FreeImageBuffers( void );
+
+void R_PrintImageList( const char *pattern, bool ( *filter )( const char *filter, const char *value ) );
+void R_ScreenShot( const char *filename, int x, int y, int width, int height, int quality, bool silent );
+
+void R_TextureMode( char *string );
+void R_AnisotropicFilter( int value );
+
+image_t *R_LoadImage( const char *name, uint8_t **pic, int width, int height, int flags, int minmipsize, int tags, int samples );
+
+image_t *R_FindImage( const wsw::StringView &name, const wsw::StringView &suffix, int flags, int minmipsize, int tags );
+
+inline image_t *R_FindImage( const char *name, const char *suffix, int flags, int minmipsize, int tags ) {
+	wsw::StringView nameView( name );
+	wsw::StringView suffixView( suffix );
+	return R_FindImage( nameView, suffixView, flags, minmipsize, tags );
+}
+
+image_t *R_Create3DImage( const char *name, int width, int height, int layers, int flags, int tags, int samples, bool array );
+void R_ReplaceImage( image_t *image, uint8_t **pic, int width, int height, int flags, int minmipsize, int samples );
+void R_ReplaceSubImage( image_t *image, int layer, int x, int y, uint8_t **pic, int width, int height );
+void R_ReplaceImageLayer( image_t *image, int layer, uint8_t **pic );
+unsigned *R_LoadPalette( int flags );
+
+struct shader_s;
+struct mfog_s;
+struct portalSurface_s;
+
+#define MIN_RENDER_MESHES           2048
+
+typedef struct mesh_s {
+	unsigned short numVerts;
+	unsigned short numElems;
+
+	elem_t              *elems;
+
+	vec4_t              *xyzArray;
+	vec4_t              *normalsArray;
+	vec4_t              *sVectorsArray;
+	vec2_t              *stArray;
+	vec2_t              *lmstArray[MAX_LIGHTMAPS];
+	byte_vec4_t         *lmlayersArray[( MAX_LIGHTMAPS + 3 ) / 4];
+	byte_vec4_t         *colorsArray[MAX_LIGHTMAPS];
+
+	uint8_t             *blendIndices;
+	uint8_t             *blendWeights;
+} mesh_t;
+
+typedef struct {
+	unsigned int firstVert, firstElem;
+	unsigned int numVerts, numElems; // real counts, including the overdraw
+} vboSlice_t;
+
+typedef struct {
+	unsigned int distKey;
+	unsigned int sortKey;
+	drawSurfaceType_t   *drawSurf;
+} sortedDrawSurf_t;
+
+typedef struct {
+	unsigned int numDrawSurfs, maxDrawSurfs;
+	sortedDrawSurf_t    *drawSurfs;
+
+	unsigned int maxVboSlices;
+	vboSlice_t          *vboSlices;
+} drawList_t;
+
+typedef void (*drawSurf_cb)( const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
+typedef void (*batchDrawSurf_cb)( const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
+
 #include "shader.h"
-#include "backend.h"
-//#include "shadow.h"
-#include "model.h"
-#include "trace.h"
-#include "program.h"
+
+enum {
+	RB_VBO_STREAM_COMPACT       = -2, // bind RB_VBO_STREAM instead
+	RB_VBO_STREAM               = -1,
+	RB_VBO_NONE                 = 0,
+	RB_VBO_NUM_STREAMS          = -RB_VBO_STREAM_COMPACT
+};
+
+//===================================================================
+
+struct shader_s;
+struct mfog_s;
+struct superLightStyle_s;
+struct portalSurface_s;
+struct refScreenTexSet_s;
+
+// core
+void RB_Init( void );
+void RB_Shutdown( void );
+void RB_SetTime( int64_t time );
+void RB_BeginFrame( void );
+void RB_EndFrame( void );
+void RB_BeginRegistration( void );
+void RB_EndRegistration( void );
+
+void RB_LoadCameraMatrix( const mat4_t m );
+void RB_LoadObjectMatrix( const mat4_t m );
+void RB_LoadProjectionMatrix( const mat4_t m );
+
+void RB_DepthRange( float depthmin, float depthmax );
+void RB_GetDepthRange( float* depthmin, float *depthmax );
+void RB_DepthOffset( bool enable );
+void RB_ClearDepth( float depth );
+void RB_Cull( int cull );
+void RB_SetState( int state );
+void RB_FrontFace( bool front );
+void RB_FlipFrontFace( void );
+void RB_Scissor( int x, int y, int w, int h );
+void RB_GetScissor( int *x, int *y, int *w, int *h );
+void RB_ApplyScissor( void );
+void RB_Viewport( int x, int y, int w, int h );
+void RB_Clear( int bits, float r, float g, float b, float a );
+void RB_SetZClip( float zNear, float zFar );
+void RB_SetScreenImageSet( const struct refScreenTexSet_s *st );
+
+void RB_BindFrameBufferObject( int object );
+int RB_BoundFrameBufferObject( void );
+void RB_BlitFrameBufferObject( int src, int dest, int bitMask, int mode, int filter, int readAtt, int drawAtt );
+
+void RB_BindVBO( int id, int primitive );
+
+void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
+						const struct mfog_s *fog, const struct portalSurface_s *portalSurface, unsigned int shadowBits,
+						const struct mesh_s *mesh, int primitive, float x_offset, float y_offset );
+void RB_FlushDynamicMeshes( void );
+
+void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems );
+void RB_DrawElementsInstanced( int firstVert, int numVerts, int firstElem, int numElems,
+							   int numInstances, instancePoint_t *instances );
+
+void RB_FlushTextureCache( void );
+
+// shader
+void RB_BindShader( const entity_t *e, const struct shader_s *shader, const struct mfog_s *fog );
+void RB_SetLightstyle( const struct superLightStyle_s *lightStyle );
+void RB_SetDlightBits( unsigned int dlightBits );
+void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights );
+void RB_SetPortalSurface( const struct portalSurface_s *portalSurface );
+void RB_SetRenderFlags( int flags );
+void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure );
+void RB_SetShaderStateMask( int ANDmask, int ORmask );
+void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis );
+bool RB_EnableTriangleOutlines( bool enable );
+
+vattribmask_t RB_GetVertexAttribs( void );
+
+void RB_StatsMessage( char *msg, size_t size );
+
+/*
+==============================================================================
+
+BRUSH MODELS
+
+==============================================================================
+*/
+
+
+//
+// in memory representation
+//
+typedef struct {
+	float radius;
+
+	unsigned int firstModelSurface;
+	unsigned int numModelSurfaces;
+
+	unsigned int firstModelDrawSurface;
+	unsigned int numModelDrawSurfaces;
+
+	vec3_t mins, maxs;
+} mmodel_t;
+
+typedef struct mfog_s {
+	shader_t        *shader;
+	cplane_t        *visibleplane;
+	vec3_t mins, maxs;
+} mfog_t;
+
+typedef struct mshaderref_s {
+	char name[MAX_QPATH];
+	int flags;
+	int contents;
+	shader_t        *shaders[NUM_SHADER_TYPES_BSP];
+} mshaderref_t;
+
+typedef struct msurface_s {
+	unsigned int facetype, flags;
+
+	unsigned int firstDrawSurfVert, firstDrawSurfElem;
+
+	unsigned int numInstances;
+
+	unsigned int drawSurf;
+
+	mutable int fragmentframe;                  // for multi-check avoidance
+
+	vec4_t plane;
+
+	union {
+		float origin[3];
+		float mins[3];
+	};
+	union {
+		float maxs[3];
+		float color[3];
+	};
+
+	mesh_t mesh;
+
+	instancePoint_t *instances;
+
+	shader_t *shader;
+	mfog_t *fog;
+
+	struct superLightStyle_s *superLightStyle;
+} msurface_t;
+
+typedef struct mnode_s {
+	cplane_t        plane;
+
+	// TODO: We can really use short indices!
+	int32_t        children[2];
+} mnode_t;
+
+typedef struct mleaf_s {
+	// leaf specific
+	int cluster, area;
+
+	float mins[3];
+	float maxs[3];                      // for bounding box culling
+
+	unsigned *visSurfaces;
+	unsigned *fragmentSurfaces;
+
+	unsigned numVisSurfaces;
+	unsigned numFragmentSurfaces;
+} mleaf_t;
+
+typedef struct {
+	uint8_t ambient[MAX_LIGHTMAPS][3];
+	uint8_t diffuse[MAX_LIGHTMAPS][3];
+	uint8_t styles[MAX_LIGHTMAPS];
+	uint8_t direction[2];
+} mgridlight_t;
+
+typedef struct {
+	int texNum;
+	int texLayer;
+	float texMatrix[2][2];
+} mlightmapRect_t;
+
+typedef struct mbrushmodel_s {
+	const bspFormatDesc_t *format;
+
+	dvis_t          *pvs;
+
+	unsigned int numsubmodels;
+	mmodel_t        *submodels;
+	struct model_s  *inlines;
+
+	unsigned int numModelSurfaces;
+	unsigned int firstModelSurface;
+
+	unsigned int numModelDrawSurfaces;
+	unsigned int firstModelDrawSurface;
+
+	msurface_t      *modelSurfaces;
+
+	unsigned int numplanes;
+	cplane_t        *planes;
+
+	unsigned int numleafs;              // number of visible leafs, not counting 0
+	mleaf_t         *leafs;
+	mleaf_t         **visleafs;
+	unsigned int numvisleafs;
+
+	unsigned int numnodes;
+	mnode_t         *nodes;
+
+	unsigned int numsurfaces;
+	msurface_t      *surfaces;
+
+	unsigned int numlightgridelems;
+	mgridlight_t    *lightgrid;
+
+	unsigned int numlightarrayelems;
+	int             *lightarray;
+
+	unsigned int numfogs;
+	mfog_t          *fogs;
+	mfog_t          *globalfog;
+
+	/*unsigned*/ int numareas;
+
+	vec3_t gridSize;
+	vec3_t gridMins;
+	int gridBounds[4];
+
+	unsigned int numDrawSurfaces;
+	drawSurfaceBSP_t *drawSurfaces;
+
+	unsigned int numLightmapImages;
+	struct image_s  **lightmapImages;
+
+	unsigned int numSuperLightStyles;
+	struct superLightStyle_s *superLightStyles;
+
+	unsigned numMiptex;
+	void            *mipTex;
+} mbrushmodel_t;
+
+/*
+==============================================================================
+
+ALIAS MODELS
+
+==============================================================================
+*/
+
+//
+// in memory representation
+//
+typedef struct {
+	short point[3];
+	uint8_t latlong[2];                     // use bytes to keep 8-byte alignment
+} maliasvertex_t;
+
+typedef struct {
+	vec3_t mins, maxs;
+	vec3_t scale;
+	vec3_t translate;
+	float radius;
+} maliasframe_t;
+
+typedef struct {
+	char name[MD3_MAX_PATH];
+	quat_t quat;
+	vec3_t origin;
+} maliastag_t;
+
+typedef struct {
+	char name[MD3_MAX_PATH];
+	shader_t        *shader;
+} maliasskin_t;
+
+typedef struct maliasmesh_s {
+	char name[MD3_MAX_PATH];
+
+	int numverts;
+	maliasvertex_t *vertexes;
+	vec2_t          *stArray;
+
+	vec4_t          *xyzArray;
+	vec4_t          *normalsArray;
+	vec4_t          *sVectorsArray;
+
+	int numtris;
+	elem_t          *elems;
+
+	int numskins;
+	maliasskin_t    *skins;
+
+	struct mesh_vbo_s *vbo;
+} maliasmesh_t;
+
+typedef struct maliasmodel_s {
+	int numframes;
+	maliasframe_t   *frames;
+
+	int numtags;
+	maliastag_t     *tags;
+
+	int nummeshes;
+	maliasmesh_t    *meshes;
+	drawSurfaceAlias_t *drawSurfs;
+
+	int numskins;
+	maliasskin_t    *skins;
+
+	int numverts;             // sum of numverts for all meshes
+	int numtris;             // sum of numtris for all meshes
+} maliasmodel_t;
+
+/*
+==============================================================================
+
+SKELETAL MODELS
+
+==============================================================================
+*/
+
+//
+// in memory representation
+//
+#define SKM_MAX_WEIGHTS     4
+
+//
+// in memory representation
+//
+typedef struct {
+	char            *name;
+	shader_t        *shader;
+} mskskin_t;
+
+typedef struct {
+	uint8_t indices[SKM_MAX_WEIGHTS];
+	uint8_t weights[SKM_MAX_WEIGHTS];
+} mskblend_t;
+
+typedef struct mskmesh_s {
+	char            *name;
+
+	uint8_t         *blendIndices;
+	uint8_t         *blendWeights;
+
+	unsigned int numverts;
+	vec4_t          *xyzArray;
+	vec4_t          *normalsArray;
+	vec2_t          *stArray;
+	vec4_t          *sVectorsArray;
+
+	unsigned int    *vertexBlends;  // [0..numbones-1] reference directly to bones
+	// [numbones..numbones+numblendweights-1] reference to model blendweights
+
+	unsigned int maxWeights;        // the maximum number of bones, affecting a single vertex in the mesh
+
+	unsigned int numtris;
+	elem_t          *elems;
+
+	mskskin_t skin;
+
+	struct mesh_vbo_s *vbo;
+} mskmesh_t;
+
+typedef struct {
+	char            *name;
+	signed int parent;
+	unsigned int flags;
+} mskbone_t;
+
+typedef struct {
+	vec3_t mins, maxs;
+	float radius;
+	bonepose_t      *boneposes;
+} mskframe_t;
+
+typedef struct mskmodel_s {
+	unsigned int numbones;
+	mskbone_t       *bones;
+
+	unsigned int nummeshes;
+	mskmesh_t       *meshes;
+	drawSurfaceSkeletal_t *drawSurfs;
+
+	unsigned int numtris;
+	elem_t          *elems;
+
+	unsigned int numverts;
+	vec4_t          *xyzArray;
+	vec4_t          *normalsArray;
+	vec2_t          *stArray;
+	vec4_t          *sVectorsArray;
+	uint8_t         *blendIndices;
+	uint8_t         *blendWeights;
+
+	unsigned int numblends;
+	mskblend_t      *blends;
+	unsigned int    *vertexBlends;  // [0..numbones-1] reference directly to bones
+	// [numbones..numbones+numblendweights-1] reference to blendweights
+
+	unsigned int numframes;
+	mskframe_t      *frames;
+	bonepose_t      *invbaseposes;
+} mskmodel_t;
+
+//===================================================================
+
+//
+// Whole model
+//
+
+typedef enum { mod_bad = -1, mod_free, mod_brush, mod_alias, mod_skeletal } modtype_t;
+typedef void ( *mod_touch_t )( struct model_s *model );
+
+#define MOD_MAX_LODS    4
+
+typedef struct model_s {
+	char            *name;
+	int registrationSequence;
+	mod_touch_t touch;          // touching a model updates registration sequence, images and VBO's
+
+	modtype_t type;
+
+	//
+	// volume occupied by the model graphics
+	//
+	vec3_t mins, maxs;
+	float radius;
+
+	//
+	// memory representation pointer
+	//
+	void            *extradata;
+
+	int lodnum;                 // LOD index, 0 for parent model, 1..MOD_MAX_LODS for LOD models
+	int numlods;
+	struct model_s  *lods[MOD_MAX_LODS];
+
+	mempool_t       *mempool;
+} model_t;
+
+//============================================================================
+
+extern model_t *r_prevworldmodel;
+
+void        R_InitModels( void );
+void        R_ShutdownModels( void );
+void        R_FreeUnusedModels( void );
+
+void        R_ModelBounds( const model_t *model, vec3_t mins, vec3_t maxs );
+void        R_ModelFrameBounds( const struct model_s *model, int frame, vec3_t mins, vec3_t maxs );
+void        R_RegisterWorldModel( const char *model );
+void        R_WaitWorldModel( void );
+struct model_s *R_RegisterModel( const char *name );
+
+void R_GetTransformBufferForMesh( mesh_t *mesh, bool positions, bool normals, bool sVectors );
+
+void        Mod_ClearAll( void );
+model_t     *Mod_ForName( const char *name, bool crash );
+mleaf_t     *Mod_PointInLeaf( float *p, model_t *model );
+uint8_t     *Mod_ClusterPVS( int cluster, model_t *model );
+
+unsigned int Mod_Handle( const model_t *mod );
+model_t     *Mod_ForHandle( unsigned int elem );
+
+void        Mod_StripLODSuffix( char *name );
+
+//#include "program.h"
 
 #ifdef min
 #undef min
@@ -912,5 +1533,16 @@ typedef struct {
 
 extern mapconfig_t mapConfig;
 extern refinst_t rn;
+
+typedef struct {
+	float fraction;             // time completed, 1.0 = didn't hit anything
+	vec3_t endpos;              // final position
+	cplane_t plane;             // surface normal at impact
+	int surfFlags;              // surface hit
+	int ent;                    // not set by CM_*() functions
+	struct shader_s *shader;    // surface shader
+} rtrace_t;
+
+msurface_t *R_TraceLine( rtrace_t *tr, const vec3_t start, const vec3_t end, int surfumask );
 
 #endif // R_LOCAL_H
