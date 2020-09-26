@@ -1,5 +1,5 @@
-#ifndef WSW_VIRTUALKEYBOARDMODEL_H
-#define WSW_VIRTUALKEYBOARDMODEL_H
+#ifndef WSW_531a9137_a4c6_43b4_961e_eda1109e7c80_H
+#define WSW_531a9137_a4c6_43b4_961e_eda1109e7c80_H
 
 #include <QObject>
 #include <QColor>
@@ -12,10 +12,14 @@
 
 class QQuickItem;
 
+namespace wsw::ui {
+
+class QtUISystem;
+
 class KeysAndBindingsModel : public QObject {
 	Q_OBJECT
 
-	friend class QWswUISystem;
+	friend class QtUISystem;
 public:
 	enum BindingGroup {
 		MovementGroup = 1,
@@ -200,5 +204,7 @@ private:
 	std::array<QQuickItem *, 256> m_keyItems {};
 	std::array<QQuickItem *, kMaxCommands> m_commandItems {};
 };
+
+}
 
 #endif

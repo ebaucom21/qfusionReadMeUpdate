@@ -1,9 +1,11 @@
-#ifndef WSW_UISYSTEM_H
-#define WSW_UISYSTEM_H
+#ifndef WSW_0646db93_a5f6_4b71_9267_800aa42abe4b_H
+#define WSW_0646db93_a5f6_4b71_9267_800aa42abe4b_H
 
 #include <optional>
 
 namespace wsw { class StringView; }
+
+namespace wsw::ui {
 
 class UISystem {
 public:
@@ -49,5 +51,7 @@ public:
 
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 };
+
+}
 
 #endif

@@ -30,12 +30,28 @@ QVariant VID_GetMainContextHandle();
 bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
-class QWswUISystem : public QObject, public UISystem {
+void R_Set2DMode( bool );
+void R_DrawExternalTextureOverlay( unsigned );
+shader_t *R_RegisterPic( const char * );
+struct model_s *R_RegisterModel( const char * );
+void RF_RegisterWorldModel( const char * );
+void RF_ClearScene();
+void RF_RenderScene( const refdef_t * );
+void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
+						const vec4_t color, const shader_t *shader );
+
+// Hacks
+bool CG_IsSpectator();
+bool CG_HasTwoTeams();
+
+namespace wsw::ui {
+
+class QtUISystem : public QObject, public UISystem {
 	Q_OBJECT
 
 	// The implementation is borrowed from https://github.com/RSATom/QuickLayer
 
-	template <typename> friend class SingletonHolder;
+	template <typename> friend class ::SingletonHolder;
 	friend class NativelyDrawnImage;
 	friend class NativelyDrawnModel;
 public:
@@ -154,10 +170,10 @@ private:
 
 	ServerListModel *m_serverListModel { nullptr };
 
-	wsw::ui::ChatModelProxy m_chatModel;
-	wsw::ui::ChatModelProxy m_teamChatModel;
+	ChatModelProxy m_chatModel;
+	ChatModelProxy m_teamChatModel;
 
-	wsw::ui::CallvotesModelProxy m_callvotesModel;
+	CallvotesModelProxy m_callvotesModel;
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -254,7 +270,7 @@ private:
 	[[nodiscard]]
 	auto convertName( const wsw::StringView &rawName ) const -> QString;
 
-	explicit QWswUISystem( int width, int height );
+	explicit QtUISystem( int width, int height );
 
 	void updateCVarAwareControls();
 	void checkPropertyChanges();
@@ -274,21 +290,21 @@ private:
 	auto convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key>;
 };
 
-void QWswUISystem::onSceneGraphInitialized() {
+void QtUISystem::onSceneGraphInitialized() {
 	auto attachment = QOpenGLFramebufferObject::CombinedDepthStencil;
 	m_framebufferObject = new QOpenGLFramebufferObject( m_window->size(), attachment );
 	m_window->setRenderTarget( m_framebufferObject );
 }
 
-void QWswUISystem::onRenderRequested() {
+void QtUISystem::onRenderRequested() {
 	m_hasPendingRedraw = true;
 }
 
-void QWswUISystem::onSceneChanged() {
+void QtUISystem::onSceneChanged() {
 	m_hasPendingSceneChange = true;
 }
 
-void QWswUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
+void QtUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
 	if ( QQmlComponent::Ready != status ) {
 		if( status == QQmlComponent::Error ) {
 			Com_Printf( S_COLOR_RED "The root Qml component loading has failed: %s\n",
@@ -318,33 +334,33 @@ void QWswUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
 	m_isValidAndReady = true;
 }
 
-static SingletonHolder<QWswUISystem> uiSystemInstanceHolder;
+static SingletonHolder<QtUISystem> uiSystemInstanceHolder;
 // Hacks for allowing retrieval of a maybe-instance
 // (we do not want to add these hacks to SingletonHolder)
 static bool initialized = false;
 
 void UISystem::init( int width, int height ) {
-	::uiSystemInstanceHolder.Init( width, height );
+	uiSystemInstanceHolder.Init( width, height );
 	initialized = true;
 }
 
 void UISystem::shutdown() {
-	::uiSystemInstanceHolder.Shutdown();
+	uiSystemInstanceHolder.Shutdown();
 	initialized = false;
 }
 
 auto UISystem::instance() -> UISystem * {
-	return ::uiSystemInstanceHolder.Instance();
+	return uiSystemInstanceHolder.Instance();
 }
 
 auto UISystem::maybeInstance() -> std::optional<UISystem *> {
 	if( initialized ) {
-		return ::uiSystemInstanceHolder.Instance();
+		return uiSystemInstanceHolder.Instance();
 	}
 	return std::nullopt;
 }
 
-void QWswUISystem::refresh( unsigned refreshFlags ) {
+void QtUISystem::refresh( unsigned refreshFlags ) {
 #ifndef _WIN32
 	QGuiApplication::processEvents( QEventLoop::AllEvents );
 #endif
@@ -360,8 +376,6 @@ void QWswUISystem::refresh( unsigned refreshFlags ) {
 	leaveUIRenderingMode();
 }
 
-QVariant VID_GetMainContextHandle();
-
 static bool isAPrintableChar( int ch ) {
 	if( ch < 0 || ch > 127 ) {
 		return false;
@@ -371,7 +385,7 @@ static bool isAPrintableChar( int ch ) {
 	return std::isprint( (unsigned char)ch );
 }
 
-QWswUISystem::QWswUISystem( int initialWidth, int initialHeight ) {
+QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	int fakeArgc = 0;
 	char *fakeArgv[] = { nullptr };
 	m_application = new QGuiApplication( fakeArgc, fakeArgv );
@@ -406,9 +420,9 @@ QWswUISystem::QWswUISystem( int initialWidth, int initialHeight ) {
 	m_window->setGeometry( 0, 0, initialWidth, initialHeight );
 	m_window->setColor( Qt::transparent );
 
-	QObject::connect( m_window, &QQuickWindow::sceneGraphInitialized, this, &QWswUISystem::onSceneGraphInitialized );
-	QObject::connect( m_control, &QQuickRenderControl::renderRequested, this, &QWswUISystem::onRenderRequested );
-	QObject::connect( m_control, &QQuickRenderControl::sceneChanged, this, &QWswUISystem::onSceneChanged );
+	QObject::connect( m_window, &QQuickWindow::sceneGraphInitialized, this, &QtUISystem::onSceneGraphInitialized );
+	QObject::connect( m_control, &QQuickRenderControl::renderRequested, this, &QtUISystem::onRenderRequested );
+	QObject::connect( m_control, &QQuickRenderControl::sceneChanged, this, &QtUISystem::onSceneChanged );
 
 	m_surface = new QOffscreenSurface;
 	m_surface->setFormat( m_sharedContext->format() );
@@ -437,7 +451,7 @@ QWswUISystem::QWswUISystem( int initialWidth, int initialHeight ) {
 	}
 
 	const QString reason( "This type is a native code bridge and cannot be instantiated" );
-	qmlRegisterUncreatableType<QWswUISystem>( "net.warsow", 2, 6, "Wsw", reason );
+	qmlRegisterUncreatableType<QtUISystem>( "net.warsow", 2, 6, "Wsw", reason );
 	qmlRegisterUncreatableType<wsw::ui::ChatModel>( "net.warsow", 2, 6, "ChatModel", reason );
 	qmlRegisterUncreatableType<wsw::ui::CallvotesModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
 	qmlRegisterUncreatableType<wsw::ui::GametypeDef>( "net.warsow", 2, 6, "GametypeDef", reason );
@@ -466,7 +480,7 @@ QWswUISystem::QWswUISystem( int initialWidth, int initialHeight ) {
 
 	m_component = new QQmlComponent( m_engine );
 
-	connect( m_component, &QQmlComponent::statusChanged, this, &QWswUISystem::onComponentStatusChanged );
+	connect( m_component, &QQmlComponent::statusChanged, this, &QtUISystem::onComponentStatusChanged );
 	m_component->loadUrl( QUrl( "qrc:/RootItem.qml" ) );
 
 	m_sensitivityVar = Cvar_Get( "ui_sensitivity", "1.0", CVAR_ARCHIVE );
@@ -477,13 +491,13 @@ QWswUISystem::QWswUISystem( int initialWidth, int initialHeight ) {
 	// Initialize the table of textual strings corresponding to characters
 	for( const QString &s: m_charStrings ) {
 		const auto offset = (int)( &s - m_charStrings );
-		if( ::isAPrintableChar( offset ) ) {
+		if( isAPrintableChar( offset ) ) {
 			m_charStrings[offset] = QString::asprintf( "%c", (char)offset );
 		}
 	}
 }
 
-void QWswUISystem::renderQml() {
+void QtUISystem::renderQml() {
 	assert( m_isValidAndReady );
 
 	if( !m_hasPendingSceneChange && !m_hasPendingRedraw ) {
@@ -511,7 +525,7 @@ void QWswUISystem::renderQml() {
 	f->glFinish();
 }
 
-void QWswUISystem::enterUIRenderingMode() {
+void QtUISystem::enterUIRenderingMode() {
 	assert( !m_isInUIRenderingMode );
 	m_isInUIRenderingMode = true;
 
@@ -520,7 +534,7 @@ void QWswUISystem::enterUIRenderingMode() {
 	}
 }
 
-void QWswUISystem::leaveUIRenderingMode() {
+void QtUISystem::leaveUIRenderingMode() {
 	assert( m_isInUIRenderingMode );
 	m_isInUIRenderingMode = false;
 
@@ -529,17 +543,7 @@ void QWswUISystem::leaveUIRenderingMode() {
 	}
 }
 
-void R_Set2DMode( bool );
-void R_DrawExternalTextureOverlay( unsigned );
-shader_t *R_RegisterPic( const char * );
-struct model_s *R_RegisterModel( const char * );
-void RF_RegisterWorldModel( const char * );
-void RF_ClearScene();
-void RF_RenderScene( const refdef_t * );
-void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-	                    const vec4_t color, const shader_t *shader );
-
-void QWswUISystem::drawSelfInMainContext() {
+void QtUISystem::drawSelfInMainContext() {
 	if( !m_isValidAndReady || m_skipDrawingSelf ) {
 		return;
 	}
@@ -591,7 +595,7 @@ void QWswUISystem::drawSelfInMainContext() {
 	R_Set2DMode( false );
 }
 
-void QWswUISystem::drawBackgroundMapIfNeeded() {
+void QtUISystem::drawBackgroundMapIfNeeded() {
 	if( m_lastFrameState.clientState != CA_DISCONNECTED ) {
 		m_hasStartedBackgroundMapLoading = false;
 		m_hasSucceededBackgroundMapLoading = false;
@@ -638,7 +642,7 @@ void QWswUISystem::drawBackgroundMapIfNeeded() {
 	RF_RenderScene( &rdf );
 }
 
-void QWswUISystem::toggleInGameMenu() {
+void QtUISystem::toggleInGameMenu() {
 	if( isShowingInGameMenu() ) {
 		setActiveMenuMask( m_activeMenuMask & ~InGameMenu );
 	} else {
@@ -646,21 +650,21 @@ void QWswUISystem::toggleInGameMenu() {
 	}
 }
 
-void QWswUISystem::showMainMenu() {
+void QtUISystem::showMainMenu() {
 	setActiveMenuMask( MainMenu );
 }
 
-void QWswUISystem::returnFromInGameMenu() {
+void QtUISystem::returnFromInGameMenu() {
 	setActiveMenuMask( m_activeMenuMask & ~InGameMenu, 0 );
 }
 
-void QWswUISystem::returnFromMainMenu() {
+void QtUISystem::returnFromMainMenu() {
 	if( m_backupMenuMask ) {
 		setActiveMenuMask( m_backupMenuMask, 0 );
 	}
 }
 
-void QWswUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask ) {
+void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask ) {
 	if( m_activeMenuMask == activeMask ) {
 		if( backupMask ) {
 			m_backupMenuMask = *backupMask;
@@ -696,11 +700,7 @@ void QWswUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigne
 	}
 }
 
-// Hacks
-bool CG_IsSpectator();
-bool CG_HasTwoTeams();
-
-void QWswUISystem::checkPropertyChanges() {
+void QtUISystem::checkPropertyChanges() {
 	const auto lastClientState = m_lastFrameState.clientState;
 	const auto actualClientState = cls.state;
 	m_lastFrameState.clientState = actualClientState;
@@ -746,12 +746,12 @@ void QWswUISystem::checkPropertyChanges() {
 	}
 
 	if( hasTwoTeams ) {
-		const auto alphaName( cl.configStrings.getTeamAlphaName().value_or( wsw::StringView() ) );
+		const auto alphaName( ::cl.configStrings.getTeamAlphaName().value_or( wsw::StringView() ) );
 		if( !m_lastFrameState.teamAlphaName.equals( alphaName ) ) {
 			m_lastFrameState.teamAlphaName.assign( alphaName );
 			Q_EMIT teamAlphaNameChanged( teamAlphaName() );
 		}
-		const auto betaName( cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
+		const auto betaName( ::cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
 		if( !m_lastFrameState.teamBetaName.equals( betaName ) ) {
 			m_lastFrameState.teamBetaName.assign( betaName );
 			Q_EMIT teamBetaNameChanged( teamBetaName() );
@@ -776,7 +776,7 @@ void QWswUISystem::checkPropertyChanges() {
 	}
 }
 
-bool QWswUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
+bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 	if( !m_activeMenuMask ) {
 		return false;
 	}
@@ -824,11 +824,11 @@ bool QWswUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 	return true;
 }
 
-bool QWswUISystem::requestsKeyboardFocus() const {
+bool QtUISystem::requestsKeyboardFocus() const {
 	return m_activeMenuMask != 0;
 }
 
-bool QWswUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
+bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	if( !m_activeMenuMask ) {
 		return false;
 	}
@@ -848,12 +848,12 @@ bool QWswUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	return true;
 }
 
-bool QWswUISystem::handleCharEvent( int ch ) {
+bool QtUISystem::handleCharEvent( int ch ) {
 	if( !m_activeMenuMask ) {
 		return false;
 	}
 
-	if( !::isAPrintableChar( ch ) ) {
+	if( !isAPrintableChar( ch ) ) {
 		return true;
 	}
 
@@ -867,7 +867,7 @@ bool QWswUISystem::handleCharEvent( int ch ) {
 	return true;
 }
 
-auto QWswUISystem::getPressedMouseButtons() const -> Qt::MouseButtons {
+auto QtUISystem::getPressedMouseButtons() const -> Qt::MouseButtons {
 	const auto *const keyHandlingSystem = wsw::cl::KeyHandlingSystem::instance();
 
 	auto result = Qt::MouseButtons();
@@ -883,7 +883,7 @@ auto QWswUISystem::getPressedMouseButtons() const -> Qt::MouseButtons {
 	return result;
 }
 
-auto QWswUISystem::getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers {
+auto QtUISystem::getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers {
 	const auto *const keyHandlingSystem = wsw::cl::KeyHandlingSystem::instance();
 
 	auto result = Qt::KeyboardModifiers();
@@ -899,7 +899,7 @@ auto QWswUISystem::getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers 
 	return result;
 }
 
-bool QWswUISystem::tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown ) {
+bool QtUISystem::tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown ) {
 	Qt::MouseButton button;
 	if( quakeKey == K_MOUSE1 ) {
 		button = Qt::LeftButton;
@@ -918,7 +918,7 @@ bool QWswUISystem::tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown 
 	return true;
 }
 
-auto QWswUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key> {
+auto QtUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key> {
 	if( quakeKey < 0 ) {
 		return std::nullopt;
 	}
@@ -979,11 +979,11 @@ auto QWswUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional
 	}
 }
 
-bool QWswUISystem::isDebuggingNativelyDrawnItems() const {
+bool QtUISystem::isDebuggingNativelyDrawnItems() const {
 	return m_debugNativelyDrawnItemsVar->integer != 0;
 }
 
-void QWswUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
+void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
 	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
 		Com_Printf( "An item is not an instance of NativelyDrawn\n" );
@@ -998,7 +998,7 @@ void QWswUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
 	m_numNativelyDrawnItems++;
 }
 
-void QWswUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
+void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
 		Com_Printf( "An item is not an instance of NativelyDrawn\n" );
@@ -1013,12 +1013,12 @@ void QWswUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 	assert( m_numNativelyDrawnItems >= 0 );
 }
 
-QVariant QWswUISystem::getCVarValue( const QString &name ) const {
+QVariant QtUISystem::getCVarValue( const QString &name ) const {
 	const cvar_t *maybeVar = Cvar_Find( name.toUtf8().constData() );
 	return maybeVar ? maybeVar->string : QVariant();
 }
 
-void QWswUISystem::setCVarValue( const QString &name, const QVariant &value ) {
+void QtUISystem::setCVarValue( const QString &name, const QVariant &value ) {
 	const QByteArray nameUtf( name.toUtf8() );
 
 #ifndef PUBLIC_BUILD
@@ -1036,7 +1036,7 @@ void QWswUISystem::setCVarValue( const QString &name, const QVariant &value ) {
 	Cvar_ForceSet( nameUtf.constData(), value.toString().toUtf8().constData() );
 }
 
-void QWswUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value ) {
+void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value ) {
 	auto it = m_pendingCVarChanges.find( control );
 	if( it == m_pendingCVarChanges.end() ) {
 		const QByteArray nameUtf( name.toUtf8() );
@@ -1065,11 +1065,11 @@ void QWswUISystem::markPendingCVarChanges( QQuickItem *control, const QString &n
 	}
 }
 
-bool QWswUISystem::hasControlPendingCVarChanges( QQuickItem *control ) const {
+bool QtUISystem::hasControlPendingCVarChanges( QQuickItem *control ) const {
 	return m_pendingCVarChanges.contains( control );
 }
 
-void QWswUISystem::commitPendingCVarChanges() {
+void QtUISystem::commitPendingCVarChanges() {
 	if( m_pendingCVarChanges.isEmpty() ) {
 		return;
 	}
@@ -1096,7 +1096,7 @@ void QWswUISystem::commitPendingCVarChanges() {
 	}
 }
 
-void QWswUISystem::rollbackPendingCVarChanges() {
+void QtUISystem::rollbackPendingCVarChanges() {
 	if( m_pendingCVarChanges.isEmpty() ) {
 		return;
 	}
@@ -1111,7 +1111,7 @@ void QWswUISystem::rollbackPendingCVarChanges() {
 	Q_EMIT hasPendingCVarChangesChanged( false );
 }
 
-void QWswUISystem::registerCVarAwareControl( QQuickItem *control ) {
+void QtUISystem::registerCVarAwareControl( QQuickItem *control ) {
 #ifndef PUBLIC_BUILD
 	if( m_cvarAwareControls.contains( control ) ) {
 		Com_Printf( "A CVar-aware control is already registered\n" );
@@ -1121,13 +1121,13 @@ void QWswUISystem::registerCVarAwareControl( QQuickItem *control ) {
 	m_cvarAwareControls.insert( control );
 }
 
-void QWswUISystem::unregisterCVarAwareControl( QQuickItem *control ) {
+void QtUISystem::unregisterCVarAwareControl( QQuickItem *control ) {
 	if( !m_cvarAwareControls.remove( control ) ) {
 		Com_Printf( "Failed to unregister a CVar-aware control\n" );
 	}
 }
 
-void QWswUISystem::updateCVarAwareControls() {
+void QtUISystem::updateCVarAwareControls() {
 	// Check whether pending changes still hold
 
 	const bool hadPendingChanges = !m_pendingCVarChanges.isEmpty();
@@ -1149,15 +1149,15 @@ void QWswUISystem::updateCVarAwareControls() {
 	}
 }
 
-QString QWswUISystem::teamAlphaName() const {
+QString QtUISystem::teamAlphaName() const {
 	return convertName( m_lastFrameState.teamAlphaName.asView() );
 }
 
-QString QWswUISystem::teamBetaName() const {
+QString QtUISystem::teamBetaName() const {
 	return convertName( m_lastFrameState.teamBetaName.asView() );
 }
 
-auto QWswUISystem::convertName( const wsw::StringView &rawName ) const -> QString {
+auto QtUISystem::convertName( const wsw::StringView &rawName ) const -> QString {
 	char buffer[64];
 	assert( rawName.size() < sizeof( buffer ) );
 	rawName.copyTo( buffer, sizeof( buffer ) );
@@ -1166,15 +1166,15 @@ auto QWswUISystem::convertName( const wsw::StringView &rawName ) const -> QStrin
 	return QString::fromLatin1( buffer );
 }
 
-void QWswUISystem::quit() {
+void QtUISystem::quit() {
 	Cbuf_AddText( "quit" );
 }
 
-void QWswUISystem::disconnect() {
+void QtUISystem::disconnect() {
 	Cbuf_AddText( "disconnect" );
 }
 
-auto QWswUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
+auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
 	if( int color = COM_ReadColorRGBString( string.toUtf8().constData() ); color != -1 ) {
 		return QColor::fromRgb( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ), 255 );
 	}
@@ -1192,30 +1192,32 @@ static const QMatrix4x4 kShearMatrix {
 	+0.0, +0.0, +0.0, +1.0
 };
 
-auto QWswUISystem::makeSkewXMatrix( qreal height ) const -> QMatrix4x4 {
+auto QtUISystem::makeSkewXMatrix( qreal height ) const -> QMatrix4x4 {
 	QMatrix4x4 result( kShearMatrix );
 	result.translate( kTan * (float)height, 0.0f );
 	return result;
 }
 
-void QWswUISystem::startServerListUpdates() {
+void QtUISystem::startServerListUpdates() {
 	ServerList::instance()->startPushingUpdates( m_serverListModel, true, true );
 }
 
-void QWswUISystem::stopServerListUpdates() {
+void QtUISystem::stopServerListUpdates() {
 	ServerList::instance()->stopPushingUpdates();
 }
 
-void QWswUISystem::addToChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
+void QtUISystem::addToChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
 	m_chatModel.addMessage( name, frameTimestamp, message );
 }
 
-void QWswUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
+void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
 	m_teamChatModel.addMessage( name, frameTimestamp, message );
 }
 
-void QWswUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
+void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
 	m_callvotesModel.handleConfigString( configStringIndex, string );
+}
+
 }
 
 #include "uisystem.moc"

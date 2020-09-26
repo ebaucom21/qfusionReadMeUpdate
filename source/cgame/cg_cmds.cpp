@@ -57,10 +57,10 @@ static void CG_SC_ChatPrint( void ) {
 	if( teamonly ) {
 		CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
 					   cg.frame.playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
-		UISystem::instance()->addToTeamChat( nameView, cg.realTime, textView );
+		wsw::ui::UISystem::instance()->addToTeamChat( nameView, cg.realTime, textView );
 	} else {
 		CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
-		UISystem::instance()->addToChat( nameView, cg.realTime, textView );
+		wsw::ui::UISystem::instance()->addToChat( nameView, cg.realTime, textView );
 	}
 
 	if( cg_chatBeep->integer ) {
@@ -173,7 +173,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 	} else if( i >= CS_WEAPONDEFS && i < CS_WEAPONDEFS + MAX_WEAPONDEFS ) {
 		CG_OverrideWeapondef( i - CS_WEAPONDEFS, string.data() );
 	} else if( i >= CS_CALLVOTEINFOS && i < CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS ) {
-		UISystem::instance()->handleConfigString( i, string );
+		wsw::ui::UISystem::instance()->handleConfigString( i, string );
 	}
 }
 

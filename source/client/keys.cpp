@@ -421,7 +421,7 @@ bool KeyHandlingSystem::isAToggleConsoleKey( int key ) {
 void KeyHandlingSystem::handleCharEvent( int key, wchar_t ch ) {
 	if( !isAToggleConsoleKey( key ) ) {
 		if( !Con_HandleCharEvent( ch ) ) {
-			(void)UISystem::instance()->handleCharEvent( ch );
+			(void)wsw::ui::UISystem::instance()->handleCharEvent( ch );
 		}
 	}
 }
@@ -486,7 +486,7 @@ void KeyHandlingSystem::handleEscapeKey() {
 		return;
 	}
 
-	if( !UISystem::instance()->handleKeyEvent( K_ESCAPE, true ) ) {
+	if( !wsw::ui::UISystem::instance()->handleKeyEvent( K_ESCAPE, true ) ) {
 		CL_GameModule_EscapeKey();
 	}
 }
@@ -496,7 +496,7 @@ void KeyHandlingSystem::runSubsystemHandlers( int key, bool down, bool wasDown, 
 		return;
 	}
 
-	if( UISystem::instance()->handleKeyEvent( key, down ) ) {
+	if( wsw::ui::UISystem::instance()->handleKeyEvent( key, down ) ) {
 		return;
 	}
 

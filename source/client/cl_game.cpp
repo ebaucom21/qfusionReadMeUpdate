@@ -259,5 +259,5 @@ void CL_GameModule_MouseMove( int dx, int dy ) {
 }
 
 bool CG_HasKeyboardFocus() {
-	return cge && !Con_HasKeyboardFocus() && !UISystem::instance()->requestsKeyboardFocus();
+	return cge && !Con_HasKeyboardFocus() && !wsw::ui::UISystem::instance()->requestsKeyboardFocus();
 }

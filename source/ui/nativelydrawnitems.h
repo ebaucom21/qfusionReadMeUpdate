@@ -1,11 +1,19 @@
-#ifndef WSW_NATIVELYDRAWNIMAGE_H
-#define WSW_NATIVELYDRAWNIMAGE_H
+#ifndef WSW_a0dc8c82_6aa3_43c1_8c33_e5fad1cf6177_H
+#define WSW_a0dc8c82_6aa3_43c1_8c33_e5fad1cf6177_H
 
 #include <QQuickItem>
 #include <QtGui/QVector3D>
 
+struct shader_s;
+struct model_s;
+struct skinfile_s;
+
+namespace wsw::ui {
+
+class QtUISystem;
+
 class NativelyDrawn {
-	friend class QWswUISystem;
+	friend class QtUISystem;
 protected:
 	virtual ~NativelyDrawn() = default;
 
@@ -24,7 +32,7 @@ public:
 class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	Q_OBJECT
 
-	struct shader_s *m_material { nullptr };
+	shader_s *m_material { nullptr };
 	QString m_materialName;
 
 	QSize m_sourceSize { 0, 0 };
@@ -58,8 +66,8 @@ public:
 class NativelyDrawnModel : public QQuickItem, public NativelyDrawn {
 	Q_OBJECT
 
-	struct model_s *m_model { nullptr };
-	struct skinfile_s *m_skinFile { nullptr };
+	model_s *m_model { nullptr };
+	skinfile_s *m_skinFile { nullptr };
 
 	enum : unsigned { ReloadModel = 0x1, ReloadSkin = 0x2 };
 
@@ -117,5 +125,7 @@ public:
 
 	void drawSelfNatively() override;
 };
+
+}
 
 #endif

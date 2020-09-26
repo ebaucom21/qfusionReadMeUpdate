@@ -1718,11 +1718,11 @@ void CL_SetClientState( int state ) {
 		Steam_AdvertiseGame( NULL, 0 );
 	}
 
-	auto *uiSystem = UISystem::instance();
+	auto *const uiSystem = wsw::ui::UISystem::instance();
 	switch( state ) {
 		case CA_DISCONNECTED:
 			Con_Close();
-			uiSystem->refresh( UISystem::ShowCursor | UISystem::UseOwnBackground );
+			uiSystem->refresh( wsw::ui::UISystem::ShowCursor | wsw::ui::UISystem::UseOwnBackground );
 			uiSystem->forceMenuOn();
 			//CL_UIModule_MenuMain ();
 			//SCR_UpdateScreen();
@@ -1794,7 +1794,7 @@ void CL_InitMedia( void ) {
 	SCR_EnableQuickMenu( false );
 
 	// load user interface
-	UISystem::init( VID_GetWindowWidth(), VID_GetWindowHeight() );
+	wsw::ui::UISystem::init( VID_GetWindowWidth(), VID_GetWindowHeight() );
 }
 
 /*
@@ -1816,7 +1816,7 @@ void CL_ShutdownMedia( void ) {
 	CL_GameModule_Shutdown();
 
 	// shutdown user interface
-	UISystem::shutdown();
+	wsw::ui::UISystem::shutdown();
 
 	SCR_ShutDownConsoleMedia();
 }
@@ -1851,7 +1851,7 @@ void CL_RestartMedia( void ) {
 	// register console font and background
 	SCR_RegisterConsoleMedia();
 
-	UISystem::instance()->forceMenuOff();
+	wsw::ui::UISystem::instance()->forceMenuOff();
 }
 
 /*
@@ -2639,7 +2639,7 @@ void CL_Init( void ) {
 
 	CL_InitMedia();
 
-	UISystem::instance()->forceMenuOff();
+	wsw::ui::UISystem::instance()->forceMenuOff();
 
 	ML_Init();
 }
@@ -2672,7 +2672,7 @@ void CL_Shutdown( void ) {
 		cls.servername = NULL;
 	}
 
-	UISystem::shutdown();
+	wsw::ui::UISystem::shutdown();
 	CL_GameModule_Shutdown();
 	CL_SoundModule_Shutdown( true );
 	CL_ShutdownInput();

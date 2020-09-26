@@ -3,6 +3,8 @@
 #include <QJsonArray>
 #include <QColor>
 
+namespace wsw::ui {
+
 auto ServerListModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ ServerName, "serverName" },
@@ -234,10 +236,12 @@ auto ServerListModel::toStyledText( const wsw::StringView &text ) -> QString {
 		}
 
 		result.append( kFontOpeningTagPrefix );
-		result.append( ::htmlColorNamesCache.getColorName( sv.front() - '0' ) );
+		result.append( htmlColorNamesCache.getColorName( sv.front() - '0' ) );
 		result.append( kFontOpeningTagSuffix );
 
 		sv = sv.drop( 1 );
 		hadColorToken = true;
 	}
+}
+
 }

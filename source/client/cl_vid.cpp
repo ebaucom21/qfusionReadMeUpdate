@@ -492,9 +492,9 @@ load_refresh:
 		if( cgameActive ) {
 			CL_GameModule_Init();
 			Con_Close();
-			UISystem::instance()->forceMenuOff();
+			wsw::ui::UISystem::instance()->forceMenuOff();
 		} else {
-			if( auto maybeInstance = UISystem::maybeInstance() ) {
+			if( auto maybeInstance = wsw::ui::UISystem::maybeInstance() ) {
 				( *maybeInstance )->forceMenuOn();
 			}
 		}

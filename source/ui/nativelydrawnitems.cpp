@@ -3,6 +3,8 @@
 #include "../qcommon/qcommon.h"
 #include "../ref/frontend.h"
 
+namespace wsw::ui {
+
 NativelyDrawnImage::NativelyDrawnImage( QQuickItem *parent )
 	: QQuickItem( parent ) {
 }
@@ -164,4 +166,6 @@ void NativelyDrawnModel::drawSelfNatively() {
 	}
 
 	// TODO: Postponed to the renderer rewrite
+}
+
 }

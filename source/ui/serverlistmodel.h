@@ -1,8 +1,10 @@
-#ifndef WSW_SERVERLISTMODEL_H
-#define WSW_SERVERLISTMODEL_H
+#ifndef WSW_b8181ad3_2c0a_441c_86e9_6c3241ea0535_H
+#define WSW_b8181ad3_2c0a_441c_86e9_6c3241ea0535_H
 
 #include "../client/serverlist.h"
 #include <QAbstractTableModel>
+
+namespace wsw::ui {
 
 class ServerListModel : public QAbstractTableModel, public ServerListListener {
 	Q_OBJECT
@@ -66,5 +68,7 @@ public:
 	void onServerUpdated( const PolledGameServer *server ) override;
 	void onServerRemoved( const PolledGameServer *server ) override;
 };
+
+}
 
 #endif

@@ -1113,7 +1113,7 @@ static void CG_InGameMenu( void ) {
 * CG_EscapeKey
 */
 void CG_EscapeKey( void ) {
-	UISystem::instance()->toggleInGameMenu();
+	wsw::ui::UISystem::instance()->toggleInGameMenu();
 }
 
 /*

@@ -57,7 +57,7 @@ static void CL_UpdateGameInput( int frameTime ) {
 	// refresh input in cgame
 	CL_GameModule_InputFrame( frameTime );
 
-	if( !UISystem::instance()->handleMouseMove( frameTime, mx, my ) ) {
+	if( !wsw::ui::UISystem::instance()->handleMouseMove( frameTime, mx, my ) ) {
 		CL_GameModule_MouseMove( mx, my );
 		// TODO: Check whether a console is open?
 		CL_GameModule_AddViewAngles( cl.viewangles );

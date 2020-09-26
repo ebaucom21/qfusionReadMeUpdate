@@ -5,6 +5,8 @@
 
 using wsw::operator""_asView;
 
+namespace wsw::ui {
+
 struct KeyboardRowEntry {
 	const char *text { "" };
 	int quakeKey { -1 };
@@ -587,4 +589,6 @@ void KeysAndBindingsModel::onKeyItemClicked( QQuickItem *item, int quakeKey ) {
 }
 
 void KeysAndBindingsModel::onCommandItemClicked( QQuickItem *item, int commandNum ) {
+}
+
 }
