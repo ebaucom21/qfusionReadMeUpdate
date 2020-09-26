@@ -2,6 +2,7 @@
 #include "bufferedreadertest.h"
 #include "configstringstoragetest.h"
 #include "enumtokenmatchertest.h"
+#include "fsutilstest.h"
 #include "staticstringtest.h"
 #include "stringsplittertest.h"
 #include "stringviewtest.h"
@@ -47,6 +48,11 @@ int main( int argc, char **argv ) {
 	{
 		EnumTokenMatcherTest enumTokenMatcherTest;
 		result |= QTest::qExec( &enumTokenMatcherTest, argc, argv );
+	}
+
+	{
+		FSUtilsTest fsUtilsTest;
+		result |= QTest::qExec( &fsUtilsTest, argc, argv );
 	}
 
 	{

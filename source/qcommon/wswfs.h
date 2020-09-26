@@ -291,6 +291,15 @@ public:
 	auto findDirFiles( const wsw::StringView &dir, const wsw::StringView &ext ) -> std::optional<CallResult>;
 };
 
+[[nodiscard]]
+auto getExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView>;
+
+[[nodiscard]]
+auto stripExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView>;
+
+[[nodiscard]]
+auto splitAtExtension( const wsw::StringView &fileName ) -> std::optional<std::pair<wsw::StringView, wsw::StringView>>;
+
 }
 
 #endif

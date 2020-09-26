@@ -264,4 +264,40 @@ auto SearchResultHolder::getFileForNum( int num ) -> wsw::StringView {
 	throw std::exception();
 }
 
+[[nodiscard]]
+auto getExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView> {
+	if( const auto maybeSplitPair = splitAtExtension( fileName ) ) {
+		return maybeSplitPair->second;
+	}
+	return std::nullopt;
+}
+
+[[nodiscard]]
+auto stripExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView> {
+	if( const auto maybeSplitPair = splitAtExtension( fileName ) ) {
+		return maybeSplitPair->first;
+	}
+	return std::nullopt;
+}
+
+[[nodiscard]]
+auto splitAtExtension( const wsw::StringView &fileName ) -> std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+	wsw::StringView tmp( fileName );
+	unsigned pathPrefixLen = 0;
+	if( const auto maybeSlashIndex = fileName.lastIndexOf( '/' ) ) {
+		pathPrefixLen = *maybeSlashIndex + 1;
+		tmp = fileName.drop( pathPrefixLen );
+	}
+
+	if( const auto maybeDotIndex = tmp.lastIndexOf( '.' ) ) {
+		const auto dotIndex = *maybeDotIndex;
+		if( dotIndex + 1 < tmp.size() ) {
+			const auto realDotIndex = dotIndex + pathPrefixLen;
+			return fileName.dropMid( realDotIndex, 0 );
+		}
+	}
+
+	return std::nullopt;
+}
+
 }
