@@ -62,6 +62,12 @@ private slots:
 	void test_dropRight();
 	void test_dropRightExact();
 	void test_dropRightWhile();
+
+	void test_takeMid();
+	void test_takeMidExact();
+
+	void test_dropMid();
+	void test_dropMidExact();
 };
 
 #endif

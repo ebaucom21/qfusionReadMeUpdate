@@ -524,3 +524,185 @@ void StringViewTest::test_dropRightWhile() {
 	QVERIFY( !"Hello!"_asView.dropRightWhile( isPunct ).isZeroTerminated() );
 	QVERIFY( !wsw::StringView( "Hello!", 6 ).takeRightWhile( isPunct ).isZeroTerminated() );
 }
+
+void StringViewTest::test_takeMid() {
+	QCOMPARE( "Hello, world!"_asView.takeMid( 0, 0 ), ""_asView );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 5, 0 ), ""_asView );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 12, 0 ), ""_asView );
+
+	QCOMPARE( "Hello, world!"_asView.takeMid( 0, 13 ), "Hello, world!"_asView );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 0, 99 ), "Hello, world!"_asView );
+
+	QCOMPARE( "Hello, world!"_asView.takeMid( 0, 5 ), "Hello"_asView );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 5, 1 ), ","_asView );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 7, 5 ), "world"_asView );
+	QVERIFY( !"Hello, world!"_asView.takeMid( 7, 5 ).isZeroTerminated() );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 7, 6 ), "world!"_asView );
+	QVERIFY( "Hello, world!"_asView.takeMid( 7, 6 ).isZeroTerminated() );
+	QCOMPARE( "Hello, world!"_asView.takeMid( 7, 99 ), "world!"_asView );
+	QVERIFY( "Hello, world!"_asView.takeMid( 7, 99 ).isZeroTerminated() );
+}
+
+void StringViewTest::test_takeMidExact() {
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 0, 0 ), std::optional( ""_asView ) );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 5, 0 ), std::optional( ""_asView ) );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 12, 0 ), std::optional( ""_asView ) );
+
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 0, 13 ), std::optional( "Hello, world!"_asView ) );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 0, 99 ), std::nullopt );
+
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 0, 5 ), std::optional( "Hello"_asView ) );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 5, 1 ), std::optional( ","_asView ) );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 7, 5 ), std::optional( "world"_asView ) );
+	QVERIFY( !"Hello, world!"_asView.takeMidExact( 7, 5 ).value().isZeroTerminated() );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 7, 6 ), std::optional( "world!"_asView ) );
+	QVERIFY( "Hello, world!"_asView.takeMidExact( 7, 6 ).value().isZeroTerminated() );
+	QCOMPARE( "Hello, world!"_asView.takeMidExact( 7, 99 ), std::nullopt );
+}
+
+void StringViewTest::test_dropMid() {
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 0, 0 );
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "Hello, world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 0, 7 );
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 0, 13 );
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 0, 99 );
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 5, 0 );
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ", world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 5, 2 );
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 5, 7 );
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 5, 99 );
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 12, 1 );
+		QCOMPARE( left, "Hello, world"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto [left, right] = "Hello, world!"_asView.dropMid( 12, 99 );
+		QCOMPARE( left, "Hello, world"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+}
+
+void StringViewTest::test_dropMidExact() {
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 0, 0 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "Hello, world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 0, 7 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 0, 13 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, ""_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+
+	QVERIFY( !"Hello, world!"_asView.dropMidExact( 0, 99 ).has_value() );
+
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 5, 0 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ", world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 5, 2 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "world!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 5, 7 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, "Hello"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, "!"_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+
+	QVERIFY( !"Hello, world!"_asView.dropMidExact( 5, 99 ).has_value() );
+
+	{
+		const auto maybeParts = "Hello, world!"_asView.dropMidExact( 12, 1 );
+		QVERIFY( maybeParts.has_value() );
+		const auto [left, right] = *maybeParts;
+		QCOMPARE( left, "Hello, world"_asView );
+		QVERIFY( !left.isZeroTerminated() );
+		QCOMPARE( right, ""_asView );
+		QVERIFY( right.isZeroTerminated() );
+	}
+
+	QVERIFY( !"Hello, world!"_asView.dropMidExact( 12, 99 ).has_value() );
+}

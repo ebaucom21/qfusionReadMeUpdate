@@ -408,6 +408,48 @@ public:
 		return wsw::StringView( m_s, (unsigned)( p - m_s ), terminated );
 	}
 
+	[[nodiscard]]
+	auto takeMid( size_t index, size_t n ) const -> wsw::StringView {
+		assert( index < m_len );
+		Terminated terminated = m_terminated && index + n >= m_len ? ZeroTerminated : Unspecified;
+		return wsw::StringView( m_s + index, std::min( n, m_len - index ), terminated );
+	}
+
+	[[nodiscard]]
+	auto takeMidExact( size_t index, size_t n ) const -> std::optional<wsw::StringView> {
+		assert( index < m_len );
+		if( index + n <= m_len ) {
+			Terminated terminated = m_terminated && index + n == m_len ? ZeroTerminated : Unspecified;
+			return wsw::StringView( m_s + index, n, terminated );
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]]
+	auto dropMid( size_t index, size_t n ) const -> std::pair<wsw::StringView, wsw::StringView> {
+		assert( index < m_len );
+		wsw::StringView left( m_s, index );
+		const auto off2 = std::min( index + n, m_len );
+		const auto len2 = m_len - off2;
+		wsw::StringView right( m_s + off2, len2, m_terminated ? ZeroTerminated : Unspecified );
+		assert( left.length() + std::min( n, m_len - index ) + right.length() == m_len );
+		return std::make_pair( left, right );
+	}
+
+	[[nodiscard]]
+	auto dropMidExact( size_t index, size_t n ) const -> std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+		assert( index < m_len );
+		if( index + n > m_len ) {
+			return std::nullopt;
+		}
+		wsw::StringView left( m_s, index );
+		const auto off2 = index + n;
+		const auto len2 = m_len - off2;
+		wsw::StringView right( m_s + off2, len2, m_terminated ? ZeroTerminated : Unspecified );
+		assert( left.length() + n + right.length() == m_len );
+		return std::make_pair( left, right );
+	}
+
 	void copyTo( char *buffer, size_t bufferSize ) const {
 		assert( bufferSize > m_len );
 		memcpy( buffer, m_s, m_len );

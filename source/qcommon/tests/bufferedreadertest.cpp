@@ -120,4 +120,8 @@ int FS_Write( const void *buffer, size_t length, int fd ) {
 	return (int)::write( fd, buffer, length );
 }
 
+// Define it just to make wswfs.cpp linking with the test code
+int FS_GetFileList( char const*, char const*, char*, unsigned long, int, int ) {
+	abort();
+}
 
