@@ -22,6 +22,7 @@ add_executable(
         fsutilstest.cpp
         enumtokenmatchertest.cpp
         staticstringtest.cpp
+        stringspanstoragetest.cpp
         stringsplittertest.cpp
         stringviewtest.cpp
         tonumtest.cpp)

@@ -5,6 +5,7 @@
 #include "fsutilstest.h"
 #include "staticstringtest.h"
 #include "stringsplittertest.h"
+#include "stringspanstoragetest.h"
 #include "stringviewtest.h"
 #include "tonumtest.h"
 #include <QCoreApplication>
@@ -28,6 +29,11 @@ int main( int argc, char **argv ) {
 	{
 		StringSplitterTest stringSplitterTest;
 		result |= QTest::qExec( &stringSplitterTest, argc, argv );
+	}
+
+	{
+		StringSpanStorageTest stringSpanStorageTest;
+		result |= QTest::qExec( &stringSpanStorageTest, argc, argv );
 	}
 
 	{

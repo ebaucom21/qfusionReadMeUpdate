@@ -279,6 +279,7 @@ public:
 		copyTo( buffer, M );
 	}
 
+	[[maybe_unused]]
 	auto append( char ch ) -> decltype( *this ) {
 		assert( !full() );
 		m_data[m_len + 0] = ch;
@@ -290,13 +291,17 @@ public:
 	template <typename Container>
 	[[maybe_unused]]
 	auto append( const Container &chars ) -> decltype( *this ) {
-		assert( m_len + chars.size() <= N );
-		std::memmove( m_data + m_len, chars.data(), chars.size() );
-		m_len += chars.size();
+		return append( chars.data(), chars.size() );
+	}
+
+	[[maybe_unused]]
+	auto append( const char *data, size_t dataSize ) -> decltype( *this ) {
+		assert( m_len + dataSize <= N );
+		std::memmove( m_data + m_len, data, dataSize );
+		m_len += dataSize;
 		m_data[m_len] = '\0';
 		return *this;
 	}
-
 #ifndef _MSC_VER
 	[[nodiscard]]
 	bool appendf( const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );
