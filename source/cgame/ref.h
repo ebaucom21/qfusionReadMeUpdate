@@ -135,7 +135,7 @@ typedef struct entity_s {
 	/*
 	** texturing
 	*/
-	struct skinfile_s *customSkin;      // registered .skin file
+	struct Skin *customSkin;      // registered .skin file
 	struct shader_s *customShader;      // NULL for inline skin
 
 	/*

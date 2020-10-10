@@ -1424,15 +1424,9 @@ bool    R_AddBrushModelToDrawList( const entity_t *e );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
 void    R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceBSP_t *drawSurf );
 
-//
-// r_skin.c
-//
-void        R_InitSkinFiles( void );
-void        R_ShutdownSkinFiles( void );
-void        R_FreeUnusedSkinFiles( void );
-struct skinfile_s *R_SkinFile_Load( const char *name );
-struct skinfile_s *R_RegisterSkinFile( const char *name );
-shader_t    *R_FindShaderForSkinFile( const struct skinfile_s *skinfile, const char *meshname );
+struct Skin;
+Skin *R_RegisterSkinFile( const char *name );
+shader_t *R_FindShaderForSkinFile( const Skin *skin, const char *meshname );
 
 //
 // r_skm.c

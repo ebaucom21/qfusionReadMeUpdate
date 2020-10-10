@@ -10,6 +10,7 @@
 #include "shader.h"
 #include "glimp.h"
 #include "../qcommon/wswstaticvector.h"
+#include "../qcommon/stringspanstorage.h"
 
 #include <optional>
 
@@ -558,6 +559,17 @@ public:
 						 wsw::Vector<TokenSpan> &resultingTokens );
 };
 
+class Skin {
+	friend class MaterialCache;
+private:
+	wsw::StringSpanStorage<uint16_t, uint16_t> m_stringDataStorage;
+	wsw::StaticVector<std::pair<shader_s *, unsigned>, 8> m_meshPartMaterials;
+	unsigned m_registrationSequence { 0 };
+public:
+	[[nodiscard]]
+	auto getName() const -> wsw::StringView { return m_stringDataStorage.back(); }
+};
+
 class MaterialCache {
 	friend class MaterialParser;
 	friend class MaterialSource;
@@ -590,6 +602,8 @@ class MaterialCache {
 	wsw::StaticVector<TokenStream, 1> templateTokenStreamHolder;
 	wsw::StaticVector<MaterialLexer, 1> templateLexerHolder;
 	wsw::StaticVector<TokenStream, 1> primaryTokenStreamHolder;
+
+	wsw::StaticVector<Skin, 16> m_skins;
 
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
 	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::String *;
@@ -629,6 +643,15 @@ class MaterialCache {
 	auto newDefault2DLikeMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+
+	auto findSkinByName( const wsw::StringView &name ) -> Skin *;
+	[[nodiscard]]
+	auto parseSkinFileData( const wsw::StringView &name, const wsw::StringView &fileData ) -> Skin *;
+	[[nodiscard]]
+	bool parseSkinFileData( Skin *skin, const wsw::StringView &fileData );
+	[[nodiscard]]
+	auto readSkinFileData( const wsw::StringView &name, char *buffer, size_t bufferSize ) ->
+		std::optional<wsw::StringView>;
 public:
 	MaterialCache();
 	~MaterialCache();
@@ -641,9 +664,7 @@ public:
 
 	void freeUnusedMaterialsByType( const shaderType_e *types, unsigned numTypes );
 
-	void freeUnusedMaterials() {
-		freeUnusedMaterialsByType( nullptr, 0 );
-	}
+	void freeUnusedObjects();
 
 	void touchMaterialsByName( const wsw::StringView &name );
 
@@ -660,6 +681,12 @@ public:
 
 	[[nodiscard]]
 	auto loadDefaultMaterial( const wsw::StringView &name, int type ) -> shader_t *;
+
+	[[nodiscard]]
+	auto registerSkin( const wsw::StringView &name ) -> Skin *;
+
+	[[nodiscard]]
+	auto findMeshMaterialInSkin( const Skin *skin, const wsw::StringView &meshName ) -> shader_t *;
 };
 
 struct shader_s;

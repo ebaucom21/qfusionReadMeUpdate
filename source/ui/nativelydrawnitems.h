@@ -6,7 +6,7 @@
 
 struct shader_s;
 struct model_s;
-struct skinfile_s;
+struct Skin;
 
 namespace wsw::ui {
 
@@ -67,7 +67,7 @@ class NativelyDrawnModel : public QQuickItem, public NativelyDrawn {
 	Q_OBJECT
 
 	model_s *m_model { nullptr };
-	skinfile_s *m_skinFile { nullptr };
+	Skin *m_skinFile { nullptr };
 
 	enum : unsigned { ReloadModel = 0x1, ReloadSkin = 0x2 };
 

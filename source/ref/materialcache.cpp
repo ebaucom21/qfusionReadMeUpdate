@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/hash.h"
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswfs.h"
 #include "materiallocal.h"
 
@@ -117,6 +118,12 @@ void MaterialCache::freeUnusedMaterialsByType( const shaderType_e *types, unsign
 		}
 		unlinkAndFree( material );
 	}
+}
+
+void MaterialCache::freeUnusedObjects() {
+	// TODO: Free unused skins
+
+	freeUnusedMaterialsByType( nullptr, 0 );
 }
 
 void MaterialCache::unlinkAndFree( shader_t *s ) {
@@ -1017,4 +1024,151 @@ void MaterialCache::loadMaterial( image_t **images, const wsw::StringView &fullN
     if( !images[2] ) {
         images[2] = R_FindImage( fullName, kAddSuffix, addFlags, minMipSize, imagetags );
     }
+}
+
+// TODO: Can it be const?
+auto MaterialCache::findSkinByName( const wsw::StringView &name ) -> Skin * {
+	for( Skin &skin: m_skins ) {
+		if( skin.getName().equalsIgnoreCase( name ) ) {
+			return std::addressof( skin );
+		}
+	}
+	return nullptr;
+}
+
+auto MaterialCache::readSkinFileData( const wsw::StringView &name, char *buffer,
+									  size_t bufferSize ) -> std::optional<wsw::StringView> {
+	wsw::StaticString<MAX_QPATH> pathBuffer;
+	wsw::StringView filePath = name;
+	if( !pathBuffer.endsWith( ".skin"_asView ) ) {
+		pathBuffer << name << ".skin"_asView;
+		filePath = pathBuffer.asView();
+	}
+
+	auto maybeHandle = wsw::fs::openAsReadHandle( filePath );
+	if( !maybeHandle ) {
+		Com_Printf( "Failed to load skin %s: Failed to open %s\n", name.data(), pathBuffer.data() );
+		return std::nullopt;
+	}
+
+	const auto fileSize = maybeHandle->getInitialFileSize();
+	if( !fileSize || fileSize >= bufferSize ) {
+		Com_Printf( "Failed to load skin %s: The file %s has a bogus size\n", name.data(), pathBuffer.data() );
+		return std::nullopt;
+	}
+
+	if( !maybeHandle->readExact( buffer, fileSize ) ) {
+		Com_Printf( "Failed to load %s: Failed to read %s\n", name.data(), pathBuffer.data() );
+		return std::nullopt;
+	}
+
+	buffer[fileSize] = '\0';
+	return wsw::StringView( buffer, fileSize, wsw::StringView::ZeroTerminated );
+}
+
+bool MaterialCache::parseSkinFileData( Skin *skin, const wsw::StringView &fileData ) {
+	assert( skin->m_stringDataStorage.empty() );
+	assert( skin->m_meshPartMaterials.empty() );
+
+	wsw::StringSplitter splitter( fileData );
+	// TODO: There should be static standard lookup instances
+	wsw::CharLookup newlineChars( "\r\n"_asView );
+	while( const auto maybeToken = splitter.getNext( newlineChars ) ) {
+		if( skin->m_meshPartMaterials.size() == skin->m_meshPartMaterials.capacity() ) {
+			return false;
+		}
+		const wsw::StringView token( maybeToken->trim() );
+		const auto maybeCommaIndex = token.indexOf( ',' );
+		if( maybeCommaIndex == std::nullopt ) {
+			if( token.startsWith( "//"_asView ) ) {
+				continue;
+			}
+			return false;
+		}
+		auto [left, right] = token.dropMid( *maybeCommaIndex, 1 );
+		std::tie( left, right ) = std::make_pair( left.trim(), right.trim() );
+		if( left.empty() || right.empty() ) {
+			return false;
+		}
+		if( right.indexOf( ',' ) != std::nullopt ) {
+			return false;
+		}
+		const unsigned meshNameSpanNum = skin->m_stringDataStorage.add( left ).first;
+		// This is an inlined body of the old R_RegisterSkin()
+		// We hope no zero termination is required
+		shader_s *material = this->loadMaterial( right, SHADER_TYPE_DIFFUSE, false, rsh.noTexture );
+		skin->m_meshPartMaterials.push_back( std::make_pair( material, meshNameSpanNum ) );
+	}
+
+	return true;
+}
+
+auto MaterialCache::parseSkinFileData( const wsw::StringView &name, const wsw::StringView &fileData ) -> Skin * {
+	// Hacks! The method code would've been much nicer with a stack construction
+	// of an instance and a further call of emplace_back( std::move( ... ) )
+	// but Skin is not movable and we do not want to make one of its member types movable.
+	const auto oldSize = m_skins.size();
+	void *mem = m_skins.unsafe_grow_back();
+	Skin *skin;
+	try {
+		skin = new( mem )Skin();
+	} catch( ... ) {
+		m_skins.unsafe_set_size( oldSize );
+		throw;
+	}
+
+	try {
+		if( !parseSkinFileData( skin, fileData ) ) {
+			m_skins.pop_back();
+			return nullptr;
+		}
+		skin->m_registrationSequence = rsh.registrationSequence;
+		skin->m_stringDataStorage.add( name );
+		return skin;
+	} catch( ... ) {
+		m_skins.pop_back();
+		throw;
+	}
+}
+
+auto MaterialCache::registerSkin( const wsw::StringView &name ) -> Skin * {
+	if( Skin *existing = findSkinByName( name ) ) {
+		existing->m_registrationSequence = rsh.registrationSequence;
+		for( auto &[material, _] : existing->m_meshPartMaterials ) {
+			R_TouchShader( material );
+		}
+		return existing;
+	}
+
+	assert( name.isZeroTerminated() && name.size() < MAX_QPATH );
+	if( m_skins.size() == m_skins.capacity() ) {
+		Com_Printf( "Failed to load skin %s: Too many skins\n", name.data() );
+		return nullptr;
+	}
+
+	char buffer[1024];
+	if( const auto maybeFileData = readSkinFileData( name, buffer, sizeof( buffer ) ) ) {
+		return parseSkinFileData( name, *maybeFileData );
+	}
+
+	return nullptr;
+}
+
+auto MaterialCache::findMeshMaterialInSkin( const Skin *skin, const wsw::StringView &materialName ) -> shader_s * {
+	assert( skin );
+	for( const auto &[material, nameSpanNum] : skin->m_meshPartMaterials ) {
+		const wsw::StringView name( skin->m_stringDataStorage[nameSpanNum] );
+		if( name.equalsIgnoreCase( materialName ) ) {
+			return material;
+		}
+	}
+	return nullptr;
+}
+
+Skin *R_RegisterSkinFile( const char *name ) {
+	return MaterialCache::instance()->registerSkin( wsw::StringView( name ) );
+}
+
+shader_t *R_FindShaderForSkinFile( const Skin *skin, const char *meshname ) {
+	return MaterialCache::instance()->findMeshMaterialInSkin( skin, wsw::StringView( meshname ) );
 }

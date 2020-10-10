@@ -482,16 +482,16 @@ typedef struct {
 
 	struct pmodelinfo_s *pModelsIndex[MAX_MODELS];
 	struct pmodelinfo_s *basePModelInfo; //fall back replacements
-	struct skinfile_s *baseSkin;
+	struct Skin *baseSkin;
 
 	// force models
 	struct pmodelinfo_s *teamModelInfo[GS_MAX_TEAMS];
-	struct skinfile_s *teamCustomSkin[GS_MAX_TEAMS]; // user defined
+	struct Skin *teamCustomSkin[GS_MAX_TEAMS]; // user defined
 	int teamColor[GS_MAX_TEAMS];
 
 	struct sfx_s *soundPrecache[MAX_SOUNDS];
 	struct shader_s *imagePrecache[MAX_IMAGES];
-	struct skinfile_s *skinPrecache[MAX_SKINFILES];
+	struct Skin *skinPrecache[MAX_SKINFILES];
 
 	int precacheModelsStart;
 	int precacheSoundsStart;
@@ -907,7 +907,7 @@ void CG_SC_AutoRecordAction( const char *action );
 void CG_RegisterTeamColor( int team );
 void CG_RegisterForceModels( void );
 void CG_SetSceneTeamColors( void );
-bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct skinfile_s **skin );
+bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct Skin **skin );
 vec_t *CG_TeamColor( int team, vec4_t color );
 uint8_t *CG_TeamColorForEntity( int entNum, byte_vec4_t color );
 uint8_t *CG_PlayerColorForEntity( int entNum, byte_vec4_t color );

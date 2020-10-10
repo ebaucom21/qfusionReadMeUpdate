@@ -6685,8 +6685,6 @@ static rserr_t R_PostInit( void ) {
 
 	MaterialCache::init();
 
-	R_InitSkinFiles();
-
 	R_InitModels();
 
 	Scene::Init();
@@ -6792,9 +6790,8 @@ void R_EndRegistration( void ) {
 
 	R_FreeUnusedModels();
 	R_FreeUnusedVBOs();
-	R_FreeUnusedSkinFiles();
 
-	MaterialCache::instance()->freeUnusedMaterials();
+	MaterialCache::instance()->freeUnusedObjects();
 
 	R_FreeUnusedImages();
 
@@ -6816,8 +6813,6 @@ void R_Shutdown( bool verbose ) {
 	Scene::Shutdown();
 
 	R_ShutdownModels();
-
-	R_ShutdownSkinFiles();
 
 	R_ShutdownVBO();
 

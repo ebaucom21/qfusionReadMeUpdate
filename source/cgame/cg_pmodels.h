@@ -110,7 +110,7 @@ typedef struct pmodelinfo_s {
 typedef struct {
 	//static data
 	pmodelinfo_t *pmodelinfo;
-	struct skinfile_s *skin;
+	struct Skin *skin;
 
 	//dynamic
 	gs_pmodel_animationstate_t animState;

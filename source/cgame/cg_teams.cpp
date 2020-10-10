@@ -61,9 +61,9 @@ void CG_SetSceneTeamColors( void ) {
 /*
 * CG_RegisterForceModel
 */
-static void CG_RegisterForceModel( cvar_t *teamForceModel, cvar_t *teamForceModelToggle, cvar_t *teamForceSkin, pmodelinfo_t **ppmodelinfo, struct skinfile_s **pskin ) {
+static void CG_RegisterForceModel( cvar_t *teamForceModel, cvar_t *teamForceModelToggle, cvar_t *teamForceSkin, pmodelinfo_t **ppmodelinfo, struct Skin **pskin ) {
 	pmodelinfo_t *pmodelinfo;
-	struct skinfile_s *skin = NULL;
+	struct Skin *skin = NULL;
 
 	if( teamForceModel->modified ) {
 		teamForceModel->modified = false;
@@ -137,7 +137,7 @@ static void CG_CheckUpdateTeamModelRegistration( int team ) {
 /*
 * CG_PModelForCentity
 */
-bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct skinfile_s **skin ) {
+bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct Skin **skin ) {
 	int team;
 	centity_t *owner;
 	unsigned int ownerNum;
