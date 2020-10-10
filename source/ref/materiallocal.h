@@ -2,6 +2,7 @@
 #define WSW_MATERIALLOCAL_H
 
 #include "../gameshared/q_shared.h"
+#include "../qcommon/memspecbuilder.h"
 #include "../qcommon/wswstdtypes.h"
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/qcommon.h"
@@ -445,41 +446,6 @@ public:
 
 #include <vector>
 
-class MemSpecBuilder {
-	size_t size { 0 };
-public:
-	template <typename T>
-	class Spec {
-		friend class MemSpecBuilder;
-		size_t offset;
-	public:
-		auto get( void *base ) const -> T * {
-			auto *p = (uint8_t *)base;
-			p += offset;
-			assert( !( (uintptr_t)p % alignof( T ) ) );
-			return (T *)p;
-		}
-	};
-
-	template <typename T>
-	auto add() -> Spec<T> {
-		return add<T>( 1 );
-	}
-
-	template <typename T>
-	auto add( size_t numElems ) -> Spec<T> {
-		if( size % alignof( T ) ) {
-			size += alignof( T ) - size % alignof( T );
-		}
-		Spec<T> result;
-		result.offset = size;
-		size += sizeof( T ) * numElems;
-		return result;
-	}
-
-	auto sizeSoFar() -> size_t { return size; }
-};
-
 struct PlaceholderSpan {
 	uint32_t tokenNum;
 	uint16_t offset;
@@ -633,7 +599,7 @@ class MaterialCache {
 	auto loadMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name, int type, TokenStream *tokenStream ) -> shader_t *;
 
 	// This must go once sane material classes get implemented
-	auto initMaterial( int type, const wsw::HashedStringView &cleanName, MemSpecBuilder memSpec ) -> shader_t *;
+	auto initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec ) -> shader_t *;
 
 	auto newDefaultMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	auto newDefaultVertexMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;

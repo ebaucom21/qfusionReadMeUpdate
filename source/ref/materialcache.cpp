@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/links.h"
+#include "../qcommon/memspecbuilder.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswfs.h"
@@ -440,7 +441,7 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 	R_ReplaceSubImage( baseImage, 0, x, y, &data, width, height );
 }
 
-auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanName, MemSpecBuilder memSpec )
+auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec )
 	-> shader_t * {
 	assert( memSpec.sizeSoFar() >= sizeof( shader_t ) );
 	auto nameSpec = memSpec.add<char>( cleanName.size() + 1 );
@@ -480,9 +481,8 @@ auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanNa
 
 auto MaterialCache::newDefaultVertexMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name )
 	-> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
 
 	shader_t *s = initMaterial( SHADER_TYPE_VERTEX, cleanName, memSpec );
 
@@ -504,9 +504,8 @@ auto MaterialCache::newDefaultVertexMaterial( const wsw::HashedStringView &clean
 
 auto MaterialCache::newDefaultDeluxeMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name )
 	-> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
 	shader_t *s = initMaterial( SHADER_TYPE_DELUXEMAP, cleanName, memSpec );
 
 	// deluxemapping
@@ -537,9 +536,8 @@ auto MaterialCache::newDefaultDeluxeMaterial( const wsw::HashedStringView &clean
 
 auto MaterialCache::newDefaultCoronaMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name )
 	-> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
 
 	shader_t *s = initMaterial( SHADER_TYPE_CORONA, cleanName, memSpec );
 
@@ -561,8 +559,7 @@ auto MaterialCache::newDefaultCoronaMaterial( const wsw::HashedStringView &clean
 
 auto MaterialCache::newDefaultDiffuseMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name )
 	-> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
 	auto passSpec = memSpec.add<shaderpass_t>();
 
 	shader_s *s = initMaterial( SHADER_TYPE_DIFFUSE, cleanName, memSpec );
@@ -598,9 +595,8 @@ auto MaterialCache::newDefault2DLikeMaterial( int type,
 											  const wsw::HashedStringView &cleanName,
 											  const wsw::StringView &name )
 												-> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
 
 	shader_t *s = initMaterial( type, cleanName, memSpec );
 
@@ -625,9 +621,8 @@ auto MaterialCache::newDefault2DLikeMaterial( int type,
 }
 
 auto MaterialCache::newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_s * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shader_t>();
-	auto passSpec = memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
 
 	auto *s = initMaterial( SHADER_TYPE_OPAQUE_ENV, cleanName, memSpec );
 
@@ -650,8 +645,7 @@ auto MaterialCache::newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName
 }
 
 auto MaterialCache::newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t * {
-	MemSpecBuilder memSpec;
-	memSpec.add<shaderpass_t>();
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
 
 	auto *s = initMaterial( SHADER_TYPE_FOG, cleanName, memSpec );
 	s->vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
@@ -764,23 +758,23 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 		lineNum++;
 	}
 
-	MemSpecBuilder memSpec;
-	auto headerSpec = memSpec.add<MaterialFileContents>();
-	auto spansSpec = memSpec.add<TokenSpan>( fileTokenSpans.size() );
-	auto contentsSpec = memSpec.add<char>( numKeptChars );
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::initiallyEmpty() );
+	const auto headerSpec = memSpec.add<MaterialFileContents>();
+	const auto spansSpec = memSpec.add<TokenSpan>( fileTokenSpans.size() );
+	const auto contentsSpec = memSpec.add<char>( numKeptChars );
 
-	auto *mem = (uint8_t *)::malloc( memSpec.sizeSoFar() );
+	auto *const mem = (uint8_t *)::malloc( memSpec.sizeSoFar() );
 	if( !mem ) {
 		return nullptr;
 	}
 
-	auto *result = new( headerSpec.get( mem ) )MaterialFileContents();
+	auto *const result = new( headerSpec.get( mem ) )MaterialFileContents();
 	result->spans = spansSpec.get( mem );
 	result->data = contentsSpec.get( mem );
 	assert( !result->dataSize && !result->numSpans );
 
 	// Copy spans and compactified data
-	char *data = contentsSpec.get( mem );
+	char *const data = contentsSpec.get( mem );
 	for( const auto &parsedSpan: fileTokenSpans ) {
 		auto *copiedSpan = &result->spans[result->numSpans++];
 		*copiedSpan = parsedSpan;

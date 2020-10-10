@@ -1503,12 +1503,12 @@ shader_t *MaterialParser::build() {
 
 	const auto attribs = buildVertexAttribs();
 
-	using TcGenSpec = MemSpecBuilder::Spec<float>;
-	using TcModSpec = MemSpecBuilder::Spec<tcmod_t>;
+	using TcGenSpec = wsw::MemSpecBuilder::ChunkSpec<float>;
+	using TcModSpec = wsw::MemSpecBuilder::ChunkSpec<tcmod_t>;
 	wsw::StaticVector<std::optional<TcGenSpec>, 16> tcGenSpecs;
 	wsw::StaticVector<std::optional<TcModSpec>, 16> tcModSpecs;
 
-	MemSpecBuilder memSpec;
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::initiallyEmpty() );
 	const auto shaderSpec = memSpec.add<shader_t>();
 	const auto passesSpec = memSpec.add<shaderpass_t>( passes.size() );
 
@@ -1526,15 +1526,15 @@ shader_t *MaterialParser::build() {
 		}
 	}
 
-	std::optional<MemSpecBuilder::Spec<deformv_t>> deformDataSpec = std::nullopt;
-	if( auto size = deforms.size() ) {
+	std::optional<wsw::MemSpecBuilder::ChunkSpec<deformv_t>> deformDataSpec = std::nullopt;
+	if( const auto size = deforms.size() ) {
 		deformDataSpec = memSpec.add<deformv_t>( size );
 	}
 
 	const auto nameSpec = memSpec.add<char>( cleanName.size() + 1 );
 
-	std::optional<MemSpecBuilder::Spec<int>> deformSigSpec = std::nullopt;
-	if( auto size = deformSig.size() ) {
+	std::optional<wsw::MemSpecBuilder::ChunkSpec<int>> deformSigSpec = std::nullopt;
+	if( const auto size = deformSig.size() ) {
 		deformSigSpec = memSpec.add<int>( size );
 	}
 
