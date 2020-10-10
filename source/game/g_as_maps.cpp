@@ -28,52 +28,25 @@ static void G_ResetMapScriptData( void ) {
 	memset( &level.mapscript, 0, sizeof( level.mapscript ) );
 }
 
+static void *LoadMapScriptFunc( asIScriptModule *module, const char *decl ) {
+	void *pfn = module->GetFunctionByDecl( decl );
+	if( !pfn ) {
+		if( developer->integer || sv_cheats->integer ) {
+			G_Printf( "* The function '%s' was not present in the map script.\n", decl );
+		}
+	}
+	return pfn;
+}
+
 /*
 * G_asInitializeMapScript
 */
 static bool G_asInitializeMapScript( asIScriptModule *asModule ) {
-	const char *fdeclstr;
-
-	fdeclstr = "void MAP_Init()";
-	level.mapscript.initFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.mapscript.initFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the map script.\n", fdeclstr );
-		}
-	}
-
-	fdeclstr = "void MAP_PreThink()";
-	level.mapscript.preThinkFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.mapscript.preThinkFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the map script.\n", fdeclstr );
-		}
-	}
-
-	fdeclstr = "void MAP_PostThink()";
-	level.mapscript.postThinkFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.mapscript.postThinkFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the map script.\n", fdeclstr );
-		}
-	}
-
-	fdeclstr = "void MAP_Exit()";
-	level.mapscript.exitFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.mapscript.exitFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the map script.\n", fdeclstr );
-		}
-	}
-
-	fdeclstr = "const String @MAP_Gametype( const String &gt )";
-	level.mapscript.gametypeFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.mapscript.gametypeFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the map script.\n", fdeclstr );
-		}
-	}
-
+	level.mapscript.initFunc = LoadMapScriptFunc( asModule, "void MAP_Init()" );
+	level.mapscript.preThinkFunc = LoadMapScriptFunc( asModule, "void MAP_PreThink()" );
+	level.mapscript.postThinkFunc = LoadMapScriptFunc( asModule, "void MAP_PostThink()" );
+	level.mapscript.exitFunc = LoadMapScriptFunc( asModule, "void MAP_Exit()" );
+	level.mapscript.gametypeFunc = LoadMapScriptFunc( asModule, "const String @MAP_Gametype( const String &gt )" );
 	return true;
 }
 

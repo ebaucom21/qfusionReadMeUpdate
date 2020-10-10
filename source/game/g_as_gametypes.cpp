@@ -362,122 +362,38 @@ void GT_asCallShutdown( void ) {
 	}
 }
 
+static void *LoadScriptFunc( asIScriptModule *module, const char *decl ) {
+	void *pfn = module->GetFunctionByDecl( decl );
+	if( !pfn ) {
+		if( developer->integer || sv_cheats->integer ) {
+			G_Printf( "* The function '%s' was not present in the script.\n", decl );
+		}
+	}
+	return pfn;
+}
+
 static bool G_asInitializeGametypeScript( asIScriptModule *asModule ) {
-	int error;
-	asIScriptContext *ctx;
-	int funcCount;
-	const char *fdeclstr;
-
-	// grab script function calls
-	funcCount = 0;
-
-	fdeclstr = "void GT_InitGametype()";
-	level.gametype.initFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.initFunc ) {
-		G_Printf( "* The function '%s' was not found. Can not continue.\n", fdeclstr );
+	if( !( level.gametype.initFunc = asModule->GetFunctionByDecl( "void GT_InitGametype()" ) ) ) {
+		G_Printf( "Failed to find GT_InitGametype() in the script\n" );
 		return false;
-	} else {
-		funcCount++;
 	}
 
-	fdeclstr = "void GT_SpawnGametype()";
-	level.gametype.spawnFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.spawnFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
+	auto *const lgt = &level.gametype;
+	std::pair<void **, const char *> defs[] = {
+		{ &lgt->spawnFunc, "void GT_SpawnGametype()" },
+		{ &lgt->matchStateStartedFunc, "void GT_MatchStateStarted()" },
+		{ &lgt->matchStateFinishedFunc, "bool GT_MatchStateFinished( int incomingMatchState )" },
+		{ &lgt->thinkRulesFunc, "void GT_ThinkRules()" },
+		{ &lgt->playerRespawnFunc, "void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )" },
+		{ &lgt->scoreEventFunc, "void GT_ScoreEvent( Client @client, const String &score_event, const String &args )" },
+		{ &lgt->scoreboardMessageFunc, "String @GT_ScoreboardMessage( uint maxlen )" },
+		{ &lgt->selectSpawnPointFunc, "Entity @GT_SelectSpawnPoint( Entity @ent )" },
+		{ &lgt->clientCommandFunc, "bool GT_Command( Client @client, const String &cmdString, const String &argsString, int argc )" },
+		{ &lgt->shutdownFunc, "void GT_Shutdown()" }
+	};
 
-	fdeclstr = "void GT_MatchStateStarted()";
-	level.gametype.matchStateStartedFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.matchStateStartedFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "bool GT_MatchStateFinished( int incomingMatchState )";
-	level.gametype.matchStateFinishedFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.matchStateFinishedFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "void GT_ThinkRules()";
-	level.gametype.thinkRulesFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.thinkRulesFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )";
-	level.gametype.playerRespawnFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.playerRespawnFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "void GT_ScoreEvent( Client @client, const String &score_event, const String &args )";
-	level.gametype.scoreEventFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.scoreEventFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "String @GT_ScoreboardMessage( uint maxlen )";
-	level.gametype.scoreboardMessageFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.scoreboardMessageFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "Entity @GT_SelectSpawnPoint( Entity @ent )";
-	level.gametype.selectSpawnPointFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.selectSpawnPointFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "bool GT_Command( Client @client, const String &cmdString, const String &argsString, int argc )";
-	level.gametype.clientCommandFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.clientCommandFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
-	}
-
-	fdeclstr = "void GT_Shutdown()";
-	level.gametype.shutdownFunc = asModule->GetFunctionByDecl( fdeclstr );
-	if( !level.gametype.shutdownFunc ) {
-		if( developer->integer || sv_cheats->integer ) {
-			G_Printf( "* The function '%s' was not present in the script.\n", fdeclstr );
-		}
-	} else {
-		funcCount++;
+	for( auto [ppfn, decl]: defs ) {
+		*ppfn = LoadScriptFunc( asModule, decl );
 	}
 
 	//
@@ -489,9 +405,9 @@ static bool G_asInitializeGametypeScript( asIScriptModule *asModule ) {
 	// execute the GT_InitGametype function
 	//
 
-	ctx = qasAcquireContext( GAME_AS_ENGINE() );
+	asIScriptContext *ctx = qasAcquireContext( GAME_AS_ENGINE() );
 
-	error = ctx->Prepare( static_cast<asIScriptFunction *>( level.gametype.initFunc ) );
+	int error = ctx->Prepare( static_cast<asIScriptFunction *>( level.gametype.initFunc ) );
 	if( error < 0 ) {
 		return false;
 	}
