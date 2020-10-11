@@ -118,6 +118,12 @@ public:
 	auto front() const -> wsw::StringView { return ( *this )[0]; }
 	[[nodiscard]]
 	auto back() const -> wsw::StringView { return ( *this )[size() - 1]; }
+
+	void pop_back() {
+		const auto [off, len] = m_spansBuffer.back();
+		m_spansBuffer.pop_back();
+		m_charsBuffer.erase( off, len + 1 );
+	}
 };
 
 template <typename Off, typename Len, unsigned SpansCapacity, unsigned CharsCapacity>

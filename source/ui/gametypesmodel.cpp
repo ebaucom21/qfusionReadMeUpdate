@@ -1,5 +1,6 @@
 #include "gametypesmodel.h"
 
+#include "../qcommon/stringspanstorage.h"
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/maplist.h"
@@ -93,7 +94,7 @@ auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) c
 
 class MapExistenceCache {
 	// Fits the small dataset well (the number of "certified" maps declared in .gtd is small)
-	using NamesList = wsw::StaticVector<wsw::StringView, 32>;
+	using NamesList = wsw::StringSpanStaticStorage<uint16_t, uint8_t, 32, 1024>;
 
 	NamesList existingMaps;
 	NamesList missingMaps;
@@ -119,10 +120,15 @@ public:
 		assert( mapFileName.isZeroTerminated() );
 		bool exists = ML_FilenameExists( mapFileName.data() );
 		NamesList &list = exists ? existingMaps : missingMaps;
-		if( list.size() == list.capacity() ) {
+		if( list.size() == list.spansCapacity() ) {
 			list.pop_back();
 		}
-		list.push_back( mapFileName );
+		// We assume that the last pop back could've been sufficient.
+		// This is not a 100% guarantee of having a room for a string.
+		// Just skip caching of a result in this case without trying to restore the list state if it has been modified.
+		if( list.canAdd( mapFileName ) ) {
+			list.add( mapFileName );
+		}
 		return exists;
 	}
 };
