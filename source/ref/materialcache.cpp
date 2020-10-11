@@ -1087,7 +1087,7 @@ bool MaterialCache::parseSkinFileData( Skin *skin, const wsw::StringView &fileDa
 		if( right.indexOf( ',' ) != std::nullopt ) {
 			return false;
 		}
-		const unsigned meshNameSpanNum = skin->m_stringDataStorage.add( left ).first;
+		const unsigned meshNameSpanNum = skin->m_stringDataStorage.add( left );
 		// This is an inlined body of the old R_RegisterSkin()
 		// We hope no zero termination is required
 		shader_s *material = this->loadMaterial( right, SHADER_TYPE_DIFFUSE, false, rsh.noTexture );

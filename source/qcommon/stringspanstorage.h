@@ -35,9 +35,23 @@ public:
 		m_spansBuffer.shrink_to_fit();
 	}
 
-	template <typename ResultSpan = InternalSpan>
 	[[maybe_unused]]
-	auto add( const wsw::StringView &s ) -> std::pair<unsigned, ResultSpan> {
+	auto add( const wsw::StringView &s ) -> unsigned {
+		const auto len = s.length();
+		assert( len <= std::numeric_limits<Len>::max() );
+		const auto off = m_charsBuffer.size();
+		assert( off <= std::numeric_limits<Off>::max() );
+		m_charsBuffer.append( s.data(), len );
+		m_charsBuffer.push_back( '\0' );
+		assert( m_spansBuffer.size() < std::numeric_limits<unsigned>::max() );
+		auto resultSpanNum = (unsigned)m_spansBuffer.size();
+		m_spansBuffer.push_back( { (Off)off, (Len)len } );
+		return resultSpanNum;
+	}
+
+	template <typename ResultSpan = InternalSpan>
+	[[nodiscard]]
+	auto addReturningPair( const wsw::StringView &s ) -> std::pair<unsigned, ResultSpan> {
 		const auto len = s.length();
 		assert( len <= std::numeric_limits<Len>::max() );
 		const auto off = m_charsBuffer.size();
@@ -45,14 +59,21 @@ public:
 		m_charsBuffer.append( s.data(), len );
 		m_charsBuffer.push_back( '\0' );
 		const auto resultSpanNum = (unsigned)m_spansBuffer.size();
+		assert( m_spansBuffer.size() < std::numeric_limits<unsigned>::max() );
 		if constexpr( std::is_same_v<InternalSpan, ResultSpan> ) {
 			ResultSpan resultSpan = { (Off)off, (Len)len };
 			m_spansBuffer.push_back( resultSpan );
 			return std::make_pair( resultSpanNum, resultSpan );
 		} else {
-			m_spansBuffer.push_back( {(Off) off, (Len) len} );
+			m_spansBuffer.push_back( { (Off) off, (Len) len } );
 			return std::make_pair( resultSpanNum, {(Off) off, (Len) len } );
 		}
+	}
+
+	template <typename ResultSpan>
+	[[nodiscard]]
+	auto addReturningSpan( const wsw::StringView &s ) -> ResultSpan {
+		return addReturningPair( s ).second;
 	}
 
 	void clear() {
