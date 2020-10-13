@@ -591,7 +591,9 @@ bool MaterialParser::parseCubeMapExt( int addFlags, int tcGen ) {
 	auto *const pass = currPass();
 	if( auto maybeToken = lexer->getNextTokenInLine() ) {
 		const auto imageFlags = getImageFlags() | addFlags | IT_SRGB | IT_CUBEMAP;
-		pass->images[0] = R_FindImage( *maybeToken, wsw::StringView(), imageFlags, *minMipSize, imageTags );
+		// TODO: Fix that!
+		// pass->images[0] = R_FindImage( *maybeToken, wsw::StringView(), imageFlags, *minMipSize, imageTags );
+		abort();
 	}
 
 	pass->anim_fps = 0;
@@ -604,7 +606,7 @@ bool MaterialParser::parseCubeMapExt( int addFlags, int tcGen ) {
 
 	// TODO Use the newly added facilities
 	//Com_DPrintf( S_COLOR_YELLOW "Shader %s has a stage with no image: %s\n", shader->name, token );
-	pass->images[0] = rsh.noTexture;
+	pass->images[0] = TextureCache::instance()->noTexture();
 	pass->tcgen = TC_GEN_BASE;
 
 	return true;
@@ -651,6 +653,10 @@ bool MaterialParser::parseMaterial() {
 		pass->rgbgen.type = RGB_GEN_IDENTITY;
 	}
 
+	auto *const textureCache = TextureCache::instance();
+	auto *const blackTexture = textureCache->blackTexture();
+	auto *const whiteTexture = textureCache->whiteTexture();
+
 	// I assume materials are only applied to lightmapped surfaces
 
 	for(;; ) {
@@ -672,7 +678,7 @@ bool MaterialParser::parseMaterial() {
 				pass->images[2] = findImage( token, imageFlags );
 			} else {
 				// set gloss to rsh.blackTexture so we know we have already parsed the gloss image
-				pass->images[2] = rsh.blackTexture;
+				pass->images[2] = blackTexture;
 			}
 		} else {
 			// parse decal images
@@ -683,7 +689,7 @@ bool MaterialParser::parseMaterial() {
 				if( !isAPlaceholder( token ) ) {
 					pass->images[i] = findImage( token, imageFlags | IT_SRGB );
 				} else {
-					pass->images[i] = rsh.whiteTexture;
+					pass->images[i] = whiteTexture;
 				}
 				break;
 			}
@@ -691,12 +697,12 @@ bool MaterialParser::parseMaterial() {
 	}
 
 	// black texture => no gloss, so don't waste time in the GLSL program
-	if( pass->images[2] == rsh.blackTexture ) {
+	if( pass->images[2] == blackTexture ) {
 		pass->images[2] = nullptr;
 	}
 
 	for( int i = 3; i < 5; i++ ) {
-		if( pass->images[i] == rsh.whiteTexture ) {
+		if( pass->images[i] == whiteTexture ) {
 			pass->images[i] = nullptr;
 		}
 	}
@@ -714,15 +720,16 @@ bool MaterialParser::parseMaterial() {
 	const auto mipSize = minMipSize.value_or( 1 );
 
 	// load normalmap image
-	pass->images[1] = R_FindImage( name, kNormSuffix, ( imageFlags | IT_NORMALMAP ), mipSize, imageTags );
+	// TODO................ ! Check whether `imageFlags` or `flags` should be supplied
+	pass->images[1] = textureCache->getMaterialTexture( name, kNormSuffix, imageFlags, mipSize, imageTags );
 
 	// load glossmap image
 	if( r_lighting_specular->integer ) {
-		pass->images[2] = R_FindImage( name, kGlossSuffix, flags, mipSize, imageTags );
+		pass->images[2] = textureCache->getMaterialTexture( name, kGlossSuffix, flags, mipSize, imageTags );
 	}
 
-	if( !( pass->images[3] = R_FindImage( name, kDecalSuffix, flags, mipSize, imageTags ) ) ) {
-		pass->images[3] = R_FindImage( name, kAddSuffix, flags, mipSize, imageTags );
+	if( !( pass->images[3] = textureCache->getMaterialTexture( name, kDecalSuffix, flags, mipSize, imageTags ) ) ) {
+		pass->images[3] = textureCache->getMaterialTexture( name, kAddSuffix, flags, mipSize, imageTags );
 	}
 
 	return true;

@@ -613,13 +613,11 @@ void R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2,
 }
 
 void R_DrawExternalTextureOverlay( GLuint externalTexNum ) {
-	rsh.externalTexture->texnum = externalTexNum;
+	return;
+	Texture *texture = TextureCache::instance()->wrapUITextureHandle( externalTexNum );
 
 	R_DrawStretchQuick( 0, 0, rf.width2D, rf.height2D, 0.0f, 1.0f, 1.0f, 0.0f, colorWhite,
-		GLSL_PROGRAM_TYPE_NONE, rsh.externalTexture, GLSTATE_SRCBLEND_SRC_ALPHA | GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA );
-
-	// Prevent reusing this num
-	rsh.externalTexture->texnum = 0;
+		GLSL_PROGRAM_TYPE_NONE, texture, GLSTATE_SRCBLEND_SRC_ALPHA | GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 }
 
 static const wsw::HashedStringView kBuiltinImage( "$builtinimage" );
@@ -628,7 +626,7 @@ static const wsw::HashedStringView kBuiltinImage( "$builtinimage" );
 * R_DrawStretchQuick
 */
 void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-						 const vec4_t color, int program_type, image_t *image, int blendMask ) {
+						 const vec4_t color, int program_type, Texture *image, int blendMask ) {
 	static shaderpass_t p;
 	static shader_t s;
 
@@ -726,8 +724,9 @@ static void R_ApplyBrightness( void ) {
 	color[0] = color[1] = color[2] = c, color[3] = 1;
 
 	R_Set2DMode( true );
+	auto *const whiteTexture = TextureCache::instance()->whiteTexture();
 	R_DrawStretchQuick( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight, 0, 0, 1, 1,
-						color, GLSL_PROGRAM_TYPE_NONE, rsh.whiteTexture, GLSTATE_SRCBLEND_ONE | GLSTATE_DSTBLEND_ONE );
+						color, GLSL_PROGRAM_TYPE_NONE, whiteTexture, GLSTATE_SRCBLEND_ONE | GLSTATE_DSTBLEND_ONE );
 }
 
 /*
@@ -3661,8 +3660,8 @@ static const wsw::HashedStringView kBuiltinPostProcessing( "$builtinpostprocessi
 /*
 * R_BlitTextureToScrFbo
 */
-static void R_BlitTextureToScrFbo( const refdef_t *fd, image_t *image, int dstFbo,
-								   int program_type, const vec4_t color, int blendMask, int numShaderImages, image_t **shaderImages,
+static void R_BlitTextureToScrFbo( const refdef_t *fd, Texture *image, int dstFbo,
+								   int program_type, const vec4_t color, int blendMask, int numShaderImages, Texture **shaderImages,
 								   int iParam0 ) {
 	int x, y;
 	int w, h, fw, fh;
@@ -3700,7 +3699,7 @@ static void R_BlitTextureToScrFbo( const refdef_t *fd, image_t *image, int dstFb
 		// set the viewport to full resolution of the framebuffer (without the NPOT padding if there's one)
 		// draw quad on the whole framebuffer texture
 		// set scissor to default framebuffer resolution
-		image_t *cb = RFB_GetObjectTextureAttachment( dstFbo, false, 0 );
+		Texture *cb = RFB_GetObjectTextureAttachment( dstFbo, false, 0 );
 		x = 0;
 		y = 0;
 		w = fw = rf.frameBufferWidth;
@@ -3769,9 +3768,9 @@ static void R_BlitTextureToScrFbo( const refdef_t *fd, image_t *image, int dstFb
 * Performs Kawase blur which approximates standard Gaussian blur in multiple passes.
 * Supposedly performs better on high resolution inputs.
 */
-static image_t *R_BlurTextureToScrFbo( const refdef_t *fd, image_t *image, image_t *otherImage ) {
+static Texture *R_BlurTextureToScrFbo( const refdef_t *fd, Texture *image, Texture *otherImage ) {
 	unsigned i;
-	image_t *images[2];
+	Texture *images[2];
 	const int kernel35x35[] =
 		{ 0, 1, 2, 2, 3 };     //  equivalent to 35x35 kernel
 	;
@@ -3807,9 +3806,9 @@ void R_RenderScene( const refdef_t *fd ) {
 	int fbFlags = 0;
 	int ppFrontBuffer = 0;
 	int samples = 0;
-	image_t *ppSource;
+	Texture *ppSource;
 	shader_t *cc;
-	image_t *bloomTex[NUM_BLOOM_LODS];
+	Texture *bloomTex[NUM_BLOOM_LODS];
 
 	if( r_norefresh->integer ) {
 		return;
@@ -3847,7 +3846,7 @@ void R_RenderScene( const refdef_t *fd ) {
 
 	fbFlags = 0;
 	cc = rn.refdef.colorCorrection;
-	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] && cc->passes[0].images[0] != rsh.noTexture ) ) {
+	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] && !cc->passes[0].images[0]->isAPlaceholder ) ) {
 		cc = NULL;
 	}
 
@@ -3860,8 +3859,7 @@ void R_RenderScene( const refdef_t *fd ) {
 
 		// reload the multisample framebuffer if needed
 		if( samples > 0 && (  !rn.st->multisampleTarget || RFB_GetSamples( rn.st->multisampleTarget ) != samples ) ) {
-			int width, height;
-			R_GetRenderBufferSize( glConfig.width, glConfig.height, 0, IT_SPECIAL, &width, &height );
+			const auto [width, height] = R_GetRenderBufferSize( glConfig.width, glConfig.height );
 
 			if( rn.st->multisampleTarget ) {
 				RFB_UnregisterObject( rn.st->multisampleTarget );
@@ -3976,8 +3974,8 @@ void R_RenderScene( const refdef_t *fd ) {
 	// apply tone mapping (and possibly color correction too, if not doing the bloom as well)
 	if( fbFlags & PPFX_BIT_TONE_MAPPING ) {
 		unsigned numImages = 0;
-		image_t *images[MAX_SHADER_IMAGES] = { NULL };
-		image_t *dest;
+		Texture *images[MAX_SHADER_IMAGES] = { NULL };
+		Texture *dest;
 
 		fbFlags &= ~PPFX_BIT_TONE_MAPPING;
 		dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // LDR
@@ -4020,7 +4018,7 @@ void R_RenderScene( const refdef_t *fd ) {
 
 	// apply bloom
 	if( fbFlags & PPFX_BIT_BLOOM ) {
-		image_t *src;
+		Texture *src;
 
 		// continously downscale and blur
 		src = rsh.st.screenOverbrightTex;
@@ -4039,13 +4037,13 @@ void R_RenderScene( const refdef_t *fd ) {
 
 	// apply color correction
 	if( fbFlags & PPFX_BIT_COLOR_CORRECTION ) {
-		image_t *dest;
+		Texture *dest;
 		unsigned numImages = 0;
-		image_t *images[MAX_SHADER_IMAGES] = { NULL };
+		Texture *images[MAX_SHADER_IMAGES] = { NULL };
 
 		fbFlags &= ~PPFX_BIT_COLOR_CORRECTION;
 		if( fbFlags & PPFX_BIT_BLOOM ) {
-			memcpy( images + 2, bloomTex, sizeof( image_t * ) * NUM_BLOOM_LODS );
+			memcpy( images + 2, bloomTex, sizeof( Texture * ) * NUM_BLOOM_LODS );
 			fbFlags &= ~PPFX_BIT_BLOOM;
 		}
 		images[0] = cc ? cc->passes[0].images[0] : NULL;
@@ -4090,7 +4088,7 @@ void R_RenderScene( const refdef_t *fd ) {
 */
 void R_BlurScreen( void ) {
 	refdef_t dummy, *fd;
-	image_t *ppSource;
+	Texture *ppSource;
 
 	fd = &dummy;
 	memset( fd, 0, sizeof( *fd ) );
@@ -4460,7 +4458,7 @@ LIGHTMAP ALLOCATION
 
 static uint8_t *r_lightmapBuffer;
 static int r_lightmapBufferSize;
-static image_t *r_lightmapTextures[MAX_LIGHTMAP_IMAGES];
+static Texture *r_lightmapTextures[MAX_LIGHTMAP_IMAGES];
 static int r_numUploadedLightmaps;
 static int r_maxLightmapBlockSize;
 
@@ -4512,7 +4510,7 @@ static void R_BuildLightmap( int w, int h, bool deluxe, const uint8_t *data, uin
 * R_UploadLightmap
 */
 static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int samples, bool deluxe ) {
-	image_t *image;
+	Texture *image;
 	char uploadName[128];
 
 	if( !name || !data ) {
@@ -4526,8 +4524,9 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 
 	Q_snprintfz( uploadName, sizeof( uploadName ), "%s%i", name, r_numUploadedLightmaps );
 
-	image = R_LoadImage( uploadName, (uint8_t **)( &data ), w, h, IT_SPECIAL, 1, IMAGE_TAG_GENERIC, samples );
-	r_lightmapTextures[r_numUploadedLightmaps] = image;
+	//image = R_LoadImage( uploadName, (uint8_t **)( &data ), w, h, IT_SPECIAL, 1, IMAGE_TAG_GENERIC, samples );
+	//abort();
+	r_lightmapTextures[r_numUploadedLightmaps] = nullptr;
 
 	return r_numUploadedLightmaps++;
 }
@@ -4684,6 +4683,10 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 
 	layerWidth = w * ( 1 + ( int )mapConfig.deluxeMappingEnabled );
 
+	if( !mapConfig.lightmapsPacking ) {
+		abort();
+	}
+
 	mapConfig.maxLightmapSize = 0;
 	mapConfig.lightmapArrays = mapConfig.lightmapsPacking
 							   && glConfig.ext.texture_array
@@ -4722,7 +4725,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		int numLayers = std::min( glConfig.maxTextureLayers, 256 ); // layer index is a uint8_t
 		int layer = 0;
 		int lightmapNum = 0;
-		image_t *image = NULL;
+		Texture *image = NULL;
 		mlightmapRect_t *rect = rects;
 		int blockSize = w * h * LIGHTMAP_BYTES;
 		float texScale = 1.0f;
@@ -4736,6 +4739,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 			texScale = 0.5f;
 		}
 
+		auto *const textureCache = TextureCache::instance();
 		for( i = 0; i < numLightmaps; i++ ) {
 			if( !layer ) {
 				if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
@@ -4744,9 +4748,8 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 					break;
 				}
 				lightmapNum = r_numUploadedLightmaps++;
-				image = R_Create3DImage( va_r( tempbuf, sizeof( tempbuf ), "*lm%i", lightmapNum ), layerWidth, h,
-										 ( ( i + numLayers ) <= numLightmaps ) ? numLayers : numLightmaps % numLayers,
-										 IT_SPECIAL, IMAGE_TAG_GENERIC, samples, true );
+				unsigned numArrayLayers = ( ( i + numLayers ) <= numLightmaps ) ? numLayers : numLightmaps % numLayers;
+				image = textureCache->createLightmapArray( layerWidth, h, numArrayLayers, samples );
 				r_lightmapTextures[lightmapNum] = image;
 			}
 
@@ -4769,7 +4772,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 				++rect;
 			}
 
-			R_ReplaceImageLayer( image, layer, &r_lightmapBuffer );
+			textureCache->replaceLightmapLayer( image, layer, r_lightmapBuffer );
 
 			++layer;
 			if( layer == numLayers ) {
@@ -4788,6 +4791,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		for( i = 0, j = 0; i < numBlocks; i += p * stride, j += p ) {
 			p = R_PackLightmaps( numLightmaps - j, w, h, dataRowSize, stride, samples,
 								 false, "*lm", data + j * dataRowSize * stride, &rects[i] );
+
 		}
 	}
 
@@ -4795,7 +4799,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		Q_free( r_lightmapBuffer );
 	}
 
-	loadbmodel->lightmapImages = (image_t **)Q_malloc( sizeof( *loadbmodel->lightmapImages ) * r_numUploadedLightmaps );
+	loadbmodel->lightmapImages = (Texture **)Q_malloc( sizeof( *loadbmodel->lightmapImages ) * r_numUploadedLightmaps );
 	memcpy( loadbmodel->lightmapImages, r_lightmapTextures,
 			sizeof( *loadbmodel->lightmapImages ) * r_numUploadedLightmaps );
 	loadbmodel->numLightmapImages = r_numUploadedLightmaps;
@@ -4814,8 +4818,9 @@ void R_TouchLightmapImages( model_t *mod ) {
 
 	loadbmodel = ( ( mbrushmodel_t * )mod->extradata );
 
+	auto *const textureCache = TextureCache::instance();
 	for( i = 0; i < loadbmodel->numLightmapImages; i++ ) {
-		R_TouchImage( loadbmodel->lightmapImages[i], IMAGE_TAG_GENERIC );
+		textureCache->touchTexture( loadbmodel->lightmapImages[i], IMAGE_TAG_GENERIC );
 	}
 }
 
@@ -5094,12 +5099,12 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
 	const shader_t *shader = portalSurface->shader;
 	vec_t *portal_centre = portalSurface->centre;
 	bool mirror, refraction = false;
-	image_t *captureTexture;
+	Texture *captureTexture;
 	int captureTextureId = -1;
 	int prevRenderFlags = 0;
 	bool prevFlipped;
 	bool doReflection, doRefraction;
-	image_t *portalTexures[2] = { NULL, NULL };
+	Texture *portalTexures[2] = { NULL, NULL };
 
 	doReflection = doRefraction = true;
 	if( shader->flags & SHADER_PORTAL_CAPTURE ) {
@@ -5286,8 +5291,9 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
 	if( captureTextureId >= 0 ) {
 		int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
 
-		captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
-											 rsc.frameCount );
+		// TODO:
+		//captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
+		//									 rsc.frameCount );
 		portalTexures[captureTextureId] = captureTexture;
 
 		if( !captureTexture ) {
@@ -5483,7 +5489,9 @@ static ref_frontend_t rrf;
 * RF_AdapterShutdown
 */
 static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
-	R_ReleaseBuiltinScreenImages();
+	if( TextureCache *instance = TextureCache::maybeInstance() ) {
+		instance->releaseScreenTextures();
+	}
 
 	RB_Shutdown();
 
@@ -5506,7 +5514,7 @@ static bool RF_AdapterInit( ref_frontendAdapter_t *adapter ) {
 
 	RFB_Init();
 
-	R_InitBuiltinScreenImages();
+	TextureCache::instance()->initScreenTextures();
 
 	R_BindFrameBufferObject( 0 );
 
@@ -5587,9 +5595,10 @@ static void RF_CheckCvars( void ) {
 		R_SetGamma( r_gamma->value );
 	}
 
-	if( r_texturefilter->modified ) {
+	if( r_texturefilter->modified || r_texturemode->modified ) {
 		r_texturefilter->modified = false;
-		R_AnisotropicFilter( r_texturefilter->integer );
+		r_texturemode->modified = false;
+		TextureCache::instance()->applyFilter( wsw::StringView( r_texturemode->string ), r_texturefilter->integer );
 	}
 
 	if( r_wallcolor->modified || r_floorcolor->modified ) {
@@ -5601,12 +5610,6 @@ static void RF_CheckCvars( void ) {
 		r_wallcolor->modified = r_floorcolor->modified = false;
 
 		R_SetWallFloorColors( wallColor, floorColor );
-	}
-
-	// texturemode stuff
-	if( r_texturemode->modified ) {
-		r_texturemode->modified = false;
-		R_TextureMode( r_texturemode->string );
 	}
 
 	// keep r_outlines_cutoff value in sane bounds to prevent wallhacking
@@ -5943,7 +5946,6 @@ cvar_t *r_texturemode;
 cvar_t *r_texturefilter;
 cvar_t *r_texturecompression;
 cvar_t *r_picmip;
-cvar_t *r_nobind;
 cvar_t *r_polyblend;
 cvar_t *r_lockpvs;
 cvar_t *r_screenshot_fmtstr;
@@ -6299,6 +6301,12 @@ static void R_FinalizeGLExtensions( void ) {
 
 	qglGetIntegerv( GL_MAX_SAMPLES, &glConfig.maxFramebufferSamples );
 
+	glConfig.maxObjectLabelLen = 0;
+	if( qglObjectLabel ) {
+		static_assert( sizeof( int ) == sizeof( glConfig.maxObjectLabelLen ) );
+		qglGetIntegerv( GL_MAX_LABEL_LENGTH, (int *)&glConfig.maxObjectLabelLen );
+	}
+
 	Cvar_Get( "r_texturefilter_max", "0", CVAR_READONLY );
 	Cvar_ForceSet( "r_texturefilter_max", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureFilterAnisotropic ) );
 
@@ -6340,7 +6348,6 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_drawelements = Cvar_Get( "r_drawelements", "1", 0 );
 	r_showtris = Cvar_Get( "r_showtris", "0", CVAR_CHEAT );
 	r_lockpvs = Cvar_Get( "r_lockpvs", "0", CVAR_CHEAT );
-	r_nobind = Cvar_Get( "r_nobind", "0", 0 );
 	r_picmip = Cvar_Get( "r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
 	r_polyblend = Cvar_Get( "r_polyblend", "1", 0 );
 
@@ -6668,10 +6675,6 @@ static rserr_t R_PostInit( void ) {
 	R_FillStartupBackgroundColor( COLOR_R( glConfig.startupColor ) / 255.0f,
 								  COLOR_G( glConfig.startupColor ) / 255.0f, COLOR_B( glConfig.startupColor ) / 255.0f );
 
-	R_TextureMode( r_texturemode->string );
-
-	R_AnisotropicFilter( r_texturefilter->integer );
-
 	if( r_verbose ) {
 		R_PrintInfo();
 	}
@@ -6681,7 +6684,9 @@ static rserr_t R_PostInit( void ) {
 
 	R_InitVBO();
 
-	R_InitImages();
+	TextureCache::init();
+
+	TextureCache::instance()->applyFilter( wsw::StringView( r_texturemode->string ), r_texturefilter->integer );
 
 	MaterialCache::init();
 
@@ -6793,7 +6798,7 @@ void R_EndRegistration( void ) {
 
 	MaterialCache::instance()->freeUnusedObjects();
 
-	R_FreeUnusedImages();
+	TextureCache::instance()->freeAllUnusedTextures();
 
 	R_DeferDataSync();
 
@@ -6818,7 +6823,7 @@ void R_Shutdown( bool verbose ) {
 
 	MaterialCache::shutdown();
 
-	R_ShutdownImages();
+	TextureCache::shutdown();
 
 	// destroy compiled GLSL programs
 	RP_Shutdown();

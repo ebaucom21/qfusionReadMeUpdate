@@ -179,20 +179,12 @@ void RB_FlushTextureCache( void ) {
 /*
 * RB_BindImage
 */
-void RB_BindImage( int tmu, const image_t *tex ) {
-	GLuint texnum;
-
+void RB_BindImage( int tmu, const Texture *tex ) {
 	assert( tex != NULL );
 	assert( tex->texnum != 0 );
 
 	if( tex->missing ) {
-		tex = rsh.noTexture;
-	} else if( !tex->loaded ) {
-		// not yet loaded from disk
-		tex = tex->flags & IT_CUBEMAP ? rsh.whiteCubemapTexture : rsh.whiteTexture;
-	} else if( rsh.noTexture && ( r_nobind->integer && tex->texnum != 0 ) ) {
-		// performance evaluation option
-		tex = rsh.noTexture;
+		tex = TextureCache::instance()->noTexture();
 	}
 
 	if( rb.gl.flushTextures ) {
@@ -200,7 +192,7 @@ void RB_BindImage( int tmu, const image_t *tex ) {
 		memset( rb.gl.currentTextures, 0, sizeof( rb.gl.currentTextures ) );
 	}
 
-	texnum = tex->texnum;
+	const GLuint texnum = tex->texnum;
 	if( rb.gl.currentTextures[tmu] == texnum ) {
 		return;
 	}
@@ -209,7 +201,7 @@ void RB_BindImage( int tmu, const image_t *tex ) {
 
 	RB_SelectTextureUnit( tmu );
 
-	qglBindTexture( R_TextureTarget( tex->flags, NULL ), tex->texnum );
+	qglBindTexture( tex->target, tex->texnum );
 
 	rb.stats.c_totalBinds++;
 }

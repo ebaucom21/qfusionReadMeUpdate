@@ -93,7 +93,7 @@ enum {
 	,IT_SYNC            = 1 << 16     // load image synchronously
 	,IT_DEPTHCOMPARE    = 1 << 17
 	,IT_ARRAY           = 1 << 18
-	,IT_3D              = 1 << 19
+	,IT_3D              = 0
 	,IT_STENCIL         = 1 << 20     // for IT_DEPTH or IT_DEPTHRB textures, whether there's stencil
 	,IT_NO_DATA_SYNC    = 1 << 21     // owned by the drawing thread, do not sync in the frontend thread
 	,IT_FLOAT           = 1 << 22
@@ -101,9 +101,6 @@ enum {
 	,IT_WAL             = 1 << 24
 	,IT_MIPTEX          = 1 << 25
 	,IT_MIPTEX_FULLBRIGHT = 1 << 26
-	,IT_LEFTHALF        = 1 << 27
-	,IT_RIGHTHALF       = 1 << 28
-
 };
 
 /**
@@ -115,7 +112,6 @@ enum {
 #define IT_LOADFLAGS        ( IT_ALPHAMASK | IT_BGRA | IT_SYNC | IT_SRGB )
 
 #define IT_SPECIAL          ( IT_CLAMP | IT_NOMIPMAP | IT_NOPICMIP | IT_NOCOMPRESS )
-#define IT_SKYFLAGS         ( IT_SKY | IT_NOMIPMAP | IT_CLAMP | IT_SYNC )
 
 /**
  * Image usage tags, to allow certain images to be freed separately.
@@ -126,15 +122,41 @@ enum {
 	,IMAGE_TAG_WORLD    = 1 << 2      // World textures.
 };
 
-typedef struct image_s {
-	char            *name;                      // game path, not including extension
-	int registrationSequence;
-	volatile bool loaded;
-	volatile bool missing;
+enum class BuiltinTexNum {
+	Raw,
+	RawYuv0,
+	No = RawYuv0 + 3,
+	White,
+	WhiteCubemap,
+	Black,
+	Grey,
+	BlankBump,
+	Particle,
+	Corona,
+	Portal0
+};
 
-	char extension[8];                          // file extension
+class Texture {
+public:
+	enum Links { ListLinks, BinLinks };
+
+	Texture *prev[2] { nullptr, nullptr };
+	Texture *next[2] { nullptr, nullptr };
+
+	Texture *nextInList() { return next[ListLinks]; }
+	Texture *nextInBin() { return next[BinLinks]; }
+
+	wsw::StringView name;
+
+	// Empty if builtin (todo: do we need that?)
+	std::optional<int> registrationSequence;
+
+	bool missing;
+	bool isAPlaceholder { false };
+
 	int flags;
-	GLuint texnum;                              // gl texture binding
+	GLuint texnum { 0 };                              // gl texture binding
+	GLuint target { 0 };
 	int width, height;                          // source image
 	int layers;                                 // texture array size
 	int upload_width,
@@ -144,45 +166,255 @@ typedef struct image_s {
 	int fbo;                                    // frame buffer object texture is attached to
 	unsigned int framenum;                      // rf.frameCount texture was updated (rendered to)
 	int tags;                                   // usage tags of the image
-	struct image_s  *next, *prev;
-} image_t;
+};
 
-void R_InitImages( void );
-int R_TextureTarget( int flags, int *uploadTarget );
-void R_TouchImage( image_t *image, int tags );
-void R_FreeUnusedImagesByTags( int tags );
-void R_FreeUnusedImages( void );
-void R_InitBuiltinScreenImages( void );
-void R_ReleaseBuiltinScreenImages( void );
-void R_ShutdownImages( void );
-void R_GetRenderBufferSize( const int inWidth, const int inHeight,
-							const int inLimit, const int flags, int *outWidth, int *outHeight );
-void R_InitViewportTexture( image_t **texture, const char *name, int id,
-							int viewportWidth, int viewportHeight, int size, int flags, int tags, int samples );
-image_t *R_GetPortalTexture( int viewportWidth, int viewportHeight, int flags, unsigned frameNum );
-void R_FreeImageBuffers( void );
+#include "../qcommon/wswstaticstring.h"
 
-void R_PrintImageList( const char *pattern, bool ( *filter )( const char *filter, const char *value ) );
+#include <memory>
+
+struct BuiltinTextureFactory;
+
+class TextureCache {
+
+	static constexpr unsigned kMaxTextures = 2048;
+	Texture m_textureStorage[kMaxTextures];
+
+	static constexpr unsigned kMaxNameLen = 63;
+	static constexpr unsigned kNameDataStride = kMaxNameLen + 1;
+
+	// TODO: Request OS pages directly
+	std::unique_ptr<char[]> m_nameDataStorage;
+
+	Texture *m_freeTexturesHead { nullptr };
+	Texture *m_usedTexturesHead { nullptr };
+
+	static constexpr unsigned kNumHashBins = 97;
+
+	Texture *m_hashBins[kNumHashBins];
+
+	static constexpr unsigned kMaxPortalTextures = 16;
+
+	Texture *m_portalTextures[kMaxPortalTextures];
+
+	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0 + kMaxPortalTextures];
+
+	Texture *m_externalHandleWrapper;
+
+	// This terminology is valid only for 2D textures but it's is trivial/convenient to use
+	enum TextureFilter {
+		Nearest,
+		Bilinear,
+		Trilinear
+	};
+
+	static const std::pair<wsw::StringView, TextureFilter> kTextureFilterNames[3];
+	static const std::pair<GLuint, GLuint> kTextureFilterGLValues[3];
+
+	TextureFilter m_textureFilter { Trilinear };
+	int m_anisoLevel { 1 };
+
+	wsw::StaticString<kMaxNameLen> m_cleanNameBuffer;
+
+	[[nodiscard]]
+	auto makeCleanName( const wsw::StringView &rawName, const wsw::StringView &suffix ) -> std::optional<wsw::StringView>;
+
+	/**
+	 * The name is a little reference to {@code java.lang.String::intern()}
+	 */
+	[[nodiscard]]
+	auto internTextureName( const Texture *texture, const wsw::StringView &name ) -> wsw::StringView;
+
+	[[nodiscard]]
+	static auto findFilterByName( const wsw::StringView &name ) -> std::optional<TextureFilter>;
+
+	[[nodiscard]]
+	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned minMipSize, unsigned flags ) -> Texture *;
+
+	struct TextureFileData {
+		/**
+		 * Owned by static image loading buffers
+		 */
+		uint8_t *data;
+		uint16_t width;
+		uint16_t height;
+		uint16_t samples;
+	};
+
+	[[nodiscard]]
+	auto loadTextureDataFromFile( const wsw::StringView &name ) -> std::optional<TextureFileData>;
+
+	void bindToModify( Texture *texture ) {
+		bindToModify( texture->target, texture->texnum );
+	}
+	void unbindModified( Texture *texture ) {
+		unbindModified( texture->target, texture->texnum );
+	}
+
+	void bindToModify( GLenum target, GLuint texture );
+	void unbindModified( GLenum target, GLuint texture );
+
+	void applyFilter( Texture *texture, GLuint minify, GLuint magnify );
+	void applyAniso( Texture *texture, int aniso );
+
+	void setupWrapMode( GLuint target, unsigned flags );
+	void setupFilterMode( GLuint target, unsigned flags, unsigned w, unsigned h, unsigned minMipSize );
+
+	[[nodiscard]]
+	auto getLodForMinMipSize( unsigned width, unsigned height, unsigned minMipSize ) -> int;
+
+	[[nodiscard]]
+	auto getNextMip( unsigned width, unsigned height, unsigned minMipSize = 1 )
+		-> std::optional<std::pair<unsigned, unsigned>>;
+
+	[[nodiscard]]
+	auto findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
+		-> std::optional<std::tuple<Texture *, unsigned, bool>>;
+
+	[[nodiscard]]
+	auto getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
+
+	void initBuiltinTextures();
+	void initBuiltinTexture( BuiltinTextureFactory &&factory );
+
+	// TODO: Return a RAII wrapper?
+	[[nodiscard]]
+	auto generateHandle( const wsw::StringView &label ) -> GLuint;
+public:
+	TextureCache();
+
+	static void init();
+	static void shutdown();
+	[[nodiscard]]
+	static auto instance() -> TextureCache *;
+	// FIXME this is a grand hack for being compatible with the existing code. It must eventually be removed.
+	[[nodiscard]]
+	static auto maybeInstance() -> TextureCache *;
+
+	void initScreenTextures();
+	void releaseScreenTextures();
+
+	void touchTexture( Texture *texture, unsigned lifetimeTags );
+
+	void applyFilter( const wsw::StringView &name, int anisoLevel );
+
+	[[nodiscard]]
+	auto getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix,
+						     unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture *;
+
+	[[nodiscard]]
+	auto getMaterialTexture( const wsw::StringView &name, unsigned flags,
+						     unsigned minMipSize, unsigned tags ) -> Texture * {
+		return getMaterialTexture( name, wsw::StringView(), flags, minMipSize, tags );
+	}
+
+	[[nodiscard]]
+	auto createFontMask( const wsw::StringView &name, unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
+
+	void resize2DTexture( Texture *texture, const wsw::StringView &name, unsigned w, unsigned h, unsigned samples, const uint8_t *data = nullptr );
+
+	[[nodiscard]]
+	auto createLightmapArray( unsigned w, unsigned h, unsigned numLayers, unsigned samples ) -> Texture *;
+
+	void replaceLightmapLayer( Texture *texture, unsigned layer, uint8_t *data );
+
+	void replaceFontMaskSamples( Texture *texture, unsigned width, unsigned height, const uint8_t *data );
+
+	[[nodiscard]]
+	auto getPortalTexture( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
+
+	[[nodiscard]]
+	auto getBuiltinTexture( BuiltinTexNum number ) -> Texture * {
+		assert( number < BuiltinTexNum::Portal0 );
+		Texture *result = m_builtinTextures[(unsigned)number];
+		assert( result );
+		return result;
+	}
+
+	[[nodiscard]]
+	auto noTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::No ); }
+	[[nodiscard]]
+	auto whiteTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::White ); }
+	[[nodiscard]]
+	auto greyTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Grey ); }
+	[[nodiscard]]
+	auto blackTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Black ); }
+	[[nodiscard]]
+	auto blankNormalmap() -> Texture * { return getBuiltinTexture( BuiltinTexNum::BlankBump ); }
+	[[nodiscard]]
+	auto whiteCubemapTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::WhiteCubemap ); }
+	[[nodiscard]]
+	auto particleTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Particle ); }
+	[[nodiscard]]
+	auto coronaTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Corona ); }
+
+	[[nodiscard]]
+	auto wrapUITextureHandle( GLuint externalHandle ) -> Texture *;
+
+	void freeUnusedWorldTextures();
+	void freeAllUnusedTextures();
+};
+
+// TODO: This should belong to RenderTargetManager
+[[nodiscard]]
+auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight,
+							std::optional<unsigned> inLimit = std::nullopt ) -> std::pair<unsigned, unsigned>;
+
 void R_ScreenShot( const char *filename, int x, int y, int width, int height, int quality, bool silent );
 
-void R_TextureMode( char *string );
-void R_AnisotropicFilter( int value );
+class ImageBuffer {
+	static inline ImageBuffer *s_head;
 
-image_t *R_LoadImage( const char *name, uint8_t **pic, int width, int height, int flags, int minmipsize, int tags, int samples );
+	ImageBuffer *m_next { nullptr };
+	uint8_t *m_data { nullptr };
+	size_t m_capacity { 0 };
+public:
+	ImageBuffer() noexcept {
+		m_next = s_head;
+		s_head = this;
+	}
 
-image_t *R_FindImage( const wsw::StringView &name, const wsw::StringView &suffix, int flags, int minmipsize, int tags );
+	~ImageBuffer() {
+		::free( m_data );
+	}
 
-inline image_t *R_FindImage( const char *name, const char *suffix, int flags, int minmipsize, int tags ) {
-	wsw::StringView nameView( name );
-	wsw::StringView suffixView( suffix );
-	return R_FindImage( nameView, suffixView, flags, minmipsize, tags );
-}
+	[[nodiscard]]
+	auto reserveAndGet( size_t size ) -> uint8_t * {
+		if( m_capacity < size ) {
+			// TODO: Use something like ::mmap()/VirtualAlloc() for this kind of allocations
+			if( auto *newData = (uint8_t *)::realloc( m_data, size ) ) {
+				m_data = newData;
+				m_capacity = size;
+			} else {
+				throw std::bad_alloc();
+			}
+		}
+		return m_data;
+	}
 
-image_t *R_Create3DImage( const char *name, int width, int height, int layers, int flags, int tags, int samples, bool array );
-void R_ReplaceImage( image_t *image, uint8_t **pic, int width, int height, int flags, int minmipsize, int samples );
-void R_ReplaceSubImage( image_t *image, int layer, int x, int y, uint8_t **pic, int width, int height );
-void R_ReplaceImageLayer( image_t *image, int layer, uint8_t **pic );
-unsigned *R_LoadPalette( int flags );
+	[[nodiscard]]
+	auto reserveForCubemapAndGet( size_t sideSize ) -> uint8_t ** {
+		if( auto rem = sideSize % 4 ) {
+			sideSize += 4 - rem;
+		}
+		size_t headerSize = 6 * sizeof( uint8_t );
+		uint8_t *rawData = reserveAndGet( headerSize + 6 * sideSize );
+		auto *const header = (uint8_t **)rawData;
+		rawData += headerSize;
+		for( unsigned i = 0; i < 6; ++i ) {
+			header[i] = rawData;
+			rawData += sideSize;
+		}
+		return header;
+	}
+
+	static void freeAllBuffers() {
+		for( ImageBuffer *buffer = s_head; buffer; buffer = buffer->m_next ) {
+			::free( buffer->m_data );
+			buffer->m_data = nullptr;
+			buffer->m_capacity = 0;
+		}
+	}
+};
 
 struct shader_s;
 struct mfog_s;
@@ -463,7 +695,7 @@ typedef struct mbrushmodel_s {
 	drawSurfaceBSP_t *drawSurfaces;
 
 	unsigned int numLightmapImages;
-	struct image_s  **lightmapImages;
+	Texture **lightmapImages;
 
 	unsigned int numSuperLightStyles;
 	struct superLightStyle_s *superLightStyles;
@@ -759,13 +991,13 @@ void        Mod_StripLODSuffix( char *name );
 //===================================================================
 
 typedef struct refScreenTexSet_s {
-	image_t         *screenTex;
-	image_t         *screenTexCopy;
-	image_t         *screenPPCopies[2];
-	image_t         *screenDepthTex;
-	image_t         *screenDepthTexCopy;
-	image_t         *screenOverbrightTex; // the overbrights output target
-	image_t         *screenBloomLodTex[NUM_BLOOM_LODS][2]; // lods + backups for bloom
+	Texture         *screenTex;
+	Texture         *screenTexCopy;
+	Texture         *screenPPCopies[2];
+	Texture         *screenDepthTex;
+	Texture         *screenDepthTexCopy;
+	Texture         *screenOverbrightTex; // the overbrights output target
+	Texture         *screenBloomLodTex[NUM_BLOOM_LODS][2]; // lods + backups for bloom
 	int multisampleTarget;                // multisample fbo
 } refScreenTexSet_t;
 
@@ -774,7 +1006,7 @@ typedef struct portalSurface_s {
 	cplane_t plane, untransformed_plane;
 	const shader_t  *shader;
 	vec3_t mins, maxs, centre;
-	image_t         *texures[2];            // front and back portalmaps
+	Texture         *texures[2];            // front and back portalmaps
 	skyportal_t     *skyPortal;
 } portalSurface_t;
 
@@ -834,20 +1066,6 @@ typedef struct {
 
 //====================================================
 
-enum class BuiltinTexNumber {
-	Raw,
-	RawYuv0,
-	No = RawYuv0 + 3,
-	White,
-	WhiteCubemap,
-	Black,
-	Grey,
-	BlankBump,
-	Particle,
-	Corona,
-	Portal0
-};
-
 // globals shared by the frontend and the backend
 // the backend should never attempt modifying any of these
 typedef struct {
@@ -868,19 +1086,6 @@ typedef struct {
 	struct mesh_vbo_s *postProcessingVBO;
 
 	vec3_t wallColor, floorColor;
-
-	image_t         *noTexture;                 // use for bad textures
-	image_t         *whiteTexture;
-	image_t         *whiteCubemapTexture;
-	image_t         *blackTexture;
-	image_t         *greyTexture;
-	image_t         *blankBumpTexture;
-	image_t         *particleTexture;           // little dot for particles
-	image_t         *coronaTexture;
-	image_t         *portalTextures[MAX_PORTAL_TEXTURES + 1];
-
-	// A wrapper for an externally provided texture handle
-	image_t         *externalTexture;
 
 	refScreenTexSet_t st, stf;
 
@@ -1147,7 +1352,6 @@ extern cvar_t *r_texturemode;
 extern cvar_t *r_texturefilter;
 extern cvar_t *r_texturecompression;
 extern cvar_t *r_mode;
-extern cvar_t *r_nobind;
 extern cvar_t *r_picmip;
 extern cvar_t *r_polyblend;
 extern cvar_t *r_lockpvs;
@@ -1231,8 +1435,8 @@ void        RFB_UnregisterObject( int object );
 void        RFB_TouchObject( int object );
 void        RFB_BindObject( int object );
 int         RFB_BoundObject( void );
-bool        RFB_AttachTextureToObject( int object, bool depth, int target, image_t *texture );
-image_t     *RFB_GetObjectTextureAttachment( int object, bool depth, int target );
+bool        RFB_AttachTextureToObject( int object, bool depth, int target, Texture *texture );
+Texture     *RFB_GetObjectTextureAttachment( int object, bool depth, int target );
 bool        RFB_HasColorRenderBuffer( int object );
 bool        RFB_HasDepthRenderBuffer( int object );
 bool        RFB_HasStencilRenderBuffer( int object );
@@ -1320,7 +1524,7 @@ void        R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, fl
 void        R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 									 float angle, const vec4_t color, const shader_t *shader );
 void        R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-								const vec4_t color, int program_type, image_t *image, int blendMask );
+								const vec4_t color, int program_type, Texture *image, int blendMask );
 
 void        R_DrawExternalTextureOverlay( GLuint externalTexNum );
 

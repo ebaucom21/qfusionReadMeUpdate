@@ -191,7 +191,7 @@ void RB_DrawShadedElements( void );
 int RB_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
 						const deformv_t *deforms, int numDeforms, r_glslfeat_t features );
 int RB_BindProgram( int program );
-void RB_BindImage( int tmu, const image_t *tex );
+void RB_BindImage( int tmu, const Texture *tex );
 void RB_BindArrayBuffer( int buffer );
 void RB_BindElementArrayBuffer( int buffer );
 void RB_SetInstanceData( int numInstances, instancePoint_t *instances );

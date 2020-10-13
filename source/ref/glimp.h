@@ -218,8 +218,8 @@ typedef struct {
 	,maxFramebufferSamples
 	;
 	unsigned int maxGLSLBones;      // the maximum amount of bones we can handle in a vertex shader
+	unsigned maxObjectLabelLen;
 
-	bool forceRGBAFramebuffers;             // PowerVR hack - its blending interprets alpha in RGB FBs as 0, not 1
 	bool sSRGB;
 
 	glextinfo_t ext;

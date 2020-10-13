@@ -87,10 +87,11 @@ void R_TouchShader( shader_t *s ) {
 	for( unsigned i = 0; i < s->numpasses; i++ ) {
 		shaderpass_t *pass = s->passes + i;
 
+		auto *const textureCache = TextureCache::instance();
 		for( unsigned j = 0; j < MAX_SHADER_IMAGES; j++ ) {
-			image_t *image = pass->images[j];
+			Texture *image = pass->images[j];
 			if( image ) {
-				R_TouchImage( image, s->imagetags );
+				textureCache->touchTexture( image, s->imagetags );
 			} else if( !pass->program_type ) {
 				// only programs can have gaps in images
 				break;
@@ -225,7 +226,7 @@ unsigned R_PackShaderOrder( const shader_t *shader ) {
 
 	if( program_type == GLSL_PROGRAM_TYPE_MATERIAL ) {
 		// this is not a material shader in case all images are missing except for the defuse
-		if( ( !pass->images[1] || pass->images[1]->missing || pass->images[1] == rsh.blankBumpTexture ) &&
+		if( ( !pass->images[1] || pass->images[1]->missing || pass->images[1]->isAPlaceholder ) &&
 			( !pass->images[2] || pass->images[2]->missing ) &&
 			( !pass->images[3] || pass->images[3]->missing ) &&
 			( !pass->images[4] || pass->images[4]->missing ) ) {
@@ -254,7 +255,7 @@ void MaterialCache::touchMaterialsByName( const wsw::StringView &name ) {
 	}
 }
 
-auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool forceDefault, image_t *defaultImage )
+auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture * )
 	-> shader_t * {
 	wsw::HashedStringView cleanName( makeCleanName( name ) );
 	const auto binIndex = cleanName.getHash() % kNumBins;
@@ -282,106 +283,62 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 }
 
 shader_t *MaterialCache::loadDefaultMaterial( const wsw::StringView &name, int type ) {
-    return loadMaterial( name, type, true, rsh.noTexture );
+    return loadMaterial( name, type, true, TextureCache::instance()->noTexture() );
 }
 
 /*
 * R_RegisterPic
 */
 shader_t *R_RegisterPic( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, false, rsh.noTexture );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, false, TextureCache::instance()->noTexture() );
 }
 
-/*
-* R_RegisterRawPic_
-*
-* Registers default 2D shader with base image provided as raw data.
-*/
-shader_t *R_RegisterRawPic_( const char *name, int width, int height, uint8_t *data, int flags, int samples, bool bgra ) {
-	int type = SHADER_TYPE_2D_RAW;
-	flags |= IT_SPECIAL;
-	if( bgra ) {
-		flags |= IT_BGRA;
-	}
-
-	auto *s = MaterialCache::instance()->loadDefaultMaterial( wsw::StringView( name ), type );
-	if( !s ) {
+shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8_t *data ) {
+	const wsw::StringView nameView( name );
+	auto *const material = MaterialCache::instance()->loadDefaultMaterial( nameView, SHADER_TYPE_2D_RAW );
+	if( !material ) {
 	    return nullptr;
 	}
 
+	TextureCache *textureCache = TextureCache::instance();
 	// unlink and delete the old image from memory, unless it's the default one
-	image_t *image = s->passes[0].images[0];
-	if( !image || image == rsh.noTexture ) {
+	Texture *image = material->passes[0].images[0];
+	if( !image || image->isAPlaceholder ) {
 		// try to load new image
-		image = R_LoadImage( name, &data, width, height, flags, 1, IMAGE_TAG_GENERIC, samples );
-		s->passes[0].images[0] = image;
+		material->passes[0].images[0] = textureCache->createFontMask( nameView, width, height, data );
 	} else {
 		// replace current texture data
-		R_ReplaceImage( image, &data, width, height, image->flags, 1, image->samples );
+		textureCache->replaceFontMaskSamples( image, width, height, data );
 	}
-	return s;
-}
-
-/*
-* R_RegisterRawPic
-*
-* Registers default 2D shader with base image provided as raw color data.
-*/
-shader_t *R_RegisterRawPic( const char *name, int width, int height, uint8_t *data, int samples, bool bgra ) {
-	return R_RegisterRawPic_( name, width, height, data, 0, samples, bgra );
-}
-
-/*
-* R_RegisterRawAlphaMask
-*
-* Registers default alpha mask shader with base image provided as raw alpha values.
-*/
-shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8_t *data ) {
-	return R_RegisterRawPic_( name, width, height, data, IT_ALPHAMASK, 1, false );
-}
-
-/*
-* R_RegisterLevelshot
-*/
-shader_t *R_RegisterLevelshot( const char *name, shader_t *defaultShader, bool *matchesDefault ) {
-	shader_t *shader;
-
-	image_t *defaultImage = defaultShader ? defaultShader->passes[0].images[0] : NULL;
-	shader = MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, true, defaultImage );
-
-	if( matchesDefault ) {
-		*matchesDefault = ( shader->passes[0].images[0] == defaultImage );
-	}
-
-	return shader;
+	return material;
 }
 
 /*
 * R_RegisterShader
 */
 shader_t *R_RegisterShader( const char *name, shaderType_e type ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), type, false, rsh.noTexture );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), type, false );
 }
 
 /*
 * R_RegisterSkin
 */
 shader_t *R_RegisterSkin( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_DIFFUSE, false, rsh.noTexture );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_DIFFUSE, false );
 }
 
 /*
 * R_RegisterVideo
 */
 shader_t *R_RegisterVideo( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_VIDEO, false, rsh.noTexture );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_VIDEO, false );
 }
 
 /*
 * R_RegisterLinearPic
 */
 shader_t *R_RegisterLinearPic( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D_LINEAR, false, rsh.noTexture );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D_LINEAR, false );
 }
 
 
@@ -391,7 +348,7 @@ shader_t *R_RegisterLinearPic( const char *name ) {
 * Returns dimensions for shader's base (taken from the first pass) image
 */
 void R_GetShaderDimensions( const shader_t *shader, int *width, int *height ) {
-	image_t *baseImage;
+	Texture *baseImage;
 
 	assert( shader );
 	if( !shader || !shader->numpasses ) {
@@ -419,7 +376,7 @@ void R_GetShaderDimensions( const shader_t *shader, int *width, int *height ) {
 * Must not be used to overwrite previously written areas when doing batched drawing.
 */
 void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data ) {
-	image_t *baseImage;
+	Texture *baseImage;
 
 	assert( shader );
 	if( !shader ) {
@@ -438,7 +395,7 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 		return;
 	}
 
-	R_ReplaceSubImage( baseImage, 0, x, y, &data, width, height );
+	TextureCache::instance()->replaceFontMaskSamples( baseImage, width, height, data );
 }
 
 auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec )
@@ -510,7 +467,7 @@ auto MaterialCache::newDefaultDeluxeMaterial( const wsw::HashedStringView &clean
 
 	// deluxemapping
 
-    image_t *images[3] { nullptr, nullptr, nullptr };
+    Texture *images[3] { nullptr, nullptr, nullptr };
 	// TODO: Name or clean name?
 	loadMaterial( images, name, 0, s->imagetags );
 
@@ -564,7 +521,7 @@ auto MaterialCache::newDefaultDiffuseMaterial( const wsw::HashedStringView &clea
 
 	shader_s *s = initMaterial( SHADER_TYPE_DIFFUSE, cleanName, memSpec );
 
-	image_t *materialImages[3];
+	Texture *materialImages[3];
 
 	// load material images
 	// TODO: Name or clean name?
@@ -638,8 +595,7 @@ auto MaterialCache::newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName
 	VectorClear( pass->rgbgen.args );
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->tcgen = TC_GEN_NONE;
-	assert( rsh.whiteTexture );
-	pass->images[0] = rsh.whiteTexture;
+	pass->images[0] = TextureCache::instance()->whiteTexture();
 
 	return s;
 }
@@ -929,7 +885,7 @@ class BuiltinTexMatcher {
 
 	wsw::StaticVector<Chunk, 12> stringChunks;
 
-	using TexNumberViews = wsw::StaticVector<std::pair<wsw::StringView, BuiltinTexNumber>, 6>;
+	using TexNumberViews = wsw::StaticVector<std::pair<wsw::StringView, BuiltinTexNum>, 6>;
 
 	TexNumberViews longTexNumbers;
 	TexNumberViews shortTexNumbers;
@@ -940,7 +896,7 @@ class BuiltinTexMatcher {
 		return wsw::StringView( data );
 	}
 
-	void add( const char *name, BuiltinTexNumber texNumber ) noexcept {
+	void add( const char *name, BuiltinTexNum texNumber ) noexcept {
 		assert( std::strlen( name ) < sizeof( Chunk::data ) );
 
 		longTexNumbers.emplace_back( std::make_pair( makeView( "$", name, "image" ), texNumber ) );
@@ -948,7 +904,7 @@ class BuiltinTexMatcher {
 	}
 
 	static auto matchInList( const wsw::StringView &image, const TexNumberViews &views )
-		-> std::optional<BuiltinTexNumber> {
+		-> std::optional<BuiltinTexNum> {
 		for( const auto &[name, texNum] : views ) {
 			if( name.equalsIgnoreCase( image ) ) {
 				return std::optional( texNum );
@@ -958,15 +914,15 @@ class BuiltinTexMatcher {
 	}
 public:
 	BuiltinTexMatcher() noexcept {
-		add( "white", BuiltinTexNumber::White );
-		add( "black", BuiltinTexNumber::Black );
-		add( "grey", BuiltinTexNumber::Grey );
-		add( "blankbump", BuiltinTexNumber::BlankBump );
-		add( "particle", BuiltinTexNumber::Particle );
-		add( "corona", BuiltinTexNumber::Corona );
+		add( "white", BuiltinTexNum::White );
+		add( "black", BuiltinTexNum::Black );
+		add( "grey", BuiltinTexNum::Grey );
+		add( "blankbump", BuiltinTexNum::BlankBump );
+		add( "particle", BuiltinTexNum::Particle );
+		add( "corona", BuiltinTexNum::Corona );
 	}
 
-	auto match( const wsw::StringView &image ) -> std::optional<BuiltinTexNumber> {
+	auto match( const wsw::StringView &image ) -> std::optional<BuiltinTexNum> {
 		// Try matching long tokens (they're more likely to be met in wsw assets)
 		if( auto num = matchInList( image, longTexNumbers ) ) {
 			return num;
@@ -979,44 +935,47 @@ static BuiltinTexMatcher builtinTexMatcher;
 
 static const wsw::StringView kLightmapPrefix( "*lm" );
 
-auto MaterialCache::findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize ) -> image_t * {
+auto MaterialCache::findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize ) -> Texture * {
 	assert( minMipSize );
 
+	// TODO: Move this to ImageCache?
 	if( auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
-		// TODO... add a builtin tex getter by num
+		return TextureCache::instance()->getBuiltinTexture( *maybeBuiltinTexNum );
 	}
 
 	if( kLightmapPrefix.equalsIgnoreCase( name.take( 3 ) ) ) {
 	    // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		//Com_DPrintf( S_COLOR_YELLOW "WARNING: shader %s has a stage with explicit lightmap image\n", shader->name );
-		return rsh.whiteTexture;
+		return TextureCache::instance()->whiteTexture();
 	}
 
-	auto image = R_FindImage( name, wsw::StringView(), flags, minMipSize, imageTags );
-	if( !image ) {
+	// TODO: Passing params this way is error-prone!!!!!! Pass a struct!!!!!!!!!!!!!!!!!!!!!!!!
+	Texture *texture = TextureCache::instance()->getMaterialTexture( name, flags, minMipSize, imageTags );
+	if( !texture ) {
 	    // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		//Com_Printf( S_COLOR_YELLOW "WARNING: shader %s has a stage with no image: %s\n", shader->name, name.data() );
-		return rsh.noTexture;
+		return TextureCache::instance()->noTexture();
 	}
 
-	return image;
+	return texture;
 }
 
-void MaterialCache::loadMaterial( image_t **images, const wsw::StringView &fullName, int addFlags, int imagetags, int minMipSize ) {
+void MaterialCache::loadMaterial( Texture **images, const wsw::StringView &fullName, int addFlags, int imagetags, int minMipSize ) {
     // set defaults
     images[0] = images[1] = images[2] = nullptr;
 
+    auto *const cache = TextureCache::instance();
     // load normalmap image
-    images[0] = R_FindImage( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), minMipSize, imagetags );
+    images[0] = cache->getMaterialTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), minMipSize, imagetags );
 
     // load glossmap image
     if( r_lighting_specular->integer ) {
-        images[1] = R_FindImage( fullName, kGlossSuffix, addFlags, minMipSize, imagetags );
+        images[1] = cache->getMaterialTexture( fullName, kGlossSuffix, addFlags, minMipSize, imagetags );
     }
 
-    images[2] = R_FindImage( fullName, kDecalSuffix, addFlags, minMipSize, imagetags );
+    images[2] = cache->getMaterialTexture( fullName, kDecalSuffix, addFlags, minMipSize, imagetags );
     if( !images[2] ) {
-        images[2] = R_FindImage( fullName, kAddSuffix, addFlags, minMipSize, imagetags );
+        images[2] = cache->getMaterialTexture( fullName, kAddSuffix, addFlags, minMipSize, imagetags );
     }
 }
 
@@ -1090,7 +1049,7 @@ bool MaterialCache::parseSkinFileData( Skin *skin, const wsw::StringView &fileDa
 		const unsigned meshNameSpanNum = skin->m_stringDataStorage.add( left );
 		// This is an inlined body of the old R_RegisterSkin()
 		// We hope no zero termination is required
-		shader_s *material = this->loadMaterial( right, SHADER_TYPE_DIFFUSE, false, rsh.noTexture );
+		shader_s *material = this->loadMaterial( right, SHADER_TYPE_DIFFUSE, false );
 		skin->m_meshPartMaterials.push_back( std::make_pair( material, meshNameSpanNum ) );
 	}
 

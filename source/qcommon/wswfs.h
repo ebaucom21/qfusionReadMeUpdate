@@ -300,6 +300,18 @@ auto stripExtension( const wsw::StringView &fileName ) -> std::optional<wsw::Str
 [[nodiscard]]
 auto splitAtExtension( const wsw::StringView &fileName ) -> std::optional<std::pair<wsw::StringView, wsw::StringView>>;
 
+/**
+ * Given a file name, tries to find a first matching VFS entry with one of specified extensions.
+ * @param name a file name. Could have an arbitrary extension, or no extension at all.
+ * @param begin a beginning of the supplied extensions array
+ * @param end an end of the supplied extensions array
+ * @todo supply a range instead of two iterators
+ * @return a (maybe) pair of a basename (without extension) and an extension that produces a first VFS match.
+ */
+[[nodiscard]]
+auto findFirstExtension( const wsw::StringView &name, const wsw::StringView *begin, const wsw::StringView *end ) ->
+	std::optional<std::pair<wsw::StringView, wsw::StringView>>;
+
 }
 
 #endif

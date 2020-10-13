@@ -300,4 +300,46 @@ auto splitAtExtension( const wsw::StringView &fileName ) -> std::optional<std::p
 	return std::nullopt;
 }
 
+[[nodiscard]]
+auto findFirstExtension( const wsw::StringView &name, const wsw::StringView *begin, const wsw::StringView *end ) ->
+	std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+	assert( name.isZeroTerminated() );
+	assert( begin <= end );
+
+	// Compatibility conversions, should eventually be gone
+	const char *extensions[16];
+	if( end - begin >= std::size( extensions ) ) {
+		return std::nullopt;
+	}
+
+	for( const wsw::StringView *ext = begin; ext != end; ++ext ) {
+		if( !ext->isZeroTerminated() ) {
+			return std::nullopt;
+		}
+		extensions[ext - begin] = ext->data();
+	}
+
+	const char *rawResult = FS_FirstExtension( name.data(), extensions, (int)( end - begin ) );
+	if( !rawResult ) {
+		return std::nullopt;
+	}
+
+	// This is an additional validation for a reverse conversion, should be gone as well
+	bool found = false;
+	wsw::StringView rawResultView( rawResult );
+	for( const wsw::StringView *ext = begin; ext != end; ++ext ) {
+		if( ext->equalsIgnoreCase( rawResultView ) ) {
+			found = true;
+			break;
+		}
+	}
+	assert( found );
+
+	if( auto maybeBaseName = stripExtension( name ) ) {
+		return std::make_pair( *maybeBaseName, rawResultView );
+	}
+
+	return std::make_pair( name, rawResultView );
+}
+
 }

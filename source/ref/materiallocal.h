@@ -580,8 +580,8 @@ class MaterialCache {
 
 	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
 
-	auto findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize = 1 ) -> image_s *;
-	void loadMaterial( image_s **images, const wsw::StringView &fullName, int flags, int imageTags, int minMipSize = 1 );
+	auto findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize = 1 ) -> Texture *;
+	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags, int minMipSize = 1 );
 
 	void loadDirContents( const wsw::StringView &dir );
 
@@ -643,7 +643,7 @@ public:
 	auto expandTemplate( const wsw::StringView &name, const wsw::StringView *args, size_t numArgs ) -> MaterialLexer *;
 
 	[[nodiscard]]
-	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault, image_s *defaultImage ) -> shader_t *;
+	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture *defaultImage = nullptr ) -> shader_t *;
 
 	[[nodiscard]]
 	auto loadDefaultMaterial( const wsw::StringView &name, int type ) -> shader_t *;
@@ -658,7 +658,7 @@ public:
 struct shader_s;
 struct shaderpass_s;
 struct shaderfunc_s;
-struct image_s;
+class Texture;
 
 class MaterialParser {
 	friend class ParserTestWrapper;
@@ -824,7 +824,7 @@ class MaterialParser {
 
 	int getImageFlags();
 
-	auto findImage( const wsw::StringView &name_, int flags_ ) -> image_s * {
+	auto findImage( const wsw::StringView &name_, int flags_ ) -> Texture * {
 		return materialCache->findImage( name_, flags_, imageTags, minMipSize.value_or( 1 ) );
 	}
 

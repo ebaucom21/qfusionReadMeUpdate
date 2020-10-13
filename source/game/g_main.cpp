@@ -795,3 +795,7 @@ void FS_FCloseFile( int file ) {
 int FS_Read( void *buffer, size_t len, int file ) {
 	return trap_FS_Read( buffer, len, file );
 }
+
+const char *FS_FirstExtension( const char *filename, const char **extension, int numExtensions ) {
+	return trap_FS_FirstExtension( filename, extension, numExtensions );
+}

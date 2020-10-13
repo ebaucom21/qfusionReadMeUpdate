@@ -518,6 +518,8 @@ const char              *qglGetGLWExtensionsString();
 #define GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE      0x8D56
 #define GL_MAX_SAMPLES                             0x8D57
 
+#define GL_MAX_LABEL_LENGTH               0x82E8
+
 #endif // QGL_H
 
 #ifndef APIENTRY
@@ -715,3 +717,5 @@ QGL_FUNC( void, glTexSubImage3D, ( GLenum target, GLint level, GLint xoffset, GL
 QGL_FUNC( void, glDrawBuffers, ( GLsizei n, const GLenum * bufs ) );
 
 QGL_FUNC( void, glSampleCoverage, ( GLfloat value, GLboolean invert ) );
+
+QGL_EXT( void, glObjectLabel, ( GLenum identifier, GLuint name, GLsizei length, const char *label ) );

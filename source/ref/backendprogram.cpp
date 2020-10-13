@@ -527,25 +527,25 @@ void RB_GetShaderpassColor( const shaderpass_t *pass, byte_vec4_t rgba_, float *
 /*
 * RB_ShaderpassTex
 */
-static inline const image_t *RB_ShaderpassTex( const shaderpass_t *pass ) {
-
+static inline Texture *RB_ShaderpassTex( const shaderpass_t *pass ) {
 	if( pass->anim_fps && pass->anim_numframes ) {
 		return pass->images[(int)( pass->anim_fps * rb.currentShaderTime ) % pass->anim_numframes];
 	}
 
+	auto *const textureCache = TextureCache::instance();
 	if( pass->flags & SHADERPASS_PORTALMAP ) {
 		return rb.currentPortalSurface && rb.currentPortalSurface->texures[0] ?
-			   rb.currentPortalSurface->texures[0] : rsh.blackTexture;
+			   rb.currentPortalSurface->texures[0] : textureCache->blackTexture();
 	}
 
-	const image_t *tex = pass->images[0];
+	Texture *tex = pass->images[0];
 	if( !tex ) {
-		return rsh.noTexture;
+		return textureCache->noTexture();
 	}
 	if( !tex->missing ) {
 		return tex;
 	}
-	return r_usenotexture->integer == 0 ? rsh.greyTexture : rsh.noTexture;
+	return r_usenotexture->integer == 0 ? textureCache->greyTexture() : textureCache->noTexture();
 }
 
 //==================================================================================
@@ -828,7 +828,6 @@ static void RB_UpdateFogUniforms( int program, const mfog_t *fog ) {
 static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	int i;
 	int program;
-	const image_t *base, *normalmap, *glossmap, *decalmap, *entdecalmap;
 	vec3_t lightDir = { 0.0f, 0.0f, 0.0f };
 	vec4_t ambient = { 0.0f, 0.0f, 0.0f, 0.0f }, diffuse = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float offsetmappingScale, glossIntensity, glossExponent;
@@ -837,29 +836,18 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 	bool applyDecal;
 	mat4_t texMatrix;
 
-	// handy pointers
-	base = RB_ShaderpassTex( pass );
-	normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : rsh.blankBumpTexture;
-	glossmap = pass->images[2] && !pass->images[2]->missing ?  pass->images[2] : NULL;
-	decalmap = pass->images[3] && !pass->images[3]->missing ?  pass->images[3] : NULL;
-	entdecalmap = pass->images[4] && !pass->images[4]->missing ?  pass->images[4] : NULL;
+	auto *const textureCache = TextureCache::instance();
 
-	if( normalmap && !normalmap->loaded ) {
-		normalmap = rsh.blankBumpTexture;
-	}
-	if( glossmap && !glossmap->loaded ) {
-		glossmap = NULL;
-	}
-	if( decalmap && !decalmap->loaded ) {
-		decalmap = NULL;
-	}
-	if( entdecalmap && !entdecalmap->loaded ) {
-		entdecalmap = NULL;
-	}
+	// handy pointers
+	Texture *base = RB_ShaderpassTex( pass );
+	Texture *normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : textureCache->blankNormalmap();
+	Texture *glossmap = pass->images[2] && !pass->images[2]->missing ?  pass->images[2] : NULL;
+	Texture *decalmap = pass->images[3] && !pass->images[3]->missing ?  pass->images[3] : NULL;
+	Texture *entdecalmap = pass->images[4] && !pass->images[4]->missing ?  pass->images[4] : NULL;
 
 	// use blank image if the normalmap is too tiny due to high picmip value
 	if( !normalmap || ( normalmap->upload_width < 2 || normalmap->upload_height < 2 ) ) {
-		normalmap = rsh.blankBumpTexture;
+		normalmap = textureCache->blankNormalmap();
 	}
 
 	if( ( rb.currentModelType == mod_brush && !mapConfig.deluxeMappingEnabled )
@@ -947,7 +935,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 		programFeatures |= GLSL_SHADER_MATERIAL_DECAL;
 
 		if( rb.renderFlags & RF_LIGHTMAP ) {
-			decalmap = rsh.blackTexture;
+			decalmap = textureCache->blackTexture();
 			programFeatures |= GLSL_SHADER_MATERIAL_DECAL_ADD;
 		} else {
 			// if no alpha, use additive blending
@@ -1097,35 +1085,36 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t
 	int i;
 	int width = 1, height = 1;
 	int program;
-	image_t *portaltexture[2];
+	Texture *portaltexture[2];
 	bool frontPlane;
 	mat4_t texMatrix;
-	const image_t *dudvmap, *normalmap;
 
 	if( !rb.currentPortalSurface ) {
 		return;
 	}
 
+	auto *const textureCache = TextureCache::instance();
+	auto *const blackTexture = textureCache->blackTexture();
+	auto *const blankNormalmap = textureCache->blankNormalmap();
 	for( i = 0; i < 2; i++ ) {
 		portaltexture[i] = rb.currentPortalSurface->texures[i];
 		if( !portaltexture[i] ) {
-			portaltexture[i] = rsh.blackTexture;
+			portaltexture[i] = blackTexture;
 		} else {
 			width = portaltexture[i]->upload_width;
 			height = portaltexture[i]->upload_height;
 		}
 	}
 
-	dudvmap = pass->images[0] && !pass->images[0]->missing ? pass->images[0] : rsh.blankBumpTexture;
-	normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : rsh.blankBumpTexture;
-
-	if( dudvmap != rsh.blankBumpTexture ) {
+	Texture *dudvmap = pass->images[0] && !pass->images[0]->missing ? pass->images[0] : blankNormalmap;
+	Texture *normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : blankNormalmap;
+	if( dudvmap != blankNormalmap ) {
 		programFeatures |= GLSL_SHADER_DISTORTION_DUDV;
 	}
-	if( portaltexture[0] != rsh.blackTexture ) {
+	if( portaltexture[0] != blackTexture ) {
 		programFeatures |= GLSL_SHADER_DISTORTION_REFLECTION;
 	}
-	if( portaltexture[1] != rsh.blackTexture ) {
+	if( portaltexture[1] != blackTexture ) {
 		programFeatures |= GLSL_SHADER_DISTORTION_REFRACTION;
 	}
 
@@ -1149,7 +1138,7 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t
 	// set shaderpass state (blending, depthwrite, etc)
 	RB_SetShaderpassState( pass->flags );
 
-	if( normalmap != rsh.blankBumpTexture ) {
+	if( normalmap != blankNormalmap ) {
 		// eyeDot
 		programFeatures |= GLSL_SHADER_DISTORTION_EYEDOT;
 
@@ -1267,7 +1256,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 	int state;
 	int program;
 	int rgbgen = pass->rgbgen.type;
-	const image_t *image;
+	const Texture *image;
 	const mfog_t *fog = rb.fog;
 	bool isWorldSurface = rb.currentModelType == mod_brush ? true : false;
 	const superLightStyle_t *lightStyle = NULL;
@@ -1352,7 +1341,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 			programFeatures |= GLSL_SHADER_COMMON_DRAWFLAT;
 		}
 		if( rb.renderFlags & RF_LIGHTMAP ) {
-			image = rsh.whiteTexture;
+			image = TextureCache::instance()->whiteTexture();
 		}
 	}
 
@@ -1444,7 +1433,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 */
 static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	int program;
-	image_t *base, *shade, *diffuse, *decal, *entdecal, *stripes, *light;
+	Texture *base, *shade, *diffuse, *decal, *entdecal, *stripes, *light;
 	const mfog_t *fog = rb.fog;
 	mat4_t reflectionMatrix;
 	mat4_t texMatrix;
@@ -1459,7 +1448,7 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 
 	Matrix4_Identity( texMatrix );
 
-	RB_BindImage( 0, base->loaded ? base : rsh.blackTexture );
+	RB_BindImage( 0, base );
 
 	RB_VertexTCCelshadeMatrix( reflectionMatrix );
 
@@ -1479,15 +1468,19 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 	// set shaderpass state (blending, depthwrite, etc)
 	RB_SetShaderpassState( pass->flags );
 
+	auto *const textureCache = TextureCache::instance();
+	Texture *const whiteTexture = textureCache->whiteTexture();
+	Texture *const whiteCubemapTexture = textureCache->whiteCubemapTexture();
+
 	// replacement images are there to ensure that the entity is still
 	// properly colored despite real images still being loaded in a separate thread
 #define CELSHADE_BIND( tmu,tex,feature,canAdd,replacement ) \
 	if( tex && !tex->missing ) { \
-		image_t *btex = tex; \
+		Texture *btex = tex; \
 		if( rb.renderFlags & RF_SHADOWMAPVIEW ) { \
-			btex = tex->flags & IT_CUBEMAP ? rsh.whiteCubemapTexture : rsh.whiteTexture; \
+			btex = tex->flags & IT_CUBEMAP ? whiteCubemapTexture : whiteTexture; \
 		} else { \
-			btex = tex->loaded ? tex : replacement; \
+			btex = true ? tex : replacement; \
 			if( btex ) { \
 				programFeatures |= feature; \
 				if( canAdd && ( btex->samples & 1 ) ) { \
@@ -1499,10 +1492,10 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 		} \
 	}
 
-	CELSHADE_BIND( 1, shade, 0, false, rsh.whiteCubemapTexture );
+	CELSHADE_BIND( 1, shade, 0, false, whiteCubemapTexture );
 	CELSHADE_BIND( 2, diffuse, GLSL_SHADER_CELSHADE_DIFFUSE, false, NULL );
 	CELSHADE_BIND( 3, decal, GLSL_SHADER_CELSHADE_DECAL, true, NULL );
-	CELSHADE_BIND( 4, entdecal, GLSL_SHADER_CELSHADE_ENTITY_DECAL, true, rsh.whiteTexture );
+	CELSHADE_BIND( 4, entdecal, GLSL_SHADER_CELSHADE_ENTITY_DECAL, true, whiteTexture );
 	CELSHADE_BIND( 5, stripes, GLSL_SHADER_CELSHADE_STRIPES, true, NULL );
 	CELSHADE_BIND( 6, light, GLSL_SHADER_CELSHADE_CEL_LIGHT, true, NULL );
 
@@ -1565,7 +1558,7 @@ static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, r_glslfeat_t progra
 static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	bool fxaa3 = false;
 	int program;
-	const image_t *image = pass->images[0];
+	const Texture *image = pass->images[0];
 	mat4_t texMatrix;
 
 	// set shaderpass state (blending, depthwrite, etc)
@@ -2152,7 +2145,7 @@ void RB_DrawOutlinedElements( void ) {
 	r_triLinesPass.alphagen.type = ALPHA_GEN_CONST;
 	VectorCopy( r_triLinesColor + 3, r_triLinesPass.alphagen.args );
 	r_triLinesPass.flags = 0;
-	r_triLinesPass.images[0] = rsh.whiteTexture;
+	r_triLinesPass.images[0] = TextureCache::instance()->whiteTexture();
 	r_triLinesPass.anim_fps = 0;
 	r_triLinesPass.anim_numframes = 0;
 	r_triLinesPass.program_type = GLSL_PROGRAM_TYPE_Q3A_SHADER;
@@ -2207,7 +2200,7 @@ void RB_DrawShadedElements( void ) {
 	if( rb.texFog && rb.texFog->shader ) {
 		shaderpass_t *fogPass = &r_GLSLpasses[BUILTIN_GLSLPASS_FOG];
 
-		fogPass->images[0] = rsh.whiteTexture;
+		fogPass->images[0] = TextureCache::instance()->whiteTexture();
 		if( !rb.currentShader->numpasses || rb.currentShader->fog_dist ) {
 			fogPass->flags &= ~GLSTATE_DEPTHFUNC_EQ;
 		} else {

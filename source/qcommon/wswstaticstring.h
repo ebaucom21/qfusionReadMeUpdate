@@ -131,7 +131,9 @@ public:
 	bool assignfv( const char *format, va_list va );
 
 	[[nodiscard]]
-	auto asView() const -> wsw::StringView { return wsw::StringView( m_data, m_len ); }
+	auto asView() const -> wsw::StringView {
+		return wsw::StringView( m_data, m_len, wsw::StringView::ZeroTerminated );
+	}
 
 	[[nodiscard]]
 	auto begin() -> char * { return m_data; }

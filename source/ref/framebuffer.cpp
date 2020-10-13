@@ -33,8 +33,8 @@ typedef struct {
 	unsigned int colorRenderBuffer;
 	int width, height;
 	int samples;
-	image_t *depthTexture;
-	image_t *colorTexture[MAX_FRAMEBUFFER_COLOR_ATTACHMENTS];
+	Texture *depthTexture;
+	Texture *colorTexture[MAX_FRAMEBUFFER_COLOR_ATTACHMENTS];
 } r_fbo_t;
 
 static bool r_frambuffer_objects_initialized;
@@ -137,9 +137,9 @@ found:
 	qglBindFramebuffer( GL_FRAMEBUFFER, fbo->objectID );
 
 	if( colorRB ) {
-		format = glConfig.forceRGBAFramebuffers ? GL_RGBA : GL_RGB;
+		format = GL_RGB;
 		if( useFloat ) {
-			format = glConfig.forceRGBAFramebuffers ? GL_RGBA16F : GL_RGB16F;
+			format = GL_RGB16F;
 		}
 
 		qglGenRenderbuffers( 1, &rbID );
@@ -287,7 +287,7 @@ void RFB_BindObject( int object ) {
 /*
 * RFB_AttachTextureToObject
 */
-bool RFB_AttachTextureToObject( int object, bool depth, int target, image_t *texture ) {
+bool RFB_AttachTextureToObject( int object, bool depth, int target, Texture *texture ) {
 	r_fbo_t *fbo;
 	int attachment;
 	GLuint texnum = 0;
@@ -376,7 +376,7 @@ bind:
 /*
 * RFB_GetObjectTextureAttachment
 */
-image_t *RFB_GetObjectTextureAttachment( int object, bool depth, int target ) {
+Texture *RFB_GetObjectTextureAttachment( int object, bool depth, int target ) {
 	r_fbo_t *fbo;
 
 	assert( object > 0 && object <= r_num_framebuffer_objects );

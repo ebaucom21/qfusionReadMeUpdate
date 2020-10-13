@@ -203,6 +203,8 @@ typedef struct {
 	shaderfunc_t func;
 } deformv_t;
 
+class Texture;
+
 // Per-pass rendering state information
 typedef struct shaderpass_s {
 	unsigned int flags;
@@ -218,7 +220,7 @@ typedef struct shaderpass_s {
 
 	unsigned int program_type;
 
-	struct image_s             *images[MAX_SHADER_IMAGES]; // texture refs
+	Texture             *images[MAX_SHADER_IMAGES]; // texture refs
 
 	float anim_fps;                                 // animation frames per sec
 	unsigned int anim_numframes;
@@ -299,9 +301,7 @@ typedef struct alignas( 8 ) shader_s {
 
 shader_t    *R_RegisterShader( const char *name, shaderType_e type );
 shader_t    *R_RegisterPic( const char *name );
-shader_t    *R_RegisterRawPic( const char *name, int width, int height, uint8_t *data, int samples, bool bgra = false );
 shader_t    *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8_t *data );
-shader_t    *R_RegisterLevelshot( const char *name, shader_t *defaultShader, bool *matchesDefault );
 shader_t    *R_RegisterSkin( const char *name );
 shader_t    *R_RegisterVideo( const char *name );
 shader_t    *R_RegisterLinearPic( const char *name );

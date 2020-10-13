@@ -565,7 +565,7 @@ static void Mod_LoadShaderrefs( const lump_t *l ) {
 	if( newMap ) {
 		std::array<shaderType_e, 2> shaderTypes = { SHADER_TYPE_DELUXEMAP, SHADER_TYPE_VERTEX };
 		materialCache->freeUnusedMaterialsByType( shaderTypes.data(), shaderTypes.size() );
-		R_FreeUnusedImagesByTags( IMAGE_TAG_WORLD );
+		TextureCache::instance()->freeUnusedWorldTextures();
 	}
 }
 
