@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/singletonholder.h"
 
 using wsw::operator""_asView;
+using wsw::operator""_asHView;
 
 #include <algorithm>
 #include <tuple>
@@ -990,6 +991,28 @@ void TextureCache::initBuiltinTextures() {
 	initBuiltinTexture( CoronaTextureFactory() );
 	initBuiltinTexture( ParticleTextureFactory() );
 	initBuiltinTexture( BlankNormalMapFactory() );
+
+	assert( m_freeTexturesHead );
+	const wsw::HashedStringView hashedName( "***external***"_asHView );
+	Texture *const texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	texture->name = wsw::StringView( hashedName.data(), hashedName.size(), wsw::StringView::ZeroTerminated );
+	texture->width = texture->upload_width = 0;
+	texture->height = texture->upload_height = 0;
+	texture->tags = IMAGE_TAG_BUILTIN;
+	texture->flags = IT_SPECIAL;
+	texture->isAPlaceholder = false;
+	texture->samples = 0;
+	texture->minmipsize = 0;
+	texture->fbo = 0;
+	texture->missing = false;
+	texture->registrationSequence = std::nullopt;
+	texture->texnum = 0;
+	texture->target = GL_TEXTURE_2D;
+
+	const unsigned binIndex = hashedName.getHash() % kNumHashBins;
+	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	m_externalHandleWrapper = texture;
 }
 
 static void wsw_stb_write_func( void *context, void *data, int size ) {

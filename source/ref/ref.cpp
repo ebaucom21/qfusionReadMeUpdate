@@ -613,7 +613,6 @@ void R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2,
 }
 
 void R_DrawExternalTextureOverlay( GLuint externalTexNum ) {
-	return;
 	Texture *texture = TextureCache::instance()->wrapUITextureHandle( externalTexNum );
 
 	R_DrawStretchQuick( 0, 0, rf.width2D, rf.height2D, 0.0f, 1.0f, 1.0f, 0.0f, colorWhite,
@@ -4523,6 +4522,7 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 	}
 
 	Q_snprintfz( uploadName, sizeof( uploadName ), "%s%i", name, r_numUploadedLightmaps );
+	Com_Printf( S_COLOR_CYAN "Upload name: %s\n", uploadName );
 
 	//image = R_LoadImage( uploadName, (uint8_t **)( &data ), w, h, IT_SPECIAL, 1, IMAGE_TAG_GENERIC, samples );
 	//abort();
