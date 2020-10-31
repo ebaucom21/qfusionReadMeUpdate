@@ -4683,10 +4683,6 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 
 	layerWidth = w * ( 1 + ( int )mapConfig.deluxeMappingEnabled );
 
-	if( !mapConfig.lightmapsPacking ) {
-		abort();
-	}
-
 	mapConfig.maxLightmapSize = 0;
 	mapConfig.lightmapArrays = mapConfig.lightmapsPacking
 							   && glConfig.ext.texture_array
@@ -6260,7 +6256,8 @@ static void R_FinalizeGLExtensions( void ) {
 	qglGetIntegerv( GL_MAX_3D_TEXTURE_SIZE, &glConfig.maxTexture3DSize );
 
 	glConfig.maxTextureLayers = 0;
-	if( glConfig.ext.texture_array ) {
+	if( isExtensionSupported( "GL_EXT_texture_array" ) ) {
+		glConfig.ext.texture_array = true;
 		qglGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS_EXT, &glConfig.maxTextureLayers );
 	}
 

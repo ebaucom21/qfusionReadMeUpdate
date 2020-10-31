@@ -656,14 +656,100 @@ void TextureCache::resize2DTexture( Texture *texture, const wsw::StringView &nam
 	abort();
 }
 
+static int lmArrayCounter = 0;
+
 auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLayers, unsigned samples ) -> Texture * {
 	assert( samples == 1 || samples == 3 );
 
-	abort();
+	// TODO: Separate freelists for different texture groups/types
+	if( !m_freeTexturesHead ) {
+		return nullptr;
+	}
+
+	GLint internalFormat;
+	GLenum format;
+	if( samples == 3 ) {
+		std::tie( internalFormat, format ) = std::make_pair( GL_RGB8, GL_RGB );
+	} else {
+		std::tie( internalFormat, format ) = std::make_pair( GL_R8, GL_RED );
+	}
+
+	wsw::StaticString<MAX_QPATH> nameBuffer;
+	nameBuffer << "lmarray"_asView << lmArrayCounter++;
+
+	const GLenum target = GL_TEXTURE_2D_ARRAY_EXT;
+	const unsigned binIndex = wsw::HashedStringView( nameBuffer.asView() ).getHash() % kNumHashBins;
+	if( Texture *existing = findTextureInBin( binIndex, nameBuffer.asView(), 1, IT_CLAMP | IT_NOMIPMAP ) ) {
+		assert( existing->target == target );
+		bindToModify( existing );
+
+		// TODO: Use qglTexStorage3D if it is available
+		for( unsigned layer = 0; layer < numLayers; ++layer ) {
+			qglTexSubImage3D( target, 0, 0, 0, layer, w, h, 1, format, GL_UNSIGNED_BYTE, nullptr );
+		}
+
+		setupWrapMode( target, IT_CLAMP );
+		setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
+
+		unbindModified( existing );
+
+		existing->width = existing->upload_width = w;
+		existing->height = existing->upload_height = h;
+		existing->layers = numLayers;
+		existing->samples = samples;
+
+		return existing;
+	}
+
+	const GLuint handle = generateHandle( nameBuffer.asView() );
+	bindToModify( target, handle );
+
+	qglTexImage3D( target, 0, internalFormat, w, h, numLayers, 0, format, GL_UNSIGNED_BYTE, nullptr );
+	setupWrapMode( target, IT_CLAMP );
+	setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
+
+	unbindModified( target, 0 );
+
+	Texture *texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	texture->name = internTextureName( texture, nameBuffer.asView() );
+	texture->texnum = handle;
+	texture->target = target;
+	texture->flags = IT_CLAMP | IT_NOMIPMAP;
+	texture->minmipsize = 1;
+	texture->width = texture->upload_width = w;
+	texture->height = texture->upload_height = h;
+	texture->samples = samples;
+	texture->registrationSequence = rsh.registrationSequence;
+	texture->fbo = 0;
+	texture->framenum = 0;
+	texture->layers = numLayers;
+	texture->missing = false;
+	texture->tags = IMAGE_TAG_WORLD;
+
+	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	return texture;
 }
 
-void TextureCache::replaceLightmapLayer( Texture *texture, unsigned layer, uint8_t *data ) {
-	abort();
+void TextureCache::replaceLightmapLayer( Texture *texture, unsigned layer, const uint8_t *data ) {
+	assert( texture );
+	assert( layer < texture->layers );
+
+	// TODO: Store these properties in a LightmapTextureArray instance
+
+	GLint internalFormat;
+	GLenum format;
+	if( texture->samples == 3 ) {
+		std::tie( internalFormat, format ) = std::make_pair( GL_RGB8, GL_RGB );
+	} else {
+		std::tie( internalFormat, format ) = std::make_pair( GL_R8, GL_RED );
+	}
+
+	bindToModify( texture );
+
+	qglTexSubImage3D( texture->target, 0, 0, 0, layer, texture->width, texture->height, 1, format, GL_UNSIGNED_BYTE, data );
+
+	unbindModified( texture );
 }
 
 void TextureCache::replaceFontMaskSamples( Texture *texture, unsigned w, unsigned h, const uint8_t *data ) {

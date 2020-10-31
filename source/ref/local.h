@@ -315,7 +315,7 @@ public:
 	[[nodiscard]]
 	auto createLightmapArray( unsigned w, unsigned h, unsigned numLayers, unsigned samples ) -> Texture *;
 
-	void replaceLightmapLayer( Texture *texture, unsigned layer, uint8_t *data );
+	void replaceLightmapLayer( Texture *texture, unsigned layer, const uint8_t *data );
 
 	void replaceFontMaskSamples( Texture *texture, unsigned width, unsigned height, const uint8_t *data );
 
