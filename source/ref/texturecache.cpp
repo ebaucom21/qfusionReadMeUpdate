@@ -873,7 +873,7 @@ struct NoTextureTextureFactory : public BuiltinTextureFactory {
 		width = height = side;
 		flags = IT_SRGB;
 		samples = 3;
-		data = loadingBuffer.reserveAndGet( side * side * 3 );
+		data = loadingBuffer.reserveAndGet( side * side * samples );
 
 		const uint8_t wswPurple[] { 53, 34, 69 };
 		const uint8_t wswOrange[] { 95, 39, 9 };
@@ -911,41 +911,61 @@ struct NoTextureTextureFactory : public BuiltinTextureFactory {
 
 struct CoronaTextureFactory : public BuiltinTextureFactory {
 	CoronaTextureFactory() : BuiltinTextureFactory( "***corona***"_asView, BuiltinTexNum::Corona ) {
-		width = height = 32;
+		constexpr unsigned side = 32;
+
+		width = height = side;
 		flags = IT_SPECIAL | IT_SRGB;
 		samples = 4;
-		data = loadingBuffer.reserveAndGet( 32 * 32 * 4 );
+		data = loadingBuffer.reserveAndGet( side * side * samples );
 
-		// TODO: Clean up
-		for( int y = 0; y < 32; y++ ) {
-			const float dy = ( (float)y - 15.5f ) * ( 1.0f / 16.0f );
-			for( int x = 0; x < 32; x++ ) {
-				const float dx = ( (float)x - 15.5f ) * ( 1.0f / 16.0f );
-				int a = (int)( ( ( 1.0f / ( dx * dx + dy * dy + 0.2f ) ) - ( 1.0f / ( 1.0f + 0.2 ) ) ) * 32.0f / ( 1.0f / ( 1.0f + 0.2 ) ) );
-				Q_clamp( a, 0, 255 );
-				data[( y * 32 + x ) * 4 + 0] = data[( y * 32 + x ) * 4 + 1] = data[( y * 32 + x ) * 4 + 2] = a;
-			}
+		ptrdiff_t offset = 0;
+		uint8_t *const __restrict p = data;
+		constexpr int halfSide = (int)side / 2;
+		constexpr float invHalfSide = 1.0f / (float)halfSide;
+		for( int pixNum = 0; pixNum < (int)( side * side ); ++pixNum ) {
+			const int x = pixNum % (int)side;
+			const int y = pixNum / (int)side;
+
+			const auto unitDX = (float)( x - halfSide ) * invHalfSide;
+			const auto unitDY = (float)( y - halfSide ) * invHalfSide;
+
+			float frac = 1.0f - Q_Sqrt( unitDX * unitDX + unitDY * unitDY );
+			frac = std::clamp( frac, 0.0f, 1.0f );
+			frac = frac * frac;
+
+			const auto value = (uint8_t)( 128.0f * frac );
+			p[offset + 0] = value;
+			p[offset + 1] = value;
+			p[offset + 2] = value;
+			p[offset + 3] = value;
+			offset += 4;
 		}
 	}
 };
 
 struct ParticleTextureFactory : public BuiltinTextureFactory {
 	ParticleTextureFactory() : BuiltinTextureFactory( "***particle***"_asView, BuiltinTexNum::Particle ) {
-		width = height = 16;
+		constexpr unsigned side = 16;
+
+		width = height = side;
 		flags = IT_NOPICMIP | IT_NOMIPMAP | IT_SRGB;
 		samples = 4;
-		data = loadingBuffer.reserveAndGet( 16 * 16 * 4 );
-		std::memset( data, 255, 16 * 16 * 4 );
+		data = loadingBuffer.reserveAndGet( side * side * samples );
 
-		// TODO: Clean up
-		for( int x = 0; x < 16; x++ ) {
-			const int dx2 = ( x - 8 ) * ( x - 8 );
-			for( int y = 0; y < 16; y++ ) {
-				const int dy = y - 8;
-				const float dd2 = (float)( dx2 + dy * dy );
-				const int d = 255 - (int)( 35 * std::sqrt( dd2 ) );
-				data[( y * 16 + x ) * 4 + 3] = std::clamp( d, 0, 255 );
-			}
+		ptrdiff_t offset = 0;
+		uint8_t *const __restrict p = data;
+		constexpr int halfSide = (int)side / 2;
+		for( int pixNum = 0; pixNum < (int)side * side; ++pixNum ) {
+			const int x = pixNum % (int)side;
+			const int y = pixNum / (int)side;
+			const auto dx = x - halfSide;
+			const auto dy = y - halfSide;
+			const uint8_t value = ( dx * dx + dy * dy < halfSide * halfSide ) ? 255 : 0;
+			p[offset + 0] = value;
+			p[offset + 1] = value;
+			p[offset + 2] = value;
+			p[offset + 3] = value;
+			offset += 4;
 		}
 	}
 };
