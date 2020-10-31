@@ -310,7 +310,8 @@ public:
 	[[nodiscard]]
 	auto createFontMask( const wsw::StringView &name, unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
 
-	void resize2DTexture( Texture *texture, const wsw::StringView &name, unsigned w, unsigned h, unsigned samples, const uint8_t *data = nullptr );
+	[[nodiscard]]
+	auto createLightmap( unsigned w, unsigned h, unsigned samples, const uint8_t *data ) -> Texture *;
 
 	[[nodiscard]]
 	auto createLightmapArray( unsigned w, unsigned h, unsigned numLayers, unsigned samples ) -> Texture *;

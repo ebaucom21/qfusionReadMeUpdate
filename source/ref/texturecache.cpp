@@ -651,9 +651,61 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 	return texture;
 }
 
-void TextureCache::resize2DTexture( Texture *texture, const wsw::StringView &name,
-									unsigned w, unsigned h, unsigned samples, const uint8_t *data ) {
-	abort();
+static auto getLightmapFormatsForSamples( unsigned samples ) -> std::pair<GLint, GLenum> {
+	assert( samples == 1 || samples == 3 );
+	if( samples == 3 ) {
+		return std::make_pair( GL_RGB8, GL_RGB );
+	}
+	return std::make_pair( GL_R8, GL_RED );
+}
+
+static int lmCounter = 0;
+
+auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, const uint8_t *data ) -> Texture * {
+	assert( samples == 1 || samples == 3 );
+
+	if( !m_freeTexturesHead ) {
+		return nullptr;
+	}
+
+	const auto [internalFormat, format] = getLightmapFormatsForSamples( samples );
+
+	// TODO: We don't need to name it and put it in bins, just try finding a best match by parameters
+	wsw::StaticString<MAX_QPATH> nameBuffer;
+	nameBuffer << "lm"_asView << lmCounter++;
+
+	const GLenum target = GL_TEXTURE_2D;
+	const GLuint handle = generateHandle( nameBuffer.asView() );
+	bindToModify( target, handle );
+
+	qglTexImage2D( target, 0, internalFormat, w, h, 0, format, GL_UNSIGNED_BYTE, data );
+
+	setupWrapMode( target, IT_CLAMP );
+	setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
+
+	unbindModified( target, handle );
+
+	// TODO: Reduce this boilerplate/use different lists for different texture types
+	Texture *texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	texture->name = internTextureName( texture, nameBuffer.asView() );
+	texture->texnum = handle;
+	texture->target = target;
+	texture->flags = IT_CLAMP | IT_NOMIPMAP;
+	texture->minmipsize = 1;
+	texture->width = texture->upload_width = w;
+	texture->height = texture->upload_height = h;
+	texture->samples = samples;
+	texture->registrationSequence = rsh.registrationSequence;
+	texture->fbo = 0;
+	texture->framenum = 0;
+	texture->layers = 0;
+	texture->missing = false;
+	texture->tags = IMAGE_TAG_WORLD;
+
+	const unsigned binIndex = wsw::HashedStringView( nameBuffer.asView() ).getHash() % kNumHashBins;
+	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	return texture;
 }
 
 static int lmArrayCounter = 0;
@@ -666,41 +718,13 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 		return nullptr;
 	}
 
-	GLint internalFormat;
-	GLenum format;
-	if( samples == 3 ) {
-		std::tie( internalFormat, format ) = std::make_pair( GL_RGB8, GL_RGB );
-	} else {
-		std::tie( internalFormat, format ) = std::make_pair( GL_R8, GL_RED );
-	}
+	const auto [internalFormat, format] = getLightmapFormatsForSamples( samples );
 
+	// TODO: We don't need to name it and put it in bins, just try finding a best match by parameters
 	wsw::StaticString<MAX_QPATH> nameBuffer;
 	nameBuffer << "lmarray"_asView << lmArrayCounter++;
 
 	const GLenum target = GL_TEXTURE_2D_ARRAY_EXT;
-	const unsigned binIndex = wsw::HashedStringView( nameBuffer.asView() ).getHash() % kNumHashBins;
-	if( Texture *existing = findTextureInBin( binIndex, nameBuffer.asView(), 1, IT_CLAMP | IT_NOMIPMAP ) ) {
-		assert( existing->target == target );
-		bindToModify( existing );
-
-		// TODO: Use qglTexStorage3D if it is available
-		for( unsigned layer = 0; layer < numLayers; ++layer ) {
-			qglTexSubImage3D( target, 0, 0, 0, layer, w, h, 1, format, GL_UNSIGNED_BYTE, nullptr );
-		}
-
-		setupWrapMode( target, IT_CLAMP );
-		setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
-
-		unbindModified( existing );
-
-		existing->width = existing->upload_width = w;
-		existing->height = existing->upload_height = h;
-		existing->layers = numLayers;
-		existing->samples = samples;
-
-		return existing;
-	}
-
 	const GLuint handle = generateHandle( nameBuffer.asView() );
 	bindToModify( target, handle );
 
@@ -726,6 +750,7 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	texture->missing = false;
 	texture->tags = IMAGE_TAG_WORLD;
 
+	const unsigned binIndex = wsw::HashedStringView( nameBuffer.asView() ).getHash() % kNumHashBins;
 	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
 	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
 	return texture;
@@ -736,14 +761,7 @@ void TextureCache::replaceLightmapLayer( Texture *texture, unsigned layer, const
 	assert( layer < texture->layers );
 
 	// TODO: Store these properties in a LightmapTextureArray instance
-
-	GLint internalFormat;
-	GLenum format;
-	if( texture->samples == 3 ) {
-		std::tie( internalFormat, format ) = std::make_pair( GL_RGB8, GL_RGB );
-	} else {
-		std::tie( internalFormat, format ) = std::make_pair( GL_R8, GL_RED );
-	}
+	const auto [internalFormat, format] = getLightmapFormatsForSamples( texture->samples );
 
 	bindToModify( texture );
 

@@ -4510,8 +4510,6 @@ static void R_BuildLightmap( int w, int h, bool deluxe, const uint8_t *data, uin
 */
 static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int samples, bool deluxe ) {
 	Texture *image;
-	char uploadName[128];
-
 	if( !name || !data ) {
 		return r_numUploadedLightmaps;
 	}
@@ -4521,12 +4519,7 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 		return 0;
 	}
 
-	Q_snprintfz( uploadName, sizeof( uploadName ), "%s%i", name, r_numUploadedLightmaps );
-	Com_Printf( S_COLOR_CYAN "Upload name: %s\n", uploadName );
-
-	//image = R_LoadImage( uploadName, (uint8_t **)( &data ), w, h, IT_SPECIAL, 1, IMAGE_TAG_GENERIC, samples );
-	//abort();
-	r_lightmapTextures[r_numUploadedLightmaps] = nullptr;
+	r_lightmapTextures[r_numUploadedLightmaps] = TextureCache::instance()->createLightmap( w, h, samples, data );
 
 	return r_numUploadedLightmaps++;
 }
