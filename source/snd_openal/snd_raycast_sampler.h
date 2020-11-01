@@ -10,7 +10,12 @@ class GenericRaycastSampler {
 
 protected:
 	unsigned numPrimaryRays { 0 };
+	// A number of ray hits that address recorded hit points/distances
+	// that in turn could be used for secondary emission.
+	// (TODO: Consider using a better name)
 	unsigned numPrimaryHits { 0 };
+	// A number of rays with non-1.0 trace fraction, this number is not less than numPrimaryHits
+	unsigned numRaysHitAnySurface { 0 };
 	float averageDistance { 0.0f };
 
 	vec3_t emissionOrigin { 0.0f, 0.0f, 0.0f };
@@ -33,6 +38,7 @@ protected:
 							float *primaryHitDistances_,
 							const vec3_t emissionOrigin_ ) {
 		numPrimaryHits = 0;
+		numRaysHitAnySurface = 0;
 		averageDistance = 0.0f;
 
 		this->primaryRayDirs = primaryRayDirs_;

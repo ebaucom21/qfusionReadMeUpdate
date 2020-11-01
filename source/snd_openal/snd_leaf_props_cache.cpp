@@ -529,27 +529,35 @@ auto LeafPropsSampler::ComputeLeafProps( const vec3_t origin ) -> std::optional<
 	this->numPrimaryRays = maxRays;
 
 	EmitPrimaryRays();
+
 	// Happens mostly if rays outgoing from origin start in solid
 	if( !numPrimaryHits ) {
 		return std::nullopt;
 	}
 
-	const float invNumHits = 1.0f / (float)numPrimaryHits;
+	assert( numRaysHitAnySurface >= numPrimaryHits );
 
-	// These kinds of surfaces are mutually exclusive
-	assert( numRaysHitSmoothSurface + numRaysHitAbsorptiveSurface <= numPrimaryHits );
+	assert( numRaysHitSmoothSurface + numRaysHitAbsorptiveSurface <= numRaysHitAnySurface );
 	// A neutral leaf is either surrounded by fully neutral surfaces or numbers of smooth and absorptive surfaces match
-	// 0.5 for a neutral leaf
-	// 0.0 for a leaf that is surrounded with absorptive surfaces
-	// 1.0 for a leaf that is surrounded with smooth surfaces
-	float smoothness = 0.5f;
-	smoothness += ( 0.5f * invNumHits ) * (float)( (int)numRaysHitSmoothSurface - (int)numRaysHitAbsorptiveSurface );
+	// A frac is  0.0 for a neutral leaf
+	// A frac is -1.0 for a leaf that is surrounded by absorptive surfaces
+	// A frac is +1.0 for a leaf that is surrounded by smooth surfaces
+	float frac = ( (float)numRaysHitSmoothSurface - (float)numRaysHitAbsorptiveSurface );
+	frac *= 1.0f / (float)numRaysHitAnySurface;
+	assert( frac >= -1.0f && frac <= +1.0f );
+
+	// A smoothness is 0.5 for a neutral leaf
+	// A smoothness is 0.0 for a leaf that is surrounded by absorptive surfaces
+	// A smoothness is 1.0 for a leaf that is surrounded by smooth surfaces
+	const float smoothness = 0.5f + 0.5f * frac;
+	assert( smoothness >= 0.0f && smoothness <= 1.0f );
 
 	LeafProps props;
 	props.setSmoothnessFactor( smoothness );
 	props.setRoomSizeFactor( ComputeRoomSizeFactor() );
-	props.setSkyFactor( Q_Sqrt( (float)numRaysHitSky * invNumHits ) );
-	props.setMetallnessFactor( Q_Sqrt( (float)numRaysHitMetal * invNumHits ) );
+	const float invNumPrimaryHits = 1.0f / (float)numPrimaryHits;
+	props.setSkyFactor( Q_Sqrt( (float)numRaysHitSky * invNumPrimaryHits ) );
+	props.setMetallnessFactor( Q_Sqrt( (float)numRaysHitMetal * invNumPrimaryHits ) );
 
 	return props;
 }

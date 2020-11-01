@@ -59,6 +59,7 @@ void GenericRaycastSampler::EmitPrimaryRays() {
 	// These values must be reset at this stage
 	assert( !averageDistance );
 	assert( !numPrimaryHits );
+	assert( !numRaysHitAnySurface );
 
 	// Check whether sampling params have been set
 	assert( numPrimaryRays );
@@ -83,6 +84,7 @@ void GenericRaycastSampler::EmitPrimaryRays() {
 			continue;
 		}
 
+		numRaysHitAnySurface++;
 		if( !CheckAndAddHitSurfaceProps( trace ) ) {
 			continue;
 		}
@@ -119,6 +121,9 @@ void GenericRaycastSampler::EmitPrimaryRays() {
 	if( numPrimaryHits ) {
 		averageDistance /= (float)numPrimaryHits;
 	}
+
+	assert( numRaysHitAnySurface <= numPrimaryRays );
+	assert( numRaysHitAnySurface >= numPrimaryHits );
 }
 
 float GenericRaycastSampler::ComputePrimaryHitDistanceStdDev() const {
