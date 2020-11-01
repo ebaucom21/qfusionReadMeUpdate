@@ -130,49 +130,7 @@ static void SNAP_WriteDeltaGameStateToClient( const client_snapshot_t *from, con
 */
 static void SNAP_WritePlayerstateToClient( msg_t *msg, const player_state_t *ops, const player_state_t *ps, const client_snapshot_t *frame ) {
 	MSG_WriteUint8( msg, svc_playerinfo );
-
-	// Transmit private stats for spectators
-	if( frame->ps->stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
-		MSG_WriteDeltaPlayerState( msg, ops, ps );
-		return;
-	}
-
-	// Transmit private stats for teammates
-	int clientTeam = frame->ps->stats[STAT_TEAM];
-	if( clientTeam > TEAM_PLAYERS && clientTeam == ps->stats[STAT_TEAM] ) {
-		MSG_WriteDeltaPlayerState( msg, ops, ps );
-		return;
-	}
-
-	// Transmit as-is in this case
-	if( frame->multipov ) {
-		MSG_WriteDeltaPlayerState( msg, ops, ps );
-		return;
-	}
-
-	// Transmit as-is for the player itself
-	if( frame->ps->POVnum == ps->playerNum + 1 ) {
-		MSG_WriteDeltaPlayerState( msg, ops, ps );
-		return;
-	}
-
-	player_state_t modifiedState = *ps;
-	modifiedState.stats[STAT_HEALTH] = 100;
-	modifiedState.stats[STAT_ARMOR] = 100;
-	memset( modifiedState.inventory, 0, sizeof( modifiedState.inventory ) );
-
-	// Transmit fake/garbage data if the player entity would be culled if there were no attached events
-	if( SnapShadowTable::Instance()->IsEntityShadowed( frame->ps->playerNum, ps->playerNum + 1 ) ) {
-		for( int i = 0; i < 2; ++i ) {
-			modifiedState.viewangles[i] = -180.0f + 360.0f * random();
-		}
-		for( int i = 0; i < 3; ++i ) {
-			modifiedState.pmove.origin[i] = -500.0f + 1000.0f * random();
-			modifiedState.pmove.velocity[i] = -500.0f + 1000.0f * random();
-		}
-	}
-
-	MSG_WriteDeltaPlayerState( msg, ops, &modifiedState );
+	MSG_WriteDeltaPlayerState( msg, ops, ps );
 }
 
 /*
