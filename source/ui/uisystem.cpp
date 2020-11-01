@@ -370,6 +370,9 @@ void QtUISystem::refresh( unsigned refreshFlags ) {
 	if( !m_isValidAndReady ) {
 		return;
 	}
+	if( !m_hasPendingSceneChange && !m_hasPendingRedraw ) {
+		return;
+	}
 
 	enterUIRenderingMode();
 	renderQml();
@@ -499,10 +502,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 
 void QtUISystem::renderQml() {
 	assert( m_isValidAndReady );
-
-	if( !m_hasPendingSceneChange && !m_hasPendingRedraw ) {
-		return;
-	}
+	assert( m_hasPendingSceneChange || m_hasPendingRedraw );
 
 	if( m_hasPendingSceneChange ) {
 		m_control->polishItems();
