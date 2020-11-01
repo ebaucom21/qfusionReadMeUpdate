@@ -846,7 +846,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 	Texture *entdecalmap = pass->images[4] && !pass->images[4]->missing ?  pass->images[4] : NULL;
 
 	// use blank image if the normalmap is too tiny due to high picmip value
-	if( !normalmap || ( normalmap->upload_width < 2 || normalmap->upload_height < 2 ) ) {
+	if( !normalmap || ( normalmap->width < 2 || normalmap->height < 2 ) ) {
 		normalmap = textureCache->blankNormalmap();
 	}
 
@@ -1101,8 +1101,8 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t
 		if( !portaltexture[i] ) {
 			portaltexture[i] = blackTexture;
 		} else {
-			width = portaltexture[i]->upload_width;
-			height = portaltexture[i]->upload_height;
+			width = portaltexture[i]->width;
+			height = portaltexture[i]->height;
 		}
 	}
 
@@ -1420,8 +1420,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 		}
 
 		if( programFeatures & GLSL_SHADER_COMMON_SOFT_PARTICLE ) {
-			RP_UpdateTextureUniforms( program,
-									  rb.st.screenDepthTex->upload_width, rb.st.screenDepthTex->upload_height );
+			RP_UpdateTextureUniforms( program, rb.st.screenDepthTex->width, rb.st.screenDepthTex->height );
 		}
 
 		RB_DrawElementsReal( &rb.drawElements );
@@ -1582,7 +1581,7 @@ static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t progr
 	if( RB_BindProgram( program ) ) {
 		RB_UpdateCommonUniforms( program, pass, texMatrix );
 
-		RP_UpdateTextureUniforms( program, image->upload_width, image->upload_height );
+		RP_UpdateTextureUniforms( program, image->width, image->height );
 
 		RB_DrawElementsReal( &rb.drawElements );
 	}
@@ -1687,7 +1686,7 @@ static void RB_RenderMeshGLSL_KawaseBlur( const shaderpass_t *pass, r_glslfeat_t
 	if( RB_BindProgram( program ) ) {
 		RB_UpdateCommonUniforms( program, pass, texMatrix );
 
-		RP_UpdateKawaseUniforms( program, pass->images[0]->upload_width, pass->images[0]->upload_height, pass->anim_numframes );
+		RP_UpdateKawaseUniforms( program, pass->images[0]->width, pass->images[0]->height, pass->anim_numframes );
 
 		RB_DrawElementsReal( &rb.drawElements );
 	}

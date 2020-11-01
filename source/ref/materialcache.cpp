@@ -390,8 +390,8 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 
 	baseImage = shader->passes[0].images[0];
 
-	assert( ( ( x + width ) <= baseImage->upload_width ) && ( ( y + height ) <= baseImage->upload_height ) );
-	if( ( ( x + width ) > baseImage->upload_width ) || ( ( y + height ) > baseImage->upload_height ) ) {
+	assert( ( ( x + width ) <= baseImage->width ) && ( ( y + height ) <= baseImage->height ) );
+	if( ( ( x + width ) > baseImage->width ) || ( ( y + height ) > baseImage->height ) ) {
 		return;
 	}
 

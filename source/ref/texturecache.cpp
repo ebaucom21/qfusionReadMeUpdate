@@ -584,8 +584,8 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	texture->target = target;
 	texture->flags = flags;
 	texture->minmipsize = minMipSize;
-	texture->width = texture->upload_width = width;
-	texture->height = texture->upload_height = height;
+	texture->width = width;
+	texture->height = height;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->fbo = 0;
@@ -637,8 +637,8 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 	texture->target = target;
 	texture->flags = flags;
 	texture->minmipsize = 1;
-	texture->width = texture->upload_width = w;
-	texture->height = texture->upload_height = h;
+	texture->width = w;
+	texture->height = h;
 	texture->samples = 1;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->fbo = 0;
@@ -692,8 +692,8 @@ auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, con
 	texture->target = target;
 	texture->flags = IT_CLAMP | IT_NOMIPMAP;
 	texture->minmipsize = 1;
-	texture->width = texture->upload_width = w;
-	texture->height = texture->upload_height = h;
+	texture->width = w;
+	texture->height = h;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->fbo = 0;
@@ -740,8 +740,8 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	texture->target = target;
 	texture->flags = IT_CLAMP | IT_NOMIPMAP;
 	texture->minmipsize = 1;
-	texture->width = texture->upload_width = w;
-	texture->height = texture->upload_height = h;
+	texture->width = w;
+	texture->height = h;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->fbo = 0;
@@ -878,8 +878,8 @@ auto TextureCache::wrapUITextureHandle( GLuint externalHandle ) -> Texture * {
 	assert( m_externalHandleWrapper );
 	Texture *texture = m_externalHandleWrapper;
 	texture->texnum = externalHandle;
-	texture->width = texture->upload_width = rf.width2D;
-	texture->height = texture->upload_height = rf.height2D;
+	texture->width = rf.width2D;
+	texture->height = rf.height2D;
 	texture->missing = false;
 	texture->samples = 1;
 	return texture;
@@ -952,8 +952,8 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 	Texture *texture = wsw::unlink( parent->m_freeTexturesHead, &parent->m_freeTexturesHead, Texture::ListLinks );
 	texture->target = target;
 	texture->texnum = handle;
-	texture->width = texture->upload_width = m_width;
-	texture->height = texture->upload_height = m_height;
+	texture->width = m_width;
+	texture->height = m_height;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
@@ -1133,8 +1133,8 @@ void WhiteCubemapTextureFactory::exec( TextureCache *parent ) {
 	Texture *texture = wsw::unlink( parent->m_freeTexturesHead, &parent->m_freeTexturesHead, Texture::ListLinks );
 	texture->target = target;
 	texture->texnum = handle;
-	texture->width = texture->upload_width = 1;
-	texture->height = texture->upload_height = 1;
+	texture->width = 1;
+	texture->height = 1;
 	texture->layers = 0;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
@@ -1172,8 +1172,8 @@ void TextureCache::initBuiltinTextures() {
 	const wsw::HashedStringView hashedName( "***external***"_asHView );
 	Texture *const texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
 	texture->name = wsw::StringView( hashedName.data(), hashedName.size(), wsw::StringView::ZeroTerminated );
-	texture->width = texture->upload_width = 0;
-	texture->height = texture->upload_height = 0;
+	texture->width = 0;
+	texture->height = 0;
 	texture->tags = IMAGE_TAG_BUILTIN;
 	texture->flags = IT_SPECIAL;
 	texture->isAPlaceholder = false;
@@ -1284,7 +1284,7 @@ auto R_InitViewportTexture( Texture *existing, const wsw::StringView &name, unsi
 		t->fbo = 0;
 	}
 
-	t->fbo = RFB_RegisterObject( t->upload_width, t->upload_height, ( tags & IMAGE_TAG_BUILTIN ) != 0,
+	t->fbo = RFB_RegisterObject( t->width, t->height, ( tags & IMAGE_TAG_BUILTIN ) != 0,
 								 ( flags & IT_DEPTHRB ) != 0, ( flags & IT_STENCIL ) != 0, false, 0, false );
 	RFB_AttachTextureToObject( t->fbo, ( t->flags & IT_DEPTH ) != 0, 0, t );
 }

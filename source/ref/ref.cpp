@@ -3704,8 +3704,8 @@ static void R_BlitTextureToScrFbo( const refdef_t *fd, Texture *image, int dstFb
 		w = fw = rf.frameBufferWidth;
 		h = fh = rf.frameBufferHeight;
 		if( cb ) {
-			fw = cb->upload_width;
-			fh = cb->upload_height;
+			fw = cb->width;
+			fh = cb->height;
 		}
 		RB_Viewport( 0, 0, w, h );
 		RB_Scissor( 0, 0, glConfig.width, glConfig.height );
@@ -3735,10 +3735,10 @@ static void R_BlitTextureToScrFbo( const refdef_t *fd, Texture *image, int dstFb
 
 	if( !dstFbo ) {
 		tcmod.type = TC_MOD_TRANSFORM;
-		tcmod.args[0] = ( float )( w ) / ( float )( image->upload_width );
-		tcmod.args[1] = ( float )( h ) / ( float )( image->upload_height );
-		tcmod.args[4] = ( float )( x ) / ( float )( image->upload_width );
-		tcmod.args[5] = ( float )( image->upload_height - h - y ) / ( float )( image->upload_height );
+		tcmod.args[0] = ( float )( w ) / ( float )( image->width );
+		tcmod.args[1] = ( float )( h ) / ( float )( image->height );
+		tcmod.args[4] = ( float )( x ) / ( float )( image->width );
+		tcmod.args[5] = ( float )( image->height - h - y ) / ( float )( image->height );
 		p.numtcmods = 1;
 		p.tcmods = &tcmod;
 	} else {
@@ -5291,8 +5291,8 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
 		}
 
 		x = y = 0;
-		w = captureTexture->upload_width;
-		h = captureTexture->upload_height;
+		w = captureTexture->width;
+		h = captureTexture->height;
 		rn.refdef.width = w;
 		rn.refdef.height = h;
 		rn.refdef.x = 0;
