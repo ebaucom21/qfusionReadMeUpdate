@@ -888,97 +888,110 @@ auto TextureCache::wrapUITextureHandle( GLuint externalHandle ) -> Texture * {
 void TextureCache::freeUnusedWorldTextures() {}
 void TextureCache::freeAllUnusedTextures() {}
 
-struct BuiltinTextureFactory {
-	const wsw::StringView name;
-	const BuiltinTexNum builtinTexNum;
-	uint8_t *data { nullptr };
-	unsigned width { 0 }, height { 0 };
-	unsigned flags { 0 };
-	unsigned samples { 0 };
-	BuiltinTextureFactory( const wsw::StringView &name_, BuiltinTexNum builtinTexNum_ )
-		: name( name_ ), builtinTexNum( builtinTexNum_ ) {}
+class BuiltinTextureFactory {
+protected:
+	const wsw::StringView m_name;
+	const BuiltinTexNum m_builtinTexNum;
+
+public:
+	BuiltinTextureFactory( const wsw::StringView &name, BuiltinTexNum builtinTexNum )
+		: m_name( name ), m_builtinTexNum( builtinTexNum ) {}
+
+	virtual void exec( TextureCache *parent ) = 0;
 };
 
-void TextureCache::initBuiltinTexture( BuiltinTextureFactory &&factory ) {
-	assert( factory.data );
-	assert( factory.name.startsWith( "***"_asView ) && factory.name.endsWith( "***"_asView ) );
-	assert( !factory.name.drop( 3 ).dropRight( 3 ).contains( '*' ) );
-	assert( factory.name.length() > 7 );
-	assert( factory.width && factory.height );
-	assert( factory.samples > 1 && factory.samples <= 4 );
-	assert( factory.flags );
+class Basic2DBuiltinTextureFactory : public BuiltinTextureFactory {
+protected:
+	uint8_t *m_data { nullptr };
+	unsigned m_width { 0 }, m_height { 0 };
+	unsigned m_flags { 0 };
+	unsigned m_samples { 0 };
+public:
+	Basic2DBuiltinTextureFactory( const wsw::StringView &name, BuiltinTexNum builtinTexNum )
+		: BuiltinTextureFactory( name, builtinTexNum ) {}
+
+	void exec( TextureCache *parent ) override;
+};
+
+void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
+	assert( m_data );
+	assert( m_name.startsWith( "***"_asView ) && m_name.endsWith( "***"_asView ) );
+	assert( !m_name.drop( 3 ).dropRight( 3 ).contains( '*' ) );
+	assert( m_name.length() > 7 );
+	assert( m_width && m_height );
+	assert( m_samples > 1 && m_samples <= 4 );
+	assert( m_flags );
 
 	assert( qglGetError() == GL_NO_ERROR );
 
-	// TODO: There is a cubemap in the complete textures set
 	const GLenum target = GL_TEXTURE_2D;
-	const GLuint handle = generateHandle( factory.name );
+	const GLuint handle = parent->generateHandle( m_name );
 
-	bindToModify( target, handle );
+	parent->bindToModify( target, handle );
 
-	const auto [swizzleMask, internalFormat, format, type] = getRegularTexImageFormats( factory.flags, factory.samples );
+	const auto [swizzleMask, internalFormat, format, type] = getRegularTexImageFormats( m_flags, m_samples );
 	if( swizzleMask != kSwizzleMaskIdentity ) {
 		qglTexParameteriv( target, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask );
 	}
 
-	qglTexImage2D( target, 0, internalFormat, factory.width, factory.height, 0, format, type, factory.data );
+	qglTexImage2D( target, 0, internalFormat, m_width, m_height, 0, format, type, m_data );
 
-	setupWrapMode( target, factory.flags );
+	parent->setupWrapMode( target, m_flags );
 
 	// !!!!!!!!
 	qglGenerateMipmap( target );
 
-	unbindModified( target, handle );
+	parent->unbindModified( target, handle );
 
-	assert( makeCleanName( factory.name, wsw::StringView() ) == factory.name );
-	const unsigned binIndex = wsw::HashedStringView( factory.name ).getHash() % kNumHashBins;
-	assert( findTextureInBin( binIndex, factory.name, 1, factory.flags ) == nullptr );
+	assert( parent->makeCleanName( m_name, wsw::StringView() ) == m_name );
+	const unsigned binIndex = wsw::HashedStringView( m_name ).getHash() % parent->kNumHashBins;
+	assert( parent->findTextureInBin( binIndex, m_name, 1, m_flags ) == nullptr );
 
-	assert( m_freeTexturesHead );
+	assert( parent->m_freeTexturesHead );
 
-	Texture *texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	Texture *texture = wsw::unlink( parent->m_freeTexturesHead, &parent->m_freeTexturesHead, Texture::ListLinks );
 	texture->target = target;
 	texture->texnum = handle;
-	texture->width = texture->upload_width = factory.width;
-	texture->height = texture->upload_height = factory.height;
+	texture->width = texture->upload_width = m_width;
+	texture->height = texture->upload_height = m_height;
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
 	texture->fbo = 0;
 	texture->minmipsize = 1;
-	texture->samples = factory.samples;
-	texture->flags = factory.flags;
+	texture->samples = m_samples;
+	texture->flags = m_flags;
 	texture->tags = IMAGE_TAG_GENERIC;
-	texture->name = internTextureName( texture, factory.name );
+	texture->name = m_name;
 
-	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
-	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	wsw::link( texture, &parent->m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &parent->m_hashBins[binIndex], Texture::BinLinks );
 
-	assert( !m_builtinTextures[(unsigned)factory.builtinTexNum] );
-	m_builtinTextures[(unsigned)factory.builtinTexNum] = texture;
+	assert( !parent->m_builtinTextures[(unsigned)m_builtinTexNum] );
+	parent->m_builtinTextures[(unsigned)m_builtinTexNum] = texture;
 }
 
-struct SolidColorTextureFactory : public BuiltinTextureFactory {
+struct SolidColorTextureFactory : public Basic2DBuiltinTextureFactory {
 	SolidColorTextureFactory( const wsw::StringView &name, BuiltinTexNum builtinTexNum, const vec4_t color )
-		: BuiltinTextureFactory( name, builtinTexNum ) {
-		samples = 3;
-		width = height = 1;
-		flags = IT_NOPICMIP | IT_NOCOMPRESS;
-		data = ::loadingBuffer.reserveAndGet( 3 );
-		data[0] = (uint8_t)( 255 * color[0] );
-		data[1] = (uint8_t)( 255 * color[1] );
-		data[2] = (uint8_t)( 255 * color[2] );
+		: Basic2DBuiltinTextureFactory( name, builtinTexNum ) {
+		m_samples = 3;
+		m_width = m_height = 1;
+		m_flags = IT_NOPICMIP | IT_NOCOMPRESS;
+		m_data = ::loadingBuffer.reserveAndGet( 3 );
+		m_data[0] = (uint8_t)( 255 * color[0] );
+		m_data[1] = (uint8_t)( 255 * color[1] );
+		m_data[2] = (uint8_t)( 255 * color[2] );
 	}
 };
 
-struct NoTextureTextureFactory : public BuiltinTextureFactory {
-	NoTextureTextureFactory() : BuiltinTextureFactory( "***notexture***"_asView, BuiltinTexNum::No ) {
+struct NoTextureTextureFactory : public Basic2DBuiltinTextureFactory {
+	NoTextureTextureFactory() : Basic2DBuiltinTextureFactory( "***notexture***"_asView, BuiltinTexNum::No ) {
 		constexpr unsigned side = 8;
 
-		width = height = side;
-		flags = IT_SRGB;
-		samples = 3;
-		data = loadingBuffer.reserveAndGet( side * side * samples );
+		m_width = m_height = side;
+		m_flags = IT_SRGB;
+		m_samples = 3;
+		m_data = loadingBuffer.reserveAndGet( side * side * m_samples );
 
 		const uint8_t wswPurple[] { 53, 34, 69 };
 		const uint8_t wswOrange[] { 95, 39, 9 };
@@ -990,7 +1003,7 @@ struct NoTextureTextureFactory : public BuiltinTextureFactory {
 		}
 
 		ptrdiff_t offset = 0;
-		uint8_t *const __restrict p = data;
+		uint8_t *const __restrict p = m_data;
 		for( unsigned pixNum = 0; pixNum < side * side; ++pixNum ) {
 			const unsigned x = pixNum % side;
 			const unsigned y = pixNum / side;
@@ -1014,17 +1027,17 @@ struct NoTextureTextureFactory : public BuiltinTextureFactory {
 	}
 };
 
-struct CoronaTextureFactory : public BuiltinTextureFactory {
-	CoronaTextureFactory() : BuiltinTextureFactory( "***corona***"_asView, BuiltinTexNum::Corona ) {
+struct CoronaTextureFactory : public Basic2DBuiltinTextureFactory {
+	CoronaTextureFactory() : Basic2DBuiltinTextureFactory( "***corona***"_asView, BuiltinTexNum::Corona ) {
 		constexpr unsigned side = 32;
 
-		width = height = side;
-		flags = IT_SPECIAL | IT_SRGB;
-		samples = 4;
-		data = loadingBuffer.reserveAndGet( side * side * samples );
+		m_width = m_height = side;
+		m_flags = IT_SPECIAL | IT_SRGB;
+		m_samples = 4;
+		m_data = loadingBuffer.reserveAndGet( side * side * m_samples );
 
 		ptrdiff_t offset = 0;
-		uint8_t *const __restrict p = data;
+		uint8_t *const __restrict p = m_data;
 		constexpr int halfSide = (int)side / 2;
 		constexpr float invHalfSide = 1.0f / (float)halfSide;
 		for( int pixNum = 0; pixNum < (int)( side * side ); ++pixNum ) {
@@ -1048,17 +1061,17 @@ struct CoronaTextureFactory : public BuiltinTextureFactory {
 	}
 };
 
-struct ParticleTextureFactory : public BuiltinTextureFactory {
-	ParticleTextureFactory() : BuiltinTextureFactory( "***particle***"_asView, BuiltinTexNum::Particle ) {
+struct ParticleTextureFactory : public Basic2DBuiltinTextureFactory {
+	ParticleTextureFactory() : Basic2DBuiltinTextureFactory( "***particle***"_asView, BuiltinTexNum::Particle ) {
 		constexpr unsigned side = 16;
 
-		width = height = side;
-		flags = IT_NOPICMIP | IT_NOMIPMAP | IT_SRGB;
-		samples = 4;
-		data = loadingBuffer.reserveAndGet( side * side * samples );
+		m_width = m_height = side;
+		m_flags = IT_NOPICMIP | IT_NOMIPMAP | IT_SRGB;
+		m_samples = 4;
+		m_data = loadingBuffer.reserveAndGet( side * side * m_samples );
 
 		ptrdiff_t offset = 0;
-		uint8_t *const __restrict p = data;
+		uint8_t *const __restrict p = m_data;
 		constexpr int halfSide = (int)side / 2;
 		for( int pixNum = 0; pixNum < (int)side * side; ++pixNum ) {
 			const int x = pixNum % (int)side;
@@ -1075,17 +1088,75 @@ struct ParticleTextureFactory : public BuiltinTextureFactory {
 	}
 };
 
-struct BlankNormalMapFactory : public BuiltinTextureFactory {
-	BlankNormalMapFactory() : BuiltinTextureFactory( "***blanknormalmap***"_asView, BuiltinTexNum::BlankBump ) {
-		width = height = 1;
-		samples = 4;
-		flags = IT_NOPICMIP | IT_NOCOMPRESS;
-		data = ::loadingBuffer.reserveAndGet( 4 );
-		data[0] = data[1] = 128;
-		data[2] = 255;
-		data[3] = 128; // Displacement height
+struct BlankNormalMapFactory : public Basic2DBuiltinTextureFactory {
+	BlankNormalMapFactory() : Basic2DBuiltinTextureFactory( "***blanknormalmap***"_asView, BuiltinTexNum::BlankBump ) {
+		m_width = m_height = 1;
+		m_samples = 4;
+		m_flags = IT_NOPICMIP | IT_NOCOMPRESS;
+		m_data = ::loadingBuffer.reserveAndGet( 4 );
+		m_data[0] = m_data[1] = 128;
+		m_data[2] = 255;
+		m_data[3] = 128; // Displacement height
 	}
 };
+
+class WhiteCubemapTextureFactory : public BuiltinTextureFactory {
+public:
+	WhiteCubemapTextureFactory() : BuiltinTextureFactory( "***whitecubemap***"_asView, BuiltinTexNum::WhiteCubemap ) {}
+
+	virtual void exec( TextureCache *parent ) override;
+};
+
+void WhiteCubemapTextureFactory::exec( TextureCache *parent ) {
+	const GLenum target = GL_TEXTURE_CUBE_MAP;
+	const GLuint handle = parent->generateHandle( m_name );
+
+	parent->bindToModify( target, handle );
+
+	const auto flags = IT_NOMIPMAP | IT_CUBEMAP;
+	const uint8_t data[3] = { 255, 255, 255 };
+	for( unsigned i = 0; i < 6; ++i ) {
+		qglTexImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB8, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, data );
+	}
+
+	parent->setupWrapMode( target, flags );
+
+	parent->unbindModified( target, handle );
+
+	assert( parent->makeCleanName( m_name, wsw::StringView() ) == m_name );
+	const unsigned binIndex = wsw::HashedStringView( m_name ).getHash() % parent->kNumHashBins;
+	assert( parent->findTextureInBin( binIndex, m_name, 1, flags ) == nullptr );
+
+	assert( parent->m_freeTexturesHead );
+
+	// TODO: This boilerplate must eventually be purged
+	Texture *texture = wsw::unlink( parent->m_freeTexturesHead, &parent->m_freeTexturesHead, Texture::ListLinks );
+	texture->target = target;
+	texture->texnum = handle;
+	texture->width = texture->upload_width = 1;
+	texture->height = texture->upload_height = 1;
+	texture->layers = 0;
+	texture->registrationSequence = rsh.registrationSequence;
+	texture->missing = false;
+	texture->isAPlaceholder = false;
+	texture->fbo = 0;
+	texture->minmipsize = 1;
+	texture->samples = 3;
+	texture->flags = flags;
+	texture->tags = IMAGE_TAG_GENERIC;
+	texture->name = m_name;
+
+	wsw::link( texture, &parent->m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &parent->m_hashBins[binIndex], Texture::BinLinks );
+
+	assert( m_builtinTexNum == BuiltinTexNum::WhiteCubemap );
+	assert( !parent->m_builtinTextures[(unsigned)m_builtinTexNum] );
+	parent->m_builtinTextures[(unsigned)m_builtinTexNum] = texture;
+}
+
+void TextureCache::initBuiltinTexture( BuiltinTextureFactory &&factory ) {
+	factory.exec( this );
+}
 
 void TextureCache::initBuiltinTextures() {
 	initBuiltinTexture( SolidColorTextureFactory( "***black***"_asView, BuiltinTexNum::Black, colorBlack ) );
@@ -1095,6 +1166,7 @@ void TextureCache::initBuiltinTextures() {
 	initBuiltinTexture( CoronaTextureFactory() );
 	initBuiltinTexture( ParticleTextureFactory() );
 	initBuiltinTexture( BlankNormalMapFactory() );
+	initBuiltinTexture( WhiteCubemapTextureFactory() );
 
 	assert( m_freeTexturesHead );
 	const wsw::HashedStringView hashedName( "***external***"_asHView );

@@ -1432,24 +1432,22 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 * RB_RenderMeshGLSL_Celshade
 */
 static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
-	int program;
-	Texture *base, *shade, *diffuse, *decal, *entdecal, *stripes, *light;
 	const mfog_t *fog = rb.fog;
-	mat4_t reflectionMatrix;
+
+	Texture *const base = pass->images[0];
+	Texture *const shade = pass->images[1];
+	Texture *const diffuse = pass->images[2];
+	Texture *const decal = pass->images[3];
+	Texture *const entdecal = pass->images[4];
+	Texture *const stripes = pass->images[5];
+	Texture *const light = pass->images[6];
+
 	mat4_t texMatrix;
-
-	base = pass->images[0];
-	shade = pass->images[1];
-	diffuse = pass->images[2];
-	decal = pass->images[3];
-	entdecal = pass->images[4];
-	stripes = pass->images[5];
-	light = pass->images[6];
-
 	Matrix4_Identity( texMatrix );
 
 	RB_BindImage( 0, base );
 
+	mat4_t reflectionMatrix;
 	RB_VertexTCCelshadeMatrix( reflectionMatrix );
 
 	// possibly apply the "texture" fog inline
@@ -1470,7 +1468,9 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 
 	auto *const textureCache = TextureCache::instance();
 	Texture *const whiteTexture = textureCache->whiteTexture();
+	assert( whiteTexture && whiteTexture->target == GL_TEXTURE_2D );
 	Texture *const whiteCubemapTexture = textureCache->whiteCubemapTexture();
+	assert( whiteCubemapTexture && whiteCubemapTexture->target == GL_TEXTURE_CUBE_MAP );
 
 	// replacement images are there to ensure that the entity is still
 	// properly colored despite real images still being loaded in a separate thread
@@ -1480,7 +1480,7 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 		if( rb.renderFlags & RF_SHADOWMAPVIEW ) { \
 			btex = tex->flags & IT_CUBEMAP ? whiteCubemapTexture : whiteTexture; \
 		} else { \
-			btex = true ? tex : replacement; \
+			btex = ( tex && !tex->missing ) ? tex : replacement; \
 			if( btex ) { \
 				programFeatures |= feature; \
 				if( canAdd && ( btex->samples & 1 ) ) { \
@@ -1502,7 +1502,7 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 #undef CELSHADE_BIND
 
 	// update uniforms
-	program = RB_RegisterProgram( GLSL_PROGRAM_TYPE_CELSHADE, NULL,
+	int program = RB_RegisterProgram( GLSL_PROGRAM_TYPE_CELSHADE, NULL,
 								  rb.currentShader->deformSig, rb.currentShader->deforms, rb.currentShader->numdeforms, programFeatures );
 	if( RB_BindProgram( program ) ) {
 		RB_UpdateCommonUniforms( program, pass, texMatrix );

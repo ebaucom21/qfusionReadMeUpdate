@@ -172,9 +172,12 @@ public:
 
 #include <memory>
 
-struct BuiltinTextureFactory;
+class BuiltinTextureFactory;
 
 class TextureCache {
+	friend class BuiltinTextureFactory;
+	friend class Basic2DBuiltinTextureFactory;
+	friend class WhiteCubemapTextureFactory;
 
 	static constexpr unsigned kMaxTextures = 2048;
 	Texture m_textureStorage[kMaxTextures];
@@ -328,6 +331,7 @@ public:
 		assert( number < BuiltinTexNum::Portal0 );
 		Texture *result = m_builtinTextures[(unsigned)number];
 		assert( result );
+		assert( !result->missing );
 		return result;
 	}
 
