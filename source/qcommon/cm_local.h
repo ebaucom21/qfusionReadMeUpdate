@@ -73,12 +73,17 @@ typedef vec3_t vec_bounds_t;
 
 typedef struct cbrush_s {
 	cbrushside_t *brushsides;
+	uint8_t *simd;
+	int numSimdGroups;
 
 	vec_bounds_t mins, maxs, center;
 	float radius;
 
 	int contents;
 	int numsides;
+
+	// TODO: An external storage must be used instead!!!!
+	uint8_t simddata[1024];
 } cbrush_t;
 
 typedef struct cface_s {

@@ -26,6 +26,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_FACET_PLANES 32
 
+__attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+
 static inline float CM_AddSphericalBounds( vec_bounds_t mins, vec_bounds_t maxs, vec_bounds_t center ) {
 #ifdef CM_USE_SSE
 	mins[3] = 0.0f;
@@ -309,6 +311,8 @@ static void CM_CreatePatch( cmodel_state_t *cms, cface_t *patch, int shadernum, 
 				s->surfFlags = shaderref->flags;
 				s->shaderNum = shadernum;
 			}
+			facet->numSimdGroups = BuildSimdBrushsideData( facet->brushsides, facet->numsides, facet->simddata );
+			facet->simd = facet->simddata;
 		}
 
 		patch->contents = shaderref->contents;
@@ -921,6 +925,9 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 		out->numsides = LittleLong( in->numsides );
 		out->brushsides = cms->map_brushsides + LittleLong( in->firstside );
 		CM_BoundBrush( cms, out );
+
+		out->numSimdGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simddata );
+		out->simd = out->simddata;
 	}
 }
 

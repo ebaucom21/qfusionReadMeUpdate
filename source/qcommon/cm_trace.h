@@ -45,7 +45,7 @@ struct CMTraceComputer {
 	virtual void SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec_t *end,
 									  const vec_t *mins, const vec_t *maxs, int brushmask );
 
-	virtual void SetupClipContext( CMTraceContext *tlc ) {}
+	void SetupClipContext( CMTraceContext * ) {}
 
 	virtual void CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*method )( CMTraceContext *, const cbrush_s * ),
 							 const cbrush_s *brushes, int numbrushes, const cface_s *markfaces, int nummarkfaces );
@@ -82,8 +82,6 @@ struct CMSse42TraceComputer final: public CMTraceComputer {
 #ifdef CM_USE_SSE
 	void SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec_t *end,
 							  const vec_t *mins, const vec_t *maxs, int brushmask ) override;
-
-	void SetupClipContext( CMTraceContext *tlc ) override;
 
 	void ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_s *brushes, int numbrushes,
 						const cface_s *markfaces, int nummarkfaces ) override;
