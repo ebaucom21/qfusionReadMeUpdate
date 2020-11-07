@@ -30,25 +30,3 @@ bool CombatActionRecord::CheckCommonCombatConditions( const WorldState &currWorl
 	}
 	return true;
 }
-
-BotScriptActionRecord::~BotScriptActionRecord() {
-	GENERIC_asDeleteScriptActionRecord( scriptObject );
-}
-
-void BotScriptActionRecord::Activate() {
-	BotActionRecord::Activate();
-	GENERIC_asActivateScriptActionRecord( scriptObject );
-}
-
-void BotScriptActionRecord::Deactivate() {
-	BotActionRecord::Deactivate();
-	GENERIC_asDeactivateScriptActionRecord( scriptObject );
-}
-
-AiActionRecord::Status BotScriptActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	return (AiActionRecord::Status)GENERIC_asUpdateScriptActionRecordStatus( scriptObject, currWorldState );
-}
-
-PlannerNode *BotScriptAction::TryApply( const WorldState &worldState ) {
-	return (PlannerNode *)GENERIC_asTryApplyScriptAction( scriptObject, worldState );
-}

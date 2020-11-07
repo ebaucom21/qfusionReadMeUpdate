@@ -280,22 +280,6 @@ public:
 	 */
 	float FovDotFactor() const { return cosf( (float)DEG2RAD( Fov() / 2 ) ); }
 
-	BotGoal *GetGoalByName( const char *name ) {
-		return planningModule.GetGoalByName( name );
-	}
-
-	BotAction *GetActionByName( const char *name ) {
-		return planningModule.GetActionByName( name );
-	}
-
-	BotScriptGoal *InstantiateScriptGoal( void *scriptFactoryObject, const char *name, unsigned updatePeriod ) {
-		return planningModule.InstantiateScriptGoal( scriptFactoryObject, name, updatePeriod );
-	}
-
-	BotScriptAction *InstantiateScriptAction( void *scriptFactoryObject, const char *name ) {
-		return planningModule.InstantiateScriptAction( scriptFactoryObject, name );
-	}
-
 	const WorldState &CachedWorldState() const {
 		return planningModule.CachedWorldState();
 	}

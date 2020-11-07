@@ -523,23 +523,3 @@ PlannerNode *RoamGoal::GetWorldStateTransitions( const WorldState &worldState ) 
 
 	return ApplyExtraActions( firstTransition, worldState );
 }
-
-void BotScriptGoal::UpdateWeight( const WorldState &currWorldState ) {
-	this->weight = GENERIC_asGetScriptGoalWeight( scriptObject, currWorldState );
-}
-
-void BotScriptGoal::GetDesiredWorldState( WorldState *worldState ) {
-	GENERIC_asGetScriptGoalDesiredWorldState( scriptObject, worldState );
-}
-
-PlannerNode *BotScriptGoal::GetWorldStateTransitions( const WorldState &worldState ) {
-	return ApplyExtraActions( nullptr, worldState );
-}
-
-void BotScriptGoal::OnPlanBuildingStarted() {
-	GENERIC_asOnScriptGoalPlanBuildingStarted( scriptObject );
-}
-
-void BotScriptGoal::OnPlanBuildingCompleted( const AiActionRecord *planHead ) {
-	GENERIC_asOnScriptGoalPlanBuildingCompleted( scriptObject, planHead != nullptr );
-}

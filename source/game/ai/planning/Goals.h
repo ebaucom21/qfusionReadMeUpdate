@@ -125,23 +125,4 @@ public:
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
-class BotScriptGoal : public BotGoal {
-	void *scriptObject;
-public:
-	// TODO: Provide ways for setting the debug color for this kind of goals
-	explicit BotScriptGoal( BotPlanningModule *module_, const char *name_, unsigned updatePeriod_, void *scriptObject_ )
-		: BotGoal( module_, name_, 0, updatePeriod_ ),
-		scriptObject( scriptObject_ ) {}
-
-	// Exposed for script API
-	using BotGoal::Self;
-
-	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
-	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
-
-	void OnPlanBuildingStarted() override;
-	void OnPlanBuildingCompleted( const AiActionRecord *planHead ) override;
-};
-
 #endif

@@ -84,12 +84,6 @@ public:
 
 	void RegisterBuiltinGoalsAndActions();
 
-	BotGoal *GetGoalByName( const char *name ) { return planner.GetGoalByName( name ); }
-	BotAction *GetActionByName( const char *name ) { return planner.GetActionByName( name ); }
-
-	BotScriptGoal *InstantiateScriptGoal( void *scriptGoalsFactory, const char *name, unsigned updatePeriod );
-	BotScriptAction *InstantiateScriptAction( void *scriptActionsFactory, const char *name );
-
 	bool ShouldAimPrecisely() const {
 		// Try shooting immediately if "attacking out of despair"
 		return planner.activeGoal != &attackOutOfDespairGoal;

@@ -15,26 +15,6 @@ const int *BotPlanner::Inventory() const {
 	return game.edicts[bot->EntNum()].r.client->ps.inventory;
 }
 
-BotGoal *BotPlanner::GetGoalByName( const char *name ) {
-	for( auto &goal: scriptGoals ) {
-		if( !Q_stricmp( name, goal.Name() ) ) {
-			return &goal;
-		}
-	}
-
-	return nullptr;
-}
-
-BotAction *BotPlanner::GetActionByName( const char *name ) {
-	for( auto &action: scriptActions ) {
-		if( !Q_stricmp( name, action.Name() ) ) {
-			return &action;
-		}
-	}
-
-	return nullptr;
-}
-
 bool BotPlanner::FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin ) {
 	float radius = 128.0f + 192.0f * bot->Skill();
 	typedef DodgeHazardProblemSolver Solver;

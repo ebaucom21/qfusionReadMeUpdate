@@ -80,23 +80,6 @@ static const asBehavior_t EMPTY_BEHAVIORS[] = { ASLIB_BEHAVIOR_NULL };
 static const asProperty_t EMPTY_PROPERTIES[] = { ASLIB_PROPERTY_NULL };
 static const asMethod_t EMPTY_METHODS[] = { ASLIB_METHOD_NULL };
 
-static PlannerNode *objectPlannerNode_prepareActionResult(PlannerNode *node)
-{
-    CHECK_ARG(node);
-    node->worldStateHash = node->worldState.Hash();
-    return node;
-}
-
-// Cannot be declared as a property due to offsetof() being invalid for PlannerNode
-static WorldState *objectPlannerNode_worldState(PlannerNode *plannerNode)
-{
-    return &CHECK_ARG(plannerNode)->worldState;
-}
-static BotScriptActionRecord *objectPlannerNode_nativeActionRecord(PlannerNode *plannerNode)
-{
-    return (BotScriptActionRecord *)CHECK_ARG(plannerNode)->actionRecord;
-}
-
 #define DECLARE_METHOD(type, name, params, nativeFunc) \
     { ASLIB_FUNCTION_DECL(type, name, params), asFUNCTION(nativeFunc), asCALL_CDECL_OBJFIRST }
 
@@ -104,121 +87,6 @@ static BotScriptActionRecord *objectPlannerNode_nativeActionRecord(PlannerNode *
     DECLARE_METHOD(type, name, params, nativeFunc),           \
     DECLARE_METHOD(const type, name, params const, nativeFunc)
 
-static const asMethod_t asAiPlannerNode_ObjectMethods[] =
-{
-    DECLARE_METHOD(AIWorldState &, get_worldState, (), objectPlannerNode_worldState),
-    DECLARE_METHOD(AIActionRecord &, get_nativeActionRecord, (), objectPlannerNode_nativeActionRecord),
-    DECLARE_METHOD(AIPlannerNode &, prepareActionResult, (), objectPlannerNode_prepareActionResult),
-
-    ASLIB_METHOD_NULL
-};
-
-static const asClassDescriptor_t asAiPlannerNodeClassDescriptor =
-{
-    "AIPlannerNode",		             /* name */
-    asOBJ_REF|asOBJ_NOCOUNT,	         /* object type flags */
-    sizeof(PlannerNode),	             /* size */
-    EMPTY_FUNCDEFS,		                 /* funcdefs */
-    EMPTY_BEHAVIORS,                     /* object behaviors */
-    asAiPlannerNode_ObjectMethods,	     /* methods */
-    EMPTY_PROPERTIES,		             /* properties */
-
-    NULL, NULL					         /* string factory hack */
-};
-
-static const asClassDescriptor_t asAiWorldStateClassDescriptor =
-{
-    "AIWorldState",		           /* name */
-    asOBJ_REF|asOBJ_NOCOUNT,	   /* NOTE: this is really a value type but this semantics is hidden from script */
-    sizeof(WorldState),	           /* size */
-    EMPTY_FUNCDEFS,		           /* funcdefs */
-    EMPTY_BEHAVIORS,               /* object behaviors */
-    EMPTY_METHODS,  /* methods */
-    EMPTY_PROPERTIES,		       /* properties */
-
-    NULL, NULL					   /* string factory hack */
-};
-
-// These getters are redundant but convenient and save consequent native calls
-#define DEFINE_NATIVE_ENTITY_GETTERS(paramName, nativeName, scriptName) \
-static edict_t *object##scriptName##_self(nativeName *paramName) { \
-    return game.edicts + paramName->Self()->EntNum(); \
-} \
-static gclient_t *object##scriptName##_client(nativeName *paramName) { \
-    return game.edicts[paramName->Self()->EntNum()].r.client; \
-} \
-static Bot *object##scriptName##_bot(nativeName *paramName) { \
-    return game.edicts[paramName->Self()->EntNum()].bot; \
-}
-
-// Use dummy format string to avoid a warning when a format string cannot be analyzed
-#define DEFINE_NATIVE_DEBUG_OUTPUT_METHOD(nativeName, scriptName)              \
-void object##scriptName##_debug(const nativeName *obj, const asstring_t *name) \
-{                                                                              \
-    CHECK_ARG(obj);                                                            \
-    CHECK_ARG(name);                                                           \
-    if (name->len > 0 && name->buffer[name->len - 1] == '\n')                  \
-        obj->Debug("%s", name->buffer);                                        \
-    else                                                                       \
-        obj->Debug("%s\n", name->buffer);                                      \
-}
-
-#define DECLARE_SCRIPT_ENTITY_GETTERS_LIST(scriptName)                              \
-DECLARE_METHOD(Entity @, get_self, (), object##scriptName##_self),                  \
-DECLARE_METHOD(const Entity @, get_self, () const, object##scriptName##_self),      \
-DECLARE_METHOD(Client @, get_client, (), object##scriptName##_client),              \
-DECLARE_METHOD(const Client @, get_client, () const, object##scriptName##_client),  \
-DECLARE_METHOD(Bot @, get_bot, (), object##scriptName##_bot),                       \
-DECLARE_METHOD(const Bot @, get_bot, () const, object##scriptName##_bot)
-
-DEFINE_NATIVE_ENTITY_GETTERS(goal, BotScriptGoal, Goal)
-
-static const asMethod_t asAiGoal_ObjectMethods[] =
-{
-    DECLARE_SCRIPT_ENTITY_GETTERS_LIST(Goal),
-
-    ASLIB_METHOD_NULL
-};
-
-static const asClassDescriptor_t asAiGoalClassDescriptor =
-{
-    "AIGoal",		                /* name */
-    asOBJ_REF|asOBJ_NOCOUNT,	    /* object type flags */
-    sizeof(BotScriptGoal),	        /* size */
-    EMPTY_FUNCDEFS,		            /* funcdefs */
-    EMPTY_BEHAVIORS,                /* object behaviors */
-    asAiGoal_ObjectMethods,         /* methods */
-    EMPTY_PROPERTIES,		        /* properties */
-
-    NULL, NULL					    /* string factory hack */
-};
-
-DEFINE_NATIVE_ENTITY_GETTERS(actionRecord, BotScriptActionRecord, ActionRecord)
-DEFINE_NATIVE_DEBUG_OUTPUT_METHOD(BotScriptActionRecord, ActionRecord)
-
-#define DECLARE_SCRIPT_DEBUG_OUTPUT_METHOD(nativeName) \
-DECLARE_METHOD(void, debug, (const String &in message), object##nativeName##_debug)
-
-static const asMethod_t asAiActionRecord_ObjectMethods[] =
-{
-    DECLARE_SCRIPT_ENTITY_GETTERS_LIST(ActionRecord),
-    DECLARE_SCRIPT_DEBUG_OUTPUT_METHOD(ActionRecord),
-
-    ASLIB_METHOD_NULL
-};
-
-static const asClassDescriptor_t asAiActionRecordClassDescriptor =
-{
-    "AIActionRecord",	                   /* name */
-    asOBJ_REF|asOBJ_NOCOUNT,	           /* object type flags */
-    sizeof(BotScriptActionRecord),	       /* size */
-    EMPTY_FUNCDEFS,		                   /* funcdefs */
-    EMPTY_BEHAVIORS,                       /* object behaviors */
-    asAiActionRecord_ObjectMethods,        /* methods */
-    EMPTY_PROPERTIES,		               /* properties */
-
-    NULL, NULL					           /* string factory hack */
-};
 
 // We bypass the stock CScriptAny::Retrieve() method and access the value object pointer directly
 // to avoid extra performance issues/leaks due to operations on the object ref count performed in the method.
@@ -280,56 +148,8 @@ public:
     }
 };
 
-static TypeHolderAndChecker scriptGoalFactoryTypeHolder("AIScriptGoalFactory");
-static TypeHolderAndChecker scriptActionFactoryTypeHolder("AIScriptActionFactory");
-static TypeHolderAndChecker scriptActionRecordTypeHolder("AIScriptActionRecord");
 static TypeHolderAndChecker scriptWeightConfigVarTypeHolder("AIScriptWeightConfigVar");
 static TypeHolderAndChecker scriptWeightConfigVarGroupTypeHolder("AIScriptWeightConfigVarGroup");
-
-// AS does not have forward class declarations, and script AIScriptActionRecord class
-// cannot be registered to the moment of the base engine script initialization.
-// We have to pass a reference to a script action record in the `any` container class.
-static PlannerNode *objectAction_newNodeForRecord(BotScriptAction *action, CScriptAny *scriptRecordAnyRef, float cost, WorldState *worldState)
-{
-    CHECK_ARG(action);
-    CHECK_ARG(scriptRecordAnyRef);
-    CHECK_ARG(worldState);
-
-    void *scriptRecord = scriptActionRecordTypeHolder.GetValueRef(scriptRecordAnyRef);
-    if (PlannerNode *node = action->NewNodeForRecord(scriptRecord))
-    {
-        node->worldState = *worldState;
-        node->heapCost = cost;
-        return node;
-    }
-    return nullptr;
-}
-
-DEFINE_NATIVE_ENTITY_GETTERS(action, BotScriptAction, Action)
-DEFINE_NATIVE_DEBUG_OUTPUT_METHOD(BotScriptAction, Action)
-
-static const asMethod_t asAiAction_ObjectMethods[] =
-{
-    DECLARE_SCRIPT_ENTITY_GETTERS_LIST(Action),
-    DECLARE_SCRIPT_DEBUG_OUTPUT_METHOD(Action),
-
-    DECLARE_METHOD(AIPlannerNode @, newNodeForRecord, (any &scriptRecord, float cost, AIWorldState &worldState), objectAction_newNodeForRecord),
-
-    ASLIB_METHOD_NULL
-};
-
-static const asClassDescriptor_t asAiActionClassDescriptor =
-{
-    "AIAction",		                 /* name */
-    asOBJ_REF|asOBJ_NOCOUNT,	     /* object type flags */
-    sizeof(BotScriptAction),	     /* size */
-    EMPTY_FUNCDEFS,		             /* funcdefs */
-    EMPTY_BEHAVIORS,                 /* object behaviors */
-    asAiAction_ObjectMethods,        /* methods */
-    EMPTY_PROPERTIES,		         /* properties */
-
-    NULL, NULL					     /* string factory hack */
-};
 
 static const asProperty_t asAiScriptWeaponDef_Properties[] =
 {
@@ -1120,11 +940,6 @@ const asClassDescriptor_t *asAIClassesDescriptors[] =
     &asAiWeightConfigVarGroupClassDescriptor,
     &asAiWeightConfigVarClassDescriptor,
     &asBotClassDescriptor,
-    &asAiWorldStateClassDescriptor,
-    &asAiGoalClassDescriptor,
-    &asAiActionRecordClassDescriptor,
-    &asAiActionClassDescriptor,
-    &asAiPlannerNodeClassDescriptor,
 
     NULL
 };
@@ -1175,43 +990,10 @@ void asFunc_RemoveAllObjectiveSpots()
     GetObjectiveBasedTeam(__FUNCTION__, TEAM_BETA)->RemoveAllObjectiveSpots();
 }
 
-// AS does not have forward class declarations, and script AIScriptGoalFactory class
-// cannot be registered to the moment of the base engine script initialization.
-// We have to pass a reference to a script goal factory in the `any` container class.
-static void asFunc_RegisterScriptGoal(const asstring_t *name, CScriptAny *factoryObjectAnyRef, unsigned updatePeriod)
-{
-    CHECK_ARG(name);
-    CHECK_ARG(factoryObjectAnyRef);
-
-    void *factoryObject = scriptGoalFactoryTypeHolder.GetValueRef(factoryObjectAnyRef);
-    AiManager::Instance()->RegisterScriptGoal(name->buffer, factoryObject, updatePeriod);
-}
-
-// AS does not have forward class declarations, and script AIScriptActionFactory class
-// cannot be registered to the moment of the base engine script initialization.
-// We have to pass a reference to a script action factory in the `any` container class.
-static void asFunc_RegisterScriptAction(const asstring_t *name, CScriptAny *factoryObjectAnyRef)
-{
-    CHECK_ARG(name);
-    CHECK_ARG(factoryObjectAnyRef);
-
-    void *factoryObject = scriptActionFactoryTypeHolder.GetValueRef(factoryObjectAnyRef);
-    AiManager::Instance()->RegisterScriptAction(name->buffer, factoryObject);
-}
-
-static void asFunc_AddApplicableAction(const asstring_t *goalName, const asstring_t *actionName)
-{
-    AiManager::Instance()->AddApplicableAction(CHECK_ARG(goalName)->buffer, CHECK_ARG(actionName)->buffer);
-}
-
 #define DECLARE_FUNC(signature, nativeFunc) { signature, asFUNCTION(nativeFunc), NULL }
 
 const asglobfuncs_t asAIGlobFuncs[] =
 {
-    DECLARE_FUNC("void RegisterScriptGoal( const String &in name, any &scriptGoalFactory )", asFunc_RegisterScriptGoal),
-    DECLARE_FUNC("void RegisterScriptAction( const String &in name, any &scriptActionFactory )", asFunc_RegisterScriptAction),
-    DECLARE_FUNC("void AddApplicableAction( const String &in goalName, const String &in actionName )", asFunc_AddApplicableAction),
-
     DECLARE_FUNC("void AddNavEntity( Entity @ent, int flags )", AI_AddNavEntity),
     DECLARE_FUNC("void RemoveNavEntity( Entity @ent )", AI_RemoveNavEntity),
     DECLARE_FUNC("void NavEntityReached( Entity @ent )", AI_NavEntityReached),
@@ -1588,9 +1370,6 @@ void AI_InitGametypeScript(asIScriptModule *module)
 {
     gtAIFunctionsRegistry.Load(module);
 
-    scriptGoalFactoryTypeHolder.Load(module);
-    scriptActionFactoryTypeHolder.Load(module);
-    scriptActionRecordTypeHolder.Load(module);
     scriptWeightConfigVarTypeHolder.Load(module);
     scriptWeightConfigVarGroupTypeHolder.Load(module);
 }
@@ -1599,115 +1378,8 @@ void AI_ResetGametypeScript()
 {
     gtAIFunctionsRegistry.Unload();
 
-    scriptGoalFactoryTypeHolder.Unload();
-    scriptActionFactoryTypeHolder.Unload();
-    scriptActionRecordTypeHolder.Unload();
     scriptWeightConfigVarTypeHolder.Unload();
     scriptWeightConfigVarGroupTypeHolder.Unload();
-
-    // Since the enclosing function might be called on start, the instance might be not constructed yet
-    if (auto aiManagerInstance = AiManager::Instance())
-        aiManagerInstance->UnregisterScriptGoalsAndActions();
-}
-
-static auto instantiateGoalFunc =
-    gtAIFunctionsRegistry.Function3<BotScriptGoal *, void *, edict_t *, void *>(
-        "AIScriptGoal @GENERIC_InstantiateGoal( AIScriptGoalFactory &factory, Entity &owner, AIGoal &goal )", nullptr);
-
-void *GENERIC_asInstantiateGoal(void *factoryObject, edict_t *owner, BotScriptGoal *nativeGoal)
-{
-    return instantiateGoalFunc(factoryObject, owner, nativeGoal);
-}
-
-static auto instantiateActionFunc =
-    gtAIFunctionsRegistry.Function3<BotScriptAction *, void *, edict_t *, void *>(
-        "AIScriptAction @GENERIC_InstantiateAction( AIScriptActionFactory &factory, Entity &owner, AIAction &action )", nullptr);
-
-void *GENERIC_asInstantiateAction(void *factoryObject, edict_t *owner, BotScriptAction *nativeAction)
-{
-    return instantiateActionFunc(factoryObject, owner, nativeAction);
-}
-
-static auto activateScriptActionRecordFunc =
-    gtAIFunctionsRegistry.Function1<Void, void *>(
-        "void GENERIC_ActivateScriptActionRecord( AIScriptActionRecord &record )", Void::VALUE);
-
-void GENERIC_asActivateScriptActionRecord(void *scriptObject)
-{
-    activateScriptActionRecordFunc(scriptObject);
-}
-
-static auto deactivateScriptActionRecordFunc =
-    gtAIFunctionsRegistry.Function1<Void, void *>(
-        "void GENERIC_DeactivateScriptActionRecord( AIScriptActionRecord &record )", Void::VALUE);
-
-void GENERIC_asDeactivateScriptActionRecord(void *scriptObject)
-{
-    deactivateScriptActionRecordFunc(scriptObject);
-}
-
-static auto deleteScriptActionRecordFunc =
-    gtAIFunctionsRegistry.Function1<Void, void *>(
-        "void GENERIC_DeleteScriptActionRecord( AIScriptActionRecord &record )", Void::VALUE);
-
-void GENERIC_asDeleteScriptActionRecord(void *scriptObject)
-{
-    deleteScriptActionRecordFunc(scriptObject);
-}
-
-static auto checkScriptActionRecordStatusFunc =
-    gtAIFunctionsRegistry.Function2<int, void *, const WorldState *>(
-        "int GENERIC_UpdateScriptActionRecordStatus( AIScriptActionRecord &record, const AIWorldState &worldState )",
-        (int)AiActionRecord::Status::VALID);
-
-int GENERIC_asUpdateScriptActionRecordStatus(void *scriptObject, const WorldState &worldState)
-{
-    return checkScriptActionRecordStatusFunc(scriptObject, &worldState);
-}
-
-static auto tryApplyScriptActionFunc =
-    gtAIFunctionsRegistry.Function2<void *, void *, const WorldState *>(
-        "AIPlannerNode @GENERIC_TryApplyScriptAction( AIScriptAction &action, const AIWorldState &worldState )", nullptr);
-
-void *GENERIC_asTryApplyScriptAction(void *scriptObject, const WorldState &worldState)
-{
-    return tryApplyScriptActionFunc(scriptObject, &worldState);
-}
-
-static auto getScriptGoalNewWeightFunc =
-    gtAIFunctionsRegistry.Function2<float, void *, const WorldState *>(
-        "float GENERIC_GetScriptGoalWeight( AIScriptGoal &goal, const AIWorldState &worldState )", 0.0f);
-
-float GENERIC_asGetScriptGoalWeight(void *scriptObject, const WorldState &worldState)
-{
-    return getScriptGoalNewWeightFunc(scriptObject, &worldState);
-}
-
-static auto getScriptGoalDesiredWorldStateFunc =
-    gtAIFunctionsRegistry.Function2<Void, void *, WorldState *>(
-        "void GENERIC_GetScriptGoalDesiredWorldState( AIScriptGoal &goal, AIWorldState &worldState )", Void::VALUE);
-
-void GENERIC_asGetScriptGoalDesiredWorldState(void *scriptObject, WorldState *worldState)
-{
-    getScriptGoalDesiredWorldStateFunc(scriptObject, worldState);
-}
-
-static auto onScriptGoalPlanBuildingStartedFunc =
-    gtAIFunctionsRegistry.Function1<Void, void *>(
-        "void GENERIC_OnScriptGoalPlanBuildingStarted( AIScriptGoal &goal )", Void::VALUE);
-
-void GENERIC_asOnScriptGoalPlanBuildingStarted(void *scriptObject)
-{
-    onScriptGoalPlanBuildingStartedFunc(scriptObject);
-}
-
-static auto onScriptGoalPlanBuildingCompletedFunc =
-    gtAIFunctionsRegistry.Function2<Void, void *, bool>(
-        "void GENERIC_OnScriptGoalPlanBuildingCompleted( AIScriptGoal &goal, bool succeeded )", Void::VALUE);
-
-void GENERIC_asOnScriptGoalPlanBuildingCompleted(void *scriptObject, bool succeeded)
-{
-    onScriptGoalPlanBuildingCompletedFunc(scriptObject, succeeded);
 }
 
 static auto registerScriptWeightConfigFunc =

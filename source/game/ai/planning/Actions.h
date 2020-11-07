@@ -321,47 +321,4 @@ public:
 
 DECLARE_ACTION( StopLostEnemyPursuitAction, 1 );
 
-class BotScriptActionRecord : public BotActionRecord {
-	void *scriptObject;
-public:
-	BotScriptActionRecord( PoolBase *pool_, Bot *self_, const char *name_, void *scriptObject_ )
-		: BotActionRecord( pool_, self_, name_ ),
-		scriptObject( scriptObject_ ) {
-		// This field is currently unused... Let's just
-		(void)scriptObject;
-	}
-
-	~BotScriptActionRecord() override;
-
-	using BotActionRecord::Self;
-	using BotActionRecord::Debug;
-
-	void Activate() override;
-	void Deactivate() override;
-
-	Status UpdateStatus( const WorldState &worldState ) override;
-};
-
-class BotScriptAction : public BotAction {
-	Pool<BotScriptActionRecord, 3> pool;
-	void *scriptObject;
-public:
-	BotScriptAction( BotPlanningModule *module_, const char *name_, void *scriptObject_ )
-		: BotAction( module_, name_ ),
-		pool( name_ ),
-		scriptObject( scriptObject_ ) {}
-
-	// Exposed for script API
-	using BotAction::Self;
-	using BotAction::Debug;
-
-	PlannerNode *NewNodeForRecord( void *scriptRecord ) {
-		// Reuse the existing method to ensure that logic and messaging is consistent
-		PlannerNodePtr plannerNodePtr( AiAction::NewNodeForRecord( pool.New( Self(), name, scriptRecord ) ) );
-		return plannerNodePtr.ReleaseOwnership();
-	}
-
-	PlannerNode *TryApply( const WorldState &worldState ) override;
-};
-
 #endif

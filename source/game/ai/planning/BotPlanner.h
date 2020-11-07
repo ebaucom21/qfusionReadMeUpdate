@@ -19,15 +19,6 @@ class BotPlanner : public AiPlanner {
 	Bot *const bot;
 	BotPlanningModule *const module;
 
-	wsw::StaticVector<BotScriptGoal, MAX_GOALS> scriptGoals;
-	wsw::StaticVector<BotScriptAction, MAX_ACTIONS> scriptActions;
-
-	BotGoal *GetGoalByName( const char *name );
-	BotAction *GetActionByName( const char *name );
-
-	BotScriptGoal *AllocScriptGoal() { return scriptGoals.unsafe_grow_back(); }
-	BotScriptAction *AllocScriptAction() { return scriptActions.unsafe_grow_back(); }
-
 	const int *Inventory() const;
 
 	template <int Weapon>
