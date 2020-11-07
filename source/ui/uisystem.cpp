@@ -85,6 +85,7 @@ public:
 	void leaveUIRenderingMode();
 
 	Q_PROPERTY( bool isShowingMainMenu READ isShowingMainMenu NOTIFY isShowingMainMenuChanged );
+	Q_PROPERTY( bool isShowingConnectionScreen READ isShowingConnectionScreen NOTIFY isShowingConnectionScreenChanged );
 	Q_PROPERTY( bool isShowingInGameMenu READ isShowingInGameMenu NOTIFY isShowingInGameMenuChanged );
 	Q_PROPERTY( bool isShowingDemoPlaybackMenu READ isShowingDemoPlaybackMenu NOTIFY isShowingDemoPlaybackMenuChanged );
 	Q_PROPERTY( bool isDebuggingNativelyDrawnItems READ isDebuggingNativelyDrawnItems NOTIFY isDebuggingNativelyDrawnItemsChanged );
@@ -141,6 +142,7 @@ signals:
 	Q_SIGNAL void teamBetaNameChanged( QString teamBetaName );
 
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
+	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
 	Q_SIGNAL void isShowingInGameMenuChanged( bool isShowingInGameMenu );
 	Q_SIGNAL void isShowingDemoPlaybackMenuChanged( bool isShowingDemoMenu );
 	Q_SIGNAL void isDebuggingNativelyDrawnItemsChanged( bool isDebuggingNativelyDrawnItems );
@@ -188,8 +190,9 @@ private:
 
 	enum ActiveMenuMask : unsigned {
 		MainMenu             = 0x1,
-		InGameMenu           = 0x2,
-		DemoPlaybackMenu     = 0x4
+		ConnectionScreen     = 0x2,
+		InGameMenu           = 0x4,
+		DemoPlaybackMenu     = 0x8
 	};
 
 	unsigned m_backupMenuMask { 0 };
@@ -246,6 +249,11 @@ private:
 	[[nodiscard]]
 	bool isShowingMainMenu() const {
 		return ( m_activeMenuMask & MainMenu ) != 0;
+	}
+
+	[[nodiscard]]
+	bool isShowingConnectionScreen() const {
+		return ( m_activeMenuMask & ConnectionScreen ) != 0;
 	}
 
 	[[nodiscard]]
@@ -616,6 +624,10 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 		return;
 	}
 
+	if( !( m_activeMenuMask & MainMenu ) ) {
+		return;
+	}
+
 	refdef_t rdf;
 	memset( &rdf, 0, sizeof( rdf ) );
 	rdf.areabits = nullptr;
@@ -675,6 +687,7 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned>
 	const auto oldActiveMask = m_activeMenuMask;
 
 	const bool wasShowingMainMenu = isShowingMainMenu();
+	const bool wasShowingConnectionScreen = isShowingConnectionScreen();
 	const bool wasShowingInGameMenu = isShowingInGameMenu();
 	const bool wasShowingDemoPlaybackMenu = isShowingDemoPlaybackMenu();
 
@@ -682,11 +695,15 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned>
 	m_activeMenuMask = activeMask;
 
 	const bool _isShowingMainMenu = isShowingMainMenu();
+	const bool _isShowingConnectionScreen = isShowingConnectionScreen();
 	const bool _isShowingInGameMenu = isShowingInGameMenu();
 	const bool _isShowingDemoPlaybackMenu = isShowingDemoPlaybackMenu();
 
 	if( wasShowingMainMenu != _isShowingMainMenu ) {
 		Q_EMIT isShowingMainMenuChanged( _isShowingMainMenu );
+	}
+	if( wasShowingConnectionScreen != _isShowingConnectionScreen ) {
+		Q_EMIT isShowingConnectionScreenChanged( _isShowingConnectionScreen );
 	}
 	if( wasShowingInGameMenu != _isShowingInGameMenu ) {
 		Q_EMIT isShowingInGameMenuChanged( _isShowingInGameMenu );
@@ -712,6 +729,8 @@ void QtUISystem::checkPropertyChanges() {
 		} else if( actualClientState == CA_ACTIVE ) {
 			setActiveMenuMask( InGameMenu, 0 );
 			m_callvotesModel.reload();
+		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
+			setActiveMenuMask( ConnectionScreen, 0 );
 		}
 	}
 

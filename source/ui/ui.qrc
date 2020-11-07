@@ -7,6 +7,7 @@
         <file>CentralOverlayGroup.qml</file>
         <file>ColorPickerItem.qml</file>
         <file>ColorPickerColorItem.qml</file>
+        <file>ConnectionScreen.qml</file>
         <file>CVarAwareCheckBox.qml</file>
         <file>CVarAwareColorPicker.qml</file>
         <file>CVarAwareComboBox.qml</file>

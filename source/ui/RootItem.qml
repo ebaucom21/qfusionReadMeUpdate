@@ -16,10 +16,13 @@ Item {
         }
     }
 
-    Keys.forwardTo: [mainMenu, demoPlaybackMenu, inGameMenu]
+    Keys.forwardTo: [mainMenu, connectionScreen, demoPlaybackMenu, inGameMenu]
 
     MainMenu {
         id: mainMenu
+    }
+    ConnectionScreen {
+        id: connectionScreen
     }
     DemoPlaybackMenu {
         id: demoPlaybackMenu
