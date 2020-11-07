@@ -6,7 +6,6 @@
 
 #include <limits>
 
-template <typename AdjacencyListType, typename DistanceType>
 class GraphLike {
 	friend class CachedLeafsGraph;
 	friend class CachedGraphReader;
@@ -16,16 +15,16 @@ protected:
 	 * Should be released using TaggedAllocator::FreeUsingMetadata()
 	 * (descendants can use custom allocators that are put in metadata).
 	 */
-	DistanceType *distanceTable { nullptr };
+	float *distanceTable { nullptr };
 	/**
 	 * Should be released using TaggedAllocator::FreeUsingMetadata()
 	 * (descendants can use custom allocators that are put in metadata).
 	 */
-	AdjacencyListType *adjacencyListsData { nullptr };
+	int *adjacencyListsData { nullptr };
 	/**
 	 * Assumed to be allocated within {@code adjacencyListsData} at its end.
 	 */
-	AdjacencyListType *adjacencyListsOffsets { nullptr };
+	int *adjacencyListsOffsets { nullptr };
 
 	int numLeafs;
 	explicit GraphLike( int numLeafs_ ): numLeafs( numLeafs_ ) {}
@@ -38,31 +37,28 @@ public:
 
 	int NumLeafs() const { return numLeafs; }
 
-	DistanceType EdgeDistance( int leaf1, int leaf2 ) const {
+	float EdgeDistance( int leaf1, int leaf2 ) const {
 		assert( distanceTable );
 		assert( leaf1 > 0 && leaf1 < numLeafs );
 		assert( leaf2 > 0 && leaf2 < numLeafs );
 		return distanceTable[leaf1 * numLeafs + leaf2];
 	}
 
-	const AdjacencyListType *AdjacencyList( int leafNum ) const {
+	const int *AdjacencyList( int leafNum ) const {
 		assert( adjacencyListsData && adjacencyListsOffsets );
 		assert( leafNum > 0 && leafNum < numLeafs );
 		return adjacencyListsData + adjacencyListsOffsets[leafNum];
 	}
 };
 
-class CachedLeafsGraph: public CachedComputation, public GraphLike<int, float> {
-	typedef GraphLike<int, float> ParentGraphType;
-
+class CachedLeafsGraph: public CachedComputation, public GraphLike {
 	friend class PropagationTable;
 	friend class CachedGraphReader;
 	friend class CachedGraphWriter;
 	template <typename> friend class SingletonHolder;
-	template <typename> friend class PropagationGraphBuilder;
+	friend class PropagationGraphBuilder;
 
-	template <typename DistanceType>
-	friend DistanceType *ReuseGlobalDistanceTable( int numLeafs );
+	friend float *ReuseGlobalDistanceTable( int numLeafs );
 
 	/**
 	 * This is a temporary data useful for {@code PropagationGraphBuilder<?,?>}
@@ -84,7 +80,7 @@ class CachedLeafsGraph: public CachedComputation, public GraphLike<int, float> {
 
 	CachedLeafsGraph()
 		: CachedComputation( "CachedLeafsGraph", ".graph", "CachedLeafsGraph@v1337" )
-		, GraphLike<int, float>( -1 ) {}
+		, GraphLike( -1 ) {}
 
 	~CachedLeafsGraph() override;
 public:
@@ -100,7 +96,7 @@ public:
 	/**
 	 * A helper that resolves ambiguous calls of {@code NumLeafs()} of both base classes.
 	 */
-	int NumLeafs() const { return ( (ParentGraphType *)this)->NumLeafs(); }
+	int NumLeafs() const { return ( (GraphLike *)this)->NumLeafs(); }
 
 	static CachedLeafsGraph *Instance();
 	static void Init();
@@ -111,10 +107,10 @@ class PropagationTable: public CachedComputation {
 	friend class PropagationIOHelper;
 	friend class PropagationTableReader;
 	friend class PropagationTableWriter;
-	template <typename> friend class PropagationTableBuilder;
-	template <typename> friend class PropagationBuilderTask;
-	template <typename> friend class CoarsePropagationTask;
-	template <typename> friend class FinePropagationTask;
+	friend class PropagationTableBuilder;
+	friend class PropagationBuilderTask;
+	friend class CoarsePropagationTask;
+	friend class FinePropagationTask;
 	friend class CachedLeafsGraph;
 	template <typename> friend class SingletonHolder;
 

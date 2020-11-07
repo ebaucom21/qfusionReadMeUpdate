@@ -12,31 +12,29 @@
 #include <memory>
 #include <random>
 
-template <typename AdjacencyListType, typename DistanceType>
-GraphLike<AdjacencyListType, DistanceType>::~GraphLike() {
+GraphLike::~GraphLike() {
 	TaggedAllocator::FreeUsingMetadata( distanceTable, "distance table" );
 	TaggedAllocator::FreeUsingMetadata( adjacencyListsData, "adjacency data" );
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-class MutableGraph: public GraphLike<AdjacencyListType, DistanceType> {
-	template <typename, typename> friend class GraphBuilder;
+class MutableGraph: public GraphLike {
+	friend class GraphBuilder;
 protected:
 	explicit MutableGraph( int numLeafs_ )
-		: GraphLike<AdjacencyListType, DistanceType>( numLeafs_ ) {}
+		: GraphLike( numLeafs_ ) {}
 
 	/**
 	 * An address of the buffer that is allowed to be modified.
 	 * The {@code distanceTable} must point to it after {@code SaveDistanceTable()} call.
 	 * @note It is intended to be different for different instances of a mutable graph if there are multiple ones.
 	 */
-	DistanceType *distanceTableScratchpad { nullptr };
+	float *distanceTableScratchpad { nullptr };
 	/**
 	 * An address of the original buffer that must be kept unmodified.
 	 * The {@code distanceTable} must point to it initially and after {@code RestoreDistanceTable} call.
 	 * @note It is intended to be shared between instances of a mutable graph if there are multiple ones.
 	 */
-	DistanceType *distanceTableBackup { nullptr };
+	float *distanceTableBackup { nullptr };
 public:
 	~MutableGraph() override {
 		TaggedAllocator::FreeUsingMetadata( distanceTableBackup, "distance table backup" );
@@ -45,7 +43,7 @@ public:
 		this->distanceTable = nullptr;
 	}
 
-	void SetEdgeDistance( int leaf1, int leaf2, DistanceType newDistance ) {
+	void SetEdgeDistance( int leaf1, int leaf2, float newDistance ) {
 		// Template quirks: a member of a template base cannot be resolved in scope otherwise
 		auto *const distanceTable = this->distanceTable;
 		// Just check whether the distance table is set.
@@ -59,12 +57,12 @@ public:
 		distanceTable[leaf2 * numLeafs + leaf1] = newDistance;
 	}
 
-	void ScaleEdgeDistance( AdjacencyListType leaf1, AdjacencyListType leaf2, DistanceType scale ) {
+	void ScaleEdgeDistance( int leaf1, int leaf2, float scale ) {
 		auto *const distanceTable = this->distanceTable;
 		assert( this->distanceTableScratchpad );
 		// The distance table must point at the scratchpad
 		assert( distanceTable == this->distanceTableScratchpad );
-		const AdjacencyListType numLeafs = this->numLeafs;
+		const int numLeafs = this->numLeafs;
 		assert( leaf1 > 0 && leaf1 < numLeafs );
 		assert( leaf2 > 0 && leaf2 < numLeafs );
 		distanceTable[leaf1 * numLeafs + leaf2] *= scale;
@@ -97,15 +95,13 @@ public:
 	}
 };
 
-template <typename AdjacencyListType, typename DistanceType>
-class GraphBuilder: public MutableGraph<AdjacencyListType, DistanceType> {
+class GraphBuilder: public MutableGraph {
 protected:
 	bool canSkipBuildTableCall { false };
 
-	explicit GraphBuilder( int numLeafs )
-		: MutableGraph<AdjacencyListType, DistanceType>( numLeafs ) {}
+	explicit GraphBuilder( int numLeafs ) : MutableGraph( numLeafs ) {}
 
-	virtual DistanceType ComputeEdgeDistance( int leaf1, int leaf2 ) = 0;
+	virtual float ComputeEdgeDistance( int leaf1, int leaf2 ) = 0;
 
 	virtual SharingAllocator &TableBackupAllocator() {
 		// Let's always use a ref-counting allocator for shareable data
@@ -120,7 +116,7 @@ protected:
 		return *SingleThreadSharingAllocator::Instance();
 	}
 public:
-	using TargetType = GraphLike<AdjacencyListType, DistanceType>;
+	using TargetType = GraphLike;
 protected:
 	virtual void PrepareToBuild();
 	virtual void BuildDistanceTable();
@@ -142,7 +138,7 @@ public:
 	 */
 	bool Build( TargetType *target = nullptr );
 
-	void TransferOwnership( DistanceType **table, AdjacencyListType **lists, AdjacencyListType **listsOffsets ) {
+	void TransferOwnership( float **table, int **lists, int **listsOffsets ) {
 		assert( this->distanceTable == this->distanceTableBackup );
 		// TODO: Transfer the scratchpad as well?
 		*table = TransferCheckingNullity( &this->distanceTableBackup );
@@ -153,10 +149,9 @@ public:
 	}
 };
 
-template <typename DistanceType>
-class PropagationGraphBuilder: public GraphBuilder<int, DistanceType> {
+class PropagationGraphBuilder: public GraphBuilder {
 protected:
-	using TargetType = GraphLike<int, DistanceType>;
+	using TargetType = GraphLike;
 public:
 	uint8_t *dirsTable { nullptr };
 	const bool fastAndCoarse;
@@ -169,14 +164,14 @@ public:
 
 	bool TryUsingGlobalGraph( TargetType *target ) override;
 
-	DistanceType ComputeEdgeDistance( int leaf1, int leaf2 ) override {
+	float ComputeEdgeDistance( int leaf1, int leaf2 ) override {
 		Com_Error( ERR_FATAL, "PropagationGraphBuilder<?, ?>::ComputeEdgeDistance() should not be called\n" );
 	}
 private:
-	using SuperType = GraphBuilder<int, DistanceType>;
+	using SuperType = GraphBuilder;
 public:
 	PropagationGraphBuilder( int actualNumLeafs, bool fastAndCoarse_ )
-		: GraphBuilder<int, DistanceType>( actualNumLeafs ), fastAndCoarse( fastAndCoarse_ ) {}
+		: GraphBuilder( actualNumLeafs ), fastAndCoarse( fastAndCoarse_ ) {}
 
 	/**
 	 * Returns an average propagation direction from leaf1 to leaf2.
@@ -242,17 +237,16 @@ public:
 		TaggedAllocator::FreeUsingMetadata( dirsTable, "dirs table of builder" );
 	}
 
-	void TransferOwnership( DistanceType **distanceTable, uint8_t **dirsTable, int **lists, int **listsOffsets ) {
+	void TransferOwnership( float **distanceTable, uint8_t **dirsTable, int **lists, int **listsOffsets ) {
 		SuperType::TransferOwnership( distanceTable, lists, listsOffsets );
 		*dirsTable = SuperType::TransferCheckingNullity( &this->dirsTable );
 	}
 };
 
-template <typename DistanceType>
-class CloneableGraphBuilder: public PropagationGraphBuilder<DistanceType> {
+class CloneableGraphBuilder: public PropagationGraphBuilder {
 public:
 	CloneableGraphBuilder( int actualNumLeafs, bool fastAndCoarse_ )
-		: PropagationGraphBuilder<DistanceType>( actualNumLeafs, fastAndCoarse_ ) {}
+		: PropagationGraphBuilder( actualNumLeafs, fastAndCoarse_ ) {}
 
 	/**
 	 * Tries to clone the instance sharing immutable fields if it's possible.
@@ -261,8 +255,7 @@ public:
 	CloneableGraphBuilder *Clone();
 };
 
-template <typename AdjacencyListType, typename DistanceType>
-bool GraphBuilder<AdjacencyListType, DistanceType>::Build( TargetType *target ) {
+bool GraphBuilder::Build( TargetType *target ) {
 	// Should not be called for empty graphs
 	assert( this->numLeafs > 0 );
 
@@ -435,8 +428,7 @@ done:
 	return std::sqrt( DistanceSquared( leafCenters[0], leafCenters[1] ) );
 }
 
-template <typename DistanceType>
-void PropagationGraphBuilder<DistanceType>::PrepareToBuild() {
+void PropagationGraphBuilder::PrepareToBuild() {
 	SuperType::PrepareToBuild();
 
 	assert( this->distanceTable );
@@ -469,56 +461,12 @@ void PropagationGraphBuilder<DistanceType>::PrepareToBuild() {
 	this->canSkipBuildTableCall = true;
 }
 
-/**
- * This is extracted to a separate function as it was used in a code that was rejected before committing.
- * Might be useful in future.
- */
-template <typename ExistingType, typename AllocatorElemType>
-static AllocatorElemType *ConvertFloatArray( const ExistingType *existing, int numVectorElems, const char *logTag ) {
-	assert( existing );
-
-	// Using a ref-counting allocator is either mandatory or just won't hurt
-	auto *const result = SingleThreadSharingAllocator::Instance()->Alloc<AllocatorElemType>( numVectorElems, logTag );
-
-	// Convert using flattened views of data.
-	// This is a more generic approach and yields better code in all builds.
-	const int numScalarElems = ( numVectorElems * sizeof( ExistingType ) ) / sizeof( float );
-	const auto *const __restrict existingView = (const float *)existing;
-	auto *const __restrict resultView = (double *)result;
-	for( int i = 0; i < numScalarElems; ++i ) {
-		// Expand float to double...
-		resultView[i] = existingView[i];
-	}
-
-	return result;
-}
-
-/**
- * Tries to reuse the distance table of the global leafs graph
- * either just by sharing it or performing data conversion without expensive computations.
- * An appropriate version is selected for {@code DistanceType} by template substitution rules.
- */
-template <typename DistanceType> DistanceType *ReuseGlobalDistanceTable( int numLeafs );
-
-/**
- * A specialization of {@code ReuseGlobalDistanceTable<?>( int )} that shares the global leafs graph distance table.
- */
-template <> float *ReuseGlobalDistanceTable<float>( int ) {
+float *ReuseGlobalDistanceTable( int ) {
 	float *existingTable = CachedLeafsGraph::Instance()->distanceTable;
 	return SharingAllocator::AddRef( existingTable, "global distance table" );
 }
 
-/**
- * A specialization of {@code ReuseGlobalDistanceTable<?>( int )} that builds a table of doubles
- * by converting data of the global leafs graph distnace table.
- */
-template <> double *ReuseGlobalDistanceTable<double>( int numLeafs ) {
-	float *existingTable = CachedLeafsGraph::Instance()->distanceTable;
-	return ConvertFloatArray<float, double>( existingTable, numLeafs * numLeafs, "global distance table" );
-}
-
-template <typename DistanceType>
-bool PropagationGraphBuilder<DistanceType>::TryUsingGlobalGraph( TargetType *target ) {
+bool PropagationGraphBuilder::TryUsingGlobalGraph( TargetType *target ) {
 	if( !SuperType::TryUsingGlobalGraph( target ) ) {
 		return false;
 	}
@@ -528,35 +476,32 @@ bool PropagationGraphBuilder<DistanceType>::TryUsingGlobalGraph( TargetType *tar
 	return true;
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-void GraphBuilder<AdjacencyListType, DistanceType>::PrepareToBuild() {
+void GraphBuilder::PrepareToBuild() {
 	int numTableCells = this->NumLeafs() * this->NumLeafs();
 	// We can't allocate "backup" and "scratchpad" in the same chunk
 	// as we want to be able to share the immutable table data ("backup")
 	// Its still doable by providing a custom allocator.
 	this->distanceTableBackup = TableBackupAllocator().template
-		Alloc<DistanceType>( numTableCells, "distance table backup" );
+		Alloc<float>( numTableCells, "distance table backup" );
 	this->distanceTableScratchpad = TableScratchpadAllocator().template
-		Alloc<DistanceType>( numTableCells, "distance table scratchpad" );
+		Alloc<float>( numTableCells, "distance table scratchpad" );
 	// Set the distance table as it is expected for the first SaveDistanceTable() call
 	this->distanceTable = this->distanceTableBackup;
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-void GraphBuilder<AdjacencyListType, DistanceType>::CheckMutualReachability( int leaf1, int leaf2 ) {
+void GraphBuilder::CheckMutualReachability( int leaf1, int leaf2 ) {
 	assert( leaf1 != leaf2 );
-	DistanceType direct = this->EdgeDistance( leaf1, leaf2 );
+	float direct = this->EdgeDistance( leaf1, leaf2 );
 	// Must be either a valid positive distance or an infinity
 	assert( direct > 0 );
-	DistanceType reverse = this->EdgeDistance( leaf2, leaf1 );
+	float reverse = this->EdgeDistance( leaf2, leaf1 );
 	// Takes infinity into account as well
 	assert( direct == reverse );
 	// Avoid warnings in release builds
 	(void)direct, (void)reverse;
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-void GraphBuilder<AdjacencyListType, DistanceType>::BuildDistanceTable() {
+void GraphBuilder::BuildDistanceTable() {
 	for( int i = 1; i < this->numLeafs; ++i ) {
 		for( int j = i + 1; j < this->numLeafs; ++j ) {
 			this->SetEdgeDistance( i, j, this->ComputeEdgeDistance( i, j ) );
@@ -567,8 +512,7 @@ void GraphBuilder<AdjacencyListType, DistanceType>::BuildDistanceTable() {
 	}
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-void GraphBuilder<AdjacencyListType, DistanceType>::BuildAdjacencyLists() {
+void GraphBuilder::BuildAdjacencyLists() {
 	const int numLeafs = this->numLeafs;
 	const auto *distanceTable = this->distanceTable;
 	size_t totalNumCells = 0;
@@ -590,11 +534,11 @@ void GraphBuilder<AdjacencyListType, DistanceType>::BuildAdjacencyLists() {
 	// A second additional cell is for offset of the adjacency list in the compactified data
 	totalNumCells += 2 * numLeafs;
 	auto *const mem = AdjacencyListsAllocator().template
-		Alloc<AdjacencyListType>( (int)totalNumCells, "adjacency data" );
+		Alloc<int>( (int)totalNumCells, "adjacency data" );
 	auto *const adjacencyListsData = this->adjacencyListsData = mem;
 	auto *const adjacencyListsOffsets = this->adjacencyListsOffsets = mem + ( totalNumCells - numLeafs );
 
-	AdjacencyListType *dataPtr = adjacencyListsData;
+	int *dataPtr = adjacencyListsData;
 	// Write a zero-length list for the zero leaf
 	*dataPtr++ = 0;
 	adjacencyListsOffsets[0] = 0;
@@ -602,7 +546,7 @@ void GraphBuilder<AdjacencyListType, DistanceType>::BuildAdjacencyLists() {
 	for( int i = 1; i < numLeafs; ++i ) {
 		int rowOffset = i * numLeafs;
 		// Save a position of the list length
-		AdjacencyListType *const listLengthRef = dataPtr++;
+		int *const listLengthRef = dataPtr++;
 		for( int j = 1; j < i; ++j ) {
 			if( std::isfinite( distanceTable[rowOffset + j] ) ) {
 				*dataPtr++ = j;
@@ -613,18 +557,17 @@ void GraphBuilder<AdjacencyListType, DistanceType>::BuildAdjacencyLists() {
 				*dataPtr++ = j;
 			}
 		}
-		adjacencyListsOffsets[i] = (AdjacencyListType)( listLengthRef - adjacencyListsData );
-		*listLengthRef = (AdjacencyListType)( dataPtr - listLengthRef - 1 );
+		adjacencyListsOffsets[i] = (int)( listLengthRef - adjacencyListsData );
+		*listLengthRef = (int)( dataPtr - listLengthRef - 1 );
 	}
 }
 
-template <typename DistanceType>
 struct HeapEntry {
-	DistanceType distance;
-	DistanceType heapCost;
+	float distance;
+	float heapCost;
 	int leafNum;
 
-	HeapEntry( int leafNum_, DistanceType distance_, DistanceType heapCost_ )
+	HeapEntry( int leafNum_, float distance_, float heapCost_ )
 		: distance( distance_ ), heapCost( heapCost_ ), leafNum( leafNum_ ) {}
 
 	bool operator<( const HeapEntry &that ) const {
@@ -636,14 +579,13 @@ struct HeapEntry {
 /**
  * A specialized updates heap optimized for path-finding usage patterns.
  */
-template <typename DistanceType>
 class UpdatesHeap {
-	HeapEntry<DistanceType> *buffer;
+	HeapEntry *buffer;
 	int size { 0 };
 	int capacity { 1024 + 512 };
 public:
 	UpdatesHeap() {
-		buffer = (HeapEntry<DistanceType> *)Q_malloc( sizeof( HeapEntry<DistanceType> ) * capacity );
+		buffer = (HeapEntry *)Q_malloc( sizeof( HeapEntry ) * capacity );
 	}
 
 	~UpdatesHeap() {
@@ -660,8 +602,8 @@ public:
 	 * @param distance a forwarded parameter of {@code HeapEntry()} constructor.
 	 * @param heapCost a forwarded parameter of {@code HeapEntry()} constructor.
 	 */
-	void Push( int leaf, DistanceType distance, DistanceType heapCost ) {
-		new( buffer + size++ )HeapEntry<DistanceType>( leaf, distance, heapCost );
+	void Push( int leaf, float distance, float heapCost ) {
+		new( buffer + size++ )HeapEntry( leaf, distance, heapCost );
 		std::push_heap( buffer, buffer + size );
 	}
 
@@ -669,7 +611,7 @@ public:
 		return !size;
 	}
 
-	DistanceType BestDistance() const {
+	float BestDistance() const {
 		return buffer[0].distance;
 	}
 
@@ -678,7 +620,7 @@ public:
 	 * The returned value is valid until next {@code PrepareToAdd()} call.
 	 * @return a reference to the newly popped entry.
 	 */
-	const HeapEntry<DistanceType> &PopInPlace() {
+	const HeapEntry &PopInPlace() {
 		std::pop_heap( buffer, buffer + size );
 		return buffer[--size];
 	}
@@ -693,35 +635,32 @@ public:
 		}
 		capacity = ( 4 * ( size + atMost ) ) / 3;
 		auto *const oldBuffer = buffer;
-		buffer = (HeapEntry<DistanceType> *)Q_malloc( sizeof( HeapEntry<DistanceType> ) * capacity );
-		memcpy( buffer, oldBuffer, sizeof( HeapEntry<DistanceType> ) * size );
+		buffer = (HeapEntry *)Q_malloc( sizeof( HeapEntry ) * capacity );
+		memcpy( buffer, oldBuffer, sizeof( HeapEntry ) * size );
 		Q_free( oldBuffer );
 	}
 };
 
-template <typename DistanceType>
 struct VertexBidirectionalUpdateStatus {
-	DistanceType distance[2];
+	float distance[2];
 	int32_t parentLeaf[2];
 	bool isVisited[2];
 };
 
-template <typename DistanceType>
 struct VertexFloodFillUpdateStatus {
-	DistanceType distance;
+	float distance;
 	int32_t parentLeaf;
 };
 
-template <typename> class BidirectionalPathFinder;
+class BidirectionalPathFinder;
 
-template <typename DistanceType>
 class PathReverseIterator {
-	template <typename> friend class BidirectionalPathFinder;
-	BidirectionalPathFinder<DistanceType> *const parent;
+	friend class BidirectionalPathFinder;
+	BidirectionalPathFinder *const parent;
 	int leafNum { std::numeric_limits<int>::min() };
 	const int listIndex;
 
-	PathReverseIterator( BidirectionalPathFinder<DistanceType> *parent_, int listIndex_ )
+	PathReverseIterator( BidirectionalPathFinder *parent_, int listIndex_ )
 		: parent( parent_ ), listIndex( listIndex_ ) {}
 
 	void ResetWithLeaf( int leafNum_ ) {
@@ -729,27 +668,19 @@ class PathReverseIterator {
 		this->leafNum = leafNum_;
 	}
 public:
-	bool HasNext() const {
-		return leafNum > 0 && parent->updateStatus[leafNum].parentLeaf[listIndex] > 0;
-	}
-
+	bool HasNext() const;
+	void Next();
 	int LeafNum() const { return leafNum; }
-
-	void Next() {
-		assert( HasNext() );
-		leafNum = parent->updateStatus[leafNum].parentLeaf[listIndex];
-	}
 };
 
-template <typename DistanceType>
 class FloodFillPathFinder {
-	template <typename> friend class CoarsePropagationTask;
-	template <typename> friend class CoarsePropagationBuilder;
+	friend class CoarsePropagationTask;
+	friend class CoarsePropagationBuilder;
 
-	using VertexUpdateStatus = VertexFloodFillUpdateStatus<DistanceType>;
+	using VertexUpdateStatus = VertexFloodFillUpdateStatus;
 
-	UpdatesHeap<DistanceType> heap;
-	PropagationGraphBuilder<DistanceType> *graph;
+	UpdatesHeap heap;
+	PropagationGraphBuilder *graph;
 	VertexUpdateStatus *updateStatus;
 	int lastFillLeafNum { -1 };
 
@@ -763,7 +694,7 @@ class FloodFillPathFinder {
 		return updateStatus[to].distance;
 	}
 public:
-	explicit FloodFillPathFinder( PropagationGraphBuilder<DistanceType> *graph_ ) : graph( graph_ ) {
+	explicit FloodFillPathFinder( PropagationGraphBuilder *graph_ ) : graph( graph_ ) {
 		size_t memSize = graph_->NumLeafs() * sizeof( VertexUpdateStatus );
 		updateStatus = (VertexUpdateStatus *)::Q_malloc( memSize );
 	}
@@ -775,24 +706,23 @@ public:
 	}
 };
 
-template <typename DistanceType>
 class BidirectionalPathFinder {
-	template <typename> friend class PathReverseIterator;
-	template <typename> friend class PropagationTableBuilder;
+	friend class PathReverseIterator;
+	friend class PropagationTableBuilder;
 
-	using IteratorType = PathReverseIterator<DistanceType>;
-	using VertexUpdateStatus = VertexBidirectionalUpdateStatus<DistanceType>;
+	using IteratorType = PathReverseIterator;
+	using VertexUpdateStatus = VertexBidirectionalUpdateStatus;
 
 	/**
 	 * An euclidean leaf-to-leaf distance table supplied by a parent
 	 */
 	const float *const euclideanDistanceTable;
 
-	PropagationGraphBuilder<DistanceType> *graph;
+	PropagationGraphBuilder *graph;
 
 	VertexUpdateStatus *updateStatus { nullptr };
 
-	UpdatesHeap<DistanceType> heaps[2];
+	UpdatesHeap heaps[2];
 
 	IteratorType tmpDirectIterator { this, 0 };
 	IteratorType tmpReverseIterator { this, 1 };
@@ -801,7 +731,7 @@ class BidirectionalPathFinder {
 		return euclideanDistanceTable[leaf1 * graph->NumLeafs() + leaf2];
 	}
 public:
-	explicit BidirectionalPathFinder( const float *euclideanDistanceTable_, PropagationGraphBuilder<DistanceType> *graph_ )
+	explicit BidirectionalPathFinder( const float *euclideanDistanceTable_, PropagationGraphBuilder *graph_ )
 		: euclideanDistanceTable( euclideanDistanceTable_ )
 		, graph( graph_ ) {
 		size_t memSize = graph_->NumLeafs() * sizeof( VertexUpdateStatus );
@@ -830,21 +760,26 @@ public:
 	 * However their combination is intended to represent an entire path.
 	 * A last valid leaf during iteration matches {@code fromLeaf} and {@code toLeaf} accordingly.
 	 */
-	DistanceType FindPath( int fromLeaf, int toLeaf, IteratorType **direct, IteratorType **reverse );
+	float FindPath( int fromLeaf, int toLeaf, IteratorType **direct, IteratorType **reverse );
 };
 
-template <typename DistanceType>
-DistanceType BidirectionalPathFinder<DistanceType>::FindPath( int fromLeaf,
-															  int toLeaf,
-															  IteratorType **direct,
-															  IteratorType **reverse ) {
+inline bool PathReverseIterator::HasNext() const {
+	return leafNum > 0 && parent->updateStatus[leafNum].parentLeaf[listIndex] > 0;
+}
+
+inline void PathReverseIterator::Next() {
+	assert( HasNext() );
+	leafNum = parent->updateStatus[leafNum].parentLeaf[listIndex];
+}
+
+float BidirectionalPathFinder::FindPath( int fromLeaf, int toLeaf, IteratorType **direct, IteratorType **reverse ) {
 	// A-star hinting targets for each turn
 	const int turnTargetLeaf[2] = { toLeaf, fromLeaf };
 
 	for( int i = 0, end = graph->NumLeafs(); i < end; ++i ) {
 		auto *status = updateStatus + i;
 		for( int turn = 0; turn < 2; ++turn ) {
-			status->distance[turn] = std::numeric_limits<DistanceType>::infinity();
+			status->distance[turn] = std::numeric_limits<float>::infinity();
 			status->parentLeaf[turn] = -1;
 			status->isVisited[turn] = false;
 		}
@@ -853,13 +788,13 @@ DistanceType BidirectionalPathFinder<DistanceType>::FindPath( int fromLeaf,
 	heaps[0].Clear();
 	heaps[1].Clear();
 
-	updateStatus[fromLeaf].distance[0] = DistanceType( 0 );
-	heaps[0].Push( fromLeaf, DistanceType( 0 ), GetEuclideanDistance( fromLeaf, toLeaf ) );
-	updateStatus[toLeaf].distance[1] = DistanceType( 0 );
-	heaps[1].Push( toLeaf, DistanceType( 0 ), GetEuclideanDistance( toLeaf, fromLeaf ) );
+	updateStatus[fromLeaf].distance[0] = float( 0 );
+	heaps[0].Push( fromLeaf, float( 0 ), GetEuclideanDistance( fromLeaf, toLeaf ) );
+	updateStatus[toLeaf].distance[1] = float( 0 );
+	heaps[1].Push( toLeaf, float( 0 ), GetEuclideanDistance( toLeaf, fromLeaf ) );
 
 	int bestLeaf = -1;
-	auto bestDistanceSoFar = std::numeric_limits<DistanceType>::infinity();
+	auto bestDistanceSoFar = std::numeric_limits<float>::infinity();
 	while( !heaps[0].IsEmpty() && !heaps[1].IsEmpty() ) {
 		for( int turn = 0; turn < 2; ++turn ) {
 			if( heaps[0].BestDistance() + heaps[1].BestDistance() >= bestDistanceSoFar ) {
@@ -876,7 +811,7 @@ DistanceType BidirectionalPathFinder<DistanceType>::FindPath( int fromLeaf,
 
 			auto *const activeHeap = &heaps[turn];
 
-			const HeapEntry<DistanceType> &entry = activeHeap->PopInPlace();
+			const HeapEntry &entry = activeHeap->PopInPlace();
 			// Save these values immediately as ReserveForAddition() call might make accessing the entry illegal.
 			const int entryLeafNum = entry.leafNum;
 			const double entryDistance = updateStatus[entryLeafNum].distance[turn];
@@ -894,13 +829,13 @@ DistanceType BidirectionalPathFinder<DistanceType>::FindPath( int fromLeaf,
 				if( status->isVisited[turn] ) {
 					continue;
 				}
-				DistanceType edgeDistance = graph->EdgeDistance( entryLeafNum, leafNum );
-				DistanceType relaxedDistance = edgeDistance + entryDistance;
+				float edgeDistance = graph->EdgeDistance( entryLeafNum, leafNum );
+				float relaxedDistance = edgeDistance + entryDistance;
 				if( status->distance[turn] <= relaxedDistance ) {
 					continue;
 				}
 
-				DistanceType otherDistance = status->distance[( turn + 1 ) & 1];
+				float otherDistance = status->distance[( turn + 1 ) & 1];
 				if( otherDistance + relaxedDistance < bestDistanceSoFar ) {
 					bestLeaf = leafNum;
 					bestDistanceSoFar = otherDistance + relaxedDistance;
@@ -909,32 +844,31 @@ DistanceType BidirectionalPathFinder<DistanceType>::FindPath( int fromLeaf,
 				status->distance[turn] = relaxedDistance;
 				status->parentLeaf[turn] = entryLeafNum;
 
-				DistanceType euclideanDistance = GetEuclideanDistance( leafNum, turnTargetLeaf[turn] );
+				float euclideanDistance = GetEuclideanDistance( leafNum, turnTargetLeaf[turn] );
 				activeHeap->Push( leafNum, relaxedDistance, relaxedDistance + euclideanDistance );
 			}
 		}
 	}
 
-	return std::numeric_limits<DistanceType>::infinity();
+	return std::numeric_limits<float>::infinity();
 }
 
-template <typename DistanceType>
-void FloodFillPathFinder<DistanceType>::FloodFillForLeaf( int leafNum ) {
+void FloodFillPathFinder::FloodFillForLeaf( int leafNum ) {
 	// A-star hinting targets for each turn
 
 	for( int i = 0, end = graph->NumLeafs(); i < end; ++i ) {
 		auto *status = updateStatus + i;
-		status->distance = std::numeric_limits<DistanceType>::infinity();
+		status->distance = std::numeric_limits<float>::infinity();
 		status->parentLeaf = -1;
 	}
 
 	heap.Clear();
 
-	updateStatus[leafNum].distance = DistanceType( 0 );
-	heap.Push( leafNum, DistanceType( 0 ), DistanceType( 0 ) );
+	updateStatus[leafNum].distance = float( 0 );
+	heap.Push( leafNum, float( 0 ), float( 0 ) );
 
 	while( !heap.IsEmpty() ) {
-		const HeapEntry<DistanceType> &entry = heap.PopInPlace();
+		const HeapEntry &entry = heap.PopInPlace();
 		// Save these values immediately as ReserveForAddition() call might make accessing the entry illegal.
 		const int entryLeafNum = entry.leafNum;
 		const double entryDistance = updateStatus[entryLeafNum].distance;
@@ -946,8 +880,8 @@ void FloodFillPathFinder<DistanceType>::FloodFillForLeaf( int leafNum ) {
 		for( int i = 0; i < listSize; ++i ) {
 			const auto leafNum = adjacencyList[i];
 			auto *const status = &updateStatus[leafNum];
-			DistanceType edgeDistance = graph->EdgeDistance( entryLeafNum, leafNum );
-			DistanceType relaxedDistance = edgeDistance + entryDistance;
+			float edgeDistance = graph->EdgeDistance( entryLeafNum, leafNum );
+			float relaxedDistance = edgeDistance + entryDistance;
 			if( status->distance <= relaxedDistance ) {
 				continue;
 			}
@@ -962,8 +896,7 @@ void FloodFillPathFinder<DistanceType>::FloodFillForLeaf( int leafNum ) {
 	lastFillLeafNum = leafNum;
 }
 
-template <typename DistanceType>
-int FloodFillPathFinder<DistanceType>::UnwindPath( int from, int to, int *directLeafNumsEnd, int *reverseLeafNumsBegin ) {
+int FloodFillPathFinder::UnwindPath( int from, int to, int *directLeafNumsEnd, int *reverseLeafNumsBegin ) {
 	assert( from == lastFillLeafNum );
 
 	int *directWritePtr = directLeafNumsEnd - 1;
@@ -989,17 +922,16 @@ int FloodFillPathFinder<DistanceType>::UnwindPath( int from, int to, int *direct
 	return (int)diff;
 }
 
-template <typename> class PropagationTableBuilder;
+class PropagationTableBuilder;
 
-template <typename DistanceType>
 class PropagationBuilderTask : public ParallelComputationHost::PartialTask {
-	template <typename> friend class PropagationTableBuilder;
-	template <typename> friend class FinePropagationBuilder;
-	template <typename> friend class CoarsePropagationBuilder;
+	friend class PropagationTableBuilder;
+	friend class FinePropagationBuilder;
+	friend class CoarsePropagationBuilder;
 protected:
 	using PropagationProps = PropagationTable::PropagationProps;
-	using ParentBuilderType = PropagationTableBuilder<DistanceType>;
-	using GraphType = CloneableGraphBuilder<DistanceType>;
+	using ParentBuilderType = PropagationTableBuilder;
+	using GraphType = CloneableGraphBuilder;
 
 	ParentBuilderType *const parent;
 	PropagationProps *const table;
@@ -1014,10 +946,7 @@ protected:
 	int lastReportedProgress { 0 };
 	int executedAtLastReport { 0 };
 
-	explicit PropagationBuilderTask( ParentBuilderType *parent_, int numLeafs_ )
-		: parent( parent_ ), table( parent_->table ), numLeafs( numLeafs_ ) {
-		assert( table && "The table of parent has not been set" );
-	}
+	explicit PropagationBuilderTask( ParentBuilderType *parent_, int numLeafs_ );
 
 	~PropagationBuilderTask() override {
 		if( graphInstance ) {
@@ -1055,19 +984,18 @@ protected:
 	 * @param distance a distance of the best met temporary path returned as an out parameter.
 	 * @return true if a path has been managed to be built successfully.
 	 */
-	virtual bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, DistanceType *distance ) = 0;
+	virtual bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) = 0;
 };
 
-template <typename DistanceType>
-class FinePropagationTask : public PropagationBuilderTask<DistanceType> {
-	template <typename> friend class PropagationTableBuilder;
-	template <typename> friend class FinePropagationBuilder;
+class FinePropagationTask : public PropagationBuilderTask {
+	friend class PropagationTableBuilder;
+	friend class FinePropagationBuilder;
 public:
 	using PropagationProps = PropagationTable::PropagationProps;
-	using IteratorType = PathReverseIterator<DistanceType>;
-	using ParentBuilderType = PropagationTableBuilder<DistanceType>;
-	using PathFinderType = BidirectionalPathFinder<DistanceType>;
-	using GraphType = PropagationGraphBuilder<DistanceType>;
+	using IteratorType = PathReverseIterator;
+	using ParentBuilderType = PropagationTableBuilder;
+	using PathFinderType = BidirectionalPathFinder;
+	using GraphType = PropagationGraphBuilder;
 private:
 	PathFinderType *pathFinderInstance { nullptr };
 
@@ -1091,12 +1019,12 @@ private:
 	 * @param scale a weight scale for path edges
 	 * @return a new range begin for the buffer (that is less than the {@code arrayEnd}
 	 */
-	int *UnwindScalingWeights( IteratorType *iterator, int *arrayEnd, DistanceType scale );
+	int *UnwindScalingWeights( IteratorType *iterator, int *arrayEnd, float scale );
 
-	bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, DistanceType *distance ) override;
+	bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) override;
 public:
 	FinePropagationTask( ParentBuilderType *parent_, int numLeafs_ )
-		: PropagationBuilderTask<DistanceType>( parent_, numLeafs_ ) {}
+		: PropagationBuilderTask( parent_, numLeafs_ ) {}
 
 	~FinePropagationTask() override;
 };
@@ -1124,35 +1052,33 @@ static void BuildLeafEuclideanDistanceTable( float *table, int numLeafs ) {
 	}
 }
 
-template <typename DistanceType>
-class CoarsePropagationTask : public PropagationBuilderTask<DistanceType> {
-	template <typename> friend class CoarsePropagationBuilder;
+class CoarsePropagationTask : public PropagationBuilderTask {
+	friend class CoarsePropagationBuilder;
 
-	using ParentBuilderType = PropagationTableBuilder<DistanceType>;
-	using IteratorType = PathReverseIterator<DistanceType>;
-	using GraphType = CloneableGraphBuilder<DistanceType>;
-	using PathFinderType = FloodFillPathFinder<DistanceType>;
+	using ParentBuilderType = PropagationTableBuilder;
+	using IteratorType = PathReverseIterator;
+	using GraphType = CloneableGraphBuilder;
+	using PathFinderType = FloodFillPathFinder;
 
 	PathFinderType *pathFinderInstance { nullptr };
 
-	bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, DistanceType *distance ) override;
+	bool BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) override;
 public:
 	explicit CoarsePropagationTask( ParentBuilderType *parent_, int numLeafs_ )
-		: PropagationBuilderTask<DistanceType>( parent_, numLeafs_ ) {}
+		: PropagationBuilderTask( parent_, numLeafs_ ) {}
 
 	void Exec() override;
 };
 
-template <typename DistanceType>
 class PropagationTableBuilder {
-	template <typename> friend class PropagationBuilderTask;
-	template <typename> friend class FinePropagationTask;
-	template <typename> friend class CoarsePropagationTask;
+	friend class PropagationBuilderTask;
+	friend class FinePropagationTask;
+	friend class CoarsePropagationTask;
 protected:
 	using PropagationProps = PropagationTable::PropagationProps;
-	using TaskType = PropagationBuilderTask<DistanceType>;
+	using TaskType = PropagationBuilderTask;
 
-	CloneableGraphBuilder<DistanceType> graphBuilder;
+	CloneableGraphBuilder graphBuilder;
 
 	PropagationProps *table { nullptr };
 	struct qmutex_s *progressLock { nullptr };
@@ -1180,7 +1106,7 @@ protected:
 	__declspec( noreturn ) void ValidationError( _Printf_format_string_ const char *format, ... );
 #endif
 
-	virtual PropagationBuilderTask<DistanceType> *NewTask() = 0;
+	virtual PropagationBuilderTask *NewTask() = 0;
 
 	/**
 	 * Up to 32 parallel tasks are supported. We are probably going to exceed available memory trying to create more tasks.
@@ -1203,10 +1129,14 @@ public:
 	inline PropagationProps *ReleaseOwnership();
 };
 
-template <typename DistanceType>
-class FinePropagationBuilder : public PropagationTableBuilder<DistanceType> {
-	using PathFinderType = BidirectionalPathFinder<DistanceType>;
-	using TaskType = FinePropagationTask<DistanceType>;
+PropagationBuilderTask::PropagationBuilderTask( ParentBuilderType *parent_, int numLeafs_ )
+	: parent( parent_ ), table( parent_->table ), numLeafs( numLeafs_ ) {
+	assert( table && "The table of parent has not been set" );
+}
+
+class FinePropagationBuilder : public PropagationTableBuilder {
+	using PathFinderType = BidirectionalPathFinder;
+	using TaskType = FinePropagationTask;
 
 	/**
 	 * An euclidean distance table for leaves
@@ -1214,10 +1144,10 @@ class FinePropagationBuilder : public PropagationTableBuilder<DistanceType> {
 	 */
 	float *euclideanDistanceTable { nullptr };
 
-	FinePropagationTask<DistanceType> *NewTask() override;
+	FinePropagationTask *NewTask() override;
 public:
 	explicit FinePropagationBuilder( int actualNumLeafs_ )
-		: PropagationTableBuilder<DistanceType>( actualNumLeafs_, false ) {
+		: PropagationTableBuilder( actualNumLeafs_, false ) {
 		euclideanDistanceTable = (float *)Q_malloc( actualNumLeafs_ * actualNumLeafs_ * sizeof( float ) );
 		if( euclideanDistanceTable ) {
 			BuildLeafEuclideanDistanceTable( euclideanDistanceTable, actualNumLeafs_ );
@@ -1231,15 +1161,14 @@ public:
 	}
 };
 
-template <typename DistanceType>
-class CoarsePropagationBuilder : public PropagationTableBuilder<DistanceType> {
-	using PathFinderType = FloodFillPathFinder<DistanceType>;
-	using TaskType = CoarsePropagationTask<DistanceType>;
+class CoarsePropagationBuilder : public PropagationTableBuilder {
+	using PathFinderType = FloodFillPathFinder;
+	using TaskType = CoarsePropagationTask;
 
-	CoarsePropagationTask<DistanceType> *NewTask() override;
+	CoarsePropagationTask *NewTask() override;
 public:
 	explicit CoarsePropagationBuilder( int actualNumLeafs_ )
-		: PropagationTableBuilder<DistanceType>( actualNumLeafs_, true ) {}
+		: PropagationTableBuilder( actualNumLeafs_, true ) {}
 };
 
 template <typename T>
@@ -1266,8 +1195,7 @@ struct Holder {
 	}
 };
 
-template <typename DistanceType>
-FinePropagationTask<DistanceType> *FinePropagationBuilder<DistanceType>::NewTask() {
+FinePropagationTask *FinePropagationBuilder::NewTask() {
 	Holder<TaskType> taskHolder( this, this->graphBuilder.NumLeafs() );
 	if( !taskHolder ) {
 		return nullptr;
@@ -1293,8 +1221,7 @@ FinePropagationTask<DistanceType> *FinePropagationBuilder<DistanceType>::NewTask
 	return taskHolder.ReleaseOwnership();
 }
 
-template <typename DistanceType>
-CoarsePropagationTask<DistanceType> *CoarsePropagationBuilder<DistanceType>::NewTask() {
+CoarsePropagationTask *CoarsePropagationBuilder::NewTask() {
 	Holder<TaskType> taskHolder( this, this->graphBuilder.NumLeafs() );
 	if( !taskHolder ) {
 		return nullptr;
@@ -1320,16 +1247,14 @@ CoarsePropagationTask<DistanceType> *CoarsePropagationBuilder<DistanceType>::New
 	return taskHolder.ReleaseOwnership();
 }
 
-template <typename DistanceType>
-typename PropagationTableBuilder<DistanceType>::PropagationProps *PropagationTableBuilder<DistanceType>::ReleaseOwnership() {
+PropagationTableBuilder::PropagationProps *PropagationTableBuilder::ReleaseOwnership() {
 	assert( table );
 	auto *result = table;
 	table = nullptr;
 	return result;
 }
 
-template <typename DistanceType>
-PropagationTableBuilder<DistanceType>::~PropagationTableBuilder() {
+PropagationTableBuilder::~PropagationTableBuilder() {
 	if( table ) {
 		Q_free( table );
 	}
@@ -1350,8 +1275,7 @@ public:
 	}
 };
 
-template <typename DistanceType>
-void PropagationTableBuilder<DistanceType>::AddTaskProgress( int taskWorkloadDelta ) {
+void PropagationTableBuilder::AddTaskProgress( int taskWorkloadDelta ) {
 	assert( taskWorkloadDelta > 0 );
 	assert( totalWorkload > 0 && "The total workload value has not been set" );
 
@@ -1367,8 +1291,7 @@ void PropagationTableBuilder<DistanceType>::AddTaskProgress( int taskWorkloadDel
 	Com_Printf( "Computing a sound propagation table... %2d%%\n", newProgress );
 }
 
-template <typename DistanceType>
-bool PropagationTableBuilder<DistanceType>::Build() {
+bool PropagationTableBuilder::Build() {
 	progressLock = QMutex_Create();
 	if( !progressLock ) {
 		return false;
@@ -1409,9 +1332,7 @@ bool PropagationTableBuilder<DistanceType>::Build() {
 	return true;
 }
 
-template <typename DistanceType>
-int PropagationTableBuilder<DistanceType>::InstantiateTasks( TaskType *tasks[MAX_TASKS],
-															 ParallelComputationHost *computationHost ) {
+int PropagationTableBuilder::InstantiateTasks( TaskType *tasks[MAX_TASKS], ParallelComputationHost *computationHost ) {
 	const int suggestedNumTasks = std::min( (int)MAX_TASKS, computationHost->SuggestNumberOfTasks() );
 
 	// First try creating tasks
@@ -1434,8 +1355,7 @@ int PropagationTableBuilder<DistanceType>::InstantiateTasks( TaskType *tasks[MAX
 	return actualNumTasks;
 }
 
-template <typename DistanceType>
-void PropagationTableBuilder<DistanceType>::DistributeWorkload( TaskType *tasks[MAX_TASKS], int actualNumTasks ) {
+void PropagationTableBuilder::DistributeWorkload( TaskType *tasks[MAX_TASKS], int actualNumTasks ) {
 	const int numLeafs = graphBuilder.NumLeafs();
 	// Set the total number of workload units
 	// (a computation of props for a pair of leafs is a workload unit)
@@ -1487,8 +1407,7 @@ void PropagationTableBuilder<DistanceType>::DistributeWorkload( TaskType *tasks[
 	// and unwind these tables only then but the storage requirements for intermediate flood-fill tables are enormous.
 }
 
-template <typename DistanceType>
-void PropagationTableBuilder<DistanceType>::ValidateJointResults() {
+void PropagationTableBuilder::ValidateJointResults() {
 	const int numLeafs = graphBuilder.NumLeafs();
 	if( numLeafs <= 0 ) {
 		ValidationError( "Illegal graph NumLeafs() %d", numLeafs );
@@ -1551,8 +1470,7 @@ void PropagationTableBuilder<DistanceType>::ValidateJointResults() {
 	}
 }
 
-template <typename DistanceType>
-void PropagationTableBuilder<DistanceType>::ValidationError( const char *format, ... ) {
+void PropagationTableBuilder::ValidationError( const char *format, ... ) {
 	char buffer[1024];
 
 	va_list va;
@@ -1563,16 +1481,14 @@ void PropagationTableBuilder<DistanceType>::ValidationError( const char *format,
 	Com_Error( ERR_FATAL, "PropagationTableBuilder<?>::ValidateJointResults(): %s", buffer );
 }
 
-template <typename DistanceType>
-FinePropagationTask<DistanceType>::~FinePropagationTask() {
+FinePropagationTask::~FinePropagationTask() {
 	if( pathFinderInstance ) {
-		pathFinderInstance->~BidirectionalPathFinder<DistanceType>();
+		pathFinderInstance->~BidirectionalPathFinder();
 		Q_free( pathFinderInstance );
 	}
 }
 
-template <typename DistanceType>
-void FinePropagationTask<DistanceType>::Exec() {
+void FinePropagationTask::Exec() {
 	// Check whether the range has been set and is valid
 	assert( this->leafsRangeBegin > 0 );
 	assert( this->leafsRangeEnd > this->leafsRangeBegin );
@@ -1617,8 +1533,7 @@ void FinePropagationTask<DistanceType>::Exec() {
 	}
 }
 
-template <typename DistanceType>
-void CoarsePropagationTask<DistanceType>::Exec() {
+void CoarsePropagationTask::Exec() {
 	// Check whether the range has been set and is valid
 	assert( this->leafsRangeBegin > 0 );
 	assert( this->leafsRangeEnd > this->leafsRangeBegin );
@@ -1647,8 +1562,7 @@ void CoarsePropagationTask<DistanceType>::Exec() {
 	}
 }
 
-template <typename DistanceType>
-void PropagationBuilderTask<DistanceType>::ComputePropsForPair( int leaf1, int leaf2 ) {
+void PropagationBuilderTask::ComputePropsForPair( int leaf1, int leaf2 ) {
 	this->executed++;
 	const auto progress = (int)( 100 * ( this->executed / (float)this->total ) );
 	// We keep computing progress in percents to avoid confusion
@@ -1670,7 +1584,7 @@ void PropagationBuilderTask<DistanceType>::ComputePropsForPair( int leaf1, int l
 	}
 
 	vec3_t dir1, dir2;
-	DistanceType distance;
+	float distance;
 	if( !BuildPropagationPath( leaf1, leaf2, dir1, dir2, &distance ) ) {
 		firstProps->MarkAsFailed();
 		secondProps->MarkAsFailed();
@@ -1723,10 +1637,7 @@ public:
 	}
 };
 
-template <typename DistanceType>
-bool FinePropagationTask<DistanceType>::BuildPropagationPath( int leaf1, int leaf2,
-															  vec3_t _1to2, vec3_t _2to1,
-															  DistanceType *distance ) {
+bool FinePropagationTask::BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) {
 	assert( leaf1 != leaf2 );
 
 	WeightedDirBuilder _1to2Builder;
@@ -1753,7 +1664,7 @@ bool FinePropagationTask<DistanceType>::BuildPropagationPath( int leaf1, int lea
 	const int maxAttempts = WeightedDirBuilder::MAX_DIRS;
 	// Do at most maxAttempts to find an alternative path
 	for( ; numAttempts != maxAttempts; ++numAttempts ) {
-		DistanceType newPathDistance = pathFinderInstance->FindPath( leaf1, leaf2, &directIterator, &reverseIterator );
+		float newPathDistance = pathFinderInstance->FindPath( leaf1, leaf2, &directIterator, &reverseIterator );
 		// If the path cannot be (longer) found stop
 		if( std::isinf( newPathDistance ) ) {
 			break;
@@ -1821,10 +1732,7 @@ bool FinePropagationTask<DistanceType>::BuildPropagationPath( int leaf1, int lea
 	return true;
 }
 
-template <typename DistanceType>
-bool CoarsePropagationTask<DistanceType>::BuildPropagationPath( int leaf1, int leaf2,
-	                                                            vec3_t _1to2, vec3_t _2to1,
-	                                                            DistanceType *distance ) {
+bool CoarsePropagationTask::BuildPropagationPath( int leaf1, int leaf2, vec3_t _1to2, vec3_t _2to1, float *distance ) {
 	// There's surely a sufficient room for the unwind buffer
 	// tmpLeafNums are capacious enough to store slightly more than NumLeafs() * 2 elements
 	int *const directLeafNumsEnd = this->tmpLeafNums + this->graphInstance->NumLeafs() + 1;
@@ -1857,8 +1765,7 @@ bool CoarsePropagationTask<DistanceType>::BuildPropagationPath( int leaf1, int l
 	return true;
 }
 
-template <typename DistanceType>
-int *FinePropagationTask<DistanceType>::Unwind( IteratorType *iterator, int *arrayEnd ) {
+int *FinePropagationTask::Unwind( IteratorType *iterator, int *arrayEnd ) {
 	int *arrayBegin = arrayEnd;
 	// Traverse the direct iterator backwards
 	int prevLeafNum = iterator->LeafNum();
@@ -1875,8 +1782,7 @@ int *FinePropagationTask<DistanceType>::Unwind( IteratorType *iterator, int *arr
 	return arrayBegin;
 }
 
-template <typename DistanceType>
-int *FinePropagationTask<DistanceType>::UnwindScalingWeights( IteratorType *iterator, int *arrayEnd, DistanceType scale ) {
+int *FinePropagationTask::UnwindScalingWeights( IteratorType *iterator, int *arrayEnd, float scale ) {
 	int *arrayBegin = arrayEnd;
 	// Traverse the direct iterator backwards
 	int prevLeafNum = iterator->LeafNum();
@@ -1896,10 +1802,7 @@ int *FinePropagationTask<DistanceType>::UnwindScalingWeights( IteratorType *iter
 	return arrayBegin;
 }
 
-template <typename DistanceType>
-void PropagationBuilderTask<DistanceType>::BuildInfluxDirForLeaf( float *allocatedDir,
-															   const int *leafsChain,
-															   int numLeafsInChain ) {
+void PropagationBuilderTask::BuildInfluxDirForLeaf( float *allocatedDir, const int *leafsChain, int numLeafsInChain ) {
 	assert( numLeafsInChain > 1 );
 	const int maxTestedLeafs = std::min( numLeafsInChain, (int)WeightedDirBuilder::MAX_DIRS );
 
@@ -2014,7 +1917,7 @@ bool PropagationTable::TryReadFromFile( int fsFlags ) {
 
 bool PropagationTable::ComputeNewState( bool fastAndCoarse ) {
 	if( fastAndCoarse ) {
-		CoarsePropagationBuilder<float> builder( NumLeafs() );
+		CoarsePropagationBuilder builder( NumLeafs() );
 		if( builder.Build() ) {
 			table = builder.ReleaseOwnership();
 			return true;
@@ -2022,7 +1925,7 @@ bool PropagationTable::ComputeNewState( bool fastAndCoarse ) {
 		return false;
 	}
 
-	FinePropagationBuilder<double> builder( NumLeafs() );
+	FinePropagationBuilder builder( NumLeafs() );
 	if( builder.Build() ) {
 		table = builder.ReleaseOwnership();
 		return true;
@@ -2164,9 +2067,9 @@ bool CachedLeafsGraph::ComputeNewState( bool fastAndCoarse_ ) {
 	// Always set the number of leafs for the graph even if we have not managed to build the graph.
 	// The number of leafs in the CachedComputation will be always set by its EnsureValid() logic.
 	// Hack... we have to resolve multiple inheritance ambiguity.
-	( ( ParentGraphType *)this)->numLeafs = actualNumLeafs;
+	( ( GraphLike *)this)->numLeafs = actualNumLeafs;
 
-	PropagationGraphBuilder<float> builder( actualNumLeafs, fastAndCoarse_ );
+	PropagationGraphBuilder builder( actualNumLeafs, fastAndCoarse_ );
 	// Specify "this" as a target to suppress an infinite recursion while trying to reuse the global graph
 	if( !builder.Build( this ) ) {
 		return false;
@@ -2364,7 +2267,7 @@ bool CachedGraphReader::Read( CachedLeafsGraph *readObject ) {
 	readObject->adjacencyListsData = listsDataHolder.release();
 	readObject->adjacencyListsOffsets = readObject->adjacencyListsData + listsDataSize - numLeafs;
 	readObject->leafListsDataSize = listsDataSize;
-	( (CachedLeafsGraph::ParentGraphType *)readObject )->numLeafs = numLeafs;
+	( (GraphLike *)readObject )->numLeafs = numLeafs;
 	return true;
 }
 
@@ -2399,13 +2302,12 @@ bool CachedGraphWriter::Write( const CachedLeafsGraph *writtenObject ) {
 	return CachedComputationWriter::Write( writtenObject->adjacencyListsData, listsDataSize * sizeof( int ) );
 }
 
-template <typename AdjacencyListType, typename DistanceType>
-bool GraphBuilder<AdjacencyListType, DistanceType>::TryUsingGlobalGraph( TargetType *target ) {
+bool GraphBuilder::TryUsingGlobalGraph( TargetType *target ) {
 	const auto globalGraph = CachedLeafsGraph::Instance();
 	// Can't be used for the global graph itself (falls into an infinite recursion)
 	// WARNING! We have to force the desired type of the object first to avoid comparison of different pointers,
 	// then erase the type to make it compiling. `this` differs in context of different base classes of an object.
-	if( ( void *)static_cast<GraphLike<int, float> *>( globalGraph ) == (void *)target ) {
+	if( ( void *)static_cast<GraphLike *>( globalGraph ) == (void *)target ) {
 		return false;
 	}
 
@@ -2419,7 +2321,7 @@ bool GraphBuilder<AdjacencyListType, DistanceType>::TryUsingGlobalGraph( TargetT
 
 	TaggedAllocator *listsDataAllocator;
 	TaggedAllocator *tableScratchpadAllocator = nullptr;
-	if( auto *thatBuilderLike = dynamic_cast<GraphBuilder<AdjacencyListType, DistanceType> *>( target ) ) {
+	if( auto *thatBuilderLike = dynamic_cast<GraphBuilder *>( target ) ) {
 		tableScratchpadAllocator = &thatBuilderLike->TableScratchpadAllocator();
 		listsDataAllocator = &thatBuilderLike->AdjacencyListsAllocator();
 	} else {
@@ -2427,7 +2329,7 @@ bool GraphBuilder<AdjacencyListType, DistanceType>::TryUsingGlobalGraph( TargetT
 		listsDataAllocator = SingleThreadSharingAllocator::Instance();
 	}
 
-	this->adjacencyListsData = listsDataAllocator->Alloc<AdjacencyListType>( listsDataSize, "clone lists data" );
+	this->adjacencyListsData = listsDataAllocator->Alloc<int>( listsDataSize, "clone lists data" );
 	this->adjacencyListsOffsets = this->adjacencyListsData + listsDataSize - numLeafs;
 
 	// If the global graph has been built/loaded successfully
@@ -2439,7 +2341,7 @@ bool GraphBuilder<AdjacencyListType, DistanceType>::TryUsingGlobalGraph( TargetT
 	// (so we do not have to correct a list index every time we perform an access)
 	// However thats where lists data actually begin.
 	const int *const thatListsDataBegin = globalGraph->AdjacencyList( 1 ) - 1;
-	AdjacencyListType *thisData = this->adjacencyListsData;
+	int *thisData = this->adjacencyListsData;
 	// Put a dummy value for the zero leaf
 	*thisData++ = 0;
 	for( int i = 1; i < numLeafs; ++i ) {
@@ -2448,62 +2350,61 @@ bool GraphBuilder<AdjacencyListType, DistanceType>::TryUsingGlobalGraph( TargetT
 		// Must be valid
 		assert( actualOffset >= 0 );
 		// Check for overflow if casting to a lesser type
-		if( actualOffset > std::numeric_limits<DistanceType>::max() ) {
+		if( actualOffset > std::numeric_limits<float>::max() ) {
 			return false;
 		}
-		this->adjacencyListsOffsets[i] = (AdjacencyListType)( actualOffset );
+		this->adjacencyListsOffsets[i] = (int)( actualOffset );
 		const int listSize = *thatList++;
 		// Check the length for sanity
 		assert( listSize >= 0 );
 		// Add the list length to the lists data of this builder
-		*thisData++ = (AdjacencyListType)listSize;
+		*thisData++ = (int)listSize;
 		for( int j = 0; j < listSize; ++j ) {
 			const int leafNum = thatList[j];
 			// Check whether the leaf num is valid
 			assert( leafNum > 0 && leafNum < numLeafs );
 			// Check for overflow if casting to a lesser type
-			if( leafNum > std::numeric_limits<DistanceType>::max() ) {
+			if( leafNum > std::numeric_limits<float>::max() ) {
 				return false;
 			}
 			// Add the list element to the lists data of this builder
-			*thisData++ = (AdjacencyListType)leafNum;
+			*thisData++ = (int)leafNum;
 		}
 	}
 
 	// Must match the beginning of the offsets after lists data has been written
 	assert( thisData == this->adjacencyListsOffsets );
 
-	if( auto *mutableGraphTarget = dynamic_cast<MutableGraph<AdjacencyListType, DistanceType> *>( target ) ) {
+	if( auto *mutableGraphTarget = dynamic_cast<MutableGraph *>( target ) ) {
 		if( !tableScratchpadAllocator ) {
 			// Let's use a basic tagged allocator (that does not allow sharing)
 			// so we can spot attempts of sharing mutable per-instance data easily
 			tableScratchpadAllocator = UniqueAllocator::Instance();
 		}
 		mutableGraphTarget->distanceTableScratchpad =
-			tableScratchpadAllocator->template Alloc<DistanceType>( numLeafs * numLeafs, "scratchpad of a clone" );
+			tableScratchpadAllocator->template Alloc<float>( numLeafs * numLeafs, "scratchpad of a clone" );
 	}
 
-	this->distanceTable = this->distanceTableBackup = ReuseGlobalDistanceTable<DistanceType>( numLeafs );
+	this->distanceTable = this->distanceTableBackup = ReuseGlobalDistanceTable( numLeafs );
 
 	return true;
 }
 
-template <typename DistanceType>
-CloneableGraphBuilder<DistanceType> *CloneableGraphBuilder<DistanceType>::Clone() {
+CloneableGraphBuilder *CloneableGraphBuilder::Clone() {
 	// TODO: Use just malloc() and check results? A caller code must be aware of possible failure
-	void *objectMem = Q_malloc( sizeof( CloneableGraphBuilder<DistanceType> ) );
+	void *objectMem = Q_malloc( sizeof( CloneableGraphBuilder ) );
 	if( !objectMem ) {
 		return nullptr;
 	}
 
-	using CloneHolder = std::unique_ptr<CloneableGraphBuilder<DistanceType>, SoundMemDeleter>;
-	CloneHolder clone( new( objectMem )CloneableGraphBuilder<DistanceType>( this->NumLeafs(), this->fastAndCoarse ) );
+	using CloneHolder = std::unique_ptr<CloneableGraphBuilder, SoundMemDeleter>;
+	CloneHolder clone( new( objectMem )CloneableGraphBuilder( this->NumLeafs(), this->fastAndCoarse ) );
 
 	clone->distanceTable = clone->distanceTableBackup =
 		SharingAllocator::AddRef( this->distanceTableBackup, "cloned table backup" );
 
 	clone->distanceTableScratchpad =
-		clone->TableScratchpadAllocator().template Alloc<DistanceType>(
+		clone->TableScratchpadAllocator().template Alloc<float>(
 			this->NumLeafs() * this->NumLeafs(), "scratchpad of a clone" );
 
 	if( !clone->distanceTableScratchpad ) {
