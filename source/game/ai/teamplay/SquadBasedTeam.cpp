@@ -89,17 +89,17 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	int numToAreas;
 
 	const edict_t *const fromEnt = game.edicts + fromEntNum;
-	if( fromEnt->ai && fromEnt->ai->botRef ) {
-		routeCache = fromEnt->ai->botRef->RouteCache();
-		numFromAreas = fromEnt->ai->botRef->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
+	if( Bot *bot = fromEnt->bot ) {
+		routeCache = fromEnt->bot->RouteCache();
+		numFromAreas = fromEnt->bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
 	} else {
 		routeCache = AiAasRouteCache::Shared();
 		numFromAreas = FindEntityAreas( fromEnt, fromAreaNums );
 	}
 
 	const edict_t *const toEnt = game.edicts + toEntNum;
-	if( toEnt->ai && toEnt->ai->botRef ) {
-		numToAreas = fromEnt->ai->botRef->EntityPhysicsState()->PrepareRoutingStartAreas( toAreaNums );
+	if( Bot *bot = toEnt->bot ) {
+		numToAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( toAreaNums );
 	} else {
 		numToAreas = FindEntityAreas( toEnt, toAreaNums );
 	}
@@ -891,15 +891,15 @@ void AiSquad::SetDroppedEntityAsBotGoal( edict_t *ent ) {
 	// We might as well check for team change but it is extremely rare,
 	// requires tracking the supplier team
 	// and also picking an item dropped for a bot as a former teammate won't harm
-	edict_t *bot = ent->target_ent;
-	if( !bot->r.inuse || G_ISGHOSTING( bot ) || !bot->ai || !bot->ai->botRef ) {
+	edict_t *botEnt = ent->target_ent;
+	if( !botEnt->r.inuse || G_ISGHOSTING( botEnt ) || !botEnt->bot ) {
 		return;
 	}
 
 	const NavEntity *navEntity = NavEntitiesRegistry::Instance()->NavEntityForEntity( ent );
 	SelectedNavEntity selectedNavEntity( navEntity, 1.0f, 5.0f, level.time + 2000 );
-	bot->ai->botRef->ForceSetNavEntity( selectedNavEntity );
-	bot->ai->botRef->ForcePlanBuilding();
+	botEnt->bot->ForceSetNavEntity( selectedNavEntity );
+	botEnt->bot->ForcePlanBuilding();
 }
 
 bool AiSquad::RequestWeaponAndAmmoDrop( Bot *consumer, const int *maxBotWeaponTiers, Bot *suppliersListHead ) {
@@ -1378,7 +1378,7 @@ sortPairs:
 		AiSquad *const squad = AllocSquad();
 		for( int clientNum : { pair.clientNum1, pair.clientNum2 } ) {
 			isClientAssigned[clientNum] = true;
-			Bot *bot = ents[clientNum + 1].ai->botRef;
+			Bot *bot = ents[clientNum + 1].bot;
 			wsw::unlink( bot, &orphanBotsHead, Bot::SQUAD_LINKS );
 			squad->AddBot( bot );
 		}

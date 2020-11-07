@@ -267,11 +267,11 @@ void MovementPredictionContext::ShowBuiltPlanPath( bool useActionsColor ) const 
 }
 
 static void Intercepted_PredictedEvent( int entNum, int ev, int parm ) {
-	game.edicts[entNum].ai->botRef->OnInterceptedPredictedEvent( ev, parm );
+	game.edicts[entNum].bot->OnInterceptedPredictedEvent( ev, parm );
 }
 
 static void Intercepted_PMoveTouchTriggers( pmove_t *pm, const vec3_t previous_origin ) {
-	game.edicts[pm->playerState->playerNum + 1].ai->botRef->OnInterceptedPMoveTouchTriggers( pm, previous_origin );
+	game.edicts[pm->playerState->playerNum + 1].bot->OnInterceptedPMoveTouchTriggers( pm, previous_origin );
 }
 
 static MovementPredictionContext *currPredictionContext;
@@ -898,7 +898,7 @@ void MovementPredictionContext::BuildPlan() {
 	const auto savedPlayerState = self->r.client->ps;
 	const auto savedPMove = self->r.client->old_pmove;
 
-	Assert( self->ai->botRef->entityPhysicsState == &module->movementState.entityPhysicsState );
+	Assert( self->bot->entityPhysicsState == &module->movementState.entityPhysicsState );
 	// Save current entity physics state (it will be modified even for a single prediction step)
 	const AiEntityPhysicsState currEntityPhysicsState = module->movementState.entityPhysicsState;
 
@@ -966,10 +966,10 @@ void MovementPredictionContext::BuildPlan() {
 	// Even the first predicted movement state usually has modified physics state, restore it to a saved value
 	module->movementState.entityPhysicsState = currEntityPhysicsState;
 	// Restore the current entity physics state reference in Ai subclass
-	self->ai->botRef->entityPhysicsState = &module->movementState.entityPhysicsState;
+	self->bot->entityPhysicsState = &module->movementState.entityPhysicsState;
 	// These assertions helped to find an annoying bug during development
-	Assert( VectorCompare( self->s.origin, self->ai->botRef->entityPhysicsState->Origin() ) );
-	Assert( VectorCompare( self->velocity, self->ai->botRef->entityPhysicsState->Velocity() ) );
+	Assert( VectorCompare( self->s.origin, self->bot->entityPhysicsState->Origin() ) );
+	Assert( VectorCompare( self->velocity, self->bot->entityPhysicsState->Velocity() ) );
 
 	module_PMoveTouchTriggers = general_PMoveTouchTriggers;
 	module_PredictedEvent = general_PredictedEvent;

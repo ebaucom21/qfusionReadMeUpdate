@@ -368,10 +368,10 @@ private:
 	/**
 	 * {@code next[]} and {@code prev[]} links below are addressed by these indices
 	 */
-	enum { SQUAD_LINKS, TMP_LINKS, TEAM_LINKS, OBJECTIVE_LINKS };
+	enum { SQUAD_LINKS, TMP_LINKS, TEAM_LINKS, OBJECTIVE_LINKS, AI_LINKS };
 
-	Bot *next[4] { nullptr, nullptr, nullptr, nullptr };
-	Bot *prev[4] { nullptr, nullptr, nullptr, nullptr };
+	Bot *next[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
+	Bot *prev[5] { nullptr, nullptr, nullptr, nullptr, nullptr };
 
 	Bot *NextInSquad() { return next[SQUAD_LINKS]; };
 	const Bot *NextInSquad() const { return next[SQUAD_LINKS]; }
@@ -384,6 +384,9 @@ private:
 
 	Bot *NextInObjective() { return next[OBJECTIVE_LINKS]; }
 	const Bot *NextInObjective() const { return next[OBJECTIVE_LINKS]; }
+
+	Bot *NextInAIList() { return next[AI_LINKS]; }
+	const Bot *NextInAIList() const { return next[AI_LINKS]; }
 
 	AiObjectiveSpot *objectiveSpot { nullptr };
 

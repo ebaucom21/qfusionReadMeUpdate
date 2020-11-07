@@ -147,8 +147,8 @@ static edict_t *object##scriptName##_self(nativeName *paramName) { \
 static gclient_t *object##scriptName##_client(nativeName *paramName) { \
     return game.edicts[paramName->Self()->EntNum()].r.client; \
 } \
-static ai_handle_t *object##scriptName##_bot(nativeName *paramName) { \
-    return game.edicts[paramName->Self()->EntNum()].ai; \
+static Bot *object##scriptName##_bot(nativeName *paramName) { \
+    return game.edicts[paramName->Self()->EntNum()].bot; \
 }
 
 // Use dummy format string to avoid a warning when a format string cannot be analyzed
@@ -941,104 +941,104 @@ static const asClassDescriptor_t asAiWeightConfigVarClassDescriptor =
     NULL, NULL
 };
 
-#define CHECK_BOT_HANDLE(ai) ((!(ai) || !(ai)->botRef) ? (API_ERROR("The given bot handle is null\n"), (ai)) : (ai))
+#define CHECK_BOT_HANDLE(ai) (!(ai) ? (API_ERROR("The given bot handle is null\n"), (ai)) : (ai))
 
-float objectBot_getEffectiveOffensiveness(const ai_handle_t *ai)
+float objectBot_getEffectiveOffensiveness(const Bot *bot)
 {
-    return CHECK_BOT_HANDLE(ai)->botRef->GetEffectiveOffensiveness();
+    return CHECK_BOT_HANDLE(bot)->GetEffectiveOffensiveness();
 }
 
-void objectBot_setBaseOffensiveness(ai_handle_t *ai, float baseOffensiveness)
+void objectBot_setBaseOffensiveness(Bot *bot, float baseOffensiveness)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->SetBaseOffensiveness(baseOffensiveness);
+    CHECK_BOT_HANDLE(bot)->SetBaseOffensiveness(baseOffensiveness);
 }
 
-void objectBot_setAttitude(ai_handle_t *ai, edict_t *ent, int attitude)
+void objectBot_setAttitude(Bot *bot, edict_t *ent, int attitude)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->SetAttitude(CHECK_ARG(ent), attitude);
+    CHECK_BOT_HANDLE(bot)->SetAttitude(CHECK_ARG(ent), attitude);
 }
 
-void objectBot_clearOverriddenEntityWeights(ai_handle_t *ai)
+void objectBot_clearOverriddenEntityWeights(Bot *bot)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->ClearOverriddenEntityWeights();
+    CHECK_BOT_HANDLE(bot)->ClearOverriddenEntityWeights();
 }
 
-void objectBot_overrideEntityWeight(ai_handle_t *ai, edict_t *ent, float weight)
+void objectBot_overrideEntityWeight(Bot *bot, edict_t *ent, float weight)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->OverrideEntityWeight(CHECK_ARG(ent), weight);
+    CHECK_BOT_HANDLE(bot)->OverrideEntityWeight(CHECK_ARG(ent), weight);
 }
 
-int objectBot_get_defenceSpotId(const ai_handle_t *ai)
+int objectBot_get_defenceSpotId(const Bot *bot)
 {
-    return CHECK_BOT_HANDLE(ai)->botRef->DefenceSpotId();
+    return CHECK_BOT_HANDLE(bot)->DefenceSpotId();
 }
 
-int objectBot_get_offenseSpotId(const ai_handle_t *ai)
+int objectBot_get_offenseSpotId(const Bot *bot)
 {
-    return CHECK_BOT_HANDLE(ai)->botRef->OffenseSpotId();
+    return CHECK_BOT_HANDLE(bot)->OffenseSpotId();
 }
 
-void objectBot_setNavTarget(const ai_handle_t *ai, const asvec3_t *navTargetOrigin, float reachRadius)
+void objectBot_setNavTarget(Bot *bot, const asvec3_t *navTargetOrigin, float reachRadius)
 {
     if (reachRadius <= 0.0f)
         API_ERROR("The given reach radius is negative\n");
 
-    CHECK_BOT_HANDLE(ai)->botRef->SetNavTarget(Vec3(CHECK_ARG(navTargetOrigin)->v), reachRadius);
+    CHECK_BOT_HANDLE(bot)->SetNavTarget(Vec3(CHECK_ARG(navTargetOrigin)->v), reachRadius);
 }
 
-void objectBot_resetNavTarget(const ai_handle_t *ai)
+void objectBot_resetNavTarget(Bot *bot)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->ResetNavTarget();
+    CHECK_BOT_HANDLE(bot)->ResetNavTarget();
 }
 
-void objectBot_setCampingSpot(const ai_handle_t *ai, const AiCampingSpot *campingSpot)
+void objectBot_setCampingSpot(Bot *bot, const AiCampingSpot *campingSpot)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->SetCampingSpot(*CHECK_ARG(campingSpot));
+    CHECK_BOT_HANDLE(bot)->SetCampingSpot(*CHECK_ARG(campingSpot));
 }
 
-void objectBot_resetCampingSpot(const ai_handle_t *ai)
+void objectBot_resetCampingSpot(Bot *bot)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->ResetCampingSpot();
+    CHECK_BOT_HANDLE(bot)->ResetCampingSpot();
 }
 
-void objectBot_setPendingLookAtPoint(const ai_handle_t *ai, const AiPendingLookAtPoint *pendingLookAtPoint, unsigned timeoutPeriod)
+void objectBot_setPendingLookAtPoint(Bot *bot, const AiPendingLookAtPoint *pendingLookAtPoint, unsigned timeoutPeriod)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->SetPendingLookAtPoint(*CHECK_ARG(pendingLookAtPoint), timeoutPeriod);
+    CHECK_BOT_HANDLE(bot)->SetPendingLookAtPoint(*CHECK_ARG(pendingLookAtPoint), timeoutPeriod);
 }
 
-void objectBot_resetPendingLookAtPoint(const ai_handle_t *ai)
+void objectBot_resetPendingLookAtPoint(Bot *bot)
 {
-    CHECK_BOT_HANDLE(ai)->botRef->ResetPendingLookAtPoint();
+    CHECK_BOT_HANDLE(bot)->ResetPendingLookAtPoint();
 }
 
-unsigned objectBot_nextSimilarWorldStateInstanceId(const ai_handle_t *ai)
+unsigned objectBot_nextSimilarWorldStateInstanceId(Bot *bot)
 {
-    return CHECK_BOT_HANDLE(ai)->botRef->NextSimilarWorldStateInstanceId();
+    return CHECK_BOT_HANDLE(bot)->NextSimilarWorldStateInstanceId();
 }
 
-const SelectedNavEntity *objectBot_get_selectedNavEntity(const ai_handle_t *ai)
+const SelectedNavEntity *objectBot_get_selectedNavEntity(const Bot *bot)
 {
-    return &CHECK_BOT_HANDLE(ai)->botRef->GetSelectedNavEntity();
+    return &CHECK_BOT_HANDLE(bot)->GetSelectedNavEntity();
 }
 
-const SelectedEnemies *objectBot_get_selectedEnemies(const ai_handle_t *ai)
+const SelectedEnemies *objectBot_get_selectedEnemies(const Bot *bot)
 {
-    return &CHECK_BOT_HANDLE(ai)->botRef->GetSelectedEnemies();
+    return &CHECK_BOT_HANDLE(bot)->GetSelectedEnemies();
 }
 
-int objectBot_checkTravelTimeMillis(const ai_handle_t *ai, const asvec3_t *from, const asvec3_t *to, bool allowUnreachable)
+int objectBot_checkTravelTimeMillis(Bot *bot, const asvec3_t *from, const asvec3_t *to, bool allowUnreachable)
 {
-    return CHECK_BOT_HANDLE(ai)->botRef->CheckTravelTimeMillis(Vec3(from->v), Vec3(to->v), allowUnreachable);
+    return CHECK_BOT_HANDLE(bot)->CheckTravelTimeMillis(Vec3(from->v), Vec3(to->v), allowUnreachable);
 }
 
 #define DEFINE_NATIVE_BOT_MISC_TACTICS_ACCESSORS(lowercasePrefix, uppercasePrefix, restOfTheName) \
-bool objectBot_get##lowercasePrefix##restOfTheName(const ai_handle_t *ai)                         \
+bool objectBot_get##lowercasePrefix##restOfTheName(const Bot *bot)                         \
 {                                                                                                 \
-    return CHECK_BOT_HANDLE(ai)->botRef->GetMiscTactics().lowercasePrefix##restOfTheName;         \
+    return CHECK_BOT_HANDLE(bot)->GetMiscTactics().lowercasePrefix##restOfTheName;         \
 }                                                                                                 \
-void objectBot_set##uppercasePrefix##restOfTheName(ai_handle_t *ai, bool value)                   \
+void objectBot_set##uppercasePrefix##restOfTheName(Bot *bot, bool value)                   \
 {                                                                                                 \
-    CHECK_BOT_HANDLE(ai)->botRef->GetMiscTactics().lowercasePrefix##restOfTheName = value;        \
+    CHECK_BOT_HANDLE(bot)->GetMiscTactics().lowercasePrefix##restOfTheName = value;        \
 }
 
 DEFINE_NATIVE_BOT_MISC_TACTICS_ACCESSORS(will, Will, Advance);
@@ -1099,7 +1099,7 @@ static const asClassDescriptor_t asBotClassDescriptor =
 {
     "Bot",						/* name */
     asOBJ_REF|asOBJ_NOCOUNT,	/* object type flags */
-    sizeof(ai_handle_t),		/* size */
+    sizeof( Bot ),		/* size */
     EMPTY_FUNCDEFS,				/* funcdefs */
     EMPTY_BEHAVIORS,     		/* object behaviors */
     asbot_Methods,				/* methods */
@@ -1818,19 +1818,19 @@ void GT_asBotDropArmor( gclient_t *client )
 }
 
 static auto botTouchedGoalFunc =
-    gtAIFunctionsRegistry.Function2<Void, const ai_handle_t *, const edict_t *>(
+    gtAIFunctionsRegistry.Function2<Void, const Bot *, const edict_t *>(
         "void GT_BotTouchedGoal( const Bot @bot, const Entity @goalEnt )", Void::VALUE);
 
-void GT_asBotTouchedGoal(const ai_handle_t *bot, const edict_t *goalEnt)
+void GT_asBotTouchedGoal(const Bot *bot, const edict_t *goalEnt)
 {
     botTouchedGoalFunc(bot, goalEnt);
 }
 
 static auto botReachedGoalRadiusFunc =
-    gtAIFunctionsRegistry.Function2<Void, const ai_handle_t *, const edict_t *>(
+    gtAIFunctionsRegistry.Function2<Void, const Bot *, const edict_t *>(
         "void GT_BotReachedGoalRadius( const Bot @bot, const Entity @goalEnt )", Void::VALUE);
 
-void GT_asBotReachedGoalRadius(const ai_handle_t *bot, const edict_t *goalEnt)
+void GT_asBotReachedGoalRadius(const Bot *bot, const edict_t *goalEnt)
 {
     botReachedGoalRadiusFunc(bot, goalEnt);
 }

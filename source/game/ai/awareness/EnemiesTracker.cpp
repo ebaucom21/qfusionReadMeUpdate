@@ -82,8 +82,8 @@ Vec3 TrackedEnemy::LookDir() const {
 	}
 
 	lookDirComputedAt = levelTime;
-	if( ent->ai && ent->ai->botRef ) {
-		ent->ai->botRef->EntityPhysicsState()->ForwardDir().CopyTo( lookDir );
+	if( const Bot *bot = ent->bot ) {
+		bot->EntityPhysicsState()->ForwardDir().CopyTo( lookDir );
 	} else {
 		AngleVectors( ent->s.angles, lookDir, nullptr, nullptr );
 	}
@@ -380,18 +380,18 @@ float AiEnemiesTracker::ComputeRawEnemyWeight( const edict_t *enemy ) {
 	return weight;
 }
 
-void AiEnemiesTracker::OnPain( const edict_t *bot, const edict_t *enemy, float kick, int damage ) {
+void AiEnemiesTracker::OnPain( const edict_t *botEnt, const edict_t *enemy, float kick, int damage ) {
 	int attackerSlot = EnqueueAttacker( enemy, damage );
 	if( attackerSlot < 0 ) {
 		return;
 	}
 
 	bool newThreat = true;
-	if( bot->ai->botRef->IsPrimaryAimEnemy( enemy ) ) {
+	if( botEnt->bot->IsPrimaryAimEnemy( enemy ) ) {
 		newThreat = false;
 		int currEnemySlot = -1;
 		for( int i = 0, end = attackers.size(); i < end; ++i ) {
-			if( bot->ai->botRef->IsPrimaryAimEnemy( attackers[i].ent ) ) {
+			if( botEnt->bot->IsPrimaryAimEnemy( attackers[i].ent ) ) {
 				currEnemySlot = i;
 				break;
 			}

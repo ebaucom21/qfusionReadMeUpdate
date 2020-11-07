@@ -68,11 +68,8 @@ Vec3 SelectedEnemies::ClosestEnemyOrigin( const vec3_t relativelyTo ) const {
 Vec3 SelectedEnemies::LookDir() const {
 	CheckValid( "LookDir" );
 
-	if( const auto *ai = enemies.front()->ent->ai ) {
-		// TODO: Once again remove this awkward pointer chasing
-		if( const auto *bot = ai->botRef ) {
-			return bot->EntityPhysicsState()->ForwardDir();
-		}
+	if( const auto *bot = enemies.front()->ent->bot ) {
+		return bot->EntityPhysicsState()->ForwardDir();
 	}
 
 	vec3_t lookDir;
@@ -230,8 +227,8 @@ float SelectedEnemies::ComputeThreatFactor( const edict_t *ent, unsigned *enemyN
 	// Check whether the bot is an tracked/selected enemy of other bot?
 	// This however would make other bots way too special.
 	// The code should work fine for all kind of enemies.
-	if( ent->ai && ent->ai->botRef ) {
-		if( dot < ent->ai->botRef->FovDotFactor() ) {
+	if( Bot *entBot = ent->bot ) {
+		if( dot < entBot->FovDotFactor() ) {
 			return 0.0f;
 		}
 	} else if( ent->r.client && dot < 0.2f ) {
@@ -716,7 +713,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 				if( Q_Sqrt( squareDistance ) > 768.0f - 384.0f * pingFactor ) {
 					continue;
 				}
-			} else if( const Bot *thatBot = ent->ai->botRef ) {
+			} else if( const Bot *thatBot = ent->bot ) {
 				// Raise the skip distance threshold for hard bots
 				if( Q_Sqrt( squareDistance ) > 384.0f + 512.0f * thatBot->Skill() ) {
 					continue;

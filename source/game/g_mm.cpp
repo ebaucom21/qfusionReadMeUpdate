@@ -590,7 +590,7 @@ void StatsowFacade::OnClientHadPlaytime( const gclient_t *client ) {
 	const edict_t *ent = game.edicts + ENTNUM( client );
 	// Check whether it's a bot first (they do not have valid session ids as well)
 	if( ent->ai ) {
-		if( AI_GetType( ent->ai ) == AI_ISBOT ) {
+		if( ent->bot ) {
 			reason = "A bot had a play-time";
 		}
 		// The report is still valid if it's an AI but not a bot.

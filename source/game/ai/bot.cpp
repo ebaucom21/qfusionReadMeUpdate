@@ -173,9 +173,9 @@ void Bot::ForceSetNavEntity( const SelectedNavEntity &selectedNavEntity_ ) {
 	this->selectedNavEntity = selectedNavEntity_;
 
 	if( !selectedNavEntity.IsEmpty() ) {
-		self->ai->botRef->lastItemSelectedAt = level.time;
-	} else if( self->ai->botRef->lastItemSelectedAt >= self->ai->botRef->noItemAvailableSince ) {
-		self->ai->botRef->noItemAvailableSince = level.time;
+		lastItemSelectedAt = level.time;
+	} else if( lastItemSelectedAt >= noItemAvailableSince ) {
+		noItemAvailableSince = level.time;
 	}
 }
 

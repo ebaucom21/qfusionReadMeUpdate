@@ -207,9 +207,9 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 			VectorScale( enemyData->velocityDir2D, scale, enemyData->velocityDir2D );
 		}
 
-		if( enemy->ent->ai && enemy->ent->ai->botRef ) {
+		if( Bot *bot = enemy->ent->bot ) {
 			int areaNums[2] = { 0, 0 };
-			enemy->ent->ai->botRef->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
+			bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
 			// TODO: PrepareRoutingStartAreas() should always put grounded area first.
 			// The currently saved data is a valid input for further tests but could lead to false negatives.
 			enemyData->groundedAreaNum = areaNums[0];

@@ -553,7 +553,7 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	self->max_health = 100;
 	self->health = self->max_health;
 
-	if( AI_GetType( self->ai ) == AI_ISBOT ) {
+	if( self->bot ) {
 		self->think = NULL;
 		self->classname = "bot";
 	} else if( self->r.svflags & SVF_FAKECLIENT ) {
@@ -1667,7 +1667,7 @@ void G_ClientThink( edict_t *ent ) {
 
 	// run bots thinking with the rest of clients
 	if( ent->r.svflags & SVF_FAKECLIENT ) {
-		if( !ent->think && AI_GetType( ent->ai ) == AI_ISBOT ) {
+		if( !ent->think && ent->bot ) {
 			AI_Think( ent );
 		}
 	}

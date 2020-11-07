@@ -207,7 +207,7 @@ void AiObjectiveBasedTeam::EnableDefenceSpotAutoAlert( DefenceSpot *defenceSpot 
 	// TODO: Track a list of all bots in AiBaseTeam
 	for( int i = 1; i <= gs.maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
-		if( !ent->ai || !ent->ai->botRef ) {
+		if( !ent->bot ) {
 			continue;
 		}
 		// If an entity is an AI, it is a client.
@@ -215,7 +215,7 @@ void AiObjectiveBasedTeam::EnableDefenceSpotAutoAlert( DefenceSpot *defenceSpot 
 			continue;
 		}
 		auto callback = (AlertTracker::AlertCallback)( &AiObjectiveBasedTeam::OnAlertReported );
-		ent->ai->botRef->EnableAutoAlert( alertSpot, callback, this );
+		ent->bot->EnableAutoAlert( alertSpot, callback, this );
 	}
 	defenceSpot->usesAutoAlert = true;
 }
@@ -223,13 +223,13 @@ void AiObjectiveBasedTeam::EnableDefenceSpotAutoAlert( DefenceSpot *defenceSpot 
 void AiObjectiveBasedTeam::DisableDefenceSpotAutoAlert( DefenceSpot *defenceSpot ) {
 	for( int i = 1; i <= gs.maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
-		if( !ent->ai || !ent->ai->botRef ) {
+		if( !ent->bot ) {
 			continue;
 		}
 		if( ent->r.client->team != this->teamNum ) {
 			continue;
 		}
-		ent->ai->botRef->DisableAutoAlert( defenceSpot->id );
+		ent->bot->DisableAutoAlert( defenceSpot->id );
 	}
 	defenceSpot->usesAutoAlert = false;
 }
@@ -397,17 +397,17 @@ void AiObjectiveBasedTeam::ResetAllBotsOrders() {
 	// TODO: Utilize AiManager Ai/Bot list?
 	for( int i = 0; i <= gs.maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
-		if( !ent->r.inuse || !ent->ai || !ent->ai->botRef ) {
+		if( !ent->r.inuse || !ent->bot ) {
 			continue;
 		}
-		ResetBotOrders( ent->ai->botRef );
+		ResetBotOrders( ent->bot );
 	}
 }
 
 void AiObjectiveBasedTeam::FindAllCandidates( Candidates &candidates ) {
 	for( int i = 0; i <= gs.maxclients; ++i ) {
 		edict_t *ent = game.edicts + i;
-		if( !ent->r.inuse || !ent->ai || !ent->ai->botRef ) {
+		if( !ent->r.inuse || !ent->bot ) {
 			continue;
 		}
 		// If an entity is an AI, it is a client too.
@@ -418,7 +418,7 @@ void AiObjectiveBasedTeam::FindAllCandidates( Candidates &candidates ) {
 			continue;
 		}
 
-		candidates.push_back( BotAndScore( ent->ai->botRef ) );
+		candidates.push_back( BotAndScore( ent->bot ) );
 	}
 }
 

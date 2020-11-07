@@ -353,50 +353,41 @@ void G_FreeAI( edict_t *ent ) {
 
 	AiManager::Instance()->UnlinkAi( ent->ai );
 
-	// Perform virtual destructor call
-	ent->ai->aiRef->~Ai();
+	// Perform a virtual destructor call
+	ent->ai->~Ai();
 
 	Q_free( ent->ai );
 	ent->ai = nullptr;
 }
 
-//==========================================
-// AI_GetType
-//==========================================
-ai_type AI_GetType( const ai_handle_t *ai ) {
-	return ai ? ai->type : AI_INACTIVE;
-}
-
 void AI_TouchedEntity( edict_t *self, edict_t *ent ) {
-	if( self->ai ) {
-		self->ai->aiRef->TouchedEntity( ent );
+	if( Ai *ai = self->ai ) {
+		ai->TouchedEntity( ent );
 	}
 }
 
 void AI_DamagedEntity( edict_t *self, edict_t *ent, int damage ) {
-	if( self->ai && self->ai->botRef ) {
-		self->ai->botRef->OnEnemyDamaged( ent, damage );
+	if( Bot *bot = self->bot ) {
+		bot->OnEnemyDamaged( ent, damage );
 	}
 }
 
 void AI_Pain( edict_t *self, edict_t *attacker, int kick, int damage ) {
-	if( self->ai && self->ai->botRef ) {
-		self->ai->botRef->OnPain( attacker, kick, damage );
+	if( Bot *bot = self->bot ) {
+		bot->OnPain( attacker, kick, damage );
 	}
 }
 
 void AI_Knockback( edict_t *self, edict_t *attacker, const vec3_t basedir, int kick, int dflags ) {
-	if( self->ai && self->ai->botRef ) {
-		self->ai->botRef->OnKnockback( attacker, basedir, kick, dflags );
+	if( Bot *bot = self->bot ) {
+		bot->OnKnockback( attacker, basedir, kick, dflags );
 	}
 }
 
 void AI_Think( edict_t *self ) {
-	if( !self->ai || self->ai->type == AI_INACTIVE ) {
-		return;
+	if( Ai *ai = self->ai ) {
+		ai->Update();
 	}
-
-	self->ai->aiRef->Update();
 }
 
 void AI_RegisterEvent( edict_t *ent, int event, int parm ) {

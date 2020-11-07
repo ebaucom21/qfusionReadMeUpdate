@@ -1419,10 +1419,10 @@ static bool objectGameClient_isBot( gclient_t *self ) {
 	}
 
 	ent = PLAYERENT( playerNum );
-	return ( ( ent->r.svflags & SVF_FAKECLIENT ) && AI_GetType( ent->ai ) == AI_ISBOT );
+	return ( ent->r.svflags & SVF_FAKECLIENT ) && ent->bot;
 }
 
-static ai_handle_t *objectGameClient_getBot( gclient_t *self ) {
+static Bot *objectGameClient_getBot( gclient_t *self ) {
 	int playerNum;
 	const edict_t *ent;
 
@@ -1432,11 +1432,11 @@ static ai_handle_t *objectGameClient_getBot( gclient_t *self ) {
 	}
 
 	ent = PLAYERENT( playerNum );
-	if( !( ent->r.svflags & SVF_FAKECLIENT ) || AI_GetType( ent->ai ) != AI_ISBOT ) {
+	if( !( ent->r.svflags & SVF_FAKECLIENT ) || !ent->bot ) {
 		return NULL;
 	}
 
-	return ent->ai;
+	return ent->bot;
 }
 
 static int objectGameClient_ClientState( gclient_t *self ) {

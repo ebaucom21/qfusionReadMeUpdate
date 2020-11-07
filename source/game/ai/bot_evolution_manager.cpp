@@ -160,7 +160,7 @@ void CopyWeightConfigRandomizing( const AiWeightConfigVarGroup *from, AiWeightCo
 
 void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 	if( !ai_evolution->integer ) {
-		ent->ai->botRef->WeightConfig().CopyValues( referenceConfig );
+		ent->bot->WeightConfig().CopyValues( referenceConfig );
 		return;
 	}
 
@@ -171,10 +171,7 @@ void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 		}
 
 		const edict_t *clientEnt = game.edicts + i + 1;
-		if( !clientEnt->ai ) {
-			continue;
-		}
-		if( !clientEnt->ai->botRef ) {
+		if( !clientEnt->bot ) {
 			continue;
 		}
 
@@ -183,12 +180,12 @@ void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
 
 	float botNumRatio = numBotsInGame / (float)g_numbots->integer;
 	if( botNumRatio <= 0.5f ) {
-		ent->ai->botRef->WeightConfig().CopyValues( referenceConfig );
+		ent->bot->WeightConfig().CopyValues( referenceConfig );
 		return;
 	}
 
 	CopyWeightConfigRandomizing( (AiWeightConfigVarGroup *)&referenceConfig,
-								 (AiWeightConfigVarGroup *)&ent->ai->botRef->WeightConfig(),
+								 (AiWeightConfigVarGroup *)&ent->bot->WeightConfig(),
 								 0.25f * ( botNumRatio - 0.5f ) );
 }
 
@@ -259,7 +256,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 
 		// Do this cheap test first, AiWeightConfig::operator==() is expensive
 		if( score > bestReferenceScore ) {
-			if( ent->ai->botRef->WeightConfig() == referenceConfig ) {
+			if( ent->bot->WeightConfig() == referenceConfig ) {
 				bestReferenceScore = score;
 			}
 		}
@@ -277,7 +274,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 	}
 
 	const char *fileName = va( "ai/%s%s_%s.weights", ( GS_Instagib() ? "i" : "" ), g_gametype->string, level.mapname );
-	if( !bestEnt->ai->botRef->WeightConfig().Save( fileName ) ) {
+	if( !bestEnt->bot->WeightConfig().Save( fileName ) ) {
 		G_Printf( S_COLOR_RED "%s: Can't save weights file `%s`\n", tag, fileName );
 	}
 }

@@ -119,24 +119,24 @@ AiManager::AiManager( const char *gametype, const char *mapname ) {
 }
 
 void AiManager::NavEntityReachedBy( const NavEntity *navEntity, const Ai *grabber ) {
-	if( !navEntity ) {
+	if( !navEntity || !grabber ) {
 		return;
 	}
 
 	// find all bots which have this node as goal and tell them their goal is reached
-	for( auto *aiHandle = aiHandlesListHead; aiHandle; aiHandle = aiHandle->Next() ) {
-		aiHandle->aiRef->OnNavEntityReachedBy( navEntity, grabber );
+	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
+		bot->OnNavEntityReachedBy( navEntity, grabber );
 	}
 }
 
 void AiManager::NavEntityReachedSignal( const edict_t *ent ) {
-	if( !aiHandlesListHead ) {
+	if( !ent ) {
 		return;
 	}
 
 	// find all bots which have this node as goal and tell them their goal is reached
-	for( auto *aiHandle = aiHandlesListHead; aiHandle; aiHandle = aiHandle->Next() ) {
-		aiHandle->aiRef->OnEntityReachedSignal( ent );
+	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
+		bot->OnEntityReachedSignal( ent );
 	}
 }
 
@@ -145,10 +145,10 @@ void AiManager::OnBotJoinedTeam( edict_t *ent, int team ) {
 	const int oldTeam = teams[entNum];
 	if( oldTeam != team ) {
 		if( oldTeam != TEAM_SPECTATOR ) {
-			AiBaseTeam::GetTeamForNum( oldTeam )->RemoveBot( ent->ai->botRef );
+			AiBaseTeam::GetTeamForNum( oldTeam )->RemoveBot( ent->bot );
 		}
 		if( team != TEAM_SPECTATOR ) {
-			AiBaseTeam::GetTeamForNum( team )->AddBot( ent->ai->botRef );
+			AiBaseTeam::GetTeamForNum( team )->AddBot( ent->bot );
 		}
 		teams[entNum] = team;
 	}
@@ -158,31 +158,36 @@ void AiManager::OnBotDropped( edict_t *ent ) {
 	const int entNum = ENTNUM( ent );
 	const int oldTeam = teams[entNum];
 	if( oldTeam != TEAM_SPECTATOR ) {
-		AiBaseTeam::GetTeamForNum( oldTeam )->RemoveBot( ent->ai->botRef );
+		AiBaseTeam::GetTeamForNum( oldTeam )->RemoveBot( ent->bot );
 	}
 	teams[entNum] = TEAM_SPECTATOR;
 }
 
-void AiManager::LinkAi( ai_handle_t *aiHandle ) {
-	wsw::link( aiHandle, &aiHandlesListHead, 0 );
+void AiManager::LinkAi( Ai *ai ) {
+	if( Bot *bot = dynamic_cast<Bot *>( ai ) ) {
+		wsw::link( bot, &botHandlesHead, Bot::AI_LINKS );
+	}
 }
 
-void AiManager::UnlinkAi( ai_handle_t *aiHandle ) {
-	wsw::unlink( aiHandle, &aiHandlesListHead, 0 );
+void AiManager::UnlinkAi( Ai *ai ) {
+	Bot *bot = dynamic_cast<Bot *>( ai );
+	if( !bot ) {
+		return;
+	}
+
+	wsw::unlink( bot, &botHandlesHead, Bot::AI_LINKS );
 
 	// All links related to the unlinked AI become invalid.
 	// Reset CPU quota cycling state to prevent use-after-free.
-	globalCpuQuota.OnRemoved( aiHandle );
+	globalCpuQuota.OnRemoved( bot );
 	for( int i = 0; i < 4; ++i ) {
-		thinkQuota->OnRemoved( aiHandle );
+		thinkQuota->OnRemoved( bot );
 	}
 }
 
 void AiManager::RegisterEvent( const edict_t *ent, int event, int parm ) {
-	for( auto *aiHandle = aiHandlesListHead; aiHandle; aiHandle = aiHandle->Next() ) {
-		if( auto *bot = aiHandle->botRef ) {
-			bot->RegisterEvent( ent, event, parm );
-		}
+	for( Bot *bot = ent->bot; bot; bot = bot->NextInAIList() ) {
+		bot->RegisterEvent( ent, event, parm );
 	}
 }
 
@@ -249,13 +254,13 @@ edict_t * AiManager::ConnectFakeClient() {
 }
 
 void AiManager::RespawnBot( edict_t *self ) {
-	if( AI_GetType( self->ai ) != AI_ISBOT ) {
+	if( !self->bot ) {
 		return;
 	}
 
 	BotEvolutionManager::Instance()->OnBotRespawned( self );
 
-	self->ai->botRef->OnRespawn();
+	self->bot->OnRespawn();
 }
 
 static void BOT_JoinPlayers( edict_t *self ) {
@@ -306,22 +311,11 @@ void AiManager::SetupBotForEntity( edict_t *ent ) {
 		AI_FailWith( "AiManager::SetupBotForEntity()", "Only fake clients are supported\n" );
 	}
 
-	size_t memSize = sizeof( ai_handle_t ) + sizeof( Bot );
-	size_t alignmentBytes = 0;
-	if( sizeof( ai_handle_t ) % 16 ) {
-		alignmentBytes = 16 - sizeof( ai_handle_t ) % 16;
-	}
-	memSize += alignmentBytes;
+	auto *mem = (uint8_t *)Q_malloc( sizeof( Bot ) );
+	ent->bot = new( mem )Bot( ent, MakeSkillForNewBot( ent->r.client ) );
+	ent->ai = ent->bot;
 
-	auto *handleMem = (uint8_t *)Q_malloc( memSize );
-	ent->ai = (ai_handle_t *)handleMem;
-	ent->ai->type = AI_ISBOT;
-
-	auto *botMem = handleMem + sizeof( ai_handle_t ) + alignmentBytes;
-	ent->ai->botRef = new( botMem )Bot( ent, MakeSkillForNewBot( ent->r.client ) );
-	ent->ai->aiRef = ent->ai->botRef;
-
-	LinkAi( ent->ai );
+	LinkAi( ent->bot );
 
 	ent->think = nullptr;
 	ent->nextThink = level.time + 1;
@@ -378,7 +372,7 @@ void AiManager::RemoveBot( const char *name ) {
 void AiManager::AfterLevelScriptShutdown() {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
 	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
-		if( !ent->r.inuse || AI_GetType( ent->ai ) != AI_ISBOT ) {
+		if( !ent->r.inuse || !ent->ai ) {
 			continue;
 		}
 
@@ -486,7 +480,7 @@ void AiManager::RegisterBuiltinAction( const char *actionName ) {
 }
 
 void AiManager::SetupBotGoalsAndActions( edict_t *ent ) {
-	Bot *const bot = ent->ai->botRef;
+	Bot *const bot = ent->bot;
 
 	constexpr const char *tag = "AiManager::SetupBotGoalsAndActions()";
 
@@ -539,8 +533,8 @@ void AiManager::SetupBotGoalsAndActions( edict_t *ent ) {
 }
 
 void AiManager::Frame() {
-	globalCpuQuota.Update( aiHandlesListHead );
-	thinkQuota[level.framenum % 4].Update( aiHandlesListHead );
+	globalCpuQuota.Update( botHandlesHead );
+	thinkQuota[level.framenum % 4].Update( botHandlesHead );
 
 	if( !GS_TeamBasedGametype() ) {
 		AiBaseTeam::GetTeamForNum( TEAM_PLAYERS )->Update();
@@ -652,37 +646,34 @@ bool AiManager::IsAreaReachableFromHubAreas( int targetArea, float *score ) cons
 	return numReach > 0;
 }
 
-bool AiManager::GlobalQuota::Fits( const ai_handle_t *ai ) const {
-	return !ai->aiRef->IsGhosting();
+bool AiManager::GlobalQuota::Fits( const Bot *bot ) const {
+	return !bot->IsGhosting();
 }
 
-bool AiManager::ThinkQuota::Fits( const ai_handle_t *ai ) const {
-	if( !ai->aiRef->IsGhosting() ) {
-		return false;
-	}
+bool AiManager::ThinkQuota::Fits( const Bot *bot ) const {
 	// Only bots that have the same frame affinity fit
-	return ai->botRef && ai->botRef->frameAffinityOffset == affinityOffset;
+	return bot->frameAffinityOffset == affinityOffset;
 }
 
-void AiManager::Quota::Update( const ai_handle_t *aiHandlesHead ) {
+void AiManager::Quota::Update( const Bot *aiHandlesHead ) {
 	if( !owner ) {
 		owner = aiHandlesHead;
 		while( owner && !Fits( owner ) ) {
-			owner = owner->Next();
+			owner = owner->NextInAIList();
 		}
 		return;
 	}
 
 	const auto *const oldOwner = owner;
 	// Start from the next AI in list
-	owner = owner->Next();
+	owner = owner->NextInAIList();
 	// Scan all bots that are after the current owner in the list
 	while( owner ) {
 		// Stop on the first bot that fits this
 		if( Fits( owner ) ) {
 			break;
 		}
-		owner = owner->Next();
+		owner = owner->NextInAIList();
 	}
 
 	// If the scan has not reached the list end
@@ -700,7 +691,7 @@ void AiManager::Quota::Update( const ai_handle_t *aiHandlesHead ) {
 		if( Fits( owner ) ) {
 			break;
 		}
-		owner = owner->Next();
+		owner = owner->NextInAIList();
 	}
 
 	// If the loop execution has not been interrupted by break,
@@ -709,17 +700,15 @@ void AiManager::Quota::Update( const ai_handle_t *aiHandlesHead ) {
 }
 
 bool AiManager::TryGetExpensiveComputationQuota( const Bot *bot ) {
-	const edict_t *ent = game.edicts + bot->EntNum();
-	return globalCpuQuota.TryAcquire( ent->ai );
+	return globalCpuQuota.TryAcquire( bot );
 }
 
 bool AiManager::TryGetExpensiveThinkCallQuota( const Bot *bot ) {
-	const edict_t *ent = game.edicts + bot->EntNum();
-	return thinkQuota[level.framenum % 4].TryAcquire( ent->ai );
+	return thinkQuota[level.framenum % 4].TryAcquire( bot );
 }
 
-bool AiManager::Quota::TryAcquire( const ai_handle_t *ai ) {
-	if( ai != owner ) {
+bool AiManager::Quota::TryAcquire( const Bot *bot ) {
+	if( bot != owner ) {
 		return false;
 	}
 

@@ -53,7 +53,7 @@ bool BotFlyUntilLandingMovementState::CheckForLanding( const Context *context ) 
 
 void BotWeaponJumpMovementState::TryDeactivate( const edict_t *self, const Context *context ) {
 	// If a bot has activated a trigger, give its movement state a priority
-	if( level.time - self->ai->botRef->LastTriggerTouchTime() < 64 ) {
+	if( level.time - self->bot->LastTriggerTouchTime() < 64 ) {
 		Deactivate();
 	}
 

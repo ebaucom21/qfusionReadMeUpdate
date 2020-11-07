@@ -107,12 +107,10 @@ void AdvantageProblemSolver::pruneByVisTables( SpotsQueryVector &spotsFromQuery 
 	Vec3 keepVisibleOrigin( problemParams.keepVisibleOrigin );
 	if( const auto *keepVisibleEntity = problemParams.keepVisibleEntity ) {
 		keepVisibleOrigin.Z() += 0.66f * keepVisibleEntity->r.maxs[2];
-		if( const auto *ai = keepVisibleEntity->ai ) {
-			if( const auto *bot = ai->botRef ) {
-				int areaNums[2] { 0, 0 };
-				bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
-				keepVisibleAreaNum = areaNums[0];
-			}
+		if( const Bot *bot = keepVisibleEntity->bot ) {
+			int areaNums[2] { 0, 0 };
+			bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
+			keepVisibleAreaNum = areaNums[0];
 		}
 	}
 

@@ -129,7 +129,7 @@ void PathBlockingTracker::Update() {
 
 	wsw::StaticVector<const TrackedEnemy *, DisableMapAreasRequest::MAX_ENEMIES> potentialBlockers;
 
-	const TrackedEnemy *enemy = self->ai->botRef->TrackedEnemiesHead();
+	const TrackedEnemy *enemy = self->bot->TrackedEnemiesHead();
 	for(; enemy; enemy = enemy->NextInTrackedList() ) {
 		if( !IsAPotentialBlocker( enemy, damageToKillBot, botBestWeaponTier ) ) {
 			continue;

@@ -16,32 +16,32 @@ protected:
 	AiManager( const char *gametype, const char *mapname );
 
 	int teams[MAX_CLIENTS];
-	ai_handle_t *aiHandlesListHead { nullptr };
+	Bot *botHandlesHead { nullptr };
 
 	struct Quota {
 		int64_t givenAt { 0 };
-		const ai_handle_t *owner { nullptr };
+		const Bot *owner { nullptr };
 
-		virtual bool Fits( const ai_handle_t *ai ) const = 0;
+		virtual bool Fits( const Bot *ai ) const = 0;
 
-		bool TryAcquire( const ai_handle_t *ai );
-		void Update( const ai_handle_t *aiHandlesHead );
+		bool TryAcquire( const Bot *ai );
+		void Update( const Bot *botHandlesHead );
 
-		void OnRemoved( const ai_handle_t *ai ) {
-			if( ai == owner ) {
+		void OnRemoved( const Bot *bot ) {
+			if( bot == owner ) {
 				owner = nullptr;
 			}
 		}
 	};
 
 	struct GlobalQuota final : public Quota {
-		bool Fits( const ai_handle_t *ai ) const override;
+		bool Fits( const Bot *bot ) const override;
 	};
 
 	struct ThinkQuota final : public Quota {
 		const unsigned affinityOffset;
 		explicit ThinkQuota( unsigned affinityOffset_ ): affinityOffset( affinityOffset_ ) {}
-		bool Fits( const ai_handle_t *ai ) const override;
+		bool Fits( const Bot *bot ) const override;
 	};
 
 	GlobalQuota globalCpuQuota;
@@ -199,8 +199,8 @@ public:
 
 	void FindHubAreas();
 public:
-	void LinkAi( ai_handle_t *aiHandle );
-	void UnlinkAi( ai_handle_t *aiHandle );
+	void LinkAi( Ai *ai );
+	void UnlinkAi( Ai *ai );
 
 	void OnBotDropped( edict_t *ent );
 

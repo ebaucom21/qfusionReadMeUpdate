@@ -26,16 +26,6 @@ in NO WAY supported by Steve Yeager.
 #ifndef QFUSION_AI_H
 #define QFUSION_AI_H
 
-typedef enum {
-	AI_INACTIVE,
-	AI_ISBOT,
-	AI_ISMONSTER,
-
-	AI_MAX_TYPES
-} ai_type;
-
-typedef struct ai_handle_s ai_handle_t;
-
 extern const struct asEnum_s asAIEnums[];
 extern const struct asClassDescriptor_s *asAIClassesDescriptors[];
 extern const struct asglobfuncs_s asAIGlobFuncs[];
@@ -97,7 +87,6 @@ void AI_NavEntityReached( edict_t *ent );
 
 void        AI_Think( edict_t *self );
 void        G_FreeAI( edict_t *ent );
-ai_type     AI_GetType( const ai_handle_t *ai );
 void        AI_TouchedEntity( edict_t *self, edict_t *ent );
 void        AI_DamagedEntity( edict_t *self, edict_t *ent, int damage );
 void        AI_Pain( edict_t *self, edict_t *attacker, int kick, int damage );

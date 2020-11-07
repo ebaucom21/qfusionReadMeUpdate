@@ -1327,14 +1327,7 @@ void G_RespawnEffect( edict_t *ent ) {
 * G_SolidMaskForEnt
 */
 int G_SolidMaskForEnt( edict_t *ent ) {
-	int solidmask;
-	if( AI_GetType( ent->ai ) == AI_ISMONSTER ) {
-		solidmask = MASK_MONSTERSOLID;
-	} else {
-		solidmask = ent->r.clipmask ? ent->r.clipmask : MASK_SOLID;
-	}
-
-	return solidmask;
+	return ent->r.clipmask ? ent->r.clipmask : MASK_SOLID;
 }
 
 /*

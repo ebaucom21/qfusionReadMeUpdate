@@ -476,7 +476,7 @@ bool BotItemsSelector::IsShortRangeReachable( const NavEntity *navEnt, const int
 	}
 
 	const int travelFlags = TFL_WALK | TFL_AIR;
-	const auto *routeCache = self->ai->botRef->routeCache;
+	const auto *routeCache = self->bot->routeCache;
 	for( int i = 0; i < numFromAreas; ++i ) {
 		if( routeCache->TravelTimeToGoalArea( fromAreaNums[i], navEnt->AasAreaNum(), travelFlags ) ) {
 			return true;

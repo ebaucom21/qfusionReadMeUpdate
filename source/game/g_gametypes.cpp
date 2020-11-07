@@ -1283,7 +1283,7 @@ static void G_CheckNumBots( void ) {
 			if( !ent->r.inuse || !( ent->r.svflags & SVF_FAKECLIENT ) ) {
 				continue;
 			}
-			if( AI_GetType( ent->ai ) == AI_ISBOT ) {
+			if( ent->bot ) {
 				AI_RemoveBot( ent->r.client->netname );
 				break;
 			}

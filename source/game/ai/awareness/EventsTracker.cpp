@@ -500,7 +500,7 @@ const edict_t *PlayerTeleOutEventsCache::GetPlayerAndDestOriginByEvent( const ed
 
 void EventsTracker::HandlePlayerTeleportOutEvent( const edict_t *ent, float ) {
 	const edict_t *self = game.edicts + bot->EntNum();
-	float distanceThreshold = 512.0f * ( 2.0f + 1.0f * self->ai->botRef->Skill() );
+	float distanceThreshold = 512.0f * ( 2.0f + 1.0f * self->bot->Skill() );
 	if( DistanceSquared( self->s.origin, ent->s.origin ) > distanceThreshold * distanceThreshold ) {
 		return;
 	}

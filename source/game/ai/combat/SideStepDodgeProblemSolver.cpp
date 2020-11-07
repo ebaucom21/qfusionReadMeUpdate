@@ -11,8 +11,8 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 			tmpVec3.Set( originEntity->s.origin );
 			tmpVec3.Z() += originEntity->r.mins[2];
 			droppedToFloorOrigin = &tmpVec3;
-		} else if( originEntity->ai && originEntity->ai->botRef ) {
-			const auto &entityPhysicsState = originEntity->ai->botRef->EntityPhysicsState();
+		} else if( Bot *bot = originEntity->bot ) {
+			const auto &entityPhysicsState = bot->EntityPhysicsState();
 			if( entityPhysicsState->HeightOverGround() < 32.0f ) {
 				tmpVec3.Set( entityPhysicsState->Origin() );
 				tmpVec3.Z() += playerbox_stand_mins[2];
@@ -47,8 +47,8 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 	vec3_t velocityDir;
 	// Perform deferred retrieval of these additional parameters
 	if( const auto *originEntity = originParams.originEntity ) {
-		if( originEntity->ai && originEntity->ai->botRef ) {
-			const auto &entityPhysicsState = originEntity->ai->botRef->EntityPhysicsState();
+		if( Bot *bot = originEntity->bot ) {
+			const auto &entityPhysicsState = bot->EntityPhysicsState();
 			int areaNums[2] { 0, 0 };
 			entityPhysicsState->PrepareRoutingStartAreas( areaNums );
 			testedAreaNum = areaNums[0];

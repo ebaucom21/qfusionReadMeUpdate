@@ -375,7 +375,7 @@ public:
 
 	inline void ResetNavTarget() {
 		this->navTarget = nullptr;
-		self->ai->aiRef->OnNavTargetTouchHandled();
+		OnNavTargetTouchHandled();
 	}
 
 	bool IsCloseToNavTarget( float proximityThreshold ) const {

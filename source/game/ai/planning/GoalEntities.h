@@ -134,15 +134,15 @@ public:
 
 	const char *Name() const override { return name; }
 
-	void NotifyTouchedByBot( const edict_t *bot ) const {
+	void NotifyTouchedByBot( const edict_t *botEnt ) const {
 		if( ShouldNotifyScript() ) {
-			GT_asBotTouchedGoal( bot->ai, ent );
+			GT_asBotTouchedGoal( botEnt->bot, ent );
 		}
 	}
 
-	void NotifyBotReachedRadius( const edict_t *bot ) const {
+	void NotifyBotReachedRadius( const edict_t *botEnt ) const {
 		if( ShouldNotifyScript() ) {
-			GT_asBotReachedGoalRadius( bot->ai, ent );
+			GT_asBotReachedGoalRadius( botEnt->bot, ent );
 		}
 	}
 

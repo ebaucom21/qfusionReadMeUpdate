@@ -102,8 +102,8 @@ void GT_asBotDropHealth( gclient_t *client );
 bool GT_asBotWouldDropArmor( const gclient_t *client );
 void GT_asBotDropArmor( gclient_t *client );
 
-void GT_asBotTouchedGoal( const ai_handle_t *bot, const edict_t *goalEnt );
-void GT_asBotReachedGoalRadius( const ai_handle_t *bot, const edict_t *goalEnt );
+void GT_asBotTouchedGoal( const Bot *bot, const edict_t *goalEnt );
+void GT_asBotReachedGoalRadius( const Bot *bot, const edict_t *goalEnt );
 
 // These functions return a score in range [0, 1].
 // Default score should be 0.5f, and it should be returned
@@ -133,19 +133,6 @@ bool GT_asFireScriptWeapon( gclient_t *client, int scriptWeaponNum );
 
 #include "navigation/AasWorld.h"
 #include "vec3.h"
-
-typedef struct ai_handle_s {
-	// Links for generic Link()/Unlink() utilities
-	ai_handle_t *prev[1], *next[1];
-
-	ai_handle_t *Next() { return next[0]; }
-	const ai_handle_t *Next() const { return next[0]; }
-
-	class Ai * aiRef;
-	class Bot * botRef;
-
-	ai_type type;
-} ai_handle_t;
 
 #ifndef _MSC_VER
 void AI_Debug( const char *tag, const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );

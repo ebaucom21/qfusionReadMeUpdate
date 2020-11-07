@@ -1877,6 +1877,9 @@ typedef struct {
 	int frequency;
 } particles_edict_t;
 
+class Ai;
+class Bot;
+
 struct edict_s {
 	entity_state_t s;
 	entity_shared_t r;
@@ -2003,7 +2006,9 @@ struct edict_s {
 	// common data blocks
 	moveinfo_t moveinfo;        // func movers movement
 
-	ai_handle_t *ai;
+	Ai *ai;
+	Bot *bot;
+
 	float aiIntrinsicEnemyWeight;
 	float aiVisibilityDistance;
 

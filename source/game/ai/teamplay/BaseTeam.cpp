@@ -207,7 +207,7 @@ void AiBaseTeam::ReleaseBotFrameAffinity( int entNum ) {
 void AiBaseTeam::SetBotFrameAffinity( int entNum, unsigned modulo, unsigned offset ) {
 	botAffinityModulo[entNum] = (unsigned char)modulo;
 	botAffinityOffsets[entNum] = (unsigned char)offset;
-	game.edicts[entNum].ai->botRef->SetFrameAffinity( modulo, offset );
+	game.edicts[entNum].bot->SetFrameAffinity( modulo, offset );
 }
 
 void AiBaseTeam::Init() {
