@@ -20,7 +20,7 @@ Row {
 						   leftColor.a * frac + rightColor.a * (1.0 - frac));
 			width: 20
 			height: 40
-			radius: 2
+			radius: 3
 
 			transform: Matrix4x4 {
 				matrix: root.transformMatrix

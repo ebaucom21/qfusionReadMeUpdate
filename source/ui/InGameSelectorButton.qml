@@ -35,7 +35,7 @@ Item {
         width: parent.width
         height: parent.height
         anchors.centerIn: parent
-        radius: 2
+        radius: 3
         color: mouseArea.containsMouse ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.25)
 
         transform: Matrix4x4 {
@@ -45,7 +45,7 @@ Item {
         Label {
             anchors.centerIn: parent
             text: root.text
-            font.pointSize: 20
+            font.pointSize: 17
             font.bold: true
             font.capitalization: Font.AllUppercase
         }

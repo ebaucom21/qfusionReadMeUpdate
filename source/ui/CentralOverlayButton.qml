@@ -92,7 +92,7 @@ Item {
 		id: contentRow
 		height: 40
 		width: 224
-		radius: 2
+		radius: 3
 		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 
 		transform: Matrix4x4 {
@@ -116,7 +116,7 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
-			font.pointSize: 20
+			font.pointSize: 17
 			text: root.text
 			font.weight: Font.Bold
 			font.capitalization: Font.AllUppercase

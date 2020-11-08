@@ -8,11 +8,9 @@ Item {
     id: root
 
     ColumnLayout {
-        spacing: 16
-        width: logo.width - 128
-        anchors.bottom: logo.top
-        anchors.bottomMargin: 24
-        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 18
+        width: parent.width - 32 - 128
+        anchors.centerIn: parent
 
         InGameSelectorButton {
             text: "Main menu"
@@ -24,23 +22,6 @@ Item {
         InGameSelectorButton {
             text: "Gametype Options"
         }
-    }
-
-    Image {
-        id: logo
-        width: Math.min(implicitWidth, parent.width - 32)
-        fillMode: Image.PreserveAspectFit
-        anchors.centerIn: parent
-        source: "logo.webp"
-    }
-
-    ColumnLayout {
-        spacing: 16
-        width: logo.width - 128
-        anchors.top: logo.bottom
-        anchors.topMargin: 24
-        anchors.horizontalCenter: parent.horizontalCenter
-
         InGameSelectorButton {
             visible: wsw.isSpectator
             text: "Spectator options"

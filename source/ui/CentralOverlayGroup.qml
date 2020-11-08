@@ -42,7 +42,7 @@ Item {
 		anchors.top: logoHolder.bottom
 		anchors.left: parent.left
 		anchors.right: parent.right
-		spacing: 16
+		spacing: 18
 
 		CentralOverlayButton {
 		    highlighted: root.highlightedPageTag === root.pageNews
