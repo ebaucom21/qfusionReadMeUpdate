@@ -1,8 +1,8 @@
-#include "snap_tables.h"
+#include "sv_snap.h"
 #include "../gameshared/gs_public.h"
 #include "../gameshared/q_comref.h"
-#include "singletonholder.h"
-#include "cm_local.h"
+#include "../qcommon/singletonholder.h"
+#include "../qcommon/cm_local.h"
 
 static SingletonHolder<SnapShadowTable> shadowTableHolder;
 

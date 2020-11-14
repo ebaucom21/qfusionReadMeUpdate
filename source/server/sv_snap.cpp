@@ -18,11 +18,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-#include "qcommon.h"
-#include "snap_write.h"
-#include "snap_tables.h"
+#include "../qcommon/qcommon.h"
+#include "sv_snap.h"
+
 #include "../gameshared/gs_public.h"
-#include "../gameshared/q_comref.h"
 
 static inline void SNAP_WriteDeltaEntity( msg_t *msg, const entity_state_t *from, const entity_state_t *to,
 										  const client_snapshot_t *frame, bool force ) {
