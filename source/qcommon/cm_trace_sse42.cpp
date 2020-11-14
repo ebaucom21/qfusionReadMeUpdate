@@ -4,72 +4,9 @@
 
 #ifdef CM_USE_SSE
 
-/**
- * Create this object in scopes that match boundaries
- * of transition between regular SSE2 and VEX-encoded binary code.
- * Compiling this file using MSVC requires AVX support and the code
- * is VEX-encoded contrary to the rest of the codebase.
- * This fence inserts instructions that help to avoid transition penalties.
- */
-struct VexEncodingFence {
-#ifdef _MSC_VER
-	VexEncodingFence() {
-		_mm256_zeroupper();
-	}
-	~VexEncodingFence() {
-		_mm256_zeroupper();
-	}
-#endif
-};
-
-static inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs,
-											 __m128 shapeMins, __m128 shapeMaxs ) {
-	__m128 cmp1 = _mm_cmpge_ps( shapeMins, traceAbsmaxs );
-	__m128 cmp2 = _mm_cmpge_ps( traceAbsmins, shapeMaxs );
-	return !_mm_movemask_ps( _mm_or_ps( cmp1, cmp2 ) );
-}
-
-static inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs,
-											 const vec4_t shapeMins, const vec4_t shapeMaxs ) {
-	// This version relies on fast unaligned loads, that's why it requires SSE4.
-	__m128 xmmShapeMins = _mm_loadu_ps( shapeMins );
-	__m128 xmmShapeMaxs = _mm_loadu_ps( shapeMaxs );
-
-	return CM_BoundsIntersect_SSE42( traceAbsmins, traceAbsmaxs, xmmShapeMins, xmmShapeMaxs );
-}
-
-static inline bool CM_MightCollide_SSE42( const vec_bounds_t shapeMins,
-										  const vec_bounds_t shapeMaxs,
-										  const CMTraceContext *tlc ) {
-	return CM_BoundsIntersect_SSE42( tlc->xmmAbsmins, tlc->xmmAbsmaxs, shapeMins, shapeMaxs );
-}
-
-static inline bool CM_MightCollideInLeaf_SSE42( const vec_bounds_t shapeMins,
-												const vec_bounds_t shapeMaxs,
-												const vec_bounds_t shapeCenter,
-												float shapeRadius,
-												const CMTraceContext *tlc ) {
-	if( !CM_MightCollide_SSE42( shapeMins, shapeMaxs, tlc ) ) {
-		return false;
-	}
-
-	// TODO: Vectorize this part. This task is not completed for various reasons.
-
-	vec3_t centerToStart;
-	vec3_t proj, perp;
-
-	VectorSubtract( tlc->start, shapeCenter, centerToStart );
-	float projMagnitude = DotProduct( centerToStart, tlc->traceDir );
-	VectorScale( tlc->traceDir, projMagnitude, proj );
-	VectorSubtract( centerToStart, proj, perp );
-	float distanceThreshold = shapeRadius + tlc->boxRadius;
-	return VectorLengthSquared( perp ) <= distanceThreshold * distanceThreshold;
-}
-
 void CMSse42TraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes,
 										  int numbrushes, const cface_t *markfaces, int nummarkfaces ) {
-	volatile VexEncodingFence fence;
-	(void)fence;
+	[[maybe_unused]] volatile VexScopedFence fence;
 
 	// Save the exact address to avoid pointer chasing in loops
 	const float *fraction = &tlc->trace->fraction;
@@ -120,6 +57,10 @@ __attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides
 	if( numSides >= 256 ) {
 		printf( "Too many brushsides %d\n", numSides );
 		abort();
+	}
+	if( (uintptr_t)buffer % 32 ) {
+		//printf( "Misaligned buffer\n" );
+		//abort();
 	}
 
 	int numVectorGroups = numSides / 4;
@@ -185,6 +126,7 @@ __attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides
 		signBitsPtr[i] = signBitsPtr[lastSideNum];
 	}
 
+	assert( !numVectorGroups || numVectorGroups >= 2 );
 	return numVectorGroups;
 }
 
@@ -226,13 +168,13 @@ void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *
 	// The data must be converted to SIMD-friendly format upon the map loading.
 	// Actually, this is performed for world brushes/facets but in a non-optimal fashion.
 
-	alignas( 16 ) uint8_t tmpBuffer[1024];
+	alignas( 32 ) uint8_t tmpBuffer[1024];
 
 	const uint8_t *buffer;
 	int numVectorGroups;
 	if( brush->simd ) {
-		numVectorGroups = brush->numSimdGroups;
-		buffer = brush->simddata;
+		numVectorGroups = brush->numSseGroups;
+		buffer = brush->simd;
 	} else {
 		numVectorGroups = BuildSimdBrushsideData( brush->brushsides, brush->numsides, tmpBuffer );
 		buffer = tmpBuffer;
@@ -418,8 +360,7 @@ void CMSse42TraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr
 												const vec3_t mins, const vec3_t maxs, int brushmask ) {
 	CMTraceComputer::SetupCollideContext( tlc, tr, start, end, mins, maxs, brushmask );
 	// Put the fence after the super method call (that does not use VEX encoding)
-	volatile VexEncodingFence fence;
-	(void)fence;
+	[[maybe_unused]] volatile VexScopedFence fence;
 
 	// Always set xmm trace bounds since it is used by all code paths, leaf-optimized and generic
 	tlc->xmmAbsmins = _mm_setr_ps( tlc->absmins[0], tlc->absmins[1], tlc->absmins[2], 0 );
@@ -427,6 +368,8 @@ void CMSse42TraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr
 }
 
 void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
+	[[maybe_unused]] volatile VexScopedFence fence;
+
 	int leafNums[1024], topNode;
 	// TODO: This can be optimized
 	const int numLeaves = CM_BoxLeafnums( cms, mins, maxs, leafNums, 1024, &topNode );
@@ -449,6 +392,9 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 			if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
 				continue;
 			}
+			if( !b->numsides ) {
+				continue;
+			}
 			destShapes[numShapes++] = b;
 		}
 
@@ -466,6 +412,9 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 				if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
 					continue;
 				}
+				if( !b->numsides ) {
+					continue;
+				}
 				destShapes[numShapes++] = b;
 			}
 		}
@@ -476,6 +425,8 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 }
 
 void CMSse42TraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
+	[[maybe_unused]] volatile VexScopedFence fence;
+
 	const int numSrcShapes = baseList->numShapes;
 	const auto *srcShapes = baseList->shapes;
 
@@ -509,6 +460,8 @@ void CMSse42TraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *
 void CMSse42TraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
 					  const float *start, const float *end,
 					  const float *mins, const float *maxs, int clipMask ) {
+	[[maybe_unused]] volatile VexScopedFence fence;
+
 	alignas( 16 ) CMTraceContext tlc;
 	SetupCollideContext( &tlc, tr, start, end, mins, maxs, clipMask );
 

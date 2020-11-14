@@ -311,7 +311,7 @@ static void CM_CreatePatch( cmodel_state_t *cms, cface_t *patch, int shadernum, 
 				s->surfFlags = shaderref->flags;
 				s->shaderNum = shadernum;
 			}
-			facet->numSimdGroups = BuildSimdBrushsideData( facet->brushsides, facet->numsides, facet->simddata );
+			facet->numSseGroups = BuildSimdBrushsideData( facet->brushsides, facet->numsides, facet->simddata );
 			facet->simd = facet->simddata;
 		}
 
@@ -926,7 +926,7 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 		out->brushsides = cms->map_brushsides + LittleLong( in->firstside );
 		CM_BoundBrush( cms, out );
 
-		out->numSimdGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simddata );
+		out->numSseGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simddata );
 		out->simd = out->simddata;
 	}
 }

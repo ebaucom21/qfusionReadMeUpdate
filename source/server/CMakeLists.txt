@@ -16,11 +16,7 @@ file(GLOB SERVER_HEADERS
 file(GLOB SERVER_SOURCES
 	"../qcommon/asyncstream.cpp"
 	"../qcommon/autoupdate.cpp"
-	"../qcommon/cm_main.cpp"
-	"../qcommon/cm_q3bsp.cpp"
-	"../qcommon/cm_sample.cpp"
-	"../qcommon/cm_trace.cpp"
-	"../qcommon/cm_trace_sse42.cpp"
+	"../qcommon/cm_*.cpp"
 	"../qcommon/compression.cpp"
 	"../qcommon/configstringstorage.cpp"
 	"../qcommon/base64.cpp"
@@ -98,6 +94,7 @@ if (MSVC)
 	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "/fp:precise")
 else()
 	set_source_files_properties("../qcommon/cm_trace_sse42.cpp" PROPERTIES COMPILE_FLAGS "-msse4.2")
+	set_source_files_properties("../qcommon/cm_trace_avx.cpp" PROPERTIES COMPILE_FLAGS "-mavx")
 	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "-fno-fast-math")
 endif()
 

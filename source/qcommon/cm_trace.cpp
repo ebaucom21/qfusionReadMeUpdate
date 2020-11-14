@@ -32,6 +32,7 @@ static inline void CM_SetBuiltinBrushBounds( vec_bounds_t mins, vec_bounds_t max
 
 static CMGenericTraceComputer genericTraceComputer;
 static CMSse42TraceComputer sse42TraceComputer;
+static CMAvxTraceComputer avxTraceComputer;
 
 static CMTraceComputer *selectedTraceComputer = nullptr;
 
@@ -63,7 +64,7 @@ struct CMTraceComputer *CM_GetTraceComputer( cmodel_state_t *cms ) {
 
 	if( Sys_GetProcessorFeatures() & desiredFeatureFlags ) {
 		Com_Printf( "%s instructions are supported. An optimized collision code will be used\n", featureDesc );
-		selectedTraceComputer = &sse42TraceComputer;
+		selectedTraceComputer = &avxTraceComputer;
 	} else {
 		Com_Printf( "%s instructions support has not been found. A generic collision code will be used\n", featureDesc );
 		selectedTraceComputer = &genericTraceComputer;
@@ -374,14 +375,17 @@ void CMTraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush
 		// crosses face
 		f = d1 - d2;
 		if( f > 0 ) {   // enter
-			f = ( d1 - DIST_EPSILON ) / f;
+			// conform to SIMD versions by using RCP
+			// there is slight difference in rightmost digits (~ 1e-4) with the division but we believe it's negligible.
+			// we could provide a specialized double-precision version for gameplay code if it is really needed.
+			f = ( d1 - DIST_EPSILON ) * Q_Rcp( f );
 			if( f > enterfrac ) {
 				enterfrac = f;
 				clipplane = p;
 				leadside = side;
 			}
 		} else if( f < 0 ) {   // leave
-			f = ( d1 + DIST_EPSILON ) / f;
+			f = ( d1 + DIST_EPSILON ) * Q_Rcp( f );
 			if( f < leavefrac ) {
 				leavefrac = f;
 			}
@@ -822,6 +826,88 @@ void CMTraceComputer::Trace( trace_t *tr, const vec3_t start, const vec3_t end,
 	}
 }
 
+static void CompareTraceResults( const trace_t *tr, const char **tags, int count, bool interrupt = false ) {
+	if( count < 2 ) {
+		return;
+	}
+
+	int i;
+
+	for( i = 0; i < count - 1; ++i ) {
+		if( tr[i].fraction != tr[i + 1].fraction ) {
+			break;
+		}
+	}
+	if( i != count - 1 ) {
+		for( i = 0; i < count; ++i ) {
+			printf( "%8s: fraction %lf\n", tags[i], tr[i].fraction );
+		}
+		if( interrupt ) {
+			abort();
+		}
+	}
+
+	for ( i = 0; i < count - 1; ++i ) {
+		if( !VectorCompare( tr[i].endpos, tr[i + 1].endpos ) ) {
+			break;
+		}
+	}
+	if( i != count - 1 ) {
+		for( i = 0; i < count; ++i ) {
+			printf( "%8s: endpos %lf %lf %lf\n", tags[i], tr[i].endpos[0], tr[i].endpos[1], tr[i].endpos[2] );
+		}
+		if( interrupt ) {
+			abort();
+		}
+	}
+
+	for( i = 0; i < count - 1; ++i ) {
+		if( !VectorCompare( tr[i].plane.normal, tr[i + 1].plane.normal ) || tr[i].plane.dist != tr[i + 1].plane.dist ) {
+			break;
+		}
+	}
+	if( i != count - 1 ) {
+		for( i = 0; i < count; ++i ) {
+			const float *n = tr[i].plane.normal;
+			printf( "%8s: normal %lf %lf %lf dist %lf\n", tags[i], n[0], n[1], n[2], tr[i].plane.dist );
+		}
+		if( interrupt ) {
+			abort();
+		}
+	}
+
+	for( i = 0; i < count - 1; ++i ) {
+		const auto &tr1 = tr[i];
+		const auto &tr2 = tr[i + 1];
+		if( tr1.contents != tr2.contents || tr1.surfFlags != tr2.surfFlags || tr1.shaderNum != tr2.shaderNum ) {
+			break;
+		}
+	}
+	if( i != count - 1 ) {
+		for( i = 0; i < count; ++i ) {
+			printf( "%8s: contents %x surfFlags %x shaderNum %x\n",
+		   		tags[i], tr[i].contents, tr[i].surfFlags, tr[i].shaderNum );
+		}
+		if( interrupt ) {
+			abort();
+		}
+	}
+
+	for( i = 0; i < count - 1; ++i ) {
+		if( tr[i].startsolid != tr[i + 1].startsolid || tr[i].allsolid != tr[i + 1].allsolid ) {
+			break;
+		}
+	}
+	if( i != count - 1 ) {
+		for( i = 0; i < count; ++i ) {
+			printf( "%8s: startsolid %d allsolid %d\n", tags[i], (int)tr[i].startsolid, (int)tr[i].allsolid );
+		}
+		if( interrupt ) {
+			abort();
+		}
+	}
+}
+
 /*
 * CM_TransformedBoxTrace
 *
@@ -895,6 +981,18 @@ void CM_TransformedBoxTrace( const cmodel_state_t *cms, trace_t *tr,
 		VectorCopy( end_l, temp );
 		Matrix3_TransformVector( axis, temp, end_l );
 	}
+
+#ifdef CM_SELF_TEST
+	trace_t traces[3];
+	const char *tags[3] { "generic", "sse42", "avx" };
+	genericTraceComputer.cms = const_cast<cmodel_state_s *>( cms );
+	genericTraceComputer.Trace( &traces[0], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	sse42TraceComputer.cms = const_cast<cmodel_state_s *>( cms );
+	sse42TraceComputer.Trace( &traces[1], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	avxTraceComputer.cms = const_cast<cmodel_state_s *>( cms );
+	avxTraceComputer.Trace( &traces[2], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	CompareTraceResults( traces, tags, 3 );
+#endif
 
 	// sweep the box through the model
 	cms->traceComputer->Trace( tr, start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
@@ -1021,7 +1119,7 @@ void CMTraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
 
 	for( int i = 0; i < numShapes; ++i ) {
 		const cbrush_t *__restrict b = shapes[i];
-		if( !BoundsIntersect( b->mins, b->maxs, tlc.mins, tlc.maxs ) ) {
+		if( !BoundsIntersect( b->mins, b->maxs, tlc.absmins, tlc.absmaxs ) ) {
 			continue;
 		}
 		( this->*clipFn )( &tlc, b );
@@ -1043,13 +1141,14 @@ void CMTraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
 }
 
 CMShapeList *CM_AllocShapeList( cmodel_state_t *cms ) {
-	// TODO: Use only a necessary amount of memory
-	void *mem = ::malloc( 16 * 1024 );
+	// TODO: Use a necessary amount of memory
+	const size_t totalSize = 16 * 1024;
+	void *mem = ::malloc( totalSize );
 	if( !mem ) {
 		return nullptr;
 	}
 	auto *list = (CMShapeList *)mem;
-	new( list )CMShapeList( list + 1 );
+	new( list )CMShapeList( list + 1, totalSize - sizeof( CMShapeList ) );
 	return list;
 }
 
@@ -1060,6 +1159,27 @@ void CM_FreeShapeList( cmodel_state_t *cms, CMShapeList *list ) {
 }
 
 CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
+#ifdef CM_SELF_TEST
+	cbrush_s **tmp1[1024];
+	cbrush_s **tmp2[1024];
+
+	genericTraceComputer.cms = cms;
+	genericTraceComputer.BuildShapeList( list, mins, maxs, clipMask );
+	const int numShapes1 = list->numShapes;
+	std::memcpy( tmp1, list->shapes, list->numShapes * 8 );
+
+	avxTraceComputer.cms = cms;
+	avxTraceComputer.BuildShapeList( list, mins, maxs, clipMask );
+	int numShapes2 = list->numShapes;
+	if( numShapes1 != numShapes2 ) abort();
+	std::memcpy( tmp2, list->shapes, list->numShapes * 8 );
+
+	// We're free to reorder shapes, make sure they're sorted for comparison
+	std::sort( tmp1, tmp1 + list->numShapes );
+	std::sort( tmp2, tmp2 + list->numShapes );
+	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
+#endif
+
 	CM_GetTraceComputer( cms )->BuildShapeList( list, mins, maxs, clipMask );
 	return list;
 }
@@ -1067,6 +1187,27 @@ CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const fl
 void CM_ClipShapeList( cmodel_state_t *cms, CMShapeList *list,
 	                   const CMShapeList *baseList,
 	                   const float *mins, const float *maxs ) {
+#ifdef CM_SELF_TEST
+	cbrush_s **tmp1[1024];
+	cbrush_s **tmp2[1024];
+
+	genericTraceComputer.cms = cms;
+	genericTraceComputer.ClipShapeList( list, baseList, mins, maxs );
+	const int numShapes1 = list->numShapes;
+	std::memcpy( tmp1, list->shapes, list->numShapes * 8 );
+
+	avxTraceComputer.cms = cms;
+	avxTraceComputer.ClipShapeList( list, baseList, mins, maxs );
+	const int numShapes2 = list->numShapes;
+	if( numShapes1 != numShapes2 ) abort();
+	std::memcpy( tmp2, list->shapes, list->numShapes * 8 );
+
+	// We're free to reorder shapes, make sure they're sorted for comparison
+	std::sort( tmp1, tmp1 + list->numShapes );
+	std::sort( tmp2, tmp2 + list->numShapes );
+	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
+#endif
+
 	CM_GetTraceComputer( cms )->ClipShapeList( list, baseList, mins, maxs );
 }
 
@@ -1079,5 +1220,24 @@ void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *
 		VectorCopy( end, tr->endpos );
 	    return;
 	}
+
+#ifdef CM_SELF_TEST
+	trace_t traces[3];
+	const char *tags[3] { "generic", "sse42", "avx" };
+	std::memset( &traces[0], 0, sizeof( trace_t ) );
+	std::memset( &traces[1], 0, sizeof( trace_t ) );
+	std::memset( &traces[2], 0, sizeof( trace_t ) );
+	traces[0].fraction = traces[1].fraction = traces[2].fraction = 1.0f;
+
+	genericTraceComputer.cms = cms;
+	genericTraceComputer.ClipToShapeList( list, &traces[0], start, end, mins, maxs, clipMask );
+	sse42TraceComputer.cms = cms;
+	sse42TraceComputer.ClipToShapeList( list, &traces[1], start, end, mins, maxs, clipMask );
+	avxTraceComputer.cms = cms;
+	avxTraceComputer.ClipToShapeList( list, &traces[2], start, end, mins, maxs, clipMask );
+
+	CompareTraceResults( traces, tags, 3 );
+#endif
+
 	CM_GetTraceComputer( cms )->ClipToShapeList( list, tr, start, end, mins, maxs, clipMask );
 }

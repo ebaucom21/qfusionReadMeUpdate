@@ -74,7 +74,7 @@ typedef vec3_t vec_bounds_t;
 typedef struct cbrush_s {
 	cbrushside_t *brushsides;
 	uint8_t *simd;
-	int numSimdGroups;
+	int numSseGroups;
 
 	vec_bounds_t mins, maxs, center;
 	float radius;
@@ -254,18 +254,30 @@ static inline void CM_CopyCMToRawPlane( const cm_plane_t *src, cplane_t *dest ) 
 #ifdef __cplusplus
 }
 
-struct CMShapeList {
+struct alignas( sizeof( void * ) )CMShapeList {
 	const cbrush_t **shapes;
-	int numShapes { 0 };
+	void *scratchpad;
 
 	vec3_t mins, maxs;
+
+	int numShapes { 0 };
+	int numAvxFriendlyShapes { 0 };
+	int numOtherShapes { 0 };
+	// TODO int maxNumShapes, scratchpadSizeInBytes
 	bool hasBounds { false };
 
-	explicit CMShapeList( void *mem ) {
+	CMShapeList( void *mem, size_t size ) {
 		assert( !( (uintptr_t)mem % sizeof( void * ) ) );
 		shapes = (const cbrush_t **)mem;
+		// Use last 3.5K bytes as a scratchpad
+		// (these magic numbers are for avoiding possible cache bank conflicts but keep the pointed chunk aligned)
+		scratchpad = ( (uint8_t *)mem + ( size - ( 4096 - 512 - 48 ) ) );
 	}
 };
+
+#if 0
+#define CM_SELF_TEST
+#endif
 
 #endif
 

@@ -76,7 +76,7 @@ struct CMTraceComputer {
 
 struct CMGenericTraceComputer final: public CMTraceComputer {};
 
-struct CMSse42TraceComputer final: public CMTraceComputer {
+struct CMSse42TraceComputer: public CMTraceComputer {
 	// Don't even bother about making prototypes if there is no attempt to compile SSE code
 	// (this should aid calls devirtualization)
 #ifdef CM_USE_SSE
@@ -97,5 +97,88 @@ struct CMSse42TraceComputer final: public CMTraceComputer {
 		                  const float *mins, const float *maxs, int clipMask ) override;
 #endif
 };
+
+struct CMAvxTraceComputer final: public CMSse42TraceComputer {
+	//void ClipToAvxFriendlyShapes( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shapes, int numShapes );
+	void ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shape );
+
+	void ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) override;
+
+	void ClipToShapeList( const CMShapeList *list, trace_t *tr,
+						  const float *start, const float *end,
+						  const float *mins, const float *maxs, int clipMask ) override;
+};
+
+
+#ifdef CM_USE_SSE
+
+inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs, __m128 shapeMins, __m128 shapeMaxs ) {
+	__m128 cmp1 = _mm_cmpge_ps( shapeMins, traceAbsmaxs );
+	__m128 cmp2 = _mm_cmpge_ps( traceAbsmins, shapeMaxs );
+	__m128 orCmp = _mm_or_ps( cmp1, cmp2 );
+
+	return _mm_movemask_epi8( _mm_cmpeq_epi32( _mm_castps_si128( orCmp ), _mm_setzero_si128() ) ) == 0xFFFF;
+}
+
+inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs,
+									  const float *shapeMins, const float *shapeMaxs ) {
+	// This version relies on fast unaligned loads, that's why it requires SSE4.
+	__m128 xmmShapeMins = _mm_loadu_ps( shapeMins );
+	__m128 xmmShapeMaxs = _mm_loadu_ps( shapeMaxs );
+
+	return CM_BoundsIntersect_SSE42( traceAbsmins, traceAbsmaxs, xmmShapeMins, xmmShapeMaxs );
+}
+
+inline bool CM_MightCollide_SSE42( const float *__restrict shapeMins,
+								   const float *__restrict shapeMaxs,
+								   const CMTraceContext *__restrict tlc ) {
+	return CM_BoundsIntersect_SSE42( tlc->xmmAbsmins, tlc->xmmAbsmaxs, shapeMins, shapeMaxs );
+}
+
+inline bool CM_MightCollideInLeaf_SSE42( const float *__restrict shapeMins,
+										 const float *__restrict shapeMaxs,
+									  	 const float *__restrict shapeCenter,
+										 float shapeRadius,
+										 const CMTraceContext *__restrict tlc ) {
+	if( !CM_MightCollide_SSE42( shapeMins, shapeMaxs, tlc ) ) {
+		return false;
+	}
+
+	vec3_t centerToStart;
+	vec3_t proj, perp;
+
+	VectorSubtract( tlc->start, shapeCenter, centerToStart );
+	const float projMagnitude = DotProduct( centerToStart, tlc->traceDir );
+	VectorScale( tlc->traceDir, projMagnitude, proj );
+	VectorSubtract( centerToStart, proj, perp );
+	const float distanceThreshold = shapeRadius + tlc->boxRadius;
+	return VectorLengthSquared( perp ) <= distanceThreshold * distanceThreshold;
+}
+
+// TODO: Discover why there's no observable penalty on an Intel CPU, contrary to what it should be
+
+// SSE4.2 code gets compiled with /arch:AVX TODO is it really needed
+#if defined( CM_USE_AVX ) || defined( _MSC_VER )
+//#define wsw_vex_fence() _mm256_zeroupper()
+#define wsw_vex_fence() do {} while (0)
+#else
+#define wsw_vex_fence() do {} while (0)
+#endif
+
+/**
+ * Create this object in scopes that match boundaries
+ * of transition between regular SSE2 and VEX-encoded binary code.
+ * This fence inserts instructions that help to avoid transition penalties.
+ */
+struct VexScopedFence {
+	VexScopedFence() {
+		wsw_vex_fence();
+	}
+	~VexScopedFence() {
+		wsw_vex_fence();
+	}
+};
+
+#endif
 
 #endif //QFUSION_CM_TRACE_H
