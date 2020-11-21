@@ -22,6 +22,8 @@ class Scoreboard : wsw::ScoreboardShared {
 
 	RawData m_oldRawData {};
 
+	unsigned m_oldNumPlayersPerTeam[4] {};
+
 	enum PendingPlayerUpdates : uint8_t {
 		NoPendingUpdates   = 0x0,
 		PendingClanUpdate  = 0x1,
@@ -49,8 +51,9 @@ class Scoreboard : wsw::ScoreboardShared {
 
 	[[nodiscard]]
 	auto doReload() -> std::optional<wsw::StringView>;
-
+public:
 	struct PlayerUpdates {
+		uint8_t playerNum;
 		uint8_t shortSlotsMask;
 		bool nickname: 1;
 		bool clan: 1;
@@ -61,8 +64,9 @@ class Scoreboard : wsw::ScoreboardShared {
 		uint8_t team;
 		bool score : 1;
 		bool name : 1;
+		bool players : 1;
 	};
-
+private:
 	[[nodiscard]]
 	auto checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerNum )
 		-> std::optional<PlayerUpdates>;
@@ -71,8 +75,47 @@ public:
 
 	void handleConfigString( unsigned configStringIndex, const wsw::StringView &string );
 
+	[[nodiscard]]
+	auto getColumnCount() const -> unsigned {
+		return m_columnKinds.size();
+	}
+	[[nodiscard]]
+	auto getColumnKind( unsigned column ) const -> ColumnKind {
+		return m_columnKinds[column];
+	}
+	[[nodiscard]]
+	auto getPlayerTeam( unsigned playerNum ) const -> unsigned {
+		return m_oldRawData.getPlayerTeam( playerNum );
+	}
+
+	[[nodiscard]]
+	auto getPlayerIconForColumn( unsigned playerNum, unsigned column ) const -> unsigned {
+		assert( m_columnKinds[column] == Icon );
+		return m_oldRawData.getPlayerShort( playerNum, m_columnSlots[column] );
+	}
+	[[nodiscard]]
+	auto getPlayerNumberForColumn( unsigned playerNum, unsigned column ) const -> int {
+		assert( m_columnKinds[column] == Number );
+		return m_oldRawData.getPlayerShort( playerNum, m_columnSlots[column] );
+	}
+	[[nodiscard]]
+	auto getPlayerPingForColumn( unsigned playerNum, unsigned column ) const -> int {
+		assert( m_columnKinds[column] == Ping );
+		return m_oldRawData.getPlayerShort( playerNum, m_columnSlots[column] );
+	}
+	[[nodiscard]]
+	auto getPlayerScoreForColumn( unsigned playerNum, unsigned column ) const -> int {
+		assert( m_columnKinds[column] == Score );
+		return m_oldRawData.getPlayerScore( playerNum );
+	}
+
+	[[nodiscard]]
+	auto getPlayerNameForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView;
+	[[nodiscard]]
+	auto getPlayerClanForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView;
+
 	using PlayerUpdatesList = wsw::StaticVector<PlayerUpdates, MAX_CLIENTS>;
-	using TeamUpdatesList = wsw::StaticVector<TeamUpdates, 2>;
+	using TeamUpdatesList = wsw::StaticVector<TeamUpdates, 3>;
 
 	[[nodiscard]]
 	bool checkUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates, TeamUpdatesList &teamUpdates );

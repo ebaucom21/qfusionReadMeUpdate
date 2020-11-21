@@ -1238,6 +1238,10 @@ void MSG_ReadDeltaGameState( msg_t *msg, const game_state_t *from, game_state_t 
 
 static const msg_field_t raw_scoreboard_msg_fields[] = {
 	{
+		offsetof( ReplicatedScoreboardData, playersTeamMask ),
+		64, 1, WIRE_BASE128
+	},
+	{
 		offsetof( ReplicatedScoreboardData, alphaScore ),
 		32, 1, WIRE_BASE128
 	},

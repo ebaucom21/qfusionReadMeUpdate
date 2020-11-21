@@ -164,6 +164,7 @@ void Scoreboard::endDefiningSchema() {
 void Scoreboard::beginUpdating() {
 	expectState( NoState );
 	m_state = Update;
+	m_replicatedData.playersTeamMask = 0;
 }
 
 void Scoreboard::setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon ) {
@@ -195,6 +196,11 @@ void Scoreboard::setPlayerNumber( const gclient_s *client, unsigned slot, int nu
 void Scoreboard::endUpdating() {
 	expectState( Update );
 
+	static_assert( TEAM_SPECTATOR >= 0 && TEAM_SPECTATOR < 4 );
+	static_assert( TEAM_PLAYERS >= 0 && TEAM_PLAYERS < 4 );
+	static_assert( TEAM_ALPHA >= 0 && TEAM_ALPHA < 4 );
+	static_assert( TEAM_BETA >= 0 && TEAM_BETA < 4 );
+
 	const auto *const ents = game.edicts;
 	const auto maxPlayerNum = (unsigned)gs.maxclients;
 	for( unsigned playerNum = 0; playerNum < maxPlayerNum; ++playerNum ) {
@@ -211,6 +217,7 @@ void Scoreboard::endUpdating() {
 		}
 		m_replicatedData.setPlayerScore( playerNum, score );
 		m_replicatedData.setPlayerShort( playerNum, m_pingSlot, ping );
+		m_replicatedData.setPlayerTeam( playerNum, ent->s.team );
 	}
 
 	m_state = NoState;

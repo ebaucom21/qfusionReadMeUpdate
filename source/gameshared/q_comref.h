@@ -449,6 +449,7 @@ typedef struct {
 } game_state_t;
 
 struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
+	uint64_t playersTeamMask;
 	int alphaScore;
 	int betaScore;
 	int scores[MAX_CLIENTS];
@@ -478,6 +479,18 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 		assert( playerNum < (unsigned)MAX_CLIENTS );
 		assert( slot < (unsigned)kMaxShortSlots );
 		return values[kMaxShortSlots * playerNum + slot];
+	}
+
+	void setPlayerTeam( unsigned playerNum, int team ) {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		assert( team >= 0 && team <= 3 );
+		playersTeamMask |= ( (unsigned)team << ( 2 * playerNum ) );
+	}
+
+	[[nodiscard]]
+	auto getPlayerTeam( unsigned playerNum ) const -> int {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		return (int)( ( playersTeamMask >> ( 2 * playerNum ) ) & 0x3u );
 	}
 };
 

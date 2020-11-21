@@ -10,7 +10,7 @@
 #include "nativelydrawnitems.h"
 #include "serverlistmodel.h"
 #include "keysandbindingsmodel.h"
-#include "scoreboard.h"
+#include "scoreboardmodel.h"
 #include "wswimageprovider.h"
 
 #include <QGuiApplication>
@@ -180,7 +180,7 @@ private:
 
 	CallvotesModelProxy m_callvotesModel;
 
-	wsw::ui::Scoreboard m_scoreboard;
+	ScoreboardModelProxy m_scoreboardModel;
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -734,7 +734,7 @@ void QtUISystem::checkPropertyChanges() {
 		} else if( actualClientState == CA_ACTIVE ) {
 			setActiveMenuMask( InGameMenu, 0 );
 			m_callvotesModel.reload();
-			m_scoreboard.reload();
+			m_scoreboardModel.reload();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
 			setActiveMenuMask( ConnectionScreen, 0 );
 		}
@@ -1241,18 +1241,14 @@ void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimest
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
 	if( (unsigned)( configStringIndex - CS_PLAYERINFOS ) < (unsigned)MAX_CLIENTS ) {
-		m_scoreboard.handleConfigString( configStringIndex, string );
+		m_scoreboardModel.handleConfigString( configStringIndex, string );
 	} else if( (unsigned)( configStringIndex - CS_CALLVOTEINFOS ) < (unsigned)MAX_CALLVOTEINFOS ) {
 		m_callvotesModel.handleConfigString( configStringIndex, string );
 	}
 }
 
 void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) {
-	Scoreboard::PlayerUpdatesList playerUpdates;
-	Scoreboard::TeamUpdatesList teamUpdates;
-	// TODO: The raw update result must be processed by some kind of "scoreboard proxy"
-	// that manages updating individual QML-exposed models
-	(void)m_scoreboard.checkUpdates( scoreboardData, playerUpdates, teamUpdates );
+	m_scoreboardModel.update( scoreboardData );
 }
 
 }

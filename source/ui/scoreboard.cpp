@@ -1,5 +1,6 @@
 #include "scoreboard.h"
 
+#include "../gameshared/q_shared.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswtonum.h"
 #include "../client/client.h"
@@ -195,12 +196,30 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 	teamUpdates.clear();
 
 	// TODO: Check team score updates
+	// TODO: Check team name updates (do we really need to add this test as we already track changes for join buttons?)
+
+	bool isTeamUpdateNeeded[4] { false, false, false, false };
 
 	// TODO: Limit iteration by gs.maxclients
 	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+		const auto oldTeam = m_oldRawData.getPlayerTeam( i );
+		const auto newTeam = currData.getPlayerTeam( i );
+		if( oldTeam != newTeam ) {
+			isTeamUpdateNeeded[oldTeam] = isTeamUpdateNeeded[newTeam] = true;
+		}
 		if( auto maybePlayerUpdates = checkPlayerDataUpdates( m_oldRawData, currData, i ) ) {
 			playerUpdates.push_back( *maybePlayerUpdates );
 		}
+	}
+
+	for( unsigned i = 0; i < 4; ++i ) {
+		if( !isTeamUpdateNeeded[i] ) {
+			continue;
+		}
+		TeamUpdates updates {};
+		updates.team = i;
+		updates.players = true;
+		teamUpdates.push_back( updates );
 	}
 
 	const bool result = !( teamUpdates.empty() && playerUpdates.empty() );
@@ -215,6 +234,16 @@ void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::
 	assert( playerNum < (unsigned)MAX_CLIENTS );
 	// Consider this as a full update currently
 	m_pendingPlayerUpdates[playerNum] = (PendingPlayerUpdates)( PendingClanUpdate | PendingNameUpdate );
+}
+
+auto Scoreboard::getPlayerNameForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
+	assert( m_columnKinds[playerNum] == Nickname );
+	return wsw::StringView( "<name>" );
+}
+
+auto Scoreboard::getPlayerClanForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
+	assert( m_columnKinds[playerNum] == Clan );
+	return wsw::StringView( "<clan>" );
 }
 
 auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerNum )
