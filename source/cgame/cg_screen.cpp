@@ -1252,10 +1252,10 @@ void CG_Draw2DView( void ) {
 	CG_CheckDamageCrosshair();
 
 	scr_centertime_off -= cg.frameTime;
-	if( CG_IsScoreboardShown() ) {
-		CG_DrawScoreboard();
-	} else if( scr_centertime_off > 0 ) {
-		CG_DrawCenterString();
+	if( !CG_IsScoreboardShown() ) {
+		if( scr_centertime_off > 0 ) {
+			CG_DrawCenterString();
+		}
 	}
 
 	CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600,

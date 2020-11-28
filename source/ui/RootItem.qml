@@ -2,6 +2,7 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
 import QtQuick.Window 2.12
+import net.warsow 2.6
 
 Item {
     id: rootItem
@@ -18,6 +19,7 @@ Item {
 
     Keys.forwardTo: [mainMenu, connectionScreen, demoPlaybackMenu, inGameMenu]
 
+    // TODO: These items should be wrapped in loaders
     MainMenu {
         id: mainMenu
     }
@@ -29,6 +31,11 @@ Item {
     }
     InGameMenu {
         id: inGameMenu
+    }
+    Loader {
+        active: wsw.isShowingScoreboard
+        anchors.fill: parent
+        sourceComponent: Component { ScoreboardScreen {} }
     }
 
     MouseArea {

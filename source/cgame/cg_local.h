@@ -371,6 +371,8 @@ typedef struct cg_sexedSfx_s {
 typedef struct {
 	char name[MAX_QPATH];
 	char cleanname[MAX_QPATH];
+	char clan[MAX_QPATH];
+	char cleanclan[MAX_QPATH];
 	int hand;
 	byte_vec4_t color;
 	struct shader_s *icon;
@@ -778,13 +780,9 @@ void CG_ClearAwards( void );
 //
 // cg_scoreboard.c
 //
-inline void CG_DrawScoreboard( void ) {}
-inline void CG_ToggleScores_f( void ) {}
-inline void CG_ScoresOn_f( void ) {}
-inline void CG_ScoresOff_f( void ) {}
-inline bool CG_ExecuteScoreboardTemplateLayout( char *s ) { return false; }
-inline void SCR_UpdatePlayerStatsMessage( const char *string ) {}
-inline bool CG_IsScoreboardShown( void ) { return false; }
+void CG_ScoresOn_f();
+void CG_ScoresOff_f();
+bool CG_IsScoreboardShown();
 
 //
 // cg_main.c

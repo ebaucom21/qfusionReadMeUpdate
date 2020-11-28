@@ -76,6 +76,9 @@ public:
 	void handleConfigString( unsigned configStringIndex, const wsw::StringView &string );
 
 	[[nodiscard]]
+	auto getImageAssetPath( unsigned asset ) const -> std::optional<wsw::StringView>;
+
+	[[nodiscard]]
 	auto getColumnCount() const -> unsigned {
 		return m_columnKinds.size();
 	}

@@ -191,8 +191,12 @@ static void CG_ParseClientInfo( cg_clientInfo_t *ci, const char *info ) {
 	s = Info_ValueForKey( info, "name" );
 	Q_strncpyz( ci->name, s && s[0] ? s : "badname", sizeof( ci->name ) );
 
+	s = Info_ValueForKey( info, "clan" );
+	Q_strncpyz( ci->clan, s && s[0] ? s : "", sizeof( ci->clan ) );
+
 	// name with color tokes stripped
 	Q_strncpyz( ci->cleanname, COM_RemoveColorTokens( ci->name ), sizeof( ci->cleanname ) );
+	Q_strncpyz( ci->cleanclan, COM_RemoveColorTokens( ci->clan ), sizeof( ci->cleanclan ) );
 
 	s = Info_ValueForKey( info, "hand" );
 	ci->hand = s && s[0] ? atoi( s ) : 2;
@@ -227,4 +231,14 @@ void CG_ResetClientInfos( void ) {
 			CG_LoadClientInfo( i, *cs );
 		}
 	}
+}
+
+wsw::StringView CG_PlayerName( unsigned playerNum ) {
+	assert( playerNum < (unsigned)MAX_CLIENTS );
+	return wsw::StringView( cgs.clientInfo[playerNum].name );
+}
+
+wsw::StringView CG_PlayerClan( unsigned playerNum ) {
+	assert( playerNum < (unsigned)MAX_CLIENTS );
+	return wsw::StringView( cgs.clientInfo[playerNum].clan );
 }

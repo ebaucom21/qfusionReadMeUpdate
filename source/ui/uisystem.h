@@ -54,6 +54,10 @@ public:
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 
 	virtual void updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) = 0;
+
+	virtual void setScoreboardShown( bool shown ) = 0;
+	[[nodiscard]]
+	virtual bool isShowingScoreboard() const = 0;
 };
 
 }

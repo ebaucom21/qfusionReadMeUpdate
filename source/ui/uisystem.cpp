@@ -84,6 +84,10 @@ public:
 
 	void updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) override;
 
+	[[nodiscard]]
+	bool isShowingScoreboard() const override;
+	void setScoreboardShown( bool shown ) override;
+
 	void enterUIRenderingMode();
 	void leaveUIRenderingMode();
 
@@ -92,6 +96,8 @@ public:
 	Q_PROPERTY( bool isShowingInGameMenu READ isShowingInGameMenu NOTIFY isShowingInGameMenuChanged );
 	Q_PROPERTY( bool isShowingDemoPlaybackMenu READ isShowingDemoPlaybackMenu NOTIFY isShowingDemoPlaybackMenuChanged );
 	Q_PROPERTY( bool isDebuggingNativelyDrawnItems READ isDebuggingNativelyDrawnItems NOTIFY isDebuggingNativelyDrawnItemsChanged );
+
+	Q_PROPERTY( bool isShowingScoreboard READ isShowingScoreboard NOTIFY isShowingScoreboardChanged );
 
 	Q_PROPERTY( bool isSpectator READ isSpectator NOTIFY isSpectatorChanged );
 	Q_PROPERTY( bool hasTwoTeams READ hasTwoTeams NOTIFY hasTwoTeamsChanged );
@@ -143,6 +149,8 @@ signals:
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_SIGNAL void teamAlphaNameChanged( QString teamAlphaName );
 	Q_SIGNAL void teamBetaNameChanged( QString teamBetaName );
+
+	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
@@ -203,6 +211,9 @@ private:
 	unsigned m_backupMenuMask { 0 };
 	unsigned m_activeMenuMask { 0 };
 
+	bool m_shouldShowScoreboard { false };
+	bool m_isShowingScoreboard {false };
+
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
 
@@ -247,24 +258,20 @@ private:
 	};
 
 	[[nodiscard]]
-	bool isShowingDemoPlaybackMenu() const {
-		return ( m_activeMenuMask & DemoPlaybackMenu ) != 0;
+	bool isShowingMaskElement( unsigned bit ) const {
+		// We do not want to complicate mask/stack state management.
+		// Just test the separate scoreboard flag on every check.
+		return ( m_activeMenuMask & bit ) != 0 && !m_isShowingScoreboard;
 	}
 
 	[[nodiscard]]
-	bool isShowingMainMenu() const {
-		return ( m_activeMenuMask & MainMenu ) != 0;
-	}
-
+	bool isShowingDemoPlaybackMenu() const { return isShowingMaskElement( DemoPlaybackMenu ); }
 	[[nodiscard]]
-	bool isShowingConnectionScreen() const {
-		return ( m_activeMenuMask & ConnectionScreen ) != 0;
-	}
-
+	bool isShowingMainMenu() const { return isShowingMaskElement( MainMenu ); }
 	[[nodiscard]]
-	bool isShowingInGameMenu() const {
-		return ( m_activeMenuMask & InGameMenu ) != 0;
-	};
+	bool isShowingConnectionScreen() const { return isShowingMaskElement( ConnectionScreen ); }
+	[[nodiscard]]
+	bool isShowingInGameMenu() const { return isShowingMaskElement( InGameMenu ); }
 
 	[[nodiscard]]
 	bool isDebuggingNativelyDrawnItems() const;
@@ -468,10 +475,13 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 
 	const QString reason( "This type is a native code bridge and cannot be instantiated" );
 	qmlRegisterUncreatableType<QtUISystem>( "net.warsow", 2, 6, "Wsw", reason );
-	qmlRegisterUncreatableType<wsw::ui::ChatModel>( "net.warsow", 2, 6, "ChatModel", reason );
-	qmlRegisterUncreatableType<wsw::ui::CallvotesModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
-	qmlRegisterUncreatableType<wsw::ui::GametypeDef>( "net.warsow", 2, 6, "GametypeDef", reason );
-	qmlRegisterUncreatableType<wsw::ui::GametypesModel>( "net.warsow", 2, 6, "GametypesModel", reason );
+	qmlRegisterUncreatableType<ChatModel>( "net.warsow", 2, 6, "ChatModel", reason );
+	qmlRegisterUncreatableType<CallvotesModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
+	qmlRegisterUncreatableType<GametypeDef>( "net.warsow", 2, 6, "GametypeDef", reason );
+	qmlRegisterUncreatableType<GametypesModel>( "net.warsow", 2, 6, "GametypesModel", reason );
+	qmlRegisterUncreatableType<ScoreboardModelProxy>( "net.warsow", 2, 6, "Scoreboard", reason );
+	qmlRegisterUncreatableType<ScoreboardTeamModel>( "net.warsow", 2, 6, "ScoreboardTeamModel", reason );
+	qmlRegisterUncreatableType<ScoreboardSpecsModel>( "net.warsow", 2, 6, "ScoreboardSpecsModel", reason );
 	qmlRegisterUncreatableType<KeysAndBindingsModel>( "net.warsow", 2, 6, "KeysAndBindings", reason );
 	qmlRegisterUncreatableType<ServerListModel>( "net.warsow", 2, 6, "ServerListModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
@@ -486,13 +496,18 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	QQmlContext *context = m_engine->rootContext();
 	context->setContextProperty( "serverListModel", m_serverListModel );
 	context->setContextProperty( "keysAndBindings", new KeysAndBindingsModel );
-	context->setContextProperty( "gamtypesModel", new wsw::ui::GametypesModel );
+	context->setContextProperty( "gametypesModel", new GametypesModel );
 	context->setContextProperty( "compactChatModel", m_chatModel.getCompactModel() );
 	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
 	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
 	context->setContextProperty( "richTeamChatModel", m_teamChatModel.getRichModel() );
 	context->setContextProperty( "callvotesModel", m_callvotesModel.getCallvotesModel() );
 	context->setContextProperty( "opcallsModel", m_callvotesModel.getOpcallsModel() );
+	context->setContextProperty( "scoreboard", &m_scoreboardModel );
+	context->setContextProperty( "scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
+	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
+	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
+	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -727,6 +742,7 @@ void QtUISystem::checkPropertyChanges() {
 	const auto actualClientState = cls.state;
 	m_lastFrameState.clientState = actualClientState;
 	if( m_lastFrameState.clientState != lastClientState ) {
+		const bool wasShowingScoreboard = m_isShowingScoreboard;
 		if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu, 0 );
 			m_chatModel.clear();
@@ -737,6 +753,12 @@ void QtUISystem::checkPropertyChanges() {
 			m_scoreboardModel.reload();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
 			setActiveMenuMask( ConnectionScreen, 0 );
+		}
+		// Hide scoreboard upon state changes
+		m_isShowingScoreboard = false;
+		m_shouldShowScoreboard = false;
+		if( wasShowingScoreboard ) {
+			Q_EMIT isShowingScoreboardChanged( false );
 		}
 	}
 
@@ -756,6 +778,11 @@ void QtUISystem::checkPropertyChanges() {
 				setActiveMenuMask( m_activeMenuMask | ~DemoPlaybackMenu, 0 );
 			}
 		}
+	}
+
+	if( m_isShowingScoreboard != m_shouldShowScoreboard ) {
+		m_isShowingScoreboard = m_shouldShowScoreboard;
+		Q_EMIT isShowingScoreboardChanged( m_isShowingScoreboard );
 	}
 
 	const bool wasSpectator = m_lastFrameState.isSpectator;
@@ -790,7 +817,7 @@ void QtUISystem::checkPropertyChanges() {
 
 	updateCVarAwareControls();
 
-	if( m_activeMenuMask ) {
+	if( m_activeMenuMask || m_isShowingScoreboard ) {
 		m_skipDrawingSelf = false;
 		m_lastActiveMaskTime = Sys_Milliseconds();
 	} else if( !m_skipDrawingSelf ) {
@@ -1251,6 +1278,26 @@ void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardDat
 	m_scoreboardModel.update( scoreboardData );
 }
 
+bool QtUISystem::isShowingScoreboard() const {
+	return m_isShowingScoreboard;
+}
+
+void QtUISystem::setScoreboardShown( bool shown ) {
+	m_shouldShowScoreboard = shown;
+}
+
+}
+
+bool CG_IsScoreboardShown() {
+	return wsw::ui::UISystem::instance()->isShowingScoreboard();
+}
+
+void CG_ScoresOn_f() {
+	wsw::ui::UISystem::instance()->setScoreboardShown( true );
+}
+
+void CG_ScoresOff_f() {
+	wsw::ui::UISystem::instance()->setScoreboardShown( false );
 }
 
 #include "uisystem.moc"

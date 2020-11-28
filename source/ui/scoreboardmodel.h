@@ -5,6 +5,7 @@
 #include "../gameshared/gs_public.h"
 
 #include <QAbstractListModel>
+#include <QObject>
 
 struct ReplicatedScoreboardData;
 
@@ -59,13 +60,15 @@ class ScoreboardSpecsModel : public QAbstractListModel {
 	auto data( const QModelIndex &modelIndex, int role ) const -> QVariant override;
 };
 
-class ScoreboardModelProxy : public ScoreboardShared {
+class ScoreboardModelProxy : public QObject, ScoreboardShared {
+	Q_OBJECT
+
 	friend class ScoreboardTeamModel;
 	friend class ScoreboardSpecsModel;
 
 	Scoreboard m_scoreboard;
 
-	// Can't declare members of QAbstractTableModel descendants and we don't want to use a dynamic allocation
+	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation
 	StaticVector<ScoreboardTeamModel, 3> m_teamModelsHolder;
 	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
 
@@ -76,8 +79,31 @@ class ScoreboardModelProxy : public ScoreboardShared {
 	void dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team, int rowInTeam );
 	void dispatchSpecRowUpdates( const PlayerUpdates &updates, int rowInTeam );
 public:
+	enum class QmlColumnKind {
+		Nickname,
+		Clan,
+		Score,
+		Ping,
+		Number,
+		Icon
+	};
+	Q_ENUM( QmlColumnKind );
+	static_assert( (int)QmlColumnKind::Nickname == (int)Nickname );
+	static_assert( (int)QmlColumnKind::Clan == (int)Clan );
+	static_assert( (int)QmlColumnKind::Score == (int)Score );
+	static_assert( (int)QmlColumnKind::Ping == (int)Ping );
+	static_assert( (int)QmlColumnKind::Number == (int)Number );
+	static_assert( (int)QmlColumnKind::Icon == (int)Icon );
+
 	ScoreboardModelProxy();
 
+	[[nodiscard]]
+	Q_INVOKABLE int getColumnKind( int column ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getImageAssetPath( int asset ) const;
+
+	[[nodiscard]]
+	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }
 	[[nodiscard]]
 	auto getPlayersModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[0]; }
 	[[nodiscard]]

@@ -39,8 +39,6 @@ class ServerListModel : public QAbstractTableModel, public ServerListListener {
 	auto getIndexOfServer( const PolledGameServer *server ) const -> std::optional<unsigned>;
 
 	[[nodiscard]]
-	static auto toStyledText( const wsw::StringView &text ) -> QString;
-	[[nodiscard]]
 	static auto toQmlTeamList( const PlayerInfo *playerInfoHead ) -> QVariant;
 	[[nodiscard]]
 	static auto toMatchTimeFlags( const MatchTime &time ) -> int;

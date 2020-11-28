@@ -1000,6 +1000,7 @@ static void G_UpdatePlayerInfoString( int playerNum ) {
 	playerString[0] = 0;
 
 	Info_SetValueForKey( playerString, "name", client->netname );
+	Info_SetValueForKey( playerString, "clan", client->clanname );
 	Info_SetValueForKey( playerString, "hand", va( "%i", client->hand ) );
 	Info_SetValueForKey( playerString, "color",
 						 va( "%i %i %i", client->color[0], client->color[1], client->color[2] ) );

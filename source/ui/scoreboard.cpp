@@ -10,6 +10,9 @@ using wsw::operator""_asView;
 // TODO: This should be shared...
 static const wsw::StringView kPlaceholder( "-"_asView );
 
+wsw::StringView CG_PlayerName( unsigned );
+wsw::StringView CG_PlayerClan( unsigned );
+
 namespace wsw::ui {
 
 void Scoreboard::clearSchema() {
@@ -229,6 +232,13 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 	return result;
 }
 
+auto Scoreboard::getImageAssetPath( unsigned asset ) const -> std::optional<wsw::StringView> {
+	if( asset && asset < m_columnAssetsStorage.size() + 1 ) {
+		return m_columnAssetsStorage[asset - 1];
+	}
+	return std::nullopt;
+}
+
 void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::StringView &string ) {
 	const auto playerNum = (unsigned)( configStringIndex - CS_PLAYERINFOS );
 	assert( playerNum < (unsigned)MAX_CLIENTS );
@@ -237,13 +247,15 @@ void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::
 }
 
 auto Scoreboard::getPlayerNameForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
-	assert( m_columnKinds[playerNum] == Nickname );
-	return wsw::StringView( "<name>" );
+	assert( m_columnKinds[column] == Nickname );
+	assert( playerNum < (unsigned)MAX_CLIENTS );
+	return CG_PlayerName( playerNum );
 }
 
 auto Scoreboard::getPlayerClanForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
-	assert( m_columnKinds[playerNum] == Clan );
-	return wsw::StringView( "<clan>" );
+	assert( m_columnKinds[column] == Clan );
+	assert( playerNum < (unsigned)MAX_CLIENTS );
+	return CG_PlayerClan( playerNum );
 }
 
 auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerNum )
@@ -263,7 +275,7 @@ auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &n
 	}
 
 	if( ( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask ) ) {
-		return PlayerUpdates { mask, nickname, clan, score };
+		return PlayerUpdates { (uint8_t)playerNum, mask, nickname, clan, score };
 	}
 
 	return std::nullopt;
