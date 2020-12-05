@@ -17,14 +17,15 @@ class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
 	friend class ScoreboardModelProxy;
 
 	ScoreboardModelProxy *const m_proxy;
-	const int m_teamNum;
+	const int m_teamListIndex;
 
 	enum Role {
 		Kind = Qt::UserRole + 1,
 		Value
 	};
 
-	ScoreboardTeamModel( ScoreboardModelProxy *proxy, int teamNum ) : m_proxy( proxy ), m_teamNum( teamNum ) {}
+	ScoreboardTeamModel( ScoreboardModelProxy *proxy, int teamListIndex )
+		: m_proxy( proxy ), m_teamListIndex( teamListIndex ) {}
 
 	static inline QVector<int> kValueRoleAsVector { Value };
 
@@ -68,15 +69,15 @@ class ScoreboardModelProxy : public QObject, ScoreboardShared {
 
 	Scoreboard m_scoreboard;
 
-	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation
-	StaticVector<ScoreboardTeamModel, 3> m_teamModelsHolder;
+	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
+	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
 	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
 
-	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerNumsForTeam[4];
+	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerNumsForList[5];
 
 	using PlayerUpdates = Scoreboard::PlayerUpdates;
 
-	void dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team, int rowInTeam );
+	void dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team, int rowInTeam, int rowInMixedList );
 	void dispatchSpecRowUpdates( const PlayerUpdates &updates, int rowInTeam );
 public:
 	enum class QmlColumnKind {
@@ -101,6 +102,8 @@ public:
 	Q_INVOKABLE int getColumnKind( int column ) const;
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getImageAssetPath( int asset ) const;
+	[[nodiscard]]
+	Q_INVOKABLE bool isMixedListRowAlpha( int row ) const;
 
 	[[nodiscard]]
 	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }
@@ -110,6 +113,8 @@ public:
 	auto getAlphaModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[1]; }
 	[[nodiscard]]
 	auto getBetaModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[2]; }
+	[[nodiscard]]
+	auto getMixedModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[3]; }
 
 	void handleConfigString( unsigned configStringIndex, const wsw::StringView &string );
 

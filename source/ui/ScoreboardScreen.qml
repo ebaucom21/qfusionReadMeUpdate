@@ -33,7 +33,6 @@ Rectangle {
                 Layout.fillWidth: true
             }
             ScoreboardPlayersList {
-                // TODO: Use an actual team color
                 baseColor: "red"
                 model: scoreboardAlphaModel
                 Layout.fillWidth: true

@@ -508,6 +508,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
 	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
 	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
+	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
 
 	m_component = new QQmlComponent( m_engine );
 

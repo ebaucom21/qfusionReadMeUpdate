@@ -15,6 +15,22 @@ TableView {
 
     property color baseColor
 
+    property color baseAlphaColor: "red"
+    property color baseBetaColor: "green"
+
+    property bool mixedTeamsMode: false
+
+    function getCellColor(row, column) {
+        let c = baseColor
+        if (mixedTeamsMode) {
+            c = scoreboard.isMixedListRowAlpha(row) ? baseAlphaColor : baseBetaColor
+        }
+        if (row % 2) {
+            return column % 2 ? Qt.darker(c, 1.1) : c
+        }
+        return column % 2 ? c : Qt.lighter(c, 1.2)
+    }
+
     delegate: Item {
         readonly property int kind: scoreboard.getColumnKind(column)
 
@@ -33,9 +49,7 @@ TableView {
         Rectangle {
             anchors.fill: parent
             opacity: 0.7
-            color: row % 2 ?
-                Qt.lighter(baseColor, column % 2 ? 1.2 : 1.5) :
-                Qt.darker(baseColor, column % 2 ? 1.2 : 1.5)
+            color: getCellColor(row, column)
         }
 
         Label {
