@@ -73,7 +73,7 @@ class ScoreboardModelProxy : public QObject, ScoreboardShared {
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
 	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
 
-	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerNumsForList[5];
+	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForList[5];
 
 	using PlayerUpdates = Scoreboard::PlayerUpdates;
 

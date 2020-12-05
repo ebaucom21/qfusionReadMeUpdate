@@ -203,14 +203,13 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 
 	bool isTeamUpdateNeeded[4] { false, false, false, false };
 
-	// TODO: Limit iteration by gs.maxclients
-	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
-		const auto oldTeam = m_oldRawData.getPlayerTeam( i );
-		const auto newTeam = currData.getPlayerTeam( i );
+	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
+		const auto oldTeam = m_oldRawData.getPlayerTeam( playerIndex );
+		const auto newTeam = currData.getPlayerTeam( playerIndex );
 		if( oldTeam != newTeam ) {
 			isTeamUpdateNeeded[oldTeam] = isTeamUpdateNeeded[newTeam] = true;
 		}
-		if( auto maybePlayerUpdates = checkPlayerDataUpdates( m_oldRawData, currData, i ) ) {
+		if( auto maybePlayerUpdates = checkPlayerDataUpdates( m_oldRawData, currData, playerIndex ) ) {
 			playerUpdates.push_back( *maybePlayerUpdates );
 		}
 	}
@@ -246,36 +245,37 @@ void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::
 	m_pendingPlayerUpdates[playerNum] = (PendingPlayerUpdates)( PendingClanUpdate | PendingNameUpdate );
 }
 
-auto Scoreboard::getPlayerNameForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
+auto Scoreboard::getPlayerNameForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView {
 	assert( m_columnKinds[column] == Nickname );
-	assert( playerNum < (unsigned)MAX_CLIENTS );
-	return CG_PlayerName( playerNum );
+	assert( playerIndex < (unsigned)kMaxPlayers );
+	return CG_PlayerName( m_oldRawData.playerNums[playerIndex] );
 }
 
-auto Scoreboard::getPlayerClanForColumn( unsigned playerNum, unsigned column ) const -> wsw::StringView {
+auto Scoreboard::getPlayerClanForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView {
 	assert( m_columnKinds[column] == Clan );
-	assert( playerNum < (unsigned)MAX_CLIENTS );
-	return CG_PlayerClan( playerNum );
+	assert( playerIndex < (unsigned)kMaxPlayers );
+	return CG_PlayerClan( m_oldRawData.playerNums[playerIndex] );
 }
 
-auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerNum )
+auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerIndex )
 	 -> std::optional<PlayerUpdates> {
+	const auto playerNum = m_oldRawData.playerNums[playerIndex];
 	const bool nickname = m_pendingPlayerUpdates[playerNum] & PendingNameUpdate;
 	const bool clan = m_pendingPlayerUpdates[playerNum] & PendingClanUpdate;
 	m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;
 
-	const bool score = newOne.getPlayerScore( playerNum ) != oldOne.getPlayerScore( playerNum );
+	const bool score = newOne.getPlayerScore( playerIndex ) != oldOne.getPlayerScore( playerIndex );
 
 	uint8_t mask = 0;
 	static_assert( 1u << kMaxShortSlots <= std::numeric_limits<uint8_t>::max() );
 	for( unsigned slot = 0; slot < kMaxShortSlots; ++slot ) {
-		if( newOne.getPlayerShort( playerNum, slot ) != oldOne.getPlayerShort( playerNum, slot ) ) {
+		if( newOne.getPlayerShort( playerIndex, slot ) != oldOne.getPlayerShort( playerIndex, slot ) ) {
 			mask |= ( 1u << slot );
 		}
 	}
 
 	if( ( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask ) ) {
-		return PlayerUpdates { (uint8_t)playerNum, mask, nickname, clan, score };
+		return PlayerUpdates { (uint8_t)playerIndex, mask, nickname, clan, score };
 	}
 
 	return std::nullopt;

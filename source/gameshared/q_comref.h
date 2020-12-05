@@ -226,9 +226,8 @@ protected:
 		return kind < Ping;
 	}
 
-	// Account for 0-characters space while setting data limits
-	// (there is an assumptions that strings are kept in wsw::StringSpanStaticStorage)
-
+	// Don't imply that player indices are client numbers (they have the same range but are sorted by score)
+	static constexpr unsigned kMaxPlayers = MAX_CLIENTS;
 	static constexpr unsigned kMaxColumns = 8;
 	static constexpr unsigned kMaxTitleLen = 12;
 	static constexpr unsigned kTitleDataLimit = 64 + kMaxColumns;
@@ -452,45 +451,55 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 	uint64_t playersTeamMask;
 	int alphaScore;
 	int betaScore;
-	int scores[MAX_CLIENTS];
-	short values[MAX_CLIENTS * kMaxShortSlots];
+	int scores[kMaxPlayers];
+	short values[kMaxPlayers * kMaxShortSlots];
+	uint8_t playerNums[kMaxPlayers];
 
 	using wsw::ScoreboardShared::kMaxShortSlots;
 
-	void setPlayerScore( unsigned playerNum, int score ) {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
-		values[kMaxShortSlots * playerNum] = score;
+	void setPlayerScore( unsigned playerIndex, int value ) {
+		assert( playerIndex < (unsigned)kMaxPlayers );
+		scores[playerIndex] = value;
 	}
 
 	[[nodiscard]]
-	auto getPlayerScore( unsigned playerNum ) const -> int {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
-		return values[kMaxShortSlots * playerNum];
+	auto getPlayerScore( unsigned playerIndex ) const -> int {
+		assert( playerIndex < (unsigned)kMaxPlayers );
+		return scores[playerIndex];
 	}
 
-	void setPlayerShort( unsigned playerNum, unsigned slot, int16_t value ) {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
+	void setPlayerShort( unsigned playerIndex, unsigned slot, int16_t value ) {
+		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( slot < (unsigned)kMaxShortSlots );
-		values[kMaxShortSlots * playerNum + slot] = value;
+		values[kMaxShortSlots * playerIndex + slot] = value;
 	}
 
 	[[nodiscard]]
-	auto getPlayerShort( unsigned playerNum, unsigned slot ) const -> int16_t {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
+	auto getPlayerShort( unsigned playerIndex, unsigned slot ) const -> int16_t {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
 		assert( slot < (unsigned)kMaxShortSlots );
-		return values[kMaxShortSlots * playerNum + slot];
+		return values[kMaxShortSlots * playerIndex + slot];
 	}
 
-	void setPlayerTeam( unsigned playerNum, int team ) {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
+	void setPlayerTeam( unsigned playerIndex, int team ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
 		assert( team >= 0 && team <= 3 );
-		playersTeamMask |= ( (unsigned)team << ( 2 * playerNum ) );
+		playersTeamMask |= ( (unsigned)team << ( 2 * playerIndex ) );
 	}
 
 	[[nodiscard]]
-	auto getPlayerTeam( unsigned playerNum ) const -> int {
-		assert( playerNum < (unsigned)MAX_CLIENTS );
-		return (int)( ( playersTeamMask >> ( 2 * playerNum ) ) & 0x3u );
+	auto getPlayerTeam( unsigned playerIndex ) const -> int {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return (int)( ( playersTeamMask >> ( 2 * playerIndex ) ) & 0x3u );
+	}
+
+	void copyThatRow( unsigned destRow, const ReplicatedScoreboardData &that, unsigned thatSrcRow ) {
+		scores[destRow] = that.scores[thatSrcRow];
+		// TODO: This could be a memmove but it's more clear written this way
+		for( unsigned slot = 0; slot < kMaxShortSlots; ++slot ) {
+			setPlayerShort( destRow, slot, that.getPlayerShort( thatSrcRow, slot ) );
+		}
+		playerNums[destRow] = that.playerNums[thatSrcRow];
 	}
 };
 

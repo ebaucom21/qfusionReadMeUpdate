@@ -201,24 +201,70 @@ void Scoreboard::endUpdating() {
 	static_assert( TEAM_ALPHA >= 0 && TEAM_ALPHA < 4 );
 	static_assert( TEAM_BETA >= 0 && TEAM_BETA < 4 );
 
-	const auto *const ents = game.edicts;
+	struct NumAndScore { unsigned num; int score; };
+	alignas( 16 ) NumAndScore sortHandles[kMaxPlayers];
+	std::memset( sortHandles, 0, sizeof( sortHandles ) );
+
+	const auto *const playerEnts = game.edicts + 1;
 	const auto maxPlayerNum = (unsigned)gs.maxclients;
+	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
 	for( unsigned playerNum = 0; playerNum < maxPlayerNum; ++playerNum ) {
-		const auto *const ent = ents + playerNum + 1;
-		if( !ent->r.inuse ) {
-			continue;
-		}
+		// Indices and client numbers match 1-1 at this stage.
+		const auto playerIndex = playerNum;
+		m_replicatedData.playerNums[playerIndex] = playerNum;
+		sortHandles[playerIndex].num = playerNum;
+		const auto *const ent = playerEnts + playerNum;
 		int16_t ping = 999;
-		int score = 0;
-		if( trap_GetClientState( playerNum ) == CS_SPAWNED ) {
+		int score = std::numeric_limits<int32_t>::min();
+		if( ent->r.inuse && trap_GetClientState( (int)playerNum ) == CS_SPAWNED ) {
 			const auto *const client = ent->r.client;
 			ping = client->r.ping;
-			score = client->level.stats.score;
+			if( ent->s.team > TEAM_SPECTATOR ) {
+				score = client->level.stats.score;
+			}
 		}
-		m_replicatedData.setPlayerScore( playerNum, score );
-		m_replicatedData.setPlayerShort( playerNum, m_pingSlot, ping );
-		m_replicatedData.setPlayerTeam( playerNum, ent->s.team );
+		sortHandles[playerIndex].score = score;
+		m_replicatedData.setPlayerShort( playerIndex, m_pingSlot, ping );
+		m_replicatedData.setPlayerScore( playerIndex, score );
 	}
+
+	// We have been addressing the data by client numbers.
+	// The update is finished.
+	// A strict match of indices and client numbers is no longer needed.
+	// We can sort now.
+	// Clients could sort on their own but this would complicate client code that is already much more complex.
+	// A server is able to change the sorting of scoreboard dynamically, this opens modding opportunities.
+	// Also this saves redundant operations on every client.
+
+	// TODO: std::stable_sort allocates, try avoiding that (note that using std::sort is wrong)
+	if( level.gametype.inverseScore ) {
+		// Sort in an ascending order
+		auto cmp = []( const NumAndScore &lhs, const NumAndScore &rhs ) { return lhs.score < rhs.score; };
+		std::stable_sort( std::begin( sortHandles ), std::end( sortHandles ), cmp );
+	} else {
+		// Sort in a descending order
+		auto cmp = []( const NumAndScore &lhs, const NumAndScore &rhs ) { return lhs.score > rhs.score; };
+		std::stable_sort( std::begin( sortHandles ), std::end( sortHandles ), cmp );
+	}
+
+	const ReplicatedScoreboardData unsortedData( m_replicatedData );
+	m_replicatedData.playersTeamMask = 0;
+
+	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
+	for( unsigned i = 0; i < kMaxPlayers; ++i ) {
+		[[maybe_unused]] const auto [playerNum, score] = sortHandles[i];
+		assert( score == unsortedData.scores[playerNum] );
+		// Copy the old row for the player to its place in the sorting order
+		m_replicatedData.copyThatRow( i, unsortedData, playerNum );
+		// Set team bits for actual indices
+		m_replicatedData.setPlayerTeam( i, playerEnts[playerNum].s.team );
+	}
+
+	// Now all player rows are sorted by scores in a desired order.
+	// All players are in the same list of rows.
+	// This means that any list made of elements picked from this list
+	// is going to be sorted as well if element indices of picked elements are unique and growing monotonically.
+	// This makes players lists / team lists / alpha-beta mixed lists sorted naturally.
 
 	m_state = NoState;
 }

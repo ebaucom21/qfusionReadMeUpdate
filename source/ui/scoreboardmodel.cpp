@@ -22,7 +22,7 @@ static auto formatPing( unsigned ping ) -> QString {
 }
 
 auto ScoreboardTeamModel::rowCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_playerNumsForList[m_teamListIndex].size();
+	return (int)m_proxy->m_playerIndicesForList[m_teamListIndex].size();
 }
 
 auto ScoreboardTeamModel::columnCount( const QModelIndex & ) const -> int {
@@ -38,13 +38,13 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 		return QVariant();
 	}
 	const auto &scb = m_proxy->m_scoreboard;
-	const auto &nums = m_proxy->m_playerNumsForList;
+	const auto &indices = m_proxy->m_playerIndicesForList;
 	const auto column = (unsigned)modelIndex.column();
 	if( column >= scb.getColumnCount() ) {
 		return QVariant();
 	}
 	const auto row = (unsigned)modelIndex.row();
-	if( row >= nums[m_teamListIndex].size() ) {
+	if( row >= indices[m_teamListIndex].size() ) {
 		return QVariant();
 	}
 	if( role == Kind ) {
@@ -53,21 +53,21 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 	if( role != Value ) {
 		return QVariant();
 	}
-	const auto playerNum = nums[m_teamListIndex][row];
+	const auto playerIndex = indices[m_teamListIndex][row];
 	// TODO: This is awkward a bit
 	switch( scb.getColumnKind( column ) ) {
-		case Nickname: return toStyledText( scb.getPlayerNameForColumn( playerNum, column ) );
-		case Clan: return toStyledText( scb.getPlayerClanForColumn( playerNum, column ) );
-		case Score: return scb.getPlayerScoreForColumn( playerNum, column );
-		case Ping: return formatPing( scb.getPlayerPingForColumn( playerNum, column ) );
-		case Number: return scb.getPlayerNumberForColumn( playerNum, column );
-		case Icon: return scb.getPlayerIconForColumn( playerNum, column );
+		case Nickname: return toStyledText( scb.getPlayerNameForColumn( playerIndex, column ) );
+		case Clan: return toStyledText( scb.getPlayerClanForColumn( playerIndex, column ) );
+		case Score: return scb.getPlayerScoreForColumn( playerIndex, column );
+		case Ping: return formatPing( scb.getPlayerPingForColumn( playerIndex, column ) );
+		case Number: return scb.getPlayerNumberForColumn( playerIndex, column );
+		case Icon: return scb.getPlayerIconForColumn( playerIndex, column );
 	}
 	throw std::logic_error( "Unreachable" );
 }
 
 auto ScoreboardSpecsModel::rowCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_playerNumsForList[TEAM_SPECTATOR].size();
+	return (int)m_proxy->m_playerIndicesForList[TEAM_SPECTATOR].size();
 }
 
 auto ScoreboardSpecsModel::columnCount( const QModelIndex & ) const -> int {
@@ -82,7 +82,7 @@ auto ScoreboardSpecsModel::data( const QModelIndex &modelIndex, int role ) const
 	if( !modelIndex.isValid() ) {
 		return QVariant();
 	}
-	const auto &nums = m_proxy->m_playerNumsForList[TEAM_SPECTATOR];
+	const auto &nums = m_proxy->m_playerIndicesForList[TEAM_SPECTATOR];
 	const auto row = (unsigned)modelIndex.row();
 	if( row >= nums.size() ) {
 		return QVariant();
@@ -121,7 +121,7 @@ auto ScoreboardModelProxy::getImageAssetPath( int asset ) const -> QByteArray {
 }
 
 bool ScoreboardModelProxy::isMixedListRowAlpha( int row ) const {
-	const auto &nums = std::end( m_playerNumsForList )[-1];
+	const auto &nums = std::end( m_playerIndicesForList )[-1];
 	assert( (unsigned)row < nums.size() );
 	return m_scoreboard.getPlayerTeam( nums[row] ) == TEAM_ALPHA;
 }
@@ -166,28 +166,27 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		return;
 	}
 
-	for( auto &nums : m_playerNumsForList ) {
-		nums.clear();
+	for( auto &indices: m_playerIndicesForList ) {
+		indices.clear();
 	}
 
 	// We should update player nums first so fully reset models get a correct data from the very beginning
 
-	using PlayerIndicesTable = std::array<uint8_t, MAX_CLIENTS>;
+	using PlayerIndicesTable = std::array<uint8_t, kMaxPlayers>;
 	PlayerIndicesTable listPlayerTables[5];
 
-	// TODO: Limit by gs.maxclients
-	for( unsigned playerNum = 0; playerNum < MAX_CLIENTS; ++playerNum ) {
-		const auto teamNum = m_scoreboard.getPlayerTeam( playerNum );
+	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
+		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
 		// TODO: How do we separate specs from empty client slots?
-		auto &teamNums = m_playerNumsForList[teamNum];
-		auto &teamIndices = listPlayerTables[teamNum];
-		teamIndices[playerNum] = (uint8_t)teamNums.size();
-		teamNums.push_back( playerNum );
+		auto &teamNums = m_playerIndicesForList[teamNum];
+		auto &teamTable = listPlayerTables[teamNum];
+		teamTable[playerIndex] = (uint8_t)teamNums.size();
+		teamNums.push_back( playerIndex );
 		if( teamNum == TEAM_ALPHA || teamNum == TEAM_BETA ) {
-			auto &mixedNums = m_playerNumsForList[TEAM_BETA + 1];
-			auto &mixedIndices = listPlayerTables[TEAM_BETA + 1];
-			mixedIndices[playerNum] = (uint8_t)mixedNums.size();
-			mixedNums.push_back( playerNum );
+			auto &mixedIndices = m_playerIndicesForList[TEAM_BETA + 1];
+			auto &mixedTable = listPlayerTables[TEAM_BETA + 1];
+			mixedTable[playerIndex] = (uint8_t)mixedIndices.size();
+			mixedIndices.push_back( playerIndex );
 		}
 	}
 
@@ -219,20 +218,20 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 	}
 
 	for( const auto &playerUpdate: playerUpdates ) {
-		const auto playerNum = playerUpdate.playerNum;
-		const auto teamNum = m_scoreboard.getPlayerTeam( playerNum );
+		const auto playerIndex = playerUpdate.playerIndex;
+		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
 		if( wasTeamReset[teamNum] ) {
 			continue;
 		}
 		const auto &teamIndicesTable = listPlayerTables[teamNum];
-		const auto rowInTeam = (unsigned)teamIndicesTable[playerNum];
-		assert( rowInTeam < m_playerNumsForList[teamNum].size() );
+		const auto rowInTeam = (unsigned)teamIndicesTable[playerIndex];
+		assert( rowInTeam < m_playerIndicesForList[teamNum].size() );
 		if( teamNum == TEAM_SPECTATOR ) {
 			dispatchSpecRowUpdates( playerUpdate, rowInTeam );
 			continue;
 		}
 		const auto &mixedIndicesTable = listPlayerTables[teamNum];
-		const auto rowInMixedList = (unsigned)mixedIndicesTable[playerNum];
+		const auto rowInMixedList = (unsigned)mixedIndicesTable[playerIndex];
 		dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeam, rowInMixedList );
 	}
 }
