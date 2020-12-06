@@ -84,9 +84,14 @@ public:
 	auto getColumnKind( unsigned column ) const -> ColumnKind {
 		return m_columnKinds[column];
 	}
+
 	[[nodiscard]]
 	auto getPlayerTeam( unsigned playerIndex ) const -> unsigned {
 		return m_oldRawData.getPlayerTeam( playerIndex );
+	}
+	[[nodiscard]]
+	bool isPlayerConnected( unsigned playerIndex ) const {
+		return m_oldRawData.isPlayerConnected( playerIndex );
 	}
 
 	[[nodiscard]]

@@ -208,19 +208,23 @@ void Scoreboard::endUpdating() {
 	const auto *const playerEnts = game.edicts + 1;
 	const auto maxPlayerNum = (unsigned)gs.maxclients;
 	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
-	for( unsigned playerNum = 0; playerNum < maxPlayerNum; ++playerNum ) {
+	for( unsigned playerNum = 0; playerNum < kMaxPlayers; ++playerNum ) {
+		const auto *const ent = playerEnts + playerNum;
 		// Indices and client numbers match 1-1 at this stage.
 		const auto playerIndex = playerNum;
-		m_replicatedData.playerNums[playerIndex] = playerNum;
+		m_replicatedData.playerNumsAndFlagBits[playerIndex] = playerNum;
 		sortHandles[playerIndex].num = playerNum;
-		const auto *const ent = playerEnts + playerNum;
 		int16_t ping = 999;
 		int score = std::numeric_limits<int32_t>::min();
-		if( ent->r.inuse && trap_GetClientState( (int)playerNum ) == CS_SPAWNED ) {
+		if( ent->r.inuse ) {
 			const auto *const client = ent->r.client;
-			ping = client->r.ping;
-			if( ent->s.team > TEAM_SPECTATOR ) {
-				score = client->level.stats.score;
+			const auto clientState = trap_GetClientState( (int)playerNum );
+			if( clientState >= CS_CONNECTING ) {
+				m_replicatedData.playerNumsAndFlagBits[playerIndex] |= kFlagBitConnected;
+				ping = client->r.ping;
+				if( clientState == CS_SPAWNED && ent->s.team > TEAM_SPECTATOR ) {
+					score = client->level.stats.score;
+				}
 			}
 		}
 		sortHandles[playerIndex].score = score;

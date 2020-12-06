@@ -226,6 +226,9 @@ protected:
 		return kind < Ping;
 	}
 
+	static constexpr uint8_t kPlayerNumMask = ( 1u << 5u ) - 1u;
+	static constexpr uint8_t kFlagBitConnected = 1u << 5u;
+
 	// Don't imply that player indices are client numbers (they have the same range but are sorted by score)
 	static constexpr unsigned kMaxPlayers = MAX_CLIENTS;
 	static constexpr unsigned kMaxColumns = 8;
@@ -453,7 +456,7 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 	int betaScore;
 	int scores[kMaxPlayers];
 	short values[kMaxPlayers * kMaxShortSlots];
-	uint8_t playerNums[kMaxPlayers];
+	uint8_t playerNumsAndFlagBits[kMaxPlayers];
 
 	using wsw::ScoreboardShared::kMaxShortSlots;
 
@@ -476,21 +479,33 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 
 	[[nodiscard]]
 	auto getPlayerShort( unsigned playerIndex, unsigned slot ) const -> int16_t {
-		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( slot < (unsigned)kMaxShortSlots );
 		return values[kMaxShortSlots * playerIndex + slot];
 	}
 
 	void setPlayerTeam( unsigned playerIndex, int team ) {
-		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( team >= 0 && team <= 3 );
 		playersTeamMask |= ( (unsigned)team << ( 2 * playerIndex ) );
 	}
 
 	[[nodiscard]]
 	auto getPlayerTeam( unsigned playerIndex ) const -> int {
-		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		assert( playerIndex < (unsigned)kMaxPlayers );
 		return (int)( ( playersTeamMask >> ( 2 * playerIndex ) ) & 0x3u );
+	}
+
+	[[nodiscard]]
+	auto getPlayerNum( unsigned playerIndex ) const -> unsigned {
+		assert( playerIndex < (unsigned)kMaxPlayers );
+		return (unsigned)( playerNumsAndFlagBits[playerIndex] & kPlayerNumMask );
+	}
+
+	[[nodiscard]]
+	bool isPlayerConnected( unsigned playerIndex ) const {
+		assert( playerIndex < (unsigned)kMaxPlayers );
+		return ( playerNumsAndFlagBits[playerIndex] & kFlagBitConnected ) != 0;
 	}
 
 	void copyThatRow( unsigned destRow, const ReplicatedScoreboardData &that, unsigned thatSrcRow ) {
@@ -499,7 +514,7 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 		for( unsigned slot = 0; slot < kMaxShortSlots; ++slot ) {
 			setPlayerShort( destRow, slot, that.getPlayerShort( thatSrcRow, slot ) );
 		}
-		playerNums[destRow] = that.playerNums[thatSrcRow];
+		playerNumsAndFlagBits[destRow] = that.playerNumsAndFlagBits[thatSrcRow];
 	}
 };
 

@@ -248,18 +248,18 @@ void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::
 auto Scoreboard::getPlayerNameForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView {
 	assert( m_columnKinds[column] == Nickname );
 	assert( playerIndex < (unsigned)kMaxPlayers );
-	return CG_PlayerName( m_oldRawData.playerNums[playerIndex] );
+	return CG_PlayerName( m_oldRawData.getPlayerNum( playerIndex ) );
 }
 
 auto Scoreboard::getPlayerClanForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView {
 	assert( m_columnKinds[column] == Clan );
 	assert( playerIndex < (unsigned)kMaxPlayers );
-	return CG_PlayerClan( m_oldRawData.playerNums[playerIndex] );
+	return CG_PlayerClan( m_oldRawData.getPlayerNum( playerIndex ) );
 }
 
 auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerIndex )
 	 -> std::optional<PlayerUpdates> {
-	const auto playerNum = m_oldRawData.playerNums[playerIndex];
+	const auto playerNum = m_oldRawData.getPlayerNum( playerIndex );
 	const bool nickname = m_pendingPlayerUpdates[playerNum] & PendingNameUpdate;
 	const bool clan = m_pendingPlayerUpdates[playerNum] & PendingClanUpdate;
 	m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;

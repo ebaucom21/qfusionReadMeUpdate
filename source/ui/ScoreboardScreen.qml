@@ -42,6 +42,11 @@ Rectangle {
                 model: scoreboardBetaModel
                 Layout.fillWidth: true
             }
+            ScoreboardSpecsList {
+                baseColor: "black"
+                model: scoreboardSpecsModel
+                Layout.fillWidth: true
+            }
         }
     }
 }

@@ -1258,7 +1258,7 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		16, MAX_CLIENTS * ReplicatedScoreboardData::kMaxShortSlots, WIRE_BASE128
 	},
 	{
-		offsetof( ReplicatedScoreboardData, playerNums ),
+		offsetof( ReplicatedScoreboardData, playerNumsAndFlagBits ),
 		8, MAX_CLIENTS, WIRE_FIXED_INT8
 	}
 };

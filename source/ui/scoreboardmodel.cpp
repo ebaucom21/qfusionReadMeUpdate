@@ -75,28 +75,29 @@ auto ScoreboardSpecsModel::columnCount( const QModelIndex & ) const -> int {
 }
 
 auto ScoreboardSpecsModel::roleNames() const -> QHash<int, QByteArray> {
-	return { { Nickname, "name" }, { Ping, "Ping" } };
+	return { { Nickname, "name" }, { Ping, "ping" } };
 }
 
 auto ScoreboardSpecsModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
 	if( !modelIndex.isValid() ) {
 		return QVariant();
 	}
-	const auto &nums = m_proxy->m_playerIndicesForList[TEAM_SPECTATOR];
+	const auto &indices = m_proxy->m_playerIndicesForList[TEAM_SPECTATOR];
 	const auto row = (unsigned)modelIndex.row();
-	if( row >= nums.size() ) {
+	if( row >= indices.size() ) {
 		return QVariant();
 	}
 	const auto &scb = m_proxy->m_scoreboard;
-	const auto playerNum = nums[row];
+	const auto playerIndex = indices[row];
 	// TODO: These assumptions about column numbers are risky. This is just to get the stuff working.
 	if( role == Ping ) {
 		const auto pingColumn = m_proxy->m_scoreboard.getColumnCount() - 1;
-		return formatPing( scb.getPlayerPingForColumn( playerNum, pingColumn ) );
+		Com_Printf( "Ping role: player %d ping is %d\n", playerIndex, scb.getPlayerPingForColumn( playerIndex, pingColumn ) );
+		return formatPing( scb.getPlayerPingForColumn( playerIndex, pingColumn ) );
 	}
 	if( role == Nickname ) {
 		const auto nameColumn = 0;
-		return toStyledText( scb.getPlayerNameForColumn( playerNum, nameColumn ) );
+		return toStyledText( scb.getPlayerNameForColumn( playerIndex, nameColumn ) );
 	}
 	return QVariant();
 }
@@ -176,6 +177,9 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 	PlayerIndicesTable listPlayerTables[5];
 
 	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
+		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
+			continue;
+		}
 		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
 		// TODO: How do we separate specs from empty client slots?
 		auto &teamNums = m_playerIndicesForList[teamNum];
@@ -219,6 +223,9 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 
 	for( const auto &playerUpdate: playerUpdates ) {
 		const auto playerIndex = playerUpdate.playerIndex;
+		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
+			continue;
+		}
 		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
 		if( wasTeamReset[teamNum] ) {
 			continue;
