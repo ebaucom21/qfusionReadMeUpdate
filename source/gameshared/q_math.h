@@ -330,9 +330,7 @@ static inline bool BoundsIntersect( const vec3_t mins1, const vec3_t maxs1, cons
 
 	__m128 cmp1 = _mm_cmpge_ps( xmmMins1, xmmMaxs2 );
 	__m128 cmp2 = _mm_cmpge_ps( xmmMins2, xmmMaxs1 );
-	__m128 orCmp = _mm_or_ps( cmp1, cmp2 );
-
-	return _mm_movemask_epi8( _mm_cmpeq_epi32( _mm_castps_si128( orCmp ), _mm_setzero_si128() ) ) == 0xFFFF;
+	return !_mm_movemask_ps( _mm_or_ps( cmp1, cmp2 ) );
 #endif
 }
 

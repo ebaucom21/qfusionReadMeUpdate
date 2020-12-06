@@ -26,9 +26,7 @@ static inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAb
 											 __m128 shapeMins, __m128 shapeMaxs ) {
 	__m128 cmp1 = _mm_cmpge_ps( shapeMins, traceAbsmaxs );
 	__m128 cmp2 = _mm_cmpge_ps( traceAbsmins, shapeMaxs );
-	__m128 orCmp = _mm_or_ps( cmp1, cmp2 );
-
-	return _mm_movemask_epi8( _mm_cmpeq_epi32( _mm_castps_si128( orCmp ), _mm_setzero_si128() ) ) == 0xFFFF;
+	return !_mm_movemask_ps( _mm_or_ps( cmp1, cmp2 ) );
 }
 
 static inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs,
