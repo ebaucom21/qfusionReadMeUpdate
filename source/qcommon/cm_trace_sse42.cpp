@@ -188,16 +188,33 @@ __attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides
 	return numVectorGroups;
 }
 
-static void printv( const char *tag, __m128 v ) {
-	alignas( 16 ) float data[4];
-	_mm_store_ps( data, v );
-	printf( "%32s: %f %f %f %f\n", tag, data[0], data[1], data[2], data[3] );
+// We could try inlining bodies manually and interleaving instructions
+// for a better throughput but GCC does it right from our observations.
+
+inline __m128 horizontalAllMin( __m128 v ) {
+	// https://stackoverflow.com/a/35270026
+	__m128 shuf = _mm_movehdup_ps( v );
+	__m128 mins = _mm_min_ps( v, shuf );
+	shuf = _mm_movehl_ps( shuf, mins );
+	mins = _mm_min_ss( mins, shuf );
+	return _mm_shuffle_ps( mins, mins, _MM_SHUFFLE( 0, 0, 0, 0 ) );
 }
 
-static void printx( const char *tag, __m128 v ) {
-	alignas( 16 ) uint32_t data[4];
-	_mm_store_ps( (float *)data, v );
-	printf( "%32s: %08x %08x %08x %08x\n", tag, data[0], data[1], data[2], data[3] );
+inline __m128 horizontalAllMax( __m128 v ) {
+	// https://stackoverflow.com/a/35270026
+	__m128 shuf = _mm_movehdup_ps( v );
+	__m128 maxs = _mm_max_ps( v, shuf );
+	shuf = _mm_movehl_ps( shuf, maxs );
+	maxs = _mm_max_ss( maxs, shuf );
+	return _mm_shuffle_ps( maxs, maxs, _MM_SHUFFLE( 0, 0, 0, 0 ) );
+}
+
+inline int horizontalMaxScalar( __m128i v ) {
+	// This does not seem very efficient (the throughput is poor) but is fine for a post-loop teardown code
+	v = _mm_max_epi32( v, _mm_shuffle_epi32( v, _MM_SHUFFLE( 2, 1, 0, 3 ) ) );
+	v = _mm_max_epi32( v, _mm_shuffle_epi32( v, _MM_SHUFFLE( 2, 1, 0, 3 ) ) );
+	v = _mm_max_epi32( v, _mm_shuffle_epi32( v, _MM_SHUFFLE( 2, 1, 0, 3 ) ) );
+	return _mm_cvtsi128_si32( v );
 }
 
 void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
@@ -248,18 +265,15 @@ void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *
 	int getout = 0;
 	int startout = 0;
 
-	const int strideInElems = 4 * numVectorGroups;
-	const auto *const __restrict sidenums = (int *)( buffer + 7 * strideInElems * sizeof( float ) );
-	const auto *const __restrict cursorPtr = (float *)( buffer );
+	__m128 xmmCurrSides = _mm_castsi128_ps( _mm_set1_epi32( -1 ) );
 
-	// Make it negative so we get a segfault on a misuse
-	int leadSideNum = std::numeric_limits<int>::min();
+	const int strideInElems = 4 * numVectorGroups;
 	for( int i = 0; i < numVectorGroups; ++i ) {
 		// http://cbloomrants.blogspot.com/2010/07/07-21-10-x86.html
 		// "... on x86 you should write code to take use of complex addressing,
 		// you can have fewer data dependencies if you just set up one base variable
 		// and then do lots of referencing off it.
-		const float *__restrict p = cursorPtr + 4 * i;
+		const float *__restrict p = (const float *)buffer + 4 * i;
 		const __m128 xmmX = _mm_loadu_ps( p );
 		const __m128 xmmY = _mm_loadu_ps( p + strideInElems );
 		const __m128 xmmZ = _mm_loadu_ps( p + 2 * strideInElems );
@@ -335,36 +349,22 @@ void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *
 		const __m128 xmmMinLeaveFracs = _mm_min_ps( xmmCurrLeaveFracs, xmmLeaveFracsToCmp );
 
 		// Compute a horizontal max of the enter fracs vector and a horizontal min of the leave fracs vector
-		// https://stackoverflow.com/a/35270026
-
-		__m128 xmmTmpShuf1 = _mm_movehdup_ps( xmmMaxEnterFracs );        // broadcast elements 3,1 to 2,0
-		__m128 xmmTmpRes1 = _mm_max_ps( xmmMaxEnterFracs, xmmTmpShuf1 );
-		xmmTmpShuf1 = _mm_movehl_ps( xmmTmpShuf1, xmmTmpRes1 ); // high half -> low half
-		xmmTmpRes1 = _mm_max_ss( xmmTmpRes1, xmmTmpShuf1 );
-
+		xmmCurrLeaveFracs = horizontalAllMin( xmmMinLeaveFracs );
 		// We have to find an index of the new max enter frac (if any) to store the lead side num
-		const __m128 xmmAllMaxEnterFracs = _mm_shuffle_ps( xmmTmpRes1, xmmTmpRes1, _MM_SHUFFLE( 0, 0, 0, 0 ) );
-
+		const __m128 xmmAllMaxEnterFracs = horizontalAllMax( xmmMaxEnterFracs );
 		const __m128 xmmMatchBestIndexCmp = _mm_cmpeq_ps( xmmMaxEnterFracs, xmmAllMaxEnterFracs );
 		const __m128 xmmMatchLessCurrCmp = _mm_cmpgt_ps( xmmMaxEnterFracs, xmmCurrEnterFracs );
 		const __m128 xmmIndexMask = _mm_and_ps( xmmMatchBestIndexCmp, xmmMatchLessCurrCmp );
-		const int indexMask = _mm_movemask_ps( xmmIndexMask );
+		xmmCurrEnterFracs = xmmAllMaxEnterFracs;
 
-		// This could have been branchless, e.g we could unload to memory
-		// and address the current result by -1 but the branchless TZCNT
-		// is not omnipresent and also memory ops could suck.
-		if( indexMask ) {
-			leadSideNum = sidenums[( 4 * i ) + __builtin_ctz( indexMask )];
-			xmmCurrEnterFracs = xmmAllMaxEnterFracs;
-		}
-
-		// Save min leave fracs for the next iteration
-		// Doing this after the branch is actually faster as it probably could use a misprediction latency window
-		__m128 xmmTmpShuf2 = _mm_movehdup_ps( xmmMinLeaveFracs );        // broadcast elements 3,1 to 2,0
-		__m128 xmmTmpRes2 = _mm_min_ps( xmmMinLeaveFracs, xmmTmpShuf2 );
-		xmmTmpShuf2 = _mm_movehl_ps( xmmTmpShuf2, xmmTmpRes2 ); // high half -> low half
-		xmmTmpRes2 = _mm_min_ss( xmmTmpRes2, xmmTmpShuf2 );
-		xmmCurrLeaveFracs = _mm_shuffle_ps( xmmTmpRes2, xmmTmpRes2, _MM_SHUFFLE( 0, 0, 0, 0 ) );
+		const __m128 xmmSideNums = _mm_loadu_ps( p + 7 * strideInElems );
+		// Side numbers are growing monotonically.
+		// All 4 side number values of a step are greater than values of a previous step.
+		// xmmCurrSides initially contains values lesser than the first feasible side number.
+		// Overwrite these values using the enter frac mask of this step.
+		// One of the 4 xmmCurrSides contains the best lead side number.
+		// It can be computed in the tear down code using the horizontal max operation.
+		xmmCurrSides = _mm_blendv_ps( xmmCurrSides, xmmSideNums, xmmIndexMask );
 	}
 
 	if( !startout ) {
@@ -394,11 +394,11 @@ void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *
 			const auto *const sidey = (float *)( buffer + floatStrideInBytes );
 			const auto *const sidez = (float *)( buffer + 2 * floatStrideInBytes );
 			const auto *const sided = (float *)( buffer + 6 * floatStrideInBytes );
-			if( enterfrac < 0 ) {
-				enterfrac = 0;
-			}
+			enterfrac = std::max( 0.0f, enterfrac );
 			tlc->trace->fraction = enterfrac;
 			cplane_s *destPlane = &tlc->trace->plane;
+			// All side operations are performed in the FP execution domain in the loop body
+			const int leadSideNum = horizontalMaxScalar( _mm_castps_si128( xmmCurrSides ) );
 			assert( (unsigned)leadSideNum < (unsigned)brush->numsides );
 			destPlane->normal[0] = sidex[leadSideNum];
 			destPlane->normal[1] = sidey[leadSideNum];
