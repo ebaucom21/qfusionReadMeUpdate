@@ -261,8 +261,10 @@ void Scoreboard::endUpdating() {
 	for( unsigned i = 0; i < kMaxPlayers; ++i ) {
 		[[maybe_unused]] const auto [playerNum, score] = sortHandles[i];
 		assert( score == unsortedData.scores[playerNum] );
-		// Copy the old row for the player to its place in the sorting order
-		m_replicatedData.copyThatRow( i, unsortedData, playerNum );
+		if( i != playerNum ) {
+			// Copy the old row for the player to its place in the sorting order
+			m_replicatedData.copyThatRow( i, unsortedData, playerNum );
+		}
 		// Set team bits for actual indices
 		m_replicatedData.setPlayerTeam( i, playerEnts[playerNum].s.team );
 	}

@@ -15,6 +15,9 @@ class Scoreboard : wsw::ScoreboardShared {
 	wsw::StaticVector<ColumnKind, kMaxColumns> m_columnKinds;
 	wsw::StaticVector<unsigned, kMaxAssets> m_columnSlots;
 
+	std::optional<unsigned> m_nameColumn;
+	std::optional<unsigned> m_pingSlot;
+
 	wsw::StringSpanStaticStorage<uint8_t, uint8_t, kMaxColumns, kTitleDataLimit> m_columnTitlesStorage;
 	wsw::StringSpanStaticStorage<uint8_t, uint8_t, kMaxAssets, kAssetDataLimit> m_columnAssetsStorage;
 
@@ -119,6 +122,15 @@ public:
 		assert( m_columnKinds[column] == Score );
 		return m_oldRawData.getPlayerScore( playerIndex );
 	}
+
+	[[nodiscard]]
+	bool hasPing() const { return m_pingSlot.has_value(); }
+	[[nodiscard]]
+	auto getPlayerPing( unsigned playerIndex ) const -> int;
+	[[nodiscard]]
+	auto getPlayerName( unsigned playerIndex ) const -> wsw::StringView;
+
+	// Getters for table-based models that track columns. The column is redundant but is supplied for extra validation.
 
 	[[nodiscard]]
 	auto getPlayerNameForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView;

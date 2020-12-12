@@ -520,6 +520,7 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 		// TODO: This could be a memmove but it's more clear written this way
 		for( unsigned slot = 0; slot < kMaxShortSlots; ++slot ) {
 			setPlayerShort( destRow, slot, that.getPlayerShort( thatSrcRow, slot ) );
+			assert( getPlayerShort( destRow, slot ) == that.getPlayerShort( thatSrcRow, slot ) );
 		}
 		playerNumsAndFlagBits[destRow] = that.playerNumsAndFlagBits[thatSrcRow];
 	}

@@ -17,6 +17,8 @@ namespace wsw::ui {
 
 void Scoreboard::clearSchema() {
 	m_columnKinds.clear();
+	m_pingSlot = std::nullopt;
+	m_nameColumn = std::nullopt;
 	m_columnTitlesStorage.clear();
 	m_columnAssetsStorage.clear();
 }
@@ -166,11 +168,33 @@ bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 			case 2: res = parseLayoutSlot( token ); break;
 		}
 		if( !res ) {
-			Com_Printf( S_COLOR_CYAN "%d\n", (int)( num % 3 ) );
 			return false;
 		}
 	}
-	return m_columnKinds.size() > 2 && m_columnTitlesStorage.size() == m_columnKinds.size();
+
+	if( m_columnKinds.size() < 2 || m_columnTitlesStorage.size() != m_columnKinds.size() ) {
+		return false;
+	}
+
+	assert( m_pingSlot == std::nullopt );
+	assert( m_nameColumn == std::nullopt );
+	// TODO: Share with the game module implementation? Supply the slot within the replicated data?
+	unsigned slotCounter = 0;
+	for( unsigned column = 0; column < m_columnKinds.size(); ++column ) {
+		const auto kind = m_columnKinds[column];
+		if( !isSeparateSlotSpaceKind( kind ) ) {
+			if( kind == Ping ) {
+				m_pingSlot = slotCounter;
+			}
+			slotCounter++;
+		} else if( kind == Nickname ) {
+			m_nameColumn = column;
+		}
+	}
+
+	// The ping column could be omitted but the name is always present
+	assert( m_nameColumn.has_value() );
+	return true;
 }
 
 bool Scoreboard::parseAssets( const wsw::StringView &string ) {
@@ -238,11 +262,23 @@ auto Scoreboard::getImageAssetPath( unsigned asset ) const -> std::optional<wsw:
 	return std::nullopt;
 }
 
-void Scoreboard::handleConfigString( unsigned int configStringIndex, const wsw::StringView &string ) {
+void Scoreboard::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
 	const auto playerNum = (unsigned)( configStringIndex - CS_PLAYERINFOS );
 	assert( playerNum < (unsigned)MAX_CLIENTS );
 	// Consider this as a full update currently
 	m_pendingPlayerUpdates[playerNum] = (PendingPlayerUpdates)( PendingClanUpdate | PendingNameUpdate );
+}
+
+auto Scoreboard::getPlayerPing( unsigned playerIndex ) const -> int {
+	assert( m_pingSlot.has_value() );
+	assert( playerIndex < (unsigned)kMaxPlayers );
+	return m_oldRawData.getPlayerShort( playerIndex, *m_pingSlot );
+}
+
+auto Scoreboard::getPlayerName( unsigned playerIndex ) const -> wsw::StringView {
+	assert( m_nameColumn.has_value() );
+	assert( playerIndex < (unsigned)kMaxPlayers );
+	return CG_PlayerName( m_oldRawData.getPlayerNum( playerIndex ) );
 }
 
 auto Scoreboard::getPlayerNameForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView {

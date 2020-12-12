@@ -92,15 +92,11 @@ auto ScoreboardSpecsModel::data( const QModelIndex &modelIndex, int role ) const
 	}
 	const auto &scb = m_proxy->m_scoreboard;
 	const auto playerIndex = indices[row];
-	// TODO: These assumptions about column numbers are risky. This is just to get the stuff working.
 	if( role == Ping ) {
-		const auto pingColumn = m_proxy->m_scoreboard.getColumnCount() - 1;
-		Com_Printf( "Ping role: player %d ping is %d\n", playerIndex, scb.getPlayerPingForColumn( playerIndex, pingColumn ) );
-		return formatPing( scb.getPlayerPingForColumn( playerIndex, pingColumn ) );
+		return formatPing( scb.hasPing() ? scb.getPlayerPing( playerIndex ) : 0 );
 	}
 	if( role == Nickname ) {
-		const auto nameColumn = 0;
-		return toStyledText( scb.getPlayerNameForColumn( playerIndex, nameColumn ) );
+		return toStyledText( scb.getPlayerName( playerIndex ) );
 	}
 	return QVariant();
 }
