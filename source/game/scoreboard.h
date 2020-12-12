@@ -62,9 +62,14 @@ public:
 	auto registerNumberColumn( const wsw::StringView &title ) -> unsigned {
 		return registerUserColumn( title, Number );
 	}
+	[[nodiscard]]
+	auto registerGlyphColumn( const wsw::StringView &title ) -> unsigned {
+		return registerUserColumn( title, Glyph );
+	}
 
 	void setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon );
 	void setPlayerNumber( const gclient_s *client, unsigned slot, int value );
+	void setPlayerGlyph( const gclient_s *client, unsigned slot, unsigned codePoint );
 
 	void update();
 };

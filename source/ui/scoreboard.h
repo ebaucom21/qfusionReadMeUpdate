@@ -113,6 +113,11 @@ public:
 		return m_oldRawData.getPlayerShort( playerIndex, m_columnSlots[column] );
 	}
 	[[nodiscard]]
+	auto getPlayerGlyphForColumn( unsigned playerIndex, unsigned column ) const -> int {
+		assert( m_columnKinds[column] == Glyph );
+		return m_oldRawData.getPlayerShort( playerIndex, m_columnSlots[column] );
+	}
+	[[nodiscard]]
 	auto getPlayerPingForColumn( unsigned playerIndex, unsigned column ) const -> int {
 		assert( m_columnKinds[column] == Ping );
 		return m_oldRawData.getPlayerShort( playerIndex, m_columnSlots[column] );

@@ -63,7 +63,7 @@ TableView {
             padding: 4
             text: value
             font.weight: Font.Medium
-            font.pointSize: 12
+            font.pointSize: kind !== Scoreboard.Glyph ? 12 : 16
             font.letterSpacing: 1
             font.strikeout: isGhosting && isTextual
         }

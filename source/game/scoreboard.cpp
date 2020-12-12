@@ -55,7 +55,7 @@ void Scoreboard::checkSlot( unsigned slot, ColumnKind expectedKind ) const {
 }
 
 auto Scoreboard::registerUserColumn( const wsw::StringView &title, ColumnKind kind ) -> unsigned {
-	assert( kind == Number || kind == Icon );
+	assert( kind == Number || kind == Icon || kind == Glyph );
 	expectState( Schema );
 	// Reserve space for ping and score
 	if( m_columnKinds.size() + 2 == m_columnKinds.capacity() ) {
@@ -191,6 +191,18 @@ void Scoreboard::setPlayerNumber( const gclient_s *client, unsigned slot, int nu
 	using Limits = std::numeric_limits<int16_t>;
 	const auto value = (int16_t)std::clamp( number, (int)Limits::min(), (int)Limits::max() );
 	m_replicatedData.setPlayerShort( playerNum, slot, value );
+}
+
+void Scoreboard::setPlayerGlyph( const gclient_s *client, unsigned slot, unsigned codePoint ) {
+	const auto playerNum = PLAYERNUM( client );
+	expectState( Update );
+	checkPlayerNum( playerNum );
+	checkSlot( slot, Glyph );
+	slot = slot - 1;
+	if( codePoint > (unsigned)std::numeric_limits<uint16_t>::max() ) {
+		throw Error( "Illegal code point (malformed or out of the Unicode BMP)" );
+	}
+	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)codePoint );
 }
 
 void Scoreboard::endUpdating() {

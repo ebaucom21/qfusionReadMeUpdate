@@ -218,7 +218,8 @@ protected:
 		Score,
 		Ping,
 		Number,
-		Icon
+		Glyph,
+		Icon,
 	};
 
 	[[nodiscard]]

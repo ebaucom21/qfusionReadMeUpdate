@@ -89,6 +89,7 @@ public:
 		Score,
 		Ping,
 		Number,
+		Glyph,
 		Icon
 	};
 	Q_ENUM( QmlColumnKind );
@@ -97,6 +98,7 @@ public:
 	static_assert( (int)QmlColumnKind::Score == (int)Score );
 	static_assert( (int)QmlColumnKind::Ping == (int)Ping );
 	static_assert( (int)QmlColumnKind::Number == (int)Number );
+	static_assert( (int)QmlColumnKind::Glyph == (int)Glyph );
 	static_assert( (int)QmlColumnKind::Icon == (int)Icon );
 
 	ScoreboardModelProxy();

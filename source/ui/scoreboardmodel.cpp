@@ -21,6 +21,14 @@ static auto formatPing( unsigned ping ) -> QString {
 	return toStyledText( buffer.asView() );
 }
 
+[[nodiscard]]
+static inline auto formatGlyph( int codePoint ) -> QChar {
+	// Only the Unicode BMP is supported as we limit transmitted values to short
+	assert( (unsigned)codePoint < (unsigned)std::numeric_limits<uint16_t>::max() );
+	QChar ch( (uint16_t)codePoint );
+	return ch.isPrint() ? ch : QChar();
+}
+
 auto ScoreboardTeamModel::rowCount( const QModelIndex & ) const -> int {
 	return (int)m_proxy->m_playerIndicesForList[m_teamListIndex].size();
 }
@@ -64,6 +72,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 		case Score: return scb.getPlayerScoreForColumn( playerIndex, column );
 		case Ping: return formatPing( scb.getPlayerPingForColumn( playerIndex, column ) );
 		case Number: return scb.getPlayerNumberForColumn( playerIndex, column );
+		case Glyph: return formatGlyph( scb.getPlayerGlyphForColumn( playerIndex, column ) );
 		case Icon: return scb.getPlayerIconForColumn( playerIndex, column );
 	}
 	throw std::logic_error( "Unreachable" );
