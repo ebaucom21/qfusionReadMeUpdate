@@ -56,6 +56,7 @@ public:
 		bool nickname: 1;
 		bool clan: 1;
 		bool score: 1;
+		bool ghosting: 1;
 	};
 
 	struct TeamUpdates {
@@ -92,6 +93,10 @@ public:
 	[[nodiscard]]
 	bool isPlayerConnected( unsigned playerIndex ) const {
 		return m_oldRawData.isPlayerConnected( playerIndex );
+	}
+	[[nodiscard]]
+	bool isPlayerGhosting( unsigned playerIndex ) const {
+		return m_oldRawData.isPlayerGhosting( playerIndex );
 	}
 
 	[[nodiscard]]

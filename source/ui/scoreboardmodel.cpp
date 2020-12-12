@@ -30,7 +30,7 @@ auto ScoreboardTeamModel::columnCount( const QModelIndex & ) const -> int {
 }
 
 auto ScoreboardTeamModel::roleNames() const -> QHash<int, QByteArray> {
-	return { { Kind, "kind" }, { Value, "value" } };
+	return { { Kind, "kind" }, { Value, "value" }, { IsGhosting, "isGhosting" } };
 }
 
 auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
@@ -50,10 +50,13 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 	if( role == Kind ) {
 		return scb.getColumnKind( column );
 	}
+	const auto playerIndex = indices[m_teamListIndex][row];
+	if( role == IsGhosting ) {
+		return scb.isPlayerGhosting( playerIndex );
+	}
 	if( role != Value ) {
 		return QVariant();
 	}
-	const auto playerIndex = indices[m_teamListIndex][row];
 	// TODO: This is awkward a bit
 	switch( scb.getColumnKind( column ) ) {
 		case Nickname: return toStyledText( scb.getPlayerNameForColumn( playerIndex, column ) );
@@ -138,17 +141,24 @@ ScoreboardModelProxy::ScoreboardModelProxy() {
 void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team,
 													 int rowInTeam, int rowInMixedList ) {
 	assert( team >= TEAM_PLAYERS && team <= TEAM_BETA );
-	const QVector<int> &changedRoles = ScoreboardTeamModel::kValueRoleAsVector;
 	QAbstractTableModel *const teamModel = &m_teamModelsHolder[team - 1];
 	QAbstractTableModel *const mixedModel = ( team != TEAM_PLAYERS ) ? m_teamModelsHolder.end() - 1 : nullptr;
+	const QVector<int> *changedRoles = &ScoreboardTeamModel::kValueRoleAsVector;
+	if( updates.ghosting ) {
+		if( updates.nickname | updates.clan | updates.score | updates.shortSlotsMask ) {
+			changedRoles = &ScoreboardTeamModel::kValueAndGhostingRolesAsVector;
+		} else {
+			changedRoles = &ScoreboardTeamModel::kGhostingRoleAsVector;
+		}
+	}
 
 	for( unsigned i = 0; i < m_scoreboard.getColumnCount(); ++i ) {
 		// TODO: Check updates for whether the column has been really changed
 		QModelIndex teamModelIndex( teamModel->index( rowInTeam, (int)i ) );
-		teamModel->dataChanged( teamModelIndex, teamModelIndex, changedRoles );
+		teamModel->dataChanged( teamModelIndex, teamModelIndex, *changedRoles );
 		if( mixedModel ) {
 			QModelIndex mixedModelIndex( mixedModel->index( rowInMixedList, (int)i ) );
-			mixedModel->dataChanged( mixedModelIndex, mixedModelIndex, changedRoles );
+			mixedModel->dataChanged( mixedModelIndex, mixedModelIndex, *changedRoles );
 		}
 	}
 }

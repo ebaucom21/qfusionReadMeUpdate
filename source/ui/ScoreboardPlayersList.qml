@@ -33,6 +33,8 @@ TableView {
 
     delegate: Item {
         readonly property int kind: scoreboard.getColumnKind(column)
+        readonly property bool isTextual : kind == Scoreboard.Nickname || kind == Scoreboard.Clan
+        readonly property real valueOpacity: isGhosting ? 0.5 : 1.0
 
         implicitWidth: {
             if (kind == Scoreboard.Nickname) {
@@ -54,14 +56,16 @@ TableView {
 
         Label {
             visible: kind != Scoreboard.Icon
+            opacity: valueOpacity
             anchors.fill: parent
             verticalAlignment: Qt.AlignVCenter
-            horizontalAlignment: kind == Scoreboard.Nickname || kind == Scoreboard.Clan ? Qt.AlignLeft : Qt.AlignHCenter
+            horizontalAlignment: isTextual ? Qt.AlignLeft : Qt.AlignHCenter
             padding: 4
             text: value
             font.weight: Font.Medium
             font.pointSize: 12
             font.letterSpacing: 1
+            font.strikeout: isGhosting && isTextual
         }
 
         Loader {
@@ -70,6 +74,7 @@ TableView {
 
             Image {
                 visible: value
+                opacity: valueOpacity
                 width: 32
                 height: 32
                 source: value ? scoreboard.getImageAssetPath(value) : ""

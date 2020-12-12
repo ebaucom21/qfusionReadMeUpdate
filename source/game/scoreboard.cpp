@@ -206,13 +206,13 @@ void Scoreboard::endUpdating() {
 	std::memset( sortHandles, 0, sizeof( sortHandles ) );
 
 	const auto *const playerEnts = game.edicts + 1;
-	const auto maxPlayerNum = (unsigned)gs.maxclients;
 	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
 	for( unsigned playerNum = 0; playerNum < kMaxPlayers; ++playerNum ) {
 		const auto *const ent = playerEnts + playerNum;
 		// Indices and client numbers match 1-1 at this stage.
 		const auto playerIndex = playerNum;
 		m_replicatedData.playerNumsAndFlagBits[playerIndex] = playerNum;
+		m_replicatedData.playerNumsAndFlagBits[playerIndex] |= kFlagBitGhosting;
 		sortHandles[playerIndex].num = playerNum;
 		int16_t ping = 999;
 		int score = std::numeric_limits<int32_t>::min();
@@ -224,6 +224,9 @@ void Scoreboard::endUpdating() {
 				ping = client->r.ping;
 				if( clientState == CS_SPAWNED && ent->s.team > TEAM_SPECTATOR ) {
 					score = client->level.stats.score;
+					if( !G_ISGHOSTING( ent ) ) {
+						m_replicatedData.playerNumsAndFlagBits[playerIndex] &= ~kFlagBitGhosting;
+					}
 				}
 			}
 		}

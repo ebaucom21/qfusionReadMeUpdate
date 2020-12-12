@@ -21,13 +21,16 @@ class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
 
 	enum Role {
 		Kind = Qt::UserRole + 1,
-		Value
+		Value,
+		IsGhosting
 	};
 
 	ScoreboardTeamModel( ScoreboardModelProxy *proxy, int teamListIndex )
 		: m_proxy( proxy ), m_teamListIndex( teamListIndex ) {}
 
 	static inline QVector<int> kValueRoleAsVector { Value };
+	static inline QVector<int> kGhostingRoleAsVector { IsGhosting };
+	static inline QVector<int> kValueAndGhostingRolesAsVector { Value, IsGhosting };
 
 	[[nodiscard]]
 	auto rowCount( const QModelIndex & ) const -> int override;

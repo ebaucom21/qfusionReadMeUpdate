@@ -228,6 +228,7 @@ protected:
 
 	static constexpr uint8_t kPlayerNumMask = ( 1u << 5u ) - 1u;
 	static constexpr uint8_t kFlagBitConnected = 1u << 5u;
+	static constexpr uint8_t kFlagBitGhosting = 1u << 6u;
 
 	// Don't imply that player indices are client numbers (they have the same range but are sorted by score)
 	static constexpr unsigned kMaxPlayers = MAX_CLIENTS;
@@ -506,6 +507,12 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 	bool isPlayerConnected( unsigned playerIndex ) const {
 		assert( playerIndex < (unsigned)kMaxPlayers );
 		return ( playerNumsAndFlagBits[playerIndex] & kFlagBitConnected ) != 0;
+	}
+
+	[[nodiscard]]
+	bool isPlayerGhosting( unsigned playerIndex ) const {
+		assert( playerIndex < (unsigned)kMaxPlayers );
+		return ( playerNumsAndFlagBits[playerIndex] & kFlagBitGhosting ) != 0;
 	}
 
 	void copyThatRow( unsigned destRow, const ReplicatedScoreboardData &that, unsigned thatSrcRow ) {

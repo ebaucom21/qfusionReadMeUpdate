@@ -265,6 +265,7 @@ auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &n
 	m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;
 
 	const bool score = newOne.getPlayerScore( playerIndex ) != oldOne.getPlayerScore( playerIndex );
+	const bool ghosting = newOne.isPlayerGhosting( playerIndex ) != oldOne.isPlayerGhosting( playerIndex );
 
 	uint8_t mask = 0;
 	static_assert( 1u << kMaxShortSlots <= std::numeric_limits<uint8_t>::max() );
@@ -274,8 +275,8 @@ auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &n
 		}
 	}
 
-	if( ( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask ) ) {
-		return PlayerUpdates { (uint8_t)playerIndex, mask, nickname, clan, score };
+	if( ( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask ) | (unsigned)ghosting ) {
+		return PlayerUpdates { (uint8_t)playerIndex, mask, nickname, clan, score, ghosting };
 	}
 
 	return std::nullopt;
