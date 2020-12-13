@@ -81,7 +81,7 @@ bool Scoreboard::parseLayoutTitle( const wsw::StringView &token ) {
 }
 
 bool Scoreboard::parseLayoutKind( const wsw::StringView &token ) {
-	const std::array<ColumnKind, 4> uniqueFields { Nickname, Clan, Ping, Score };
+	const std::array<ColumnKind, 5> uniqueFields { Nickname, Clan, Ping, Score, Status };
 
 	const auto maybeValue = wsw::toNum<unsigned>( token );
 	// TODO: Use magic_enum for obtaining the max value
@@ -96,7 +96,9 @@ bool Scoreboard::parseLayoutKind( const wsw::StringView &token ) {
 		}
 		// Disallow empty titles for these kinds
 		if( m_columnTitlesStorage.back().empty() ) {
-			return false;
+			if( kind != Status ) {
+				return false;
+			}
 		}
 	} else {
 		if( m_columnTitlesStorage.back().empty() ) {
@@ -113,7 +115,7 @@ bool Scoreboard::parseLayoutSlot( const wsw::StringView &token ) {
 	assert( m_columnKinds.size() == m_columnSlots.size() + 1 );
 
 	const ColumnKind kind = m_columnKinds.back();
-	if( isSeparateSlotSpaceKind( kind ) ) {
+	if( kind == Nickname || kind == Clan || kind == Score ) {
 		if( !token.equalsIgnoreCase( kPlaceholder ) ) {
 			return false;
 		}
@@ -124,9 +126,7 @@ bool Scoreboard::parseLayoutSlot( const wsw::StringView &token ) {
 	}
 
 	if( token.equalsIgnoreCase( kPlaceholder ) ) {
-		if( kind != Ping ) {
-			return false;
-		}
+		return false;
 	}
 
 	const auto maybeSlot = wsw::toNum<unsigned>( token );
@@ -152,8 +152,6 @@ bool Scoreboard::parseLayoutSlot( const wsw::StringView &token ) {
 
 bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 	assert( m_columnKinds.empty() );
-
-	wsw::StaticVector<ColumnKind, 4> metFields;
 
 	wsw::StringSplitter splitter( string );
 	while( const auto maybeTokenAndNum = splitter.getNextWithNum() ) {
@@ -182,13 +180,13 @@ bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 	unsigned slotCounter = 0;
 	for( unsigned column = 0; column < m_columnKinds.size(); ++column ) {
 		const auto kind = m_columnKinds[column];
-		if( !isSeparateSlotSpaceKind( kind ) ) {
+		if( kind == Nickname ) {
+			m_nameColumn = column;
+		} else if( kind != Clan && kind != Score ) {
 			if( kind == Ping ) {
 				m_pingSlot = slotCounter;
 			}
 			slotCounter++;
-		} else if( kind == Nickname ) {
-			m_nameColumn = column;
 		}
 	}
 

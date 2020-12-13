@@ -6,6 +6,7 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Rectangle {
+    id: root
     color: Qt.rgba(Material.background.r, Material.background.g, Material.background.b, 0.8)
 
     // TODO: Share with the in-game menu
@@ -13,6 +14,9 @@ Rectangle {
 
     readonly property color baseColor: Qt.rgba(Material.background.r, Material.background.g, Material.background.b, 0.7)
     readonly property color tintColor: Qt.rgba(Material.accent.r, Material.accent.g, Material.accent.b, 0.05)
+
+    readonly property real baseCellWidth: 48
+    readonly property real clanCellWidth: 96
 
     Item {
         id: baselinePane
@@ -28,23 +32,32 @@ Rectangle {
             spacing: 20
 
             ScoreboardPlayersList {
-                baseColor: Material.accent
                 model: scoreboardPlayersModel
+                baseColor: Material.accent
+                baseCellWidth: root.baseCellWidth
+                clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
+                Layout.rightMargin: -root.baseCellWidth
             }
             ScoreboardPlayersList {
-                baseColor: "red"
                 model: scoreboardAlphaModel
+                baseColor: "red"
+                baseCellWidth: root.baseCellWidth
+                clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
+                Layout.rightMargin: -root.baseCellWidth
             }
             ScoreboardPlayersList {
-                baseColor: "green"
                 model: scoreboardBetaModel
+                baseColor: "green"
+                baseCellWidth: root.baseCellWidth
+                clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
+                Layout.rightMargin: -root.baseCellWidth
             }
             ScoreboardSpecsList {
-                baseColor: "black"
                 model: scoreboardSpecsModel
+                baseColor: "black"
                 Layout.fillWidth: true
             }
         }

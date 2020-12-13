@@ -28,7 +28,8 @@ class Scoreboard : public wsw::ScoreboardShared {
 	enum State : unsigned { NoState, Schema, Update };
 	State m_state { NoState };
 
-	unsigned m_pingSlot {~0u };
+	unsigned m_pingSlot { ~0u };
+	unsigned m_statusSlot { ~0u };
 
 	void expectState( State expectedState );
 	void checkPlayerNum( unsigned playerNum ) const;
@@ -70,6 +71,9 @@ public:
 	void setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon );
 	void setPlayerNumber( const gclient_s *client, unsigned slot, int value );
 	void setPlayerGlyph( const gclient_s *client, unsigned slot, unsigned codePoint );
+
+	void setPlayerStatusIcon( const gclient_s *client, unsigned icon );
+	void setPlayerStatusGlyph( const gclient_s *client, unsigned codePoint );
 
 	void update();
 };

@@ -57,8 +57,8 @@ void Scoreboard::checkSlot( unsigned slot, ColumnKind expectedKind ) const {
 auto Scoreboard::registerUserColumn( const wsw::StringView &title, ColumnKind kind ) -> unsigned {
 	assert( kind == Number || kind == Icon || kind == Glyph );
 	expectState( Schema );
-	// Reserve space for ping and score
-	if( m_columnKinds.size() + 2 == m_columnKinds.capacity() ) {
+	// Reserve space for ping, score and status
+	if( m_columnKinds.size() + 3 == m_columnKinds.capacity() ) {
 		throw Error( "Too many columns" );
 	}
 	if( title.empty() ) {
@@ -89,6 +89,7 @@ void Scoreboard::beginDefiningSchema() {
 	m_state = Schema;
 
 	m_pingSlot = ~0u;
+	m_statusSlot = ~0u;
 
 	m_columnKinds.push_back( Nickname );
 	m_columnTitlesStorage.add( kNameTitle );
@@ -120,6 +121,8 @@ void Scoreboard::endDefiningSchema() {
 	m_columnTitlesStorage.add( kScoreTitle );
 	m_columnKinds.push_back( Ping );
 	m_columnTitlesStorage.add( kPingTitle );
+	m_columnKinds.push_back( Status );
+	m_columnTitlesStorage.add( kPlaceholder );
 
 	assert( m_columnKinds.size() == m_columnTitlesStorage.size() );
 	wsw::StaticString<1024> schemaBuffer;
@@ -136,12 +139,13 @@ void Scoreboard::endDefiningSchema() {
 		}
 		const auto kind = m_columnKinds[i];
 		schemaBuffer << ' ' << (unsigned)kind << ' ';
-		if( isSeparateSlotSpaceKind( kind ) ) {
-			assert( kind != Ping );
+		if( kind == Nickname || kind == Clan || kind == Score ) {
 			schemaBuffer << '-';
 		} else {
 			if( kind == Ping ) {
 				m_pingSlot = slotCounter;
+			} else if( kind == Status ) {
+				m_statusSlot = slotCounter;
 			}
 			schemaBuffer << slotCounter++;
 		}
@@ -164,7 +168,7 @@ void Scoreboard::endDefiningSchema() {
 void Scoreboard::beginUpdating() {
 	expectState( NoState );
 	m_state = Update;
-	m_replicatedData.playersTeamMask = 0;
+	std::memset( &m_replicatedData, 0, sizeof( m_replicatedData ) );
 }
 
 void Scoreboard::setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon ) {
@@ -173,10 +177,8 @@ void Scoreboard::setPlayerIcon( const gclient_s *client, unsigned slot, unsigned
 	checkPlayerNum( playerNum );
 	checkSlot( slot, Icon );
 	slot = slot - 1;
-	if( icon ) {
-		if( icon + 1 > m_columnAssetsStorage.size() ) {
-			throw Error( "Icon index is out of bounds" );
-		}
+	if( icon && icon > m_columnAssetsStorage.size() ) {
+		throw Error( "Icon index is out of bounds" );
 	}
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)icon );
 }
@@ -205,6 +207,31 @@ void Scoreboard::setPlayerGlyph( const gclient_s *client, unsigned slot, unsigne
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)codePoint );
 }
 
+void Scoreboard::setPlayerStatusIcon( const gclient_s *client, unsigned icon ) {
+	const auto playerNum = PLAYERNUM( client );
+	expectState( Update );
+	checkPlayerNum( playerNum );
+	if( icon && icon > m_columnAssetsStorage.size() ) {
+		throw Error( "Icon index is out of bounds" );
+	}
+	static_assert( kMaxAssets < 32 );
+	m_replicatedData.setPlayerShort( playerNum, m_statusSlot, (int16_t)icon );
+}
+
+void Scoreboard::setPlayerStatusGlyph( const gclient_s *client, unsigned codePoint ) {
+	const auto playerNum = PLAYERNUM( client );
+	expectState( Update );
+	checkPlayerNum( playerNum );
+	static_assert( kMaxAssets < 32 );
+	if( codePoint && codePoint < 32 ) {
+		throw Error( "Illegal code point (a dozen of first numeric values is reserved for icons)" );
+	}
+	if( codePoint > (unsigned)std::numeric_limits<uint16_t>::max() ) {
+		throw Error( "Illegal code point (malformed or out of the Unicode BMP)" );
+	}
+	m_replicatedData.setPlayerShort( playerNum, m_statusSlot, (int16_t)codePoint );
+}
+
 void Scoreboard::endUpdating() {
 	expectState( Update );
 
@@ -216,6 +243,10 @@ void Scoreboard::endUpdating() {
 	struct NumAndScore { unsigned num; int score; };
 	alignas( 16 ) NumAndScore sortHandles[kMaxPlayers];
 	std::memset( sortHandles, 0, sizeof( sortHandles ) );
+
+	// Set ready status automatically for now
+	const bool shouldSetReadyStatusIcon = ( !GS_RaceGametype() && GS_MatchState() < MATCH_STATE_COUNTDOWN );
+	const bool *const readyStates = level.ready;
 
 	const auto *const playerEnts = game.edicts + 1;
 	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
@@ -245,6 +276,11 @@ void Scoreboard::endUpdating() {
 		sortHandles[playerIndex].score = score;
 		m_replicatedData.setPlayerShort( playerIndex, m_pingSlot, ping );
 		m_replicatedData.setPlayerScore( playerIndex, score );
+		assert( playerIndex == playerNum );
+		if( shouldSetReadyStatusIcon && readyStates[playerNum] ) {
+			// “✔” (U+2714)
+			m_replicatedData.setPlayerShort( playerIndex, m_statusSlot, 0x2714 );
+		}
 	}
 
 	// We have been addressing the data by client numbers.

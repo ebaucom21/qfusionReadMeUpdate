@@ -208,6 +208,10 @@ typedef struct {
 
 #define MAX_CONFIGSTRINGS   ( CS_HELPMESSAGES + MAX_HELPMESSAGES )
 
+#ifdef Status
+#undef Status
+#endif
+
 namespace wsw {
 
 class ScoreboardShared {
@@ -216,16 +220,12 @@ protected:
 		Nickname,
 		Clan,
 		Score,
+		Status,
 		Ping,
 		Number,
 		Glyph,
 		Icon,
 	};
-
-	[[nodiscard]]
-	static bool isSeparateSlotSpaceKind( ColumnKind kind ) {
-		return kind < Ping;
-	}
 
 	static constexpr uint8_t kPlayerNumMask = ( 1u << 5u ) - 1u;
 	static constexpr uint8_t kFlagBitConnected = 1u << 5u;
@@ -233,13 +233,12 @@ protected:
 
 	// Don't imply that player indices are client numbers (they have the same range but are sorted by score)
 	static constexpr unsigned kMaxPlayers = MAX_CLIENTS;
-	static constexpr unsigned kMaxColumns = 8;
+	static constexpr unsigned kMaxColumns = 10;
 	static constexpr unsigned kMaxTitleLen = 12;
 	static constexpr unsigned kTitleDataLimit = 64 + kMaxColumns;
 	static constexpr unsigned kMaxAssets = 16;
 	static constexpr unsigned kAssetDataLimit = 256 + kMaxAssets;
 	static constexpr unsigned kMaxShortSlots = 7;
-	static constexpr unsigned kNumBuiltinColumns = 4;
 };
 
 }

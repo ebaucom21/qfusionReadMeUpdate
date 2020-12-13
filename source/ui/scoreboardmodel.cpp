@@ -29,6 +29,14 @@ static inline auto formatGlyph( int codePoint ) -> QChar {
 	return ch.isPrint() ? ch : QChar();
 }
 
+[[nodiscard]]
+static inline auto formatStatus( int value ) -> QVariant {
+	if( value < 32 ) {
+		return value;
+	}
+	return formatGlyph( value );
+}
+
 auto ScoreboardTeamModel::rowCount( const QModelIndex & ) const -> int {
 	return (int)m_proxy->m_playerIndicesForList[m_teamListIndex].size();
 }
@@ -70,6 +78,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 		case Nickname: return toStyledText( scb.getPlayerNameForColumn( playerIndex, column ) );
 		case Clan: return toStyledText( scb.getPlayerClanForColumn( playerIndex, column ) );
 		case Score: return scb.getPlayerScoreForColumn( playerIndex, column );
+		case Status: return formatStatus( scb.getPlayerStatusForColumn( playerIndex, column ) );
 		case Ping: return formatPing( scb.getPlayerPingForColumn( playerIndex, column ) );
 		case Number: return scb.getPlayerNumberForColumn( playerIndex, column );
 		case Glyph: return formatGlyph( scb.getPlayerGlyphForColumn( playerIndex, column ) );

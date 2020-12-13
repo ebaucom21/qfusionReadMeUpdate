@@ -127,6 +127,11 @@ public:
 		assert( m_columnKinds[column] == Score );
 		return m_oldRawData.getPlayerScore( playerIndex );
 	}
+	[[nodiscard]]
+	auto getPlayerStatusForColumn( unsigned playerIndex, unsigned column ) const -> int {
+		assert( m_columnKinds[column] == Status );
+		return m_oldRawData.getPlayerShort( playerIndex, m_columnSlots[column] );
+	}
 
 	[[nodiscard]]
 	bool hasPing() const { return m_pingSlot.has_value(); }

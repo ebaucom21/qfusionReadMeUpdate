@@ -1432,6 +1432,14 @@ static void scoreboard_setPlayerGlyph( const gclient_t *client, unsigned slot, u
 	scb->setPlayerGlyph( client, slot, codePoint );
 }
 
+static void scoreboard_setPlayerStatusIcon( const gclient_t *client, unsigned asset, wsw::g::Scoreboard *scb ) {
+	scb->setPlayerStatusIcon( client, asset );
+}
+
+static void scoreboard_setPlayerStatusGlyph( const gclient_t *client, unsigned codePoint, wsw::g::Scoreboard *scb ) {
+	scb->setPlayerStatusGlyph( client, codePoint );
+}
+
 static const asMethod_t scoreboard_Methods[] =
 {
 	{ ASLIB_FUNCTION_DECL( void, beginDefiningSchema, () ), asFUNCTION( scoreboard_beginDefiningSchema ), asCALL_CDECL_OBJLAST },
@@ -1445,6 +1453,8 @@ static const asMethod_t scoreboard_Methods[] =
 	{ ASLIB_FUNCTION_DECL( void, setPlayerIcon, (const Client @, uint, uint) ), asFUNCTION( scoreboard_setPlayerIcon ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, setPlayerNumber, (const Client @, uint, uint) ), asFUNCTION( scoreboard_setPlayerNumber ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( void, setPlayerGlyph, (const Client @, uint, uint ) ), asFUNCTION( scoreboard_setPlayerGlyph ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( void, setPlayerStatusIcon, (const Client @, uint ) ), asFUNCTION( scoreboard_setPlayerStatusIcon ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( void, setPlayerStatusGlyph, (const Client @, uint ) ), asFUNCTION( scoreboard_setPlayerStatusGlyph ), asCALL_CDECL_OBJLAST },
 
 	ASLIB_METHOD_NULL
 };

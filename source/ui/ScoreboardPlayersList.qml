@@ -20,6 +20,9 @@ TableView {
 
     property bool mixedTeamsMode: false
 
+    property real baseCellWidth
+    property real clanCellWidth
+
     function getCellColor(row, column) {
         let c = baseColor
         if (mixedTeamsMode) {
@@ -33,16 +36,15 @@ TableView {
 
     delegate: Item {
         readonly property int kind: scoreboard.getColumnKind(column)
-        readonly property bool isTextual : kind == Scoreboard.Nickname || kind == Scoreboard.Clan
+        readonly property bool isColumnTextual: (kind === Scoreboard.Nickname) || (kind === Scoreboard.Clan)
+        readonly property bool isColumnStatusOne: kind === Scoreboard.Status
+        readonly property bool isDisplayingGlyph: (kind === Scoreboard.Glyph) || (isColumnStatusOne && value >= 32)
+        readonly property bool shouldBeDisplayedAsIcon: (kind === Scoreboard.Icon) || (isColumnStatusOne && value < 32)
         readonly property real valueOpacity: isGhosting ? 0.5 : 1.0
 
-        implicitWidth: {
-            if (kind == Scoreboard.Nickname) {
-                tableView.width - 96 - (tableView.columns - 2) * 48
-            } else {
-                kind == Scoreboard.Clan ? 96 : 48
-            }
-        }
+        implicitWidth: kind === Scoreboard.Nickname ?
+                       (tableView.width - clanCellWidth - (tableView.columns - 2) * baseCellWidth) :
+                       (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
 
         implicitHeight: 32
         onImplicitHeightChanged: forceLayoutTimer.start()
@@ -50,34 +52,35 @@ TableView {
 
         Rectangle {
             anchors.fill: parent
+            visible: !isColumnStatusOne
             opacity: 0.7
-            color: getCellColor(row, column)
+            color: isColumnStatusOne ? "transparent" : getCellColor(row, column)
         }
 
         Label {
-            visible: kind != Scoreboard.Icon
-            opacity: valueOpacity
+            visible: !shouldBeDisplayedAsIcon
+            opacity: isColumnStatusOne ? 1.0 : valueOpacity
             anchors.fill: parent
             verticalAlignment: Qt.AlignVCenter
-            horizontalAlignment: isTextual ? Qt.AlignLeft : Qt.AlignHCenter
+            horizontalAlignment: isColumnTextual ? Qt.AlignLeft : Qt.AlignHCenter
             padding: 4
             text: value
+            textFormat: Text.StyledText
             font.weight: Font.Medium
-            font.pointSize: kind !== Scoreboard.Glyph ? 12 : 16
+            font.pointSize: 12
             font.letterSpacing: 1
-            font.strikeout: isGhosting && isTextual
+            font.strikeout: isGhosting && isColumnTextual
         }
 
         Loader {
-            active: kind == Scoreboard.Icon
+            active: value && shouldBeDisplayedAsIcon
             anchors.centerIn: parent
 
             Image {
-                visible: value
                 opacity: valueOpacity
                 width: 32
                 height: 32
-                source: value ? scoreboard.getImageAssetPath(value) : ""
+                source: scoreboard.getImageAssetPath(value)
             }
         }
     }
