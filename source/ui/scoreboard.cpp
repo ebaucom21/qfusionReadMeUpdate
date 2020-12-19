@@ -231,9 +231,7 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 		if( oldTeam != newTeam ) {
 			isTeamUpdateNeeded[oldTeam] = isTeamUpdateNeeded[newTeam] = true;
 		}
-		if( auto maybePlayerUpdates = checkPlayerDataUpdates( m_oldRawData, currData, playerIndex ) ) {
-			playerUpdates.push_back( *maybePlayerUpdates );
-		}
+		addPlayerUpdates( m_oldRawData, currData, playerIndex, playerUpdates );
 	}
 
 	for( unsigned i = 0; i < 4; ++i ) {
@@ -291,12 +289,23 @@ auto Scoreboard::getPlayerClanForColumn( unsigned playerIndex, unsigned column )
 	return CG_PlayerClan( m_oldRawData.getPlayerNum( playerIndex ) );
 }
 
-auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerIndex )
-	 -> std::optional<PlayerUpdates> {
-	const auto playerNum = m_oldRawData.getPlayerNum( playerIndex );
-	const bool nickname = m_pendingPlayerUpdates[playerNum] & PendingNameUpdate;
-	const bool clan = m_pendingPlayerUpdates[playerNum] & PendingClanUpdate;
-	m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;
+void Scoreboard::addPlayerUpdates( const RawData &oldOne, const RawData &newOne,
+								   unsigned playerIndex, PlayerUpdatesList &dest ) {
+	const auto oldPlayerNum = oldOne.getPlayerNum( playerIndex );
+	const auto newPlayerNum = newOne.getPlayerNum( playerIndex );
+
+	bool nickname, clan;
+	if( oldPlayerNum != newPlayerNum ) {
+		// Consider doing a full update in this case
+		nickname = clan = true;
+		// Keep m_pendingPlayerUpdates as-is.
+		// What to do in this case is non-obvious and having a small pending extra update is harmless.
+	} else {
+		const auto playerNum = newPlayerNum;
+		nickname = m_pendingPlayerUpdates[playerNum] & PendingNameUpdate;
+		clan = m_pendingPlayerUpdates[playerNum] & PendingClanUpdate;
+		m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;
+	}
 
 	const bool score = newOne.getPlayerScore( playerIndex ) != oldOne.getPlayerScore( playerIndex );
 	const bool ghosting = newOne.isPlayerGhosting( playerIndex ) != oldOne.isPlayerGhosting( playerIndex );
@@ -309,11 +318,9 @@ auto Scoreboard::checkPlayerDataUpdates( const RawData &oldOne, const RawData &n
 		}
 	}
 
-	if( ( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask ) | (unsigned)ghosting ) {
-		return PlayerUpdates { (uint8_t)playerIndex, mask, nickname, clan, score, ghosting };
+	if( (unsigned)nickname | (unsigned)clan | (unsigned)score | (unsigned)mask | (unsigned)ghosting ) {
+		new( dest.unsafe_grow_back() )PlayerUpdates { (uint8_t)playerIndex, mask, nickname, clan, score, ghosting };
 	}
-
-	return std::nullopt;
 }
 
 }

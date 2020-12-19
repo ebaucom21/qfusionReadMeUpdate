@@ -68,10 +68,11 @@ public:
 		bool name : 1;
 		bool players : 1;
 	};
+
+	using PlayerUpdatesList = wsw::StaticVector<PlayerUpdates, MAX_CLIENTS>;
+	using TeamUpdatesList = wsw::StaticVector<TeamUpdates, 3>;
 private:
-	[[nodiscard]]
-	auto checkPlayerDataUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerNum )
-		-> std::optional<PlayerUpdates>;
+	void addPlayerUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerIndex, PlayerUpdatesList &dest );
 public:
 	void reload();
 
@@ -87,6 +88,10 @@ public:
 	[[nodiscard]]
 	auto getColumnKind( unsigned column ) const -> ColumnKind {
 		return m_columnKinds[column];
+	}
+	[[nodiscard]]
+	auto getColumnSlot( unsigned column ) const -> unsigned {
+		return m_columnSlots[column];
 	}
 
 	[[nodiscard]]
@@ -146,9 +151,6 @@ public:
 	auto getPlayerNameForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView;
 	[[nodiscard]]
 	auto getPlayerClanForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView;
-
-	using PlayerUpdatesList = wsw::StaticVector<PlayerUpdates, MAX_CLIENTS>;
-	using TeamUpdatesList = wsw::StaticVector<TeamUpdates, 3>;
 
 	[[nodiscard]]
 	bool checkUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates, TeamUpdatesList &teamUpdates );

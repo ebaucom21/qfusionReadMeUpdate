@@ -157,22 +157,58 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 	assert( team >= TEAM_PLAYERS && team <= TEAM_BETA );
 	QAbstractTableModel *const teamModel = &m_teamModelsHolder[team - 1];
 	QAbstractTableModel *const mixedModel = ( team != TEAM_PLAYERS ) ? m_teamModelsHolder.end() - 1 : nullptr;
-	const QVector<int> *changedRoles = &ScoreboardTeamModel::kValueRoleAsVector;
 	if( updates.ghosting ) {
+		const QVector<int> *changedRoles = &ScoreboardTeamModel::kGhostingRoleAsVector;
 		if( updates.nickname | updates.clan | updates.score | updates.shortSlotsMask ) {
 			changedRoles = &ScoreboardTeamModel::kValueAndGhostingRolesAsVector;
-		} else {
-			changedRoles = &ScoreboardTeamModel::kGhostingRoleAsVector;
 		}
+
+		// We have to force redrawing of each cell upon ghosting status change
+		for( unsigned i = 0; i < m_scoreboard.getColumnCount(); ++i ) {
+			QModelIndex teamModelIndex( teamModel->index( rowInTeam, (int)i ) );
+			teamModel->dataChanged( teamModelIndex, teamModelIndex, *changedRoles );
+			if( mixedModel ) {
+				QModelIndex mixedModelIndex( mixedModel->index( rowInMixedList, (int)i ) );
+				mixedModel->dataChanged( mixedModelIndex, mixedModelIndex, *changedRoles );
+			}
+		}
+		return;
 	}
 
+	assert( !updates.ghosting );
+	const QVector<int> &changedRoles = ScoreboardTeamModel::kValueRoleAsVector;
 	for( unsigned i = 0; i < m_scoreboard.getColumnCount(); ++i ) {
-		// TODO: Check updates for whether the column has been really changed
+		// Check whether the table cell really needs updating
+		const auto kind = m_scoreboard.getColumnKind( i );
+		if( kind >= Status ) {
+			assert( kind == Status || kind == Ping || kind == Number || kind == Glyph || kind == Icon );
+			const unsigned slotBit = 1u << m_scoreboard.getColumnSlot( i );
+			if( !( slotBit & (unsigned)updates.shortSlotsMask ) ) {
+				continue;
+			}
+		} else {
+			if( kind == Nickname ) {
+				if( !updates.nickname ) {
+					continue;
+				}
+			} else if( kind == Clan ) {
+				if( !updates.clan ) {
+					continue;
+				}
+			} else if( kind == Score ) {
+				if( !updates.score ) {
+					continue;
+				}
+			} else {
+				assert( 0 && "Unreachable" );
+			}
+		}
+
 		QModelIndex teamModelIndex( teamModel->index( rowInTeam, (int)i ) );
-		teamModel->dataChanged( teamModelIndex, teamModelIndex, *changedRoles );
+		teamModel->dataChanged( teamModelIndex, teamModelIndex, changedRoles );
 		if( mixedModel ) {
 			QModelIndex mixedModelIndex( mixedModel->index( rowInMixedList, (int)i ) );
-			mixedModel->dataChanged( mixedModelIndex, mixedModelIndex, *changedRoles );
+			mixedModel->dataChanged( mixedModelIndex, mixedModelIndex, changedRoles );
 		}
 	}
 }
