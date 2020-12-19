@@ -42,8 +42,11 @@ TableView {
         readonly property bool shouldBeDisplayedAsIcon: (kind === Scoreboard.Icon) || (isColumnStatusOne && value < 32)
         readonly property real valueOpacity: isGhosting ? 0.5 : 1.0
 
+        // Table width can be zero while loading via Loader
         implicitWidth: kind === Scoreboard.Nickname ?
-                       (tableView.width - clanCellWidth - (tableView.columns - 2) * baseCellWidth) :
+                       (tableView.width ?
+                           tableView.width - clanCellWidth - (tableView.columns - 2) * baseCellWidth :
+                           baseCellWidth) :
                        (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
 
         implicitHeight: 32

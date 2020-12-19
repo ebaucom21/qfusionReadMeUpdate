@@ -14,6 +14,8 @@ namespace wsw::ui {
 class ScoreboardModelProxy;
 
 class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
+	Q_OBJECT
+
 	friend class ScoreboardModelProxy;
 
 	ScoreboardModelProxy *const m_proxy;
@@ -31,6 +33,8 @@ class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
 	static inline QVector<int> kValueRoleAsVector { Value };
 	static inline QVector<int> kGhostingRoleAsVector { IsGhosting };
 	static inline QVector<int> kValueAndGhostingRolesAsVector { Value, IsGhosting };
+
+	Q_PROPERTY( int teamTag MEMBER m_teamListIndex CONSTANT )
 
 	[[nodiscard]]
 	auto rowCount( const QModelIndex & ) const -> int override;
@@ -104,6 +108,8 @@ public:
 	static_assert( (int)QmlColumnKind::Icon == (int)Icon );
 
 	ScoreboardModelProxy();
+
+	Q_SIGNAL void teamReset( int resetTeamTag );
 
 	[[nodiscard]]
 	Q_INVOKABLE int getColumnKind( int column ) const;

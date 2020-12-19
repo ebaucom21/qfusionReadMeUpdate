@@ -275,7 +275,8 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		}
 	}
 
-	if( wasTeamReset[TEAM_ALPHA ] | wasTeamReset[TEAM_BETA] ) {
+	const bool wasMixedListReset = wasTeamReset[TEAM_ALPHA] | wasTeamReset[TEAM_BETA];
+	if( wasMixedListReset ) {
 		auto &model = std::end( m_teamModelsHolder )[-1];
 		model.beginResetModel();
 		model.endResetModel();
@@ -300,6 +301,15 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		const auto &mixedIndicesTable = listPlayerTables[teamNum];
 		const auto rowInMixedList = (unsigned)mixedIndicesTable[playerIndex];
 		dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeam, rowInMixedList );
+	}
+
+	for( int i = 0; i < 4; ++i ) {
+		if( wasTeamReset[i] ) {
+			Q_EMIT teamReset( i );
+		}
+	}
+	if( wasMixedListReset ) {
+		Q_EMIT teamReset( 4 );
 	}
 }
 

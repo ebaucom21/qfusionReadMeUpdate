@@ -40,8 +40,9 @@
         <file>QuitPage.qml</file>
         <file>RootItem.qml</file>
         <file>ScoreboardScreen.qml</file>
-        <file>ScoreboardPlayersList.qml</file>
-        <file>ScoreboardSpecsList.qml</file>
+        <file>ScoreboardSpecsPane.qml</file>
+        <file>ScoreboardTable.qml</file>
+        <file>ScoreboardTeamPane.qml</file>
         <file>ServerBrowserCard.qml</file>
         <file>ServerBrowserPlayersList.qml</file>
         <file>SettingsLabel.qml</file>

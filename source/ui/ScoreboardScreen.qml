@@ -31,31 +31,31 @@ Rectangle {
             anchors.margins: 16
             spacing: 20
 
-            ScoreboardPlayersList {
+            ScoreboardTeamPane {
                 model: scoreboardPlayersModel
-                baseColor: Material.accent
+                baseColor: Qt.lighter(Material.background)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
                 Layout.rightMargin: -root.baseCellWidth
             }
-            ScoreboardPlayersList {
+            ScoreboardTeamPane {
                 model: scoreboardAlphaModel
-                baseColor: "red"
+                baseColor: Qt.darker("red")
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
                 Layout.rightMargin: -root.baseCellWidth
             }
-            ScoreboardPlayersList {
+            ScoreboardTeamPane {
                 model: scoreboardBetaModel
-                baseColor: "green"
+                baseColor: Qt.darker("green")
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
                 Layout.fillWidth: true
                 Layout.rightMargin: -root.baseCellWidth
             }
-            ScoreboardSpecsList {
+            ScoreboardSpecsPane {
                 model: scoreboardSpecsModel
                 baseColor: "black"
                 Layout.fillWidth: true
