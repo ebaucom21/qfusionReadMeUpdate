@@ -5,7 +5,7 @@
 #define CM_USE_SSE
 #define CM_USE_AVX
 
-void CMAvxTraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
+void AvxOps::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 	const cbrush_t *tmp[64];
 
@@ -26,7 +26,7 @@ void CMAvxTraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *ba
 		const cbrush_t *__restrict b = srcShapes[i];
 		__m128 shapeMins = _mm_loadu_ps( b->mins );
 		__m128 shapeMaxs = _mm_loadu_ps( b->maxs );
-		if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
+		if( !boundsIntersectSse42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
 			continue;
 		}
 
@@ -90,7 +90,7 @@ inline __m256 horizontalAllMin( __m256 a ) {
 	return m2;
 }
 
-void CMAvxTraceComputer::ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shape ) {
+void AvxOps::ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shape ) {
 	assert( shape->numSseGroups == 2 );
 	assert( shape->numsides >= 6 && shape->numsides <= 8 );
 	assert( shape->simd );
@@ -269,9 +269,8 @@ void CMAvxTraceComputer::ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc,
 	}
 }
 
-void CMAvxTraceComputer::ClipToShapeList( const CMShapeList *__restrict list, trace_t *tr,
-										  const float *start, const float *end,
-										  const float *mins, const float *maxs, int clipMask ) {
+void AvxOps::ClipToShapeList( const CMShapeList *__restrict list, trace_t *tr, const float *start,
+							  const float *end, const float *mins, const float *maxs, int clipMask ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 
 	alignas( 16 ) CMTraceContext tlc;
@@ -299,7 +298,7 @@ void CMAvxTraceComputer::ClipToShapeList( const CMShapeList *__restrict list, tr
 		const int numAvxFriendlyShapes = list->numAvxFriendlyShapes;
 		for(; i < numAvxFriendlyShapes; ++i ) {
 			const cbrush_s *__restrict b = shapes[i];
-			if( !CM_BoundsIntersect_SSE42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
+			if( !boundsIntersectSse42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
 				continue;
 			}
 			ClipToAvxFriendlyShape( &tlc, b );
@@ -310,10 +309,10 @@ void CMAvxTraceComputer::ClipToShapeList( const CMShapeList *__restrict list, tr
 		}
 
 		// Make sure the virtual call address gets resolved here
-		auto clipFn = &CMSse42TraceComputer::ClipBoxToBrush;
+		auto clipFn = &Sse42Ops::ClipBoxToBrush;
 		for(; i < numShapes; ++i ) {
 			const cbrush_t *__restrict b = shapes[i];
-			if( !CM_BoundsIntersect_SSE42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
+			if( !boundsIntersectSse42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
 				continue;
 			}
 			wsw_vex_fence();
@@ -325,10 +324,10 @@ void CMAvxTraceComputer::ClipToShapeList( const CMShapeList *__restrict list, tr
 		}
 	} else {
 		// Make sure the virtual call address gets resolved here
-		const auto clipFn = callClipToBrush ? &CMSse42TraceComputer::ClipBoxToBrush : &CMSse42TraceComputer::TestBoxInBrush;
+		const auto clipFn = callClipToBrush ? &Sse42Ops::ClipBoxToBrush : &Sse42Ops::TestBoxInBrush;
 		for( int i = 0; i < numShapes; ++i ) {
 			const cbrush_t *__restrict b = shapes[i];
-			if( !CM_BoundsIntersect_SSE42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
+			if( !boundsIntersectSse42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
 				continue;
 			}
 			wsw_vex_fence();

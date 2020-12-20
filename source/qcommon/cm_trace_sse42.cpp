@@ -4,8 +4,7 @@
 
 #ifdef CM_USE_SSE
 
-void CMSse42TraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes,
-										  int numbrushes, const cface_t *markfaces, int nummarkfaces ) {
+void Sse42Ops::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes, int numbrushes, const cface_t *markfaces, int nummarkfaces ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 
 	// Save the exact address to avoid pointer chasing in loops
@@ -17,11 +16,11 @@ void CMSse42TraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *b
 		if( !( b->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollideInLeaf_SSE42( b->mins, b->maxs, b->center, b->radius, tlc ) ) {
+		if( !doBoundsAndLineDistTestSse42( b->mins, b->maxs, b->center, b->radius, tlc ) ) {
 			continue;
 		}
 		// Specify the "overridden" method explicitly
-		CMSse42TraceComputer::ClipBoxToBrush( tlc, b );
+		Sse42Ops::ClipBoxToBrush( tlc, b );
 		if( !*fraction ) {
 			return;
 		}
@@ -33,16 +32,16 @@ void CMSse42TraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *b
 		if( !( patch->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollideInLeaf_SSE42( patch->mins, patch->maxs, patch->center, patch->radius, tlc ) ) {
+		if( !doBoundsAndLineDistTestSse42( patch->mins, patch->maxs, patch->center, patch->radius, tlc ) ) {
 			continue;
 		}
 		for( int j = 0; j < patch->numfacets; j++ ) {
 			const auto *__restrict facet = &patch->facets[j];
-			if( !CM_MightCollideInLeaf_SSE42( facet->mins, facet->maxs, facet->center, facet->radius, tlc ) ) {
+			if( !doBoundsAndLineDistTestSse42( facet->mins, facet->maxs, facet->center, facet->radius, tlc ) ) {
 				continue;
 			}
 			// Specify the "overridden" method explicitly
-			CMSse42TraceComputer::ClipBoxToBrush( tlc, facet );
+			Sse42Ops::ClipBoxToBrush( tlc, facet );
 			if( !*fraction ) {
 				return;
 			}
@@ -159,7 +158,7 @@ inline int horizontalMaxScalar( __m128i v ) {
 	return _mm_cvtsi128_si32( v );
 }
 
-void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
+void Sse42Ops::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
 	if( !brush->numsides ) {
 		return;
 	}
@@ -355,10 +354,9 @@ void CMSse42TraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *
 	}
 }
 
-void CMSse42TraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr,
-												const vec_t *start, const vec3_t end,
-												const vec3_t mins, const vec3_t maxs, int brushmask ) {
-	CMTraceComputer::SetupCollideContext( tlc, tr, start, end, mins, maxs, brushmask );
+void Sse42Ops::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec3_t end,
+									const vec3_t mins, const vec3_t maxs, int brushmask ) {
+	Ops::SetupCollideContext( tlc, tr, start, end, mins, maxs, brushmask );
 	// Put the fence after the super method call (that does not use VEX encoding)
 	[[maybe_unused]] volatile VexScopedFence fence;
 
@@ -367,7 +365,7 @@ void CMSse42TraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr
 	tlc->xmmAbsmaxs = _mm_setr_ps( tlc->absmaxs[0], tlc->absmaxs[1], tlc->absmaxs[2], 1 );
 }
 
-void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
+void Sse42Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 
 	int leafNums[1024], topNode;
@@ -389,7 +387,7 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 			if( !( b->contents & clipMask ) ) {
 				continue;
 			}
-			if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
+			if( !boundsIntersectSse42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
 				continue;
 			}
 			if( !b->numsides ) {
@@ -404,12 +402,12 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 			if( !( f->contents & clipMask ) ) {
 				continue;
 			}
-			if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, f->mins, f->maxs ) ) {
+			if( !boundsIntersectSse42( testedMins, testedMaxs, f->mins, f->maxs ) ) {
 				continue;
 			}
 			for( int k = 0; k < f->numfacets; ++k ) {
 				const auto *__restrict b = &f->facets[k];
-				if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
+				if( !boundsIntersectSse42( testedMins, testedMaxs, b->mins, b->maxs ) ) {
 					continue;
 				}
 				if( !b->numsides ) {
@@ -424,7 +422,7 @@ void CMSse42TraceComputer::BuildShapeList( CMShapeList *list, const float *mins,
 	list->numShapes = numShapes;
 }
 
-void CMSse42TraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
+void Sse42Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 
 	const int numSrcShapes = baseList->numShapes;
@@ -441,7 +439,7 @@ void CMSse42TraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *
 		const cbrush_t *__restrict b = srcShapes[i];
 		__m128 shapeMins = _mm_loadu_ps( b->mins );
 		__m128 shapeMaxs = _mm_loadu_ps( b->maxs );
-		if( !CM_BoundsIntersect_SSE42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
+		if( !boundsIntersectSse42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
 			continue;
 		}
 
@@ -457,9 +455,8 @@ void CMSse42TraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *
 	}
 }
 
-void CMSse42TraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
-					  const float *start, const float *end,
-					  const float *mins, const float *maxs, int clipMask ) {
+void Sse42Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *start,
+								const float *end, const float *mins, const float *maxs, int clipMask ) {
 	[[maybe_unused]] volatile VexScopedFence fence;
 
 	alignas( 16 ) CMTraceContext tlc;
@@ -474,11 +471,11 @@ void CMSse42TraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr
 	}
 
 	// Make sure the virtual call address gets resolved here
-	auto clipFn = &CMSse42TraceComputer::ClipBoxToBrush;
+	auto clipFn = &Sse42Ops::ClipBoxToBrush;
 	if( !VectorCompare( start, end ) ) {
 		SetupClipContext( &tlc );
 	} else {
-		clipFn = &CMTraceComputer::TestBoxInBrush;
+		clipFn = &Sse42Ops::TestBoxInBrush;
 	}
 
 	const int numShapes = list->numShapes;
@@ -486,7 +483,7 @@ void CMSse42TraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr
 	float *const __restrict fraction = &tlc.trace->fraction;
 	for( int i = 0; i < numShapes; ++i ) {
 		const cbrush_t *__restrict b = shapes[i];
-		if( !CM_BoundsIntersect_SSE42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
+		if( !boundsIntersectSse42( tlc.xmmAbsmins, tlc.xmmAbsmaxs, b->mins, b->maxs ) ) {
 			continue;
 		}
 		( this->*clipFn )( &tlc, b );

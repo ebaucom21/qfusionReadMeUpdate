@@ -217,12 +217,12 @@ struct cmodel_state_s {
 	mutable const float *leaf_mins, *leaf_maxs;
 	mutable int leaf_topnode;
 
-	struct CMTraceComputer *traceComputer;
+	struct Ops *ops;
 };
 
 //=======================================================================
 
-struct CMTraceComputer *CM_GetTraceComputer( cmodel_state_t *cms );
+struct Ops *CM_GetOps( cmodel_state_t *cms );
 
 void CM_InitBoxHull( cmodel_state_t *cms );
 

@@ -901,7 +901,7 @@ cmodel_state_t *CM_New() {
 	cms->map_areas = &cms->map_area_empty;
 	cms->map_entitystring = &cms->map_entitystring_empty;
 
-	cms->traceComputer = CM_GetTraceComputer( cms );
+	cms->ops = CM_GetOps( cms );
 
 	return cms;
 }

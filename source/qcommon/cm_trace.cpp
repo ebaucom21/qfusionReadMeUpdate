@@ -30,22 +30,22 @@ static inline void CM_SetBuiltinBrushBounds( vec_bounds_t mins, vec_bounds_t max
 	}
 }
 
-static CMGenericTraceComputer genericTraceComputer;
-static CMSse42TraceComputer sse42TraceComputer;
-static CMAvxTraceComputer avxTraceComputer;
+static GenericOps genericOps;
+static Sse42Ops sse42Ops;
+static AvxOps avxOps;
 
-static CMTraceComputer *selectedTraceComputer = nullptr;
+static Ops *selectedOps = nullptr;
 
-struct CMTraceComputer *CM_GetTraceComputer( cmodel_state_t *cms ) {
+struct Ops *CM_GetOps( cmodel_state_t *cms ) {
 	// This is mostly to avoid annoying console spam on every map loading
-	if( selectedTraceComputer ) {
+	if( selectedOps ) {
 		// Just set the appropriate cms pointer
 		// (the selected computer once it's selected remains the same during the entire executable lifetime).
 		// Warning: If different cms instances (e.g. cloned ones)
 		// are used simultaneously, this is plain wrong in environment of that kind.
 		// Instantiate separate trace computer instances in such cases.
-		selectedTraceComputer->cms = cms;
-		return selectedTraceComputer;
+		selectedOps->cms = cms;
+		return selectedOps;
 	}
 
 	// While SSE4.1 support is all that is really used we require SSE4.2 support.
@@ -55,23 +55,29 @@ struct CMTraceComputer *CM_GetTraceComputer( cmodel_state_t *cms ) {
 	// All these instructions use VEX encoding consequently and thus require AVX support.
 
 #ifndef _MSC_VER
-	constexpr auto desiredFeatureFlags = Q_CPU_FEATURE_SSE42;
-	constexpr const char *featureDesc = "SSE4.2";
+	Ops *ops[] = { &avxOps, &sse42Ops };
+	unsigned featureBits[] = { Q_CPU_FEATURE_AVX, Q_CPU_FEATURE_SSE42 };
+	const char *tags[] = { "AVX", "SSE4.2" };
 #else
-	constexpr auto desiredFeatureFlags = Q_CPU_FEATURE_AVX;
-	constexpr const char *featureDesc = "AVX";
+	Ops *ops[] = { &avxOps };
+	unsigned featureBits[] = { Q_CPU_FEATURE_AVX };
+	const char *tags[] = { "AVX" };
 #endif
 
-	if( Sys_GetProcessorFeatures() & desiredFeatureFlags ) {
-		Com_Printf( "%s instructions are supported. An optimized collision code will be used\n", featureDesc );
-		selectedTraceComputer = &avxTraceComputer;
-	} else {
-		Com_Printf( "%s instructions support has not been found. A generic collision code will be used\n", featureDesc );
-		selectedTraceComputer = &genericTraceComputer;
+	const char *selectedTag = "generic";
+	selectedOps = &genericOps;
+	const auto features = Sys_GetProcessorFeatures();
+	for( unsigned i = 0; i < std::size( ops ); ++i ) {
+		if( featureBits[i] & features ) {
+			selectedOps = ops[i];
+			selectedTag = tags[i];
+			break;
+		}
 	}
 
-	selectedTraceComputer->cms = cms;
-	return selectedTraceComputer;
+	Com_Printf( "Using the %s collision code path\n", selectedTag );
+	selectedOps->cms = cms;
+	return selectedOps;
 }
 
 /*
@@ -274,15 +280,7 @@ cmodel_t *CM_OctagonModelForBBox( cmodel_state_t *cms, const vec3_t mins, const 
 	return cms->oct_cmodel;
 }
 
-/*
-===============================================================================
-
-BOX TRACING
-
-===============================================================================
-*/
-
-void CMTraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
+void Ops::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
 	cm_plane_t *clipplane;
 	cbrushside_t *side, *leadside;
 	float d1, d2, f;
@@ -416,7 +414,7 @@ void CMTraceComputer::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush
 	}
 }
 
-void CMTraceComputer::TestBoxInBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
+void Ops::TestBoxInBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
 	int i;
 	cm_plane_t *p;
 	cbrushside_t *side;
@@ -495,13 +493,8 @@ void CMTraceComputer::TestBoxInBrush( CMTraceContext *tlc, const cbrush_t *brush
 	tlc->trace->contents = brush->contents;
 }
 
-static inline bool CM_MightCollide( const vec_bounds_t shapeMins, const vec_bounds_t shapeMaxs, const CMTraceContext *tlc ) {
-	return BoundsIntersect( shapeMins, shapeMaxs, tlc->absmins, tlc->absmaxs );
-}
-
-void CMTraceComputer::CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*method )( CMTraceContext *, const cbrush_t * ),
-								  const cbrush_t *brushes, int nummarkbrushes,
-								  const cface_t *markfaces, int nummarkfaces ) {
+void Ops::CollideBox( CMTraceContext *tlc, void ( Ops::*method )( CMTraceContext *, const cbrush_t * ),
+					  const cbrush_t *brushes, int nummarkbrushes, const cface_t *markfaces, int nummarkfaces ) {
 	// Save the exact address to avoid pointer chasing in loops
 	const float *fraction = &tlc->trace->fraction;
 
@@ -511,7 +504,7 @@ void CMTraceComputer::CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*
 		if( !( b->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollide( b->mins, b->maxs, tlc ) ) {
+		if( !doBoundsTest( b->mins, b->maxs, tlc ) ) {
 			continue;
 		}
 		( this->*method )( tlc, b );
@@ -526,12 +519,12 @@ void CMTraceComputer::CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*
 		if( !( patch->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollide( patch->mins, patch->maxs, tlc ) ) {
+		if( !doBoundsTest( patch->mins, patch->maxs, tlc ) ) {
 			continue;
 		}
 		for( int j = 0; j < patch->numfacets; j++ ) {
 			const auto *__restrict facet = &patch->facets[j];
-			if( !CM_MightCollide( facet->mins, facet->maxs, tlc ) ) {
+			if( !doBoundsTest( facet->mins, facet->maxs, tlc ) ) {
 				continue;
 			}
 			( this->*method )( tlc, facet );
@@ -542,32 +535,12 @@ void CMTraceComputer::CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*
 	}
 }
 
-static inline bool CM_MightCollideInLeaf( const vec_bounds_t shapeMins,
-										  const vec_bounds_t shapeMaxs,
-										  const vec_bounds_t shapeCenter,
-										  float shapeRadius,
-										  const CMTraceContext *tlc ) {
-	if( !CM_MightCollide( shapeMins, shapeMaxs, tlc ) ) {
-		return false;
-	}
 
-	// TODO: Vectorize this part. This task is not completed for various reasons.
 
-	vec3_t centerToStart;
-	vec3_t proj, perp;
-
-	VectorSubtract( tlc->start, shapeCenter, centerToStart );
-	float projMagnitude = DotProduct( centerToStart, tlc->traceDir );
-	VectorScale( tlc->traceDir, projMagnitude, proj );
-	VectorSubtract( centerToStart, proj, perp );
-	float distanceThreshold = shapeRadius + tlc->boxRadius;
-	return VectorLengthSquared( perp ) <= distanceThreshold * distanceThreshold;
-}
-
-void CMTraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes,
-									 int numbrushes, const cface_t *markfaces, int nummarkfaces ) {
+void Ops::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes, int numbrushes,
+						 const cface_t *markfaces, int nummarkfaces ) {
 	// Saving the method reference should reduce virtual calls cost by avoid vtable lookup
-	auto method = &CMTraceComputer::ClipBoxToBrush;
+	auto method = &Ops::ClipBoxToBrush;
 
 	// Save the exact address to avoid pointer chasing in loops
 	const float *fraction = &tlc->trace->fraction;
@@ -578,7 +551,7 @@ void CMTraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushe
 		if( !( b->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollideInLeaf( b->mins, b->maxs, b->center, b->radius, tlc ) ) {
+		if( !doBoundsAndLineDistTest( b->mins, b->maxs, b->center, b->radius, tlc ) ) {
 			continue;
 		}
 		( this->*method )( tlc, b );
@@ -593,12 +566,12 @@ void CMTraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushe
 		if( !( patch->contents & tlc->contents ) ) {
 			continue;
 		}
-		if( !CM_MightCollideInLeaf( patch->mins, patch->maxs, patch->center, patch->radius, tlc ) ) {
+		if( !doBoundsAndLineDistTest( patch->mins, patch->maxs, patch->center, patch->radius, tlc ) ) {
 			continue;
 		}
 		for( int j = 0; j < patch->numfacets; j++ ) {
 			const auto *__restrict facet = &patch->facets[j];
-			if( !CM_MightCollideInLeaf( facet->mins, facet->maxs, facet->center, facet->radius, tlc ) ) {
+			if( !doBoundsAndLineDistTest( facet->mins, facet->maxs, facet->center, facet->radius, tlc ) ) {
 				continue;
 			}
 			( this->*method )( tlc, facet );
@@ -609,9 +582,7 @@ void CMTraceComputer::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushe
 	}
 }
 
-void CMTraceComputer::RecursiveHullCheck( CMTraceContext *tlc, int num,
-										  float p1f, float p2f,
-										  const vec3_t p1, const vec3_t p2 ) {
+void Ops::RecursiveHullCheck( CMTraceContext *tlc, int num, float p1f, float p2f, const vec3_t p1, const vec3_t p2 ) {
 	cnode_t *node;
 	cplane_t *plane;
 	int side;
@@ -700,12 +671,7 @@ loc0:
 	RecursiveHullCheck( tlc, node->children[side ^ 1], midf, p2f, mid, p2 );
 }
 
-//======================================================================
-
-
-
-void CMTraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start,
-										   const vec3_t end, const vec3_t mins, const vec3_t maxs, int brushmask ) {
+void Ops::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec3_t end, const vec3_t mins, const vec3_t maxs, int brushmask ) {
 	tlc->trace = tr;
 	tlc->contents = brushmask;
 	VectorCopy( start, tlc->start );
@@ -729,8 +695,7 @@ void CMTraceComputer::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, con
 	AddPointToBounds( tlc->endmaxs, tlc->absmins, tlc->absmaxs );
 }
 
-void CMTraceComputer::Trace( trace_t *tr, const vec3_t start, const vec3_t end,
-							 const vec3_t mins, const vec3_t maxs,
+void Ops::Trace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
 							 const cmodel_t *cmodel, int brushmask, int topNodeHint ) {
 	assert( topNodeHint >= 0 );
 
@@ -748,7 +713,7 @@ void CMTraceComputer::Trace( trace_t *tr, const vec3_t start, const vec3_t end,
 	// check for position test special case
 	//
 	if( VectorCompare( start, end ) ) {
-		auto func = &CMTraceComputer::TestBoxInBrush;
+		auto func = &Ops::TestBoxInBrush;
 		if( cmodel != cms->map_cmodels ) {
 			if( BoundsIntersect( cmodel->mins, cmodel->maxs, tlc.absmins, tlc.absmaxs ) ) {
 				CollideBox( &tlc, func, cmodel->brushes, cmodel->numbrushes, cmodel->faces, cmodel->numfaces );
@@ -810,7 +775,7 @@ void CMTraceComputer::Trace( trace_t *tr, const vec3_t start, const vec3_t end,
 	if( cmodel == cms->map_cmodels ) {
 		RecursiveHullCheck( &tlc, topNodeHint, 0, 1, start, end );
 	} else if( BoundsIntersect( cmodel->mins, cmodel->maxs, tlc.absmins, tlc.absmaxs ) ) {
-		auto func = &CMTraceComputer::ClipBoxToBrush;
+		auto func = &Ops::ClipBoxToBrush;
 		CollideBox( &tlc, func, cmodel->brushes, cmodel->numbrushes, cmodel->faces, cmodel->numfaces );
 	}
 
@@ -985,17 +950,17 @@ void CM_TransformedBoxTrace( const cmodel_state_t *cms, trace_t *tr,
 #ifdef CM_SELF_TEST
 	trace_t traces[3];
 	const char *tags[3] { "generic", "sse42", "avx" };
-	genericTraceComputer.cms = const_cast<cmodel_state_s *>( cms );
-	genericTraceComputer.Trace( &traces[0], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
-	sse42TraceComputer.cms = const_cast<cmodel_state_s *>( cms );
-	sse42TraceComputer.Trace( &traces[1], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
-	avxTraceComputer.cms = const_cast<cmodel_state_s *>( cms );
-	avxTraceComputer.Trace( &traces[2], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	genericOps.cms = const_cast<cmodel_state_s *>( cms );
+	genericOps.Trace( &traces[0], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	sse42Ops.cms = const_cast<cmodel_state_s *>( cms );
+	sse42Ops.Trace( &traces[1], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	avxOps.cms = const_cast<cmodel_state_s *>( cms );
+	avxOps.Trace( &traces[2], start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
 	CompareTraceResults( traces, tags, 3 );
 #endif
 
 	// sweep the box through the model
-	cms->traceComputer->Trace( tr, start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
+	cms->ops->Trace( tr, start_l, end_l, mins, maxs, cmodel, brushmask, topNodeHint );
 
 	if( rotated && tr->fraction != 1.0 ) {
 		VectorNegate( angles, a );
@@ -1017,7 +982,7 @@ void CM_TransformedBoxTrace( const cmodel_state_t *cms, trace_t *tr,
 	}
 }
 
-void CMTraceComputer::BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
+void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
 	int leafNums[1024], topNode;
 	// TODO: This can be optimized
 	const int numLeaves = CM_BoxLeafnums( cms, mins, maxs, leafNums, 1024, &topNode );
@@ -1064,7 +1029,7 @@ void CMTraceComputer::BuildShapeList( CMShapeList *list, const float *mins, cons
 	list->numShapes = numShapes;
 }
 
-void CMTraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
+void Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
 	const int numSrcShapes = baseList->numShapes;
 	const auto *srcShapes = baseList->shapes;
 
@@ -1092,9 +1057,8 @@ void CMTraceComputer::ClipShapeList( CMShapeList *list, const CMShapeList *baseL
 	}
 }
 
-void CMTraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
-	                                   const float *start, const float *end,
-	                                   const float *mins, const float *maxs, int clipMask ) {
+void Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *start,
+						   const float *end, const float *mins, const float *maxs, int clipMask ) {
 	CMTraceContext tlc;
 	SetupCollideContext( &tlc, tr, start, end, mins, maxs, clipMask );
 
@@ -1112,9 +1076,9 @@ void CMTraceComputer::ClipToShapeList( const CMShapeList *list, trace_t *tr,
 	float *const __restrict fraction = &tlc.trace->fraction;
 
 	// Make sure the virtual call address gets resolved here
-	auto clipFn = &CMTraceComputer::ClipBoxToBrush;
+	auto clipFn = &Ops::ClipBoxToBrush;
 	if( VectorCompare( start, end ) ) {
-		clipFn = &CMTraceComputer::TestBoxInBrush;
+		clipFn = &Ops::TestBoxInBrush;
 	}
 
 	for( int i = 0; i < numShapes; ++i ) {
@@ -1163,13 +1127,13 @@ CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const fl
 	cbrush_s **tmp1[1024];
 	cbrush_s **tmp2[1024];
 
-	genericTraceComputer.cms = cms;
-	genericTraceComputer.BuildShapeList( list, mins, maxs, clipMask );
+	genericOps.cms = cms;
+	genericOps.BuildShapeList( list, mins, maxs, clipMask );
 	const int numShapes1 = list->numShapes;
 	std::memcpy( tmp1, list->shapes, list->numShapes * 8 );
 
-	avxTraceComputer.cms = cms;
-	avxTraceComputer.BuildShapeList( list, mins, maxs, clipMask );
+	avxOps.cms = cms;
+	avxOps.BuildShapeList( list, mins, maxs, clipMask );
 	int numShapes2 = list->numShapes;
 	if( numShapes1 != numShapes2 ) abort();
 	std::memcpy( tmp2, list->shapes, list->numShapes * 8 );
@@ -1180,7 +1144,7 @@ CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const fl
 	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
 #endif
 
-	CM_GetTraceComputer( cms )->BuildShapeList( list, mins, maxs, clipMask );
+	CM_GetOps( cms )->BuildShapeList( list, mins, maxs, clipMask );
 	return list;
 }
 
@@ -1191,13 +1155,13 @@ void CM_ClipShapeList( cmodel_state_t *cms, CMShapeList *list,
 	cbrush_s **tmp1[1024];
 	cbrush_s **tmp2[1024];
 
-	genericTraceComputer.cms = cms;
-	genericTraceComputer.ClipShapeList( list, baseList, mins, maxs );
+	genericOps.cms = cms;
+	genericOps.ClipShapeList( list, baseList, mins, maxs );
 	const int numShapes1 = list->numShapes;
 	std::memcpy( tmp1, list->shapes, list->numShapes * 8 );
 
-	avxTraceComputer.cms = cms;
-	avxTraceComputer.ClipShapeList( list, baseList, mins, maxs );
+	avxOps.cms = cms;
+	avxOps.ClipShapeList( list, baseList, mins, maxs );
 	const int numShapes2 = list->numShapes;
 	if( numShapes1 != numShapes2 ) abort();
 	std::memcpy( tmp2, list->shapes, list->numShapes * 8 );
@@ -1208,7 +1172,7 @@ void CM_ClipShapeList( cmodel_state_t *cms, CMShapeList *list,
 	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
 #endif
 
-	CM_GetTraceComputer( cms )->ClipShapeList( list, baseList, mins, maxs );
+	CM_GetOps( cms )->ClipShapeList( list, baseList, mins, maxs );
 }
 
 void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *tr,
@@ -1229,15 +1193,15 @@ void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *
 	std::memset( &traces[2], 0, sizeof( trace_t ) );
 	traces[0].fraction = traces[1].fraction = traces[2].fraction = 1.0f;
 
-	genericTraceComputer.cms = cms;
-	genericTraceComputer.ClipToShapeList( list, &traces[0], start, end, mins, maxs, clipMask );
-	sse42TraceComputer.cms = cms;
-	sse42TraceComputer.ClipToShapeList( list, &traces[1], start, end, mins, maxs, clipMask );
-	avxTraceComputer.cms = cms;
-	avxTraceComputer.ClipToShapeList( list, &traces[2], start, end, mins, maxs, clipMask );
+	genericOps.cms = cms;
+	genericOps.ClipToShapeList( list, &traces[0], start, end, mins, maxs, clipMask );
+	sse42Ops.cms = cms;
+	sse42Ops.ClipToShapeList( list, &traces[1], start, end, mins, maxs, clipMask );
+	avxOps.cms = cms;
+	avxOps.ClipToShapeList( list, &traces[2], start, end, mins, maxs, clipMask );
 
 	CompareTraceResults( traces, tags, 3 );
 #endif
 
-	CM_GetTraceComputer( cms )->ClipToShapeList( list, tr, start, end, mins, maxs, clipMask );
+	CM_GetOps( cms )->ClipToShapeList( list, tr, start, end, mins, maxs, clipMask );
 }

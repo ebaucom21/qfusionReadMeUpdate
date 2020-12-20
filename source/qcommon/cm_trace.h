@@ -37,17 +37,17 @@ struct CMTraceContext {
 
 struct CMShapeList;
 
-struct CMTraceComputer {
+struct Ops {
 	struct cmodel_state_s *cms;
 
-	CMTraceComputer(): cms( nullptr ) {}
+	Ops(): cms( nullptr ) {}
 
 	virtual void SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec_t *end,
 									  const vec_t *mins, const vec_t *maxs, int brushmask );
 
 	void SetupClipContext( CMTraceContext * ) {}
 
-	virtual void CollideBox( CMTraceContext *tlc, void ( CMTraceComputer::*method )( CMTraceContext *, const cbrush_s * ),
+	virtual void CollideBox( CMTraceContext *tlc, void ( Ops::*method )( CMTraceContext *, const cbrush_s * ),
 							 const cbrush_s *brushes, int numbrushes, const cface_s *markfaces, int nummarkfaces );
 
 
@@ -74,9 +74,9 @@ struct CMTraceComputer {
 		                          const float *mins, const float *maxs, int clipMask );
 };
 
-struct CMGenericTraceComputer final: public CMTraceComputer {};
+struct GenericOps final: public Ops {};
 
-struct CMSse42TraceComputer: public CMTraceComputer {
+struct Sse42Ops: public Ops {
 	// Don't even bother about making prototypes if there is no attempt to compile SSE code
 	// (this should aid calls devirtualization)
 #ifdef CM_USE_SSE
@@ -98,7 +98,7 @@ struct CMSse42TraceComputer: public CMTraceComputer {
 #endif
 };
 
-struct CMAvxTraceComputer final: public CMSse42TraceComputer {
+struct AvxOps final: public Sse42Ops {
 	//void ClipToAvxFriendlyShapes( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shapes, int numShapes );
 	void ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrush_t *__restrict shape );
 
@@ -109,10 +109,35 @@ struct CMAvxTraceComputer final: public CMSse42TraceComputer {
 						  const float *mins, const float *maxs, int clipMask ) override;
 };
 
+inline bool doBoundsTest( const float *shapeMins, const float *shapeMaxs, const CMTraceContext *tlc ) {
+	return BoundsIntersect( shapeMins, shapeMaxs, tlc->absmins, tlc->absmaxs );
+}
+
+inline bool doBoundsAndLineDistTest( const float *__restrict shapeMins,
+									 const float *__restrict shapeMaxs,
+									 const float *__restrict shapeCenter,
+									 float shapeRadius,
+									 const CMTraceContext *__restrict tlc ) {
+	if( !doBoundsTest( shapeMins, shapeMaxs, tlc ) ) {
+		return false;
+	}
+
+	// TODO: Vectorize this part. This task is not completed for various reasons.
+
+	vec3_t centerToStart;
+	vec3_t proj, perp;
+
+	VectorSubtract( tlc->start, shapeCenter, centerToStart );
+	float projMagnitude = DotProduct( centerToStart, tlc->traceDir );
+	VectorScale( tlc->traceDir, projMagnitude, proj );
+	VectorSubtract( centerToStart, proj, perp );
+	float distanceThreshold = shapeRadius + tlc->boxRadius;
+	return VectorLengthSquared( perp ) <= distanceThreshold * distanceThreshold;
+}
 
 #ifdef CM_USE_SSE
 
-inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs, __m128 shapeMins, __m128 shapeMaxs ) {
+inline bool boundsIntersectSse42( __m128 traceAbsmins, __m128 traceAbsmaxs, __m128 shapeMins, __m128 shapeMaxs ) {
 	__m128 cmp1 = _mm_cmpge_ps( shapeMins, traceAbsmaxs );
 	__m128 cmp2 = _mm_cmpge_ps( traceAbsmins, shapeMaxs );
 	__m128 orCmp = _mm_or_ps( cmp1, cmp2 );
@@ -120,27 +145,27 @@ inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs, 
 	return _mm_movemask_epi8( _mm_cmpeq_epi32( _mm_castps_si128( orCmp ), _mm_setzero_si128() ) ) == 0xFFFF;
 }
 
-inline bool CM_BoundsIntersect_SSE42( __m128 traceAbsmins, __m128 traceAbsmaxs,
-									  const float *shapeMins, const float *shapeMaxs ) {
+inline bool boundsIntersectSse42( __m128 traceAbsmins, __m128 traceAbsmaxs,
+								  const float *shapeMins, const float *shapeMaxs ) {
 	// This version relies on fast unaligned loads, that's why it requires SSE4.
 	__m128 xmmShapeMins = _mm_loadu_ps( shapeMins );
 	__m128 xmmShapeMaxs = _mm_loadu_ps( shapeMaxs );
 
-	return CM_BoundsIntersect_SSE42( traceAbsmins, traceAbsmaxs, xmmShapeMins, xmmShapeMaxs );
+	return boundsIntersectSse42( traceAbsmins, traceAbsmaxs, xmmShapeMins, xmmShapeMaxs );
 }
 
-inline bool CM_MightCollide_SSE42( const float *__restrict shapeMins,
-								   const float *__restrict shapeMaxs,
-								   const CMTraceContext *__restrict tlc ) {
-	return CM_BoundsIntersect_SSE42( tlc->xmmAbsmins, tlc->xmmAbsmaxs, shapeMins, shapeMaxs );
+inline bool doBoundsTestSse42( const float *__restrict shapeMins,
+							   const float *__restrict shapeMaxs,
+							   const CMTraceContext *__restrict tlc ) {
+	return boundsIntersectSse42( tlc->xmmAbsmins, tlc->xmmAbsmaxs, shapeMins, shapeMaxs );
 }
 
-inline bool CM_MightCollideInLeaf_SSE42( const float *__restrict shapeMins,
-										 const float *__restrict shapeMaxs,
-									  	 const float *__restrict shapeCenter,
-										 float shapeRadius,
-										 const CMTraceContext *__restrict tlc ) {
-	if( !CM_MightCollide_SSE42( shapeMins, shapeMaxs, tlc ) ) {
+inline bool doBoundsAndLineDistTestSse42( const float *__restrict shapeMins,
+										  const float *__restrict shapeMaxs,
+										  const float *__restrict shapeCenter,
+										  float shapeRadius,
+										  const CMTraceContext *__restrict tlc ) {
+	if( !doBoundsTestSse42( shapeMins, shapeMaxs, tlc ) ) {
 		return false;
 	}
 
