@@ -82,12 +82,16 @@ public:
 	auto getImageAssetPath( unsigned asset ) const -> std::optional<wsw::StringView>;
 
 	[[nodiscard]]
-	auto getColumnCount() const -> unsigned {
+	auto getColumnsCount() const -> unsigned {
 		return m_columnKinds.size();
 	}
 	[[nodiscard]]
 	auto getColumnKind( unsigned column ) const -> ColumnKind {
 		return m_columnKinds[column];
+	}
+	[[nodiscard]]
+	auto getColumnTitle( unsigned column ) const -> wsw::StringView {
+		return m_columnTitlesStorage[column];
 	}
 	[[nodiscard]]
 	auto getColumnSlot( unsigned column ) const -> unsigned {

@@ -114,9 +114,13 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE int getColumnKind( int column ) const;
 	[[nodiscard]]
+	Q_INVOKABLE QByteArray getColumnTitle( int column ) const;
+	[[nodiscard]]
 	Q_INVOKABLE QByteArray getImageAssetPath( int asset ) const;
 	[[nodiscard]]
 	Q_INVOKABLE bool isMixedListRowAlpha( int row ) const;
+	[[nodiscard]]
+	Q_INVOKABLE int getColumnsCount() const { return m_scoreboard.getColumnsCount(); }
 
 	[[nodiscard]]
 	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }

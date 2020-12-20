@@ -42,7 +42,7 @@ auto ScoreboardTeamModel::rowCount( const QModelIndex & ) const -> int {
 }
 
 auto ScoreboardTeamModel::columnCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_scoreboard.getColumnCount();
+	return (int) m_proxy->m_scoreboard.getColumnsCount();
 }
 
 auto ScoreboardTeamModel::roleNames() const -> QHash<int, QByteArray> {
@@ -56,7 +56,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 	const auto &scb = m_proxy->m_scoreboard;
 	const auto &indices = m_proxy->m_playerIndicesForList;
 	const auto column = (unsigned)modelIndex.column();
-	if( column >= scb.getColumnCount() ) {
+	if( column >= scb.getColumnsCount() ) {
 		return QVariant();
 	}
 	const auto row = (unsigned)modelIndex.row();
@@ -92,7 +92,7 @@ auto ScoreboardSpecsModel::rowCount( const QModelIndex & ) const -> int {
 }
 
 auto ScoreboardSpecsModel::columnCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_scoreboard.getColumnCount();
+	return (int) m_proxy->m_scoreboard.getColumnsCount();
 }
 
 auto ScoreboardSpecsModel::roleNames() const -> QHash<int, QByteArray> {
@@ -131,6 +131,11 @@ auto ScoreboardModelProxy::getColumnKind( int column ) const -> int {
 	return (int)m_scoreboard.getColumnKind( (unsigned)column );
 }
 
+auto ScoreboardModelProxy::getColumnTitle( int column ) const -> QByteArray {
+	const wsw::StringView title( m_scoreboard.getColumnTitle( (unsigned)column ) );
+	return !title.empty() ? QByteArray( title.data(), title.size() ) : QByteArray();
+}
+
 auto ScoreboardModelProxy::getImageAssetPath( int asset ) const -> QByteArray {
 	if( auto maybePath = m_scoreboard.getImageAssetPath( (unsigned)asset ) ) {
 		return QByteArray( "image://wsw/" ) + QByteArray( maybePath->data(), maybePath->size() );
@@ -164,7 +169,7 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 		}
 
 		// We have to force redrawing of each cell upon ghosting status change
-		for( unsigned i = 0; i < m_scoreboard.getColumnCount(); ++i ) {
+		for( unsigned i = 0; i < m_scoreboard.getColumnsCount(); ++i ) {
 			QModelIndex teamModelIndex( teamModel->index( rowInTeam, (int)i ) );
 			teamModel->dataChanged( teamModelIndex, teamModelIndex, *changedRoles );
 			if( mixedModel ) {
@@ -177,7 +182,7 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 
 	assert( !updates.ghosting );
 	const QVector<int> &changedRoles = ScoreboardTeamModel::kValueRoleAsVector;
-	for( unsigned i = 0; i < m_scoreboard.getColumnCount(); ++i ) {
+	for( unsigned i = 0; i < m_scoreboard.getColumnsCount(); ++i ) {
 		// Check whether the table cell really needs updating
 		const auto kind = m_scoreboard.getColumnKind( i );
 		if( kind >= Status ) {

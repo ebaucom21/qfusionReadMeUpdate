@@ -15,7 +15,7 @@ Rectangle {
     readonly property color baseColor: Qt.rgba(Material.background.r, Material.background.g, Material.background.b, 0.7)
     readonly property color tintColor: Qt.rgba(Material.accent.r, Material.accent.g, Material.accent.b, 0.05)
 
-    readonly property real baseCellWidth: 48
+    readonly property real baseCellWidth: 64
     readonly property real clanCellWidth: 96
 
     Item {
