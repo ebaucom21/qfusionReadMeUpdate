@@ -1416,6 +1416,10 @@ static unsigned scoreboard_registerIconColumn( const asstring_t *title, wsw::g::
 	return scb->registerIconColumn( wsw::StringView( title->buffer, title->len ) );
 }
 
+static unsigned scoreboard_registerIconColumn2( const asstring_t *title, unsigned titleColumnSpan, wsw::g::Scoreboard *scb ) {
+	return scb->registerIconColumn( wsw::StringView( title->buffer, title->len ), titleColumnSpan );
+}
+
 static unsigned scoreboard_registerGlyphColumn( const asstring_t *title, wsw::g::Scoreboard *scb ) {
 	return scb->registerGlyphColumn( wsw::StringView( title->buffer, title->len ) );
 }
@@ -1448,6 +1452,7 @@ static const asMethod_t scoreboard_Methods[] =
 	{ ASLIB_FUNCTION_DECL( uint, registerAsset, (const String @) ), asFUNCTION( scoreboard_registerAsset ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( uint, registerNumberColumn, (const String @) ), asFUNCTION( scoreboard_registerNumberColumn ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( uint, registerIconColumn, (const String @) ), asFUNCTION( scoreboard_registerIconColumn ), asCALL_CDECL_OBJLAST },
+	{ ASLIB_FUNCTION_DECL( uint, registerIconColumn, (const String @, uint) ), asFUNCTION( scoreboard_registerIconColumn2 ), asCALL_CDECL_OBJLAST },
 	{ ASLIB_FUNCTION_DECL( uint, registerGlyphColumn, (const String @) ), asFUNCTION( scoreboard_registerGlyphColumn ), asCALL_CDECL_OBJLAST },
 
 	{ ASLIB_FUNCTION_DECL( void, setPlayerIcon, (const Client @, uint, uint) ), asFUNCTION( scoreboard_setPlayerIcon ), asCALL_CDECL_OBJLAST },

@@ -116,6 +116,8 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getColumnTitle( int column ) const;
 	[[nodiscard]]
+	Q_INVOKABLE int getTitleColumnSpan( int column ) const;
+	[[nodiscard]]
 	Q_INVOKABLE QByteArray getImageAssetPath( int asset ) const;
 	[[nodiscard]]
 	Q_INVOKABLE bool isMixedListRowAlpha( int row ) const;

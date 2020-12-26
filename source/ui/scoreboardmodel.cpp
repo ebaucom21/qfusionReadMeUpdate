@@ -131,6 +131,10 @@ auto ScoreboardModelProxy::getColumnKind( int column ) const -> int {
 	return (int)m_scoreboard.getColumnKind( (unsigned)column );
 }
 
+auto ScoreboardModelProxy::getTitleColumnSpan( int column ) const -> int {
+	return (int)m_scoreboard.getTitleColumnSpan( (unsigned)column );
+}
+
 auto ScoreboardModelProxy::getColumnTitle( int column ) const -> QByteArray {
 	const wsw::StringView title( m_scoreboard.getColumnTitle( (unsigned)column ) );
 	return !title.empty() ? QByteArray( title.data(), title.size() ) : QByteArray();

@@ -13,10 +13,13 @@ namespace wsw::ui {
 // TODO: Shouldn't it belong to the CG subsystem?
 class Scoreboard : wsw::ScoreboardShared {
 	wsw::StaticVector<ColumnKind, kMaxColumns> m_columnKinds;
+	wsw::StaticVector<unsigned, kMaxColumns> m_titleColumnSpans;
 	wsw::StaticVector<unsigned, kMaxAssets> m_columnSlots;
 
 	std::optional<unsigned> m_nameColumn;
 	std::optional<unsigned> m_pingSlot;
+
+	unsigned m_titleSpanColumnsLeft { 0 };
 
 	wsw::StringSpanStaticStorage<uint8_t, uint8_t, kMaxColumns, kTitleDataLimit> m_columnTitlesStorage;
 	wsw::StringSpanStaticStorage<uint8_t, uint8_t, kMaxAssets, kAssetDataLimit> m_columnAssetsStorage;
@@ -38,6 +41,9 @@ class Scoreboard : wsw::ScoreboardShared {
 
 	[[nodiscard]]
 	bool parseLayoutTitle( const wsw::StringView &token );
+
+	[[nodiscard]]
+	bool parseLayoutTitleColumnSpan( const wsw::StringView &token );
 
 	[[nodiscard]]
 	bool parseLayoutKind( const wsw::StringView &token );
@@ -96,6 +102,10 @@ public:
 	[[nodiscard]]
 	auto getColumnSlot( unsigned column ) const -> unsigned {
 		return m_columnSlots[column];
+	}
+	[[nodiscard]]
+	auto getTitleColumnSpan( unsigned column ) const -> unsigned {
+		return m_titleColumnSpans[column];
 	}
 
 	[[nodiscard]]

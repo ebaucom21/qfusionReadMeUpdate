@@ -78,11 +78,14 @@ TableView {
         Loader {
             active: value && shouldBeDisplayedAsIcon
             anchors.centerIn: parent
+            width: 20
+            height: 20
 
-            Image {
+            sourceComponent: Image {
                 opacity: valueOpacity
-                width: 32
-                height: 32
+                mipmap: true
+                width: 20
+                height: 20
                 source: scoreboard.getImageAssetPath(value)
             }
         }

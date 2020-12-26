@@ -54,32 +54,65 @@ void Scoreboard::checkSlot( unsigned slot, ColumnKind expectedKind ) const {
 	}
 }
 
-auto Scoreboard::registerUserColumn( const wsw::StringView &title, ColumnKind kind ) -> unsigned {
+auto Scoreboard::registerUserColumn( const wsw::StringView &title, ColumnKind kind,
+									 unsigned titleColumnSpan ) -> unsigned {
 	assert( kind == Number || kind == Icon || kind == Glyph );
+	assert( m_columnKinds.size() == m_titleColumnSpans.size() );
 	expectState( Schema );
 	// Reserve space for ping, score and status
 	if( m_columnKinds.size() + 3 == m_columnKinds.capacity() ) {
 		throw Error( "Too many columns" );
 	}
+	if( !titleColumnSpan ) {
+		throw Error( "titleColumnSpan must be non-zero" );
+	}
+	if( titleColumnSpan > 3 ) {
+		throw Error( "titleColumnSpan is limited by 3" );
+	}
+	// Check whether a previous span still has an effect
+	if( m_titleSpanColumnsLeft ) {
+		if( kind != Icon ) {
+			throw Error( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
+		}
+		if( titleColumnSpan > 1 ) {
+			throw Error( "Can't start a new title column span while a previous one is incomplete" );
+		}
+		titleColumnSpan = 0;
+	} else {
+		if( titleColumnSpan > 1 ) {
+			if( kind != Icon ) {
+				throw Error( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
+			}
+		}
+	}
+	wsw::StringView titleToUse( title );
 	if( title.empty() ) {
-		m_columnTitlesStorage.add( kPlaceholder );
-		m_columnKinds.push_back( kind );
-		return m_columnKinds.size() + 1;
-	}
-	if( title.length() > kMaxTitleLen ) {
-		throw Error( "The title is too long" );
-	}
-	for( const wsw::StringView &builtin : kBuiltinColumnTitles ) {
-		if( builtin.equalsIgnoreCase( title ) ) {
-			throw Error( "Can't use a title of a builtin column" );
+		if( titleColumnSpan > 1 ) {
+			throw Error( "A title can't be empty for titleColumnSpan > 1" );
+		}
+		titleToUse = kPlaceholder;
+	} else {
+		if( title.length() > kMaxTitleLen ) {
+			throw Error( "The title is too long" );
+		}
+		for( const wsw::StringView &builtin : kBuiltinColumnTitles ) {
+			if( builtin.equalsIgnoreCase( title ) ) {
+				throw Error( "Can't use a title of a builtin column" );
+			}
+		}
+		for( const wsw::StringView &existing: m_columnTitlesStorage ) {
+			if( existing.equalsIgnoreCase( title ) ) {
+				throw Error( "Duplicated column title" );
+			}
 		}
 	}
-	for( const wsw::StringView &existing: m_columnTitlesStorage ) {
-		if( existing.equalsIgnoreCase( title ) ) {
-			throw Error( "Duplicated column title" );
-		}
+	m_titleColumnSpans.push_back( titleColumnSpan );
+	if( m_titleSpanColumnsLeft ) {
+		m_titleSpanColumnsLeft--;
+	} else {
+		m_titleSpanColumnsLeft = titleColumnSpan - 1;
 	}
-	m_columnTitlesStorage.add( title );
+	m_columnTitlesStorage.add( titleToUse );
 	m_columnKinds.push_back( kind );
 	return m_columnKinds.size() + 1;
 }
@@ -91,10 +124,14 @@ void Scoreboard::beginDefiningSchema() {
 	m_pingSlot = ~0u;
 	m_statusSlot = ~0u;
 
+	m_titleSpanColumnsLeft = 0u;
+
 	m_columnKinds.push_back( Nickname );
 	m_columnTitlesStorage.add( kNameTitle );
+	m_titleColumnSpans.push_back( 1 );
 	m_columnKinds.push_back( Clan );
 	m_columnTitlesStorage.add( kClanTitle );
+	m_titleColumnSpans.push_back( 1 );
 }
 
 auto Scoreboard::registerAsset( const wsw::StringView &path ) -> unsigned {
@@ -117,13 +154,21 @@ void Scoreboard::endDefiningSchema() {
 	expectState( Schema );
 	m_state = NoState;
 
+	if( m_titleSpanColumnsLeft ) {
+		throw Error( "Can't end defining schema while a current title column span is incomplete" );
+	}
+
 	m_columnKinds.push_back( Score );
 	m_columnTitlesStorage.add( kScoreTitle );
+	m_titleColumnSpans.push_back( 1 );
 	m_columnKinds.push_back( Ping );
 	m_columnTitlesStorage.add( kPingTitle );
+	m_titleColumnSpans.push_back( 1 );
 	m_columnKinds.push_back( Status );
 	m_columnTitlesStorage.add( kPlaceholder );
+	m_titleColumnSpans.push_back( 1 );
 
+	assert( m_columnKinds.size() == m_titleColumnSpans.size() );
 	assert( m_columnKinds.size() == m_columnTitlesStorage.size() );
 	wsw::StaticString<1024> schemaBuffer;
 	wsw::StaticString<1024> assetsBuffer;
@@ -149,7 +194,7 @@ void Scoreboard::endDefiningSchema() {
 			}
 			schemaBuffer << slotCounter++;
 		}
-		schemaBuffer << ' ';
+		schemaBuffer << ' ' << m_titleColumnSpans[i] << ' ';
 	}
 
 	for( const wsw::StringView &asset: m_columnAssetsStorage ) {

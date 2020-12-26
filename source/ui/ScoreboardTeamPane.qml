@@ -41,9 +41,10 @@ Item {
                         id: title
                         readonly property int kind: scoreboard.getColumnKind(index)
                         readonly property bool isTextual: kind == Scoreboard.Nickname || kind === Scoreboard.Clan
+                        readonly property int span: scoreboard.getTitleColumnSpan(index)
                         width: (kind === Scoreboard.Nickname) ?
                                    root.width - clanCellWidth - baseCellWidth * (columnsCount - 2) :
-                                   (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
+                                   (kind === Scoreboard.Clan ? clanCellWidth : span * baseCellWidth)
                         leftPadding: isTextual ? 4 : 0
                         bottomPadding: 4
                         height: 36

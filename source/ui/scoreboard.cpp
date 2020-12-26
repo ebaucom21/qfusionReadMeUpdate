@@ -21,6 +21,7 @@ void Scoreboard::clearSchema() {
 	m_nameColumn = std::nullopt;
 	m_columnTitlesStorage.clear();
 	m_columnAssetsStorage.clear();
+	m_titleSpanColumnsLeft = 0;
 }
 
 void Scoreboard::reload() {
@@ -78,6 +79,28 @@ bool Scoreboard::parseLayoutTitle( const wsw::StringView &token ) {
 	}
 	m_columnTitlesStorage.add( title );
 	return true;
+}
+
+bool Scoreboard::parseLayoutTitleColumnSpan( const wsw::StringView &token ) {
+	assert( m_columnKinds.size() == m_titleColumnSpans.size() + 1 );
+	if( const auto maybeNum = wsw::toNum<unsigned>( token ) ) {
+		if( const auto num = *maybeNum; num <= 3 ) {
+			if( m_titleSpanColumnsLeft ) {
+				if( num || m_columnKinds.back() != Icon ) {
+					return false;
+				}
+				m_titleSpanColumnsLeft--;
+			} else {
+				if( num != 1 && m_columnKinds.back() != Icon ) {
+					return false;
+				}
+				m_titleSpanColumnsLeft = num - 1;
+			}
+			m_titleColumnSpans.push_back( num );
+			return true;
+		}
+	}
+	return false;
 }
 
 bool Scoreboard::parseLayoutKind( const wsw::StringView &token ) {
@@ -158,12 +181,13 @@ bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 		if( m_columnKinds.size() == m_columnKinds.capacity() ) {
 			return false;
 		}
-		bool res;
+		bool res = false;
 		const auto &[token, num] = *maybeTokenAndNum;
-		switch( num % 3 ) {
+		switch( num % 4 ) {
 			case 0: res = parseLayoutTitle( token ); break;
 			case 1: res = parseLayoutKind( token ); break;
 			case 2: res = parseLayoutSlot( token ); break;
+			case 3: res = parseLayoutTitleColumnSpan( token ); break;
 		}
 		if( !res ) {
 			return false;
@@ -173,6 +197,12 @@ bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 	if( m_columnKinds.size() < 2 || m_columnTitlesStorage.size() != m_columnKinds.size() ) {
 		return false;
 	}
+
+	if( m_titleSpanColumnsLeft ) {
+		return false;
+	}
+
+	assert( m_columnKinds.size() == m_titleColumnSpans.size() );
 
 	assert( m_pingSlot == std::nullopt );
 	assert( m_nameColumn == std::nullopt );
