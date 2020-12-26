@@ -280,7 +280,7 @@ void CG_KillPolyBeamsByTag( int tag ) {
 */
 void CG_QuickPolyBeam( const vec3_t start, const vec3_t end, int width, struct shader_s *shader ) {
 	if( !shader ) {
-		shader = CG_MediaShader( cgs.media.shaderLaser );
+		shader = cgs.media.shaderLaser;
 	}
 
 	CG_SpawnPolyBeam( start, end, NULL, width, 1, 0, shader, 64, 0 );
@@ -311,7 +311,7 @@ void CG_LaserGunPolyBeam( const vec3_t start, const vec3_t end, const vec4_t col
 		poly_color = tcolor;
 	}
 
-	shader = CG_MediaShader( cgs.media.shaderLaserGunBeam );
+	shader = cgs.media.shaderLaserGunBeam;
 	CG_SpawnPolyBeam( start, end, poly_color, 12, 1, 0, shader, 64, tag );
 	// Draw another poly beam so its section has an X-shape
 	// This is required to fix segmented curved laser look
@@ -337,24 +337,24 @@ void CG_ElectroPolyBeam( const vec3_t start, const vec3_t end, int team ) {
 	if( cg_ebbeam_old->integer ) {
 		if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
 			if( team == TEAM_ALPHA ) {
-				shader = CG_MediaShader( cgs.media.shaderElectroBeamOldAlpha );
+				shader = cgs.media.shaderElectroBeamOldAlpha;
 			} else {
-				shader = CG_MediaShader( cgs.media.shaderElectroBeamOldBeta );
+				shader = cgs.media.shaderElectroBeamOldBeta;
 			}
 		} else {
-			shader = CG_MediaShader( cgs.media.shaderElectroBeamOld );
+			shader = cgs.media.shaderElectroBeamOld;
 		}
 
 		CG_SpawnPolyBeam( start, end, NULL, cg_ebbeam_width->integer, cg_ebbeam_time->value * 1000, cg_ebbeam_time->value * 1000 * 0.4f, shader, 128, 0 );
 	} else {
 		if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
 			if( team == TEAM_ALPHA ) {
-				shader = CG_MediaShader( cgs.media.shaderElectroBeamAAlpha );
+				shader = cgs.media.shaderElectroBeamAAlpha;
 			} else {
-				shader = CG_MediaShader( cgs.media.shaderElectroBeamABeta );
+				shader = cgs.media.shaderElectroBeamABeta;
 			}
 		} else {
-			shader = CG_MediaShader( cgs.media.shaderElectroBeamA );
+			shader = cgs.media.shaderElectroBeamA;
 		}
 
 		CG_SpawnPolyBeam( start, end, NULL, cg_ebbeam_width->integer, cg_ebbeam_time->value * 1000, cg_ebbeam_time->value * 1000 * 0.4f, shader, 128, 0 );
@@ -393,14 +393,14 @@ void CG_InstaPolyBeam( const vec3_t start, const vec3_t end, int team ) {
 		return;
 	}
 
-	CG_SpawnPolyBeam( start, end, tcolor, cg_instabeam_width->integer, cg_instabeam_time->value * 1000, cg_instabeam_time->value * 1000 * 0.4f, CG_MediaShader( cgs.media.shaderInstaBeam ), 128, 0 );
+	CG_SpawnPolyBeam( start, end, tcolor, cg_instabeam_width->integer, cg_instabeam_time->value * 1000, cg_instabeam_time->value * 1000 * 0.4f, cgs.media.shaderInstaBeam, 128, 0 );
 }
 
 /*
 * CG_PLink
 */
 void CG_PLink( const vec3_t start, const vec3_t end, const vec4_t color, int flags ) {
-	CG_SpawnPolyBeam( start, end, color, 4, 2000.0f, 0.0f, CG_MediaShader( cgs.media.shaderLaser ), 64, 0 );
+	CG_SpawnPolyBeam( start, end, color, 4, 2000.0f, 0.0f, cgs.media.shaderLaser, 64, 0 );
 }
 
 void CG_WaveSpark( const vec3_t emitterOrigin ) {
@@ -421,7 +421,7 @@ void CG_WaveSpark( const vec3_t emitterOrigin ) {
 	VectorScale( end, dirScale, end );
 	VectorAdd( end, emitterOrigin, end );
 
-	CG_SpawnPolyBeam( emitterOrigin, end, NULL, 8, 64, 64, CG_MediaShader( cgs.media.shaderWaveSparks ), 0, 0 );
+	CG_SpawnPolyBeam( emitterOrigin, end, NULL, 8, 64, 64, cgs.media.shaderWaveSparks, 0, 0 );
 }
 
 /*

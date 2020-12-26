@@ -106,7 +106,7 @@ void CG_DrawHUDNumeric( int x, int y, int align, const float *color, int charwid
 		}
 		u = ( frame & 3 ) * 0.25f;
 		v = ( frame >> 2 ) * 0.25f;
-		RF_DrawStretchPic( x, y, charwidth, charheight, u, v, u + 0.25f, v + 0.25f, color, CG_MediaShader( cgs.media.shaderSbNums ) );
+		RF_DrawStretchPic( x, y, charwidth, charheight, u, v, u + 0.25f, v + 0.25f, color, cgs.media.shaderSbNums );
 		x += charwidth;
 		ptr++;
 		length--;
@@ -157,7 +157,7 @@ void CG_DrawHUDField( int x, int y, int align, float *color, int size, int width
 		}
 		u = ( frame & 3 ) * 0.25f;
 		v = ( frame >> 2 ) * 0.25f;
-		RF_DrawStretchPic( x, y, w, h, u, v, u + 0.25f, v + 0.25f, color, CG_MediaShader( cgs.media.shaderSbNums ) );
+		RF_DrawStretchPic( x, y, w, h, u, v, u + 0.25f, v + 0.25f, color, cgs.media.shaderSbNums );
 		x += w;
 		ptr++;
 		length--;
@@ -376,7 +376,7 @@ void CG_DrawMiniMap( int x, int y, int iw, int ih, bool draw_playernames, bool d
 				thisSize = std::max( box_size, 8 ) * cgs.vidHeight / 600;
 				thisX = CG_VerticalAlignForHeight( x + (int)coords[0], ALIGN_CENTER_MIDDLE, thisSize );
 				thisY = CG_VerticalAlignForHeight( y + (int)coords[1] - thisSize, ALIGN_CENTER_MIDDLE, thisSize );
-				RF_DrawStretchPic( thisX, thisY, thisSize, thisSize, 0, 0, 1, 1, tmp_yellow_alpha, CG_MediaShader( cgs.media.shaderDownArrow ) );
+				RF_DrawStretchPic( thisX, thisY, thisSize, thisSize, 0, 0, 1, 1, tmp_yellow_alpha, cgs.media.shaderDownArrow );
 			}
 
 			// do we want names too?

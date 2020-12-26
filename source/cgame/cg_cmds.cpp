@@ -64,7 +64,7 @@ static void CG_SC_ChatPrint( void ) {
 	}
 
 	if( cg_chatBeep->integer ) {
-		SoundSystem::Instance()->StartLocalSound( CG_MediaSfx( cgs.media.sfxChat ), 1.0f );
+		SoundSystem::Instance()->StartLocalSound( cgs.media.sfxChat, 1.0f );
 	}
 }
 

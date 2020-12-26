@@ -137,189 +137,9 @@ typedef struct {
 
 #include "cg_pmodels.h"
 
-typedef struct cgs_media_handle_s {
-	char *name;
-	void *data;
-	struct cgs_media_handle_s *next;
-} cgs_media_handle_t;
+#include "mediacache.h"
 
 #define STAT_MINUS              10  // num frame for '-' stats digit
-
-typedef struct {
-	// sounds
-	cgs_media_handle_t *sfxChat;
-
-	// timers
-	cgs_media_handle_t *sfxTimerBipBip;
-	cgs_media_handle_t *sfxTimerPloink;
-
-	cgs_media_handle_t *sfxRic[2];
-
-	cgs_media_handle_t *sfxWeaponUp;
-	cgs_media_handle_t *sfxWeaponUpNoAmmo;
-
-	cgs_media_handle_t *sfxWalljumpFailed;
-
-	//--------------------------------------
-
-	cgs_media_handle_t *sfxWeaponHit[4];
-	// We try to avoid combining new sounds with old assets offline due to licensing reasons
-	cgs_media_handle_t *sfxWeaponHit2[4];
-	cgs_media_handle_t *sfxWeaponKill;
-	cgs_media_handle_t *sfxWeaponHitTeam;
-
-	cgs_media_handle_t *sfxItemRespawn;
-	cgs_media_handle_t *sfxPlayerRespawn;
-	cgs_media_handle_t *sfxTeleportIn;
-	cgs_media_handle_t *sfxTeleportOut;
-	cgs_media_handle_t *sfxShellHit;
-
-	// Gunblade sounds :
-	cgs_media_handle_t *sfxGunbladeWeakShot[3];
-	cgs_media_handle_t *sfxGunbladeStrongShot;
-	cgs_media_handle_t *sfxBladeFleshHit[3];
-	cgs_media_handle_t *sfxBladeWallHit[2];
-	cgs_media_handle_t *sfxGunbladeStrongHit[3];
-
-	// Riotgun sounds :
-	cgs_media_handle_t *sfxRiotgunWeakHit;
-	cgs_media_handle_t *sfxRiotgunStrongHit;
-
-	// Grenade launcher sounds :
-	cgs_media_handle_t *sfxGrenadeWeakBounce[2];
-	cgs_media_handle_t *sfxGrenadeStrongBounce[2];
-	cgs_media_handle_t *sfxGrenadeWeakExplosion;
-	cgs_media_handle_t *sfxGrenadeStrongExplosion;
-
-	// Rocket launcher sounds :
-	cgs_media_handle_t *sfxRocketLauncherWeakHit;
-	cgs_media_handle_t *sfxRocketLauncherStrongHit;
-
-	// Plasmagun sounds
-	cgs_media_handle_t *sfxPlasmaWeakHit;
-	cgs_media_handle_t *sfxPlasmaStrongHit;
-
-	// Lasergun sounds
-	cgs_media_handle_t *sfxLasergunWeakHum;
-	cgs_media_handle_t *sfxLasergunWeakQuadHum;
-	cgs_media_handle_t *sfxLasergunWeakStop;
-	cgs_media_handle_t *sfxLasergunStrongHum;
-	cgs_media_handle_t *sfxLasergunStrongQuadHum;
-	cgs_media_handle_t *sfxLasergunStrongStop;
-	cgs_media_handle_t *sfxLasergunHit[3];
-
-	cgs_media_handle_t *sfxElectroboltHit;
-
-	// Shockwave sounds
-	cgs_media_handle_t *sfxWaveWeakHit;
-	cgs_media_handle_t *sfxWaveStrongHit;
-
-	cgs_media_handle_t *sfxExplosionLfe;
-	cgs_media_handle_t *sfxQuadFireSound;
-
-	// models
-	//	cgs_media_handle_t		*modTeleportEffect;
-	cgs_media_handle_t *modDash;
-	cgs_media_handle_t *modHeadStun;
-
-	cgs_media_handle_t *modIlluminatiGibs;
-
-	//wsw weapon sfx
-	cgs_media_handle_t *modRocketExplosion;
-	cgs_media_handle_t *modPlasmaExplosion;
-	cgs_media_handle_t *modWaveExplosion;
-
-	cgs_media_handle_t *modBulletExplode;
-	cgs_media_handle_t *modBladeWallHit;
-	cgs_media_handle_t *modBladeWallExplo;
-
-	cgs_media_handle_t *modElectroBoltWallHit;
-	cgs_media_handle_t *modInstagunWallHit;
-
-	cgs_media_handle_t *modLasergunWallExplo;
-
-	//no wsw
-
-	cgs_media_handle_t *shaderParticle;
-	cgs_media_handle_t *shaderGrenadeExplosion;
-	cgs_media_handle_t *shaderRocketExplosion;
-	cgs_media_handle_t *shaderRocketExplosionRing;
-	cgs_media_handle_t *shaderWaveExplosionRing;
-	cgs_media_handle_t *shaderBulletExplosion;
-	cgs_media_handle_t *shaderRaceGhostEffect;
-	cgs_media_handle_t *shaderWaterBubble;
-	//	cgs_media_handle_t		*shaderTeleportEffect;
-	cgs_media_handle_t *shaderSmokePuff;
-
-	cgs_media_handle_t *shaderSmokePuff1;
-	cgs_media_handle_t *shaderSmokePuff2;
-	cgs_media_handle_t *shaderSmokePuff3;
-
-	cgs_media_handle_t *shaderStrongRocketFireTrailPuff;
-	cgs_media_handle_t *shaderWeakRocketFireTrailPuff;
-	cgs_media_handle_t *shaderGrenadeTrailSmokePuff;
-	cgs_media_handle_t *shaderRocketTrailSmokePuff;
-	cgs_media_handle_t *shaderBloodTrailPuff;
-	cgs_media_handle_t *shaderBloodTrailLiquidPuff;
-	cgs_media_handle_t *shaderBloodImpactPuff;
-	cgs_media_handle_t *shaderCartoonHit;
-	cgs_media_handle_t *shaderCartoonHit2;
-	cgs_media_handle_t *shaderCartoonHit3;
-	cgs_media_handle_t *shaderTeamMateIndicator;
-	cgs_media_handle_t *shaderTeamCarrierIndicator;
-	cgs_media_handle_t *shaderTeleporterSmokePuff;
-	cgs_media_handle_t *shaderBladeMark;
-	cgs_media_handle_t *shaderBulletMark;
-	cgs_media_handle_t *shaderExplosionMark;
-	cgs_media_handle_t *shaderEnergyMark;
-	cgs_media_handle_t *shaderLaser;
-	cgs_media_handle_t *shaderNet;
-	cgs_media_handle_t *shaderSelect;
-	cgs_media_handle_t *shaderChatBalloon;
-	cgs_media_handle_t *shaderDownArrow;
-	cgs_media_handle_t *shaderTeleportShellGfx;
-
-	//wsw
-	//----------------------------------------------
-
-	cgs_media_handle_t *shaderAdditiveParticleShine;
-
-	//wsw weapon sfx
-	cgs_media_handle_t *shaderPlasmaMark;
-	cgs_media_handle_t *shaderElectroBeamOld;
-	cgs_media_handle_t *shaderElectroBeamOldAlpha;
-	cgs_media_handle_t *shaderElectroBeamOldBeta;
-	cgs_media_handle_t *shaderElectroBeamA;
-	cgs_media_handle_t *shaderElectroBeamAAlpha;
-	cgs_media_handle_t *shaderElectroBeamABeta;
-	cgs_media_handle_t *shaderElectroBeamB;
-	cgs_media_handle_t *shaderElectroBeamBAlpha;
-	cgs_media_handle_t *shaderElectroBeamBBeta;
-	cgs_media_handle_t *shaderElectroBeamRing;
-	cgs_media_handle_t *shaderWaveCorona;
-	cgs_media_handle_t *shaderWaveSparks;
-	cgs_media_handle_t *shaderInstaBeam;
-	cgs_media_handle_t *shaderLaserGunBeam;
-	cgs_media_handle_t *shaderElectroboltMark;
-	cgs_media_handle_t *shaderInstagunMark;
-
-	//wsw
-	cgs_media_handle_t *shaderPlayerShadow;
-	cgs_media_handle_t *shaderFlagFlare;
-
-	// hud icons
-	cgs_media_handle_t *shaderWeaponIcon[WEAP_TOTAL];
-	cgs_media_handle_t *shaderNoGunWeaponIcon[WEAP_TOTAL];
-	cgs_media_handle_t *shaderGunbladeBlastIcon;
-	cgs_media_handle_t *shaderInstagunChargeIcon[3];
-
-	cgs_media_handle_t *shaderKeyIcon[KEYICON_TOTAL];
-
-	//no wsw
-
-	cgs_media_handle_t *shaderSbNums;
-	cgs_media_handle_t *shaderReadyIcon;
-} cgs_media_t;
 
 typedef struct bonenode_s {
 	int bonenum;
@@ -447,7 +267,7 @@ typedef struct {
 	struct qfontface_s *fontSystemMedium;
 	struct qfontface_s *fontSystemBig;
 
-	cgs_media_t media;
+	MediaCache media;
 
 	bool precacheDone;
 
@@ -668,20 +488,10 @@ void CG_DrawMiniMap( int x, int y, int iw, int ih, bool draw_playernames, bool d
 void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int maxval, vec4_t color, struct shader_s *shader );
 void CG_DrawPicBar( int x, int y, int width, int height, int align, float percent, struct shader_s *shader, vec4_t backColor, vec4_t color );
 
-//
-// cg_media.c
-//
-void CG_RegisterMediaSounds( void );
-void CG_RegisterMediaModels( void );
-void CG_RegisterMediaShaders( void );
 void CG_RegisterLevelMinimap( void );
 void CG_RegisterFonts( void );
 
 struct model_s *CG_RegisterModel( const char *name );
-
-struct sfx_s *CG_MediaSfx( cgs_media_handle_t *mediasfx );
-struct model_s *CG_MediaModel( cgs_media_handle_t *mediamodel );
-struct shader_s *CG_MediaShader( cgs_media_handle_t *mediashader );
 
 //
 // cg_players.c

@@ -524,7 +524,7 @@ void CG_AddParticles( void ) {
 		p->poly.stcoords = p->pStcoords;
 		p->poly.colors = p->pColor;
 		p->poly.fognum = p->fog ? 0 : -1;
-		p->poly.shader = ( p->shader == NULL ) ? CG_MediaShader( cgs.media.shaderParticle ) : p->shader;
+		p->poly.shader = ( p->shader == NULL ) ? cgs.media.shaderParticle : p->shader;
 
 		RF_AddPolyToScene( &p->poly );
 	}

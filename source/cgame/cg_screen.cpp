@@ -358,7 +358,7 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
 	}
 	x = CG_HorizontalAlignForWidth( x, align, w );
 	y = CG_VerticalAlignForHeight( y, align, h );
-	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, CG_MediaShader( cgs.media.shaderNet ) );
+	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
 }
 
 /*
@@ -518,7 +518,7 @@ void CG_DrawKeyState( int x, int y, int w, int h, int align, const char *key ) {
 		color[3] = 0.5f;
 	}
 
-	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, CG_MediaShader( cgs.media.shaderKeyIcon[i] ) );
+	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderKeyIcon[i] );
 }
 
 /*
@@ -810,7 +810,6 @@ void CG_DrawTeamMates( void ) {
 
 	for( i = 0; i < gs.maxclients; i++ ) {
 		trace_t trace;
-		cgs_media_handle_t *media;
 
 		if( !cgs.clientInfo[i].name[0] || ISVIEWERENTITY( i + 1 ) ) {
 			continue;
@@ -856,13 +855,14 @@ void CG_DrawTeamMates( void ) {
 
 		CG_TeamColor( cg.predictedPlayerState.stats[STAT_TEAM], color );
 
+		shader_s *shader;
 		if( cent->current.effects & EF_CARRIER ) {
-			media = cgs.media.shaderTeamCarrierIndicator;
+			shader = cgs.media.shaderTeamCarrierIndicator;
 		} else {
-			media = cgs.media.shaderTeamMateIndicator;
+			shader = cgs.media.shaderTeamMateIndicator;
 		}
 
-		RF_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, CG_MediaShader( media ) );
+		RF_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
 	}
 }
 

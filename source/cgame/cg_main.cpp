@@ -372,7 +372,8 @@ static void CG_RegisterModels( void ) {
 		return;
 	}
 
-	CG_RegisterMediaModels();
+	cgs.media.registerModels();
+
 	CG_RegisterBasePModel(); // never before registering the weapon models
 	CG_RegisterWeaponModels();
 
@@ -421,7 +422,7 @@ static void CG_RegisterSounds( void ) {
 		return;
 	}
 
-	CG_RegisterMediaSounds();
+	cgs.media.registerSounds();
 }
 
 /*
@@ -463,7 +464,7 @@ static void CG_RegisterShaders( void ) {
 		return;
 	}
 
-	CG_RegisterMediaShaders();
+	cgs.media.registerMaterials();
 }
 
 /*

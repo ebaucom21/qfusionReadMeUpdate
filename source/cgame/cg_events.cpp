@@ -109,8 +109,8 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 
 			CG_HighVelImpactPuffParticles( trace->endpos, trace->plane.normal, 8, 0.5f, 1.0f, 0.8f, 0.2f, 1.0f, NULL );
 
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxLasergunHit[rand() % 3] ), trace->endpos, CHAN_AUTO,
-									cg_volume_effects->value, ATTN_STATIC );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxLasergunHit[rand() % 3], trace->endpos, CHAN_AUTO,
+													  cg_volume_effects->value, ATTN_STATIC );
 		}
 #undef TRAILTIME
 	}
@@ -143,9 +143,9 @@ void CG_LaserBeamEffect( centity_t *cent ) {
 	if( cent->localEffects[LOCALEFFECT_LASERBEAM] <= cg.time ) {
 		if( cent->localEffects[LOCALEFFECT_LASERBEAM] ) {
 			if( !cent->laserCurved ) {
-				sound = CG_MediaSfx( cgs.media.sfxLasergunStrongStop );
+				sound = cgs.media.sfxLasergunStrongStop;
 			} else {
-				sound = CG_MediaSfx( cgs.media.sfxLasergunWeakStop );
+				sound = cgs.media.sfxLasergunWeakStop;
 			}
 
 			if( ISVIEWERENTITY( cent->current.number ) ) {
@@ -188,9 +188,9 @@ void CG_LaserBeamEffect( centity_t *cent ) {
 		range = GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
 
 		if( cent->current.effects & EF_QUAD ) {
-			sound = CG_MediaSfx( cgs.media.sfxLasergunStrongQuadHum );
+			sound = cgs.media.sfxLasergunStrongQuadHum;
 		} else {
-			sound = CG_MediaSfx( cgs.media.sfxLasergunStrongHum );
+			sound = cgs.media.sfxLasergunStrongHum;
 		}
 
 		// trace the beam: for tracing we use the real beam origin
@@ -212,9 +212,9 @@ void CG_LaserBeamEffect( centity_t *cent ) {
 		range = GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
 
 		if( cent->current.effects & EF_QUAD ) {
-			sound = CG_MediaSfx( cgs.media.sfxLasergunWeakQuadHum );
+			sound = cgs.media.sfxLasergunWeakQuadHum;
 		} else {
-			sound = CG_MediaSfx( cgs.media.sfxLasergunWeakHum );
+			sound = cgs.media.sfxLasergunWeakHum;
 		}
 
 		// TODO: What's the point of it since drawing an impact sprite
@@ -359,7 +359,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 		}
 
 		if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
-			struct sfx_s *quadSfx = CG_MediaSfx( cgs.media.sfxQuadFireSound );
+			struct sfx_s *quadSfx = cgs.media.sfxQuadFireSound;
 			if( ISVIEWERENTITY( entNum ) ) {
 				SoundSystem::Instance()->StartGlobalSound( quadSfx, CHAN_AUTO, cg_volume_effects->value );
 			} else {
@@ -615,7 +615,7 @@ static void CG_BulletImpact( trace_t *tr ) {
 	}
 
 	// spawn decal
-	CG_SpawnDecal( tr->endpos, tr->plane.normal, random() * 360, 8, 1, 1, 1, 1, 8, 1, false, CG_MediaShader( cgs.media.shaderBulletMark ) );
+	CG_SpawnDecal( tr->endpos, tr->plane.normal, random() * 360, 8, 1, 1, 1, 1, 8, 1, false, cgs.media.shaderBulletMark );
 }
 
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
@@ -649,7 +649,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 				// flesh impact sound
 			} else {
 				CG_ImpactPuffParticles( trace.endpos, trace.plane.normal, 1, 0.7, 1, 0.7, 0.0, 1.0, NULL );
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxRic[ rand() % 2 ] ), trace.endpos, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRic[rand() % 2 ], trace.endpos, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
 			}
 		}
 	}
@@ -749,11 +749,11 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dir, int weapon, int fir
 
 	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
 		if( firedef->fire_mode == FIRE_MODE_STRONG ) {
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxRiotgunStrongHit ), trace.endpos, CHAN_AUTO,
-									cg_volume_effects->value, ATTN_IDLE );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRiotgunStrongHit, trace.endpos, CHAN_AUTO,
+													  cg_volume_effects->value, ATTN_IDLE );
 		} else {
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxRiotgunWeakHit ), trace.endpos, CHAN_AUTO,
-									cg_volume_effects->value, ATTN_IDLE );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRiotgunWeakHit, trace.endpos, CHAN_AUTO,
+													  cg_volume_effects->value, ATTN_IDLE );
 		}
 	}
 }
@@ -901,11 +901,11 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 void CG_Event_Pain( entity_state_t *state, int parm ) {
 	if( parm == PAIN_WARSHELL ) {
 		if( ISVIEWERENTITY( state->number ) ) {
-			SoundSystem::Instance()->StartGlobalSound( CG_MediaSfx( cgs.media.sfxShellHit ), CHAN_PAIN,
-									 cg_volume_players->value );
+			SoundSystem::Instance()->StartGlobalSound( cgs.media.sfxShellHit, CHAN_PAIN,
+													   cg_volume_players->value );
 		} else {
-			SoundSystem::Instance()->StartRelativeSound( CG_MediaSfx( cgs.media.sfxShellHit ), state->number, CHAN_PAIN,
-									   cg_volume_players->value, state->attenuation );
+			SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxShellHit, state->number, CHAN_PAIN,
+														 cg_volume_players->value, state->attenuation );
 		}
 	} else {
 		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * ( parm + 1 ) ),
@@ -1003,10 +1003,9 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 
 	if( ev == EV_WALLJUMP_FAILED ) {
 		if( ISVIEWERENTITY( state->number ) ) {
-			SoundSystem::Instance()->StartGlobalSound( CG_MediaSfx( cgs.media.sfxWalljumpFailed ), CHAN_BODY,
-									 cg_volume_effects->value );
+			SoundSystem::Instance()->StartGlobalSound( cgs.media.sfxWalljumpFailed, CHAN_BODY, cg_volume_effects->value );
 		} else {
-			SoundSystem::Instance()->StartRelativeSound( CG_MediaSfx( cgs.media.sfxWalljumpFailed ), state->number, CHAN_BODY, cg_volume_effects->value, ATTN_NORM );
+			SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxWalljumpFailed, state->number, CHAN_BODY, cg_volume_effects->value, ATTN_NORM );
 		}
 	} else {
 		CG_SexedSound( state->number, CHAN_BODY, va( S_PLAYER_WALLJUMP_1_to_2, ( rand() & 1 ) + 1 ),
@@ -1119,9 +1118,9 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			}
 
 			if( viewer ) {
-				SoundSystem::Instance()->StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponUp ), CHAN_AUTO, cg_volume_effects->value );
+				SoundSystem::Instance()->StartGlobalSound( cgs.media.sfxWeaponUp, CHAN_AUTO, cg_volume_effects->value );
 			} else {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxWeaponUp ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxWeaponUp, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 			}
 			break;
 
@@ -1221,9 +1220,9 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 
 		case EV_NOAMMOCLICK:
 			if( viewer ) {
-				SoundSystem::Instance()->StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponUpNoAmmo ), CHAN_ITEM, cg_volume_effects->value );
+				SoundSystem::Instance()->StartGlobalSound( cgs.media.sfxWeaponUpNoAmmo, CHAN_ITEM, cg_volume_effects->value );
 			} else {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxWeaponUpNoAmmo ), ent->origin, CHAN_ITEM, cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxWeaponUpNoAmmo, ent->origin, CHAN_ITEM, cg_volume_effects->value, ATTN_IDLE );
 			}
 			break;
 
@@ -1316,8 +1315,8 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			ByteToDir( parm, dir );
 			CG_BulletExplosion( ent->origin, dir, NULL );
 			CG_ParticleEffect( ent->origin, dir, 1.0f, 0.67f, 0.0f, 6 );
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxRic[rand() % 2] ), ent->origin, CHAN_AUTO,
-									cg_volume_effects->value, ATTN_IDLE );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRic[rand() % 2], ent->origin, CHAN_AUTO,
+													  cg_volume_effects->value, ATTN_IDLE );
 			break;
 
 		case EV_LASER_SPARKS:
@@ -1343,8 +1342,8 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 
 		case EV_ITEM_RESPAWN:
 			cg_entities[ent->number].respawnTime = cg.time;
-			SoundSystem::Instance()->StartRelativeSound( CG_MediaSfx( cgs.media.sfxItemRespawn ), ent->number, CHAN_AUTO,
-									   cg_volume_effects->value, ATTN_IDLE );
+			SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxItemRespawn, ent->number, CHAN_AUTO,
+														 cg_volume_effects->value, ATTN_IDLE );
 			break;
 
 		case EV_PLAYER_RESPAWN:
@@ -1354,7 +1353,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 				CG_ResetDamageIndicator();
 			}
 
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxPlayerRespawn ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxPlayerRespawn, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 
 			if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 				cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
@@ -1363,7 +1362,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			break;
 
 		case EV_PLAYER_TELEPORT_IN:
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxTeleportIn ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxTeleportIn, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 
 			if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 				cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_IN] = cg.time;
@@ -1372,7 +1371,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			break;
 
 		case EV_PLAYER_TELEPORT_OUT:
-			SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxTeleportOut ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxTeleportOut, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 
 			if( ent->ownerNum && ent->ownerNum < gs.maxclients + 1 ) {
 				cg_entities[ent->ownerNum].localEffects[LOCALEFFECT_EV_PLAYER_TELEPORT_OUT] = cg.time;
@@ -1384,10 +1383,10 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			ByteToDir( parm, dir );
 			CG_PlasmaExplosion( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
 			if( ent->firemode == FIRE_MODE_STRONG ) {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxPlasmaStrongHit ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxPlasmaStrongHit, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 				CG_StartKickAnglesEffect( ent->origin, 50, ent->weapon * 8, 100 );
 			} else {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxPlasmaWeakHit ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxPlasmaWeakHit, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 				CG_StartKickAnglesEffect( ent->origin, 30, ent->weapon * 8, 75 );
 			}
 			break;
@@ -1443,9 +1442,9 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 
 		case EV_GRENADE_BOUNCE:
 			if( parm == FIRE_MODE_STRONG ) {
-				SoundSystem::Instance()->StartRelativeSound( CG_MediaSfx( cgs.media.sfxGrenadeStrongBounce[rand() & 1] ), ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxGrenadeStrongBounce[rand() & 1], ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 			} else {
-				SoundSystem::Instance()->StartRelativeSound( CG_MediaSfx( cgs.media.sfxGrenadeWeakBounce[rand() & 1] ), ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxGrenadeWeakBounce[rand() & 1], ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 			}
 			break;
 
@@ -1457,14 +1456,14 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			ByteToDir( parm, dir );
 			CG_GunBladeBlastImpact( ent->origin, dir, (float)ent->weapon * 8 );
 			if( ent->skinnum > 64 ) {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxGunbladeStrongHit[2] ), ent->origin, CHAN_AUTO,
-										cg_volume_effects->value, ATTN_DISTANT );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[2], ent->origin, CHAN_AUTO,
+														  cg_volume_effects->value, ATTN_DISTANT );
 			} else if( ent->skinnum > 34 ) {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxGunbladeStrongHit[1] ), ent->origin, CHAN_AUTO,
-										cg_volume_effects->value, ATTN_NORM );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[1], ent->origin, CHAN_AUTO,
+														  cg_volume_effects->value, ATTN_NORM );
 			} else {
-				SoundSystem::Instance()->StartFixedSound( CG_MediaSfx( cgs.media.sfxGunbladeStrongHit[0] ), ent->origin, CHAN_AUTO,
-										cg_volume_effects->value, ATTN_IDLE );
+				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[0], ent->origin, CHAN_AUTO,
+														  cg_volume_effects->value, ATTN_IDLE );
 			}
 
 			//ent->skinnum is knockback value
@@ -1549,14 +1548,14 @@ static void CG_FirePlayerStateEvents( void ) {
 					break;
 				}
 				if( parm < 4 ) { // hit of some caliber
-					SoundSystem::Instance()->StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponHit[parm] ), cg_volume_hitsound->value );
-					SoundSystem::Instance()->StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponHit2[parm] ), cg_volume_hitsound->value );
+					SoundSystem::Instance()->StartLocalSound( cgs.media.sfxWeaponHit[parm], cg_volume_hitsound->value );
+					SoundSystem::Instance()->StartLocalSound( cgs.media.sfxWeaponHit2[parm], cg_volume_hitsound->value );
 					CG_ScreenCrosshairDamageUpdate();
 				} else if( parm == 4 ) {  // killed an enemy
-					SoundSystem::Instance()->StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponKill ), cg_volume_hitsound->value );
+					SoundSystem::Instance()->StartLocalSound( cgs.media.sfxWeaponKill, cg_volume_hitsound->value );
 					CG_ScreenCrosshairDamageUpdate();
 				} else {  // hit a teammate
-					SoundSystem::Instance()->StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponHitTeam ), cg_volume_hitsound->value );
+					SoundSystem::Instance()->StartLocalSound( cgs.media.sfxWeaponHitTeam, cg_volume_hitsound->value );
 					if( cg_showhelp->integer ) {
 						if( random() <= 0.5f ) {
 							CG_CenterPrint( "Don't shoot at members of your team!" );

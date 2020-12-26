@@ -612,7 +612,7 @@ static void CG_AddRaceGhostShell( entity_t *ent ) {
 		return;
 	}
 
-	shell.customShader = CG_MediaShader( cgs.media.shaderRaceGhostEffect );
+	shell.customShader = cgs.media.shaderRaceGhostEffect;
 	shell.renderfx |= ( RF_FULLBRIGHT | RF_NOSHADOW );
 	shell.outlineHeight = 0;
 
@@ -820,7 +820,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 	}
 
 	if( cent->effects & EF_BUSYICON ) {
-		iconShader = CG_MediaShader( cgs.media.shaderChatBalloon );
+		iconShader = cgs.media.shaderChatBalloon;
 		radius = 12;
 		upoffset = 2;
 	}
@@ -866,7 +866,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 			balloon.rtype = RT_MODEL;
 			balloon.customShader = NULL;
 			balloon.radius = 0;
-			balloon.model = CG_MediaModel( cgs.media.modHeadStun );
+			balloon.model = cgs.media.modHeadStun;
 
 			if( !( cent->current.effects & EF_PLAYER_STUNNED ) ) {
 				balloon.shaderRGBA[3] = ( 255 * ( 1.0f - cg.lerpfrac ) );
