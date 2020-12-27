@@ -94,16 +94,19 @@ public:
 
 struct EfxPresetEntry;
 
-class ReverbEffect: public Effect {
-	float GetMasterGain( struct src_s *src ) const final;
-public:
-	static constexpr float MAX_REVERB_DECAY = 5.6f + 0.001f;
-protected:
-	void InterpolateCommonReverbProps( const Interpolator &interpolator, const ReverbEffect *that );
-public:
-	explicit ReverbEffect( ALint type_ ): Effect( type_ ) {}
+class EaxReverbEffect final: public Effect {
+	friend class EfxPresetsHolder;
+	friend class ReverbEffectSampler;
 
-	// A regular direct obstruction (same as for the flanger effect)
+	void UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin );
+
+	static constexpr float MAX_REVERB_DECAY = 5.6f + 0.001f;
+	vec3_t tmpSourceOrigin { 0, 0, 0 };
+
+	float GetMasterGain( src_s *src ) const override;
+public:
+	EaxReverbEffect(): Effect( AL_EFFECT_EAXREVERB ) {}
+
 	float directObstruction;
 
 	float density;              // [0.0 ... 1.0]    default 1.0
@@ -118,48 +121,23 @@ public:
 
 	// An intermediate of the reverb sampling algorithm, useful for gain adjustment
 	float secondaryRaysObstruction;
+	float hfReference; // [1000 ... 20000]  default 5000
 
-	virtual void ReusePreset( const EfxPresetEntry *presetHandle );
+	float echoTime;   // [0.075 ... 0.25]  default 0.25
+	float echoDepth;  // [0.0   ... 1.0]   default 0.0
 
-	virtual void CopyReverbProps( const ReverbEffect *that );
+	void ReusePreset( const EfxPresetEntry *presetHandle );
 
 	unsigned GetLingeringTimeout() const override {
 		return (unsigned)( decayTime * 1000 + 50 );
 	}
 
 	bool ShouldKeepLingering( float sourceQualityHint, int64_t millisNow ) const override;
-};
-
-class StandardReverbEffect final: public ReverbEffect {
-	friend class ReverbEffectSampler;
-public:
-	StandardReverbEffect(): ReverbEffect( AL_EFFECT_REVERB ) {}
-
-	void BindOrUpdate( struct src_s *src ) override;
-	void InterpolateProps( const Effect *oldOne, int timeDelta ) override;
-};
-
-class EaxReverbEffect final: public ReverbEffect {
-	friend class EfxPresetsHolder;
-	friend class ReverbEffectSampler;
-
-	void UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin );
-
-	vec3_t tmpSourceOrigin { 0, 0, 0 };
-public:
-	EaxReverbEffect(): ReverbEffect( AL_EFFECT_EAXREVERB ) {}
-
-	float hfReference; // [1000 ... 20000]  default 5000
-
-	float echoTime;   // [0.075 ... 0.25]  default 0.25
-	float echoDepth;  // [0.0   ... 1.0]   default 0.0
-
-	void ReusePreset( const EfxPresetEntry *presetHandle ) override;
 
 	void BindOrUpdate( struct src_s *src ) override;
 	void InterpolateProps( const Effect *oldOne, int timeDelta ) override;
 
-	void CopyReverbProps( const ReverbEffect *that ) override;
+	void CopyReverbProps( const EaxReverbEffect *that );
 
 	void UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) override;
 };

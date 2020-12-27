@@ -49,12 +49,12 @@ Effect *UnderwaterFlangerEffectSampler::TryApply( const ListenerProps &listenerP
 	return effect;
 }
 
-static bool ENV_TryReuseSourceReverbProps( src_t *src, const src_t *tryReusePropsSrc, ReverbEffect *newEffect ) {
+static bool ENV_TryReuseSourceReverbProps( src_t *src, const src_t *tryReusePropsSrc, EaxReverbEffect *newEffect ) {
 	if( !tryReusePropsSrc ) {
 		return false;
 	}
 
-	auto *reuseEffect = Effect::Cast<const ReverbEffect *>( tryReusePropsSrc->envUpdateState.effect );
+	auto *reuseEffect = Effect::Cast<const EaxReverbEffect *>( tryReusePropsSrc->envUpdateState.effect );
 	if( !reuseEffect ) {
 		return false;
 	}
@@ -189,7 +189,7 @@ float ObstructedEffectSampler::ComputeDirectObstruction( const ListenerProps &li
 }
 
 Effect *ReverbEffectSampler::TryApply( const ListenerProps &listenerProps, src_t *src, const src_t *tryReusePropsSrc ) {
-	ReverbEffect *effect = EffectsAllocator::Instance()->NewReverbEffect( src );
+	EaxReverbEffect *effect = EffectsAllocator::Instance()->NewReverbEffect( src );
 	effect->directObstruction = ComputeDirectObstruction( listenerProps, src );
 	// We try reuse props only for reverberation effects
 	// since reverberation effects sampling is extremely expensive.
@@ -218,7 +218,7 @@ float ReverbEffectSampler::GetEmissionRadius() const {
 	return distance;
 }
 
-void ReverbEffectSampler::ResetMutableState( const ListenerProps &listenerProps_, src_t *src_, ReverbEffect *effect_ ) {
+void ReverbEffectSampler::ResetMutableState( const ListenerProps &listenerProps_, src_t *src_, EaxReverbEffect *effect_ ) {
 	this->listenerProps = &listenerProps_;
 	this->src = src_;
 	this->effect = effect_;
@@ -231,7 +231,7 @@ void ReverbEffectSampler::ResetMutableState( const ListenerProps &listenerProps_
 
 void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerProps_,
 												src_t *src_,
-												ReverbEffect *effect_ ) {
+												EaxReverbEffect *effect_ ) {
 	ResetMutableState( listenerProps_, src_, effect_ );
 
 	// A "realistic obstruction" requires a higher amount of secondary (and thus primary) rays

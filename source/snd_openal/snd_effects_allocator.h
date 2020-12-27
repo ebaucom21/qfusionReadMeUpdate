@@ -9,7 +9,6 @@
 class alignas( 8 )EffectsAllocator {
 	template<typename> friend class SingletonHolder;
 
-	static_assert( sizeof( EaxReverbEffect ) >= sizeof( StandardReverbEffect ), "" );
 	static_assert( sizeof( EaxReverbEffect ) >= sizeof( UnderwaterFlangerEffect ), "" );
 
 	static constexpr auto MAX_EFFECT_SIZE = sizeof( EaxReverbEffect );
@@ -21,15 +20,6 @@ class alignas( 8 )EffectsAllocator {
 	alignas( 8 ) uint8_t storage[2 * ENTRY_SIZE * MAX_SRC];
 	// For every source contains an effect type for the corresponding entry, or zero if an entry is unused.
 	ALint effectTypes[MAX_SRC][2];
-
-	mutable int isEaxReverbAvailable { -1 };
-
-	int IsEaxReverbAvailable() const {
-		if( isEaxReverbAvailable == -1 ) {
-			isEaxReverbAvailable = qalGetEnumValue( "AL_EFFECT_EAXREVERB" ) != 0 ? 1 : 0;
-		}
-		return isEaxReverbAvailable > 0;
-	}
 
 	void *AllocEntry( const src_t *src, ALint effectTypes );
 	void FreeEntry( const void *entry );
@@ -52,11 +42,8 @@ public:
 		return new( AllocEntry( src, AL_EFFECT_FLANGER ) )UnderwaterFlangerEffect();
 	}
 
-	ReverbEffect *NewReverbEffect( const src_t *src ) {
-		if( IsEaxReverbAvailable() ) {
-			return new( AllocEntry( src, AL_EFFECT_EAXREVERB ) )EaxReverbEffect();
-		}
-		return new( AllocEntry( src, AL_EFFECT_REVERB ) )StandardReverbEffect();
+	EaxReverbEffect *NewReverbEffect( const src_t *src ) {
+		return new( AllocEntry( src, AL_EFFECT_EAXREVERB ) )EaxReverbEffect();
 	}
 
 	void DeleteEffect( Effect *effect );

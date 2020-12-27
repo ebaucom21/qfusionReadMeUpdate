@@ -71,11 +71,11 @@ private:
 
 	const ListenerProps *listenerProps;
 	src_t * src;
-	ReverbEffect * effect;
+	EaxReverbEffect * effect;
 
-	void ComputeReverberation( const ListenerProps &listenerProps_, src_t *src_, ReverbEffect *effect_ );
+	void ComputeReverberation( const ListenerProps &listenerProps_, src_t *src_, EaxReverbEffect *effect_ );
 
-	void ResetMutableState( const ListenerProps &listenerProps_, src_t *src_, ReverbEffect *effect_ );
+	void ResetMutableState( const ListenerProps &listenerProps_, src_t *src_, EaxReverbEffect *effect_ );
 
 	float GetEmissionRadius() const override;
 	void SetupPrimaryRayDirs();

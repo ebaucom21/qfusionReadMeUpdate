@@ -81,34 +81,16 @@ void UnderwaterFlangerEffect::BindOrUpdate( src_t *src ) {
 	AttachEffect( src );
 }
 
-float ReverbEffect::GetMasterGain( src_t *src ) const {
-	float gain = src->fvol * src->volumeVar->value;
+float EaxReverbEffect::GetMasterGain( src_t *src ) const {
+	float result = src->fvol * src->volumeVar->value;
 
 	// Both partial obstruction factors are within [0, 1] range, so we multiply by 0.5
 	float obstructionFactor = 0.5f * ( this->directObstruction + this->secondaryRaysObstruction );
 	assert( obstructionFactor >= 0.0f && obstructionFactor <= 1.0f );
 	// The gain might be lowered up to 2x
-	gain *= 1.0f - 0.5f * obstructionFactor;
-	assert( gain >= 0.0f && gain <= 1.0f );
-	return gain;
-}
-
-void StandardReverbEffect::BindOrUpdate( src_t *src ) {
-	CheckCurrentlyBoundEffect( src );
-
-	qalEffectf( src->effect, AL_REVERB_DENSITY, this->density );
-	qalEffectf( src->effect, AL_REVERB_DIFFUSION, this->diffusion );
-	qalEffectf( src->effect, AL_REVERB_GAIN, this->gain );
-	qalEffectf( src->effect, AL_REVERB_GAINHF, this->gainHf );
-	qalEffectf( src->effect, AL_REVERB_DECAY_TIME, this->decayTime );
-	qalEffectf( src->effect, AL_REVERB_REFLECTIONS_GAIN, this->reflectionsGain );
-	qalEffectf( src->effect, AL_REVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
-	qalEffectf( src->effect, AL_REVERB_LATE_REVERB_GAIN, this->lateReverbGain );
-	qalEffectf( src->effect, AL_REVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
-
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f - directObstruction );
-
-	AttachEffect( src );
+	result *= 1.0f - 0.5f * obstructionFactor;
+	assert( result >= 0.0f && result <= 1.0f );
+	return result;
 }
 
 void EaxReverbEffect::BindOrUpdate( src_t *src ) {
@@ -144,21 +126,7 @@ void UnderwaterFlangerEffect::InterpolateProps( const Effect *oldOne, int timeDe
 	directObstruction = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
 }
 
-void ReverbEffect::CopyReverbProps( const ReverbEffect *that ) {
-	// Avoid memcpy... This is not a POD type
-	density = that->density;
-	diffusion = that->diffusion;
-	gain = that->gain;
-	gainHf = that->gainHf;
-	decayTime = that->decayTime;
-	reflectionsGain = that->reflectionsGain;
-	reflectionsDelay = that->reflectionsDelay;
-	lateReverbGain = that->lateReverbGain;
-	lateReverbDelay = that->lateReverbDelay;
-	secondaryRaysObstruction = that->secondaryRaysObstruction;
-}
-
-bool ReverbEffect::ShouldKeepLingering( float sourceQualityHint, int64_t millisNow ) const {
+bool EaxReverbEffect::ShouldKeepLingering( float sourceQualityHint, int64_t millisNow ) const {
 	if( sourceQualityHint <= 0 ) {
 		return false;
 	}
@@ -172,7 +140,13 @@ bool ReverbEffect::ShouldKeepLingering( float sourceQualityHint, int64_t millisN
 	return distanceAtLastUpdate < 192.0f + 768.0f * factor;
 }
 
-void ReverbEffect::InterpolateCommonReverbProps( const Interpolator &interpolator, const ReverbEffect *that ) {
+void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
+	const auto *that = Cast<EaxReverbEffect *>( oldOne );
+	if( !that ) {
+		return;
+	}
+
+	Interpolator interpolator( timeDelta );
 	directObstruction = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
 	density = interpolator( density, that->density, 0.0f, 1.0f );
 	diffusion = interpolator( diffusion, that->diffusion, 0.0f, 1.0f );
@@ -184,38 +158,26 @@ void ReverbEffect::InterpolateCommonReverbProps( const Interpolator &interpolato
 	lateReverbGain = interpolator( lateReverbGain, that->lateReverbGain, 0.0f, 10.0f );
 	lateReverbDelay = interpolator( lateReverbDelay, that->lateReverbDelay, 0.0f, 0.1f );
 	secondaryRaysObstruction = interpolator( secondaryRaysObstruction, that->secondaryRaysObstruction, 0.0f, 1.0f );
-}
-
-void StandardReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
-	if( const auto *that = Cast<ReverbEffect *>( oldOne ) ) {
-		InterpolateCommonReverbProps( Interpolator( timeDelta ), that );
-	}
-}
-
-void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
-	const auto *that = Cast<EaxReverbEffect *>( oldOne );
-	if( !that ) {
-		return;
-	}
-
-	Interpolator interpolator( timeDelta );
-	InterpolateCommonReverbProps( interpolator, that );
 	hfReference = interpolator( hfReference, that->hfReference, 1000.0f, 20000.0f );
 	echoTime = interpolator( echoTime, that->echoTime, 0.075f, 0.25f );
 	echoDepth = interpolator( echoDepth, that->echoDepth, 0.0f, 1.0f );
 }
 
-void EaxReverbEffect::CopyReverbProps( const ReverbEffect *effect ) {
-	ReverbEffect::CopyReverbProps( effect );
-	if( const auto *that = Cast<EaxReverbEffect *>( effect ) ) {
-		this->hfReference = that->hfReference;
-		this->echoTime = that->echoTime;
-		this->echoDepth = that->echoDepth;
-	} else {
-		this->hfReference = 5000.0f;
-		this->echoTime = 0.25f;
-		this->echoDepth = 0.0f;
-	}
+void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
+	// Avoid doing memcpy... This is not a POD type
+	density = that->density;
+	diffusion = that->diffusion;
+	gain = that->gain;
+	gainHf = that->gainHf;
+	decayTime = that->decayTime;
+	reflectionsGain = that->reflectionsGain;
+	reflectionsDelay = that->reflectionsDelay;
+	lateReverbGain = that->lateReverbGain;
+	lateReverbDelay = that->lateReverbDelay;
+	secondaryRaysObstruction = that->secondaryRaysObstruction;
+	hfReference = that->hfReference;
+	echoTime = that->echoTime;
+	echoDepth = that->echoDepth;
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
