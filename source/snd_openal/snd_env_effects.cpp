@@ -218,47 +218,6 @@ void EaxReverbEffect::CopyReverbProps( const ReverbEffect *effect ) {
 	}
 }
 
-void ChorusEffect::BindOrUpdate( struct src_s *src ) {
-	CheckCurrentlyBoundEffect( src );
-
-	qalEffecti( src->effect, AL_CHORUS_PHASE, phase );
-	qalEffecti( src->effect, AL_CHORUS_WAVEFORM, waveform );
-
-	qalEffectf( src->effect, AL_CHORUS_DELAY, delay );
-	qalEffectf( src->effect, AL_CHORUS_DEPTH, depth );
-	qalEffectf( src->effect, AL_CHORUS_RATE, rate );
-	qalEffectf( src->effect, AL_CHORUS_FEEDBACK, feedback );
-
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
-
-	AttachEffect( src );
-}
-
-void DistortionEffect::BindOrUpdate( struct src_s *src ) {
-	CheckCurrentlyBoundEffect( src );
-
-	qalEffectf( src->effect, AL_DISTORTION_EDGE, edge );
-	qalEffectf( src->effect, AL_DISTORTION_EDGE, gain );
-
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
-
-	AttachEffect( src );
-}
-
-void EchoEffect::BindOrUpdate( struct src_s *src ) {
-	CheckCurrentlyBoundEffect( src );
-
-	qalEffectf( src->effect, AL_ECHO_DELAY, delay );
-	qalEffectf( src->effect, AL_ECHO_LRDELAY, lrDelay );
-	qalEffectf( src->effect, AL_ECHO_DAMPING, damping );
-	qalEffectf( src->effect, AL_ECHO_FEEDBACK, feedback );
-	qalEffectf( src->effect, AL_ECHO_SPREAD, spread );
-
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
-
-	AttachEffect( src );
-}
-
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
 	const auto *updateState = &src->panningUpdateState;
 

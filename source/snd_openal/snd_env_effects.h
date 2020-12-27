@@ -161,50 +161,7 @@ public:
 
 	void CopyReverbProps( const ReverbEffect *that ) override;
 
-
 	void UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) override;
-};
-
-class ChorusEffect final: public Effect {
-public:
-	ChorusEffect(): Effect( AL_EFFECT_CHORUS ) {}
-
-	enum Waveform {
-		SIN = 0,
-		TRIANGLE = 1
-	};
-
-	Waveform waveform;
-	int phase;        // [-180 ... 180]     default 90
-	float rate;       // [0.0  ... 10.0]    default 1.1
-	float depth;      // [0.0  ... 1.0]     default 0.1
-	float feedback;   // [-1.0 ... 1.0]     default 0.25
-	float delay;      // [0.0  ... 0.016]   default 0.016
-
-	void BindOrUpdate( struct src_s *src ) override;
-};
-
-class DistortionEffect final: public Effect {
-public:
-	DistortionEffect(): Effect( AL_EFFECT_DISTORTION ) {}
-
-	float edge;   // [0.0  ... 1.0]  default 0.2
-	float gain;   // [0.01 ... 1.0]  default 0.05
-
-	void BindOrUpdate( struct src_s *src ) override;
-};
-
-class EchoEffect final: public Effect {
-public:
-	EchoEffect(): Effect( AL_EFFECT_ECHO ) {}
-
-	float delay;      // [0.0  ... 0.207]  default 0.1
-	float lrDelay;    // [0.0  ... 0.404]  default 0.1
-	float damping;    // [0.0  ... 0.99]   default 0.5
-	float feedback;   // [0.0  ... 1.0]    default 0.5
-	float spread;     // [-1.0 ... 1.0]    default -1.0
-
-	void BindOrUpdate( struct src_s *src ) override;
 };
 
 #endif

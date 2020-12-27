@@ -11,9 +11,6 @@ class alignas( 8 )EffectsAllocator {
 
 	static_assert( sizeof( EaxReverbEffect ) >= sizeof( StandardReverbEffect ), "" );
 	static_assert( sizeof( EaxReverbEffect ) >= sizeof( UnderwaterFlangerEffect ), "" );
-	static_assert( sizeof( EaxReverbEffect ) >= sizeof( ChorusEffect ), "" );
-	static_assert( sizeof( EaxReverbEffect ) >= sizeof( DistortionEffect ), "" );
-	static_assert( sizeof( EaxReverbEffect ) >= sizeof( EchoEffect ), "" );
 
 	static constexpr auto MAX_EFFECT_SIZE = sizeof( EaxReverbEffect );
 
@@ -60,18 +57,6 @@ public:
 			return new( AllocEntry( src, AL_EFFECT_EAXREVERB ) )EaxReverbEffect();
 		}
 		return new( AllocEntry( src, AL_EFFECT_REVERB ) )StandardReverbEffect();
-	}
-
-	ChorusEffect *NewChorusEffect( const src_t *src ) {
-		return new( AllocEntry( src, AL_EFFECT_CHORUS ) )ChorusEffect();
-	}
-
-	DistortionEffect *NewDistortionEffect( const src_t *src ) {
-		return new( AllocEntry( src, AL_EFFECT_DISTORTION ) )DistortionEffect();
-	}
-
-	EchoEffect *NewEchoEffect( const src_t *src ) {
-		return new( AllocEntry( src, AL_EFFECT_ECHO ) )EchoEffect();
 	}
 
 	void DeleteEffect( Effect *effect );
