@@ -17,17 +17,31 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 	}
 
 	// If we have saved a path that is not perfect but good enough during attempts for bunny-hopping prediction
-	if( context->travelTimeForGoodEnoughPath < std::numeric_limits<int>::max() ) {
-		Assert( !context->goodEnoughPath.empty() );
-		context->predictedMovementActions.clear();
-		for( const auto &action: context->goodEnoughPath ) {
-			context->predictedMovementActions.push_back( action );
+	if( !context->goodEnoughPath.empty() || !context->lastResortPath.empty() ) {
+		const char *tag;
+		MovementPredictionContext::PredictedPath *path;
+		if( !context->goodEnoughPath.empty() ) {
+			path = &context->goodEnoughPath;
+			tag = "a good enough";
+		} else {
+			path = &context->lastResortPath;
+			tag = "a last resort";
 		}
+
+		assert( !path->empty() );
+
+		context->predictedMovementActions.clear();
+		for( const auto &pathElem : *path ) {
+			context->predictedMovementActions.push_back( pathElem );
+		}
+
 		context->goodEnoughPath.clear();
+		context->lastResortPath.clear();
+
 		context->isCompleted = true;
 		// Prevent saving the current (fallback) action on stack... TODO: this should be done more explicitly
 		context->isTruncated = true;
-		Debug( "Using a good enough path built during this planning session\n" );
+		Debug( "Using %s path built during this planning session\n", tag );
 		Debug( "The good enough path starts with %s\n", context->predictedMovementActions.front().action->Name() );
 		return;
 	}

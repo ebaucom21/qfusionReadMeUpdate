@@ -113,12 +113,17 @@ private:
 			  movementStatesMask( 0 ) {}
 	};
 
-	wsw::StaticVector<PredictedMovementAction, MAX_PREDICTED_STATES> predictedMovementActions;
+	using PredictedPath = wsw::StaticVector<PredictedMovementAction, MAX_PREDICTED_STATES>;
+
+	PredictedPath predictedMovementActions;
 	wsw::StaticVector<BotMovementState, MAX_PREDICTED_STATES> botMovementStatesStack;
 	wsw::StaticVector<player_state_t, MAX_PREDICTED_STATES> playerStatesStack;
 
-	wsw::StaticVector<PredictedMovementAction, MAX_PREDICTED_STATES> goodEnoughPath;
+	PredictedPath goodEnoughPath;
 	int travelTimeForGoodEnoughPath { std::numeric_limits<int>::max() };
+
+	PredictedPath lastResortPath;
+	unsigned lastResortPathPenalty { std::numeric_limits<unsigned>::max() };
 
 	template <typename T, unsigned N>
 	class CachesStack
@@ -355,6 +360,7 @@ public:
 	inline unsigned MillisAheadForFrameStart( unsigned frameIndex ) const;
 
 	void CompleteOrSaveGoodEnoughPath( int minTravelTimeSoFar, unsigned penaltyMillis = 0 );
+	void SaveLastResortPath( unsigned penaltyMillis );
 
 	class BaseMovementAction *GetCachedActionAndRecordForCurrTime( MovementActionRecord *record_ );
 

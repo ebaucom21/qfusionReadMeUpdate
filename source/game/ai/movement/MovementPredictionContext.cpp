@@ -444,6 +444,23 @@ void MovementPredictionContext::NearbyTriggersCache::EnsureValidForBounds( const
 	}
 }
 
+void MovementPredictionContext::SaveLastResortPath( unsigned penaltyMillis ) {
+	if( lastResortPathPenalty <= penaltyMillis ) {
+		return;
+	}
+
+	// Sanity check
+	if( predictedMovementActions.size() < 4 ) {
+		return;
+	}
+
+	lastResortPathPenalty = penaltyMillis;
+	lastResortPath.clear();
+	for( const auto &pathElem: predictedMovementActions ) {
+		new( lastResortPath.unsafe_grow_back() )PredictedMovementAction( pathElem );
+	}
+}
+
 void MovementPredictionContext::CompleteOrSaveGoodEnoughPath( int minTravelTimeSoFar, unsigned penaltyMillis ) {
 	// Sanity check
 	assert( penaltyMillis < 30000 );
@@ -915,6 +932,9 @@ void MovementPredictionContext::BuildPlan() {
 
 	this->goodEnoughPath.clear();
 	this->travelTimeForGoodEnoughPath = std::numeric_limits<int>::max();
+
+	this->lastResortPath.clear();
+	this->lastResortPathPenalty = std::numeric_limits<unsigned>::max();
 
 #ifndef CHECK_INFINITE_NEXT_STEP_LOOPS
 	for(;; ) {

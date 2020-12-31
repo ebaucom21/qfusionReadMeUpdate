@@ -65,10 +65,9 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( Context *context ) {
 		// This might be another router woe as many rejected trajectories seem legit.
 		// We have decided to save the trajectory if there was an advancement applying a huge penalty.
 		if( minTravelTimeToNavTargetSoFar && minTravelTimeToNavTargetSoFar < travelTimeAtSequenceStart ) {
-			CompleteOrSaveGoodEnoughPath( context, 9999 );
-		} else {
-			context->SetPendingRollback();
+			context->SaveLastResortPath( sequencePathPenalty );
 		}
+		context->SetPendingRollback();
 		return false;
 	}
 
