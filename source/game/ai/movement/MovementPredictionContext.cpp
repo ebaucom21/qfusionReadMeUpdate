@@ -444,6 +444,30 @@ void MovementPredictionContext::NearbyTriggersCache::EnsureValidForBounds( const
 	}
 }
 
+void MovementPredictionContext::SaveGoodEnoughPath( unsigned advancement, unsigned penaltyMillis ) {
+	if( penaltyMillis ) {
+		if( penaltyMillis >= goodEnoughPathPenalty ) {
+			return;
+		}
+	} else {
+		if( advancement <= goodEnoughPathAdvancement ) {
+			return;
+		}
+	}
+
+	// Sanity check
+	if( predictedMovementActions.size() < 4 ) {
+		return;
+	}
+
+	goodEnoughPathPenalty = penaltyMillis;
+	goodEnoughPathAdvancement = advancement;
+	goodEnoughPath.clear();
+	for( const auto &pathElem: predictedMovementActions ) {
+		new( goodEnoughPath.unsafe_grow_back() )PredictedMovementAction( pathElem );
+	}
+}
+
 void MovementPredictionContext::SaveLastResortPath( unsigned penaltyMillis ) {
 	if( lastResortPathPenalty <= penaltyMillis ) {
 		return;
@@ -459,59 +483,6 @@ void MovementPredictionContext::SaveLastResortPath( unsigned penaltyMillis ) {
 	for( const auto &pathElem: predictedMovementActions ) {
 		new( lastResortPath.unsafe_grow_back() )PredictedMovementAction( pathElem );
 	}
-}
-
-void MovementPredictionContext::CompleteOrSaveGoodEnoughPath( int minTravelTimeSoFar, unsigned penaltyMillis ) {
-	// Sanity check
-	assert( penaltyMillis < 30000 );
-
-	constexpr const char *tag = "MovementPredictionContext::CompleteOrSaveGoodEnoughPath()";
-
-	// We supply millis for convenience but convert to centis in order to match AAS time units
-	int travelTimeToTarget = TravelTimeToNavTarget() + penaltyMillis / 10;
-	if( !penaltyMillis && travelTimeToTarget <= minTravelTimeSoFar ) {
-		Debug( "%s: Stopping prediction\n", tag );
-		isCompleted = true;
-		return;
-	}
-
-	// Check whether we have already saved a better "good enough" path
-	if( travelTimeToTarget > travelTimeForGoodEnoughPath ) {
-		Debug( "%s: The travel time to nav target is worse than known one\n", tag );
-		SetPendingRollback();
-		return;
-	}
-
-	// Sanity check
-	if( predictedMovementActions.size() < 3 ) {
-		Debug( "%s: Insufficient path size\n", tag );
-		SetPendingRollback();
-		return;
-	}
-
-	// Take the second last action as a last saved one.
-	// Properties of the last action of stack may be incomplete to the moment of this call
-	const float *const startOrigin = predictedMovementActions[0].entityPhysicsState.Origin();
-	Assert( topOfStackIndex + 1 == predictedMovementActions.size() );
-	const float *const endOrigin = predictedMovementActions[topOfStackIndex - 1].entityPhysicsState.Origin();
-
-	// Sanity check
-	if( DistanceSquared( startOrigin, endOrigin ) < SQUARE( 72 ) ) {
-		Debug( "%s: Insufficient origin delta for path\n", tag );
-		SetPendingRollback();
-		return;
-	}
-
-	goodEnoughPath.clear();
-
-	// TODO: Copy only few entries? This would make looking at a built path impossible though.
-	for( const PredictedMovementAction &action: predictedMovementActions ) {
-		new( goodEnoughPath.unsafe_grow_back() )PredictedMovementAction( action );
-	}
-
-	Debug( "%s: Saved a good enough path for action %s\n", tag, goodEnoughPath.front().action->Name() );
-	travelTimeForGoodEnoughPath = travelTimeToTarget;
-	SetPendingRollback();
 }
 
 void MovementPredictionContext::SetupStackForStep() {
@@ -931,7 +902,8 @@ void MovementPredictionContext::BuildPlan() {
 	this->shouldRollback = false;
 
 	this->goodEnoughPath.clear();
-	this->travelTimeForGoodEnoughPath = std::numeric_limits<int>::max();
+	this->goodEnoughPathPenalty = std::numeric_limits<unsigned>::max();
+	this->goodEnoughPathAdvancement = 0;
 
 	this->lastResortPath.clear();
 	this->lastResortPathPenalty = std::numeric_limits<unsigned>::max();

@@ -410,11 +410,6 @@ inline bool BunnyHopAction::WasOnGroundThisFrame( const Context *context ) const
 	return context->movementState->entityPhysicsState.GroundEntity() || context->frameEvents.hasJumped;
 }
 
-void BunnyHopAction::CompleteOrSaveGoodEnoughPath( Context *context, unsigned additionalPenalty ) {
-	// Let the penalty be a sum of an accumulated path penalty and a penalty specified at invocation of this method.
-	context->CompleteOrSaveGoodEnoughPath( minTravelTimeToNavTargetSoFar, additionalPenalty + sequencePathPenalty );
-}
-
 bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( Context *context,
 														 int currTravelTimeToTarget,
 														 int groundedAreaNum ) {
@@ -607,20 +602,45 @@ void BunnyHopAction::CheckPredictionStepResults( Context *context ) {
 	}
 
 	if( WasOnGroundThisFrame( context ) ) {
-		// Advancing to a target is sufficient for termination.
-		// Note that if the current travel time is worse than the minimal one
-		// during the prediction sequence (but still is better than the start one) a penalty is applied.
-		if( currTravelTimeToTarget < travelTimeAtSequenceStart ) {
-			// Apply an additional penalty for an insufficient advancement
-			int advancement = travelTimeAtSequenceStart - currTravelTimeToTarget;
-			unsigned penalty = 0;
-			if( advancement < 30 ) {
-				penalty = (unsigned)( 30 - advancement );
+		// If there was an advancement from the initial position
+		if( currTravelTimeToTarget < travelTimeAtSequenceStart || !travelTimeAtSequenceStart ) {
+			// If we're currently at the best position
+			if( currTravelTimeToTarget == minTravelTimeToNavTargetSoFar ) {
+				// Check for completion if we have already made a hop before
+				if( didTheLatchedHop ) {
+					// Try a "direct" completion if we've landed some sufficient units ahead of the last hop origin
+					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > SQUARE( 48 ) ) {
+						if( !sequencePathPenalty ) {
+							context->isCompleted = true;
+							return;
+						}
+					}
+				} else {
+					// Set the latched hop state if it's needed
+					if( !hasALatchedHop ) {
+						hasALatchedHop = true;
+						latchedHopOrigin.Set( newEntityPhysicsState.Origin() );
+						// Save an "good enough" path that is going to be used if the direct completion fails
+						unsigned advancement = 0;
+						if( travelTimeAtSequenceStart ) {
+							advancement = travelTimeAtSequenceStart - currTravelTimeToTarget;
+						}
+						context->SaveGoodEnoughPath( advancement, sequencePathPenalty );
+					}
+				}
 			}
-			// Remember that this call checks itself whether the current travel time
-			// is the minimal one so far and applies a penalty if needed on its own.
-			CompleteOrSaveGoodEnoughPath( context, penalty );
-			return;
+		}
+	} else {
+		if( !didTheLatchedHop ) {
+			if( hasALatchedHop ) {
+				didTheLatchedHop = true;
+			}
+		} else {
+			// Don't waste further cycles (the completion condition won't hold)
+			if( sequencePathPenalty ) {
+				context->SetPendingRollback();
+				return;
+			}
 		}
 	}
 
@@ -645,7 +665,8 @@ void BunnyHopAction::OnApplicationSequenceStarted( Context *context ) {
 
 	travelTimeAtSequenceStart = 0;
 	reachAtSequenceStart = 0;
-	groundedAreaAtSequenceStart = context->CurrGroundedAasAreaNum();
+
+	latchedHopOrigin.Set( 0, 0, 0 );
 
 	sequencePathPenalty = 0;
 
@@ -668,18 +689,14 @@ void BunnyHopAction::OnApplicationSequenceStarted( Context *context ) {
 		}
 	}
 
-	const float heightOverGround = entityPhysicsState.HeightOverGround();
-	if( std::isfinite( heightOverGround ) ) {
-		groundZAtSequenceStart = originAtSequenceStart.Z() - heightOverGround + playerbox_stand_mins[2];
-	} else {
-		groundZAtSequenceStart = std::numeric_limits<float>::infinity();
-	}
-
 	currentSpeedLossSequentialMillis = 0;
 	currentUnreachableTargetSequentialMillis = 0;
 
 	hasEnteredNavTargetArea = false;
 	hasTouchedNavTarget = false;
+
+	hasALatchedHop = false;
+	didTheLatchedHop = false;
 }
 
 void BunnyHopAction::OnApplicationSequenceStopped( Context *context,

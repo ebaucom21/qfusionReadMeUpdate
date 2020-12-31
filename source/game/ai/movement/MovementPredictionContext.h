@@ -120,7 +120,8 @@ private:
 	wsw::StaticVector<player_state_t, MAX_PREDICTED_STATES> playerStatesStack;
 
 	PredictedPath goodEnoughPath;
-	int travelTimeForGoodEnoughPath { std::numeric_limits<int>::max() };
+	unsigned goodEnoughPathAdvancement { 0 };
+	unsigned goodEnoughPathPenalty { std::numeric_limits<unsigned>::max() };
 
 	PredictedPath lastResortPath;
 	unsigned lastResortPathPenalty { std::numeric_limits<unsigned>::max() };
@@ -359,7 +360,7 @@ public:
 	inline void SaveSuggestedActionForNextFrame( BaseMovementAction *action );
 	inline unsigned MillisAheadForFrameStart( unsigned frameIndex ) const;
 
-	void CompleteOrSaveGoodEnoughPath( int minTravelTimeSoFar, unsigned penaltyMillis = 0 );
+	void SaveGoodEnoughPath( unsigned advancement, unsigned penaltyMillis );
 	void SaveLastResortPath( unsigned penaltyMillis );
 
 	class BaseMovementAction *GetCachedActionAndRecordForCurrTime( MovementActionRecord *record_ );

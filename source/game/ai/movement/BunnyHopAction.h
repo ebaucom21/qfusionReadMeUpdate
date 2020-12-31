@@ -8,8 +8,9 @@ class BunnyHopAction : public BaseMovementAction {
 protected:
 	int travelTimeAtSequenceStart { 0 };
 	int reachAtSequenceStart { 0 };
-	int groundedAreaAtSequenceStart { 0 };
-	float groundZAtSequenceStart { 0.0f };
+
+	Vec3 latchedHopOrigin { 0, 0, 0 };
+
 	// Best results so far achieved in the action application sequence
 	int minTravelTimeToNavTargetSoFar { 0 };
 	int minTravelTimeAreaNumSoFar { 0 };
@@ -47,6 +48,9 @@ protected:
 	bool hasEnteredNavTargetArea { false };
 	bool hasTouchedNavTarget { false };
 
+	bool hasALatchedHop { false };
+	bool didTheLatchedHop { false };
+
 	void SetupCommonBunnyHopInput( MovementPredictionContext *context );
 	// TODO: Mark as virtual in base class and mark as final here to avoid a warning about hiding parent member?
 	bool GenericCheckIsActionEnabled( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
@@ -79,8 +83,6 @@ protected:
 		assert( penalty < 30000 );
 		sequencePathPenalty = std::max( sequencePathPenalty, penalty );
 	}
-
-	void CompleteOrSaveGoodEnoughPath( MovementPredictionContext *context, unsigned additionalPenalty = 0 );
 
 	bool CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum );
 public:
