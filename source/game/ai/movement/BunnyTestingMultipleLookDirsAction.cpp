@@ -1,6 +1,8 @@
 #include "BunnyTestingMultipleLookDirsAction.h"
 #include "MovementLocal.h"
 
+#include "../../../../third-party/gcem/include/gcem.hpp"
+
 void BunnyTestingMultipleLookDirsAction::BeforePlanning() {
 	BunnyHopAction::BeforePlanning();
 
@@ -158,6 +160,13 @@ public:
 
 static DirRotatorsCache dirRotatorsCache;
 
+static inline bool areDirsSimilar( const Vec3 &__restrict a, const Vec3 &__restrict b ) {
+	assert( std::fabs( a.SquaredLength() - 1.0f ) < 0.1f );
+	assert( std::fabs( b.SquaredLength() - 1.0f ) < 0.1f );
+	constexpr const float dotThreshold = gcem::cos( DEG2RAD( 3.0f ) );
+	return a.Dot( b ) > dotThreshold;
+}
+
 void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 	// TODO: See notes in the method javadoc about this very basic approach
 
@@ -178,19 +187,14 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 		assert( std::fabs( lessBendingDir.SquaredLength() - 1.0f ) < 0.1f );
 	}
 
-	// The threshold is approximately a cosine of 3 degrees
-	constexpr float kDotThreshold = 0.9987f;
-
 	// First prune similar suggested areas.
 	// (a code that fills suggested areas may test similarity
 	// for its own optimization purposes but it is not mandatory).
 	for( size_t baseDirIndex = 0; baseDirIndex < suggestedLookDirs.size() - 1u; ++baseDirIndex ) {
 		const Vec3 &__restrict baseTestedDir = cachedLessBendingDirs[baseDirIndex];
-		assert( std::fabs( baseTestedDir.SquaredLength() - 1.0f ) < 0.1f );
 		for( size_t nextDirIndex = baseDirIndex + 1; nextDirIndex < suggestedLookDirs.size(); ) {
 			const Vec3 &__restrict nextTestedDir = cachedLessBendingDirs[nextDirIndex];
-			assert( std::fabs( nextTestedDir.SquaredLength() - 1.0f ) < 0.1f );
-			if( baseTestedDir.Dot( nextTestedDir ) > kDotThreshold ) {
+			if( !areDirsSimilar( baseTestedDir, nextTestedDir ) ) {
 				nextDirIndex++;
 				continue;
 			}
@@ -209,26 +213,24 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 
 	// Actually, derive more dirs from saved dirs
 
+	assert( !suggestedLookDirs.empty() );
 	// Save this fixed value (as the dirs array is going to grow)
 	const size_t lastBaseDirIndex = suggestedLookDirs.size() - 1u;
 	// For every base dir from kept given ones
 	for( size_t baseDirIndex = 0; baseDirIndex <= lastBaseDirIndex; ++baseDirIndex ) {
 		const auto &__restrict base = suggestedLookDirs[baseDirIndex];
 		const auto &__restrict baseDir = base.dir;
-		assert( std::fabs( baseDir.SquaredLength() - 1.0f ) < 0.1f );
 		const auto &__restrict baseTestedDir = cachedLessBendingDirs[baseDirIndex];
-		assert( std::fabs( baseTestedDir.SquaredLength() - 1.0f ) < 0.1f );
 		// Produce a rotated dir for every possible rotation
 		for( const auto &rotator: dirRotatorsCache ) {
 			Vec3 rotated( rotator.rotate( baseDir ) );
-			assert( std::fabs( rotated.SquaredLength() - 1.0f ) < 0.1f );
 			Vec3 lessBendingRotated( rotated );
 			lessBendingRotated.Z() *= Z_NO_BEND_SCALE;
 			lessBendingRotated *= Q_RSqrt( lessBendingRotated.SquaredLength() );
 			// Check whether there is a similar dir using comparisons of respective "less bending" dirs
 			bool hasASimilarDir = false;
 			for( const auto &__restrict lessBendingExisting: cachedLessBendingDirs ) {
-				if( lessBendingRotated.Dot( lessBendingExisting ) <= kDotThreshold ) {
+				if( areDirsSimilar( lessBendingRotated, lessBendingExisting ) ) {
 					hasASimilarDir = true;
 					break;
 				}
