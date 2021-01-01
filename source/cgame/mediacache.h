@@ -69,16 +69,22 @@ public:
 		CachedFormatBasedSound( MediaCache *parent, const char *format, int value );
 	};
 
+	class CachedFormatBasedMaterial : public CachedFormatBasedHandle<shader_s> {
+		friend class MediaCache;
+		CachedFormatBasedMaterial( MediaCache *parent, const char *format, int value );
+	};
+
 	void registerSounds();
 	void registerModels();
 	void registerMaterials();
 private:
 	// TODO: Should we just keep precached and non-precached linked handles in different lists?
-	CachedSound *m_sounds {nullptr };
+	CachedSound *m_sounds { nullptr };
 	CachedModel *m_models { nullptr };
 	CachedMaterial *m_materials { nullptr };
 
-	CachedFormatBasedSound *m_formatBasedSounds {nullptr };
+	CachedFormatBasedSound *m_formatBasedSounds { nullptr };
+	CachedFormatBasedMaterial *m_formatBasedMaterials { nullptr };
 
 	template <typename T>
 	void link( T *item, T **head ) {
@@ -90,9 +96,12 @@ private:
 	void registerSound( CachedFormatBasedSound *sound );
 	void registerModel( CachedModel *model );
 	void registerMaterial( CachedMaterial *material );
+	void registerMaterial( CachedFormatBasedMaterial *material );
 
 	static constexpr const char *kRicFormat = "sounds/weapons/ric%d";
 	static constexpr const char *kWeaponHit2Format = "sounds/misc/hit_plus_%d";
+	static constexpr const char *kCrosshairFormat = "gfx/hud/crosshair%d";
+	static constexpr const char *kStrongCrosshairFormat = "gfx/hud/strong_crosshair%d";
 public:
 	MediaCache();
 
@@ -198,6 +207,24 @@ public:
 	CachedModel modElectroBoltWallHit { this, wsw::StringView( PATH_ELECTROBLAST_IMPACT_MODEL ) };
 	CachedModel modInstagunWallHit { this, wsw::StringView( PATH_INSTABLAST_IMPACT_MODEL ) };
 	CachedModel modLasergunWallExplo { this, wsw::StringView( PATH_LASERGUN_IMPACT_MODEL ) };
+
+	CachedFormatBasedMaterial shaderCrosshair[9] {
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 1 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 2 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 3 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 4 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 5 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 6 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 7 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 8 },
+		CachedFormatBasedMaterial { this, kCrosshairFormat, 9 }
+	};
+
+	CachedFormatBasedMaterial shaderStrongCrosshair[3] {
+		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 1 },
+		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 2 },
+		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 3 }
+	};
 
 	CachedMaterial shaderParticle { this, wsw::StringView( "particle" ) };
 

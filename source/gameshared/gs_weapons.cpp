@@ -367,10 +367,7 @@ found:
 	return weap_chosen;
 }
 
-/*
-* GS_FiredefForPlayerState
-*/
-firedef_t *GS_FiredefForPlayerState( player_state_t *playerState, int checkweapon ) {
+const firedef_t *GS_FiredefForPlayerState( const player_state_t *playerState, int checkweapon ) {
 	gs_weapon_definition_t *weapondef;
 
 	weapondef = GS_GetWeaponDef( checkweapon );
@@ -387,7 +384,7 @@ firedef_t *GS_FiredefForPlayerState( player_state_t *playerState, int checkweapo
 * GS_CheckAmmoInWeapon
 */
 bool GS_CheckAmmoInWeapon( player_state_t *playerState, int checkweapon ) {
-	firedef_t *firedef = GS_FiredefForPlayerState( playerState, checkweapon );
+	const firedef_t *firedef = GS_FiredefForPlayerState( playerState, checkweapon );
 
 	if( checkweapon != WEAP_NONE && !playerState->inventory[checkweapon] ) {
 		return false;
@@ -404,7 +401,7 @@ bool GS_CheckAmmoInWeapon( player_state_t *playerState, int checkweapon ) {
 * GS_ThinkPlayerWeapon
 */
 int GS_ThinkPlayerWeapon( player_state_t *playerState, int buttons, int msecs, int timeDelta ) {
-	firedef_t *firedef;
+	const firedef_t *firedef;
 	bool refire = false;
 
 	assert( playerState->stats[STAT_PENDING_WEAPON] >= 0 && playerState->stats[STAT_PENDING_WEAPON] < WEAP_TOTAL );

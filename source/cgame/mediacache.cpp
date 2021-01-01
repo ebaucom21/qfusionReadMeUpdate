@@ -44,9 +44,14 @@ template <typename T>
 MediaCache::CachedFormatBasedHandle<T>::CachedFormatBasedHandle( const char *format, int value )
 	: m_format( format ), m_value( value ) {}
 
-MediaCache::CachedFormatBasedSound::CachedFormatBasedSound( MediaCache *parent, const char *format, int index )
-	: MediaCache::CachedFormatBasedHandle<sfx_s>( format, index ) {
+MediaCache::CachedFormatBasedSound::CachedFormatBasedSound( MediaCache *parent, const char *format, int value )
+	: MediaCache::CachedFormatBasedHandle<sfx_s>( format, value ) {
 	parent->link( this, &parent->m_formatBasedSounds );
+}
+
+MediaCache::CachedFormatBasedMaterial::CachedFormatBasedMaterial( MediaCache *parent, const char *format, int value )
+	: MediaCache::CachedFormatBasedHandle<shader_s>( format, value ) {
+	parent->link( this, &parent->m_formatBasedMaterials );
 }
 
 // Make sure it's defined here so the inline setup of fields does not get replicated over inclusion places
@@ -69,6 +74,10 @@ void MediaCache::registerModels() {
 
 void MediaCache::registerMaterials() {
 	for( CachedMaterial *material = m_materials; material; material = (CachedMaterial *)material->m_next ) {
+		registerMaterial( material );
+	}
+
+	for( auto *material = m_formatBasedMaterials; material; material = (CachedFormatBasedMaterial *)material->m_next ) {
 		registerMaterial( material );
 	}
 }
@@ -99,6 +108,14 @@ void MediaCache::registerMaterial( CachedMaterial *material ) {
 	if( !material->m_handle ) {
 		assert( material->m_name.isZeroTerminated() );
 		material->m_handle = R_RegisterPic( material->m_name.data() );
+	}
+}
+
+void MediaCache::registerMaterial( CachedFormatBasedMaterial *material ) {
+	if( !material->m_handle ) {
+		char buffer[1024];
+		char *name = va_r( buffer, sizeof( buffer ), material->m_format, material->m_value );
+		material->m_handle = R_RegisterPic( name );
 	}
 }
 

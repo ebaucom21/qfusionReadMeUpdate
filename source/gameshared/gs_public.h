@@ -1086,7 +1086,7 @@ gs_weapon_definition_t *GS_GetWeaponDefExt( int weapon, bool race );
 void GS_InitWeapons( void );
 int GS_SelectBestWeapon( player_state_t *playerState );
 bool GS_CheckAmmoInWeapon( player_state_t *playerState, int checkweapon );
-firedef_t *GS_FiredefForPlayerState( player_state_t *playerState, int checkweapon );
+const firedef_t *GS_FiredefForPlayerState( const player_state_t *playerState, int checkweapon );
 int GS_ThinkPlayerWeapon( player_state_t *playerState, int buttons, int msecs, int timeDelta );
 trace_t *GS_TraceBullet( trace_t    *trace, vec3_t start, vec3_t dir, float r, float u, int range, int ignore, int timeDelta );
 void GS_TraceLaserBeam( trace_t *trace, vec3_t origin, vec3_t angles, float range, int ignore, int timeDelta, void ( *impact )( trace_t *tr, vec3_t dir ) );

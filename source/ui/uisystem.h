@@ -58,6 +58,9 @@ public:
 	virtual void setScoreboardShown( bool shown ) = 0;
 	[[nodiscard]]
 	virtual bool isShowingScoreboard() const = 0;
+
+	[[nodiscard]]
+	virtual bool isShown() const = 0;
 };
 
 }

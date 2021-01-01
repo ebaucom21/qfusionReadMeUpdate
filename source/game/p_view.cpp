@@ -363,7 +363,7 @@ static void G_SetClientEffects( edict_t *ent ) {
 	}
 
 	if( ent->s.weapon ) {
-		firedef_t *firedef = GS_FiredefForPlayerState( &client->ps, ent->s.weapon );
+		const firedef_t *firedef = GS_FiredefForPlayerState( &client->ps, ent->s.weapon );
 		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) {
 			ent->s.effects |= EF_STRONG_WEAPON;
 		}

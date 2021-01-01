@@ -50,7 +50,6 @@ cvar_t *cg_weaponlist;
 cvar_t *cg_crosshair;
 cvar_t *cg_crosshair_size;
 cvar_t *cg_crosshair_color;
-cvar_t *cg_crosshair_font;
 
 cvar_t *cg_crosshair_strong;
 cvar_t *cg_crosshair_strong_size;
@@ -262,15 +261,14 @@ void CG_ScreenInit( void ) {
 	cg_weaponlist =     Cvar_Get( "cg_weaponlist", "1", CVAR_ARCHIVE );
 
 	cg_crosshair =      Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
-	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "24", CVAR_ARCHIVE );
+	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "32", CVAR_ARCHIVE );
 	cg_crosshair_color =    Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
-	cg_crosshair_font =     Cvar_Get( "cg_crosshair_font", "Warsow Crosshairs", CVAR_ARCHIVE );
 	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
 	cg_crosshair_color->modified = true;
 	cg_crosshair_damage_color->modified = false;
 
 	cg_crosshair_strong =       Cvar_Get( "cg_crosshair_strong", "0", CVAR_ARCHIVE );
-	cg_crosshair_strong_size =  Cvar_Get( "cg_crosshair_strong_size", "24", CVAR_ARCHIVE );
+	cg_crosshair_strong_size =  Cvar_Get( "cg_crosshair_strong_size", "64", CVAR_ARCHIVE );
 	cg_crosshair_strong_color = Cvar_Get( "cg_crosshair_strong_color", "255 255 255", CVAR_ARCHIVE );
 	cg_crosshair_strong_color->modified = true;
 
@@ -361,51 +359,18 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
 	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
 }
 
-/*
-* CG_CrosshairDimensions
-*/
-static int CG_CrosshairDimensions( int x, int y, int size, int align, int *sx, int *sy ) {
-	// odd sizes look sharper
-	size = ( int )ceilf( size * (float)( cgs.vidHeight / 600.0f ) ) | 1;
-	*sx = CG_HorizontalAlignForWidth( x, align, size );
-	*sy = CG_VerticalAlignForHeight( y, align, size );
-	return size;
-}
+static vec4_t chColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+static vec4_t chColorStrong = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-/*
-* CG_DrawCrosshairChar
-*/
-static void CG_DrawCrosshairChar( int x, int y, int size, int num, const vec_t *color ) {
-	struct qfontface_s *font = SCR_RegisterSpecialFont( cg_crosshair_font->string, QFONT_STYLE_NONE, size );
-	if( !font ) {
-		Cvar_Set( cg_crosshair_font->name, cg_crosshair_font->dvalue );
-		font = SCR_RegisterSpecialFont( cg_crosshair_font->string, QFONT_STYLE_NONE, size );
-	}
-
-	wchar_t blackChar, colorChar;
-	if( num ) {
-		blackChar = 'A' - 1 + num;
-		colorChar = 'a' - 1 + num;
-	} else {
-		blackChar = '?';
-		colorChar = '!';
-	}
-
-	SCR_DrawRawChar( x, y, blackChar, font, colorBlack );
-	SCR_DrawRawChar( x, y, colorChar, font, color );
-}
+static constexpr int kMaxCrosshairValue = 10;
+static constexpr int kMaxStrongCrosshairValue = 3;
 
 /*
 * CG_DrawCrosshair
 */
-void CG_DrawCrosshair( int x, int y, int align ) {
-	static vec4_t chColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	static vec4_t chColorStrong = { 1.0f, 1.0f, 1.0f, 1.0f };
-	int rgbcolor;
-	int sx, sy, size;
-
+void CG_DrawCrosshair() {
 	if( cg_crosshair->modified ) {
-		if( cg_crosshair->integer > 26 || cg_crosshair->integer < 0 ) {
+		if( cg_crosshair->integer > kMaxCrosshairValue || cg_crosshair->integer < 0 ) {
 			Cvar_Set( cg_crosshair->name, "0" );
 		}
 		cg_crosshair->modified = false;
@@ -421,6 +386,7 @@ void CG_DrawCrosshair( int x, int y, int align ) {
 	}
 
 	if( cg_crosshair_color->modified || cg_crosshair_damage_color->modified ) {
+		int rgbcolor;
 		if( cg_crosshair_damage_color->modified ) {
 			if( scr_damagetime_off <= 0 ) {
 				scr_damagetime_off = 300;
@@ -441,7 +407,7 @@ void CG_DrawCrosshair( int x, int y, int align ) {
 	}
 
 	if( cg_crosshair_strong->modified ) {
-		if( cg_crosshair_strong->integer > 26 || cg_crosshair_strong->integer < 0 ) {
+		if( cg_crosshair_strong->integer > kMaxStrongCrosshairValue || cg_crosshair_strong->integer < 0 ) {
 			Cvar_Set( cg_crosshair_strong->name, "0" );
 		}
 		cg_crosshair_strong->modified = false;
@@ -457,6 +423,7 @@ void CG_DrawCrosshair( int x, int y, int align ) {
 	}
 
 	if( cg_crosshair_strong_color->modified || cg_crosshair_damage_color->modified ) {
+		int rgbcolor;
 		if( cg_crosshair_damage_color->modified ) {
 			rgbcolor = COM_ReadColorRGBString( cg_crosshair_damage_color->string );
 		} else {
@@ -473,17 +440,32 @@ void CG_DrawCrosshair( int x, int y, int align ) {
 		cg_crosshair_strong_color->modified = false;
 	}
 
+	const int x = cgs.vidWidth / 2;
+	const int y = cgs.vidHeight / 2;
+
+	const auto *playerState = &cg.predictFromPlayerState;
+
+	const firedef_s *firedef = nullptr;
 	if( cg_crosshair_strong->integer && cg_crosshair_strong_size->integer ) {
-		firedef_t *firedef = GS_FiredefForPlayerState( &cg.predictedPlayerState, cg.predictedPlayerState.stats[STAT_WEAPON] );
-		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) { // strong
-			size = CG_CrosshairDimensions( x, y, cg_crosshair_strong_size->integer, align, &sx, &sy );
-			CG_DrawCrosshairChar( sx, sy, size, cg_crosshair_strong->integer, chColorStrong );
+		firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
+		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) {
+			const int dim = cg_crosshair_strong_size->integer;
+			const int shift = -dim / 2;
+			const shader_s *pic = cgs.media.shaderStrongCrosshair[cg_crosshair_strong->integer - 1];
+			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColorStrong, pic );
 		}
 	}
 
-	if( cg_crosshair->integer && cg_crosshair_size->integer && ( cg.predictedPlayerState.stats[STAT_WEAPON] != WEAP_NONE ) ) {
-		size = CG_CrosshairDimensions( x, y, cg_crosshair_size->integer, align, &sx, &sy );
-		CG_DrawCrosshairChar( sx, sy, size, cg_crosshair->integer, chColor );
+	if( cg_crosshair->integer && cg_crosshair_size->integer && playerState->stats[STAT_WEAPON] != WEAP_NONE ) {
+		if( !firedef ) {
+			firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
+		}
+		if( firedef ) {
+			const int dim = cg_crosshair_size->integer;
+			const int shift = -dim / 2;
+			const shader_s *pic = cgs.media.shaderCrosshair[cg_crosshair->integer - 1];
+			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColor, pic );
+		}
 	}
 }
 

@@ -65,6 +65,13 @@ void CG_DrawHUD() {
 		// TODO...
 		hud->modified = false;
 	}
+
+	// TODO: Does it work for chasers?
+	if( cg.predictedPlayerState.pmove.pm_type == PM_NORMAL ) {
+		if( !wsw::ui::UISystem::instance()->isShown() ) {
+			CG_DrawCrosshair();
+		}
+	}
 }
 
 bool CG_IsSpectator() {

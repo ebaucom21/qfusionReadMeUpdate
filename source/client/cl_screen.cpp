@@ -74,13 +74,6 @@ qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size 
 }
 
 /*
-* SCR_RegisterSpecialFont
-*/
-qfontface_t *SCR_RegisterSpecialFont( const char *family, int style, unsigned int size ) {
-	return FTLIB_RegisterFont( family, NULL, style, size );
-}
-
-/*
 * SCR_RegisterConsoleFont
 */
 static void SCR_RegisterConsoleFont( void ) {

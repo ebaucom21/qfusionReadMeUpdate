@@ -88,6 +88,9 @@ public:
 	bool isShowingScoreboard() const override;
 	void setScoreboardShown( bool shown ) override;
 
+	[[nodiscard]]
+	bool isShown() const override;
+
 	void enterUIRenderingMode();
 	void leaveUIRenderingMode();
 
@@ -1285,6 +1288,10 @@ bool QtUISystem::isShowingScoreboard() const {
 
 void QtUISystem::setScoreboardShown( bool shown ) {
 	m_shouldShowScoreboard = shown;
+}
+
+bool QtUISystem::isShown() const {
+	return m_isValidAndReady && ( m_activeMenuMask || m_isShowingScoreboard );
 }
 
 }

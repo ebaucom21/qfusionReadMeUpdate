@@ -545,7 +545,7 @@ void CG_DrawHUD();
 void CG_LoadingString( const char *str );
 bool CG_LoadingItemName( const char *str );
 
-void CG_DrawCrosshair( int x, int y, int align );
+void CG_DrawCrosshair();
 void CG_DrawKeyState( int x, int y, int w, int h, int align, const char *key );
 
 void CG_ScreenCrosshairDamageUpdate( void );
