@@ -373,7 +373,6 @@ typedef struct {
 	player_state_t predictFromPlayerState;
 
 	int lastWeapon;
-	unsigned int lastCrossWeapons; // bitfield containing the last weapons selected from the cross
 
 	mat3_t autorotateAxis;
 
@@ -583,7 +582,6 @@ extern cvar_t *cg_showitemtimers;
 void CG_SC_ResetObituaries( void );
 void CG_SC_Obituary( void );
 void CG_UpdateHUDPostDraw( void );
-void CG_ShowWeaponCross( void );
 void CG_ClearHUDInputState( void );
 void CG_ClearAwards( void );
 

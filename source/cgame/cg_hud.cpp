@@ -34,7 +34,6 @@ cvar_t *cg_showitemtimers;
 void CG_SC_ResetObituaries() {}
 void CG_SC_Obituary() {}
 void CG_UpdateHUDPostDraw() {}
-void CG_ShowWeaponCross() {}
 void CG_ClearHUDInputState() {}
 void CG_ClearAwards() {}
 
