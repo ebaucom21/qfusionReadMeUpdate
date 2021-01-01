@@ -347,6 +347,7 @@ static void plat_spawn_inside_trigger( edict_t *ent ) {
 	// middle trigger
 	//
 	trigger = G_Spawn();
+	trigger->classname = "trigger_platform";
 	trigger->s.team = ent->s.team;
 	trigger->touch = Touch_Plat_Center;
 	trigger->movetype = MOVETYPE_NONE;

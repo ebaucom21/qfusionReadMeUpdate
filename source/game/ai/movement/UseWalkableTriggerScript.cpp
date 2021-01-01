@@ -56,11 +56,11 @@ const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( Context *cont
 	Vec3 absMaxs( problemParams.Origin() );
 	absMins += playerbox_stand_mins;
 	absMaxs += playerbox_stand_maxs;
-	context->nearbyTriggersCache.EnsureValidForBounds( absMins.Data(), absMaxs.Data() );
+	context->nearbyTriggersCache.ensureValidForBounds( absMins.Data(), absMaxs.Data() );
 	return FindClosestToTargetTrigger( problemParams, context->nearbyTriggersCache );
 }
 
-typedef Context::NearbyTriggersCache NearbyTriggersCache;
+typedef wsw::ai::movement::NearbyTriggersCache NearbyTriggersCache;
 
 const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
 																   const NearbyTriggersCache &triggersCache ) {

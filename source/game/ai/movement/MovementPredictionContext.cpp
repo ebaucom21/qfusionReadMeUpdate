@@ -1,5 +1,6 @@
 #include "MovementPredictionContext.h"
 #include "MovementLocal.h"
+#include "../frameentitiescache.h"
 
 void MovementPredictionContext::NextReachNumAndTravelTimeToNavTarget( int *reachNum, int *travelTimeToNavTarget ) {
 	*reachNum = 0;
@@ -334,7 +335,7 @@ void MovementPredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, ve
 	// Make a local copy of the reference for faster access (avoid accessing shared library relocation table).
 	edict_t *const gameEdicts = game.edicts;
 
-	nearbyTriggersCache.EnsureValidForBounds( mins, maxs );
+	nearbyTriggersCache.ensureValidForBounds( mins, maxs );
 
 	for( int i = 0; i < nearbyTriggersCache.numJumppadEnts; ++i ) {
 		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.jumppadEntNums[i] ) ) {
@@ -373,73 +374,6 @@ void MovementPredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, ve
 					break;
 				}
 			}
-		}
-	}
-}
-
-void MovementPredictionContext::NearbyTriggersCache::EnsureValidForBounds( const vec3_t absMins,
-																			  const vec3_t absMaxs ) {
-	int i = 0;
-	for( i = 0; i < 3; ++i ) {
-		if ( lastComputedForMins[i] + 192.0f > absMins[i] ) {
-			break;
-		}
-		if ( lastComputedForMaxs[i] - 192.0f < absMaxs[i] ) {
-			break;
-		}
-	}
-
-	// If all coords have passed tests
-	if ( i == 3 ) {
-		return;
-	}
-
-	VectorSet( lastComputedForMins, -256, -256, -256 );
-	VectorSet( lastComputedForMaxs, +256, +256, +256 );
-	VectorAdd( absMins, lastComputedForMins, lastComputedForMins );
-	VectorAdd( absMaxs, lastComputedForMaxs, lastComputedForMaxs );
-
-	numTeleportEnts = numJumppadEnts = numPlatformEnts = numOtherEnts = 0;
-
-	constexpr auto maxEnts = 3 * MAX_GROUP_ENTITIES + MAX_OTHER_ENTITIES;
-	int entNums[maxEnts];
-	const int numEnts = GClip_AreaEdicts( lastComputedForMins, lastComputedForMaxs, entNums, maxEnts, AREA_TRIGGERS, 0 );
-
-	const edict_t *const gameEdicts = game.edicts;
-	for( i = 0; i < numEnts; ++i ) {
-		const edict_t *ent = gameEdicts + entNums[i];
-		if( !ent->r.inuse ) {
-			continue;
-		}
-
-		const char *classname = ent->classname;
-		if( !classname ) {
-			continue;
-		}
-
-		if( !Q_stricmp( "func_plat", classname ) ) {
-			if( numPlatformEnts != MAX_GROUP_ENTITIES ) {
-				platformEntNums[numPlatformEnts++] = (uint16_t)entNums[i];
-			}
-			continue;
-		}
-
-		if( !Q_stricmp( "trigger_push", classname ) ) {
-			if( numJumppadEnts != MAX_GROUP_ENTITIES ) {
-				jumppadEntNums[numJumppadEnts] = (uint16_t)entNums[i];
-			}
-			continue;
-		}
-
-		if( !Q_stricmp( "trigger_teleport", classname ) ) {
-			if( numTeleportEnts != MAX_GROUP_ENTITIES ) {
-				teleportEntNums[numTeleportEnts++] = (uint16_t)entNums[i];
-			}
-			continue;
-		}
-
-		if( numOtherEnts != MAX_OTHER_ENTITIES ) {
-			otherEntNums[numOtherEnts++] = (uint16_t)entNums[i];
 		}
 	}
 }

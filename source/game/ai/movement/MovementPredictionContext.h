@@ -7,6 +7,7 @@ class BaseMovementAction;
 #include "MovementState.h"
 #include "FloorClusterAreasCache.h"
 #include "EnvironmentTraceCache.h"
+#include "nearbytriggerscache.h"
 
 struct MovementActionRecord {
 	BotInput botInput;
@@ -193,50 +194,7 @@ private:
 	// Its easy to change it here at least.
 	const unsigned defaultFrameTime { 16 };
 public:
-	struct NearbyTriggersCache {
-		vec3_t lastComputedForMins;
-		vec3_t lastComputedForMaxs;
-
-		int numJumppadEnts;
-		int numTeleportEnts;
-		int numPlatformEnts;
-		int numOtherEnts;
-
-		static constexpr auto MAX_GROUP_ENTITIES = 12;
-		static constexpr auto MAX_OTHER_ENTITIES = 20;
-
-		uint16_t jumppadEntNums[MAX_GROUP_ENTITIES];
-		uint16_t teleportEntNums[MAX_GROUP_ENTITIES];
-		uint16_t platformEntNums[MAX_GROUP_ENTITIES];
-		uint16_t otherEntNums[MAX_OTHER_ENTITIES];
-
-		int triggerTravelFlags[3];
-		const int *triggerNumEnts[3];
-		const uint16_t *triggerEntNums[3];
-
-		NearbyTriggersCache()
-			: numJumppadEnts( 0 ),
-			  numTeleportEnts( 0 ),
-			  numPlatformEnts( 0 ),
-			  numOtherEnts( 0 ) {
-			// Set illegal bounds to force update on first access
-			ClearBounds( lastComputedForMins, lastComputedForMaxs );
-
-			triggerTravelFlags[0] = TRAVEL_JUMPPAD;
-			triggerTravelFlags[1] = TRAVEL_TELEPORT;
-			triggerTravelFlags[2] = TRAVEL_ELEVATOR;
-
-			triggerNumEnts[0] = &numJumppadEnts;
-			triggerNumEnts[1] = &numTeleportEnts;
-			triggerNumEnts[2] = &numPlatformEnts;
-
-			triggerEntNums[0] = &jumppadEntNums[0];
-			triggerEntNums[1] = &teleportEntNums[0];
-			triggerEntNums[2] = &platformEntNums[0];
-		}
-
-		void EnsureValidForBounds( const vec3_t absMins, const vec3_t absMaxs );
-	} nearbyTriggersCache;
+	wsw::ai::movement::NearbyTriggersCache nearbyTriggersCache;
 
 	BotMovementState *movementState;
 	MovementActionRecord *record;

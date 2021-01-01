@@ -1,0 +1,39 @@
+#ifndef WSW_0b4bb3fb_4c2f_47f9_afe7_68889268c9bd_H
+#define WSW_0b4bb3fb_4c2f_47f9_afe7_68889268c9bd_H
+
+#include "../navigation/AasWorld.h"
+
+namespace wsw::ai::movement {
+
+struct NearbyTriggersCache {
+	vec3_t lastComputedForMins { +99999, +99999, +99999 };
+	vec3_t lastComputedForMaxs { -99999, -99999, -99999 };
+
+	unsigned numJumppadEnts { 0 };
+	unsigned numTeleportEnts { 0 };
+	unsigned numPlatformEnts { 0 };
+	unsigned numOtherEnts { 0 };
+
+	static constexpr const size_t kMaxClassEnts { 16 };
+	static constexpr const size_t kMaxOtherEnts { 16 };
+
+	uint16_t jumppadEntNums[kMaxClassEnts];
+	uint16_t teleportEntNums[kMaxClassEnts];
+	uint16_t platformEntNums[kMaxClassEnts];
+	uint16_t otherEntNums[kMaxOtherEnts];
+
+	int triggerTravelFlags[3];
+	const unsigned *triggerNumEnts[3];
+	const uint16_t *triggerEntNums[3];
+
+	NearbyTriggersCache();
+
+	void ensureValidForBounds( const float *__restrict absMins, const float *__restrict absMaxs );
+private:
+	[[nodiscard]]
+	auto clipToRegion( const ArrayRange<uint16_t> &entNums, uint16_t *dest, size_t destSize ) -> unsigned;
+};
+
+}
+
+#endif

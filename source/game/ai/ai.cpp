@@ -3,6 +3,7 @@
 #include "ai_ground_trace_cache.h"
 #include "teamplay/ObjectiveBasedTeam.h"
 #include "combat/TacticalSpotsRegistry.h"
+#include "frameentitiescache.h"
 
 const cvar_t *ai_evolution;
 const cvar_t *ai_debugOutput;
@@ -175,6 +176,7 @@ void AI_InitLevel( void ) {
 	AiManager::Init( g_gametype->string, level.mapname );
 
 	NavEntitiesRegistry::Init();
+	wsw::ai::FrameEntitiesCache::init();
 }
 
 void AI_Shutdown( void ) {
@@ -195,6 +197,7 @@ void AI_AfterLevelScriptShutdown() {
 		AiManager::Shutdown();
 	}
 
+	wsw::ai::FrameEntitiesCache::shutdown();
 	NavEntitiesRegistry::Shutdown();
 	HazardsSelectorCache::Shutdown();
 	AiGroundTraceCache::Shutdown();
@@ -213,6 +216,8 @@ void AI_CommonFrame() {
 	EntitiesPvsCache::Instance()->Update();
 
 	NavEntitiesRegistry::Instance()->Update();
+
+	wsw::ai::FrameEntitiesCache::instance()->update();
 
 	AiManager::Instance()->Update();
 }

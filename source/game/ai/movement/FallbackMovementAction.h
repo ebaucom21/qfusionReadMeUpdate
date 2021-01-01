@@ -5,6 +5,8 @@
 
 class MovementScript;
 
+namespace wsw::ai::movement { struct NearbyTriggersCache; }
+
 class FallbackMovementAction : public BaseMovementAction {
 	struct ClosestTriggerProblemParams {
 	private:
@@ -28,7 +30,7 @@ class FallbackMovementAction : public BaseMovementAction {
 	const edict_t *FindClosestToTargetTrigger( MovementPredictionContext *context );
 
 	const edict_t *FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
-											   const MovementPredictionContext::NearbyTriggersCache &triggersCache );
+											   const wsw::ai::movement::NearbyTriggersCache &triggersCache );
 
 	const edict_t *FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
 											   const uint16_t *triggerEntNums,
