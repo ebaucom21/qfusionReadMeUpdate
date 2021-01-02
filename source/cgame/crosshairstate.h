@@ -15,9 +15,19 @@ class CrosshairState {
 	const char *const m_baseVarName;
 
 	// We have to use a lazy loading for these vars/materials due to lifetime issues. This should eventually be gone.
+	cvar_t *m_ownValueVar { nullptr };
+	cvar_t *m_ownColorVar { nullptr };
+	cvar_t *m_ownSizeVar { nullptr };
+
 	cvar_t *m_valueVar { nullptr };
 	cvar_t *m_colorVar { nullptr };
 	cvar_t *m_sizeVar { nullptr };
+protected:
+	const char *m_separateValueVarBaseName { nullptr };
+	const char *m_separateColorVarBaseName { nullptr };
+	const char *m_separateSizeVarBaseName { nullptr };
+private:
+
 	MediaCache::LinkedMaterialsArray *m_materials { nullptr };
 
 	const unsigned m_assetsTag;
@@ -29,8 +39,8 @@ class CrosshairState {
 	float m_varColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
 	float m_drawColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
 
-	static inline float s_damageColor[4];
-	static inline int s_oldPackedDamageColor { -1 };
+	static float s_damageColor[4];
+	static int s_oldPackedDamageColor;
 
 	// Don't use var->modified flags as this is error-prone (multiple subsystems could reset it).
 	// Just check values caching whether its needed. We do the same for the UI var tracking code.
@@ -40,20 +50,21 @@ class CrosshairState {
 	static void checkColorVar( cvar_t *var, float *cachedColor, int *oldPackedColor = nullptr );
 
 	[[nodiscard]]
-	auto getCVar( cvar_t **cached, const char *suffix, const char *defaultValue ) -> cvar_t *;
+	auto getOwnCVar( cvar_t **cached, const char *suffix, const char *defaultValue ) -> cvar_t *;
 
 	[[nodiscard]]
 	auto getMaterials() -> MaterialsArray *;
 public:
-	CrosshairState( const char *baseVarName, unsigned materialAssetsTag, int decayTime ) noexcept
-		: m_baseVarName( baseVarName ), m_assetsTag( materialAssetsTag )
+	CrosshairState( const char *baseVarName, unsigned assetsTag, int decayTime ) noexcept
+		: m_baseVarName( baseVarName ), m_assetsTag( assetsTag )
 		, m_decayTime( decayTime ), m_invDecayTime( 1.0f / (float)decayTime ) {}
 
 	void touchDamageState() { m_decayTimeLeft = m_decayTime; }
 
 	static void staticUpdate();
 
-	void update();
+	void update( unsigned weapon );
+	void clear();
 
 	[[nodiscard]]
 	auto getDrawingColor() -> const float *;

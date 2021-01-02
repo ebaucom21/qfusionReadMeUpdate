@@ -48,6 +48,7 @@ cvar_t *cg_draw2D;
 cvar_t *cg_weaponlist;
 
 cvar_t *cg_crosshair_damage_color;
+cvar_t *cg_separate_weapon_settings;
 
 cvar_t *cg_showSpeed;
 cvar_t *cg_showPickup;
@@ -231,6 +232,7 @@ void CG_ScreenInit( void ) {
 	cg_weaponlist =     Cvar_Get( "cg_weaponlist", "1", CVAR_ARCHIVE );
 
 	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
+	cg_separate_weapon_settings = Cvar_Get( "cg_separate_weapon_settings", "0", CVAR_ARCHIVE );
 
 	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
 	cg_showSpeed =      Cvar_Get( "cg_showSpeed", "1", CVAR_ARCHIVE );
@@ -334,21 +336,31 @@ static void drawCrosshair( CrosshairState *state ) {
 
 void CG_UpdateCrosshair() {
 	CrosshairState::staticUpdate();
-	cg.crosshairState.update();
-	cg.strongCrosshairState.update();
+	if( unsigned weapon = cg.predictedPlayerState.stats[STAT_WEAPON] ) {
+		cg.crosshairState.update( weapon );
+		cg.strongCrosshairState.update( weapon );
+	} else {
+		cg.crosshairState.clear();
+		cg.strongCrosshairState.clear();
+	}
 }
 
 void CG_DrawCrosshair() {
 	const auto *const playerState = &cg.predictFromPlayerState;
-	const auto *const firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
+	const auto weapon = playerState->stats[STAT_WEAPON];
+	if( !weapon ) {
+		return;
+	}
+
+	const auto *const firedef = GS_FiredefForPlayerState( playerState, weapon );
 	if( !firedef ) {
 		return;
 	}
 
 	if( cg.strongCrosshairState.canBeDrawn() && ( firedef->fire_mode == FIRE_MODE_STRONG ) ) {
-		drawCrosshair( &cg.strongCrosshairState );
+		::drawCrosshair( &cg.strongCrosshairState );
 	}
-	if( cg.crosshairState.canBeDrawn() && ( playerState->stats[STAT_WEAPON] != WEAP_NONE ) ) {
+	if( cg.crosshairState.canBeDrawn() ) {
 		::drawCrosshair( &cg.crosshairState );
 	}
 }

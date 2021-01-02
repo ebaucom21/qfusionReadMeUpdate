@@ -441,8 +441,24 @@ typedef struct {
 	cg_viewweapon_t weapon;
 	cg_viewdef_t view;
 
-	CrosshairState crosshairState { "cg_crosshair", MediaCache::kCrosshairTag, 350 };
-	CrosshairState strongCrosshairState { "cg_crosshair_strong", MediaCache::kStrongCrosshairTag, 300 };
+	class PrimaryCrosshairState : public CrosshairState {
+	public:
+		PrimaryCrosshairState() : CrosshairState( "cg_crosshair", MediaCache::kCrosshairTag, 350 ) {
+			m_separateSizeVarBaseName = nullptr;
+			m_separateColorVarBaseName = "cg_crosshair";
+			m_separateValueVarBaseName = "cg_crosshair";
+		}
+	} crosshairState;
+
+	class StrongCrosshairState : public CrosshairState {
+	public:
+		StrongCrosshairState() : CrosshairState( "cg_crosshair_strong", MediaCache::kStrongCrosshairTag, 300 ) {
+			m_separateSizeVarBaseName = nullptr;
+			// Share the same var with the primary state
+			m_separateColorVarBaseName = "cg_crosshair";
+			m_separateValueVarBaseName = nullptr;
+		}
+	} strongCrosshairState;
 } cg_state_t;
 
 extern cg_static_t cgs;
