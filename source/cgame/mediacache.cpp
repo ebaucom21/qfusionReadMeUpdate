@@ -140,6 +140,16 @@ void MediaCache::registerMaterialsArray( MediaCache::LinkedMaterialsArray *array
 	}
 }
 
+auto MediaCache::findMaterialsArrayByTag( unsigned tag ) -> LinkedMaterialsArray * {
+	// This is sufficient for now
+	// A full assets lookup could be performed whether it turns out to be ubiquitous
+	switch( tag ) {
+		case kCrosshairTag: return &shaderCrosshair;
+		case kStrongCrosshairTag: return &shaderStrongCrosshair;
+		default: return nullptr;
+	}
+}
+
 /*
 * CG_RegisterModel
 */

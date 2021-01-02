@@ -96,14 +96,14 @@ public:
 	void registerSounds();
 	void registerModels();
 	void registerMaterials();
+
+	using LinkedSoundsArray = ArbitraryLengthHandlesArray<sfx_s>;
+	using LinkedMaterialsArray = ArbitraryLengthHandlesArray<shader_s>;
 private:
 	// TODO: Should we just keep precached and non-precached linked handles in different lists?
 	CachedSound *m_sounds { nullptr };
 	CachedModel *m_models { nullptr };
 	CachedMaterial *m_materials { nullptr };
-
-	using LinkedSoundsArray = ArbitraryLengthHandlesArray<sfx_s>;
-	using LinkedMaterialsArray = ArbitraryLengthHandlesArray<shader_s>;
 
 	LinkedSoundsArray *m_soundsArrays { nullptr };
 	LinkedMaterialsArray *m_materialsArrays { nullptr };
@@ -311,6 +311,12 @@ public:
 	};
 
 	CachedMaterial shaderSbNums { this, wsw::StringView( "gfx/hud/sbnums" ) };
+
+	static constexpr unsigned kCrosshairTag = 1;
+	static constexpr unsigned kStrongCrosshairTag = 2;
+
+	[[nodiscard]]
+	auto findMaterialsArrayByTag( unsigned tag ) -> LinkedMaterialsArray *;
 };
 
 #endif

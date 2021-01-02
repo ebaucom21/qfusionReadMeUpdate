@@ -47,14 +47,6 @@ cvar_t *cg_showPointedPlayer;
 cvar_t *cg_draw2D;
 cvar_t *cg_weaponlist;
 
-cvar_t *cg_crosshair;
-cvar_t *cg_crosshair_size;
-cvar_t *cg_crosshair_color;
-
-cvar_t *cg_crosshair_strong;
-cvar_t *cg_crosshair_strong_size;
-cvar_t *cg_crosshair_strong_color;
-
 cvar_t *cg_crosshair_damage_color;
 
 cvar_t *cg_showSpeed;
@@ -76,8 +68,6 @@ cvar_t *cg_showChasers;
 
 cvar_t *cg_showTeamLocations;
 cvar_t *cg_showViewBlends;
-
-static int scr_damagetime_off;
 
 /*
 ===============================================================================
@@ -123,26 +113,6 @@ static void CG_DrawCenterString( void ) {
 	}
 
 	SCR_DrawMultilineString( cgs.vidWidth / 2, y, helpmessage, ALIGN_CENTER_TOP, cgs.vidWidth, 0, font, colorWhite );
-}
-
-//=============================================================================
-
-static void CG_CheckDamageCrosshair( void ) {
-	scr_damagetime_off -= cg.frameTime;
-	if( scr_damagetime_off <= 0 ) {
-		if( !cg_crosshair_damage_color->modified ) {
-			return;
-		}
-
-		// Reset crosshair
-		cg_crosshair_color->modified = true;
-		cg_crosshair_strong_color->modified = true;
-		cg_crosshair_damage_color->modified = false;
-	}
-}
-
-void CG_ScreenCrosshairDamageUpdate( void ) {
-	cg_crosshair_damage_color->modified = true;
 }
 
 //=============================================================================
@@ -260,17 +230,7 @@ void CG_ScreenInit( void ) {
 	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
 	cg_weaponlist =     Cvar_Get( "cg_weaponlist", "1", CVAR_ARCHIVE );
 
-	cg_crosshair =      Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
-	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "32", CVAR_ARCHIVE );
-	cg_crosshair_color =    Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
 	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
-	cg_crosshair_color->modified = true;
-	cg_crosshair_damage_color->modified = false;
-
-	cg_crosshair_strong =       Cvar_Get( "cg_crosshair_strong", "0", CVAR_ARCHIVE );
-	cg_crosshair_strong_size =  Cvar_Get( "cg_crosshair_strong_size", "64", CVAR_ARCHIVE );
-	cg_crosshair_strong_color = Cvar_Get( "cg_crosshair_strong_color", "255 255 255", CVAR_ARCHIVE );
-	cg_crosshair_strong_color->modified = true;
 
 	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
 	cg_showSpeed =      Cvar_Get( "cg_showSpeed", "1", CVAR_ARCHIVE );
@@ -359,113 +319,37 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
 	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
 }
 
-static vec4_t chColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-static vec4_t chColorStrong = { 1.0f, 1.0f, 1.0f, 1.0f };
+void CG_ScreenCrosshairDamageUpdate() {
+	cg.crosshairState.touchDamageState();
+	cg.strongCrosshairState.touchDamageState();
+}
 
-/*
-* CG_DrawCrosshair
-*/
+static void drawCrosshair( CrosshairState *state ) {
+	auto [xOff, yOff] = state->getDrawingOffsets();
+	auto [xDim, yDim] = state->getDrawingDimensions();
+	const int x = cgs.vidWidth / 2 + xOff;
+	const int y = cgs.vidHeight / 2 + yOff;
+	RF_DrawStretchPic( x, y, xDim, yDim, 0, 0, 1, 1, state->getDrawingColor(), state->getDrawingMaterial() );
+}
+
+void CG_UpdateCrosshair() {
+	CrosshairState::staticUpdate();
+	cg.crosshairState.update();
+	cg.strongCrosshairState.update();
+}
+
 void CG_DrawCrosshair() {
-	const auto &crosshairs = cgs.media.shaderCrosshair;
-	const auto &strongCrosshairs = cgs.media.shaderStrongCrosshair;
-
-	if( cg_crosshair->modified ) {
-		if( (unsigned)cg_crosshair->integer >= ( crosshairs.length() + 1u ) ) {
-			Cvar_Set( cg_crosshair->name, "1" );
-		}
-		cg_crosshair->modified = false;
+	const auto *const playerState = &cg.predictFromPlayerState;
+	const auto *const firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
+	if( !firedef ) {
+		return;
 	}
 
-	if( cg_crosshair_size->modified ) {
-		if( cg_crosshair_size->integer < 0 ) {
-			Cvar_Set( cg_crosshair_size->name, "0" );
-		} else if( cg_crosshair_size->integer > 64 ) {
-			Cvar_Set( cg_crosshair_size->name, "64" );
-		}
-		cg_crosshair_size->modified = false;
+	if( cg.strongCrosshairState.canBeDrawn() && ( firedef->fire_mode == FIRE_MODE_STRONG ) ) {
+		drawCrosshair( &cg.strongCrosshairState );
 	}
-
-	if( cg_crosshair_color->modified || cg_crosshair_damage_color->modified ) {
-		int rgbcolor;
-		if( cg_crosshair_damage_color->modified ) {
-			if( scr_damagetime_off <= 0 ) {
-				scr_damagetime_off = 300;
-			}
-			rgbcolor = COM_ReadColorRGBString( cg_crosshair_damage_color->string );
-		} else {
-			rgbcolor = COM_ReadColorRGBString( cg_crosshair_color->string );
-		}
-		if( rgbcolor != -1 ) {
-			Vector4Set( chColor,
-						COLOR_R( rgbcolor ) * ( 1.0f / 255.0f ),
-						COLOR_G( rgbcolor ) * ( 1.0f / 255.0f ),
-						COLOR_B( rgbcolor ) * ( 1.0f / 255.0f ), 1.0f );
-		} else {
-			Vector4Set( chColor, 1.0f, 1.0f, 1.0f, 1.0f );
-		}
-		cg_crosshair_color->modified = false;
-	}
-
-	if( cg_crosshair_strong->modified ) {
-		if( (unsigned)cg_crosshair_strong->integer >= ( strongCrosshairs.length() + 1u ) ) {
-			Cvar_Set( cg_crosshair_strong->name, "1" );
-		}
-		cg_crosshair_strong->modified = false;
-	}
-
-	if( cg_crosshair_strong_size->modified ) {
-		if( cg_crosshair_strong_size->integer < 0 ) {
-			Cvar_Set( cg_crosshair_strong_size->name, "0" );
-		} else if( cg_crosshair_strong_size->integer > 64 ) {
-			Cvar_Set( cg_crosshair_strong_size->name, "64" );
-		}
-		cg_crosshair_strong_size->modified = false;
-	}
-
-	if( cg_crosshair_strong_color->modified || cg_crosshair_damage_color->modified ) {
-		int rgbcolor;
-		if( cg_crosshair_damage_color->modified ) {
-			rgbcolor = COM_ReadColorRGBString( cg_crosshair_damage_color->string );
-		} else {
-			rgbcolor = COM_ReadColorRGBString( cg_crosshair_strong_color->string );
-		}
-		if( rgbcolor != -1 ) {
-			Vector4Set( chColorStrong,
-						COLOR_R( rgbcolor ) * ( 1.0f / 255.0f ),
-						COLOR_G( rgbcolor ) * ( 1.0f / 255.0f ),
-						COLOR_B( rgbcolor ) * ( 1.0f / 255.0f ), 1.0f );
-		} else {
-			Vector4Set( chColorStrong, 1.0f, 1.0f, 1.0f, 1.0f );
-		}
-		cg_crosshair_strong_color->modified = false;
-	}
-
-	const int x = cgs.vidWidth / 2;
-	const int y = cgs.vidHeight / 2;
-
-	const auto *playerState = &cg.predictFromPlayerState;
-
-	const firedef_s *firedef = nullptr;
-	if( cg_crosshair_strong->integer && cg_crosshair_strong_size->integer ) {
-		firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
-		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) {
-			const int dim = cg_crosshair_strong_size->integer;
-			const int shift = -dim / 2;
-			const shader_s *pic = strongCrosshairs[cg_crosshair_strong->integer - 1];
-			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColorStrong, pic );
-		}
-	}
-
-	if( cg_crosshair->integer && cg_crosshair_size->integer && playerState->stats[STAT_WEAPON] != WEAP_NONE ) {
-		if( !firedef ) {
-			firedef = GS_FiredefForPlayerState( playerState, playerState->stats[STAT_WEAPON] );
-		}
-		if( firedef ) {
-			const int dim = cg_crosshair_size->integer;
-			const int shift = -dim / 2;
-			const shader_s *pic = crosshairs[cg_crosshair->integer - 1];
-			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColor, pic );
-		}
+	if( cg.crosshairState.canBeDrawn() && ( playerState->stats[STAT_WEAPON] != WEAP_NONE ) ) {
+		::drawCrosshair( &cg.crosshairState );
 	}
 }
 
@@ -1208,6 +1092,8 @@ static void CG_SCRDrawViewBlend( void ) {
 * CG_Draw2DView
 */
 void CG_Draw2DView( void ) {
+	CG_UpdateCrosshair();
+
 	if( !cg.view.draw2D ) {
 		return;
 	}
@@ -1230,8 +1116,6 @@ void CG_Draw2DView( void ) {
 	CG_DrawHUD();
 
 	CG_UpdateHUDPostDraw();
-
-	CG_CheckDamageCrosshair();
 
 	scr_centertime_off -= cg.frameTime;
 	if( !CG_IsScoreboardShown() ) {

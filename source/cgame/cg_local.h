@@ -138,6 +138,7 @@ typedef struct {
 #include "cg_pmodels.h"
 
 #include "mediacache.h"
+#include "crosshairstate.h"
 
 #define STAT_MINUS              10  // num frame for '-' stats digit
 
@@ -439,6 +440,9 @@ typedef struct {
 
 	cg_viewweapon_t weapon;
 	cg_viewdef_t view;
+
+	CrosshairState crosshairState { "cg_crosshair", MediaCache::kCrosshairTag, 350 };
+	CrosshairState strongCrosshairState { "cg_crosshair_strong", MediaCache::kStrongCrosshairTag, 300 };
 } cg_state_t;
 
 extern cg_static_t cgs;

@@ -939,7 +939,10 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 			  int sharedSeed, bool gameStart ) {
 	CG_InitGameShared();
 
+	// Hacks, see below
+	cg.~cg_state_t();
 	memset( &cg, 0, sizeof( cg_state_t ) );
+	new( &cg )cg_state_t;
 
 	// Hacks, see a related comment in the client/ code
 	cgs.~cg_static_t();
