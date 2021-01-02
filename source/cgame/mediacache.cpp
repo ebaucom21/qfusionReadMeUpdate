@@ -41,17 +41,32 @@ MediaCache::CachedMaterial::CachedMaterial( MediaCache *parent, const wsw::Strin
 }
 
 template <typename T>
-MediaCache::CachedFormatBasedHandle<T>::CachedFormatBasedHandle( const char *format, int value )
-	: m_format( format ), m_value( value ) {}
+MediaCache::ArbitraryLengthHandlesArray<T>::ArbitraryLengthHandlesArray( const char *format,
+																		 unsigned int numHandles,
+																		 unsigned int indexShift )
+	: m_format( format ), m_numHandles( numHandles ), m_indexShift( indexShift ) {}
 
-MediaCache::CachedFormatBasedSound::CachedFormatBasedSound( MediaCache *parent, const char *format, int value )
-	: MediaCache::CachedFormatBasedHandle<sfx_s>( format, value ) {
-	parent->link( this, &parent->m_formatBasedSounds );
+template <typename T, unsigned Length>
+MediaCache::CachedHandlesArray<T, Length>::CachedHandlesArray( const char *format, unsigned indexShift )
+	: ArbitraryLengthHandlesArray<T>( format, Length, indexShift ) {
+	this->m_handles = m_handlesStorage;
+	std::fill_n( m_handlesStorage, Length, nullptr );
 }
 
-MediaCache::CachedFormatBasedMaterial::CachedFormatBasedMaterial( MediaCache *parent, const char *format, int value )
-	: MediaCache::CachedFormatBasedHandle<shader_s>( format, value ) {
-	parent->link( this, &parent->m_formatBasedMaterials );
+template <unsigned Length>
+MediaCache::CachedSoundsArray<Length>::CachedSoundsArray( MediaCache *parent,
+														  const char *format,
+														  unsigned indexShift )
+	: CachedHandlesArray<sfx_s, Length>( format, indexShift ) {
+	parent->link( ( MediaCache::LinkedSoundsArray *)this, &parent->m_soundsArrays );
+}
+
+template <unsigned Length>
+MediaCache::CachedMaterialsArray<Length>::CachedMaterialsArray( MediaCache *parent,
+																const char *format,
+																unsigned indexShift )
+	: CachedHandlesArray<shader_s, Length>( format, indexShift ) {
+	parent->link( ( MediaCache::LinkedMaterialsArray *)this, &parent->m_materialsArrays );
 }
 
 // Make sure it's defined here so the inline setup of fields does not get replicated over inclusion places
@@ -61,8 +76,8 @@ void MediaCache::registerSounds() {
 	for( CachedSound *sound = m_sounds; sound; sound = (CachedSound *)sound->m_next ) {
 		registerSound( sound );
 	}
-	for( CachedFormatBasedSound *sound = m_formatBasedSounds; sound; sound = (CachedFormatBasedSound *)sound->m_next ) {
-		registerSound( sound );
+	for( LinkedSoundsArray *array = m_soundsArrays; array; array = array->m_next ) {
+		registerSoundsArray( array );
 	}
 }
 
@@ -76,9 +91,8 @@ void MediaCache::registerMaterials() {
 	for( CachedMaterial *material = m_materials; material; material = (CachedMaterial *)material->m_next ) {
 		registerMaterial( material );
 	}
-
-	for( auto *material = m_formatBasedMaterials; material; material = (CachedFormatBasedMaterial *)material->m_next ) {
-		registerMaterial( material );
+	for( LinkedMaterialsArray *array = m_materialsArrays; array; array = array->m_next ) {
+		registerMaterialsArray( array );
 	}
 }
 
@@ -89,11 +103,17 @@ void MediaCache::registerSound( CachedSound *sound ) {
 	}
 }
 
-void MediaCache::registerSound( CachedFormatBasedSound *sound ) {
-	if( !sound->m_handle ) {
-		char buffer[1024];
-		char *name = va_r( buffer, sizeof( buffer ), sound->m_format, sound->m_value );
-		sound->m_handle = SoundSystem::Instance()->RegisterSound( name );
+template <typename T>
+auto MediaCache::formatName( char *buffer, ArbitraryLengthHandlesArray<T> *array, unsigned index ) -> const char * {
+	return va_r( buffer, 1024, array->m_format, index + array->m_indexShift );
+}
+
+void MediaCache::registerSoundsArray( MediaCache::LinkedSoundsArray *array ) {
+	char buffer[1024];
+	for( unsigned i = 0; i < array->m_numHandles; ++i ) {
+		if( !array->m_handles[i] ) {
+			array->m_handles[i] = SoundSystem::Instance()->RegisterSound( formatName( buffer, array, i ) );
+		}
 	}
 }
 
@@ -111,11 +131,12 @@ void MediaCache::registerMaterial( CachedMaterial *material ) {
 	}
 }
 
-void MediaCache::registerMaterial( CachedFormatBasedMaterial *material ) {
-	if( !material->m_handle ) {
-		char buffer[1024];
-		char *name = va_r( buffer, sizeof( buffer ), material->m_format, material->m_value );
-		material->m_handle = R_RegisterPic( name );
+void MediaCache::registerMaterialsArray( MediaCache::LinkedMaterialsArray *array ) {
+	char buffer[1024];
+	for( unsigned i = 0; i < array->m_numHandles; ++i ) {
+		if( !array->m_handles[i] ) {
+			array->m_handles[i] = R_RegisterPic( formatName( buffer, array, i ) );
+		}
 	}
 }
 

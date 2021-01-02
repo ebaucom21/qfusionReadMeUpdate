@@ -47,31 +47,50 @@ public:
 	};
 
 	template <typename T>
-	class CachedFormatBasedHandle {
+	class ArbitraryLengthHandlesArray {
 		friend class MediaCache;
-
-		CachedFormatBasedHandle<T> *m_next { nullptr };
+	protected:
+		ArbitraryLengthHandlesArray<T> *m_next { nullptr };
 		const char *const m_format;
-		T *m_handle { nullptr };
-		// TODO: Automate indices setup? There's a problem with making a clear decl. API for that (offset may vary)
-		const int m_value;
+		T **m_handles { nullptr };
+		const unsigned m_numHandles;
+		const unsigned m_indexShift;
+
+		ArbitraryLengthHandlesArray( const char *format, unsigned numHandles, unsigned indexShift = 1u );
 	public:
-		CachedFormatBasedHandle( const char *format, int value );
+		[[nodiscard]]
+		auto length() const -> unsigned { return m_numHandles; }
 
 		[[nodiscard]]
-		operator T*() { return m_handle; }
+		auto operator[]( unsigned index ) -> T * {
+			assert( index < m_numHandles );
+			return m_handles[index];
+		}
 		[[nodiscard]]
-		operator const T*() const { return m_handle; }
+		auto operator[]( unsigned index ) const -> const T * {
+			assert( index < m_numHandles );
+			return m_handles[index];
+		}
 	};
 
-	class CachedFormatBasedSound : public CachedFormatBasedHandle<sfx_s> {
+	template <typename T, unsigned Length>
+	class CachedHandlesArray : public ArbitraryLengthHandlesArray<T> {
 		friend class MediaCache;
-		CachedFormatBasedSound( MediaCache *parent, const char *format, int value );
+		T *m_handlesStorage[Length];
+	protected:
+		explicit CachedHandlesArray( const char *format, unsigned indexShift = 1u );
 	};
 
-	class CachedFormatBasedMaterial : public CachedFormatBasedHandle<shader_s> {
+	template <unsigned Length>
+	class CachedSoundsArray : public CachedHandlesArray<sfx_s, Length> {
 		friend class MediaCache;
-		CachedFormatBasedMaterial( MediaCache *parent, const char *format, int value );
+		CachedSoundsArray( MediaCache *parent, const char *format, unsigned indexShift = 1u );
+	};
+
+	template <unsigned Length>
+	class CachedMaterialsArray : public CachedHandlesArray<shader_s, Length> {
+		friend class MediaCache;
+		CachedMaterialsArray( MediaCache *parent, const char *format, unsigned indexShift = 1u );
 	};
 
 	void registerSounds();
@@ -83,8 +102,11 @@ private:
 	CachedModel *m_models { nullptr };
 	CachedMaterial *m_materials { nullptr };
 
-	CachedFormatBasedSound *m_formatBasedSounds { nullptr };
-	CachedFormatBasedMaterial *m_formatBasedMaterials { nullptr };
+	using LinkedSoundsArray = ArbitraryLengthHandlesArray<sfx_s>;
+	using LinkedMaterialsArray = ArbitraryLengthHandlesArray<shader_s>;
+
+	LinkedSoundsArray *m_soundsArrays { nullptr };
+	LinkedMaterialsArray *m_materialsArrays { nullptr };
 
 	template <typename T>
 	void link( T *item, T **head ) {
@@ -93,31 +115,21 @@ private:
 	}
 
 	void registerSound( CachedSound *sound );
-	void registerSound( CachedFormatBasedSound *sound );
 	void registerModel( CachedModel *model );
 	void registerMaterial( CachedMaterial *material );
-	void registerMaterial( CachedFormatBasedMaterial *material );
+	void registerSoundsArray( LinkedSoundsArray *sound );
+	void registerMaterialsArray( LinkedMaterialsArray *material );
 
-	static constexpr const char *kRicFormat = "sounds/weapons/ric%d";
-	static constexpr const char *kWeaponHit2Format = "sounds/misc/hit_plus_%d";
-	static constexpr const char *kCrosshairFormat = "gfx/hud/crosshair%d";
-	static constexpr const char *kStrongCrosshairFormat = "gfx/hud/strong_crosshair%d";
+	template <typename T>
+	[[nodiscard]]
+	auto formatName( char *buffer, ArbitraryLengthHandlesArray<T> *array, unsigned index ) -> const char *;
 public:
 	MediaCache();
 
 	CachedSound sfxChat { this, wsw::StringView( S_CHAT ) };
-	CachedFormatBasedSound sfxRic[2] {
-		{ this, kRicFormat, 1 }, { this, kRicFormat, 2 }
-	};
-
-	CachedFormatBasedSound sfxWeaponHit[4] {
-		{ this, S_WEAPON_HITS, 0 }, { this, S_WEAPON_HITS, 1 },
-		{ this, S_WEAPON_HITS, 2 }, { this, S_WEAPON_HITS, 3 }
-	};
-	CachedFormatBasedSound sfxWeaponHit2[4] {
-		{ this, kWeaponHit2Format, 0 }, { this, kWeaponHit2Format, 1 },
-		{ this, kWeaponHit2Format, 2 }, { this, kWeaponHit2Format, 3 }
-	};
+	CachedSoundsArray<2> sfxRic { this, "sounds/weapons/ric%d" };
+	CachedSoundsArray<4> sfxWeaponHit { this, S_WEAPON_HITS, 0 };
+	CachedSoundsArray<4> sfxWeaponHit2 { this, "sounds/misc/hit_plus_%d", 0 };
 
 	CachedSound sfxWeaponKill { this, wsw::StringView( S_WEAPON_KILL ) };
 	CachedSound sfxWeaponHitTeam { this, wsw::StringView( S_WEAPON_HIT_TEAM ) };
@@ -132,37 +144,19 @@ public:
 	CachedSound sfxTeleportOut { this, wsw::StringView( S_TELEPORT_OUT ) };
 	CachedSound sfxShellHit { this, wsw::StringView( S_SHELL_HIT ) };
 
-	CachedFormatBasedSound sfxGunbladeWeakShot[3] {
-		{ this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3, 1 },
-		{ this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3, 2 },
-		{ this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3, 3 }
-	};
-
-	CachedFormatBasedSound sfxBladeFleshHit[3] {
-		{ this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3, 1 },
-		{ this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3, 2 },
-		{ this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3, 3 }
-	};
-
-	CachedFormatBasedSound sfxBladeWallHit[2] {
-		{ this, S_WEAPON_GUNBLADE_W_HIT_WALL_1_to_2, 1 }, { this, S_WEAPON_GUNBLADE_W_HIT_WALL_1_to_2, 2 }
-	};
+	CachedSoundsArray<3> sfxGunbladeWeakShot { this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3 };
+	CachedSoundsArray<3> sfxBladeFleshHit { this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3 };
+	CachedSoundsArray<2> sfxBladeWallHit { this, S_WEAPON_GUNBLADE_W_HIT_WALL_1_to_2 };
 
 	CachedSound sfxGunbladeStrongShot { this, wsw::StringView( S_WEAPON_GUNBLADE_S_SHOT ) };
 
-	CachedFormatBasedSound sfxGunbladeStrongHit[2] {
-		{ this, S_WEAPON_GUNBLADE_S_HIT_1_to_2, 1 }, { this, S_WEAPON_GUNBLADE_S_HIT_1_to_2, 2 }
-	};
+	CachedSoundsArray<2> sfxGunbladeStrongHit { this, S_WEAPON_GUNBLADE_S_HIT_1_to_2 };
 
 	CachedSound sfxRiotgunWeakHit { this, wsw::StringView( S_WEAPON_RIOTGUN_W_HIT ) };
 	CachedSound sfxRiotgunStrongHit { this, wsw::StringView( S_WEAPON_RIOTGUN_S_HIT ) };
 
-	CachedFormatBasedSound sfxGrenadeWeakBounce[2] {
-		{ this, S_WEAPON_GRENADE_W_BOUNCE_1_to_2, 1 }, { this, S_WEAPON_GRENADE_W_BOUNCE_1_to_2, 2 }
-	};
-	CachedFormatBasedSound sfxGrenadeStrongBounce[2] {
-		{ this, S_WEAPON_GRENADE_S_BOUNCE_1_to_2, 1 }, { this, S_WEAPON_GRENADE_S_BOUNCE_1_to_2, 2 }
-	};
+	CachedSoundsArray<2> sfxGrenadeWeakBounce { this, S_WEAPON_GRENADE_W_BOUNCE_1_to_2 };
+	CachedSoundsArray<2> sfxGrenadeStrongBounce { this, S_WEAPON_GRENADE_S_BOUNCE_1_to_2, 1 };
 
 	CachedSound sfxGrenadeWeakExplosion { this, wsw::StringView( S_WEAPON_GRENADE_W_HIT ) };
 	CachedSound sfxGrenadeStrongExplosion { this, wsw::StringView( S_WEAPON_GRENADE_S_HIT ) };
@@ -208,23 +202,8 @@ public:
 	CachedModel modInstagunWallHit { this, wsw::StringView( PATH_INSTABLAST_IMPACT_MODEL ) };
 	CachedModel modLasergunWallExplo { this, wsw::StringView( PATH_LASERGUN_IMPACT_MODEL ) };
 
-	CachedFormatBasedMaterial shaderCrosshair[9] {
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 1 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 2 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 3 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 4 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 5 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 6 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 7 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 8 },
-		CachedFormatBasedMaterial { this, kCrosshairFormat, 9 }
-	};
-
-	CachedFormatBasedMaterial shaderStrongCrosshair[3] {
-		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 1 },
-		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 2 },
-		CachedFormatBasedMaterial { this, kStrongCrosshairFormat, 3 }
-	};
+	CachedMaterialsArray<9> shaderCrosshair { this, "gfx/hud/crosshair%d" };
+	CachedMaterialsArray<3> shaderStrongCrosshair { this, "gfx/hud/strong_crosshair%d" };
 
 	CachedMaterial shaderParticle { this, wsw::StringView( "particle" ) };
 
@@ -318,11 +297,7 @@ public:
 
 	CachedMaterial shaderGunbladeBlastIcon { this, wsw::StringView( PATH_GUNBLADE_BLAST_ICON ) };
 
-	CachedMaterial shaderInstagunChargeIcon[3] {
-		{ this, wsw::StringView( "gfx/hud/icons/weapon/instagun_0" ) },
-		{ this, wsw::StringView( "gfx/hud/icons/weapon/instagun_1" ) },
-		{ this, wsw::StringView( "gfx/hud/icons/weapon/instagun_2" ) },
-	};
+	CachedMaterialsArray<3> shaderInstagunChargeIcon { this, "gfx/hud/icons/weapon/instagun_%d", 0 };
 
 	CachedMaterial shaderKeyIcon[KEYICON_TOTAL] {
 		{ this, wsw::StringView( PATH_KEYICON_FORWARD ) },

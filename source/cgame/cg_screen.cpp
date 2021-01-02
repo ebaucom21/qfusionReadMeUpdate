@@ -362,16 +362,16 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
 static vec4_t chColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 static vec4_t chColorStrong = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-static constexpr int kMaxCrosshairValue = 10;
-static constexpr int kMaxStrongCrosshairValue = 3;
-
 /*
 * CG_DrawCrosshair
 */
 void CG_DrawCrosshair() {
+	const auto &crosshairs = cgs.media.shaderCrosshair;
+	const auto &strongCrosshairs = cgs.media.shaderStrongCrosshair;
+
 	if( cg_crosshair->modified ) {
-		if( cg_crosshair->integer > kMaxCrosshairValue || cg_crosshair->integer < 0 ) {
-			Cvar_Set( cg_crosshair->name, "0" );
+		if( (unsigned)cg_crosshair->integer >= ( crosshairs.length() + 1u ) ) {
+			Cvar_Set( cg_crosshair->name, "1" );
 		}
 		cg_crosshair->modified = false;
 	}
@@ -407,8 +407,8 @@ void CG_DrawCrosshair() {
 	}
 
 	if( cg_crosshair_strong->modified ) {
-		if( cg_crosshair_strong->integer > kMaxStrongCrosshairValue || cg_crosshair_strong->integer < 0 ) {
-			Cvar_Set( cg_crosshair_strong->name, "0" );
+		if( (unsigned)cg_crosshair_strong->integer >= ( strongCrosshairs.length() + 1u ) ) {
+			Cvar_Set( cg_crosshair_strong->name, "1" );
 		}
 		cg_crosshair_strong->modified = false;
 	}
@@ -451,7 +451,7 @@ void CG_DrawCrosshair() {
 		if( firedef && firedef->fire_mode == FIRE_MODE_STRONG ) {
 			const int dim = cg_crosshair_strong_size->integer;
 			const int shift = -dim / 2;
-			const shader_s *pic = cgs.media.shaderStrongCrosshair[cg_crosshair_strong->integer - 1];
+			const shader_s *pic = strongCrosshairs[cg_crosshair_strong->integer - 1];
 			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColorStrong, pic );
 		}
 	}
@@ -463,7 +463,7 @@ void CG_DrawCrosshair() {
 		if( firedef ) {
 			const int dim = cg_crosshair_size->integer;
 			const int shift = -dim / 2;
-			const shader_s *pic = cgs.media.shaderCrosshair[cg_crosshair->integer - 1];
+			const shader_s *pic = crosshairs[cg_crosshair->integer - 1];
 			RF_DrawStretchPic( x + shift, y + shift, dim, dim, 0, 0, 1, 1, chColor, pic );
 		}
 	}
