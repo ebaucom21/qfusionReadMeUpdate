@@ -155,7 +155,7 @@ void CL_UpdateClientCommandsToServer( msg_t *msg ) {
 * CL_ForwardToServer_f
 */
 void CL_ForwardToServer_f( void ) {
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -233,7 +233,7 @@ static void CL_CheckForResend( void ) {
 	// FIXME: should use cls.realtime, but it can be old here after starting a server
 	int64_t realtime = Sys_Milliseconds();
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -507,7 +507,7 @@ static void CL_Rcon_f( void ) {
 	const socket_t *socket;
 	const netadr_t *address;
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -829,11 +829,11 @@ void CL_Disconnect( const char *message ) {
 	cls.connect_count = 0;
 	cls.rejected = false;
 
-	if( cls.demo.recording ) {
+	if( cls.demoRecorder.recording ) {
 		CL_Stop_f();
 	}
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		CL_DemoCompleted();
 	} else {
 		CL_Disconnect_SendCommand(); // send a disconnect message to the server
@@ -926,7 +926,7 @@ void CL_Changing_f( void ) {
 		return;
 	}
 
-	if( cls.demo.recording ) {
+	if( cls.demoRecorder.recording ) {
 		CL_Stop_f();
 	}
 
@@ -946,7 +946,7 @@ void CL_Changing_f( void ) {
 * The server is changing levels
 */
 void CL_ServerReconnect_f( void ) {
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -961,7 +961,7 @@ void CL_ServerReconnect_f( void ) {
 		return;
 	}
 
-	if( cls.demo.recording ) {
+	if( cls.demoRecorder.recording ) {
 		CL_Stop_f();
 	}
 
@@ -1047,7 +1047,7 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		return;
 	}
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		Com_DPrintf( "Received connectionless cmd \"%s\" from %s while playing a demo\n", s, NET_AddressToString( address ) );
 		return;
 	}
@@ -1274,7 +1274,7 @@ void CL_ReadPackets( void ) {
 				continue;
 			}
 
-			if( cls.demo.playing ) {
+			if( cls.demoPlayer.playing ) {
 				// only allow connectionless packets during demo playback
 				continue;
 			}
@@ -1315,7 +1315,7 @@ void CL_ReadPackets( void ) {
 		}
 	}
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -1611,8 +1611,8 @@ void CL_RequestNextDownload( void ) {
 void CL_Precache_f( void ) {
 	FS_RemovePurePaks();
 
-	if( cls.demo.playing ) {
-		if( !cls.demo.play_jump ) {
+	if( cls.demoPlayer.playing ) {
+		if( !cls.demoPlayer.play_jump ) {
 			CL_LoadMap( cl.configStrings.getWorldModel()->data() );
 
 			CL_GameModule_Init();
@@ -1621,7 +1621,7 @@ void CL_Precache_f( void ) {
 			SoundSystem::Instance()->StopAllSounds();
 		}
 
-		cls.demo.play_ignore_next_frametime = true;
+		cls.demoPlayer.play_ignore_next_frametime = true;
 
 		return;
 	}
@@ -2070,7 +2070,7 @@ static void CL_ShutdownLocal( void ) {
 * CL_TimedemoStats
 */
 static void CL_TimedemoStats( void ) {
-	if( cl_timedemo->integer && cls.demo.playing ) {
+	if( cl_timedemo->integer && cls.demoPlayer.playing ) {
 		int64_t lastTime = cl.timedemo.lastTime;
 		if( lastTime != 0 ) {
 			int msec;
@@ -2096,7 +2096,7 @@ static void CL_TimedemoStats( void ) {
 */
 void CL_AdjustServerTime( unsigned int gameMsec ) {
 	// hurry up if coming late (unless in demos)
-	if( !cls.demo.playing ) {
+	if( !cls.demoPlayer.playing ) {
 		if( ( cl.newServerTimeDelta < cl.serverTimeDelta ) && gameMsec > 0 ) {
 			cl.serverTimeDelta--;
 		}
@@ -2146,7 +2146,7 @@ int CL_SmoothTimeDeltas( void ) {
 	double delta;
 	snapshot_t  *snap;
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		if( cl.currentSnapNum <= 0 ) { // if first snap
 			return cl.serverTimeDeltas[cl.pendingSnapNum & MASK_TIMEDELTAS_BACKUP];
 		}
@@ -2207,18 +2207,18 @@ void CL_UpdateSnapshot( void ) {
 				cl_extrapolationTime->modified = false;
 			}
 
-			if( !cls.demo.playing && cl_extrapolate->integer ) {
+			if( !cls.demoPlayer.playing && cl_extrapolate->integer ) {
 				cl.newServerTimeDelta += cl_extrapolationTime->integer;
 			}
 
 			// if we don't have current snap (or delay is too big) don't wait to fire the pending one
-			if( ( !cls.demo.play_jump && cl.currentSnapNum <= 0 ) ||
-				( !cls.demo.playing && abs( cl.newServerTimeDelta - cl.serverTimeDelta ) > 200 ) ) {
+			if( ( !cls.demoPlayer.play_jump && cl.currentSnapNum <= 0 ) ||
+				( !cls.demoPlayer.playing && abs( cl.newServerTimeDelta - cl.serverTimeDelta ) > 200 ) ) {
 				cl.serverTimeDelta = cl.newServerTimeDelta;
 			}
 
 			// don't either wait if in a timedemo
-			if( cls.demo.playing && cl_timedemo->integer ) {
+			if( cls.demoPlayer.playing && cl_timedemo->integer ) {
 				cl.serverTimeDelta = cl.newServerTimeDelta;
 			}
 		}
@@ -2268,7 +2268,7 @@ static bool CL_MaxPacketsReached( void ) {
 		float minTime = ( 1000.0f / cl_pps->value );
 
 		// don't let cl_pps be smaller than sv_pps
-		if( cls.state == CA_ACTIVE && !cls.demo.playing && cl.snapFrameTime ) {
+		if( cls.state == CA_ACTIVE && !cls.demoPlayer.playing && cl.snapFrameTime ) {
 			if( (unsigned int)minTime > cl.snapFrameTime ) {
 				minTime = cl.snapFrameTime;
 			}
@@ -2301,7 +2301,7 @@ void CL_SendMessagesToServer( bool sendNow ) {
 		return;
 	}
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -2350,7 +2350,7 @@ static void CL_NetFrame( int realMsec, int gameMsec ) {
 		cls.lastPacketReceivedTime = cls.realtime;
 	}
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		CL_ReadDemoPackets(); // fetch results from demo file
 	}
 	CL_ReadPackets(); // fetch results from server
@@ -2384,13 +2384,13 @@ void CL_Frame( int realMsec, int gameMsec ) {
 
 	cls.realtime += realMsec;
 
-	if( cls.demo.playing && cls.demo.play_ignore_next_frametime ) {
+	if( cls.demoPlayer.playing && cls.demoPlayer.play_ignore_next_frametime ) {
 		gameMsec = 0;
-		cls.demo.play_ignore_next_frametime = false;
+		cls.demoPlayer.play_ignore_next_frametime = false;
 	}
 
-	if( cls.demo.playing ) {
-		if( cls.demo.paused ) {
+	if( cls.demoPlayer.playing ) {
+		if( cls.demoPlayer.paused ) {
 			gameMsec = 0;
 		} else {
 			CL_LatchedDemoJump();
@@ -2413,7 +2413,7 @@ void CL_Frame( int realMsec, int gameMsec ) {
 		maxFps = 60;
 		minMsec = 1000.0f / maxFps;
 		roundingMsec += 1000.0f / maxFps - minMsec;
-	} else if( cl_maxfps->integer > 0 && !( cl_timedemo->integer && cls.demo.playing ) ) {
+	} else if( cl_maxfps->integer > 0 && !( cl_timedemo->integer && cls.demoPlayer.playing ) ) {
 		const int absMinFps = 24;
 
 		// do not allow setting cl_maxfps to very low values to prevent cheating

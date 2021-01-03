@@ -315,7 +315,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 	download_list_t *dl;
 
 	// ignore download commands coming from demo files
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -559,7 +559,7 @@ static void CL_InitDownload_f( void ) {
 	bool allow_localhttpdownload;
 
 	// ignore download commands coming from demo files
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -701,7 +701,7 @@ static void CL_ParseDownload( msg_t *msg ) {
 	offset = MSG_ReadInt32( msg );
 	size = MSG_ReadInt32( msg );
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		// ignore download commands coming from demo files
 		return;
 	}
@@ -789,7 +789,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	// parse protocol version number
 	i = MSG_ReadInt32( msg );
 
-	if( i != APP_PROTOCOL_VERSION && !( cls.demo.playing && i == APP_DEMO_PROTOCOL_VERSION ) ) {
+	if( i != APP_PROTOCOL_VERSION && !( cls.demoPlayer.playing && i == APP_DEMO_PROTOCOL_VERSION ) ) {
 		Com_Error( ERR_DROP, "Server returned version %i, not %i", i, APP_PROTOCOL_VERSION );
 	}
 
@@ -809,7 +809,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 
 	sv_bitflags = MSG_ReadUint8( msg );
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		cls.reliable = ( sv_bitflags & SV_BITFLAGS_RELIABLE );
 	} else {
 		if( cls.reliable != ( ( sv_bitflags & SV_BITFLAGS_RELIABLE ) != 0 ) ) {
@@ -876,7 +876,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 
 	cls.wakelock = Sys_AcquireWakeLock();
 
-	if( !cls.demo.playing && ( cls.serveraddress.type == NA_IP ) ) {
+	if( !cls.demoPlayer.playing && ( cls.serveraddress.type == NA_IP ) ) {
 		Steam_AdvertiseGame( cls.serveraddress.address.ipv4.ip, NET_GetAddressPort( &cls.serveraddress ) );
 	}
 
@@ -905,27 +905,24 @@ static void CL_ParseFrame( msg_t *msg ) {
 	if( snap->valid ) {
 		cl.receivedSnapNum = snap->serverFrame;
 
-		if( cls.demo.recording ) {
-			if( cls.demo.waiting && !snap->delta ) {
-				cls.demo.waiting = false; // we can start recording now
-				cls.demo.basetime = snap->serverTime;
-				cls.demo.localtime = time( NULL );
-
-				// clear demo meta data, we'll write some keys later
-				cls.demo.meta_data_realsize = SNAP_ClearDemoMeta( cls.demo.meta_data, sizeof( cls.demo.meta_data ) );
+		if( cls.demoRecorder.recording ) {
+			if( cls.demoRecorder.waiting && !snap->delta ) {
+				cls.demoRecorder.waiting = false; // we can start recording now
+				cls.demoRecorder.basetime = snap->serverTime;
+				cls.demoRecorder.localtime = time( NULL );
 
 				// write out messages to hold the startup information
-				SNAP_BeginDemoRecording( cls.demo.file, 0x10000 + cl.servercount, cl.snapFrameTime,
+				SNAP_BeginDemoRecording( cls.demoRecorder.file, 0x10000 + cl.servercount, cl.snapFrameTime,
 										 cl.servermessage, cls.reliable ? SV_BITFLAGS_RELIABLE : 0, cls.purelist,
 										 cl.configStrings, cl_baselines );
 
 				// the rest of the demo file will be individual frames
 			}
 
-			if( !cls.demo.waiting ) {
-				cls.demo.duration = snap->serverTime - cls.demo.basetime;
+			if( !cls.demoRecorder.waiting ) {
+				cls.demoRecorder.duration = snap->serverTime - cls.demoRecorder.basetime;
 			}
-			cls.demo.time = cls.demo.duration;
+			cls.demoRecorder.time = cls.demoRecorder.duration;
 		}
 
 		if( cl_debug_timeDelta->integer ) {
@@ -973,7 +970,7 @@ static void CL_CvarInfoRequest_f( void ) {
 	char *cvarName;
 	const char *cvarString;
 
-	if( cls.demo.playing ) {
+	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
@@ -1024,7 +1021,7 @@ static void CL_UpdateConfigString( int idx, const char *s ) {
 		return;
 	}
 
-	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demo.playing ) ) {
+	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demoPlayer.playing ) ) {
 		Com_Printf( "CL_ParseConfigstringCommand(%i): \"%s\"\n", idx, s );
 	}
 
@@ -1156,7 +1153,7 @@ static void CL_ParseServerCommand( msg_t *msg ) {
 	Cmd_TokenizeString( text );
 	s = Cmd_Argv( 0 );
 
-	if( cl_debug_serverCmd->integer && ( cls.state < CA_ACTIVE || cls.demo.playing ) ) {
+	if( cl_debug_serverCmd->integer && ( cls.state < CA_ACTIVE || cls.demoPlayer.playing ) ) {
 		Com_Printf( "CL_ParseServerCommand: \"%s\"\n", text );
 	}
 
@@ -1274,23 +1271,23 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				break;
 
 			case svc_demoinfo:
-				assert( cls.demo.playing );
+				assert( cls.demoPlayer.playing );
 
 				MSG_ReadInt32( msg );
 				MSG_ReadInt32( msg );
-				cls.demo.meta_data_realsize = (size_t)MSG_ReadInt32( msg );
+				cls.demoPlayer.meta_data_realsize = (size_t)MSG_ReadInt32( msg );
 				meta_data_maxsize = (size_t)MSG_ReadInt32( msg );
 
 				// sanity check
-				if( cls.demo.meta_data_realsize > meta_data_maxsize ) {
-					cls.demo.meta_data_realsize = meta_data_maxsize;
+				if( cls.demoPlayer.meta_data_realsize > meta_data_maxsize ) {
+					cls.demoPlayer.meta_data_realsize = meta_data_maxsize;
 				}
-				if( cls.demo.meta_data_realsize > sizeof( cls.demo.meta_data ) ) {
-					cls.demo.meta_data_realsize = sizeof( cls.demo.meta_data );
+				if( cls.demoPlayer.meta_data_realsize > sizeof( cls.demoPlayer.meta_data ) ) {
+					cls.demoPlayer.meta_data_realsize = sizeof( cls.demoPlayer.meta_data );
 				}
 
-				MSG_ReadData( msg, cls.demo.meta_data, cls.demo.meta_data_realsize );
-				MSG_SkipData( msg, meta_data_maxsize - cls.demo.meta_data_realsize );
+				MSG_ReadData( msg, cls.demoPlayer.meta_data, cls.demoPlayer.meta_data_realsize );
+				MSG_SkipData( msg, meta_data_maxsize - cls.demoPlayer.meta_data_realsize );
 				break;
 
 			case svc_playerinfo:
@@ -1333,7 +1330,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 	// we don't know if it is ok to save a demo message until
 	// after we have parsed the frame
 	//
-	if( cls.demo.recording && !cls.demo.waiting ) {
+	if( cls.demoRecorder.recording && !cls.demoRecorder.waiting ) {
 		CL_WriteDemoMessage( msg );
 	}
 }

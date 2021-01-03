@@ -1313,7 +1313,7 @@ static void Con_Key_Enter( void ) {
 
 	// decide whether to treat the text as chat or command
 	p = key_lines[edit_line] + 1;
-	if( cls.state <= CA_HANDSHAKE || cls.demo.playing ) {
+	if( cls.state <= CA_HANDSHAKE || cls.demoPlayer.playing ) {
 		type = COMMAND;
 	} else if( *p == '\\' || *p == '/' ) {
 		type = COMMAND;

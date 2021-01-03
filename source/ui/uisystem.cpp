@@ -767,7 +767,7 @@ void QtUISystem::checkPropertyChanges() {
 	}
 
 	const bool wasPlayingADemo = m_lastFrameState.isPlayingADemo;
-	const bool isPlayingADemo = m_lastFrameState.isPlayingADemo = cls.demo.playing;
+	const bool isPlayingADemo = m_lastFrameState.isPlayingADemo = cls.demoPlayer.playing;
 	if( isPlayingADemo != wasPlayingADemo ) {
 		if( isPlayingADemo ) {
 			if ( m_activeMenuMask & MainMenu ) {

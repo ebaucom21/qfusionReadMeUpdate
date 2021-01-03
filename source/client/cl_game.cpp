@@ -114,7 +114,7 @@ void CL_GameModule_Init( void ) {
 	start = Sys_Milliseconds();
 	CG_Init( cls.servername, cl.playernum,
 			   viddef.width, viddef.height, VID_GetPixelRatio(),
-			   cls.demo.playing, cls.demo.playing ? cls.demo.filename : "",
+			   cls.demoPlayer.playing, cls.demoPlayer.playing ? cls.demoPlayer.filename : "",
 			   cls.sv_pure, cl.snapFrameTime, APP_PROTOCOL_VERSION, APP_DEMO_EXTENSION_STR,
 			   cls.mediaRandomSeed, cl.gamestart );
 
@@ -198,7 +198,7 @@ bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
 */
 void CL_GameModule_RenderView() {
 	if( cge && cls.cgameActive ) {
-		unsigned extrapolationTime = cl_extrapolate->integer && !cls.demo.playing ? cl_extrapolationTime->integer : 0;
+		unsigned extrapolationTime = cl_extrapolate->integer && !cls.demoPlayer.playing ? cl_extrapolationTime->integer : 0;
 		CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
 	}
 }

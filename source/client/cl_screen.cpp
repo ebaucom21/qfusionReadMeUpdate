@@ -687,7 +687,7 @@ void SCR_UpdateScreen( void ) {
 	// TODO: Pass as flags
 	const bool forcevsync = ( cls.state == CA_DISCONNECTED && scr_con_current );
 	const bool forceclear = true;
-	const bool timedemo = cl_timedemo->integer != 0 && cls.demo.playing;
+	const bool timedemo = cl_timedemo->integer && cls.demoPlayer.playing;
 
 	RF_BeginFrame( forceclear, forcevsync, timedemo );
 

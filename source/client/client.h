@@ -190,18 +190,17 @@ typedef struct {
 	bool cancelled;             // to allow cleaning up of temporary download file
 } download_t;
 
-typedef struct {
+struct DemoPlayer {
 	char *name;
 
-	bool recording;
-	bool waiting;       // don't record until a non-delta message is received
 	bool playing;
 	bool paused;        // A boolean to test if demo is paused -- PLX
 
-	int file;
+	int demofilehandle;
+	int demofilelen, demofilelentotal;
+
 	char *filename;
 
-	time_t localtime;       // time of day of demo recording
 	int64_t time;           // milliseconds passed since the start of the demo
 	int64_t duration, basetime;
 
@@ -214,9 +213,21 @@ typedef struct {
 
 	char meta_data[SNAP_MAX_DEMO_META_DATA_SIZE];
 	size_t meta_data_realsize;
-} cl_demo_t;
+};
 
-typedef cl_demo_t demorec_t;
+struct DemoRecorder {
+	char *name;
+
+	bool recording;
+	bool waiting;       // don't record until a non-delta message is received
+
+	int file;
+	char *filename;
+
+	time_t localtime;       // time of day of demo recording
+	int64_t time;           // milliseconds passed since the start of the demo
+	int64_t duration, basetime;
+};
 
 typedef struct {
 	connstate_t state;          // only set through CL_SetClientState
@@ -273,7 +284,8 @@ typedef struct {
 	bool registrationOpen;
 
 	// demo recording info must be here, so it isn't cleared on level change
-	cl_demo_t demo;
+	DemoRecorder demoRecorder;
+	DemoPlayer demoPlayer;
 
 	// these shaders have nothing to do with media
 	shader_t *whiteShader;
@@ -436,7 +448,6 @@ void CL_PauseDemo_f( void );
 void CL_DemoJump_f( void );
 size_t CL_ReadDemoMetaData( const char *demopath, char *meta_data, size_t meta_data_size );
 char **CL_DemoComplete( const char *partial );
-#define CL_SetDemoMetaKeyValue( k,v ) cls.demo.meta_data_realsize = SNAP_SetDemoMetaKeyValue( cls.demo.meta_data, sizeof( cls.demo.meta_data ), cls.demo.meta_data_realsize, k, v )
 
 //
 // cl_parse.c
