@@ -1,6 +1,7 @@
 #include "boundsbuildertest.h"
 #include "bufferedreadertest.h"
 #include "configstringstoragetest.h"
+#include "demometadatatest.h"
 #include "enumtokenmatchertest.h"
 #include "fsutilstest.h"
 #include "staticstringtest.h"
@@ -49,6 +50,11 @@ int main( int argc, char **argv ) {
 	{
 		ConfigStringStorageTest configStringStorageTest;
 		result |= QTest::qExec( &configStringStorageTest, argc, argv );
+	}
+
+	{
+		DemoMetadataTest demoMetadataTest;
+		result |= QTest::qExec( &demoMetadataTest, argc, argv );
 	}
 
 	{

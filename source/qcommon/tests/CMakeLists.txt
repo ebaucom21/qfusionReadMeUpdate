@@ -19,6 +19,7 @@ add_executable(
         boundsbuildertest.cpp
         bufferedreadertest.cpp
         configstringstoragetest.cpp
+        demometadatatest.cpp
         fsutilstest.cpp
         enumtokenmatchertest.cpp
         staticstringtest.cpp

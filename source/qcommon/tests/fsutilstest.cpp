@@ -32,3 +32,7 @@ void FSUtilsTest::test_splitAtExtension() {
 		QCOMPARE( ext, ".tga"_asView );
 	}
 }
+
+const char *FS_FirstExtension( const char *, const char **, int ) {
+	return nullptr;
+}

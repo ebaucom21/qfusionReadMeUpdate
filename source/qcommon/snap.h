@@ -69,11 +69,9 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 
 namespace wsw {
 
-// Preserve the template signature for structural compatibility	regardless of the build kind
-template <typename SpansBuffer = wsw::StaticVector<std::pair<uint16_t, uint16_t>, 64>>
 class DemoMetadataWriter {
 #ifndef PUBLIC_BUILD
-	SpansBuffer m_spansBuffer;
+	wsw::StaticVector<std::pair<uint16_t, uint16_t>, 64> m_spansBuffer;
 #endif
 	char *const m_basePtr;
 	unsigned m_writeOff { 0 };
@@ -125,8 +123,8 @@ class DemoMetadataWriter {
 		return false;
 	}
 public:
-	explicit DemoMetadataWriter( char *basePtr ) : m_basePtr( basePtr ) {
-		std::memset( basePtr, 0, SNAP_MAX_DEMO_META_DATA_SIZE );
+	explicit DemoMetadataWriter( char *data ) : m_basePtr( data ) {
+		std::memset( data, 0, SNAP_MAX_DEMO_META_DATA_SIZE );
 	}
 
 	void write( const wsw::StringView &key, const wsw::StringView &value ) {
@@ -147,6 +145,36 @@ public:
 
 	[[nodiscard]]
 	auto resultSoFar() const -> std::pair<size_t, bool> { return { m_writeOff, !m_incomplete }; }
+};
+
+class DemoMetadataReader {
+	const char *const m_basePtr;
+	const unsigned m_dataSize;
+	unsigned m_readOff { 0 };
+public:
+	DemoMetadataReader( const char *data, unsigned dataSize ) : m_basePtr( data ), m_dataSize( dataSize ) {
+		assert( m_basePtr[dataSize] == '\0' );
+	}
+
+	[[nodiscard]]
+	bool hasNext() const { return m_readOff < m_dataSize; }
+
+	[[nodiscard]]
+	auto readNext() -> std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+		const auto keyLen = std::strlen( m_basePtr + m_readOff );
+		if( m_readOff + keyLen + 1 < m_dataSize ) {
+			assert( m_basePtr[m_readOff + keyLen] == '\0' );
+			const auto valueLen = std::strlen( m_basePtr + m_readOff + keyLen + 1 );
+			if( m_readOff + keyLen + valueLen + 2 <= m_dataSize ) {
+				assert( m_basePtr[m_readOff + keyLen + valueLen + 1] == '\0' );
+				wsw::StringView key( m_basePtr + m_readOff, keyLen, wsw::StringView::ZeroTerminated );
+				wsw::StringView value( m_basePtr + m_readOff + keyLen + 1, valueLen, wsw::StringView::ZeroTerminated );
+				m_readOff += keyLen + valueLen + 2;
+				return std::make_pair( key, value );
+			}
+		}
+		return std::nullopt;
+	}
 };
 
 }
