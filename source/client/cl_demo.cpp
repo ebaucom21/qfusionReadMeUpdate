@@ -74,16 +74,16 @@ void CL_Stop_f( void ) {
 	SNAP_StopDemoRecording( cls.demoRecorder.file );
 
 	char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
-	wsw::DemoMetaDataWriter writer( metadata );
+	wsw::DemoMetadataWriter writer( metadata );
 
 	// write some meta information about the match/demo
-	writer.setValue( "hostname"_asView, cl.configStrings.getHostName().value() );
-	writer.setValue( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
-	writer.setValue( "multipov"_asView, "0"_asView );
-	writer.setValue( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
-	writer.setValue( "mapname"_asView, cl.configStrings.getMapName().value() );
-	writer.setValue( "gametype"_asView, cl.configStrings.getGametypeName().value() );
-	writer.setValue( "levelname"_asView, cl.configStrings.getMessage().value() );
+	writer.write( "hostname"_asView, cl.configStrings.getHostName().value() );
+	writer.write( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
+	writer.write( "multipov"_asView, "0"_asView );
+	writer.write( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
+	writer.write( "mapname"_asView, cl.configStrings.getMapName().value() );
+	writer.write( "gametype"_asView, cl.configStrings.getGametypeName().value() );
+	writer.write( "levelname"_asView, cl.configStrings.getMessage().value() );
 
 	FS_FCloseFile( cls.demoRecorder.file );
 

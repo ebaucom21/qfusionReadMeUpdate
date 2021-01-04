@@ -65,12 +65,16 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 
 #include "wswstaticvector.h"
 #include "wswstringview.h"
+#include "wswstdtypes.h"
 
 namespace wsw {
 
+// Preserve the template signature for structural compatibility	regardless of the build kind
 template <typename SpansBuffer = wsw::StaticVector<std::pair<uint16_t, uint16_t>, 64>>
-class DemoMetaDataWriter {
+class DemoMetadataWriter {
+#ifndef PUBLIC_BUILD
 	SpansBuffer m_spansBuffer;
+#endif
 	char *const m_basePtr;
 	unsigned m_writeOff { 0 };
 	bool m_incomplete { false };
@@ -78,6 +82,8 @@ class DemoMetaDataWriter {
 	[[nodiscard]]
 	auto freeBytesLeft() const -> unsigned { return SNAP_MAX_DEMO_META_DATA_SIZE - m_writeOff; }
 
+// Checking for duplicated keys makes sense only in developer builds for now
+#ifndef PUBLIC_BUILD
 	[[nodiscard]]
 	auto findExistingKeyIndex( const wsw::StringView &key ) const -> std::optional<unsigned> {
 		for( unsigned i = 0; i < m_spansBuffer.size(); i += 2 ) {
@@ -89,31 +95,42 @@ class DemoMetaDataWriter {
 		}
 		return std::nullopt;
 	}
+#endif
 
 	[[nodiscard]]
 	bool tryAppendingValue( const wsw::StringView &key, const wsw::StringView &value ) {
 		if( key.length() + value.length() + 2 <= freeBytesLeft() ) {
-			const auto keyOff = (uint16_t)m_writeOff;
+			[[maybe_unused]] const auto keyOff = m_writeOff;
 			key.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
 			assert( m_basePtr[m_writeOff + key.length()] == '\0' );
 			m_writeOff += key.length() + 1;
-			const auto valueOff = (uint16_t)m_writeOff;
+
+			[[maybe_unused]] const auto valueOff = m_writeOff;
 			value.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
 			assert( m_basePtr[m_writeOff + value.length()] == '\0' );
 			m_writeOff += value.length() + 1;
-			// TODO: Check spans capacity (there should be some member availability test)
-			m_spansBuffer.emplace_back( std::make_pair( keyOff, (uint16_t)key.length() ) );
-			m_spansBuffer.emplace_back( std::make_pair( valueOff, (uint16_t)value.length() ) );
+
+#ifndef PUBLIC_BUILD
+			using OffType = typename std::remove_reference<decltype( m_spansBuffer.front().first )>::type;
+			using LenType = typename std::remove_reference<decltype( m_spansBuffer.front().second )>::type;
+			assert( keyOff <= std::numeric_limits<OffType>::max() );
+			assert( key.length() <= std::numeric_limits<LenType>::max() );
+			m_spansBuffer.emplace_back( std::make_pair( keyOff, (LenType)key.length() ) );
+			assert( valueOff <= std::numeric_limits<OffType>::max() );
+			assert( value.length() <= std::numeric_limits<LenType>::max() );
+			m_spansBuffer.emplace_back( std::make_pair( valueOff, (LenType)value.length() ) );
+#endif
 			return true;
 		}
 		return false;
 	}
 public:
-	explicit DemoMetaDataWriter( char *basePtr ) : m_basePtr( basePtr ) {
+	explicit DemoMetadataWriter( char *basePtr ) : m_basePtr( basePtr ) {
 		std::memset( basePtr, 0, SNAP_MAX_DEMO_META_DATA_SIZE );
 	}
 
-	void setValue( const wsw::StringView &key, const wsw::StringView &value ) {
+	void write( const wsw::StringView &key, const wsw::StringView &value ) {
+#ifndef PUBLIC_BUILD
 		if( !m_incomplete ) {
 			if( findExistingKeyIndex( key ) == std::nullopt ) {
 				m_incomplete |= !tryAppendingValue( key, value );
@@ -121,6 +138,11 @@ public:
 				throw std::logic_error( "Supplying duplicated keys is currently disallowed" );
 			}
 		}
+#else
+		if( !m_incomplete ) {
+			m_incomplete |= !tryAppendingValue( key, value );
+		}
+#endif
 	}
 
 	[[nodiscard]]
