@@ -223,20 +223,18 @@ static void SV_Demo_Stop( bool cancel, bool silent ) {
 			Com_Printf( "Error: Failed to delete the temporary server demo file\n" );
 		}
 	} else {
-		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
-		wsw::DemoMetadataWriter writer( metadata );
+		using namespace wsw;
 
-		// write some meta information about the match/demo
-		writer.write( "hostname"_asView, sv.configStrings.getHostName().value() );
-		writer.write( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)svs.demo.localtime ) ) );
-		writer.write( "multipov"_asView, "1"_asView );
-		writer.write( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) ) );
-		writer.write( "mapname"_asView, sv.configStrings.getMapName().value() );
-		writer.write( "gametype"_asView, sv.configStrings.getGametypeName().value() );
-		writer.write( "levelname"_asView, sv.configStrings.getMessage().value() );
-		writer.write( "matchname"_asView, sv.configStrings.getMatchName().value() );
-		writer.write( "matchscore"_asView, sv.configStrings.getMatchScore().value() );
-		writer.write( "matchuuid"_asView, sv.configStrings.getMatchUuid().value() );
+		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
+		DemoMetadataWriter writer( metadata );
+
+		writer.write( kDemoKeyServerName, sv.configStrings.getHostName().value() );
+		writer.write( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)svs.demo.localtime ) ) );
+		writer.write( kDemoKeyMultiPov, "1"_asView );
+		writer.write( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) ) );
+		writer.write( kDemoKeyMapName, sv.configStrings.getMapName().value() );
+		writer.write( kDemoKeyMapChecksum, sv.configStrings.getMapCheckSum().value() );
+		writer.write( kDemoKeyGametype, sv.configStrings.getGametypeName().value() );
 
 		const auto [metadataSize, wasComplete] = writer.resultSoFar();
 		if( !wasComplete ) {

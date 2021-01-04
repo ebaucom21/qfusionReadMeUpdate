@@ -73,17 +73,19 @@ void CL_Stop_f( void ) {
 	// finish up
 	SNAP_StopDemoRecording( cls.demoRecorder.file );
 
+	using namespace wsw;
+
 	char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
-	wsw::DemoMetadataWriter writer( metadata );
+	DemoMetadataWriter writer( metadata );
 
 	// write some meta information about the match/demo
-	writer.write( "hostname"_asView, cl.configStrings.getHostName().value() );
-	writer.write( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
-	writer.write( "multipov"_asView, "0"_asView );
-	writer.write( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
-	writer.write( "mapname"_asView, cl.configStrings.getMapName().value() );
-	writer.write( "gametype"_asView, cl.configStrings.getGametypeName().value() );
-	writer.write( "levelname"_asView, cl.configStrings.getMessage().value() );
+	writer.write( kDemoKeyServerName, ::cl.configStrings.getHostName().value() );
+	writer.write( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
+	writer.write( kDemoKeyMultiPov, "0"_asView );
+	writer.write( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
+	writer.write( kDemoKeyMapName, ::cl.configStrings.getMapName().value() );
+	writer.write( kDemoKeyMapChecksum, ::cl.configStrings.getMapCheckSum().value() );
+	writer.write( kDemoKeyGametype, ::cl.configStrings.getGametypeName().value() );
 
 	FS_FCloseFile( cls.demoRecorder.file );
 
@@ -483,59 +485,4 @@ void CL_DemoJump_f( void ) {
 		cls.demoPlayer.play_jump_time = time; // gametime always starts from 0
 	}
 	cls.demoPlayer.play_jump_latched = true;
-}
-
-/*
-* CL_ReadDemoMetaData
-*/
-size_t CL_ReadDemoMetaData( const char *demopath, char *meta_data, size_t meta_data_size ) {
-	char *servername;
-	size_t meta_data_realsize = 0;
-
-	if( !demopath || !*demopath ) {
-		return 0;
-	}
-
-	// have to copy the argument now, since next actions will lose it
-	servername = Q_strdup( demopath );
-	COM_SanitizeFilePath( servername );
-
-	// hack:
-	if( cls.demoPlayer.playing && !Q_stricmp( cls.demoPlayer.name, servername ) && cls.demoPlayer.meta_data_realsize > 0 ) {
-		if( meta_data && meta_data_size ) {
-			meta_data_realsize = cls.demoPlayer.meta_data_realsize;
-			memcpy( meta_data, cls.demoPlayer.meta_data, std::min( meta_data_size, cls.demoPlayer.meta_data_realsize ) );
-			meta_data[std::min( meta_data_size - 1, cls.demoPlayer.meta_data_realsize )] = '\0';
-		}
-	} else {
-		char *name;
-		size_t name_size;
-		int demofile, demolength;
-
-		name_size = sizeof( char ) * ( strlen( "demos/" ) + strlen( servername ) + strlen( APP_DEMO_EXTENSION_STR ) + 1 );
-		name = (char *)Q_malloc( name_size );
-
-		Q_snprintfz( name, name_size, "demos/%s", servername );
-		COM_DefaultExtension( name, APP_DEMO_EXTENSION_STR, name_size );
-
-		demolength = FS_FOpenFile( name, &demofile, FS_READ | SNAP_DEMO_GZ );
-
-		if( !demofile || demolength < 1 ) {
-			// relative filename didn't work, try launching a demo from absolute path
-			Q_snprintfz( name, name_size, "%s", servername );
-			COM_DefaultExtension( name, APP_DEMO_EXTENSION_STR, name_size );
-			demolength = FS_FOpenAbsoluteFile( name, &demofile, FS_READ );
-		}
-
-		if( demolength > 0 ) {
-			meta_data_realsize = SNAP_ReadDemoMetaData( demofile, meta_data, meta_data_size );
-		}
-		FS_FCloseFile( demofile );
-
-		Q_free( name );
-	}
-
-	Q_free( servername );
-
-	return meta_data_realsize;
 }

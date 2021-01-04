@@ -68,6 +68,15 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 #include "wswstdtypes.h"
 
 namespace wsw {
+// These keys are mandatory.
+// We could have settled on fixed binary offsets instead of keys but an extensible k/v set is a better approach.
+extern const wsw::StringView kDemoKeyServerName;
+extern const wsw::StringView kDemoKeyTimestamp;
+extern const wsw::StringView kDemoKeyMultiPov;
+extern const wsw::StringView kDemoKeyDuration;
+extern const wsw::StringView kDemoKeyMapName;
+extern const wsw::StringView kDemoKeyMapChecksum;
+extern const wsw::StringView kDemoKeyGametype;
 
 class DemoMetadataWriter {
 #ifndef PUBLIC_BUILD

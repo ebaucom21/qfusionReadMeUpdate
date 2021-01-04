@@ -23,6 +23,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <algorithm>
 
+using wsw::operator""_asView;
+
+namespace wsw {
+// We don't want spreading inclusion of _asView so they're declared as extern ones
+const wsw::StringView kDemoKeyServerName( "ServerName"_asView );
+const wsw::StringView kDemoKeyTimestamp( "Timestamp"_asView );
+const wsw::StringView kDemoKeyMultiPov( "MultiPov"_asView );
+const wsw::StringView kDemoKeyDuration( "Duration"_asView );
+const wsw::StringView kDemoKeyMapName( "MapName"_asView );
+const wsw::StringView kDemoKeyMapChecksum( "MapChecksum"_asView );
+const wsw::StringView kDemoKeyGametype( "Gametype"_asView );
+}
+
 #define DEMO_SAFEWRITE( demofile,msg,force ) \
 	if( force || ( msg )->cursize > ( msg )->maxsize / 2 ) \
 	{ \
@@ -105,9 +118,6 @@ static void SNAP_DemoMetaDataMessage( msg_t *msg, const char *meta_data, size_t 
 
 	if( meta_data_realsize > SNAP_MAX_DEMO_META_DATA_SIZE ) {
 		meta_data_realsize = SNAP_MAX_DEMO_META_DATA_SIZE;
-	}
-	if( meta_data_realsize > 0 ) {
-		meta_data_realsize--;
 	}
 
 	meta_data_ofs = msg->cursize - meta_data_ofs;

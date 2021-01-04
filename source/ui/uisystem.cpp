@@ -6,6 +6,7 @@
 #include "../client/client.h"
 #include "callvotesmodel.h"
 #include "chatmodel.h"
+#include "demos.h"
 #include "gametypesmodel.h"
 #include "nativelydrawnitems.h"
 #include "serverlistmodel.h"
@@ -192,6 +193,9 @@ private:
 	CallvotesModelProxy m_callvotesModel;
 
 	ScoreboardModelProxy m_scoreboardModel;
+
+	DemosResolver m_demosResolver;
+	DemosModel m_demosModel { &m_demosResolver };
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -487,6 +491,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	qmlRegisterUncreatableType<ScoreboardSpecsModel>( "net.warsow", 2, 6, "ScoreboardSpecsModel", reason );
 	qmlRegisterUncreatableType<KeysAndBindingsModel>( "net.warsow", 2, 6, "KeysAndBindings", reason );
 	qmlRegisterUncreatableType<ServerListModel>( "net.warsow", 2, 6, "ServerListModel", reason );
+	qmlRegisterUncreatableType<DemosResolver>( "net.warsow", 2, 6, "DemosResolver", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
 
@@ -512,6 +517,8 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
 	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
 	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
+	context->setContextProperty( "demosModel", &m_demosModel );
+	context->setContextProperty( "demosResolver", &m_demosResolver );
 
 	m_component = new QQmlComponent( m_engine );
 
