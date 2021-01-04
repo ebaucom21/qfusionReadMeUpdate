@@ -235,8 +235,6 @@ typedef struct {
 	time_t localtime;
 	int64_t basetime, duration;
 	client_t client;                // special client for writing the messages
-	char meta_data[SNAP_MAX_DEMO_META_DATA_SIZE];
-	size_t meta_data_realsize;
 } server_static_demo_t;
 
 typedef server_static_demo_t demorec_t;

@@ -61,9 +61,73 @@ void SNAP_BeginDemoRecording( int demofile, unsigned int spawncount, unsigned in
 void SNAP_StopDemoRecording( int demofile );
 void SNAP_WriteDemoMetaData( const char *filename, const char *meta_data, size_t meta_data_realsize );
 size_t SNAP_ClearDemoMeta( char *meta_data, size_t meta_data_max_size );
-size_t SNAP_SetDemoMetaKeyValue( char *meta_data, size_t meta_data_max_size, size_t meta_data_realsize,
-								 const char *key, const char *value );
 size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_size );
+
+#include "wswstaticvector.h"
+#include "wswstringview.h"
+
+namespace wsw {
+
+template <typename SpansBuffer = wsw::StaticVector<std::pair<uint16_t, uint16_t>, 64>>
+class DemoMetaDataWriter {
+	SpansBuffer m_spansBuffer;
+	char *const m_basePtr;
+	unsigned m_writeOff { 0 };
+	bool m_incomplete { false };
+
+	[[nodiscard]]
+	auto freeBytesLeft() const -> unsigned { return SNAP_MAX_DEMO_META_DATA_SIZE - m_writeOff; }
+
+	[[nodiscard]]
+	auto findExistingKeyIndex( const wsw::StringView &key ) const -> std::optional<unsigned> {
+		for( unsigned i = 0; i < m_spansBuffer.size(); i += 2 ) {
+			const auto [keyOff, keyLen] = m_spansBuffer[i + 0];
+			const wsw::StringView existingKey( m_basePtr + keyOff, keyLen, wsw::StringView::ZeroTerminated );
+			if( existingKey.equalsIgnoreCase( key ) ) {
+				return i;
+			}
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]]
+	bool tryAppendingValue( const wsw::StringView &key, const wsw::StringView &value ) {
+		if( key.length() + value.length() + 2 <= freeBytesLeft() ) {
+			const auto keyOff = (uint16_t)m_writeOff;
+			key.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
+			assert( m_basePtr[m_writeOff + key.length()] == '\0' );
+			m_writeOff += key.length() + 1;
+			const auto valueOff = (uint16_t)m_writeOff;
+			value.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
+			assert( m_basePtr[m_writeOff + value.length()] == '\0' );
+			m_writeOff += value.length() + 1;
+			// TODO: Check spans capacity (there should be some member availability test)
+			m_spansBuffer.emplace_back( std::make_pair( keyOff, (uint16_t)key.length() ) );
+			m_spansBuffer.emplace_back( std::make_pair( valueOff, (uint16_t)value.length() ) );
+			return true;
+		}
+		return false;
+	}
+public:
+	explicit DemoMetaDataWriter( char *basePtr ) : m_basePtr( basePtr ) {
+		std::memset( basePtr, 0, SNAP_MAX_DEMO_META_DATA_SIZE );
+	}
+
+	void setValue( const wsw::StringView &key, const wsw::StringView &value ) {
+		if( !m_incomplete ) {
+			if( findExistingKeyIndex( key ) == std::nullopt ) {
+				m_incomplete |= !tryAppendingValue( key, value );
+			} else {
+				throw std::logic_error( "Supplying duplicated keys is currently disallowed" );
+			}
+		}
+	}
+
+	[[nodiscard]]
+	auto resultSoFar() const -> std::pair<size_t, bool> { return { m_writeOff, !m_incomplete }; }
+};
+
+}
 
 #endif
 

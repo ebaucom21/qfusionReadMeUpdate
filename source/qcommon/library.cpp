@@ -180,11 +180,11 @@ void Com_UnloadGameLibrary( void **handle ) {
 		if( !iter ) {
 			char *p;
 
-			FS_RemoveAbsoluteFile( gamelib->fullname );
+			//FS_RemoveAbsoluteFile( gamelib->fullname );
 			p = strrchr( gamelib->fullname, '/' );
 			if( p ) {
 				*p = '\0';
-				FS_RemoveAbsoluteDirectory( gamelib->fullname );
+				//FS_RemoveAbsoluteDirectory( gamelib->fullname );
 			}
 		}
 

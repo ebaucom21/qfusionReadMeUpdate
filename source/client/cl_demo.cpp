@@ -23,6 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
+using wsw::operator""_asView;
+
 static void CL_PauseDemo( bool paused );
 
 /*
@@ -71,30 +73,26 @@ void CL_Stop_f( void ) {
 	// finish up
 	SNAP_StopDemoRecording( cls.demoRecorder.file );
 
-	char meta_data[SNAP_MAX_DEMO_META_DATA_SIZE];
-	memset( meta_data, 0, sizeof( meta_data ) );
-
-	size_t meta_data_realsize = 0;
-
-#define CL_SetDemoMetaKeyValue( k,v ) meta_data_realsize = SNAP_SetDemoMetaKeyValue( meta_data, sizeof( meta_data ), meta_data_realsize, k, v )
+	char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
+	wsw::DemoMetaDataWriter writer( metadata );
 
 	// write some meta information about the match/demo
-	CL_SetDemoMetaKeyValue( "hostname", cl.configStrings.getHostName()->data() );
-	CL_SetDemoMetaKeyValue( "localtime", va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) );
-	CL_SetDemoMetaKeyValue( "multipov", "0" );
-	CL_SetDemoMetaKeyValue( "duration", va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) );
-	CL_SetDemoMetaKeyValue( "mapname", cl.configStrings.getMapName()->data() );
-	CL_SetDemoMetaKeyValue( "gametype", cl.configStrings.getGametypeName()->data() );
-	CL_SetDemoMetaKeyValue( "levelname", cl.configStrings.getMessage()->data() );
-	CL_SetDemoMetaKeyValue( "matchname", cl.configStrings.getMatchName()->data() );
-	CL_SetDemoMetaKeyValue( "matchscore", cl.configStrings.getMatchScore()->data() );
-	CL_SetDemoMetaKeyValue( "matchuuid", cl.configStrings.getMatchUuid()->data() );
-
-#undef CL_SetDemoMetaKeyValue
+	writer.setValue( "hostname"_asView, cl.configStrings.getHostName().value() );
+	writer.setValue( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
+	writer.setValue( "multipov"_asView, "0"_asView );
+	writer.setValue( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
+	writer.setValue( "mapname"_asView, cl.configStrings.getMapName().value() );
+	writer.setValue( "gametype"_asView, cl.configStrings.getGametypeName().value() );
+	writer.setValue( "levelname"_asView, cl.configStrings.getMessage().value() );
 
 	FS_FCloseFile( cls.demoRecorder.file );
 
-	SNAP_WriteDemoMetaData( cls.demoRecorder.filename, meta_data, meta_data_realsize );
+	const auto [metadataSize, wasComplete] = writer.resultSoFar();
+	if( !wasComplete ) {
+		Com_Printf( S_COLOR_YELLOW "The demo metadata was truncated\n" );
+	}
+
+	SNAP_WriteDemoMetaData( cls.demoRecorder.filename, metadata, metadataSize );
 
 	// cancel the demos
 	if( cancel ) {

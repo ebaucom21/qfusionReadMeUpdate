@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sv_snap.h"
 
+using wsw::operator""_asView;
+
 #define SV_DEMO_DIR va( "demos/server%s%s", sv_demodir->string[0] ? "/" : "", sv_demodir->string[0] ? sv_demodir->string : "" )
 
 /*
@@ -41,9 +43,6 @@ static void SV_Demo_WriteMessage( msg_t *msg ) {
 * SV_Demo_WriteStartMessages
 */
 static void SV_Demo_WriteStartMessages( void ) {
-	// clear demo meta data, we'll write some keys later
-	svs.demo.meta_data_realsize = SNAP_ClearDemoMeta( svs.demo.meta_data, sizeof( svs.demo.meta_data ) );
-
 	SNAP_BeginDemoRecording( svs.demo.file, svs.spawncount, svc.snapFrameTime, sv.mapname, SV_BITFLAGS_RELIABLE,
 							 svs.purelist, sv.configStrings, sv.baselines );
 }
@@ -197,10 +196,6 @@ void SV_Demo_Start_f( void ) {
 	svs.demo.client.nodelta = false;
 }
 
-inline void SV_SetDemoMetaKeyValue( const char *key, const char *value ) {
-	svs.demo.meta_data_realsize = SNAP_SetDemoMetaKeyValue( svs.demo.meta_data, sizeof( svs.demo.meta_data ), svs.demo.meta_data_realsize, key, value );
-}
-
 /*
 * SV_Demo_Stop
 */
@@ -228,19 +223,27 @@ static void SV_Demo_Stop( bool cancel, bool silent ) {
 			Com_Printf( "Error: Failed to delete the temporary server demo file\n" );
 		}
 	} else {
-		// write some meta information about the match/demo
-		SV_SetDemoMetaKeyValue( "hostname", sv.configStrings.getHostName()->data() );
-		SV_SetDemoMetaKeyValue( "localtime", va( "%" PRIu64, (uint64_t)svs.demo.localtime ) );
-		SV_SetDemoMetaKeyValue( "multipov", "1" );
-		SV_SetDemoMetaKeyValue( "duration", va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) );
-		SV_SetDemoMetaKeyValue( "mapname", sv.configStrings.getMapName()->data() );
-		SV_SetDemoMetaKeyValue( "gametype", sv.configStrings.getGametypeName()->data() );
-		SV_SetDemoMetaKeyValue( "levelname", sv.configStrings.getMessage()->data() );
-		SV_SetDemoMetaKeyValue( "matchname", sv.configStrings.getMatchName()->data() );
-		SV_SetDemoMetaKeyValue( "matchscore", sv.configStrings.getMatchScore()->data() );
-		SV_SetDemoMetaKeyValue( "matchuuid", sv.configStrings.getMatchUuid()->data() );
+		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
+		wsw::DemoMetaDataWriter writer( metadata );
 
-		SNAP_WriteDemoMetaData( svs.demo.tempname, svs.demo.meta_data, svs.demo.meta_data_realsize );
+		// write some meta information about the match/demo
+		writer.setValue( "hostname"_asView, sv.configStrings.getHostName().value() );
+		writer.setValue( "localtime"_asView, wsw::StringView( va( "%" PRIu64, (uint64_t)svs.demo.localtime ) ) );
+		writer.setValue( "multipov"_asView, "1"_asView );
+		writer.setValue( "duration"_asView, wsw::StringView( va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) ) );
+		writer.setValue( "mapname"_asView, sv.configStrings.getMapName().value() );
+		writer.setValue( "gametype"_asView, sv.configStrings.getGametypeName().value() );
+		writer.setValue( "levelname"_asView, sv.configStrings.getMessage().value() );
+		writer.setValue( "matchname"_asView, sv.configStrings.getMatchName().value() );
+		writer.setValue( "matchscore"_asView, sv.configStrings.getMatchScore().value() );
+		writer.setValue( "matchuuid"_asView, sv.configStrings.getMatchUuid().value() );
+
+		const auto [metadataSize, wasComplete] = writer.resultSoFar();
+		if( !wasComplete ) {
+			Com_Printf( S_COLOR_YELLOW "The demo metadata was truncated\n" );
+		}
+
+		SNAP_WriteDemoMetaData( svs.demo.tempname, metadata, metadataSize );
 
 		if( !FS_MoveFile( svs.demo.tempname, svs.demo.filename ) ) {
 			Com_Printf( "Error: Failed to rename the server demo file\n" );
