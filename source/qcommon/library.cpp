@@ -180,11 +180,18 @@ void Com_UnloadGameLibrary( void **handle ) {
 		if( !iter ) {
 			char *p;
 
-			//FS_RemoveAbsoluteFile( gamelib->fullname );
-			p = strrchr( gamelib->fullname, '/' );
-			if( p ) {
-				*p = '\0';
-				//FS_RemoveAbsoluteDirectory( gamelib->fullname );
+#ifdef PUBLIC_BUILD
+			[[maybe_unused]] constexpr bool remove = true;
+#else
+			const bool remove = !Cvar_Integer( "keep_libs" );
+#endif
+			if( remove ) {
+				FS_RemoveAbsoluteFile( gamelib->fullname );
+				p = strrchr( gamelib->fullname, '/' );
+				if( p ) {
+					*p = '\0';
+					FS_RemoveAbsoluteDirectory( gamelib->fullname );
+				}
 			}
 		}
 
