@@ -7,6 +7,7 @@ Column {
     id: root
     spacing: 12
     property var model
+    property color highlightColor
 
     Repeater {
         model: root.model
@@ -15,6 +16,7 @@ Column {
             text: modelData["text"]
             command: modelData["command"]
             commandNum: modelData["commandNum"]
+            highlightColor: root.highlightColor
         }
     }
 }

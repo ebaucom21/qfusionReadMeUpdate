@@ -9,10 +9,13 @@ MouseArea {
     property string text
     property string command
     property int commandNum
-    property int commandGroup
+    property color highlightColor
 
     property real defaultLabelWidth
     property real defaultLabelHeight
+
+    property bool externallyHighlighted
+    readonly property bool highlighted: containsMouse || externallyHighlighted
 
     hoverEnabled: true
     implicitHeight: Math.max(marker.height, defaultLabelHeight) + 4
@@ -21,11 +24,12 @@ MouseArea {
     Component.onCompleted: keysAndBindings.registerCommandItem(root, commandNum)
     Component.onDestruction: keysAndBindings.unregisterCommandItem(root, commandNum)
 
-    onClicked: keysAndBindings.onCommandItemClicked(root, commandNum)
+    onContainsMouseChanged: keysAndBindings.onCommandItemContainsMouseChanged(root, commandNum, containsMouse)
 
     Label {
         id: marker
         text: "\u2716"
+        color: highlighted ? highlightColor : Material.foreground
         readonly property real defaultWidth: width
         anchors {
             left: parent.left
@@ -36,8 +40,9 @@ MouseArea {
     Label {
         id: label
         text: root.text
-        font.pointSize: root.containsMouse ? 12 : 11
-        font.weight: root.containsMouse ? Font.Medium : Font.Normal
+        color: highlighted ? highlightColor : Material.foreground
+        font.underline: highlighted
+        font.weight: highlighted ? Font.Bold : Font.Normal
         anchors {
             left: marker.right
             leftMargin: 12

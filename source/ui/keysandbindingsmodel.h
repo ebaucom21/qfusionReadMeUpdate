@@ -36,11 +36,12 @@ public:
 
 	Q_INVOKABLE void registerKeyItem( QQuickItem *item, int quakeKey );
 	Q_INVOKABLE void unregisterKeyItem( QQuickItem *item, int quakeKey );
-	Q_INVOKABLE void onKeyItemClicked( QQuickItem *item, int quakeKey );
+
+	Q_INVOKABLE void onKeyItemContainsMouseChanged( QQuickItem *keyItem, int quakeKey, bool contains );
+	Q_INVOKABLE void onCommandItemContainsMouseChanged( QQuickItem *commandItem, int commandNum, bool contains );
 
 	Q_INVOKABLE void registerCommandItem( QQuickItem *item, int commandNum );
 	Q_INVOKABLE void unregisterCommandItem( QQuickItem *item, int commandNum );
-	Q_INVOKABLE void onCommandItemClicked( QQuickItem *item, int commandNum );
 private:
 	QJsonArray m_keyboardMainPadRowModel[6];
 	QJsonArray m_keyboardArrowPadRowModel[5];

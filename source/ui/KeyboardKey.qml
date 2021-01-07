@@ -16,15 +16,21 @@ Item {
     property real rowSpacing
     property bool hidden: false
 
+    property bool externallyHighlighted
+    property bool highlighted: mouseArea.containsMouse || externallyHighlighted
+
+    readonly property color highlightColor: keysAndBindings.colorForGroup(root.group)
+    readonly property color highlightBackground: Qt.rgba(highlightColor.r, highlightColor.g, highlightColor.b, 0.075)
+
     Rectangle {
-        color: !hidden ? Qt.rgba(0, 0, 0, 0.3) : "transparent"
+        color: !hidden ? (root.group ? highlightBackground : Qt.rgba(0, 0, 0, 0.3)) : "transparent"
         radius: 5
         width: parent.width
         height: parent.height * rowSpan + rowSpacing * (rowSpan - 1)
 
         border {
-            width: mouseArea.containsMouse ? 2 : 0
-            color: Material.accentColor
+            width: highlighted ? 2 : 0
+            color: root.group ? highlightColor : Material.accentColor
         }
         anchors {
             top: parent.top
@@ -44,7 +50,7 @@ Item {
             height: 5
             radius: 2.5
             visible: !!root.group && root.visible && root.enabled
-            color: keysAndBindings.colorForGroup(root.group)
+            color: highlightColor
         }
 
         MouseArea {
@@ -54,6 +60,9 @@ Item {
             anchors.centerIn: parent
             width: parent.width - 10
             height: parent.height - 10
+            onContainsMouseChanged: {
+                keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
+            }
         }
 
         Label {

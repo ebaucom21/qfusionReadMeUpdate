@@ -82,6 +82,11 @@ Item {
         ]
     }
 
+    readonly property color movementGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.MovementGroup)
+    readonly property color weaponGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.WeaponGroup)
+    readonly property color actionGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.ActionGroup)
+    readonly property color respectGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.RespectGroup)
+
     RowLayout {
         spacing: 32
         anchors {
@@ -103,13 +108,14 @@ Item {
 
             Rectangle {
                 height: 3; width: movementColumn.width
-                color: keysAndBindings.colorForGroup(KeysAndBindings.MovementGroup)
+                color: movementGroupColor
             }
 
             BindableCommandsColumn {
                 id: movementColumn
                 Layout.alignment: Qt.AlignTop
                 model: keysAndBindings.commandsMovementColumn
+                highlightColor: movementGroupColor
             }
         }
 
@@ -126,7 +132,7 @@ Item {
 
             Rectangle {
                 height: 3; width: weaponColumnsRow.width
-                color: keysAndBindings.colorForGroup(KeysAndBindings.WeaponGroup)
+                color: weaponGroupColor
             }
 
             RowLayout {
@@ -136,11 +142,13 @@ Item {
                 BindableCommandsColumn {
                     Layout.alignment: Qt.AlignTop
                     model: keysAndBindings.commandsWeaponsColumn1
+                    highlightColor: weaponGroupColor
                 }
 
                 BindableCommandsColumn {
                     Layout.alignment: Qt.AlignTop
                     model: keysAndBindings.commandsWeaponsColumn2
+                    highlightColor: weaponGroupColor
                 }
             }
         }
@@ -158,13 +166,14 @@ Item {
 
             Rectangle {
                 height: 3; width: actionsColumn.width
-                color: keysAndBindings.colorForGroup(KeysAndBindings.ActionGroup)
+                color: actionGroupColor
             }
 
             BindableCommandsColumn {
                 id: actionsColumn
                 Layout.alignment: Qt.AlignTop
                 model: keysAndBindings.commandsActionsColumn
+                highlightColor: actionGroupColor
             }
         }
 
@@ -181,7 +190,7 @@ Item {
 
             Rectangle {
                 height: 3; width: respectColumnsRow.width
-                color: keysAndBindings.colorForGroup(KeysAndBindings.RespectGroup)
+                color: respectGroupColor
             }
 
             RowLayout {
@@ -191,11 +200,13 @@ Item {
                 BindableCommandsColumn {
                     Layout.alignment: Qt.AlignTop
                     model: keysAndBindings.commandsRespectColumn1
+                    highlightColor: respectGroupColor
                 }
 
                 BindableCommandsColumn {
                     Layout.alignment: Qt.AlignTop
                     model: keysAndBindings.commandsRespectColumn2
+                    highlightColor: respectGroupColor
                 }
             }
         }

@@ -82,10 +82,10 @@ static KeyboardRowEntry kMainPadRow4[] {
 	{ "G", (int)'g' },
 	{ "H", (int)'h' },
 	{ "J", (int)'j' },
-	{ "K", (int)'h' },
+	{ "K", (int)'k' },
 	{ "L", (int)'l' },
 	{ ":", (int)';' },
-	{ "\"", (int)',' },
+	{ "\"", (int)'\'' },
 	{ "ENTER", K_ENTER, 2.0 }
 };
 
@@ -219,13 +219,13 @@ static const QColor kColorForGroup[] = {
 	QColor::fromRgbF( colorCyan[0], colorCyan[1], colorCyan[2], colorCyan[3] ),
 	QColor::fromRgbF( colorRed[0], colorRed[1], colorRed[2], colorRed[3] ),
 	QColor::fromRgbF( colorMagenta[0], colorMagenta[1], colorMagenta[2], colorMagenta[3] ),
-	QColor::fromRgbF( colorDkGrey[0], colorDkGrey[1], colorDkGrey[2], colorDkGrey[3] )
+	QColor::fromRgbF( colorLtGrey[0], colorLtGrey[1], colorLtGrey[2], colorLtGrey[3] )
 };
 
 static const QColor kTransparentColor( QColor::fromRgb( 0, 0, 0, 0 ) );
 
 auto KeysAndBindingsModel::colorForGroup( int group ) const -> QColor {
-	if( group >= MovementGroup && group < UnknownGroup ) {
+	if( group >= MovementGroup && group <= UnknownGroup ) {
 		return kColorForGroup[group - MovementGroup];
 	}
 	return kTransparentColor;
@@ -418,14 +418,14 @@ auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) c
 }
 
 void KeysAndBindingsModel::registerKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (unsigned)quakeKey <= m_keyItems.size() ) {
+	if( (size_t)( quakeKey - 1 ) < m_keyItems.size() ) {
 		assert( !m_keyItems[quakeKey] );
 		m_keyItems[quakeKey] = item;
 	}
 }
 
 void KeysAndBindingsModel::unregisterKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (unsigned)quakeKey <= sizeof( m_keyItems ) ) {
+	if( (size_t)quakeKey <= sizeof( m_keyItems ) ) {
 		assert( m_keyItems[quakeKey] == item );
 		m_keyItems[quakeKey] = nullptr;
 	}
@@ -529,7 +529,7 @@ static CommandsColumnEntry kRespectCommandsColumn2[] {
 	{ "Say tks!", "say tks" },
 	{ "Say soz!", "say soz" },
 	{ "Say n1!", "say n1" },
-	{ "Say ht!", "say nt" },
+	{ "Say nt!", "say nt" },
 	{ "Say lol!", "say lol" }
 };
 
@@ -585,10 +585,33 @@ KeysAndBindingsModel::KeysAndBindingsModel() {
 	m_keyboardNumPadRowModel[4] = keyboardRowToJsonArray( kNumPadRow5 );
 }
 
-void KeysAndBindingsModel::onKeyItemClicked( QQuickItem *item, int quakeKey ) {
+void KeysAndBindingsModel::onKeyItemContainsMouseChanged( QQuickItem *keyItem, int quakeKey, bool contains ) {
+	// Find a command with the respective binding
+	if( const auto it = m_oldKeyBindings.find( quakeKey ); it != m_oldKeyBindings.end() ) {
+		const wsw::String &command = it->second;
+		if( const auto maybeCommandNum = getCommandNum( wsw::StringView( command.data(), command.size() ) ) ) {
+			if ( QQuickItem *commandItem = m_commandItems[*maybeCommandNum] ) {
+				commandItem->setProperty( "externallyHighlighted", contains );
+			}
+		}
+	}
 }
 
-void KeysAndBindingsModel::onCommandItemClicked( QQuickItem *item, int commandNum ) {
+void KeysAndBindingsModel::onCommandItemContainsMouseChanged( QQuickItem *commandItem, int commandNum, bool contains ) {
+	// Find keys with the respective bindings
+	// TODO: This is quite bad, should eventually be rewritten
+	for( int i = 0; i < 256; ++i ) {
+		if( const auto it = m_oldKeyBindings.find( i ); it != m_oldKeyBindings.end() ) {
+			const wsw::String &command = it->second;
+			if( const auto maybeCommandNum = getCommandNum( wsw::StringView( command.data(), command.size() ) ) ) {
+				if( *maybeCommandNum == commandNum ) {
+					if( QQuickItem *keyItem = m_keyItems[i] ) {
+						keyItem->setProperty( "externallyHighlighted", contains );
+					}
+				}
+			}
+		}
+	}
 }
 
 }
