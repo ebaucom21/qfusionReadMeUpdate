@@ -159,10 +159,7 @@ private:
 	[[nodiscard]]
 	bool reloadRowKeyBindings( QJsonArray &row );
 
-	void reloadCommandBindings( QJsonArray *columnsBegin, QJsonArray *columnsEnd, const wsw::StringView &changedSignalPrefix );
-
-	[[nodiscard]]
-	bool reloadColumnCommandBindings( QJsonArray &column );
+	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
 	auto registerKnownBindings( wsw::HashMap<wsw::String, int> &dest,
@@ -197,6 +194,9 @@ private:
 	wsw::HashMap<wsw::String, int> m_otherBindingNums;
 	wsw::HashMap<wsw::String, int> m_weaponBindingNums;
 	wsw::HashMap<wsw::String, int> m_respectBindingNums;
+
+	// TODO: Optimize
+	wsw::Vector<int> m_boundKeysForCommand[kMaxCommands];
 
 	// TODO: Optimize by avoiding allocations
 	// (all known bindings/commands can use &'static lifetime)

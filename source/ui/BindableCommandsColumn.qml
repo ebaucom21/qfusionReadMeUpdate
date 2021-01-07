@@ -16,6 +16,7 @@ Column {
             text: modelData["text"]
             command: modelData["command"]
             commandNum: modelData["commandNum"]
+            isBound: modelData["isBound"]
             highlightColor: root.highlightColor
         }
     }

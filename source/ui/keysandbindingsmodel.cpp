@@ -198,14 +198,21 @@ static auto keyboardRowToJsonArray( const T &row ) -> QJsonArray {
 	return keyboardRowToJsonArray( std::begin( row ), std::end( row ) );
 }
 
-static const wsw::StringView kKeyboardMainPadRow( "keyboardMainPadRow" );
-static const wsw::StringView kKeyboardArrowPadRow( "keyboardArrowPadRow" );
-static const wsw::StringView kKeyboardNumPadRow( "keyboardNumPadRow" );
-
 void KeysAndBindingsModel::reload() {
-	reloadKeyBindings( m_keyboardMainPadRowModel, kKeyboardMainPadRow );
-	reloadKeyBindings( m_keyboardArrowPadRowModel, kKeyboardArrowPadRow );
-	reloadKeyBindings( m_keyboardNumPadRowModel, kKeyboardNumPadRow );
+	for( auto &keys : m_boundKeysForCommand ) {
+		keys.clear();
+	}
+
+	reloadKeyBindings( m_keyboardMainPadRowModel, "keyboardMainPadRow"_asView );
+	reloadKeyBindings( m_keyboardArrowPadRowModel, "keyboardArrowPadRow"_asView );
+	reloadKeyBindings( m_keyboardNumPadRowModel, "keyboardNumPadRow"_asView );
+
+	reloadColumnCommandBindings( m_commandsMovementColumnModel, "commandsMovementColumnChanged"_asView );
+	reloadColumnCommandBindings( m_commandsWeaponsColumnModel[0], "commandsWeaponsColumn1Changed"_asView );
+	reloadColumnCommandBindings( m_commandsWeaponsColumnModel[1], "commandsWeaponsColumn2Changed"_asView );
+	reloadColumnCommandBindings( m_commandsActionsColumnModel, "commandsActionsColumnChanged"_asView );
+	reloadColumnCommandBindings( m_commandsRespectColumnModel[0], "commandsRespectColumn1Changed"_asView );
+	reloadColumnCommandBindings( m_commandsRespectColumnModel[1], "commandsRespectColumn2Changed"_asView );
 }
 
 static_assert( KeysAndBindingsModel::MovementGroup == 1 );
@@ -299,11 +306,9 @@ bool KeysAndBindingsModel::reloadRowKeyBindings( QJsonArray &row ) {
 			if( !maybeCurrBinding ) {
 				continue;
 			}
-			//
-			// TODO: Set the current binding num as a field
-			//
 			if( auto maybeNum = getCommandNum( *maybeCurrBinding ) ) {
 				obj[kGroupKey] = (int)m_commandBindingGroups[*maybeNum];
+				m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
 			} else {
 				obj[kGroupKey] = (int)UnknownGroup;
 			}
@@ -318,15 +323,15 @@ bool KeysAndBindingsModel::reloadRowKeyBindings( QJsonArray &row ) {
 				const auto binding = *maybeCurrBinding;
 				wsw::StringView iterValueView( it->second.data(), it->second.size() );
 				if( iterValueView.equals( binding ) ) {
+					if( auto maybeNum = getCommandNum( binding ) ) {
+						m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
+					}
 					continue;
 				}
-				//
-				// TODO: Set the current binding num as a field
-				//
-
 				// TODO: Generalize
 				if( auto maybeNum = getCommandNum( binding ) ) {
 					obj[kGroupKey] = (int)m_commandBindingGroups[*maybeNum];
+					m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
 				} else {
 					obj[kGroupKey] = (int)UnknownGroup;
 				}
@@ -346,26 +351,25 @@ bool KeysAndBindingsModel::reloadRowKeyBindings( QJsonArray &row ) {
 	return wasRowModified;
 }
 
-void KeysAndBindingsModel::reloadCommandBindings( QJsonArray *columnsBegin, QJsonArray *columnsEnd,
-												  const wsw::StringView &changedSignalPrefix ) {
-	ChangedSignalNameComposer signalNameComposer( changedSignalPrefix );
-	for( QJsonArray *column = columnsBegin; column != columnsEnd; ++column ) {
-		if( !reloadRowKeyBindings( *column ) ) {
-			continue;
-		}
-
-		const auto signalNum = (int)( column - columnsBegin );
-		QMetaObject::invokeMethod( this, signalNameComposer.getSignalNameForNum( signalNum ) );
-	}
-}
-
-bool KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column ) {
+void KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column, const wsw::StringView &changedSignal ) {
 	bool wasColumnModified = false;
-	for( QJsonValueRef ref : column ) {
+	for( QJsonValueRef ref: column ) {
 		QJsonObject obj( ref.toObject() );
-		// TODO: Determine what key gets bound here
+		const int commandNum = obj["commandNum"].toInt();
+		assert( (unsigned)commandNum < (unsigned)kMaxCommands );
+		const wsw::Vector<int> &boundKeys = m_boundKeysForCommand[commandNum];
+		const bool isActuallyBound = !boundKeys.empty();
+		if( obj["isBound"].toBool() != isActuallyBound ) {
+			obj["isBound"] = isActuallyBound;
+			wasColumnModified = true;
+			ref = obj;
+		}
 	}
-	return wasColumnModified;
+
+	assert( changedSignal.isZeroTerminated() );
+	if( wasColumnModified ) {
+		QMetaObject::invokeMethod( this, changedSignal.data() );
+	}
 }
 
 static const wsw::StringView kMovementCommands[] = {
@@ -418,27 +422,27 @@ auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) c
 }
 
 void KeysAndBindingsModel::registerKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (size_t)( quakeKey - 1 ) < m_keyItems.size() ) {
+	if( (size_t)( quakeKey - 1 ) < (size_t)( m_keyItems.size() - 1 ) ) {
 		assert( !m_keyItems[quakeKey] );
 		m_keyItems[quakeKey] = item;
 	}
 }
 
 void KeysAndBindingsModel::unregisterKeyItem( QQuickItem *item, int quakeKey ) {
-	if( (size_t)quakeKey <= sizeof( m_keyItems ) ) {
+	if( (size_t)( quakeKey - 1 ) < (size_t)( m_keyItems.size() - 1 ) ) {
 		assert( m_keyItems[quakeKey] == item );
 		m_keyItems[quakeKey] = nullptr;
 	}
 }
 
 void KeysAndBindingsModel::registerCommandItem( QQuickItem *item, int commandNum ) {
-	assert( (size_t)( commandNum - 1 ) < m_commandItems.size() );
+	assert( (size_t)commandNum < m_commandItems.size() );
 	assert( !m_commandItems[commandNum] );
 	m_commandItems[commandNum] = item;
 }
 
 void KeysAndBindingsModel::unregisterCommandItem( QQuickItem *item, int commandNum ) {
-	assert( (size_t)( commandNum - 1 ) < m_commandItems.size() );
+	assert( (size_t)commandNum < m_commandItems.size() );
 	assert( item == m_commandItems[commandNum] );
 	m_commandItems[commandNum] = nullptr;
 }
@@ -543,7 +547,8 @@ auto KeysAndBindingsModel::commandsColumnToJsonArray( CommandsColumnEntry *begin
 		QJsonObject obj {
 			{ "text", entry->text },
 			{ "command", entry->command },
-			{ "commandNum", *maybeNum }
+			{ "commandNum", *maybeNum },
+			{ "isBound", false }
 		};
 		result.append( obj );
 	}
@@ -598,18 +603,10 @@ void KeysAndBindingsModel::onKeyItemContainsMouseChanged( QQuickItem *keyItem, i
 }
 
 void KeysAndBindingsModel::onCommandItemContainsMouseChanged( QQuickItem *commandItem, int commandNum, bool contains ) {
-	// Find keys with the respective bindings
-	// TODO: This is quite bad, should eventually be rewritten
-	for( int i = 0; i < 256; ++i ) {
-		if( const auto it = m_oldKeyBindings.find( i ); it != m_oldKeyBindings.end() ) {
-			const wsw::String &command = it->second;
-			if( const auto maybeCommandNum = getCommandNum( wsw::StringView( command.data(), command.size() ) ) ) {
-				if( *maybeCommandNum == commandNum ) {
-					if( QQuickItem *keyItem = m_keyItems[i] ) {
-						keyItem->setProperty( "externallyHighlighted", contains );
-					}
-				}
-			}
+	assert( (unsigned)commandNum < (unsigned)kMaxCommands );
+	for( int key : m_boundKeysForCommand[commandNum] ) {
+		if( QQuickItem *keyItem = m_keyItems[key] ) {
+			keyItem->setProperty( "externallyHighlighted", contains );
 		}
 	}
 }

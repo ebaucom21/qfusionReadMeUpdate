@@ -14,23 +14,26 @@ MouseArea {
     property real defaultLabelWidth
     property real defaultLabelHeight
 
+    property bool isBound
     property bool externallyHighlighted
-    readonly property bool highlighted: containsMouse || externallyHighlighted
+    readonly property bool highlighted: isBound && (containsMouse || externallyHighlighted)
 
     hoverEnabled: true
     implicitHeight: Math.max(marker.height, defaultLabelHeight) + 4
-    implicitWidth: marker.defaultWidth + defaultLabelWidth + 12
+    implicitWidth: marker.width + defaultLabelWidth + 12
 
     Component.onCompleted: keysAndBindings.registerCommandItem(root, commandNum)
     Component.onDestruction: keysAndBindings.unregisterCommandItem(root, commandNum)
 
     onContainsMouseChanged: keysAndBindings.onCommandItemContainsMouseChanged(root, commandNum, containsMouse)
 
-    Label {
+    Rectangle {
         id: marker
-        text: "\u2716"
+        visible: isBound
+        width: 5
+        height: 5
+        radius: 2.5
         color: highlighted ? highlightColor : Material.foreground
-        readonly property real defaultWidth: width
         anchors {
             left: parent.left
             verticalCenter: parent.verticalCenter
