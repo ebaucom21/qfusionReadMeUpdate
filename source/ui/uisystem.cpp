@@ -185,7 +185,9 @@ private:
 	bool m_isValidAndReady { false };
 	bool m_skipDrawingSelf { false };
 
-	ServerListModel *m_serverListModel { nullptr };
+	ServerListModel m_serverListModel;
+	GametypesModel m_gametypesModel;
+	KeysAndBindingsModel m_keysAndBindingsModel;
 
 	ChatModelProxy m_chatModel;
 	ChatModelProxy m_teamChatModel;
@@ -499,12 +501,10 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_engine->rootContext()->setContextProperty( "wsw", this );
 	m_engine->addImageProvider( "wsw", new wsw::ui::WswImageProvider );
 
-	m_serverListModel = new ServerListModel;
-
 	QQmlContext *context = m_engine->rootContext();
-	context->setContextProperty( "serverListModel", m_serverListModel );
-	context->setContextProperty( "keysAndBindings", new KeysAndBindingsModel );
-	context->setContextProperty( "gametypesModel", new GametypesModel );
+	context->setContextProperty( "serverListModel", &m_serverListModel );
+	context->setContextProperty( "keysAndBindings", &m_keysAndBindingsModel );
+	context->setContextProperty( "gametypesModel", &m_gametypesModel );
 	context->setContextProperty( "compactChatModel", m_chatModel.getCompactModel() );
 	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
 	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
@@ -826,6 +826,7 @@ void QtUISystem::checkPropertyChanges() {
 		m_debugNativelyDrawnItemsVar->modified = false;
 	}
 
+	m_keysAndBindingsModel.checkUpdates();
 	updateCVarAwareControls();
 
 	if( m_activeMenuMask || m_isShowingScoreboard ) {
@@ -1262,7 +1263,7 @@ auto QtUISystem::makeSkewXMatrix( qreal height ) const -> QMatrix4x4 {
 }
 
 void QtUISystem::startServerListUpdates() {
-	ServerList::instance()->startPushingUpdates( m_serverListModel, true, true );
+	ServerList::instance()->startPushingUpdates( &m_serverListModel, true, true );
 }
 
 void QtUISystem::stopServerListUpdates() {

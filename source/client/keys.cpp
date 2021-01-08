@@ -244,6 +244,8 @@ void KeyBindingsSystem::setBinding( int key, const wsw::StringView &binding ) {
 	if( binding.equalsIgnoreCase( kToggleConsole ) ) {
 		m_numConsoleBindings++;
 	}
+
+	m_isModified = true;
 }
 
 void KeyBindingsSystem::unbindAll() {
@@ -252,6 +254,7 @@ void KeyBindingsSystem::unbindAll() {
 		// TODO: Shrink to fit?
 	}
 	m_numConsoleBindings = 0;
+	m_isModified = true;
 }
 
 }

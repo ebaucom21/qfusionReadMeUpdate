@@ -198,6 +198,15 @@ static auto keyboardRowToJsonArray( const T &row ) -> QJsonArray {
 	return keyboardRowToJsonArray( std::begin( row ), std::end( row ) );
 }
 
+void KeysAndBindingsModel::checkUpdates() {
+	if( m_isTrackingUpdates ) {
+		// Like a "CAS" atomic operation
+		if( wsw::cl::KeyBindingsSystem::instance()->getAndResetModifiedStatus() ) {
+			reload();
+		}
+	}
+}
+
 void KeysAndBindingsModel::reload() {
 	for( auto &keys : m_boundKeysForCommand ) {
 		keys.clear();
@@ -291,64 +300,52 @@ void KeysAndBindingsModel::reloadKeyBindings( QJsonArray *rowsBegin, QJsonArray 
 	}
 }
 
-static const QString kGroupKey( "group" );
 
 bool KeysAndBindingsModel::reloadRowKeyBindings( QJsonArray &row ) {
-	const auto *const bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
-
 	bool wasRowModified = false;
-	for( QJsonValueRef ref : row ) {
-		QJsonObject obj( ref.toObject() );
-		const int quakeKey = obj["quakeKey"].toInt();
-		const auto maybeCurrBinding = bindingsSystem->getBindingForKey( quakeKey );
-		auto it = m_oldKeyBindings.find( quakeKey );
-		if( it == m_oldKeyBindings.end() ) {
-			if( !maybeCurrBinding ) {
-				continue;
-			}
-			if( auto maybeNum = getCommandNum( *maybeCurrBinding ) ) {
-				obj[kGroupKey] = (int)m_commandBindingGroups[*maybeNum];
-				m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
-			} else {
-				obj[kGroupKey] = (int)UnknownGroup;
-			}
-			ref = obj;
-		} else {
-			if( !maybeCurrBinding ) {
-				if( it->second.empty() ) {
-					continue;
-				}
-				obj.remove( kGroupKey );
-			} else {
-				const auto binding = *maybeCurrBinding;
-				wsw::StringView iterValueView( it->second.data(), it->second.size() );
-				if( iterValueView.equals( binding ) ) {
-					if( auto maybeNum = getCommandNum( binding ) ) {
-						m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
-					}
-					continue;
-				}
-				// TODO: Generalize
-				if( auto maybeNum = getCommandNum( binding ) ) {
-					obj[kGroupKey] = (int)m_commandBindingGroups[*maybeNum];
-					m_boundKeysForCommand[*maybeNum].push_back( quakeKey );
-				} else {
-					obj[kGroupKey] = (int)UnknownGroup;
-				}
-			}
-			ref = obj;
+	for( QJsonValueRef ref: row ) {
+		if( reloadRowKeyEntry( ref ) ) {
+			wasRowModified = true;
 		}
-		// TODO: Use an insertion hint based on an iterator (if any)
-		if( maybeCurrBinding ) {
-			const auto binding = *maybeCurrBinding;
-			m_oldKeyBindings.insert( std::make_pair( quakeKey, wsw::String( binding.data(), binding.size() ) ) );
-		} else {
-			m_oldKeyBindings.insert( std::make_pair( quakeKey, wsw::String() ) );
+	}
+	return wasRowModified;
+}
+
+static const QString kGroup( "group" );
+static const QString kQuakeKey( "quakeKey" );
+
+bool KeysAndBindingsModel::reloadRowKeyEntry( QJsonValueRef ref ) {
+	assert( ref.isObject() );
+	// We have to modify an object and assign the ref back to modify a field
+	QJsonObject obj( ref.toObject() );
+	const int quakeKey = obj[kQuakeKey].toInt();
+	wsw::String &lastBinding = m_lastKeyBindings[quakeKey];
+
+	if( const auto maybeCurrBinding = wsw::cl::KeyBindingsSystem::instance()->getBindingForKey( quakeKey ) ) {
+		const wsw::StringView currBinding( *maybeCurrBinding );
+		const wsw::StringView lastBindingView( lastBinding.data(), lastBinding.size(), wsw::StringView::ZeroTerminated );
+		const auto maybeCommand = getCommandNum( currBinding );
+		if( maybeCommand ) {
+			m_boundKeysForCommand[*maybeCommand].push_back( quakeKey );
 		}
-		wasRowModified = true;
+		if( lastBindingView != currBinding ) {
+			lastBinding.assign( currBinding.data(), currBinding.size() );
+			obj[kGroup] = maybeCommand ? m_commandBindingGroups[*maybeCommand] : (int) UnknownGroup;
+			ref = obj;
+			return true;
+		}
+		return false;
 	}
 
-	return wasRowModified;
+	if( !lastBinding.empty() ) {
+		lastBinding.clear();
+		static_assert( UnknownGroup != 0, "An unknown group is a group for an unknown but present binding" );
+		obj[kGroup] = 0;
+		ref = obj;
+		return true;
+	}
+
+	return false;
 }
 
 void KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column, const wsw::StringView &changedSignal ) {
@@ -592,8 +589,7 @@ KeysAndBindingsModel::KeysAndBindingsModel() {
 
 void KeysAndBindingsModel::onKeyItemContainsMouseChanged( QQuickItem *keyItem, int quakeKey, bool contains ) {
 	// Find a command with the respective binding
-	if( const auto it = m_oldKeyBindings.find( quakeKey ); it != m_oldKeyBindings.end() ) {
-		const wsw::String &command = it->second;
+	if( const auto &command = m_lastKeyBindings[quakeKey]; !command.empty() ) {
 		if( const auto maybeCommandNum = getCommandNum( wsw::StringView( command.data(), command.size() ) ) ) {
 			if ( QQuickItem *commandItem = m_commandItems[*maybeCommandNum] ) {
 				commandItem->setProperty( "externallyHighlighted", contains );

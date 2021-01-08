@@ -30,8 +30,6 @@ public:
 	};
 	Q_ENUM( BindingGroup )
 
-	Q_INVOKABLE void reload();
-
 	Q_INVOKABLE QColor colorForGroup( int group ) const;
 
 	Q_INVOKABLE void registerKeyItem( QQuickItem *item, int quakeKey );
@@ -42,6 +40,14 @@ public:
 
 	Q_INVOKABLE void registerCommandItem( QQuickItem *item, int commandNum );
 	Q_INVOKABLE void unregisterCommandItem( QQuickItem *item, int commandNum );
+
+	Q_INVOKABLE void startTrackingUpdates() {
+		reload();
+		m_isTrackingUpdates = true;
+	}
+	Q_INVOKABLE void stopTrackingUpdates() {
+		m_isTrackingUpdates = false;
+	}
 private:
 	QJsonArray m_keyboardMainPadRowModel[6];
 	QJsonArray m_keyboardArrowPadRowModel[5];
@@ -159,6 +165,9 @@ private:
 	[[nodiscard]]
 	bool reloadRowKeyBindings( QJsonArray &row );
 
+	[[nodiscard]]
+	bool reloadRowKeyEntry( QJsonValueRef ref );
+
 	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
@@ -186,8 +195,12 @@ private:
 	[[nodiscard]]
 	auto getCommandNum( const wsw::StringView &command ) const -> std::optional<int>;
 
+	void reload();
+
 	KeysAndBindingsModel();
 private:
+	void checkUpdates();
+
 	static constexpr auto kMaxCommands = 48;
 	std::array<BindingGroup, kMaxCommands> m_commandBindingGroups;
 
@@ -196,14 +209,15 @@ private:
 	wsw::HashMap<wsw::String, int> m_respectBindingNums;
 
 	// TODO: Optimize
-	wsw::Vector<int> m_boundKeysForCommand[kMaxCommands];
+	std::array<wsw::Vector<int>, kMaxCommands> m_boundKeysForCommand;
 
-	// TODO: Optimize by avoiding allocations
-	// (all known bindings/commands can use &'static lifetime)
-	wsw::HashMap<int, wsw::String> m_oldKeyBindings;
+	// This is not that bad as the small strings optimization should work for the most part
+	std::array<wsw::String, 256> m_lastKeyBindings;
 
 	std::array<QQuickItem *, 256> m_keyItems {};
 	std::array<QQuickItem *, kMaxCommands> m_commandItems {};
+
+	bool m_isTrackingUpdates { false };
 };
 
 }

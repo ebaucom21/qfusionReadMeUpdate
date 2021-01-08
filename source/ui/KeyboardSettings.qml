@@ -7,7 +7,8 @@ import net.warsow 2.6
 Item {
     id: root
 
-    Component.onCompleted: keysAndBindings.reload()
+    Component.onCompleted: keysAndBindings.startTrackingUpdates()
+    Component.onDestruction: keysAndBindings.stopTrackingUpdates()
 
     KeyboardPane {
         id: mainKeyboardPane

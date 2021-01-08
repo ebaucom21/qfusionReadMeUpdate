@@ -76,6 +76,7 @@ class KeyBindingsSystem {
 	wsw::String m_bindings[kMaxBindings];
 
 	int m_numConsoleBindings { 0 };
+	bool m_isModified { false };
 public:
 	static void init();
 	static void shutdown();
@@ -102,6 +103,13 @@ public:
 
 	[[nodiscard]]
 	auto isConsoleBound() const { return m_numConsoleBindings > 0; }
+
+	[[nodiscard]]
+	bool getAndResetModifiedStatus() {
+		bool result = m_isModified;
+		m_isModified = false;
+		return result;
+	}
 };
 
 class KeyHandlingSystem {
