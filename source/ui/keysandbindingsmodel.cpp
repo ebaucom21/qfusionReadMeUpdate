@@ -1,6 +1,7 @@
 #include <QQuickItem>
 
 #include "keysandbindingsmodel.h"
+#include "../qcommon/wswstaticstring.h"
 #include "../client/keys.h"
 
 using wsw::operator""_asView;
@@ -369,28 +370,8 @@ void KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column, cons
 	}
 }
 
-static const wsw::StringView kMovementCommands[] = {
-	"+forward"_asView, "+back"_asView, "+moveleft"_asView, "+moveright"_asView,
-	"+moveup"_asView, "+movedown"_asView, "+special"_asView
-};
-
-static const wsw::StringView kActionCommands[] = {
-	"+attack"_asView, "+zoom"_asView, "weapnext"_asView, "weapprev"_asView,
-	"messagemode"_asView, "messagemode2"_asView, "+scores"_asView
-};
-
-static const wsw::StringView kWeaponCommands[] = {
-	"gb"_asView, "mg"_asView, "rg"_asView, "gl"_asView, "pg"_asView,
-	"rl"_asView, "lg"_asView, "eb"_asView, "sw"_asView, "ig"_asView
-};
-
-static const wsw::StringView kRespectCommands[] = {
-	"hi"_asView, "bb"_asView, "glhf"_asView, "gg"_asView, "plz"_asView,
-	"tks"_asView, "soz"_asView, "n1"_asView, "nt"_asView, "lol"_asView
-};
-
-static const wsw::StringView kUsePrefix( "use" );
-static const wsw::StringView kSayPrefix( "say" );
+static const wsw::StringView kUsePrefix( "use"_asView );
+static const wsw::StringView kSayPrefix( "say"_asView );
 
 auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) const -> std::optional<int> {
 	// TODO: Eliminate this copy...
@@ -444,37 +425,50 @@ void KeysAndBindingsModel::unregisterCommandItem( QQuickItem *item, int commandN
 	m_commandItems[commandNum] = nullptr;
 }
 
-auto KeysAndBindingsModel::registerKnownBindings( wsw::HashMap<wsw::String, int> &dest,
-												  const wsw::StringView *begin,
-												  const wsw::StringView *end,
-												  BindingGroup bindingGroup,
-												  int startFromNum ) -> int {
-	for( const wsw::StringView *view = begin; view != end; ++view ) {
-		int num = startFromNum + (int)( view - begin );
-		dest.insert( std::make_pair( wsw::String( view->data(), view->size() ), num ) );
-		assert( (size_t)num < sizeof( m_commandBindingGroups ) );
-		assert( m_commandBindingGroups[num] == UnknownGroup );
-		m_commandBindingGroups[num] = bindingGroup;
+void KeysAndBindingsModel::startTrackingUpdates() {
+	reload();
+	m_isTrackingUpdates = true;
+}
+
+void KeysAndBindingsModel::stopTrackingUpdates() {
+	m_isTrackingUpdates = false;
+}
+
+void KeysAndBindingsModel::bind( int quakeKey, int commandNum ) {
+	assert( (unsigned)quakeKey <= 255 );
+	assert( (unsigned)commandNum < (unsigned)kMaxCommands );
+	const wsw::StringView &command = m_commandsForGlobalNums[commandNum];
+	assert( !command.empty() );
+	const BindingGroup group = m_commandBindingGroups[commandNum];
+	assert( group && group < UnknownGroup );
+	wsw::StaticString<64> tmp;
+	wsw::StringView fullCommand( command );
+	if( group == WeaponGroup ) {
+		tmp << "use "_asView << command;
+		fullCommand = tmp.asView();
+	} else if( group == RespectGroup ) {
+		tmp << "say "_asView << command;
+		fullCommand = tmp.asView();
 	}
-	return startFromNum + (int)( end - begin );
+	wsw::cl::KeyBindingsSystem::instance()->setBinding( quakeKey, fullCommand );
 }
 
-template <typename Array>
-auto KeysAndBindingsModel::registerKnownBindings( wsw::HashMap<wsw::String, int> &dest,
-												  const Array &bindings,
-												  BindingGroup bindingGroup,
-												  int startFromNum ) -> int {
-	return registerKnownBindings( dest, std::begin( bindings ), std::end( bindings ), bindingGroup, startFromNum );
+void KeysAndBindingsModel::unbind( int quakeKey ) {
+	wsw::cl::KeyBindingsSystem::instance()->setBinding( quakeKey, wsw::StringView() );
 }
 
-void KeysAndBindingsModel::precacheKnownBindingProps() {
-	std::fill( std::begin( m_commandBindingGroups ), std::end( m_commandBindingGroups ), UnknownGroup );
+auto KeysAndBindingsModel::getKeyNameToDisplay( int quakeKey ) const -> QByteArray {
+	if( auto maybeName = wsw::cl::KeyBindingsSystem::instance()->getNameForKey( quakeKey ) ) {
+		return QByteArray( maybeName->data(), maybeName->size() ).toUpper();
+	}
+	throw std::logic_error( "FIXME no name for key" );
+}
 
-	// Start from 1 so it less error-prone regarding to coercion to booleans at JS side
-	int numBindings = registerKnownBindings( m_otherBindingNums, kMovementCommands, MovementGroup, 1 );
-	numBindings = registerKnownBindings( m_otherBindingNums, kActionCommands, ActionGroup, numBindings );
-	numBindings = registerKnownBindings( m_weaponBindingNums, kWeaponCommands, WeaponGroup, numBindings );
-	registerKnownBindings( m_respectBindingNums, kRespectCommands, RespectGroup, numBindings );
+auto KeysAndBindingsModel::getCommandNameToDisplay( int commandNum ) const -> QByteArray {
+	assert( (unsigned)commandNum < (unsigned)kMaxCommands );
+	const wsw::StringView view( m_commandsDescForGlobalNums[commandNum] );
+	assert( !view.empty() );
+	return QByteArray( view.data(), view.size() );
 }
 
 struct CommandsColumnEntry {
@@ -534,6 +528,57 @@ static CommandsColumnEntry kRespectCommandsColumn2[] {
 	{ "Say lol!", "say lol" }
 };
 
+auto KeysAndBindingsModel::registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+												  const CommandsColumnEntry *begin,
+												  const CommandsColumnEntry *end,
+												  BindingGroup bindingGroup,
+												  int startFromNum ) -> int {
+	for( const CommandsColumnEntry *entry = begin; entry != end; ++entry ) {
+		const int num = startFromNum + (int)( entry - begin );
+
+		wsw::StringView commandView( entry->command );
+		if( commandView.startsWith( "use "_asView ) || commandView.startsWith( "say "_asView ) ) {
+			commandView = commandView.drop( 4 );
+		}
+
+		dest.insert( std::make_pair( wsw::String( commandView.data(), commandView.size() ), num ) );
+
+		assert( (size_t)num < sizeof( m_commandBindingGroups ) );
+		assert( m_commandBindingGroups[num] == UnknownGroup );
+		m_commandBindingGroups[num] = bindingGroup;
+
+		assert( m_commandsForGlobalNums[num].empty() );
+		m_commandsForGlobalNums[num] = commandView;
+		assert( !m_commandsForGlobalNums[num].empty() );
+
+		assert( m_commandsDescForGlobalNums[num].empty() );
+		m_commandsDescForGlobalNums[num] = wsw::StringView( entry->text );
+		assert( !m_commandsDescForGlobalNums[num].empty() );
+	}
+
+	return startFromNum + (int)( end - begin );
+}
+
+template <typename Array>
+auto KeysAndBindingsModel::registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+												  const Array &commands,
+												  BindingGroup bindingGroup,
+												  int startFromNum ) -> int {
+	return registerKnownCommands( dest, std::begin( commands ), std::end( commands ), bindingGroup, startFromNum );
+}
+
+void KeysAndBindingsModel::registerKnownCommands() {
+	std::fill( std::begin( m_commandBindingGroups ), std::end( m_commandBindingGroups ), UnknownGroup );
+
+	// Start from 1 so it less error-prone regarding to coercion to booleans at JS side
+	int numCommands = registerKnownCommands( m_otherBindingNums, kMovementCommandsColumn, MovementGroup, 1 );
+	numCommands = registerKnownCommands( m_otherBindingNums, kActionCommandsColumn, ActionGroup, numCommands );
+	numCommands = registerKnownCommands( m_weaponBindingNums, kWeaponCommandsColumn1, WeaponGroup, numCommands );
+	numCommands = registerKnownCommands( m_weaponBindingNums, kWeaponCommandsColumn2, WeaponGroup, numCommands );
+	numCommands = registerKnownCommands( m_respectBindingNums, kRespectCommandsColumn1, RespectGroup, numCommands );
+	registerKnownCommands( m_respectBindingNums, kRespectCommandsColumn2, RespectGroup, numCommands );
+}
+
 auto KeysAndBindingsModel::commandsColumnToJsonArray( CommandsColumnEntry *begin,
 													  CommandsColumnEntry *end )
 													  -> QJsonArray {
@@ -558,7 +603,7 @@ auto KeysAndBindingsModel::commandsColumnToJsonArray( Column &column ) -> QJsonA
 }
 
 KeysAndBindingsModel::KeysAndBindingsModel() {
-	precacheKnownBindingProps();
+	registerKnownCommands();
 
 	m_commandsMovementColumnModel = commandsColumnToJsonArray( kMovementCommandsColumn );
 	m_commandsActionsColumnModel = commandsColumnToJsonArray( kActionCommandsColumn );

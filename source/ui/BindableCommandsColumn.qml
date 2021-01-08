@@ -6,8 +6,14 @@ import net.warsow 2.6
 Column {
     id: root
     spacing: 12
+
     property var model
+    property bool isInEditorMode
+    property bool allowMultiBind
     property color highlightColor
+
+    signal bindingRequested(int command)
+    signal bindingSelected(int command)
 
     Repeater {
         model: root.model
@@ -17,7 +23,11 @@ Column {
             command: modelData["command"]
             commandNum: modelData["commandNum"]
             isBound: modelData["isBound"]
+            isInEditorMode: root.isInEditorMode
+            allowMultiBind: root.allowMultiBind
             highlightColor: root.highlightColor
+            onBindingRequested: root.bindingRequested(command)
+            onBindingSelected: root.bindingSelected(command)
         }
     }
 }

@@ -16,6 +16,8 @@ namespace wsw::ui {
 
 class QtUISystem;
 
+struct CommandsColumnEntry;
+
 class KeysAndBindingsModel : public QObject {
 	Q_OBJECT
 
@@ -30,6 +32,7 @@ public:
 	};
 	Q_ENUM( BindingGroup )
 
+	[[nodiscard]]
 	Q_INVOKABLE QColor colorForGroup( int group ) const;
 
 	Q_INVOKABLE void registerKeyItem( QQuickItem *item, int quakeKey );
@@ -41,13 +44,16 @@ public:
 	Q_INVOKABLE void registerCommandItem( QQuickItem *item, int commandNum );
 	Q_INVOKABLE void unregisterCommandItem( QQuickItem *item, int commandNum );
 
-	Q_INVOKABLE void startTrackingUpdates() {
-		reload();
-		m_isTrackingUpdates = true;
-	}
-	Q_INVOKABLE void stopTrackingUpdates() {
-		m_isTrackingUpdates = false;
-	}
+	Q_INVOKABLE void startTrackingUpdates();
+	Q_INVOKABLE void stopTrackingUpdates();
+
+	Q_INVOKABLE void bind( int quakeKey, int commandNum );
+	Q_INVOKABLE void unbind( int quakeKey );
+
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getKeyNameToDisplay( int quakeKey ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getCommandNameToDisplay( int commandNum ) const;
 private:
 	QJsonArray m_keyboardMainPadRowModel[6];
 	QJsonArray m_keyboardArrowPadRowModel[5];
@@ -171,19 +177,19 @@ private:
 	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
-	auto registerKnownBindings( wsw::HashMap<wsw::String, int> &dest,
-							    const wsw::StringView *begin,
-							    const wsw::StringView *end,
+	auto registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+							    const CommandsColumnEntry *begin,
+							    const CommandsColumnEntry *end,
 							    BindingGroup bindingGroup,
 							    int startFromNum ) -> int;
 
 	template <typename Array>
-	auto registerKnownBindings( wsw::HashMap<wsw::String, int> &dest,
-								const Array &bindings,
+	auto registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+								const Array &commands,
 								BindingGroup bindingGroup,
 								int startFromNum ) -> int;
 
-	void precacheKnownBindingProps();
+	void registerKnownCommands();
 
 	[[nodiscard]]
 	auto commandsColumnToJsonArray( struct CommandsColumnEntry *begin, struct CommandsColumnEntry *end ) -> QJsonArray;
@@ -207,6 +213,9 @@ private:
 	wsw::HashMap<wsw::String, int> m_otherBindingNums;
 	wsw::HashMap<wsw::String, int> m_weaponBindingNums;
 	wsw::HashMap<wsw::String, int> m_respectBindingNums;
+
+	std::array<wsw::StringView, kMaxCommands> m_commandsForGlobalNums;
+	std::array<wsw::StringView, kMaxCommands> m_commandsDescForGlobalNums;
 
 	// TODO: Optimize
 	std::array<wsw::Vector<int>, kMaxCommands> m_boundKeysForCommand;

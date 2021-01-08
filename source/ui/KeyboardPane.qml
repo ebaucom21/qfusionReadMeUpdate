@@ -13,6 +13,11 @@ Rectangle {
 
     property real rowHeight: 32
     property var rowModels
+    property bool isInEditorMode
+
+    signal bindingRequested(int quakeKey)
+    signal unbindingRequested(int quakeKey)
+    signal keySelected(int quakeKey)
 
     ColumnLayout {
         id: layout
@@ -26,6 +31,10 @@ Rectangle {
                 width: parent.width
                 Layout.preferredHeight: root.rowHeight
                 model: root.rowModels[index]
+                isInEditorMode: root.isInEditorMode
+                onBindingRequested: root.bindingRequested(quakeKey)
+                onUnbindingRequested: root.unbindingRequested(quakeKey)
+                onKeySelected: root.keySelected(quakeKey)
             }
         }
     }

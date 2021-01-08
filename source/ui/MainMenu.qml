@@ -161,13 +161,24 @@ Item {
 	    if (!visible) {
 	        return
 	    }
-	    if (centralOverlay.handleKeyEvent(event)) {
-	        return
+	    let currentPaneItem = contentPane.currentItem
+	    // TODO: Events propagation needs some attention and some work, e.g. setting the .accepted flag
+	    // TODO: Check whether Keys.redirectTo is applicable
+	    if (currentPaneItem) {
+	        if (currentPaneItem.hasOwnProperty("handleKeyEvent")) {
+	            let handler = currentPaneItem.handleKeyEvent
+	            if (handler && handler(event)) {
+	                return
+	            }
+	        }
 	    }
+	    if (centralOverlay.handleKeyEvent(event)) {
+            return
+        }
+
 	    if (event.key !== Qt.Key_Escape) {
 	        return
 	    }
-
 	    wsw.returnFromMainMenu()
 	    root.forceActiveFocus()
 	    event.accepted = true

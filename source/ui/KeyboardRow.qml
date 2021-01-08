@@ -11,6 +11,11 @@ RowLayout {
 
     property real rowSpacing
     property var model
+    property bool isInEditorMode
+
+    signal bindingRequested(int quakeKey)
+    signal unbindingRequested(int quakeKey)
+    signal keySelected(int quakeKey)
 
     Repeater {
         model: root.model
@@ -23,8 +28,12 @@ RowLayout {
             hidden: modelData["hidden"]
             rowSpan: modelData["rowSpan"]
             group: modelData["group"]
+            isInEditorMode: root.isInEditorMode
             Layout.fillWidth: true
             Layout.preferredWidth: modelData["layoutWeight"]
+            onBindingRequested: root.bindingRequested(quakeKey)
+            onUnbindingRequested: root.unbindingRequested(quakeKey)
+            onKeySelected: root.keySelected(quakeKey)
         }
     }
 }

@@ -9,6 +9,10 @@ Item {
     implicitHeight: parent.height
     clip: false
 
+    signal bindingRequested(int quakeKey)
+    signal unbindingRequested(int quakeKey)
+    signal keySelected(int quakeKey)
+
     property string text: ""
     property int quakeKey: -1
     property int rowSpan: 1
@@ -16,11 +20,16 @@ Item {
     property real rowSpacing
     property bool hidden: false
 
+    property bool isInEditorMode
     property bool externallyHighlighted
-    property bool highlighted: mouseArea.containsMouse || externallyHighlighted
+    property bool highlighted: isInEditorMode ?
+        (mouseArea.containsMouse && !group) :
+        (mouseArea.containsMouse || externallyHighlighted)
 
     readonly property color highlightColor: keysAndBindings.colorForGroup(root.group)
     readonly property color highlightBackground: Qt.rgba(highlightColor.r, highlightColor.g, highlightColor.b, 0.075)
+
+    readonly property bool isActionAvailable: mouseArea.containsMouse && mouseArea.mouseX < 16 && !isInEditorMode
 
     Rectangle {
         color: !hidden ? (root.group ? highlightBackground : Qt.rgba(0, 0, 0, 0.3)) : "transparent"
@@ -49,8 +58,16 @@ Item {
             width: 5
             height: 5
             radius: 2.5
-            visible: !!root.group && root.visible && root.enabled
+            visible: !!root.group && root.visible && root.enabled && !isActionAvailable
             color: highlightColor
+        }
+
+        Label {
+            visible: isActionAvailable
+            anchors.left: parent.left
+            anchors.leftMargin: 5
+            anchors.verticalCenter: parent.verticalCenter
+            text: group ? '\u2715' : '\u2795'
         }
 
         MouseArea {
@@ -61,7 +78,18 @@ Item {
             width: parent.width - 10
             height: parent.height - 10
             onContainsMouseChanged: {
-                keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
+                if (!isInEditorMode) {
+                    keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
+                }
+            }
+            onClicked: {
+                if (isInEditorMode) {
+                    keySelected(quakeKey)
+                } else if (group) {
+                    unbindingRequested(quakeKey)
+                } else {
+                    bindingRequested(quakeKey)
+                }
             }
         }
 

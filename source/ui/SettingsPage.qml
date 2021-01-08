@@ -6,6 +6,8 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
+    readonly property var handleKeyEvent: swipeView.currentItem["handleKeyEvent"]
+
     TabBar {
         id: tabBar
         enabled: !wsw.hasPendingCVarChanges

@@ -10,206 +10,246 @@ Item {
     Component.onCompleted: keysAndBindings.startTrackingUpdates()
     Component.onDestruction: keysAndBindings.stopTrackingUpdates()
 
-    KeyboardPane {
-        id: mainKeyboardPane
-        anchors {
-            top: parent.top
-            topMargin: 32
-            horizontalCenter: parent.horizontalCenter
-        }
+    property int pendingKeyToBind: 0
+    // TODO: Make feasible commands start from 1
+    property int pendingCommandToBind: -1
 
-        width: root.width - 96
-        rowHeight: 26
-        rowModels: [
-            keysAndBindings.keyboardMainPadRow1,
-            keysAndBindings.keyboardMainPadRow2,
-            keysAndBindings.keyboardMainPadRow3,
-            keysAndBindings.keyboardMainPadRow4,
-            keysAndBindings.keyboardMainPadRow5,
-            keysAndBindings.keyboardMainPadRow6
-        ]
+    Translate {
+        id: keysGroupTransform
+        y: 0
     }
 
-    MouseKeysPane {
-        height: arrowPadPane.height
-        anchors {
-            top: mainKeyboardPane.bottom
-            topMargin: 24
-            left: mainKeyboardPane.left
-            right: arrowPadPane.left
-            rightMargin: 32
-        }
-    }
+    readonly property int headingFontWeight: Font.Medium
+    readonly property int headingLetterSpacing: 1
+    readonly property int headingFontSize: 12
 
-    KeyboardPane {
-        id: arrowPadPane
-        width: mainKeyboardPane.width / 5
+    // TODO: Generalize?
+    Loader {
+        id: keysHeaderLoader
+        active: pendingCommandToBind >= 0 && !isAnimating
+        width: root.width
+        anchors.bottom: keys.top
+        anchors.bottomMargin: 64
+        anchors.horizontalCenter: parent.horizontalCenter
+        transform: keysGroupTransform
 
-        anchors {
-            top: mainKeyboardPane.bottom
-            topMargin: 24
-            right: numPadPane.left
-            rightMargin: 32
-        }
-
-        rowHeight: 26
-        rowModels: [
-            keysAndBindings.keyboardArrowPadRow1,
-            keysAndBindings.keyboardArrowPadRow2,
-            keysAndBindings.keyboardArrowPadRow3,
-            keysAndBindings.keyboardArrowPadRow4,
-            keysAndBindings.keyboardArrowPadRow5
-        ]
-    }
-
-    KeyboardPane {
-        id: numPadPane
-        anchors {
-            top: mainKeyboardPane.bottom
-            topMargin: 24
-            right: mainKeyboardPane.right
-        }
-
-        // One extra key
-        width: 4 * arrowPadPane.width / 3
-
-        rowHeight: 26
-        rowModels: [
-            keysAndBindings.keyboardNumPadRow1,
-            keysAndBindings.keyboardNumPadRow2,
-            keysAndBindings.keyboardNumPadRow3,
-            keysAndBindings.keyboardNumPadRow4,
-            keysAndBindings.keyboardNumPadRow5,
-        ]
-    }
-
-    readonly property color movementGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.MovementGroup)
-    readonly property color weaponGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.WeaponGroup)
-    readonly property color actionGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.ActionGroup)
-    readonly property color respectGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.RespectGroup)
-
-    RowLayout {
-        spacing: 32
-        anchors {
-            top: numPadPane.bottom
-            topMargin: 48
-            horizontalCenter: parent.horizontalCenter
-        }
-
-        ColumnLayout {
-            width: movementColumn.width
-            Layout.alignment: Qt.AlignTop
-            spacing: 16
+        // Just label for now. This is going to be extended by the "direct mode" switch
+        sourceComponent: ColumnLayout {
+            opacity: 0
+            NumberAnimation on opacity {
+                from: 0.0; to: 1.0
+                duration: 100
+                easing.type: Easing.InQuad
+            }
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Movement"
-                font.capitalization: Font.AllUppercase
-            }
-
-            Rectangle {
-                height: 3; width: movementColumn.width
-                color: movementGroupColor
-            }
-
-            BindableCommandsColumn {
-                id: movementColumn
-                Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsMovementColumn
-                highlightColor: movementGroupColor
+                text: 'Select a key to bind the command <b><font color="orange">' +
+                        keysAndBindings.getCommandNameToDisplay(pendingCommandToBind) +
+                        '</font></b> to. Press <b><font color="orange">ESC</font></b> to cancel.'
+                font.weight: headingFontWeight
+                font.pointSize: headingFontSize
+                font.letterSpacing: headingLetterSpacing
             }
         }
+    }
 
-        ColumnLayout {
-            width: weaponColumnsRow.width
-            Layout.alignment: Qt.AlignTop
+    KeyboardAndMouse {
+        id: keys
+        width: parent.width - 96
+        height: implicitHeight
+        anchors.horizontalCenter: parent.horizontalCenter
+        transform: keysGroupTransform
+        isInEditorMode: pendingCommandToBind >= 0
+        onUnbindingRequested: {
+            if (!isAnimating) {
+                keysAndBindings.unbind(quakeKey)
+            }
+        }
+        onBindingRequested: {
+            if (!isAnimating) {
+                pendingKeyToBind = quakeKey
+            }
+        }
+        onKeySelected: {
+            if (!isAnimating) {
+                const command = pendingCommandToBind
+                pendingCommandToBind = -1
+                keysAndBindings.bind(quakeKey, command)
+            }
+        }
+    }
+
+    Translate {
+        id: commandsGroupTransform
+        y: 0
+    }
+
+    Loader {
+        id: commandsHeaderLoader
+        active: pendingKeyToBind && !isAnimating
+        width: root.width
+        anchors.bottom: commandsPane.top
+        anchors.bottomMargin: 64
+        anchors.horizontalCenter: parent.horizontalCenter
+        transform: commandsGroupTransform
+
+        sourceComponent: ColumnLayout {
+            readonly property bool allowMultiBind: multiBindCheckBox.checked
             spacing: 16
+            opacity: 0
+                NumberAnimation on opacity {
+                from: 0.0; to: 1.0
+                duration: 100
+                easing.type: Easing.InQuad
+            }
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Weapons"
-                font.capitalization: Font.AllUppercase
+                text: 'Select a command to bind to the key <b><font color="orange">' +
+                        keysAndBindings.getKeyNameToDisplay(pendingKeyToBind) +
+                        '</font></b>. Press <b><font color="orange">ESC</font></b> to cancel.'
+                font.weight: headingFontWeight
+                font.pointSize: headingFontSize
+                font.letterSpacing: headingLetterSpacing
             }
-
-            Rectangle {
-                height: 3; width: weaponColumnsRow.width
-                color: weaponGroupColor
-            }
-
-            RowLayout {
-                id: weaponColumnsRow
-                spacing: 40
-
-                BindableCommandsColumn {
-                    Layout.alignment: Qt.AlignTop
-                    model: keysAndBindings.commandsWeaponsColumn1
-                    highlightColor: weaponGroupColor
-                }
-
-                BindableCommandsColumn {
-                    Layout.alignment: Qt.AlignTop
-                    model: keysAndBindings.commandsWeaponsColumn2
-                    highlightColor: weaponGroupColor
-                }
+            CheckBox {
+                id: multiBindCheckBox
+                Layout.alignment: Qt.AlignLeft
+                Layout.leftMargin: 96 // wtf?
+                Material.theme: Material.Dark
+                Material.foreground: "white"
+                Material.accent: "orange"
+                text: "Allow binding multiple keys to commands"
             }
         }
+    }
 
-        ColumnLayout {
-            width: actionsColumn.width
-            Layout.alignment: Qt.AlignTop
-            spacing: 16
-
-            Label {
-                Layout.alignment: Qt.AlignHCenter
-                text: "Actions"
-                font.capitalization: Font.AllUppercase
-            }
-
-            Rectangle {
-                height: 3; width: actionsColumn.width
-                color: actionGroupColor
-            }
-
-            BindableCommandsColumn {
-                id: actionsColumn
-                Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsActionsColumn
-                highlightColor: actionGroupColor
+    CommandsPane {
+        id: commandsPane
+        anchors.top: keys.bottom
+        anchors.topMargin: 64
+        anchors.horizontalCenter: parent.horizontalCenter
+        transform: commandsGroupTransform
+        isInEditorMode: pendingKeyToBind
+        allowMultiBind: commandsHeaderLoader.item && commandsHeaderLoader.item.allowMultiBind
+        onBindingRequested: {
+            if (!isAnimating) {
+                pendingCommandToBind = command
             }
         }
-
-        ColumnLayout {
-            width: respectColumnsRow.width
-            Layout.alignment: Qt.AlignTop
-            spacing: 16
-
-            Label {
-                Layout.alignment: Qt.AlignHCenter
-                text: "R&S Tokens"
-                font.capitalization: Font.AllUppercase
-            }
-
-            Rectangle {
-                height: 3; width: respectColumnsRow.width
-                color: respectGroupColor
-            }
-
-            RowLayout {
-                id: respectColumnsRow
-                spacing: 40
-
-                BindableCommandsColumn {
-                    Layout.alignment: Qt.AlignTop
-                    model: keysAndBindings.commandsRespectColumn1
-                    highlightColor: respectGroupColor
-                }
-
-                BindableCommandsColumn {
-                    Layout.alignment: Qt.AlignTop
-                    model: keysAndBindings.commandsRespectColumn2
-                    highlightColor: respectGroupColor
-                }
+        onBindingSelected: {
+            if (!isAnimating) {
+                const key = pendingKeyToBind
+                pendingKeyToBind = 0
+                keysAndBindings.bind(key, command)
             }
         }
+    }
+
+    onPendingKeyToBindChanged: {
+        if (pendingKeyToBind) {
+            returnKeysAnim.stop()
+            returnCommandsAnim.stop()
+            hideKeysAnim.start()
+            liftCommandsAnim.start()
+        } else {
+            hideKeysAnim.stop()
+            liftCommandsAnim.stop()
+            returnKeysAnim.start()
+            returnCommandsAnim.start()
+        }
+    }
+
+    onPendingCommandToBindChanged: {
+        if (pendingCommandToBind >= 0) {
+            returnKeysAnim.stop()
+            returnCommandsAnim.stop()
+            dropKeysAnim.start()
+            hideCommandsAnim.start()
+        } else {
+            dropKeysAnim.stop()
+            hideCommandsAnim.stop()
+            returnKeysAnim.start()
+            returnCommandsAnim.start()
+        }
+    }
+
+    readonly property bool isAnimatingKeys:
+        hideKeysAnim.running || dropKeysAnim.running || returnKeysAnim.running
+    readonly property bool isAnimatingCommands:
+        hideCommandsAnim.running || liftCommandsAnim.running || returnCommandsAnim.running
+    readonly property bool isAnimating: isAnimatingKeys || isAnimatingCommands
+
+    NumberAnimation {
+        id: hideKeysAnim
+        target: keysGroupTransform
+        property: "y"
+        from: 0; to: -9999
+        duration: 333
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
+        id: returnKeysAnim
+        target: keysGroupTransform
+        property: "y"
+        from: -9999; to: 0
+        duration: 333
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
+        id: dropKeysAnim
+        target: keysGroupTransform
+        property: "y"
+        from: 0; to: 200
+        duration: 200
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
+        id: liftCommandsAnim
+        target: commandsGroupTransform
+        property: "y"
+        from: 0; to: -200
+        duration: 200
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
+        id: returnCommandsAnim
+        target: commandsGroupTransform
+        property: "y"
+        from: -200; to: 0
+        duration: 200
+        easing.type: Easing.OutQuad
+    }
+
+    NumberAnimation {
+        id: hideCommandsAnim
+        target: commandsGroupTransform
+        property: "y"
+        from: 0; to: 9999
+        duration: 333
+        easing.type: Easing.OutQuad
+    }
+
+    function handleKeyEvent(event) {
+        if (event.key === Qt.Key_Escape) {
+            // Let the animation complete itself
+            if (isAnimating) {
+                event.accepted = true
+                return true
+            }
+            if (pendingKeyToBind || pendingCommandToBind >= 0) {
+                pendingKeyToBind = 0
+                pendingCommandToBind = -1
+                event.accepted = true
+                return true
+            }
+
+        }
+        return false
     }
 }
