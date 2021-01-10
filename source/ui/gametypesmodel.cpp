@@ -13,6 +13,7 @@ namespace wsw::ui {
 
 auto GametypesModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
+		{ Name, "name" },
 		{ Title, "title" },
 		{ Flags, "flags" },
 		{ Maps, "maps" },
@@ -37,6 +38,7 @@ auto GametypesModel::data( const QModelIndex &index, int role ) const -> QVarian
 		return QVariant();
 	}
 	switch( role ) {
+		case Name: return toQString( m_gametypes[row].getName() );
 		case Title: return toQString( m_gametypes[row].getTitle() );
 		case Flags: return (int)m_gametypes[row].getFlags();
 		case Maps: return getListOfMaps( m_gametypes[row] );
@@ -48,14 +50,15 @@ auto GametypesModel::data( const QModelIndex &index, int role ) const -> QVarian
 auto GametypesModel::getListOfMaps( const GametypeDef &def ) const -> QJsonArray {
 	QJsonArray result;
 
-	const auto &mapInfoList = def.m_mapInfo;
+	const auto &mapInfoList = def.m_mapInfoList;
 	for( const auto &info: mapInfoList ) {
 		int minPlayers = 0, maxPlayers = 0;
 		if( auto maybeNumOfPlayers = info.numPlayers ) {
 			std::tie( minPlayers, maxPlayers ) = *maybeNumOfPlayers;
 		}
 		result.append( QJsonObject({
-			{ "name", toQString( def.getString( info.nameSpan ) ) },
+			{ "name", toQString( def.m_stringDataStorage[info.fileNameSpanIndex] ) },
+			{ "title", toQString( def.m_stringDataStorage[info.fullNameSpanIndex] ) },
 			{ "minPlayers", minPlayers },
 			{ "maxPlayers", maxPlayers }
 		}));
@@ -65,7 +68,7 @@ auto GametypesModel::getListOfMaps( const GametypeDef &def ) const -> QJsonArray
 }
 
 auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) const -> QJsonObject {
-	assert( (unsigned)mapNum < def.m_mapInfo.size() );
+	assert( (unsigned)mapNum < def.m_mapInfoList.size() );
 
 	const auto botConfig = def.m_botConfig;
 	if( botConfig == GametypeDef::NoBots ) {
@@ -82,7 +85,7 @@ auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) c
 		fixed = true;
 	} else {
 		assert( botConfig == GametypeDef::FixedNumBotsForMap || botConfig == GametypeDef::BestNumBotsForMap );
-		auto [minPlayers, maxPlayers] = def.m_mapInfo[mapNum].numPlayers.value();
+		auto [minPlayers, maxPlayers] = def.m_mapInfoList[mapNum].numPlayers.value();
 		assert( minPlayers && maxPlayers && minPlayers < maxPlayers );
 		number = (int)(( minPlayers + maxPlayers ) / 2 );
 		fixed = botConfig == GametypeDef::FixedNumBotsForMap;
@@ -93,43 +96,39 @@ auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) c
 }
 
 class MapExistenceCache {
-	// Fits the small dataset well (the number of "certified" maps declared in .gtd is small)
-	using NamesList = wsw::StringSpanStaticStorage<uint16_t, uint8_t, 32, 1024>;
+	using NamesList = wsw::StringSpanStorage<uint16_t, uint16_t>;
 
-	NamesList existingMaps;
-	NamesList missingMaps;
+	NamesList m_existingMapFileNames;
+	NamesList m_existingMapFullNames;
+	NamesList m_missingMapFileNames;
 
 	[[nodiscard]]
-	static bool findInList( const wsw::StringView &v, const NamesList &namesList ) {
-		for( const wsw::StringView &name: namesList ) {
-			if( name.equalsIgnoreCase( v ) ) {
-				return true;
+	static auto findInList( const wsw::StringView &v, const NamesList &namesList ) -> std::optional<unsigned> {
+		for( unsigned i = 0; i < namesList.size(); ++i ) {
+			if( namesList[i].equalsIgnoreCase( v ) ) {
+				return i;
 			}
 		}
-		return false;
+		return std::nullopt;
 	}
 public:
 	[[nodiscard]]
-	bool exists( const wsw::StringView &mapFileName ) {
-		if( findInList( mapFileName, existingMaps ) ) {
-			return true;
+	auto checkExistenceAndGetFullName( const wsw::StringView &mapFileName ) -> std::optional<wsw::StringView> {
+		if( const auto maybeExistingIndex = findInList( mapFileName, m_existingMapFileNames ) ) {
+			return m_existingMapFullNames[*maybeExistingIndex];
 		}
-		if( findInList( mapFileName, missingMaps ) ) {
-			return false;
+		if( findInList( mapFileName, m_missingMapFileNames ) != std::nullopt ) {
+			return std::nullopt;
 		}
 		assert( mapFileName.isZeroTerminated() );
-		bool exists = ML_FilenameExists( mapFileName.data() );
-		NamesList &list = exists ? existingMaps : missingMaps;
-		if( list.size() == list.spansCapacity() ) {
-			list.pop_back();
+		if( !ML_FilenameExists( mapFileName.data() ) ) {
+			m_missingMapFileNames.add( mapFileName );
+			return std::nullopt;
 		}
-		// We assume that the last pop back could've been sufficient.
-		// This is not a 100% guarantee of having a room for a string.
-		// Just skip caching of a result in this case without trying to restore the list state if it has been modified.
-		if( list.canAdd( mapFileName ) ) {
-			list.add( mapFileName );
-		}
-		return exists;
+		const wsw::StringView mapFullName( ML_GetFullname( mapFileName.data() ) );
+		m_existingMapFileNames.add( mapFileName );
+		m_existingMapFullNames.add( mapFullName );
+		return mapFullName;
 	}
 };
 
@@ -155,23 +154,23 @@ GametypesModel::GametypesModel() {
 		path.erase( dir.length() + 1 );
 		path << fileName;
 
-		auto maybeDef = GametypeDefParser::exec( path.asView() );
-		if( !maybeDef ) {
-			continue;
-		}
-
-		auto def( *maybeDef );
-		auto &mapInfo = def.m_mapInfo;
-		for( unsigned i = 0; i < mapInfo.size(); ) {
-			const wsw::StringView mapName( def.getString( mapInfo[i].nameSpan ) );
-			if( mapExistenceCache.exists( mapName ) ) {
-				++i;
-			} else {
-				mapInfo.erase( mapInfo.begin() + i );
+		if( auto maybeDef = GametypeDefParser::exec( path.asView() ) ) {
+			auto def( std::move( *maybeDef ) );
+			auto &stringStorage = def.m_stringDataStorage;
+			auto &mapInfoList = def.m_mapInfoList;
+			for( unsigned i = 0; i < mapInfoList.size(); ) {
+				const wsw::StringView mapName( stringStorage[mapInfoList[i].fileNameSpanIndex] );
+				if( const auto maybeFullName = mapExistenceCache.checkExistenceAndGetFullName( mapName ) ) {
+					mapInfoList[i].fullNameSpanIndex = stringStorage.add( *maybeFullName );
+					++i;
+				} else {
+					mapInfoList.erase( mapInfoList.begin() + i );
+				}
 			}
-		}
-		if( !mapInfo.empty() ) {
-			m_gametypes.emplace_back( std::move( def ) );
+			if( !mapInfoList.empty() ) {
+				def.m_nameSpanIndex = stringStorage.add( fileName );
+				m_gametypes.emplace_back( std::move( def ) );
+			}
 		}
 	}
 }

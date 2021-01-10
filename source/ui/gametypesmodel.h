@@ -11,7 +11,8 @@ namespace wsw::ui {
 
 class GametypesModel : public QAbstractListModel {
 	enum Role {
-		Title = Qt::UserRole + 1,
+		Name = Qt::UserRole + 1,
+		Title,
 		Flags,
 		Maps,
 		Desc

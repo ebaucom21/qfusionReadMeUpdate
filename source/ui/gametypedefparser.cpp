@@ -70,7 +70,7 @@ bool GametypeDefParser::parseTitle() {
 		return false;
 	}
 
-	m_gametypeDef.m_titleSpan = m_gametypeDef.addString( view );
+	m_gametypeDef.m_titleSpanIndex = m_gametypeDef.m_stringDataStorage.add( view );
 	return true;
 }
 
@@ -196,7 +196,7 @@ bool GametypeDefParser::parseMaps() {
 			if( !maybeNum || *maybeNum > 16 ) {
 				return false;
 			}
-			m_gametypeDef.addMap( token, *maybeNum, *maybeNum );
+			m_gametypeDef.addMap( token.take( *semicolonIndex ), *maybeNum, *maybeNum );
 			continue;
 		}
 
@@ -214,7 +214,7 @@ bool GametypeDefParser::parseMaps() {
 			return false;
 		}
 
-		m_gametypeDef.addMap( token, *maybeMin, *maybeMax );
+		m_gametypeDef.addMap( token.take( *semicolonIndex ), *maybeMin, *maybeMax );
 	}
 	return true;
 }
@@ -224,7 +224,7 @@ bool GametypeDefParser::parseDescription() {
 		return false;
 	}
 
-	wsw::String &s = m_gametypeDef.m_stringData;
+	wsw::StaticString<kBufferSize> s;
 	const auto off = s.size();
 
 	bool hadLine = false;
@@ -242,7 +242,7 @@ bool GametypeDefParser::parseDescription() {
 			if( !len ) {
 				return false;
 			}
-			m_gametypeDef.m_descSpan = { (uint16_t)off, (uint16_t)len };
+			m_gametypeDef.m_descSpanIndex = m_gametypeDef.m_stringDataStorage.add( s.asView() );
 			return true;
 		}
 		hadLine = true;

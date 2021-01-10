@@ -8,6 +8,7 @@
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswfs.h"
 #include "../qcommon/wswstdtypes.h"
+#include "../qcommon/stringspanstorage.h"
 
 namespace wsw::ui {
 
@@ -32,54 +33,43 @@ public:
 		ScriptSpawnedBots
 	};
 private:
-	struct StringDataSpan {
-		uint16_t off, len;
-	};
-
 	struct MapInfo {
-		StringDataSpan nameSpan;
-		std::optional<std::pair<int, int>> numPlayers;
+		unsigned fileNameSpanIndex { ~0u };
+		unsigned fullNameSpanIndex { ~0u };
+		std::optional<std::pair<unsigned, unsigned>> numPlayers;
 	};
 
-	wsw::String m_stringData;
-	wsw::Vector<MapInfo> m_mapInfo;
+	wsw::Vector<MapInfo> m_mapInfoList;
 
-	StringDataSpan m_titleSpan;
-	StringDataSpan m_descSpan;
+	unsigned m_nameSpanIndex { ~0u };
+	unsigned m_titleSpanIndex { ~0u };
+	unsigned m_descSpanIndex { ~0u };
 
 	unsigned m_flags { NoFlags };
 	unsigned m_botConfig { NoBots };
 
 	std::optional<unsigned> m_exactNumBots;
 
-	auto addString( const wsw::StringView &string ) -> StringDataSpan {
-		auto off = m_stringData.size();
-		m_stringData.append( string.data(), string.size() );
-		m_stringData.push_back( '\0' );
-		return { (uint16_t)off, (uint16_t)string.length() };
-	}
-
-	[[nodiscard]]
-	auto getString( const StringDataSpan &span ) const -> wsw::StringView {
-		assert( span.len < m_stringData.size() && span.off + span.len < m_stringData.size() );
-		return wsw::StringView( m_stringData.data() + span.off, span.len, wsw::StringView::ZeroTerminated );
-	}
+	wsw::StringSpanStorage<uint16_t, uint16_t> m_stringDataStorage;
 
 	void addMap( const wsw::StringView &mapName ) {
-		m_mapInfo.push_back( { addString( mapName ), std::nullopt } );
+		m_mapInfoList.push_back( { m_stringDataStorage.add( mapName ), ~0u, std::nullopt } );
 	}
 
 	void addMap( const wsw::StringView &mapName, unsigned minPlayers, unsigned maxPlayers ) {
 		assert( minPlayers && minPlayers < 32 && maxPlayers && maxPlayers < 32 && minPlayers <= maxPlayers );
-		m_mapInfo.push_back( { addString( mapName ), std::make_pair( (int)minPlayers, (int)maxPlayers ) } );
+		const auto numPlayers = std::make_pair( minPlayers, maxPlayers );
+		m_mapInfoList.push_back( { m_stringDataStorage.add( mapName ), ~0u, numPlayers } );
 	}
 public:
 	[[nodiscard]]
 	auto getFlags() const -> GameplayFlags { return (GameplayFlags)m_flags; }
 	[[nodiscard]]
-	auto getTitle() const -> wsw::StringView { return getString( m_titleSpan ); }
+	auto getName() const -> wsw::StringView { return m_stringDataStorage[m_nameSpanIndex]; }
 	[[nodiscard]]
-	auto getDesc() const -> wsw::StringView { return getString( m_descSpan ); }
+	auto getTitle() const -> wsw::StringView { return m_stringDataStorage[m_titleSpanIndex]; }
+	[[nodiscard]]
+	auto getDesc() const -> wsw::StringView { return m_stringDataStorage[m_descSpanIndex]; }
 };
 
 class GametypeDefParser {
