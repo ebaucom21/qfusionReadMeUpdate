@@ -81,14 +81,15 @@ static void PrepareAnglesAndWeapon( Context *context ) {
 int ScheduleWeaponJumpAction::dummyTravelTimes[ScheduleWeaponJumpAction::MAX_AREAS];
 
 void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
-	if( !GenericCheckIsActionEnabled( context, &DefaultWalkAction() ) ) {
+	auto *const defaultAction = context->SuggestDefaultAction();
+	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
 	}
 
 	Assert( context->topOfStackIndex == 0, "This action can be applied only for the current state" );
 
 	if( GS_ShootingDisabled() ) {
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
@@ -97,7 +98,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 		int groundedAreaNum = context->CurrGroundedAasAreaNum();
 		if( !groundedAreaNum || entityPhysicsState.HeightOverGround() > 8.0f ) {
 			Debug( "The bot is far from the ground\n" );
-			this->SwitchOrRollback( context, &DefaultWalkAction() );
+			this->SwitchOrRollback( context, defaultAction );
 			return;
 		}
 	}
@@ -108,19 +109,19 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	// Disallow rocketjumps for easy bots and also prevent holding cpu quota all the time
 	if( bot->Skill() <= 0.33f ) {
 		Debug( "The action has been rejected by a bot skill test\n" );
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
 	if( context->IsInNavTargetArea() ) {
 		Debug( "The bot is already in the target area\n" );
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
 	if( !module->weaponJumpAttemptsRateLimiter.TryAcquire( level.time ) ) {
 		Debug( "A weapon jumping attempt is disallowed by the rate limiter\n" );
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
@@ -133,7 +134,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 				if( targetClusterNum == currClusterNum ) {
 					if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 144 ) ) {
 						Debug( "The bot is in the target floor cluster and is fairly close to target\n" );
-						this->SwitchOrRollback( context, &DefaultWalkAction() );
+						this->SwitchOrRollback( context, defaultAction );
 						return;
 					}
 				}
@@ -150,12 +151,12 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	int numSuitableWeapons = bot->GetWeaponsForWeaponJumping( suitableWeapons );
 	if( !numSuitableWeapons ) {
 		Debug( "There is no suitable weapon-jump weapons for the current bot state\n" );
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
 	if( !( context->CurrGroundedAasAreaNum() && context->NavTargetAasAreaNum() ) ) {
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
@@ -172,7 +173,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	}
 
 	Debug( "No method/target was suitable for weapon-jumping, disabling the action for further planning\n" );
-	this->SwitchOrRollback( context, &DefaultWalkAction() );
+	this->SwitchOrRollback( context, defaultAction );
 }
 
 inline const int *ScheduleWeaponJumpAction::GetTravelTimesForReachChainShortcut() {
@@ -530,8 +531,9 @@ bool ScheduleWeaponJumpAction::TryShortcutReachChain( Context *context, const in
 }
 
 void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
+	auto *const defaultAction = context->SuggestDefaultAction();
 	auto *weaponJumpState = &context->movementState->weaponJumpMovementState;
-	if( !GenericCheckIsActionEnabled( context, &DefaultWalkAction() ) ) {
+	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		module->ResetFailedWeaponJumpAttempt( context );
 		return;
 	}
@@ -539,7 +541,7 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	// If shooting has been disabled after we have scheduled the weaponjump
 	if( GS_ShootingDisabled() ) {
 		module->ResetFailedWeaponJumpAttempt( context );
-		SwitchOrRollback( context, &DefaultWalkAction() );
+		SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
@@ -573,8 +575,9 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
 }
 
 void CorrectWeaponJumpAction::PlanPredictionStep( Context *context ) {
+	auto *const defaultAction = context->SuggestDefaultAction();
 	auto *const weaponJumpState = &context->movementState->weaponJumpMovementState;
-	if( !GenericCheckIsActionEnabled( context, &DefaultWalkAction() ) ) {
+	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		module->ResetFailedWeaponJumpAttempt( context );
 		return;
 	}
@@ -582,7 +585,7 @@ void CorrectWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	// If shooting has been disabled after we have scheduled the weaponjump
 	if( GS_ShootingDisabled() ) {
 		module->ResetFailedWeaponJumpAttempt( context );
-		SwitchOrRollback( context, &DefaultWalkAction() );
+		SwitchOrRollback( context, defaultAction );
 		return;
 	}
 
@@ -615,7 +618,7 @@ void CorrectWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	if( weaponJumpFailed ) {
 		Debug( "The weapon jump attempt has failed, deactivating weapon jump state\n" );
 		module->ResetFailedWeaponJumpAttempt( context );
-		this->SwitchOrRollback( context, &DefaultWalkAction() );
+		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
 

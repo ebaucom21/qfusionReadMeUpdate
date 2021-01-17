@@ -256,6 +256,7 @@ public:
 	FrameEvents frameEvents;
 
 	class BaseMovementAction *SuggestSuitableAction();
+	class BaseMovementAction *SuggestDefaultAction();
 	inline class BaseMovementAction *SuggestAnyAction();
 
 	inline Vec3 NavTargetOrigin() const;

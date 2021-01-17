@@ -285,14 +285,6 @@ inline BaseMovementAction &BaseMovementAction::DummyAction() {
 	return module->fallbackMovementAction;
 }
 
-inline BaseMovementAction &BaseMovementAction::DefaultWalkAction() {
-	return module->walkCarefullyAction;
-}
-
-inline BaseMovementAction &BaseMovementAction::DefaultBunnyAction() {
-	return module->bunnyToStairsOrRampExitAction;
-}
-
 inline FlyUntilLandingAction &BaseMovementAction::FlyUntilLandingAction() {
 	return module->flyUntilLandingAction;
 }

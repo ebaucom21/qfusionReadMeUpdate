@@ -46,8 +46,6 @@ protected:
 	bool failPredictionOnEnteringHazardImpactZone { true };
 
 	inline BaseMovementAction &DummyAction();
-	inline BaseMovementAction &DefaultWalkAction();
-	inline BaseMovementAction &DefaultBunnyAction();
 	inline class FlyUntilLandingAction &FlyUntilLandingAction();
 	inline class LandOnSavedAreasAction &LandOnSavedAreasAction();
 
@@ -135,14 +133,6 @@ class FlyUntilLandingAction : public BaseMovementAction
 public:
 	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( FlyUntilLandingAction, COLOR_RGB( 0, 255, 0 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
-};
-
-class WalkCarefullyAction : public BaseMovementAction
-{
-public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( WalkCarefullyAction, COLOR_RGB( 128, 0, 255 ) ) {}
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
 };
 
 #endif

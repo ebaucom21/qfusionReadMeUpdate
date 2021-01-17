@@ -139,7 +139,6 @@ class BotMovementModule {
 	SwimMovementAction swimMovementAction;
 	FlyUntilLandingAction flyUntilLandingAction;
 	CampASpotMovementAction campASpotMovementAction;
-	WalkCarefullyAction walkCarefullyAction;
 	BunnyToStairsOrRampExitAction bunnyToStairsOrRampExitAction;
 	BunnyTestingNextReachDirsAction bunnyTestingNextReachDirsAction;
 	BunnyToBestVisibleReachAction bunnyToBestVisibleReachAction;

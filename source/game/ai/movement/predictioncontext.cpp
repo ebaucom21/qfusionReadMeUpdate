@@ -542,6 +542,40 @@ inline BaseMovementAction *MovementPredictionContext::SuggestAnyAction() {
 	return &module->fallbackMovementAction;
 }
 
+BaseMovementAction *MovementPredictionContext::SuggestDefaultAction() {
+	// Do not even try using (accelerated) bunnying for easy bots.
+	// They however will still still perform various jumps,
+	// even during regular roaming on plain surfaces (thats what movement fallbacks do).
+	// Ramp/stairs areas and areas not in floor clusters are exceptions
+	// (these kinds of areas are still troublesome for bot movement).
+	auto *const defaultBunnyHopAction = &module->bunnyToStairsOrRampExitAction;
+	auto *const combatMovementAction = &module->combatDodgeSemiRandomlyToTargetAction;
+	auto *const savedCombatNextAction = combatMovementAction->allowFailureUsingThatAsNextAction;
+	BaseMovementAction *suggestedAction = defaultBunnyHopAction;
+	if( bot->ShouldSkinBunnyInFavorOfCombatMovement() ) {
+		// Do not try bunnying first and start from this combat action directly
+		if( !combatMovementAction->IsDisabledForPlanning() ) {
+			combatMovementAction->allowFailureUsingThatAsNextAction = defaultBunnyHopAction;
+			suggestedAction = combatMovementAction;
+		}
+	} else if( bot->Skill() < 0.33f ) {
+		const auto *aasWorld = AiAasWorld::Instance();
+		const int currGroundedAreaNum = CurrGroundedAasAreaNum();
+		// If the current area is not a ramp-like area
+		if( !( aasWorld->AreaSettings()[currGroundedAreaNum].areaflags & AREA_INCLINED_FLOOR ) ) {
+			// If the current area is not in a stairs cluster
+			if( !( aasWorld->AreaStairsClusterNums()[currGroundedAreaNum] ) ) {
+				// If the current area is in a floor cluster
+				if( aasWorld->AreaFloorClusterNums()[currGroundedAreaNum ] ) {
+					// Use a basic movement for easy bots
+					suggestedAction = &module->fallbackMovementAction;
+				}
+			}
+		}
+	}
+	return suggestedAction;
+}
+
 BaseMovementAction *MovementPredictionContext::SuggestSuitableAction() {
 	Assert( !this->actionSuggestedByAction );
 
@@ -575,7 +609,7 @@ BaseMovementAction *MovementPredictionContext::SuggestSuitableAction() {
 			}
 			// Fly until landing movement state has been deactivate,
 			// switch to bunnying (and, implicitly, to a dummy action if it fails)
-			return &module->walkCarefullyAction;
+			return SuggestDefaultAction();
 		}
 		return &module->handleTriggeredJumppadAction;
 	}
@@ -603,7 +637,7 @@ BaseMovementAction *MovementPredictionContext::SuggestSuitableAction() {
 	}
 
 	if( topOfStackIndex > 0 ) {
-		return &module->walkCarefullyAction;
+		return SuggestDefaultAction();
 	}
 
 	return &module->scheduleWeaponJumpAction;

@@ -2,14 +2,15 @@
 #include "movementlocal.h"
 
 void RidePlatformAction::PlanPredictionStep( Context *context ) {
-	if( !GenericCheckIsActionEnabled( context, &DefaultWalkAction() ) ) {
+	auto *const defaultAction = context->SuggestDefaultAction();
+	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
 	}
 
 	const edict_t *platform = GetPlatform( context );
 	if( !platform ) {
 		context->cannotApplyAction = true;
-		context->actionSuggestedByAction = &DefaultWalkAction();
+		context->actionSuggestedByAction = defaultAction;
 		Debug( "Cannot apply the action (cannot find a platform below)\n" );
 		return;
 	}
