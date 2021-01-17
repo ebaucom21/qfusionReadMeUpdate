@@ -21,15 +21,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sv_mm.h"
 
-typedef struct sv_master_s {
+typedef struct sv_infoserver_s {
 	netadr_t address;
 	bool steam;
-} sv_master_t;
+} sv_infoserver_t;
 
-static sv_master_t sv_masters[MAX_MASTERS];
+static sv_infoserver_t sv_infoServers[MAX_INFO_SERVERS];
 
-extern cvar_t *sv_masterservers;
-extern cvar_t *sv_masterservers_steam;
+extern cvar_t *sv_infoservers;
 extern cvar_t *sv_hostname;
 extern cvar_t *sv_skilllevel;
 extern cvar_t *sv_reconnectlimit;     // minimum seconds between connect messages
@@ -39,16 +38,11 @@ extern cvar_t *sv_iplimit;
 
 //==============================================================================
 //
-//MASTER SERVERS MANAGEMENT
+//INFO SERVERS MANAGEMENT
 //
 //==============================================================================
 
-
-/*
-* SV_AddMaster_f
-* Add a master server to the list
-*/
-static void SV_AddMaster_f( char *address, bool steam ) {
+static void SV_AddInfoServer_f( char *address, bool steam ) {
 	int i;
 
 	if( !address || !address[0] ) {
@@ -56,7 +50,7 @@ static void SV_AddMaster_f( char *address, bool steam ) {
 	}
 
 	if( !sv_public->integer ) {
-		Com_Printf( "'SV_AddMaster_f' Only public servers use masters.\n" );
+		Com_Printf( "'SV_AddInfoServer_f' Only public servers use info servers.\n" );
 		return;
 	}
 
@@ -65,39 +59,36 @@ static void SV_AddMaster_f( char *address, bool steam ) {
 		return;
 	}
 
-	for( i = 0; i < MAX_MASTERS; i++ ) {
-		sv_master_t *master = &sv_masters[i];
+	for( i = 0; i < MAX_INFO_SERVERS; i++ ) {
+		auto *const server = &sv_infoServers[i];
 
-		if( master->address.type != NA_NOTRANSMIT ) {
+		if( server->address.type != NA_NOTRANSMIT ) {
 			continue;
 		}
 
-		if( !NET_StringToAddress( address, &master->address ) ) {
-			Com_Printf( "'SV_AddMaster_f' Bad Master server address: %s\n", address );
+		if( !NET_StringToAddress( address, &server->address ) ) {
+			Com_Printf( "'SV_AddInfoServer_f' Bad info server address: %s\n", address );
 			return;
 		}
 
-		if( NET_GetAddressPort( &master->address ) == 0 ) {
-			NET_SetAddressPort( &master->address, steam ? PORT_MASTER_STEAM : PORT_MASTER );
+		if( NET_GetAddressPort( &server->address ) == 0 ) {
+			NET_SetAddressPort( &server->address, PORT_INFO_SERVER );
 		}
 
-		master->steam = steam;
+		server->steam = steam;
 
-		Com_Printf( "Added new master server #%i at %s\n", i, NET_AddressToString( &master->address ) );
+		Com_Printf( "Added new info server #%i at %s\n", i, NET_AddressToString( &server->address ) );
 		return;
 	}
 
-	Com_Printf( "'SV_AddMaster_f' List of master servers is already full\n" );
+	Com_Printf( "'SV_AddInfoServer_f' List of info servers is already full\n" );
 }
 
-/*
-* SV_ResolveMaster
-*/
-static void SV_ResolveMaster( void ) {
-	char *master, *mlist;
+static void SV_ResolveInfoServers( void ) {
+	char *iserver, *ilist;
 
-	// wsw : jal : initialize masters list
-	memset( sv_masters, 0, sizeof( sv_masters ) );
+	// wsw : jal : initialize info servers list
+	memset( sv_infoServers, 0, sizeof( sv_infoServers ) );
 
 	//never go public when not acting as a game server
 	if( sv.state > ss_game ) {
@@ -108,61 +99,34 @@ static void SV_ResolveMaster( void ) {
 		return;
 	}
 
-	mlist = sv_masterservers->string;
-	if( *mlist ) {
-		while( mlist ) {
-			master = COM_Parse( &mlist );
-			if( !master[0] ) {
+	ilist = sv_infoservers->string;
+	if( *ilist ) {
+		while( ilist ) {
+			iserver = COM_Parse( &ilist );
+			if( !iserver[0] ) {
 				break;
 			}
 
-			SV_AddMaster_f( master, false );
+			SV_AddInfoServer_f( iserver, false );
 		}
 	}
 
-#if APP_STEAMID
-	mlist = sv_masterservers_steam->string;
-	if( *mlist ) {
-		while( mlist ) {
-			master = COM_Parse( &mlist );
-			if( !master[0] ) {
-				break;
-			}
-
-			SV_AddMaster_f( master, true );
-		}
-	}
-#endif
-
-	svc.lastMasterResolve = Sys_Milliseconds();
+	svc.lastInfoServerResolve = Sys_Milliseconds();
 }
 
-/*
-* SV_InitMaster
-* Set up the main master server
-*/
-void SV_InitMaster( void ) {
-	SV_ResolveMaster();
+void SV_InitInfoServers( void ) {
+	SV_ResolveInfoServers();
 
 	svc.nextHeartbeat = Sys_Milliseconds() + HEARTBEAT_SECONDS * 1000; // wait a while before sending first heartbeat
 }
 
-/*
-* SV_UpdateMaster
-*/
-void SV_UpdateMaster( void ) {
-	// refresh master server IP addresses periodically
-	if( svc.lastMasterResolve + TTL_MASTERS < Sys_Milliseconds() ) {
-		SV_ResolveMaster();
+void SV_UpdateInfoServers( void ) {
+	if( svc.lastInfoServerResolve + TTL_INFO_SERVERS < Sys_Milliseconds() ) {
+		SV_ResolveInfoServers();
 	}
 }
 
-/*
-* SV_MasterHeartbeat
-* Send a message to the master every few minutes to
-* let it know we are alive, and log information
-*/
-void SV_MasterHeartbeat( void ) {
+void SV_InfoServerHeartbeat( void ) {
 	int64_t time = Sys_Milliseconds();
 	int i;
 
@@ -181,35 +145,30 @@ void SV_MasterHeartbeat( void ) {
 		return;
 	}
 
-	// send to group master
-	for( i = 0; i < MAX_MASTERS; i++ ) {
-		sv_master_t *master = &sv_masters[i];
+	for( i = 0; i < MAX_INFO_SERVERS; i++ ) {
+		auto *server = &sv_infoServers[i];
 
-		if( master->address.type != NA_NOTRANSMIT ) {
+		if( server->address.type != NA_NOTRANSMIT ) {
 			socket_t *socket;
 
 			if( dedicated && dedicated->integer ) {
-				Com_Printf( "Sending heartbeat to %s\n", NET_AddressToString( &master->address ) );
+				Com_Printf( "Sending heartbeat to %s\n", NET_AddressToString( &server->address ) );
 			}
 
-			socket = ( master->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
+			socket = ( server->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
 
-			if( master->steam ) {
+			if( server->steam ) {
 				uint8_t steamHeartbeat = 'q';
-				NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &master->address );
+				NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &server->address );
 			} else {
 				// warning: "DarkPlaces" is a protocol name here, not a game name. Do not replace it.
-				Netchan_OutOfBandPrint( socket, &master->address, "heartbeat DarkPlaces\n" );
+				Netchan_OutOfBandPrint( socket, &server->address, "heartbeat DarkPlaces\n" );
 			}
 		}
 	}
 }
 
-/*
-* SV_MasterSendQuit
-* Notifies Steam master servers that the server is shutting down.
-*/
-void SV_MasterSendQuit( void ) {
+void SV_InfoServerSendQuit( void ) {
 	int i;
 	const char quitMessage[] = "b\n";
 
@@ -222,18 +181,17 @@ void SV_MasterSendQuit( void ) {
 		return;
 	}
 
-	// send to group master
-	for( i = 0; i < MAX_MASTERS; i++ ) {
-		sv_master_t *master = &sv_masters[i];
+	for( i = 0; i < MAX_INFO_SERVERS; i++ ) {
+		auto *const server = &sv_infoServers[i];
 
-		if( master->steam && ( master->address.type != NA_NOTRANSMIT ) ) {
-			socket_t *socket = ( master->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
+		if( server->steam && ( server->address.type != NA_NOTRANSMIT ) ) {
+			socket_t *socket = ( server->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
 
 			if( dedicated && dedicated->integer ) {
-				Com_Printf( "Sending quit to %s\n", NET_AddressToString( &master->address ) );
+				Com_Printf( "Sending quit to %s\n", NET_AddressToString( &server->address ) );
 			}
 
-			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &master->address );
+			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &server->address );
 		}
 	}
 }
@@ -594,7 +552,6 @@ static void SVC_GetChallenge( const socket_t *socket, const netadr_t *address ) 
 
 /*
 * SVC_DirectConnect
-* A connection request that did not come from the master
 */
 static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address ) {
 #ifdef TCP_ALLOW_CONNECT

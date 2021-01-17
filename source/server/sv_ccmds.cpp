@@ -144,7 +144,7 @@ static void SV_Map_f( void ) {
 		sv.state = ss_dead; // don't save current level when changing
 	}
 
-	SV_UpdateMaster();
+	SV_UpdateInfoServers();
 
 	// start up the next map
 	SV_Map( mapname, !Q_stricmp( Cmd_Argv( 0 ), "devmap" ) );

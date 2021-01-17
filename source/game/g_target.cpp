@@ -550,7 +550,7 @@ static void target_string_use( edict_t *self, edict_t *other, edict_t *activator
 	char c;
 
 	l = strlen( self->message );
-	for( e = self->teammaster; e; e = e->teamchain ) {
+	for( e = self->teamleader; e; e = e->teamchain ) {
 		if( !e->count ) {
 			continue;
 		}

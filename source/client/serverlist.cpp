@@ -39,19 +39,18 @@ void ServerList::init() {
 	serverListHolder.Init();
 	initialized = true;
 
-	const char *masterServersStr = Cvar_String( "masterservers" );
-	if( !*masterServersStr ) {
+	const char *infoServersStr = Cvar_String( "infoservers" );
+	if( !*infoServersStr ) {
 		return;
 	}
 
-	// count the number of master servers
-	int numMasters = 0;
-	for( const char *ptr = masterServersStr; ptr; ) {
-		char *masterAddress = COM_Parse( &ptr );
-		if( !*masterAddress ) {
+	int numInfoServers = 0;
+	for( const char *ptr = infoServersStr; ptr; ) {
+		char *infoAddress = COM_Parse( &ptr );
+		if( !*infoAddress ) {
 			break;
 		}
-		numMasters++;
+		numInfoServers++;
 	}
 
 	if( !( resolverMutex = QMutex_Create() ) ) {
@@ -59,11 +58,11 @@ void ServerList::init() {
 	}
 
 	// Set this first as some resolvers may return almost immediately
-	::numActiveResolvers = std::min( (int)kMaxMasterServers, numMasters );
+	::numActiveResolvers = std::min( (int)kMaxInfoServers, numInfoServers );
 
 	int numSpawnedResolvers = 0;
-	for( const char *ptr = masterServersStr; ptr; ) {
-		if( numSpawnedResolvers == kMaxMasterServers ) {
+	for( const char *ptr = infoServersStr; ptr; ) {
+		if( numSpawnedResolvers == kMaxInfoServers ) {
 			break;
 		}
 		char *addressString = COM_Parse( &ptr );
@@ -98,7 +97,7 @@ void *ServerList::resolverThreadFunc( void *param ) {
 	if( address.type == NA_IP || address.type == NA_IP6 ) {
 		resolved = true;
 		if( NET_GetAddressPort( &address ) == 0 ) {
-			NET_SetAddressPort( &address, PORT_MASTER );
+			NET_SetAddressPort( &address, PORT_INFO_SERVER );
 		}
 	}
 
@@ -107,7 +106,7 @@ void *ServerList::resolverThreadFunc( void *param ) {
 	QMutex_Lock( resolverMutex );
 	if( initialized ) {
 		if( resolved ) {
-			instance()->addMasterServer( address );
+			instance()->addInfoServer( address );
 		}
 		numResolversLeft = numActiveResolvers.fetch_sub( 1 );
 	}
@@ -120,7 +119,7 @@ void *ServerList::resolverThreadFunc( void *param ) {
 
 	// We held the string for printing it in this case
 	if( !resolved ) {
-		Com_Printf( "Failed to resolve master server address: %s\n", string );
+		Com_Printf( "Failed to resolve info server address: %s\n", string );
 	}
 
 	delete[] string;
@@ -134,7 +133,7 @@ void ServerList::parseGetServersResponse( const socket_t *socket, const netadr_t
 
 	constexpr const char *function = "ServerList::parseGetServersResponse()";
 
-	// TODO: Check whether the packet came from an actual master server
+	// TODO: Check whether the packet came from an actual info server server
 	// TODO: Is it possible at all? (We're talking about UDP packets).
 
 	MSG_BeginReading( msg );
@@ -429,7 +428,7 @@ void ServerList::frame() {
 
 	dropTimedOutServers();
 
-	emitPollMasterServersPackets();
+	emitPollInfoServersPackets();
 	emitPollGameServersPackets();
 }
 
@@ -453,20 +452,20 @@ void ServerList::stopPushingUpdates() {
 	this->m_listener = nullptr;
 }
 
-void ServerList::emitPollMasterServersPackets() {
+void ServerList::emitPollInfoServersPackets() {
 	const auto millisNow = Sys_Milliseconds();
 
-	if( millisNow - m_lastMasterServersPollAt < 1500 ) {
+	if( millisNow - m_lastInfoServersPollAt < 1500 ) {
 		return;
 	}
 
 	// Make the warning affected by the timer too (do not spam in console way too often), do not return prematurely
-	if( m_numMasterServers ) {
-		m_lastMasterServerIndex = ( m_lastMasterServerIndex + 1 ) % m_numMasterServers;
-		sendPollMasterServerPacket( m_masterServers[m_lastMasterServerIndex] );
+	if( m_numInfoServers ) {
+		m_lastInfoServerIndex = ( m_lastInfoServerIndex + 1 ) % m_numInfoServers;
+		sendPollInfoServerPacket( m_infoServers[m_lastInfoServerIndex] );
 	}
 
-	m_lastMasterServersPollAt = millisNow;
+	m_lastInfoServersPollAt = millisNow;
 }
 
 void ServerList::emitPollGameServersPackets() {
@@ -501,7 +500,7 @@ void ServerList::dropServer( PolledGameServer *server ) {
 	delete server;
 }
 
-void ServerList::sendPollMasterServerPacket( const netadr_t &address ) {
+void ServerList::sendPollInfoServerPacket( const netadr_t &address ) {
 	socket_t *socket = ( address.type == NA_IP ) ? &cls.socket_udp : &cls.socket_udp6;
 	const char *empty = m_showEmptyServers ? "empty" : "";
 	Netchan_OutOfBandPrint( socket, &address, "getservers Warsow %d full%s", 22, empty );

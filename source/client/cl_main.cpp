@@ -67,7 +67,7 @@ cvar_t *m_yaw;
 cvar_t *info_password;
 cvar_t *rate;
 
-cvar_t *cl_masterservers;
+cvar_t *cl_infoservers;
 
 // wsw : debug netcode
 cvar_t *cl_debug_serverCmd;
@@ -1925,7 +1925,7 @@ static void CL_InitLocal( void ) {
 	cl_extrapolationTime =  Cvar_Get( "cl_extrapolationTime", "0", CVAR_DEVELOPER );
 	cl_extrapolate = Cvar_Get( "cl_extrapolate", "1", CVAR_ARCHIVE );
 
-	cl_masterservers =  Cvar_Get( "masterservers", DEFAULT_MASTER_SERVERS_IPS, 0 );
+	cl_infoservers =  Cvar_Get( "infoservers", DEFAULT_INFO_SERVERS_IPS, 0 );
 
 	cl_shownet =        Cvar_Get( "cl_shownet", "0", 0 );
 	cl_timeout =        Cvar_Get( "cl_timeout", "120", 0 );

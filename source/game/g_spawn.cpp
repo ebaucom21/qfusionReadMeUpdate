@@ -496,7 +496,7 @@ static char *ED_ParseEdict( char *data, edict_t *ent ) {
 *
 * Chain together all entities with a matching team field.
 *
-* All but the first will have the FL_TEAMSLAVE flag set.
+* All but the first will have the FL_TEAMFOLLOWER flag set.
 * All but the last will have the teamchain field set to the next one
 */
 static void G_FindTeams( void ) {
@@ -513,11 +513,11 @@ static void G_FindTeams( void ) {
 		if( !e->team ) {
 			continue;
 		}
-		if( e->flags & FL_TEAMSLAVE ) {
+		if( e->flags & FL_TEAMFOLLOWER ) {
 			continue;
 		}
 		chain = e;
-		e->teammaster = e;
+		e->teamleader = e;
 		c++;
 		c2++;
 		for( j = i + 1, e2 = e + 1; j < game.numentities; j++, e2++ ) {
@@ -527,15 +527,15 @@ static void G_FindTeams( void ) {
 			if( !e2->team ) {
 				continue;
 			}
-			if( e2->flags & FL_TEAMSLAVE ) {
+			if( e2->flags & FL_TEAMFOLLOWER ) {
 				continue;
 			}
 			if( !strcmp( e->team, e2->team ) ) {
 				c2++;
 				chain->teamchain = e2;
-				e2->teammaster = e;
+				e2->teamleader = e;
 				chain = e2;
-				e2->flags |= FL_TEAMSLAVE;
+				e2->flags |= FL_TEAMFOLLOWER;
 			}
 		}
 	}

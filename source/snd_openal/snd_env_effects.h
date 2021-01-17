@@ -66,14 +66,14 @@ protected:
 	void CheckCurrentlyBoundEffect( src_s *src );
 	virtual void IntiallySetupEffect( src_s *src );
 
-	virtual float GetMasterGain( src_s *src ) const;
+	virtual float GetSourceGain( src_s *src ) const;
 
 	void AttachEffect( src_s *src );
 };
 
 class UnderwaterFlangerEffect final: public Effect {
 	void IntiallySetupEffect( src_s *src ) override;
-	float GetMasterGain( src_s *src ) const override;
+	float GetSourceGain( src_s *src ) const override;
 public:
 	UnderwaterFlangerEffect(): Effect( AL_EFFECT_FLANGER ) {}
 
@@ -103,7 +103,7 @@ class EaxReverbEffect final: public Effect {
 	static constexpr float MAX_REVERB_DECAY = 5.6f + 0.001f;
 	vec3_t tmpSourceOrigin { 0, 0, 0 };
 
-	float GetMasterGain( src_s *src ) const override;
+	float GetSourceGain( src_s *src ) const override;
 public:
 	EaxReverbEffect(): Effect( AL_EFFECT_EAXREVERB ) {}
 

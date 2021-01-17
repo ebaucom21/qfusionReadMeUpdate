@@ -612,11 +612,11 @@ static void SV_Physics_Pusher( edict_t *ent ) {
 	edict_t *part, *mover;
 
 	// if not a team captain, so movement will be handled elsewhere
-	if( ent->flags & FL_TEAMSLAVE ) {
+	if( ent->flags & FL_TEAMFOLLOWER ) {
 		return;
 	}
 
-	// make sure all team slaves can move before commiting
+	// make sure all team followers can move before commiting
 	// any moves or calling any think functions
 	// if the move is blocked, all moved objects will be backed out
 	//retry:
@@ -706,14 +706,14 @@ static void SV_Physics_Toss( edict_t *ent ) {
 	trace_t trace;
 	vec3_t move;
 	float backoff;
-	edict_t *slave;
+	edict_t *follower;
 	bool wasinwater;
 	bool isinwater;
 	vec3_t old_origin;
 	float oldSpeed;
 
 	// if not a team captain, so movement will be handled elsewhere
-	if( ent->flags & FL_TEAMSLAVE ) {
+	if( ent->flags & FL_TEAMFOLLOWER ) {
 		return;
 	}
 
@@ -847,10 +847,10 @@ static void SV_Physics_Toss( edict_t *ent ) {
 		G_PositionedSound( ent->s.origin, CHAN_AUTO, trap_SoundIndex( S_HIT_WATER ), ATTN_IDLE );
 	}
 
-	// move teamslaves
-	for( slave = ent->teamchain; slave; slave = slave->teamchain ) {
-		VectorCopy( ent->s.origin, slave->s.origin );
-		GClip_LinkEntity( slave );
+	// move followers
+	for( follower = ent->teamchain; follower; follower = follower->teamchain ) {
+		VectorCopy( ent->s.origin, follower->s.origin );
+		GClip_LinkEntity( follower );
 	}
 }
 
@@ -858,7 +858,7 @@ static void SV_Physics_Toss( edict_t *ent ) {
 
 void SV_Physics_LinearProjectile( edict_t *ent, int lookAheadTime ) {
 	// if not a team captain movement will be handled elsewhere
-	if( ent->flags & FL_TEAMSLAVE ) {
+	if( ent->flags & FL_TEAMFOLLOWER ) {
 		return;
 	}
 
@@ -940,7 +940,7 @@ void G_RunEntity( edict_t *ent ) {
 	}
 
 	// only team captains decide the think, and they make think their team members when they do
-	if( !( ent->flags & FL_TEAMSLAVE ) ) {
+	if( !( ent->flags & FL_TEAMFOLLOWER ) ) {
 		for( part = ent; part; part = part->teamchain ) {
 			SV_RunThink( part );
 		}

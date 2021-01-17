@@ -245,11 +245,8 @@ protected:
 
 //==============================================
 
-// masterservers cvar is shared by client and server. This ensures both have the same default string
-#define DEFAULT_MASTER_SERVERS_IPS          "dpmaster.deathmask.net ghdigital.com excalibur.nvg.ntnu.no eu.master.warsow.gg"
-#define DEFAULT_MASTER_SERVERS_STEAM_IPS    "208.64.200.65:27015 208.64.200.39:27011 208.64.200.52:27011"
-#define SERVER_PINGING_TIMEOUT              50
-#define LAN_SERVER_PINGING_TIMEOUT          20
+// infoservers cvar is shared by client and server. This ensures both have the same default string
+#define DEFAULT_INFO_SERVERS_IPS          "warsow.net"
 #define DEFAULT_PLAYERMODEL                 "viciious"
 #define DEFAULT_PLAYERSKIN                  "default"
 

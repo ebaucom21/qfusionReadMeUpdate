@@ -29,20 +29,20 @@ static void MegaHealth_think( edict_t *self );
 
 void DoRespawn( edict_t *ent ) {
 	if( ent->team ) {
-		edict_t *master;
+		edict_t *leader;
 		int count;
 		int choice;
 
-		master = ent->teammaster;
+		leader = ent->teamleader;
 
-		assert( master != NULL );
+		assert( leader != NULL );
 
-		if( master ) {
-			for( count = 0, ent = master; ent; ent = ent->chain, count++ ) ;
+		if( leader ) {
+			for( count = 0, ent = leader; ent; ent = ent->chain, count++ ) ;
 
 			choice = rand() % count;
 
-			for( count = 0, ent = master; count < choice; ent = ent->chain, count++ ) ;
+			for( count = 0, ent = leader; count < choice; ent = ent->chain, count++ ) ;
 		}
 	}
 
@@ -900,15 +900,15 @@ static void Finish_SpawningItem( edict_t *ent ) {
 	}
 
 	if( ent->team ) {
-		ent->flags &= ~FL_TEAMSLAVE;
+		ent->flags &= ~FL_TEAMFOLLOWER;
 		ent->chain = ent->teamchain;
 		ent->teamchain = NULL;
 
 		ent->r.svflags |= SVF_NOCLIENT;
 		ent->r.solid = SOLID_NOT;
 
-		// team slaves and targeted items aren't present at start
-		if( ent == ent->teammaster && !ent->targetname ) {
+		// team followers and targeted items aren't present at start
+		if( ent == ent->teamleader && !ent->targetname ) {
 			ent->nextThink = level.time + 1;
 			ent->think = DoRespawn;
 			GClip_LinkEntity( ent );

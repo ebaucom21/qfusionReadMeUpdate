@@ -250,13 +250,13 @@ class ServerList {
 	static constexpr unsigned kNumHashBins = 97;
 	PolledGameServer *m_serversHashBins[kNumHashBins];
 
-	static constexpr unsigned kMaxMasterServers = 4;
-	netadr_t m_masterServers[kMaxMasterServers];
+	static constexpr unsigned kMaxInfoServers = 4;
+	netadr_t m_infoServers[kMaxInfoServers];
 
-	unsigned m_numMasterServers { 0 };
+	unsigned m_numInfoServers { 0 };
 
-	int64_t m_lastMasterServersPollAt { 0 };
-	unsigned m_lastMasterServerIndex { 0 };
+	int64_t m_lastInfoServersPollAt { 0 };
+	unsigned m_lastInfoServerIndex { 0 };
 
 	bool m_showEmptyServers { false };
 	bool m_showPlayerInfo { true };
@@ -275,8 +275,8 @@ class ServerList {
 	[[nodiscard]]
 	auto findServerByAddress( const netadr_t &address, unsigned binIndex ) -> PolledGameServer *;
 
-	void emitPollMasterServersPackets();
-	void sendPollMasterServerPacket( const netadr_t &address );
+	void emitPollInfoServersPackets();
+	void sendPollInfoServerPacket( const netadr_t &address );
 	void emitPollGameServersPackets();
 	void sendPollGameServerPacket( PolledGameServer *server );
 
@@ -288,9 +288,9 @@ class ServerList {
 
 	static void *resolverThreadFunc( void * );
 
-	void addMasterServer( const netadr_t &address ) {
-		assert( m_numMasterServers < kMaxMasterServers );
-		m_masterServers[m_numMasterServers++] = address;
+	void addInfoServer( const netadr_t &address ) {
+		assert( m_numInfoServers < kMaxInfoServers );
+		m_infoServers[m_numInfoServers++] = address;
 	}
 
 	// TODO: Should not be called directly by global context

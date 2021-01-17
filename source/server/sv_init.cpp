@@ -472,7 +472,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 
 	// SV_MM_Shutdown();
 
-	SV_MasterSendQuit();
+	SV_InfoServerSendQuit();
 
 	NET_CloseSocket( &svs.socket_loopback );
 	NET_CloseSocket( &svs.socket_udp );

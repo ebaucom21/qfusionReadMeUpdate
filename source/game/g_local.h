@@ -65,7 +65,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define FL_IMMUNE_LAVA      0x00000080
 #define FL_PARTIALGROUND    0x00000100  // not all corners are valid
 #define FL_WATERJUMP        0x00000200  // player jumping out of water
-#define FL_TEAMSLAVE        0x00000400  // not the first on the team
+#define FL_TEAMFOLLOWER     0x00000400  // not the first on the team
 #define FL_NO_KNOCKBACK     0x00000800
 #define FL_BUSY             0x00001000
 
@@ -1975,7 +1975,7 @@ struct edict_s {
 	edict_t *groundentity;
 	int groundentity_linkcount;
 	edict_t *teamchain;
-	edict_t *teammaster;
+	edict_t *teamleader;
 	int noise_index;
 	float attenuation;
 

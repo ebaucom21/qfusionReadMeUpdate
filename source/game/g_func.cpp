@@ -142,7 +142,7 @@ static void Move_Calc( edict_t *ent, vec3_t dest, void ( *func )( edict_t * ) ) 
 	ent->moveinfo.endfunc = func;
 	Move_UpdateLinearVelocity( ent, 0, 0 );
 
-	if( level.current_entity == ( ( ent->flags & FL_TEAMSLAVE ) ? ent->teammaster : ent ) ) {
+	if( level.current_entity == (( ent->flags & FL_TEAMFOLLOWER ) ? ent->teamleader : ent ) ) {
 		Move_Begin( ent );
 	} else {
 		ent->nextThink = level.time + 1;
@@ -224,7 +224,7 @@ static void AngleMove_Calc( edict_t *ent, vec3_t destangles, void ( *func )( edi
 	VectorCopy( destangles, ent->moveinfo.destangles );
 	ent->moveinfo.endfunc = func;
 
-	if( level.current_entity == ( ( ent->flags & FL_TEAMSLAVE ) ? ent->teammaster : ent ) ) {
+	if( level.current_entity == (( ent->flags & FL_TEAMFOLLOWER ) ? ent->teamleader : ent ) ) {
 		AngleMove_Begin( ent );
 	} else {
 		ent->nextThink = level.time + 1;
@@ -248,7 +248,7 @@ static void AngleMove_Calc( edict_t *ent, vec3_t destangles, void ( *func )( edi
 static void plat_go_down( edict_t *ent );
 
 static void plat_hit_top( edict_t *ent ) {
-	if( !( ent->flags & FL_TEAMSLAVE ) ) {
+	if( !( ent->flags & FL_TEAMFOLLOWER ) ) {
 		if( ent->moveinfo.sound_end ) {
 			G_AddEvent( ent, EV_PLAT_HIT_TOP, ent->moveinfo.sound_end, true );
 		}
@@ -261,7 +261,7 @@ static void plat_hit_top( edict_t *ent ) {
 }
 
 static void plat_hit_bottom( edict_t *ent ) {
-	if( !( ent->flags & FL_TEAMSLAVE ) ) {
+	if( !( ent->flags & FL_TEAMFOLLOWER ) ) {
 		if( ent->moveinfo.sound_end ) {
 			G_AddEvent( ent, EV_PLAT_HIT_BOTTOM, ent->moveinfo.sound_end, true );
 		}
@@ -271,7 +271,7 @@ static void plat_hit_bottom( edict_t *ent ) {
 }
 
 void plat_go_down( edict_t *ent ) {
-	if( !( ent->flags & FL_TEAMSLAVE ) ) {
+	if( !( ent->flags & FL_TEAMFOLLOWER ) ) {
 		if( ent->moveinfo.sound_start ) {
 			G_AddEvent( ent, EV_PLAT_START_MOVING, ent->moveinfo.sound_start, true );
 		}
@@ -283,7 +283,7 @@ void plat_go_down( edict_t *ent ) {
 }
 
 static void plat_go_up( edict_t *ent ) {
-	if( !( ent->flags & FL_TEAMSLAVE ) ) {
+	if( !( ent->flags & FL_TEAMFOLLOWER ) ) {
 		if( ent->moveinfo.sound_start ) {
 			G_AddEvent( ent, EV_PLAT_START_MOVING, ent->moveinfo.sound_start, true );
 		}
@@ -523,9 +523,8 @@ void SP_func_plat( edict_t *ent ) {
 static void door_use_areaportals( edict_t *self, bool open ) {
 	int iopen = open ? 1 : 0;
 
-	if( self->flags & FL_TEAMSLAVE ) {
-		return; // only the team master does this
-
+	if( self->flags & FL_TEAMFOLLOWER ) {
+		return; // only the team leader does this
 	}
 
 	// make sure we don't open the same areaportal twice
@@ -540,7 +539,7 @@ static void door_use_areaportals( edict_t *self, bool open ) {
 static void door_go_down( edict_t *self );
 
 static void door_hit_top( edict_t *self ) {
-	if( !( self->flags & FL_TEAMSLAVE ) ) {
+	if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 		if( self->moveinfo.sound_end ) {
 			G_AddEvent( self, EV_DOOR_HIT_TOP, self->moveinfo.sound_end, true );
 		}
@@ -557,7 +556,7 @@ static void door_hit_top( edict_t *self ) {
 }
 
 static void door_hit_bottom( edict_t *self ) {
-	if( !( self->flags & FL_TEAMSLAVE ) ) {
+	if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 		if( self->moveinfo.sound_end ) {
 			G_AddEvent( self, EV_DOOR_HIT_BOTTOM, self->moveinfo.sound_end, true );
 		}
@@ -568,7 +567,7 @@ static void door_hit_bottom( edict_t *self ) {
 }
 
 void door_go_down( edict_t *self ) {
-	if( !( self->flags & FL_TEAMSLAVE ) ) {
+	if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 		if( self->moveinfo.sound_start ) {
 			G_AddEvent( self, EV_DOOR_START_MOVING, self->moveinfo.sound_start, true );
 		}
@@ -600,7 +599,7 @@ static void door_go_up( edict_t *self, edict_t *activator ) {
 		return;
 	}
 
-	if( !( self->flags & FL_TEAMSLAVE ) ) {
+	if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 		if( self->moveinfo.sound_start ) {
 			G_AddEvent( self, EV_DOOR_START_MOVING, self->moveinfo.sound_start, true );
 		}
@@ -621,7 +620,7 @@ static void door_go_up( edict_t *self, edict_t *activator ) {
 static void door_use( edict_t *self, edict_t *other, edict_t *activator ) {
 	edict_t *ent;
 
-	if( self->flags & FL_TEAMSLAVE ) {
+	if( self->flags & FL_TEAMFOLLOWER ) {
 		return;
 	}
 
@@ -670,9 +669,8 @@ static void Think_CalcMoveSpeed( edict_t *self ) {
 	float newspeed;
 	float dist;
 
-	if( self->flags & FL_TEAMSLAVE ) {
-		return; // only the team master does this
-
+	if( self->flags & FL_TEAMFOLLOWER ) {
+		return; // only the team leader does this
 	}
 
 	// find the smallest distance any member of the team will be moving
@@ -698,7 +696,7 @@ static void Think_SpawnDoorTrigger( edict_t *ent ) {
 	vec3_t mins, maxs;
 	float expand_size = 80;     // was 60
 
-	if( ent->flags & FL_TEAMSLAVE ) {
+	if( ent->flags & FL_TEAMFOLLOWER ) {
 		return; // only the team leader spawns a trigger
 
 	}
@@ -756,10 +754,10 @@ static void door_blocked( edict_t *self, edict_t *other ) {
 	// so let it just squash the object to death real fast
 	if( self->moveinfo.wait >= 0 ) {
 		if( self->moveinfo.state == STATE_DOWN ) {
-			for( ent = self->teammaster; ent; ent = ent->teamchain )
+			for( ent = self->teamleader; ent; ent = ent->teamchain )
 				door_go_up( ent, ent->activator );
 		} else {
-			for( ent = self->teammaster; ent; ent = ent->teamchain )
+			for( ent = self->teamleader; ent; ent = ent->teamchain )
 				door_go_down( ent );
 		}
 	}
@@ -768,7 +766,7 @@ static void door_blocked( edict_t *self, edict_t *other ) {
 static void door_killed( edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, const vec3_t point ) {
 	edict_t *ent;
 
-	for( ent = self->teammaster; ent; ent = ent->teamchain ) {
+	for( ent = self->teamleader; ent; ent = ent->teamchain ) {
 		ent->health = ent->max_health;
 		if( ent->spawnflags & DOOR_DIE_ONCE ) {
 			ent->takedamage = DAMAGE_NO;
@@ -776,7 +774,7 @@ static void door_killed( edict_t *self, edict_t *inflictor, edict_t *attacker, i
 	}
 
 	if( !self->s.team || self->s.team == attacker->s.team || self->s.team == inflictor->s.team ) {
-		door_use( self->teammaster, attacker, attacker );
+		door_use( self->teamleader, attacker, attacker );
 	}
 }
 
@@ -868,7 +866,7 @@ void SP_func_door( edict_t *ent ) {
 
 	// to simplify logic elsewhere, make non-teamed doors into a team of one
 	if( !ent->team ) {
-		ent->teammaster = ent;
+		ent->teamleader = ent;
 	}
 
 	GClip_LinkEntity( ent );
@@ -992,7 +990,7 @@ void SP_func_door_rotating( edict_t *ent ) {
 
 	// to simplify logic elsewhere, make non-teamed doors into a team of one
 	if( !ent->team ) {
-		ent->teammaster = ent;
+		ent->teamleader = ent;
 	}
 
 	GClip_LinkEntity( ent );
@@ -1357,7 +1355,7 @@ static void button_fire( edict_t *self ) {
 	}
 
 	self->moveinfo.state = STATE_UP;
-	if( self->moveinfo.sound_start && !( self->flags & FL_TEAMSLAVE ) ) {
+	if( self->moveinfo.sound_start && !( self->flags & FL_TEAMFOLLOWER ) ) {
 		G_AddEvent( self, EV_BUTTON_FIRE, self->moveinfo.sound_start, true );
 	}
 	Move_Calc( self, self->moveinfo.end_origin, button_wait );
@@ -1524,7 +1522,7 @@ static void train_wait( edict_t *self ) {
 			self->nextThink = 0;
 		}
 
-		if( !( self->flags & FL_TEAMSLAVE ) ) {
+		if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 			if( self->moveinfo.sound_end ) {
 				G_AddEvent( self, EV_TRAIN_STOP, self->moveinfo.sound_end, true );
 			}
@@ -1579,7 +1577,7 @@ again:
 	self->moveinfo.wait = ent->wait;
 	self->target_ent = ent;
 
-	if( !( self->flags & FL_TEAMSLAVE ) ) {
+	if( !( self->flags & FL_TEAMFOLLOWER ) ) {
 		if( self->moveinfo.sound_start ) {
 			G_AddEvent( self, EV_TRAIN_START, self->moveinfo.sound_start, true );
 		}
@@ -1914,8 +1912,8 @@ static void func_bobbing_blocked( edict_t *self, edict_t *other ) {
 * func_bobbing_use
 */
 static void func_bobbing_use( edict_t *self, edict_t *other, edict_t *activator ) {
-	if( self->flags & FL_TEAMSLAVE ) {
-		G_UseTargets( self->teammaster, activator );
+	if( self->flags & FL_TEAMFOLLOWER ) {
+		G_UseTargets( self->teamleader, activator );
 		return;
 	}
 
@@ -2000,8 +1998,8 @@ static void func_pendulum_blocked( edict_t *self, edict_t *other ) {
 * func_pendulum_use
 */
 static void func_pendulum_use( edict_t *self, edict_t *other, edict_t *activator ) {
-	if( self->flags & FL_TEAMSLAVE ) {
-		G_UseTargets( self->teammaster, activator );
+	if( self->flags & FL_TEAMFOLLOWER ) {
+		G_UseTargets( self->teamleader, activator );
 		return;
 	}
 

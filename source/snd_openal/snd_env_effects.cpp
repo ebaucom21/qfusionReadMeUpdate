@@ -33,12 +33,12 @@ void Effect::IntiallySetupEffect( src_t *src ) {
 	qalEffecti( src->effect, AL_EFFECT_TYPE, this->type );
 }
 
-float Effect::GetMasterGain( src_s *src ) const {
+float Effect::GetSourceGain( src_s *src ) const {
 	return src->fvol * src->volumeVar->value;
 }
 
 void Effect::AdjustGain( src_t *src ) const {
-	qalSourcef( src->source, AL_GAIN, GetMasterGain( src ) );
+	qalSourcef( src->source, AL_GAIN, GetSourceGain( src ) );
 }
 
 void Effect::AttachEffect( src_t *src ) {
@@ -58,7 +58,7 @@ void UnderwaterFlangerEffect::IntiallySetupEffect( src_t *src ) {
 	qalEffectf( src->effect, AL_FLANGER_FEEDBACK, -0.4f );
 }
 
-float UnderwaterFlangerEffect::GetMasterGain( src_t *src ) const {
+float UnderwaterFlangerEffect::GetSourceGain( src_t *src ) const {
 	float gain = src->fvol * src->volumeVar->value;
 	// Lower gain significantly if there is a medium transition
 	// (if the listener is not in liquid and the source is, and vice versa)
@@ -81,7 +81,7 @@ void UnderwaterFlangerEffect::BindOrUpdate( src_t *src ) {
 	AttachEffect( src );
 }
 
-float EaxReverbEffect::GetMasterGain( src_t *src ) const {
+float EaxReverbEffect::GetSourceGain( src_t *src ) const {
 	float result = src->fvol * src->volumeVar->value;
 
 	// Both partial obstruction factors are within [0, 1] range, so we multiply by 0.5

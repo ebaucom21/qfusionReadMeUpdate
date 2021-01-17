@@ -37,9 +37,9 @@
 
 //=============================================================================
 
-#define MAX_MASTERS                     16 // max recipients for heartbeat packets
+#define MAX_INFO_SERVERS                     16 // max recipients for heartbeat packets
 #define HEARTBEAT_SECONDS               300
-#define TTL_MASTERS                     24 * 60 * 60
+#define TTL_INFO_SERVERS                24 * 60 * 60
 
 #define USERINFO_UPDATE_COOLDOWN_MSEC   2000
 
@@ -307,7 +307,7 @@ typedef struct {
 	unsigned int snapFrameTime;     // msecs between server packets
 	unsigned int gameFrameTime;     // msecs between game code executions
 	bool autostarted;
-	int64_t lastMasterResolve;
+	int64_t lastInfoServerResolve;
 	unsigned int autoUpdateMinute;  // the minute number we should run the autoupdate check, in the range 0 to 59
 } server_constant_t;
 
@@ -397,13 +397,11 @@ void SV_WriteClientdataToMessage( client_t *client, msg_t *msg );
 void SV_InitOperatorCommands( void );
 void SV_ShutdownOperatorCommands( void );
 
-void SV_SendServerinfo( client_t *client );
 void SV_UserinfoChanged( client_t *cl );
 
-void SV_MasterHeartbeat( void );
-void SV_MasterSendQuit( void );
+void SV_InfoServerHeartbeat( void );
+void SV_InfoServerSendQuit( void );
 
-void SVC_MasterInfoResponse( const socket_t *socket, const netadr_t *address );
 int SVC_FakeConnect( const char *fakeUserinfo, const char *fakeSocketType, const char *fakeIP );
 
 void SV_UpdateActivity( void );
@@ -412,8 +410,8 @@ void SV_UpdateActivity( void );
 // sv_oob.c
 //
 void SV_ConnectionlessPacket( const socket_t *socket, const netadr_t *address, msg_t *msg );
-void SV_InitMaster( void );
-void SV_UpdateMaster( void );
+void SV_InitInfoServers( void );
+void SV_UpdateInfoServers( void );
 
 //
 // sv_init.c

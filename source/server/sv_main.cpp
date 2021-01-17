@@ -81,8 +81,7 @@ cvar_t *sv_reconnectlimit; // minimum seconds between connect messages
 
 cvar_t *sv_maxrate;
 cvar_t *sv_compresspackets;
-cvar_t *sv_masterservers;
-cvar_t *sv_masterservers_steam;
+cvar_t *sv_infoservers;
 cvar_t *sv_skilllevel;
 
 // wsw : debug netcode
@@ -688,8 +687,8 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 		// run matchmaker stuff
 		SVStatsowFacade::Instance()->Frame();
 
-		// send a heartbeat to the master if needed
-		SV_MasterHeartbeat();
+		// send a heartbeat to info servers if needed
+		SV_InfoServerHeartbeat();
 
 		// clear teleport flags, etc for next frame
 		ge->ClearSnap();
@@ -896,8 +895,7 @@ void SV_Init( void ) {
 		Cvar_ForceSet( "sv_skilllevel", "0" );
 	}
 
-	sv_masterservers =          Cvar_Get( "masterservers", DEFAULT_MASTER_SERVERS_IPS, CVAR_LATCH );
-	sv_masterservers_steam =    Cvar_Get( "masterservers_steam", DEFAULT_MASTER_SERVERS_STEAM_IPS, CVAR_LATCH );
+	sv_infoservers =          Cvar_Get( "infoservers", DEFAULT_INFO_SERVERS_IPS, CVAR_LATCH );
 
 	sv_debug_serverCmd =        Cvar_Get( "sv_debug_serverCmd", "0", CVAR_ARCHIVE );
 
@@ -940,8 +938,7 @@ void SV_Init( void ) {
 
 	Com_Printf( "Game running at %i fps. Server transmit at %i pps\n", sv_fps->integer, sv_pps->integer );
 
-	//init the master servers list
-	SV_InitMaster();
+	SV_InitInfoServers();
 
 	SVStatsowFacade::Init();
 
