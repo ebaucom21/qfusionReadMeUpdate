@@ -1,6 +1,6 @@
 #include "nearbytriggerscache.h"
 #include "../frameentitiescache.h"
-#include "../ai_local.h"
+#include "../ailocal.h"
 
 namespace wsw::ai::movement {
 

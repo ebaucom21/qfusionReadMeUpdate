@@ -2,7 +2,7 @@
 #define WSW_367671cf_02ef_4de7_9728_36bbe2aeab04_H
 
 #include "../../qcommon/wswstaticvector.h"
-#include "ai_local.h"
+#include "ailocal.h"
 
 template <typename> class SingletonHolder;
 

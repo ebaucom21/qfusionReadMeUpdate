@@ -1,7 +1,7 @@
 #ifndef WSW_0b4bb3fb_4c2f_47f9_afe7_68889268c9bd_H
 #define WSW_0b4bb3fb_4c2f_47f9_afe7_68889268c9bd_H
 
-#include "../navigation/AasWorld.h"
+#include "../navigation/aasworld.h"
 
 namespace wsw::ai::movement {
 

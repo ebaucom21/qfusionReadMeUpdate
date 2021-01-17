@@ -1,8 +1,8 @@
 #include "bot.h"
-#include "ai_manager.h"
-#include "ai_ground_trace_cache.h"
-#include "teamplay/ObjectiveBasedTeam.h"
-#include "combat/TacticalSpotsRegistry.h"
+#include "manager.h"
+#include "groundtracecache.h"
+#include "teamplay/objectivebasedteam.h"
+#include "combat/tacticalspotsregistry.h"
 #include "frameentitiescache.h"
 
 const cvar_t *ai_evolution;

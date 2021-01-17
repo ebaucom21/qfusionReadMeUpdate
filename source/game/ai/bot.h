@@ -1,21 +1,21 @@
-#ifndef AI_BOT_H
-#define AI_BOT_H
+#ifndef WSW_da942a7a_e77d_4eaf_9ad8_e1b4b6fc5240_H
+#define WSW_da942a7a_e77d_4eaf_9ad8_e1b4b6fc5240_H
 
 #include "../../qcommon/wswstaticvector.h"
-#include "awareness/AwarenessModule.h"
-#include "planning/PlanningModule.h"
-#include "ai_base_ai.h"
+#include "awareness/awarenessmodule.h"
+#include "planning/planningmodule.h"
+#include "baseai.h"
 #include "vec3.h"
 
-#include "movement/MovementModule.h"
-#include "combat/WeaponsUsageModule.h"
-#include "planning/TacticalSpotsCache.h"
-#include "awareness/AwarenessModule.h"
-#include "planning/RoamingManager.h"
-#include "bot_weight_config.h"
+#include "movement/movementmodule.h"
+#include "combat/weaponsusagemodule.h"
+#include "planning/tacticalspotscache.h"
+#include "awareness/awarenessmodule.h"
+#include "planning/roamingmanager.h"
+#include "botweightconfig.h"
 
-#include "planning/Goals.h"
-#include "planning/Actions.h"
+#include "planning/goals.h"
+#include "planning/actions.h"
 
 #include <functional>
 

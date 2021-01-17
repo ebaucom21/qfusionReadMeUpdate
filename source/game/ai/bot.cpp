@@ -1,8 +1,8 @@
 #include "bot.h"
-#include "navigation/AasWorld.h"
-#include "teamplay/ObjectiveBasedTeam.h"
+#include "navigation/aasworld.h"
+#include "teamplay/objectivebasedteam.h"
 #include "../g_gametypes.h"
-#include "ai_manager.h"
+#include "manager.h"
 #include <algorithm>
 #include <array>
 

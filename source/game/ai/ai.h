@@ -23,8 +23,8 @@ This program is a modification of the ACE Bot, and is therefore
 in NO WAY supported by Steve Yeager.
 */
 
-#ifndef QFUSION_AI_H
-#define QFUSION_AI_H
+#ifndef WSW_6f0d98f2_8fe2_4153_b41e_fea9833517a0_H
+#define WSW_6f0d98f2_8fe2_4153_b41e_fea9833517a0_H
 
 extern const struct asEnum_s asAIEnums[];
 extern const struct asClassDescriptor_s *asAIClassesDescriptors[];
