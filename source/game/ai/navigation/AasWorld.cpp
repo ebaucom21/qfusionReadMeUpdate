@@ -1,7 +1,6 @@
 #include "AasWorld.h"
 #include "AasElementsMask.h"
 #include "AasAreasWalker.h"
-#include "../buffer_builder.h"
 #include "../../../qcommon/wswstaticvector.h"
 #include "../ai_local.h"
 #include "../ai_precomputed_file_handler.h"
@@ -15,6 +14,38 @@
 
 #include <cmath>
 #include <cstdlib>
+
+template<typename T>
+class BufferBuilder {
+	wsw::Vector<T> m_underlying;
+public:
+	explicit BufferBuilder( size_t initialSizeHint ) {
+		m_underlying.reserve( initialSizeHint );
+	}
+
+	unsigned Size() const { return (unsigned)m_underlying.size(); }
+
+	void Clear() {
+		// Preserve the old semantics that used to release memory
+		wsw::Vector<T> tmp;
+		std::swap( m_underlying, tmp );
+	}
+
+	void Add( const T &elem ) {
+		m_underlying.push_back( elem );
+	}
+	void Add( const T *elems, int numElems ) {
+		m_underlying.insert( m_underlying.end(), elems, elems + numElems );
+	}
+
+	T *FlattenResult() const {
+		static_assert( std::is_trivial_v<T> );
+		const size_t sizeInBytes = sizeof( T ) * m_underlying.size();
+		auto *const result = (T *)Q_malloc( sizeInBytes );
+		std::memcpy( result, m_underlying.data(), sizeInBytes );
+		return result;
+	}
+};
 
 // Static member definition
 AiAasWorld *AiAasWorld::instance = nullptr;
