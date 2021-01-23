@@ -273,9 +273,9 @@ AreaAndScore *BunnyTestingSavedLookDirsAction::TakeBestCandidateAreas( AreaAndSc
 void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( MovementPredictionContext *context,
 															 AreaAndScore *candidateAreasBegin,
 															 AreaAndScore *candidateAreasEnd ) {
-	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
+	const auto &__restrict entityPhysicsState = context->movementState->entityPhysicsState;
 	const int navTargetAreaNum = context->NavTargetAasAreaNum();
-	const auto *aasAreas = AiAasWorld::Instance()->Areas();
+	const auto *__restrict aasAreas = AiAasWorld::Instance()->Areas();
 
 	AreaAndScore *takenAreasBegin = candidateAreasBegin;
 	assert( maxSuggestedLookDirs <= suggestedLookDirs.capacity() );
@@ -284,18 +284,22 @@ void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( MovementPredictionC
 
 	suggestedLookDirs.clear();
 	for( auto iter = takenAreasBegin; iter < takenAreasEnd; ++iter ) {
-		int areaNum = ( *iter ).areaNum;
-		void *mem = suggestedLookDirs.unsafe_grow_back();
+		const int areaNum = ( *iter ).areaNum;
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::Instance()->NumAreas() );
+		Vec3 dir( context->NavTargetOrigin() );
 		if( areaNum != navTargetAreaNum ) {
-			Vec3 *toAreaDir = new(mem)Vec3( aasAreas[areaNum].center );
-			toAreaDir->Z() = aasAreas[areaNum].mins[2] + 32.0f;
-			*toAreaDir -= entityPhysicsState.Origin();
-			toAreaDir->Z() *= Z_NO_BEND_SCALE;
-			toAreaDir->NormalizeFast();
-		} else {
-			Vec3 *toTargetDir = new(mem)Vec3( context->NavTargetOrigin() );
-			*toTargetDir -= entityPhysicsState.Origin();
-			toTargetDir->NormalizeFast();
+			const auto &area = aasAreas[areaNum];
+			dir.Set( area.center );
+			dir.Z() = area.mins[2] + 32.0f;
+		}
+		dir -= entityPhysicsState.Origin();
+		if( areaNum != navTargetAreaNum ) {
+			dir.Z() *= Z_NO_BEND_SCALE;
+		}
+		const auto squareLen = dir.SquaredLength();
+		if( squareLen > 1.0f ) {
+			dir *= Q_RSqrt( squareLen );
+			suggestedLookDirs.emplace_back( SuggestedDir( dir, areaNum ) );
 		}
 	}
 }
