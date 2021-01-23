@@ -18,6 +18,7 @@ class DemosResolver : public QObject {
 	Q_OBJECT
 
 	friend class EnumerateFilesTask;
+	friend class RunQueryTask;
 	friend class DemosModel;
 
 	wsw::StringSpanStorage<uint8_t, uint8_t> m_fileNameSpans[2];
@@ -35,10 +36,10 @@ class DemosResolver : public QObject {
 	static constexpr unsigned kMaxOtherKeysAndValues = 8;
 	static constexpr unsigned kMaxTags = 8;
 
-	struct TaskResult;
+	struct ResolveTaskResult;
 
 	struct MetadataEntry {
-		TaskResult *parent { nullptr };
+		ResolveTaskResult *parent { nullptr };
 		MetadataEntry *prev { nullptr }, *next { nullptr };
 		// StaticVector<?,?> is uncopyable and that's reasonable.
 		std::pair<unsigned, unsigned> otherKeysAndValues[kMaxOtherKeysAndValues];
@@ -68,8 +69,8 @@ class DemosResolver : public QObject {
 	static constexpr unsigned kNumBins { 79 };
 	MetadataEntry *m_hashBins[kNumBins] {};
 
-	struct TaskResult {
-		TaskResult *prev { nullptr }, *next { nullptr };
+	struct ResolveTaskResult {
+		ResolveTaskResult *prev { nullptr }, *next { nullptr };
 		wsw::Vector<MetadataEntry> entries;
 		StringDataStorage storage;
 		int numRefs { 0 };
@@ -77,13 +78,29 @@ class DemosResolver : public QObject {
 
 	unsigned m_numPendingTasks { 0 };
 	unsigned m_numCompletedTasks { 0 };
-	wsw::Vector<TaskResult *> m_taskResultsToProcess;
+	wsw::Vector<ResolveTaskResult *> m_taskResultsToProcess;
 
-	TaskResult *m_taskResultsHead { nullptr };
-	wsw::Vector<const MetadataEntry *> m_displayedEntries;
+	ResolveTaskResult *m_taskResultsHead { nullptr };
+	wsw::Vector<const MetadataEntry *> m_entries;
+
+	wsw::Vector<unsigned> m_lastQueryResults;
+	wsw::StaticString<32> m_lastQuery;
 
 	[[nodiscard]]
-	auto getCount() const -> int { return (int)m_displayedEntries.size(); };
+	auto getCount() const -> int {
+		if( m_lastQuery.empty() ) {
+			return (int)m_entries.size();
+		}
+		return m_lastQueryResults.size();
+	};
+
+	[[nodiscard]]
+	auto getEntry( int row ) const -> const MetadataEntry * {
+		if( m_lastQuery.empty() ) {
+			return m_entries[row];
+		}
+		return m_entries[m_lastQueryResults[row]];
+	}
 
 	void enumerateFiles();
 	void purgeMetadata( const wsw::StringView &file );
@@ -92,19 +109,23 @@ class DemosResolver : public QObject {
 	void parseMetadata( const char *data, size_t dataSize, const wsw::StringView &fileName,
 					    wsw::Vector<MetadataEntry > *entries, StringDataStorage *storage );
 	void processTaskResults();
-	void updateDisplayedList();
+	void updateDefaultDisplayedList();
+	void runQuery();
 
-	Q_SIGNAL void taskCompleted( TaskResult *result );
-	Q_SLOT void takeTaskResult( TaskResult *result );
-	Q_SIGNAL void backgroundTasksReady( bool isReady );
+	Q_SIGNAL void resolveTaskCompleted( ResolveTaskResult *result );
+	Q_SLOT void takeResolveTaskResult( ResolveTaskResult *result );
+	Q_SIGNAL void resolveTasksReady( bool isReady );
+	Q_SIGNAL void runQueryTasksReady( bool isReady );
 	Q_SLOT void setReady( bool ready );
 public:
 	DemosResolver();
 	~DemosResolver() override;
 
 	Q_SIGNAL void isReadyChanged( bool isReady );
+
 	Q_PROPERTY( bool isReady READ isReady NOTIFY isReadyChanged );
-	Q_INVOKABLE void update();
+	Q_INVOKABLE void reload();
+	Q_INVOKABLE void query( const QString &query );
 
 	Q_SIGNAL void progressUpdated( QVariant maybePercents );
 
@@ -124,12 +145,6 @@ class DemosModel : public QAbstractListModel {
 	};
 
 	DemosResolver *const m_resolver;
-
-	[[nodiscard]]
-	auto getEntry( int row ) const -> const DemosResolver::MetadataEntry * {
-		assert( (unsigned)row < (unsigned)m_resolver->getCount() );
-		return m_resolver->m_displayedEntries[row];
-	}
 
 	Q_SLOT void onIsResolverReadyChanged( bool isReady );
 public:

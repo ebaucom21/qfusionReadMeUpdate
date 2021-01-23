@@ -35,11 +35,11 @@ auto DemosModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	if( index.isValid() ) {
 		if( const int row = index.row(); (unsigned)row < (unsigned)m_resolver->getCount() ) {
 			switch( role ) {
-				case Section: return getEntry( row )->sectionDate;
-				case Timestamp: return getEntry( row )->timestamp;
-				case ServerName: return toQVariant( getEntry( row )->getServerName() );
-				case FileName: return toQVariant( getEntry( row )->getFileName() );
-				case MapName: return toQVariant( getEntry( row )->getMapName() );
+				case Section: return m_resolver->getEntry( row )->sectionDate;
+				case Timestamp: return m_resolver->getEntry( row )->timestamp;
+				case ServerName: return toQVariant( m_resolver->getEntry( row )->getServerName() );
+				case FileName: return toQVariant( m_resolver->getEntry( row )->getFileName() );
+				case MapName: return toQVariant( m_resolver->getEntry( row )->getMapName() );
 				default:;
 			}
 		}
@@ -55,13 +55,15 @@ void DemosModel::onIsResolverReadyChanged( bool ) {
 DemosResolver::DemosResolver() {
 	m_threadPool.setExpiryTimeout( 3000 );
 	// Establish connections for inter-thread transmissions of task results
-	connect( this, &DemosResolver::taskCompleted, this, &DemosResolver::takeTaskResult, Qt::QueuedConnection );
-	connect( this, &DemosResolver::backgroundTasksReady, this, &DemosResolver::setReady, Qt::QueuedConnection );
+	Qt::ConnectionType connectionType = Qt::QueuedConnection;
+	connect( this, &DemosResolver::resolveTaskCompleted, this, &DemosResolver::takeResolveTaskResult, connectionType );
+	connect( this, &DemosResolver::resolveTasksReady, this, &DemosResolver::setReady, connectionType );
+	connect( this, &DemosResolver::runQueryTasksReady, this, &DemosResolver::setReady, connectionType );
 }
 
 DemosResolver::~DemosResolver() {
-	TaskResult *next;
-	for( TaskResult *result = m_taskResultsHead; result; result = next ) {
+	ResolveTaskResult *next;
+	for( ResolveTaskResult *result = m_taskResultsHead; result; result = next ) {
 		next = result->next;
 		delete result;
 	}
@@ -75,14 +77,43 @@ public:
 	void run() override { m_resolver->enumerateFiles(); }
 };
 
-void DemosResolver::update() {
+class RunQueryTask : public QRunnable {
+	DemosResolver *const m_resolver;
+public:
+	explicit RunQueryTask( DemosResolver *resolver ) : m_resolver( resolver ) {}
+	void run() override { m_resolver->runQuery(); }
+};
+
+void DemosResolver::reload() {
 	assert( m_isReady );
 
 	setReady( false );
 
+	m_lastQueryResults.clear();
+	m_lastQuery.clear();
+
 	Q_EMIT progressUpdated( QVariant() );
 
 	m_threadPool.start( new EnumerateFilesTask( this ) );
+}
+
+void DemosResolver::query( const QString &query ) {
+	assert( m_isReady );
+
+	const QByteArray queryBytes( query.toLatin1() );
+	assert( (unsigned)queryBytes.size() < m_lastQuery.capacity() );
+	const wsw::StringView queryView( queryBytes.data(), queryBytes.size() );
+
+	if( m_lastQuery.asView().equalsIgnoreCase( queryView ) ) {
+		return;
+	}
+
+	setReady( false );
+
+	m_lastQuery.assign( queryView );
+	Q_EMIT progressUpdated( QVariant() );
+
+	m_threadPool.start( new RunQueryTask( this ) );
 }
 
 void DemosResolver::setReady( bool ready ) {
@@ -138,7 +169,7 @@ void DemosResolver::enumerateFiles() {
 	}
 
 	if( m_addedNew.empty() && m_goneOld.empty() ) {
-		Q_EMIT backgroundTasksReady( true );
+		Q_EMIT resolveTasksReady( true );
 		return;
 	}
 
@@ -174,16 +205,16 @@ void DemosResolver::purgeMetadata( const wsw::StringView &fileName ) {
 }
 
 void DemosResolver::resolveMetadata( unsigned first, unsigned last ) {
-	TaskResult *taskResult = nullptr;
+	ResolveTaskResult *taskResult = nullptr;
 	try {
-		taskResult = new TaskResult;
+		taskResult = new ResolveTaskResult;
 		for ( unsigned index = first; index < last; ++index ) {
 			resolveMetadata( index, &taskResult->entries, &taskResult->storage );
 		}
-		Q_EMIT takeTaskResult( taskResult );
+		Q_EMIT takeResolveTaskResult( taskResult );
 	} catch (...) {
 		delete taskResult;
-		Q_EMIT takeTaskResult( nullptr );
+		Q_EMIT takeResolveTaskResult( nullptr );
 	}
 }
 
@@ -282,7 +313,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 	}
 }
 
-void DemosResolver::takeTaskResult( TaskResult *result ) {
+void DemosResolver::takeResolveTaskResult( ResolveTaskResult *result ) {
 	if( result ) {
 		m_taskResultsToProcess.push_back( result );
 	}
@@ -291,12 +322,12 @@ void DemosResolver::takeTaskResult( TaskResult *result ) {
 	Q_EMIT progressUpdated( progress );
 	if( m_numPendingTasks == m_numCompletedTasks ) {
 		processTaskResults();
-		Q_EMIT backgroundTasksReady( true );
+		Q_EMIT resolveTasksReady( true );
 	}
 }
 
 void DemosResolver::processTaskResults() {
-	for( TaskResult *const result: m_taskResultsToProcess ) {
+	for( ResolveTaskResult *const result: m_taskResultsToProcess ) {
 		for( MetadataEntry &entry: result->entries ) {
 			// Link to parent
 			entry.parent = result;
@@ -308,22 +339,47 @@ void DemosResolver::processTaskResults() {
 	}
 
 	m_taskResultsToProcess.clear();
-	updateDisplayedList();
+	updateDefaultDisplayedList();
 }
 
-void DemosResolver::updateDisplayedList() {
-	m_displayedEntries.clear();
-	for( TaskResult *result = m_taskResultsHead; result; result = result->next ) {
+void DemosResolver::updateDefaultDisplayedList() {
+	m_entries.clear();
+	for( ResolveTaskResult *result = m_taskResultsHead; result; result = result->next ) {
 		for( const MetadataEntry &entry: result->entries ) {
-			m_displayedEntries.push_back( std::addressof( entry ) );
+			m_entries.push_back( std::addressof( entry ) );
 		}
 	}
 
-	// Sort by date for now
+	// Sort the default list by date
 	const auto cmp = []( const MetadataEntry *lhs, const MetadataEntry *rhs ) {
 		return lhs->rawTimestamp < rhs->rawTimestamp;
 	};
-	std::sort( m_displayedEntries.begin(), m_displayedEntries.end(), cmp );
+	std::sort( m_entries.begin(), m_entries.end(), cmp );
+}
+
+void DemosResolver::runQuery() {
+	if( m_lastQuery.empty() ) {
+		// Just reset
+		// This has been still required to force the model update
+		Q_EMIT runQueryTasksReady( true );
+		return;
+	}
+
+	assert( m_lastQueryResults.empty() );
+	const wsw::StringView lastQueryView( m_lastQuery.asView() );
+	for( unsigned index = 0; index < m_entries.size(); ++index ) {
+		const MetadataEntry *const entry = m_entries[index];
+		// Just basic for now
+		if( entry->getFileName().contains( lastQueryView ) ) {
+			m_lastQueryResults.push_back( index );
+		} else if( entry->getServerName().contains( lastQueryView ) ) {
+			m_lastQueryResults.push_back( index );
+		} else if( entry->getMapName().contains( lastQueryView ) ) {
+			m_lastQueryResults.push_back( index );
+		}
+	}
+
+	Q_EMIT runQueryTasksReady( true );
 }
 
 }
