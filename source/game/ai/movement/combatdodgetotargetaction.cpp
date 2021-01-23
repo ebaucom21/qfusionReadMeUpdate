@@ -6,27 +6,35 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 	auto *combatMovementState = &context->movementState->keyMoveDirsState;
 	Assert( !combatMovementState->IsActive() );
 
-	int keyMoves[2];
-	auto &traceCache = context->TraceCache();
 	vec3_t closestFloorPoint;
-	Vec3 intendedMoveDir( entityPhysicsState.Origin() );
-	bool hasDefinedMoveDir = false;
+	std::optional<Vec3> maybeTarget;
+	const float *__restrict botOrigin = entityPhysicsState.Origin();
 	if( context->sameFloorClusterAreasCache.GetClosestToTargetPoint( context, closestFloorPoint ) ) {
-		intendedMoveDir -= closestFloorPoint;
-		hasDefinedMoveDir = true;
-	} else if( int nextReachNum = context->NextReachNum() ) {
-		const auto &nextReach = AiAasWorld::Instance()->Reachabilities()[nextReachNum];
-		Vec3 reachAvgDir( nextReach.start );
-		reachAvgDir += nextReach.end;
-		reachAvgDir *= 0.5f;
-		hasDefinedMoveDir = true;
+		if( Distance2DSquared( botOrigin, closestFloorPoint ) > SQUARE( 1.0f ) ) {
+			maybeTarget = Vec3( closestFloorPoint );
+		}
+	} else if( const int nextReachNum = context->NextReachNum() ) {
+		const auto &__restrict nextReach = AiAasWorld::Instance()->Reachabilities()[nextReachNum];
+		// This check is not just a normalization check but also is a logical one (switch to end if close to start)
+		if( Distance2DSquared( botOrigin, nextReach.start ) > SQUARE( 16.0f ) ) {
+			maybeTarget = Vec3( nextReach.start );
+		} else if( Distance2DSquared( botOrigin, nextReach.end ) > SQUARE( 1.0f ) ) {
+			maybeTarget = Vec3( nextReach.end );
+		}
+	} else if( context->NavTargetAasAreaNum() ) {
+		Vec3 navTargetOrigin( context->NavTargetOrigin() );
+		if( navTargetOrigin.SquareDistance2DTo( botOrigin ) > SQUARE( 1.0f ) ) {
+			maybeTarget = navTargetOrigin;
+		}
 	}
 
-	if( hasDefinedMoveDir ) {
-		// We have swapped the difference start and end points for convenient Vec3 initialization
-		intendedMoveDir *= -1.0f;
-		intendedMoveDir.NormalizeFast();
-
+	int keyMoves[2];
+	auto &traceCache = context->TraceCache();
+	if( maybeTarget ) {
+		Vec3 intendedMoveDir( *maybeTarget );
+		intendedMoveDir -= botOrigin;
+		intendedMoveDir.Z() *= Z_NO_BEND_SCALE;
+		intendedMoveDir *= Q_RSqrt( intendedMoveDir.SquaredLength() );
 		if( ShouldTryRandomness() ) {
 			traceCache.makeRandomizedKeyMovesToTarget( context, intendedMoveDir, keyMoves );
 		} else {
@@ -36,21 +44,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 		traceCache.makeRandomKeyMoves( context, keyMoves );
 	}
 
-	unsigned timeout = BotKeyMoveDirsState::TIMEOUT_PERIOD;
-	unsigned oneFourth = timeout / 4u;
-	// We are assuming that the bot keeps facing the enemy...
-	// Less the side component is, lower the timeout should be
-	// (so we can switch to an actual side dodge faster).
-	// Note: we can't switch directions every frame as it results
-	// to average zero spatial shift (ground acceleration is finite).
-	if( keyMoves[0] ) {
-		timeout -= oneFourth;
-	}
-	if( !keyMoves[1] ) {
-		timeout -= oneFourth;
-	}
-
-	combatMovementState->Activate( keyMoves[0], keyMoves[1], timeout );
+	combatMovementState->Activate( keyMoves[0], keyMoves[1], BotKeyMoveDirsState::TIMEOUT_PERIOD );
 }
 
 void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context ) {

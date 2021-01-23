@@ -299,7 +299,7 @@ public:
 	int8_t forwardMove { 0 };
 	int8_t rightMove { 0 };
 public:
-	static constexpr uint16_t TIMEOUT_PERIOD = 768;
+	static constexpr uint16_t TIMEOUT_PERIOD = 500;
 
 	inline void Frame( unsigned frameTime ) {
 		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft - (int)frameTime ) );
