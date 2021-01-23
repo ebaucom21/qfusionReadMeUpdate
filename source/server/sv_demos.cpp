@@ -228,15 +228,16 @@ static void SV_Demo_Stop( bool cancel, bool silent ) {
 		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
 		DemoMetadataWriter writer( metadata );
 
-		writer.write( kDemoKeyServerName, sv.configStrings.getHostName().value() );
-		writer.write( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)svs.demo.localtime ) ) );
-		writer.write( kDemoKeyMultiPov, "1"_asView );
-		writer.write( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) ) );
-		writer.write( kDemoKeyMapName, sv.configStrings.getMapName().value() );
-		writer.write( kDemoKeyMapChecksum, sv.configStrings.getMapCheckSum().value() );
-		writer.write( kDemoKeyGametype, sv.configStrings.getGametypeName().value() );
+		writer.writePair( kDemoKeyServerName, sv.configStrings.getHostName().value() );
+		writer.writePair( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)svs.demo.localtime ) ) );
+		writer.writePair( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( svs.demo.duration / 1000.0f ) ) ) );
+		writer.writePair( kDemoKeyMapName, sv.configStrings.getMapName().value() );
+		writer.writePair( kDemoKeyMapChecksum, sv.configStrings.getMapCheckSum().value() );
+		writer.writePair( kDemoKeyGametype, sv.configStrings.getGametypeName().value() );
 
-		const auto [metadataSize, wasComplete] = writer.resultSoFar();
+		writer.writeTag( kDemoTagMultiPov );
+
+		const auto [metadataSize, wasComplete] = writer.markCurrentResult();
 		if( !wasComplete ) {
 			Com_Printf( S_COLOR_YELLOW "The demo metadata was truncated\n" );
 		}

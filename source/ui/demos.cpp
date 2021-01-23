@@ -203,9 +203,8 @@ void DemosResolver::resolveMetadata( unsigned index, wsw::Vector<MetadataEntry> 
 	FS_FCloseFile( handle );
 }
 
-static wsw::StringView kMandatoryKeys[7] {
-	kDemoKeyServerName, kDemoKeyTimestamp, kDemoKeyMultiPov,
-	kDemoKeyDuration, kDemoKeyMapName, kDemoKeyMapChecksum, kDemoKeyGametype
+static wsw::StringView kMandatoryKeys[6] {
+	kDemoKeyServerName, kDemoKeyTimestamp, kDemoKeyDuration, kDemoKeyMapName, kDemoKeyMapChecksum, kDemoKeyGametype
 };
 
 void DemosResolver::parseMetadata( const char *data, size_t dataSize,
@@ -213,11 +212,12 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 								   wsw::Vector<MetadataEntry> *entries,
 								   StringDataStorage *stringData ) {
 	wsw::StaticVector<std::pair<wsw::StringView, wsw::StringView>, kMaxOtherKeysAndValues> otherKeysAndValues;
-	std::optional<wsw::StringView> parsedMandatoryValues[7];
+	std::optional<wsw::StringView> parsedMandatoryValues[6];
+	wsw::StaticVector<wsw::StringView, kMaxTags> tags;
 
 	wsw::DemoMetadataReader reader( data, dataSize );
-	while( reader.hasNext() ) {
-		const auto maybeKeyValue = reader.readNext();
+	while( reader.hasNextPair() ) {
+		const auto maybeKeyValue = reader.readNextPair();
 		if( !maybeKeyValue ) {
 			return;
 		}
@@ -233,39 +233,50 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 		if( !isAMandatoryKey ) {
 			if( otherKeysAndValues.size() != otherKeysAndValues.capacity() ) {
 				otherKeysAndValues.push_back( *maybeKeyValue );
+			}
+			// Continue pairs retrieval regardless of pairs capacity exhaustion
+		}
+	}
+
+	while( reader.hasNextTag() ) {
+		if( const auto maybeTag = reader.readNextTag() ) {
+			if( tags.size() != tags.capacity() ) {
+				tags.push_back( *maybeTag );
 			} else {
 				break;
 			}
+		} else {
+			return;
 		}
 	}
 
 	const auto valuesEnd = parsedMandatoryValues + std::size( parsedMandatoryValues );
 	if( std::find( parsedMandatoryValues, valuesEnd, std::nullopt ) == valuesEnd ) {
 		if( const auto maybeTimestamp = wsw::toNum<uint64_t>( *parsedMandatoryValues[1] ) ) {
-			if( const auto maybeDuration = wsw::toNum<int>( *parsedMandatoryValues[3] ) ) {
-				if( const auto maybeMultiPov = wsw::toNum<bool>( *parsedMandatoryValues[2] ) ) {
-					// TODO: Looking forward to being able using designated initializers
-					MetadataEntry entry;
-					entry.fileNameIndex  = stringData->add( fileName );
-					entry.fileNameHash   = wsw::HashedStringView( fileName ).getHash();
-					entry.hashBinIndex   = entry.fileNameHash % kNumBins;
-					entry.rawTimestamp   = *maybeTimestamp;
-					entry.timestamp      = QDateTime::fromSecsSinceEpoch( *maybeTimestamp );
-					entry.sectionDate    = entry.timestamp.date();
-					entry.duration       = *maybeDuration;
-					entry.isMultiPov     = *maybeMultiPov;
-					entry.serverNameIndex   = stringData->add( *parsedMandatoryValues[0] );
-					entry.mapNameIndex      = stringData->add( *parsedMandatoryValues[4] );
-					entry.mapChecksumIndex  = stringData->add( *parsedMandatoryValues[5] );
-					entry.gametypeIndex 	= stringData->add( *parsedMandatoryValues[6] );
-					entry.numOtherKeysAndValues = 0;
-					for( const auto &[key, value]: otherKeysAndValues ) {
-						const auto keyIndex   = stringData->add( key );
-						const auto valueIndex = stringData->add( value );
-						entry.otherKeysAndValues[entry.numOtherKeysAndValues++] = { keyIndex, valueIndex };
-					}
-					entries->emplace_back( std::move( entry ) );
+			if( const auto maybeDuration = wsw::toNum<int>( *parsedMandatoryValues[2] ) ) {
+				// TODO: Looking forward to being able using designated initializers
+				MetadataEntry entry;
+				entry.fileNameIndex  = stringData->add( fileName );
+				entry.fileNameHash   = wsw::HashedStringView( fileName ).getHash();
+				entry.hashBinIndex   = entry.fileNameHash % kNumBins;
+				entry.rawTimestamp   = *maybeTimestamp;
+				entry.timestamp      = QDateTime::fromSecsSinceEpoch( *maybeTimestamp );
+				entry.sectionDate    = entry.timestamp.date();
+				entry.duration       = *maybeDuration;
+				entry.serverNameIndex   = stringData->add( *parsedMandatoryValues[0] );
+				entry.mapNameIndex      = stringData->add( *parsedMandatoryValues[3] );
+				entry.mapChecksumIndex  = stringData->add( *parsedMandatoryValues[4] );
+				entry.gametypeIndex 	= stringData->add( *parsedMandatoryValues[5] );
+				entry.numOtherKeysAndValues = 0;
+				for( const auto &[key, value]: otherKeysAndValues ) {
+					const auto keyIndex   = stringData->add( key );
+					const auto valueIndex = stringData->add( value );
+					entry.otherKeysAndValues[entry.numOtherKeysAndValues++] = { keyIndex, valueIndex };
 				}
+				for( const auto &tag: tags ) {
+					entry.tagIndices[entry.numTags++] = stringData->add( tag );
+				}
+				entries->emplace_back( std::move( entry ) );
 			}
 		}
 	}

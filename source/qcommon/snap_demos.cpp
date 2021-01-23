@@ -25,17 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
-namespace wsw {
-// We don't want spreading inclusion of _asView so they're declared as extern ones
-const wsw::StringView kDemoKeyServerName( "ServerName"_asView );
-const wsw::StringView kDemoKeyTimestamp( "Timestamp"_asView );
-const wsw::StringView kDemoKeyMultiPov( "MultiPov"_asView );
-const wsw::StringView kDemoKeyDuration( "Duration"_asView );
-const wsw::StringView kDemoKeyMapName( "MapName"_asView );
-const wsw::StringView kDemoKeyMapChecksum( "MapChecksum"_asView );
-const wsw::StringView kDemoKeyGametype( "Gametype"_asView );
-}
-
 #define DEMO_SAFEWRITE( demofile,msg,force ) \
 	if( force || ( msg )->cursize > ( msg )->maxsize / 2 ) \
 	{ \

@@ -68,65 +68,53 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 #include "wswstdtypes.h"
 
 namespace wsw {
+
 // These keys are mandatory.
 // We could have settled on fixed binary offsets instead of keys but an extensible k/v set is a better approach.
-extern const wsw::StringView kDemoKeyServerName;
-extern const wsw::StringView kDemoKeyTimestamp;
-extern const wsw::StringView kDemoKeyMultiPov;
-extern const wsw::StringView kDemoKeyDuration;
-extern const wsw::StringView kDemoKeyMapName;
-extern const wsw::StringView kDemoKeyMapChecksum;
-extern const wsw::StringView kDemoKeyGametype;
+const wsw::StringView kDemoKeyServerName( "ServerName"_asView );
+const wsw::StringView kDemoKeyTimestamp( "Timestamp"_asView );
+const wsw::StringView kDemoKeyDuration( "Duration"_asView );
+const wsw::StringView kDemoKeyMapName( "MapName"_asView );
+const wsw::StringView kDemoKeyMapChecksum( "MapChecksum"_asView );
+const wsw::StringView kDemoKeyGametype( "Gametype"_asView );
+
+const wsw::StringView kDemoTagSinglePov( "SinglePOV" );
+const wsw::StringView kDemoTagMultiPov( "MultiPOV" );
 
 class DemoMetadataWriter {
-#ifndef PUBLIC_BUILD
-	wsw::StaticVector<std::pair<uint16_t, uint16_t>, 64> m_spansBuffer;
-#endif
 	char *const m_basePtr;
 	unsigned m_writeOff { 0 };
+	unsigned m_numPairsWritten { 0 };
+	unsigned m_numTagsWritten { 0 };
 	bool m_incomplete { false };
 
 	[[nodiscard]]
 	auto freeBytesLeft() const -> unsigned { return SNAP_MAX_DEMO_META_DATA_SIZE - m_writeOff; }
 
-// Checking for duplicated keys makes sense only in developer builds for now
-#ifndef PUBLIC_BUILD
 	[[nodiscard]]
-	auto findExistingKeyIndex( const wsw::StringView &key ) const -> std::optional<unsigned> {
-		for( unsigned i = 0; i < m_spansBuffer.size(); i += 2 ) {
-			const auto [keyOff, keyLen] = m_spansBuffer[i + 0];
-			const wsw::StringView existingKey( m_basePtr + keyOff, keyLen, wsw::StringView::ZeroTerminated );
-			if( existingKey.equalsIgnoreCase( key ) ) {
-				return i;
-			}
+	bool tryAppendingTag( const wsw::StringView &tag ) {
+		assert( m_numPairsWritten );
+		if( tag.length() + 1 <= freeBytesLeft() ) {
+			tag.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
+			assert( m_basePtr[m_writeOff + tag.length()] == '\0' );
+			m_writeOff += tag.length() + 1;
+			return true;
 		}
-		return std::nullopt;
+		return false;
 	}
-#endif
 
 	[[nodiscard]]
-	bool tryAppendingValue( const wsw::StringView &key, const wsw::StringView &value ) {
+	bool tryAppendingPair( const wsw::StringView &key, const wsw::StringView &value ) {
+		assert( !m_numTagsWritten );
 		if( key.length() + value.length() + 2 <= freeBytesLeft() ) {
-			[[maybe_unused]] const auto keyOff = m_writeOff;
 			key.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
 			assert( m_basePtr[m_writeOff + key.length()] == '\0' );
 			m_writeOff += key.length() + 1;
 
-			[[maybe_unused]] const auto valueOff = m_writeOff;
 			value.copyTo( m_basePtr + m_writeOff, freeBytesLeft() );
 			assert( m_basePtr[m_writeOff + value.length()] == '\0' );
 			m_writeOff += value.length() + 1;
 
-#ifndef PUBLIC_BUILD
-			using OffType = typename std::remove_reference<decltype( m_spansBuffer.front().first )>::type;
-			using LenType = typename std::remove_reference<decltype( m_spansBuffer.front().second )>::type;
-			assert( keyOff <= std::numeric_limits<OffType>::max() );
-			assert( key.length() <= std::numeric_limits<LenType>::max() );
-			m_spansBuffer.emplace_back( std::make_pair( keyOff, (LenType)key.length() ) );
-			assert( valueOff <= std::numeric_limits<OffType>::max() );
-			assert( value.length() <= std::numeric_limits<LenType>::max() );
-			m_spansBuffer.emplace_back( std::make_pair( valueOff, (LenType)value.length() ) );
-#endif
 			return true;
 		}
 		return false;
@@ -134,42 +122,79 @@ class DemoMetadataWriter {
 public:
 	explicit DemoMetadataWriter( char *data ) : m_basePtr( data ) {
 		std::memset( data, 0, SNAP_MAX_DEMO_META_DATA_SIZE );
+		m_writeOff += 8;
 	}
 
-	void write( const wsw::StringView &key, const wsw::StringView &value ) {
-#ifndef PUBLIC_BUILD
+	[[maybe_unused]]
+	bool writePair( const wsw::StringView &key, const wsw::StringView &value ) {
 		if( !m_incomplete ) {
-			if( findExistingKeyIndex( key ) == std::nullopt ) {
-				m_incomplete |= !tryAppendingValue( key, value );
-			} else {
-				throw std::logic_error( "Supplying duplicated keys is currently disallowed" );
+			if( m_numTagsWritten ) {
+				throw std::logic_error( "Attempt to write a key-value pair after tags" );
 			}
+			if( tryAppendingPair( key, value ) ) {
+				m_numPairsWritten++;
+				return true;
+			}
+			m_incomplete = true;
 		}
-#else
+		return false;
+	}
+
+	[[maybe_unused]]
+	bool writeTag( const wsw::StringView &tag ) {
 		if( !m_incomplete ) {
-			m_incomplete |= !tryAppendingValue( key, value );
+			if( !m_numPairsWritten ) {
+				throw std::logic_error( "Attempt to write a tag prior to key-value pairs" );
+			}
+			if( tryAppendingTag( tag ) ) {
+				m_numTagsWritten++;
+				return true;
+			}
+			m_incomplete = true;
 		}
-#endif
+		return false;
 	}
 
 	[[nodiscard]]
-	auto resultSoFar() const -> std::pair<size_t, bool> { return { m_writeOff, !m_incomplete }; }
+	auto markCurrentResult() const -> std::pair<size_t, bool> {
+		uint32_t numPairsToMark = LittleLong( m_numPairsWritten );
+		uint32_t numTagsToMark = LittleLong( m_numTagsWritten );
+		std::memcpy( m_basePtr + 0, &numPairsToMark, 4 );
+		std::memcpy( m_basePtr + 4, &numTagsToMark, 4 );
+		return { m_writeOff, !m_incomplete };
+	}
 };
 
 class DemoMetadataReader {
 	const char *const m_basePtr;
 	const unsigned m_dataSize;
 	unsigned m_readOff { 0 };
+	unsigned m_numPairs { 0 };
+	unsigned m_numTags { 0 };
+	unsigned m_numPairsRead { 0 };
+	unsigned m_numTagsRead { 0 };
 public:
-	DemoMetadataReader( const char *data, unsigned dataSize ) : m_basePtr( data ), m_dataSize( dataSize ) {
+	DemoMetadataReader( const char *data, unsigned dataSize )
+		: m_basePtr( data ), m_dataSize( dataSize ) {
 		assert( m_basePtr[dataSize] == '\0' );
+		if( dataSize >= 8 ) {
+			unsigned numPairs, numTags;
+			std::memcpy( &numPairs, data + 0, 4 );
+			std::memcpy( &numTags, data + 4, 4 );
+			m_numPairs = LittleLong( numPairs );
+			m_numTags = LittleLong( numTags );
+			m_readOff += 8;
+		}
 	}
 
 	[[nodiscard]]
-	bool hasNext() const { return m_readOff < m_dataSize; }
+	bool hasNextPair() const { return m_numPairsRead < m_numPairs; }
 
 	[[nodiscard]]
-	auto readNext() -> std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+	auto readNextPair() -> std::optional<std::pair<wsw::StringView, wsw::StringView>> {
+		if( !hasNextPair() ) {
+			throw std::logic_error( "No key-value pairs to read" );
+		}
 		const auto keyLen = std::strlen( m_basePtr + m_readOff );
 		if( m_readOff + keyLen + 1 < m_dataSize ) {
 			assert( m_basePtr[m_readOff + keyLen] == '\0' );
@@ -179,8 +204,31 @@ public:
 				wsw::StringView key( m_basePtr + m_readOff, keyLen, wsw::StringView::ZeroTerminated );
 				wsw::StringView value( m_basePtr + m_readOff + keyLen + 1, valueLen, wsw::StringView::ZeroTerminated );
 				m_readOff += keyLen + valueLen + 2;
+				m_numPairsRead++;
 				return std::make_pair( key, value );
 			}
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]]
+	bool hasNextTag() const { return m_numTagsRead < m_numTags; }
+
+	[[nodiscard]]
+	auto readNextTag() -> std::optional<wsw::StringView> {
+		if( hasNextPair() ) {
+			throw std::logic_error( "Reading of key-value pairs is incomplete" );
+		}
+		if( !hasNextTag() ) {
+			throw std::logic_error( "No tags to read" );
+		}
+		const auto tagLen = std::strlen( m_basePtr + m_readOff );
+		if( m_readOff + tagLen < m_dataSize ) {
+			assert( m_basePtr[m_readOff + tagLen] == '\0' );
+			wsw::StringView tag( m_basePtr + m_readOff, tagLen, wsw::StringView::ZeroTerminated );
+			m_readOff += tagLen + 1;
+			m_numTagsRead++;
+			return tag;
 		}
 		return std::nullopt;
 	}

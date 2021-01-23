@@ -79,17 +79,18 @@ void CL_Stop_f( void ) {
 	DemoMetadataWriter writer( metadata );
 
 	// write some meta information about the match/demo
-	writer.write( kDemoKeyServerName, ::cl.configStrings.getHostName().value() );
-	writer.write( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
-	writer.write( kDemoKeyMultiPov, "0"_asView );
-	writer.write( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
-	writer.write( kDemoKeyMapName, ::cl.configStrings.getMapName().value() );
-	writer.write( kDemoKeyMapChecksum, ::cl.configStrings.getMapCheckSum().value() );
-	writer.write( kDemoKeyGametype, ::cl.configStrings.getGametypeName().value() );
+	writer.writePair( kDemoKeyServerName, ::cl.configStrings.getHostName().value() );
+	writer.writePair( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
+	writer.writePair( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
+	writer.writePair( kDemoKeyMapName, ::cl.configStrings.getMapName().value() );
+	writer.writePair( kDemoKeyMapChecksum, ::cl.configStrings.getMapCheckSum().value() );
+	writer.writePair( kDemoKeyGametype, ::cl.configStrings.getGametypeName().value() );
+
+	writer.writeTag( kDemoTagSinglePov );
 
 	FS_FCloseFile( cls.demoRecorder.file );
 
-	const auto [metadataSize, wasComplete] = writer.resultSoFar();
+	const auto [metadataSize, wasComplete] = writer.markCurrentResult();
 	if( !wasComplete ) {
 		Com_Printf( S_COLOR_YELLOW "The demo metadata was truncated\n" );
 	}

@@ -33,6 +33,7 @@ class DemosResolver : public QObject {
 	using StringDataStorage = wsw::StringSpanStorage<uint8_t, uint8_t>;
 
 	static constexpr unsigned kMaxOtherKeysAndValues = 8;
+	static constexpr unsigned kMaxTags = 8;
 
 	struct TaskResult;
 
@@ -41,6 +42,7 @@ class DemosResolver : public QObject {
 		MetadataEntry *prev { nullptr }, *next { nullptr };
 		// StaticVector<?,?> is uncopyable and that's reasonable.
 		std::pair<unsigned, unsigned> otherKeysAndValues[kMaxOtherKeysAndValues];
+		unsigned tagIndices[kMaxTags];
 		uint64_t rawTimestamp;
 		QDateTime timestamp;
 		QDate sectionDate;
@@ -53,7 +55,7 @@ class DemosResolver : public QObject {
 		unsigned gametypeIndex;
 		int duration;
 		unsigned numOtherKeysAndValues;
-		bool isMultiPov;
+		unsigned numTags;
 
 		[[nodiscard]]
 		auto getServerName() const -> wsw::StringView { return parent->storage[serverNameIndex]; }
