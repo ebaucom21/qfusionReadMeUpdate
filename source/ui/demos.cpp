@@ -16,8 +16,10 @@ auto DemosModel::roleNames() const -> QHash<int, QByteArray> {
 		{ Section, "section" },
 		{ Timestamp, "timestamp" },
 		{ ServerName, "serverName" },
+		{ DemoName, "demoName" },
 		{ FileName, "fileName" },
-		{ MapName, "mapName" }
+		{ MapName, "mapName" },
+		{ Gametype, "gametype" }
 	};
 }
 
@@ -30,16 +32,23 @@ static inline auto toQVariant( const wsw::StringView &view ) -> QVariant {
 	return QByteArray( view.data(), view.size() );
 }
 
+[[nodiscard]]
+static inline auto formatTimestamp( const QDateTime &timestamp ) -> QVariant {
+	return timestamp.toString( Qt::DefaultLocaleShortDate );
+}
+
 auto DemosModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	assert( m_resolver->isReady() );
 	if( index.isValid() ) {
 		if( const int row = index.row(); (unsigned)row < (unsigned)m_resolver->getCount() ) {
 			switch( role ) {
 				case Section: return m_resolver->getEntry( row )->sectionDate;
-				case Timestamp: return m_resolver->getEntry( row )->timestamp;
+				case Timestamp: return formatTimestamp( m_resolver->getEntry( row )->timestamp );
 				case ServerName: return toQVariant( m_resolver->getEntry( row )->getServerName() );
+				case DemoName: return toQVariant( m_resolver->getEntry( row )->getDemoName() );
 				case FileName: return toQVariant( m_resolver->getEntry( row )->getFileName() );
 				case MapName: return toQVariant( m_resolver->getEntry( row )->getMapName() );
+				case Gametype: return toQVariant( m_resolver->getEntry( row )->getGametype() );
 				default:;
 			}
 		}
@@ -111,6 +120,8 @@ void DemosResolver::query( const QString &query ) {
 	setReady( false );
 
 	m_lastQuery.assign( queryView );
+	m_lastQueryResults.clear();
+
 	Q_EMIT progressUpdated( QVariant() );
 
 	m_threadPool.start( new RunQueryTask( this ) );
@@ -222,15 +233,27 @@ void DemosResolver::resolveMetadata( unsigned index, wsw::Vector<MetadataEntry> 
 	const wsw::StringView fileName( m_fileNameSpans[m_turn][index].data() );
 	assert( fileName.isZeroTerminated() );
 
+	std::pair<unsigned, unsigned> baseNameSpan( 0, fileName.length() );
+	if( const auto slashIndex = fileName.lastIndexOf( '/' ) ) {
+		const unsigned droppedLen = *slashIndex + 1;
+		baseNameSpan.first = droppedLen;
+		baseNameSpan.second -= droppedLen;
+	}
+	if( fileName.endsWith( kDemoExtension ) ) {
+		baseNameSpan.second -= kDemoExtension.length();
+	}
+	assert( baseNameSpan.first + baseNameSpan.second <= fileName.length() );
+
 	int handle = 0;
 	int length = FS_FOpenFile( fileName.data(), &handle, FS_READ | SNAP_DEMO_GZ );
 	if( length > 0 ) {
 		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
 		size_t realSize = SNAP_ReadDemoMetaData( handle, metadata, sizeof( metadata ) );
 		if( realSize <= sizeof( metadata ) ) {
-			parseMetadata( metadata, realSize, fileName, entries, storage );
+			parseMetadata( metadata, realSize, fileName, baseNameSpan, entries, storage );
 		}
 	}
+
 	FS_FCloseFile( handle );
 }
 
@@ -240,6 +263,7 @@ static wsw::StringView kMandatoryKeys[6] {
 
 void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 								   const wsw::StringView &fileName,
+								   const std::pair<unsigned, unsigned> &baseNameSpan,
 								   wsw::Vector<MetadataEntry> *entries,
 								   StringDataStorage *stringData ) {
 	wsw::StaticVector<std::pair<wsw::StringView, wsw::StringView>, kMaxOtherKeysAndValues> otherKeysAndValues;
@@ -289,6 +313,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 				MetadataEntry entry;
 				entry.fileNameIndex  = stringData->add( fileName );
 				entry.fileNameHash   = wsw::HashedStringView( fileName ).getHash();
+				entry.baseNameSpan   = baseNameSpan;
 				entry.hashBinIndex   = entry.fileNameHash % kNumBins;
 				entry.rawTimestamp   = *maybeTimestamp;
 				entry.timestamp      = QDateTime::fromSecsSinceEpoch( *maybeTimestamp );

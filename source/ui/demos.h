@@ -49,6 +49,7 @@ class DemosResolver : public QObject {
 		QDate sectionDate;
 		unsigned fileNameIndex;
 		unsigned fileNameHash;
+		std::pair<unsigned, unsigned> baseNameSpan;
 		unsigned hashBinIndex;
 		unsigned serverNameIndex;
 		unsigned mapNameIndex;
@@ -64,6 +65,12 @@ class DemosResolver : public QObject {
 		auto getMapName() const -> wsw::StringView { return parent->storage[mapNameIndex]; }
 		[[nodiscard]]
 		auto getFileName() const -> wsw::StringView { return parent->storage[fileNameIndex]; }
+		[[nodiscard]]
+		auto getGametype() const -> wsw::StringView { return parent->storage[gametypeIndex]; }
+		[[nodiscard]]
+		auto getDemoName() const -> wsw::StringView {
+			return getFileName().takeMid( baseNameSpan.first, baseNameSpan.second );
+		}
 	};
 
 	static constexpr unsigned kNumBins { 79 };
@@ -84,7 +91,7 @@ class DemosResolver : public QObject {
 	wsw::Vector<const MetadataEntry *> m_entries;
 
 	wsw::Vector<unsigned> m_lastQueryResults;
-	wsw::StaticString<32> m_lastQuery;
+	wsw::StaticString<30> m_lastQuery;
 
 	[[nodiscard]]
 	auto getCount() const -> int {
@@ -106,7 +113,9 @@ class DemosResolver : public QObject {
 	void purgeMetadata( const wsw::StringView &file );
 	void resolveMetadata( unsigned first, unsigned last );
 	void resolveMetadata( unsigned index, wsw::Vector<MetadataEntry> *entries, StringDataStorage *storage );
-	void parseMetadata( const char *data, size_t dataSize, const wsw::StringView &fileName,
+	void parseMetadata( const char *data, size_t dataSize,
+					 	const wsw::StringView &fullFileName,
+					 	const std::pair<unsigned, unsigned> &baseNameSpan,
 					    wsw::Vector<MetadataEntry > *entries, StringDataStorage *storage );
 	void processTaskResults();
 	void updateDefaultDisplayedList();
@@ -140,8 +149,10 @@ class DemosModel : public QAbstractListModel {
 		Section = Qt::UserRole + 1,
 		Timestamp,
 		ServerName,
+		DemoName,
 		FileName,
-		MapName
+		MapName,
+		Gametype
 	};
 
 	DemosResolver *const m_resolver;
