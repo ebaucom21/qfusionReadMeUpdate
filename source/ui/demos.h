@@ -21,7 +21,7 @@ class DemosResolver : public QObject {
 	friend class RunQueryTask;
 	friend class DemosModel;
 
-	wsw::StringSpanStorage<uint8_t, uint8_t> m_fileNameSpans[2];
+	wsw::StringSpanStorage<unsigned, unsigned> m_fileNameSpans[2];
 
 	QThreadPool m_threadPool;
 	int m_turn { 0 };
@@ -30,8 +30,8 @@ class DemosResolver : public QObject {
 	wsw::Vector<unsigned> m_addedNew;
 	wsw::Vector<unsigned> m_goneOld;
 
-	using StringSpan = std::pair<uint8_t, uint8_t>;
-	using StringDataStorage = wsw::StringSpanStorage<uint8_t, uint8_t>;
+	using StringSpan = std::pair<unsigned, unsigned>;
+	using StringDataStorage = wsw::StringSpanStorage<unsigned, unsigned>;
 
 	static constexpr unsigned kMaxOtherKeysAndValues = 8;
 	static constexpr unsigned kMaxTags = 8;
@@ -120,6 +120,9 @@ class DemosResolver : public QObject {
 	void processTaskResults();
 	void updateDefaultDisplayedList();
 	void runQuery();
+
+	template <typename WordMatcher>
+	void runQueryUsingWordMatcher( const wsw::StringView &query );
 
 	Q_SIGNAL void resolveTaskCompleted( ResolveTaskResult *result );
 	Q_SLOT void takeResolveTaskResult( ResolveTaskResult *result );

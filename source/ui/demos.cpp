@@ -4,6 +4,9 @@
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/version.h"
 #include "../qcommon/wswfs.h"
+#include "wordsmatcher.h"
+
+extern bool matchLog;
 
 namespace wsw::ui {
 
@@ -390,21 +393,90 @@ void DemosResolver::runQuery() {
 		return;
 	}
 
+	// TODO: Parse the query DSL
+	runQueryUsingWordMatcher<WordsMatcher>( m_lastQuery.asView() );
+
+	Q_EMIT runQueryTasksReady( true );
+}
+
+// Was templated for different algorithms trial during development. Kept as-is for now.
+template <typename WordMatcher>
+void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
+	WordMatcher matcher( word );
+
+	bool hadFuzzyMatches = false;
+	constexpr unsigned shift = 27u;
+
+	unsigned maxDist = 0;
+	if( word.length() > 8 ) {
+		maxDist = 3;
+	} else if( word.length() > 4 ) {
+		maxDist = 2;
+	} else if( word.length() > 1 ) {
+		maxDist = 1;
+	}
+
 	assert( m_lastQueryResults.empty() );
-	const wsw::StringView lastQueryView( m_lastQuery.asView() );
 	for( unsigned index = 0; index < m_entries.size(); ++index ) {
 		const MetadataEntry *const entry = m_entries[index];
-		// Just basic for now
-		if( entry->getFileName().contains( lastQueryView ) ) {
-			m_lastQueryResults.push_back( index );
-		} else if( entry->getServerName().contains( lastQueryView ) ) {
-			m_lastQueryResults.push_back( index );
-		} else if( entry->getMapName().contains( lastQueryView ) ) {
-			m_lastQueryResults.push_back( index );
+		unsigned bestMismatch = std::numeric_limits<unsigned>::max();
+		// Test MetadataEntry fields. Interrupt early on an exact match.
+		if( const auto maybeDemoNameMatch = matcher.match( entry->getDemoName(), maxDist ) ) {
+			const unsigned mismatch = *maybeDemoNameMatch;
+			if( !mismatch ) {
+				m_lastQueryResults.push_back( index );
+				continue;
+			}
+			bestMismatch = std::min( mismatch, bestMismatch );
+		}
+		if( const auto maybeServerNameMatch = matcher.match( entry->getServerName(), maxDist ) ) {
+			const unsigned mismatch = *maybeServerNameMatch;
+			if( !mismatch ) {
+				m_lastQueryResults.push_back( index );
+				continue;
+			}
+			bestMismatch = std::min( mismatch, bestMismatch );
+		}
+		if( const auto maybeMapNameMatch = matcher.match( entry->getMapName(), std::min( 1u, maxDist ) ) ) {
+			const unsigned mismatch = *maybeMapNameMatch;
+			if( !mismatch ) {
+				m_lastQueryResults.push_back( index );
+				continue;
+			}
+			bestMismatch = std::min( mismatch, bestMismatch );
+		}
+		if( const auto maybeGametypeMatch = matcher.match( entry->getGametype(), std::min( 1u, maxDist ) ) ) {
+			const unsigned mismatch = *maybeGametypeMatch;
+			if( !mismatch ) {
+				m_lastQueryResults.push_back( index );
+				continue;
+			}
+			bestMismatch = std::min( mismatch, bestMismatch );
+		}
+		if( bestMismatch < std::numeric_limits<unsigned>::max() ) {
+			assert( bestMismatch < ( 32 - shift ) );
+			// Add penalty bits to the index
+			const unsigned penaltyBits = bestMismatch << shift;
+			assert( !( index & penaltyBits ) );
+			m_lastQueryResults.push_back( index | penaltyBits );
+			hadFuzzyMatches = true;
 		}
 	}
 
-	Q_EMIT runQueryTasksReady( true );
+	if( !hadFuzzyMatches ) {
+		// Preserve the default ordering
+		return;
+	}
+
+	// Sort entries so best matches (with smaller penalty bits) are first.
+	// A default ordering of entries with the same penalty is preserved.
+	std::stable_sort( m_lastQueryResults.begin(), m_lastQueryResults.end() );
+
+	// Unmask indices
+	for( unsigned &index: m_lastQueryResults ) {
+		index &= ( 1u << shift ) - 1;
+		assert( index < m_entries.size() );
+	}
 }
 
 }
