@@ -218,7 +218,7 @@ void CL_DemoCompleted( void ) {
 	cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal = 0;
 
 	cls.demoPlayer.playing = false;
-	cls.demoPlayer.basetime = cls.demoPlayer.duration = cls.demoPlayer.time = 0;
+	cls.demoPlayer.time = 0;
 	Q_free( cls.demoPlayer.filename );
 	cls.demoPlayer.filename = NULL;
 	Q_free( cls.demoPlayer.name );
@@ -376,7 +376,7 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 	CL_SetClientState( CA_HANDSHAKE );
 	Com_SetDemoPlaying( true );
 	cls.demoPlayer.playing = true;
-	cls.demoPlayer.basetime = cls.demoPlayer.duration = cls.demoPlayer.time = 0;
+	cls.demoPlayer.time = 0;
 
 	cls.demoPlayer.pause_on_stop = pause_on_stop;
 	cls.demoPlayer.play_ignore_next_frametime = false;

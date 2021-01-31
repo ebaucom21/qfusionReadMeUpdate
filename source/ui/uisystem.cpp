@@ -198,6 +198,7 @@ private:
 
 	DemosResolver m_demosResolver;
 	DemosModel m_demosModel { &m_demosResolver };
+	DemoPlayer m_demoPlayer { this };
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -494,6 +495,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	qmlRegisterUncreatableType<KeysAndBindingsModel>( "net.warsow", 2, 6, "KeysAndBindings", reason );
 	qmlRegisterUncreatableType<ServerListModel>( "net.warsow", 2, 6, "ServerListModel", reason );
 	qmlRegisterUncreatableType<DemosResolver>( "net.warsow", 2, 6, "DemosResolver", reason );
+	qmlRegisterUncreatableType<DemoPlayer>( "net.warsow", 2, 6, "DemoPlayer", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
 
@@ -519,6 +521,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
 	context->setContextProperty( "demosModel", &m_demosModel );
 	context->setContextProperty( "demosResolver", &m_demosResolver );
+	context->setContextProperty( "demoPlayer", &m_demoPlayer );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -818,6 +821,7 @@ void QtUISystem::checkPropertyChanges() {
 	}
 
 	m_keysAndBindingsModel.checkUpdates();
+	m_demoPlayer.checkUpdates();
 	updateCVarAwareControls();
 
 	if( m_activeMenuMask || m_isShowingScoreboard ) {

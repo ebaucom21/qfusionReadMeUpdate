@@ -202,7 +202,6 @@ struct DemoPlayer {
 	char *filename;
 
 	int64_t time;           // milliseconds passed since the start of the demo
-	int64_t duration, basetime;
 
 	bool play_jump;
 	bool play_jump_latched;

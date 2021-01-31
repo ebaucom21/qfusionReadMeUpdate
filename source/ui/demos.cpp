@@ -4,9 +4,8 @@
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/version.h"
 #include "../qcommon/wswfs.h"
+#include "../client/client.h"
 #include "wordsmatcher.h"
-
-extern bool matchLog;
 
 namespace wsw::ui {
 
@@ -36,7 +35,7 @@ static inline auto toQVariant( const wsw::StringView &view ) -> QVariant {
 }
 
 [[nodiscard]]
-static inline auto formatTimestamp( const QDateTime &timestamp ) -> QVariant {
+static inline auto formatTimestamp( const QDateTime &timestamp ) -> QString {
 	return timestamp.toString( Qt::DefaultLocaleShortDate );
 }
 
@@ -535,6 +534,95 @@ void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
 		index &= resultIndexMask;
 		assert( index < m_entries.size() );
 	}
+}
+
+void DemoPlayer::checkUpdates() {
+	const bool wasPlaying = m_isPlaying;
+	const bool wasPaused = m_isPaused;
+	const int oldDuration = m_duration;
+	const int oldProgress = m_progress;
+
+	//m_duration = (int)( ::cls.demoPlayer.duration / 1000 );
+	m_duration = 5 * 60;
+	m_progress = (int)( ::cls.demoPlayer.time / 1000 );
+
+	m_isPlaying = ::cls.demoPlayer.playing;
+	m_isPaused = ::cls.demoPlayer.playing && ::cls.demoPlayer.paused;
+
+	if( oldDuration != m_duration ) {
+		Q_EMIT durationChanged( m_duration );
+	}
+	if( oldProgress != m_progress ) {
+		Q_EMIT progressChanged( m_progress );
+	}
+	if( wasPlaying != m_isPlaying ) {
+		Q_EMIT isPlayingChanged( m_isPlaying );
+	}
+	if( wasPaused != m_isPaused ) {
+		Q_EMIT isPausedChanged( m_isPaused );
+	}
+
+	if( !wasPlaying != m_isPlaying ) {
+		if( cls.demoPlayer.meta_data_realsize ) {
+			reloadMetadata();
+		}
+	}
+}
+
+void DemoPlayer::reloadMetadata() {
+	wsw::DemoMetadataReader reader( cls.demoPlayer.meta_data, cls.demoPlayer.meta_data_realsize );
+	while( reader.hasNextPair() ) {
+		if( const auto maybePair = reader.readNextPair() ) {
+			const auto [key, value] = *maybePair;
+			if( key.equalsIgnoreCase( kDemoKeyServerName ) ) {
+				m_serverName = toStyledText( value );
+			} else if( key.equalsIgnoreCase( kDemoKeyTimestamp ) ) {
+				uint64_t timestamp = wsw::toNum<uint64_t>( value ).value_or( 0 );
+				m_timestamp = formatTimestamp( QDateTime::fromSecsSinceEpoch( timestamp ) );
+			} else if( key.equalsIgnoreCase( kDemoKeyDuration ) ) {
+				m_duration = wsw::toNum<int>( value ).value_or( 0 );
+			} else if( key.equalsIgnoreCase( kDemoKeyMapName ) ) {
+				m_mapName = toStyledText( value );
+			} else if( key.equalsIgnoreCase( kDemoKeyGametype ) ) {
+				m_gametype = toStyledText( value );
+			}
+		} else {
+			break;
+		}
+	}
+
+	m_demoName = QString::fromLatin1( cls.demoPlayer.name );
+
+	Q_EMIT serverNameChanged( getServerName() );
+	Q_EMIT timestampChanged( getTimestamp() );
+	Q_EMIT durationChanged( getDuration() );
+	Q_EMIT mapNameChanged( getMapName() );
+	Q_EMIT gametypeChanged( getGametype() );
+	Q_EMIT demoNameChanged( getDemoName() );
+}
+
+void DemoPlayer::pause() {
+	Cbuf_ExecuteText( EXEC_APPEND, "demopause" );
+}
+
+void DemoPlayer::stop() {
+	Cbuf_ExecuteText( EXEC_APPEND, "disconnect" );
+}
+
+void DemoPlayer::seek( qreal frac ) {
+	const int totalSeconds = std::clamp( (int)( std::round( m_duration * frac + 0.5 ) ), 0, m_duration );
+	const auto [seconds, minutes] = std::div( totalSeconds, 60 );
+	wsw::StaticString<32> buffer( "demojump %02d:%02d", (int)seconds, (int)minutes );
+	Cbuf_ExecuteText( EXEC_APPEND, buffer.data() );
+}
+
+auto DemoPlayer::formatDuration( int durationSeconds ) -> QByteArray {
+	const auto [seconds, minutes] = std::div( std::abs( durationSeconds ), 60 );
+	wsw::StaticString<16> buffer( "-%02d:%02d", (int)seconds, (int)minutes );
+	if( durationSeconds >= 0 ) {
+		return QByteArray( buffer.data() + 1, buffer.size() - 1 );
+	}
+	return QByteArray( buffer.data(), buffer.size() );
 }
 
 }

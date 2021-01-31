@@ -4,6 +4,7 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/stringspanstorage.h"
 #include "../qcommon/wswstdtypes.h"
+#include "local.h"
 
 #include <QAbstractListModel>
 #include <QSharedPointer>
@@ -170,6 +171,83 @@ public:
 	auto rowCount( const QModelIndex & ) const -> int override;
 	[[nodiscard]]
 	auto data( const QModelIndex &index, int role ) const -> QVariant override;
+};
+
+class QtUISystem;
+
+// Just to expose a typed/structured demo playback interface
+class DemoPlayer : public QObject {
+	Q_OBJECT
+
+	friend class QtUISystem;
+
+	QString m_timestamp;
+	QString m_gametype;
+	QString m_mapName;
+	QString m_serverName;
+	QString m_demoName;
+
+	int m_duration { 0 };
+	int m_progress { 0 };
+	bool m_isPlaying { false };
+	bool m_isPaused { false };
+
+	explicit DemoPlayer( QtUISystem * ) {}
+
+	[[nodiscard]]
+	bool isPlaying() const { return m_isPlaying; }
+	[[nodiscard]]
+	bool isPaused() const { return m_isPaused; }
+	[[nodiscard]]
+	int getDuration() const { return m_duration; }
+	[[nodiscard]]
+	int getProgress() const { return m_progress; }
+	[[nodiscard]]
+	QString getTimestamp() const { return m_timestamp; }
+	[[nodiscard]]
+	QString getGametype() const { return m_gametype; }
+	[[nodiscard]]
+	QString getMapName() const { return m_mapName; };
+	[[nodiscard]]
+	QString getServerName() const { return m_serverName; }
+	[[nodiscard]]
+	QString getDemoName() const { return m_demoName; }
+
+	void checkUpdates();
+	void reloadMetadata();
+public:
+	Q_SIGNAL void isPlayingChanged( bool isPlaying );
+	Q_PROPERTY( bool isPlaying READ isPlaying NOTIFY isPlayingChanged );
+
+	Q_SIGNAL void isPausedChanged( bool isPaused );
+	Q_PROPERTY( bool isPaused READ isPaused NOTIFY isPausedChanged );
+
+	Q_SIGNAL void durationChanged( int duration );
+	Q_PROPERTY( int duration READ getDuration NOTIFY durationChanged );
+
+	Q_SIGNAL void progressChanged( int progress );
+	Q_PROPERTY( int progress READ getProgress NOTIFY progressChanged );
+
+	Q_SIGNAL void timestampChanged( QString timestamp );
+	Q_PROPERTY( QString timestamp READ getTimestamp NOTIFY timestampChanged );
+
+	Q_SIGNAL void gametypeChanged( QString gametype );
+	Q_PROPERTY( QString gametype READ getGametype NOTIFY gametypeChanged );
+
+	Q_SIGNAL void mapNameChanged( QString mapName );
+	Q_PROPERTY( QString mapName READ getMapName NOTIFY mapNameChanged );
+
+	Q_SIGNAL void serverNameChanged( QString serverName );
+	Q_PROPERTY( QString serverName READ getServerName NOTIFY serverNameChanged );
+
+	Q_SIGNAL void demoNameChanged( QString demoName );
+	Q_PROPERTY( QString demoName READ getDemoName NOTIFY demoNameChanged );
+
+	Q_INVOKABLE void pause();
+	Q_INVOKABLE void stop();
+	Q_INVOKABLE void seek(qreal frac);
+
+	Q_INVOKABLE QByteArray formatDuration( int durationSeconds );
 };
 
 }
