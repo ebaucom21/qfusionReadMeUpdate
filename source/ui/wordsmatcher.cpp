@@ -11,7 +11,7 @@
 
 namespace wsw::ui {
 
-auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxDist ) -> std::optional<unsigned> {
+auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxDist ) -> std::optional<Match> {
 	if( a.length() > b.length() ) {
 		std::swap( a, b );
 	}
@@ -58,7 +58,7 @@ auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxD
 
 	// TODO: Cut off early
 	if( const auto dist = buffer[bufferSize - 1]; dist < maxDist ) {
-		return dist;
+		return Match { dist, prefixLen + suffixLen };
 	}
 
 	return std::nullopt;
@@ -74,27 +74,30 @@ auto WordsMatcher::prepareInput( const wsw::StringView &rawInput ) -> wsw::Strin
 }
 
 auto WordsMatcher::matchByDistance( const wsw::StringView &input, const wsw::StringView &word, unsigned maxDist )
-	-> std::optional<unsigned> {
+	-> std::optional<Match> {
 	if( input.length() <= word.size() ) {
 		return distance( word, input, maxDist );
 	}
 
 	unsigned bestMismatch = maxDist;
+	unsigned resultLen = 0;
 	const unsigned numMatchingAttempts = input.length() - word.length();
 	for( unsigned i = 0; i < numMatchingAttempts; ++i ) {
 		const wsw::StringView inputWindow( input.takeMid( i, word.length() ) );
 		// Make sure we handle last windows correctly
 		assert( inputWindow.length() == word.length() );
-		if( const auto maybeDist = distance( word, inputWindow, maxDist ) ) {
-			bestMismatch = *maybeDist;
+		if( const auto maybeMatch = distance( word, inputWindow, bestMismatch ) ) {
+			auto [dist, len] = *maybeMatch;
+			bestMismatch = dist;
+			resultLen = len;
 			if( !bestMismatch ) {
-				return bestMismatch;
+				return Match { 0u, resultLen };
 			}
 		}
 	}
 
 	if( bestMismatch != maxDist ) {
-		return bestMismatch;
+		return Match { bestMismatch, resultLen };
 	}
 
 	return std::nullopt;
@@ -115,7 +118,7 @@ WordsMatcher::WordsMatcher( const wsw::StringView &word ) {
 	new( m_exactMatcherHolder.unsafe_grow_back() )std::boyer_moore_searcher( begin, end );
 }
 
-auto WordsMatcher::match( const wsw::StringView &rawInput, unsigned maxDist ) -> std::optional<unsigned> {
+auto WordsMatcher::match( const wsw::StringView &rawInput, unsigned maxDist ) -> std::optional<Match> {
 	const wsw::StringView input( prepareInput( rawInput ) );
 	if( input.empty() ) {
 		return std::nullopt;
@@ -123,7 +126,7 @@ auto WordsMatcher::match( const wsw::StringView &rawInput, unsigned maxDist ) ->
 
 	std::boyer_moore_searcher<const char *> &matcher = m_exactMatcherHolder.front();
 	if( matcher( input.begin(), input.end() ).first != input.end() ) {
-		return 0;
+		return Match { 0u, (unsigned)m_stringDataBuffer.length() };
 	}
 
 	// Only if a fuzzy match is allowed

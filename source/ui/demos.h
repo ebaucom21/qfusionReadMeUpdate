@@ -90,7 +90,7 @@ class DemosResolver : public QObject {
 	ResolveTaskResult *m_taskResultsHead { nullptr };
 	wsw::Vector<const MetadataEntry *> m_entries;
 
-	wsw::Vector<unsigned> m_lastQueryResults;
+	wsw::Vector<uint64_t> m_lastQueryResults;
 	wsw::StaticString<30> m_lastQuery;
 
 	[[nodiscard]]

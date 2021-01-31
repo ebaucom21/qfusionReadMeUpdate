@@ -393,74 +393,132 @@ void DemosResolver::runQuery() {
 		return;
 	}
 
+	const auto devMode = developer->integer;
+	uint64_t startMicros = 0;
+	if( devMode ) {
+		// Doesn't matter that much as it's a background task but we're curious
+		startMicros = Sys_Microseconds();
+	}
+
 	// TODO: Parse the query DSL
 	runQueryUsingWordMatcher<WordsMatcher>( m_lastQuery.asView() );
 
+	if( devMode ) {
+		const auto microsTaken = (int)( Sys_Microseconds() - startMicros );
+		Com_Printf( "Running a query `%s` took %d micros\n", m_lastQuery.data(), microsTaken );
+	}
+
 	Q_EMIT runQueryTasksReady( true );
 }
+
+struct MatchResultAccum {
+	unsigned bestDistance { std::numeric_limits<unsigned>::max() };
+	unsigned commonLength { 0 };
+
+	[[nodiscard]]
+	bool addOrInterrupt( const WordsMatcher::Match &match ) {
+		if( !match.editDistance ) {
+			return false;
+		}
+		if( match.editDistance < bestDistance ) {
+			bestDistance = match.editDistance;
+			commonLength = match.commonLength;
+		}
+		return true;
+	}
+
+	[[nodiscard]]
+	bool hasResults() const { return bestDistance != std::numeric_limits<unsigned>::max(); }
+};
 
 // Was templated for different algorithms trial during development. Kept as-is for now.
 template <typename WordMatcher>
 void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
 	WordMatcher matcher( word );
 
-	bool hadFuzzyMatches = false;
-	constexpr unsigned shift = 27u;
+	constexpr uint64_t mismatchShift = 32u;
+	constexpr uint64_t prefixLenShift = 35u;
+	constexpr uint64_t resultIndexMask = ( (uint64_t)1 << mismatchShift ) - 1;
+	static_assert( resultIndexMask == 0xFFFF'FFFFu );
 
 	unsigned maxDist = 0;
 	if( word.length() > 8 ) {
-		maxDist = 3;
+		maxDist = 4;
 	} else if( word.length() > 4 ) {
+		maxDist = 3;
+	} else if( word.length() > 2 ) {
 		maxDist = 2;
 	} else if( word.length() > 1 ) {
 		maxDist = 1;
 	}
 
+	bool hadFuzzyMatches = false;
 	assert( m_lastQueryResults.empty() );
 	for( unsigned index = 0; index < m_entries.size(); ++index ) {
 		const MetadataEntry *const entry = m_entries[index];
-		unsigned bestMismatch = std::numeric_limits<unsigned>::max();
+		MatchResultAccum resultAccum;
+
 		// Test MetadataEntry fields. Interrupt early on an exact match.
-		if( const auto maybeDemoNameMatch = matcher.match( entry->getDemoName(), maxDist ) ) {
-			const unsigned mismatch = *maybeDemoNameMatch;
-			if( !mismatch ) {
+		if( const auto maybeMatch = matcher.match( entry->getDemoName(), maxDist ) ) {
+			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
 			}
-			bestMismatch = std::min( mismatch, bestMismatch );
 		}
-		if( const auto maybeServerNameMatch = matcher.match( entry->getServerName(), maxDist ) ) {
-			const unsigned mismatch = *maybeServerNameMatch;
-			if( !mismatch ) {
+
+		if( const auto maybeMatch = matcher.match( entry->getServerName(), maxDist ) ) {
+			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
 			}
-			bestMismatch = std::min( mismatch, bestMismatch );
 		}
-		if( const auto maybeMapNameMatch = matcher.match( entry->getMapName(), std::min( 1u, maxDist ) ) ) {
-			const unsigned mismatch = *maybeMapNameMatch;
-			if( !mismatch ) {
+
+		if( const auto maybeMatch = matcher.match( entry->getMapName(), std::max( 1u, maxDist + 1 ) ) ) {
+			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
 			}
-			bestMismatch = std::min( mismatch, bestMismatch );
 		}
-		if( const auto maybeGametypeMatch = matcher.match( entry->getGametype(), std::min( 1u, maxDist ) ) ) {
-			const unsigned mismatch = *maybeGametypeMatch;
-			if( !mismatch ) {
+
+		if( const auto maybeMatch = matcher.match( entry->getGametype(), std::max( 1u, maxDist + 1 ) ) ) {
+			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
 			}
-			bestMismatch = std::min( mismatch, bestMismatch );
 		}
-		if( bestMismatch < std::numeric_limits<unsigned>::max() ) {
-			assert( bestMismatch < ( 32 - shift ) );
-			// Add penalty bits to the index
-			const unsigned penaltyBits = bestMismatch << shift;
-			assert( !( index & penaltyBits ) );
-			m_lastQueryResults.push_back( index | penaltyBits );
-			hadFuzzyMatches = true;
+
+		if( !resultAccum.hasResults() ) {
+			continue;
 		}
+
+		hadFuzzyMatches = true;
+
+		constexpr uint64_t maxPrefixLen = 16u;
+		constexpr uint64_t maxMismatch = 8u;
+		static_assert( prefixLenShift > mismatchShift );
+		static_assert( 1u << ( prefixLenShift - mismatchShift ) == maxMismatch );
+
+		// Add penalty bits to the index
+		// Prefix bits have a priority
+		// Results with the same prefix (actually, prefix + postfix) length are sorted by an edit distance
+
+		// Limit prefix len that is taken into account
+		const unsigned commonLength = std::min( (unsigned)maxPrefixLen, resultAccum.commonLength );
+		// A better (larger) prefix match has lesser penalty bits
+		const uint64_t prefixPenaltyBits = (uint64_t)( maxPrefixLen - commonLength ) << prefixLenShift;
+
+		// Make sure there's a sufficient room for a mismatch distance
+		assert( resultAccum.bestDistance < maxMismatch );
+		// A better (smaller) mismatch has smaller penalty bits
+		const uint64_t mismatchPenaltyBits = (uint64_t)resultAccum.bestDistance << mismatchShift;
+
+		// Make sure these bits don't overlap
+		assert( !( mismatchPenaltyBits & prefixPenaltyBits ) );
+		const uint64_t penaltyBits = mismatchPenaltyBits | prefixPenaltyBits;
+
+		// Make sure these bits don't overlap with the base index
+		assert( !( index & penaltyBits ) );
+		m_lastQueryResults.push_back( (uint64_t)index | penaltyBits );
 	}
 
 	if( !hadFuzzyMatches ) {
@@ -473,8 +531,8 @@ void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
 	std::stable_sort( m_lastQueryResults.begin(), m_lastQueryResults.end() );
 
 	// Unmask indices
-	for( unsigned &index: m_lastQueryResults ) {
-		index &= ( 1u << shift ) - 1;
+	for( uint64_t &index: m_lastQueryResults ) {
+		index &= resultIndexMask;
 		assert( index < m_entries.size() );
 	}
 }
