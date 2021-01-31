@@ -752,14 +752,23 @@ void QtUISystem::checkPropertyChanges() {
 	const auto lastClientState = m_lastFrameState.clientState;
 	const auto actualClientState = cls.state;
 	m_lastFrameState.clientState = actualClientState;
-	if( m_lastFrameState.clientState != lastClientState ) {
+
+	const bool wasPlayingADemo = m_lastFrameState.isPlayingADemo;
+	const bool isPlayingADemo = cls.demoPlayer.playing;
+	m_lastFrameState.isPlayingADemo = isPlayingADemo;
+
+	if( m_lastFrameState.clientState != lastClientState || isPlayingADemo != wasPlayingADemo ) {
 		const bool wasShowingScoreboard = m_isShowingScoreboard;
 		if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu, 0 );
 			m_chatModel.clear();
 			m_teamChatModel.clear();
 		} else if( actualClientState == CA_ACTIVE ) {
-			setActiveMenuMask( InGameMenu, 0 );
+			if( isPlayingADemo ) {
+				setActiveMenuMask( DemoPlaybackMenu, 0 );
+			} else {
+				setActiveMenuMask( InGameMenu, 0 );
+			}
 			m_callvotesModel.reload();
 			m_scoreboardModel.reload();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
@@ -770,24 +779,6 @@ void QtUISystem::checkPropertyChanges() {
 		m_shouldShowScoreboard = false;
 		if( wasShowingScoreboard ) {
 			Q_EMIT isShowingScoreboardChanged( false );
-		}
-	}
-
-	const bool wasPlayingADemo = m_lastFrameState.isPlayingADemo;
-	const bool isPlayingADemo = m_lastFrameState.isPlayingADemo = cls.demoPlayer.playing;
-	if( isPlayingADemo != wasPlayingADemo ) {
-		if( isPlayingADemo ) {
-			if ( m_activeMenuMask & MainMenu ) {
-				m_backupMenuMask |= DemoPlaybackMenu;
-			} else {
-				setActiveMenuMask( m_activeMenuMask | DemoPlaybackMenu, 0 );
-			}
-		} else {
-			if( m_activeMenuMask & MainMenu ) {
-				m_backupMenuMask &= ~DemoPlaybackMenu;
-			} else {
-				setActiveMenuMask( m_activeMenuMask | ~DemoPlaybackMenu, 0 );
-			}
 		}
 	}
 
