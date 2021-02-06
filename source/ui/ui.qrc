@@ -23,10 +23,9 @@
         <file>HudSettings.qml</file>
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
+        <file>InGameGeneralPage.qml</file>
         <file>InGameMenu.qml</file>
-        <file>InGameSelectorButton.qml</file>
-        <file>InGamePlayersPage.qml</file>
-        <file>InGameSelectorPage.qml</file>
+        <file>InGameButton.qml</file>
         <file>KeyboardAndMouse.qml</file>
         <file>KeyboardKey.qml</file>
         <file>KeyboardPane.qml</file>

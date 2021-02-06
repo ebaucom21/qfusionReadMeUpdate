@@ -8,28 +8,18 @@ Item {
     id: root
 
     ColumnLayout {
-        spacing: 18
-        width: parent.width - 32 - 128
+        spacing: 20
+        width: parent.width - 32 - 192
         anchors.centerIn: parent
 
-        InGameSelectorButton {
+        InGameButton {
             text: "Main menu"
             onClicked: wsw.showMainMenu()
         }
-        InGameSelectorButton {
+        InGameButton {
             text: wsw.isSpectator ? "Join" : "Spectate"
         }
-        InGameSelectorButton {
-            text: "Gametype Options"
-        }
-        InGameSelectorButton {
-            visible: wsw.isSpectator
-            text: "Spectator options"
-        }
-        InGameSelectorButton {
-            text: "Call a vote"
-        }
-        InGameSelectorButton {
+        InGameButton {
             text: "Disconnect"
             onClicked: wsw.disconnect()
         }

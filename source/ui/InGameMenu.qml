@@ -31,9 +31,20 @@ Rectangle {
                 NumberAnimation { duration: 66 }
             }
 
-            TabButton { text: "General" }
-            TabButton { text: "Chat" }
-            TabButton { text: "Players" }
+            TabButton {
+                text: "General"
+                readonly property var component: generalComponent
+            }
+            TabButton {
+                text: "Chat"
+                readonly property var component: chatComponent
+            }
+            TabButton {
+                text: "Callvotes"
+                readonly property var component: callvotesComponent
+            }
+
+            onCurrentItemChanged: stackView.replace(currentItem.component)
         }
     }
 
@@ -50,28 +61,28 @@ Rectangle {
         layer.enabled: parent.enabled
         layer.effect: ElevationEffect { elevation: 64 }
 
-        SwipeView {
-            id: swipeView
+        StackView {
+            id: stackView
             anchors.fill: parent
             anchors.margins: 16
-            interactive: false
-            currentIndex: tabBar.currentIndex
+            initialItem: generalComponent
             clip: true
-
-            StackView {
-                id: stackView
-                focus: true
-                initialItem: selectorComponent
-            }
-
-            InGameChatPage {}
-            Item {}
         }
+    }
 
-        Component {
-            id: selectorComponent
-            InGameSelectorPage {}
-        }
+    Component {
+        id: generalComponent
+        InGameGeneralPage {}
+    }
+
+    Component {
+        id: chatComponent
+        InGameChatPage {}
+    }
+
+    Component {
+        id: callvotesComponent
+        Item {}
     }
 
     onVisibleChanged: {
