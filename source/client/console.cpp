@@ -1267,7 +1267,7 @@ bool Con_HandleCharEvent( wchar_t key ) {
 /*
 * Con_SendChatMessage
 */
-static void Con_SendChatMessage( const char *text, bool team ) {
+void Con_SendChatMessage( const char *text, bool team ) {
 	const char *cmd;
 	char buf[MAX_CHAT_BYTES], *p;
 

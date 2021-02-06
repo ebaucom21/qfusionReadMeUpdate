@@ -59,6 +59,7 @@ bool Con_HasKeyboardFocus();
 bool Con_HandleKeyEvent( int key, bool down );
 [[nodiscard]]
 bool Con_HandleCharEvent( wchar_t key );
+void Con_SendChatMessage( const char *text, bool team );
 
 int Q_ColorCharCount( const char *s, int byteofs );
 int Q_ColorCharOffset( const char *s, int charcount );

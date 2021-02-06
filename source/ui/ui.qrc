@@ -2,6 +2,7 @@
     <qresource>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
+        <file>ChatPopup.qml</file>
         <file>CentralOverlayButton.qml</file>
         <file>CentralOverlayButtonTrail.qml</file>
         <file>CentralOverlayGroup.qml</file>
@@ -21,6 +22,7 @@
         <file>HelpPage.qml</file>
         <file>HudSettings.qml</file>
         <file>InGameCallvotesPage.qml</file>
+        <file>InGameChatPage.qml</file>
         <file>InGameMenu.qml</file>
         <file>InGameSelectorButton.qml</file>
         <file>InGamePlayersPage.qml</file>
@@ -42,6 +44,7 @@
         <file>PlayOnlinePage.qml</file>
         <file>ProfilePage.qml</file>
         <file>QuitPage.qml</file>
+        <file>RichChatList.qml</file>
         <file>RootItem.qml</file>
         <file>ScoreboardScreen.qml</file>
         <file>ScoreboardSpecsPane.qml</file>

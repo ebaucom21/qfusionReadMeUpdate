@@ -89,6 +89,16 @@ public:
 	bool isShowingScoreboard() const override;
 	void setScoreboardShown( bool shown ) override;
 
+	void toggleChatPopup() override;
+	void toggleTeamChatPopup() override;
+
+	[[nodiscard]]
+	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
+	[[nodiscard]]
+	bool isShowingTeamChatPopup() const { return m_isShowingTeamChatPopup; }
+	[[nodiscard]]
+	bool hasTeamChat() const { return m_hasTeamChat; }
+
 	[[nodiscard]]
 	bool isShown() const override;
 
@@ -102,6 +112,10 @@ public:
 	Q_PROPERTY( bool isDebuggingNativelyDrawnItems READ isDebuggingNativelyDrawnItems NOTIFY isDebuggingNativelyDrawnItemsChanged );
 
 	Q_PROPERTY( bool isShowingScoreboard READ isShowingScoreboard NOTIFY isShowingScoreboardChanged );
+
+	Q_PROPERTY( bool isShowingChatPopup READ isShowingChatPopup NOTIFY isShowingChatPopupChanged );
+	Q_PROPERTY( bool isShowingTeamChatPopup READ isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
+	Q_PROPERTY( bool hasTeamChat READ hasTeamChat NOTIFY hasTeamChatChanged );
 
 	Q_PROPERTY( bool isSpectator READ isSpectator NOTIFY isSpectatorChanged );
 	Q_PROPERTY( bool hasTwoTeams READ hasTwoTeams NOTIFY hasTwoTeamsChanged );
@@ -126,6 +140,9 @@ public:
 	Q_INVOKABLE void showMainMenu();
 	Q_INVOKABLE void returnFromInGameMenu();
 	Q_INVOKABLE void returnFromMainMenu();
+
+	Q_INVOKABLE void closeChatPopup();
+	Q_INVOKABLE void sendChatMessage( const QString &text, bool team );
 
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
@@ -155,6 +172,9 @@ signals:
 	Q_SIGNAL void teamBetaNameChanged( QString teamBetaName );
 
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
+	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
+	Q_SIGNAL void isShowingTeamChatPopupChanged( bool isShowingTeamChatPopup );
+	Q_SIGNAL void hasTeamChatChanged( bool hasTeamChat );
 
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
@@ -222,7 +242,14 @@ private:
 	unsigned m_activeMenuMask { 0 };
 
 	bool m_shouldShowScoreboard { false };
-	bool m_isShowingScoreboard {false };
+	bool m_isShowingScoreboard { false };
+
+	bool m_shouldShowChatPopup { false };
+	bool m_shouldShowTeamChatPopup { false };
+	bool m_isShowingChatPopup { false };
+	bool m_isShowingTeamChatPopup { false };
+
+	bool m_hasTeamChat { false };
 
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
@@ -710,6 +737,23 @@ void QtUISystem::returnFromMainMenu() {
 	}
 }
 
+void QtUISystem::closeChatPopup() {
+	const bool wasShowingChatPopup = m_isShowingChatPopup;
+	const bool wasShowingTeamChatPopup = m_isShowingTeamChatPopup;
+
+	m_isShowingChatPopup = false;
+	m_isShowingTeamChatPopup = false;
+	m_shouldShowChatPopup = false;
+	m_shouldShowTeamChatPopup = false;
+
+	if( wasShowingChatPopup ) {
+		Q_EMIT isShowingChatPopupChanged( false );
+	}
+	if( wasShowingTeamChatPopup ) {
+		Q_EMIT isShowingTeamChatPopupChanged( false );
+	}
+}
+
 void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask ) {
 	if( m_activeMenuMask == activeMask ) {
 		if( backupMask ) {
@@ -762,6 +806,8 @@ void QtUISystem::checkPropertyChanges() {
 
 	if( m_lastFrameState.clientState != lastClientState || isPlayingADemo != wasPlayingADemo ) {
 		const bool wasShowingScoreboard = m_isShowingScoreboard;
+		const bool wasShowingChatPopup = m_isShowingChatPopup;
+		const bool wasShowingTeamChatPopup = m_isShowingTeamChatPopup;
 		if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu, 0 );
 			m_chatModel.clear();
@@ -783,11 +829,45 @@ void QtUISystem::checkPropertyChanges() {
 		if( wasShowingScoreboard ) {
 			Q_EMIT isShowingScoreboardChanged( false );
 		}
+		// Hide chat upon state changes
+		m_isShowingChatPopup = false;
+		m_shouldShowChatPopup = false;
+		m_isShowingTeamChatPopup = false;
+		m_shouldShowTeamChatPopup = false;
+		if( wasShowingChatPopup ) {
+			Q_EMIT isShowingChatPopupChanged( false );
+		}
+		if( wasShowingTeamChatPopup ) {
+			Q_EMIT isShowingTeamChatPopupChanged( false );
+		}
+	}
+
+	const bool hadTeamChat = m_hasTeamChat;
+	m_hasTeamChat = false;
+	if( Cmd_Exists( "say_team" ) ) {
+		m_hasTeamChat = CG_IsSpectator() || ( GS_TeamBasedGametype() && !GS_InvidualGameType() );
+	}
+
+	if( hadTeamChat != m_hasTeamChat ) {
+		// Hide all popups forcefully in this case
+		m_shouldShowChatPopup = false;
+		m_shouldShowTeamChatPopup = false;
+		Q_EMIT hasTeamChatChanged( m_hasTeamChat );
 	}
 
 	if( m_isShowingScoreboard != m_shouldShowScoreboard ) {
 		m_isShowingScoreboard = m_shouldShowScoreboard;
 		Q_EMIT isShowingScoreboardChanged( m_isShowingScoreboard );
+	}
+
+	if( m_isShowingChatPopup != m_shouldShowChatPopup ) {
+		m_isShowingChatPopup = m_shouldShowChatPopup;
+		Q_EMIT isShowingChatPopupChanged( m_isShowingChatPopup );
+	}
+
+	if( m_isShowingTeamChatPopup != m_shouldShowTeamChatPopup ) {
+		m_isShowingTeamChatPopup = m_shouldShowTeamChatPopup;
+		Q_EMIT isShowingTeamChatPopupChanged( m_isShowingTeamChatPopup );
 	}
 
 	const bool wasSpectator = m_lastFrameState.isSpectator;
@@ -824,7 +904,7 @@ void QtUISystem::checkPropertyChanges() {
 	m_demoPlayer.checkUpdates();
 	updateCVarAwareControls();
 
-	if( m_activeMenuMask || m_isShowingScoreboard ) {
+	if( m_activeMenuMask || m_isShowingScoreboard || ( m_isShowingChatPopup | m_isShowingTeamChatPopup ) ) {
 		m_skipDrawingSelf = false;
 		m_lastActiveMaskTime = Sys_Milliseconds();
 	} else if( !m_skipDrawingSelf ) {
@@ -884,12 +964,14 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 }
 
 bool QtUISystem::requestsKeyboardFocus() const {
-	return m_activeMenuMask != 0;
+	return m_activeMenuMask != 0 || ( m_isShowingChatPopup || m_isShowingTeamChatPopup );
 }
 
 bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	if( !m_activeMenuMask ) {
-		return false;
+		if( !( m_isShowingChatPopup || m_isShowingTeamChatPopup ) ) {
+			return false;
+		}
 	}
 
 	if( tryHandlingKeyEventAsAMouseEvent( quakeKey, keyDown ) ) {
@@ -909,7 +991,9 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 
 bool QtUISystem::handleCharEvent( int ch ) {
 	if( !m_activeMenuMask ) {
-		return false;
+		if( !( m_isShowingChatPopup || m_isShowingTeamChatPopup ) ) {
+			return false;
+		}
 	}
 
 	if( !isAPrintableChar( ch ) ) {
@@ -1293,8 +1377,33 @@ void QtUISystem::setScoreboardShown( bool shown ) {
 	m_shouldShowScoreboard = shown;
 }
 
+void QtUISystem::toggleChatPopup() {
+	m_shouldShowChatPopup = !m_shouldShowChatPopup;
+}
+
+void QtUISystem::toggleTeamChatPopup() {
+	if( m_hasTeamChat ) {
+		m_shouldShowTeamChatPopup = !m_shouldShowTeamChatPopup;
+	} else {
+		m_shouldShowTeamChatPopup = false;
+		m_shouldShowChatPopup = !m_shouldShowChatPopup;
+	}
+}
+
+void QtUISystem::sendChatMessage( const QString &text, bool team ) {
+	// TODO: This is quite inefficient
+	// TODO: Must be unicode-aware
+	const QString clearText( text.trimmed().replace( '\r', ' ' ).replace( '\n', ' ' ).constData() );
+	if( !clearText.isEmpty() ) {
+		Con_SendChatMessage( clearText.toUtf8().constData(), team );
+	}
+}
+
 bool QtUISystem::isShown() const {
-	return m_isValidAndReady && ( m_activeMenuMask || m_isShowingScoreboard );
+	if( m_isValidAndReady ) {
+		return ( m_activeMenuMask || m_isShowingScoreboard || m_isShowingChatPopup || m_isShowingTeamChatPopup );
+	}
+	return false;
 }
 
 }
@@ -1309,6 +1418,16 @@ void CG_ScoresOn_f() {
 
 void CG_ScoresOff_f() {
 	wsw::ui::UISystem::instance()->setScoreboardShown( false );
+}
+
+void CG_MessageMode() {
+	wsw::ui::UISystem::instance()->toggleChatPopup();
+	CL_ClearInputState();
+}
+
+void CG_MessageMode2() {
+	wsw::ui::UISystem::instance()->toggleTeamChatPopup();
+	CL_ClearInputState();
 }
 
 #include "uisystem.moc"

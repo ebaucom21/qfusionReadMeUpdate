@@ -1,7 +1,5 @@
 #include "chatmodel.h"
-
-#include "../gameshared/q_arch.h"
-#include "../qcommon/wswstringview.h"
+#include "local.h"
 
 namespace wsw::ui {
 
@@ -40,8 +38,7 @@ void ChatModel::addNewEntry( QString timestamp, const wsw::StringView &name, con
 	m_data.append({
 		std::move( timestamp ),
 		m_proxy->acquireCachedName( name ),
-		// TODO: Sanitize...
-		QString::fromUtf8( message.data(), message.size() )
+		toStyledText( message )
 	});
 }
 
@@ -162,9 +159,8 @@ void RichChatModel::addToCurrGroup( const wsw::StringView &message, int lastMess
 	beginResetModel();
 	assert( !m_data.empty() );
 	QString &content = m_data.last().message;
-	content.append( '\n' );
-	// TODO: Sanitize string, parse color tokens...
-	content.append( QString::fromUtf8( message.data(), message.size() ) );
+	content.append( QLatin1String( "<br>", 4 ) );
+	content.append( toStyledText( message ) );
 	endResetModel();
 }
 
@@ -181,8 +177,7 @@ auto ChatModelProxy::formatTime( int hour, int minute ) -> QString {
 
 auto ChatModelProxy::acquireCachedName( const wsw::StringView &name ) -> QString {
 	// TODO: Implement names cache!
-	// TODO: Sanitize!
-	return QString::fromUtf8( name.data(), name.size() );
+	return toStyledText( name );
 }
 
 void ChatModelProxy::clear() {

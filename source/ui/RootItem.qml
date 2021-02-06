@@ -17,7 +17,7 @@ Item {
         }
     }
 
-    Keys.forwardTo: [mainMenu, connectionScreen, demoPlaybackMenu, inGameMenu]
+    Keys.forwardTo: [mainMenu, connectionScreen, demoPlaybackMenu, inGameMenu, chatLoader.item]
 
     // TODO: These items should be wrapped in loaders
     MainMenu {
@@ -36,6 +36,12 @@ Item {
         active: wsw.isShowingScoreboard
         anchors.fill: parent
         sourceComponent: Component { ScoreboardScreen {} }
+    }
+    Loader {
+        id: chatLoader
+        active: wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
+        anchors.fill: parent
+        sourceComponent: Component { ChatPopup {} }
     }
 
     MouseArea {

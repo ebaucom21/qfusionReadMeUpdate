@@ -612,6 +612,9 @@ void CG_ScoresOn_f();
 void CG_ScoresOff_f();
 bool CG_IsScoreboardShown();
 
+void CG_MessageMode();
+void CG_MessageMode2();
+
 //
 // cg_main.c
 //

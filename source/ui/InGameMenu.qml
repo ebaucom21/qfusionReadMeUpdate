@@ -56,6 +56,7 @@ Rectangle {
             anchors.margins: 16
             interactive: false
             currentIndex: tabBar.currentIndex
+            clip: true
 
             StackView {
                 id: stackView
@@ -63,7 +64,7 @@ Rectangle {
                 initialItem: selectorComponent
             }
 
-            Item {}
+            InGameChatPage {}
             Item {}
         }
 

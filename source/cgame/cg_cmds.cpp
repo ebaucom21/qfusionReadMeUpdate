@@ -1105,6 +1105,8 @@ static const cgcmd_t cgcmds[] =
 {
 	{ "+scores", CG_ScoresOn_f, true },
 	{ "-scores", CG_ScoresOff_f, true },
+	{ "messagemode", CG_MessageMode, false },
+	{ "messagemode2", CG_MessageMode2, false },
 	{ "demoget", CG_Cmd_DemoGet_f, false },
 	{ "demolist", NULL, false },
 	{ "use", CG_Cmd_UseItem_f, false },
