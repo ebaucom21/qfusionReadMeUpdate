@@ -9,6 +9,7 @@
 #include "demos.h"
 #include "gametypesmodel.h"
 #include "nativelydrawnitems.h"
+#include "playersmodel.h"
 #include "serverlistmodel.h"
 #include "keysandbindingsmodel.h"
 #include "scoreboardmodel.h"
@@ -100,6 +101,9 @@ public:
 	bool hasTeamChat() const { return m_hasTeamChat; }
 
 	[[nodiscard]]
+	bool isOperator() const { return m_lastFrameState.isOperator; }
+
+	[[nodiscard]]
 	bool isShown() const override;
 
 	void enterUIRenderingMode();
@@ -153,6 +157,11 @@ public:
 
 	Q_INVOKABLE void startServerListUpdates();
 	Q_INVOKABLE void stopServerListUpdates();
+
+	Q_INVOKABLE void callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall );
+
+	Q_SIGNAL void isOperatorChanged( bool isOperator );
+	Q_PROPERTY( bool isOperator READ isOperator NOTIFY isOperatorChanged );
 
 	Q_PROPERTY( QColor black MEMBER m_colorBlack CONSTANT );
 	Q_PROPERTY( QColor red MEMBER m_colorRed CONSTANT );
@@ -220,6 +229,8 @@ private:
 	DemosModel m_demosModel { &m_demosResolver };
 	DemoPlayer m_demoPlayer { this };
 
+	PlayersModel m_playersModel;
+
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
 	struct {
@@ -229,6 +240,7 @@ private:
 		bool isSpectator { false };
 		bool hasTwoTeams { false };
 		bool isPlayingADemo { false };
+		bool isOperator { false };
 	} m_lastFrameState;
 
 	enum ActiveMenuMask : unsigned {
@@ -538,8 +550,8 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
 	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
 	context->setContextProperty( "richTeamChatModel", m_teamChatModel.getRichModel() );
-	context->setContextProperty( "callvotesModel", m_callvotesModel.getCallvotesModel() );
-	context->setContextProperty( "opcallsModel", m_callvotesModel.getOpcallsModel() );
+	context->setContextProperty( "regularCallvotesModel", m_callvotesModel.getRegularModel() );
+	context->setContextProperty( "operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
 	context->setContextProperty( "scoreboard", &m_scoreboardModel );
 	context->setContextProperty( "scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
 	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
@@ -549,6 +561,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "demosModel", &m_demosModel );
 	context->setContextProperty( "demosResolver", &m_demosResolver );
 	context->setContextProperty( "demoPlayer", &m_demoPlayer );
+	context->setContextProperty( "playersModel", &m_playersModel );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -1317,6 +1330,18 @@ void QtUISystem::disconnect() {
 	Cbuf_AddText( "disconnect" );
 }
 
+void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {
+	wsw::StaticString<1024> command;
+	if( isOperatorCall ) {
+		command << "opcall"_asView;
+	} else {
+		command << "callvote"_asView;
+	}
+	command << ' ' << wsw::StringView( name.data(), (unsigned)name.size() );
+	command << ' ' << wsw::StringView( value.data(), (unsigned)value.size() );
+	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+}
+
 auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
 	if( int color = COM_ReadColorRGBString( string.toUtf8().constData() ); color != -1 ) {
 		return QColor::fromRgb( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ), 255 );
@@ -1366,6 +1391,7 @@ void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::Stri
 
 void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) {
 	m_scoreboardModel.update( scoreboardData );
+	m_playersModel.update( scoreboardData );
 }
 
 bool QtUISystem::isShowingScoreboard() const {

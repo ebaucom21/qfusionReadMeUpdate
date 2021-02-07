@@ -2,6 +2,7 @@
 #define WSW_7bec9edc_f137_4385_ad94_191ee7088622_H
 
 #include <QAbstractListModel>
+#include <QJsonArray>
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
@@ -13,20 +14,30 @@ class CallvotesModelProxy;
 
 class CallvotesModel : public QAbstractListModel {
 	friend class CallvotesModelProxy;
+
+	Q_OBJECT
 public:
 	enum Kind {
-		Missing,
+		NoArgs,
 		Boolean,
 		Number,
 		Player,
 		Minutes,
-		Options
+		MapList,
+		Options,
 	};
 	Q_ENUM( Kind );
+
+	enum Flags {
+		Regular = 0x1,
+		Operator = 0x2,
+	};
+	Q_ENUM( Flags );
 private:
 	enum Role {
 		Name = Qt::UserRole + 1,
 		Desc,
+		Flags,
 		ArgsKind,
 		ArgsHandle,
 		Current,
@@ -41,6 +52,11 @@ public:
 
 	void notifyOfChangesAtNum( int num );
 
+	// Generic signals are not really usable in QML, add the our one
+	Q_SIGNAL void currentChanged( int index, QVariant value );
+
+	Q_INVOKABLE QJsonArray getOptionsList( int handle ) const;
+
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
 	[[nodiscard]]
@@ -50,11 +66,13 @@ public:
 };
 
 class CallvotesModelProxy {
+	friend class CallvotesModel;
 public:
 	struct Entry {
 		QString name;
 		QString desc;
 		QString current;
+		unsigned flags;
 		CallvotesModel::Kind kind;
 		int argsHandle;
 	};
@@ -67,8 +85,8 @@ private:
 	wsw::Vector<Entry> m_entries;
 	wsw::Vector<std::pair<OptionTokens, int>> m_options;
 
-	CallvotesModel m_callvotesModel { this };
-	CallvotesModel m_opcallsModel { this };
+	CallvotesModel m_regularModel {this };
+	CallvotesModel m_operatorModel {this };
 
 	[[nodiscard]]
 	auto addArgs( const std::optional<wsw::StringView> &maybeArgs )
@@ -81,9 +99,9 @@ public:
 	auto getEntry( int entryNum ) const -> const Entry & { return m_entries[entryNum]; }
 
 	[[nodiscard]]
-	auto getCallvotesModel() -> CallvotesModel * { return &m_callvotesModel; }
+	auto getRegularModel() -> CallvotesModel * { return &m_regularModel; }
 	[[nodiscard]]
-	auto getOpcallsModel() -> CallvotesModel * { return &m_opcallsModel; }
+	auto getOperatorModel() -> CallvotesModel * { return &m_operatorModel; }
 
 	void reload();
 

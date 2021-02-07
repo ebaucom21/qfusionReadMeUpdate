@@ -4,6 +4,8 @@
 #include "../qcommon/compression.h"
 #include "../qcommon/wswstringsplitter.h"
 
+#include <QJsonObject>
+
 using wsw::operator""_asView;
 
 namespace wsw::ui {
@@ -12,7 +14,8 @@ auto CallvotesModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Name, "name" },
 		{ Desc, "desc" },
-		{ ArgsKind, "kind" },
+		{ Flags, "flags" },
+		{ ArgsKind, "argsKind" },
 		{ ArgsHandle, "argsHandle" },
 		{ Current, "current" }
 	};
@@ -35,6 +38,7 @@ auto CallvotesModel::data( const QModelIndex &index, int role ) const -> QVarian
 	switch( role ) {
 		case Name: return m_proxy->getEntry( row ).name;
 		case Desc: return m_proxy->getEntry( row ).desc;
+		case Flags: return m_proxy->getEntry( row ).flags;
 		case ArgsKind: return m_proxy->getEntry( row ).kind;
 		case ArgsHandle: return m_proxy->getEntry( row ).argsHandle;
 		case Current: return m_proxy->getEntry( row ).current;
@@ -45,9 +49,25 @@ auto CallvotesModel::data( const QModelIndex &index, int role ) const -> QVarian
 void CallvotesModel::notifyOfChangesAtNum( int num ) {
 	const auto it = std::find( m_entryNums.begin(), m_entryNums.end(), num );
 	if( it != m_entryNums.end() ) {
-		QModelIndex index( createIndex( (int)( it - m_entryNums.begin() ), 0 ) );
-		Q_EMIT dataChanged( index, index, kRoleCurrentChangeset );
+		const auto index = (int)( it - m_entryNums.begin() );
+		QModelIndex modelIndex( createIndex( index, 0 ) );
+		Q_EMIT dataChanged( modelIndex, modelIndex, kRoleCurrentChangeset );
+		Q_EMIT currentChanged( index, m_proxy->getEntry( num ).current );
 	}
+}
+
+auto CallvotesModel::getOptionsList( int handle ) const -> QJsonArray {
+	assert( (unsigned)( handle - 1 ) < (unsigned)m_proxy->m_options.size() );
+	[[maybe_unused]] const auto &[options, storedHandle] = m_proxy->m_options[handle - 1];
+	assert( handle == storedHandle );
+
+	QJsonArray result;
+	for( const auto &[off, len]: options.spans ) {
+		QString s( QString::fromUtf8( options.content.data() + off, len ) );
+		result.append( QJsonObject {{"name", s}, {"value", s}});
+	}
+
+	return result;
 }
 
 static const std::pair<wsw::StringView, CallvotesModel::Kind> kArgKindNames[] {
@@ -55,15 +75,16 @@ static const std::pair<wsw::StringView, CallvotesModel::Kind> kArgKindNames[] {
 	{ "number"_asView, CallvotesModel::Number },
 	{ "player"_asView, CallvotesModel::Player },
 	{ "minutes"_asView, CallvotesModel::Minutes },
+	{ "maplist"_asView, CallvotesModel::MapList },
 	{ "options"_asView, CallvotesModel::Options }
 };
 
 void CallvotesModelProxy::reload() {
-	m_callvotesModel.beginResetModel();
-	m_opcallsModel.beginResetModel();
+	m_regularModel.beginResetModel();
+	m_operatorModel.beginResetModel();
 
-	m_callvotesModel.m_entryNums.clear();
-	m_opcallsModel.m_entryNums.clear();
+	m_regularModel.m_entryNums.clear();
+	m_operatorModel.m_entryNums.clear();
 
 	m_entries.clear();
 	m_options.clear();
@@ -94,10 +115,10 @@ void CallvotesModelProxy::reload() {
 			break;
 		}
 
-		const bool isVotingEnalbed = maybeAllowedOps->contains( 'v' );
+		const bool isVotingEnabled = maybeAllowedOps->contains( 'v' );
 		const bool isOpcallEnabled = maybeAllowedOps->contains( 'o' );
 		// Very unlikely
-		if( !isVotingEnalbed && !isOpcallEnabled ) {
+		if( !isVotingEnabled && !isOpcallEnabled ) {
 			break;
 		}
 
@@ -112,17 +133,24 @@ void CallvotesModelProxy::reload() {
 		const auto [kind, maybeArgsHandle] = *maybeArgKindAndHandle;
 		assert( !maybeArgsHandle || *maybeArgsHandle > 0 );
 
-		if( isVotingEnalbed ) {
-			m_callvotesModel.m_entryNums.push_back( (int)m_entries.size() );
+		unsigned flags = 0;
+		if( isVotingEnabled ) {
+			flags |= CallvotesModel::Regular;
 		}
 		if( isOpcallEnabled ) {
-			m_opcallsModel.m_entryNums.push_back( (int)m_entries.size() );
+			flags |= CallvotesModel::Operator;
+		}
+
+		m_operatorModel.m_entryNums.push_back( (int)m_entries.size() );
+		if( isVotingEnabled ) {
+			m_regularModel.m_entryNums.push_back( (int) m_entries.size() );
 		}
 
 		Entry entry {
 			QString::fromUtf8( maybeName->data(), maybeName->size() ),
 			QString::fromUtf8( maybeDesc->data(), maybeDesc->size() ),
 			QString::fromUtf8( current.data(), current.size() ),
+			flags,
 			kind,
 			maybeArgsHandle.value_or( 0 )
 		};
@@ -130,14 +158,14 @@ void CallvotesModelProxy::reload() {
 		m_entries.emplace_back( std::move( entry ) );
 	}
 
-	m_callvotesModel.endResetModel();
-	m_opcallsModel.endResetModel();
+	m_regularModel.endResetModel();
+	m_operatorModel.endResetModel();
 }
 
 auto CallvotesModelProxy::addArgs( const std::optional<wsw::StringView> &maybeArgs )
 	-> std::optional<std::pair<CallvotesModel::Kind, std::optional<int>>> {
 	if( !maybeArgs ) {
-		return std::make_pair( CallvotesModel::Missing, std::nullopt );
+		return std::make_pair( CallvotesModel::NoArgs, std::nullopt );
 	}
 
 	wsw::StringSplitter splitter( *maybeArgs );
@@ -148,19 +176,19 @@ auto CallvotesModelProxy::addArgs( const std::optional<wsw::StringView> &maybeAr
 		return std::nullopt;
 	}
 
-	auto foundKind = CallvotesModel::Missing;
+	auto foundKind = CallvotesModel::NoArgs;
 	for( const auto &[name, kind] : kArgKindNames ) {
-		assert( kind != CallvotesModel::Missing );
+		assert( kind != CallvotesModel::NoArgs );
 		if( maybeHeadToken->equalsIgnoreCase( name ) ) {
 			foundKind = kind;
 			break;
 		}
 	}
 
-	if( foundKind == CallvotesModel::Missing ) {
+	if( foundKind == CallvotesModel::NoArgs ) {
 		return std::nullopt;
 	}
-	if( foundKind != CallvotesModel::Options ) {
+	if( foundKind != CallvotesModel::Options && foundKind != CallvotesModel::MapList ) {
 		return std::make_pair( foundKind, std::nullopt );
 	}
 
@@ -175,7 +203,7 @@ auto CallvotesModelProxy::addArgs( const std::optional<wsw::StringView> &maybeAr
 	}
 
 	if( const auto maybeArgsHandle = parseAndAddOptions( *maybeDataToken ) ) {
-		return std::make_pair( CallvotesModel::Options, maybeArgsHandle );
+		return std::make_pair( foundKind, maybeArgsHandle );
 	}
 
 	return std::nullopt;
@@ -253,8 +281,8 @@ void CallvotesModelProxy::handleConfigString( unsigned configStringNum, const ws
 	m_entries[entryNum].current = QString::fromUtf8( maybeCurrent->data(), maybeCurrent->size() );
 
 	// TODO: Also emit some global signal that should be useful for updating values in an open popup
-	m_callvotesModel.notifyOfChangesAtNum( entryNum );
-	m_opcallsModel.notifyOfChangesAtNum( entryNum );
+	m_regularModel.notifyOfChangesAtNum( entryNum );
+	m_operatorModel.notifyOfChangesAtNum( entryNum );
 }
 
 }

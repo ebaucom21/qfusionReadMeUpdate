@@ -236,7 +236,7 @@ static void G_VoteMapDescribeClientArgs( int configStringIndex ) {
 	const wsw::String &base64 = encoder.encode();
 	wsw::String buffer;
 	buffer.reserve( base64.length() + 16 );
-	buffer.append( "options " );
+	buffer.append( "maplist " );
 	buffer.append( base64 );
 
 	trap_ConfigString( configStringIndex, buffer.data() );

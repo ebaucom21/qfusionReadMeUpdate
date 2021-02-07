@@ -82,7 +82,7 @@ Rectangle {
 
     Component {
         id: callvotesComponent
-        Item {}
+        InGameCallvotesPage {}
     }
 
     onVisibleChanged: {
@@ -94,6 +94,14 @@ Rectangle {
     Keys.onPressed: {
         if (!visible) {
             return
+        }
+
+        let currentItem = stackView.currentItem
+        if (currentItem && currentItem.hasOwnProperty("handleKeyEvent")) {
+            let handler = currentItem.handleKeyEvent
+            if (handler && handler(event)) {
+                return
+            }
         }
 
         if (event.key !== Qt.Key_Escape) {

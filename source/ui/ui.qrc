@@ -21,6 +21,11 @@
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudSettings.qml</file>
+        <file>InGameCallvoteMapSelector.qml</file>
+        <file>InGameCallvoteNumberSelector.qml</file>
+        <file>InGameCallvoteOptionSelector.qml</file>
+        <file>InGameCallvotePlayerSelector.qml</file>
+        <file>InGameCallvoteScalarSelector.qml</file>
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
         <file>InGameGeneralPage.qml</file>
@@ -49,6 +54,7 @@
         <file>ScoreboardSpecsPane.qml</file>
         <file>ScoreboardTable.qml</file>
         <file>ScoreboardTeamPane.qml</file>
+        <file>SelectableLabel.qml</file>
         <file>ServerBrowserCard.qml</file>
         <file>ServerBrowserPlayersList.qml</file>
         <file>SettingsLabel.qml</file>
