@@ -4,6 +4,7 @@
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/qcommon.h"
 #include "../client/client.h"
+#include "actionrequestmodel.h"
 #include "callvotesmodel.h"
 #include "chatmodel.h"
 #include "demos.h"
@@ -93,6 +94,11 @@ public:
 	void toggleChatPopup() override;
 	void toggleTeamChatPopup() override;
 
+	void touchActionRequest( const wsw::StringView &tag, unsigned timeout,
+						  	 const wsw::StringView &title, const wsw::StringView &actionDesc,
+						  	 const std::pair<wsw::StringView, int> *actionsBegin,
+						  	 const std::pair<wsw::StringView, int> *actionsEnd );
+
 	[[nodiscard]]
 	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
 	[[nodiscard]]
@@ -120,6 +126,8 @@ public:
 	Q_PROPERTY( bool isShowingChatPopup READ isShowingChatPopup NOTIFY isShowingChatPopupChanged );
 	Q_PROPERTY( bool isShowingTeamChatPopup READ isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
 	Q_PROPERTY( bool hasTeamChat READ hasTeamChat NOTIFY hasTeamChatChanged );
+
+	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
 	Q_PROPERTY( bool isSpectator READ isSpectator NOTIFY isSpectatorChanged );
 	Q_PROPERTY( bool hasTwoTeams READ hasTwoTeams NOTIFY hasTwoTeamsChanged );
@@ -185,6 +193,8 @@ signals:
 	Q_SIGNAL void isShowingTeamChatPopupChanged( bool isShowingTeamChatPopup );
 	Q_SIGNAL void hasTeamChatChanged( bool hasTeamChat );
 
+	Q_SIGNAL void isShowingActionRequestsChanged( bool isShowingActionRequests );
+
 	Q_SIGNAL void isShowingMainMenuChanged( bool isShowingMainMenu );
 	Q_SIGNAL void isShowingConnectionScreenChanged( bool isShowingConnectionScreen );
 	Q_SIGNAL void isShowingInGameMenuChanged( bool isShowingInGameMenu );
@@ -231,6 +241,8 @@ private:
 
 	PlayersModel m_playersModel;
 
+	ActionRequestsModel m_actionRequestsModel;
+
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
 	struct {
@@ -260,6 +272,8 @@ private:
 	bool m_shouldShowTeamChatPopup { false };
 	bool m_isShowingChatPopup { false };
 	bool m_isShowingTeamChatPopup { false };
+
+	bool m_isShowingActionRequests { false };
 
 	bool m_hasTeamChat { false };
 
@@ -321,6 +335,9 @@ private:
 	bool isShowingConnectionScreen() const { return isShowingMaskElement( ConnectionScreen ); }
 	[[nodiscard]]
 	bool isShowingInGameMenu() const { return isShowingMaskElement( InGameMenu ); }
+
+	[[nodiscard]]
+	bool isShowingActionRequests() const { return m_isShowingActionRequests;}
 
 	[[nodiscard]]
 	bool isDebuggingNativelyDrawnItems() const;
@@ -562,6 +579,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "demosResolver", &m_demosResolver );
 	context->setContextProperty( "demoPlayer", &m_demoPlayer );
 	context->setContextProperty( "playersModel", &m_playersModel );
+	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -883,6 +901,17 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingTeamChatPopupChanged( m_isShowingTeamChatPopup );
 	}
 
+	const bool wasShowingActionRequests = m_isShowingActionRequests;
+	m_isShowingActionRequests = false;
+	if( !m_actionRequestsModel.empty() ) {
+		if( !m_activeMenuMask && !m_isShowingChatPopup && !m_isShowingTeamChatPopup && !m_isShowingScoreboard ) {
+			m_isShowingActionRequests = true;
+		}
+	}
+	if( wasShowingActionRequests != m_isShowingActionRequests ) {
+		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
+	}
+
 	const bool wasSpectator = m_lastFrameState.isSpectator;
 	const bool isSpectator = m_lastFrameState.isSpectator = CG_IsSpectator();
 	if( isSpectator != wasSpectator ) {
@@ -915,9 +944,20 @@ void QtUISystem::checkPropertyChanges() {
 
 	m_keysAndBindingsModel.checkUpdates();
 	m_demoPlayer.checkUpdates();
+	m_actionRequestsModel.update();
+
 	updateCVarAwareControls();
 
-	if( m_activeMenuMask || m_isShowingScoreboard || ( m_isShowingChatPopup | m_isShowingTeamChatPopup ) ) {
+	bool isLikelyToDrawSelf = false;
+	if( m_activeMenuMask ) {
+		isLikelyToDrawSelf = true;
+	} else if( m_isShowingScoreboard || m_isShowingChatPopup || m_isShowingTeamChatPopup ) {
+		isLikelyToDrawSelf = true;
+	} else if( !m_actionRequestsModel.empty() ) {
+		isLikelyToDrawSelf = true;
+	}
+
+	if( isLikelyToDrawSelf ) {
 		m_skipDrawingSelf = false;
 		m_lastActiveMaskTime = Sys_Milliseconds();
 	} else if( !m_skipDrawingSelf ) {
@@ -983,6 +1023,9 @@ bool QtUISystem::requestsKeyboardFocus() const {
 bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 	if( !m_activeMenuMask ) {
 		if( !( m_isShowingChatPopup || m_isShowingTeamChatPopup ) ) {
+			if( keyDown ) {
+				return m_actionRequestsModel.handleKeyEvent( quakeKey );
+			}
 			return false;
 		}
 	}
@@ -1413,6 +1456,13 @@ void QtUISystem::toggleTeamChatPopup() {
 		m_shouldShowTeamChatPopup = false;
 		m_shouldShowChatPopup = !m_shouldShowChatPopup;
 	}
+}
+
+void QtUISystem::touchActionRequest( const wsw::StringView &tag, unsigned int timeout,
+									 const wsw::StringView &title, const wsw::StringView &actionDesc,
+									 const std::pair<wsw::StringView, int> *actionsBegin,
+									 const std::pair<wsw::StringView, int> *actionsEnd ) {
+	m_actionRequestsModel.touch( tag, timeout, title, actionDesc, actionsBegin, actionsEnd );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

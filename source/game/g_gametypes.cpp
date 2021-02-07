@@ -23,6 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/hash.h"
 #include "../qcommon/wswstringsplitter.h"
 
+using wsw::operator""_asView;
+
 GVariousStats::~GVariousStats() {
 	Clear();
 	if( bins ) {
@@ -855,6 +857,13 @@ static void G_Match_ReadyAnnouncement( void ) {
 					} else {
 						G_AnnouncerSound( e, trap_SoundIndex( S_ANNOUNCER_READY_UP_POLITE ), GS_MAX_TEAMS, true, NULL );
 					}
+
+					const wsw::StringView yellow( S_COLOR_YELLOW ), white( S_COLOR_WHITE );
+					wsw::StringView title( "Get yourself ready, please!"_asView );
+					wsw::StaticString<32> desc;
+					desc << "Press "_asView << yellow << "F4"_asView << white << " for that"_asView;
+					std::pair<wsw::StringView, wsw::StringView> actions[1] { { "F4"_asView,  "ready"_asView } };
+					G_SendActionRequest( e, "ready"_asView, 2000, title, desc.asView(), actions );
 				}
 			}
 		}

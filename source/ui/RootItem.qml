@@ -43,6 +43,11 @@ Item {
         anchors.fill: parent
         sourceComponent: Component { ChatPopup {} }
     }
+    ActionRequestArea {
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+    }
 
     MouseArea {
         id: popupOverlay
@@ -55,6 +60,7 @@ Item {
             color: "#3A885500"
         }
     }
+
 
     function enablePopupOverlay() {
         popupOverlay.visible = true

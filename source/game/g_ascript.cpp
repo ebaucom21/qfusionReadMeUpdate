@@ -1936,7 +1936,6 @@ static void objectGameClient_SetQuickMenuItems( asstring_t *str, gclient_t *self
 	}
 
 	Q_strncpyz( self->level.quickMenuItems, str->buffer, sizeof( self->level.quickMenuItems ) );
-	trap_GameCmd( PLAYERENT( playerNum ), va( "qm %s", str->buffer ) );
 }
 
 static const asFuncdef_t gameclient_Funcdefs[] =

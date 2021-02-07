@@ -1055,6 +1055,19 @@ void G_AwardResetPlayerComboStats( edict_t *ent );
 void G_AwardRaceRecord( edict_t *self );
 void G_DeathAwards( edict_t *ent );
 
+void G_SendActionRequest( const edict_t *ent, const wsw::StringView &tag, unsigned timeout,
+						  const wsw::StringView &title, const wsw::StringView &desc,
+						  const std::pair<wsw::StringView, wsw::StringView> *actionsBegin,
+						  const std::pair<wsw::StringView, wsw::StringView> *actionsEnd );
+
+// A workaround for the lack of ranges in the current target language version
+template <typename ActionsRange>
+void G_SendActionRequest( const edict_t *ent, const wsw::StringView &tag, unsigned timeout,
+						  const wsw::StringView &title, const wsw::StringView &desc,
+						  const ActionsRange &actions ) {
+	G_SendActionRequest( ent, tag, timeout, title, desc, std::begin( actions ), std::end( actions ) );
+}
+
 //============================================================================
 
 #include "ai/ai.h"
@@ -1631,8 +1644,6 @@ class RespectHandler final : public ChatHandler {
 		bool hasIgnoredCodex;
 		bool hasViolatedCodex;
 
-		static char hintBuffer[64];
-
 		ClientEntry() {
 			Reset();
 		}
@@ -1654,14 +1665,8 @@ class RespectHandler final : public ChatHandler {
 		 */
 		void CheckBehaviour( const int64_t matchStartTime );
 
-#ifndef _MSC_VER
-		void PrintToClientScreen( unsigned timeout, const char *format, ... ) __attribute__( ( format( printf, 3, 4 ) ) );
-#else
-		void PrintToClientScreen( unsigned timeout, _Printf_format_string_ const char *format, ... );
-#endif
-		void ShowRespectMenuAtClient( unsigned timeout, int tokenNum );
-
-		static const char *MakeHintString( int tokenNum );
+		void RequestClientRespectAction( int tokenNum );
+		void DisplayCodexViolationWarning();
 
 		void AnnounceMisconductBehaviour( const char *action );
 

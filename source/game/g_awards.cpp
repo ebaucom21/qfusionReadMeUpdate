@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "../qcommon/wswstaticstring.h"
 
 #define EBHIT_FOR_AWARD     3
 #define MULTIKILL_INTERVAL  3000
@@ -435,4 +436,28 @@ void G_DeathAwards( edict_t *ent ) {
 	if( frag_count >= 5 ) {
 		G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " made a spree of " S_COLOR_WHITE "%d" S_COLOR_YELLOW "!\n", ent->r.client->netname, frag_count );
 	}
+}
+
+static inline wsw::StaticString<1024> &appendQuoted( wsw::StaticString<1024> &buffer, const wsw::StringView &s ) {
+	return buffer << '\"' << s << '\"' << ' ';
+}
+
+void G_SendActionRequest( const edict_t *ent, const wsw::StringView &tag, unsigned timeout,
+						  const wsw::StringView &title, const wsw::StringView &desc,
+						  const std::pair<wsw::StringView, wsw::StringView> *actionsBegin,
+						  const std::pair<wsw::StringView, wsw::StringView> *actionsEnd ) {
+	wsw::StaticString<1024> buffer;
+	buffer << wsw::StringView( "arq " );
+	buffer << timeout << ' ';
+	appendQuoted( buffer, tag );
+	appendQuoted( buffer, title );
+	appendQuoted( buffer, desc );
+	const auto numActions = (unsigned)( actionsEnd - actionsBegin );
+	buffer << numActions << ' ';
+	for( auto it = actionsBegin; it != actionsEnd; ++it ) {
+		const auto [key, cmd] = *it;
+		appendQuoted( buffer, key );
+		appendQuoted( buffer, cmd );
+	}
+	trap_GameCmd( ent, buffer.data() );
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource>
+        <file>ActionRequestArea.qml</file>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
         <file>ChatPopup.qml</file>

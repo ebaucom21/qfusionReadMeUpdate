@@ -1605,6 +1605,36 @@ static const char *G_CallVotes_String( const callvotedata_t *vote ) {
 	return vote->callvote->name;
 }
 
+static void RequestActions() {
+	const wsw::StringView yellow( S_COLOR_YELLOW ), white( S_COLOR_WHITE );
+	wsw::StaticString<64> title, desc;
+	const wsw::StringView vote( G_CallVotes_String( &callvoteState.vote ) );
+	title << "A vote "_asView << yellow << vote << white << " is in progress"_asView;
+	desc << "Press "_asView;
+	desc << yellow << "F1"_asView << white << " to vote yes, "_asView;
+	desc << yellow << "F2"_asView << white << " to vote no"_asView;
+	const std::pair<wsw::StringView, wsw::StringView> actions[2] {
+		{ "F1"_asView, "vote yes"_asView },
+		{ "F2"_asView, "vote no"_asView }
+	};
+
+	for( const edict_t *ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
+		const gclient_t *client = ent->r.client;
+
+		if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
+			continue;
+		}
+
+		if( ( ent->r.svflags & SVF_FAKECLIENT ) ) {
+			continue;
+		}
+
+		if( clientVoted[PLAYERNUM( ent )] == VOTED_NOTHING ) {
+			G_SendActionRequest( ent, "vote"_asView, 2500, title.asView(), desc.asView(), actions );
+		}
+	}
+}
+
 /*
 * G_CallVotes_CheckState
 */
@@ -1681,10 +1711,11 @@ static void G_CallVotes_CheckState( void ) {
 		if( callvoteState.timeout - game.realtime <= 7500 && callvoteState.timeout - game.realtime > 2500 ) {
 			G_AnnouncerSound( NULL, trap_SoundIndex( S_ANNOUNCER_CALLVOTE_VOTE_NOW ), GS_MAX_TEAMS, true, NULL );
 		}
-		G_PrintMsg( NULL, "Vote in progress: %s%s%s, %i voted yes, %i voted no. %i required\n", S_COLOR_YELLOW,
+		G_PrintMsg( NULL, "A vote %s%s%s is in progress: %i voted yes, %i voted no. %i required\n", S_COLOR_YELLOW,
 					G_CallVotes_String( &callvoteState.vote ), S_COLOR_WHITE, yeses, noes,
 					needvotes + 1 );
 		warntimer = game.realtime + 5 * 1000;
+		RequestActions();
 	}
 }
 
@@ -1935,8 +1966,9 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 				ent->r.client->netname, G_CallVotes_String( &callvoteState.vote ) );
 
 	G_PrintMsg( NULL, "Press " S_COLOR_YELLOW "F1" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote yes"
-				S_COLOR_WHITE " or " S_COLOR_YELLOW "F2" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote no"
-				S_COLOR_WHITE ", or cast your vote using the " S_COLOR_YELLOW "in-game menu\n" );
+				S_COLOR_WHITE " or " S_COLOR_YELLOW "F2" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote no" );
+
+	RequestActions();
 
 	G_CallVotes_Think(); // make the first think
 }

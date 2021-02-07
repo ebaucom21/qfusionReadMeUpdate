@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 
 #include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswtonum.h"
 #include "../qcommon/qcommon.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
@@ -689,40 +690,6 @@ static void CG_SC_MenuCustom( void ) {
 	Cbuf_ExecuteText( EXEC_APPEND, va( "%s\n", request ) );
 }
 
-static void CG_SC_MenuQuick() {
-	// Currently just skip this command.
-	// We do not remove sending of this command by the game server
-	// as we could re-add the quickmenu later (it might be useful for custom gametypes).
-	// This should follow an overall improvement of the UI subsystem (namely switching to the rich Chromium UI).
-}
-
-static void PutRespectMenuItems( int highlightEntryNum ) {
-	wsw::StringStream ss;
-
-	auto add = [&]( const char *token, int i ) {
-		ss << va( "btn%i \"`%s` !\" ", i, token );
-		ss << va( "cmd%i \"say %s\" ", i, token );
-	};
-
-	add( "hi", 1 );
-	add( "bb", 2 );
-	add( "glhf", 3 );
-	add( "gg", 4 );
-	add( "plz", 5 );
-	add( "tks", 6 );
-	add( "soz", 7 );
-	add( "n1", 8 );
-	add( "nt", 9 );
-	add( "lol", 0 );
-
-	ss << "highlight" << " \"" << highlightEntryNum << "\" ";
-
-	const wsw::String s( ss.str() );
-	memcpy( cg.quickmenu, s.data(), s.size() + 1 );
-
-	CG_RefreshQuickMenu();
-}
-
 /*
 * CG_SC_MenuOpen
 */
@@ -781,35 +748,33 @@ static void CG_SC_AddAward( void ) {
 	CG_AddAward( Cmd_Argv( 1 ), 2500 );
 }
 
-static void CG_SC_RespectEvent() {
-	const char *arg = Cmd_Argv( 1 );
-	const int numArgs = Cmd_Argc();
-	if( numArgs < 3 ) {
-		return;
-	}
-
-	auto timeout = (unsigned)atoi( Cmd_Argv( 2 ) );
-	Q_clamp( timeout, 1000, 5000 );
-
-	if ( !Q_stricmp( arg, "print" ) ) {
-		// Hack! Use award facilities for displaying this
-		CG_AddAward( Cmd_Argv( 3 ), timeout );
-		return;
-	}
-
-	if( !Q_stricmp( arg, "menu" ) ) {
-		// Don't show the respect menu during playtime unless it's explicitly enabled
-		if( !cg_autoRespectMenu->integer && GS_MatchState() == MATCH_STATE_PLAYTIME ) {
-			return;
+static void CG_SC_ActionRequest() {
+	int argNum = 1;
+	// Expect a timeout
+	if( const auto maybeTimeout = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
+		// Expect a tag
+		if( const wsw::StringView tag( Cmd_Argv( argNum++ ) ); !tag.empty() ) {
+			// Expect a title
+			if( const wsw::StringView title( Cmd_Argv( argNum++ ) ); !title.empty() ) {
+				const wsw::StringView desc( Cmd_Argv( argNum++ ) );
+				// Expect a number of commands
+				if ( const auto maybeNumCommands = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
+					// Read (key, command) pairs
+					const auto maxArgNum = (int)std::min( 9u, *maybeNumCommands ) + argNum;
+					wsw::StaticVector<std::pair<wsw::StringView, int>, 9> actions;
+					const auto *bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
+					while( argNum < maxArgNum ) {
+						const wsw::StringView keyView( Cmd_Argv( argNum++ ) );
+						const auto maybeKey = bindingsSystem->getKeyForName( keyView );
+						if( !maybeKey ) {
+							return;
+						}
+						actions.emplace_back( { wsw::StringView( Cmd_Argv( argNum++ ) ), *maybeKey } );
+					}
+					wsw::ui::UISystem::instance()->touchActionRequest( tag, *maybeTimeout, title, desc, actions );
+				}
+			}
 		}
-		int highlightEntryNum = -1;
-		if( numArgs > 3 ) {
-			highlightEntryNum = atoi( Cmd_Argv( 3 ) );
-		}
-		PutRespectMenuItems( highlightEntryNum );
-		CG_ShowQuickMenu( 1 );
-		cg.quickmenu_timeout_at = cg.time + timeout;
-		return;
 	}
 }
 
@@ -848,8 +813,7 @@ static const svcmd_t cg_svcmds[] =
 	{ "memo", CG_SC_MenuModal },
 	{ "motd", CG_SC_MOTD },
 	{ "aw", CG_SC_AddAward },
-	{ "qm", CG_SC_MenuQuick },
-	{ "rns", CG_SC_RespectEvent },
+	{ "arq", CG_SC_ActionRequest },
 	{ "ply", CG_SC_PlaySound },
 
 	{ NULL }

@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswstdtypes.h"
 
 #include <algorithm>
@@ -33,6 +34,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <new>
 #include <utility>
 #include <thread>
+
+using wsw::operator""_asView;
 
 static SingletonHolder<StatsowFacade> statsHolder;
 
@@ -1452,13 +1455,12 @@ bool RespectHandler::ClientEntry::HandleMessage( const char *message ) {
 		return false;
 	}
 
-	constexpr const char *warning = S_COLOR_YELLOW "Less talk, let's play!";
 	if( G_ISGHOSTING( ent ) ) {
 		// This is primarily for round-based gametypes. Just print a warning.
 		// Fragged players waiting for a next round start
 		// are not considered spectators while really they are.
 		// Other gametypes should follow this behaviour to avoid misunderstanding rules.
-		PrintToClientScreen( 2000, "%s", warning );
+		DisplayCodexViolationWarning();
 		return false;
 	}
 
@@ -1469,15 +1471,14 @@ bool RespectHandler::ClientEntry::HandleMessage( const char *message ) {
 	}
 
 	if( matchState < MATCH_STATE_PLAYTIME ) {
-		// Print a warning only to the player
-		PrintToClientScreen( 2000, "%s", warning );
+		DisplayCodexViolationWarning();
 		return false;
 	}
 
 	// Never warned (at start of the level)
 	if( !warnedAt ) {
 		warnedAt = level.time;
-		PrintToClientScreen( 2000, "%s", warning );
+		DisplayCodexViolationWarning();
 		// Let the message be printed by default facilities
 		return false;
 	}
@@ -1492,7 +1493,7 @@ bool RespectHandler::ClientEntry::HandleMessage( const char *message ) {
 	// Allow speaking occasionally once per 5 minutes
 	if( millisSinceLastWarn > 5 * 60 * 1000 ) {
 		warnedAt = level.time;
-		PrintToClientScreen( 2000, "%s", warning );
+		DisplayCodexViolationWarning();
 		return false;
 	}
 
@@ -1531,24 +1532,6 @@ void RespectHandler::ClientEntry::AnnounceFairPlay() {
 	char cmd[MAX_STRING_CHARS];
 	Q_snprintfz( cmd, sizeof( cmd ), "ply \"%s\"", S_RESPECT_REWARD );
 	trap_GameCmd( ent, cmd );
-}
-
-void RespectHandler::ClientEntry::PrintToClientScreen( unsigned timeout, const char *format, ... ) {
-	char formatBuffer[MAX_STRING_CHARS];
-	char commandBuffer[MAX_STRING_CHARS];
-
-	va_list va;
-	va_start( va, format );
-	Q_vsnprintfz( formatBuffer, sizeof( formatBuffer ), format, va );
-	va_end( va );
-
-	// Make this message appear as an award that has a custom timeout at client-side
-	Q_snprintfz( commandBuffer, sizeof( commandBuffer ), "rns print %d \"%s\"", timeout, formatBuffer );
-	trap_GameCmd( ent, commandBuffer );
-}
-
-void RespectHandler::ClientEntry::ShowRespectMenuAtClient( unsigned timeout, int tokenNum ) {
-	trap_GameCmd( ent, va( "rns menu %d %d", timeout, tokenNum ) );
 }
 
 class RespectToken {
@@ -1689,14 +1672,6 @@ int RespectTokensRegistry::MatchByToken( const char **p ) {
 	return -1;
 }
 
-char RespectHandler::ClientEntry::hintBuffer[64];
-
-const char *RespectHandler::ClientEntry::MakeHintString( int tokenNum ) {
-	const char *tokenName = RespectTokensRegistry::TokenForNum( tokenNum ).Name();
-	Q_snprintfz( hintBuffer, sizeof( hintBuffer ), S_COLOR_CYAN "Say `%s` please!", tokenName );
-	return hintBuffer;
-}
-
 /**
  * Tries to match a sequence like this: {@code ( Whitespace-Char* Color-Token? )* }
  * @param s an address of the supplied string. Gets modified on success.
@@ -1808,8 +1783,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 			saidBefore = true;
 		}
 		if( !hasTakenCountdownHint ) {
-			PrintToClientScreen( 3000, "%s", MakeHintString( startTokenNum ) );
-			ShowRespectMenuAtClient( 4500, startTokenNum );
+			RequestClientRespectAction( startTokenNum );
 			hasTakenCountdownHint = true;
 		}
 		return;
@@ -1849,8 +1823,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 		}
 
 		if( !hasTakenStartHint && !hasViolatedCodex ) {
-			PrintToClientScreen( 3000, "%s", MakeHintString( startTokenNum ) );
-			ShowRespectMenuAtClient( 3500, startTokenNum );
+			RequestClientRespectAction( startTokenNum );
 			hasTakenStartHint = true;
 			return;
 		}
@@ -1861,8 +1834,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 		}
 
 		if( !hasTakenLastStartHint && !hasViolatedCodex ) {
-			PrintToClientScreen( 3000, "%s", MakeHintString( startTokenNum ) );
-			ShowRespectMenuAtClient( 3500, startTokenNum );
+			RequestClientRespectAction( startTokenNum );
 			hasTakenLastStartHint = true;
 			return;
 		}
@@ -1908,9 +1880,43 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 		return;
 	}
 
-	PrintToClientScreen( 3000, "%s", MakeHintString( endTokenNum ) );
-	ShowRespectMenuAtClient( 5000, endTokenNum );
+	RequestClientRespectAction( endTokenNum );
 	hasTakenFinalHint = true;
+}
+
+void RespectHandler::ClientEntry::RequestClientRespectAction( int tokenNum ) {
+	wsw::StringView rawTokenView( RespectTokensRegistry::TokenForNum( tokenNum ).Name() );
+	wsw::StaticString<8> token;
+	token << rawTokenView;
+	for( char &ch: token ) {
+		ch = (char)std::toupper( ch );
+	}
+
+	const wsw::StringView yellow( S_COLOR_YELLOW ), white( S_COLOR_WHITE );
+
+	wsw::StaticString<32> title;
+	title << "Say "_asView << yellow << token << white << ", please!"_asView;
+
+	// Client bindings for a 1st token start at 0-th offset in the numeric keys row.
+	const int keyNum = ( tokenNum + 1 ) % 10;
+
+	wsw::StaticString<32> desc;
+	desc << "Press "_asView << yellow << keyNum << white << " for that"_asView;
+
+	wsw::StaticString<16> key( "%d", keyNum );
+
+	wsw::StaticString<16> command;
+	command << "say "_asView << rawTokenView;
+
+	const std::pair<wsw::StringView, wsw::StringView> actions[1] { { key.asView(), command.asView() } };
+	G_SendActionRequest( ent, "respectAction"_asView, 4000, title.asView(), desc.asView(), actions, actions + 1 );
+}
+
+void RespectHandler::ClientEntry::DisplayCodexViolationWarning() {
+	const wsw::StringView title( "Less talk, let's play!"_asView );
+	const wsw::StringView desc( ""_asView );
+	const std::pair<wsw::StringView, wsw::StringView> actions[0];
+	G_SendActionRequest( ent, "respectWarning"_asView, 3000, title, desc, actions, actions + 0 );
 }
 
 void RespectHandler::ClientEntry::OnClientDisconnected() {
