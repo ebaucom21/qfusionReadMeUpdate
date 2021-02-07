@@ -14,6 +14,8 @@ Item {
 
     signal clicked()
 
+    readonly property var fullHeightTransformMatrix: wsw.makeSkewXMatrix(height, 20.0)
+
     // Acts as a shadow caster.
     // Putting content inside it is discouraged as antialiasing does not seem to be working in this case
     MouseArea {
@@ -22,9 +24,7 @@ Item {
         anchors.fill: parent
         onClicked: root.clicked()
 
-        transform: Matrix4x4 {
-            matrix: wsw.makeSkewXMatrix(mouseArea.height)
-        }
+        transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
 
         layer.enabled: root.enabled
         layer.effect: ElevationEffect { elevation: 16 }
@@ -38,16 +38,20 @@ Item {
         radius: 3
         color: mouseArea.containsMouse ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.25)
 
-        transform: Matrix4x4 {
-            matrix: wsw.makeSkewXMatrix(rectangle.height)
-        }
+        transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
+    }
 
-        Label {
-            anchors.centerIn: parent
-            text: root.text
-            font.pointSize: 17
-            font.bold: true
-            font.capitalization: Font.AllUppercase
+    Label {
+        id: label
+        anchors.centerIn: parent
+        text: root.text
+        font.pointSize: 15
+        font.weight: Font.Bold
+        font.letterSpacing: 1
+        font.capitalization: Font.AllUppercase
+
+        transform: Matrix4x4 {
+            matrix: wsw.makeSkewXMatrix(label.height, 16.0)
         }
     }
 }

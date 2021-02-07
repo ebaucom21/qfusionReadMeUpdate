@@ -149,7 +149,7 @@ public:
 
 	Q_INVOKABLE QVariant colorFromRgbString( const QString &string ) const;
 
-	Q_INVOKABLE QMatrix4x4 makeSkewXMatrix( qreal height ) const;
+	Q_INVOKABLE QMatrix4x4 makeSkewXMatrix( qreal height, qreal degrees ) const;
 
 	Q_INVOKABLE void startServerListUpdates();
 	Q_INVOKABLE void stopServerListUpdates();
@@ -1324,20 +1324,19 @@ auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
 	return QVariant();
 }
 
-static constexpr const float kShearAngle = DEG2RAD( 20.0f );
-static const float kSin = -std::sin( kShearAngle );
-static const float kTan = std::tan( kShearAngle );
-
-static const QMatrix4x4 kShearMatrix {
-	+1.0, kSin, +0.0, +0.0,
-	+0.0, +1.0, +0.0, +0.0,
-	+0.0, +0.0, +1.0, +0.0,
-	+0.0, +0.0, +0.0, +1.0
-};
-
-auto QtUISystem::makeSkewXMatrix( qreal height ) const -> QMatrix4x4 {
-	QMatrix4x4 result( kShearMatrix );
-	result.translate( kTan * (float)height, 0.0f );
+auto QtUISystem::makeSkewXMatrix( qreal height, qreal degrees ) const -> QMatrix4x4 {
+	assert( degrees >= 0.0 && degrees + 0.1 < 90.0 );
+	const float angle = (float)DEG2RAD( degrees );
+	const float sin = std::sin( angle );
+	const float cos = std::cos( angle );
+	const float tan = sin * Q_Rcp( cos );
+	QMatrix4x4 result {
+		+1.0, -sin, +0.0, +0.0,
+		+0.0, +1.0, +0.0, +0.0,
+		+0.0, +0.0, +1.0, +0.0,
+		+0.0, +0.0, +0.0, +1.0
+	};
+	result.translate( tan * (float)height, 0.0f );
 	return result;
 }
 

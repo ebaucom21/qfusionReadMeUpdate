@@ -22,11 +22,7 @@ Item {
 		}
 	}
 
-	readonly property var transformMatrix: Qt.matrix4x4(
-		+1.0, -0.3, +0.0, +0.0,
-		+0.0, +1.0, +0.0, +0.0,
-		+0.0, +0.0, +1.0, +0.0,
-		+0.0, +0.0, +0.0, +1.0)
+	readonly property var transformMatrix: wsw.makeSkewXMatrix(root.height, 20.0)
 
 	property color foregroundColor:
 		Qt.lighter(Material.backgroundColor, 1.5)
@@ -116,7 +112,8 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
-			font.pointSize: 17
+			font.pointSize: 15
+			font.letterSpacing: 1
 			text: root.text
 			font.weight: Font.Bold
 			font.capitalization: Font.AllUppercase
