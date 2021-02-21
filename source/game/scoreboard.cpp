@@ -280,6 +280,10 @@ void Scoreboard::setPlayerStatusGlyph( const gclient_s *client, unsigned codePoi
 void Scoreboard::endUpdating() {
 	expectState( Update );
 
+	// Set team score automatically for now
+	m_replicatedData.alphaScore = ::teamlist[TEAM_ALPHA].stats.score;
+	m_replicatedData.betaScore = ::teamlist[TEAM_BETA].stats.score;
+
 	static_assert( TEAM_SPECTATOR >= 0 && TEAM_SPECTATOR < 4 );
 	static_assert( TEAM_PLAYERS >= 0 && TEAM_PLAYERS < 4 );
 	static_assert( TEAM_ALPHA >= 0 && TEAM_ALPHA < 4 );
