@@ -217,6 +217,8 @@ void KeysAndBindingsModel::reload() {
 	reloadKeyBindings( m_keyboardArrowPadRowModel, "keyboardArrowPadRow"_asView );
 	reloadKeyBindings( m_keyboardNumPadRowModel, "keyboardNumPadRow"_asView );
 
+	reloadMouseKeyBindings();
+
 	reloadColumnCommandBindings( m_commandsMovementColumnModel, "commandsMovementColumnChanged"_asView );
 	reloadColumnCommandBindings( m_commandsWeaponsColumnModel[0], "commandsWeaponsColumn1Changed"_asView );
 	reloadColumnCommandBindings( m_commandsWeaponsColumnModel[1], "commandsWeaponsColumn2Changed"_asView );
@@ -301,7 +303,6 @@ void KeysAndBindingsModel::reloadKeyBindings( QJsonArray *rowsBegin, QJsonArray 
 	}
 }
 
-
 bool KeysAndBindingsModel::reloadRowKeyBindings( QJsonArray &row ) {
 	bool wasRowModified = false;
 	for( QJsonValueRef ref: row ) {
@@ -347,6 +348,53 @@ bool KeysAndBindingsModel::reloadRowKeyEntry( QJsonValueRef ref ) {
 	}
 
 	return false;
+}
+
+void KeysAndBindingsModel::reloadMouseKeyBindings() {
+	static_assert( K_MWHEELUP == K_MOUSE8 + 1 && K_MWHEELDOWN == K_MWHEELUP + 1 );
+
+	for( int key = K_MOUSE1; key <= K_MWHEELDOWN; ++key ) {
+		if( reloadMouseKeyBinding( key ) ) {
+			Q_EMIT mouseKeyBindingChanged( key );
+		}
+	}
+}
+
+bool KeysAndBindingsModel::reloadMouseKeyBinding( int quakeKey ) {
+	assert( (unsigned)( quakeKey - K_MOUSE1 ) < m_mouseKeyBindingGroups.size() );
+
+	auto &lastBinding = m_lastKeyBindings[quakeKey];
+	if( const auto maybeCurrBinding = wsw::cl::KeyBindingsSystem::instance()->getBindingForKey( quakeKey ) ) {
+		const wsw::StringView currBinding( *maybeCurrBinding );
+		const wsw::StringView lastBindingView( lastBinding.data(), lastBinding.size(), wsw::StringView::ZeroTerminated );
+		const auto maybeCommand = getCommandNum( currBinding );
+		if( maybeCommand ) {
+			m_boundKeysForCommand[*maybeCommand].push_back( quakeKey );
+		}
+		if( lastBindingView != currBinding ) {
+			lastBinding.assign( currBinding.data(), currBinding.size() );
+			if( maybeCommand ) {
+				m_mouseKeyBindingGroups[quakeKey - K_MOUSE1] = m_commandBindingGroups[*maybeCommand];
+			} else {
+				m_mouseKeyBindingGroups[quakeKey - K_MOUSE1] = UnknownGroup;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	if( !lastBinding.empty() ) {
+		lastBinding.clear();
+		m_mouseKeyBindingGroups[quakeKey - K_MOUSE1] = std::nullopt;
+		return true;
+	}
+
+	return false;
+}
+
+auto KeysAndBindingsModel::getMouseKeyBindingGroup( int quakeKey ) -> int {
+	assert( (unsigned)( quakeKey - K_MOUSE1 ) <= m_mouseKeyBindingGroups.size() );
+	return m_mouseKeyBindingGroups[quakeKey - K_MOUSE1].value_or( (BindingGroup)0 );
 }
 
 void KeysAndBindingsModel::reloadColumnCommandBindings( QJsonArray &column, const wsw::StringView &changedSignal ) {
@@ -469,6 +517,15 @@ auto KeysAndBindingsModel::getCommandNameToDisplay( int commandNum ) const -> QB
 	const wsw::StringView view( m_commandsDescForGlobalNums[commandNum] );
 	assert( !view.empty() );
 	return QByteArray( view.data(), view.size() );
+}
+
+auto KeysAndBindingsModel::getMouseWheelKeyCode( bool scrollUp ) const -> int {
+	return scrollUp ? K_MWHEELUP : K_MWHEELDOWN;
+}
+
+auto KeysAndBindingsModel::getMouseButtonKeyCode( int buttonNum ) const -> int {
+	assert( (unsigned)( buttonNum - 1 ) < 8 );
+	return K_MOUSE1 + ( buttonNum - 1 );
 }
 
 struct CommandsColumnEntry {

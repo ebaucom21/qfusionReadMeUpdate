@@ -54,11 +54,19 @@ public:
 	Q_INVOKABLE QByteArray getKeyNameToDisplay( int quakeKey ) const;
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getCommandNameToDisplay( int commandNum ) const;
+
+	[[nodiscard]]
+	Q_INVOKABLE int getMouseWheelKeyCode( bool scrollUp ) const;
+	[[nodiscard]]
+	Q_INVOKABLE int getMouseButtonKeyCode( int buttonNum ) const;
+
+	Q_SIGNAL void mouseKeyBindingChanged( int changedQuakeKey );
+	[[nodiscard]]
+	Q_INVOKABLE int getMouseKeyBindingGroup( int quakeKey );
 private:
 	QJsonArray m_keyboardMainPadRowModel[6];
 	QJsonArray m_keyboardArrowPadRowModel[5];
 	QJsonArray m_keyboardNumPadRowModel[5];
-	QJsonArray m_mouseKeysModel;
 
 	QJsonArray m_commandsMovementColumnModel;
 	QJsonArray m_commandsActionsColumnModel;
@@ -85,8 +93,6 @@ private:
 	Q_SIGNAL void keyboardNumPadRow3Changed();
 	Q_SIGNAL void keyboardNumPadRow4Changed();
 	Q_SIGNAL void keyboardNumPadRow5Changed();
-
-	Q_SIGNAL void mouseKeysModelChanged();
 
 	Q_SIGNAL void commandsMovementColumnChanged();
 	Q_SIGNAL void commandsActionsColumnChanged();
@@ -174,6 +180,10 @@ private:
 	[[nodiscard]]
 	bool reloadRowKeyEntry( QJsonValueRef ref );
 
+	void reloadMouseKeyBindings();
+	[[nodiscard]]
+	bool reloadMouseKeyBinding( int quakeKey );
+
 	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
@@ -206,6 +216,8 @@ private:
 	KeysAndBindingsModel();
 private:
 	void checkUpdates();
+
+	std::array<std::optional<BindingGroup>, 10> m_mouseKeyBindingGroups;
 
 	static constexpr auto kMaxCommands = 48;
 	std::array<BindingGroup, kMaxCommands> m_commandBindingGroups;

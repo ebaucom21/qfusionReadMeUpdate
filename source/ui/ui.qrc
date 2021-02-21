@@ -41,6 +41,8 @@
         <file>LocalGameDetailArrangement.qml</file>
         <file>LocalGameListDelegate.qml</file>
         <file>MainMenu.qml</file>
+        <file>MouseButtonShape.qml</file>
+        <file>MouseKey.qml</file>
         <file>MouseKeysPane.qml</file>
         <file>MouseSettings.qml</file>
         <file>NativelyDrawnImage.qml</file>
