@@ -1,7 +1,6 @@
 #include "snd_leaf_props_cache.h"
 #include "snd_effect_sampler.h"
 #include "snd_computation_host.h"
-#include "snd_presets_registry.h"
 #include "../qcommon/glob.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstringview.h"
@@ -28,9 +27,8 @@ struct EfxPresetEntry;
 
 class LeafPropsReader final: public CachedComputationReader, public LeafPropsIOHelper {
 public:
-	using PresetHandle = const EfxPresetEntry *;
 private:
-	bool ParseLine( char *line, unsigned lineLength, LeafProps *props, PresetHandle *presetHandle );
+	bool ParseLine( char *line, unsigned lineLength, LeafProps *props );
 public:
 	explicit LeafPropsReader( const LeafPropsCache *parent_, int fileFlags )
 		: CachedComputationReader( parent_, fileFlags, true ) {}
@@ -41,7 +39,7 @@ public:
 		ERROR
 	};
 
-	Status ReadNextProps( LeafProps *props, PresetHandle *presetRef );
+	Status ReadNextProps( LeafProps *props );
 };
 
 class LeafPropsWriter final: public CachedComputationWriter, public LeafPropsIOHelper {
@@ -52,7 +50,7 @@ public:
 	bool WriteProps( const LeafProps &props );
 };
 
-LeafPropsReader::Status LeafPropsReader::ReadNextProps( LeafProps *props, PresetHandle *presetHandle ) {
+LeafPropsReader::Status LeafPropsReader::ReadNextProps( LeafProps *props ) {
 	if( fsResult < 0 ) {
 		return ERROR;
 	}
@@ -73,7 +71,7 @@ LeafPropsReader::Status LeafPropsReader::ReadNextProps( LeafProps *props, Preset
 		return ERROR;
 	}
 
-	if( !ParseLine( dataPtr, (uint32_t)lineLength, props, presetHandle ) ) {
+	if( !ParseLine( dataPtr, (uint32_t)lineLength, props ) ) {
 		dataPtr = nullptr;
 		return ERROR;
 	}
@@ -90,7 +88,7 @@ LeafPropsReader::Status LeafPropsReader::ReadNextProps( LeafProps *props, Preset
 	return OK;
 }
 
-bool LeafPropsReader::ParseLine( char *line, unsigned lineLength, LeafProps *props, PresetHandle *presetHandle ) {
+bool LeafPropsReader::ParseLine( char *line, unsigned lineLength, LeafProps *props ) {
 	char *linePtr = line;
 	char *endPtr = nullptr;
 
@@ -123,8 +121,6 @@ bool LeafPropsReader::ParseLine( char *line, unsigned lineLength, LeafProps *pro
 	// Terminate after the character we have stopped at
 	*++endPtr = '\0';
 
-	// Save for recovery in case of leaf props scanning failure
-	const char *maybePresetName = linePtr;
 	int lastPartNum = 0;
 	float parts[4];
 	for(; lastPartNum < 4; ++lastPartNum ) {
@@ -151,15 +147,6 @@ bool LeafPropsReader::ParseLine( char *line, unsigned lineLength, LeafProps *pro
 		}
 		parts[lastPartNum] = (float)v;
 		linePtr = endPtr + 1;
-	}
-
-	if( !lastPartNum ) {
-		if( ( *presetHandle = EfxPresetsRegistry::Instance()->FindByName( maybePresetName ) ) ) {
-			return true;
-		}
-		// A verbose reporting of an illegal preset name is important as it is typed by a designer manually
-		Com_Printf( S_COLOR_YELLOW "The token `%s` for leaf %d is not a valid preset name\n", maybePresetName, num );
-		return false;
 	}
 
 	// There should be 4 parts
@@ -217,12 +204,8 @@ void LeafPropsCache::ResetExistingState() {
 	if( leafProps ) {
 		Q_free( leafProps );
 	}
-	if( leafPresets ) {
-		Q_free( leafPresets );
-	}
 
 	leafProps = (LeafProps *)Q_malloc( sizeof( LeafProps ) * NumLeafs() );
-	leafPresets = (PresetHandle *)Q_malloc( sizeof( PresetHandle ) * NumLeafs() );
 }
 
 bool LeafPropsCache::TryReadFromFile( int fsFlags ) {
@@ -234,14 +217,12 @@ bool LeafPropsCache::TryReadFromFile( LeafPropsReader *reader ) {
 	int numReadProps = 0;
 	for(;; ) {
 		LeafProps props;
-		PresetHandle presetHandle = nullptr;
-		switch( reader->ReadNextProps( &props, &presetHandle ) ) {
+		switch( reader->ReadNextProps( &props ) ) {
 			case LeafPropsReader::OK:
 				if( numReadProps + 1 > NumLeafs() ) {
 					return false;
 				}
 				this->leafProps[numReadProps] = props;
-				this->leafPresets[numReadProps] = presetHandle;
 				numReadProps++;
 				break;
 			case LeafPropsReader::DONE:

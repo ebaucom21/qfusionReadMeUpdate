@@ -1,7 +1,6 @@
 #include "snd_effect_sampler.h"
 #include "snd_leaf_props_cache.h"
 #include "snd_effects_allocator.h"
-#include "snd_presets_registry.h"
 #include "snd_propagation.h"
 
 #include "../gameshared/q_collision.h"
@@ -266,16 +265,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	assert( src->envUpdateState.leafNum >= 0 );
 
 	const auto *const leafPropsCache = LeafPropsCache::Instance();
-	// Try checking whether there is a preset defined for the leaf.
-	// Few notes:
-	// 1) Presets are not utilized as-is. Some fields like reference frequencies are unused.
-	// 2) Even if we use a preset we still need a secondary emission
-	// for an actual reflections pan, and thus a primary emission too.
-	if( const auto *presetHandle = leafPropsCache->GetPresetForLeaf( src->envUpdateState.leafNum ) ) {
-		effect->ReusePreset( presetHandle );
-		return;
-	}
-
 	const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
 
 	const float roomSizeFactor = leafProps.getRoomSizeFactor();
