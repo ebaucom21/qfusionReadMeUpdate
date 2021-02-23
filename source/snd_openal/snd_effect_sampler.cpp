@@ -351,6 +351,8 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 		// [2500, 10000]
 		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 7500.0f;
 	}
+
+	effect->gainHf = ( 0.4f + 0.4f * metallnessFactor );
 }
 
 void ReverbEffectSampler::SetMinimalReverbProps() {
@@ -391,17 +393,8 @@ void ReverbEffectSampler::EmitSecondaryRays() {
 		float frac = numPassedSecondaryRays / (float)numPrimaryHits;
 		// The secondary rays obstruction is complement to the `frac`
 		effect->secondaryRaysObstruction = 1.0f - frac;
-		const auto *const leafPropsCache = LeafPropsCache::Instance();
-		// Check whether there were a preset defined for the leaf.
-		// In this case do not modify the HF gain which has been already set from a preset.
-		if( !leafPropsCache->GetPresetForLeaf( src->envUpdateState.leafNum ) ) {
-			// A absence of a HF attenuation sounds poor, metallic/reflective environments should be the only exception.
-			const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
-			effect->gainHf = ( 0.4f + 0.5f * leafProps.getMetallnessFactor() ) * frac;
-		}
 	} else {
 		// Set minimal feasible values
 		effect->secondaryRaysObstruction = 1.0f;
-		effect->gainHf = 0.0f;
 	}
 }
