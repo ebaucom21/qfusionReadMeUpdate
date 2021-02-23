@@ -176,6 +176,9 @@ typedef struct {
 #define CS_SCOREBOARD_ASSETS 16
 #define CS_SCOREBOARD_SCHEMA 17
 
+#define CS_ACTIVE_CALLVOTE  18
+#define CS_CALLVOTE_GROUPS  19
+
 #define CS_TEAM_SPECTATOR_NAME 21
 #define CS_TEAM_PLAYERS_NAME 22
 #define CS_TEAM_ALPHA_NAME  23
@@ -185,9 +188,7 @@ typedef struct {
 #define CS_MATCHSCORE       26
 #define CS_MATCHUUID        27
 
-#define CS_ACTIVE_CALLVOTE  28
-
-#define CS_GAMETYPE_OPTIONS_TITLE 26
+#define CS_GAMETYPE_OPTIONS_TITLE 29
 
 #define CS_WORLDMODEL       30
 #define CS_MAPCHECKSUM      31      // for catching cheater maps

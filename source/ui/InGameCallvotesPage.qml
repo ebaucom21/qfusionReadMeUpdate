@@ -14,7 +14,6 @@ Item {
         anchors.topMargin: 8
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        initialItem: voteSelectionComponent
     }
 
     property int selectedVoteIndex
@@ -28,6 +27,11 @@ Item {
 
     property var activeCallvotesModel: wsw.isOperator ? operatorCallvotesModel : regularCallvotesModel
 
+    onActiveCallvotesModelChanged: {
+        stackView.clear()
+        stackView.replace(groupSelectionComponent)
+    }
+
     Connections {
         target: activeCallvotesModel
         onCurrentChanged: {
@@ -38,28 +42,60 @@ Item {
     }
 
     Component {
-        id: voteSelectionComponent
-        ListView {
-            id: list
+        id: groupSelectionComponent
 
-            model: activeCallvotesModel
-            spacing: 12
-
+        Item {
+            id: groupsPage
             readonly property int stage: 1
 
-            delegate: SelectableLabel {
-                text: name
-                width: list.width
-                horizontalAlignment: Qt.AlignHCenter
-                onClicked: {
-                    selectedVoteIndex = index
-                    selectedVoteName = name
-                    selectedVoteDesc = desc
-                    selectedVoteFlags = flags
-                    selectedVoteArgsHandle = argsHandle
-                    selectedVoteArgsKind = argsKind
-                    selectedVoteCurrent = current
-                    stackView.replace(argsSelectionComponent)
+            ListView {
+                anchors.centerIn: parent
+                width: groupsPage.width
+                height: Math.min(groupsPage.height, contentHeight)
+                model: activeCallvotesModel ? activeCallvotesModel.getGroupsModel() : undefined
+                spacing: 16
+
+                delegate: SelectableLabel {
+                    text: name
+                    width: groupsPage.width
+                    horizontalAlignment: Qt.AlignHCenter
+                    onClicked: {
+                        activeCallvotesModel.setGroupFilter(group)
+                        stackView.replace(voteSelectionComponent)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: voteSelectionComponent
+
+        Item {
+            id: votesPage
+            readonly property int stage: 2
+
+            ListView {
+                anchors.centerIn: parent
+                width: votesPage.width
+                height: Math.min(votesPage.height, contentHeight)
+                model: activeCallvotesModel
+                spacing: 12
+
+                delegate: SelectableLabel {
+                    text: name
+                    width: votesPage.width
+                    horizontalAlignment: Qt.AlignHCenter
+                    onClicked: {
+                        selectedVoteIndex = index
+                        selectedVoteName = name
+                        selectedVoteDesc = desc
+                        selectedVoteFlags = flags
+                        selectedVoteArgsHandle = argsHandle
+                        selectedVoteArgsKind = argsKind
+                        selectedVoteCurrent = current
+                        stackView.replace(argsSelectionComponent)
+                    }
                 }
             }
         }
@@ -71,7 +107,7 @@ Item {
         ColumnLayout {
             spacing: 20
 
-            readonly property int stage: 2
+            readonly property int stage: 3
 
             Component.onCompleted: {
                 if (selectedVoteArgsKind === CallvotesModel.Boolean) {
@@ -250,8 +286,13 @@ Item {
 
     function handleKeyEvent(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
-            if (stackView.currentItem.stage === 2) {
-                stackView.replace(voteSelectionComponent)
+            const stage = stackView.currentItem.stage
+            if (stage == 2 || stage == 3) {
+                if (stage == 2) {
+                    stackView.replace(groupSelectionComponent)
+                } else {
+                    stackView.replace(voteSelectionComponent)
+                }
                 event.accepted = true
                 return true
             }

@@ -297,7 +297,7 @@ void Info_CleanValue( const char *in, char *out, size_t outsize );
 #define MAX_SKINFILES               256
 #define MAX_ITEMS                   64          // 16x4
 #define MAX_CALLVOTES               32
-#define MAX_CALLVOTEINFOS           ( MAX_CALLVOTES * 4 )
+#define MAX_CALLVOTEINFOS           ( MAX_CALLVOTES * 5 )
 #define MAX_GAMETYPE_OPTIONS        16
 #define MAX_GENERAL                 128         // general config strings
 #define MAX_MMPLAYERINFOS           128

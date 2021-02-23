@@ -64,10 +64,13 @@ protected:
 
 	[[nodiscard]]
 	static auto callvoteNumToIndex( unsigned num, unsigned field ) -> unsigned {
-		if( num >= MAX_CALLVOTEINFOS / 4 || CS_CALLVOTEINFOS + num * 4 + field >= kMaxStrings ) {
+		if( num >= MAX_CALLVOTEINFOS / kNumCallvoteFields ) {
 			throw std::out_of_range( "The num is out of range" );
 		}
-		return CS_CALLVOTEINFOS + num * 4 + field;
+		if( CS_CALLVOTEINFOS + num * kNumCallvoteFields + field >= kMaxStrings ) {
+			throw std::out_of_range( "The num is out of range" );
+		}
+		return CS_CALLVOTEINFOS + num * kNumCallvoteFields + field;
 	}
 public:
 	ConfigStringStorage();
@@ -121,6 +124,8 @@ public:
 	DEFINE_CONFIGSTRING_ACCESSORS( CS_WORLDMODEL, WorldModel )
 	DEFINE_CONFIGSTRING_ACCESSORS( CS_MAPCHECKSUM, MapCheckSum )
 
+	DEFINE_CONFIGSTRING_ACCESSORS( CS_CALLVOTE_GROUPS, CallvoteGroups )
+
 #undef DEFINE_CONFIGSTRING_ACCESSORS
 
 #define DEFINE_CONFIGSTRING_GROUP_ACCESSORS( startIndex, maxGroupStrings, name )                   \
@@ -149,26 +154,35 @@ public:
 
 #undef DEFINE_CONFIGSTRING_GROUP_ACCESSORS
 
-	static constexpr const unsigned kCallvoteFieldName = 0;
-	static constexpr const unsigned kCallvoteFieldDesc = 1;
-	static constexpr const unsigned kCallvoteFieldArgs = 2;
-	static constexpr const unsigned kCallvoteFieldStatus = 3;
+	enum class CallvoteFields {
+		Name,
+		Desc,
+		Group,
+		Args,
+		Status
+	};
+
+	static constexpr unsigned kNumCallvoteFields = 5;
 
 	[[nodiscard]]
 	auto getCallvoteName( unsigned num ) const -> std::optional<wsw::StringView> {
-		return getNoCheck( callvoteNumToIndex( num, kCallvoteFieldName ) );
+		return getNoCheck( callvoteNumToIndex( num, (unsigned)CallvoteFields::Name ) );
 	}
 	[[nodiscard]]
 	auto getCallvoteDesc( unsigned num ) const -> std::optional<wsw::StringView> {
-		return getNoCheck( callvoteNumToIndex( num, kCallvoteFieldDesc ) );
+		return getNoCheck( callvoteNumToIndex( num, (unsigned)CallvoteFields::Desc ) );
+	}
+	[[nodiscard]]
+	auto getCallvoteGroup( unsigned num ) const -> std::optional<wsw::StringView> {
+		return getNoCheck( callvoteNumToIndex( num, (unsigned)CallvoteFields::Group ) );
 	}
 	[[nodiscard]]
 	auto getCallvoteArgs( unsigned num ) const -> std::optional<wsw::StringView> {
-		return getNoCheck( callvoteNumToIndex( num, kCallvoteFieldArgs ) );
+		return getNoCheck( callvoteNumToIndex( num, (unsigned)CallvoteFields::Args ) );
 	}
 	[[nodiscard]]
 	auto getCallvoteStatus( unsigned num ) const -> std::optional<wsw::StringView> {
-		return getNoCheck( callvoteNumToIndex( num, kCallvoteFieldStatus ) );
+		return getNoCheck( callvoteNumToIndex( num, (unsigned)CallvoteFields::Status ) );
 	}
 };
 

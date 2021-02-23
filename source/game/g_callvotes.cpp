@@ -69,6 +69,7 @@ typedef struct callvotetype_s
 	void ( *describeClientArgs )( int configStringIndex );
 	char *argument_format;
 	char *help;
+	const char *group;
 	int registrationNum;
 	bool isVotingEnabled;
 	bool isOpcallEnabled;
@@ -1793,7 +1794,9 @@ void G_CallVotes_UpdateCurrentStatus() {
 			status << ' ' << callvote->lastCurrent;
 		}
 
-		int index = CS_CALLVOTEINFOS + callvote->registrationNum * 4 + wsw::ConfigStringStorage::kCallvoteFieldStatus;
+		using Storage = wsw::ConfigStringStorage;
+		int index = CS_CALLVOTEINFOS;
+		index += callvote->registrationNum * Storage::kNumCallvoteFields + (int)Storage::CallvoteFields::Status;
 		trap_ConfigString( index, status.data() );
 	}
 }
@@ -2133,6 +2136,8 @@ void G_RegisterGametypeScriptCallvote( const char *name, const char *usage, cons
 	vote->extraHelp = NULL;
 	vote->argument_format = usage ? Q_strdup( usage ) : NULL;
 	vote->help = help ? Q_strdup( va( "%s", help ) ) : NULL;
+	// TODO: Make the group scriptable
+	vote->group = "other";
 }
 
 /*
@@ -2158,6 +2163,7 @@ void G_CallVotes_Init( void ) {
 	callvote->describeClientArgs = G_VoteMapDescribeClientArgs;
 	callvote->argument_format = Q_strdup( "<name>" );
 	callvote->help = Q_strdup( "Changes map" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "restart" );
 	callvote->expectedargs = 0;
@@ -2167,6 +2173,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Restarts current map" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "nextmap" );
 	callvote->expectedargs = 0;
@@ -2176,6 +2183,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Jumps to the next map" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "scorelimit" );
 	callvote->expectedargs = 1;
@@ -2186,6 +2194,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<number>" );
 	callvote->describeClientArgs = G_DescribeNumberArg;
 	callvote->help = Q_strdup( "Sets the number of frags or caps needed to win the match\nSpecify 0 to disable" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "timelimit" );
 	callvote->expectedargs = 1;
@@ -2196,6 +2205,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<minutes>" );
 	callvote->describeClientArgs = G_DescribeMinutesArg;
 	callvote->help = Q_strdup( "Sets number of minutes after which the match ends\nSpecify 0 to disable" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "gametype" );
 	callvote->expectedargs = 1;
@@ -2206,6 +2216,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<name>" );
 	callvote->describeClientArgs = G_VoteGametypeDescribeClientArgs;
 	callvote->help = Q_strdup( "Changes the gametype" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "warmup_timelimit" );
 	callvote->expectedargs = 1;
@@ -2216,6 +2227,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<minutes>" );
 	callvote->describeClientArgs = G_DescribeMinutesArg;
 	callvote->help = Q_strdup( "Sets the number of minutes after which the warmup ends\nSpecify 0 to disable" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "extended_time" );
 	callvote->expectedargs = 1;
@@ -2226,6 +2238,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<minutes>" );
 	callvote->describeClientArgs = G_DescribeMinutesArg;
 	callvote->help = Q_strdup( "Sets the length of the overtime\nSpecify 0 to enable sudden death mode" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "maxteamplayers" );
 	callvote->expectedargs = 1;
@@ -2236,6 +2249,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<number>" );
 	callvote->describeClientArgs = G_DescribeNumberArg;
 	callvote->help = Q_strdup( "Sets the maximum number of players in one team" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "lock" );
 	callvote->expectedargs = 0;
@@ -2245,6 +2259,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Locks teams to disallow players joining in mid-game" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "unlock" );
 	callvote->expectedargs = 0;
@@ -2254,6 +2269,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Unlocks teams to allow players joining in mid-game" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "allready" );
 	callvote->expectedargs = 0;
@@ -2263,6 +2279,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Sets all players as ready so the match can start" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "remove" );
 	callvote->expectedargs = 1;
@@ -2273,6 +2290,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<player>" );
 	callvote->describeClientArgs = G_DescribePlayerArg;
 	callvote->help = Q_strdup( "Forces player back to spectator mode" );
+	callvote->group = "players";
 
 	callvote = G_RegisterCallvote( "kick" );
 	callvote->expectedargs = 1;
@@ -2283,6 +2301,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<player>" );
 	callvote->describeClientArgs = G_DescribePlayerArg;
 	callvote->help = Q_strdup( "Removes player from the server" );
+	callvote->group = "players";
 
 	callvote = G_RegisterCallvote( "kickban" );
 	callvote->expectedargs = 1;
@@ -2293,6 +2312,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<player>" );
 	callvote->describeClientArgs = G_DescribePlayerArg;
 	callvote->help = Q_strdup( "Removes player from the server and bans his IP-address for 15 minutes" );
+	callvote->group = "players";
 
 	callvote = G_RegisterCallvote( "mute" );
 	callvote->expectedargs = 1;
@@ -2303,6 +2323,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<player>" );
 	callvote->describeClientArgs = G_DescribePlayerArg;
 	callvote->help = Q_strdup( "Disallows chat messages from the muted player" );
+	callvote->group = "players";
 
 	callvote = G_RegisterCallvote( "unmute" );
 	callvote->expectedargs = 1;
@@ -2313,6 +2334,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<player>" );
 	callvote->describeClientArgs = G_DescribePlayerArg;
 	callvote->help = Q_strdup( "Reallows chat messages from the unmuted player" );
+	callvote->group = "players";
 
 	callvote = G_RegisterCallvote( "numbots" );
 	callvote->expectedargs = 1;
@@ -2323,6 +2345,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<number>" );
 	callvote->describeClientArgs = G_DescribeNumberArg;
 	callvote->help = Q_strdup( "Sets the number of bots to play on the server" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "allow_teamdamage" );
 	callvote->expectedargs = 1;
@@ -2333,6 +2356,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->help = Q_strdup( "Toggles whether shooting teammates will do damage to them" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "instajump" );
 	callvote->expectedargs = 1;
@@ -2343,6 +2367,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->help = Q_strdup( "Toggles whether instagun can be used for weapon jumping" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "instashield" );
 	callvote->expectedargs = 1;
@@ -2353,6 +2378,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->help = Q_strdup( "Toggles the availability of instashield in instagib" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "allow_falldamage" );
 	callvote->expectedargs = 1;
@@ -2363,6 +2389,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->help = Q_strdup( "Toggles whether falling long distances deals damage" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "allow_selfdamage" );
 	callvote->expectedargs = 1;
@@ -2373,6 +2400,7 @@ void G_CallVotes_Init( void ) {
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->help = Q_strdup( "Toggles whether weapon splashes can damage self" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "timeout" );
 	callvote->expectedargs = 0;
@@ -2382,6 +2410,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Pauses the game" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "timein" );
 	callvote->expectedargs = 0;
@@ -2391,6 +2420,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Resumes the game if in timeout" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "allow_uneven" );
 	callvote->expectedargs = 1;
@@ -2401,6 +2431,7 @@ void G_CallVotes_Init( void ) {
 	callvote->describeClientArgs = G_DescribeBooleanArg;
 	callvote->argument_format = Q_strdup( "<1 or 0>" );
 	callvote->help = Q_strdup( "Allows uneven number of players in teams" );
+	callvote->group = "rules";
 
 	callvote = G_RegisterCallvote( "shuffle" );
 	callvote->expectedargs = 0;
@@ -2410,6 +2441,7 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Shuffles teams" );
+	callvote->group = "actions";
 
 	callvote = G_RegisterCallvote( "rebalance" );
 	callvote->expectedargs = 0;
@@ -2419,6 +2451,10 @@ void G_CallVotes_Init( void ) {
 	callvote->extraHelp = NULL;
 	callvote->argument_format = NULL;
 	callvote->help = Q_strdup( "Rebalances teams" );
+	callvote->group = "actions";
+
+	trap_ConfigString( CS_CALLVOTE_GROUPS, "all, All, actions, Gameplay actions, rules, Gameplay rules, "
+										   "players, Player actions, other, Other" );
 
 	// wsw : pb : server admin can now disable a specific callvote command (g_disable_vote_<callvote name>)
 	for( callvote = callvotesHeadNode; callvote != NULL; callvote = callvote->next ) {
@@ -2430,18 +2466,19 @@ void G_CallVotes_Init( void ) {
 			continue;
 		}
 
-		const auto configStringIndex = CS_CALLVOTEINFOS + callvote->registrationNum * 4;
+		const auto configStringIndex = CS_CALLVOTEINFOS + callvote->registrationNum * 5;
 
 		using Storage = wsw::ConfigStringStorage;
 		assert( configStringIndex < CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS );
 
-		trap_ConfigString( configStringIndex + Storage::kCallvoteFieldName, callvote->name );
-		trap_ConfigString( configStringIndex + Storage::kCallvoteFieldDesc, callvote->help );
+		trap_ConfigString( configStringIndex + (unsigned)Storage::CallvoteFields::Name, callvote->name );
+		trap_ConfigString( configStringIndex + (unsigned)Storage::CallvoteFields::Desc, callvote->help );
+		trap_ConfigString( configStringIndex + (unsigned)Storage::CallvoteFields::Group, callvote->group );
 
 		if( auto method = callvote->describeClientArgs ) {
-			method( configStringIndex + Storage::kCallvoteFieldArgs );
+			method( configStringIndex + (unsigned)Storage::CallvoteFields::Args );
 		} else {
-			trap_ConfigString( configStringIndex + Storage::kCallvoteFieldArgs, "" );
+			trap_ConfigString( configStringIndex + (unsigned)Storage::CallvoteFields::Args, "" );
 		}
 
 		wsw::StaticString<MAX_STRING_CHARS> status;
@@ -2456,7 +2493,7 @@ void G_CallVotes_Init( void ) {
 			status << ' ' << wsw::StringView( method() );
 		}
 
-		trap_ConfigString( configStringIndex + Storage::kCallvoteFieldStatus, status.data() );
+		trap_ConfigString( configStringIndex + (unsigned)Storage::CallvoteFields::Status, status.data() );
 
 		assert( configStringIndex <= CS_CALLVOTEINFOS + MAX_CALLVOTEINFOS );
 	}

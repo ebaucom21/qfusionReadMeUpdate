@@ -547,7 +547,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	const QString reason( "This type is a native code bridge and cannot be instantiated" );
 	qmlRegisterUncreatableType<QtUISystem>( "net.warsow", 2, 6, "Wsw", reason );
 	qmlRegisterUncreatableType<ChatModel>( "net.warsow", 2, 6, "ChatModel", reason );
-	qmlRegisterUncreatableType<CallvotesModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
+	qmlRegisterUncreatableType<CallvotesListModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
 	qmlRegisterUncreatableType<GametypeDef>( "net.warsow", 2, 6, "GametypeDef", reason );
 	qmlRegisterUncreatableType<GametypesModel>( "net.warsow", 2, 6, "GametypesModel", reason );
 	qmlRegisterUncreatableType<ScoreboardModelProxy>( "net.warsow", 2, 6, "Scoreboard", reason );
@@ -1433,6 +1433,7 @@ void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimest
 }
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
+	// TODO: Let aggregated entities decide whether they can handle?
 	if( (unsigned)( configStringIndex - CS_PLAYERINFOS ) < (unsigned)MAX_CLIENTS ) {
 		m_scoreboardModel.handleConfigString( configStringIndex, string );
 	} else if( (unsigned)( configStringIndex - CS_CALLVOTEINFOS ) < (unsigned)MAX_CALLVOTEINFOS ) {

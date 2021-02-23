@@ -7,12 +7,34 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstdtypes.h"
+#include "../qcommon/stringspanstorage.h"
 
 namespace wsw::ui {
 
 class CallvotesModelProxy;
 
-class CallvotesModel : public QAbstractListModel {
+class CallvotesGroupsModel : public QAbstractListModel {
+	friend class CallvotesListModel;
+
+	enum Role {
+		Name = Qt::UserRole + 1,
+		Group
+	};
+
+	CallvotesModelProxy *m_proxy;
+	wsw::StaticVector<unsigned, MAX_CALLVOTES> m_roleIndices;
+
+	explicit CallvotesGroupsModel( CallvotesModelProxy *proxy ) : m_proxy( proxy ) {}
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &index, int role ) const -> QVariant override;
+};
+
+class CallvotesListModel : public QAbstractListModel {
 	friend class CallvotesModelProxy;
 
 	Q_OBJECT
@@ -38,6 +60,7 @@ private:
 		Name = Qt::UserRole + 1,
 		Desc,
 		Flags,
+		Group,
 		ArgsKind,
 		ArgsHandle,
 		Current,
@@ -45,10 +68,16 @@ private:
 
 	static inline const QVector<int> kRoleCurrentChangeset { Current };
 
+	CallvotesGroupsModel m_groupsModel;
 	CallvotesModelProxy *const m_proxy;
-	wsw::Vector<int> m_entryNums;
+	wsw::StaticVector<int, MAX_CALLVOTES> m_parentEntryNums;
+	wsw::StaticVector<int, MAX_CALLVOTES> m_displayedEntryNums;
+
+	void beginReloading();
+	void addNum( int num );
+	void endReloading();
 public:
-	explicit CallvotesModel( CallvotesModelProxy *proxy ) : m_proxy( proxy ) {}
+	explicit CallvotesListModel( CallvotesModelProxy *proxy ) : m_groupsModel( proxy ), m_proxy( proxy ) {}
 
 	void notifyOfChangesAtNum( int num );
 
@@ -56,6 +85,11 @@ public:
 	Q_SIGNAL void currentChanged( int index, QVariant value );
 
 	Q_INVOKABLE QJsonArray getOptionsList( int handle ) const;
+
+	Q_INVOKABLE void setGroupFilter( int group );
+
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getGroupsModel() { return &m_groupsModel; }
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
@@ -66,14 +100,16 @@ public:
 };
 
 class CallvotesModelProxy {
-	friend class CallvotesModel;
+	friend class CallvotesListModel;
+	friend class CallvotesGroupsModel;
 public:
 	struct Entry {
 		QString name;
 		QString desc;
 		QString current;
 		unsigned flags;
-		CallvotesModel::Kind kind;
+		unsigned group;
+		CallvotesListModel::Kind kind;
 		int argsHandle;
 	};
 private:
@@ -85,23 +121,36 @@ private:
 	wsw::Vector<Entry> m_entries;
 	wsw::Vector<std::pair<OptionTokens, int>> m_options;
 
-	CallvotesModel m_regularModel {this };
-	CallvotesModel m_operatorModel {this };
+	static constexpr unsigned kMaxGroups = 16;
+
+	wsw::StringSpanStaticStorage<uint8_t, uint8_t, kMaxGroups, 256> m_groupDataStorage;
+
+	CallvotesListModel m_regularModel { this };
+	CallvotesListModel m_operatorModel { this };
 
 	[[nodiscard]]
 	auto addArgs( const std::optional<wsw::StringView> &maybeArgs )
-		-> std::optional<std::pair<CallvotesModel::Kind, std::optional<int>>>;
+		-> std::optional<std::pair<CallvotesListModel::Kind, std::optional<int>>>;
 
 	[[nodiscard]]
 	auto parseAndAddOptions( const wsw::StringView &encodedOptions ) -> std::optional<int>;
+
+	[[nodiscard]]
+	bool tryParsingCallvoteGroups( const wsw::StringView &groups );
+
+	[[nodiscard]]
+	auto tryReloading() -> std::optional<wsw::StringView>;
+
+	[[nodiscard]]
+	auto findGroupByTag( const wsw::StringView &tag ) const -> std::optional<unsigned>;
 public:
 	[[nodiscard]]
 	auto getEntry( int entryNum ) const -> const Entry & { return m_entries[entryNum]; }
 
 	[[nodiscard]]
-	auto getRegularModel() -> CallvotesModel * { return &m_regularModel; }
+	auto getRegularModel() -> CallvotesListModel * { return &m_regularModel; }
 	[[nodiscard]]
-	auto getOperatorModel() -> CallvotesModel * { return &m_operatorModel; }
+	auto getOperatorModel() -> CallvotesListModel * { return &m_operatorModel; }
 
 	void reload();
 
