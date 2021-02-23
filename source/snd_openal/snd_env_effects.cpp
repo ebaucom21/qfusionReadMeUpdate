@@ -100,7 +100,6 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	qalEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
 	qalEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf );
 	qalEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
-	qalEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reflectionsGain );
 	qalEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
 	qalEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->lateReverbGain );
 	qalEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
@@ -148,7 +147,6 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	diffusion = interpolator( diffusion, that->diffusion, 0.0f, 1.0f );
 	gainHf = interpolator( gainHf, that->gainHf, 0.0f, 1.0f );
 	decayTime = interpolator( decayTime, that->decayTime, 0.1f, 20.0f );
-	reflectionsGain = interpolator( reflectionsGain, that->reflectionsGain, 0.0f, 3.16f );
 	reflectionsDelay = interpolator( reflectionsDelay, that->reflectionsDelay, 0.0f, 0.3f );
 	lateReverbGain = interpolator( lateReverbGain, that->lateReverbGain, 0.0f, 10.0f );
 	lateReverbDelay = interpolator( lateReverbDelay, that->lateReverbDelay, 0.0f, 0.1f );
@@ -162,7 +160,6 @@ void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
 	diffusion = that->diffusion;
 	gainHf = that->gainHf;
 	decayTime = that->decayTime;
-	reflectionsGain = that->reflectionsGain;
 	reflectionsDelay = that->reflectionsDelay;
 	lateReverbGain = that->lateReverbGain;
 	lateReverbDelay = that->lateReverbDelay;

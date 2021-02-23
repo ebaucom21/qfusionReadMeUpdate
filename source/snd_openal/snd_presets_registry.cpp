@@ -91,7 +91,6 @@ void EaxReverbEffect::ReusePreset( const EfxPresetEntry *presetHandle ) {
 	diffusion = presetHandle->preset.diffusion;
 	gainHf = presetHandle->preset.gainHF;
 	decayTime = presetHandle->preset.decayTime;
-	reflectionsGain = presetHandle->preset.reflectionsGain;
 	reflectionsDelay = presetHandle->preset.reflectionsDelay;
 	lateReverbGain = presetHandle->preset.lateReverbGain;
 	lateReverbDelay = presetHandle->preset.lateReverbDelay;

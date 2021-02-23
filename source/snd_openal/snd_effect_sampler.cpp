@@ -325,11 +325,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	const float gainFactorForRoomSize = std::pow( 1.0f - decayFrac, 5.0f );
 	effect->lateReverbGain = distantGain + 0.50f * gainFactorForRoomSize;
 
-	// This is an early reverberation gain and it should decay quickly with increasing room size.
-	// The values must be within [0.0, 3.16] range.
-	// Lets raise early reverberation for metal environment to simulate "live" surfaces.
-	effect->reflectionsGain = 0.05f + ( 0.25f + 0.25f * metallnessFactor ) * gainFactorForRoomSize;
-
 	// Must be within [0.0, 0.3] range.
 	// Keep it default... it's hard to tweak
 	effect->reflectionsDelay = 0.007f;
@@ -362,7 +357,6 @@ void ReverbEffectSampler::SetMinimalReverbProps() {
 	effect->density = 1.0f;
 	effect->diffusion = 1.0f;
 	effect->decayTime = 0.60f;
-	effect->reflectionsGain = 0.05f;
 	effect->reflectionsDelay = 0.007f;
 	effect->lateReverbGain = 0.15f;
 	effect->lateReverbDelay = 0.011f;
