@@ -107,9 +107,6 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 
 	qalEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->hfReference );
 
-	qalEffectf( src->effect, AL_EAXREVERB_ECHO_TIME, this->echoTime );
-	qalEffectf( src->effect, AL_EAXREVERB_ECHO_DEPTH, this->echoDepth );
-
 	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f - directObstruction );
 
 	AttachEffect( src );
@@ -157,8 +154,6 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	lateReverbDelay = interpolator( lateReverbDelay, that->lateReverbDelay, 0.0f, 0.1f );
 	secondaryRaysObstruction = interpolator( secondaryRaysObstruction, that->secondaryRaysObstruction, 0.0f, 1.0f );
 	hfReference = interpolator( hfReference, that->hfReference, 1000.0f, 20000.0f );
-	echoTime = interpolator( echoTime, that->echoTime, 0.075f, 0.25f );
-	echoDepth = interpolator( echoDepth, that->echoDepth, 0.0f, 1.0f );
 }
 
 void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
@@ -173,8 +168,6 @@ void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
 	lateReverbDelay = that->lateReverbDelay;
 	secondaryRaysObstruction = that->secondaryRaysObstruction;
 	hfReference = that->hfReference;
-	echoTime = that->echoTime;
-	echoDepth = that->echoDepth;
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {

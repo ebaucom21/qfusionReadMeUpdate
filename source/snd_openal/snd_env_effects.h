@@ -122,9 +122,6 @@ public:
 	float secondaryRaysObstruction;
 	float hfReference; // [1000 ... 20000]  default 5000
 
-	float echoTime;   // [0.075 ... 0.25]  default 0.25
-	float echoDepth;  // [0.0   ... 1.0]   default 0.0
-
 	void ReusePreset( const EfxPresetEntry *presetHandle );
 
 	unsigned GetLingeringTimeout() const override {

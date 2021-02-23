@@ -96,8 +96,6 @@ void EaxReverbEffect::ReusePreset( const EfxPresetEntry *presetHandle ) {
 	lateReverbGain = presetHandle->preset.lateReverbGain;
 	lateReverbDelay = presetHandle->preset.lateReverbDelay;
 	hfReference = presetHandle->preset.referenceHF;
-	echoTime = presetHandle->preset.echoTime;
-	echoDepth = presetHandle->preset.echoDepth;
 }
 
 #define DEFINE_PRESET( presetMacroName )                    \

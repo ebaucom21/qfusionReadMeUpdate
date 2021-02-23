@@ -356,26 +356,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 		// [2500, 10000]
 		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 7500.0f;
 	}
-
-	// Apply an echo but only for open spaces
-	if( !hasSky ) {
-		effect->echoTime = 0.25f;
-		// Efficiently disable the echo
-		effect->echoDepth = 0.0f;
-	} else {
-		// Must be within [0.075, 0.25] range.
-		// We are not sure whether this is still valid for updated OpenAL SOFT versions,
-		// but the most strong and distinct echo was for the value of 0.125.
-		effect->echoTime = 0.075f + 0.125f * roomSizeFactor;
-		// The echo depth must be within [0.0, 1.0] range.
-		// Raise echo depth until sky factor reaches 0.5f, then lower it.
-		// So echo depth is within [0.25f, 0.5f] bounds and reaches its maximum at skyFactor = 0.5f
-		if( skyFactor < 0.5f ) {
-			effect->echoDepth = 0.25f + 0.5f * 2.0f * skyFactor;
-		} else {
-			effect->echoDepth = 0.75f - 0.3f * 2.0f * ( skyFactor - 0.5f );
-		}
-	}
 }
 
 void ReverbEffectSampler::SetMinimalReverbProps() {
@@ -388,8 +368,6 @@ void ReverbEffectSampler::SetMinimalReverbProps() {
 	effect->lateReverbDelay = 0.011f;
 	effect->gainHf = 0.0f;
 	effect->hfReference = 5000.0f;
-	effect->echoTime = 0.25f;
-	effect->echoDepth = 0.0f;
 }
 
 void ReverbEffectSampler::EmitSecondaryRays() {
