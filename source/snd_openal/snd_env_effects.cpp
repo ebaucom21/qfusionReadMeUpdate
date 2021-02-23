@@ -98,7 +98,6 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 
 	qalEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
 	qalEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
-	qalEffectf( src->effect, AL_EAXREVERB_GAIN, this->gain );
 	qalEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf );
 	qalEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
 	qalEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reflectionsGain );
@@ -150,8 +149,7 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	directObstruction = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
 	density = interpolator( density, that->density, 0.0f, 1.0f );
 	diffusion = interpolator( diffusion, that->diffusion, 0.0f, 1.0f );
-	gain = interpolator( gain, that->gain, 0.0f, 1.0f );
-	gainHf = interpolator( gain, that->gainHf, 0.0f, 1.0f );
+	gainHf = interpolator( gainHf, that->gainHf, 0.0f, 1.0f );
 	decayTime = interpolator( decayTime, that->decayTime, 0.1f, 20.0f );
 	reflectionsGain = interpolator( reflectionsGain, that->reflectionsGain, 0.0f, 3.16f );
 	reflectionsDelay = interpolator( reflectionsDelay, that->reflectionsDelay, 0.0f, 0.3f );
@@ -167,7 +165,6 @@ void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
 	// Avoid doing memcpy... This is not a POD type
 	density = that->density;
 	diffusion = that->diffusion;
-	gain = that->gain;
 	gainHf = that->gainHf;
 	decayTime = that->decayTime;
 	reflectionsGain = that->reflectionsGain;

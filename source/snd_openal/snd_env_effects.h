@@ -111,7 +111,6 @@ public:
 
 	float density;              // [0.0 ... 1.0]    default 1.0
 	float diffusion;            // [0.0 ... 1.0]    default 1.0
-	float gain;                 // [0.0 ... 1.0]    default 0.32
 	float gainHf;               // [0.0 ... 1.0]    default 0.89
 	float decayTime;            // [0.1 ... 20.0]   default 1.49
 	float reflectionsGain;      // [0.0 ... 3.16]   default 0.05

@@ -89,7 +89,6 @@ const EfxPresetEntry *EfxPresetsRegistry::FindByName( const char *name ) const {
 void EaxReverbEffect::ReusePreset( const EfxPresetEntry *presetHandle ) {
 	density = presetHandle->preset.density;
 	diffusion = presetHandle->preset.diffusion;
-	gain = presetHandle->preset.gain;
 	gainHf = presetHandle->preset.gainHF;
 	decayTime = presetHandle->preset.decayTime;
 	reflectionsGain = presetHandle->preset.reflectionsGain;

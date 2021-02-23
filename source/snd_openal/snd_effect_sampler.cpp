@@ -282,11 +282,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	const float metallnessFactor = leafProps.getMetallnessFactor();
 	const float skyFactor = leafProps.getSkyFactor();
 
-	// It should be default.
-	// Secondary rays obstruction is the only modulation we apply.
-	// See EmitSecondaryRays()
-	effect->gain = 0.32f;
-
 	// The density must be within [0.0, 1.0] range.
 	// Lower the density is, more tinny and metallic a sound appear.
 	effect->density = 1.0f - metallnessFactor;
@@ -387,7 +382,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 }
 
 void ReverbEffectSampler::SetMinimalReverbProps() {
-	effect->gain = 0.1f;
 	effect->density = 1.0f;
 	effect->diffusion = 1.0f;
 	effect->decayTime = 0.60f;
@@ -452,15 +446,9 @@ void ReverbEffectSampler::EmitSecondaryRays() {
 			const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
 			effect->gainHf = ( 0.4f + 0.5f * leafProps.getMetallnessFactor() ) * frac;
 		}
-		// We also modify effect gain by a fraction of secondary rays passed to listener.
-		// This is not right in theory, but is inevitable in the current game sound model
-		// where you can hear across the level through solid walls
-		// in order to avoid messy echoes coming from everywhere.
-		effect->gain *= 0.75f + 0.25f * frac;
 	} else {
 		// Set minimal feasible values
 		effect->secondaryRaysObstruction = 1.0f;
 		effect->gainHf = 0.0f;
-		effect->gain *= 0.5f;
 	}
 }
