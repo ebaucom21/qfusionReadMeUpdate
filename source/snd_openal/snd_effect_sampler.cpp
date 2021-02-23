@@ -347,36 +347,33 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	// Must be within [0.0 ... 0.1] range
 	effect->lateReverbDelay = 0.011f + 0.088f * roomSizeFactor;
 
-	if( auto *eaxEffect = Effect::Cast<EaxReverbEffect *>( effect ) ) {
-		// 0.5 is the value of a neutral surface
-		const float smoothness = leafProps.getSmoothnessFactor();
-		if( smoothness <= 0.5f ) {
-			// [1000, 2500]
-			eaxEffect->hfReference = 1000.0f + ( 2.0f * smoothness ) * 1500.0f;
-		} else {
-			// [2500, 10000]
-			eaxEffect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 7500.0f;
-		}
+	// 0.5 is the value of a neutral surface
+	const float smoothness = leafProps.getSmoothnessFactor();
+	if( smoothness <= 0.5f ) {
+		// [1000, 2500]
+		effect->hfReference = 1000.0f + ( 2.0f * smoothness ) * 1500.0f;
+	} else {
+		// [2500, 10000]
+		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 7500.0f;
+	}
 
-		// Apply an echo but only for open spaces
-		if( !hasSky ) {
-			eaxEffect->echoTime = 0.25f;
-			// Efficiently disable the echo
-			eaxEffect->echoDepth = 0.0f;
-			return;
-		}
-
+	// Apply an echo but only for open spaces
+	if( !hasSky ) {
+		effect->echoTime = 0.25f;
+		// Efficiently disable the echo
+		effect->echoDepth = 0.0f;
+	} else {
 		// Must be within [0.075, 0.25] range.
 		// We are not sure whether this is still valid for updated OpenAL SOFT versions,
 		// but the most strong and distinct echo was for the value of 0.125.
-		eaxEffect->echoTime = 0.075f + 0.125f * roomSizeFactor;
+		effect->echoTime = 0.075f + 0.125f * roomSizeFactor;
 		// The echo depth must be within [0.0, 1.0] range.
 		// Raise echo depth until sky factor reaches 0.5f, then lower it.
 		// So echo depth is within [0.25f, 0.5f] bounds and reaches its maximum at skyFactor = 0.5f
 		if( skyFactor < 0.5f ) {
-			eaxEffect->echoDepth = 0.25f + 0.5f * 2.0f * skyFactor;
+			effect->echoDepth = 0.25f + 0.5f * 2.0f * skyFactor;
 		} else {
-			eaxEffect->echoDepth = 0.75f - 0.3f * 2.0f * ( skyFactor - 0.5f );
+			effect->echoDepth = 0.75f - 0.3f * 2.0f * ( skyFactor - 0.5f );
 		}
 	}
 }
@@ -390,47 +387,31 @@ void ReverbEffectSampler::SetMinimalReverbProps() {
 	effect->lateReverbGain = 0.15f;
 	effect->lateReverbDelay = 0.011f;
 	effect->gainHf = 0.0f;
-	if( auto *eaxEffect = Effect::Cast<EaxReverbEffect *>( effect ) ) {
-		eaxEffect->hfReference = 5000.0f;
-		eaxEffect->echoTime = 0.25f;
-		eaxEffect->echoDepth = 0.0f;
-	}
+	effect->hfReference = 5000.0f;
+	effect->echoTime = 0.25f;
+	effect->echoDepth = 0.0f;
 }
 
 void ReverbEffectSampler::EmitSecondaryRays() {
 	int listenerLeafNum = listenerProps->GetLeafNum();
 
-	auto *const eaxEffect = Effect::Cast<EaxReverbEffect *>( effect );
 	auto *const panningUpdateState = &src->panningUpdateState;
 
 	trace_t trace;
 
 	unsigned numPassedSecondaryRays = 0;
-	if( eaxEffect ) {
-		panningUpdateState->numPassedSecondaryRays = 0;
-		for( unsigned i = 0; i < numPrimaryHits; i++ ) {
-			// Cut off by PVS system early, we are not interested in actual ray hit points contrary to the primary emission.
-			if( !S_LeafsInPVS( listenerLeafNum, S_PointLeafNum( reflectionPoints[i] ) ) ) {
-				continue;
-			}
-
-			S_Trace( &trace, reflectionPoints[i], testedListenerOrigin, vec3_origin, vec3_origin, MASK_SOLID );
-			if( trace.fraction == 1.0f && !trace.startsolid ) {
-				numPassedSecondaryRays++;
-				float *savedPoint = panningUpdateState->reflectionPoints[panningUpdateState->numPassedSecondaryRays++];
-				VectorCopy( reflectionPoints[i], savedPoint );
-			}
+	panningUpdateState->numPassedSecondaryRays = 0;
+	for( unsigned i = 0; i < numPrimaryHits; i++ ) {
+		// Cut off by PVS system early, we are not interested in actual ray hit points contrary to the primary emission.
+		if( !S_LeafsInPVS( listenerLeafNum, S_PointLeafNum( reflectionPoints[i] ) ) ) {
+			continue;
 		}
-	} else {
-		for( unsigned i = 0; i < numPrimaryHits; i++ ) {
-			if( !S_LeafsInPVS( listenerLeafNum, S_PointLeafNum( reflectionPoints[i] ) ) ) {
-				continue;
-			}
 
-			S_Trace( &trace, reflectionPoints[i], testedListenerOrigin, vec3_origin, vec3_origin, MASK_SOLID );
-			if( trace.fraction == 1.0f && !trace.startsolid ) {
-				numPassedSecondaryRays++;
-			}
+		S_Trace( &trace, reflectionPoints[i], testedListenerOrigin, vec3_origin, vec3_origin, MASK_SOLID );
+		if( trace.fraction == 1.0f && !trace.startsolid ) {
+			numPassedSecondaryRays++;
+			float *savedPoint = panningUpdateState->reflectionPoints[panningUpdateState->numPassedSecondaryRays++];
+			VectorCopy( reflectionPoints[i], savedPoint );
 		}
 	}
 
