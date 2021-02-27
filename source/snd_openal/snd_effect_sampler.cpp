@@ -276,16 +276,10 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	effect->density = 1.0f - metallnessFactor;
 
 	// The diffusion must be within [0.0, 1.0] range.
-	// Lowering diffusing has an effect that is similar to echoes that quickly change their panning from left to right.
-	// (its probably uses some phase modulation as well).
+	// Low values feel like a modulation and like a quickly panning echo.
 	effect->diffusion = 1.0f;
-
-	// Apply a non-standard diffusion only for an outdoor environment
-	const bool hasSky = skyFactor > 0;
-	if( hasSky ) {
-		// Make sure the diffusion kicks in only for a really huge space
-		effect->diffusion -= roomSizeFactor * roomSizeFactor;
-	}
+	// Apply a non-standard diffusion only for a huge outdoor environment.
+	effect->diffusion -= roomSizeFactor * Q_Sqrt( skyFactor );
 
 	// The decay time should be within [0.1, 20.0] range.
 	// A reverberation starts being really heard from values greater than 0.5.
