@@ -121,6 +121,10 @@ public:
 	float secondaryRaysObstruction;
 	float hfReference; // [1000 ... 20000]  default 5000
 
+	// A custom parameter, [0.0 ... 1.0], 0.0 for directly reachable sources,
+	// 1.0 for very distant indirect-reachable or completely unreachable sources.
+	float indirectAttenuation;
+
 	unsigned GetLingeringTimeout() const override {
 		return (unsigned)( decayTime * 1000 + 50 );
 	}

@@ -317,15 +317,25 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	// Must be within [0.0, 0.3] range.
 	// Keep it default... it's hard to tweak
 	effect->reflectionsDelay = 0.007f;
-	// This is the only exception ... a hack that feels great:
-	// Increase the reflections delay for indirect propagation using the propagation path length
-	vec3_t tableDir;
-	float tableDistance;
-	int listenerLeafNum = listenerProps->GetLeafNum();
+
+	const int listenerLeafNum = listenerProps->GetLeafNum();
 	const auto *const table = PropagationTable::Instance();
-	if( table->GetIndirectPathProps( src->envUpdateState.leafNum, listenerLeafNum, tableDir, &tableDistance ) ) {
-		// 2^16 is the maximal distance that may be stored in the table, everything above is clamped
-		effect->reflectionsDelay = 0.299f * std::pow( tableDistance / (float)( 1 << 16 ), 0.33f );
+	if( table->HasDirectPath( src->envUpdateState.leafNum, listenerLeafNum ) ) {
+		effect->indirectAttenuation = 0.0f;
+	} else {
+		[[maybe_unused]] vec3_t tableDir;
+		float tableDistance = 1.0f;
+		if( table->GetIndirectPathProps( src->envUpdateState.leafNum, listenerLeafNum, tableDir, &tableDistance ) ) {
+			// The table stores a distance up to 2^16 and clamps everything above.
+			// Putting a reference limit at 2^16 does not feel good so we clamp to a value 4x lower.
+			constexpr auto maxDistance = (float)( 1u << 14u );
+			constexpr auto invMaxDistance = 1.0f / maxDistance;
+			const float frac = std::min( maxDistance, tableDistance ) * invMaxDistance;
+			assert( frac >= 0.0f && frac <= 1.0f );
+			effect->indirectAttenuation = Q_Sqrt( Q_Sqrt( frac ) );
+		} else {
+			effect->indirectAttenuation = 1.0f;
+		}
 	}
 
 	// Must be within [0.0 ... 0.1] range

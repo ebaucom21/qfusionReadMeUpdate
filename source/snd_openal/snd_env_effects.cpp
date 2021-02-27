@@ -82,13 +82,16 @@ void UnderwaterFlangerEffect::BindOrUpdate( src_t *src ) {
 }
 
 float EaxReverbEffect::GetSourceGain( src_t *src ) const {
-	float result = src->fvol * src->volumeVar->value;
+	assert( indirectAttenuation >= 0.0f && indirectAttenuation <= 1.0f );
 
-	// Both partial obstruction factors are within [0, 1] range, so we multiply by 0.5
-	float obstructionFactor = 0.5f * ( this->directObstruction + this->secondaryRaysObstruction );
+	// Both partial obstruction factors are within [0, 1] range, so we can get an average
+	const float obstructionFactor = 0.5f * ( this->directObstruction + this->secondaryRaysObstruction );
 	assert( obstructionFactor >= 0.0f && obstructionFactor <= 1.0f );
-	// The gain might be lowered up to 2x
-	result *= 1.0f - 0.5f * obstructionFactor;
+
+	const float attenuation = std::max( indirectAttenuation, 0.5f * obstructionFactor );
+	assert( attenuation >= 0.0f && attenuation <= 1.0f );
+
+	const float result = ( src->fvol * src->volumeVar->value ) * ( 1.0f - attenuation );
 	assert( result >= 0.0f && result <= 1.0f );
 	return result;
 }
@@ -152,6 +155,7 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	lateReverbDelay = interpolator( lateReverbDelay, that->lateReverbDelay, 0.0f, 0.1f );
 	secondaryRaysObstruction = interpolator( secondaryRaysObstruction, that->secondaryRaysObstruction, 0.0f, 1.0f );
 	hfReference = interpolator( hfReference, that->hfReference, 1000.0f, 20000.0f );
+	indirectAttenuation = interpolator( indirectAttenuation, that->indirectAttenuation, 0.0f, 1.0f );
 }
 
 void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
@@ -165,6 +169,7 @@ void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
 	lateReverbDelay = that->lateReverbDelay;
 	secondaryRaysObstruction = that->secondaryRaysObstruction;
 	hfReference = that->hfReference;
+	indirectAttenuation = that->indirectAttenuation;
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
