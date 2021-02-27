@@ -243,9 +243,10 @@ public:
 	Q_SIGNAL void demoNameChanged( QString demoName );
 	Q_PROPERTY( QString demoName READ getDemoName NOTIFY demoNameChanged );
 
+	Q_INVOKABLE void play( const QByteArray &fileName );
 	Q_INVOKABLE void pause();
 	Q_INVOKABLE void stop();
-	Q_INVOKABLE void seek(qreal frac);
+	Q_INVOKABLE void seek( qreal frac );
 
 	Q_INVOKABLE QByteArray formatDuration( int durationSeconds );
 };

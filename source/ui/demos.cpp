@@ -601,6 +601,20 @@ void DemoPlayer::reloadMetadata() {
 	Q_EMIT demoNameChanged( getDemoName() );
 }
 
+void DemoPlayer::play( const QByteArray &fileName ) {
+	wsw::StringView demoName( fileName.data(), fileName.size() );
+	if( demoName.startsWith( '/' ) ) {
+		demoName = demoName.drop( 1 );
+	}
+	const wsw::StringView prefix( "demos/"_asView );
+	if( demoName.startsWith( prefix ) ) {
+		demoName = demoName.drop( prefix.length() );
+	}
+	wsw::StaticString<MAX_QPATH> buffer;
+	buffer << "demo "_asView << demoName;
+	Cbuf_ExecuteText( EXEC_APPEND, buffer.data() );
+}
+
 void DemoPlayer::pause() {
 	Cbuf_ExecuteText( EXEC_APPEND, "demopause" );
 }

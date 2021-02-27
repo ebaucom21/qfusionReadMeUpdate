@@ -17,6 +17,7 @@
         <file>CVarAwareSlider.qml</file>
         <file>CVarAwareTextField.qml</file>
         <file>DemoPlaybackMenu.qml</file>
+        <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>
         <file>GeneralSettings.qml</file>
         <file>GraphicsSettings.qml</file>

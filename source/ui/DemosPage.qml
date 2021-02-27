@@ -21,6 +21,14 @@ Item {
 
     readonly property real rowSpacing: 16
 
+    property int selectedIndex: -1
+    property var selectedGametype
+    property var selectedDemoName
+    property var selectedFileName
+    property var selectedServerName
+    property var selectedMapName
+    property var selectedTimestamp
+
     Component.onCompleted: demosResolver.reload()
 
     TextField {
@@ -53,6 +61,7 @@ Item {
     }
 
     function submitQuery(query) {
+        selectedIndex = -1
         if (demosResolver.isReady) {
             demosResolver.query(query)
         } else {
@@ -72,51 +81,54 @@ Item {
 
     RowLayout {
         id: listHeader
+        visible: selectedIndex < 0
         anchors.top: queryField.bottom
         anchors.topMargin: 48
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.leftMargin: leftListMargin
-        anchors.rightMargin: rightListMargin
+        anchors.leftMargin: leftListMargin + rowSpacing / 2
+        anchors.rightMargin: rightListMargin + rowSpacing / 2
         width: listView.width
-        spacing: rowSpacing
-
+        height: visible ? implicitHeight : 0
+        spacing: rowSpacing / 2
 
         Label {
+            id: demoHeading
             Layout.fillWidth: true
             Layout.preferredWidth: demoNameWeight
             horizontalAlignment: Qt.AlignLeft
             font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             text: "Name"
         }
         Label {
+            id: serverHeading
             Layout.fillWidth: true
             Layout.preferredWidth: serverNameWeight
             horizontalAlignment: Qt.AlignHCenter
             font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             text: "Server"
         }
         Label {
             Layout.preferredWidth: mapColumnWidth
             horizontalAlignment: Qt.AlignHCenter
             font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             text: "Map"
         }
         Label {
             Layout.preferredWidth: gametypeColumnWidth
             horizontalAlignment: Qt.AlignHCenter
             font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             text: "Gametype"
         }
         Label {
             Layout.preferredWidth: timestampColumnWidth
-            horizontalAlignment: Qt.AlignHCenter
+            horizontalAlignment: Qt.AlignRight
             font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             text: "Timestamp"
         }
     }
@@ -130,54 +142,143 @@ Item {
         anchors.bottomMargin: 32
         anchors.left: parent.left
         anchors.leftMargin: leftListMargin
-        anchors.right: parent.right
-        anchors.rightMargin: rightListMargin
-        boundsBehavior: Flickable.StopAtBounds
-        spacing: rowSpacing
+        width: (selectedIndex >= 0 ? 0.6 * parent.width : parent.width) - leftListMargin - rightListMargin
+        spacing: selectedIndex >= 0 ? 1.5 * rowSpacing : rowSpacing
         clip: true
 
-        delegate: RowLayout {
+        delegate: DemosListDelegate {
             width: listView.width
-            spacing: 16
+            compact: selectedIndex >= 0
+            selected: index === selectedIndex
+            rowSpacing: root.rowSpacing
 
-            Label {
-                Layout.fillWidth: true
-                Layout.preferredWidth: demoNameWeight
-                font.capitalization: Font.AllUppercase
-                font.pointSize: 11
-                elide: Text.ElideRight
-                text: demoName
-            }
-            Label {
-                Layout.fillWidth: true
-                Layout.preferredWidth: serverNameWeight
-                horizontalAlignment: Qt.AlignHCenter
-                font.capitalization: Font.AllUppercase
-                font.pointSize: 11
-                elide: Text.ElideMiddle
-                text: serverName
-            }
-            Label {
-                Layout.preferredWidth: mapColumnWidth
-                horizontalAlignment: Qt.AlignHCenter
-                font.capitalization: Font.AllUppercase
-                font.pointSize: 11
-                text: mapName
-            }
-            Label {
-                Layout.preferredWidth: gametypeColumnWidth
-                horizontalAlignment: Qt.AlignHCenter
-                font.capitalization: Font.AllUppercase
-                font.pointSize: 11
-                text: gametype
-            }
-            Label {
-                Layout.preferredWidth: timestampColumnWidth
-                horizontalAlignment: Qt.AlignCenter
-                font.capitalization: Font.AllUppercase
-                font.pointSize: 11
-                text: timestamp
+            demoName: model.demoName
+            mapName: model.mapName
+            serverName: model.serverName
+            gametype: model.gametype
+            timestamp: model.timestamp
+
+            demoColumnWidth: demoHeading.width
+            serverColumnWidth: serverHeading.width
+            mapColumnWidth: root.mapColumnWidth
+            gametypeColumnWidth: root.gametypeColumnWidth
+            timestampColumnWidth: root.timestampColumnWidth
+
+            onClicked: {
+                selectedDemoName = demoName
+                selectedMapName = mapName
+                selectedFileName = fileName
+                selectedServerName = serverName
+                selectedGametype = gametype
+                selectedTimestamp = timestamp
+                selectedIndex = index
+                repositionListTimer.start()
             }
         }
+    }
+
+    Timer {
+        id: repositionListTimer
+        interval: 100
+        onTriggered: {
+            if (selectedIndex >= 0) {
+                listView.positionViewAtIndex(selectedIndex, ListView.Visible)
+            }
+        }
+    }
+
+    Loader {
+        active: selectedIndex >= 0
+        anchors.left: listView.right
+        anchors.leftMargin: 48
+        anchors.verticalCenter: parent.verticalCenter
+        sourceComponent: Item {
+            width: root.width - listView.width - leftListMargin - rightListMargin
+            height: 240
+
+            Column {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.top
+                anchors.bottomMargin: 24
+                width: parent.width
+                spacing: 8
+                Label {
+                    width: parent.width
+                    horizontalAlignment: Qt.AlignHCenter
+                    font.capitalization: Font.AllUppercase
+                    font.pointSize: 12
+                    font.weight: Font.Medium
+                    font.letterSpacing: 1.0
+                    elide: Text.ElideMiddle
+                    text: selectedDemoName
+                }
+                Label {
+                    width: parent.width
+                    horizontalAlignment: Qt.AlignHCenter
+                    font.pointSize: 12
+                    font.weight: Font.Medium
+                    font.letterSpacing: 0.5
+                    elide: Text.ElideMiddle
+                    text: selectedServerName
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                opacity: 0.1
+            }
+
+            Image {
+                anchors.fill: parent
+                source: "image://wsw/levelshots/" + selectedMapName
+                fillMode: Image.PreserveAspectCrop
+                opacity: 0.5
+            }
+
+            Label {
+                anchors.top: parent.bottom
+                anchors.left: parent.left
+                anchors.topMargin: 12
+                font.pointSize: 11
+                font.weight: Font.Medium
+                text: selectedMapName + " " + selectedGametype
+            }
+
+            Label {
+                id: timestampLabel
+                anchors.top: parent.bottom
+                anchors.right: parent.right
+                anchors.topMargin: 12
+                font.pointSize: 11
+                font.weight: Font.Medium
+                text: selectedTimestamp
+            }
+
+            Button {
+                anchors.top: timestampLabel.bottom
+                anchors.topMargin: 4
+                anchors.right: parent.right
+                width: 48
+                highlighted: true
+                flat: true
+                text: "\u25B8"
+
+                onClicked: {
+                    selectedIndex = -1
+                    demoPlayer.play(selectedFileName)
+                }
+            }
+        }
+    }
+
+    function handleKeyEvent(event) {
+        if (event.key === Qt.Key_Escape) {
+            if (selectedIndex >= 0) {
+                selectedIndex = -1
+                event.accepted = true
+                return true
+            }
+        }
+        return false
     }
 }
