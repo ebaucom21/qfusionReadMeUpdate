@@ -308,10 +308,6 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	const float gainFactorForRoomSize = std::pow( 1.0f - decayFrac, 5.0f );
 	effect->lateReverbGain = distantGain + 0.50f * gainFactorForRoomSize;
 
-	// Must be within [0.0, 0.3] range.
-	// Keep it default... it's hard to tweak
-	effect->reflectionsDelay = 0.007f;
-
 	const int listenerLeafNum = listenerProps->GetLeafNum();
 	const auto *const table = PropagationTable::Instance();
 	if( table->HasDirectPath( src->envUpdateState.leafNum, listenerLeafNum ) ) {
@@ -332,8 +328,13 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 		}
 	}
 
+	// Consider the indirect path distance having the same effect as the room size.
+
 	// Must be within [0.0 ... 0.1] range
-	effect->lateReverbDelay = 0.011f + 0.088f * roomSizeFactor;
+	effect->lateReverbDelay = 0.011f + 0.088f * std::max( effect->indirectAttenuation, roomSizeFactor );
+	// Must be within [0.0, 0.3] range.
+	effect->reflectionsDelay = 0.007f + 0.29f *
+		std::max( effect->indirectAttenuation, ( 0.5f + 0.5f * skyFactor ) * roomSizeFactor );
 
 	// 0.5 is the value of a neutral surface
 	const float smoothness = leafProps.getSmoothnessFactor();
