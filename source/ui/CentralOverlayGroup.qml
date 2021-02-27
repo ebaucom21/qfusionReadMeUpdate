@@ -5,7 +5,14 @@ import QtQuick.Layouts 1.12
 
 Item {
 	id: root
-	anchors.fill: parent
+    anchors.centerIn: parent
+    width: Math.max(parent.width, minFrameWidth)
+    height: parent.height
+
+    readonly property real minFrameWidth: 1600
+
+    readonly property bool shouldHideExpandedButtons: parent.width < minFrameWidth
+    readonly property bool areButtonsVisible: !shouldHideExpandedButtons || settingsButton.expansionFrac < 1.0
 
 	property real expansionFrac: someOverlayButton.expansionFrac
 
@@ -25,6 +32,21 @@ Item {
     readonly property int pageQuit: 8
     readonly property int pageTagMax: 8
 
+    ToolButton {
+        enabled: !areButtonsVisible
+        visible: !areButtonsVisible
+        anchors.top: parent.top
+        anchors.topMargin: 8
+        anchors.left: parent.left
+        anchors.leftMargin: Math.max(0.5 * (minFrameWidth - root.parent.width) + 8, 0)
+        contentItem: Label {
+            font.weight: Font.Medium
+            font.pointSize: 12
+            text: "\u276E"
+        }
+        onClicked: handleKeyBack()
+    }
+
 	Item {
 		id: logoHolder
 		anchors.centerIn: parent
@@ -39,6 +61,7 @@ Item {
 
 	ColumnLayout {
 		id: topColumn
+		visible: areButtonsVisible
 		anchors.top: logoHolder.bottom
 		anchors.left: parent.left
 		anchors.right: parent.right
@@ -81,12 +104,14 @@ Item {
 
 	ColumnLayout {
 		id: bottomColumn
+		visible: areButtonsVisible
 		anchors.bottom: logoHolder.top
 		anchors.left: parent.left
 		anchors.right: parent.right
 		spacing: 16
 
 		CentralOverlayButton {
+		    id: settingsButton
 		    highlighted: root.highlightedPageTag === root.pageSettings
 			text: "Settings"
 			leaningRight: false
@@ -201,6 +226,12 @@ Item {
     }
 
     function _handleKeyEvent(event) {
+        if (shouldHideExpandedButtons && expansionFrac > 0.0) {
+            if (event.key === Qt.Key_Escape) {
+                return handleKeyBack()
+            }
+            return false
+        }
         switch (event.key) {
             case Qt.Key_Escape: return handleKeyBack()
             case Qt.Key_Tab: return handleKeyTab()
