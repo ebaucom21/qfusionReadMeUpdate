@@ -95,12 +95,10 @@ ListView {
             }
 
             Label {
-                readonly property int ping: modelData["ping"]
-                text: ping
+                text: wsw.formatPing(modelData["ping"])
                 width: 48
                 font.pointSize: 11
                 horizontalAlignment: Qt.AlignHCenter
-                color: ping < 50 ? wsw.green : (ping < 100 ? wsw.yellow : (ping < 150 ? wsw.orange : wsw.red))
             }
         }
     }

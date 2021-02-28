@@ -351,12 +351,8 @@ Item {
                             font.pointSize: 11
                         }
                         Label {
-                            readonly property int ping: modelData["ping"]
-                            text: ping
+                            text: wsw.formatPing(modelData["ping"])
                             font.pointSize: 11
-                            color: ping < 50 ?  wsw.green :
-                                    (ping < 100 ? wsw.yellow :
-                                    (ping < 150 ? wsw.orange : wsw.red))
                         }
                     }
                 }

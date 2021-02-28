@@ -7,15 +7,15 @@
 namespace wsw::ui {
 
 class HtmlColorNamesCache {
-	QString names[10];
+	QByteArray names[10];
 public:
-	auto getColorName( int colorNum ) -> const QString & {
+	auto getColorName( int colorNum ) -> const QByteArray & {
 		assert( (unsigned)colorNum < 10u );
 		if( !names[colorNum].isEmpty() ) {
 			return names[colorNum];
 		}
 		const float *rawColor = color_table[colorNum];
-		names[colorNum] = QColor::fromRgbF( rawColor[0], rawColor[1], rawColor[2] ).name( QColor::HexRgb );
+		names[colorNum] = QColor::fromRgbF( rawColor[0], rawColor[1], rawColor[2] ).name( QColor::HexRgb ).toLatin1();
 		return names[colorNum];
 	}
 };
@@ -115,6 +115,30 @@ auto toStyledText( const wsw::StringView &text ) -> QString {
 		sv = sv.drop( 1 );
 		hadColorToken = true;
 	}
+}
+
+auto formatPing( int ping ) -> QByteArray {
+	ping = std::clamp( ping, 0, 999 );
+	int colorNum;
+	if( ping < 50 ) {
+		colorNum = 2;
+	} else if( ping < 100 ) {
+		colorNum = 3;
+	} else if( ping < 150 ) {
+		colorNum = 8;
+	} else {
+		colorNum = 1;
+	}
+	const QByteArray &colorName = htmlColorNamesCache.getColorName( colorNum );
+	const int totalTagsSize = kFontOpeningTagPrefix.size() + kFontOpeningTagSuffix.size() + kFontClosingTag.size();
+	QByteArray result;
+	result.reserve( totalTagsSize + colorName.size() + 3 );
+	result.setNum( ping );
+	result.prepend( kFontOpeningTagSuffix.data(), kFontOpeningTagSuffix.size() );
+	result.prepend( colorName );
+	result.prepend( kFontOpeningTagPrefix.data(), kFontOpeningTagPrefix.size() );
+	result.append( kFontClosingTag.data(), kFontClosingTag.size() );
+	return result;
 }
 
 }

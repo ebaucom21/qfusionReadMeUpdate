@@ -10,6 +10,9 @@ namespace wsw::ui {
 [[nodiscard]]
 auto toStyledText( const wsw::StringView &text ) -> QString;
 
+[[nodiscard]]
+auto formatPing( int ping ) -> QByteArray;
+
 }
 
 #endif

@@ -3,24 +3,6 @@
 
 namespace wsw::ui {
 
-// TODO: Share this with the server browser
-[[nodiscard]]
-static auto formatPing( unsigned ping ) -> QString {
-	// TODO: Optimize (we can compose styled text based on ping numeric value)
-	wsw::StaticString<16> buffer;
-	if( ping < 50 ) {
-		buffer << wsw::StringView( S_COLOR_GREEN );
-	} else if( ping < 100 ) {
-		buffer << wsw::StringView( S_COLOR_YELLOW );
-	} else if( ping < 150 ) {
-		buffer << wsw::StringView( S_COLOR_ORANGE );
-	} else {
-		buffer << wsw::StringView( S_COLOR_RED );
-	}
-	buffer << ping;
-	return toStyledText( buffer.asView() );
-}
-
 [[nodiscard]]
 static inline auto formatGlyph( int codePoint ) -> QChar {
 	// Only the Unicode BMP is supported as we limit transmitted values to short

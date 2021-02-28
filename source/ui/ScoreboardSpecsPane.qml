@@ -35,7 +35,7 @@ Item {
                     font.letterSpacing: 1
                 }
                 Label {
-                    text: ping
+                    text: wsw.formatPing(ping)
                     width: implicitWidth + 12
                     horizontalAlignment: Qt.AlignLeft
                     font.weight: Font.Medium

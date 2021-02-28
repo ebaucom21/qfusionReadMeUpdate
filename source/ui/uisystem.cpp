@@ -166,6 +166,8 @@ public:
 
 	Q_INVOKABLE QMatrix4x4 makeSkewXMatrix( qreal height, qreal degrees ) const;
 
+	Q_INVOKABLE QByteArray formatPing( int ping ) const;
+
 	Q_INVOKABLE void startServerListUpdates();
 	Q_INVOKABLE void stopServerListUpdates();
 
@@ -1414,6 +1416,10 @@ auto QtUISystem::makeSkewXMatrix( qreal height, qreal degrees ) const -> QMatrix
 	};
 	result.translate( tan * (float)height, 0.0f );
 	return result;
+}
+
+auto QtUISystem::formatPing( int ping ) const -> QByteArray {
+	return wsw::ui::formatPing( ping );
 }
 
 void QtUISystem::startServerListUpdates() {
