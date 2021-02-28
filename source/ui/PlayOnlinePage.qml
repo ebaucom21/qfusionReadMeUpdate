@@ -7,16 +7,28 @@ import net.warsow 2.6
 
 Item {
     id: root
-    Component.onCompleted: wsw.startServerListUpdates()
+
+    Component.onCompleted: {
+        scanTimer.start()
+        wsw.startServerListUpdates()
+    }
+
     Component.onDestruction: wsw.stopServerListUpdates()
 
     TableView {
         id: tableView
+        visible: !scanTimer.running
         anchors.fill: parent
         columnSpacing: 28
         rowSpacing: 40
         interactive: true
         flickableDirection: Flickable.VerticalFlick
+
+        onRowsChanged: {
+            if (!rows) {
+                scanTimer.start()
+            }
+        }
 
         model: serverListModel
 
@@ -48,6 +60,59 @@ Item {
             id: forceLayoutTimer
             interval: 1
             onTriggered: tableView.forceLayout()
+        }
+    }
+
+    Timer {
+        id: scanTimer
+        interval: 1250
+    }
+
+    Loader {
+        anchors.centerIn: parent
+        active: scanTimer.running
+        sourceComponent: ColumnLayout {
+            Component.onCompleted: opacity = 1.0
+            opacity: 0.0
+            Behavior on opacity { NumberAnimation { duration: 500 } }
+            spacing: 24
+            width: progressBar.implicitWidth
+            ProgressBar {
+                id: progressBar
+                indeterminate: true
+            }
+            Label {
+                Layout.fillWidth: true
+                font.pointSize: 12
+                horizontalAlignment: Qt.AlignHCenter
+                text: "Discovering servers\u2026"
+            }
+        }
+    }
+
+    Loader {
+        anchors.centerIn: parent
+        active: !scanTimer.running && !tableView.rows
+        sourceComponent: ColumnLayout {
+            Component.onCompleted: opacity = 1.0
+            opacity: 0.0
+            Behavior on opacity { NumberAnimation { duration: 500 } }
+            spacing: 12
+            width: 320
+            Label {
+                Layout.fillWidth: true
+                font.pointSize: 12
+                horizontalAlignment: Qt.AlignHCenter
+                text: "No servers found"
+            }
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                flat: true
+                highlighted: true
+                text: "Play offline"
+                // TODO: This should be less hacky
+                onClicked: centralOverlay.activePageTag = centralOverlay.pageLocalGame
+            }
         }
     }
 }
