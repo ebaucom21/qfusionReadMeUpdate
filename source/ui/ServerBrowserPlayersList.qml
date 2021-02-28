@@ -17,22 +17,18 @@ ListView {
 
         Label {
             text: "Name"
-            anchors {
-                left: parent.left
-                leftMargin: 8
-                verticalCenter: parent.verticalCenter
-            }
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
             font.pointSize: 11
             font.weight: Font.Medium
         }
 
         Row {
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 8
-            anchors {
-                right: parent.right
-                rightMargin: 8
-                verticalCenter: parent.verticalCenter
-            }
 
             Label {
                 text: "Score"
@@ -65,22 +61,17 @@ ListView {
             wrapMode: Text.Wrap
             elide: Text.ElideRight
 
-            anchors {
-                left: parent.left
-                leftMargin: 8
-                verticalCenter: parent.verticalCenter
-            }
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
         }
 
         Row {
             id: scoreAndPingRow
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 8
-
-            anchors {
-                right: parent.right
-                rightMargin: 8
-                verticalCenter: parent.verticalCenter
-            }
 
             Label {
                 text: modelData["score"]

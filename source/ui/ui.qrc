@@ -63,6 +63,9 @@
         <file>SelectableLabel.qml</file>
         <file>ServerBrowserCard.qml</file>
         <file>ServerBrowserPlayersList.qml</file>
+        <file>ServerBrowserScoreView.qml</file>
+        <file>ServerBrowserSpecsList.qml</file>
+        <file>ServerBrowserTimeView.qml</file>
         <file>SettingsLabel.qml</file>
         <file>SettingsPage.qml</file>
         <file>SoundSettings.qml</file>
