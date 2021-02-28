@@ -6,12 +6,6 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 ListView {
-    visible: wsw.isShowingActionRequests
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.right: parent.right
-    anchors.margins: 16
-    width: 480
     spacing: 16
     model: actionRequestsModel
 

@@ -6,8 +6,6 @@ import net.warsow 2.6
 
 Item {
     id: root
-    anchors.fill: parent
-    visible: wsw.isShowingConnectionScreen
 
     RadialGradient {
         anchors.fill: parent

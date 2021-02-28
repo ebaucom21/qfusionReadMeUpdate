@@ -6,8 +6,6 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Rectangle {
-    visible: wsw.isShowingInGameMenu
-    anchors.fill: parent
     color: "#D8AA5500"
 
     readonly property real heightFrac: (Math.min(1080, rootItem.height - 720)) / (1080 - 720)
@@ -142,7 +140,6 @@ Rectangle {
 
         if (stackView.depth === 1) {
             wsw.returnFromInGameMenu()
-            mainMenu.forceActiveFocus()
             return
         }
 

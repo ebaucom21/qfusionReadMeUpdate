@@ -6,13 +6,6 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
-    visible: wsw.isShowingDemoPlaybackMenu
-    height: 96
-    width: Math.min(parent.width, 720)
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: 32
-    anchors.horizontalCenter: parent.horizontalCenter
-
     layer.enabled: true
     layer.effect: ElevationEffect { elevation: 64 }
 

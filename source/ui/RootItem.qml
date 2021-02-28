@@ -17,36 +17,65 @@ Item {
         }
     }
 
-    Keys.forwardTo: [mainMenu, connectionScreen, demoPlaybackMenu, inGameMenu, chatLoader.item]
+    Keys.forwardTo: [
+        mainMenuLoader.item, connectionScreenLoader.item,
+        demoPlaybackMenuLoader.item, inGameMenuLoader.item, chatLoader.item
+    ]
 
-    // TODO: These items should be wrapped in loaders
-    MainMenu {
-        id: mainMenu
+    Loader {
+        id: mainMenuLoader
+        active: wsw.isShowingMainMenu
+        anchors.fill: parent
+        sourceComponent: MainMenu {}
     }
-    ConnectionScreen {
-        id: connectionScreen
+
+    Loader {
+        id: connectionScreenLoader
+        active: wsw.isShowingConnectionScreen
+        anchors.fill: parent
+        sourceComponent: ConnectionScreen {}
     }
-    DemoPlaybackMenu {
-        id: demoPlaybackMenu
+
+    Loader {
+        id: demoPlaybackMenuLoader
+        active: wsw.isShowingDemoPlaybackMenu
+        height: 96
+        width: Math.min(parent.width, 720)
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 32
+        anchors.horizontalCenter: parent.horizontalCenter
+
+        sourceComponent: DemoPlaybackMenu {}
     }
-    InGameMenu {
-        id: inGameMenu
+
+    Loader {
+        id: inGameMenuLoader
+        active: wsw.isShowingInGameMenu
+        anchors.fill: parent
+        sourceComponent: InGameMenu {}
     }
+
     Loader {
         active: wsw.isShowingScoreboard
         anchors.fill: parent
-        sourceComponent: Component { ScoreboardScreen {} }
+        sourceComponent: ScoreboardScreen {}
     }
+
     Loader {
         id: chatLoader
         active: wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
         anchors.fill: parent
-        sourceComponent: Component { ChatPopup {} }
+        sourceComponent: ChatPopup {}
     }
-    ActionRequestArea {
+
+    Loader {
+        active: wsw.isShowingActionRequests
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right
+        anchors.margins: 16
+        width: 480
+        sourceComponent: ActionRequestArea {}
     }
 
     MouseArea {
@@ -60,7 +89,6 @@ Item {
             color: "#3A885500"
         }
     }
-
 
     function enablePopupOverlay() {
         popupOverlay.visible = true
