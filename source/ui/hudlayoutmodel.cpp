@@ -85,44 +85,39 @@ void HudLayoutModel::finishDragging( int index ) {
 }
 
 void HudLayoutModel::updateAnchors( int index ) {
-	assert( (unsigned)index < (unsigned)m_entries.size() );
-	std::optional<int> maybeNewAnchorItem;
-	std::optional<std::pair<int, int>> newAnchors;
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
-		if( i != (unsigned)index ) {
-			if( const auto maybeFlagsPair = getMatchingAnchors( m_entries[index], m_entries[i] ) ) {
-				newAnchors = maybeFlagsPair;
-				maybeNewAnchorItem = i;
-			}
-		}
+	if( const auto maybeItemAndAnchors = getMatchingAnchorItem( index ) ) {
+		updateAnchors( index, maybeItemAndAnchors->first, maybeItemAndAnchors->second );
 	}
+}
 
-	// Can't reanchor
-	if( !maybeNewAnchorItem ) {
-		return;
-	}
-
-	const int newAnchorItem = *maybeNewAnchorItem;
-	const int oldAnchorItem = m_entries[index].realAnchorItem;
+void HudLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair ) {
+	Entry &dragged = m_entries[index];
+	const int oldAnchorItem = dragged.realAnchorItem;
 	if( oldAnchorItem != newAnchorItem ) {
 		if( oldAnchorItem >= 0 ) {
 			m_entries[oldAnchorItem].displayedAnchors = 0;
 			QModelIndex modelIndex( createIndex( oldAnchorItem, 0 ) );
 			Q_EMIT dataChanged( modelIndex, modelIndex, kDisplayedAnchorsAsRole );
+		} else {
+			setDisplayedFieldAnchors( 0 );
 		}
 	}
 
-	m_entries[index].realAnchorItem = newAnchorItem;
-	m_entries[index].displayedAnchors = 0;
-
-	std::tie( m_entries[index].selfAnchors, m_entries[index].anchorItemAnchors ) = *newAnchors;
+	dragged.realAnchorItem = newAnchorItem;
+	dragged.displayedAnchors = 0;
+	dragged.selfAnchors = newAnchorPair.selfAnchors;
+	dragged.anchorItemAnchors = newAnchorPair.otherAnchors;
 
 	const QModelIndex draggedModelIndex( createIndex( index, 0 ) );
 	Q_EMIT dataChanged( draggedModelIndex, draggedModelIndex, kAllAnchorsAsRole );
 
-	m_entries[newAnchorItem].displayedAnchors = 0;
-	const QModelIndex anchorItemModelIndex( createIndex( newAnchorItem, 0 ) );
-	Q_EMIT dataChanged( anchorItemModelIndex, anchorItemModelIndex, kDisplayedAnchorsAsRole );
+	if( newAnchorItem >= 0 ) {
+		m_entries[newAnchorItem].displayedAnchors = 0;
+		const QModelIndex anchorItemModelIndex( createIndex( newAnchorItem, 0 ) );
+		Q_EMIT dataChanged( anchorItemModelIndex, anchorItemModelIndex, kDisplayedAnchorsAsRole );
+	} else {
+		setDisplayedFieldAnchors( 0 );
+	}
 }
 
 void HudLayoutModel::updatePosition( int index, qreal x, qreal y ) {
@@ -151,56 +146,60 @@ public:
 };
 
 void HudLayoutModel::updateMarkers( int draggedIndex ) {
-	assert( (unsigned)draggedIndex < m_entries.size() );
-	Entry &dragged = m_entries[draggedIndex];
-
+	// It's more convenient to decompose results
 	std::optional<int> anchorItem;
-	std::pair<int, int> flagsPair { 0, 0 };
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
-		if( i != (unsigned)draggedIndex ) {
-			if( const auto maybeFlagsPair = getMatchingAnchors( dragged, m_entries[i] ) ) {
-				flagsPair = *maybeFlagsPair;
-				anchorItem = i;
-			}
-		}
+	std::optional<AnchorPair> anchorsPair;
+	if( const auto maybeItemAndAnchors = getMatchingAnchorItem( draggedIndex ) ) {
+		anchorItem = maybeItemAndAnchors->first;
+		anchorsPair = maybeItemAndAnchors->second;
 	}
 
 	SmallIntSet modifiedRows;
 
 	// Dispatch updates
+	Entry &dragged = m_entries[draggedIndex];
 	if( dragged.displayedAnchorItem != anchorItem ) {
 		// Clear flags of a (maybe) old item
 		if( dragged.displayedAnchorItem ) {
-			const int oldItemIndex = *dragged.displayedAnchorItem;
-			m_entries[oldItemIndex].displayedAnchors = 0;
-			modifiedRows.add( oldItemIndex );
+			// TODO: This could be negative (to indicate the field)
+			if( const int oldItemIndex = *dragged.displayedAnchorItem; oldItemIndex >= 0 ) {
+				m_entries[oldItemIndex].displayedAnchors = 0;
+				modifiedRows.add( oldItemIndex );
+			} else {
+				setDisplayedFieldAnchors( 0 );
+			}
 		}
 		dragged.displayedAnchorItem = anchorItem;
 		modifiedRows.add( draggedIndex );
 	}
 
 	if( dragged.displayedAnchorItem ) {
-		const int currItemIndex = *dragged.displayedAnchorItem;
-		if( m_entries[currItemIndex].displayedAnchors != flagsPair.second ) {
-			m_entries[currItemIndex].displayedAnchors = flagsPair.second;
-			modifiedRows.add( currItemIndex );
+		assert( anchorsPair );
+		if( const int currItemIndex = *dragged.displayedAnchorItem; currItemIndex >= 0 ) {
+			if( m_entries[currItemIndex].displayedAnchors != anchorsPair->otherAnchors ) {
+				m_entries[currItemIndex].displayedAnchors = anchorsPair->otherAnchors;
+				modifiedRows.add( currItemIndex );
+			}
+		} else {
+			setDisplayedFieldAnchors( anchorsPair->otherAnchors );
 		}
 	}
 
-	if( dragged.displayedAnchors != flagsPair.first ) {
-		dragged.displayedAnchors = flagsPair.first;
+	const int selfAnchors = anchorsPair ? anchorsPair->selfAnchors : 0;
+	if( dragged.displayedAnchors != selfAnchors ) {
+		dragged.displayedAnchors = selfAnchors;
 		modifiedRows.add( draggedIndex );
 	}
 
 	for( int row: modifiedRows ) {
+		assert( (unsigned)row < (unsigned)m_entries.size() );
 		QModelIndex modelIndex( createIndex( row, 0 ) );
 		Q_EMIT dataChanged( modelIndex, modelIndex, kDisplayedAnchorsAsRole );
 	}
 }
 
 // Pairs are arranged in their priority order
-const HudLayoutModel::AllowedAnchorPair HudLayoutModel::kAllowedAnchorPairs[] {
-	{ VCenter | HCenter, VCenter | HCenter },
+const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingEntryAnchorPairs[] {
 	{ Top | HCenter, Bottom | HCenter },
 	{ Bottom | HCenter, Top | HCenter },
 	{ VCenter | Left, VCenter | Right },
@@ -212,22 +211,59 @@ const HudLayoutModel::AllowedAnchorPair HudLayoutModel::kAllowedAnchorPairs[] {
 	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right }
 };
 
-auto HudLayoutModel::getMatchingAnchors( const Entry &dragged, const Entry &other )
-	-> std::optional<std::pair<int, int>> {
-	QRectF rectangle( dragged.rectangle );
-	rectangle.moveTopLeft( dragged.pendingOrigin );
+[[nodiscard]]
+static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
+	QPointF diff( pt1 - pt2 );
+	// Units are device-independent so this is correct
+	return diff.x() * diff.x() + diff.y() * diff.y() < 12 * 12;
+}
 
-	if( rectangle.intersects( other.rectangle ) ) {
-		// This is not efficient but this is not a performance-demanding code
-		for( const auto &[selfAnchors, otherAnchors]: kAllowedAnchorPairs ) {
-			const QPointF selfPoint( getPointForAnchors( rectangle, selfAnchors ) );
-			const QPointF otherPoint( getPointForAnchors( other.rectangle, otherAnchors ) );
-			const QPointF diff( selfPoint - otherPoint );
-			// Units are device-independent so this is correct
-			if( diff.x() * diff.x() + diff.y() * diff.y() < 15 * 15 ) {
-				return std::make_pair( selfAnchors, otherAnchors );
+auto HudLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+	-> std::optional<AnchorPair> {
+	for( const auto &[selfAnchors, otherAnchors] : kMatchingEntryAnchorPairs ) {
+		const QPointF selfPoint( getPointForAnchors( draggedRectangle, selfAnchors ) );
+		const QPointF otherPoint( getPointForAnchors( otherEntryRectangle, otherAnchors ) );
+		if( isClose( selfPoint, otherPoint ) ) {
+			return AnchorPair { selfAnchors, otherAnchors };
+		}
+	}
+	return std::nullopt;
+}
+
+auto HudLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
+	-> std::optional<AnchorPair> {
+	// Arrange in their priority order
+	for( const int horizontalBits : { Left, Right, HCenter } ) {
+		for( const int verticalBits : { Top, Bottom, VCenter } ) {
+			const int anchors = horizontalBits | verticalBits;
+			const QPointF selfPoint( getPointForAnchors( draggedRectangle, anchors ) );
+			const QPointF otherPoint( getPointForAnchors( fieldRectangle, anchors ) );
+			if( isClose( selfPoint, otherPoint ) ) {
+				return AnchorPair { anchors, anchors };
 			}
 		}
+	}
+	return std::nullopt;
+}
+
+auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<int, AnchorPair>> {
+	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
+	QRectF draggedRectangle( m_entries[draggedIndex].rectangle );
+	draggedRectangle.moveTopLeft( m_entries[draggedIndex].pendingOrigin );
+
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		if( i != (unsigned)draggedIndex ) {
+			if( const auto maybeAnchors = getMatchingEntryAnchors( draggedRectangle, m_entries[i].rectangle ) ) {
+				return std::make_pair( (int)i, *maybeAnchors );
+			}
+		}
+	}
+
+	assert( m_fieldSize.isValid() );
+	QRectF fieldRectangle( 0, 0, m_fieldSize.width(), m_fieldSize.height() );
+	if( const auto maybeAnchors = getMatchingFieldAnchors( draggedRectangle, fieldRectangle ) ) {
+		// TODO: It would be nice to have a proper ADT language-level support
+		return std::make_pair( -1, *maybeAnchors );
 	}
 
 	return std::nullopt;

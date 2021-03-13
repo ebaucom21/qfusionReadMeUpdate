@@ -42,6 +42,10 @@ Item {
             color: Qt.rgba(1.0, 1.0, 1.0, 0.03)
         }
 
+        HudEditorAnchorsMarker {
+            displayedAnchors: hudEditorLayoutModel.displayedFieldAnchors
+        }
+
         Repeater {
             id: repeater
             model: hudEditorLayoutModel
@@ -143,19 +147,9 @@ Item {
                     }
                 }
 
-                Rectangle {
-                    visible: displayedAnchors
-                    color: mouseArea.drag.active ? Material.accent : "pink"
-                    width: 4; height: 4
-                    anchors.centerIn: parent
-                    anchors.horizontalCenterOffset:
-                        displayedAnchors & HudLayoutModel.Left ?
-                            (-parent.width / 2) :
-                            (displayedAnchors & HudLayoutModel.Right ? parent.width / 2 : 0)
-                    anchors.verticalCenterOffset:
-                        displayedAnchors & HudLayoutModel.Top ?
-                            (-parent.height / 2) :
-                            (displayedAnchors & HudLayoutModel.Bottom ? parent.height / 2 : 0)
+                HudEditorAnchorsMarker {
+                    displayedAnchors: model.displayedAnchors
+                    highlighted: mouseArea.drag.active
                 }
 
                 MouseArea {

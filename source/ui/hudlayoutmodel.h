@@ -21,6 +21,9 @@ public:
 	Q_INVOKABLE void updatePosition( int index, qreal x, qreal y );
 	Q_INVOKABLE void updateAnchors( int index );
 
+	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
+	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
+
 	HudLayoutModel();
 
 	enum HorizontalAnchorBits {
@@ -62,26 +65,47 @@ private:
 	static inline const QVector<int> kOriginRoleAsVector { Origin };
 
 	QSizeF m_fieldSize;
+	int m_displayedFieldAnchors { 0 };
 
 	wsw::Vector<Entry> m_entries;
 
 	void updateMarkers( int draggedIndex );
 
-	struct AllowedAnchorPair {
+	struct AnchorPair {
 		int selfAnchors;
 		int otherAnchors;
 	};
 
-	static const AllowedAnchorPair kAllowedAnchorPairs[];
+	static const AnchorPair kMatchingEntryAnchorPairs[];
 
 	[[nodiscard]]
-	auto getMatchingAnchors( const Entry &dragged, const Entry &other ) -> std::optional<std::pair<int, int>>;
+	static auto getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+		-> std::optional<AnchorPair>;
+
+	[[nodiscard]]
+	static auto getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
+		-> std::optional<AnchorPair>;
+
+	[[nodiscard]]
+	auto getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<int, AnchorPair>>;
 
 	[[nodiscard]]
 	static auto getPointForAnchors( const QRectF &r, int anchors ) -> QPointF;
 
 	[[nodiscard]]
 	static auto getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView>;
+
+	[[nodiscard]]
+	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
+
+	void setDisplayedFieldAnchors( int anchors ) {
+		if( m_displayedFieldAnchors != anchors ) {
+			m_displayedFieldAnchors = anchors;
+			Q_EMIT displayedFieldAnchorsChanged( anchors );
+		}
+	}
+
+	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

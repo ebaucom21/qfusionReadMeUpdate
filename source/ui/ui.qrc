@@ -22,6 +22,7 @@
         <file>GeneralSettings.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
+        <file>HudEditorAnchorsMarker.qml</file>
         <file>HudSettings.qml</file>
         <file>InGameCallvoteMapSelector.qml</file>
         <file>InGameCallvoteNumberSelector.qml</file>
