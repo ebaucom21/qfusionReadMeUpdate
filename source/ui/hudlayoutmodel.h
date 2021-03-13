@@ -90,6 +90,10 @@ private:
 	auto getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<int, AnchorPair>>;
 
 	[[nodiscard]]
+	bool isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
+									   const AnchorPair &anchors ) const;
+
+	[[nodiscard]]
 	static auto getPointForAnchors( const QRectF &r, int anchors ) -> QPointF;
 
 	[[nodiscard]]

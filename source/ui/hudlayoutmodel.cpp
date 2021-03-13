@@ -250,7 +250,9 @@ auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::opt
 	for( unsigned i = 0; i < m_entries.size(); ++i ) {
 		if( i != (unsigned)draggedIndex ) {
 			if( const auto maybeAnchors = getMatchingEntryAnchors( draggedRectangle, m_entries[i].rectangle ) ) {
-				return std::make_pair( (int)i, *maybeAnchors );
+				if( isAnchorDefinedPositionValid( draggedIndex, (int)i, *maybeAnchors ) ) {
+					return std::make_pair( (int) i, *maybeAnchors );
+				}
 			}
 		}
 	}
@@ -258,11 +260,66 @@ auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::opt
 	assert( m_fieldSize.isValid() );
 	QRectF fieldRectangle( 0, 0, m_fieldSize.width(), m_fieldSize.height() );
 	if( const auto maybeAnchors = getMatchingFieldAnchors( draggedRectangle, fieldRectangle ) ) {
-		// TODO: It would be nice to have a proper ADT language-level support
-		return std::make_pair( -1, *maybeAnchors );
+		if( isAnchorDefinedPositionValid( draggedIndex, std::nullopt, *maybeAnchors ) ) {
+			// TODO: It would be nice to have a proper ADT language-level support
+			return std::make_pair( -1, *maybeAnchors );
+		}
 	}
 
 	return std::nullopt;
+}
+
+bool HudLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
+												   const AnchorPair &anchors ) const {
+	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
+	const Entry &dragged = m_entries[draggedIndex];
+
+	QPointF anchorPoint;
+	if( otherIndex ) {
+		assert( (unsigned)*otherIndex < (unsigned)m_entries.size() && *otherIndex != draggedIndex );
+		anchorPoint = getPointForAnchors( m_entries[*otherIndex].rectangle, anchors.otherAnchors );
+	} else {
+		const QRectF fieldRectangle( 0, 0, m_fieldSize.width(), m_fieldSize.height() );
+		anchorPoint = getPointForAnchors( fieldRectangle, anchors.otherAnchors );
+	}
+
+	// Apply an anchor-defined position to the dragged item rectangle
+	QRectF predictedRectangle( dragged.rectangle );
+	// Align center first as this moves along both axes
+	if( anchors.selfAnchors & ( VCenter | HCenter ) ) {
+		predictedRectangle.moveCenter( anchorPoint );
+	}
+
+	if( anchors.selfAnchors & Left ) {
+		predictedRectangle.moveLeft( anchorPoint.x() );
+	} else if( anchors.selfAnchors & Right ) {
+		predictedRectangle.moveRight( anchorPoint.x() );
+	}
+
+	if( anchors.selfAnchors & Top ) {
+		predictedRectangle.moveTop( anchorPoint.y() );
+	} else if( anchors.selfAnchors & Bottom ) {
+		predictedRectangle.moveBottom( anchorPoint.y() );
+	}
+
+	// Try shrinking a bit to mitigate f.p. comparison issues
+	if( predictedRectangle.width() > 2.0 && predictedRectangle.height() > 2.0 ) {
+		const QPointF oldCenter( predictedRectangle.center() );
+		predictedRectangle.setWidth( predictedRectangle.width() - 0.5 );
+		predictedRectangle.setHeight( predictedRectangle.height() - 0.5 );
+		predictedRectangle.moveCenter( oldCenter );
+	}
+
+	const int secondCmpIndex = otherIndex ? *otherIndex : draggedIndex;
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		if( i != (unsigned)draggedIndex && i != (unsigned)secondCmpIndex ) {
+			if( m_entries[i].rectangle.intersects( predictedRectangle ) ) {
+				return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 static constexpr auto kHorizontalBitsMask = 0x7;
