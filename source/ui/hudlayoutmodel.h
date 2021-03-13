@@ -107,6 +107,8 @@ private:
 
 	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
 
+	void notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles );
+
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
 	[[nodiscard]]

@@ -42,6 +42,12 @@ auto HudLayoutModel::data( const QModelIndex &index, int role ) const -> QVarian
 	return QVariant();
 }
 
+void HudLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles ) {
+	assert( (unsigned)index < (unsigned)m_entries.size() );
+	const QModelIndex modelIndex( createIndex( index, 0 ) );
+	Q_EMIT dataChanged( modelIndex, modelIndex, changedRoles );
+}
+
 HudLayoutModel::HudLayoutModel() {
 	// Just for debugging
 	Entry entry;
@@ -79,8 +85,7 @@ void HudLayoutModel::finishDragging( int index ) {
 	Entry &dragged = m_entries[index];
 	if( dragged.rectangle.topLeft() != dragged.pendingOrigin ) {
 		dragged.rectangle.moveTopLeft( dragged.pendingOrigin );
-		QModelIndex modelIndex( createIndex( index, 0 ) );
-		Q_EMIT dataChanged( modelIndex, modelIndex, kOriginRoleAsVector );
+		notifyOfUpdatesAtIndex( index, kOriginRoleAsVector );
 	}
 }
 
@@ -96,8 +101,7 @@ void HudLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPa
 	if( oldAnchorItem != newAnchorItem ) {
 		if( oldAnchorItem >= 0 ) {
 			m_entries[oldAnchorItem].displayedAnchors = 0;
-			QModelIndex modelIndex( createIndex( oldAnchorItem, 0 ) );
-			Q_EMIT dataChanged( modelIndex, modelIndex, kDisplayedAnchorsAsRole );
+			notifyOfUpdatesAtIndex( oldAnchorItem, kDisplayedAnchorsAsRole );
 		} else {
 			setDisplayedFieldAnchors( 0 );
 		}
@@ -107,14 +111,11 @@ void HudLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPa
 	dragged.displayedAnchors = 0;
 	dragged.selfAnchors = newAnchorPair.selfAnchors;
 	dragged.anchorItemAnchors = newAnchorPair.otherAnchors;
-
-	const QModelIndex draggedModelIndex( createIndex( index, 0 ) );
-	Q_EMIT dataChanged( draggedModelIndex, draggedModelIndex, kAllAnchorsAsRole );
+	notifyOfUpdatesAtIndex( index, kAllAnchorsAsRole );
 
 	if( newAnchorItem >= 0 ) {
 		m_entries[newAnchorItem].displayedAnchors = 0;
-		const QModelIndex anchorItemModelIndex( createIndex( newAnchorItem, 0 ) );
-		Q_EMIT dataChanged( anchorItemModelIndex, anchorItemModelIndex, kDisplayedAnchorsAsRole );
+		notifyOfUpdatesAtIndex( newAnchorItem, kDisplayedAnchorsAsRole );
 	} else {
 		setDisplayedFieldAnchors( 0 );
 	}
@@ -126,8 +127,7 @@ void HudLayoutModel::updatePosition( int index, qreal x, qreal y ) {
 	Entry &entry = m_entries[index];
 	if( entry.rectangle.topLeft() != point ) {
 		entry.rectangle.moveTopLeft( point );
-		QModelIndex modelIndex( createIndex( index, 0 ) );
-		Q_EMIT dataChanged( modelIndex, modelIndex, kOriginRoleAsVector );
+		notifyOfUpdatesAtIndex( index, kOriginRoleAsVector );
 	}
 }
 
@@ -156,12 +156,10 @@ void HudLayoutModel::updateMarkers( int draggedIndex ) {
 
 	SmallIntSet modifiedRows;
 
-	// Dispatch updates
 	Entry &dragged = m_entries[draggedIndex];
 	if( dragged.displayedAnchorItem != anchorItem ) {
 		// Clear flags of a (maybe) old item
 		if( dragged.displayedAnchorItem ) {
-			// TODO: This could be negative (to indicate the field)
 			if( const int oldItemIndex = *dragged.displayedAnchorItem; oldItemIndex >= 0 ) {
 				m_entries[oldItemIndex].displayedAnchors = 0;
 				modifiedRows.add( oldItemIndex );
@@ -192,9 +190,7 @@ void HudLayoutModel::updateMarkers( int draggedIndex ) {
 	}
 
 	for( int row: modifiedRows ) {
-		assert( (unsigned)row < (unsigned)m_entries.size() );
-		QModelIndex modelIndex( createIndex( row, 0 ) );
-		Q_EMIT dataChanged( modelIndex, modelIndex, kDisplayedAnchorsAsRole );
+		notifyOfUpdatesAtIndex( row, kDisplayedAnchorsAsRole );
 	}
 }
 
