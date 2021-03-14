@@ -11,7 +11,10 @@ Item {
         height: 9 * 50
         clip: true
 
-        Component.onCompleted: hudEditorLayoutModel.setFieldSize(width, height)
+        Component.onCompleted: {
+            hudEditorLayoutModel.setFieldSize(width, height)
+            hudEditorLayoutModel.load("default")
+        }
 
         Rectangle {
             anchors.left: parent.left

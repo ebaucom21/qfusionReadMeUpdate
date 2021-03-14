@@ -2,6 +2,7 @@
 #define WSW_8c488c22_5afd_4fad_9e25_9304dd129d10_H
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswstdtypes.h"
 
 #include <QAbstractListModel>
@@ -21,10 +22,13 @@ public:
 	Q_INVOKABLE void updatePosition( int index, qreal x, qreal y );
 	Q_INVOKABLE void updateAnchors( int index );
 
+	[[nodiscard]]
+	Q_INVOKABLE bool load( const QByteArray &fileName );
+	[[nodiscard]]
+	Q_INVOKABLE bool save( const QByteArray &fileName );
+
 	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
 	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
-
-	HudLayoutModel();
 
 	enum HorizontalAnchorBits {
 		Left    = 0x1,
@@ -116,6 +120,30 @@ private:
 
 	[[nodiscard]]
 	bool isDraggable( int index ) const;
+
+	[[nodiscard]]
+	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
+		-> std::optional<wsw::StringView>;
+
+	[[nodiscard]]
+	bool serialize( wsw::StaticString<4096> *buffer );
+
+	void writeAnchor( wsw::StaticString<32> *tmp, int anchor );
+
+	[[nodiscard]]
+	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<Entry>>;
+
+	[[nodiscard]]
+	auto parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<Entry, unsigned>>;
+
+	[[nodiscard]]
+	auto parseHorizontalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseVerticalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseAnchors( const wsw::StringView &first, const wsw::StringView &second ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseAnchors( const wsw::StringView &token ) -> std::optional<int>;
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

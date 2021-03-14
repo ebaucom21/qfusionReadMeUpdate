@@ -1,4 +1,7 @@
 #include "hudlayoutmodel.h"
+#include "../qcommon/wswfs.h"
+#include "../qcommon/wswtonum.h"
+#include "../qcommon/wswstringsplitter.h"
 
 #include <QPointF>
 #include <QSizeF>
@@ -70,21 +73,269 @@ void HudLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &chan
 	Q_EMIT dataChanged( modelIndex, modelIndex, changedRoles );
 }
 
-HudLayoutModel::HudLayoutModel() {
-	// Just for debugging
-	Entry entry;
-	entry.rectangle = QRectF( 0, 0, 32, 96 );
-	entry.selfAnchors = Top | Left;
-	entry.anchorItemAnchors = Top | Left;
-	m_entries.push_back( entry );
-	entry.rectangle = QRectF( 0, 0, 96, 32 );
-	entry.selfAnchors = Bottom | Right;
-	entry.anchorItemAnchors = Bottom | Right;
-	m_entries.push_back( entry );
-	entry.rectangle = QRectF( 0, 0, 64, 64 );
-	entry.selfAnchors = VCenter | HCenter;
-	entry.anchorItemAnchors = VCenter | HCenter;
-	m_entries.push_back( entry );
+bool HudLayoutModel::load( const QByteArray &fileName ) {
+	wsw::StaticString<MAX_QPATH> pathBuffer;
+	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
+		if( auto maybeHandle = wsw::fs::openAsReadHandle( *maybePath ) ) {
+			char dataBuffer[4096];
+			if( const size_t size = maybeHandle->getInitialFileSize(); size && size < sizeof( dataBuffer ) ) {
+				if( maybeHandle->readExact( dataBuffer, size ) ) {
+					if( auto maybeLoadedEntries = deserialize( wsw::StringView( dataBuffer, size ) ) ) {
+						if( !maybeLoadedEntries->empty() ) {
+							beginResetModel();
+							wsw::Vector<Entry> loadedEntries( std::move( *maybeLoadedEntries ) );
+							m_entries.swap( loadedEntries );
+							endResetModel();
+							return true;
+						}
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+bool HudLayoutModel::save( const QByteArray &fileName ) {
+	wsw::StaticString<MAX_QPATH> pathBuffer;
+	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
+		if( auto maybeHandle = wsw::fs::openAsWriteHandle( *maybePath ) ) {
+			wsw::StaticString<4096> dataBuffer;
+			if( serialize( &dataBuffer ) ) {
+				if( maybeHandle->write( dataBuffer.data(), dataBuffer.size() ) ) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
+								   const wsw::StringView &baseFileName ) const -> std::optional<wsw::StringView> {
+	if( baseFileName.length() > std::min( 16u, buffer->capacity() ) ) {
+		return std::nullopt;
+	}
+	if( baseFileName.contains( '/' ) || baseFileName.contains( '\\' ) || baseFileName.contains( '.' ) ) {
+		return std::nullopt;
+	}
+	for( char ch: baseFileName ) {
+		if( !::isalnum( ch ) ) {
+			return std::nullopt;
+		}
+	}
+	buffer->clear();
+	( *buffer ) << "huds/"_asView << baseFileName << ".hud"_asView;
+	return buffer->asView();
+}
+
+static const wsw::StringView kWidth( "Width"_asView );
+static const wsw::StringView kHeight( "Height"_asView );
+static const wsw::StringView kItem( "Item"_asView );
+static const wsw::StringView kSelf( "Self"_asView );
+static const wsw::StringView kOther( "Other"_asView );
+
+static const wsw::StringView *const kOrderedKeywords[] {
+	&kWidth, &kHeight, &kItem, &kSelf, &kOther
+};
+
+bool HudLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
+	wsw::StaticString<32> selfAnchorsString, otherAnchorsString;
+	auto &buffer = *buffer_;
+
+	// `<<` throws on overflow
+	try {
+		buffer.clear();
+		for( unsigned i = 0; i < m_entries.size(); ++i ) {
+			const Entry &entry = m_entries[i];
+			// Disallow serializing dragged items
+			if( entry.displayedAnchorItem ) {
+				return false;
+			}
+
+			writeAnchor( &selfAnchorsString, entry.selfAnchors );
+			writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
+
+			buffer << ( i + 1 ) << ' ';
+			buffer << kWidth << ' ' << entry.rectangle.width() << ' ';
+			buffer << kHeight << ' ' << entry.rectangle.height() << ' ';
+			buffer << kItem << ' ' << entry.realAnchorItem << ' ';
+			buffer << kSelf << ' ' << selfAnchorsString << ' ';
+			buffer << kOther << ' ' << otherAnchorsString << ' ';
+			buffer << "\r\n"_asView;
+		}
+		return true;
+	} catch( ... ) {
+		return false;
+	}
+}
+
+void HudLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int anchor ) {
+	const auto [first, second] = getAnchorNames( anchor );
+	buffer->clear();
+	( *buffer ) << first << '|' << second;
+}
+
+// TODO: Share the static instance over the codebase
+static const wsw::CharLookup kNewlineChars( "\r\n"_asView );
+
+auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<Entry>> {
+	wsw::Vector<Entry> entries;
+	wsw::StringSplitter lineSplitter( data );
+	while( const auto maybeNextLine = lineSplitter.getNext( kNewlineChars ) ) {
+		auto maybeEntryAndIndex = parseEntry( *maybeNextLine );
+		if( !maybeEntryAndIndex ) {
+			return std::nullopt;
+		}
+		auto &&[entry, index] = std::move( *maybeEntryAndIndex );
+		if( index != entries.size() + 1 ) {
+			return std::nullopt;
+		}
+		entries.push_back( entry );
+	}
+
+	for( const Entry &entry: m_entries ) {
+		// Disallow non-existing anchor items
+		if( entry.realAnchorItem >= 0 ) {
+			if( (unsigned)entry.realAnchorItem >= (unsigned)m_entries.size() ) {
+				return std::nullopt;
+			}
+		}
+	}
+
+	// Try detecting direct (1-1) anchor loops
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		if( int anchorItem = m_entries[i].realAnchorItem; anchorItem >= 0 ) {
+			if( m_entries[anchorItem].realAnchorItem == (int)i ) {
+				return std::nullopt;
+			}
+		}
+	}
+
+	// TODO: Check mutual intersections of items
+	// TODO: Check indirect anchor loops (graph cycles)
+
+	return entries;
+}
+
+auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<Entry, unsigned>> {
+	wsw::StringSplitter splitter( line );
+	std::optional<qreal> dimensions[2];
+	std::optional<unsigned> entryIndex;
+	std::optional<int> parent;
+	std::optional<int> anchors[2];
+
+	unsigned lastTokenNum = 0;
+	while( const auto maybeNextTokenAndNum = splitter.getNextWithNum() ) {
+		const auto [token, num] = *maybeNextTokenAndNum;
+		lastTokenNum = num;
+		if( num % 2 ) {
+			const unsigned keywordIndex = num / 2;
+			if( keywordIndex >= std::size( kOrderedKeywords ) ) {
+				return std::nullopt;
+			}
+			if( !kOrderedKeywords[keywordIndex]->equalsIgnoreCase( token ) ) {
+				return std::nullopt;
+			}
+		} else {
+			const unsigned valueIndex = num / 2;
+			if( valueIndex == 0 ) {
+				if( const auto maybeIndex = wsw::toNum<unsigned>( token ) ) {
+					entryIndex = maybeIndex;
+				} else {
+					return std::nullopt;
+				}
+			} else if( valueIndex >= 1 && valueIndex <= 2 ) {
+				if( const auto maybeValue = wsw::toNum<qreal>( token ) ) {
+					dimensions[valueIndex - 1] = maybeValue;
+				} else {
+					return std::nullopt;
+				}
+			} else if( valueIndex == 3 ) {
+				if( const auto maybeParent = wsw::toNum<int>( token ) ) {
+					parent = maybeParent;
+				} else {
+					return std::nullopt;
+				}
+			} else if( valueIndex >= 4 && valueIndex <= 5 ) {
+				if( const auto maybeAnchors = parseAnchors( token ) ) {
+					anchors[valueIndex - 4] = maybeAnchors;
+				} else {
+					return std::nullopt;
+				}
+			}
+		}
+	}
+	if( lastTokenNum == 2 * std::size( kOrderedKeywords ) ) {
+		Entry entry;
+		entry.realAnchorItem = parent.value();
+		entry.selfAnchors = anchors[0].value();
+		entry.anchorItemAnchors = anchors[1].value();
+		entry.rectangle.setWidth( dimensions[0].value() );
+		entry.rectangle.setHeight( dimensions[1].value() );
+		return std::make_pair( entry, entryIndex.value() );
+	}
+	return std::nullopt;
+}
+
+auto HudLayoutModel::parseAnchors( const wsw::StringView &token ) -> std::optional<int> {
+	wsw::StringSplitter splitter( token );
+	// Expect exactly 2 tokens
+	if( const auto maybeFirst = splitter.getNext( '|' ) ) {
+		if( const auto maybeSecond = splitter.getNext( '|' ) ) {
+			if( !splitter.getNext() ) {
+				return parseAnchors( maybeFirst->trim(), maybeSecond->trim() );
+			}
+		}
+	}
+	return std::nullopt;
+}
+
+auto HudLayoutModel::parseAnchors( const wsw::StringView &first, const wsw::StringView &second ) -> std::optional<int> {
+	std::optional<int> horizontal, vertical;
+	if( !( vertical = parseVerticalAnchors( first ) ) ) {
+		if( !( horizontal = parseHorizontalAnchors( first ) ) ) {
+			return std::nullopt;
+		}
+	}
+	if( vertical ) {
+		if( !( horizontal = parseHorizontalAnchors( second ) ) ) {
+			return std::nullopt;
+		}
+	} else {
+		if( !( vertical = parseVerticalAnchors( second ) ) )  {
+			return std::nullopt;
+		}
+	}
+	return horizontal.value() | vertical.value();
+}
+
+static const wsw::StringView kTop( "Top"_asView );
+static const wsw::StringView kBottom( "Bottom"_asView );
+static const wsw::StringView kVCenter( "VCenter"_asView );
+
+static const wsw::StringView kLeft( "Left"_asView );
+static const wsw::StringView kRight( "Right"_asView );
+static const wsw::StringView kHCenter( "HCenter"_asView );
+
+auto HudLayoutModel::parseHorizontalAnchors( const wsw::StringView &keyword ) -> std::optional<int> {
+	const std::pair<wsw::StringView, int> mapping[] { { kTop, Top }, { kBottom, Bottom }, { kVCenter, VCenter } };
+	for( const auto &[word, value] : mapping ) {
+		if( word.equalsIgnoreCase( keyword ) ) {
+			return value;
+		}
+	}
+	return std::nullopt;
+}
+
+auto HudLayoutModel::parseVerticalAnchors( const wsw::StringView &keyword ) -> std::optional<int> {
+	const std::pair<wsw::StringView, int> mapping[] { { kLeft, Left }, { kRight, Right }, { kHCenter, HCenter } };
+	for( const auto &[word, value] : mapping ) {
+		if( word.equalsIgnoreCase( keyword ) ) {
+			return value;
+		}
+	}
+	return std::nullopt;
 }
 
 void HudLayoutModel::setFieldSize( qreal width, qreal height ) {
@@ -370,9 +621,9 @@ auto HudLayoutModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPoin
 [[nodiscard]]
 static inline auto getHorizontalAnchorName( int bits ) -> wsw::StringView {
 	switch( bits & kHorizontalBitsMask ) {
-		case HudLayoutModel::Left: return "Left"_asView;
-		case HudLayoutModel::HCenter: return "HCenter"_asView;
-		case HudLayoutModel::Right: return "Right"_asView;
+		case HudLayoutModel::Left: return kLeft;
+		case HudLayoutModel::HCenter: return kHCenter;
+		case HudLayoutModel::Right: return kRight;
 		default: return "None"_asView;
 	}
 }
@@ -380,9 +631,9 @@ static inline auto getHorizontalAnchorName( int bits ) -> wsw::StringView {
 [[nodiscard]]
 static inline auto getVerticalAnchorName( int bits ) -> wsw::StringView {
 	switch( bits & kVerticalBitsMask ) {
-		case HudLayoutModel::Top: return "Top"_asView;
-		case HudLayoutModel::VCenter: return "VCenter"_asView;
-		case HudLayoutModel::Bottom: return "Bottom"_asView;
+		case HudLayoutModel::Top: return kTop;
+		case HudLayoutModel::VCenter: return kVCenter;
+		case HudLayoutModel::Bottom: return kBottom;
 		default: return "None"_asView;
 	}
 }
