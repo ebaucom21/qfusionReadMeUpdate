@@ -43,6 +43,7 @@ private:
 	enum Role {
 		Origin = Qt::UserRole + 1,
 		Size,
+		Draggable,
 		DisplayedAnchors,
 		DisplayedAnchorItemIndex,
 		SelfAnchors,
@@ -60,8 +61,8 @@ private:
 		std::optional<int> displayedAnchorItem;
 	};
 
-	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors };
-	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors };
+	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors, Draggable };
+	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
 	static inline const QVector<int> kOriginRoleAsVector { Origin };
 
 	QSizeF m_fieldSize;
@@ -112,6 +113,9 @@ private:
 	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
 
 	void notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles );
+
+	[[nodiscard]]
+	bool isDraggable( int index ) const;
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

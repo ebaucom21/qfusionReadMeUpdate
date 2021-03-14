@@ -155,7 +155,7 @@ Item {
                 MouseArea {
                     id: mouseArea
                     anchors.fill: parent
-                    drag.target: parent
+                    drag.target: draggable ? parent : undefined
                     hoverEnabled: true
                     drag.onActiveChanged: {
                         if (!drag.active) {

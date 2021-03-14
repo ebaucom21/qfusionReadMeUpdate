@@ -11,6 +11,7 @@ auto HudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Origin, "origin" },
 		{ Size, "size" },
+		{ Draggable, "draggable" },
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
 		{ DisplayedAnchors, "displayedAnchors" },
@@ -30,6 +31,7 @@ auto HudLayoutModel::data( const QModelIndex &index, int role ) const -> QVarian
 			switch( role ) {
 				case Origin: return m_entries[row].rectangle.topLeft();
 				case Size: return m_entries[row].rectangle.size();
+				case Draggable: return isDraggable( row );
 				case DisplayedAnchors: return m_entries[row].displayedAnchors;
 				case DisplayedAnchorItemIndex: return m_entries[row].displayedAnchorItem.value_or( 0 );
 				case SelfAnchors: return m_entries[row].selfAnchors;
@@ -40,6 +42,26 @@ auto HudLayoutModel::data( const QModelIndex &index, int role ) const -> QVarian
 		}
 	}
 	return QVariant();
+}
+
+bool HudLayoutModel::isDraggable( int index ) const {
+	assert( (unsigned)index < (unsigned)m_entries.size() );
+	// This is not that bad as properties are cached/retrieved on demand
+	// and maintaining a bidirectional mapping is extremely error-prone.
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		if( i != (unsigned)index ) {
+			const Entry &entry = m_entries[i];
+			if( entry.realAnchorItem == index ) {
+				return false;
+			}
+			if( const auto maybeDisplayedItem = entry.displayedAnchorItem ) {
+				if( *maybeDisplayedItem == index ) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
 }
 
 void HudLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles ) {
