@@ -251,7 +251,9 @@ auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::opt
 		if( i != (unsigned)draggedIndex ) {
 			if( const auto maybeAnchors = getMatchingEntryAnchors( draggedRectangle, m_entries[i].rectangle ) ) {
 				if( isAnchorDefinedPositionValid( draggedIndex, (int)i, *maybeAnchors ) ) {
-					return std::make_pair( (int) i, *maybeAnchors );
+					if( m_entries[i].realAnchorItem != draggedIndex ) {
+						return std::make_pair( (int)i, *maybeAnchors );
+					}
 				}
 			}
 		}
