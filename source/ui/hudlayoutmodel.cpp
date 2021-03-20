@@ -10,7 +10,7 @@ using wsw::operator""_asView;
 
 namespace wsw::ui {
 
-auto HudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
+auto HudEditorLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Origin, "origin" },
 		{ Size, "size" },
@@ -24,11 +24,11 @@ auto HudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	};
 }
 
-auto HudLayoutModel::rowCount( const QModelIndex & ) const -> int {
+auto HudEditorLayoutModel::rowCount( const QModelIndex & ) const -> int {
 	return m_fieldSize.isValid() ? (int)m_entries.size() : 0;
 }
 
-auto HudLayoutModel::data( const QModelIndex &index, int role ) const -> QVariant {
+auto HudEditorLayoutModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	if( index.isValid() ) {
 		if( int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
 			switch( role ) {
@@ -47,7 +47,7 @@ auto HudLayoutModel::data( const QModelIndex &index, int role ) const -> QVarian
 	return QVariant();
 }
 
-bool HudLayoutModel::isDraggable( int index ) const {
+bool HudEditorLayoutModel::isDraggable( int index ) const {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	// This is not that bad as properties are cached/retrieved on demand
 	// and maintaining a bidirectional mapping is extremely error-prone.
@@ -67,7 +67,7 @@ bool HudLayoutModel::isDraggable( int index ) const {
 	return true;
 }
 
-void HudLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles ) {
+void HudEditorLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles ) {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	const QModelIndex modelIndex( createIndex( index, 0 ) );
 	Q_EMIT dataChanged( modelIndex, modelIndex, changedRoles );
@@ -82,11 +82,7 @@ bool HudLayoutModel::load( const QByteArray &fileName ) {
 				if( maybeHandle->readExact( dataBuffer, size ) ) {
 					if( auto maybeLoadedEntries = deserialize( wsw::StringView( dataBuffer, size ) ) ) {
 						if( !maybeLoadedEntries->empty() ) {
-							beginResetModel();
-							wsw::Vector<Entry> loadedEntries( std::move( *maybeLoadedEntries ) );
-							m_entries.swap( loadedEntries );
-							endResetModel();
-							return true;
+							return acceptDeserializedEntries( std::move( *maybeLoadedEntries ) );
 						}
 					}
 				}
@@ -96,7 +92,7 @@ bool HudLayoutModel::load( const QByteArray &fileName ) {
 	return false;
 }
 
-bool HudLayoutModel::save( const QByteArray &fileName ) {
+bool HudEditorLayoutModel::save( const QByteArray &fileName ) {
 	wsw::StaticString<MAX_QPATH> pathBuffer;
 	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
 		if( auto maybeHandle = wsw::fs::openAsWriteHandle( *maybePath ) ) {
@@ -129,20 +125,18 @@ auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
 	return buffer->asView();
 }
 
-static const wsw::StringView kWidth( "Width"_asView );
-static const wsw::StringView kHeight( "Height"_asView );
 static const wsw::StringView kItem( "Item"_asView );
 static const wsw::StringView kSelf( "Self"_asView );
 static const wsw::StringView kOther( "Other"_asView );
+static const wsw::StringView kKind( "Kind"_asView );
 
-static const wsw::StringView *const kOrderedKeywords[] {
-	&kWidth, &kHeight, &kItem, &kSelf, &kOther
-};
+static const wsw::StringView *const kOrderedKeywords[] { &kItem, &kSelf, &kOther, &kKind };
 
-bool HudLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
+bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	wsw::StaticString<32> selfAnchorsString, otherAnchorsString;
 	auto &buffer = *buffer_;
 
+	const QMetaEnum kindMeta( QMetaEnum::fromType<Kind>() );
 	// `<<` throws on overflow
 	try {
 		buffer.clear();
@@ -157,11 +151,10 @@ bool HudLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 			writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
 
 			buffer << ( i + 1 ) << ' ';
-			buffer << kWidth << ' ' << entry.rectangle.width() << ' ';
-			buffer << kHeight << ' ' << entry.rectangle.height() << ' ';
 			buffer << kItem << ' ' << entry.realAnchorItem << ' ';
 			buffer << kSelf << ' ' << selfAnchorsString << ' ';
 			buffer << kOther << ' ' << otherAnchorsString << ' ';
+			buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
 			buffer << "\r\n"_asView;
 		}
 		return true;
@@ -170,7 +163,7 @@ bool HudLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	}
 }
 
-void HudLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int anchor ) {
+void HudEditorLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int anchor ) {
 	const auto [first, second] = getAnchorNames( anchor );
 	buffer->clear();
 	( *buffer ) << first << '|' << second;
@@ -179,8 +172,8 @@ void HudLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int anchor ) {
 // TODO: Share the static instance over the codebase
 static const wsw::CharLookup kNewlineChars( "\r\n"_asView );
 
-auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<Entry>> {
-	wsw::Vector<Entry> entries;
+auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>> {
+	wsw::Vector<FileEntry> entries;
 	wsw::StringSplitter lineSplitter( data );
 	while( const auto maybeNextLine = lineSplitter.getNext( kNewlineChars ) ) {
 		auto maybeEntryAndIndex = parseEntry( *maybeNextLine );
@@ -188,25 +181,43 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 			return std::nullopt;
 		}
 		auto &&[entry, index] = std::move( *maybeEntryAndIndex );
-		if( index != entries.size() + 1 ) {
+		if( index != entries.size() ) {
 			return std::nullopt;
 		}
 		entries.push_back( entry );
 	}
 
-	for( const Entry &entry: m_entries ) {
+	for( const FileEntry &entry: entries ) {
 		// Disallow non-existing anchor items
-		if( entry.realAnchorItem >= 0 ) {
-			if( (unsigned)entry.realAnchorItem >= (unsigned)m_entries.size() ) {
+		if( entry.anchorItem >= 0 ) {
+			if( (unsigned)entry.anchorItem >= (unsigned)entries.size() ) {
 				return std::nullopt;
 			}
 		}
 	}
 
+	// Validate kinds
+	const QMetaEnum metaKinds( QMetaEnum::fromType<Kind>() );
+	std::array<bool, 32> presentKinds;
+	assert( presentKinds.size() > (size_t)metaKinds.keyCount() );
+	presentKinds.fill( false );
+	for( const FileEntry &entry: entries ) {
+		const int kind = entry.kind;
+		if( kind && (unsigned)kind < (unsigned)presentKinds.max_size() ) {
+			if( metaKinds.key( kind ) != nullptr ) {
+				if ( !presentKinds[kind] ) {
+					presentKinds[kind] = true;
+					continue;
+				}
+			}
+		}
+		return std::nullopt;
+	}
+
 	// Try detecting direct (1-1) anchor loops
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
-		if( int anchorItem = m_entries[i].realAnchorItem; anchorItem >= 0 ) {
-			if( m_entries[anchorItem].realAnchorItem == (int)i ) {
+	for( unsigned i = 0; i < entries.size(); ++i ) {
+		if( int anchorItem = entries[i].anchorItem; anchorItem >= 0 ) {
+			if( entries[anchorItem].anchorItem == (int)i ) {
 				return std::nullopt;
 			}
 		}
@@ -218,12 +229,11 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 	return entries;
 }
 
-auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<Entry, unsigned>> {
+auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<FileEntry, unsigned>> {
 	wsw::StringSplitter splitter( line );
-	std::optional<qreal> dimensions[2];
-	std::optional<unsigned> entryIndex;
-	std::optional<int> parent;
+	std::optional<int> values[2];
 	std::optional<int> anchors[2];
+	std::optional<Kind> kind;
 
 	unsigned lastTokenNum = 0;
 	while( const auto maybeNextTokenAndNum = splitter.getNextWithNum() ) {
@@ -239,42 +249,40 @@ auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<
 			}
 		} else {
 			const unsigned valueIndex = num / 2;
-			if( valueIndex == 0 ) {
-				if( const auto maybeIndex = wsw::toNum<unsigned>( token ) ) {
-					entryIndex = maybeIndex;
+			if( valueIndex < 2 ) {
+				if( const auto maybeValue = wsw::toNum<int>( token ) ) {
+					values[valueIndex] = maybeValue;
 				} else {
 					return std::nullopt;
 				}
-			} else if( valueIndex >= 1 && valueIndex <= 2 ) {
-				if( const auto maybeValue = wsw::toNum<qreal>( token ) ) {
-					dimensions[valueIndex - 1] = maybeValue;
-				} else {
-					return std::nullopt;
-				}
-			} else if( valueIndex == 3 ) {
-				if( const auto maybeParent = wsw::toNum<int>( token ) ) {
-					parent = maybeParent;
-				} else {
-					return std::nullopt;
-				}
-			} else if( valueIndex >= 4 && valueIndex <= 5 ) {
+			} else if( valueIndex >= 2 && valueIndex <= 3 ) {
 				if( const auto maybeAnchors = parseAnchors( token ) ) {
-					anchors[valueIndex - 4] = maybeAnchors;
+					anchors[valueIndex - 2] = maybeAnchors;
 				} else {
 					return std::nullopt;
 				}
+			} else if( valueIndex == 4 ) {
+				if( const auto maybeKind = parseKind( token ) ) {
+					kind = maybeKind;
+				} else {
+					return std::nullopt;
+				}
+			} else {
+				return std::nullopt;
 			}
 		}
 	}
+
 	if( lastTokenNum == 2 * std::size( kOrderedKeywords ) ) {
-		Entry entry;
-		entry.realAnchorItem = parent.value();
+		// TODO: Use designated initializers
+		FileEntry entry;
+		entry.anchorItem = values[1].value();
 		entry.selfAnchors = anchors[0].value();
-		entry.anchorItemAnchors = anchors[1].value();
-		entry.rectangle.setWidth( dimensions[0].value() );
-		entry.rectangle.setHeight( dimensions[1].value() );
-		return std::make_pair( entry, entryIndex.value() );
+		entry.otherAnchors = anchors[1].value();
+		entry.kind = kind.value();
+		return std::make_pair( entry, values[0].value() );
 	}
+
 	return std::nullopt;
 }
 
@@ -338,7 +346,53 @@ auto HudLayoutModel::parseVerticalAnchors( const wsw::StringView &keyword ) -> s
 	return std::nullopt;
 }
 
-void HudLayoutModel::setFieldSize( qreal width, qreal height ) {
+auto HudLayoutModel::parseKind( const wsw::StringView &token ) -> std::optional<Kind> {
+	const QMetaEnum kindMeta( QMetaEnum::fromType<Kind>() );
+	// Implement a case-insensitive comparison manually
+	for( int i = 0, end = kindMeta.keyCount(); i < end; ++i ) {
+		if( token.equalsIgnoreCase( wsw::StringView( kindMeta.key( i ) ) ) ) {
+			return (Kind)kindMeta.value( i );
+		}
+	}
+	return std::nullopt;
+}
+
+bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
+	wsw::Vector<Entry> entries;
+	for( FileEntry &fileEntry: fileEntries ) {
+		if( const auto maybeSize = getEditorSizeForKind( fileEntry.kind ) ) {
+			Entry entry;
+			entry.kind = fileEntry.kind;
+			entry.selfAnchors = fileEntry.selfAnchors;
+			entry.anchorItemAnchors = fileEntry.otherAnchors;
+			entry.realAnchorItem = fileEntry.anchorItem;
+			entry.rectangle.setSize( *maybeSize );
+			entries.push_back( entry );
+		} else {
+			return false;
+		}
+	}
+	assert( entries.size() == fileEntries.size() );
+	beginResetModel();
+	std::swap( m_entries, entries );
+	endResetModel();
+	return true;
+}
+
+auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QSize> {
+	switch( kind ) {
+		case HealthBar: [[fallthrough]];
+		case ArmorBar: [[fallthrough]];
+		case SpeedBar: return QSize( 144, 32 );
+		case AllWeaponsBar: return QSize( 256, 48 );
+		case SelectedWeapon: return QSize( 96, 96 );
+		case MatchTime: return QSize( 128, 64 );
+		case MatchScore: return QSize( 128, 56 );
+		default: return std::nullopt;
+	}
+}
+
+void HudEditorLayoutModel::setFieldSize( qreal width, qreal height ) {
 	QSize size( width, height );
 	if( size != m_fieldSize ) {
 		beginResetModel();
@@ -347,13 +401,13 @@ void HudLayoutModel::setFieldSize( qreal width, qreal height ) {
 	}
 }
 
-void HudLayoutModel::trackDragging( int index, qreal x, qreal y ) {
+void HudEditorLayoutModel::trackDragging( int index, qreal x, qreal y ) {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	m_entries[index].pendingOrigin = QPointF( x, y );
 	updateMarkers( index );
 }
 
-void HudLayoutModel::finishDragging( int index ) {
+void HudEditorLayoutModel::finishDragging( int index ) {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	Entry &dragged = m_entries[index];
 	if( dragged.rectangle.topLeft() != dragged.pendingOrigin ) {
@@ -362,13 +416,13 @@ void HudLayoutModel::finishDragging( int index ) {
 	}
 }
 
-void HudLayoutModel::updateAnchors( int index ) {
+void HudEditorLayoutModel::updateAnchors( int index ) {
 	if( const auto maybeItemAndAnchors = getMatchingAnchorItem( index ) ) {
 		updateAnchors( index, maybeItemAndAnchors->first, maybeItemAndAnchors->second );
 	}
 }
 
-void HudLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair ) {
+void HudEditorLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair ) {
 	Entry &dragged = m_entries[index];
 	const int oldAnchorItem = dragged.realAnchorItem;
 	if( oldAnchorItem != newAnchorItem ) {
@@ -394,7 +448,7 @@ void HudLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPa
 	}
 }
 
-void HudLayoutModel::updatePosition( int index, qreal x, qreal y ) {
+void HudEditorLayoutModel::updatePosition( int index, qreal x, qreal y ) {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	QPointF point( x, y );
 	Entry &entry = m_entries[index];
@@ -418,7 +472,7 @@ public:
 	}
 };
 
-void HudLayoutModel::updateMarkers( int draggedIndex ) {
+void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
 	// It's more convenient to decompose results
 	std::optional<int> anchorItem;
 	std::optional<AnchorPair> anchorsPair;
@@ -468,7 +522,7 @@ void HudLayoutModel::updateMarkers( int draggedIndex ) {
 }
 
 // Pairs are arranged in their priority order
-const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingEntryAnchorPairs[] {
+const HudLayoutModel::AnchorPair HudEditorLayoutModel::kMatchingEntryAnchorPairs[] {
 	{ Top | HCenter, Bottom | HCenter },
 	{ Bottom | HCenter, Top | HCenter },
 	{ VCenter | Left, VCenter | Right },
@@ -487,7 +541,7 @@ static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
 	return diff.x() * diff.x() + diff.y() * diff.y() < 12 * 12;
 }
 
-auto HudLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+auto HudEditorLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
 	-> std::optional<AnchorPair> {
 	for( const auto &[selfAnchors, otherAnchors] : kMatchingEntryAnchorPairs ) {
 		const QPointF selfPoint( getPointForAnchors( draggedRectangle, selfAnchors ) );
@@ -499,7 +553,7 @@ auto HudLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, co
 	return std::nullopt;
 }
 
-auto HudLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
+auto HudEditorLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
 	-> std::optional<AnchorPair> {
 	// Arrange in their priority order
 	for( const int horizontalBits : { Left, Right, HCenter } ) {
@@ -515,7 +569,8 @@ auto HudLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, co
 	return std::nullopt;
 }
 
-auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<int, AnchorPair>> {
+auto HudEditorLayoutModel::getMatchingAnchorItem( int draggedIndex ) const
+	-> std::optional<std::pair<int, AnchorPair>> {
 	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
 	QRectF draggedRectangle( m_entries[draggedIndex].rectangle );
 	draggedRectangle.moveTopLeft( m_entries[draggedIndex].pendingOrigin );
@@ -544,8 +599,8 @@ auto HudLayoutModel::getMatchingAnchorItem( int draggedIndex ) const -> std::opt
 	return std::nullopt;
 }
 
-bool HudLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
-												   const AnchorPair &anchors ) const {
+bool HudEditorLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
+														 const AnchorPair &anchors ) const {
 	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
 	const Entry &dragged = m_entries[draggedIndex];
 
@@ -600,7 +655,7 @@ bool HudLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const std::
 static constexpr auto kHorizontalBitsMask = 0x7;
 static constexpr auto kVerticalBitsMask = 0x7 << 3;
 
-auto HudLayoutModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPointF {
+auto HudEditorLayoutModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPointF {
 	qreal x;
 	switch( anchors & kHorizontalBitsMask ) {
 		case Left: x = r.left(); break;
@@ -640,6 +695,41 @@ static inline auto getVerticalAnchorName( int bits ) -> wsw::StringView {
 
 auto HudLayoutModel::getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView> {
 	return { getVerticalAnchorName( anchors ), getHorizontalAnchorName( anchors ) };
+}
+
+auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
+	return {
+		{ Kind, "kind" },
+		{ SelfAnchors, "selfAnchors" },
+		{ AnchorItemAnchors, "anchorItemAnchors" },
+		{ AnchorItemIndex, "anchorItemIndex" }
+	};
+}
+
+auto InGameHudLayoutModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> QVariant {
+	if( index.isValid() ) {
+		if( int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			switch( role ) {
+				case Kind: return m_entries[row].kind;
+				case SelfAnchors: return m_entries[row].selfAnchors;
+				case AnchorItemAnchors: return m_entries[row].otherAnchors;
+				case AnchorItemIndex: return m_entries[row].anchorItem;
+				default: return QVariant();
+			}
+		}
+	}
+	return QVariant();
+}
+
+bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
+	beginResetModel();
+	std::swap( m_entries, fileEntries );
+	endResetModel();
+	return true;
 }
 
 }

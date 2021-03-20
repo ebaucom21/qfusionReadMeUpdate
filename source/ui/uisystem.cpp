@@ -251,7 +251,8 @@ private:
 
 	ActionRequestsModel m_actionRequestsModel;
 
-	HudLayoutModel m_hudEditorLayoutModel;
+	HudEditorLayoutModel m_hudEditorLayoutModel;
+	InGameHudLayoutModel m_inGameHudLayoutModel;
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -564,6 +565,8 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	qmlRegisterUncreatableType<DemoPlayer>( "net.warsow", 2, 6, "DemoPlayer", reason );
 	qmlRegisterUncreatableType<GametypeOptionsModel>( "net.warsow", 2, 6, "GametypeOptionsModel", reason );
 	qmlRegisterUncreatableType<HudLayoutModel>( "net.warsow", 2, 6, "HudLayoutModel", reason );
+	qmlRegisterUncreatableType<HudEditorLayoutModel>( "net.warsow", 2, 6, "HudEditorLayoutModel", reason );
+	qmlRegisterUncreatableType<InGameHudLayoutModel>( "net.warsow", 2, 6, "InGameHudLayoutModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
 
@@ -594,6 +597,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
 	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
 	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
+	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
 
 	m_component = new QQmlComponent( m_engine );
 

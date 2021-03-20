@@ -23,7 +23,9 @@
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudEditorAnchorsMarker.qml</file>
+        <file>HudLayoutItem.qml</file>
         <file>HudSettings.qml</file>
+        <file>InGameButton.qml</file>
         <file>InGameCallvoteMapSelector.qml</file>
         <file>InGameCallvoteNumberSelector.qml</file>
         <file>InGameCallvoteOptionSelector.qml</file>
@@ -33,8 +35,8 @@
         <file>InGameChatPage.qml</file>
         <file>InGameGametypeOptionsPage.qml</file>
         <file>InGameGeneralPage.qml</file>
+        <file>InGameHud.qml</file>
         <file>InGameMenu.qml</file>
-        <file>InGameButton.qml</file>
         <file>KeyboardAndMouse.qml</file>
         <file>KeyboardKey.qml</file>
         <file>KeyboardPane.qml</file>

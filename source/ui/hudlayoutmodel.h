@@ -16,20 +16,6 @@ namespace wsw::ui {
 class HudLayoutModel : public QAbstractListModel {
 	Q_OBJECT
 public:
-	Q_INVOKABLE void trackDragging( int index, qreal x, qreal y );
-	Q_INVOKABLE void finishDragging( int index );
-	Q_INVOKABLE void setFieldSize( qreal width, qreal height );
-	Q_INVOKABLE void updatePosition( int index, qreal x, qreal y );
-	Q_INVOKABLE void updateAnchors( int index );
-
-	[[nodiscard]]
-	Q_INVOKABLE bool load( const QByteArray &fileName );
-	[[nodiscard]]
-	Q_INVOKABLE bool save( const QByteArray &fileName );
-
-	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
-	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
-
 	enum HorizontalAnchorBits {
 		Left    = 0x1,
 		HCenter = 0x2,
@@ -43,7 +29,64 @@ public:
 		Bottom   = 0x4 << 3
 	};
 	Q_ENUM( VerticalAnchorBits );
-private:
+
+	enum Kind {
+		HealthBar = 1,
+		ArmorBar,
+		SpeedBar,
+		AllWeaponsBar,
+		SelectedWeapon,
+		MatchTime,
+		MatchScore
+	};
+	Q_ENUM( Kind );
+
+	[[nodiscard]]
+	Q_INVOKABLE bool load( const QByteArray &fileName );
+protected:
+	struct FileEntry {
+		Kind kind;
+		int selfAnchors;
+		int otherAnchors;
+		int anchorItem;
+	};
+
+	struct AnchorPair {
+		int selfAnchors;
+		int otherAnchors;
+	};
+
+	[[nodiscard]]
+	static auto getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView>;
+
+	[[nodiscard]]
+	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
+		-> std::optional<wsw::StringView>;
+
+	[[nodiscard]]
+	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>>;
+
+	[[nodiscard]]
+	auto parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<FileEntry, unsigned>>;
+
+	[[nodiscard]]
+	virtual bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&entries ) = 0;
+
+	[[nodiscard]]
+	auto parseHorizontalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseVerticalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseAnchors( const wsw::StringView &first, const wsw::StringView &second ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseAnchors( const wsw::StringView &token ) -> std::optional<int>;
+	[[nodiscard]]
+	auto parseKind( const wsw::StringView &token ) -> std::optional<Kind>;
+};
+
+class HudEditorLayoutModel : public HudLayoutModel {
+	Q_OBJECT
+
 	enum Role {
 		Origin = Qt::UserRole + 1,
 		Size,
@@ -62,26 +105,45 @@ private:
 		int selfAnchors { 0 };
 		int anchorItemAnchors { 0 };
 		int realAnchorItem { -1 };
+		Kind kind { (Kind)0 };
 		std::optional<int> displayedAnchorItem;
 	};
 
-	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors, Draggable };
-	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
-	static inline const QVector<int> kOriginRoleAsVector { Origin };
+	[[nodiscard]]
+	bool serialize( wsw::StaticString<4096> *buffer );
+	void writeAnchor( wsw::StaticString<32> *tmp, int anchor );
 
-	QSizeF m_fieldSize;
-	int m_displayedFieldAnchors { 0 };
+	[[nodiscard]]
+	bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) override;
 
-	wsw::Vector<Entry> m_entries;
+	[[nodiscard]]
+	static auto getEditorSizeForKind( Kind kind ) -> std::optional<QSize>;
+
+	[[nodiscard]]
+	bool isDraggable( int index ) const;
+
+	[[nodiscard]]
+	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
+
+	void setDisplayedFieldAnchors( int anchors ) {
+		if( m_displayedFieldAnchors != anchors ) {
+			m_displayedFieldAnchors = anchors;
+			Q_EMIT displayedFieldAnchorsChanged( anchors );
+		}
+	}
 
 	void updateMarkers( int draggedIndex );
 
-	struct AnchorPair {
-		int selfAnchors;
-		int otherAnchors;
-	};
+	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
 
-	static const AnchorPair kMatchingEntryAnchorPairs[];
+	void notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles );
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &, int role ) const -> QVariant override;
 
 	[[nodiscard]]
 	static auto getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
@@ -101,49 +163,43 @@ private:
 	[[nodiscard]]
 	static auto getPointForAnchors( const QRectF &r, int anchors ) -> QPointF;
 
-	[[nodiscard]]
-	static auto getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView>;
+	wsw::Vector<Entry> m_entries;
+
+	QSizeF m_fieldSize;
+	int m_displayedFieldAnchors { 0 };
+
+	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors, Draggable };
+	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
+	static inline const QVector<int> kOriginRoleAsVector { Origin };
+
+	static const AnchorPair kMatchingEntryAnchorPairs[];
+public:
+	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
+	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
+
+	Q_INVOKABLE void trackDragging( int index, qreal x, qreal y );
+	Q_INVOKABLE void finishDragging( int index );
+	Q_INVOKABLE void setFieldSize( qreal width, qreal height );
+	Q_INVOKABLE void updatePosition( int index, qreal x, qreal y );
+	Q_INVOKABLE void updateAnchors( int index );
 
 	[[nodiscard]]
-	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
+	Q_INVOKABLE bool save( const QByteArray &fileName );
+};
 
-	void setDisplayedFieldAnchors( int anchors ) {
-		if( m_displayedFieldAnchors != anchors ) {
-			m_displayedFieldAnchors = anchors;
-			Q_EMIT displayedFieldAnchorsChanged( anchors );
-		}
-	}
+class InGameHudLayoutModel : public HudLayoutModel {
+	enum Role {
+		Kind = Qt::UserRole + 1,
+		SelfAnchors,
+		AnchorItemIndex,
+		AnchorItemAnchors
+	};
 
-	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
-
-	void notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles );
-
-	[[nodiscard]]
-	bool isDraggable( int index ) const;
+	// Use entries as-is
+	wsw::Vector<FileEntry> m_entries;
 
 	[[nodiscard]]
-	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
-		-> std::optional<wsw::StringView>;
-
-	[[nodiscard]]
-	bool serialize( wsw::StaticString<4096> *buffer );
-
-	void writeAnchor( wsw::StaticString<32> *tmp, int anchor );
-
-	[[nodiscard]]
-	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<Entry>>;
-
-	[[nodiscard]]
-	auto parseEntry( const wsw::StringView &line ) -> std::optional<std::pair<Entry, unsigned>>;
-
-	[[nodiscard]]
-	auto parseHorizontalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
-	[[nodiscard]]
-	auto parseVerticalAnchors( const wsw::StringView &keyword ) -> std::optional<int>;
-	[[nodiscard]]
-	auto parseAnchors( const wsw::StringView &first, const wsw::StringView &second ) -> std::optional<int>;
-	[[nodiscard]]
-	auto parseAnchors( const wsw::StringView &token ) -> std::optional<int>;
+	bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) override;
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

@@ -52,14 +52,18 @@ Item {
         Repeater {
             id: repeater
             model: hudEditorLayoutModel
-            delegate: Rectangle {
+            delegate: HudLayoutItem {
                 id: element
                 width: size.width
                 height: size.height
-                color: Qt.rgba(1.0, 0.0, 0.3, 0.3)
                 onXChanged: handleCoordChanges()
                 onYChanged: handleCoordChanges()
                 state: "anchored"
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: Qt.rgba(1.0, 0.0, 0.3, 0.3)
+                }
 
                 states: [
                     State {
@@ -108,38 +112,9 @@ Item {
                     }
                 ]
 
-                // Translates natively supplied (numeric) flags to an AnchorLine of another item.
-                // Assumes that flags consist of two parts each of that has a single bit set.
-                // This means that a HUD item position is described by 2 of 6 supported anchors
-                // (leaving the unused anchors.baseline out of scope).
                 function getQmlAnchor(anchorBit) {
-                    // If this anchorBit is specfied for self anchors
-                    if (selfAnchors & anchorBit) {
-                        const anchorItem = anchorItemIndex >= 0 ? repeater.itemAt(anchorItemIndex) : field
-                        const horizontalMask = HudLayoutModel.Left | HudLayoutModel.HCenter | HudLayoutModel.Right
-                        // If this anchor bit describes a horizontal rule
-                        if (anchorBit & horizontalMask) {
-                            // Check what horizontal anchor of other item is specified
-                            switch (anchorItemAnchors & horizontalMask) {
-                                case HudLayoutModel.Left: return anchorItem.left
-                                case HudLayoutModel.HCenter: return anchorItem.horizontalCenter
-                                case HudLayoutModel.Right: return anchorItem.right
-                            }
-                            console.log("unreachable")
-                        }
-                        // If this anchor bit describes a vertial rule
-                        const verticalMask = HudLayoutModel.Top | HudLayoutModel.VCenter | HudLayoutModel.Bottom
-                        if (anchorBit & verticalMask) {
-                            // Check what vertical anchor of other item is specified
-                            switch (anchorItemAnchors & verticalMask) {
-                                case HudLayoutModel.Top: return anchorItem.top
-                                case HudLayoutModel.VCenter: return anchorItem.verticalCenter
-                                case HudLayoutModel.Bottom: return anchorItem.bottom
-                            }
-                            console.log("unreachable")
-                        }
-                    }
-                    return undefined
+                    const anchorItem = anchorItemIndex >= 0 ? repeater.itemAt(anchorItemIndex) : field
+                    return getQmlAnchorOfItem(selfAnchors, anchorItemAnchors, anchorBit, anchorItem)
                 }
 
                 function handleCoordChanges() {
