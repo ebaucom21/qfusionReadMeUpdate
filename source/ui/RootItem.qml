@@ -78,6 +78,10 @@ Item {
         sourceComponent: ActionRequestArea {}
     }
 
+    InGameHud {
+        anchors.fill: parent
+    }
+
     MouseArea {
         id: popupOverlay
         visible: false

@@ -204,7 +204,7 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 	for( const FileEntry &entry: entries ) {
 		const int kind = entry.kind;
 		if( kind && (unsigned)kind < (unsigned)presentKinds.max_size() ) {
-			if( metaKinds.key( kind ) != nullptr ) {
+			if( metaKinds.valueToKey( kind ) != nullptr ) {
 				if ( !presentKinds[kind] ) {
 					presentKinds[kind] = true;
 					continue;
@@ -382,12 +382,12 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QSize> {
 	switch( kind ) {
 		case HealthBar: [[fallthrough]];
-		case ArmorBar: [[fallthrough]];
-		case SpeedBar: return QSize( 144, 32 );
-		case AllWeaponsBar: return QSize( 256, 48 );
-		case SelectedWeapon: return QSize( 96, 96 );
+		case ArmorBar: return QSize( 144, 32 );
+		case InventoryBar: return QSize( 256, 48 );
+		case WeaponStatus: return QSize( 96, 96 );
 		case MatchTime: return QSize( 128, 64 );
-		case MatchScore: return QSize( 128, 56 );
+		case AlphaScore: [[fallthrough]];
+		case BetaScore: return QSize( 128, 56 );
 		default: return std::nullopt;
 	}
 }

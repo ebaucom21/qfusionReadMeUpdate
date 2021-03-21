@@ -11,6 +11,7 @@
 #include "gametypeoptionsmodel.h"
 #include "gametypesmodel.h"
 #include "hudlayoutmodel.h"
+#include "huddatamodel.h"
 #include "nativelydrawnitems.h"
 #include "playersmodel.h"
 #include "serverlistmodel.h"
@@ -253,6 +254,8 @@ private:
 
 	HudEditorLayoutModel m_hudEditorLayoutModel;
 	InGameHudLayoutModel m_inGameHudLayoutModel;
+
+	HudDataModel m_hudDataModel;
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -567,6 +570,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	qmlRegisterUncreatableType<HudLayoutModel>( "net.warsow", 2, 6, "HudLayoutModel", reason );
 	qmlRegisterUncreatableType<HudEditorLayoutModel>( "net.warsow", 2, 6, "HudEditorLayoutModel", reason );
 	qmlRegisterUncreatableType<InGameHudLayoutModel>( "net.warsow", 2, 6, "InGameHudLayoutModel", reason );
+	qmlRegisterUncreatableType<HudDataModel>( "net.warsow", 2, 6, "HudDataModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
 
@@ -598,6 +602,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
 	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
 	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
+	context->setContextProperty( "hudDataModel", &m_hudDataModel );
 
 	m_component = new QQmlComponent( m_engine );
 
@@ -964,6 +969,8 @@ void QtUISystem::checkPropertyChanges() {
 	m_keysAndBindingsModel.checkUpdates();
 	m_demoPlayer.checkUpdates();
 	m_actionRequestsModel.update();
+
+	m_hudDataModel.checkPropertyChanges();
 
 	updateCVarAwareControls();
 
@@ -1459,6 +1466,7 @@ void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::Stri
 void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) {
 	m_scoreboardModel.update( scoreboardData );
 	m_playersModel.update( scoreboardData );
+	m_hudDataModel.updateScoreboardData( scoreboardData );
 }
 
 bool QtUISystem::isShowingScoreboard() const {

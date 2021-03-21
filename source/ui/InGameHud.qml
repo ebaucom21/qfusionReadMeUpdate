@@ -16,8 +16,8 @@ Item {
         model: inGameHudLayoutModel
 
         delegate: HudLayoutItem {
-            width: 240
-            height: 64
+            width: item ? item.implicitWidth : 0
+            height: item ? item.implicitHeight : 0
 
             anchors.top: getQmlAnchor(HudLayoutModel.Top)
             anchors.bottom: getQmlAnchor(HudLayoutModel.Bottom)
@@ -26,23 +26,89 @@ Item {
             anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
             anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
 
-            Rectangle {
-                anchors.fill: parent
-                radius: 6
-                color: if (index % 3 == 0) {
-                    Qt.rgba(1.0, 0.0, 0.5, 0.5)
-                } else if (index % 3 == 1) {
-                    Qt.rgba(0.5, 1.0, 0.0, 0.5)
+            sourceComponent: {
+                if (kind === HudLayoutModel.HealthBar) {
+                    healthBarComponent
+                } else if (kind === HudLayoutModel.ArmorBar) {
+                    armorBarComponent
+                } else if (kind === HudLayoutModel.InventoryBar) {
+                    inventoryBarComponent
+                } else if (kind === HudLayoutModel.WeaponStatus) {
+                    weaponStatusComponent
+                } else if (kind === HudLayoutModel.MatchTime) {
+                    matchTimeComponent
+                } else if (kind === HudLayoutModel.AlphaScore) {
+                    alphaScoreComponent
+                } else if (kind === HudLayoutModel.BetaScore) {
+                    betaScoreComponent
                 } else {
-                    Qt.rgba(1.0, 0.0, 1.0, 0.5)
+                    undefined
                 }
             }
 
-            Label {
-                anchors.centerIn: parent
-                text: index
-                font.weight: Font.Bold
-                font.pointSize: 12
+            Component {
+                id: healthBarComponent
+                HudValueBar {
+                    text: "HEALTH"
+                    color: hudDataModel.health > 100 ? "deeppink" :
+                                                        (hudDataModel.health >= 50 ? "white" : "orangered")
+                    value: hudDataModel.health
+                    frac: 0.01 * Math.min(100.0, Math.max(0, hudDataModel.health))
+                    iconPath: hudDataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
+                                                          "image://wsw/gfx/hud/icons/health/50"
+                }
+            }
+
+            Component {
+                id: armorBarComponent
+                HudValueBar {
+                    text: "ARMOR"
+                    value: hudDataModel.armor
+                    frac: 0.01 * Math.min(100.0, hudDataModel.armor)
+                    color: hudDataModel.armor >= 125 ? "red" : (hudDataModel.armor >= 75 ? "gold" : "green")
+                    iconPath: {
+                        hudDataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
+                        (hudDataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
+                                                    "image://wsw/gfx/hud/icons/armor/ga")
+                    }
+                }
+            }
+
+            Component {
+                id: inventoryBarComponent
+                HudInventoryBar {}
+            }
+
+            Component {
+                id: weaponStatusComponent
+                HudWeaponStatus {}
+            }
+
+            Component {
+                id: matchTimeComponent
+                HudMatchTime {}
+            }
+
+            Component {
+                id: alphaScoreComponent
+                HudTeamScore {
+                    visible: hudDataModel.hasTwoTeams
+                    leftAligned: true
+                    color: hudDataModel.alphaColor
+                    name: hudDataModel.alphaName
+                    score: hudDataModel.alphaScore
+                }
+            }
+
+            Component {
+                id: betaScoreComponent
+                HudTeamScore {
+                    visible: hudDataModel.hasTwoTeams
+                    leftAligned: false
+                    color: hudDataModel.betaColor
+                    name: hudDataModel.betaName
+                    score: hudDataModel.betaScore
+                }
             }
 
             function getQmlAnchor(anchorBit) {
@@ -51,4 +117,5 @@ Item {
             }
         }
     }
+
 }

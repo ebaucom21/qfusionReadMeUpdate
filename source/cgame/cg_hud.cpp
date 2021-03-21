@@ -81,3 +81,89 @@ bool CG_IsSpectator() {
 bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype() && !GS_InvidualGameType();
 }
+
+int CG_ActiveWeapon() {
+	return cg.predictedPlayerState.stats[STAT_WEAPON];
+}
+
+bool CG_HasWeapon( int weapon ) {
+	assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
+	return cg.predictedPlayerState.inventory[weapon];
+}
+
+int CG_Health() {
+	return cg.predictedPlayerState.stats[STAT_HEALTH];
+}
+
+int CG_Armor() {
+	return cg.predictedPlayerState.stats[STAT_ARMOR];
+}
+
+int CG_TeamAlphaColor() {
+	return COM_ReadColorRGBString( cg_teamALPHAcolor ? cg_teamALPHAcolor->string : "" );
+}
+
+int CG_TeamBetaColor() {
+	return COM_ReadColorRGBString( cg_teamBETAcolor ? cg_teamBETAcolor->string : "" );
+}
+
+std::pair<int, int> CG_WeaponAmmo( int weapon ) {
+	const auto *weaponDef = GS_GetWeaponDef( weapon );
+	const int *inventory = cg.predictedPlayerState.inventory;
+	return { inventory[weaponDef->firedef_weak.ammo_id], inventory[weaponDef->firedef.ammo_id] };
+}
+
+extern cvar_t *cg_showTimer;
+
+auto CG_GetMatchClockTime() -> std::pair<int, int> {
+	int64_t clocktime, startTime, duration, curtime;
+	double seconds;
+	int minutes;
+
+	if( !cg_showTimer ) {
+		return { 0, 0 };
+	}
+
+	if( !cg_showTimer->integer ) {
+		return { 0, 0 };
+	}
+
+	if( GS_MatchState() > MATCH_STATE_PLAYTIME ) {
+		return { 0, 0 };
+	}
+
+	if( GS_RaceGametype() ) {
+		if( cg.predictedPlayerState.stats[STAT_TIME_SELF] != STAT_NOTSET ) {
+			clocktime = cg.predictedPlayerState.stats[STAT_TIME_SELF] * 100;
+		} else {
+			clocktime = 0;
+		}
+	} else if( GS_MatchClockOverride() ) {
+		clocktime = GS_MatchClockOverride();
+	} else {
+		curtime = ( GS_MatchWaiting() || GS_MatchPaused() ) ? cg.frame.serverTime : cg.time;
+		duration = GS_MatchDuration();
+		startTime = GS_MatchStartTime();
+
+		// count downwards when having a duration
+		if( duration && ( cg_showTimer->integer != 3 ) ) {
+			if( duration + startTime < curtime ) {
+				duration = curtime - startTime; // avoid negative results
+
+			}
+			clocktime = startTime + duration - curtime;
+		} else {
+			if( curtime >= startTime ) { // avoid negative results
+				clocktime = curtime - startTime;
+			} else {
+				clocktime = 0;
+			}
+		}
+	}
+
+	seconds = (double)clocktime * 0.001;
+	minutes = (int)( seconds / 60 );
+	seconds -= minutes * 60;
+
+	return { minutes, seconds };
+}

@@ -33,11 +33,11 @@ public:
 	enum Kind {
 		HealthBar = 1,
 		ArmorBar,
-		SpeedBar,
-		AllWeaponsBar,
-		SelectedWeapon,
+		InventoryBar,
+		WeaponStatus,
 		MatchTime,
-		MatchScore
+		AlphaScore,
+		BetaScore,
 	};
 	Q_ENUM( Kind );
 
