@@ -6,6 +6,8 @@
 #include "../qcommon/hash.h"
 #include "../qcommon/wswstaticvector.h"
 
+using wsw::operator""_asView;
+
 static bool isANumber( const wsw::StringView &view ) {
 	for( char ch: view ) {
 		if( (unsigned)( ch - '0' ) > 9 ) {
@@ -129,6 +131,11 @@ auto MaterialParser::exec() -> shader_t * {
 		}
 	}
 
+	if( conditionalBlockDepth ) {
+		Com_Printf( S_COLOR_YELLOW "Syntax error. Is an `endif` missing?\n" );
+		return nullptr;
+	}
+
 	return build();
 }
 
@@ -214,7 +221,7 @@ bool MaterialParser::parseKey() {
 			case MaterialKey::Portal: return parsePortal();
 			case MaterialKey::EntityMergable: return parseEntityMergable();
 			case MaterialKey::If: return parseIf();
-			case MaterialKey::EndIf: return true;
+			case MaterialKey::EndIf: return parseEndIf();
 			case MaterialKey::OffsetMappingScale: return parseOffsetMappingScale();
 			case MaterialKey::GlossExponent: return parseGlossExponent();
 			case MaterialKey::GlossIntensity: return parseGlossIntensity();
@@ -1151,30 +1158,41 @@ bool MaterialParser::parseFunc( shaderfunc_t *func ) {
 }
 
 bool MaterialParser::parseIf() {
-	if( auto maybeCondition = parseCondition() ) {
-		if( *maybeCondition ) {
-			skipConditionBlock();
+	if( const std::optional<bool> maybeCondition = parseCondition() ) {
+		// TODO: Increase the current nesting depth
+		if( !*maybeCondition ) {
+			return skipConditionalBlock();
 		}
+		++conditionalBlockDepth;
 		return true;
 	}
 	return false;
 }
 
+bool MaterialParser::parseEndIf() {
+	if( conditionalBlockDepth <= 0 ) {
+		return false;
+	}
+	--conditionalBlockDepth;
+	return true;
+}
+
 static const wsw::StringView kIfLiteral( "if" );
 static const wsw::StringView kEndIfLiteral( "endif" );
 
-void MaterialParser::skipConditionBlock() {
+bool MaterialParser::skipConditionalBlock() {
 	for( int depth = 1; depth > 0; ) {
-		std::optional<wsw::StringView> maybeToken = lexer->getNextToken();
-		if( !maybeToken ) {
-			break;
-		}
-		if( kIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
-			depth++;
-		} else if( kEndIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
-			depth--;
+		if( const std::optional<wsw::StringView> maybeToken = lexer->getNextToken() ) {
+			if( kIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
+				depth++;
+			} else if( kEndIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
+				depth--;
+			}
+		} else {
+			return false;
 		}
 	}
+	return true;
 }
 
 auto MaterialParser::parseCondition() -> std::optional<bool> {
@@ -1182,53 +1200,51 @@ auto MaterialParser::parseCondition() -> std::optional<bool> {
 
 	int numTokens = 0;
 	for(;; ) {
-		auto maybeToken = lexer->getNextTokenInLine();
-		if( !maybeToken ) {
+		const auto oldCurrTokenNum = lexer->getCurrTokenNum();
+		// First, just check whether there's a next token in line. This is a shared preliminary condition.
+		if( lexer->getNextTokenInLine() == std::nullopt ) {
 			if( numTokens == 0 ) {
 				return std::nullopt;
 			}
-			break;
+			return evaluator.exec();
+		} else {
+			lexer->unGetToken();
+			if( numTokens == MaterialIfEvaluator::Capacity ) {
+				return std::nullopt;
+			}
+			numTokens++;
 		}
 
-		if( numTokens == MaterialIfEvaluator::Capacity ) {
-			return std::nullopt;
-		}
+		// Make sure the lexer state has been rolled back properly
+		assert( lexer->getCurrTokenNum() == oldCurrTokenNum );
 
-		numTokens++;
-
-		lexer->unGetToken();
-		if( auto maybeLogicOp = lexer->getLogicOp() ) {
+		// Try classifying the token
+		if( const auto maybeLogicOp = lexer->getLogicOp() ) {
 			evaluator.addLogicOp( *maybeLogicOp );
-		} else if( auto maybeCmpOp = lexer->getCmpOp() ) {
+		} else if( const auto maybeCmpOp = lexer->getCmpOp() ) {
 			evaluator.addCmpOp( *maybeCmpOp );
-		} else if( auto maybeIntVar = lexer->getIntConditionVar() ) {
+		} else if( const auto maybeIntVar = lexer->getIntConditionVar() ) {
 			evaluator.addInt( getIntConditionVarValue( *maybeIntVar ) );
-		} else if( auto maybeBoolVar = lexer->getBoolConditionVar() ) {
+		} else if( const auto maybeBoolVar = lexer->getBoolConditionVar() ) {
 			evaluator.addBool( getBoolConditionVarValue( *maybeBoolVar ) );
-		} if( auto maybeInt = lexer->getInt() ) {
+		} else if( const auto maybeInt = lexer->getInt() ) {
 			evaluator.addInt( *maybeInt );
-		} if( auto maybeBool = lexer->getBool() ) {
+		} else if( const auto maybeBool = lexer->getBool() ) {
 			evaluator.addBool( *maybeBool );
-		}
-
-		auto token = *maybeToken;
-		if( token.length() != 1 ) {
-			return std::nullopt;
-		}
-
-		const char ch = token[0];
-		if( ch == '(' ) {
-			evaluator.addLeftParen();
-		} else if( ch == ')' ) {
-			evaluator.addRightParen();
-		} else if( ch == '!' ) {
-			evaluator.addUnaryNot();
+		} else if( const auto token( lexer->getNextTokenInLine().value() ); token.length() == 1 ) {
+			if( token[0] == '(' ) {
+				evaluator.addLeftParen();
+			} else if( token[0] == ')' ) {
+				evaluator.addRightParen();
+			} else if( token[0] == '!' ) {
+				evaluator.addUnaryNot();
+			} else {
+				return std::nullopt;
+			}
 		} else {
 			return std::nullopt;
 		}
 	}
-
-	return evaluator.exec();
 }
 
 int MaterialParser::getIntConditionVarValue( IntConditionVar var ) {

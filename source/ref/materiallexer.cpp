@@ -389,6 +389,7 @@ auto MaterialLexer::getBool() -> std::optional<bool> {
 		if( kFalseLiteral.equalsIgnoreCase( *maybeToken ) ) {
 			return false;
 		}
+		unGetToken();
 	}
 	return std::nullopt;
 }

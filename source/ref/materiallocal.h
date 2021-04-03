@@ -354,14 +354,6 @@ class MaterialLexer {
 
 	bool parseVector( float *dest, size_t numElems );
 	void parseVectorOrFill( float *dest, size_t numElems, float defaultValue );
-
-	auto getSingleCharToken( char ch ) -> std::optional<bool> {
-		if( auto maybeToken = getNextToken() ) {
-			auto token = *maybeToken;
-			return std::optional( token.length() == 1 && token[0] == ch );
-		}
-		return std::nullopt;
-	}
 public:
 	explicit MaterialLexer( TokenStream *tokenStream_ ) : stream( tokenStream_ ) {}
 
@@ -375,12 +367,19 @@ public:
 		return stream->getNextToken();
 	}
 
+	[[nodiscard]]
 	auto getNextTokenInLine() -> std::optional<wsw::StringView> {
 		return stream->getNextTokenInLine();
 	}
 
+	[[maybe_unused]]
 	bool unGetToken() {
 		return stream->unGetToken();
+	}
+
+	[[nodiscard]]
+	auto getCurrTokenNum() const -> int {
+		return stream->getCurrTokenNum();
 	}
 
 	std::optional<PassKey> getPassKey();
@@ -693,6 +692,8 @@ class MaterialParser {
 
 	int imageTags { 0 };
 
+	int conditionalBlockDepth { 0 };
+
 	bool noPicMip { false };
 	bool noMipMaps { false };
 	bool noCompress { false };
@@ -765,6 +766,7 @@ class MaterialParser {
 	bool parseDeformVertexes();
 	bool parsePortal();
 	bool parseIf();
+	bool parseEndIf();
 	bool parseOffsetMappingScale();
 	bool parseGlossExponent();
 	bool parseGlossIntensity();
@@ -772,9 +774,13 @@ class MaterialParser {
 	bool parseSoftParticle();
 	bool parseForceWorldOutlines();
 
+	[[nodiscard]]
 	auto parseCondition() -> std::optional<bool>;
-	void skipConditionBlock();
+	[[nodiscard]]
+	bool skipConditionalBlock();
+	[[nodiscard]]
 	static auto getIntConditionVarValue( IntConditionVar var ) -> int;
+	[[nodiscard]]
 	static auto getBoolConditionVarValue( BoolConditionVar var ) -> bool;
 
 	bool parseDeformWave();
