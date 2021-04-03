@@ -18,48 +18,104 @@ Rectangle {
     readonly property real baseCellWidth: 64
     readonly property real clanCellWidth: 96
 
-    Item {
-        id: baselinePane
-        anchors.centerIn: parent
-        // TODO: Share with the in-game menu
-        width: 480 + 120 * heightFrac
-        height: 560 + 210 * heightFrac
+    readonly property real tableWidth: 600
 
-        ColumnLayout {
-            id: column
-            width: baselinePane.width
-            anchors.margins: 16
-            spacing: 20
+    // A column layout could have been more apporpriate but it lacks hoirzontal center offset properties
 
-            ScoreboardTeamPane {
-                model: scoreboardPlayersModel
-                baseColor: Qt.lighter(Material.background)
-                baseCellWidth: root.baseCellWidth
-                clanCellWidth: root.clanCellWidth
-                Layout.fillWidth: true
-                Layout.rightMargin: -root.baseCellWidth
+    Loader {
+        id: teamTablesLoader
+        anchors.top: parent.top
+        anchors.topMargin: 0.25 * root.height
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.horizontalCenterOffset: 0.5 * root.baseCellWidth
+        sourceComponent: {
+            if (!hudDataModel.hasTwoTeams) {
+                playersDisplayComponent
+            } else if (scoreboard.display === Scoreboard.Mixed) {
+                mixedTeamsDisplayComponent
+            } else if (scoreboard.display === Scoreboard.SideBySide && root.width > 2 * root.tableWidth) {
+                sideBySideTeamsDisplayComponent
+            } else {
+                columnWiseTeamsDisplayComponent
             }
+        }
+    }
+
+    ScoreboardSpecsPane {
+        anchors.top: teamTablesLoader.bottom
+        anchors.topMargin: 48
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.tableWidth
+        baseColor: "black"
+    }
+
+    Component {
+        id: playersDisplayComponent
+
+        ScoreboardTeamPane {
+            width: root.tableWidth
+            model: scoreboardPlayersModel
+            baseColor: Qt.lighter(Material.background)
+            baseCellWidth: root.baseCellWidth
+            clanCellWidth: root.clanCellWidth
+        }
+    }
+
+    Component {
+        id: sideBySideTeamsDisplayComponent
+
+        Row {
             ScoreboardTeamPane {
+                width: root.tableWidth
                 model: scoreboardAlphaModel
-                baseColor: Qt.darker("red")
+                baseColor: Qt.darker(hudDataModel.alphaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
-                Layout.fillWidth: true
-                Layout.rightMargin: -root.baseCellWidth
             }
             ScoreboardTeamPane {
+                width: root.tableWidth
                 model: scoreboardBetaModel
-                baseColor: Qt.darker("green")
+                baseColor: Qt.darker(hudDataModel.betaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
-                Layout.fillWidth: true
-                Layout.rightMargin: -root.baseCellWidth
             }
-            ScoreboardSpecsPane {
-                model: scoreboardSpecsModel
-                baseColor: "black"
-                Layout.fillWidth: true
+        }
+    }
+
+    Component {
+        id: columnWiseTeamsDisplayComponent
+
+        Column {
+            spacing: 32
+            ScoreboardTeamPane {
+                width: root.tableWidth
+                model: scoreboardAlphaModel
+                baseColor: Qt.darker(hudDataModel.alphaColor)
+                baseCellWidth: root.baseCellWidth
+                clanCellWidth: root.clanCellWidth
             }
+            ScoreboardTeamPane {
+                width: root.tableWidth
+                model: scoreboardBetaModel
+                displayHeader: false
+                baseColor: Qt.darker(hudDataModel.betaColor)
+                baseCellWidth: root.baseCellWidth
+                clanCellWidth: root.clanCellWidth
+            }
+        }
+    }
+
+    Component {
+        id: mixedTeamsDisplayComponent
+
+        ScoreboardTeamPane {
+            width: root.tableWidth
+            model: scoreboardMixedModel
+            mixedTeamsMode: true
+            baseAlphaColor: Qt.darker(hudDataModel.alphaColor)
+            baseBetaColor: Qt.darker(hudDataModel.betaColor)
+            baseCellWidth: root.baseCellWidth
+            clanCellWidth: root.clanCellWidth
         }
     }
 }

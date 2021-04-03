@@ -73,12 +73,27 @@ class ScoreboardModelProxy : public QObject, ScoreboardShared {
 
 	friend class ScoreboardTeamModel;
 	friend class ScoreboardSpecsModel;
+public:
+	enum Display {
+		SideBySide,
+		ColumnWise,
+		Mixed
+	};
+	Q_ENUM( Display );
 
 	Scoreboard m_scoreboard;
 
 	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
 	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
+
+	cvar_s *m_displayVar { nullptr };
+	Display m_display { SideBySide };
+
+	[[nodiscard]]
+	auto getDisplay() const { return m_display; }
+
+	void checkDisplayVar();
 
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForList[5];
 
@@ -123,6 +138,9 @@ public:
 	Q_INVOKABLE bool isMixedListRowAlpha( int row ) const;
 	[[nodiscard]]
 	Q_INVOKABLE int getColumnsCount() const { return m_scoreboard.getColumnsCount(); }
+
+	Q_SIGNAL void displayChanged( Display display );
+	Q_PROPERTY( Display display READ getDisplay NOTIFY displayChanged );
 
 	[[nodiscard]]
 	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }

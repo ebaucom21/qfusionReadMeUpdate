@@ -141,6 +141,9 @@ ScoreboardModelProxy::ScoreboardModelProxy() {
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_ALPHA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA + 1 );
+
+	m_displayVar = Cvar_Get( "ui_scoreboardDisplay", "0", CVAR_ARCHIVE );
+	checkDisplayVar();
 }
 
 void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team,
@@ -211,7 +214,24 @@ void ScoreboardModelProxy::dispatchSpecRowUpdates( const PlayerUpdates &updates,
 	model.dataChanged( modelIndex, modelIndex );
 }
 
+void ScoreboardModelProxy::checkDisplayVar() {
+	if( m_displayVar->modified ) {
+		const auto oldDisplay = m_display;
+		m_display = (Display)m_displayVar->value;
+		if( m_display != SideBySide && m_display != ColumnWise && m_display != Mixed ) {
+			m_display = SideBySide;
+			Cvar_ForceSet( m_displayVar->name, va( "%d", (int)m_display ) );
+		}
+		if( m_display != oldDisplay ) {
+			Q_EMIT displayChanged( m_display );
+		}
+		m_displayVar->modified = false;
+	}
+}
+
 void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
+	checkDisplayVar();
+
 	Scoreboard::PlayerUpdatesList playerUpdates;
 	Scoreboard::TeamUpdatesList teamUpdates;
 	if( !m_scoreboard.checkUpdates( currData, playerUpdates, teamUpdates ) ) {

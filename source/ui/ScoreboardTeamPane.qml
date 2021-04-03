@@ -13,6 +13,10 @@ Item {
     property real clanCellWidth
     property color baseColor
 
+    property bool mixedTeamsMode: false
+    property color baseAlphaColor
+    property color baseBetaColor
+
     property int bufferIndex: 0
 
     implicitHeight: activeItem ? activeItem.implicitHeight + (header.status === Loader.Ready ? 36 : 0) : 0
@@ -69,6 +73,9 @@ Item {
         ScoreboardTable {
             model: root.model
             baseColor: root.baseColor
+            baseAlphaColor: root.baseAlphaColor
+            baseBetaColor: root.baseBetaColor
+            mixedTeamsMode: root.mixedTeamsMode
             baseCellWidth: root.baseCellWidth
             clanCellWidth: root.clanCellWidth
         }
