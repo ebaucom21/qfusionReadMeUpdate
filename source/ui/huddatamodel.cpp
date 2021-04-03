@@ -1,4 +1,5 @@
 #include "huddatamodel.h"
+#include "local.h"
 #include "../qcommon/qcommon.h"
 #include "../gameshared/gs_public.h"
 #include "../client/client.h"
@@ -239,11 +240,36 @@ auto HudDataModel::getActiveWeaponName() const -> QByteArray {
 	return m_activeWeapon ? weaponPropsCache.getWeaponName( m_activeWeapon ) : QByteArray();
 }
 
+void HudDataModel::setFormattedTime( QByteArray *dest, int value ) {
+	assert( value >= 0 );
+	dest->clear();
+	if( value >= 100 ) {
+		dest->setNum( value );
+	} else {
+		dest->clear();
+		const int q = value / 10;
+		const int r = value - ( q * 10 );
+		dest->append( (char)( '0' + q ) );
+		dest->append( (char)( '0' + r ) );
+	}
+}
+
+void HudDataModel::setStyledTeamName( QByteArray *dest, const wsw::StringView &name ) {
+	// TODO: toStyledText() should allow accepting an external buffer of an arbitrary structurally compatible type
+	*dest = toStyledText( name ).toLatin1();
+}
+
 void HudDataModel::checkPropertyChanges() {
 	const bool hadTwoTeams = getHasTwoTeams();
 	m_hasTwoTeams = CG_HasTwoTeams();
 	if( const bool hasTwoTeams = getHasTwoTeams(); hasTwoTeams != hadTwoTeams ) {
 		Q_EMIT hasTwoTeamsChanged( hasTwoTeams );
+	}
+
+	const bool wasSpectator = getIsSpectator();
+	m_isSpectator = CG_IsSpectator();
+	if( const bool isSpectator = getIsSpectator(); isSpectator != wasSpectator ) {
+		Q_EMIT isSpectatorChanged( isSpectator );
 	}
 
 	if( m_pendingAlphaScore != m_alphaScore ) {
@@ -256,17 +282,17 @@ void HudDataModel::checkPropertyChanges() {
 	}
 
 	const wsw::StringView alphaName( ::cl.configStrings.getTeamAlphaName().value_or( wsw::StringView() ) );
-	if( !alphaName.equals( wsw::StringView( m_alphaName.data(), m_alphaName.size() ) ) ) {
-		m_alphaName.clear();
-		m_alphaName.append( alphaName.data(), alphaName.size() );
-		Q_EMIT alphaNameChanged( m_alphaName );
+	if( !m_alphaName.equals( alphaName ) ) {
+		m_alphaName.assign( alphaName );
+		setStyledTeamName( &m_styledAlphaName, alphaName );
+		Q_EMIT alphaNameChanged( getAlphaName() );
 	}
 
 	const wsw::StringView betaName( ::cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
-	if( !betaName.equals( wsw::StringView( m_betaName.data(), m_betaName.size() ) ) ) {
-		m_betaName.clear();
-		m_betaName.append( betaName.data(), betaName.size() );
-		Q_EMIT betaNameChanged( m_betaName );
+	if( !m_betaName.equals( betaName ) ) {
+		m_betaName.assign( betaName );
+		setStyledTeamName( &m_styledBetaName, betaName );
+		Q_EMIT betaNameChanged( getBetaName() );
 	}
 
 	const auto oldAlphaColor = m_alphaColor;
@@ -281,13 +307,15 @@ void HudDataModel::checkPropertyChanges() {
 
 	const auto [minutes, seconds] = CG_GetMatchClockTime();
 	if( minutes != m_matchTimeMinutes ) {
+		assert( minutes >= 0 );
 		m_matchTimeMinutes = minutes;
-		(void)m_formattedMinutes.assignf( "%02d", minutes );
+		setFormattedTime( &m_formattedMinutes, minutes );
 		Q_EMIT matchTimeMinutesChanged( getMatchTimeMinutes() );
 	}
 	if( seconds != m_matchTimeSeconds ) {
+		assert( (unsigned)seconds < 60u );
 		m_matchTimeSeconds = seconds;
-		(void)m_formattedSeconds.assignf( "%02d", seconds );
+		setFormattedTime( &m_formattedSeconds, seconds );
 		Q_EMIT matchTimeSecondsChanged( getMatchTimeSeconds() );
 	}
 

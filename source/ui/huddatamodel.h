@@ -55,15 +55,20 @@ class HudDataModel : public QObject {
 
 	InventoryModel m_inventoryModel;
 
-	QByteArray m_alphaName, m_betaName;
+	wsw::StaticString<32> m_alphaName;
+	wsw::StaticString<32> m_betaName;
+	QByteArray m_styledAlphaName;
+	QByteArray m_styledBetaName;
+
 	int m_alphaColor { 0 }, m_betaColor { 0 };
 	int m_alphaScore { 0 }, m_pendingAlphaScore { 0 };
 	int m_betaScore { 0 }, m_pendingBetaScore { 0 };
 	bool m_hasTwoTeams { false };
+	bool m_isSpectator { true };
 
-	wsw::StaticString<8> m_formattedSeconds;
-	wsw::StaticString<8> m_formattedMinutes;
-	wsw::StaticString<24> m_formattedMatchState;
+	QByteArray m_formattedSeconds;
+	QByteArray m_formattedMinutes;
+	QByteArray m_formattedMatchState;
 	int m_matchTimeSeconds { 0 };
 	int m_matchTimeMinutes { 0 };
 
@@ -74,9 +79,9 @@ class HudDataModel : public QObject {
 	int m_health { 0 }, m_armor { 0 };
 
 	[[nodiscard]]
-	auto getAlphaName() const -> const QByteArray & { return m_alphaName; }
+	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
 	[[nodiscard]]
-	auto getBetaName() const -> const QByteArray & { return m_betaName; }
+	auto getBetaName() const -> const QByteArray & { return m_styledBetaName; }
 	[[nodiscard]]
 	auto getAlphaColor() const -> QColor { return toQColor( m_alphaColor ); }
 	[[nodiscard]]
@@ -87,6 +92,8 @@ class HudDataModel : public QObject {
 	auto getBetaScore() const -> int { return m_betaScore; }
 	[[nodiscard]]
 	bool getHasTwoTeams() const { return m_hasTwoTeams; }
+	[[nodiscard]]
+	bool getIsSpectator() const { return m_isSpectator; }
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
@@ -94,11 +101,14 @@ class HudDataModel : public QObject {
 	}
 
 	[[nodiscard]]
-	auto getMatchTimeSeconds() const -> QByteArray { return toQByteArray( m_formattedSeconds ); }
+	auto getMatchTimeSeconds() const -> QByteArray { return m_formattedSeconds; }
 	[[nodiscard]]
-	auto getMatchTimeMinutes() const -> QByteArray { return toQByteArray( m_formattedMinutes ); }
+	auto getMatchTimeMinutes() const -> QByteArray { return m_formattedMinutes; }
 	[[nodiscard]]
-	auto getMatchState() const -> QByteArray { return toQByteArray( m_formattedMatchState ); }
+	auto getMatchState() const -> QByteArray { return m_formattedMatchState; }
+
+	static void setFormattedTime( QByteArray *dest, int value );
+	static void setStyledTeamName( QByteArray *dest, const wsw::StringView &name );
 
 	[[nodiscard]]
 	auto getActiveWeaponIcon() const -> QByteArray;
@@ -114,14 +124,6 @@ class HudDataModel : public QObject {
 	auto getHealth() const -> int { return m_health; }
 	[[nodiscard]]
 	auto getArmor() const -> int { return m_armor; }
-
-	// TODO: QLatin1String does not work for a property
-
-	template <auto N>
-	[[nodiscard]]
-	static auto toQByteArray( const wsw::StaticString<N> &buffer ) -> QByteArray {
-		return QByteArray( buffer.data(), buffer.size() );
-	}
 public:
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
@@ -137,6 +139,8 @@ public:
 	Q_PROPERTY( int betaScore READ getBetaScore NOTIFY betaScoreChanged );
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams READ getHasTwoTeams NOTIFY hasTwoTeamsChanged );
+	Q_SIGNAL void isSpectatorChanged( bool isSpectator );
+	Q_PROPERTY( bool isSpectator READ getIsSpectator NOTIFY isSpectatorChanged );
 
 	Q_SIGNAL void matchTimeSecondsChanged( const QByteArray &seconds );
 	Q_PROPERTY( QByteArray matchTimeSeconds READ getMatchTimeSeconds NOTIFY matchTimeSecondsChanged );

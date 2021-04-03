@@ -17,7 +17,7 @@ Item {
             onClicked: wsw.showMainMenu()
         }
         InGameButton {
-            text: wsw.isSpectator ? "Join" : "Spectate"
+            text: hudDataModel.isSpectator ? "Join" : "Spectate"
         }
         InGameButton {
             text: "Disconnect"

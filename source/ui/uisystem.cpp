@@ -49,7 +49,6 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 
 // Hacks
 bool CG_IsSpectator();
-bool CG_HasTwoTeams();
 
 namespace wsw::ui {
 
@@ -134,11 +133,6 @@ public:
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
-	Q_PROPERTY( bool isSpectator READ isSpectator NOTIFY isSpectatorChanged );
-	Q_PROPERTY( bool hasTwoTeams READ hasTwoTeams NOTIFY hasTwoTeamsChanged );
-	Q_PROPERTY( QString teamAlphaName READ teamAlphaName NOTIFY teamAlphaNameChanged );
-	Q_PROPERTY( QString teamBetaName READ teamBetaName NOTIFY teamBetaNameChanged );
-
 	Q_INVOKABLE void registerNativelyDrawnItem( QQuickItem *item );
 	Q_INVOKABLE void unregisterNativelyDrawnItem( QQuickItem *item );
 
@@ -190,11 +184,6 @@ public:
 	Q_PROPERTY( QColor grey MEMBER m_colorGrey CONSTANT );
 	Q_PROPERTY( QVariantList consoleColors MEMBER m_consoleColors CONSTANT );
 signals:
-	Q_SIGNAL void isSpectatorChanged( bool isSpectator );
-	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
-	Q_SIGNAL void teamAlphaNameChanged( QString teamAlphaName );
-	Q_SIGNAL void teamBetaNameChanged( QString teamBetaName );
-
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
 	Q_SIGNAL void isShowingTeamChatPopupChanged( bool isShowingTeamChatPopup );
@@ -260,11 +249,7 @@ private:
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
 	struct {
-		wsw::StaticString<32> teamAlphaName;
-		wsw::StaticString<32> teamBetaName;
 		connstate_t clientState { CA_UNINITIALIZED };
-		bool isSpectator { false };
-		bool hasTwoTeams { false };
 		bool isPlayingADemo { false };
 		bool isOperator { false };
 	} m_lastFrameState;
@@ -358,17 +343,6 @@ private:
 
 	[[nodiscard]]
 	bool hasPendingCVarChanges() const { return !m_pendingCVarChanges.isEmpty(); }
-
-	[[nodiscard]]
-	bool isSpectator() const { return m_lastFrameState.isSpectator; }
-	[[nodiscard]]
-	bool hasTwoTeams() const { return m_lastFrameState.hasTwoTeams; }
-	[[nodiscard]]
-	auto teamAlphaName() const -> QString;
-	[[nodiscard]]
-	auto teamBetaName() const -> QString;
-	[[nodiscard]]
-	auto convertName( const wsw::StringView &rawName ) const -> QString;
 
 	explicit QtUISystem( int width, int height );
 
@@ -936,31 +910,6 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
 	}
 
-	const bool wasSpectator = m_lastFrameState.isSpectator;
-	const bool isSpectator = m_lastFrameState.isSpectator = CG_IsSpectator();
-	if( isSpectator != wasSpectator ) {
-		Q_EMIT isSpectatorChanged( isSpectator );
-	}
-
-	const bool hadTwoTeams = m_lastFrameState.hasTwoTeams;
-	const bool hasTwoTeams = m_lastFrameState.hasTwoTeams = CG_HasTwoTeams();
-	if( hasTwoTeams != hadTwoTeams ) {
-		Q_EMIT hasTwoTeamsChanged( hasTwoTeams );
-	}
-
-	if( hasTwoTeams ) {
-		const auto alphaName( ::cl.configStrings.getTeamAlphaName().value_or( wsw::StringView() ) );
-		if( !m_lastFrameState.teamAlphaName.equals( alphaName ) ) {
-			m_lastFrameState.teamAlphaName.assign( alphaName );
-			Q_EMIT teamAlphaNameChanged( teamAlphaName() );
-		}
-		const auto betaName( ::cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
-		if( !m_lastFrameState.teamBetaName.equals( betaName ) ) {
-			m_lastFrameState.teamBetaName.assign( betaName );
-			Q_EMIT teamBetaNameChanged( teamBetaName() );
-		}
-	}
-
 	if( m_debugNativelyDrawnItemsVar->modified ) {
 		Q_EMIT isDebuggingNativelyDrawnItemsChanged( m_debugNativelyDrawnItemsVar->integer != 0 );
 		m_debugNativelyDrawnItemsVar->modified = false;
@@ -1372,23 +1321,6 @@ void QtUISystem::updateCVarAwareControls() {
 	for( QQuickItem *control : m_cvarAwareControls ) {
 		QMetaObject::invokeMethod( control, "checkCVarChanges" );
 	}
-}
-
-QString QtUISystem::teamAlphaName() const {
-	return convertName( m_lastFrameState.teamAlphaName.asView() );
-}
-
-QString QtUISystem::teamBetaName() const {
-	return convertName( m_lastFrameState.teamBetaName.asView() );
-}
-
-auto QtUISystem::convertName( const wsw::StringView &rawName ) const -> QString {
-	char buffer[64];
-	assert( rawName.size() < sizeof( buffer ) );
-	rawName.copyTo( buffer, sizeof( buffer ) );
-	// TODO: Sanitize rich text input, parse color tokens
-	COM_RemoveColorTokens( buffer );
-	return QString::fromLatin1( buffer );
 }
 
 void QtUISystem::quit() {
