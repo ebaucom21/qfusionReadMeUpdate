@@ -165,113 +165,68 @@ bool MaterialParser::parsePass() {
 }
 
 bool MaterialParser::parsePassKey() {
-	std::optional<PassKey> maybeKey = lexer->getPassKey();
-	if( !maybeKey ) {
-		return allowUnknownEntries;
+	if( const std::optional<PassKey> maybeKey = lexer->getPassKey() ) {
+		switch( *maybeKey ) {
+			case PassKey::RgbGen: return parseRgbGen();
+			case PassKey::BlendFunc: return parseBlendFunc();
+			case PassKey::DepthFunc: return parseDepthFunc();
+			case PassKey::DepthWrite: return parseDepthWrite();
+			case PassKey::AlphaFunc: return parseAlphaFunc();
+			case PassKey::TCMod: return parseTCMod();
+			case PassKey::Map: return parseMap();
+			case PassKey::AnimMap: return parseAnimMap();
+			case PassKey::CubeMap: return parseCubeMap();
+			case PassKey::ShadeCubeMap: return parseShadeCubeMap();
+			case PassKey::ClampMap: return parseClampMap();
+			case PassKey::AnimClampMap: return parseAnimClampMap();
+			case PassKey::Material: return parseMaterial();
+			case PassKey::Distortion: return parseDistortion();
+			case PassKey::CelShade: return parseCelshade();
+			case PassKey::TCGen: return parseTCGen();
+			case PassKey::AlphaGen: return parseAlphaGen();
+			case PassKey::Detail: return parseDetail();
+			case PassKey::Grayscale: return parseGrayscale();
+			case PassKey::Skip: return parseSkip();
+			default: throw std::logic_error( "unreachable" );
+		}
 	}
 
-	switch( *maybeKey ) {
-		case PassKey::RgbGen:
-			return parseRgbGen();
-		case PassKey::BlendFunc:
-			return parseBlendFunc();
-		case PassKey::DepthFunc:
-			return parseDepthFunc();
-		case PassKey::DepthWrite:
-			return parseDepthWrite();
-		case PassKey::AlphaFunc:
-			return parseAlphaFunc();
-		case PassKey::TCMod:
-			return parseTCMod();
-		case PassKey::Map:
-			return parseMap();
-		case PassKey::AnimMap:
-			return parseAnimMap();
-		case PassKey::CubeMap:
-			return parseCubeMap();
-		case PassKey::ShadeCubeMap:
-			return parseShadeCubeMap();
-		case PassKey::ClampMap:
-			return parseClampMap();
-		case PassKey::AnimClampMap:
-			return parseAnimClampMap();
-		case PassKey::Material:
-			return parseMaterial();
-		case PassKey::Distortion:
-			return parseDistortion();
-		case PassKey::CelShade:
-			return parseCelshade();
-		case PassKey::TCGen:
-			return parseTCGen();
-		case PassKey::AlphaGen:
-			return parseAlphaGen();
-		case PassKey::Detail:
-			return parseDetail();
-		case PassKey::Grayscale:
-			return parseGrayscale();
-		case PassKey::Skip:
-			return parseSkip();
-	}
+	return allowUnknownEntries;
 }
 
 bool MaterialParser::parseKey() {
-	std::optional<MaterialKey> maybeKey = lexer->getMaterialKey();
-	if( !maybeKey ) {
-		return allowUnknownEntries;
+	if( const std::optional<MaterialKey> maybeKey = lexer->getMaterialKey() ) {
+		switch( *maybeKey ) {
+			case MaterialKey::Cull: return parseCull();
+			case MaterialKey::SkyParams: return parseSkyParms();
+			case MaterialKey::SkyParams2: return parseSkyParms2();
+			case MaterialKey::SkyParamsSides: return parseSkyParmsSides();
+			case MaterialKey::FogParams: return parseFogParams();
+			case MaterialKey::NoMipMaps: return parseNoMipmaps();
+			case MaterialKey::NoPicMip: return parseNoPicmip();
+			case MaterialKey::NoCompress: return parseNoCompress();
+			case MaterialKey::NoFiltering: return parseNofiltering();
+			case MaterialKey::SmallestMipSize: return parseSmallestMipSize();
+			case MaterialKey::PolygonOffset: return parsePolygonOffset();
+			case MaterialKey::StencilTest: return parseStencilTest();
+			case MaterialKey::Sort: return parseSort();
+			case MaterialKey::DeformVertexes: return parseDeformVertexes();
+			case MaterialKey::Portal: return parsePortal();
+			case MaterialKey::EntityMergable: return parseEntityMergable();
+			case MaterialKey::If: return parseIf();
+			case MaterialKey::EndIf: return true;
+			case MaterialKey::OffsetMappingScale: return parseOffsetMappingScale();
+			case MaterialKey::GlossExponent: return parseGlossExponent();
+			case MaterialKey::GlossIntensity: return parseGlossIntensity();
+			case MaterialKey::Template: return parseTemplate();
+			case MaterialKey::Skip: return parseSkip();
+			case MaterialKey::SoftParticle: return parseSoftParticle();
+			case MaterialKey::ForceWorldOutlines: return parseForceWorldOutlines();
+			default: throw std::logic_error( "unreachable" );
+		}
 	}
 
-	switch( *maybeKey ) {
-		case MaterialKey::Cull:
-			return parseCull();
-		case MaterialKey::SkyParams:
-			return parseSkyParms();
-		case MaterialKey::SkyParams2:
-			return parseSkyParms2();
-		case MaterialKey::SkyParamsSides:
-			return parseSkyParmsSides();
-		case MaterialKey::FogParams:
-			return parseFogParams();
-		case MaterialKey::NoMipMaps:
-			return parseNoMipmaps();
-		case MaterialKey::NoPicMip:
-			return parseNoPicmip();
-		case MaterialKey::NoCompress:
-			return parseNoCompress();
-		case MaterialKey::NoFiltering:
-			return parseNofiltering();
-		case MaterialKey::SmallestMipSize:
-			return parseSmallestMipSize();
-		case MaterialKey::PolygonOffset:
-			return parsePolygonOffset();
-		case MaterialKey::StencilTest:
-			return parseStencilTest();
-		case MaterialKey::Sort:
-			return parseSort();
-		case MaterialKey::DeformVertexes:
-			return parseDeformVertexes();
-		case MaterialKey::Portal:
-			return parsePortal();
-		case MaterialKey::EntityMergable:
-			return parseEntityMergable();
-		case MaterialKey::If:
-			return parseIf();
-		case MaterialKey::EndIf:
-			return true;
-		case MaterialKey::OffsetMappingScale:
-			return parseOffsetMappingScale();
-		case MaterialKey::GlossExponent:
-			return parseGlossExponent();
-		case MaterialKey::GlossIntensity:
-			return parseGlossIntensity();
-		case MaterialKey::Template:
-			return parseTemplate();
-		case MaterialKey::Skip:
-			return parseSkip();
-		case MaterialKey::SoftParticle:
-			return parseSoftParticle();
-		case MaterialKey::ForceWorldOutlines:
-			return parseForceWorldOutlines();
-	}
+	return allowUnknownEntries;
 }
 
 bool MaterialParser::parseRgbGen() {
@@ -1278,25 +1233,20 @@ auto MaterialParser::parseCondition() -> std::optional<bool> {
 
 int MaterialParser::getIntConditionVarValue( IntConditionVar var ) {
 	switch( var ) {
-		case IntConditionVar::MaxTextureSize:
-			return glConfig.maxTextureSize;
-		case IntConditionVar::MaxTextureCubemapSize:
-			return glConfig.maxTextureCubemapSize;
-		case IntConditionVar::MaxTextureUnits:
-			return glConfig.maxTextureUnits;
+		case IntConditionVar::MaxTextureSize: return glConfig.maxTextureSize;
+		case IntConditionVar::MaxTextureCubemapSize: return glConfig.maxTextureCubemapSize;
+		case IntConditionVar::MaxTextureUnits: return glConfig.maxTextureUnits;
+		default: throw std::logic_error( "unreachable" );
 	}
 }
 
 bool MaterialParser::getBoolConditionVarValue( BoolConditionVar var ) {
 	switch( var ) {
-		case BoolConditionVar::TextureCubeMap:
-			return true;
-		case BoolConditionVar::Glsl:
-			return true;
-		case BoolConditionVar::DeluxeMaps:
-			return mapConfig.deluxeMaps;
-		case BoolConditionVar::PortalMaps:
-			return r_portalmaps->integer;
+		case BoolConditionVar::TextureCubeMap: return true;
+		case BoolConditionVar::Glsl: return true;
+		case BoolConditionVar::DeluxeMaps: return mapConfig.deluxeMaps;
+		case BoolConditionVar::PortalMaps: return r_portalmaps->integer;
+		default: throw std::logic_error( "unreachable" );
 	}
 }
 
