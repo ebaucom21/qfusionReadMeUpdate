@@ -78,6 +78,14 @@ bool CG_IsSpectator() {
 	return ISREALSPECTATOR();
 }
 
+bool CG_HasActiveChasePov() {
+	if( !ISREALSPECTATOR() ) {
+		return true;
+	}
+	// TODO: Is this a correct condition for that?
+	return cg.predictedPlayerState.POVnum >= 0 && cg.predictedPlayerState.POVnum != cg.predictedPlayerState.playerNum + 1;
+}
+
 bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype() && !GS_InvidualGameType();
 }

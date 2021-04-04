@@ -19,7 +19,7 @@ Item {
 
     Keys.forwardTo: [
         mainMenuLoader.item, connectionScreenLoader.item,
-        demoPlaybackMenuLoader.item, inGameMenuLoader.item, chatLoader.item
+        demoPlaybackMenuLoader.item, inGameMenuLoader.item, hudLoader.item
     ]
 
     Loader {
@@ -62,10 +62,10 @@ Item {
     }
 
     Loader {
-        id: chatLoader
-        active: wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
+        id: hudLoader
+        active: wsw.isShowingHud || wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
         anchors.fill: parent
-        sourceComponent: ChatPopup {}
+        sourceComponent: InGameHud {}
     }
 
     Loader {
@@ -76,10 +76,6 @@ Item {
         anchors.margins: 16
         width: 480
         sourceComponent: ActionRequestArea {}
-    }
-
-    InGameHud {
-        anchors.fill: parent
     }
 
     MouseArea {

@@ -41,6 +41,8 @@ Item {
                     alphaScoreComponent
                 } else if (kind === HudLayoutModel.BetaScore) {
                     betaScoreComponent
+                } else if (kind === HudLayoutModel.Chat) {
+                    chatComponent
                 } else {
                     undefined
                 }
@@ -49,6 +51,7 @@ Item {
             Component {
                 id: healthBarComponent
                 HudValueBar {
+                    visible: wsw.isShowingPovHud
                     text: "HEALTH"
                     color: hudDataModel.health > 100 ? "deeppink" :
                                                         (hudDataModel.health >= 50 ? "white" : "orangered")
@@ -62,6 +65,7 @@ Item {
             Component {
                 id: armorBarComponent
                 HudValueBar {
+                    visible: wsw.isShowingPovHud
                     text: "ARMOR"
                     value: hudDataModel.armor
                     frac: 0.01 * Math.min(100.0, hudDataModel.armor)
@@ -76,12 +80,16 @@ Item {
 
             Component {
                 id: inventoryBarComponent
-                HudInventoryBar {}
+                HudInventoryBar {
+                    visible: wsw.isShowingPovHud
+                }
             }
 
             Component {
                 id: weaponStatusComponent
-                HudWeaponStatus {}
+                HudWeaponStatus {
+                    visible: wsw.isShowingPovHud
+                }
             }
 
             Component {
@@ -109,6 +117,11 @@ Item {
                     name: hudDataModel.betaName
                     score: hudDataModel.betaScore
                 }
+            }
+
+            Component {
+                id: chatComponent
+                HudChat {}
             }
 
             function getQmlAnchor(anchorBit) {

@@ -388,6 +388,7 @@ auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QS
 		case MatchTime: return QSize( 128, 64 );
 		case AlphaScore: [[fallthrough]];
 		case BetaScore: return QSize( 128, 56 );
+		case Chat: return QSize( 384, 96 );
 		default: return std::nullopt;
 	}
 }

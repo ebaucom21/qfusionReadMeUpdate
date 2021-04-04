@@ -38,6 +38,7 @@ public:
 		MatchTime,
 		AlphaScore,
 		BetaScore,
+		Chat,
 	};
 	Q_ENUM( Kind );
 

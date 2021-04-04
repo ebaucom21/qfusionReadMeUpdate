@@ -49,6 +49,7 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 
 // Hacks
 bool CG_IsSpectator();
+bool CG_HasActiveChasePov();
 
 namespace wsw::ui {
 
@@ -109,6 +110,10 @@ public:
 	bool isShowingTeamChatPopup() const { return m_isShowingTeamChatPopup; }
 	[[nodiscard]]
 	bool hasTeamChat() const { return m_hasTeamChat; }
+	[[nodiscard]]
+	bool isShowingHud() const { return m_isShowingHud; }
+	[[nodiscard]]
+	bool isShowingPovHud() const { return m_isShowingPovHud; }
 
 	[[nodiscard]]
 	bool isOperator() const { return m_lastFrameState.isOperator; }
@@ -130,6 +135,11 @@ public:
 	Q_PROPERTY( bool isShowingChatPopup READ isShowingChatPopup NOTIFY isShowingChatPopupChanged );
 	Q_PROPERTY( bool isShowingTeamChatPopup READ isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
 	Q_PROPERTY( bool hasTeamChat READ hasTeamChat NOTIFY hasTeamChatChanged );
+
+	Q_SIGNAL void isShowingHudChanged( bool isShowingHud );
+	Q_PROPERTY( bool isShowingHud READ isShowingHud NOTIFY isShowingHudChanged );
+	Q_SIGNAL void isShowingPovHudChanged( bool isShowingPovHud );
+	Q_PROPERTY( bool isShowingPovHud READ isShowingPovHud NOTIFY isShowingPovHudChanged );
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
@@ -275,6 +285,8 @@ private:
 	bool m_isShowingActionRequests { false };
 
 	bool m_hasTeamChat { false };
+	bool m_isShowingPovHud { false };
+	bool m_isShowingHud { false };
 
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
@@ -899,13 +911,19 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingTeamChatPopupChanged( m_isShowingTeamChatPopup );
 	}
 
-	const bool wasShowingActionRequests = m_isShowingActionRequests;
-	m_isShowingActionRequests = false;
-	if( !m_actionRequestsModel.empty() ) {
-		if( !m_activeMenuMask && !m_isShowingChatPopup && !m_isShowingTeamChatPopup && !m_isShowingScoreboard ) {
-			m_isShowingActionRequests = true;
-		}
+	const bool wasShowingHud = m_isShowingHud;
+	const bool wasShowingPovHud = m_isShowingPovHud;
+	m_isShowingHud = actualClientState == CA_ACTIVE;
+	if( m_isShowingHud != wasShowingHud ) {
+		Q_EMIT isShowingHudChanged( m_isShowingHud );
 	}
+	m_isShowingPovHud = m_isShowingHud && CG_HasActiveChasePov();
+	if( m_isShowingPovHud != wasShowingPovHud ) {
+		Q_EMIT isShowingPovHudChanged( m_isShowingPovHud );
+	}
+
+	const bool wasShowingActionRequests = m_isShowingActionRequests;
+	m_isShowingActionRequests = !m_actionRequestsModel.empty() && !m_activeMenuMask;
 	if( wasShowingActionRequests != m_isShowingActionRequests ) {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
 	}
@@ -925,6 +943,8 @@ void QtUISystem::checkPropertyChanges() {
 
 	bool isLikelyToDrawSelf = false;
 	if( m_activeMenuMask ) {
+		isLikelyToDrawSelf = true;
+	} else if( m_isShowingHud ) {
 		isLikelyToDrawSelf = true;
 	} else if( m_isShowingScoreboard || m_isShowingChatPopup || m_isShowingTeamChatPopup ) {
 		isLikelyToDrawSelf = true;
