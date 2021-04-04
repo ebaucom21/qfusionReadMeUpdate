@@ -4,9 +4,6 @@
 #include "shader.h"
 
 #include "../qcommon/hash.h"
-#include "../qcommon/wswstaticvector.h"
-
-using wsw::operator""_asView;
 
 static bool isANumber( const wsw::StringView &view ) {
 	for( char ch: view ) {
@@ -26,45 +23,45 @@ auto MaterialParser::tryAddingPassTCMod( TCMod modType ) -> tcmod_t * {
 	if( pass->numtcmods == MAX_SHADER_TCMODS ) {
 		return nullptr;
 	}
-	if( tcMods.size() == tcMods.capacity() ) {
+	if( m_tcMods.size() == m_tcMods.capacity() ) {
 		return nullptr;
 	}
 	// Set the tcmod data pointer if it has not been set yet
 	if( !pass->numtcmods ) {
-		pass->tcmods = tcMods.end();
+		pass->tcmods = m_tcMods.end();
 	}
 	pass->numtcmods++;
-	auto *newMod = tcMods.unsafe_grow_back();
+	auto *newMod = m_tcMods.unsafe_grow_back();
 	memset( newMod, 0, sizeof( tcmod_t ) );
 	newMod->type = (unsigned)modType;
 	return newMod;
 }
 
 auto MaterialParser::tryAddingDeform( Deform deformType ) -> deformv_t * {
-	if( deforms.size() == deforms.capacity() ) {
+	if( m_deforms.size() == m_deforms.capacity() ) {
 		return nullptr;
 	}
-	auto *deform = deforms.unsafe_grow_back();
+	auto *deform = m_deforms.unsafe_grow_back();
 	memset( deform, 0, sizeof( deformv_t ) );
 	deform->type = (unsigned)deformType;
 	return deform;
 }
 
-MaterialParser::MaterialParser( MaterialCache *materialCache_,
-								TokenStream *mainTokenStream_,
-								const wsw::StringView &name_,
-								const wsw::HashedStringView &cleanName_,
-								shaderType_e type_ )
-	: materialCache( materialCache_ )
-	, defaultLexer( mainTokenStream_ )
-	, lexer( &defaultLexer )
-	, name( name_ )
-	, cleanName( cleanName_ )
-	, type( type_ ) {}
+MaterialParser::MaterialParser( MaterialCache *materialCache,
+								TokenStream *mainTokenStream,
+								const wsw::StringView &name,
+								const wsw::HashedStringView &cleanName,
+								shaderType_e type )
+	: m_materialCache( materialCache )
+	, m_defaultLexer( mainTokenStream )
+	, m_lexer( &m_defaultLexer )
+	, m_name( name )
+	, m_cleanName( cleanName )
+	, m_type( type ) {}
 
 auto MaterialParser::exec() -> shader_t * {
 	for(;;) {
-		auto maybeToken = lexer->getNextToken();
+		auto maybeToken = m_lexer->getNextToken();
 		if( !maybeToken ) {
 			break;
 		}
@@ -73,33 +70,35 @@ auto MaterialParser::exec() -> shader_t * {
 		// Check for a pass or a key
 		// TODO: There should be a routine that allows a direct comparison with chars
 		if( !token.equals( wsw::StringView( "{" ) ) ) {
-			lexer->unGetToken();
+			m_lexer->unGetToken();
 			if( !parseKey() ) {
 				wsw::String tokenString( token.data(), token.size() );
-				assert( name.isZeroTerminated() );
-				Com_Printf( S_COLOR_YELLOW "Failed to parse a key `%s` in %s\n", tokenString.data(), name.data() );
+				assert( m_name.isZeroTerminated() );
+				Com_Printf( S_COLOR_YELLOW "Failed to parse a key `%s` in %s\n", tokenString.data(), m_name.data() );
 				return nullptr;
 			}
 
 			// Skip any trailing stuff at the end of the parsed key
-			lexer->skipToEndOfLine();
+			if( !m_lexer->skipToEndOfLine() ) {
+				return nullptr;
+			}
 			continue;
 		}
 
-		if( passes.size() == passes.capacity() ) {
+		if( m_passes.size() == m_passes.capacity() ) {
 			Com_Printf( S_COLOR_YELLOW "Too many passes\n" );
 			return nullptr;
 		}
 
-		auto *newPass = passes.unsafe_grow_back();
+		auto *const newPass = m_passes.unsafe_grow_back();
 		memset( newPass, 0, sizeof( shaderpass_t ) );
 
 		if( !parsePass() ) {
-			Com_Printf( S_COLOR_YELLOW "Failed to parse a pass in %s\n", name.data() );
+			Com_Printf( S_COLOR_YELLOW "Failed to parse a pass in %s\n", m_name.data() );
 			return nullptr;
 		}
 
-		auto maybeNextToken = lexer->getNextToken();
+		auto maybeNextToken = m_lexer->getNextToken();
 		if( !maybeNextToken ) {
 			Com_Printf( S_COLOR_YELLOW "Missing a closing brace of a pass\n" );
 			return nullptr;
@@ -131,7 +130,7 @@ auto MaterialParser::exec() -> shader_t * {
 		}
 	}
 
-	if( conditionalBlockDepth ) {
+	if( m_conditionalBlockDepth ) {
 		Com_Printf( S_COLOR_YELLOW "Syntax error. Is an `endif` missing?\n" );
 		return nullptr;
 	}
@@ -141,14 +140,14 @@ auto MaterialParser::exec() -> shader_t * {
 
 bool MaterialParser::parsePass() {
 	for(;;) {
-		const auto maybeToken = lexer->getNextToken();
+		const auto maybeToken = m_lexer->getNextToken();
 		if( !maybeToken ) {
 			Com_Printf( S_COLOR_YELLOW "Failed to get a next token in a pass\n" );
 			return false;
 		}
 
 		const wsw::StringView token = *maybeToken;
-		lexer->unGetToken();
+		m_lexer->unGetToken();
 
 		// Protect from nested passes
 		if( token.equals( wsw::StringView( "{" ) ) ) {
@@ -162,17 +161,19 @@ bool MaterialParser::parsePass() {
 
 		if( !parsePassKey() ) {
 			wsw::String s( token.data(), token.size() );
-			Com_Printf( "Failed to parse a key (len=%d) %s in %s\n", (int)token.size(), s.data(), name.data() );
+			Com_Printf( "Failed to parse a key (len=%d) %s in %s\n", (int)token.size(), s.data(), m_name.data() );
 			return false;
 		}
 
 		// Skip any trailing stuff at the end of the parsed key
-		lexer->skipToEndOfLine();
+		if( !m_lexer->skipToEndOfLine() ) {
+			return false;
+		}
 	}
 }
 
 bool MaterialParser::parsePassKey() {
-	if( const std::optional<PassKey> maybeKey = lexer->getPassKey() ) {
+	if( const std::optional<PassKey> maybeKey = m_lexer->getPassKey() ) {
 		switch( *maybeKey ) {
 			case PassKey::RgbGen: return parseRgbGen();
 			case PassKey::BlendFunc: return parseBlendFunc();
@@ -198,11 +199,11 @@ bool MaterialParser::parsePassKey() {
 		}
 	}
 
-	return allowUnknownEntries;
+	return m_allowUnknownEntries;
 }
 
 bool MaterialParser::parseKey() {
-	if( const std::optional<MaterialKey> maybeKey = lexer->getMaterialKey() ) {
+	if( const std::optional<MaterialKey> maybeKey = m_lexer->getMaterialKey() ) {
 		switch( *maybeKey ) {
 			case MaterialKey::Cull: return parseCull();
 			case MaterialKey::SkyParams: return parseSkyParms();
@@ -233,11 +234,11 @@ bool MaterialParser::parseKey() {
 		}
 	}
 
-	return allowUnknownEntries;
+	return m_allowUnknownEntries;
 }
 
 bool MaterialParser::parseRgbGen() {
-	std::optional<RgbGen> maybeRgbGen = lexer->getRgbGen();
+	std::optional<RgbGen> maybeRgbGen = m_lexer->getRgbGen();
 	// TODO: We handle this at loop level, do we?
 	if( !maybeRgbGen ) {
 		return false;
@@ -257,7 +258,7 @@ bool MaterialParser::parseRgbGen() {
 			break;
 		case RgbGen::ColorWave:
 			pass->rgbgen.type = RGB_GEN_WAVE;
-			if( !lexer->getVector<3>( pass->rgbgen.args ) ) {
+			if( !m_lexer->getVector<3>( pass->rgbgen.args ) ) {
 				return false;
 			}
 			if( !parseFunc( &pass->rgbgen.func ) ) {
@@ -266,7 +267,7 @@ bool MaterialParser::parseRgbGen() {
 			break;
 		case RgbGen::Custom:
 			pass->rgbgen.type = RGB_GEN_CUSTOMWAVE;
-			pass->rgbgen.args[0] = lexer->getFloat().value_or(0);
+			pass->rgbgen.args[0] = m_lexer->getFloat().value_or(0);
 			if( pass->rgbgen.args[0] < 0 || pass->rgbgen.args[0] >= NUM_CUSTOMCOLORS ) {
 				pass->rgbgen.args[0] = 0;
 			}
@@ -274,7 +275,7 @@ bool MaterialParser::parseRgbGen() {
 			break;
 		case RgbGen::CustomWave:
 			pass->rgbgen.type = RGB_GEN_CUSTOMWAVE;
-			pass->rgbgen.args[0] = lexer->getFloat().value_or(0);
+			pass->rgbgen.args[0] = m_lexer->getFloat().value_or(0);
 			if( pass->rgbgen.args[0] < 0 || pass->rgbgen.args[0] >= NUM_CUSTOMCOLORS ) {
 				pass->rgbgen.args[0] = 0;
 			}
@@ -287,7 +288,7 @@ bool MaterialParser::parseRgbGen() {
 		case RgbGen::EntityWave:
 			pass->rgbgen.type = RGB_GEN_ENTITYWAVE;
 			pass->rgbgen.func.type = SHADER_FUNC_NONE;
-			if( !lexer->getVector<3>( pass->rgbgen.args ) ) {
+			if( !m_lexer->getVector<3>( pass->rgbgen.args ) ) {
 			    return false;
 			}
 			return parseFunc( &pass->rgbgen.func );
@@ -301,9 +302,9 @@ bool MaterialParser::parseRgbGen() {
 			pass->rgbgen.type = RGB_GEN_ONE_MINUS_VERTEX;
 			break;
 		case RgbGen::LightingDiffuse:
-			if( type < SHADER_TYPE_DIFFUSE ) {
+			if( m_type < SHADER_TYPE_DIFFUSE ) {
 				pass->rgbgen.type = RGB_GEN_VERTEX;
-			} else if( type > SHADER_TYPE_DIFFUSE ) {
+			} else if( m_type > SHADER_TYPE_DIFFUSE ) {
 				pass->rgbgen.type = RGB_GEN_IDENTITY;
 			} else {
 				pass->rgbgen.type = RGB_GEN_LIGHTING_DIFFUSE;
@@ -315,7 +316,7 @@ bool MaterialParser::parseRgbGen() {
 		case RgbGen::Const:
 			pass->rgbgen.type = RGB_GEN_CONST;
 			vec3_t color;
-			if( !lexer->getVector<3>( color ) ) {
+			if( !m_lexer->getVector<3>( color ) ) {
 			    return false;
 			}
 			ColorNormalize( color, pass->rgbgen.args );
@@ -329,17 +330,17 @@ bool MaterialParser::parseBlendFunc() {
 	auto *const pass = currPass();
 
 	pass->flags &= ~GLSTATE_BLEND_MASK;
-	if( std::optional<UnaryBlendFunc> maybeUnaryFunc = lexer->getUnaryBlendFunc() ) {
+	if( std::optional<UnaryBlendFunc> maybeUnaryFunc = m_lexer->getUnaryBlendFunc() ) {
 		pass->flags |= (int)( *maybeUnaryFunc );
 		return true;
 	}
 
-	std::optional<SrcBlend> maybeSrcBlend = lexer->getSrcBlend();
+	std::optional<SrcBlend> maybeSrcBlend = m_lexer->getSrcBlend();
 	if( !maybeSrcBlend && m_strict ) {
 		return false;
 	}
 
-	std::optional<DstBlend> maybeDstBlend = lexer->getDstBlend();
+	std::optional<DstBlend> maybeDstBlend = m_lexer->getDstBlend();
 	if( !maybeDstBlend && m_strict ) {
 		return false;
 	}
@@ -349,7 +350,7 @@ bool MaterialParser::parseBlendFunc() {
 }
 
 bool MaterialParser::parseDepthFunc() {
-	std::optional<DepthFunc> maybeFunc = lexer->getDepthFunc();
+	std::optional<DepthFunc> maybeFunc = m_lexer->getDepthFunc();
 	if( !maybeFunc ) {
 		return false;
 	}
@@ -375,7 +376,7 @@ bool MaterialParser::parseAlphaFunc() {
 
 	pass->flags &= ~( SHADERPASS_ALPHAFUNC | GLSTATE_ALPHATEST );
 
-	std::optional<AlphaFunc> maybeFunc = lexer->getAlphaFunc();
+	std::optional<AlphaFunc> maybeFunc = m_lexer->getAlphaFunc();
 	if( !maybeFunc ) {
 		return false;
 	}
@@ -400,14 +401,14 @@ bool MaterialParser::parseAlphaFunc() {
 }
 
 bool MaterialParser::parseTCMod() {
-	std::optional<TCMod> maybeTCMod = lexer->getTCMod();
+	std::optional<TCMod> maybeTCMod = m_lexer->getTCMod();
 	if( !maybeTCMod ) {
 		return false;
 	}
 
 	TCMod modType = *maybeTCMod;
 	if( modType == TCMod::Rotate ) {
-		auto maybeArg = lexer->getFloat();
+		auto maybeArg = m_lexer->getFloat();
 		if( !maybeArg ) {
 			return false;
 		}
@@ -425,7 +426,7 @@ bool MaterialParser::parseTCMod() {
 	}
 
 	if( modType == TCMod::Scale || modType == TCMod::Scroll ) {
-		return lexer->getVector<2>( newMod->args );
+		return m_lexer->getVector<2>( newMod->args );
 	}
 
 	if( modType == TCMod::Stretch ) {
@@ -443,11 +444,11 @@ bool MaterialParser::parseTCMod() {
 	}
 
 	if( modType == TCMod::Turb ) {
-		return lexer->getVector<4>( newMod->args );
+		return m_lexer->getVector<4>( newMod->args );
 	}
 
 	assert( modType == TCMod::Transform );
-	if( !lexer->getVector<6>( newMod->args ) ) {
+	if( !m_lexer->getVector<6>( newMod->args ) ) {
 	    return false;
 	}
 
@@ -491,16 +492,16 @@ bool MaterialParser::tryMatchingPortalMap( const wsw::StringView &texNameToken )
 	pass->flags = ( pass->flags & ~( SHADERPASS_LIGHTMAP ) ) | SHADERPASS_PORTALMAP;
 	pass->anim_fps = 0;
 	pass->images[0] = nullptr;
-	if( ( flags & SHADER_PORTAL ) && ( sort == SHADER_SORT_PORTAL ) ) {
-		sort = 0; // reset sorting so we can figure it out later. FIXME?
+	if( ( m_flags & SHADER_PORTAL ) && ( m_sort == SHADER_SORT_PORTAL ) ) {
+		m_sort = 0; // reset sorting so we can figure it out later. FIXME?
 	}
 
-	flags |= SHADER_PORTAL | ( r_portalmaps->integer ? SHADER_PORTAL_CAPTURE : 0 );
+	m_flags |= SHADER_PORTAL | ( r_portalmaps->integer ? SHADER_PORTAL_CAPTURE : 0 );
 	return true;
 }
 
 bool MaterialParser::parseMapExt( int addFlags ) {
-	const std::optional<wsw::StringView> maybeToken = lexer->getNextTokenInLine();
+	const std::optional<wsw::StringView> maybeToken = m_lexer->getNextTokenInLine();
 	if( !maybeToken ) {
 		return false;
 	}
@@ -528,11 +529,11 @@ bool MaterialParser::parseAnimMapExt( int addFlags ) {
 	pass->tcgen = TC_GEN_BASE;
 	pass->flags &= ~( SHADERPASS_LIGHTMAP | SHADERPASS_PORTALMAP );
 	// TODO: Disallow?
-	pass->anim_fps = lexer->getFloatOr( 0.0f );
+	pass->anim_fps = m_lexer->getFloatOr( 0.0f );
 	pass->anim_numframes = 0;
 
 	for(;; ) {
-		if( auto maybeToken = lexer->getNextTokenInLine() ) {
+		if( const auto maybeToken = m_lexer->getNextTokenInLine() ) {
 			if( pass->anim_numframes < MAX_SHADER_IMAGES ) {
 				pass->images[pass->anim_numframes++] = findImage( *maybeToken, imageFlags );
 			}
@@ -551,8 +552,9 @@ bool MaterialParser::parseAnimMapExt( int addFlags ) {
 
 bool MaterialParser::parseCubeMapExt( int addFlags, int tcGen ) {
 	auto *const pass = currPass();
-	if( auto maybeToken = lexer->getNextTokenInLine() ) {
+	if( const auto maybeToken = m_lexer->getNextTokenInLine() ) {
 		const auto imageFlags = getImageFlags() | addFlags | IT_SRGB | IT_CUBEMAP;
+		(void)imageFlags;
 		// TODO: Fix that!
 		// pass->images[0] = R_FindImage( *maybeToken, wsw::StringView(), imageFlags, *minMipSize, imageTags );
 		abort();
@@ -598,8 +600,8 @@ bool MaterialParser::parseMaterial() {
 	auto *const pass = currPass();
 
 	const auto imageFlags = getImageFlags();
-	auto maybeFirstToken = lexer->getNextTokenInLine();
-	const auto &firstToken = maybeFirstToken ? *maybeFirstToken : this->name;
+	auto maybeFirstToken = m_lexer->getNextTokenInLine();
+	const auto &firstToken = maybeFirstToken ? *maybeFirstToken : this->m_name;
 
 	pass->images[0] = findImage( firstToken, imageFlags | IT_SRGB );
 	if( !pass->images[0] ) {
@@ -622,7 +624,7 @@ bool MaterialParser::parseMaterial() {
 	// I assume materials are only applied to lightmapped surfaces
 
 	for(;; ) {
-		const auto maybeToken = lexer->getNextTokenInLine();
+		const auto maybeToken = m_lexer->getNextTokenInLine();
 		if( !maybeToken ) {
 			break;
 		}
@@ -679,19 +681,19 @@ bool MaterialParser::parseMaterial() {
 	pass->images[1] = pass->images[2] = pass->images[3] = nullptr;
 
 	// set defaults
-	const auto mipSize = minMipSize.value_or( 1 );
+	const auto mipSize = m_minMipSize.value_or( 1 );
 
 	// load normalmap image
 	// TODO................ ! Check whether `imageFlags` or `flags` should be supplied
-	pass->images[1] = textureCache->getMaterialTexture( name, kNormSuffix, imageFlags, mipSize, imageTags );
+	pass->images[1] = textureCache->getMaterialTexture( m_name, kNormSuffix, imageFlags, mipSize, m_imageTags );
 
 	// load glossmap image
 	if( r_lighting_specular->integer ) {
-		pass->images[2] = textureCache->getMaterialTexture( name, kGlossSuffix, flags, mipSize, imageTags );
+		pass->images[2] = textureCache->getMaterialTexture( m_name, kGlossSuffix, m_flags, mipSize, m_imageTags );
 	}
 
-	if( !( pass->images[3] = textureCache->getMaterialTexture( name, kDecalSuffix, flags, mipSize, imageTags ) ) ) {
-		pass->images[3] = textureCache->getMaterialTexture( name, kAddSuffix, flags, mipSize, imageTags );
+	if( !( pass->images[3] = textureCache->getMaterialTexture( m_name, kDecalSuffix, m_flags, mipSize, m_imageTags ) ) ) {
+		pass->images[3] = textureCache->getMaterialTexture( m_name, kAddSuffix, m_flags, mipSize, m_imageTags );
 	}
 
 	return true;
@@ -701,8 +703,7 @@ bool MaterialParser::parseDistortion() {
 	if( !r_portalmaps->integer ) {
 	    // TODO:....
 		//Com_DPrintf( S_COLOR_YELLOW "WARNING: shader %s has a distortion stage, while GLSL is not supported\n", shader->name );
-		lexer->skipToEndOfLine();
-		return true;
+		return m_lexer->skipToEndOfLine();
 	}
 
 	auto *const pass = currPass();
@@ -712,12 +713,12 @@ bool MaterialParser::parseDistortion() {
 	pass->images[0] = pass->images[1] = nullptr;
 
 	for(;;) {
-		auto maybeToken = lexer->getNextTokenInLine();
+		const auto maybeToken = m_lexer->getNextTokenInLine();
 		if( !maybeToken ) {
 			break;
 		}
 
-		auto token = *maybeToken;
+		const auto token = *maybeToken;
 		if( isANumber( token ) ) {
 			continue;
 		}
@@ -736,11 +737,11 @@ bool MaterialParser::parseDistortion() {
 		VectorClear( pass->rgbgen.args );
 	}
 
-	if( sort == SHADER_SORT_PORTAL ) {
-		sort = 0; // reset sorting so we can figure it out later. FIXME?
+	if( m_sort == SHADER_SORT_PORTAL ) {
+		m_sort = 0; // reset sorting so we can figure it out later. FIXME?
 	}
 
-	flags |= SHADER_PORTAL | SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2;
+	m_flags |= SHADER_PORTAL | SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2;
 	return true;
 }
 
@@ -759,7 +760,7 @@ bool MaterialParser::parseCelshade() {
 
 	// at least two valid images are required: 'base' and 'celshade'
 	for( int i = 0; i < 2; i++ ) {
-		auto maybeToken = lexer->getNextTokenInLine();
+		auto maybeToken = m_lexer->getNextTokenInLine();
 		if( !maybeToken ) {
 			return false;
 		}
@@ -773,7 +774,7 @@ bool MaterialParser::parseCelshade() {
 
 	// parse optional images: [diffuse] [decal] [entitydecal] [stripes] [celllight]
 	for( int i = 0; i < 5; i++ ) {
-		auto maybeToken = lexer->getNextTokenInLine();
+		auto maybeToken = m_lexer->getNextTokenInLine();
 		if( !maybeToken ) {
 			break;
 		}
@@ -787,7 +788,7 @@ bool MaterialParser::parseCelshade() {
 }
 
 bool MaterialParser::parseTCGen() {
-	auto maybeTCGen = lexer->getTCGen();
+	auto maybeTCGen = m_lexer->getTCGen();
 	if( !maybeTCGen ) {
 	    return false;
 	}
@@ -797,10 +798,10 @@ bool MaterialParser::parseTCGen() {
 	auto *pass = currPass();
 	pass->tcgen = (unsigned)tcGen;
 	if( tcGen == TCGen::Vector ) {
-		if( !lexer->getVector<4>( &pass->tcgenVec[0] ) ) {
+		if( !m_lexer->getVector<4>( &pass->tcgenVec[0] ) ) {
 			return false;
 		}
-		if( !lexer->getVector<4>( &pass->tcgenVec[4] ) ) {
+		if( !m_lexer->getVector<4>( &pass->tcgenVec[4] ) ) {
 			return false;
 		}
 	}
@@ -809,7 +810,7 @@ bool MaterialParser::parseTCGen() {
 }
 
 bool MaterialParser::parseAlphaGen() {
-	std::optional<AlphaGen> maybeAlphaGen = lexer->getAlphaGen();
+	std::optional<AlphaGen> maybeAlphaGen = m_lexer->getAlphaGen();
 	if( !maybeAlphaGen ) {
 		return parseAlphaGenPortal();
 	}
@@ -819,7 +820,7 @@ bool MaterialParser::parseAlphaGen() {
 	pass->alphagen.type = (unsigned)alphaGen;
 
 	if( alphaGen == AlphaGen::Const ) {
-		pass->alphagen.args[0] = std::abs( lexer->getFloat().value_or(0) );
+		pass->alphagen.args[0] = std::abs( m_lexer->getFloat().value_or(0) );
 		return true;
 	}
 
@@ -833,7 +834,7 @@ bool MaterialParser::parseAlphaGen() {
 
 	// treat custom distanceramp as portal
 	if( pass->alphagen.func.type == SHADER_FUNC_RAMP && pass->alphagen.func.args[1] == 1 ) {
-		portalDistance = std::max( std::abs( pass->alphagen.func.args[3] ), portalDistance );
+		m_portalDistance = std::max( std::abs( pass->alphagen.func.args[3] ), m_portalDistance );
 	}
 
 	return true;
@@ -842,7 +843,7 @@ bool MaterialParser::parseAlphaGen() {
 static wsw::StringView kPortal = wsw::StringView( "portal" );
 
 bool MaterialParser::parseAlphaGenPortal() {
-	auto maybeToken = lexer->getNextToken();
+	auto maybeToken = m_lexer->getNextToken();
 	if( !maybeToken ) {
 		return false;
 	}
@@ -853,12 +854,12 @@ bool MaterialParser::parseAlphaGenPortal() {
 
 	auto *const pass = currPass();
 
-	float dist = lexer->getFloatOr( 256.0f );
+	float dist = m_lexer->getFloatOr( 256.0f );
 	pass->alphagen.type = ALPHA_GEN_WAVE;
 	pass->alphagen.func.type = SHADER_FUNC_RAMP;
 
 	Vector4Set( pass->alphagen.func.args, 0, 1, 0, dist );
-	portalDistance = std::max( dist, portalDistance );
+	m_portalDistance = std::max( dist, m_portalDistance );
 	return true;
 }
 
@@ -873,18 +874,17 @@ bool MaterialParser::parseGrayscale() {
 }
 
 bool MaterialParser::parseSkip() {
-	lexer->skipToEndOfLine();
-	return true;
+	return m_lexer->skipToEndOfLine();
 }
 
 bool MaterialParser::parseCull() {
-	if( auto maybeCullMode = lexer->getCullMode() ) {
-		flags &= ~( SHADER_CULL_FRONT | SHADER_CULL_BACK );
+	if( const auto maybeCullMode = m_lexer->getCullMode() ) {
+		m_flags &= ~( SHADER_CULL_FRONT | SHADER_CULL_BACK );
 		auto cullMode = *maybeCullMode;
 		if( cullMode == CullMode::Front ) {
-			flags |= SHADER_CULL_FRONT;
+			m_flags |= SHADER_CULL_FRONT;
 		} else if( cullMode == CullMode::Back ) {
-			flags |= SHADER_CULL_BACK;
+			m_flags |= SHADER_CULL_BACK;
 		}
 		return true;
 	}
@@ -908,91 +908,91 @@ bool MaterialParser::parseSkyParmsSides() {
 
 bool MaterialParser::parseFogParams() {
 	vec3_t color, fcolor;
-	if( !lexer->getVector<3>( color ) ) {
+	if( !m_lexer->getVector<3>( color ) ) {
 		return false;
 	}
 
 	ColorNormalize( color, fcolor );
 
-	fog_color[0] = ( int )( fcolor[0] * 255.0f );
-	fog_color[1] = ( int )( fcolor[1] * 255.0f );
-	fog_color[2] = ( int )( fcolor[2] * 255.0f );
-	fog_color[3] = 255;
+	m_fog_color[0] = ( int )( fcolor[0] * 255.0f );
+	m_fog_color[1] = ( int )( fcolor[1] * 255.0f );
+	m_fog_color[2] = ( int )( fcolor[2] * 255.0f );
+	m_fog_color[3] = 255;
 
 	// TODO: Print warnings on getting default values?
-	fog_dist = lexer->getFloatOr( -1.0f );
-	if( fog_dist <= 0.1f ) {
-		fog_dist = 128.0f;
+	m_fog_dist = m_lexer->getFloatOr( -1.0f );
+	if( m_fog_dist <= 0.1f ) {
+		m_fog_dist = 128.0f;
 	}
 
 	// TODO: Print warnings on getting default values?
-	fog_clearDist = lexer->getFloatOr( -1.0f );
-	if( fog_clearDist > fog_dist - 128 ) {
-		fog_clearDist = fog_dist - 128;
+	m_fog_clearDist = m_lexer->getFloatOr( -1.0f );
+	if( m_fog_clearDist > m_fog_dist - 128 ) {
+		m_fog_clearDist = m_fog_dist - 128;
 	}
-	if( fog_clearDist <= 0.0f ) {
-		fog_clearDist = 0;
+	if( m_fog_clearDist <= 0.0f ) {
+		m_fog_clearDist = 0;
 	}
 
 	return true;
 }
 
 bool MaterialParser::parseNoMipmaps() {
-	noMipMaps = noPicMip = true;
-	minMipSize = std::optional( 1 );
+	m_noMipMaps = m_noPicMip = true;
+	m_minMipSize = std::optional( 1 );
 	return true;
 }
 
 bool MaterialParser::parseNoPicmip() {
-	noPicMip = true;
+	m_noPicMip = true;
 	return true;
 }
 
 bool MaterialParser::parseNoCompress() {
-	noCompress = true;
+	m_noCompress = true;
 	return true;
 }
 
 bool MaterialParser::parseNofiltering() {
-	noFiltering = true;
-	flags |= SHADER_NO_TEX_FILTERING;
+	m_noFiltering = true;
+	m_flags |= SHADER_NO_TEX_FILTERING;
 	return true;
 }
 
 bool MaterialParser::parseSmallestMipSize() {
-	if( auto maybeMipSize = lexer->getInt() ) {
-		minMipSize = std::optional( std::max( 1, *maybeMipSize ) );
+	if( const auto maybeMipSize = m_lexer->getInt() ) {
+		m_minMipSize = std::optional( std::max( 1, *maybeMipSize ) );
 		return true;
 	}
 	return false;
 }
 
 bool MaterialParser::parsePolygonOffset() {
-	flags |= SHADER_POLYGONOFFSET;
+	m_flags |= SHADER_POLYGONOFFSET;
 	return true;
 }
 
 bool MaterialParser::parseStencilTest() {
-	flags |= SHADER_STENCILTEST;
+	m_flags |= SHADER_STENCILTEST;
 	return true;
 }
 
 bool MaterialParser::parseEntityMergable() {
-	flags |= SHADER_ENTITY_MERGABLE;
+	m_flags |= SHADER_ENTITY_MERGABLE;
 	return true;
 }
 
 bool MaterialParser::parseSort() {
-	if( auto maybeSortMode = lexer->getSortMode() ) {
-		sort = (int)( *maybeSortMode );
+	if( const auto maybeSortMode = m_lexer->getSortMode() ) {
+		m_sort = (int)( *maybeSortMode );
 		return true;
 	}
 
-	if( auto maybeNum = lexer->getInt() ) {
-		sort = *maybeNum;
+	if( const auto maybeNum = m_lexer->getInt() ) {
+		m_sort = *maybeNum;
 		// TODO: Check the lower bound and print a warning
-		if( sort > SHADER_SORT_NEAREST ) {
-			sort = SHADER_SORT_NEAREST;
+		if( m_sort > SHADER_SORT_NEAREST ) {
+			m_sort = SHADER_SORT_NEAREST;
 		}
 		return true;
 	}
@@ -1000,7 +1000,7 @@ bool MaterialParser::parseSort() {
 }
 
 bool MaterialParser::parseDeformVertexes() {
-	std::optional<Deform> maybeDeform = lexer->getDeform();
+	std::optional<Deform> maybeDeform = m_lexer->getDeform();
 	if( !maybeDeform ) {
 		return false;
 	}
@@ -1021,7 +1021,7 @@ bool MaterialParser::parseDeformVertexes() {
 	assert( deformType == Deform::Autosprite || deformType == Deform::Autosprite2 || deformType == Deform::Autoparticle );
 
 	if( tryAddingDeform( deformType ) ) {
-		flags |= SHADER_AUTOSPRITE;
+		m_flags |= SHADER_AUTOSPRITE;
 		return true;
 	}
 
@@ -1033,7 +1033,7 @@ bool MaterialParser::parseDeformWave() {
 	if( !deform ) {
 		return false;
 	}
-	auto maybeArg = lexer->getFloat();
+	auto maybeArg = m_lexer->getFloat();
 	if( !maybeArg ) {
 		return false;
 	}
@@ -1054,7 +1054,7 @@ bool MaterialParser::parseDeformMove() {
 	if( !deform ) {
 		return false;
 	}
-	if( !lexer->getVector<3>( deform->args ) ) {
+	if( !m_lexer->getVector<3>( deform->args ) ) {
 		return false;
 	}
 	if( !parseFunc( &deform->func ) ) {
@@ -1071,8 +1071,8 @@ bool MaterialParser::parseDeformMove() {
 }
 
 bool MaterialParser::parseDeformBulge() {
-	if( auto *deform = tryAddingDeform( Deform::Bulge ) ) {
-		if ( lexer->getVector<4>( deform->args ) ) {
+	if( auto *const deform = tryAddingDeform( Deform::Bulge ) ) {
+		if ( m_lexer->getVector<4>( deform->args ) ) {
 			return addToDeformSignature( deform->args[0], deform->args[1], deform->args[2], deform->args[3] );
 		}
 	}
@@ -1080,28 +1080,28 @@ bool MaterialParser::parseDeformBulge() {
 }
 
 bool MaterialParser::parsePortal() {
-	flags |= SHADER_PORTAL;
-	sort = SHADER_SORT_PORTAL;
+	m_flags |= SHADER_PORTAL;
+	m_sort = SHADER_SORT_PORTAL;
 	return true;
 }
 
 bool MaterialParser::parseOffsetMappingScale() {
-	offsetMappingScale = lexer->getFloatOr(0.0f );
+	m_offsetMappingScale = m_lexer->getFloatOr(0.0f );
 	return true;
 }
 
 bool MaterialParser::parseGlossExponent() {
-	glossExponent = lexer->getFloatOr(0.0f);
+	m_glossExponent = m_lexer->getFloatOr(0.0f);
 	return true;
 }
 
 bool MaterialParser::parseGlossIntensity() {
-	glossIntensity = lexer->getFloatOr(0.0f);
+	m_glossIntensity = m_lexer->getFloatOr(0.0f);
 	return true;
 }
 
 bool MaterialParser::parseTemplate() {
-	if( lexer != &defaultLexer ) {
+	if( m_lexer != &m_defaultLexer ) {
 		// TODO:
 		Com_Printf( "Recursive template" );
 		return false;
@@ -1109,7 +1109,7 @@ bool MaterialParser::parseTemplate() {
 
 	// TODO: Disallow multiple template expansions as well?
 
-	auto maybeNameToken = lexer->getNextToken();
+	auto maybeNameToken = m_lexer->getNextToken();
 	if( !maybeNameToken ) {
 		return false;
 	}
@@ -1118,7 +1118,7 @@ bool MaterialParser::parseTemplate() {
 
 	wsw::StaticVector<wsw::StringView, 16> args;
 	for(;; ) {
-		if( auto maybeToken = lexer->getNextTokenInLine() ) {
+		if( const auto maybeToken = m_lexer->getNextTokenInLine() ) {
 			if( args.size() == args.capacity() ) {
 				return false;
 			}
@@ -1128,30 +1128,30 @@ bool MaterialParser::parseTemplate() {
 		}
 	}
 
-	lexer = materialCache->expandTemplate( *maybeNameToken, args.begin(), args.size() );
+	m_lexer = m_materialCache->expandTemplate( *maybeNameToken, args.begin(), args.size() );
 	bool result = false;
-	if( lexer ) {
+	if( m_lexer ) {
 		// TODO... really?
 		result = exec();
 	}
-	lexer = &defaultLexer;
+	m_lexer = &m_defaultLexer;
 	return result;
 }
 
 bool MaterialParser::parseSoftParticle() {
-	flags |= SHADER_SOFT_PARTICLE;
+	m_flags |= SHADER_SOFT_PARTICLE;
 	return true;
 }
 
 bool MaterialParser::parseForceWorldOutlines() {
-	flags |= SHADER_FORCE_OUTLINE_WORLD;
+	m_flags |= SHADER_FORCE_OUTLINE_WORLD;
 	return true;
 }
 
 bool MaterialParser::parseFunc( shaderfunc_t *func ) {
-	if( auto maybeFunc = lexer->getFunc() ) {
+	if( const auto maybeFunc = m_lexer->getFunc() ) {
 		func->type = (unsigned)*maybeFunc;
-		lexer->getVectorOrFill<4>( func->args, 0.0f );
+		m_lexer->getVectorOrFill<4>( func->args, 0.0f );
 		return true;
 	}
 	return false;
@@ -1163,26 +1163,26 @@ bool MaterialParser::parseIf() {
 		if( !*maybeCondition ) {
 			return skipConditionalBlock();
 		}
-		++conditionalBlockDepth;
+		++m_conditionalBlockDepth;
 		return true;
 	}
 	return false;
 }
 
 bool MaterialParser::parseEndIf() {
-	if( conditionalBlockDepth <= 0 ) {
+	if( m_conditionalBlockDepth <= 0 ) {
 		return false;
 	}
-	--conditionalBlockDepth;
+	--m_conditionalBlockDepth;
 	return true;
 }
 
-static const wsw::StringView kIfLiteral( "if" );
-static const wsw::StringView kEndIfLiteral( "endif" );
+static const wsw::StringView kIfLiteral( "if"_asView );
+static const wsw::StringView kEndIfLiteral( "endif"_asView );
 
 bool MaterialParser::skipConditionalBlock() {
 	for( int depth = 1; depth > 0; ) {
-		if( const std::optional<wsw::StringView> maybeToken = lexer->getNextToken() ) {
+		if( const std::optional<wsw::StringView> maybeToken = m_lexer->getNextToken() ) {
 			if( kIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
 				depth++;
 			} else if( kEndIfLiteral.equalsIgnoreCase( *maybeToken ) ) {
@@ -1200,38 +1200,38 @@ auto MaterialParser::parseCondition() -> std::optional<bool> {
 
 	int numTokens = 0;
 	for(;; ) {
-		const auto oldCurrTokenNum = lexer->getCurrTokenNum();
+		const auto oldCurrTokenNum = m_lexer->getCurrTokenNum();
 		// First, just check whether there's a next token in line. This is a shared preliminary condition.
-		if( lexer->getNextTokenInLine() == std::nullopt ) {
+		if( m_lexer->getNextTokenInLine() == std::nullopt ) {
 			if( numTokens == 0 ) {
 				return std::nullopt;
 			}
 			return evaluator.exec();
 		} else {
-			lexer->unGetToken();
+			m_lexer->unGetToken();
 			if( numTokens == MaterialIfEvaluator::Capacity ) {
 				return std::nullopt;
 			}
 			numTokens++;
 		}
 
-		// Make sure the lexer state has been rolled back properly
-		assert( lexer->getCurrTokenNum() == oldCurrTokenNum );
+		// Make sure the m_lexer state has been rolled back properly
+		assert( m_lexer->getCurrTokenNum() == oldCurrTokenNum );
 
 		// Try classifying the token
-		if( const auto maybeLogicOp = lexer->getLogicOp() ) {
+		if( const auto maybeLogicOp = m_lexer->getLogicOp() ) {
 			evaluator.addLogicOp( *maybeLogicOp );
-		} else if( const auto maybeCmpOp = lexer->getCmpOp() ) {
+		} else if( const auto maybeCmpOp = m_lexer->getCmpOp() ) {
 			evaluator.addCmpOp( *maybeCmpOp );
-		} else if( const auto maybeIntVar = lexer->getIntConditionVar() ) {
+		} else if( const auto maybeIntVar = m_lexer->getIntConditionVar() ) {
 			evaluator.addInt( getIntConditionVarValue( *maybeIntVar ) );
-		} else if( const auto maybeBoolVar = lexer->getBoolConditionVar() ) {
+		} else if( const auto maybeBoolVar = m_lexer->getBoolConditionVar() ) {
 			evaluator.addBool( getBoolConditionVarValue( *maybeBoolVar ) );
-		} else if( const auto maybeInt = lexer->getInt() ) {
+		} else if( const auto maybeInt = m_lexer->getInt() ) {
 			evaluator.addInt( *maybeInt );
-		} else if( const auto maybeBool = lexer->getBool() ) {
+		} else if( const auto maybeBool = m_lexer->getBool() ) {
 			evaluator.addBool( *maybeBool );
-		} else if( const auto token( lexer->getNextTokenInLine().value() ); token.length() == 1 ) {
+		} else if( const auto token( m_lexer->getNextTokenInLine().value() ); token.length() == 1 ) {
 			if( token[0] == '(' ) {
 				evaluator.addLeftParen();
 			} else if( token[0] == ')' ) {
@@ -1269,11 +1269,11 @@ bool MaterialParser::getBoolConditionVarValue( BoolConditionVar var ) {
 int MaterialParser::buildVertexAttribs() {
 	int attribs = VATTRIB_POSITION_BIT;
 
-	for( const auto &deform: deforms ) {
+	for( const auto &deform: m_deforms ) {
 		attribs |= getDeformVertexAttribs( deform );
 	}
 
-	for( const auto &pass: passes ) {
+	for( const auto &pass: m_passes ) {
 		attribs |= getPassVertexAttribs( pass );
 	}
 
@@ -1361,20 +1361,20 @@ int MaterialParser::getTCGenVertexAttribs( unsigned gen ) {
 }
 
 void MaterialParser::fixLightmapsForVertexLight() {
-	if( !hasLightmapPass ) {
+	if( !m_hasLightmapPass ) {
 		return;
 	}
 
-	if( type != SHADER_TYPE_DELUXEMAP && type != SHADER_TYPE_VERTEX ) {
+	if( m_type != SHADER_TYPE_DELUXEMAP && m_type != SHADER_TYPE_VERTEX ) {
 		return;
 	}
 
 	// fix up rgbgen's and blendmodes for lightmapped shaders and vertex lighting
-	for( auto &pass: passes ) {
+	for( auto &pass: m_passes ) {
 		const auto blendMask = pass.flags & GLSTATE_BLEND_MASK;
 
 		// TODO: Simplify
-		if( !( !blendMask || blendMask == ( GLSTATE_SRCBLEND_DST_COLOR | GLSTATE_DSTBLEND_ZERO ) || passes.size() == 1 ) ) {
+		if( !( !blendMask || blendMask == ( GLSTATE_SRCBLEND_DST_COLOR | GLSTATE_DSTBLEND_ZERO ) || m_passes.size() == 1 ) ) {
 			continue;
 		}
 
@@ -1394,25 +1394,25 @@ void MaterialParser::fixLightmapsForVertexLight() {
 }
 
 void MaterialParser::fixFlagsAndSortingOrder() {
-	if( passes.empty() && !sort ) {
-		if( flags & SHADER_PORTAL ) {
-			sort = SHADER_SORT_PORTAL;
+	if( m_passes.empty() && !m_sort ) {
+		if( m_flags & SHADER_PORTAL ) {
+			m_sort = SHADER_SORT_PORTAL;
 		} else {
-			sort = SHADER_SORT_ADDITIVE;
+			m_sort = SHADER_SORT_ADDITIVE;
 		}
 	}
 
-	if( ( flags & SHADER_POLYGONOFFSET ) && !sort ) {
-		sort = SHADER_SORT_DECAL;
+	if( ( m_flags & SHADER_POLYGONOFFSET ) && !m_sort ) {
+		m_sort = SHADER_SORT_DECAL;
 	}
-	if( flags & SHADER_AUTOSPRITE ) {
-		flags &= ~( SHADER_CULL_FRONT | SHADER_CULL_BACK );
+	if( m_flags & SHADER_AUTOSPRITE ) {
+		m_flags &= ~( SHADER_CULL_FRONT | SHADER_CULL_BACK );
 	}
 
 	bool allDetail = true;
 
 	const shaderpass_t *opaquePass = nullptr;
-	for( auto &pass: passes ) {
+	for( auto &pass: m_passes ) {
 		const auto blendmask = pass.flags & GLSTATE_BLEND_MASK;
 
 		if( !opaquePass && !blendmask ) {
@@ -1423,18 +1423,18 @@ void MaterialParser::fixFlagsAndSortingOrder() {
 			pass.flags |= GLSTATE_DEPTHWRITE;
 		}
 		if( ( pass.flags & SHADERPASS_LIGHTMAP || pass.program_type == GLSL_PROGRAM_TYPE_MATERIAL ) ) {
-			if( type >= SHADER_TYPE_DELUXEMAP ) {
-				flags |= SHADER_LIGHTMAP;
+			if( m_type >= SHADER_TYPE_DELUXEMAP ) {
+				m_flags |= SHADER_LIGHTMAP;
 			}
 		}
 		if( pass.flags & GLSTATE_DEPTHWRITE ) {
-			flags |= SHADER_DEPTHWRITE;
+			m_flags |= SHADER_DEPTHWRITE;
 		}
 
 		// disable r_drawflat for shaders with customizable color passes
 		if( pass.rgbgen.type == RGB_GEN_CONST || pass.rgbgen.type == RGB_GEN_CUSTOMWAVE ||
 			pass.rgbgen.type == RGB_GEN_ENTITYWAVE || pass.rgbgen.type == RGB_GEN_ONE_MINUS_ENTITY ) {
-			flags |= SHADER_NODRAWFLAT;
+			m_flags |= SHADER_NODRAWFLAT;
 		}
 
 		if( !( pass.flags & SHADERPASS_DETAIL ) ) {
@@ -1442,28 +1442,28 @@ void MaterialParser::fixFlagsAndSortingOrder() {
 		}
 	}
 
-	if( !passes.empty() && allDetail ) {
-		flags |= SHADER_ALLDETAIL;
+	if( !m_passes.empty() && allDetail ) {
+		m_flags |= SHADER_ALLDETAIL;
 	}
 
-	if( !sort ) {
+	if( !m_sort ) {
 		if( opaquePass ) {
 			if( opaquePass->flags & SHADERPASS_ALPHAFUNC ) {
-				sort = SHADER_SORT_ALPHATEST;
+				m_sort = SHADER_SORT_ALPHATEST;
 			}
 		} else {
 			// all passes have blendfuncs
-			sort = ( flags & SHADER_DEPTHWRITE ) ? SHADER_SORT_ALPHATEST : SHADER_SORT_ADDITIVE;
+			m_sort = ( m_flags & SHADER_DEPTHWRITE ) ? SHADER_SORT_ALPHATEST : SHADER_SORT_ADDITIVE;
 		}
 	}
 
-	if( !sort ) {
-		sort = SHADER_SORT_OPAQUE;
+	if( !m_sort ) {
+		m_sort = SHADER_SORT_OPAQUE;
 	}
 
 	// disable r_drawflat for transparent shaders
-	if( sort >= SHADER_SORT_UNDERWATER ) {
-		flags |= SHADER_NODRAWFLAT;
+	if( m_sort >= SHADER_SORT_UNDERWATER ) {
+		m_flags |= SHADER_NODRAWFLAT;
 	}
 }
 
@@ -1483,10 +1483,10 @@ shader_t *MaterialParser::build() {
 
 	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::initiallyEmpty() );
 	const auto shaderSpec = memSpec.add<shader_t>();
-	const auto passesSpec = memSpec.add<shaderpass_t>( passes.size() );
+	const auto passesSpec = memSpec.add<shaderpass_t>( m_passes.size() );
 
-	for( const auto &pass: passes ) {
-		if( auto numElems = pass.getNumTCGenElems() ) {
+	for( const auto &pass: m_passes ) {
+		if( const auto numElems = pass.getNumTCGenElems() ) {
 			tcGenSpecs.push_back( memSpec.add<float>( numElems ) );
 		} else {
 			tcGenSpecs.push_back( std::nullopt );
@@ -1500,14 +1500,14 @@ shader_t *MaterialParser::build() {
 	}
 
 	std::optional<wsw::MemSpecBuilder::ChunkSpec<deformv_t>> deformDataSpec = std::nullopt;
-	if( const auto size = deforms.size() ) {
+	if( const auto size = m_deforms.size() ) {
 		deformDataSpec = memSpec.add<deformv_t>( size );
 	}
 
-	const auto nameSpec = memSpec.add<char>( cleanName.size() + 1 );
+	const auto nameSpec = memSpec.add<char>( m_cleanName.size() + 1 );
 
 	std::optional<wsw::MemSpecBuilder::ChunkSpec<int>> deformSigSpec = std::nullopt;
-	if( const auto size = deformSig.size() ) {
+	if( const auto size = m_deformSig.size() ) {
 		deformSigSpec = memSpec.add<int>( size );
 	}
 
@@ -1520,60 +1520,61 @@ shader_t *MaterialParser::build() {
 	auto *const s = new( shaderSpec.get( baseMem ) )shader_t;
 
 	char *const savedName = nameSpec.get( baseMem );
-	std::memcpy( savedName, cleanName.data(), cleanName.size() );
-	savedName[cleanName.size()] = '\0';
-	s->name = wsw::HashedStringView( savedName, cleanName.size(), cleanName.getHash(), wsw::StringView::ZeroTerminated );
+	std::memcpy( savedName, m_cleanName.data(), m_cleanName.size() );
+	savedName[m_cleanName.size()] = '\0';
+	s->name = wsw::HashedStringView( savedName, m_cleanName.size(),
+								  m_cleanName.getHash(), wsw::StringView::ZeroTerminated );
 
-	s->type = this->type;
-	s->flags = this->flags;
-	s->sort = this->sort;
+	s->type = this->m_type;
+	s->flags = this->m_flags;
+	s->sort = this->m_sort;
 	s->vattribs = attribs;
 
 	s->passes = passesSpec.get( baseMem );
-	s->numpasses = passes.size();
+	s->numpasses = m_passes.size();
 
 	// Perform a shallow copy first
-	std::copy( passes.begin(), passes.end(), s->passes );
+	std::copy( m_passes.begin(), m_passes.end(), s->passes );
 
-	for( size_t i = 0; i < passes.size(); ++i ) {
+	for( size_t i = 0; i < m_passes.size(); ++i ) {
 		auto *const savedPass = &s->passes[i];
-		const auto *parsedPass = &passes[i];
-		if( auto tcGenSpec = tcGenSpecs[i] ) {
+		const auto *parsedPass = &m_passes[i];
+		if( const auto tcGenSpec = tcGenSpecs[i] ) {
 			savedPass->tcgenVec = ( *tcGenSpec ).get( baseMem );
 			size_t numTCGenElems = parsedPass->getNumTCGenElems();
 			assert( numTCGenElems );
 			std::copy( parsedPass->tcgenVec, parsedPass->tcgenVec + numTCGenElems, savedPass->tcgenVec );
 		}
-		if( auto tcModSpec = tcModSpecs[i] ) {
+		if( const auto tcModSpec = tcModSpecs[i] ) {
 			savedPass->tcmods = ( *tcModSpec ).get( baseMem );
 			std::copy( savedPass->tcmods, savedPass->tcmods + savedPass->numtcmods, parsedPass->tcmods );
 		}
 	}
 
-	s->numdeforms = deforms.size();
+	s->numdeforms = m_deforms.size();
 	if( deformDataSpec ) {
 		s->deforms = ( *deformDataSpec ).get( baseMem );
-		std::copy( deforms.begin(), deforms.end(), s->deforms );
+		std::copy( m_deforms.begin(), m_deforms.end(), s->deforms );
 	}
 
 	if( deformSigSpec ) {
-		int *sigData = ( *deformSigSpec ).get( baseMem );
-		size_t rawDataLen = deformSig.size() * sizeof( int );
-		std::copy( deformSig.begin(), deformSig.end(), sigData );
+		int *const sigData = ( *deformSigSpec ).get( baseMem );
+		size_t rawDataLen = m_deformSig.size() * sizeof( int );
+		std::copy( m_deformSig.begin(), m_deformSig.end(), sigData );
 		s->deformSig.hash = COM_SuperFastHash( (const uint8_t *)sigData, rawDataLen, rawDataLen );
-		s->deformSig.len = (uint32_t)deformSig.size();
+		s->deformSig.len = (uint32_t)m_deformSig.size();
 		s->deformSig.data = sigData;
 	}
 
-	std::copy( std::begin( fog_color ), std::end( fog_color ), s->fog_color );
-	s->fog_dist = fog_dist;
-	s->fog_clearDist = fog_clearDist;
+	std::copy( std::begin( m_fog_color ), std::end( m_fog_color ), s->fog_color );
+	s->fog_dist = m_fog_dist;
+	s->fog_clearDist = m_fog_clearDist;
 
-	s->glossIntensity = glossIntensity;
-	s->glossExponent = glossExponent;
-	s->offsetmappingScale = offsetMappingScale;
+	s->glossIntensity = m_glossIntensity;
+	s->glossExponent = m_glossExponent;
+	s->offsetmappingScale = m_offsetMappingScale;
 
-	s->portalDistance = portalDistance;
+	s->portalDistance = m_portalDistance;
 
 	// TODO: Copy sky params
 
@@ -1583,11 +1584,11 @@ shader_t *MaterialParser::build() {
 int MaterialParser::getImageFlags() {
 	int flags = 0;
 
-	flags |= ( noMipMaps ? IT_NOMIPMAP : 0 );
-	flags |= ( noPicMip ? IT_NOPICMIP : 0 );
-	flags |= ( noCompress ? IT_NOCOMPRESS : 0 );
-	flags |= ( noFiltering ? IT_NOFILTERING : 0 );
-	if( type == SHADER_TYPE_2D || type == SHADER_TYPE_2D_RAW || type == SHADER_TYPE_VIDEO ) {
+	flags |= ( m_noMipMaps ? IT_NOMIPMAP : 0 );
+	flags |= ( m_noPicMip ? IT_NOPICMIP : 0 );
+	flags |= ( m_noCompress ? IT_NOCOMPRESS : 0 );
+	flags |= ( m_noFiltering ? IT_NOFILTERING : 0 );
+	if( m_type == SHADER_TYPE_2D || m_type == SHADER_TYPE_2D_RAW || m_type == SHADER_TYPE_VIDEO ) {
 		flags |= IT_SYNC;
 	}
 	//if( r_shaderHasAutosprite )

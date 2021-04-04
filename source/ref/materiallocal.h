@@ -1,5 +1,5 @@
-#ifndef WSW_MATERIALLOCAL_H
-#define WSW_MATERIALLOCAL_H
+#ifndef WSW_0778b312_c4f6_4400_bcec_132900009562_H
+#define WSW_0778b312_c4f6_4400_bcec_132900009562_H
 
 #include "../gameshared/q_shared.h"
 #include "../qcommon/memspecbuilder.h"
@@ -12,6 +12,8 @@
 #include "glimp.h"
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/stringspanstorage.h"
+
+using wsw::operator""_asView;
 
 #include <optional>
 
@@ -220,27 +222,29 @@ enum class SkySide {
 };
 
 class TokenSplitter {
-	const char *const data;
-	size_t dataSize;
-	ptrdiff_t offset { 0 };
+	const char *const m_data;
+	size_t m_dataSize;
+	ptrdiff_t m_offset { 0 };
 
+	[[nodiscard]]
 	auto tryMatching1Or2CharsToken( const char *tokenStart ) const -> std::optional<unsigned>;
 
 	[[nodiscard]]
 	static bool mustCloseTokenAtChar( char ch, char nextCh );
 public:
-	TokenSplitter( const char *data_, size_t dataSize_ )
-		: data( data_ ), dataSize( dataSize_ ) {}
+	TokenSplitter( const char *data, size_t dataSize )
+		: m_data( data ), m_dataSize( dataSize ) {}
 
 	[[nodiscard]]
 	bool isAtEof() const {
-		if( (ptrdiff_t)offset >= dataSize ) {
+		if( (ptrdiff_t)m_offset >= (ptrdiff_t)m_dataSize ) {
 			return true;
 		}
 		// Protect against bogus files
-		return data[offset] == '\0';
+		return m_data[m_offset] == '\0';
 	}
 
+	[[nodiscard]]
 	auto fetchNextTokenInLine() -> std::optional<std::pair<uint32_t, uint32_t>>;
 };
 
@@ -252,88 +256,87 @@ struct TokenSpan {
 
 class TokenStream {
 	// Initialize just to suppress a lint warning
-	const char *data[2] { nullptr, nullptr };
+	const char *m_data[2] { nullptr, nullptr };
 
-	const TokenSpan *const tokenSpans;
-	const int numTokens;
+	const TokenSpan *const m_tokenSpans;
+	const int m_numTokens;
 
-	int currToken { 0 };
-	int currLine { 0 };
+	int m_currToken { 0 };
+	int m_currLine { 0 };
 
 	[[nodiscard]]
-	auto getView( int offset, unsigned len ) -> wsw::StringView {
+	auto getView( int offset, unsigned len ) const -> wsw::StringView {
 		// Use either a data or an alt data as a base ptr based on the offset sign
-		const char *p = this->data[offset < 0] + std::abs( offset );
+		const char *p = this->m_data[offset < 0] + std::abs( offset );
 		assert( p );
 		return wsw::StringView( p, len );
 	}
 public:
-	TokenStream( const char *data_, const TokenSpan *tokenSpans_, const int numTokens_, const char *altData_ = nullptr )
-		: tokenSpans( tokenSpans_ ), numTokens( numTokens_ ) {
-		data[0] = data_;
-		data[1] = altData_;
+	TokenStream( const char *data, const TokenSpan *tokenSpans, int numTokens, const char *altData = nullptr )
+		: m_tokenSpans( tokenSpans ), m_numTokens( numTokens ) {
+		m_data[0] = data;
+		m_data[1] = altData;
 	}
 
 	[[nodiscard]]
-	bool isAtEof() const {
-		return currToken >= numTokens;
-	}
+	bool isAtEof() const { return m_currToken >= m_numTokens; }
 
 	[[nodiscard]]
-	auto getCurrTokenNum() const -> int { return currToken; }
+	auto getCurrTokenNum() const -> int { return m_currToken; }
 
 	void setCurrTokenNum( int num ) {
-		assert( num >= 0 && num <= numTokens );
-		currToken = num;
-		if( num < numTokens ) {
-			currLine = tokenSpans[num].line;
+		assert( (unsigned)num <= (unsigned)m_numTokens );
+		m_currToken = num;
+		if( num < m_numTokens ) {
+			m_currLine = m_tokenSpans[num].line;
 		} else {
-			currLine = std::numeric_limits<int>::max();
+			m_currLine = std::numeric_limits<int>::max();
 		}
 	}
 
 	[[nodiscard]]
 	auto getNextTokenInLine() -> std::optional<wsw::StringView> {
-		if( currToken >= numTokens ) {
+		if( m_currToken >= m_numTokens ) {
 			return std::nullopt;
 		}
-		const auto &[off, len, line] = tokenSpans[currToken];
-		if( line != currLine ) {
+		const auto &[off, len, line] = m_tokenSpans[m_currToken];
+		if( ( decltype( m_currLine ) )line != m_currLine ) {
 			return std::nullopt;
 		}
-		currToken++;
+		m_currToken++;
 		return std::optional( getView( off, len ) );
 	}
 
 	[[nodiscard]]
 	auto getNextToken() -> std::optional<wsw::StringView> {
-		if( currToken >= numTokens ) {
+		if( m_currToken >= m_numTokens ) {
 			return std::nullopt;
 		}
-		const auto &[off, len, line] = tokenSpans[currToken++];
-		currLine = line;
+		const auto &[off, len, line] = m_tokenSpans[m_currToken++];
+		m_currLine = line;
 		return std::optional( getView( off, len ) );
 	}
 
 	[[maybe_unused]]
 	bool unGetToken() {
-		assert( currToken <= numTokens );
-		if( currToken == 0 ) {
+		assert( m_currToken <= m_numTokens );
+		if( m_currToken == 0 ) {
 			return false;
 		}
-		currToken = currToken - 1;
-		currLine = tokenSpans[currToken].line;
+		m_currToken = m_currToken - 1;
+		m_currLine = m_tokenSpans[m_currToken].line;
 		return true;
 	}
 };
 
 class MaterialLexer {
-	TokenStream *stream { nullptr };
+	TokenStream *m_stream { nullptr };
 
 	template <typename T>
+	[[nodiscard]]
 	auto getNumber() -> std::optional<T> {
-		if( auto maybeToken = getNextTokenInLine() ) {
-			if( auto maybeNumber = wsw::toNum<T>( *maybeToken ) ) {
+		if( const auto maybeToken = getNextTokenInLine() ) {
+			if( const auto maybeNumber = wsw::toNum<T>( *maybeToken ) ) {
 				return maybeNumber;
 			}
 			unGetToken();
@@ -342,9 +345,10 @@ class MaterialLexer {
 	}
 
 	template <typename T>
+	[[nodiscard]]
 	auto getNumberOr( T defaultValue ) -> T {
-		if( auto maybeToken = getNextTokenInLine() ) {
-			if( auto maybeNumber = wsw::toNum<T>( *maybeToken ) ) {
+		if( const auto maybeToken = getNextTokenInLine() ) {
+			if( const auto maybeNumber = wsw::toNum<T>( *maybeToken ) ) {
 				return *maybeNumber;
 			}
 			unGetToken();
@@ -352,81 +356,91 @@ class MaterialLexer {
 		return defaultValue;
 	}
 
+	[[nodiscard]]
 	bool parseVector( float *dest, size_t numElems );
 	void parseVectorOrFill( float *dest, size_t numElems, float defaultValue );
 public:
-	explicit MaterialLexer( TokenStream *tokenStream_ ) : stream( tokenStream_ ) {}
+	explicit MaterialLexer( TokenStream *tokenStream ) : m_stream( tokenStream ) {}
 
 	[[nodiscard]]
-	bool isAtEof() const {
-		return stream->isAtEof();
-	}
-
+	auto getNextToken() -> std::optional<wsw::StringView> { return m_stream->getNextToken(); }
 	[[nodiscard]]
-	auto getNextToken() -> std::optional<wsw::StringView> {
-		return stream->getNextToken();
-	}
-
-	[[nodiscard]]
-	auto getNextTokenInLine() -> std::optional<wsw::StringView> {
-		return stream->getNextTokenInLine();
-	}
-
+	auto getNextTokenInLine() -> std::optional<wsw::StringView> { return m_stream->getNextTokenInLine(); }
 	[[maybe_unused]]
-	bool unGetToken() {
-		return stream->unGetToken();
-	}
+	bool unGetToken() { return m_stream->unGetToken(); }
+	[[nodiscard]]
+	auto getCurrTokenNum() const -> int { return m_stream->getCurrTokenNum(); }
 
 	[[nodiscard]]
-	auto getCurrTokenNum() const -> int {
-		return stream->getCurrTokenNum();
-	}
+	auto getPassKey() -> std::optional<PassKey>;
+	[[nodiscard]]
+	auto getDeform() -> std::optional<Deform>;
+	[[nodiscard]]
+	auto getFunc() -> std::optional<Func>;
+	[[nodiscard]]
+	auto getIntConditionVar() -> std::optional<IntConditionVar>;
+	[[nodiscard]]
+	auto getBoolConditionVar() -> std::optional<BoolConditionVar>;
+	[[nodiscard]]
+	auto getLogicOp() -> std::optional<LogicOp>;
+	[[nodiscard]]
+	auto getCmpOp() -> std::optional<CmpOp>;
+	[[nodiscard]]
+	auto getCullMode() -> std::optional<CullMode>;
+	[[nodiscard]]
+	auto getSortMode() -> std::optional<SortMode>;
+	[[nodiscard]]
+	auto getMaterialKey() -> std::optional<MaterialKey>;
+	[[nodiscard]]
+	auto getRgbGen() -> std::optional<RgbGen>;
+	[[nodiscard]]
+	auto getAlphaGen() -> std::optional<AlphaGen>;
+	[[nodiscard]]
+	auto getSrcBlend() -> std::optional<SrcBlend>;
+	[[nodiscard]]
+	auto getDstBlend() -> std::optional<DstBlend>;
+	[[nodiscard]]
+	auto getUnaryBlendFunc() -> std::optional<UnaryBlendFunc>;
+	[[nodiscard]]
+	auto getAlphaFunc() -> std::optional<AlphaFunc>;
+	[[nodiscard]]
+	auto getDepthFunc() -> std::optional<DepthFunc>;
+	[[nodiscard]]
+	auto getTCMod() -> std::optional<TCMod>;
+	[[nodiscard]]
+	auto getTCGen() -> std::optional<TCGen>;
+	[[nodiscard]]
+	auto getSkySide() -> std::optional<SkySide>;
 
-	std::optional<PassKey> getPassKey();
-	std::optional<Deform> getDeform();
-	std::optional<Func> getFunc();
-	std::optional<IntConditionVar> getIntConditionVar();
-	std::optional<BoolConditionVar> getBoolConditionVar();
-	std::optional<LogicOp> getLogicOp();
-	std::optional<CmpOp> getCmpOp();
-	std::optional<CullMode> getCullMode();
-	std::optional<SortMode> getSortMode();
-	std::optional<MaterialKey> getMaterialKey();
-	std::optional<RgbGen> getRgbGen();
-	std::optional<AlphaGen> getAlphaGen();
-	std::optional<SrcBlend> getSrcBlend();
-	std::optional<DstBlend> getDstBlend();
-	std::optional<UnaryBlendFunc> getUnaryBlendFunc();
-	std::optional<AlphaFunc> getAlphaFunc();
-	std::optional<DepthFunc> getDepthFunc();
-	std::optional<TCMod> getTCMod();
-	std::optional<TCGen> getTCGen();
-	std::optional<SkySide> getSkySide();
-
+	[[nodiscard]]
 	bool skipToEndOfLine();
 
+	[[nodiscard]]
 	auto getFloat() -> std::optional<float> { return getNumber<float>(); }
+	[[nodiscard]]
 	auto getInt() -> std::optional<int> { return getNumber<int>(); }
-
+	[[nodiscard]]
 	auto getFloatOr( float defaultValue ) -> float { return getNumberOr<float>( defaultValue ); }
+	[[nodiscard]]
 	auto getIntOr( int defaultValue ) -> int { return getNumberOr<int>( defaultValue ); }
 
 	template <size_t N>
+	[[nodiscard]]
 	bool getVector( float *dest ) {
 		static_assert( N && N <= 8 );
 		if constexpr( N == 1 ) {
-			if( auto number = getFloat() ) {
+			if( const auto number = getFloat() ) {
 				*dest = *number;
 				return true;
 			}
 			return false;
 		}
 		// Make sure it rolls back offset properly on failure like everything else does
-		const auto oldTokenNum = stream->getCurrTokenNum();
+		const auto oldTokenNum = m_stream->getCurrTokenNum();
 		if( parseVector( dest, N ) ) {
 			return true;
 		}
-		stream->setCurrTokenNum( oldTokenNum );
+		m_stream->setCurrTokenNum( oldTokenNum );
 		return false;
 	}
 
@@ -440,6 +454,7 @@ public:
 		}
 	}
 
+	[[nodiscard]]
 	auto getBool() -> std::optional<bool>;
 };
 
@@ -468,8 +483,8 @@ class MaterialSource {
 
 	std::optional<Placeholders> m_placeholders;
 
-	MaterialSource *nextInList { nullptr };
-	MaterialSource *nextInBin { nullptr };
+	MaterialSource *m_nextInList { nullptr };
+	MaterialSource *m_nextInBin { nullptr };
 
 	wsw::HashedStringView m_name;
 
@@ -524,7 +539,8 @@ public:
 						 wsw::Vector<TokenSpan> &resultingTokens );
 };
 
-class Skin {
+// MSVC: Keep it defined as struct for now
+struct Skin {
 	friend class MaterialCache;
 private:
 	wsw::StringSpanStorage<uint16_t, uint16_t> m_stringDataStorage;
@@ -539,76 +555,91 @@ class MaterialCache {
 	friend class MaterialParser;
 	friend class MaterialSource;
 
-	MaterialFileContents *fileContentsHead {nullptr };
+	MaterialFileContents *m_fileContentsHead { nullptr };
 
 	enum { kNumBins = 307 };
 
-	MaterialSource *sourcesHead { nullptr };
-	MaterialSource *sourceBins[kNumBins] { nullptr };
+	MaterialSource *m_sourcesHead { nullptr };
+	MaterialSource *m_sourceBins[kNumBins] { nullptr };
 
-	shader_t *materialsHead { nullptr };
-	shader_t *materialBins[kNumBins] { nullptr };
+	shader_t *m_materialsHead { nullptr };
+	shader_t *m_materialBins[kNumBins] { nullptr };
+	shader_t *m_materialById[MAX_SHADERS] { nullptr };
 
-	shader_t *materialById[MAX_SHADERS] { nullptr };
+	wsw::String m_pathNameBuffer;
+	wsw::String m_cleanNameBuffer;
+	wsw::String m_expansionBuffer;
+	wsw::String m_fileContentsBuffer;
 
-	wsw::String pathNameBuffer;
-	wsw::String cleanNameBuffer;
-	wsw::String expansionBuffer;
-	wsw::String fileContentsBuffer;
+	wsw::Vector<TokenSpan> m_fileTokenSpans;
+	wsw::Vector<TokenSpan> m_templateTokenSpans;
 
-	wsw::Vector<TokenSpan> fileTokenSpans;
-	wsw::Vector<TokenSpan> templateTokenSpans;
+	wsw::Vector<wsw::StringView> m_fileMaterialNames;
+	wsw::Vector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
 
-	wsw::Vector<wsw::StringView> fileMaterialNames;
-	wsw::Vector<std::pair<unsigned, unsigned>> fileSourceSpans;
+	wsw::Vector<uint16_t> m_freeMaterialIds;
 
-	wsw::Vector<uint16_t> freeMaterialIds;
-
-	wsw::StaticVector<TokenStream, 1> templateTokenStreamHolder;
-	wsw::StaticVector<MaterialLexer, 1> templateLexerHolder;
-	wsw::StaticVector<TokenStream, 1> primaryTokenStreamHolder;
+	wsw::StaticVector<TokenStream, 1> m_templateTokenStreamHolder;
+	wsw::StaticVector<MaterialLexer, 1> m_templateLexerHolder;
+	wsw::StaticVector<TokenStream, 1> m_primaryTokenStreamHolder;
 
 	wsw::StaticVector<Skin, 16> m_skins;
 
+	[[nodiscard]]
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
+	[[nodiscard]]
 	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::String *;
 
+	[[nodiscard]]
 	auto findSourceByName( const wsw::StringView &name ) -> MaterialSource * {
 		return findSourceByName( wsw::HashedStringView( name ) );
 	}
 
+	[[nodiscard]]
 	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
 
+	[[nodiscard]]
 	auto findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize = 1 ) -> Texture *;
 	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags, int minMipSize = 1 );
 
 	void loadDirContents( const wsw::StringView &dir );
 
 	void addFileContents( const wsw::StringView &fileName );
+	[[nodiscard]]
 	bool tryAddingFileContents( const MaterialFileContents *contents );
 
 	void unlinkAndFree( shader_t *s );
 
+	[[nodiscard]]
 	auto getNextMaterialId() -> unsigned;
-
+	[[nodiscard]]
 	auto makeCleanName( const wsw::StringView &name ) -> wsw::HashedStringView;
-
+	[[nodiscard]]
 	auto getTokenStreamForShader( const wsw::HashedStringView &cleanName ) -> TokenStream *;
-
+	[[nodiscard]]
 	auto loadMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name, int type, TokenStream *tokenStream ) -> shader_t *;
 
 	// This must go once sane material classes get implemented
+	[[nodiscard]]
 	auto initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec ) -> shader_t *;
-
+	[[nodiscard]]
 	auto newDefaultMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newDefaultVertexMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newDefaultDeluxeMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newDefaultCoronaMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newDefaultDiffuseMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newDefault2DLikeMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+	[[nodiscard]]
 	auto newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 
+	[[nodiscard]]
 	auto findSkinByName( const wsw::StringView &name ) -> Skin *;
 	[[nodiscard]]
 	auto parseSkinFileData( const wsw::StringView &name, const wsw::StringView &fileData ) -> Skin *;
@@ -635,7 +666,7 @@ public:
 
 	[[nodiscard]]
 	auto getMaterialById( int id ) -> shader_t * {
-		return materialById[id];
+		return m_materialById[id];
 	}
 
 	[[nodiscard]]
@@ -662,116 +693,172 @@ class Texture;
 class MaterialParser {
 	friend class ParserTestWrapper;
 
-	MaterialCache *const materialCache;
-	MaterialLexer defaultLexer;
-	MaterialLexer *lexer;
+	MaterialCache *const m_materialCache;
+	MaterialLexer m_defaultLexer;
+	MaterialLexer *m_lexer;
 
-	const wsw::StringView name;
-	const wsw::HashedStringView cleanName;
+	const wsw::StringView m_name;
+	const wsw::HashedStringView m_cleanName;
 
-	wsw::StaticVector<int, 256> deformSig;
-	wsw::StaticVector<shaderpass_t, MAX_SHADER_PASSES> passes;
-	wsw::StaticVector<deformv_t, MAX_SHADER_DEFORMVS> deforms;
-	wsw::StaticVector<tcmod_t, MAX_SHADER_PASSES * MAX_SHADER_TCMODS> tcMods;
+	wsw::StaticVector<int, 256> m_deformSig;
+	wsw::StaticVector<shaderpass_t, MAX_SHADER_PASSES> m_passes;
+	wsw::StaticVector<deformv_t, MAX_SHADER_DEFORMVS> m_deforms;
+	wsw::StaticVector<tcmod_t, MAX_SHADER_PASSES * MAX_SHADER_TCMODS> m_tcMods;
 
-	int sort { 0 };
-	int flags { SHADER_CULL_FRONT };
-	shaderType_e type { (shaderType_e)0 };
+	int m_sort { 0 };
+	int m_flags { SHADER_CULL_FRONT };
+	shaderType_e m_type { (shaderType_e)0 };
 
-	std::optional<int> minMipSize;
+	std::optional<int> m_minMipSize;
 
-	uint8_t fog_color[4] { 0, 0, 0, 0 };
-	float fog_dist { 0.0f };
-	float fog_clearDist { 0.0f };
+	uint8_t m_fog_color[4] { 0, 0, 0, 0 };
+	float m_fog_dist { 0.0f };
+	float m_fog_clearDist { 0.0f };
 
-	float glossIntensity { 0.0f };
-	float glossExponent { 0.0f };
-	float offsetMappingScale { 0.0f };
+	float m_glossIntensity { 0.0f };
+	float m_glossExponent { 0.0f };
+	float m_offsetMappingScale { 0.0f };
 
-	float portalDistance { 0.0f };
+	float m_portalDistance { 0.0f };
 
-	int imageTags { 0 };
+	int m_imageTags { 0 };
 
-	int conditionalBlockDepth { 0 };
+	int m_conditionalBlockDepth { 0 };
 
-	bool noPicMip { false };
-	bool noMipMaps { false };
-	bool noCompress { false };
-	bool noFiltering { false };
+	bool m_noPicMip { false };
+	bool m_noMipMaps { false };
+	bool m_noCompress { false };
+	bool m_noFiltering { false };
 
-	bool hasLightmapPass { false };
+	bool m_hasLightmapPass { false };
 
-	bool allowUnknownEntries { true };
+	bool m_allowUnknownEntries { true };
 
 	bool m_strict { false };
 
 	[[nodiscard]]
 	auto currPass() -> shaderpass_t * {
-		assert( !passes.empty() );
-		return &passes.back();
+		assert( !m_passes.empty() );
+		return &m_passes.back();
 	}
 
+	[[nodiscard]]
 	auto tryAddingPassTCMod( TCMod modType ) -> tcmod_t *;
+	[[nodiscard]]
 	auto tryAddingDeform( Deform deformType ) -> deformv_t *;
 
+	[[nodiscard]]
 	bool parsePass();
+	[[nodiscard]]
 	bool parsePassKey();
+	[[nodiscard]]
 	bool parseKey();
 
+	[[nodiscard]]
 	bool parseRgbGen();
+	[[nodiscard]]
 	bool parseBlendFunc();
+	[[nodiscard]]
 	bool parseDepthFunc();
+	[[nodiscard]]
 	bool parseDepthWrite();
+	[[nodiscard]]
 	bool parseAlphaFunc();
+	[[nodiscard]]
 	bool parseTCMod();
+	[[nodiscard]]
 	bool parseMap();
+	[[nodiscard]]
 	bool parseAnimMap();
+	[[nodiscard]]
 	bool parseCubeMap();
+	[[nodiscard]]
 	bool parseShadeCubeMap();
+	[[nodiscard]]
 	bool parseSurroundMap();
+	[[nodiscard]]
 	bool parseClampMap();
+	[[nodiscard]]
 	bool parseAnimClampMap();
+	[[nodiscard]]
 	bool parseMaterial();
+	[[nodiscard]]
 	bool parseDistortion();
+	[[nodiscard]]
 	bool parseCelshade();
+	[[nodiscard]]
 	bool parseTCGen();
+	[[nodiscard]]
 	bool parseAlphaGen();
+	[[nodiscard]]
 	bool parseDetail();
+	[[nodiscard]]
 	bool parseGrayscale();
+	[[nodiscard]]
 	bool parseSkip();
 
+	[[nodiscard]]
 	bool parseAlphaGenPortal();
 
+	[[nodiscard]]
 	bool parseMapExt( int addFlags );
+	[[nodiscard]]
 	bool tryMatchingPortalMap( const wsw::StringView &texNameToken );
+	[[nodiscard]]
 	bool tryMatchingLightMap( const wsw::StringView &texNameToken );
 
+	[[nodiscard]]
 	bool parseAnimMapExt( int addFlags );
+	[[nodiscard]]
 	bool parseCubeMapExt( int addFlags, int tcGen );
 
+	[[nodiscard]]
 	bool parseCull();
+	[[nodiscard]]
 	bool parseSkyParms();
+	[[nodiscard]]
 	bool parseSkyParms2();
+	[[nodiscard]]
 	bool parseSkyParmsSides();
+	[[nodiscard]]
 	bool parseFogParams();
+	[[nodiscard]]
 	bool parseNoMipmaps();
+	[[nodiscard]]
 	bool parseNoPicmip();
+	[[nodiscard]]
 	bool parseNoCompress();
+	[[nodiscard]]
 	bool parseNofiltering();
+	[[nodiscard]]
 	bool parseSmallestMipSize();
+	[[nodiscard]]
 	bool parsePolygonOffset();
+	[[nodiscard]]
 	bool parseStencilTest();
+	[[nodiscard]]
 	bool parseEntityMergable();
+	[[nodiscard]]
 	bool parseSort();
+	[[nodiscard]]
 	bool parseDeformVertexes();
+	[[nodiscard]]
 	bool parsePortal();
+	[[nodiscard]]
 	bool parseIf();
+	[[nodiscard]]
 	bool parseEndIf();
+	[[nodiscard]]
 	bool parseOffsetMappingScale();
+	[[nodiscard]]
 	bool parseGlossExponent();
+	[[nodiscard]]
 	bool parseGlossIntensity();
+	[[nodiscard]]
 	bool parseTemplate();
+	[[nodiscard]]
 	bool parseSoftParticle();
+	[[nodiscard]]
 	bool parseForceWorldOutlines();
 
 	[[nodiscard]]
@@ -783,8 +870,11 @@ class MaterialParser {
 	[[nodiscard]]
 	static auto getBoolConditionVarValue( BoolConditionVar var ) -> bool;
 
+	[[nodiscard]]
 	bool parseDeformWave();
+	[[nodiscard]]
 	bool parseDeformBulge();
+	[[nodiscard]]
 	bool parseDeformMove();
 
 	[[nodiscard]]
@@ -818,8 +908,8 @@ class MaterialParser {
 
 	[[nodiscard]]
 	bool tryAddingToSignature( int value ) {
-		if( deformSig.size() != deformSig.capacity() ) {
-			deformSig.push_back( value );
+		if( m_deformSig.size() != m_deformSig.capacity() ) {
+			m_deformSig.push_back( value );
 			return true;
 		}
 		return false;
@@ -830,20 +920,28 @@ class MaterialParser {
 
 	int getImageFlags();
 
+	[[nodiscard]]
 	auto findImage( const wsw::StringView &name_, int flags_ ) -> Texture * {
-		return materialCache->findImage( name_, flags_, imageTags, minMipSize.value_or( 1 ) );
+		return m_materialCache->findImage( name_, flags_, m_imageTags, m_minMipSize.value_or( 1 ) );
 	}
 
 	void fixLightmapsForVertexLight();
 	void fixFlagsAndSortingOrder();
 
+	[[nodiscard]]
 	auto build() -> shader_t *;
 
+	[[nodiscard]]
 	auto buildVertexAttribs() -> int;
+	[[nodiscard]]
 	static auto getDeformVertexAttribs( const deformv_t &deform ) -> int;
+	[[nodiscard]]
 	static auto getPassVertexAttribs( const shaderpass_t &pass ) -> int;
+	[[nodiscard]]
 	static auto getRgbGenVertexAttribs( const shaderpass_t &pass, const colorgen_t &gen ) -> int;
+	[[nodiscard]]
 	static auto getAlphaGenVertexAttribs( const colorgen_t &gen ) -> int;
+	[[nodiscard]]
 	static auto getTCGenVertexAttribs( unsigned gen ) -> int;
 public:
 	MaterialParser( MaterialCache *materialCache_,
@@ -852,6 +950,7 @@ public:
 					const wsw::HashedStringView &cleanName_,
 					shaderType_e type_ );
 
+	[[nodiscard]]
     auto exec() -> shader_t *;
 };
 
@@ -911,13 +1010,15 @@ private:
 	static_assert( sizeof( Value ) == 6 );
 #pragma pack( pop )
 
+	[[maybe_unused]]
 	auto makeEntry( Tag tag ) -> TapeEntry * {
-		assert( m_numEntries < Capacity );
+		assert( (unsigned)m_numEntries < (unsigned)Capacity );
 		auto *e = &m_tape[m_numEntries++];
 		e->tag = tag;
 		return e;
 	}
 
+	[[nodiscard]]
 	auto nextTokenTag() -> std::optional<Tag> {
 		return ( m_tapeCursor < m_numEntries ) ? std::optional( m_tape[m_tapeCursor++].tag ) : std::nullopt;
 	}

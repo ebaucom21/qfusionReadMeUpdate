@@ -348,8 +348,8 @@ static SkySideMatcher skySideMatcher;
 
 #define IMPLEMENT_GET_ENUM_METHOD( type, method, matcher ) \
 auto MaterialLexer::method() -> std::optional<type> {\
-	if( auto token = getNextTokenInLine() ) {\
-		if ( auto func = ::matcher.match( *token ) ) {\
+	if( const auto token = getNextTokenInLine() ) {\
+		if( const auto func = ::matcher.match( *token ) ) {\
 			return func;\
 		}\
 		unGetToken();\
@@ -382,7 +382,7 @@ static const wsw::StringView kTrueLiteral( "true" );
 static const wsw::StringView kFalseLiteral( "false" );
 
 auto MaterialLexer::getBool() -> std::optional<bool> {
-	if( auto maybeToken = getNextToken() ) {
+	if( const auto maybeToken = getNextToken() ) {
 		if( kTrueLiteral.equalsIgnoreCase( *maybeToken ) ) {
 			return true;
 		}
@@ -399,7 +399,7 @@ bool MaterialLexer::parseVector( float *dest, size_t numElems ) {
 	float scratchpad[8];
 
 	bool hadParenAtStart = false;
-	if( auto maybeFirstToken = getNextTokenInLine() ) {
+	if( const auto maybeFirstToken = getNextTokenInLine() ) {
 		auto token = *maybeFirstToken;
 		if( token.equals( wsw::StringView( "(" ) ) ) {
 			hadParenAtStart = true;
@@ -409,7 +409,7 @@ bool MaterialLexer::parseVector( float *dest, size_t numElems ) {
 	}
 
 	for( size_t i = 0; i < numElems; ++i ) {
-		if( auto maybeFloat = getFloat() ) {
+		if( const auto maybeFloat = getFloat() ) {
 			scratchpad[i] = *maybeFloat;
 		} else {
 			return false;
@@ -423,8 +423,8 @@ bool MaterialLexer::parseVector( float *dest, size_t numElems ) {
 		return true;
 	}
 
-	if( auto maybeNextToken = getNextTokenInLine() ) {
-		auto token = *maybeNextToken;
+	if( const auto maybeNextToken = getNextTokenInLine() ) {
+		const auto token = *maybeNextToken;
 		if( token.equals( wsw::StringView( ")" ) ) ) {
 			std::copy( scratchpad, scratchpad + numElems, dest );
 			return true;
@@ -438,7 +438,7 @@ void MaterialLexer::parseVectorOrFill( float *dest, size_t numElems, float defau
 	assert( numElems > 1 && numElems <= 8 );
 
 	bool hadParenAtStart = false;
-	if( auto maybeFirstToken = getNextTokenInLine() ) {
+	if( const auto maybeFirstToken = getNextTokenInLine() ) {
 		if( ( *maybeFirstToken ).equals( wsw::StringView( "(" ) ) ) {
 			hadParenAtStart = true;
 		} else {
@@ -448,7 +448,7 @@ void MaterialLexer::parseVectorOrFill( float *dest, size_t numElems, float defau
 
 	size_t i = 0;
 	for(; i < numElems; ++i ) {
-		if( auto maybeFloat = getFloat() ) {
+		if( const auto maybeFloat = getFloat() ) {
 			dest[i] = *maybeFloat;
 		} else {
 			break;
@@ -458,7 +458,7 @@ void MaterialLexer::parseVectorOrFill( float *dest, size_t numElems, float defau
 	std::fill( dest + i, dest + numElems, defaultValue );
 
 	if( hadParenAtStart ) {
-		if( auto maybeNextToken = getNextTokenInLine() ) {
+		if( const auto maybeNextToken = getNextTokenInLine() ) {
 			if( !( *maybeNextToken ).equals( wsw::StringView( ")" ) ) ) {
 				unGetToken();
 			}
@@ -469,8 +469,7 @@ void MaterialLexer::parseVectorOrFill( float *dest, size_t numElems, float defau
 bool MaterialLexer::skipToEndOfLine() {
 	// Could be optimized but it gets called rarely (TODO: Really?)
 	for(;; ) {
-		auto maybeToken = getNextTokenInLine();
-		if( !maybeToken ) {
+		if( getNextTokenInLine() == std::nullopt ) {
 			return true;
 		}
 	}
@@ -534,7 +533,7 @@ struct IsLastStringLiteralChar {
 static CharLookupTable<IsLastStringLiteralChar> isLastStringLiteralChar;
 
 auto TokenSplitter::fetchNextTokenInLine() -> std::optional<std::pair<unsigned, unsigned>> {
-	const char *__restrict p = data + offset;
+	const char *__restrict p = m_data + m_offset;
 
 start:
 	// Strip whitespace characters until a non-whitespace one or a newline character is met
@@ -550,12 +549,12 @@ start:
 		while( isNewlineChar( *p ) ) {
 			p++;
 		}
-		offset = p - data;
+		m_offset = p - m_data;
 		return std::nullopt;
 	}
 
 	if( !*p ) {
-		offset = p - data;
+		m_offset = p - m_data;
 		return std::nullopt;
 	}
 
@@ -569,7 +568,7 @@ start:
 			while( isNewlineChar( *p ) ) {
 				p++;
 			}
-			offset = p - data;
+			m_offset = p - m_data;
 			return std::nullopt;
 		}
 
@@ -578,21 +577,21 @@ start:
 			// Skip till "*/" is met
 			for(;; p++ ) {
 				if( !*p ) {
-					offset = p - data;
+					m_offset = p - m_data;
 					return std::nullopt;
 				}
 				// TODO: Should we mark newlines met?
 				if( *p == '*' ) {
 					if( p[1] == '/' ) {
 						p += 2;
-						offset = p - data;
+						m_offset = p - m_data;
 						break;
 					}
 				}
 				metNewline |= isNewlineChar( *p );
 			}
 			if( metNewline ) {
-				offset = p - data;
+				m_offset = p - m_data;
 				return std::nullopt;
 			}
 			// We may just recurse but this can lead to an overflow at bogus files with tons of comments
@@ -606,17 +605,17 @@ start:
 		for(;; p++ ) {
 			// TODO: What if '\n', '\r' (as a single byte) are met inside a string?
 			if( isLastStringLiteralChar( *p ) ) {
-				offset = p - data + 1;
+				m_offset = p - m_data + 1;
 				// What if a string is empty?
-				return std::make_pair( tokenStart - data, p - tokenStart );
+				return std::make_pair( tokenStart - m_data, p - tokenStart );
 			}
 		}
 	}
 
-	if( auto maybeSpanLen = tryMatching1Or2CharsToken( p ) ) {
-		auto len = *maybeSpanLen;
-		offset = ( p - data ) + len;
-		return std::make_pair( p - data, len );
+	if( const auto maybeSpanLen = tryMatching1Or2CharsToken( p ) ) {
+		const auto len = *maybeSpanLen;
+		m_offset = ( p - m_data ) + len;
+		return std::make_pair( p - m_data, len );
 	}
 
 	const char *tokenStart = p;
@@ -624,15 +623,15 @@ start:
 		if( !mustCloseTokenAtChar( p[0], p[1] ) ) {
 			continue;
 		}
-		offset = p - data;
+		m_offset = p - m_data;
 		auto len = p - tokenStart;
 		assert( len >= 0 );
-		return std::make_pair( tokenStart - data, len );
+		return std::make_pair( tokenStart - m_data, len );
 	}
 }
 
 auto TokenSplitter::tryMatching1Or2CharsToken( const char *tokenStart ) const -> std::optional<unsigned> {
-	char ch = tokenStart[0];
+	const char ch = tokenStart[0];
 
 	if( ch == '{' || ch == '}' || ch == '(' || ch == ')' ) {
 		return 1;

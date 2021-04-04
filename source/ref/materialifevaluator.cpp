@@ -61,7 +61,7 @@ auto MaterialIfEvaluator::evalUnaryExpr() -> std::optional<Value> {
 	}
 
 	if( tag == Tag::UnaryNot ) {
-		if( auto maybeValue = evalUnaryExpr() ) {
+		if( const auto maybeValue = evalUnaryExpr() ) {
 			Value value = *maybeValue;
 			if( !value.isBool ) {
 				warnIntegerToBooleanConversion( value, "an integer", "under a NOT operator");
@@ -72,8 +72,8 @@ auto MaterialIfEvaluator::evalUnaryExpr() -> std::optional<Value> {
 	}
 
 	if( tag == Tag::LParen ) {
-		if( auto maybeValue = evalExpr() ) {
-			if( auto maybeParenTag = nextTokenTag() ) {
+		if( const auto maybeValue = evalExpr() ) {
+			if( const auto maybeParenTag = nextTokenTag() ) {
 				if( *maybeParenTag == Tag::RParen ) {
 					return maybeValue;
 				}
@@ -104,44 +104,39 @@ auto MaterialIfEvaluator::evalCmpExpr() -> std::optional<Value> {
 
 	const auto op = *lastCmpOp();
 
-	std::optional<Value> maybeRight = evalUnaryExpr();
+	const std::optional<Value> maybeRight = evalUnaryExpr();
 	if( !maybeRight ) {
 		return withError( "Failed to evaluate a right-hand expression" );
 	}
 
-	Value left = *maybeLeft;
+	const Value left = *maybeLeft;
 	if( left.isBool ) {
 		warnBooleanToIntegerConversion( left, "a left-hand boolean", "for comparison" );
 	}
 
-	Value right = *maybeRight;
+	const Value right = *maybeRight;
 	if( right.isBool ) {
 		warnBooleanToIntegerConversion( right, "a right-hand boolean", "for comparison" );
 	}
 
 	switch( op ) {
-		case CmpOp::LS:
-			return std::optional( Value( (int)left < (int)right ) );
-		case CmpOp::LE:
-			return std::optional( Value( (int)left <= (int)right ) );
-		case CmpOp::NE:
-			return std::optional( Value( (int)left != (int)right ) );
-		case CmpOp::EQ:
-			return std::optional( Value( (int)left == (int)right ) );
-		case CmpOp::GE:
-			return std::optional( Value( (int)left >= (int)right ) );
-		case CmpOp::GT:
-			return std::optional( Value( (int)left > (int)right ) );
+		case CmpOp::LS: return Value( (int)left < (int)right );
+		case CmpOp::LE: return Value( (int)left <= (int)right );
+		case CmpOp::NE: return Value( (int)left != (int)right );
+		case CmpOp::EQ: return Value( (int)left == (int)right );
+		case CmpOp::GE: return Value( (int)left >= (int)right );
+		case CmpOp::GT: return Value( (int)left > (int)right );
+		default: throw std::logic_error( "unreachable" );
 	}
 }
 
 auto MaterialIfEvaluator::evalLogicExpr() -> std::optional<Value> {
-	std::optional<Value> maybeLeft = evalCmpExpr();
+	const std::optional<Value> maybeLeft = evalCmpExpr();
 	if( !maybeLeft ) {
 		return std::nullopt;
 	}
 
-	std::optional<Tag> maybeTag = nextTokenTag();
+	const std::optional<Tag> maybeTag = nextTokenTag();
 	if( !maybeTag ) {
 		return maybeLeft;
 	}
@@ -153,31 +148,30 @@ auto MaterialIfEvaluator::evalLogicExpr() -> std::optional<Value> {
 
 	const auto op = *lastLogicOp();
 
-	std::optional<Value> maybeRight = evalCmpExpr();
+	const std::optional<Value> maybeRight = evalCmpExpr();
 	if( !maybeRight ) {
 		return withError( "Missing a right-hand operand of a logical operation" );
 	}
 
-	Value left = *maybeLeft;
+	const Value left = *maybeLeft;
 	if( !left.isBool ) {
 		warnIntegerToBooleanConversion( left, "a left-hand integer", "for a logical operation" );
 	}
 
-	Value right = *maybeRight;
+	const Value right = *maybeRight;
 	if( !right.isBool ) {
 		warnIntegerToBooleanConversion( right, "a right-hand integer", "for a logical operation" );
 	}
 
 	switch( op ) {
-		case LogicOp::And:
-			return std::optional( Value( (bool)left && (bool)right ) );
-		case LogicOp::Or:
-			return std::optional( Value( (bool)left || (bool)right ) );
+		case LogicOp::And: return Value( (bool)left && (bool)right );
+		case LogicOp::Or: return Value( (bool)left || (bool)right );
+		default: throw std::logic_error( "unreachable" );
 	}
 }
 
 auto MaterialIfEvaluator::exec() -> std::optional<bool> {
-	std::optional<Value> maybeValue = evalExpr();
+	const std::optional<Value> maybeValue = evalExpr();
 	if( m_hadError ) {
 		return std::nullopt;
 	}
@@ -190,7 +184,7 @@ auto MaterialIfEvaluator::exec() -> std::optional<bool> {
 		return std::nullopt;
 	}
 
-	Value value = *maybeValue;
+	const Value value = *maybeValue;
 	if( !value.isBool ) {
 		warnIntegerToBooleanConversion( value, "an integer", "as an IF condition" );
 	}

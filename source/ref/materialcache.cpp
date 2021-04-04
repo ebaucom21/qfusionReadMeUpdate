@@ -55,15 +55,15 @@ MaterialCache::MaterialCache() {
 		loadDirContents( dir );
 	}
 
-	freeMaterialIds.reserve( MAX_SHADERS );
+	m_freeMaterialIds.reserve( MAX_SHADERS );
 	for( unsigned i = 0; i < MAX_SHADERS; ++i ) {
-		freeMaterialIds.push_back( i );
+		m_freeMaterialIds.push_back( i );
 	}
 }
 
 void MaterialCache::loadDirContents( const wsw::StringView &dir ) {
 	wsw::fs::SearchResultHolder searchResultHolder;
-	if( auto callResult = searchResultHolder.findDirFiles( dir, ".shader"_asView ) ) {
+	if( const auto callResult = searchResultHolder.findDirFiles( dir, ".shader"_asView ) ) {
 		for( const wsw::StringView &fileName: *callResult ) {
 			this->addFileContents( fileName );
 		}
@@ -102,7 +102,7 @@ void R_TouchShader( shader_t *s ) {
 
 void MaterialCache::freeUnusedMaterialsByType( const shaderType_e *types, unsigned int numTypes ) {
 	if( !numTypes ) {
-		for( shader_s *material = materialsHead; material; material = material->next[shader_t::kListLinks] ) {
+		for( shader_s *material = m_materialsHead; material; material = material->next[shader_t::kListLinks] ) {
 			if( material->registrationSequence != rsh.registrationSequence ) {
 				continue;
 			}
@@ -111,7 +111,7 @@ void MaterialCache::freeUnusedMaterialsByType( const shaderType_e *types, unsign
 		return;
 	}
 
-	for( shader_s *material = materialsHead; material; material = material->next[shader_t::kListLinks] ) {
+	for( shader_s *material = m_materialsHead; material; material = material->next[shader_t::kListLinks] ) {
 		if( material->registrationSequence == rsh.registrationSequence ) {
 			continue;
 		}
@@ -129,28 +129,28 @@ void MaterialCache::freeUnusedObjects() {
 }
 
 void MaterialCache::unlinkAndFree( shader_t *s ) {
-	materialById[s->id] = nullptr;
-	freeMaterialIds.push_back( s->id );
+	m_materialById[s->id] = nullptr;
+	m_freeMaterialIds.push_back( s->id );
 
 	abort();
 }
 
 auto MaterialCache::getNextMaterialId() -> unsigned {
-	if( freeMaterialIds.empty() ) {
-		Com_Error( ERR_FATAL, "Out of free material ids\n" );
+	if( m_freeMaterialIds.empty() ) {
+		throw std::logic_error( "underflow" );
 	}
-	auto result = freeMaterialIds.back();
-	freeMaterialIds.pop_back();
+	const unsigned result = m_freeMaterialIds.back();
+	m_freeMaterialIds.pop_back();
 	return result;
 }
 
 auto MaterialCache::makeCleanName( const wsw::StringView &name ) -> wsw::HashedStringView {
-	cleanNameBuffer.clear();
-	cleanNameBuffer.reserve( name.length() + 1 );
+	m_cleanNameBuffer.clear();
+	m_cleanNameBuffer.reserve( name.length() + 1 );
 
 	unsigned i = 0;
 	for( char ch: name ) {
-		if( !( ch == '/' | ch == '\\' ) ) {
+		if( !( ( ch == '/' ) | ( ch == '\\' ) ) ) {
 			break;
 		}
 		i++;
@@ -169,9 +169,9 @@ auto MaterialCache::makeCleanName( const wsw::StringView &name ) -> wsw::HashedS
 			hashBackup = hash;
 		}
 		char cleanCh = ch != '\\' ? tolower( ch ) : '/';
-		cleanNameBuffer.push_back( cleanCh );
+		m_cleanNameBuffer.push_back( cleanCh );
 		hash = wsw::nextHashStep( hash, cleanCh );
-		if( cleanNameBuffer.back() == '/' ) {
+		if( m_cleanNameBuffer.back() == '/' ) {
 			lastSlash = len;
 		}
 		len++;
@@ -185,11 +185,11 @@ auto MaterialCache::makeCleanName( const wsw::StringView &name ) -> wsw::HashedS
 		lastDot = 0;
 	}
 	if( lastDot ) {
-		cleanNameBuffer.resize( lastDot );
+		m_cleanNameBuffer.resize( lastDot );
 		hash = hashBackup;
 	}
 
-	return wsw::HashedStringView( cleanNameBuffer.data(), cleanNameBuffer.length(), hash );
+	return wsw::HashedStringView( m_cleanNameBuffer.data(), m_cleanNameBuffer.length(), hash );
 }
 
 auto MaterialCache::getTokenStreamForShader( const wsw::HashedStringView &cleanName ) -> TokenStream * {
@@ -198,12 +198,12 @@ auto MaterialCache::getTokenStreamForShader( const wsw::HashedStringView &cleanN
 		return nullptr;
 	}
 
-	if( !primaryTokenStreamHolder.empty() ) {
-		primaryTokenStreamHolder.pop_back();
+	if( !m_primaryTokenStreamHolder.empty() ) {
+		m_primaryTokenStreamHolder.pop_back();
 	}
 
-	void *mem = primaryTokenStreamHolder.unsafe_grow_back();
-	const auto [spans, numTokens] = source->getTokenSpans();
+	void *mem = m_primaryTokenStreamHolder.unsafe_grow_back();
+	const auto &[spans, numTokens] = source->getTokenSpans();
 	return new( mem )TokenStream( source->getCharData(), spans, numTokens );
 }
 
@@ -246,9 +246,9 @@ unsigned R_PackShaderOrder( const shader_t *shader ) {
 }
 
 void MaterialCache::touchMaterialsByName( const wsw::StringView &name ) {
-	wsw::HashedStringView cleanView( makeCleanName( name ) );
-	auto binIndex = cleanView.getHash() % kNumBins;
-	for( shader_t *material = materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
+	const wsw::HashedStringView cleanView( makeCleanName( name ) );
+	const auto binIndex = cleanView.getHash() % kNumBins;
+	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
 		if( cleanView.equalsIgnoreCase( wsw::HashedStringView( material->name ) ) ) {
 			R_TouchShader( material );
 		}
@@ -257,10 +257,10 @@ void MaterialCache::touchMaterialsByName( const wsw::StringView &name ) {
 
 auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture * )
 	-> shader_t * {
-	wsw::HashedStringView cleanName( makeCleanName( name ) );
+	const wsw::HashedStringView cleanName( makeCleanName( name ) );
 	const auto binIndex = cleanName.getHash() % kNumBins;
 
-	for( shader_t *material = materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
+	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
 		if( !cleanName.equalsIgnoreCase( material->name ) ) {
 			continue;
 		}
@@ -271,14 +271,14 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 		}
 	}
 
-	TokenStream *tokenStream = forceDefault ? nullptr : getTokenStreamForShader( cleanName );
-	auto *material = loadMaterial( cleanName, name, type, tokenStream );
+	TokenStream *const tokenStream = forceDefault ? nullptr : getTokenStreamForShader( cleanName );
+	auto *const material = loadMaterial( cleanName, name, type, tokenStream );
 	if( !material ) {
 		return nullptr;
 	}
 
 	material->registrationSequence = rsh.registrationSequence;
-	wsw::link( material, &materialBins[binIndex], shader_t::kBinLinks );
+	wsw::link( material, &m_materialBins[binIndex], shader_t::kBinLinks );
 	return material;
 }
 
@@ -325,13 +325,6 @@ shader_t *R_RegisterShader( const char *name, shaderType_e type ) {
 */
 shader_t *R_RegisterSkin( const char *name ) {
 	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_DIFFUSE, false );
-}
-
-/*
-* R_RegisterVideo
-*/
-shader_t *R_RegisterVideo( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_VIDEO, false );
 }
 
 /*
@@ -627,7 +620,7 @@ auto MaterialCache::loadMaterial( const wsw::HashedStringView &cleanName,
 
 	assert( result );
 	result->id = getNextMaterialId();
-	materialById[result->id] = result;
+	m_materialById[result->id] = result;
 	return result;
 }
 
@@ -657,7 +650,7 @@ auto MaterialCache::newDefaultMaterial( int type, const wsw::HashedStringView &c
 }
 
 auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const wsw::String * {
-	wsw::String &pathName = pathNameBuffer;
+	wsw::String &pathName = m_pathNameBuffer;
 	pathName.clear();
 	pathName.append( "scripts/" );
 	pathName.append( fileName.data(), fileName.size() );
@@ -672,15 +665,15 @@ auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const 
 	}
 
 	const auto size = maybeHandle->getInitialFileSize();
-	fileContentsBuffer.resize( size + 1 );
-	if( !maybeHandle->readExact( fileContentsBuffer.data(), size ) ) {
+	m_fileContentsBuffer.resize( size + 1 );
+	if( !maybeHandle->readExact( m_fileContentsBuffer.data(), size ) ) {
 		return nullptr;
 	}
 
 	// Put the terminating zero, this is not mandatory as tokens aren't supposed
 	// to be zero terminated but allows printing contents using C-style facilities
-	fileContentsBuffer[size] = '\0';
-	return &fileContentsBuffer;
+	m_fileContentsBuffer[size] = '\0';
+	return &m_fileContentsBuffer;
 }
 
 auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents * {
@@ -701,14 +694,14 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 
 	TokenSplitter splitter( rawContents->data() + offsetShift, rawContents->size() - offsetShift );
 
-	fileTokenSpans.clear();
+	m_fileTokenSpans.clear();
 
 	uint32_t lineNum = 0;
 	size_t numKeptChars = 0;
 	while( !splitter.isAtEof() ) {
 		while( auto maybeToken = splitter.fetchNextTokenInLine() ) {
 			const auto &[off, len] = *maybeToken;
-			fileTokenSpans.emplace_back( TokenSpan { (int)( off + offsetShift ), len, lineNum } );
+			m_fileTokenSpans.emplace_back( TokenSpan { (int)( off + offsetShift ), len, lineNum } );
 			numKeptChars += len;
 		}
 		lineNum++;
@@ -716,7 +709,7 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 
 	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::initiallyEmpty() );
 	const auto headerSpec = memSpec.add<MaterialFileContents>();
-	const auto spansSpec = memSpec.add<TokenSpan>( fileTokenSpans.size() );
+	const auto spansSpec = memSpec.add<TokenSpan>( m_fileTokenSpans.size() );
 	const auto contentsSpec = memSpec.add<char>( numKeptChars );
 
 	auto *const mem = (uint8_t *)::malloc( memSpec.sizeSoFar() );
@@ -731,7 +724,7 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 
 	// Copy spans and compactified data
 	char *const data = contentsSpec.get( mem );
-	for( const auto &parsedSpan: fileTokenSpans ) {
+	for( const auto &parsedSpan: m_fileTokenSpans ) {
 		auto *copiedSpan = &result->spans[result->numSpans++];
 		*copiedSpan = parsedSpan;
 		copiedSpan->offset = result->dataSize;
@@ -740,7 +733,7 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 		assert( parsedSpan.len == copiedSpan->len && parsedSpan.line == copiedSpan->line );
 	}
 
-	assert( result->numSpans == fileTokenSpans.size() );
+	assert( result->numSpans == m_fileTokenSpans.size() );
 	assert( result->dataSize == numKeptChars );
 
 	return result;
@@ -750,8 +743,8 @@ void MaterialCache::addFileContents( const wsw::StringView &fileName ) {
 	if( MaterialFileContents *contents = loadFileContents( fileName ) ) {
 		if( tryAddingFileContents( contents ) ) {
 			assert( !contents->next );
-			contents->next = fileContentsHead;
-			fileContentsHead = contents;
+			contents->next = m_fileContentsHead;
+			m_fileContentsHead = contents;
 		} else {
 			contents->~MaterialFileContents();
 			free( contents );
@@ -760,8 +753,8 @@ void MaterialCache::addFileContents( const wsw::StringView &fileName ) {
 }
 
 bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents ) {
-	fileMaterialNames.clear();
-	fileSourceSpans.clear();
+	m_fileMaterialNames.clear();
+	m_fileSourceSpans.clear();
 
 	unsigned tokenNum = 0;
 	TokenStream stream( contents->data, contents->spans, contents->numSpans );
@@ -791,10 +784,10 @@ bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents 
 
 		// TODO: Count how many tokens are in the shader
 		for( int depth = 1; depth; ) {
-			if( auto maybeBlockToken = stream.getNextToken() ) {
+			if( const auto maybeBlockToken = stream.getNextToken() ) {
 				tokenNum++;
-				auto blockToken = *maybeBlockToken;
-				char ch = blockToken.maybeFront().value_or( '\0' );
+				const auto blockToken = *maybeBlockToken;
+				const char ch = blockToken.maybeFront().value_or( '\0' );
 				depth += ( ch == '{' ) ? +1 : 0;
 				depth += ( ch == '}' ) ? -1 : 0;
 			} else {
@@ -805,44 +798,44 @@ bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents 
 			}
 		}
 
-		fileMaterialNames.emplace_back( *maybeNameToken );
+		m_fileMaterialNames.emplace_back( *maybeNameToken );
 		assert( tokenNum > shaderSpanStart );
 		// Exclude the closing brace from the range
-		fileSourceSpans.emplace_back( std::make_pair( shaderSpanStart, tokenNum - shaderSpanStart - 1 ) );
+		m_fileSourceSpans.emplace_back( std::make_pair( shaderSpanStart, tokenNum - shaderSpanStart - 1 ) );
 	}
 
-	auto *mem = (uint8_t *)::malloc( sizeof( MaterialSource ) * fileMaterialNames.size() );
+	auto *mem = (uint8_t *)::malloc( sizeof( MaterialSource ) * m_fileMaterialNames.size() );
 	if( !mem ) {
 		return false;
 	}
 
 	auto *const firstInSameMemChunk = (MaterialSource *)mem;
 
-	assert( fileMaterialNames.size() == fileSourceSpans.size() );
-	for( size_t i = 0; i < fileMaterialNames.size(); ++i ) {
+	assert( m_fileMaterialNames.size() == m_fileSourceSpans.size() );
+	for( size_t i = 0; i < m_fileMaterialNames.size(); ++i ) {
 		auto *const source = new( mem )MaterialSource;
 		mem += sizeof( MaterialSource );
 
-		auto [from, len] = fileSourceSpans[i];
+		const auto &[from, len] = m_fileSourceSpans[i];
 		source->m_tokenSpansOffset = from;
 		source->m_numTokens = len;
 		source->m_fileContents = contents;
 		source->m_firstInSameMemChunk = firstInSameMemChunk;
-		source->m_name = wsw::HashedStringView( fileMaterialNames[i] );
-		source->nextInList = sourcesHead;
-		sourcesHead = source;
+		source->m_name = wsw::HashedStringView( m_fileMaterialNames[i] );
+		source->m_nextInList = m_sourcesHead;
+		m_sourcesHead = source;
 
-		auto binIndex = source->getName().getHash() % kNumBins;
-		source->nextInBin = sourceBins[binIndex];
-		sourceBins[binIndex] = source;
+		const auto binIndex = source->getName().getHash() % kNumBins;
+		source->m_nextInBin = m_sourceBins[binIndex];
+		m_sourceBins[binIndex] = source;
 	}
 
 	return true;
 }
 
 auto MaterialCache::findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource * {
-	auto binIndex = name.getHash() % kNumBins;
-	for( MaterialSource *source = sourceBins[binIndex]; source; source = source->nextInBin ) {
+	const auto binIndex = name.getHash() % kNumBins;
+	for( MaterialSource *source = m_sourceBins[binIndex]; source; source = source->m_nextInBin ) {
 		if( source->getName().equalsIgnoreCase( name ) ) {
 			return source;
 		}
@@ -857,24 +850,25 @@ auto MaterialCache::expandTemplate( const wsw::StringView &name, const wsw::Stri
 		return nullptr;
 	}
 
-	expansionBuffer.clear();
-	templateTokenSpans.clear();
-	if( !source->expandTemplate( args, numArgs, expansionBuffer, templateTokenSpans ) ) {
+	m_expansionBuffer.clear();
+	m_templateTokenSpans.clear();
+	if( !source->expandTemplate( args, numArgs, m_expansionBuffer, m_templateTokenSpans ) ) {
 		return nullptr;
 	}
 
-	if( !templateLexerHolder.empty() ) {
-		templateLexerHolder.pop_back();
-		templateTokenStreamHolder.pop_back();
+	if( !m_templateLexerHolder.empty() ) {
+		m_templateLexerHolder.pop_back();
+		m_templateTokenStreamHolder.pop_back();
 	}
 
-	void *streamMem = templateTokenStreamHolder.unsafe_grow_back();
-	new( streamMem )TokenStream( source->getCharData(), templateTokenSpans.data(),templateTokenSpans.size(), expansionBuffer.data() );
+	void *streamMem = m_templateTokenStreamHolder.unsafe_grow_back();
+	new( streamMem )TokenStream( source->getCharData(), m_templateTokenSpans.data(),
+							  m_templateTokenSpans.size(), m_expansionBuffer.data() );
 
-	void *lexerMem = templateLexerHolder.unsafe_grow_back();
-	new( lexerMem )MaterialLexer( templateTokenStreamHolder.begin() );
+	void *lexerMem = m_templateLexerHolder.unsafe_grow_back();
+	new( lexerMem )MaterialLexer( m_templateTokenStreamHolder.begin() );
 
-	return templateLexerHolder.begin();
+	return m_templateLexerHolder.begin();
 }
 
 class BuiltinTexMatcher {
@@ -924,7 +918,7 @@ public:
 
 	auto match( const wsw::StringView &image ) -> std::optional<BuiltinTexNum> {
 		// Try matching long tokens (they're more likely to be met in wsw assets)
-		if( auto num = matchInList( image, longTexNumbers ) ) {
+		if( const auto num = matchInList( image, longTexNumbers ) ) {
 			return num;
 		}
 		return matchInList( image, shortTexNumbers );
@@ -939,7 +933,7 @@ auto MaterialCache::findImage( const wsw::StringView &name, int flags, int image
 	assert( minMipSize );
 
 	// TODO: Move this to ImageCache?
-	if( auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
+	if( const auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
 		return TextureCache::instance()->getBuiltinTexture( *maybeBuiltinTexNum );
 	}
 
