@@ -421,13 +421,8 @@ typedef struct {
 	const char *matchmessage;
 	char helpmessage[MAX_HELPMESSAGE_CHARS];
 	int64_t helpmessage_time;
-	char *teaminfo;
-	size_t teaminfo_size;
 	char *motd;
 	int64_t motd_time;
-	char quickmenu[MAX_STRING_CHARS];
-	bool quickmenu_left;
-	int64_t quickmenu_timeout_at;
 
 	// awards
 	char award_lines[MAX_AWARD_LINES][MAX_CONFIGSTRING_CHARS];
@@ -499,13 +494,6 @@ centity_t *CG_GetItemTimerEnt( int num );
 //
 int CG_HorizontalAlignForWidth( const int x, int align, int width );
 int CG_VerticalAlignForHeight( const int y, int align, int height );
-int CG_HorizontalMovementForAlign( int align );
-
-void CG_DrawHUDField( int x, int y, int align, float *color, int size, int width, int value );
-void CG_DrawHUDModel( int x, int y, int align, int w, int h, struct model_s *model, struct shader_s *shader, float yawspeed );
-void CG_DrawMiniMap( int x, int y, int iw, int ih, bool draw_playernames, bool draw_itemnames, int align, vec4_t color );
-void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int maxval, vec4_t color, struct shader_s *shader );
-void CG_DrawPicBar( int x, int y, int width, int height, int align, float percent, struct shader_s *shader, vec4_t backColor, vec4_t color );
 
 void CG_RegisterLevelMinimap( void );
 void CG_RegisterFonts( void );
@@ -546,12 +534,6 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin );
 //
 extern vrect_t scr_vrect;
 
-extern cvar_t *cg_showFPS;
-extern cvar_t *cg_showAwards;
-extern cvar_t *cg_showZoomEffect;
-extern cvar_t *cg_showCaptureAreas;
-extern cvar_t *cg_showChasers;
-
 void CG_ScreenInit( void );
 void CG_ScreenShutdown( void );
 void CG_Draw2D( void );
@@ -570,34 +552,11 @@ void CG_DrawKeyState( int x, int y, int w, int h, int align, const char *key );
 
 void CG_ScreenCrosshairDamageUpdate( void );
 
-int CG_ParseValue( const char **s );
-
-void CG_DrawClock( int x, int y, int align, struct qfontface_s *font, vec4_t color );
-void CG_DrawPlayerNames( struct qfontface_s *font, vec4_t color );
+void CG_DrawPlayerNames();
 void CG_DrawTeamMates( void );
-void CG_DrawHUDNumeric( int x, int y, int align, float *color, int charwidth, int charheight, int value );
-void CG_DrawTeamInfo( int x, int y, int align, struct qfontface_s *font, vec4_t color );
 void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 
 void CG_ClearPointedNum( void );
-
-/**
- * Sends current quick menu string to the UI.
- */
-void CG_RefreshQuickMenu( void );
-
-/**
- * Toggles the visibility of the quick menu.
- *
- * @param state quick menu visibility (0 = hidden, 1 = on the right, -1 = on the left)
- */
-void CG_ShowQuickMenu( int state );
-
-//
-// cg_hud.c
-//
-extern cvar_t *cg_showminimap;
-extern cvar_t *cg_showitemtimers;
 
 void CG_SC_ResetObituaries( void );
 void CG_SC_Obituary( void );
@@ -622,7 +581,6 @@ extern cvar_t *developer;
 extern cvar_t *cg_showClamp;
 
 // wsw
-extern cvar_t *cg_showObituaries;
 extern cvar_t *cg_volume_hitsound;    // hit sound volume
 extern cvar_t *cg_autoaction_demo;
 extern cvar_t *cg_autoaction_screenshot;
@@ -885,15 +843,6 @@ void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t col
 void CG_WaveCoronaAndTrail( centity_t *ent, const vec3_t org );
 void CG_ImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader );
 void CG_HighVelImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader );
-
-//
-// cg_test.c - debug only
-//
-#ifndef PUBLIC_BUILD
-inline void CG_DrawTestLine( vec3_t start, vec3_t end ) {}
-inline void CG_DrawTestBox( const vec3_t origin, const vec3_t mins, const vec3_t maxs, const vec3_t angles ) {}
-inline void CG_AddTest( void ) {}
-#endif
 
 //
 //	cg_vweap.c - client weapon

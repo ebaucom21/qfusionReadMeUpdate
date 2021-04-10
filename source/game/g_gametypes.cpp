@@ -1446,10 +1446,6 @@ void G_RunGametype( void ) {
 	G_Match_ScoreAnnouncement();
 	G_Match_ReadyAnnouncement();
 
-	if( GS_TeamBasedGametype() ) {
-		G_Teams_UpdateTeamInfoMessages();
-	}
-
 	G_asGarbageCollect( false );
 }
 

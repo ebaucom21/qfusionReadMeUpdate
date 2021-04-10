@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 bool CG_DemoCam_IsFree( void );
 bool CG_DemoCam( void ); // Called each frame
 bool CG_DemoCam_Update( void );
-void CG_DrawDemocam2D( void );
 void CG_DemocamInit( void );
 void CG_DemocamShutdown( void );
 void CG_DemocamReset( void );

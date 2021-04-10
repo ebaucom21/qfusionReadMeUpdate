@@ -473,31 +473,6 @@ const cmodel_s *CG_CModelForEntity( int entNum ) {
 * draw the bounding box (in brush models case the box containing the model)
 */
 void CG_DrawEntityBox( centity_t *cent ) {
-#ifndef PUBLIC_BUILD
-	const cmodel_s *cmodel;
-	vec3_t mins, maxs;
-
-	if( cent->ent.renderfx & RF_VIEWERMODEL ) {
-		return;
-	}
-
-	cmodel = CG_CModelForEntity( cent->current.number );
-	if( cmodel ) {
-		CG_InlineModelBounds( cmodel, mins, maxs );
-		if( cg_drawEntityBoxes->integer < 2 && cent->current.solid == SOLID_BMODEL ) {
-			return;
-		}
-
-		// push triggers don't move so aren't interpolated
-		if( cent->current.type == ET_PUSH_TRIGGER ) {
-			CG_DrawTestBox( cent->current.origin, mins, maxs, vec3_origin );
-		} else {
-			vec3_t origin;
-			VectorLerp( cent->prev.origin, cg.lerpfrac, cent->current.origin, origin );
-			CG_DrawTestBox( origin, mins, maxs, vec3_origin );
-		}
-	}
-#endif
 }
 
 /*

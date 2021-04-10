@@ -109,7 +109,6 @@ cvar_t *cg_autoaction_stats;
 cvar_t *cg_autoaction_spectator;
 cvar_t *cg_simpleItems;
 cvar_t *cg_simpleItemsSize;
-cvar_t *cg_showObituaries;
 cvar_t *cg_particles;
 cvar_t *cg_showhelp;
 cvar_t *cg_showClamp;
@@ -155,8 +154,6 @@ cvar_t *cg_playList;
 cvar_t *cg_playListShuffle;
 
 cvar_t *cg_flashWindowCount;
-
-cvar_t *cg_autoRespectMenu;
 
 cvar_t *cg_viewBob;
 
@@ -610,7 +607,6 @@ static void CG_RegisterVariables( void ) {
 	cg_outlineWorld =   Cvar_Get( "cg_outlineWorld", "0", CVAR_ARCHIVE );
 	cg_outlinePlayers = Cvar_Get( "cg_outlinePlayers", "0", CVAR_ARCHIVE );
 	cg_drawEntityBoxes =    Cvar_Get( "cg_drawEntityBoxes", "0", CVAR_DEVELOPER );
-	cg_showObituaries = Cvar_Get( "cg_showObituaries", va( "%i", CG_OBITUARY_HUD | CG_OBITUARY_CENTER ), CVAR_ARCHIVE );
 	cg_autoaction_demo =    Cvar_Get( "cg_autoaction_demo", "0", CVAR_ARCHIVE );
 	cg_autoaction_screenshot =  Cvar_Get( "cg_autoaction_screenshot", "0", CVAR_ARCHIVE );
 	cg_autoaction_stats =   Cvar_Get( "cg_autoaction_stats", "0", CVAR_ARCHIVE );
@@ -691,15 +687,10 @@ static void CG_RegisterVariables( void ) {
 	cg_instabeam_alpha = Cvar_Get( "cg_instabeam_alpha", "0.4", CVAR_ARCHIVE );
 	cg_instabeam_time = Cvar_Get( "cg_instabeam_time", "0.4", CVAR_ARCHIVE );
 
-	cg_showminimap = Cvar_Get( "cg_showMiniMap", "0", CVAR_ARCHIVE );
-	cg_showitemtimers = Cvar_Get( "cg_showItemTimers", "3", CVAR_ARCHIVE );
-
 	cg_playList = Cvar_Get( "cg_playList", S_PLAYLIST_MATCH, CVAR_ARCHIVE );
 	cg_playListShuffle = Cvar_Get( "cg_playListShuffle", "1", CVAR_ARCHIVE );
 
 	cg_flashWindowCount = Cvar_Get( "cg_flashWindowCount", "4", CVAR_ARCHIVE );
-
-	cg_autoRespectMenu = Cvar_Get( "cg_autoRespectMenu", "1", CVAR_ARCHIVE );
 
 	cg_viewBob = Cvar_Get( "cg_viewBob", "1", CVAR_ARCHIVE );
 }
@@ -978,8 +969,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 
 	cgs.hasGametypeMenu = false; // this will update as soon as we receive configstrings
 	cgs.gameMenuRequested = !gameStart;
-
-	CG_RefreshQuickMenu();
 
 	CG_InitInput();
 

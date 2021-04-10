@@ -1,4 +1,5 @@
 /*
+Copyright (C) 1997-2001 Id Software, Inc.
 Copyright (C) 2002-2003 Victor Luchits
 Copyright (C) 2007 Daniel Lindenfelser
 
@@ -22,12 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../client/client.h"
 #include "../ref/frontend.h"
-
-// cg_view.c -- player rendering positioning
-
-//======================================================================
-//					ChaseHack (In Eyes Chasecam)
-//======================================================================
+#include "../ui/uisystem.h"
 
 cg_chasecam_t chaseCam;
 
@@ -1176,10 +1172,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddPolys();
 	CG_AddLightStyles();
 
-#ifndef PUBLIC_BUILD
-	CG_AddTest();
-#endif
-
 	AnglesToAxis( cg.view.angles, rd->viewaxis );
 
 	rd->rdflags = CG_RenderFlags();
@@ -1190,11 +1182,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 		float v = WAVE_AMPLITUDE * ( sin( phase ) - 1.0 ) + 1;
 		rd->fov_x *= v;
 		rd->fov_y *= v;
-	}
-
-	if( cg.quickmenu_timeout_at && cg.quickmenu_timeout_at < cg.time ) {
-		cg.quickmenu_timeout_at = 0;
-		CG_ShowQuickMenu( 0 );
 	}
 
 	CG_AddLocalSounds();
@@ -1211,4 +1198,242 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_ResetTemporaryBoneposesCache(); // clear for next frame
 
 	cg.viewFrameCount++;
+}
+
+vrect_t scr_vrect;
+
+cvar_t *cg_viewSize;
+cvar_t *cg_showFPS;
+cvar_t *cg_draw2D;
+
+cvar_t *cg_showZoomEffect;
+
+cvar_t *cg_showViewBlends;
+
+/*
+* CG_CalcVrect
+*
+* Sets scr_vrect, the coordinates of the rendered window
+*/
+void CG_CalcVrect( void ) {
+	int size;
+
+	// bound viewsize
+	if( cg_viewSize->integer < 40 ) {
+		Cvar_Set( cg_viewSize->name, "40" );
+	} else if( cg_viewSize->integer > 100 ) {
+		Cvar_Set( cg_viewSize->name, "100" );
+	}
+
+	size = cg_viewSize->integer;
+
+	if( size == 100 ) {
+		scr_vrect.width = cgs.vidWidth;
+		scr_vrect.height = cgs.vidHeight;
+		scr_vrect.x = scr_vrect.y = 0;
+	} else {
+		scr_vrect.width = cgs.vidWidth * size / 100;
+		scr_vrect.width &= ~1;
+
+		scr_vrect.height = cgs.vidHeight * size / 100;
+		scr_vrect.height &= ~1;
+
+		scr_vrect.x = ( cgs.vidWidth - scr_vrect.width ) / 2;
+		scr_vrect.y = ( cgs.vidHeight - scr_vrect.height ) / 2;
+	}
+}
+
+void CG_ScreenInit( void ) {
+	cg_viewSize =       Cvar_Get( "cg_viewSize", "100", CVAR_ARCHIVE );
+	cg_showFPS =        Cvar_Get( "cg_showFPS", "0", CVAR_ARCHIVE );
+	cg_draw2D =     Cvar_Get( "cg_draw2D", "1", 0 );
+
+	cg_showViewBlends = Cvar_Get( "cg_showViewBlends", "1", CVAR_ARCHIVE );
+	cg_showZoomEffect = Cvar_Get( "cg_showZoomEffect", "1", CVAR_ARCHIVE );
+
+	CG_InitHUD();
+}
+
+void CG_ScreenShutdown( void ) {
+	CG_ShutdownHUD();
+}
+
+void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
+	int64_t incomingAcknowledged, outgoingSequence;
+
+	if( cgs.demoPlaying ) {
+		return;
+	}
+
+	NET_GetCurrentState( &incomingAcknowledged, &outgoingSequence, NULL );
+	if( outgoingSequence - incomingAcknowledged < CMD_BACKUP - 1 ) {
+		return;
+	}
+	x = CG_HorizontalAlignForWidth( x, align, w );
+	y = CG_VerticalAlignForHeight( y, align, h );
+	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
+}
+
+void CG_DrawRSpeeds( int x, int y, int align, struct qfontface_s *font, const vec4_t color ) {
+	char msg[1024];
+
+	RF_GetSpeedsMessage( msg, sizeof( msg ) );
+
+	if( msg[0] ) {
+		int height;
+		const char *p, *start, *end;
+
+		height = SCR_FontHeight( font );
+
+		p = start = msg;
+		do {
+			end = strchr( p, '\n' );
+			if( end ) {
+				msg[end - start] = '\0';
+			}
+
+			SCR_DrawString( x, y, align,
+							p, font, color );
+			y += height;
+
+			if( end ) {
+				p = end + 1;
+			} else {
+				break;
+			}
+		} while( 1 );
+	}
+}
+
+void CG_EscapeKey( void ) {
+	wsw::ui::UISystem::instance()->toggleInGameMenu();
+}
+
+void CG_LoadingString( const char *str ) {
+	Q_strncpyz( cgs.loadingstring, str, sizeof( cgs.loadingstring ) );
+}
+
+/*
+* CG_LoadingItemName
+*
+* Allow at least one item per frame to be precached.
+* Stop accepting new precaches after the timelimit for this frame has been reached.
+*/
+bool CG_LoadingItemName( const char *str ) {
+	if( cgs.precacheCount > cgs.precacheStart && ( Sys_Milliseconds() > cgs.precacheStartMsec + 33 ) ) {
+		return false;
+	}
+	cgs.precacheCount++;
+	return true;
+}
+
+static void CG_AddBlend( float r, float g, float b, float a, float *v_blend ) {
+	float a2, a3;
+
+	if( a <= 0 ) {
+		return;
+	}
+	a2 = v_blend[3] + ( 1 - v_blend[3] ) * a; // new total alpha
+	a3 = v_blend[3] / a2; // fraction of color from old
+
+	v_blend[0] = v_blend[0] * a3 + r * ( 1 - a3 );
+	v_blend[1] = v_blend[1] * a3 + g * ( 1 - a3 );
+	v_blend[2] = v_blend[2] * a3 + b * ( 1 - a3 );
+	v_blend[3] = a2;
+}
+
+static void CG_CalcColorBlend( float *color ) {
+	float time;
+	float uptime;
+	float delta;
+	int i, contents;
+
+	//clear old values
+	for( i = 0; i < 4; i++ )
+		color[i] = 0.0f;
+
+	// Add colorblend based on world position
+	contents = CG_PointContents( cg.view.origin );
+	if( contents & CONTENTS_WATER ) {
+		CG_AddBlend( 0.0f, 0.1f, 8.0f, 0.2f, color );
+	}
+	if( contents & CONTENTS_LAVA ) {
+		CG_AddBlend( 1.0f, 0.3f, 0.0f, 0.6f, color );
+	}
+	if( contents & CONTENTS_SLIME ) {
+		CG_AddBlend( 0.0f, 0.1f, 0.05f, 0.6f, color );
+	}
+
+	// Add colorblends from sfx
+	for( i = 0; i < MAX_COLORBLENDS; i++ ) {
+		if( cg.time > cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) {
+			continue;
+		}
+
+		time = (float)( ( cg.colorblends[i].timestamp + cg.colorblends[i].blendtime ) - cg.time );
+		uptime = ( (float)cg.colorblends[i].blendtime ) * 0.5f;
+		delta = 1.0f - ( fabs( time - uptime ) / uptime );
+		if( delta <= 0.0f ) {
+			continue;
+		}
+		if( delta > 1.0f ) {
+			delta = 1.0f;
+		}
+
+		CG_AddBlend( cg.colorblends[i].blend[0],
+					 cg.colorblends[i].blend[1],
+					 cg.colorblends[i].blend[2],
+					 cg.colorblends[i].blend[3] * delta,
+					 color );
+	}
+}
+
+static void CG_SCRDrawViewBlend( void ) {
+	vec4_t colorblend;
+
+	if( !cg_showViewBlends->integer ) {
+		return;
+	}
+
+	CG_CalcColorBlend( colorblend );
+	if( colorblend[3] < 0.01f ) {
+		return;
+	}
+
+	RF_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
+}
+
+void CG_Draw2DView( void ) {
+	if( !cg.view.draw2D ) {
+		return;
+	}
+
+	CG_SCRDrawViewBlend();
+
+	// show when we are in "dead" chasecam
+	if( cg.predictedPlayerState.stats[STAT_LAYOUTS] & STAT_LAYOUT_SPECDEAD ) {
+		int barheight = cgs.vidHeight * 0.08;
+		const vec4_t barcolor = { 0.0f, 0.0f, 0.0f, 0.6f };
+		RF_DrawStretchPic( 0, 0, cgs.vidWidth, barheight, 0, 0, 1, 1, barcolor, cgs.shaderWhite );
+		RF_DrawStretchPic( 0, cgs.vidHeight - barheight, cgs.vidWidth, barheight, 0, 0, 1, 1, barcolor, cgs.shaderWhite );
+	}
+
+	if( cg.motd && ( cg.time > cg.motd_time ) ) {
+		Q_free(   cg.motd );
+		cg.motd = NULL;
+	}
+
+	CG_DrawHUD();
+
+	CG_UpdateHUDPostDraw();
+
+	CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600,
+					ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );
+}
+
+void CG_Draw2D() {
+	// TODO: We still have to update some states even if these conditions do not hold
+	if( cg_draw2D->integer && cg.view.draw2D ) {
+		CG_Draw2DView();
+	}
 }

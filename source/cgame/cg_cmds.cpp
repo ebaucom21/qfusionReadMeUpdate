@@ -180,130 +180,6 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 }
 
 /*
-* CG_SC_PrintPlayerStats
-*/
-static void CG_SC_PrintPlayerStats( const char *s, void ( *print )( const char *format, ... ), void ( *printDmg )( const char *format, ... ) ) {
-	int playerNum;
-	int i, shot_strong, hit_total, shot_total;
-	int total_damage_given, total_damage_received, health_taken, armor_taken;
-	gsitem_t *item;
-
-	playerNum = CG_ParseValue( &s );
-	if( playerNum < 0 || playerNum >= gs.maxclients ) {
-		return;
-	}
-
-	if( !printDmg ) {
-		printDmg = print;
-	}
-
-	// print stats to console/file
-	printDmg( "Stats for %s" S_COLOR_WHITE ":\r\n", cgs.clientInfo[playerNum].name );
-	print( "\r\nWeapon\r\n" );
-	print( "    hit/shot percent\r\n" );
-
-	for( i = WEAP_GUNBLADE; i < WEAP_TOTAL; i++ ) {
-		item = GS_FindItemByTag( i );
-		assert( item );
-
-		shot_total = CG_ParseValue( &s );
-		if( shot_total < 1 ) { // only continue with registered shots
-			continue;
-		}
-		hit_total = CG_ParseValue( &s );
-
-		// legacy - parse shot_strong and hit_strong
-		shot_strong = CG_ParseValue( &s );
-		if( shot_strong != shot_total ) {
-			CG_ParseValue( &s );
-		}
-
-		// name
-		print( "%s%2s" S_COLOR_WHITE ": ", item->color, item->shortname );
-
-#define STATS_PERCENT( hit,total ) ( ( total ) == 0 ? 0 : ( ( hit ) == ( total ) ? 100 : (float)( hit ) * 100.0f / (float)( total ) ) )
-
-		// total
-		print( S_COLOR_GREEN "%3i" S_COLOR_WHITE "/" S_COLOR_CYAN "%3i      " S_COLOR_YELLOW "%2.1f",
-			   hit_total, shot_total, STATS_PERCENT( hit_total, shot_total ) );
-
-		print( "\r\n" );
-	}
-
-	print( "\r\n" );
-
-	total_damage_given = CG_ParseValue( &s );
-	total_damage_received = CG_ParseValue( &s );
-
-	printDmg( S_COLOR_YELLOW "Damage given/received: " S_COLOR_WHITE "%i/%i " S_COLOR_YELLOW "ratio: %s%3.2f\r\n",
-			  total_damage_given, total_damage_received,
-			  ( total_damage_given > total_damage_received ? S_COLOR_GREEN : S_COLOR_RED ),
-			  STATS_PERCENT( total_damage_given, total_damage_given + total_damage_received ) );
-
-	health_taken = CG_ParseValue( &s );
-	armor_taken = CG_ParseValue( &s );
-
-	printDmg( S_COLOR_YELLOW "Health/Armor taken: " S_COLOR_CYAN "%i" S_COLOR_WHITE "/" S_COLOR_CYAN "%i\r\n",
-			  health_taken, armor_taken );
-
-#undef STATS_PERCENT
-}
-
-/*
-* CG_SC_PrintStatsToFile
-*/
-static int cg_statsFileHandle;
-void CG_SC_PrintStatsToFile( const char *format, ... ) {
-	va_list argptr;
-	char msg[1024];
-
-	va_start( argptr, format );
-	Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
-	va_end( argptr );
-
-	FS_Print( cg_statsFileHandle, msg );
-}
-
-/*
-* CG_SC_DumpPlayerStats
-*/
-static void CG_SC_DumpPlayerStats( const char *filename, const char *stats ) {
-	if( cgs.demoPlaying ) {
-		return;
-	}
-
-	if( FS_FOpenFile( filename, &cg_statsFileHandle, FS_APPEND ) == -1 ) {
-		Com_Printf( "Couldn't write autorecorded stats, error opening file %s\n", filename );
-		return;
-	}
-
-	CG_SC_PrintPlayerStats( stats, CG_SC_PrintStatsToFile, NULL );
-
-	FS_FCloseFile( cg_statsFileHandle );
-}
-
-/*
-* CG_SC_PlayerStats
-*/
-static void CG_SC_PlayerStats( void ) {
-	const char *s;
-	int print;
-
-	print = atoi( Cmd_Argv( 1 ) );
-	s = Cmd_Argv( 2 );
-
-	if( !print ) { // scoreboard message update
-		return;
-	}
-
-	CG_SC_PrintPlayerStats( s, Com_Printf, CG_LocalPrint );
-
-	if( print == 2 ) {
-		CG_SC_AutoRecordAction( "stats" );
-	}
-}
-
-/*
 * CG_SC_AutoRecordName
 */
 static const char *CG_SC_AutoRecordName( void ) {
@@ -402,11 +278,6 @@ void CG_SC_AutoRecordAction( const char *action ) {
 		if( autorecording ) {
 			Cbuf_ExecuteText( EXEC_NOW, "stop cancel silent" );
 			autorecording = false;
-		}
-	} else if( !Q_stricmp( action, "stats" ) ) {
-		if( cg_autoaction_stats->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			const char *filename = va( "stats/%s/%s.txt", gs.gametypeName, name );
-			CG_SC_DumpPlayerStats( filename, Cmd_Argv( 2 ) );
 		}
 	} else if( developer->integer ) {
 		Com_Printf( "CG_SC_AutoRecordAction: Unknown action: %s\n", action );
@@ -555,31 +426,6 @@ static void CG_SC_HelpMessage( void ) {
 }
 
 /*
-* CG_CS_UpdateTeamInfo
-*/
-static void CG_CS_UpdateTeamInfo( void ) {
-	char *ti;
-
-	ti = Cmd_Argv( 1 );
-	if( !ti[0] ) {
-		cg.teaminfo_size = 0;
-		Q_free(   cg.teaminfo );
-		cg.teaminfo = NULL;
-		return;
-	}
-
-	if( strlen( ti ) + 1 > cg.teaminfo_size ) {
-		if( cg.teaminfo ) {
-			Q_free(   cg.teaminfo );
-		}
-		cg.teaminfo_size = strlen( ti ) + 1;
-		cg.teaminfo = ( char * )Q_malloc( cg.teaminfo_size );
-	}
-
-	Q_strncpyz( cg.teaminfo, ti, cg.teaminfo_size );
-}
-
-/*
 * CG_Cmd_DemoGet_f
 */
 static bool demo_requested = false;
@@ -663,70 +509,6 @@ static void CG_SC_MOTD( void ) {
 }
 
 /*
-* CG_SC_MenuCustom
-*/
-static void CG_SC_MenuCustom( void ) {
-	char request[MAX_STRING_CHARS];
-	int i, c;
-
-	if( cgs.demoPlaying ) {
-		return;
-	}
-
-	if( Cmd_Argc() < 2 ) {
-		return;
-	}
-
-	Q_strncpyz( request, va( "menu_open custom title \"%s\" ", Cmd_Argv( 1 ) ), sizeof( request ) );
-
-	for( i = 2, c = 1; i < Cmd_Argc() - 1; i += 2, c++ ) {
-		const char *label = Cmd_Argv( i );
-		const char *cmd = Cmd_Argv( i + 1 );
-
-		Q_strncatz( request, va( "btn%i \"%s\" ", c, label ), sizeof( request ) );
-		Q_strncatz( request, va( "cmd%i \"%s%s\" ", c, *cmd ? "cmd " : "", cmd ), sizeof( request ) );
-	}
-
-	Cbuf_ExecuteText( EXEC_APPEND, va( "%s\n", request ) );
-}
-
-/*
-* CG_SC_MenuOpen
-*/
-static void CG_SC_MenuOpen_( bool modal ) {
-	char request[MAX_STRING_CHARS];
-	int i, c;
-
-	if( cgs.demoPlaying ) {
-		return;
-	}
-
-	if( Cmd_Argc() < 2 ) {
-		return;
-	}
-
-	Q_strncpyz( request, va( "%s \"%s\"", modal ? "menu_modal" : "menu_open", Cmd_Argv( 1 ) ), sizeof( request ) );
-	for( i = 2, c = 1; i < Cmd_Argc(); i++, c++ )
-		Q_strncatz( request, va( " param%i \"%s\"", c, Cmd_Argv( i ) ), sizeof( request ) );
-
-	Cbuf_ExecuteText( EXEC_APPEND, va( "%s\n", request ) );
-}
-
-/*
-* CG_SC_MenuOpen
-*/
-static void CG_SC_MenuOpen( void ) {
-	CG_SC_MenuOpen_( false );
-}
-
-/*
-* CG_SC_MenuModal
-*/
-static void CG_SC_MenuModal( void ) {
-	CG_SC_MenuOpen_( true );
-}
-
-/*
 * CG_AddAward
 */
 void CG_AddAward( const char *str, unsigned timeoutMillis ) {
@@ -807,16 +589,11 @@ static const svcmd_t cg_svcmds[] =
 	{ "cp", CG_SC_CenterPrint },
 	{ "cpf", CG_SC_CenterPrintFormat },
 	{ "obry", CG_SC_Obituary },
-	{ "plstats", CG_SC_PlayerStats },
 	{ "mm", CG_SC_MatchMessage },
 	{ "mapmsg", CG_SC_HelpMessage },
-	{ "ti", CG_CS_UpdateTeamInfo },
 	{ "demoget", CG_SC_DemoGet },
 	{ "cha", CG_SC_ChannelAdd },
 	{ "chr", CG_SC_ChannelRemove },
-	{ "mecu", CG_SC_MenuCustom },
-	{ "meop", CG_SC_MenuOpen },
-	{ "memo", CG_SC_MenuModal },
 	{ "motd", CG_SC_MOTD },
 	{ "aw", CG_SC_AddAward },
 	{ "arq", CG_SC_ActionRequest },

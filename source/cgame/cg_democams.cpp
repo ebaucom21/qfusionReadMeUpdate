@@ -55,12 +55,6 @@ static int cam_POVent;
 static bool cam_3dPerson;
 
 /*
-* CG_DrawDemocam2D
-*/
-void CG_DrawDemocam2D( void ) {
-}
-
-/*
 * CG_DemoCam_GetViewType
 */
 int CG_DemoCam_GetViewType( void ) {
