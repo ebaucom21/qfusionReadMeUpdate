@@ -73,6 +73,8 @@ private:
 	wsw::StaticVector<int, MAX_CALLVOTES> m_parentEntryNums;
 	wsw::StaticVector<int, MAX_CALLVOTES> m_displayedEntryNums;
 
+	bool m_hasSetGroupModelOwnership { false };
+
 	void beginReloading();
 	void addNum( int num );
 	void endReloading();
@@ -89,7 +91,7 @@ public:
 	Q_INVOKABLE void setGroupFilter( int group );
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getGroupsModel() { return &m_groupsModel; }
+	Q_INVOKABLE QAbstractListModel *getGroupsModel();
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

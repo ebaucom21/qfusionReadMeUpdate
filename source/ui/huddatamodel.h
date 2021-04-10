@@ -78,6 +78,8 @@ class HudDataModel : public QObject {
 
 	int m_health { 0 }, m_armor { 0 };
 
+	bool m_hasSetInventoryModelOwnership { false };
+
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
 	[[nodiscard]]
@@ -162,7 +164,7 @@ public:
 	Q_PROPERTY( int armor READ getArmor NOTIFY armorChanged );
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getInventoryModel() { return &m_inventoryModel; }
+	Q_INVOKABLE QAbstractListModel *getInventoryModel();
 
 	HudDataModel();
 

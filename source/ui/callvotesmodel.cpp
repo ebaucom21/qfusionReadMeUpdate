@@ -6,6 +6,7 @@
 #include "local.h"
 
 #include <QJsonObject>
+#include <QQmlEngine>
 
 using wsw::operator""_asView;
 
@@ -129,6 +130,14 @@ void CallvotesListModel::setGroupFilter( int group ) {
 		}
 	}
 	endResetModel();
+}
+
+auto CallvotesListModel::getGroupsModel() -> QAbstractListModel * {
+	if( !m_hasSetGroupModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_groupsModel, QQmlEngine::CppOwnership );
+		m_hasSetGroupModelOwnership = true;
+	}
+	return &m_groupsModel;
 }
 
 auto CallvotesListModel::getOptionsList( int handle ) const -> QJsonArray {

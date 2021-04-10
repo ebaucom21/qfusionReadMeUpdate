@@ -5,6 +5,7 @@
 #include "../client/client.h"
 
 #include <QColor>
+#include <QQmlEngine>
 
 // Hacks
 bool CG_IsSpectator();
@@ -263,6 +264,14 @@ HudDataModel::HudDataModel() {
 	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
 	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
+}
+
+auto HudDataModel::getInventoryModel() -> QAbstractListModel * {
+	if( !m_hasSetInventoryModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_inventoryModel, QQmlEngine::CppOwnership );
+		m_hasSetInventoryModelOwnership = true;
+	}
+	return &m_inventoryModel;
 }
 
 void HudDataModel::checkPropertyChanges() {
