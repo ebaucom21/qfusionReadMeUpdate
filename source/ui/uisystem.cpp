@@ -931,7 +931,7 @@ void QtUISystem::checkPropertyChanges() {
 
 	const bool wasShowingHud = m_isShowingHud;
 	const bool wasShowingPovHud = m_isShowingPovHud;
-	m_isShowingHud = actualClientState == CA_ACTIVE;
+	m_isShowingHud = actualClientState == CA_ACTIVE && !( m_activeMenuMask & MainMenu );
 	if( m_isShowingHud != wasShowingHud ) {
 		Q_EMIT isShowingHudChanged( m_isShowingHud );
 	}
