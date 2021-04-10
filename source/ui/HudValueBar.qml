@@ -42,25 +42,37 @@ Item {
         source: iconPath
    }
 
-    Rectangle {
+    Item {
         id: bar
+        width: back.width - valueLabel.width - 3 * 8
+        height: 24
         anchors.left: back.left
         anchors.bottom: back.bottom
         anchors.margins: 8
-        width: back.width - valueLabel.width - 3 * 8
-        height: 24
-        color: Qt.tint("black", Qt.rgba(root.color.r, root.color.g, root.color.b, 0.2))
-        radius: 4
-    }
+        // Prevent the animated value bar to leave the desired bounds
+        clip: true
 
-    Rectangle {
-        width: bar.width * root.frac
-        height: bar.height - 2
-        anchors.left: bar.left
-        anchors.leftMargin: 1
-        anchors.verticalCenter: bar.verticalCenter
-        radius: bar.radius
-        color: root.color
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.tint("black", Qt.rgba(root.color.r, root.color.g, root.color.b, 0.2))
+            radius: 4
+        }
+
+        Rectangle {
+            width: Math.max(parent.width * root.frac - 2, 0)
+            height: parent.height - 2
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            radius: 4
+            color: root.color
+
+            Behavior on width {
+                NumberAnimation {
+                    duration: 125
+                    easing.type: Easing.OutElastic
+                }
+            }
+        }
     }
 
     Label {
