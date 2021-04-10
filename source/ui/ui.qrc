@@ -21,12 +21,13 @@
         <file>GeneralSettings.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
-	<file>HudChat.qml</file>
+        <file>HudChat.qml</file>
         <file>HudEditorAnchorsMarker.qml</file>
         <file>HudLayoutItem.qml</file>
         <file>HudSettings.qml</file>
         <file>HudInventoryBar.qml</file>
         <file>HudMatchTime.qml</file>
+        <file>HudTeamList.qml</file>
         <file>HudTeamScore.qml</file>
         <file>HudValueBar.qml</file>
         <file>HudWeaponStatus.qml</file>

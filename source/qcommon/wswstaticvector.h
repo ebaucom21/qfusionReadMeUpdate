@@ -26,6 +26,7 @@ public:
 	typedef const T *const_iterator;
 	typedef T &reference;
 	typedef const T &const_reference;
+	typedef T value_type;
 
 private:
 	// Disable moving and, implicitly, copying

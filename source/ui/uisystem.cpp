@@ -55,9 +55,9 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 
 // Hacks
 bool CG_IsSpectator();
-bool CG_HasActiveChasePov();
 bool CG_HasTwoTeams();
 int CG_MyRealTeam();
+std::optional<unsigned> CG_ActiveChasePov();
 
 namespace wsw::ui {
 
@@ -1025,7 +1025,7 @@ void QtUISystem::checkPropertyChanges() {
 	if( m_isShowingHud != wasShowingHud ) {
 		Q_EMIT isShowingHudChanged( m_isShowingHud );
 	}
-	m_isShowingPovHud = m_isShowingHud && CG_HasActiveChasePov();
+	m_isShowingPovHud = m_isShowingHud && ( CG_ActiveChasePov() != std::nullopt );
 	if( m_isShowingPovHud != wasShowingPovHud ) {
 		Q_EMIT isShowingPovHudChanged( m_isShowingPovHud );
 	}

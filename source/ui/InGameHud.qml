@@ -78,6 +78,8 @@ Item {
                     betaScoreComponent
                 } else if (kind === HudLayoutModel.Chat) {
                     chatComponent
+                } else if (kind === HudLayoutModel.TeamList) {
+                    teamListComponent
                 } else {
                     undefined
                 }
@@ -151,6 +153,11 @@ Item {
             Component {
                 id: chatComponent
                 HudChat {}
+            }
+
+            Component {
+                id: teamListComponent
+                HudTeamList {}
             }
 
             function getQmlAnchor(anchorBit) {

@@ -573,12 +573,18 @@ bool CG_IsSpectator() {
 	return ISREALSPECTATOR();
 }
 
-bool CG_HasActiveChasePov() {
+std::optional<unsigned> CG_ActiveChasePov() {
 	if( !ISREALSPECTATOR() ) {
-		return true;
+		assert( cg.predictedPlayerState.POVnum );
+		return cg.predictedPlayerState.POVnum - 1u;
 	}
 	// TODO: Is this a correct condition for that?
-	return cg.predictedPlayerState.POVnum >= 0 && cg.predictedPlayerState.POVnum != cg.predictedPlayerState.playerNum + 1;
+	if( cg.predictedPlayerState.POVnum >= 0 ) {
+		if( cg.predictedPlayerState.POVnum != cg.predictedPlayerState.playerNum + 1 ) {
+			return cg.predictedPlayerState.POVnum;
+		}
+	}
+	return std::nullopt;
 }
 
 bool CG_HasTwoTeams() {
@@ -671,4 +677,8 @@ auto CG_GetMatchClockTime() -> std::pair<int, int> {
 	seconds -= minutes * 60;
 
 	return { minutes, seconds };
+}
+
+wsw::StringView CG_LocationName( unsigned location ) {
+	return ::cl.configStrings.getLocation( location ).value();
 }

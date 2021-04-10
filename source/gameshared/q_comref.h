@@ -615,7 +615,7 @@ public:
 	}
 
 	[[nodiscard]]
-	auto getPlayerPowerupBits( unsigned playerIndex ) -> unsigned {
+	auto getPlayerPowerupBits( unsigned playerIndex ) const -> unsigned {
 		assert( playerIndex < (unsigned)MAX_CLIENTS );
 		return unpackWord( packedPlayerSpecificData[playerIndex], kPowerupsMask, kPowerupsShift );
 	}

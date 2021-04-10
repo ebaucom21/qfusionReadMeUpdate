@@ -18,6 +18,9 @@ int CG_TeamAlphaColor();
 int CG_TeamBetaColor();
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
+std::optional<unsigned> CG_ActiveChasePov();
+wsw::StringView CG_PlayerName( unsigned playerNum );
+wsw::StringView CG_LocationName( unsigned location );
 
 namespace wsw::ui {
 
@@ -65,8 +68,8 @@ public:
 
 	[[nodiscard]]
 	auto getWeaponIconPath( int weapon ) const -> QByteArray {
-		assert( weapon && (unsigned)weapon < (unsigned)WEAP_TOTAL );
-		return m_weaponIconPaths[weapon - 1];
+		assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
+		return weapon ? m_weaponIconPaths[weapon - 1] : QByteArray();
 	}
 
 	[[nodiscard]]
@@ -233,6 +236,165 @@ void InventoryModel::checkPropertyChanges() {
 	}
 }
 
+auto TeamListModel::roleNames() const -> QHash<int, QByteArray> {
+	return {
+		{ Health, "health" }, { Armor, "armor" }, { WeaponIconPath, "weaponIconPath" },
+		{ Nickname, "nickname" }, { Location, "location" }, { Powerups, "powerups" }
+	};
+}
+
+auto TeamListModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto TeamListModel::data( const QModelIndex &index, int role ) const -> QVariant {
+	if( index.isValid() ) {
+		if( const auto row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			switch( role ) {
+				case Health: return m_entries[row].health;
+				case Armor: return m_entries[row].armor;
+				case WeaponIconPath: return weaponPropsCache.getWeaponIconPath( (int)m_entries[row].weapon );
+				case Nickname: return toStyledText( CG_PlayerName( m_entries[row].playerNum ) );
+				case Location: return toStyledText( CG_LocationName( m_entries[row].location ) );
+				case Powerups: return m_entries[row].powerups;
+				default: return QVariant();
+			}
+		}
+	}
+	return QVariant();
+}
+
+void TeamListModel::resetWithScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
+	beginResetModel();
+	fillEntries( scoreboardData, m_entries );
+	endResetModel();
+}
+
+void TeamListModel::fillEntries( const ReplicatedScoreboardData &scoreboardData, EntriesVector &entries ) {
+	entries.clear();
+	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+		if( !scoreboardData.isPlayerGhosting( i ) && scoreboardData.getPlayerTeam( i ) == m_team ) {
+			const unsigned playerNum = scoreboardData.getPlayerNum( i );
+			if( playerNum != m_povPlayerNum ) {
+				// TODO: Looking forward to being able to use designated initializers
+				Entry entry;
+				entry.playerNum = playerNum;
+				entry.health    = scoreboardData.getPlayerHealth( i );
+				entry.armor     = scoreboardData.getPlayerArmor( i );
+				entry.weapon    = scoreboardData.getPlayerWeapon( i );
+				entry.location  = scoreboardData.getPlayerLocation( i );
+				entry.powerups  = scoreboardData.getPlayerPowerupBits( i );
+				entries.push_back( entry );
+			}
+		}
+	}
+
+	// Sort by player num for now
+	const auto cmp = []( const Entry &lhs, const Entry &rhs ) {
+		return lhs.playerNum < rhs.playerNum;
+	};
+	std::sort( entries.begin(), entries.end(), cmp );
+}
+
+void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsigned povPlayerNum ) {
+	int povTeam = -1;
+	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+		if( scoreboardData.getPlayerNum( i ) == povPlayerNum ) {
+			povTeam = scoreboardData.getPlayerTeam( i );
+			break;
+		}
+	}
+
+	if( povTeam < 0 ) {
+		throw std::logic_error( "Failed to find the current POV in the scoreboard" );
+	}
+
+	// The POV player is in another team.
+	// This also naturally covers many POV changes.
+	if( povTeam != m_team ) {
+		m_team = povTeam;
+		assert( m_team == TEAM_ALPHA || m_team == TEAM_BETA );
+		m_povPlayerNum = povPlayerNum;
+		resetWithScoreboardData( scoreboardData );
+		return;
+	}
+
+	// Handle remaining POV change cases
+	if( m_povPlayerNum != povPlayerNum ) {
+		m_povPlayerNum = povPlayerNum;
+		resetWithScoreboardData( scoreboardData );
+		return;
+	}
+
+	// Backup entries
+	m_oldEntries.clear();
+	std::copy( std::begin( m_entries ), std::end( m_entries ), std::back_inserter( m_oldEntries ) );
+
+	fillEntries( scoreboardData, m_entries );
+
+	// TODO: This can be optimized in case of having a single-row difference
+	if( m_entries.size() != m_oldEntries.size() ) {
+		beginResetModel();
+		endResetModel();
+		return;
+	}
+
+	const auto *const tracker = wsw::ui::NameChangesTracker::instance();
+
+	// Just dispatch updates
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		const auto &oldEntry = m_oldEntries[i];
+		const auto &entry = m_entries[i];
+		int numUpdates = 0;
+		if( entry.playerNum != oldEntry.playerNum ) {
+			// Do a full reset
+			numUpdates = 999;
+		} else {
+			const unsigned counter = tracker->getLastNicknameUpdateCounter( entry.playerNum );
+			if( counter != m_nicknameUpdateCounters[entry.playerNum] ) {
+				m_nicknameUpdateCounters[entry.playerNum] = counter;
+				numUpdates = 999;
+			}
+		}
+
+		const bool hasHealthUpdates = entry.health != oldEntry.health;
+		numUpdates += hasHealthUpdates;
+		const bool hasArmorUpdates = entry.armor != oldEntry.armor;
+		numUpdates += hasArmorUpdates;
+		const bool hasWeaponUpdates = entry.weapon != oldEntry.weapon;
+		numUpdates += hasWeaponUpdates;
+		const bool hasLocationUpdates = entry.location != oldEntry.location;
+
+		if( numUpdates ) {
+			// Specify a full row update by default
+			const QVector<int> *changedRoles = nullptr;
+			// Optimize for most frequent updates
+			if( numUpdates == 1 ) {
+				if( hasHealthUpdates ) {
+					changedRoles = &kHealthAsRole;
+				} else if( hasArmorUpdates ) {
+					changedRoles = &kArmorAsRole;
+				} else if( hasWeaponUpdates ) {
+					changedRoles = &kWeaponIconPathAsRole;
+				} else if( hasLocationUpdates ) {
+					changedRoles = &kLocationAsRole;
+				}
+			} else if( numUpdates == 2 ) {
+				if( hasHealthUpdates && hasArmorUpdates ) {
+					changedRoles = &kHealthAndArmorAsRole;
+				}
+			}
+
+			const QModelIndex modelIndex( createIndex( (int)i, 0 ) );
+			if( changedRoles ) {
+				Q_EMIT dataChanged( modelIndex, modelIndex, *changedRoles );
+			} else {
+				Q_EMIT dataChanged( modelIndex, modelIndex );
+			}
+		}
+	}
+}
+
 auto HudDataModel::getActiveWeaponIcon() const -> QByteArray {
 	return m_activeWeapon ? weaponPropsCache.getWeaponIconPath( m_activeWeapon ) : QByteArray();
 }
@@ -272,6 +434,14 @@ auto HudDataModel::getInventoryModel() -> QAbstractListModel * {
 		m_hasSetInventoryModelOwnership = true;
 	}
 	return &m_inventoryModel;
+}
+
+auto HudDataModel::getTeamListModel() -> QAbstractListModel * {
+	if( !m_hasSetTeamListModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_teamListModel, QQmlEngine::CppOwnership );
+		m_hasSetTeamListModelOwnership = true;
+	}
+	return &m_teamListModel;
 }
 
 void HudDataModel::checkPropertyChanges() {
@@ -367,12 +537,25 @@ void HudDataModel::checkPropertyChanges() {
 		Q_EMIT armorChanged( m_armor );
 	}
 
+	const auto hadLocations = m_hasLocations;
+	assert( MAX_LOCATIONS > 1 );
+	// Require having at least a couple of locations defined
+	m_hasLocations = ::cl.configStrings.get( CS_LOCATIONS + 0 ) && ::cl.configStrings.get( CS_LOCATIONS + 1 );
+	if( hadLocations != m_hasLocations ) {
+		Q_EMIT hasLocationsChanged( m_hasLocations );
+	}
+
 	m_inventoryModel.checkPropertyChanges();
 }
 
 void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {
 	m_pendingAlphaScore = scoreboardData.alphaScore;
 	m_pendingBetaScore = scoreboardData.betaScore;
+	if( CG_HasTwoTeams() ) {
+		if( const auto maybeActiveChasePov = CG_ActiveChasePov() ) {
+			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
+		}
+	}
 }
 
 }

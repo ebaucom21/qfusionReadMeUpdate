@@ -4,6 +4,8 @@
 #include <QAbstractListModel>
 #include <QColor>
 
+#include <array>
+
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstaticstring.h"
 
@@ -50,10 +52,64 @@ class InventoryModel : public QAbstractListModel {
 	auto data( const QModelIndex &index, int role ) const -> QVariant override;
 };
 
+class TeamListModel : public QAbstractListModel {
+	friend class HudDataModel;
+
+	enum Role {
+		Health,
+		Armor,
+		WeaponIconPath,
+		Nickname,
+		Location,
+		Powerups
+	};
+
+	struct Entry {
+		unsigned playerNum;
+		unsigned health { 0 }, armor { 0 };
+		unsigned weapon { 0 };
+		unsigned location { 0 };
+		unsigned powerups { 0 };
+	};
+
+	using EntriesVector = wsw::StaticVector<Entry, 32>;
+
+	EntriesVector m_oldEntries;
+	EntriesVector m_entries;
+
+	static inline const QVector<int> kHealthAsRole { Health };
+	static inline const QVector<int> kArmorAsRole { Armor };
+	static inline const QVector<int> kHealthAndArmorAsRole { Armor };
+	static inline const QVector<int> kWeaponIconPathAsRole { WeaponIconPath };
+	static inline const QVector<int> kLocationAsRole { Location };
+
+	unsigned m_povPlayerNum { ~0u };
+	int m_team { -1 };
+
+	std::array<unsigned, MAX_CLIENTS> m_nicknameUpdateCounters;
+
+	TeamListModel() {
+		m_nicknameUpdateCounters.fill( 0 );
+	}
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &index, int role ) const -> QVariant override;
+
+	void fillEntries( const ReplicatedScoreboardData &scoreboardData, EntriesVector &entries );
+	void resetWithScoreboardData( const ReplicatedScoreboardData &scoreboardData );
+
+	void update( const ReplicatedScoreboardData &scoreboardData, unsigned povPlayerNum );
+};
+
 class HudDataModel : public QObject {
 	Q_OBJECT
 
 	InventoryModel m_inventoryModel;
+	TeamListModel m_teamListModel;
 
 	wsw::StaticString<32> m_alphaName;
 	wsw::StaticString<32> m_betaName;
@@ -78,7 +134,10 @@ class HudDataModel : public QObject {
 
 	int m_health { 0 }, m_armor { 0 };
 
+	bool m_hasLocations { false };
+
 	bool m_hasSetInventoryModelOwnership { false };
+	bool m_hasSetTeamListModelOwnership { false };
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -126,6 +185,9 @@ class HudDataModel : public QObject {
 	auto getHealth() const -> int { return m_health; }
 	[[nodiscard]]
 	auto getArmor() const -> int { return m_armor; }
+
+	[[nodiscard]]
+	bool getHasLocations() const { return m_hasLocations; }
 public:
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
@@ -163,8 +225,20 @@ public:
 	Q_SIGNAL void armorChanged( int armor );
 	Q_PROPERTY( int armor READ getArmor NOTIFY armorChanged );
 
+	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
+	Q_PROPERTY( bool hasLocations READ getHasLocations NOTIFY hasLocationsChanged );
+
+	enum Powerup {
+		Quad  = 0x1,
+		Shell = 0x2,
+		Regen = 0x4
+	};
+	Q_ENUM( Powerup );
+
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getInventoryModel();
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getTeamListModel();
 
 	HudDataModel();
 
