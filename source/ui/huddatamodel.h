@@ -164,6 +164,8 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getInventoryModel() { return &m_inventoryModel; }
 
+	HudDataModel();
+
 	void checkPropertyChanges();
 	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
 };

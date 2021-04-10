@@ -259,6 +259,12 @@ void HudDataModel::setStyledTeamName( QByteArray *dest, const wsw::StringView &n
 	*dest = toStyledText( name ).toLatin1();
 }
 
+HudDataModel::HudDataModel() {
+	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
+	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
+	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
+}
+
 void HudDataModel::checkPropertyChanges() {
 	const bool hadTwoTeams = getHasTwoTeams();
 	m_hasTwoTeams = CG_HasTwoTeams();
