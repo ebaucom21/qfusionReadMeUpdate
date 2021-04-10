@@ -146,6 +146,13 @@ public:
 	Q_INVOKABLE void registerNativelyDrawnItem( QQuickItem *item );
 	Q_INVOKABLE void unregisterNativelyDrawnItem( QQuickItem *item );
 
+	Q_SIGNAL void hudOccludersChanged();
+	Q_INVOKABLE void registerHudOccluder( QQuickItem *item );
+	Q_INVOKABLE void unregisterHudOccluder( QQuickItem *item );
+	Q_INVOKABLE void updateHudOccluder( QQuickItem *item );
+	[[nodiscard]]
+	Q_INVOKABLE bool isHudItemOccluded( QQuickItem *item );
+
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
 	Q_INVOKABLE void markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value );
@@ -304,6 +311,8 @@ private:
 	static constexpr const int kMaxNativelyDrawnItems = 64;
 
 	int m_numNativelyDrawnItems { 0 };
+
+	wsw::Vector<QQuickItem *> m_hudOccluders;
 
 	QSet<QQuickItem *> m_cvarAwareControls;
 
@@ -1205,6 +1214,42 @@ void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 	nativelyDrawn->m_isLinked = false;
 	m_numNativelyDrawnItems--;
 	assert( m_numNativelyDrawnItems >= 0 );
+}
+
+void QtUISystem::registerHudOccluder( QQuickItem *item ) {
+	if( const auto it = std::find( m_hudOccluders.begin(), m_hudOccluders.end(), item ); it != m_hudOccluders.end() ) {
+		throw std::logic_error( "This HUD occluder item has been already registered" );
+	}
+	m_hudOccluders.push_back( item );
+	Q_EMIT hudOccludersChanged();
+}
+
+void QtUISystem::unregisterHudOccluder( QQuickItem *item ) {
+	if( const auto it = std::find( m_hudOccluders.begin(), m_hudOccluders.end(), item ); it != m_hudOccluders.end() ) {
+		m_hudOccluders.erase( it );
+		Q_EMIT hudOccludersChanged();
+	} else {
+		throw std::logic_error( "This HUD occluder item has not been registered" );
+	}
+}
+
+void QtUISystem::updateHudOccluder( QQuickItem * ) {
+	// TODO: Just set a pending update flag and check during properties update?
+	Q_EMIT hudOccludersChanged();
+}
+
+bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
+	QRectF itemRect( item->mapRectToScene( item->boundingRect() ) );
+	itemRect.setWidth( itemRect.width() + 10.0 );
+	itemRect.setHeight( itemRect.height() + 10.0 );
+	itemRect.moveTopLeft( QPointF( itemRect.x() - 5.0, itemRect.y() - 5.0 ) );
+	for( const QQuickItem *occluder : m_hudOccluders ) {
+		const QRectF occluderRect( occluder->mapRectToScene( occluder->boundingRect() ) );
+		if( occluderRect.intersects( itemRect ) ) {
+			return true;
+		}
+	}
+	return false;
 }
 
 QVariant QtUISystem::getCVarValue( const QString &name ) const {

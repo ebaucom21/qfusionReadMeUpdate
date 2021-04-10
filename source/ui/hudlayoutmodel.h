@@ -42,6 +42,14 @@ public:
 	};
 	Q_ENUM( Kind );
 
+	// Could be useful for the editor model as well, so lift it here
+	enum Flags {
+		NoFlags       = 0x0,
+		TeamBasedOnly = 0x1,
+		PovOnly       = 0x2
+	};
+	Q_ENUM( Flags );
+
 	[[nodiscard]]
 	Q_INVOKABLE bool load( const QByteArray &fileName );
 protected:
@@ -56,6 +64,9 @@ protected:
 		int selfAnchors;
 		int otherAnchors;
 	};
+
+	[[nodiscard]]
+	static auto getFlagsForKind( Kind kind ) -> Flags;
 
 	[[nodiscard]]
 	static auto getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView>;
@@ -191,6 +202,7 @@ public:
 class InGameHudLayoutModel : public HudLayoutModel {
 	enum Role {
 		Kind = Qt::UserRole + 1,
+		Flags,
 		SelfAnchors,
 		AnchorItemIndex,
 		AnchorItemAnchors

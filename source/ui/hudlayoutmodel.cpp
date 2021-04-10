@@ -698,9 +698,24 @@ auto HudLayoutModel::getAnchorNames( int anchors ) -> std::pair<wsw::StringView,
 	return { getVerticalAnchorName( anchors ), getHorizontalAnchorName( anchors ) };
 }
 
+auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
+	switch( kind ) {
+		case HealthBar: return PovOnly;
+		case ArmorBar: return PovOnly;
+		case InventoryBar: return PovOnly;
+		case WeaponStatus: return PovOnly;
+		case MatchTime: return NoFlags;
+		case AlphaScore: return TeamBasedOnly;
+		case BetaScore: return TeamBasedOnly;
+		case Chat: return NoFlags;
+		default: throw std::logic_error( "unreachable" );
+	}
+}
+
 auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Kind, "kind" },
+		{ Flags, "flags" },
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
 		{ AnchorItemIndex, "anchorItemIndex" }
@@ -716,6 +731,7 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 		if( int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
 			switch( role ) {
 				case Kind: return m_entries[row].kind;
+				case Flags: return getFlagsForKind( m_entries[row].kind );
 				case SelfAnchors: return m_entries[row].selfAnchors;
 				case AnchorItemAnchors: return m_entries[row].otherAnchors;
 				case AnchorItemIndex: return m_entries[row].anchorItem;

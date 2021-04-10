@@ -16,6 +16,7 @@ Item {
         model: inGameHudLayoutModel
 
         delegate: HudLayoutItem {
+            id: itemLoader
             width: item ? item.implicitWidth : 0
             height: item ? item.implicitHeight : 0
 
@@ -25,6 +26,40 @@ Item {
             anchors.right: getQmlAnchor(HudLayoutModel.Right)
             anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
             anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
+
+            Connections {
+                target: wsw
+                onHudOccludersChanged: itemLoader.updateItemVisibility()
+                onIsShowingPovHudChanged: itemLoader.updateItemVisibility()
+            }
+
+            Connections {
+                target: hudDataModel
+                onHasTwoTeamsChanged: itemLoader.updateItemVisibility()
+            }
+
+            Connections {
+                target: item
+                onWidthChanged: itemLoader.updateItemVisibility()
+                onHeightChanged: itemLoader.updateItemVisibility()
+                onXChanged: itemLoader.updateItemVisibility()
+                onYChanged: itemLoader.updateItemVisibility()
+            }
+
+            onLoaded: itemLoader.updateItemVisibility()
+
+            function updateItemVisibility() {
+                if (item) {
+                    if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
+                        item.visible = false
+                    } else if (!wsw.isShowingPovHud && (flags & HudLayoutModel.PovOnly)) {
+                        item.visible = false
+                    } else {
+                        // Put the expensive test last
+                        item.visible = !wsw.isHudItemOccluded(item)
+                    }
+                }
+            }
 
             sourceComponent: {
                 if (kind === HudLayoutModel.HealthBar) {
@@ -51,7 +86,6 @@ Item {
             Component {
                 id: healthBarComponent
                 HudValueBar {
-                    visible: wsw.isShowingPovHud
                     text: "HEALTH"
                     color: hudDataModel.health > 100 ? "deeppink" :
                                                         (hudDataModel.health >= 50 ? "white" : "orangered")
@@ -65,7 +99,6 @@ Item {
             Component {
                 id: armorBarComponent
                 HudValueBar {
-                    visible: wsw.isShowingPovHud
                     text: "ARMOR"
                     value: hudDataModel.armor
                     frac: 0.01 * Math.min(100.0, hudDataModel.armor)
@@ -80,16 +113,12 @@ Item {
 
             Component {
                 id: inventoryBarComponent
-                HudInventoryBar {
-                    visible: wsw.isShowingPovHud
-                }
+                HudInventoryBar {}
             }
 
             Component {
                 id: weaponStatusComponent
-                HudWeaponStatus {
-                    visible: wsw.isShowingPovHud
-                }
+                HudWeaponStatus {}
             }
 
             Component {

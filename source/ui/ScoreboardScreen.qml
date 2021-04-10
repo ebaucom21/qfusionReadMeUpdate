@@ -41,11 +41,29 @@ Rectangle {
         }
     }
 
+    Item {
+        id: hudOccluder
+        anchors.top: teamTablesLoader.top
+        anchors.horizontalCenter: teamTablesLoader.horizontalCenter
+        width: Math.max(teamTablesLoader.item.width, specsPane.width)
+        height: teamTablesLoader.item.height + (specsPane.visible ? specsPane.anchors.topMargin + specsPane.height : 0)
+
+        Component.onCompleted: wsw.registerHudOccluder(hudOccluder)
+        Component.onDestruction: wsw.unregisterHudOccluder(hudOccluder)
+        onWidthChanged: wsw.updateHudOccluder(hudOccluder)
+        onHeightChanged: wsw.updateHudOccluder(hudOccluder)
+        onXChanged: wsw.updateHudOccluder(hudOccluder)
+        onYChanged: wsw.updateHudOccluder(hudOccluder)
+    }
+
     ScoreboardSpecsPane {
+        id: specsPane
         anchors.top: teamTablesLoader.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.tableWidth
+        height: implicitHeight
+        model: scoreboardSpecsModel
         baseColor: "black"
     }
 

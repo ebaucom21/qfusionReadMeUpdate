@@ -28,6 +28,13 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             background: null
 
+            Component.onCompleted: wsw.registerHudOccluder(tabBar)
+            Component.onDestruction: wsw.unregisterHudOccluder(tabBar)
+            onWidthChanged: wsw.updateHudOccluder(tabBar)
+            onHeightChanged: wsw.updateHudOccluder(tabBar)
+            onXChanged: wsw.updateHudOccluder(tabBar)
+            onYChanged: wsw.updateHudOccluder(tabBar)
+
             Behavior on opacity {
                 NumberAnimation { duration: 66 }
             }
@@ -78,6 +85,13 @@ Rectangle {
             initialItem: generalComponent
             clip: true
         }
+
+        Component.onCompleted: wsw.registerHudOccluder(mainPane)
+        Component.onDestruction: wsw.unregisterHudOccluder(mainPane)
+        onWidthChanged: wsw.updateHudOccluder(mainPane)
+        onHeightChanged: wsw.updateHudOccluder(mainPane)
+        onXChanged: wsw.updateHudOccluder(mainPane)
+        onYChanged: wsw.updateHudOccluder(mainPane)
     }
 
     Component {
