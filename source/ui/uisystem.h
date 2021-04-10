@@ -2,6 +2,7 @@
 #define WSW_0646db93_a5f6_4b71_9267_800aa42abe4b_H
 
 #include <optional>
+#include <cstdint>
 
 struct ReplicatedScoreboardData;
 

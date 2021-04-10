@@ -49,10 +49,14 @@ void Sse42Ops::ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_t *brushes, int 
 	}
 }
 
-__attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#ifndef _MSC_VER
+__attribute__ ( (noinline) ) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#else
+__declspec( noinline ) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#endif
 
 // TODO: This was just to get the stuff working, rewrite it
-__attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer ) {
+int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer ) {
 	if( numSides >= 256 ) {
 		printf( "Too many brushsides %d\n", numSides );
 		abort();

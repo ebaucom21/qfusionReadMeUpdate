@@ -5,6 +5,9 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
+// For char_traits
+#include <string>
 
 namespace wsw {
 
@@ -42,7 +45,8 @@ protected:
 
 	[[nodiscard]]
 	auto toOffset( const char *p ) const -> unsigned {
-		assert( p - m_s < (ptrdiff_t)kMaxLen );
+		// These casts are mandatory for 32-bit uintptr_t's
+		assert( (uint64_t)(uintptr_t)( p - m_s ) < (uint64_t)kMaxLen );
 		return (unsigned)( p - m_s );
 	}
 

@@ -21,8 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "printstream.h"
 
-// TODO: Lift the header to the toplevel
 #include "wswstaticvector.h"
+
+#include <clocale>
 
 #if ( defined( _MSC_VER ) && ( defined( _M_IX86 ) || defined( _M_AMD64 ) || defined( _M_X64 ) ) )
 // For __cpuid() intrinsic

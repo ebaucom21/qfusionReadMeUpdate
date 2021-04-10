@@ -48,21 +48,9 @@ struct Ops *CM_GetOps( cmodel_state_t *cms ) {
 		return selectedOps;
 	}
 
-	// While SSE4.1 support is all that is really used we require SSE4.2 support.
-	// we rely on fast unaligned loads that seem to be supported by SSE4.2+ hardware.
-	// Moreover we have to require AVX support for MSVC builds.
-	// Specifying /arch:AVX is the only option to get SSE3+ instructions compiled.
-	// All these instructions use VEX encoding consequently and thus require AVX support.
-
-#ifndef _MSC_VER
 	Ops *ops[] = { &avxOps, &sse42Ops };
 	unsigned featureBits[] = { Q_CPU_FEATURE_AVX, Q_CPU_FEATURE_SSE42 };
 	const char *tags[] = { "AVX", "SSE4.2" };
-#else
-	Ops *ops[] = { &avxOps };
-	unsigned featureBits[] = { Q_CPU_FEATURE_AVX };
-	const char *tags[] = { "AVX" };
-#endif
 
 	const char *selectedTag = "generic";
 	selectedOps = &genericOps;
@@ -791,6 +779,7 @@ void Ops::Trace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t
 	}
 }
 
+#ifdef CM_SELF_TEST
 static void CompareTraceResults( const trace_t *tr, const char **tags, int count, bool interrupt = false ) {
 	if( count < 2 ) {
 		return;
@@ -872,6 +861,7 @@ static void CompareTraceResults( const trace_t *tr, const char **tags, int count
 		}
 	}
 }
+#endif
 
 /*
 * CM_TransformedBoxTrace

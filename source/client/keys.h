@@ -136,9 +136,6 @@ class KeyHandlingSystem {
 	int m_numKeysDown { 0 };
 
 	[[nodiscard]]
-	static bool isAToggleConsoleKey( int key );
-
-	[[nodiscard]]
 	static bool isAnAutoRepeatKey( int key );
 
 	[[nodiscard]]
@@ -153,6 +150,13 @@ public:
 	static void init();
 	static void shutdown();
 	static auto instance() -> KeyHandlingSystem *;
+
+#ifdef _WIN32
+	static auto instanceOrNull() -> KeyHandlingSystem *;
+#endif
+
+	[[nodiscard]]
+	bool isAToggleConsoleKey( int key ) const;
 
 	void handleCharEvent( int key, wchar_t ch );
 	void handleKeyEvent( int key, bool down, int64_t time );

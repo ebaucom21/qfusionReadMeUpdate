@@ -1915,7 +1915,8 @@ void RespectHandler::ClientEntry::RequestClientRespectAction( int tokenNum ) {
 void RespectHandler::ClientEntry::DisplayCodexViolationWarning() {
 	const wsw::StringView title( "Less talk, let's play!"_asView );
 	const wsw::StringView desc( ""_asView );
-	const std::pair<wsw::StringView, wsw::StringView> actions[0];
+	// Zero-size arrays are illegal for MSVC. We should switch to passing std::range eventually.
+	const std::pair<wsw::StringView, wsw::StringView> actions[1];
 	G_SendActionRequest( ent, "respectWarning"_asView, 3000, title, desc, actions, actions + 0 );
 }
 

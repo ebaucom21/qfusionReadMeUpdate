@@ -254,7 +254,7 @@ void AvxOps::ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrus
 			cplane_s *destPlane = &tlc->trace->plane;
 			const int indexMask = _mm256_movemask_ps( ymmIndexMask );
 			assert( indexMask );
-			const int leadSideNum = sidenums[__builtin_ctz( indexMask )];
+			const int leadSideNum = sidenums[_wsw_ctz( indexMask )];
 			assert( (unsigned)leadSideNum < (unsigned)shape->numsides );
 			destPlane->normal[0] = sidex[leadSideNum];
 			destPlane->normal[1] = sidey[leadSideNum];

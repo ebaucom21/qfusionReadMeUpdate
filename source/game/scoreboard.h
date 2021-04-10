@@ -11,6 +11,8 @@
 
 struct gclient_s;
 
+template <typename> class SingletonHolder;
+
 namespace wsw::g {
 
 class Scoreboard : public wsw::ScoreboardShared {

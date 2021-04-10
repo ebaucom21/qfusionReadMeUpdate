@@ -119,7 +119,7 @@ public:
 		assign( view.data(), view.size() );
 	}
 
-#ifndef __MSC_VER
+#ifndef _MSC_VER
 	[[nodiscard]]
 	bool assignf( const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );
 #else

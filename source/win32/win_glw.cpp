@@ -552,8 +552,7 @@ static bool GLimp_InitGL( bool isInitialDummyContext ) {
 			goto fail;
 		}
 	} else {
-		// Enforcing core contexts is temporarily disabled
-#if 0
+#if 1
 		assert( qwglCreateContextAttribsARB );
 
 		int attribs[] = {
@@ -567,11 +566,12 @@ static bool GLimp_InitGL( bool isInitialDummyContext ) {
 			Com_Printf( "GLimp_Init() - qwglCreateContextAttribsARB failed\n" );
 			goto fail;
 		}
-#endif
+#else
 		if( !( glw_state.hGLRC = qwglCreateContext( glw_state.hDC ) ) ) {
 			Com_Printf( "GLimp_Init() - qwglCreateContextAttribsARB failed\n" );
 			goto fail;
 		}
+#endif
 	}
 
 	if( !qwglMakeCurrent( glw_state.hDC, glw_state.hGLRC ) ) {

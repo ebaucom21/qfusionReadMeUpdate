@@ -26,7 +26,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_FACET_PLANES 32
 
-__attribute__ ((noinline)) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#ifndef _MSC_VER
+__attribute__ ( (noinline) ) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#else
+__declspec( noinline ) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
+#endif
 
 static inline float CM_AddSphericalBounds( vec_bounds_t mins, vec_bounds_t maxs, vec_bounds_t center ) {
 #ifdef CM_USE_SSE

@@ -280,7 +280,7 @@ void ChangedSignalNameComposer::initBuffer() {
 }
 
 auto ChangedSignalNameComposer::getSignalNameForNum( int num ) -> const char * {
-	assert( num >= 1 && num <= 9 );
+	assert( (unsigned)num <= (unsigned)9 );
 	if( !m_initialized ) {
 		initBuffer();
 		m_initialized = true;
@@ -321,8 +321,12 @@ bool KeysAndBindingsModel::reloadRowKeyEntry( QJsonValueRef ref ) {
 	// We have to modify an object and assign the ref back to modify a field
 	QJsonObject obj( ref.toObject() );
 	const int quakeKey = obj[kQuakeKey].toInt();
-	wsw::String &lastBinding = m_lastKeyBindings[quakeKey];
+	// This is an MSVC-spotted issue. TODO: Is this fix correct?
+	if( (unsigned)quakeKey > 255 ) {
+		return false;
+	}
 
+	wsw::String &lastBinding = m_lastKeyBindings[quakeKey];
 	if( const auto maybeCurrBinding = wsw::cl::KeyBindingsSystem::instance()->getBindingForKey( quakeKey ) ) {
 		const wsw::StringView currBinding( *maybeCurrBinding );
 		const wsw::StringView lastBindingView( lastBinding.data(), lastBinding.size(), wsw::StringView::ZeroTerminated );

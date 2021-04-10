@@ -1,6 +1,8 @@
 #include "scoreboardmodel.h"
 #include "local.h"
 
+#include <array>
+
 namespace wsw::ui {
 
 [[nodiscard]]

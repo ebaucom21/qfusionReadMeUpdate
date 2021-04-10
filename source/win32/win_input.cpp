@@ -84,6 +84,18 @@ cvar_t *in_grabinconsole;
 
 bool in_appactive;
 
+void Key_Event( int key, bool down, int64_t time ) {
+	wsw::cl::KeyHandlingSystem::instance()->handleKeyEvent( key, down, time );
+}
+
+void Key_CharEvent( int key, wchar_t ch ) {
+	wsw::cl::KeyHandlingSystem::instance()->handleCharEvent( key, ch );
+}
+
+void Key_MouseEvent( int key, bool down, int64_t time ) {
+	wsw::cl::KeyHandlingSystem::instance()->handleMouseEvent( key, down, time );
+}
+
 /*
 ============================================================
 

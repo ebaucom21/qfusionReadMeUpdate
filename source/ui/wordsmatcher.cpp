@@ -68,7 +68,7 @@ auto WordsMatcher::prepareInput( const wsw::StringView &rawInput ) -> wsw::Strin
 	m_inputBuffer.clear();
 	m_inputBuffer.reserve( rawInput.size() );
 	for( char ch: rawInput ) {
-		m_inputBuffer.push_back( std::tolower( ch, std::locale::classic() ) );
+		m_inputBuffer.push_back( (char)std::tolower( ch ) );
 	}
 	return wsw::StringView( m_inputBuffer.data(), m_inputBuffer.size() );
 }
@@ -110,7 +110,7 @@ WordsMatcher::WordsMatcher( const wsw::StringView &word ) {
 
 	m_stringDataBuffer.reserve( word.size() );
 	for( char ch: word ) {
-		m_stringDataBuffer.push_back( std::tolower( ch, std::locale::classic() ) );
+		m_stringDataBuffer.push_back( (char)std::tolower( ch ) );
 	}
 
 	const char *begin = m_stringDataBuffer.data();

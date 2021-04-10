@@ -20,6 +20,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sys_win.h
 
 #include "../qcommon/qcommon.h"
+#include "../client/keys.h"
+
 #include "winquake.h"
 #include "resource.h"
 #include <errno.h>
@@ -135,10 +137,10 @@ void Sys_Init( void ) {
 #define myTranslateMessage( msg ) TranslateMessage( msg )
 #else
 int IN_MapKey( int key );
-bool Key_IsNonPrintable( int key );
 static BOOL myTranslateMessage( MSG *msg ) {
 	if( msg->message == WM_KEYDOWN ) {
-		if( Key_IsNonPrintable( IN_MapKey( msg->lParam ) ) ) {
+		int key = IN_MapKey( msg->lParam );
+		if( auto *system = wsw::cl::KeyHandlingSystem::instance(); system && system->isAToggleConsoleKey( key ) ) {
 			return TRUE;
 		} else {
 			return TranslateMessage( msg );

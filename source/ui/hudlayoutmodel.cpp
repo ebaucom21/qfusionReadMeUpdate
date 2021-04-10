@@ -6,6 +6,8 @@
 #include <QPointF>
 #include <QSizeF>
 
+#include <array>
+
 using wsw::operator""_asView;
 
 namespace wsw::ui {

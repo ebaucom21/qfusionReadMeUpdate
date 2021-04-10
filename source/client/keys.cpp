@@ -403,7 +403,13 @@ auto KeyHandlingSystem::instance() -> KeyHandlingSystem * {
 	return ::keyHandlingSystemHolder.Instance();
 }
 
-bool KeyHandlingSystem::isAToggleConsoleKey( int key ) {
+#ifdef _WIN32
+auto KeyHandlingSystem::instanceOrNull() -> KeyHandlingSystem * {
+	return key_initialized ? ::keyHandlingSystemHolder.Instance() : nullptr;
+}
+#endif
+
+bool KeyHandlingSystem::isAToggleConsoleKey( int key ) const {
 	if( (unsigned)key >= kMaxKeys ) {
 		return false;
 	}

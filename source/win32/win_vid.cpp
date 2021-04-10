@@ -84,6 +84,10 @@ extern int64_t sys_msg_time;
 
 static float vid_pixelRatio = 1.0f;
 
+void Key_Event( int key, bool down, int64_t time );
+void Key_CharEvent( int key, wchar_t ch );
+void Key_MouseEvent( int key, bool down, int64_t time );
+
 /*
 ** WinKeys system hook (taken from ezQuake)
 */

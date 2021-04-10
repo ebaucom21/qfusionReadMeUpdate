@@ -188,6 +188,18 @@ inline bool doBoundsAndLineDistTestSse42( const float *__restrict shapeMins,
 #define wsw_vex_fence() do {} while (0)
 #endif
 
+#ifndef _MSC_VER
+#define _wsw_ctz( x ) __builtin_ctz( x )
+#else
+#include <intrin.h>
+__forceinline int _wsw_ctz( int x ) {
+	assert( x );
+	unsigned long result = 0;
+	_BitScanForward( &result, x );
+	return result;
+}
+#endif
+
 /**
  * Create this object in scopes that match boundaries
  * of transition between regular SSE2 and VEX-encoded binary code.

@@ -33,6 +33,8 @@
 #include <QQuickItem>
 #include <QUrl>
 
+#include <clocale>
+
 QVariant VID_GetMainContextHandle();
 
 bool GLimp_BeginUIRenderingHacks();
