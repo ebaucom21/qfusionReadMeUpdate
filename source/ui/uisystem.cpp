@@ -26,6 +26,7 @@
 #include <QQuickWindow>
 #include <QOffscreenSurface>
 #include <QOpenGLFunctions>
+#include <QOpenGLExtraFunctions>
 #include <QQmlEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -231,6 +232,7 @@ private:
 	QQuickWindow *m_window { nullptr };
 	QQmlEngine *m_engine { nullptr };
 	QQmlComponent *m_component { nullptr };
+	GLuint m_vao { 0 };
 	bool m_hasPendingSceneChange { false };
 	bool m_hasPendingRedraw { false };
 	bool m_isInUIRenderingMode { false };
@@ -496,7 +498,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	format.setMajorVersion( 3 );
 	format.setMinorVersion( 3 );
 	format.setRenderableType( QSurfaceFormat::OpenGL );
-	format.setProfile( QSurfaceFormat::CompatibilityProfile );
+	format.setProfile( QSurfaceFormat::CoreProfile );
 
 	m_externalContext = new QOpenGLContext;
 	m_externalContext->setNativeHandle( VID_GetMainContextHandle() );
@@ -534,6 +536,11 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 
 	bool hadErrors = true;
 	if( m_sharedContext->makeCurrent( m_surface ) ) {
+		// Bind a dummy VAO in the Qt context. That's something it fails to do on its own.
+		auto *const f = m_sharedContext->extraFunctions();
+		// TODO: Take care about the VAO lifetime
+		f->glGenVertexArrays( 1, &m_vao );
+		f->glBindVertexArray( m_vao );
 		m_control->initialize( m_sharedContext );
 		m_window->resetOpenGLState();
 		hadErrors = m_sharedContext->functions()->glGetError() != GL_NO_ERROR;

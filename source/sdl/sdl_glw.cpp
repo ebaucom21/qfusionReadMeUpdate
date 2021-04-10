@@ -179,6 +179,9 @@ static bool GLimp_InitGL( int stencilbits ) {
 	int colorBits, depthBits, stencilBits;
 
 	SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, std::max( 0, stencilbits ) );
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 3 );
+	SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
 
 	glw_state.sdl_glcontext = SDL_GL_CreateContext( glw_state.sdl_window );
 	if( glw_state.sdl_glcontext == 0 ) {
