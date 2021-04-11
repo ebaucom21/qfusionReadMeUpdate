@@ -36,7 +36,7 @@ Item {
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         horizontalAlignment: Qt.AlignHCenter
-        maximumLength: 29
+        maximumLength: 28
         width: 300
         Material.theme: Material.Dark
         Material.foreground: "white"
