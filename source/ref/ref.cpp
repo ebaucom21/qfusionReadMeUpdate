@@ -1794,7 +1794,8 @@ static vec3_t modelOrg;                         // relative to view point
 */
 bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
 	const shader_t *shader = surf->shader;
-	if( surf->flags & SURF_NODRAW ) {
+	// Exclude old sky surfaces from rendering for now
+	if( surf->flags & ( SURF_NODRAW | SURF_SKY ) ) {
 		return false;
 	}
 	if( !surf->mesh.numVerts ) {
