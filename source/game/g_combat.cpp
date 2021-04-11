@@ -935,7 +935,7 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 
 bool SplashPropagationSolver::coarseCanSplashDamage( const edict_t *ent ) const {
 	vec3_t origin;
-	if( !m_plane ) {
+	if( m_plane ) {
 		// up by 9 units to account for stairs
 		VectorMA( m_inflictor->s.origin, 9, m_plane->normal, origin );
 	} else {
