@@ -4,7 +4,7 @@
 
 DodgeHazardProblemSolver::DodgeHazardProblemSolver( const OriginParams &originParams_, const ProblemParams &problemParams_ )
 	: TacticalSpotsProblemSolver( originParams_, problemParams_ ), problemParams( problemParams_ ) {
-	addSuperiorSortCriterion(SpotSortCriterion::GenericScore );
+	addSortCriterion( SpotSortCriterion::GenericScore, 5 );
 }
 
 int DodgeHazardProblemSolver::findMany( vec3_t *spotOrigins, int maxSpots ) {
@@ -15,7 +15,7 @@ int DodgeHazardProblemSolver::findMany( vec3_t *spotOrigins, int maxSpots ) {
 
 	auto maybeVelocityDir = getVelocityDirForConformanceTests();
 	if( maybeVelocityDir ) {
-		addABitSuperiorSortCriterion( SpotSortCriterion::VelocityConformance, 0.5f );
+		addSortCriterion( SpotSortCriterion::VelocityConformance, 3 );
 		modifyScoreByVelocityConformance( candidateSpots, *maybeVelocityDir );
 	}
 

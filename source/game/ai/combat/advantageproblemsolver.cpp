@@ -4,13 +4,14 @@
 
 AdvantageProblemSolver::AdvantageProblemSolver( const OriginParams &originParams_, const ProblemParams &problemParams_ )
 	: TacticalSpotsProblemSolver( originParams_, problemParams_ ), problemParams( problemParams_ ) {
-	addSuperiorSortCriterion( SpotSortCriterion::SpotVisImpact );
-	addABitSuperiorSortCriterion( SpotSortCriterion::OriginDistance, 0.0f );
-	addABitSuperiorSortCriterion( SpotSortCriterion::EntityDistance, 0.0f );
-	addABitSuperiorSortCriterion( SpotSortCriterion::HeightOverOrigin, 0.0f );
-	addABitSuperiorSortCriterion( SpotSortCriterion::HeightOverEntity, 0.0f );
-	addABitSuperiorSortCriterion( SpotSortCriterion::TravelTime, 0.5f );
-	addABitSuperiorSortCriterion( SpotSortCriterion::EnemyVisImpact, 0.5f );
+	// Strongest criteria must come last
+	addSortCriterion( SpotSortCriterion::SpotVisImpact, 3 );
+	addSortCriterion( SpotSortCriterion::OriginDistance, 3 );
+	addSortCriterion( SpotSortCriterion::EntityDistance, 3 );
+	addSortCriterion( SpotSortCriterion::HeightOverOrigin, 2 );
+	addSortCriterion( SpotSortCriterion::HeightOverEntity, 2 );
+	addSortCriterion( SpotSortCriterion::TravelTime, 5 );
+	addSortCriterion( SpotSortCriterion::EnemyVisImpact, 3 );
 }
 
 int AdvantageProblemSolver::findMany( vec3_t *spots, int maxSpots ) {

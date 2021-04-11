@@ -4,8 +4,9 @@
 
 CoverProblemSolver::CoverProblemSolver( const OriginParams &originParams_, const ProblemParams &problemParams_ )
 	: TacticalSpotsProblemSolver( originParams_, problemParams_ ), problemParams( problemParams_ ) {
-	addSuperiorSortCriterion( SpotSortCriterion::TravelTime );
-	addABitSuperiorSortCriterion( SpotSortCriterion::EnemyVisImpact, 0.5f );
+	// Strongest criteria must come last
+	addSortCriterion( SpotSortCriterion::TravelTime, 3 );
+	addSortCriterion( SpotSortCriterion::EnemyVisImpact, 3 );
 }
 
 int CoverProblemSolver::findMany( vec3_t *spots, int maxSpots ) {

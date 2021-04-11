@@ -374,27 +374,29 @@ void TacticalSpotsProblemSolver::sortImpl( SpotLikeVector &v ) {
 	auto cmp = [this]( const auto &lhs, const auto &rhs ) {
 		const CriteriaScores &__restrict leftScores = this->scores[lhs.scoreIndex];
 		const CriteriaScores &__restrict rightScores = this->scores[rhs.scoreIndex];
-		const float valScale = 5.0f;
-		// Start from the superior criterion and continue while we can access an inferior element
-		for( unsigned i = criteria.size(); i-- > 1; ) {
-			const auto [criterion, separation] = criteria[i];
-			const float frac = 0.5f + 0.5f * separation;
-			const float fracComplement = 1.0f - frac;
-			const auto inferiorCriterion = criteria[i - 1].criterion;
-			float leftVal = leftScores.get( criterion ) * frac + leftScores.get( inferiorCriterion ) * fracComplement;
-			float rightVal = rightScores.get( criterion ) * frac + rightScores.get( inferiorCriterion ) * fracComplement;
+
+		// Perform a lexicographical comparison of criteria scores.
+		// Start comparing from the strongest criterion that is assumed to come last.
+		for( unsigned i = criteria.size(); i-- >= 1; ) {
+			const auto [criterion, valueGroupsDistinctionScale] = criteria[i];
+			const float leftVal = leftScores.get( criterion );
+			const float rightVal = rightScores.get( criterion );
 			// Convert to integer to ignore minor differences assuming values are within a small float range
 			assert( std::fabs( leftVal ) < 1.01f );
 			assert( std::fabs( rightVal ) < 1.01f );
-			const int comparedLeftVal = (int)( valScale * leftVal );
-			const int comparedRightVal = (int)( valScale * rightVal );
-			// Best spots should be first in an ascending order
-			if( comparedLeftVal > comparedRightVal ) {
-				return true;
+			assert( valueGroupsDistinctionScale > 1 );
+			// Values should belong to the [-valueGroupsDistinctionScale, +valueGroupsDistinctionScale] range
+			const int comparedLeftVal = (int)( valueGroupsDistinctionScale * leftVal );
+			const int comparedRightVal = (int)( valueGroupsDistinctionScale * rightVal );
+			// A mismatch means that we have to yield a result
+			if( comparedLeftVal != comparedRightVal ) {
+				// Best spots should come first in a sequence of spots sorted by this comparator
+				return comparedLeftVal > comparedRightVal;
 			}
 		}
-		auto criterion = criteria.front().criterion;
-		return (int)( valScale * leftScores.get( criterion ) ) > (int)( valScale * rightScores.get( criterion ) );
+
+		// There were no mismatching criteria, this means `<` must return false
+		return false;
 	};
 
 	std::sort( v.begin(), v.end(), cmp );

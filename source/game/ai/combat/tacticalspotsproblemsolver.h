@@ -128,13 +128,9 @@ protected:
 	void sort( SpotsAndScoreVector &v );
 	void sort( OriginAndScoreVector &v );
 
-	void addSuperiorSortCriterion( SpotSortCriterion criterion ) {
-		addABitSuperiorSortCriterion( criterion, 1.0f );
-	}
-
-	void addABitSuperiorSortCriterion( SpotSortCriterion criterion, float separation ) {
-		assert( separation >= 0.0f && separation <= 1.0f );
-		criteria.push_back( { criterion, separation } );
+	void addSortCriterion( SpotSortCriterion criterion, int distinctGroupsScale ) {
+		assert( distinctGroupsScale > 1 );
+		criteria.push_back( { criterion, distinctGroupsScale } );
 		unsigned bit = 1u << (unsigned)criterion;
 		assert( !( addedCriteriaMask & bit ) );
 		addedCriteriaMask |= bit;
@@ -145,13 +141,13 @@ private:
 	template <typename SpotsAndScores>
 	int makeResultsPruningByProximityImpl( const SpotsAndScores &spotsAndScores, vec3_t *origins, int maxSpots );
 
-	struct AddedCriterion {
-		SpotSortCriterion criterion;
-		float separation;
-	};
-
 	// For debugging
 	unsigned addedCriteriaMask { 0 };
+
+	struct AddedCriterion {
+		SpotSortCriterion criterion;
+		int valueGroupsDistinctionScale;
+	};
 
 	// TODO: Use magic_enum
 	wsw::StaticVector<AddedCriterion, 9> criteria;
