@@ -17,7 +17,37 @@ Item {
             onClicked: wsw.showMainMenu()
         }
         InGameButton {
-            text: hudDataModel.isSpectator ? "Join" : "Spectate"
+            visible: (!hudDataModel.hasTwoTeams && wsw.canJoin) ||
+                     (hudDataModel.hasTwoTeams && wsw.canJoinAlpha && wsw.canJoinBeta)
+            text: "Join"
+            onClicked: {
+                wsw.join()
+                wsw.returnFromInGameMenu()
+            }
+        }
+        InGameButton {
+            visible: wsw.canJoinAlpha
+            text: "Join '" + hudDataModel.alphaName + "'"
+            onClicked: {
+                wsw.joinAlpha()
+                wsw.returnFromInGameMenu()
+            }
+        }
+        InGameButton {
+            visible: wsw.canJoinBeta
+            text: "Join '" + hudDataModel.betaName + "'"
+            onClicked: {
+                wsw.joinBeta()
+                wsw.returnFromInGameMenu()
+            }
+        }
+        InGameButton {
+            visible: wsw.canSpectate
+            text: "Spectate"
+            onClicked: {
+                wsw.spectate()
+                wsw.returnFromInGameMenu()
+            }
         }
         InGameButton {
             text: "Disconnect"

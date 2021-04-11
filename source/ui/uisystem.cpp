@@ -53,6 +53,8 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 // Hacks
 bool CG_IsSpectator();
 bool CG_HasActiveChasePov();
+bool CG_HasTwoTeams();
+int CG_MyRealTeam();
 
 namespace wsw::ui {
 
@@ -122,6 +124,15 @@ public:
 	bool isOperator() const { return m_lastFrameState.isOperator; }
 
 	[[nodiscard]]
+	auto getCanJoin() const { return m_canJoin; }
+	[[nodiscard]]
+	auto getCanJoinAlpha() const { return m_canJoinAlpha; }
+	[[nodiscard]]
+	auto getCanJoinBeta() const { return m_canJoinBeta; }
+	[[nodiscard]]
+	auto getCanSpectate() const { return m_canSpectate; }
+
+	[[nodiscard]]
 	bool isShown() const override;
 
 	void enterUIRenderingMode();
@@ -177,6 +188,23 @@ public:
 
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
+
+	Q_INVOKABLE void spectate();
+	Q_INVOKABLE void join();
+	Q_INVOKABLE void joinAlpha();
+	Q_INVOKABLE void joinBeta();
+
+	Q_SIGNAL void canSpectateChanged( bool canSpectate );
+	Q_PROPERTY( bool canSpectate READ getCanSpectate NOTIFY canSpectateChanged );
+
+	Q_SIGNAL void canJoinChanged( bool canJoin );
+	Q_PROPERTY( bool canJoin READ getCanJoin NOTIFY canJoinChanged );
+
+	Q_SIGNAL void canJoinAlphaChanged( bool canJoinAlpha );
+	Q_PROPERTY( bool canJoinAlpha READ getCanJoinAlpha NOTIFY canJoinAlphaChanged );
+
+	Q_SIGNAL void canJoinBetaChanged( bool canJoinBeta );
+	Q_PROPERTY( bool canJoinBeta READ getCanJoinBeta NOTIFY canJoinBetaChanged );
 
 	Q_INVOKABLE QVariant colorFromRgbString( const QString &string ) const;
 
@@ -298,6 +326,11 @@ private:
 	bool m_hasTeamChat { false };
 	bool m_isShowingPovHud { false };
 	bool m_isShowingHud { false };
+
+	bool m_canJoin { false };
+	bool m_canSpectate { false };
+	bool m_canJoinAlpha { false };
+	bool m_canJoinBeta { false };
 
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
@@ -951,6 +984,36 @@ void QtUISystem::checkPropertyChanges() {
 		m_debugNativelyDrawnItemsVar->modified = false;
 	}
 
+	const bool oldCanSpectate = m_canSpectate;
+	const bool oldCanJoin = m_canJoin;
+	const bool oldCanJoinAlpha = m_canJoinAlpha;
+	const bool oldCanJoinBeta = m_canJoinBeta;
+
+	// TODO: This is fine for now but something more sophisticated should be really used
+	m_canSpectate = m_canJoin = m_canJoinAlpha = m_canJoinBeta = false;
+	if( actualClientState == CA_ACTIVE && GS_MatchState() <= MATCH_STATE_PLAYTIME ) {
+		const int team = CG_MyRealTeam();
+		m_canSpectate = team != TEAM_SPECTATOR;
+		m_canJoin = team == TEAM_SPECTATOR;
+		if( CG_HasTwoTeams() ) {
+			m_canJoinAlpha = team != TEAM_ALPHA;
+			m_canJoinBeta = team != TEAM_BETA;
+		}
+	}
+
+	if( oldCanSpectate != m_canSpectate ) {
+		Q_EMIT canSpectateChanged( m_canSpectate );
+	}
+	if( oldCanJoin != m_canJoin ) {
+		Q_EMIT canJoinChanged( m_canJoin );
+	}
+	if( oldCanJoinAlpha != m_canJoinAlpha ) {
+		Q_EMIT canJoinAlphaChanged( m_canJoinAlpha );
+	}
+	if( oldCanJoinBeta != m_canJoinBeta ) {
+		Q_EMIT canJoinBetaChanged( m_canJoinBeta );
+	}
+
 	m_keysAndBindingsModel.checkUpdates();
 	m_demoPlayer.checkUpdates();
 	m_actionRequestsModel.update();
@@ -1403,6 +1466,26 @@ void QtUISystem::quit() {
 
 void QtUISystem::disconnect() {
 	Cbuf_AddText( "disconnect" );
+}
+
+void QtUISystem::spectate() {
+	assert( getCanSpectate() );
+	Cbuf_AddText( "spec" );
+}
+
+void QtUISystem::join() {
+	assert( getCanJoin() );
+	Cbuf_AddText( "join" );
+}
+
+void QtUISystem::joinAlpha() {
+	assert( getCanJoinAlpha() );
+	Cbuf_AddText( "join alpha" );
+}
+
+void QtUISystem::joinBeta() {
+	assert( getCanJoinBeta() );
+	Cbuf_AddText( "join beta" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {

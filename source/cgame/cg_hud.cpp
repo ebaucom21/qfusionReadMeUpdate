@@ -585,6 +585,10 @@ bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype() && !GS_InvidualGameType();
 }
 
+int CG_MyRealTeam() {
+	return cg.predictedPlayerState.stats[STAT_REALTEAM];
+}
+
 int CG_ActiveWeapon() {
 	return cg.predictedPlayerState.stats[STAT_WEAPON];
 }
