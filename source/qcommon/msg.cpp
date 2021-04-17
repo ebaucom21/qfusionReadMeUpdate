@@ -1242,6 +1242,10 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		64, 1, WIRE_BASE128
 	},
 	{
+		offsetof( ReplicatedScoreboardData, playersFlagsMask ),
+		64, 1, WIRE_BASE128
+	},
+	{
 		offsetof( ReplicatedScoreboardData, alphaScore ),
 		32, 1, WIRE_BASE128
 	},
@@ -1258,7 +1262,11 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		16, MAX_CLIENTS * ReplicatedScoreboardData::kMaxShortSlots, WIRE_BASE128
 	},
 	{
-		offsetof( ReplicatedScoreboardData, playerNumsAndFlagBits ),
+		offsetof( ReplicatedScoreboardData, packedPlayerSpecificData ),
+		32, MAX_CLIENTS, WIRE_BASE128
+	},
+	{
+		offsetof( ReplicatedScoreboardData, locations ),
 		8, MAX_CLIENTS, WIRE_FIXED_INT8
 	}
 };

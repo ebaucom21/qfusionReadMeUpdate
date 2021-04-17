@@ -145,10 +145,10 @@ typedef struct {
 #define ANGLE2BYTE( x )     ( (int)( ( x ) * 256 / 360 ) & 255 )
 #define BYTE2ANGLE( x )     ( ( x ) * ( 360.0 / 256 ) )
 
-#define MAX_GAMECOMMANDS    256     // command names for command completion
-#define MAX_LOCATIONS       256
+#define MAX_GAMECOMMANDS    64     // command names for command completion
+#define MAX_LOCATIONS       128
 #define MAX_WEAPONDEFS      MAX_ITEMS
-#define MAX_HELPMESSAGES    256
+#define MAX_HELPMESSAGES    64
 
 //
 // config strings are a general means of communication from
@@ -231,9 +231,10 @@ protected:
 		Icon,
 	};
 
-	static constexpr uint8_t kPlayerNumMask = ( 1u << 5u ) - 1u;
-	static constexpr uint8_t kFlagBitConnected = 1u << 5u;
-	static constexpr uint8_t kFlagBitGhosting = 1u << 6u;
+	// We prefer declaring these as plain constants due to name clash with Q_ENUM in the client scoreboard
+	static constexpr unsigned kPowerupBitQuad  = 0x1;
+	static constexpr unsigned kPowerupBitShell = 0x2;
+	static constexpr unsigned kPowerupBitRegen = 0x4;
 
 	// Don't imply that player indices are client numbers (they have the same range but are sorted by score)
 	static constexpr unsigned kMaxPlayers = MAX_CLIENTS;
@@ -453,12 +454,73 @@ typedef struct {
 } game_state_t;
 
 struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
+private:
+	[[nodiscard]]
+	static auto packWord( unsigned currentPacked, unsigned word, unsigned mask, unsigned shift ) -> unsigned {
+		assert( !( mask & ( mask + 1 ) ) );
+		assert( shift < 32u );
+		assert( !( word & ~mask ) );
+		word = word << shift;
+		mask = mask << shift;
+		return ( currentPacked & ~mask ) | word;
+	}
+
+	[[nodiscard]]
+	static auto unpackWord( unsigned packed, unsigned mask, unsigned shift ) -> unsigned {
+		assert( !( mask & ( mask + 1 ) ) );
+		assert( shift < 32u );
+		return ( packed >> shift ) & mask;
+	}
+
+	// Player num occupies first 5 bits
+	static constexpr unsigned kPlayerNumShift = 0u;
+	static constexpr unsigned kPlayerNumMask = ( ( 1u << 5u ) - 1u );
+	// Health starts from the 8th bit and occupies 10 bits
+	static constexpr unsigned kHealthShift = 5u;
+	static constexpr unsigned kHealthMask = ( ( 1u << 10u ) - 1u );
+	// Weapon occupies 4 next bits to the left
+	static constexpr unsigned kWeaponShift = kHealthShift + 10u;
+	static constexpr unsigned kWeaponMask = ( ( 1u << 4u ) - 1u );
+	// Armor occupies 10 next bits to the left
+	static constexpr unsigned kArmorShift = kWeaponShift + 4u;
+	static constexpr unsigned kArmorMask = ( ( 1u << 10u ) - 1u );
+	// Powerup statuses occupy leftmost 3 bits
+	static constexpr unsigned kPowerupsShift = kArmorShift + 10u;
+	static constexpr unsigned kPowerupsMask = ( ( 1u << 3u ) - 1u );
+	static_assert( kPowerupsShift + 3u <= 32u );
+
+	void setPlayerFlagBit( unsigned playerIndex, unsigned flagBit, bool set ) {
+		assert( (unsigned)playerIndex < (unsigned)kMaxPlayers );
+		assert( flagBit == 1 || flagBit == 2 );
+		const uint64_t bitMask = ( (uint64_t)flagBit ) << ( 2 * playerIndex );
+		if( set ) {
+			playersFlagsMask |= bitMask;
+		} else {
+			playersFlagsMask &= ~bitMask;
+		}
+	}
+
+	[[nodiscard]]
+	bool testPlayerFlagBit( unsigned playerIndex, unsigned flagBit ) const {
+		assert( (unsigned)playerIndex < (unsigned)kMaxPlayers );
+		assert( flagBit == 1 || flagBit == 2 );
+		return ( ( playersFlagsMask >> ( 2 * playerIndex ) ) & flagBit ) != 0;
+	}
+
+	static constexpr unsigned kFlagBitConnected = 0x1;
+	static constexpr unsigned kFlagBitGhosting  = 0x2;
+public:
+	// Transmitted separately for historical reason, and lately - for reasons described in the locations remark.
 	uint64_t playersTeamMask;
+	// See locations remark
+	uint64_t playersFlagsMask;
 	int alphaScore;
 	int betaScore;
 	int scores[kMaxPlayers];
 	short values[kMaxPlayers * kMaxShortSlots];
-	uint8_t playerNumsAndFlagBits[kMaxPlayers];
+	uint32_t packedPlayerSpecificData[kMaxPlayers];
+	// Locations are transmitted separately since they can't fit preferred 32 bit of packed player data
+	uint8_t locations[kMaxPlayers];
 
 	using wsw::ScoreboardShared::kMaxShortSlots;
 
@@ -498,22 +560,102 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 		return (int)( ( playersTeamMask >> ( 2 * playerIndex ) ) & 0x3u );
 	}
 
+	void setPlayerNum( unsigned playerIndex, unsigned num ) {
+		assert( playerIndex < (unsigned)kMaxPlayers && num < MAX_CLIENTS );
+		auto &packed = packedPlayerSpecificData[playerIndex];
+		packed = packWord( packed, num, kPlayerNumMask, kPlayerNumShift );
+	}
+
 	[[nodiscard]]
 	auto getPlayerNum( unsigned playerIndex ) const -> unsigned {
 		assert( playerIndex < (unsigned)kMaxPlayers );
-		return (unsigned)( playerNumsAndFlagBits[playerIndex] & kPlayerNumMask );
+		return unpackWord( packedPlayerSpecificData[playerIndex], kPlayerNumMask, kPlayerNumShift );
+	}
+
+	void setPlayerHealth( unsigned playerIndex, int health ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS && (unsigned)health < 1024u );
+		auto &packed = packedPlayerSpecificData[playerIndex];
+		packed = packWord( packed, (unsigned)health, kHealthMask, kHealthShift );
+	}
+
+	[[nodiscard]]
+	auto getPlayerHealth( unsigned playerIndex ) const -> unsigned {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return (uint16_t)unpackWord( packedPlayerSpecificData[playerIndex], kHealthMask, kHealthShift );
+	}
+
+	void setPlayerArmor( unsigned playerIndex, int armor ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS && (unsigned)armor < 1024u );
+		auto &packed = packedPlayerSpecificData[playerIndex];
+		packed = packWord( packed, (unsigned)armor, kArmorMask, kArmorShift );
+	}
+
+	[[nodiscard]]
+	auto getPlayerArmor( unsigned playerIndex ) const -> unsigned {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return (uint16_t)unpackWord( packedPlayerSpecificData[playerIndex], kArmorMask, kArmorShift );
+	}
+
+	void setPlayerWeapon( unsigned playerIndex, int weapon ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS && (unsigned)weapon < 16u );
+		auto &packed = packedPlayerSpecificData[playerIndex];
+		packed = packWord( packed, (unsigned)weapon, kWeaponMask, kWeaponShift );
+	}
+
+	[[nodiscard]]
+	auto getPlayerWeapon( unsigned playerIndex ) const -> unsigned {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return (uint8_t)unpackWord( packedPlayerSpecificData[playerIndex], kWeaponMask, kWeaponShift );
+	}
+
+	void setPlayerPowerupsBits( unsigned playerIndex, unsigned powerupBits ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS && powerupBits < 8 );
+		auto &packed = packedPlayerSpecificData[playerIndex];
+		packed = packWord( packed, powerupBits, kPowerupsMask, kPowerupsShift );
+	}
+
+	[[nodiscard]]
+	auto getPlayerPowerupBits( unsigned playerIndex ) -> unsigned {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return unpackWord( packedPlayerSpecificData[playerIndex], kPowerupsMask, kPowerupsShift );
+	}
+
+	void setPlayerLocation( unsigned playerIndex, unsigned location ) {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		assert( location < (unsigned)MAX_LOCATIONS );
+		static_assert( (unsigned)MAX_LOCATIONS <= std::numeric_limits<uint8_t>::max() );
+		locations[playerIndex] = location;
+	}
+
+	[[nodiscard]]
+	auto getPlayerLocation( unsigned playerIndex ) const -> unsigned {
+		assert( playerIndex < (unsigned)MAX_CLIENTS );
+		return locations[playerIndex];
+	}
+
+	void shadowPrivateData( unsigned playerIndex ) {
+		setPlayerHealth( playerIndex, 0 );
+		setPlayerArmor( playerIndex, 0 );
+		setPlayerWeapon( playerIndex, 0 );
+		setPlayerLocation( playerIndex, 0 );
+	}
+
+	void setPlayerConnected( unsigned playerIndex, bool connected ) {
+		setPlayerFlagBit( playerIndex, kFlagBitConnected, connected );
 	}
 
 	[[nodiscard]]
 	bool isPlayerConnected( unsigned playerIndex ) const {
-		assert( playerIndex < (unsigned)kMaxPlayers );
-		return ( playerNumsAndFlagBits[playerIndex] & kFlagBitConnected ) != 0;
+		return testPlayerFlagBit( playerIndex, kFlagBitConnected );
+	}
+
+	void setPlayerGhosting( unsigned playerIndex, bool ghosting ) {
+		setPlayerFlagBit( playerIndex, kFlagBitGhosting, ghosting );
 	}
 
 	[[nodiscard]]
 	bool isPlayerGhosting( unsigned playerIndex ) const {
-		assert( playerIndex < (unsigned)kMaxPlayers );
-		return ( playerNumsAndFlagBits[playerIndex] & kFlagBitGhosting ) != 0;
+		return testPlayerFlagBit( playerIndex, kFlagBitGhosting );
 	}
 
 	void copyThatRow( unsigned destRow, const ReplicatedScoreboardData &that, unsigned thatSrcRow ) {
@@ -523,7 +665,8 @@ struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 			setPlayerShort( destRow, slot, that.getPlayerShort( thatSrcRow, slot ) );
 			assert( getPlayerShort( destRow, slot ) == that.getPlayerShort( thatSrcRow, slot ) );
 		}
-		playerNumsAndFlagBits[destRow] = that.playerNumsAndFlagBits[thatSrcRow];
+		packedPlayerSpecificData[destRow] = that.packedPlayerSpecificData[thatSrcRow];
+		locations[destRow] = that.locations[thatSrcRow];
 	}
 };
 

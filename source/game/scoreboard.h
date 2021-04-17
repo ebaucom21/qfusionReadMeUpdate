@@ -50,7 +50,7 @@ public:
 	static auto instance() -> Scoreboard *;
 
 	[[nodiscard]]
-	auto getRawReplicatedData() const -> const ReplicatedScoreboardData * {
+	auto getRawReplicatedData() -> ReplicatedScoreboardData * {
 		return &m_replicatedData;
 	}
 

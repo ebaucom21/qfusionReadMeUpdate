@@ -293,6 +293,10 @@ void Scoreboard::endUpdating() {
 	alignas( 16 ) NumAndScore sortHandles[kMaxPlayers];
 	std::memset( sortHandles, 0, sizeof( sortHandles ) );
 
+	bool isPlayerConnected[kMaxPlayers], isPlayerGhosting[kMaxPlayers];
+	std::fill( std::begin( isPlayerConnected ), std::end( isPlayerConnected ), false );
+	std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
+
 	// Set ready status automatically for now
 	const bool shouldSetReadyStatusIcon = ( !GS_RaceGametype() && GS_MatchState() < MATCH_STATE_COUNTDOWN );
 	const bool *const readyStates = level.ready;
@@ -303,8 +307,8 @@ void Scoreboard::endUpdating() {
 		const auto *const ent = playerEnts + playerNum;
 		// Indices and client numbers match 1-1 at this stage.
 		const auto playerIndex = playerNum;
-		m_replicatedData.playerNumsAndFlagBits[playerIndex] = playerNum;
-		m_replicatedData.playerNumsAndFlagBits[playerIndex] |= kFlagBitGhosting;
+		assert( !m_replicatedData.packedPlayerSpecificData[playerIndex] );
+		m_replicatedData.setPlayerNum( playerIndex, playerNum );
 		sortHandles[playerIndex].num = playerNum;
 		int16_t ping = 999;
 		int score = std::numeric_limits<int32_t>::min();
@@ -312,12 +316,28 @@ void Scoreboard::endUpdating() {
 			const auto *const client = ent->r.client;
 			const auto clientState = trap_GetClientState( (int)playerNum );
 			if( clientState >= CS_CONNECTING ) {
-				m_replicatedData.playerNumsAndFlagBits[playerIndex] |= kFlagBitConnected;
-				ping = client->r.ping;
+				isPlayerConnected[playerIndex] = true;
+				ping = (int16_t)client->r.ping;
 				if( clientState == CS_SPAWNED && ent->s.team > TEAM_SPECTATOR ) {
 					score = client->level.stats.score;
 					if( !G_ISGHOSTING( ent ) ) {
-						m_replicatedData.playerNumsAndFlagBits[playerIndex] &= ~kFlagBitGhosting;
+						isPlayerGhosting[playerIndex] = false;
+						const int health = std::clamp( HEALTH_TO_INT( ent->health ), 0, 999 );
+						m_replicatedData.setPlayerHealth( playerIndex, health );
+						const int armor = std::clamp( ARMOR_TO_INT( client->resp.armor ), 0, 999 );
+						m_replicatedData.setPlayerArmor( playerIndex, armor );
+						assert( (unsigned)client->ps.stats[STAT_WEAPON] < 16u );
+						m_replicatedData.setPlayerWeapon( playerIndex, client->ps.stats[STAT_WEAPON] );
+						if( ent->s.team > TEAM_SPECTATOR && !G_IsDead( ent ) ) {
+							if( const int location = G_MapLocationTAGForOrigin( ent->s.origin ); location >= 0 ) {
+								m_replicatedData.setPlayerLocation( playerIndex, (unsigned)location );
+							}
+							unsigned powerupBits = 0;
+							powerupBits |= client->ps.stats[POWERUP_QUAD] ? kPowerupBitQuad : 0;
+							powerupBits |= client->ps.stats[POWERUP_SHELL] ? kPowerupBitShell : 0;
+							powerupBits |= client->ps.stats[POWERUP_REGEN] ? kPowerupBitRegen : 0;
+							m_replicatedData.setPlayerPowerupsBits( playerIndex, powerupBits );
+						}
 					}
 				}
 			}
@@ -353,17 +373,21 @@ void Scoreboard::endUpdating() {
 
 	const ReplicatedScoreboardData unsortedData( m_replicatedData );
 	m_replicatedData.playersTeamMask = 0;
+	m_replicatedData.playersFlagsMask = 0;
 
 	static_assert( kMaxPlayers == (unsigned)MAX_CLIENTS );
-	for( unsigned i = 0; i < kMaxPlayers; ++i ) {
-		[[maybe_unused]] const auto [playerNum, score] = sortHandles[i];
+	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
+		[[maybe_unused]] const auto [playerNum, score] = sortHandles[playerIndex];
 		assert( score == unsortedData.scores[playerNum] );
-		if( i != playerNum ) {
+		if( playerIndex != playerNum ) {
 			// Copy the old row for the player to its place in the sorting order
-			m_replicatedData.copyThatRow( i, unsortedData, playerNum );
+			m_replicatedData.copyThatRow( playerIndex, unsortedData, playerNum );
 		}
 		// Set team bits for actual indices
-		m_replicatedData.setPlayerTeam( i, playerEnts[playerNum].s.team );
+		m_replicatedData.setPlayerTeam( playerIndex, playerEnts[playerNum].s.team );
+		// Set flags for actual indices
+		m_replicatedData.setPlayerConnected( playerIndex, isPlayerConnected[playerNum] );
+		m_replicatedData.setPlayerGhosting( playerIndex, isPlayerGhosting[playerNum] );
 	}
 
 	// Now all player rows are sorted by scores in a desired order.
