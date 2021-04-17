@@ -32,6 +32,8 @@
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QUrl>
+#include <QPointer>
+#include <QScopedPointer>
 
 #include <clocale>
 
@@ -252,17 +254,25 @@ public slots:
 
 	Q_SLOT void onComponentStatusChanged( QQmlComponent::Status status );
 private:
+	static inline QGuiApplication *s_application { nullptr };
+	static inline int s_fakeArgc { 0 };
+	static inline char **s_fakeArgv { nullptr };
+	static inline QString s_charStrings[128];
+	static inline cvar_t *s_sensitivityVar { nullptr };
+	static inline cvar_t *s_mouseAccelVar { nullptr };
+	static inline cvar_t *s_debugNativelyDrawnItemsVar { nullptr };
+
 	int64_t m_lastActiveMaskTime { 0 };
-	QGuiApplication *m_application { nullptr };
-	QOpenGLContext *m_externalContext { nullptr };
-	QOpenGLContext *m_sharedContext { nullptr };
-	QQuickRenderControl *m_control { nullptr };
-	QOpenGLFramebufferObject *m_framebufferObject { nullptr };
-	QOffscreenSurface *m_surface { nullptr };
-	QQuickWindow *m_window { nullptr };
-	QQmlEngine *m_engine { nullptr };
-	QQmlComponent *m_component { nullptr };
+	QPointer<QOpenGLContext> m_externalContext;
+	QPointer<QOpenGLContext> m_sharedContext;
+	QPointer<QQuickRenderControl> m_control;
+	QScopedPointer<QOpenGLFramebufferObject> m_framebufferObject;
+	QPointer<QOffscreenSurface> m_surface { nullptr };
+	QPointer<QQuickWindow> m_window { nullptr };
+	QPointer<QQmlEngine> m_engine;
+	QPointer<QQmlComponent> m_component;
 	GLuint m_vao { 0 };
+
 	bool m_hasPendingSceneChange { false };
 	bool m_hasPendingRedraw { false };
 	bool m_isInUIRenderingMode { false };
@@ -335,13 +345,7 @@ private:
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
 
-	cvar_t *m_sensitivityVar { nullptr };
-	cvar_t *m_mouseAccelVar { nullptr };
-	cvar_t *m_debugNativelyDrawnItemsVar { nullptr };
-
 	qreal m_mouseXY[2] { 0.0, 0.0 };
-
-	QString m_charStrings[128];
 
 	NativelyDrawn *m_nativelyDrawnListHead { nullptr };
 
@@ -354,6 +358,10 @@ private:
 	QSet<QQuickItem *> m_cvarAwareControls;
 
 	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
+
+	static void initPersistentPart();
+	static void registerCustomQmlTypes();
+	void registerContextProperties( QQmlContext *context );
 
 	[[nodiscard]]
 	static auto colorForNum( int num ) -> QColor {
@@ -422,10 +430,90 @@ private:
 	auto convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key>;
 };
 
+[[nodiscard]]
+static bool isAPrintableChar( int ch ) {
+	// See https://en.cppreference.com/w/cpp/string/byte/isprint
+	return ch >= 0 &&  ch <= 127 && std::isprint( (unsigned char)ch );
+}
+
+void QtUISystem::initPersistentPart() {
+	if( !s_application ) {
+		s_application = new QGuiApplication( s_fakeArgc, s_fakeArgv );
+		// Fix the overwritten locale, if any
+		(void)std::setlocale( LC_ALL, "C" );
+
+		registerCustomQmlTypes();
+
+		// Initialize the table of textual strings corresponding to characters
+		for( const QString &s: s_charStrings ) {
+			const auto offset = (int)( std::addressof( s ) - s_charStrings );
+			if( isAPrintableChar( offset ) ) {
+				s_charStrings[offset] = QString::asprintf( "%c", (char)offset );
+			}
+		}
+
+		s_sensitivityVar = Cvar_Get( "ui_sensitivity", "1.0", CVAR_ARCHIVE );
+		s_mouseAccelVar = Cvar_Get( "ui_mouseAccel", "0.25", CVAR_ARCHIVE );
+		s_debugNativelyDrawnItemsVar = Cvar_Get( "ui_debugNativelyDrawnItems", "0", 0 );
+	}
+}
+
+void QtUISystem::registerCustomQmlTypes() {
+	const QString reason( "This type is a native code bridge and cannot be instantiated" );
+	const char *const uri = "net.warsow";
+	qmlRegisterUncreatableType<QtUISystem>( uri, 2, 6, "Wsw", reason );
+	qmlRegisterUncreatableType<ChatModel>( uri, 2, 6, "ChatModel", reason );
+	qmlRegisterUncreatableType<CallvotesListModel>( uri, 2, 6, "CallvotesModel", reason );
+	qmlRegisterUncreatableType<GametypeDef>( uri, 2, 6, "GametypeDef", reason );
+	qmlRegisterUncreatableType<GametypesModel>( uri, 2, 6, "GametypesModel", reason );
+	qmlRegisterUncreatableType<ScoreboardModelProxy>( uri, 2, 6, "Scoreboard", reason );
+	qmlRegisterUncreatableType<ScoreboardTeamModel>( uri, 2, 6, "ScoreboardTeamModel", reason );
+	qmlRegisterUncreatableType<ScoreboardSpecsModel>( uri, 2, 6, "ScoreboardSpecsModel", reason );
+	qmlRegisterUncreatableType<KeysAndBindingsModel>( uri, 2, 6, "KeysAndBindings", reason );
+	qmlRegisterUncreatableType<ServerListModel>( uri, 2, 6, "ServerListModel", reason );
+	qmlRegisterUncreatableType<DemosResolver>( uri, 2, 6, "DemosResolver", reason );
+	qmlRegisterUncreatableType<DemoPlayer>( uri, 2, 6, "DemoPlayer", reason );
+	qmlRegisterUncreatableType<GametypeOptionsModel>( uri, 2, 6, "GametypeOptionsModel", reason );
+	qmlRegisterUncreatableType<HudLayoutModel>( uri, 2, 6, "HudLayoutModel", reason );
+	qmlRegisterUncreatableType<HudEditorLayoutModel>( uri, 2, 6, "HudEditorLayoutModel", reason );
+	qmlRegisterUncreatableType<InGameHudLayoutModel>( uri, 2, 6, "InGameHudLayoutModel", reason );
+	qmlRegisterUncreatableType<HudDataModel>( uri, 2, 6, "HudDataModel", reason );
+	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
+	qmlRegisterType<NativelyDrawnModel>( uri, 2, 6, "NativelyDrawnModel_Native" );
+}
+
+void QtUISystem::registerContextProperties( QQmlContext *context ) {
+	context->setContextProperty( "wsw", this );
+	context->setContextProperty( "serverListModel", &m_serverListModel );
+	context->setContextProperty( "keysAndBindings", &m_keysAndBindingsModel );
+	context->setContextProperty( "gametypesModel", &m_gametypesModel );
+	context->setContextProperty( "compactChatModel", m_chatModel.getCompactModel() );
+	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
+	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
+	context->setContextProperty( "richTeamChatModel", m_teamChatModel.getRichModel() );
+	context->setContextProperty( "regularCallvotesModel", m_callvotesModel.getRegularModel() );
+	context->setContextProperty( "operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
+	context->setContextProperty( "scoreboard", &m_scoreboardModel );
+	context->setContextProperty( "scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
+	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
+	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
+	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
+	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
+	context->setContextProperty( "demosModel", &m_demosModel );
+	context->setContextProperty( "demosResolver", &m_demosResolver );
+	context->setContextProperty( "demoPlayer", &m_demoPlayer );
+	context->setContextProperty( "playersModel", &m_playersModel );
+	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
+	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
+	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
+	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
+	context->setContextProperty( "hudDataModel", &m_hudDataModel );
+}
+
 void QtUISystem::onSceneGraphInitialized() {
 	auto attachment = QOpenGLFramebufferObject::CombinedDepthStencil;
-	m_framebufferObject = new QOpenGLFramebufferObject( m_window->size(), attachment );
-	m_window->setRenderTarget( m_framebufferObject );
+	m_framebufferObject.reset( new QOpenGLFramebufferObject( m_window->size(), attachment ) );
+	m_window->setRenderTarget( m_framebufferObject.get() );
 }
 
 void QtUISystem::onRenderRequested() {
@@ -511,21 +599,8 @@ void QtUISystem::refresh( unsigned refreshFlags ) {
 	leaveUIRenderingMode();
 }
 
-static bool isAPrintableChar( int ch ) {
-	if( ch < 0 || ch > 127 ) {
-		return false;
-	}
-
-	// See https://en.cppreference.com/w/cpp/string/byte/isprint
-	return std::isprint( (unsigned char)ch );
-}
-
 QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
-	int fakeArgc = 0;
-	char *fakeArgv[] = { nullptr };
-	m_application = new QGuiApplication( fakeArgc, fakeArgv );
-	// Fix the overwritten locale, if any
-	(void)std::setlocale( LC_ALL, "C" );
+	initPersistentPart();
 
 	QSurfaceFormat format;
 	format.setDepthBufferSize( 24 );
@@ -590,74 +665,15 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 		return;
 	}
 
-	const QString reason( "This type is a native code bridge and cannot be instantiated" );
-	qmlRegisterUncreatableType<QtUISystem>( "net.warsow", 2, 6, "Wsw", reason );
-	qmlRegisterUncreatableType<ChatModel>( "net.warsow", 2, 6, "ChatModel", reason );
-	qmlRegisterUncreatableType<CallvotesListModel>( "net.warsow", 2, 6, "CallvotesModel", reason );
-	qmlRegisterUncreatableType<GametypeDef>( "net.warsow", 2, 6, "GametypeDef", reason );
-	qmlRegisterUncreatableType<GametypesModel>( "net.warsow", 2, 6, "GametypesModel", reason );
-	qmlRegisterUncreatableType<ScoreboardModelProxy>( "net.warsow", 2, 6, "Scoreboard", reason );
-	qmlRegisterUncreatableType<ScoreboardTeamModel>( "net.warsow", 2, 6, "ScoreboardTeamModel", reason );
-	qmlRegisterUncreatableType<ScoreboardSpecsModel>( "net.warsow", 2, 6, "ScoreboardSpecsModel", reason );
-	qmlRegisterUncreatableType<KeysAndBindingsModel>( "net.warsow", 2, 6, "KeysAndBindings", reason );
-	qmlRegisterUncreatableType<ServerListModel>( "net.warsow", 2, 6, "ServerListModel", reason );
-	qmlRegisterUncreatableType<DemosResolver>( "net.warsow", 2, 6, "DemosResolver", reason );
-	qmlRegisterUncreatableType<DemoPlayer>( "net.warsow", 2, 6, "DemoPlayer", reason );
-	qmlRegisterUncreatableType<GametypeOptionsModel>( "net.warsow", 2, 6, "GametypeOptionsModel", reason );
-	qmlRegisterUncreatableType<HudLayoutModel>( "net.warsow", 2, 6, "HudLayoutModel", reason );
-	qmlRegisterUncreatableType<HudEditorLayoutModel>( "net.warsow", 2, 6, "HudEditorLayoutModel", reason );
-	qmlRegisterUncreatableType<InGameHudLayoutModel>( "net.warsow", 2, 6, "InGameHudLayoutModel", reason );
-	qmlRegisterUncreatableType<HudDataModel>( "net.warsow", 2, 6, "HudDataModel", reason );
-	qmlRegisterType<NativelyDrawnImage>( "net.warsow", 2, 6, "NativelyDrawnImage_Native" );
-	qmlRegisterType<NativelyDrawnModel>( "net.warsow", 2, 6, "NativelyDrawnModel_Native" );
-
 	m_engine = new QQmlEngine;
-	m_engine->rootContext()->setContextProperty( "wsw", this );
 	m_engine->addImageProvider( "wsw", new wsw::ui::WswImageProvider );
 
-	QQmlContext *context = m_engine->rootContext();
-	context->setContextProperty( "serverListModel", &m_serverListModel );
-	context->setContextProperty( "keysAndBindings", &m_keysAndBindingsModel );
-	context->setContextProperty( "gametypesModel", &m_gametypesModel );
-	context->setContextProperty( "compactChatModel", m_chatModel.getCompactModel() );
-	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
-	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
-	context->setContextProperty( "richTeamChatModel", m_teamChatModel.getRichModel() );
-	context->setContextProperty( "regularCallvotesModel", m_callvotesModel.getRegularModel() );
-	context->setContextProperty( "operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
-	context->setContextProperty( "scoreboard", &m_scoreboardModel );
-	context->setContextProperty( "scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
-	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
-	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
-	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
-	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
-	context->setContextProperty( "demosModel", &m_demosModel );
-	context->setContextProperty( "demosResolver", &m_demosResolver );
-	context->setContextProperty( "demoPlayer", &m_demoPlayer );
-	context->setContextProperty( "playersModel", &m_playersModel );
-	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
-	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
-	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
-	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
-	context->setContextProperty( "hudDataModel", &m_hudDataModel );
+	registerContextProperties( m_engine->rootContext() );
 
 	m_component = new QQmlComponent( m_engine );
 
 	connect( m_component, &QQmlComponent::statusChanged, this, &QtUISystem::onComponentStatusChanged );
 	m_component->loadUrl( QUrl( "qrc:/RootItem.qml" ) );
-
-	m_sensitivityVar = Cvar_Get( "ui_sensitivity", "1.0", CVAR_ARCHIVE );
-	m_mouseAccelVar = Cvar_Get( "ui_mouseAccel", "0.25", CVAR_ARCHIVE );
-
-	m_debugNativelyDrawnItemsVar = Cvar_Get( "ui_debugNativelyDrawnItems", "0", 0 );
-
-	// Initialize the table of textual strings corresponding to characters
-	for( const QString &s: m_charStrings ) {
-		const auto offset = (int)( &s - m_charStrings );
-		if( isAPrintableChar( offset ) ) {
-			m_charStrings[offset] = QString::asprintf( "%c", (char)offset );
-		}
-	}
 }
 
 void QtUISystem::renderQml() {
@@ -979,9 +995,9 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
 	}
 
-	if( m_debugNativelyDrawnItemsVar->modified ) {
-		Q_EMIT isDebuggingNativelyDrawnItemsChanged( m_debugNativelyDrawnItemsVar->integer != 0 );
-		m_debugNativelyDrawnItemsVar->modified = false;
+	if( s_debugNativelyDrawnItemsVar->modified ) {
+		Q_EMIT isDebuggingNativelyDrawnItemsChanged( s_debugNativelyDrawnItemsVar->integer != 0 );
+		s_debugNativelyDrawnItemsVar->modified = false;
 	}
 
 	const bool oldCanSpectate = m_canSpectate;
@@ -1056,21 +1072,21 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 	const int bounds[2] = { m_window->width(), m_window->height() };
 	const int deltas[2] = { dx, dy };
 
-	if( m_sensitivityVar->modified ) {
-		if( m_sensitivityVar->value <= 0.0f || m_sensitivityVar->value > 10.0f ) {
-			Cvar_ForceSet( m_sensitivityVar->name, "1.0" );
+	if( s_sensitivityVar->modified ) {
+		if( s_sensitivityVar->value <= 0.0f || s_sensitivityVar->value > 10.0f ) {
+			Cvar_ForceSet( s_sensitivityVar->name, "1.0" );
 		}
 	}
 
-	if( m_mouseAccelVar->modified ) {
-		if( m_mouseAccelVar->value < 0.0f || m_mouseAccelVar->value > 1.0f ) {
-			Cvar_ForceSet( m_mouseAccelVar->name, "0.25" );
+	if( s_mouseAccelVar->modified ) {
+		if( s_mouseAccelVar->value < 0.0f || s_mouseAccelVar->value > 1.0f ) {
+			Cvar_ForceSet( s_mouseAccelVar->name, "0.25" );
 		}
 	}
 
-	float sensitivity = m_sensitivityVar->value;
+	float sensitivity = s_sensitivityVar->value;
 	if( frameTime > 0 ) {
-		sensitivity += (float)m_mouseAccelVar->value * std::sqrt( dx * dx + dy * dy ) / (float)( frameTime );
+		sensitivity += (float)s_mouseAccelVar->value * std::sqrt( dx * dx + dy * dy ) / (float)( frameTime );
 	}
 
 	for( int i = 0; i < 2; ++i ) {
@@ -1135,7 +1151,7 @@ bool QtUISystem::handleCharEvent( int ch ) {
 	const auto modifiers = getPressedKeyboardModifiers();
 	// The plain cast of `ch` to Qt::Key seems to be correct in this case
 	// (all printable characters seem to map 1-1 to Qt key codes)
-	QKeyEvent pressEvent( QEvent::KeyPress, (Qt::Key)ch, modifiers, m_charStrings[ch] );
+	QKeyEvent pressEvent( QEvent::KeyPress, (Qt::Key)ch, modifiers, s_charStrings[ch] );
 	QCoreApplication::sendEvent( m_window, &pressEvent );
 	QKeyEvent releaseEvent( QEvent::KeyRelease, (Qt::Key)ch, modifiers );
 	QCoreApplication::sendEvent( m_window, &releaseEvent );
@@ -1255,7 +1271,7 @@ auto QtUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Q
 }
 
 bool QtUISystem::isDebuggingNativelyDrawnItems() const {
-	return m_debugNativelyDrawnItemsVar->integer != 0;
+	return s_debugNativelyDrawnItemsVar->integer != 0;
 }
 
 void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
