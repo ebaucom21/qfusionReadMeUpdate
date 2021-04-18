@@ -34,6 +34,7 @@
 #include <QUrl>
 #include <QPointer>
 #include <QScopedPointer>
+#include <QFontDatabase>
 
 #include <clocale>
 
@@ -360,6 +361,8 @@ private:
 	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
 
 	static void initPersistentPart();
+	static void registerFonts();
+	static void registerFont( const wsw::StringView &path );
 	static void registerCustomQmlTypes();
 	void registerContextProperties( QQmlContext *context );
 
@@ -442,6 +445,7 @@ void QtUISystem::initPersistentPart() {
 		// Fix the overwritten locale, if any
 		(void)std::setlocale( LC_ALL, "C" );
 
+		registerFonts();
 		registerCustomQmlTypes();
 
 		// Initialize the table of textual strings corresponding to characters
@@ -480,6 +484,43 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterUncreatableType<HudDataModel>( uri, 2, 6, "HudDataModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( uri, 2, 6, "NativelyDrawnModel_Native" );
+}
+
+static const char *kFontSuffixes[] {
+	"-B", "-BI", "-C", "-L", "-LI", "-M", "-MI", "-R", "-RI", "-Th",
+	"Mono-B", "Mono-BI", "Mono-R", "Mono-RI"
+};
+
+void QtUISystem::registerFonts() {
+	QFontDatabase::removeAllApplicationFonts();
+
+	wsw::StaticString<64> path;
+	path.append( "fonts/Ubuntu"_asView );
+	const auto pathPrefixLen = path.size();
+	for( const char *suffix: kFontSuffixes ) {
+		path.erase( pathPrefixLen );
+		path.append( wsw::StringView( suffix ) );
+		path.append( ".ttf"_asView );
+		registerFont( path.asView() );
+	}
+
+	QGuiApplication::setFont( QFont( "Ubuntu", 12 ) );
+}
+
+void QtUISystem::registerFont( const wsw::StringView &path ) {
+	if( auto handle = wsw::fs::openAsReadHandle( path ) ) {
+		const size_t size = handle->getInitialFileSize();
+		QByteArray data( (int)size, Qt::Uninitialized );
+		if( handle->readExact( data.data(), size ) ) {
+			if( QFontDatabase::addApplicationFontFromData( data ) >= 0 ) {
+				return;
+			}
+		}
+	}
+
+	wsw::StaticString<256> message;
+	message << "Failed to register "_asView << path;
+	throw std::runtime_error( message.data() );
 }
 
 void QtUISystem::registerContextProperties( QQmlContext *context ) {
