@@ -8,6 +8,8 @@
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/stringspanstorage.h"
 
+#include <array>
+
 namespace wsw::ui {
 
 // TODO: Shouldn't it belong to the CG subsystem?
@@ -28,13 +30,8 @@ class Scoreboard : wsw::ScoreboardShared {
 
 	RawData m_oldRawData {};
 
-	enum PendingPlayerUpdates : uint8_t {
-		NoPendingUpdates   = 0x0,
-		PendingClanUpdate  = 0x1,
-		PendingNameUpdate  = 0x2
-	};
-
-	PendingPlayerUpdates m_pendingPlayerUpdates[MAX_CLIENTS] {};
+	std::array<unsigned, MAX_CLIENTS> m_lastNameUpdateCounters;
+	std::array<unsigned, MAX_CLIENTS> m_lastClanUpdateCounters;
 
 	[[nodiscard]]
 	bool parseLayout( const wsw::StringView &string );
@@ -80,9 +77,12 @@ public:
 private:
 	void addPlayerUpdates( const RawData &oldOne, const RawData &newOne, unsigned playerIndex, PlayerUpdatesList &dest );
 public:
-	void reload();
+	Scoreboard() {
+		m_lastNameUpdateCounters.fill( 0 );
+		m_lastClanUpdateCounters.fill( 0 );
+	}
 
-	void handleConfigString( unsigned configStringIndex, const wsw::StringView &string );
+	void reload();
 
 	[[nodiscard]]
 	auto getImageAssetPath( unsigned asset ) const -> std::optional<wsw::StringView>;

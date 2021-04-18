@@ -107,10 +107,6 @@ void ScoreboardModelProxy::reload() {
 	m_scoreboard.reload();
 }
 
-void ScoreboardModelProxy::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
-	m_scoreboard.handleConfigString( configStringIndex, string );
-}
-
 auto ScoreboardModelProxy::getColumnKind( int column ) const -> int {
 	return (int)m_scoreboard.getColumnKind( (unsigned)column );
 }

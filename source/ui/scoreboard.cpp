@@ -1,5 +1,6 @@
 #include "scoreboard.h"
 
+#include "local.h"
 #include "../gameshared/q_shared.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswtonum.h"
@@ -288,13 +289,6 @@ auto Scoreboard::getImageAssetPath( unsigned asset ) const -> std::optional<wsw:
 	return std::nullopt;
 }
 
-void Scoreboard::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
-	const auto playerNum = (unsigned)( configStringIndex - CS_PLAYERINFOS );
-	assert( playerNum < (unsigned)MAX_CLIENTS );
-	// Consider this as a full update currently
-	m_pendingPlayerUpdates[playerNum] = (PendingPlayerUpdates)( PendingClanUpdate | PendingNameUpdate );
-}
-
 auto Scoreboard::getPlayerPing( unsigned playerIndex ) const -> int {
 	assert( m_pingSlot.has_value() );
 	assert( playerIndex < (unsigned)kMaxPlayers );
@@ -324,17 +318,25 @@ void Scoreboard::addPlayerUpdates( const RawData &oldOne, const RawData &newOne,
 	const auto oldPlayerNum = oldOne.getPlayerNum( playerIndex );
 	const auto newPlayerNum = newOne.getPlayerNum( playerIndex );
 
-	bool nickname, clan;
+	bool nickname = false, clan = false;
 	if( oldPlayerNum != newPlayerNum ) {
 		// Consider doing a full update in this case
 		nickname = clan = true;
-		// Keep m_pendingPlayerUpdates as-is.
+		// Keep update counters as-is.
 		// What to do in this case is non-obvious and having a small pending extra update is harmless.
 	} else {
 		const auto playerNum = newPlayerNum;
-		nickname = m_pendingPlayerUpdates[playerNum] & PendingNameUpdate;
-		clan = m_pendingPlayerUpdates[playerNum] & PendingClanUpdate;
-		m_pendingPlayerUpdates[playerNum] = NoPendingUpdates;
+		const auto *const tracker = wsw::ui::NameChangesTracker::instance();
+		const unsigned nameCounter = tracker->getLastNicknameUpdateCounter( playerNum );
+		const unsigned clanCounter = tracker->getLastClanUpdateCounter( playerNum );
+		if( nameCounter != m_lastNameUpdateCounters[playerNum] ) {
+			m_lastNameUpdateCounters[playerNum] = nameCounter;
+			nickname = true;
+		}
+		if( clanCounter != m_lastClanUpdateCounters[playerNum] ) {
+			m_lastClanUpdateCounters[playerNum] = clanCounter;
+			clan = true;
+		}
 	}
 
 	const bool score = newOne.getPlayerScore( playerIndex ) != oldOne.getPlayerScore( playerIndex );

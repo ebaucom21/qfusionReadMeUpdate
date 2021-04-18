@@ -1546,7 +1546,11 @@ void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimest
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
 	// TODO: Let aggregated entities decide whether they can handle?
 	if( (unsigned)( configStringIndex - CS_PLAYERINFOS ) < (unsigned)MAX_CLIENTS ) {
-		m_scoreboardModel.handleConfigString( configStringIndex, string );
+		auto *const tracker = wsw::ui::NameChangesTracker::instance();
+		const auto playerNum = (unsigned)( configStringIndex - CS_PLAYERINFOS );
+		// Consider this a full update for now
+		tracker->registerNicknameUpdate( playerNum );
+		tracker->registerClanUpdate( playerNum );
 	} else if( (unsigned)( configStringIndex - CS_CALLVOTEINFOS ) < (unsigned)MAX_CALLVOTEINFOS ) {
 		m_callvotesModel.handleConfigString( configStringIndex, string );
 	}

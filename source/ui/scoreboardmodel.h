@@ -153,8 +153,6 @@ public:
 	[[nodiscard]]
 	auto getMixedModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[3]; }
 
-	void handleConfigString( unsigned configStringIndex, const wsw::StringView &string );
-
 	void reload();
 	void update( const ReplicatedScoreboardData &currData );
 };
