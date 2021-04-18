@@ -19,7 +19,7 @@ Item {
 
     property int bufferIndex: 0
 
-    implicitHeight: activeItem ? activeItem.implicitHeight + (header.status === Loader.Ready ? 36 : 0) : 0
+    implicitHeight: activeItem ? activeItem.implicitHeight + (header.status === Loader.Ready ? 40 : 0) : 0
 
     readonly property var activeItem: (front.status === Loader.Ready) ? front.item : back.item
     readonly property int columnsCount: scoreboard.getColumnsCount()
@@ -29,7 +29,7 @@ Item {
         width: root.width - baseCellWidth
         active: root.visible && displayHeader && activeItem && activeItem.rows
         sourceComponent: Item {
-            implicitHeight: 36
+            implicitHeight: 40
 
             Rectangle {
                 anchors.fill: parent
@@ -51,12 +51,15 @@ Item {
                                    (kind === Scoreboard.Clan ? clanCellWidth : span * baseCellWidth)
                         leftPadding: isTextual ? 4 : 0
                         bottomPadding: 4
-                        height: 36
+                        height: 40
                         verticalAlignment: Qt.AlignVCenter
                         horizontalAlignment: isTextual ? Qt.AlignLeft : Qt.AlignHCenter
                         text: scoreboard.getColumnTitle(index)
                         font.pointSize: 12
-                        font.weight: Font.Medium
+                        font.weight: Font.Bold
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 0.75
+                        style: Text.Raised
                     }
                 }
             }

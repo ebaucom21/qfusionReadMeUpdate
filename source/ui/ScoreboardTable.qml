@@ -49,7 +49,7 @@ TableView {
                            baseCellWidth) :
                        (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
 
-        implicitHeight: 32
+        implicitHeight: 36
         onImplicitHeightChanged: forceLayoutTimer.start()
         onHeightChanged: forceLayoutTimer.start()
 
@@ -69,10 +69,11 @@ TableView {
             padding: 4
             text: value
             textFormat: Text.StyledText
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             font.pointSize: 12
             font.letterSpacing: 1
             font.strikeout: isGhosting && isColumnTextual
+            style: Text.Raised
         }
 
         Loader {
