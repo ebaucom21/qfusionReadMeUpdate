@@ -126,8 +126,11 @@ void Scoreboard::beginDefiningSchema() {
 
 	m_titleSpanColumnsLeft = 0u;
 
+	m_columnKinds.clear();
 	m_columnKinds.push_back( Nickname );
+	m_columnTitlesStorage.clear();
 	m_columnTitlesStorage.add( kNameTitle );
+	m_titleColumnSpans.clear();
 	m_titleColumnSpans.push_back( 1 );
 	m_columnKinds.push_back( Clan );
 	m_columnTitlesStorage.add( kClanTitle );

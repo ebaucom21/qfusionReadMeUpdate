@@ -18,6 +18,8 @@ namespace wsw::ui {
 
 void Scoreboard::clearSchema() {
 	m_columnKinds.clear();
+	m_columnSlots.clear();
+	m_titleColumnSpans.clear();
 	m_pingSlot = std::nullopt;
 	m_nameColumn = std::nullopt;
 	m_columnTitlesStorage.clear();
