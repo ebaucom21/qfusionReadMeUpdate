@@ -363,6 +363,8 @@ void G_FreeAI( edict_t *ent ) {
 
 	Q_free( ent->ai );
 	ent->ai = nullptr;
+	// TODO: Merge these fields, add a fast custom RTTI if needed
+	ent->bot = nullptr;
 }
 
 void AI_TouchedEntity( edict_t *self, edict_t *ent ) {
