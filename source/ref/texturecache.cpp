@@ -770,7 +770,8 @@ void TextureCache::replaceLightmapLayer( Texture *texture, unsigned layer, const
 	unbindModified( texture );
 }
 
-void TextureCache::replaceFontMaskSamples( Texture *texture, unsigned w, unsigned h, const uint8_t *data ) {
+// TODO: Pass a reference to some "rectangle" type instead of these parameters
+void TextureCache::replaceFontMaskSamples( Texture *texture, unsigned x, unsigned y, unsigned w, unsigned h, const uint8_t *data ) {
 	const GLenum target = texture->target;
 	assert( target == GL_TEXTURE_2D );
 
@@ -782,7 +783,7 @@ void TextureCache::replaceFontMaskSamples( Texture *texture, unsigned w, unsigne
 		qglTexParameteriv( target, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask );
 	}
 
-	qglTexSubImage2D( target, 0, 0, 0, w, h, format, type, data );
+	qglTexSubImage2D( target, 0, x, y, w, h, format, type, data );
 
 	unbindModified( target, 0 );
 

@@ -319,7 +319,7 @@ public:
 
 	void replaceLightmapLayer( Texture *texture, unsigned layer, const uint8_t *data );
 
-	void replaceFontMaskSamples( Texture *texture, unsigned width, unsigned height, const uint8_t *data );
+	void replaceFontMaskSamples( Texture *texture, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data );
 
 	[[nodiscard]]
 	auto getPortalTexture( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;

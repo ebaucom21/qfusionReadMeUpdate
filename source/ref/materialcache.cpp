@@ -308,7 +308,7 @@ shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8
 		material->passes[0].images[0] = textureCache->createFontMask( nameView, width, height, data );
 	} else {
 		// replace current texture data
-		textureCache->replaceFontMaskSamples( image, width, height, data );
+		textureCache->replaceFontMaskSamples( image, 0, 0, width, height, data );
 	}
 	return material;
 }
@@ -388,7 +388,7 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 		return;
 	}
 
-	TextureCache::instance()->replaceFontMaskSamples( baseImage, width, height, data );
+	TextureCache::instance()->replaceFontMaskSamples( baseImage, x, y, width, height, data );
 }
 
 auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec )
