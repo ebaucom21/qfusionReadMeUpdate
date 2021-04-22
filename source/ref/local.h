@@ -171,6 +171,7 @@ public:
 #include <memory>
 
 class BuiltinTextureFactory;
+class ImageBuffer;
 
 class TextureCache {
 	friend class BuiltinTextureFactory;
@@ -242,7 +243,8 @@ class TextureCache {
 	};
 
 	[[nodiscard]]
-	auto loadTextureDataFromFile( const wsw::StringView &name ) -> std::optional<TextureFileData>;
+	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer, ImageBuffer *dataBuffer )
+		-> std::optional<TextureFileData>;
 
 	void bindToModify( Texture *texture ) {
 		bindToModify( texture->target, texture->texnum );
@@ -307,6 +309,9 @@ public:
 						     unsigned minMipSize, unsigned tags ) -> Texture * {
 		return getMaterialTexture( name, wsw::StringView(), flags, minMipSize, tags );
 	}
+
+	[[nodiscard]]
+	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture *;
 
 	[[nodiscard]]
 	auto createFontMask( const wsw::StringView &name, unsigned w, unsigned h, const uint8_t *data ) -> Texture *;

@@ -396,12 +396,11 @@ auto getRegularTexImageFormats( int flags, int samples ) -> GLTexImageFormats {
 }
 
 static ImageBuffer readFileBuffer;
-static ImageBuffer loadingBuffer;
-static ImageBuffer scalingBuffer;
-static ImageBuffer lineBuffer;
-static ImageBuffer flipBuffer;
+static ImageBuffer cubemapBuffer[6];
+static ImageBuffer &loadingBuffer = cubemapBuffer[0];
 
-auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name ) -> std::optional<TextureFileData> {
+auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
+											ImageBuffer *dataBuffer )-> std::optional<TextureFileData> {
 	assert( name.isZeroTerminated() );
 	assert( NUM_IMAGE_EXTENSIONS == 3 );
 	// TODO: Adopt the sane FS interface over the codebase
@@ -429,13 +428,13 @@ auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name ) -> std
 		return std::nullopt;
 	}
 
-	uint8_t *const fileBuffer = readFileBuffer.reserveAndGet( fileSize );
-	if( !maybeHandle->readExact( fileBuffer, fileSize ) ) {
+	uint8_t *const fileBufferBytes = readBuffer->reserveAndGet( fileSize );
+	if( !maybeHandle->readExact( fileBufferBytes, fileSize ) ) {
 		return std::nullopt;
 	}
 
 	int width = 0, height = 0, samples = 0;
-	stbi_uc *bytes = stbi_load_from_memory( (const stbi_uc *)fileBuffer, (int)fileSize, &width, &height, &samples, 0 );
+	auto *bytes = stbi_load_from_memory( (const stbi_uc *)fileBufferBytes, (int)fileSize, &width, &height, &samples, 0 );
 	if( !bytes ) {
 		return std::nullopt;
 	}
@@ -450,7 +449,7 @@ auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name ) -> std
 		return std::nullopt;
 	}
 
-	uint8_t *const imageData = loadingBuffer.reserveAndGet( imageDataSize );
+	uint8_t *const imageData = dataBuffer->reserveAndGet( imageDataSize );
 	std::memcpy( imageData, bytes, imageDataSize );
 	stbi_image_free( bytes );
 
@@ -548,7 +547,7 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 
 	// TODO: Track disk loading failures while loading materials to avoid excessive FS calls?
 
-	auto maybeFileData = loadTextureDataFromFile( cleanName );
+	auto maybeFileData = loadTextureDataFromFile( cleanName, &::readFileBuffer, &::loadingBuffer );
 	if( !maybeFileData ) {
 		return nullptr;
 	}
@@ -593,6 +592,99 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	texture->framenum = 0;
 	texture->missing = false;
 	texture->tags = tags;
+
+	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
+	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	return texture;
+}
+
+auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture * {
+	const auto maybeCleanName = makeCleanName( name, wsw::StringView() );
+	if( !maybeCleanName ) {
+		return nullptr;
+	}
+
+	// TODO: Keep a cache of 100% missing textures during material loading to reduce FS pressure
+
+	const auto cleanName = *maybeCleanName;
+	const auto binIndex = wsw::HashedStringView( cleanName ).getHash() % kNumHashBins;
+	if( Texture *texture = findTextureInBin( binIndex, cleanName, minMipSize, flags ) ) {
+		touchTexture( texture, tags );
+		return texture;
+	}
+
+	if( !m_freeTexturesHead ) {
+		return nullptr;
+	}
+
+	const char signLetters[2] { 'p', 'n' };
+	const char axisLetters[3] { 'x', 'y', 'z' };
+
+	wsw::StaticString<MAX_QPATH> nameBuffer;
+	nameBuffer << cleanName << '_';
+	const auto prefixLen = nameBuffer.size();
+
+	const void *dataOfSides[6];
+	int width = 0, height = 0, samples = 0;
+	for( unsigned i = 0; i < 6; ++i ) {
+		nameBuffer.erase( prefixLen );
+		nameBuffer.append( signLetters[i % 2] );
+		nameBuffer.append( axisLetters[i / 2] );
+		ImageBuffer *const dataBuffer = ::cubemapBuffer + i;
+		const auto maybeData = loadTextureDataFromFile( nameBuffer.asView(), &::loadingBuffer, ::cubemapBuffer + i );
+		if( !maybeData ) {
+			return nullptr;
+		}
+		if( i ) {
+			if( maybeData->width != width || maybeData->height != height || maybeData->samples != samples ) {
+				return nullptr;
+			}
+		} else {
+			width = maybeData->width;
+			height = maybeData->height;
+			samples = maybeData->samples;
+		}
+		dataOfSides[i] = maybeData->data;
+	}
+
+	const GLenum target = GL_TEXTURE_CUBE_MAP;
+	const GLuint handle = generateHandle( cleanName );
+
+	bindToModify( target, handle );
+
+	const auto [swizzleMask, internalFormat, format, type] = getRegularTexImageFormats( (int)flags, samples );
+
+	for( unsigned i = 0; i < 6; ++i ) {
+		GLenum sideTarget = GL_TEXTURE_CUBE_MAP_POSITIVE_X + i;
+
+		if( swizzleMask != kSwizzleMaskIdentity ) {
+			qglTexParameteriv( sideTarget, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask );
+		}
+
+		qglTexImage2D( sideTarget, 0, internalFormat, width, height, 0, format, type, dataOfSides[i] );
+	}
+
+	setupFilterMode( target, flags, width, height, 1 );
+	setupWrapMode( target, flags );
+
+	qglGenerateMipmap( target );
+
+	unbindModified( target, handle );
+
+	Texture *texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	texture->name = internTextureName( texture, cleanName );
+	texture->texnum = handle;
+	texture->target = target;
+	texture->flags = (int)flags;
+	texture->minmipsize = 1;
+	texture->width = width;
+	texture->height = height;
+	texture->samples = samples;
+	texture->registrationSequence = rsh.registrationSequence;
+	texture->fbo = 0;
+	texture->framenum = 0;
+	texture->missing = false;
+	texture->tags = (int)tags;
 
 	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
 	wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );

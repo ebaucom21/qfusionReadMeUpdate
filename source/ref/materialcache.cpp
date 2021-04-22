@@ -932,23 +932,24 @@ static const wsw::StringView kLightmapPrefix( "*lm" );
 auto MaterialCache::findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize ) -> Texture * {
 	assert( minMipSize );
 
-	// TODO: Move this to ImageCache?
 	if( const auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
 		return TextureCache::instance()->getBuiltinTexture( *maybeBuiltinTexNum );
 	}
 
 	if( kLightmapPrefix.equalsIgnoreCase( name.take( 3 ) ) ) {
-	    // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		//Com_DPrintf( S_COLOR_YELLOW "WARNING: shader %s has a stage with explicit lightmap image\n", shader->name );
 		return TextureCache::instance()->whiteTexture();
 	}
 
-	// TODO: Passing params this way is error-prone!!!!!! Pass a struct!!!!!!!!!!!!!!!!!!!!!!!!
-	Texture *texture = TextureCache::instance()->getMaterialTexture( name, flags, minMipSize, imageTags );
-	if( !texture ) {
-	    // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		//Com_Printf( S_COLOR_YELLOW "WARNING: shader %s has a stage with no image: %s\n", shader->name, name.data() );
-		return TextureCache::instance()->noTexture();
+	Texture *texture;
+	auto *const textureCache = TextureCache::instance();
+	if( flags & IT_CUBEMAP ) {
+		if( !( texture = textureCache->getMaterialCubemap( name, flags, minMipSize, imageTags ) ) ) {
+			texture = textureCache->whiteCubemapTexture();
+		}
+	} else {
+		if( !( texture = textureCache->getMaterialTexture( name, flags, minMipSize, imageTags ) ) ) {
+			texture = textureCache->noTexture();
+		}
 	}
 
 	return texture;
