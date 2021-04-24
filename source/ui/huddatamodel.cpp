@@ -480,6 +480,32 @@ void HudDataModel::checkPropertyChanges() {
 		Q_EMIT betaNameChanged( getBetaName() );
 	}
 
+	if( m_numAliveAlphaPlayers != m_pendingNumAliveAlphaPlayers ) {
+		m_numAliveAlphaPlayers = m_pendingNumAliveAlphaPlayers;
+		m_alphaPlayersStatus = getStatusForNumberOfPlayers( m_numAliveAlphaPlayers );
+		Q_EMIT alphaPlayersStatusChanged( m_alphaPlayersStatus );
+	}
+
+	if( m_numAliveBetaPlayers != m_pendingNumAliveBetaPlayers ) {
+		m_numAliveBetaPlayers = m_pendingNumAliveBetaPlayers;
+		m_betaPlayersStatus = getStatusForNumberOfPlayers( m_numAliveBetaPlayers );
+		Q_EMIT betaPlayersStatusChanged( m_betaPlayersStatus );
+	}
+
+	const wsw::StringView alphaStatus( ::cl.configStrings.getTeamAlphaStatus().value_or( wsw::StringView() ) );
+	if( !m_alphaTeamStatus.equals( alphaStatus ) ) {
+		m_alphaTeamStatus.assign( alphaStatus );
+		m_styledAlphaTeamStatus = toStyledText( alphaStatus ).toUtf8();
+		Q_EMIT alphaTeamStatusChanged( m_styledAlphaTeamStatus );
+	}
+
+	const wsw::StringView betaStatus( ::cl.configStrings.getTeamBetaStatus().value_or( wsw::StringView() ) );
+	if( !m_betaTeamStatus.equals( betaStatus ) ) {
+		m_betaTeamStatus.assign( betaStatus );
+		m_styledBetaTeamStatus = toStyledText( betaStatus ).toUtf8();
+		Q_EMIT betaTeamStatusChanged( m_styledBetaTeamStatus );
+	}
+
 	const auto oldAlphaColor = m_alphaColor;
 	if( oldAlphaColor != ( m_alphaColor = CG_TeamAlphaColor() ) ) {
 		Q_EMIT alphaColorChanged( getAlphaColor() );
@@ -554,6 +580,36 @@ void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scorebo
 	if( CG_HasTwoTeams() ) {
 		if( const auto maybeActiveChasePov = CG_ActiveChasePov() ) {
 			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
+			updateTeamPlayerStatuses( scoreboardData );
+		}
+	}
+}
+
+static const QByteArray kStatusesForNumberOfPlayers[] {
+	"",
+	"\u066D",
+	"\u066D \u066D",
+	"\u066D \u066D \u066D",
+	"\u066D \u066D \u066D \u066D",
+	"\u066D \u066D \u066D \u066D \u066D",
+	"\u066D \u066D \u066D \u066D \u066D \u066D"
+};
+
+auto HudDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray {
+	return kStatusesForNumberOfPlayers[std::min( numPlayers, (int)std::size( kStatusesForNumberOfPlayers ) - 1 )];
+}
+
+void HudDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData ) {
+	m_pendingNumAliveAlphaPlayers = 0;
+	m_pendingNumAliveBetaPlayers = 0;
+	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+		if( scoreboardData.isPlayerConnected( i ) && !scoreboardData.isPlayerGhosting( i ) ) {
+			const int team = scoreboardData.getPlayerTeam( i );
+			if( team == TEAM_ALPHA ) {
+				m_pendingNumAliveAlphaPlayers++;
+			} else if( team == TEAM_BETA ) {
+				m_pendingNumAliveBetaPlayers++;
+			}
 		}
 	}
 }

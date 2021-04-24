@@ -179,14 +179,16 @@ typedef struct {
 #define CS_ACTIVE_CALLVOTE  18
 #define CS_CALLVOTE_GROUPS  19
 
-#define CS_TEAM_SPECTATOR_NAME 21
-#define CS_TEAM_PLAYERS_NAME 22
-#define CS_TEAM_ALPHA_NAME  23
-#define CS_TEAM_BETA_NAME   24
+#define CS_TEAM_SPECTATOR_NAME  20
+#define CS_TEAM_PLAYERS_NAME    21
+#define CS_TEAM_ALPHA_NAME      22
+#define CS_TEAM_BETA_NAME       23
+#define CS_TEAM_ALPHA_STATUS    24
+#define CS_TEAM_BETA_STATUS     25
 
-#define CS_MATCHNAME        25
-#define CS_MATCHSCORE       26
-#define CS_MATCHUUID        27
+#define CS_MATCHNAME        26
+#define CS_MATCHSCORE       27
+#define CS_MATCHUUID        28
 
 #define CS_GAMETYPE_OPTIONS_TITLE 29
 

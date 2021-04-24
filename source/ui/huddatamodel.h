@@ -116,6 +116,12 @@ class HudDataModel : public QObject {
 	QByteArray m_styledAlphaName;
 	QByteArray m_styledBetaName;
 
+	QByteArray m_alphaPlayersStatus, m_betaPlayersStatus;
+	int m_numAliveAlphaPlayers { 0 }, m_numAliveBetaPlayers { 0 };
+	int m_pendingNumAliveAlphaPlayers { 0 }, m_pendingNumAliveBetaPlayers { 0 };
+	wsw::StaticString<32> m_alphaTeamStatus, m_betaTeamStatus;
+	QByteArray m_styledAlphaTeamStatus, m_styledBetaTeamStatus;
+
 	int m_alphaColor { 0 }, m_betaColor { 0 };
 	int m_alphaScore { 0 }, m_pendingAlphaScore { 0 };
 	int m_betaScore { 0 }, m_pendingBetaScore { 0 };
@@ -151,6 +157,14 @@ class HudDataModel : public QObject {
 	auto getAlphaScore() const -> int { return m_alphaScore; }
 	[[nodiscard]]
 	auto getBetaScore() const -> int { return m_betaScore; }
+	[[nodiscard]]
+	auto getAlphaPlayersStatus() const -> const QByteArray & { return m_alphaPlayersStatus; }
+	[[nodiscard]]
+	auto getBetaPlayersStatus() const -> const QByteArray & { return m_betaPlayersStatus; }
+	[[nodiscard]]
+	auto getAlphaTeamStatus() const -> const QByteArray & { return m_styledAlphaTeamStatus; }
+	[[nodiscard]]
+	auto getBetaTeamStatus() const -> const QByteArray & { return m_styledBetaTeamStatus; }
 	[[nodiscard]]
 	bool getHasTwoTeams() const { return m_hasTwoTeams; }
 	[[nodiscard]]
@@ -188,11 +202,15 @@ class HudDataModel : public QObject {
 
 	[[nodiscard]]
 	bool getHasLocations() const { return m_hasLocations; }
+
+	[[nodiscard]]
+	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
+	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
 public:
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
-	Q_PROPERTY( QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
+	Q_PROPERTY( const QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
 	Q_SIGNAL void betaNameChanged( const QByteArray &betaName );
-	Q_PROPERTY( QByteArray betaName READ getBetaName NOTIFY betaNameChanged );
+	Q_PROPERTY( const QByteArray betaName READ getBetaName NOTIFY betaNameChanged );
 	Q_SIGNAL void alphaColorChanged( const QColor &alphaColor );
 	Q_PROPERTY( QColor alphaColor READ getAlphaColor NOTIFY alphaColorChanged );
 	Q_SIGNAL void betaColorChanged( const QColor &betaColor );
@@ -201,6 +219,15 @@ public:
 	Q_PROPERTY( int alphaScore READ getAlphaScore NOTIFY alphaScoreChanged );
 	Q_SIGNAL void betaScoreChanged( int betaScore );
 	Q_PROPERTY( int betaScore READ getBetaScore NOTIFY betaScoreChanged );
+	Q_SIGNAL void alphaPlayersStatusChanged( const QByteArray &alphaPlayersStatus );
+	Q_PROPERTY( const QByteArray alphaPlayersStatus READ getAlphaPlayersStatus NOTIFY alphaPlayersStatusChanged );
+	Q_SIGNAL void betaPlayersStatusChanged( const QByteArray &betaPlayersStatus );
+	Q_PROPERTY( const QByteArray betaPlayersStatus READ getBetaPlayersStatus NOTIFY betaPlayersStatusChanged );
+	Q_SIGNAL void alphaTeamStatusChanged( const QByteArray &alphaTeamStatus );
+	Q_PROPERTY( const QByteArray alphaTeamStatus READ getAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
+	Q_SIGNAL void betaTeamStatusChanged( const QByteArray &betaTeamStatus );
+	Q_PROPERTY( const QByteArray betaTeamStatus READ getBetaTeamStatus NOTIFY betaTeamStatusChanged );
+
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams READ getHasTwoTeams NOTIFY hasTwoTeamsChanged );
 	Q_SIGNAL void isSpectatorChanged( bool isSpectator );

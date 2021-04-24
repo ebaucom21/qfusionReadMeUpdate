@@ -136,6 +136,8 @@ Item {
                     color: hudDataModel.alphaColor
                     name: hudDataModel.alphaName
                     score: hudDataModel.alphaScore
+                    teamStatus: hudDataModel.alphaTeamStatus
+                    playersStatus: hudDataModel.alphaPlayersStatus
                 }
             }
 
@@ -147,6 +149,8 @@ Item {
                     color: hudDataModel.betaColor
                     name: hudDataModel.betaName
                     score: hudDataModel.betaScore
+                    teamStatus: hudDataModel.betaTeamStatus
+                    playersStatus: hudDataModel.betaPlayersStatus
                 }
             }
 

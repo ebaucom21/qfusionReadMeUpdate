@@ -10,6 +10,8 @@ Item {
     property string name
     property color color
     property bool leftAligned
+    property string teamStatus
+    property string playersStatus
 
     implicitWidth: 360
     implicitHeight: 72
@@ -33,9 +35,14 @@ Item {
                 anchors.right: scoreLabel.left
             }
             AnchorChanges {
-                target: colorBar
-                anchors.left: undefined
-                anchors.right: scoreLabel.left
+                target: teamStatusIndicator
+                anchors.left: colorBar.left
+                anchors.right: undefined
+            }
+            AnchorChanges {
+                target: playersStatusIndicator
+                anchors.left: colorBar.left
+                anchors.right: undefined
             }
         },
         State {
@@ -52,9 +59,14 @@ Item {
                 anchors.right: undefined
             }
             AnchorChanges {
-                target: colorBar
-                anchors.left: scoreLabel.right
-                anchors.right: undefined
+                target: teamStatusIndicator
+                anchors.left: undefined
+                anchors.right: colorBar.right
+            }
+            AnchorChanges {
+                target: playersStatusIndicator
+                anchors.left: undefined
+                anchors.right: colorBar.right
             }
         }
     ]
@@ -70,27 +82,32 @@ Item {
 
     Rectangle {
         id: colorBar
-        width: parent.width - scoreLabel.width - 48
         anchors.top: parent.top
-        anchors.margins: 8
-        height: 16
-        color: root.color
-        radius: 2
-        opacity: 0.5
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: 4
+        radius: 1
+        height: 28
+        color: Qt.rgba(root.color.r, root.color.g, root.color.b, wsw.isShowingScoreboard ? 0.5 : 0.6)
     }
 
     Label {
         id: scoreLabel
-        width: Math.min(implicitWidth, 72)
-        anchors.top: parent.top
-        anchors.topMargin: -8
-        anchors.leftMargin: 20
-        anchors.rightMargin: 20
+        width: Math.max(96, implicitWidth)
+        anchors.top: colorBar.top
+        anchors.topMargin: -4
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        horizontalAlignment: Qt.AlignHCenter
         font.weight: Font.ExtraBold
         font.letterSpacing: 3
         font.pointSize: 56
         style: Text.Raised
         text: score
+        transform: Scale {
+            xScale: 1.00
+            yScale: 0.85
+        }
     }
 
     Label {
@@ -101,8 +118,29 @@ Item {
         anchors.rightMargin: 16
         font.weight: Font.ExtraBold
         font.pointSize: 24
-        font.letterSpacing: 4
+        font.letterSpacing: 3
         style: Text.Raised
         text: name
+    }
+
+    Label {
+        id: teamStatusIndicator
+        text: teamStatus
+        anchors.margins: 4
+        anchors.bottom: parent.bottom
+        font.weight: Font.ExtraBold
+        font.pointSize: 24
+        style: Text.Raised
+    }
+
+    Label {
+        id: playersStatusIndicator
+        text: playersStatus
+        anchors.leftMargin: 6
+        anchors.rightMargin: 6
+        anchors.verticalCenter: colorBar.verticalCenter
+        font.weight: Font.ExtraBold
+        font.pointSize: 20
+        style: Text.Raised
     }
 }
