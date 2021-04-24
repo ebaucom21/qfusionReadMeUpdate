@@ -16,38 +16,48 @@ Item {
 
     readonly property var fullHeightTransformMatrix: wsw.makeSkewXMatrix(height, 20.0)
 
-    // Acts as a shadow caster.
-    // Putting content inside it is discouraged as antialiasing does not seem to be working in this case
     MouseArea {
         id: mouseArea
         hoverEnabled: true
         anchors.fill: parent
         onClicked: root.clicked()
+    }
 
-        transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
+    // Acts as a shadow caster.
+    // Putting content inside it is discouraged as antialiasing does not seem to be working in this case
+    Item {
+        anchors.centerIn: parent
+        height: parent.height
+        width: mouseArea.containsMouse ? parent.width + 16 : parent.width
 
         layer.enabled: root.enabled
         layer.effect: ElevationEffect { elevation: 16 }
+
+        transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
+
+        Behavior on width { SmoothedAnimation { duration: 333 } }
     }
 
     Rectangle {
-        id: rectangle
-        width: parent.width
-        height: parent.height
         anchors.centerIn: parent
+        height: parent.height
+        width: mouseArea.containsMouse ? parent.width + 16 : parent.width
         radius: 3
+
         color: mouseArea.containsMouse ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.25)
 
         transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
+
+        Behavior on width { SmoothedAnimation { duration: 333 } }
     }
 
     Label {
         id: label
         anchors.centerIn: parent
         text: root.text
-        font.pointSize: 15
+        font.pointSize: 14
         font.weight: Font.Bold
-        font.letterSpacing: 1
+        font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
         font.capitalization: Font.AllUppercase
 
         transform: Matrix4x4 {
