@@ -403,6 +403,11 @@ auto HudDataModel::getActiveWeaponName() const -> QByteArray {
 	return m_activeWeapon ? weaponPropsCache.getWeaponName( m_activeWeapon ) : QByteArray();
 }
 
+static const QByteArray kWarmup( "WARMUP" );
+static const QByteArray kCountdown( "COUNTDOWN" );
+static const QByteArray kOvertime( "OVERTIME" );
+static const QByteArray kNoMatchState;
+
 void HudDataModel::setFormattedTime( QByteArray *dest, int value ) {
 	assert( value >= 0 );
 	dest->clear();
@@ -528,6 +533,20 @@ void HudDataModel::checkPropertyChanges() {
 		m_matchTimeSeconds = seconds;
 		setFormattedTime( &m_formattedSeconds, seconds );
 		Q_EMIT matchTimeSecondsChanged( getMatchTimeSeconds() );
+	}
+
+	const QByteArray *displayedMatchState = &kNoMatchState;
+	const int rawMatchState = GS_MatchState();
+	if( rawMatchState == MATCH_STATE_WARMUP ) {
+		displayedMatchState = &kWarmup;
+	} else if( rawMatchState == MATCH_STATE_COUNTDOWN ) {
+		displayedMatchState = &kCountdown;
+	} else if( GS_MatchExtended() ) {
+		displayedMatchState = &kOvertime;
+	}
+	if( m_displayedMatchState.compare( *displayedMatchState ) != 0 ) {
+		m_displayedMatchState = *displayedMatchState;
+		Q_EMIT matchStateChanged( m_displayedMatchState );
 	}
 
 	const auto oldActiveWeapon = m_activeWeapon;

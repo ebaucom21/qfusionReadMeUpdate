@@ -130,7 +130,7 @@ class HudDataModel : public QObject {
 
 	QByteArray m_formattedSeconds;
 	QByteArray m_formattedMinutes;
-	QByteArray m_formattedMatchState;
+	QByteArray m_displayedMatchState;
 	int m_matchTimeSeconds { 0 };
 	int m_matchTimeMinutes { 0 };
 
@@ -180,7 +180,7 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	auto getMatchTimeMinutes() const -> QByteArray { return m_formattedMinutes; }
 	[[nodiscard]]
-	auto getMatchState() const -> QByteArray { return m_formattedMatchState; }
+	auto getMatchState() const -> QByteArray { return m_displayedMatchState; }
 
 	static void setFormattedTime( QByteArray *dest, int value );
 	static void setStyledTeamName( QByteArray *dest, const wsw::StringView &name );
@@ -234,9 +234,11 @@ public:
 	Q_PROPERTY( bool isSpectator READ getIsSpectator NOTIFY isSpectatorChanged );
 
 	Q_SIGNAL void matchTimeSecondsChanged( const QByteArray &seconds );
-	Q_PROPERTY( QByteArray matchTimeSeconds READ getMatchTimeSeconds NOTIFY matchTimeSecondsChanged );
+	Q_PROPERTY( const QByteArray matchTimeSeconds READ getMatchTimeSeconds NOTIFY matchTimeSecondsChanged );
 	Q_SIGNAL void matchTimeMinutesChanged( const QByteArray &minutes );
-	Q_PROPERTY( QByteArray matchTimeMinutes READ getMatchTimeMinutes NOTIFY matchTimeMinutesChanged );
+	Q_PROPERTY( const QByteArray matchTimeMinutes READ getMatchTimeMinutes NOTIFY matchTimeMinutesChanged );
+	Q_SIGNAL void matchStateChanged( const QByteArray &matchState );
+	Q_PROPERTY( const QByteArray matchState READ getMatchState NOTIFY matchStateChanged );
 
 	Q_SIGNAL void activeWeaponIconChanged( const QByteArray &activeWeaponIcon );
 	Q_PROPERTY( QByteArray activeWeaponIcon READ getActiveWeaponIcon NOTIFY activeWeaponIconChanged );
