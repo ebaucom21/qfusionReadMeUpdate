@@ -46,7 +46,10 @@ Rectangle {
         anchors.top: teamTablesLoader.top
         anchors.horizontalCenter: teamTablesLoader.horizontalCenter
         width: Math.max(teamTablesLoader.item.width, specsPane.width)
-        height: teamTablesLoader.item.height + (specsPane.visible ? specsPane.anchors.topMargin + specsPane.height : 0)
+        height: teamTablesLoader.item.height +
+            (challengersPane.visible ? challengersPane.anchors.topMargin + challengersPane.height : 0) +
+            (specsPane.visible ? specsPane.anchors.topMargin + specsPane.height : 0) +
+            (chasersPane.visible ? chasersPane.anchors.topMargin + chasersPane.height : 0)
 
         Component.onCompleted: wsw.registerHudOccluder(hudOccluder)
         Component.onDestruction: wsw.unregisterHudOccluder(hudOccluder)
@@ -57,14 +60,36 @@ Rectangle {
     }
 
     ScoreboardSpecsPane {
-        id: specsPane
+        id: challengersPane
         anchors.top: teamTablesLoader.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
-        width: root.tableWidth
+        width: root.tableWidth - root.baseCellWidth
+        height: implicitHeight
+        model: scoreboardChallengersModel
+        title: "Challengers"
+    }
+
+    ScoreboardSpecsPane {
+        id: specsPane
+        anchors.top: challengersPane.bottom
+        anchors.topMargin: 48
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.tableWidth - root.baseCellWidth
         height: implicitHeight
         model: scoreboardSpecsModel
-        baseColor: "black"
+        title: "Spectators"
+    }
+
+    ScoreboardSpecsPane {
+        id: chasersPane
+        anchors.top: specsPane.bottom
+        anchors.topMargin: 48
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.tableWidth - root.baseCellWidth
+        height: implicitHeight
+        model: scoreboardChasersModel
+        title: "Chasers"
     }
 
     Component {

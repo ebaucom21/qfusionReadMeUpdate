@@ -43,6 +43,9 @@ class Scoreboard : public wsw::ScoreboardShared {
 
 	void beginUpdating();
 	void endUpdating();
+
+	[[nodiscard]]
+	auto preparePlayerSpecificData( unsigned index, unsigned clientNum ) -> const ReplicatedScoreboardData *;
 public:
 	static void init();
 	static void shutdown();
@@ -50,9 +53,7 @@ public:
 	static auto instance() -> Scoreboard *;
 
 	[[nodiscard]]
-	auto getRawReplicatedData() -> ReplicatedScoreboardData * {
-		return &m_replicatedData;
-	}
+	auto getRawReplicatedData( unsigned clientNum ) -> const ReplicatedScoreboardData *;
 
 	void beginDefiningSchema();
 	void endDefiningSchema();

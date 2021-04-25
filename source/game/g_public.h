@@ -228,7 +228,7 @@ typedef struct {
 	void ( *ClearSnap )( void );
 
 	const game_state_t *( *GetGameState )();
-	const ReplicatedScoreboardData *( *GetRawScoreboardData )();
+	const ReplicatedScoreboardData *( *GetRawScoreboardData )( unsigned clientNum );
 
 	bool ( *AllowDownload )( edict_t *ent, const char *requestname, const char *uploadname );
 

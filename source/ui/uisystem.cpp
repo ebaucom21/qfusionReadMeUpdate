@@ -540,6 +540,8 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
 	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
 	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
+	context->setContextProperty( "scoreboardChasersModel", m_scoreboardModel.getChasersModel() );
+	context->setContextProperty( "scoreboardChallengersModel", m_scoreboardModel.getChallengersModel() );
 	context->setContextProperty( "demosModel", &m_demosModel );
 	context->setContextProperty( "demosResolver", &m_demosResolver );
 	context->setContextProperty( "demoPlayer", &m_demoPlayer );

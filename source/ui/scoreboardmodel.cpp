@@ -72,7 +72,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 }
 
 auto ScoreboardSpecsModel::rowCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_playerIndicesForList[TEAM_SPECTATOR].size();
+	return (int)m_indices->size();
 }
 
 auto ScoreboardSpecsModel::columnCount( const QModelIndex & ) const -> int {
@@ -87,13 +87,12 @@ auto ScoreboardSpecsModel::data( const QModelIndex &modelIndex, int role ) const
 	if( !modelIndex.isValid() ) {
 		return QVariant();
 	}
-	const auto &indices = m_proxy->m_playerIndicesForList[TEAM_SPECTATOR];
 	const auto row = (unsigned)modelIndex.row();
-	if( row >= indices.size() ) {
+	if( row >= m_indices->size() ) {
 		return QVariant();
 	}
 	const auto &scb = m_proxy->m_scoreboard;
-	const auto playerIndex = indices[row];
+	const auto playerIndex = ( *m_indices )[row];
 	if( role == Ping ) {
 		return formatPing( scb.hasPing() ? scb.getPlayerPing( playerIndex ) : 0 );
 	}
@@ -134,7 +133,10 @@ bool ScoreboardModelProxy::isMixedListRowAlpha( int row ) const {
 }
 
 ScoreboardModelProxy::ScoreboardModelProxy() {
-	new( m_specsModelHolder.unsafe_grow_back() )ScoreboardSpecsModel( this );
+	new( m_specsModelHolder.unsafe_grow_back() )ScoreboardSpecsModel( this, &m_playerIndicesForList[TEAM_SPECTATOR] );
+	new( m_chasersModelHolder.unsafe_grow_back() )ScoreboardSpecsModel( this, &m_chasers );
+	new( m_challengersModelHolder.unsafe_grow_back() )ScoreboardSpecsModel( this, &m_challengers );
+
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_PLAYERS );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_ALPHA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA );
@@ -205,11 +207,25 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 	}
 }
 
-void ScoreboardModelProxy::dispatchSpecRowUpdates( const PlayerUpdates &updates, int rowInTeam ) {
-	ScoreboardSpecsModel &model = m_specsModelHolder.front();
+auto ScoreboardSpecsModel::getChangedRolesForUpdates( const Scoreboard::PlayerUpdates &updates ) -> const QVector<int> * {
+	if( updates.nickname ) {
+		// Consider this as a ping update
+		if( updates.shortSlotsMask ) {
+			return &kNicknameAndPingRoleAsVector;
+		}
+		return &kNicknameRoleAsVector;
+	}
+	if( updates.shortSlotsMask ) {
+		return &kPingRoleAsVector;
+	}
+	return nullptr;
+}
+
+void ScoreboardModelProxy::dispatchSpecRowUpdates( const QVector<int> &changedRoles,
+												   ScoreboardSpecsModel *model, int rowInTeam ) {
 	// TODO: Check roles that got changed, build and supply updated roles vector
-	const QModelIndex modelIndex( model.index( rowInTeam ) );
-	model.dataChanged( modelIndex, modelIndex );
+	const QModelIndex modelIndex( model->index( rowInTeam ) );
+	model->dataChanged( modelIndex, modelIndex );
 }
 
 void ScoreboardModelProxy::checkDisplayVar() {
@@ -232,7 +248,8 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 
 	Scoreboard::PlayerUpdatesList playerUpdates;
 	Scoreboard::TeamUpdatesList teamUpdates;
-	if( !m_scoreboard.checkUpdates( currData, playerUpdates, teamUpdates ) ) {
+	const auto maybeUpdateFlags = m_scoreboard.checkAndGetUpdates( currData, playerUpdates, teamUpdates );
+	if( !maybeUpdateFlags ) {
 		return;
 	}
 
@@ -250,7 +267,6 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 			continue;
 		}
 		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
-		// TODO: How do we separate specs from empty client slots?
 		auto &teamNums = m_playerIndicesForList[teamNum];
 		auto &teamTable = listPlayerTables[teamNum];
 		teamTable[playerIndex] = (uint8_t)teamNums.size();
@@ -260,6 +276,44 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 			auto &mixedTable = listPlayerTables[TEAM_BETA + 1];
 			mixedTable[playerIndex] = (uint8_t)mixedIndices.size();
 			mixedIndices.push_back( playerIndex );
+		}
+	}
+
+	const bool wereChasersReset = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Chasers;
+	const bool wereChallengersReset = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Challengers;
+	const bool wereChasersOrChallengersReset = wereChasersReset | wereChallengersReset;
+	if( wereChasersOrChallengersReset ) {
+		unsigned clientIndices[kMaxPlayers];
+		std::fill( std::begin( clientIndices ), std::end( clientIndices ), ~0u );
+		for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
+			if( m_scoreboard.isPlayerConnected( playerIndex ) ) {
+				const unsigned clientNum = m_scoreboard.getPlayerNum( playerIndex );
+				clientIndices[clientNum] = playerIndex;
+			}
+		}
+		if( wereChasersReset ) {
+			auto &model = m_chasersModelHolder.front();
+			model.beginResetModel();
+			m_chasers.clear();
+			for( unsigned clientNum = 0; clientNum < MAX_CLIENTS; ++clientNum ) {
+				if( m_scoreboard.isClientMyChaser( clientNum ) ) {
+					m_chasers.push_back( clientIndices[clientNum] );
+				}
+			}
+			model.endResetModel();
+		}
+		if( wereChallengersReset ) {
+			auto &model = m_challengersModelHolder.front();
+			model.beginResetModel();
+			m_challengers.clear();
+			for( unsigned i = 0; i < (unsigned)MAX_CLIENTS; ++i ) {
+				if( const auto maybeClientNum = m_scoreboard.getClientNumOfChallenger( i ) ) {
+					m_challengers.push_back( clientIndices[*maybeClientNum] );
+				} else {
+					break;
+				}
+			}
+			model.endResetModel();
 		}
 	}
 
@@ -291,25 +345,72 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		model.endResetModel();
 	}
 
+	// Build index translation tables prior to dispatching updates, if needed
+	alignas( 16 ) int8_t playerIndexToIndexInChasersList[kMaxPlayers];
+	alignas( 16 ) int8_t playerIndexToIndexInChallengersList[kMaxPlayers];
+	std::fill( playerIndexToIndexInChasersList, playerIndexToIndexInChasersList + kMaxPlayers, -1 );
+	std::fill( playerIndexToIndexInChallengersList, playerIndexToIndexInChallengersList + kMaxPlayers, -1 );
+	if( !playerUpdates.empty() && !wereChasersOrChallengersReset ) {
+		if( !wereChasersReset ) {
+			for( unsigned i = 0; i < m_chasers.size(); ++i ) {
+				playerIndexToIndexInChasersList[m_chasers[i]] = (int8_t)i;
+			}
+		}
+		if( !wereChallengersReset ) {
+			for( unsigned i = 0; i < m_challengers.size(); ++i ) {
+				playerIndexToIndexInChallengersList[m_challengers[i]] = (int8_t)i;
+			}
+		}
+	}
+
 	for( const auto &playerUpdate: playerUpdates ) {
 		const auto playerIndex = playerUpdate.playerIndex;
 		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
 			continue;
 		}
-		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
-		if( wasTeamReset[teamNum] ) {
-			continue;
+
+		bool hasCheckedChangedSpecRoles = false;
+		const QVector<int> *changedSpecRoles = nullptr;
+		if( const auto listIndex = playerIndexToIndexInChasersList[playerIndex]; listIndex >= 0 ) {
+			assert( !wereChasersReset );
+			if( !hasCheckedChangedSpecRoles ) {
+				changedSpecRoles = ScoreboardSpecsModel::getChangedRolesForUpdates( playerUpdate );
+				hasCheckedChangedSpecRoles = true;
+			}
+			if( changedSpecRoles ) {
+				dispatchSpecRowUpdates( *changedSpecRoles, &m_chasersModelHolder.front(), listIndex );
+			}
 		}
-		const auto &teamIndicesTable = listPlayerTables[teamNum];
-		const auto rowInTeam = (unsigned)teamIndicesTable[playerIndex];
-		assert( rowInTeam < m_playerIndicesForList[teamNum].size() );
-		if( teamNum == TEAM_SPECTATOR ) {
-			dispatchSpecRowUpdates( playerUpdate, rowInTeam );
-			continue;
+		if( const auto listIndex = playerIndexToIndexInChallengersList[playerIndex]; listIndex >= 0 ) {
+			assert( !wereChallengersReset );
+			if( !hasCheckedChangedSpecRoles ) {
+				changedSpecRoles = ScoreboardSpecsModel::getChangedRolesForUpdates( playerUpdate );
+				hasCheckedChangedSpecRoles = true;
+			}
+			if( changedSpecRoles ) {
+				dispatchSpecRowUpdates( *changedSpecRoles, &m_challengersModelHolder.front(), listIndex );
+			}
 		}
-		const auto &mixedIndicesTable = listPlayerTables[teamNum];
-		const auto rowInMixedList = (unsigned)mixedIndicesTable[playerIndex];
-		dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeam, rowInMixedList );
+
+		const auto teamNum = (int)m_scoreboard.getPlayerTeam( playerIndex );
+		if( !wasTeamReset[teamNum] ) {
+			const auto &teamIndicesTable = listPlayerTables[teamNum];
+			const auto rowInTeam = (int)teamIndicesTable[playerIndex];
+			assert( (unsigned)rowInTeam < (unsigned)m_playerIndicesForList[teamNum].size() );
+			if( teamNum == TEAM_SPECTATOR ) {
+				if( !hasCheckedChangedSpecRoles ) {
+					changedSpecRoles = ScoreboardSpecsModel::getChangedRolesForUpdates( playerUpdate );
+					hasCheckedChangedSpecRoles = true;
+				}
+				if( changedSpecRoles ) {
+					dispatchSpecRowUpdates( *changedSpecRoles, &m_specsModelHolder.front(), rowInTeam );
+				}
+			} else {
+				const auto &mixedIndicesTable = listPlayerTables[teamNum];
+				const auto rowInMixedList = (int)mixedIndicesTable[playerIndex];
+				dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeam, rowInMixedList );
+			}
+		}
 	}
 
 	for( int i = 0; i < 4; ++i ) {

@@ -455,6 +455,8 @@ typedef struct {
 	int64_t stats[MAX_GAME_STATS];
 } game_state_t;
 
+#include <optional>
+
 struct ReplicatedScoreboardData final : public wsw::ScoreboardShared {
 private:
 	[[nodiscard]]
@@ -516,6 +518,9 @@ public:
 	uint64_t playersTeamMask;
 	// See locations remark
 	uint64_t playersFlagsMask;
+	// Bit positions correspond to a player index.
+	// This is supposed to be set individually prior to transmission to a specific pov.
+	uint32_t povChaseMask;
 	int alphaScore;
 	int betaScore;
 	int scores[kMaxPlayers];
@@ -523,6 +528,8 @@ public:
 	uint32_t packedPlayerSpecificData[kMaxPlayers];
 	// Locations are transmitted separately since they can't fit preferred 32 bit of packed player data
 	uint8_t locations[kMaxPlayers];
+	// The challengers queue. Entity numbers are written (this means valid entries are non-zero and start from 1).
+	uint8_t challengersQueue[kMaxPlayers];
 
 	using wsw::ScoreboardShared::kMaxShortSlots;
 
@@ -658,6 +665,19 @@ public:
 	[[nodiscard]]
 	bool isPlayerGhosting( unsigned playerIndex ) const {
 		return testPlayerFlagBit( playerIndex, kFlagBitGhosting );
+	}
+
+	[[nodiscard]]
+	bool isClientMyChaser( unsigned playerNum ) const {
+		assert( playerNum < (unsigned)MAX_CLIENTS );
+		return povChaseMask & ( 1u << playerNum );
+	}
+
+	[[nodiscard]]
+	auto getClientNumOfChallenger( unsigned indexInQueue ) const -> std::optional<unsigned> {
+		assert( indexInQueue < (unsigned)MAX_CLIENTS );
+		const unsigned maybeNum = challengersQueue[indexInQueue];
+		return maybeNum ? std::optional( maybeNum - 1u ) : std::nullopt;
 	}
 
 	void copyThatRow( unsigned destRow, const ReplicatedScoreboardData &that, unsigned thatSrcRow ) {

@@ -4,8 +4,8 @@
 
 using wsw::operator""_asView;
 
-const ReplicatedScoreboardData *G_GetScoreboardData() {
-	return wsw::g::Scoreboard::instance()->getRawReplicatedData();
+const ReplicatedScoreboardData *G_GetScoreboardData( unsigned clientNum ) {
+	return wsw::g::Scoreboard::instance()->getRawReplicatedData( clientNum );
 }
 
 namespace wsw::g {
@@ -300,6 +300,19 @@ void Scoreboard::endUpdating() {
 	std::fill( std::begin( isPlayerConnected ), std::end( isPlayerConnected ), false );
 	std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
 
+	if( const auto *queue = G_Teams_ChallengersQueue() ) {
+		for( unsigned i = 0; ; ++i ) {
+			if( const edict_t *ent = queue[i] ) {
+				assert( !m_replicatedData.challengersQueue[i] );
+				// Non-zero numbers are supposed to indicate valid challenger queue entries
+				assert( ent->s.number && (unsigned)ent->s.number <= (unsigned)kMaxPlayers );
+				m_replicatedData.challengersQueue[i] = (uint8_t)ent->s.number;
+			} else {
+				break;
+			}
+		}
+	}
+
 	// Set ready status automatically for now
 	const bool shouldSetReadyStatusIcon = ( !GS_RaceGametype() && GS_MatchState() < MATCH_STATE_COUNTDOWN );
 	const bool *const readyStates = level.ready;
@@ -408,6 +421,42 @@ void Scoreboard::update() {
 	GT_asCallUpdateScoreboard();
 
 	endUpdating();
+}
+
+auto Scoreboard::getRawReplicatedData( unsigned clientNum ) -> const ReplicatedScoreboardData * {
+	// TODO: Cache the index <-> playerNum relation?
+	for( unsigned i = 0; i < (unsigned)gs.maxclients; ++i ) {
+		if( m_replicatedData.getPlayerNum( i ) == clientNum ) {
+			return preparePlayerSpecificData( i, clientNum );
+		}
+	}
+	throw std::logic_error( "unreachable" );
+}
+
+[[nodiscard]]
+auto Scoreboard::preparePlayerSpecificData( unsigned index, unsigned clientNum ) -> const ReplicatedScoreboardData * {
+	m_replicatedData.povChaseMask = 0;
+	if( !m_replicatedData.isPlayerConnected( index ) ) {
+		return &m_replicatedData;
+	}
+
+	int chasePovEntNum = (int)clientNum + 1;
+	if( m_replicatedData.getPlayerTeam( index ) == TEAM_SPECTATOR ) {
+		const edict_t *ent = game.edicts + clientNum + 1;
+		if( !ent->r.client->resp.chase.active ) {
+			return &m_replicatedData;
+		}
+		chasePovEntNum = ent->r.client->resp.chase.target;
+	}
+
+	for( const edict_t *ent = game.edicts + 1; ent->s.number <= gs.maxclients; ent++ ) {
+		if( ent->r.client->resp.chase.active && ent->r.client->resp.chase.target == chasePovEntNum ) {
+			assert( (unsigned)( ent->s.number - 1 ) < (unsigned)MAX_CLIENTS );
+			m_replicatedData.povChaseMask |= 1u << ( ent->s.number - 1 );
+		}
+	}
+
+	return &m_replicatedData;
 }
 
 }

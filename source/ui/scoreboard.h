@@ -109,6 +109,10 @@ public:
 	}
 
 	[[nodiscard]]
+	auto getPlayerNum( unsigned playerIndex ) const -> unsigned {
+		return m_oldRawData.getPlayerNum( playerIndex );
+	}
+	[[nodiscard]]
 	auto getPlayerTeam( unsigned playerIndex ) const -> unsigned {
 		return m_oldRawData.getPlayerTeam( playerIndex );
 	}
@@ -119,6 +123,15 @@ public:
 	[[nodiscard]]
 	bool isPlayerGhosting( unsigned playerIndex ) const {
 		return m_oldRawData.isPlayerGhosting( playerIndex );
+	}
+
+	[[nodiscard]]
+	bool isClientMyChaser( unsigned playerNum ) const {
+		return m_oldRawData.isClientMyChaser( playerNum );
+	}
+	[[nodiscard]]
+	auto getClientNumOfChallenger( unsigned indexInQueue ) const -> std::optional<unsigned> {
+		return m_oldRawData.getClientNumOfChallenger( indexInQueue );
 	}
 
 	[[nodiscard]]
@@ -166,8 +179,16 @@ public:
 	[[nodiscard]]
 	auto getPlayerClanForColumn( unsigned playerIndex, unsigned column ) const -> wsw::StringView;
 
+	enum class UpdateFlags {
+		Players      = 0x1,
+		Teams        = 0x2,
+		Chasers      = 0x4,
+		Challengers  = 0x8
+	};
+
 	[[nodiscard]]
-	bool checkUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates, TeamUpdatesList &teamUpdates );
+	auto checkAndGetUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates,
+						     TeamUpdatesList &teamUpdates ) -> std::optional<UpdateFlags>;
 };
 
 }

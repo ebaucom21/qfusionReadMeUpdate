@@ -1246,6 +1246,10 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		64, 1, WIRE_BASE128
 	},
 	{
+		offsetof( ReplicatedScoreboardData, povChaseMask ),
+		32, 1, WIRE_BASE128
+	},
+	{
 		offsetof( ReplicatedScoreboardData, alphaScore ),
 		32, 1, WIRE_BASE128
 	},
@@ -1267,6 +1271,10 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 	},
 	{
 		offsetof( ReplicatedScoreboardData, locations ),
+		8, MAX_CLIENTS, WIRE_FIXED_INT8
+	},
+	{
+		offsetof( ReplicatedScoreboardData, challengersQueue ),
 		8, MAX_CLIENTS, WIRE_FIXED_INT8
 	}
 };

@@ -249,13 +249,12 @@ bool Scoreboard::parseAssets( const wsw::StringView &string ) {
 	return true;
 }
 
-bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates, TeamUpdatesList &teamUpdates ) {
+auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList &playerUpdates,
+									 TeamUpdatesList &teamUpdates ) -> std::optional<UpdateFlags> {
 	playerUpdates.clear();
 	teamUpdates.clear();
 
-	// TODO: Check team score updates
-	// TODO: Check team name updates (do we really need to add this test as we already track changes for join buttons?)
-
+	unsigned updatesMask = 0x0;
 	bool isTeamUpdateNeeded[4] { false, false, false, false };
 
 	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
@@ -267,6 +266,21 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 		addPlayerUpdates( m_oldRawData, currData, playerIndex, playerUpdates );
 	}
 
+	if( !playerUpdates.empty() ) {
+		updatesMask |= (unsigned)UpdateFlags::Players;
+	}
+
+	if( currData.povChaseMask != m_oldRawData.povChaseMask ) {
+		updatesMask |= (unsigned)UpdateFlags::Chasers;
+	}
+
+	for( unsigned i = 0; i < kMaxPlayers; ++i ) {
+		if( currData.challengersQueue[i] != m_oldRawData.challengersQueue[i] ) {
+			updatesMask |= (unsigned)UpdateFlags::Challengers;
+			break;
+		}
+	}
+
 	for( unsigned i = 0; i < 4; ++i ) {
 		if( !isTeamUpdateNeeded[i] ) {
 			continue;
@@ -275,13 +289,15 @@ bool Scoreboard::checkUpdates( const RawData &currData, PlayerUpdatesList &playe
 		updates.team = i;
 		updates.players = true;
 		teamUpdates.push_back( updates );
+		updatesMask |= (unsigned)UpdateFlags::Teams;
 	}
 
-	const bool result = !( teamUpdates.empty() && playerUpdates.empty() );
-	if( result ) {
+	if( updatesMask ) {
 		m_oldRawData = currData;
+		return (UpdateFlags)updatesMask;
 	}
-	return result;
+
+	return std::nullopt;
 }
 
 auto Scoreboard::getImageAssetPath( unsigned asset ) const -> std::optional<wsw::StringView> {

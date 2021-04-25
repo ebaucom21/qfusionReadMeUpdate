@@ -50,13 +50,22 @@ class ScoreboardSpecsModel : public QAbstractListModel {
 	friend class ScoreboardModelProxy;
 
 	ScoreboardModelProxy *const m_proxy;
+	const StaticVector<unsigned, MAX_CLIENTS> *const m_indices;
 
 	enum Role {
 		Nickname = Qt::UserRole + 1,
 		Ping,
 	};
 
-	explicit ScoreboardSpecsModel( ScoreboardModelProxy *proxy ) : m_proxy( proxy ) {}
+	static inline QVector<int> kNicknameRoleAsVector { Nickname };
+	static inline QVector<int> kPingRoleAsVector { Ping };
+	static inline QVector<int> kNicknameAndPingRoleAsVector { Nickname, Ping };
+
+	ScoreboardSpecsModel( ScoreboardModelProxy *proxy, const StaticVector<unsigned, MAX_CLIENTS> *indices )
+		: m_proxy( proxy ), m_indices( indices ) {}
+
+	[[nodiscard]]
+	static auto getChangedRolesForUpdates( const Scoreboard::PlayerUpdates &updates ) -> const QVector<int> *;
 
 	[[nodiscard]]
 	auto rowCount( const QModelIndex & ) const -> int override;
@@ -86,6 +95,8 @@ public:
 	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
 	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
+	StaticVector<ScoreboardSpecsModel, 1> m_chasersModelHolder;
+	StaticVector<ScoreboardSpecsModel, 1> m_challengersModelHolder;
 
 	cvar_s *m_displayVar { nullptr };
 	Display m_display { SideBySide };
@@ -96,11 +107,13 @@ public:
 	void checkDisplayVar();
 
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForList[5];
+	wsw::StaticVector<unsigned, MAX_CLIENTS> m_chasers;
+	wsw::StaticVector<unsigned, MAX_CLIENTS> m_challengers;
 
 	using PlayerUpdates = Scoreboard::PlayerUpdates;
 
 	void dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team, int rowInTeam, int rowInMixedList );
-	void dispatchSpecRowUpdates( const PlayerUpdates &updates, int rowInTeam );
+	void dispatchSpecRowUpdates( const QVector<int> &changedRoles, ScoreboardSpecsModel *model, int rowInTeam );
 public:
 	enum class QmlColumnKind {
 		Nickname,
@@ -144,6 +157,10 @@ public:
 
 	[[nodiscard]]
 	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }
+	[[nodiscard]]
+	auto getChasersModel() -> ScoreboardSpecsModel * { return &m_chasersModelHolder[0]; }
+	[[nodiscard]]
+	auto getChallengersModel() -> ScoreboardSpecsModel * { return &m_challengersModelHolder[0]; }
 	[[nodiscard]]
 	auto getPlayersModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[0]; }
 	[[nodiscard]]
