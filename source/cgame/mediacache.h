@@ -161,6 +161,9 @@ public:
 	CachedSound sfxGrenadeWeakExplosion { this, wsw::StringView( S_WEAPON_GRENADE_W_HIT ) };
 	CachedSound sfxGrenadeStrongExplosion { this, wsw::StringView( S_WEAPON_GRENADE_S_HIT ) };
 
+	CachedSound sfxBombletBounce { this, wsw::StringView( S_BOMBLET_BOUNCE ) };
+	CachedSound sfxBombletExplosion { this, wsw::StringView( S_BOMBLET_EXPLOSION ) };
+
 	CachedSound sfxRocketLauncherWeakHit { this, wsw::StringView( S_WEAPON_ROCKET_W_HIT ) };
 	CachedSound sfxRocketLauncherStrongHit { this, wsw::StringView( S_WEAPON_ROCKET_S_HIT ) };
 

@@ -811,7 +811,7 @@ inline bool SplashPropagationSolver::isVulnerable( const edict_t *ent, bool vola
 		return false;
 	}
 	const auto entType = ent->s.type;
-	return entType == ET_ROCKET || entType == ET_GRENADE || entType == ET_WAVE;
+	return entType == ET_ROCKET || entType == ET_GRENADE || entType == ET_WAVE || entType == ET_BOMBLET;
 }
 
 auto SplashPropagationSolver::findRawEntsInRadius( int *rawEntNums ) const -> int {
@@ -899,20 +899,37 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 
 		// Weapon jumps hack : when knockback on self, use strong weapon definition
 		const edict_t *ent = gameEdicts + entNum;
-		const bool isSelfDamage = ent == m_attacker && ent->r.client;
-		const auto *weapondef = isSelfDamage ? weaponDefForSelfDamage( m_inflictor ) : nullptr;
-		if( weapondef ) {
-			if( isRaceGametype ) {
-				const float splashFrac = weapondef->firedef.splashfrac;
-				RS_SplashFrac( entNum, origin, radius, p->pushDir, &kickFrac, nullptr, splashFrac );
-			} else {
-				G_SplashFrac( entNum, origin, radius, p->pushDir, &kickFrac, nullptr );
-				minKnockback = (float)weapondef->firedef.minknockback;
-				maxKnockback = (float)weapondef->firedef.knockback;
-				minKnockback = std::min( minKnockback, maxKnockback );
+		// If self-damage
+		if( ent == m_attacker && ent->r.client ) {
+			float splashFrac        = 0.0f;
+			float minSelfKnockback  = 0.0f;
+			float maxSelfKnockback  = 0.0f;
+			float selfDamageScale   = 0.0f;
+			bool hasFoundParams     = false;
+			if( const auto *def = weaponDefForSelfDamage( m_inflictor ) ) {
+				splashFrac        = def->firedef.splashfrac;
+				minSelfKnockback  = (float)def->firedef.minknockback;
+				maxSelfKnockback  = (float)def->firedef.knockback;
+				minSelfKnockback  = std::min( minKnockback, maxKnockback );
+				selfDamageScale   = def->firedef.selfdamage;
+				hasFoundParams    = true;
+			} else if( ent->s.type == ET_BOMBLET ) {
+				splashFrac        = 1.0f;
+				minSelfKnockback  = kMinBombletKnockback;
+				maxSelfKnockback  = kMaxBombletKnockback;
+				selfDamageScale   = 1.0f;
+				hasFoundParams    = true;
 			}
-			knockback = ( minKnockback + ( ( maxKnockback - minKnockback ) * kickFrac ) ) * g_self_knockback->value;
-			damage *= weapondef->firedef.selfdamage;
+			if( hasFoundParams ) {
+				if( isRaceGametype ) {
+					RS_SplashFrac( entNum, origin, radius, p->pushDir, &kickFrac, nullptr, splashFrac );
+				} else {
+					G_SplashFrac( entNum, origin, radius, p->pushDir, &kickFrac, nullptr );
+				}
+				knockback = ( minSelfKnockback + ( ( maxSelfKnockback - minSelfKnockback ) * kickFrac ) );
+				knockback *= g_self_knockback->value;
+				damage *= selfDamageScale;
+			}
 		}
 
 		if( knockback < 1.0f ) {
@@ -974,6 +991,8 @@ void SplashPropagationSolver::applyDamage( const DamageParams &params ) {
 			W_Detonate_Rocket( ent, m_inflictor, nullptr, 0 );
 		} else if( ent->s.type == ET_GRENADE ) {
 			W_Detonate_Grenade( ent, m_inflictor );
+		} else if( ent->s.type == ET_BOMBLET ) {
+			W_Detonate_Bomblet( ent, m_inflictor );
 		} else {
 			assert( ent->s.type == ET_WAVE );
 			W_Detonate_Wave( ent, m_inflictor, nullptr, 0 );

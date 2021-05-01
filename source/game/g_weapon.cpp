@@ -107,9 +107,6 @@ static void W_Fire_Lead( edict_t *self, vec3_t start, vec3_t aimdir, vec3_t axis
 }
 #endif
 
-#define DIRECTAIRTHIT_DAMAGE_BONUS 0
-#define DIRECTHIT_DAMAGE_BONUS 0
-
 enum {
 	PROJECTILE_TOUCH_NOT = 0,
 	PROJECTILE_TOUCH_DIRECTHIT,
@@ -752,41 +749,171 @@ edict_t *W_Fire_Grenade( edict_t *self, vec3_t start, vec3_t angles, int speed, 
 * W_Touch_Rocket
 */
 static void W_Touch_Rocket( edict_t *ent, edict_t *other, cplane_t *plane, int surfFlags ) {
-	vec3_t dir;
-	int hitType;
 
 	if( surfFlags & SURF_NOIMPACT ) {
 		G_FreeEdict( ent );
 		return;
 	}
 
-	hitType = G_Projectile_HitStyle( ent, other );
+	const int hitType = G_Projectile_HitStyle( ent, other );
 	if( hitType == PROJECTILE_TOUCH_NOT ) {
 		return;
 	}
 
 	if( other->takedamage ) {
-		int directHitDamage = ent->projectileInfo.maxDamage;
-
+		vec3_t dir;
 		VectorNormalize2( ent->velocity, dir );
-
 		if( hitType == PROJECTILE_TOUCH_DIRECTSPLASH ) { // use hybrid direction from splash and projectile
-
 			G_SplashFrac( ENTNUM( other ), ent->s.origin, ent->projectileInfo.radius, dir, NULL, NULL );
-		} else {
-			VectorNormalize2( ent->velocity, dir );
-
-			if( hitType == PROJECTILE_TOUCH_DIRECTAIRHIT ) {
-				directHitDamage += DIRECTAIRTHIT_DAMAGE_BONUS;
-			} else if( hitType == PROJECTILE_TOUCH_DIRECTHIT ) {
-				directHitDamage += DIRECTHIT_DAMAGE_BONUS;
-			}
 		}
 
-		G_Damage( other, ent, ent->r.owner, dir, ent->velocity, ent->s.origin, directHitDamage, ent->projectileInfo.maxKnockback, ent->projectileInfo.stun, 0, ent->style );
+		G_Damage( other, ent, ent->r.owner, dir, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, ent->projectileInfo.stun, 0, ent->style );
 	}
 
 	W_Detonate_Rocket( ent, other, plane, surfFlags );
+}
+
+void W_Bomblet_Explode( edict_t *ent, const float *dir, const edict_t *ignore ) {
+	vec3_t origin;
+	int radius;
+	edict_t *event;
+	vec3_t up = { 0, 0, 1 };
+	if( !dir ) {
+		dir = up;
+	}
+
+	G_RadiusDamage( ent, ent->r.owner, NULL, ignore, MOD_ROCKET_SPLASH_S );
+
+	radius = ( ( ent->projectileInfo.radius * 1 / 8 ) > 127 ) ? 127 : ( ent->projectileInfo.radius * 1 / 8 );
+	VectorMA( ent->s.origin, -0.02, ent->velocity, origin );
+	event = G_SpawnEvent( EV_BOMBLET_EXPLOSION, ( dir ? DirToByte( dir ) : 0 ), ent->s.origin );
+	event->s.firemode = FIRE_MODE_STRONG;
+	event->s.weapon = radius;
+
+	G_FreeEdict( ent );
+}
+
+void W_Bomblet_Explode( edict_t *ent ) {
+	W_Bomblet_Explode( ent, nullptr, nullptr );
+}
+
+void W_Detonate_Bomblet( edict_t *ent, const edict_t *ignore ) {
+	W_Bomblet_Explode( ent, nullptr, ignore );
+}
+
+/*
+* W_Touch_Grenade
+*/
+static void W_Touch_Bomblet( edict_t *ent, edict_t *other, cplane_t *plane, int surfFlags ) {
+	if( surfFlags & SURF_NOIMPACT ) {
+		G_FreeEdict( ent );
+		return;
+	}
+
+	const int hitType = G_Projectile_HitStyle( ent, other );
+	if( hitType == PROJECTILE_TOUCH_NOT ) {
+		return;
+	}
+
+	// don't explode on doors and plats that take damage
+	// except for doors and plats that take damage in race
+	if( !other->takedamage || ( !GS_RaceGametype() && ISBRUSHMODEL( other->s.modelindex ) ) ) {
+		// Suppress event spam by transmitting BOUNCE events of only "long-living" entities
+		if( ent->style ) {
+			G_AddEvent( ent, EV_BOMBLET_BOUNCE, 0, true );
+		}
+		return;
+	}
+
+	if( other->takedamage ) {
+		vec3_t dir;
+		VectorNormalize2( ent->velocity, dir );
+
+		if( hitType == PROJECTILE_TOUCH_DIRECTSPLASH ) { // use hybrid direction from splash and projectile
+			G_SplashFrac( ENTNUM( other ), ent->s.origin, ent->projectileInfo.radius, dir, NULL, NULL );
+		}
+
+		G_Damage( other, ent, ent->r.owner, dir, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, ent->projectileInfo.stun, 0, ent->style );
+	}
+
+	ent->enemy = other;
+	W_Bomblet_Explode( ent, plane ? plane->normal : NULL, nullptr );
+}
+
+static edict_t *W_Fire_Bomblet( edict_t *self, vec3_t start, vec3_t angles, int timeout ) {
+	constexpr int minKnockback = kMinBombletKnockback;
+	constexpr int maxKnockback = kMaxBombletKnockback;
+	constexpr int stun = 500;
+	constexpr int radius = 56;
+	constexpr int minDamage = kMinBombletDamage;
+	constexpr int speed = 325;
+	float damage = kMaxBombletDamage;
+	if( GS_Instagib() ) {
+		damage = 9999;
+	}
+
+	edict_t *ent = W_Fire_TossProjectile( self, start, angles, speed, damage, minKnockback, maxKnockback, stun, minDamage, radius, timeout, 0 );
+	VectorClear( ent->s.angles );
+	ent->style = MOD_ROCKET_SPLASH_S;
+	ent->s.type = ET_BOMBLET;
+	ent->r.owner = self->r.owner;
+	ent->s.ownerNum = self->s.ownerNum;
+	ent->movetype = MOVETYPE_BOUNCEGRENADE;
+	ent->touch = W_Touch_Bomblet;
+	ent->use = NULL;
+	ent->think = W_Bomblet_Explode;
+	ent->classname = "bomblet";
+	ent->enemy = NULL;
+	ent->s.modelindex = trap_ModelIndex( PATH_BOMBLET_MODEL );
+	ent->s.effects |= EF_STRONG_WEAPON;
+
+	GClip_LinkEntity( ent );
+
+	return ent;
+}
+
+static constexpr unsigned kBombletSpawnInterval = 64 + 16;
+
+static void W_BombletSpawner_Think( edict_t *ent ) {
+	const int spawnCount = std::min( ent->count, ( ( random() > 0.5 ) ? 2 : 1 ) );
+	for( int i = 0; i < spawnCount; ++i ) {
+		float emitterDir[3];
+		AngleVectors( ent->s.angles, emitterDir, nullptr, nullptr );
+
+		float angles[3] { 0, 0, 0 };
+		for( int fitAttempt = 0; fitAttempt < 16; ++fitAttempt ) {
+			vec3_t dir;
+			ByteToDir( (int)( random() * NUMVERTEXNORMALS ) % NUMVERTEXNORMALS, dir );
+			if( DotProduct( dir, emitterDir ) > 0 ) {
+				VecToAngles( dir, angles );
+				break;
+			}
+		}
+
+		const bool isLongLiving = ( random() > 0.9 ) && ( spawnCount == 1 );
+		const int timeout = isLongLiving ? (int)( 500 + 1000 * random() ) : (int)( 200 + 100 * random() );
+		if( edict_t *const bomblet = W_Fire_Bomblet( ent, ent->s.origin, angles, timeout ) ) {
+			bomblet->style = (int)isLongLiving;
+			// TODO: Vary using a smooth transition using Z normal value?
+			if( bomblet->velocity[2] > 0 ) {
+				bomblet->velocity[2] *= 0.75f;
+			} else {
+				bomblet->velocity[2] *= 0.33f;
+			}
+			// Let long-living stuff fall down to spice it
+			if( !isLongLiving ) {
+				bomblet->gravity *= 0.75f;
+			}
+		}
+	}
+
+	ent->count -= spawnCount;
+	if( ent->count ) {
+		ent->nextThink = level.time + kBombletSpawnInterval;
+		ent->think = W_BombletSpawner_Think;
+	} else {
+		G_FreeEdict( ent );
+	}
 }
 
 void W_Detonate_Rocket( edict_t *ent, const edict_t *ignore, const cplane_t *plane, int surfFlags ) {
@@ -802,6 +929,20 @@ void W_Detonate_Rocket( edict_t *ent, const edict_t *ignore, const cplane_t *pla
 		event = G_SpawnEvent( EV_ROCKET_EXPLOSION, DirToByte( plane ? plane->normal : NULL ), explosion_origin );
 		event->s.firemode = ( ent->s.effects & EF_STRONG_WEAPON ) ? FIRE_MODE_STRONG : FIRE_MODE_WEAK;
 		event->s.weapon = ( ( ent->projectileInfo.radius * 1 / 8 ) > 255 ) ? 255 : ( ent->projectileInfo.radius * 1 / 8 );
+
+		if( ent->s.effects & EF_STRONG_WEAPON ) {
+			edict_t *cluster = G_Spawn();
+			cluster->s.solid = SOLID_NOT;
+			VectorCopy( explosion_origin, cluster->s.origin );
+			VecToAngles( plane->normal, cluster->s.angles );
+			cluster->classname = "bomblet_spawner";
+			cluster->count = 6;
+			cluster->r.owner = ent->r.owner;
+			cluster->s.ownerNum = ENTNUM( ent->r.owner );
+			cluster->think = W_BombletSpawner_Think;
+			cluster->nextThink = level.time + kBombletSpawnInterval;
+			GClip_LinkEntity( cluster );
+		}
 	}
 
 	// free the rocket at next frame

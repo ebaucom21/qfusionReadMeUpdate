@@ -839,6 +839,8 @@ typedef enum {
 	EV_BOLT_EXPLOSION,
 	EV_WAVE_EXPLOSION,
 	EV_INSTA_EXPLOSION,
+	EV_BOMBLET_BOUNCE,
+	EV_BOMBLET_EXPLOSION,
 
 	// 3 spots reserved for new weapons sfx, so
 	// the events below don't change their numbers easily
@@ -913,6 +915,8 @@ enum {
 	ET_GRENADE,
 	ET_PLASMA,
 	ET_WAVE,
+
+	ET_BOMBLET,
 
 	ET_SPRITE,
 

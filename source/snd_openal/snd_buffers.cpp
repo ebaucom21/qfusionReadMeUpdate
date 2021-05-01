@@ -161,6 +161,10 @@ static void S_SetQualityHint( sfx_t *sfx ) {
 		return;
 	}
 
+	if( strstr( sfx->filename, "sounds/weapons/bomblet" ) ) {
+		return;
+	}
+
 	if( strstr( sfx->filename, S_QUAD_FIRE ) || strstr( sfx->filename, S_SHELL_HIT ) ) {
 		return;
 	}

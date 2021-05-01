@@ -897,7 +897,13 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 
 void W_Detonate_Rocket( edict_t *ent, const edict_t *ignore, const cplane_t *plane, int surfFlags );
 void W_Detonate_Grenade( edict_t *self, const edict_t *ignore );
+void W_Detonate_Bomblet( edict_t *self, const edict_t *ignore );
 void W_Detonate_Wave( edict_t *ent, const edict_t *ignore, const cplane_t *plane, int surfFlags );
+
+constexpr const float kMinBombletKnockback = 32.5f;
+constexpr const float kMaxBombletKnockback = 75.0f;
+constexpr const float kMinBombletDamage    = 5;
+constexpr const float kMaxBombletDamage    = 10;
 
 bool Pickup_Weapon( edict_t *other, const gsitem_t *item, int flags, int ammo_count );
 edict_t *Drop_Weapon( edict_t *ent, const gsitem_t *item );
