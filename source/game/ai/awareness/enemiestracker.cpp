@@ -344,10 +344,10 @@ float AiEnemiesTracker::ModifyWeightForDamageRatio( const edict_t *enemy, float 
 
 	float damageToKill = DamageToKill( enemy );
 	if( hasQuad ) {
-		damageToKill /= 4;
+		damageToKill /= QUAD_DAMAGE_SCALE;
 	}
 	if( ::HasShell( enemy ) ) {
-		damageToKill *= 4;
+		damageToKill *= QUAD_DAMAGE_SCALE;
 	}
 
 	// abs(damageToBeKilled - damageToKill) / maxDamageToKill may be > 1
