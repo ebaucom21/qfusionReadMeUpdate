@@ -18,27 +18,32 @@ void AvxOps::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, cons
 	int numAvxFriendlyShapes = 0;
 	int numOtherShapes = 0;
 
-	__m128 testedMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0 );
-	__m128 testedMaxs = _mm_setr_ps( maxs[0], maxs[1], maxs[2], 1 );
+	const __m128 testedMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0 );
+	const __m128 testedMaxs = _mm_setr_ps( maxs[0], maxs[1], maxs[2], 1 );
 
 	BoundsBuilder builder;
 	for( int i = 0; i < numSrcShapes; ++i ) {
 		const cbrush_t *__restrict b = srcShapes[i];
-		__m128 shapeMins = _mm_loadu_ps( b->mins );
-		__m128 shapeMaxs = _mm_loadu_ps( b->maxs );
-		if( !boundsIntersectSse42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
-			continue;
-		}
+		const __m128 shapeMins = _mm_loadu_ps( b->mins );
+		const __m128 shapeMaxs = _mm_loadu_ps( b->maxs );
 
-		builder.addPoint( shapeMins );
-		builder.addPoint( shapeMaxs );
-		if( b->numSseGroups == 2 ) {
-			assert( b->numsides >= 6 && b->numsides <= 8 );
-			avxFriendlyShapes[numAvxFriendlyShapes++] = b;
-		} else {
-			assert( b->numsides >= 6 );
-			otherShapes[numOtherShapes++] = b;
-		}
+		const __m128 cmp1 = _mm_cmpge_ps( shapeMins, testedMaxs );
+		const __m128 cmp2 = _mm_cmpge_ps( testedMins, shapeMaxs );
+		const __m128 mask = _mm_or_ps( cmp1, cmp2 );
+
+		builder.addPointsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
+
+		// Advance / consider it added if no mask bit set
+		const bool shouldAdd = ( _mm_movemask_ps( mask ) == 0 );
+		const bool isAvxFriendly = ( b->numSseGroups == 2 );
+
+		assert( ( isAvxFriendly && ( b->numsides >= 6 && b->numsides <= 8 ) ) || b->numsides >= 6 );
+
+		avxFriendlyShapes[numAvxFriendlyShapes] = b;
+		numAvxFriendlyShapes += ( shouldAdd & isAvxFriendly );
+
+		otherShapes[numOtherShapes] = b;
+		numOtherShapes += ( shouldAdd & !isAvxFriendly );
 	}
 
 	list->numOtherShapes = numOtherShapes;

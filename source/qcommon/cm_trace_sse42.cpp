@@ -435,21 +435,23 @@ void Sse42Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, co
 	int numDestShapes = 0;
 	auto *destShapes = list->shapes;
 
-	__m128 testedMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0 );
-	__m128 testedMaxs = _mm_setr_ps( maxs[0], maxs[1], maxs[2], 1 );
+	const __m128 testedMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0 );
+	const __m128 testedMaxs = _mm_setr_ps( maxs[0], maxs[1], maxs[2], 1 );
 
 	BoundsBuilder builder;
 	for( int i = 0; i < numSrcShapes; ++i ) {
 		const cbrush_t *__restrict b = srcShapes[i];
-		__m128 shapeMins = _mm_loadu_ps( b->mins );
-		__m128 shapeMaxs = _mm_loadu_ps( b->maxs );
-		if( !boundsIntersectSse42( testedMins, testedMaxs, shapeMins, shapeMaxs ) ) {
-			continue;
-		}
+		const __m128 shapeMins = _mm_loadu_ps( b->mins );
+		const __m128 shapeMaxs = _mm_loadu_ps( b->maxs );
 
-		destShapes[numDestShapes++] = b;
-		builder.addPoint( shapeMins );
-		builder.addPoint( shapeMaxs );
+		const __m128 cmp1 = _mm_cmpge_ps( shapeMins, testedMaxs );
+		const __m128 cmp2 = _mm_cmpge_ps( testedMins, shapeMaxs );
+		const __m128 mask = _mm_or_ps( cmp1, cmp2 );
+
+		builder.addPointsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
+		destShapes[numDestShapes] = b;
+		// Advance / consider it added if no mask bit set
+		numDestShapes += ( _mm_movemask_ps( mask ) == 0 );
 	}
 
 	list->numShapes = numDestShapes;

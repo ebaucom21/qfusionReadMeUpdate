@@ -10,6 +10,7 @@ private slots:
 	void test_generic();
 	void test_sse2();
 	void test_sse2Specific();
+	void test_addingByMask();
 };
 
 #endif

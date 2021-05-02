@@ -385,6 +385,47 @@ public:
 	}
 #endif
 
+#ifdef WSW_USE_SSE41
+	void addPointsIfNoCmpMaskDWordSet( __m128 mask, __m128 pt1, __m128 pt2 ) {
+		// Find a minimal element of the mask (SSE4.1).
+		// This command can only operate on 16-bit words but is fast.
+		// The mask is supposed to contain 4 32-bit dwords, each of them either 0 or ~0.
+
+		// We have to flip bits as only the MIN comnand is available
+		__m128i flippedMask = _mm_cmpeq_epi32( _mm_castps_si128( mask ), _mm_setzero_si128() );
+		__m128i minMaskElem = _mm_minpos_epu16( flippedMask );
+		// The byte contains either 0xFF or 0x0.
+		// Broadcast it to all lanes (Supplementary SSE3).
+		__m128 blendMask = _mm_castsi128_ps( _mm_shuffle_epi8( minMaskElem, _mm_setzero_si128() ) );
+		// The blend mask now must contain either all-ones or all-zeros.
+
+		//int values[4];
+		//_mm_store_ps( (float *)values, blendMask );
+		//printf( "Blend mask: %x %x %x %x\n", values[0], values[1], values[2], values[3] );
+
+		// This should give a hint to load old stuff to registers
+		__m128 oldMins = m_mins;
+		__m128 oldMaxs = m_maxs;
+
+		// Compute mins/maxs of old mins and new points.
+		// Supply old mins/maxs instead of points if we should actually reject these points.
+		// This could have been more clear in case of a single added point
+		// but we fuse addition of two points in a single method call so we don't have to compute the blend mask twice.
+
+		__m128 mins1 = _mm_min_ps( oldMins, _mm_blendv_ps( oldMins, pt1, blendMask ) );
+		__m128 mins2 = _mm_min_ps( oldMins, _mm_blendv_ps( oldMins, pt2, blendMask ) );
+		__m128 maxs1 = _mm_max_ps( oldMaxs, _mm_blendv_ps( oldMaxs, pt1, blendMask ) );
+		__m128 maxs2 = _mm_max_ps( oldMaxs, _mm_blendv_ps( oldMaxs, pt2, blendMask ) );
+
+		// Write back to memory
+		m_mins = _mm_min_ps( mins1, mins2 );
+		m_maxs = _mm_max_ps( maxs1, maxs2 );
+
+		// TODO: Shouldn't be marked if some mask bits were set
+		markAsTouched();
+	}
+#endif
+
 	void storeTo( float *__restrict mins, float *__restrict maxs ) const {
 		checkTouched();
 

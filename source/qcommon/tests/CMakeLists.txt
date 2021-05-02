@@ -7,7 +7,7 @@ find_package(Qt5Test REQUIRED)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_BUILD_TYPE DEBUG)
-set(CMAKE_CXX_FLAGS "-O0 -g -fno-omit-frame-pointer -fsanitize=address")
+set(CMAKE_CXX_FLAGS "-O0 -g -fno-omit-frame-pointer -fsanitize=address -msse4.2")
 
 enable_testing(true)
 
