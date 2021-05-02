@@ -23,7 +23,7 @@ Item {
         height: contentHeight
         width: root.width - 32
         model: hudDataModel.getTeamListModel()
-        layer.enabled: true
+        layer.enabled: count
         layer.effect: ElevationEffect { elevation: 64 }
         delegate: Rectangle {
             width: list.width
