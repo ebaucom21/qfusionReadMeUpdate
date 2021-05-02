@@ -54,8 +54,6 @@ static cvar_t *cg_showCaptureAreas;
 static cvar_t *cg_showObituaries;
 static cvar_t *cg_showTimer;
 
-void CG_SC_ResetObituaries() {}
-void CG_SC_Obituary() {}
 void CG_UpdateHUDPostDraw() {}
 void CG_ClearHUDInputState() {}
 void CG_ClearAwards() {}

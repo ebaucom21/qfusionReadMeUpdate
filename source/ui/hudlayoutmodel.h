@@ -39,7 +39,8 @@ public:
 		AlphaScore,
 		BetaScore,
 		Chat,
-		TeamList
+		TeamList,
+		Obituaries
 	};
 	Q_ENUM( Kind );
 

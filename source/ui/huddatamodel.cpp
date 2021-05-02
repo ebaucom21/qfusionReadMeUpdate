@@ -92,6 +92,29 @@ public:
 		assert( weapon && (unsigned)weapon < (unsigned)WEAP_TOTAL );
 		return m_weaponColors[weapon - 1];
 	}
+
+	[[nodiscard]]
+	auto getObituaryIconPath( unsigned meansOfDeath ) const -> QByteArray {
+		assert( meansOfDeath >= MOD_GUNBLADE_W && meansOfDeath < (unsigned)MOD_COUNT );
+		// No static guarantees here but we can spot bugs easily in this case
+		if( meansOfDeath >= MOD_GUNBLADE_W && meansOfDeath <= MOD_INSTAGUN_S ) {
+			return getWeaponIconPath( (int)( WEAP_GUNBLADE + ( meansOfDeath - MOD_GUNBLADE_W ) / 2 ) );
+		}
+		// TODO: What's the point of having these separate values?
+		if( meansOfDeath == MOD_GRENADE_SPLASH_S || meansOfDeath == MOD_GRENADE_SPLASH_W ) {
+			return getWeaponIconPath( WEAP_GRENADELAUNCHER );
+		}
+		if( meansOfDeath == MOD_ROCKET_SPLASH_S || meansOfDeath == MOD_ROCKET_SPLASH_W ) {
+			return getWeaponIconPath( WEAP_ROCKETLAUNCHER );
+		}
+		if( meansOfDeath == MOD_PLASMA_SPLASH_S || meansOfDeath == MOD_PLASMA_SPLASH_W ) {
+			return getWeaponIconPath( WEAP_PLASMAGUN );
+		}
+		if( meansOfDeath >= MOD_SHOCKWAVE_SPLASH_W && meansOfDeath <= MOD_SHOCKWAVE_CORONA_S ) {
+			return getWeaponIconPath( WEAP_SHOCKWAVE );
+		}
+		return getWeaponIconPath( WEAP_GUNBLADE );
+	}
 };
 
 static WeaponPropsCache weaponPropsCache;
@@ -395,6 +418,71 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 	}
 }
 
+auto ObituariesModel::roleNames() const -> QHash<int, QByteArray> {
+	return { { { Victim, "victim" }, { Attacker, "attacker" }, { IconPath, "iconPath" } } };
+}
+
+auto ObituariesModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto ObituariesModel::data( const QModelIndex &index, int role ) const -> QVariant {
+	if( index.isValid() ) {
+		if( const auto row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			switch( role ) {
+				case Victim: return toStyledText( m_entries[row].victim.asView() );
+				case Attacker: return toStyledText( m_entries[row].attacker.asView() );
+				case IconPath: return weaponPropsCache.getObituaryIconPath( m_entries[row].meansOfDeath );
+				default: return QVariant();
+			}
+		}
+	}
+	return QVariant();
+}
+
+void ObituariesModel::addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
+								   const std::optional<wsw::StringView> &attacker ) {
+	// TODO: Add to pending entries in case of a huge feed size?
+	if( m_entries.size() == m_entries.capacity() ) {
+		beginRemoveRows( QModelIndex(), 0, 0 );
+		m_entries.erase( m_entries.begin() );
+		endRemoveRows();
+	}
+
+	beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() );
+
+	m_entries.emplace_back( Entry {} );
+	m_entries.back().meansOfDeath = meansOfDeath;
+	m_entries.back().timestamp = timestamp;
+	m_entries.back().victim.assign( victim );
+	if( attacker ) {
+		m_entries.back().attacker.assign( *attacker );
+	}
+
+	endInsertRows();
+}
+
+void ObituariesModel::reset() {
+	beginResetModel();
+	m_entries.clear();
+	endResetModel();
+}
+
+void ObituariesModel::update( int64_t currTime ) {
+	unsigned i = 0;
+	for(; i < m_entries.size(); ++i ) {
+		if( m_entries[i].timestamp + 5000 > currTime ) {
+			break;
+		}
+	}
+
+	if( i ) {
+		beginRemoveRows( QModelIndex(), 0, (int)( i - 1 ) );
+		m_entries.erase( m_entries.begin(), m_entries.begin() + i );
+		endRemoveRows();
+	}
+}
+
 auto HudDataModel::getActiveWeaponIcon() const -> QByteArray {
 	return m_activeWeapon ? weaponPropsCache.getWeaponIconPath( m_activeWeapon ) : QByteArray();
 }
@@ -449,7 +537,15 @@ auto HudDataModel::getTeamListModel() -> QAbstractListModel * {
 	return &m_teamListModel;
 }
 
-void HudDataModel::checkPropertyChanges() {
+auto HudDataModel::getObituariesModel() -> QAbstractListModel * {
+	if( !m_hasSetObituariesModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_obituariesModel, QQmlEngine::CppOwnership );
+		m_hasSetObituariesModelOwnership = true;
+	}
+	return &m_obituariesModel;
+}
+
+void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	const bool hadTwoTeams = getHasTwoTeams();
 	m_hasTwoTeams = CG_HasTwoTeams();
 	if( const bool hasTwoTeams = getHasTwoTeams(); hasTwoTeams != hadTwoTeams ) {
@@ -591,6 +687,7 @@ void HudDataModel::checkPropertyChanges() {
 	}
 
 	m_inventoryModel.checkPropertyChanges();
+	m_obituariesModel.update( currTime );
 }
 
 void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {

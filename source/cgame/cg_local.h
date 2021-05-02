@@ -559,7 +559,6 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 void CG_ClearPointedNum( void );
 
 void CG_SC_ResetObituaries( void );
-void CG_SC_Obituary( void );
 void CG_UpdateHUDPostDraw( void );
 void CG_ClearHUDInputState( void );
 void CG_ClearAwards( void );

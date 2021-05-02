@@ -392,6 +392,7 @@ auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QS
 		case BetaScore: return QSize( 128, 56 );
 		case Chat: return QSize( 384, 96 );
 		case TeamList: return QSize( 256, 128 );
+		case Obituaries: return QSize( 256, 108 );
 		default: return std::nullopt;
 	}
 }
@@ -712,6 +713,7 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case BetaScore: return TeamBasedOnly;
 		case Chat: return NoFlags;
 		case TeamList: return (Flags)( TeamBasedOnly | PovOnly );
+		case Obituaries: return NoFlags;
 		default: throw std::logic_error( "unreachable" );
 	}
 }

@@ -58,10 +58,10 @@ static void CG_SC_ChatPrint( void ) {
 	if( teamonly ) {
 		CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
 					   cg.frame.playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
-		wsw::ui::UISystem::instance()->addToTeamChat( nameView, cg.realTime, textView );
+		wsw::ui::UISystem::instance()->addToTeamChat( nameView, textView );
 	} else {
 		CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
-		wsw::ui::UISystem::instance()->addToChat( nameView, cg.realTime, textView );
+		wsw::ui::UISystem::instance()->addToChat( nameView, textView );
 	}
 
 	if( cg_chatBeep->integer ) {
@@ -572,6 +572,37 @@ static void CG_SC_PlaySound() {
 	}
 
 	SoundSystem::Instance()->StartLocalSound( Cmd_Argv( 1 ) );
+}
+
+void CG_SC_ResetObituaries() {
+	wsw::ui::UISystem::instance()->resetObituaries();
+}
+
+static void CG_SC_Obituary() {
+	if( Cmd_Argc() == 4 ) {
+		unsigned args[3];
+		for( int i = 0; i < 3; ++i ) {
+			if( const auto maybeNum = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( i + 1 ) ) ) ) {
+				args[i] = *maybeNum;
+			} else {
+				return;
+			}
+		}
+		const auto victim = args[0], attacker = args[1], meansOfDeath = args[2];
+		if( ( victim && victim < (unsigned)( MAX_CLIENTS + 1 ) ) && attacker < (unsigned)( MAX_CLIENTS + 1 ) ) {
+			if( meansOfDeath >= (unsigned)MOD_GUNBLADE_W && meansOfDeath < (unsigned)MOD_COUNT ) {
+				if( const wsw::StringView victimName( cgs.clientInfo[victim - 1].name ); !victimName.empty() ) {
+					std::optional<wsw::StringView> attackerName;
+					if( attacker ) {
+						if( const wsw::StringView view( cgs.clientInfo[attacker - 1].name ); !view.empty() ) {
+							attackerName = view;
+						}
+					}
+					wsw::ui::UISystem::instance()->addObituary( victimName, meansOfDeath, attackerName );
+				}
+			}
+		}
+	}
 }
 
 typedef struct

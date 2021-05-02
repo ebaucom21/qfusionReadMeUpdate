@@ -91,8 +91,8 @@ public:
 
 	void toggleInGameMenu() override;
 
-	void addToChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) override;
-	void addToTeamChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) override;
+	void addToChat( const wsw::StringView &name, const wsw::StringView &message ) override;
+	void addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) override;
 
 	void handleConfigString( unsigned configStringNum, const wsw::StringView &configString ) override;
 
@@ -108,9 +108,14 @@ public:
 	void touchActionRequest( const wsw::StringView &tag, unsigned timeout,
 						  	 const wsw::StringView &title, const wsw::StringView &actionDesc,
 						  	 const std::pair<wsw::StringView, int> *actionsBegin,
-						  	 const std::pair<wsw::StringView, int> *actionsEnd );
+						  	 const std::pair<wsw::StringView, int> *actionsEnd ) override;
 
-	void handleOptionsStatusCommand( const wsw::StringView &status );
+	void handleOptionsStatusCommand( const wsw::StringView &status ) override;
+
+	void resetObituaries() override;
+
+	void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
+				      const std::optional<wsw::StringView> &maybeAttacker ) override;
 
 	[[nodiscard]]
 	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
@@ -137,6 +142,9 @@ public:
 
 	[[nodiscard]]
 	bool isShown() const override;
+
+	[[nodiscard]]
+	auto getFrameTimestamp() const -> int64_t { return ::cls.realtime; }
 
 	void enterUIRenderingMode();
 	void leaveUIRenderingMode();
@@ -1077,7 +1085,7 @@ void QtUISystem::checkPropertyChanges() {
 	m_demoPlayer.checkUpdates();
 	m_actionRequestsModel.update();
 
-	m_hudDataModel.checkPropertyChanges();
+	m_hudDataModel.checkPropertyChanges( getFrameTimestamp() );
 
 	updateCVarAwareControls();
 
@@ -1594,12 +1602,12 @@ void QtUISystem::stopServerListUpdates() {
 	ServerList::instance()->stopPushingUpdates();
 }
 
-void QtUISystem::addToChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
-	m_chatModel.addMessage( name, frameTimestamp, message );
+void QtUISystem::addToChat( const wsw::StringView &name, const wsw::StringView &message ) {
+	m_chatModel.addMessage( name, getFrameTimestamp(), message );
 }
 
-void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
-	m_teamChatModel.addMessage( name, frameTimestamp, message );
+void QtUISystem::addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) {
+	m_teamChatModel.addMessage( name, getFrameTimestamp(), message );
 }
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
@@ -1651,6 +1659,15 @@ void QtUISystem::touchActionRequest( const wsw::StringView &tag, unsigned int ti
 
 void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
 	m_gametypeOptionsModel.handleOptionsStatusCommand( status );
+}
+
+void QtUISystem::resetObituaries() {
+	m_hudDataModel.resetObituaries();
+}
+
+void QtUISystem::addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
+							  const std::optional<wsw::StringView> &maybeAttacker ) {
+	m_hudDataModel.addObituary( victim, getFrameTimestamp(), meansOfDeath, maybeAttacker );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

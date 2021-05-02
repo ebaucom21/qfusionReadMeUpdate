@@ -49,8 +49,8 @@ public:
 
 	virtual void toggleInGameMenu() = 0;
 
-	virtual void addToChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) = 0;
-	virtual void addToTeamChat( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) = 0;
+	virtual void addToChat( const wsw::StringView &name, const wsw::StringView &message ) = 0;
+	virtual void addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) = 0;
 
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 
@@ -77,6 +77,10 @@ public:
 								  	 const std::pair<wsw::StringView, int> *actionsEnd ) = 0;
 
 	virtual void handleOptionsStatusCommand( const wsw::StringView &status ) = 0;
+
+	virtual void resetObituaries() = 0;
+	virtual void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
+						      const std::optional<wsw::StringView> &maybeAttacker ) = 0;
 
 	[[nodiscard]]
 	virtual bool isShown() const = 0;

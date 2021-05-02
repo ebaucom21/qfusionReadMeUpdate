@@ -105,11 +105,47 @@ class TeamListModel : public QAbstractListModel {
 	void update( const ReplicatedScoreboardData &scoreboardData, unsigned povPlayerNum );
 };
 
+class ObituariesModel : public QAbstractListModel {
+	Q_OBJECT
+
+	friend class HudDataModel;
+
+	enum Role {
+		Victim,
+		Attacker,
+		IconPath
+	};
+
+	struct Entry {
+		int64_t timestamp;
+		wsw::StaticString<32> victim;
+		wsw::StaticString<32> attacker;
+		unsigned meansOfDeath { 0 };
+	};
+
+	// TODO: Use a circular buffer / StaticDeque (check whether it's really functional)?
+	wsw::StaticVector<Entry, 4> m_entries;
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &index, int role ) const -> QVariant override;
+
+	void addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
+					  const std::optional<wsw::StringView> &attacker );
+
+	void reset();
+	void update( int64_t currTime );
+};
+
 class HudDataModel : public QObject {
 	Q_OBJECT
 
 	InventoryModel m_inventoryModel;
 	TeamListModel m_teamListModel;
+	ObituariesModel m_obituariesModel;
 
 	wsw::StaticString<32> m_alphaName;
 	wsw::StaticString<32> m_betaName;
@@ -144,6 +180,7 @@ class HudDataModel : public QObject {
 
 	bool m_hasSetInventoryModelOwnership { false };
 	bool m_hasSetTeamListModelOwnership { false };
+	bool m_hasSetObituariesModelOwnership { false };
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -268,10 +305,20 @@ public:
 	Q_INVOKABLE QAbstractListModel *getInventoryModel();
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getTeamListModel();
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getObituariesModel();
 
 	HudDataModel();
 
-	void checkPropertyChanges();
+	void resetObituaries() {
+		m_obituariesModel.reset();
+	}
+	void addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
+				      const std::optional<wsw::StringView> &attacker ) {
+		m_obituariesModel.addObituary( victim, timestamp, meansOfDeath, attacker );
+	}
+
+	void checkPropertyChanges( int64_t currTime );
 	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );
 };
 
