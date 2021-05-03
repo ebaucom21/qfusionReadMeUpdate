@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/frontend.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
+#include "../ui/uisystem.h"
 
 cg_static_t cgs;
 cg_state_t cg;
@@ -176,8 +177,11 @@ void CG_LocalPrint( const char *format, ... ) {
 	char msg[GAMECHAT_STRING_SIZE];
 
 	va_start( argptr, format );
-	Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
+	const int res = Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
 	va_end( argptr );
+
+	const wsw::StringView msgView( msg, std::min( (size_t)res, sizeof( msg ) ) );
+	wsw::ui::UISystem::instance()->addToMessageFeed( msgView.trim() );
 
 	Con_PrintSilent( msg );
 }

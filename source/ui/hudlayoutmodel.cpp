@@ -393,6 +393,7 @@ auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QS
 		case Chat: return QSize( 384, 96 );
 		case TeamList: return QSize( 256, 128 );
 		case Obituaries: return QSize( 256, 108 );
+		case MessageFeed: return QSize( 384, 96 );
 		default: return std::nullopt;
 	}
 }
@@ -714,6 +715,7 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case Chat: return NoFlags;
 		case TeamList: return (Flags)( TeamBasedOnly | PovOnly );
 		case Obituaries: return NoFlags;
+		case MessageFeed: return NoFlags;
 		default: throw std::logic_error( "unreachable" );
 	}
 }

@@ -468,18 +468,95 @@ void ObituariesModel::reset() {
 	endResetModel();
 }
 
-void ObituariesModel::update( int64_t currTime ) {
+template <typename Entries>
+[[nodiscard]]
+static auto getNumTimedOutEntries( const Entries &entries, int64_t currTime, unsigned timeout ) -> unsigned {
 	unsigned i = 0;
-	for(; i < m_entries.size(); ++i ) {
-		if( m_entries[i].timestamp + 5000 > currTime ) {
+	for(; i < entries.size(); ++i ) {
+		if( entries[i].timestamp + timeout > currTime ) {
 			break;
 		}
 	}
+	return i;
+}
 
-	if( i ) {
-		beginRemoveRows( QModelIndex(), 0, (int)( i - 1 ) );
-		m_entries.erase( m_entries.begin(), m_entries.begin() + i );
+void ObituariesModel::update( int64_t currTime ) {
+	if( const unsigned numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 5000u ) ) {
+		beginRemoveRows( QModelIndex(), 0, (int)( numTimedOutEntries - 1 ) );
+		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
 		endRemoveRows();
+	}
+}
+
+auto MessageFeedModel::roleNames() const -> QHash<int, QByteArray> {
+	return { { Message, "message" } };
+}
+
+auto MessageFeedModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto MessageFeedModel::data( const QModelIndex &index, int role ) const -> QVariant {
+	if( index.isValid() && role == Message ) {
+		if( const auto row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			return toStyledText( m_entries[row].message.asView() );
+		}
+	}
+	return QVariant();
+}
+
+void MessageFeedModel::addMessage( const wsw::StringView &message, int64_t timestamp ) {
+	// We add to an intermediate circular buffer so the primary model is not flooded by additions/removals
+	m_pendingEntries[m_pendingEntriesTail].timestamp = timestamp;
+	m_pendingEntries[m_pendingEntriesTail].message.assign( message );
+	m_pendingEntriesTail = ( m_pendingEntriesTail + 1 ) % kMaxEntries;
+	if( m_numPendingEntries == kMaxEntries ) {
+		m_pendingEntriesHead++;
+	} else {
+		m_numPendingEntries++;
+	}
+}
+
+void MessageFeedModel::update( int64_t currTime ) {
+	if( const unsigned numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 7500u ) ) {
+		beginRemoveRows( QModelIndex(), 0, (int)( numTimedOutEntries - 1 ) );
+		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
+		endRemoveRows();
+	}
+
+	if( m_numPendingEntries ) {
+		const auto totalNumEntries = m_numPendingEntries + m_entries.size();
+		if( totalNumEntries > kMaxEntries ) {
+			const auto numEntriesToRemove = totalNumEntries - kMaxEntries;
+			assert( numEntriesToRemove > 0 && numEntriesToRemove <= kMaxEntries );
+			beginRemoveRows( QModelIndex(), 0, (int)( numEntriesToRemove - 1 ) );
+			m_entries.erase( m_entries.begin(), m_entries.begin() + numEntriesToRemove );
+			endRemoveRows();
+		}
+
+		assert( m_entries.size() + m_numPendingEntries <= kMaxEntries );
+		beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() + (int)m_numPendingEntries - 1 );
+		unsigned cursor = m_pendingEntriesHead;
+		for( unsigned i = 0; i < m_numPendingEntries; ++i ) {
+			assert( m_entries.size() != m_entries.capacity() );
+			m_entries.push_back( m_pendingEntries[cursor] );
+			cursor = ( cursor + 1 ) % kMaxEntries;
+		}
+		endInsertRows();
+
+		m_numPendingEntries = m_pendingEntriesHead = m_pendingEntriesTail = 0;
+	}
+
+	if( m_entries.empty() ) {
+		m_isFadingOut = false;
+	} else {
+		m_isFadingOut = true;
+		for( const Entry &entry: m_entries ) {
+			if( entry.timestamp + 5000 > currTime ) {
+				m_isFadingOut = false;
+				break;
+			}
+		}
 	}
 }
 
@@ -543,6 +620,14 @@ auto HudDataModel::getObituariesModel() -> QAbstractListModel * {
 		m_hasSetObituariesModelOwnership = true;
 	}
 	return &m_obituariesModel;
+}
+
+auto HudDataModel::getMessageFeedModel() -> QAbstractListModel * {
+	if( !m_hasSetMessageFeedModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_messageFeedModel, QQmlEngine::CppOwnership );
+		m_hasSetMessageFeedModelOwnership = true;
+	}
+	return &m_messageFeedModel;
 }
 
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
@@ -688,6 +773,13 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 
 	m_inventoryModel.checkPropertyChanges();
 	m_obituariesModel.update( currTime );
+
+	const bool wasMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
+	m_messageFeedModel.update( currTime );
+	const bool isMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
+	if( wasMessageFeedFadingOut != isMessageFeedFadingOut ) {
+		Q_EMIT isMessageFeedFadingOutChanged( isMessageFeedFadingOut );
+	}
 }
 
 void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scoreboardData ) {

@@ -82,6 +82,8 @@ public:
 	virtual void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
 						      const std::optional<wsw::StringView> &maybeAttacker ) = 0;
 
+	virtual void addToMessageFeed( const wsw::StringView &message ) = 0;
+
 	[[nodiscard]]
 	virtual bool isShown() const = 0;
 };

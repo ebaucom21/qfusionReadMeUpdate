@@ -106,8 +106,6 @@ class TeamListModel : public QAbstractListModel {
 };
 
 class ObituariesModel : public QAbstractListModel {
-	Q_OBJECT
-
 	friend class HudDataModel;
 
 	enum Role {
@@ -140,12 +138,49 @@ class ObituariesModel : public QAbstractListModel {
 	void update( int64_t currTime );
 };
 
+class MessageFeedModel : public QAbstractListModel {
+	friend class HudDataModel;
+
+	enum Role { Message = Qt::UserRole + 1 };
+
+	struct Entry {
+		int64_t timestamp;
+		wsw::StaticString<1024> message;
+	};
+
+	static constexpr unsigned kMaxEntries = 4;
+
+	Entry m_pendingEntries[kMaxEntries];
+	unsigned m_numPendingEntries { 0 };
+	unsigned m_pendingEntriesHead { 0 };
+	unsigned m_pendingEntriesTail { 0 };
+
+	bool m_isFadingOut { false };
+
+	wsw::StaticVector<Entry, kMaxEntries> m_entries;
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &index, int role ) const -> QVariant override;
+
+	void addMessage( const wsw::StringView &message, int64_t timestamp );
+
+	void update( int64_t currTime );
+
+	[[nodiscard]]
+	bool isFadingOut() const { return m_isFadingOut; }
+};
+
 class HudDataModel : public QObject {
 	Q_OBJECT
 
 	InventoryModel m_inventoryModel;
 	TeamListModel m_teamListModel;
 	ObituariesModel m_obituariesModel;
+	MessageFeedModel m_messageFeedModel;
 
 	wsw::StaticString<32> m_alphaName;
 	wsw::StaticString<32> m_betaName;
@@ -181,6 +216,7 @@ class HudDataModel : public QObject {
 	bool m_hasSetInventoryModelOwnership { false };
 	bool m_hasSetTeamListModelOwnership { false };
 	bool m_hasSetObituariesModelOwnership { false };
+	bool m_hasSetMessageFeedModelOwnership { false };
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -241,6 +277,9 @@ class HudDataModel : public QObject {
 	bool getHasLocations() const { return m_hasLocations; }
 
 	[[nodiscard]]
+	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
+
+	[[nodiscard]]
 	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
 	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
 public:
@@ -294,6 +333,9 @@ public:
 	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
 	Q_PROPERTY( bool hasLocations READ getHasLocations NOTIFY hasLocationsChanged );
 
+	Q_SIGNAL void isMessageFeedFadingOutChanged( bool isMessageFeedFadingOut );
+	Q_PROPERTY( bool isMessageFeedFadingOut READ getIsMessageFeedFadingOut NOTIFY isMessageFeedFadingOutChanged );
+
 	enum Powerup {
 		Quad  = 0x1,
 		Shell = 0x2,
@@ -307,6 +349,8 @@ public:
 	Q_INVOKABLE QAbstractListModel *getTeamListModel();
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getObituariesModel();
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getMessageFeedModel();
 
 	HudDataModel();
 
@@ -316,6 +360,10 @@ public:
 	void addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
 				      const std::optional<wsw::StringView> &attacker ) {
 		m_obituariesModel.addObituary( victim, timestamp, meansOfDeath, attacker );
+	}
+
+	void addToMessageFeed( const wsw::StringView &message, int64_t timestamp ) {
+		m_messageFeedModel.addMessage( message, timestamp );
 	}
 
 	void checkPropertyChanges( int64_t currTime );

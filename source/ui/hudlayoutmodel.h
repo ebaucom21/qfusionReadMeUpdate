@@ -40,7 +40,8 @@ public:
 		BetaScore,
 		Chat,
 		TeamList,
-		Obituaries
+		Obituaries,
+		MessageFeed
 	};
 	Q_ENUM( Kind );
 

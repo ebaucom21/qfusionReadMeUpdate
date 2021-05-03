@@ -117,6 +117,8 @@ public:
 	void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
 				      const std::optional<wsw::StringView> &maybeAttacker ) override;
 
+	void addToMessageFeed( const wsw::StringView &message );
+
 	[[nodiscard]]
 	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
 	[[nodiscard]]
@@ -1668,6 +1670,10 @@ void QtUISystem::resetObituaries() {
 void QtUISystem::addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
 							  const std::optional<wsw::StringView> &maybeAttacker ) {
 	m_hudDataModel.addObituary( victim, getFrameTimestamp(), meansOfDeath, maybeAttacker );
+}
+
+void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
+	m_hudDataModel.addToMessageFeed( message, getFrameTimestamp() );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

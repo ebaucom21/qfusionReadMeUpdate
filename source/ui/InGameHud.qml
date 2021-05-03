@@ -82,6 +82,8 @@ Item {
                     teamListComponent
                 } else if (kind === HudLayoutModel.Obituaries) {
                     obituariesComponent
+                } else if (kind === HudLayoutModel.MessageFeed) {
+                    messageFeedComponent
                 } else {
                     undefined
                 }
@@ -169,6 +171,11 @@ Item {
             Component {
                 id: obituariesComponent
                 HudObituaries {}
+            }
+
+            Component {
+                id: messageFeedComponent
+                HudMessageFeed {}
             }
 
             function getQmlAnchor(anchorBit) {
