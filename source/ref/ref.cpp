@@ -5585,10 +5585,10 @@ static void RF_CheckCvars( void ) {
 		R_SetGamma( r_gamma->value );
 	}
 
-	if( r_texturefilter->modified || r_texturemode->modified ) {
+	if( r_texturefilter->modified || r_anisolevel->modified ) {
 		r_texturefilter->modified = false;
-		r_texturemode->modified = false;
-		TextureCache::instance()->applyFilter( wsw::StringView( r_texturemode->string ), r_texturefilter->integer );
+		r_anisolevel->modified = false;
+		TextureCache::instance()->applyFilter( wsw::StringView( r_texturefilter->string ), r_anisolevel->integer );
 	}
 
 	if( r_wallcolor->modified || r_floorcolor->modified ) {
@@ -5932,8 +5932,8 @@ cvar_t *r_lodscale;
 
 cvar_t *r_stencilbits;
 cvar_t *r_gamma;
-cvar_t *r_texturemode;
 cvar_t *r_texturefilter;
+cvar_t *r_anisolevel;
 cvar_t *r_texturecompression;
 cvar_t *r_picmip;
 cvar_t *r_polyblend;
@@ -6298,8 +6298,8 @@ static void R_FinalizeGLExtensions( void ) {
 		qglGetIntegerv( GL_MAX_LABEL_LENGTH, (int *)&glConfig.maxObjectLabelLen );
 	}
 
-	Cvar_Get( "r_texturefilter_max", "0", CVAR_READONLY );
-	Cvar_ForceSet( "r_texturefilter_max", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureFilterAnisotropic ) );
+	Cvar_Get( "r_anisolevel_max", "0", CVAR_READONLY );
+	Cvar_ForceSet( "r_anisolevel_max", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureFilterAnisotropic ) );
 
 	Cvar_Get( "r_soft_particles_available", "1", CVAR_READONLY );
 
@@ -6408,8 +6408,8 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_lodscale = Cvar_Get( "r_lodscale", "5.0", CVAR_ARCHIVE );
 
 	r_gamma = Cvar_Get( "r_gamma", "1.0", CVAR_ARCHIVE );
-	r_texturemode = Cvar_Get( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
-	r_texturefilter = Cvar_Get( "r_texturefilter", "4", CVAR_ARCHIVE );
+	r_texturefilter = Cvar_Get( "r_texturefilter", "trilinear", CVAR_ARCHIVE );
+	r_anisolevel = Cvar_Get( "r_anisolevel", "4", CVAR_ARCHIVE );
 	r_texturecompression = Cvar_Get( "r_texturecompression", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
 	r_stencilbits = Cvar_Get( "r_stencilbits", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
 
@@ -6492,8 +6492,8 @@ static void R_PrintInfo() {
 	Com_Printf( "mode: %ix%i%s\n", glConfig.width, glConfig.height,
 				glConfig.fullScreen ? ", fullscreen" : ", windowed" );
 	Com_Printf( "picmip: %i\n", r_picmip->integer );
-	Com_Printf( "texturemode: %s\n", r_texturemode->string );
-	Com_Printf( "anisotropic filtering: %i\n", r_texturefilter->integer );
+	Com_Printf( "texturefilter: %s\n", r_texturefilter->string );
+	Com_Printf( "anisotropic filtering: %i\n", r_anisolevel->integer );
 	Com_Printf( "vertical sync: %s\n", ( r_swapinterval->integer || r_swapinterval_min->integer ) ? "enabled" : "disabled" );
 
 	R_PrintGLExtensionsInfo();
@@ -6677,7 +6677,7 @@ static rserr_t R_PostInit( void ) {
 
 	TextureCache::init();
 
-	TextureCache::instance()->applyFilter( wsw::StringView( r_texturemode->string ), r_texturefilter->integer );
+	TextureCache::instance()->applyFilter( wsw::StringView( r_texturefilter->string ), r_anisolevel->integer );
 
 	MaterialCache::init();
 

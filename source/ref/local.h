@@ -98,9 +98,8 @@ enum {
 	,IT_NO_DATA_SYNC    = 1 << 21     // owned by the drawing thread, do not sync in the frontend thread
 	,IT_FLOAT           = 1 << 22
 	,IT_SRGB            = 1 << 23
-	,IT_WAL             = 1 << 24
-	,IT_MIPTEX          = 1 << 25
-	,IT_MIPTEX_FULLBRIGHT = 1 << 26
+	,IT_CUSTOMFILTERING = 1 << 24
+
 };
 
 /**
@@ -1356,8 +1355,8 @@ extern cvar_t *r_lodbias;
 extern cvar_t *r_lodscale;
 
 extern cvar_t *r_gamma;
-extern cvar_t *r_texturemode;
 extern cvar_t *r_texturefilter;
+extern cvar_t *r_anisolevel;
 extern cvar_t *r_texturecompression;
 extern cvar_t *r_mode;
 extern cvar_t *r_picmip;

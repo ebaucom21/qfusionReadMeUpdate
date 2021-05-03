@@ -118,7 +118,8 @@ const std::pair<wsw::StringView, TextureCache::TextureFilter> TextureCache::kTex
 };
 
 const std::pair<GLuint, GLuint> TextureCache::kTextureFilterGLValues[3] {
-	{ GL_NEAREST_MIPMAP_NEAREST, GL_NEAREST },
+	// We have decided to apply mipmap filtering for the "nearest" filter.
+	{ GL_NEAREST_MIPMAP_LINEAR, GL_NEAREST },
 	{ GL_LINEAR_MIPMAP_NEAREST, GL_LINEAR },
 	{ GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR }
 };
@@ -162,7 +163,7 @@ void TextureCache::applyFilter( const wsw::StringView &name, int anisoLevel ) {
 	for( Texture *texture = m_usedTexturesHead; texture; texture = texture->nextInList() ) {
 		// There are individual checks in each apply() subroutine.
 		// We add another early check to avoid doing a fruitless bind.
-		if( texture->flags & ( IT_NOFILTERING | IT_DEPTH ) ) {
+		if( texture->flags & ( IT_NOFILTERING | IT_DEPTH | IT_CUSTOMFILTERING ) ) {
 			continue;
 		}
 		bindToModify( texture );
@@ -182,7 +183,7 @@ void TextureCache::applyFilter( const wsw::StringView &name, int anisoLevel ) {
 void TextureCache::applyFilter( Texture *texture, GLuint minify, GLuint magnify ) {
 	// TODO: Check whether it's bound for modifying
 	// TODO: What about usign the bindless API?
-	if( texture->flags & ( IT_NOFILTERING | IT_DEPTH ) ) {
+	if( texture->flags & ( IT_NOFILTERING | IT_DEPTH | IT_CUSTOMFILTERING ) ) {
 		return;
 	}
 	GLuint minifyToApply = ( texture->flags & IT_NOMIPMAP ) ? magnify : minify;
@@ -193,7 +194,7 @@ void TextureCache::applyFilter( Texture *texture, GLuint minify, GLuint magnify 
 void TextureCache::applyAniso( Texture *texture, int level ) {
 	assert( glConfig.ext.texture_filter_anisotropic );
 	assert( level >= 1 && level <= glConfig.maxTextureFilterAnisotropic );
-	if( ( texture->flags & ( IT_NOFILTERING | IT_DEPTH | IT_NOMIPMAP ) ) ) {
+	if( ( texture->flags & ( IT_NOFILTERING | IT_DEPTH | IT_NOMIPMAP | IT_CUSTOMFILTERING ) ) ) {
 		return;
 	}
 	qglTexParameteri( texture->target, GL_TEXTURE_MAX_ANISOTROPY_EXT, level );
@@ -230,7 +231,17 @@ void TextureCache::setupFilterMode( GLuint target, unsigned flags, unsigned w, u
 		}
 	// TODO: Reverse the condition, reorder branches
 	} else if( !( flags & IT_NOMIPMAP ) ) {
-		const auto [minify, magnify] = kTextureFilterGLValues[m_textureFilter];
+		auto [minify, magnify] = kTextureFilterGLValues[m_textureFilter];
+		if( flags & IT_CUBEMAP ) {
+			// Turn mipmap filtering off for cubemaps.
+			// There's no visual difference for real kinds of surfaces.
+			// This should aid texturing performance especially on a low-end hardware.
+			if( minify == GL_LINEAR_MIPMAP_LINEAR ) {
+				minify = GL_LINEAR_MIPMAP_NEAREST;
+			} else if( minify == GL_NEAREST_MIPMAP_LINEAR ) {
+				minify = GL_NEAREST_MIPMAP_NEAREST;
+			}
+		}
 		qglTexParameteri( target, GL_TEXTURE_MIN_FILTER, minify );
 		qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, magnify );
 		if( glConfig.ext.texture_filter_anisotropic ) {
@@ -772,8 +783,14 @@ auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, con
 
 	qglTexImage2D( target, 0, internalFormat, w, h, 0, format, GL_UNSIGNED_BYTE, data );
 
-	setupWrapMode( target, IT_CLAMP );
-	setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
+	const unsigned flags = IT_CLAMP | IT_NOMIPMAP | IT_CUSTOMFILTERING;
+	setupWrapMode( target, flags );
+
+	qglTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	if( glConfig.ext.texture_filter_anisotropic ) {
+		qglTexParameteri( target, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1 );
+	}
 
 	unbindModified( target, handle );
 
@@ -782,7 +799,7 @@ auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, con
 	texture->name = internTextureName( texture, nameBuffer.asView() );
 	texture->texnum = handle;
 	texture->target = target;
-	texture->flags = IT_CLAMP | IT_NOMIPMAP;
+	texture->flags = flags;
 	texture->minmipsize = 1;
 	texture->width = w;
 	texture->height = h;
@@ -820,9 +837,15 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	const GLuint handle = generateHandle( nameBuffer.asView() );
 	bindToModify( target, handle );
 
+	const unsigned flags = IT_CLAMP | IT_NOMIPMAP | IT_CUSTOMFILTERING;
 	qglTexImage3D( target, 0, internalFormat, w, h, numLayers, 0, format, GL_UNSIGNED_BYTE, nullptr );
-	setupWrapMode( target, IT_CLAMP );
-	setupFilterMode( target, IT_CLAMP | IT_NOMIPMAP, w, h, 1 );
+	setupWrapMode( target, flags );
+
+	qglTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	if( glConfig.ext.texture_filter_anisotropic ) {
+		qglTexParameteri( target, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1 );
+	}
 
 	unbindModified( target, 0 );
 
@@ -830,7 +853,7 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	texture->name = internTextureName( texture, nameBuffer.asView() );
 	texture->texnum = handle;
 	texture->target = target;
-	texture->flags = IT_CLAMP | IT_NOMIPMAP;
+	texture->flags = flags;
 	texture->minmipsize = 1;
 	texture->width = w;
 	texture->height = h;
@@ -999,6 +1022,7 @@ protected:
 	unsigned m_width { 0 }, m_height { 0 };
 	unsigned m_flags { 0 };
 	unsigned m_samples { 0 };
+	virtual void setupCustomFilter( GLuint target ) {};
 public:
 	Basic2DBuiltinTextureFactory( const wsw::StringView &name, BuiltinTexNum builtinTexNum )
 		: BuiltinTextureFactory( name, builtinTexNum ) {}
@@ -1030,6 +1054,11 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 	qglTexImage2D( target, 0, internalFormat, m_width, m_height, 0, format, type, m_data );
 
 	parent->setupWrapMode( target, m_flags );
+	if( m_flags & IT_CUSTOMFILTERING ) {
+		setupCustomFilter( target );
+	} else {
+		parent->setupFilterMode( target, m_flags, m_width, m_height, 1 );
+	}
 
 	// !!!!!!!!
 	qglGenerateMipmap( target );
@@ -1082,7 +1111,7 @@ struct NoTextureTextureFactory : public Basic2DBuiltinTextureFactory {
 		constexpr unsigned side = 8;
 
 		m_width = m_height = side;
-		m_flags = IT_SRGB;
+		m_flags = IT_SRGB | IT_CUSTOMFILTERING;
 		m_samples = 3;
 		m_data = loadingBuffer.reserveAndGet( side * side * m_samples );
 
@@ -1116,6 +1145,14 @@ struct NoTextureTextureFactory : public Basic2DBuiltinTextureFactory {
 			p[offset + 2] = color[2];
 			// Increment after addressing to avoid AGI
 			offset += 3;
+		}
+	}
+
+	void setupCustomFilter( GLenum target ) override {
+		qglTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR );
+		qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+		if( glConfig.ext.texture_filter_anisotropic ) {
+			qglTexParameteri( target, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1 );
 		}
 	}
 };
