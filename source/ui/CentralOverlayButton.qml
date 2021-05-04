@@ -62,7 +62,8 @@ Item {
 
 	transitions: Transition {
 		AnchorAnimation {
-			duration: 200
+			duration: 333
+			easing.type: Easing.OutBack
 		}
 	}
 
@@ -87,9 +88,10 @@ Item {
 	Rectangle {
 		id: contentRow
 		height: 40
-		width: 224
+		width: mouseArea.containsMouse ? 224 + 12 : 224
 		radius: 3
 		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
+		Behavior on width { SmoothedAnimation { duration: 333 } }
 
 		transform: Matrix4x4 {
 			matrix: root.transformMatrix
@@ -112,11 +114,12 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
-			font.pointSize: 15
-			font.letterSpacing: 1
+			font.pointSize: 14
+			font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
 			text: root.text
-			font.weight: Font.Bold
+			font.weight: Font.ExtraBold
 			font.capitalization: Font.AllUppercase
+			Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 		}
 
 		MouseArea {

@@ -28,7 +28,7 @@ Item {
     Item {
         anchors.centerIn: parent
         height: parent.height
-        width: mouseArea.containsMouse ? parent.width + 16 : parent.width
+        width: mouseArea.containsMouse ? parent.width + 8 : parent.width
 
         layer.enabled: root.enabled
         layer.effect: ElevationEffect { elevation: 16 }
@@ -56,9 +56,11 @@ Item {
         anchors.centerIn: parent
         text: root.text
         font.pointSize: 14
-        font.weight: Font.Bold
+        font.weight: Font.ExtraBold
         font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
         font.capitalization: Font.AllUppercase
+
+        Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 
         transform: Matrix4x4 {
             matrix: wsw.makeSkewXMatrix(label.height, 16.0)
