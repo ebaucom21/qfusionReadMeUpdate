@@ -16,7 +16,7 @@ Item {
         height: (typeof(timeFlags) !== "undefined" && !timeFlags) ? implicitHeight : 0
         font.pointSize: 15
         font.letterSpacing: 8
-        font.weight: Font.ExtraBold
+        font.weight: Font.Black
         anchors.centerIn: parent
         horizontalAlignment: Qt.AlignHCenter
         text: (timeMinutes ? (timeMinutes < 10 ? "0" + timeMinutes : timeMinutes) : "00") +
@@ -32,7 +32,7 @@ Item {
         anchors.centerIn: parent
         font.pointSize: 13
         font.letterSpacing: 8
-        font.weight: Font.ExtraBold
+        font.weight: Font.Black
         horizontalAlignment: Qt.AlignHCenter
 
         Connections {

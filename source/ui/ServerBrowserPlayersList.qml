@@ -15,13 +15,12 @@ ListView {
         height: visible ? 32 : 0
         visible: typeof(model) !== "undefined" || showEmptyListHeader
 
-        Label {
-            text: "Name"
+        ServerBrowserDataLabel {
             anchors.left: parent.left
             anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
-            font.pointSize: 11
-            font.weight: Font.Medium
+            font.weight: Font.DemiBold
+            text: "Name"
         }
 
         Row {
@@ -30,20 +29,18 @@ ListView {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
 
-            Label {
-                text: "Score"
+            ServerBrowserDataLabel {
                 width: 48
-                font.pointSize: 11
-                font.weight: Font.Medium
                 horizontalAlignment: Qt.AlignHCenter
+                font.weight: Font.DemiBold
+                text: "Score"
             }
 
-            Label {
-                text: "Ping"
+            ServerBrowserDataLabel {
                 width: 48
-                font.pointSize: 11
-                font.weight: Font.Medium
                 horizontalAlignment: Qt.AlignHCenter
+                font.weight: Font.DemiBold
+                text: "Ping"
             }
         }
     }
@@ -52,14 +49,9 @@ ListView {
         width: root.width
         height: 24
 
-        Label {
+        ServerBrowserDataLabel {
             text: modelData["name"]
-            textFormat: Text.StyledText
-            font.pointSize: 11
             width: root.width - scoreAndPingRow.width - 8
-            maximumLineCount: 1
-            wrapMode: Text.Wrap
-            elide: Text.ElideRight
 
             anchors.left: parent.left
             anchors.leftMargin: 8
@@ -73,23 +65,16 @@ ListView {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
 
-            Label {
-                text: modelData["score"]
+            ServerBrowserDataLabel {
                 width: 48
-                font.pointSize: 11
                 horizontalAlignment: Qt.AlignHCenter
-                // Race scores could break layout:
-                // TODO: Provide more space for this in a single-column layout
-                maximumLineCount: 1
-                wrapMode: Text.Wrap
-                elide: Text.ElideRight
+                text: modelData["score"]
             }
 
-            Label {
-                text: wsw.formatPing(modelData["ping"])
+            ServerBrowserDataLabel {
                 width: 48
-                font.pointSize: 11
                 horizontalAlignment: Qt.AlignHCenter
+                text: wsw.formatPing(modelData["ping"])
             }
         }
     }

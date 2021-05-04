@@ -47,8 +47,9 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 8
             text: address
-            font.pointSize: 12
-            font.weight: Font.Medium
+            font.pointSize: 11
+            font.weight: Font.Bold
+            font.underline: true
         }
 
         Label {
@@ -61,7 +62,8 @@ Item {
             text: serverName
             textFormat: Text.StyledText
             font.pointSize: 12
-            font.weight: Font.Medium
+            font.letterSpacing: 0.5
+            font.weight: Font.DemiBold
             wrapMode: Text.Wrap
             maximumLineCount: 1
             elide: Text.ElideRight
@@ -78,29 +80,37 @@ Item {
                 text: mapName
                 textFormat: Text.StyledText
                 font.pointSize: 11
+                font.letterSpacing: 0.5
+                font.weight: Font.DemiBold
             }
             Label {
                 text: "-"
                 font.pointSize: 11
+                font.weight: Font.Black
             }
             Label {
                 text: gametype
                 textFormat: Text.StyledText
                 font.pointSize: 11
+                font.letterSpacing: 0.5
+                font.weight: Font.DemiBold
             }
             Label {
                 text: "-"
                 font.pointSize: 11
+                font.weight: Font.Black
             }
             Label {
                 text: numPlayers + "/" + maxPlayers
-                font.weight: Font.ExtraBold
                 font.pointSize: 12
                 color: numPlayers !== maxPlayers ? Material.foreground : "red"
+                font.weight: Font.Black
             }
             Label {
                 text: "players"
                 font.pointSize: 11
+                font.letterSpacing: 0.5
+                font.weight: Font.Bold
             }
         }
     }
@@ -118,27 +128,26 @@ Item {
                 spectatorsView.height + matchTimeView.height + teamScoreView.height +
                 Math.max(alphaView.contentHeight, betaView.contentHeight, playersView.contentHeight)
 
-        ServerBrowserTimeView {
-            id: matchTimeView
-            width: root.width
-            height: implicitHeight
-            anchors.top: body.top
-            anchors.topMargin: 4
-            timeMinutes: root.timeMinutes
-            timeSeconds: root.timeSeconds
-            timeFlags: root.timeFlags
-        }
-
         ServerBrowserScoreView {
             id: teamScoreView
             visible: implicitHeight > 0
             width: root.width
-            anchors.top: matchTimeView.bottom
+            anchors.top: body.top
             height: implicitHeight
             alphaTeamList: root.alphaTeamList
             betaTeamList: root.betaTeamList
             alphaTeamScore: root.alphaTeamScore
             betaTeamScore: root.betaTeamScore
+        }
+
+        ServerBrowserTimeView {
+            id: matchTimeView
+            width: root.width
+            height: implicitHeight
+            anchors.top: teamScoreView.bottom
+            timeMinutes: root.timeMinutes
+            timeSeconds: root.timeSeconds
+            timeFlags: root.timeFlags
         }
 
         ServerBrowserPlayersList {
@@ -147,7 +156,7 @@ Item {
             showEmptyListHeader: root.showEmptyTeamListHeader
             width: root.width / 2 - 12
             height: contentHeight
-            anchors.top: teamScoreView.bottom
+            anchors.top: matchTimeView.bottom
             anchors.left: parent.left
         }
 
@@ -157,14 +166,14 @@ Item {
             showEmptyListHeader: root.showEmptyTeamListHeader
             width: root.width / 2 - 12
             height: contentHeight
-            anchors.top: teamScoreView.bottom
+            anchors.top: matchTimeView.bottom
             anchors.right: parent.right
         }
 
         ServerBrowserPlayersList {
             id: playersView
             model: playersTeamList
-            anchors.top: teamScoreView.bottom
+            anchors.top: matchTimeView.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             height: contentHeight

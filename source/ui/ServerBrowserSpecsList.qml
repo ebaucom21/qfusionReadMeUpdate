@@ -10,14 +10,13 @@ Item {
     implicitHeight: model ?
         (label.implicitHeight + label.anchors.topMargin + flow.implicitHeight + flow.anchors.topMargin) : 0
 
-    Label {
+    ServerBrowserDataLabel {
+        id: label
         anchors.top: parent.top
         anchors.topMargin: 12
+        font.weight: Font.Bold
         anchors.horizontalCenter: parent.horizontalCenter
-        id: label
         text: "Spectators"
-        font.pointSize: 11
-        font.weight: Font.Medium
     }
 
     Flow {
@@ -36,13 +35,11 @@ Item {
             model: root.model
             delegate: Row {
                 spacing: 8
-                Label {
+                ServerBrowserDataLabel {
                     text: modelData["name"]
-                    font.pointSize: 11
                 }
-                Label {
+                ServerBrowserDataLabel {
                     text: wsw.formatPing(modelData["ping"])
-                    font.pointSize: 11
                 }
             }
         }

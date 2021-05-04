@@ -73,6 +73,7 @@
         <file>SelectableGametypeOption.qml</file>
         <file>SelectableLabel.qml</file>
         <file>ServerBrowserCard.qml</file>
+        <file>ServerBrowserDataLabel.qml</file>
         <file>ServerBrowserPlayersList.qml</file>
         <file>ServerBrowserScoreView.qml</file>
         <file>ServerBrowserSpecsList.qml</file>
