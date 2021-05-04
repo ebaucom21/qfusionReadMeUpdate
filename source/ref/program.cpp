@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "program.h"
+#include "scene.h"
 #include "../qcommon/q_trie.h"
 #include "../qcommon/qcommon.h"
 
@@ -1971,8 +1972,8 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 		Vector4Set( shaderColor[3], 1.0f, 1.0f, 1.0f, 1.0f );
 		n = 0;
 
-		const auto *scene = Scene::Instance();
-		const Scene::LightNumType *rangeBegin, *rangeEnd;
+		const auto *scene = wsw::ref::Scene::Instance();
+		const wsw::ref::Scene::LightNumType *rangeBegin, *rangeEnd;
 		scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
 		for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter ) {
 			if( program->loc.DynamicLightsPosition[n] < 0 ) {

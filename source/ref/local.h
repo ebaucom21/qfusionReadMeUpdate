@@ -1127,100 +1127,6 @@ typedef struct {
 	refdef_t refdef;
 } r_scene_t;
 
-class Scene {
-	template <typename> friend class SingletonHolder;
-
-	shader_t *coronaShader { nullptr };
-
-	Scene() {
-		for( int i = 0; i < MAX_CORONA_LIGHTS; ++i ) {
-			coronaSurfs[i] = ST_CORONA;
-		}
-	}
-public:
-	using LightNumType = uint8_t;
-
-	class Light {
-		friend class Scene;
-	public:
-		vec3_t color;
-		float radius;
-		vec4_t center;
-	private:
-		Light() {}
-
-		Light( const float *center_, const float *color_, float radius_ ) {
-			VectorCopy( color_, this->color );
-			this->radius = radius_;
-			VectorCopy( center_, this->center );
-			this->center[3] = 0;
-		}
-	};
-
-private:
-	enum { MAX_CORONA_LIGHTS = 255 };
-	enum { MAX_PROGRAM_LIGHTS = 255 };
-
-	Light coronaLights[MAX_CORONA_LIGHTS];
-	Light programLights[MAX_PROGRAM_LIGHTS];
-
-	int numCoronaLights { 0 };
-	int numProgramLights { 0 };
-
-	LightNumType drawnCoronaLightNums[MAX_CORONA_LIGHTS];
-	LightNumType drawnProgramLightNums[MAX_PROGRAM_LIGHTS];
-
-	int numDrawnCoronaLights { 0 };
-	int numDrawnProgramLights { 0 };
-
-	drawSurfaceType_t coronaSurfs[MAX_CORONA_LIGHTS];
-
-	uint32_t BitsForNumberOfLights( int numLights ) {
-		assert( numLights <= 32 );
-		return (uint32_t)( ( 1ull << (uint64_t)( numLights ) ) - 1 );
-	}
-public:
-	static void Init();
-	static void Shutdown();
-	static Scene *Instance();
-
-	void Clear() {
-		numCoronaLights = 0;
-		numProgramLights = 0;
-
-		numDrawnCoronaLights = 0;
-		numDrawnProgramLights = 0;
-	}
-
-	void InitVolatileAssets();
-
-	void DestroyVolatileAssets();
-
-	void AddLight( const vec3_t origin, float programIntensity, float coronaIntensity, float r, float g, float b );
-
-	void DynLightDirForOrigin( const vec3_t origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
-
-	const Light *LightForCoronaSurf( const drawSurfaceType_t *surf ) const {
-		return &coronaLights[surf - coronaSurfs];
-	}
-
-	// CAUTION: The meaning of dlight bits has been changed:
-	// a bit correspond to an index of a light num in drawnProgramLightNums
-	uint32_t CullLights( unsigned clipFlags );
-
-	void DrawCoronae();
-
-	const Light *ProgramLightForNum( LightNumType num ) const {
-		assert( (unsigned)num < (unsigned)MAX_PROGRAM_LIGHTS );
-		return &programLights[num];
-	}
-
-	void GetDrawnProgramLightNums( const LightNumType **rangeBegin, const LightNumType **rangeEnd ) const {
-		*rangeBegin = drawnProgramLightNums;
-		*rangeEnd = drawnProgramLightNums + numDrawnProgramLights;
-	}
-};
-
 // global frontend variables are stored here
 // the backend should never attempt reading or modifying them
 typedef struct {
@@ -1418,13 +1324,6 @@ void        R_ScreenShot_f( void );
 //
 // r_cull.c
 //
-void        R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum );
-bool    R_CullBox( const vec3_t mins, const vec3_t maxs, const unsigned int clipflags );
-bool    R_CullSphere( const vec3_t centre, const float radius, const unsigned int clipflags );
-bool    R_VisCullBox( const vec3_t mins, const vec3_t maxs );
-bool    R_VisCullSphere( const vec3_t origin, float radius );
-int         R_CullModelEntity( const entity_t *e, vec3_t mins, vec3_t maxs, float radius, bool sphereCull, bool pvsCull );
-bool    R_CullSpriteEntity( const entity_t *e );
 
 //
 // r_framebuffer.c

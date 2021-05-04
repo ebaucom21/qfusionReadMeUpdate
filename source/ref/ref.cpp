@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "frontend.h"
 #include "materiallocal.h"
+#include "scene.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/singletonholder.h"
 #include <algorithm>
@@ -1135,7 +1136,7 @@ void R_RenderView( const refdef_t *fd ) {
 			rn.hdrExposure = R_LightExposureForOrigin( rn.viewOrigin );
 		}
 
-		Scene::Instance()->DrawCoronae();
+		wsw::ref::Scene::Instance()->DrawCoronae();
 
 		if( r_speeds->integer ) {
 			msec = Sys_Milliseconds();
@@ -1856,8 +1857,8 @@ static unsigned int R_SurfaceDlightBits( const msurface_t *surf, unsigned int ch
 
 	// TODO: This is totally wrong! Lights should mark affected surfaces in their radius on their own!
 
-	const auto *scene = Scene::Instance();
-	const Scene::LightNumType *rangeBegin, *rangeEnd;
+	const auto *scene = wsw::ref::Scene::Instance();
+	const wsw::ref::Scene::LightNumType *rangeBegin, *rangeEnd;
 	scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
 	// Caution: bits correspond to indices in range now!
 	uint32_t mask = 1;
@@ -2189,13 +2190,13 @@ bool R_AddBrushModelToDrawList( const entity_t *e ) {
 
 	R_TransformPointToModelSpace( e, rotated, rn.refdef.vieworg, modelOrg );
 
-	const auto *scene = Scene::Instance();
+	const auto *scene = wsw::ref::Scene::Instance();
 	// TODO: Lights should mark models they affect on their own!
 
 	// check dynamic lights that matter in the instance against the model
 	dlightBits = 0;
 
-	const Scene::LightNumType *rangeBegin, *rangeEnd;
+	const wsw::ref::Scene::LightNumType *rangeBegin, *rangeEnd;
 	scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
 	unsigned mask = 1;
 	for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter, mask <<= 1 ) {
@@ -2476,7 +2477,7 @@ void R_DrawWorld( void ) {
 	}
 
 	// cull dynamic lights
-	rn.dlightBits = Scene::Instance()->CullLights( clipFlags );
+	rn.dlightBits = wsw::ref::Scene::Instance()->CullLights( clipFlags );
 
 	// BEGIN t_world_node
 	if( speeds ) {
@@ -3311,7 +3312,7 @@ void R_ClearScene( void ) {
 
 	R_ClearSkeletalCache();
 
-	Scene::Instance()->Clear();
+	wsw::ref::Scene::Instance()->Clear();
 }
 
 /*
@@ -3358,238 +3359,6 @@ void R_AddEntityToScene( const entity_t *ent ) {
 			tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
 			R_AddEntityToScene( &tent );
 		}
-	}
-}
-
-static SingletonHolder<Scene> sceneInstanceHolder;
-
-void Scene::Init() {
-	sceneInstanceHolder.Init();
-}
-
-void Scene::Shutdown() {
-	sceneInstanceHolder.Shutdown();
-}
-
-Scene *Scene::Instance() {
-	return sceneInstanceHolder.Instance();
-}
-
-void Scene::InitVolatileAssets() {
-	coronaShader = MaterialCache::instance()->loadDefaultMaterial( wsw::StringView( "$corona" ), SHADER_TYPE_CORONA );
-}
-
-void Scene::DestroyVolatileAssets() {
-	coronaShader = nullptr;
-}
-
-void Scene::AddLight( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
-	assert( r || g || b );
-	assert( programIntensity || coronaIntensity );
-	assert( coronaIntensity >= 0 );
-	assert( programIntensity >= 0 );
-
-	vec3_t color { r, g, b };
-	if( r_lighting_grayscale->integer ) {
-		float grey = ColorGrayscale( color );
-		color[0] = color[1] = color[2] = bound( 0, grey, 1 );
-	}
-
-	// TODO: We can share culling information for program lights and coronae even if radii do not match
-
-	const int cvarValue = r_dynamiclight->integer;
-	if( ( cvarValue & ~1 ) && coronaIntensity && numCoronaLights < MAX_CORONA_LIGHTS ) {
-		new( &coronaLights[numCoronaLights++] )Light( org, color, coronaIntensity );
-	}
-
-	if( ( cvarValue & 1 ) && programIntensity && numProgramLights < MAX_PROGRAM_LIGHTS ) {
-		new( &programLights[numProgramLights++] )Light( org, color, programIntensity );
-	}
-}
-
-void Scene::DynLightDirForOrigin( const vec_t *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal ) {
-	if( !( r_dynamiclight->integer & 1 ) ) {
-		return;
-	}
-
-	vec3_t direction;
-	bool anyDlights = false;
-
-	// TODO: We can avoid doing a loop over all lights
-	// if there's a spatial hierarchy for most entities that receive dlights
-
-	const auto *__restrict lights = programLights;
-	const LightNumType *__restrict nums = drawnProgramLightNums;
-	for( int i = 0; i < numDrawnProgramLights; i++ ) {
-		const auto *__restrict dl = lights + nums[i];
-		const float squareDist = DistanceSquared( dl->center, origin );
-		const float threshold = dl->radius + radius;
-		if( squareDist > threshold * threshold ) {
-			continue;
-		}
-
-		// Start computing invThreshold so hopefully the result is ready to the moment of its usage
-		const float invThreshold = 1.0f / threshold;
-
-		// TODO: Mark as "unlikely"
-		if( squareDist < 0.001f ) {
-			continue;
-		}
-
-		VectorSubtract( dl->center, origin, direction );
-		const float invDist = Q_RSqrt( squareDist );
-		VectorScale( direction, invDist, direction );
-
-		if( !anyDlights ) {
-			VectorNormalizeFast( dir );
-			anyDlights = true;
-		}
-
-		const float dist = Q_Rcp( invDist );
-		const float add = 1.0f - ( dist * invThreshold );
-		const float dist2 = add * 0.5f / dist;
-		for( int j = 0; j < 3; j++ ) {
-			const float dot = dl->color[j] * add;
-			diffuseLocal[j] += dot;
-			ambientLocal[j] += dot * 0.05f;
-			dir[j] += direction[j] * dist2;
-		}
-	}
-}
-
-uint32_t Scene::CullLights( unsigned clipFlags ) {
-	if( rn.renderFlags & RF_ENVVIEW ) {
-		return 0;
-	}
-
-	if( r_fullbright->integer ) {
-		return 0;
-	}
-
-	const int cvarValue = r_dynamiclight->integer;
-	if( !cvarValue ) {
-		return 0;
-	}
-
-	if( cvarValue & ~1 ) {
-		for( int i = 0; i < numCoronaLights; ++i ) {
-			const auto &light = coronaLights[i];
-			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-				continue;
-			}
-			drawnCoronaLightNums[numDrawnCoronaLights++] = (LightNumType)i;
-		}
-	}
-
-	if( !( cvarValue & 1 ) ) {
-		return 0;
-	}
-
-	// TODO: Use PVS as well..
-	// TODO: Mark surfaces that the light has an impact on during PVS BSP traversal
-	// TODO: Cull world nodes / surfaces prior to this so we do not have to test light impact on culled surfaces
-
-	if( numProgramLights <= MAX_DLIGHTS ) {
-		for( int i = 0; i < numProgramLights; ++i ) {
-			const auto &light = programLights[i];
-			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-				continue;
-			}
-			drawnProgramLightNums[numDrawnProgramLights++] = (LightNumType)i;
-		}
-		return BitsForNumberOfLights( numDrawnProgramLights );
-	}
-
-	int numCulledLights = 0;
-	for( int i = 0; i < numProgramLights; ++i ) {
-		const auto &light = programLights[i];
-		if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-			continue;
-		}
-		drawnProgramLightNums[numCulledLights++] = (LightNumType)i;
-	}
-
-	if( numCulledLights <= MAX_DLIGHTS ) {
-		numDrawnProgramLights = numCulledLights;
-		return BitsForNumberOfLights( numDrawnProgramLights );
-	}
-
-	// TODO: We can reuse computed distances for further surface sorting...
-
-	struct LightAndScore {
-		int num;
-		float score;
-
-		LightAndScore() = default;
-		LightAndScore( int num_, float score_ ): num( num_ ), score( score_ ) {}
-		bool operator<( const LightAndScore &that ) const { return score < that.score; }
-	};
-
-	// TODO: Use a proper component layout and SIMD distance (dot) computations here
-
-	int numSortedLights = 0;
-	LightAndScore sortedLights[MAX_PROGRAM_LIGHTS];
-	for( int i = 0; i < numCulledLights; ++i ) {
-		const int num = drawnProgramLightNums[i];
-		const Light *light = &programLights[num];
-		float score = Q_RSqrt( DistanceSquared( light->center, rn.viewOrigin ) ) * light->radius;
-		new( &sortedLights[numSortedLights++] )LightAndScore( num, score );
-		std::push_heap( sortedLights, sortedLights + numSortedLights );
-	}
-
-	numDrawnProgramLights = 0;
-	while( numDrawnProgramLights < MAX_DLIGHTS ) {
-		std::pop_heap( sortedLights, sortedLights + numSortedLights );
-		assert( numSortedLights > 0 );
-		numSortedLights--;
-		int num = sortedLights[numSortedLights].num;
-		drawnProgramLightNums[numDrawnProgramLights++] = num;
-	}
-
-	assert( numDrawnProgramLights == MAX_DLIGHTS );
-	return BitsForNumberOfLights( MAX_DLIGHTS );
-}
-
-void Scene::DrawCoronae() {
-	if( !( r_dynamiclight->integer & ~1 ) ) {
-		return;
-	}
-
-	const auto *__restrict nums = drawnCoronaLightNums;
-	const auto *__restrict lights = coronaLights;
-	const float *__restrict viewOrigin = rn.viewOrigin;
-	auto *__restrict meshList = rn.meshlist;
-	auto *__restrict polyEnt = rsc.polyent;
-
-	bool hasManyFogs = false;
-	mfog_t *fog = nullptr;
-	if( !( rn.renderFlags & RF_SHADOWMAPVIEW ) &&  !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		if( rsh.worldModel && rsh.worldBrushModel->numfogs ) {
-			if( auto *globalFog = rsh.worldBrushModel->globalfog ) {
-				fog = globalFog;
-			} else {
-				hasManyFogs = true;
-			}
-		}
-	}
-
-	const auto numLights = numDrawnCoronaLights;
-	if( !hasManyFogs ) {
-		for( int i = 0; i < numLights; ++i ) {
-			const auto *light = &lights[nums[i]];
-			const float distance = Q_Rcp( Q_RSqrt( DistanceSquared( viewOrigin, light->center ) ) );
-			// TODO: All this stuff below should use restrict qualifiers
-			R_AddSurfToDrawList( meshList, polyEnt, fog, coronaShader, distance, 0, nullptr, &coronaSurfs[i] );
-		}
-		return;
-	}
-
-	for( int i = 0; i < numLights; i++ ) {
-		const auto *light = &lights[nums[i]];
-		const float distance = Q_Rcp( Q_RSqrt( DistanceSquared( viewOrigin, light->center ) ) );
-		// TODO: We can skip some tests even in this case
-		fog = R_FogForSphere( light->center, 1 );
-		R_AddSurfToDrawList( meshList, polyEnt, fog, coronaShader, distance, 0, nullptr, &coronaSurfs[i] );
 	}
 }
 
@@ -4215,7 +3984,7 @@ void R_BatchCoronaSurf( const entity_t *e, const shader_t *shader,
 	vec3_t origin, point;
 	vec3_t v_left, v_up;
 
-	auto *const light = Scene::Instance()->LightForCoronaSurf( drawSurf );
+	auto *const light = wsw::ref::Scene::Instance()->LightForCoronaSurf( drawSurf );
 
 	float radius = light->radius;
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
@@ -4390,7 +4159,7 @@ void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t d
 	dynamic:
 	// add dynamic lights
 	if( radius ) {
-		Scene::Instance()->DynLightDirForOrigin( origin, radius, dir, diffuseLocal, ambientLocal );
+		wsw::ref::Scene::Instance()->DynLightDirForOrigin( origin, radius, dir, diffuseLocal, ambientLocal );
 	}
 
 	VectorNormalizeFast( dir );
@@ -5683,7 +5452,7 @@ void RF_AddLightToScene( const vec3_t org, float programIntensity, float coronaI
 		return;
 	}
 
-	Scene::Instance()->AddLight( org, programIntensity, coronaIntensity, r, g, b );
+	wsw::ref::Scene::Instance()->AddLight( org, programIntensity, coronaIntensity, r, g, b );
 }
 
 void RF_AddPolyToScene( const poly_t *poly ) {
@@ -6683,7 +6452,7 @@ static rserr_t R_PostInit( void ) {
 
 	R_InitModels();
 
-	Scene::Init();
+	wsw::ref::Scene::Init();
 
 	R_ClearScene();
 
@@ -6722,7 +6491,7 @@ static void R_InitVolatileAssets( void ) {
 	R_InitSkeletalCache();
 	R_InitCustomColors();
 
-	Scene::Instance()->InitVolatileAssets();
+	wsw::ref::Scene::Instance()->InitVolatileAssets();
 
 	auto *materialCache = MaterialCache::instance();
 	rsh.envShader = materialCache->loadDefaultMaterial( wsw::StringView( "$environment" ), SHADER_TYPE_OPAQUE_ENV );
@@ -6746,7 +6515,7 @@ static void R_InitVolatileAssets( void ) {
 * R_DestroyVolatileAssets
 */
 static void R_DestroyVolatileAssets( void ) {
-	Scene::Instance()->DestroyVolatileAssets();
+	wsw::ref::Scene::Instance()->DestroyVolatileAssets();
 
 	// kill volatile data
 	R_ShutdownCustomColors();
@@ -6806,7 +6575,7 @@ void R_Shutdown( bool verbose ) {
 
 	R_DestroyVolatileAssets();
 
-	Scene::Shutdown();
+	wsw::ref::Scene::Shutdown();
 
 	R_ShutdownModels();
 
