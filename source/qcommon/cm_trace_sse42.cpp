@@ -1,3 +1,13 @@
+#ifdef _MSC_VER
+// This file is compiled using the /arch:SSE2 switch.
+// The next available switch is /arch:AVX which produces a VEX-encoded code which we don't want.
+// We have to define feature macros manually.
+#define WSW_USE_SSE42
+#define WSW_USE_SSE41
+#define WSW_USE_SSSE3
+#define WSW_USE_SSE3
+#endif
+
 #include "qcommon.h"
 #include "cm_local.h"
 #include "cm_trace.h"
