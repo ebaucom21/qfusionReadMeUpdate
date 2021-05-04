@@ -199,6 +199,8 @@ public:
 	Q_INVOKABLE void closeChatPopup();
 	Q_INVOKABLE void sendChatMessage( const QString &text, bool team );
 
+	Q_INVOKABLE void connectToAddress( const QByteArray &address );
+
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
 
@@ -1674,6 +1676,12 @@ void QtUISystem::addObituary( const wsw::StringView &victim, unsigned meansOfDea
 
 void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
 	m_hudDataModel.addToMessageFeed( message, getFrameTimestamp() );
+}
+
+void QtUISystem::connectToAddress( const QByteArray &address ) {
+	wsw::StaticString<256> command;
+	command << "connect "_asView << wsw::StringView( address.data(), (unsigned)address.size() );
+	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

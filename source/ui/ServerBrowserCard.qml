@@ -50,6 +50,13 @@ Item {
             font.pointSize: 11
             font.weight: Font.Bold
             font.underline: true
+            color: addressLinkMouseArea.containsMouse ? Material.accent : Material.foreground
+            MouseArea {
+                id: addressLinkMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: wsw.connectToAddress(address)
+            }
         }
 
         Label {
