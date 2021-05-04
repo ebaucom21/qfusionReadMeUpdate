@@ -650,18 +650,14 @@ void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s
 	RB_FlushDynamicMeshes();
 }
 
-/*
-* R_BindFrameBufferObject
-*/
 void R_BindFrameBufferObject( int object ) {
-	int width, height;
-
-	RFB_GetObjectSize( object, &width, &height );
+	const int width = glConfig.width;
+	const int height = glConfig.height;
 
 	rf.frameBufferWidth = width;
 	rf.frameBufferHeight = height;
 
-	RB_BindFrameBufferObject( object );
+	RB_BindFrameBufferObject();
 
 	RB_Viewport( rn.viewport[0], rn.viewport[1], rn.viewport[2], rn.viewport[3] );
 	RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
@@ -929,8 +925,6 @@ static void R_Clear( int bitMask ) {
 	bool rgbShadow = ( rn.renderFlags & ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB ) ) == ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB );
 	bool depthPortal = ( rn.renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW ) ) != 0 && ( rn.renderFlags & RF_PORTAL_CAPTURE ) == 0;
 
-	fbo = RB_BoundFrameBufferObject();
-
 	if( rgbShadow ) {
 		clearColor = true;
 		Vector4Set( envColor, 1, 1, 1, 1 );
@@ -952,9 +946,6 @@ static void R_Clear( int bitMask ) {
 	}
 	if( clearColor ) {
 		bits |= GL_COLOR_BUFFER_BIT;
-	}
-	if( RFB_HasStencilRenderBuffer( fbo ) ) {
-		bits |= GL_STENCIL_BUFFER_BIT;
 	}
 
 	bits &= bitMask;
@@ -2948,15 +2939,10 @@ static void _R_DrawSurfaces( drawList_t *list ) {
 	bool batchFlushed = true, batchOpaque = false;
 	int entityFX = 0, prevEntityFX = -1;
 	mat4_t projectionMatrix;
-	int riFBO = 0;
 
 	if( !list->numDrawSurfs ) {
 		return;
 	}
-
-	riFBO = RB_BoundFrameBufferObject();
-
-	RB_SetScreenImageSet( rn.st );
 
 	for( i = 0; i < list->numDrawSurfs; i++ ) {
 		sds = list->drawSurfs + i;
@@ -3039,18 +3025,6 @@ static void _R_DrawSurfaces( drawList_t *list ) {
 			if( !depthWrite && !depthCopied && Shader_ReadDepth( shader ) ) {
 				// ignore portals because oblique frustum messes up the depth values
 				if( ( rn.renderFlags & RF_SOFT_PARTICLES ) && !( rn.renderFlags & RF_CLIPPLANE ) ) {
-					int fbo = RB_BoundFrameBufferObject();
-					if( RFB_HasDepthRenderBuffer( fbo ) && rn.st->screenTexCopy ) {
-						// draw all dynamic surfaces that write depth before copying
-						if( batchOpaque ) {
-							batchOpaque = false;
-							RB_FlushDynamicMeshes();
-							batchFlushed = true;
-						}
-						// this also resolves the multisampling fbo
-						rn.multisampleDepthResolved = true;
-						RB_BlitFrameBufferObject( fbo, rn.st->screenTexCopy->fbo, GL_DEPTH_BUFFER_BIT, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
-					}
 				}
 
 				depthCopied = true;
@@ -3108,7 +3082,7 @@ static void _R_DrawSurfaces( drawList_t *list ) {
 		RB_FlipFrontFace();
 	}
 
-	RB_BindFrameBufferObject( riFBO );
+	RB_BindFrameBufferObject();
 }
 
 /*
@@ -3259,26 +3233,6 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 	}
 }
 
-enum {
-	PPFX_SOFT_PARTICLES,
-	PPFX_TONE_MAPPING,
-	PPFX_COLOR_CORRECTION,
-	PPFX_OVERBRIGHT_TARGET,
-	PPFX_BLOOM,
-	PPFX_FXAA,
-	PPFX_BLUR,
-};
-
-enum {
-	PPFX_BIT_SOFT_PARTICLES = RF_BIT( PPFX_SOFT_PARTICLES ),
-	PPFX_BIT_TONE_MAPPING = RF_BIT( PPFX_TONE_MAPPING ),
-	PPFX_BIT_COLOR_CORRECTION = RF_BIT( PPFX_COLOR_CORRECTION ),
-	PPFX_BIT_OVERBRIGHT_TARGET = RF_BIT( PPFX_OVERBRIGHT_TARGET ),
-	PPFX_BIT_BLOOM = RF_BIT( PPFX_BLOOM ),
-	PPFX_BIT_FXAA = RF_BIT( PPFX_FXAA ),
-	PPFX_BIT_BLUR = RF_BIT( PPFX_BLUR ),
-};
-
 /*
 * R_ClearScene
 */
@@ -3424,149 +3378,6 @@ void R_AddLightStyleToScene( int style, float r, float g, float b ) {
 	ls->rgb[2] = std::max( 0.0f, b );
 }
 
-static const wsw::HashedStringView kBuiltinPostProcessing( "$builtinpostprocessing" );
-
-/*
-* R_BlitTextureToScrFbo
-*/
-static void R_BlitTextureToScrFbo( const refdef_t *fd, Texture *image, int dstFbo,
-								   int program_type, const vec4_t color, int blendMask, int numShaderImages, Texture **shaderImages,
-								   int iParam0 ) {
-	int x, y;
-	int w, h, fw, fh;
-	static shaderpass_t p;
-	static shader_t s;
-	int i;
-	static tcmod_t tcmod;
-	mat4_t m;
-
-	assert( rsh.postProcessingVBO );
-	if( numShaderImages >= MAX_SHADER_IMAGES ) {
-		numShaderImages = MAX_SHADER_IMAGES;
-	}
-
-	// blit + flip using a static mesh to avoid redundant buffer uploads
-	// (also using custom PP effects like FXAA with the stream VBO causes
-	// Adreno to mark the VBO as "slow" (due to some weird bug)
-	// for the rest of the frame and drop FPS to 10-20).
-	RB_FlushDynamicMeshes();
-
-	RB_BindFrameBufferObject( dstFbo );
-
-	if( !dstFbo ) {
-		// default framebuffer
-		// set the viewport to full resolution
-		// but keep the scissoring region
-		x = fd->x;
-		y = fd->y;
-		w = fw = fd->width;
-		h = fh = fd->height;
-		RB_Viewport( 0, 0, glConfig.width, glConfig.height );
-		RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
-	} else {
-		// aux framebuffer
-		// set the viewport to full resolution of the framebuffer (without the NPOT padding if there's one)
-		// draw quad on the whole framebuffer texture
-		// set scissor to default framebuffer resolution
-		Texture *cb = RFB_GetObjectTextureAttachment( dstFbo, false, 0 );
-		x = 0;
-		y = 0;
-		w = fw = rf.frameBufferWidth;
-		h = fh = rf.frameBufferHeight;
-		if( cb ) {
-			fw = cb->width;
-			fh = cb->height;
-		}
-		RB_Viewport( 0, 0, w, h );
-		RB_Scissor( 0, 0, glConfig.width, glConfig.height );
-	}
-
-	s.vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
-	s.sort = SHADER_SORT_NEAREST;
-	s.numpasses = 1;
-	s.name = kBuiltinPostProcessing;
-	s.passes = &p;
-
-	p.rgbgen.type = RGB_GEN_IDENTITY;
-	p.alphagen.type = ALPHA_GEN_IDENTITY;
-	p.tcgen = TC_GEN_NONE;
-	p.images[0] = image;
-	for( i = 1; i < numShaderImages + 1; i++ ) {
-		if( i >= MAX_SHADER_IMAGES ) {
-			break;
-		}
-		p.images[i] = shaderImages[i - 1];
-	}
-	for( ; i < MAX_SHADER_IMAGES; i++ )
-		p.images[i] = NULL;
-	p.flags = blendMask | SHADERPASS_NOSRGB;
-	p.program_type = program_type;
-	p.anim_numframes = iParam0;
-
-	if( !dstFbo ) {
-		tcmod.type = TC_MOD_TRANSFORM;
-		tcmod.args[0] = ( float )( w ) / ( float )( image->width );
-		tcmod.args[1] = ( float )( h ) / ( float )( image->height );
-		tcmod.args[4] = ( float )( x ) / ( float )( image->width );
-		tcmod.args[5] = ( float )( image->height - h - y ) / ( float )( image->height );
-		p.numtcmods = 1;
-		p.tcmods = &tcmod;
-	} else {
-		p.numtcmods = 0;
-	}
-
-	Matrix4_Identity( m );
-	Matrix4_Scale2D( m, fw, fh );
-	Matrix4_Translate2D( m, x, y );
-	RB_LoadObjectMatrix( m );
-
-	RB_BindShader( NULL, &s, NULL );
-	RB_BindVBO( rsh.postProcessingVBO->index, GL_TRIANGLES );
-	RB_DrawElements( 0, 4, 0, 6 );
-
-	RB_LoadObjectMatrix( mat4x4_identity );
-
-	// restore 2D viewport and scissor
-	RB_Viewport( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight );
-	RB_Scissor( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight );
-}
-
-/*
-* R_BlurTextureToScrFbo
-*
-* Performs Kawase blur which approximates standard Gaussian blur in multiple passes.
-* Supposedly performs better on high resolution inputs.
-*/
-static Texture *R_BlurTextureToScrFbo( const refdef_t *fd, Texture *image, Texture *otherImage ) {
-	unsigned i;
-	Texture *images[2];
-	const int kernel35x35[] =
-		{ 0, 1, 2, 2, 3 };     //  equivalent to 35x35 kernel
-	;
-	const int kernel63x63[] =
-		{ 0, 1, 2, 3, 4, 4, 5 }     // equivalent to 63x63 kernel
-	;
-	const int *kernel;
-	unsigned numPasses;
-
-	if( true ) {
-		kernel = kernel63x63;
-		numPasses = sizeof( kernel63x63 ) / sizeof( kernel63x63[0] );
-	} else {
-		kernel = kernel35x35;
-		numPasses = sizeof( kernel35x35 ) / sizeof( kernel35x35[0] );
-	}
-
-	images[0] = image;
-	images[1] = otherImage;
-	for( i = 0; i < numPasses; i++ ) {
-		R_BlitTextureToScrFbo( fd, images[i & 1], images[( i + 1 ) & 1]->fbo, GLSL_PROGRAM_TYPE_KAWASE_BLUR,
-							   colorWhite, 0, 0, NULL, kernel[i] );
-	}
-
-	return images[( i + 1 ) & 1];
-}
-
 /*
 * R_RenderScene
 */
@@ -3609,7 +3420,6 @@ void R_RenderScene( const refdef_t *fd ) {
 	rn.portalmasklist = &r_portalmasklist;
 	rn.dlightBits = 0;
 
-	rn.st = &rsh.st;
 	rn.renderTarget = 0;
 	rn.multisampleDepthResolved = false;
 
@@ -3621,66 +3431,6 @@ void R_RenderScene( const refdef_t *fd ) {
 
 	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
 		samples = bound( 0, r_samples->integer, glConfig.maxFramebufferSamples );
-
-		if( glConfig.sSRGB && rsh.stf.screenTex ) {
-			rn.st = &rsh.stf;
-		}
-
-		// reload the multisample framebuffer if needed
-		if( samples > 0 && (  !rn.st->multisampleTarget || RFB_GetSamples( rn.st->multisampleTarget ) != samples ) ) {
-			const auto [width, height] = R_GetRenderBufferSize( glConfig.width, glConfig.height );
-
-			if( rn.st->multisampleTarget ) {
-				RFB_UnregisterObject( rn.st->multisampleTarget );
-			}
-			rn.st->multisampleTarget = RFB_RegisterObject( width, height, true, true, glConfig.stencilBits != 0, true,
-														   samples, rn.st == &rsh.stf );
-		}
-
-		// ignore r_samples values below 2 or if we failed to allocate the multisample fb
-		if( samples > 1 && rn.st->multisampleTarget != 0 ) {
-			rn.renderTarget = rn.st->multisampleTarget;
-		} else {
-			samples = 0;
-		}
-
-		if( r_soft_particles->integer && ( rn.st->screenTex != NULL ) ) {
-			// use FBO with depth renderbuffer attached
-			if( !rn.renderTarget ) {
-				rn.renderTarget = rn.st->screenTex->fbo;
-			}
-			rn.renderFlags |= RF_SOFT_PARTICLES;
-			fbFlags |= PPFX_BIT_SOFT_PARTICLES;
-		}
-
-		if( rn.st->screenPPCopies[0] && rn.st->screenPPCopies[1] ) {
-			int oldFlags = fbFlags;
-
-			if( rn.st == &rsh.stf ) {
-				fbFlags |= PPFX_BIT_TONE_MAPPING | PPFX_BIT_COLOR_CORRECTION;
-			}
-			if( cc ) {
-				fbFlags |= PPFX_BIT_COLOR_CORRECTION;
-			}
-			if( r_fxaa->integer ) {
-				fbFlags |= PPFX_BIT_FXAA;
-			}
-			if( r_bloom->integer && rn.st == &rsh.stf && rsh.st.screenBloomLodTex[NUM_BLOOM_LODS - 1][1] ) {
-				fbFlags |= PPFX_BIT_OVERBRIGHT_TARGET | PPFX_BIT_COLOR_CORRECTION;
-			}
-			if( fd->rdflags & RDF_BLURRED ) {
-				fbFlags |= PPFX_BIT_BLUR;
-				fbFlags &= ~PPFX_BIT_FXAA;
-			}
-
-			if( fbFlags != oldFlags ) {
-				// use a FBO without a depth renderbuffer attached, unless we need one for soft particles
-				if( !rn.renderTarget ) {
-					rn.renderTarget = rn.st->screenPPCopies[0]->fbo;
-					ppFrontBuffer = 1;
-				}
-			}
-		}
 	}
 
 	// clip new scissor region to the one currently set
@@ -3704,173 +3454,6 @@ void R_RenderScene( const refdef_t *fd ) {
 		R_WriteSpeedsMessage( rf.speedsMsg, sizeof( rf.speedsMsg ) );
 		QMutex_Unlock( rf.speedsMsgLock );
 	}
-
-	// blit and blend framebuffers in proper order
-
-	// resolve the multisample framebuffer
-	if( samples > 0 ) {
-		int bits = GL_COLOR_BUFFER_BIT;
-
-		if( !rn.multisampleDepthResolved ) {
-			bits |= GL_DEPTH_BUFFER_BIT;
-			rn.multisampleDepthResolved = true;
-		}
-
-		RB_BlitFrameBufferObject( rn.renderTarget, rn.st->screenTexCopy->fbo, bits, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
-		ppSource = rn.st->screenTexCopy;
-	} else {
-		if( rn.renderTarget ) {
-			ppSource = RFB_GetObjectTextureAttachment( rn.renderTarget, false, 0 );
-		} else {
-			ppSource = NULL;
-		}
-	}
-
-	if( fbFlags == PPFX_BIT_SOFT_PARTICLES ) {
-		// only blit soft particles directly when we don't have any other post processing
-		// otherwise use the soft particles FBO as the base texture on the next layer
-		// to avoid wasting time on resolves and the fragment shader to blit to a temp texture
-		R_BlitTextureToScrFbo( fd,
-							   ppSource, 0,
-							   GLSL_PROGRAM_TYPE_NONE,
-							   colorWhite, 0,
-							   0, NULL, 0 );
-		return;
-	}
-
-	fbFlags &= ~PPFX_BIT_SOFT_PARTICLES;
-
-	// apply tone mapping (and possibly color correction too, if not doing the bloom as well)
-	if( fbFlags & PPFX_BIT_TONE_MAPPING ) {
-		unsigned numImages = 0;
-		Texture *images[MAX_SHADER_IMAGES] = { NULL };
-		Texture *dest;
-
-		fbFlags &= ~PPFX_BIT_TONE_MAPPING;
-		dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // LDR
-
-		if( fbFlags & PPFX_BIT_OVERBRIGHT_TARGET ) {
-			fbFlags &= ~PPFX_BIT_OVERBRIGHT_TARGET;
-
-			if( !RFB_AttachTextureToObject( dest->fbo, false, 1, rsh.st.screenOverbrightTex ) ) {
-				dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // re-evaluate
-			} else {
-				fbFlags |= PPFX_BIT_BLOOM;
-			}
-		}
-
-		if( fbFlags & PPFX_BIT_BLOOM ) {
-			images[1] = rsh.st.screenOverbrightTex;
-			numImages = 2;
-		} else if( cc ) {
-			images[0] = cc->passes[0].images[0];
-			numImages = 2;
-			fbFlags &= ~PPFX_BIT_COLOR_CORRECTION;
-			dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL; // re-evaluate
-			cc = NULL;
-		}
-
-		R_BlitTextureToScrFbo( fd,
-							   ppSource, dest ? dest->fbo : 0,
-							   GLSL_PROGRAM_TYPE_COLOR_CORRECTION,
-							   colorWhite, 0,
-							   numImages, images, 0 );
-
-		ppFrontBuffer ^= 1;
-		ppSource = dest;
-
-		if( fbFlags & PPFX_BIT_BLOOM ) {
-			// detach
-			RFB_AttachTextureToObject( dest->fbo, false, 1, NULL );
-		}
-	}
-
-	// apply bloom
-	if( fbFlags & PPFX_BIT_BLOOM ) {
-		Texture *src;
-
-		// continously downscale and blur
-		src = rsh.st.screenOverbrightTex;
-		for( l = 0; l < NUM_BLOOM_LODS; l++ ) {
-			// halve the resolution
-			R_BlitTextureToScrFbo( fd,
-								   src, rsh.st.screenBloomLodTex[l][0]->fbo,
-								   GLSL_PROGRAM_TYPE_NONE,
-								   colorWhite, 0,
-								   0, NULL, 0 );
-
-			src = R_BlurTextureToScrFbo( fd, rsh.st.screenBloomLodTex[l][0], rsh.st.screenBloomLodTex[l][1] );
-			bloomTex[l] = src;
-		}
-	}
-
-	// apply color correction
-	if( fbFlags & PPFX_BIT_COLOR_CORRECTION ) {
-		Texture *dest;
-		unsigned numImages = 0;
-		Texture *images[MAX_SHADER_IMAGES] = { NULL };
-
-		fbFlags &= ~PPFX_BIT_COLOR_CORRECTION;
-		if( fbFlags & PPFX_BIT_BLOOM ) {
-			memcpy( images + 2, bloomTex, sizeof( Texture * ) * NUM_BLOOM_LODS );
-			fbFlags &= ~PPFX_BIT_BLOOM;
-		}
-		images[0] = cc ? cc->passes[0].images[0] : NULL;
-		numImages = MAX_SHADER_IMAGES;
-
-		dest = fbFlags ? rsh.st.screenPPCopies[ppFrontBuffer] : NULL;
-		R_BlitTextureToScrFbo( fd,
-							   ppSource, dest ? dest->fbo : 0,
-							   GLSL_PROGRAM_TYPE_COLOR_CORRECTION,
-							   colorWhite, 0,
-							   numImages, images, 0 );
-
-		ppFrontBuffer ^= 1;
-		ppSource = dest;
-	}
-
-	// apply FXAA
-	if( fbFlags & PPFX_BIT_FXAA ) {
-		assert( fbFlags == PPFX_BIT_FXAA );
-
-		// not that FXAA only works on LDR input
-		R_BlitTextureToScrFbo( fd,
-							   ppSource, 0,
-							   GLSL_PROGRAM_TYPE_FXAA,
-							   colorWhite, 0,
-							   0, NULL, 0 );
-		return;
-	}
-
-	if( fbFlags & PPFX_BIT_BLUR ) {
-		ppSource = R_BlurTextureToScrFbo( fd, ppSource, rsh.st.screenPPCopies[ppFrontBuffer] );
-		R_BlitTextureToScrFbo( fd,
-							   ppSource, 0,
-							   GLSL_PROGRAM_TYPE_NONE,
-							   colorWhite, 0,
-							   0, NULL, 0 );
-	}
-}
-
-/*
-* R_BlurScreen
-*/
-void R_BlurScreen( void ) {
-	refdef_t dummy, *fd;
-	Texture *ppSource;
-
-	fd = &dummy;
-	memset( fd, 0, sizeof( *fd ) );
-	fd->width = rf.frameBufferWidth;
-	fd->height = rf.frameBufferHeight;
-
-	RB_FlushDynamicMeshes();
-
-	RB_BlitFrameBufferObject( 0, rsh.st.screenPPCopies[0]->fbo, GL_COLOR_BUFFER_BIT, FBO_COPY_NORMAL, GL_NEAREST, 0, 0 );
-
-	ppSource = R_BlurTextureToScrFbo( fd, rsh.st.screenPPCopies[0], rsh.st.screenPPCopies[1] );
-
-	R_BlitTextureToScrFbo( fd, ppSource, 0, GLSL_PROGRAM_TYPE_NONE, colorWhite, 0, 0, NULL, 0 );
 }
 
 /*
@@ -5067,7 +4650,7 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
 		rn.refdef.height = h;
 		rn.refdef.x = 0;
 		rn.refdef.y = 0;
-		rn.renderTarget = captureTexture->fbo;
+		// TODO.... rn.renderTarget = captureTexture->fbo;
 		rn.renderFlags |= RF_PORTAL_CAPTURE;
 		Vector4Set( rn.viewport, rn.refdef.x + x, rn.refdef.y + y, w, h );
 		Vector4Set( rn.scissor, rn.refdef.x + x, rn.refdef.y + y, w, h );
@@ -5254,8 +4837,6 @@ static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
 
 	RB_Shutdown();
 
-	RFB_Shutdown();
-
 	if( adapter->GLcontext ) {
 		GLimp_SharedContext_Destroy( adapter->GLcontext, NULL );
 	}
@@ -5270,8 +4851,6 @@ static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
 */
 static bool RF_AdapterInit( ref_frontendAdapter_t *adapter ) {
 	RB_Init();
-
-	RFB_Init();
 
 	TextureCache::instance()->initScreenTextures();
 
@@ -5418,8 +4997,6 @@ void RF_EndRegistration( void ) {
 	R_DataSync();
 
 	RB_EndRegistration();
-
-	RFB_FreeUnusedObjects();
 }
 
 void RF_RegisterWorldModel( const char *model ) {
@@ -5465,10 +5042,6 @@ void RF_AddLightStyleToScene( int style, float r, float g, float b ) {
 
 void RF_RenderScene( const refdef_t *fd ) {
 	R_RenderScene( fd );
-}
-
-void RF_BlurScreen( void ) {
-	R_BlurScreen();
 }
 
 void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,

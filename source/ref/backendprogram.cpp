@@ -734,9 +734,7 @@ static r_glslfeat_t RB_sRGBProgramFeatures( const shaderpass_t *pass ) {
 
 		// ok, so we're getting sRGB linear input while rendering to
 		// default framebuffer, so we need to go back from linear to sRGB
-		if( RB_BoundFrameBufferObject() == 0 ) {
-			f |= GLSL_SHADER_COMMON_LINEAR2SRB;
-		}
+		f |= GLSL_SHADER_COMMON_LINEAR2SRB;
 	}
 
 	return f;
@@ -1372,9 +1370,10 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 
 	RB_SetShaderpassState( state );
 
+	/*
 	if( programFeatures & GLSL_SHADER_COMMON_SOFT_PARTICLE ) {
 		RB_BindImage( 3, rb.st.screenDepthTexCopy );
-	}
+	}*/
 
 	if( isLightmapped ) {
 		int i;
@@ -1419,9 +1418,10 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 			RP_UpdateDrawFlatUniforms( program, rsh.wallColor, rsh.floorColor );
 		}
 
+		/*
 		if( programFeatures & GLSL_SHADER_COMMON_SOFT_PARTICLE ) {
 			RP_UpdateTextureUniforms( program, rb.st.screenDepthTex->width, rb.st.screenDepthTex->height );
-		}
+		}*/
 
 		RB_DrawElementsReal( &rb.drawElements );
 	}
@@ -1709,11 +1709,12 @@ void RB_RenderMeshGLSLProgrammed( const shaderpass_t *pass, int programType ) {
 	features |= RB_TcModsProgramFeatures( pass );
 	features |= RB_sRGBProgramFeatures( pass );
 
+	/*
 	if( ( rb.currentShader->flags & SHADER_SOFT_PARTICLE )
 		&& rb.st.screenDepthTexCopy
 		&& ( rb.renderFlags & RF_SOFT_PARTICLES ) ) {
 		features |= GLSL_SHADER_COMMON_SOFT_PARTICLE;
-	}
+	}*/
 
 	switch( programType ) {
 		case GLSL_PROGRAM_TYPE_MATERIAL:
@@ -1927,13 +1928,6 @@ void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure ) {
 	rb.minLight = minLight;
 	rb.noWorldLight = noWorldLight;
 	rb.hdrExposure = hdrExposure;
-}
-
-/*
-* RB_SetScreenImageSet
-*/
-void RB_SetScreenImageSet( const refScreenTexSet_t *st ) {
-	rb.st = *st;
 }
 
 /*

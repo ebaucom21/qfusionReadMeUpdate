@@ -598,7 +598,6 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	texture->height = height;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
-	texture->fbo = 0;
 	texture->isAPlaceholder = false;
 	texture->framenum = 0;
 	texture->missing = false;
@@ -692,7 +691,6 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 	texture->height = height;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
-	texture->fbo = 0;
 	texture->framenum = 0;
 	texture->missing = false;
 	texture->tags = (int)tags;
@@ -744,7 +742,6 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 	texture->height = h;
 	texture->samples = 1;
 	texture->registrationSequence = rsh.registrationSequence;
-	texture->fbo = 0;
 	texture->framenum = 0;
 	texture->missing = false;
 	texture->tags = IMAGE_TAG_GENERIC;
@@ -805,7 +802,6 @@ auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, con
 	texture->height = h;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
-	texture->fbo = 0;
 	texture->framenum = 0;
 	texture->layers = 0;
 	texture->missing = false;
@@ -859,7 +855,6 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	texture->height = h;
 	texture->samples = samples;
 	texture->registrationSequence = rsh.registrationSequence;
-	texture->fbo = 0;
 	texture->framenum = 0;
 	texture->layers = numLayers;
 	texture->missing = false;
@@ -1079,7 +1074,6 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
-	texture->fbo = 0;
 	texture->minmipsize = 1;
 	texture->samples = m_samples;
 	texture->flags = m_flags;
@@ -1269,7 +1263,6 @@ void WhiteCubemapTextureFactory::exec( TextureCache *parent ) {
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
-	texture->fbo = 0;
 	texture->minmipsize = 1;
 	texture->samples = 3;
 	texture->flags = flags;
@@ -1309,7 +1302,6 @@ void TextureCache::initBuiltinTextures() {
 	texture->isAPlaceholder = false;
 	texture->samples = 0;
 	texture->minmipsize = 0;
-	texture->fbo = 0;
 	texture->missing = false;
 	texture->registrationSequence = std::nullopt;
 	texture->texnum = 0;
@@ -1377,7 +1369,7 @@ void R_ScreenShot( const char *filename, int x, int y, int width, int height, in
 }
 
 auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight, std::optional<unsigned> inLimit )
--> std::pair<unsigned, unsigned> {
+	-> std::pair<unsigned, unsigned> {
 	// limit the texture size to either screen resolution in case we can't use FBO
 	// or hardware limits and ensure it's a POW2-texture if we don't support such textures
 	unsigned limit = glConfig.maxRenderbufferSize;
@@ -1386,110 +1378,6 @@ auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight, std::optional<u
 	}
 	limit = std::max( 1u, limit );
 	return std::make_pair( std::min( inWidth, limit ), std::min( inHeight, limit ) );
-}
-
-auto R_InitViewportTexture( Texture *existing, const wsw::StringView &name, unsigned width, unsigned height, int flags, int tags, int samples ) -> Texture * {
-	if( existing ) {
-		if( existing->width == width && existing->height == height ) {
-			return existing;
-		}
-		// TODO: Bind, resize, and unbind
-		// TODO: Update width/upload_width, height/upload_height fields
-	} else {
-		// TODO: Check whether there is a free slot
-		// TODO: Generate
-		// TODO: Bind to modify
-		// TODO: Resize
-		// TODO: Unbind
-		// TODO: Create a new entry and fill fields
-	}
-
-	// TODO: Texture manager should not call render target manager directly
-	// The render target manager should be a caller of this method!
-
-	Texture *t = existing;
-	// update FBO, if attached
-	if( t->fbo ) {
-		RFB_UnregisterObject( t->fbo );
-		t->fbo = 0;
-	}
-
-	t->fbo = RFB_RegisterObject( t->width, t->height, ( tags & IMAGE_TAG_BUILTIN ) != 0,
-								 ( flags & IT_DEPTHRB ) != 0, ( flags & IT_STENCIL ) != 0, false, 0, false );
-	RFB_AttachTextureToObject( t->fbo, ( t->flags & IT_DEPTH ) != 0, 0, t );
-}
-
-enum FloatUsage {
-	NoFloat,
-	UseFloat,
-};
-
-
-// TODO: This call should belong to RenderTargetManager
-
-static auto R_InitScreenFboAttachments( const wsw::StringView &name, std::pair<Texture *, Texture *> existing, FloatUsage floatUsage )
--> std::pair<Texture *, Texture *> {
-	Texture *existingColor = existing.first;
-	Texture *existingDepth = existing.second;
-
-	const unsigned width = std::max( glConfig.width, 1 );
-	const unsigned height = std::max( glConfig.height, 1 );
-
-	const int flags = IT_SPECIAL;
-
-	int colorFlags = flags | IT_FRAMEBUFFER;
-	int depthFlags = flags | ( IT_DEPTH | IT_NOFILTERING );
-	if( !existingDepth ) {
-		colorFlags |= IT_DEPTHRB;
-	}
-
-	if( glConfig.stencilBits ) {
-		if( existingDepth ) {
-			depthFlags |= IT_STENCIL;
-		} else {
-			colorFlags |= IT_STENCIL;
-		}
-	}
-
-	if( floatUsage ) {
-		colorFlags |= IT_FLOAT;
-	}
-
-	Texture *resultColor = R_InitViewportTexture( existingColor, name, width, height, colorFlags, IMAGE_TAG_BUILTIN, 3 );
-	if( !resultColor ) {
-		return std::make_pair( nullptr, nullptr );
-	}
-
-	wsw::StaticString<MAX_QPATH> depthName;
-	depthName << name << "_depth"_asView;
-	Texture *resultDepth = R_InitViewportTexture( existingDepth, depthName.asView(), width, height, depthFlags, IMAGE_TAG_BUILTIN, 1 );
-	if( colorFlags & IT_FRAMEBUFFER ) {
-		RFB_AttachTextureToObject( resultColor->fbo, true, 0, resultDepth );
-	}
-
-	return std::make_pair( resultColor, resultDepth );
-}
-
-static void R_InitBuiltinScreenImageSet( refScreenTexSet_t *st, FloatUsage useFloat ) {
-	char name[128];
-	const char *postfix = useFloat ? "16f" : "";
-
-	Q_snprintfz( name, sizeof( name ), "r_screenTex%s", postfix );
-	std::tie( st->screenTex, st->screenDepthTex ) =
-		R_InitScreenFboAttachments( wsw::StringView( name ), std::make_pair( st->screenTex, st->screenDepthTex ), useFloat );
-
-	// TODO: Do we need copies?
-	// TODO: We can share some auxiliary computations
-
-	// stencil is required in the copy for depth/stencil formats to match when blitting.
-	Q_snprintfz( name, sizeof( name ), "r_screenTexCopy%s", postfix );
-	std::tie( st->screenTexCopy, st->screenDepthTexCopy ) =
-		R_InitScreenFboAttachments( wsw::StringView( name ), std::make_pair( st->screenTexCopy, st->screenDepthTexCopy ), useFloat );
-}
-
-static void R_InitBuiltinScreenImages() {
-	R_InitBuiltinScreenImageSet( &rsh.st, NoFloat );
-	R_InitBuiltinScreenImageSet( &rsh.stf, UseFloat );
 }
 
 void TextureCache::initScreenTextures() {

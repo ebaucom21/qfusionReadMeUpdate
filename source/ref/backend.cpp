@@ -586,17 +586,9 @@ void RB_Clear( int bits, float r, float g, float b, float a ) {
 	RB_DepthRange( 0.0f, 1.0f );
 }
 
-/*
-* RB_BindFrameBufferObject
-*/
-void RB_BindFrameBufferObject( int object ) {
-	int width, height;
-
-	RFB_BindObject( object );
-
-	RFB_CheckObjectStatus();
-
-	RFB_GetObjectSize( object, &width, &height );
+void RB_BindFrameBufferObject() {
+	const int width = glConfig.width;
+	const int height = glConfig.height;
 
 	if( rb.gl.fbHeight != height ) {
 		rb.gl.scissorChanged = true;
@@ -604,20 +596,6 @@ void RB_BindFrameBufferObject( int object ) {
 
 	rb.gl.fbWidth = width;
 	rb.gl.fbHeight = height;
-}
-
-/*
-* RB_BoundFrameBufferObject
-*/
-int RB_BoundFrameBufferObject( void ) {
-	return RFB_BoundObject();
-}
-
-/*
-* RB_BlitFrameBufferObject
-*/
-void RB_BlitFrameBufferObject( int src, int dest, int bitMask, int mode, int filter, int readAtt, int drawAtt ) {
-	RFB_BlitObject( src, dest, bitMask, mode, filter, readAtt, drawAtt );
 }
 
 /*

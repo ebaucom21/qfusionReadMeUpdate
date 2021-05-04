@@ -160,7 +160,6 @@ public:
 	int layers;                                 // texture array size
 	int minmipsize;                             // size of the smallest mipmap that should be used
 	int samples;
-	int fbo;                                    // frame buffer object texture is attached to
 	unsigned int framenum;                      // rf.frameCount texture was updated (rendered to)
 	int tags;                                   // usage tags of the image
 };
@@ -515,9 +514,7 @@ void RB_Clear( int bits, float r, float g, float b, float a );
 void RB_SetZClip( float zNear, float zFar );
 void RB_SetScreenImageSet( const struct refScreenTexSet_s *st );
 
-void RB_BindFrameBufferObject( int object );
-int RB_BoundFrameBufferObject( void );
-void RB_BlitFrameBufferObject( int src, int dest, int bitMask, int mode, int filter, int readAtt, int drawAtt );
+void RB_BindFrameBufferObject();
 
 void RB_BindVBO( int id, int primitive );
 
@@ -1063,8 +1060,6 @@ typedef struct {
 
 	refdef_t refdef;
 
-	refScreenTexSet_t *st;                  // points to either either a 8bit or a 16bit float set
-
 	drawList_t      *meshlist;              // meshes to be rendered
 	drawList_t      *portalmasklist;        // sky and portal BSP surfaces are rendered before (sky-)portals
 											// to create depth mask
@@ -1093,8 +1088,6 @@ typedef struct {
 	struct mesh_vbo_s *postProcessingVBO;
 
 	vec3_t wallColor, floorColor;
-
-	refScreenTexSet_t st, stf;
 
 	shader_t        *envShader;
 	shader_t        *whiteShader;
@@ -1326,34 +1319,6 @@ void        R_ScreenShot_f( void );
 //
 
 //
-// r_framebuffer.c
-//
-enum {
-	FBO_COPY_NORMAL = 0,
-	FBO_COPY_CENTREPOS = 1,
-	FBO_COPY_INVERT_Y = 2,
-	FBO_COPY_NORMAL_DST_SIZE = 3,
-};
-
-void        RFB_Init( void );
-int         RFB_RegisterObject( int width, int height, bool builtin, bool depthRB, bool stencilRB, bool colorRB, int samples, bool useFloat );
-void        RFB_UnregisterObject( int object );
-void        RFB_TouchObject( int object );
-void        RFB_BindObject( int object );
-int         RFB_BoundObject( void );
-bool        RFB_AttachTextureToObject( int object, bool depth, int target, Texture *texture );
-Texture     *RFB_GetObjectTextureAttachment( int object, bool depth, int target );
-bool        RFB_HasColorRenderBuffer( int object );
-bool        RFB_HasDepthRenderBuffer( int object );
-bool        RFB_HasStencilRenderBuffer( int object );
-int         RFB_GetSamples( int object );
-void        RFB_BlitObject( int src, int dest, int bitMask, int mode, int filter, int readAtt, int drawAtt );
-bool        RFB_CheckObjectStatus( void );
-void        RFB_GetObjectSize( int object, int *width, int *height );
-void        RFB_FreeUnusedObjects( void );
-void        RFB_Shutdown( void );
-
-//
 // r_light.c
 //
 #define MAX_SUPER_STYLES    128
@@ -1519,12 +1484,6 @@ void R_AddEntityToScene( const entity_t *ent );
 void R_AddPolyToScene( const poly_t *poly );
 void R_AddLightStyleToScene( int style, float r, float g, float b );
 void R_RenderScene( const refdef_t *fd );
-void R_BlurScreen( void );
-
-//
-// r_surf.c
-//
-#define MAX_SURF_QUERIES        0x1E0
 
 void        R_DrawWorld( void );
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );

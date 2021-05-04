@@ -652,11 +652,6 @@ static int CG_RenderFlags( void ) {
 		rdflags |= RDF_FLIPPED;
 	}
 
-	// Blur screen during the postmatch with the single exception (race uses some match state hacks IIRC)
-	if( !GS_RaceGametype() && GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
-		rdflags |= RDF_BLURRED;
-	}
-
 	rdflags |= CG_SkyPortal();
 
 	return rdflags;
