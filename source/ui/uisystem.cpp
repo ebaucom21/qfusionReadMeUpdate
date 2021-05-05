@@ -117,7 +117,11 @@ public:
 	void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
 				      const std::optional<wsw::StringView> &maybeAttacker ) override;
 
-	void addToMessageFeed( const wsw::StringView &message );
+	void addToMessageFeed( const wsw::StringView &message ) override;
+
+	void notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind );
+
+	Q_INVOKABLE void clearFailedConnectionState() { m_clearFailedConnectionState = true; }
 
 	[[nodiscard]]
 	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
@@ -200,6 +204,8 @@ public:
 	Q_INVOKABLE void sendChatMessage( const QString &text, bool team );
 
 	Q_INVOKABLE void connectToAddress( const QByteArray &address );
+	Q_INVOKABLE void reconnectWithPassword( const QByteArray &address, const QByteArray &password );
+	Q_INVOKABLE void reconnect();
 
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
@@ -234,6 +240,20 @@ public:
 
 	Q_SIGNAL void isOperatorChanged( bool isOperator );
 	Q_PROPERTY( bool isOperator READ isOperator NOTIFY isOperatorChanged );
+
+	enum ConnectionFailKind_ {
+		NoFail = 0,
+		DontReconnect    = (unsigned)UISystem::ConnectionFailKind::DontReconnect,
+		TryReconnecting  = (unsigned)UISystem::ConnectionFailKind::TryReconnecting,
+		PasswordRequired = (unsigned)UISystem::ConnectionFailKind::PasswordRequired
+	};
+	Q_ENUM( ConnectionFailKind_ );
+
+	Q_SIGNAL void connectionFailKindChanged( ConnectionFailKind_ kind );
+	Q_PROPERTY( ConnectionFailKind_ connectionFailKind READ getConnectionFailKind NOTIFY connectionFailKindChanged );
+
+	Q_SIGNAL void connectionFailMessageChanged( const QByteArray &message );
+	Q_PROPERTY( QByteArray connectionFailMessage READ getConnectionFailMessage NOTIFY connectionFailMessageChanged );
 
 	Q_PROPERTY( QColor black MEMBER m_colorBlack CONSTANT );
 	Q_PROPERTY( QColor red MEMBER m_colorRed CONSTANT );
@@ -317,6 +337,11 @@ private:
 	InGameHudLayoutModel m_inGameHudLayoutModel;
 
 	HudDataModel m_hudDataModel;
+
+	QByteArray m_connectionFailMessage;
+	std::optional<ConnectionFailKind> m_pendingConnectionFailKind;
+	std::optional<ConnectionFailKind> m_connectionFailKind;
+	bool m_clearFailedConnectionState { false };
 
 	// A copy of last frame client properties for state change detection without intrusive changes to client code.
 	// Use a separate scope for clarity and for avoiding name conflicts.
@@ -424,6 +449,13 @@ private:
 
 	[[nodiscard]]
 	bool hasPendingCVarChanges() const { return !m_pendingCVarChanges.isEmpty(); }
+
+	[[nodiscard]]
+	auto getConnectionFailMessage() const -> QByteArray { return m_connectionFailMessage; }
+	[[nodiscard]]
+	auto getConnectionFailKind() const -> ConnectionFailKind_ {
+		return m_connectionFailKind ? (ConnectionFailKind_)*m_connectionFailKind : NoFail;
+	};
 
 	explicit QtUISystem( int width, int height );
 
@@ -966,11 +998,30 @@ void QtUISystem::checkPropertyChanges() {
 	const bool isPlayingADemo = cls.demoPlayer.playing;
 	m_lastFrameState.isPlayingADemo = isPlayingADemo;
 
-	if( m_lastFrameState.clientState != lastClientState || isPlayingADemo != wasPlayingADemo ) {
+	bool checkMaskChanges = false;
+	if( m_lastFrameState.clientState != lastClientState ) {
+		checkMaskChanges = true;
+	} else if( isPlayingADemo != wasPlayingADemo ) {
+		checkMaskChanges = true;
+	} else if( m_pendingConnectionFailKind ) {
+		checkMaskChanges = true;
+	} else if( m_clearFailedConnectionState ) {
+		checkMaskChanges = true;
+	}
+
+	m_clearFailedConnectionState = false;
+
+	if( checkMaskChanges ) {
 		const bool wasShowingScoreboard = m_isShowingScoreboard;
 		const bool wasShowingChatPopup = m_isShowingChatPopup;
 		const bool wasShowingTeamChatPopup = m_isShowingTeamChatPopup;
-		if( actualClientState == CA_DISCONNECTED ) {
+		if( m_pendingConnectionFailKind ) {
+			m_connectionFailKind = m_pendingConnectionFailKind;
+			m_pendingConnectionFailKind = std::nullopt;
+			setActiveMenuMask( ConnectionScreen, 0 );
+			Q_EMIT connectionFailKindChanged( getConnectionFailKind() );
+			Q_EMIT connectionFailMessageChanged( getConnectionFailMessage() );
+		} else if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu, 0 );
 			m_chatModel.clear();
 			m_teamChatModel.clear();
@@ -1002,6 +1053,17 @@ void QtUISystem::checkPropertyChanges() {
 		}
 		if( wasShowingTeamChatPopup ) {
 			Q_EMIT isShowingTeamChatPopupChanged( false );
+		}
+
+		// Reset the fail state (if any) for robustness
+		if( actualClientState != CA_DISCONNECTED ) {
+			const bool hadKind = m_connectionFailKind != std::nullopt;
+			m_connectionFailKind = m_pendingConnectionFailKind = std::nullopt;
+			m_connectionFailMessage.clear();
+			if( hadKind ) {
+				Q_EMIT connectionFailKindChanged( NoFail );
+				Q_EMIT connectionFailMessageChanged( m_connectionFailMessage );
+			}
 		}
 	}
 
@@ -1678,10 +1740,32 @@ void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
 	m_hudDataModel.addToMessageFeed( message, getFrameTimestamp() );
 }
 
+void QtUISystem::notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind ) {
+	m_connectionFailMessage.clear();
+	// TODO: Add proper overloads that avoid duplicated conversions
+	m_connectionFailMessage = toStyledText( message ).toUtf8();
+	m_pendingConnectionFailKind = kind;
+}
+
 void QtUISystem::connectToAddress( const QByteArray &address ) {
 	wsw::StaticString<256> command;
 	command << "connect "_asView << wsw::StringView( address.data(), (unsigned)address.size() );
 	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+}
+
+void QtUISystem::reconnectWithPassword( const QByteArray &address, const QByteArray &password ) {
+	wsw::StaticString<256> command;
+	const wsw::StringView passwordView( password.data(), (unsigned)password.size() );
+	command << "seta password \""_asView << passwordView << "\""_asView;
+	Cbuf_ExecuteText( EXEC_NOW, command.data() );
+	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
+}
+
+void QtUISystem::reconnect() {
+	// TODO: Check whether we actually can reconnect
+	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
+	// Protect from sticking in this state
+	m_clearFailedConnectionState = true;
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

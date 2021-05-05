@@ -84,6 +84,14 @@ public:
 
 	virtual void addToMessageFeed( const wsw::StringView &message ) = 0;
 
+	enum class ConnectionFailKind {
+		DontReconnect = 1,
+		TryReconnecting,
+		PasswordRequired
+	};
+
+	virtual void notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind ) = 0;
+
 	[[nodiscard]]
 	virtual bool isShown() const = 0;
 };

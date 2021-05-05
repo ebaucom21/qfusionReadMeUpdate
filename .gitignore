@@ -5,6 +5,7 @@ source/*/Debug
 source/*/Release
 source/ipch
 source/client/qfusion_autogen/
+source/client/warsow_autogen/
 *.sdf
 *.opensdf
 *.vcxproj.user

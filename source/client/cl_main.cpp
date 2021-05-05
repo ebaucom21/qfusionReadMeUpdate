@@ -776,9 +776,6 @@ static void CL_Disconnect_SendCommand( void ) {
 * This is also called on Com_Error, so it shouldn't cause any errors
 */
 void CL_Disconnect( const char *message ) {
-	char menuparms[MAX_STRING_CHARS];
-	bool wasconnecting;
-
 	// We have to shut down webdownloading first
 	if( cls.download.web && !cls.download.disconnect ) {
 		cls.download.disconnect = true;
@@ -790,12 +787,6 @@ void CL_Disconnect( const char *message ) {
 	}
 	if( cls.state == CA_DISCONNECTED ) {
 		goto done;
-	}
-
-	if( cls.state < CA_CONNECTED ) {
-		wasconnecting = true;
-	} else {
-		wasconnecting = false;
 	}
 
 	SV_ShutdownGame( "Owner left the listen server", false );
@@ -875,11 +866,10 @@ void CL_Disconnect( const char *message ) {
 	}
 
 	if( cl_connectChain[0] == '\0' ) {
-		if( message != NULL ) {
-			Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-						 ( wasconnecting ? DROP_REASON_CONNFAILED : DROP_REASON_CONNERROR ), cls.servername, DROP_TYPE_GENERAL, message );
-
-			Cbuf_ExecuteText( EXEC_NOW, menuparms );
+		if( message ) {
+			const auto kind = wsw::ui::UISystem::ConnectionFailKind::TryReconnecting;
+			auto *uiSystem = wsw::ui::UISystem::instance();
+			uiSystem->notifyOfFailedConnection( wsw::StringView( message ), kind );
 		}
 	} else {
 		const char *s = strchr( cl_connectChain, ',' );
@@ -1116,15 +1106,18 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
 			Com_Printf( "Automatic reconnecting allowed.\n" );
 		} else {
-			char menuparms[MAX_STRING_CHARS];
-
 			Com_Printf( "Automatic reconnecting not allowed.\n" );
-
-			CL_Disconnect( NULL );
-			Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-						 DROP_REASON_CONNFAILED, cls.servername, cls.rejecttype, cls.rejectmessage );
-
-			Cbuf_ExecuteText( EXEC_NOW, menuparms );
+			const auto dropType = cls.rejecttype;
+			CL_Disconnect( nullptr );
+			using Kind = wsw::ui::UISystem::ConnectionFailKind;
+			auto *const uiSystem = wsw::ui::UISystem::instance();
+			if( dropType == DROP_TYPE_GENERAL ) {
+				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::TryReconnecting );
+			} else if( dropType == DROP_TYPE_PASSWORD ) {
+				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::PasswordRequired );
+			} else {
+				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::DontReconnect );
+			}
 		}
 
 		return;
