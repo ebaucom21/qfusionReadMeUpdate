@@ -94,6 +94,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     if (MSVC)
         add_release_link_flags("/LTCG")
 
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /source-charset:utf-8 /execution-charset:utf-8")
         set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} /EHsc")
 
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD /W3 /GL /O2 /Ot /Ob2 /Oi")
