@@ -19,13 +19,18 @@ MouseArea {
         anchors.horizontalCenter: parent.horizontalCenter
 
         color: (root.containsMouse || root.selected) ? Material.accent : Material.foreground
-        font.weight: Font.Medium
-        font.pointSize: 16
-        font.letterSpacing: root.containsMouse ? 1.5 : 1.0
+        font.weight: Font.Bold
+        font.pointSize: 13
+        font.letterSpacing: (root.containsMouse || root.selected) ? 1.75 : 1.25
         font.capitalization: Font.AllUppercase
 
+        Behavior on font.letterSpacing { NumberAnimation { duration: 67 } }
+
         transitions: Transition {
-            AnchorAnimation { duration: 200 }
+            AnchorAnimation {
+                duration: 200
+                easing.type: Easing.OutBack
+            }
         }
 
         state: "initial"

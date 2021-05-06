@@ -10,6 +10,8 @@
 namespace wsw::ui {
 
 class GametypesModel : public QAbstractListModel {
+	Q_OBJECT
+
 	enum Role {
 		Name = Qt::UserRole + 1,
 		Title,
@@ -26,13 +28,15 @@ class GametypesModel : public QAbstractListModel {
 	auto rowCount( const QModelIndex & ) const -> int override;
 	[[nodiscard]]
 	auto data( const QModelIndex &index, int role ) const -> QVariant override;
-public:
-	GametypesModel();
 
 	[[nodiscard]]
 	auto getListOfMaps( const GametypeDef &def ) const -> QJsonArray;
+public:
+	GametypesModel();
+
+	// Unfortunately, the MOC is only able to parse the shitty syntax, not the sane one
 	[[nodiscard]]
-	auto getSuggestedNumBots( const GametypeDef &def, int mapNum ) const -> QJsonObject;
+	Q_INVOKABLE QJsonObject getBotConfig( int gametypeNum, int mapNum ) const;
 };
 
 }

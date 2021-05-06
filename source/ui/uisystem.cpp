@@ -204,8 +204,17 @@ public:
 	Q_INVOKABLE void sendChatMessage( const QString &text, bool team );
 
 	Q_INVOKABLE void connectToAddress( const QByteArray &address );
-	Q_INVOKABLE void reconnectWithPassword( const QByteArray &address, const QByteArray &password );
+	Q_INVOKABLE void reconnectWithPassword( const QByteArray &password );
 	Q_INVOKABLE void reconnect();
+
+	enum LocalServerFlags {
+		LocalServerInsta  = 0x1,
+		LocalServerPublic = 0x2
+	};
+
+	Q_ENUM( LocalServerFlags );
+
+	Q_INVOKABLE void launchLocalServer( const QByteArray &gametype, const QByteArray &map, int flags, int numBots );
 
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
@@ -458,6 +467,9 @@ private:
 	};
 
 	explicit QtUISystem( int width, int height );
+
+	template <typename Value>
+	void appendSetCVarCommand( const wsw::StringView &name, const Value &value );
 
 	void updateCVarAwareControls();
 	void checkPropertyChanges();
@@ -1747,18 +1759,26 @@ void QtUISystem::notifyOfFailedConnection( const wsw::StringView &message, Conne
 	m_pendingConnectionFailKind = kind;
 }
 
+template <typename Value>
+void QtUISystem::appendSetCVarCommand( const wsw::StringView &name, const Value &value ) {
+	wsw::StaticString<256> command;
+	assert( !name.contains( ' ' ) && !name.contains( '\t' ) );
+	command << "set "_asView << name << " \""_asView << value << "\";"_asView;
+	Com_Printf( "%s\n", command.data() );
+	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+}
+
 void QtUISystem::connectToAddress( const QByteArray &address ) {
 	wsw::StaticString<256> command;
 	command << "connect "_asView << wsw::StringView( address.data(), (unsigned)address.size() );
 	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
 }
 
-void QtUISystem::reconnectWithPassword( const QByteArray &address, const QByteArray &password ) {
+void QtUISystem::reconnectWithPassword( const QByteArray &password ) {
 	wsw::StaticString<256> command;
-	const wsw::StringView passwordView( password.data(), (unsigned)password.size() );
-	command << "seta password \""_asView << passwordView << "\""_asView;
-	Cbuf_ExecuteText( EXEC_NOW, command.data() );
+	appendSetCVarCommand( "password"_asView, wsw::StringView( password.data(), password.size() ) );
 	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
+	m_clearFailedConnectionState = true;
 }
 
 void QtUISystem::reconnect() {
@@ -1766,6 +1786,17 @@ void QtUISystem::reconnect() {
 	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
 	// Protect from sticking in this state
 	m_clearFailedConnectionState = true;
+}
+
+void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray &map, int flags, int numBots ) {
+	appendSetCVarCommand( "g_gametype"_asView, gametype );
+	appendSetCVarCommand( "g_instagib"_asView, ( flags & LocalServerInsta ) ? 1 : 0 );
+	appendSetCVarCommand( "g_numbots"_asView, numBots );
+	appendSetCVarCommand( "sv_public"_asView, ( flags & LocalServerPublic ) ? 1 : 0 );
+
+	wsw::StaticString<256> command;
+	command << "map "_asView << map;
+	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
 }
 
 void QtUISystem::sendChatMessage( const QString &text, bool team ) {

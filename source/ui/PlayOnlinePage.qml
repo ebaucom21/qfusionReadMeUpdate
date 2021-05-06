@@ -106,8 +106,8 @@ Item {
                 text: "No servers found"
             }
             Button {
+                Layout.preferredWidth: 144
                 Layout.alignment: Qt.AlignHCenter
-                flat: true
                 highlighted: true
                 text: "Play offline"
                 // TODO: This should be less hacky

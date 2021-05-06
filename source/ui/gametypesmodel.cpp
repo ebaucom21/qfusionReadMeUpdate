@@ -67,15 +67,18 @@ auto GametypesModel::getListOfMaps( const GametypeDef &def ) const -> QJsonArray
 	return result;
 }
 
-auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) const -> QJsonObject {
-	assert( (unsigned)mapNum < def.m_mapInfoList.size() );
-
-	const auto botConfig = def.m_botConfig;
-	if( botConfig == GametypeDef::NoBots ) {
-		return QJsonObject( { { "allowed", false } } );
+auto GametypesModel::getBotConfig( int gametypeNum, int mapNum ) const -> QJsonObject {
+	// Illegal values could be passed due to some QML lifetime issues, return defaults in this case
+	if( (unsigned)gametypeNum >= (unsigned)m_gametypes.size() ) {
+		return QJsonObject();
 	}
-	if( botConfig == GametypeDef::ScriptSpawnedBots ) {
-		return QJsonObject( { { "allowed", true }, { "defined", false } } );
+	const auto &def = m_gametypes[gametypeNum];
+	if( (unsigned)mapNum >= (unsigned)def.m_mapInfoList.size() ) {
+		return QJsonObject();
+	}
+	const auto &botConfig = def.m_botConfig;
+	if( botConfig == GametypeDef::NoBots || botConfig == GametypeDef::ScriptSpawnedBots ) {
+		return QJsonObject();
 	}
 
 	int number;
@@ -85,10 +88,10 @@ auto GametypesModel::getSuggestedNumBots( const GametypeDef &def, int mapNum ) c
 		fixed = true;
 	} else {
 		assert( botConfig == GametypeDef::FixedNumBotsForMap || botConfig == GametypeDef::BestNumBotsForMap );
-		auto [minPlayers, maxPlayers] = def.m_mapInfoList[mapNum].numPlayers.value();
+		const auto [minPlayers, maxPlayers] = def.m_mapInfoList[mapNum].numPlayers.value();
 		assert( minPlayers && maxPlayers && minPlayers < maxPlayers );
-		number = (int)(( minPlayers + maxPlayers ) / 2 );
-		fixed = botConfig == GametypeDef::FixedNumBotsForMap;
+		number = (int)( ( minPlayers + maxPlayers ) / 2 );
+		fixed = ( botConfig == GametypeDef::FixedNumBotsForMap );
 	}
 
 	assert( number > 0 );
@@ -168,7 +171,7 @@ GametypesModel::GametypesModel() {
 				}
 			}
 			if( !mapInfoList.empty() ) {
-				def.m_nameSpanIndex = stringStorage.add( fileName );
+				def.m_nameSpanIndex = stringStorage.add( fileName.dropRight( ext.length() ) );
 				m_gametypes.emplace_back( std::move( def ) );
 			}
 		}
