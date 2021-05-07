@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR} ${JPEG_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
+include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
 include_directories(${OGG_INCLUDE_DIR} ${VORBIS_INCLUDE_DIR} ${FREETYPE_INCLUDE_DIRS})
 include_directories("../../third-party/magic_enum/include")
 
@@ -322,5 +322,5 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     add_custom_command(TARGET ${QFUSION_CLIENT_NAME} POST_BUILD COMMAND ${COPY_DYLIBS})
 endif()
 
-target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE ${CURL_LIBRARY} ${ZLIB_LIBRARY} ${JPEG_LIBRARIES} ${PNG_LIBRARIES} ${REF_PLATFORM_LIBRARIES} ${OGG_LIBRARY} ${VORBIS_LIBRARIES} ${FREETYPE_LIBRARIES} ${CLIENT_PLATFORM_LIBRARIES} snd_openal_soft Qt5::Core Qt5::Concurrent Qt5::Quick Qt5::Gui Qt5::Svg)
+target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE ${CURL_LIBRARY} ${ZLIB_LIBRARY} ${REF_PLATFORM_LIBRARIES} ${OGG_LIBRARY} ${VORBIS_LIBRARIES} ${FREETYPE_LIBRARIES} ${CLIENT_PLATFORM_LIBRARIES} snd_openal_soft Qt5::Core Qt5::Concurrent Qt5::Quick Qt5::Gui Qt5::Svg)
 qf_set_output_dir(${QFUSION_CLIENT_NAME} "")

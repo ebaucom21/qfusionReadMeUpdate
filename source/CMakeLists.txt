@@ -182,8 +182,6 @@ if (NOT GAME_MODULES_ONLY)
         find_package(Ogg REQUIRED)
         find_package(Vorbis REQUIRED)
         find_package(Freetype REQUIRED)
-        find_package(JPEG REQUIRED)
-        find_package(PNG REQUIRED)
         find_package(OpenAL)
         find_package(Qt5 COMPONENTS Core Concurrent Quick Gui Svg REQUIRED)
 
