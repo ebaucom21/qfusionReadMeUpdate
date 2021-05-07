@@ -13,7 +13,6 @@ ServerInfoParser::ServerInfoParser() {
 	addHandler( "mapname", &ServerInfoParser::handleMapname );
 	addHandler( "g_match_time", &ServerInfoParser::handleMatchTime );
 	addHandler( "g_match_score", &ServerInfoParser::handleMatchScore );
-	addHandler( "fs_game", &ServerInfoParser::handleGameFS );
 	addHandler( "gametype", &ServerInfoParser::handleGametype );
 	addHandler( "bots", &ServerInfoParser::handleNumBots );
 	addHandler( "clients", &ServerInfoParser::handleNumClients );
@@ -366,10 +365,6 @@ bool ServerInfoParser::handleMatchScore( const wsw::StringView &value ) {
 	}
 
 	return true;
-}
-
-bool ServerInfoParser::handleGameFS( const wsw::StringView &value ) {
-	return handleString( value, &m_info->modname );
 }
 
 bool ServerInfoParser::handleGametype( const wsw::StringView &value ) {

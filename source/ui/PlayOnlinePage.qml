@@ -10,19 +10,68 @@ Item {
 
     Component.onCompleted: {
         scanTimer.start()
-        wsw.startServerListUpdates()
+        applyFilter()
     }
 
     Component.onDestruction: wsw.stopServerListUpdates()
 
+    function applyFilter() {
+        let flags = 0
+        if (fullCheckBox.checked) {
+            flags |= Wsw.ShowFullServers
+        }
+        if (emptyCheckBox.checked) {
+            flags |= Wsw.ShowEmptyServers
+        }
+        wsw.startServerListUpdates(flags)
+    }
+
+    RowLayout {
+        id: optionsBar
+        anchors.top: parent.top
+        anchors.topMargin: 16
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+        Item { Layout.fillWidth: true }
+
+        CheckBox {
+            id: fullCheckBox
+            Material.theme: checked ? Material.Light : Material.Dark
+            text: "Show full"
+            onCheckedChanged: applyFilter()
+            // TODO: Lift the reusable component
+            Component.onCompleted: {
+                contentItem.font.pointSize = 12
+                contentItem.color = Material.foreground
+            }
+        }
+        CheckBox {
+            id: emptyCheckBox
+            Material.theme: checked ? Material.Light : Material.Dark
+            text: "Show empty"
+            onCheckedChanged: applyFilter()
+            Component.onCompleted: {
+                contentItem.font.pointSize = 12
+                contentItem.color = Material.foreground
+            }
+        }
+    }
+
     TableView {
         id: tableView
         visible: !scanTimer.running
-        anchors.fill: parent
+        anchors.top: optionsBar.bottom
+        anchors.topMargin: 16
+        anchors.bottom: parent.bottom
+        // Ok, let it go slightly out of bounds in side directions
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width + columnSpacing
         columnSpacing: 28
         rowSpacing: 40
         interactive: true
         flickableDirection: Flickable.VerticalFlick
+        clip: true
 
         onRowsChanged: {
             if (!rows) {
@@ -34,7 +83,7 @@ Item {
 
         delegate: ServerBrowserCard {
             implicitWidth: root.width / 2
-            visible: typeof(serverName) !== "undefined"
+            visible: typeof(model["serverName"]) !== "undefined"
             serverName: model["serverName"] || ""
             mapName: model["mapName"] || ""
             gametype: model["gametype"] || ""
@@ -61,11 +110,16 @@ Item {
             interval: 1
             onTriggered: tableView.forceLayout()
         }
+
+        Connections {
+            target: serverListModel
+            onWasReset: tableView.forceLayout()
+        }
     }
 
     Timer {
         id: scanTimer
-        interval: 1250
+        interval: 1750
     }
 
     Loader {

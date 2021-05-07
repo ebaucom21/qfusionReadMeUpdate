@@ -58,7 +58,6 @@ class ServerInfoParser {
 	bool handleMapname( const wsw::StringView & );
 	bool handleMatchTime( const wsw::StringView & );
 	bool handleMatchScore( const wsw::StringView & );
-	bool handleGameFS(const wsw::StringView &);
 	bool handleGametype( const wsw::StringView & );
 	bool handleNumBots( const wsw::StringView & );
 	bool handleNumClients( const wsw::StringView & );

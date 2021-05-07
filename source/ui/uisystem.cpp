@@ -242,7 +242,13 @@ public:
 
 	Q_INVOKABLE QByteArray formatPing( int ping ) const;
 
-	Q_INVOKABLE void startServerListUpdates();
+	enum ServerListFlags {
+		ShowEmptyServers = 0x1,
+		ShowFullServers  = 0x2
+	};
+	Q_ENUM( ServerListFlags );
+
+	Q_INVOKABLE void startServerListUpdates( int flags );
 	Q_INVOKABLE void stopServerListUpdates();
 
 	Q_INVOKABLE void callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall );
@@ -1672,11 +1678,15 @@ auto QtUISystem::formatPing( int ping ) const -> QByteArray {
 	return wsw::ui::formatPing( ping );
 }
 
-void QtUISystem::startServerListUpdates() {
-	ServerList::instance()->startPushingUpdates( &m_serverListModel, true, true );
+void QtUISystem::startServerListUpdates( int flags ) {
+	m_serverListModel.clear();
+	const bool showEmptyServers = ( flags & ShowEmptyServers ) != 0;
+	const bool showFullServers = ( flags & ShowFullServers ) != 0;
+	ServerList::instance()->startPushingUpdates( &m_serverListModel, showEmptyServers, showFullServers );
 }
 
 void QtUISystem::stopServerListUpdates() {
+	m_serverListModel.clear();
 	ServerList::instance()->stopPushingUpdates();
 }
 

@@ -36,7 +36,7 @@ class ServerListModel : public QAbstractTableModel, public ServerListListener {
 	auto getServerAtIndex( int index ) const -> const PolledGameServer *;
 
 	[[nodiscard]]
-	auto getIndexOfServer( const PolledGameServer *server ) const -> std::optional<unsigned>;
+	auto findIndexOfServer( const PolledGameServer *server ) const -> std::optional<unsigned>;
 
 	[[nodiscard]]
 	static auto toQmlTeamList( const PlayerInfo *playerInfoHead ) -> QVariant;
@@ -53,6 +53,8 @@ public:
 	};
 	Q_ENUM( MatchTimeFlags );
 
+	Q_SIGNAL void wasReset();
+
  	[[nodiscard]]
  	auto roleNames() const -> QHash<int, QByteArray> override;
 	[[nodiscard]]
@@ -61,6 +63,8 @@ public:
 	auto rowCount( const QModelIndex & ) const -> int override;
 	[[nodiscard]]
 	auto columnCount( const QModelIndex & ) const -> int override;
+
+	void clear();
 
 	void onServerAdded( const PolledGameServer *server ) override;
 	void onServerUpdated( const PolledGameServer *server ) override;

@@ -39,6 +39,13 @@ auto ServerListModel::columnCount( const QModelIndex & ) const -> int {
 	return 2;
 }
 
+void ServerListModel::clear() {
+	beginResetModel();
+	m_servers.clear();
+	endResetModel();
+	Q_EMIT wasReset();
+}
+
 auto ServerListModel::getServerAtIndex( int index ) const -> const PolledGameServer * {
 	if( (unsigned)index < m_servers.size() ) {
 		return m_servers[index];
@@ -46,7 +53,7 @@ auto ServerListModel::getServerAtIndex( int index ) const -> const PolledGameSer
 	return nullptr;
 }
 
-auto ServerListModel::getIndexOfServer( const PolledGameServer *server ) const -> std::optional<unsigned> {
+auto ServerListModel::findIndexOfServer( const PolledGameServer *server ) const -> std::optional<unsigned> {
 	for( unsigned i = 0; i < m_servers.size(); ++i ) {
 		if( m_servers[i] == server ) {
 			return i;
@@ -55,66 +62,49 @@ auto ServerListModel::getIndexOfServer( const PolledGameServer *server ) const -
 	return std::nullopt;
 }
 
-auto ServerListModel::data( const QModelIndex &index, int role ) const -> QVariant {
-	const auto *server = getServerAtIndex( index.row() * 2 + index.column() );
+auto ServerListModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
+	const int arrayIndex = modelIndex.row() * 2 + modelIndex.column();
+	const auto *const server = getServerAtIndex( arrayIndex );
 	if( !server ) {
+		if( arrayIndex != (int)m_servers.size() ) {
+			throw std::logic_error( "Attempt to retrieve a data out of bounds" );
+		}
+		// Allow accessing the bottom-right empty cell
 		return QVariant();
 	}
 
-	// TODO: Should these conversions be cached?
-
 	switch( role ) {
-		case ServerName:
-			return toStyledText( server->getServerName() );
-		case MapName:
-			return toStyledText( server->getMapName() );
-		case Gametype:
-			return toStyledText( server->getGametype() );
-		case Address:
-			return QVariant( QString::fromLatin1( NET_AddressToString( &server->getAddress() ) ) );
-		case Ping:
-			// TODO: No ping yet?
-			return QVariant();
-		case NumPlayers:
-			return server->getNumClients();
-		case MaxPlayers:
-			return server->getMaxClients();
-		case TimeMinutes:
-			return server->getTime().timeMinutes;
-		case TimeSeconds:
-			return server->getTime().timeSeconds;
-		case TimeFlags:
-			return toMatchTimeFlags( server->getTime() );
-		case AlphaTeamName:
-			return toStyledText( server->getAlphaName() );
-		case BetaTeamName:
-			return toStyledText( server->getBetaName() );
-		case AlphaTeamScore:
-			return server->getAlphaScore();
-		case BetaTeamScore:
-			return server->getBetaScore();
-		case AlphaTeamList:
-			return toQmlTeamList( server->getAlphaTeam().first );
-		case BetaTeamList:
-			return toQmlTeamList( server->getBetaTeam().first );
-		case PlayersTeamList:
-			return toQmlTeamList( server->getPlayersTeam().first );
-		case SpectatorsList:
-			return toQmlTeamList( server->getSpectators().first );
-		default:
-			return QVariant();
+		case ServerName: return toStyledText( server->getServerName() );
+		case MapName: return toStyledText( server->getMapName() );
+		case Gametype: return toStyledText( server->getGametype() );
+		case Address: return QVariant( QString::fromLatin1( NET_AddressToString( &server->getAddress() ) ) );
+		case Ping: return QVariant();
+		case NumPlayers: return server->getNumClients();
+		case MaxPlayers: return server->getMaxClients();
+		case TimeMinutes: return server->getTime().timeMinutes;
+		case TimeSeconds: return server->getTime().timeSeconds;
+		case TimeFlags: return toMatchTimeFlags( server->getTime() );
+		case AlphaTeamName: return toStyledText( server->getAlphaName() );
+		case BetaTeamName: return toStyledText( server->getBetaName() );
+		case AlphaTeamScore: return server->getAlphaScore();
+		case BetaTeamScore: return server->getBetaScore();
+		case AlphaTeamList: return toQmlTeamList( server->getAlphaTeam().first );
+		case BetaTeamList: return toQmlTeamList( server->getBetaTeam().first );
+		case PlayersTeamList: return toQmlTeamList( server->getPlayersTeam().first );
+		case SpectatorsList: return toQmlTeamList( server->getSpectators().first );
+		default: return QVariant();
 	}
 }
 
 void ServerListModel::onServerAdded( const PolledGameServer *server ) {
-	if( getIndexOfServer( server ) ) {
-		return;
+	if( findIndexOfServer( server ) ) {
+		throw std::logic_error( "The server is already present" );
 	}
 
-	auto serversCount = (int)m_servers.size();
+	const auto serversCount = (int)m_servers.size();
 	if( serversCount % 2 ) {
 		m_servers.push_back( server );
-		QModelIndex modelIndex( QAbstractTableModel::index( rowCount( QModelIndex() ), 1 ) );
+		const QModelIndex modelIndex( index( rowCount( QModelIndex() ), 1 ) );
 		Q_EMIT dataChanged( modelIndex, modelIndex );
 		return;
 	}
@@ -126,25 +116,49 @@ void ServerListModel::onServerAdded( const PolledGameServer *server ) {
 }
 
 void ServerListModel::onServerRemoved( const PolledGameServer *server ) {
-	const auto maybeServerIndex = getIndexOfServer( server );
+	const auto maybeServerIndex = findIndexOfServer( server );
 	if( !maybeServerIndex ) {
-		return;
+		throw std::logic_error( "Failed to find the server for removal" );
 	}
 
-	// TODO!!!!!!!!
+	// Swap with the last row.
+	// The QSortFilterProxy model that we're going to use
+	// should help to preserve the desired order regardless of that.
+	std::swap( m_servers[*maybeServerIndex], m_servers.back() );
+
+	// TODO: Optimize dispatching updates (specify the rectangle in a QModelIndex() constructor)
+	assert( !m_servers.empty() );
+	for( unsigned i = *maybeServerIndex; i < m_servers.size() - 1u; ++i ) {
+		const auto row = (int)i / 2;
+		const auto column = (int)i % 2;
+		const QModelIndex modelIndex( index( row, column ) );
+		Q_EMIT dataChanged( modelIndex, modelIndex );
+	}
+
+	const auto oldLastRow = (int)m_servers.size() / 2;
+	// If there's going to be a row removal
+	if( m_servers.size() % 2 ) {
+		beginRemoveRows( QModelIndex(), oldLastRow, oldLastRow );
+		m_servers.pop_back();
+		endRemoveRows();
+	} else {
+		m_servers.pop_back();
+		// Make the bottom-right cell reflect it's now-empty status
+		const QModelIndex modelIndex( index( oldLastRow, 1 ) );
+		Q_EMIT dataChanged( modelIndex, modelIndex );
+	}
 }
 
 void ServerListModel::onServerUpdated( const PolledGameServer *server ) {
-	// TODO: Update sort model prior to that
-	const auto maybeServerIndex = getIndexOfServer( server );
+	const auto maybeServerIndex = findIndexOfServer( server );
 	if( !maybeServerIndex ) {
-		return;
+		throw std::logic_error( "Failed to find the server for update" );
 	}
 
 	const auto row = (int)*maybeServerIndex / 2;
 	const auto column = (int)*maybeServerIndex % 2;
 
-	QModelIndex modelIndex( QAbstractTableModel::index( row, column ) );
+	const QModelIndex modelIndex( index( row, column ) );
 	Q_EMIT dataChanged( modelIndex, modelIndex );
 }
 

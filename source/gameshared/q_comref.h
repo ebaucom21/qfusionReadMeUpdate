@@ -253,7 +253,12 @@ protected:
 //==============================================
 
 // infoservers cvar is shared by client and server. This ensures both have the same default string
+#ifndef PUBLIC_BUILD
+#define DEFAULT_INFO_SERVERS_IPS          "warsow.net dpmaster.deathmask.net"
+#else
 #define DEFAULT_INFO_SERVERS_IPS          "warsow.net"
+#endif
+
 #define DEFAULT_PLAYERMODEL                 "viciious"
 #define DEFAULT_PLAYERSKIN                  "default"
 

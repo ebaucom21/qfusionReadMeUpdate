@@ -87,7 +87,6 @@ class ServerInfo {
 public:
 	wsw::StaticString<64> serverName;
 	wsw::StaticString<32> gametype;
-	wsw::StaticString<32> modname;
 	wsw::StaticString<32> mapname;
 
 	~ServerInfo();
@@ -163,43 +162,28 @@ public:
 	auto getAddress() const -> const netadr_t & { return m_networkAddress; }
 
 	[[nodiscard]]
-	auto getServerName() const -> wsw::StringView {
-		return getCheckedInfo()->serverName.asView();
-	}
+	auto getServerName() const -> wsw::StringView { return getCheckedInfo()->serverName.asView(); }
 
 	[[nodiscard]]
-	auto getModName() const -> wsw::StringView {
-		return getCheckedInfo()->modname.asView();
-	}
+	auto getGametype() const -> wsw::StringView { return getCheckedInfo()->gametype.asView(); }
 
 	[[nodiscard]]
-	auto getGametype() const -> wsw::StringView {
-		return getCheckedInfo()->gametype.asView();
-	}
-
-	[[nodiscard]]
-	auto getMapName() const -> wsw::StringView {
-		return getCheckedInfo()->mapname.asView();
-	}
+	auto getMapName() const -> wsw::StringView { return getCheckedInfo()->mapname.asView(); }
 
 	[[nodiscard]]
 	auto getTime() const -> const MatchTime & { return getCheckedInfo()->time; }
 
 	[[nodiscard]]
-	auto getAlphaName() const -> wsw::StringView {
-		return getCheckedInfo()->score.getAlphaScore().name.asView();
-	}
-	auto getBetaName() const -> wsw::StringView {
-		return getCheckedInfo()->score.getBetaScore().name.asView();
-	}
+	auto getAlphaName() const -> wsw::StringView { return getCheckedInfo()->score.getAlphaScore().name.asView(); }
+
 	[[nodiscard]]
-	auto getAlphaScore() const -> int {
-		return getCheckedInfo()->score.getAlphaScore().score;
-	}
+	auto getBetaName() const -> wsw::StringView { return getCheckedInfo()->score.getBetaScore().name.asView(); }
+
 	[[nodiscard]]
-	auto getBetaScore() const -> int {
-		return getCheckedInfo()->score.getBetaScore().score;
-	}
+	auto getAlphaScore() const -> int { return getCheckedInfo()->score.getAlphaScore().score; }
+
+	[[nodiscard]]
+	auto getBetaScore() const -> int { return getCheckedInfo()->score.getBetaScore().score; }
 
 	[[nodiscard]]
 	auto getMaxClients() const -> int { return getCheckedInfo()->maxClients; }
@@ -259,6 +243,7 @@ class ServerList {
 	unsigned m_lastInfoServerIndex { 0 };
 
 	bool m_showEmptyServers { false };
+	bool m_showFullServers { true };
 	bool m_showPlayerInfo { true };
 
 	void onNewServerInfo( PolledGameServer *server, ServerInfo *parsedServerInfo );
@@ -286,6 +271,8 @@ class ServerList {
 	ServerList();
 	~ServerList();
 
+	void clearState();
+
 	static void *resolverThreadFunc( void * );
 
 	void addInfoServer( const netadr_t &address ) {
@@ -301,7 +288,7 @@ public:
 	static void shutdown();
 	static auto instance() -> ServerList *;
 
-	void startPushingUpdates( ServerListListener *listener_, bool showEmptyServers_, bool showPlayerInfo_ );
+	void startPushingUpdates( ServerListListener *listener_, bool showEmptyServers, bool showFullServers );
 	void stopPushingUpdates();
 
 	void frame();

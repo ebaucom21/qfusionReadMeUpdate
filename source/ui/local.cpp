@@ -36,17 +36,36 @@ static const QLatin1String kEntityAmp( "&amp;" );
 static const QLatin1String kEntityQuot( "&quot;" );
 static const QLatin1String kEntityNbsp( "&nbsp;" );
 
-static auto appendEscapingEntities( QString *dest, const wsw::StringView &src ) {
+static void appendUtf8View( QString *__restrict dest, const wsw::StringView &__restrict view ) {
+	bool hasHiChars = true;
+	// Try saving allocations
+	if( view.length() < 64 ) {
+		hasHiChars = false;
+		for( const char ch : view ) {
+			if( (unsigned char)ch > 127u ) {
+				hasHiChars = true;
+				break;
+			}
+		}
+	}
+	if( hasHiChars ) {
+		dest->append( QString::fromUtf8( view.data(), (int)view.size() ) );
+	} else {
+		dest->append( QLatin1String( view.data(), (int)view.size() ) );
+	}
+}
+
+static void appendEscapingEntities( QString *__restrict dest, const wsw::StringView &__restrict src ) {
 	wsw::StringView sv( src );
 	for(;; ) {
 		const std::optional<unsigned> maybeIndex = sv.indexOf( kEntityCharsToEscapeLookup );
 		if( !maybeIndex ) {
-			dest->append( QLatin1String( sv.data(), sv.size() ) );
+			appendUtf8View( dest, sv );
 			return;
 		}
 
 		const auto index = *maybeIndex;
-		dest->append( QLatin1String( sv.data(), index ) );
+		appendUtf8View( dest, sv.take( index ) );
 		const char ch = sv[index];
 		sv = sv.drop( index + 1 );
 

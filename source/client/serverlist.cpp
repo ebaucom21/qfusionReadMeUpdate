@@ -412,13 +412,24 @@ ServerList::ServerList() {
 }
 
 ServerList::~ServerList() {
+	clearState();
+	delete m_serverInfoParser;
+}
+
+void ServerList::clearState() {
+	m_lastInfoServersPollAt = 0;
+	m_lastInfoServerIndex = 0;
+
 	PolledGameServer *nextServer;
 	for( PolledGameServer *server = m_serversHead; server; server = nextServer ) {
 		nextServer = server->nextInList();
+		const auto binIndex = NET_AddressHash( server->getAddress() ) % kNumHashBins;
+		wsw::unlink( server, &m_serversHashBins[binIndex], PolledGameServer::BIN_LINKS );
 		delete server;
 	}
 
-	delete m_serverInfoParser;
+	std::fill( std::begin( m_serversHashBins ), std::end( m_serversHashBins ), nullptr );
+	m_serversHead = nullptr;
 }
 
 void ServerList::frame() {
@@ -432,23 +443,18 @@ void ServerList::frame() {
 	emitPollGameServersPackets();
 }
 
-void ServerList::startPushingUpdates( ServerListListener *listener, bool showEmptyServers, bool showPlayerInfo ) {
-	if( !listener ) {
-		Com_Error( ERR_FATAL, "The listener is not specified" );
-	}
-
-	if( this->m_listener == listener ) {
-		if( this->m_showEmptyServers == showEmptyServers && this->m_showPlayerInfo == showPlayerInfo ) {
-			return;
-		}
-	}
+void ServerList::startPushingUpdates( ServerListListener *listener, bool showEmptyServers, bool showFullServers ) {
+	assert( listener );
+	clearState();
 
 	this->m_listener = listener;
 	this->m_showEmptyServers = showEmptyServers;
-	this->m_showPlayerInfo = showPlayerInfo;
+	this->m_showFullServers = showFullServers;
 }
 
 void ServerList::stopPushingUpdates() {
+	clearState();
+
 	this->m_listener = nullptr;
 }
 
@@ -501,9 +507,10 @@ void ServerList::dropServer( PolledGameServer *server ) {
 }
 
 void ServerList::sendPollInfoServerPacket( const netadr_t &address ) {
-	socket_t *socket = ( address.type == NA_IP ) ? &cls.socket_udp : &cls.socket_udp6;
-	const char *empty = m_showEmptyServers ? "empty" : "";
-	Netchan_OutOfBandPrint( socket, &address, "getservers Warsow %d full%s", 22, empty );
+	socket_t *const socket = ( address.type == NA_IP ) ? &cls.socket_udp : &cls.socket_udp6;
+	const char *const full = m_showFullServers ? "full" : "";
+	const char *const empty = m_showEmptyServers ? "empty" : "";
+	Netchan_OutOfBandPrint( socket, &address, "getservers Warsow %d %s %s", 22, full, empty );
 }
 
 void ServerList::sendPollGameServerPacket( PolledGameServer *server ) {
@@ -518,9 +525,8 @@ void ServerList::sendPollGameServerPacket( PolledGameServer *server ) {
 
 void ServerList::onNewServerInfo( PolledGameServer *server, ServerInfo *newServerInfo ) {
 	if( server->m_oldInfo ) {
+		assert( server->m_currInfo && "The current info must be present if the old one is" );
 		delete server->m_oldInfo;
-		assert( server->m_currInfo );
-		server->m_oldInfo = server->m_currInfo;
 	}
 
 	server->m_oldInfo = server->m_currInfo;
@@ -650,10 +656,6 @@ bool ServerInfo::matchesOld( ServerInfo *oldInfo ) {
 	// Never changes until server restart
 
 	if( serverName != oldInfo->serverName ) {
-		return false;
-	}
-
-	if( modname != oldInfo->modname ) {
 		return false;
 	}
 
