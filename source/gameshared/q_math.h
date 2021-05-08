@@ -386,7 +386,14 @@ public:
 #endif
 
 #ifdef WSW_USE_SSE41
+	[[deprecated("use addMinsAndMaxs*, this subroutine is only for compatibility with old tests")]]
 	void addPointsIfNoCmpMaskDWordSet( __m128 mask, __m128 pt1, __m128 pt2 ) {
+		addMinsAndMaxsIfNoCmpMaskDWordSet( mask, _mm_min_ps( pt1, pt2 ), _mm_max_ps( pt1, pt2 ) );
+	}
+
+	void addMinsAndMaxsIfNoCmpMaskDWordSet( __m128 mask, __m128 givenMins, __m128 givenMaxs ) {
+		assert( !_mm_movemask_ps( _mm_cmpgt_ps( givenMins, givenMaxs ) ) );
+
 		// Find a minimal element of the mask (SSE4.1).
 		// This command can only operate on 16-bit words but is fast.
 		// The mask is supposed to contain 4 32-bit dwords, each of them either 0 or ~0.
@@ -407,19 +414,13 @@ public:
 		__m128 oldMins = m_mins;
 		__m128 oldMaxs = m_maxs;
 
-		// Compute mins/maxs of old mins and new points.
-		// Supply old mins/maxs instead of points if we should actually reject these points.
-		// This could have been more clear in case of a single added point
-		// but we fuse addition of two points in a single method call so we don't have to compute the blend mask twice.
+		// Select either old mins/maxs or given ones using the blend mask
+		__m128 selectedMins = _mm_blendv_ps( oldMins, givenMins, blendMask );
+		__m128 selectedMaxs = _mm_blendv_ps( oldMaxs, givenMaxs, blendMask );
 
-		__m128 mins1 = _mm_min_ps( oldMins, _mm_blendv_ps( oldMins, pt1, blendMask ) );
-		__m128 mins2 = _mm_min_ps( oldMins, _mm_blendv_ps( oldMins, pt2, blendMask ) );
-		__m128 maxs1 = _mm_max_ps( oldMaxs, _mm_blendv_ps( oldMaxs, pt1, blendMask ) );
-		__m128 maxs2 = _mm_max_ps( oldMaxs, _mm_blendv_ps( oldMaxs, pt2, blendMask ) );
-
-		// Write back to memory
-		m_mins = _mm_min_ps( mins1, mins2 );
-		m_maxs = _mm_max_ps( maxs1, maxs2 );
+		// Write comparison results back to memory
+		m_mins = _mm_min_ps( oldMins, selectedMins );
+		m_maxs = _mm_max_ps( oldMaxs, selectedMaxs );
 
 		// TODO: Shouldn't be marked if some mask bits were set
 		markAsTouched();

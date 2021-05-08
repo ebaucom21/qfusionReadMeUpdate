@@ -458,7 +458,7 @@ void Sse42Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, co
 		const __m128 cmp2 = _mm_cmpge_ps( testedMins, shapeMaxs );
 		const __m128 mask = _mm_or_ps( cmp1, cmp2 );
 
-		builder.addPointsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
+		builder.addMinsAndMaxsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
 		destShapes[numDestShapes] = b;
 		// Advance / consider it added if no mask bit set
 		numDestShapes += ( _mm_movemask_ps( mask ) == 0 );

@@ -31,7 +31,7 @@ void AvxOps::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, cons
 		const __m128 cmp2 = _mm_cmpge_ps( testedMins, shapeMaxs );
 		const __m128 mask = _mm_or_ps( cmp1, cmp2 );
 
-		builder.addPointsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
+		builder.addMinsAndMaxsIfNoCmpMaskDWordSet( mask, shapeMins, shapeMaxs );
 
 		// Advance / consider it added if no mask bit set
 		const bool shouldAdd = ( _mm_movemask_ps( mask ) == 0 );
