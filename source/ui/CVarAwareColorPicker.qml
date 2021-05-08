@@ -15,6 +15,7 @@ RowLayout {
 
     property var customColor
     property int selectedIndex: -1
+    property color selectedColor: customColor ? customColor : wsw.consoleColors[selectedIndex]
 
     Repeater {
         model: wsw.consoleColors

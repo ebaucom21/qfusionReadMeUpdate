@@ -20,8 +20,8 @@ ColorPickerItem {
         radius: 2
 
         Rectangle {
-            anchors.bottom: parent.top
-            anchors.bottomMargin: 4
+            anchors.top: parent.bottom
+            anchors.topMargin: 4
             width: 14
             height: 2
             color: root.color

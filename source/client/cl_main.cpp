@@ -2630,6 +2630,9 @@ void CL_Init( void ) {
 	// Caution! The UI system relies on the server list being in a valid state.
 	ServerList::init();
 
+	// Initialize some vars that could be used by the UI prior to the UI loading
+	CG_InitPersistentState();
+
 	CL_InitMedia();
 
 	wsw::ui::UISystem::instance()->forceMenuOff();

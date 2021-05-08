@@ -11,6 +11,7 @@ Slider {
 
     property string cvarName: ""
     property bool applyImmediately: true
+    property bool suppressSignals: true
 
     function checkCVarChanges() {
         let newValue = wsw.getCVarValue(cvarName)
@@ -22,20 +23,25 @@ Slider {
     }
 
     function rollbackChanges() {
+        suppressSignals = true
         value = wsw.getCVarValue(cvarName)
+        suppressSignals = false
     }
 
     onValueChanged: {
-        if (applyImmediately) {
-            wsw.setCVarValue(cvarName, value)
-        } else {
-            wsw.markPendingCVarChanges(root, cvarName, value)
+        if (!suppressSignals) {
+            if (applyImmediately) {
+                wsw.setCVarValue(cvarName, value)
+            } else {
+                wsw.markPendingCVarChanges(root, cvarName, value)
+            }
         }
     }
 
     Component.onCompleted: {
         value = wsw.getCVarValue(cvarName)
         wsw.registerCVarAwareControl(root)
+        suppressSignals = false
     }
 
     Component.onDestruction: wsw.unregisterCVarAwareControl(root)

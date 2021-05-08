@@ -3,6 +3,8 @@
 
 #include <QQuickItem>
 #include <QtGui/QVector3D>
+#include <QColor>
+#include <QRectF>
 
 struct shader_s;
 struct model_s;
@@ -17,10 +19,12 @@ class NativelyDrawn {
 protected:
 	virtual ~NativelyDrawn() = default;
 
-	int m_nativeZ { 0 };
+	// Allows accessing QQuickItem functionality while iterating over generic NativelyDrawn things (casts are unsafe)
+	QQuickItem *m_selfAsItem { nullptr };
 	unsigned m_reloadRequestMask { 0 };
 	bool m_isLinked { false };
 public:
+	int m_nativeZ { 0 };
 	NativelyDrawn *next { nullptr };
 	NativelyDrawn *prev { nullptr };
 
@@ -35,22 +39,30 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	shader_s *m_material { nullptr };
 	QString m_materialName;
 
-	QSize m_sourceSize { 0, 0 };
+	QSize m_sourceSize;
+	QSize m_desiredSize;
 
-	Q_SIGNAL void materialNameChanged( const QString &materialName );
-	void setMaterialName( const QString &materialName );
+	QColor m_color { Qt::white };
 
-	Q_SIGNAL void nativeZChanged( int nativeZ );
 	void setNativeZ( int nativeZ );
+	Q_SIGNAL void nativeZChanged( int nativeZ );
+	Q_PROPERTY( int nativeZ MEMBER m_nativeZ WRITE setNativeZ NOTIFY nativeZChanged )
+
+	void setMaterialName( const QString &materialName );
+	Q_SIGNAL void materialNameChanged( const QString &materialName );
+	Q_PROPERTY( QString materialName MEMBER m_materialName WRITE setMaterialName NOTIFY materialNameChanged )
 
 	Q_SIGNAL void sourceSizeChanged( const QSize &sourceSize );
-
-	Q_PROPERTY( int nativeZ MEMBER m_nativeZ WRITE setNativeZ NOTIFY nativeZChanged )
-	Q_PROPERTY( QString materialName MEMBER m_materialName WRITE setMaterialName NOTIFY materialNameChanged )
 	Q_PROPERTY( QSize sourceSize MEMBER m_sourceSize NOTIFY sourceSizeChanged );
 
+	Q_SIGNAL void desiredSizeChanged( const QSize &desiredSize );
+	Q_PROPERTY( QSize desiredSize MEMBER m_desiredSize NOTIFY desiredSizeChanged );
+
+	Q_SIGNAL void colorChanged( const QColor &color );
+	Q_PROPERTY( QColor color MEMBER m_color NOTIFY colorChanged );
+
 	Q_SIGNAL void isLoadedChanged( bool isLoaded );
-	Q_PROPERTY( bool isLoaded READ isLoaded NOTIFY isLoadedChanged )
+	Q_PROPERTY( bool isLoaded READ isLoaded NOTIFY isLoadedChanged );
 
 	[[nodiscard]]
 	bool isLoaded() const override;

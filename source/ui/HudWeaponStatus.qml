@@ -29,6 +29,7 @@ Item {
         font.weight: Font.Medium
         font.letterSpacing: 1
         font.pointSize: 12
+        font.capitalization: Font.AllUppercase
         textFormat: Text.PlainText
         text: hudDataModel.activeWeaponName
     }

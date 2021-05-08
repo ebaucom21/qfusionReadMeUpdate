@@ -35,6 +35,7 @@
 #include <QPointer>
 #include <QScopedPointer>
 #include <QFontDatabase>
+#include <QQmlProperty>
 
 #include <clocale>
 
@@ -183,6 +184,11 @@ public:
 	Q_INVOKABLE void updateHudOccluder( QQuickItem *item );
 	[[nodiscard]]
 	Q_INVOKABLE bool isHudItemOccluded( QQuickItem *item );
+
+	Q_INVOKABLE void registerNativelyDrawnItemsOccluder( QQuickItem *item );
+	Q_INVOKABLE void unregisterNativelyDrawnItemsOccluder( QQuickItem *item );
+	// There's no need to track changes of these occluders
+	// as natively drawn items and occluders are checked every frame prior to drawing
 
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
@@ -402,11 +408,13 @@ private:
 
 	NativelyDrawn *m_nativelyDrawnListHead { nullptr };
 
-	static constexpr const int kMaxNativelyDrawnItems = 64;
+	static constexpr const int kMaxNativelyDrawnItems = 32;
+	static constexpr const int kMaxOccludersOfNativelyDrawnItems = 16;
 
 	int m_numNativelyDrawnItems { 0 };
 
 	wsw::Vector<QQuickItem *> m_hudOccluders;
+	wsw::Vector<QQuickItem *> m_nativelyDrawnItemsOccluders;
 
 	QSet<QQuickItem *> m_cvarAwareControls;
 
@@ -477,6 +485,9 @@ private:
 	template <typename Value>
 	void appendSetCVarCommand( const wsw::StringView &name, const Value &value );
 
+	[[nodiscard]]
+	auto findCVarOrThrow( const QByteArray &name ) const -> cvar_t *;
+
 	void updateCVarAwareControls();
 	void checkPropertyChanges();
 	void setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask = std::nullopt );
@@ -488,6 +499,9 @@ private:
 	auto getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers;
 
 	bool tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown );
+
+	using ItemsHeap = wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems>;
+	using NativelyDrawnOccluderBounds = wsw::StaticVector<QRectF, 4>;
 
 	void drawBackgroundMapIfNeeded();
 
@@ -836,31 +850,68 @@ void QtUISystem::drawSelfInMainContext() {
 		return lhs->m_nativeZ > rhs->m_nativeZ;
 	};
 
-	wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems> zHeaps[2];
+	assert( m_nativelyDrawnItemsOccluders.size() <= kMaxOccludersOfNativelyDrawnItems );
+	wsw::StaticVector<QRectF, kMaxOccludersOfNativelyDrawnItems> occluderBounds;
+	for( const QQuickItem *occluder: m_nativelyDrawnItemsOccluders ) {
+		occluderBounds.emplace_back( occluder->mapRectToScene( occluder->boundingRect() ) );
+	}
+
+	wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems> underlayHeap, overlayHeap;
 	for( NativelyDrawn *nativelyDrawn = m_nativelyDrawnListHead; nativelyDrawn; nativelyDrawn = nativelyDrawn->next ) {
-		auto &heap = zHeaps[nativelyDrawn->m_nativeZ >= 0];
-		heap.push_back( nativelyDrawn );
-		std::push_heap( heap.begin(), heap.end(), cmp );
+		const QQuickItem *item = nativelyDrawn->m_selfAsItem;
+		assert( item );
+
+		const QVariant visibleProperty( QQmlProperty::read( item, "visible" ) );
+		assert( !visibleProperty.isNull() && visibleProperty.isValid() );
+		if( !visibleProperty.toBool() ) {
+			continue;
+		}
+
+		if( nativelyDrawn->m_nativeZ < 0 ) {
+			underlayHeap.push_back( nativelyDrawn );
+			std::push_heap( underlayHeap.begin(), underlayHeap.end(), cmp );
+			continue;
+		}
+
+		// Don't draw natively drawn items on top of occluders.
+		// TODO: We either draw everything or draw nothing, a proper clipping/
+		// fragmented drawing would be a correct solution.
+		// Still, this the current approach produces acceptable results.
+
+		bool occluded = false;
+		const QRectF itemBounds( item->mapRectToScene( item->boundingRect() ) );
+		for( const QRectF &bounds: occluderBounds ) {
+			if( bounds.intersects( itemBounds ) ) {
+				occluded = true;
+				break;
+			}
+		}
+		if( occluded ) {
+			continue;
+		}
+
+		overlayHeap.push_back( nativelyDrawn );
+		std::push_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
 	}
 
 	// This is quite inefficient as we switch rendering modes for different kinds of items.
 	// Unfortunately this is mandatory for maintaining the desired Z order.
 	// Considering the low number of items of this kind the performance impact should be negligible.
 
-	while( !zHeaps[0].empty() ) {
-		std::pop_heap( zHeaps[0].begin(), zHeaps[0].end(), cmp );
-		zHeaps[0].back()->drawSelfNatively();
-		zHeaps[0].pop_back();
+	while( !underlayHeap.empty() ) {
+		std::pop_heap( underlayHeap.begin(), underlayHeap.end(), cmp );
+		underlayHeap.back()->drawSelfNatively();
+		underlayHeap.pop_back();
 	}
 
 	R_Set2DMode( true );
 	R_DrawExternalTextureOverlay( m_framebufferObject->texture() );
 	R_Set2DMode( false );
 
-	while( !zHeaps[1].empty() ) {
-		std::pop_heap( zHeaps[1].begin(), zHeaps[1].end(), cmp );
-		zHeaps[1].back()->drawSelfNatively();
-		zHeaps[1].pop_back();
+	while( !overlayHeap.empty() ) {
+		std::pop_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
+		overlayHeap.back()->drawSelfNatively();
+		overlayHeap.pop_back();
 	}
 
 	if( !m_activeMenuMask ) {
@@ -1410,14 +1461,12 @@ bool QtUISystem::isDebuggingNativelyDrawnItems() const {
 }
 
 void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
-	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
+	auto *const nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
-		Com_Printf( "An item is not an instance of NativelyDrawn\n" );
-		return;
+		throw std::logic_error( "An item is not an instance of NativelyDrawn" );
 	}
 	if( m_numNativelyDrawnItems == kMaxNativelyDrawnItems ) {
-		Com_Printf( "Too many natively drawn items, skipping this one\n" );
-		return;
+		throw std::logic_error( "Too many natively drawn items" );
 	}
 	wsw::link( nativelyDrawn, &this->m_nativelyDrawnListHead );
 	nativelyDrawn->m_isLinked = true;
@@ -1427,11 +1476,10 @@ void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
 void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
-		Com_Printf( "An item is not an instance of NativelyDrawn\n" );
-		return;
+		throw std::logic_error( "An item is not an instance of NativelyDrawn" );
 	}
 	if( !nativelyDrawn->m_isLinked ) {
-		return;
+		throw std::logic_error( "The NativelyDrawn instance is not linked to the list" );
 	}
 	wsw::unlink( nativelyDrawn, &this->m_nativelyDrawnListHead );
 	nativelyDrawn->m_isLinked = false;
@@ -1475,39 +1523,59 @@ bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
 	return false;
 }
 
+void QtUISystem::registerNativelyDrawnItemsOccluder( QQuickItem *item ) {
+	auto &occluders = m_nativelyDrawnItemsOccluders;
+	if( const auto it = std::find( occluders.begin(), occluders.end(), item ); it != occluders.end() ) {
+		throw std::logic_error( "This occluder of natively drawn items has been already registered" );
+	}
+	if( occluders.size() == kMaxOccludersOfNativelyDrawnItems ) {
+		throw std::logic_error( "Too many occluders of natively drawn items" );
+	}
+	occluders.push_back( item );
+}
+
+void QtUISystem::unregisterNativelyDrawnItemsOccluder( QQuickItem *item ) {
+	auto &occluders = m_nativelyDrawnItemsOccluders;
+	const auto it = std::find( occluders.begin(), occluders.end(), item );
+	if( it == occluders.end() ) {
+		throw std::logic_error( "This occluder of natively drawn items has not been registered" );
+	}
+	occluders.erase( it );
+}
+
+auto QtUISystem::findCVarOrThrow( const QByteArray &name ) const -> cvar_t * {
+	if( cvar_t *maybeVar = Cvar_Find( name.constData() ) ) {
+		return maybeVar;
+	}
+	std::string message;
+	message += "Failed to find a var \"";
+	message += std::string_view( name.data(), (size_t)name.size() );
+	message += "\" by name";
+	throw std::logic_error( message );
+}
+
 QVariant QtUISystem::getCVarValue( const QString &name ) const {
-	const cvar_t *maybeVar = Cvar_Find( name.toUtf8().constData() );
-	return maybeVar ? maybeVar->string : QVariant();
+	return QVariant( findCVarOrThrow( name.toLatin1() )->string );
 }
 
 void QtUISystem::setCVarValue( const QString &name, const QVariant &value ) {
-	const QByteArray nameUtf( name.toUtf8() );
+	const QByteArray nameBytes( name.toLatin1() );
+	auto *const cvar = findCVarOrThrow( nameBytes );
 
-#ifndef PUBLIC_BUILD
-	auto *const cvar = Cvar_Find( nameUtf.constData() );
-	if( !cvar ) {
-		Com_Printf( "Failed to find a var %s by name\n", nameUtf.constData() );
-		return;
-	}
+	// TODO: What to do with that?
 	if( ( cvar->flags & CVAR_LATCH_VIDEO ) || ( cvar->flags & CVAR_LATCH_SOUND ) ) {
-		Com_Printf( "Refusing to apply a video/sound-latched var %s value immediately\n", nameUtf.constData() );
+		Com_Printf( "Refusing to apply a video/sound-latched var %s value immediately\n", nameBytes.constData() );
 		return;
 	}
-#endif
 
-	Cvar_ForceSet( nameUtf.constData(), value.toString().toUtf8().constData() );
+	Cvar_ForceSet( nameBytes.constData(), value.toString().toLatin1().constData() );
 }
 
 void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value ) {
 	auto it = m_pendingCVarChanges.find( control );
 	if( it == m_pendingCVarChanges.end() ) {
-		const QByteArray nameUtf( name.toUtf8() );
-		cvar_t *var = Cvar_Find( nameUtf.constData() );
-		if( !var ) {
-			Com_Printf( "Failed to find a var %s by name\n", nameUtf.constData() );
-			return;
-		}
-		m_pendingCVarChanges.insert( control, { value, var } );
+		// TODO: Use `it` as a hint
+		m_pendingCVarChanges.insert( control, { value, findCVarOrThrow( name.toLatin1() ) } );
 		if( m_pendingCVarChanges.size() == 1 ) {
 			Q_EMIT hasPendingCVarChangesChanged( true );
 		}
@@ -1538,7 +1606,7 @@ void QtUISystem::commitPendingCVarChanges() {
 
 	auto [restartVideo, restartSound] = std::make_pair( false, false );
 	for( const auto &[value, cvar]: m_pendingCVarChanges ) {
-		Cvar_ForceSet( cvar->name, value.toString().toUtf8().constData() );
+		Cvar_ForceSet( cvar->name, value.toString().toLatin1().constData() );
 		if( cvar->flags & CVAR_LATCH_VIDEO ) {
 			restartVideo = true;
 		}
@@ -1574,18 +1642,17 @@ void QtUISystem::rollbackPendingCVarChanges() {
 }
 
 void QtUISystem::registerCVarAwareControl( QQuickItem *control ) {
-#ifndef PUBLIC_BUILD
+	assert( control );
 	if( m_cvarAwareControls.contains( control ) ) {
-		Com_Printf( "A CVar-aware control is already registered\n" );
-		return;
+		throw std::logic_error( "A CVar-aware control has been already registered" );
 	}
-#endif
 	m_cvarAwareControls.insert( control );
 }
 
 void QtUISystem::unregisterCVarAwareControl( QQuickItem *control ) {
+	assert( control );
 	if( !m_cvarAwareControls.remove( control ) ) {
-		Com_Printf( "Failed to unregister a CVar-aware control\n" );
+		throw std::logic_error( "Failed to unregister a CVar-aware control" );
 	}
 }
 

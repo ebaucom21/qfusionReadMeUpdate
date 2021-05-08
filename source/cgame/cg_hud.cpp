@@ -42,9 +42,6 @@ static cvar_t *cg_showChasers;
 
 static cvar_t *cg_centerTime;
 
-cvar_t *cg_crosshair_damage_color;
-cvar_t *cg_separate_weapon_settings;
-
 static cvar_t *cg_showPointedPlayer;
 
 static cvar_t *cg_showSpeed;
@@ -64,9 +61,6 @@ void CG_InitHUD() {
 	cg_specHUD =        Cvar_Get( "cg_specHUD", "", CVAR_ARCHIVE );
 
 	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
-
-	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
-	cg_separate_weapon_settings = Cvar_Get( "cg_separate_weapon_settings", "0", CVAR_ARCHIVE );
 
 	cg_showPointedPlayer =  Cvar_Get( "cg_showPointedPlayer", "1", CVAR_ARCHIVE );
 
@@ -231,7 +225,7 @@ static void drawCrosshair( CrosshairState *state ) {
 }
 
 void CG_UpdateCrosshair() {
-	CrosshairState::staticUpdate();
+	CrosshairState::updateSharedPart();
 	if( unsigned weapon = cg.predictedPlayerState.stats[STAT_WEAPON] ) {
 		cg.crosshairState.update( weapon );
 		cg.strongCrosshairState.update( weapon );

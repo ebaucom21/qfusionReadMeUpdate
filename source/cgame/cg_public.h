@@ -74,6 +74,8 @@ typedef struct snapshot_s {
 
 //===============================================================
 
+void CG_InitPersistentState();
+
 void CG_Init( const char *serverName, unsigned int playerNum,
 			  int vidWidth, int vidHeight, float pixelRatio,
 			  bool demoplaying, const char *demoName, bool pure, unsigned snapFrameTime,

@@ -11,8 +11,10 @@
         <file>CommandsPane.qml</file>
         <file>ConnectionScreen.qml</file>
         <file>CVarAwareCheckBox.qml</file>
+        <file>CVarAwareCrosshairSelector.qml</file>
         <file>CVarAwareColorPicker.qml</file>
         <file>CVarAwareComboBox.qml</file>
+        <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
         <file>CVarAwareTextField.qml</file>
         <file>DemoPlaybackMenu.qml</file>

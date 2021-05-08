@@ -2,93 +2,50 @@
 
 #include "cg_local.h"
 
-extern cvar_t *cg_crosshair_damage_color;
-extern cvar_t *cg_separate_weapon_settings;
+#include "../qcommon/wswstaticstring.h"
 
-class SharedSeparateWeaponVarsCache {
-	cvar_t *m_sizeVars[WEAP_TOTAL - 1] {};
-	cvar_t *m_colorVars[WEAP_TOTAL - 1] {};
-	cvar_t *m_valueVars[WEAP_TOTAL - 1] {};
+using wsw::operator""_asView;
 
-	char m_buffer[64];
-
-	static_assert( WEAP_NONE == 0 );
-	static inline const char *kWeaponNames[WEAP_TOTAL - 1] = {
-		"gb", "mg", "rg", "gl", "rl", "pg", "lg", "eb", "sw", "ig"
-	};
-
-	[[nodiscard]]
-	auto mkVarName( const char *baseName, const char *suffix, unsigned weapon ) -> const char * {
-		assert( weapon > WEAP_NONE && weapon < WEAP_TOTAL );
-		return va_r( m_buffer, sizeof( m_buffer ), "%s%s_%s", baseName, suffix, kWeaponNames[weapon - 1] );
-	}
-
-	[[nodiscard]]
-	auto getCVarForWeapon( cvar_t **vars, const char *baseName, const char *suffix,
-						   const char *defaultValue, unsigned weapon ) -> cvar_t * {
-		assert( weapon > WEAP_NONE && weapon < WEAP_TOTAL );
-		// This currently assumes the same name.
-		cvar_t **cached = vars + weapon - 1;
-		// We don't want to always make the name in the release code path so it's called separately in the assertion.
-		assert( !*cached || !Q_stricmp( ( *cached )->name, mkVarName( baseName, suffix, weapon ) ) );
-		if( !*cached ) {
-			*cached = Cvar_Get( mkVarName( baseName, suffix, weapon ), defaultValue, CVAR_ARCHIVE );
-		}
-		return *cached;
-	}
-public:
-	[[nodiscard]]
-	auto getSizeCVarForWeapon( const char *baseName, unsigned weapon ) -> cvar_t * {
-		return getCVarForWeapon( m_sizeVars, baseName, "_size", "64", weapon );
-	}
-	[[nodiscard]]
-	auto getColorCVarForWeapon( const char *baseName, unsigned weapon ) -> cvar_t * {
-		return getCVarForWeapon( m_colorVars, baseName, "_color", "255 255 255", weapon );
-	}
-	[[nodiscard]]
-	auto getValueCVarForWeapon( const char *baseName, unsigned weapon ) -> cvar_t * {
-		return getCVarForWeapon( m_valueVars, baseName, "", "1", weapon );
-	}
-} weaponVarsCache;
-
-float CrosshairState::s_damageColor[4];
-int CrosshairState::s_oldPackedDamageColor { -1 };
-
-void CrosshairState::checkValueVar( cvar_t *var, const MaterialsArray &materials ) {
-	if( (unsigned)var->integer >= ( materials.length() + 1u ) ) {
-		Cvar_Set( var->name, "1" );
+void CrosshairState::checkValueVar( cvar_t *var, unsigned numCrosshairs ) {
+	if( (unsigned)var->integer > numCrosshairs ) {
+		Cvar_ForceSet( var->name, "1" );
 	}
 }
 
-void CrosshairState::checkSizeVar( cvar_t *var, unsigned maxSize ) {
-	if( (unsigned)var->integer > maxSize ) {
-		char buffer[32];
-		Cvar_Set( var->name, va_r( buffer, sizeof( buffer ), "%u", maxSize ) );
+static const int kValidSizes[] { 16, 32, 64 };
+
+void CrosshairState::checkSizeVar( cvar_t *var ) {
+	if( std::find( std::begin( kValidSizes ), std::end( kValidSizes ), var->integer ) == std::end( kValidSizes ) ) {
+		char buffer[16];
+		Cvar_ForceSet( var->name, va_r( buffer, sizeof( buffer ), "%d", kValidSizes[std::size( kValidSizes ) / 2] ) );
 	}
 }
 
 void CrosshairState::checkColorVar( cvar_s *var, float *cachedColor, int *oldPackedColor ) {
-	float r = 1.0f, g = 1.0f, b = 1.0f;
 	const int packedColor = COM_ReadColorRGBString( var->string );
-	if( !oldPackedColor || packedColor != *oldPackedColor ) {
-		*oldPackedColor = packedColor;
-		if ( packedColor != -1 ) {
-			constexpr float normalizer = 1.0f / 255.0f;
-			r = COLOR_R( packedColor ) * normalizer;
-			g = COLOR_G( packedColor ) * normalizer;
-			b = COLOR_B( packedColor ) * normalizer;
+	if( packedColor == -1 ) {
+		constexpr const char *defaultString = "255 255 255";
+		if( !Q_stricmp( var->string, defaultString ) ) {
+			Cvar_ForceSet( var->name, defaultString );
 		}
-		Vector4Set( cachedColor, r, g, b, 1.0f );
 	}
-}
-
-auto CrosshairState::getOwnCVar( cvar_t **cached, const char *suffix, const char *defaultValue ) -> cvar_t * {
-	if( !*cached ) {
-		char buffer[256];
-		const char *name = va_r( buffer, sizeof( buffer ), "%s%s", m_baseVarName, suffix );
-		*cached = Cvar_Get( name, defaultValue, CVAR_ARCHIVE );
+	// Update cached color values if their addresses are supplied and the packed value has changed
+	// (tracking the packed value allows using cheap comparisons of a single integer)
+	if( !oldPackedColor || ( packedColor != *oldPackedColor ) ) {
+		if( oldPackedColor ) {
+			*oldPackedColor = packedColor;
+		}
+		if( cachedColor ) {
+			float r = 1.0f, g = 1.0f, b = 1.0f;
+			if( packedColor != -1 ) {
+				constexpr float normalizer = 1.0f / 255.0f;
+				r = COLOR_R( packedColor ) * normalizer;
+				g = COLOR_G( packedColor ) * normalizer;
+				b = COLOR_B( packedColor ) * normalizer;
+			}
+			Vector4Set( cachedColor, r, g, b, 1.0f );
+		}
 	}
-	return *cached;
 }
 
 [[nodiscard]]
@@ -99,35 +56,94 @@ auto CrosshairState::getMaterials() -> MaterialsArray * {
 	return m_materials;
 }
 
-void CrosshairState::staticUpdate() {
+static_assert( WEAP_NONE == 0 && WEAP_GUNBLADE == 1 );
+static inline const char *kWeaponNames[WEAP_TOTAL - 1] = {
+	"gb", "mg", "rg", "gl", "rl", "pg", "lg", "eb", "sw", "ig"
+};
+
+void CrosshairState::init() {
+	wsw::StaticString<64> varNameBuffer;
+	varNameBuffer << "cg_crosshair_"_asView;
+	const auto prefixLen = varNameBuffer.length();
+
+	for( int i = 0; i < WEAP_TOTAL - 1; ++i ) {
+		assert( std::strlen( kWeaponNames[i] ) == 2 );
+		const wsw::StringView weaponName( kWeaponNames[i], 2 );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << weaponName;
+		s_valueVars[i] = Cvar_Get( varNameBuffer.data(), "1", CVAR_ARCHIVE );
+		checkValueVar( s_valueVars[i], kNumCrosshairs );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << "size_"_asView << weaponName;
+		s_sizeVars[i] = Cvar_Get( varNameBuffer.data(), "32", CVAR_ARCHIVE );
+		checkSizeVar( s_sizeVars[i] );
+
+		varNameBuffer.erase( prefixLen );
+		varNameBuffer << "color_"_asView << weaponName;
+		s_colorVars[i] = Cvar_Get( varNameBuffer.data(), "255 255 255", CVAR_ARCHIVE );
+		checkColorVar( s_colorVars[i] );
+	}
+
+	cg_crosshair = Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
+	checkValueVar( cg_crosshair, kNumCrosshairs );
+
+	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "32", CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_size );
+
+	cg_crosshair_color = Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
+	checkColorVar( cg_crosshair_color );
+
+	cg_crosshair_strong = Cvar_Get( "cg_crosshair_strong", "1", CVAR_ARCHIVE );
+	checkValueVar( cg_crosshair_strong, kNumStrongCrosshairs );
+
+	cg_crosshair_strong_size = Cvar_Get( "cg_crosshair_strong_size", "64", CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_strong_size );
+
+	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
+	checkColorVar( cg_crosshair_damage_color );
+
+	cg_separate_weapon_settings = Cvar_Get( "cg_separate_weapon_settings", "0", CVAR_ARCHIVE );
+}
+
+void CrosshairState::updateSharedPart() {
 	checkColorVar( cg_crosshair_damage_color, s_damageColor, &s_oldPackedDamageColor );
 }
 
 void CrosshairState::update( unsigned weapon ) {
 	assert( weapon > 0 && weapon < WEAP_TOTAL );
 
-	const int separate = cg_separate_weapon_settings->integer;
+	const int isSeparate = cg_separate_weapon_settings->integer;
+	const bool isStrong = m_style == Strong;
 
-	if( separate && m_separateSizeVarBaseName ) {
-		m_sizeVar = ::weaponVarsCache.getSizeCVarForWeapon( m_separateColorVarBaseName, weapon );
+	if( isStrong ) {
+		m_sizeVar = cg_crosshair_strong_size;
+	} else if( isSeparate ) {
+		m_sizeVar = s_sizeVars[weapon - 1];
 	} else {
-		m_sizeVar = getOwnCVar( &m_ownSizeVar, "_size", "64" );
+		m_sizeVar = cg_crosshair_size;
 	}
-	checkSizeVar( m_sizeVar, 64 );
 
-	if( separate && m_separateColorVarBaseName ) {
-		m_colorVar = ::weaponVarsCache.getColorCVarForWeapon( m_separateColorVarBaseName, weapon );
+	checkSizeVar( m_sizeVar );
+
+	if( isSeparate ) {
+		m_colorVar = s_colorVars[weapon - 1];
 	} else {
-		m_colorVar = getOwnCVar( &m_ownColorVar, "_color", "255 255 255" );
+		m_colorVar = cg_crosshair_color;
 	}
+
 	checkColorVar( m_colorVar, m_varColor, &m_oldPackedColor );
 
-	if( separate && m_separateValueVarBaseName ) {
-		m_valueVar = ::weaponVarsCache.getValueCVarForWeapon( m_separateValueVarBaseName, weapon );
+	if( isStrong ) {
+		m_valueVar = cg_crosshair_strong;
+	} else if( isSeparate ) {
+		m_valueVar = s_valueVars[weapon - 1];
 	} else {
-		m_valueVar = getOwnCVar( &m_ownValueVar, "", "1" );
+		m_valueVar = cg_crosshair;
 	}
-	checkValueVar( m_valueVar, *getMaterials() );
+
+	checkValueVar( m_valueVar, kNumCrosshairs );
 
 	m_decayTimeLeft = std::max( 0, m_decayTimeLeft - cg.frameTime );
 }
@@ -138,10 +154,11 @@ void CrosshairState::clear() {
 }
 
 auto CrosshairState::getDrawingColor() -> const float * {
-	if( m_decayTimeLeft <= 0 ) {
-		return m_varColor;
+	if( m_decayTimeLeft > 0 ) {
+		const float frac = 1.0f - Q_Sqrt( (float) m_decayTimeLeft * m_invDecayTime );
+		assert( frac >= 0.0f && frac <= 1.0f );
+		VectorLerp( s_damageColor, frac, m_varColor, m_drawColor );
+		return m_drawColor;
 	}
-	const float frac = 1.0f - Q_Sqrt( (float)m_decayTimeLeft * m_invDecayTime );
-	VectorLerp( s_damageColor, frac, m_varColor, m_drawColor );
-	return m_drawColor;
+	return m_varColor;
 }

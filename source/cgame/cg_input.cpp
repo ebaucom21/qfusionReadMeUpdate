@@ -485,7 +485,9 @@ void CG_InitInput( void ) {
 	Cmd_AddCommand( "-zoom", IN_ZoomUp );
 
 	Cmd_AddCommand( "centerview", CG_CenterView );
+}
 
+void CG_InitInputVars() {
 	cl_yawspeed =  Cvar_Get( "cl_yawspeed", "140", 0 );
 	cl_pitchspeed = Cvar_Get( "cl_pitchspeed", "150", 0 );
 	cl_anglespeedkey = Cvar_Get( "cl_anglespeedkey", "1.5", 0 );

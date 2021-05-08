@@ -1,5 +1,7 @@
 #include "nativelydrawnitems.h"
 
+#include <QQmlProperty>
+
 #include "../qcommon/qcommon.h"
 #include "../ref/frontend.h"
 
@@ -7,6 +9,7 @@ namespace wsw::ui {
 
 NativelyDrawnImage::NativelyDrawnImage( QQuickItem *parent )
 	: QQuickItem( parent ) {
+	m_selfAsItem = this;
 }
 
 void NativelyDrawnImage::setNativeZ( int nativeZ ) {
@@ -69,14 +72,36 @@ void NativelyDrawnImage::drawSelfNatively() {
 	}
 
 	R_Set2DMode( true );
-	vec4_t color { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	const float opacity = QQmlProperty::read( m_selfAsItem, "opacity" ).toFloat();
+	const vec4_t color {
+		(float)m_color.redF(), (float)m_color.greenF(), (float)m_color.blueF(), opacity * (float)m_color.alphaF()
+	};
+
 	const QPointF globalPoint( mapToGlobal( QPointF( x(), y() ) ) );
-	RF_DrawStretchPic( globalPoint.x(), globalPoint.y(), width(), height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
+	const auto qmlX = (int)globalPoint.x(), qmlY = (int)globalPoint.y();
+
+	// TODO: Check units
+	// TODO: Check rounding
+	// TODO: Setup scissor if the clip rect is defined
+
+	// Check whether the bitmap size is specified
+	if( m_desiredSize.isValid() ) {
+		int x = qmlX + (int)width() / 2;
+		int y = qmlY + (int)height() / 2;
+		const int w = (int)m_desiredSize.width();
+		const int h = (int)m_desiredSize.height();
+		RF_DrawStretchPic( x - w / 2, y - w / 2, w, h, 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
+	} else {
+		RF_DrawStretchPic( qmlX, qmlY, (int)width(), (int)height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
+	}
+
 	R_Set2DMode( false );
 }
 
 NativelyDrawnModel::NativelyDrawnModel( QQuickItem *parent )
 	: QQuickItem( parent ) {
+	m_selfAsItem = this;
 }
 
 void NativelyDrawnModel::setNativeZ( int nativeZ ) {

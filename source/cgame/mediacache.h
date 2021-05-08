@@ -12,6 +12,11 @@ struct sfx_s;
 struct model_s;
 struct shader_s;
 
+constexpr const unsigned kNumCrosshairs = 10;
+constexpr const char *kCrosshairsFormat = "gfx/hud/crosshair%d";
+constexpr const unsigned kNumStrongCrosshairs = 3;
+constexpr const char *kStrongCrosshairsFormat = "gfx/hud/strong_crosshair%d";
+
 class MediaCache {
 	// Currently all entries are precached.
 	// Separate types that check a handle status on every access should be introduced if lazy loading is needed.
@@ -205,8 +210,8 @@ public:
 	CachedModel modInstagunWallHit { this, wsw::StringView( PATH_INSTABLAST_IMPACT_MODEL ) };
 	CachedModel modLasergunWallExplo { this, wsw::StringView( PATH_LASERGUN_IMPACT_MODEL ) };
 
-	CachedMaterialsArray<9> shaderCrosshair { this, "gfx/hud/crosshair%d" };
-	CachedMaterialsArray<3> shaderStrongCrosshair { this, "gfx/hud/strong_crosshair%d" };
+	CachedMaterialsArray<kNumCrosshairs> shaderCrosshair { this, kCrosshairsFormat };
+	CachedMaterialsArray<kNumStrongCrosshairs> shaderStrongCrosshair { this, kStrongCrosshairsFormat };
 
 	CachedMaterial shaderParticle { this, wsw::StringView( "particle" ) };
 

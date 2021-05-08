@@ -924,6 +924,11 @@ void CG_Reset( void ) {
 	memset( cg_entities, 0, sizeof( cg_entities ) );
 }
 
+void CG_InitPersistentState() {
+	CG_InitInputVars();
+	CrosshairState::init();
+}
+
 /*
 * CG_Init
 */

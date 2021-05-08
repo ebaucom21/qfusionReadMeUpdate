@@ -3,6 +3,7 @@
 #include "../qcommon/qcommon.h"
 #include "../gameshared/gs_public.h"
 #include "../client/client.h"
+#include "../cgame/mediacache.h"
 
 #include <QColor>
 #include <QQmlEngine>
@@ -24,74 +25,70 @@ wsw::StringView CG_LocationName( unsigned location );
 
 namespace wsw::ui {
 
-
 class WeaponPropsCache {
-	mutable QByteArray m_weaponNames[WEAP_TOTAL - 1];
-	QByteArray m_weaponIconPaths[WEAP_TOTAL - 1];
-	QColor m_weaponColors[WEAP_TOTAL - 1];
+	struct Entry {
+		QByteArray fullName;
+		QByteArray shortName;
+		QByteArray iconPath;
+		QColor color;
+	};
+
+	wsw::StaticVector<Entry, WEAP_TOTAL - 1> m_entries;
+	QStringList m_availableStrongCrosshairs;
+	QStringList m_availableCrosshairs;
 public:
 	WeaponPropsCache() {
 		QByteArray prefix( "image://wsw/gfx/hud/icons/weapon/" );
 
-		m_weaponIconPaths[WEAP_GUNBLADE - 1] = prefix + "gunblade";
-		m_weaponColors[WEAP_GUNBLADE - 1] = QColor::fromRgbF( 1.0, 1.0, 0.5 );
+		m_entries.emplace_back( { "Gunblade", "gb", prefix + "gunblade", QColor::fromRgbF( 1.0, 1.0, 0.5 ) } );
+		m_entries.emplace_back( { "Machinegun", "mg", prefix + "machinegun", QColor::fromRgbF( 0.5, 0.5, 0.5 ) } );
+		m_entries.emplace_back( { "Riotgun", "rg", prefix + "riot", QColor::fromRgbF( 1.0, 0.5, 0.0 ) } );
+		m_entries.emplace_back( { "Grenade Launcher", "gl", prefix + "grenade", QColor::fromRgbF( 0.0, 0.0, 1.0 ) } );
+		m_entries.emplace_back( { "Rocket Launcher", "rl", prefix + "rocket", QColor::fromRgbF( 0.7, 0.0, 0.0 ) } );
+		m_entries.emplace_back( { "Plasmagun", "pg", prefix + "plasma", QColor::fromRgbF( 0.0, 0.7, 0.0 ) } );
+		m_entries.emplace_back( { "Lasergun", "lg", prefix + "laser", QColor::fromRgbF( 0.9, 0.9, 0.0 ) } );
+		m_entries.emplace_back( { "Electrobolt", "eb", prefix + "electro", QColor::fromRgbF( 0.0, 0.5, 1.0 ) } );
+		m_entries.emplace_back( { "Shockwave", "sw", prefix + "shockwave", QColor::fromRgbF( 0.3, 0.7, 1.0 ) } );
+		m_entries.emplace_back( { "Instagun", "ig", prefix + "instagun", QColor::fromRgbF( 0.0, 1.0, 1.0 ) } );
 
-		m_weaponIconPaths[WEAP_MACHINEGUN - 1] = prefix + "machinegun";
-		m_weaponColors[WEAP_MACHINEGUN - 1] = QColor::fromRgbF( 0.5, 0.5, 0.5 );
-
-		m_weaponIconPaths[WEAP_RIOTGUN - 1] = prefix + "riot";
-		m_weaponColors[WEAP_RIOTGUN - 1] = QColor::fromRgbF( 1.0, 0.5, 0.0 );
-
-		m_weaponIconPaths[WEAP_GRENADELAUNCHER - 1] = prefix + "grenade";
-		m_weaponColors[WEAP_GRENADELAUNCHER - 1] = QColor::fromRgbF( 0.0, 0.0, 1.0 );
-
-		m_weaponIconPaths[WEAP_ROCKETLAUNCHER - 1] = prefix + "rocket";
-		m_weaponColors[WEAP_ROCKETLAUNCHER - 1] = QColor::fromRgbF( 0.7, 0.0, 0.0 );
-
-		m_weaponIconPaths[WEAP_PLASMAGUN - 1] = prefix + "plasma";
-		m_weaponColors[WEAP_PLASMAGUN - 1] = QColor::fromRgbF( 0.0, 0.7, 0.0 );
-
-		m_weaponIconPaths[WEAP_LASERGUN - 1] = prefix + "laser";
-		m_weaponColors[WEAP_LASERGUN - 1] = QColor::fromRgbF( 0.9, 0.9, 0.0 );
-
-		m_weaponIconPaths[WEAP_ELECTROBOLT - 1] = prefix + "electro";
-		m_weaponColors[WEAP_ELECTROBOLT - 1] = QColor::fromRgbF( 0.0, 0.5, 1.0 );
-
-		m_weaponIconPaths[WEAP_SHOCKWAVE - 1] = prefix + "shockwave";
-		m_weaponColors[WEAP_SHOCKWAVE - 1] = QColor::fromRgbF( 0.3, 0.7, 1.0 );
-
-		m_weaponIconPaths[WEAP_INSTAGUN - 1] = prefix + "instagun";
-		m_weaponColors[WEAP_INSTAGUN - 1] = QColor::fromRgbF( 0.0, 1.0, 1.0 );
-
-		assert( std::end( m_weaponIconPaths )[-1].length() );
+		m_availableCrosshairs.reserve( kNumCrosshairs );
+		for( unsigned i = 1; i < kNumCrosshairs + 1; ++i ) {
+			m_availableCrosshairs.append( QString::asprintf( kCrosshairsFormat, i ) );
+		}
+		m_availableStrongCrosshairs.reserve( kNumStrongCrosshairs );
+		for( unsigned i = 1; i < kNumStrongCrosshairs; ++i ) {
+			m_availableStrongCrosshairs.append( QString::asprintf( kStrongCrosshairsFormat, i ) );
+		}
 	}
 
 	[[nodiscard]]
 	auto getWeaponIconPath( int weapon ) const -> QByteArray {
 		assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
-		return weapon ? m_weaponIconPaths[weapon - 1] : QByteArray();
+		return weapon ? m_entries[weapon - 1].iconPath : QByteArray();
 	}
 
 	[[nodiscard]]
-	auto getWeaponName( int weapon ) const -> QByteArray {
+	auto getWeaponFullName( int weapon ) const -> QByteArray {
 		assert( weapon && (unsigned)weapon < (unsigned)WEAP_TOTAL );
-		QByteArray &name = m_weaponNames[weapon - 1];
-		if( !name.length() ) {
-			// Capitalize on data level to reduce possible QML overhead
-			const wsw::StringView rawName( GS_GetWeaponDef( weapon )->name );
-			name.reserve( (QByteArray::size_type)rawName.length() );
-			for( char ch: rawName ) {
-				name.append( (char)std::toupper( ch ) );
-			}
-		}
-		return name;
+		return m_entries[weapon - 1].fullName;
+	}
+
+	[[nodiscard]]
+	auto getWeaponShortName( int weapon ) const -> QByteArray {
+		assert( weapon && (unsigned)weapon < (unsigned)WEAP_TOTAL );
+		return m_entries[weapon - 1].shortName;
 	}
 
 	[[nodiscard]]
 	auto getWeaponColor( int weapon ) const -> QColor {
 		assert( weapon && (unsigned)weapon < (unsigned)WEAP_TOTAL );
-		return m_weaponColors[weapon - 1];
+		return m_entries[weapon - 1].color;
 	}
+
+	[[nodiscard]]
+	auto getAvailableCrosshairs() const -> QStringList { return m_availableCrosshairs; }
+	[[nodiscard]]
+	auto getAvailableStrongCrosshairs() const -> QStringList { return m_availableStrongCrosshairs; }
 
 	[[nodiscard]]
 	auto getObituaryIconPath( unsigned meansOfDeath ) const -> QByteArray {
@@ -565,7 +562,27 @@ auto HudDataModel::getActiveWeaponIcon() const -> QByteArray {
 }
 
 auto HudDataModel::getActiveWeaponName() const -> QByteArray {
-	return m_activeWeapon ? weaponPropsCache.getWeaponName( m_activeWeapon ) : QByteArray();
+	return m_activeWeapon ? weaponPropsCache.getWeaponFullName( m_activeWeapon ) : QByteArray();
+}
+
+auto HudDataModel::getWeaponFullName( int weapon ) const -> QByteArray {
+	return weaponPropsCache.getWeaponFullName( weapon );
+}
+
+auto HudDataModel::getWeaponShortName( int weapon ) const -> QByteArray {
+	return weaponPropsCache.getWeaponShortName( weapon );
+}
+
+auto HudDataModel::getWeaponIconPath( int weapon ) const -> QByteArray {
+	return weaponPropsCache.getWeaponIconPath( weapon );
+}
+
+auto HudDataModel::getAvailableCrosshairs() const -> QStringList {
+	return weaponPropsCache.getAvailableCrosshairs();
+}
+
+auto HudDataModel::getAvailableStrongCrosshairs() const -> QStringList {
+	return weaponPropsCache.getAvailableStrongCrosshairs();
 }
 
 static const QByteArray kWarmup( "WARMUP" );

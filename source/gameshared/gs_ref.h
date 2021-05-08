@@ -29,6 +29,4 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAX_CLANNAME_BYTES 16
 #define MAX_CLANNAME_CHARS 8
 
-#define NUM_CROSSHAIRS  14
-
 #endif // __GS_REF_H

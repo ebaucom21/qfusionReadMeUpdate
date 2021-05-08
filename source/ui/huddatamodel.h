@@ -263,6 +263,7 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	auto getActiveWeaponName() const -> QByteArray;
 
+
 	[[nodiscard]]
 	auto getActiveWeaponStrongAmmo() const -> int { return m_activeWeaponStrongAmmo; }
 	[[nodiscard]]
@@ -351,6 +352,18 @@ public:
 	Q_INVOKABLE QAbstractListModel *getObituariesModel();
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getMessageFeedModel();
+
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getWeaponFullName( int weapon ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getWeaponShortName( int weapon ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getWeaponIconPath( int weapon ) const;
+
+	[[nodiscard]]
+	Q_INVOKABLE QStringList getAvailableCrosshairs() const;
+	[[nodiscard]]
+	Q_INVOKABLE QStringList getAvailableStrongCrosshairs() const;
 
 	HudDataModel();
 
