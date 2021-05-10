@@ -20,7 +20,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         color: Material.backgroundColor
 
-        TabBar {
+        WswTabBar {
             id: tabBar
             visible: stackView.depth < 2
             width: mainPane.width
@@ -39,22 +39,22 @@ Rectangle {
                 NumberAnimation { duration: 66 }
             }
 
-            TabButton {
+            WswTabButton {
                 width: tabButtonWidth
                 text: "General"
                 readonly property var component: generalComponent
             }
-            TabButton {
+            WswTabButton {
                 width: tabButtonWidth
                 text: "Chat"
                 readonly property var component: chatComponent
             }
-            TabButton {
+            WswTabButton {
                 width: tabButtonWidth
                 text: "Callvotes"
                 readonly property var component: callvotesComponent
             }
-            TabButton {
+            WswTabButton {
                 visible: gametypeOptionsModel.available
                 width: visible ? tabButtonWidth : 0
                 text: gametypeOptionsModel.tabTitle

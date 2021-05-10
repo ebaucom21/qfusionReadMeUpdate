@@ -8,7 +8,7 @@ import net.warsow 2.6
 Item {
     readonly property var handleKeyEvent: swipeView.currentItem["handleKeyEvent"]
 
-    TabBar {
+    WswTabBar {
         id: tabBar
         enabled: !wsw.hasPendingCVarChanges
         background: null
@@ -20,13 +20,13 @@ Item {
             right: parent.right
         }
 
-        TabButton { text: "General" }
-        TabButton { text: "Teams" }
-        TabButton { text: "Graphics" }
-        TabButton { text: "Sound" }
-        TabButton { text: "Mouse" }
-        TabButton { text: "Keyboard" }
-        TabButton { text: "HUD" }
+        WswTabButton { text: "General" }
+        WswTabButton { text: "Teams" }
+        WswTabButton { text: "Graphics" }
+        WswTabButton { text: "Sound" }
+        WswTabButton { text: "Mouse" }
+        WswTabButton { text: "Keyboard" }
+        WswTabButton { text: "HUD" }
     }
 
     SwipeView {

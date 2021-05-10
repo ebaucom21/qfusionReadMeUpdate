@@ -82,6 +82,8 @@
         <file>SettingsPage.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
+        <file>WswTabBar.qml</file>
+        <file>WswTabButton.qml</file>
         <file>logo.webp</file>
         <file>qtquickcontrols2.conf</file>
     </qresource>
