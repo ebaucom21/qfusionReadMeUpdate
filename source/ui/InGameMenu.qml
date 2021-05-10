@@ -40,25 +40,25 @@ Rectangle {
             }
 
             WswTabButton {
+                readonly property var component: generalComponent
                 width: tabButtonWidth
                 text: "General"
-                readonly property var component: generalComponent
             }
             WswTabButton {
+                readonly property var component: Component { InGameChatPage {} }
                 width: tabButtonWidth
                 text: "Chat"
-                readonly property var component: chatComponent
             }
             WswTabButton {
+                readonly property var component: Component { InGameCallvotesPage {} }
                 width: tabButtonWidth
                 text: "Callvotes"
-                readonly property var component: callvotesComponent
             }
             WswTabButton {
+                readonly property var component: Component { InGameGametypeOptionsPage {} }
                 visible: gametypeOptionsModel.available
                 width: visible ? tabButtonWidth : 0
                 text: gametypeOptionsModel.tabTitle
-                readonly property var component: gametypeOptionsComponent
             }
 
             onCurrentItemChanged: stackView.replace(currentItem.component)

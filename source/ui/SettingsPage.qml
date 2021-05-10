@@ -6,61 +6,66 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
-    readonly property var handleKeyEvent: swipeView.currentItem["handleKeyEvent"]
+    readonly property var handleKeyEvent: stackView.currentItem["handleKeyEvent"]
+
+    Component {
+        id: generalSettingsComponent
+        GeneralSettings {}
+    }
 
     WswTabBar {
         id: tabBar
         enabled: !wsw.hasPendingCVarChanges
         background: null
-        currentIndex: swipeView.currentIndex
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
 
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
+        onCurrentItemChanged: stackView.replace(currentItem.component)
+
+        WswTabButton {
+            readonly property var component: generalSettingsComponent
+            text: "General"
         }
-
-        WswTabButton { text: "General" }
-        WswTabButton { text: "Teams" }
-        WswTabButton { text: "Graphics" }
-        WswTabButton { text: "Sound" }
-        WswTabButton { text: "Mouse" }
-        WswTabButton { text: "Keyboard" }
-        WswTabButton { text: "HUD" }
+        WswTabButton {
+            readonly property var component: Component { TeamsSettings {} }
+            text: "Teams"
+        }
+        WswTabButton {
+            readonly property var component: Component { GraphicsSettings {} }
+            text: "Graphics"
+        }
+        WswTabButton {
+            readonly property var component: Component { SoundSettings {} }
+            text: "Sound"
+        }
+        WswTabButton {
+            readonly property var component: Component { MouseSettings {} }
+            text: "Mouse"
+        }
+        WswTabButton {
+            readonly property var component: Component { KeyboardSettings {} }
+            text: "Keyboard"
+        }
+        WswTabButton {
+            readonly property var component: Component { HudSettings {} }
+            text: "HUD"
+        }
     }
 
-    SwipeView {
-        id: swipeView
-        interactive: !wsw.hasPendingCVarChanges
-        clip: true
-
-        anchors {
-            top: tabBar.bottom
-            bottom: parent.bottom
-            left: parent.left
-            right: parent.right
-        }
-
-        Connections {
-            target: tabBar
-            onCurrentIndexChanged: swipeView.currentIndex = tabBar.currentIndex
-        }
-
-        GeneralSettings {}
-        TeamsSettings {}
-        GraphicsSettings {}
-        SoundSettings {}
-        MouseSettings {}
-        KeyboardSettings {}
-        HudSettings {}
+    StackView {
+        id: stackView
+        anchors.top: tabBar.bottom
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        initialItem: generalSettingsComponent
+        clip: false
     }
 
     Loader {
-        anchors {
-            bottom: parent.bottom
-            horizontalCenter: parent.horizontalCenter
-        }
-
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width
         height: 64
         active: wsw.hasPendingCVarChanges
