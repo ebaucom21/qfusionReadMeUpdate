@@ -287,6 +287,11 @@ public:
 	Q_PROPERTY( QColor orange MEMBER m_colorOrange CONSTANT );
 	Q_PROPERTY( QColor grey MEMBER m_colorGrey CONSTANT );
 	Q_PROPERTY( QVariantList consoleColors MEMBER m_consoleColors CONSTANT );
+	Q_PROPERTY( QStringList playerModels MEMBER m_playerModels CONSTANT );
+	Q_PROPERTY( QString defaultPlayerModel MEMBER m_defaultPlayerModel CONSTANT );
+	Q_PROPERTY( QString defaultTeamAlphaModel MEMBER m_defaultTeamAlphaModel CONSTANT );
+	Q_PROPERTY( QString defaultTeamBetaModel MEMBER m_defaultTeamBetaModel CONSTANT );
+	Q_PROPERTY( QString defaultTeamPlayersModel MEMBER m_defaultTeamPlayersModel CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -447,6 +452,12 @@ private:
 		m_colorBlack, m_colorRed, m_colorGreen, m_colorYellow, m_colorBlue,
 		m_colorCyan, m_colorMagenta, m_colorWhite, m_colorOrange, m_colorGrey
 	};
+
+	const QStringList m_playerModels { "viciious", "bobot", "monada", "bigvic", "padpork", "silverclaw" };
+	const QString m_defaultPlayerModel { DEFAULT_PLAYERMODEL };
+	const QString m_defaultTeamPlayersModel { DEFAULT_TEAMPLAYERS_MODEL };
+	const QString m_defaultTeamAlphaModel { DEFAULT_TEAMALPHA_MODEL };
+	const QString m_defaultTeamBetaModel { DEFAULT_TEAMBETA_MODEL };
 
 	[[nodiscard]]
 	bool isShowingMaskElement( unsigned bit ) const {

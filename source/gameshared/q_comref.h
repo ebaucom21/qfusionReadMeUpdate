@@ -260,6 +260,10 @@ protected:
 #endif
 
 #define DEFAULT_PLAYERMODEL                 "viciious"
+#define DEFAULT_TEAMPLAYERS_MODEL          "bobot"
+#define DEFAULT_TEAMALPHA_MODEL            "bigvic"
+#define DEFAULT_TEAMBETA_MODEL             "padpork"
+
 #define DEFAULT_PLAYERSKIN                  "default"
 
 #ifdef UCMDTIMENUDGE

@@ -646,38 +646,6 @@ static void CG_RegisterVariables( void ) {
 	// developer cvars
 	cg_showClamp =      Cvar_Get( "cg_showClamp", "0", CVAR_DEVELOPER );
 
-	//team models
-	cg_teamPLAYERSmodel = Cvar_Get( "cg_teamPLAYERSmodel", DEFAULT_PLAYERMODEL, CVAR_ARCHIVE );
-	cg_teamPLAYERSmodelForce = Cvar_Get( "cg_teamPLAYERSmodelForce", "0", CVAR_ARCHIVE );
-	cg_teamPLAYERSskin = Cvar_Get( "cg_teamPLAYERSskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
-	cg_teamPLAYERScolor = Cvar_Get( "cg_teamPLAYERScolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
-	cg_teamPLAYERScolorForce = Cvar_Get( "cg_teamPLAYERScolorForce", "0", CVAR_ARCHIVE );
-	cg_teamPLAYERSmodel->modified = true;
-	cg_teamPLAYERSmodelForce->modified = true;
-	cg_teamPLAYERSskin->modified = true;
-	cg_teamPLAYERScolor->modified = true;
-	cg_teamPLAYERScolorForce->modified = true;
-
-	cg_teamALPHAmodel = Cvar_Get( "cg_teamALPHAmodel", "bigvic", CVAR_ARCHIVE );
-	cg_teamALPHAmodelForce = Cvar_Get( "cg_teamALPHAmodelForce", "1", CVAR_ARCHIVE );
-	cg_teamALPHAskin = Cvar_Get( "cg_teamALPHAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
-	cg_teamALPHAcolor = Cvar_Get( "cg_teamALPHAcolor", DEFAULT_TEAMALPHA_COLOR, CVAR_ARCHIVE );
-	cg_teamALPHAmodel->modified = true;
-	cg_teamALPHAmodelForce->modified = true;
-	cg_teamALPHAskin->modified = true;
-	cg_teamALPHAcolor->modified = true;
-
-	cg_teamBETAmodel = Cvar_Get( "cg_teamBETAmodel", "padpork", CVAR_ARCHIVE );
-	cg_teamBETAmodelForce = Cvar_Get( "cg_teamBETAmodelForce", "1", CVAR_ARCHIVE );
-	cg_teamBETAskin = Cvar_Get( "cg_teamBETAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
-	cg_teamBETAcolor = Cvar_Get( "cg_teamBETAcolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
-	cg_teamBETAmodel->modified = true;
-	cg_teamBETAmodelForce->modified = true;
-	cg_teamBETAskin->modified = true;
-	cg_teamBETAcolor->modified = true;
-
-	cg_forceMyTeamAlpha = Cvar_Get( "cg_forceMyTeamAlpha", "0", CVAR_ARCHIVE );
-
 	// dmh - learn0more's team colored beams
 	cg_teamColoredBeams = Cvar_Get( "cg_teamColoredBeams", "0", CVAR_ARCHIVE );
 	cg_teamColoredInstaBeams = Cvar_Get( "cg_teamColoredInstaBeams", "1", CVAR_ARCHIVE );
@@ -926,6 +894,39 @@ void CG_Reset( void ) {
 
 void CG_InitPersistentState() {
 	CG_InitInputVars();
+
+	//team models
+	cg_teamPLAYERSmodel = Cvar_Get( "cg_teamPLAYERSmodel", DEFAULT_TEAMPLAYERS_MODEL, CVAR_ARCHIVE );
+	cg_teamPLAYERSmodelForce = Cvar_Get( "cg_teamPLAYERSmodelForce", "0", CVAR_ARCHIVE );
+	cg_teamPLAYERSskin = Cvar_Get( "cg_teamPLAYERSskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
+	cg_teamPLAYERScolor = Cvar_Get( "cg_teamPLAYERScolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
+	cg_teamPLAYERScolorForce = Cvar_Get( "cg_teamPLAYERScolorForce", "0", CVAR_ARCHIVE );
+	cg_teamPLAYERSmodel->modified = true;
+	cg_teamPLAYERSmodelForce->modified = true;
+	cg_teamPLAYERSskin->modified = true;
+	cg_teamPLAYERScolor->modified = true;
+	cg_teamPLAYERScolorForce->modified = true;
+
+	cg_teamALPHAmodel = Cvar_Get( "cg_teamALPHAmodel", DEFAULT_TEAMALPHA_MODEL, CVAR_ARCHIVE );
+	cg_teamALPHAmodelForce = Cvar_Get( "cg_teamALPHAmodelForce", "1", CVAR_ARCHIVE );
+	cg_teamALPHAskin = Cvar_Get( "cg_teamALPHAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
+	cg_teamALPHAcolor = Cvar_Get( "cg_teamALPHAcolor", DEFAULT_TEAMALPHA_COLOR, CVAR_ARCHIVE );
+	cg_teamALPHAmodel->modified = true;
+	cg_teamALPHAmodelForce->modified = true;
+	cg_teamALPHAskin->modified = true;
+	cg_teamALPHAcolor->modified = true;
+
+	cg_teamBETAmodel = Cvar_Get( "cg_teamBETAmodel", DEFAULT_TEAMBETA_MODEL, CVAR_ARCHIVE );
+	cg_teamBETAmodelForce = Cvar_Get( "cg_teamBETAmodelForce", "1", CVAR_ARCHIVE );
+	cg_teamBETAskin = Cvar_Get( "cg_teamBETAskin", DEFAULT_PLAYERSKIN, CVAR_ARCHIVE );
+	cg_teamBETAcolor = Cvar_Get( "cg_teamBETAcolor", DEFAULT_TEAMBETA_COLOR, CVAR_ARCHIVE );
+	cg_teamBETAmodel->modified = true;
+	cg_teamBETAmodelForce->modified = true;
+	cg_teamBETAskin->modified = true;
+	cg_teamBETAcolor->modified = true;
+
+	cg_forceMyTeamAlpha = Cvar_Get( "cg_forceMyTeamAlpha", "0", CVAR_ARCHIVE );
+
 	CrosshairState::init();
 }
 

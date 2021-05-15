@@ -9,8 +9,8 @@ Item {
     readonly property var handleKeyEvent: stackView.currentItem["handleKeyEvent"]
 
     Component {
-        id: generalSettingsComponent
-        GeneralSettings {}
+        id: playerSettingsComponent
+        PlayerSettings {}
     }
 
     WswTabBar {
@@ -24,8 +24,8 @@ Item {
         onCurrentItemChanged: stackView.replace(currentItem.component)
 
         WswTabButton {
-            readonly property var component: generalSettingsComponent
-            text: "General"
+            readonly property var component: playerSettingsComponent
+            text: "Player"
         }
         WswTabButton {
             readonly property var component: Component { TeamsSettings {} }
@@ -59,7 +59,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        initialItem: generalSettingsComponent
+        initialItem: playerSettingsComponent
         clip: false
     }
 

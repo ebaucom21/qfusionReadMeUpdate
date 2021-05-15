@@ -12,9 +12,10 @@ CheckBox {
 
     property string cvarName: ""
     property bool applyImmediately: true
+    property var valueConverters: undefined
 
     function checkCVarChanges() {
-        let value = wsw.getCVarValue(cvarName) != 0
+        const value = fromNative(wsw.getCVarValue(cvarName))
         if (checked != value) {
             if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
                 checked = value
@@ -22,21 +23,25 @@ CheckBox {
         }
     }
 
-    function rollbackChanges() {
-        checked = wsw.getCVarValue(cvarName) != 0
-    }
+    function rollbackChanges() { checked = fromNative(wsw.getCVarValue(cvarName)) }
+
+    function fromNative(value) { return value != 0; }
+    function toNative(value) { return value ? "1" : "0"; }
 
     onClicked: {
-        let value = checked ? "1" : "0"
+        const convertedValue = toNative(checked)
         if (applyImmediately) {
-            wsw.setCVarValue(cvarName, value)
+            wsw.setCVarValue(cvarName, convertedValue)
         } else {
-            wsw.markPendingCVarChanges(root, cvarName, value)
+            wsw.markPendingCVarChanges(root, cvarName, convertedValue)
         }
     }
 
     Component.onCompleted: {
-        checked = wsw.getCVarValue(cvarName) != 0
+        contentItem.font.pointSize = 11
+        contentItem.font.letterSpacing = 0.5
+        contentItem.font.weight = Font.Medium
+        checked = fromNative(wsw.getCVarValue(cvarName))
         wsw.registerCVarAwareControl(root)
     }
 

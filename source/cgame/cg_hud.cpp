@@ -605,11 +605,11 @@ int CG_Armor() {
 }
 
 int CG_TeamAlphaColor() {
-	return COM_ReadColorRGBString( cg_teamALPHAcolor ? cg_teamALPHAcolor->string : "" );
+	return COM_ReadColorRGBString( cg_teamALPHAcolor->string );
 }
 
 int CG_TeamBetaColor() {
-	return COM_ReadColorRGBString( cg_teamBETAcolor ? cg_teamBETAcolor->string : "" );
+	return COM_ReadColorRGBString( cg_teamBETAcolor->string );
 }
 
 std::pair<int, int> CG_WeaponAmmo( int weapon ) {

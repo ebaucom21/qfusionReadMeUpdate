@@ -14,13 +14,13 @@
         <file>CVarAwareCrosshairSelector.qml</file>
         <file>CVarAwareColorPicker.qml</file>
         <file>CVarAwareComboBox.qml</file>
+        <file>CVarAwareModelSelector.qml</file>
         <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
         <file>CVarAwareTextField.qml</file>
         <file>DemoPlaybackMenu.qml</file>
         <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>
-        <file>GeneralSettings.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudChat.qml</file>
@@ -63,6 +63,7 @@
         <file>NativelyDrawnImage.qml</file>
         <file>NativelyDrawnModel.qml</file>
         <file>NewsPage.qml</file>
+        <file>PlayerSettings.qml</file>
         <file>PlayOnlinePage.qml</file>
         <file>ProfilePage.qml</file>
         <file>QuitPage.qml</file>
@@ -86,9 +87,13 @@
         <file>SettingsRow.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
+        <file>TeamSettingsTeamColumn.qml</file>
         <file>WswTabBar.qml</file>
         <file>WswTabButton.qml</file>
         <file>logo.webp</file>
         <file>qtquickcontrols2.conf</file>
+        <!-- TODO: Load from the game FS -->
+        <file>ModelLeftArrow.svg</file>
+        <file>ModelRightArrow.svg</file>
     </qresource>
 </RCC>

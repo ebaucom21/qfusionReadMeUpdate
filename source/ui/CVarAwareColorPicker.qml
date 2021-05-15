@@ -7,7 +7,7 @@ import net.warsow 2.6
 
 RowLayout {
     id: root
-    spacing: 10
+    spacing: 8
     clip: false
 
     property string cvarName
