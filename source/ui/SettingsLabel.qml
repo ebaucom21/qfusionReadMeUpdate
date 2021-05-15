@@ -11,5 +11,6 @@ Label {
     verticalAlignment: Qt.AlignVCenter
     font.pointSize: 11
     font.letterSpacing: 0.5
-    font.weight: Font.Normal
+    font.weight: Font.Medium
+    //font.capitalization: Font.AllUppercase
 }

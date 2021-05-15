@@ -80,8 +80,10 @@
         <file>ServerBrowserScoreView.qml</file>
         <file>ServerBrowserSpecsList.qml</file>
         <file>ServerBrowserTimeView.qml</file>
+        <file>SettingsGroupHeaderRow.qml</file>
         <file>SettingsLabel.qml</file>
         <file>SettingsPage.qml</file>
+        <file>SettingsRow.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>WswTabBar.qml</file>

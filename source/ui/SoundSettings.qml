@@ -7,157 +7,96 @@ import net.warsow 2.6
 Flickable {
     id: root
     flickableDirection: Flickable.VerticalFlick
+    readonly property bool showGroupHeaders: rootItem.height > 800
 
     ColumnLayout {
-        anchors {
-            top: parent.top
-            topMargin: rootItem.height > 800 ? 32 : 8
-            horizontalCenter: parent.horizontalCenter
+        anchors.centerIn: parent
+        width: 0.67 * parent.width
+
+        SettingsRow {
+            text: "Sound volume"
+            CVarAwareSlider { cvarName: "s_volume" }
         }
 
-        GridLayout {
-            columns: 2
-            columnSpacing: 16
-            rowSpacing: 0 + 5 * (Math.min(1080, rootItem.height) - 720) / (1080 - 720)
+        SettingsRow {
+            text: "Music volume"
+            CVarAwareSlider { cvarName: "s_musicvolume" }
+        }
 
-            SettingsLabel {
-                text: "Enable sound system"
-            }
+        SettingsGroupHeaderRow {
+            visible: showGroupHeaders
+            text: "Volume of in-game sounds"
+        }
 
-            CVarAwareCheckBox {
-                cvarName: "s_module"
-                applyImmediately: false
-            }
+        SettingsRow {
+            text: "Players sounds"
+            CVarAwareSlider { cvarName: "cg_volume_players" }
+        }
 
-            SettingsLabel {
-                text: "Sound volume"
-            }
+        SettingsRow {
+            text: "Effects sounds"
+            CVarAwareSlider { cvarName: "cg_volume_effects" }
+        }
 
-            CVarAwareSlider {
-                cvarName: "s_volume"
-            }
+        SettingsRow {
+            text: "Announcer sounds"
+            CVarAwareSlider { cvarName: "cg_volume_announcer" }
+        }
 
-            SettingsLabel {
-                text: "Music volume"
-            }
+        SettingsRow {
+            text: "Hit beep sounds"
+            CVarAwareSlider { cvarName: "cg_volume_hitsound" }
+        }
 
-            CVarAwareSlider {
-                cvarName: "s_musicvolume"
-            }
+        SettingsGroupHeaderRow {
+            visible: showGroupHeaders
+            text: "Advanced effects"
+        }
 
-            Label {
-                visible: rootItem.height > 800
-                Layout.alignment: Qt.AlignHCenter
-                Layout.columnSpan: 2
-                text: "Volume of in-game sounds"
-                font.weight: Font.Medium
-            }
-
-            SettingsLabel {
-                text: "Players sounds"
-            }
-
-            CVarAwareSlider {
-                cvarName: "cg_volume_players"
-            }
-
-            SettingsLabel {
-                text: "Effects sounds"
-            }
-
-            CVarAwareSlider {
-                cvarName: "cg_volume_effects"
-            }
-
-            SettingsLabel {
-                text: "Announcer sounds"
-            }
-
-            CVarAwareSlider {
-                cvarName: "cg_volume_announcer"
-            }
-
-            SettingsLabel {
-                text: "Hit beep sounds"
-            }
-
-            CVarAwareSlider {
-                cvarName: "cg_volume_hitsound"
-            }
-
-            Label {
-                visible: rootItem.height > 800
-                Layout.alignment: Qt.AlignHCenter
-                Layout.columnSpan: 2
-                text: "Advanced effects"
-                font.weight: Font.Medium
-            }
-
-            SettingsLabel {
-                text: "Use environment effects"
-            }
-
+        SettingsRow {
+            text: "Use environment effects"
             CVarAwareCheckBox {
                 cvarName: "s_environment_effects"
                 applyImmediately: false
             }
+        }
 
-            SettingsLabel {
-                text: "Use HRTF"
-            }
-
+        SettingsRow {
+            text: "Use HRTF"
             CVarAwareCheckBox {
                 cvarName: "s_hrtf"
                 applyImmediately: false
             }
+        }
 
-            Label {
-                visible: rootItem.height > 800
-                Layout.alignment: Qt.AlignHCenter
-                Layout.columnSpan: 2
-                text: "Miscellaneous settings"
-                font.weight: Font.Medium
-            }
+        SettingsGroupHeaderRow {
+            visible: showGroupHeaders
+            text: "Miscellaneous settings"
+        }
 
-            SettingsLabel {
-                text: "Play sounds while in background"
-            }
+        SettingsRow {
+            text: "Play sounds while in background"
+            CVarAwareCheckBox { cvarName: "s_globalfocus" }
+        }
 
-            CVarAwareCheckBox {
-                cvarName: "s_globalfocus"
-            }
+        SettingsRow {
+            text: "Chat message sound"
+            CVarAwareCheckBox { cvarName: "cg_chatBeep" }
+        }
 
-            SettingsLabel {
-                text: "Chat message sound"
-            }
+        SettingsRow {
+            text: "Heavy rocket explosions"
+            CVarAwareCheckBox { cvarName: "cg_heavyRocketExplosions" }
+        }
 
-            CVarAwareCheckBox {
-                cvarName: "cg_chatBeep"
-            }
+        SettingsRow {
+            text: "Heavy grenade explosions"
+            CVarAwareCheckBox { cvarName: "cg_heavyGrenadeExplosions" }
+        }
 
-            SettingsLabel {
-                text: "Heavy rocket explosions"
-            }
-
-            CVarAwareCheckBox {
-                cvarName: "cg_heavyRocketExplosions"
-            }
-
-            SettingsLabel {
-                text: "Heavy grenade explosions"
-            }
-
-            CVarAwareCheckBox {
-                cvarName: "cg_heavyGrenadeExplosions"
-            }
-
-            SettingsLabel {
-                text: "Heavy shockwave exploslions"
-            }
-
-            CVarAwareCheckBox {
-                cvarName: "cg_heavyShockwaveExplosions"
-            }
+        SettingsRow {
+            text: "Heavy shockwave exploslions"
+            CVarAwareCheckBox { cvarName: "cg_heavyShockwaveExplosions" }
         }
     }
 }
