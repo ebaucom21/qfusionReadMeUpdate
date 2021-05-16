@@ -16,8 +16,8 @@ Item {
         dim: false
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: parent
-        width: 280
-        height: 220
+        width: wsw.desiredPopupWidth
+        height: wsw.desiredPopupHeight
 
         function openSelf() {
             popup.parent = rootItem.windowContentItem
@@ -26,61 +26,24 @@ Item {
         }
 
         function closeSelf() {
-            if (!opened) {
-                return
-            }
-
-            popup.close()
-            rootItem.disablePopupOverlay()
-            quitPage.backTrigger()
-        }
-
-        background: Rectangle {
-            Rectangle {
-                width: parent.width
-                height: 3
-                anchors.top: parent.top
-                color: Material.accentColor
-            }
-
-            width: parent.width
-            height: parent.height
-            focus: true
-            radius: 3
-            color: Material.backgroundColor
-            layer.enabled: parent.enabled
-            layer.effect: ElevationEffect { elevation: 32 }
-
-            Keys.onPressed: {
-                if (event.key === Qt.Key_Escape) {
-                    popup.closeSelf()
-                }
+            if (opened) {
+                popup.close()
+                rootItem.disablePopupOverlay()
+                quitPage.backTrigger()
             }
         }
 
-        Label {
-            anchors.top: parent.top
-            anchors.topMargin: 32
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: "Quit the game?"
-            font.weight: Font.Light
-            font.pointSize: 15
-        }
+        background: PopupBackground {}
 
-        Button {
-            id: yesButton
-            anchors { bottom: parent.bottom; left: parent.left }
-            text: "Yes"
-            flat: true
-            onClicked: wsw.quit()
-        }
-
-        Button {
-            anchors { bottom: parent.bottom; right: parent.right }
-            text: "No"
-            flat: true
-            highlighted: true
-            onClicked: popup.closeSelf()
+        contentItem: PopupContentItem {
+            title: "Quit the game?"
+            hasAcceptButton: true
+            hasRejectButton: true
+            // :flatearth:
+            acceptButtonText: "Cancel"
+            rejectButtonText: "OK"
+            onAccepted: wsw.quit()
+            onRejected: popup.closeSelf()
         }
     }
 

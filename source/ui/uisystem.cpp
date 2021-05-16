@@ -292,6 +292,8 @@ public:
 	Q_PROPERTY( QString defaultTeamAlphaModel MEMBER m_defaultTeamAlphaModel CONSTANT );
 	Q_PROPERTY( QString defaultTeamBetaModel MEMBER m_defaultTeamBetaModel CONSTANT );
 	Q_PROPERTY( QString defaultTeamPlayersModel MEMBER m_defaultTeamPlayersModel CONSTANT );
+	Q_PROPERTY( qreal desiredPopupWidth MEMBER m_desiredPopupWidth CONSTANT );
+	Q_PROPERTY( qreal desiredPopupHeight MEMBER m_desiredPopupHeight CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -458,6 +460,9 @@ private:
 	const QString m_defaultTeamPlayersModel { DEFAULT_TEAMPLAYERS_MODEL };
 	const QString m_defaultTeamAlphaModel { DEFAULT_TEAMALPHA_MODEL };
 	const QString m_defaultTeamBetaModel { DEFAULT_TEAMBETA_MODEL };
+
+	const qreal m_desiredPopupWidth { 300 };
+	const qreal m_desiredPopupHeight { 320 };
 
 	[[nodiscard]]
 	bool isShowingMaskElement( unsigned bit ) const {

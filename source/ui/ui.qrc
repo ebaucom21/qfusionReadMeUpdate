@@ -66,6 +66,8 @@
         <file>PlayerSettings.qml</file>
         <file>PlayOnlinePage.qml</file>
         <file>ProfilePage.qml</file>
+        <file>PopupBackground.qml</file>
+        <file>PopupContentItem.qml</file>
         <file>QuitPage.qml</file>
         <file>RichChatList.qml</file>
         <file>RootItem.qml</file>

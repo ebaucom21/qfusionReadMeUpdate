@@ -24,14 +24,12 @@ Item {
         SettingsGroupHeaderRow {
             text: "Your player model"
             Layout.topMargin: 20
-            Layout.leftMargin: 56
         }
 
         CVarAwareModelSelector {
             Layout.preferredWidth: 480
             Layout.preferredHeight: 480
             Layout.alignment: Qt.AlignHCenter
-            Layout.leftMargin: 56
             modelColor: colorPicker.selectedColor
             defaultModel: wsw.defaultPlayerModel
             cvarName: "model"
@@ -42,7 +40,6 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 16
             Layout.bottomMargin: 16
-            Layout.leftMargin: 56
             cvarName: "color"
         }
 

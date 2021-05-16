@@ -15,7 +15,7 @@ RowLayout {
 
     property var customColor
     property int selectedIndex: -1
-    property color selectedColor: customColor ? customColor : wsw.consoleColors[selectedIndex]
+    property color selectedColor: typeof(customColor) !== "undefined" ? customColor : wsw.consoleColors[selectedIndex]
 
     Repeater {
         model: wsw.consoleColors
@@ -184,169 +184,116 @@ RowLayout {
         dim: false
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: parent
-        width: 280
-        height: 240
+        width: wsw.desiredPopupWidth
+        height: wsw.desiredPopupHeight
+
+        // TODO: Figure out a better way to pass args to the contentComopnent instance
+        property real initialSliderRValue: 1.0
+        property real initialSliderGValue: 1.0
+        property real initialSliderBValue: 1.0
 
         property var selectedColor
         property bool hasChanges: false
 
         function openSelf(customColor) {
-            rSlider.value = customColor ? customColor.r : 1.0
-            gSlider.value = customColor ? customColor.g : 1.0
-            bSlider.value = customColor ? customColor.b : 1.0
+            popup.initialSliderRValue = customColor ? customColor.r : 1.0
+            popup.initialSliderGValue = customColor ? customColor.g : 1.0
+            popup.initialSliderBValue = customColor ? customColor.b : 1.0
             popup.selectedColor = customColor
             popup.hasChanges = false
             popup.parent = rootItem.windowContentItem
             rootItem.enablePopupOverlay()
+            wsw.registerNativelyDrawnItemsOccluder(background)
             popup.open()
         }
 
         function closeSelf() {
-            if (!opened) {
-                return
+            if (opened) {
+                popup.close()
+                popup.selectedColor = undefined
+                popup.hasChanges = false
+                rootItem.disablePopupOverlay()
+                wsw.unregisterNativelyDrawnItemsOccluder(background)
             }
-
-            popup.close()
-            popup.selectedColor = undefined
-            popup.hasChanges = false
-            rootItem.disablePopupOverlay()
         }
 
-        function updateSelectedColor() {
-            if (!opened) {
-                return
+        function updateSelectedColor(r, g, b) {
+            if (opened) {
+                // Don't modify the selected color partially
+                const newColor = Qt.rgba(r, g, b, 1.0)
+                if (selectedColor != newColor) {
+                    selectedColor = newColor
+                    hasChanges = true
+                }
             }
-            // Don't modify the selected color partially
-            let color = Qt.rgba(0, 0, 0, 1.0)
-            color.r = rSlider.value
-            color.g = gSlider.value
-            color.b = bSlider.value
-            selectedColor = color
-            hasChanges = true
         }
 
-        background: Rectangle {
-            Rectangle {
-                width: parent.width
-                height: 3
-                anchors.top: parent.top
-                color: Material.accentColor
+        background: PopupBackground {}
+
+        contentItem: PopupContentItem {
+            title: "Select a color"
+            hasAcceptButton: popup.hasChanges
+            acceptButtonText: "Select"
+            onAccepted: {
+                 root.setSelectedCustomColor(popup.selectedColor)
+                 popup.closeSelf()
             }
+            onRejected: popup.closeSelf()
 
-            width: parent.width
-            height: parent.height
-            focus: true
-            radius: 3
-            color: Material.backgroundColor
-            layer.enabled: parent.enabled
-            layer.effect: ElevationEffect { elevation: 32 }
+            contentComponent: Item {
+                RowLayout {
+                    id: slidersRow
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 24
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 8
+                    spacing: -8
 
-            Label {
-                id: titleLabel
-                anchors.top: parent.top
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.topMargin: 20
-                text: "Select a custom color"
-                font.weight: Font.Light
-                font.pointSize: 15
-            }
-
-            RowLayout {
-                id: slidersRow
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: titleLabel.bottom
-                anchors.topMargin: 24
-                anchors.bottom: cancelButton.top
-                anchors.bottomMargin: 8
-                spacing: -8
-
-                Slider {
-                    id: rSlider
-                    Layout.fillHeight: true
-                    orientation: Qt.Vertical
-                    Material.accent: Qt.rgba(1.0, 0.0, 0.0, 1.0)
-                    onValueChanged: popup.updateSelectedColor()
-                }
-                Slider {
-                    id: gSlider
-                    Layout.fillHeight: true
-                    orientation: Qt.Vertical
-                    Material.accent: Qt.rgba(0.0, 1.0, 0.0, 1.0)
-                    onValueChanged: popup.updateSelectedColor()
-                }
-                Slider {
-                    id: bSlider
-                    Layout.fillHeight: true
-                    orientation: Qt.Vertical
-                    Material.accent: Qt.rgba(0.0, 0.0, 1.0, 1.0)
-                    onValueChanged: popup.updateSelectedColor()
-                }
-            }
-
-            Rectangle {
-                anchors {
-                    verticalCenter: slidersRow.verticalCenter
-                    left: parent.left
-                    leftMargin: 32
-                }
-                width: 21; height: 21; radius: 2
-                color: popup.selectedColor ? popup.selectedColor : "transparent"
-            }
-
-            Rectangle {
-                anchors {
-                    verticalCenter: slidersRow.verticalCenter
-                    right: parent.right
-                    rightMargin: 32
-                }
-                width: 21; height: 21; radius: 2
-                color: popup.selectedColor ? popup.selectedColor : "transparent"
-            }
-
-            Button {
-                id: cancelButton
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.leftMargin: 20
-                flat: true
-                text: "Cancel"
-
-                states: [
-                    State {
-                        when: !popup.hasChanges
-                        AnchorChanges {
-                            target: cancelButton
-                            anchors.left: undefined
-                            anchors.right: undefined
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
+                    Slider {
+                        id: rSlider
+                        value: popup.initialSliderRValue
+                        Layout.fillHeight: true
+                        orientation: Qt.Vertical
+                        Material.accent: Qt.rgba(1.0, 0.0, 0.0, 1.0)
+                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
                     }
-                ]
-
-                transitions: Transition {
-                    AnchorAnimation { duration: 25 }
+                    Slider {
+                        id: gSlider
+                        value: popup.initialSliderGValue
+                        Layout.fillHeight: true
+                        orientation: Qt.Vertical
+                        Material.accent: Qt.rgba(0.0, 1.0, 0.0, 1.0)
+                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
+                    }
+                    Slider {
+                        id: bSlider
+                        value: popup.initialSliderBValue
+                        Layout.fillHeight: true
+                        orientation: Qt.Vertical
+                        Material.accent: Qt.rgba(0.0, 0.0, 1.0, 1.0)
+                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
+                    }
                 }
 
-                onClicked: popup.closeSelf()
-            }
-
-            Button {
-                anchors.bottom: parent.bottom
-                anchors.right: parent.right
-                anchors.rightMargin: 20
-                flat: true
-                highlighted: true
-                visible: popup.hasChanges
-                text: "Select"
-                onClicked: {
-                    root.setSelectedCustomColor(popup.selectedColor)
-                    popup.closeSelf()
+                Rectangle {
+                    anchors {
+                        verticalCenter: slidersRow.verticalCenter
+                        left: parent.left
+                        leftMargin: 32
+                    }
+                    width: 28; height: 28; radius: 2
+                    color: popup.selectedColor ? popup.selectedColor : "transparent"
                 }
-            }
 
-            Keys.onPressed: {
-                if (event.key === Qt.Key_Escape) {
-                    popup.closeSelf()
+                Rectangle {
+                    anchors {
+                        verticalCenter: slidersRow.verticalCenter
+                        right: parent.right
+                        rightMargin: 32
+                    }
+                    width: 28; height: 28; radius: 2
+                    color: popup.selectedColor ? popup.selectedColor : "transparent"
                 }
             }
         }
