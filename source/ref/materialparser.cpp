@@ -1547,7 +1547,7 @@ shader_t *MaterialParser::build() {
 		}
 		if( const auto tcModSpec = tcModSpecs[i] ) {
 			savedPass->tcmods = ( *tcModSpec ).get( baseMem );
-			std::copy( savedPass->tcmods, savedPass->tcmods + savedPass->numtcmods, parsedPass->tcmods );
+			std::copy( parsedPass->tcmods, parsedPass->tcmods + savedPass->numtcmods, savedPass->tcmods );
 		}
 	}
 
