@@ -447,7 +447,7 @@ auto MaterialCache::newDefaultVertexMaterial( const wsw::HashedStringView &clean
 	pass->tcgen = TC_GEN_BASE;
 	pass->rgbgen.type = RGB_GEN_VERTEX;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
-	pass->images[0] = findImage( name,  s ->flags, IT_SRGB );
+	pass->images[0] = findImage( name, 0, IT_SRGB );
 
 	return s;
 }
@@ -476,7 +476,7 @@ auto MaterialCache::newDefaultDeluxeMaterial( const wsw::HashedStringView &clean
 	pass->rgbgen.type = RGB_GEN_IDENTITY;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->program_type = GLSL_PROGRAM_TYPE_MATERIAL;
-	pass->images[0] = findImage( name, s->flags, IT_SRGB );
+	pass->images[0] = findImage( name, 0, IT_SRGB );
 	pass->images[1] = images[0]; // normalmap
 	pass->images[2] = images[1]; // glossmap
 	pass->images[3] = images[2]; // decalmap
@@ -502,7 +502,7 @@ auto MaterialCache::newDefaultCoronaMaterial( const wsw::HashedStringView &clean
 	pass->rgbgen.type = RGB_GEN_VERTEX;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->tcgen = TC_GEN_BASE;
-	pass->images[0] = findImage( wsw::StringView( "*corona" ), s->flags, IT_SPECIAL );
+	pass->images[0] = findImage( wsw::StringView( "*corona" ), 0, IT_SPECIAL );
 
 	return s;
 }
@@ -532,7 +532,7 @@ auto MaterialCache::newDefaultDiffuseMaterial( const wsw::HashedStringView &clea
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->tcgen = TC_GEN_BASE;
 	pass->program_type = GLSL_PROGRAM_TYPE_MATERIAL;
-	pass->images[0] = findImage( name, s->flags, IT_SRGB );
+	pass->images[0] = findImage( name, 0, IT_SRGB );
 	pass->images[1] = materialImages[0]; // normalmap
 	pass->images[2] = materialImages[1]; // glossmap
 	pass->images[3] = materialImages[2]; // decalmap

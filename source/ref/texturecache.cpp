@@ -265,8 +265,7 @@ void TextureCache::setupFilterMode( GLuint target, unsigned flags, unsigned w, u
 }
 
 void TextureCache::setupWrapMode( GLuint target, unsigned flags ) {
-	// TODO: check why is it IT_CLAMP by default
-	const int wrap = ( flags & IT_CLAMP ) && false ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+	const int wrap = ( flags & IT_CLAMP ) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
 	qglTexParameteri( target, GL_TEXTURE_WRAP_S, wrap );
 	qglTexParameteri( target, GL_TEXTURE_WRAP_T, wrap );
 }
