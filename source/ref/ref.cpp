@@ -5769,8 +5769,8 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_temp1 = Cvar_Get( "r_temp1", "0", 0 );
 
 	r_drawflat = Cvar_Get( "r_drawflat", "0", CVAR_ARCHIVE );
-	r_wallcolor = Cvar_Get( "r_wallcolor", "255 255 255", CVAR_ARCHIVE );
-	r_floorcolor = Cvar_Get( "r_floorcolor", "255 153 0", CVAR_ARCHIVE );
+	r_wallcolor = Cvar_Get( "r_wallcolor", "192 128 192", CVAR_ARCHIVE );
+	r_floorcolor = Cvar_Get( "r_floorcolor", "136 89 178", CVAR_ARCHIVE );
 
 	// make sure we rebuild our 3D texture after vid_restart
 	r_wallcolor->modified = r_floorcolor->modified = true;

@@ -192,7 +192,8 @@ public:
 
 	Q_INVOKABLE QVariant getCVarValue( const QString &name ) const;
 	Q_INVOKABLE void setCVarValue( const QString &name, const QVariant &value );
-	Q_INVOKABLE void markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value );
+	Q_INVOKABLE void markPendingCVarChanges( QQuickItem *control, const QString &name,
+										     const QVariant &value, bool allowMulti = false );
 	Q_INVOKABLE bool hasControlPendingCVarChanges( QQuickItem *control ) const;
 
 	Q_PROPERTY( bool hasPendingCVarChanges READ hasPendingCVarChanges NOTIFY hasPendingCVarChangesChanged );
@@ -294,6 +295,9 @@ public:
 	Q_PROPERTY( QString defaultTeamPlayersModel MEMBER m_defaultTeamPlayersModel CONSTANT );
 	Q_PROPERTY( qreal desiredPopupWidth MEMBER m_desiredPopupWidth CONSTANT );
 	Q_PROPERTY( qreal desiredPopupHeight MEMBER m_desiredPopupHeight CONSTANT );
+	Q_PROPERTY( QJsonArray videoModeHeadingsList MEMBER s_videoModeHeadingsList CONSTANT );
+	Q_PROPERTY( QJsonArray videoModeWidthValuesList MEMBER s_videoModeWidthValuesList CONSTANT );
+	Q_PROPERTY( QJsonArray videoModeHeightValuesList MEMBER s_videoModeHeightValuesList CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -431,6 +435,7 @@ private:
 	static void registerFonts();
 	static void registerFont( const wsw::StringView &path );
 	static void registerCustomQmlTypes();
+	static void retrieveVideoModes();
 	void registerContextProperties( QQmlContext *context );
 
 	[[nodiscard]]
@@ -463,6 +468,10 @@ private:
 
 	const qreal m_desiredPopupWidth { 300 };
 	const qreal m_desiredPopupHeight { 320 };
+
+	static inline QJsonArray s_videoModeHeadingsList;
+	static inline QJsonArray s_videoModeWidthValuesList;
+	static inline QJsonArray s_videoModeHeightValuesList;
 
 	[[nodiscard]]
 	bool isShowingMaskElement( unsigned bit ) const {
@@ -547,6 +556,8 @@ void QtUISystem::initPersistentPart() {
 				s_charStrings[offset] = QString::asprintf( "%c", (char)offset );
 			}
 		}
+
+		retrieveVideoModes();
 
 		s_sensitivityVar = Cvar_Get( "ui_sensitivity", "1.0", CVAR_ARCHIVE );
 		s_mouseAccelVar = Cvar_Get( "ui_mouseAccel", "0.25", CVAR_ARCHIVE );
@@ -643,6 +654,18 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
 	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
 	context->setContextProperty( "hudDataModel", &m_hudDataModel );
+}
+
+void QtUISystem::retrieveVideoModes() {
+	int width, height;
+	for( unsigned i = 0; VID_GetModeInfo( &width, &height, i ); ++i ) {
+		// Exclude junk modes
+		if( width >= 1024 && height >= 600 ) {
+			s_videoModeWidthValuesList.append( width );
+			s_videoModeHeightValuesList.append( height );
+			s_videoModeHeadingsList.append( QString::asprintf( "%dx%d", width, height ) );
+		}
+	}
 }
 
 void QtUISystem::onSceneGraphInitialized() {
@@ -1587,27 +1610,59 @@ void QtUISystem::setCVarValue( const QString &name, const QVariant &value ) {
 	Cvar_ForceSet( nameBytes.constData(), value.toString().toLatin1().constData() );
 }
 
-void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name, const QVariant &value ) {
+void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &name,
+										 const QVariant &value, bool allowMulti ) {
+	const QByteArray expectedCVarName( name.toLatin1() );
 	auto it = m_pendingCVarChanges.find( control );
 	if( it == m_pendingCVarChanges.end() ) {
 		// TODO: Use `it` as a hint
-		m_pendingCVarChanges.insert( control, { value, findCVarOrThrow( name.toLatin1() ) } );
+		m_pendingCVarChanges.insert( control, { value, findCVarOrThrow( expectedCVarName ) } );
 		if( m_pendingCVarChanges.size() == 1 ) {
 			Q_EMIT hasPendingCVarChangesChanged( true );
 		}
 		return;
 	}
 
-	// Check if changes really going to have an effect
-	if( QVariant( it->second->string ) != value ) {
-		it->first = value;
-		return;
-	}
-
-	// TODO: Does a repeated check make any sense?
-	m_pendingCVarChanges.erase( it );
-	if( m_pendingCVarChanges.isEmpty() ) {
-		Q_EMIT hasPendingCVarChangesChanged( false );
+	assert( !m_pendingCVarChanges.empty() );
+	if( allowMulti ) {
+		bool hasFoundCVarEntry = false;
+		// Qt maps are, surprisingly, multi-maps
+		for(;; it++) {
+			if( it == m_pendingCVarChanges.constEnd() || it.key() != control ) {
+				break;
+			}
+			const cvar_t *const var = it->second;
+			if( expectedCVarName.compare( var->name, Qt::CaseInsensitive ) == 0 ) {
+				// Check if changes really going to have an effect
+				if( QVariant( var->string ) != value ) {
+					it->first = value;
+				} else {
+					m_pendingCVarChanges.erase( it );
+					if( m_pendingCVarChanges.isEmpty() ) {
+						Q_EMIT hasPendingCVarChangesChanged( false );
+					}
+				}
+				hasFoundCVarEntry = true;
+				break;
+			}
+		}
+		if( !hasFoundCVarEntry ) {
+			m_pendingCVarChanges.insertMulti( control, { value, findCVarOrThrow( expectedCVarName ) } );
+		}
+	} else {
+		const cvar_t *const var = it->second;
+		if( expectedCVarName.compare( var->name, Qt::CaseInsensitive ) != 0 ) {
+			throw std::logic_error( "Multiple CVar values for this control are disallowed" );
+		}
+		// Check if changes really going to have an effect
+		if( QVariant( var->string ) != value ) {
+			it->first = value;
+		} else {
+			m_pendingCVarChanges.erase( it );
+			if( m_pendingCVarChanges.isEmpty() ) {
+				Q_EMIT hasPendingCVarChangesChanged( false );
+			}
+		}
 	}
 }
 

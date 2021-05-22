@@ -1,6 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource>
         <file>ActionRequestArea.qml</file>
+        <file>AutoFittingComboBox.qml</file>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
         <file>CentralOverlayButton.qml</file>
@@ -18,6 +19,7 @@
         <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
         <file>CVarAwareTextField.qml</file>
+        <file>CVarAwareVideoModesComboBox.qml</file>
         <file>DemoPlaybackMenu.qml</file>
         <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>

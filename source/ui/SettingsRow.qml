@@ -26,6 +26,8 @@ Item {
         font.weight: Font.Medium
         font.letterSpacing: 0.5
         text: root.text
+        color: Material.foreground
+        opacity: root.enabled ? 1.0 : 0.5
     }
 
     default property Item contentItem
