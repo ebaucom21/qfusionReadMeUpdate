@@ -28,23 +28,60 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 		}
 	}
 
-	int keyMoves[2];
-	auto &traceCache = context->TraceCache();
-	if( maybeTarget ) {
-		Vec3 intendedMoveDir( *maybeTarget );
-		intendedMoveDir -= botOrigin;
-		intendedMoveDir.Z() *= Z_NO_BEND_SCALE;
-		intendedMoveDir *= Q_RSqrt( intendedMoveDir.SquaredLength() );
-		if( ShouldTryRandomness() ) {
-			traceCache.makeRandomizedKeyMovesToTarget( context, intendedMoveDir, keyMoves );
-		} else {
-			traceCache.makeKeyMovesToTarget( context, intendedMoveDir, keyMoves );
+	struct DirAndScore {
+		unsigned dir;
+		float score;
+		[[nodiscard]]
+		bool operator<( const DirAndScore &that ) const {
+			// Give a preference to dirs with larger scores
+			return score > that.score;
 		}
-	} else {
-		traceCache.makeRandomKeyMoves( context, keyMoves );
+	};
+
+	DirAndScore dirsAndScores[std::size( kSideDirFractions )];
+	assert( std::size( dirsAndScores ) == std::size( dirIndices ) );
+
+	bool hasDefinedMoveDir = false;
+	// Slightly randomize (use fully random dirs in a half of cases).
+	// This remains biased towards the target as random dirs in the
+	// another half of cases still could conform to the desired direction.
+	if( maybeTarget && ( random() > 0.5f ) ) {
+		Vec3 desiredMoveDir( Vec3( *maybeTarget ) - botOrigin );
+		desiredMoveDir.Z() *= Z_NO_BEND_SCALE;
+		const float desiredDirSquareLen = desiredMoveDir.SquaredLength();
+		if( desiredDirSquareLen > SQUARE( 12.0f ) ) {
+			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
+			hasDefinedMoveDir = true;
+			desiredMoveDir *= Q_RSqrt( desiredDirSquareLen );
+			Assert( std::fabs( desiredMoveDir.LengthFast() - 1.0f ) < 0.01f );
+			for( unsigned i = 0; i < std::size( kSideDirFractions ); ++i ) {
+				const float *const fractions = kSideDirFractions[i];
+				const Vec3 forwardPart( forwardDir * fractions[0] );
+				const Vec3 rightPart( rightDir * fractions[1] );
+				Vec3 moveDir( forwardPart + rightPart );
+				const float moveDirSquareLen = moveDir.SquaredLength();
+				moveDir *= Q_RSqrt( moveDirSquareLen );
+				Assert( std::fabs( moveDir.LengthFast() - 1.0f ) < 0.01f );
+				dirsAndScores[i] = { i, desiredMoveDir.Dot( moveDir ) };
+			}
+			std::sort( std::begin( dirsAndScores ), std::end( dirsAndScores ) );
+			for( unsigned i = 0; i < std::size( dirsAndScores ); ++i ) {
+				this->dirIndices[i] = dirsAndScores[i].dir;
+			}
+		}
+	}
+	if( !hasDefinedMoveDir ) {
+		// Poor man's shuffle (we don't have an STL-compatible RNG).
+		// This is acceptable to randomize directions between frames.
+		const auto randomOffset = (unsigned)( level.framenum );
+		for( unsigned i = 0; i < std::size( dirsAndScores ); ++i ) {
+			// TODO: Fix the RNG interface/the RNG in general, use a proper shuffle.
+			this->dirIndices[( i + randomOffset ) % std::size( this->dirIndices )] = i;
+		}
 	}
 
-	combatMovementState->Activate( keyMoves[0], keyMoves[1], BotKeyMoveDirsState::TIMEOUT_PERIOD );
+	const auto *directions = kSideDirSigns[this->dirIndices[0]];
+	combatMovementState->Activate( directions[0], directions[1], dirsTimeout );
 }
 
 void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context ) {
@@ -71,48 +108,6 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context
 		context->isCompleted = true;
 	}
 
-	// The look dir gets reset in OnBeforePlanning() only once during planning.
-	// We obviously should use the same look dir for every attempt
-	// (for every action application sequence).
-	// Only pressed buttons and their randomness vary during attempts.
-	if( !lookDir ) {
-		// There are currently 3 call sites where this movement action gets activated.
-		// 1) MovementPredictionContext::SuggestAnyAction()
-		// The action gets selected if there are valid "selected enemies"
-		// and if the bot should attack and should keep crosshair on enemies.
-		// 2) MovementPredictionContext::SuggestAnyAction()
-		// If the previous condition does not hold but there is a valid "kept in fov point"
-		// and the bot has a nav target and should not "rush headless"
-		// (so a combat semi-random dodging keeping the "point" in fov
-		// usually to be ready to fire is used for movement to nav target)
-		// 3) WalkCarefullyAction::PlanPredictionStep()
-		// That action checks whether a bot should "walk carefully"
-		// and usually switches to a first bunnying action of proposed bunnying actions
-		// if conditions of "walking carefully" action are not met.
-		// But if the bot logic reports the bot should skip bunnying and favor combat movement
-		// (e.g. to do an urgent dodge) this combat movement action gets activated.
-		// There might be no predefined look dir in this case and thus we should keep existing look dir.
-
-		// We try to select a look dir if it is available according to situation priority
-		bool hasDefinedLookDir = false;
-		if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemies().AreValid() ) {
-			bot->GetSelectedEnemies().LastSeenOrigin().CopyTo( tmpDir );
-			hasDefinedLookDir = true;
-		} else if( const float *keptInFovPoint = bot->GetKeptInFovPoint() ) {
-			VectorCopy( keptInFovPoint, tmpDir );
-			hasDefinedLookDir = true;
-		}
-
-		if( hasDefinedLookDir ) {
-			VectorSubtract( tmpDir, entityPhysicsState.Origin(), tmpDir );
-			VectorNormalize( tmpDir );
-		} else {
-			// Just keep existing look dir
-			entityPhysicsState.ForwardDir().CopyTo( tmpDir );
-		}
-		lookDir = tmpDir;
-	}
-
 	// If there are "selected enemies", this look dir will be overridden
 	// using more appropriate value by aiming subsystem
 	// but still has to be provided for movement prediction.
@@ -121,24 +116,14 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context
 
 	const short *pmStats = context->currPlayerState->pmove.stats;
 	if( entityPhysicsState.GroundEntity() ) {
-		if( ShouldTrySpecialMovement() ) {
-			if( pmStats[PM_STAT_FEATURES] & PMFEAT_DASH ) {
-				const float speedThreshold = context->GetDashSpeed() - 10;
-				if( entityPhysicsState.Speed() < speedThreshold ) {
-					if( !pmStats[PM_STAT_DASHTIME] ) {
-						if( isCombatDashingAllowed ) {
-							botInput->SetSpecialButton( true );
-							context->predictionStepMillis = context->DefaultFrameTime();
-						}
-					}
-				}
+		if( isCombatDashingAllowed && !pmStats[PM_STAT_DASHTIME] && ( pmStats[PM_STAT_FEATURES] & PMFEAT_DASH ) ) {
+			const float speedThreshold = context->GetDashSpeed() - 10;
+			if( entityPhysicsState.Speed() < speedThreshold ) {
+				botInput->SetSpecialButton( true );
+				context->predictionStepMillis = context->DefaultFrameTime();
 			}
 		}
-		auto *combatMovementState = &context->movementState->keyMoveDirsState;
-		if( !combatMovementState->IsActive() ) {
-			UpdateKeyMoveDirs( context );
-		}
-
+		auto *const combatMovementState = &context->movementState->keyMoveDirsState;
 		botInput->SetForwardMovement( combatMovementState->ForwardMove() );
 		botInput->SetRightMovement( combatMovementState->RightMove() );
 		// Set at least a single key or button while on ground (forward/right move keys might both be zero)
@@ -148,23 +133,16 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context
 			}
 		}
 	} else {
-		if( ShouldTrySpecialMovement() ) {
-			if( ( pmStats[PM_STAT_FEATURES] & PMFEAT_WALLJUMP ) && !pmStats[PM_STAT_WJTIME] && !pmStats[PM_STAT_STUN] ) {
-				botInput->SetSpecialButton( true );
-				context->predictionStepMillis = context->DefaultFrameTime();
-			}
+		if( ( pmStats[PM_STAT_FEATURES] & PMFEAT_WALLJUMP ) && !pmStats[PM_STAT_WJTIME] && !pmStats[PM_STAT_STUN] ) {
+			botInput->SetSpecialButton( true );
+			context->predictionStepMillis = context->DefaultFrameTime();
 		}
 
-		if( !botInput->IsSpecialButtonSet() && entityPhysicsState.Speed2D() < 650 ) {
-			const float skill = bot->Skill();
-			// Derive accelFrac from skill for medium bots
-			float accelFrac = skill;
-			// Use fixed accelFrac values for hard/easy bots
-			if( skill >= 0.66f ) {
-				accelFrac = 1.00f;
-			} else if( skill < 0.33f ) {
-				accelFrac = 0.15f;
-			}
+		const float skill = bot->Skill();
+		Assert( skill >= 0.0f && skill <= 1.0f );
+		const float runSpeed = context->GetRunSpeed();
+		if( !botInput->IsSpecialButtonSet() && ( entityPhysicsState.Speed2D() < runSpeed * ( 1.0f + skill ) ) ) {
+			const float accelFrac = skill;
 			context->CheatingAccelerate( accelFrac );
 		}
 	}
@@ -184,7 +162,7 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Context 
 		}
 	}
 
-	int newTravelTimeToTarget = context->TravelTimeToNavTarget();
+	const int newTravelTimeToTarget = context->TravelTimeToNavTarget();
 	// If there is no definite current travel time to target
 	if( !newTravelTimeToTarget ) {
 		// If there was a definite initial/best travel time to target
@@ -227,7 +205,7 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Context 
 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	// Check for prediction termination...
-	if( !entityPhysicsState.GroundEntity() || this->SequenceDuration( context ) < 250 ) {
+	if( !entityPhysicsState.GroundEntity() || this->SequenceDuration( context ) < dirsTimeout ) {
 		context->SaveSuggestedActionForNextFrame( this );
 		return;
 	}
@@ -261,6 +239,85 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Contex
 	if( int clusterNum = AiAasWorld::Instance()->FloorClusterNum( context->CurrGroundedAasAreaNum() ) ) {
 		this->bestFloorClusterSoFar = clusterNum;
 	}
+
+	auto *const moveDirsState = &context->movementState->keyMoveDirsState;
+
+	// The look dir gets reset in OnBeforePlanning() only once during planning.
+	// We obviously should use the same look dir for every attempt
+	// (for every action application sequence).
+	// Only pressed buttons and their randomness vary during attempts.
+	if( !lookDir ) {
+		Assert( !context->topOfStackIndex );
+		// There are currently 3 call sites where this movement action gets activated.
+		// 1) MovementPredictionContext::SuggestAnyAction()
+		// The action gets selected if there are valid "selected enemies"
+		// and if the bot should attack and should keep crosshair on enemies.
+		// 2) MovementPredictionContext::SuggestAnyAction()
+		// If the previous condition does not hold but there is a valid "kept in fov point"
+		// and the bot has a nav target and should not "rush headless"
+		// (so a combat semi-random dodging keeping the "point" in fov
+		// usually to be ready to fire is used for movement to nav target)
+		// 3) WalkCarefullyAction::PlanPredictionStep()
+		// That action checks whether a bot should "walk carefully"
+		// and usually switches to a first bunnying action of proposed bunnying actions
+		// if conditions of "walking carefully" action are not met.
+		// But if the bot logic reports the bot should skip bunnying and favor combat movement
+		// (e.g. to do an urgent dodge) this combat movement action gets activated.
+		// There might be no predefined look dir in this case and thus we should keep existing look dir.
+
+		// We try to select a look dir if it is available according to situation priority
+		bool hasDefinedLookDir = false;
+		if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemies().AreValid() ) {
+			bot->GetSelectedEnemies().LastSeenOrigin().CopyTo( tmpDir );
+			hasDefinedLookDir = true;
+		} else if( const float *keptInFovPoint = bot->GetKeptInFovPoint() ) {
+			VectorCopy( keptInFovPoint, tmpDir );
+			hasDefinedLookDir = true;
+		}
+
+		const auto &entityPhysicsState = context->movementState->entityPhysicsState;
+		if( hasDefinedLookDir ) {
+			VectorSubtract( tmpDir, entityPhysicsState.Origin(), tmpDir );
+			VectorNormalize( tmpDir );
+		} else {
+			// Just keep existing look dir
+			entityPhysicsState.ForwardDir().CopyTo( tmpDir );
+		}
+		lookDir = tmpDir;
+
+		// Check whether directions have timed out only once per planning frame
+		if( !moveDirsState->IsActive() ) {
+			UpdateKeyMoveDirs( context );
+			hasUpdatedMoveDirsAtFirstAttempt = true;
+		}
+	}
+
+	// We have failed the first attempt using the kept dirs.
+	// Deactivate the dirs state and try all new dirs.
+	if( attemptNum == 1 && !hasUpdatedMoveDirsAtFirstAttempt ) {
+		Assert( moveDirsState->IsActive() );
+		moveDirsState->Deactivate();
+		UpdateKeyMoveDirs( context );
+		// Consider the first attempt wasted
+		maxAttempts += 1;
+	}
+
+	unsigned dirIndex = ~0u;
+	if( hasUpdatedMoveDirsAtFirstAttempt ) {
+		if( attemptNum != maxAttempts ) {
+			dirIndex = dirIndices[attemptNum];
+		}
+	} else {
+		if( attemptNum && attemptNum != maxAttempts ) {
+			dirIndex = dirIndices[attemptNum - 1];
+		}
+	}
+
+	if( dirIndex < std::size( kSideDirSigns ) ) {
+		const auto *signs = kSideDirSigns[dirIndex];
+		moveDirsState->forwardMove = (int8_t)signs[0];
+		moveDirsState->rightMove = (int8_t)signs[1];
+	}
 }
 
 void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStopped( Context *context,
@@ -274,14 +331,29 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStopped( Contex
 
 	attemptNum++;
 	Assert( attemptNum <= maxAttempts );
+	// Could've been set on prediction stack overflow
+	this->isDisabledForPlanning = false;
 }
 
 void CombatDodgeSemiRandomlyToTargetAction::BeforePlanning() {
 	BaseMovementAction::BeforePlanning();
+
+	const float skill = bot->Skill();
+
 	this->lookDir = nullptr;
 	this->attemptNum = 0;
-	this->maxAttempts = bot->Skill() > 0.33f ? 4 : 2;
-	this->isCombatDashingAllowed = bot->IsCombatDashingAllowed();
+	this->hasUpdatedMoveDirsAtFirstAttempt = false;
+	this->isCombatDashingAllowed = ( skill >= 0.33f ) && bot->IsCombatDashingAllowed();
 	this->isCompatCrouchingAllowed = bot->IsCombatCrouchingAllowed();
+	this->maxAttempts = std::size( kSideDirSigns );
 	this->allowFailureUsingThatAsNextAction = nullptr;
+
+	constexpr float limit = 0.66f;
+	this->dirsTimeout = 400u;
+	// Make easy bots change directions slower
+	if( skill < limit ) {
+		const float frac = skill * ( 1.0f / limit );
+		assert( frac >= 0.0f && frac <= 1.0f );
+		this->dirsTimeout += (unsigned)( 300.0f * ( 1.0f - frac ) );
+	}
 }

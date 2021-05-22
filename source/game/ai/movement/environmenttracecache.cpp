@@ -2,34 +2,6 @@
 #include "movementlocal.h"
 
 /**
- * Contains signs of forward and right key values for 8 tested directions
- */
-static const int sideDirSigns[8][2] = {
-	{ +1, +0 }, // forward
-	{ -1, +0 }, // back
-	{ +0, -1 }, // left
-	{ +0, +1 }, // right
-	{ +1, -1 }, // front left
-	{ +1, +1 }, // front right
-	{ -1, -1 }, // back left
-	{ -1, +1 }, // back right
-};
-
-/**
- * Contains fractions for forward and right dirs for 8 tested directions
- */
-static const float sideDirFractions[8][2] = {
-	{ +1.000f, +0.000f }, // front
-	{ -1.000f, +0.000f }, // back
-	{ +0.000f, -1.000f }, // left
-	{ +0.000f, +1.000f }, // right
-	{ +0.707f, -0.707f }, // front left
-	{ +0.707f, +0.707f }, // front right
-	{ -0.707f, -0.707f }, // back left
-	{ -0.707f, +0.707f }, // back right
-};
-
-/**
  * Makes a trace directory for a given direction number
  * @param dirNum a number of a direction among 8 tested ones
  * @param front2DDir a current front (forward) direction for a bot
@@ -37,7 +9,7 @@ static const float sideDirFractions[8][2] = {
  * @param traceDir a result storage
  */
 static inline void makeTraceDir( unsigned dirNum, const vec3_t front2DDir, const vec3_t right2DDir, vec3_t traceDir ) {
-	const float *fractions = sideDirFractions[dirNum];
+	const float *fractions = kSideDirFractions[dirNum];
 	VectorScale( front2DDir, fractions[0], traceDir );
 	VectorMA( traceDir, fractions[1], right2DDir, traceDir );
 	VectorNormalizeFast( traceDir );
@@ -75,7 +47,7 @@ void EnvironmentTraceCache::makeRandomizedKeyMovesToTarget( Context *context, co
 	float scoresSum = 0.0f;
 	for( unsigned i = 0; i < numNonBlockedDirs; ++i ) {
 		vec3_t keyMoveVec;
-		const float *fractions = sideDirFractions[nonBlockedDirIndices[i]];
+		const float *fractions = kSideDirFractions[nonBlockedDirIndices[i]];
 		VectorScale( forwardDir.Data(), fractions[0], keyMoveVec );
 		VectorMA( keyMoveVec, fractions[1], rightDir.Data(), keyMoveVec );
 		scoresSum += 0.55f + 0.45f * intendedMoveDir.Dot( keyMoveVec );
@@ -90,7 +62,7 @@ void EnvironmentTraceCache::makeRandomizedKeyMovesToTarget( Context *context, co
 		}
 
 		int dirIndex = nonBlockedDirIndices[i];
-		const int *dirMoves = sideDirSigns[dirIndex];
+		const int *dirMoves = kSideDirSigns[dirIndex];
 		Vector2Copy( dirMoves, keyMoves );
 		return;
 	}
@@ -112,7 +84,7 @@ void EnvironmentTraceCache::makeKeyMovesToTarget( Context *context, const Vec3 &
 	for( unsigned i = 0; i < numNonBlockedDirs; ++i ) {
 		vec3_t keyMoveVec;
 		unsigned dirIndex = nonBlockedDirIndices[i];
-		const float *const fractions = sideDirFractions[dirIndex];
+		const float *const fractions = kSideDirFractions[dirIndex];
 		VectorScale( forwardDir.Data(), fractions[0], keyMoveVec );
 		VectorMA( keyMoveVec, fractions[1], rightDir.Data(), keyMoveVec );
 		float score = 0.55f + 0.45f * intendedMoveDir.Dot( keyMoveVec );
@@ -122,7 +94,7 @@ void EnvironmentTraceCache::makeKeyMovesToTarget( Context *context, const Vec3 &
 		}
 	}
 	if( bestScore > 0 ) {
-		const int *dirMoves = sideDirSigns[bestDirIndex];
+		const int *dirMoves = kSideDirSigns[bestDirIndex];
 		Vector2Copy( dirMoves, keyMoves );
 		return;
 	}
@@ -135,7 +107,7 @@ void EnvironmentTraceCache::makeRandomKeyMoves( Context *context, int *keyMoves 
 	unsigned numNonBlockedDirs = selectNonBlockedDirs( context, nonBlockedDirIndices );
 	if( numNonBlockedDirs ) {
 		int dirIndex = nonBlockedDirIndices[(unsigned)( 0.9999f * numNonBlockedDirs * random() )];
-		const int *const dirMoves = sideDirSigns[dirIndex];
+		const int *const dirMoves = kSideDirSigns[dirIndex];
 		Vector2Copy( dirMoves, keyMoves );
 		return;
 	}

@@ -568,4 +568,30 @@ bool TraceArcInSolidWorld( const vec3_t from, const vec3_t to );
 
 void DirToKeyInput( const Vec3 &desiredDir, const vec3_t actualForwardDir, const vec3_t actualRightDir, BotInput *input );
 
+/// \brief Contains signs of forward and right key values for 8 tested directions
+inline const int kSideDirSigns[8][2] = {
+	{ +1, +0 }, // forward
+	{ -1, +0 }, // back
+	{ +0, -1 }, // left
+	{ +0, +1 }, // right
+	{ +1, -1 }, // front left
+	{ +1, +1 }, // front right
+	{ -1, -1 }, // back left
+	{ -1, +1 }, // back right
+};
+
+/// \brief Contains fractions for forward and right dirs for 8 tested directions
+inline const float kSideDirFractions[8][2] = {
+	{ +1.000f, +0.000f }, // front
+	{ -1.000f, +0.000f }, // back
+	{ +0.000f, -1.000f }, // left
+	{ +0.000f, +1.000f }, // right
+	{ +0.707f, -0.707f }, // front left
+	{ +0.707f, +0.707f }, // front right
+	{ -0.707f, -0.707f }, // back left
+	{ -0.707f, +0.707f }, // back right
+};
+
+static_assert( std::size( kSideDirFractions ) == std::size( kSideDirSigns ) );
+
 #endif

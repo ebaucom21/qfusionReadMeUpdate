@@ -16,10 +16,14 @@ class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction
 
 	unsigned maxAttempts { 0 };
 	unsigned attemptNum { 0 };
+	unsigned dirsTimeout { 0 };
+	unsigned dirIndices[8];
 
 	// Results for the corresponding Bot:: calls precached at application sequence start
 	bool isCombatDashingAllowed { false };
 	bool isCompatCrouchingAllowed { false };
+
+	bool hasUpdatedMoveDirsAtFirstAttempt { false };
 
 	// If we are in "combat" mode and should keep crosshair on enemies
 	// the CombatDodgeSemiRandomlyToTargetAction action is a terminal action.
@@ -30,15 +34,6 @@ class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction
 	BaseMovementAction *allowFailureUsingThatAsNextAction { nullptr };
 
 	inline bool IsAllowedToFail() { return allowFailureUsingThatAsNextAction != nullptr; }
-
-	inline bool ShouldTryRandomness() { return attemptNum < maxAttempts / 2; }
-	inline bool ShouldTrySpecialMovement() {
-		// HACK for easy bots to disable special movement in combat
-		// (maxAttempts is 2 for easy bots and is 4 otherwise)
-		// This approach seems more cache friendly than self->ai->botRef... chasing
-		// not to mention we cannot access Bot members in this header due to its incomplete definition
-		return maxAttempts > 2 && !( attemptNum & 1 );
-	}
 
 	void UpdateKeyMoveDirs( MovementPredictionContext *context );
 
