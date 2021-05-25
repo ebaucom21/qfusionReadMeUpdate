@@ -1,6 +1,8 @@
 #include "combatdodgetotargetaction.h"
 #include "movementlocal.h"
 
+#include "../../../../third-party/gcem/include/gcem.hpp"
+
 void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *combatMovementState = &context->movementState->keyMoveDirsState;
@@ -116,16 +118,44 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context
 
 	const short *pmStats = context->currPlayerState->pmove.stats;
 	if( entityPhysicsState.GroundEntity() ) {
+		assert( !botInput->IsSpecialButtonSet() && !botInput->UpMovement() );
+		assert( !botInput->ForwardMovement() && !botInput->RightMovement() );
 		if( isCombatDashingAllowed && !pmStats[PM_STAT_DASHTIME] && ( pmStats[PM_STAT_FEATURES] & PMFEAT_DASH ) ) {
-			const float speedThreshold = context->GetDashSpeed() - 10;
-			if( entityPhysicsState.Speed() < speedThreshold ) {
+			if( const float threshold = context->GetDashSpeed() - 10; entityPhysicsState.Speed2D() < threshold ) {
 				botInput->SetSpecialButton( true );
 				context->predictionStepMillis = context->DefaultFrameTime();
 			}
 		}
 		auto *const combatMovementState = &context->movementState->keyMoveDirsState;
-		botInput->SetForwardMovement( combatMovementState->ForwardMove() );
-		botInput->SetRightMovement( combatMovementState->RightMove() );
+		// If dashing is allowed but cannot be performed, try preserving the speed by jumping
+		// if the current velocity direction conforms the desired one for this prediction attempt.
+		if( isCombatDashingAllowed && !botInput->IsSpecialButtonSet() && ( pmStats[PM_STAT_FEATURES] & PMFEAT_JUMP ) ) {
+			if( const float threshold = context->GetDashSpeed(); entityPhysicsState.Speed2D() > threshold ) {
+				Vec3 keyMoveDir( 0, 0, 0 );
+				keyMoveDir += (float)combatMovementState->ForwardMove() * entityPhysicsState.ForwardDir();
+				keyMoveDir += (float)combatMovementState->RightMove() * entityPhysicsState.RightDir();
+				if( const auto squareKeyDirLen = keyMoveDir.SquaredLength(); squareKeyDirLen > SQUARE( 0.5f ) ) {
+					keyMoveDir *= Q_RSqrt( squareKeyDirLen );
+					assert( std::fabs( keyMoveDir.LengthFast() - 1.0f ) < 0.01f );
+					Vec3 velocity2DDir( entityPhysicsState.Velocity() );
+					velocity2DDir.Z() = 0;
+					velocity2DDir *= Q_Rcp( entityPhysicsState.Speed2D() );
+					assert( std::fabs( velocity2DDir.LengthFast() - 1.0f ) < 0.01f );
+					if( velocity2DDir.Dot( keyMoveDir ) > gcem::cos( DEG2RAD( 30.0f ) ) ) {
+						const auto floorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
+						// Restrict to NOFALL areas for now
+						// TODO: Use another prediction attempt with the same direction if jumping fails
+						if( AiAasWorld::Instance()->AreaSettings()[floorAreaNum].areaflags & AREA_NOFALL ) {
+							botInput->SetUpMovement( 1 );
+						}
+					}
+				}
+			}
+		}
+		if( !botInput->UpMovement() ) {
+			botInput->SetForwardMovement( combatMovementState->ForwardMove() );
+			botInput->SetRightMovement( combatMovementState->RightMove() );
+		}
 		// Set at least a single key or button while on ground (forward/right move keys might both be zero)
 		if( !botInput->ForwardMovement() && !botInput->RightMovement() && !botInput->UpMovement() ) {
 			if( !botInput->IsSpecialButtonSet() ) {
