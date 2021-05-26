@@ -3,6 +3,19 @@
 
 #include "../../../../third-party/gcem/include/gcem.hpp"
 
+[[nodiscard]]
+static inline auto makeMoveDir( const float *__restrict fractions, const Vec3 &__restrict forwardDir,
+								const Vec3 &__restrict rightDir ) {
+	const Vec3 forwardPart( forwardDir * fractions[0] );
+	const Vec3 rightPart( rightDir * fractions[1] );
+	Vec3 moveDir( forwardPart + rightPart );
+	moveDir.Z() *= Z_NO_BEND_SCALE;
+	const float moveDirSquareLen = moveDir.SquaredLength();
+	moveDir *= Q_RSqrt( moveDirSquareLen );
+	assert( std::fabs( moveDir.LengthFast() - 1.0f ) < 0.01f );
+	return moveDir;
+}
+
 void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *combatMovementState = &context->movementState->keyMoveDirsState;
@@ -30,18 +43,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 		}
 	}
 
-	struct DirAndScore {
-		unsigned dir;
-		float score;
-		[[nodiscard]]
-		bool operator<( const DirAndScore &that ) const {
-			// Give a preference to dirs with larger scores
-			return score > that.score;
-		}
-	};
-
-	DirAndScore dirsAndScores[std::size( kSideDirFractions )];
-	assert( std::size( dirsAndScores ) == std::size( dirIndices ) );
+	constexpr auto kMaxSideDirs = std::size( kSideDirFractions );
 
 	bool hasDefinedMoveDir = false;
 	// Slightly randomize (use fully random dirs in a half of cases).
@@ -54,31 +56,89 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 		if( desiredDirSquareLen > SQUARE( 12.0f ) ) {
 			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
 			hasDefinedMoveDir = true;
+
 			desiredMoveDir *= Q_RSqrt( desiredDirSquareLen );
-			Assert( std::fabs( desiredMoveDir.LengthFast() - 1.0f ) < 0.01f );
-			for( unsigned i = 0; i < std::size( kSideDirFractions ); ++i ) {
-				const float *const fractions = kSideDirFractions[i];
-				const Vec3 forwardPart( forwardDir * fractions[0] );
-				const Vec3 rightPart( rightDir * fractions[1] );
-				Vec3 moveDir( forwardPart + rightPart );
-				const float moveDirSquareLen = moveDir.SquaredLength();
-				moveDir *= Q_RSqrt( moveDirSquareLen );
-				Assert( std::fabs( moveDir.LengthFast() - 1.0f ) < 0.01f );
+			assert( std::fabs( desiredMoveDir.LengthFast() - 1.0f ) < 0.01f );
+
+			struct DirAndScore {
+				unsigned dir; float score;
+				[[nodiscard]]
+				bool operator<( const DirAndScore &that ) const { return score > that.score; }
+			} dirsAndScores[kMaxSideDirs];
+			assert( std::size( dirsAndScores ) == std::size( dirIndices ) );
+
+			for( unsigned i = 0; i < kMaxSideDirs; ++i ) {
+				const Vec3 moveDir( makeMoveDir( kSideDirFractions[i], forwardDir, rightDir ) );
 				dirsAndScores[i] = { i, desiredMoveDir.Dot( moveDir ) };
 			}
+
+			// Give a preference to dirs with larger scores
 			std::sort( std::begin( dirsAndScores ), std::end( dirsAndScores ) );
-			for( unsigned i = 0; i < std::size( dirsAndScores ); ++i ) {
+			for( unsigned i = 0; i < kMaxSideDirs; ++i ) {
 				this->dirIndices[i] = dirsAndScores[i].dir;
 			}
 		}
 	}
 	if( !hasDefinedMoveDir ) {
-		// Poor man's shuffle (we don't have an STL-compatible RNG).
-		// This is acceptable to randomize directions between frames.
-		const auto randomOffset = (unsigned)( level.framenum );
-		for( unsigned i = 0; i < std::size( dirsAndScores ); ++i ) {
-			// TODO: Fix the RNG interface/the RNG in general, use a proper shuffle.
-			this->dirIndices[( i + randomOffset ) % std::size( this->dirIndices )] = i;
+		const auto &selectedEnemies = bot->GetSelectedEnemies();
+		if( selectedEnemies.AreValid() && selectedEnemies.AreThreatening() ) {
+			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
+
+			Vec3 enemyLookDir( selectedEnemies.LookDir() );
+			enemyLookDir.Z() *= Z_NO_BEND_SCALE;
+			enemyLookDir.NormalizeFast();
+			assert( std::fabs( enemyLookDir.LengthFast() - 1.0f ) < 0.01f );
+
+			// We don't want a fully deterministic choice by the dot product (so best dirs are always first).
+			// We select randomly using weights giving greater weights to better dirs.
+
+			float totalWeightsSum = 0.0f;
+			// A single value is sufficient but using a pair is more clear
+			std::pair<float, float> segments[kMaxSideDirs];
+
+			constexpr float kMaxWeight = 1.0f, kMinWeight = 0.25f;
+			for( unsigned i = 0; i < kMaxSideDirs; ++i ) {
+				const Vec3 moveDir( makeMoveDir( kSideDirFractions[i], forwardDir, rightDir ) );
+				// Give orthogonal directions a priority
+				const float frac = 1.0f - std::fabs( enemyLookDir.Dot( moveDir ) );
+				assert( frac >= -0.01f && frac <= 1.01f );
+				const float weight = kMinWeight + ( kMaxWeight - kMinWeight ) * frac;
+				assert( weight > 0.1f );
+				const float oldSum = totalWeightsSum;
+				totalWeightsSum += weight;
+				segments[i] = { oldSum, totalWeightsSum };
+			}
+
+			// Now pick directions randomly one by one, better dirs got a greater chance
+			unsigned numPickedDirs = 0;
+			unsigned alreadyPickedMask = 0;
+			assert( totalWeightsSum > kMinWeight * kMaxSideDirs && totalWeightsSum > 0.1f );
+			while( numPickedDirs != kMaxSideDirs ) {
+				// Add a small epsilon to ensure it's within bounds
+				const float r = ( totalWeightsSum - 0.001f ) * random();
+				assert( r >= 0.0f && r < totalWeightsSum );
+				// We've picked a random value within [0, totalWeightsSum) bounds.
+				// Find a direction that corresponds to this value.
+				for( unsigned i = 0, maskBit = 1; i < kMaxSideDirs; ++i, maskBit <<= 1 ) {
+					if( !( alreadyPickedMask & maskBit ) ) {
+						assert( segments[i].first < segments[i].second );
+						if( r >= segments[i].first && r <= segments[i].second ) {
+							this->dirIndices[numPickedDirs++] = i;
+							alreadyPickedMask |= maskBit;
+							break;
+						}
+					}
+				}
+			}
+			assert( alreadyPickedMask == ( 1u << kMaxSideDirs ) - 1 );
+		} else {
+			// Poor man's shuffle (we don't have an STL-compatible RNG).
+			// This is acceptable to randomize directions between frames.
+			const auto randomOffset = (unsigned)( level.framenum );
+			for( unsigned i = 0; i < std::size( this->dirIndices ); ++i ) {
+				// TODO: Fix the RNG interface/the RNG in general, use a proper shuffle.
+				this->dirIndices[( i + randomOffset ) % std::size( this->dirIndices )] = i;
+			}
 		}
 	}
 
