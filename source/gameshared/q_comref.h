@@ -569,7 +569,7 @@ public:
 	void setPlayerTeam( unsigned playerIndex, int team ) {
 		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( team >= 0 && team <= 3 );
-		playersTeamMask |= ( (unsigned)team << ( 2 * playerIndex ) );
+		playersTeamMask |= ( (uint64_t)team << ( 2 * playerIndex ) );
 	}
 
 	[[nodiscard]]
