@@ -1,6 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource>
         <file>ActionRequestArea.qml</file>
+        <file>AddNewListItemButton.qml</file>
         <file>AutoFittingComboBox.qml</file>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
@@ -27,6 +28,8 @@
         <file>HelpPage.qml</file>
         <file>HudChat.qml</file>
         <file>HudEditorAnchorsMarker.qml</file>
+        <file>HudEditorField.qml</file>
+        <file>HudEditorWizard.qml</file>
         <file>HudLayoutItem.qml</file>
         <file>HudObituaries.qml</file>
         <file>HudSettings.qml</file>
@@ -92,6 +95,7 @@
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>
+        <file>WswCheckBox.qml</file>
         <file>WswTabBar.qml</file>
         <file>WswTabButton.qml</file>
         <file>logo.webp</file>
@@ -99,5 +103,7 @@
         <!-- TODO: Load from the game FS -->
         <file>ModelLeftArrow.svg</file>
         <file>ModelRightArrow.svg</file>
+        <file>Add.svg</file>
+        <file>Close.svg</file>
     </qresource>
 </RCC>

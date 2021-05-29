@@ -10,6 +10,7 @@
 #include <QSizeF>
 #include <QPointF>
 #include <QRectF>
+#include <QJsonArray>
 
 namespace wsw::ui {
 
@@ -53,6 +54,8 @@ public:
 	};
 	Q_ENUM( Flags );
 
+	static inline const unsigned kMaxHudNameLength = 16u;
+
 	[[nodiscard]]
 	Q_INVOKABLE bool load( const QByteArray &fileName );
 protected:
@@ -77,6 +80,8 @@ protected:
 	[[nodiscard]]
 	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
 		-> std::optional<wsw::StringView>;
+
+	bool load( const wsw::StringView &fileName );
 
 	[[nodiscard]]
 	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>>;
@@ -124,6 +129,8 @@ class HudEditorLayoutModel : public HudLayoutModel {
 		std::optional<int> displayedAnchorItem;
 	};
 
+	void reloadExistingHuds();
+
 	[[nodiscard]]
 	bool serialize( wsw::StaticString<4096> *buffer );
 	void writeAnchor( wsw::StaticString<32> *tmp, int anchor );
@@ -139,6 +146,9 @@ class HudEditorLayoutModel : public HudLayoutModel {
 
 	[[nodiscard]]
 	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
+
+	[[nodiscard]]
+	auto getExistingHuds() const -> QJsonArray { return m_existingHuds; }
 
 	void setDisplayedFieldAnchors( int anchors ) {
 		if( m_displayedFieldAnchors != anchors ) {
@@ -183,14 +193,24 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	QSizeF m_fieldSize;
 	int m_displayedFieldAnchors { 0 };
 
+	QJsonArray m_existingHuds;
+
 	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors, Draggable };
 	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
 	static inline const QVector<int> kOriginRoleAsVector { Origin };
 
+
 	static const AnchorPair kMatchingEntryAnchorPairs[];
 public:
+	HudEditorLayoutModel();
+
 	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
 	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
+
+	Q_SIGNAL void existingHudsChanged( const QJsonArray &existingHuds );
+	Q_PROPERTY( const QJsonArray existingHuds READ getExistingHuds NOTIFY existingHudsChanged );
+
+	Q_PROPERTY( unsigned maxHudNameLength MEMBER kMaxHudNameLength CONSTANT );
 
 	Q_INVOKABLE void trackDragging( int index, qreal x, qreal y );
 	Q_INVOKABLE void finishDragging( int index );

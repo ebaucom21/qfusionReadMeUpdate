@@ -76,8 +76,12 @@ void HudEditorLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int>
 }
 
 bool HudLayoutModel::load( const QByteArray &fileName ) {
+	return load( wsw::StringView( fileName.data(), fileName.size() ) );
+}
+
+bool HudLayoutModel::load( const wsw::StringView &fileName ) {
 	wsw::StaticString<MAX_QPATH> pathBuffer;
-	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
+	if( const auto maybePath = makeFilePath( &pathBuffer, fileName ) ) {
 		if( auto maybeHandle = wsw::fs::openAsReadHandle( *maybePath ) ) {
 			char dataBuffer[4096];
 			if( const size_t size = maybeHandle->getInitialFileSize(); size && size < sizeof( dataBuffer ) ) {
@@ -94,6 +98,31 @@ bool HudLayoutModel::load( const QByteArray &fileName ) {
 	return false;
 }
 
+static const wsw::StringView kHudsDirectory( "huds"_asView );
+static const wsw::StringView kHudsExtension( ".wswhud"_asView );
+
+void HudEditorLayoutModel::reloadExistingHuds() {
+	wsw::fs::SearchResultHolder searchResultHolder;
+	if( const auto maybeResult = searchResultHolder.findDirFiles( kHudsDirectory, kHudsExtension ) ) {
+		QJsonArray huds;
+		for( const wsw::StringView &fileName : *maybeResult ) {
+			if( const auto maybeName = wsw::fs::stripExtension( fileName ) ) {
+				if( maybeName->length() <= kMaxHudNameLength ) {
+					// Check whether the hud file really contains a valid hud
+					// TODO: Don't modify the global mutable state
+					if( load( *maybeName ) ) {
+						huds.append( QString::fromLatin1( maybeName->data(), (int)maybeName->size() ).toLower() );
+					}
+				}
+			}
+		}
+		if( huds != m_existingHuds ) {
+			m_existingHuds = huds;
+			Q_EMIT existingHudsChanged( huds );
+		}
+	}
+}
+
 bool HudEditorLayoutModel::save( const QByteArray &fileName ) {
 	wsw::StaticString<MAX_QPATH> pathBuffer;
 	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
@@ -101,6 +130,7 @@ bool HudEditorLayoutModel::save( const QByteArray &fileName ) {
 			wsw::StaticString<4096> dataBuffer;
 			if( serialize( &dataBuffer ) ) {
 				if( maybeHandle->write( dataBuffer.data(), dataBuffer.size() ) ) {
+					reloadExistingHuds();
 					return true;
 				}
 			}
@@ -111,6 +141,9 @@ bool HudEditorLayoutModel::save( const QByteArray &fileName ) {
 
 auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
 								   const wsw::StringView &baseFileName ) const -> std::optional<wsw::StringView> {
+	if( baseFileName.length() > kMaxHudNameLength ) {
+		return std::nullopt;
+	}
 	if( baseFileName.length() > std::min( 16u, buffer->capacity() ) ) {
 		return std::nullopt;
 	}
@@ -123,7 +156,7 @@ auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
 		}
 	}
 	buffer->clear();
-	( *buffer ) << "huds/"_asView << baseFileName << ".hud"_asView;
+	( *buffer ) << kHudsDirectory << '/' << baseFileName << kHudsExtension;
 	return buffer->asView();
 }
 
@@ -152,7 +185,7 @@ bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 			writeAnchor( &selfAnchorsString, entry.selfAnchors );
 			writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
 
-			buffer << ( i + 1 ) << ' ';
+			buffer << i << ' ';
 			buffer << kItem << ' ' << entry.realAnchorItem << ' ';
 			buffer << kSelf << ' ' << selfAnchorsString << ' ';
 			buffer << kOther << ' ' << otherAnchorsString << ' ';
@@ -357,6 +390,10 @@ auto HudLayoutModel::parseKind( const wsw::StringView &token ) -> std::optional<
 		}
 	}
 	return std::nullopt;
+}
+
+HudEditorLayoutModel::HudEditorLayoutModel() {
+	reloadExistingHuds();
 }
 
 bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
