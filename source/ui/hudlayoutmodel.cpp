@@ -16,6 +16,8 @@ auto HudEditorLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Origin, "origin" },
 		{ Size, "size" },
+		{ Name, "name" },
+		{ Color, "color" },
 		{ Draggable, "draggable" },
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
@@ -36,6 +38,8 @@ auto HudEditorLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 			switch( role ) {
 				case Origin: return m_entries[row].rectangle.topLeft();
 				case Size: return m_entries[row].rectangle.size();
+				case Name: return m_entries[row].name;
+				case Color: return m_entries[row].color;
 				case Draggable: return isDraggable( row );
 				case DisplayedAnchors: return m_entries[row].displayedAnchors;
 				case DisplayedAnchorItemIndex: return m_entries[row].displayedAnchorItem.value_or( 0 );
@@ -399,17 +403,17 @@ HudEditorLayoutModel::HudEditorLayoutModel() {
 bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
 	wsw::Vector<Entry> entries;
 	for( FileEntry &fileEntry: fileEntries ) {
-		if( const auto maybeSize = getEditorSizeForKind( fileEntry.kind ) ) {
-			Entry entry;
-			entry.kind = fileEntry.kind;
-			entry.selfAnchors = fileEntry.selfAnchors;
-			entry.anchorItemAnchors = fileEntry.otherAnchors;
-			entry.realAnchorItem = fileEntry.anchorItem;
-			entry.rectangle.setSize( *maybeSize );
-			entries.push_back( entry );
-		} else {
-			return false;
-		}
+		const auto &props = kEditorPropsForKind[fileEntry.kind - 1];
+		assert( fileEntry.kind == props.kind );
+		Entry entry;
+		entry.kind = fileEntry.kind;
+		entry.selfAnchors = fileEntry.selfAnchors;
+		entry.anchorItemAnchors = fileEntry.otherAnchors;
+		entry.realAnchorItem = fileEntry.anchorItem;
+		entry.rectangle.setSize( props.size );
+		entry.color = props.color;
+		entry.name = props.name;
+		entries.push_back( entry );
 	}
 	assert( entries.size() == fileEntries.size() );
 	beginResetModel();
@@ -418,22 +422,19 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 	return true;
 }
 
-auto HudEditorLayoutModel::getEditorSizeForKind( Kind kind ) -> std::optional<QSize> {
-	switch( kind ) {
-		case HealthBar: [[fallthrough]];
-		case ArmorBar: return QSize( 144, 32 );
-		case InventoryBar: return QSize( 256, 48 );
-		case WeaponStatus: return QSize( 96, 96 );
-		case MatchTime: return QSize( 128, 64 );
-		case AlphaScore: [[fallthrough]];
-		case BetaScore: return QSize( 128, 56 );
-		case Chat: return QSize( 384, 96 );
-		case TeamList: return QSize( 256, 128 );
-		case Obituaries: return QSize( 256, 108 );
-		case MessageFeed: return QSize( 384, 96 );
-		default: return std::nullopt;
-	}
-}
+const HudEditorLayoutModel::EditorProps HudEditorLayoutModel::kEditorPropsForKind[] {
+	{ "Health", HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ) },
+	{ "Armor", ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ) },
+	{ "Inventory", InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ) },
+	{ "Weapon status", WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ) },
+	{ "Match time", MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ) },
+	{ "Alpha score", AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ) },
+	{ "Beta score", BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ) },
+	{ "Chat", Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ) },
+	{ "Team list", TeamList, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ) },
+	{ "Frags feed", Obituaries, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ) },
+	{ "Message feed", MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ) }
+};
 
 void HudEditorLayoutModel::setFieldSize( qreal width, qreal height ) {
 	QSize size( width, height );

@@ -1,6 +1,7 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
+import QtQuick.Controls.Material.impl 2.12
 import net.warsow 2.6
 
 Item {
@@ -51,9 +52,30 @@ Item {
             onYChanged: handleCoordChanges()
             state: "anchored"
 
+            property color actualColor: mouseArea.containsMouse ? Qt.lighter(model.color, 1.25) : model.color
+            Behavior on actualColor { ColorAnimation { duration: 33 } }
+
             Rectangle {
                 anchors.fill: parent
-                color: Qt.rgba(1.0, 0.0, 0.3, 0.3)
+                color: Qt.rgba(actualColor.r, actualColor.g, actualColor.b, 0.3)
+                border.color: Qt.rgba(actualColor.r, actualColor.g, actualColor.b, 0.7)
+                border.width: 2
+                layer.enabled: true
+                layer.effect: ElevationEffect { elevation: 4 }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                width: parent.width
+                horizontalAlignment: Qt.AlignHCenter
+                verticalAlignment: Qt.AlignVCenter
+                maximumLineCount: 2
+                wrapMode: Text.WordWrap
+                font.pointSize: 10.5
+                font.letterSpacing: 0.5
+                font.capitalization: Font.AllUppercase
+                text: name
+                font.weight: Font.Medium
             }
 
             states: [

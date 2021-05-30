@@ -110,6 +110,8 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	enum Role {
 		Origin = Qt::UserRole + 1,
 		Size,
+		Name,
+		Color,
 		Draggable,
 		DisplayedAnchors,
 		DisplayedAnchorItemIndex,
@@ -119,8 +121,10 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	};
 
 	struct Entry {
+		const char *name;
 		QRectF rectangle;
 		QPointF pendingOrigin;
+		QColor color;
 		int displayedAnchors { 0 };
 		int selfAnchors { 0 };
 		int anchorItemAnchors { 0 };
@@ -137,9 +141,6 @@ class HudEditorLayoutModel : public HudLayoutModel {
 
 	[[nodiscard]]
 	bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) override;
-
-	[[nodiscard]]
-	static auto getEditorSizeForKind( Kind kind ) -> std::optional<QSize>;
 
 	[[nodiscard]]
 	bool isDraggable( int index ) const;
@@ -199,7 +200,13 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
 	static inline const QVector<int> kOriginRoleAsVector { Origin };
 
-
+	struct EditorProps {
+		const char *name;
+		int kind;
+		QSize size;
+		QColor color;
+	};
+	static const EditorProps kEditorPropsForKind[];
 	static const AnchorPair kMatchingEntryAnchorPairs[];
 public:
 	HudEditorLayoutModel();
