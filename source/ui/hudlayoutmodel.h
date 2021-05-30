@@ -54,8 +54,6 @@ public:
 	};
 	Q_ENUM( Flags );
 
-	static inline const unsigned kMaxHudNameLength = 16u;
-
 	[[nodiscard]]
 	Q_INVOKABLE bool load( const QByteArray &fileName );
 protected:
@@ -70,6 +68,9 @@ protected:
 		int selfAnchors;
 		int otherAnchors;
 	};
+
+	static inline const unsigned kMaxHudNameLength = 16u;
+	static const AnchorPair kMatchingEntryAnchorPairs[];
 
 	[[nodiscard]]
 	static auto getFlagsForKind( Kind kind ) -> Flags;
@@ -207,7 +208,6 @@ class HudEditorLayoutModel : public HudLayoutModel {
 		QColor color;
 	};
 	static const EditorProps kEditorPropsForKind[];
-	static const AnchorPair kMatchingEntryAnchorPairs[];
 public:
 	HudEditorLayoutModel();
 

@@ -208,6 +208,19 @@ void HudEditorLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int ancho
 	( *buffer ) << first << '|' << second;
 }
 
+// Pairs are arranged in their priority order
+const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingEntryAnchorPairs[] {
+	{ Top | HCenter, Bottom | HCenter },
+	{ Bottom | HCenter, Top | HCenter },
+	{ VCenter | Left, VCenter | Right },
+	{ VCenter | Right, VCenter | Left },
+
+	{ Top | Left, Bottom | Left }, { Top | Left, Bottom | Right },
+	{ Top | Right, Bottom | Left }, { Top | Right, Bottom | Right },
+	{ Bottom | Left, Top | Left }, { Bottom | Left, Top | Right },
+	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right }
+};
+
 // TODO: Share the static instance over the codebase
 static const wsw::CharLookup kNewlineChars( "\r\n"_asView );
 
@@ -224,15 +237,6 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 			return std::nullopt;
 		}
 		entries.push_back( entry );
-	}
-
-	for( const FileEntry &entry: entries ) {
-		// Disallow non-existing anchor items
-		if( entry.anchorItem >= 0 ) {
-			if( (unsigned)entry.anchorItem >= (unsigned)entries.size() ) {
-				return std::nullopt;
-			}
-		}
 	}
 
 	// Validate kinds
@@ -253,17 +257,43 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 		return std::nullopt;
 	}
 
-	// Try detecting direct (1-1) anchor loops
+	// Reject illegal anchors
+	// TODO: Check mutual intersections of items (this requires applying a layout manually)
+	// TODO: Check indirect anchor loops (graph cycles)
 	for( unsigned i = 0; i < entries.size(); ++i ) {
-		if( int anchorItem = entries[i].anchorItem; anchorItem >= 0 ) {
-			if( entries[anchorItem].anchorItem == (int)i ) {
+		const FileEntry &entry = entries[i];
+		// Disallow non-existing anchor items
+		if( entry.anchorItem >= 0 ) {
+			if( (unsigned)entry.anchorItem >= (unsigned)entries.size() ) {
+				return std::nullopt;
+			}
+			// Disallow anchoring to self
+			if( entry.anchorItem == (int)i ) {
+				return std::nullopt;
+			}
+			// Try detecting direct (1-1) anchor loops
+			if( entries[entry.anchorItem].anchorItem == (int)i ) {
+				return std::nullopt;
+			}
+			bool hasValidAnchorPair = false;
+			// Check whether the anchor pair is valid
+			for( const auto &[selfAnchors, otherAnchors] : kMatchingEntryAnchorPairs ) {
+				if( selfAnchors == entry.selfAnchors && otherAnchors == entry.otherAnchors ) {
+					hasValidAnchorPair = true;
+					break;
+				}
+			}
+			if( !hasValidAnchorPair ) {
+				return std::nullopt;
+			}
+		} else {
+			// Check whether the anchor pair is valid
+			// Item and field anchors are required to be matching for now
+			if( entry.selfAnchors != entry.otherAnchors ) {
 				return std::nullopt;
 			}
 		}
 	}
-
-	// TODO: Check mutual intersections of items
-	// TODO: Check indirect anchor loops (graph cycles)
 
 	return entries;
 }
@@ -564,19 +594,6 @@ void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
 		notifyOfUpdatesAtIndex( row, kDisplayedAnchorsAsRole );
 	}
 }
-
-// Pairs are arranged in their priority order
-const HudLayoutModel::AnchorPair HudEditorLayoutModel::kMatchingEntryAnchorPairs[] {
-	{ Top | HCenter, Bottom | HCenter },
-	{ Bottom | HCenter, Top | HCenter },
-	{ VCenter | Left, VCenter | Right },
-	{ VCenter | Right, VCenter | Left },
-
-	{ Top | Left, Bottom | Left }, { Top | Left, Bottom | Right },
-	{ Top | Right, Bottom | Left }, { Top | Right, Bottom | Right },
-	{ Bottom | Left, Top | Left }, { Bottom | Left, Top | Right },
-	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right }
-};
 
 [[nodiscard]]
 static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
