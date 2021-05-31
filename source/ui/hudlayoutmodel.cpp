@@ -209,16 +209,67 @@ void HudEditorLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int ancho
 }
 
 // Pairs are arranged in their priority order
-const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingEntryAnchorPairs[] {
+
+const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingItemAndItemAnchorPairs[] {
+	// Sides
 	{ Top | HCenter, Bottom | HCenter },
 	{ Bottom | HCenter, Top | HCenter },
 	{ VCenter | Left, VCenter | Right },
 	{ VCenter | Right, VCenter | Left },
 
+	// Corner-corner pairs that don't lead to overlapping
 	{ Top | Left, Bottom | Left }, { Top | Left, Bottom | Right },
 	{ Top | Right, Bottom | Left }, { Top | Right, Bottom | Right },
 	{ Bottom | Left, Top | Left }, { Bottom | Left, Top | Right },
-	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right }
+	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right },
+
+	// Corners to mid points of sides
+	{ Top | Left, Bottom | HCenter }, { Top | Right, Bottom | HCenter },
+	{ Bottom | Left, Top | HCenter }, { Bottom | Right, Top | HCenter },
+
+	// Mid points of sides to corners
+	{ Top | HCenter, Bottom | Left }, { Top | HCenter, Bottom | Right },
+	{ Bottom | HCenter, Top | Left }, { Bottom | HCenter, Top | Right }
+};
+
+const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingItemAndFieldAnchorPairs[] {
+	{ VCenter | HCenter, VCenter | HCenter },
+
+	// Centers of same contacting sides
+	{ Top | HCenter, Top | HCenter },
+	{ Bottom | HCenter, Bottom | HCenter },
+	{ VCenter | Left, VCenter | Left },
+	{ VCenter | Right, VCenter | Right },
+
+	// Same corners
+	{ Top | Left, Top | Left },
+	{ Top | Right, Top | Right },
+	{ Bottom | Left, Bottom | Left },
+	{ Bottom | Right, Bottom | Right },
+
+	// Top or bottom to the vertical center field line
+	{ Top | Left, VCenter | Left },
+	{ Top | Right, VCenter | Right },
+	{ Bottom | Left, VCenter | Left },
+	{ Bottom | Right, VCenter | Right },
+
+	// Left or right to the horizontal center field line
+	{ Top | Left, Top | HCenter },
+	{ Top | Right, Top | HCenter },
+	{ Bottom | Left, Bottom | HCenter },
+	{ Bottom | Right, Bottom | HCenter },
+
+	// A side mid point to the central point
+	{ Top | HCenter, VCenter | HCenter },
+	{ Bottom | HCenter, VCenter | HCenter },
+	{ VCenter | Left, VCenter | HCenter },
+	{ VCenter | Right, VCenter | HCenter },
+
+	// A corner to the central point
+	{ Top | Left, VCenter | HCenter },
+	{ Top | Right, VCenter | HCenter },
+	{ Bottom | Left, VCenter | HCenter },
+	{ Bottom | Right, VCenter | HCenter }
 };
 
 // TODO: Share the static instance over the codebase
@@ -262,6 +313,8 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 	// TODO: Check indirect anchor loops (graph cycles)
 	for( unsigned i = 0; i < entries.size(); ++i ) {
 		const FileEntry &entry = entries[i];
+		const AnchorPair *validAnchorsBegin = std::begin( kMatchingItemAndFieldAnchorPairs );
+		const AnchorPair *validAnchorsEnd = std::end( kMatchingItemAndFieldAnchorPairs );
 		// Disallow non-existing anchor items
 		if( entry.anchorItem >= 0 ) {
 			if( (unsigned)entry.anchorItem >= (unsigned)entries.size() ) {
@@ -275,23 +328,18 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 			if( entries[entry.anchorItem].anchorItem == (int)i ) {
 				return std::nullopt;
 			}
-			bool hasValidAnchorPair = false;
-			// Check whether the anchor pair is valid
-			for( const auto &[selfAnchors, otherAnchors] : kMatchingEntryAnchorPairs ) {
-				if( selfAnchors == entry.selfAnchors && otherAnchors == entry.otherAnchors ) {
-					hasValidAnchorPair = true;
-					break;
-				}
+			validAnchorsBegin = std::begin( kMatchingItemAndItemAnchorPairs );
+			validAnchorsEnd = std::end( kMatchingItemAndItemAnchorPairs );
+		}
+		bool hasValidAnchorPair = false;
+		for( const AnchorPair *it = validAnchorsBegin; it != validAnchorsEnd; ++it ) {
+			if( it->selfAnchors == entry.selfAnchors && it->otherAnchors == entry.otherAnchors ) {
+				hasValidAnchorPair = true;
+				break;
 			}
-			if( !hasValidAnchorPair ) {
-				return std::nullopt;
-			}
-		} else {
-			// Check whether the anchor pair is valid
-			// Item and field anchors are required to be matching for now
-			if( entry.selfAnchors != entry.otherAnchors ) {
-				return std::nullopt;
-			}
+		}
+		if( !hasValidAnchorPair ) {
+			return std::nullopt;
 		}
 	}
 
@@ -602,11 +650,14 @@ static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
 	return diff.x() * diff.x() + diff.y() * diff.y() < 12 * 12;
 }
 
-auto HudEditorLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+template <typename Range>
+auto HudEditorLayoutModel::getMatchingAnchors( const QRectF &draggedRectangle, const QRectF &otherRectangle,
+											   const Range &range )
 	-> std::optional<AnchorPair> {
-	for( const auto &[selfAnchors, otherAnchors] : kMatchingEntryAnchorPairs ) {
+	for( auto it = std::begin( range ); it != std::end( range ); ++it ) {
+		const auto &[selfAnchors, otherAnchors] = *it;
 		const QPointF selfPoint( getPointForAnchors( draggedRectangle, selfAnchors ) );
-		const QPointF otherPoint( getPointForAnchors( otherEntryRectangle, otherAnchors ) );
+		const QPointF otherPoint( getPointForAnchors( otherRectangle, otherAnchors ) );
 		if( isClose( selfPoint, otherPoint ) ) {
 			return AnchorPair { selfAnchors, otherAnchors };
 		}
@@ -614,20 +665,14 @@ auto HudEditorLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectang
 	return std::nullopt;
 }
 
+auto HudEditorLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+	-> std::optional<AnchorPair> {
+	return getMatchingAnchors( draggedRectangle, otherEntryRectangle, kMatchingItemAndItemAnchorPairs );
+}
+
 auto HudEditorLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
 	-> std::optional<AnchorPair> {
-	// Arrange in their priority order
-	for( const int horizontalBits : { Left, Right, HCenter } ) {
-		for( const int verticalBits : { Top, Bottom, VCenter } ) {
-			const int anchors = horizontalBits | verticalBits;
-			const QPointF selfPoint( getPointForAnchors( draggedRectangle, anchors ) );
-			const QPointF otherPoint( getPointForAnchors( fieldRectangle, anchors ) );
-			if( isClose( selfPoint, otherPoint ) ) {
-				return AnchorPair { anchors, anchors };
-			}
-		}
-	}
-	return std::nullopt;
+	return getMatchingAnchors( draggedRectangle, fieldRectangle, kMatchingItemAndFieldAnchorPairs );
 }
 
 auto HudEditorLayoutModel::getMatchingAnchorItem( int draggedIndex ) const

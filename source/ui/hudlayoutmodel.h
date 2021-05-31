@@ -70,7 +70,8 @@ protected:
 	};
 
 	static inline const unsigned kMaxHudNameLength = 16u;
-	static const AnchorPair kMatchingEntryAnchorPairs[];
+	static const AnchorPair kMatchingItemAndItemAnchorPairs[];
+	static const AnchorPair kMatchingItemAndFieldAnchorPairs[];
 
 	[[nodiscard]]
 	static auto getFlagsForKind( Kind kind ) -> Flags;
@@ -171,6 +172,12 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	auto rowCount( const QModelIndex & ) const -> int override;
 	[[nodiscard]]
 	auto data( const QModelIndex &, int role ) const -> QVariant override;
+
+	template <typename Range>
+	[[nodiscard]]
+	static auto getMatchingAnchors( const QRectF &draggedRectangle, const QRectF &otherRectangle,
+								    const Range &range )
+								    -> std::optional<AnchorPair>;
 
 	[[nodiscard]]
 	static auto getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
