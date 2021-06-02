@@ -52,7 +52,7 @@ Item {
             onYChanged: handleCoordChanges()
             state: "anchored"
 
-            property color actualColor: mouseArea.containsMouse ? Qt.lighter(model.color, 1.25) : model.color
+            property color actualColor: mouseArea.containsMouse ? Qt.lighter(model.color, 1.5) : model.color
             Behavior on actualColor { ColorAnimation { duration: 33 } }
 
             Rectangle {
@@ -147,7 +147,7 @@ Item {
                 id: mouseArea
                 anchors.fill: parent
                 drag.target: draggable ? parent : undefined
-                hoverEnabled: true
+                hoverEnabled: false
                 drag.onActiveChanged: {
                     if (!drag.active) {
                         hudEditorLayoutModel.finishDragging(index)
