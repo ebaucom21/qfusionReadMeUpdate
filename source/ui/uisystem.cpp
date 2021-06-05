@@ -4,6 +4,7 @@
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/qcommon.h"
 #include "../client/client.h"
+#include "../cgame/crosshairstate.h"
 #include "actionrequestmodel.h"
 #include "callvotesmodel.h"
 #include "chatmodel.h"
@@ -47,6 +48,9 @@ bool GLimp_EndUIRenderingHacks();
 void R_Set2DMode( bool );
 void R_DrawExternalTextureOverlay( unsigned );
 shader_t *R_RegisterPic( const char * );
+shader_t *R_CreateExplicitlyManaged2DMaterial();
+void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
+bool R_UpdateExternallyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
 struct model_s *R_RegisterModel( const char * );
 void RF_RegisterWorldModel( const char * );
 void RF_ClearScene();
@@ -75,8 +79,8 @@ public:
 
 	void drawSelfInMainContext() override;
 
-	void beginRegistration() override {};
-	void endRegistration() override {};
+	void beginRegistration() override;
+	void endRegistration() override;
 
 	[[nodiscard]]
 	bool requestsKeyboardFocus() const override;
@@ -298,6 +302,9 @@ public:
 	Q_PROPERTY( QJsonArray videoModeHeadingsList MEMBER s_videoModeHeadingsList CONSTANT );
 	Q_PROPERTY( QJsonArray videoModeWidthValuesList MEMBER s_videoModeWidthValuesList CONSTANT );
 	Q_PROPERTY( QJsonArray videoModeHeightValuesList MEMBER s_videoModeHeightValuesList CONSTANT );
+	Q_PROPERTY( qreal minCrosshairSize MEMBER s_minCrosshairSize CONSTANT );
+	Q_PROPERTY( qreal maxCrosshairSize MEMBER s_maxCrosshairSize CONSTANT );
+	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -326,6 +333,10 @@ private:
 	static inline cvar_t *s_sensitivityVar { nullptr };
 	static inline cvar_t *s_mouseAccelVar { nullptr };
 	static inline cvar_t *s_debugNativelyDrawnItemsVar { nullptr };
+
+	static inline const qreal s_minCrosshairSize { kMinCrosshairSize };
+	static inline const qreal s_maxCrosshairSize { kMaxCrosshairSize };
+	static inline const qreal s_crosshairSizeStep { 1.0 };
 
 	int64_t m_lastActiveMaskTime { 0 };
 	QPointer<QOpenGLContext> m_externalContext;
@@ -943,6 +954,8 @@ void QtUISystem::drawSelfInMainContext() {
 		underlayHeap.pop_back();
 	}
 
+	NativelyDrawn::recycleResourcesInMainContext();
+
 	R_Set2DMode( true );
 	R_DrawExternalTextureOverlay( m_framebufferObject->texture() );
 	R_Set2DMode( false );
@@ -1015,6 +1028,14 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 
 	RF_ClearScene();
 	RF_RenderScene( &rdf );
+}
+
+void QtUISystem::beginRegistration() {
+	CrosshairState::beginRegistration();
+}
+
+void QtUISystem::endRegistration() {
+	CrosshairState::endRegistration();
 }
 
 void QtUISystem::toggleInGameMenu() {

@@ -563,8 +563,8 @@ class MaterialCache {
 	MaterialSource *m_sourceBins[kNumBins] { nullptr };
 
 	shader_t *m_materialsHead { nullptr };
-	shader_t *m_materialBins[kNumBins] { nullptr };
-	shader_t *m_materialById[MAX_SHADERS] { nullptr };
+	shader_t *m_materialBins[kNumBins] {};
+	shader_t *m_materialById[MAX_SHADERS] {};
 
 	wsw::String m_pathNameBuffer;
 	wsw::String m_cleanNameBuffer;
@@ -585,6 +585,9 @@ class MaterialCache {
 
 	wsw::StaticVector<Skin, 16> m_skins;
 
+	using DesiredSize = std::pair<uint16_t, uint16_t>;
+	using MaybeDesiredSize = std::optional<DesiredSize>;
+
 	[[nodiscard]]
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
 	[[nodiscard]]
@@ -599,8 +602,8 @@ class MaterialCache {
 	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
 
 	[[nodiscard]]
-	auto findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize = 1 ) -> Texture *;
-	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags, int minMipSize = 1 );
+	auto findImage( const wsw::StringView &name, int flags, int tags ) -> Texture *;
+	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags );
 
 	void loadDirContents( const wsw::StringView &dir );
 
@@ -674,6 +677,16 @@ public:
 
 	[[nodiscard]]
 	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture *defaultImage = nullptr ) -> shader_t *;
+
+	// TODO: Split this functionality into MaterialCache and MaterialLoader?
+
+	// Results bypass caching and require a manual lifetime management.
+	// It's recommended to implement custom domain-specific caching on top of it where it's possible.
+	[[nodiscard]]
+	auto create2DMaterialBypassingCache() -> shader_t *;
+	void release2DMaterialBypassingCache( shader_t *material );
+	bool update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name,
+											  const MaybeDesiredSize &desiredSize );
 
 	[[nodiscard]]
 	auto loadDefaultMaterial( const wsw::StringView &name, int type ) -> shader_t *;
@@ -921,8 +934,8 @@ class MaterialParser {
 	int getImageFlags();
 
 	[[nodiscard]]
-	auto findImage( const wsw::StringView &name_, int flags_ ) -> Texture * {
-		return m_materialCache->findImage( name_, flags_, m_imageTags, m_minMipSize.value_or( 1 ) );
+	auto findImage( const wsw::StringView &name, int flags ) -> Texture * {
+		return m_materialCache->findImage( name, flags, m_imageTags );
 	}
 
 	void fixLightmapsForVertexLight();

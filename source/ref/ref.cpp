@@ -5131,7 +5131,7 @@ int RF_GetAverageFrametime( void ) {
 	return rf.frameTime.average;
 }
 
-void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data ) {
+void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data ) {
 	R_ReplaceRawSubPic( shader, x, y, width, height, data );
 }
 

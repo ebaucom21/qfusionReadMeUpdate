@@ -638,6 +638,7 @@ static void CL_BeginRegistration( void ) {
 	cls.registrationOpen = true;
 
 	RF_BeginRegistration();
+	wsw::ui::UISystem::instance()->beginRegistration();
 	SoundSystem::Instance()->BeginRegistration();
 }
 
@@ -653,6 +654,7 @@ static void CL_EndRegistration( void ) {
 
 	FTLIB_TouchAllFonts();
 	RF_EndRegistration();
+	wsw::ui::UISystem::instance()->endRegistration();
 	SoundSystem::Instance()->EndRegistration();
 }
 

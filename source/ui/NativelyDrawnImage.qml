@@ -33,7 +33,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        sourceComponent: underlying.isLoaded && !wsw.isDebuggingNativelyDrawnItems ? null : debuggingPlaceholder
+        sourceComponent: wsw.isDebuggingNativelyDrawnItems ? debuggingPlaceholder : null
     }
 
     Component {
@@ -41,7 +41,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            color: "red"
+            color: underlying.isLoaded ? "red" : "transparent"
             opacity: 0.125
             border.width: 1
             border.color: "orange"

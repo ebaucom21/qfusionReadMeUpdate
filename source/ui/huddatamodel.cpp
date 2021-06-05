@@ -3,7 +3,7 @@
 #include "../qcommon/qcommon.h"
 #include "../gameshared/gs_public.h"
 #include "../client/client.h"
-#include "../cgame/mediacache.h"
+#include "../cgame/crosshairstate.h"
 
 #include <QColor>
 #include <QQmlEngine>
@@ -51,13 +51,16 @@ public:
 		m_entries.emplace_back( { "Shockwave", "sw", prefix + "shockwave", QColor::fromRgbF( 0.3, 0.7, 1.0 ) } );
 		m_entries.emplace_back( { "Instagun", "ig", prefix + "instagun", QColor::fromRgbF( 0.0, 1.0, 1.0 ) } );
 
+		QString buffer;
 		m_availableCrosshairs.reserve( kNumCrosshairs );
 		for( unsigned i = 1; i < kNumCrosshairs + 1; ++i ) {
-			m_availableCrosshairs.append( QString::asprintf( kCrosshairsFormat, i ) );
+			CrosshairState::makePath<QString, QLatin1String>( &buffer, CrosshairState::Weak, i );
+			m_availableCrosshairs.append( buffer );
 		}
 		m_availableStrongCrosshairs.reserve( kNumStrongCrosshairs );
-		for( unsigned i = 1; i < kNumStrongCrosshairs; ++i ) {
-			m_availableStrongCrosshairs.append( QString::asprintf( kStrongCrosshairsFormat, i ) );
+		for( unsigned i = 1; i < kNumStrongCrosshairs + 1; ++i ) {
+			CrosshairState::makePath<QString, QLatin1String>( &buffer, CrosshairState::Strong, i );
+			m_availableStrongCrosshairs.append( buffer );
 		}
 	}
 

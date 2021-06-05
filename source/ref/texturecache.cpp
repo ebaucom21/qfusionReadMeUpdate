@@ -32,6 +32,12 @@ using wsw::operator""_asHView;
 #include <memory>
 #include <utility>
 
+// TODO: This is a cheap hack to make the stuff working
+namespace wsw::ui {
+[[nodiscard]]
+bool rasterizeSvg( unsigned w, unsigned h, const void *rawSvgData, size_t rawSvgDataSize, void *dest, size_t destCapacity );
+}
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../third-party/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -200,26 +206,7 @@ void TextureCache::applyAniso( Texture *texture, int level ) {
 	qglTexParameteri( texture->target, GL_TEXTURE_MAX_ANISOTROPY_EXT, level );
 }
 
-auto TextureCache::getNextMip( unsigned width, unsigned height, unsigned minMipSize )
-	-> std::optional<std::pair<unsigned int, unsigned int>> {
-	if( width > minMipSize || height > minMipSize ) {
-		// TODO: check the lower bound, shouldn't it be minMipSize?
-		return std::make_pair( std::min( 1u, width / 2 ), std::min( 1u, height / 2 ) );
-	}
-	return std::nullopt;
-}
-
-auto TextureCache::getLodForMinMipSize( unsigned width, unsigned height, unsigned minMipSize ) -> int {
-	// TODO: `minMipSize` not used!
-	int mip = 0;
-	while( const auto maybeNextMip = getNextMip( width, height ) ) {
-		std::tie( width, height ) = *maybeNextMip;
-		mip++;
-	}
-	return mip;
-}
-
-void TextureCache::setupFilterMode( GLuint target, unsigned flags, unsigned w, unsigned h, unsigned minMipSize ) {
+void TextureCache::setupFilterMode( GLuint target, unsigned flags ) {
 	if( flags & IT_NOFILTERING ) {
 		qglTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
 		qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
@@ -246,11 +233,6 @@ void TextureCache::setupFilterMode( GLuint target, unsigned flags, unsigned w, u
 		qglTexParameteri( target, GL_TEXTURE_MAG_FILTER, magnify );
 		if( glConfig.ext.texture_filter_anisotropic ) {
 			qglTexParameteri( target, GL_TEXTURE_MAX_ANISOTROPY_EXT, m_anisoLevel );
-		}
-		if( minMipSize > 1 ) {
-			const int lod = getLodForMinMipSize( w, h, minMipSize );
-			qglTexParameteri( target, GL_TEXTURE_MAX_LOD, lod );
-			qglTexParameteri( target, GL_TEXTURE_MAX_LEVEL, lod );
 		}
 	} else {
 		const GLuint magnify = kTextureFilterGLValues[m_textureFilter].second;
@@ -407,17 +389,23 @@ auto getRegularTexImageFormats( int flags, int samples ) -> GLTexImageFormats {
 
 static ImageBuffer readFileBuffer;
 static ImageBuffer cubemapBuffer[6];
-static ImageBuffer &loadingBuffer = cubemapBuffer[0];
+static ImageBuffer loadingBuffer;
+static ImageBuffer conversionBuffer;
 
-auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
-											ImageBuffer *dataBuffer )-> std::optional<TextureFileData> {
+auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name,
+											ImageBuffer *readBuffer,
+											ImageBuffer *dataBuffer,
+											ImageBuffer *conversionBuffer,
+											const MaybeDesiredSize &desiredSize )
+											-> std::optional<TextureFileData> {
 	assert( name.isZeroTerminated() );
-	assert( NUM_IMAGE_EXTENSIONS == 3 );
+	assert( NUM_IMAGE_EXTENSIONS == 4 );
 	// TODO: Adopt the sane FS interface over the codebase
-	const wsw::StringView extensions[3] = {
+	const wsw::StringView extensions[4] = {
 		wsw::StringView( IMAGE_EXTENSIONS[0] ),
 		wsw::StringView( IMAGE_EXTENSIONS[1] ),
-		wsw::StringView( IMAGE_EXTENSIONS[2] )
+		wsw::StringView( IMAGE_EXTENSIONS[2] ),
+		wsw::StringView( IMAGE_EXTENSIONS[3] )
 	};
 
 	const auto maybePartsPair = wsw::fs::findFirstExtension( name, std::begin( extensions ), std::end( extensions ) );
@@ -432,9 +420,13 @@ auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name, ImageBu
 		return std::nullopt;
 	}
 
-	constexpr size_t kMaxSaneImageDataSize = 2048 * 2048 * 4;
+	const bool isSvg = maybePartsPair->second.equalsIgnoreCase( ".svg"_asView );
+
+	constexpr size_t kMaxSaneBitmapDataSize = 2048 * 2048 * 4;
+	// In case of regular images, consider that the data size cannot be greater than 2048x2048 RGBA + some header bytes
+	const size_t maxSaneImageDataSize = isSvg ? 1024 * 1024 : ( kMaxSaneBitmapDataSize + 8192 );
 	const size_t fileSize = maybeHandle->getInitialFileSize();
-	if( fileSize > kMaxSaneImageDataSize + 4096 ) {
+	if( fileSize > maxSaneImageDataSize ) {
 		return std::nullopt;
 	}
 
@@ -444,24 +436,45 @@ auto TextureCache::loadTextureDataFromFile( const wsw::StringView &name, ImageBu
 	}
 
 	int width = 0, height = 0, samples = 0;
-	auto *bytes = stbi_load_from_memory( (const stbi_uc *)fileBufferBytes, (int)fileSize, &width, &height, &samples, 0 );
-	if( !bytes ) {
-		return std::nullopt;
+	size_t imageDataSize = 0;
+	uint8_t *bytes = nullptr;
+	if( isSvg ) {
+		// It's only gets used in this case.
+		// TODO: Redesign supplying of desired texture parameters
+		// so it can be meaningful in case of regular images.
+		if( !desiredSize ) {
+			return std::nullopt;
+		}
+		samples = 4;
+		std::tie( width, height ) = *desiredSize;
+		imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
+		bytes = conversionBuffer->reserveAndGet( imageDataSize );
+		if( !wsw::ui::rasterizeSvg( width, height, fileBufferBytes, fileSize, bytes, imageDataSize ) ) {
+			return std::nullopt;
+		}
+	} else {
+		bytes = stbi_load_from_memory( (const stbi_uc *)fileBufferBytes, (int)fileSize, &width, &height, &samples, 0 );
+		if( !bytes ) {
+			return std::nullopt;
+		}
+		assert( width > 0 && height > 0 && samples > 0 );
+		imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
 	}
 
-	// TODO: Provide allocators for stb that use the loading buffer?
-	// This is not that easy as we use stb in the UI code as well.
-	// TODO: Unify image loading code with the UI?
-	assert( width > 0 && height > 0 && samples > 0 );
-	const size_t imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
+	assert( imageDataSize );
 	// Sanity check (disallow huge bogus allocations)
-	if( imageDataSize > kMaxSaneImageDataSize ) {
+	if( imageDataSize > kMaxSaneBitmapDataSize ) {
 		return std::nullopt;
 	}
 
 	uint8_t *const imageData = dataBuffer->reserveAndGet( imageDataSize );
 	std::memcpy( imageData, bytes, imageDataSize );
-	stbi_image_free( bytes );
+	if( !isSvg ) {
+		// This is not that easy as we use stb in the UI code as well.
+		// TODO: Provide allocators for stb that use the loading buffer?
+		// TODO: Unify image loading code with the UI?
+		stbi_image_free( bytes );
+	}
 
 	return TextureFileData { imageData, (uint16_t)width, (uint16_t)height, (uint16_t)samples };
 }
@@ -518,14 +531,28 @@ auto TextureCache::internTextureName( const Texture *texture, const wsw::StringV
 	return wsw::StringView( data, name.length(), wsw::StringView::ZeroTerminated );
 }
 
-auto TextureCache::findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned minMipSize, unsigned flags )
-	-> Texture * {
+auto TextureCache::findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags ) -> Texture * {
 	assert( bin < kNumHashBins );
 
 	for( Texture *texture = m_hashBins[bin]; texture; texture = texture->nextInBin() ) {
 		if( texture->name.equalsIgnoreCase( name ) ) {
 			if( ( texture->flags & ~IT_LOADFLAGS ) == ( flags & ~IT_LOADFLAGS ) ) {
-				if( texture->minmipsize == minMipSize ) {
+				return texture;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+auto TextureCache::findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags,
+									 unsigned width, unsigned height ) -> Texture * {
+	assert( bin < kNumHashBins );
+
+	for( Texture *texture = m_hashBins[bin]; texture; texture = texture->nextInBin() ) {
+		if( texture->name.equalsIgnoreCase( name ) ) {
+			if( ( texture->flags & ~IT_LOADFLAGS ) == ( flags & ~IT_LOADFLAGS ) ) {
+				if( texture->width == width && texture->height == height ) {
 					return texture;
 				}
 			}
@@ -535,8 +562,87 @@ auto TextureCache::findTextureInBin( unsigned bin, const wsw::StringView &name, 
 	return nullptr;
 }
 
-auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix,
-									   unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture * {
+auto TextureCache::create2DTextureBypassingCache() -> Texture * {
+	if( !m_freeTexturesHead ) {
+		return nullptr;
+	}
+
+	const GLuint handle = generateHandle( wsw::StringView() );
+	const GLenum target = GL_TEXTURE_2D;
+	// TODO: Skip?
+	bindToModify( target, handle );
+	unbindModified( target, handle );
+
+	// TODO: Use a different allocation group, a different type
+	Texture *texture = wsw::unlink( m_freeTexturesHead, &m_freeTexturesHead, Texture::ListLinks );
+	texture->name = wsw::StringView();
+	texture->texnum = handle;
+	texture->target = GL_TEXTURE_2D;
+	texture->flags = IT_CLAMP;
+	texture->width = 0;
+	texture->height = 0;
+	texture->samples = 0;
+	texture->registrationSequence = rsh.registrationSequence;
+	texture->isAPlaceholder = false;
+	texture->framenum = 0;
+	texture->missing = false;
+	texture->tags = 0;
+
+	wsw::link( texture, &m_usedTexturesHead, Texture::ListLinks );
+	// !!! We don't link it!
+	// wsw::link( texture, &m_hashBins[binIndex], Texture::BinLinks );
+	return texture;
+}
+
+void TextureCache::release2DTextureBypassingCache( Texture *texture ) {
+	if( texture ) {
+		qglDeleteTextures( 1, &texture->texnum );
+		wsw::unlink( texture, &m_usedTexturesHead, Texture::ListLinks );
+		wsw::link( texture, &m_freeTexturesHead, Texture::ListLinks );
+	}
+}
+
+bool TextureCache::update2DTextureBypassingCache( Texture *texture, const wsw::StringView &name,
+												  const MaybeDesiredSize &desiredSize ) {
+	const auto maybeCleanName = makeCleanName( name, wsw::StringView() );
+	if( !maybeCleanName ) {
+		return false;
+	}
+
+	auto maybeFileData = loadTextureDataFromFile( *maybeCleanName, &::readFileBuffer, &::loadingBuffer,
+												  &::conversionBuffer, desiredSize );
+	if( !maybeFileData ) {
+		return false;
+	}
+
+	auto [fileBytes, width, height, samples] = *maybeFileData;
+
+	qglPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+
+	const GLenum target = GL_TEXTURE_2D;
+
+	bindToModify( target, texture->texnum );
+
+	const auto [swizzleMask, internalFormat, format, type] = getRegularTexImageFormats( texture->flags, samples );
+	setupFilterMode( target, texture->flags );
+	setupWrapMode( target, texture->flags );
+
+	if( swizzleMask != kSwizzleMaskIdentity ) {
+		qglTexParameteriv( target, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask );
+	}
+
+	qglTexImage2D( target, 0, internalFormat, width, height, 0, format, type, fileBytes );
+
+	if( true || !( texture->flags & IT_NOMIPMAP ) ) {
+		qglGenerateMipmap( target );
+	}
+
+	unbindModified( target, texture->texnum );
+	return true;
+}
+
+auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix, unsigned flags,
+									   unsigned tags, const MaybeDesiredSize &desiredSize ) -> Texture * {
 	const auto maybeCleanName = makeCleanName( name, suffix );
 	if( !maybeCleanName ) {
 		return nullptr;
@@ -546,9 +652,17 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 
 	const auto cleanName = *maybeCleanName;
 	const auto binIndex = wsw::HashedStringView( cleanName ).getHash() % kNumHashBins;
-	if( Texture *texture = findTextureInBin( binIndex, cleanName, minMipSize, flags ) ) {
-		touchTexture( texture, tags );
-		return texture;
+	Texture *existingTexture = nullptr;
+	if( desiredSize ) {
+		// TODO: Should be kept in a separate storage!!!!
+		// The storage/lifetime management has to be rewritten!
+		existingTexture = findTextureInBin( binIndex, cleanName, flags, desiredSize->first, desiredSize->second );
+	} else {
+		existingTexture = findTextureInBin( binIndex, cleanName, flags );
+	}
+	if( existingTexture ) {
+		touchTexture( existingTexture, tags );
+		return existingTexture;
 	}
 
 	if( !m_freeTexturesHead ) {
@@ -557,7 +671,8 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 
 	// TODO: Track disk loading failures while loading materials to avoid excessive FS calls?
 
-	auto maybeFileData = loadTextureDataFromFile( cleanName, &::readFileBuffer, &::loadingBuffer );
+	auto maybeFileData = loadTextureDataFromFile( cleanName, &::readFileBuffer, &::loadingBuffer,
+												  &::conversionBuffer, desiredSize );
 	if( !maybeFileData ) {
 		return nullptr;
 	}
@@ -572,7 +687,7 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	bindToModify( target, handle );
 
 	const auto [swizzleMask, internalFormat, format, type] = getRegularTexImageFormats( flags, samples );
-	setupFilterMode( target, flags, width, height, minMipSize );
+	setupFilterMode( target, flags );
 	setupWrapMode( target, flags );
 
 	if( swizzleMask != kSwizzleMaskIdentity ) {
@@ -592,7 +707,6 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	texture->texnum = handle;
 	texture->target = target;
 	texture->flags = flags;
-	texture->minmipsize = minMipSize;
 	texture->width = width;
 	texture->height = height;
 	texture->samples = samples;
@@ -607,7 +721,8 @@ auto TextureCache::getMaterialTexture( const wsw::StringView &name, const wsw::S
 	return texture;
 }
 
-auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture * {
+auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned tags,
+									   const MaybeDesiredSize & ) -> Texture * {
 	const auto maybeCleanName = makeCleanName( name, wsw::StringView() );
 	if( !maybeCleanName ) {
 		return nullptr;
@@ -617,7 +732,7 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 
 	const auto cleanName = *maybeCleanName;
 	const auto binIndex = wsw::HashedStringView( cleanName ).getHash() % kNumHashBins;
-	if( Texture *texture = findTextureInBin( binIndex, cleanName, minMipSize, flags ) ) {
+	if( Texture *texture = findTextureInBin( binIndex, cleanName, flags ) ) {
 		touchTexture( texture, tags );
 		return texture;
 	}
@@ -639,8 +754,8 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 		nameBuffer.erase( prefixLen );
 		nameBuffer.append( signLetters[i % 2] );
 		nameBuffer.append( axisLetters[i / 2] );
-		ImageBuffer *const dataBuffer = ::cubemapBuffer + i;
-		const auto maybeData = loadTextureDataFromFile( nameBuffer.asView(), &::loadingBuffer, ::cubemapBuffer + i );
+		const auto maybeData = loadTextureDataFromFile( nameBuffer.asView(), &::loadingBuffer,
+														&::cubemapBuffer[i], &::conversionBuffer );
 		if( !maybeData ) {
 			return nullptr;
 		}
@@ -673,7 +788,7 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 		qglTexImage2D( sideTarget, 0, internalFormat, width, height, 0, format, type, dataOfSides[i] );
 	}
 
-	setupFilterMode( target, flags, width, height, 1 );
+	setupFilterMode( target, flags );
 	setupWrapMode( target, flags );
 
 	qglGenerateMipmap( target );
@@ -685,7 +800,6 @@ auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned fla
 	texture->texnum = handle;
 	texture->target = target;
 	texture->flags = (int)flags;
-	texture->minmipsize = 1;
 	texture->width = width;
 	texture->height = height;
 	texture->samples = samples;
@@ -709,7 +823,7 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 
 	const auto cleanName = *maybeCleanName;
 	const auto binIndex = wsw::getHashForLength( cleanName.data(), cleanName.size() ) % kNumHashBins;
-	if( Texture *texture = findTextureInBin( binIndex, cleanName, 1, flags ) ) {
+	if( Texture *texture = findTextureInBin( binIndex, cleanName, flags ) ) {
 		touchTexture( texture, IMAGE_TAG_BUILTIN );
 		return texture;
 	}
@@ -726,7 +840,7 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 
 	qglTexImage2D( target, 0, internalFormat, w, h, 0, format, type, data );
 
-	setupFilterMode( target, flags, w, h, 1 );
+	setupFilterMode( target, flags );
 	setupWrapMode( target, flags );
 
 	unbindModified( target, handle );
@@ -736,7 +850,6 @@ auto TextureCache::createFontMask( const wsw::StringView &name, unsigned w, unsi
 	texture->texnum = handle;
 	texture->target = target;
 	texture->flags = flags;
-	texture->minmipsize = 1;
 	texture->width = w;
 	texture->height = h;
 	texture->samples = 1;
@@ -796,7 +909,6 @@ auto TextureCache::createLightmap( unsigned w, unsigned h, unsigned samples, con
 	texture->texnum = handle;
 	texture->target = target;
 	texture->flags = flags;
-	texture->minmipsize = 1;
 	texture->width = w;
 	texture->height = h;
 	texture->samples = samples;
@@ -849,7 +961,6 @@ auto TextureCache::createLightmapArray( unsigned w, unsigned h, unsigned numLaye
 	texture->texnum = handle;
 	texture->target = target;
 	texture->flags = flags;
-	texture->minmipsize = 1;
 	texture->width = w;
 	texture->height = h;
 	texture->samples = samples;
@@ -1051,7 +1162,7 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 	if( m_flags & IT_CUSTOMFILTERING ) {
 		setupCustomFilter( target );
 	} else {
-		parent->setupFilterMode( target, m_flags, m_width, m_height, 1 );
+		parent->setupFilterMode( target, m_flags );
 	}
 
 	// !!!!!!!!
@@ -1061,7 +1172,7 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 
 	assert( parent->makeCleanName( m_name, wsw::StringView() ) == m_name );
 	const unsigned binIndex = wsw::HashedStringView( m_name ).getHash() % parent->kNumHashBins;
-	assert( parent->findTextureInBin( binIndex, m_name, 1, m_flags ) == nullptr );
+	assert( parent->findTextureInBin( binIndex, m_name, m_flags ) == nullptr );
 
 	assert( parent->m_freeTexturesHead );
 
@@ -1073,7 +1184,6 @@ void Basic2DBuiltinTextureFactory::exec( TextureCache *parent ) {
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
-	texture->minmipsize = 1;
 	texture->samples = m_samples;
 	texture->flags = m_flags;
 	texture->tags = IMAGE_TAG_GENERIC;
@@ -1248,7 +1358,7 @@ void WhiteCubemapTextureFactory::exec( TextureCache *parent ) {
 
 	assert( parent->makeCleanName( m_name, wsw::StringView() ) == m_name );
 	const unsigned binIndex = wsw::HashedStringView( m_name ).getHash() % parent->kNumHashBins;
-	assert( parent->findTextureInBin( binIndex, m_name, 1, flags ) == nullptr );
+	assert( parent->findTextureInBin( binIndex, m_name, flags ) == nullptr );
 
 	assert( parent->m_freeTexturesHead );
 
@@ -1262,7 +1372,6 @@ void WhiteCubemapTextureFactory::exec( TextureCache *parent ) {
 	texture->registrationSequence = rsh.registrationSequence;
 	texture->missing = false;
 	texture->isAPlaceholder = false;
-	texture->minmipsize = 1;
 	texture->samples = 3;
 	texture->flags = flags;
 	texture->tags = IMAGE_TAG_GENERIC;
@@ -1300,7 +1409,6 @@ void TextureCache::initBuiltinTextures() {
 	texture->flags = IT_SPECIAL;
 	texture->isAPlaceholder = false;
 	texture->samples = 0;
-	texture->minmipsize = 0;
 	texture->missing = false;
 	texture->registrationSequence = std::nullopt;
 	texture->texnum = 0;

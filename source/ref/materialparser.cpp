@@ -683,15 +683,15 @@ bool MaterialParser::parseMaterial() {
 	// set defaults
 	const auto mipSize = m_minMipSize.value_or( 1 );
 
-	pass->images[1] = textureCache->getMaterialTexture( m_name, kNormSuffix, imageFlags, mipSize, m_imageTags );
+	pass->images[1] = textureCache->getMaterialTexture( m_name, kNormSuffix, imageFlags, m_imageTags );
 
 	// load glossmap image
 	if( r_lighting_specular->integer ) {
-		pass->images[2] = textureCache->getMaterialTexture( m_name, kGlossSuffix, imageFlags, mipSize, m_imageTags );
+		pass->images[2] = textureCache->getMaterialTexture( m_name, kGlossSuffix, imageFlags, m_imageTags );
 	}
 
-	if( !( pass->images[3] = textureCache->getMaterialTexture( m_name, kDecalSuffix, imageFlags, mipSize, m_imageTags ) ) ) {
-		pass->images[3] = textureCache->getMaterialTexture( m_name, kAddSuffix, imageFlags, mipSize, m_imageTags );
+	if( !( pass->images[3] = textureCache->getMaterialTexture( m_name, kDecalSuffix, imageFlags, m_imageTags ) ) ) {
+		pass->images[3] = textureCache->getMaterialTexture( m_name, kAddSuffix, imageFlags, m_imageTags );
 	}
 
 	return true;

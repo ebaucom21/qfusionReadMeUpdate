@@ -158,7 +158,6 @@ public:
 	GLuint target { 0 };
 	int width, height;                          // source image
 	int layers;                                 // texture array size
-	int minmipsize;                             // size of the smallest mipmap that should be used
 	int samples;
 	unsigned int framenum;                      // rf.frameCount texture was updated (rendered to)
 	int tags;                                   // usage tags of the image
@@ -172,6 +171,10 @@ class BuiltinTextureFactory;
 class ImageBuffer;
 
 class TextureCache {
+public:
+	using DesiredSize = std::pair<uint16_t, uint16_t>;
+	using MaybeDesiredSize = std::optional<DesiredSize>;
+private:
 	friend class BuiltinTextureFactory;
 	friend class Basic2DBuiltinTextureFactory;
 	friend class WhiteCubemapTextureFactory;
@@ -228,7 +231,10 @@ class TextureCache {
 	static auto findFilterByName( const wsw::StringView &name ) -> std::optional<TextureFilter>;
 
 	[[nodiscard]]
-	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned minMipSize, unsigned flags ) -> Texture *;
+	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags ) -> Texture *;
+	[[nodiscard]]
+	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags,
+						   unsigned width, unsigned height ) -> Texture *;
 
 	struct TextureFileData {
 		/**
@@ -241,7 +247,9 @@ class TextureCache {
 	};
 
 	[[nodiscard]]
-	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer, ImageBuffer *dataBuffer )
+	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
+								  ImageBuffer *dataBuffer, ImageBuffer *conversionBuffer,
+								  const MaybeDesiredSize &desiredSize = std::nullopt )
 		-> std::optional<TextureFileData>;
 
 	void bindToModify( Texture *texture ) {
@@ -258,14 +266,7 @@ class TextureCache {
 	void applyAniso( Texture *texture, int aniso );
 
 	void setupWrapMode( GLuint target, unsigned flags );
-	void setupFilterMode( GLuint target, unsigned flags, unsigned w, unsigned h, unsigned minMipSize );
-
-	[[nodiscard]]
-	auto getLodForMinMipSize( unsigned width, unsigned height, unsigned minMipSize ) -> int;
-
-	[[nodiscard]]
-	auto getNextMip( unsigned width, unsigned height, unsigned minMipSize = 1 )
-		-> std::optional<std::pair<unsigned, unsigned>>;
+	void setupFilterMode( GLuint target, unsigned flags );
 
 	[[nodiscard]]
 	auto findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
@@ -299,17 +300,25 @@ public:
 	void applyFilter( const wsw::StringView &name, int anisoLevel );
 
 	[[nodiscard]]
-	auto getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix,
-						     unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture *;
+	auto getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix, unsigned flags,
+							 unsigned tags, const MaybeDesiredSize &desiredSize = std::nullopt ) -> Texture *;
 
 	[[nodiscard]]
-	auto getMaterialTexture( const wsw::StringView &name, unsigned flags,
-						     unsigned minMipSize, unsigned tags ) -> Texture * {
-		return getMaterialTexture( name, wsw::StringView(), flags, minMipSize, tags );
+	auto getMaterialTexture( const wsw::StringView &name, unsigned flags, unsigned tags,
+							 const MaybeDesiredSize &desiredSize = std::nullopt ) -> Texture * {
+		return getMaterialTexture( name, wsw::StringView(), flags, tags, desiredSize );
 	}
 
+	// TODO: Separate TextureCache and TextureLoader/TextureFactory
 	[[nodiscard]]
-	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned minMipSize, unsigned tags ) -> Texture *;
+	auto create2DTextureBypassingCache() -> Texture *;
+	void release2DTextureBypassingCache( Texture *texture );
+	[[nodiscard]]
+	bool update2DTextureBypassingCache( Texture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize );
+
+	[[nodiscard]]
+	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags,
+							 unsigned tags, const MaybeDesiredSize &desiredSize ) -> Texture *;
 
 	[[nodiscard]]
 	auto createFontMask( const wsw::StringView &name, unsigned w, unsigned h, const uint8_t *data ) -> Texture *;

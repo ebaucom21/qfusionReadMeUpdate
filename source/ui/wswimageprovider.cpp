@@ -94,23 +94,20 @@ void WswImageResponse::exec() {
 	}
 }
 
+[[nodiscard]]
+auto rasterizeSvg( const QSize &desiredSize, const QByteArray &data ) -> QImage;
+
 bool WswImageResponse::loadSvg( const QByteArray &fileData ) {
-	QSvgRenderer renderer( fileData );
-	if( !renderer.isValid() ) {
+	if( !m_requestedSize.isValid() ) {
+		Com_Printf( S_COLOR_YELLOW "%s: A valid size must be specified for loading an SVG image %s\n", kTag,
+					m_name.constData() );
+		return false;
+	}
+	m_image = rasterizeSvg( m_requestedSize, fileData );
+	if( m_image.isNull() ) {
 		Com_Printf( S_COLOR_YELLOW "%s: Failed to parse SVG for %s\n", kTag, m_name.constData() );
 		return false;
 	}
-	if( renderer.animated() ) {
-		Com_Printf( S_COLOR_YELLOW "%s: %s is an animated SVG\n", kTag, m_name.constData() );
-		return false;
-	}
-
-	QSize size = m_requestedSize.isValid() ? m_requestedSize : QSize( 128, 128 );
-	m_image = QImage( size, QImage::Format_ARGB32 );
-	QPainter painter( &m_image );
-	painter.setRenderHint( QPainter::Antialiasing, true );
-	painter.setRenderHint( QPainter::HighQualityAntialiasing, true );
-	renderer.render( &painter );
 	return true;
 }
 

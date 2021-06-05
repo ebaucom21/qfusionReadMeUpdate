@@ -301,7 +301,7 @@ typedef struct alignas( 8 ) shader_s {
 
 shader_t    *R_RegisterShader( const char *name, shaderType_e type );
 shader_t    *R_RegisterPic( const char *name );
-shader_t    *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8_t *data );
+shader_t    *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data );
 shader_t    *R_RegisterSkin( const char *name );
 shader_t    *R_RegisterLinearPic( const char *name );
 
@@ -311,6 +311,6 @@ void        R_TouchShader( shader_t *s );
 
 void        R_GetShaderDimensions( const shader_t *shader, int *width, int *height );
 
-void        R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data );
+void        R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data );
 
 #endif // R_SHADER_H

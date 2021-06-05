@@ -3,6 +3,9 @@
 #include "../qcommon/wswstringview.h"
 
 #include <QColor>
+#include <QImage>
+#include <QPainter>
+#include <QSvgRenderer>
 
 namespace wsw::ui {
 
@@ -158,6 +161,41 @@ auto formatPing( int ping ) -> QByteArray {
 	result.prepend( kFontOpeningTagPrefix.data(), kFontOpeningTagPrefix.size() );
 	result.append( kFontClosingTag.data(), kFontClosingTag.size() );
 	return result;
+}
+
+[[nodiscard]]
+auto rasterizeSvg( const QSize &desiredSize, const QByteArray &data ) -> QImage {
+	QSvgRenderer renderer( data );
+	if( !renderer.isValid() ) {
+		return QImage();
+	}
+	QImage image( desiredSize.width(), desiredSize.height(), QImage::Format_RGBA8888 );
+	image.fill( Qt::transparent );
+	QPainter painter( &image );
+	painter.setRenderHint( QPainter::Antialiasing );
+	painter.setRenderHint( QPainter::HighQualityAntialiasing );
+	renderer.render( &painter );
+	return image;
+}
+
+// The dest is assumed to accept ARGB8 pixels
+// TODO: Allow caching parsed SVG data
+// TODO: Allow specifying drawing region
+[[nodiscard]]
+bool rasterizeSvg( unsigned w, unsigned h, const void *rawSvgData, size_t rawSvgDataSize,
+				   void *dest, size_t destCapacity ) {
+	const size_t expectedSize = 4 * w * h;
+	if( destCapacity < expectedSize ) {
+		throw std::out_of_range( "The dest buffer has an insufficient capacity" );
+	}
+	const QByteArray data( QByteArray::fromRawData( (const char *)rawSvgData, (int)rawSvgDataSize ) );
+	const QImage image( rasterizeSvg( QSize( (int)w, (int)h ), data ) );
+	if( image.isNull() ) {
+		return false;
+	}
+	assert( (size_t)image.sizeInBytes() == expectedSize );
+	std::memcpy( dest, image.constBits(), image.sizeInBytes() );
+	return true;
 }
 
 }

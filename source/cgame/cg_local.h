@@ -436,8 +436,8 @@ typedef struct {
 	cg_viewweapon_t weapon;
 	cg_viewdef_t view;
 
-	CrosshairState crosshairState { MediaCache::kCrosshairTag, 350, CrosshairState::Weak };
-	CrosshairState strongCrosshairState { MediaCache::kStrongCrosshairTag, 300, CrosshairState::Strong };
+	CrosshairState crosshairState { CrosshairState::Weak, 350 };
+	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 } cg_state_t;
 
 extern cg_static_t cgs;

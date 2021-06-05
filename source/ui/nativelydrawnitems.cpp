@@ -5,11 +5,30 @@
 #include "../qcommon/qcommon.h"
 #include "../ref/frontend.h"
 
+shader_t *R_CreateExplicitlyManaged2DMaterial();
+void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
+
 namespace wsw::ui {
+
+wsw::Vector<shader_s *> NativelyDrawn::s_materialsToRecycle;
+
+void NativelyDrawn::recycleResourcesInMainContext() {
+	for( auto *material: s_materialsToRecycle ) {
+		R_ReleaseExplicitlyManaged2DMaterial( material );
+	}
+	s_materialsToRecycle.clear();
+}
 
 NativelyDrawnImage::NativelyDrawnImage( QQuickItem *parent )
 	: QQuickItem( parent ) {
 	m_selfAsItem = this;
+}
+
+NativelyDrawnImage::~NativelyDrawnImage() {
+	if( m_material ) {
+		s_materialsToRecycle.push_back( m_material );
+	}
 }
 
 void NativelyDrawnImage::setNativeZ( int nativeZ ) {
@@ -22,20 +41,28 @@ void NativelyDrawnImage::setNativeZ( int nativeZ ) {
 void NativelyDrawnImage::setMaterialName( const QString &materialName ) {
 	if( m_materialName != materialName ) {
 		m_materialName = materialName;
-		m_reloadRequestMask = true;
+		m_reloadRequestMask |= ReloadMaterial;
 		Q_EMIT materialNameChanged( materialName );
 	}
 }
 
-bool NativelyDrawnImage::isLoaded() const {
-	return m_material != nullptr;
+void NativelyDrawnImage::setDesiredSize( const QSize &size ) {
+	if( m_desiredSize != size ) {
+		m_desiredSize = size;
+		m_reloadRequestMask |= ChangeSize;
+		Q_EMIT desiredSizeChanged( size );
+	}
 }
 
-void NativelyDrawnImage::updateSize( int w, int h ) {
-	const bool hasChangedSize = m_sourceSize.width() != w || m_sourceSize.height() != h;
+bool NativelyDrawnImage::isLoaded() const {
+	return m_material && m_isMaterialLoaded;
+}
+
+void NativelyDrawnImage::updateSourceSize( int w, int h ) {
+	const bool hasChanges = m_sourceSize.width() != w || m_sourceSize.height() != h;
 	m_sourceSize.setWidth( w );
 	m_sourceSize.setHeight( h );
-	if( hasChangedSize ) {
+	if( hasChanges ) {
 		Q_EMIT sourceSizeChanged( m_sourceSize );
 	}
 }
@@ -47,27 +74,39 @@ void NativelyDrawnImage::reloadIfNeeded() {
 
 	m_reloadRequestMask = 0;
 
-	const bool wasLoaded = m_material != nullptr;
-	m_material = R_RegisterPic( m_materialName.toUtf8().constData() );
-	bool isLoaded = m_material != nullptr;
+	const bool wasLoaded = this->isLoaded();
+	const QByteArray nameBytes( m_materialName.toUtf8() );
+
+	if( !m_material ) {
+		m_material = R_CreateExplicitlyManaged2DMaterial();
+	}
+
+	if( m_desiredSize.isValid() ) {
+		const int weight = m_desiredSize.width(), height = m_desiredSize.height();
+		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, weight, height );
+	} else {
+		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes );
+	}
+
+	const bool isLoaded = this->isLoaded();
 	if( wasLoaded != isLoaded ) {
 		Q_EMIT isLoadedChanged( isLoaded );
 	}
 
 	if( !isLoaded ) {
-		updateSize( 0, 0 );
+		updateSourceSize( 0, 0 );
 		return;
 	}
 
 	int w, h;
 	R_GetShaderDimensions( m_material, &w, &h );
-	updateSize( w, h );
+	updateSourceSize( w, h );
 }
 
 void NativelyDrawnImage::drawSelfNatively() {
 	reloadIfNeeded();
 
-	if( !m_material ) {
+	if( !isLoaded() ) {
 		return;
 	}
 

@@ -6,10 +6,16 @@
 #include "../gameshared/q_shared.h"
 #include "../gameshared/q_comref.h"
 #include "../gameshared/q_cvar.h"
+#include "../gameshared/gs_public.h"
 
-#include "mediacache.h"
+struct shader_s;
 
-using MaterialsArray = const MediaCache::LinkedMaterialsArray;
+constexpr const unsigned kNumCrosshairs = 10;
+constexpr const unsigned kNumStrongCrosshairs = 6;
+
+constexpr const unsigned kMinCrosshairSize = 16;
+constexpr const unsigned kDefaultCrosshairSize = 32;
+constexpr const unsigned kMaxCrosshairSize = 64;
 
 class CrosshairState {
 public:
@@ -34,9 +40,6 @@ private:
 	static inline float s_damageColor[4] {};
 	static inline int s_oldPackedDamageColor { -1 };
 
-	MediaCache::LinkedMaterialsArray *m_materials { nullptr };
-
-	const unsigned m_assetsTag;
 	const int m_decayTime;
 	const float m_invDecayTime;
 
@@ -54,17 +57,40 @@ private:
 	static void checkSizeVar( cvar_t *var );
 	static void checkColorVar( cvar_t *var, float *cachedColor = nullptr, int *oldPackedColor = nullptr );
 
-	[[nodiscard]]
-	auto getMaterials() -> MaterialsArray *;
+	static inline const wsw::StringView kWeakPathPrefix { "gfx/hud/crosshair_" };
+	static inline const wsw::StringView kStrongPathPrefix { "gfx/hud/crosshair_strong_" };
 public:
-	CrosshairState( unsigned assetsTag, int decayTime, Style style ) noexcept
-		: m_assetsTag( assetsTag ) , m_decayTime( decayTime )
-		, m_invDecayTime( 1.0f / (float)decayTime ), m_style( style ) {}
+	CrosshairState( Style style, unsigned decayTime ) noexcept
+		: m_decayTime( (int)decayTime ), m_invDecayTime( 1.0f / (float)decayTime ), m_style( style ) {}
 
 	void touchDamageState() { m_decayTimeLeft = m_decayTime; }
 
 	static void init();
+	static void beginRegistration();
+	static void endRegistration();
 	static void updateSharedPart();
+
+	template <typename Buffer, typename AppendArg = wsw::StringView>
+	static void makePath( Buffer *buffer, Style style, unsigned num ) {
+		buffer->clear();
+		if( style == Weak ) {
+			buffer->append( AppendArg( kWeakPathPrefix.data(), kWeakPathPrefix.size() ) );
+		} else {
+			buffer->append( AppendArg( kStrongPathPrefix.data(), kStrongPathPrefix.size() ) );
+		}
+		assert( num && num < 20 );
+		// This is the most compatible approach for tiny numbers
+		char numData[2];
+		if( num < 10 ) {
+			numData[0] = (char)( '0' + (int)num );
+			buffer->append( AppendArg( numData, 1 ) );
+		} else {
+			numData[0] = (char)( '0' + ( (int)num / 10 ) );
+			numData[1] = (char)( '0' + ( (int)num % 10 ) );
+			buffer->append( AppendArg( numData, 2 ) );
+		}
+		buffer->append( AppendArg( ".svg", 4 ) );
+	}
 
 	void update( unsigned weapon );
 	void clear();
@@ -72,24 +98,32 @@ public:
 	[[nodiscard]]
 	auto getDrawingColor() -> const float *;
 	[[nodiscard]]
+	auto getDrawingMaterial() -> const shader_s *;
+
+	[[nodiscard]]
 	auto getDrawingOffsets() const -> std::pair<int, int> {
-		assert( m_sizeVar );
-		return { -m_sizeVar->integer / 2, -m_sizeVar->integer / 2 };
+		if( m_style == Weak ) {
+			assert( m_sizeVar );
+			return { -m_sizeVar->integer / 2, -m_sizeVar->integer / 2 };
+		}
+		return { -(int)kMaxCrosshairSize / 2, -(int)kMaxCrosshairSize / 2 };
 	}
 	[[nodiscard]]
 	auto getDrawingDimensions() const -> std::pair<int, int> {
-		assert( m_sizeVar );
-		return { m_sizeVar->integer, m_sizeVar->integer };
+		if( m_style == Weak ) {
+			assert( m_sizeVar );
+			return { m_sizeVar->integer, m_sizeVar->integer };
+		}
+		return { (int)kMaxCrosshairSize, (int)kMaxCrosshairSize };
 	}
-	[[nodiscard]]
-	auto getDrawingMaterial() -> const shader_s * {
-		assert( m_valueVar && m_valueVar->integer );
-		return ( *getMaterials() )[m_valueVar->integer - 1];
-	}
+
 	[[nodiscard]]
 	bool canBeDrawn() const {
-		assert( m_valueVar && m_sizeVar );
-		return m_valueVar->integer && m_sizeVar->integer;
+		if( m_style == Weak ) {
+			assert( m_valueVar && m_sizeVar );
+			return m_valueVar->integer && m_sizeVar->integer;
+		}
+		return true;
 	}
 };
 

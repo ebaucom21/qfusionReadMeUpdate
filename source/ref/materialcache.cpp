@@ -261,39 +261,97 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 	const auto binIndex = cleanName.getHash() % kNumBins;
 
 	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
-		if( !cleanName.equalsIgnoreCase( material->name ) ) {
-			continue;
-		}
-		// TODO: This should be a method
-		if( material->type == type || ( type == SHADER_TYPE_2D && material->type == SHADER_TYPE_2D_RAW ) ) {
-			R_TouchShader( material );
-			return material;
+		if( cleanName.equalsIgnoreCase( material->name ) ) {
+			// TODO: This should be a method
+			if( material->type == type || ( type == SHADER_TYPE_2D && material->type == SHADER_TYPE_2D_RAW ) ) {
+				R_TouchShader( material );
+				return material;
+			}
 		}
 	}
 
 	TokenStream *const tokenStream = forceDefault ? nullptr : getTokenStreamForShader( cleanName );
-	auto *const material = loadMaterial( cleanName, name, type, tokenStream );
-	if( !material ) {
+	if( auto *const material = loadMaterial( cleanName, name, type, tokenStream ) ) {
+		material->registrationSequence = rsh.registrationSequence;
+		wsw::link( material, &m_materialBins[binIndex], shader_t::kBinLinks );
+		return material;
+	}
+
+	return nullptr;
+}
+
+[[nodiscard]]
+auto MaterialCache::create2DMaterialBypassingCache() -> shader_t * {
+	auto *texture = TextureCache::instance()->create2DTextureBypassingCache();
+	if( !texture ) {
 		return nullptr;
 	}
 
-	material->registrationSequence = rsh.registrationSequence;
-	wsw::link( material, &m_materialBins[binIndex], shader_t::kBinLinks );
+	wsw::MemSpecBuilder memSpec( wsw::MemSpecBuilder::withInitialSizeOf<shader_t>() );
+	const auto passSpec = memSpec.add<shaderpass_t>();
+
+	shader_t *material = initMaterial( SHADER_TYPE_2D, wsw::HashedStringView(), memSpec );
+
+	material->flags = 0;
+	material->vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT | VATTRIB_COLOR0_BIT;
+	material->sort = SHADER_SORT_ADDITIVE;
+	material->numpasses = 1;
+	material->passes = passSpec.get( material );
+
+	auto *pass = &material->passes[0];
+	pass->flags = GLSTATE_SRCBLEND_SRC_ALPHA | GLSTATE_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	pass->rgbgen.type = RGB_GEN_VERTEX;
+	pass->alphagen.type = ALPHA_GEN_VERTEX;
+	pass->tcgen = TC_GEN_BASE;
+	pass->images[0] = texture;
+
 	return material;
+}
+
+void MaterialCache::release2DMaterialBypassingCache( shader_t *material ) {
+	if( material ) {
+		auto *image = material->passes[0].images[0];
+		assert( image );
+		material->~shader_t();
+		::free( material );
+	}
+}
+
+bool MaterialCache::update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name, const MaybeDesiredSize &desiredSize ) {
+	if( material ) {
+		assert( material->type == SHADER_TYPE_2D );
+		assert( material->numpasses == 1 );
+		assert( material->passes[0].images[0] );
+		auto *texture = material->passes[0].images[0];
+		return TextureCache::instance()->update2DTextureBypassingCache( texture, name, desiredSize );
+	}
+	return false;
 }
 
 shader_t *MaterialCache::loadDefaultMaterial( const wsw::StringView &name, int type ) {
     return loadMaterial( name, type, true, TextureCache::instance()->noTexture() );
 }
 
-/*
-* R_RegisterPic
-*/
 shader_t *R_RegisterPic( const char *name ) {
 	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, false, TextureCache::instance()->noTexture() );
 }
 
-shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, uint8_t *data ) {
+shader_t *R_CreateExplicitlyManaged2DMaterial() {
+	return MaterialCache::instance()->create2DMaterialBypassingCache();
+}
+void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material ) {
+	return MaterialCache::instance()->release2DMaterialBypassingCache( material );
+}
+
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 ) {
+	std::optional<std::pair<uint16_t, uint16_t>> desiredSize;
+	if( w > 0 && h > 0 ) {
+		desiredSize = std::make_pair( (uint16_t)w, (uint16_t)h );
+	}
+	return MaterialCache::instance()->update2DMaterialImageBypassingCache( material, wsw::StringView( name ), desiredSize );
+}
+
+shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data ) {
 	const wsw::StringView nameView( name );
 	auto *const material = MaterialCache::instance()->loadDefaultMaterial( nameView, SHADER_TYPE_2D_RAW );
 	if( !material ) {
@@ -368,7 +426,7 @@ void R_GetShaderDimensions( const shader_t *shader, int *width, int *height ) {
 * Adds a new subimage to the specified raw pic.
 * Must not be used to overwrite previously written areas when doing batched drawing.
 */
-void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data ) {
+void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data ) {
 	Texture *baseImage;
 
 	assert( shader );
@@ -929,9 +987,8 @@ static BuiltinTexMatcher builtinTexMatcher;
 
 static const wsw::StringView kLightmapPrefix( "*lm" );
 
-auto MaterialCache::findImage( const wsw::StringView &name, int flags, int imageTags, int minMipSize ) -> Texture * {
-	assert( minMipSize );
-
+auto MaterialCache::findImage( const wsw::StringView &name, int flags, int tags )
+	-> Texture * {
 	if( const auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
 		return TextureCache::instance()->getBuiltinTexture( *maybeBuiltinTexNum );
 	}
@@ -943,11 +1000,11 @@ auto MaterialCache::findImage( const wsw::StringView &name, int flags, int image
 	Texture *texture;
 	auto *const textureCache = TextureCache::instance();
 	if( flags & IT_CUBEMAP ) {
-		if( !( texture = textureCache->getMaterialCubemap( name, flags, minMipSize, imageTags ) ) ) {
+		if( !( texture = textureCache->getMaterialCubemap( name, flags, tags, std::nullopt ) ) ) {
 			texture = textureCache->whiteCubemapTexture();
 		}
 	} else {
-		if( !( texture = textureCache->getMaterialTexture( name, flags, minMipSize, imageTags ) ) ) {
+		if( !( texture = textureCache->getMaterialTexture( name, flags, tags, std::nullopt ) ) ) {
 			texture = textureCache->noTexture();
 		}
 	}
@@ -955,22 +1012,22 @@ auto MaterialCache::findImage( const wsw::StringView &name, int flags, int image
 	return texture;
 }
 
-void MaterialCache::loadMaterial( Texture **images, const wsw::StringView &fullName, int addFlags, int imagetags, int minMipSize ) {
+void MaterialCache::loadMaterial( Texture **images, const wsw::StringView &fullName, int addFlags, int imagetags ) {
     // set defaults
     images[0] = images[1] = images[2] = nullptr;
 
     auto *const cache = TextureCache::instance();
     // load normalmap image
-    images[0] = cache->getMaterialTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), minMipSize, imagetags );
+    images[0] = cache->getMaterialTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), imagetags );
 
     // load glossmap image
     if( r_lighting_specular->integer ) {
-        images[1] = cache->getMaterialTexture( fullName, kGlossSuffix, addFlags, minMipSize, imagetags );
+        images[1] = cache->getMaterialTexture( fullName, kGlossSuffix, addFlags, imagetags );
     }
 
-    images[2] = cache->getMaterialTexture( fullName, kDecalSuffix, addFlags, minMipSize, imagetags );
+    images[2] = cache->getMaterialTexture( fullName, kDecalSuffix, addFlags, imagetags );
     if( !images[2] ) {
-        images[2] = cache->getMaterialTexture( fullName, kAddSuffix, addFlags, minMipSize, imagetags );
+        images[2] = cache->getMaterialTexture( fullName, kAddSuffix, addFlags, imagetags );
     }
 }
 

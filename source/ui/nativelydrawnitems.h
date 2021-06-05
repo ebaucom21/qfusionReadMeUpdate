@@ -6,6 +6,9 @@
 #include <QColor>
 #include <QRectF>
 
+#include "../qcommon/qcommon.h"
+#include "../qcommon/wswstdtypes.h"
+
 struct shader_s;
 struct model_s;
 struct Skin;
@@ -23,10 +26,14 @@ protected:
 	QQuickItem *m_selfAsItem { nullptr };
 	unsigned m_reloadRequestMask { 0 };
 	bool m_isLinked { false };
+
+	static wsw::Vector<shader_s *> s_materialsToRecycle;
 public:
 	int m_nativeZ { 0 };
 	NativelyDrawn *next { nullptr };
 	NativelyDrawn *prev { nullptr };
+
+	static void recycleResourcesInMainContext();
 
 	[[nodiscard]]
 	virtual bool isLoaded() const = 0;
@@ -39,10 +46,16 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	shader_s *m_material { nullptr };
 	QString m_materialName;
 
+	/// A real size of the underlying bitmap
 	QSize m_sourceSize;
+	/// A desired size of the image on screen
 	QSize m_desiredSize;
 
+	enum : unsigned { ReloadMaterial = 0x1, ChangeSize = 0x2 };
+
 	QColor m_color { Qt::white };
+
+	bool m_isMaterialLoaded { false };
 
 	void setNativeZ( int nativeZ );
 	Q_SIGNAL void nativeZChanged( int nativeZ );
@@ -53,10 +66,10 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	Q_PROPERTY( QString materialName MEMBER m_materialName WRITE setMaterialName NOTIFY materialNameChanged )
 
 	Q_SIGNAL void sourceSizeChanged( const QSize &sourceSize );
-	Q_PROPERTY( QSize sourceSize MEMBER m_sourceSize NOTIFY sourceSizeChanged );
+	Q_PROPERTY( QSize sourceSize READ getSourceSize NOTIFY sourceSizeChanged );
 
 	Q_SIGNAL void desiredSizeChanged( const QSize &desiredSize );
-	Q_PROPERTY( QSize desiredSize MEMBER m_desiredSize NOTIFY desiredSizeChanged );
+	Q_PROPERTY( QSize desiredSize READ getDesiredSize WRITE setDesiredSize NOTIFY desiredSizeChanged );
 
 	Q_SIGNAL void colorChanged( const QColor &color );
 	Q_PROPERTY( QColor color MEMBER m_color NOTIFY colorChanged );
@@ -67,10 +80,18 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	[[nodiscard]]
 	bool isLoaded() const override;
 
+	[[nodiscard]]
+	auto getSourceSize() const -> QSize { return m_sourceSize; }
+	[[nodiscard]]
+	auto getDesiredSize() const -> QSize { return m_desiredSize; }
+
+	void setDesiredSize( const QSize &size );
+
 	void reloadIfNeeded();
-	void updateSize( int w, int h );
+	void updateSourceSize( int w, int h );
 public:
 	explicit NativelyDrawnImage( QQuickItem *parent = nullptr );
+	~NativelyDrawnImage() override;
 
 	void drawSelfNatively() override;
 };
