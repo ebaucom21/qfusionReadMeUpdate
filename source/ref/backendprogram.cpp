@@ -538,14 +538,8 @@ static inline Texture *RB_ShaderpassTex( const shaderpass_t *pass ) {
 			   rb.currentPortalSurface->texures[0] : textureCache->blackTexture();
 	}
 
-	Texture *tex = pass->images[0];
-	if( !tex ) {
-		return textureCache->noTexture();
-	}
-	if( !tex->missing ) {
-		return tex;
-	}
-	return r_usenotexture->integer == 0 ? textureCache->greyTexture() : textureCache->noTexture();
+	Texture *const tex = pass->images[0];
+	return tex ? tex : textureCache->noTexture();
 }
 
 //==================================================================================
@@ -838,10 +832,10 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 
 	// handy pointers
 	Texture *base = RB_ShaderpassTex( pass );
-	Texture *normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : textureCache->blankNormalmap();
-	Texture *glossmap = pass->images[2] && !pass->images[2]->missing ?  pass->images[2] : NULL;
-	Texture *decalmap = pass->images[3] && !pass->images[3]->missing ?  pass->images[3] : NULL;
-	Texture *entdecalmap = pass->images[4] && !pass->images[4]->missing ?  pass->images[4] : NULL;
+	Texture *normalmap = pass->images[1] ? pass->images[1] : textureCache->blankNormalmap();
+	Texture *glossmap = pass->images[2];
+	Texture *decalmap = pass->images[3];
+	Texture *entdecalmap = pass->images[4];
 
 	// use blank image if the normalmap is too tiny due to high picmip value
 	if( !normalmap || ( normalmap->width < 2 || normalmap->height < 2 ) ) {
@@ -1104,8 +1098,8 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t
 		}
 	}
 
-	Texture *dudvmap = pass->images[0] && !pass->images[0]->missing ? pass->images[0] : blankNormalmap;
-	Texture *normalmap = pass->images[1] && !pass->images[1]->missing ? pass->images[1] : blankNormalmap;
+	Texture *const dudvmap = pass->images[0] ? pass->images[0] : blankNormalmap;
+	Texture *const normalmap = pass->images[1] ? pass->images[1] : blankNormalmap;
 	if( dudvmap != blankNormalmap ) {
 		programFeatures |= GLSL_SHADER_DISTORTION_DUDV;
 	}
@@ -1474,12 +1468,12 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 	// replacement images are there to ensure that the entity is still
 	// properly colored despite real images still being loaded in a separate thread
 #define CELSHADE_BIND( tmu,tex,feature,canAdd,replacement ) \
-	if( tex && !tex->missing ) { \
+	if( tex ) { \
 		Texture *btex = tex; \
 		if( rb.renderFlags & RF_SHADOWMAPVIEW ) { \
 			btex = tex->flags & IT_CUBEMAP ? whiteCubemapTexture : whiteTexture; \
 		} else { \
-			btex = ( tex && !tex->missing ) ? tex : replacement; \
+			btex = tex ? tex : replacement; \
 			if( btex ) { \
 				programFeatures |= feature; \
 				if( canAdd && ( btex->samples & 1 ) ) { \

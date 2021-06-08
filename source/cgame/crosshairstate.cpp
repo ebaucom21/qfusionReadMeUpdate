@@ -8,24 +8,15 @@
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-void R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
-
-// TODO: Keep this stuff in the UI subdirectory
-#include <QSvgRenderer>
-#include <QImage>
-#include <QPainter>
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
 
 using wsw::operator""_asView;
 
 template <size_t N>
 class CrosshairMaterialCache {
-	static_assert( sizeof( QSvgRenderer ) == 16 );
-
 	shader_s *m_materials[N] {};
 	unsigned m_cachedMaterialSize[N] {};
 	const CrosshairState::Style m_style;
-
-	static constexpr unsigned kSide { kMaxCrosshairSize };
 public:
 	explicit CrosshairMaterialCache( CrosshairState::Style style ) noexcept : m_style( style ) {}
 

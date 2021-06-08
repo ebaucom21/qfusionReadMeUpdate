@@ -84,10 +84,10 @@ void R_TouchShader( shader_t *s ) {
 	s->registrationSequence = rsh.registrationSequence;
 
 	// touch all images this shader references
+	auto *const textureCache = TextureCache::instance();
 	for( unsigned i = 0; i < s->numpasses; i++ ) {
 		shaderpass_t *pass = s->passes + i;
 
-		auto *const textureCache = TextureCache::instance();
 		for( unsigned j = 0; j < MAX_SHADER_IMAGES; j++ ) {
 			Texture *image = pass->images[j];
 			if( image ) {
@@ -226,10 +226,7 @@ unsigned R_PackShaderOrder( const shader_t *shader ) {
 
 	if( program_type == GLSL_PROGRAM_TYPE_MATERIAL ) {
 		// this is not a material shader in case all images are missing except for the defuse
-		if( ( !pass->images[1] || pass->images[1]->missing || pass->images[1]->isAPlaceholder ) &&
-			( !pass->images[2] || pass->images[2]->missing ) &&
-			( !pass->images[3] || pass->images[3]->missing ) &&
-			( !pass->images[4] || pass->images[4]->missing ) ) {
+		if( !pass->images[1] && !pass->images[2] && !pass->images[3] && !pass->images[4] ) {
 			program_type = GLSL_PROGRAM_TYPE_Q3A_SHADER;
 		}
 	}
@@ -238,7 +235,7 @@ unsigned R_PackShaderOrder( const shader_t *shader ) {
 	order = program_type & 0x1F;
 
 	// check presence of gloss for materials
-	if( program_type == GLSL_PROGRAM_TYPE_MATERIAL && pass->images[2] != NULL && !pass->images[2]->missing ) {
+	if( program_type == GLSL_PROGRAM_TYPE_MATERIAL && pass->images[2] != NULL ) {
 		order |= 0x20;
 	}
 
@@ -282,7 +279,7 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 
 [[nodiscard]]
 auto MaterialCache::create2DMaterialBypassingCache() -> shader_t * {
-	auto *texture = TextureCache::instance()->create2DTextureBypassingCache();
+	auto *texture = TextureCache::instance()->getUnderlyingFactory()->createRaw2DTexture();
 	if( !texture ) {
 		return nullptr;
 	}
@@ -323,7 +320,7 @@ bool MaterialCache::update2DMaterialImageBypassingCache( shader_t *material, con
 		assert( material->numpasses == 1 );
 		assert( material->passes[0].images[0] );
 		auto *texture = material->passes[0].images[0];
-		return TextureCache::instance()->update2DTextureBypassingCache( texture, name, desiredSize );
+		return TextureCache::instance()->getUnderlyingFactory()->updateRaw2DTexture( (Raw2DTexture *)texture, name, desiredSize );
 	}
 	return false;
 }
@@ -353,22 +350,19 @@ bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *n
 
 shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data ) {
 	const wsw::StringView nameView( name );
-	auto *const material = MaterialCache::instance()->loadDefaultMaterial( nameView, SHADER_TYPE_2D_RAW );
-	if( !material ) {
-	    return nullptr;
+	if( auto *const material = MaterialCache::instance()->loadDefaultMaterial( nameView, SHADER_TYPE_2D_RAW ) ) {
+		auto *const textureFactory = TextureCache::instance()->getUnderlyingFactory();
+		// unlink and delete the old image from memory, unless it's the default one
+		Texture *image = material->passes[0].images[0];
+		if ( !image ) {
+			// try to load new image
+			material->passes[0].images[0] = textureFactory->createFontMask( width, height, data );
+		} else {
+			// replace current texture data
+			textureFactory->replaceFontMaskSamples( image, 0, 0, width, height, data );
+		}
+		return material;
 	}
-
-	TextureCache *textureCache = TextureCache::instance();
-	// unlink and delete the old image from memory, unless it's the default one
-	Texture *image = material->passes[0].images[0];
-	if( !image || image->isAPlaceholder ) {
-		// try to load new image
-		material->passes[0].images[0] = textureCache->createFontMask( nameView, width, height, data );
-	} else {
-		// replace current texture data
-		textureCache->replaceFontMaskSamples( image, 0, 0, width, height, data );
-	}
-	return material;
 }
 
 /*
@@ -446,7 +440,7 @@ void R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, 
 		return;
 	}
 
-	TextureCache::instance()->replaceFontMaskSamples( baseImage, x, y, width, height, data );
+	TextureCache::instance()->getUnderlyingFactory()->replaceFontMaskSamples( baseImage, x, y, width, height, data );
 }
 
 auto MaterialCache::initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec )
@@ -1000,11 +994,11 @@ auto MaterialCache::findImage( const wsw::StringView &name, int flags, int tags 
 	Texture *texture;
 	auto *const textureCache = TextureCache::instance();
 	if( flags & IT_CUBEMAP ) {
-		if( !( texture = textureCache->getMaterialCubemap( name, flags, tags, std::nullopt ) ) ) {
+		if( !( texture = textureCache->getMaterialCubemap( name, flags, tags ) ) ) {
 			texture = textureCache->whiteCubemapTexture();
 		}
 	} else {
-		if( !( texture = textureCache->getMaterialTexture( name, flags, tags, std::nullopt ) ) ) {
+		if( !( texture = textureCache->getMaterial2DTexture( name, flags, tags ) ) ) {
 			texture = textureCache->noTexture();
 		}
 	}
@@ -1016,18 +1010,18 @@ void MaterialCache::loadMaterial( Texture **images, const wsw::StringView &fullN
     // set defaults
     images[0] = images[1] = images[2] = nullptr;
 
-    auto *const cache = TextureCache::instance();
+    auto *const textureCache = TextureCache::instance();
     // load normalmap image
-    images[0] = cache->getMaterialTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), imagetags );
+    images[0] = textureCache->getMaterial2DTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), imagetags );
 
     // load glossmap image
     if( r_lighting_specular->integer ) {
-        images[1] = cache->getMaterialTexture( fullName, kGlossSuffix, addFlags, imagetags );
+        images[1] = textureCache->getMaterial2DTexture( fullName, kGlossSuffix, addFlags, imagetags );
     }
 
-    images[2] = cache->getMaterialTexture( fullName, kDecalSuffix, addFlags, imagetags );
+    images[2] = textureCache->getMaterial2DTexture( fullName, kDecalSuffix, addFlags, imagetags );
     if( !images[2] ) {
-        images[2] = cache->getMaterialTexture( fullName, kAddSuffix, addFlags, imagetags );
+        images[2] = textureCache->getMaterial2DTexture( fullName, kAddSuffix, addFlags, imagetags );
     }
 }
 

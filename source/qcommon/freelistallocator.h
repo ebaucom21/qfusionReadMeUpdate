@@ -147,7 +147,7 @@ public:
 	}
 
 	[[nodiscard]]
-	auto allocOrNull() noexcept -> uint8_t * {
+	auto allocOrNull( unsigned *index = nullptr ) noexcept -> uint8_t * {
 		unlockMembers();
 
 		uint8_t *result = nullptr;
@@ -176,12 +176,15 @@ public:
 		}
 
 		lockMembers();
+		if( index && result ) {
+			*index = slowIndexOf( result );
+		}
 		return result;
 	}
 
 	[[nodiscard]]
-	auto allocOrThrow() -> uint8_t * {
-		if( auto *result = allocOrNull() ) {
+	auto allocOrThrow( unsigned *index = nullptr ) -> uint8_t * {
+		if( auto *result = allocOrNull( index ) ) {
 			return result;
 		}
 		throw std::bad_alloc();
@@ -239,6 +242,12 @@ public:
 	[[nodiscard]]
 	bool hasValidOffset( const void *p ) const {
 		return !( ( (const uint8_t *)p - m_basePtr ) % m_realChunkSize );
+	}
+
+	[[nodiscard]]
+	auto slowIndexOf( const void *p ) const -> unsigned {
+		assert( mayOwn( p ) && hasValidOffset( p ) );
+		return (unsigned)( (const uint8_t *)p - m_basePtr ) / (unsigned)m_realChunkSize;
 	}
 };
 

@@ -183,10 +183,6 @@ void RB_BindImage( int tmu, const Texture *tex ) {
 	assert( tex != NULL );
 	assert( tex->texnum != 0 );
 
-	if( tex->missing ) {
-		tex = TextureCache::instance()->noTexture();
-	}
-
 	if( rb.gl.flushTextures ) {
 		rb.gl.flushTextures = false;
 		memset( rb.gl.currentTextures, 0, sizeof( rb.gl.currentTextures ) );

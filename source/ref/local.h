@@ -122,9 +122,7 @@ enum {
 };
 
 enum class BuiltinTexNum {
-	Raw,
-	RawYuv0,
-	No = RawYuv0 + 3,
+	No,
 	White,
 	WhiteCubemap,
 	Black,
@@ -133,6 +131,14 @@ enum class BuiltinTexNum {
 	Particle,
 	Corona,
 	Portal0
+};
+
+struct BitmapProps {
+	uint16_t width { 0 }, height { 0 }, samples { 0 };
+	[[nodiscard]]
+	bool operator!=( const BitmapProps &that ) const {
+		return width != that.width || height != that.height || samples != that.samples;
+	}
 };
 
 class Texture {
@@ -145,64 +151,109 @@ public:
 	Texture *nextInList() { return next[ListLinks]; }
 	Texture *nextInBin() { return next[BinLinks]; }
 
-	wsw::StringView name;
-
-	// Empty if builtin (todo: do we need that?)
-	std::optional<int> registrationSequence;
-
-	bool missing;
-	bool isAPlaceholder { false };
-
-	int flags;
+	int flags { 0 };
 	GLuint texnum { 0 };                              // gl texture binding
 	GLuint target { 0 };
-	int width, height;                          // source image
-	int layers;                                 // texture array size
-	int samples;
-	unsigned int framenum;                      // rf.frameCount texture was updated (rendered to)
+	int width { -1 }, height { -1};                          // source image
+	int layers { -1 };                                 // texture array size
+	int samples { -1 };
 	int tags;                                   // usage tags of the image
 };
 
+class FontMask : public Texture {
+public:
+	explicit FontMask( GLuint handle, unsigned width, unsigned height, int flags ) {
+		this->texnum = handle;
+		this->target = GL_TEXTURE_2D;
+		this->width = width;
+		this->height = height;
+		this->samples = 1;
+		this->flags = flags;
+	}
+};
+
+class Lightmap : public Texture {
+	friend class TextureFactory;
+	Lightmap( GLuint handle, unsigned w, unsigned h, unsigned samples, int flags ) {
+		assert( samples == 1 || samples == 3 );
+		this->texnum = handle;
+		this->target = GL_TEXTURE_2D;
+		this->width = w;
+		this->height = h;
+		this->samples = samples;
+		this->flags = flags;
+	}
+};
+
+class LightmapArray : public Texture {
+	friend class TextureFactory;
+	LightmapArray( GLuint handle, unsigned w, unsigned h, unsigned samples, unsigned layers, int flags ) {
+		assert( samples == 1 || samples == 3 );
+		this->texnum = handle;
+		this->width = w;
+		this->height = h;
+		this->target = GL_TEXTURE_2D_ARRAY_EXT;
+		this->samples = samples;
+		this->layers = layers;
+		this->flags = flags;
+	}
+};
+
+class Raw2DTexture : public Texture {
+	friend class TextureFactory;
+	explicit Raw2DTexture( GLuint handle ) {
+		this->texnum = handle;
+		this->target = GL_TEXTURE_2D;
+		this->flags = IT_CLAMP;
+	}
+};
+
+class PortalTexture : public Texture {
+public:
+	unsigned framenum { 0 };
+};
+
+class MaterialTexture : public Texture {
+	const wsw::HashedStringView m_name;
+protected:
+	MaterialTexture( const wsw::HashedStringView &name, GLuint handle, GLuint target, BitmapProps bitmapProps, int flags )
+		: m_name( name ) {
+		this->texnum = handle;
+		this->target = target;
+		this->width = bitmapProps.width;
+		this->height = bitmapProps.height;
+		this->samples = bitmapProps.samples;
+		this->flags = flags;
+	}
+public:
+	unsigned registrationSequence { 0 };
+	[[nodiscard]]
+	auto getName() const -> const wsw::HashedStringView & { return m_name; }
+};
+
+class Material2DTexture : public MaterialTexture {
+	friend class TextureFactory;
+	Material2DTexture( const wsw::HashedStringView &name, GLuint handle, BitmapProps bitmapProps, int flags )
+		: MaterialTexture( name, handle, GL_TEXTURE_2D, bitmapProps, flags ) {}
+};
+
+class MaterialCubemap : public MaterialTexture {
+	friend class TextureFactory;
+	MaterialCubemap( const wsw::HashedStringView &name, GLuint handle, BitmapProps bitmapProps, int flags )
+		: MaterialTexture( name, handle, GL_TEXTURE_CUBE_MAP, bitmapProps, flags ) {}
+};
+
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/freelistallocator.h"
 
 #include <memory>
 
-class BuiltinTextureFactory;
+class TextureCache;
 class ImageBuffer;
 
-class TextureCache {
-public:
-	using DesiredSize = std::pair<uint16_t, uint16_t>;
-	using MaybeDesiredSize = std::optional<DesiredSize>;
-private:
-	friend class BuiltinTextureFactory;
-	friend class Basic2DBuiltinTextureFactory;
-	friend class WhiteCubemapTextureFactory;
-
-	static constexpr unsigned kMaxTextures = 2048;
-	Texture m_textureStorage[kMaxTextures];
-
-	static constexpr unsigned kMaxNameLen = 63;
-	static constexpr unsigned kNameDataStride = kMaxNameLen + 1;
-
-	// TODO: Request OS pages directly
-	std::unique_ptr<char[]> m_nameDataStorage;
-
-	Texture *m_freeTexturesHead { nullptr };
-	Texture *m_usedTexturesHead { nullptr };
-
-	static constexpr unsigned kNumHashBins = 97;
-
-	Texture *m_hashBins[kNumHashBins];
-
-	static constexpr unsigned kMaxPortalTextures = 16;
-
-	Texture *m_portalTextures[kMaxPortalTextures];
-
-	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0 + kMaxPortalTextures];
-
-	Texture *m_externalHandleWrapper;
-
+class TextureManagementShared {
+	static wsw::StaticString<64> s_cleanNameBuffer;
+protected:
 	// This terminology is valid only for 2D textures but it's is trivial/convenient to use
 	enum TextureFilter {
 		Nearest,
@@ -213,115 +264,117 @@ private:
 	static const std::pair<wsw::StringView, TextureFilter> kTextureFilterNames[3];
 	static const std::pair<GLuint, GLuint> kTextureFilterGLValues[3];
 
-	TextureFilter m_textureFilter { Trilinear };
-	int m_anisoLevel { 1 };
-
-	wsw::StaticString<kMaxNameLen> m_cleanNameBuffer;
-
-	[[nodiscard]]
-	auto makeCleanName( const wsw::StringView &rawName, const wsw::StringView &suffix ) -> std::optional<wsw::StringView>;
-
-	/**
-	 * The name is a little reference to {@code java.lang.String::intern()}
-	 */
-	[[nodiscard]]
-	auto internTextureName( const Texture *texture, const wsw::StringView &name ) -> wsw::StringView;
-
 	[[nodiscard]]
 	static auto findFilterByName( const wsw::StringView &name ) -> std::optional<TextureFilter>;
 
 	[[nodiscard]]
-	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags ) -> Texture *;
-	[[nodiscard]]
-	auto findTextureInBin( unsigned bin, const wsw::StringView &name, unsigned flags,
-						   unsigned width, unsigned height ) -> Texture *;
+	static auto makeCleanName( const wsw::StringView &rawName, const wsw::StringView &suffix )
+		-> std::optional<wsw::StringView>;
 
-	struct TextureFileData {
-		/**
-		 * Owned by static image loading buffers
-		 */
-		uint8_t *data;
-		uint16_t width;
-		uint16_t height;
-		uint16_t samples;
-	};
-
-	[[nodiscard]]
-	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
-								  ImageBuffer *dataBuffer, ImageBuffer *conversionBuffer,
-								  const MaybeDesiredSize &desiredSize = std::nullopt )
-		-> std::optional<TextureFileData>;
-
-	void bindToModify( Texture *texture ) {
-		bindToModify( texture->target, texture->texnum );
-	}
-	void unbindModified( Texture *texture ) {
-		unbindModified( texture->target, texture->texnum );
-	}
+	void bindToModify( Texture *texture ) { bindToModify( texture->target, texture->texnum ); }
+	void unbindModified( Texture *texture ) { unbindModified( texture->target, texture->texnum ); }
 
 	void bindToModify( GLenum target, GLuint texture );
 	void unbindModified( GLenum target, GLuint texture );
 
 	void applyFilter( Texture *texture, GLuint minify, GLuint magnify );
 	void applyAniso( Texture *texture, int aniso );
+};
+
+class TextureFactory : TextureManagementShared {
+public:
+	using DesiredSize = std::pair<uint16_t, uint16_t>;
+	using MaybeDesiredSize = std::optional<DesiredSize>;
+private:
+	friend class TextureCache;
+
+	static constexpr auto kMaxMaterialTextures = 1024u;
+	static constexpr auto kMaxMaterialCubemaps = 64u;
+	static constexpr auto kMaxRaw2DTextures = 32u;
+	static constexpr auto kMaxFontMasks = 32u;
+	static constexpr auto kMaxLightmaps = 32u;
+
+	static constexpr auto kMaxBuiltinTextures = 16u;
+
+	using Allocator = wsw::HeapBasedFreelistAllocator;
+	
+	// TODO: This is not exception-safe !!!!!!!!!!!!!
+	Allocator m_materialTexturesAllocator { sizeof( Material2DTexture ), kMaxMaterialTextures };
+	Allocator m_materialCubemapsAllocator { sizeof( MaterialCubemap ), kMaxMaterialCubemaps };
+	Allocator m_raw2DTexturesAllocator { sizeof( Raw2DTexture ), kMaxRaw2DTextures };
+	Allocator m_fontMasksAllocator { sizeof( FontMask ), kMaxFontMasks };
+	Allocator m_lightmapsAllocator { std::max( sizeof( Lightmap ), sizeof( LightmapArray ) ), kMaxLightmaps };
+	Allocator m_builtinTexturesAllocator { sizeof( Texture ), kMaxBuiltinTextures };
+
+	static constexpr unsigned kMaxNameLen = 63;
+	static constexpr unsigned kNameDataStride = kMaxNameLen + 1;
+
+	// TODO: Request OS pages directly
+	std::unique_ptr<char[]> m_nameDataStorage;
+
+	TextureFilter m_textureFilter { Trilinear };
+	int m_anisoLevel { 1 };
+
+	/**
+	 * The name is a little reference to {@code java.lang.String::intern()}
+	 */
+	[[nodiscard]]
+	auto internTextureName( unsigned storageIndex, const wsw::HashedStringView &name ) -> wsw::HashedStringView;
+
+	[[nodiscard]]
+	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
+								  ImageBuffer *dataBuffer, ImageBuffer *conversionBuffer,
+								  const MaybeDesiredSize &desiredSize = std::nullopt )
+		-> std::optional<std::pair<uint8_t*, BitmapProps>>;
+
+	[[nodiscard]]
+	bool tryUpdatingFilterOrAniso( TextureFilter filter, int givenAniso, int *anisoToApply,
+								   bool *doApplyFilter, bool *doApplyAniso );
 
 	void setupWrapMode( GLuint target, unsigned flags );
 	void setupFilterMode( GLuint target, unsigned flags );
 
-	[[nodiscard]]
-	auto findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
-		-> std::optional<std::tuple<Texture *, unsigned, bool>>;
-
-	[[nodiscard]]
-	auto getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
-
-	void initBuiltinTextures();
-	void initBuiltinTexture( BuiltinTextureFactory &&factory );
-
 	// TODO: Return a RAII wrapper?
 	[[nodiscard]]
 	auto generateHandle( const wsw::StringView &label ) -> GLuint;
+
+	struct Builtin2DTextureData {
+		const uint8_t *bytes { nullptr };
+		unsigned width { 0 }, height { 0 };
+		unsigned samples { 0 };
+		unsigned flags { 0 };
+		bool nearestFilteringOnly {false };
+	};
+
+	[[nodiscard]]
+	auto createBuiltin2DTexture( const Builtin2DTextureData &data ) -> Texture *;
+	[[nodiscard]]
+	auto createSolidColorBuiltinTexture( const float *color ) -> Texture *;
+	[[nodiscard]]
+	auto createBuiltinNoTextureTexture() -> Texture *;
+	[[nodiscard]]
+	auto createBuiltinBlankNormalmap() -> Texture *;
+	[[nodiscard]]
+	auto createBuiltinWhiteCubemap() -> Texture *;
+	[[nodiscard]]
+	auto createBuiltinParticleTexture() -> Texture *;
+	[[nodiscard]]
+	auto createBuiltinCoronaTexture() -> Texture *;
+	[[nodiscard]]
+	auto createUITextureHandleWrapper() -> Texture *;
+
+	void releaseBuiltinTexture( Texture *texture );
 public:
-	TextureCache();
-
-	static void init();
-	static void shutdown();
-	[[nodiscard]]
-	static auto instance() -> TextureCache *;
-	// FIXME this is a grand hack for being compatible with the existing code. It must eventually be removed.
-	[[nodiscard]]
-	static auto maybeInstance() -> TextureCache *;
-
-	void initScreenTextures();
-	void releaseScreenTextures();
-
-	void touchTexture( Texture *texture, unsigned lifetimeTags );
-
-	void applyFilter( const wsw::StringView &name, int anisoLevel );
+	TextureFactory();
 
 	[[nodiscard]]
-	auto getMaterialTexture( const wsw::StringView &name, const wsw::StringView &suffix, unsigned flags,
-							 unsigned tags, const MaybeDesiredSize &desiredSize = std::nullopt ) -> Texture *;
+	auto loadMaterialTexture( const wsw::HashedStringView &name, unsigned flags, unsigned tags ) -> Material2DTexture *;
 
 	[[nodiscard]]
-	auto getMaterialTexture( const wsw::StringView &name, unsigned flags, unsigned tags,
-							 const MaybeDesiredSize &desiredSize = std::nullopt ) -> Texture * {
-		return getMaterialTexture( name, wsw::StringView(), flags, tags, desiredSize );
-	}
-
-	// TODO: Separate TextureCache and TextureLoader/TextureFactory
-	[[nodiscard]]
-	auto create2DTextureBypassingCache() -> Texture *;
-	void release2DTextureBypassingCache( Texture *texture );
-	[[nodiscard]]
-	bool update2DTextureBypassingCache( Texture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize );
+	auto loadMaterialCubemap( const wsw::HashedStringView &name, unsigned flags, unsigned tags ) -> MaterialCubemap *;
 
 	[[nodiscard]]
-	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags,
-							 unsigned tags, const MaybeDesiredSize &desiredSize ) -> Texture *;
-
-	[[nodiscard]]
-	auto createFontMask( const wsw::StringView &name, unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
+	auto createFontMask( unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
 
 	[[nodiscard]]
 	auto createLightmap( unsigned w, unsigned h, unsigned samples, const uint8_t *data ) -> Texture *;
@@ -334,16 +387,87 @@ public:
 	void replaceFontMaskSamples( Texture *texture, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data );
 
 	[[nodiscard]]
-	auto getPortalTexture( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
+	auto createRaw2DTexture() -> Raw2DTexture *;
+	void releaseRaw2DTexture( Raw2DTexture *texture );
+	[[nodiscard]]
+	bool updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize );
+};
+
+class TextureCache : TextureManagementShared {
+	static constexpr unsigned kMaxPortalTextures = 16;
+
+	TextureFactory m_factory;
+	// TODO: Why are portal textures included
+	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0 + kMaxPortalTextures] {};
+	PortalTexture *m_portalTextures[kMaxPortalTextures];
+	Texture *m_uiTextureWrapper { nullptr };
+
+	static constexpr unsigned kNumHashBins = 101;
+
+	Material2DTexture *m_materialTextureBins[kNumHashBins] { nullptr };
+	MaterialCubemap *m_materialCubemapBins[kNumHashBins] { nullptr };
+
+	Material2DTexture *m_materialTexturesHead { nullptr };
+	MaterialCubemap *m_materialCubemapsHead { nullptr };
+
+	[[nodiscard]]
+	auto findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
+		-> std::optional<std::tuple<PortalTexture *, unsigned, bool>>;
+
+	[[nodiscard]]
+	auto getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> PortalTexture *;
+
+	template <typename T>
+	[[nodiscard]]
+	auto findCachedTextureInBin( T *binHead, const wsw::HashedStringView &name, unsigned flags ) -> T *;
+
+	template <typename T, typename Method>
+	[[nodiscard]]
+	auto getTexture(  const wsw::StringView &name, const wsw::StringView &suffix,
+					  unsigned flags, unsigned tags,
+					  T **listHead, T **bins, Method methodOfFactory ) -> T *;
+
+	void applyFilterOrAnisoInList( Texture *listHead, TextureFilter filter,
+								   int aniso, bool applyFilter, bool applyAniso );
+public:
+	using DesiredSize = std::pair<uint16_t, uint16_t>;
+	using MaybeDesiredSize = std::optional<DesiredSize>;
+
+	TextureCache();
+	~TextureCache();
+
+	static void init();
+	static void shutdown();
+
+	static auto instance() -> TextureCache *;
+	// FIXME this is a grand hack for being compatible with the existing code. It must eventually be removed.
+	[[nodiscard]]
+	static auto maybeInstance() -> TextureCache *;
+
+	void applyFilter( const wsw::StringView &name, int anisoLevel );
 
 	[[nodiscard]]
 	auto getBuiltinTexture( BuiltinTexNum number ) -> Texture * {
 		assert( number < BuiltinTexNum::Portal0 );
 		Texture *result = m_builtinTextures[(unsigned)number];
 		assert( result );
-		assert( !result->missing );
 		return result;
 	}
+
+	[[nodiscard]]
+	auto getUnderlyingFactory() -> TextureFactory * { return &m_factory; }
+
+	[[nodiscard]]
+	auto getMaterial2DTexture( const wsw::StringView &name, const wsw::StringView &suffix,
+							   unsigned flags, unsigned tags ) -> Material2DTexture *;
+
+	[[nodiscard]]
+	auto getMaterial2DTexture( const wsw::StringView &name, unsigned flags, unsigned tags ) -> Material2DTexture * {
+		return getMaterial2DTexture( name, wsw::StringView(), flags, tags );
+	}
+
+	[[nodiscard]]
+	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned tags ) -> MaterialCubemap *;
 
 	[[nodiscard]]
 	auto noTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::No ); }
@@ -363,7 +487,15 @@ public:
 	auto coronaTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::Corona ); }
 
 	[[nodiscard]]
-	auto wrapUITextureHandle( GLuint externalHandle ) -> Texture *;
+	auto wrapUITextureHandle( GLuint externalTexNum ) -> Texture *;
+
+	[[nodiscard]]
+	auto getPortalTexture( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
+
+	void createRenderTargetAttachments() {}
+	void releaseRenderTargetAttachments() {}
+
+	void touchTexture( Texture *texture, unsigned tags );
 
 	void freeUnusedWorldTextures();
 	void freeAllUnusedTextures();

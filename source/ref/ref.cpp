@@ -3425,7 +3425,7 @@ void R_RenderScene( const refdef_t *fd ) {
 
 	fbFlags = 0;
 	cc = rn.refdef.colorCorrection;
-	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] && !cc->passes[0].images[0]->isAPlaceholder ) ) {
+	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] ) ) {
 		cc = NULL;
 	}
 
@@ -3872,7 +3872,8 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 		return 0;
 	}
 
-	r_lightmapTextures[r_numUploadedLightmaps] = TextureCache::instance()->createLightmap( w, h, samples, data );
+	r_lightmapTextures[r_numUploadedLightmaps] = TextureCache::instance()
+		->getUnderlyingFactory()->createLightmap( w, h, samples, data );
 
 	return r_numUploadedLightmaps++;
 }
@@ -4030,7 +4031,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 	layerWidth = w * ( 1 + ( int )mapConfig.deluxeMappingEnabled );
 
 	mapConfig.maxLightmapSize = 0;
-	mapConfig.lightmapArrays = mapConfig.lightmapsPacking
+	mapConfig.lightmapArrays = false && mapConfig.lightmapsPacking
 							   && glConfig.ext.texture_array
 							   && ( glConfig.maxVertexAttribs > VATTRIB_LMLAYERS0123 )
 							   && ( glConfig.maxVaryingFloats >= ( 9 * 4 ) ) // 9th varying is required by material shaders
@@ -4081,7 +4082,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 			texScale = 0.5f;
 		}
 
-		auto *const textureCache = TextureCache::instance();
+		auto *const textureFactory = TextureCache::instance()->getUnderlyingFactory();
 		for( i = 0; i < numLightmaps; i++ ) {
 			if( !layer ) {
 				if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
@@ -4091,7 +4092,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 				}
 				lightmapNum = r_numUploadedLightmaps++;
 				unsigned numArrayLayers = ( ( i + numLayers ) <= numLightmaps ) ? numLayers : numLightmaps % numLayers;
-				image = textureCache->createLightmapArray( layerWidth, h, numArrayLayers, samples );
+				image = textureFactory->createLightmapArray( layerWidth, h, numArrayLayers, samples );
 				r_lightmapTextures[lightmapNum] = image;
 			}
 
@@ -4114,7 +4115,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 				++rect;
 			}
 
-			textureCache->replaceLightmapLayer( image, layer, r_lightmapBuffer );
+			textureFactory->replaceLightmapLayer( image, layer, r_lightmapBuffer );
 
 			++layer;
 			if( layer == numLayers ) {
@@ -4162,6 +4163,10 @@ void R_TouchLightmapImages( model_t *mod ) {
 
 	auto *const textureCache = TextureCache::instance();
 	for( i = 0; i < loadbmodel->numLightmapImages; i++ ) {
+		// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// TODO!!!!!!!!!!!!!!!!!!!!!!!! is the cache supposed to care of lightmaps?
 		textureCache->touchTexture( loadbmodel->lightmapImages[i], IMAGE_TAG_GENERIC );
 	}
 }
@@ -4832,7 +4837,7 @@ static ref_frontend_t rrf;
 */
 static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
 	if( TextureCache *instance = TextureCache::maybeInstance() ) {
-		instance->releaseScreenTextures();
+		instance->releaseRenderTargetAttachments();
 	}
 
 	RB_Shutdown();
@@ -4852,7 +4857,7 @@ static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
 static bool RF_AdapterInit( ref_frontendAdapter_t *adapter ) {
 	RB_Init();
 
-	TextureCache::instance()->initScreenTextures();
+	TextureCache::instance()->createRenderTargetAttachments();
 
 	R_BindFrameBufferObject( 0 );
 
