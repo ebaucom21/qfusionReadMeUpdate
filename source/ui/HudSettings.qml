@@ -8,7 +8,7 @@ StackView {
     id: root
     initialItem: settingsComponent
 
-    readonly property var listOfHuds: hudEditorLayoutModel.existingHuds
+    readonly property var listOfHuds: hudEditorModel.existingHuds
 
     function startHudEditorWizard() {
         clear(StackView.Immediatate)

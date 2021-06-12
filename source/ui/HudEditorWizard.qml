@@ -10,7 +10,7 @@ Item {
     property var selectedForSavingFileName
     signal exitRequested()
 
-    readonly property var existingHuds: hudEditorLayoutModel.existingHuds
+    readonly property var existingHuds: hudEditorModel.existingHuds
     readonly property real listItemWidth: 300
 
     Label {
@@ -115,12 +115,14 @@ Item {
             readonly property bool canGoNext: true
             width: root.width
 
-            HudEditorField {
-                id: editorField
+            HudEditor {
                 anchors.centerIn: parent
-                width: 0.8 * parent.width
-                height: (9.0 / 16.0) * editorField.width
-                Component.onCompleted: hudEditorLayoutModel.setFieldSize(width, height)
+                width: parent.width
+                height: parent.height - 48
+                Component.onCompleted: {
+                    hudEditorModel.setDragAreaSize(width, height)
+                    hudEditorModel.setFieldAreaSize(fieldWidth, fieldHeight)
+                }
             }
         }
 
@@ -281,7 +283,7 @@ Item {
             visible: swipeView.currentItem.canGoNext
             onClicked: {
                 if (swipeView.currentIndex === 0) {
-                    if (hudEditorLayoutModel.load(selectedForLoadingFileName)) {
+                    if (hudEditorModel.load(selectedForLoadingFileName)) {
                         swipeView.currentIndex = 1
                     } else {
                         // TODO: What to do? Shake?
@@ -289,7 +291,7 @@ Item {
                 } else if (swipeView.currentIndex === 1) {
                     swipeView.currentIndex = 2
                 } else {
-                    if (hudEditorLayoutModel.save(selectedForSavingFileName)) {
+                    if (hudEditorModel.save(selectedForSavingFileName)) {
                         root.exitRequested()
                     } else {
                         // TODO: Shake?

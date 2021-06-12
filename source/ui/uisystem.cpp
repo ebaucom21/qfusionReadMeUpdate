@@ -376,7 +376,7 @@ private:
 
 	ActionRequestsModel m_actionRequestsModel;
 
-	HudEditorLayoutModel m_hudEditorLayoutModel;
+	HudEditorModel m_hudEditorModel;
 	InGameHudLayoutModel m_inGameHudLayoutModel;
 
 	HudDataModel m_hudDataModel;
@@ -593,7 +593,7 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterUncreatableType<DemoPlayer>( uri, 2, 6, "DemoPlayer", reason );
 	qmlRegisterUncreatableType<GametypeOptionsModel>( uri, 2, 6, "GametypeOptionsModel", reason );
 	qmlRegisterUncreatableType<HudLayoutModel>( uri, 2, 6, "HudLayoutModel", reason );
-	qmlRegisterUncreatableType<HudEditorLayoutModel>( uri, 2, 6, "HudEditorLayoutModel", reason );
+	qmlRegisterUncreatableType<HudEditorModel>( uri, 2, 6, "HudEditorModel", reason );
 	qmlRegisterUncreatableType<InGameHudLayoutModel>( uri, 2, 6, "InGameHudLayoutModel", reason );
 	qmlRegisterUncreatableType<HudDataModel>( uri, 2, 6, "HudDataModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
@@ -662,7 +662,7 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 	context->setContextProperty( "playersModel", &m_playersModel );
 	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
 	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
-	context->setContextProperty( "hudEditorLayoutModel", &m_hudEditorLayoutModel );
+	context->setContextProperty( "hudEditorModel", &m_hudEditorModel );
 	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
 	context->setContextProperty( "hudDataModel", &m_hudDataModel );
 }

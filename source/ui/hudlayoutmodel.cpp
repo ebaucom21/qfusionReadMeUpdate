@@ -5,6 +5,7 @@
 
 #include <QPointF>
 #include <QSizeF>
+#include <QQmlEngine>
 
 #include <array>
 
@@ -14,6 +15,7 @@ namespace wsw::ui {
 
 auto HudEditorLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
+		{ ItemKind, "kind" },
 		{ Origin, "origin" },
 		{ Size, "size" },
 		{ Name, "name" },
@@ -29,23 +31,24 @@ auto HudEditorLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 }
 
 auto HudEditorLayoutModel::rowCount( const QModelIndex & ) const -> int {
-	return m_fieldSize.isValid() ? (int)m_entries.size() : 0;
+	return (int)m_entries.size();
 }
 
 auto HudEditorLayoutModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	if( index.isValid() ) {
 		if( int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
 			switch( role ) {
+				case ItemKind: return m_entries[row].kind;
 				case Origin: return m_entries[row].rectangle.topLeft();
 				case Size: return m_entries[row].rectangle.size();
-				case Name: return m_entries[row].name;
+				case Name: return QByteArray::fromRawData( m_entries[row].name.data(), m_entries[row].name.size() );
 				case Color: return m_entries[row].color;
 				case Draggable: return isDraggable( row );
 				case DisplayedAnchors: return m_entries[row].displayedAnchors;
-				case DisplayedAnchorItemIndex: return m_entries[row].displayedAnchorItem.value_or( 0 );
+				case DisplayedAnchorItemIndex: return m_entries[row].getQmlAnchorItem();
 				case SelfAnchors: return m_entries[row].selfAnchors;
 				case AnchorItemAnchors: return m_entries[row].anchorItemAnchors;
-				case AnchorItemIndex: return m_entries[row].realAnchorItem;
+				case AnchorItemIndex: return m_entries[row].realAnchorItem.toRawValue();
 				default: return QVariant();
 			}
 		}
@@ -60,11 +63,11 @@ bool HudEditorLayoutModel::isDraggable( int index ) const {
 	for( unsigned i = 0; i < m_entries.size(); ++i ) {
 		if( i != (unsigned)index ) {
 			const Entry &entry = m_entries[i];
-			if( entry.realAnchorItem == index ) {
+			if( entry.realAnchorItem.isOtherItem() && entry.realAnchorItem.toItemIndex() == index ) {
 				return false;
 			}
 			if( const auto maybeDisplayedItem = entry.displayedAnchorItem ) {
-				if( *maybeDisplayedItem == index ) {
+				if( maybeDisplayedItem->isOtherItem() && maybeDisplayedItem->toItemIndex() == index ) {
 					return false;
 				}
 			}
@@ -73,10 +76,22 @@ bool HudEditorLayoutModel::isDraggable( int index ) const {
 	return true;
 }
 
-void HudEditorLayoutModel::notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles ) {
+void HudEditorLayoutModel::notifyOfDisplayedAnchorsUpdateAtIndex( int index ) {
 	assert( (unsigned)index < (unsigned)m_entries.size() );
 	const QModelIndex modelIndex( createIndex( index, 0 ) );
-	Q_EMIT dataChanged( modelIndex, modelIndex, changedRoles );
+	Q_EMIT dataChanged( modelIndex, modelIndex, kDisplayedAnchorRoles );
+}
+
+void HudEditorLayoutModel::notifyOfOriginUpdateAtIndex( int index ) {
+	assert( (unsigned)index < (unsigned)m_entries.size() );
+	const QModelIndex modelIndex( createIndex( index, 0 ) );
+	Q_EMIT dataChanged( modelIndex, modelIndex, kOriginRoleAsVector );
+}
+
+void HudEditorLayoutModel::notifyOfFullUpdateAtIndex( int index ) {
+	assert( (unsigned)index < (unsigned)m_entries.size() );
+	const QModelIndex modelIndex( createIndex( index, 0 ) );
+	Q_EMIT dataChanged( modelIndex, modelIndex );
 }
 
 bool HudLayoutModel::load( const QByteArray &fileName ) {
@@ -105,16 +120,16 @@ bool HudLayoutModel::load( const wsw::StringView &fileName ) {
 static const wsw::StringView kHudsDirectory( "huds"_asView );
 static const wsw::StringView kHudsExtension( ".wswhud"_asView );
 
-void HudEditorLayoutModel::reloadExistingHuds() {
+void HudEditorModel::reloadExistingHuds() {
 	wsw::fs::SearchResultHolder searchResultHolder;
 	if( const auto maybeResult = searchResultHolder.findDirFiles( kHudsDirectory, kHudsExtension ) ) {
 		QJsonArray huds;
 		for( const wsw::StringView &fileName : *maybeResult ) {
 			if( const auto maybeName = wsw::fs::stripExtension( fileName ) ) {
-				if( maybeName->length() <= kMaxHudNameLength ) {
+				if( maybeName->length() <= HudLayoutModel::kMaxHudNameLength ) {
 					// Check whether the hud file really contains a valid hud
 					// TODO: Don't modify the global mutable state
-					if( load( *maybeName ) ) {
+					if( m_layoutModel.load( *maybeName ) ) {
 						huds.append( QString::fromLatin1( maybeName->data(), (int)maybeName->size() ).toLower() );
 					}
 				}
@@ -127,12 +142,17 @@ void HudEditorLayoutModel::reloadExistingHuds() {
 	}
 }
 
-bool HudEditorLayoutModel::save( const QByteArray &fileName ) {
+bool HudEditorModel::load( const QByteArray &fileName ) {
+	return m_layoutModel.load( fileName );
+}
+
+bool HudEditorModel::save( const QByteArray &fileName ) {
+	const wsw::StringView fileNameView( fileName.data(), fileName.size() );
 	wsw::StaticString<MAX_QPATH> pathBuffer;
-	if( const auto maybePath = makeFilePath( &pathBuffer, wsw::StringView( fileName.data(), fileName.size() ) ) ) {
+	if( const auto maybePath = m_layoutModel.makeFilePath( &pathBuffer, fileNameView ) ) {
 		if( auto maybeHandle = wsw::fs::openAsWriteHandle( *maybePath ) ) {
 			wsw::StaticString<4096> dataBuffer;
-			if( serialize( &dataBuffer ) ) {
+			if( m_layoutModel.serialize( &dataBuffer ) ) {
 				if( maybeHandle->write( dataBuffer.data(), dataBuffer.size() ) ) {
 					reloadExistingHuds();
 					return true;
@@ -185,12 +205,16 @@ bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 			if( entry.displayedAnchorItem ) {
 				return false;
 			}
+			// Don't dump toolbox items
+			if( entry.realAnchorItem.isToolbox() ) {
+				continue;
+			}
 
 			writeAnchor( &selfAnchorsString, entry.selfAnchors );
 			writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
 
-			buffer << i << ' ';
-			buffer << kItem << ' ' << entry.realAnchorItem << ' ';
+			buffer << ( i + 1 ) << ' ';
+			buffer << kItem << ' ' << entry.realAnchorItem.toRawValue() << ' ';
 			buffer << kSelf << ' ' << selfAnchorsString << ' ';
 			buffer << kOther << ' ' << otherAnchorsString << ' ';
 			buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
@@ -284,7 +308,7 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 			return std::nullopt;
 		}
 		auto &&[entry, index] = std::move( *maybeEntryAndIndex );
-		if( index != entries.size() ) {
+		if( index != entries.size() + 1 ) {
 			return std::nullopt;
 		}
 		entries.push_back( entry );
@@ -316,20 +340,25 @@ auto HudLayoutModel::deserialize( const wsw::StringView &data ) -> std::optional
 		const AnchorPair *validAnchorsBegin = std::begin( kMatchingItemAndFieldAnchorPairs );
 		const AnchorPair *validAnchorsEnd = std::end( kMatchingItemAndFieldAnchorPairs );
 		// Disallow non-existing anchor items
-		if( entry.anchorItem >= 0 ) {
-			if( (unsigned)entry.anchorItem >= (unsigned)entries.size() ) {
+		if( entry.anchorItem.isOtherItem() ) {
+			const int itemIndex = entry.anchorItem.toItemIndex();
+			if( (unsigned)itemIndex >= (unsigned)entries.size() ) {
 				return std::nullopt;
 			}
 			// Disallow anchoring to self
-			if( entry.anchorItem == (int)i ) {
+			if( itemIndex == (int)i ) {
 				return std::nullopt;
 			}
-			// Try detecting direct (1-1) anchor loops
-			if( entries[entry.anchorItem].anchorItem == (int)i ) {
+			// Try detecting direct (1-1) anchor loops'
+			const auto anchorItemAnchorItem = entries[itemIndex].anchorItem;
+			if( anchorItemAnchorItem.isOtherItem() && anchorItemAnchorItem.toItemIndex() == (int)i ) {
 				return std::nullopt;
 			}
 			validAnchorsBegin = std::begin( kMatchingItemAndItemAnchorPairs );
 			validAnchorsEnd = std::end( kMatchingItemAndItemAnchorPairs );
+		} else if( entry.anchorItem.isToolbox() ) {
+			// Protect against loading toolbox stuff from files
+			return std::nullopt;
 		}
 		bool hasValidAnchorPair = false;
 		for( const AnchorPair *it = validAnchorsBegin; it != validAnchorsEnd; ++it ) {
@@ -393,7 +422,7 @@ auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<
 	if( lastTokenNum == 2 * std::size( kOrderedKeywords ) ) {
 		// TODO: Use designated initializers
 		FileEntry entry;
-		entry.anchorItem = values[1].value();
+		entry.anchorItem = AnchorItem( values[1].value() );
 		entry.selfAnchors = anchors[0].value();
 		entry.otherAnchors = anchors[1].value();
 		entry.kind = kind.value();
@@ -474,11 +503,48 @@ auto HudLayoutModel::parseKind( const wsw::StringView &token ) -> std::optional<
 	return std::nullopt;
 }
 
-HudEditorLayoutModel::HudEditorLayoutModel() {
-	reloadExistingHuds();
+auto HudEditorToolboxModel::roleNames() const -> QHash<int, QByteArray> {
+	return {
+		{ Kind, "kind" }, { Name, "name" }, { Size, "size" },
+		{ Color, "color" }, { DisplayedAnchors, "displayedAnchors" },
+	};
+}
+
+auto HudEditorToolboxModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto HudEditorToolboxModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
+	if( modelIndex.isValid() ) {
+		if( const int row = modelIndex.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			switch( role ) {
+				case Kind: return m_entries[row].kind;
+				case Name: return m_entries[row].name.data();
+				case Size: return m_entries[row].rectangle.size();
+				case Color: return m_entries[row].color;
+				case DisplayedAnchors: return m_entries[row].displayedAnchors;
+				default:;
+			}
+		}
+	}
+	return QVariant();
+}
+
+void HudEditorToolboxModel::setDisplayedAnchorsForKind( int kind, int anchors ) {
+	assert( (unsigned)( kind - 1 ) < m_entries.size() );
+	m_entries[kind - 1].kind = kind;
+	const QModelIndex modelIndex( createIndex( kind - 1, 0 ) );
+	// TODO: Use a better granularity for supplied roles
+	Q_EMIT dataChanged( modelIndex, modelIndex, kMutableRoles );
 }
 
 bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
+	const QMetaEnum metaKinds( QMetaEnum::fromType<Kind>() );
+
+	// Discover what kinds are missing from the layout
+	unsigned presentKindsMask = 0;
+	assert( metaKinds.keyCount() < 32 );
+
 	wsw::Vector<Entry> entries;
 	for( FileEntry &fileEntry: fileEntries ) {
 		const auto &props = kEditorPropsForKind[fileEntry.kind - 1];
@@ -487,13 +553,38 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 		entry.kind = fileEntry.kind;
 		entry.selfAnchors = fileEntry.selfAnchors;
 		entry.anchorItemAnchors = fileEntry.otherAnchors;
+		assert( !fileEntry.anchorItem.isToolbox() );
 		entry.realAnchorItem = fileEntry.anchorItem;
 		entry.rectangle.setSize( props.size );
 		entry.color = props.color;
 		entry.name = props.name;
 		entries.push_back( entry );
+
+		// These assertions hold for valid deserialized entries
+		const auto kind = (unsigned)entry.kind;
+		assert( kind && kind < 32 );
+		assert( metaKinds.valueToKey( kind ) );
+		assert( !( presentKindsMask & ( 1u << kind ) ) );
+		presentKindsMask |= ( 1u << kind );
 	}
-	assert( entries.size() == fileEntries.size() );
+
+	// Add toolbox entries for missing item kinds
+	for( int i = 1; i < metaKinds.keyCount() + 1; ++i ) {
+		if( !( presentKindsMask & ( 1u << (unsigned)i ) ) ) {
+			const auto kind = (Kind)i;
+			const auto props = kEditorPropsForKind[kind - 1];
+			Entry entry;
+			entry.kind = kind;
+			entry.selfAnchors = VCenter | HCenter;
+			entry.anchorItemAnchors = VCenter | HCenter;
+			entry.realAnchorItem = AnchorItem::forToolbox();
+			entry.rectangle.setSize( props.size );
+			entry.color = props.color;
+			entry.name = props.name;
+			entries.push_back( entry );
+		}
+	}
+
 	beginResetModel();
 	std::swap( m_entries, entries );
 	endResetModel();
@@ -501,82 +592,130 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 }
 
 const HudEditorLayoutModel::EditorProps HudEditorLayoutModel::kEditorPropsForKind[] {
-	{ "Health", HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ) },
-	{ "Armor", ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ) },
-	{ "Inventory", InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ) },
-	{ "Weapon status", WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ) },
-	{ "Match time", MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ) },
-	{ "Alpha score", AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ) },
-	{ "Beta score", BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ) },
-	{ "Chat", Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ) },
-	{ "Team list", TeamList, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ) },
-	{ "Frags feed", Obituaries, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ) },
-	{ "Message feed", MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ) }
+	{ "Health"_asView, HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ) },
+	{ "Armor"_asView, ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ) },
+	{ "Inventory"_asView, InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ) },
+	{ "Weapon status"_asView, WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ) },
+	{ "Match time"_asView, MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ) },
+	{ "Alpha score"_asView, AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ) },
+	{ "Beta score"_asView, BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ) },
+	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ) },
+	{ "Team list"_asView, TeamList, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ) },
+	{ "Frags feed"_asView, Obituaries, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ) },
+	{ "Message feed"_asView, MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ) }
 };
 
-void HudEditorLayoutModel::setFieldSize( qreal width, qreal height ) {
-	QSize size( width, height );
-	if( size != m_fieldSize ) {
-		beginResetModel();
-		m_fieldSize = size;
-		endResetModel();
+void HudEditorModel::setFieldAreaSize( qreal width, qreal height ) {
+	if( const QSizeF size( width, height); size != m_fieldAreaSize ) {
+		m_layoutModel.beginResetModel();
+		m_toolboxModel.beginResetModel();
+		m_fieldAreaSize = size;
+		m_toolboxModel.endResetModel();
+		m_layoutModel.endResetModel();
 	}
 }
 
-void HudEditorLayoutModel::trackDragging( int index, qreal x, qreal y ) {
-	assert( (unsigned)index < (unsigned)m_entries.size() );
-	m_entries[index].pendingOrigin = QPointF( x, y );
+void HudEditorModel::setDragAreaSize( qreal width, qreal height ) {
+	if( const QSizeF size( width, height ); size != m_dragAreaSize ) {
+		m_layoutModel.beginResetModel();
+		m_toolboxModel.beginResetModel();
+		m_dragAreaSize = size;
+		m_toolboxModel.endResetModel();
+		m_layoutModel.endResetModel();
+	}
+}
+
+auto HudEditorModel::getLayoutModel() -> QAbstractListModel * {
+	if( !m_hasSetLayoutModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_layoutModel, QQmlEngine::CppOwnership );
+		m_hasSetLayoutModelOwnership = true;
+	}
+	return &m_layoutModel;
+}
+
+auto HudEditorModel::getToolboxModel() -> QAbstractListModel * {
+	if( !m_hasSetToolboxModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_toolboxModel, QQmlEngine::CppOwnership );
+		m_hasSetLayoutModelOwnership = true;
+	}
+	return &m_toolboxModel;
+}
+
+void HudEditorModel::trackDragging( int index, qreal x, qreal y ) {
+	auto &entries = m_layoutModel.m_entries;
+	assert( (unsigned)index < (unsigned)entries.size() );
+	entries[index].pendingOrigin = QPointF( x, y );
 	updateMarkers( index );
 }
 
-void HudEditorLayoutModel::finishDragging( int index ) {
-	assert( (unsigned)index < (unsigned)m_entries.size() );
-	Entry &dragged = m_entries[index];
+void HudEditorModel::finishDragging( int index ) {
+	auto &entries = m_layoutModel.m_entries;
+	assert( (unsigned)index < (unsigned)entries.size() );
+	auto &dragged = entries[index];
+
 	if( dragged.rectangle.topLeft() != dragged.pendingOrigin ) {
 		dragged.rectangle.moveTopLeft( dragged.pendingOrigin );
-		notifyOfUpdatesAtIndex( index, kOriginRoleAsVector );
 	}
-}
 
-void HudEditorLayoutModel::updateAnchors( int index ) {
-	if( const auto maybeItemAndAnchors = getMatchingAnchorItem( index ) ) {
-		updateAnchors( index, maybeItemAndAnchors->first, maybeItemAndAnchors->second );
-	}
-}
-
-void HudEditorLayoutModel::updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair ) {
-	Entry &dragged = m_entries[index];
-	const int oldAnchorItem = dragged.realAnchorItem;
-	if( oldAnchorItem != newAnchorItem ) {
-		if( oldAnchorItem >= 0 ) {
-			m_entries[oldAnchorItem].displayedAnchors = 0;
-			notifyOfUpdatesAtIndex( oldAnchorItem, kDisplayedAnchorsAsRole );
+	if( dragged.displayedAnchorItem ) {
+		const AnchorItem anchorItem = *dragged.displayedAnchorItem;
+		assert( dragged.displayedAnchors );
+		dragged.realAnchorItem = anchorItem;
+		dragged.selfAnchors = dragged.displayedAnchors;
+		if( anchorItem.isOtherItem() ) {
+			dragged.anchorItemAnchors = entries[anchorItem.toItemIndex()].displayedAnchors;
+		} else if( anchorItem.isField() ) {
+			dragged.anchorItemAnchors = m_displayedFieldAnchors;
 		} else {
-			setDisplayedFieldAnchors( 0 );
+			dragged.anchorItemAnchors = HudLayoutModel::VCenter | HudLayoutModel::HCenter;
 		}
 	}
 
-	dragged.realAnchorItem = newAnchorItem;
-	dragged.displayedAnchors = 0;
-	dragged.selfAnchors = newAnchorPair.selfAnchors;
-	dragged.anchorItemAnchors = newAnchorPair.otherAnchors;
-	notifyOfUpdatesAtIndex( index, kAllAnchorsAsRole );
+	m_layoutModel.notifyOfFullUpdateAtIndex( index );
+}
 
-	if( newAnchorItem >= 0 ) {
-		m_entries[newAnchorItem].displayedAnchors = 0;
-		notifyOfUpdatesAtIndex( newAnchorItem, kDisplayedAnchorsAsRole );
-	} else {
-		setDisplayedFieldAnchors( 0 );
+void HudEditorModel::clearDisplayedMarkers( int index ) {
+	updateMarkers( index );
+
+	auto &entries = m_layoutModel.m_entries;
+	auto &dragged = entries[index];
+	if( dragged.displayedAnchorItem ) {
+		const auto oldAnchorItem = *dragged.displayedAnchorItem;
+		if( oldAnchorItem.isOtherItem() ) {
+			const int itemIndex = oldAnchorItem.toItemIndex();
+			entries[itemIndex].displayedAnchors = 0;
+			assert( entries[itemIndex].displayedAnchorItem == std::nullopt );
+			m_layoutModel.notifyOfDisplayedAnchorsUpdateAtIndex( itemIndex );
+		} else if( oldAnchorItem.isField() ) {
+			setDisplayedFieldAnchors( 0 );
+		} else {
+			assert( oldAnchorItem.isToolbox() && dragged.kind );
+			m_toolboxModel.setDisplayedAnchorsForKind( dragged.kind, 0 );
+		}
+	}
+
+	entries[index].displayedAnchors = 0;
+	entries[index].displayedAnchorItem = std::nullopt;
+	m_layoutModel.notifyOfDisplayedAnchorsUpdateAtIndex( index );
+}
+
+void HudEditorModel::updateElementPosition( int index, qreal x, qreal y ) {
+	auto &entries = m_layoutModel.m_entries;
+	assert( (unsigned)index < (unsigned)entries.size() );
+	auto &entry = entries[index];
+	if( const QPointF point( x, y ); entry.rectangle.topLeft() != point ) {
+		entry.rectangle.moveTopLeft( point );
+		m_layoutModel.notifyOfOriginUpdateAtIndex( index );
 	}
 }
 
-void HudEditorLayoutModel::updatePosition( int index, qreal x, qreal y ) {
-	assert( (unsigned)index < (unsigned)m_entries.size() );
-	QPointF point( x, y );
-	Entry &entry = m_entries[index];
-	if( entry.rectangle.topLeft() != point ) {
+Q_INVOKABLE void HudEditorModel::updatePlaceholderPosition( int index, qreal x, qreal y ) {
+	auto &entries = m_toolboxModel.m_entries;
+	assert( (unsigned)index < (unsigned)entries.size() );
+	auto &entry = entries[index];
+	if( const QPointF point( x, y ); entry.rectangle.topLeft() != point ) {
 		entry.rectangle.moveTopLeft( point );
-		notifyOfUpdatesAtIndex( index, kOriginRoleAsVector );
+		// There's no need to dispatch updates in this case
 	}
 }
 
@@ -594,9 +733,9 @@ public:
 	}
 };
 
-void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
+void HudEditorModel::updateMarkers( int draggedIndex ) {
 	// It's more convenient to decompose results
-	std::optional<int> anchorItem;
+	std::optional<AnchorItem> anchorItem;
 	std::optional<AnchorPair> anchorsPair;
 	if( const auto maybeItemAndAnchors = getMatchingAnchorItem( draggedIndex ) ) {
 		anchorItem = maybeItemAndAnchors->first;
@@ -604,16 +743,24 @@ void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
 	}
 
 	SmallIntSet modifiedRows;
+	std::optional<int> updatedToolboxAnchors;
 
-	Entry &dragged = m_entries[draggedIndex];
+	auto &entries = m_layoutModel.m_entries;
+	HudEditorLayoutModel::Entry &dragged = entries[draggedIndex];
 	if( dragged.displayedAnchorItem != anchorItem ) {
 		// Clear flags of a (maybe) old item
 		if( dragged.displayedAnchorItem ) {
-			if( const int oldItemIndex = *dragged.displayedAnchorItem; oldItemIndex >= 0 ) {
-				m_entries[oldItemIndex].displayedAnchors = 0;
-				modifiedRows.add( oldItemIndex );
-			} else {
+			const AnchorItem oldDisplayedAnchorItem = *dragged.displayedAnchorItem;
+			if( oldDisplayedAnchorItem.isOtherItem() ) {
+				const int itemIndex = oldDisplayedAnchorItem.toItemIndex();
+				entries[itemIndex].displayedAnchors = 0;
+				entries[itemIndex].displayedAnchorItem = std::nullopt;
+				modifiedRows.add( itemIndex );
+			} else if( oldDisplayedAnchorItem.isField() ) {
 				setDisplayedFieldAnchors( 0 );
+			} else {
+				assert( oldDisplayedAnchorItem.isToolbox() );
+				updatedToolboxAnchors = 0;
 			}
 		}
 		dragged.displayedAnchorItem = anchorItem;
@@ -622,13 +769,19 @@ void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
 
 	if( dragged.displayedAnchorItem ) {
 		assert( anchorsPair );
-		if( const int currItemIndex = *dragged.displayedAnchorItem; currItemIndex >= 0 ) {
-			if( m_entries[currItemIndex].displayedAnchors != anchorsPair->otherAnchors ) {
-				m_entries[currItemIndex].displayedAnchors = anchorsPair->otherAnchors;
+		const AnchorItem currDisplayedAnchorItem = *dragged.displayedAnchorItem;
+		if( currDisplayedAnchorItem.isOtherItem() ) {
+			const int currItemIndex = currDisplayedAnchorItem.toItemIndex();
+			if( entries[currItemIndex].displayedAnchors != anchorsPair->otherAnchors ) {
+				entries[currItemIndex].displayedAnchors = anchorsPair->otherAnchors;
 				modifiedRows.add( currItemIndex );
 			}
-		} else {
+		} else if( currDisplayedAnchorItem.isField() ) {
 			setDisplayedFieldAnchors( anchorsPair->otherAnchors );
+		} else {
+			assert( currDisplayedAnchorItem.isToolbox() );
+			assert( anchorsPair->otherAnchors == ( HudLayoutModel::VCenter | HudLayoutModel::HCenter ) );
+			updatedToolboxAnchors = anchorsPair->otherAnchors;
 		}
 	}
 
@@ -639,7 +792,11 @@ void HudEditorLayoutModel::updateMarkers( int draggedIndex ) {
 	}
 
 	for( int row: modifiedRows ) {
-		notifyOfUpdatesAtIndex( row, kDisplayedAnchorsAsRole );
+		m_layoutModel.notifyOfDisplayedAnchorsUpdateAtIndex( row );
+	}
+
+	if( updatedToolboxAnchors != std::nullopt ) {
+		m_toolboxModel.setDisplayedAnchorsForKind( dragged.kind, *updatedToolboxAnchors );
 	}
 }
 
@@ -651,8 +808,8 @@ static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
 }
 
 template <typename Range>
-auto HudEditorLayoutModel::getMatchingAnchors( const QRectF &draggedRectangle, const QRectF &otherRectangle,
-											   const Range &range )
+auto HudEditorModel::getMatchingAnchors( const QRectF &draggedRectangle, const QRectF &otherRectangle,
+										 const Range &range )
 	-> std::optional<AnchorPair> {
 	for( auto it = std::begin( range ); it != std::end( range ); ++it ) {
 		const auto &[selfAnchors, otherAnchors] = *it;
@@ -665,76 +822,91 @@ auto HudEditorLayoutModel::getMatchingAnchors( const QRectF &draggedRectangle, c
 	return std::nullopt;
 }
 
-auto HudEditorLayoutModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
+auto HudEditorModel::getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
 	-> std::optional<AnchorPair> {
-	return getMatchingAnchors( draggedRectangle, otherEntryRectangle, kMatchingItemAndItemAnchorPairs );
+	return getMatchingAnchors( draggedRectangle, otherEntryRectangle, HudLayoutModel::kMatchingItemAndItemAnchorPairs );
 }
 
-auto HudEditorLayoutModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
+auto HudEditorModel::getMatchingFieldAnchors( const QRectF &draggedRectangle, const QRectF &fieldRectangle )
 	-> std::optional<AnchorPair> {
-	return getMatchingAnchors( draggedRectangle, fieldRectangle, kMatchingItemAndFieldAnchorPairs );
+	return getMatchingAnchors( draggedRectangle, fieldRectangle, HudLayoutModel::kMatchingItemAndFieldAnchorPairs );
 }
 
-auto HudEditorLayoutModel::getMatchingAnchorItem( int draggedIndex ) const
-	-> std::optional<std::pair<int, AnchorPair>> {
-	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
-	QRectF draggedRectangle( m_entries[draggedIndex].rectangle );
-	draggedRectangle.moveTopLeft( m_entries[draggedIndex].pendingOrigin );
+auto HudEditorModel::getMatchingAnchorItem( int draggedIndex ) const
+	-> std::optional<std::pair<AnchorItem, AnchorPair>> {
+	const auto &itemEntries = m_layoutModel.m_entries;
+	assert( (unsigned)draggedIndex < (unsigned)itemEntries.size() );
+	QRectF draggedRectangle( itemEntries[draggedIndex].rectangle );
+	draggedRectangle.moveTopLeft( itemEntries[draggedIndex].pendingOrigin );
+	const QRectF validAreaRectangle( 0, 0, m_fieldAreaSize.width(), m_fieldAreaSize.height() );
+	if( !draggedRectangle.intersects( validAreaRectangle ) ) {
+		const auto draggedItemKind = itemEntries[draggedIndex].kind;
+		assert( draggedItemKind > 0 );
+		const auto &toolboxEntryRectangle = m_toolboxModel.m_entries[draggedItemKind - 1].rectangle;
+		const auto centerAnchors = HudLayoutModel::VCenter | HudLayoutModel::HCenter;
+		const QPointF draggedItemCenter( getPointForAnchors( draggedRectangle, centerAnchors ) );
+		const QPointF toolboxPlaceholderCenter( getPointForAnchors( toolboxEntryRectangle, centerAnchors ) );
+		if( isClose( draggedItemCenter, toolboxPlaceholderCenter ) ) {
+			return std::make_pair( AnchorItem::forToolbox(), AnchorPair { centerAnchors, centerAnchors } );
+		}
+		return std::nullopt;
+	}
 
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+	for( unsigned i = 0; i < itemEntries.size(); ++i ) {
 		if( i != (unsigned)draggedIndex ) {
-			if( const auto maybeAnchors = getMatchingEntryAnchors( draggedRectangle, m_entries[i].rectangle ) ) {
+			if( const auto maybeAnchors = getMatchingEntryAnchors( draggedRectangle, itemEntries[i].rectangle ) ) {
 				if( isAnchorDefinedPositionValid( draggedIndex, (int)i, *maybeAnchors ) ) {
-					if( m_entries[i].realAnchorItem != draggedIndex ) {
-						return std::make_pair( (int)i, *maybeAnchors );
+					const auto entryAnchorItem = itemEntries[i].realAnchorItem;
+					if( !entryAnchorItem.isOtherItem() || entryAnchorItem.toItemIndex() != draggedIndex ) {
+						return std::make_pair( AnchorItem::forItem( i ), *maybeAnchors );
 					}
 				}
 			}
 		}
 	}
 
-	assert( m_fieldSize.isValid() );
-	QRectF fieldRectangle( 0, 0, m_fieldSize.width(), m_fieldSize.height() );
+	assert( m_fieldAreaSize.isValid() );
+	const QRectF fieldRectangle( 0, 0, m_fieldAreaSize.width(), m_fieldAreaSize.height() );
 	if( const auto maybeAnchors = getMatchingFieldAnchors( draggedRectangle, fieldRectangle ) ) {
 		if( isAnchorDefinedPositionValid( draggedIndex, std::nullopt, *maybeAnchors ) ) {
-			// TODO: It would be nice to have a proper ADT language-level support
-			return std::make_pair( -1, *maybeAnchors );
+			return std::make_pair( AnchorItem::forField(), *maybeAnchors );
 		}
 	}
 
 	return std::nullopt;
 }
 
-bool HudEditorLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
-														 const AnchorPair &anchors ) const {
-	assert( (unsigned)draggedIndex < (unsigned)m_entries.size() );
-	const Entry &dragged = m_entries[draggedIndex];
+bool HudEditorModel::isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
+												   const AnchorPair &anchors ) const {
+	const auto &entries = m_layoutModel.m_entries;
+	assert( (unsigned)draggedIndex < (unsigned)entries.size() );
+	const auto &dragged = entries[draggedIndex];
 
 	QPointF anchorPoint;
 	if( otherIndex ) {
-		assert( (unsigned)*otherIndex < (unsigned)m_entries.size() && *otherIndex != draggedIndex );
-		anchorPoint = getPointForAnchors( m_entries[*otherIndex].rectangle, anchors.otherAnchors );
+		assert( (unsigned)*otherIndex < (unsigned)entries.size() && *otherIndex != draggedIndex );
+		anchorPoint = getPointForAnchors( entries[*otherIndex].rectangle, anchors.otherAnchors );
 	} else {
-		const QRectF fieldRectangle( 0, 0, m_fieldSize.width(), m_fieldSize.height() );
+		const QRectF fieldRectangle( 0, 0, m_fieldAreaSize.width(), m_fieldAreaSize.height() );
 		anchorPoint = getPointForAnchors( fieldRectangle, anchors.otherAnchors );
 	}
 
 	// Apply an anchor-defined position to the dragged item rectangle
 	QRectF predictedRectangle( dragged.rectangle );
 	// Align center first as this moves along both axes
-	if( anchors.selfAnchors & ( VCenter | HCenter ) ) {
+	if( anchors.selfAnchors & ( HudLayoutModel::VCenter | HudLayoutModel::HCenter ) ) {
 		predictedRectangle.moveCenter( anchorPoint );
 	}
 
-	if( anchors.selfAnchors & Left ) {
+	if( anchors.selfAnchors & HudLayoutModel::Left ) {
 		predictedRectangle.moveLeft( anchorPoint.x() );
-	} else if( anchors.selfAnchors & Right ) {
+	} else if( anchors.selfAnchors & HudLayoutModel::Right ) {
 		predictedRectangle.moveRight( anchorPoint.x() );
 	}
 
-	if( anchors.selfAnchors & Top ) {
+	if( anchors.selfAnchors & HudLayoutModel::Top ) {
 		predictedRectangle.moveTop( anchorPoint.y() );
-	} else if( anchors.selfAnchors & Bottom ) {
+	} else if( anchors.selfAnchors & HudLayoutModel::Bottom ) {
 		predictedRectangle.moveBottom( anchorPoint.y() );
 	}
 
@@ -747,9 +919,9 @@ bool HudEditorLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const
 	}
 
 	const int secondCmpIndex = otherIndex ? *otherIndex : draggedIndex;
-	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+	for( unsigned i = 0; i < entries.size(); ++i ) {
 		if( i != (unsigned)draggedIndex && i != (unsigned)secondCmpIndex ) {
-			if( m_entries[i].rectangle.intersects( predictedRectangle ) ) {
+			if( entries[i].rectangle.intersects( predictedRectangle ) ) {
 				return false;
 			}
 		}
@@ -761,19 +933,19 @@ bool HudEditorLayoutModel::isAnchorDefinedPositionValid( int draggedIndex, const
 static constexpr auto kHorizontalBitsMask = 0x7;
 static constexpr auto kVerticalBitsMask = 0x7 << 3;
 
-auto HudEditorLayoutModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPointF {
+auto HudEditorModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPointF {
 	qreal x;
 	switch( anchors & kHorizontalBitsMask ) {
-		case Left: x = r.left(); break;
-		case HCenter: x = 0.5 * ( r.left() + r.right() ); break;
-		case Right: x = r.right(); break;
+		case HudLayoutModel::Left: x = r.left(); break;
+		case HudLayoutModel::HCenter: x = 0.5 * ( r.left() + r.right() ); break;
+		case HudLayoutModel::Right: x = r.right(); break;
 		default: throw std::invalid_argument( "Invalid X anchor bits" );
 	}
 	qreal y;
 	switch( anchors & kVerticalBitsMask ) {
-		case Top: y = r.top(); break;
-		case VCenter: y = 0.5 * ( r.top() + r.bottom() ); break;
-		case Bottom: y = r.bottom(); break;
+		case HudLayoutModel::Top: y = r.top(); break;
+		case HudLayoutModel::VCenter: y = 0.5 * ( r.top() + r.bottom() ); break;
+		case HudLayoutModel::Bottom: y = r.bottom(); break;
 		default: throw std::invalid_argument( "Invalid Y anchor bits" );
 	}
 	return QPointF( x, y );
@@ -820,6 +992,23 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 	}
 }
 
+HudEditorModel::HudEditorModel() {
+	reloadExistingHuds();
+
+	m_toolboxModel.beginResetModel();
+
+	for( const auto &props: HudEditorLayoutModel::kEditorPropsForKind ) {
+		HudEditorToolboxModel::Entry entry;
+		entry.name = props.name;
+		entry.color = props.color;
+		entry.kind = props.kind;
+		entry.rectangle = QRectF( 0, 0, props.size.width(), props.size.height() );
+		m_toolboxModel.m_entries.push_back( entry );
+	}
+
+	m_toolboxModel.endResetModel();
+}
+
 auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Kind, "kind" },
@@ -842,7 +1031,7 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 				case Flags: return getFlagsForKind( m_entries[row].kind );
 				case SelfAnchors: return m_entries[row].selfAnchors;
 				case AnchorItemAnchors: return m_entries[row].otherAnchors;
-				case AnchorItemIndex: return m_entries[row].anchorItem;
+				case AnchorItemIndex: return m_entries[row].anchorItem.toRawValue();
 				default: return QVariant();
 			}
 		}

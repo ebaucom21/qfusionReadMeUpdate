@@ -179,7 +179,7 @@ Item {
             }
 
             function getQmlAnchor(anchorBit) {
-                const anchorItem = anchorItemIndex >= 0 ? repeater.itemAt(anchorItemIndex) : root
+                const anchorItem = anchorItemIndex > 0 ? repeater.itemAt(anchorItemIndex - 1) : root
                 return getQmlAnchorOfItem(selfAnchors, anchorItemAnchors, anchorBit, anchorItem)
             }
         }

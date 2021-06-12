@@ -16,6 +16,8 @@ namespace wsw::ui {
 
 class HudLayoutModel : public QAbstractListModel {
 	Q_OBJECT
+
+	friend class HudEditorModel;
 public:
 	enum HorizontalAnchorBits {
 		Left    = 0x1,
@@ -57,11 +59,45 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE bool load( const QByteArray &fileName );
 protected:
+	// Either this stuff is typed or we keep getting bugs
+	class AnchorItem {
+		int m_value { 0 };
+	public:
+		AnchorItem() = default;
+		explicit AnchorItem( int value ): m_value( value ) {}
+
+		[[nodiscard]]
+		static auto forItem( unsigned item ) -> AnchorItem { return AnchorItem( (int)item + 1 ); }
+		[[nodiscard]]
+		static auto forField() -> AnchorItem { return AnchorItem( -1 ); }
+		[[nodiscard]]
+		static auto forToolbox() -> AnchorItem { return AnchorItem( 0 ); }
+
+		[[nodiscard]]
+		bool operator!=( const AnchorItem &that ) const { return m_value != that.m_value; }
+		[[nodiscard]]
+		bool operator==( const AnchorItem &that ) const { return m_value == that.m_value; }
+		[[nodiscard]]
+		bool isOtherItem() const { return m_value > 0; }
+		[[nodiscard]]
+		bool isField() const { return m_value < 0; }
+		[[nodiscard]]
+		bool isToolbox() const { return !m_value; }
+		[[nodiscard]]
+		auto toRawValue() const { return m_value; }
+
+		[[nodiscard]]
+		auto toItemIndex() const -> int {
+			assert( m_value > 0 );
+			return m_value - 1;
+		}
+	};
+
 	struct FileEntry {
 		Kind kind;
 		int selfAnchors;
 		int otherAnchors;
-		int anchorItem;
+		AnchorItem anchorItem;
 	};
 
 	struct AnchorPair {
@@ -83,6 +119,7 @@ protected:
 	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
 		-> std::optional<wsw::StringView>;
 
+	[[nodiscard]]
 	bool load( const wsw::StringView &fileName );
 
 	[[nodiscard]]
@@ -109,8 +146,11 @@ protected:
 class HudEditorLayoutModel : public HudLayoutModel {
 	Q_OBJECT
 
+	friend class HudEditorModel;
+
 	enum Role {
-		Origin = Qt::UserRole + 1,
+		ItemKind = Qt::UserRole + 1,
+		Origin,
 		Size,
 		Name,
 		Color,
@@ -123,19 +163,21 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	};
 
 	struct Entry {
-		const char *name;
+		wsw::StringView name;
 		QRectF rectangle;
 		QPointF pendingOrigin;
 		QColor color;
 		int displayedAnchors { 0 };
 		int selfAnchors { 0 };
 		int anchorItemAnchors { 0 };
-		int realAnchorItem { -1 };
+		AnchorItem realAnchorItem;
 		Kind kind { (Kind)0 };
-		std::optional<int> displayedAnchorItem;
+		std::optional<AnchorItem> displayedAnchorItem;
+		[[nodiscard]]
+		auto getQmlAnchorItem() const -> QVariant {
+			return displayedAnchorItem ? QVariant( displayedAnchorItem->toRawValue() ) : QVariant();
+		}
 	};
-
-	void reloadExistingHuds();
 
 	[[nodiscard]]
 	bool serialize( wsw::StaticString<4096> *buffer );
@@ -146,6 +188,82 @@ class HudEditorLayoutModel : public HudLayoutModel {
 
 	[[nodiscard]]
 	bool isDraggable( int index ) const;
+
+	void notifyOfDisplayedAnchorsUpdateAtIndex( int index );
+	void notifyOfOriginUpdateAtIndex( int index );
+	void notifyOfFullUpdateAtIndex( int index );
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &, int role ) const -> QVariant override;
+
+	wsw::Vector<Entry> m_entries;
+
+	static inline const QVector<int> kDisplayedAnchorRoles { DisplayedAnchors, DisplayedAnchorItemIndex, Draggable };
+	static inline const QVector<int> kOriginRoleAsVector { Origin };
+
+	struct EditorProps {
+		const wsw::StringView name;
+		int kind;
+		QSize size;
+		QColor color;
+	};
+	static const EditorProps kEditorPropsForKind[];
+};
+
+class HudEditorToolboxModel : public QAbstractListModel {
+	friend class HudEditorModel;
+
+	enum Role {
+		Kind = Qt::UserRole + 1,
+		Name,
+		Size,
+		Color,
+		DisplayedAnchors,
+	};
+
+	struct Entry {
+		QRectF rectangle;
+		wsw::StringView name;
+		QColor color;
+		int kind { 0 };
+		int displayedAnchors { false };
+	};
+
+	wsw::Vector<Entry> m_entries;
+
+	static inline QVector<int> kMutableRoles { DisplayedAnchors };
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &, int role ) const -> QVariant override;
+
+	void setDisplayedAnchorsForKind( int kind, int anchors );
+};
+
+class HudEditorModel : public QObject {
+	Q_OBJECT
+
+	using AnchorItem = HudEditorLayoutModel::AnchorItem;
+	using AnchorPair = HudEditorLayoutModel::AnchorPair;
+
+	HudEditorLayoutModel m_layoutModel;
+	HudEditorToolboxModel m_toolboxModel;
+
+	QSizeF m_fieldAreaSize;
+	QSizeF m_dragAreaSize;
+	int m_displayedFieldAnchors { 0 };
+
+	QJsonArray m_existingHuds;
+
+	bool m_hasSetLayoutModelOwnership { false };
+	bool m_hasSetToolboxModelOwnership { false };
 
 	[[nodiscard]]
 	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
@@ -160,24 +278,15 @@ class HudEditorLayoutModel : public HudLayoutModel {
 		}
 	}
 
+	void reloadExistingHuds();
+
 	void updateMarkers( int draggedIndex );
-
-	void updateAnchors( int index, int newAnchorItem, const AnchorPair &newAnchorPair );
-
-	void notifyOfUpdatesAtIndex( int index, const QVector<int> &changedRoles );
-
-	[[nodiscard]]
-	auto roleNames() const -> QHash<int, QByteArray> override;
-	[[nodiscard]]
-	auto rowCount( const QModelIndex & ) const -> int override;
-	[[nodiscard]]
-	auto data( const QModelIndex &, int role ) const -> QVariant override;
 
 	template <typename Range>
 	[[nodiscard]]
 	static auto getMatchingAnchors( const QRectF &draggedRectangle, const QRectF &otherRectangle,
-								    const Range &range )
-								    -> std::optional<AnchorPair>;
+									const Range &range )
+		-> std::optional<AnchorPair>;
 
 	[[nodiscard]]
 	static auto getMatchingEntryAnchors( const QRectF &draggedRectangle, const QRectF &otherEntryRectangle )
@@ -188,7 +297,7 @@ class HudEditorLayoutModel : public HudLayoutModel {
 		-> std::optional<AnchorPair>;
 
 	[[nodiscard]]
-	auto getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<int, AnchorPair>>;
+	auto getMatchingAnchorItem( int draggedIndex ) const -> std::optional<std::pair<AnchorItem, AnchorPair>>;
 
 	[[nodiscard]]
 	bool isAnchorDefinedPositionValid( int draggedIndex, const std::optional<int> &otherIndex,
@@ -197,26 +306,10 @@ class HudEditorLayoutModel : public HudLayoutModel {
 	[[nodiscard]]
 	static auto getPointForAnchors( const QRectF &r, int anchors ) -> QPointF;
 
-	wsw::Vector<Entry> m_entries;
-
-	QSizeF m_fieldSize;
-	int m_displayedFieldAnchors { 0 };
-
-	QJsonArray m_existingHuds;
-
-	static inline const QVector<int> kDisplayedAnchorsAsRole { DisplayedAnchors, Draggable };
-	static inline const QVector<int> kAllAnchorsAsRole { DisplayedAnchors, SelfAnchors, AnchorItemAnchors, Draggable };
-	static inline const QVector<int> kOriginRoleAsVector { Origin };
-
-	struct EditorProps {
-		const char *name;
-		int kind;
-		QSize size;
-		QColor color;
-	};
-	static const EditorProps kEditorPropsForKind[];
+	[[nodiscard]]
+	static auto getMaxHudNameLength() -> int { return HudLayoutModel::kMaxHudNameLength; }
 public:
-	HudEditorLayoutModel();
+	HudEditorModel();
 
 	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
 	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
@@ -224,14 +317,23 @@ public:
 	Q_SIGNAL void existingHudsChanged( const QJsonArray &existingHuds );
 	Q_PROPERTY( const QJsonArray existingHuds READ getExistingHuds NOTIFY existingHudsChanged );
 
-	Q_PROPERTY( unsigned maxHudNameLength MEMBER kMaxHudNameLength CONSTANT );
+	Q_PROPERTY( unsigned maxHudNameLength READ getMaxHudNameLength CONSTANT );
+
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getLayoutModel();
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getToolboxModel();
 
 	Q_INVOKABLE void trackDragging( int index, qreal x, qreal y );
 	Q_INVOKABLE void finishDragging( int index );
-	Q_INVOKABLE void setFieldSize( qreal width, qreal height );
-	Q_INVOKABLE void updatePosition( int index, qreal x, qreal y );
-	Q_INVOKABLE void updateAnchors( int index );
+	Q_INVOKABLE void setFieldAreaSize( qreal width, qreal height );
+	Q_INVOKABLE void setDragAreaSize( qreal width, qreal height );
+	Q_INVOKABLE void updateElementPosition( int index, qreal x, qreal y );
+	Q_INVOKABLE void updatePlaceholderPosition( int index, qreal x, qreal y );
+	Q_INVOKABLE void clearDisplayedMarkers( int index );
 
+	[[nodiscard]]
+	Q_INVOKABLE bool load( const QByteArray &fileName );
 	[[nodiscard]]
 	Q_INVOKABLE bool save( const QByteArray &fileName );
 };

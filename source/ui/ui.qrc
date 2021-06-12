@@ -28,7 +28,7 @@
         <file>HelpPage.qml</file>
         <file>HudChat.qml</file>
         <file>HudEditorAnchorsMarker.qml</file>
-        <file>HudEditorField.qml</file>
+        <file>HudEditor.qml</file>
         <file>HudEditorWizard.qml</file>
         <file>HudLayoutItem.qml</file>
         <file>HudObituaries.qml</file>
