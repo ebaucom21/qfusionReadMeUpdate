@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_local.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswstaticvector.h"
+#include "ai/vec3.h"
 
 // The only sane implementation among 40 y/o garbage
 #include <chrono>
@@ -708,6 +710,117 @@ static edict_t *G_GetNextThinkClient( edict_t *current ) {
 	return NULL;
 }
 
+#ifndef PUBLIC_BUILD
+
+class CMBenchmark {
+	MovingAverage<64, int64_t> m_fastQueue;
+	MovingAverage<512, int64_t> m_mediumQueue;
+	MovingAverage<2048, int64_t> m_slowQueue;
+
+	CMShapeList *m_baseLists[MAX_EDICTS];
+	CMShapeList *m_clippedLists[MAX_EDICTS];
+	wsw::StaticVector<const edict_t *, MAX_EDICTS> m_ents;
+
+	static inline const char *kTriggerNames[] { "trigger_teleport", "trigger_push", "info_player_deathmatch" };
+
+	[[nodiscard]]
+	static bool isASuitableEntity( const edict_t *ent ) {
+		if( ent->item ) {
+			return true;
+		}
+		if( !ent->classname ) {
+			return false;
+		}
+		for( const char *name: kTriggerNames ) {
+			if( !Q_stricmp( name, ent->classname ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void runEntityTest( const edict_t *ent ) {
+		CMShapeList *const baseList = m_baseLists[ent->s.number];
+		CMShapeList *const clippedList = m_clippedLists[ent->s.number];
+
+		const Vec3 listMins( Vec3( -16, -16, -16 ) + ent->r.absmin );
+		const Vec3 listMaxs( Vec3( +16, +16, +16 ) + ent->r.absmax );
+
+		GAME_IMPORT.CM_BuildShapeList( baseList, listMins.Data(), listMaxs.Data(), MASK_SOLID );
+		GAME_IMPORT.CM_ClipShapeList( clippedList, baseList, listMins.Data(), listMaxs.Data() );
+
+		wsw::StaticVector<Vec3, 8> vertices;
+		const float *bounds[2] { ent->r.absmin, ent->r.absmax };
+		for( unsigned i = 0; i < 8; ++i ) {
+			float x = bounds[(i >> 2) & 1][0];
+			float y = bounds[(i >> 1) & 1][1];
+			float z = bounds[(i >> 0) & 1][2];
+			vertices.emplace_back( Vec3( x, y, z ) );
+		}
+
+		trace_t tr;
+		for( unsigned i = 0; i < 8; ++i ) {
+			for( unsigned j = 0; j < 8; ++j ) {
+				if( i == j ) {
+					continue;
+				}
+				GAME_IMPORT.CM_ClipToShapeList( clippedList, &tr, vertices[i].Data(),
+												vertices[j].Data(), vec3_origin, vec3_origin, MASK_SOLID );
+				//GAME_IMPORT.CM_TransformedBoxTrace( &tr, vertices[i].Data(), vertices[j].Data(),
+				// vec3_origin, vec3_origin, nullptr, MASK_SOLID, nullptr, nullptr, 0 );
+			}
+		}
+	}
+public:
+	CMBenchmark() noexcept {
+		const auto *const ents = game.edicts;
+		for( int i = gs.maxclients + 1, end = game.numentities; i < end; ++i ) {
+			if( const auto *ent = &game.edicts[i]; isASuitableEntity( ent ) ) {
+				m_ents.push_back( ent );
+			}
+		}
+		for( const auto *ent: m_ents ) {
+			m_baseLists[ent->s.number] = GAME_IMPORT.CM_AllocShapeList();
+			m_clippedLists[ent->s.number] = GAME_IMPORT.CM_AllocShapeList();
+		}
+	}
+
+	[[nodiscard]]
+	auto run() -> std::tuple<int64_t, int64_t, int64_t> {
+		const auto before = std::chrono::high_resolution_clock::now();
+
+		// This produces ~300K trace calls on wca1 + DM that still complete under 16 ms on the workstation
+		constexpr auto numOuterIterations = 128;
+		// Making this loop outer should make the cache more likely to be washed out so it's more realistic
+		for( int i = 0; i < numOuterIterations; ++i ) {
+			for( const auto *ent: m_ents ) {
+				runEntityTest( ent );
+			}
+		}
+
+		const auto after = std::chrono::high_resolution_clock::now();
+		const auto micros = std::chrono::duration_cast<std::chrono::microseconds>( after - before );
+
+		m_fastQueue.add( micros.count() );
+		m_mediumQueue.add( micros.count() );
+		m_slowQueue.add( micros.count() );
+		return std::make_tuple( m_fastQueue.avg(), m_mediumQueue.avg(), m_slowQueue.avg() );
+	}
+};
+
+#endif
+
+static void G_RunCMBenchmark() {
+#if 0
+	static wsw::StaticVector<CMBenchmark, 1> g_benchmarkHolder;
+	if( ::g_benchmarkHolder.empty() ) {
+		new( ::g_benchmarkHolder.unsafe_grow_back() )CMBenchmark;
+	}
+	const auto [t1, t2, t3] = ::g_benchmarkHolder.front().run();
+	Com_Printf( "%.2f %.2f %.2f\n", (float)t1 * 1e-3f, (float)t2 * 1e-3f, (float)t3 * 1e-3f );
+#endif
+}
+
 /*
 * G_RunFrame
 * Advances the world
@@ -773,6 +886,7 @@ void G_RunFrame( unsigned int msec, int64_t serverTime ) {
 	G_RunClients();
 	G_RunEntities();
 	G_RunGametype();
+	G_RunCMBenchmark();
 	G_asCallMapPostThink();
 	GClip_BackUpCollisionFrame();
 }

@@ -638,4 +638,35 @@ vec_t LogisticPDF( vec_t x );
 vec_t NormalCDF( vec_t x );
 vec_t NormalPDF( vec_t x );
 
+template <unsigned N, typename Value = int>
+class alignas( 16 ) MovingAverage {
+	static_assert( std::is_integral_v<Value> );
+	static_assert( std::is_signed_v<Value> );
+
+	uint64_t m_total { 0 };
+	int64_t m_queueSum {0 };
+	Value m_values[N + 1] {};
+	unsigned m_head { N };
+	unsigned m_tail { 0 };
+public:
+	void clear() {
+		memset( m_values, 0, sizeof( m_values ) );
+		m_tail = 0;
+		m_head = N;
+		m_queueSum = 0;
+	}
+
+	void add( Value value ) {
+		m_total++;
+		m_values[m_head] = value;
+		m_head = ( m_head + 1 ) % ( N + 1 );
+		m_queueSum -= m_values[m_tail];
+		m_tail = ( m_tail + 1 ) % ( N + 1 );
+		m_queueSum += value;
+	}
+
+	[[nodiscard]]
+	auto avg() const -> Value { return (Value)( m_queueSum / N ); }
+};
+
 #endif // GAME_QMATH_H
