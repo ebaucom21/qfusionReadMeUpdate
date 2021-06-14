@@ -192,6 +192,34 @@ static const wsw::StringView kKind( "Kind"_asView );
 static const wsw::StringView *const kOrderedKeywords[] { &kItem, &kSelf, &kOther, &kKind };
 
 bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
+	if( m_entries.size() >= 32 ) {
+		throw std::logic_error( "Too many entries, this shouldn't happen" );
+	}
+
+	// Prune toolbox-attached items. This requires remapping indices.
+	alignas( 16 ) std::array<int, 32> entryIndexToFileIndex {};
+	entryIndexToFileIndex.fill( 0 );
+
+	constexpr int kMinFileItemIndex = 1;
+	int remappedIndicesCounter = kMinFileItemIndex;
+	for( unsigned i = 0; i < m_entries.size(); ++i ) {
+		const Entry &entry = m_entries[i];
+		// Disallow serializing dragged items
+		if( entry.displayedAnchorItem ) {
+			return false;
+		}
+		// Don't serialize toolbox-attached items
+		if( entry.realAnchorItem.isToolbox() ) {
+			continue;
+		}
+		entryIndexToFileIndex[i] = remappedIndicesCounter++;
+	}
+
+	// Disallow serializing empty huds
+	if( remappedIndicesCounter == kMinFileItemIndex ) {
+		return false;
+	}
+
 	wsw::StaticString<32> selfAnchorsString, otherAnchorsString;
 	auto &buffer = *buffer_;
 
@@ -200,25 +228,33 @@ bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	try {
 		buffer.clear();
 		for( unsigned i = 0; i < m_entries.size(); ++i ) {
-			const Entry &entry = m_entries[i];
-			// Disallow serializing dragged items
-			if( entry.displayedAnchorItem ) {
-				return false;
-			}
-			// Don't dump toolbox items
-			if( entry.realAnchorItem.isToolbox() ) {
-				continue;
-			}
+			// Remap the entry index
+			if( const int entryFileIndex = entryIndexToFileIndex[i] ) {
+				const Entry &entry = m_entries[i];
 
-			writeAnchor( &selfAnchorsString, entry.selfAnchors );
-			writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
+				// Remap the anchor item index
+				int anchorItemFileIndex = -1;
+				assert( !entry.realAnchorItem.isToolbox() );
+				assert( !entry.realAnchorItem.isField() || entry.realAnchorItem.toRawValue() == -1 );
+				if( entry.realAnchorItem.isOtherItem() ) {
+					const int anchorItemIndex = entry.realAnchorItem.toItemIndex();
+					assert( entryIndexToFileIndex[anchorItemIndex] );
+					anchorItemFileIndex = entryIndexToFileIndex[anchorItemIndex];
+				}
 
-			buffer << ( i + 1 ) << ' ';
-			buffer << kItem << ' ' << entry.realAnchorItem.toRawValue() << ' ';
-			buffer << kSelf << ' ' << selfAnchorsString << ' ';
-			buffer << kOther << ' ' << otherAnchorsString << ' ';
-			buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
-			buffer << "\r\n"_asView;
+				assert( entryFileIndex && anchorItemFileIndex );
+				assert( entryFileIndex != anchorItemFileIndex );
+
+				writeAnchor( &selfAnchorsString, entry.selfAnchors );
+				writeAnchor( &otherAnchorsString, entry.anchorItemAnchors );
+
+				buffer << entryFileIndex << ' ';
+				buffer << kItem << ' ' << anchorItemFileIndex << ' ';
+				buffer << kSelf << ' ' << selfAnchorsString << ' ';
+				buffer << kOther << ' ' << otherAnchorsString << ' ';
+				buffer << kKind << ' ' << wsw::StringView( kindMeta.valueToKey( entry.kind ) ) << ' ';
+				buffer << "\r\n"_asView;
+			}
 		}
 		return true;
 	} catch( ... ) {
