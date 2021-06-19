@@ -20,6 +20,9 @@ Item {
             width: item ? item.implicitWidth : 0
             height: item ? item.implicitHeight : 0
 
+            readonly property var controllingCVar: model.controllingCVar
+            property bool isCVarOn: false
+
             anchors.top: getQmlAnchor(HudLayoutModel.Top)
             anchors.bottom: getQmlAnchor(HudLayoutModel.Bottom)
             anchors.left: getQmlAnchor(HudLayoutModel.Left)
@@ -48,9 +51,35 @@ Item {
 
             onLoaded: itemLoader.updateItemVisibility()
 
+            Component.onCompleted: {
+                if (itemLoader.controllingCVar) {
+                    wsw.registerCVarAwareControl(itemLoader)
+                    checkCVarChanges()
+                }
+                updateItemVisibility()
+            }
+
+            Component.onDestruction: {
+                if (itemLoader.controllingCVar) {
+                    wsw.unregisterCVarAwareControl(itemLoader)
+                }
+            }
+
+            function checkCVarChanges() {
+                const wasCVarOn = itemLoader.isCVarOn
+                const stringValue = wsw.getCVarValue(controllingCVar)
+                const numericValue = parseInt(stringValue, 10)
+                itemLoader.isCVarOn = numericValue && !isNaN(numericValue)
+                if (wasCVarOn !== itemLoader.isCVarOn) {
+                    updateItemVisibility()
+                }
+            }
+
             function updateItemVisibility() {
                 if (item) {
-                    if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
+                    if (itemLoader.controllingCVar && !itemLoader.isCVarOn) {
+                        item.visible = false
+                    } else if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false
                     } else if (!wsw.isShowingPovHud && (flags & HudLayoutModel.PovOnly)) {
                         item.visible = false
@@ -78,10 +107,10 @@ Item {
                     betaScoreComponent
                 } else if (kind === HudLayoutModel.Chat) {
                     chatComponent
-                } else if (kind === HudLayoutModel.TeamList) {
-                    teamListComponent
-                } else if (kind === HudLayoutModel.Obituaries) {
-                    obituariesComponent
+                } else if (kind === HudLayoutModel.TeamInfo) {
+                    teamInfoComponent
+                } else if (kind === HudLayoutModel.FragsFeed) {
+                    fragsFeedComponent
                 } else if (kind === HudLayoutModel.MessageFeed) {
                     messageFeedComponent
                 } else {
@@ -164,13 +193,13 @@ Item {
             }
 
             Component {
-                id: teamListComponent
-                HudTeamList {}
+                id: teamInfoComponent
+                HudTeamInfo {}
             }
 
             Component {
-                id: obituariesComponent
-                HudObituaries {}
+                id: fragsFeedComponent
+                HudFragsFeed {}
             }
 
             Component {

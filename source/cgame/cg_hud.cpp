@@ -35,10 +35,12 @@ static cvar_t *cg_showPlayerNames;
 static cvar_t *cg_showPlayerNames_alpha;
 static cvar_t *cg_showPlayerNames_zfar;
 static cvar_t *cg_showPlayerNames_barWidth;
-static cvar_t *cg_showTeamMates;
+static cvar_t *cg_showTeamInfo;
 
 static cvar_t *cg_showPressedKeys;
 static cvar_t *cg_showChasers;
+
+static cvar_t *cg_showMessageFeed;
 
 static cvar_t *cg_centerTime;
 
@@ -48,7 +50,7 @@ static cvar_t *cg_showSpeed;
 static cvar_t *cg_showPickup;
 static cvar_t *cg_showAwards;
 static cvar_t *cg_showCaptureAreas;
-static cvar_t *cg_showObituaries;
+static cvar_t *cg_showFragsFeed;
 static cvar_t *cg_showTimer;
 
 void CG_UpdateHUDPostDraw() {}
@@ -68,7 +70,7 @@ void CG_InitHUD() {
 	cg_showPlayerNames_alpha =  Cvar_Get( "cg_showPlayerNames_alpha", "0.4", CVAR_ARCHIVE );
 	cg_showPlayerNames_zfar =   Cvar_Get( "cg_showPlayerNames_zfar", "1024", CVAR_ARCHIVE );
 	cg_showPlayerNames_barWidth =   Cvar_Get( "cg_showPlayerNames_barWidth", "8", CVAR_ARCHIVE );
-	cg_showTeamMates =      Cvar_Get( "cg_showTeamMates", "1", CVAR_ARCHIVE );
+	cg_showTeamInfo =      Cvar_Get( "cg_showTeamInfo", "1", CVAR_ARCHIVE );
 
 	cg_showPressedKeys = Cvar_Get( "cg_showPressedKeys", "0", CVAR_ARCHIVE );
 
@@ -78,7 +80,9 @@ void CG_InitHUD() {
 	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
 	cg_showAwards =     Cvar_Get( "cg_showAwards", "1", CVAR_ARCHIVE );
 
-	cg_showObituaries = Cvar_Get( "cg_showObituaries", va( "%i", CG_OBITUARY_HUD | CG_OBITUARY_CENTER ), CVAR_ARCHIVE );
+	cg_showFragsFeed = Cvar_Get( "cg_showFragsFeed", "1", CVAR_ARCHIVE );
+
+	cg_showMessageFeed = Cvar_Get( "cg_showMessageFeed", "1", CVAR_ARCHIVE );
 
 	cg_showminimap = Cvar_Get( "cg_showMiniMap", "0", CVAR_ARCHIVE );
 	cg_showitemtimers = Cvar_Get( "cg_showItemTimers", "3", CVAR_ARCHIVE );
@@ -456,7 +460,7 @@ void CG_DrawTeamMates() {
 	int i;
 	int pic_size = 18 * cgs.vidHeight / 600;
 
-	if( !cg_showTeamMates->integer ) {
+	if( !cg_showTeamInfo->integer ) {
 		return;
 	}
 
@@ -500,7 +504,7 @@ void CG_DrawTeamMates() {
 		}
 
 		CG_Trace( &trace, cg.view.origin, vec3_origin, vec3_origin, cent->ent.origin, cg.predictedPlayerState.POVnum, MASK_OPAQUE );
-		if( cg_showTeamMates->integer == 1 && trace.fraction == 1.0f ) {
+		if( cg_showTeamInfo->integer == 1 && trace.fraction == 1.0f ) {
 			continue;
 		}
 

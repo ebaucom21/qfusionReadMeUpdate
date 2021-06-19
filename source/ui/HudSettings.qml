@@ -105,8 +105,12 @@ StackView {
                     CVarAwareCheckBox { cvarName: "cg_showAwards" }
                 }
                 SettingsRow {
-                    text: "Show obituaries"
-                    CVarAwareCheckBox { cvarName: "cg_showObituaries" }
+                    text: "Show frags feed"
+                    CVarAwareCheckBox { cvarName: "cg_showFragsFeed" }
+                }
+                SettingsRow {
+                    text: "Show message feed"
+                    CVarAwareCheckBox { cvarName: "cg_showMessageFeed" }
                 }
                 SettingsRow {
                     text: "Show pressed keys"
@@ -122,11 +126,11 @@ StackView {
                 }
                 SettingsRow {
                     text: "Show teammates info & locations"
-                    CVarAwareCheckBox { cvarName: "cg_showTeamLocations" }
+                    CVarAwareCheckBox { cvarName: "cg_showTeamInfo" }
                 }
                 SettingsRow {
                     text: "Show teammate beacons through walls"
-                    CVarAwareCheckBox { cvarName: "cg_showTeamMates" }
+                    CVarAwareCheckBox { cvarName: "cg_showTeamInfo" }
                 }
             }
         }

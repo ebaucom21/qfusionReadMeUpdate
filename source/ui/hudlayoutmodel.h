@@ -42,8 +42,8 @@ public:
 		AlphaScore,
 		BetaScore,
 		Chat,
-		TeamList,
-		Obituaries,
+		TeamInfo,
+		FragsFeed,
 		MessageFeed
 	};
 	Q_ENUM( Kind );
@@ -104,6 +104,16 @@ protected:
 		int selfAnchors;
 		int otherAnchors;
 	};
+
+	struct EditorProps {
+		const wsw::StringView name;
+		int kind;
+		QSize size;
+		QColor color;
+		const std::optional<wsw::StringView> controllingCVar;
+	};
+
+	static const EditorProps kEditorPropsForKind[];
 
 	static inline const unsigned kMaxHudNameLength = 16u;
 	static const AnchorPair kMatchingItemAndItemAnchorPairs[];
@@ -204,14 +214,6 @@ class HudEditorLayoutModel : public HudLayoutModel {
 
 	static inline const QVector<int> kDisplayedAnchorRoles { DisplayedAnchors, DisplayedAnchorItemIndex, Draggable };
 	static inline const QVector<int> kOriginRoleAsVector { Origin };
-
-	struct EditorProps {
-		const wsw::StringView name;
-		int kind;
-		QSize size;
-		QColor color;
-	};
-	static const EditorProps kEditorPropsForKind[];
 };
 
 class HudEditorToolboxModel : public QAbstractListModel {
@@ -340,15 +342,30 @@ public:
 
 class InGameHudLayoutModel : public HudLayoutModel {
 	enum Role {
-		Kind = Qt::UserRole + 1,
+		ItemKind = Qt::UserRole + 1,
 		Flags,
 		SelfAnchors,
 		AnchorItemIndex,
-		AnchorItemAnchors
+		AnchorItemAnchors,
+		ControllingCVar
 	};
 
-	// Use entries as-is
-	wsw::Vector<FileEntry> m_entries;
+	struct Entry {
+		Kind kind;
+		int selfAnchors;
+		int otherAnchors;
+		AnchorItem anchorItem;
+		std::optional<wsw::StringView> controllingCVar;
+		[[nodiscard]]
+		auto getControllingCVarAsQVariant() const -> QVariant {
+			if( controllingCVar ) {
+				return QByteArray::fromRawData( controllingCVar->data(), controllingCVar->size() );
+			}
+			return QVariant();
+		}
+	};
+
+	wsw::Vector<Entry> m_entries;
 
 	[[nodiscard]]
 	bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) override;

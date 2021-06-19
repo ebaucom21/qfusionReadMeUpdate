@@ -627,18 +627,18 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 	return true;
 }
 
-const HudEditorLayoutModel::EditorProps HudEditorLayoutModel::kEditorPropsForKind[] {
-	{ "Health"_asView, HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ) },
-	{ "Armor"_asView, ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ) },
-	{ "Inventory"_asView, InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ) },
-	{ "Weapon status"_asView, WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ) },
-	{ "Match time"_asView, MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ) },
-	{ "Alpha score"_asView, AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ) },
-	{ "Beta score"_asView, BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ) },
-	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ) },
-	{ "Team list"_asView, TeamList, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ) },
-	{ "Frags feed"_asView, Obituaries, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ) },
-	{ "Message feed"_asView, MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ) }
+const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
+	{ "Health"_asView, HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ), std::nullopt },
+	{ "Armor"_asView, ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ), std::nullopt },
+	{ "Inventory"_asView, InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ), std::nullopt },
+	{ "Weapon status"_asView, WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ), std::nullopt },
+	{ "Match time"_asView, MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ), std::nullopt },
+	{ "Alpha score"_asView, AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ), std::nullopt },
+	{ "Beta score"_asView, BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ), std::nullopt },
+	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ), std::nullopt },
+	{ "Team info"_asView, TeamInfo, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ), "cg_showTeamInfo"_asView },
+	{ "Frags feed"_asView, FragsFeed, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ), "cg_showFragsFeed"_asView },
+	{ "Message feed"_asView, MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ), "cg_showMessageFeed"_asView }
 };
 
 void HudEditorModel::setFieldAreaSize( qreal width, qreal height ) {
@@ -1021,8 +1021,8 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case AlphaScore: return TeamBasedOnly;
 		case BetaScore: return TeamBasedOnly;
 		case Chat: return NoFlags;
-		case TeamList: return (Flags)( TeamBasedOnly | PovOnly );
-		case Obituaries: return NoFlags;
+		case TeamInfo: return (Flags)( TeamBasedOnly | PovOnly );
+		case FragsFeed: return NoFlags;
 		case MessageFeed: return NoFlags;
 		default: throw std::logic_error( "unreachable" );
 	}
@@ -1047,11 +1047,12 @@ HudEditorModel::HudEditorModel() {
 
 auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
-		{ Kind, "kind" },
+		{ ItemKind, "kind" },
 		{ Flags, "flags" },
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
-		{ AnchorItemIndex, "anchorItemIndex" }
+		{ AnchorItemIndex, "anchorItemIndex" },
+		{ ControllingCVar, "controllingCVar" }
 	};
 }
 
@@ -1063,11 +1064,12 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 	if( index.isValid() ) {
 		if( int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
 			switch( role ) {
-				case Kind: return m_entries[row].kind;
+				case ItemKind: return m_entries[row].kind;
 				case Flags: return getFlagsForKind( m_entries[row].kind );
 				case SelfAnchors: return m_entries[row].selfAnchors;
 				case AnchorItemAnchors: return m_entries[row].otherAnchors;
 				case AnchorItemIndex: return m_entries[row].anchorItem.toRawValue();
+				case ControllingCVar: return m_entries[row].getControllingCVarAsQVariant();
 				default: return QVariant();
 			}
 		}
@@ -1077,7 +1079,19 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 
 bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
 	beginResetModel();
-	std::swap( m_entries, fileEntries );
+	m_entries.clear();
+	m_entries.reserve( fileEntries.size() );
+	for( const FileEntry &fileEntry: fileEntries ) {
+		// TODO: This cries for designated initializers
+		Entry entry;
+		entry.kind = fileEntry.kind;
+		entry.selfAnchors = fileEntry.selfAnchors;
+		entry.otherAnchors = fileEntry.otherAnchors;
+		entry.anchorItem = fileEntry.anchorItem;
+		assert( fileEntry.kind && fileEntry.kind < std::size( kEditorPropsForKind ) + 1 );
+		entry.controllingCVar = kEditorPropsForKind[fileEntry.kind - 1].controllingCVar;
+		m_entries.push_back( entry );
+	}
 	endResetModel();
 	return true;
 }
