@@ -875,8 +875,6 @@ void CG_Reset( void ) {
 
 	CG_ClearPointedNum();
 
-	CG_ClearAwards();
-
 	CG_ClearChaseCam();
 
 	cg.time = 0;

@@ -55,7 +55,6 @@ static cvar_t *cg_showTimer;
 
 void CG_UpdateHUDPostDraw() {}
 void CG_ClearHUDInputState() {}
-void CG_ClearAwards() {}
 
 void CG_InitHUD() {
 	cg_showHUD =        Cvar_Get( "cg_showHUD", "1", CVAR_ARCHIVE );
@@ -95,42 +94,10 @@ void CG_InitHUD() {
 void CG_ShutdownHUD() {
 }
 
-char scr_centerstring[1024];
-int scr_centertime_off;
-int scr_center_lines;
-int scr_erase_center;
-
-/*
-* CG_CenterPrint
-*
-* Called for important messages that should stay in the center of the screen
-* for a few moments
-*/
 void CG_CenterPrint( const char *str ) {
-	Q_strncpyz( scr_centerstring, str, sizeof( scr_centerstring ) );
-	scr_centertime_off = cg_centerTime->value * 1000.0f;
-
-	// count the number of lines for centering
-	scr_center_lines = 1;
-	const char *s = scr_centerstring;
-	while( *s )
-		if( *s++ == '\n' ) {
-			scr_center_lines++;
-		}
-}
-
-static void CG_DrawCenterString( void ) {
-	int y;
-	struct qfontface_s *font = cgs.fontSystemMedium;
-	char *helpmessage = scr_centerstring;
-
-	if( scr_center_lines <= 4 ) {
-		y = cgs.vidHeight * 0.35f;
-	} else {
-		y = 48 * cgs.vidHeight / 600;
+	if( str && *str ) {
+		wsw::ui::UISystem::instance()->addStatusMessage( wsw::StringView( str ) );
 	}
-
-	SCR_DrawMultilineString( cgs.vidWidth / 2, y, helpmessage, ALIGN_CENTER_TOP, cgs.vidWidth, 0, font, colorWhite );
 }
 
 int CG_HorizontalAlignForWidth( const int x, int align, int width ) {
@@ -528,13 +495,6 @@ void CG_DrawTeamMates() {
 
 void CG_DrawHUD() {
 	CG_UpdateCrosshair();
-	scr_centertime_off -= cg.frameTime;
-
-	if( !CG_IsScoreboardShown() ) {
-		if( scr_centertime_off > 0 ) {
-			CG_DrawCenterString();
-		}
-	}
 
 	if( !cg_showHUD->integer ) {
 		return;

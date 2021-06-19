@@ -424,15 +424,6 @@ typedef struct {
 	char *motd;
 	int64_t motd_time;
 
-	// awards
-	char award_lines[MAX_AWARD_LINES][MAX_CONFIGSTRING_CHARS];
-	int64_t award_timestamps[MAX_AWARD_LINES];
-	int64_t award_timeouts[MAX_AWARD_LINES];
-	int award_head;
-
-	// statusbar program
-	struct cg_layoutnode_s *statusBar;
-
 	cg_viewweapon_t weapon;
 	cg_viewdef_t view;
 
@@ -545,7 +536,6 @@ void CG_ClearPointedNum( void );
 void CG_SC_ResetObituaries( void );
 void CG_UpdateHUDPostDraw( void );
 void CG_ClearHUDInputState( void );
-void CG_ClearAwards( void );
 
 //
 // cg_scoreboard.c
@@ -657,7 +647,6 @@ void CG_Precache( void );
 void CG_UseItem( const char *name );
 void CG_RegisterCGameCommands( void );
 void CG_UnregisterCGameCommands( void );
-void CG_AddAward( const char *str, unsigned timeoutMillis );
 void CG_OverrideWeapondef( int index, const char *cstring );
 
 void CG_StartBackgroundTrack( void );

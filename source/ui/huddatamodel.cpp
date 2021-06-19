@@ -560,6 +560,45 @@ void MessageFeedModel::update( int64_t currTime ) {
 	}
 }
 
+auto AwardsModel::roleNames() const -> QHash<int, QByteArray> {
+	return { { Message, "message" } };
+}
+
+auto AwardsModel::rowCount( const QModelIndex & ) const -> int {
+	return (int)m_entries.size();
+}
+
+auto AwardsModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
+	if( modelIndex.isValid() ) {
+		if( const int row = modelIndex.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			return toStyledText( m_entries[row].message.asView() );
+		}
+	}
+	return QVariant();
+}
+
+void AwardsModel::addAward( const wsw::StringView &award, int64_t timestamp ) {
+	if( m_entries.size() == m_entries.capacity() ) {
+		beginRemoveRows( QModelIndex(), 0, 0 );
+		m_entries.erase( m_entries.begin() );
+		endRemoveRows();
+	}
+
+	beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() );
+	auto *const entry = new( m_entries.unsafe_grow_back() )Entry;
+	entry->message.assign( award );
+	entry->timestamp = timestamp;
+	endInsertRows();
+}
+
+void AwardsModel::update( int64_t currTime ) {
+	if( const auto numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 3000 ) ) {
+		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries );
+		m_entries.erase( m_entries.begin(), m_entries.begin() + (int)numTimedOutEntries );
+		endRemoveRows();
+	}
+}
+
 auto HudDataModel::getActiveWeaponIcon() const -> QByteArray {
 	return m_activeWeapon ? weaponPropsCache.getWeaponIconPath( m_activeWeapon ) : QByteArray();
 }
@@ -648,6 +687,20 @@ auto HudDataModel::getMessageFeedModel() -> QAbstractListModel * {
 		m_hasSetMessageFeedModelOwnership = true;
 	}
 	return &m_messageFeedModel;
+}
+
+auto HudDataModel::getAwardsModel() -> QAbstractListModel * {
+	if( !m_hasSetAwardsModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_awardsModel, QQmlEngine::CppOwnership );
+		m_hasSetAwardsModelOwnership = true;
+	}
+	return &m_awardsModel;
+}
+
+void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t ) {
+	m_statusMessage = toStyledText( message );
+	// Always perform updates
+	Q_EMIT statusMessageChanged( getStatusMessage() );
 }
 
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
@@ -793,6 +846,7 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 
 	m_inventoryModel.checkPropertyChanges();
 	m_obituariesModel.update( currTime );
+	m_awardsModel.update( currTime );
 
 	const bool wasMessageFeedFadingOut = m_messageFeedModel.isFadingOut();
 	m_messageFeedModel.update( currTime );

@@ -124,6 +124,10 @@ public:
 
 	void addToMessageFeed( const wsw::StringView &message ) override;
 
+	void addAward( const wsw::StringView &award ) override;
+
+	void addStatusMessage( const wsw::StringView &message ) override;
+
 	void notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind );
 
 	Q_INVOKABLE void clearFailedConnectionState() { m_clearFailedConnectionState = true; }
@@ -1919,6 +1923,14 @@ void QtUISystem::addObituary( const wsw::StringView &victim, unsigned meansOfDea
 
 void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {
 	m_hudDataModel.addToMessageFeed( message, getFrameTimestamp() );
+}
+
+void QtUISystem::addAward( const wsw::StringView &award ) {
+	m_hudDataModel.addAward( award, getFrameTimestamp() );
+}
+
+void QtUISystem::addStatusMessage( const wsw::StringView &message ) {
+	m_hudDataModel.addStatusMessage( message, getFrameTimestamp() );
 }
 
 void QtUISystem::notifyOfFailedConnection( const wsw::StringView &message, ConnectionFailKind kind ) {

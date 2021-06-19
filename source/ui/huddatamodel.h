@@ -174,6 +174,31 @@ class MessageFeedModel : public QAbstractListModel {
 	bool isFadingOut() const { return m_isFadingOut; }
 };
 
+class AwardsModel : public QAbstractListModel {
+	friend class HudDataModel;
+
+	// TODO: Add icons?
+	enum Role { Message = Qt::UserRole + 1 };
+
+	struct Entry {
+		int64_t timestamp;
+		wsw::StaticString<64> message;
+	};
+
+	wsw::StaticVector<Entry, 4> m_entries;
+
+	[[nodiscard]]
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &modelIndex, int role ) const -> QVariant override;
+
+	void addAward( const wsw::StringView &award, int64_t timestamp );
+
+	void update( int64_t currTime );
+};
+
 class HudDataModel : public QObject {
 	Q_OBJECT
 
@@ -181,6 +206,10 @@ class HudDataModel : public QObject {
 	TeamListModel m_teamListModel;
 	ObituariesModel m_obituariesModel;
 	MessageFeedModel m_messageFeedModel;
+	AwardsModel m_awardsModel;
+
+	// TODO make toStyledText() work with arbitrary types
+	QString m_statusMessage;
 
 	wsw::StaticString<32> m_alphaName;
 	wsw::StaticString<32> m_betaName;
@@ -217,6 +246,7 @@ class HudDataModel : public QObject {
 	bool m_hasSetTeamListModelOwnership { false };
 	bool m_hasSetObituariesModelOwnership { false };
 	bool m_hasSetMessageFeedModelOwnership { false };
+	bool m_hasSetAwardsModelOwnership { false };
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -273,6 +303,9 @@ class HudDataModel : public QObject {
 	auto getHealth() const -> int { return m_health; }
 	[[nodiscard]]
 	auto getArmor() const -> int { return m_armor; }
+
+	[[nodiscard]]
+	auto getStatusMessage() const -> QString { return m_statusMessage; }
 
 	[[nodiscard]]
 	bool getHasLocations() const { return m_hasLocations; }
@@ -337,6 +370,9 @@ public:
 	Q_SIGNAL void isMessageFeedFadingOutChanged( bool isMessageFeedFadingOut );
 	Q_PROPERTY( bool isMessageFeedFadingOut READ getIsMessageFeedFadingOut NOTIFY isMessageFeedFadingOutChanged );
 
+	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
+	Q_PROPERTY( QString statusMessage READ getStatusMessage NOTIFY statusMessageChanged );
+
 	enum Powerup {
 		Quad  = 0x1,
 		Shell = 0x2,
@@ -352,6 +388,8 @@ public:
 	Q_INVOKABLE QAbstractListModel *getObituariesModel();
 	[[nodiscard]]
 	Q_INVOKABLE QAbstractListModel *getMessageFeedModel();
+	[[nodiscard]]
+	Q_INVOKABLE QAbstractListModel *getAwardsModel();
 
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getWeaponFullName( int weapon ) const;
@@ -378,6 +416,12 @@ public:
 	void addToMessageFeed( const wsw::StringView &message, int64_t timestamp ) {
 		m_messageFeedModel.addMessage( message, timestamp );
 	}
+
+	void addAward( const wsw::StringView &award, int64_t timestamp ) {
+		m_awardsModel.addAward( award, timestamp );
+	}
+
+	void addStatusMessage( const wsw::StringView &message, int64_t timestamp );
 
 	void checkPropertyChanges( int64_t currTime );
 	void updateScoreboardData( const ReplicatedScoreboardData &scoreboardData );

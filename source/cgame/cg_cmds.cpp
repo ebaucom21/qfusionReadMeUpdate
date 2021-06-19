@@ -509,25 +509,13 @@ static void CG_SC_MOTD( void ) {
 }
 
 /*
-* CG_AddAward
-*/
-void CG_AddAward( const char *str, unsigned timeoutMillis ) {
-	if( !str || !str[0] ) {
-		return;
-	}
-
-	int index = cg.award_head % MAX_AWARD_LINES;
-	Q_strncpyz( cg.award_lines[index], str, MAX_CONFIGSTRING_CHARS );
-	cg.award_timestamps[index] = cg.time;
-	cg.award_timeouts[index] = cg.time + timeoutMillis;
-	cg.award_head++;
-}
-
-/*
 * CG_SC_AddAward
 */
 static void CG_SC_AddAward( void ) {
-	CG_AddAward( Cmd_Argv( 1 ), 2500 );
+	const char *str = Cmd_Argv( 1 );
+	if( str && *str ) {
+		wsw::ui::UISystem::instance()->addAward( wsw::StringView( str ) );
+	}
 }
 
 static void CG_SC_ActionRequest() {
@@ -599,6 +587,22 @@ static void CG_SC_Obituary() {
 						}
 					}
 					wsw::ui::UISystem::instance()->addObituary( victimName, meansOfDeath, attackerName );
+					if( attacker && attacker != victim && ISVIEWERENTITY( attacker ) ) {
+						wsw::StaticString<256> message;
+						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
+							if( GS_TeamBasedGametype() ) {
+								message << wsw::StringView( S_COLOR_ORANGE ) <<
+									wsw::StringView( "YOU TEAMFRAGGED " ) << wsw::StringView( S_COLOR_WHITE );
+							}
+						}
+						if( message.empty() ) {
+							message << wsw::StringView( "COOL! YOU FRAGGED " );
+						}
+						for( char ch: victimName ) {
+							message.append( (char)std::toupper( ch ) );
+						}
+						wsw::ui::UISystem::instance()->addStatusMessage( message.asView() );
+					}
 				}
 			}
 		}

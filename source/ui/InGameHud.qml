@@ -113,6 +113,10 @@ Item {
                     fragsFeedComponent
                 } else if (kind === HudLayoutModel.MessageFeed) {
                     messageFeedComponent
+                } else if (kind === HudLayoutModel.AwardsArea) {
+                    awardsAreaComponent
+                } else if (kind === HudLayoutModel.StatusMessage) {
+                    statusMessageComponent
                 } else {
                     undefined
                 }
@@ -205,6 +209,16 @@ Item {
             Component {
                 id: messageFeedComponent
                 HudMessageFeed {}
+            }
+
+            Component {
+                id: awardsAreaComponent
+                HudAwardsArea {}
+            }
+
+            Component {
+                id: statusMessageComponent
+                HudStatusMessage {}
             }
 
             function getQmlAnchor(anchorBit) {

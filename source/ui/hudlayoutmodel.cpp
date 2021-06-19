@@ -638,7 +638,9 @@ const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
 	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ), std::nullopt },
 	{ "Team info"_asView, TeamInfo, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ), "cg_showTeamInfo"_asView },
 	{ "Frags feed"_asView, FragsFeed, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ), "cg_showFragsFeed"_asView },
-	{ "Message feed"_asView, MessageFeed, QSize( 256, 72 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ), "cg_showMessageFeed"_asView }
+	{ "Message feed"_asView, MessageFeed, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ), "cg_showMessageFeed"_asView },
+	{ "Awards area"_asView, AwardsArea, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.9 ), "cg_showAwards"_asView },
+	{ "Status message"_asView, StatusMessage, QSize( 192, 32 ), QColor::fromRgbF( 0.3, 0.9, 0.7 ), std::nullopt }
 };
 
 void HudEditorModel::setFieldAreaSize( qreal width, qreal height ) {
@@ -1024,6 +1026,8 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case TeamInfo: return (Flags)( TeamBasedOnly | PovOnly );
 		case FragsFeed: return NoFlags;
 		case MessageFeed: return NoFlags;
+		case AwardsArea: return NoFlags;
+		case StatusMessage: return NoFlags;
 		default: throw std::logic_error( "unreachable" );
 	}
 }

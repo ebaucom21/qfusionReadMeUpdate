@@ -44,7 +44,9 @@ public:
 		Chat,
 		TeamInfo,
 		FragsFeed,
-		MessageFeed
+		MessageFeed,
+		AwardsArea,
+		StatusMessage,
 	};
 	Q_ENUM( Kind );
 

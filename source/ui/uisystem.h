@@ -84,6 +84,10 @@ public:
 
 	virtual void addToMessageFeed( const wsw::StringView &message ) = 0;
 
+	virtual void addAward( const wsw::StringView &award ) = 0;
+
+	virtual void addStatusMessage( const wsw::StringView &message ) = 0;
+
 	enum class ConnectionFailKind {
 		DontReconnect = 1,
 		TryReconnecting,
