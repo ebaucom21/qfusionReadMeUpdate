@@ -63,7 +63,7 @@ public:
 	[[nodiscard]]
 	static constexpr auto capacity() -> size_type {
 		static_assert( N > 0, "Illegal chars buffer size" );
-		return N - 1u;
+		return N;
 	}
 
 	template <typename Container>
@@ -368,6 +368,7 @@ public:
 	[[nodiscard]]
 	bool insertfv( size_type index, const char *format, va_list va );
 
+	[[maybe_unused]]
 	auto erase( size_type index, size_type count = npos ) -> decltype( *this ) {
 		assert( index <= m_len );
 		if( count >= m_len - index ) {
@@ -379,6 +380,17 @@ public:
 		m_len -= count;
 		m_data[m_len] = '\0';
 		return *this;
+	}
+
+	void resize( size_type newLength, char fillByChar ) {
+		assert( newLength <= capacity() );
+		if( newLength > m_len ) {
+			std::memset( m_data, fillByChar, newLength - m_len );
+			m_len = newLength;
+			m_data[m_len] = '\0';
+		} else if( newLength < m_len ) {
+			erase( newLength );
+		}
 	}
 
 	[[maybe_unused]]

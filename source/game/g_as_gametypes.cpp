@@ -186,7 +186,7 @@ void GT_asCallPlayerRespawn( edict_t *ent, int old_team, int new_team ) {
 }
 
 //"void GT_scoreEvent( Client @client, String &score_event, String &args )"
-void GT_asCallScoreEvent( gclient_t *client, const char *score_event, const char *args ) {
+void GT_asCallScoreEvent( Client *client, const char *score_event, const char *args ) {
 	int error;
 	asIScriptContext *ctx;
 	asstring_t *s1, *s2;
@@ -279,7 +279,7 @@ edict_t *GT_asCallSelectSpawnPoint( edict_t *ent ) {
 }
 
 //"bool GT_Command( Client @client, String &cmdString, String &argsString, int argc )"
-bool GT_asCallGameCommand( gclient_t *client, const char *cmd, const char *args, int argc ) {
+bool GT_asCallGameCommand( Client *client, const char *cmd, const char *args, int argc ) {
 	int error;
 	asIScriptContext *ctx;
 	asstring_t *s1, *s2;

@@ -464,7 +464,7 @@ static bool SV_SendClientDatagram( client_t *client ) {
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
 
 	// Set snap hint flags to client-specific flags set by the game module
-	int snapHintFlags = client->edict->r.client->r.snapHintFlags;
+	int snapHintFlags = client->edict->r.client->m_snapHintFlags;
 	// Add server global snap hint flags
 	if( sv_snap_aggressive_sound_culling->integer ) {
 		snapHintFlags |= SNAP_HINT_CULL_SOUND_WITH_PVS;

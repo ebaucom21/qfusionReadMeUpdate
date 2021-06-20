@@ -89,7 +89,7 @@ void StatsowFacade::UpdateAverageRating() {
 void StatsowFacade::TransferRatings() {
 	clientRating_t *cr, *found;
 	edict_t *ent;
-	gclient_t *client;
+	Client *client;
 
 	// shuffle the ratings back from game.ratings to clients->ratings and back
 	// based on current gametype
@@ -191,7 +191,7 @@ clientRating_t *StatsowFacade::AddRating( edict_t *ent, const char *gametype, fl
 	return cr;
 }
 
-void StatsowFacade::TryUpdatingGametypeRating( const gclient_t *client,
+void StatsowFacade::TryUpdatingGametypeRating( const Client *client,
 											   const clientRating_t *addedRating,
 											   const char *addedForGametype ) {
 	// If the gametype is not a current gametype
@@ -218,7 +218,7 @@ void StatsowFacade::TryUpdatingGametypeRating( const gclient_t *client,
 
 // removes all references for given entity
 void StatsowFacade::RemoveRating( edict_t *ent ) {
-	gclient_t *client;
+	Client *client;
 	clientRating_t *cr;
 
 	client = ent->r.client;
@@ -236,7 +236,7 @@ void StatsowFacade::RemoveRating( edict_t *ent ) {
 	UpdateAverageRating();
 }
 
-RaceRun::RaceRun( const struct gclient_s *client_, int numSectors_, uint32_t *times_ )
+RaceRun::RaceRun( const struct Client *client_, int numSectors_, uint32_t *times_ )
 	: clientSessionId( client_->mm_session ), numSectors( numSectors_ ), times( times_ ) {
 	assert( numSectors_ > 0 );
 	// Check alignment of the provided times array
@@ -245,13 +245,13 @@ RaceRun::RaceRun( const struct gclient_s *client_, int numSectors_, uint32_t *ti
 	SaveNickname( client_ );
 }
 
-void RaceRun::SaveNickname( const struct gclient_s *client ) {
+void RaceRun::SaveNickname( const struct Client *client ) {
 	if( client->mm_session.IsValidSessionId() ) {
 		nickname[0] = '\0';
 		return;
 	}
 
-	Q_strncpyz( nickname, client->netname, MAX_NAME_BYTES );
+	Q_strncpyz( nickname, client->netname.data(), MAX_NAME_BYTES );
 }
 
 RaceRun *StatsowFacade::NewRaceRun( const edict_t *ent, int numSectors ) {
@@ -262,7 +262,7 @@ RaceRun *StatsowFacade::NewRaceRun( const edict_t *ent, int numSectors ) {
 		return nullptr;
 	}
 
-	auto *run = client->level.stats.currentRun;
+	auto *run = client->stats.currentRun;
 	uint8_t *mem = nullptr;
 	if( run ) {
 		// Check whether we can actually reuse the underlying memory chunk
@@ -283,7 +283,7 @@ RaceRun *StatsowFacade::NewRaceRun( const edict_t *ent, int numSectors ) {
 	auto *times = ( uint32_t * )( mem + sizeof( RaceRun ) );
 	auto *newRun = new( mem )RaceRun( client, numSectors, times );
 	// Set the constructed run as a current one for the client
-	return ( client->level.stats.currentRun = newRun );
+	return ( client->stats.currentRun = newRun );
 }
 
 void StatsowFacade::ValidateRaceRun( const char *tag, const edict_t *owner ) {
@@ -298,7 +298,7 @@ void StatsowFacade::ValidateRaceRun( const char *tag, const edict_t *owner ) {
 		G_Error( "%s: The owner entity is not a client\n", tag );
 	}
 
-	const auto *run = client->level.stats.currentRun;
+	const auto *run = client->stats.currentRun;
 	if( !run ) {
 		G_Error( "%s: The client does not have a current race run\n", tag );
 	}
@@ -309,7 +309,7 @@ void StatsowFacade::SetSectorTime( edict_t *owner, int sector, uint32_t time ) {
 	ValidateRaceRun( tag, owner );
 
 	auto *const client = owner->r.client;
-	auto *const run = client->level.stats.currentRun;
+	auto *const run = client->stats.currentRun;
 
 	if( sector < 0 || sector >= run->numSectors ) {
 		G_Error( "%s: the sector %d is out of valid bounds [0, %d)", tag, sector, run->numSectors );
@@ -324,14 +324,14 @@ RunStatusQuery *StatsowFacade::CompleteRun( edict_t *owner, uint32_t finalTime, 
 	ValidateRaceRun( "StatsowFacade::CompleteRun()", owner );
 
 	auto *const client = owner->r.client;
-	auto *const run = client->level.stats.currentRun;
+	auto *const run = client->stats.currentRun;
 
 	run->times[run->numSectors] = finalTime;
 	run->utcTimestamp = game.utcTimeMillis;
 	run->SaveNickname( client );
 
 	// Transfer the ownership over the run
-	client->level.stats.currentRun = nullptr;
+	client->stats.currentRun = nullptr;
 	// We pass the tag as an argument since it's memory is not intended to be in the run ownership
 	return SendRaceRunReport( run, runTag );
 }
@@ -488,7 +488,7 @@ void StatsowFacade::DeleteRunStatusQuery( RunStatusQuery *query ) {
 	Q_free( query );
 }
 
-void StatsowFacade::AddToRacePlayTime( const gclient_t *client, int64_t timeToAdd ) {
+void StatsowFacade::AddToRacePlayTime( const Client *client, int64_t timeToAdd ) {
 	// Put this check first so we get warnings on misuse of the API even if there's no Statsow connection
 	if( timeToAdd <= 0 ) {
 		const char *tag = "StatsowFacade::AddToRacePlayTime()";
@@ -580,7 +580,7 @@ void StatsowFacade::ClearEntries() {
 	clientEntriesHead = nullptr;
 }
 
-void StatsowFacade::OnClientHadPlaytime( const gclient_t *client ) {
+void StatsowFacade::OnClientHadPlaytime( const Client *client ) {
 	if( !IsValid() ) {
 		return;
 	}
@@ -600,7 +600,7 @@ void StatsowFacade::OnClientHadPlaytime( const gclient_t *client ) {
 		// TODO: Are logged frags valid as well in this case?
 	} else {
 		if( !client->mm_session.IsValidSessionId() ) {
-			reason = va( "An anonymous player `%s` had a play-time", client->netname );
+			reason = va( "An anonymous player `%s` had a play-time", client->netname.data() );
 		}
 	}
 
@@ -774,7 +774,7 @@ void StatsowFacade::AddPlayerReport( edict_t *ent, bool final ) {
 	}
 
 	constexpr const char *format = "StatsowFacade::AddPlayerReport(): %s" S_COLOR_WHITE " (%s)\n";
-	G_Printf( format, cl->netname, cl->mm_session.ToString( uuid_buffer ) );
+	G_Printf( format, cl->netname.data(), cl->mm_session.ToString( uuid_buffer ) );
 
 	ClientEntry *entry = FindEntryById( cl->mm_session );
 	if( entry ) {
@@ -793,21 +793,21 @@ void StatsowFacade::AddToExistingEntry( edict_t *ent, bool final, ClientEntry *e
 	auto *const cl = ent->r.client;
 
 	// we can merge
-	Q_strncpyz( e->netname, cl->netname, sizeof( e->netname ) );
+	Q_strncpyz( e->netname, cl->netname.data(), sizeof( e->netname ) );
 	e->team = cl->team;
-	e->timePlayed += ( level.time - cl->teamstate.timeStamp ) / 1000;
+	e->timePlayed += ( level.time - cl->teamStateTimestamp ) / 1000;
 	e->final = final;
 
-	e->stats.awards += cl->level.stats.awards;
-	e->stats.score += cl->level.stats.score;
+	e->stats.awards += cl->stats.awards;
+	e->stats.score += cl->stats.score;
 
-	for( const auto &keyAndValue : cl->level.stats ) {
+	for( const auto &keyAndValue : cl->stats ) {
 		e->stats.AddToEntry( keyAndValue );
 	}
 
 	for( int i = 0; i < ( AMMO_TOTAL - AMMO_GUNBLADE ); i++ ) {
 		auto &stats = e->stats;
-		const auto &thatStats = cl->level.stats;
+		const auto &thatStats = cl->stats;
 		stats.accuracy_damage[i] += thatStats.accuracy_damage[i];
 		stats.accuracy_frags[i] += thatStats.accuracy_frags[i];
 		stats.accuracy_hits[i] += thatStats.accuracy_hits[i];
@@ -817,7 +817,7 @@ void StatsowFacade::AddToExistingEntry( edict_t *ent, bool final, ClientEntry *e
 	}
 
 	// requires handling of duplicates
-	MergeAwards( e->stats.awardsSequence, std::move( cl->level.stats.awardsSequence ) );
+	MergeAwards( e->stats.awardsSequence, std::move( cl->stats.awardsSequence ) );
 }
 
 void StatsowFacade::MergeAwards( StatsSequence<LoggedAward> &to, StatsSequence<LoggedAward> &&from ) {
@@ -866,12 +866,13 @@ StatsowFacade::ClientEntry *StatsowFacade::NewPlayerEntry( edict_t *ent, bool fi
 	auto *const e = new( Q_malloc( sizeof( ClientEntry ) ) )ClientEntry;
 
 	// fill in the data
-	Q_strncpyz( e->netname, cl->netname, sizeof( e->netname ) );
+	Q_strncpyz( e->netname, cl->netname.data(), sizeof( e->netname ) );
 	e->team = cl->team;
-	e->timePlayed = ( level.time - cl->teamstate.timeStamp ) / 1000;
+	e->timePlayed = ( level.time - cl->teamStateTimestamp ) / 1000;
 	e->final = final;
 	e->mm_session = cl->mm_session;
-	e->stats = std::move( cl->level.stats );
+	// TODO: What if not `final`?
+	e->stats = std::move( cl->stats );
 	return e;
 }
 
@@ -900,7 +901,7 @@ void StatsowFacade::AddAward( const edict_t *ent, const char *awardMsg ) {
 		return;
 	}
 
-	auto &awardsSequence = ent->r.client->level.stats.awardsSequence;
+	auto &awardsSequence = ent->r.client->stats.awardsSequence;
 	// first check if we already have this one on the clients list
 	const size_t msgLen = ::strlen( awardMsg );
 
@@ -1765,7 +1766,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 		return;
 	}
 
-	if( !ent->r.client->level.stats.had_playtime ) {
+	if( !ent->r.client->stats.had_playtime ) {
 		return;
 	}
 
@@ -1805,7 +1806,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 			return;
 		}
 
-		const auto lastActivityAt = ent->r.client->level.last_activity;
+		const auto lastActivityAt = ent->r.client->last_activity;
 		// Skip inactive clients considering their behaviour respectful
 		if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
 			saidBefore = true;
@@ -1862,7 +1863,7 @@ void RespectHandler::ClientEntry::CheckBehaviour( const int64_t matchStartTime )
 	// and players that have played till the match end.
 	// They still have to say the mandatory token at the end with the single exception of becoming inactive.
 
-	const auto lastActivityAt = ent->r.client->level.last_activity;
+	const auto lastActivityAt = ent->r.client->last_activity;
 	if( !lastActivityAt || levelTime - lastActivityAt > 10000 ) {
 		saidAfter = true;
 		return;
@@ -1925,7 +1926,7 @@ void RespectHandler::ClientEntry::OnClientDisconnected() {
 		return;
 	}
 
-	if( !ent->r.client->level.stats.had_playtime ) {
+	if( !ent->r.client->stats.had_playtime ) {
 		return;
 	}
 
@@ -2128,7 +2129,7 @@ void IgnoreFilter::HandleIgnoreListCommand( const edict_t *ent ) {
 	const char *pronoun = S_COLOR_WHITE "your";
 	char buffer[64];
 	if( player != ent ) {
-		Q_snprintfz( buffer, sizeof( buffer ), S_COLOR_WHITE "%s" S_COLOR_WHITE " ignores", player->r.client->netname );
+		Q_snprintfz( buffer, sizeof( buffer ), S_COLOR_WHITE "%s" S_COLOR_WHITE " ignores", player->r.client->netname.data() );
 		action = buffer;
 		pronoun = "their";
 	}
@@ -2172,7 +2173,7 @@ void IgnoreFilter::HandleIgnoreListCommand( const edict_t *ent ) {
 			}
 			wereTeammatesMet = true;
 		}
-		ss << S_COLOR_WHITE << separator << clientEnt->r.client->netname;
+		ss << S_COLOR_WHITE << separator << clientEnt->r.client->netname.data();
 		separator = ", ";
 	}
 
@@ -2198,14 +2199,8 @@ void IgnoreFilter::NotifyOfIgnoredMessage( const edict_t *target, const edict_t 
 }
 
 void IgnoreFilter::OnUserInfoChanged( const edict_t *user ) {
-	const char *userInfo = user->r.client->userinfo;
-	const char *filterString = Info_ValueForKey( userInfo, "cg_chatFilter" );
-	if( !filterString || !*filterString ) {
-		return;
-	}
-
 	ClientEntry &e = entries[PLAYERNUM( user )];
-	const int filterValue = ::atof( filterString );
-	e.ignoresEverybody = ( filterValue & 1 ) != 0;
-	e.ignoresNotTeammates = ( filterValue & 2 ) != 0;
+	const int flags = user->r.client->getChatFilterFlags();
+	e.ignoresEverybody = ( flags & 1 ) != 0;
+	e.ignoresNotTeammates = ( flags & 2 ) != 0;
 }

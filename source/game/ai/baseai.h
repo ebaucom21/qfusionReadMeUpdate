@@ -414,7 +414,7 @@ public:
 	virtual bool MayNotBeFeasibleEnemy( const edict_t *ent ) const;
 protected:
 	const char *Nick() const {
-		return self->r.client ? self->r.client->netname : self->classname;
+		return self->r.client ? self->r.client->netname.data() : self->classname;
 	}
 
 	virtual void TouchedOtherEntity( const edict_t *entity ) {}

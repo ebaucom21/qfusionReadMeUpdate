@@ -51,10 +51,10 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 	trap_GameCmd( ent, cmd );
 
 	if( dedicated->integer ) {
-		G_Printf( "%s", COM_RemoveColorTokens( va( "%s receives a '%s' award.\n", ent->r.client->netname, awardMsg ) ) );
+		G_Printf( "%s", COM_RemoveColorTokens( va( "%s receives a '%s' award.\n", ent->r.client->netname.data(), awardMsg ) ) );
 	}
 
-	ent->r.client->level.stats.awards++;
+	ent->r.client->stats.awards++;
 	teamlist[ent->s.team].stats.awards++;
 	G_Gametype_ScoreEvent( ent->r.client, "award", awardMsg );
 
@@ -62,11 +62,11 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 
 	// add it to every player who's chasing this player
 	for( edict_t *other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
-		if( !other->r.client || !other->r.inuse || !other->r.client->resp.chase.active ) {
+		if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 			continue;
 		}
 
-		if( other->r.client->resp.chase.target == ENTNUM( ent ) ) {
+		if( other->r.client->chase.target == ENTNUM( ent ) ) {
 			trap_GameCmd( other, cmd );
 		}
 	}
@@ -97,20 +97,20 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 	switch( mod ) {
 		case MOD_INSTAGUN_W:
 		case MOD_INSTAGUN_S:
-			attacker->r.client->resp.awardInfo.ebhit_count++;
-			if( attacker->r.client->resp.awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
-				attacker->r.client->resp.awardInfo.ebhit_count = 0;
-				attacker->r.client->resp.awardInfo.accuracy_award++;
+			attacker->r.client->awardInfo.ebhit_count++;
+			if( attacker->r.client->awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
+				attacker->r.client->awardInfo.ebhit_count = 0;
+				attacker->r.client->awardInfo.accuracy_award++;
 				G_PlayerAward( attacker, S_COLOR_BLUE "Accuracy!" );
 			}
 			flag = COMBO_FLAG( WEAP_INSTAGUN );
 			break;
 		case MOD_ELECTROBOLT_W:
 		case MOD_ELECTROBOLT_S:
-			attacker->r.client->resp.awardInfo.ebhit_count++;
-			if( attacker->r.client->resp.awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
-				attacker->r.client->resp.awardInfo.ebhit_count = 0;
-				attacker->r.client->resp.awardInfo.accuracy_award++;
+			attacker->r.client->awardInfo.ebhit_count++;
+			if( attacker->r.client->awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
+				attacker->r.client->awardInfo.ebhit_count = 0;
+				attacker->r.client->awardInfo.accuracy_award++;
 				G_PlayerAward( attacker, S_COLOR_BLUE "Accuracy!" );
 			}
 			flag = COMBO_FLAG( WEAP_ELECTROBOLT );
@@ -158,7 +158,7 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 	}
 
 	if( flag ) {
-		if( attacker->r.client->resp.awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) && G_IsDead( targ ) ) { // RL...
+		if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) && G_IsDead( targ ) ) { // RL...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
 				G_PlayerAward( attacker, S_COLOR_BLUE "RL to EB!" );
 			} else if( flag == COMBO_FLAG( WEAP_LASERGUN ) ) { // to LG
@@ -171,7 +171,7 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 
 			//else if( flag == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) )  // to RL
 			//	G_PlayerAward( attacker, S_COLOR_BLUE "RL to RL!" );
-		} else if( attacker->r.client->resp.awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GRENADELAUNCHER ) && G_IsDead( targ ) ) {   // GL...
+		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GRENADELAUNCHER ) && G_IsDead( targ ) ) {   // GL...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
 				G_PlayerAward( attacker, S_COLOR_BLUE "GL to EB!" );
 			} else if( flag == COMBO_FLAG( WEAP_LASERGUN ) ) { // to LG
@@ -184,25 +184,25 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 
 			//else if( flag == COMBO_FLAG( WEAP_GRENADELAUNCHER ) )  // to GL
 			//	G_PlayerAward( attacker, S_COLOR_BLUE "GL to GL!" );
-		} else if( attacker->r.client->resp.awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_LASERGUN ) && G_IsDead( targ ) ) {   // LG...
+		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_LASERGUN ) && G_IsDead( targ ) ) {   // LG...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
-				if( attacker->r.client->resp.awardInfo.lasthit == targ && level.time < attacker->r.client->resp.awardInfo.lasthit_time + LB_TIMEOUT_FOR_COMBO ) {
+				if( attacker->r.client->awardInfo.lasthit == targ && level.time < attacker->r.client->awardInfo.lasthit_time + LB_TIMEOUT_FOR_COMBO ) {
 					G_PlayerAward( attacker, S_COLOR_BLUE "LG to EB!" );
 				}
 			}
-		} else if( attacker->r.client->resp.awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GUNBLADE ) && G_IsDead( targ ) ) {
+		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GUNBLADE ) && G_IsDead( targ ) ) {
 			if( flag == COMBO_FLAG( WEAP_GUNBLADE ) ) {
-				if( attacker->r.client->resp.awardInfo.lasthit == targ && level.time < attacker->r.client->resp.awardInfo.lasthit_time + GUNBLADE_TIMEOUT_FOR_COMBO ) {
+				if( attacker->r.client->awardInfo.lasthit == targ && level.time < attacker->r.client->awardInfo.lasthit_time + GUNBLADE_TIMEOUT_FOR_COMBO ) {
 					G_PlayerAward( attacker, S_COLOR_BLUE "Gunblade Combo!" );
 				}
 			}
 		}
 
-		attacker->r.client->resp.awardInfo.combo[PLAYERNUM( targ )] = flag;
+		attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] = flag;
 	}
 
-	attacker->r.client->resp.awardInfo.lasthit = targ;
-	attacker->r.client->resp.awardInfo.lasthit_time = level.time;
+	attacker->r.client->awardInfo.lasthit = targ;
+	attacker->r.client->awardInfo.lasthit_time = level.time;
 }
 
 void G_AwardResetPlayerComboStats( edict_t *ent ) {
@@ -213,12 +213,12 @@ void G_AwardResetPlayerComboStats( edict_t *ent ) {
 	resetvalue = ( G_IsDead( ent ) ? 0 : COMBO_FLAG( WEAP_LASERGUN ) );
 
 	for( i = 0; i < gs.maxclients; i++ )
-		game.clients[i].resp.awardInfo.combo[PLAYERNUM( ent )] &= resetvalue;
+		game.clients[i].awardInfo.combo[PLAYERNUM( ent )] &= resetvalue;
 }
 
 void G_AwardPlayerMissedElectrobolt( edict_t *self, int mod ) {
 	if( mod == MOD_ELECTROBOLT_W || mod == MOD_ELECTROBOLT_S || mod == MOD_INSTAGUN_W || mod == MOD_INSTAGUN_S ) {
-		self->r.client->resp.awardInfo.ebhit_count = 0;
+		self->r.client->awardInfo.ebhit_count = 0;
 	}
 }
 
@@ -226,7 +226,7 @@ void G_AwardPlayerMissedLasergun( edict_t *self, int mod ) {
 	int i;
 	if( mod == MOD_LASERGUN_W || mod == MOD_LASERGUN_S ) {
 		for( i = 0; i < gs.maxclients; i++ )  // cancelling lasergun combo award
-			game.clients[i].resp.awardInfo.combo[PLAYERNUM( self )] &= ~COMBO_FLAG( WEAP_LASERGUN );
+			game.clients[i].awardInfo.combo[PLAYERNUM( self )] &= ~COMBO_FLAG( WEAP_LASERGUN );
 	}
 }
 
@@ -260,7 +260,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 	static const int weakMeansOfDeath[3] = { MOD_ROCKET_W, MOD_GRENADE_W, MOD_SHOCKWAVE_W };
 	static const char *weaponNames[3] = { "Rocket", "Grenade", "Shockwave" };
 
-	award_info_t *awardInfo = &attacker->r.client->resp.awardInfo;
+	award_info_t *awardInfo = &attacker->r.client->awardInfo;
 	int *const directAwardCounts[3] = {
 		&awardInfo->directrocket_award, &awardInfo->directgrenade_award, &awardInfo->directwave_award
 	};
@@ -289,20 +289,20 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 	}
 
 	// Multikill
-	if( game.serverTime - attacker->r.client->resp.awardInfo.multifrag_timer < MULTIKILL_INTERVAL ) {
-		attacker->r.client->resp.awardInfo.multifrag_count++;
+	if( game.serverTime - attacker->r.client->awardInfo.multifrag_timer < MULTIKILL_INTERVAL ) {
+		attacker->r.client->awardInfo.multifrag_count++;
 	} else {
-		attacker->r.client->resp.awardInfo.multifrag_count = 1;
+		attacker->r.client->awardInfo.multifrag_count = 1;
 	}
 
-	attacker->r.client->resp.awardInfo.multifrag_timer = game.serverTime;
+	attacker->r.client->awardInfo.multifrag_timer = game.serverTime;
 
-	if( attacker->r.client->resp.awardInfo.multifrag_count > 1 ) {
+	if( attacker->r.client->awardInfo.multifrag_count > 1 ) {
 		char s[MAX_CONFIGSTRING_CHARS];
 
 		s[0] = 0;
 
-		switch( attacker->r.client->resp.awardInfo.multifrag_count ) {
+		switch( attacker->r.client->awardInfo.multifrag_count ) {
 			case 0:
 			case 1:
 				break;
@@ -316,7 +316,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 				Q_strncpyz( s, S_COLOR_GREEN "Quadruple Frag!", sizeof( s ) );
 				break;
 			default:
-				Q_snprintfz( s, sizeof( s ), S_COLOR_GREEN "Extermination! %i in a row!", attacker->r.client->resp.awardInfo.multifrag_count );
+				Q_snprintfz( s, sizeof( s ), S_COLOR_GREEN "Extermination! %i in a row!", attacker->r.client->awardInfo.multifrag_count );
 				break;
 		}
 
@@ -324,37 +324,37 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 	}
 
 	// Sprees
-	attacker->r.client->resp.awardInfo.frag_count++;
+	attacker->r.client->awardInfo.frag_count++;
 
-	if( attacker->r.client->resp.awardInfo.frag_count &&
-		( attacker->r.client->resp.awardInfo.frag_count % 5 == 0 ) ) {
+	if( attacker->r.client->awardInfo.frag_count &&
+		( attacker->r.client->awardInfo.frag_count % 5 == 0 ) ) {
 		char s[MAX_CONFIGSTRING_CHARS];
 
 		s[0] = 0;
 
-		switch( (int)( attacker->r.client->resp.awardInfo.frag_count / 5 ) ) {
+		switch( (int)( attacker->r.client->awardInfo.frag_count / 5 ) ) {
 			case 1:
 				Q_strncpyz( s, S_COLOR_YELLOW "On Fire!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is On Fire!\n", attacker->r.client->netname );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is On Fire!\n", attacker->r.client->netname.data() );
 				break;
 			case 2:
 				Q_strncpyz( s, S_COLOR_YELLOW "Raging!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is Raging!\n", attacker->r.client->netname );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is Raging!\n", attacker->r.client->netname.data() );
 				break;
 			case 3:
 				Q_strncpyz( s, S_COLOR_YELLOW "Fraglord!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is the Fraglord!\n", attacker->r.client->netname );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is the Fraglord!\n", attacker->r.client->netname.data() );
 				break;
 			case 4:
 				Q_strncpyz( s, S_COLOR_YELLOW "Extermination!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is Exterminating!\n", attacker->r.client->netname );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is Exterminating!\n", attacker->r.client->netname.data() );
 				break;
 			case 5:
 				Q_strncpyz( s, S_COLOR_YELLOW "God Mode!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is in God Mode!\n", attacker->r.client->netname );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is in God Mode!\n", attacker->r.client->netname.data() );
 			default:
 				Q_strncpyz( s, S_COLOR_YELLOW "God Mode!", sizeof( s ) );
-				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is in God Mode! " S_COLOR_WHITE "%d" S_COLOR_YELLOW " frags!\n", attacker->r.client->netname, attacker->r.client->resp.awardInfo.frag_count );
+				G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " is in God Mode! " S_COLOR_WHITE "%d" S_COLOR_YELLOW " frags!\n", attacker->r.client->netname.data(), attacker->r.client->awardInfo.frag_count );
 				break;
 		}
 
@@ -380,7 +380,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 
 	// ch : weapon specific frags
 	if( G_ModToAmmo( mod ) != AMMO_NONE ) {
-		attacker->r.client->level.stats.accuracy_frags[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
+		attacker->r.client->stats.accuracy_frags[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
 	}
 }
 
@@ -391,39 +391,39 @@ void G_AwardPlayerPickup( edict_t *self, edict_t *item ) {
 
 	// MH control
 	if( item->item->tag == HEALTH_MEGA ) {
-		self->r.client->level.stats.AddToEntry( "mh_taken", 1 );
-		self->r.client->resp.awardInfo.mh_control_award++;
-		if( self->r.client->resp.awardInfo.mh_control_award % 5 == 0 ) {
+		self->r.client->stats.AddToEntry( "mh_taken", 1 );
+		self->r.client->awardInfo.mh_control_award++;
+		if( self->r.client->awardInfo.mh_control_award % 5 == 0 ) {
 			G_PlayerAward( self, S_COLOR_CYAN "Mega-Health Control!" );
 		}
 	}
 	// UH control
 	else if( item->item->tag == HEALTH_ULTRA ) {
-		self->r.client->level.stats.AddToEntry( "uh_taken", 1 );
-		self->r.client->resp.awardInfo.uh_control_award++;
-		if( self->r.client->resp.awardInfo.uh_control_award % 5 == 0 ) {
+		self->r.client->stats.AddToEntry( "uh_taken", 1 );
+		self->r.client->awardInfo.uh_control_award++;
+		if( self->r.client->awardInfo.uh_control_award % 5 == 0 ) {
 			G_PlayerAward( self, S_COLOR_CYAN "Ultra-Health Control!" );
 		}
 	}
 	// RA control
 	else if( item->item->tag == ARMOR_RA ) {
-		self->r.client->level.stats.AddToEntry( "ra_taken", 1 );
-		self->r.client->resp.awardInfo.ra_control_award++;
-		if( self->r.client->resp.awardInfo.ra_control_award % 5 == 0 ) {
+		self->r.client->stats.AddToEntry( "ra_taken", 1 );
+		self->r.client->awardInfo.ra_control_award++;
+		if( self->r.client->awardInfo.ra_control_award % 5 == 0 ) {
 			G_PlayerAward( self, S_COLOR_CYAN "Red Armor Control!" );
 		}
 	}
 	// Other items counts
 	else if( item->item->tag == ARMOR_GA ) {
-		self->r.client->level.stats.AddToEntry( "ga_taken", 1 );
+		self->r.client->stats.AddToEntry( "ga_taken", 1 );
 	} else if( item->item->tag == ARMOR_YA ) {
-		self->r.client->level.stats.AddToEntry( "ya_taken", 1 );
+		self->r.client->stats.AddToEntry( "ya_taken", 1 );
 	} else if( item->item->tag == POWERUP_QUAD ) {
-		self->r.client->level.stats.AddToEntry( "quads_taken", 1 );
+		self->r.client->stats.AddToEntry( "quads_taken", 1 );
 	} else if( item->item->tag == POWERUP_REGEN ) {
-		self->r.client->level.stats.AddToEntry( "regens_taken", 1 );
+		self->r.client->stats.AddToEntry( "regens_taken", 1 );
 	} else if( item->item->tag == POWERUP_SHELL ) {
-		self->r.client->level.stats.AddToEntry( "shells_taken", 1 );
+		self->r.client->stats.AddToEntry( "shells_taken", 1 );
 	}
 }
 
@@ -432,9 +432,9 @@ void G_AwardRaceRecord( edict_t *self ) {
 }
 
 void G_DeathAwards( edict_t *ent ) {
-	int frag_count = ent->r.client->resp.awardInfo.frag_count;
+	int frag_count = ent->r.client->awardInfo.frag_count;
 	if( frag_count >= 5 ) {
-		G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " made a spree of " S_COLOR_WHITE "%d" S_COLOR_YELLOW "!\n", ent->r.client->netname, frag_count );
+		G_PrintMsg( NULL, "%s" S_COLOR_YELLOW " made a spree of " S_COLOR_WHITE "%d" S_COLOR_YELLOW "!\n", ent->r.client->netname.data(), frag_count );
 	}
 }
 

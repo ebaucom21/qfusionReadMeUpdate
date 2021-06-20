@@ -111,9 +111,9 @@ struct alignas( 8 )RaceRun {
 	 * @note it is assumed that the times array is allocated within
 	 * this run object and thus does not need its own memory management.
 	 */
-	RaceRun( const struct gclient_s *client_, int numSectors_, uint32_t *times_ );
+	RaceRun( const struct Client *client_, int numSectors_, uint32_t *times_ );
 
-	void SaveNickname( const struct gclient_s *client );
+	void SaveNickname( const struct Client *client );
 };
 
 class QueryObject;
@@ -263,8 +263,8 @@ public:
 };
 
 template <typename T, size_t N> inline void MoveArray( T ( &dest )[N], T ( &src )[N] ) {
-	memcpy( dest, src, N );
-	memset( src, 0, N );
+	memcpy( dest, src, N * sizeof( T ) );
+	memset( src, 0, N * sizeof( T ) );
 }
 
 void *Q_malloc( size_t size );

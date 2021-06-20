@@ -95,18 +95,18 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage,
 
 		// count stats
 		if( GS_MatchState() == MATCH_STATE_PLAYTIME ) {
-			targ->r.client->level.stats.AddDeath();
+			targ->r.client->stats.AddDeath();
 			teamlist[targ->s.team].stats.AddDeath();
 
 			if( !attacker || !attacker->r.client || attacker == targ || attacker == world ) {
-				targ->r.client->level.stats.AddSuicide();
+				targ->r.client->stats.AddSuicide();
 				teamlist[targ->s.team].stats.AddSuicide();
 			} else {
 				if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
-					attacker->r.client->level.stats.AddTeamFrag();
+					attacker->r.client->stats.AddTeamFrag();
 					teamlist[attacker->s.team].stats.AddTeamFrag();
 				} else {
-					attacker->r.client->level.stats.AddFrag();
+					attacker->r.client->stats.AddFrag();
 					teamlist[attacker->s.team].stats.AddFrag();
 					G_AwardPlayerKilled( targ, inflictor, attacker, mod );
 				}
@@ -123,7 +123,7 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage,
 * G_CheckArmor
 */
 static float G_CheckArmor( edict_t *ent, float damage, int dflags ) {
-	gclient_t *client = ent->r.client;
+	Client *client = ent->r.client;
 	float maxsave, save, armordamage;
 
 	if( !client ) {
@@ -134,7 +134,7 @@ static float G_CheckArmor( edict_t *ent, float damage, int dflags ) {
 		return 0.0f;
 	}
 
-	maxsave = std::min( damage, client->resp.armor / g_armor_degradation->value );
+	maxsave = std::min( damage, client->armor / g_armor_degradation->value );
 
 	if( maxsave <= 0.0f ) {
 		return 0.0f;
@@ -143,11 +143,11 @@ static float G_CheckArmor( edict_t *ent, float damage, int dflags ) {
 	armordamage = maxsave * g_armor_degradation->value;
 	save = maxsave * g_armor_protection->value;
 
-	client->resp.armor -= armordamage;
-	if( ARMOR_TO_INT( client->resp.armor ) <= 0 ) {
-		client->resp.armor = 0.0f;
+	client->armor -= armordamage;
+	if( ARMOR_TO_INT( client->armor ) <= 0 ) {
+		client->armor = 0.0f;
 	}
-	client->ps.stats[STAT_ARMOR] = ARMOR_TO_INT( client->resp.armor );
+	client->ps.stats[STAT_ARMOR] = ARMOR_TO_INT( client->armor );
 
 	return save;
 }
@@ -246,7 +246,7 @@ static void G_KnockBackPush( edict_t *targ, edict_t *attacker, const vec3_t base
 * dflags		these flags are used to control how T_Damage works
 */
 void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_t pushdir, const vec3_t dmgdir, const vec3_t point, float damage, float knockback, float stun, int dflags, int mod ) {
-	gclient_t *client;
+	Client *client;
 	float take;
 	float save;
 	float asave;
@@ -280,7 +280,7 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 
 	// stun
 	if( g_allow_stun->integer && !( dflags & ( DAMAGE_NO_STUN | FL_GODMODE ) )
-		&& (int)stun > 0 && targ->r.client && targ->r.client->resp.takeStun &&
+		&& (int)stun > 0 && targ->r.client && targ->r.client->takeStun &&
 		!GS_IsTeamDamage( &targ->s, &attacker->s ) && ( targ != attacker ) ) {
 		if( dflags & DAMAGE_STUN_CLAMP ) {
 			if( targ->r.client->ps.pmove.stats[PM_STAT_STUN] < (int)stun ) {
@@ -365,10 +365,10 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 
 	// adding damage given/received to stats
 	if( statDmg && attacker->r.client && !targ->deadflag && targ->movetype != MOVETYPE_PUSH && targ->s.type != ET_CORPSE ) {
-		attacker->r.client->level.stats.AddDamageGiven( take + asave );
+		attacker->r.client->stats.AddDamageGiven( take + asave );
 		teamlist[attacker->s.team].stats.AddDamageGiven( take + asave );
 		if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
-			attacker->r.client->level.stats.AddTeamDamageGiven( take + asave );
+			attacker->r.client->stats.AddTeamDamageGiven( take + asave );
 			teamlist[attacker->s.team].stats.AddTeamDamageGiven( take + asave );
 		}
 	}
@@ -379,10 +379,10 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 		AI_DamagedEntity( attacker, targ, (int)damage );
 
 	if( statDmg && client ) {
-		client->level.stats.AddDamageTaken( take + asave );
+		client->stats.AddDamageTaken( take + asave );
 		teamlist[targ->s.team].stats.AddDamageTaken( take + asave );
 		if( GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
-			client->level.stats.AddTeamDamageTaken( take + asave );
+			client->stats.AddTeamDamageTaken( take + asave );
 			teamlist[targ->s.team].stats.AddTeamDamageTaken( take + asave );
 		}
 	}
@@ -426,8 +426,8 @@ void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_
 
 	// add damage done to stats
 	if( !GS_IsTeamDamage( &targ->s, &attacker->s ) && statDmg && G_ModToAmmo( mod ) != AMMO_NONE && client && attacker->r.client ) {
-		attacker->r.client->level.stats.accuracy_hits[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
-		attacker->r.client->level.stats.accuracy_damage[G_ModToAmmo( mod ) - AMMO_GUNBLADE] += damage;
+		attacker->r.client->stats.accuracy_hits[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
+		attacker->r.client->stats.accuracy_damage[G_ModToAmmo( mod ) - AMMO_GUNBLADE] += damage;
 		teamlist[attacker->s.team].stats.accuracy_hits[G_ModToAmmo( mod ) - AMMO_GUNBLADE]++;
 		teamlist[attacker->s.team].stats.accuracy_damage[G_ModToAmmo( mod ) - AMMO_GUNBLADE] += damage;
 

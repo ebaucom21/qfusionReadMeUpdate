@@ -100,8 +100,8 @@ static inline void GetRandomPointInBox( const vec3_t origin, const vec3_t mins, 
 }
 
 bool SnapVisTable::DoCullingByCastingRays( const edict_t *clientEnt, const vec3_t viewOrigin, const edict_t *targetEnt ) {
-	const gclient_t *const povClient = clientEnt->r.client;
-	const gclient_t *const targetClient = targetEnt->r.client;
+	const Client *const povClient = clientEnt->r.client;
+	const Client *const targetClient = targetEnt->r.client;
 
 	// This method is internal and should be called supplying proper arguments
 	assert( povClient && targetClient );
@@ -184,7 +184,7 @@ bool SnapVisTable::DoCullingByCastingRays( const edict_t *clientEnt, const vec3_
 	// We might think about skipping culling for high-ping players but pings are easily mocked from a client side.
 	// The game is barely playable for really high pings anyway.
 
-	float xerpTimeSeconds = 0.001f * ( 100 + povClient->r.ping );
+	float xerpTimeSeconds = 0.001f * ( 100.0f + (float)povClient->m_ping );
 	clamp_high( xerpTimeSeconds, 0.275f );
 
 	// Check whether the former hint was useful.
@@ -236,12 +236,12 @@ bool SnapVisTable::DoCullingByCastingRays( const edict_t *clientEnt, const vec3_
 }
 
 bool SnapVisTable::TryCullingByCastingRays( const edict_t *povEnt, const vec_t *viewOrigin, const edict_t *targetEnt ) {
-	const gclient_t *targetClient = targetEnt->r.client;
+	const Client *targetClient = targetEnt->r.client;
 	if( !targetClient ) {
 		return false;
 	}
 
-	const gclient_t *povClient = povEnt->r.client;
+	const Client *povClient = povEnt->r.client;
 	if( !povClient ) {
 		return false;
 	}

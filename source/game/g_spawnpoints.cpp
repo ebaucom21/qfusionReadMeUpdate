@@ -533,14 +533,14 @@ void G_SpawnQueue_ReleaseTeamQueue( int team ) {
 
 		ghost = false;
 
-		if( team == TEAM_SPECTATOR || ent->r.client->teamstate.is_coach ) {
+		if( team == TEAM_SPECTATOR || ent->r.client->is_coach ) {
 			ghost = true;
 		}
 
 		G_ClientRespawn( ent, ghost );
 
 		// when spawning inside spectator team bring up the chase camera
-		if( team == TEAM_SPECTATOR && !ent->r.client->resp.chase.active ) {
+		if( team == TEAM_SPECTATOR && !ent->r.client->chase.active ) {
 			G_ChasePlayer( ent, NULL, false, 0 );
 		}
 	}
@@ -637,14 +637,14 @@ void G_SpawnQueue_Think( void ) {
 
 			ghost = false;
 
-			if( team == TEAM_SPECTATOR || ent->r.client->teamstate.is_coach ) {
+			if( team == TEAM_SPECTATOR || ent->r.client->is_coach ) {
 				ghost = true;
 			}
 
 			G_ClientRespawn( ent, ghost );
 
 			// when spawning inside spectator team bring up the chase camera
-			if( team == TEAM_SPECTATOR && !ent->r.client->resp.chase.active ) {
+			if( team == TEAM_SPECTATOR && !ent->r.client->chase.active ) {
 				G_ChasePlayer( ent, NULL, false, 0 );
 			}
 		}

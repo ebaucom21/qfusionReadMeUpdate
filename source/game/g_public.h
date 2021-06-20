@@ -20,32 +20,34 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    68
+#define GAME_API_VERSION    70
 
 //===============================================================
 
 #define MAX_ENT_CLUSTERS    16
 
 typedef struct edict_s edict_t;
-typedef struct gclient_s gclient_t;
-typedef struct gclient_quit_s gclient_quit_t;
+typedef struct Client Client;
 
-/*
-typedef struct stat_query_s stat_query_t;
-typedef struct stat_query_api_s stat_query_api_t;
-*/
-struct stat_query_api_s;
-struct stat_query_s;
+struct ServersideClientBase {
+	int m_ping;
+	int m_health;
+	int m_frags;
+	int m_snapHintFlags;
+	player_state_t ps;
+
+	ServersideClientBase() {
+		resetShared();
+	}
+
+	void resetShared() {
+		m_ping = m_health = m_frags = m_snapHintFlags = 0;
+		memset( &ps, 0, sizeof( ps ) );
+	}
+};
 
 typedef struct {
-	int ping;
-	int health;
-	int frags;
-	int snapHintFlags;
-} client_shared_t;
-
-typedef struct {
-	gclient_t *client;
+	Client *client;
 	bool inuse;
 
 	int num_clusters;           // if -1, use headnode instead

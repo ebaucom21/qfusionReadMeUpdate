@@ -100,6 +100,13 @@ typedef struct clientRating_s {
 
 mm_uuid_t *Uuid_FromString( const char *buffer, mm_uuid_t *dest );
 
+namespace wsw { class StringView; }
+
+#include <optional>
+
+[[nodiscard]]
+auto Uuid_FromString( const wsw::StringView &buffer ) -> std::optional<mm_uuid_t>;
+
 char *Uuid_ToString( char *buffer, mm_uuid_t uuid );
 
 static inline bool Uuid_IsValidSessionId( mm_uuid_t uuid ) {

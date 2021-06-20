@@ -49,13 +49,14 @@ void G_Teams_Init( void ) {
 
 	for( ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
 		if( ent->r.inuse ) {
-			ent->r.client->teamstate.Reset();
-			ent->r.client->resp.Reset();
+			ent->r.client->teamStateTimestamp = 0;
+			ent->r.client->resetTeamState();
+			ent->r.client->resetSpawnState();
 			ent->s.team = ent->r.client->team = TEAM_SPECTATOR;
 			G_GhostClient( ent );
 			ent->movetype = MOVETYPE_NOCLIP; // allow freefly
-			ent->r.client->teamstate.timeStamp = level.time;
-			ent->r.client->resp.timeStamp = level.time;
+			ent->r.client->teamStateTimestamp = level.time;
+			ent->r.client->spawnStateTimestamp = level.time;
 		}
 	}
 
@@ -64,11 +65,11 @@ void G_Teams_Init( void ) {
 static int G_Teams_CompareMembers( const void *a, const void *b ) {
 	edict_t *edict_a = game.edicts + *(int *)a;
 	edict_t *edict_b = game.edicts + *(int *)b;
-	int score_a = edict_a->r.client->level.stats.score;
-	int score_b = edict_b->r.client->level.stats.score;
+	int score_a = edict_a->r.client->stats.score;
+	int score_b = edict_b->r.client->stats.score;
 	int result = ( level.gametype.inverseScore ? -1 : 1 ) * ( score_b - score_a );
 	if( !result ) {
-		result = Q_stricmp( edict_a->r.client->netname, edict_b->r.client->netname );
+		result = Q_stricmp( edict_a->r.client->netname.data(), edict_b->r.client->netname.data() );
 	}
 	if( !result ) {
 		result = ENTNUM( edict_a ) - ENTNUM( edict_b );
@@ -99,7 +100,7 @@ void G_Teams_UpdateMembersList( void ) {
 			if( ent->s.team == team ) {
 				teamlist[team].playerIndices[teamlist[team].numplayers++] = ENTNUM( ent );
 
-				if( ent->r.client->teamstate.is_coach ) {
+				if( ent->r.client->is_coach ) {
 					teamlist[team].has_coach = true;
 				}
 			}
@@ -108,8 +109,9 @@ void G_Teams_UpdateMembersList( void ) {
 		qsort( teamlist[team].playerIndices, teamlist[team].numplayers, sizeof( teamlist[team].playerIndices[0] ), G_Teams_CompareMembers );
 
 		if( teamlist[team].numplayers ) {
-			for( i = 0; i < teamlist[team].numplayers; i++ )
-				teamlist[team].ping += game.edicts[teamlist[team].playerIndices[i]].r.client->r.ping;
+			for( i = 0; i < teamlist[team].numplayers; i++ ) {
+				teamlist[team].ping += game.edicts[teamlist[team].playerIndices[i]].r.client->m_ping;
+			}
 			teamlist[team].ping /= teamlist[team].numplayers;
 		}
 	}
@@ -273,7 +275,7 @@ void G_Teams_Invite_f( edict_t *ent ) {
 				continue;
 			}
 
-			Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname ), sizeof( msg ) );
+			Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname.data() ), sizeof( msg ) );
 		}
 
 		G_PrintMsg( ent, "%s", msg );
@@ -295,14 +297,14 @@ void G_Teams_Invite_f( edict_t *ent ) {
 	}
 
 	if( G_Teams_PlayerIsInvited( team, toinvite ) ) {
-		G_PrintMsg( ent, "%s%s is already invited to your team.\n", toinvite->r.client->netname, S_COLOR_WHITE );
+		G_PrintMsg( ent, "%s%s is already invited to your team.\n", toinvite->r.client->netname.data(), S_COLOR_WHITE );
 		return;
 	}
 
 	G_Teams_InvitePlayer( team, toinvite );
 
-	G_PrintMsg( NULL, "%s%s invited %s%s to team %s%s.\n", ent->r.client->netname, S_COLOR_WHITE,
-				toinvite->r.client->netname, S_COLOR_WHITE, GS_TeamName( team ), S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s%s invited %s%s to team %s%s.\n", ent->r.client->netname.data(), S_COLOR_WHITE,
+				toinvite->r.client->netname.data(), S_COLOR_WHITE, GS_TeamName( team ), S_COLOR_WHITE );
 }
 
 /*
@@ -316,14 +318,14 @@ void G_Teams_SetTeam( edict_t *ent, int team ) {
 
 	if( ent->r.client->team != TEAM_SPECTATOR && team != TEAM_SPECTATOR ) {
 		// keep scores when switching between non-spectating teams
-		int64_t timeStamp = ent->r.client->teamstate.timeStamp;
-		ent->r.client->teamstate.Reset();
-		ent->r.client->teamstate.timeStamp = timeStamp;
+		int64_t timeStamp = ent->r.client->teamStateTimestamp;
+		ent->r.client->resetTeamState();
+		ent->r.client->teamStateTimestamp = timeStamp;
 	} else {
 		// clear scores at changing team
-		ent->r.client->level.stats.Clear();
-		ent->r.client->teamstate.Reset();
-		ent->r.client->teamstate.timeStamp = level.time;
+		ent->r.client->stats.Clear();
+		ent->r.client->resetTeamState();
+		ent->r.client->teamStateTimestamp = level.time;
 	}
 
 	ent->r.client->team = team;
@@ -510,7 +512,7 @@ bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent ) {
 		if( G_Teams_JoinTeam( ent, TEAM_PLAYERS ) ) {
 			if( !silent ) {
 				G_PrintMsg( NULL, "%s%s joined the %s team.\n",
-							ent->r.client->netname, S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
+							ent->r.client->netname.data(), S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 			}
 		}
 		return true;
@@ -543,7 +545,7 @@ bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent ) {
 			if( G_Teams_JoinTeam( ent, team ) ) {
 				if( !silent ) {
 					G_PrintMsg( NULL, "%s%s joined the %s team.\n",
-								ent->r.client->netname, S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
+								ent->r.client->netname.data(), S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 				}
 				return true;
 			}
@@ -589,7 +591,7 @@ void G_Teams_Join_Cmd( edict_t *ent ) {
 			return;
 		}
 		if( G_Teams_JoinTeam( ent, team ) ) {
-			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname, S_COLOR_WHITE,
+			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(), S_COLOR_WHITE,
 						GS_TeamName( ent->s.team ), S_COLOR_WHITE );
 			return;
 		}
@@ -627,7 +629,7 @@ edict_t **G_Teams_ChallengersQueue( void ) {
 	int num_challengers = 0;
 	static edict_t *challengers[MAX_CLIENTS + 1];
 	edict_t *e;
-	gclient_t *cl;
+	Client *cl;
 
 	// fill the challengers into array, then sort
 	for( e = game.edicts + 1; PLAYERNUM( e ) < gs.maxclients; e++ ) {
@@ -729,10 +731,10 @@ static edict_t *G_Teams_BestScoreBelow( int maxscore ) {
 		for( team = TEAM_ALPHA; team < GS_MAX_TEAMS; team++ ) {
 			for( i = 0; i < teamlist[team].numplayers; i++ ) {
 				e = game.edicts + teamlist[team].playerIndices[i];
-				if( e->r.client->level.stats.score > bestScore &&
-					e->r.client->level.stats.score <= maxscore
+				if( e->r.client->stats.score > bestScore &&
+					e->r.client->stats.score <= maxscore
 					&& !e->r.client->queueTimeStamp ) {
-					bestScore = e->r.client->level.stats.score;
+					bestScore = e->r.client->stats.score;
 					best = e;
 				}
 			}
@@ -740,10 +742,10 @@ static edict_t *G_Teams_BestScoreBelow( int maxscore ) {
 	} else {
 		for( i = 0; i < teamlist[TEAM_PLAYERS].numplayers; i++ ) {
 			e = game.edicts + teamlist[TEAM_PLAYERS].playerIndices[i];
-			if( e->r.client->level.stats.score > bestScore &&
-				e->r.client->level.stats.score <= maxscore
+			if( e->r.client->stats.score > bestScore &&
+				e->r.client->stats.score <= maxscore
 				&& !e->r.client->queueTimeStamp ) {
-				bestScore = e->r.client->level.stats.score;
+				bestScore = e->r.client->stats.score;
 				best = e;
 			}
 		}
@@ -800,7 +802,7 @@ void G_Teams_AdvanceChallengersQueue( void ) {
 		for( i = 0; i < winnerscount; i++ ) {
 			won = G_Teams_BestScoreBelow( maxscore );
 			if( won ) {
-				maxscore = won->r.client->level.stats.score;
+				maxscore = won->r.client->stats.score;
 				won->r.client->queueTimeStamp = 1 + ( winnerscount - i ); // never have 2 players with the same timestamp
 			}
 		}
@@ -891,7 +893,7 @@ static void UpdatePoint( edict_t *who ) {
 	edict_t *ent, *ent_best = NULL;
 	int i, j;
 	float value, value_best = 0.35f; // if nothing better is found, print nothing
-	gclient_t *client = who->r.client;
+	Client *client = who->r.client;
 	vec3_t boxpoints[8], viewpoint;
 
 	AngleVectors( client->ps.viewangles, forward, NULL, NULL );
@@ -952,9 +954,9 @@ static void Say_Team_Location( edict_t *who, char *buf, int buflen, const char *
 }
 
 static void Say_Team_Armor( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( GS_Armor_TagForCount( who->r.client->resp.armor ) != ARMOR_NONE ) {
-		Q_snprintfz( buf, buflen, "%s%i%s", GS_FindItemByTag( GS_Armor_TagForCount( who->r.client->resp.armor ) )->color,
-					 ARMOR_TO_INT( who->r.client->resp.armor ), current_color );
+	if( GS_Armor_TagForCount( who->r.client->armor ) != ARMOR_NONE ) {
+		Q_snprintfz( buf, buflen, "%s%i%s", GS_FindItemByTag( GS_Armor_TagForCount( who->r.client->armor ) )->color,
+					 ARMOR_TO_INT( who->r.client->armor ), current_color );
 	} else {
 		Q_snprintfz( buf, buflen, "%s0%s", S_COLOR_GREEN, current_color );
 	}
@@ -1066,10 +1068,10 @@ static void Say_Team_Point_Location( edict_t *who, char *buf, int buflen, const 
 }
 
 static void Say_Team_Pickup( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( !who->r.client->teamstate.last_pickup ) {
+	if( !who->r.client->last_pickup ) {
 		buf[0] = 0;
 	} else {
-		gsitem_t *item = GS_FindItemByClassname( who->r.client->teamstate.last_pickup->classname );
+		gsitem_t *item = GS_FindItemByClassname( who->r.client->last_pickup->classname );
 		if( item ) {
 			Q_snprintfz( buf, buflen, "%s%s%s", ( item->color ? item->color : "" ), item->shortname, current_color );
 		} else {
@@ -1079,7 +1081,7 @@ static void Say_Team_Pickup( edict_t *who, char *buf, int buflen, const char *cu
 }
 
 static void Say_Team_Pickup_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( !who->r.client->teamstate.last_pickup ) {
+	if( !who->r.client->last_pickup ) {
 		buf[0] = 0;
 	} else {
 		G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( point_location ), buf, buflen );
@@ -1088,7 +1090,7 @@ static void Say_Team_Pickup_Location( edict_t *who, char *buf, int buflen, const
 }
 
 static void Say_Team_Drop( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	const gsitem_t *item = who->r.client->teamstate.last_drop_item;
+	const gsitem_t *item = who->r.client->last_drop_item;
 
 	if( !item ) {
 		buf[0] = 0;
@@ -1098,10 +1100,10 @@ static void Say_Team_Drop( edict_t *who, char *buf, int buflen, const char *curr
 }
 
 static void Say_Team_Drop_Location( edict_t *who, char *buf, int buflen, const char *current_color ) {
-	if( !who->r.client->teamstate.last_drop_item ) {
+	if( !who->r.client->last_drop_item ) {
 		buf[0] = 0;
 	} else {
-		G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( who->r.client->teamstate.last_drop_location ), buf, buflen );
+		G_MapLocationNameForTAG( G_MapLocationTAGForOrigin( who->r.client->last_drop_location ), buf, buflen );
 		Q_strncatz( buf, current_color, buflen );
 	}
 }
@@ -1226,7 +1228,7 @@ void G_Teams_Coach( edict_t *ent ) {
 				G_PrintMsg( ent, "Can't set coach mode with the match in progress\n" );
 			} else {
 				// move to coach mode
-				ent->r.client->teamstate.is_coach = true;
+				ent->r.client->is_coach = true;
 				G_GhostClient( ent );
 				ent->health = ent->max_health;
 				ent->deadflag = DEAD_NO;
@@ -1235,15 +1237,15 @@ void G_Teams_Coach( edict_t *ent ) {
 
 				//clear up his scores
 				G_Match_Ready( ent ); // set ready and check readys
-				ent->r.client->level.stats.Clear();
+				ent->r.client->stats.Clear();
 
 				teamlist[ent->s.team].has_coach = true;
-				G_PrintMsg( NULL, "%s%s is now team %s coach \n", ent->r.client->netname,
+				G_PrintMsg( NULL, "%s%s is now team %s coach \n", ent->r.client->netname.data(),
 							S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 			}
-		} else if( ent->r.client->teamstate.is_coach ) {   // if you are this team coach, resign
-			ent->r.client->teamstate.is_coach = false;
-			G_PrintMsg( NULL, "%s%s is no longer team %s coach \n", ent->r.client->netname,
+		} else if( ent->r.client->is_coach ) {   // if you are this team coach, resign
+			ent->r.client->is_coach = false;
+			G_PrintMsg( NULL, "%s%s is no longer team %s coach \n", ent->r.client->netname.data(),
 						S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 
 			G_Teams_SetTeam( ent, ent->s.team );
@@ -1256,20 +1258,20 @@ void G_Teams_Coach( edict_t *ent ) {
 }
 
 void G_Teams_CoachLockTeam( edict_t *ent ) {
-	if( ent->r.client->teamstate.is_coach ) {
+	if( ent->r.client->is_coach ) {
 		if( !G_Teams_TeamIsLocked( ent->s.team ) ) {
 			G_Teams_LockTeam( ent->s.team );
-			G_PrintMsg( NULL, "%s%s locked the %s team.\n", ent->r.client->netname,
+			G_PrintMsg( NULL, "%s%s locked the %s team.\n", ent->r.client->netname.data(),
 						S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 		}
 	}
 }
 
 void G_Teams_CoachUnLockTeam( edict_t *ent ) {
-	if( ent->r.client->teamstate.is_coach ) {
+	if( ent->r.client->is_coach ) {
 		if( G_Teams_TeamIsLocked( ent->s.team ) ) {
 			G_Teams_UnLockTeam( ent->s.team );
-			G_PrintMsg( NULL, "%s%s unlocked the %s team.\n", ent->r.client->netname,
+			G_PrintMsg( NULL, "%s%s unlocked the %s team.\n", ent->r.client->netname.data(),
 						S_COLOR_WHITE, GS_TeamName( ent->s.team ) );
 		}
 	}

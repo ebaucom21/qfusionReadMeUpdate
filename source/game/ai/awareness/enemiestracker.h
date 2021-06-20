@@ -185,7 +185,7 @@ public:
 		if( !ent ) {
 			return "???";
 		}
-		return ent->r.client ? ent->r.client->netname : ent->classname;
+		return ent->r.client ? ent->r.client->netname.data() : ent->classname;
 	}
 
 	inline float AvgWeight() const { return avgPositiveWeight; }

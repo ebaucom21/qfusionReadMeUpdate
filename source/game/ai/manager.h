@@ -59,7 +59,7 @@ protected:
 	bool CheckCanSpawnBots();
 	void CreateUserInfo( char *buffer, size_t bufferSize );
 	edict_t * ConnectFakeClient();
-	float MakeSkillForNewBot( const gclient_t *client ) const;
+	float MakeSkillForNewBot( const Client *client ) const;
 	void SetupBotForEntity( edict_t *ent );
 	void TryJoiningTeam( edict_t *ent, const char *teamName );
 
@@ -88,7 +88,7 @@ public:
 
 	void SpawnBot( const char *teamName );
 	void RespawnBot( edict_t *ent );
-	void RemoveBot( const char *name );
+	void RemoveBot( const wsw::StringView &name );
 	void AfterLevelScriptShutdown();
 	void BeforeLevelScriptShutdown();
 

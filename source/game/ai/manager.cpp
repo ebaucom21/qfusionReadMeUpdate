@@ -208,7 +208,7 @@ bool AiManager::CheckCanSpawnBots() {
 	return false;
 }
 
-float AiManager::MakeSkillForNewBot( const gclient_t *client ) const {
+float AiManager::MakeSkillForNewBot( const Client *client ) const {
 	float skillLevel;
 
 	// Always use the same skill for bots that are subject of evolution
@@ -221,7 +221,7 @@ float AiManager::MakeSkillForNewBot( const gclient_t *client ) const {
 		Q_clamp( skillLevel, 0.10f, 0.99f );
 	}
 
-	G_Printf( "%s skill %i\n", client->netname, (int)( skillLevel * 100 ) );
+	G_Printf( "%s skill %i\n", client->netname.data(), (int)( skillLevel * 100 ) );
 	return skillLevel;
 }
 
@@ -278,10 +278,10 @@ void AiManager::SpawnBot( const char *teamName ) {
 	game.numBots++;
 }
 
-void AiManager::RemoveBot( const char *name ) {
+void AiManager::RemoveBot( const wsw::StringView &name ) {
 	// Do not iterate over the linked list of bots since it is implicitly modified by these calls
 	for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
-		if( !Q_stricmp( ent->r.client->netname, name ) ) {
+		if( ent->r.client->netname.equalsIgnoreCase( name ) ) {
 			trap_DropClient( ent, DROP_TYPE_GENERAL, nullptr );
 			OnBotDropped( ent );
 			G_FreeAI( ent );
@@ -289,7 +289,7 @@ void AiManager::RemoveBot( const char *name ) {
 			return;
 		}
 	}
-	G_Printf( "AiManager::RemoveBot(): A bot `%s` has not been found\n", name );
+	G_Printf( "AiManager::RemoveBot(): A bot `%s` has not been found\n", name.data() );
 }
 
 void AiManager::AfterLevelScriptShutdown() {

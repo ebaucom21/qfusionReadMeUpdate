@@ -178,7 +178,7 @@ BotItemsSelector::ItemAndGoalWeights BotItemsSelector::ComputeHealthWeights( con
 }
 
 BotItemsSelector::ItemAndGoalWeights BotItemsSelector::ComputeArmorWeights( const gsitem_t *item ) const {
-	float currArmor = game.edicts[bot->EntNum()].r.client->resp.armor;
+	float currArmor = game.edicts[bot->EntNum()].r.client->armor;
 	switch( item->tag ) {
 		case ARMOR_RA:
 			return currArmor < 150.0f ? ItemAndGoalWeights( 2.0f, 1.0f ) : ItemAndGoalWeights( 0, 0 );

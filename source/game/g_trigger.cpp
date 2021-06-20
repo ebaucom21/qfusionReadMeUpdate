@@ -497,7 +497,7 @@ static void hurt_delayer_think( edict_t *self ) {
 	edict_t *target = &game.edicts[self->s.ownerNum];
 	float damage = target->health + ( -GIB_HEALTH ) + 1;
 
-	if( target->r.client && target->r.client->resp.timeStamp == self->deathTimeStamp ) {
+	if( target->r.client && target->r.client->spawnStateTimestamp == self->deathTimeStamp ) {
 		target->takedamage = true;
 		G_Damage( target, target, world, vec3_origin, vec3_origin, target->s.origin, damage, 0, 0, DAMAGE_NO_PROTECTION, MOD_TRIGGER_HURT );
 	}
@@ -551,7 +551,7 @@ static void hurt_touch( edict_t *self, edict_t *other, cplane_t *plane, int surf
 			delayer->think = hurt_delayer_think;
 			delayer->nextThink = level.time + diedelay;
 			if( other->r.client ) {
-				delayer->deathTimeStamp = other->r.client->resp.timeStamp;
+				delayer->deathTimeStamp = other->r.client->spawnStateTimestamp;
 			}
 
 			// make it be dead so it doesn't touch the trigger again

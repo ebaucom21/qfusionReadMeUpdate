@@ -9,7 +9,7 @@
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/stringspanstorage.h"
 
-struct gclient_s;
+struct Client;
 
 template <typename> class SingletonHolder;
 
@@ -73,12 +73,12 @@ public:
 		return registerUserColumn( title, Glyph );
 	}
 
-	void setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon );
-	void setPlayerNumber( const gclient_s *client, unsigned slot, int value );
-	void setPlayerGlyph( const gclient_s *client, unsigned slot, unsigned codePoint );
+	void setPlayerIcon( const Client *client, unsigned slot, unsigned icon );
+	void setPlayerNumber( const Client *client, unsigned slot, int value );
+	void setPlayerGlyph( const Client *client, unsigned slot, unsigned codePoint );
 
-	void setPlayerStatusIcon( const gclient_s *client, unsigned icon );
-	void setPlayerStatusGlyph( const gclient_s *client, unsigned codePoint );
+	void setPlayerStatusIcon( const Client *client, unsigned icon );
+	void setPlayerStatusGlyph( const Client *client, unsigned codePoint );
 
 	void update();
 };

@@ -20,7 +20,7 @@ bool UserInfo::set( const wsw::HashedStringView &key, const wsw::StringView &val
 			wsw::StringView ownedValue( data, value.length(), wsw::StringView::ZeroTerminated );
 			// TODO: Use an insertion hint
 			// TODO: Add a non-const iterator?
-			m_keysAndValues.insertOrThrow( key, value );
+			m_keysAndValues.insertOrReplace( key, value );
 			return true;
 		}
 

@@ -144,7 +144,7 @@ typedef enum {
 //
 typedef struct {
 	edict_t *edicts;        // [maxentities]
-	gclient_t *clients;     // [maxclients]
+	Client *clients;     // [maxclients]
 
 	int protocol;
 	char demoExtension[MAX_QPATH];
@@ -302,7 +302,7 @@ extern int meansOfDeath;
 #define FOFS( x ) offsetof( edict_t,x )
 #define STOFS( x ) offsetof( spawn_temp_t,x )
 #define LLOFS( x ) offsetof( level_locals_t,x )
-#define CLOFS( x ) offsetof( gclient_t,x )
+#define CLOFS( x ) offsetof( Client,x )
 #define AWOFS( x ) offsetof( award_info_t,x )
 
 extern cvar_t *password;
@@ -414,7 +414,7 @@ void G_MoveClientToPostMatchScoreBoards( edict_t *ent, edict_t *spawnpoint );
 void G_Gametype_Init( void );
 void G_Gametype_GenerateAllowedGametypesList( void );
 bool G_Gametype_IsVotable( const wsw::StringView &name );
-void G_Gametype_ScoreEvent( gclient_t *client, const char *score_event, const char *args );
+void G_Gametype_ScoreEvent( Client *client, const char *score_event, const char *args );
 void G_RunGametype( void );
 bool G_Gametype_CanPickUpItem( const gsitem_t *item );
 bool G_Gametype_CanSpawnItem( const gsitem_t *item );
@@ -488,10 +488,10 @@ bool GT_asCallMatchStateFinished( int incomingMatchState );
 void GT_asCallThinkRules( void );
 void GT_asCallPlayerKilled( edict_t *targ, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point, int mod );
 void GT_asCallPlayerRespawn( edict_t *ent, int old_team, int new_team );
-void GT_asCallScoreEvent( gclient_t *client, const char *score_event, const char *args );
+void GT_asCallScoreEvent( Client *client, const char *score_event, const char *args );
 void GT_asCallUpdateScoreboard();
 edict_t *GT_asCallSelectSpawnPoint( edict_t *ent );
-bool GT_asCallGameCommand( gclient_t *client, const char *cmd, const char *args, int argc );
+bool GT_asCallGameCommand( Client *client, const char *cmd, const char *args, int argc );
 bool GT_asCallBotStatus( edict_t *ent );
 void GT_asCallShutdown( void );
 
@@ -607,7 +607,7 @@ void SpawnItem( edict_t *ent, const gsitem_t *item );
 void G_Items_FinishSpawningItems( void );
 int PowerArmorType( edict_t *ent );
 const gsitem_t *GetItemByTag( int tag );
-bool Add_Ammo( gclient_t *client, const gsitem_t *item, int count, bool add_it );
+bool Add_Ammo( Client *client, const gsitem_t *item, int count, bool add_it );
 void Touch_ItemSound( edict_t *other, const gsitem_t *item );
 void Touch_Item( edict_t *ent, edict_t *other, cplane_t *plane, int surfFlags );
 bool G_PickupItem( edict_t *other, const gsitem_t *it, int flags, int count, const int *invpack );
@@ -737,9 +737,9 @@ int G_SolidMaskForEnt( edict_t *ent );
 void G_CheckGround( edict_t *ent );
 void G_CategorizePosition( edict_t *ent );
 bool G_CheckBottom( edict_t *ent );
-void G_ReleaseClientPSEvent( gclient_t *client );
-void G_AddPlayerStateEvent( gclient_t *client, int event, int parm );
-void G_ClearPlayerStateEvents( gclient_t *client );
+void G_ReleaseClientPSEvent( Client *client );
+void G_AddPlayerStateEvent( Client *client, int event, int parm );
+void G_ClearPlayerStateEvents( Client *client );
 
 // announcer events
 void G_AnnouncerSound( edict_t *targ, int soundindex, int team, bool queued, edict_t *ignore );
@@ -925,8 +925,8 @@ void G_EndServerFrames_UpdateChaseCam( void );
 //
 void G_InitBodyQueue( void );
 void ClientUserinfoChanged( edict_t *ent, char *userinfo );
-void G_Client_UpdateActivity( gclient_t *client );
-void G_Client_InactivityRemove( gclient_t *client );
+void G_Client_UpdateActivity( Client *client );
+void G_Client_InactivityRemove( Client *client, int64_t inactivityMillis );
 void G_ClientRespawn( edict_t *self, bool ghost );
 void G_ClientClearStats( edict_t *ent );
 void G_GhostClient( edict_t *self );
@@ -985,15 +985,8 @@ void SV_ShutdownIPList( void );
 // p_view.c
 //
 void G_ClientEndSnapFrame( edict_t *ent );
-void G_ClientAddDamageIndicatorImpact( gclient_t *client, int damage, const vec3_t dir );
+void G_ClientAddDamageIndicatorImpact( Client *client, int damage, const vec3_t dir );
 void G_ClientDamageFeedback( edict_t *ent );
-
-//
-// p_hud.c
-//
-
-void G_SetClientStats( edict_t *ent );
-void G_Snap_UpdateWeaponListMessages( void );
 
 //
 // g_phys.c
@@ -1162,20 +1155,94 @@ typedef struct {
 #define G_MAX_TIME_DELTAS   8
 #define G_MAX_TIME_DELTAS_MASK ( G_MAX_TIME_DELTAS - 1 )
 
-typedef struct {
-	int buttons;
-	uint8_t plrkeys; // used for displaying key icons
-	int damageTaken;
-	vec3_t damageTakenDir;
+#include "../qcommon/userinfo.h"
+#include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswtonum.h"
 
-} client_snapreset_t;
+struct Client : public ServersideClientBase {
+	wsw::UserInfo m_userInfo;
 
-typedef struct client_respawnreset_s {
-	client_snapreset_t snap;
+	void setName( const wsw::StringView &inputName );
+	void setClan( const wsw::StringView &inputClan );
+	void setCleanNameResolvingNameClash( const wsw::StringView &name );
+	[[nodiscard]]
+	auto findClientWithTheSameColorlessName( const wsw::StringView &colorlessName ) -> const Client *;
+	void setSkinFromInfo();
+
+	void runPMove( pmove_t *pm );
+	void checkRegeneration();
+	void runTouch( int *entNums, int numTouchEnts );
+	void checkInstaShield();
+	[[nodiscard]]
+	auto ucmdToPlayerKeys() const -> uint8_t;
+	[[nodiscard]]
+	bool hasNewActivity( const usercmd_t &oldUcmd ) const;
+	void executeUcmd( const usercmd_t &ucmd_, int timeDelta_ );
+
+	// The maximum name length in characters without counting color tokens is controlled by MAX_NAME_CHARS constant
+	wsw::StaticString<MAX_NAME_BYTES> netname;
+	wsw::StaticString<MAX_NAME_BYTES> colorlessNetname;
+	wsw::StaticString<MAX_CLANNAME_BYTES> clanname;
+
+	wsw::StaticString<MAX_INFO_VALUE> ip;
+	wsw::StaticString<MAX_INFO_VALUE> socket;
+
+	// is a zero UUID if a client is not authenticated
+	// is an all-bits-set UUID if the session is local
+	// is a valid UUID if a client is authenticated
+	mm_uuid_t mm_session;
+	clientRating_t *ratings;        // list of ratings for gametypes
+
+	bool connecting;
+	bool multiview;
+
+	byte_vec4_t color;
+	int team;
+	int hand;
+	int handicap;
+	int movestyle;
+	int movestyle_latched;
+	bool isoperator;
+	int64_t queueTimeStamp;
+
+	usercmd_t ucmd;
+	int64_t timeDelta;
+	MovingAverage<8> deltas;
+
+	pmove_state_t old_pmove;    // for detecting out-of-pmove changes
+
+	// Team state
+	int64_t teamStateTimestamp; // last time it was reset
+
+	bool is_coach;
+
+	int64_t readyUpWarningNext; // (timer) warn people to ready up
+	int readyUpWarningCount;
+
+	// for position command
+	bool position_saved;
+	vec3_t position_origin;
+	vec3_t position_angles;
+	int64_t position_lastcmd;
+
+	const gsitem_t *last_drop_item;
+	vec3_t last_drop_location;
+	edict_t *last_pickup;
+	edict_t *last_killer;
+
+	// Respawn
+
+	struct {
+		int buttons;
+		uint8_t plrkeys;
+		int damageTaken;
+		vec3_t damageTakenDir;
+	} snap;
+
 	chasecam_t chase;
 	award_info_t awardInfo;
 
-	int64_t timeStamp; // last time it was reset
+	int64_t spawnStateTimestamp; // last time it was reset
 
 	// player_state_t event
 	int events[MAX_CLIENT_EVENTS];
@@ -1195,25 +1262,16 @@ typedef struct client_respawnreset_s {
 
 	int64_t pickup_msg_time;
 
-	// Stay uniform with client_levelreset_s
-	void Reset() {
-		memset( this, 0, sizeof( *this ) );
-	}
-} client_respawnreset_t;
-
-typedef struct client_levelreset_s {
-	int64_t timeStamp;				// last time it was reset
+	int64_t levelTimestamp;				// last time it was reset
 
 	unsigned int respawnCount;
 	matchmessage_t matchmessage;
 	unsigned int helpmessage;
 
-	int64_t last_vsay;				// time when last vsay was said
 	int64_t last_activity;
 
 	score_stats_t stats;
 	bool showscores;
-	bool showPLinks;				// bot debug
 
 	// flood protection
 	int64_t flood_locktill;			// locked from talking
@@ -1227,155 +1285,61 @@ typedef struct client_levelreset_s {
 
 	char quickMenuItems[1024];
 
-	void Reset() {
-		timeStamp = 0;
+	void resetLevelState();
+	void resetSpawnState();
+	void resetTeamState();
 
-		respawnCount = 0;
-		memset( &matchmessage, 0, sizeof( matchmessage ) );
-		helpmessage = 0;
-		last_vsay = 0;
-		last_activity = 0;
+	void reset();
 
-		stats.Clear();
-
-		showscores = false;
-		showPLinks = false;
-
-		flood_locktill = 0;
-		memset( flood_when, 0, sizeof( flood_when ) );
-		flood_whenhead = 0;
-		memset( flood_team_when, 0, sizeof( flood_team_when ) );
-
-		callvote_when = 0;
-		memset( quickMenuItems, 0, sizeof( quickMenuItems ) );
+	[[nodiscard]]
+	auto getInfoValue( const wsw::HashedStringView &key ) const -> std::optional<wsw::StringView> {
+		return m_userInfo.get( key );
 	}
-} client_levelreset_t;
-
-typedef struct client_teamreset_s {
-	int64_t timeStamp; // last time it was reset
-
-	bool is_coach;
-
-	int64_t readyUpWarningNext; // (timer) warn people to ready up
-	int readyUpWarningCount;
-
-	// for position command
-	bool position_saved;
-	vec3_t position_origin;
-	vec3_t position_angles;
-	int64_t position_lastcmd;
-
-	const gsitem_t *last_drop_item;
-	vec3_t last_drop_location;
-	edict_t *last_pickup;
-	edict_t *last_killer;
-
-	// Stay uniform with client_levelreset_s
-	void Reset() {
-		memset( this, 0, sizeof( *this ) );
+	[[nodiscard]]
+	auto getInfoValueOrEmpty( const wsw::HashedStringView &key ) const -> wsw::StringView {
+		return m_userInfo.getOrEmpty( key );
 	}
-} client_teamreset_t;
-
-struct gclient_s {
-	// known to server
-	player_state_t ps;          // communicated by server to clients
-	client_shared_t r;
-
-	// DO NOT MODIFY ANYTHING ABOVE THIS, THE SERVER
-	// EXPECTS THE FIELDS IN THAT ORDER!
-
-	//================================
-
-	/*
-	// Review notes
-	- Revise the calls to G_ClearPlayerStateEvents, they may be useless now
-	- self->ai.pers.netname for what? there is self->r.client->netname already
-	- CTF prints personal bonuses in global console. I don't think this is worth it
-	*/
-
-	client_respawnreset_t resp;
-	client_levelreset_t level;
-	client_teamreset_t teamstate;
-
-	//short ucmd_angles[3]; // last ucmd angles
-
-	// persistent info along all the time the client is connected
-
-	char userinfo[MAX_INFO_STRING];
-	char netname[MAX_NAME_BYTES];   // maximum name length is characters without counting color tokens
-	                                // is controlled by MAX_NAME_CHARS constant
-	char clanname[MAX_CLANNAME_BYTES];
-	char ip[MAX_INFO_VALUE];
-	char socket[MAX_INFO_VALUE];
-
-	// is a zero UUID if a client is not authenticated
-	// is an all-bits-set UUID if the session is local
-	// is a valid UUID if a client is authenticated
-	mm_uuid_t mm_session;
-	clientRating_t *ratings;        // list of ratings for gametypes
-
-	bool connecting;
-	bool multiview;
-
-	byte_vec4_t color;
-	int team;
-	int hand;
-	unsigned mmflags;
-	int handicap;
-	int movestyle;
-	int movestyle_latched;
-	bool isoperator;
-	int64_t queueTimeStamp;
-
-	usercmd_t ucmd;
-	int timeDelta;              // time offset to adjust for shots collision (antilag)
-	int timeDeltas[G_MAX_TIME_DELTAS];
-	int timeDeltasHead;
-
-	pmove_state_t old_pmove;    // for detecting out-of-pmove changes
-
-	int asRefCount, asFactored;
-
-	void Reset() {
-		memset( &ps, 0, sizeof( ps ) );
-		memset( &r, 0, sizeof( r ) );
-
-		resp.Reset();
-		level.Reset();
-		teamstate.Reset();
-
-		memset( userinfo, 0, sizeof( userinfo ) );
-		memset( netname, 0, sizeof( netname ) );
-		memset( clanname, 0, sizeof( clanname ) );
-		memset( ip, 0, sizeof( ip ) );
-		memset( socket, 0, sizeof( socket ) );
-
-		mm_session = Uuid_ZeroUuid();
-		ratings = nullptr;
-
-		connecting = false;
-		multiview = false;
-
-		Vector4Clear( color );
-		team = 0;
-		hand = 0;
-		mmflags = 0;
-		handicap = 0;
-		movestyle = 0;
-		movestyle_latched = 0;
-		isoperator = false;
-		queueTimeStamp = 0;
-
-		memset( &ucmd, 0, sizeof( ucmd ) );
-		timeDelta = 0;
-		memset( timeDeltas, 0, sizeof( timeDeltas ) );
-		timeDeltasHead = 0;
-
-		memset( &old_pmove, 0, sizeof( old_pmove ) );
-
-		asRefCount = 0;
-		asFactored = 0;
+	[[nodiscard]]
+	auto getInfoValueOrThrow( const wsw::HashedStringView &key ) const -> wsw::StringView {
+		return m_userInfo.getOrThrow( key );
 	}
+	[[nodiscard]]
+	auto getNonEmptyInfoValue( const wsw::HashedStringView &key ) const -> std::optional<wsw::StringView> {
+		if( const auto maybeValue = m_userInfo.get( key ); maybeValue && !maybeValue->empty() ) {
+			return maybeValue;
+		}
+		return std::nullopt;
+	}
+
+	[[nodiscard]]
+	auto getMMLoginName() const -> std::optional<wsw::StringView> {
+		return getNonEmptyInfoValue( wsw::HashedStringView( "cl_mm_login" ) );
+	}
+
+	[[nodiscard]]
+	auto getChatFilterFlags() const -> int {
+		if( const auto maybeString = m_userInfo.get( wsw::HashedStringView( "cg_chatFilter" ) ) ) {
+			if( const auto maybeValue = wsw::toNum<int>( *maybeString ) ) {
+				return *maybeValue;
+			}
+		}
+		return 0;
+	}
+
+	void setReplicatedStats();
+
+	void setUserInfo( const wsw::StringView &rawInfo );
+
+	void handleUserInfoChanges();
+
+	[[nodiscard]]
+	auto getEntity() -> edict_t *;
+
+	[[nodiscard]]
+	auto getEntity() const -> const edict_t *;
+
+	[[nodiscard]]
+	bool isFakeClient() const;
 };
 
 #include <functional>
@@ -1484,7 +1448,7 @@ public:
 
 	RunStatusQuery *SendRaceRunReport( RaceRun *raceRun, const char *runTag = nullptr );
 
-	void AddToRacePlayTime( const gclient_t *client, int64_t timeToAdd );
+	void AddToRacePlayTime( const Client *client, int64_t timeToAdd );
 
 	void SendMatchFinishedReport();
 
@@ -1504,7 +1468,7 @@ public:
 	clientRating_t *AddDefaultRating( edict_t *ent, const char *gametype );
 	clientRating_t *AddRating( edict_t *ent, const char *gametype, float rating, float deviation );
 
-	void TryUpdatingGametypeRating( const gclient_t *client,
+	void TryUpdatingGametypeRating( const Client *client,
 									const clientRating_t *addedRating,
 									const char *addedForGametype );
 
@@ -1514,7 +1478,7 @@ public:
 		return !IsValid();
 	}
 
-	void OnClientHadPlaytime( const gclient_t *client );
+	void OnClientHadPlaytime( const Client *client );
 };
 
 /**
@@ -2035,10 +1999,10 @@ struct edict_s {
 };
 
 static inline int ENTNUM( const edict_t *x ) { return x - game.edicts; }
-static inline int ENTNUM( const gclient_t *x ) { return x - game.clients + 1; }
+static inline int ENTNUM( const Client *x ) { return x - game.clients + 1; }
 
 static inline int PLAYERNUM( const edict_t *x ) { return x - game.edicts - 1; }
-static inline int PLAYERNUM( const gclient_t *x ) { return x - game.clients; }
+static inline int PLAYERNUM( const Client *x ) { return x - game.clients; }
 
 static inline edict_t *PLAYERENT( int x ) { return game.edicts + x + 1; }
 

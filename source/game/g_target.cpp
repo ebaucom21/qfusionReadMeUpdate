@@ -794,7 +794,7 @@ static void target_give_use( edict_t *self, edict_t *other, edict_t *activator )
 	float attenuation;
 	const char *pickup_sound;
 	int prev_pickup = -1;
-	gclient_t *aclient = activator && activator->r.client ? activator->r.client : NULL;
+	Client *aclient = activator && activator->r.client ? activator->r.client : NULL;
 	const gsitem_t *sounds[MAX_GIVE_SOUNDS];
 
 	give = NULL;

@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 * G_Chase_SetChaseActive
 */
 static void G_Chase_SetChaseActive( edict_t *ent, bool active ) {
-	ent->r.client->resp.chase.active = active;
+	ent->r.client->chase.active = active;
 	G_UpdatePlayerMatchMsg( ent );
 }
 
@@ -43,7 +43,7 @@ static bool G_Chase_IsValidTarget( edict_t *ent, edict_t *target, bool teamonly 
 		return false;
 	}
 
-	if( teamonly && !ent->r.client->teamstate.is_coach && G_ISGHOSTING( target ) ) {
+	if( teamonly && !ent->r.client->is_coach && G_ISGHOSTING( target ) ) {
 		return false;
 	}
 
@@ -75,17 +75,17 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 	static int64_t pwupswitchTime = 0;
 #define CARRIERSWITCHDELAY 8000
 
-	if( !ent->r.client || !ent->r.client->resp.chase.active || !ent->r.client->resp.chase.followmode ) {
+	if( !ent->r.client || !ent->r.client->chase.active || !ent->r.client->chase.followmode ) {
 		return newpov;
 	}
 
 	// follow killer, with a small delay
-	if( ( ent->r.client->resp.chase.followmode & 8 ) ) {
+	if( ( ent->r.client->chase.followmode & 8 ) ) {
 		edict_t *targ;
 
-		targ = &game.edicts[ent->r.client->resp.chase.target];
+		targ = &game.edicts[ent->r.client->chase.target];
 		if( G_IsDead( targ ) && targ->deathTimeStamp + 400 < level.time ) {
-			edict_t *attacker = targ->r.client->teamstate.last_killer;
+			edict_t *attacker = targ->r.client->last_killer;
 
 			// ignore world and team kills
 			if( attacker && attacker->r.client && !GS_IsTeamDamage( &targ->s, &attacker->s ) ) {
@@ -122,7 +122,7 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 		if( target->s.team <= 0 || target->s.team >= (int)( sizeof( flags ) / sizeof( flags[0] ) ) ) {
 			continue;
 		}
-		if( ent->r.client->resp.chase.teamonly && ent->s.team != target->s.team ) {
+		if( ent->r.client->chase.teamonly && ent->s.team != target->s.team ) {
 			continue;
 		}
 
@@ -231,11 +231,11 @@ static int G_Chase_FindFollowPOV( edict_t *ent ) {
 	}
 
 	// so, we got all, select what we prefer to show
-	if( ctfpov != -1 && ( ent->r.client->resp.chase.followmode & 4 ) ) {
+	if( ctfpov != -1 && ( ent->r.client->chase.followmode & 4 ) ) {
 		newpov = ctfpov;
-	} else if( poweruppov != -1 && ( ent->r.client->resp.chase.followmode & 2 ) ) {
+	} else if( poweruppov != -1 && ( ent->r.client->chase.followmode & 2 ) ) {
 		newpov = poweruppov;
-	} else if( scorelead != -1 && ( ent->r.client->resp.chase.followmode & 1 ) ) {
+	} else if( scorelead != -1 && ( ent->r.client->chase.followmode & 1 ) ) {
 		newpov = scorelead;
 	}
 
@@ -251,32 +251,32 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 	int followpov;
 
 	// not in chasecam
-	if( !ent->r.client->resp.chase.active ) {
+	if( !ent->r.client->chase.active ) {
 		return;
 	}
 
 	if( ( followpov = G_Chase_FindFollowPOV( ent ) ) != -1 ) {
-		ent->r.client->resp.chase.target = followpov;
+		ent->r.client->chase.target = followpov;
 	}
 
 	// is our chase target gone?
-	targ = &game.edicts[ent->r.client->resp.chase.target];
+	targ = &game.edicts[ent->r.client->chase.target];
 
-	if( !G_Chase_IsValidTarget( ent, targ, ent->r.client->resp.chase.teamonly ) ) {
-		if( game.realtime < ent->r.client->resp.chase.timeout ) { // wait for timeout
+	if( !G_Chase_IsValidTarget( ent, targ, ent->r.client->chase.teamonly ) ) {
+		if( game.realtime < ent->r.client->chase.timeout ) { // wait for timeout
 			return;
 		}
 
-		ent->r.client->resp.chase.timeout = game.realtime + 1500; // update timeout
+		ent->r.client->chase.timeout = game.realtime + 1500; // update timeout
 
-		G_ChasePlayer( ent, NULL, ent->r.client->resp.chase.teamonly, ent->r.client->resp.chase.followmode );
-		targ = &game.edicts[ent->r.client->resp.chase.target];
-		if( !G_Chase_IsValidTarget( ent, targ, ent->r.client->resp.chase.teamonly ) ) {
+		G_ChasePlayer( ent, NULL, ent->r.client->chase.teamonly, ent->r.client->chase.followmode );
+		targ = &game.edicts[ent->r.client->chase.target];
+		if( !G_Chase_IsValidTarget( ent, targ, ent->r.client->chase.teamonly ) ) {
 			return;
 		}
 	}
 
-	ent->r.client->resp.chase.timeout = game.realtime + 1500; // update timeout
+	ent->r.client->chase.timeout = game.realtime + 1500; // update timeout
 
 	if( targ == ent ) {
 		return;
@@ -296,14 +296,14 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_SPECTEAMONLY;
 	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_INSTANTRESPAWN;
 
-	if( ent->r.client->resp.chase.teamonly ) {
+	if( ent->r.client->chase.teamonly ) {
 		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SPECTEAMONLY;
-		if( !ent->r.client->teamstate.is_coach ) {
+		if( !ent->r.client->is_coach ) {
 			ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SPECDEAD; // show deadcam effect
 		}
 	}
 
-	if( ent->r.client->level.showscores || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
+	if( ent->r.client->showscores || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
 		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SCOREBOARD; // show the scoreboard
 
 	}
@@ -363,7 +363,7 @@ void G_EndServerFrames_UpdateChaseCam( void ) {
 void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmode ) {
 	int i;
 	edict_t *e;
-	gclient_t *client;
+	Client *client;
 	int targetNum = -1;
 	int oldTarget;
 	bool can_follow = true;
@@ -371,9 +371,9 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 
 	client = ent->r.client;
 
-	oldTarget = client->resp.chase.target;
+	oldTarget = client->chase.target;
 
-	if( teamonly && !client->teamstate.is_coach ) {
+	if( teamonly && !client->is_coach ) {
 		can_follow = false;
 	}
 
@@ -382,12 +382,12 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 		followmode = false;
 	}
 
-	if( ent->r.client->resp.chase.followmode && !followmode ) {
+	if( ent->r.client->chase.followmode && !followmode ) {
 		G_PrintMsg( ent, "Disabling chasecam follow mode\n" );
 	}
 
 	// always disable chasing as a start
-	memset( &client->resp.chase, 0, sizeof( chasecam_t ) );
+	memset( &client->chase, 0, sizeof( chasecam_t ) );
 
 	// locate the requested target
 	if( name && name[0] ) {
@@ -397,7 +397,7 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 				continue;
 			}
 
-			Q_strncpyz( colorlessname, COM_RemoveColorTokens( e->r.client->netname ), sizeof( colorlessname ) );
+			Q_strncpyz( colorlessname, COM_RemoveColorTokens( e->r.client->netname.data() ), sizeof( colorlessname ) );
 
 			if( !Q_stricmp( COM_RemoveColorTokens( name ), colorlessname ) ) {
 				targetNum = PLAYERNUM( e );
@@ -445,16 +445,16 @@ void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmod
 	G_GhostClient( ent );
 	if( targetNum != -1 ) {
 		// we found a target, set up the chasecam
-		client->resp.chase.target = targetNum + 1;
-		client->resp.chase.teamonly = teamonly;
-		client->resp.chase.followmode = followmode;
+		client->chase.target = targetNum + 1;
+		client->chase.teamonly = teamonly;
+		client->chase.followmode = followmode;
 		G_Chase_SetChaseActive( ent, true );
 	} else {
 		// stay as observer
 		if( !teamonly ) {
 			ent->movetype = MOVETYPE_NOCLIP;
 		}
-		client->level.showscores = false;
+		client->showscores = false;
 		G_Chase_SetChaseActive( ent, false );
 		G_CenterPrintMsg( ent, "No one to chase" );
 	}
@@ -472,11 +472,11 @@ void G_ChaseStep( edict_t *ent, int step ) {
 
 	assert( step == -1 || step == 0 || step == 1 );
 
-	if( !ent->r.client->resp.chase.active ) {
+	if( !ent->r.client->chase.active ) {
 		return;
 	}
 
-	start = ent->r.client->resp.chase.target;
+	start = ent->r.client->chase.target;
 	i = -1;
 	player_found = false; // needed to prevent an infinite loop if there are no players
 	// find the team of the previously chased player and his index in the sorted teamlist
@@ -495,7 +495,7 @@ void G_ChaseStep( edict_t *ent, int step ) {
 
 	if( step == 0 ) {
 		// keep chasing the current player if possible
-		if( i >= 0 && G_Chase_IsValidTarget( ent, game.edicts + start, ent->r.client->resp.chase.teamonly ) ) {
+		if( i >= 0 && G_Chase_IsValidTarget( ent, game.edicts + start, ent->r.client->chase.teamonly ) ) {
 			newtarget = game.edicts + start;
 		} else {
 			step = 1;
@@ -533,7 +533,7 @@ void G_ChaseStep( edict_t *ent, int step ) {
 			if( actual == start ) {
 				break; // back at the original player, no need to waste time
 			}
-			if( G_Chase_IsValidTarget( ent, game.edicts + actual, ent->r.client->resp.chase.teamonly ) ) {
+			if( G_Chase_IsValidTarget( ent, game.edicts + actual, ent->r.client->chase.teamonly ) ) {
 				newtarget = game.edicts + actual;
 				break;
 			}
@@ -543,7 +543,7 @@ void G_ChaseStep( edict_t *ent, int step ) {
 	}
 
 	if( newtarget ) {
-		G_ChasePlayer( ent, va( "%i", PLAYERNUM( newtarget ) ), ent->r.client->resp.chase.teamonly, ent->r.client->resp.chase.followmode );
+		G_ChasePlayer( ent, va( "%i", PLAYERNUM( newtarget ) ), ent->r.client->chase.teamonly, ent->r.client->chase.followmode );
 	}
 }
 
@@ -554,11 +554,11 @@ void Cmd_ChaseCam_f( edict_t *ent ) {
 	bool team_only;
 	const char *arg1;
 
-	if( ent->s.team != TEAM_SPECTATOR && !ent->r.client->teamstate.is_coach ) {
+	if( ent->s.team != TEAM_SPECTATOR && !ent->r.client->is_coach ) {
 		G_Teams_JoinTeam( ent, TEAM_SPECTATOR );
 		// prevent 'joined spectators' spam
 		if( !ChatHandlersChain::Instance()->DetectFlood( ent, false ) ) {
-			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname,
+			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(),
 						S_COLOR_WHITE, GS_TeamName( ent->s.team ), S_COLOR_WHITE );
 		}
 	}
@@ -568,7 +568,7 @@ void Cmd_ChaseCam_f( edict_t *ent ) {
 	// & 4 = objectives
 	// & 8 = fragger
 
-	if( ent->r.client->teamstate.is_coach && GS_TeamBasedGametype() ) {
+	if( ent->r.client->is_coach && GS_TeamBasedGametype() ) {
 		team_only = true;
 	} else {
 		team_only = false;
@@ -619,13 +619,13 @@ void G_SpectatorMode( edict_t *ent ) {
 	// join spectator team
 	if( ent->s.team != TEAM_SPECTATOR ) {
 		G_Teams_JoinTeam( ent, TEAM_SPECTATOR );
-		G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname,
+		G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(),
 					S_COLOR_WHITE, GS_TeamName( ent->s.team ), S_COLOR_WHITE );
 	}
 
 	// was in chasecam
-	if( ent->r.client->resp.chase.active ) {
-		ent->r.client->level.showscores = false;
+	if( ent->r.client->chase.active ) {
+		ent->r.client->showscores = false;
 		G_Chase_SetChaseActive( ent, false );
 
 		// reset movement speeds
@@ -655,7 +655,7 @@ void Cmd_Spec_f( edict_t *ent ) {
 */
 void Cmd_SwitchChaseCamMode_f( edict_t *ent ) {
 	if( ent->s.team == TEAM_SPECTATOR ) {
-		if( ent->r.client->resp.chase.active ) {
+		if( ent->r.client->chase.active ) {
 			G_SpectatorMode( ent );
 		} else {
 			G_Chase_SetChaseActive( ent, true );

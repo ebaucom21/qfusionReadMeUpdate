@@ -21,8 +21,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <errno.h>
 
 #include "../gameshared/q_math.h"
+#include "wswstaticstring.h"
 #include "qcommon.h"
 #include "mmrating.h"
+
+auto Uuid_FromString( const wsw::StringView &string ) -> std::optional<mm_uuid_t> {
+	if( string.length() == UUID_DATA_LENGTH ) {
+		wsw::StaticString<UUID_DATA_LENGTH> buffer;
+		buffer << string;
+		mm_uuid_t uuid;
+		if( Uuid_FromString( buffer.data(), &uuid ) ) {
+			return uuid;
+		}
+	}
+	return std::nullopt;
+}
 
 #ifndef _WIN32
 

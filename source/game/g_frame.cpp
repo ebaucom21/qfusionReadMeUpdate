@@ -332,24 +332,34 @@ static bool g_snapStarted = false;
 * G_SnapClients
 */
 void G_SnapClients( void ) {
-	int i;
-	edict_t *ent;
-
-	// calc the player views now that all pushing and damage has been added
-	for( i = 0; i < gs.maxclients; i++ ) {
-		ent = game.edicts + 1 + i;
-		if( !ent->r.inuse || !ent->r.client ) {
-			continue;
+	if( g_inactivity_maxtime->modified ) {
+		if( g_inactivity_maxtime->value <= 0.0f ) {
+			trap_Cvar_ForceSet( "g_inactivity_maxtime", "0.0" );
+		} else if( g_inactivity_maxtime->value < 15.0f ) {
+			trap_Cvar_ForceSet( "g_inactivity_maxtime", "15.0" );
 		}
 
-		G_Client_InactivityRemove( ent->r.client );
+		g_inactivity_maxtime->modified = false;
+	}
 
-		G_ClientEndSnapFrame( ent );
+	const int64_t inactivityMillis = g_inactivity_maxtime->integer * 1000;
 
-		if( ent->s.effects & EF_BUSYICON ) {
-			ent->flags |= FL_BUSY;
-		} else {
-			ent->flags &= ~FL_BUSY;
+	// calc the player views now that all pushing and damage has been added
+	for( int i = 0; i < gs.maxclients; i++ ) {
+		if( edict_t *const ent = game.edicts + 1 + i; ent->r.inuse ) {
+			if( auto *const client = ent->r.client ) {
+				if( inactivityMillis ) {
+					G_Client_InactivityRemove( client, inactivityMillis );
+				}
+
+				G_ClientEndSnapFrame( ent );
+
+				if ( ent->s.effects & EF_BUSYICON ) {
+					ent->flags |= FL_BUSY;
+				} else {
+					ent->flags &= ~FL_BUSY;
+				}
+			}
 		}
 	}
 
@@ -524,7 +534,7 @@ void G_ClearSnap( void ) {
 		// clear the snap temp info
 		memset( &ent->snap, 0, sizeof( ent->snap ) );
 		if( ent->r.client && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
-			memset( &ent->r.client->resp.snap, 0, sizeof( ent->r.client->resp.snap ) );
+			memset( &ent->r.client->snap, 0, sizeof( ent->r.client->snap ) );
 
 			// set race stats to invisible
 			ent->r.client->ps.stats[STAT_TIME_SELF] = STAT_NOTSET;

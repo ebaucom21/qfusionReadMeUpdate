@@ -511,7 +511,7 @@ void HazardsSelector::FindLaserHazards( const EntNumsVector &entNums ) {
 		// Modify potential damage from a beam by its owner accuracy
 		float damageScore = 50.0f;
 		if( owner->team != self->team && owner->r.client ) {
-			const auto &ownerStats = owner->r.client->level.stats;
+			const auto &ownerStats = owner->r.client->stats;
 			if( ownerStats.accuracy_shots[AMMO_LASERS] > 10 ) {
 				float extraDamage = 75.0f;
 				extraDamage *= ownerStats.accuracy_hits[AMMO_LASERS];

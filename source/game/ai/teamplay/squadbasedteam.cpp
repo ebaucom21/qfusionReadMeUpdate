@@ -54,7 +54,7 @@ public:
 	int GetTravelTime( const edict_t *fromEnt, const edict_t *toEnt ) const {
 		return GetTravelTime( ENTNUM( fromEnt ), ENTNUM( toEnt ) );
 	}
-	int GetTravelTime( const gclient_t *fromClient, const gclient_t *toClient ) const {
+	int GetTravelTime( const Client *fromClient, const Client *toClient ) const {
 		return GetTravelTime( (int)( fromClient - game.clients ) + 1, (int)( toClient - game.clients ) + 1 );
 	}
 	int GetTravelTime( const Bot *fromBot, const Bot *toBot ) const {
@@ -1534,7 +1534,7 @@ void AiSquadBasedTeam::PlayerAssistanceTracker::UpdateInfluence() {
 
 		// Ignore clients that were not active for a half of a second or longer.
 		// Otherwise getting assisted just by happening to be spawned in a group at round start is annoying.
-		if( client->level.last_activity + 500 < levelTime ) {
+		if( client->last_activity + 500 < levelTime ) {
 			continue;
 		}
 
@@ -1669,7 +1669,7 @@ void AiSquadBasedTeam::PlayerAssistanceTracker::DrainAndPick() {
 		assistedNum = goodClientNum;
 
 		const auto goodEntNum = goodClientNum + 1;
-		const char *nickName = gameEdicts[goodEntNum].r.client->netname;
+		const char *nickName = gameEdicts[goodEntNum].r.client->netname.data();
 		G_Say_Team( botEnt, va( "Roger! I've got your back %s\n", nickName ), false );
 	}
 }

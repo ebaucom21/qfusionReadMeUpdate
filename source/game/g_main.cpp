@@ -343,10 +343,10 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	game.edicts = ( edict_t * )Q_malloc( game.maxentities * sizeof( game.edicts[0] ) );
 
 	// initialize all clients for this game
-	game.clients = ( gclient_t * )Q_malloc( gs.maxclients * sizeof( game.clients[0] ) );
+	game.clients = ( Client * )Q_malloc( gs.maxclients * sizeof( game.clients[0] ) );
 	// call clients constructors since this is no longer a POD type
 	for( int i = 0; i < gs.maxclients; ++i ) {
-		new( game.clients + i )gclient_s;
+		new( game.clients + i )Client;
 	}
 
 	StatsowFacade::Init();
@@ -413,7 +413,7 @@ void G_Shutdown( void ) {
 	game.edicts = nullptr;
 
 	for( i = 0; i < gs.maxclients; ++i ) {
-		game.clients[i].~gclient_t();
+		game.clients[i].~Client();
 	}
 
 	Q_free( game.clients );
@@ -663,7 +663,7 @@ void G_ExitLevel( void ) {
 			continue;
 		}
 
-		ent->r.client->level.showscores = false;
+		ent->r.client->showscores = false;
 
 		if( ent->health > ent->max_health ) {
 			ent->health = ent->max_health;

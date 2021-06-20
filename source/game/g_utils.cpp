@@ -735,7 +735,7 @@ void G_PrintChasersf( const edict_t *self, const char *format, ... ) {
 	va_end( argptr );
 
 	for( ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
-		if( ent->r.client->resp.chase.active && ent->r.client->resp.chase.target == ENTNUM( self ) ) {
+		if( ent->r.client->chase.active && ent->r.client->chase.target == ENTNUM( self ) ) {
 			G_PrintMsg( ent, "%s", msg );
 		}
 	}
@@ -798,9 +798,9 @@ void ChatPrintHelper::PrintToServerConsole( bool teamOnly ) {
 	} else if( const auto *client = source->r.client ) {
 		if( teamOnly ) {
 			const char *team = client->ps.stats[STAT_TEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM";
-			G_Printf( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n", team, client->netname, msg );
+			G_Printf( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n", team, client->netname.data(), msg );
 		} else {
-			G_Printf( "%s" S_COLOR_GREEN ": %s\n", client->netname, msg );
+			G_Printf( "%s" S_COLOR_GREEN ": %s\n", client->netname.data(), msg );
 		}
 	}
 
@@ -893,11 +893,11 @@ void G_CenterPrintMsg( const edict_t *ent, const char *format, ... ) {
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
 		for( other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
-			if( !other->r.client || !other->r.inuse || !other->r.client->resp.chase.active ) {
+			if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 				continue;
 			}
 
-			if( other->r.client->resp.chase.target == ENTNUM( ent ) ) {
+			if( other->r.client->chase.target == ENTNUM( ent ) ) {
 				trap_GameCmd( other, cmd );
 			}
 		}
@@ -981,11 +981,11 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 	if( ent != NULL ) {
 		// add it to every player who's chasing this player
 		for( other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
-			if( !other->r.client || !other->r.inuse || !other->r.client->resp.chase.active ) {
+			if( !other->r.client || !other->r.inuse || !other->r.client->chase.active ) {
 				continue;
 			}
 
-			if( other->r.client->resp.chase.target == ENTNUM( ent ) ) {
+			if( other->r.client->chase.target == ENTNUM( ent ) ) {
 				trap_GameCmd( other, cmd );
 			}
 		}
@@ -1021,7 +1021,7 @@ void G_UpdatePlayerMatchMsg( edict_t *ent, bool force ) {
 		if( GS_HasChallengers() ) { // He is in the queue
 			newmm = ( ent->r.client->queueTimeStamp ? MATCHMESSAGE_CHALLENGERS_QUEUE : MATCHMESSAGE_ENTER_CHALLENGERS_QUEUE );
 		} else {
-			newmm = ( ent->r.client->resp.chase.active ? MATCHMESSAGE_NONE : MATCHMESSAGE_SPECTATOR_MODES );
+			newmm = ( ent->r.client->chase.active ? MATCHMESSAGE_NONE : MATCHMESSAGE_SPECTATOR_MODES );
 		}
 	} else {
 		if( GS_MatchState() == MATCH_STATE_WARMUP ) {
@@ -1031,8 +1031,8 @@ void G_UpdatePlayerMatchMsg( edict_t *ent, bool force ) {
 		}
 	}
 
-	if( newmm != ent->r.client->level.matchmessage || force ) {
-		ent->r.client->level.matchmessage = newmm;
+	if( newmm != ent->r.client->matchmessage || force ) {
+		ent->r.client->matchmessage = newmm;
 		trap_GameCmd( ent, va( "mm %i", newmm ) );
 	}
 }
@@ -1097,8 +1097,8 @@ void G_SetPlayerHelpMessage( edict_t *ent, unsigned index, bool force ) {
 		return;
 	}
 
-	if( index != ent->r.client->level.helpmessage || force ) {
-		ent->r.client->level.helpmessage = index;
+	if( index != ent->r.client->helpmessage || force ) {
+		ent->r.client->helpmessage = index;
 		trap_GameCmd( ent, va( "mapmsg %i", index ) );
 	}
 }
@@ -1563,15 +1563,15 @@ void G_SetBoundsForSpanEntity( edict_t *ent, vec_t size ) {
 /*
 * G_ReleaseClientPSEvent
 */
-void G_ReleaseClientPSEvent( gclient_t *client ) {
+void G_ReleaseClientPSEvent( Client *client ) {
 	int i;
 
 	if( client ) {
 		for( i = 0; i < 2; i++ ) {
-			if( client->resp.eventsCurrent < client->resp.eventsHead ) {
-				client->ps.event[i] = client->resp.events[client->resp.eventsCurrent & MAX_CLIENT_EVENTS_MASK] & 127;
-				client->ps.eventParm[i] = ( client->resp.events[client->resp.eventsCurrent & MAX_CLIENT_EVENTS_MASK] >> 8 ) & 0xFF;
-				client->resp.eventsCurrent++;
+			if( client->eventsCurrent < client->eventsHead ) {
+				client->ps.event[i] = client->events[client->eventsCurrent & MAX_CLIENT_EVENTS_MASK] & 127;
+				client->ps.eventParm[i] = ( client->events[client->eventsCurrent & MAX_CLIENT_EVENTS_MASK] >> 8 ) & 0xFF;
+				client->eventsCurrent++;
 			} else {
 				client->ps.event[i] = PSEV_NONE;
 				client->ps.eventParm[i] = 0;
@@ -1584,7 +1584,7 @@ void G_ReleaseClientPSEvent( gclient_t *client ) {
 * G_AddPlayerStateEvent
 * This event is only sent to this client inside its player_state_t.
 */
-void G_AddPlayerStateEvent( gclient_t *client, int event, int parm ) {
+void G_AddPlayerStateEvent( Client *client, int event, int parm ) {
 	int eventdata;
 	if( client ) {
 		if( !event || event > PSEV_MAX_EVENTS || parm > 0xFF ) {
@@ -1592,8 +1592,8 @@ void G_AddPlayerStateEvent( gclient_t *client, int event, int parm ) {
 		}
 		if( client ) {
 			eventdata = ( ( event & 0xFF ) | ( parm & 0xFF ) << 8 );
-			client->resp.events[client->resp.eventsHead & MAX_CLIENT_EVENTS_MASK] = eventdata;
-			client->resp.eventsHead++;
+			client->events[client->eventsHead & MAX_CLIENT_EVENTS_MASK] = eventdata;
+			client->eventsHead++;
 		}
 	}
 }
@@ -1601,10 +1601,10 @@ void G_AddPlayerStateEvent( gclient_t *client, int event, int parm ) {
 /*
 * G_ClearPlayerStateEvents
 */
-void G_ClearPlayerStateEvents( gclient_t *client ) {
+void G_ClearPlayerStateEvents( Client *client ) {
 	if( client ) {
-		memset( client->resp.events, PSEV_NONE, sizeof( client->resp.events ) );
-		client->resp.eventsCurrent = client->resp.eventsHead = 0;
+		memset( client->events, PSEV_NONE, sizeof( client->events ) );
+		client->eventsCurrent = client->eventsHead = 0;
 	}
 }
 
@@ -1636,7 +1636,7 @@ edict_t *G_PlayerForText( const char *text ) {
 				continue;
 			}
 
-			if( !Q_stricmp( colorless, COM_RemoveColorTokens( e->r.client->netname ) ) ) {
+			if( !Q_stricmp( colorless, COM_RemoveColorTokens( e->r.client->netname.data() ) ) ) {
 				return e;
 			}
 		}
@@ -1680,9 +1680,8 @@ void G_AnnouncerSound( edict_t *targ, int soundindex, int team, bool queued, edi
 				playerTeam = ent->s.team;
 
 				// if in chasecam, assume the player is in the chased player team
-				if( playerTeam == TEAM_SPECTATOR && ent->r.client->resp.chase.active
-					&& ent->r.client->resp.chase.target > 0 ) {
-					playerTeam = game.edicts[ent->r.client->resp.chase.target].s.team;
+				if( playerTeam == TEAM_SPECTATOR && ent->r.client->chase.active && ent->r.client->chase.target > 0 ) {
+					playerTeam = game.edicts[ent->r.client->chase.target].s.team;
 				}
 
 				if( playerTeam != team ) {

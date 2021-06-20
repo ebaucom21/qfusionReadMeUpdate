@@ -41,6 +41,7 @@ file(GLOB GAME_SOURCES
 	"../qcommon/md5.cpp"
 	"../qcommon/hash.cpp"
 	"../qcommon/cjson.cpp"
+	"../qcommon/userinfo.cpp"
 	"../qcommon/wswfs.cpp"
 )
 

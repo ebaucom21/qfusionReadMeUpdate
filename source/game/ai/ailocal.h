@@ -81,12 +81,12 @@ inline bool IsBuiltinWeaponContinuousFire( int builtinWeapon ) {
 }
 
 int BuiltinWeaponTier( int builtinWeapon );
-int FindBestWeaponTier( const gclient_t *client );
+int FindBestWeaponTier( const Client *client );
 
-bool GT_asBotWouldDropHealth( const gclient_t *client );
-void GT_asBotDropHealth( gclient_t *client );
-bool GT_asBotWouldDropArmor( const gclient_t *client );
-void GT_asBotDropArmor( gclient_t *client );
+bool GT_asBotWouldDropHealth( const Client *client );
+void GT_asBotDropHealth( Client *client );
+bool GT_asBotWouldDropArmor( const Client *client );
+void GT_asBotDropArmor( Client *client );
 
 void GT_asBotTouchedGoal( const Bot *bot, const edict_t *goalEnt );
 void GT_asBotReachedGoalRadius( const Bot *bot, const edict_t *goalEnt );
@@ -95,8 +95,8 @@ void GT_asBotReachedGoalRadius( const Bot *bot, const edict_t *goalEnt );
 // Default score should be 0.5f, and it should be returned
 // when a GT script does not provide these function counterparts.
 // Note that offence and defence score are not complementary but independent.
-float GT_asPlayerOffensiveAbilitiesRating( const gclient_t *client );
-float GT_asPlayerDefenciveAbilitiesRating( const gclient_t *client );
+float GT_asPlayerOffensiveAbilitiesRating( const Client *client );
+float GT_asPlayerDefenciveAbilitiesRating( const Client *client );
 
 struct AiScriptWeaponDef {
 	int weaponNum;
@@ -111,11 +111,11 @@ struct AiScriptWeaponDef {
 	bool isContinuousFire;
 };
 
-int GT_asGetScriptWeaponsNum( const gclient_t *client );
-bool GT_asGetScriptWeaponDef( const gclient_t *client, int scriptWeaponNum, AiScriptWeaponDef *weaponDef );
-int GT_asGetScriptWeaponCooldown( const gclient_t *client, int scriptWeaponNum );
-bool GT_asSelectScriptWeapon( gclient_t *client, int scriptWeaponNum );
-bool GT_asFireScriptWeapon( gclient_t *client, int scriptWeaponNum );
+int GT_asGetScriptWeaponsNum( const Client *client );
+bool GT_asGetScriptWeaponDef( const Client *client, int scriptWeaponNum, AiScriptWeaponDef *weaponDef );
+int GT_asGetScriptWeaponCooldown( const Client *client, int scriptWeaponNum );
+bool GT_asSelectScriptWeapon( Client *client, int scriptWeaponNum );
+bool GT_asFireScriptWeapon( Client *client, int scriptWeaponNum );
 
 #include "navigation/aasworld.h"
 #include "vec3.h"
@@ -183,7 +183,7 @@ inline const char *Nick( const edict_t *ent ) {
 		return "???";
 	}
 	if( ent->r.client ) {
-		return ent->r.client->netname;
+		return ent->r.client->netname.data();
 	}
 	return ent->classname;
 }

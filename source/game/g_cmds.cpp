@@ -154,7 +154,7 @@ static void Cmd_Give_f( edict_t *ent ) {
 	}
 
 	if( give_all || !Q_stricmp( name, "armor" ) ) {
-		ent->r.client->resp.armor = GS_Armor_MaxCountForTag( ARMOR_RA );
+		ent->r.client->armor = GS_Armor_MaxCountForTag( ARMOR_RA );
 		if( !give_all ) {
 			return;
 		}
@@ -275,7 +275,7 @@ static void Cmd_GameOperator_f( edict_t *ent ) {
 
 	if( !Q_stricmp( trap_Cmd_Argv( 1 ), g_operator_password->string ) ) {
 		if( !ent->r.client->isoperator ) {
-			G_PrintMsg( NULL, "%s" S_COLOR_WHITE " is now a game operator\n", ent->r.client->netname );
+			G_PrintMsg( NULL, "%s" S_COLOR_WHITE " is now a game operator\n", ent->r.client->netname.data() );
 		}
 
 		ent->r.client->isoperator = true;
@@ -311,7 +311,7 @@ static void Cmd_Kill_f( edict_t *ent ) {
 	}
 
 	// can suicide after 5 seconds
-	if( level.time < ent->r.client->resp.timeStamp + ( GS_RaceGametype() ? 1000 : 5000 ) ) {
+	if( level.time < ent->r.client->spawnStateTimestamp + (GS_RaceGametype() ? 1000 : 5000 ) ) {
 		return;
 	}
 
@@ -335,7 +335,7 @@ void Cmd_ChasePrev_f( edict_t *ent ) {
 * Cmd_PutAway_f
 */
 static void Cmd_PutAway_f( edict_t *ent ) {
-	ent->r.client->level.showscores = false;
+	ent->r.client->showscores = false;
 }
 
 /*
@@ -347,10 +347,10 @@ static void Cmd_Score_f( edict_t *ent ) {
 	if( trap_Cmd_Argc() == 2 ) {
 		newvalue = ( atoi( trap_Cmd_Argv( 1 ) ) != 0 ) ? true : false;
 	} else {
-		newvalue = !ent->r.client->level.showscores ? true : false;
+		newvalue = !ent->r.client->showscores ? true : false;
 	}
 
-	ent->r.client->level.showscores = newvalue;
+	ent->r.client->showscores = newvalue;
 }
 
 /*
@@ -365,7 +365,7 @@ static void Cmd_CvarInfo_f( edict_t *ent ) {
 	// see if the gametype script is requesting this info
 	if( !GT_asCallGameCommand( ent->r.client, "cvarinfo", trap_Cmd_Args(), trap_Cmd_Argc() - 1 ) ) {
 		// if the gametype script wasn't interested in this command, print the output to console
-		G_Printf( "%s%s's cvar '%s' is '%s%s'\n", ent->r.client->netname, S_COLOR_WHITE, trap_Cmd_Argv( 1 ), trap_Cmd_Argv( 2 ), S_COLOR_WHITE );
+		G_Printf( "%s%s's cvar '%s' is '%s%s'\n", ent->r.client->netname.data(), S_COLOR_WHITE, trap_Cmd_Argv( 1 ), trap_Cmd_Argv( 2 ), S_COLOR_WHITE );
 	}
 }
 
@@ -579,9 +579,9 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 	vec3_t angles { 0, 0, 0 };
 
 	// Fill by saved values if needed
-	if( tryLoadingMissing && ent->r.client->teamstate.position_saved ) {
-		VectorCopy( ent->r.client->teamstate.position_origin, origin );
-		VectorCopy( ent->r.client->teamstate.position_angles, angles );
+	if( tryLoadingMissing && ent->r.client->position_saved ) {
+		VectorCopy( ent->r.client->position_origin, origin );
+		VectorCopy( ent->r.client->position_angles, angles );
 	}
 
 	OriginMatcher originMatcher;
@@ -600,7 +600,7 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 			return;
 		}
 		// If there's nothing saved
-		if( !ent->r.client->teamstate.position_saved ) {
+		if( !ent->r.client->position_saved ) {
 			G_PrintMsg( ent, "A saved or specified origin must always be present\n" );
 			return;
 		}
@@ -609,7 +609,7 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 	originMatcher.CopyToIfHasResult( origin );
 	anglesMatcher.CopyToIfHasResult( angles );
 
-	if( ent->r.client->resp.chase.active ) {
+	if( ent->r.client->chase.active ) {
 		G_SpectatorMode( ent );
 	}
 
@@ -648,11 +648,11 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 */
 static void Cmd_Position_f( edict_t *ent ) {
 	// flood protect
-	if( ent->r.client->teamstate.position_lastcmd + 500 > game.realtime ) {
+	if( ent->r.client->position_lastcmd + 500 > game.realtime ) {
 		return;
 	}
 
-	ent->r.client->teamstate.position_lastcmd = game.realtime;
+	ent->r.client->position_lastcmd = game.realtime;
 
 	const char *action = trap_Cmd_Argv( 1 );
 
@@ -660,20 +660,20 @@ static void Cmd_Position_f( edict_t *ent ) {
 		if( !CheckStateForPositionCmd( ent ) ) {
 			return;
 		}
-		ent->r.client->teamstate.position_saved = true;
-		VectorCopy( ent->s.origin, ent->r.client->teamstate.position_origin );
-		VectorCopy( ent->s.angles, ent->r.client->teamstate.position_angles );
+		ent->r.client->position_saved = true;
+		VectorCopy( ent->s.origin, ent->r.client->position_origin );
+		VectorCopy( ent->s.angles, ent->r.client->position_angles );
 		G_PrintMsg( ent, "Position saved.\n" );
 		return;
 	}
 
 	if( !Q_stricmp( action, "showSaved" ) ) {
-		if( !ent->r.client->teamstate.position_saved ) {
+		if( !ent->r.client->position_saved ) {
 			G_PrintMsg( ent, "There's no saved position\n" );
 			return;
 		}
-		const float *o = ent->r.client->teamstate.position_origin;
-		const float *a = ent->r.client->teamstate.position_angles;
+		const float *o = ent->r.client->position_origin;
+		const float *a = ent->r.client->position_angles;
 		G_PrintMsg( ent, "Saved origin: %.6f %.6f %.6f, angles: %.6f %.6f\n", o[0], o[1], o[2], a[0], a[1] );
 		return;
 	}
@@ -762,8 +762,7 @@ static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs ) {
 	for( i = start; i < gs.maxclients; i++ ) {
 		if( trap_GetClientState( i ) >= CS_SPAWNED ) {
 			edict_t *clientEnt = &game.edicts[i + 1];
-			gclient_t *cl;
-			const char *login;
+			Client *cl;
 
 			if( onlyspecs && clientEnt->s.team != TEAM_SPECTATOR ) {
 				continue;
@@ -771,16 +770,13 @@ static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs ) {
 
 			cl = clientEnt->r.client;
 
-			login = NULL;
+			wsw::StringView login;
 			if( cl->mm_session.IsValidSessionId() ) {
-				login = Info_ValueForKey( cl->userinfo, "cl_mm_login" );
-			}
-			if( !login ) {
-				login = "";
+				login = cl->getInfoValueOrEmpty( wsw::HashedStringView( "cl_mm_login" ) );
 			}
 
-			Q_snprintfz( line, sizeof( line ), "%3i %s" S_COLOR_WHITE "%s%s%s%s\n", i, cl->netname,
-						 login[0] ? "(" S_COLOR_YELLOW : "", login, login[0] ? S_COLOR_WHITE ")" : "",
+			Q_snprintfz( line, sizeof( line ), "%3i %s" S_COLOR_WHITE "%s%s%s%s\n", i, cl->netname.data(),
+						 login[0] ? "(" S_COLOR_YELLOW : "", login.data(), login[0] ? S_COLOR_WHITE ")" : "",
 						 cl->isoperator ? " op" : "" );
 
 			if( strlen( line ) + strlen( msg ) > sizeof( msg ) - 100 ) {
@@ -872,7 +868,7 @@ bool FloodFilter::DetectFlood( const edict_t *ent, bool teamonly ) {
 	// TODO: Rewrite so the client do not actually have to maintain its flood state
 
 	int i;
-	gclient_t *client;
+	Client *client;
 
 	assert( ent != NULL );
 
@@ -883,9 +879,9 @@ bool FloodFilter::DetectFlood( const edict_t *ent, bool teamonly ) {
 
 	// old protection still active
 	if( !teamonly || g_floodprotection_team->integer ) {
-		if( game.realtime < client->level.flood_locktill ) {
+		if( game.realtime < client->flood_locktill ) {
 			G_PrintMsg( ent, "You can't talk for %d more seconds\n",
-						(int)( ( client->level.flood_locktill - game.realtime ) / 1000.0f ) + 1 );
+						(int)( ( client->flood_locktill - game.realtime ) / 1000.0f ) + 1 );
 			return true;
 		}
 	}
@@ -893,38 +889,38 @@ bool FloodFilter::DetectFlood( const edict_t *ent, bool teamonly ) {
 
 	if( teamonly ) {
 		if( g_floodprotection_team->integer && g_floodprotection_penalty->value > 0 ) {
-			i = client->level.flood_team_whenhead - g_floodprotection_team->integer + 1;
+			i = client->flood_team_whenhead - g_floodprotection_team->integer + 1;
 			if( i < 0 ) {
 				i = MAX_FLOOD_MESSAGES + i;
 			}
 
-			if( client->level.flood_team_when[i] && client->level.flood_team_when[i] <= game.realtime &&
-				( game.realtime < client->level.flood_team_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
-				client->level.flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
+			if( client->flood_team_when[i] && client->flood_team_when[i] <= game.realtime &&
+				( game.realtime < client->flood_team_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
+				client->flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
 				G_PrintMsg( ent, "Flood protection: You can't talk for %d seconds.\n", g_floodprotection_penalty->integer );
 				return true;
 			}
 		}
 
-		client->level.flood_team_whenhead = ( client->level.flood_team_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
-		client->level.flood_team_when[client->level.flood_team_whenhead] = game.realtime;
+		client->flood_team_whenhead = ( client->flood_team_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
+		client->flood_team_when[client->flood_team_whenhead] = game.realtime;
 	} else {
 		if( g_floodprotection_messages->integer && g_floodprotection_penalty->value > 0 ) {
-			i = client->level.flood_whenhead - g_floodprotection_messages->integer + 1;
+			i = client->flood_whenhead - g_floodprotection_messages->integer + 1;
 			if( i < 0 ) {
 				i = MAX_FLOOD_MESSAGES + i;
 			}
 
-			if( client->level.flood_when[i] && client->level.flood_when[i] <= game.realtime &&
-				( game.realtime < client->level.flood_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
-				client->level.flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
+			if( client->flood_when[i] && client->flood_when[i] <= game.realtime &&
+				( game.realtime < client->flood_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
+				client->flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
 				G_PrintMsg( ent, "Flood protection: You can't talk for %d seconds.\n", g_floodprotection_penalty->integer );
 				return true;
 			}
 		}
 
-		client->level.flood_whenhead = ( client->level.flood_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
-		client->level.flood_when[client->level.flood_whenhead] = game.realtime;
+		client->flood_whenhead = ( client->flood_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
+		client->flood_when[client->flood_whenhead] = game.realtime;
 	}
 
 	return false;
@@ -958,11 +954,11 @@ static void Cmd_CoinToss_f( edict_t *ent ) {
 
 	qtails = ( Q_stricmp( "heads", trap_Cmd_Argv( 1 ) ) != 0 ) ? true : false;
 	if( qtails == ( rand() & 1 ) ) {
-		G_PrintMsg( NULL, S_COLOR_YELLOW "COINTOSS %s: " S_COLOR_WHITE "It was %s! %s " S_COLOR_WHITE "tossed a coin and " S_COLOR_GREEN "won!\n", upper, trap_Cmd_Argv( 1 ), ent->r.client->netname );
+		G_PrintMsg( NULL, S_COLOR_YELLOW "COINTOSS %s: " S_COLOR_WHITE "It was %s! %s " S_COLOR_WHITE "tossed a coin and " S_COLOR_GREEN "won!\n", upper, trap_Cmd_Argv( 1 ), ent->r.client->netname.data() );
 		return;
 	}
 
-	G_PrintMsg( NULL, S_COLOR_YELLOW "COINTOSS %s: " S_COLOR_WHITE "It was %s! %s " S_COLOR_WHITE "tossed a coin and " S_COLOR_RED "lost!\n", upper, qtails ? "heads" : "tails", ent->r.client->netname );
+	G_PrintMsg( NULL, S_COLOR_YELLOW "COINTOSS %s: " S_COLOR_WHITE "It was %s! %s " S_COLOR_WHITE "tossed a coin and " S_COLOR_RED "lost!\n", upper, qtails ? "heads" : "tails", ent->r.client->netname.data() );
 }
 
 static SingletonHolder<ChatHandlersChain> chatHandlersChainHolder;
@@ -1132,7 +1128,7 @@ static void Cmd_Timeout_f( edict_t *ent ) {
 		return;
 	}
 
-	G_PrintMsg( NULL, "%s%s called a timeout\n", ent->r.client->netname, S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s%s called a timeout\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 
 	if( !GS_MatchPaused() ) {
 		G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEOUT_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
@@ -1183,22 +1179,22 @@ static void Cmd_Timein_f( edict_t *ent ) {
 
 	G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_TIMEOUT_TIMEIN_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
 
-	G_PrintMsg( NULL, "%s%s called a timein\n", ent->r.client->netname, S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s%s called a timein\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 }
 
 /*
 * Cmd_Awards_f
 */
 static void Cmd_Awards_f( edict_t *ent ) {
-	gclient_t *client;
+	Client *client;
 	static char entry[MAX_TOKEN_CHARS];
 
 	assert( ent && ent->r.client );
 	client = ent->r.client;
 
-	Q_snprintfz( entry, sizeof( entry ), "Awards for %s\n", client->netname );
+	Q_snprintfz( entry, sizeof( entry ), "Awards for %s\n", client->netname.data() );
 
-	const auto &awards = client->level.stats.awardsSequence;
+	const auto &awards = client->stats.awardsSequence;
 	if( !awards.empty() ) {
 		for( const LoggedAward &ga: awards ) {
 			Q_strncatz( entry, va( "\t%dx %s\n", ga.count, ga.name.data() ), sizeof( entry ) );
@@ -1215,7 +1211,7 @@ static void Cmd_Awards_f( edict_t *ent ) {
 * Note: This string must never contain " characters
 */
 char *G_StatsMessage( edict_t *ent ) {
-	gclient_t *client;
+	Client *client;
 	gsitem_t *item;
 	int i, shot_weak, hit_weak, shot_strong, hit_strong, shot_total, hit_total;
 	static char entry[MAX_TOKEN_CHARS];
@@ -1234,13 +1230,13 @@ char *G_StatsMessage( edict_t *ent ) {
 		shot_weak = shot_strong = 0;
 
 		if( item->weakammo_tag != AMMO_NONE ) {
-			hit_weak = client->level.stats.accuracy_hits[item->weakammo_tag - AMMO_GUNBLADE];
-			shot_weak = client->level.stats.accuracy_shots[item->weakammo_tag - AMMO_GUNBLADE];
+			hit_weak = client->stats.accuracy_hits[item->weakammo_tag - AMMO_GUNBLADE];
+			shot_weak = client->stats.accuracy_shots[item->weakammo_tag - AMMO_GUNBLADE];
 		}
 
 		if( item->ammo_tag != AMMO_NONE ) {
-			hit_strong = client->level.stats.accuracy_hits[item->ammo_tag - AMMO_GUNBLADE];
-			shot_strong = client->level.stats.accuracy_shots[item->ammo_tag - AMMO_GUNBLADE];
+			hit_strong = client->stats.accuracy_hits[item->ammo_tag - AMMO_GUNBLADE];
+			shot_strong = client->stats.accuracy_shots[item->ammo_tag - AMMO_GUNBLADE];
 		}
 
 		hit_total = hit_weak + hit_strong;
@@ -1259,8 +1255,8 @@ char *G_StatsMessage( edict_t *ent ) {
 		}
 	}
 
-	Q_strncatz( entry, va( " %d %d", (int)client->level.stats.GetEntry( "dmg_given" ), (int)client->level.stats.GetEntry( "dmg_taken" ) ), sizeof( entry ) );
-	Q_strncatz( entry, va( " %d %d", (int)client->level.stats.GetEntry( "health_taken" ), (int)client->level.stats.GetEntry( "armor_taken" ) ), sizeof( entry ) );
+	Q_strncatz( entry, va( " %d %d", (int)client->stats.GetEntry( "dmg_given" ), (int)client->stats.GetEntry( "dmg_taken" ) ), sizeof( entry ) );
+	Q_strncatz( entry, va( " %d %d", (int)client->stats.GetEntry( "health_taken" ), (int)client->stats.GetEntry( "armor_taken" ) ), sizeof( entry ) );
 
 	// add enclosing quote
 	Q_strncatz( entry, "\"", sizeof( entry ) );
@@ -1286,8 +1282,8 @@ static void Cmd_ShowStats_f( edict_t *ent ) {
 			return;
 		}
 	} else {
-		if( ent->r.client->resp.chase.active && game.edicts[ent->r.client->resp.chase.target].r.client ) {
-			target = &game.edicts[ent->r.client->resp.chase.target];
+		if( ent->r.client->chase.active && game.edicts[ent->r.client->chase.target].r.client ) {
+			target = &game.edicts[ent->r.client->chase.target];
 		} else {
 			target = ent;
 		}
@@ -1306,8 +1302,7 @@ static void Cmd_ShowStats_f( edict_t *ent ) {
 */
 static void Cmd_Whois_f( edict_t *ent ) {
 	edict_t *target;
-	gclient_t *cl;
-	const char *login;
+	Client *cl;
 
 	if( trap_Cmd_Argc() > 2 ) {
 		G_PrintMsg( ent, "Usage: whois [player]\n" );
@@ -1321,8 +1316,8 @@ static void Cmd_Whois_f( edict_t *ent ) {
 			return;
 		}
 	} else {
-		if( ent->r.client->resp.chase.active && game.edicts[ent->r.client->resp.chase.target].r.client ) {
-			target = &game.edicts[ent->r.client->resp.chase.target];
+		if( ent->r.client->chase.active && game.edicts[ent->r.client->chase.target].r.client ) {
+			target = &game.edicts[ent->r.client->chase.target];
 		} else {
 			target = ent;
 		}
@@ -1335,9 +1330,13 @@ static void Cmd_Whois_f( edict_t *ent ) {
 		return;
 	}
 
-	login = Info_ValueForKey( cl->userinfo, "cl_mm_login" );
+	const char *login = "unknown";
+	if( const auto maybeLoginName = cl->getMMLoginName() ) {
+		assert( maybeLoginName->isZeroTerminated() );
+		login = maybeLoginName->data();
+	}
 
-	G_PrintMsg( ent, "%s%s is %s\n", cl->netname, S_COLOR_WHITE, login ? login : "unknown" );
+	G_PrintMsg( ent, "%s%s is %s\n", cl->netname.data(), S_COLOR_WHITE, login );
 }
 
 /*
@@ -1347,7 +1346,7 @@ static void Cmd_Whois_f( edict_t *ent ) {
 */
 static void Cmd_Upstate_f( edict_t *ent ) {
 	G_UpdatePlayerMatchMsg( ent, true );
-	G_SetPlayerHelpMessage( ent, ent->r.client->level.helpmessage, true );
+	G_SetPlayerHelpMessage( ent, ent->r.client->helpmessage, true );
 }
 
 //===========================================================

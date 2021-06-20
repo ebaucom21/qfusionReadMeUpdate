@@ -96,7 +96,7 @@ void        AI_RegisterEvent( edict_t *ent, int event, int parm );
 
 bool        AI_CanSpawnBots();
 void        AI_SpawnBot( const char *team );
-void        AI_RemoveBot( const char *name );
+void        AI_RemoveBot( const wsw::StringView &name );
 void        AI_RemoveBots();
 void        AI_Respawn( edict_t *ent );
 

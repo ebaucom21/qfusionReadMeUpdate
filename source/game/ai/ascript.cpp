@@ -552,7 +552,7 @@ static bool objectSelectedEnemies_isPrimaryEnemy(const SelectedEnemies *obj, con
 {
     return CHECK_ARG(obj)->IsPrimaryEnemy(CHECK_ARG(ent));
 }
-static bool objectSelectedEnemies_isPrimaryEnemy2(const SelectedEnemies *obj, const gclient_t *client)
+static bool objectSelectedEnemies_isPrimaryEnemy2(const SelectedEnemies *obj, const Client *client)
 {
     return CHECK_ARG(obj)->IsPrimaryEnemy(game.edicts + (game.clients - CHECK_ARG(client)) + 1);
 }
@@ -1458,33 +1458,33 @@ void GENERIC_asSaveEvolutionResults(void *scriptEvolutionManager)
 }
 
 static auto botWouldDropHealthFunc =
-    gtAIFunctionsRegistry.Function1<bool, const gclient_t*>("bool GT_BotWouldDropHealth( const Client @client )", false);
+    gtAIFunctionsRegistry.Function1<bool, const Client*>("bool GT_BotWouldDropHealth( const Client @client )", false);
 
-bool GT_asBotWouldDropHealth(const gclient_t *client)
+bool GT_asBotWouldDropHealth(const Client *client)
 {
     return botWouldDropHealthFunc(client);
 }
 
 static auto botDropHealthFunc =
-    gtAIFunctionsRegistry.Function1<Void, gclient_t*>("void GT_BotDropHealth( Client @client )", Void::VALUE);
+    gtAIFunctionsRegistry.Function1<Void, Client*>("void GT_BotDropHealth( Client @client )", Void::VALUE);
 
-void GT_asBotDropHealth( gclient_t *client )
+void GT_asBotDropHealth( Client *client )
 {
     botDropHealthFunc(client);
 }
 
 static auto botWouldDropArmorFunc =
-    gtAIFunctionsRegistry.Function1<bool, const gclient_t*>("bool GT_BotWouldDropArmor( const Client @client )", false);
+    gtAIFunctionsRegistry.Function1<bool, const Client*>("bool GT_BotWouldDropArmor( const Client @client )", false);
 
-bool GT_asBotWouldDropArmor( const gclient_t *client )
+bool GT_asBotWouldDropArmor( const Client *client )
 {
     return botWouldDropArmorFunc(client);
 }
 
 static auto botDropArmorFunc =
-    gtAIFunctionsRegistry.Function1<Void, gclient_t*>("void GT_BotDropArmor( Client @client )", Void::VALUE);
+    gtAIFunctionsRegistry.Function1<Void, Client*>("void GT_BotDropArmor( Client @client )", Void::VALUE);
 
-void GT_asBotDropArmor( gclient_t *client )
+void GT_asBotDropArmor( Client *client )
 {
     botDropArmorFunc(client);
 }
@@ -1508,64 +1508,64 @@ void GT_asBotReachedGoalRadius(const Bot *bot, const edict_t *goalEnt)
 }
 
 static auto playerOffensiveAbilitiesRatingFunc =
-    gtAIFunctionsRegistry.Function1<float, const gclient_t*>(
+    gtAIFunctionsRegistry.Function1<float, const Client*>(
         "float GT_PlayerOffensiveAbilitiesRating( const Client @client )", 0.5f);
 
-float GT_asPlayerOffensiveAbilitiesRating(const gclient_t *client)
+float GT_asPlayerOffensiveAbilitiesRating(const Client *client)
 {
     return playerOffensiveAbilitiesRatingFunc(client);
 }
 
 static auto playerDefenciveAbilitiesRatingFunc =
-    gtAIFunctionsRegistry.Function1<float, const gclient_t*>(
+    gtAIFunctionsRegistry.Function1<float, const Client*>(
         "float GT_PlayerDefenciveAbilitiesRating( const Client @client )", 0.5f);
 
-float GT_asPlayerDefenciveAbilitiesRating(const gclient_t *client)
+float GT_asPlayerDefenciveAbilitiesRating(const Client *client)
 {
     return playerDefenciveAbilitiesRatingFunc(client);
 }
 
 static auto getScriptWeaponsNumFunc =
-    gtAIFunctionsRegistry.Function1<int, const gclient_t*>(
+    gtAIFunctionsRegistry.Function1<int, const Client*>(
         "int GT_GetScriptWeaponsNum( const Client @client )", 0);
 
-int GT_asGetScriptWeaponsNum(const gclient_t *client)
+int GT_asGetScriptWeaponsNum(const Client *client)
 {
     return getScriptWeaponsNumFunc(client);
 }
 
 static auto getScriptWeaponDefFunc =
-    gtAIFunctionsRegistry.Function3<bool, const gclient_t*, int, AiScriptWeaponDef *>(
+    gtAIFunctionsRegistry.Function3<bool, const Client*, int, AiScriptWeaponDef *>(
         "bool GT_GetScriptWeaponDef( const Client @client, int weaponNum, AIScriptWeaponDef &out weaponDef )", false);
 
-bool GT_asGetScriptWeaponDef(const gclient_t *client, int weaponNum, AiScriptWeaponDef *weaponDef)
+bool GT_asGetScriptWeaponDef(const Client *client, int weaponNum, AiScriptWeaponDef *weaponDef)
 {
     return getScriptWeaponDefFunc(client, weaponNum, weaponDef);
 }
 
 static auto getScriptWeaponCooldownFunc =
-    gtAIFunctionsRegistry.Function2<int, const gclient_t*, int>(
+    gtAIFunctionsRegistry.Function2<int, const Client*, int>(
         "int GT_GetScriptWeaponCooldown( const Client @client, int weaponNum )", INT_MAX);
 
-int GT_asGetScriptWeaponCooldown(const gclient_t *client, int weaponNum)
+int GT_asGetScriptWeaponCooldown(const Client *client, int weaponNum)
 {
     return getScriptWeaponCooldownFunc(client, weaponNum);
 }
 
 static auto selectScriptWeaponFunc =
-    gtAIFunctionsRegistry.Function2<bool, gclient_t*, int>(
+    gtAIFunctionsRegistry.Function2<bool, Client*, int>(
         "bool GT_SelectScriptWeapon( Client @client, int weaponNum )", false);
 
-bool GT_asSelectScriptWeapon(gclient_t *client, int weaponNum)
+bool GT_asSelectScriptWeapon(Client *client, int weaponNum)
 {
     return selectScriptWeaponFunc(client, weaponNum);
 }
 
 static auto fireScriptWeaponFunc =
-    gtAIFunctionsRegistry.Function2<bool, gclient_t*, int>(
+    gtAIFunctionsRegistry.Function2<bool, Client*, int>(
         "bool GT_FireScriptWeapon( Client @client, int weaponNum )", false);
 
-bool GT_asFireScriptWeapon(gclient_t *client, int weaponNum)
+bool GT_asFireScriptWeapon(Client *client, int weaponNum)
 {
     return fireScriptWeaponFunc(client, weaponNum);
 }

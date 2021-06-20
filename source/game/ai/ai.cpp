@@ -53,7 +53,7 @@ int BuiltinWeaponTier( int builtinWeapon ) {
 	}
 }
 
-int FindBestWeaponTier( const gclient_t *client ) {
+int FindBestWeaponTier( const Client *client ) {
 	const auto *inventory = client->ps.inventory;
 	constexpr int ammoShift = AMMO_GUNBLADE - WEAP_GUNBLADE;
 	constexpr int weakAmmoShift = AMMO_WEAK_GUNBLADE - WEAP_GUNBLADE;
@@ -413,7 +413,7 @@ void AI_Respawn( edict_t *ent ) {
 	AiManager::Instance()->RespawnBot( ent );
 }
 
-void AI_RemoveBot( const char *name ) {
+void AI_RemoveBot( const wsw::StringView &name ) {
 	AiManager::Instance()->RemoveBot( name );
 }
 

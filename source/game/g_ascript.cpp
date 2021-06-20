@@ -1426,23 +1426,23 @@ static unsigned scoreboard_registerGlyphColumn( const asstring_t *title, wsw::g:
 	return scb->registerGlyphColumn( wsw::StringView( title->buffer, title->len ) );
 }
 
-static void scoreboard_setPlayerIcon( const gclient_t *client, unsigned slot, unsigned asset, wsw::g::Scoreboard *scb ) {
+static void scoreboard_setPlayerIcon( const Client *client, unsigned slot, unsigned asset, wsw::g::Scoreboard *scb ) {
 	scb->setPlayerIcon( client, slot, asset );
 }
 
-static void scoreboard_setPlayerNumber( const gclient_t *client, unsigned slot, int number, wsw::g::Scoreboard *scb ) {
+static void scoreboard_setPlayerNumber( const Client *client, unsigned slot, int number, wsw::g::Scoreboard *scb ) {
 	scb->setPlayerNumber( client, slot, number );
 }
 
-static void scoreboard_setPlayerGlyph( const gclient_t *client, unsigned slot, unsigned codePoint, wsw::g::Scoreboard *scb ) {
+static void scoreboard_setPlayerGlyph( const Client *client, unsigned slot, unsigned codePoint, wsw::g::Scoreboard *scb ) {
 	scb->setPlayerGlyph( client, slot, codePoint );
 }
 
-static void scoreboard_setPlayerStatusIcon( const gclient_t *client, unsigned asset, wsw::g::Scoreboard *scb ) {
+static void scoreboard_setPlayerStatusIcon( const Client *client, unsigned asset, wsw::g::Scoreboard *scb ) {
 	scb->setPlayerStatusIcon( client, asset );
 }
 
-static void scoreboard_setPlayerStatusGlyph( const gclient_t *client, unsigned codePoint, wsw::g::Scoreboard *scb ) {
+static void scoreboard_setPlayerStatusGlyph( const Client *client, unsigned codePoint, wsw::g::Scoreboard *scb ) {
 	scb->setPlayerStatusGlyph( client, codePoint );
 }
 
@@ -1481,22 +1481,15 @@ static const asClassDescriptor_t asScoreboardClassDescriptor = {
 //=======================================================================
 
 // CLASS: Client
-static int objectGameClient_PlayerNum( gclient_t *self ) {
-	if( self->asFactored ) {
-		return -1;
-	}
+static int objectGameClient_PlayerNum( Client *self ) {
 	return PLAYERNUM( self );
 }
 
-static bool objectGameClient_isReady( gclient_t *self ) {
-	if( self->asFactored ) {
-		return false;
-	}
-
+static bool objectGameClient_isReady( Client *self ) {
 	return ( level.ready[self - game.clients] || GS_MatchState() == MATCH_STATE_PLAYTIME ) ? true : false;
 }
 
-static bool objectGameClient_isBot( gclient_t *self ) {
+static bool objectGameClient_isBot( Client *self ) {
 	int playerNum;
 	const edict_t *ent;
 
@@ -1509,7 +1502,7 @@ static bool objectGameClient_isBot( gclient_t *self ) {
 	return ( ent->r.svflags & SVF_FAKECLIENT ) && ent->bot;
 }
 
-static Bot *objectGameClient_getBot( gclient_t *self ) {
+static Bot *objectGameClient_getBot( Client *self ) {
 	int playerNum;
 	const edict_t *ent;
 
@@ -1526,55 +1519,37 @@ static Bot *objectGameClient_getBot( gclient_t *self ) {
 	return ent->bot;
 }
 
-static int objectGameClient_ClientState( gclient_t *self ) {
-	if( self->asFactored ) {
-		return CS_FREE;
-	}
-
+static int objectGameClient_ClientState( Client *self ) {
 	return trap_GetClientState( (int)( self - game.clients ) );
 }
 
-static void objectGameClient_ClearPlayerStateEvents( gclient_t *self ) {
+static void objectGameClient_ClearPlayerStateEvents( Client *self ) {
 	G_ClearPlayerStateEvents( self );
 }
 
-static asstring_t *objectGameClient_getName( gclient_t *self ) {
-	char temp[MAX_NAME_BYTES + 2];
-
-	Q_strncpyz( temp, self->netname, sizeof( temp ) );
-	Q_strncatz( temp, S_COLOR_WHITE, sizeof( temp ) );
-
-	return qasStringFactoryBuffer( temp, strlen( temp ) );
+static asstring_t *objectGameClient_getName( Client *self ) {
+	wsw::StaticString<MAX_NAME_BYTES> temp( self->netname );
+	temp << wsw::StringView( S_COLOR_WHITE );
+	return qasStringFactoryBuffer( temp.data(), temp.size() );
 }
 
-static asstring_t *objectGameClient_getClanName( gclient_t *self ) {
-	char temp[MAX_CLANNAME_BYTES + 2];
-
-	Q_strncpyz( temp, self->clanname, sizeof( temp ) );
-	Q_strncatz( temp, S_COLOR_WHITE, sizeof( temp ) );
-
-	return qasStringFactoryBuffer( temp, strlen( temp ) );
+static asstring_t *objectGameClient_getClanName( Client *self ) {
+	wsw::StaticString<MAX_NAME_BYTES> temp( self->clanname );
+	temp << wsw::StringView( S_COLOR_WHITE );
+	return qasStringFactoryBuffer( temp.data(), temp.size() );
 }
 
-static asstring_t *objectGameClient_getMMLogin( gclient_t *self ) {
-	const char *login = NULL;
-
+static asstring_t *objectGameClient_getMMLogin( Client *self ) {
+	wsw::StringView login;
 	if( self->mm_session.IsValidSessionId() ) {
-		login = Info_ValueForKey( self->userinfo, "cl_mm_login" );
-	}
-	if( !login ) {
-		login = "";
+		login = self->getInfoValueOrEmpty( wsw::HashedStringView( "cl_mm_login" ) );
 	}
 
-	return qasStringFactoryBuffer( login, strlen( login ) );
+	return qasStringFactoryBuffer( login.data(), login.size() );
 }
 
-static void objectGameClient_Respawn( bool ghost, gclient_t *self ) {
+static void objectGameClient_Respawn( bool ghost, Client *self ) {
 	int playerNum;
-
-	if( self->asFactored ) {
-		return;
-	}
 
 	playerNum = objectGameClient_PlayerNum( self );
 
@@ -1583,7 +1558,7 @@ static void objectGameClient_Respawn( bool ghost, gclient_t *self ) {
 	}
 }
 
-static edict_t *objectGameClient_GetEntity( gclient_t *self ) {
+static edict_t *objectGameClient_GetEntity( Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
@@ -1594,7 +1569,7 @@ static edict_t *objectGameClient_GetEntity( gclient_t *self ) {
 	return PLAYERENT( playerNum );
 }
 
-static int objectGameClient_InventoryCount( int index, gclient_t *self ) {
+static int objectGameClient_InventoryCount( int index, Client *self ) {
 	if( index < 0 || index >= MAX_ITEMS ) {
 		return 0;
 	}
@@ -1602,7 +1577,7 @@ static int objectGameClient_InventoryCount( int index, gclient_t *self ) {
 	return self->ps.inventory[ index ];
 }
 
-static void objectGameClient_InventorySetCount( int index, int newcount, gclient_t *self ) {
+static void objectGameClient_InventorySetCount( int index, int newcount, Client *self ) {
 	gsitem_t *it;
 
 	if( index < 0 || index >= MAX_ITEMS ) {
@@ -1626,7 +1601,7 @@ static void objectGameClient_InventorySetCount( int index, int newcount, gclient
 	self->ps.inventory[ index ] = newcount;
 }
 
-static void objectGameClient_InventoryGiveItemExt( int index, int count, gclient_t *self ) {
+static void objectGameClient_InventoryGiveItemExt( int index, int count, Client *self ) {
 	const gsitem_t *it;
 	int playerNum;
 
@@ -1651,18 +1626,18 @@ static void objectGameClient_InventoryGiveItemExt( int index, int count, gclient
 	G_PickupItem( PLAYERENT( playerNum ), it, 0, count < 0 ? it->quantity : count, NULL );
 }
 
-static void objectGameClient_InventoryGiveItem( int index, gclient_t *self ) {
+static void objectGameClient_InventoryGiveItem( int index, Client *self ) {
 	objectGameClient_InventoryGiveItemExt( index, -1, self );
 }
 
-static void objectGameClient_InventoryClear( gclient_t *self ) {
+static void objectGameClient_InventoryClear( Client *self ) {
 	memset( self->ps.inventory, 0, sizeof( self->ps.inventory ) );
 
 	self->ps.stats[STAT_WEAPON] = self->ps.stats[STAT_PENDING_WEAPON] = WEAP_NONE;
 	self->ps.weaponState = WEAPON_STATE_READY;
 }
 
-static bool objectGameClient_CanSelectWeapon( int index, gclient_t *self ) {
+static bool objectGameClient_CanSelectWeapon( int index, Client *self ) {
 	if( index < WEAP_NONE || index >= WEAP_TOTAL ) {
 		return false;
 	}
@@ -1670,7 +1645,7 @@ static bool objectGameClient_CanSelectWeapon( int index, gclient_t *self ) {
 	return ( GS_CheckAmmoInWeapon( &self->ps, index ) ) == true;
 }
 
-static void objectGameClient_SelectWeapon( int index, gclient_t *self ) {
+static void objectGameClient_SelectWeapon( int index, Client *self ) {
 	if( index < WEAP_NONE || index >= WEAP_TOTAL ) {
 		self->ps.stats[STAT_PENDING_WEAPON] = GS_SelectBestWeapon( &self->ps );
 		return;
@@ -1681,7 +1656,7 @@ static void objectGameClient_SelectWeapon( int index, gclient_t *self ) {
 	}
 }
 
-static void objectGameClient_addAward( asstring_t *msg, gclient_t *self ) {
+static void objectGameClient_addAward( asstring_t *msg, Client *self ) {
 	int playerNum;
 
 	if( !msg ) {
@@ -1696,7 +1671,7 @@ static void objectGameClient_addAward( asstring_t *msg, gclient_t *self ) {
 	G_PlayerAward( PLAYERENT( playerNum ), msg->buffer );
 }
 
-static void objectGameClient_addMetaAward( asstring_t *msg, gclient_t *self ) {
+static void objectGameClient_addMetaAward( asstring_t *msg, Client *self ) {
 	int playerNum;
 
 	if( !msg ) {
@@ -1711,7 +1686,7 @@ static void objectGameClient_addMetaAward( asstring_t *msg, gclient_t *self ) {
 	G_PlayerMetaAward( PLAYERENT( playerNum ), msg->buffer );
 }
 
-static void objectGameClient_execGameCommand( asstring_t *msg, gclient_t *self ) {
+static void objectGameClient_execGameCommand( asstring_t *msg, Client *self ) {
 	int playerNum;
 
 	if( !msg ) {
@@ -1726,7 +1701,7 @@ static void objectGameClient_execGameCommand( asstring_t *msg, gclient_t *self )
 	trap_GameCmd( PLAYERENT( playerNum ), msg->buffer );
 }
 
-static void objectGameClient_setHUDStat( int stat, int value, gclient_t *self ) {
+static void objectGameClient_setHUDStat( int stat, int value, Client *self ) {
 	if( !ISGAMETYPESTAT( stat ) ) {
 		if( stat > 0 && stat < GS_GAMETYPE_STATS_START ) {
 			G_Printf( "* WARNING: stat %i is write protected\n", stat );
@@ -1739,7 +1714,7 @@ static void objectGameClient_setHUDStat( int stat, int value, gclient_t *self ) 
 	self->ps.stats[ stat ] = ( (short)value & 0xFFFF );
 }
 
-static int objectGameClient_getHUDStat( int stat, gclient_t *self ) {
+static int objectGameClient_getHUDStat( int stat, Client *self ) {
 	if( stat < 0 && stat >= MAX_STATS ) {
 		G_Printf( "* WARNING: stat %i is out of range\n", stat );
 		return 0;
@@ -1748,19 +1723,19 @@ static int objectGameClient_getHUDStat( int stat, gclient_t *self ) {
 	return self->ps.stats[ stat ];
 }
 
-static void objectGameClient_setPMoveFeatures( unsigned int bitmask, gclient_t *self ) {
+static void objectGameClient_setPMoveFeatures( unsigned int bitmask, Client *self ) {
 	self->ps.pmove.stats[PM_STAT_FEATURES] = ( bitmask & PMFEAT_ALL );
 }
 
-static unsigned int objectGameClient_getPMoveFeatures( gclient_t *self ) {
+static unsigned int objectGameClient_getPMoveFeatures( Client *self ) {
 	return self->ps.pmove.stats[PM_STAT_FEATURES];
 }
 
-static unsigned int objectGameClient_getPressedKeys( gclient_t *self ) {
+static unsigned int objectGameClient_getPressedKeys( Client *self ) {
 	return self->ps.plrkeys;
 }
 
-static void objectGameClient_setPMoveMaxSpeed( float speed, gclient_t *self ) {
+static void objectGameClient_setPMoveMaxSpeed( float speed, Client *self ) {
 	if( speed < 0.0f ) {
 		self->ps.pmove.stats[PM_STAT_MAXSPEED] = (short)DEFAULT_PLAYERSPEED;
 	} else {
@@ -1768,11 +1743,11 @@ static void objectGameClient_setPMoveMaxSpeed( float speed, gclient_t *self ) {
 	}
 }
 
-static float objectGameClient_getPMoveMaxSpeed( gclient_t *self ) {
+static float objectGameClient_getPMoveMaxSpeed( Client *self ) {
 	return self->ps.pmove.stats[PM_STAT_MAXSPEED];
 }
 
-static void objectGameClient_setPMoveJumpSpeed( float speed, gclient_t *self ) {
+static void objectGameClient_setPMoveJumpSpeed( float speed, Client *self ) {
 	if( speed < 0.0f ) {
 		self->ps.pmove.stats[PM_STAT_JUMPSPEED] = (short)DEFAULT_JUMPSPEED;
 	} else {
@@ -1780,11 +1755,11 @@ static void objectGameClient_setPMoveJumpSpeed( float speed, gclient_t *self ) {
 	}
 }
 
-static float objectGameClient_getPMoveJumpSpeed( gclient_t *self ) {
+static float objectGameClient_getPMoveJumpSpeed( Client *self ) {
 	return self->ps.pmove.stats[PM_STAT_JUMPSPEED];
 }
 
-static void objectGameClient_setPMoveDashSpeed( float speed, gclient_t *self ) {
+static void objectGameClient_setPMoveDashSpeed( float speed, Client *self ) {
 	if( speed < 0.0f ) {
 		self->ps.pmove.stats[PM_STAT_DASHSPEED] = (short)DEFAULT_DASHSPEED;
 	} else {
@@ -1792,26 +1767,23 @@ static void objectGameClient_setPMoveDashSpeed( float speed, gclient_t *self ) {
 	}
 }
 
-static float objectGameClient_getPMoveDashSpeed( gclient_t *self ) {
+static float objectGameClient_getPMoveDashSpeed( Client *self ) {
 	return self->ps.pmove.stats[PM_STAT_DASHSPEED];
 }
 
-static asstring_t *objectGameClient_getUserInfoKey( asstring_t *key, gclient_t *self ) {
-	char *s;
-
+static asstring_t *objectGameClient_getUserInfoKey( asstring_t *key, Client *self ) {
 	if( !key || !key->buffer || !key->buffer[0] ) {
 		return qasStringFactoryBuffer( NULL, 0 );
 	}
 
-	s = Info_ValueForKey( self->userinfo, key->buffer );
-	if( !s || !*s ) {
-		return qasStringFactoryBuffer( NULL, 0 );
+	if( const auto maybeValue = self->getNonEmptyInfoValue( wsw::HashedStringView( key->buffer, key->len ) ) ) {
+		return qasStringFactoryBuffer( maybeValue->data(), maybeValue->size() );
 	}
 
-	return qasStringFactoryBuffer( s, strlen( s ) );
+	return qasStringFactoryBuffer( NULL, 0 );
 }
 
-static void objectGameClient_printMessage( asstring_t *str, gclient_t *self ) {
+static void objectGameClient_printMessage( asstring_t *str, Client *self ) {
 	int playerNum;
 
 	if( !str || !str->buffer ) {
@@ -1826,7 +1798,7 @@ static void objectGameClient_printMessage( asstring_t *str, gclient_t *self ) {
 	G_PrintMsg( PLAYERENT( playerNum ), "%s", str->buffer );
 }
 
-static void objectGameClient_ChaseCam( asstring_t *str, bool teamonly, gclient_t *self ) {
+static void objectGameClient_ChaseCam( asstring_t *str, bool teamonly, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
@@ -1837,7 +1809,7 @@ static void objectGameClient_ChaseCam( asstring_t *str, bool teamonly, gclient_t
 	G_ChasePlayer( PLAYERENT( playerNum ), str ? str->buffer : NULL, teamonly, 0 );
 }
 
-static void objectGameClient_SetChaseActive( bool active, gclient_t *self ) {
+static void objectGameClient_SetChaseActive( bool active, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
@@ -1845,15 +1817,15 @@ static void objectGameClient_SetChaseActive( bool active, gclient_t *self ) {
 		return;
 	}
 
-	self->resp.chase.active = active;
+	self->chase.active = active;
 	G_UpdatePlayerMatchMsg( PLAYERENT( playerNum ) );
 }
 
-static bool objectGameClient_GetChaseActive( gclient_t *self ) {
-	return self->resp.chase.active;
+static bool objectGameClient_GetChaseActive( Client *self ) {
+	return self->chase.active;
 }
 
-static void objectGameClient_NewRaceRun( int numSectors, gclient_t *self ) {
+static void objectGameClient_NewRaceRun( int numSectors, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
@@ -1864,7 +1836,7 @@ static void objectGameClient_NewRaceRun( int numSectors, gclient_t *self ) {
 	StatsowFacade::Instance()->NewRaceRun( PLAYERENT( playerNum ), numSectors );
 }
 
-static void objectGameClient_SetSectorTime( int sector, uint32_t time, gclient_t *self ) {
+static void objectGameClient_SetSectorTime( int sector, uint32_t time, Client *self ) {
 	// TODO: Validate `self`
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
@@ -1875,7 +1847,7 @@ static void objectGameClient_SetSectorTime( int sector, uint32_t time, gclient_t
 	StatsowFacade::Instance()->SetSectorTime( PLAYERENT( playerNum ), sector, time );
 }
 
-static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, gclient_t *self ) {
+static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
 	if( playerNum < 0 || playerNum >= gs.maxclients ) {
@@ -1885,7 +1857,7 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, gcl
 	return StatsowFacade::Instance()->CompleteRun( PLAYERENT( playerNum ), finalTime );
 }
 
-static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, const asstring_t *tag, gclient_t *self ) {
+static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, const asstring_t *tag, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
 	if( playerNum < 0 || playerNum >= gs.maxclients ) {
@@ -1900,7 +1872,7 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, co
 	return StatsowFacade::Instance()->CompleteRun( playerEnt, finalTime, tag->buffer );
 }
 
-static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, gclient_t *self ) {
+static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, Client *self ) {
 	int playerNum = objectGameClient_PlayerNum( self );
 	// TODO: Throw a script exception at this!
 	if( playerNum < 0 || playerNum >= gs.maxclients ) {
@@ -1910,7 +1882,7 @@ static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, gclient_t *se
 	StatsowFacade::Instance()->AddToRacePlayTime( self, timeToAdd );
 }
 
-static void objectGameClient_SetHelpMessage( unsigned int index, gclient_t *self ) {
+static void objectGameClient_SetHelpMessage( unsigned int index, Client *self ) {
 	int playerNum;
 
 	playerNum = objectGameClient_PlayerNum( self );
@@ -1921,7 +1893,7 @@ static void objectGameClient_SetHelpMessage( unsigned int index, gclient_t *self
 	G_SetPlayerHelpMessage( PLAYERENT( playerNum ), index );
 }
 
-static void objectGameClient_SetQuickMenuItems( asstring_t *str, gclient_t *self ) {
+static void objectGameClient_SetQuickMenuItems( asstring_t *str, Client *self ) {
 	int playerNum;
 
 	if( !str || !str->buffer ) {
@@ -1937,7 +1909,7 @@ static void objectGameClient_SetQuickMenuItems( asstring_t *str, gclient_t *self
 		return;
 	}
 
-	Q_strncpyz( self->level.quickMenuItems, str->buffer, sizeof( self->level.quickMenuItems ) );
+	Q_strncpyz( self->quickMenuItems, str->buffer, sizeof( self->quickMenuItems ) );
 }
 
 static const asFuncdef_t gameclient_Funcdefs[] =
@@ -2002,25 +1974,25 @@ static const asMethod_t gameclient_Methods[] =
 
 static const asProperty_t gameclient_Properties[] =
 {
-	{ ASLIB_PROPERTY_DECL( Stats, stats ), ASLIB_FOFFSET( gclient_t, level.stats ) },
-	{ ASLIB_PROPERTY_DECL( const bool, connecting ), ASLIB_FOFFSET( gclient_t, connecting ) },
-	{ ASLIB_PROPERTY_DECL( const bool, multiview ), ASLIB_FOFFSET( gclient_t, multiview ) },
-	{ ASLIB_PROPERTY_DECL( int, team ), ASLIB_FOFFSET( gclient_t, team ) },
-	{ ASLIB_PROPERTY_DECL( const int, hand ), ASLIB_FOFFSET( gclient_t, hand ) },
-	{ ASLIB_PROPERTY_DECL( const bool, isOperator ), ASLIB_FOFFSET( gclient_t, isoperator ) },
-	{ ASLIB_PROPERTY_DECL( const int64, queueTimeStamp ), ASLIB_FOFFSET( gclient_t, queueTimeStamp ) },
-	{ ASLIB_PROPERTY_DECL( float, armor ), ASLIB_FOFFSET( gclient_t, resp.armor ) },
-	{ ASLIB_PROPERTY_DECL( const bool, chaseActive ), ASLIB_FOFFSET( gclient_t, resp.chase.active ) },
-	{ ASLIB_PROPERTY_DECL( int, chaseTarget ), ASLIB_FOFFSET( gclient_t, resp.chase.target ) },
-	{ ASLIB_PROPERTY_DECL( bool, chaseTeamonly ), ASLIB_FOFFSET( gclient_t, resp.chase.teamonly ) },
-	{ ASLIB_PROPERTY_DECL( int, chaseFollowMode ), ASLIB_FOFFSET( gclient_t, resp.chase.followmode ) },
-	{ ASLIB_PROPERTY_DECL( const bool, coach ), ASLIB_FOFFSET( gclient_t, teamstate.is_coach ) },
-	{ ASLIB_PROPERTY_DECL( const int, ping ), ASLIB_FOFFSET( gclient_t, r.ping ) },
-	{ ASLIB_PROPERTY_DECL( const int16, weapon ), ASLIB_FOFFSET( gclient_t, ps.stats[STAT_WEAPON] ) },
-	{ ASLIB_PROPERTY_DECL( const int16, pendingWeapon ), ASLIB_FOFFSET( gclient_t, ps.stats[STAT_PENDING_WEAPON] ) },
-	{ ASLIB_PROPERTY_DECL( bool, takeStun ), ASLIB_FOFFSET( gclient_t, resp.takeStun ) },
-	{ ASLIB_PROPERTY_DECL( int64, lastActivity ), ASLIB_FOFFSET( gclient_t, level.last_activity ) },
-	{ ASLIB_PROPERTY_DECL( const int64, uCmdTimeStamp ), ASLIB_FOFFSET( gclient_t, ucmd.serverTimeStamp ) },
+	{ ASLIB_PROPERTY_DECL( Stats, stats ), ASLIB_FOFFSET( Client, stats ) },
+	{ ASLIB_PROPERTY_DECL( const bool, connecting ), ASLIB_FOFFSET( Client, connecting ) },
+	{ ASLIB_PROPERTY_DECL( const bool, multiview ), ASLIB_FOFFSET( Client, multiview ) },
+	{ ASLIB_PROPERTY_DECL( int, team ), ASLIB_FOFFSET( Client, team ) },
+	{ ASLIB_PROPERTY_DECL( const int, hand ), ASLIB_FOFFSET( Client, hand ) },
+	{ ASLIB_PROPERTY_DECL( const bool, isOperator ), ASLIB_FOFFSET( Client, isoperator ) },
+	{ ASLIB_PROPERTY_DECL( const int64, queueTimeStamp ), ASLIB_FOFFSET( Client, queueTimeStamp ) },
+	{ ASLIB_PROPERTY_DECL( float, armor ), ASLIB_FOFFSET( Client, armor ) },
+	{ ASLIB_PROPERTY_DECL( const bool, chaseActive ), ASLIB_FOFFSET( Client, chase.active ) },
+	{ ASLIB_PROPERTY_DECL( int, chaseTarget ), ASLIB_FOFFSET( Client, chase.target ) },
+	{ ASLIB_PROPERTY_DECL( bool, chaseTeamonly ), ASLIB_FOFFSET( Client, chase.teamonly ) },
+	{ ASLIB_PROPERTY_DECL( int, chaseFollowMode ), ASLIB_FOFFSET( Client, chase.followmode ) },
+	{ ASLIB_PROPERTY_DECL( const bool, coach ), ASLIB_FOFFSET( Client, is_coach ) },
+	{ ASLIB_PROPERTY_DECL( const int, ping ), ASLIB_FOFFSET( Client, m_ping ) },
+	{ ASLIB_PROPERTY_DECL( const int16, weapon ), ASLIB_FOFFSET( Client, ps.stats[STAT_WEAPON] ) },
+	{ ASLIB_PROPERTY_DECL( const int16, pendingWeapon ), ASLIB_FOFFSET( Client, ps.stats[STAT_PENDING_WEAPON] ) },
+	{ ASLIB_PROPERTY_DECL( bool, takeStun ), ASLIB_FOFFSET( Client, takeStun ) },
+	{ ASLIB_PROPERTY_DECL( int64, lastActivity ), ASLIB_FOFFSET( Client, last_activity ) },
+	{ ASLIB_PROPERTY_DECL( const int64, uCmdTimeStamp ), ASLIB_FOFFSET( Client, ucmd.serverTimeStamp ) },
 
 	ASLIB_PROPERTY_NULL
 };
@@ -2029,7 +2001,7 @@ static const asClassDescriptor_t asGameClientDescriptor =
 {
 	"Client",                   /* name */
 	asOBJ_REF | asOBJ_NOCOUNT,    /* object type flags */
-	sizeof( gclient_t ),        /* size */
+	sizeof( Client ),        /* size */
 	gameclient_Funcdefs,        /* funcdefs */
 	gameclient_ObjectBehaviors, /* object behaviors */
 	gameclient_Methods,         /* methods */
@@ -2658,7 +2630,7 @@ static edict_t *asFunc_GetEntity( int entNum ) {
 	return &game.edicts[ entNum ];
 }
 
-static gclient_t *asFunc_GetClient( int clientNum ) {
+static Client *asFunc_GetClient( int clientNum ) {
 	if( clientNum < 0 || clientNum >= gs.maxclients ) {
 		return NULL;
 	}
@@ -3104,14 +3076,14 @@ static void asFunc_G_GlobalSound( int channel, int soundindex ) {
 	G_GlobalSound( channel, soundindex );
 }
 
-static void asFunc_G_LocalSound( gclient_t *target, int channel, int soundindex ) {
+static void asFunc_G_LocalSound( Client *target, int channel, int soundindex ) {
 	edict_t *ent = NULL;
 
 	if( !target ) {
 		return;
 	}
 
-	if( target && !target->asFactored ) {
+	if( target ) {
 		int playerNum = target - game.clients;
 
 		if( playerNum < 0 || playerNum >= gs.maxclients ) {
@@ -3126,11 +3098,11 @@ static void asFunc_G_LocalSound( gclient_t *target, int channel, int soundindex 
 	}
 }
 
-static void asFunc_G_AnnouncerSound( gclient_t *target, int soundindex, int team, bool queued, gclient_t *ignore ) {
+static void asFunc_G_AnnouncerSound( Client *target, int soundindex, int team, bool queued, Client *ignore ) {
 	edict_t *ent = NULL, *passent = NULL;
 	int playerNum;
 
-	if( target && !target->asFactored ) {
+	if( target ) {
 		playerNum = target - game.clients;
 
 		if( playerNum < 0 || playerNum >= gs.maxclients ) {
@@ -3140,7 +3112,7 @@ static void asFunc_G_AnnouncerSound( gclient_t *target, int soundindex, int team
 		ent = game.edicts + playerNum + 1;
 	}
 
-	if( ignore && !ignore->asFactored ) {
+	if( ignore ) {
 		playerNum = ignore - game.clients;
 
 		if( playerNum >= 0 && playerNum < gs.maxclients ) {

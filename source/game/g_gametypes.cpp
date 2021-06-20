@@ -268,7 +268,6 @@ void G_Match_Autorecord_Start( void ) {
 		Q_strncpyz( players, trap_GetConfigString( CS_MATCHNAME ), sizeof( players ) );
 		if( players[0] == '\0' ) {
 			if( GS_InvidualGameType() ) {
-				const char *netname;
 				edict_t *ent;
 
 				for( team = TEAM_ALPHA; team < GS_MAX_TEAMS; team++ ) {
@@ -276,8 +275,7 @@ void G_Match_Autorecord_Start( void ) {
 						continue;
 					}
 					ent = game.edicts + teamlist[team].playerIndices[0];
-					netname = ent->r.client->netname;
-					Q_strncatz( players, netname, sizeof( players ) );
+					Q_strncatz( players, ent->r.client->netname.data(), sizeof( players ) );
 					if( team != GS_MAX_TEAMS - 1 ) {
 						Q_strncatz( players, " vs ", sizeof( players ) );
 					}
@@ -452,7 +450,7 @@ void G_Match_LaunchState( int matchState ) {
 
 				level.ready[PLAYERNUM( ent )] = false;
 
-				G_PrintMsg( nullptr, "%s%s is no longer ready.\n", ent->r.client->netname, S_COLOR_WHITE );
+				G_PrintMsg( nullptr, "%s%s is no longer ready.\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 
 				G_UpdatePlayerMatchMsg( ent );
 			}
@@ -575,7 +573,7 @@ bool G_Match_ScorelimitHit( void ) {
 					continue;
 				}
 
-				if( e->r.client->level.stats.score >= g_scorelimit->integer ) {
+				if( e->r.client->stats.score >= g_scorelimit->integer ) {
 					return true;
 				}
 			}
@@ -713,11 +711,11 @@ static void G_Match_ScoreAnnouncement( void ) {
 		int score_max = -999999999;
 
 		for( i = 0; i < MAX_CLIENTS && i < teamlist[TEAM_PLAYERS].numplayers; i++ ) {
-			if( game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].level.stats.score > score_max ) {
-				score_max = game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].level.stats.score;
+			if( game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].stats.score > score_max ) {
+				score_max = game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].stats.score;
 				leaders[0] = teamlist[TEAM_PLAYERS].playerIndices[i];
 				num_leaders = 1;
-			} else if( game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].level.stats.score == score_max ) {
+			} else if( game.clients[teamlist[TEAM_PLAYERS].playerIndices[i] - 1].stats.score == score_max ) {
 				leaders[num_leaders++] = teamlist[TEAM_PLAYERS].playerIndices[i];
 			}
 		}
@@ -736,8 +734,8 @@ static void G_Match_ScoreAnnouncement( void ) {
 			continue;
 		}
 
-		if( e->r.client->resp.chase.active ) {
-			chased = &game.edicts[e->r.client->resp.chase.target];
+		if( e->r.client->chase.active ) {
+			chased = &game.edicts[e->r.client->chase.target];
 		} else {
 			chased = e;
 		}
@@ -848,12 +846,12 @@ static void G_Match_ReadyAnnouncement( void ) {
 					continue;
 				}
 
-				if( e->r.client->teamstate.readyUpWarningNext < game.realtime ) {
-					e->r.client->teamstate.readyUpWarningNext = game.realtime + G_ANNOUNCER_READYUP_DELAY;
-					e->r.client->teamstate.readyUpWarningCount++;
-					if( e->r.client->teamstate.readyUpWarningCount > 3 ) {
+				if( e->r.client->readyUpWarningNext < game.realtime ) {
+					e->r.client->readyUpWarningNext = game.realtime + G_ANNOUNCER_READYUP_DELAY;
+					e->r.client->readyUpWarningCount++;
+					if( e->r.client->readyUpWarningCount > 3 ) {
 						G_AnnouncerSound( e, trap_SoundIndex( S_ANNOUNCER_READY_UP_PISSEDOFF ), GS_MAX_TEAMS, true, NULL );
-						e->r.client->teamstate.readyUpWarningCount = 0;
+						e->r.client->readyUpWarningCount = 0;
 					} else {
 						G_AnnouncerSound( e, trap_SoundIndex( S_ANNOUNCER_READY_UP_POLITE ), GS_MAX_TEAMS, true, NULL );
 					}
@@ -972,7 +970,7 @@ void G_Match_Ready( edict_t *ent ) {
 
 	level.ready[PLAYERNUM( ent )] = true;
 
-	G_PrintMsg( NULL, "%s%s is ready!\n", ent->r.client->netname, S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s%s is ready!\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 
 	G_UpdatePlayerMatchMsg( ent );
 
@@ -1000,7 +998,7 @@ void G_Match_NotReady( edict_t *ent ) {
 
 	level.ready[PLAYERNUM( ent )] = false;
 
-	G_PrintMsg( NULL, "%s%s is no longer ready.\n", ent->r.client->netname, S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s%s is no longer ready.\n", ent->r.client->netname.data(), S_COLOR_WHITE );
 
 	G_UpdatePlayerMatchMsg( ent );
 
@@ -1294,7 +1292,7 @@ static void G_CheckNumBots( void ) {
 				continue;
 			}
 			if( ent->bot ) {
-				AI_RemoveBot( ent->r.client->netname );
+				AI_RemoveBot( ent->r.client->netname.asView() );
 				break;
 			}
 		}
@@ -1413,7 +1411,7 @@ static void G_CheckEvenTeam( void ) {
 /*
 * G_Gametype_ScoreEvent
 */
-void G_Gametype_ScoreEvent( gclient_t *client, const char *score_event, const char *args ) {
+void G_Gametype_ScoreEvent( Client *client, const char *score_event, const char *args ) {
 	if( !score_event || !score_event[0] ) {
 		return;
 	}

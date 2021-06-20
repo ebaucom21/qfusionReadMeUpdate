@@ -146,7 +146,7 @@ static void SV_CalcPings( void ) {
 		{ cl->ping = total / count;}
 #endif
 		// let the game dll know about the ping
-		cl->edict->r.client->r.ping = cl->ping;
+		cl->edict->r.client->m_ping = cl->ping;
 	}
 }
 

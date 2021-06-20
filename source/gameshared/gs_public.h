@@ -558,9 +558,14 @@ enum {
 // teams
 const char *GS_TeamName( int team );
 const char *GS_DefaultTeamName( int team );
-const char *GS_TeamSkinName( int team );
+
+namespace wsw { class StringView; }
+
+[[nodiscard]]
+auto GS_TeamSkinName( int team ) -> std::optional<wsw::StringView>;
+
 int GS_Teams_TeamFromName( const char *teamname );
-bool GS_IsTeamDamage( entity_state_t *targ, entity_state_t *attacker );
+bool GS_IsTeamDamage( const entity_state_t *targ, const entity_state_t *attacker );
 
 //===============================================================
 

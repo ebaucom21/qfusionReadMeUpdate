@@ -171,7 +171,7 @@ static bool Pickup_Powerup( edict_t *other, const gsitem_t *item, int flags, int
 
 //======================================================================
 
-bool Add_Ammo( gclient_t *client, const gsitem_t *item, int count, bool add_it ) {
+bool Add_Ammo( Client *client, const gsitem_t *item, int count, bool add_it ) {
 	int max;
 
 	if( !client || !item ) {
@@ -294,7 +294,7 @@ static bool Pickup_Health( edict_t *other, const gsitem_t *item, int flags ) {
 	other->health += item->quantity;
 
 	if( other->r.client ) {
-		other->r.client->level.stats.AddToEntry( "health_taken", item->quantity );
+		other->r.client->stats.AddToEntry( "health_taken", item->quantity );
 		teamlist[other->s.team].stats.AddToEntry( "health_taken", item->quantity );
 	}
 
@@ -314,7 +314,7 @@ static bool Pickup_Health( edict_t *other, const gsitem_t *item, int flags ) {
 //======================================================================
 
 bool Add_Armor( edict_t *other, const gsitem_t *item, bool pick_it ) {
-	gclient_t *client = other->r.client;
+	Client *client = other->r.client;
 	float maxarmorcount = 0.0f, newarmorcount;
 	float pickupitem_maxcount;
 
@@ -329,31 +329,31 @@ bool Add_Armor( edict_t *other, const gsitem_t *item, bool pick_it ) {
 	pickupitem_maxcount = GS_Armor_MaxCountForTag( item->tag );
 
 	// can't pick if surpassed the max armor count of that type
-	if( pickupitem_maxcount && ( client->resp.armor >= pickupitem_maxcount ) ) {
+	if( pickupitem_maxcount && ( client->armor >= pickupitem_maxcount ) ) {
 		return false;
 	}
 
-	if( GS_Armor_TagForCount( client->resp.armor ) == ARMOR_NONE ) {
+	if( GS_Armor_TagForCount( client->armor ) == ARMOR_NONE ) {
 		maxarmorcount = pickupitem_maxcount;
 	} else {
-		maxarmorcount = std::max( (float)GS_Armor_MaxCountForTag( GS_Armor_TagForCount( client->resp.armor ) ), pickupitem_maxcount );
+		maxarmorcount = std::max( (float)GS_Armor_MaxCountForTag( GS_Armor_TagForCount( client->armor ) ), pickupitem_maxcount );
 	}
 
 	if( !pickupitem_maxcount ) {
-		newarmorcount = client->resp.armor + GS_Armor_PickupCountForTag( item->tag );
+		newarmorcount = client->armor + GS_Armor_PickupCountForTag( item->tag );
 	} else {
-		newarmorcount = std::min( client->resp.armor + GS_Armor_PickupCountForTag( item->tag ), maxarmorcount );
+		newarmorcount = std::min( client->armor + GS_Armor_PickupCountForTag( item->tag ), maxarmorcount );
 	}
 
 	// it can't be picked up if it doesn't add any armor
-	if( newarmorcount <= client->resp.armor ) {
+	if( newarmorcount <= client->armor ) {
 		return false;
 	}
 
 	if( pick_it ) {
-		client->resp.armor = newarmorcount;
-		client->ps.stats[STAT_ARMOR] = ARMOR_TO_INT( client->resp.armor );
-		client->level.stats.AddToEntry( "armor_taken", item->quantity );
+		client->armor = newarmorcount;
+		client->ps.stats[STAT_ARMOR] = ARMOR_TO_INT( client->armor );
+		client->stats.AddToEntry( "armor_taken", item->quantity );
 		teamlist[other->s.team].stats.AddToEntry( "armor_taken", item->quantity );
 	}
 
@@ -422,11 +422,11 @@ void Touch_Item( edict_t *ent, edict_t *other, cplane_t *plane, int surfFlags ) 
 	G_AwardPlayerPickup( other, ent );
 
 	// for messages
-	other->r.client->teamstate.last_pickup = ent;
+	other->r.client->last_pickup = ent;
 
 	// show icon and name on status bar
 	other->r.client->ps.stats[STAT_PICKUP_ITEM] = item->tag;
-	other->r.client->resp.pickup_msg_time = level.time + 3000;
+	other->r.client->pickup_msg_time = level.time + 3000;
 
 	if( ent->attenuation ) {
 		Touch_ItemSound( other, item );
@@ -551,8 +551,8 @@ edict_t *Drop_Item( edict_t *ent, const gsitem_t *item ) {
 			}
 		}
 
-		ent->r.client->teamstate.last_drop_item = item;
-		VectorCopy( dropped->s.origin, ent->r.client->teamstate.last_drop_location );
+		ent->r.client->last_drop_item = item;
+		VectorCopy( dropped->s.origin, ent->r.client->last_drop_location );
 	} else {
 		AngleVectors( ent->s.angles, forward, right, NULL );
 		VectorCopy( ent->s.origin, dropped->s.origin );

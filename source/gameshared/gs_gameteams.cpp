@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "q_collision.h"
 
 #include "gs_public.h"
+#include "../qcommon/wswstringview.h"
 
 //==================================================
 //
@@ -64,14 +65,13 @@ const char *GS_DefaultTeamName( int team ) {
 	return gs_teamNames[team];
 }
 
-/*
-* GS_TeamSkinName
-*/
-const char *GS_TeamSkinName( int team ) {
-	if( team < 0 || team >= GS_MAX_TEAMS ) {
-		return NULL;
+auto GS_TeamSkinName( int team ) -> std::optional<wsw::StringView> {
+	if( team >= 0 && team < GS_MAX_TEAMS ) {
+		if( const char *name = gs_teamSkinsNames[team] ) {
+			return wsw::StringView( name );
+		}
 	}
-	return gs_teamSkinsNames[team];
+	return std::nullopt;
 }
 
 /*
@@ -103,7 +103,7 @@ int GS_Teams_TeamFromName( const char *teamname ) {
 /*
 * GS_IsTeamDamage
 */
-bool GS_IsTeamDamage( entity_state_t *targ, entity_state_t *attacker ) {
+bool GS_IsTeamDamage( const entity_state_t *targ, const entity_state_t *attacker ) {
 	if( !GS_TeamBasedGametype() ) {
 		return false;
 	}

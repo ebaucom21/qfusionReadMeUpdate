@@ -32,7 +32,7 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 	, weightConfig( self_ )
 	, weaponsUsageModule( this ) {
 	self->r.client->movestyle = GS_CLASSICBUNNY;
-	SetTag( "%s", self->r.client->netname );
+	SetTag( "%s", self->r.client->netname.data() );
 }
 
 #ifndef _MSC_VER
@@ -215,7 +215,7 @@ void Bot::GhostingFrame() {
 	self->nextThink = level.time + 100;
 
 	// wait 4 seconds after entering the level
-	if( self->r.client->level.timeStamp + 4000 > level.time || !level.canSpawnEntities ) {
+	if( self->r.client->levelTimestamp + 4000 > level.time || !level.canSpawnEntities ) {
 		return;
 	}
 
@@ -252,14 +252,14 @@ void Bot::CallGhostingClientThink( const BotInput &input ) {
 	// set approximate ping and show values
 	ucmd.serverTimeStamp = game.serverTime;
 	ucmd.msec = (uint8_t)game.frametime;
-	self->r.client->r.ping = 0;
+	self->r.client->m_ping = 0;
 
 	ClientThink( self, &ucmd, 0 );
 }
 
 void Bot::OnRespawn() {
 	VectorClear( self->r.client->ps.pmove.delta_angles );
-	self->r.client->level.last_activity = level.time;
+	self->r.client->last_activity = level.time;
 
 	ResetNavigation();
 }
@@ -296,7 +296,7 @@ void Bot::Frame() {
 
 void Bot::ActiveFrame() {
 	//get ready if in the game
-	if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamstate.timeStamp + 4000 < level.time ) {
+	if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
 		G_Match_Ready( self );
 	}
 

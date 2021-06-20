@@ -94,10 +94,7 @@ typedef struct {
 	}
 } server_t;
 
-struct gclient_s {
-	player_state_t ps;  // communicated by server to clients
-	client_shared_t r;  // shared by both the server system and game
-};
+struct Client : public ServersideClientBase {};
 
 struct edict_s {
 	entity_state_t s;   // communicated by server to clients

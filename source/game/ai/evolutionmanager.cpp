@@ -194,7 +194,7 @@ float DefaultBotEvolutionManager::DefaultEvolutionScore( const edict_t *ent ) co
 		return 0.0f;
 	}
 
-	const score_stats_t &stats = ent->r.client->level.stats;
+	const score_stats_t &stats = ent->r.client->stats;
 	if( !stats.had_playtime ) {
 		return 0.0f;
 	}

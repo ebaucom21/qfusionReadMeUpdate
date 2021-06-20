@@ -776,7 +776,7 @@ static void G_VoteRemoveExtraHelp( edict_t *ent ) {
 					continue;
 				}
 
-				Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname ), sizeof( msg ) );
+				Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname.data() ), sizeof( msg ) );
 			}
 		}
 	} else {
@@ -785,7 +785,7 @@ static void G_VoteRemoveExtraHelp( edict_t *ent ) {
 				continue;
 			}
 
-			Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname ), sizeof( msg ) );
+			Q_strncatz( msg, va( "%3i: %s\n", PLAYERNUM( e ), e->r.client->netname.data() ), sizeof( msg ) );
 		}
 	}
 
@@ -809,7 +809,7 @@ static bool G_VoteRemoveValidate( callvotedata_t *vote, bool first ) {
 			return false;
 		} else if( tokick->s.team == TEAM_SPECTATOR ) {
 			G_PrintMsg( vote->caller, "Player %s%s%s is already spectator.\n", S_COLOR_WHITE,
-						tokick->r.client->netname, S_COLOR_RED );
+						tokick->r.client->netname.data(), S_COLOR_RED );
 
 			return false;
 		} else {
@@ -824,11 +824,11 @@ static bool G_VoteRemoveValidate( callvotedata_t *vote, bool first ) {
 	if( !game.edicts[who + 1].r.inuse || game.edicts[who + 1].s.team == TEAM_SPECTATOR ) {
 		return false;
 	} else {
-		if( !vote->string || Q_stricmp( vote->string, game.edicts[who + 1].r.client->netname ) ) {
+		if( !vote->string || Q_stricmp( vote->string, game.edicts[who + 1].r.client->netname.data() ) ) {
 			if( vote->string ) {
 				Q_free( vote->string );
 			}
-			vote->string = Q_strdup( game.edicts[who + 1].r.client->netname );
+			vote->string = Q_strdup( game.edicts[who + 1].r.client->netname.data() );
 		}
 
 		return true;
@@ -855,7 +855,7 @@ static void G_VoteRemovePassed( callvotedata_t *vote ) {
 		return;
 	}
 
-	G_PrintMsg( NULL, "Player %s%s removed from team %s%s.\n", ent->r.client->netname, S_COLOR_WHITE,
+	G_PrintMsg( NULL, "Player %s%s removed from team %s%s.\n", ent->r.client->netname.data(), S_COLOR_WHITE,
 				GS_TeamName( ent->s.team ), S_COLOR_WHITE );
 
 	G_Teams_SetTeam( ent, TEAM_SPECTATOR );
@@ -880,7 +880,7 @@ static void G_VoteHelp_ShowPlayersList( edict_t *ent ) {
 			continue;
 		}
 
-		Q_strncatz( msg, va( "%2d: %s\n", PLAYERNUM( e ), e->r.client->netname ), sizeof( msg ) );
+		Q_strncatz( msg, va( "%2d: %s\n", PLAYERNUM( e ), e->r.client->netname.data() ), sizeof( msg ) );
 	}
 
 	G_PrintMsg( ent, "%s", msg );
@@ -898,7 +898,7 @@ static bool G_SetOrValidateKickLikeCmdTarget( callvotedata_t *vote, bool first )
 
 		if( who != -1 ) {
 			if( game.edicts[who + 1].r.client->isoperator ) {
-				G_PrintMsg( vote->caller, S_COLOR_RED "%s is a game operator.\n", game.edicts[who + 1].r.client->netname );
+				G_PrintMsg( vote->caller, S_COLOR_RED "%s is a game operator.\n", game.edicts[who + 1].r.client->netname.data() );
 				return false;
 			}
 
@@ -917,11 +917,11 @@ static bool G_SetOrValidateKickLikeCmdTarget( callvotedata_t *vote, bool first )
 
 	edict_t *ent = game.edicts + who + 1;
 	if( ent->r.inuse && ent->r.client ) {
-		if( !vote->string || Q_stricmp( vote->string, ent->r.client->netname ) ) {
+		if( !vote->string || Q_stricmp( vote->string, ent->r.client->netname.data() ) ) {
 			if( vote->string ) {
 				Q_free( vote->string );
 			}
-			vote->string = Q_strdup( ent->r.client->netname );
+			vote->string = Q_strdup( ent->r.client->netname.data() );
 		}
 		return true;
 	}
@@ -938,14 +938,14 @@ const char *G_GetClientHostForFilter( const edict_t *ent ) {
 		return nullptr;
 	}
 
-	if( !Q_stricmp( ent->r.client->ip, "loopback" ) ) {
+	if( ent->r.client->ip.asView().equalsIgnoreCase( wsw::StringView( "loopback" ) ) ) {
 		return nullptr;
 	}
 
 	// We have to strip port from the address since only host part is expected by a caller.
 	// We are sure the port is present if we have already cut off special cases above.
 	static char hostBuffer[MAX_INFO_VALUE];
-	Q_strncpyz( hostBuffer, ent->r.client->ip, sizeof( hostBuffer ) );
+	ent->r.client->ip.copyTo( hostBuffer, sizeof( hostBuffer ) );
 
 	// If it is IPv6 host and port
 	if( *hostBuffer == '[' ) {
@@ -998,7 +998,7 @@ static bool G_VoteMuteValidate( callvotedata_t *vote, bool first ) {
 static void G_VoteMutePassed( callvotedata_t *vote ) {
 	if( edict_t *ent = G_Vote_GetValidDeferredVoteTarget( vote ) ) {
 		ChatHandlersChain::Instance()->Mute( ent );
-		ent->r.client->level.stats.AddToEntry( "muted_count", 1 );
+		ent->r.client->stats.AddToEntry( "muted_count", 1 );
 	}
 }
 
@@ -1377,7 +1377,7 @@ static void G_VoteRebalancePassed( callvotedata_t *vote ) {
 		for( i = 0; i < teamlist[team].numplayers; i++ ) {
 			int ent = teamlist[team].playerIndices[i];
 			players[numplayers].ent = ent;
-			players[numplayers].weight = game.edicts[ent].r.client->level.stats.score;
+			players[numplayers].weight = game.edicts[ent].r.client->stats.score;
 			numplayers++;
 		}
 	}
@@ -1399,7 +1399,7 @@ static void G_VoteRebalancePassed( callvotedata_t *vote ) {
 			G_Teams_SetTeam( e, newteam );
 		}
 
-		e->r.client->level.stats.Clear();
+		e->r.client->stats.Clear();
 
 		if( i % 2 == 0 ) {
 			team++;
@@ -1494,7 +1494,7 @@ void G_CallVotes_Reset( void ) {
 	int i;
 
 	if( callvoteState.vote.caller && callvoteState.vote.caller->r.client ) {
-		callvoteState.vote.caller->r.client->level.callvote_when = game.realtime;
+		callvoteState.vote.caller->r.client->callvote_when = game.realtime;
 	}
 
 	callvoteState.vote.callvote = NULL;
@@ -1620,7 +1620,7 @@ static void RequestActions() {
 	};
 
 	for( const edict_t *ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
-		const gclient_t *client = ent->r.client;
+		const Client *client = ent->r.client;
 
 		if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 			continue;
@@ -1661,7 +1661,7 @@ static void G_CallVotes_CheckState( void ) {
 
 	//analize votation state
 	for( ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
-		gclient_t *client = ent->r.client;
+		Client *client = ent->r.client;
 
 		if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 			continue;
@@ -1672,8 +1672,7 @@ static void G_CallVotes_CheckState( void ) {
 		}
 
 		// ignore inactive players unless they have voted
-		if( client->level.last_activity &&
-			client->level.last_activity + ( g_inactivity_maxtime->value * 1000 ) < level.time &&
+		if( client->last_activity && client->last_activity + ( g_inactivity_maxtime->value * 1000 ) < level.time &&
 			clientVoted[PLAYERNUM( ent )] == VOTED_NOTHING ) {
 			continue;
 		}
@@ -1816,7 +1815,7 @@ void G_CallVotes_Think( void ) {
 }
 
 static bool G_CallVotes_CheckFlood( const edict_t *ent ) {
-	const auto lastClientVoteAt = ent->r.client->level.callvote_when;
+	const auto lastClientVoteAt = ent->r.client->callvote_when;
 	if( !lastClientVoteAt || lastClientVoteAt + g_callvote_cooldowntime->integer * 1000 <= game.realtime ) {
 		return true;
 	}
@@ -1935,10 +1934,10 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 	if( callvote->validate != NULL && !callvote->validate( &callvoteState.vote, true ) ) {
 		// Hack... save the old timestamp before G_CallVotes_Reset()
 		// and restore it afterwards. All of this begs for refactoring anyway.
-		const auto oldClientTimestamp = ent->r.client->level.callvote_when;
+		const auto oldClientTimestamp = ent->r.client->callvote_when;
 		G_CallVotes_PrintHelpToPlayer( ent, callvote );
 		G_CallVotes_Reset(); // free the args
-		ent->r.client->level.callvote_when = oldClientTimestamp;
+		ent->r.client->callvote_when = oldClientTimestamp;
 		return;
 	}
 
@@ -1959,14 +1958,14 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 	clientVoted[PLAYERNUM( ent )] = VOTED_YES;
 	clientVoteChanges[PLAYERNUM( ent )]--;
 
-	ent->r.client->level.callvote_when = callvoteState.timeout;
+	ent->r.client->callvote_when = callvoteState.timeout;
 
 	trap_ConfigString( CS_ACTIVE_CALLVOTE, G_CallVotes_String( &callvoteState.vote ) );
 
 	G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_CALLVOTE_CALLED_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
 
 	G_PrintMsg( NULL, "%s" S_COLOR_WHITE " requested to vote " S_COLOR_YELLOW "%s\n",
-				ent->r.client->netname, G_CallVotes_String( &callvoteState.vote ) );
+				ent->r.client->netname.data(), G_CallVotes_String( &callvoteState.vote ) );
 
 	G_PrintMsg( NULL, "Press " S_COLOR_YELLOW "F1" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote yes"
 				S_COLOR_WHITE " or " S_COLOR_YELLOW "F2" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote no" );
@@ -2037,7 +2036,7 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 		}
 
 		G_PrintMsg( NULL, "Callvote has been %s by %s\n",
-					forceVote == VOTED_NO ? "cancelled" : "passed", ent->r.client->netname );
+					forceVote == VOTED_NO ? "cancelled" : "passed", ent->r.client->netname.data() );
 		return;
 	}
 
@@ -2063,12 +2062,12 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 		}
 
 		if( playerEnt->s.team == newTeam ) {
-			G_PrintMsg( ent, "The player '%s' is already in team '%s'.\n", playerEnt->r.client->netname, GS_TeamName( newTeam ) );
+			G_PrintMsg( ent, "The player '%s' is already in team '%s'.\n", playerEnt->r.client->netname.data(), GS_TeamName( newTeam ) );
 			return;
 		}
 
 		G_Teams_SetTeam( playerEnt, newTeam );
-		G_PrintMsg( NULL, "%s was moved to team %s by %s.\n", playerEnt->r.client->netname, GS_TeamName( newTeam ), ent->r.client->netname );
+		G_PrintMsg( NULL, "%s was moved to team %s by %s.\n", playerEnt->r.client->netname.data(), GS_TeamName( newTeam ), ent->r.client->netname.data() );
 
 		return;
 	}

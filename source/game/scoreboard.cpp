@@ -219,7 +219,7 @@ void Scoreboard::beginUpdating() {
 	std::memset( &m_replicatedData, 0, sizeof( m_replicatedData ) );
 }
 
-void Scoreboard::setPlayerIcon( const gclient_s *client, unsigned slot, unsigned icon ) {
+void Scoreboard::setPlayerIcon( const Client *client, unsigned slot, unsigned icon ) {
 	const auto playerNum = PLAYERNUM( client );
 	expectState( Update );
 	checkPlayerNum( playerNum );
@@ -231,7 +231,7 @@ void Scoreboard::setPlayerIcon( const gclient_s *client, unsigned slot, unsigned
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)icon );
 }
 
-void Scoreboard::setPlayerNumber( const gclient_s *client, unsigned slot, int number ) {
+void Scoreboard::setPlayerNumber( const Client *client, unsigned slot, int number ) {
 	const auto playerNum = PLAYERNUM( client );
 	expectState( Update );
 	checkPlayerNum( playerNum );
@@ -243,7 +243,7 @@ void Scoreboard::setPlayerNumber( const gclient_s *client, unsigned slot, int nu
 	m_replicatedData.setPlayerShort( playerNum, slot, value );
 }
 
-void Scoreboard::setPlayerGlyph( const gclient_s *client, unsigned slot, unsigned codePoint ) {
+void Scoreboard::setPlayerGlyph( const Client *client, unsigned slot, unsigned codePoint ) {
 	const auto playerNum = PLAYERNUM( client );
 	expectState( Update );
 	checkPlayerNum( playerNum );
@@ -255,7 +255,7 @@ void Scoreboard::setPlayerGlyph( const gclient_s *client, unsigned slot, unsigne
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)codePoint );
 }
 
-void Scoreboard::setPlayerStatusIcon( const gclient_s *client, unsigned icon ) {
+void Scoreboard::setPlayerStatusIcon( const Client *client, unsigned icon ) {
 	const auto playerNum = PLAYERNUM( client );
 	expectState( Update );
 	checkPlayerNum( playerNum );
@@ -266,7 +266,7 @@ void Scoreboard::setPlayerStatusIcon( const gclient_s *client, unsigned icon ) {
 	m_replicatedData.setPlayerShort( playerNum, m_statusSlot, (int16_t)icon );
 }
 
-void Scoreboard::setPlayerStatusGlyph( const gclient_s *client, unsigned codePoint ) {
+void Scoreboard::setPlayerStatusGlyph( const Client *client, unsigned codePoint ) {
 	const auto playerNum = PLAYERNUM( client );
 	expectState( Update );
 	checkPlayerNum( playerNum );
@@ -333,14 +333,14 @@ void Scoreboard::endUpdating() {
 			const auto clientState = trap_GetClientState( (int)playerNum );
 			if( clientState >= CS_CONNECTING ) {
 				isPlayerConnected[playerIndex] = true;
-				ping = (int16_t)client->r.ping;
+				ping = (int16_t)client->m_ping;
 				if( clientState == CS_SPAWNED && ent->s.team > TEAM_SPECTATOR ) {
-					score = client->level.stats.score;
+					score = client->stats.score;
 					if( !G_ISGHOSTING( ent ) ) {
 						isPlayerGhosting[playerIndex] = false;
 						const int health = std::clamp( HEALTH_TO_INT( ent->health ), 0, 999 );
 						m_replicatedData.setPlayerHealth( playerIndex, health );
-						const int armor = std::clamp( ARMOR_TO_INT( client->resp.armor ), 0, 999 );
+						const int armor = std::clamp( ARMOR_TO_INT( client->armor ), 0, 999 );
 						m_replicatedData.setPlayerArmor( playerIndex, armor );
 						assert( (unsigned)client->ps.stats[STAT_WEAPON] < 16u );
 						m_replicatedData.setPlayerWeapon( playerIndex, client->ps.stats[STAT_WEAPON] );
@@ -443,14 +443,14 @@ auto Scoreboard::preparePlayerSpecificData( unsigned index, unsigned clientNum )
 	int chasePovEntNum = (int)clientNum + 1;
 	if( m_replicatedData.getPlayerTeam( index ) == TEAM_SPECTATOR ) {
 		const edict_t *ent = game.edicts + clientNum + 1;
-		if( !ent->r.client->resp.chase.active ) {
+		if( !ent->r.client->chase.active ) {
 			return &m_replicatedData;
 		}
-		chasePovEntNum = ent->r.client->resp.chase.target;
+		chasePovEntNum = ent->r.client->chase.target;
 	}
 
 	for( const edict_t *ent = game.edicts + 1; ent->s.number <= gs.maxclients; ent++ ) {
-		if( ent->r.client->resp.chase.active && ent->r.client->resp.chase.target == chasePovEntNum ) {
+		if( ent->r.client->chase.active && ent->r.client->chase.target == chasePovEntNum ) {
 			assert( (unsigned)( ent->s.number - 1 ) < (unsigned)MAX_CLIENTS );
 			m_replicatedData.povChaseMask |= 1u << ( ent->s.number - 1 );
 		}
