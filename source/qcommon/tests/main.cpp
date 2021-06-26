@@ -10,6 +10,7 @@
 #include "stringspanstoragetest.h"
 #include "stringviewtest.h"
 #include "tonumtest.h"
+#include "userinfotest.h"
 #include <QCoreApplication>
 
 int main( int argc, char **argv ) {
@@ -76,6 +77,11 @@ int main( int argc, char **argv ) {
 	{
 		ToNumTest toNumTest;
 		result |= QTest::qExec( &toNumTest, argc, argv );
+	}
+
+	{
+		UserInfoTest userInfoTest;
+		result |= QTest::qExec( &userInfoTest, argc, argv );
 	}
 
 	return result;

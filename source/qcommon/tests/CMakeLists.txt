@@ -15,7 +15,9 @@ add_executable(
         qcommontest
         main.cpp
         "../configstringstorage.cpp"
+        "../hash.cpp"
         "../wswfs.cpp"
+        "../userinfo.cpp"
         boundsbuildertest.cpp
         bufferedreadertest.cpp
         configstringstoragetest.cpp
@@ -27,7 +29,8 @@ add_executable(
         stringspanstoragetest.cpp
         stringsplittertest.cpp
         stringviewtest.cpp
-        tonumtest.cpp)
+        tonumtest.cpp
+        userinfotest.cpp)
 
 add_test(NAME qcommontest COMMAND qcommontest)
 set_property(TARGET qcommontest PROPERTY CXX_STANDARD 17)

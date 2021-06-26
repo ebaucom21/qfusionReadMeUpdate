@@ -95,6 +95,11 @@ public:
 	inline static constexpr size_type capacity() { return N; }
 	inline bool empty() const { return count == 0; }
 
+	[[nodiscard]]
+	auto data() -> T * { return basePointer; }
+	[[nodiscard]]
+	auto data() const -> const T * { return basePointer; }
+
 	inline iterator begin() { return basePointer; }
 	inline const_iterator begin() const { return basePointer; }
 	inline iterator end() { return basePointer + count; }

@@ -214,14 +214,22 @@ public:
 
 	[[nodiscard]]
 	bool containsAny( const wsw::StringView &chars ) const {
-		CharLookup lookup( chars );
-		return std::find_if( m_s, m_s + m_len, lookup ) != m_s + m_len;
+		return containsAny( CharLookup( chars ) );
+	}
+
+	[[nodiscard]]
+	bool containsAny( const wsw::CharLookup &chars ) const {
+		return std::find_if( m_s, m_s + m_len, chars ) != m_s + m_len;
 	}
 
 	[[nodiscard]]
 	bool containsOnly( const wsw::StringView &chars ) const {
-		CharLookup lookup( chars );
-		return std::find_if_not( m_s, m_s + m_len, lookup ) == m_s + m_len;
+		return containsOnly( CharLookup( chars ) );
+	}
+
+	[[nodiscard]]
+	bool containsOnly( const wsw::CharLookup &chars ) const {
+		return std::find_if_not( m_s, m_s + m_len, chars ) == m_s + m_len;
 	}
 
 	[[nodiscard]]

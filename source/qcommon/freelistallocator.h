@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cassert>
+#include <stdexcept>
 
 #ifdef __SANITIZE_ADDRESS__
 #include <sanitizer/asan_interface.h>
@@ -82,6 +83,14 @@ protected:
 		WSW_ASAN_UNLOCK( getChunk( h ), m_realChunkSize );
 	}
 
+	void lockAllChunks() {
+		WSW_ASAN_LOCK( m_basePtr, m_realChunkSize * m_capacity );
+	}
+
+	void unlockAllChunks() {
+		WSW_ASAN_UNLOCK( m_basePtr, m_realChunkSize * m_capacity );
+	}
+
 	void set( void *p, unsigned chunkSize, unsigned capacity, unsigned alignment ) {
 		assert( capacity );
 		assert( alignment && !( alignment & ( alignment - 1 ) ) );
@@ -92,6 +101,13 @@ protected:
 		m_capacity = capacity;
 		m_alignment = alignment;
 
+		fixLinks();
+
+		lockMembers();
+		lockAllChunks();
+	}
+
+	void fixLinks() {
 		Header *first = getHeader( m_basePtr );
 		Header *firstNext = getHeader( m_basePtr + m_realChunkSize );
 		m_sentinel.next = first;
@@ -101,7 +117,7 @@ protected:
 
 		Header *prev = first;
 		Header *curr = firstNext;
-		for( unsigned i = 1; i < capacity - 1; ++i ) {
+		for( unsigned i = 1; i < m_capacity - 1; ++i ) {
 			auto *const next = getHeader( m_basePtr + m_realChunkSize * ( i + 1 ) );
 			curr->prev = prev;
 			curr->next = next;
@@ -113,20 +129,29 @@ protected:
 		last->prev = prev;
 		last->next = &m_sentinel;
 		m_sentinel.prev = last;
-
-		lockMembers();
-		// Protect the entire allocated chunk
-		WSW_ASAN_LOCK( m_basePtr, m_realChunkSize * m_capacity );
 	}
 public:
+	~FreelistAllocator() {
+		unlockMembers();
+		unlockAllChunks();
+	}
+
+	void clear() {
+		unlockMembers();
+		unlockAllChunks();
+
+		fixLinks();
+
+		lockMembers();
+		lockAllChunks();
+	}
+
 	[[nodiscard]]
 	auto allocOrNull() noexcept -> uint8_t * {
 		unlockMembers();
 
 		uint8_t *result = nullptr;
 		if( m_freelist != &m_sentinel ) {
-			assert( !isFull() );
-
 			Header *const curr = m_freelist;
 			unlockFullChunkPointedByHeader( curr );
 
@@ -196,18 +221,23 @@ public:
 	}
 
 	[[nodiscard]]
-	bool isFull() const { return m_freelist == &m_sentinel; }
+	bool isFull() const {
+		const_cast<FreelistAllocator *>(this)->unlockMembers();
+		const bool result = m_freelist == &m_sentinel;
+		const_cast<FreelistAllocator *>(this)->lockMembers();
+		return result;
+	}
 
 	[[nodiscard]]
 	auto capacity() const -> unsigned { return m_capacity; }
 
 	[[nodiscard]]
-	bool mayOwn(const void *p) const {
+	bool mayOwn( const void *p ) const {
 		return (uintptr_t)( (const uint8_t *)p - m_basePtr ) < m_realChunkSize * m_capacity;
 	}
 
 	[[nodiscard]]
-	bool hasValidOffset(const void *p) const {
+	bool hasValidOffset( const void *p ) const {
 		return !( ( (const uint8_t *)p - m_basePtr ) % m_realChunkSize );
 	}
 };
