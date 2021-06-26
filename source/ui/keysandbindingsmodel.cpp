@@ -19,10 +19,13 @@ struct KeyboardRowEntry {
 	static constexpr auto spacer() noexcept -> KeyboardRowEntry {
 		return { "", -1, 1.0, true, false, 1 };
 	}
+	static constexpr auto disabled( const char *text ) noexcept -> KeyboardRowEntry {
+		return { text, -1, 1.0, false, false, 1 };
+	}
 };
 
 static const KeyboardRowEntry kMainPadRow1[] {
-	{ "Esc", -1, 1.0, false, false },
+	KeyboardRowEntry::disabled( "Esc" ),
 	KeyboardRowEntry::spacer(),
 	{ "F1", K_F1 },
 	{ "F2", K_F2 },
@@ -41,7 +44,7 @@ static const KeyboardRowEntry kMainPadRow1[] {
 };
 
 static const KeyboardRowEntry kMainPadRow2[] {
-	{ "~" },
+	KeyboardRowEntry::disabled( "~" ),
 	{ "1", (int)'1' },
 	{ "2", (int)'2' },
 	{ "3", (int)'3' },
@@ -135,9 +138,9 @@ static const KeyboardRowEntry kArrowPadRow2[] {
 };
 
 static const KeyboardRowEntry kNumPadRow2[] {
-	{ "7", 0 },
-	{ "8", 0 },
-	{ "9", 0 },
+	{ "7", KP_HOME },
+	{ "8", KP_UPARROW },
+	{ "9", KP_PGUP },
 	{ "+", KP_PLUS, 1.0, false, true, 2 }
 };
 
@@ -146,9 +149,9 @@ static const KeyboardRowEntry kArrowPadRow3[] {
 };
 
 static const KeyboardRowEntry kNumPadRow3[] {
-	{ "4", 0 },
-	{ "5", 0 },
-	{ "6", 0 },
+	{ "4", KP_LEFTARROW },
+	{ "5", KP_5 },
+	{ "6", KP_RIGHTARROW },
 	KeyboardRowEntry::spacer()
 };
 
@@ -159,9 +162,9 @@ static const KeyboardRowEntry kArrowPadRow4[] {
 };
 
 static const KeyboardRowEntry kNumPadRow4[] {
-	{ "1", 0 },
-	{ "2", 0 },
-	{ "3", 0 },
+	{ "1", KP_END },
+	{ "2", KP_DOWNARROW },
+	{ "3", KP_PGDN },
 	{ "\u23CE", KP_ENTER, 1.0, false, true, 2 }
 };
 
@@ -172,8 +175,8 @@ static const KeyboardRowEntry kArrowPadRow5[] {
 };
 
 static const KeyboardRowEntry kNumPadRow5[] {
-	{ "0", 0, 2.0 },
-	{ ".", 0 },
+	{ "0", KP_INS, 2.0 },
+	{ ".", KP_DEL },
 	KeyboardRowEntry::spacer()
 };
 
