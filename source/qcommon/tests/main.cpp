@@ -4,6 +4,7 @@
 #include "demometadatatest.h"
 #include "enumtokenmatchertest.h"
 #include "fsutilstest.h"
+#include "freelistallocatortest.h"
 #include "staticstringtest.h"
 #include "stringsplittertest.h"
 #include "stringspanstoragetest.h"
@@ -60,6 +61,11 @@ int main( int argc, char **argv ) {
 	{
 		EnumTokenMatcherTest enumTokenMatcherTest;
 		result |= QTest::qExec( &enumTokenMatcherTest, argc, argv );
+	}
+
+	{
+		FreelistAllocatorTest freelistAllocatorTest;
+		result |= QTest::qExec( &freelistAllocatorTest, argc, argv );
 	}
 
 	{
