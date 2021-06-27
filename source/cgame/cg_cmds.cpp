@@ -592,15 +592,13 @@ static void CG_SC_Obituary() {
 						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
 							if( GS_TeamBasedGametype() ) {
 								message << wsw::StringView( S_COLOR_ORANGE ) <<
-									wsw::StringView( "YOU TEAMFRAGGED " ) << wsw::StringView( S_COLOR_WHITE );
+									wsw::StringView( "You teamfragged " ) << wsw::StringView( S_COLOR_WHITE );
 							}
 						}
 						if( message.empty() ) {
-							message << wsw::StringView( "COOL! YOU FRAGGED " );
+							message << wsw::StringView( "Cool! You fragged " );
 						}
-						for( char ch: victimName ) {
-							message.append( (char)std::toupper( ch ) );
-						}
+						message << victimName;
 						wsw::ui::UISystem::instance()->addStatusMessage( message.asView() );
 					}
 				}
