@@ -71,7 +71,7 @@ constexpr const vec3_t item_box_maxs = { 16.0f, 16.0f, 40.0f };
 #define DEFAULT_PLAYERSPEED_RACE 320.0f
 #define DEFAULT_JUMPSPEED 280.0f
 #define DEFAULT_DASHSPEED 450.0f
-#define PROJECTILE_PRESTEP 100
+#define PROJECTILE_PRESTEP 72
 #define ELECTROBOLT_RANGE 9001
 
 #define MIN_FOV             60

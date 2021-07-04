@@ -464,13 +464,13 @@ gs_weapon_definition_t gs_weaponDefs[] =
 			false,                          // smooth refire
 
 			//damages
-			75,                             // damage
+			70,                             // damage
 			1.00,                           // selfdamage ratio
 			100,                                // knockback
 			1250,                           // stun
 			125,                            // splash radius
 			0,                              // splash fraction
-			15,                             // splash minimum damage
+			10,                             // splash minimum damage
 			35,                             // splash minimum knockback
 
 			//projectile def
@@ -503,13 +503,13 @@ gs_weapon_definition_t gs_weaponDefs[] =
 			false,                          // smooth refire
 
 			//damages
-			75,                             // damage
+			70,                             // damage
 			1.00,                           // selfdamage ratio
 			100,                                // knockback
 			1250,                           // stun
-			135,                            // splash radius
+			125,                            // splash radius
 			0,                              // splash fraction
-			15,                             // splash minimum damage
+			10,                             // splash minimum damage
 			35,                             // splash minimum knockback
 
 			//projectile def

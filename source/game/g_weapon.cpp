@@ -2644,15 +2644,13 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 
 	// Disable antilag for all projectiles regardless of type.
 	projectile->timeDelta = 0;
-	// Use a time prestep for rockets and a very limited one for plasma/blasts/bolts.
+	// Use a a very limited one for rockets/plasma/blasts/bolts.
 	const auto type = projectile->s.type;
-	if( type != ET_ROCKET ) {
-		if( type != ET_PLASMA && type != ET_BLASTER && type != ET_ELECTRO_WEAK ) {
-			return;
-		}
-		if( !GS_RaceGametype() ) {
-			clamp_high( timeOffset, 50 );
-		}
+	if( type != ET_ROCKET && type != ET_PLASMA && type != ET_BLASTER && type != ET_ELECTRO_WEAK ) {
+		return;
+	}
+	if( !GS_RaceGametype() ) {
+		clamp_high( timeOffset, 50 );
 	}
 
 	assert( projectile->s.linearMovement );
