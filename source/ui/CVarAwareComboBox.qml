@@ -16,12 +16,10 @@ AutoFittingComboBox {
 
     property bool skipIndexChangeSignal: true
 
+    property var knownHeadingsAndValues
+
     property var headings
-    property var knownValues
-
-    property var values: knownValues
-
-    model: headings
+    property var values
 
     function checkCVarChanges() {
         let value = wsw.getCVarValue(cvarName)
@@ -60,6 +58,7 @@ AutoFittingComboBox {
     }
 
     function mapValueToIndex(value) {
+        const knownValues = knownHeadingsAndValues[1]
         for (let i = 0; i < knownValues.length; ++i) {
             if (knownValues[i] == value) {
                 return i
@@ -88,7 +87,9 @@ AutoFittingComboBox {
     }
 
     Component.onCompleted: {
-        console.assert(headings.length === values.length)
+        headings = [...knownHeadingsAndValues[0]]
+        values = [...knownHeadingsAndValues[1]]
+        model = headings
         setNewValue(wsw.getCVarValue(cvarName))
         wsw.registerCVarAwareControl(root)
         skipIndexChangeSignal = false

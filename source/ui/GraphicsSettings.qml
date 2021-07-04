@@ -22,8 +22,7 @@ Flickable {
         SettingsRow {
             text: "FPS Limit"
             CVarAwareComboBox {
-                headings: [1000, 500, 333, 250, 125, 60]
-                knownValues: [1000, 500, 333, 250, 125, 60]
+                knownHeadingsAndValues: [[1000, 500, 333, 250, 125, 60], [1000, 500, 333, 250, 125, 60]]
                 cvarName: "cl_maxfps"
             }
         }
@@ -49,8 +48,7 @@ Flickable {
         SettingsRow {
             text: "Dynamic lighting"
             CVarAwareComboBox {
-                headings: ["Combined", "Shader", "Fake", "Off"]
-                knownValues: [-1, 1, 2, 0]
+                knownHeadingsAndValues: [["Combined", "Shader", "Fake", "Off"], [-1, 1, 2, 0]]
                 cvarName: "r_dynamiclight"
             }
         }

@@ -61,8 +61,7 @@ StackView {
                 SettingsRow {
                     text: "Player HUD"
                     CVarAwareComboBox {
-                        headings: listOfHuds
-                        knownValues: listOfHuds
+                        knownHeadingsAndValues: [listOfHuds, listOfHuds]
                         cvarName: "cg_clientHUD"
                     }
                 }
@@ -70,8 +69,7 @@ StackView {
                 SettingsRow {
                     text: "Spectator HUD"
                     CVarAwareComboBox {
-                        headings: listOfHuds
-                        knownValues: listOfHuds
+                        knownHeadingsAndValues: [listOfHuds, listOfHuds]
                         cvarName: "cg_specHUD"
                     }
                 }
