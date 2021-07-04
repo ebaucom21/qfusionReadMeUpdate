@@ -22,16 +22,16 @@ Item {
                 NumberAnimation {
                     property: "transformXScale"
                     from: 0.0; to: 1.0
-                    easing.type: Easing.InElastic
-                    easing.amplitude: 4.0
-                    duration: 333
+                    easing.type: Easing.InOutElastic
+                    easing.amplitude: 10.0
+                    duration: 667
                 }
                 NumberAnimation {
                     property: "transformYScale"
                     from: 0.0; to: 1.0
-                    easing.type: Easing.InElastic
-                    easing.amplitude: 2.0
-                    duration: 333
+                    easing.type: Easing.InOutElastic
+                    easing.amplitude: 5.0
+                    duration: 667
                 }
             }
         }
@@ -41,16 +41,16 @@ Item {
                 NumberAnimation {
                     property: "transformXScale"
                     from: 0.0; to: 1.0
-                    easing.type: Easing.InElastic
-                    easing.amplitude: 4.0
-                    duration: 333
+                    easing.type: Easing.InOutElastic
+                    easing.amplitude: 10.0
+                    duration: 667
                 }
                 NumberAnimation {
                     property: "transformYScale"
                     from: 0.0; to: 1.0
-                    easing.type: Easing.InElastic
-                    easing.amplitude: 2.0
-                    duration: 333
+                    easing.type: Easing.InOutElastic
+                    easing.amplitude: 5.0
+                    duration: 667
                 }
             }
         }
@@ -61,13 +61,13 @@ Item {
                     property: "transformXScale"
                     from: 1.0; to: 0.0
                     easing.type: Easing.InCubic
-                    duration: 67
+                    duration: 48
                 }
                 NumberAnimation {
                     property: "transformYScale"
                     from: 1.0; to: 0.0
                     easing.type: Easing.InCubic
-                    duration: 67
+                    duration: 48
                 }
             }
         }
