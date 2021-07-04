@@ -331,6 +331,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 					const auto valueIndex = stringData->add( value );
 					entry.otherKeysAndValues[entry.numOtherKeysAndValues++] = { keyIndex, valueIndex };
 				}
+				entry.numTags = 0;
 				for( const auto &tag: tags ) {
 					entry.tagIndices[entry.numTags++] = stringData->add( tag );
 				}
