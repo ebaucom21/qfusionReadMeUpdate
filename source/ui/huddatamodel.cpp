@@ -482,7 +482,7 @@ static auto getNumTimedOutEntries( const Entries &entries, int64_t currTime, uns
 
 void ObituariesModel::update( int64_t currTime ) {
 	if( const unsigned numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 5000u ) ) {
-		beginRemoveRows( QModelIndex(), 0, (int)( numTimedOutEntries - 1 ) );
+		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries - 1 );
 		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
 		endRemoveRows();
 	}
@@ -519,7 +519,7 @@ void MessageFeedModel::addMessage( const wsw::StringView &message, int64_t times
 
 void MessageFeedModel::update( int64_t currTime ) {
 	if( const unsigned numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 7500u ) ) {
-		beginRemoveRows( QModelIndex(), 0, (int)( numTimedOutEntries - 1 ) );
+		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries - 1 );
 		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
 		endRemoveRows();
 	}
@@ -593,8 +593,8 @@ void AwardsModel::addAward( const wsw::StringView &award, int64_t timestamp ) {
 
 void AwardsModel::update( int64_t currTime ) {
 	if( const auto numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 3000 ) ) {
-		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries );
-		m_entries.erase( m_entries.begin(), m_entries.begin() + (int)numTimedOutEntries );
+		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries - 1 );
+		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
 		endRemoveRows();
 	}
 }
