@@ -381,8 +381,6 @@ private:
 	ActionRequestsModel m_actionRequestsModel;
 
 	HudEditorModel m_hudEditorModel;
-	InGameHudLayoutModel m_inGameHudLayoutModel;
-
 	HudDataModel m_hudDataModel;
 
 	QByteArray m_connectionFailMessage;
@@ -667,7 +665,6 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
 	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
 	context->setContextProperty( "hudEditorModel", &m_hudEditorModel );
-	context->setContextProperty( "inGameHudLayoutModel", &m_inGameHudLayoutModel );
 	context->setContextProperty( "hudDataModel", &m_hudDataModel );
 }
 

@@ -7,13 +7,9 @@ Item {
     id: root
     anchors.fill: parent
 
-    Component.onCompleted: {
-        inGameHudLayoutModel.load("default")
-    }
-
     Repeater {
         id: repeater
-        model: inGameHudLayoutModel
+        model: hudDataModel.activeLayoutModel
 
         delegate: HudLayoutItem {
             id: itemLoader

@@ -8,6 +8,7 @@
 
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstaticstring.h"
+#include "hudlayoutmodel.h"
 
 struct ReplicatedScoreboardData;
 
@@ -208,6 +209,15 @@ class HudDataModel : public QObject {
 	MessageFeedModel m_messageFeedModel;
 	AwardsModel m_awardsModel;
 
+	InGameHudLayoutModel m_clientLayoutModel;
+	InGameHudLayoutModel m_specLayoutModel;
+	QAbstractItemModel *m_activeLayoutModel { nullptr };
+	cvar_t *m_clientHudVar { nullptr };
+	cvar_t *m_specHudVar { nullptr };
+
+	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
+	HudNameString m_clientHudName, m_specHudName;
+
 	// TODO make toStyledText() work with arbitrary types
 	QString m_statusMessage;
 
@@ -247,6 +257,9 @@ class HudDataModel : public QObject {
 	bool m_hasSetObituariesModelOwnership { false };
 	bool m_hasSetMessageFeedModelOwnership { false };
 	bool m_hasSetAwardsModelOwnership { false };
+
+	[[nodiscard]]
+	auto getActiveLayoutModel() -> QAbstractItemModel * { return m_activeLayoutModel; }
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -316,7 +329,12 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
 	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
+
+	void checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName );
 public:
+	Q_SIGNAL void activeLayoutModelChanged( QAbstractItemModel *activeLayoutModel );
+	Q_PROPERTY( QAbstractItemModel *activeLayoutModel READ getActiveLayoutModel NOTIFY activeLayoutModelChanged );
+
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( const QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
 	Q_SIGNAL void betaNameChanged( const QByteArray &betaName );

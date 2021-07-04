@@ -655,6 +655,11 @@ HudDataModel::HudDataModel() {
 	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
 	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
+
+	m_clientHudVar = Cvar_Get( "cg_clientHUD", "default", CVAR_ARCHIVE );
+	m_clientHudVar->modified = true;
+	m_specHudVar = Cvar_Get( "cg_specHUD", "default", CVAR_ARCHIVE );
+	m_specHudVar->modified = true;
 }
 
 auto HudDataModel::getInventoryModel() -> QAbstractListModel * {
@@ -703,7 +708,42 @@ void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t ) {
 	Q_EMIT statusMessageChanged( getStatusMessage() );
 }
 
+static const wsw::StringView kDefaultHudName( "default"_asView );
+
+void HudDataModel::checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName ) {
+	// TODO: We try avoiding using this flag since it assumes a control from a single place in code
+	if( var->modified ) {
+		wsw::StringView name( var->string );
+		// Protect from redundant load() calls
+		if( !name.equalsIgnoreCase( currName->asView() ) ) {
+			if( name.length() > HudLayoutModel::kMaxHudNameLength ) {
+				Cvar_ForceSet( var->name, kDefaultHudName.data() );
+				name = kDefaultHudName;
+			}
+			if( !model->load( name ) ) {
+				if( !name.equalsIgnoreCase( kDefaultHudName ) ) {
+					Cvar_ForceSet( var->name, kDefaultHudName.data() );
+					name = kDefaultHudName;
+					// This could fail as well but we assume that the data of the default HUD is not corrupt.
+					// A HUD won't be displayed in case of a failure.
+					(void)model->load( kDefaultHudName );
+				}
+			}
+			currName->assign( name );
+		}
+		var->modified = false;
+	}
+}
+
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
+	checkHudVarChanges( m_clientHudVar, &m_clientLayoutModel, &m_clientHudName );
+	checkHudVarChanges( m_specHudVar, &m_specLayoutModel, &m_specHudName );
+	const auto *const oldLayoutModel = m_activeLayoutModel;
+	m_activeLayoutModel = ( CG_ActiveChasePov() != std::nullopt ) ? &m_clientLayoutModel : &m_specLayoutModel;
+	if( oldLayoutModel != m_activeLayoutModel ) {
+		Q_EMIT activeLayoutModelChanged( m_activeLayoutModel );
+	}
+
 	const bool hadTwoTeams = getHasTwoTeams();
 	m_hasTwoTeams = CG_HasTwoTeams();
 	if( const bool hasTwoTeams = getHasTwoTeams(); hasTwoTeams != hadTwoTeams ) {

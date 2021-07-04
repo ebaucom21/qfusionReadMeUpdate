@@ -58,8 +58,13 @@ public:
 	};
 	Q_ENUM( Flags );
 
+	static inline const unsigned kMaxHudNameLength = 16u;
+
 	[[nodiscard]]
 	Q_INVOKABLE bool load( const QByteArray &fileName );
+
+	[[nodiscard]]
+	bool load( const wsw::StringView &fileName );
 protected:
 	// Either this stuff is typed or we keep getting bugs
 	class AnchorItem {
@@ -117,7 +122,6 @@ protected:
 
 	static const EditorProps kEditorPropsForKind[];
 
-	static inline const unsigned kMaxHudNameLength = 16u;
 	static const AnchorPair kMatchingItemAndItemAnchorPairs[];
 	static const AnchorPair kMatchingItemAndFieldAnchorPairs[];
 
@@ -130,9 +134,6 @@ protected:
 	[[nodiscard]]
 	auto makeFilePath( wsw::StaticString<MAX_QPATH> *buffer, const wsw::StringView &baseFileName ) const
 		-> std::optional<wsw::StringView>;
-
-	[[nodiscard]]
-	bool load( const wsw::StringView &fileName );
 
 	[[nodiscard]]
 	auto deserialize( const wsw::StringView &data ) -> std::optional<wsw::Vector<FileEntry>>;

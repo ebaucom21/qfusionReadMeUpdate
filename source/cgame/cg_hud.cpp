@@ -25,8 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ui/uisystem.h"
 
 static cvar_t *cg_showHUD;
-static cvar_t *cg_specHUD;
-static cvar_t *cg_clientHUD;
 
 static cvar_t *cg_showminimap;
 static cvar_t *cg_showitemtimers;
@@ -58,8 +56,6 @@ void CG_ClearHUDInputState() {}
 
 void CG_InitHUD() {
 	cg_showHUD =        Cvar_Get( "cg_showHUD", "1", CVAR_ARCHIVE );
-	cg_clientHUD =      Cvar_Get( "cg_clientHUD", "", CVAR_ARCHIVE );
-	cg_specHUD =        Cvar_Get( "cg_specHUD", "", CVAR_ARCHIVE );
 
 	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
 
@@ -498,18 +494,6 @@ void CG_DrawHUD() {
 
 	if( !cg_showHUD->integer ) {
 		return;
-	}
-
-	// if changed from or to spec, reload the HUD
-	if( cg.specStateChanged ) {
-		cg_specHUD->modified = cg_clientHUD->modified = true;
-		cg.specStateChanged = false;
-	}
-
-	cvar_t *hud = ISREALSPECTATOR() ? cg_specHUD : cg_clientHUD;
-	if( hud->modified ) {
-		// TODO...
-		hud->modified = false;
 	}
 
 	if( !CG_IsScoreboardShown() ) {
