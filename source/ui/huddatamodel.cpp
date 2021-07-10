@@ -578,17 +578,7 @@ auto AwardsModel::data( const QModelIndex &modelIndex, int role ) const -> QVari
 }
 
 void AwardsModel::addAward( const wsw::StringView &award, int64_t timestamp ) {
-	if( m_entries.size() == m_entries.capacity() ) {
-		beginRemoveRows( QModelIndex(), 0, 0 );
-		m_entries.erase( m_entries.begin() );
-		endRemoveRows();
-	}
-
-	beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() );
-	auto *const entry = new( m_entries.unsafe_grow_back() )Entry;
-	entry->message.assign( award );
-	entry->timestamp = timestamp;
-	endInsertRows();
+	m_pendingEntries.emplace_back( Entry { timestamp, award } );
 }
 
 void AwardsModel::update( int64_t currTime ) {
@@ -596,6 +586,23 @@ void AwardsModel::update( int64_t currTime ) {
 		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries - 1 );
 		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
 		endRemoveRows();
+	}
+
+	if( !m_pendingEntries.empty() ) {
+		if( m_entries.size() == m_entries.capacity() ) {
+			beginRemoveRows( QModelIndex(), 0, 0 );
+			m_entries.erase( m_entries.begin() );
+			endRemoveRows();
+		}
+
+		beginInsertRows( QModelIndex(), (int) m_entries.size(), (int) m_entries.size() );
+		// TODO: Move from the font element
+		auto *const entry = new( m_entries.unsafe_grow_back() )Entry( m_pendingEntries.front() );
+		// Compensate the queue delay
+		entry->timestamp += ( currTime - m_pendingEntries.front().timestamp );
+		// This is fine for this small data set (todo: use a deque?)
+		m_pendingEntries.erase( m_pendingEntries.begin() );
+		endInsertRows();
 	}
 }
 

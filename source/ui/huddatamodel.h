@@ -187,6 +187,7 @@ class AwardsModel : public QAbstractListModel {
 	};
 
 	wsw::StaticVector<Entry, 4> m_entries;
+	wsw::Vector<Entry> m_pendingEntries;
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
