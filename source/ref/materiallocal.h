@@ -551,80 +551,35 @@ public:
 	auto getName() const -> wsw::StringView { return m_stringDataStorage.back(); }
 };
 
-class MaterialCache {
+class MaterialCache;
+
+class MaterialFactory {
 	friend class MaterialParser;
-	friend class MaterialSource;
+	friend class MaterialCache;
 
-	MaterialFileContents *m_fileContentsHead { nullptr };
-
-	enum { kNumBins = 307 };
-
-	MaterialSource *m_sourcesHead { nullptr };
-	MaterialSource *m_sourceBins[kNumBins] { nullptr };
-
-	shader_t *m_materialsHead { nullptr };
-	shader_t *m_materialBins[kNumBins] {};
-	shader_t *m_materialById[MAX_SHADERS] {};
-
-	wsw::String m_pathNameBuffer;
-	wsw::String m_cleanNameBuffer;
+	MaterialCache *const m_materialCache;
 	wsw::String m_expansionBuffer;
-	wsw::String m_fileContentsBuffer;
-
-	wsw::Vector<TokenSpan> m_fileTokenSpans;
 	wsw::Vector<TokenSpan> m_templateTokenSpans;
-
-	wsw::Vector<wsw::StringView> m_fileMaterialNames;
-	wsw::Vector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
-
-	wsw::Vector<uint16_t> m_freeMaterialIds;
-
 	wsw::StaticVector<TokenStream, 1> m_templateTokenStreamHolder;
 	wsw::StaticVector<MaterialLexer, 1> m_templateLexerHolder;
 	wsw::StaticVector<TokenStream, 1> m_primaryTokenStreamHolder;
-
-	wsw::StaticVector<Skin, 16> m_skins;
 
 	using DesiredSize = std::pair<uint16_t, uint16_t>;
 	using MaybeDesiredSize = std::optional<DesiredSize>;
 
 	[[nodiscard]]
-	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
-	[[nodiscard]]
-	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::String *;
-
-	[[nodiscard]]
-	auto findSourceByName( const wsw::StringView &name ) -> MaterialSource * {
-		return findSourceByName( wsw::HashedStringView( name ) );
-	}
-
-	[[nodiscard]]
-	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
-
-	[[nodiscard]]
 	auto findImage( const wsw::StringView &name, int flags, int tags ) -> Texture *;
 	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags );
 
-	void loadDirContents( const wsw::StringView &dir );
+	[[nodiscard]]
+	auto expandTemplate( const wsw::StringView &name, const wsw::StringView *args, size_t numArgs ) -> MaterialLexer *;
 
-	void addFileContents( const wsw::StringView &fileName );
-	[[nodiscard]]
-	bool tryAddingFileContents( const MaterialFileContents *contents );
-
-	void unlinkAndFree( shader_t *s );
-
-	[[nodiscard]]
-	auto getNextMaterialId() -> unsigned;
-	[[nodiscard]]
-	auto makeCleanName( const wsw::StringView &name ) -> wsw::HashedStringView;
-	[[nodiscard]]
-	auto getTokenStreamForShader( const wsw::HashedStringView &cleanName ) -> TokenStream *;
-	[[nodiscard]]
-	auto loadMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name, int type, TokenStream *tokenStream ) -> shader_t *;
-
-	// This must go once sane material classes get implemented
+	explicit MaterialFactory( MaterialCache *materialCache ) : m_materialCache( materialCache ) {}
+public:
 	[[nodiscard]]
 	auto initMaterial( int type, const wsw::HashedStringView &cleanName, wsw::MemSpecBuilder memSpec ) -> shader_t *;
+	[[nodiscard]]
+	auto newMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	[[nodiscard]]
 	auto newDefaultMaterial( int type, const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	[[nodiscard]]
@@ -641,6 +596,69 @@ class MaterialCache {
 	auto newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	[[nodiscard]]
 	auto newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+
+	// TODO: Split this functionality into MaterialCache and MaterialLoader?
+
+	// Results bypass caching and require a manual lifetime management.
+	// It's recommended to implement custom domain-specific caching on top of it where it's possible.
+	[[nodiscard]]
+	auto create2DMaterialBypassingCache() -> shader_t *;
+	void release2DMaterialBypassingCache( shader_t *material );
+	bool update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name,
+											  const MaybeDesiredSize &desiredSize );
+};
+
+class MaterialCache {
+	friend class MaterialParser;
+	friend class MaterialSource;
+
+	MaterialFactory m_factory { this };
+
+	MaterialFileContents *m_fileContentsHead { nullptr };
+
+	enum { kNumBins = 307 };
+
+	MaterialSource *m_sourcesHead { nullptr };
+	MaterialSource *m_sourceBins[kNumBins] { nullptr };
+
+	shader_t *m_materialsHead { nullptr };
+	shader_t *m_materialBins[kNumBins] {};
+	shader_t *m_materialById[MAX_SHADERS] {};
+
+	wsw::String m_pathNameBuffer;
+	wsw::String m_cleanNameBuffer;
+	wsw::String m_fileContentsBuffer;
+
+	wsw::Vector<TokenSpan> m_fileTokenSpans;
+
+	wsw::Vector<wsw::StringView> m_fileMaterialNames;
+	wsw::Vector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
+
+	wsw::Vector<uint16_t> m_freeMaterialIds;
+
+	wsw::StaticVector<Skin, 16> m_skins;
+
+	using DesiredSize = std::pair<uint16_t, uint16_t>;
+	using MaybeDesiredSize = std::optional<DesiredSize>;
+
+	[[nodiscard]]
+	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
+	[[nodiscard]]
+	auto readRawContents( const wsw::StringView &fileName ) -> const wsw::String *;
+
+	void loadDirContents( const wsw::StringView &dir );
+
+	void addFileContents( const wsw::StringView &fileName );
+
+	[[nodiscard]]
+	bool tryAddingFileContents( const MaterialFileContents *contents );
+
+	void unlinkAndFree( shader_t *s );
+
+	[[nodiscard]]
+	auto getNextMaterialId() -> unsigned;
+	[[nodiscard]]
+	auto makeCleanName( const wsw::StringView &name ) -> wsw::HashedStringView;
 
 	[[nodiscard]]
 	auto findSkinByName( const wsw::StringView &name ) -> Skin *;
@@ -661,6 +679,17 @@ public:
 	[[nodiscard]]
 	static auto instance() -> MaterialCache *;
 
+	[[nodiscard]]
+	auto getUnderlyingFactory() -> MaterialFactory * { return &m_factory; }
+
+	[[nodiscard]]
+	auto findSourceByName( const wsw::StringView &name ) -> MaterialSource * {
+		return findSourceByName( wsw::HashedStringView( name ) );
+	}
+
+	[[nodiscard]]
+	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
+
 	void freeUnusedMaterialsByType( const shaderType_e *types, unsigned numTypes );
 
 	void freeUnusedObjects();
@@ -668,25 +697,10 @@ public:
 	void touchMaterialsByName( const wsw::StringView &name );
 
 	[[nodiscard]]
-	auto getMaterialById( int id ) -> shader_t * {
-		return m_materialById[id];
-	}
-
-	[[nodiscard]]
-	auto expandTemplate( const wsw::StringView &name, const wsw::StringView *args, size_t numArgs ) -> MaterialLexer *;
+	auto getMaterialById( int id ) -> shader_t * { return m_materialById[id]; }
 
 	[[nodiscard]]
 	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture *defaultImage = nullptr ) -> shader_t *;
-
-	// TODO: Split this functionality into MaterialCache and MaterialLoader?
-
-	// Results bypass caching and require a manual lifetime management.
-	// It's recommended to implement custom domain-specific caching on top of it where it's possible.
-	[[nodiscard]]
-	auto create2DMaterialBypassingCache() -> shader_t *;
-	void release2DMaterialBypassingCache( shader_t *material );
-	bool update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name,
-											  const MaybeDesiredSize &desiredSize );
 
 	[[nodiscard]]
 	auto loadDefaultMaterial( const wsw::StringView &name, int type ) -> shader_t *;
@@ -706,7 +720,7 @@ class Texture;
 class MaterialParser {
 	friend class ParserTestWrapper;
 
-	MaterialCache *const m_materialCache;
+	MaterialFactory *const m_materialFactory;
 	MaterialLexer m_defaultLexer;
 	MaterialLexer *m_lexer;
 
@@ -935,7 +949,7 @@ class MaterialParser {
 
 	[[nodiscard]]
 	auto findImage( const wsw::StringView &name, int flags ) -> Texture * {
-		return m_materialCache->findImage( name, flags, m_imageTags );
+		return m_materialFactory->findImage( name, flags, m_imageTags );
 	}
 
 	void fixLightmapsForVertexLight();
@@ -957,11 +971,11 @@ class MaterialParser {
 	[[nodiscard]]
 	static auto getTCGenVertexAttribs( unsigned gen ) -> int;
 public:
-	MaterialParser( MaterialCache *materialCache_,
-					TokenStream *mainTokenStream_,
-					const wsw::StringView &name_,
-					const wsw::HashedStringView &cleanName_,
-					shaderType_e type_ );
+	MaterialParser( MaterialFactory *materialFactory,
+					TokenStream *mainTokenStream,
+					const wsw::StringView &name,
+					const wsw::HashedStringView &cleanName,
+					shaderType_e type );
 
 	[[nodiscard]]
     auto exec() -> shader_t *;

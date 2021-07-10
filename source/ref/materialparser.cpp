@@ -47,12 +47,12 @@ auto MaterialParser::tryAddingDeform( Deform deformType ) -> deformv_t * {
 	return deform;
 }
 
-MaterialParser::MaterialParser( MaterialCache *materialCache,
+MaterialParser::MaterialParser( MaterialFactory *materialFactory,
 								TokenStream *mainTokenStream,
 								const wsw::StringView &name,
 								const wsw::HashedStringView &cleanName,
 								shaderType_e type )
-	: m_materialCache( materialCache )
+	: m_materialFactory( materialFactory )
 	, m_defaultLexer( mainTokenStream )
 	, m_lexer( &m_defaultLexer )
 	, m_name( name )
@@ -1126,7 +1126,7 @@ bool MaterialParser::parseTemplate() {
 		}
 	}
 
-	m_lexer = m_materialCache->expandTemplate( *maybeNameToken, args.begin(), args.size() );
+	m_lexer = m_materialFactory->expandTemplate( *maybeNameToken, args.begin(), args.size() );
 	bool result = false;
 	if( m_lexer ) {
 		// TODO... really?
