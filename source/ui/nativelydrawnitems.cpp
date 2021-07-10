@@ -4,6 +4,7 @@
 
 #include "../qcommon/qcommon.h"
 #include "../ref/frontend.h"
+#include "../cgame/cg_boneposes.h"
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
@@ -103,7 +104,7 @@ void NativelyDrawnImage::reloadIfNeeded() {
 	updateSourceSize( w, h );
 }
 
-void NativelyDrawnImage::drawSelfNatively() {
+void NativelyDrawnImage::drawSelfNatively( int64_t, int64_t ) {
 	reloadIfNeeded();
 
 	if( !isLoaded() ) {
@@ -141,6 +142,7 @@ void NativelyDrawnImage::drawSelfNatively() {
 NativelyDrawnModel::NativelyDrawnModel( QQuickItem *parent )
 	: QQuickItem( parent ) {
 	m_selfAsItem = this;
+	updateViewAxis();
 }
 
 void NativelyDrawnModel::setNativeZ( int nativeZ ) {
@@ -176,14 +178,16 @@ void NativelyDrawnModel::setModelOrigin( const QVector3D &modelOrigin ) {
 void NativelyDrawnModel::setViewOrigin( const QVector3D &viewOrigin ) {
 	if( m_viewOrigin != viewOrigin ) {
 		m_viewOrigin = viewOrigin;
+		m_needsViewAxisUpdate = true;
 		Q_EMIT viewOriginChanged( viewOrigin );
 	}
 }
 
-void NativelyDrawnModel::setRotationAxis( const QVector3D &rotationAxis ) {
-	if( m_rotationAxis != rotationAxis ) {
-		m_rotationAxis = rotationAxis;
-		Q_EMIT rotationAxisChanged( rotationAxis );
+void NativelyDrawnModel::setViewTarget( const QVector3D &viewTarget ) {
+	if( m_viewTarget != viewTarget ) {
+		m_viewTarget = viewTarget;
+		m_needsViewAxisUpdate = true;
+		Q_EMIT viewTargetChanged( viewTarget );
 	}
 }
 
@@ -201,15 +205,47 @@ void NativelyDrawnModel::setViewFov( qreal viewFov ) {
 	}
 }
 
+void NativelyDrawnModel::setDesiredModelHeight( qreal desiredModelHeight ) {
+	if( m_desiredModelHeight != desiredModelHeight ) {
+		m_desiredModelHeight = desiredModelHeight;
+		Q_EMIT desiredModelHeightChanged( desiredModelHeight );
+	}
+}
+
+void NativelyDrawnModel::setModelColor( const QColor &modelColor ) {
+	if( m_modelColor != modelColor ) {
+		m_modelColor = modelColor;
+		m_transitionScale = 0.0f;
+		Q_EMIT modelColorChanged( modelColor );
+	}
+}
+
+void NativelyDrawnModel::setOutlineColor( const QColor &outlineColor ) {
+	if( m_outlineColor != outlineColor ) {
+		m_outlineColor = outlineColor;
+		Q_EMIT outlineColorChanged( outlineColor );
+	}
+}
+
+void NativelyDrawnModel::setOutlineHeight( qreal outlineHeight ) {
+	if( m_outlineHeight != outlineHeight ) {
+		m_outlineHeight = outlineHeight;
+		Q_EMIT outlineHeightChanged( outlineHeight );
+	}
+}
+
 bool NativelyDrawnModel::isLoaded() const {
 	return m_model != nullptr;
 }
 
 void NativelyDrawnModel::reloadIfNeeded() {
+	if( m_reloadRequestMask ) {
+		m_transitionScale = 0.0f;
+	}
+
 	if( m_reloadRequestMask & ReloadModel ) {
 		const bool wasLoaded = m_model != nullptr;
 		m_model = R_RegisterModel( m_modelName.toUtf8().constData() );
-		m_reloadRequestMask &= ~ReloadModel;
 		const bool isLoaded = m_model != nullptr;
 		if( wasLoaded != isLoaded ) {
 			Q_EMIT isLoadedChanged( isLoaded );
@@ -218,18 +254,113 @@ void NativelyDrawnModel::reloadIfNeeded() {
 
 	if( m_reloadRequestMask & ReloadSkin ) {
 		m_skinFile = R_RegisterSkinFile( m_skinName.toUtf8().constData() );
-		m_reloadRequestMask &= ~ReloadSkin;
 	}
+
+	m_reloadRequestMask = 0;
 }
 
-void NativelyDrawnModel::drawSelfNatively() {
+void NativelyDrawnModel::updateViewAxis() {
+	vec3_t dir { 1.0f, 0.0f, 0.0f };
+	QVector3D diff( m_viewTarget - m_viewOrigin );
+	if( const float len = diff.lengthSquared(); len > 1.0f ) {
+		diff *= 1.0f / std::sqrt( len );
+		VectorCopy( diff, dir );
+	}
+	vec3_t angles;
+	VecToAngles( dir, angles );
+	AnglesToAxis( angles, m_viewAxis );
+}
+
+static inline void setByteColorFromQColor( uint8_t *byteColor, const QColor &color ) {
+	byteColor[0] = (uint8_t)( color.redF() * 255.0 );
+	byteColor[1] = (uint8_t)( color.greenF() * 255.0 );
+	byteColor[2] = (uint8_t)( color.blueF() * 255.0 );
+	byteColor[3] = (uint8_t)( color.alphaF() * 255.0 );
+}
+
+void NativelyDrawnModel::drawSelfNatively( int64_t, int64_t timeDelta ) {
 	reloadIfNeeded();
 
 	if( !m_model ) {
 		return;
 	}
 
-	// TODO: Postponed to the renderer rewrite
+	if( m_needsViewAxisUpdate ) {
+		updateViewAxis();
+		m_needsViewAxisUpdate = false;
+	}
+
+	const QRect rect( mapRectToScene( m_selfAsItem->boundingRect() ).toRect() );
+	const int x = rect.x(), y = rect.y();
+	const int width = rect.width(), height = rect.height();
+
+	R_Set2DMode( false );
+
+	refdef_t refdef {};
+	entity_t entity {};
+
+	refdef.x = x;
+	refdef.y = y;
+	refdef.width = width;
+	refdef.height = height;
+
+	refdef.scissor_x = x;
+	refdef.scissor_y = y;
+	refdef.scissor_width = width;
+	refdef.scissor_height = height;
+
+	refdef.fov_x = (float)m_viewFov;
+	refdef.fov_y = CalcFov( refdef.fov_x, (float)refdef.width, (float)refdef.height );
+	refdef.vieworg[0] = (float)m_viewOrigin.x();
+	refdef.vieworg[1] = (float)m_viewOrigin.y();
+	refdef.vieworg[2] = (float)m_viewOrigin.z();
+	Matrix3_Copy( m_viewAxis, refdef.viewaxis );
+
+	refdef.rdflags = RDF_NOWORLDMODEL;
+	refdef.minLight = 0.7f;
+
+	entity.model = m_model;
+	entity.customSkin = m_skinFile;
+	entity.frame = entity.oldframe = 1;
+	entity.renderfx = RF_NOSHADOW | RF_FORCENOLOD | RF_MINLIGHT;
+	entity.outlineHeight = (float)m_outlineHeight;
+	entity.origin[0] = (float)m_modelOrigin.x();
+	entity.origin[1] = (float)m_modelOrigin.y();
+	entity.origin[2] = (float)m_modelOrigin.z();
+	VectorCopy( entity.origin, entity.origin2 );
+
+	setByteColorFromQColor( entity.shaderRGBA, m_modelColor );
+	setByteColorFromQColor( entity.outlineRGBA, m_outlineColor );
+
+	entity.scale = 1.0;
+	// Hacks to show player models with approximately the same height
+	if( m_desiredModelHeight > 0 ) {
+		vec3_t modelMins, modelMaxs;
+		R_ModelFrameBounds( m_model, 0, modelMins, modelMaxs );
+		if( const float modelHeight = modelMaxs[2] - modelMins[2]; height > 0 ) {
+			entity.scale = (float)m_desiredModelHeight / modelHeight;
+		}
+	}
+
+	// Scale units per second
+	constexpr float transitionSpeed = 1.5f;
+	const auto timeDeltaSeconds = 1e-3f * (float)timeDelta;
+	m_transitionScale = std::min( m_transitionScale + transitionSpeed * timeDeltaSeconds, 1.0f );
+	entity.scale *= m_transitionScale;
+
+	if( const auto rotationSpeed = (float)m_rotationSpeed; rotationSpeed != 0.0f ) {
+		vec3_t angles { 0, m_rotationAngle, 0 };
+		AngleVectors( angles, &entity.axis[0], &entity.axis[3], &entity.axis[6] );
+		VectorInverse( &entity.axis[3] );
+		m_rotationAngle = anglemod( m_rotationAngle + timeDeltaSeconds * rotationSpeed );
+	} else {
+		Matrix3_Copy( axis_identity, entity.axis );
+	}
+
+	R_ClearScene();
+	CG_SetBoneposesForTemporaryEntity( &entity );
+	R_AddEntityToScene( &entity );
+	R_RenderScene( &refdef );
 }
 
 }

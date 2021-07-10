@@ -10,6 +10,8 @@ Item {
     readonly property real modelSelectorWidth: 270
     readonly property real modelSelectorHeight: 400
 
+    readonly property bool drawNativePart: StackView.view && !StackView.view.busy
+
     ColumnLayout {
         anchors.centerIn: parent
 
@@ -28,6 +30,7 @@ Item {
                 modelSelectorWidth: root.modelSelectorWidth
                 modelSelectorHeight: root.modelSelectorHeight
                 defaultModel: wsw.defaultTeamAlphaModel
+                drawNativePart: root.drawNativePart
                 teamName: "ALPHA"
             }
 
@@ -39,6 +42,7 @@ Item {
                 modelSelectorHeight: root.modelSelectorHeight
                 defaultModel: wsw.defaultTeamPlayersModel
                 hasForceColorVar: true
+                drawNativePart: root.drawNativePart
                 teamName: "PLAYERS"
             }
 
@@ -49,6 +53,7 @@ Item {
                 modelSelectorWidth: root.modelSelectorWidth
                 modelSelectorHeight: root.modelSelectorHeight
                 defaultModel: wsw.defaultTeamBetaModel
+                drawNativePart: root.drawNativePart
                 teamName: "BETA"
             }
         }

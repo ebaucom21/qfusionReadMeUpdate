@@ -342,6 +342,8 @@ private:
 	static inline const qreal s_maxCrosshairSize { kMaxCrosshairSize };
 	static inline const qreal s_crosshairSizeStep { 1.0 };
 
+	int64_t m_lastDrawFrameTimestamp { 0 };
+
 	int64_t m_lastActiveMaskTime { 0 };
 	QPointer<QOpenGLContext> m_externalContext;
 	QPointer<QOpenGLContext> m_sharedContext;
@@ -907,6 +909,10 @@ void QtUISystem::drawSelfInMainContext() {
 		occluderBounds.emplace_back( occluder->mapRectToScene( occluder->boundingRect() ) );
 	}
 
+	const int64_t timestamp = getFrameTimestamp();
+	const int64_t delta = std::min( (int64_t)33, timestamp - m_lastDrawFrameTimestamp );
+	m_lastDrawFrameTimestamp = timestamp;
+
 	wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems> underlayHeap, overlayHeap;
 	for( NativelyDrawn *nativelyDrawn = m_nativelyDrawnListHead; nativelyDrawn; nativelyDrawn = nativelyDrawn->next ) {
 		const QQuickItem *item = nativelyDrawn->m_selfAsItem;
@@ -951,7 +957,7 @@ void QtUISystem::drawSelfInMainContext() {
 
 	while( !underlayHeap.empty() ) {
 		std::pop_heap( underlayHeap.begin(), underlayHeap.end(), cmp );
-		underlayHeap.back()->drawSelfNatively();
+		underlayHeap.back()->drawSelfNatively( timestamp, delta );
 		underlayHeap.pop_back();
 	}
 
@@ -963,7 +969,7 @@ void QtUISystem::drawSelfInMainContext() {
 
 	while( !overlayHeap.empty() ) {
 		std::pop_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
-		overlayHeap.back()->drawSelfNatively();
+		overlayHeap.back()->drawSelfNatively( timestamp, delta );
 		overlayHeap.pop_back();
 	}
 

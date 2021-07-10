@@ -8,6 +8,8 @@ Rectangle {
     color: Qt.rgba(1.0, 1.0, 1.0, 0.025)
 
     property color modelColor
+    property bool fullbright
+    property bool drawNativePart
     property int selectedIndex
     property string selectedValue
     property bool applyImmediately: true
@@ -25,10 +27,18 @@ Rectangle {
         onClicked: selectedIndex = selectedIndex ? selectedIndex - 1 : models.length - 1
     }
 
-    // TODO: Draw the model
-    Label {
-        anchors.centerIn: parent
-        text: models[selectedIndex]
+    NativelyDrawnModel {
+        visible: drawNativePart
+        anchors.fill: parent
+        modelName: "models/players/" + models[selectedIndex] + "/tris.iqm"
+        skinName: "models/players/" + models[selectedIndex] + (fullbright ? "/fullbright" : "/default")
+        viewOrigin: Qt.vector3d(64.0, 0, 0.0)
+        modelOrigin: Qt.vector3d(0.0, 0.0, -16.0)
+        desiredModelHeight: 56.0
+        rotationSpeed: -90.0
+        modelColor: root.modelColor
+        outlineColor: root.modelColor
+        outlineHeight: 0.33
     }
 
     ToolButton {

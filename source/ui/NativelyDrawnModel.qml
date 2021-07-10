@@ -9,10 +9,13 @@ Item {
     property string modelName
     property string skinName
     property vector3d modelOrigin
-    property vector3d rotationAxis
     property real rotationSpeed: 0.0
     property vector3d viewOrigin
     property real viewFov: 90.0
+    property real desiredModelHeight: 0.0
+    property real outlineHeight: 0.0
+    property color modelColor: "white"
+    property color outlineColor: "black"
 
     implicitWidth: underlying.isLoaded ? 0 : 192
     implicitHeight: underlying.isLoaded ? 0 : 192
@@ -23,10 +26,13 @@ Item {
         modelName: root.modelName
         skinName: root.skinName
         modelOrigin: root.modelOrigin
-        rotationAxis: root.rotationAxis
         rotationSpeed: root.rotationSpeed
         viewOrigin: root.viewOrigin
         viewFov: root.viewFov
+        desiredModelHeight: root.desiredModelHeight
+        outlineHeight: root.outlineHeight
+        modelColor: root.modelColor
+        outlineColor: root.outlineColor
         width: root.width
         height: root.height
         anchors.centerIn: parent
@@ -37,7 +43,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        sourceComponent: underlying.isLoaded && !wsw.isDebuggingNativelyDrawnItems ? null : debuggingPlaceholder
+        sourceComponent: wsw.isDebuggingNativelyDrawnItems ? debuggingPlaceholder : null
     }
 
     Component {

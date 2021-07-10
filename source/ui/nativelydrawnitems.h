@@ -8,6 +8,8 @@
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstdtypes.h"
+// TODO:
+#include "../cgame/cg_local.h"
 
 struct shader_s;
 struct model_s;
@@ -37,7 +39,7 @@ public:
 
 	[[nodiscard]]
 	virtual bool isLoaded() const = 0;
-	virtual void drawSelfNatively() = 0;
+	virtual void drawSelfNatively( int64_t time, int64_t timeDelta ) = 0;
 };
 
 class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
@@ -93,7 +95,7 @@ public:
 	explicit NativelyDrawnImage( QQuickItem *parent = nullptr );
 	~NativelyDrawnImage() override;
 
-	void drawSelfNatively() override;
+	void drawSelfNatively( int64_t, int64_t ) override;
 };
 
 class NativelyDrawnModel : public QQuickItem, public NativelyDrawn {
@@ -104,15 +106,21 @@ class NativelyDrawnModel : public QQuickItem, public NativelyDrawn {
 
 	enum : unsigned { ReloadModel = 0x1, ReloadSkin = 0x2 };
 
-	QString m_modelName;
-	QString m_skinName;
-	QVector3D m_modelOrigin;
-	QVector3D m_viewOrigin;
-	QVector3D m_rotationAxis;
+	QString m_modelName, m_skinName;
+	QVector3D m_modelOrigin, m_viewOrigin, m_viewTarget;
+	QColor m_modelColor { QColor::fromRgbF( 1.0f, 1.0f, 1.0f, 1.0f ) };
+	QColor m_outlineColor { QColor::fromRgbF( 1.0f, 1.0f, 1.0f, 1.0f ) };
 
 	qreal m_rotationSpeed { 0.0 };
 	qreal m_viewFov { 90.0 };
-private:
+	qreal m_desiredModelHeight { 0.0 };
+	qreal m_outlineHeight { 0.0 };
+
+	float m_transitionScale { 0.0f };
+	float m_rotationAngle { 0.0f };
+	mat3_t m_viewAxis;
+	bool m_needsViewAxisUpdate { false };
+
 	Q_SIGNAL void modelNameChanged();
 	void setModelName( const QString &modelName );
 
@@ -128,8 +136,8 @@ private:
 	Q_SIGNAL void viewOriginChanged( const QVector3D &viewOrigin );
 	void setViewOrigin( const QVector3D &viewOrigin );
 
-	Q_SIGNAL void rotationAxisChanged( const QVector3D &rotationAxis );
-	void setRotationAxis( const QVector3D &rotationAxis );
+	Q_SIGNAL void viewTargetChanged( const QVector3D &viewTarget );
+	void setViewTarget( const QVector3D &viewTarget );
 
 	Q_SIGNAL void rotationSpeedChanged( qreal rotationSpeed );
 	void setRotationSpeed( qreal rotationSpeed );
@@ -137,14 +145,30 @@ private:
 	Q_SIGNAL void viewFovChanged( qreal viewFov );
 	void setViewFov( qreal viewFov );
 
+	Q_SIGNAL void desiredModelHeightChanged( qreal desiredModelHeight );
+	void setDesiredModelHeight( qreal desiredModelHeight );
+
+	Q_SIGNAL void modelColorChanged( const QColor &modelColor );
+	void setModelColor( const QColor &modelColor );
+
+	Q_SIGNAL void outlineColorChanged( const QColor &outlineColor );
+	void setOutlineColor( const QColor &outlineColor );
+
+	Q_SIGNAL void outlineHeightChanged( qreal outlineHeight );
+	void setOutlineHeight( qreal outlineHeight );
+
 	Q_PROPERTY( QString modelName MEMBER m_modelName WRITE setModelName NOTIFY modelNameChanged )
 	Q_PROPERTY( QString skinName MEMBER m_skinName WRITE setSkinName NOTIFY skinNameChanged )
 	Q_PROPERTY( int nativeZ MEMBER m_nativeZ WRITE setNativeZ NOTIFY nativeZChanged )
 	Q_PROPERTY( QVector3D modelOrigin MEMBER m_modelOrigin WRITE setModelOrigin NOTIFY modelOriginChanged )
 	Q_PROPERTY( QVector3D viewOrigin MEMBER m_viewOrigin WRITE setViewOrigin NOTIFY viewOriginChanged )
-	Q_PROPERTY( QVector3D rotationAxis MEMBER m_rotationAxis WRITE setRotationAxis NOTIFY rotationAxisChanged )
+	Q_PROPERTY( QVector3D viewTarget MEMBER m_viewTarget WRITE setViewTarget NOTIFY viewTargetChanged )
 	Q_PROPERTY( qreal rotationSpeed MEMBER m_rotationSpeed WRITE setRotationSpeed NOTIFY rotationSpeedChanged )
 	Q_PROPERTY( qreal viewFov MEMBER m_viewFov WRITE setViewFov NOTIFY viewFovChanged )
+	Q_PROPERTY( qreal desiredModelHeight MEMBER m_desiredModelHeight WRITE setDesiredModelHeight NOTIFY desiredModelHeightChanged )
+	Q_PROPERTY( QColor modelColor MEMBER m_modelColor WRITE setModelColor NOTIFY modelColorChanged )
+	Q_PROPERTY( QColor outlineColor MEMBER m_outlineColor WRITE setOutlineColor NOTIFY outlineColorChanged )
+	Q_PROPERTY( qreal outlineHeight MEMBER m_outlineHeight WRITE setOutlineHeight NOTIFY outlineHeightChanged )
 
 	Q_SIGNAL void isLoadedChanged( bool isLoaded );
 	Q_PROPERTY( bool isLoaded READ isLoaded NOTIFY isLoadedChanged )
@@ -153,10 +177,12 @@ private:
 	bool isLoaded() const override;
 
 	void reloadIfNeeded();
+
+	void updateViewAxis();
 public:
 	explicit NativelyDrawnModel( QQuickItem *parent = nullptr );
 
-	void drawSelfNatively() override;
+	void drawSelfNatively( int64_t, int64_t ) override;
 };
 
 }

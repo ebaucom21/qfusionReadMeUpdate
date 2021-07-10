@@ -11,6 +11,7 @@ ColumnLayout {
     property real modelSelectorWidth
     property real modelSelectorHeight
     property bool hasForceColorVar: false
+    property bool drawNativePart
 
     spacing: 8
 
@@ -34,6 +35,8 @@ ColumnLayout {
         Layout.preferredWidth: root.modelSelectorWidth
         Layout.preferredHeight: root.modelSelectorHeight
         modelColor: colorPicker.selectedColor
+        fullbright: fullbrightCheckBox.checked
+        drawNativePart: root.drawNativePart
         defaultModel: root.defaultModel
         cvarName: "cg_team" + teamName + "Model"
     }
@@ -46,6 +49,7 @@ ColumnLayout {
     }
 
     CVarAwareCheckBox {
+        id: fullbrightCheckBox
         Layout.topMargin: 20
         text: "Fullbright"
         Layout.alignment: Qt.AlignHCenter

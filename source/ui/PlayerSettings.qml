@@ -31,6 +31,8 @@ Item {
             Layout.preferredHeight: 480
             Layout.alignment: Qt.AlignHCenter
             modelColor: colorPicker.selectedColor
+            fullbright: fullbrightCheckBox.checked
+            drawNativePart: root.StackView.view && !root.StackView.view.busy
             defaultModel: wsw.defaultPlayerModel
             cvarName: "model"
         }
@@ -46,6 +48,7 @@ Item {
         SettingsRow {
             text: "Fullbright"
             CVarAwareCheckBox {
+                id: fullbrightCheckBox
                 cvarName: "skin"
                 function fromNative(value) { return value.toLowerCase() == "fullbright" }
                 function toNative(value) { return value ? "fullbright" : "default" }

@@ -926,6 +926,8 @@ void CG_InitPersistentState() {
 	cg_forceMyTeamAlpha = Cvar_Get( "cg_forceMyTeamAlpha", "0", CVAR_ARCHIVE );
 
 	CrosshairState::init();
+
+	CG_InitTemporaryBoneposesCache();
 }
 
 /*
@@ -981,7 +983,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	CG_InitInput();
 
 	CG_RegisterVariables();
-	CG_InitTemporaryBoneposesCache();
 	CG_PModelsInit();
 	CG_WModelsInit();
 
