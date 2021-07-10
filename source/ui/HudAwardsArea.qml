@@ -18,57 +18,63 @@ Item {
         spacing: 8
 
         add: Transition {
-            ParallelAnimation {
-                NumberAnimation {
-                    property: "transformXScale"
-                    from: 0.0; to: 1.0
-                    easing.type: Easing.InOutElastic
-                    easing.amplitude: 10.0
-                    duration: 667
-                }
-                NumberAnimation {
-                    property: "transformYScale"
-                    from: 0.0; to: 1.0
-                    easing.type: Easing.InOutElastic
-                    easing.amplitude: 5.0
-                    duration: 667
-                }
+            NumberAnimation {
+                property: "transformXScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 10.0
+                duration: 667
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 5.0
+                duration: 667
             }
         }
 
         populate: Transition {
-            ParallelAnimation {
-                NumberAnimation {
-                    property: "transformXScale"
-                    from: 0.0; to: 1.0
-                    easing.type: Easing.InOutElastic
-                    easing.amplitude: 10.0
-                    duration: 667
-                }
-                NumberAnimation {
-                    property: "transformYScale"
-                    from: 0.0; to: 1.0
-                    easing.type: Easing.InOutElastic
-                    easing.amplitude: 5.0
-                    duration: 667
-                }
+            NumberAnimation {
+                property: "transformXScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 10.0
+                duration: 667
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 5.0
+                duration: 667
             }
         }
 
         remove: Transition {
-            ParallelAnimation {
-                NumberAnimation {
-                    property: "transformXScale"
-                    from: 1.0; to: 0.0
-                    easing.type: Easing.InCubic
-                    duration: 48
-                }
-                NumberAnimation {
-                    property: "transformYScale"
-                    from: 1.0; to: 0.0
-                    easing.type: Easing.InCubic
-                    duration: 48
-                }
+            NumberAnimation {
+                property: "transformXScale"
+                from: 1.0; to: 0.0
+                easing.type: Easing.InCubic
+                duration: 48
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                from: 1.0; to: 0.0
+                easing.type: Easing.InCubic
+                duration: 48
+            }
+        }
+
+        // A sentinel for interrupted other transitions
+        displaced: Transition {
+            NumberAnimation {
+                property: "transformXScale"
+                to: 1.0
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                to: 1.0
             }
         }
 
