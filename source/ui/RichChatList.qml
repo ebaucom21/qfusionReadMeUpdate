@@ -11,24 +11,12 @@ ListView {
 
     delegate: Item {
         width: root.width
-        height: Math.max(avatar.height + 8, nameLabel.implicitHeight + contentLabel.implicitHeight + 3 * 8)
-
-        Rectangle {
-            id: avatar
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.topMargin: 8
-            width: 24
-            height: 24
-            radius: 12
-            opacity: 0.7
-            color: "grey"
-        }
+        height: nameLabel.implicitHeight + contentLabel.implicitHeight + 3 * 8
 
         Label {
             id: nameLabel
             anchors.top: parent.top
-            anchors.left: avatar.right
+            anchors.left: parent.left
             anchors.margins: 8
             font.weight: Font.Bold
             font.letterSpacing: 1
@@ -52,7 +40,7 @@ ListView {
 
         Label {
             id: contentLabel
-            anchors.left: avatar.right
+            anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: nameLabel.bottom
             anchors.margins: 8
