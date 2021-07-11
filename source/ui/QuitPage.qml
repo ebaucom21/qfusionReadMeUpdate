@@ -39,11 +39,10 @@ Item {
             title: "Quit the game?"
             hasAcceptButton: true
             hasRejectButton: true
-            // :flatearth:
-            acceptButtonText: "Cancel"
-            rejectButtonText: "OK"
-            onAccepted: wsw.quit()
-            onRejected: popup.closeSelf()
+            acceptButtonText: "Go back"
+            rejectButtonText: "Quit"
+            onAccepted: popup.closeSelf()
+            onRejected: wsw.quit()
         }
     }
 
