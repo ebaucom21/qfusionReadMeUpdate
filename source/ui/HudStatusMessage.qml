@@ -10,16 +10,16 @@ Item {
     Connections {
         target: hudDataModel
         onStatusMessageChanged: {
-            stackView.clear()
-            stackView.push(component, {"message": statusMessage})
+            stackView.clear(StackView.Immediate)
+            stackView.push(component, {"message": statusMessage}, StackView.PushTransition)
             timer.start()
         }
     }
 
     Timer {
         id: timer
-        interval: 2500
-        onTriggered: stackView.clear()
+        interval: 3000
+        onTriggered: stackView.clear(StackView.PopTransition)
     }
 
     StackView {
@@ -27,20 +27,61 @@ Item {
         width: rootItem.width
         height: 96
         anchors.centerIn: parent
+
+        pushEnter: Transition {
+            NumberAnimation {
+                property: "transformXScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 5.0
+                duration: 333
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                from: 0.0; to: 1.0
+                easing.type: Easing.InOutElastic
+                easing.amplitude: 1.5
+                duration: 333
+            }
+        }
+
+        popExit: Transition {
+            NumberAnimation {
+                property: "transformXScale"
+                from: 1.0; to: 0.0
+                easing.type: Easing.InCubic
+                duration: 48
+            }
+            NumberAnimation {
+                property: "transformYScale"
+                from: 1.0; to: 0.0
+                easing.type: Easing.InCubic
+                duration: 48
+            }
+        }
     }
 
     Component {
         id: component
         Label {
             property string message
-            text: message
+            property real transformXScale
+            property real transformYScale
+            transform: Scale {
+                origin.x: 0.5 * width
+                origin.y: 0.5 * height
+                xScale: transformXScale
+                yScale: transformYScale
+            }
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
-            font.weight: Font.Medium
+            font.weight: Font.Bold
             font.pointSize: 20
             font.letterSpacing: 2
-            font.wordSpacing: 2
+            font.wordSpacing: 3
             font.capitalization: Font.SmallCaps
+            style: Text.Raised
+            text: message
         }
     }
 }

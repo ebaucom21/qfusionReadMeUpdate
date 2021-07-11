@@ -90,13 +90,13 @@ Item {
             width: listView.width
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
-            text: model.message
-            font.weight: Font.Black
-            font.pointSize: 28 + 1 * index
-            font.italic: true
+            font.weight: Font.Bold
+            font.pointSize: 32
             font.capitalization: Font.SmallCaps
-            font.letterSpacing: 3
+            font.letterSpacing: 2
             font.wordSpacing: 3
+            style: Text.Raised
+            text: model.message
         }
     }
 }
