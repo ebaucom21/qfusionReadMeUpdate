@@ -561,6 +561,13 @@ void QtUISystem::initPersistentPart() {
 		// Fix the overwritten locale, if any
 		(void)std::setlocale( LC_ALL, "C" );
 
+		// Force using the core profile inside Qt guts
+		// https://bugreports.qt.io/browse/QTBUG-84099
+		QSurfaceFormat format;
+		format.setVersion( 3, 3 );
+		format.setProfile( QSurfaceFormat::CoreProfile );
+		QSurfaceFormat::setDefaultFormat( format );
+
 		registerFonts();
 		registerCustomQmlTypes();
 
