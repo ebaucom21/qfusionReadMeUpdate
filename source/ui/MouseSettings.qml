@@ -18,6 +18,7 @@ Item {
         ColumnLayout {
             id: regularSettingsColumn
             width: 0.66 * root.width
+            spacing: 12
 
             SettingsRow {
                 text: "Mouse sensitivity"
@@ -40,7 +41,8 @@ Item {
                 CVarAwareCrosshairSelector {
                     drawNativePart: root.isNotInTransition
                     nativePartOpacity: popupOverlay.visible ? 0.3 : 1.0
-                    desiredWidthOrHeight: wsw.maxCrosshairSize
+                    desiredWidthOrHeight: wsw.strongCrosshairSize
+                    fieldWidth: wsw.strongCrosshairSize
                     model: availableStrongCrosshairs
                     cvarName: "cg_crosshair_strong"
                 }
@@ -67,7 +69,7 @@ Item {
         id: sameCrosshairComponent
         ColumnLayout {
             width: 0.67 * root.width
-            spacing: 20
+            spacing: 12
 
             SettingsRow {
                 text: "Crosshair"
@@ -75,6 +77,7 @@ Item {
                     drawNativePart: root.isNotInTransition
                     nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
                     desiredWidthOrHeight: sizeSlider.value
+                    fieldWidth: wsw.maxCrosshairSize
                     color: colorPicker.selectedColor || "white"
                     model: availableCrosshairs
                     cvarName: "cg_crosshair"
@@ -109,59 +112,72 @@ Item {
             implicitWidth: root.width
             width: root.width
             implicitHeight: separateCrosshairsColumn.implicitHeight
+
             ColumnLayout {
                 id: separateCrosshairsColumn
                 anchors.left: parent.left
                 // Try making it visually fit the column
                 anchors.leftMargin: 0.125 * parent.width + 4
+
                 Repeater {
                     model: 10
-                    delegate: RowLayout {
-                        id: weaponRow
-                        spacing: 12
-                        implicitHeight: 72
+                    delegate: Item {
+                        implicitHeight: 54
                         width: 0.5 * root.width
-
                         readonly property string weaponShortName: hudDataModel.getWeaponShortName(index + 1)
 
-                        Image {
-                            Layout.preferredWidth: 24
-                            Layout.preferredHeight: 24
-                            Layout.alignment: Qt.AlignVCenter
-                            fillMode: Image.PreserveAspectCrop
-                            mipmap: true
-                            smooth: true
-                            source: hudDataModel.getWeaponIconPath(index + 1)
+                        Rectangle {
+                            width: parent.width + 48
+                            height: parent.height + separateCrosshairsColumn.spacing
+                            anchors.centerIn: parent
+                            color: index % 2 ? Qt.rgba(1.0, 1.0, 1.0, 0.03) : Qt.rgba(1.0, 1.0, 1.0, 0.05)
                         }
 
-                        CVarAwareCrosshairSelector {
-                            // Hide natively drawn parts when running transitions
-                            drawNativePart: root.StackView.view && !root.StackView.view.busy
-                            nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
-                            desiredWidthOrHeight: separateSizeSlider.value
-                            color: separateColorPicker.selectedColor || "white"
-                            Layout.preferredWidth: implicitWidth
-                            Layout.preferredHeight: implicitHeight
-                            Layout.leftMargin: 16
-                            Layout.rightMargin: 16
-                            cvarName: "cg_crosshair_" + weaponShortName
-                            model: availableCrosshairs
-                        }
+                        RowLayout {
+                            spacing: 8
+                            width: 0.5 * root.width
+                            anchors.centerIn: parent
 
-                        CVarAwareSlider {
-                            id: separateSizeSlider
-                            Layout.preferredWidth: 2.0 * (wsw.maxCrosshairSize - wsw.minCrosshairSize)
-                            cvarName: "cg_crosshair_size_" + weaponShortName
-                            from: wsw.minCrosshairSize
-                            to: wsw.maxCrosshairSize
-                            stepSize: wsw.crosshairSizeStep
-                        }
+                            Image {
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                Layout.alignment: Qt.AlignVCenter
+                                fillMode: Image.PreserveAspectCrop
+                                mipmap: true
+                                smooth: true
+                                source: hudDataModel.getWeaponIconPath(index + 1)
+                            }
 
-                        CVarAwareColorPicker {
-                            id: separateColorPicker
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.leftMargin: 32
-                            cvarName: "cg_crosshair_color_" + weaponShortName
+                            CVarAwareCrosshairSelector {
+                                // Hide natively drawn parts when running transitions
+                                drawNativePart: root.StackView.view && !root.StackView.view.busy
+                                nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
+                                desiredWidthOrHeight: separateSizeSlider.value
+                                color: separateColorPicker.selectedColor || "white"
+                                fieldWidth: wsw.maxCrosshairSize
+                                Layout.preferredWidth: implicitWidth
+                                Layout.preferredHeight: implicitHeight
+                                Layout.leftMargin: 16
+                                Layout.rightMargin: 16
+                                cvarName: "cg_crosshair_" + weaponShortName
+                                model: availableCrosshairs
+                            }
+
+                            CVarAwareSlider {
+                                id: separateSizeSlider
+                                Layout.preferredWidth: 3.0 * (wsw.maxCrosshairSize - wsw.minCrosshairSize)
+                                cvarName: "cg_crosshair_size_" + weaponShortName
+                                from: wsw.minCrosshairSize
+                                to: wsw.maxCrosshairSize
+                                stepSize: wsw.crosshairSizeStep
+                            }
+
+                            CVarAwareColorPicker {
+                                id: separateColorPicker
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.leftMargin: 32
+                                cvarName: "cg_crosshair_color_" + weaponShortName
+                            }
                         }
                     }
                 }

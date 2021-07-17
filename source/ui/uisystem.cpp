@@ -308,6 +308,7 @@ public:
 	Q_PROPERTY( QJsonArray videoModeHeightValuesList MEMBER s_videoModeHeightValuesList CONSTANT );
 	Q_PROPERTY( qreal minCrosshairSize MEMBER s_minCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal maxCrosshairSize MEMBER s_maxCrosshairSize CONSTANT );
+	Q_PROPERTY( qreal strongCrosshairSize MEMBER s_strongCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
@@ -340,6 +341,7 @@ private:
 
 	static inline const qreal s_minCrosshairSize { kMinCrosshairSize };
 	static inline const qreal s_maxCrosshairSize { kMaxCrosshairSize };
+	static inline const qreal s_strongCrosshairSize { kStrongCrosshairSize };
 	static inline const qreal s_crosshairSizeStep { 1.0 };
 
 	int64_t m_lastDrawFrameTimestamp { 0 };

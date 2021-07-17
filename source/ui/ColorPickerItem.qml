@@ -4,8 +4,8 @@ import QtQuick.Controls.Material 2.12
 
 Item {
     id: root
-    implicitWidth: 14
-    height: 14
+    implicitWidth: 12
+    height: 12
     clip: false
 
     property alias containsMouse: mouseArea.containsMouse
@@ -56,7 +56,7 @@ Item {
     MouseArea {
         id: mouseArea
         anchors.centerIn: parent
-        width: 14; height: 14
+        width: 12; height: 12
         hoverEnabled: true
         onContainsMouseChanged: {
             if (containsMouse) {
@@ -87,17 +87,17 @@ Item {
         anchors.centerIn: parent
         color: Qt.lighter(root.haloColor)
         opacity: 0.0
-        width: 40
-        height: 40
-        radius: 20
+        width: 32
+        height: 32
+        radius: 16
     }
 
     Item {
         id: contentItemContainer
         clip: false
         anchors.centerIn: parent
-        width: 14
-        height: 14
+        width: 12
+        height: 12
         transform: Translate {
             id: contentItemTranslation
         }

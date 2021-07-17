@@ -6,7 +6,7 @@ import net.warsow 2.6
 Item {
     id: root
     implicitHeight: fieldWidth
-    implicitWidth: fieldWidth + 0.3 * buttonWidth
+    implicitWidth: fieldWidth + 0.5 * buttonWidth
     property string cvarName
     property bool applyImmediately: true
     property bool drawNativePart
@@ -18,10 +18,10 @@ Item {
     property real desiredWidthOrHeight: -1
     property color color: "white"
 
-    readonly property real fieldWidth: 64
+    property real fieldWidth: 64
+
     readonly property real buttonWidth: 40
-    readonly property real buttonShift:
-        buttonWidth * (-0.15 + 0.3 * (desiredWidthOrHeight - 16.0) / (64.0 - 16.0))
+    readonly property real buttonShift: 8
 
     Component.onCompleted: wsw.registerCVarAwareControl(root)
     Component.onDestruction: wsw.unregisterCVarAwareControl(root)
@@ -90,7 +90,6 @@ Item {
     RoundButton {
         anchors.horizontalCenter: parent.right
         anchors.horizontalCenterOffset: +buttonShift
-        Behavior on anchors.horizontalCenterOffset { SmoothedAnimation { duration: 50 } }
         anchors.verticalCenter: parent.verticalCenter
         Material.theme: pressed ? Material.Light : Material.Dark
         flat: true

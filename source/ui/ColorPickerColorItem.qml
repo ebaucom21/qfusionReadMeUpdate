@@ -5,8 +5,8 @@ import net.warsow 2.6
 
 ColorPickerItem {
     id: root
-    implicitWidth: 14
-    height: 14
+    implicitWidth: 12
+    height: 12
     clip: false
 
     property color color
@@ -22,7 +22,7 @@ ColorPickerItem {
         Rectangle {
             anchors.top: parent.bottom
             anchors.topMargin: 4
-            width: 14
+            width: 12
             height: 2
             color: root.color
             visible: root.selected

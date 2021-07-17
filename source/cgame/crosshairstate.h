@@ -15,7 +15,8 @@ constexpr const unsigned kNumStrongCrosshairs = 6;
 
 constexpr const unsigned kMinCrosshairSize = 16;
 constexpr const unsigned kDefaultCrosshairSize = 32;
-constexpr const unsigned kMaxCrosshairSize = 64;
+constexpr const unsigned kMaxCrosshairSize = 48;
+constexpr const unsigned kStrongCrosshairSize = 64;
 
 class CrosshairState {
 public:
