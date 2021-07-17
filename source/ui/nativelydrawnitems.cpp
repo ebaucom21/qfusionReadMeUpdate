@@ -8,7 +8,7 @@
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect );
 
 namespace wsw::ui {
 
@@ -55,6 +55,14 @@ void NativelyDrawnImage::setDesiredSize( const QSize &size ) {
 	}
 }
 
+void NativelyDrawnImage::setUseEmbossEffect( bool useEmbossEffect ) {
+	if( m_useEmbossEffect != useEmbossEffect ) {
+		m_useEmbossEffect = useEmbossEffect;
+		m_reloadRequestMask |= ChangeEffect;
+		Q_EMIT useEmbossEffectChanged( useEmbossEffect );
+	}
+}
+
 bool NativelyDrawnImage::isLoaded() const {
 	return m_material && m_isMaterialLoaded;
 }
@@ -82,11 +90,12 @@ void NativelyDrawnImage::reloadIfNeeded() {
 		m_material = R_CreateExplicitlyManaged2DMaterial();
 	}
 
+	const BitmapEffect effect = m_useEmbossEffect ? BitmapEffect::Emboss : BitmapEffect::NoEffect;
 	if( m_desiredSize.isValid() ) {
 		const int weight = m_desiredSize.width(), height = m_desiredSize.height();
-		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, weight, height );
+		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, weight, height, effect );
 	} else {
-		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes );
+		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, -1, -1, effect );
 	}
 
 	const bool isLoaded = this->isLoaded();

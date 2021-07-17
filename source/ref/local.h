@@ -281,6 +281,11 @@ protected:
 	void applyAniso( Texture *texture, int aniso );
 };
 
+enum class BitmapEffect {
+	NoEffect,
+	Emboss,
+};
+
 class TextureFactory : TextureManagementShared {
 public:
 	using DesiredSize = std::pair<uint16_t, uint16_t>;
@@ -324,7 +329,8 @@ private:
 	[[nodiscard]]
 	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
 								  ImageBuffer *dataBuffer, ImageBuffer *conversionBuffer,
-								  const MaybeDesiredSize &desiredSize = std::nullopt )
+								  const MaybeDesiredSize &desiredSize = std::nullopt,
+								  BitmapEffect bitmapEffect = BitmapEffect::NoEffect )
 		-> std::optional<std::pair<uint8_t*, BitmapProps>>;
 
 	[[nodiscard]]
@@ -390,7 +396,7 @@ public:
 	auto createRaw2DTexture() -> Raw2DTexture *;
 	void releaseRaw2DTexture( Raw2DTexture *texture );
 	[[nodiscard]]
-	bool updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize );
+	bool updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect );
 };
 
 class TextureCache : TextureManagementShared {

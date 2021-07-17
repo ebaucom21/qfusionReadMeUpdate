@@ -8,6 +8,7 @@ Item {
     readonly property size sourceSize: underlying.sourceSize
     property string materialName: ""
     property size desiredSize
+    property bool useEmbossEffect: false
     property color color: "white"
     property int nativeZ: 0
 
@@ -20,6 +21,7 @@ Item {
         id: underlying
         materialName: root.materialName
         desiredSize: root.desiredSize
+        useEmbossEffect: root.useEmbossEffect
         opacity: root.opacity
         color: root.color
         nativeZ: root.nativeZ

@@ -287,12 +287,12 @@ void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material ) {
 	return MaterialCache::instance()->getUnderlyingFactory()->release2DMaterialBypassingCache( material );
 }
 
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 ) {
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect ) {
 	std::optional<std::pair<uint16_t, uint16_t>> desiredSize;
 	if( w > 0 && h > 0 ) {
 		desiredSize = std::make_pair( (uint16_t)w, (uint16_t)h );
 	}
-	return MaterialCache::instance()->getUnderlyingFactory()->update2DMaterialImageBypassingCache( material, wsw::StringView( name ), desiredSize );
+	return MaterialCache::instance()->getUnderlyingFactory()->update2DMaterialImageBypassingCache( material, wsw::StringView( name ), desiredSize, bitmapEffect );
 }
 
 shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data ) {

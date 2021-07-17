@@ -553,6 +553,8 @@ public:
 
 class MaterialCache;
 
+enum class BitmapEffect;
+
 class MaterialFactory {
 	friend class MaterialParser;
 	friend class MaterialCache;
@@ -605,7 +607,7 @@ public:
 	auto create2DMaterialBypassingCache() -> shader_t *;
 	void release2DMaterialBypassingCache( shader_t *material );
 	bool update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name,
-											  const MaybeDesiredSize &desiredSize );
+											  const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect );
 };
 
 class MaterialCache {

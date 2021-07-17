@@ -8,7 +8,7 @@
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect );
 
 using wsw::operator""_asView;
 
@@ -28,7 +28,7 @@ public:
 		if( m_cachedMaterialSize[index] != size ) {
 			wsw::StaticString<256> name;
 			CrosshairState::makePath( &name, m_style, num );
-			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), (int)size, (int)size );
+			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), (int)size, (int)size, BitmapEffect::Emboss );
 			m_cachedMaterialSize[index] = size;
 		}
 		return m_materials[index];

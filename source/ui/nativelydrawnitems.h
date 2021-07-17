@@ -53,11 +53,12 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	/// A desired size of the image on screen
 	QSize m_desiredSize;
 
-	enum : unsigned { ReloadMaterial = 0x1, ChangeSize = 0x2 };
+	enum : unsigned { ReloadMaterial = 0x1, ChangeSize = 0x2, ChangeEffect = 0x4 };
 
 	QColor m_color { Qt::white };
 
 	bool m_isMaterialLoaded { false };
+	bool m_useEmbossEffect { false };
 
 	void setNativeZ( int nativeZ );
 	Q_SIGNAL void nativeZChanged( int nativeZ );
@@ -72,6 +73,9 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 
 	Q_SIGNAL void desiredSizeChanged( const QSize &desiredSize );
 	Q_PROPERTY( QSize desiredSize READ getDesiredSize WRITE setDesiredSize NOTIFY desiredSizeChanged );
+
+	Q_SIGNAL void useEmbossEffectChanged( bool useEmbossEffect );
+	Q_PROPERTY( bool useEmbossEffect MEMBER m_useEmbossEffect WRITE setUseEmbossEffect NOTIFY useEmbossEffectChanged );
 
 	Q_SIGNAL void colorChanged( const QColor &color );
 	Q_PROPERTY( QColor color MEMBER m_color NOTIFY colorChanged );
@@ -88,6 +92,8 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	auto getDesiredSize() const -> QSize { return m_desiredSize; }
 
 	void setDesiredSize( const QSize &size );
+
+	void setUseEmbossEffect( bool useEmbossEffect );
 
 	void reloadIfNeeded();
 	void updateSourceSize( int w, int h );

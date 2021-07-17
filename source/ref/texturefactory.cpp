@@ -263,6 +263,40 @@ auto getRegularTexImageFormats( int flags, int samples ) -> GLTexImageFormats {
 	return { swizzleMask, internalFormat, format, type };
 }
 
+struct alignas( 1 ) Rgba {
+	uint8_t r, g, b, a;
+};
+
+static_assert( alignof( Rgba ) == 1 && sizeof( Rgba ) == 4 );
+
+static void applyEmbossEffectRgba( Rgba *__restrict dest, const Rgba *__restrict src,
+								   unsigned width, unsigned height ) {
+	// Sanity checks
+	assert( width > 0 && height > 0 && width < ( 1u << 16 ) && height < ( 1u << 16 ) );
+
+	// Copy the first row as-is
+	std::memcpy( dest, src, sizeof( Rgba ) * width );
+	// Blend over a shifted black copy
+	for( unsigned line = 1; line < height; ++line ) {
+		// Copy the first pixel in line as-is
+		dest[width * line] = src[width * line];
+		for( unsigned column = 1; column < width; ++column ) {
+			const Rgba &shadowSrc = src[width * ( line - 1 ) + ( column - 1 )];
+			// Halve the black copy opacity
+			const Rgba blendDest { 0, 0, 0, (uint8_t)( shadowSrc.a / 2 ) };
+			const Rgba &blendSrc = src[width * line + column];
+			const auto srcFrac = (float)blendSrc.a * ( 1.0f / 255.0f );
+			const auto destFrac = 1.0f - srcFrac;
+			dest[line * width + column] = Rgba {
+				(uint8_t)( srcFrac * (float)blendSrc.r + destFrac * (float)blendDest.r ),
+				(uint8_t)( srcFrac * (float)blendSrc.g + destFrac * (float)blendDest.g ),
+				(uint8_t)( srcFrac * (float)blendSrc.b + destFrac * (float)blendDest.b ),
+				(uint8_t)( srcFrac * (float)blendSrc.a + destFrac * (float)blendDest.a )
+			};
+		}
+	}
+}
+
 static ImageBuffer readFileBuffer;
 static ImageBuffer cubemapBuffer[6];
 static ImageBuffer loadingBuffer;
@@ -272,7 +306,8 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 											  ImageBuffer *readBuffer,
 											  ImageBuffer *dataBuffer,
 											  ImageBuffer *conversionBuffer,
-											  const MaybeDesiredSize &desiredSize )
+											  const MaybeDesiredSize &desiredSize,
+											  BitmapEffect bitmapEffect )
 											-> std::optional<std::pair<uint8_t *, BitmapProps>> {
 	assert( name.isZeroTerminated() );
 	assert( NUM_IMAGE_EXTENSIONS == 4 );
@@ -344,7 +379,18 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 	}
 
 	uint8_t *const imageData = dataBuffer->reserveAndGet( imageDataSize );
-	std::memcpy( imageData, bytes, imageDataSize );
+	if( bitmapEffect == BitmapEffect::NoEffect ) {
+		std::memcpy( imageData, bytes, imageDataSize );
+	} else if( bitmapEffect == BitmapEffect::Emboss ) {
+		if( samples == 4 && width && height ) {
+			applyEmbossEffectRgba( (Rgba *)imageData, (const Rgba *)bytes, (unsigned)width, (unsigned)height );
+		} else {
+			return std::nullopt;
+		}
+	} else {
+		throw std::logic_error( "unreachable" );
+	}
+
 	if( !isSvg ) {
 		// This is not that easy as we use stb in the UI code as well.
 		// TODO: Provide allocators for stb that use the loading buffer?
@@ -385,15 +431,14 @@ void TextureFactory::releaseRaw2DTexture( Raw2DTexture *texture ) {
 	}
 }
 
-bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name,
-													const MaybeDesiredSize &desiredSize ) {
+bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect ) {
 	const auto maybeCleanName = makeCleanName( name, wsw::StringView() );
 	if( !maybeCleanName ) {
 		return false;
 	}
 
 	auto maybeFileData = loadTextureDataFromFile( *maybeCleanName, &::readFileBuffer, &::loadingBuffer,
-												  &::conversionBuffer, desiredSize );
+												  &::conversionBuffer, desiredSize, bitmapEffect );
 	if( !maybeFileData ) {
 		return false;
 	}
