@@ -7,52 +7,72 @@ import net.warsow 2.6
 
 ListView {
     id: root
-    spacing: 8
 
-    delegate: Item {
+    verticalLayoutDirection: ListView.BottomToTop
+
+    delegate: Loader {
         width: root.width
-        height: nameLabel.implicitHeight + contentLabel.implicitHeight + 3 * 8
+        sourceComponent: regularMessage ? messageComponent : sectionComponent
 
-        Label {
-            id: nameLabel
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.margins: 8
-            font.weight: Font.Bold
-            font.letterSpacing: 1
-            font.pointSize: 12
-            textFormat: Text.StyledText
-            style: Text.Raised
-            text: name
+        Component {
+            id: sectionComponent
+            Item {
+                implicitWidth: root.width
+                implicitHeight: Math.max(nameLabel.height, timestampLabel.height) + 20
+                Label {
+                    id: nameLabel
+                    anchors.left: parent.left
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: 8
+                    font.weight: Font.Black
+                    font.letterSpacing: 1
+                    font.pointSize: 12
+                    textFormat: Text.StyledText
+                    style: Text.Raised
+                    text: model.sectionName
+                }
+                Label {
+                    id: timestampLabel
+                    anchors.left: nameLabel.right
+                    anchors.baseline: nameLabel.baseline
+                    font.letterSpacing: 0
+                    font.pointSize: 10
+                    textFormat: Text.PlainText
+                    text: " at " + model.sectionTimestamp
+                    opacity: 0.7
+                }
+            }
         }
 
-        Label {
-            id: timestampLabel
-            anchors.left: nameLabel.right
-            anchors.baseline: nameLabel.baseline
-            anchors.margins: 8
-            font.letterSpacing: 0
-            font.pointSize: 10
-            textFormat: Text.PlainText
-            text: timestamp
-            opacity: 0.7
-        }
-
-        Label {
-            id: contentLabel
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: nameLabel.bottom
-            anchors.margins: 8
-            horizontalAlignment: Qt.AlignLeft
-            wrapMode: Text.WordWrap
-            textFormat: Text.StyledText
-            font.weight: Font.Normal
-            font.letterSpacing: 1.2
-            font.pointSize: 11
-            lineHeight: 1.2
-            clip: true
-            text: message
+        Component {
+            id: messageComponent
+            Label {
+                width: root.width
+                height: implicitHeight + 8
+                horizontalAlignment: Qt.AlignLeft
+                verticalAlignment: Qt.AlignVCenter
+                leftPadding: 8
+                rightPadding: 8
+                wrapMode: Text.WordWrap
+                textFormat: Text.StyledText
+                font.weight: Font.Normal
+                font.letterSpacing: 1.2
+                font.pointSize: 11
+                lineHeight: 1.2
+                clip: true
+                text: model.regularMessage
+                MouseArea {
+                    id: mouseArea
+                    hoverEnabled: true
+                    anchors.fill: parent
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    opacity: mouseArea.containsMouse ? 0.03 : 0.0
+                    Behavior on opacity { SmoothedAnimation { duration: 3333 } }
+                }
+            }
         }
     }
 }

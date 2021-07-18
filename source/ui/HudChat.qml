@@ -60,7 +60,7 @@ Item {
 
             ListView {
                 model: wsw.isShowingTeamChatPopup ? compactTeamChatModel : compactChatModel
-                verticalLayoutDirection: ListView.BottomToTop
+                verticalLayoutDirection: ListView.TopToBottom
                 spacing: 4
                 clip: true
                 displayMarginBeginning: 0
@@ -68,31 +68,11 @@ Item {
                 anchors.top: input.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
+                anchors.bottom: parent.bottom
                 anchors.topMargin: 0
+                anchors.bottomMargin: 0
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
-
-                onCountChanged: updateHeightAndPosition()
-                Component.onCompleted: updateHeightAndPosition()
-
-                // We want to keep items of short lists on the pane top
-                // contrary to what ListView.BottomToTop produces.
-                // This is achieved by varying the list height itself.
-                // We want to avoid computing content height on every update
-                // as this is discouraged for long lists.
-                // That's why it is implemented in a procedural fashion breaking binding chains.
-                function updateHeightAndPosition() {
-                    const allowedHeight =
-                        contentFrame.height - input.height - input.anchors.topMargin -
-                        input.anchors.bottomMargin - anchors.topMargin - anchors.bottomMargin - 12
-                    // Slightly greater than the maximal number that gets really displayed
-                    if (count < 12) {
-                        height = Math.min(allowedHeight, contentHeight)
-                    } else {
-                        height = allowedHeight
-                    }
-                    positionViewAtEnd()
-                }
 
                 delegate: RowLayout {
                     width: parent.width

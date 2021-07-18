@@ -54,8 +54,8 @@ Item {
         anchors.topMargin: 8
         anchors.bottomMargin: 12
         clip: true
-        onCountChanged: positionViewAtEnd()
-        onModelChanged: positionViewAtEnd()
+        onCountChanged: positionViewAtBeginning()
+        onModelChanged: positionViewAtBeginning()
     }
 
     Rectangle {

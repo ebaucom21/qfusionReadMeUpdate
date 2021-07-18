@@ -8,35 +8,70 @@
 #include "../gameshared/q_arch.h"
 #include "../gameshared/q_shared.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/freelistallocator.h"
+
+// TODO we can use a specialized one based on a freelist allocator
+#include <deque>
 
 namespace wsw::ui {
 
 class ChatModelProxy;
 
-class ChatModel : public QAbstractListModel {
+class ChatModelsShared {
 protected:
-	explicit ChatModel( ChatModelProxy *proxy )
-		: m_proxy( proxy ) {}
+	struct Line {
+		char *basePtr;
+		uint8_t nameLen;
+		uint8_t timestampLen;
+		uint8_t messageLen;
+		[[nodiscard]]
+		auto getName() const -> wsw::StringView {
+			return { basePtr, nameLen, wsw::StringView::ZeroTerminated };
+		}
+		[[nodiscard]]
+		auto getTimestamp() const -> wsw::StringView {
+			return { basePtr + nameLen + 1, timestampLen, wsw::StringView::ZeroTerminated };
+		}
+		[[nodiscard]]
+		auto getMessage() const -> wsw::StringView {
+			return { basePtr + nameLen + 1 + timestampLen + 1, messageLen, wsw::StringView::ZeroTerminated };
+		}
+	};
+};
+
+class ChatModel : protected ChatModelsShared, public QAbstractListModel {
+	friend class ChatModelProxy;
+protected:
+	explicit ChatModel( ChatModelProxy *proxy ) : m_proxy( proxy ) {}
 
 	ChatModelProxy *const m_proxy;
 
-	enum Role {
-		Timestamp,
-		Name,
-		Message
-	};
+	virtual void beginClear() = 0;
+	virtual void endClear() = 0;
 
-	struct Entry {
-		QString timestamp;
-		QString name;
-		QString message;
-	};
+	virtual void beginRemoveOldestLine( Line *line ) = 0;
+	virtual void endRemoveOldestLine() = 0;
 
-	QList<Entry> m_data;
+	virtual void beginAddingLine( Line *line, const QDate &date, int timeHours, int timeMinutes ) = 0;
+	virtual void endAddingLine() = 0;
+};
 
-	void addNewEntry( QString timestamp, const wsw::StringView &name, const wsw::StringView &message );
+class CompactChatModel : public ChatModel {
+	friend class ChatModelProxy;
 
-	void clear();
+	explicit CompactChatModel( ChatModelProxy *proxy ) : ChatModel( proxy ) {}
+
+	enum Role { Message = Qt::UserRole + 1, Name, Timestamp };
+
+	void beginClear() override { beginResetModel(); }
+	void endClear() override { endResetModel(); }
+
+	void beginRemoveOldestLine( Line *line ) override;
+
+	void endRemoveOldestLine() override { endRemoveRows(); };
+
+	void beginAddingLine( Line *, const QDate &, int, int ) override { beginInsertRows( QModelIndex(), 0, 0 ); }
+	void endAddingLine() override { endInsertRows(); }
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
@@ -44,15 +79,6 @@ protected:
 	auto rowCount( const QModelIndex & ) const -> int override;
 	[[nodiscard]]
 	auto data( const QModelIndex &index, int role ) const -> QVariant override;
-};
-
-class CompactChatModel : public ChatModel {
-	friend class ChatModelProxy;
-
-	explicit CompactChatModel( ChatModelProxy *proxy )
-		: ChatModel( proxy ) {}
-
-	void addMessage( const wsw::StringView &name, const wsw::StringView &message );
 };
 
 class RichChatModel : public ChatModel {
@@ -63,24 +89,62 @@ class RichChatModel : public ChatModel {
 	int m_currHeadingHour { -999 };
 	int m_currHeadingMinute { 0 };
 	int m_lastMessageMinute { 0 };
+	unsigned m_totalGroupLengthSoFar { 0 };
 
-	void addNewGroup( const wsw::StringView &name, const wsw::StringView &message );
-	void addToCurrGroup( const wsw::StringView &message, int lastMessageMinute );
-	void addToCurrGroup( const wsw::StringView &message );
+	// Default ListView sections don't work with the desired direction.
+	// The approach of manual sections management is also more flexible.
+	struct Entry {
+		Line *regularLine { nullptr };
+		Line *sectionLine { nullptr };
+	};
+
+	std::deque<Entry> m_entries;
+
+	enum Role { RegularMessage = Qt::UserRole + 1, SectionName, SectionTimestamp };
+
 	[[nodiscard]]
-	bool tryAddingToCurrGroup( const wsw::StringView &message );
+	auto roleNames() const -> QHash<int, QByteArray> override;
+	[[nodiscard]]
+	auto rowCount( const QModelIndex & ) const -> int override;
+	[[nodiscard]]
+	auto data( const QModelIndex &index, int role ) const -> QVariant override;
 
-	explicit RichChatModel( ChatModelProxy *proxy )
-		: ChatModel( proxy ) {}
+	[[nodiscard]]
+	bool canAddToCurrGroup( const Line *line, const QDate &date, int timeHours, int timeMinutes );
 
-	void addMessage( const wsw::StringView &name, const wsw::StringView &message );
+	void beginClear() override;
+	void endClear() override;
+
+	void beginRemoveOldestLine( Line *line ) override;
+	void endRemoveOldestLine() override;
+
+	void beginAddingLine( Line *line, const QDate &date, int timeHours, int timeMinutes ) override;
+	void endAddingLine() override;
+
+	explicit RichChatModel( ChatModelProxy *proxy ) : ChatModel( proxy ) {}
 };
 
-class ChatModelProxy {
+class ChatModelProxy : protected ChatModelsShared {
+	friend class ChatModel;
+	friend class CompactChatModel;
+	friend class RichChatModel;
+
 	CompactChatModel m_compactModel { this };
 	RichChatModel m_richModel { this };
 
-	QDateTime m_lastMessageQtTime { QDateTime::fromSecsSinceEpoch( 0 ) };
+	ChatModel *m_childModels[2] { &m_compactModel, &m_richModel };
+
+	static constexpr unsigned kMaxTimeBytes = 6;
+	static constexpr unsigned kFullLineSize = sizeof( Line ) + MAX_CHAT_BYTES + MAX_NAME_BYTES + kMaxTimeBytes;
+	static constexpr unsigned kMaxLines = 4 * 4096;
+
+	wsw::HeapBasedFreelistAllocator m_linesAllocator { kFullLineSize, kMaxLines, alignof( Line ) };
+	std::deque<Line *> m_lineRefs;
+
+	QDate m_lastMessageQtDate;
+	int m_lastMessageTimeHours { 0 };
+	int m_lastMessageTimeMinutes { 0 };
+	wsw::StaticString<kMaxTimeBytes> m_lastMessageFormattedTime;
 	int64_t m_lastMessageFrameTimestamp { 0 };
 	bool m_wasInTheSameFrame { false };
 public:
@@ -88,20 +152,6 @@ public:
 	auto getCompactModel() -> ChatModel * { return &m_compactModel; }
 	[[nodiscard]]
 	auto getRichModel() -> RichChatModel * { return &m_richModel; }
-	[[nodiscard]]
-	bool wasThisMessageInTheSameFrame() const { return m_wasInTheSameFrame; }
-	[[nodiscard]]
-	auto getLastMessageQtTime() const { return m_lastMessageQtTime; }
-
-	[[nodiscard]]
-	auto formatTime( const QDateTime &dateTime ) -> QString;
-	[[nodiscard]]
-	auto formatTime( int hour, int minute ) -> QString;
-	[[nodiscard]]
-	auto acquireCachedName( const wsw::StringView &name ) -> QString;
-
-	// Currently has no effect. A cache for names should be implemented in future
-	void releaseCachedName( const QString &name ) {}
 
 	void clear();
 
