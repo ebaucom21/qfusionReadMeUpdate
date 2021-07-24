@@ -59,9 +59,11 @@ Item {
         visible: drawNativePart && value
         anchors.centerIn: parent
         desiredSize: desiredWidthOrHeight > 0 ? Qt.size(desiredWidthOrHeight, desiredWidthOrHeight) : Qt.size(-1, -1)
+        borderWidth: 1
         materialName: value ? model[value - 1] : ""
         opacity: nativePartOpacity
         useOutlineEffect: true
+        fitSizeForCrispness: true
         color: root.color
     }
 

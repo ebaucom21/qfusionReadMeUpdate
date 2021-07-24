@@ -7,6 +7,8 @@
 #include <QImageReader>
 #include <QBuffer>
 
+#include "local.h"
+#include "../ref/frontend.h"
 #include "../qcommon/wswfs.h"
 
 #include "../../third-party/stb/stb_image.h"
@@ -94,16 +96,16 @@ void WswImageResponse::exec() {
 	}
 }
 
-[[nodiscard]]
-auto rasterizeSvg( const QSize &desiredSize, const QByteArray &data ) -> QImage;
-
 bool WswImageResponse::loadSvg( const QByteArray &fileData ) {
-	if( !m_requestedSize.isValid() ) {
+	if( !m_requestedSize.isValid() || m_requestedSize.isEmpty() ) {
 		Com_Printf( S_COLOR_YELLOW "%s: A valid size must be specified for loading an SVG image %s\n", kTag,
 					m_name.constData() );
 		return false;
 	}
-	m_image = rasterizeSvg( m_requestedSize, fileData );
+	ImageOptions imageOptions;
+	imageOptions.setDesiredSize( m_requestedSize.width(), m_requestedSize.height() );
+	imageOptions.fitSizeForCrispness = true;
+	m_image = rasterizeSvg( fileData, imageOptions );
 	if( m_image.isNull() ) {
 		Com_Printf( S_COLOR_YELLOW "%s: Failed to parse SVG for %s\n", kTag, m_name.constData() );
 		return false;

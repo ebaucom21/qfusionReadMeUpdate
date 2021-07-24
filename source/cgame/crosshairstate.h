@@ -99,24 +99,7 @@ public:
 	[[nodiscard]]
 	auto getDrawingColor() -> const float *;
 	[[nodiscard]]
-	auto getDrawingMaterial() -> const shader_s *;
-
-	[[nodiscard]]
-	auto getDrawingOffsets() const -> std::pair<int, int> {
-		if( m_style == Weak ) {
-			assert( m_sizeVar );
-			return { -m_sizeVar->integer / 2, -m_sizeVar->integer / 2 };
-		}
-		return { -(int)kMaxCrosshairSize / 2, -(int)kMaxCrosshairSize / 2 };
-	}
-	[[nodiscard]]
-	auto getDrawingDimensions() const -> std::pair<int, int> {
-		if( m_style == Weak ) {
-			assert( m_sizeVar );
-			return { m_sizeVar->integer, m_sizeVar->integer };
-		}
-		return { (int)kMaxCrosshairSize, (int)kMaxCrosshairSize };
-	}
+	auto getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
 
 	[[nodiscard]]
 	bool canBeDrawn() const {

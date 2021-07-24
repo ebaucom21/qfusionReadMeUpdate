@@ -281,15 +281,20 @@ protected:
 	void applyAniso( Texture *texture, int aniso );
 };
 
-enum class BitmapEffect {
-	NoEffect,
-	Outline,
+struct ImageOptions {
+	std::optional<std::pair<unsigned, unsigned>> desiredSize;
+	unsigned borderWidth { 0 };
+	bool fitSizeForCrispness { false };
+	bool useOutlineEffect { false };
+
+	template <typename T>
+	void setDesiredSize( T width, T height ) {
+		assert( width > 0 && height > 0 && width < (T)( 1 << 16 ) && height < (T)( 1 << 16 ) );
+		desiredSize = std::make_pair( (unsigned)width, (unsigned)height );
+	}
 };
 
 class TextureFactory : TextureManagementShared {
-public:
-	using DesiredSize = std::pair<uint16_t, uint16_t>;
-	using MaybeDesiredSize = std::optional<DesiredSize>;
 private:
 	friend class TextureCache;
 
@@ -329,8 +334,7 @@ private:
 	[[nodiscard]]
 	auto loadTextureDataFromFile( const wsw::StringView &name, ImageBuffer *readBuffer,
 								  ImageBuffer *dataBuffer, ImageBuffer *conversionBuffer,
-								  const MaybeDesiredSize &desiredSize = std::nullopt,
-								  BitmapEffect bitmapEffect = BitmapEffect::NoEffect )
+								  const ImageOptions &imageOptions )
 		-> std::optional<std::pair<uint8_t*, BitmapProps>>;
 
 	[[nodiscard]]
@@ -396,7 +400,7 @@ public:
 	auto createRaw2DTexture() -> Raw2DTexture *;
 	void releaseRaw2DTexture( Raw2DTexture *texture );
 	[[nodiscard]]
-	bool updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect );
+	bool updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const ImageOptions &options );
 };
 
 class TextureCache : TextureManagementShared {
@@ -436,9 +440,6 @@ class TextureCache : TextureManagementShared {
 	void applyFilterOrAnisoInList( Texture *listHead, TextureFilter filter,
 								   int aniso, bool applyFilter, bool applyAniso );
 public:
-	using DesiredSize = std::pair<uint16_t, uint16_t>;
-	using MaybeDesiredSize = std::optional<DesiredSize>;
-
 	TextureCache();
 	~TextureCache();
 

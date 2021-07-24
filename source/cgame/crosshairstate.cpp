@@ -8,35 +8,47 @@
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, const ImageOptions &options );
 
 using wsw::operator""_asView;
 
 template <size_t N>
 class CrosshairMaterialCache {
 	shader_s *m_materials[N] {};
-	unsigned m_cachedMaterialSize[N] {};
+	unsigned m_cachedRequestedSize[N] {};
+	std::pair<unsigned, unsigned> m_cachedActualSize[N] {};
 	const CrosshairState::Style m_style;
 public:
 	explicit CrosshairMaterialCache( CrosshairState::Style style ) noexcept : m_style( style ) {}
 
 	[[nodiscard]]
-	auto getMaterialForNumAndSize( unsigned num, unsigned size ) -> shader_s * {
+	auto getMaterialForNumAndSize( unsigned num, unsigned size )
+		-> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
 		const unsigned index = num - 1;
 		assert( index < N );
 		assert( size >= kMinCrosshairSize && size <= kMaxCrosshairSize );
-		if( m_cachedMaterialSize[index] != size ) {
+		if( m_cachedRequestedSize[index] != size ) {
 			wsw::StaticString<256> name;
 			CrosshairState::makePath( &name, m_style, num );
-			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), (int)size, (int)size, BitmapEffect::Outline );
-			m_cachedMaterialSize[index] = size;
+			ImageOptions options {};
+			options.fitSizeForCrispness = true;
+			options.useOutlineEffect    = true;
+			options.borderWidth         = 1;
+			options.setDesiredSize( size, size );
+			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), options );
+			m_cachedRequestedSize[index] = size;
+			m_cachedActualSize[index]    = *R_GetShaderDimensions( m_materials[index] );
 		}
-		return m_materials[index];
+		if( m_materials[index] ) {
+			const auto [width, height] = m_cachedActualSize[index];
+			return std::make_tuple( m_materials[index], width, height );
+		}
+		return std::nullopt;
 	}
 
 	void initMaterials() {
 		for( unsigned i = 0; i < N; ++i ) {
-			assert( !m_materials[i] && !m_cachedMaterialSize[i] );
+			assert( !m_materials[i] && !m_cachedRequestedSize[i] );
 			m_materials[i] = R_CreateExplicitlyManaged2DMaterial();
 		}
 	}
@@ -45,7 +57,7 @@ public:
 		for( unsigned i = 0; i < N; ++i ) {
 			R_ReleaseExplicitlyManaged2DMaterial( m_materials[i] );
 			m_materials[i] = nullptr;
-			m_cachedMaterialSize[i] = 0;
+			m_cachedRequestedSize[i] = 0;
 		}
 	}
 };
@@ -207,7 +219,7 @@ auto CrosshairState::getDrawingColor() -> const float * {
 }
 
 [[nodiscard]]
-auto CrosshairState::getDrawingMaterial() -> const shader_s * {
+auto CrosshairState::getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
 	// Apply additional validation as it could be called by the UI code
 	const unsigned maxNum = m_style == Weak ? kNumCrosshairs : kNumStrongCrosshairs;
 	if( const auto num = (unsigned)m_valueVar->integer; num && num <= maxNum ) {
@@ -220,5 +232,5 @@ auto CrosshairState::getDrawingMaterial() -> const shader_s * {
 			return ::strongCrosshairsMaterialCache.getMaterialForNumAndSize( num, kMaxCrosshairSize );
 		}
 	}
-	return nullptr;
+	return std::nullopt;
 }

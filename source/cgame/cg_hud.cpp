@@ -184,11 +184,12 @@ void CG_ScreenCrosshairDamageUpdate() {
 }
 
 static void drawCrosshair( CrosshairState *state ) {
-	auto [xOff, yOff] = state->getDrawingOffsets();
-	auto [xDim, yDim] = state->getDrawingDimensions();
-	const int x = cgs.vidWidth / 2 + xOff;
-	const int y = cgs.vidHeight / 2 + yOff;
-	RF_DrawStretchPic( x, y, xDim, yDim, 0, 0, 1, 1, state->getDrawingColor(), state->getDrawingMaterial() );
+	if( auto maybeMaterialAndDimensions = state->getDrawingMaterial() ) {
+		auto [material, width, height] = *maybeMaterialAndDimensions;
+		const int x = ( cgs.vidWidth - (int)width ) / 2;
+		const int y = ( cgs.vidHeight - (int)height ) / 2;
+		RF_DrawStretchPic( x, y, (int)width, (int)height, 0, 0, 1, 1, state->getDrawingColor(), material );
+	}
 }
 
 void CG_UpdateCrosshair() {

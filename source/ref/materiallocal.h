@@ -553,7 +553,7 @@ public:
 
 class MaterialCache;
 
-enum class BitmapEffect;
+struct ImageOptions;
 
 class MaterialFactory {
 	friend class MaterialParser;
@@ -565,9 +565,6 @@ class MaterialFactory {
 	wsw::StaticVector<TokenStream, 1> m_templateTokenStreamHolder;
 	wsw::StaticVector<MaterialLexer, 1> m_templateLexerHolder;
 	wsw::StaticVector<TokenStream, 1> m_primaryTokenStreamHolder;
-
-	using DesiredSize = std::pair<uint16_t, uint16_t>;
-	using MaybeDesiredSize = std::optional<DesiredSize>;
 
 	[[nodiscard]]
 	auto findImage( const wsw::StringView &name, int flags, int tags ) -> Texture *;
@@ -607,7 +604,7 @@ public:
 	auto create2DMaterialBypassingCache() -> shader_t *;
 	void release2DMaterialBypassingCache( shader_t *material );
 	bool update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name,
-											  const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect );
+											  const ImageOptions &options );
 };
 
 class MaterialCache {
@@ -639,9 +636,6 @@ class MaterialCache {
 	wsw::Vector<uint16_t> m_freeMaterialIds;
 
 	wsw::StaticVector<Skin, 16> m_skins;
-
-	using DesiredSize = std::pair<uint16_t, uint16_t>;
-	using MaybeDesiredSize = std::optional<DesiredSize>;
 
 	[[nodiscard]]
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;

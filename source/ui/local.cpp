@@ -1,6 +1,7 @@
 #include "local.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
+#include "../ref/frontend.h"
 
 #include <QColor>
 #include <QImage>
@@ -164,38 +165,89 @@ auto formatPing( int ping ) -> QByteArray {
 }
 
 [[nodiscard]]
-auto rasterizeSvg( const QSize &desiredSize, const QByteArray &data ) -> QImage {
+static auto rasterizeSvg( QSvgRenderer *renderer, int w, int h, int border ) -> QImage {
+	assert( border >= 0 && w > 2 * border && h > 2 * border );
+	QImage image( w, h, QImage::Format_RGBA8888 );
+	image.fill( Qt::transparent );
+	QPainter painter( &image );
+	painter.setRenderHint( QPainter::Antialiasing );
+	renderer->render( &painter, QRect( border, border, w - 2 * border, h - 2 * border ) );
+	return image;
+}
+
+[[nodiscard]]
+static auto estimateCrispness( const QImage &image ) -> float {
+	if( !image.size().isValid() || image.size().isEmpty() ) {
+		return 0.0f;
+	}
+
+	assert( image.format() == QImage::Format_RGBA8888 );
+	const auto *__restrict data = image.constBits();
+	const unsigned dataSize = image.sizeInBytes();
+
+	unsigned numAlphaTransitionPixels = 0;
+	for( unsigned i = 0; i < dataSize; ++i ) {
+		const auto alpha = data[i + 3];
+		numAlphaTransitionPixels += ( alpha != 0 ) & ( alpha != 255 );
+	}
+
+	const auto totalNumPixels = (unsigned)image.width() * (unsigned)image.height();
+	assert( totalNumPixels == dataSize / 4 );
+	return (float)( totalNumPixels - numAlphaTransitionPixels ) / (float)( numAlphaTransitionPixels );
+}
+
+[[nodiscard]]
+auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QImage {
+	assert( options.desiredSize );
+	const auto desiredWidth  = (int)options.desiredSize->first;
+	const auto desiredHeight = (int)options.desiredSize->second;
+	const auto borderWidth   = (int)options.borderWidth;
+	assert( desiredWidth > 2 * borderWidth && desiredHeight > 2 * borderWidth );
+
 	QSvgRenderer renderer( data );
 	if( !renderer.isValid() ) {
 		return QImage();
 	}
-	QImage image( desiredSize.width(), desiredSize.height(), QImage::Format_RGBA8888 );
-	image.fill( Qt::transparent );
-	QPainter painter( &image );
-	painter.setRenderHint( QPainter::Antialiasing );
-	painter.setRenderHint( QPainter::HighQualityAntialiasing );
-	renderer.render( &painter );
-	return image;
+
+	QImage image( rasterizeSvg( &renderer, desiredWidth, desiredHeight, borderWidth ) );
+	if( desiredWidth < 2 || desiredHeight < 2 ) {
+		return image;
+	}
+
+	if( !options.fitSizeForCrispness ) {
+		return image;
+	}
+
+	QImage altImage( rasterizeSvg( &renderer, desiredWidth - 1, desiredHeight - 1, borderWidth ) );
+	return estimateCrispness( image ) > estimateCrispness( altImage ) ? image : altImage;
 }
 
 // The dest is assumed to accept ARGB8 pixels
 // TODO: Allow caching parsed SVG data
-// TODO: Allow specifying drawing region
+// TODO: Use spans for supplying arguments
 [[nodiscard]]
-bool rasterizeSvg( unsigned w, unsigned h, const void *rawSvgData, size_t rawSvgDataSize,
-				   void *dest, size_t destCapacity ) {
-	const size_t expectedSize = 4 * w * h;
+auto rasterizeSvg( const void *rawSvgData, size_t rawSvgDataSize,
+				   void *dest, size_t destCapacity, const ImageOptions &options )
+				   -> std::optional<std::pair<unsigned, unsigned>> {
+	if( !options.desiredSize ) {
+		throw std::logic_error( "The desired size must be specified" );
+	}
+
+	const auto [desiredWidth, desiredHeight] = *options.desiredSize;
+	const size_t expectedSize = 4 * desiredWidth * desiredHeight;
 	if( destCapacity < expectedSize ) {
 		throw std::out_of_range( "The dest buffer has an insufficient capacity" );
 	}
+
 	const QByteArray data( QByteArray::fromRawData( (const char *)rawSvgData, (int)rawSvgDataSize ) );
-	const QImage image( rasterizeSvg( QSize( (int)w, (int)h ), data ) );
+	const QImage image( rasterizeSvg( data, options ) );
 	if( image.isNull() ) {
-		return false;
+		return std::nullopt;
 	}
-	assert( (size_t)image.sizeInBytes() == expectedSize );
+
+	assert( ( (size_t)image.sizeInBytes() == expectedSize ) || options.fitSizeForCrispness );
 	std::memcpy( dest, image.constBits(), image.sizeInBytes() );
-	return true;
+	return std::make_pair( (unsigned)image.width(), (unsigned)image.height() );
 }
 
 }

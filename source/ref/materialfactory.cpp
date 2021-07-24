@@ -61,13 +61,13 @@ void MaterialFactory::release2DMaterialBypassingCache( shader_t *material ) {
 	}
 }
 
-bool MaterialFactory::update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name, const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect ) {
+bool MaterialFactory::update2DMaterialImageBypassingCache( shader_t *material, const wsw::StringView &name, const ImageOptions &options ) {
 	if( material ) {
 		assert( material->type == SHADER_TYPE_2D );
 		assert( material->numpasses == 1 );
 		assert( material->passes[0].images[0] );
 		auto *texture = material->passes[0].images[0];
-		return TextureCache::instance()->getUnderlyingFactory()->updateRaw2DTexture( (Raw2DTexture *)texture, name, desiredSize, bitmapEffect );
+		return TextureCache::instance()->getUnderlyingFactory()->updateRaw2DTexture( (Raw2DTexture *)texture, name, options );
 	}
 	return false;
 }

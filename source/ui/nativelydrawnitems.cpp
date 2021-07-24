@@ -8,7 +8,7 @@
 
 shader_t *R_CreateExplicitlyManaged2DMaterial();
 void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, const ImageOptions &options );
 
 namespace wsw::ui {
 
@@ -50,7 +50,7 @@ void NativelyDrawnImage::setMaterialName( const QString &materialName ) {
 void NativelyDrawnImage::setDesiredSize( const QSize &size ) {
 	if( m_desiredSize != size ) {
 		m_desiredSize = size;
-		m_reloadRequestMask |= ChangeSize;
+		m_reloadRequestMask |= ChangeOtherOptions;
 		Q_EMIT desiredSizeChanged( size );
 	}
 }
@@ -58,8 +58,24 @@ void NativelyDrawnImage::setDesiredSize( const QSize &size ) {
 void NativelyDrawnImage::setUseOutlineEffect( bool useOutlineEffect ) {
 	if( m_useOutlineEffect != useOutlineEffect ) {
 		m_useOutlineEffect = useOutlineEffect;
-		m_reloadRequestMask |= ChangeEffect;
+		m_reloadRequestMask |= ChangeOtherOptions;
 		Q_EMIT useOutlineEffectChanged( useOutlineEffect );
+	}
+}
+
+void NativelyDrawnImage::setFitSizeForCrispness( bool fitSizeForCrispness ) {
+	if( m_fitSizeForCrispness != fitSizeForCrispness ) {
+		m_fitSizeForCrispness = fitSizeForCrispness;
+		m_reloadRequestMask |= ChangeOtherOptions;
+		Q_EMIT fitSizeForCrispnessChanged( fitSizeForCrispness );
+	}
+}
+
+void NativelyDrawnImage::setBorderWidth( int borderWidth ) {
+	if( m_borderWidth != borderWidth ) {
+		m_borderWidth = borderWidth;
+		m_reloadRequestMask |= ChangeOtherOptions;
+		Q_EMIT borderWidthChanged( borderWidth );
 	}
 }
 
@@ -90,26 +106,30 @@ void NativelyDrawnImage::reloadIfNeeded() {
 		m_material = R_CreateExplicitlyManaged2DMaterial();
 	}
 
-	const BitmapEffect effect = m_useOutlineEffect ? BitmapEffect::Outline : BitmapEffect::NoEffect;
-	if( m_desiredSize.isValid() ) {
-		const int weight = m_desiredSize.width(), height = m_desiredSize.height();
-		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, weight, height, effect );
-	} else {
-		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, -1, -1, effect );
+	ImageOptions options;
+	options.fitSizeForCrispness = true;
+	options.useOutlineEffect    = m_useOutlineEffect;
+	options.fitSizeForCrispness = m_fitSizeForCrispness;
+	options.borderWidth         = m_borderWidth;
+	if( m_desiredSize.isValid() && !m_desiredSize.isEmpty() ) {
+		options.setDesiredSize( m_desiredSize.width(), m_desiredSize.height() );
+		const int minSide   = std::min( m_desiredSize.width(), m_desiredSize.height() );
+		options.borderWidth = std::clamp( m_borderWidth, 0, minSide / 2 - 1 );
 	}
+
+	m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, options );
 
 	const bool isLoaded = this->isLoaded();
 	if( wasLoaded != isLoaded ) {
 		Q_EMIT isLoadedChanged( isLoaded );
 	}
 
-	if( !isLoaded ) {
-		updateSourceSize( 0, 0 );
-		return;
+	int w = 0, h = 0;
+	if( isLoaded ) {
+		if( const auto maybeDimensions = R_GetShaderDimensions( m_material ) ) {
+			std::tie( w, h ) = *maybeDimensions;
+		}
 	}
-
-	int w, h;
-	R_GetShaderDimensions( m_material, &w, &h );
 	updateSourceSize( w, h );
 }
 
@@ -134,12 +154,15 @@ void NativelyDrawnImage::drawSelfNatively( int64_t, int64_t ) {
 	// TODO: Check rounding
 	// TODO: Setup scissor if the clip rect is defined
 
+	assert( m_sourceSize.isValid() );
+
 	// Check whether the bitmap size is specified
 	if( m_desiredSize.isValid() ) {
-		int x = qmlX + (int)width() / 2;
-		int y = qmlY + (int)height() / 2;
-		const int w = (int)m_desiredSize.width();
-		const int h = (int)m_desiredSize.height();
+		const int x = qmlX + (int)width() / 2;
+		const int y = qmlY + (int)height() / 2;
+		const int w = m_sourceSize.width();
+		const int h = m_sourceSize.height();
+		//Com_Printf( "Source size: %d %d\n", w, h );
 		RF_DrawStretchPic( x - w / 2, y - w / 2, w, h, 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
 	} else {
 		RF_DrawStretchPic( qmlX, qmlY, (int)width(), (int)height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );

@@ -287,12 +287,8 @@ void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material ) {
 	return MaterialCache::instance()->getUnderlyingFactory()->release2DMaterialBypassingCache( material );
 }
 
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1, BitmapEffect bitmapEffect = BitmapEffect::NoEffect ) {
-	std::optional<std::pair<uint16_t, uint16_t>> desiredSize;
-	if( w > 0 && h > 0 ) {
-		desiredSize = std::make_pair( (uint16_t)w, (uint16_t)h );
-	}
-	return MaterialCache::instance()->getUnderlyingFactory()->update2DMaterialImageBypassingCache( material, wsw::StringView( name ), desiredSize, bitmapEffect );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, const ImageOptions &options ) {
+	return MaterialCache::instance()->getUnderlyingFactory()->update2DMaterialImageBypassingCache( material, wsw::StringView( name ), options );
 }
 
 shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data ) {
@@ -310,6 +306,7 @@ shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const
 		}
 		return material;
 	}
+	return nullptr;
 }
 
 /*
@@ -339,26 +336,13 @@ shader_t *R_RegisterLinearPic( const char *name ) {
 *
 * Returns dimensions for shader's base (taken from the first pass) image
 */
-void R_GetShaderDimensions( const shader_t *shader, int *width, int *height ) {
-	Texture *baseImage;
-
-	assert( shader );
-	if( !shader || !shader->numpasses ) {
-		return;
+auto R_GetShaderDimensions( const shader_t *shader ) -> std::optional<std::pair<unsigned, unsigned>> {
+	if( shader && shader->numpasses ) {
+		if( const Texture *image = shader->passes[0].images[0] ) {
+			return std::make_pair( image->width, image->height );
+		}
 	}
-
-	baseImage = shader->passes[0].images[0];
-	if( !baseImage ) {
-		//Com_DPrintf( S_COLOR_YELLOW "R_GetShaderDimensions: shader %s is missing base image\n", shader->name );
-		return;
-	}
-
-	if( width ) {
-		*width = baseImage->width;
-	}
-	if( height ) {
-		*height = baseImage->height;
-	}
+	return std::nullopt;
 }
 
 /*

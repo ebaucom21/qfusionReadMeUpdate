@@ -53,12 +53,15 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	/// A desired size of the image on screen
 	QSize m_desiredSize;
 
-	enum : unsigned { ReloadMaterial = 0x1, ChangeSize = 0x2, ChangeEffect = 0x4 };
+	int m_borderWidth { 0 };
+
+	enum : unsigned { ReloadMaterial = 0x1, ChangeOtherOptions = 0x2 };
 
 	QColor m_color { Qt::white };
 
 	bool m_isMaterialLoaded { false };
 	bool m_useOutlineEffect { false };
+	bool m_fitSizeForCrispness { false };
 
 	void setNativeZ( int nativeZ );
 	Q_SIGNAL void nativeZChanged( int nativeZ );
@@ -77,6 +80,12 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	Q_SIGNAL void useOutlineEffectChanged( bool useOutlineEffect );
 	Q_PROPERTY( bool useOutlineEffect MEMBER m_useOutlineEffect WRITE setUseOutlineEffect NOTIFY useOutlineEffectChanged );
 
+	Q_SIGNAL void fitSizeForCrispnessChanged( bool fitSizeForCrispness );
+	Q_PROPERTY( bool fitSizeForCrispness MEMBER m_fitSizeForCrispness WRITE setFitSizeForCrispness NOTIFY fitSizeForCrispnessChanged );
+
+	Q_SIGNAL void borderWidthChanged( int borderWidth );
+	Q_PROPERTY( int borderWidth MEMBER m_borderWidth WRITE setBorderWidth NOTIFY borderWidthChanged );
+
 	Q_SIGNAL void colorChanged( const QColor &color );
 	Q_PROPERTY( QColor color MEMBER m_color NOTIFY colorChanged );
 
@@ -94,6 +103,9 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	void setDesiredSize( const QSize &size );
 
 	void setUseOutlineEffect( bool useOutlineEffect );
+	void setFitSizeForCrispness( bool fitSizeForCrispness );
+
+	void setBorderWidth( int borderWidth );
 
 	void reloadIfNeeded();
 	void updateSourceSize( int w, int h );

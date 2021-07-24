@@ -2,9 +2,12 @@
 #define WSW_8a83c7a2_cec7_4598_94d9_3b9dd2306555_H
 
 #include <QString>
+#include <QImage>
 #include <array>
 
 namespace wsw { class StringView; }
+
+struct ImageOptions;
 
 namespace wsw::ui {
 
@@ -13,6 +16,9 @@ auto toStyledText( const wsw::StringView &text ) -> QString;
 
 [[nodiscard]]
 auto formatPing( int ping ) -> QByteArray;
+
+[[nodiscard]]
+auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QImage;
 
 class NameChangesTracker {
 	std::array<unsigned, 32> m_nameCounters;

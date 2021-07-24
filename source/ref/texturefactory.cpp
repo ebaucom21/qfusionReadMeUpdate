@@ -35,7 +35,8 @@ using wsw::operator""_asHView;
 // TODO: This is a cheap hack to make the stuff working
 namespace wsw::ui {
 [[nodiscard]]
-bool rasterizeSvg( unsigned w, unsigned h, const void *rawSvgData, size_t rawSvgDataSize, void *dest, size_t destCapacity );
+auto rasterizeSvg( const void *rawSvgData, size_t rawSvgDataSize, void *dest, size_t destCapacity,
+				   const ImageOptions &options ) -> std::optional<std::pair<unsigned, unsigned>>;
 }
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -312,8 +313,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 											  ImageBuffer *readBuffer,
 											  ImageBuffer *dataBuffer,
 											  ImageBuffer *conversionBuffer,
-											  const MaybeDesiredSize &desiredSize,
-											  BitmapEffect bitmapEffect )
+											  const ImageOptions &options )
 											-> std::optional<std::pair<uint8_t *, BitmapProps>> {
 	assert( name.isZeroTerminated() );
 	assert( NUM_IMAGE_EXTENSIONS == 4 );
@@ -359,16 +359,20 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 		// It's only gets used in this case.
 		// TODO: Redesign supplying of desired texture parameters
 		// so it can be meaningful in case of regular images.
-		if( !desiredSize ) {
+		if( !options.desiredSize ) {
 			return std::nullopt;
 		}
 		samples = 4;
-		std::tie( width, height ) = *desiredSize;
-		imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
-		bytes = conversionBuffer->reserveAndGet( imageDataSize );
-		if( !wsw::ui::rasterizeSvg( width, height, fileBufferBytes, fileSize, bytes, imageDataSize ) ) {
+		const auto [desiredWidth, desiredHeight] = *options.desiredSize;
+		const auto bufferDataSize = (size_t)desiredWidth * (size_t)desiredHeight * (size_t)samples;
+		bytes = conversionBuffer->reserveAndGet( bufferDataSize );
+		const auto maybeSize = wsw::ui::rasterizeSvg( fileBufferBytes, fileSize, bytes, bufferDataSize, options );
+		if( !maybeSize ) {
 			return std::nullopt;
 		}
+		std::tie( width, height ) = *maybeSize;
+		imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
+		assert( imageDataSize <= bufferDataSize );
 	} else {
 		bytes = stbi_load_from_memory( (const stbi_uc *)fileBufferBytes, (int)fileSize, &width, &height, &samples, 0 );
 		if( !bytes ) {
@@ -385,16 +389,14 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 	}
 
 	uint8_t *const imageData = dataBuffer->reserveAndGet( imageDataSize );
-	if( bitmapEffect == BitmapEffect::NoEffect ) {
-		std::memcpy( imageData, bytes, imageDataSize );
-	} else if( bitmapEffect == BitmapEffect::Outline ) {
+	if( options.useOutlineEffect ) {
 		if( samples == 4 && width && height ) {
 			applyOutlineEffectRgba( (Rgba *)imageData, (const Rgba *)bytes, (unsigned)width, (unsigned)height );
 		} else {
 			return std::nullopt;
 		}
 	} else {
-		throw std::logic_error( "unreachable" );
+		std::memcpy( imageData, bytes, imageDataSize );
 	}
 
 	if( !isSvg ) {
@@ -437,14 +439,15 @@ void TextureFactory::releaseRaw2DTexture( Raw2DTexture *texture ) {
 	}
 }
 
-bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name, const MaybeDesiredSize &desiredSize, BitmapEffect bitmapEffect ) {
+bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::StringView &name,
+										 const ImageOptions &options ) {
 	const auto maybeCleanName = makeCleanName( name, wsw::StringView() );
 	if( !maybeCleanName ) {
 		return false;
 	}
 
 	auto maybeFileData = loadTextureDataFromFile( *maybeCleanName, &::readFileBuffer, &::loadingBuffer,
-												  &::conversionBuffer, desiredSize, bitmapEffect );
+												  &::conversionBuffer, options );
 	if( !maybeFileData ) {
 		return false;
 	}
@@ -473,6 +476,11 @@ bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::Strin
 	}
 
 	unbindModified( target, texture->texnum );
+
+	texture->width = bitmapProps.width;
+	texture->height = bitmapProps.height;
+	texture->samples = bitmapProps.samples;
+
 	return true;
 }
 
@@ -483,7 +491,7 @@ auto TextureFactory::loadMaterialTexture( const wsw::HashedStringView &name,
 	}
 
 	auto maybeFileData = loadTextureDataFromFile( name, &::readFileBuffer, &::loadingBuffer,
-												  &::conversionBuffer, std::nullopt );
+												  &::conversionBuffer, ImageOptions {} );
 	if( !maybeFileData ) {
 		return nullptr;
 	}
@@ -539,7 +547,7 @@ auto TextureFactory::loadMaterialCubemap( const wsw::HashedStringView &name,
 		nameBuffer.append( signLetters[i % 2] );
 		nameBuffer.append( axisLetters[i / 2] );
 		const auto maybeData = loadTextureDataFromFile( nameBuffer.asView(), &::loadingBuffer,
-														&::cubemapBuffer[i], &::conversionBuffer );
+														&::cubemapBuffer[i], &::conversionBuffer, ImageOptions {} );
 		if( !maybeData ) {
 			return nullptr;
 		}

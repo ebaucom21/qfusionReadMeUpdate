@@ -309,7 +309,8 @@ unsigned    R_PackShaderOrder( const shader_t *shader );
 
 void        R_TouchShader( shader_t *s );
 
-void        R_GetShaderDimensions( const shader_t *shader, int *width, int *height );
+[[nodiscard]]
+auto R_GetShaderDimensions( const shader_t *shader ) -> std::optional<std::pair<unsigned, unsigned>>;
 
 void        R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data );
 
