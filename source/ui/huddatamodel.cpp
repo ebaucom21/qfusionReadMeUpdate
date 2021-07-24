@@ -52,8 +52,8 @@ public:
 		m_entries.emplace_back( { "Instagun", "ig", prefix + "instagun", QColor::fromRgbF( 0.0, 1.0, 1.0 ) } );
 
 		QString buffer;
-		m_availableCrosshairs.reserve( kNumCrosshairs );
-		for( unsigned i = 1; i < kNumCrosshairs + 1; ++i ) {
+		m_availableCrosshairs.reserve( kNumRegularCrosshairs );
+		for( unsigned i = 1; i < kNumRegularCrosshairs + 1; ++i ) {
 			CrosshairState::makePath<QString, QLatin1String>( &buffer, CrosshairState::Weak, i );
 			m_availableCrosshairs.append( buffer );
 		}

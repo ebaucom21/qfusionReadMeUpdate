@@ -12,21 +12,25 @@ bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *n
 
 using wsw::operator""_asView;
 
-template <size_t N>
-class CrosshairMaterialCache {
-	shader_s *m_materials[N] {};
-	unsigned m_cachedRequestedSize[N] {};
-	std::pair<unsigned, unsigned> m_cachedActualSize[N] {};
+/// A non-template base to reduce code duplication
+class BaseCrosshairMaterialCache {
+protected:
+	shader_s **m_materials { nullptr };
+	unsigned *m_cachedRequestedSize { nullptr };
+	std::pair<unsigned, unsigned> *m_cachedActualSize { nullptr };
 	const CrosshairState::Style m_style;
+	const unsigned m_minSize, m_maxSize, m_maxNum;
 public:
-	explicit CrosshairMaterialCache( CrosshairState::Style style ) noexcept : m_style( style ) {}
+	BaseCrosshairMaterialCache( CrosshairState::Style style, const SizeProps &sizeProps, unsigned maxNum ) noexcept
+		: m_style( style ), m_minSize( sizeProps.minSize ), m_maxSize( sizeProps.maxSize ), m_maxNum( maxNum ) {}
 
 	[[nodiscard]]
 	auto getMaterialForNumAndSize( unsigned num, unsigned size )
 		-> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
 		const unsigned index = num - 1;
-		assert( index < N );
-		assert( size >= kMinCrosshairSize && size <= kMaxCrosshairSize );
+		assert( index < m_maxNum );
+		// These bounds could be template parameters but not in this (17) language version
+		assert( size >= m_minSize && size <= m_maxSize );
 		if( m_cachedRequestedSize[index] != size ) {
 			wsw::StaticString<256> name;
 			CrosshairState::makePath( &name, m_style, num );
@@ -47,14 +51,14 @@ public:
 	}
 
 	void initMaterials() {
-		for( unsigned i = 0; i < N; ++i ) {
+		for( unsigned i = 0; i < m_maxNum; ++i ) {
 			assert( !m_materials[i] && !m_cachedRequestedSize[i] );
 			m_materials[i] = R_CreateExplicitlyManaged2DMaterial();
 		}
 	}
 
 	void destroyMaterials() {
-		for( unsigned i = 0; i < N; ++i ) {
+		for( unsigned i = 0; i < m_maxNum; ++i ) {
 			R_ReleaseExplicitlyManaged2DMaterial( m_materials[i] );
 			m_materials[i] = nullptr;
 			m_cachedRequestedSize[i] = 0;
@@ -62,8 +66,25 @@ public:
 	}
 };
 
-static CrosshairMaterialCache<kNumCrosshairs> crosshairsMaterialCache( CrosshairState::Weak );
-static CrosshairMaterialCache<kNumStrongCrosshairs> strongCrosshairsMaterialCache( CrosshairState::Strong );
+/// A descendant to allocate the exact storage
+template <unsigned N>
+class CrosshairMaterialCache : public BaseCrosshairMaterialCache {
+	shader_s *m_storageOfMaterials[N] {};
+	unsigned m_storageOfCachedRequestedSize[N] {};
+	std::pair<unsigned, unsigned> m_storageOfCachedActualSize[N] {};
+public:
+	CrosshairMaterialCache( CrosshairState::Style style, const SizeProps &sizeProps ) noexcept
+		: BaseCrosshairMaterialCache( style, sizeProps, N ) {
+		m_materials           = m_storageOfMaterials;
+		m_cachedRequestedSize = m_storageOfCachedRequestedSize;
+		m_cachedActualSize    = m_storageOfCachedActualSize;
+	}
+};
+
+static CrosshairMaterialCache<kNumRegularCrosshairs>
+    g_regularCrosshairsMaterialCache( CrosshairState::Weak, kRegularCrosshairSizeProps );
+static CrosshairMaterialCache<kNumStrongCrosshairs>
+    g_strongCrosshairsMaterialCache( CrosshairState::Strong, kStrongCrosshairSizeProps );
 
 void CrosshairState::checkValueVar( cvar_t *var, unsigned numCrosshairs ) {
 	if( (unsigned)var->integer > numCrosshairs ) {
@@ -71,10 +92,10 @@ void CrosshairState::checkValueVar( cvar_t *var, unsigned numCrosshairs ) {
 	}
 }
 
-void CrosshairState::checkSizeVar( cvar_t *var ) {
-	if( var->integer < (int)kMinCrosshairSize || var->integer > (int)kMaxCrosshairSize ) {
+void CrosshairState::checkSizeVar( cvar_t *var, const SizeProps &sizeProps ) {
+	if( var->integer < (int)sizeProps.minSize || var->integer > (int)sizeProps.maxSize ) {
 		char buffer[16];
-		Cvar_ForceSet( var->name, va_r( buffer, sizeof( buffer ), "%d", (int)( kDefaultCrosshairSize ) ) );
+		Cvar_ForceSet( var->name, va_r( buffer, sizeof( buffer ), "%d", (int)( sizeProps.defaultSize ) ) );
 	}
 }
 
@@ -122,12 +143,12 @@ void CrosshairState::init() {
 		varNameBuffer.erase( prefixLen );
 		varNameBuffer << weaponName;
 		s_valueVars[i] = Cvar_Get( varNameBuffer.data(), "1", CVAR_ARCHIVE );
-		checkValueVar( s_valueVars[i], kNumCrosshairs );
+		checkValueVar( s_valueVars[i], kNumRegularCrosshairs );
 
 		varNameBuffer.erase( prefixLen );
 		varNameBuffer << "size_"_asView << weaponName;
 		s_sizeVars[i] = Cvar_Get( varNameBuffer.data(), "32", CVAR_ARCHIVE );
-		checkSizeVar( s_sizeVars[i] );
+		checkSizeVar( s_sizeVars[i], kRegularCrosshairSizeProps );
 
 		varNameBuffer.erase( prefixLen );
 		varNameBuffer << "color_"_asView << weaponName;
@@ -136,16 +157,19 @@ void CrosshairState::init() {
 	}
 
 	cg_crosshair = Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
-	checkValueVar( cg_crosshair, kNumCrosshairs );
+	checkValueVar( cg_crosshair, kNumRegularCrosshairs );
 
-	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "32", CVAR_ARCHIVE );
-	checkSizeVar( cg_crosshair_size );
+	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "", CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_size, kRegularCrosshairSizeProps );
 
 	cg_crosshair_color = Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
 	checkColorVar( cg_crosshair_color );
 
 	cg_crosshair_strong = Cvar_Get( "cg_crosshair_strong", "1", CVAR_ARCHIVE );
 	checkValueVar( cg_crosshair_strong, kNumStrongCrosshairs );
+
+	cg_crosshair_strong_size = Cvar_Get( "cg_crosshair_strong_size", "", CVAR_ARCHIVE );
+	checkSizeVar( cg_crosshair_strong_size, kStrongCrosshairSizeProps );
 
 	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
 	checkColorVar( cg_crosshair_damage_color );
@@ -154,13 +178,13 @@ void CrosshairState::init() {
 }
 
 void CrosshairState::beginRegistration() {
-	::crosshairsMaterialCache.destroyMaterials();
-	::strongCrosshairsMaterialCache.destroyMaterials();
+	::g_regularCrosshairsMaterialCache.destroyMaterials();
+	::g_strongCrosshairsMaterialCache.destroyMaterials();
 }
 
 void CrosshairState::endRegistration() {
-	::crosshairsMaterialCache.initMaterials();
-	::strongCrosshairsMaterialCache.initMaterials();
+	::g_regularCrosshairsMaterialCache.initMaterials();
+	::g_strongCrosshairsMaterialCache.initMaterials();
 }
 
 void CrosshairState::updateSharedPart() {
@@ -173,13 +197,16 @@ void CrosshairState::update( unsigned weapon ) {
 	const int isSeparate = cg_separate_weapon_settings->integer;
 	const bool isStrong = m_style == Strong;
 
-	if( !isStrong ) {
+	if( isStrong ) {
+		m_sizeVar = cg_crosshair_strong_size;
+		checkSizeVar( m_sizeVar, kStrongCrosshairSizeProps );
+	} else {
 		if( isSeparate ) {
 			m_sizeVar = s_sizeVars[weapon - 1];
 		} else {
 			m_sizeVar = cg_crosshair_size;
 		}
-		checkSizeVar( m_sizeVar );
+		checkSizeVar( m_sizeVar, kRegularCrosshairSizeProps );
 	}
 
 	if( isSeparate ) {
@@ -198,7 +225,7 @@ void CrosshairState::update( unsigned weapon ) {
 		m_valueVar = cg_crosshair;
 	}
 
-	checkValueVar( m_valueVar, kNumCrosshairs );
+	checkValueVar( m_valueVar, isStrong ? kNumStrongCrosshairs : kNumRegularCrosshairs );
 
 	m_decayTimeLeft = std::max( 0, m_decayTimeLeft - cg.frameTime );
 }
@@ -220,16 +247,26 @@ auto CrosshairState::getDrawingColor() -> const float * {
 
 [[nodiscard]]
 auto CrosshairState::getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>> {
-	// Apply additional validation as it could be called by the UI code
-	const unsigned maxNum = m_style == Weak ? kNumCrosshairs : kNumStrongCrosshairs;
-	if( const auto num = (unsigned)m_valueVar->integer; num && num <= maxNum ) {
-		if( m_style == Weak ) {
-			const auto size = (unsigned)m_sizeVar->integer;
-			if( size >= kMinCrosshairSize && size <= kMaxCrosshairSize ) {
-				return ::crosshairsMaterialCache.getMaterialForNumAndSize( num, size );
-			}
+	// Apply an additional validation as it could be called by the UI code
+	if( const auto num = (unsigned)m_valueVar->integer ) {
+		BaseCrosshairMaterialCache *cache;
+		const SizeProps *sizeProps;
+		unsigned maxNum;
+		if( m_style == Strong ) {
+			maxNum = kNumStrongCrosshairs;
+			cache = &::g_strongCrosshairsMaterialCache;
+			sizeProps = &kStrongCrosshairSizeProps;
 		} else {
-			return ::strongCrosshairsMaterialCache.getMaterialForNumAndSize( num, kMaxCrosshairSize );
+			maxNum = kNumRegularCrosshairs;
+			cache = &::g_regularCrosshairsMaterialCache;
+			sizeProps = &kRegularCrosshairSizeProps;
+		}
+		if( num < maxNum ) {
+			if( const auto size = (unsigned) m_sizeVar->integer ) {
+				if ( size >= sizeProps->minSize && size <= sizeProps->maxSize ) {
+					return cache->getMaterialForNumAndSize( num, size );
+				}
+			}
 		}
 	}
 	return std::nullopt;

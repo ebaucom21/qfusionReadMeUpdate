@@ -10,13 +10,13 @@
 
 struct shader_s;
 
-constexpr const unsigned kNumCrosshairs = 10;
+constexpr const unsigned kNumRegularCrosshairs = 10;
 constexpr const unsigned kNumStrongCrosshairs = 6;
 
-constexpr const unsigned kMinCrosshairSize = 16;
-constexpr const unsigned kDefaultCrosshairSize = 32;
-constexpr const unsigned kMaxCrosshairSize = 48;
-constexpr const unsigned kStrongCrosshairSize = 64;
+struct SizeProps { unsigned minSize, maxSize, defaultSize; };
+
+constexpr const SizeProps kRegularCrosshairSizeProps { 16, 48, 24 };
+constexpr const SizeProps kStrongCrosshairSizeProps { 48, 72, 64 };
 
 class CrosshairState {
 public:
@@ -55,7 +55,7 @@ private:
 	// Just check values caching whether its needed. We do the same for the UI var tracking code.
 
 	static void checkValueVar( cvar_t *var, unsigned numCrosshairs );
-	static void checkSizeVar( cvar_t *var );
+	static void checkSizeVar( cvar_t *var, const SizeProps &sizeProps );
 	static void checkColorVar( cvar_t *var, float *cachedColor = nullptr, int *oldPackedColor = nullptr );
 
 	static inline const wsw::StringView kWeakPathPrefix { "gfx/hud/crosshair_" };

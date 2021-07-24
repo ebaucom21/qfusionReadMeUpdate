@@ -8,8 +8,6 @@ Item {
     id: root
     readonly property var availableCrosshairs: hudDataModel.getAvailableCrosshairs()
     readonly property var availableStrongCrosshairs: hudDataModel.getAvailableStrongCrosshairs()
-    readonly property var crosshairSizeTitles: ["16", "32", "64"]
-    readonly property var crosshairSizeValues: [16, 32, 64]
     readonly property var isNotInTransition: root.StackView.view && !root.StackView.view.busy
 
     Column {
@@ -41,10 +39,21 @@ Item {
                 CVarAwareCrosshairSelector {
                     drawNativePart: root.isNotInTransition
                     nativePartOpacity: popupOverlay.visible ? 0.3 : 1.0
-                    desiredWidthOrHeight: wsw.strongCrosshairSize
-                    fieldWidth: wsw.strongCrosshairSize
+                    desiredWidthOrHeight: strongSizeSlider.value
+                    fieldWidth: wsw.maxStrongCrosshairSize
                     model: availableStrongCrosshairs
                     cvarName: "cg_crosshair_strong"
+                }
+            }
+
+            SettingsRow {
+                text: "Strong crosshair size"
+                CVarAwareSlider {
+                    id: strongSizeSlider
+                    from: wsw.minStrongCrosshairSize
+                    to: wsw.maxStrongCrosshairSize
+                    stepSize: wsw.crosshairSizeStep
+                    cvarName: "cg_crosshair_strong_size"
                 }
             }
 
@@ -77,7 +86,7 @@ Item {
                     drawNativePart: root.isNotInTransition
                     nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
                     desiredWidthOrHeight: sizeSlider.value
-                    fieldWidth: wsw.maxCrosshairSize
+                    fieldWidth: wsw.maxRegularCrosshairSize
                     color: colorPicker.selectedColor || "white"
                     model: availableCrosshairs
                     cvarName: "cg_crosshair"
@@ -88,8 +97,8 @@ Item {
                 text: "Crosshair size"
                 CVarAwareSlider {
                     id: sizeSlider
-                    from: wsw.minCrosshairSize
-                    to: wsw.maxCrosshairSize
+                    from: wsw.minRegularCrosshairSize
+                    to: wsw.maxRegularCrosshairSize
                     stepSize: wsw.crosshairSizeStep
                     cvarName: "cg_crosshair_size"
                 }
@@ -154,7 +163,7 @@ Item {
                                 nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
                                 desiredWidthOrHeight: separateSizeSlider.value
                                 color: separateColorPicker.selectedColor || "white"
-                                fieldWidth: wsw.maxCrosshairSize
+                                fieldWidth: wsw.maxRegularCrosshairSize
                                 Layout.preferredWidth: implicitWidth
                                 Layout.preferredHeight: implicitHeight
                                 Layout.leftMargin: 16
@@ -165,10 +174,10 @@ Item {
 
                             CVarAwareSlider {
                                 id: separateSizeSlider
-                                Layout.preferredWidth: 3.0 * (wsw.maxCrosshairSize - wsw.minCrosshairSize)
+                                Layout.preferredWidth: 3.0 * (wsw.maxRegularCrosshairSize - wsw.minRegularCrosshairSize)
                                 cvarName: "cg_crosshair_size_" + weaponShortName
-                                from: wsw.minCrosshairSize
-                                to: wsw.maxCrosshairSize
+                                from: wsw.minRegularCrosshairSize
+                                to: wsw.maxRegularCrosshairSize
                                 stepSize: wsw.crosshairSizeStep
                             }
 
