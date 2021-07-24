@@ -283,7 +283,7 @@ protected:
 
 enum class BitmapEffect {
 	NoEffect,
-	Emboss,
+	Outline,
 };
 
 class TextureFactory : TextureManagementShared {

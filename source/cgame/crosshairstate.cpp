@@ -28,7 +28,7 @@ public:
 		if( m_cachedMaterialSize[index] != size ) {
 			wsw::StaticString<256> name;
 			CrosshairState::makePath( &name, m_style, num );
-			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), (int)size, (int)size, BitmapEffect::Emboss );
+			R_UpdateExplicitlyManaged2DMaterialImage( m_materials[index], name.data(), (int)size, (int)size, BitmapEffect::Outline );
 			m_cachedMaterialSize[index] = size;
 		}
 		return m_materials[index];

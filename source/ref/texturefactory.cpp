@@ -269,24 +269,30 @@ struct alignas( 1 ) Rgba {
 
 static_assert( alignof( Rgba ) == 1 && sizeof( Rgba ) == 4 );
 
-static void applyEmbossEffectRgba( Rgba *__restrict dest, const Rgba *__restrict src,
-								   unsigned width, unsigned height ) {
+static void applyOutlineEffectRgba( Rgba *__restrict dest, const Rgba *__restrict src,
+									unsigned width, unsigned height ) {
 	// Sanity checks
 	assert( width > 0 && height > 0 && width < ( 1u << 16 ) && height < ( 1u << 16 ) );
 
-	// Copy the first row as-is
-	std::memcpy( dest, src, sizeof( Rgba ) * width );
-	// Blend over a shifted black copy
-	for( unsigned line = 1; line < height; ++line ) {
-		// Copy the first pixel in line as-is
-		dest[width * line] = src[width * line];
-		for( unsigned column = 1; column < width; ++column ) {
-			const Rgba &shadowSrc = src[width * ( line - 1 ) + ( column - 1 )];
-			// Halve the black copy opacity
-			const Rgba blendDest { 0, 0, 0, (uint8_t)( shadowSrc.a / 2 ) };
+	for( unsigned line = 0; line < height; ++line ) {
+		for( unsigned column = 0; column < width; ++column ) {
+			float accumAlpha = 0.0f;
+			if( line > 0 ) {
+				accumAlpha += (float)src[width * ( line - 1 ) + column].a;
+			}
+			if( line + 1 < height ) {
+				accumAlpha += (float)src[width * ( line + 1 ) + column].a;
+			}
+			if( column > 0 ) {
+				accumAlpha += (float)src[width * line + ( column - 1 )].a;
+			}
+			if( column + 1 < width ) {
+				accumAlpha += (float)src[width * line + ( column + 1)].a;
+			}
+			const Rgba blendDest { 0, 0, 0, (uint8_t)std::min( 255.0f, accumAlpha ) };
 			const Rgba &blendSrc = src[width * line + column];
-			const auto srcFrac = (float)blendSrc.a * ( 1.0f / 255.0f );
-			const auto destFrac = 1.0f - srcFrac;
+			const auto srcFrac   = (float)blendSrc.a * ( 1.0f / 255.0f );
+			const auto destFrac  = 1.0f - srcFrac;
 			dest[line * width + column] = Rgba {
 				(uint8_t)( srcFrac * (float)blendSrc.r + destFrac * (float)blendDest.r ),
 				(uint8_t)( srcFrac * (float)blendSrc.g + destFrac * (float)blendDest.g ),
@@ -381,9 +387,9 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 	uint8_t *const imageData = dataBuffer->reserveAndGet( imageDataSize );
 	if( bitmapEffect == BitmapEffect::NoEffect ) {
 		std::memcpy( imageData, bytes, imageDataSize );
-	} else if( bitmapEffect == BitmapEffect::Emboss ) {
+	} else if( bitmapEffect == BitmapEffect::Outline ) {
 		if( samples == 4 && width && height ) {
-			applyEmbossEffectRgba( (Rgba *)imageData, (const Rgba *)bytes, (unsigned)width, (unsigned)height );
+			applyOutlineEffectRgba( (Rgba *)imageData, (const Rgba *)bytes, (unsigned)width, (unsigned)height );
 		} else {
 			return std::nullopt;
 		}

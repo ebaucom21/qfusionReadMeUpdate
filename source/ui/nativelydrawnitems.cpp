@@ -55,11 +55,11 @@ void NativelyDrawnImage::setDesiredSize( const QSize &size ) {
 	}
 }
 
-void NativelyDrawnImage::setUseEmbossEffect( bool useEmbossEffect ) {
-	if( m_useEmbossEffect != useEmbossEffect ) {
-		m_useEmbossEffect = useEmbossEffect;
+void NativelyDrawnImage::setUseOutlineEffect( bool useOutlineEffect ) {
+	if( m_useOutlineEffect != useOutlineEffect ) {
+		m_useOutlineEffect = useOutlineEffect;
 		m_reloadRequestMask |= ChangeEffect;
-		Q_EMIT useEmbossEffectChanged( useEmbossEffect );
+		Q_EMIT useOutlineEffectChanged( useOutlineEffect );
 	}
 }
 
@@ -90,7 +90,7 @@ void NativelyDrawnImage::reloadIfNeeded() {
 		m_material = R_CreateExplicitlyManaged2DMaterial();
 	}
 
-	const BitmapEffect effect = m_useEmbossEffect ? BitmapEffect::Emboss : BitmapEffect::NoEffect;
+	const BitmapEffect effect = m_useOutlineEffect ? BitmapEffect::Outline : BitmapEffect::NoEffect;
 	if( m_desiredSize.isValid() ) {
 		const int weight = m_desiredSize.width(), height = m_desiredSize.height();
 		m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, weight, height, effect );

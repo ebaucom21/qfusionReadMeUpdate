@@ -58,7 +58,7 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	QColor m_color { Qt::white };
 
 	bool m_isMaterialLoaded { false };
-	bool m_useEmbossEffect { false };
+	bool m_useOutlineEffect { false };
 
 	void setNativeZ( int nativeZ );
 	Q_SIGNAL void nativeZChanged( int nativeZ );
@@ -74,8 +74,8 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 	Q_SIGNAL void desiredSizeChanged( const QSize &desiredSize );
 	Q_PROPERTY( QSize desiredSize READ getDesiredSize WRITE setDesiredSize NOTIFY desiredSizeChanged );
 
-	Q_SIGNAL void useEmbossEffectChanged( bool useEmbossEffect );
-	Q_PROPERTY( bool useEmbossEffect MEMBER m_useEmbossEffect WRITE setUseEmbossEffect NOTIFY useEmbossEffectChanged );
+	Q_SIGNAL void useOutlineEffectChanged( bool useOutlineEffect );
+	Q_PROPERTY( bool useOutlineEffect MEMBER m_useOutlineEffect WRITE setUseOutlineEffect NOTIFY useOutlineEffectChanged );
 
 	Q_SIGNAL void colorChanged( const QColor &color );
 	Q_PROPERTY( QColor color MEMBER m_color NOTIFY colorChanged );
@@ -93,7 +93,7 @@ class NativelyDrawnImage : public QQuickItem, public NativelyDrawn {
 
 	void setDesiredSize( const QSize &size );
 
-	void setUseEmbossEffect( bool useEmbossEffect );
+	void setUseOutlineEffect( bool useOutlineEffect );
 
 	void reloadIfNeeded();
 	void updateSourceSize( int w, int h );
