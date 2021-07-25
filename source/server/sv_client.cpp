@@ -887,19 +887,13 @@ ucmd_t ucmds[] =
 	{ NULL, NULL }
 };
 
-/// A counter that is shared for all clients and helps to distinguish actions (results of commands) of different clients
-static uint64_t g_serverSideCommandCounter = 0;
-
 /*
 * SV_ExecuteUserCommand
 */
-static void SV_ExecuteUserCommand( client_t *client, uint64_t clientSideCounter, const char *s ) {
-	::g_serverSideCommandCounter++;
-
-	ucmd_t *u;
-
+static void SV_ExecuteUserCommand( client_t *client, uint64_t clientCommandNum, const char *s ) {
 	Cmd_TokenizeString( s );
 
+	ucmd_t *u;
 	for( u = ucmds; u->name; u++ ) {
 		if( !strcmp( Cmd_Argv( 0 ), u->name ) ) {
 			u->func( client );
@@ -908,7 +902,7 @@ static void SV_ExecuteUserCommand( client_t *client, uint64_t clientSideCounter,
 	}
 
 	if( client->state >= CS_SPAWNED && !u->name && sv.state == ss_game ) {
-		ge->ClientCommand( client->edict, clientSideCounter, ::g_serverSideCommandCounter );
+		ge->ClientCommand( client->edict, clientCommandNum );
 	}
 }
 

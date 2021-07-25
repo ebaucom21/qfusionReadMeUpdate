@@ -43,7 +43,7 @@ Item {
 
     RichChatList {
         id: chatList
-        model: isDisplayingTeamChat ? richTeamChatModel : richChatModel
+        model: isDisplayingTeamChat ? teamChatProxy.getRichModel() : chatProxy.getRichModel()
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: header.bottom
@@ -94,7 +94,11 @@ Item {
 
             Keys.onPressed: {
                 if (event.key === Qt.Key_Enter) {
-                    wsw.sendChatMessage(text, isDisplayingTeamChat)
+                    if (isDisplayingTeamChat) {
+                        teamChatProxy.sendMessage(text)
+                    } else {
+                        chatProxy.sendMessage(text)
+                    }
                     // We should clear the key that is being entered now, defer to the next frame
                     clearOnNextFrameTimer.start()
                 }

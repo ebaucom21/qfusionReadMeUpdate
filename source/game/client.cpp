@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "chat.h"
 
 using wsw::operator""_asView;
 using wsw::operator""_asHView;
@@ -50,9 +51,8 @@ void Client::resetLevelState() {
 	showscores = false;
 
 	flood_locktill = 0;
-	memset( flood_when, 0, sizeof( flood_when ) );
-	flood_whenhead = 0;
-	memset( flood_team_when, 0, sizeof( flood_team_when ) );
+	m_floodState.clear();
+	m_floodTeamState.clear();
 
 	callvote_when = 0;
 	memset( quickMenuItems, 0, sizeof( quickMenuItems ) );
@@ -1031,7 +1031,7 @@ void Client::handleUserInfoChanges() {
 	setName( m_userInfo.getOrEmpty( kInfoKeyName ) );
 
 	if( !oldName.empty() && !oldName.equals( netname ) ) {
-		if( !ChatHandlersChain::Instance()->DetectFlood( getEntity(), false ) ) {
+		if( !ChatHandlersChain::instance()->detectFlood( getEntity() ) ) {
 			G_PrintMsg( NULL, "%s%s is now known as %s%s\n", oldName.data(), S_COLOR_WHITE, netname.data(), S_COLOR_WHITE );
 		}
 	}
@@ -1116,7 +1116,7 @@ void Client::handleUserInfoChanges() {
 
 	G_Gametype_ScoreEvent( this, "userinfochanged", oldName.data() );
 	
-	ChatHandlersChain::Instance()->OnUserInfoChanged( getEntity() );
+	ChatHandlersChain::instance()->onUserInfoChanged( getEntity() );
 }
 
 /*
@@ -1218,7 +1218,7 @@ void ClientDisconnect( edict_t *ent, const char *reason ) {
 	}
 
 	StatsowFacade::Instance()->OnClientDisconnected( ent );
-	ChatHandlersChain::Instance()->ResetForClient( ENTNUM( ent ) - 1 );
+	ChatHandlersChain::instance()->resetForClient( ENTNUM( ent ) - 1 );
 
 	for( int team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ )
 		G_Teams_UnInvitePlayer( team, ent );

@@ -397,8 +397,8 @@ void G_Teams_UpdateMembersList( void );
 bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent );
 void G_Teams_SetTeam( edict_t *ent, int team );
 
-void Cmd_Say_f( edict_t *ent, bool arg0 );
-void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood );
+void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum );
+void G_Say_Team( edict_t *who, const char *inmsg );
 
 void G_Match_Ready( edict_t *ent );
 void G_Match_NotReady( edict_t *ent );
@@ -565,18 +565,17 @@ char *G_StatsMessage( edict_t *ent );
 #include "../qcommon/commandshandler.h"
 #include "../qcommon/freelistallocator.h"
 
-class ClientCommandsHandler :
-		public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, uint64_t>> {
+class ClientCommandsHandler : public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t>> {
 	static inline const wsw::StringView kScriptTag { "script" };
 	static inline const wsw::StringView kBuiltinTag { "builtin" };
 
-	using Callback = wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, uint64_t>;
+	using Callback = wsw::VarArgCommandCallback<bool, edict_t *, uint64_t>;
 
 	class ScriptCommandCallback final : public Callback {
 	public:
 		explicit ScriptCommandCallback( wsw::String &&name ): Callback( kScriptTag, std::move( name ) ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *arg, uint64_t, uint64_t ) override;
+		bool operator()( edict_t *arg, uint64_t ) override;
 	};
 
 	class Builtin1ArgCallback final : public Callback {
@@ -585,24 +584,24 @@ class ClientCommandsHandler :
 		Builtin1ArgCallback( const wsw::HashedStringView &name, void (*fn)( edict_t * ) )
 			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *ent, uint64_t, uint64_t ) override {
+		bool operator()( edict_t *ent, uint64_t ) override {
 			m_fn( ent ); return true;
 		}
 	};
 
-	class Builtin3ArgsCallback final : public Callback {
-		void (*m_fn)( edict_t *, uint64_t, uint64_t );
+	class Builtin2ArgsCallback final : public Callback {
+		void (*m_fn)( edict_t *, uint64_t );
 	public:
-		Builtin3ArgsCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, uint64_t, uint64_t ) )
+		Builtin2ArgsCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, uint64_t ) )
 			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) override {
-			m_fn( ent, clientSideCounter, serverSideCounter ); return true;
+		bool operator()( edict_t *ent, uint64_t clientCommandNum ) override {
+			m_fn( ent, clientCommandNum ); return true;
 		}
 	};
 
 	static constexpr size_t kMaxCallbackSize = std::max( sizeof( ScriptCommandCallback ),
-		std::max( sizeof( Builtin1ArgCallback ), sizeof( Builtin3ArgsCallback ) ) );
+		std::max( sizeof( Builtin1ArgCallback ), sizeof( Builtin2ArgsCallback ) ) );
 
 	// Make sure we can always construct a new argument for addOrReplace()
 	wsw::MemberBasedFreelistAllocator<kMaxCallbackSize, MAX_GAMECOMMANDS + 1> m_allocator;
@@ -620,11 +619,11 @@ public:
 
 	void precacheCommands();
 
-	void handleClientCommand( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter );
+	void handleClientCommand( edict_t *ent, uint64_t clientCommandNum );
 	void addScriptCommand( const wsw::HashedStringView &name );
 
 	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) );
-	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t, uint64_t ) );
+	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t ) );
 };
 
 //
@@ -699,45 +698,6 @@ void G_PrintChasersf( const edict_t *self, _Printf_format_string_ const char *fo
 void G_CenterPrintMsg( const edict_t *ent, _Printf_format_string_ const char *format, ... );
 void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, _Printf_format_string_ const char *format, ... );
 #endif
-
-class ChatHandlersChain;
-
-class ChatPrintHelper {
-	enum { OFFSET = 10 };
-
-	const edict_t *const source;
-	char buffer[OFFSET + 1 + 1024];
-	int messageLength { 0 };
-	bool hasPrintedToServerConsole { false };
-	bool skipServerConsole { false };
-
-	void InitFromV( const char *format, va_list va );
-	void PrintToServerConsole( bool teamOnly );
-	inline void SetCommandPrefix( bool teamOnly );
-
-	void PrintTo( const edict_t *target, bool teamOnly );
-	void DispatchWithFilter( const ChatHandlersChain *filter, bool teamOnly );
-public:
-	ChatPrintHelper &operator=( const ChatPrintHelper & ) = delete;
-	ChatPrintHelper( const ChatPrintHelper & ) = delete;
-	ChatPrintHelper &operator=( ChatPrintHelper && ) = delete;
-	ChatPrintHelper( ChatPrintHelper && ) = delete;
-
-#ifndef _MSC_VER
-	ChatPrintHelper( const edict_t *source_, const char *format, ... ) __attribute__( ( format( printf, 3, 4 ) ) );
-	explicit ChatPrintHelper( const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) );
-#else
-	ChatPrintHelper( const edict_t *source_, _Printf_format_string_ const char *format, ... );
-	explicit ChatPrintHelper( _Printf_format_string_ const char *format, ... );
-#endif
-
-	void SkipServerConsole() { skipServerConsole = true; }
-
-	void PrintToChatOf( const edict_t *target ) { PrintTo( target, false ); }
-	void PrintToTeamChatOf( const edict_t *target ) { PrintTo( target, true ); }
-	void PrintToTeam( const ChatHandlersChain *filter = nullptr ) { DispatchWithFilter( filter, true ); }
-	void PrintToEverybody( const ChatHandlersChain *filter = nullptr ) { DispatchWithFilter( filter, false ); }
-};
 
 void G_UpdatePlayerMatchMsg( edict_t *ent, bool force = false );
 void G_UpdatePlayersMatchMsgs( void );
@@ -1193,6 +1153,40 @@ typedef struct {
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswtonum.h"
 
+class FloodState {
+	int64_t m_timestamps[MAX_FLOOD_MESSAGES] {};
+	int m_head { 0 };
+public:
+	void clear() {
+		std::memset( m_timestamps, 0, sizeof( m_timestamps ) );
+		m_head = 0;
+	}
+
+	[[nodiscard]]
+	bool shouldBeActive( int64_t realTime, int protectionMessages, int64_t protectionMillis ) const {
+		assert( protectionMessages >= 0 );
+		assert( protectionMillis >= 0 );
+
+		int index = m_head - protectionMessages + 1;
+		if( index < 0 ) {
+			index += MAX_FLOOD_MESSAGES;
+		}
+
+		if( m_timestamps[index] && m_timestamps[index] <= realTime ) {
+			if( realTime < m_timestamps[index] + protectionMillis ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void touch( int64_t realTime ) {
+		m_head = ( m_head + 1 ) % MAX_FLOOD_MESSAGES;
+		m_timestamps[m_head] = realTime;
+	}
+};
+
 struct Client : public ServersideClientBase {
 	wsw::UserInfo m_userInfo;
 
@@ -1308,12 +1302,10 @@ struct Client : public ServersideClientBase {
 	bool showscores;
 
 	// flood protection
+	FloodState m_floodState;
+	FloodState m_floodTeamState;
+
 	int64_t flood_locktill;			// locked from talking
-	int64_t flood_when[MAX_FLOOD_MESSAGES];        // when messages were said
-	int flood_whenhead;             // head pointer for when said
-	// team only
-	int64_t flood_team_when[MAX_FLOOD_MESSAGES];   // when messages were said
-	int flood_team_whenhead;        // head pointer for when said
 
 	int64_t callvote_when;
 
@@ -1378,17 +1370,17 @@ struct Client : public ServersideClientBase {
 
 #include <functional>
 
+struct RespectStats : public GVariousStats {
+	RespectStats(): GVariousStats( 31 ) {}
+
+	bool hasIgnoredCodex { false };
+	bool hasViolatedCodex { false };
+};
+
 class StatsowFacade {
 	friend class ChatHandlersChain;
 	friend class RespectHandler;
 	friend class RunStatusQuery;
-
-	struct RespectStats : public GVariousStats {
-		RespectStats(): GVariousStats( 31 ) {}
-
-		bool hasIgnoredCodex { false };
-		bool hasViolatedCodex { false };
-	};
 
 	struct ClientEntry {
 		ClientEntry *next { nullptr };
@@ -1515,339 +1507,7 @@ public:
 	void OnClientHadPlaytime( const Client *client );
 };
 
-/**
- * A common supertype for chat message handlers.
- * Could pass a message to another filter, reject it or print it on its own.
- */
-class ChatHandler {
-protected:
-	virtual ~ChatHandler() = default;
-
-	/**
-	 * Should reset the held internal state for a new match
-	 */
-	virtual void Reset() = 0;
-
-	/**
-	 * Should reset the held internal state for a client
-	 */
-	virtual void ResetForClient( int clientNum ) = 0;
-
-	/**
-	 * Should "handle" the message appropriately.
-	 * @param ent a message author
-	 * @param message a message
-	 * @return true if the message has been handled and its processing should be interrupted.
-	 */
-	virtual bool HandleMessage( const edict_t *ent, const char *message ) = 0;
-};
-
-/**
- * A {@code ChatHandler} that allows public messages only from
- * authenticated players during a match (if a corresponding server var is set).
- */
-class ChatAuthFilter final : public ChatHandler {
-	friend class ChatHandlersChain;
-
-	bool authOnly { false };
-
-	ChatAuthFilter() {
-		Reset();
-	}
-
-	void ResetForClient( int ) override {}
-
-	void Reset() override;
-
-	bool HandleMessage( const edict_t *ent, const char * ) override;
-};
-
-/**
- * A {@code ChatHandler} that allows to mute/unmute public messages of a player during match time.
- */
-class MuteFilter final : public ChatHandler {
-	friend class ChatHandlersChain;
-
-	bool muted[MAX_CLIENTS];
-
-	MuteFilter() {
-		Reset();
-	}
-
-	inline void Mute( const edict_t *ent );
-	inline void Unmute( const edict_t *ent );
-
-	void ResetForClient( int clientNum ) override {
-		muted[clientNum] = false;
-	}
-
-	void Reset() override {
-		memset( muted, 0, sizeof( muted ) );
-	}
-
-	bool HandleMessage( const edict_t *ent, const char * ) override;
-};
-
-/**
- * A {@code ChatHandler} that allows to throttle down flux of messages from a player.
- * This filter could serve for throttling team messages of a player as well.
- */
-class FloodFilter final : public ChatHandler {
-	friend class ChatHandlersChain;
-
-	bool publicTimeoutAt[MAX_CLIENTS];
-	bool teamTimeoutAt[MAX_CLIENTS];
-
-	FloodFilter() {
-		Reset();
-	}
-
-	void ResetForClient( int clientNum ) override {
-		publicTimeoutAt[clientNum] = 0;
-		teamTimeoutAt[clientNum] = 0;
-	}
-
-	void Reset() override {
-		memset( publicTimeoutAt, 0, sizeof( publicTimeoutAt ) );
-		memset( teamTimeoutAt, 0, sizeof( teamTimeoutAt ) );
-	}
-
-	bool DetectFlood( const edict_t *ent, bool team );
-
-	bool HandleMessage( const edict_t *ent, const char *message ) override {
-		return DetectFlood( ent, false );
-	}
-};
-
-/**
- * A {@code ChatHandler} that analyzes chat messages of a player.
- * Messages are never rejected by this handler.
- * Some information related to the honor of Respect and Sportsmanship Codex
- * is extracted from messages and transmitted to the {@code StatsowFacade}.
- */
-class RespectHandler final : public ChatHandler {
-	friend class ChatHandlersChain;
-	friend class StatsowFacade;
-	friend class RespectTokensRegistry;
-
-	enum { NUM_TOKENS = 10 };
-
-	struct ClientEntry {
-		int64_t warnedAt;
-		int64_t firstJoinedGameAt;
-		int64_t firstSaidAt[NUM_TOKENS];
-		int64_t lastSaidAt[NUM_TOKENS];
-		const edict_t *ent { nullptr };
-		int numSaidTokens[NUM_TOKENS];
-		bool saidBefore;
-		bool saidAfter;
-		bool hasTakenCountdownHint;
-		bool hasTakenStartHint;
-		bool hasTakenLastStartHint;
-		bool hasTakenFinalHint;
-		bool hasIgnoredCodex;
-		bool hasViolatedCodex;
-
-		ClientEntry() {
-			Reset();
-		}
-
-		void Reset();
-
-		bool HandleMessage( const char *message );
-
-		/**
-		 * Scans the message for respect tokens.
-		 * Adds found tokens to token counters after a successful scan.
-		 * @param message a message to scan
-		 * @return true if only respect tokens are met (or a trimmed string is empty)
-		 */
-		bool CheckForTokens( const char *message );
-
-		/**
-		 * Checks actions necessary to honor Respect and Sportsmanship Codex for a client every frame
-		 */
-		void CheckBehaviour( const int64_t matchStartTime );
-
-		void RequestClientRespectAction( int tokenNum );
-		void DisplayCodexViolationWarning();
-
-		void AnnounceMisconductBehaviour( const char *action );
-
-		void AnnounceFairPlay();
-
-		/**
-		 * Adds accumulated data to reported stats.
-		 * Handles respect violation states appropriately.
-		 * @param reportedStats respect stats that are finally reported to Statsow
-		 */
-		void AddToReportStats( StatsowFacade::RespectStats *reportedStats );
-
-		void OnClientDisconnected();
-		void OnClientJoinedTeam( int newTeam );
-	};
-
-	ClientEntry entries[MAX_CLIENTS];
-
-	int64_t matchStartedAt { -1 };
-	int64_t lastFrameMatchState { -1 };
-
-	RespectHandler();
-
-	void ResetForClient( int clientNum ) override {
-		entries[clientNum].Reset();
-	}
-
-	void Reset() override;
-
-	bool SkipStatsForClient( const edict_t *ent ) const;
-	bool SkipStatsForClient( int playerNum ) const;
-
-	bool HandleMessage( const edict_t *ent, const char *message ) override;
-
-	void Frame();
-
-	void AddToReportStats( const edict_t *ent, StatsowFacade::RespectStats *reportedStats );
-
-	void OnClientDisconnected( const edict_t *ent );
-	void OnClientJoinedTeam( const edict_t *ent, int newTeam );
-};
-
 class ChatHandlersChain;
-
-class IgnoreFilter {
-	struct ClientEntry {
-		static_assert( MAX_CLIENTS <= 64, "" );
-		uint64_t ignoredClientsMask;
-		bool ignoresEverybody;
-		bool ignoresNotTeammates;
-
-		ClientEntry() {
-			Reset();
-		}
-
-		void Reset() {
-			ignoredClientsMask = 0;
-			ignoresEverybody = false;
-			ignoresNotTeammates = false;
-		}
-
-		void SetClientBit( int clientNum, bool ignore ) {
-			assert( (unsigned)clientNum < 64u );
-			uint64_t bit = ( ( (uint64_t)1 ) << clientNum );
-			if( ignore ) {
-				ignoredClientsMask |= bit;
-			} else {
-				ignoredClientsMask &= ~bit;
-			}
-		}
-
-		bool GetClientBit( int clientNum ) const {
-			assert( (unsigned)clientNum < 64u );
-			return ( ignoredClientsMask & ( ( (uint64_t)1 ) << clientNum ) ) != 0;
-		}
-	};
-
-	ClientEntry entries[MAX_CLIENTS];
-
-	void SendChangeFilterVarCommand( const edict_t *ent );
-	void PrintIgnoreCommandUsage( const edict_t *ent, bool ignore );
-public:
-	void HandleIgnoreCommand( const edict_t *ent, bool ignore );
-	void HandleIgnoreListCommand( const edict_t *ent );
-
-	void Reset();
-
-	void ResetForClient( int clientNum ) {
-		entries[clientNum].Reset();
-	}
-
-	bool Ignores( const edict_t *target, const edict_t *source ) const;
-	void NotifyOfIgnoredMessage( const edict_t *target, const edict_t *source ) const;
-
-	void OnUserInfoChanged( const edict_t *user );
-};
-
-/**
- * A container for all registered {@code ChatHandler} instances
- * that has a {@code ChatHandler} interface itself and acts as a facade
- * for the chat filtering subsystem applying filters in desired order.
- */
-class ChatHandlersChain final : public ChatHandler {
-	template <typename T> friend class SingletonHolder;
-
-	friend class StatsowFacade;
-
-	ChatAuthFilter authFilter;
-	MuteFilter muteFilter;
-	FloodFilter floodFilter;
-	RespectHandler respectHandler;
-	IgnoreFilter ignoreFilter;
-
-	ChatHandlersChain() {
-		Reset();
-	}
-
-	void Reset() override;
-public:
-	bool HandleMessage( const edict_t *ent, const char *message ) override;
-
-	void ResetForClient( int clientNum ) override;
-
-	static void Init();
-	static void Shutdown();
-	static ChatHandlersChain *Instance();
-
-	void Mute( const edict_t *ent ) {
-		return muteFilter.Mute( ent );
-	}
-	void Unmute( const edict_t *ent ) {
-		return muteFilter.Unmute( ent );
-	}
-	bool DetectFlood( const edict_t *ent, bool team ) {
-		return floodFilter.DetectFlood( ent, team );
-	}
-	bool SkipStatsForClient( const edict_t *ent ) const {
-		return respectHandler.SkipStatsForClient( ent );
-	}
-
-	void OnClientDisconnected( const edict_t *ent ) {
-		respectHandler.OnClientDisconnected( ent );
-	}
-	void OnClientJoinedTeam( const edict_t *ent, int newTeam ) {
-		respectHandler.OnClientJoinedTeam( ent, newTeam );
-	}
-
-	void AddToReportStats( const edict_t *ent, StatsowFacade::RespectStats *reportedStats ) {
-		respectHandler.AddToReportStats( ent, reportedStats );
-	}
-
-	bool Ignores( const edict_t *target, const edict_t *source ) const {
-		return ignoreFilter.Ignores( target, source );
-	}
-
-	void NotifyOfIgnoredMessage( const edict_t *target, const edict_t *source ) const {
-		ignoreFilter.NotifyOfIgnoredMessage( target, source );
-	}
-
-	static void HandleIgnoreCommand( edict_t *ent ) {
-		Instance()->ignoreFilter.HandleIgnoreCommand( ent, true );
-	}
-
-	static void HandleUnignoreCommand( edict_t *ent ) {
-		Instance()->ignoreFilter.HandleIgnoreCommand( ent, false );
-	}
-
-	static void HandleIgnoreListCommand( edict_t *ent ) {
-		Instance()->ignoreFilter.HandleIgnoreListCommand( ent );
-	}
-
-	void OnUserInfoChanged( const edict_t *ent ) {
-		ignoreFilter.OnUserInfoChanged( ent );
-	}
-
-	void Frame();
-};
 
 typedef struct snap_edict_s {
 	// whether we have killed anyone this snap
@@ -2039,53 +1699,6 @@ static inline int PLAYERNUM( const edict_t *x ) { return x - game.edicts - 1; }
 static inline int PLAYERNUM( const Client *x ) { return x - game.clients; }
 
 static inline edict_t *PLAYERENT( int x ) { return game.edicts + x + 1; }
-
-// web
-http_response_code_t G_WebRequest( http_query_method_t method, const char *resource,
-								   const char *query_string, char **content, size_t *content_length );
-
-inline void MuteFilter::Mute( const edict_t *ent ) {
-	muted[ENTNUM( ent ) - 1] = true;
-}
-
-inline void MuteFilter::Unmute( const edict_t *ent ) {
-	muted[ENTNUM( ent ) - 1] = false;
-}
-
-inline bool MuteFilter::HandleMessage( const edict_t *ent, const char * ) {
-	return muted[ENTNUM( ent ) - 1];
-}
-
-inline bool RespectHandler::SkipStatsForClient( const edict_t *ent ) const {
-	const auto &entry = entries[ENTNUM( ent ) - 1];
-	return entry.hasViolatedCodex || entry.hasIgnoredCodex;
-}
-
-inline void RespectHandler::AddToReportStats( const edict_t *ent, StatsowFacade::RespectStats *reported ) {
-	entries[ENTNUM( ent ) - 1].AddToReportStats( reported );
-}
-
-inline void RespectHandler::OnClientDisconnected( const edict_t *ent ) {
-	entries[ENTNUM( ent ) - 1].OnClientDisconnected();
-}
-
-inline void RespectHandler::OnClientJoinedTeam( const edict_t *ent, int newTeam ) {
-	entries[ENTNUM( ent ) - 1].OnClientJoinedTeam( newTeam );
-}
-
-inline bool IgnoreFilter::Ignores( const edict_t *target, const edict_t *source ) const {
-	if( target == source ) {
-		return false;
-	}
-	const ClientEntry &e = entries[PLAYERNUM( target )];
-	if( e.ignoresEverybody ) {
-		return true;
-	}
-	if( e.ignoresNotTeammates && ( target->s.team != source->s.team ) ) {
-		return true;
-	}
-	return e.GetClientBit( PLAYERNUM( source ) );
-}
 
 void *Q_malloc( size_t size );
 void *Q_realloc( void *buf, size_t newsize );

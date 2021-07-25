@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 #include "g_local.h"
+#include "chat.h"
 
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstdtypes.h"
@@ -822,7 +823,7 @@ static void Cmd_Spectators_f( edict_t *ent ) {
 	Cmd_PlayersExt_f( ent, true );
 }
 
-void ChatHandlersChain::Frame() {
+void ChatHandlersChain::frame() {
 	if( g_floodprotection_messages->modified ) {
 		if( g_floodprotection_messages->integer < 0 ) {
 			trap_Cvar_Set( "g_floodprotection_messages", "0" );
@@ -857,75 +858,62 @@ void ChatHandlersChain::Frame() {
 		g_floodprotection_penalty->modified = false;
 	}
 
-	if( respectHandler.lastFrameMatchState == MATCH_STATE_PLAYTIME && GS_MatchState() == MATCH_STATE_POSTMATCH ) {
+	if( m_respectHandler.m_lastFrameMatchState == MATCH_STATE_PLAYTIME && GS_MatchState() == MATCH_STATE_POSTMATCH ) {
 		// Unlock to say `gg` postmatch
-		muteFilter.Reset();
-		floodFilter.Reset();
+		m_muteFilter.reset();
+		m_floodFilter.reset();
 	}
 
-	respectHandler.Frame();
+	m_respectHandler.frame();
 }
 
-bool FloodFilter::DetectFlood( const edict_t *ent, bool teamonly ) {
+auto FloodFilter::detectFlood( const edict_t *ent, unsigned flags ) -> std::optional<uint16_t> {
 	// TODO: Rewrite so the client do not actually have to maintain its flood state
-
-	int i;
-	Client *client;
-
-	assert( ent != NULL );
-
-	client = ent->r.client;
-	assert( client != NULL );
-
-
+	auto *const client = ent->r.client;
+	const int64_t realTime = game.realtime;
 
 	// old protection still active
-	if( !teamonly || g_floodprotection_team->integer ) {
-		if( game.realtime < client->flood_locktill ) {
-			G_PrintMsg( ent, "You can't talk for %d more seconds\n",
-						(int)( ( client->flood_locktill - game.realtime ) / 1000.0f ) + 1 );
-			return true;
+	if( !( flags & TeamOnly ) || g_floodprotection_team->integer ) {
+		if( const int64_t diff = client->flood_locktill - realTime; diff > 0 ) {
+			if( !( flags & DontPrint ) ) {
+				G_PrintMsg( ent, "You can't talk for %d more seconds\n", (int)( diff / 1000 ) + 1 );
+			}
+			return std::min( std::numeric_limits<uint16_t>::max(), (uint16_t)diff );
 		}
 	}
 
+	const int protectionMillis = std::max( 1000 * g_floodprotection_seconds->integer, 0 );
+	const int penaltySeconds   = std::max( g_floodprotection_penalty->integer, 0 );
+	const int penaltyMillis    = 1000 * penaltySeconds;
 
-	if( teamonly ) {
-		if( g_floodprotection_team->integer && g_floodprotection_penalty->value > 0 ) {
-			i = client->flood_team_whenhead - g_floodprotection_team->integer + 1;
-			if( i < 0 ) {
-				i = MAX_FLOOD_MESSAGES + i;
-			}
+	FloodState *state = nullptr;
+	int messages = 0;
 
-			if( client->flood_team_when[i] && client->flood_team_when[i] <= game.realtime &&
-				( game.realtime < client->flood_team_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
-				client->flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
-				G_PrintMsg( ent, "Flood protection: You can't talk for %d seconds.\n", g_floodprotection_penalty->integer );
-				return true;
-			}
-		}
-
-		client->flood_team_whenhead = ( client->flood_team_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
-		client->flood_team_when[client->flood_team_whenhead] = game.realtime;
+	if( flags & TeamOnly ) {
+		messages = g_floodprotection_team->integer;
+		state = &client->m_floodTeamState;
 	} else {
-		if( g_floodprotection_messages->integer && g_floodprotection_penalty->value > 0 ) {
-			i = client->flood_whenhead - g_floodprotection_messages->integer + 1;
-			if( i < 0 ) {
-				i = MAX_FLOOD_MESSAGES + i;
-			}
-
-			if( client->flood_when[i] && client->flood_when[i] <= game.realtime &&
-				( game.realtime < client->flood_when[i] + g_floodprotection_seconds->integer * 1000 ) ) {
-				client->flood_locktill = game.realtime + g_floodprotection_penalty->value * 1000;
-				G_PrintMsg( ent, "Flood protection: You can't talk for %d seconds.\n", g_floodprotection_penalty->integer );
-				return true;
-			}
-		}
-
-		client->flood_whenhead = ( client->flood_whenhead + 1 ) % MAX_FLOOD_MESSAGES;
-		client->flood_when[client->flood_whenhead] = game.realtime;
+		messages = g_floodprotection_messages->integer;
+		state = &client->m_floodState;
 	}
 
-	return false;
+	if( messages > 0 && protectionMillis > 0 && penaltyMillis > 0 ) {
+		if( state->shouldBeActive( realTime, messages, protectionMillis ) ) {
+			client->flood_locktill = realTime + penaltyMillis;
+			if( !( flags & DontPrint ) ) {
+				G_PrintMsg( ent, "Flood protection: You can't talk for %d seconds.\n", penaltySeconds );
+			}
+			return penaltyMillis;
+		}
+	}
+
+	state->touch( realTime );
+
+	return std::nullopt;
+}
+
+auto FloodFilter::detectFlood( const ChatMessage &message, unsigned flags ) -> std::optional<uint16_t> {
+	return detectFlood( PLAYERENT( message.clientNum ), flags );
 }
 
 static void Cmd_CoinToss_f( edict_t *ent ) {
@@ -937,7 +925,7 @@ static void Cmd_CoinToss_f( edict_t *ent ) {
 		G_PrintMsg( ent, "You can only toss coins during warmup or timeouts\n" );
 		return;
 	}
-	if( ChatHandlersChain::Instance()->DetectFlood( ent, false ) ) {
+	if( ChatHandlersChain::instance()->detectFlood( ent ) ) {
 		return;
 	}
 
@@ -963,139 +951,62 @@ static void Cmd_CoinToss_f( edict_t *ent ) {
 	G_PrintMsg( NULL, S_COLOR_YELLOW "COINTOSS %s: " S_COLOR_WHITE "It was %s! %s " S_COLOR_WHITE "tossed a coin and " S_COLOR_RED "lost!\n", upper, qtails ? "heads" : "tails", ent->r.client->netname.data() );
 }
 
-static SingletonHolder<ChatHandlersChain> chatHandlersChainHolder;
-
-void ChatHandlersChain::Init() {
-	::chatHandlersChainHolder.Init();
+static void sendMessageFault( edict_t *ent, const MessageFault &fault ) {
+	wsw::StaticString<64> buffer;
+	buffer << "flt "_asView << fault.clientCommandNum;
+	buffer << ' ' << (unsigned)fault.kind;
+	buffer << ' ' << (unsigned)fault.timeout;
+	trap_GameCmd( ent, buffer.data() );
 }
 
-void ChatHandlersChain::Shutdown() {
-	::chatHandlersChainHolder.Shutdown();
-}
-
-ChatHandlersChain *ChatHandlersChain::Instance() {
-	return ::chatHandlersChainHolder.Instance();
-}
-
-void ChatHandlersChain::Reset() {
-	authFilter.Reset();
-	muteFilter.Reset();
-	floodFilter.Reset();
-	respectHandler.Reset();
-	ignoreFilter.Reset();
-}
-
-void ChatHandlersChain::ResetForClient( int clientNum ) {
-	authFilter.ResetForClient( clientNum );
-	muteFilter.ResetForClient( clientNum );
-	floodFilter.ResetForClient( clientNum );
-	respectHandler.ResetForClient( clientNum );
-	ignoreFilter.ResetForClient( clientNum );
-}
-
-bool ChatHandlersChain::HandleMessage( const edict_t *ent, const char *message ) {
-	// We want to call overridden methods directly just to avoid pointless virtual invocations.
-	// Filters are applied in order of their priority.
-	if( authFilter.HandleMessage( ent, message ) || muteFilter.HandleMessage( ent, message ) ) {
-		return true;
-	}
-	if( floodFilter.HandleMessage( ent, message ) || respectHandler.HandleMessage( ent, message ) ) {
-		return true;
-	}
-
-	ChatPrintHelper chatPrintHelper( ent, "%s", message );
-	// Dispatch the message using `this` as an ignore filter
-	chatPrintHelper.PrintToEverybody( this );
-	return true;
-}
-
-void ChatAuthFilter::Reset() {
-	authOnly = sv_mm_enable->integer && trap_Cvar_Value( "sv_mm_chat_loginonly" ) != 0;
-}
-
-bool ChatAuthFilter::HandleMessage( const edict_t *ent, const char * ) {
-	if( !authOnly ) {
-		return false;
-	}
-
-	if( GS_MatchState() != MATCH_STATE_PLAYTIME ) {
-		return false;
-	}
-
-	// Allow talking in timeouts
-	if( GS_MatchPaused() ) {
-		return false;
-	}
-
-	if( ent->r.client->mm_session.IsValidSessionId() ) {
-		return false;
-	}
-
-	// unauthed players are only allowed to chat to public at non play-time
-	G_PrintMsg( ent, S_COLOR_YELLOW "Register at Warsow.net and log in to say public chat messages during a match\n" );
-	return true;
-}
-
-/*
-* Cmd_Say_f
-*/
-void Cmd_Say_f( edict_t *ent, bool arg0 ) {
-	char *p;
-	char text[2048];
-	size_t arg0len = 0;
-
-	if( trap_Cmd_Argc() < 2 && !arg0 ) {
+void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum ) {
+	if( trap_Cmd_Argc() < 2 ) {
 		return;
 	}
 
-	text[0] = 0;
-
-	if( arg0 ) {
-		Q_strncatz( text, trap_Cmd_Argv( 0 ), sizeof( text ) );
-		Q_strncatz( text, " ", sizeof( text ) );
-		arg0len = strlen( text );
-		Q_strncatz( text, trap_Cmd_Args(), sizeof( text ) );
-	} else {
-		p = trap_Cmd_Args();
-
-		if( *p == '"' ) {
-			if( p[strlen( p ) - 1] == '"' ) {
-				p[strlen( p ) - 1] = 0;
-			}
-			p++;
+	wsw::StringView text( trap_Cmd_Args() );
+	if( text.startsWith( '"' ) ) {
+		if( text.endsWith( '"' ) ) {
+			text = text.drop( 1 ).dropRight( 1 );
 		}
-		Q_strncatz( text, p, sizeof( text ) );
 	}
 
-	// don't let text be too long for malicious reasons
-	text[arg0len + ( MAX_CHAT_BYTES - 1 )] = 0;
+	text = text.take( MAX_CHAT_BYTES - 1 );
 
-	ChatHandlersChain::Instance()->HandleMessage( ent, text );
+	const ChatMessage message { clientCommandNum, text, (unsigned)PLAYERNUM( ent ) };
+	if( const auto maybeFault = ChatHandlersChain::instance()->handleMessage( message ) ) {
+		sendMessageFault( ent, *maybeFault );
+	}
 }
 
-/*
-* Cmd_SayCmd_f
-*/
-static void Cmd_SayCmd_f( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
-	Cmd_Say_f( ent, false );
+static void Cmd_SayCmd_f( edict_t *ent, uint64_t clientCommandNum ) {
+	Cmd_Say_f( ent, clientCommandNum );
 }
 
-/*
-* Cmd_SayTeam_f
-*/
-static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
-	G_Say_Team( ent, trap_Cmd_Args(), true );
+static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientCommandNum ) {
+	auto *const filter = ChatHandlersChain::instance();
+	auto maybeFloodProtectionMillis = filter->detectFlood( ent, FloodFilter::TeamOnly | FloodFilter::DontPrint );
+	if( !maybeFloodProtectionMillis ) {
+		// if speccing, also check for non-team flood
+		if( ent->s.team == TEAM_SPECTATOR ) {
+			maybeFloodProtectionMillis = filter->detectFlood( ent, FloodFilter::DontPrint );
+		}
+	}
+
+	if( !maybeFloodProtectionMillis ) {
+		G_Say_Team( ent, trap_Cmd_Args() );
+	} else {
+		sendMessageFault( ent, MessageFault { clientCommandNum, MessageFault::Flood, *maybeFloodProtectionMillis } );
+	}
 }
 
 /*
 * Cmd_Join_f
 */
 static void Cmd_Join_f( edict_t *ent ) {
-	if( ChatHandlersChain::Instance()->DetectFlood( ent, false ) ) {
-		return;
+	if( !ChatHandlersChain::instance()->detectFlood( ent ) ) {
+		G_Teams_Join_Cmd( ent );
 	}
-
-	G_Teams_Join_Cmd( ent );
 }
 
 /*
@@ -1400,9 +1311,9 @@ void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name, void 
 }
 
 void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name,
-										void (*handler)( edict_t *, uint64_t, uint64_t ) ) {
+										void (*handler)( edict_t *, uint64_t ) ) {
 	if( checkNotWriteProtected( name ) ) {
-		addAndNotify( new( m_allocator.allocOrNull() )Builtin3ArgsCallback( name, handler ), false );
+		addAndNotify( new( m_allocator.allocOrNull() )Builtin2ArgsCallback( name, handler ), false );
 	}
 }
 
@@ -1468,15 +1379,15 @@ ClientCommandsHandler::ClientCommandsHandler() {
 	addBuiltin( "awards"_asHView, Cmd_Awards_f );
 
 	// ignore-related commands
-	addBuiltin( "ignore"_asHView, ChatHandlersChain::HandleIgnoreCommand );
-	addBuiltin( "unignore"_asHView, ChatHandlersChain::HandleUnignoreCommand );
-	addBuiltin( "ignorelist"_asHView, ChatHandlersChain::HandleIgnoreListCommand );
+	addBuiltin( "ignore"_asHView, ChatHandlersChain::handleIgnoreCommand );
+	addBuiltin( "unignore"_asHView, ChatHandlersChain::handleUnignoreCommand );
+	addBuiltin( "ignorelist"_asHView, ChatHandlersChain::handleIgnoreListCommand );
 
 	// misc
 	addBuiltin( "upstate"_asHView, Cmd_Upstate_f );
 }
 
-void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
+void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientCommandNum ) {
 	// Check whether the client is fully in-game
 	if( ent->r.client && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
 		const wsw::HashedStringView name( trap_Cmd_Argv( 0 ) );
@@ -1488,7 +1399,7 @@ void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientSi
 
 		bool callResult = false;
 		if( Callback *callback = findByName( name ) ) {
-			callResult = callback->operator()( ent, clientSideCounter, serverSideCounter );
+			callResult = callback->operator()( ent, clientCommandNum );
 		}
 
 		if( !callResult ) {
@@ -1516,7 +1427,7 @@ void ClientCommandsHandler::addAndNotify( Callback *newCallback, [[maybe_unused]
 	}
 }
 
-bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t, uint64_t ) {
+bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t ) {
 	const auto name( getName() );
 	assert( name.isZeroTerminated() );
 	return GT_asCallGameCommand( ent->r.client, name.data(), trap_Cmd_Args(), trap_Cmd_Argc() - 1 );

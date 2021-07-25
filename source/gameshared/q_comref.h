@@ -456,6 +456,15 @@ typedef enum {
 	HTTP_RESP_SERVICE_UNAVAILABLE = 503,
 } http_response_code_t;
 
+struct MessageFault {
+	enum Kind { Muted = 1, Flood };
+	static constexpr auto kMinKind = Muted;
+	static constexpr auto kMaxKind = Flood;
+	const uint64_t clientCommandNum;
+	const Kind kind;
+	const unsigned timeout;
+};
+
 //==============================================
 
 #define MAX_GAME_STATS  64

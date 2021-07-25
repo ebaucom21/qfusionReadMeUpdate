@@ -12,7 +12,7 @@ ListView {
 
     delegate: Loader {
         width: root.width
-        sourceComponent: regularMessage ? messageComponent : sectionComponent
+        sourceComponent: regularMessageText ? messageComponent : sectionComponent
 
         Component {
             id: sectionComponent
@@ -61,7 +61,7 @@ ListView {
                 font.pointSize: 11
                 lineHeight: 1.2
                 clip: true
-                text: model.regularMessage
+                text: model.regularMessageText
                 MouseArea {
                     id: mouseArea
                     hoverEnabled: true

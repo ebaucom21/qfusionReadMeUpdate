@@ -53,13 +53,17 @@ Item {
                 Component.onCompleted: forceActiveFocus()
 
                 onEditingFinished: {
-                    wsw.sendChatMessage(text, wsw.isShowingTeamChatPopup)
+                    if (wsw.isShowingTeamChatPopup) {
+                        teamChatProxy.sendMessage(text)
+                    } else {
+                        chatProxy.sendMessage(text)
+                    }
                     text = ""
                 }
             }
 
             ListView {
-                model: wsw.isShowingTeamChatPopup ? compactTeamChatModel : compactChatModel
+                model: wsw.isShowingTeamChatPopup ? teamChatProxy.getCompactModel() : chatProxy.getCompactModel()
                 verticalLayoutDirection: ListView.TopToBottom
                 spacing: 4
                 clip: true
@@ -84,7 +88,7 @@ Item {
                         font.letterSpacing: 0.5
                         textFormat: Text.StyledText
                         style: Text.Raised
-                        text: name + ':'
+                        text: model.name + ':'
                     }
                     Label {
                         Layout.fillWidth: true
@@ -93,7 +97,7 @@ Item {
                         font.letterSpacing: 0.5
                         textFormat: Text.StyledText
                         clip: true
-                        text: message
+                        text: model.text
                     }
                 }
             }

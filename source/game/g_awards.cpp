@@ -43,7 +43,7 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 	// for meta-awards as they aren't announced.
 
 	// Update: we have decided to skip this test
-	//if( ChatHandlersChain::Instance()->SkipStatsForClient( ent ) ) {
+	//if( ChatHandlersChain::instance()->SkipStatsForClient( ent ) ) {
 	//	return;
 	//}
 

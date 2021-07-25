@@ -8,14 +8,19 @@
 #include "../gameshared/q_arch.h"
 #include "../gameshared/q_shared.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswstdtypes.h"
 #include "../qcommon/freelistallocator.h"
 
 // TODO we can use a specialized one based on a freelist allocator
 #include <deque>
 
+struct MessageFault;
+
+namespace wsw::cl { struct ChatMessage; }
+
 namespace wsw::ui {
 
-class ChatModelProxy;
+class ChatProxy;
 
 class ChatModelsShared {
 protected:
@@ -23,7 +28,7 @@ protected:
 		char *basePtr;
 		uint8_t nameLen;
 		uint8_t timestampLen;
-		uint8_t messageLen;
+		uint8_t textLen;
 		[[nodiscard]]
 		auto getName() const -> wsw::StringView {
 			return { basePtr, nameLen, wsw::StringView::ZeroTerminated };
@@ -33,18 +38,18 @@ protected:
 			return { basePtr + nameLen + 1, timestampLen, wsw::StringView::ZeroTerminated };
 		}
 		[[nodiscard]]
-		auto getMessage() const -> wsw::StringView {
-			return { basePtr + nameLen + 1 + timestampLen + 1, messageLen, wsw::StringView::ZeroTerminated };
+		auto getText() const -> wsw::StringView {
+			return { basePtr + nameLen + 1 + timestampLen + 1, textLen, wsw::StringView::ZeroTerminated };
 		}
 	};
 };
 
 class ChatModel : protected ChatModelsShared, public QAbstractListModel {
-	friend class ChatModelProxy;
+	friend class ChatProxy;
 protected:
-	explicit ChatModel( ChatModelProxy *proxy ) : m_proxy( proxy ) {}
+	explicit ChatModel( ChatProxy *proxy ) : m_proxy( proxy ) {}
 
-	ChatModelProxy *const m_proxy;
+	ChatProxy *const m_proxy;
 
 	virtual void beginClear() = 0;
 	virtual void endClear() = 0;
@@ -57,11 +62,11 @@ protected:
 };
 
 class CompactChatModel : public ChatModel {
-	friend class ChatModelProxy;
+	friend class ChatProxy;
 
-	explicit CompactChatModel( ChatModelProxy *proxy ) : ChatModel( proxy ) {}
+	explicit CompactChatModel( ChatProxy *proxy ) : ChatModel( proxy ) {}
 
-	enum Role { Message = Qt::UserRole + 1, Name, Timestamp };
+	enum Role { Text = Qt::UserRole + 1, Name, Timestamp };
 
 	void beginClear() override { beginResetModel(); }
 	void endClear() override { endResetModel(); }
@@ -82,7 +87,7 @@ class CompactChatModel : public ChatModel {
 };
 
 class RichChatModel : public ChatModel {
-	friend class ChatModelProxy;
+	friend class ChatProxy;
 
 	wsw::StaticString<MAX_NAME_CHARS + 1> m_lastMessageName;
 	QDate m_currHeadingDate;
@@ -100,7 +105,7 @@ class RichChatModel : public ChatModel {
 
 	std::deque<Entry> m_entries;
 
-	enum Role { RegularMessage = Qt::UserRole + 1, SectionName, SectionTimestamp };
+	enum Role { RegularMessageText = Qt::UserRole + 1, SectionName, SectionTimestamp };
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
@@ -121,10 +126,12 @@ class RichChatModel : public ChatModel {
 	void beginAddingLine( Line *line, const QDate &date, int timeHours, int timeMinutes ) override;
 	void endAddingLine() override;
 
-	explicit RichChatModel( ChatModelProxy *proxy ) : ChatModel( proxy ) {}
+	explicit RichChatModel( ChatProxy *proxy ) : ChatModel( proxy ) {}
 };
 
-class ChatModelProxy : protected ChatModelsShared {
+class ChatProxy : public QObject, protected ChatModelsShared {
+	Q_OBJECT
+
 	friend class ChatModel;
 	friend class CompactChatModel;
 	friend class RichChatModel;
@@ -141,21 +148,40 @@ class ChatModelProxy : protected ChatModelsShared {
 	wsw::HeapBasedFreelistAllocator m_linesAllocator { kFullLineSize, kMaxLines, alignof( Line ) };
 	std::deque<Line *> m_lineRefs;
 
+	wsw::Vector<uint64_t> m_pendingCommandNums;
+
 	QDate m_lastMessageQtDate;
 	int m_lastMessageTimeHours { 0 };
 	int m_lastMessageTimeMinutes { 0 };
 	wsw::StaticString<kMaxTimeBytes> m_lastMessageFormattedTime;
 	int64_t m_lastMessageFrameTimestamp { 0 };
 	bool m_wasInTheSameFrame { false };
+	bool m_hasSetCompactModelOwnership { false };
+	bool m_hasSetRichModelOwnership { false };
+
+	[[nodiscard]]
+	bool removeFromPendingCommands( uint64_t commandNum );
 public:
+	enum ChatKind : uint8_t { Chat, TeamChat };
+private:
+	ChatKind m_kind;
+public:
+	explicit ChatProxy( ChatKind kind ): m_kind( kind ) {}
+
+	Q_SIGNAL void muted();
+	Q_SIGNAL void floodDetected();
+
 	[[nodiscard]]
-	auto getCompactModel() -> ChatModel * { return &m_compactModel; }
+	Q_INVOKABLE QAbstractItemModel *getCompactModel();
 	[[nodiscard]]
-	auto getRichModel() -> RichChatModel * { return &m_richModel; }
+	Q_INVOKABLE QAbstractItemModel *getRichModel();
+
+	Q_INVOKABLE void sendMessage( const QString &text );
 
 	void clear();
 
-	void addMessage( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message );
+	void addReceivedMessage( const wsw::cl::ChatMessage &message, int64_t frameTimestamp );
+	void handleMessageFault( const MessageFault &messageFault );
 };
 
 }

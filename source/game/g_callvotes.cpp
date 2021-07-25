@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "chat.h"
 #include "../qcommon/base64.h"
 #include "../qcommon/configstringstorage.h"
 #include "../qcommon/snap.h"
@@ -997,7 +998,7 @@ static bool G_VoteMuteValidate( callvotedata_t *vote, bool first ) {
 // chat mute
 static void G_VoteMutePassed( callvotedata_t *vote ) {
 	if( edict_t *ent = G_Vote_GetValidDeferredVoteTarget( vote ) ) {
-		ChatHandlersChain::Instance()->Mute( ent );
+		ChatHandlersChain::instance()->mute( ent );
 		ent->r.client->stats.AddToEntry( "muted_count", 1 );
 	}
 }
@@ -1009,7 +1010,7 @@ static bool G_VoteUnmuteValidate( callvotedata_t *vote, bool first ) {
 // chat unmute
 static void G_VoteUnmutePassed( callvotedata_t *vote ) {
 	if( edict_t *ent = G_Vote_GetValidDeferredVoteTarget( vote ) ) {
-		ChatHandlersChain::Instance()->Unmute( ent );
+		ChatHandlersChain::instance()->unmute( ent );
 	}
 }
 

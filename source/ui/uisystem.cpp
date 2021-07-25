@@ -97,8 +97,10 @@ public:
 
 	void toggleInGameMenu() override;
 
-	void addToChat( const wsw::StringView &name, const wsw::StringView &message ) override;
-	void addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) override;
+	void addToChat( const wsw::cl::ChatMessage &message ) override;
+	void addToTeamChat( const wsw::cl::ChatMessage &message ) override;
+
+	void handleMessageFault( const MessageFault &messageFault ) override;
 
 	void handleConfigString( unsigned configStringNum, const wsw::StringView &configString ) override;
 
@@ -217,7 +219,6 @@ public:
 	Q_INVOKABLE void returnFromMainMenu();
 
 	Q_INVOKABLE void closeChatPopup();
-	Q_INVOKABLE void sendChatMessage( const QString &text, bool team );
 
 	Q_INVOKABLE void connectToAddress( const QByteArray &address );
 	Q_INVOKABLE void reconnectWithPassword( const QByteArray &password );
@@ -370,8 +371,8 @@ private:
 	GametypesModel m_gametypesModel;
 	KeysAndBindingsModel m_keysAndBindingsModel;
 
-	ChatModelProxy m_chatModel;
-	ChatModelProxy m_teamChatModel;
+	ChatProxy m_chatProxy { ChatProxy::Chat };
+	ChatProxy m_teamChatProxy { ChatProxy::TeamChat };
 
 	CallvotesModelProxy m_callvotesModel;
 
@@ -596,7 +597,7 @@ void QtUISystem::registerCustomQmlTypes() {
 	const QString reason( "This type is a native code bridge and cannot be instantiated" );
 	const char *const uri = "net.warsow";
 	qmlRegisterUncreatableType<QtUISystem>( uri, 2, 6, "Wsw", reason );
-	qmlRegisterUncreatableType<ChatModel>( uri, 2, 6, "ChatModel", reason );
+	qmlRegisterUncreatableType<ChatProxy>( uri, 2, 6, "ChatProxy", reason );
 	qmlRegisterUncreatableType<CallvotesListModel>( uri, 2, 6, "CallvotesModel", reason );
 	qmlRegisterUncreatableType<GametypeDef>( uri, 2, 6, "GametypeDef", reason );
 	qmlRegisterUncreatableType<GametypesModel>( uri, 2, 6, "GametypesModel", reason );
@@ -659,10 +660,8 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 	context->setContextProperty( "serverListModel", &m_serverListModel );
 	context->setContextProperty( "keysAndBindings", &m_keysAndBindingsModel );
 	context->setContextProperty( "gametypesModel", &m_gametypesModel );
-	context->setContextProperty( "compactChatModel", m_chatModel.getCompactModel() );
-	context->setContextProperty( "richChatModel", m_chatModel.getRichModel() );
-	context->setContextProperty( "compactTeamChatModel", m_teamChatModel.getCompactModel() );
-	context->setContextProperty( "richTeamChatModel", m_teamChatModel.getRichModel() );
+	context->setContextProperty( "chatProxy", &m_chatProxy );
+	context->setContextProperty( "teamChatProxy", &m_teamChatProxy );
 	context->setContextProperty( "regularCallvotesModel", m_callvotesModel.getRegularModel() );
 	context->setContextProperty( "operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
 	context->setContextProperty( "scoreboard", &m_scoreboardModel );
@@ -1174,8 +1173,8 @@ void QtUISystem::checkPropertyChanges() {
 			Q_EMIT connectionFailMessageChanged( getConnectionFailMessage() );
 		} else if( actualClientState == CA_DISCONNECTED ) {
 			setActiveMenuMask( MainMenu, 0 );
-			m_chatModel.clear();
-			m_teamChatModel.clear();
+			m_chatProxy.clear();
+			m_teamChatProxy.clear();
 		} else if( actualClientState == CA_ACTIVE ) {
 			if( isPlayingADemo ) {
 				setActiveMenuMask( DemoPlaybackMenu, 0 );
@@ -1873,12 +1872,17 @@ void QtUISystem::stopServerListUpdates() {
 	ServerList::instance()->stopPushingUpdates();
 }
 
-void QtUISystem::addToChat( const wsw::StringView &name, const wsw::StringView &message ) {
-	m_chatModel.addMessage( name, getFrameTimestamp(), message );
+void QtUISystem::addToChat( const wsw::cl::ChatMessage &message ) {
+	m_chatProxy.addReceivedMessage( message, getFrameTimestamp() );
 }
 
-void QtUISystem::addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) {
-	m_teamChatModel.addMessage( name, getFrameTimestamp(), message );
+void QtUISystem::addToTeamChat( const wsw::cl::ChatMessage &message ) {
+	m_teamChatProxy.addReceivedMessage( message, getFrameTimestamp() );
+}
+
+void QtUISystem::handleMessageFault( const MessageFault &messageFault ) {
+	m_chatProxy.handleMessageFault( messageFault );
+	m_teamChatProxy.handleMessageFault( messageFault );
 }
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
@@ -1998,15 +2002,6 @@ void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray
 	wsw::StaticString<256> command;
 	command << "map "_asView << map;
 	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
-}
-
-void QtUISystem::sendChatMessage( const QString &text, bool team ) {
-	// TODO: This is quite inefficient
-	// TODO: Must be unicode-aware
-	const QString clearText( text.trimmed().replace( '\r', ' ' ).replace( '\n', ' ' ).constData() );
-	if( !clearText.isEmpty() ) {
-		Con_SendChatMessage( clearText.toUtf8().constData(), team );
-	}
 }
 
 bool QtUISystem::isShown() const {

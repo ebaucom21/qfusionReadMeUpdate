@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "chat.h"
 #include "../qcommon/net.h"
 #include "../qcommon/links.h"
 
@@ -30,7 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 static void Cmd_ConsoleSay_f( void ) {
 	ChatPrintHelper chatPrintHelper( "%s", trap_Cmd_Args() );
-	chatPrintHelper.PrintToEverybody();
+	chatPrintHelper.printToEverybody();
 }
 
 

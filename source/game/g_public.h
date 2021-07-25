@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    71
+#define GAME_API_VERSION    72
 
 //===============================================================
 
@@ -222,7 +222,7 @@ typedef struct {
 	void ( *ClientUserinfoChanged )( edict_t *ent, char *userinfo );
 	bool ( *ClientMultiviewChanged )( edict_t *ent, bool multiview );
 	void ( *ClientDisconnect )( edict_t *ent, const char *reason );
-	void ( *ClientCommand )( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter );
+	void ( *ClientCommand )( edict_t *ent, uint64_t clientCommandNum );
 	void ( *ClientThink )( edict_t *ent, usercmd_t *cmd, int timeDelta );
 
 	void ( *RunFrame )( unsigned int msec, int64_t serverTime );

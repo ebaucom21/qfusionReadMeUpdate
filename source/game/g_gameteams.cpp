@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
-
+#include "chat.h"
 
 //==========================================================
 //					Teams
@@ -1108,7 +1108,7 @@ static void Say_Team_Drop_Location( edict_t *who, char *buf, int buflen, const c
 	}
 }
 
-void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood ) {
+void G_Say_Team( edict_t *who, const char *inmsg, uint64_t clientCommandNum ) {
 	char *msg;
 	char msgbuf[256];
 	char outmsg[256];
@@ -1116,14 +1116,8 @@ void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood ) {
 	char current_color[3];
 
 	if( who->s.team != TEAM_SPECTATOR && ( !GS_TeamBasedGametype() || GS_InvidualGameType() ) ) {
-		Cmd_Say_f( who, false );
+		Cmd_Say_f( who, clientCommandNum );
 		return;
-	}
-
-	if( checkflood ) {
-		if( ChatHandlersChain::Instance()->DetectFlood( who, true ) ) {
-			return;
-		}
 	}
 
 	Q_strncpyz( msgbuf, inmsg, sizeof( msgbuf ) );
@@ -1135,15 +1129,8 @@ void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood ) {
 	}
 
 	if( who->s.team == TEAM_SPECTATOR ) {
-		// if speccing, also check for non-team flood
-		if( checkflood ) {
-			if( ChatHandlersChain::Instance()->DetectFlood( who, false ) ) {
-				return;
-			}
-		}
-
-		ChatPrintHelper chatPrintHelper( who, "%s", msg );
-		chatPrintHelper.PrintToTeam( ChatHandlersChain::Instance() );
+		ChatPrintHelper chatPrintHelper( who, clientCommandNum, "%s", msg );
+		chatPrintHelper.printToTeam( ChatHandlersChain::instance() );
 		return;
 	}
 
@@ -1215,8 +1202,12 @@ void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood ) {
 	}
 	*p = 0;
 
-	ChatPrintHelper chatPrintHelper( who, "%s", outmsg );
-	chatPrintHelper.PrintToTeam( ChatHandlersChain::Instance() );
+	ChatPrintHelper chatPrintHelper( who, clientCommandNum, "%s", outmsg );
+	chatPrintHelper.printToTeam( ChatHandlersChain::instance() );
+}
+
+void G_Say_Team( edict_t *who, const char *inmsg ) {
+	G_Say_Team( who, inmsg, 0 );
 }
 
 // coach

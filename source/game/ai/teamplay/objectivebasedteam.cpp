@@ -272,17 +272,17 @@ void AiObjectiveBasedTeam::OnAlertReported( Bot *bot, int id, float alertLevel )
 	const char *const location = trap_GetConfigString( CS_LOCATIONS + spot->locationTag );
 	if( !*location ) {
 		if( const auto *baseMessage = spot->alertMessage ) {
-			G_Say_Team( bot->self, va( "%s%s!!!", colorPrefix, baseMessage ), false );
+			G_Say_Team( bot->self, va( "%s%s!!!", colorPrefix, baseMessage ) );
 		} else {
-			G_Say_Team( bot->self, va( "%sAn enemy is incoming!!!", colorPrefix ), false );
+			G_Say_Team( bot->self, va( "%sAn enemy is incoming!!!", colorPrefix ) );
 		}
 		return;
 	}
 
 	if( const auto *baseMessage = spot->alertMessage ) {
-		G_Say_Team( bot->self, va( "%s%s @ %s!!!", colorPrefix, baseMessage, location ), false );
+		G_Say_Team( bot->self, va( "%s%s @ %s!!!", colorPrefix, baseMessage, location ) );
 	} else {
-		G_Say_Team( bot->self, va( "%sAn enemy is @ %s!!!", colorPrefix, location ), false );
+		G_Say_Team( bot->self, va( "%sAn enemy is @ %s!!!", colorPrefix, location ) );
 	}
 }
 

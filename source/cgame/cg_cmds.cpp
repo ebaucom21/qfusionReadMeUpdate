@@ -47,10 +47,22 @@ static void CG_SC_Print( void ) {
 * CG_SC_ChatPrint
 */
 static void CG_SC_ChatPrint( void ) {
-	const bool teamonly = !Q_stricmp( Cmd_Argv( 0 ), "tch" );
-	const int who = atoi( Cmd_Argv( 1 ) );
+	const wsw::StringView commandName( Cmd_Argv( 0 ) );
+	const bool teamonly = commandName.startsWith( 't' );
+	std::optional<uint64_t> sendCommandNum;
+	int whoArgNum = 1;
+	if( commandName.endsWith( 'a' ) ) {
+		if( ( sendCommandNum = wsw::toNum<uint64_t>( wsw::StringView( Cmd_Argv( 1 ) ) ) ) ) {
+			whoArgNum = 2;
+		} else {
+			// TODO??? What to do in this case?
+			return;
+		}
+	}
+
+	const int who = atoi( Cmd_Argv( whoArgNum ) );
 	const char *name = ( who && who == bound( 1, who, MAX_CLIENTS ) ? cgs.clientInfo[who - 1].name : "console" );
-	const char *text = Cmd_Argv( 2 );
+	const char *text = Cmd_Argv( whoArgNum + 1 );
 
 	const wsw::StringView nameView( name );
 	const wsw::StringView textView( text );
@@ -58,10 +70,10 @@ static void CG_SC_ChatPrint( void ) {
 	if( teamonly ) {
 		CG_LocalPrint( S_COLOR_YELLOW "[%s]" S_COLOR_WHITE "%s" S_COLOR_YELLOW ": %s\n",
 					   cg.frame.playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ? "SPEC" : "TEAM", name, text );
-		wsw::ui::UISystem::instance()->addToTeamChat( nameView, textView );
+		wsw::ui::UISystem::instance()->addToTeamChat( {nameView, textView, sendCommandNum } );
 	} else {
 		CG_LocalPrint( "%s" S_COLOR_GREEN ": %s\n", name, text );
-		wsw::ui::UISystem::instance()->addToChat( nameView, textView );
+		wsw::ui::UISystem::instance()->addToChat( {nameView, textView, sendCommandNum } );
 	}
 
 	if( cg_chatBeep->integer ) {
@@ -93,6 +105,34 @@ static void CG_SC_IgnoreCommand() {
 
 	const char *format = S_COLOR_GREY "A message from " S_COLOR_WHITE "%s" S_COLOR_GREY " was ignored\n";
 	CG_LocalPrint( format, cgs.clientInfo[who - 1].name );
+}
+
+static void CG_SC_MessageFault() {
+	const char *const commandNumString = Cmd_Argv( 1 );
+	const char *const faultKindString  = Cmd_Argv( 2 );
+	const char *const timeoutString    = Cmd_Argv( 3 );
+	if( commandNumString && faultKindString && timeoutString ) {
+		if( const auto maybeCommandNum = wsw::toNum<uint64_t>( commandNumString ) ) {
+			if( const auto maybeFaultKind = wsw::toNum<unsigned>( wsw::StringView( faultKindString ) ) ) {
+				// Check timeout values for sanity by specifying a lesser type
+				if( const auto maybeTimeoutValue = wsw::toNum<uint16_t>( wsw::StringView( timeoutString ) ) ) {
+					if( *maybeFaultKind >= MessageFault::kMaxKind && *maybeFaultKind <= MessageFault::kMaxKind ) {
+						const auto kind    = (MessageFault::Kind)*maybeFaultKind;
+						const auto timeout = *maybeTimeoutValue;
+						if( kind == MessageFault::Flood ) {
+							const auto secondsLeft = (int)( *maybeTimeoutValue / 1000 ) + 1;
+							CG_LocalPrint( "Flood protection. You can talk again in %d second(s)\n", secondsLeft );
+						} else if( kind == MessageFault::Muted ) {
+							CG_LocalPrint( "You are muted on this server\n" );
+						} else {
+							throw std::logic_error( "unreachable" );
+						}
+						wsw::ui::UISystem::instance()->handleMessageFault( { *maybeCommandNum, kind, timeout } );
+					}
+				}
+			}
+		}
+	}
 }
 
 /*
@@ -281,31 +321,6 @@ void CG_SC_AutoRecordAction( const char *action ) {
 		}
 	} else if( developer->integer ) {
 		Com_Printf( "CG_SC_AutoRecordAction: Unknown action: %s\n", action );
-	}
-}
-
-/*
-* CG_SC_ChannelAdd
-*/
-static void CG_SC_ChannelAdd( void ) {
-	char menuparms[MAX_STRING_CHARS];
-
-	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_tvchannel_add %s\n", Cmd_Args() );
-	Cbuf_ExecuteText( EXEC_NOW, menuparms );
-}
-
-/*
-* CG_SC_ChannelRemove
-*/
-static void CG_SC_ChannelRemove( void ) {
-	int i, id;
-
-	for( i = 1; i < Cmd_Argc(); i++ ) {
-		id = atoi( Cmd_Argv( i ) );
-		if( id <= 0 ) {
-			continue;
-		}
-		Cbuf_ExecuteText( EXEC_NOW, va( "menu_tvchannel_remove %i\n", id ) );
 	}
 }
 
@@ -616,17 +631,23 @@ typedef struct
 static const svcmd_t cg_svcmds[] =
 {
 	{ "pr", CG_SC_Print },
+
+	// Chat-related commands
 	{ "ch", CG_SC_ChatPrint },
 	{ "tch", CG_SC_ChatPrint },
+	// 'a' stands for "Acknowledge"
+	{ "cha", CG_SC_ChatPrint },
+	{ "tcha", CG_SC_ChatPrint },
 	{ "ign", CG_SC_IgnoreCommand },
+	{ "flt", CG_SC_MessageFault },
+
+	{ "tflt", CG_SC_MessageFault },
 	{ "cp", CG_SC_CenterPrint },
 	{ "cpf", CG_SC_CenterPrintFormat },
 	{ "obry", CG_SC_Obituary },
 	{ "mm", CG_SC_MatchMessage },
 	{ "mapmsg", CG_SC_HelpMessage },
 	{ "demoget", CG_SC_DemoGet },
-	{ "cha", CG_SC_ChannelAdd },
-	{ "chr", CG_SC_ChannelRemove },
 	{ "motd", CG_SC_MOTD },
 	{ "aw", CG_SC_AddAward },
 	{ "arq", CG_SC_ActionRequest },

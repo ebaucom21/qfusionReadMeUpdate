@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "chat.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswstaticvector.h"
@@ -861,7 +862,7 @@ void G_RunFrame( unsigned int msec, int64_t serverTime ) {
 
 	G_CallVotes_Think();
 
-	ChatHandlersChain::Instance()->Frame();
+	ChatHandlersChain::instance()->frame();
 	StatsowFacade::Instance()->Frame();
 
 	if( GS_MatchPaused() ) {

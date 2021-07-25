@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "scoreboard.h"
+#include "chat.h"
 
 game_locals_t game;
 level_locals_t level;
@@ -350,7 +351,7 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 	}
 
 	StatsowFacade::Init();
-	ChatHandlersChain::Init();
+	ChatHandlersChain::init();
 
 	game.numentities = gs.maxclients + 1;
 
@@ -400,7 +401,7 @@ void G_Shutdown( void ) {
 
 	G_FreeCallvotes();
 
-	ChatHandlersChain::Shutdown();
+	ChatHandlersChain::shutdown();
 	StatsowFacade::Shutdown();
 
 	for( i = 0; i < game.numentities; i++ ) {
@@ -654,11 +655,11 @@ void G_ExitLevel( void ) {
 
 	G_SnapClients();
 
-	auto *const chatHandlersChain = ChatHandlersChain::Instance();
+	auto *const chatHandlersChain = ChatHandlersChain::instance();
 	// clear some things before going to next level
 	for( i = 0; i < gs.maxclients; i++ ) {
 		ent = game.edicts + 1 + i;
-		chatHandlersChain->ResetForClient( i );
+		chatHandlersChain->resetForClient( i );
 		if( !ent->r.inuse ) {
 			continue;
 		}

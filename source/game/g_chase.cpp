@@ -17,7 +17,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
+
 #include "g_local.h"
+#include "chat.h"
 
 /*
 * G_Chase_SetChaseActive
@@ -557,7 +559,7 @@ void Cmd_ChaseCam_f( edict_t *ent ) {
 	if( ent->s.team != TEAM_SPECTATOR && !ent->r.client->is_coach ) {
 		G_Teams_JoinTeam( ent, TEAM_SPECTATOR );
 		// prevent 'joined spectators' spam
-		if( !ChatHandlersChain::Instance()->DetectFlood( ent, false ) ) {
+		if( !ChatHandlersChain::instance()->detectFlood( ent ) ) {
 			G_PrintMsg( NULL, "%s%s joined the %s%s team.\n", ent->r.client->netname.data(),
 						S_COLOR_WHITE, GS_TeamName( ent->s.team ), S_COLOR_WHITE );
 		}

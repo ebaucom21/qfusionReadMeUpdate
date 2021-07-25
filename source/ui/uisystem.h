@@ -4,9 +4,12 @@
 #include <optional>
 #include <cstdint>
 
+struct MessageFault;
 struct ReplicatedScoreboardData;
 
 namespace wsw { class StringView; }
+
+namespace wsw::cl { class ChatMessage; }
 
 namespace wsw::ui {
 
@@ -49,8 +52,10 @@ public:
 
 	virtual void toggleInGameMenu() = 0;
 
-	virtual void addToChat( const wsw::StringView &name, const wsw::StringView &message ) = 0;
-	virtual void addToTeamChat( const wsw::StringView &name, const wsw::StringView &message ) = 0;
+	virtual void addToChat( const wsw::cl::ChatMessage &message ) = 0;
+	virtual void addToTeamChat( const wsw::cl::ChatMessage &message ) = 0;
+
+	virtual void handleMessageFault( const MessageFault &messageFault ) = 0;
 
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 

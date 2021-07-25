@@ -324,6 +324,17 @@ typedef struct {
 
 extern client_static_t cls;
 
+namespace wsw::cl {
+
+struct ChatMessage {
+	const wsw::StringView name;
+	const wsw::StringView text;
+	/// This field is defined if the message is an own one.
+	const std::optional<uint64_t> sendCommandNum;
+};
+
+}
+
 //=============================================================================
 
 extern cvar_t *cl_shownet;

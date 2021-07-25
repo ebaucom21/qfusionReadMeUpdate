@@ -472,6 +472,8 @@ static void SV_LocateEntities( struct edict_s *edicts, int edict_size, int num_e
 	sv.gi.max_clients = std::min( num_edicts, sv_maxclients->integer );
 }
 
+uint64_t NextServerSideCommandCounter();
+
 /*
 * SV_InitGameProgs
 *

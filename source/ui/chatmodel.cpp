@@ -1,5 +1,9 @@
 #include "chatmodel.h"
+
+#include <QQmlEngine>
+
 #include "local.h"
+#include "../client/client.h"
 
 namespace wsw::ui {
 
@@ -9,7 +13,7 @@ static inline auto asQByteArray( const wsw::StringView &view ) -> QByteArray {
 }
 
 auto CompactChatModel::roleNames() const -> QHash<int, QByteArray> {
-	return { { Timestamp, "timestamp" }, { Name, "name" }, { Message, "message" } };
+	return { { Timestamp, "timestamp" }, { Name, "name" }, { Text, "text" } };
 }
 
 auto CompactChatModel::rowCount( const QModelIndex & ) const -> int {
@@ -21,9 +25,9 @@ auto CompactChatModel::data( const QModelIndex &index, int role ) const -> QVari
 		if( const int row = index.row(); (unsigned)row < (unsigned)m_proxy->m_lineRefs.size() ) {
 			const Line *const line = m_proxy->m_lineRefs[row];
 			switch( role ) {
-				case Timestamp: return asQByteArray( line->getTimestamp() );
+				case Text: return toStyledText( line->getText() );
 				case Name: return toStyledText( line->getName() );
-				case Message: return toStyledText( line->getMessage() );
+				case Timestamp: return asQByteArray( line->getTimestamp() );
 				default: return QVariant();
 			}
 		}
@@ -39,7 +43,7 @@ void CompactChatModel::beginRemoveOldestLine( Line *line ) {
 
 auto RichChatModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
-		{ RegularMessage, "regularMessage" },
+		{ RegularMessageText, "regularMessageText" },
 		{ SectionName, "sectionName" },
 		{ SectionTimestamp, "sectionTimestamp" }
 	};
@@ -54,7 +58,7 @@ auto RichChatModel::data( const QModelIndex &index, int role ) const -> QVariant
 		if( const int row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
 			const auto [regularLine, sectionLine] = m_entries[row];
 			switch( role ) {
-				case RegularMessage: return regularLine ? toStyledText( regularLine->getMessage() ) : QVariant();
+				case RegularMessageText: return regularLine ? toStyledText( regularLine->getText() ) : QVariant();
 				case SectionName: return sectionLine ? toStyledText( sectionLine->getName( ) ) : QVariant();
 				case SectionTimestamp: return sectionLine ? asQByteArray( sectionLine->getTimestamp() ) : QVariant();
 				default: return QVariant();
@@ -121,14 +125,14 @@ void RichChatModel::beginAddingLine( Line *line, const QDate &date, int timeHour
 	if( canAddToCurrGroup( line, date, timeHours, timeMinutes ) ) {
 		beginInsertRows( QModelIndex(), 0, 0 );
 		m_lastMessageMinute = timeMinutes;
-		m_totalGroupLengthSoFar += line->getMessage().length();
+		m_totalGroupLengthSoFar += line->getText().length();
 		m_entries.push_front( { line, nullptr } );
 	} else {
 		beginInsertRows( QModelIndex(), 0, 1 );
 		m_currHeadingDate = date;
 		m_currHeadingHour = timeHours;
 		m_currHeadingMinute = m_lastMessageMinute = timeMinutes;
-		m_totalGroupLengthSoFar = line->getMessage().length();
+		m_totalGroupLengthSoFar = line->getText().length();
 		m_entries.push_front( { nullptr, line } );
 		m_entries.push_front( { line, nullptr } );
 	}
@@ -140,7 +144,7 @@ void RichChatModel::endAddingLine() {
 }
 
 bool RichChatModel::canAddToCurrGroup( const Line *line, const QDate &date, int timeHours, int timeMinutes ) {
-	if( line->getMessage().length() + m_totalGroupLengthSoFar < 1000 ) {
+	if( line->getText().length() + m_totalGroupLengthSoFar < 1000 ) {
 		if( line->getName().equalsIgnoreCase( m_lastMessageName.asView() ) ) {
 			if( date == m_currHeadingDate && timeHours == m_currHeadingHour ) {
 				if( isWithinNMinutes<4>( timeMinutes, m_currHeadingMinute ) ) {
@@ -154,7 +158,23 @@ bool RichChatModel::canAddToCurrGroup( const Line *line, const QDate &date, int 
 	return false;
 }
 
-void ChatModelProxy::clear() {
+auto ChatProxy::getCompactModel() -> QAbstractItemModel * {
+	if( !m_hasSetCompactModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_compactModel, QQmlEngine::CppOwnership );
+		m_hasSetCompactModelOwnership = true;
+	}
+	return &m_compactModel;
+}
+
+auto ChatProxy::getRichModel() -> QAbstractItemModel * {
+	if( !m_hasSetRichModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_richModel, QQmlEngine::CppOwnership );
+		m_hasSetRichModelOwnership = true;
+	}
+	return &m_richModel;
+}
+
+void ChatProxy::clear() {
 	for( ChatModel *model: m_childModels ) {
 		model->beginClear();
 	}
@@ -166,9 +186,26 @@ void ChatModelProxy::clear() {
 	for( ChatModel *model: m_childModels ) {
 		model->endClear();
 	}
+
+	m_pendingCommandNums.clear();
 }
 
-void ChatModelProxy::addMessage( const wsw::StringView &name, int64_t frameTimestamp, const wsw::StringView &message ) {
+bool ChatProxy::removeFromPendingCommands( uint64_t commandNum ) {
+	// TODO: Use some kind of a specialized set
+	auto it = std::find( m_pendingCommandNums.begin(), m_pendingCommandNums.end(), commandNum );
+	if( it != m_pendingCommandNums.end() ) {
+		*it = m_pendingCommandNums.back();
+		m_pendingCommandNums.pop_back();
+		return true;
+	}
+	return false;
+}
+
+void ChatProxy::addReceivedMessage( const wsw::cl::ChatMessage &message, int64_t frameTimestamp ) {
+	if( message.sendCommandNum ) {
+		(void)removeFromPendingCommands( *message.sendCommandNum );
+	}
+
 	m_wasInTheSameFrame = ( m_lastMessageFrameTimestamp == frameTimestamp );
 	if( !m_wasInTheSameFrame ) {
 		m_lastMessageFrameTimestamp = frameTimestamp;
@@ -194,6 +231,8 @@ void ChatModelProxy::addMessage( const wsw::StringView &name, int64_t frameTimes
 		}
 	}
 
+	const wsw::StringView &name = message.name, &text = message.text;
+
 	assert( !m_linesAllocator.isFull() );
 	uint8_t *const mem = m_linesAllocator.allocOrNull();
 	auto *const line = new( mem )Line;
@@ -211,9 +250,9 @@ void ChatModelProxy::addMessage( const wsw::StringView &name, int64_t frameTimes
 	line->timestampLen = m_lastMessageFormattedTime.length();
 
 	writePtr += m_lastMessageFormattedTime.length() + 1;
-	std::memcpy( writePtr, message.data(), message.size() );
-	line->messageLen = message.length();
-	writePtr[message.length()] = '\0';
+	std::memcpy( writePtr, text.data(), text.size() );
+	line->textLen = text.length();
+	writePtr[text.length()] = '\0';
 
 	for( ChatModel *model: m_childModels ) {
 		model->beginAddingLine( line, m_lastMessageQtDate, m_lastMessageTimeHours, m_lastMessageTimeMinutes );
@@ -223,6 +262,28 @@ void ChatModelProxy::addMessage( const wsw::StringView &name, int64_t frameTimes
 
 	for( ChatModel *model: m_childModels ) {
 		model->endAddingLine();
+	}
+}
+
+void ChatProxy::sendMessage( const QString &text ) {
+	// TODO: This is quite inefficient
+	// TODO: Must be unicode-aware
+	const QString clearText( text.trimmed().replace( '\r', ' ' ).replace( '\n', ' ' ).constData() );
+	if( !clearText.isEmpty() ) {
+		Con_SendChatMessage( clearText.toUtf8().constData(), m_kind == TeamChat );
+	}
+}
+
+void ChatProxy::handleMessageFault( const MessageFault &fault ) {
+	// If the command is missing this is totally fine
+	if( removeFromPendingCommands( fault.clientCommandNum ) ) {
+		if( fault.kind == MessageFault::Muted ) {
+			Q_EMIT muted();
+		} else if( fault.kind == MessageFault::Flood ) {
+			Q_EMIT floodDetected();
+		} else {
+			throw std::logic_error( "Unreachable" );
+		}
 	}
 }
 

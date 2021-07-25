@@ -34,8 +34,8 @@ static void G_RemoveRating( edict_t *ent ) {
 	StatsowFacade::Instance()->RemoveRating( ent );
 }
 
-static void ClientCommand( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
-	ClientCommandsHandler::instance()->handleClientCommand( ent, clientSideCounter, serverSideCounter );
+static void ClientCommand( edict_t *ent, uint64_t clientCommandNum ) {
+	ClientCommandsHandler::instance()->handleClientCommand( ent, clientCommandNum );
 }
 
 /*

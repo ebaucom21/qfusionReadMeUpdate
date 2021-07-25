@@ -1011,7 +1011,7 @@ edict_t *AiSquad::TryDropAmmo( Bot *consumer, Bot *supplier, int weapon ) {
 
 	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( fireDef.ammo_id ) );
 	if( dropped ) {
-		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ), false );
+		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ) );
 	}
 	return dropped;
 }
@@ -1056,7 +1056,7 @@ edict_t *AiSquad::TryDropWeapon( Bot *consumer, Bot *supplier, int weapon, const
 	// Try drop a weapon
 	edict_t *dropped = G_DropItem( supplier->Self(), GS_FindItemByTag( weapon ) );
 	if( dropped ) {
-		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ), false );
+		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ) );
 	}
 	return dropped;
 }
@@ -1096,7 +1096,7 @@ bool AiSquad::RequestDrop( Bot *consumer, bool wouldSupply[MAX_CLIENTS], Bot *su
 		( supplier->*dropFunc )();
 		lastDroppedByBotTimestamps[supplierNum] = level.time;
 		lastDroppedForBotTimestamps[consumer->ClientNum()] = level.time;
-		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ), false );
+		G_Say_Team( supplier->Self(), va( "Dropped %%d at %%D for %s", consumer->Nick() ) );
 		return true;
 	}
 	return false;
@@ -1670,6 +1670,6 @@ void AiSquadBasedTeam::PlayerAssistanceTracker::DrainAndPick() {
 
 		const auto goodEntNum = goodClientNum + 1;
 		const char *nickName = gameEdicts[goodEntNum].r.client->netname.data();
-		G_Say_Team( botEnt, va( "Roger! I've got your back %s\n", nickName ), false );
+		G_Say_Team( botEnt, va( "Roger! I've got your back %s\n", nickName ) );
 	}
 }

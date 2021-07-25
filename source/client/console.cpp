@@ -1267,7 +1267,7 @@ bool Con_HandleCharEvent( wchar_t key ) {
 /*
 * Con_SendChatMessage
 */
-void Con_SendChatMessage( const char *text, bool team ) {
+uint64_t Con_SendChatMessage( const char *text, bool team ) {
 	const char *cmd;
 	char buf[MAX_CHAT_BYTES], *p;
 
@@ -1286,7 +1286,10 @@ void Con_SendChatMessage( const char *text, bool team ) {
 		cmd = "cmd say";
 	}
 
-	Cbuf_AddText( va( "%s \"%s\"\n", cmd, buf ) );
+	const auto oldCmdNum = cls.reliableSequence;
+	Cmd_ExecuteString( va( "%s \"%s\"\n", cmd, buf ) );
+	assert( oldCmdNum + 1 == cls.reliableSequence );
+	return oldCmdNum;
 }
 
 /*
