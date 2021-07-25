@@ -29,7 +29,7 @@ Item {
                 property: "transformYScale"
                 from: 0.0; to: 1.0
                 easing.type: Easing.InOutElastic
-                easing.amplitude: 5.0
+                easing.amplitude: 10.0
                 duration: 667
             }
         }
@@ -46,7 +46,7 @@ Item {
                 property: "transformYScale"
                 from: 0.0; to: 1.0
                 easing.type: Easing.InOutElastic
-                easing.amplitude: 5.0
+                easing.amplitude: 10.0
                 duration: 667
             }
         }
@@ -91,7 +91,7 @@ Item {
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
             font.weight: Font.Bold
-            font.pointSize: 32
+            font.pointSize: 26
             font.capitalization: Font.SmallCaps
             font.letterSpacing: 2
             font.wordSpacing: 3

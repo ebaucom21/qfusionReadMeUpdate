@@ -40,7 +40,7 @@ Item {
                 property: "transformYScale"
                 from: 0.0; to: 1.0
                 easing.type: Easing.InOutElastic
-                easing.amplitude: 1.5
+                easing.amplitude: 5.0
                 duration: 333
             }
         }
