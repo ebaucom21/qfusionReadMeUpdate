@@ -5,23 +5,23 @@ import net.warsow 2.6
 
 Item {
     id: root
-    implicitHeight: fieldWidth
-    implicitWidth: fieldWidth + 0.5 * buttonWidth
+    implicitHeight: fieldWidth + 2
+    implicitWidth: fieldWidth + 2 + 1.5 * buttonWidth
     property string cvarName
     property bool applyImmediately: true
     property bool drawNativePart
-    property bool displayUnderlay: false
     property real nativePartOpacity: 1.0
 
     property int value
     property var model
     property real desiredWidthOrHeight: -1
     property color color: "white"
+    property color underlayColor: "transparent"
 
     property real fieldWidth: 64
 
     readonly property real buttonWidth: 40
-    readonly property real buttonShift: 8
+    readonly property real buttonShift: -0.5 * buttonWidth
 
     Component.onCompleted: wsw.registerCVarAwareControl(root)
     Component.onDestruction: wsw.unregisterCVarAwareControl(root)
@@ -48,11 +48,11 @@ Item {
     }
 
     Rectangle {
-        visible: displayUnderlay
         anchors.centerIn: parent
-        width: fieldWidth
-        height: fieldWidth
-        color: Qt.rgba(1, 1, 1, 0.03)
+        width: fieldWidth + 2
+        height: fieldWidth + 2
+        radius: 1
+        color: underlayColor
     }
 
     NativelyDrawnImage {

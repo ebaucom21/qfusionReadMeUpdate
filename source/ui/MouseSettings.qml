@@ -8,7 +8,9 @@ Item {
     id: root
     readonly property var availableCrosshairs: hudDataModel.getAvailableCrosshairs()
     readonly property var availableStrongCrosshairs: hudDataModel.getAvailableStrongCrosshairs()
-    readonly property var isNotInTransition: root.StackView.view && !root.StackView.view.busy
+    readonly property bool isNotInTransition: root.StackView.view && !root.StackView.view.busy
+    readonly property color underlayColor: Qt.rgba(1.0, 1.0, 1.0, 0.07)
+    readonly property color altUnderlayColor: Qt.rgba(1.0, 1.0, 1.0, 0.05)
 
     Column {
         anchors.centerIn: parent
@@ -41,6 +43,7 @@ Item {
                     nativePartOpacity: popupOverlay.visible ? 0.3 : 1.0
                     desiredWidthOrHeight: strongSizeSlider.value
                     fieldWidth: wsw.maxStrongCrosshairSize
+                    underlayColor: root.underlayColor
                     model: availableStrongCrosshairs
                     cvarName: "cg_crosshair_strong"
                 }
@@ -87,6 +90,7 @@ Item {
                     nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
                     desiredWidthOrHeight: sizeSlider.value
                     fieldWidth: wsw.maxRegularCrosshairSize
+                    underlayColor: root.underlayColor
                     color: colorPicker.selectedColor || "white"
                     model: availableCrosshairs
                     cvarName: "cg_crosshair"
@@ -136,10 +140,12 @@ Item {
                         readonly property string weaponShortName: hudDataModel.getWeaponShortName(index + 1)
 
                         Rectangle {
-                            width: parent.width + 48
+                            width: parent.width + 96
                             height: parent.height + separateCrosshairsColumn.spacing
-                            anchors.centerIn: parent
-                            color: index % 2 ? Qt.rgba(1.0, 1.0, 1.0, 0.03) : Qt.rgba(1.0, 1.0, 1.0, 0.05)
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.horizontalCenterOffset: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: index % 2 ? root.underlayColor : root.altUnderlayColor
                         }
 
                         RowLayout {
