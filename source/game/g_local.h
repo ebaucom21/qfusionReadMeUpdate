@@ -562,24 +562,55 @@ extern const field_t fields[];
 
 char *G_StatsMessage( edict_t *ent );
 
-#include "../qcommon/CommandsHandler.h"
+#include "../qcommon/commandshandler.h"
+#include "../qcommon/freelistallocator.h"
 
-class ClientCommandsHandler : public SingleArgCommandsHandler<edict_t *> {
-	using Super = SingleArgCommandsHandler<edict_t *>;
+class ClientCommandsHandler :
+		public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, uint64_t>> {
+	static inline const wsw::StringView kScriptTag { "script" };
+	static inline const wsw::StringView kBuiltinTag { "builtin" };
 
-	class ScriptCommandCallback : public Super::SingleArgCallback {
+	using Callback = wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, uint64_t>;
+
+	class ScriptCommandCallback final : public Callback {
 	public:
-		ScriptCommandCallback( wsw::String &&name )
-			: SingleArgCallback( "script", std::move( name ) ) {}
-
+		explicit ScriptCommandCallback( wsw::String &&name ): Callback( kScriptTag, std::move( name ) ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *arg ) override;
+		bool operator()( edict_t *arg, uint64_t, uint64_t ) override;
 	};
 
+	class Builtin1ArgCallback final : public Callback {
+		void (*m_fn)( edict_t * );
+	public:
+		Builtin1ArgCallback( const wsw::HashedStringView &name, void (*fn)( edict_t * ) )
+			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
+		[[nodiscard]]
+		bool operator()( edict_t *ent, uint64_t, uint64_t ) override {
+			m_fn( ent ); return true;
+		}
+	};
+
+	class Builtin3ArgsCallback final : public Callback {
+		void (*m_fn)( edict_t *, uint64_t, uint64_t );
+	public:
+		Builtin3ArgsCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, uint64_t, uint64_t ) )
+			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
+		[[nodiscard]]
+		bool operator()( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) override {
+			m_fn( ent, clientSideCounter, serverSideCounter ); return true;
+		}
+	};
+
+	static constexpr size_t kMaxCallbackSize = std::max( sizeof( ScriptCommandCallback ),
+		std::max( sizeof( Builtin1ArgCallback ), sizeof( Builtin3ArgsCallback ) ) );
+
+	// Make sure we can always construct a new argument for addOrReplace()
+	wsw::MemberBasedFreelistAllocator<kMaxCallbackSize, MAX_GAMECOMMANDS + 1> m_allocator;
+
 	[[nodiscard]]
-	bool addOrReplace( GenericCommandCallback *callback ) override;
-	[[nodiscard]]
-	static bool isWriteProtected( const wsw::StringView &name );
+	static bool checkNotWriteProtected( const wsw::StringView &name );
+
+	void addAndNotify( Callback *callback, bool allowToReplace );
 public:
 	static void init();
 	static void shutdown();
@@ -589,8 +620,11 @@ public:
 
 	void precacheCommands();
 
-	void handleClientCommand( edict_t *ent );
-	void addScriptCommand( const char *name );
+	void handleClientCommand( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter );
+	void addScriptCommand( const wsw::HashedStringView &name );
+
+	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) );
+	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t, uint64_t ) );
 };
 
 //

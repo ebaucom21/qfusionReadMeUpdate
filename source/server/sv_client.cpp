@@ -887,10 +887,15 @@ ucmd_t ucmds[] =
 	{ NULL, NULL }
 };
 
+/// A counter that is shared for all clients and helps to distinguish actions (results of commands) of different clients
+static uint64_t g_serverSideCommandCounter = 0;
+
 /*
 * SV_ExecuteUserCommand
 */
-static void SV_ExecuteUserCommand( client_t *client, const char *s ) {
+static void SV_ExecuteUserCommand( client_t *client, uint64_t clientSideCounter, const char *s ) {
+	::g_serverSideCommandCounter++;
+
 	ucmd_t *u;
 
 	Cmd_TokenizeString( s );
@@ -903,7 +908,7 @@ static void SV_ExecuteUserCommand( client_t *client, const char *s ) {
 	}
 
 	if( client->state >= CS_SPAWNED && !u->name && sv.state == ss_game ) {
-		ge->ClientCommand( client->edict );
+		ge->ClientCommand( client->edict, clientSideCounter, ::g_serverSideCommandCounter );
 	}
 }
 
@@ -1099,6 +1104,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 			break;
 
 			case clc_clientcommand:
+				cmdNum = 0;
 				if( !client->reliable ) {
 					cmdNum = MSG_ReadIntBase128( msg );
 					if( cmdNum <= client->clientCommandExecuted ) {
@@ -1108,7 +1114,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 					client->clientCommandExecuted = cmdNum;
 				}
 				s = MSG_ReadString( msg );
-				SV_ExecuteUserCommand( client, s );
+				SV_ExecuteUserCommand( client, cmdNum, s );
 				if( client->state == CS_ZOMBIE ) {
 					return; // disconnect command
 				}

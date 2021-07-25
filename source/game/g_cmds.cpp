@@ -22,7 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstdtypes.h"
 #include "ai/navigation/aasworld.h"
-#include "../qcommon/CommandsHandler.h"
+
+using wsw::operator""_asView;
+using wsw::operator""_asHView;
 
 /*
 * G_Teleport
@@ -1074,14 +1076,14 @@ void Cmd_Say_f( edict_t *ent, bool arg0 ) {
 /*
 * Cmd_SayCmd_f
 */
-static void Cmd_SayCmd_f( edict_t *ent ) {
+static void Cmd_SayCmd_f( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
 	Cmd_Say_f( ent, false );
 }
 
 /*
 * Cmd_SayTeam_f
 */
-static void Cmd_SayTeam_f( edict_t *ent ) {
+static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
 	G_Say_Team( ent, trap_Cmd_Args(), true );
 }
 
@@ -1371,9 +1373,10 @@ ClientCommandsHandler *ClientCommandsHandler::instance() {
 
 void ClientCommandsHandler::precacheCommands() {
 	int i = 0;
-	for( auto *callback = listHead; callback; callback = callback->nextInList() ) {
-		// TODO: This assumes zero-terminated string views!
-		trap_ConfigString( CS_GAMECOMMANDS + i, callback->name.data() );
+	for( wsw::GenericCommandCallback *callback = m_listHead; callback; callback = callback->nextInList() ) {
+		const auto name( callback->getName() );
+		assert( name.isZeroTerminated() );
+		trap_ConfigString( CS_GAMECOMMANDS + i, name.data() );
 		i++;
 	}
 	for(; i < MAX_GAMECOMMANDS; ++i ) {
@@ -1381,133 +1384,141 @@ void ClientCommandsHandler::precacheCommands() {
 	}
 }
 
-static const wsw::StringView callvoteValidate( "callvoteValidate" );
-static const wsw::StringView callvotePassed( "callvotePassed" );
-
-bool ClientCommandsHandler::isWriteProtected( const wsw::StringView &name ) {
-	for( const wsw::StringView &s: { callvoteValidate, callvotePassed } ) {
-		if( s.equalsIgnoreCase( name ) ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool ClientCommandsHandler::addOrReplace( GenericCommandCallback *callback ) {
-	// TODO: The code assumes zero-terminated string views!
-
-	if( isWriteProtected( callback->name ) ) {
-		G_Printf( "WARNING: G_AddCommand: command name '%s' is write protected\n", callback->name.data() );
+bool ClientCommandsHandler::checkNotWriteProtected( const wsw::StringView &name ) {
+	if( name.equalsIgnoreCase( "callvoteValidate"_asView ) || name.equalsIgnoreCase( "callvotePassed"_asView ) ) {
+		G_Printf( "WARNING: G_AddCommand: command name '%s' is write protected\n", name.data() );
 		return false;
 	}
-
-	// If there was an existing command
-	if( !CommandsHandler::addOrReplace( callback ) ) {
-		return false;
-	}
-
-	// If the size has grew up over this value after the AddOrReplace() call
-	if( size > MAX_GAMECOMMANDS ) {
-		G_Error( "ClientCommandsHandler::AddOrReplace(`%s`): Too many commands\n", callback->name.data() );
-	}
-
-	// add the configstring if the precache process was already done
-	if( level.canSpawnEntities ) {
-		trap_ConfigString( CS_GAMECOMMANDS + ( size - 1 ), callback->name.data() );
-	}
-
 	return true;
 }
 
+void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) ) {
+	// Getting the name from varargs is tricky so it is called explicitly
+	if( checkNotWriteProtected( name ) ) {
+		addAndNotify( new( m_allocator.allocOrNull() )Builtin1ArgCallback( name, handler ), false );
+	}
+}
+
+void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name,
+										void (*handler)( edict_t *, uint64_t, uint64_t ) ) {
+	if( checkNotWriteProtected( name ) ) {
+		addAndNotify( new( m_allocator.allocOrNull() )Builtin3ArgsCallback( name, handler ), false );
+	}
+}
+
+void ClientCommandsHandler::addScriptCommand( const wsw::HashedStringView &name ) {
+	if( checkNotWriteProtected( name ) ) {
+		void *const mem = m_allocator.allocOrNull();
+		auto *const callback = new( mem )ScriptCommandCallback( wsw::String( name.data(), name.size() ) );
+		addAndNotify( callback, true );
+	}
+}
+
 ClientCommandsHandler::ClientCommandsHandler() {
-	auto adapter( adapterForTag( "builtin" ) );
-	adapter.addOrFail( "cvarinfo", Cmd_CvarInfo_f );
-	adapter.addOrFail( "position", Cmd_Position_f );
-	adapter.addOrFail( "players", Cmd_Players_f );
-	adapter.addOrFail( "spectators", Cmd_Spectators_f );
-	adapter.addOrFail( "stats", Cmd_ShowStats_f );
-	adapter.addOrFail( "say", Cmd_SayCmd_f );
-	adapter.addOrFail( "say_team", Cmd_SayTeam_f );
-	adapter.addOrFail( "svscore", Cmd_Score_f );
-	adapter.addOrFail( "god", Cmd_God_f );
-	adapter.addOrFail( "noclip", Cmd_Noclip_f );
-	adapter.addOrFail( "use", Cmd_Use_f );
-	adapter.addOrFail( "give", Cmd_Give_f );
-	adapter.addOrFail( "kill", Cmd_Kill_f );
-	adapter.addOrFail( "putaway", Cmd_PutAway_f );
-	adapter.addOrFail( "chase", Cmd_ChaseCam_f );
-	adapter.addOrFail( "chasenext", Cmd_ChaseNext_f );
-	adapter.addOrFail( "chaseprev", Cmd_ChasePrev_f );
-	adapter.addOrFail( "spec", Cmd_Spec_f );
-	adapter.addOrFail( "enterqueue", G_Teams_JoinChallengersQueue );
-	adapter.addOrFail( "leavequeue", G_Teams_LeaveChallengersQueue );
-	adapter.addOrFail( "camswitch", Cmd_SwitchChaseCamMode_f );
-	adapter.addOrFail( "timeout", Cmd_Timeout_f );
-	adapter.addOrFail( "timein", Cmd_Timein_f );
-	adapter.addOrFail( "cointoss", Cmd_CoinToss_f );
-	adapter.addOrFail( "whois", Cmd_Whois_f );
+	addBuiltin( "cvarinfo"_asHView, Cmd_CvarInfo_f );
+	addBuiltin( "position"_asHView, Cmd_Position_f );
+	addBuiltin( "players"_asHView, Cmd_Players_f );
+	addBuiltin( "spectators"_asHView, Cmd_Spectators_f );
+	addBuiltin( "stats"_asHView, Cmd_ShowStats_f );
+	addBuiltin( "say"_asHView, Cmd_SayCmd_f );
+	addBuiltin( "say_team"_asHView, Cmd_SayTeam_f );
+	addBuiltin( "svscore"_asHView, Cmd_Score_f );
+	addBuiltin( "god"_asHView, Cmd_God_f );
+	addBuiltin( "noclip"_asHView, Cmd_Noclip_f );
+	addBuiltin( "use"_asHView, Cmd_Use_f );
+	addBuiltin( "give"_asHView, Cmd_Give_f );
+	addBuiltin( "kill"_asHView, Cmd_Kill_f );
+	addBuiltin( "putaway"_asHView, Cmd_PutAway_f );
+	addBuiltin( "chase"_asHView, Cmd_ChaseCam_f );
+	addBuiltin( "chasenext"_asHView, Cmd_ChaseNext_f );
+	addBuiltin( "chaseprev"_asHView, Cmd_ChasePrev_f );
+	addBuiltin( "spec"_asHView, Cmd_Spec_f );
+	addBuiltin( "enterqueue"_asHView, G_Teams_JoinChallengersQueue );
+	addBuiltin( "leavequeue"_asHView, G_Teams_LeaveChallengersQueue );
+	addBuiltin( "camswitch"_asHView, Cmd_SwitchChaseCamMode_f );
+	addBuiltin( "timeout"_asHView, Cmd_Timeout_f );
+	addBuiltin( "timein"_asHView, Cmd_Timein_f );
+	addBuiltin( "cointoss"_asHView, Cmd_CoinToss_f );
+	addBuiltin( "whois"_asHView, Cmd_Whois_f );
 
 	// callvotes commands
-	adapter.addOrFail( "callvote", G_CallVote_Cmd );
-	adapter.addOrFail( "vote", G_CallVotes_CmdVote );
+	addBuiltin( "callvote"_asHView, G_CallVote_Cmd );
+	addBuiltin( "vote"_asHView, G_CallVotes_CmdVote );
 
-	adapter.addOrFail( "opcall", G_OperatorVote_Cmd );
-	adapter.addOrFail( "operator", Cmd_GameOperator_f );
-	adapter.addOrFail( "op", Cmd_GameOperator_f );
+	addBuiltin( "opcall"_asHView, G_OperatorVote_Cmd );
+	addBuiltin( "operator"_asHView, Cmd_GameOperator_f );
+	addBuiltin( "op"_asHView, Cmd_GameOperator_f );
 
 	// teams commands
-	adapter.addOrFail( "ready", G_Match_Ready );
-	adapter.addOrFail( "unready", G_Match_NotReady );
-	adapter.addOrFail( "notready", G_Match_NotReady );
-	adapter.addOrFail( "toggleready", G_Match_ToggleReady );
-	adapter.addOrFail( "join", Cmd_Join_f );
+	addBuiltin( "ready"_asHView, G_Match_Ready );
+	addBuiltin( "unready"_asHView, G_Match_NotReady );
+	addBuiltin( "notready"_asHView, G_Match_NotReady );
+	addBuiltin( "toggleready"_asHView, G_Match_ToggleReady );
+	addBuiltin( "join"_asHView, Cmd_Join_f );
 
 	// coach commands
-	adapter.addOrFail( "coach", G_Teams_Coach );
-	adapter.addOrFail( "lockteam", G_Teams_CoachLockTeam );
-	adapter.addOrFail( "unlockteam", G_Teams_CoachUnLockTeam );
-	adapter.addOrFail( "invite", G_Teams_Invite_f );
+	addBuiltin( "coach"_asHView, G_Teams_Coach );
+	addBuiltin( "lockteam"_asHView, G_Teams_CoachLockTeam );
+	addBuiltin( "unlockteam"_asHView, G_Teams_CoachUnLockTeam );
+	addBuiltin( "invite"_asHView, G_Teams_Invite_f );
 
 	// bot commands
-	adapter.addOrFail( "botnotarget", AI_Cheat_NoTarget );
+	addBuiltin( "botnotarget"_asHView, AI_Cheat_NoTarget );
 
-	// ch : addOrFailed awards
-	adapter.addOrFail( "awards", Cmd_Awards_f );
+	addBuiltin( "awards"_asHView, Cmd_Awards_f );
 
 	// ignore-related commands
-	adapter.addOrFail( "ignore", ChatHandlersChain::HandleIgnoreCommand );
-	adapter.addOrFail( "unignore", ChatHandlersChain::HandleUnignoreCommand );
-	adapter.addOrFail( "ignorelist", ChatHandlersChain::HandleIgnoreListCommand );
+	addBuiltin( "ignore"_asHView, ChatHandlersChain::HandleIgnoreCommand );
+	addBuiltin( "unignore"_asHView, ChatHandlersChain::HandleUnignoreCommand );
+	addBuiltin( "ignorelist"_asHView, ChatHandlersChain::HandleIgnoreListCommand );
 
 	// misc
-	adapter.addOrFail( "upstate", Cmd_Upstate_f );
+	addBuiltin( "upstate"_asHView, Cmd_Upstate_f );
 }
 
-void ClientCommandsHandler::handleClientCommand( edict_t *ent ) {
+void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientSideCounter, uint64_t serverSideCounter ) {
 	// Check whether the client is fully in-game
-	if( !ent->r.client || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
-		return;
+	if( ent->r.client && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
+		const wsw::HashedStringView name( trap_Cmd_Argv( 0 ) );
+
+		// Consider commands as activity. Skip cvarinfo commands as they are automatic responses
+		if( !name.equalsIgnoreCase( "cvarinfo"_asHView ) ) {
+			G_Client_UpdateActivity( ent->r.client );
+		}
+
+		bool callResult = false;
+		if( Callback *callback = findByName( name ) ) {
+			callResult = callback->operator()( ent, clientSideCounter, serverSideCounter );
+		}
+
+		if( !callResult ) {
+			G_PrintMsg( ent, "Bad user command: %s\n", name.data() );
+		}
 	}
-
-	const char *cmd = trap_Cmd_Argv( 0 );
-
-	// Skip cvarinfo cmds because they are automatic responses
-	if( Q_stricmp( cmd, "cvarinfo" ) != 0 ) {
-		G_Client_UpdateActivity( ent->r.client ); // activity detected
-	}
-
-	if( Super::handle( cmd, ent ) ) {
-		return;
-	}
-
-	G_PrintMsg( ent, "Bad user command: %s\n", cmd );
 }
 
-void ClientCommandsHandler::addScriptCommand( const char *name ) {
-	(void)add( new ScriptCommandCallback( wsw::String( name ) ) );
+void ClientCommandsHandler::addAndNotify( Callback *newCallback, [[maybe_unused]] bool allowToReplace ) {
+	const auto oldSize = m_size;
+	Callback *const oldCallback = this->addOrReplace( newCallback );
+	if( oldCallback ) {
+		assert( allowToReplace );
+		assert( oldSize == m_size );
+		oldCallback->~Callback();
+		m_allocator.free( oldCallback );
+	} else {
+		if( m_size > MAX_GAMECOMMANDS ) {
+			G_Error( "Too many game commands\n" );
+		}
+		if( level.canSpawnEntities ) {
+			// Update the configstring if the precache process was already done
+			trap_ConfigString( CS_GAMECOMMANDS + ( m_size - 1 ), newCallback->getName().data() );
+		}
+	}
 }
 
-bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *arg ) {
-	return GT_asCallGameCommand( arg->r.client, name.data(), trap_Cmd_Args(), trap_Cmd_Argc() - 1 );
+bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t, uint64_t ) {
+	const auto name( getName() );
+	assert( name.isZeroTerminated() );
+	return GT_asCallGameCommand( ent->r.client, name.data(), trap_Cmd_Args(), trap_Cmd_Argc() - 1 );
 }
 
