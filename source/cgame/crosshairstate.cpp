@@ -136,6 +136,9 @@ void CrosshairState::init() {
 	varNameBuffer << "cg_crosshair_"_asView;
 	const auto prefixLen = varNameBuffer.length();
 
+	wsw::StaticString<8> sizeStringBuffer;
+	(void)sizeStringBuffer.assignf( "%d", kRegularCrosshairSizeProps.defaultSize );
+
 	for( int i = 0; i < WEAP_TOTAL - 1; ++i ) {
 		assert( std::strlen( kWeaponNames[i] ) == 2 );
 		const wsw::StringView weaponName( kWeaponNames[i], 2 );
@@ -147,7 +150,7 @@ void CrosshairState::init() {
 
 		varNameBuffer.erase( prefixLen );
 		varNameBuffer << "size_"_asView << weaponName;
-		s_sizeVars[i] = Cvar_Get( varNameBuffer.data(), "32", CVAR_ARCHIVE );
+		s_sizeVars[i] = Cvar_Get( varNameBuffer.data(), sizeStringBuffer.data(), CVAR_ARCHIVE );
 		checkSizeVar( s_sizeVars[i], kRegularCrosshairSizeProps );
 
 		varNameBuffer.erase( prefixLen );
@@ -159,7 +162,7 @@ void CrosshairState::init() {
 	cg_crosshair = Cvar_Get( "cg_crosshair", "1", CVAR_ARCHIVE );
 	checkValueVar( cg_crosshair, kNumRegularCrosshairs );
 
-	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", "", CVAR_ARCHIVE );
+	cg_crosshair_size = Cvar_Get( "cg_crosshair_size", sizeStringBuffer.data(), CVAR_ARCHIVE );
 	checkSizeVar( cg_crosshair_size, kRegularCrosshairSizeProps );
 
 	cg_crosshair_color = Cvar_Get( "cg_crosshair_color", "255 255 255", CVAR_ARCHIVE );
@@ -168,7 +171,8 @@ void CrosshairState::init() {
 	cg_crosshair_strong = Cvar_Get( "cg_crosshair_strong", "1", CVAR_ARCHIVE );
 	checkValueVar( cg_crosshair_strong, kNumStrongCrosshairs );
 
-	cg_crosshair_strong_size = Cvar_Get( "cg_crosshair_strong_size", "", CVAR_ARCHIVE );
+	(void)sizeStringBuffer.assignf( "%d", kStrongCrosshairSizeProps.defaultSize );
+	cg_crosshair_strong_size = Cvar_Get( "cg_crosshair_strong_size", sizeStringBuffer.data(), CVAR_ARCHIVE );
 	checkSizeVar( cg_crosshair_strong_size, kStrongCrosshairSizeProps );
 
 	cg_crosshair_damage_color = Cvar_Get( "cg_crosshair_damage_color", "255 0 0", CVAR_ARCHIVE );
