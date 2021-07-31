@@ -18,6 +18,7 @@
 #include "serverlistmodel.h"
 #include "keysandbindingsmodel.h"
 #include "scoreboardmodel.h"
+#include "videoplaybacksystem.h"
 #include "wswimageprovider.h"
 
 #include <QGuiApplication>
@@ -613,6 +614,7 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterUncreatableType<HudDataModel>( uri, 2, 6, "HudDataModel", reason );
 	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( uri, 2, 6, "NativelyDrawnModel_Native" );
+	qmlRegisterType<VideoSource>( uri, 2, 6, "WswVideoSource" );
 }
 
 static const char *kFontSuffixes[] {
@@ -744,10 +746,12 @@ static bool initialized = false;
 
 void UISystem::init( int width, int height ) {
 	uiSystemInstanceHolder.Init( width, height );
+	VideoPlaybackSystem::init();
 	initialized = true;
 }
 
 void UISystem::shutdown() {
+	VideoPlaybackSystem::shutdown();
 	uiSystemInstanceHolder.Shutdown();
 	initialized = false;
 }
@@ -1298,7 +1302,9 @@ void QtUISystem::checkPropertyChanges() {
 	m_demoPlayer.checkUpdates();
 	m_actionRequestsModel.update();
 
-	m_hudDataModel.checkPropertyChanges( getFrameTimestamp() );
+	const auto timestamp = getFrameTimestamp();
+	VideoPlaybackSystem::instance()->update( timestamp );
+	m_hudDataModel.checkPropertyChanges( timestamp );
 
 	updateCVarAwareControls();
 

@@ -27,6 +27,8 @@ public:
 
 	[[nodiscard]]
 	bool isAtEof() const;
+	[[nodiscard]]
+	bool rewind();
 
 	virtual ~IOHandle();
 };

@@ -802,3 +802,7 @@ int FS_Read( void *buffer, size_t len, int file ) {
 const char *FS_FirstExtension( const char *filename, const char *extension[], int numExtensions ) {
 	return trap_FS_FirstExtension( filename, extension, numExtensions );
 }
+
+int FS_Seek( int file, int offset, int whence ) {
+	return trap_FS_Seek( file, offset, whence );
+}

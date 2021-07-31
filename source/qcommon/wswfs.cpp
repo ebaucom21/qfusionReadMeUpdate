@@ -19,6 +19,15 @@ bool IOHandle::isAtEof() const {
 	return m_hadError || FS_Eof( m_underlying );
 }
 
+bool IOHandle::rewind() {
+	if( !m_underlying ) {
+		throw std::logic_error( "Using a moved object" );
+	}
+	// TODO: It should reset errors of underlying objects
+	m_hadError = ( FS_Seek( m_underlying, 0, FS_SEEK_SET ) != 0 );
+	return !m_hadError;
+}
+
 auto ReadHandle::read( uint8_t *buffer, size_t bufferSize ) -> std::optional<size_t> {
 	if( m_hadError ) {
 		return std::nullopt;
