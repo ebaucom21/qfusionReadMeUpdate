@@ -709,9 +709,19 @@ auto HudDataModel::getAwardsModel() -> QAbstractListModel * {
 	return &m_awardsModel;
 }
 
-void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t ) {
-	m_statusMessage = toStyledText( message );
-	// Always perform updates
+void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t timestamp ) {
+	const wsw::StringView truncatedMessage( message.take( m_originalStatusMessage.capacity() ) );
+	// Almost always perform updates, except the single case: a rapid stream of the same textual message.
+	// In this case, let initial transitions to complete, otherwise the message won't be noticeable at all.
+	if( m_originalStatusMessage.equals( truncatedMessage ) ) {
+		if( m_lastStatusMessageTimestamp + 500 > timestamp ) {
+			return;
+		}
+	}
+
+	m_lastStatusMessageTimestamp = timestamp;
+	m_originalStatusMessage.assign( truncatedMessage );
+	m_formattedStatusMessage = toStyledText( truncatedMessage );
 	Q_EMIT statusMessageChanged( getStatusMessage() );
 }
 

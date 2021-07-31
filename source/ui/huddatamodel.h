@@ -219,8 +219,10 @@ class HudDataModel : public QObject {
 	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
 	HudNameString m_clientHudName, m_specHudName;
 
+	int64_t m_lastStatusMessageTimestamp { 0 };
+	wsw::StaticString<96> m_originalStatusMessage;
 	// TODO make toStyledText() work with arbitrary types
-	QString m_statusMessage;
+	QString m_formattedStatusMessage;
 
 	wsw::StaticString<32> m_alphaName;
 	wsw::StaticString<32> m_betaName;
@@ -319,7 +321,7 @@ class HudDataModel : public QObject {
 	auto getArmor() const -> int { return m_armor; }
 
 	[[nodiscard]]
-	auto getStatusMessage() const -> QString { return m_statusMessage; }
+	auto getStatusMessage() const -> QString { return m_formattedStatusMessage; }
 
 	[[nodiscard]]
 	bool getHasLocations() const { return m_hasLocations; }
