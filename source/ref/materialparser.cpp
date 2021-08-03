@@ -553,11 +553,7 @@ bool MaterialParser::parseAnimMapExt( int addFlags ) {
 bool MaterialParser::parseCubeMapExt( int addFlags, int tcGen ) {
 	auto *const pass = currPass();
 	if( const auto maybeToken = m_lexer->getNextTokenInLine() ) {
-		const auto imageFlags = getImageFlags() | addFlags | IT_SRGB | IT_CUBEMAP;
-		(void)imageFlags;
-		// TODO: Fix that!
-		// pass->images[0] = R_FindImage( *maybeToken, wsw::StringView(), imageFlags, *minMipSize, imageTags );
-		abort();
+		pass->images[0] = findImage( *maybeToken, getImageFlags() | addFlags | IT_SRGB | IT_CUBEMAP );
 	}
 
 	pass->anim_fps = 0;
@@ -570,7 +566,7 @@ bool MaterialParser::parseCubeMapExt( int addFlags, int tcGen ) {
 
 	// TODO Use the newly added facilities
 	//Com_DPrintf( S_COLOR_YELLOW "Shader %s has a stage with no image: %s\n", shader->name, token );
-	pass->images[0] = TextureCache::instance()->noTexture();
+	pass->images[0] = TextureCache::instance()->whiteCubemapTexture();
 	pass->tcgen = TC_GEN_BASE;
 
 	return true;
