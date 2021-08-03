@@ -10,8 +10,11 @@ Rectangle {
 
     readonly property real heightFrac: (Math.min(1080, rootItem.height - 720)) / (1080 - 720)
 
+    readonly property bool canShowLoadouts: gametypeOptionsModel.available && !hudDataModel.isSpectator
+
     // Reserve some space for a slight default expansion of an active button
-    readonly property real tabButtonWidth: (tabBar.width - 8) / (gametypeOptionsModel.available ? 4 : 3)
+    property real tabButtonWidth: (tabBar.width - 8) / (canShowLoadouts ? 4 : 3)
+    Behavior on tabButtonWidth { SmoothedAnimation { duration: 66 } }
 
     Rectangle {
         width: parent.width
@@ -56,7 +59,7 @@ Rectangle {
             }
             WswTabButton {
                 readonly property var component: Component { InGameGametypeOptionsPage {} }
-                visible: gametypeOptionsModel.available
+                visible: canShowLoadouts
                 width: visible ? tabButtonWidth : 0
                 text: gametypeOptionsModel.tabTitle
             }
@@ -126,6 +129,13 @@ Rectangle {
     onVisibleChanged: {
         if (visible) {
             stackView.forceActiveFocus()
+        }
+    }
+
+    onCanShowLoadoutsChanged: {
+        // TODO: Is there a better approach for the forceful page selection?
+        if (!canShowLoadouts) {
+            tabBar.setCurrentIndex(0)
         }
     }
 

@@ -18,30 +18,28 @@ auto GametypeOptionsModel::roleNames() const -> QHash<int, QByteArray> {
 }
 
 auto GametypeOptionsModel::rowCount( const QModelIndex & ) const -> int {
-	return (int)m_allowedOptionIndices.size();
+	return (int)m_allowedOptions.size();
 }
 
-auto GametypeOptionsModel::data( const QModelIndex &index, int role ) const -> QVariant {
- 	if( !index.isValid() ) {
- 		return QVariant();
+auto GametypeOptionsModel::data( const QModelIndex &modelIndex, int role ) const -> QVariant {
+ 	if( modelIndex.isValid() ) {
+ 		if( const int row = modelIndex.row(); (unsigned)row < (unsigned)m_allowedOptions.size() ) {
+ 			if( (Role)role == Role::Current ) {
+ 				return m_allowedOptions[row].currentValue;
+ 			} else {
+ 				const unsigned index = m_allowedOptions[row].entryIndex;
+ 				assert( index < (unsigned)m_allOptionEntries.size() );
+ 				const auto &entry = m_allOptionEntries[index];
+ 				switch( (Role)role ) {
+ 					case Role::Title: return getString( entry.titleSpanIndex );
+ 					case Role::Kind: return entry.kind;
+ 					case Role::Model: return entry.model;
+ 					default: return QVariant();
+ 				}
+ 			}
+ 		}
  	}
- 	const int row = index.row();
- 	if( (unsigned)row >= (unsigned)m_allowedOptionIndices.size() ) {
- 		return QVariant();
- 	}
- 	if( (Role)role == Role::Current ) {
- 		return m_currentSelectedItemNums[row];
- 	}
-
- 	const unsigned num = m_allowedOptionIndices[row];
- 	assert( num < (unsigned)m_allowedOptionIndices.size() );
- 	const auto &entry = m_optionEntries[num];
- 	switch( (Role)role ) {
-		case Role::Title: return getString( entry.titleSpanIndex );
-		case Role::Kind: return entry.kind;
-		case Role::Model: return entry.model;
-		default: return QVariant();
-	}
+ 	return QVariant();
 }
 
 auto GametypeOptionsModel::addString( const wsw::StringView &string ) -> unsigned {
@@ -50,47 +48,50 @@ auto GametypeOptionsModel::addString( const wsw::StringView &string ) -> unsigne
 
 auto GametypeOptionsModel::getString( unsigned stringSpanIndex ) const -> QByteArray {
 	const wsw::StringView view( m_stringDataStorage[stringSpanIndex] );
-	return QByteArray( view.data(), (int)view.size() );
+	return QByteArray::fromRawData( view.data(), (int)view.size() );
 }
 
-auto GametypeOptionsModel::getSelectableEntry( int row, int chosen ) const -> const SelectableItemEntry & {
-	assert( (unsigned)row < (unsigned)m_allowedOptionIndices.size() );
-	const auto index = m_allowedOptionIndices[row];
-	assert( (unsigned)index < (unsigned)m_optionEntries.size() );
-	assert( m_optionEntries[index].kind != Boolean );
-	[[maybe_unused]] auto [listOff, listLen] = m_optionEntries[index].selectableItemsSpan;
+auto GametypeOptionsModel::getSelectableEntry( int optionRow, int indexInRow ) const -> const SelectableItemEntry & {
+	assert( (unsigned)optionRow < (unsigned)m_allowedOptions.size() );
+	const auto index = m_allowedOptions[optionRow].entryIndex;
+	assert( (unsigned)index < (unsigned)m_allOptionEntries.size() );
+	assert( m_allOptionEntries[index].kind != Boolean );
+	[[maybe_unused]] auto [listOff, listLen] = m_allOptionEntries[index].selectableItemsSpan;
 	assert( (unsigned)listOff + (unsigned)listLen <= (unsigned)m_selectableItemEntries.size() );
-	assert( (unsigned)chosen < (unsigned)listLen );
-	return m_selectableItemEntries[listOff + (unsigned)chosen];
+	assert( (unsigned)indexInRow < (unsigned)listLen );
+	return m_selectableItemEntries[listOff + (unsigned)indexInRow];
 }
 
-auto GametypeOptionsModel::getSelectorItemTitle( int optionIndex, int chosenIndex ) const -> QByteArray {
-	return getString( getSelectableEntry( optionIndex, chosenIndex ).titleSpanIndex );
+auto GametypeOptionsModel::getSelectorItemTitle( int optionRow, int indexInRow ) const -> QByteArray {
+	return getString( getSelectableEntry( optionRow, indexInRow ).titleSpanIndex );
 }
+
+static const QByteArray kImagePrefix( "image://wsw/" );
 
 auto GametypeOptionsModel::getSelectorItemIcon( int optionIndex, int chosenIndex ) const -> QByteArray {
-	return getString( getSelectableEntry( optionIndex, chosenIndex ).iconSpanIndex );
+	return kImagePrefix + getString( getSelectableEntry( optionIndex, chosenIndex ).iconSpanIndex );
 }
 
-void GametypeOptionsModel::select( int row, int chosen ) {
-	assert( (unsigned)row < m_currentSelectedItemNums.size() );
-	if( m_currentSelectedItemNums[row] == chosen ) {
+void GametypeOptionsModel::select( int optionRow, int indexInRow ) {
+	assert( (unsigned)optionRow < m_allowedOptions.size() );
+	if( m_allowedOptions[optionRow].currentValue == indexInRow ) {
 		return;
 	}
 
-	// TODO: Check whether the "chosen" is valid
+	// TODO: Check whether the "indexInRow" is valid
 
-	m_currentSelectedItemNums[row] = chosen;
-	const QModelIndex modelIndex( this->index( row ) );
+	m_allowedOptions[optionRow].currentValue = indexInRow;
+	const QModelIndex modelIndex( this->index( optionRow ) );
 	Q_EMIT dataChanged( modelIndex, modelIndex, kCurrentRoleAsVector );
 
-	assert( (unsigned)row < (unsigned)m_allowedOptionIndices.size() );
-	const auto index = m_allowedOptionIndices[row];
-	assert( (unsigned)index < (unsigned)m_optionEntries.size() );
+	assert( (unsigned)optionRow < (unsigned)m_allowedOptions.size() );
+	const auto index = m_allowedOptions[optionRow].entryIndex;
+	assert( (unsigned)index < (unsigned)m_allOptionEntries.size() );
 
-	const wsw::StringView commandName( m_stringDataStorage[m_optionEntries[index].commandSpanIndex] );
+	const wsw::StringView commandName( m_stringDataStorage[m_allOptionEntries[index].commandSpanIndex] );
 	wsw::StaticString<64> commandText;
-	commandText << commandName << ' ' << index << ' ' << chosen;
+	static_assert( commandText.capacity() > kMaxCommandLen + 10 );
+	commandText << commandName << ' ' << indexInRow;
 	Cbuf_ExecuteText( EXEC_APPEND, commandText.data() );
 }
 
@@ -112,9 +113,9 @@ bool GametypeOptionsModel::parseEntryParts( const wsw::StringView &string,
 }
 
 void GametypeOptionsModel::clear() {
-	m_optionEntries.clear();
+	m_allOptionEntries.clear();
 	m_selectableItemEntries.clear();
-	m_allowedOptionIndices.clear();
+	m_allowedOptions.clear();
 	m_stringDataStorage.clear();
 }
 
@@ -123,7 +124,7 @@ void GametypeOptionsModel::reload() {
 	beginResetModel();
 	clear();
 
-	const char *command = "requestoptions";
+	const char *command = "requestoptionsstatus";
 	if( Cmd_Exists( command ) ) {
 		if( !doReload() ) {
 			clear();
@@ -149,51 +150,60 @@ bool GametypeOptionsModel::doReload() {
 	static_assert( MAX_GAMETYPE_OPTIONS == kMaxOptions );
 	unsigned configStringNum = CS_GAMETYPE_OPTIONS;
 	for(; configStringNum < CS_GAMETYPE_OPTIONS + MAX_GAMETYPE_OPTIONS; ++configStringNum ) {
+		// Interrupt at an empty config string (getting this is perfectly valid)
 		const auto maybeString = ::cl.configStrings.get( configStringNum );
 		if( !maybeString ) {
 			break;
 		}
 
+		// Expect 4 parts separated by the "|" character
 		if( !parseEntryParts( *maybeString, parts ) ) {
 			return false;
 		}
 
-		const auto &kindToken = parts[1];
-		if( kindToken.equalsIgnoreCase( kBoolean ) ) {
-			if( !parts[3].equals( wsw::StringView( "-" ) ) ) {
+		// The first part is the option name.
+		// The second part describes the kind of the option.
+		// The third part contains the command.
+		// The fourth part contains an encoded list for the OneOfList option kind
+		const wsw::StringView &title = parts[0], &kind = parts[1], &command = parts[2];
+		if( command.length() > kMaxCommandLen ) {
+			return false;
+		}
+
+		if( kind.equalsIgnoreCase( kBoolean ) ) {
+			// The fourth part must be a placeholder in this case
+			if( parts[3].equals( wsw::StringView( "-" ) ) ) {
+				// TODO: Check whether parts[2] could be a valid command
+				// TODO: Looking forward to being able to use designated initializers
+				OptionEntry entry {};
+				entry.kind             = Kind::Boolean;
+				entry.titleSpanIndex   = addString( title );
+				entry.commandSpanIndex = addString( command );
+				m_allOptionEntries.emplace_back( std::move( entry ) );
+			} else {
 				return false;
 			}
-			// TODO: Check whether parts[2] could be a valid command
-			m_optionEntries.emplace_back( OptionEntry {
-				addString( parts[0] ),
-				addString( parts[2] ),
-				Kind::Boolean,
-				0,
-				{ 0, 0 }
-			});
-			continue;
-		}
-
-		if( !kindToken.equalsIgnoreCase( kOneOfList ) ) {
+		} else if( kind.equalsIgnoreCase( kOneOfList ) ) {
+			if( const auto maybeListItemsSpan = addListItems( parts[3] ) ) {
+				[[maybe_unused]] const auto [_, numItems] = *maybeListItemsSpan;
+				// TODO: Check whether parts[2] could be a valid command
+				// TODO: Looking forward to being able to use designated initializers
+				OptionEntry entry {};
+				entry.kind                = Kind::OneOfList;
+				entry.titleSpanIndex      = addString( title );
+				entry.commandSpanIndex    = addString( command );
+				entry.model               = numItems;
+				entry.selectableItemsSpan = *maybeListItemsSpan;
+				m_allOptionEntries.emplace_back( std::move( entry ) );
+			} else {
+				return false;
+			}
+		} else {
 			return false;
 		}
-
-		const auto maybeListItemsSpan = addListItems( parts[3] );
-		if( !maybeListItemsSpan ) {
-			return false;
-		}
-
-		// TODO: Check whether parts[2] could be a valid command
-		m_optionEntries.emplace_back( OptionEntry {
-			addString( parts[0] ),
-			addString( parts[2] ),
-			Kind::OneOfList,
-			(int)maybeListItemsSpan->second,
-			*maybeListItemsSpan
-		});
 	}
 
-	if( auto maybeTitle = ::cl.configStrings.get( CS_GAMETYPE_OPTIONS_TITLE ) ) {
+	if( const auto maybeTitle = ::cl.configStrings.get( CS_GAMETYPE_OPTIONS_TITLE ) ) {
 		QString title( QString::fromLatin1( maybeTitle->data(), maybeTitle->size() ) );
 		if( m_tabTitle != title ) {
 			m_tabTitle = title;
@@ -215,6 +225,9 @@ auto GametypeOptionsModel::addListItems( const wsw::StringView &string )
 
 	const auto oldListItemsSize = m_selectableItemEntries.size();
 
+	// The items list consists of pairs (title, icon path).
+	// The transmitted list is flattened and elements are separated by ","
+
 	unsigned tmpSpans[2];
 	unsigned lastTokenNum = 0;
 	while( const auto maybeTokenAndNum = splitter.getNextWithNum( ',' ) ) {
@@ -226,10 +239,21 @@ auto GametypeOptionsModel::addListItems( const wsw::StringView &string )
 
 		const auto spanNum = tokenNum % 2;
 		lastTokenNum = tokenNum;
-		// TODO: Sanitize a displayed name...
-		// TODO: Check for a valid icon path...
+		// TODO: Sanitize the displayed name...
+
+		const bool isOptionName = spanNum == 0;
+		if( isOptionName ) {
+			if( token.length() > kMaxOptionLen ) {
+				return std::nullopt;
+			}
+		} else {
+			if( token.length() >= MAX_QPATH ) {
+				return std::nullopt;
+			}
+		}
+
 		tmpSpans[spanNum] = addString( token );
-		if( spanNum != 1 ) {
+		if( isOptionName ) {
 			continue;
 		}
 
@@ -250,38 +274,48 @@ auto GametypeOptionsModel::addListItems( const wsw::StringView &string )
 }
 
 void GametypeOptionsModel::handleOptionsStatusCommand( const wsw::StringView &status ) {
-	wsw::StaticVector<unsigned, kMaxOptions> allowed;
-	wsw::StaticVector<int, kMaxOptions> current;
+	wsw::StaticVector<OptionRow, kMaxOptions> allowedOptions;
+
+	// Options status is transmitted as a list of current option values.
+	// Negative current values indicate disallowed options.
 
 	// TODO: What to do in case of errors?
 
 	wsw::StringSplitter splitter( status );
 	while( const auto maybeTokenAndIndex = splitter.getNextWithNum() ) {
 		const auto [token, index] = *maybeTokenAndIndex;
-		if( index >= m_optionEntries.size() ) {
+		assert( m_allOptionEntries.size() <= kMaxOptions );
+		if( index >= m_allOptionEntries.size() ) {
 			return;
 		}
 		const auto maybeValue = wsw::toNum<int>( token );
 		if( !maybeValue ) {
 			return;
 		}
-
-		const int value = *maybeValue;
-		current.push_back( value );
-		if( value >= 0 ) {
-			allowed.push_back( index );
+		if( const int value = *maybeValue; value >= 0 ) {
+			const OptionEntry &entry = m_allOptionEntries[index];
+			if( entry.kind == Boolean ) {
+				if( value != 0 && value != 1 ) {
+					return;
+				}
+			} else if( entry.kind == OneOfList ) {
+				[[maybe_unused]] const auto [_, listLen] = entry.selectableItemsSpan;
+				if( (unsigned)value >= (unsigned)listLen ) {
+					return;
+				}
+			}
+			allowedOptions.push_back( { (unsigned)index, value } );
 		}
 	}
-	if( current.size() != m_optionEntries.size() ) {
-		return;
-	}
 
-	if( m_allowedOptionIndices.size() == allowed.size() ) {
-		if( std::equal( allowed.begin(), allowed.end(), m_allowedOptionIndices.begin() ) ) {
-			// Allowed options are the same, only current values are possibly changed
-			for( unsigned i = 0; i < m_currentSelectedItemNums.size(); ++i ) {
-				if( current[i] != m_currentSelectedItemNums[i] ) {
-					m_currentSelectedItemNums[i] = current[i];
+	// TODO: We can avoid doing a full reset in some other cases as well
+	if( m_allowedOptions.size() == allowedOptions.size() ) {
+		const auto compareIndices = []( const auto &a, const auto &b ) { return a.entryIndex == b.entryIndex; };
+		// If indices are the same, only current values are changed
+		if( std::equal( allowedOptions.begin(), allowedOptions.end(), m_allowedOptions.begin(), compareIndices ) ) {
+			for( unsigned i = 0; i < m_allowedOptions.size(); ++i ) {
+				if( m_allowedOptions[i].currentValue != allowedOptions[i].currentValue ) {
+					m_allowedOptions[i].currentValue = allowedOptions[i].currentValue;
 					const QModelIndex modelIndex( index( (int)i ) );
 					Q_EMIT dataChanged( modelIndex, modelIndex, kCurrentRoleAsVector );
 				}
@@ -290,17 +324,10 @@ void GametypeOptionsModel::handleOptionsStatusCommand( const wsw::StringView &st
 		}
 	}
 
-	// TODO: We can avoid a full reset in some cases
 	beginResetModel();
 
-	m_allowedOptionIndices.clear();
-	for( unsigned index: allowed ) {
-		m_allowedOptionIndices.push_back( index );
-	}
-	m_currentSelectedItemNums.clear();
-	for( int value: current ) {
-		m_currentSelectedItemNums.push_back( value );
-	}
+	m_allowedOptions.clear();
+	m_allowedOptions.insert( m_allowedOptions.end(), allowedOptions.begin(), allowedOptions.end() );
 
 	endResetModel();
 }

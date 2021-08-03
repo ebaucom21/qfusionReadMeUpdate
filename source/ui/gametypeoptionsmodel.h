@@ -29,10 +29,10 @@ public:
 	Q_SIGNAL void availableChanged( bool available );
 	Q_SIGNAL void tabTitleChanged( const QString &title );
 
-	Q_INVOKABLE QByteArray getSelectorItemIcon( int optionIndex, int chosenIndex ) const;
-	Q_INVOKABLE QByteArray getSelectorItemTitle( int optionIndex, int chosenIndex ) const;
+	Q_INVOKABLE QByteArray getSelectorItemIcon( int optionRow, int indexInRow ) const;
+	Q_INVOKABLE QByteArray getSelectorItemTitle( int optionRow, int indexInRow ) const;
 
-	Q_INVOKABLE void select( int row, int chosen );
+	Q_INVOKABLE void select( int optionRow, int indexInRow );
 private:
 	enum class Role {
 		Title = Qt::UserRole + 1,
@@ -45,7 +45,7 @@ private:
 		unsigned titleSpanIndex;
 		unsigned commandSpanIndex;
 		Kind kind;
-		int model;
+		unsigned model;
 		std::pair<unsigned, unsigned> selectableItemsSpan;
 	};
 
@@ -55,7 +55,7 @@ private:
 	};
 
 	[[nodiscard]]
-	bool isAvailable() const { return !m_optionEntries.empty(); };
+	bool isAvailable() const { return !m_allOptionEntries.empty(); };
 	[[nodiscard]]
 	auto getTabTitle() const -> QString { return m_tabTitle; }
 
@@ -78,7 +78,7 @@ private:
 	auto getString( unsigned stringSpanIndex ) const -> QByteArray;
 
 	[[nodiscard]]
-	auto getSelectableEntry( int row, int chosen ) const -> const SelectableItemEntry &;
+	auto getSelectableEntry( int optionRow, int chosenIndex ) const -> const SelectableItemEntry &;
 
 	[[nodiscard]]
 	bool doReload();
@@ -90,12 +90,19 @@ private:
 	static inline const QVector<int> kCurrentRoleAsVector { (int)Role::Current };
 
 	static constexpr unsigned kMaxOptions = MAX_GAMETYPE_OPTIONS;
+	static constexpr unsigned kMaxCommandLen = 24;
+	static constexpr unsigned kMaxOptionLen = 12;
 
-	wsw::StaticVector<OptionEntry, kMaxOptions> m_optionEntries;
-	// A flattened list of selectable items of every option (that are not of Boolean kind)
+
+	/// A datum of all possible options supplied by the server once (some could be currently hidden).
+	wsw::StaticVector<OptionEntry, kMaxOptions> m_allOptionEntries;
+	/// A flattened list of selectable items of every option (that are not of Boolean kind)
 	wsw::Vector<SelectableItemEntry> m_selectableItemEntries;
-	wsw::StaticVector<int, kMaxOptions> m_allowedOptionIndices;
-	wsw::StaticVector<int, kMaxOptions> m_currentSelectedItemNums;
+
+	struct OptionRow { unsigned entryIndex; int currentValue; };
+	/// Maps 1<->1 with displayed rows.
+	wsw::Vector<OptionRow> m_allowedOptions;
+
 	wsw::StringSpanStorage<unsigned, unsigned> m_stringDataStorage;
 public:
 	void reload();

@@ -24,6 +24,8 @@
         <file>DemoPlaybackMenu.qml</file>
         <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>
+        <file>GametypeCardOption.qml</file>
+        <file>GametypeSlantedOption.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudAwardsArea.qml</file>
@@ -82,7 +84,6 @@
         <file>ScoreboardSpecsPane.qml</file>
         <file>ScoreboardTable.qml</file>
         <file>ScoreboardTeamPane.qml</file>
-        <file>SelectableGametypeOption.qml</file>
         <file>SelectableLabel.qml</file>
         <file>ServerBrowserCard.qml</file>
         <file>ServerBrowserDataLabel.qml</file>
