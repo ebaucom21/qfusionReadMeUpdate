@@ -19,7 +19,7 @@ Item {
     readonly property real leftListMargin: 100
     readonly property real rightListMargin: 100
 
-    readonly property real rowSpacing: 16
+    readonly property real rowSpacing: selectedIndex >= 0 ? 22 : 16
 
     property int selectedIndex: -1
     property var selectedGametype
@@ -28,6 +28,7 @@ Item {
     property var selectedServerName
     property var selectedMapName
     property var selectedTimestamp
+    property var selectedTags
 
     Component.onCompleted: demosResolver.reload()
 
@@ -157,6 +158,7 @@ Item {
             serverName: model.serverName
             gametype: model.gametype
             timestamp: model.timestamp
+            tags: model.tags
 
             demoColumnWidth: demoHeading.width
             serverColumnWidth: serverHeading.width
@@ -171,6 +173,7 @@ Item {
                 selectedServerName = serverName
                 selectedGametype = gametype
                 selectedTimestamp = timestamp
+                selectedTags = tags
                 selectedIndex = index
                 repositionListTimer.start()
             }
@@ -221,6 +224,16 @@ Item {
                     elide: Text.ElideMiddle
                     text: selectedServerName
                 }
+                Label {
+                    visible: selectedTags && selectedTags.length > 0
+                    width: parent.width
+                    horizontalAlignment: Qt.AlignHCenter
+                    font.pointSize: 12
+                    font.weight: Font.Normal
+                    font.letterSpacing: 1.0
+                    elide: Text.ElideMiddle
+                    text: "<b>Tags</b>: " + selectedTags
+                }
             }
 
             Rectangle {
@@ -238,7 +251,7 @@ Item {
             Label {
                 anchors.top: parent.bottom
                 anchors.left: parent.left
-                anchors.topMargin: 12
+                anchors.topMargin: 16
                 font.pointSize: 11
                 font.weight: Font.Medium
                 text: selectedMapName + " " + selectedGametype
@@ -248,13 +261,14 @@ Item {
                 id: timestampLabel
                 anchors.top: parent.bottom
                 anchors.right: parent.right
-                anchors.topMargin: 12
+                anchors.topMargin: 16
                 font.pointSize: 11
                 font.weight: Font.Medium
                 text: selectedTimestamp
             }
 
             Button {
+                id: playButton
                 anchors.top: timestampLabel.bottom
                 anchors.topMargin: 4
                 anchors.right: parent.right

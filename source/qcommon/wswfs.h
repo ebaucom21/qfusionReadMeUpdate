@@ -293,6 +293,21 @@ public:
 	auto findDirFiles( const wsw::StringView &dir, const wsw::StringView &ext ) -> std::optional<CallResult>;
 };
 
+using WalkDirVisitor = std::function<void( const wsw::StringView &dir, const wsw::StringView &entryName )>;
+
+enum WalkErrorPolicy : uint8_t {
+	InterruptOnError,
+	ContinueWalking
+};
+
+struct WalkDirOptions {
+	WalkErrorPolicy errorPolicy { ContinueWalking };
+	uint8_t maxDepth { 255 };
+};
+
+[[nodiscard]]
+bool walkDir( const wsw::StringView &dir, const WalkDirVisitor &visitor, const WalkDirOptions &options );
+
 [[nodiscard]]
 auto getExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView>;
 

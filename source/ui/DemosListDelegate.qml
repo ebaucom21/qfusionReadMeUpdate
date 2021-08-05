@@ -15,6 +15,8 @@ MouseArea {
     property string mapName
     property string gametype
     property string timestamp
+    // TODO: An eager retrieval of tags is bad, check whether using a lazy binding (?) to a model property is possible
+    property string tags
 
     property real demoColumnWidth
     property real serverColumnWidth
@@ -23,9 +25,10 @@ MouseArea {
     property real timestampColumnWidth
 
     property real rowSpacing
+    property real labelMargins: rowSpacing / 3
 
     readonly property color textColor: containsMouse || selected ? Material.accent : Material.foreground
-    readonly property real letterSpacing: containsMouse ? 0.50 : 0.25
+    readonly property real letterSpacing: 0.50
 
     transitions: Transition {
         AnchorAnimation { duration: 67 }
@@ -93,6 +96,10 @@ MouseArea {
                 font.capitalization: Font.AllUppercase
                 width: gametypeColumnWidth
             }
+            PropertyChanges {
+                target: tagsLabel
+                visible: false
+            }
         },
         State {
             name: "compact"
@@ -151,6 +158,10 @@ MouseArea {
                 font.capitalization: Font.MixedCase
                 width: gametypeLabel.implicitWidth
             }
+            PropertyChanges {
+                target: tagsLabel
+                visible: true
+            }
         }
     ]
 
@@ -158,7 +169,7 @@ MouseArea {
 
     Label {
         id: demoNameLabel
-        anchors.margins: rowSpacing / 2
+        anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignLeft
         font.capitalization: Font.AllUppercase
         font.weight: Font.Medium
@@ -171,7 +182,7 @@ MouseArea {
     Label {
         id: serverNameLabel
         width: serverColumnWidth
-        anchors.margins: rowSpacing / 2
+        anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignHCenter
         font.capitalization: Font.AllUppercase
         font.weight: Font.Medium
@@ -183,7 +194,7 @@ MouseArea {
     }
     Label {
         id: mapNameLabel
-        anchors.margins: rowSpacing / 2
+        anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignHCenter
         font.weight: Font.Medium
         font.pointSize: 11
@@ -193,7 +204,7 @@ MouseArea {
     }
     Label {
         id: gametypeLabel
-        anchors.margins: rowSpacing / 2
+        anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignHCenter
         font.weight: Font.Medium
         font.pointSize: 11
@@ -204,12 +215,26 @@ MouseArea {
     Label {
         id: timestampLabel
         width: timestampColumnWidth
-        anchors.margins: rowSpacing / 2
+        anchors.margins: labelMargins
         horizontalAlignment: Qt.AlignRight
         font.weight: Font.Medium
         font.pointSize: 11
         font.letterSpacing: letterSpacing
         text: timestamp
+        color: textColor
+    }
+    Label {
+        id: tagsLabel
+        font.weight: Font.Medium
+        font.pointSize: 11
+        font.letterSpacing: letterSpacing
+        anchors.left: parent.left
+        anchors.top: serverNameLabel.bottom
+        anchors.margins: labelMargins
+        width: parent.width
+        maximumLineCount: 1
+        elide: Text.ElideMiddle
+        text: tags
         color: textColor
     }
 }

@@ -21,7 +21,9 @@ class StringView;
 class CharLookup {
 	bool m_data[std::numeric_limits<unsigned char>::max()];
 public:
-	CharLookup( const wsw::StringView &chars );
+	CharLookup( const wsw::StringView &chars ) noexcept;
+	template <typename P>
+	CharLookup( const P &p ) noexcept;
 
 	[[nodiscard]]
 	bool operator()( char ch ) const {
@@ -474,10 +476,20 @@ public:
 	}
 };
 
-inline CharLookup::CharLookup( const wsw::StringView &chars ) {
+inline CharLookup::CharLookup( const wsw::StringView &chars ) noexcept {
 	std::memset( m_data, 0, sizeof( m_data ) );
 	for( char ch: chars ) {
 		m_data[(unsigned char)ch] = true;
+	}
+}
+
+template <typename P>
+inline CharLookup::CharLookup( const P &p ) noexcept {
+	std::memset( m_data, 0, sizeof( m_data ) );
+	for( size_t i = 0; i < std::size( m_data ); ++i ) {
+		if( p.operator()( (char)i ) ) {
+			m_data[i] = true;
+		}
 	}
 }
 

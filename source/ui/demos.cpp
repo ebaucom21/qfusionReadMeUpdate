@@ -21,7 +21,8 @@ auto DemosModel::roleNames() const -> QHash<int, QByteArray> {
 		{ DemoName, "demoName" },
 		{ FileName, "fileName" },
 		{ MapName, "mapName" },
-		{ Gametype, "gametype" }
+		{ Gametype, "gametype" },
+		{ Tags, "tags" }
 	};
 }
 
@@ -39,6 +40,18 @@ static inline auto formatTimestamp( const QDateTime &timestamp ) -> QString {
 	return timestamp.toString( Qt::DefaultLocaleShortDate );
 }
 
+auto DemosModel::formatTags( const DemosResolver::MetadataEntry *entry ) const -> QByteArray {
+	QByteArray result;
+	for( unsigned i = 0; i < entry->numTags; ++i ) {
+		const wsw::StringView &view = entry->parent->storage[entry->tagIndices[i]];
+		result.append( view.data(), (int)view.size() );
+		if( i + 1 != entry->numTags ) {
+			result.append( ',' );
+		}
+	}
+	return result;
+}
+
 auto DemosModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	assert( m_resolver->isReady() );
 	if( index.isValid() ) {
@@ -51,6 +64,7 @@ auto DemosModel::data( const QModelIndex &index, int role ) const -> QVariant {
 				case FileName: return toQVariant( m_resolver->getEntry( row )->getFileName() );
 				case MapName: return toQVariant( m_resolver->getEntry( row )->getMapName() );
 				case Gametype: return toQVariant( m_resolver->getEntry( row )->getGametype() );
+				case Tags: return formatTags( m_resolver->getEntry( row ) );
 				default:;
 			}
 		}
@@ -154,17 +168,17 @@ void DemosResolver::enumerateFiles() {
 	auto &newFileNames = m_fileNameSpans[nextTurn];
 	newFileNames.clear();
 
-	// TODO: Add subdirectories!!!!
-	// TODO: Do we just use fixed subdirectories set???
-	wsw::StaticString<MAX_QPATH> path;
-	if( auto maybeResult = holder.findDirFiles( kSearchPathRoot, kDemoExtension ) ) {
-		path.clear();
-		for( const wsw::StringView &fileName: *maybeResult ) {
-			path.clear();
-			path << kSearchPathRoot << '/' << fileName;
-			newFileNames.add( path.asView() );
-		}
-	}
+	const auto visitor = [&]( const wsw::StringView &dir, const wsw::StringView &name ) {
+		wsw::StaticString<MAX_QPATH> path;
+		path << dir << '/' << name;
+		newFileNames.add( path.asView() );
+	};
+
+	// TODO: Looking forward to be able to use designated initializers
+	wsw::fs::WalkDirOptions walkDirOptions {};
+	walkDirOptions.errorPolicy = wsw::fs::ContinueWalking;
+	walkDirOptions.maxDepth    = 1;
+	(void)wsw::fs::walkDir( kSearchPathRoot, visitor, walkDirOptions );
 
 	m_addedNew.clear();
 	m_goneOld.clear();
@@ -232,42 +246,96 @@ void DemosResolver::resolveMetadata( unsigned first, unsigned last ) {
 }
 
 void DemosResolver::resolveMetadata( unsigned index, wsw::Vector<MetadataEntry> *entries, StringDataStorage *storage ) {
-	const wsw::StringView fileName( m_fileNameSpans[m_turn][index].data() );
-	assert( fileName.isZeroTerminated() );
+	const wsw::StringView filePath( m_fileNameSpans[m_turn][index].data() );
+	assert( filePath.isZeroTerminated() );
+	assert( filePath.length() <= std::numeric_limits<unsigned>::max() );
 
-	std::pair<unsigned, unsigned> baseNameSpan( 0, fileName.length() );
-	if( const auto slashIndex = fileName.lastIndexOf( '/' ) ) {
-		const unsigned droppedLen = *slashIndex + 1;
-		baseNameSpan.first = droppedLen;
-		baseNameSpan.second -= droppedLen;
+	std::optional<StringSpan> prefixTagSpan;
+	StringSpan baseNameSpan( 0, filePath.length() );
+	if( const auto slashIndex = filePath.lastIndexOf( '/' ) ) {
+		const unsigned dirNameLen = *slashIndex;
+		baseNameSpan.first = ( dirNameLen + 1 );
+		baseNameSpan.second -= ( dirNameLen + 1 );
+
+		wsw::StringView dirName( filePath.take( *slashIndex ) );
+		const auto oldDirNameLen = dirName.length();
+		assert( oldDirNameLen <= std::numeric_limits<unsigned>::max() );
+		if( dirName.startsWith( kSearchPathRoot ) ) {
+			dirName = dirName.drop( kSearchPathRoot.length() );
+		}
+		if( dirName.startsWith( '/' ) ) {
+			dirName = dirName.drop( 1 );
+			// FS facilities must return a normalized path
+			assert( !dirName.startsWith( '/' ) );
+		}
+		assert( oldDirNameLen >= dirName.length() );
+		unsigned tagOffset = oldDirNameLen - dirName.length();
+		unsigned tagLength = dirName.length();
+		if( const auto prevSlashIndex = dirName.lastIndexOf( '/' ) ) {
+			tagOffset += *prevSlashIndex;
+			tagLength = *slashIndex - *prevSlashIndex;
+		}
+		assert( tagOffset + tagLength <= filePath.length() );
+		assert( tagOffset + tagLength <= std::numeric_limits<uint8_t>::max() );
+		// TODO: This condition should be checked earlier
+		if( tagLength ) {
+			prefixTagSpan = std::make_pair( (uint8_t)tagOffset, (uint8_t)tagLength );
+		}
 	}
-	if( fileName.endsWith( kDemoExtension ) ) {
+
+	if( filePath.endsWith( kDemoExtension ) ) {
 		baseNameSpan.second -= kDemoExtension.length();
 	}
-	assert( baseNameSpan.first + baseNameSpan.second <= fileName.length() );
+
+	assert( baseNameSpan.first + baseNameSpan.second <= filePath.length() );
 
 	int handle = 0;
-	int length = FS_FOpenFile( fileName.data(), &handle, FS_READ | SNAP_DEMO_GZ );
+	int length = FS_FOpenFile( filePath.data(), &handle, FS_READ | SNAP_DEMO_GZ );
 	if( length > 0 ) {
 		char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
-		size_t realSize = SNAP_ReadDemoMetaData( handle, metadata, sizeof( metadata ) );
+		const size_t realSize = SNAP_ReadDemoMetaData( handle, metadata, sizeof( metadata ) );
 		if( realSize <= sizeof( metadata ) ) {
-			parseMetadata( metadata, realSize, fileName, baseNameSpan, entries, storage );
+			parseMetadata( metadata, realSize, filePath, baseNameSpan, prefixTagSpan, entries, storage );
 		}
 	}
 
 	FS_FCloseFile( handle );
 }
 
-static wsw::StringView kMandatoryKeys[6] {
+static const wsw::StringView kMandatoryKeys[6] {
 	kDemoKeyServerName, kDemoKeyTimestamp, kDemoKeyDuration, kDemoKeyMapName, kDemoKeyMapChecksum, kDemoKeyGametype
 };
 
+static const wsw::CharLookup kAllowedTagChars {
+	// Locale-independent
+	[](char ch) { return ( ch >= 'a' && ch <= 'z' ) || ( ch >= 'A' && ch <= 'Z' ) || ( ch >= '0' && ch <= '9' ); }
+};
+
+
 void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 								   const wsw::StringView &fileName,
-								   const std::pair<unsigned, unsigned> &baseNameSpan,
+								   const StringSpan &baseNameSpan,
+								   const std::optional<StringSpan> &prefixTagSpan,
 								   wsw::Vector<MetadataEntry> *entries,
 								   StringDataStorage *stringData ) {
+	constexpr auto kMaxStringLen = std::numeric_limits<uint8_t>::max();
+	struct StorageAdapter {
+		StringDataStorage *const storage;
+		[[nodiscard]]
+		auto add( const wsw::StringView &s ) -> unsigned {
+			return storage->add( s );
+		}
+		[[nodiscard]]
+		auto addLowercase( const wsw::StringView &s ) -> unsigned {
+			auto [writePtr, index] = storage->addReservedSpace( s.length() );
+			assert( s.length() < kMaxStringLen );
+			for( char ch: s ) {
+				*writePtr++ = (char)std::tolower( ch );
+			}
+			return index;
+		}
+	};
+
 	wsw::StaticVector<std::pair<wsw::StringView, wsw::StringView>, kMaxOtherKeysAndValues> otherKeysAndValues;
 	std::optional<wsw::StringView> parsedMandatoryValues[6];
 	wsw::StaticVector<wsw::StringView, kMaxTags> tags;
@@ -279,6 +347,10 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 			return;
 		}
 		const auto [key, value] = *maybeKeyValue;
+		if( key.length() > kMaxStringLen || value.length() > kMaxStringLen ) {
+			return;
+		}
+
 		bool isAMandatoryKey = false;
 		for( const auto &mandatoryKey: kMandatoryKeys ) {
 			if( mandatoryKey.equalsIgnoreCase( key ) ) {
@@ -295,18 +367,21 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 		}
 	}
 
-	while( reader.hasNextTag() ) {
-		if( const auto maybeTag = reader.readNextTag() ) {
-			if( tags.size() != tags.capacity() ) {
-				tags.push_back( *maybeTag );
-			} else {
-				break;
-			}
+	if( prefixTagSpan ) {
+		assert( prefixTagSpan->second <= kMaxStringLen );
+		tags.push_back( fileName.drop( prefixTagSpan->first ).take( prefixTagSpan->second ) );
+	}
+
+	while( reader.hasNextTag() && tags.size() != tags.capacity() ) {
+		const auto maybeTag = reader.readNextTag();
+		if( maybeTag && maybeTag->length() <= kMaxStringLen && maybeTag->containsOnly( kAllowedTagChars ) ) {
+			tags.push_back( *maybeTag );
 		} else {
 			return;
 		}
 	}
 
+	StorageAdapter adapter { stringData };
 	const auto valuesEnd = parsedMandatoryValues + std::size( parsedMandatoryValues );
 	if( std::find( parsedMandatoryValues, valuesEnd, std::nullopt ) == valuesEnd ) {
 		if( const auto maybeTimestamp = wsw::toNum<uint64_t>( *parsedMandatoryValues[1] ) ) {
@@ -321,19 +396,19 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 				entry.timestamp      = QDateTime::fromSecsSinceEpoch( *maybeTimestamp );
 				entry.sectionDate    = entry.timestamp.date();
 				entry.duration       = *maybeDuration;
-				entry.serverNameIndex   = stringData->add( *parsedMandatoryValues[0] );
-				entry.mapNameIndex      = stringData->add( *parsedMandatoryValues[3] );
-				entry.mapChecksumIndex  = stringData->add( *parsedMandatoryValues[4] );
-				entry.gametypeIndex 	= stringData->add( *parsedMandatoryValues[5] );
+				entry.serverNameIndex   = adapter.add( *parsedMandatoryValues[0] );
+				entry.mapNameIndex      = adapter.add( *parsedMandatoryValues[3] );
+				entry.mapChecksumIndex  = adapter.addLowercase( *parsedMandatoryValues[4] );
+				entry.gametypeIndex 	= adapter.addLowercase( *parsedMandatoryValues[5] );
 				entry.numOtherKeysAndValues = 0;
 				for( const auto &[key, value]: otherKeysAndValues ) {
-					const auto keyIndex   = stringData->add( key );
-					const auto valueIndex = stringData->add( value );
+					const auto keyIndex   = adapter.addLowercase( key );
+					const auto valueIndex = adapter.addLowercase( value );
 					entry.otherKeysAndValues[entry.numOtherKeysAndValues++] = { keyIndex, valueIndex };
 				}
 				entry.numTags = 0;
 				for( const auto &tag: tags ) {
-					entry.tagIndices[entry.numTags++] = stringData->add( tag );
+					entry.tagIndices[entry.numTags++] = adapter.addLowercase( tag );
 				}
 				entries->emplace_back( std::move( entry ) );
 			}

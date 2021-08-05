@@ -31,8 +31,8 @@ class DemosResolver : public QObject {
 	wsw::Vector<unsigned> m_addedNew;
 	wsw::Vector<unsigned> m_goneOld;
 
-	using StringSpan = std::pair<unsigned, unsigned>;
-	using StringDataStorage = wsw::StringSpanStorage<unsigned, unsigned>;
+	using StringSpan = std::pair<uint8_t, uint8_t>;
+	using StringDataStorage = wsw::StringSpanStorage<uint8_t, uint8_t>;
 
 	static constexpr unsigned kMaxOtherKeysAndValues = 8;
 	static constexpr unsigned kMaxTags = 8;
@@ -116,7 +116,8 @@ class DemosResolver : public QObject {
 	void resolveMetadata( unsigned index, wsw::Vector<MetadataEntry> *entries, StringDataStorage *storage );
 	void parseMetadata( const char *data, size_t dataSize,
 					 	const wsw::StringView &fullFileName,
-					 	const std::pair<unsigned, unsigned> &baseNameSpan,
+					 	const StringSpan &baseNameSpan,
+					    const std::optional<StringSpan> &prefixTagSpan,
 					    wsw::Vector<MetadataEntry > *entries, StringDataStorage *storage );
 	void processTaskResults();
 	void updateDefaultDisplayedList();
@@ -156,12 +157,16 @@ class DemosModel : public QAbstractListModel {
 		DemoName,
 		FileName,
 		MapName,
-		Gametype
+		Gametype,
+		Tags
 	};
 
 	DemosResolver *const m_resolver;
 
 	Q_SLOT void onIsResolverReadyChanged( bool isReady );
+
+	[[nodiscard]]
+	auto formatTags( const DemosResolver::MetadataEntry *entry ) const -> QByteArray;
 public:
 	explicit DemosModel( DemosResolver *resolver );
 

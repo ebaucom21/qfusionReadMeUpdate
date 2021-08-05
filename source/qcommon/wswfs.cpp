@@ -273,6 +273,50 @@ auto SearchResultHolder::getFileForNum( int num ) -> wsw::StringView {
 	throw std::exception();
 }
 
+// TODO: All of this should be supported by underlying APIs
+bool walkDir( const wsw::StringView &dir, const WalkDirVisitor &visitor, const WalkDirOptions &options ) {
+	wsw::fs::SearchResultHolder holder;
+	if( auto maybeCallResult = holder.findDirFiles( dir, wsw::StringView() ) ) {
+		for( const wsw::StringView &name: *maybeCallResult ) {
+			visitor( dir, name );
+		}
+	} else {
+		if( options.errorPolicy == InterruptOnError ) {
+			return false;
+		}
+	}
+
+	if( options.maxDepth ) {
+		// TODO: Should not require another call
+		if( auto maybeCallResult = holder.findDirFiles( dir, "/"_asView ) ) {
+			for( const wsw::StringView &name: *maybeCallResult ) {
+				// TODO: Could it happen?
+				// TODO: Should it be a distinct policy case?
+				if( name.length() + dir.length() + 1 >= MAX_QPATH ) {
+					if( options.errorPolicy == InterruptOnError ) {
+						return false;
+					}
+				} else {
+					const WalkDirOptions subdirOptions { options.errorPolicy, (uint8_t)( options.maxDepth - 1 ) };
+					wsw::StaticString<MAX_QPATH> subdirPath;
+					subdirPath << dir << '/' << name.dropRight( 1 );
+					if( !walkDir( subdirPath.asView(), visitor, subdirOptions ) ) {
+						if( options.errorPolicy == InterruptOnError ) {
+							return false;
+						}
+					}
+				}
+			}
+		} else {
+			if( options.errorPolicy == InterruptOnError ) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 [[nodiscard]]
 auto getExtension( const wsw::StringView &fileName ) -> std::optional<wsw::StringView> {
 	if( const auto maybeSplitPair = splitAtExtension( fileName ) ) {

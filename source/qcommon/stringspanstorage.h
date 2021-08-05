@@ -49,6 +49,21 @@ public:
 		return resultSpanNum;
 	}
 
+	// Caution: the returned pointer is unstable and could be invalidated upon the next call.
+	// TODO: Redesigning the regular API so it can accept arbitrary iterators including ones that can
+	// return modified values of an underlying sequence could be a better long-term solution.
+	[[maybe_unused]]
+	auto addReservedSpace( unsigned len ) -> std::pair<char *, unsigned> {
+		assert( len <= std::numeric_limits<Len>::max() );
+		const auto off = m_charsBuffer.size();
+		assert( off <= std::numeric_limits<Off>::max() );
+		m_charsBuffer.resize( m_charsBuffer.length() + len + 1 );
+		assert( m_spansBuffer.size() < std::numeric_limits<unsigned>::max() );
+		auto resultSpanNum = (unsigned)m_spansBuffer.size();
+		m_spansBuffer.push_back( { (Off)off, (Len)len } );
+		return { m_charsBuffer.data() + off, resultSpanNum };
+	}
+
 	template <typename ResultSpan = InternalSpan>
 	[[nodiscard]]
 	auto addReturningPair( const wsw::StringView &s ) -> std::pair<unsigned, ResultSpan> {
