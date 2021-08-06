@@ -561,6 +561,14 @@ int CG_TeamBetaColor() {
 	return COM_ReadColorRGBString( cg_teamBETAcolor->string );
 }
 
+int CG_TeamAlphaProgress() {
+	return cg.predictedPlayerState.stats[STAT_PROGRESS_ALPHA];
+}
+
+int CG_TeamBetaProgress() {
+	return cg.predictedPlayerState.stats[STAT_PROGRESS_BETA];
+}
+
 std::pair<int, int> CG_WeaponAmmo( int weapon ) {
 	const auto *weaponDef = GS_GetWeaponDef( weapon );
 	const int *inventory = cg.predictedPlayerState.inventory;

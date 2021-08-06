@@ -9,12 +9,16 @@ Item {
     property int score
     property string name
     property color color
+    property real progress
+    property color progressColor
     property bool leftAligned
     property string teamStatus
     property string playersStatus
 
+    property real progressAnimFrac: 0.0
+
     implicitWidth: 360
-    implicitHeight: 72
+    implicitHeight: 80
     width: implicitWidth
     height: implicitHeight
 
@@ -88,7 +92,28 @@ Item {
         anchors.margins: 4
         radius: 1
         height: 28
-        color: Qt.rgba(root.color.r, root.color.g, root.color.b, wsw.isShowingScoreboard ? 0.5 : 0.6)
+        color: Qt.rgba(root.color.r, root.color.g, root.color.b, 1.0)
+        opacity: wsw.isShowingScoreboard ? 0.5 : 0.6
+    }
+
+    Rectangle {
+        visible: progress
+        anchors.top: colorBar.bottom
+        anchors.topMargin: 2
+        anchors.left: colorBar.left
+        anchors.right: colorBar.right
+        height: 6 + 2 * progressAnimFrac
+        color: Qt.rgba(progressColor.r, progressColor.g, progressColor.b, 0.25)
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width * Math.abs(0.01 * progress)
+            Behavior on width { SmoothedAnimation { duration: 67 } }
+            height: parent.height - 2
+            color: progressColor
+            opacity: progressAnimFrac
+        }
     }
 
     Label {
@@ -142,5 +167,24 @@ Item {
         font.weight: Font.ExtraBold
         font.pointSize: 20
         style: Text.Raised
+    }
+
+    SequentialAnimation {
+        running: progress
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: root
+            property: "progressAnimFrac"
+            from: 0.0; to: 1.0
+            easing.type: Easing.OutQuad
+            duration: 100
+        }
+        NumberAnimation {
+            target: root
+            property: "progressAnimFrac"
+            from: 1.0; to: 0.0
+            easing.type: Easing.InQuad
+            duration: 100
+        }
     }
 }

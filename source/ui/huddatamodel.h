@@ -235,9 +235,14 @@ class HudDataModel : public QObject {
 	wsw::StaticString<32> m_alphaTeamStatus, m_betaTeamStatus;
 	QByteArray m_styledAlphaTeamStatus, m_styledBetaTeamStatus;
 
-	int m_alphaColor { 0 }, m_betaColor { 0 };
+	int m_rawAlphaColor { 0 }, m_rawBetaColor { 0 };
+	QColor m_alphaColor { toQColor( m_rawAlphaColor ) };
+	QColor m_betaColor { toQColor( m_rawBetaColor ) };
+	QColor m_alphaProgressColor { toProgressColor( m_alphaColor ) };
+	QColor m_betaProgressColor { toProgressColor( m_betaColor ) };
 	int m_alphaScore { 0 }, m_pendingAlphaScore { 0 };
 	int m_betaScore { 0 }, m_pendingBetaScore { 0 };
+	int m_alphaProgress { 0 }, m_betaProgress { 0 };
 	bool m_hasTwoTeams { false };
 	bool m_isSpectator { true };
 
@@ -269,9 +274,9 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	auto getBetaName() const -> const QByteArray & { return m_styledBetaName; }
 	[[nodiscard]]
-	auto getAlphaColor() const -> QColor { return toQColor( m_alphaColor ); }
+	auto getAlphaColor() const -> QColor { return m_alphaColor; }
 	[[nodiscard]]
-	auto getBetaColor() const -> QColor { return toQColor( m_betaColor ); }
+	auto getBetaColor() const -> QColor { return m_betaColor; }
 	[[nodiscard]]
 	auto getAlphaScore() const -> int { return m_alphaScore; }
 	[[nodiscard]]
@@ -285,6 +290,14 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	auto getBetaTeamStatus() const -> const QByteArray & { return m_styledBetaTeamStatus; }
 	[[nodiscard]]
+	auto getAlphaProgressColor() const -> QColor { return m_alphaProgressColor; }
+	[[nodiscard]]
+	auto getBetaProgressColor() const -> QColor { return m_betaProgressColor; }
+	[[nodiscard]]
+	auto getAlphaProgress() const { return m_alphaProgress; }
+	[[nodiscard]]
+	auto getBetaProgress() const { return m_betaProgress; }
+	[[nodiscard]]
 	bool getHasTwoTeams() const { return m_hasTwoTeams; }
 	[[nodiscard]]
 	bool getIsSpectator() const { return m_isSpectator; }
@@ -292,6 +305,10 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
 		return QColor::fromRgb( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ) );
+	}
+	[[nodiscard]]
+	static auto toProgressColor( const QColor &color ) -> QColor {
+		return color.valueF() > 0.5 ? color : QColor::fromHsvF( color.hue(), color.saturation(), 0.5 );
 	}
 
 	[[nodiscard]]
@@ -358,6 +375,14 @@ public:
 	Q_PROPERTY( const QByteArray alphaTeamStatus READ getAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
 	Q_SIGNAL void betaTeamStatusChanged( const QByteArray &betaTeamStatus );
 	Q_PROPERTY( const QByteArray betaTeamStatus READ getBetaTeamStatus NOTIFY betaTeamStatusChanged );
+	Q_SIGNAL void alphaProgressChanged( int alphaProgress );
+	Q_PROPERTY( int alphaProgress READ getAlphaProgress NOTIFY alphaProgressChanged );
+	Q_SIGNAL void betaProgressChanged( int betaProgress );
+	Q_PROPERTY( int betaProgress READ getBetaProgress NOTIFY betaProgressChanged );
+	Q_SIGNAL void alphaProgressColorChanged( const QColor &alphaProgressColor );
+	Q_PROPERTY( const QColor alphaProgressColor READ getAlphaProgressColor NOTIFY alphaProgressColorChanged );
+	Q_SIGNAL void betaProgressColorChanged( const QColor &betaProgressColor );
+	Q_PROPERTY( const QColor betaProgressColor READ getBetaProgressColor NOTIFY betaProgressColorChanged );
 
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams READ getHasTwoTeams NOTIFY hasTwoTeamsChanged );

@@ -17,6 +17,8 @@ int CG_Health();
 int CG_Armor();
 int CG_TeamAlphaColor();
 int CG_TeamBetaColor();
+int CG_TeamAlphaProgress();
+int CG_TeamBetaProgress();
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
@@ -822,14 +824,26 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT betaTeamStatusChanged( m_styledBetaTeamStatus );
 	}
 
-	const auto oldAlphaColor = m_alphaColor;
-	if( oldAlphaColor != ( m_alphaColor = CG_TeamAlphaColor() ) ) {
-		Q_EMIT alphaColorChanged( getAlphaColor() );
+	if( const auto oldProgress = m_alphaProgress; oldProgress != ( m_alphaProgress = CG_TeamAlphaProgress() ) ) {
+		Q_EMIT alphaProgressChanged( m_alphaProgress );
 	}
 
-	const auto oldBetaColor = m_betaColor;
-	if( oldBetaColor != ( m_betaColor = CG_TeamBetaColor() ) ) {
-		Q_EMIT betaColorChanged( getBetaColor() );
+	if( const auto oldProgress = m_betaProgress; oldProgress != ( m_betaProgress = CG_TeamBetaProgress() ) ) {
+		Q_EMIT betaProgressChanged( m_betaProgress );
+	}
+
+	if( const auto oldColor = m_rawAlphaColor; oldColor != ( m_rawAlphaColor = CG_TeamAlphaColor() ) ) {
+		m_alphaColor = toQColor( m_rawAlphaColor );
+		m_alphaProgressColor = toProgressColor( m_alphaColor );
+		Q_EMIT alphaColorChanged( m_alphaColor );
+		Q_EMIT alphaProgressColorChanged( m_alphaProgressColor );
+	}
+
+	if( const auto oldColor = m_rawBetaColor; oldColor != ( m_rawBetaColor = CG_TeamBetaColor() ) ) {
+		m_betaColor = toQColor( m_rawBetaColor );
+		m_betaProgressColor = toProgressColor( m_betaColor );
+		Q_EMIT betaColorChanged( m_betaColor );
+		Q_EMIT betaProgressColorChanged( m_betaProgressColor );
 	}
 
 	const auto [minutes, seconds] = CG_GetMatchClockTime();
