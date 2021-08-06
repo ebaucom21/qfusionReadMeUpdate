@@ -620,7 +620,7 @@ public:
 	void precacheCommands();
 
 	void handleClientCommand( edict_t *ent, uint64_t clientCommandNum );
-	void addScriptCommand( const wsw::HashedStringView &name );
+	void addScriptCommand( const wsw::StringView &name );
 
 	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) );
 	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t ) );

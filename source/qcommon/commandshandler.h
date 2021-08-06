@@ -12,11 +12,13 @@
 
 namespace wsw {
 
+// Parametrize by the actual derived class so links are of the proper type
+template <typename Derived>
 struct GenericCommandCallback {
 	enum { HashLinks, ListLinks };
 
-	GenericCommandCallback *prev[2] { nullptr, nullptr };
-	GenericCommandCallback *next[2] { nullptr, nullptr };
+	Derived *prev[2] { nullptr, nullptr };
+	Derived *next[2] { nullptr, nullptr };
 
 protected:
 	wsw::String m_nameBuffer;
@@ -26,11 +28,11 @@ protected:
 
 	GenericCommandCallback( const wsw::StringView &tag, wsw::String &&name_ )
 		: m_nameBuffer( std::move( name_ ) ), m_tag( tag )
-		, m_name( m_nameBuffer.data(), m_nameBuffer.length(), wsw::StringView::ZeroTerminated ) {}
+		, m_name( wsw::StringView( m_nameBuffer.data(), m_nameBuffer.length(), wsw::StringView::ZeroTerminated ) ) {}
 
 	GenericCommandCallback( const wsw::StringView &tag, const wsw::HashedStringView &name )
 		: m_nameBuffer( name.data(), name.size() ), m_tag( tag )
-		, m_name( m_nameBuffer.data(), m_nameBuffer.length(), name.getHash(), wsw::StringView::ZeroTerminated ) {}
+		, m_name( name ) {}
 
 public:
 	[[nodiscard]]
@@ -39,14 +41,14 @@ public:
 	auto getTag() const -> const wsw::StringView & { return m_tag; }
 
 	[[nodiscard]]
-	auto nextInBin() -> GenericCommandCallback * { return next[HashLinks]; }
+	auto nextInBin() -> Derived * { return next[HashLinks]; }
 	[[nodiscard]]
-	auto nextInList() -> GenericCommandCallback * { return next[ListLinks]; }
+	auto nextInList() -> Derived * { return next[ListLinks]; }
 
 	[[nodiscard]]
-	auto nextInBin() const -> const GenericCommandCallback * { return next[HashLinks]; }
+	auto nextInBin() const -> const Derived * { return next[HashLinks]; }
 	[[nodiscard]]
-	auto nextInList() const -> const GenericCommandCallback * { return next[ListLinks]; }
+	auto nextInList() const -> const Derived * { return next[ListLinks]; }
 
 	[[nodiscard]]
 	auto getBinIndex() const -> unsigned { return m_binIndex; }
@@ -73,8 +75,8 @@ protected:
 
 	void unlink( Callback *entry ) {
 		assert( entry->getBinIndex() < kNumBins );
-		wsw::link( entry, &m_hashBins[entry->getBinIndex()], Callback::HashLinks );
-		wsw::link( entry, &m_listHead, Callback::ListLinks );
+		wsw::unlink( entry, &m_hashBins[entry->getBinIndex()], Callback::HashLinks );
+		wsw::unlink( entry, &m_listHead, Callback::ListLinks );
 		assert( m_size > 0 );
 		m_size--;
 	}
@@ -153,12 +155,12 @@ public:
 };
 
 template <typename Result, typename... Args>
-class VarArgCommandCallback : public GenericCommandCallback {
+class VarArgCommandCallback : public GenericCommandCallback<VarArgCommandCallback<Result, Args...>> {
 protected:
 	VarArgCommandCallback( const wsw::StringView &tag, const wsw::HashedStringView &cmd )
-		: GenericCommandCallback( tag, cmd ) {}
+		: GenericCommandCallback<VarArgCommandCallback<Result, Args...>>( tag, cmd ) {}
 	VarArgCommandCallback( const wsw::StringView &tag, wsw::String &&cmd )
-		: GenericCommandCallback( tag, std::move( cmd ) ) {}
+		: GenericCommandCallback<VarArgCommandCallback<Result, Args...>>( tag, std::move( cmd ) ) {}
 public:
 	[[nodiscard]]
 	virtual auto operator()( Args... args ) -> Result = 0;

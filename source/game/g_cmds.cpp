@@ -1284,7 +1284,7 @@ ClientCommandsHandler *ClientCommandsHandler::instance() {
 
 void ClientCommandsHandler::precacheCommands() {
 	int i = 0;
-	for( wsw::GenericCommandCallback *callback = m_listHead; callback; callback = callback->nextInList() ) {
+	for( Callback *callback = m_listHead; callback; callback = callback->nextInList() ) {
 		const auto name( callback->getName() );
 		assert( name.isZeroTerminated() );
 		trap_ConfigString( CS_GAMECOMMANDS + i, name.data() );
@@ -1317,7 +1317,7 @@ void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name,
 	}
 }
 
-void ClientCommandsHandler::addScriptCommand( const wsw::HashedStringView &name ) {
+void ClientCommandsHandler::addScriptCommand( const wsw::StringView &name ) {
 	if( checkNotWriteProtected( name ) ) {
 		void *const mem = m_allocator.allocOrNull();
 		auto *const callback = new( mem )ScriptCommandCallback( wsw::String( name.data(), name.size() ) );
