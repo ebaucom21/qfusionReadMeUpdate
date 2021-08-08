@@ -226,7 +226,7 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 				continue;
 			}
 			const int reachAreaNum = aasReach[reachNum].areanum;
-			const auto &reachArea = aasWorld->Areas()[reachNum];
+			const auto &reachArea = aasWorld->Areas()[reachAreaNum];
 			if( reachArea.mins[2] < minAreaHeight ) {
 				rampStartArea = reachAreaNum;
 				minAreaHeight = reachArea.mins[2];
