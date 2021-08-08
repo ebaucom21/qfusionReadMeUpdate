@@ -1,7 +1,6 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
-import QtMultimedia 5.12
 import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
@@ -115,10 +114,10 @@ Item {
                     font.letterSpacing: 2
                     text: selectedGametypeTitle || ""
                 }
-                Rectangle {
+                SimpleVideoDecoration {
                     Layout.preferredWidth: gametypePage.expectedDetailsWidth
                     Layout.preferredHeight: gametypePage.expectedDetailsWidth * (9 / 16.0)
-                    opacity: 0.1
+                    filePath: "videos/gametypes/" + selectedGametypeName + ".mjpeg"
                 }
                 Label {
                     Layout.preferredWidth: gametypePage.expectedDetailsWidth - 16
@@ -189,14 +188,11 @@ Item {
                     font.letterSpacing: 1
                     text: selectedMapName || ""
                 }
-                Rectangle {
-                    Layout.topMargin: 8
-                    Layout.bottomMargin: 8
-                    width: gametypePage.expectedDetailsWidth
+                SimpleVideoDecoration {
+                    Layout.preferredWidth: gametypePage.expectedDetailsWidth
                     Layout.preferredHeight: gametypePage.expectedDetailsWidth * (9 / 16.0)
-                    opacity: 0.1
+                    filePath: "videos/maps/" + selectedMapName + ".mjpeg"
                 }
-
                 Label {
                     Layout.fillWidth: true
                     visible: !!(selectedMapMinPlayers || selectedMapMaxPlayers)

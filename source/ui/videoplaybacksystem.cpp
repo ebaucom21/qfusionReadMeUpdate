@@ -14,36 +14,67 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 		m_filePath = filePath;
 
 		if( m_decoder ) {
-			Q_EMIT terminateRequested();
+			Q_EMIT deleteDecoder();
 			disconnect( m_decoder );
 			m_decoder = nullptr;
 		}
 
+		const Status oldStatus = m_status;
 		if( auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( filePath.data(), filePath.size() ) ) ) {
-			m_decoder = new VideoDecoder( this, std::move( *maybeHandle ) );
-			assert( m_decoderThread );
-			m_decoder->moveToThread( m_decoderThread );
+			m_decoder = m_playbackSystem->newDecoder( this, std::move( *maybeHandle ) );
 
 			connect( this, &VideoSource::updateRequested,
 					 m_decoder, &VideoDecoder::onUpdateRequested, Qt::QueuedConnection );
-			connect( this, &VideoSource::terminateRequested,
-					 m_decoder, &VideoDecoder::onTerminateRequested, Qt::QueuedConnection );
+			connect( this, &VideoSource::deleteDecoder,
+					 m_decoder, &VideoDecoder::deleteLater, Qt::QueuedConnection );
 			connect( m_decoder, &VideoDecoder::frameAvailable,
 					 this, &VideoSource::onFrameAvailable, Qt::QueuedConnection );
+
+			m_status = Running;
+		} else {
+			m_status = Error;
 		}
 
 		Q_EMIT filePathChanged( filePath );
+
+		if( oldStatus != m_status ) {
+			Q_EMIT statusChanged( m_status );
+		}
 	}
 }
 
 void VideoSource::setVideoSurface( QAbstractVideoSurface *videoSurface ) {
 	if( m_videoSurface != videoSurface ) {
 		m_videoSurface = videoSurface;
+		const Status oldStatus = m_status;
 		if( videoSurface ) {
-			// Assume this format to be always available
-			(void)videoSurface->start( QVideoSurfaceFormat( QSize(), QVideoFrame::Format_ARGB32 ) );
+			bool supportsDesiredFormat = false;
+			const auto desiredFormat = QVideoFrame::Format_ARGB32;
+			for( const QVideoFrame::PixelFormat &pixelFormat: videoSurface->supportedPixelFormats() ) {
+				if( pixelFormat == desiredFormat ) {
+					supportsDesiredFormat = true;
+					break;
+				}
+			}
+			if( !supportsDesiredFormat ) {
+				m_status = Error;
+			} else {
+				if( !videoSurface->start( QVideoSurfaceFormat( QSize(), desiredFormat ) ) ) {
+					m_status = Error;
+				}
+			}
+		} else {
+			if( m_decoder ) {
+				Q_EMIT deleteDecoder();
+				disconnect( m_decoder );
+				m_decoder = nullptr;
+			}
+			m_status = Idle;
 		}
 		Q_EMIT videoSurfaceChanged( videoSurface );
+		if( oldStatus != m_status ) {
+			Q_EMIT statusChanged( m_status );
+		}
 	}
 }
 
@@ -52,12 +83,26 @@ VideoSource::VideoSource() {
 }
 
 VideoSource::~VideoSource() {
+	if( m_decoder ) {
+		Q_EMIT deleteDecoder();
+		m_decoder = nullptr;
+	}
 	VideoPlaybackSystem::instance()->unregisterSource( this );
 }
 
 void VideoSource::onFrameAvailable( const QVideoFrame &frame ) {
 	if( m_videoSurface ) {
-		(void)m_videoSurface->present( frame );
+		const Status oldStatus = m_status;
+		if( frame.isValid() ) {
+			if( !m_videoSurface->present( frame ) ) {
+				m_status = Error;
+			}
+		} else {
+			m_status = Error;
+		}
+		if( oldStatus != m_status ) {
+			Q_EMIT statusChanged( m_status );
+		}
 	}
 }
 
@@ -115,10 +160,6 @@ auto VideoDecoder::decodeNextFrame() -> QImage {
 	}
 }
 
-void VideoDecoder::onTerminateRequested() {
-	this->deleteLater();
-}
-
 static SingletonHolder<VideoPlaybackSystem> g_instanceHolder;
 
 void VideoPlaybackSystem::init() {
@@ -135,15 +176,29 @@ auto VideoPlaybackSystem::instance() -> VideoPlaybackSystem * {
 
 void VideoPlaybackSystem::registerSource( VideoSource *source ) {
 	wsw::link( source, &m_sourcesHead );
-	if( !m_decoderThread ) {
-		m_decoderThread = new QThread;
-		m_decoderThread->start( QThread::NormalPriority );
-	}
-	source->m_decoderThread = m_decoderThread;
+	source->m_playbackSystem = this;
 }
 
 void VideoPlaybackSystem::unregisterSource( VideoSource *source ) {
 	wsw::unlink( source, &m_sourcesHead );
+}
+
+auto VideoPlaybackSystem::newDecoder( VideoSource *source, wsw::fs::ReadHandle &&handle ) -> VideoDecoder * {
+	auto *decoder = new VideoDecoder( source, std::move( handle ) );
+	if( !m_decoderThread ) {
+		m_decoderThread = new QThread;
+		m_decoderThread->start( QThread::NormalPriority );
+	}
+	decoder->moveToThread( m_decoderThread );
+	connect( decoder, &QObject::destroyed, this, &VideoPlaybackSystem::decoderDestroyed, Qt::QueuedConnection );
+	assert( m_numActiveDecoders >= 0 );
+	m_numActiveDecoders++;
+	return decoder;
+}
+
+void VideoPlaybackSystem::decoderDestroyed( QObject * ) {
+	assert( m_numActiveDecoders > 0 );
+	m_numActiveDecoders--;
 }
 
 void VideoPlaybackSystem::update( int64_t timestamp ) {
@@ -155,6 +210,8 @@ void VideoPlaybackSystem::update( int64_t timestamp ) {
 	} else {
 		if( m_decoderThread ) {
 			if( m_lastActivityTimestamp + 10'000 < timestamp ) {
+				// TODO: Just check? This relies upon timings, unlikely to fail though
+				assert( !m_numActiveDecoders );
 				m_decoderThread->quit();
 				m_decoderThread = nullptr;
 			}

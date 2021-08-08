@@ -16,11 +16,11 @@ class VideoDecoder : public QObject {
 	Q_OBJECT
 
 	friend class VideoSource;
+	friend class VideoPlaybackSystem;
 
 	Q_SIGNAL void frameAvailable( QVideoFrame frame );
 
 	Q_SLOT void onUpdateRequested( int64_t timestamp );
-	Q_SLOT void onTerminateRequested();
 
 	[[nodiscard]]
 	auto decodeNextFrame() -> QImage;
@@ -35,19 +35,28 @@ class VideoDecoder : public QObject {
 		: m_source( source ), m_handle( std::forward<wsw::fs::ReadHandle>( handle ) ) {}
 };
 
+class VideoPlaybackSystem;
+
 class VideoSource : public QObject {
 	Q_OBJECT
 
 	friend class VideoPlaybackSystem;
+public:
+	enum Status { Idle, Running, Error };
+	Q_ENUM( Status );
 
+private:
 	Q_SIGNAL void filePathChanged( const QByteArray &filePath );
 	Q_PROPERTY( QByteArray filePath MEMBER m_filePath WRITE setFilePath NOTIFY filePathChanged );
 
 	Q_SIGNAL void videoSurfaceChanged( QAbstractVideoSurface *surface );
 	Q_PROPERTY( QAbstractVideoSurface *videoSurface MEMBER m_videoSurface WRITE setVideoSurface NOTIFY videoSurfaceChanged );
 
+	Q_SIGNAL void statusChanged( Status status );
+	Q_PROPERTY( Status status MEMBER m_status NOTIFY statusChanged );
+
 	Q_SIGNAL void updateRequested( int64_t timestamp );
-	Q_SIGNAL void terminateRequested();
+	Q_SIGNAL void deleteDecoder();
 
 	Q_SLOT void onFrameAvailable( const QVideoFrame &frame );
 
@@ -57,7 +66,8 @@ class VideoSource : public QObject {
 	QByteArray m_filePath;
 	QAbstractVideoSurface *m_videoSurface { nullptr };
 	VideoDecoder *m_decoder { nullptr };
-	QThread *m_decoderThread { nullptr };
+	VideoPlaybackSystem *m_playbackSystem { nullptr };
+	Status m_status { Idle };
 public:
 	VideoSource();
 	~VideoSource() override;
@@ -66,12 +76,17 @@ public:
 	VideoSource *prev { nullptr }, *next { nullptr };
 };
 
-class VideoPlaybackSystem {
+class VideoPlaybackSystem : public QObject {
+	Q_OBJECT
+
+	Q_SLOT void decoderDestroyed( QObject * );
+
 	VideoSource *m_sourcesHead { nullptr };
 	QThread *m_decoderThread { nullptr };
 	int64_t m_lastActivityTimestamp { 0 };
+	int m_numActiveDecoders { 0 };
 public:
-	~VideoPlaybackSystem();
+	~VideoPlaybackSystem() override;
 
 	static void init();
 	static void shutdown();
@@ -79,6 +94,9 @@ public:
 
 	void registerSource( VideoSource *source );
 	void unregisterSource( VideoSource *source );
+
+	[[nodiscard]]
+	auto newDecoder( VideoSource *source, wsw::fs::ReadHandle &&handle ) -> VideoDecoder *;
 
 	void update( int64_t timestamp );
 };

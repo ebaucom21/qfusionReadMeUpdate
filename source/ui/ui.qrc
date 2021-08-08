@@ -95,6 +95,7 @@
         <file>SettingsLabel.qml</file>
         <file>SettingsPage.qml</file>
         <file>SettingsRow.qml</file>
+        <file>SimpleVideoDecoration.qml</file>
         <file>SoundSettings.qml</file>
         <file>TeamsSettings.qml</file>
         <file>TeamSettingsTeamColumn.qml</file>
