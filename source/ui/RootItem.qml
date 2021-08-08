@@ -39,12 +39,7 @@ Item {
     Loader {
         id: demoPlaybackMenuLoader
         active: wsw.isShowingDemoPlaybackMenu
-        height: 96
-        width: Math.min(parent.width, 720)
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 32
-        anchors.horizontalCenter: parent.horizontalCenter
-
+        anchors.fill: parent
         sourceComponent: DemoPlaybackMenu {}
     }
 
