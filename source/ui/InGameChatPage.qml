@@ -5,12 +5,6 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
-    Rectangle {
-        anchors.fill: parent
-        opacity: 0.15
-        color: "black"
-    }
-
     property bool isDisplayingTeamChat: false
 
     RowLayout {
@@ -48,9 +42,9 @@ Item {
         anchors.right: parent.right
         anchors.top: header.bottom
         anchors.bottom: inputFrame.top
-        // It look slightly less due to the content alginment
+        // It look slightly lesser due to the content alginment
         anchors.leftMargin: 12
-        anchors.rightMargin: 8
+        anchors.rightMargin: 12
         anchors.topMargin: 8
         anchors.bottomMargin: 12
         clip: true
@@ -61,8 +55,8 @@ Item {
     Rectangle {
         anchors.horizontalCenter: inputFrame.horizontalCenter
         anchors.verticalCenter: inputFrame.verticalCenter
-        color: Material.background
-        width: inputFrame.width + 8
+        color: Qt.lighter(Material.background, 1.25)
+        width: inputFrame.width + 12
         height: inputFrame.height + 4
         radius: 3
     }
@@ -79,11 +73,14 @@ Item {
 
         TextArea {
             id: input
+            width: parent.width
             selectByMouse: false
             selectByKeyboard: false
             wrapMode: TextEdit.Wrap
             font.letterSpacing: 1.2
             font.pointSize: 12
+            Material.theme: (activeFocus || text.length > 0) ? Material.Light : Material.Dark
+            placeholderText: activeFocus ? "" : "\u2026"
 
             onTextChanged: {
                 // TODO: Count bytes/respect native code limitations on the number of bytes

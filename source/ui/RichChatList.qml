@@ -69,8 +69,10 @@ ListView {
                 }
                 Rectangle {
                     anchors.fill: parent
-                    opacity: mouseArea.containsMouse ? 0.03 : 0.0
-                    Behavior on opacity { SmoothedAnimation { duration: 3333 } }
+                    z: -1
+                    opacity: mouseArea.containsMouse ? 0.1 : 0.0
+                    color: "black"
+                    Behavior on opacity { SmoothedAnimation { duration: 100 } }
                 }
             }
         }
