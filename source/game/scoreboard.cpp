@@ -298,7 +298,12 @@ void Scoreboard::endUpdating() {
 
 	bool isPlayerConnected[kMaxPlayers], isPlayerGhosting[kMaxPlayers];
 	std::fill( std::begin( isPlayerConnected ), std::end( isPlayerConnected ), false );
-	std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
+	// Don't display players as dead/"ghosting" post-match
+	if( GS_MatchState() <= MATCH_STATE_POSTMATCH ) {
+		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
+	} else {
+		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), false );
+	}
 
 	if( const auto *queue = G_Teams_ChallengersQueue() ) {
 		for( unsigned i = 0; ; ++i ) {
