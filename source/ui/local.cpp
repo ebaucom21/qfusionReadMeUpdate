@@ -186,7 +186,7 @@ static auto estimateCrispness( const QImage &image ) -> float {
 	const unsigned dataSize = image.sizeInBytes();
 
 	unsigned numAlphaTransitionPixels = 0;
-	for( unsigned i = 0; i < dataSize; ++i ) {
+	for( unsigned i = 0; i + 3 < dataSize; ++i ) {
 		const auto alpha = data[i + 3];
 		numAlphaTransitionPixels += ( alpha != 0 ) & ( alpha != 255 );
 	}
