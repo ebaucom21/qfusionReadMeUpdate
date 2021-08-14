@@ -299,14 +299,14 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	// Higher values can feel "right" for a "cinematic" scene, but are really annoying for an actual in-game experience.
 
 	// This is a base value for huge spaces
-	const float distantGain = 0.050f - 0.015f * skyFactor;
+	const float distantGain = 0.1f;
 	// Let's try doing "energy preservation": an increased decay should lead to decreased gain.
 	// These formulae do not have any theoretical foundations but feels good.
 	// The `decayFrac` is close to 0 for tiny rooms/short decay and is close to 1 for huge rooms/long decay
 	const float decayFrac = ( effect->decayTime - minDecay ) / ( maxDecay - minDecay );
 	// This gain factor should be close to 1 for tiny rooms and quickly fall down to almost 0
 	const float gainFactorForRoomSize = std::pow( 1.0f - decayFrac, 5.0f );
-	effect->lateReverbGain = distantGain + 0.50f * gainFactorForRoomSize;
+	effect->lateReverbGain = distantGain + 0.6f * gainFactorForRoomSize;
 
 	const int listenerLeafNum = listenerProps->GetLeafNum();
 	const auto *const table = PropagationTable::Instance();
@@ -342,8 +342,8 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 		// [1000, 2500]
 		effect->hfReference = 1000.0f + ( 2.0f * smoothness ) * 1500.0f;
 	} else {
-		// [2500, 10000]
-		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 7500.0f;
+		// [2500, 7500]
+		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 5000.0f;
 	}
 
 	effect->gainHf = ( 0.4f + 0.4f * metallnessFactor );

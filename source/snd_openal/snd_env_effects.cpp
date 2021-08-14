@@ -279,6 +279,8 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 					// for very close leaves. Adding an extra distance won't harm
 					// (even if the indirect path length is already larger than the straight euclidean distance).
 					distance += 256.0f;
+					// Feels better with this multiplier
+					distance *= 1.15f;
 					// Negate the vector scale multiplier as the dir is an sound influx dir to the listener
 					// and we want to shift the origin along the line of the dir but from the listener
 					VectorScale( dir, -distance, tmpSourceOrigin );
