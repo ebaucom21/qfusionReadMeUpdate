@@ -1261,10 +1261,13 @@ static const msg_field_t raw_scoreboard_msg_fields[] = {
 		offsetof( ReplicatedScoreboardData, scores ),
 		32, MAX_CLIENTS, WIRE_BASE128
 	},
-	{
-		offsetof( ReplicatedScoreboardData, values ),
-		16, MAX_CLIENTS * ReplicatedScoreboardData::kMaxShortSlots, WIRE_BASE128
-	},
+	{ offsetof( ReplicatedScoreboardData, values[0] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[1] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[2] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[3] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[4] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[5] ), 16, MAX_CLIENTS, WIRE_BASE128 },
+	{ offsetof( ReplicatedScoreboardData, values[6] ), 16, MAX_CLIENTS, WIRE_BASE128 },
 	{
 		offsetof( ReplicatedScoreboardData, packedPlayerSpecificData ),
 		32, MAX_CLIENTS, WIRE_BASE128

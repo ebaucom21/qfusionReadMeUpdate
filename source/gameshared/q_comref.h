@@ -542,7 +542,7 @@ public:
 	int alphaScore;
 	int betaScore;
 	int scores[kMaxPlayers];
-	short values[kMaxPlayers * kMaxShortSlots];
+	short values[kMaxShortSlots][kMaxPlayers];
 	uint32_t packedPlayerSpecificData[kMaxPlayers];
 	// Locations are transmitted separately since they can't fit preferred 32 bit of packed player data
 	uint8_t locations[kMaxPlayers];
@@ -565,14 +565,14 @@ public:
 	void setPlayerShort( unsigned playerIndex, unsigned slot, int16_t value ) {
 		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( slot < (unsigned)kMaxShortSlots );
-		values[kMaxShortSlots * playerIndex + slot] = value;
+		values[slot][playerIndex] = value;
 	}
 
 	[[nodiscard]]
 	auto getPlayerShort( unsigned playerIndex, unsigned slot ) const -> int16_t {
 		assert( playerIndex < (unsigned)kMaxPlayers );
 		assert( slot < (unsigned)kMaxShortSlots );
-		return values[kMaxShortSlots * playerIndex + slot];
+		return values[slot][playerIndex];
 	}
 
 	void setPlayerTeam( unsigned playerIndex, int team ) {
