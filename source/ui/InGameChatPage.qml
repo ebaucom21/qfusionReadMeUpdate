@@ -56,6 +56,7 @@ Item {
         anchors.horizontalCenter: inputFrame.horizontalCenter
         anchors.verticalCenter: inputFrame.verticalCenter
         color: Qt.lighter(Material.background, 1.25)
+        opacity: 0.5
         width: inputFrame.width + 12
         height: inputFrame.height + 4
         radius: 3

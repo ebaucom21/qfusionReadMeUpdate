@@ -36,8 +36,7 @@ MouseArea {
         width: shadowCaster.width
         height: shadowCaster.height
         radius: 3
-        color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.25)
-        Behavior on color { ColorAnimation { duration: 96 } }
+        color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.35)
         transform: Matrix4x4 { matrix: wsw.makeSkewXMatrix(height, 15.0) }
     }
 

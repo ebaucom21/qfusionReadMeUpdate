@@ -7,67 +7,23 @@ import net.warsow 2.6
 Item {
 	id: root
 
-	readonly property real contentPaneMargin:
-		0.5 * (root.width - contentPane.width)
-	readonly property real centralPaneGradientFrac:
-		contentPaneMargin / root.width + 0.125 * contentPane.width / root.width
-
-	readonly property color tintColor:
-		Qt.rgba(Material.accentColor.r, Material.accentColor.g, Material.accentColor.b, 0.05)
-	readonly property color backgroundColor:
-		Qt.rgba(Material.backgroundColor.r, Material.backgroundColor.g, Material.backgroundColor.b, 0.97)
-	readonly property color baseGlowColor:
-		Qt.tint(Material.backgroundColor, tintColor)
-	readonly property color centralPaneColor:
-		Qt.rgba(baseGlowColor.r, baseGlowColor.g, baseGlowColor.b, 0.97)
-
-	Item {
-		id: centered
-		anchors.fill: parent
-		opacity: Math.sqrt(Math.sqrt((1.0 - centralOverlay.expansionFrac)))
-		RadialGradient {
-			anchors.fill: parent
-			gradient: Gradient {
-				GradientStop {
-					position: 0.0;
-					color: Qt.rgba(baseGlowColor.r, baseGlowColor.g, baseGlowColor.b, 0.95)
-				}
-				GradientStop {
-					position: 1.0;
-					color: backgroundColor
-				}
-			}
-		}
-	}
-
-	Item {
-		anchors.fill: parent
-		opacity: Math.sqrt(Math.sqrt(centralOverlay.expansionFrac, 4.0))
-		LinearGradient {
-			anchors.fill: parent
-			start: Qt.point(0, 0)
-			end: Qt.point(parent.width, 0)
-
-			gradient: Gradient {
-				GradientStop {
-					position: 0.0
-					color: backgroundColor
-				}
-				GradientStop {
-					position: centralPaneGradientFrac
-					color: centralPaneColor
-				}
-				GradientStop {
-					position: 1.0 - centralPaneGradientFrac
-					color: centralPaneColor
-				}
-				GradientStop {
-					position: 1.0
-					color: backgroundColor
-				}
-			}
-		}
-	}
+    RadialGradient {
+        anchors.fill: parent
+        horizontalRadius: parent.width
+        // Stretches it vertically making it almost a column in the expanded state
+        verticalRadius: parent.height * (1.0 + 3.0 * centralOverlay.expansionFrac)
+        gradient: Gradient {
+            GradientStop {
+                position: 0.00
+                color: wsw.colorWithAlpha(Qt.tint(Material.background, wsw.colorWithAlpha(Material.accent, 0.05)), 0.99)
+            }
+            GradientStop {
+                position: 1.00
+	            // The gradient makes it look denser so the base value is slightly lower
+                color: wsw.colorWithAlpha(Material.backgroundColor, wsw.fullscreenOverlayOpacity - 0.05)
+            }
+        }
+    }
 
 	CentralOverlayGroup {
 		id: centralOverlay
@@ -119,7 +75,8 @@ Item {
 
     StackView {
 		id: contentPane
-		hoverEnabled: centralOverlay.expansionFrac > 0.999
+		hoverEnabled: centralOverlay.expansionFrac >= 1.0
+		opacity: centralOverlay.expansionFrac
 		anchors.top: parent.top
 		anchors.bottom: parent.bottom
 		anchors.horizontalCenter: parent.horizontalCenter

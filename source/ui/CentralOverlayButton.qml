@@ -1,6 +1,7 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
+import QtQuick.Controls.Material.impl 2.12
 import QtQuick.Layouts 1.12
 
 Item {
@@ -24,11 +25,9 @@ Item {
 
 	readonly property var transformMatrix: wsw.makeSkewXMatrix(root.height, 20.0)
 
-	property color foregroundColor:
-		Qt.lighter(Material.backgroundColor, 1.5)
-	property color trailDecayColor:
-		Qt.rgba(Material.backgroundColor.r, Material.backgroundColor.g, Material.backgroundColor.b, 0)
-	property color highlightedColor: "orange"
+	readonly property color foregroundColor: Qt.lighter(Material.backgroundColor, 1.5)
+	readonly property color trailDecayColor: wsw.colorWithAlpha(Material.backgroundColor, 0.0)
+	readonly property color highlightedColor: Material.accentColor
 
 	states: [
 		State {
@@ -85,6 +84,22 @@ Item {
 		}
 	}
 
+    // The trail does not have a shadow but this is sufficent
+    Item {
+        z: -1
+        id: shadowCaster
+        anchors.centerIn: contentRow
+        opacity: 0.5
+        Item {
+            anchors.centerIn: parent
+            width: contentRow.width
+            height: contentRow.height
+		    transform: Matrix4x4 { matrix: root.transformMatrix }
+            layer.enabled: true
+            layer.effect: ElevationEffect { elevation: 16 }
+        }
+    }
+
 	Rectangle {
 		id: contentRow
 		height: 40
@@ -93,19 +108,19 @@ Item {
 		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 		Behavior on width { SmoothedAnimation { duration: 333 } }
 
-		transform: Matrix4x4 {
-			matrix: root.transformMatrix
-		}
+		transform: Matrix4x4 { matrix: root.transformMatrix }
 
 		onXChanged: {
-			let halfContainerWidth = parent.width / 2
-			let halfThisWidth = width / 2
-			let slidingDistance = halfContainerWidth - halfThisWidth
+			const halfContainerWidth = parent.width / 2
+			const halfThisWidth = width / 2
+			const slidingDistance = halfContainerWidth - halfThisWidth
+			let frac = 0.0
 			if (root.leaningRight) {
-				root.expansionFrac = Math.abs(x - halfContainerWidth + halfThisWidth) / slidingDistance
+				frac = Math.abs(x - halfContainerWidth + halfThisWidth) / slidingDistance
 			} else {
-				root.expansionFrac = Math.abs(x - halfContainerWidth + halfThisWidth) / slidingDistance
+				frac = Math.abs(x - halfContainerWidth + halfThisWidth) / slidingDistance
 			}
+			root.expansionFrac = Math.min(1.0, Math.max(frac, 0.0))
 		}
 
 		Label {

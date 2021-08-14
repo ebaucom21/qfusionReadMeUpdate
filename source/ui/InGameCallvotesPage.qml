@@ -212,6 +212,7 @@ Item {
                 font.pointSize: 16
                 font.capitalization: Font.AllUppercase
                 font.weight: Font.Medium
+                font.letterSpacing: 1.0
                 text: selectedVoteName
             }
             Label {
@@ -242,11 +243,13 @@ Item {
             }
 
             RowLayout {
-                Layout.preferredWidth: root.width
+                Layout.preferredWidth: 0.75 * root.width
+                Layout.maximumWidth: 0.75 * root.width
+                Layout.alignment: Qt.AlignHCenter
                 Button {
                     flat: true
                     text: "back"
-                    Layout.preferredWidth: 64
+                    Layout.preferredWidth: 96
                     Material.theme: Material.Dark
                     onClicked: stackView.replace(voteSelectionComponent)
                 }
@@ -256,21 +259,20 @@ Item {
                 Button {
                     visible: wsw.isOperator && (selectedVoteFlags & CallvotesModel.Operator)
                     enabled: argsSelectionLoader.item && argsSelectionLoader.item.canProceed
-                    flat: true
-                    highlighted: !voteButton.visible
+                    highlighted: enabled
                     text: "opcall"
-                    Layout.preferredWidth: 72
+                    Layout.preferredWidth: 108
                     Material.theme: Material.Dark
+                    Material.accent: Qt.lighter(root.Material.background, 1.35)
                     onClicked: startVote(argsSelectionLoader.item.chosenValue, true)
                 }
                 Button {
                     id: voteButton
                     visible: selectedVoteFlags & CallvotesModel.Regular
                     enabled: argsSelectionLoader.item && argsSelectionLoader.item.canProceed
-                    flat: true
                     highlighted: enabled
                     text: "vote"
-                    Layout.preferredWidth: 72
+                    Layout.preferredWidth: 108
                     Material.theme: enabled ? Material.light : Material.Dark
                     onClicked: startVote(argsSelectionLoader.item.chosenValue, false)
                 }

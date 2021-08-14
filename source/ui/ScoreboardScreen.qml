@@ -7,13 +7,8 @@ import net.warsow 2.6
 
 Rectangle {
     id: root
-    color: Qt.rgba(Material.background.r, Material.background.g, Material.background.b, 0.8)
 
-    // TODO: Share with the in-game menu
-    readonly property real heightFrac: (Math.min(1080, rootItem.height - 720)) / (1080 - 720)
-
-    readonly property color baseColor: Qt.rgba(Material.background.r, Material.background.g, Material.background.b, 0.7)
-    readonly property color tintColor: Qt.rgba(Material.accent.r, Material.accent.g, Material.accent.b, 0.05)
+    color: wsw.colorWithAlpha(Material.background, wsw.fullscreenOverlayOpacity)
 
     readonly property real baseCellWidth: 64
     readonly property real clanCellWidth: 96

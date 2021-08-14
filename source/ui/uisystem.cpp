@@ -259,6 +259,8 @@ public:
 
 	Q_INVOKABLE QByteArray formatPing( int ping ) const;
 
+	Q_INVOKABLE QColor colorWithAlpha( const QColor &color, qreal alpha );
+
 	enum ServerListFlags {
 		ShowEmptyServers = 0x1,
 		ShowFullServers  = 0x2
@@ -313,6 +315,7 @@ public:
 	Q_PROPERTY( qreal minStrongCrosshairSize MEMBER s_minStrongCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal maxStrongCrosshairSize MEMBER s_maxStrongCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
+	Q_PROPERTY( qreal fullscreenOverlayOpacity MEMBER s_fullscreenOverlayOpacity CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -347,6 +350,7 @@ private:
 	static inline const qreal s_minStrongCrosshairSize { kStrongCrosshairSizeProps.minSize };
 	static inline const qreal s_maxStrongCrosshairSize { kStrongCrosshairSizeProps.maxSize };
 	static inline const qreal s_crosshairSizeStep { 1.0 };
+	static inline const qreal s_fullscreenOverlayOpacity { 0.90 };
 
 	int64_t m_lastDrawFrameTimestamp { 0 };
 
@@ -1858,6 +1862,11 @@ auto QtUISystem::makeSkewXMatrix( qreal height, qreal degrees ) const -> QMatrix
 
 auto QtUISystem::formatPing( int ping ) const -> QByteArray {
 	return wsw::ui::formatPing( ping );
+}
+
+auto QtUISystem::colorWithAlpha( const QColor &color, qreal alpha ) -> QColor {
+	assert( alpha >= 0.0 && alpha <= 1.0 );
+	return QColor::fromRgbF( color.redF(), color.greenF(), color.blueF(), alpha );
 }
 
 void QtUISystem::startServerListUpdates( int flags ) {

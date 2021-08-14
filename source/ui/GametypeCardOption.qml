@@ -24,8 +24,7 @@ MouseArea {
         Behavior on height { SmoothedAnimation { duration: 333 } }
         Behavior on width { SmoothedAnimation { duration: 333 } }
         radius: 3
-        color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.25)
-        Behavior on color { ColorAnimation { duration: 96 } }
+        color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.35)
         layer.enabled: true
         layer.effect: ElevationEffect { elevation: 12 }
     }

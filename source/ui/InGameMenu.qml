@@ -6,9 +6,7 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Rectangle {
-    color: "#D8AA5500"
-
-    readonly property real heightFrac: (Math.min(1080, rootItem.height - 720)) / (1080 - 720)
+    color: wsw.colorWithAlpha(Material.background, wsw.fullscreenOverlayOpacity)
 
     readonly property bool canShowLoadouts: gametypeOptionsModel.available && !hudDataModel.isSpectator
 
@@ -16,70 +14,53 @@ Rectangle {
     property real tabButtonWidth: (tabBar.width - 8) / (canShowLoadouts ? 4 : 3)
     Behavior on tabButtonWidth { SmoothedAnimation { duration: 66 } }
 
-    Rectangle {
-        width: parent.width
-        height: tabBar.implicitHeight
+    WswTabBar {
+        id: tabBar
+        visible: stackView.depth < 2
+        width: mainPane.width
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        color: Material.backgroundColor
+        background: null
 
-        WswTabBar {
-            id: tabBar
-            visible: stackView.depth < 2
-            width: mainPane.width
-            anchors.top: parent.top
-            anchors.horizontalCenter: parent.horizontalCenter
-            background: null
+        Component.onCompleted: wsw.registerHudOccluder(tabBar)
+        Component.onDestruction: wsw.unregisterHudOccluder(tabBar)
+        onWidthChanged: wsw.updateHudOccluder(tabBar)
+        onHeightChanged: wsw.updateHudOccluder(tabBar)
+        onXChanged: wsw.updateHudOccluder(tabBar)
+        onYChanged: wsw.updateHudOccluder(tabBar)
 
-            Component.onCompleted: wsw.registerHudOccluder(tabBar)
-            Component.onDestruction: wsw.unregisterHudOccluder(tabBar)
-            onWidthChanged: wsw.updateHudOccluder(tabBar)
-            onHeightChanged: wsw.updateHudOccluder(tabBar)
-            onXChanged: wsw.updateHudOccluder(tabBar)
-            onYChanged: wsw.updateHudOccluder(tabBar)
-
-            Behavior on opacity {
-                NumberAnimation { duration: 66 }
-            }
-
-            WswTabButton {
-                readonly property var component: generalComponent
-                width: tabButtonWidth
-                text: "General"
-            }
-            WswTabButton {
-                readonly property var component: Component { InGameChatPage {} }
-                width: tabButtonWidth
-                text: "Chat"
-            }
-            WswTabButton {
-                readonly property var component: Component { InGameCallvotesPage {} }
-                width: tabButtonWidth
-                text: "Callvotes"
-            }
-            WswTabButton {
-                readonly property var component: Component { InGameGametypeOptionsPage {} }
-                visible: canShowLoadouts
-                width: visible ? tabButtonWidth : 0
-                text: gametypeOptionsModel.tabTitle
-            }
-
-            onCurrentItemChanged: stackView.replace(currentItem.component)
+        WswTabButton {
+            readonly property var component: generalComponent
+            width: tabButtonWidth
+            text: "General"
         }
+        WswTabButton {
+            readonly property var component: Component { InGameChatPage {} }
+            width: tabButtonWidth
+            text: "Chat"
+        }
+        WswTabButton {
+            readonly property var component: Component { InGameCallvotesPage {} }
+            width: tabButtonWidth
+            text: "Callvotes"
+        }
+        WswTabButton {
+            readonly property var component: Component { InGameGametypeOptionsPage {} }
+            visible: canShowLoadouts
+            width: visible ? tabButtonWidth : 0
+            text: gametypeOptionsModel.tabTitle
+        }
+
+        onCurrentItemChanged: stackView.replace(currentItem.component)
     }
 
-    Rectangle {
+    Item {
         id: mainPane
         focus: true
-        width: 480 + 120 * heightFrac
-        height: 560 + 210 * heightFrac
+        width: 600
+        height: Math.max(600, 0.67 * parent.height)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        color: Material.backgroundColor
-        radius: 3
-
-        layer.enabled: parent.enabled
-        layer.effect: ElevationEffect { elevation: 64 }
 
         StackView {
             id: stackView
