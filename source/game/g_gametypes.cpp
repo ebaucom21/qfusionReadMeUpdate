@@ -208,12 +208,12 @@ bool G_Match_CheckExtendPlayTime( void ) {
 				}
 
 				G_PrintMsg( NULL, "Match tied. Timelimit extended by %i minutes!\n", g_match_extendedtime->integer );
-				G_CenterPrintFormatMsg( NULL, 1, "%s MINUTE OVERTIME\n", va( "%i", g_match_extendedtime->integer ) );
+				G_CenterPrintFormatMsg( NULL, 1, "%s minute overtime!\n", va( "%i", g_match_extendedtime->integer ) );
 				gs.gameState.stats[GAMESTAT_MATCHDURATION] = (int64_t)( ( fabs( g_match_extendedtime->value ) * 60 ) * 1000 );
 			} else {
 				G_AnnouncerSound( NULL, trap_SoundIndex( va( S_ANNOUNCER_OVERTIME_SUDDENDEATH_1_to_2, ( rand() & 1 ) + 1 ) ), GS_MAX_TEAMS, true, NULL );
 				G_PrintMsg( NULL, "Match tied. Sudden death!\n" );
-				G_CenterPrintMsg( NULL, "SUDDEN DEATH" );
+				G_CenterPrintMsg( NULL, "Sudden death!" );
 				gs.gameState.stats[GAMESTAT_MATCHDURATION] = 0;
 			}
 
@@ -390,7 +390,7 @@ static void G_Match_CheckStateAbort( void ) {
 	} else if( GS_MatchState() == MATCH_STATE_COUNTDOWN && !enough ) {
 		if( any ) {
 			G_PrintMsg( NULL, "Not enough players left. Countdown aborted.\n" );
-			G_CenterPrintMsg( NULL, "COUNTDOWN ABORTED" );
+			G_CenterPrintMsg( NULL, "Countdown aborted!" );
 		}
 		G_Match_Autorecord_Cancel();
 		G_Match_LaunchState( MATCH_STATE_WARMUP );
@@ -401,7 +401,7 @@ static void G_Match_CheckStateAbort( void ) {
 	else if( GS_MatchState() == MATCH_STATE_PLAYTIME && !enough ) {
 		if( any ) {
 			G_PrintMsg( NULL, "Not enough players left. Match aborted.\n" );
-			G_CenterPrintMsg( NULL, "MATCH ABORTED" );
+			G_CenterPrintMsg( NULL, "Match aborted!" );
 		}
 		G_EndMatch();
 	}
@@ -428,7 +428,7 @@ void G_Match_LaunchState( int matchState ) {
 
 			// Hacks... abort countdown in this case
 			G_PrintMsg( nullptr, S_COLOR_YELLOW "Can't get a match id from the matchmaker server. Countdown aborted.\n" );
-			G_CenterPrintMsg( nullptr, "COUNTDOWN ABORTED" );
+			G_CenterPrintMsg( nullptr, "Countdown aborted!" );
 			matchState = MATCH_STATE_WARMUP;
 
 			G_Match_Autorecord_Cancel();
@@ -937,7 +937,7 @@ void G_Match_CheckReadys( void ) {
 		G_Match_LaunchState( MATCH_STATE_COUNTDOWN );
 	} else if( allready == false && GS_MatchState() == MATCH_STATE_COUNTDOWN ) {
 		G_PrintMsg( NULL, "Countdown aborted.\n" );
-		G_CenterPrintMsg( NULL, "COUNTDOWN ABORTED" );
+		G_CenterPrintMsg( NULL, "Countdown aborted!" );
 		G_Match_Autorecord_Cancel();
 		G_Match_LaunchState( MATCH_STATE_WARMUP );
 	}
