@@ -57,13 +57,19 @@ Item {
     Repeater {
         id: itemsRepeater
         model: hudEditorModel.getLayoutModel()
+
+        property int numInstantiatedItems: 0
+        readonly property bool canArrangeItems: numInstantiatedItems === count
+
         delegate: HudLayoutItem {
             id: element
             width: size.width
             height: size.height
+
             onXChanged: handleCoordChanges()
             onYChanged: handleCoordChanges()
-            state: "anchored"
+            Component.onCompleted: itemsRepeater.numInstantiatedItems++;
+            Component.onDestruction: itemsRepeater.numInstantiatedItems--;
 
             property color actualColor: mouseArea.containsMouse ? Qt.lighter(model.color, 1.5) : model.color
             Behavior on actualColor { ColorAnimation { duration: 33 } }
@@ -95,7 +101,7 @@ Item {
             states: [
                 State {
                     name: "anchored"
-                    when: !mouseArea.containsMouse
+                    when: !mouseArea.containsMouse && itemsRepeater.canArrangeItems
                     AnchorChanges {
                         target: element
                         anchors.top: getQmlAnchor(HudLayoutModel.Top)
@@ -108,7 +114,7 @@ Item {
                 },
                 State {
                     name: "dragged"
-                    when: mouseArea.containsMouse && mouseArea.drag.active
+                    when: mouseArea.containsMouse && mouseArea.drag.active && itemsRepeater.canArrangeItems
                     AnchorChanges {
                         target: element
                         anchors.top: undefined
@@ -126,7 +132,7 @@ Item {
                 },
                 State {
                     name: "detached"
-                    when: mouseArea.containsMouse && !mouseArea.drag.active
+                    when: mouseArea.containsMouse && !mouseArea.drag.active && itemsRepeater.canArrangeItems
                     AnchorChanges {
                         target: element
                         anchors.top: undefined
@@ -152,10 +158,12 @@ Item {
             }
 
             function handleCoordChanges() {
-                if (mouseArea.drag.active) {
-                    hudEditorModel.trackDragging(index, element.x, element.y)
-                } else {
-                    hudEditorModel.updateElementPosition(index, element.x, element.y)
+                if (itemsRepeater.canArrangeItems) {
+                    if (mouseArea.drag.active) {
+                        hudEditorModel.trackDragging(index, element.x, element.y)
+                    } else {
+                        hudEditorModel.updateElementPosition(index, element.x, element.y)
+                    }
                 }
             }
 

@@ -11,6 +11,8 @@ Item {
         id: repeater
         model: hudDataModel.activeLayoutModel
 
+        property int numInstantiatedItems: 0
+
         delegate: HudLayoutItem {
             id: itemLoader
             width: item ? item.implicitWidth : 0
@@ -19,12 +21,21 @@ Item {
             readonly property var controllingCVar: model.controllingCVar
             property bool isCVarOn: false
 
-            anchors.top: getQmlAnchor(HudLayoutModel.Top)
-            anchors.bottom: getQmlAnchor(HudLayoutModel.Bottom)
-            anchors.left: getQmlAnchor(HudLayoutModel.Left)
-            anchors.right: getQmlAnchor(HudLayoutModel.Right)
-            anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
-            anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
+            states: [
+                State {
+                    name: "arranged"
+                    when: repeater.numInstantiatedItems === repeater.count
+                    AnchorChanges {
+                        target: itemLoader
+                        anchors.top: getQmlAnchor(HudLayoutModel.Top)
+                        anchors.bottom: getQmlAnchor(HudLayoutModel.Bottom)
+                        anchors.left: getQmlAnchor(HudLayoutModel.Left)
+                        anchors.right: getQmlAnchor(HudLayoutModel.Right)
+                        anchors.horizontalCenter: getQmlAnchor(HudLayoutModel.HCenter)
+                        anchors.verticalCenter: getQmlAnchor(HudLayoutModel.VCenter)
+                    }
+                }
+            ]
 
             Connections {
                 target: wsw
@@ -46,6 +57,14 @@ Item {
             }
 
             onLoaded: itemLoader.updateItemVisibility()
+            // onStateChanged gets called too early so it turned to be useless it this regard.
+            // Intercepting anchor changes produces desired results.
+            anchors.onLeftChanged: itemLoader.updateItemVisibility()
+            anchors.onHorizontalCenterChanged: itemLoader.updateItemVisibility()
+            anchors.onRightChanged: itemLoader.updateItemVisibility()
+            anchors.onTopChanged: itemLoader.updateItemVisibility()
+            anchors.onVerticalCenterChanged: itemLoader.updateItemVisibility()
+            anchors.onBottomChanged: itemLoader.updateItemVisibility()
 
             Component.onCompleted: {
                 if (itemLoader.controllingCVar) {
@@ -53,12 +72,14 @@ Item {
                     checkCVarChanges()
                 }
                 updateItemVisibility()
+                repeater.numInstantiatedItems++;
             }
 
             Component.onDestruction: {
                 if (itemLoader.controllingCVar) {
                     wsw.unregisterCVarAwareControl(itemLoader)
                 }
+                repeater.numInstantiatedItems--;
             }
 
             function checkCVarChanges() {
