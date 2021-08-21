@@ -54,7 +54,8 @@ public:
 	enum Flags {
 		NoFlags       = 0x0,
 		TeamBasedOnly = 0x1,
-		PovOnly       = 0x2
+		PovOnly       = 0x2,
+		AlivePovOnly  = 0x2 | 0x4
 	};
 	Q_ENUM( Flags );
 

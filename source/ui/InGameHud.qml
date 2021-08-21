@@ -40,12 +40,13 @@ Item {
             Connections {
                 target: wsw
                 onHudOccludersChanged: itemLoader.updateItemVisibility()
-                onIsShowingPovHudChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
                 target: hudDataModel
                 onHasTwoTeamsChanged: itemLoader.updateItemVisibility()
+                onHasActivePovChanged: itemLoader.updateItemVisibility()
+                onIsPovAliveChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
@@ -98,7 +99,9 @@ Item {
                         item.visible = false
                     } else if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false
-                    } else if (!wsw.isShowingPovHud && (flags & HudLayoutModel.PovOnly)) {
+                    } else if (!hudDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
+                        item.visible = false
+                    } else if (!hudDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
                         item.visible = false
                     } else {
                         // Put the expensive test last

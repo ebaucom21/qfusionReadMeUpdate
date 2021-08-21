@@ -2052,25 +2052,22 @@ void Client::setReplicatedStats() {
 		return;
 	}
 
-	ps.stats[STAT_LAYOUTS] = 0;
+	ps.stats[STAT_FLAGS] = 0;
 
 	// don't force scoreboard when dead during timeout
 	if( showscores || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
-		ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SCOREBOARD;
-	}
-	if( GS_TeamBasedGametype() && !GS_InvidualGameType() ) {
-		ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_TEAMTAB;
+		ps.stats[STAT_FLAGS] |= STAT_FLAG_SCOREBOARD;
 	}
 	if( GS_HasChallengers() && queueTimeStamp ) {
-		ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_CHALLENGER;
+		ps.stats[STAT_FLAGS] |= STAT_FLAG_CHALLENGER;
 	}
 	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( this )] ) {
-		ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_READY;
+		ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
 	}
 
 	const auto *ent = getEntity();
-	if( G_SpawnQueue_GetSystem( ent->s.team ) == SPAWNSYSTEM_INSTANT ) {
-		ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_INSTANTRESPAWN;
+	if( G_IsDead( ent ) ) {
+		ps.stats[STAT_FLAGS] |= STAT_FLAG_DEADPOV;
 	}
 
 	ps.stats[STAT_TEAM] = ps.stats[STAT_REALTEAM] = ent->s.team;

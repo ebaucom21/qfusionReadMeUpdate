@@ -528,6 +528,10 @@ std::optional<unsigned> CG_ActiveChasePov() {
 	return std::nullopt;
 }
 
+bool CG_IsPovAlive() {
+	return !( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_DEADPOV );
+}
+
 bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype() && !GS_InvidualGameType();
 }

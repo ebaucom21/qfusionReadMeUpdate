@@ -1015,10 +1015,10 @@ auto HudLayoutModel::getAnchorNames( int anchors ) -> std::pair<wsw::StringView,
 
 auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 	switch( kind ) {
-		case HealthBar: return PovOnly;
-		case ArmorBar: return PovOnly;
-		case InventoryBar: return PovOnly;
-		case WeaponStatus: return PovOnly;
+		case HealthBar: return AlivePovOnly;
+		case ArmorBar: return AlivePovOnly;
+		case InventoryBar: return AlivePovOnly;
+		case WeaponStatus: return AlivePovOnly;
 		case MatchTime: return NoFlags;
 		case AlphaScore: return TeamBasedOnly;
 		case BetaScore: return TeamBasedOnly;

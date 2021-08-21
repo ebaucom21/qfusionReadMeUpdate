@@ -292,29 +292,16 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 
 	// fix some stats we don't want copied from the target
 	ent->r.client->ps.stats[STAT_REALTEAM] = ent->s.team;
-	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_SCOREBOARD;
-	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_CHALLENGER;
-	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_READY;
-	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_SPECTEAMONLY;
-	ent->r.client->ps.stats[STAT_LAYOUTS] &= ~STAT_LAYOUT_INSTANTRESPAWN;
 
-	if( ent->r.client->chase.teamonly ) {
-		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SPECTEAMONLY;
-		if( !ent->r.client->is_coach ) {
-			ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SPECDEAD; // show deadcam effect
-		}
-	}
+	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_CHALLENGER;
+	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_READY;
 
-	if( ent->r.client->showscores || GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
-		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_SCOREBOARD; // show the scoreboard
-
-	}
 	if( GS_HasChallengers() && ent->r.client->queueTimeStamp ) {
-		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_CHALLENGER;
+		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_CHALLENGER;
 	}
 
 	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( ent )] ) {
-		ent->r.client->ps.stats[STAT_LAYOUTS] |= STAT_LAYOUT_READY;
+		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
 	}
 
 	// chasecam uses PM_CHASECAM

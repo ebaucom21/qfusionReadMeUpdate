@@ -245,6 +245,8 @@ class HudDataModel : public QObject {
 	int m_alphaProgress { 0 }, m_betaProgress { 0 };
 	bool m_hasTwoTeams { false };
 	bool m_isSpectator { true };
+	bool m_hasActivePov { false };
+	bool m_isPovAlive { false };
 
 	QByteArray m_formattedSeconds;
 	QByteArray m_formattedMinutes;
@@ -301,6 +303,10 @@ class HudDataModel : public QObject {
 	bool getHasTwoTeams() const { return m_hasTwoTeams; }
 	[[nodiscard]]
 	bool getIsSpectator() const { return m_isSpectator; }
+	[[nodiscard]]
+	bool getHasActivePov() const { return m_hasActivePov; }
+	[[nodiscard]]
+	bool getIsPovAlive() const { return m_isPovAlive; }
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
@@ -388,6 +394,11 @@ public:
 	Q_PROPERTY( bool hasTwoTeams READ getHasTwoTeams NOTIFY hasTwoTeamsChanged );
 	Q_SIGNAL void isSpectatorChanged( bool isSpectator );
 	Q_PROPERTY( bool isSpectator READ getIsSpectator NOTIFY isSpectatorChanged );
+
+	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
+	Q_PROPERTY( bool hasActivePov READ getHasActivePov NOTIFY hasActivePovChanged );
+	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
+	Q_PROPERTY( bool isPovAlive READ getIsPovAlive NOTIFY isPovAliveChanged );
 
 	Q_SIGNAL void matchTimeSecondsChanged( const QByteArray &seconds );
 	Q_PROPERTY( const QByteArray matchTimeSeconds READ getMatchTimeSeconds NOTIFY matchTimeSecondsChanged );

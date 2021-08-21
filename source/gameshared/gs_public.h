@@ -608,7 +608,7 @@ float GS_FrameForTime( int *frame, int64_t curTime, int64_t startTimeStamp, floa
 #define PMFEAT_DEFAULT          ( PMFEAT_ALL & ~(PMFEAT_GHOSTMOVE|PMFEAT_CROUCHSLIDING) )
 
 enum {
-	STAT_LAYOUTS = 0
+	STAT_FLAGS = 0
 	, STAT_HEALTH
 	, STAT_ARMOR
 	, STAT_WEAPON
@@ -671,15 +671,10 @@ static const char *gs_keyicon_names[] = {
 	"special"
 };
 
-// STAT_LAYOUTS flag bits meanings
-#define STAT_LAYOUT_SPECDEAD        0x00000001
-#define STAT_LAYOUT_INSTANTRESPAWN  0x00000002
-#define STAT_LAYOUT_SCOREBOARD      0x00000004
-#define STAT_LAYOUT_TEAMTAB         0x00000008
-#define STAT_LAYOUT_CHALLENGER      0x00000010 // player is in challengers queue (used for ingame menu)
-#define STAT_LAYOUT_READY           0x00000020 // player is ready (used for ingame menu)
-//#define	STAT_LAYOUT_UNUSED			0x00000040
-#define STAT_LAYOUT_SPECTEAMONLY    0x00000080
+#define STAT_FLAG_SCOREBOARD   0x01
+#define STAT_FLAG_DEADPOV      0x02
+#define STAT_FLAG_CHALLENGER   0x04 // player is in challengers queue (used for ingame menu)
+#define STAT_FLAG_READY        0x08 // player is ready (used for ingame menu)
 
 #define STAT_NOTSET                 -9999 // used for stats that don't have meaningful value atm.
 

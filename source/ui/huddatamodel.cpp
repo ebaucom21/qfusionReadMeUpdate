@@ -22,6 +22,7 @@ int CG_TeamBetaProgress();
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
+bool CG_IsPovAlive();
 wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_LocationName( unsigned location );
 
@@ -773,6 +774,16 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	m_isSpectator = CG_IsSpectator();
 	if( const bool isSpectator = getIsSpectator(); isSpectator != wasSpectator ) {
 		Q_EMIT isSpectatorChanged( isSpectator );
+	}
+
+	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
+	m_hasActivePov = CG_ActiveChasePov() != std::nullopt;
+	m_isPovAlive = m_hasActivePov && CG_IsPovAlive();
+	if( wasPovAlive != m_isPovAlive ) {
+		Q_EMIT isPovAliveChanged( m_isPovAlive );
+	}
+	if( hadActivePov != m_hasActivePov ) {
+		Q_EMIT hasActivePovChanged( m_hasActivePov );
 	}
 
 	if( m_pendingAlphaScore != m_alphaScore ) {
