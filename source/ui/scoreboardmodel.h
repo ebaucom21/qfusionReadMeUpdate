@@ -5,6 +5,7 @@
 #include "../gameshared/gs_public.h"
 
 #include <QAbstractListModel>
+#include <QJsonArray>
 #include <QObject>
 
 struct ReplicatedScoreboardData;
@@ -46,42 +47,27 @@ class ScoreboardTeamModel : public QAbstractTableModel, ScoreboardShared {
 	auto data( const QModelIndex &modelIndex, int role ) const -> QVariant override;
 };
 
-class ScoreboardSpecsModel : public QAbstractListModel {
-	friend class ScoreboardModelProxy;
-
+class ScoreboardSpecsModelData {
+	mutable QJsonArray m_cachedArrayData;
 	ScoreboardModelProxy *const m_proxy;
-	const StaticVector<unsigned, MAX_CLIENTS> *const m_indices;
-
-	enum Role {
-		Nickname = Qt::UserRole + 1,
-		Ping,
-	};
-
-	static inline QVector<int> kNicknameRoleAsVector { Nickname };
-	static inline QVector<int> kPingRoleAsVector { Ping };
-	static inline QVector<int> kNicknameAndPingRoleAsVector { Nickname, Ping };
-
-	ScoreboardSpecsModel( ScoreboardModelProxy *proxy, const StaticVector<unsigned, MAX_CLIENTS> *indices )
+	StaticVector<unsigned, MAX_CLIENTS> *m_indices;
+	mutable bool m_isMarkedAsUpdated { false };
+public:
+	ScoreboardSpecsModelData( ScoreboardModelProxy *proxy, StaticVector<unsigned, MAX_CLIENTS> *indices )
 		: m_proxy( proxy ), m_indices( indices ) {}
 
+	void markAsUpdated() { m_isMarkedAsUpdated = true; }
 	[[nodiscard]]
-	static auto getChangedRolesForUpdates( const Scoreboard::PlayerUpdates &updates ) -> const QVector<int> *;
-
+	bool isMarkedAsUpdated() const { return m_isMarkedAsUpdated; }
 	[[nodiscard]]
-	auto rowCount( const QModelIndex & ) const -> int override;
-	[[nodiscard]]
-	auto columnCount( const QModelIndex & ) const -> int override;
-	[[nodiscard]]
-	auto roleNames() const -> QHash<int, QByteArray> override;
-	[[nodiscard]]
-	auto data( const QModelIndex &modelIndex, int role ) const -> QVariant override;
+	auto asQmlArray() const -> QJsonArray;
 };
 
 class ScoreboardModelProxy : public QObject, ScoreboardShared {
 	Q_OBJECT
 
 	friend class ScoreboardTeamModel;
-	friend class ScoreboardSpecsModel;
+	friend class ScoreboardSpecsModelData;
 public:
 	enum Display {
 		SideBySide,
@@ -94,9 +80,9 @@ public:
 
 	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
-	StaticVector<ScoreboardSpecsModel, 1> m_specsModelHolder;
-	StaticVector<ScoreboardSpecsModel, 1> m_chasersModelHolder;
-	StaticVector<ScoreboardSpecsModel, 1> m_challengersModelHolder;
+	ScoreboardSpecsModelData m_specsModel { this, &m_playerIndicesForList[TEAM_SPECTATOR] };
+	ScoreboardSpecsModelData m_chasersModel { this, &m_chasers };
+	ScoreboardSpecsModelData m_challengersModel { this, &m_challengers };
 
 	cvar_s *m_displayVar { nullptr };
 	Display m_display { SideBySide };
@@ -113,7 +99,6 @@ public:
 	using PlayerUpdates = Scoreboard::PlayerUpdates;
 
 	void dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team, int rowInTeam, int rowInMixedList );
-	void dispatchSpecRowUpdates( const QVector<int> &changedRoles, ScoreboardSpecsModel *model, int rowInTeam );
 public:
 	enum class QmlColumnKind {
 		Nickname,
@@ -155,12 +140,20 @@ public:
 	Q_SIGNAL void displayChanged( Display display );
 	Q_PROPERTY( Display display READ getDisplay NOTIFY displayChanged );
 
+	Q_SIGNAL void specsModelChanged();
+	Q_PROPERTY( QJsonArray specsModel READ getSpecsModel NOTIFY specsModelChanged );
+	Q_SIGNAL void chasersModelChanged();
+	Q_PROPERTY( QJsonArray chasersModel READ getChasersModel NOTIFY chasersModelChanged );
+	Q_SIGNAL void challengersModelChanged();
+	Q_PROPERTY( QJsonArray challengersModel READ getChallengersModel NOTIFY challengersModelChanged );
+
 	[[nodiscard]]
-	auto getSpecsModel() -> ScoreboardSpecsModel * { return &m_specsModelHolder[0]; }
+	auto getSpecsModel() -> QJsonArray { return m_specsModel.asQmlArray(); }
 	[[nodiscard]]
-	auto getChasersModel() -> ScoreboardSpecsModel * { return &m_chasersModelHolder[0]; }
+	auto getChasersModel() -> QJsonArray { return m_chasersModel.asQmlArray(); }
 	[[nodiscard]]
-	auto getChallengersModel() -> ScoreboardSpecsModel * { return &m_challengersModelHolder[0]; }
+	auto getChallengersModel() -> QJsonArray { return m_challengersModel.asQmlArray(); }
+
 	[[nodiscard]]
 	auto getPlayersModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[0]; }
 	[[nodiscard]]

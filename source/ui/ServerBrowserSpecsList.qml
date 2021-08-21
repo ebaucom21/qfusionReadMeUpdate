@@ -1,14 +1,18 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
+import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
     id: root
     property var model
 
+    readonly property int playersPerRow: 3
+    readonly property int numPlayers: model ? model.length : 0
+
     implicitHeight: model ?
-        (label.implicitHeight + label.anchors.topMargin + flow.implicitHeight + flow.anchors.topMargin) : 0
+        (label.implicitHeight + label.anchors.topMargin + column.implicitHeight + column.anchors.topMargin) : 0
 
     ServerBrowserDataLabel {
         id: label
@@ -19,8 +23,8 @@ Item {
         text: "Spectators"
     }
 
-    Flow {
-        id: flow
+    ColumnLayout {
+        id: column
         spacing: 12
 
         anchors.top: label.bottom
@@ -31,15 +35,24 @@ Item {
         anchors.rightMargin: 8
 
         Repeater {
-            id: spectatorsRepeater
-            model: root.model
+            model: numPlayers ? Math.max(numPlayers / playersPerRow, 1) : 0
             delegate: Row {
-                spacing: 8
-                ServerBrowserDataLabel {
-                    text: modelData["name"]
-                }
-                ServerBrowserDataLabel {
-                    text: wsw.formatPing(modelData["ping"])
+                readonly property int rowIndex: index
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 12
+                Repeater {
+                    model: (rowIndex !== Math.floor(numPlayers / playersPerRow)) ?
+                        playersPerRow : (numPlayers % playersPerRow)
+                    delegate: Row {
+                        spacing: 8
+                        readonly property int listIndex: rowIndex * playersPerRow + index
+                        ServerBrowserDataLabel {
+                            text: root.model[listIndex]["name"]
+                        }
+                        ServerBrowserDataLabel {
+                            text: wsw.formatPing(root.model[listIndex]["ping"])
+                        }
+                    }
                 }
             }
         }

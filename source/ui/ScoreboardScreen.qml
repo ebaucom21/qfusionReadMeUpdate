@@ -61,7 +61,8 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.tableWidth - root.baseCellWidth
         height: implicitHeight
-        model: scoreboardChallengersModel
+        model: scoreboard.challengersModel
+        playersPerRow: 2
         title: "Challengers"
     }
 
@@ -72,7 +73,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.tableWidth - root.baseCellWidth
         height: implicitHeight
-        model: scoreboardSpecsModel
+        model: scoreboard.specsModel
         title: "Spectators"
     }
 
@@ -83,7 +84,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.tableWidth - root.baseCellWidth
         height: implicitHeight
-        model: scoreboardChasersModel
+        model: scoreboard.chasersModel
         title: "Chasers"
     }
 

@@ -607,7 +607,6 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterUncreatableType<GametypesModel>( uri, 2, 6, "GametypesModel", reason );
 	qmlRegisterUncreatableType<ScoreboardModelProxy>( uri, 2, 6, "Scoreboard", reason );
 	qmlRegisterUncreatableType<ScoreboardTeamModel>( uri, 2, 6, "ScoreboardTeamModel", reason );
-	qmlRegisterUncreatableType<ScoreboardSpecsModel>( uri, 2, 6, "ScoreboardSpecsModel", reason );
 	qmlRegisterUncreatableType<KeysAndBindingsModel>( uri, 2, 6, "KeysAndBindings", reason );
 	qmlRegisterUncreatableType<ServerListModel>( uri, 2, 6, "ServerListModel", reason );
 	qmlRegisterUncreatableType<DemosResolver>( uri, 2, 6, "DemosResolver", reason );
