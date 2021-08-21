@@ -205,6 +205,29 @@ class AwardsModel : public QAbstractListModel {
 	void update( int64_t currTime );
 };
 
+struct ObjectiveIndicatorState {
+	Q_GADGET
+
+public:
+	QColor color;
+	int anim { 0 };
+	int progress { 0 };
+	int iconNum { 0 };
+	bool enabled { false };
+
+	Q_PROPERTY( QColor color MEMBER color );
+	Q_PROPERTY( int anim MEMBER anim );
+	Q_PROPERTY( int progress MEMBER progress );
+	Q_PROPERTY( int iconNum MEMBER iconNum );
+	Q_PROPERTY( bool enabled MEMBER enabled );
+
+	[[nodiscard]]
+	bool operator!=( const ObjectiveIndicatorState &that ) const {
+		return color == that.color && anim == that.anim && progress == that.progress &&
+			iconNum == that.iconNum && enabled == that.enabled;
+	}
+};
+
 class HudDataModel : public QObject {
 	Q_OBJECT
 
@@ -241,14 +264,13 @@ class HudDataModel : public QObject {
 	wsw::StaticString<32> m_alphaTeamStatus, m_betaTeamStatus;
 	QByteArray m_styledAlphaTeamStatus, m_styledBetaTeamStatus;
 
+	ObjectiveIndicatorState m_indicatorStates[3];
+
 	int m_rawAlphaColor { 0 }, m_rawBetaColor { 0 };
 	QColor m_alphaColor { toQColor( m_rawAlphaColor ) };
 	QColor m_betaColor { toQColor( m_rawBetaColor ) };
-	QColor m_alphaProgressColor { toProgressColor( m_alphaColor ) };
-	QColor m_betaProgressColor { toProgressColor( m_betaColor ) };
 	int m_alphaScore { 0 }, m_pendingAlphaScore { 0 };
 	int m_betaScore { 0 }, m_pendingBetaScore { 0 };
-	int m_alphaProgress { 0 }, m_betaProgress { 0 };
 	bool m_hasTwoTeams { false };
 	bool m_isSpectator { true };
 	bool m_hasActivePov { false };
@@ -280,10 +302,6 @@ class HudDataModel : public QObject {
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
 		return QColor::fromRgb( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ) );
-	}
-	[[nodiscard]]
-	static auto toProgressColor( const QColor &color ) -> QColor {
-		return color.valueF() > 0.5 ? color : QColor::fromHsvF( color.hue(), color.saturation(), 0.5 );
 	}
 
 	static void setFormattedTime( QByteArray *dest, int value );
@@ -326,14 +344,13 @@ public:
 	Q_PROPERTY( const QByteArray alphaTeamStatus MEMBER m_styledAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
 	Q_SIGNAL void betaTeamStatusChanged( const QByteArray &betaTeamStatus );
 	Q_PROPERTY( const QByteArray betaTeamStatus MEMBER m_styledBetaTeamStatus NOTIFY betaTeamStatusChanged );
-	Q_SIGNAL void alphaProgressChanged( int alphaProgress );
-	Q_PROPERTY( int alphaProgress MEMBER m_alphaProgress NOTIFY alphaProgressChanged );
-	Q_SIGNAL void betaProgressChanged( int betaProgress );
-	Q_PROPERTY( int betaProgress MEMBER m_betaProgress NOTIFY betaProgressChanged );
-	Q_SIGNAL void alphaProgressColorChanged( const QColor &alphaProgressColor );
-	Q_PROPERTY( const QColor alphaProgressColor MEMBER m_alphaProgressColor NOTIFY alphaProgressColorChanged );
-	Q_SIGNAL void betaProgressColorChanged( const QColor &betaProgressColor );
-	Q_PROPERTY( const QColor betaProgressColor MEMBER m_betaProgressColor NOTIFY betaProgressColorChanged );
+
+	Q_SIGNAL void indicator1StateChanged( const QVariant &indicator1State );
+	Q_PROPERTY( QVariant indicator1State READ getIndicator1State NOTIFY indicator1StateChanged );
+	Q_SIGNAL void indicator2StateChanged( const QVariant &indicator2State );
+	Q_PROPERTY( QVariant indicator2State READ getIndicator2State NOTIFY indicator2StateChanged );
+	Q_SIGNAL void indicator3StateChanged( const QVariant &indicator3State );
+	Q_PROPERTY( QVariant indicator3State READ getIndicator3State NOTIFY indicator3StateChanged );
 
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
 	Q_PROPERTY( bool hasTwoTeams MEMBER m_hasTwoTeams NOTIFY hasTwoTeamsChanged );
@@ -375,11 +392,7 @@ public:
 	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
 	Q_PROPERTY( QString statusMessage MEMBER m_formattedStatusMessage NOTIFY statusMessageChanged );
 
-	enum Powerup {
-		Quad  = 0x1,
-		Shell = 0x2,
-		Regen = 0x4
-	};
+	enum Powerup { Quad  = 0x1, Shell = 0x2, Regen = 0x4 };
 	Q_ENUM( Powerup );
 
 	[[nodiscard]]
@@ -406,6 +419,19 @@ public:
 	Q_INVOKABLE QStringList getAvailableCrosshairs() const;
 	[[nodiscard]]
 	Q_INVOKABLE QStringList getAvailableStrongCrosshairs() const;
+
+	[[nodiscard]]
+	Q_INVOKABLE QVariant getIndicator1State() { return QVariant::fromValue( m_indicatorStates[0] ); }
+	[[nodiscard]]
+	Q_INVOKABLE QVariant getIndicator2State() { return QVariant::fromValue( m_indicatorStates[1] ); }
+	[[nodiscard]]
+	Q_INVOKABLE QVariant getIndicator3State() { return QVariant::fromValue( m_indicatorStates[2] ); }
+
+	enum IndicatorAnim { NoAnim, AlertAnim, ActionAnim };
+	Q_ENUM( IndicatorAnim );
+
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getIndicatorIconPath( int iconNum ) const;
 
 	HudDataModel();
 
@@ -434,5 +460,7 @@ public:
 };
 
 }
+
+Q_DECLARE_METATYPE( wsw::ui::ObjectiveIndicatorState )
 
 #endif

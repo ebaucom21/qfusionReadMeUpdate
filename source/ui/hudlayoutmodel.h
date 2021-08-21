@@ -47,6 +47,7 @@ public:
 		MessageFeed,
 		AwardsArea,
 		StatusMessage,
+		ObjectiveStatus,
 	};
 	Q_ENUM( Kind );
 

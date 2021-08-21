@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
+#include "../ui/huddatamodel.h"
 
 extern cvar_t *cg_showHUD;
 extern cvar_t *cg_showTeamInfo;
@@ -528,12 +529,46 @@ int CG_TeamBetaColor() {
 	return COM_ReadColorRGBString( cg_teamBETAcolor->string );
 }
 
-int CG_TeamAlphaProgress() {
-	return cg.predictedPlayerState.stats[STAT_PROGRESS_ALPHA];
+auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
+	assert( (unsigned)num < 3 );
+	const auto *const stats = cg.predictedPlayerState.stats;
+
+	static_assert( (int)wsw::ui::HudDataModel::NoAnim == (int)HUD_INDICATOR_NO_ANIM );
+	static_assert( (int)wsw::ui::HudDataModel::AlertAnim == (int)HUD_INDICATOR_ALERT_ANIM );
+	static_assert( (int)wsw::ui::HudDataModel::ActionAnim == (int)HUD_INDICATOR_ACTION_ANIM );
+
+	int anim = stats[STAT_INDICATOR_1_ANIM + num];
+	if( (unsigned)anim > (unsigned)HUD_INDICATOR_ACTION_ANIM ) {
+		anim = HUD_INDICATOR_NO_ANIM;
+	}
+
+	int iconNum = stats[STAT_INDICATOR_1_ICON + num];
+	if( (unsigned)iconNum >= (unsigned)MAX_GENERAL ) {
+		iconNum = 0;
+	}
+
+	const int progress = std::clamp<int>( stats[STAT_INDICATOR_1_PROGRESS + num], -100, +100 );
+	const bool enabled = stats[STAT_INDICATOR_1_ENABLED + num] != 0;
+
+	int packedColor = ~0;
+	if( const int colorTeam = stats[STAT_INDICATOR_1_COLORTEAM + num] ) {
+		if( colorTeam == TEAM_ALPHA ) {
+			packedColor = CG_TeamAlphaColor();
+		} else if( colorTeam == TEAM_BETA ) {
+			packedColor = CG_TeamBetaColor();
+		}
+	}
+
+	const QColor color( QColor::fromRgb( COLOR_R( packedColor ), COLOR_G( packedColor ), COLOR_B( packedColor ) ) );
+	return { .color = color, .anim = anim, .progress = progress, .iconNum = iconNum, .enabled = enabled };
 }
 
-int CG_TeamBetaProgress() {
-	return cg.predictedPlayerState.stats[STAT_PROGRESS_BETA];
+auto CG_HudIndicatorIconPath( int iconNum ) -> std::optional<wsw::StringView> {
+	assert( (unsigned)iconNum <= (unsigned)CS_GENERAL );
+	if( iconNum ) {
+		return cgs.configStrings.get( (unsigned)( CS_GENERAL + iconNum - 1 ) );
+	}
+	return std::nullopt;
 }
 
 std::pair<int, int> CG_WeaponAmmo( int weapon ) {

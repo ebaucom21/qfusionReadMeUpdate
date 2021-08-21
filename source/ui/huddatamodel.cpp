@@ -17,8 +17,8 @@ int CG_Health();
 int CG_Armor();
 int CG_TeamAlphaColor();
 int CG_TeamBetaColor();
-int CG_TeamAlphaProgress();
-int CG_TeamBetaProgress();
+wsw::ui::ObjectiveIndicatorState CG_HudIndicatorState( int );
+std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
 auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
@@ -707,6 +707,17 @@ auto HudDataModel::getAvailableStrongCrosshairs() const -> QStringList {
 	return weaponPropsCache.getAvailableStrongCrosshairs();
 }
 
+static const QByteArray kIconPathPrefix( "image://wsw/" );
+
+auto HudDataModel::getIndicatorIconPath( int iconNum ) const -> QByteArray {
+	if( iconNum ) {
+		if( const auto maybePath = CG_HudIndicatorIconPath( iconNum ) ) {
+			return kIconPathPrefix + QByteArray::fromRawData( maybePath->data(), (int)maybePath->size() );
+		}
+	}
+	return QByteArray();
+}
+
 static const QByteArray kWarmup( "WARMUP" );
 static const QByteArray kCountdown( "COUNTDOWN" );
 static const QByteArray kOvertime( "OVERTIME" );
@@ -925,26 +936,27 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT betaTeamStatusChanged( m_styledBetaTeamStatus );
 	}
 
-	if( const auto oldProgress = m_alphaProgress; oldProgress != ( m_alphaProgress = CG_TeamAlphaProgress() ) ) {
-		Q_EMIT alphaProgressChanged( m_alphaProgress );
-	}
-
-	if( const auto oldProgress = m_betaProgress; oldProgress != ( m_betaProgress = CG_TeamBetaProgress() ) ) {
-		Q_EMIT betaProgressChanged( m_betaProgress );
-	}
-
 	if( const auto oldColor = m_rawAlphaColor; oldColor != ( m_rawAlphaColor = CG_TeamAlphaColor() ) ) {
 		m_alphaColor = toQColor( m_rawAlphaColor );
-		m_alphaProgressColor = toProgressColor( m_alphaColor );
 		Q_EMIT alphaColorChanged( m_alphaColor );
-		Q_EMIT alphaProgressColorChanged( m_alphaProgressColor );
 	}
 
 	if( const auto oldColor = m_rawBetaColor; oldColor != ( m_rawBetaColor = CG_TeamBetaColor() ) ) {
 		m_betaColor = toQColor( m_rawBetaColor );
-		m_betaProgressColor = toProgressColor( m_betaColor );
 		Q_EMIT betaColorChanged( m_betaColor );
-		Q_EMIT betaProgressColorChanged( m_betaProgressColor );
+	}
+
+	for( int i = 0; i < 3; ++i ) {
+		const auto oldIndicatorState( m_indicatorStates[i] );
+		if( oldIndicatorState != ( m_indicatorStates[i] = CG_HudIndicatorState( i ) ) ) {
+			if( i == 0 ) {
+				Q_EMIT indicator1StateChanged( getIndicator1State() );
+			} else if( i == 1 ) {
+				Q_EMIT indicator2StateChanged( getIndicator2State() );
+			} else if( i == 2 ) {
+				Q_EMIT indicator3StateChanged( getIndicator3State() );
+			}
+		}
 	}
 
 	const auto [minutes, seconds] = CG_GetMatchClockTime();

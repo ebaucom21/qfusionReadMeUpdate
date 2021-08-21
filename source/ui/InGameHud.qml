@@ -137,6 +137,8 @@ Item {
                     awardsAreaComponent
                 } else if (kind === HudLayoutModel.StatusMessage) {
                     statusMessageComponent
+                } else if (kind === HudLayoutModel.ObjectiveStatus) {
+                    objectiveStatusComponent
                 } else {
                     undefined
                 }
@@ -193,8 +195,6 @@ Item {
                     color: hudDataModel.alphaColor
                     name: hudDataModel.alphaName
                     score: hudDataModel.alphaScore
-                    progress: hudDataModel.alphaProgress
-                    progressColor: hudDataModel.alphaProgressColor
                     teamStatus: hudDataModel.alphaTeamStatus
                     playersStatus: hudDataModel.alphaPlayersStatus
                 }
@@ -208,8 +208,6 @@ Item {
                     color: hudDataModel.betaColor
                     name: hudDataModel.betaName
                     score: hudDataModel.betaScore
-                    progress: hudDataModel.betaProgress
-                    progressColor: hudDataModel.betaProgressColor
                     teamStatus: hudDataModel.betaTeamStatus
                     playersStatus: hudDataModel.betaPlayersStatus
                 }
@@ -243,6 +241,11 @@ Item {
             Component {
                 id: statusMessageComponent
                 HudStatusMessage {}
+            }
+
+            Component {
+                id: objectiveStatusComponent
+                HudObjectiveStatus {}
             }
 
             function getQmlAnchor(anchorBit) {

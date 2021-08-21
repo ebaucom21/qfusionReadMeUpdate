@@ -649,7 +649,8 @@ const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
 	{ "Frags feed"_asView, FragsFeed, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ), "cg_showFragsFeed"_asView },
 	{ "Message feed"_asView, MessageFeed, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ), "cg_showMessageFeed"_asView },
 	{ "Awards area"_asView, AwardsArea, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.9 ), "cg_showAwards"_asView },
-	{ "Status message"_asView, StatusMessage, QSize( 192, 32 ), QColor::fromRgbF( 0.3, 0.9, 0.7 ), std::nullopt }
+	{ "Status message"_asView, StatusMessage, QSize( 192, 32 ), QColor::fromRgbF( 0.3, 0.9, 0.7 ), std::nullopt },
+	{ "Objective status"_asView, ObjectiveStatus, QSize( 96, 64 ), QColor::fromRgbF( 0.9, 0.6, 0.3 ), std::nullopt }
 };
 
 void HudEditorModel::setFieldAreaSize( qreal width, qreal height ) {
@@ -1037,6 +1038,7 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case MessageFeed: return NoFlags;
 		case AwardsArea: return NoFlags;
 		case StatusMessage: return NoFlags;
+		case ObjectiveStatus: return NoFlags;
 		default: throw std::logic_error( "unreachable" );
 	}
 }
