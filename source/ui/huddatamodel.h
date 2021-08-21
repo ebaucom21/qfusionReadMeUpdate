@@ -269,7 +269,7 @@ class HudDataModel : public QObject {
 	bool m_hasSetAwardsModelOwnership { false };
 
 	[[nodiscard]]
-	auto getActiveLayoutModel() -> QAbstractItemModel * { return m_activeLayoutModel; }
+	auto getActiveLayoutModel() -> QObject * { return m_activeLayoutModel; }
 
 	[[nodiscard]]
 	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
@@ -358,8 +358,8 @@ class HudDataModel : public QObject {
 
 	void checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName );
 public:
-	Q_SIGNAL void activeLayoutModelChanged( QAbstractItemModel *activeLayoutModel );
-	Q_PROPERTY( QAbstractItemModel *activeLayoutModel READ getActiveLayoutModel NOTIFY activeLayoutModelChanged );
+	Q_SIGNAL void activeLayoutModelChanged( QObject *activeLayoutModel );
+	Q_PROPERTY( QObject *activeLayoutModel READ getActiveLayoutModel NOTIFY activeLayoutModelChanged );
 
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( const QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
@@ -438,15 +438,15 @@ public:
 	Q_ENUM( Powerup );
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getInventoryModel();
+	Q_INVOKABLE QObject *getInventoryModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getTeamListModel();
+	Q_INVOKABLE QObject *getTeamListModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getObituariesModel();
+	Q_INVOKABLE QObject *getObituariesModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getMessageFeedModel();
+	Q_INVOKABLE QObject *getMessageFeedModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getAwardsModel();
+	Q_INVOKABLE QObject *getAwardsModel();
 
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getWeaponFullName( int weapon ) const;

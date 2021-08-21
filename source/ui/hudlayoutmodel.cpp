@@ -663,7 +663,7 @@ void HudEditorModel::setDragAreaSize( qreal width, qreal height ) {
 	}
 }
 
-auto HudEditorModel::getLayoutModel() -> QAbstractListModel * {
+auto HudEditorModel::getLayoutModel() -> QObject * {
 	if( !m_hasSetLayoutModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_layoutModel, QQmlEngine::CppOwnership );
 		m_hasSetLayoutModelOwnership = true;
@@ -671,7 +671,7 @@ auto HudEditorModel::getLayoutModel() -> QAbstractListModel * {
 	return &m_layoutModel;
 }
 
-auto HudEditorModel::getToolboxModel() -> QAbstractListModel * {
+auto HudEditorModel::getToolboxModel() -> QObject * {
 	if( !m_hasSetToolboxModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_toolboxModel, QQmlEngine::CppOwnership );
 		m_hasSetLayoutModelOwnership = true;

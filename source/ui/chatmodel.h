@@ -172,9 +172,9 @@ public:
 	Q_SIGNAL void floodDetected();
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractItemModel *getCompactModel();
+	Q_INVOKABLE QObject *getCompactModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractItemModel *getRichModel();
+	Q_INVOKABLE QObject *getRichModel();
 
 	Q_INVOKABLE void sendMessage( const QString &text );
 

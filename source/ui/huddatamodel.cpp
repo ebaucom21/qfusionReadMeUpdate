@@ -672,7 +672,7 @@ HudDataModel::HudDataModel() {
 	m_specHudVar->modified = true;
 }
 
-auto HudDataModel::getInventoryModel() -> QAbstractListModel * {
+auto HudDataModel::getInventoryModel() -> QObject * {
 	if( !m_hasSetInventoryModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_inventoryModel, QQmlEngine::CppOwnership );
 		m_hasSetInventoryModelOwnership = true;
@@ -680,7 +680,7 @@ auto HudDataModel::getInventoryModel() -> QAbstractListModel * {
 	return &m_inventoryModel;
 }
 
-auto HudDataModel::getTeamListModel() -> QAbstractListModel * {
+auto HudDataModel::getTeamListModel() -> QObject * {
 	if( !m_hasSetTeamListModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_teamListModel, QQmlEngine::CppOwnership );
 		m_hasSetTeamListModelOwnership = true;
@@ -688,7 +688,7 @@ auto HudDataModel::getTeamListModel() -> QAbstractListModel * {
 	return &m_teamListModel;
 }
 
-auto HudDataModel::getObituariesModel() -> QAbstractListModel * {
+auto HudDataModel::getObituariesModel() -> QObject * {
 	if( !m_hasSetObituariesModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_obituariesModel, QQmlEngine::CppOwnership );
 		m_hasSetObituariesModelOwnership = true;
@@ -696,7 +696,7 @@ auto HudDataModel::getObituariesModel() -> QAbstractListModel * {
 	return &m_obituariesModel;
 }
 
-auto HudDataModel::getMessageFeedModel() -> QAbstractListModel * {
+auto HudDataModel::getMessageFeedModel() -> QObject * {
 	if( !m_hasSetMessageFeedModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_messageFeedModel, QQmlEngine::CppOwnership );
 		m_hasSetMessageFeedModelOwnership = true;
@@ -704,7 +704,7 @@ auto HudDataModel::getMessageFeedModel() -> QAbstractListModel * {
 	return &m_messageFeedModel;
 }
 
-auto HudDataModel::getAwardsModel() -> QAbstractListModel * {
+auto HudDataModel::getAwardsModel() -> QObject * {
 	if( !m_hasSetAwardsModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_awardsModel, QQmlEngine::CppOwnership );
 		m_hasSetAwardsModelOwnership = true;

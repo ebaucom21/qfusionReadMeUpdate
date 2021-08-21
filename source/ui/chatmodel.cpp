@@ -158,7 +158,7 @@ bool RichChatModel::canAddToCurrGroup( const Line *line, const QDate &date, int 
 	return false;
 }
 
-auto ChatProxy::getCompactModel() -> QAbstractItemModel * {
+auto ChatProxy::getCompactModel() -> QObject * {
 	if( !m_hasSetCompactModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_compactModel, QQmlEngine::CppOwnership );
 		m_hasSetCompactModelOwnership = true;
@@ -166,7 +166,7 @@ auto ChatProxy::getCompactModel() -> QAbstractItemModel * {
 	return &m_compactModel;
 }
 
-auto ChatProxy::getRichModel() -> QAbstractItemModel * {
+auto ChatProxy::getRichModel() -> QObject * {
 	if( !m_hasSetRichModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_richModel, QQmlEngine::CppOwnership );
 		m_hasSetRichModelOwnership = true;

@@ -91,7 +91,7 @@ public:
 	Q_INVOKABLE void setGroupFilter( int group );
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getGroupsModel();
+	Q_INVOKABLE QObject *getGroupsModel();
 
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;

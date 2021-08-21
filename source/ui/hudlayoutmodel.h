@@ -326,9 +326,9 @@ public:
 	Q_PROPERTY( unsigned maxHudNameLength READ getMaxHudNameLength CONSTANT );
 
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getLayoutModel();
+	Q_INVOKABLE QObject *getLayoutModel();
 	[[nodiscard]]
-	Q_INVOKABLE QAbstractListModel *getToolboxModel();
+	Q_INVOKABLE QObject *getToolboxModel();
 
 	Q_INVOKABLE void trackDragging( int index, qreal x, qreal y );
 	Q_INVOKABLE void finishDragging( int index );

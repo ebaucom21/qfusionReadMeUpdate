@@ -132,7 +132,7 @@ void CallvotesListModel::setGroupFilter( int group ) {
 	endResetModel();
 }
 
-auto CallvotesListModel::getGroupsModel() -> QAbstractListModel * {
+auto CallvotesListModel::getGroupsModel() -> QObject * {
 	if( !m_hasSetGroupModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_groupsModel, QQmlEngine::CppOwnership );
 		m_hasSetGroupModelOwnership = true;
