@@ -515,14 +515,19 @@ bool CG_IsSpectator() {
 }
 
 std::optional<unsigned> CG_ActiveChasePov() {
-	if( !ISREALSPECTATOR() ) {
-		assert( cg.predictedPlayerState.POVnum );
-		return cg.predictedPlayerState.POVnum - 1u;
-	}
-	// TODO: Is this a correct condition for that?
-	if( cg.predictedPlayerState.POVnum >= 0 ) {
-		if( cg.predictedPlayerState.POVnum != cg.predictedPlayerState.playerNum + 1 ) {
-			return cg.predictedPlayerState.POVnum;
+	// Don't even bother in another case
+	if( const unsigned statePovNum = cg.predictedPlayerState.POVnum; statePovNum > 0 ) {
+		unsigned chosenPovNum = 0;
+		if( !ISREALSPECTATOR() ) {
+			chosenPovNum = statePovNum;
+		} else {
+			if( statePovNum != cg.predictedPlayerState.playerNum + 1 ) {
+				chosenPovNum = statePovNum;
+			}
+		}
+		// Protect against chasing other entities (is it a thing?)
+		if( chosenPovNum && chosenPovNum < (unsigned)( gs.maxclients + 1 ) ) {
+			return chosenPovNum - 1u;
 		}
 	}
 	return std::nullopt;
