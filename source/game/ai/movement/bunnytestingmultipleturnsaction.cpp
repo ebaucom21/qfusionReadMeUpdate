@@ -2,8 +2,13 @@
 #include "movementlocal.h"
 #include "movementmodule.h"
 
+static constexpr float kMinAngularSpeed = 120.0f;
+static constexpr float kMaxAngularSpeed = 270.0f;
+static constexpr float kAngularSpeedRange = kMaxAngularSpeed - kMinAngularSpeed;
+
 const float BunnyTestingMultipleTurnsAction::kAngularSpeed[kMaxAngles] = {
-	30.0f, 60.0f, 90.0f, 150.0f, 210.0f
+	kMinAngularSpeed, kMinAngularSpeed + 0.33f * kAngularSpeedRange,
+	kMinAngularSpeed + 0.66f * kAngularSpeedRange, kMaxAngularSpeed
 };
 
 void BunnyTestingMultipleTurnsAction::PlanPredictionStep( MovementPredictionContext *context ) {
@@ -33,13 +38,24 @@ void BunnyTestingMultipleTurnsAction::PlanPredictionStep( MovementPredictionCont
 				}
 			}
 
-			float timeLike = 0.001f * context->totalMillisAhead;
 			static_assert( kMaxAttempts == 2 * kMaxAngles );
-			const float sign = attemptNum % 2 ? +1.0f : -1.0f;
-			timeLike = timeLike < 1.0 ? Q_Sqrt( Q_Sqrt( timeLike ) ) : 1.0f;
-			const float angle = ( sign * kAngularSpeed[attemptNum / 2] ) * timeLike;
+			const float sign = ( attemptNum % 2 ) ? +1.0f : -1.0f;
+
+			const float attemptAngularSpeed = kAngularSpeed[attemptNum / 2];
+			constexpr const float invAngularSpeedRange = 1.0f / ( kMaxAngularSpeed - kMinAngularSpeed );
+			// Defines how close the angular speed is to the max angular speed
+			const float fracOfMaxSpeed = ( attemptAngularSpeed - kMinAngularSpeed ) * invAngularSpeedRange;
+
+			const float timeSeconds = 0.001f * (float)context->totalMillisAhead;
+			// Hack, scale the time prior to checks (this yields better results)
+			float timeLike = 0.75f * timeSeconds;
+			if( timeLike < 1.0f ) {
+				// Change the angle slower for larger resulting turns
+				timeLike = std::pow( timeLike, 0.5f + 0.5f * fracOfMaxSpeed );
+			}
 
 			mat3_t m;
+			const float angle = ( sign * attemptAngularSpeed ) * timeLike;
 			Matrix3_Rotate( axis_identity, angle, 0.0f, 0.0f, 1.0f, m );
 			Matrix3_TransformVector( m, initialDir.Data(), lookDir );
 		}

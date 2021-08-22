@@ -25,7 +25,7 @@ public:
 
 class BunnyTestingSavedLookDirsAction : public BunnyTestingMultipleLookDirsAction {
 protected:
-	static constexpr auto kMaxSuggestedLookDirs = 40;
+	static constexpr auto kMaxSuggestedLookDirs = 48;
 
 	struct SuggestedDir {
 		Vec3 dir;

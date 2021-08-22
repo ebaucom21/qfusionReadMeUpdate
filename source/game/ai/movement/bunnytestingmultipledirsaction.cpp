@@ -88,7 +88,7 @@ void BunnyTestingMultipleLookDirsAction::PlanPredictionStep( Context *context ) 
 }
 
 class DirRotatorsCache {
-	enum { kMaxRotations = 28 };
+	enum { kMaxRotations = 36 };
 
 public:
 	struct Rotator {
@@ -107,30 +107,34 @@ private:
 public:
 	DirRotatorsCache() noexcept {
 		// We can't (?) use axis_identity due to initialization order issues (?), can we?
-		mat3_t identity = {
+		constexpr const mat3_t identity = {
 			1, 0, 0,
 			0, 1, 0,
 			0, 0, 1
 		};
 
 		int index = 0;
-		// The step is not monotonic and is not uniform intentionally
-		const float angles[kMaxRotations / 2] = {
-			4.0f, 8.0f, 12.0f, 20.0f, 16.0f, 28.0f, 24.0f, 40.0f, 36.0f, 32.0f, 45.0f, 55.0f, 65.0f, 75.0f
+		// The step is not monotonic and is not uniform (at least for the first row) intentionally
+		constexpr const float angles[kMaxRotations / 2] = {
+			4.0f, 8.0f, 12.0f, 20.0f, 16.0f, 28.0f, 24.0f, 32.0f, 36.0f,
+			40.0f, 45.0f, 55.0f, 65.0f, 75.0f, 85.0f, 95.0f, 105.0f, 120.0f
 		};
+		static_assert( std::max_element( std::begin( angles ), std::end( angles ) ) == std::end( angles ) - 1 );
+		constexpr const float maxAngle = std::end( angles )[-1];
+		constexpr const float minPenaltyAngle = 30.0f;
 		for( float angle : angles ) {
-		    unsigned penalty = 0;
-		    if( angle > 30.0f ) {
-		    	assert( angle <= 75.0f );
-		    	float frac = ( angle - 30.0f ) / ( 75.0f - 30.0f );
-		    	// Make the penalty grow as x^2 in [0, 1] range
-		        penalty = (unsigned)( 200 * frac * frac );
-		    }
+			unsigned penalty = 0;
+			if( angle > minPenaltyAngle ) {
+				assert( angle <= maxAngle );
+				const float frac = ( angle - minPenaltyAngle ) / ( maxAngle - minPenaltyAngle );
+				// Make the penalty grow as x^2 in [0, 1] range
+				penalty = (unsigned)( 300 * frac * frac );
+			}
 			// TODO: Just negate some elements? Does not really matter for a static initializer
 			for( int sign = -1; sign <= 1; sign += 2 ) {
-			    auto &r = values[index++];
-			    Matrix3_Rotate( identity, (float)sign * angle, 0, 0, 1, r.matrix );
-			    r.pathPenalty = penalty;
+				auto &r = values[index++];
+				Matrix3_Rotate( identity, (float)sign * angle, 0, 0, 1, r.matrix );
+				r.pathPenalty = penalty;
 			}
 		}
 	}
@@ -220,7 +224,6 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 	for( size_t baseDirIndex = 0; baseDirIndex <= lastBaseDirIndex; ++baseDirIndex ) {
 		const auto &__restrict base = suggestedLookDirs[baseDirIndex];
 		const auto &__restrict baseDir = base.dir;
-		const auto &__restrict baseTestedDir = cachedLessBendingDirs[baseDirIndex];
 		// Produce a rotated dir for every possible rotation
 		for( const auto &rotator: dirRotatorsCache ) {
 			Vec3 rotated( rotator.rotate( baseDir ) );
