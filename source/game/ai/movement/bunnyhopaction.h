@@ -16,6 +16,7 @@ protected:
 	int minTravelTimeAreaNumSoFar { 0 };
 
 	float distanceToReachAtStart { std::numeric_limits<float>::infinity() };
+	float distanceInNavTargetAreaAtStart { std::numeric_limits<float>::infinity() };
 
 	// A fraction of speed gain per frame time.
 	// Might be negative, in this case it limits allowed speed loss
