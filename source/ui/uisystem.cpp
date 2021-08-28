@@ -147,9 +147,6 @@ public:
 	bool isShowingPovHud() const { return m_isShowingPovHud; }
 
 	[[nodiscard]]
-	bool isOperator() const { return m_lastFrameState.isOperator; }
-
-	[[nodiscard]]
 	auto getCanJoin() const { return m_canJoin; }
 	[[nodiscard]]
 	auto getCanJoinAlpha() const { return m_canJoinAlpha; }
@@ -273,7 +270,7 @@ public:
 	Q_INVOKABLE void callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall );
 
 	Q_SIGNAL void isOperatorChanged( bool isOperator );
-	Q_PROPERTY( bool isOperator READ isOperator NOTIFY isOperatorChanged );
+	Q_PROPERTY( bool isOperator MEMBER m_isOperator NOTIFY isOperatorChanged );
 
 	enum ConnectionFailKind_ {
 		NoFail = 0,
@@ -400,13 +397,9 @@ private:
 	std::optional<ConnectionFailKind> m_connectionFailKind;
 	bool m_clearFailedConnectionState { false };
 
-	// A copy of last frame client properties for state change detection without intrusive changes to client code.
-	// Use a separate scope for clarity and for avoiding name conflicts.
-	struct {
-		connstate_t clientState { CA_UNINITIALIZED };
-		bool isPlayingADemo { false };
-		bool isOperator { false };
-	} m_lastFrameState;
+	connstate_t m_clientState { CA_UNINITIALIZED };
+	bool m_isPlayingADemo { false };
+	bool m_isOperator { false };
 
 	enum ActiveMenuMask : unsigned {
 		MainMenu             = 0x1,
@@ -1004,7 +997,7 @@ void QtUISystem::drawSelfInMainContext() {
 }
 
 void QtUISystem::drawBackgroundMapIfNeeded() {
-	if( m_lastFrameState.clientState != CA_DISCONNECTED ) {
+	if( m_clientState != CA_DISCONNECTED ) {
 		m_hasStartedBackgroundMapLoading = false;
 		m_hasSucceededBackgroundMapLoading = false;
 		return;
@@ -1143,16 +1136,16 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned>
 }
 
 void QtUISystem::checkPropertyChanges() {
-	const auto lastClientState = m_lastFrameState.clientState;
+	const auto lastClientState = m_clientState;
 	const auto actualClientState = cls.state;
-	m_lastFrameState.clientState = actualClientState;
+	m_clientState = actualClientState;
 
-	const bool wasPlayingADemo = m_lastFrameState.isPlayingADemo;
+	const bool wasPlayingADemo = m_isPlayingADemo;
 	const bool isPlayingADemo = cls.demoPlayer.playing;
-	m_lastFrameState.isPlayingADemo = isPlayingADemo;
+	m_isPlayingADemo = isPlayingADemo;
 
 	bool checkMaskChanges = false;
-	if( m_lastFrameState.clientState != lastClientState ) {
+	if( m_clientState != lastClientState ) {
 		checkMaskChanges = true;
 	} else if( isPlayingADemo != wasPlayingADemo ) {
 		checkMaskChanges = true;
