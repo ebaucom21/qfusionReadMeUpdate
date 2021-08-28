@@ -272,43 +272,6 @@ class HudDataModel : public QObject {
 	auto getActiveLayoutModel() -> QObject * { return m_activeLayoutModel; }
 
 	[[nodiscard]]
-	auto getAlphaName() const -> const QByteArray & { return m_styledAlphaName; }
-	[[nodiscard]]
-	auto getBetaName() const -> const QByteArray & { return m_styledBetaName; }
-	[[nodiscard]]
-	auto getAlphaColor() const -> QColor { return m_alphaColor; }
-	[[nodiscard]]
-	auto getBetaColor() const -> QColor { return m_betaColor; }
-	[[nodiscard]]
-	auto getAlphaScore() const -> int { return m_alphaScore; }
-	[[nodiscard]]
-	auto getBetaScore() const -> int { return m_betaScore; }
-	[[nodiscard]]
-	auto getAlphaPlayersStatus() const -> const QByteArray & { return m_alphaPlayersStatus; }
-	[[nodiscard]]
-	auto getBetaPlayersStatus() const -> const QByteArray & { return m_betaPlayersStatus; }
-	[[nodiscard]]
-	auto getAlphaTeamStatus() const -> const QByteArray & { return m_styledAlphaTeamStatus; }
-	[[nodiscard]]
-	auto getBetaTeamStatus() const -> const QByteArray & { return m_styledBetaTeamStatus; }
-	[[nodiscard]]
-	auto getAlphaProgressColor() const -> QColor { return m_alphaProgressColor; }
-	[[nodiscard]]
-	auto getBetaProgressColor() const -> QColor { return m_betaProgressColor; }
-	[[nodiscard]]
-	auto getAlphaProgress() const { return m_alphaProgress; }
-	[[nodiscard]]
-	auto getBetaProgress() const { return m_betaProgress; }
-	[[nodiscard]]
-	bool getHasTwoTeams() const { return m_hasTwoTeams; }
-	[[nodiscard]]
-	bool getIsSpectator() const { return m_isSpectator; }
-	[[nodiscard]]
-	bool getHasActivePov() const { return m_hasActivePov; }
-	[[nodiscard]]
-	bool getIsPovAlive() const { return m_isPovAlive; }
-
-	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
 		return QColor::fromRgb( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ) );
 	}
@@ -317,13 +280,6 @@ class HudDataModel : public QObject {
 		return color.valueF() > 0.5 ? color : QColor::fromHsvF( color.hue(), color.saturation(), 0.5 );
 	}
 
-	[[nodiscard]]
-	auto getMatchTimeSeconds() const -> QByteArray { return m_formattedSeconds; }
-	[[nodiscard]]
-	auto getMatchTimeMinutes() const -> QByteArray { return m_formattedMinutes; }
-	[[nodiscard]]
-	auto getMatchState() const -> QByteArray { return m_displayedMatchState; }
-
 	static void setFormattedTime( QByteArray *dest, int value );
 	static void setStyledTeamName( QByteArray *dest, const wsw::StringView &name );
 
@@ -331,23 +287,6 @@ class HudDataModel : public QObject {
 	auto getActiveWeaponIcon() const -> QByteArray;
 	[[nodiscard]]
 	auto getActiveWeaponName() const -> QByteArray;
-
-
-	[[nodiscard]]
-	auto getActiveWeaponStrongAmmo() const -> int { return m_activeWeaponStrongAmmo; }
-	[[nodiscard]]
-	auto getActiveWeaponWeakAmmo() const -> int { return m_activeWeaponWeakAmmo; }
-
-	[[nodiscard]]
-	auto getHealth() const -> int { return m_health; }
-	[[nodiscard]]
-	auto getArmor() const -> int { return m_armor; }
-
-	[[nodiscard]]
-	auto getStatusMessage() const -> QString { return m_formattedStatusMessage; }
-
-	[[nodiscard]]
-	bool getHasLocations() const { return m_hasLocations; }
 
 	[[nodiscard]]
 	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
@@ -362,73 +301,73 @@ public:
 	Q_PROPERTY( QObject *activeLayoutModel READ getActiveLayoutModel NOTIFY activeLayoutModelChanged );
 
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
-	Q_PROPERTY( const QByteArray alphaName READ getAlphaName NOTIFY alphaNameChanged );
+	Q_PROPERTY( const QByteArray alphaName MEMBER m_styledAlphaName NOTIFY alphaNameChanged );
 	Q_SIGNAL void betaNameChanged( const QByteArray &betaName );
-	Q_PROPERTY( const QByteArray betaName READ getBetaName NOTIFY betaNameChanged );
+	Q_PROPERTY( const QByteArray betaName MEMBER m_styledBetaName NOTIFY betaNameChanged );
 	Q_SIGNAL void alphaColorChanged( const QColor &alphaColor );
-	Q_PROPERTY( QColor alphaColor READ getAlphaColor NOTIFY alphaColorChanged );
+	Q_PROPERTY( QColor alphaColor MEMBER m_alphaColor NOTIFY alphaColorChanged );
 	Q_SIGNAL void betaColorChanged( const QColor &betaColor );
-	Q_PROPERTY( QColor betaColor READ getBetaColor NOTIFY betaColorChanged );
+	Q_PROPERTY( QColor betaColor MEMBER m_betaColor NOTIFY betaColorChanged );
 	Q_SIGNAL void alphaScoreChanged( int alphaScore );
-	Q_PROPERTY( int alphaScore READ getAlphaScore NOTIFY alphaScoreChanged );
+	Q_PROPERTY( int alphaScore MEMBER m_alphaScore NOTIFY alphaScoreChanged );
 	Q_SIGNAL void betaScoreChanged( int betaScore );
-	Q_PROPERTY( int betaScore READ getBetaScore NOTIFY betaScoreChanged );
+	Q_PROPERTY( int betaScore MEMBER m_betaScore NOTIFY betaScoreChanged );
 	Q_SIGNAL void alphaPlayersStatusChanged( const QByteArray &alphaPlayersStatus );
-	Q_PROPERTY( const QByteArray alphaPlayersStatus READ getAlphaPlayersStatus NOTIFY alphaPlayersStatusChanged );
+	Q_PROPERTY( const QByteArray alphaPlayersStatus MEMBER m_alphaPlayersStatus NOTIFY alphaPlayersStatusChanged );
 	Q_SIGNAL void betaPlayersStatusChanged( const QByteArray &betaPlayersStatus );
-	Q_PROPERTY( const QByteArray betaPlayersStatus READ getBetaPlayersStatus NOTIFY betaPlayersStatusChanged );
+	Q_PROPERTY( const QByteArray betaPlayersStatus MEMBER m_betaPlayersStatus NOTIFY betaPlayersStatusChanged );
 	Q_SIGNAL void alphaTeamStatusChanged( const QByteArray &alphaTeamStatus );
-	Q_PROPERTY( const QByteArray alphaTeamStatus READ getAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
+	Q_PROPERTY( const QByteArray alphaTeamStatus MEMBER m_styledAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
 	Q_SIGNAL void betaTeamStatusChanged( const QByteArray &betaTeamStatus );
-	Q_PROPERTY( const QByteArray betaTeamStatus READ getBetaTeamStatus NOTIFY betaTeamStatusChanged );
+	Q_PROPERTY( const QByteArray betaTeamStatus MEMBER m_styledBetaTeamStatus NOTIFY betaTeamStatusChanged );
 	Q_SIGNAL void alphaProgressChanged( int alphaProgress );
-	Q_PROPERTY( int alphaProgress READ getAlphaProgress NOTIFY alphaProgressChanged );
+	Q_PROPERTY( int alphaProgress MEMBER m_alphaProgress NOTIFY alphaProgressChanged );
 	Q_SIGNAL void betaProgressChanged( int betaProgress );
-	Q_PROPERTY( int betaProgress READ getBetaProgress NOTIFY betaProgressChanged );
+	Q_PROPERTY( int betaProgress MEMBER m_betaProgress NOTIFY betaProgressChanged );
 	Q_SIGNAL void alphaProgressColorChanged( const QColor &alphaProgressColor );
-	Q_PROPERTY( const QColor alphaProgressColor READ getAlphaProgressColor NOTIFY alphaProgressColorChanged );
+	Q_PROPERTY( const QColor alphaProgressColor MEMBER m_alphaProgressColor NOTIFY alphaProgressColorChanged );
 	Q_SIGNAL void betaProgressColorChanged( const QColor &betaProgressColor );
-	Q_PROPERTY( const QColor betaProgressColor READ getBetaProgressColor NOTIFY betaProgressColorChanged );
+	Q_PROPERTY( const QColor betaProgressColor MEMBER m_betaProgressColor NOTIFY betaProgressColorChanged );
 
 	Q_SIGNAL void hasTwoTeamsChanged( bool hasTwoTeams );
-	Q_PROPERTY( bool hasTwoTeams READ getHasTwoTeams NOTIFY hasTwoTeamsChanged );
+	Q_PROPERTY( bool hasTwoTeams MEMBER m_hasTwoTeams NOTIFY hasTwoTeamsChanged );
 	Q_SIGNAL void isSpectatorChanged( bool isSpectator );
-	Q_PROPERTY( bool isSpectator READ getIsSpectator NOTIFY isSpectatorChanged );
+	Q_PROPERTY( bool isSpectator MEMBER m_isSpectator NOTIFY isSpectatorChanged );
 
 	Q_SIGNAL void hasActivePovChanged( bool hasActivePov );
-	Q_PROPERTY( bool hasActivePov READ getHasActivePov NOTIFY hasActivePovChanged );
+	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );
 	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
-	Q_PROPERTY( bool isPovAlive READ getIsPovAlive NOTIFY isPovAliveChanged );
+	Q_PROPERTY( bool isPovAlive MEMBER m_isPovAlive NOTIFY isPovAliveChanged );
 
 	Q_SIGNAL void matchTimeSecondsChanged( const QByteArray &seconds );
-	Q_PROPERTY( const QByteArray matchTimeSeconds READ getMatchTimeSeconds NOTIFY matchTimeSecondsChanged );
+	Q_PROPERTY( const QByteArray matchTimeSeconds MEMBER m_formattedSeconds NOTIFY matchTimeSecondsChanged );
 	Q_SIGNAL void matchTimeMinutesChanged( const QByteArray &minutes );
-	Q_PROPERTY( const QByteArray matchTimeMinutes READ getMatchTimeMinutes NOTIFY matchTimeMinutesChanged );
+	Q_PROPERTY( const QByteArray matchTimeMinutes MEMBER m_formattedMinutes NOTIFY matchTimeMinutesChanged );
 	Q_SIGNAL void matchStateChanged( const QByteArray &matchState );
-	Q_PROPERTY( const QByteArray matchState READ getMatchState NOTIFY matchStateChanged );
+	Q_PROPERTY( const QByteArray matchState MEMBER m_displayedMatchState NOTIFY matchStateChanged );
 
 	Q_SIGNAL void activeWeaponIconChanged( const QByteArray &activeWeaponIcon );
 	Q_PROPERTY( QByteArray activeWeaponIcon READ getActiveWeaponIcon NOTIFY activeWeaponIconChanged );
 	Q_SIGNAL void activeWeaponNameChanged( const QByteArray &activeWeaponName );
 	Q_PROPERTY( QByteArray activeWeaponName READ getActiveWeaponName NOTIFY activeWeaponNameChanged );
 	Q_SIGNAL int activeWeaponWeakAmmoChanged( int activeWeaponWeaponAmmo );
-	Q_PROPERTY( int activeWeaponWeakAmmo READ getActiveWeaponWeakAmmo NOTIFY activeWeaponWeakAmmoChanged );
+	Q_PROPERTY( int activeWeaponWeakAmmo MEMBER m_activeWeaponWeakAmmo NOTIFY activeWeaponWeakAmmoChanged );
 	Q_SIGNAL int activeWeaponStrongAmmoChanged( int activeWeaponStrongAmmo );
-	Q_PROPERTY( int activeWeaponStrongAmmo READ getActiveWeaponStrongAmmo NOTIFY activeWeaponStrongAmmoChanged );
+	Q_PROPERTY( int activeWeaponStrongAmmo MEMBER m_activeWeaponStrongAmmo NOTIFY activeWeaponStrongAmmoChanged );
 
 	Q_SIGNAL void healthChanged( int health );
-	Q_PROPERTY( int health READ getHealth NOTIFY healthChanged );
+	Q_PROPERTY( int health MEMBER m_health NOTIFY healthChanged );
 	Q_SIGNAL void armorChanged( int armor );
-	Q_PROPERTY( int armor READ getArmor NOTIFY armorChanged );
+	Q_PROPERTY( int armor MEMBER m_armor NOTIFY armorChanged );
 
 	Q_SIGNAL void hasLocationsChanged( bool hasLocations );
-	Q_PROPERTY( bool hasLocations READ getHasLocations NOTIFY hasLocationsChanged );
+	Q_PROPERTY( bool hasLocations MEMBER m_hasLocations NOTIFY hasLocationsChanged );
 
 	Q_SIGNAL void isMessageFeedFadingOutChanged( bool isMessageFeedFadingOut );
 	Q_PROPERTY( bool isMessageFeedFadingOut READ getIsMessageFeedFadingOut NOTIFY isMessageFeedFadingOutChanged );
 
 	Q_SIGNAL void statusMessageChanged( const QString &statusMessage );
-	Q_PROPERTY( QString statusMessage READ getStatusMessage NOTIFY statusMessageChanged );
+	Q_PROPERTY( QString statusMessage MEMBER m_formattedStatusMessage NOTIFY statusMessageChanged );
 
 	enum Powerup {
 		Quad  = 0x1,

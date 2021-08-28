@@ -725,7 +725,7 @@ void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t tim
 	m_lastStatusMessageTimestamp = timestamp;
 	m_originalStatusMessage.assign( truncatedMessage );
 	m_formattedStatusMessage = toStyledText( truncatedMessage );
-	Q_EMIT statusMessageChanged( getStatusMessage() );
+	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
 }
 
 static const wsw::StringView kDefaultHudName( "default"_asView );
@@ -764,16 +764,12 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT activeLayoutModelChanged( m_activeLayoutModel );
 	}
 
-	const bool hadTwoTeams = getHasTwoTeams();
-	m_hasTwoTeams = CG_HasTwoTeams();
-	if( const bool hasTwoTeams = getHasTwoTeams(); hasTwoTeams != hadTwoTeams ) {
-		Q_EMIT hasTwoTeamsChanged( hasTwoTeams );
+	if( const bool hadTwoTeams = m_hasTwoTeams; hadTwoTeams != ( m_hasTwoTeams = CG_HasTwoTeams() ) ) {
+		Q_EMIT hasTwoTeamsChanged( m_hasTwoTeams );
 	}
 
-	const bool wasSpectator = getIsSpectator();
-	m_isSpectator = CG_IsSpectator();
-	if( const bool isSpectator = getIsSpectator(); isSpectator != wasSpectator ) {
-		Q_EMIT isSpectatorChanged( isSpectator );
+	if( const bool wasSpectator = m_isSpectator; wasSpectator != ( m_isSpectator = CG_IsSpectator() ) ) {
+		Q_EMIT isSpectatorChanged( m_isSpectator );
 	}
 
 	const bool hadActivePov = m_hasActivePov, wasPovAlive = m_isPovAlive;
@@ -799,14 +795,14 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	if( !m_alphaName.equals( alphaName ) ) {
 		m_alphaName.assign( alphaName );
 		setStyledTeamName( &m_styledAlphaName, alphaName );
-		Q_EMIT alphaNameChanged( getAlphaName() );
+		Q_EMIT alphaNameChanged( m_styledAlphaName );
 	}
 
 	const wsw::StringView betaName( ::cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
 	if( !m_betaName.equals( betaName ) ) {
 		m_betaName.assign( betaName );
 		setStyledTeamName( &m_styledBetaName, betaName );
-		Q_EMIT betaNameChanged( getBetaName() );
+		Q_EMIT betaNameChanged( m_styledBetaName );
 	}
 
 	if( m_numAliveAlphaPlayers != m_pendingNumAliveAlphaPlayers ) {
@@ -862,13 +858,13 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		assert( minutes >= 0 );
 		m_matchTimeMinutes = minutes;
 		setFormattedTime( &m_formattedMinutes, minutes );
-		Q_EMIT matchTimeMinutesChanged( getMatchTimeMinutes() );
+		Q_EMIT matchTimeMinutesChanged( m_formattedMinutes );
 	}
 	if( seconds != m_matchTimeSeconds ) {
 		assert( (unsigned)seconds < 60u );
 		m_matchTimeSeconds = seconds;
 		setFormattedTime( &m_formattedSeconds, seconds );
-		Q_EMIT matchTimeSecondsChanged( getMatchTimeSeconds() );
+		Q_EMIT matchTimeSecondsChanged( m_formattedSeconds );
 	}
 
 	const QByteArray *displayedMatchState = &kNoMatchState;

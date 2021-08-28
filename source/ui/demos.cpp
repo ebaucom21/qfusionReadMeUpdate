@@ -646,6 +646,9 @@ void DemoPlayer::checkUpdates() {
 }
 
 void DemoPlayer::reloadMetadata() {
+	m_serverName = m_timestamp = m_mapName = m_gametype = QString();
+	m_duration = 0;
+
 	wsw::DemoMetadataReader reader( cls.demoPlayer.meta_data, cls.demoPlayer.meta_data_realsize );
 	while( reader.hasNextPair() ) {
 		if( const auto maybePair = reader.readNextPair() ) {
@@ -669,12 +672,12 @@ void DemoPlayer::reloadMetadata() {
 
 	m_demoName = QString::fromLatin1( cls.demoPlayer.name );
 
-	Q_EMIT serverNameChanged( getServerName() );
-	Q_EMIT timestampChanged( getTimestamp() );
-	Q_EMIT durationChanged( getDuration() );
-	Q_EMIT mapNameChanged( getMapName() );
-	Q_EMIT gametypeChanged( getGametype() );
-	Q_EMIT demoNameChanged( getDemoName() );
+	Q_EMIT serverNameChanged( m_serverName );
+	Q_EMIT timestampChanged( m_timestamp );
+	Q_EMIT durationChanged( m_duration );
+	Q_EMIT mapNameChanged( m_mapName );
+	Q_EMIT gametypeChanged( m_gametype );
+	Q_EMIT demoNameChanged( m_demoName );
 }
 
 void DemoPlayer::play( const QByteArray &fileName ) {

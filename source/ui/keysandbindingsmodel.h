@@ -101,73 +101,31 @@ private:
 	Q_SIGNAL void commandsRespectColumn1Changed();
 	Q_SIGNAL void commandsRespectColumn2Changed();
 
-	[[nodiscard]] auto getMainKeyboardPaneRow1() const -> const QJsonArray & { return m_keyboardMainPadRowModel[0]; }
-	[[nodiscard]] auto getMainKeyboardPaneRow2() const -> const QJsonArray & { return m_keyboardMainPadRowModel[1]; }
-	[[nodiscard]] auto getMainKeyboardPaneRow3() const -> const QJsonArray & { return m_keyboardMainPadRowModel[2]; }
-	[[nodiscard]] auto getMainKeyboardPaneRow4() const -> const QJsonArray & { return m_keyboardMainPadRowModel[3]; }
-	[[nodiscard]] auto getMainKeyboardPaneRow5() const -> const QJsonArray & { return m_keyboardMainPadRowModel[4]; }
-	[[nodiscard]] auto getMainKeyboardPaneRow6() const -> const QJsonArray & { return m_keyboardMainPadRowModel[5]; }
+	Q_PROPERTY( QJsonArray keyboardMainPadRow1 MEMBER ( m_keyboardMainPadRowModel[0] ) NOTIFY keyboardMainPadRow1Changed );
+	Q_PROPERTY( QJsonArray keyboardMainPadRow2 MEMBER ( m_keyboardMainPadRowModel[1] ) NOTIFY keyboardMainPadRow2Changed );
+	Q_PROPERTY( QJsonArray keyboardMainPadRow3 MEMBER ( m_keyboardMainPadRowModel[2] ) NOTIFY keyboardMainPadRow3Changed );
+	Q_PROPERTY( QJsonArray keyboardMainPadRow4 MEMBER ( m_keyboardMainPadRowModel[3] ) NOTIFY keyboardMainPadRow4Changed );
+	Q_PROPERTY( QJsonArray keyboardMainPadRow5 MEMBER ( m_keyboardMainPadRowModel[4] ) NOTIFY keyboardMainPadRow5Changed );
+	Q_PROPERTY( QJsonArray keyboardMainPadRow6 MEMBER ( m_keyboardMainPadRowModel[5] ) NOTIFY keyboardMainPadRow6Changed );
 
-	[[nodiscard]]
-	auto getKeyboardArrowPadRow1() const -> const QJsonArray & { return m_keyboardArrowPadRowModel[0]; }
-	[[nodiscard]]
-	auto getKeyboardArrowPadRow2() const -> const QJsonArray & { return m_keyboardArrowPadRowModel[1]; }
-	[[nodiscard]]
-	auto getKeyboardArrowPadRow3() const -> const QJsonArray & { return m_keyboardArrowPadRowModel[2]; }
-	[[nodiscard]]
-	auto getKeyboardArrowPadRow4() const -> const QJsonArray & { return m_keyboardArrowPadRowModel[3]; }
-	[[nodiscard]]
-	auto getKeyboardArrowPadRow5() const -> const QJsonArray & { return m_keyboardArrowPadRowModel[4]; }
-
-	[[nodiscard]] 
-	auto getKeyboardNumPadRow1() const -> const QJsonArray & { return m_keyboardNumPadRowModel[0]; }
-	[[nodiscard]] 
-	auto getKeyboardNumPadRow2() const -> const QJsonArray & { return m_keyboardNumPadRowModel[1]; }
-	[[nodiscard]] 
-	auto getKeyboardNumPadRow3() const -> const QJsonArray & { return m_keyboardNumPadRowModel[2]; }
-	[[nodiscard]] 
-	auto getKeyboardNumPadRow4() const -> const QJsonArray & { return m_keyboardNumPadRowModel[3]; }
-	[[nodiscard]] 
-	auto getKeyboardNumPadRow5() const -> const QJsonArray & { return m_keyboardNumPadRowModel[4]; }
-
-	[[nodiscard]]
-	auto getCommandsMovementColumn() const -> const QJsonArray & { return m_commandsMovementColumnModel; }
-	[[nodiscard]]
-	auto getCommandsActionsColumn() const -> const QJsonArray & { return m_commandsActionsColumnModel; }
-	[[nodiscard]]
-	auto getCommandsWeaponsColumn1() const -> const QJsonArray & { return m_commandsWeaponsColumnModel[0]; }
-	[[nodiscard]]
-	auto getCommandsWeaponsColumn2() const -> const QJsonArray & { return m_commandsWeaponsColumnModel[1]; }
-	[[nodiscard]]
-	auto getCommandsRespectColumn1() const -> const QJsonArray & { return m_commandsRespectColumnModel[0]; }
-	[[nodiscard]]
-	auto getCommandsRespectColumn2() const -> const QJsonArray & { return m_commandsRespectColumnModel[1]; }
+	Q_PROPERTY( QJsonArray keyboardArrowPadRow1 MEMBER ( m_keyboardArrowPadRowModel[0] ) NOTIFY keyboardArrowPadRow1Changed );
+	Q_PROPERTY( QJsonArray keyboardArrowPadRow2 MEMBER ( m_keyboardArrowPadRowModel[1] ) NOTIFY keyboardArrowPadRow2Changed );
+	Q_PROPERTY( QJsonArray keyboardArrowPadRow3 MEMBER ( m_keyboardArrowPadRowModel[2] ) NOTIFY keyboardArrowPadRow3Changed );
+	Q_PROPERTY( QJsonArray keyboardArrowPadRow4 MEMBER ( m_keyboardArrowPadRowModel[3] ) NOTIFY keyboardArrowPadRow4Changed );
+	Q_PROPERTY( QJsonArray keyboardArrowPadRow5 MEMBER ( m_keyboardArrowPadRowModel[4] ) NOTIFY keyboardArrowPadRow5Changed );
 	
-	Q_PROPERTY( QJsonArray keyboardMainPadRow1 READ getMainKeyboardPaneRow1 NOTIFY keyboardMainPadRow1Changed );
-	Q_PROPERTY( QJsonArray keyboardMainPadRow2 READ getMainKeyboardPaneRow2 NOTIFY keyboardMainPadRow2Changed );
-	Q_PROPERTY( QJsonArray keyboardMainPadRow3 READ getMainKeyboardPaneRow3 NOTIFY keyboardMainPadRow3Changed );
-	Q_PROPERTY( QJsonArray keyboardMainPadRow4 READ getMainKeyboardPaneRow4 NOTIFY keyboardMainPadRow4Changed );
-	Q_PROPERTY( QJsonArray keyboardMainPadRow5 READ getMainKeyboardPaneRow5 NOTIFY keyboardMainPadRow5Changed );
-	Q_PROPERTY( QJsonArray keyboardMainPadRow6 READ getMainKeyboardPaneRow6 NOTIFY keyboardMainPadRow6Changed );
+	Q_PROPERTY( QJsonArray keyboardNumPadRow1 MEMBER ( m_keyboardNumPadRowModel[0] ) NOTIFY keyboardNumPadRow1Changed );
+	Q_PROPERTY( QJsonArray keyboardNumPadRow2 MEMBER ( m_keyboardNumPadRowModel[1] ) NOTIFY keyboardNumPadRow2Changed );
+	Q_PROPERTY( QJsonArray keyboardNumPadRow3 MEMBER ( m_keyboardNumPadRowModel[2] ) NOTIFY keyboardNumPadRow3Changed );
+	Q_PROPERTY( QJsonArray keyboardNumPadRow4 MEMBER ( m_keyboardNumPadRowModel[3] ) NOTIFY keyboardNumPadRow4Changed );
+	Q_PROPERTY( QJsonArray keyboardNumPadRow5 MEMBER ( m_keyboardNumPadRowModel[4] ) NOTIFY keyboardNumPadRow5Changed );
 
-	Q_PROPERTY( QJsonArray keyboardArrowPadRow1 READ getKeyboardArrowPadRow1 NOTIFY keyboardArrowPadRow1Changed );
-	Q_PROPERTY( QJsonArray keyboardArrowPadRow2 READ getKeyboardArrowPadRow2 NOTIFY keyboardArrowPadRow2Changed );
-	Q_PROPERTY( QJsonArray keyboardArrowPadRow3 READ getKeyboardArrowPadRow3 NOTIFY keyboardArrowPadRow3Changed );
-	Q_PROPERTY( QJsonArray keyboardArrowPadRow4 READ getKeyboardArrowPadRow4 NOTIFY keyboardArrowPadRow4Changed );
-	Q_PROPERTY( QJsonArray keyboardArrowPadRow5 READ getKeyboardArrowPadRow5 NOTIFY keyboardArrowPadRow5Changed );
-	
-	Q_PROPERTY( QJsonArray keyboardNumPadRow1 READ getKeyboardNumPadRow1 NOTIFY keyboardNumPadRow1Changed );
-	Q_PROPERTY( QJsonArray keyboardNumPadRow2 READ getKeyboardNumPadRow2 NOTIFY keyboardNumPadRow2Changed );
-	Q_PROPERTY( QJsonArray keyboardNumPadRow3 READ getKeyboardNumPadRow3 NOTIFY keyboardNumPadRow3Changed );
-	Q_PROPERTY( QJsonArray keyboardNumPadRow4 READ getKeyboardNumPadRow4 NOTIFY keyboardNumPadRow4Changed );
-	Q_PROPERTY( QJsonArray keyboardNumPadRow5 READ getKeyboardNumPadRow5 NOTIFY keyboardNumPadRow5Changed );
-
-	Q_PROPERTY( QJsonArray commandsMovementColumn READ getCommandsMovementColumn NOTIFY commandsMovementColumnChanged );
-	Q_PROPERTY( QJsonArray commandsActionsColumn READ getCommandsActionsColumn NOTIFY commandsActionsColumnChanged );
-	Q_PROPERTY( QJsonArray commandsWeaponsColumn1 READ getCommandsWeaponsColumn1 NOTIFY commandsWeaponsColumn1Changed );
-	Q_PROPERTY( QJsonArray commandsWeaponsColumn2 READ getCommandsWeaponsColumn2 NOTIFY commandsWeaponsColumn2Changed );
-	Q_PROPERTY( QJsonArray commandsRespectColumn1 READ getCommandsRespectColumn1 NOTIFY commandsRespectColumn1Changed );
-	Q_PROPERTY( QJsonArray commandsRespectColumn2 READ getCommandsRespectColumn2 NOTIFY commandsRespectColumn2Changed );
+	Q_PROPERTY( QJsonArray commandsMovementColumn MEMBER m_commandsMovementColumnModel NOTIFY commandsMovementColumnChanged );
+	Q_PROPERTY( QJsonArray commandsActionsColumn MEMBER m_commandsActionsColumnModel NOTIFY commandsActionsColumnChanged );
+	Q_PROPERTY( QJsonArray commandsWeaponsColumn1 MEMBER ( m_commandsWeaponsColumnModel[0] ) NOTIFY commandsWeaponsColumn1Changed );
+	Q_PROPERTY( QJsonArray commandsWeaponsColumn2 MEMBER ( m_commandsWeaponsColumnModel[1] ) NOTIFY commandsWeaponsColumn2Changed );
+	Q_PROPERTY( QJsonArray commandsRespectColumn1 MEMBER ( m_commandsRespectColumnModel[0] ) NOTIFY commandsRespectColumn1Changed );
+	Q_PROPERTY( QJsonArray commandsRespectColumn2 MEMBER ( m_commandsRespectColumnModel[1] ) NOTIFY commandsRespectColumn2Changed );
 
 	template <typename Array>
 	void reloadKeyBindings( Array &array, const wsw::StringView &changedSignalPrefix );

@@ -271,12 +271,6 @@ class HudEditorModel : public QObject {
 	bool m_hasSetLayoutModelOwnership { false };
 	bool m_hasSetToolboxModelOwnership { false };
 
-	[[nodiscard]]
-	auto getDisplayedFieldAnchors() const -> int { return m_displayedFieldAnchors; }
-
-	[[nodiscard]]
-	auto getExistingHuds() const -> QJsonArray { return m_existingHuds; }
-
 	void setDisplayedFieldAnchors( int anchors ) {
 		if( m_displayedFieldAnchors != anchors ) {
 			m_displayedFieldAnchors = anchors;
@@ -318,10 +312,10 @@ public:
 	HudEditorModel();
 
 	Q_SIGNAL void displayedFieldAnchorsChanged( int displayedFieldAnchors );
-	Q_PROPERTY( int displayedFieldAnchors READ getDisplayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
+	Q_PROPERTY( int displayedFieldAnchors MEMBER m_displayedFieldAnchors NOTIFY displayedFieldAnchorsChanged );
 
 	Q_SIGNAL void existingHudsChanged( const QJsonArray &existingHuds );
-	Q_PROPERTY( const QJsonArray existingHuds READ getExistingHuds NOTIFY existingHudsChanged );
+	Q_PROPERTY( const QJsonArray existingHuds MEMBER m_existingHuds NOTIFY existingHudsChanged );
 
 	Q_PROPERTY( unsigned maxHudNameLength READ getMaxHudNameLength CONSTANT );
 

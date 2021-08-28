@@ -199,54 +199,35 @@ class DemoPlayer : public QObject {
 
 	explicit DemoPlayer( QtUISystem * ) {}
 
-	[[nodiscard]]
-	bool isPlaying() const { return m_isPlaying; }
-	[[nodiscard]]
-	bool isPaused() const { return m_isPaused; }
-	[[nodiscard]]
-	int getDuration() const { return m_duration; }
-	[[nodiscard]]
-	int getProgress() const { return m_progress; }
-	[[nodiscard]]
-	QString getTimestamp() const { return m_timestamp; }
-	[[nodiscard]]
-	QString getGametype() const { return m_gametype; }
-	[[nodiscard]]
-	QString getMapName() const { return m_mapName; };
-	[[nodiscard]]
-	QString getServerName() const { return m_serverName; }
-	[[nodiscard]]
-	QString getDemoName() const { return m_demoName; }
-
 	void checkUpdates();
 	void reloadMetadata();
 public:
 	Q_SIGNAL void isPlayingChanged( bool isPlaying );
-	Q_PROPERTY( bool isPlaying READ isPlaying NOTIFY isPlayingChanged );
+	Q_PROPERTY( bool isPlaying MEMBER m_isPlaying NOTIFY isPlayingChanged );
 
 	Q_SIGNAL void isPausedChanged( bool isPaused );
-	Q_PROPERTY( bool isPaused READ isPaused NOTIFY isPausedChanged );
+	Q_PROPERTY( bool isPaused MEMBER m_isPaused NOTIFY isPausedChanged );
 
 	Q_SIGNAL void durationChanged( int duration );
-	Q_PROPERTY( int duration READ getDuration NOTIFY durationChanged );
+	Q_PROPERTY( int duration MEMBER m_duration NOTIFY durationChanged );
 
 	Q_SIGNAL void progressChanged( int progress );
-	Q_PROPERTY( int progress READ getProgress NOTIFY progressChanged );
+	Q_PROPERTY( int progress MEMBER m_progress NOTIFY progressChanged );
 
 	Q_SIGNAL void timestampChanged( QString timestamp );
-	Q_PROPERTY( QString timestamp READ getTimestamp NOTIFY timestampChanged );
+	Q_PROPERTY( QString timestamp MEMBER m_timestamp NOTIFY timestampChanged );
 
 	Q_SIGNAL void gametypeChanged( QString gametype );
-	Q_PROPERTY( QString gametype READ getGametype NOTIFY gametypeChanged );
+	Q_PROPERTY( QString gametype MEMBER m_gametype NOTIFY gametypeChanged );
 
 	Q_SIGNAL void mapNameChanged( QString mapName );
-	Q_PROPERTY( QString mapName READ getMapName NOTIFY mapNameChanged );
+	Q_PROPERTY( QString mapName MEMBER m_mapName NOTIFY mapNameChanged );
 
 	Q_SIGNAL void serverNameChanged( QString serverName );
-	Q_PROPERTY( QString serverName READ getServerName NOTIFY serverNameChanged );
+	Q_PROPERTY( QString serverName MEMBER m_serverName NOTIFY serverNameChanged );
 
 	Q_SIGNAL void demoNameChanged( QString demoName );
-	Q_PROPERTY( QString demoName READ getDemoName NOTIFY demoNameChanged );
+	Q_PROPERTY( QString demoName MEMBER m_demoName NOTIFY demoNameChanged );
 
 	Q_INVOKABLE void play( const QByteArray &fileName );
 	Q_INVOKABLE void pause();
