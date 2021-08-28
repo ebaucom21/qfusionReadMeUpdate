@@ -51,7 +51,7 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 		botInput->SetAllowedRotationMask( BotInputRotation::NONE );
 	} else {
 		const auto &entityPhysicsState = context->movementState->entityPhysicsState;
-		if( !entityPhysicsState.GroundEntity() ) {
+		if( !entityPhysicsState.GroundEntity() && CanWaitForLanding( context ) ) {
 			// Fallback path movement is the last hope action, wait for landing
 			SetupLostNavTargetMovement( context );
 		} else if( auto *fallback = TryFindMovementFallback( context ) ) {
@@ -73,6 +73,83 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 	botInput->isUcmdSet = true;
 	Debug( "Planning is complete: the action should never be predicted ahead\n" );
 	context->isCompleted = true;
+}
+
+bool FallbackMovementAction::CanWaitForLanding( MovementPredictionContext *context ) {
+	const int navTargetAreaNum = context->NavTargetAasAreaNum();
+	if( !navTargetAreaNum ) {
+		return false;
+	}
+
+	// Switch to picking the target immediately
+	if( context->IsInNavTargetArea() ) {
+		return false;
+	}
+
+	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
+	const auto *const routeCache = bot->RouteCache();
+
+	int fromAreaNums[2] { 0, 0 };
+	const int numFromAreas = entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
+	const int startTravelTime = routeCache->PreferredRouteToGoalArea( fromAreaNums, numFromAreas, navTargetAreaNum );
+	if( !startTravelTime ) {
+		return false;
+	}
+
+	AiTrajectoryPredictor predictor;
+	predictor.AddStopEventFlags( AiTrajectoryPredictor::HIT_SOLID );
+	predictor.AddStopEventFlags( AiTrajectoryPredictor::HIT_ENTITY );
+	predictor.AddStopEventFlags( AiTrajectoryPredictor::HIT_LIQUID );
+	Vec3 mins( playerbox_stand_mins );
+	mins.Z() += 12.0f;
+	predictor.SetColliderBounds( mins.Data(), playerbox_stand_maxs );
+	predictor.SetStepMillis( 67 );
+	predictor.SetNumSteps( 16 );
+	AiTrajectoryPredictor::Results results;
+	predictor.SetEntitiesCollisionProps( true, bot->EntNum() );
+	(void)predictor.Run( entityPhysicsState.Velocity(), entityPhysicsState.Origin(), &results );
+
+	const auto *const aasWorld = AiAasWorld::Instance();
+	int resultAreaNum = aasWorld->FindAreaNum( results.origin );
+	if( !resultAreaNum ) {
+		// WTF?
+		results.origin[2] += 8.0f;
+		resultAreaNum = aasWorld->FindAreaNum( results.origin );
+		if( !resultAreaNum ) {
+			return false;
+		}
+	}
+
+	// Nothing is going to be changed
+	if( resultAreaNum == entityPhysicsState.CurrAasAreaNum() ) {
+		return true;
+	}
+
+	// The nav target area is going to be reached
+	if( resultAreaNum == navTargetAreaNum ) {
+		return true;
+	}
+
+	// Lower restrictions for landing in the same floor cluster
+	if( const auto resultFloorClusterNum = aasWorld->FloorClusterNum( resultAreaNum ) ) {
+		if( fromAreaNums[0] && aasWorld->FloorClusterNum( fromAreaNums[0] ) == resultFloorClusterNum ) {
+			return true;
+		}
+		if( fromAreaNums[1] && aasWorld->FloorClusterNum( fromAreaNums[1] ) == resultFloorClusterNum ) {
+			return true;
+		}
+		if( aasWorld->FloorClusterNum( navTargetAreaNum ) == resultFloorClusterNum ) {
+			return true;
+		}
+	}
+
+	const int endTravelTime = routeCache->PreferredRouteToGoalArea( resultAreaNum, navTargetAreaNum );
+	if( !endTravelTime ) {
+		return false;
+	}
+
+	// Consider an advancement to be a success
+	return startTravelTime > endTravelTime;
 }
 
 void FallbackMovementAction::SetupNavTargetAreaMovement( Context *context ) {
@@ -103,6 +180,10 @@ void FallbackMovementAction::SetupNavTargetAreaMovement( Context *context ) {
 			}
 		}
 	}
+
+	botInput->isUcmdSet = true;
+	botInput->canOverrideUcmd = true;
+	botInput->canOverrideLookVec = true;
 }
 
 void FallbackMovementAction::SetupLostNavTargetMovement( Context *context ) {

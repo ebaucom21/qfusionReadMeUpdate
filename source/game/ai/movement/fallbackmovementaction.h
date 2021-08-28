@@ -72,6 +72,8 @@ class FallbackMovementAction : public BaseMovementAction {
 
 	MovementScript *TryShortcutOtherFallbackByJumping( MovementPredictionContext *context,
 															int initialTargetAreaNum );
+
+	bool CanWaitForLanding( MovementPredictionContext *context );
 public:
 	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( FallbackMovementAction, COLOR_RGB( 0, 0, 0 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
