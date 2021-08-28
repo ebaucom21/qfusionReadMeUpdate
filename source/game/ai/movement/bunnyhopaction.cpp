@@ -547,29 +547,75 @@ bool BunnyHopAction::CheckNavTargetAreaTransition( Context *context ) {
 	return false;
 }
 
-static bool ConformsAndAdvancesToTarget( const AiEntityPhysicsState &newEntityPhysicsState,
-										 const Vec3 &targetPoint, float initialDistanceToTarget ) {
+bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( MovementPredictionContext *context, int currTravelTimeToTarget ) {
+	assert( currTravelTimeToTarget );
+
+	// If there was a definite advancement from the initial position
+	if( currTravelTimeToTarget < travelTimeAtSequenceStart ) {
+		return true;
+	}
+
+	// Any feasible travel time would be an advancement in this case
+	if( !travelTimeAtSequenceStart ) {
+		return true;
+	}
+
+	if( currTravelTimeToTarget > travelTimeAtSequenceStart ) {
+		return false;
+	}
+
+	// Try finding a target point in the same area
+	Vec3 targetPoint( 0, 0, 0 );
+	std::optional<float> initial2DDistance;
+	if( reachAtSequenceStart ) {
+		if( const auto reachNum = context->NextReachNum(); reachNum == reachAtSequenceStart ) {
+			targetPoint.Set( AiAasWorld::Instance()->Reachabilities()[reachNum].start );
+			initial2DDistance = distanceToReachAtStart;
+		}
+	} else {
+		assert( context->IsInNavTargetArea() );
+		targetPoint = context->NavTargetOrigin();
+		initial2DDistance = distanceInNavTargetAreaAtStart;
+	}
+
+	if( initial2DDistance == std::nullopt ) {
+		return false;
+	}
+
+	constexpr const float min2DAdvancementToTarget = 72.0f;
+	// If the area was way too small to track advancement within its bounds
+	if( *initial2DDistance < min2DAdvancementToTarget ) {
+		return false;
+	}
+
+	const auto &newEntityPhysicsState = context->movementState->entityPhysicsState;
 	const float distance2DToTarget = targetPoint.FastDistance2DTo( newEntityPhysicsState.Origin() );
-	constexpr float min2DAdvancementToTarget = 80.0f;
-	if( distance2DToTarget + min2DAdvancementToTarget < initialDistanceToTarget ) {
-		// Make sure we can normalize
-		if( newEntityPhysicsState.Speed() < 300.0f ) {
+	// If the advancement was insufficient
+	if( distance2DToTarget + min2DAdvancementToTarget > initial2DDistance ) {
+		return false;
+	}
+
+	// Make sure we can normalize the velocity dir.
+	// Consider the dir confirming in the case of a small velocity.
+	if( newEntityPhysicsState.Speed() < 100.0f ) {
+		return true;
+	}
+
+	if( distance2DToTarget > 12.0f ) {
+		Vec3 dirToReach( targetPoint - newEntityPhysicsState.Origin() );
+		dirToReach.NormalizeFast();
+		Vec3 velocityDir( newEntityPhysicsState.Velocity() );
+		velocityDir *= Q_Rcp( newEntityPhysicsState.Speed() );
+		constexpr const float maxFracDistance = min2DAdvancementToTarget, invMaxFracDistance = 1.0f / maxFracDistance;
+		const float distance2DFrac = invMaxFracDistance * std::min( maxFracDistance, distance2DToTarget );
+		assert( distance2DFrac >= -0.01 && distance2DFrac <= 1.01f );
+		// Require a better velocity conformance for landing closer to the target
+		const float dotThreshold = 0.9f - 0.2f * distance2DFrac;
+		if( velocityDir.Dot( dirToReach ) > dotThreshold ) {
 			return true;
 		}
-		if( distance2DToTarget > 16.0f ) {
-			Vec3 dirToReach( targetPoint - newEntityPhysicsState.Origin() );
-			dirToReach.NormalizeFast();
-			Vec3 velocityDir( newEntityPhysicsState.Velocity() );
-			velocityDir *= Q_Rcp( newEntityPhysicsState.Speed() );
-			constexpr float minDotDistance = 80.0f, invMinDotDistance = 1.0f / minDotDistance;
-			const float distance2DFrac = invMinDotDistance * std::min( minDotDistance, distance2DToTarget );
-			// Require a better velocity conformance
-			const float dotThreshold = 0.9f - 0.2f * distance2DFrac;
-			if( velocityDir.Dot( dirToReach ) > dotThreshold ) {
-				return true;
-			}
-		}
 	}
+
 	return false;
 }
 
@@ -628,30 +674,7 @@ void BunnyHopAction::CheckPredictionStepResults( Context *context ) {
 	}
 
 	if( WasOnGroundThisFrame( context ) ) {
-		bool canProcessTheHop = false;
-		// If there was a definite advancement from the initial position
-		if( currTravelTimeToTarget < travelTimeAtSequenceStart || !travelTimeAtSequenceStart ) {
-			canProcessTheHop = true;
-		} else if( currTravelTimeToTarget == travelTimeAtSequenceStart ) {
-			if( reachAtSequenceStart ) {
-				if( const float initialDistance = distanceToReachAtStart; initialDistance > 96.0f ) {
-					if( const auto reachNum = context->NextReachNum(); reachNum == reachAtSequenceStart ) {
-						const Vec3 targetPoint( AiAasWorld::Instance()->Reachabilities()[reachNum].start );
-						if( ConformsAndAdvancesToTarget( newEntityPhysicsState, targetPoint, distanceToReachAtStart ) ) {
-							canProcessTheHop = true;
-						}
-					}
-				}
-			} else {
-				if( const float initialDistance = distanceInNavTargetAreaAtStart; initialDistance > 72.0f ) {
-					const Vec3 targetPoint( context->NavTargetOrigin() );
-					if( ConformsAndAdvancesToTarget( newEntityPhysicsState, targetPoint, initialDistance ) ) {
-						canProcessTheHop = true;
-					}
-				}
-			}
-		}
-		if( canProcessTheHop ) {
+		if( HasMadeAnAdvancementPriorToLanding( context, currTravelTimeToTarget ) ) {
 			// If we're currently at the best position
 			if( currTravelTimeToTarget == minTravelTimeToNavTargetSoFar ) {
 				// Check for completion if we have already made a hop before

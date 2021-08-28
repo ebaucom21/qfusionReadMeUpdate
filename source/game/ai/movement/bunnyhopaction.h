@@ -86,6 +86,8 @@ protected:
 	}
 
 	bool CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum );
+
+	bool HasMadeAnAdvancementPriorToLanding( MovementPredictionContext *context, int currTravelTimeToTarget );
 public:
 	BunnyHopAction( BotMovementModule *module_, const char *name_, int debugColor_ = 0 )
 		: BaseMovementAction( module_, name_, debugColor_ ) {
