@@ -510,7 +510,6 @@ void CG_Predict_TouchTriggers( pmove_t *pm, const vec3_t previous_origin );
 extern vrect_t scr_vrect;
 
 void CG_ScreenInit( void );
-void CG_ScreenShutdown( void );
 void CG_Draw2D( void );
 void CG_CalcVrect( void );
 void CG_CenterPrint( const char *str );
@@ -534,8 +533,6 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 void CG_ClearPointedNum( void );
 
 void CG_SC_ResetObituaries( void );
-void CG_UpdateHUDPostDraw( void );
-void CG_ClearHUDInputState( void );
 
 //
 // cg_scoreboard.c

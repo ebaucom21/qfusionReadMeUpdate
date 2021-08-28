@@ -158,6 +158,41 @@ cvar_t *cg_flashWindowCount;
 
 cvar_t *cg_viewBob;
 
+cvar_t *cg_viewSize;
+cvar_t *cg_showFPS;
+cvar_t *cg_draw2D;
+
+cvar_t *cg_showZoomEffect;
+
+cvar_t *cg_showViewBlends;
+
+cvar_t *cg_showHUD;
+
+static cvar_t *cg_showminimap;
+static cvar_t *cg_showitemtimers;
+
+cvar_t *cg_showPlayerNames;
+cvar_t *cg_showPlayerNames_alpha;
+cvar_t *cg_showPlayerNames_zfar;
+cvar_t *cg_showPlayerNames_barWidth;
+cvar_t *cg_showTeamInfo;
+
+static cvar_t *cg_showPressedKeys;
+cvar_t *cg_showChasers;
+
+static cvar_t *cg_showMessageFeed;
+
+static cvar_t *cg_centerTime;
+
+cvar_t *cg_showPointedPlayer;
+
+cvar_t *cg_showSpeed;
+cvar_t *cg_showPickup;
+cvar_t *cg_showAwards;
+cvar_t *cg_showCaptureAreas;
+cvar_t *cg_showFragsFeed;
+cvar_t *cg_showTimer;
+
 void CG_Error( const char *format, ... ) {
 	char msg[1024];
 	va_list argptr;
@@ -925,6 +960,44 @@ void CG_InitPersistentState() {
 
 	cg_forceMyTeamAlpha = Cvar_Get( "cg_forceMyTeamAlpha", "0", CVAR_ARCHIVE );
 
+	cg_viewSize =       Cvar_Get( "cg_viewSize", "100", CVAR_ARCHIVE );
+	cg_showFPS =        Cvar_Get( "cg_showFPS", "0", CVAR_ARCHIVE );
+	cg_draw2D =     Cvar_Get( "cg_draw2D", "1", 0 );
+
+	cg_showViewBlends = Cvar_Get( "cg_showViewBlends", "1", CVAR_ARCHIVE );
+	cg_showZoomEffect = Cvar_Get( "cg_showZoomEffect", "1", CVAR_ARCHIVE );
+
+	cg_showHUD =        Cvar_Get( "cg_showHUD", "1", CVAR_ARCHIVE );
+
+	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
+
+	cg_showPointedPlayer =  Cvar_Get( "cg_showPointedPlayer", "1", CVAR_ARCHIVE );
+
+	cg_showPlayerNames =        Cvar_Get( "cg_showPlayerNames", "1", CVAR_ARCHIVE );
+	cg_showPlayerNames_alpha =  Cvar_Get( "cg_showPlayerNames_alpha", "0.4", CVAR_ARCHIVE );
+	cg_showPlayerNames_zfar =   Cvar_Get( "cg_showPlayerNames_zfar", "1024", CVAR_ARCHIVE );
+	cg_showPlayerNames_barWidth =   Cvar_Get( "cg_showPlayerNames_barWidth", "8", CVAR_ARCHIVE );
+	cg_showTeamInfo =      Cvar_Get( "cg_showTeamInfo", "1", CVAR_ARCHIVE );
+
+	cg_showPressedKeys = Cvar_Get( "cg_showPressedKeys", "0", CVAR_ARCHIVE );
+
+	cg_showSpeed =      Cvar_Get( "cg_showSpeed", "1", CVAR_ARCHIVE );
+	cg_showPickup =     Cvar_Get( "cg_showPickup", "1", CVAR_ARCHIVE );
+
+	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
+	cg_showAwards =     Cvar_Get( "cg_showAwards", "1", CVAR_ARCHIVE );
+
+	cg_showFragsFeed = Cvar_Get( "cg_showFragsFeed", "1", CVAR_ARCHIVE );
+
+	cg_showMessageFeed = Cvar_Get( "cg_showMessageFeed", "1", CVAR_ARCHIVE );
+
+	cg_showminimap = Cvar_Get( "cg_showMiniMap", "0", CVAR_ARCHIVE );
+	cg_showitemtimers = Cvar_Get( "cg_showItemTimers", "3", CVAR_ARCHIVE );
+
+	cg_showCaptureAreas = Cvar_Get( "cg_showCaptureAreas", "1", CVAR_ARCHIVE );
+
+	cg_showChasers = Cvar_Get( "cg_showChasers", "1", CVAR_ARCHIVE );
+
 	CrosshairState::init();
 
 	CG_InitTemporaryBoneposesCache();
@@ -986,8 +1059,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	CG_PModelsInit();
 	CG_WModelsInit();
 
-	CG_ScreenInit();
-
 	CG_ClearLightStyles();
 
 	CG_ClearLocalEntities();
@@ -1034,7 +1105,6 @@ void CG_Shutdown( void ) {
 	CG_SC_ResetObituaries();
 	CG_FreeLocalEntities();
 	CG_DemocamShutdown();
-	CG_ScreenShutdown();
 	CG_UnregisterCGameCommands();
 	CG_WModelsShutdown();
 	CG_PModelsShutdown();

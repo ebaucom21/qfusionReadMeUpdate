@@ -1197,13 +1197,13 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 vrect_t scr_vrect;
 
-cvar_t *cg_viewSize;
-cvar_t *cg_showFPS;
-cvar_t *cg_draw2D;
+extern cvar_t *cg_viewSize;
+extern cvar_t *cg_showFPS;
+extern cvar_t *cg_draw2D;
 
-cvar_t *cg_showZoomEffect;
+extern cvar_t *cg_showZoomEffect;
 
-cvar_t *cg_showViewBlends;
+extern cvar_t *cg_showViewBlends;
 
 /*
 * CG_CalcVrect
@@ -1236,21 +1236,6 @@ void CG_CalcVrect( void ) {
 		scr_vrect.x = ( cgs.vidWidth - scr_vrect.width ) / 2;
 		scr_vrect.y = ( cgs.vidHeight - scr_vrect.height ) / 2;
 	}
-}
-
-void CG_ScreenInit( void ) {
-	cg_viewSize =       Cvar_Get( "cg_viewSize", "100", CVAR_ARCHIVE );
-	cg_showFPS =        Cvar_Get( "cg_showFPS", "0", CVAR_ARCHIVE );
-	cg_draw2D =     Cvar_Get( "cg_draw2D", "1", 0 );
-
-	cg_showViewBlends = Cvar_Get( "cg_showViewBlends", "1", CVAR_ARCHIVE );
-	cg_showZoomEffect = Cvar_Get( "cg_showZoomEffect", "1", CVAR_ARCHIVE );
-
-	CG_InitHUD();
-}
-
-void CG_ScreenShutdown( void ) {
-	CG_ShutdownHUD();
 }
 
 void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
@@ -1411,8 +1396,6 @@ void CG_Draw2DView( void ) {
 	}
 
 	CG_DrawHUD();
-
-	CG_UpdateHUDPostDraw();
 
 	CG_DrawRSpeeds( cgs.vidWidth, cgs.vidHeight / 2 + 8 * cgs.vidHeight / 600,
 					ALIGN_RIGHT_TOP, cgs.fontSystemSmall, colorWhite );

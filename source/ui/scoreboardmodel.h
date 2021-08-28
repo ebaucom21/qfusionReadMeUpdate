@@ -86,11 +86,9 @@ public:
 
 	cvar_s *m_displayVar { nullptr };
 	Display m_display { SideBySide };
+	bool m_hasChasers { false };
 
-	[[nodiscard]]
-	auto getDisplay() const { return m_display; }
-
-	void checkDisplayVar();
+	void checkVars();
 
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForList[5];
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_chasers;
@@ -138,7 +136,9 @@ public:
 	Q_INVOKABLE int getColumnsCount() const { return m_scoreboard.getColumnsCount(); }
 
 	Q_SIGNAL void displayChanged( Display display );
-	Q_PROPERTY( Display display READ getDisplay NOTIFY displayChanged );
+	Q_PROPERTY( Display display MEMBER m_display NOTIFY displayChanged );
+	Q_SIGNAL void hasChasersChanged( bool hasChasers );
+	Q_PROPERTY( bool hasChasers MEMBER m_hasChasers NOTIFY hasChasersChanged );
 
 	Q_SIGNAL void specsModelChanged();
 	Q_PROPERTY( QJsonArray specsModel READ getSpecsModel NOTIFY specsModelChanged );

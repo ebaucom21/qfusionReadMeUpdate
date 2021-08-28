@@ -5,6 +5,9 @@
 
 #include <array>
 
+extern cvar_t *cg_showChasers;
+std::optional<unsigned> CG_ActiveChasePov();
+
 namespace wsw::ui {
 
 [[nodiscard]]
@@ -136,7 +139,7 @@ ScoreboardModelProxy::ScoreboardModelProxy() {
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA + 1 );
 
 	m_displayVar = Cvar_Get( "ui_scoreboardDisplay", "0", CVAR_ARCHIVE );
-	checkDisplayVar();
+	checkVars();
 }
 
 void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &updates, int team,
@@ -200,23 +203,26 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 	}
 }
 
-void ScoreboardModelProxy::checkDisplayVar() {
-	if( m_displayVar->modified ) {
-		const auto oldDisplay = m_display;
-		m_display = (Display)m_displayVar->value;
-		if( m_display != SideBySide && m_display != ColumnWise && m_display != Mixed ) {
-			m_display = SideBySide;
-			Cvar_ForceSet( m_displayVar->name, va( "%d", (int)m_display ) );
-		}
-		if( m_display != oldDisplay ) {
-			Q_EMIT displayChanged( m_display );
-		}
-		m_displayVar->modified = false;
+void ScoreboardModelProxy::checkVars() {
+	const auto oldDisplay = m_display;
+	m_display = (Display)m_displayVar->value;
+	if( m_display != SideBySide && m_display != ColumnWise && m_display != Mixed ) {
+		m_display = SideBySide;
+		Cvar_ForceSet( m_displayVar->name, va( "%d", (int)m_display ) );
+	}
+	if( m_display != oldDisplay ) {
+		Q_EMIT displayChanged( m_display );
+	}
+
+	const auto oldHasChasers = m_hasChasers;
+	m_hasChasers = cg_showChasers->integer && CG_ActiveChasePov() != std::nullopt;
+	if( m_hasChasers != oldHasChasers ) {
+		Q_EMIT hasChasersChanged( m_hasChasers );
 	}
 }
 
 void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
-	checkDisplayVar();
+	checkVars();
 
 	Scoreboard::PlayerUpdatesList playerUpdates;
 	Scoreboard::TeamUpdatesList teamUpdates;

@@ -24,71 +24,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
-static cvar_t *cg_showHUD;
-
-static cvar_t *cg_showminimap;
-static cvar_t *cg_showitemtimers;
-
-static cvar_t *cg_showPlayerNames;
-static cvar_t *cg_showPlayerNames_alpha;
-static cvar_t *cg_showPlayerNames_zfar;
-static cvar_t *cg_showPlayerNames_barWidth;
-static cvar_t *cg_showTeamInfo;
-
-static cvar_t *cg_showPressedKeys;
-static cvar_t *cg_showChasers;
-
-static cvar_t *cg_showMessageFeed;
-
-static cvar_t *cg_centerTime;
-
-static cvar_t *cg_showPointedPlayer;
-
-static cvar_t *cg_showSpeed;
-static cvar_t *cg_showPickup;
-static cvar_t *cg_showAwards;
-static cvar_t *cg_showCaptureAreas;
-static cvar_t *cg_showFragsFeed;
-static cvar_t *cg_showTimer;
-
-void CG_UpdateHUDPostDraw() {}
-void CG_ClearHUDInputState() {}
-
-void CG_InitHUD() {
-	cg_showHUD =        Cvar_Get( "cg_showHUD", "1", CVAR_ARCHIVE );
-
-	cg_centerTime =     Cvar_Get( "cg_centerTime", "2.5", 0 );
-
-	cg_showPointedPlayer =  Cvar_Get( "cg_showPointedPlayer", "1", CVAR_ARCHIVE );
-
-	cg_showPlayerNames =        Cvar_Get( "cg_showPlayerNames", "1", CVAR_ARCHIVE );
-	cg_showPlayerNames_alpha =  Cvar_Get( "cg_showPlayerNames_alpha", "0.4", CVAR_ARCHIVE );
-	cg_showPlayerNames_zfar =   Cvar_Get( "cg_showPlayerNames_zfar", "1024", CVAR_ARCHIVE );
-	cg_showPlayerNames_barWidth =   Cvar_Get( "cg_showPlayerNames_barWidth", "8", CVAR_ARCHIVE );
-	cg_showTeamInfo =      Cvar_Get( "cg_showTeamInfo", "1", CVAR_ARCHIVE );
-
-	cg_showPressedKeys = Cvar_Get( "cg_showPressedKeys", "0", CVAR_ARCHIVE );
-
-	cg_showSpeed =      Cvar_Get( "cg_showSpeed", "1", CVAR_ARCHIVE );
-	cg_showPickup =     Cvar_Get( "cg_showPickup", "1", CVAR_ARCHIVE );
-
-	cg_showTimer =      Cvar_Get( "cg_showTimer", "1", CVAR_ARCHIVE );
-	cg_showAwards =     Cvar_Get( "cg_showAwards", "1", CVAR_ARCHIVE );
-
-	cg_showFragsFeed = Cvar_Get( "cg_showFragsFeed", "1", CVAR_ARCHIVE );
-
-	cg_showMessageFeed = Cvar_Get( "cg_showMessageFeed", "1", CVAR_ARCHIVE );
-
-	cg_showminimap = Cvar_Get( "cg_showMiniMap", "0", CVAR_ARCHIVE );
-	cg_showitemtimers = Cvar_Get( "cg_showItemTimers", "3", CVAR_ARCHIVE );
-
-	cg_showCaptureAreas = Cvar_Get( "cg_showCaptureAreas", "1", CVAR_ARCHIVE );
-
-	cg_showChasers = Cvar_Get( "cg_showChasers", "1", CVAR_ARCHIVE );
-}
-
-void CG_ShutdownHUD() {
-}
+extern cvar_t *cg_showHUD;
+extern cvar_t *cg_showTeamInfo;
+extern cvar_t *cg_showTimer;
+extern cvar_t *cg_showPlayerNames;
+extern cvar_t *cg_showPlayerNames_alpha;
+extern cvar_t *cg_showPlayerNames_barWidth;
+extern cvar_t *cg_showPlayerNames_zfar;
+extern cvar_t *cg_showPointedPlayer;
 
 void CG_CenterPrint( const char *str ) {
 	if( str && *str ) {

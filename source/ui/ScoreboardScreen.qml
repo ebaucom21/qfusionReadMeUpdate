@@ -79,6 +79,7 @@ Rectangle {
 
     ScoreboardSpecsPane {
         id: chasersPane
+        visible: scoreboard.hasChasers && scoreboard.chasersModel.length
         anchors.top: specsPane.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter

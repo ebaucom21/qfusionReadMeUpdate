@@ -612,8 +612,6 @@ void CG_InputFrame( int frameTime ) {
 */
 void CG_ClearInputState( void ) {
 	cg_inputFrameTime = 0;
-
-	CG_ClearHUDInputState();
 }
 
 /*
