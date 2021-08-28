@@ -484,6 +484,10 @@ bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype();
 }
 
+bool CG_IsOperator() {
+	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_OPERATOR ) != 0;
+}
+
 int CG_MyRealTeam() {
 	return cg.predictedPlayerState.stats[STAT_REALTEAM];
 }

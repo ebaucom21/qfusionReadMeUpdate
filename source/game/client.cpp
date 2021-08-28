@@ -2064,6 +2064,9 @@ void Client::setReplicatedStats() {
 	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( this )] ) {
 		ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
 	}
+	if( isoperator ) {
+		ps.stats[STAT_FLAGS] |= STAT_FLAG_OPERATOR;
+	}
 
 	const auto *ent = getEntity();
 	if( G_IsDead( ent ) ) {

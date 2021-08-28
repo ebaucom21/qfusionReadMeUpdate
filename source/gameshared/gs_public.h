@@ -675,6 +675,7 @@ static const char *gs_keyicon_names[] = {
 #define STAT_FLAG_DEADPOV      0x02
 #define STAT_FLAG_CHALLENGER   0x04 // player is in challengers queue (used for ingame menu)
 #define STAT_FLAG_READY        0x08 // player is ready (used for ingame menu)
+#define STAT_FLAG_OPERATOR     0x10
 
 #define STAT_NOTSET                 -9999 // used for stats that don't have meaningful value atm.
 

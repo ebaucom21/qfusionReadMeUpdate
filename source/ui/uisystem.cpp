@@ -62,6 +62,7 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 // Hacks
 bool CG_IsSpectator();
 bool CG_HasTwoTeams();
+bool CG_IsOperator();
 int CG_MyRealTeam();
 std::optional<unsigned> CG_ActiveChasePov();
 
@@ -1261,6 +1262,10 @@ void QtUISystem::checkPropertyChanges() {
 	if( s_debugNativelyDrawnItemsVar->modified ) {
 		Q_EMIT isDebuggingNativelyDrawnItemsChanged( s_debugNativelyDrawnItemsVar->integer != 0 );
 		s_debugNativelyDrawnItemsVar->modified = false;
+	}
+
+	if( const bool wasOperator = m_isOperator; wasOperator != ( m_isOperator = CG_IsOperator() ) ) {
+		Q_EMIT isOperatorChanged( m_isOperator );
 	}
 
 	const bool oldCanSpectate = m_canSpectate;

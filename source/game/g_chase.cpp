@@ -295,6 +295,7 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 
 	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_CHALLENGER;
 	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_READY;
+	ent->r.client->ps.stats[STAT_FLAGS] &= ~STAT_FLAG_OPERATOR;
 
 	if( GS_HasChallengers() && ent->r.client->queueTimeStamp ) {
 		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_CHALLENGER;
@@ -302,6 +303,10 @@ static void G_EndFrame_UpdateChaseCam( edict_t *ent ) {
 
 	if( GS_MatchState() <= MATCH_STATE_WARMUP && level.ready[PLAYERNUM( ent )] ) {
 		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_READY;
+	}
+
+	if( ent->r.client->isoperator ) {
+		ent->r.client->ps.stats[STAT_FLAGS] |= STAT_FLAG_OPERATOR;
 	}
 
 	// chasecam uses PM_CHASECAM
