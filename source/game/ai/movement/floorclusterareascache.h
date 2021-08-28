@@ -116,7 +116,7 @@ protected:
 							int expectedClusterNum,
 							CandidateAreasHeap &scratchpadHeap ) const;
 
-	inline bool AreaPassesCollisionTest( MovementPredictionContext *context, int areaNum ) const;
+	bool AreaPassesCollisionTest( MovementPredictionContext *context, int areaNum ) const;
 
 	virtual bool AreaPassesCollisionTest( const Vec3 &start, int areaNum, const vec3_t mins, const vec3_t maxs ) const = 0;
 public:

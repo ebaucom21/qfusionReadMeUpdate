@@ -45,26 +45,25 @@ protected:
 	bool stopPredictionOnEnteringWater { true };
 	bool failPredictionOnEnteringHazardImpactZone { true };
 
-	inline BaseMovementAction &DummyAction();
-	inline class FlyUntilLandingAction &FlyUntilLandingAction();
-	inline class LandOnSavedAreasAction &LandOnSavedAreasAction();
+	BaseMovementAction &DummyAction();
+	class FlyUntilLandingAction &FlyUntilLandingAction();
+	class LandOnSavedAreasAction &LandOnSavedAreasAction();
 
 	void Debug( const char *format, ... ) const;
 	// We want to have a full control over movement code assertions, so use custom ones for this class
-	inline void Assert( bool condition, const char *message = nullptr ) const;
+	void Assert( bool condition, const char *message = nullptr ) const;
 	template <typename T>
-	inline void Assert( T conditionLikeValue, const char *message = nullptr ) const {
+	void Assert( T conditionLikeValue, const char *message = nullptr ) const {
 		Assert( conditionLikeValue != 0, message );
 	}
 
-	inline bool GenericCheckIsActionEnabled( MovementPredictionContext *context,
-											 BaseMovementAction *suggestedAction = nullptr ) const;
+	bool GenericCheckIsActionEnabled( MovementPredictionContext *context, BaseMovementAction *suggestedAction = nullptr ) const;
 
-	inline void CheckDisableOrSwitchPreconditions( MovementPredictionContext *context, const char *methodTag );
+	void CheckDisableOrSwitchPreconditions( MovementPredictionContext *context, const char *methodTag );
 
-	inline void DisableWithAlternative( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
-	inline void SwitchOrStop( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
-	inline void SwitchOrRollback( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
+	void DisableWithAlternative( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
+	void SwitchOrStop( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
+	void SwitchOrRollback( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
 
 	bool HasTouchedNavEntityThisFrame( MovementPredictionContext *context );
 public:
@@ -100,10 +99,10 @@ public:
 
 	unsigned SequenceDuration( const MovementPredictionContext *context ) const;
 
-	inline const char *Name() const { return name; }
-	inline int DebugColor() const { return debugColor; }
-	inline unsigned ActionNum() const { return actionNum; }
-	inline bool IsDisabledForPlanning() const { return isDisabledForPlanning; }
+	const char *Name() const { return name; }
+	int DebugColor() const { return debugColor; }
+	unsigned ActionNum() const { return actionNum; }
+	bool IsDisabledForPlanning() const { return isDisabledForPlanning; }
 };
 
 #define DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( name, debugColor_ ) \

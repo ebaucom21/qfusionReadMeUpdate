@@ -176,7 +176,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	this->SwitchOrRollback( context, defaultAction );
 }
 
-inline const int *ScheduleWeaponJumpAction::GetTravelTimesForReachChainShortcut() {
+const int *ScheduleWeaponJumpAction::GetTravelTimesForReachChainShortcut() {
 	if( !dummyTravelTimes[0] ) {
 		for( int i = 0; i < MAX_AREAS; ++i ) {
 			// Make sure every travel time is a feasible AAS time (>0)
@@ -187,7 +187,7 @@ inline const int *ScheduleWeaponJumpAction::GetTravelTimesForReachChainShortcut(
 	return dummyTravelTimes;
 }
 
-inline bool ScheduleWeaponJumpAction::TryGetComputationQuota() const {
+bool ScheduleWeaponJumpAction::TryGetComputationQuota() const {
 	if( !hasTestedComputationQuota ) {
 		// We can use weapon jumping for escaping from blocked state that's why it's "vital"
 		hasAcquiredComputationQuota = bot->TryGetVitalComputationQuota();
@@ -196,7 +196,7 @@ inline bool ScheduleWeaponJumpAction::TryGetComputationQuota() const {
 	return hasAcquiredComputationQuota;
 }
 
-inline float ScheduleWeaponJumpAction::EstimateMapComputationalComplexity() const {
+float ScheduleWeaponJumpAction::EstimateMapComputationalComplexity() const {
 	int numAreas = AiAasWorld::Instance()->NumAreas();
 	assert( numAreas < std::numeric_limits<uint16_t>::max() );
 	float f = 1.0f - ( numAreas / (float)std::numeric_limits<uint16_t>::max() );

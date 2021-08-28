@@ -51,21 +51,21 @@ public:
 
 	virtual ~BestJumpableSpotDetector() {}
 
-	inline void SetStepMillis( unsigned stepMillis ) {
+	void SetStepMillis( unsigned stepMillis ) {
 		predictor.SetStepMillis( stepMillis );
 	}
 
-	inline void SetNumSteps( unsigned numSteps ) {
+	void SetNumSteps( unsigned numSteps ) {
 		predictor.SetNumSteps( numSteps );
 	}
 
 	// Might vary for different purposes, e.g.
 	// for rocketjumping a full playerbox should be used, for barrier jumping we can zero mins
-	inline void SetColliderBounds( const vec3_t mins, const vec3_t maxs ) {
+	void SetColliderBounds( const vec3_t mins, const vec3_t maxs ) {
 		predictor.SetColliderBounds( mins, maxs );
 	}
 
-	inline void SetTestSpotAreaNums( bool value ) { this->testSpotAreaNums = value; }
+	void SetTestSpotAreaNums( bool value ) { this->testSpotAreaNums = value; }
 
 	virtual const SpotAndScore *Exec( const vec3_t startOrigin_, unsigned *millis = nullptr );
 };
@@ -95,7 +95,7 @@ public:
 		, navTargetAreaNum( 0 )
 		, startTravelTimeToTarget( 0 ) {}
 
-	inline void AddRoutingParams( const AiAasRouteCache *routeCache_, int navTargetAreaNum_, int startTravelTimeToTarget_ ) {
+	void AddRoutingParams( const AiAasRouteCache *routeCache_, int navTargetAreaNum_, int startTravelTimeToTarget_ ) {
 		this->routeCache = routeCache_;
 		this->navTargetAreaNum = navTargetAreaNum_;
 		this->startTravelTimeToTarget = startTravelTimeToTarget_;

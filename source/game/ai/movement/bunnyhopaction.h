@@ -78,7 +78,7 @@ protected:
 		                                     int currTravelTimeToTarget,
 		                                     int groundedAreaNum );
 
-	inline bool WasOnGroundThisFrame( const MovementPredictionContext *context ) const;
+	bool WasOnGroundThisFrame( const MovementPredictionContext *context ) const;
 
 	void EnsurePathPenalty( unsigned penalty ) {
 		assert( penalty < 30000 );

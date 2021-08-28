@@ -406,7 +406,7 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( Context *context ) {
 	return true;
 }
 
-inline bool BunnyHopAction::WasOnGroundThisFrame( const Context *context ) const {
+bool BunnyHopAction::WasOnGroundThisFrame( const Context *context ) const {
 	return context->movementState->entityPhysicsState.GroundEntity() || context->frameEvents.hasJumped;
 }
 

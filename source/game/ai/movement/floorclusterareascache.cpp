@@ -2,7 +2,7 @@
 #include "movementlocal.h"
 #include "../combat/tacticalspotsregistry.h"
 
-inline bool FloorClusterAreasCache::AreaPassesCollisionTest( Context *context, int areaNum ) const {
+bool FloorClusterAreasCache::AreaPassesCollisionTest( Context *context, int areaNum ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	Vec3 start( entityPhysicsState.Origin() );

@@ -33,16 +33,16 @@ class ScheduleWeaponJumpAction: public BaseMovementAction {
 	mutable bool hasTestedComputationQuota { false };
 	mutable bool hasAcquiredComputationQuota { false };
 
-	inline bool TryGetComputationQuota() const;
+	bool TryGetComputationQuota() const;
 
 	/**
 	 * Allows to get a rough estimate how expensive weapon jump tests are going to be
 	 * (this depends of collision world complexity and AAS for the map)
 	 * @return a value in [0, 1] range
 	 */
-	inline float EstimateMapComputationalComplexity() const;
+	float EstimateMapComputationalComplexity() const;
 
-	inline const int *GetTravelTimesForReachChainShortcut();
+	const int *GetTravelTimesForReachChainShortcut();
 
 	void SaveLandingAreas( MovementPredictionContext *context, int areaNum );
 public:

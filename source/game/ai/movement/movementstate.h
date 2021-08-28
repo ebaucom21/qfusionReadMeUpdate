@@ -21,13 +21,14 @@ class alignas ( 2 )AiCampingSpot
 public:
 	bool hasLookAtPoint;
 
-	inline float Radius() const { return radius; }
-	inline float Alertness() const { return alertness / 256.0f; }
-	inline Vec3 Origin() const { return GetUnpacked4uVec( origin ); }
-	inline Vec3 LookAtPoint() const { return GetUnpacked4uVec( lookAtPoint ); }
+	float Radius() const { return radius; }
+	float Alertness() const { return alertness / 256.0f; }
+	Vec3 Origin() const { return GetUnpacked4uVec( origin ); }
+	Vec3 LookAtPoint() const { return GetUnpacked4uVec( lookAtPoint ); }
+
 	// Warning! This does not set hasLookAtPoint, only used to store a vector in (initially unsused) lookAtPoint field
 	// This behaviour is used when lookAtPoint is controlled manually by an external code.
-	inline void SetLookAtPoint( const Vec3 &lookAtPoint_ ) { SetPacked4uVec( lookAtPoint_, lookAtPoint ); }
+	void SetLookAtPoint( const Vec3 &lookAtPoint_ ) { SetPacked4uVec( lookAtPoint_, lookAtPoint ); }
 
 	AiCampingSpot( const Vec3 &origin_, float radius_, float alertness_ = 0.75f )
 		: radius( (uint16_t)( radius_ ) ), alertness( (uint8_t)( alertness_ * 255 ) ), hasLookAtPoint( false )
@@ -71,8 +72,8 @@ class alignas ( 2 )AiPendingLookAtPoint
 	}
 
 public:
-	inline Vec3 Origin() const { return GetUnpacked4uVec( origin ); }
-	inline float TurnSpeedMultiplier() const { return turnSpeedMultiplier / 16.0f; };
+	Vec3 Origin() const { return GetUnpacked4uVec( origin ); }
+	float TurnSpeedMultiplier() const { return turnSpeedMultiplier / 16.0f; };
 
 	AiPendingLookAtPoint( const vec3_t origin_, float turnSpeedMultiplier_ )
 		: turnSpeedMultiplier( (uint16_t)( std::min( 255.0f, turnSpeedMultiplier_ * 16.0f ) ) )
@@ -106,35 +107,35 @@ public:
 	// If this flag is set, bot is in "jumppad" movement state
 	bool hasEnteredJumppad;
 
-	inline BotJumppadMovementState()
+	BotJumppadMovementState()
 		: jumppadEntNum( 0 ), hasTouchedJumppad( false ), hasEnteredJumppad( false ) {}
 
 	// Useless but kept for structural type conformance with other movement states
-	inline void Frame( unsigned frameTime ) {}
+	void Frame( unsigned frameTime ) {}
 
-	inline bool IsActive() const {
+	bool IsActive() const {
 		return ( hasTouchedJumppad || hasEnteredJumppad );
 	}
 
-	inline void Deactivate() {
+	void Deactivate() {
 		hasTouchedJumppad = false;
 		hasEnteredJumppad = false;
 	}
 
-	inline void Activate( const edict_t *triggerEnt ) {
+	void Activate( const edict_t *triggerEnt ) {
 		hasTouchedJumppad = true;
 		// Keep hasEnteredJumppad as-is (a jumppad might be touched again few millis later)
 		jumppadEntNum = ( decltype( jumppadEntNum ) )( ENTNUM( const_cast<edict_t *>( triggerEnt ) ) );
 	}
 
-	inline void TryDeactivate( const edict_t *self, const MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const MovementPredictionContext *context = nullptr ) {
 		if( ShouldDeactivate( self, context ) ) {
 			Deactivate();
 		}
 	}
 
-	inline const edict_t *JumppadEntity() const { return game.edicts + jumppadEntNum; }
-	inline Vec3 JumpTarget() const { return Vec3( JumppadEntity()->target_ent->s.origin ); }
+	const edict_t *JumppadEntity() const { return game.edicts + jumppadEntNum; }
+	Vec3 JumpTarget() const { return Vec3( JumppadEntity()->target_ent->s.origin ); }
 };
 
 class alignas ( 2 )BotWeaponJumpMovementState : protected BotAerialMovementState
@@ -158,7 +159,7 @@ public:
 		, hasTriggeredWeaponJump( false )
 		, hasCorrectedWeaponJump( false ) {}
 
-	inline void Frame( unsigned frameTime ) {
+	void Frame( unsigned frameTime ) {
 		if( millisToTriggerJumpLeft >= frameTime ) {
 			millisToTriggerJumpLeft -= frameTime;
 		} else {
@@ -166,23 +167,23 @@ public:
 		}
 	}
 
-	inline Vec3 JumpTarget() const { return GetUnpacked4uVec( jumpTarget ); }
-	inline Vec3 FireTarget() const { return GetUnpacked4uVec( fireTarget ); }
-	inline Vec3 OriginAtStart() const { return GetUnpacked4uVec( originAtStart ); }
+	Vec3 JumpTarget() const { return GetUnpacked4uVec( jumpTarget ); }
+	Vec3 FireTarget() const { return GetUnpacked4uVec( fireTarget ); }
+	Vec3 OriginAtStart() const { return GetUnpacked4uVec( originAtStart ); }
 
-	inline bool IsActive() const {
+	bool IsActive() const {
 		return ( hasPendingWeaponJump || hasTriggeredWeaponJump || hasCorrectedWeaponJump );
 	}
 
 	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr );
 
-	inline void Deactivate() {
+	void Deactivate() {
 		hasPendingWeaponJump = false;
 		hasTriggeredWeaponJump = false;
 		hasCorrectedWeaponJump = false;
 	}
 
-	inline void Activate( const Vec3 &jumpTarget_, const Vec3 &fireTarget_, const Vec3 &originAtStart_, int weapon_ ) {
+	void Activate( const Vec3 &jumpTarget_, const Vec3 &fireTarget_, const Vec3 &originAtStart_, int weapon_ ) {
 		SetPacked4uVec( jumpTarget_, jumpTarget );
 		SetPacked4uVec( fireTarget_, fireTarget );
 		SetPacked4uVec( originAtStart_, originAtStart );
@@ -202,23 +203,23 @@ private:
 	unsigned char timeLeft;
 
 public:
-	inline BotPendingLookAtPointState() : timeLeft( 0 ) {}
+	BotPendingLookAtPointState() : timeLeft( 0 ) {}
 
-	inline void Frame( unsigned frameTime ) {
+	void Frame( unsigned frameTime ) {
 		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft * 4 - (int)frameTime ) / 4 );
 	}
 
-	inline bool IsActive() const { return timeLeft > 0; }
+	bool IsActive() const { return timeLeft > 0; }
 
 	// Timeout period is limited by 1000 millis
-	inline void Activate( const AiPendingLookAtPoint &pendingLookAtPoint_, unsigned timeoutPeriod = 500U ) {
+	void Activate( const AiPendingLookAtPoint &pendingLookAtPoint_, unsigned timeoutPeriod = 500U ) {
 		this->pendingLookAtPoint = pendingLookAtPoint_;
 		this->timeLeft = ( decltype( this->timeLeft ) )( std::min( 1000U, timeoutPeriod ) / 4 );
 	}
 
-	inline void Deactivate() { timeLeft = 0; }
+	void Deactivate() { timeLeft = 0; }
 
-	inline void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
 		if( !IsActive() ) {
 			Deactivate();
 		}
@@ -236,29 +237,29 @@ class alignas ( 2 )BotCampingSpotState
 	int8_t rightMove : 4;
 	bool isTriggered;
 
-	inline unsigned StrafeDirTimeout() const {
+	unsigned StrafeDirTimeout() const {
 		return (unsigned)( 400 + 100 * random() + 300 * ( 1.0f - campingSpot.Alertness() ) );
 	}
-	inline unsigned LookAtPointTimeout() const {
+	unsigned LookAtPointTimeout() const {
 		return (unsigned)( 800 + 200 * random() + 2000 * ( 1.0f - campingSpot.Alertness() ) );
 	}
 
 public:
-	inline BotCampingSpotState()
+	BotCampingSpotState()
 		: moveDirsTimeLeft( 0 )
 		, lookAtPointTimeLeft( 0 )
 		, forwardMove( 0 )
 		, rightMove( 0 )
 		, isTriggered( false ) {}
 
-	inline void Frame( unsigned frameTime ) {
+	void Frame( unsigned frameTime ) {
 		moveDirsTimeLeft = ( uint16_t ) std::max( 0, (int)moveDirsTimeLeft - (int)frameTime );
 		lookAtPointTimeLeft = ( uint16_t ) std::max( 0, (int)lookAtPointTimeLeft - (int)frameTime );
 	}
 
-	inline bool IsActive() const { return isTriggered; }
+	bool IsActive() const { return isTriggered; }
 
-	inline void Activate( const AiCampingSpot &campingSpot_ ) {
+	void Activate( const AiCampingSpot &campingSpot_ ) {
 		// Reset dir timers if and only if an actual origin has been significantly changed.
 		// Otherwise this leads to "jitter" movement on the same point
 		// when prediction errors prevent using a predicted action
@@ -270,23 +271,23 @@ public:
 		this->isTriggered = true;
 	}
 
-	inline void Deactivate() { isTriggered = false; }
+	void Deactivate() { isTriggered = false; }
 
 	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr );
 
-	inline Vec3 Origin() const { return campingSpot.Origin(); }
-	inline float Radius() const { return campingSpot.Radius(); }
+	Vec3 Origin() const { return campingSpot.Origin(); }
+	float Radius() const { return campingSpot.Radius(); }
 
 	AiPendingLookAtPoint GetOrUpdateRandomLookAtPoint() const;
 
-	inline float Alertness() const { return campingSpot.Alertness(); }
+	float Alertness() const { return campingSpot.Alertness(); }
 
-	inline int ForwardMove() const { return forwardMove; }
-	inline int RightMove() const { return rightMove; }
+	int ForwardMove() const { return forwardMove; }
+	int RightMove() const { return rightMove; }
 
-	inline bool AreKeyMoveDirsValid() { return moveDirsTimeLeft > 0; }
+	bool AreKeyMoveDirsValid() { return moveDirsTimeLeft > 0; }
 
-	inline void SetKeyMoveDirs( int forwardMove_, int rightMove_ ) {
+	void SetKeyMoveDirs( int forwardMove_, int rightMove_ ) {
 		this->forwardMove = ( decltype( this->forwardMove ) )forwardMove_;
 		this->rightMove = ( decltype( this->rightMove ) )rightMove_;
 	}
@@ -301,24 +302,24 @@ public:
 public:
 	static constexpr uint16_t TIMEOUT_PERIOD = 500;
 
-	inline void Frame( unsigned frameTime ) {
+	void Frame( unsigned frameTime ) {
 		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft - (int)frameTime ) );
 	}
 
-	inline bool IsActive() const { return timeLeft != 0; }
+	bool IsActive() const { return timeLeft != 0; }
 
-	inline void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {}
+	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {}
 
-	inline void Deactivate() { timeLeft = 0; }
+	void Deactivate() { timeLeft = 0; }
 
-	inline void Activate( int forwardMove_, int rightMove_, unsigned timeLeft_ = TIMEOUT_PERIOD ) {
+	void Activate( int forwardMove_, int rightMove_, unsigned timeLeft_ = TIMEOUT_PERIOD ) {
 		this->forwardMove = ( decltype( this->forwardMove ) )forwardMove_;
 		this->rightMove = ( decltype( this->rightMove ) )rightMove_;
 		this->timeLeft = ( decltype( this->timeLeft ) )timeLeft_;
 	}
 
-	inline int ForwardMove() const { return forwardMove; }
-	inline int RightMove() const { return rightMove; }
+	int ForwardMove() const { return forwardMove; }
+	int RightMove() const { return rightMove; }
 };
 
 class alignas ( 2 )BotFlyUntilLandingMovementState : protected BotAerialMovementState
@@ -331,17 +332,17 @@ class alignas ( 2 )BotFlyUntilLandingMovementState : protected BotAerialMovement
 	bool isLanding : 1;
 
 public:
-	inline BotFlyUntilLandingMovementState()
+	BotFlyUntilLandingMovementState()
 		: landingDistanceThreshold( 0 ),
 		  isTriggered( false ),
 		  usesDistanceThreshold( false ),
 		  isLanding( false ) {}
 
-	inline void Frame( unsigned frameTime ) {}
+	void Frame( unsigned frameTime ) {}
 
 	bool CheckForLanding( const class MovementPredictionContext *context );
 
-	inline void Activate( const vec3_t target_, float landingDistanceThreshold_ ) {
+	void Activate( const vec3_t target_, float landingDistanceThreshold_ ) {
 		SetPacked4uVec( target_, this->target );
 		landingDistanceThreshold = ( decltype( landingDistanceThreshold ) )( landingDistanceThreshold_ );
 		isTriggered = true;
@@ -349,28 +350,28 @@ public:
 		isLanding = false;
 	}
 
-	inline void Activate( const Vec3 &target_, float landingDistanceThreshold_ ) {
+	void Activate( const Vec3 &target_, float landingDistanceThreshold_ ) {
 		Activate( target_.Data(), landingDistanceThreshold_ );
 	}
 
-	inline void Activate( float startLandingAtZ ) {
+	void Activate( float startLandingAtZ ) {
 		this->target[2] = (short)startLandingAtZ;
 		isTriggered = true;
 		usesDistanceThreshold = false;
 		isLanding = false;
 	}
 
-	inline bool IsActive() const { return isTriggered; }
+	bool IsActive() const { return isTriggered; }
 
-	inline void Deactivate() { isTriggered = false; }
+	void Deactivate() { isTriggered = false; }
 
-	inline void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
 		if( ShouldDeactivate( self, context ) ) {
 			Deactivate();
 		}
 	}
 
-	inline Vec3 Target() const { return GetUnpacked4uVec( target ); }
+	Vec3 Target() const { return GetUnpacked4uVec( target ); }
 };
 
 class Bot;
@@ -397,11 +398,11 @@ struct alignas ( 4 )BotMovementState {
 	// (The current input rotation kind has a bit less restrictive application conditions).
 	BotInputRotation inputRotation;
 
-	inline BotMovementState()
+	BotMovementState()
 		: inputRotation( BotInputRotation::NONE ) {
 	}
 
-	inline void Frame( unsigned frameTime ) {
+	void Frame( unsigned frameTime ) {
 		jumppadMovementState.Frame( frameTime );
 		weaponJumpMovementState.Frame( frameTime );
 		pendingLookAtPointState.Frame( frameTime );
@@ -410,7 +411,7 @@ struct alignas ( 4 )BotMovementState {
 		flyUntilLandingMovementState.Frame( frameTime );
 	}
 
-	inline void TryDeactivateContainedStates( const edict_t *self, MovementPredictionContext *context ) {
+	void TryDeactivateContainedStates( const edict_t *self, MovementPredictionContext *context ) {
 		jumppadMovementState.TryDeactivate( self, context );
 		weaponJumpMovementState.TryDeactivate( self, context );
 		pendingLookAtPointState.TryDeactivate( self, context );
@@ -419,7 +420,7 @@ struct alignas ( 4 )BotMovementState {
 		flyUntilLandingMovementState.TryDeactivate( self, context );
 	}
 
-	inline void Reset() {
+	void Reset() {
 		jumppadMovementState.Deactivate();
 		weaponJumpMovementState.Deactivate();
 		pendingLookAtPointState.Deactivate();
@@ -428,7 +429,7 @@ struct alignas ( 4 )BotMovementState {
 		flyUntilLandingMovementState.Deactivate();
 	}
 
-	inline unsigned GetContainedStatesMask() const {
+	unsigned GetContainedStatesMask() const {
 		unsigned result = 0;
 		result |= ( (unsigned)( jumppadMovementState.IsActive() ) ) << 0;
 		result |= ( (unsigned)( weaponJumpMovementState.IsActive() ) ) << 1;

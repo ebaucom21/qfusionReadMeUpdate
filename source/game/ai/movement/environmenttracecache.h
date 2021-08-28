@@ -50,7 +50,7 @@ private:
 	 * @param nonBlockedDirIndices a buffer for results
 	 * @return a number of non-blocked dirs
 	 */
-	inline unsigned selectNonBlockedDirs( class MovementPredictionContext *context, unsigned *nonBlockedDirIndices );
+	unsigned selectNonBlockedDirs( class MovementPredictionContext *context, unsigned *nonBlockedDirIndices );
 public:
 	struct Query {
 		unsigned mask;

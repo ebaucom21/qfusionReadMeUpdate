@@ -184,39 +184,39 @@ class BotMovementModule {
 public:
 	explicit BotMovementModule( Bot *bot_ );
 
-	inline void OnInterceptedPredictedEvent( int ev, int parm ) {
+	void OnInterceptedPredictedEvent( int ev, int parm ) {
 		predictionContext.OnInterceptedPredictedEvent( ev, parm );
 	}
 
-	inline void OnInterceptedPMoveTouchTriggers( pmove_t *pm, const vec3_t previousOrigin ) {
+	void OnInterceptedPMoveTouchTriggers( pmove_t *pm, const vec3_t previousOrigin ) {
 		predictionContext.OnInterceptedPMoveTouchTriggers( pm, previousOrigin );
 	}
 
-	inline void SetCampingSpot( const AiCampingSpot &campingSpot ) {
+	void SetCampingSpot( const AiCampingSpot &campingSpot ) {
 		movementState.campingSpotState.Activate( campingSpot );
 	}
 
-	inline void ResetCampingSpot() {
+	void ResetCampingSpot() {
 		movementState.campingSpotState.Deactivate();
 	}
 
-	inline bool HasActiveCampingSpot() const {
+	bool HasActiveCampingSpot() const {
 		return movementState.campingSpotState.IsActive();
 	}
 
-	inline void SetPendingLookAtPoint( const AiPendingLookAtPoint &lookAtPoint, unsigned timeoutPeriod ) {
+	void SetPendingLookAtPoint( const AiPendingLookAtPoint &lookAtPoint, unsigned timeoutPeriod ) {
 		movementState.pendingLookAtPointState.Activate( lookAtPoint, timeoutPeriod );
 	}
 
-	inline void ResetPendingLookAtPoint() {
+	void ResetPendingLookAtPoint() {
 		movementState.pendingLookAtPointState.Deactivate();
 	}
 
-	inline bool HasPendingLookAtPoint() const {
+	bool HasPendingLookAtPoint() const {
 		return movementState.pendingLookAtPointState.IsActive();
 	}
 
-	inline void ActivateJumppadState( const edict_t *jumppadEnt ) {
+	void ActivateJumppadState( const edict_t *jumppadEnt ) {
 		movementState.jumppadMovementState.Activate( jumppadEnt );
 	}
 

@@ -19,21 +19,21 @@ public:
 	int8_t pendingWeapon : 7;
 	bool hasModifiedVelocity : 1;
 
-	inline MovementActionRecord()
+	MovementActionRecord()
 		: pendingWeapon( -1 ),
 		  hasModifiedVelocity( false ) {}
 
-	inline void Clear() {
+	void Clear() {
 		botInput.Clear();
 		pendingWeapon = -1;
 		hasModifiedVelocity = false;
 	}
 
-	inline void SetModifiedVelocity( const Vec3 &velocity ) {
+	void SetModifiedVelocity( const Vec3 &velocity ) {
 		SetModifiedVelocity( velocity.Data() );
 	}
 
-	inline void SetModifiedVelocity( const vec3_t velocity ) {
+	void SetModifiedVelocity( const vec3_t velocity ) {
 		for( int i = 0; i < 3; ++i ) {
 			int snappedVelocityComponent = (int)( velocity[i] * 16.0f );
 			if( snappedVelocityComponent > std::numeric_limits<signed short>::max() ) {
@@ -46,7 +46,7 @@ public:
 		hasModifiedVelocity = true;
 	}
 
-	inline Vec3 ModifiedVelocity() const {
+	Vec3 ModifiedVelocity() const {
 		assert( hasModifiedVelocity );
 		float scale = 1.0f / 16.0f;
 		return Vec3( scale * modifiedVelocity[0], scale * modifiedVelocity[1], scale * modifiedVelocity[2] );
@@ -84,16 +84,16 @@ public:
 		bool canHitAsIs : 1;
 		bool mayHitOverridingPitch : 1;
 
-		inline HitWhileRunningTestResult()
+		HitWhileRunningTestResult()
 		{
 			static_assert( sizeof( *this ) == 1, "" );
 			*( (uint8_t *)( this ) ) = 0;
 		}
 
-		inline bool CanHit() const { return canHitAsIs || mayHitOverridingPitch; }
+		bool CanHit() const { return canHitAsIs || mayHitOverridingPitch; }
 
 		// Use the method and not a static var (the method result should be inlined w/o any static memory access)
-		static inline HitWhileRunningTestResult Failure() { return HitWhileRunningTestResult(); }
+		static HitWhileRunningTestResult Failure() { return HitWhileRunningTestResult(); }
 	};
 
 	SameFloorClusterAreasCache sameFloorClusterAreasCache;
@@ -139,37 +139,37 @@ private:
 		inline void ClearBit( unsigned bit ) { isCachedBitset &= ~( ( (uint64_t)1 ) << bit ); }
 
 	public:
-		inline CachesStack() : isCachedBitset( 0 ) {}
+		CachesStack() : isCachedBitset( 0 ) {}
 
-		inline void SetCachedValue( const T &value ) {
+		void SetCachedValue( const T &value ) {
 			assert( values.size() );
 			SetBit( values.size() - 1 );
 			values.back() = value;
 		}
-		inline void SetCachedValue( T &&value ) {
+		void SetCachedValue( T &&value ) {
 			assert( values.size() );
 			SetBit( values.size() - 1 );
 			values.back() = std::move( value );
 		}
 		// When cache stack growth for balancing is needed and no value exists for current stack pos, use this method
-		inline void PushDummyNonCachedValue( T &&value = T() ) {
+		void PushDummyNonCachedValue( T &&value = T() ) {
 			ClearBit( values.size() );
 			values.emplace_back( std::move( value ) );
 		}
 		// Should be used when the cached type cannot be copied or moved (use this pointer to allocate a value in-place)
-		inline T *UnsafeGrowForNonCachedValue() {
+		T *UnsafeGrowForNonCachedValue() {
 			ClearBit( values.size() );
 			return values.unsafe_grow_back();
 		}
-		inline T *GetUnsafeBufferForCachedValue() {
+		T *GetUnsafeBufferForCachedValue() {
 			SetBit( values.size() - 1 );
 			return &values[0] + ( values.size() - 1 );
 		}
-		inline const T *GetCached() const {
+		const T *GetCached() const {
 			assert( values.size() );
 			return ( isCachedBitset & ( ( (uint64_t)1 ) << ( values.size() - 1 ) ) ) ? &values.back() : nullptr;
 		}
-		inline const T *GetCachedValueBelowTopOfStack() const {
+		const T *GetCachedValueBelowTopOfStack() const {
 			assert( values.size() );
 			if( values.size() == 1 ) {
 				return nullptr;
@@ -177,9 +177,9 @@ private:
 			return ( isCachedBitset & ( ( (uint64_t)1 ) << ( values.size() - 2 ) ) ) ? &values[values.size() - 2] : nullptr;
 		}
 
-		inline unsigned Size() const { return values.size(); }
+		unsigned Size() const { return values.size(); }
 		// Use when cache stack is being rolled back
-		inline void PopToSize( unsigned newSize ) {
+		void PopToSize( unsigned newSize ) {
 			assert( newSize <= values.size() );
 			values.truncate( newSize );
 		}
@@ -236,11 +236,11 @@ public:
 		bool hasTouchedTeleporter: 1;
 		bool hasTouchedPlatform: 1;
 
-		inline FrameEvents() {
+		FrameEvents() {
 			Clear();
 		}
 
-		inline void Clear() {
+		void Clear() {
 			numOtherTouchedTriggers = 0;
 			hasJumped = false;
 			hasDoubleJumped = false;
@@ -257,36 +257,36 @@ public:
 
 	class BaseMovementAction *SuggestSuitableAction();
 	class BaseMovementAction *SuggestDefaultAction();
-	inline class BaseMovementAction *SuggestAnyAction();
+	class BaseMovementAction *SuggestAnyAction();
 
-	inline Vec3 NavTargetOrigin() const;
-	inline float NavTargetRadius() const;
-	inline bool IsCloseToNavTarget() const;
-	inline int CurrAasAreaNum() const;
-	inline int CurrGroundedAasAreaNum() const;
-	inline int NavTargetAasAreaNum() const;
-	inline bool IsInNavTargetArea() const;
+	Vec3 NavTargetOrigin() const;
+	float NavTargetRadius() const;
+	bool IsCloseToNavTarget() const;
+	int CurrAasAreaNum() const;
+	int CurrGroundedAasAreaNum() const;
+	int NavTargetAasAreaNum() const;
+	bool IsInNavTargetArea() const;
 
-	inline unsigned DefaultFrameTime() const;
+	unsigned DefaultFrameTime() const;
 
-	inline EnvironmentTraceCache &TraceCache();
+	EnvironmentTraceCache &TraceCache();
 
 	// Do not return boolean value, avoid extra branching. Checking results if necessary is enough.
 	void NextReachNumAndTravelTimeToNavTarget( int *reachNum, int *travelTimeToNavTarget );
 
-	inline int NextReachNum() {
+	int NextReachNum() {
 		int results[2];
 		NextReachNumAndTravelTimeToNavTarget( results, results + 1 );
 		return results[0];
 	}
-	inline int TravelTimeToNavTarget() {
+	int TravelTimeToNavTarget() {
 		int results[2];
 		NextReachNumAndTravelTimeToNavTarget( results, results + 1 );
 		return results[1];
 	}
 
-	inline const AiAasRouteCache *RouteCache() const;
-	inline const ArrayRange<int> TravelFlags() const;
+	const AiAasRouteCache *RouteCache() const;
+	const ArrayRange<int> TravelFlags() const;
 
 	explicit MovementPredictionContext( BotMovementModule *module );
 
@@ -298,26 +298,26 @@ public:
 
 	void NextMovementStep();
 
-	inline const AiEntityPhysicsState &PhysicsStateBeforeStep() const {
+	const AiEntityPhysicsState &PhysicsStateBeforeStep() const {
 		return predictedMovementActions[topOfStackIndex].entityPhysicsState;
 	}
 
-	inline bool CanGrowStackForNextStep() const {
+	bool CanGrowStackForNextStep() const {
 		// Note: topOfStackIndex is an array index, MAX_PREDICTED_STATES is an array size
 		return this->topOfStackIndex + 1 < MAX_PREDICTED_STATES;
 	}
 
-	inline void SaveActionOnStack( BaseMovementAction *action );
+	void SaveActionOnStack( BaseMovementAction *action );
 
 	// Frame index is restricted to topOfStack or topOfStack + 1
-	inline void MarkSavepoint( BaseMovementAction *markedBy, unsigned frameIndex );
+	void MarkSavepoint( BaseMovementAction *markedBy, unsigned frameIndex );
 
-	inline const char *ActiveActionName() const;
+	const char *ActiveActionName() const;
 
-	inline void SetPendingRollback();
-	inline void RollbackToSavepoint();
-	inline void SaveSuggestedActionForNextFrame( BaseMovementAction *action );
-	inline unsigned MillisAheadForFrameStart( unsigned frameIndex ) const;
+	void SetPendingRollback();
+	void RollbackToSavepoint();
+	void SaveSuggestedActionForNextFrame( BaseMovementAction *action );
+	unsigned MillisAheadForFrameStart( unsigned frameIndex ) const;
 
 	void SaveGoodEnoughPath( unsigned advancement, unsigned penaltyMillis );
 	void SaveLastResortPath( unsigned penaltyMillis );
@@ -340,19 +340,19 @@ public:
 
 	void Debug( const char *format, ... ) const;
 	// We want to have a full control over movement code assertions, so use custom ones for this class
-	inline void Assert( bool condition, const char *message = nullptr ) const;
+	void Assert( bool condition, const char *message = nullptr ) const;
 	template <typename T>
-	inline void Assert( T conditionLikeValue, const char *message = nullptr ) const {
+	void Assert( T conditionLikeValue, const char *message = nullptr ) const {
 		Assert( conditionLikeValue != 0, message );
 	}
 
-	inline float GetRunSpeed() const;
-	inline float GetJumpSpeed() const;
-	inline float GetDashSpeed() const;
+	float GetRunSpeed() const;
+	float GetJumpSpeed() const;
+	float GetDashSpeed() const;
 
 	void CheatingAccelerate( float frac );
 
-	inline void CheatingCorrectVelocity( const Vec3 &target ) {
+	void CheatingCorrectVelocity( const Vec3 &target ) {
 		CheatingCorrectVelocity( target.Data() );
 	}
 
