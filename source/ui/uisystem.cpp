@@ -63,6 +63,8 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 bool CG_IsSpectator();
 bool CG_HasTwoTeams();
 bool CG_IsOperator();
+bool CG_CanBeReady();
+bool CG_IsReady();
 int CG_MyRealTeam();
 std::optional<unsigned> CG_ActiveChasePov();
 
@@ -137,26 +139,6 @@ public:
 	Q_INVOKABLE void clearFailedConnectionState() { m_clearFailedConnectionState = true; }
 
 	[[nodiscard]]
-	bool isShowingChatPopup() const { return m_isShowingChatPopup; }
-	[[nodiscard]]
-	bool isShowingTeamChatPopup() const { return m_isShowingTeamChatPopup; }
-	[[nodiscard]]
-	bool hasTeamChat() const { return m_hasTeamChat; }
-	[[nodiscard]]
-	bool isShowingHud() const { return m_isShowingHud; }
-	[[nodiscard]]
-	bool isShowingPovHud() const { return m_isShowingPovHud; }
-
-	[[nodiscard]]
-	auto getCanJoin() const { return m_canJoin; }
-	[[nodiscard]]
-	auto getCanJoinAlpha() const { return m_canJoinAlpha; }
-	[[nodiscard]]
-	auto getCanJoinBeta() const { return m_canJoinBeta; }
-	[[nodiscard]]
-	auto getCanSpectate() const { return m_canSpectate; }
-
-	[[nodiscard]]
 	bool isShown() const override;
 
 	[[nodiscard]]
@@ -173,14 +155,14 @@ public:
 
 	Q_PROPERTY( bool isShowingScoreboard READ isShowingScoreboard NOTIFY isShowingScoreboardChanged );
 
-	Q_PROPERTY( bool isShowingChatPopup READ isShowingChatPopup NOTIFY isShowingChatPopupChanged );
-	Q_PROPERTY( bool isShowingTeamChatPopup READ isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
-	Q_PROPERTY( bool hasTeamChat READ hasTeamChat NOTIFY hasTeamChatChanged );
+	Q_PROPERTY( bool isShowingChatPopup MEMBER m_isShowingChatPopup NOTIFY isShowingChatPopupChanged );
+	Q_PROPERTY( bool isShowingTeamChatPopup MEMBER m_isShowingTeamChatPopup NOTIFY isShowingTeamChatPopupChanged );
+	Q_PROPERTY( bool hasTeamChat MEMBER m_hasTeamChat NOTIFY hasTeamChatChanged );
 
 	Q_SIGNAL void isShowingHudChanged( bool isShowingHud );
-	Q_PROPERTY( bool isShowingHud READ isShowingHud NOTIFY isShowingHudChanged );
+	Q_PROPERTY( bool isShowingHud MEMBER m_isShowingHud NOTIFY isShowingHudChanged );
 	Q_SIGNAL void isShowingPovHudChanged( bool isShowingPovHud );
-	Q_PROPERTY( bool isShowingPovHud READ isShowingPovHud NOTIFY isShowingPovHudChanged );
+	Q_PROPERTY( bool isShowingPovHud MEMBER m_isShowingPovHud NOTIFY isShowingPovHudChanged );
 
 	Q_PROPERTY( bool isShowingActionRequests READ isShowingActionRequests NOTIFY isShowingActionRequestsChanged );
 
@@ -234,22 +216,29 @@ public:
 	Q_INVOKABLE void quit();
 	Q_INVOKABLE void disconnect();
 
+	Q_INVOKABLE void toggleReady();
 	Q_INVOKABLE void spectate();
 	Q_INVOKABLE void join();
 	Q_INVOKABLE void joinAlpha();
 	Q_INVOKABLE void joinBeta();
 
 	Q_SIGNAL void canSpectateChanged( bool canSpectate );
-	Q_PROPERTY( bool canSpectate READ getCanSpectate NOTIFY canSpectateChanged );
+	Q_PROPERTY( bool canSpectate MEMBER m_canSpectate NOTIFY canSpectateChanged );
 
 	Q_SIGNAL void canJoinChanged( bool canJoin );
-	Q_PROPERTY( bool canJoin READ getCanJoin NOTIFY canJoinChanged );
+	Q_PROPERTY( bool canJoin MEMBER m_canJoin NOTIFY canJoinChanged );
 
 	Q_SIGNAL void canJoinAlphaChanged( bool canJoinAlpha );
-	Q_PROPERTY( bool canJoinAlpha READ getCanJoinAlpha NOTIFY canJoinAlphaChanged );
+	Q_PROPERTY( bool canJoinAlpha MEMBER m_canJoinAlpha NOTIFY canJoinAlphaChanged );
 
 	Q_SIGNAL void canJoinBetaChanged( bool canJoinBeta );
-	Q_PROPERTY( bool canJoinBeta READ getCanJoinBeta NOTIFY canJoinBetaChanged );
+	Q_PROPERTY( bool canJoinBeta MEMBER m_canJoinBeta NOTIFY canJoinBetaChanged );
+
+	Q_SIGNAL void canBeReadyChanged( bool canBeReady );
+	Q_PROPERTY( bool canBeReady MEMBER m_canBeReady NOTIFY canBeReadyChanged );
+
+	Q_SIGNAL void isReadyChanged( bool isReady );
+	Q_PROPERTY( bool isReady MEMBER m_isReady NOTIFY isReadyChanged );
 
 	Q_INVOKABLE QVariant colorFromRgbString( const QString &string ) const;
 
@@ -426,6 +415,9 @@ private:
 	bool m_isShowingPovHud { false };
 	bool m_isShowingHud { false };
 
+	bool m_canBeReady { false };
+	bool m_isReady { false };
+
 	bool m_canJoin { false };
 	bool m_canSpectate { false };
 	bool m_canJoinAlpha { false };
@@ -543,9 +535,6 @@ private:
 	auto getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers;
 
 	bool tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown );
-
-	using ItemsHeap = wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems>;
-	using NativelyDrawnOccluderBounds = wsw::StaticVector<QRectF, 4>;
 
 	void drawBackgroundMapIfNeeded();
 
@@ -1264,6 +1253,14 @@ void QtUISystem::checkPropertyChanges() {
 		s_debugNativelyDrawnItemsVar->modified = false;
 	}
 
+	if( const bool oldCanBeReady = m_canBeReady; oldCanBeReady != ( m_canBeReady = CG_CanBeReady() ) ) {
+		Q_EMIT canBeReadyChanged( m_canBeReady );
+	}
+
+	if( const bool wasReady = m_isReady; wasReady != ( m_isReady = CG_IsReady() ) ) {
+		Q_EMIT isReadyChanged( m_isReady );
+	}
+
 	if( const bool wasOperator = m_isOperator; wasOperator != ( m_isOperator = CG_IsOperator() ) ) {
 		Q_EMIT isOperatorChanged( m_isOperator );
 	}
@@ -1803,23 +1800,28 @@ void QtUISystem::disconnect() {
 }
 
 void QtUISystem::spectate() {
-	assert( getCanSpectate() );
+	assert( m_canSpectate );
 	Cbuf_AddText( "spec" );
 }
 
 void QtUISystem::join() {
-	assert( getCanJoin() );
+	assert( m_canJoin );
 	Cbuf_AddText( "join" );
 }
 
 void QtUISystem::joinAlpha() {
-	assert( getCanJoinAlpha() );
+	assert( m_canJoinAlpha );
 	Cbuf_AddText( "join alpha" );
 }
 
 void QtUISystem::joinBeta() {
-	assert( getCanJoinBeta() );
+	assert( m_canJoinBeta );
 	Cbuf_AddText( "join beta" );
+}
+
+void QtUISystem::toggleReady() {
+	assert( m_canBeReady );
+	Cbuf_AddText( "ready" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {

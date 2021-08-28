@@ -484,6 +484,14 @@ bool CG_HasTwoTeams() {
 	return GS_TeamBasedGametype();
 }
 
+bool CG_CanBeReady() {
+	return !ISREALSPECTATOR() && ( GS_MatchState() == MATCH_STATE_WARMUP || GS_MatchState() == MATCH_STATE_COUNTDOWN );
+}
+
+bool CG_IsReady() {
+	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_READY ) != 0;
+}
+
 bool CG_IsOperator() {
 	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_OPERATOR ) != 0;
 }

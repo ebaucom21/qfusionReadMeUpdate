@@ -17,6 +17,14 @@ Item {
             onClicked: wsw.showMainMenu()
         }
         InGameButton {
+            visible: wsw.canBeReady
+            text: wsw.isReady ? "Not ready" : "Ready"
+            onClicked: {
+                wsw.toggleReady()
+                wsw.returnFromInGameMenu()
+            }
+        }
+        InGameButton {
             visible: (!hudDataModel.hasTwoTeams && wsw.canJoin) ||
                      (hudDataModel.hasTwoTeams && wsw.canJoinAlpha && wsw.canJoinBeta)
             text: "Join"
