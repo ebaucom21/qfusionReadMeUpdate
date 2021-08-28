@@ -1223,7 +1223,7 @@ void QtUISystem::checkPropertyChanges() {
 	const bool hadTeamChat = m_hasTeamChat;
 	m_hasTeamChat = false;
 	if( Cmd_Exists( "say_team" ) ) {
-		m_hasTeamChat = CG_IsSpectator() || ( GS_TeamBasedGametype() && !GS_InvidualGameType() );
+		m_hasTeamChat = CG_IsSpectator() || ( GS_TeamBasedGametype() && !GS_IndividualGameType() );
 	}
 
 	if( hadTeamChat != m_hasTeamChat ) {

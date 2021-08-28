@@ -404,7 +404,7 @@ bool Bot::NavTargetWorthRushing() const {
 	// Don't jump if there's no pressure from enemies
 	if( !selectedEnemies.AreValid() ) {
 		// Duel-like gametypes are an exception
-		if( !( GS_TeamBasedGametype() && GS_InvidualGameType() ) ) {
+		if( !( GS_TeamBasedGametype() && GS_IndividualGameType() ) ) {
 			return false;
 		}
 	}

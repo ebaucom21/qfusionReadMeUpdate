@@ -421,7 +421,7 @@ void ReactToEnemyLostGoal::ModifyWeightForPursuit( const WorldState &currWorldSt
 	// Increase the threshold wearing powerups or in duel-like gametypes
 	if( hasOffensivePowerups ) {
 		distanceThreshold = 1024.0f + 256.0f;
-	} else if( GS_InvidualGameType() ) {
+	} else if( GS_IndividualGameType() ) {
 		distanceThreshold = 768.0f;
 	}
 

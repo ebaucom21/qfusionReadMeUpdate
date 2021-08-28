@@ -264,7 +264,7 @@ void AiBaseTeam::ReleaseTeam( int teamNum ) {
 
 AiBaseTeam *AiBaseTeam::InstantiateTeam( int teamNum ) {
 	// Delegate construction to AiSquadBasedTeam
-	if( GS_TeamBasedGametype() && !GS_InvidualGameType() ) {
+	if( GS_TeamBasedGametype() && !GS_IndividualGameType() ) {
 		return AiSquadBasedTeam::InstantiateTeam( teamNum );
 	}
 

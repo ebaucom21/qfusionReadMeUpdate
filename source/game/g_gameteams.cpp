@@ -1115,7 +1115,7 @@ void G_Say_Team( edict_t *who, const char *inmsg, uint64_t clientCommandNum ) {
 	char *p;
 	char current_color[3];
 
-	if( who->s.team != TEAM_SPECTATOR && ( !GS_TeamBasedGametype() || GS_InvidualGameType() ) ) {
+	if( who->s.team != TEAM_SPECTATOR && ( !GS_TeamBasedGametype() || GS_IndividualGameType() ) ) {
 		Cmd_Say_f( who, clientCommandNum );
 		return;
 	}
@@ -1213,7 +1213,7 @@ void G_Say_Team( edict_t *who, const char *inmsg ) {
 // coach
 
 void G_Teams_Coach( edict_t *ent ) {
-	if( GS_TeamBasedGametype() && !GS_InvidualGameType() && ent->s.team != TEAM_SPECTATOR ) {
+	if( GS_TeamBasedGametype() && !GS_IndividualGameType() && ent->s.team != TEAM_SPECTATOR ) {
 		if( !teamlist[ent->s.team].has_coach ) {
 			if( GS_MatchState() > MATCH_STATE_WARMUP && !GS_MatchPaused() ) {
 				G_PrintMsg( ent, "Can't set coach mode with the match in progress\n" );

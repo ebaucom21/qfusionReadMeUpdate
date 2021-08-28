@@ -182,7 +182,7 @@ static void CG_FlashGameWindow( void ) {
 		oldAlphaScore = cg.predictedPlayerState.stats[STAT_TEAM_ALPHA_SCORE];
 		oldBetaScore = cg.predictedPlayerState.stats[STAT_TEAM_BETA_SCORE];
 
-		flash = scoresSet && GS_TeamBasedGametype() && !GS_InvidualGameType();
+		flash = scoresSet && GS_TeamBasedGametype() && !GS_IndividualGameType();
 		scoresSet = true;
 	}
 

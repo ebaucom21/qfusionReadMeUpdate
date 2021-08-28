@@ -161,7 +161,7 @@ extern gs_state_t gs;
 
 #define GS_MatchState() ( gs.gameState.stats[GAMESTAT_MATCHSTATE] )
 #define GS_MaxPlayersInTeam() ( gs.gameState.stats[GAMESTAT_MAXPLAYERSINTEAM] )
-#define GS_InvidualGameType() ( GS_MaxPlayersInTeam() == 1 ? true : false )
+#define GS_IndividualGameType() ( GS_MaxPlayersInTeam() == 1 ? true : false )
 
 #define GS_MatchDuration() ( gs.gameState.stats[GAMESTAT_MATCHDURATION] )
 #define GS_MatchStartTime() ( gs.gameState.stats[GAMESTAT_MATCHSTART] )

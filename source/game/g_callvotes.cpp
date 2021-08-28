@@ -1833,7 +1833,7 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 	const char *votename;
 	callvotetype_t *callvote;
 
-	if( !isopcall && ent->s.team == TEAM_SPECTATOR && GS_InvidualGameType()
+	if( !isopcall && ent->s.team == TEAM_SPECTATOR && GS_IndividualGameType()
 		&& GS_MatchState() == MATCH_STATE_PLAYTIME && !GS_MatchPaused() ) {
 		int team, count;
 		edict_t *e;

@@ -538,7 +538,7 @@ bool CG_IsPovAlive() {
 }
 
 bool CG_HasTwoTeams() {
-	return GS_TeamBasedGametype() && !GS_InvidualGameType();
+	return GS_TeamBasedGametype();
 }
 
 int CG_MyRealTeam() {

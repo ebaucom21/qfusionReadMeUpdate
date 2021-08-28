@@ -1007,7 +1007,7 @@ static bool objectGametypeDescriptor_hasSelfDamage( gametype_descriptor_t *self 
 }
 
 static bool objectGametypeDescriptor_isInvidualGameType( gametype_descriptor_t *self ) {
-	return GS_InvidualGameType();
+	return GS_IndividualGameType();
 }
 
 static const asFuncdef_t gametypedescr_Funcdefs[] =

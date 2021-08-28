@@ -267,7 +267,7 @@ void G_Match_Autorecord_Start( void ) {
 		// list of players
 		Q_strncpyz( players, trap_GetConfigString( CS_MATCHNAME ), sizeof( players ) );
 		if( players[0] == '\0' ) {
-			if( GS_InvidualGameType() ) {
+			if( GS_IndividualGameType() ) {
 				edict_t *ent;
 
 				for( team = TEAM_ALPHA; team < GS_MAX_TEAMS; team++ ) {
@@ -758,7 +758,7 @@ static void G_Match_ScoreAnnouncement( void ) {
 
 		// in the game or chasing someone who is
 		if( G_WasLeading( chased ) && !G_IsLeading( chased ) ) {
-			if( GS_TeamBasedGametype() && !GS_InvidualGameType() ) {
+			if( GS_TeamBasedGametype() && !GS_IndividualGameType() ) {
 				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_LOST_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {
@@ -766,7 +766,7 @@ static void G_Match_ScoreAnnouncement( void ) {
 								  GS_MAX_TEAMS, true, NULL );
 			}
 		} else if( ( !G_WasLeading( chased ) || ( last_leaders[1] != 0 ) ) && G_IsLeading( chased ) && ( leaders[1] == 0 ) ) {
-			if( GS_TeamBasedGametype() && !GS_InvidualGameType() ) {
+			if( GS_TeamBasedGametype() && !GS_IndividualGameType() ) {
 				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TAKEN_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {
@@ -774,7 +774,7 @@ static void G_Match_ScoreAnnouncement( void ) {
 								  GS_MAX_TEAMS, true, NULL );
 			}
 		} else if( ( !G_WasLeading( chased ) || ( last_leaders[1] == 0 ) ) && G_IsLeading( chased ) && ( leaders[1] != 0 ) ) {
-			if( GS_TeamBasedGametype() && !GS_InvidualGameType() ) {
+			if( GS_TeamBasedGametype() && !GS_IndividualGameType() ) {
 				G_AnnouncerSound( e, trap_SoundIndex( va( S_ANNOUNCER_SCORE_TEAM_TIED_LEAD_1_to_2, ( rand() & 1 ) + 1 ) ),
 								  GS_MAX_TEAMS, true, NULL );
 			} else {

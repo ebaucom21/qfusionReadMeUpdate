@@ -263,7 +263,7 @@ void DefaultBotEvolutionManager::SaveEvolutionResults() {
 	}
 
 	constexpr const char *tag = "DefaultBotEvolutionManager::SaveEvolutionResults()";
-	if( numRatedBots < ( GS_InvidualGameType() ? 2u : 3u ) ) {
+	if( numRatedBots < ( GS_IndividualGameType() ? 2u : 3u ) ) {
 		G_Printf( S_COLOR_YELLOW "%s: There were too few (%d) rated bots. No results to save.\n", tag, numRatedBots );
 		return;
 	}
