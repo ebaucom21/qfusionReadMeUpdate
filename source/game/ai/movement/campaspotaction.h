@@ -1,24 +1,24 @@
 #ifndef WSW_06604b3c_dd68_43dd_b482_d92433ea23c6_H
 #define WSW_06604b3c_dd68_43dd_b482_d92433ea23c6_H
 
-#include "basemovementaction.h"
+#include "baseaction.h"
 
-class CampASpotMovementAction : public BaseMovementAction {
+class CampASpotMovementAction : public BaseAction {
 	unsigned disabledForApplicationFrameIndex { std::numeric_limits<unsigned>::max() };
 
-	bool TryUpdateKeyMoveDirs( MovementPredictionContext *context );
-	Vec3 GetUpdatedPendingLookDir( MovementPredictionContext *context );
+	bool TryUpdateKeyMoveDirs( PredictionContext *context );
+	Vec3 GetUpdatedPendingLookDir( PredictionContext *context );
 public:
-	explicit CampASpotMovementAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "CampASpotMovementAction", COLOR_RGB( 128, 0, 128 ) ) {}
+	explicit CampASpotMovementAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "CampASpotMovementAction", COLOR_RGB( 128, 0, 128 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
-	void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	void PlanPredictionStep( PredictionContext *context ) override;
+	void CheckPredictionStepResults( PredictionContext *context ) override;
+	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason stopReason,
 									   unsigned stoppedAtFrameIndex ) override;
 	void BeforePlanning() override {
-		BaseMovementAction::BeforePlanning();
+		BaseAction::BeforePlanning();
 		disabledForApplicationFrameIndex = std::numeric_limits<unsigned>::max();
 	}
 };

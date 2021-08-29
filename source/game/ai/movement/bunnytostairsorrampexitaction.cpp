@@ -1,10 +1,10 @@
 #include "movementlocal.h"
 #include "bunnytostairsorrampexitaction.h"
 
-void BunnyToStairsOrRampExitAction::PlanPredictionStep( MovementPredictionContext *context ) {
+void BunnyToStairsOrRampExitAction::PlanPredictionStep( PredictionContext *context ) {
 	// This action is the first applied action as it is specialized
 	// and falls back to other bunnying actions if it cannot be applied.
-	if( !GenericCheckIsActionEnabled( context, &module->bunnyToBestFloorClusterPointAction ) ) {
+	if( !GenericCheckIsActionEnabled( context, &m_subsystem->bunnyToBestFloorClusterPointAction ) ) {
 		return;
 	}
 
@@ -25,7 +25,7 @@ void BunnyToStairsOrRampExitAction::PlanPredictionStep( MovementPredictionContex
 	}
 }
 
-bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( MovementPredictionContext *context ) {
+bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *context ) {
 	int groundedAreaNum = context->CurrGroundedAasAreaNum();
 	if( !groundedAreaNum ) {
 		Debug( "A current grounded area num is not defined\n" );
@@ -73,7 +73,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( MovementPredictionCon
 	return true;
 }
 
-void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( MovementPredictionContext *context, int exitAreaNum ) {
+void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( PredictionContext *context, int exitAreaNum ) {
 	const auto *const aasWorld = AiAasWorld::Instance();
 	const auto *const aasReach = aasWorld->Reachabilities();
 	const auto *const aasFloorClusterNums = aasWorld->AreaFloorClusterNums();
@@ -107,11 +107,11 @@ void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( MovementPredictionC
 	}
 }
 
-void BunnyToStairsOrRampExitAction::CheckPredictionStepResults( MovementPredictionContext *context ) {
+void BunnyToStairsOrRampExitAction::CheckPredictionStepResults( PredictionContext *context ) {
 	// We skip the direct superclass method call!
 	// Much more lenient checks are used for this specialized action.
 	// Only generic checks for all movement actions should be performed in addition.
-	BaseMovementAction::CheckPredictionStepResults( context );
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}

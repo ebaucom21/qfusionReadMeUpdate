@@ -3,10 +3,10 @@
 #include "floorclusterareascache.h"
 #include "../manager.h"
 
-BunnyTestingNextReachDirsAction::BunnyTestingNextReachDirsAction( BotMovementModule *module_ )
-	: BunnyTestingSavedLookDirsAction( module_, NAME, COLOR_RGB( 0, 192, 0 ) ) {
+BunnyTestingNextReachDirsAction::BunnyTestingNextReachDirsAction( MovementSubsystem *subsystem )
+	: BunnyTestingSavedLookDirsAction( subsystem, NAME, COLOR_RGB( 0, 192, 0 ) ) {
 	// The constructor cannot be defined in the header due to this bot member access
-	suggestedAction = &module->bunnyToBestVisibleReachAction;
+	suggestedAction = &m_subsystem->bunnyToBestVisibleReachAction;
 	maxSuggestedLookDirs = kMaxSuggestedLookDirs;
 }
 
@@ -28,7 +28,7 @@ void BunnyTestingNextReachDirsAction::BeforePlanning() {
 		return;
 	}
 
-	// TODO: All these decisions should not be made at movement module level
+	// TODO: All these decisions should not be made at movement m_subsystem level
 
 	// Check whether the bot is carrier. Use the maximal possible number of look dirs in this case.
 	const edict_t *self = game.edicts + bot->EntNum();
@@ -52,7 +52,7 @@ void BunnyTestingNextReachDirsAction::BeforePlanning() {
 class NextReachDirsCollector final : public ReachChainWalker {
 	friend class BunnyTestingNextReachDirsAction;
 
-	Context *const context;
+	PredictionContext *const context;
 	const AiAasWorld *const aasWorld;
 	const aas_area_t *const aasAreas;
 	const aas_areasettings_t *const aasAreaSettings;
@@ -70,7 +70,7 @@ class NextReachDirsCollector final : public ReachChainWalker {
 
 	inline bool CheckForStairsCluster( int areaNum );
 public:
-	NextReachDirsCollector( const Bot *bot_, Context *context_, AreaAndScore *candidates_, unsigned maxCandidates_ )
+	NextReachDirsCollector( const Bot *bot_, PredictionContext *context_, AreaAndScore *candidates_, unsigned maxCandidates_ )
 		: ReachChainWalker( context_->RouteCache() )
 		, context( context_ )
 		, aasWorld( AiAasWorld::Instance() )
@@ -100,7 +100,7 @@ public:
 	bool Accept( int, const aas_reachability_t &reach, int ) override;
 };
 
-void BunnyTestingNextReachDirsAction::SaveSuggestedLookDirs( Context *context ) {
+void BunnyTestingNextReachDirsAction::SaveSuggestedLookDirs( PredictionContext *context ) {
 	Assert( suggestedLookDirs.empty() );
 
 	if( context->IsInNavTargetArea() ) {

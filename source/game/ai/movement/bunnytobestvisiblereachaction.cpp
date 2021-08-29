@@ -7,7 +7,7 @@ struct Walker : public ReachChainWalker {
 	const AiAasWorld *const aasWorld;
 	Vec3 result { 0, 0, 0 };
 
-	explicit Walker( Context *context )
+	explicit Walker( PredictionContext *context )
 		: ReachChainWalker( context->RouteCache() )
 		, botOrigin( context->movementState->entityPhysicsState.Origin() )
 		, aasWorld( AiAasWorld::Instance() ) {}
@@ -20,8 +20,8 @@ struct Walker : public ReachChainWalker {
 	bool Exec() override;
 };
 
-void BunnyToBestVisibleReachAction::PlanPredictionStep( Context *context ) {
-	if( !GenericCheckIsActionEnabled( context, &module->bunnyTestingMultipleTurnsAction ) ) {
+void BunnyToBestVisibleReachAction::PlanPredictionStep( PredictionContext *context ) {
+	if( !GenericCheckIsActionEnabled( context, &m_subsystem->bunnyTestingMultipleTurnsAction ) ) {
 		return;
 	}
 

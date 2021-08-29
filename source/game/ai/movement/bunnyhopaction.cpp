@@ -1,8 +1,8 @@
 #include "bunnyhopaction.h"
 #include "movementlocal.h"
 
-bool BunnyHopAction::GenericCheckIsActionEnabled( Context *context, BaseMovementAction *suggestedAction ) {
-	if( !BaseMovementAction::GenericCheckIsActionEnabled( context, suggestedAction ) ) {
+bool BunnyHopAction::GenericCheckIsActionEnabled( PredictionContext *context, BaseAction *suggestedAction ) {
+	if( !BaseAction::GenericCheckIsActionEnabled( context, suggestedAction ) ) {
 		return false;
 	}
 
@@ -17,7 +17,7 @@ bool BunnyHopAction::GenericCheckIsActionEnabled( Context *context, BaseMovement
 	return false;
 }
 
-bool BunnyHopAction::CheckCommonBunnyHopPreconditions( Context *context ) {
+bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *context ) {
 	int currAasAreaNum = context->CurrAasAreaNum();
 	if( !currAasAreaNum ) {
 		Debug( "Cannot apply action: curr AAS area num is undefined\n" );
@@ -88,7 +88,7 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( Context *context ) {
 	return true;
 }
 
-void BunnyHopAction::SetupCommonBunnyHopInput( Context *context ) {
+void BunnyHopAction::SetupCommonBunnyHopInput( PredictionContext *context ) {
 	const auto *pmoveStats = context->currPlayerState->pmove.stats;
 
 	auto *botInput = &context->record->botInput;
@@ -128,7 +128,7 @@ void BunnyHopAction::SetupCommonBunnyHopInput( Context *context ) {
 	}
 }
 
-bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, Context *context ) {
+bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
@@ -233,7 +233,7 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, Context *co
 	return true;
 }
 
-bool BunnyHopAction::CanFlyAboveGroundRelaxed( const Context *context ) const {
+bool BunnyHopAction::CanFlyAboveGroundRelaxed( const PredictionContext *context ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	if( entityPhysicsState.GroundEntity() ) {
 		return false;
@@ -243,7 +243,7 @@ bool BunnyHopAction::CanFlyAboveGroundRelaxed( const Context *context ) const {
 	return entityPhysicsState.HeightOverGround() >= desiredHeightOverGround;
 }
 
-void BunnyHopAction::TrySetWalljump( Context *context, const Vec3 &velocity2DDir, const Vec3 &intendedLookDir2D ) {
+void BunnyHopAction::TrySetWalljump( PredictionContext *context, const Vec3 &velocity2DDir, const Vec3 &intendedLookDir2D ) {
 	if( !CanSetWalljump( context, velocity2DDir, intendedLookDir2D ) ) {
 		return;
 	}
@@ -255,7 +255,7 @@ void BunnyHopAction::TrySetWalljump( Context *context, const Vec3 &velocity2DDir
 	context->predictionStepMillis = context->DefaultFrameTime();
 }
 
-bool BunnyHopAction::CanSetWalljump( Context *context, const Vec3 &velocity2DDir, const Vec3 &intended2DLookDir ) const {
+bool BunnyHopAction::CanSetWalljump( PredictionContext *context, const Vec3 &velocity2DDir, const Vec3 &intended2DLookDir ) const {
 	const short *pmoveStats = context->currPlayerState->pmove.stats;
 	if( !( pmoveStats[PM_STAT_FEATURES] & PMFEAT_WALLJUMP ) ) {
 		return false;
@@ -286,7 +286,7 @@ bool BunnyHopAction::CanSetWalljump( Context *context, const Vec3 &velocity2DDir
 	return velocity2DDir.Dot( entityPhysicsState.ForwardDir() ) > 0.7f && velocity2DDir.Dot( intended2DLookDir ) > 0.7f;
 }
 
-void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( Context *context ) {
+void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( PredictionContext *context ) {
 	// Skip at start to let the bot escape any obstacles at the current in-game position
 	if( context->totalMillisAhead < 128 ) {
 		if( originAtSequenceStart.Distance2DTo( context->movementState->entityPhysicsState.Origin() ) < SQUARE( 36 ) ) {
@@ -296,7 +296,7 @@ void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( Context *context ) {
 
 	// While logic of this method really should belong to CheckPredictionStepResults()
 	// we find retrieval of the shape list with consequent immediate reuse here
-	// and in MovementPredictionContext::NextMovementStep() convenient.
+	// and in PredictionContext::NextMovementStep() convenient.
 
 	Assert( !thisFrameCMShapeList );
 	thisFrameCMShapeList = context->TraceCache().getShapeListForPMoveCollision( context );
@@ -330,7 +330,7 @@ void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( Context *context ) {
 	}
 }
 
-bool BunnyHopAction::CheckStepSpeedGainOrLoss( Context *context ) {
+bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 	const auto &newEntityPhysicsState = context->movementState->entityPhysicsState;
 	const auto &oldEntityPhysicsState = context->PhysicsStateBeforeStep();
 
@@ -406,11 +406,11 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( Context *context ) {
 	return true;
 }
 
-bool BunnyHopAction::WasOnGroundThisFrame( const Context *context ) const {
+bool BunnyHopAction::WasOnGroundThisFrame( const PredictionContext *context ) const {
 	return context->movementState->entityPhysicsState.GroundEntity() || context->frameEvents.hasJumped;
 }
 
-bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( Context *context,
+bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *context,
 														 int currTravelTimeToTarget,
 														 int groundedAreaNum ) {
 	constexpr const char *format = "A prediction step has lead to increased travel time to nav target\n";
@@ -497,7 +497,7 @@ bool BunnyHopAction::CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int
 	return false;
 }
 
-bool BunnyHopAction::TryHandlingUnreachableTarget( Context *context ) {
+bool BunnyHopAction::TryHandlingUnreachableTarget( PredictionContext *context ) {
 	currentUnreachableTargetSequentialMillis += context->predictionStepMillis;
 	if( currentUnreachableTargetSequentialMillis < tolerableUnreachableTargetSequentialMillis ) {
 		context->SaveSuggestedActionForNextFrame( this );
@@ -508,7 +508,7 @@ bool BunnyHopAction::TryHandlingUnreachableTarget( Context *context ) {
 	return false;
 }
 
-bool BunnyHopAction::CheckNavTargetAreaTransition( Context *context ) {
+bool BunnyHopAction::CheckNavTargetAreaTransition( PredictionContext *context ) {
 	if( !context->IsInNavTargetArea() ) {
 		// If the bot has left the nav target area
 		if( hasEnteredNavTargetArea ) {
@@ -547,7 +547,7 @@ bool BunnyHopAction::CheckNavTargetAreaTransition( Context *context ) {
 	return false;
 }
 
-bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( MovementPredictionContext *context, int currTravelTimeToTarget ) {
+bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *context, int currTravelTimeToTarget ) {
 	assert( currTravelTimeToTarget );
 
 	// If there was a definite advancement from the initial position
@@ -619,8 +619,8 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( MovementPredictionConte
 	return false;
 }
 
-void BunnyHopAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}
@@ -716,7 +716,7 @@ void BunnyHopAction::CheckPredictionStepResults( Context *context ) {
 	}
 
 	// Check whether to continue prediction still makes sense
-	constexpr auto stackGrowthLimit = ( 3 * MovementPredictionContext::MAX_PREDICTED_STATES ) / 4;
+	constexpr auto stackGrowthLimit = ( 3 * PredictionContext::MAX_PREDICTED_STATES ) / 4;
 	if( context->topOfStackIndex < stackGrowthLimit ) {
 		context->SaveSuggestedActionForNextFrame( this );
 		return;
@@ -727,8 +727,8 @@ void BunnyHopAction::CheckPredictionStepResults( Context *context ) {
 	context->SetPendingRollback();
 }
 
-void BunnyHopAction::OnApplicationSequenceStarted( Context *context ) {
-	BaseMovementAction::OnApplicationSequenceStarted( context );
+void BunnyHopAction::OnApplicationSequenceStarted( PredictionContext *context ) {
+	BaseAction::OnApplicationSequenceStarted( context );
 	context->MarkSavepoint( this, context->topOfStackIndex );
 
 	minTravelTimeToNavTargetSoFar = std::numeric_limits<int>::max();
@@ -773,10 +773,10 @@ void BunnyHopAction::OnApplicationSequenceStarted( Context *context ) {
 	didTheLatchedHop = false;
 }
 
-void BunnyHopAction::OnApplicationSequenceStopped( Context *context,
+void BunnyHopAction::OnApplicationSequenceStopped( PredictionContext *context,
 												   SequenceStopReason reason,
 												   unsigned stoppedAtFrameIndex ) {
-	BaseMovementAction::OnApplicationSequenceStopped( context, reason, stoppedAtFrameIndex );
+	BaseAction::OnApplicationSequenceStopped( context, reason, stoppedAtFrameIndex );
 
 	if( reason != FAILED ) {
 		if( reason != DISABLED ) {
@@ -795,6 +795,6 @@ void BunnyHopAction::OnApplicationSequenceStopped( Context *context,
 }
 
 void BunnyHopAction::BeforePlanning() {
-	BaseMovementAction::BeforePlanning();
+	BaseAction::BeforePlanning();
 	this->disabledForApplicationFrameIndex = std::numeric_limits<unsigned>::max();
 }

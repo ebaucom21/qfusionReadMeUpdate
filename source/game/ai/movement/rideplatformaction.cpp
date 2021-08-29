@@ -1,7 +1,7 @@
 #include "rideplatformaction.h"
 #include "movementlocal.h"
 
-void RidePlatformAction::PlanPredictionStep( Context *context ) {
+void RidePlatformAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
@@ -22,14 +22,14 @@ void RidePlatformAction::PlanPredictionStep( Context *context ) {
 	}
 }
 
-void RidePlatformAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void RidePlatformAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}
 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
-	const int targetAreaNum = module->savedPlatformAreas[currTestedAreaIndex];
+	const int targetAreaNum = m_subsystem->savedPlatformAreas[currTestedAreaIndex];
 	const int currAreaNum = entityPhysicsState.CurrAasAreaNum();
 	const int droppedToFloorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
 	if( currAreaNum == targetAreaNum || droppedToFloorAreaNum == targetAreaNum ) {
@@ -59,10 +59,10 @@ void RidePlatformAction::CheckPredictionStepResults( Context *context ) {
 	context->SaveSuggestedActionForNextFrame( this );
 }
 
-void RidePlatformAction::OnApplicationSequenceStopped( Context *context,
+void RidePlatformAction::OnApplicationSequenceStopped( PredictionContext *context,
 													   SequenceStopReason stopReason,
 													   unsigned stoppedAtFrameIndex ) {
-	BaseMovementAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
+	BaseAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
 	if( stopReason != FAILED && stopReason != DISABLED ) {
 		return;
 	}
@@ -74,7 +74,7 @@ inline void DirToKeyInput( const Vec3 &desiredDir, const AiEntityPhysicsState &e
 	DirToKeyInput( desiredDir, entityPhysicsState.ForwardDir().Data(), entityPhysicsState.RightDir().Data(), input );
 }
 
-void RidePlatformAction::SetupIdleRidingPlatformMovement( Context *context, const edict_t *platform ) {
+void RidePlatformAction::SetupIdleRidingPlatformMovement( PredictionContext *context, const edict_t *platform ) {
 	TrySaveExitAreas( context, platform );
 
 	auto *botInput = &context->record->botInput;
@@ -128,8 +128,8 @@ void RidePlatformAction::SetupIdleRidingPlatformMovement( Context *context, cons
 	float height = platform->moveinfo.start_origin[2] - platform->moveinfo.end_origin[2];
 	float frac = ( platform->s.origin[2] - platform->moveinfo.end_origin[2] ) / height;
 	// If the bot is fairly close to the destination and there are saved areas, start looking at the first one
-	if( frac > 0.5f && !module->savedPlatformAreas.empty() ) {
-		const auto &area = AiAasWorld::Instance()->Areas()[module->savedPlatformAreas.front()];
+	if( frac > 0.5f && !m_subsystem->savedPlatformAreas.empty() ) {
+		const auto &area = AiAasWorld::Instance()->Areas()[m_subsystem->savedPlatformAreas.front()];
 		Vec3 lookVec( area.center );
 		lookVec -= context->movementState->entityPhysicsState.Origin();
 		botInput->SetIntendedLookDir( lookVec, false );
@@ -142,7 +142,7 @@ void RidePlatformAction::SetupIdleRidingPlatformMovement( Context *context, cons
 	botInput->SetIntendedLookDir( lookVec, false );
 }
 
-void RidePlatformAction::SetupExitPlatformMovement( Context *context, const edict_t *platform ) {
+void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, const edict_t *platform ) {
 	const ExitAreasVector &suggestedAreas = SuggestExitAreas( context, platform );
 	if( suggestedAreas.empty() ) {
 		Debug( "Warning: there is no platform exit areas, do not plan ahead\n" );
@@ -185,7 +185,7 @@ void RidePlatformAction::SetupExitPlatformMovement( Context *context, const edic
 	}
 }
 
-const edict_t *RidePlatformAction::GetPlatform( Context *context ) const {
+const edict_t *RidePlatformAction::GetPlatform( PredictionContext *context ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const edict_t *groundEntity = entityPhysicsState.GroundEntity();
 	if( groundEntity ) {
@@ -210,8 +210,8 @@ const edict_t *RidePlatformAction::GetPlatform( Context *context ) const {
 	return nullptr;
 }
 
-void RidePlatformAction::TrySaveExitAreas( Context *context, const edict_t *platform ) {
-	auto &savedAreas = module->savedPlatformAreas;
+void RidePlatformAction::TrySaveExitAreas( PredictionContext *context, const edict_t *platform ) {
+	auto &savedAreas = m_subsystem->savedPlatformAreas;
 	// Don't overwrite already present areas
 	if( !savedAreas.empty() ) {
 		return;
@@ -257,28 +257,28 @@ void RidePlatformAction::TrySaveExitAreas( Context *context, const edict_t *plat
 
 typedef RidePlatformAction::ExitAreasVector ExitAreasVector;
 
-const ExitAreasVector &RidePlatformAction::SuggestExitAreas( Context *context, const edict_t *platform ) {
-	if( !module->savedPlatformAreas.empty() ) {
-		return module->savedPlatformAreas;
+const ExitAreasVector &RidePlatformAction::SuggestExitAreas( PredictionContext *context, const edict_t *platform ) {
+	if( !m_subsystem->savedPlatformAreas.empty() ) {
+		return m_subsystem->savedPlatformAreas;
 	}
 
 	FindExitAreas( context, platform, tmpExitAreas );
 
 	// Save found areas to avoid repeated FindExitAreas() calls while testing next area after rollback
 	for( int areaNum: tmpExitAreas )
-		module->savedPlatformAreas.push_back( areaNum );
+		m_subsystem->savedPlatformAreas.push_back( areaNum );
 
 	return tmpExitAreas;
 };
 
-void RidePlatformAction::FindExitAreas( Context *context, const edict_t *platform, ExitAreasVector &exitAreas ) {
+void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_t *platform, ExitAreasVector &exitAreas ) {
 	const auto &aasWorld = AiAasWorld::Instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 
 	edict_t *const ignore = game.edicts + bot->EntNum();
 
-	const BotMovementState &movementState = context ? *context->movementState : module->movementState;
+	const MovementState &movementState = context ? *context->movementState : m_subsystem->movementState;
 
 	exitAreas.clear();
 

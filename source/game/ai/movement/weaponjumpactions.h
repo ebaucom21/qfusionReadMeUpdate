@@ -1,28 +1,28 @@
 #ifndef WSW_f438caae_47fc_4ebb_ba29_7a7323ee5b33_H
 #define WSW_f438caae_47fc_4ebb_ba29_7a7323ee5b33_H
 
-#include "basemovementaction.h"
+#include "baseaction.h"
 
-class ScheduleWeaponJumpAction: public BaseMovementAction {
+class ScheduleWeaponJumpAction: public BaseAction {
 	friend class WeaponJumpWeaponsTester;
 
 	enum { MAX_AREAS = 64 };
 
-	bool TryJumpDirectlyToTarget( MovementPredictionContext *context, const int *suitableWeapons, int numWeapons );
+	bool TryJumpDirectlyToTarget( PredictionContext *context, const int *suitableWeapons, int numWeapons );
 	// Gets raw nearby areas
-	int GetCandidatesForJumpingToTarget( MovementPredictionContext *context, int *areaNums );
+	int GetCandidatesForJumpingToTarget( PredictionContext *context, int *areaNums );
 	// Cuts off some raw areas using cheap tests
 	// Modifies raw nearby areas buffer in-place
-	int FilterRawCandidateAreas( MovementPredictionContext *context, int *areaNums, int numRawAreas );
+	int FilterRawCandidateAreas( PredictionContext *context, int *areaNums, int numRawAreas );
 	// Filters out areas that are not (significantly) closer to the target
 	// Modifies the supplied buffer in-place as well.
 	// Writes travel times to target to the travel times buffer.
-	int ReachTestNearbyTargetAreas( MovementPredictionContext *context, int *areaNums, int *travelTimes, int numAreas );
+	int ReachTestNearbyTargetAreas( PredictionContext *context, int *areaNums, int *travelTimes, int numAreas );
 
-	int GetCandidatesForReachChainShortcut( MovementPredictionContext *context, int *areaNums );
-	bool TryShortcutReachChain( MovementPredictionContext *context, const int *suitableWeapons, int numWeapons );
+	int GetCandidatesForReachChainShortcut( PredictionContext *context, int *areaNums );
+	bool TryShortcutReachChain( PredictionContext *context, const int *suitableWeapons, int numWeapons );
 
-	void PrepareJumpTargets( MovementPredictionContext *context, const int *areaNums, vec3_t *targets, int numAreas );
+	void PrepareJumpTargets( PredictionContext *context, const int *areaNums, vec3_t *targets, int numAreas );
 
 	// Monotonically increasing dummy travel times (1, 2, ...).
 	// Used for providing travel times for reach chain shortcut.
@@ -44,34 +44,34 @@ class ScheduleWeaponJumpAction: public BaseMovementAction {
 
 	const int *GetTravelTimesForReachChainShortcut();
 
-	void SaveLandingAreas( MovementPredictionContext *context, int areaNum );
+	void SaveLandingAreas( PredictionContext *context, int areaNum );
 public:
-	explicit ScheduleWeaponJumpAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "ScheduleWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit ScheduleWeaponJumpAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "ScheduleWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 
 	void BeforePlanning() override {
-		BaseMovementAction::BeforePlanning();
+		BaseAction::BeforePlanning();
 		hasTestedComputationQuota = false;
 		hasAcquiredComputationQuota = false;
 	}
 };
 
-class TryTriggerWeaponJumpAction: public BaseMovementAction {
+class TryTriggerWeaponJumpAction: public BaseAction {
 public:
-	explicit TryTriggerWeaponJumpAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "TryTriggerWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit TryTriggerWeaponJumpAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "TryTriggerWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
-class CorrectWeaponJumpAction: public BaseMovementAction {
+class CorrectWeaponJumpAction: public BaseAction {
 public:
-	explicit CorrectWeaponJumpAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "CorrectWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit CorrectWeaponJumpAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "CorrectWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
 #endif

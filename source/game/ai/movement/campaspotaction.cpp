@@ -1,7 +1,7 @@
 #include "campaspotaction.h"
 #include "movementlocal.h"
 
-bool CampASpotMovementAction::TryUpdateKeyMoveDirs( Context *context ) {
+bool CampASpotMovementAction::TryUpdateKeyMoveDirs( PredictionContext *context ) {
 	auto *campingSpotState = &context->movementState->campingSpotState;
 	if( campingSpotState->AreKeyMoveDirsValid() ) {
 		return false;
@@ -17,7 +17,7 @@ bool CampASpotMovementAction::TryUpdateKeyMoveDirs( Context *context ) {
 	return true;
 }
 
-Vec3 CampASpotMovementAction::GetUpdatedPendingLookDir( Context *context ) {
+Vec3 CampASpotMovementAction::GetUpdatedPendingLookDir( PredictionContext *context ) {
 	auto *const lookAtPointState = &context->movementState->pendingLookAtPointState;
 	const float *keptInFovPoint = bot->GetKeptInFovPoint();
 	const auto &campingSpotState = context->movementState->campingSpotState;
@@ -38,7 +38,7 @@ Vec3 CampASpotMovementAction::GetUpdatedPendingLookDir( Context *context ) {
 	return intendedLookDir;
 }
 
-void CampASpotMovementAction::PlanPredictionStep( Context *context ) {
+void CampASpotMovementAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
@@ -119,8 +119,8 @@ void CampASpotMovementAction::PlanPredictionStep( Context *context ) {
 	botInput->SetWalkButton( random() > campingSpotState->Alertness() * 0.75f );
 }
 
-void CampASpotMovementAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void CampASpotMovementAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}
@@ -164,10 +164,10 @@ void CampASpotMovementAction::CheckPredictionStepResults( Context *context ) {
 	}
 }
 
-void CampASpotMovementAction::OnApplicationSequenceStopped( Context *context,
+void CampASpotMovementAction::OnApplicationSequenceStopped( PredictionContext *context,
 														    SequenceStopReason stopReason,
 														    unsigned stoppedAtFrameIndex ) {
-	BaseMovementAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
+	BaseAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
 
 	if( stopReason == DISABLED ) {
 		return;

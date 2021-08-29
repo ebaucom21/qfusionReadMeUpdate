@@ -16,7 +16,7 @@ static inline auto makeMoveDir( const float *__restrict fractions, const Vec3 &_
 	return moveDir;
 }
 
-void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context ) {
+void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *combatMovementState = &context->movementState->keyMoveDirsState;
 	Assert( !combatMovementState->IsActive() );
@@ -146,7 +146,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( Context *context 
 	combatMovementState->Activate( directions[0], directions[1], dirsTimeout );
 }
 
-void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context ) {
+void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *botInput = &context->record->botInput;
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
@@ -238,8 +238,8 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( Context *context
 	}
 }
 
-void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}
@@ -321,8 +321,8 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Context 
 	context->isCompleted = true;
 }
 
-void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Context *context ) {
-	BaseMovementAction::OnApplicationSequenceStarted( context );
+void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( PredictionContext *context ) {
+	BaseAction::OnApplicationSequenceStarted( context );
 
 	this->bestTravelTimeSoFar = context->TravelTimeToNavTarget();
 	this->bestFloorClusterSoFar = 0;
@@ -339,10 +339,10 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Contex
 	if( !lookDir ) {
 		Assert( !context->topOfStackIndex );
 		// There are currently 3 call sites where this movement action gets activated.
-		// 1) MovementPredictionContext::SuggestAnyAction()
+		// 1) PredictionContext::SuggestAnyAction()
 		// The action gets selected if there are valid "selected enemies"
 		// and if the bot should attack and should keep crosshair on enemies.
-		// 2) MovementPredictionContext::SuggestAnyAction()
+		// 2) PredictionContext::SuggestAnyAction()
 		// If the previous condition does not hold but there is a valid "kept in fov point"
 		// and the bot has a nav target and should not "rush headless"
 		// (so a combat semi-random dodging keeping the "point" in fov
@@ -410,10 +410,10 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Contex
 	}
 }
 
-void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStopped( Context *context,
+void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStopped( PredictionContext *context,
 																		  SequenceStopReason stopReason,
 																		  unsigned stoppedAtFrameIndex ) {
-	BaseMovementAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
+	BaseAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
 	if( stopReason != FAILED ) {
 		attemptNum = 0;
 		return;
@@ -426,7 +426,7 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStopped( Contex
 }
 
 void CombatDodgeSemiRandomlyToTargetAction::BeforePlanning() {
-	BaseMovementAction::BeforePlanning();
+	BaseAction::BeforePlanning();
 
 	const float skill = bot->Skill();
 

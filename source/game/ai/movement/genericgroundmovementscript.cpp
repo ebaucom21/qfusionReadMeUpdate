@@ -2,7 +2,7 @@
 #include "movementlocal.h"
 #include "../combat/tacticalspotsregistry.h"
 
-bool GenericGroundMovementScript::TryDeactivate( Context *context ) {
+bool GenericGroundMovementScript::TryDeactivate( PredictionContext *context ) {
 	// This code is useful for all children and should be called first in all overridden implementations
 
 	// Deactivate the action with success if the bot has touched a trigger
@@ -23,7 +23,7 @@ bool GenericGroundMovementScript::TryDeactivate( Context *context ) {
 	return false;
 }
 
-bool GenericGroundMovementScript::ShouldSkipTests( Context *context ) {
+bool GenericGroundMovementScript::ShouldSkipTests( PredictionContext *context ) {
 	if( context ) {
 		return !context->movementState->entityPhysicsState.GroundEntity();
 	}
@@ -31,7 +31,7 @@ bool GenericGroundMovementScript::ShouldSkipTests( Context *context ) {
 	return !game.edicts[bot->EntNum()].groundentity;
 }
 
-int GenericGroundMovementScript::GetCurrBotAreas( int *areaNums, Context *context ) {
+int GenericGroundMovementScript::GetCurrBotAreas( int *areaNums, PredictionContext *context ) {
 	if( context ) {
 		return context->movementState->entityPhysicsState.PrepareRoutingStartAreas( areaNums );
 	}
@@ -39,7 +39,7 @@ int GenericGroundMovementScript::GetCurrBotAreas( int *areaNums, Context *contex
 	return bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
 }
 
-bool GenericGroundMovementScript::SetupForKeptPointInFov( MovementPredictionContext *context,
+bool GenericGroundMovementScript::SetupForKeptPointInFov( PredictionContext *context,
 														  const float *steeringTarget,
 														  const float *keptInFovPoint ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
@@ -144,7 +144,7 @@ bool GenericGroundMovementScript::SetupForKeptPointInFov( MovementPredictionCont
 	return true;
 }
 
-void GenericGroundMovementScript::SetupMovement( Context *context ) {
+void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 	const auto &miscTactics = bot->GetMiscTactics();
@@ -285,7 +285,7 @@ void GenericGroundMovementScript::SetupMovement( Context *context ) {
 	botInput->SetUpMovement( +1 );
 }
 
-bool GenericGroundMovementScript::TestActualWalkability( int targetAreaNum, const vec3_t targetOrigin, Context *context ) {
+bool GenericGroundMovementScript::TestActualWalkability( int targetAreaNum, const vec3_t targetOrigin, PredictionContext *context ) {
 	const AiEntityPhysicsState *entityPhysicsState;
 	if( context ) {
 		entityPhysicsState = &context->movementState->entityPhysicsState;

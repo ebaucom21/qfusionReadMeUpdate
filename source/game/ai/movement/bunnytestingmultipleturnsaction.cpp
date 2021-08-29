@@ -1,6 +1,6 @@
 #include "bunnytestingmultipleturnsaction.h"
 #include "movementlocal.h"
-#include "movementmodule.h"
+#include "movementsubsystem.h"
 
 static constexpr float kMinAngularSpeed = 120.0f;
 static constexpr float kMaxAngularSpeed = 270.0f;
@@ -11,10 +11,10 @@ const float BunnyTestingMultipleTurnsAction::kAngularSpeed[kMaxAngles] = {
 	kMinAngularSpeed + 0.66f * kAngularSpeedRange, kMaxAngularSpeed
 };
 
-void BunnyTestingMultipleTurnsAction::PlanPredictionStep( MovementPredictionContext *context ) {
+void BunnyTestingMultipleTurnsAction::PlanPredictionStep( PredictionContext *context ) {
 	// This action is the first applied action as it is specialized
 	// and falls back to other bunnying actions if it cannot be applied.
-	if( !GenericCheckIsActionEnabled( context, &module->fallbackMovementAction ) ) {
+	if( !GenericCheckIsActionEnabled( context, &m_subsystem->fallbackMovementAction ) ) {
 		return;
 	}
 
@@ -73,7 +73,7 @@ void BunnyTestingMultipleTurnsAction::PlanPredictionStep( MovementPredictionCont
 	}
 }
 
-void BunnyTestingMultipleTurnsAction::OnApplicationSequenceStopped( MovementPredictionContext *context,
+void BunnyTestingMultipleTurnsAction::OnApplicationSequenceStopped( PredictionContext *context,
 																	SequenceStopReason stopReason,
 																	unsigned stoppedAtFrameIndex ) {
 	BunnyHopAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );

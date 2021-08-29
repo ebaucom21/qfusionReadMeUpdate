@@ -1,7 +1,7 @@
 #include "falldownscript.h"
 #include "movementlocal.h"
 
-bool FallDownScript::TryDeactivate( Context *context ) {
+bool FallDownScript::TryDeactivate( PredictionContext *context ) {
 	assert( status == PENDING );
 
 	if( level.time - activatedAt > timeout ) {
@@ -28,7 +28,7 @@ bool FallDownScript::TryDeactivate( Context *context ) {
 	return entityPhysicsState->Origin()[2] < targetOrigin[2];
 }
 
-void FallDownScript::SetupMovement( Context *context ) {
+void FallDownScript::SetupMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
@@ -94,14 +94,14 @@ void FallDownScript::SetupMovement( Context *context ) {
 	}
 }
 
-MovementScript *FallbackMovementAction::TryFindWalkOffLedgeReachFallback( Context *context,
+MovementScript *FallbackAction::TryFindWalkOffLedgeReachFallback( PredictionContext *context,
 																			const aas_reachability_t &nextReach ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	// If the falling distance is really low, treat is just as walking to a node
 	const float squareFallingHeight = DistanceSquared( nextReach.start, nextReach.end );
 	if( squareFallingHeight < SQUARE( 40.0f ) ) {
-		auto *script = &module->useWalkableNodeScript;
+		auto *script = &m_subsystem->useWalkableNodeScript;
 		float squareDistance = DistanceSquared( entityPhysicsState.Origin(), nextReach.start );
 		unsigned timeout = 100 + (unsigned)( 1000.0f * sqrtf( squareDistance ) / context->GetRunSpeed() );
 		Vec3 target( nextReach.start );
@@ -113,7 +113,7 @@ MovementScript *FallbackMovementAction::TryFindWalkOffLedgeReachFallback( Contex
 	const int targetAreaNum = nextReach.areanum;
 	const auto &targetArea = AiAasWorld::Instance()->Areas()[targetAreaNum];
 
-	auto *script = &module->fallDownScript;
+	auto *script = &m_subsystem->fallDownScript;
 	// Set target not to the reach. end but to the center of the target area (a reach end is often at ledge)
 	// Setting the proper Z (should be greater than an origin of bot standing at destination) is important!
 	Vec3 targetOrigin( targetArea.center[0], targetArea.center[1], targetArea.mins[2] + 4.0f - playerbox_stand_mins[2] );

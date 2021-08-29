@@ -14,15 +14,15 @@ protected:
 		VectorCopy( nodeOrigin, target );
 	}
 public:
-	explicit UseWalkableNodeScript( const Bot *bot_, BotMovementModule *module_ )
-		: GenericGroundMovementScript( bot_, module_, COLOR_RGB( 0, 192, 0 ) ) {}
+	explicit UseWalkableNodeScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: GenericGroundMovementScript( bot_, subsystem, COLOR_RGB( 0, 192, 0 ) ) {}
 
 	const vec3_t &NodeOrigin() const { return nodeOrigin; }
 	int NodeAreaNum() const { return nodeAasAreaNum; }
 
 	void Activate( const vec3_t nodeOrigin_, float reachRadius_, int nodeAasAreaNum_ = 0, unsigned timeout_ = 750 );
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 };
 
 #endif

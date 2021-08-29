@@ -4,8 +4,8 @@
 #include "../ailocal.h"
 
 class Bot;
-class BotMovementModule;
-class MovementPredictionContext;
+class MovementSubsystem;
+class PredictionContext;
 
 class MovementScript {
 public:
@@ -17,7 +17,7 @@ public:
 
 protected:
 	const Bot *const bot;
-	BotMovementModule *const module;
+	MovementSubsystem *const m_subsystem;
 	int64_t activatedAt;
 	Status status;
 	int debugColor;
@@ -34,8 +34,8 @@ protected:
 		return true;
 	}
 public:
-	MovementScript( const Bot *bot_, BotMovementModule *module_, int debugColor_ )
-		: bot( bot_ ), module( module_ ), activatedAt( 0 ), status( COMPLETED ), debugColor( debugColor_ ) {}
+	MovementScript( const Bot *bot_, MovementSubsystem *subsystem, int debugColor_ )
+		: bot( bot_ ), m_subsystem( subsystem ), activatedAt( 0 ), status( COMPLETED ), debugColor( debugColor_ ) {}
 
 	bool IsActive() const { return status == PENDING; }
 
@@ -43,9 +43,9 @@ public:
 
 	virtual ~MovementScript() = default;
 
-	virtual bool TryDeactivate( MovementPredictionContext *context = nullptr ) = 0;
+	virtual bool TryDeactivate( PredictionContext *context = nullptr ) = 0;
 
-	virtual void SetupMovement( MovementPredictionContext *context ) = 0;
+	virtual void SetupMovement( PredictionContext *context ) = 0;
 };
 
 #endif

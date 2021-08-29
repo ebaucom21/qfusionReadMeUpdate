@@ -8,19 +8,19 @@ class BunnyTestingMultipleLookDirsAction : public BunnyHopAction {
 	friend class BunnyToBestShortcutAreaAction;
 	friend class BunnyInterpolatingChainAtStartAction;
 protected:
-	BaseMovementAction *suggestedAction { nullptr };
+	BaseAction *suggestedAction { nullptr };
 	const float *currDir {nullptr };
 
-	virtual void OnApplicationSequenceFailed( MovementPredictionContext *context, unsigned stoppedAtFrameIndex ) {};
+	virtual void OnApplicationSequenceFailed( PredictionContext *context, unsigned stoppedAtFrameIndex ) {};
 public:
-	BunnyTestingMultipleLookDirsAction( BotMovementModule *module_, const char *name_, int debugColor_ )
-		: BunnyHopAction( module_, name_, debugColor_ ) {}
+	BunnyTestingMultipleLookDirsAction( MovementSubsystem *subsystem, const char *name_, int debugColor_ )
+		: BunnyHopAction( subsystem, name_, debugColor_ ) {}
 
 	void BeforePlanning() override;
-	void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason stopReason,
 									   unsigned stoppedAtFrameIndex ) override;
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
 class BunnyTestingSavedLookDirsAction : public BunnyTestingMultipleLookDirsAction {
@@ -50,11 +50,11 @@ protected:
 		suggestedLookDirs.clear();
 	}
 
-	void OnApplicationSequenceStarted( MovementPredictionContext *context ) final;
+	void OnApplicationSequenceStarted( PredictionContext *context ) final;
 
-	void OnApplicationSequenceFailed( MovementPredictionContext *context, unsigned stoppedAtFrameIndex ) final;
+	void OnApplicationSequenceFailed( PredictionContext *context, unsigned stoppedAtFrameIndex ) final;
 
-	virtual void SaveSuggestedLookDirs( MovementPredictionContext *context ) = 0;
+	virtual void SaveSuggestedLookDirs( PredictionContext *context ) = 0;
 
 	/**
 	 * Assuming that look dirs and areas have been just saved, derives additional ones
@@ -74,12 +74,12 @@ protected:
 	 */
 	AreaAndScore *TakeBestCandidateAreas( AreaAndScore *inputBegin, AreaAndScore *inputEnd, unsigned maxAreas );
 
-	void SaveCandidateAreaDirs( MovementPredictionContext *context,
+	void SaveCandidateAreaDirs( PredictionContext *context,
 								AreaAndScore *candidateAreasBegin,
 								AreaAndScore *candidateAreasEnd );
 
-	BunnyTestingSavedLookDirsAction( BotMovementModule *module_, const char *name_, int debugColor_ )
-		: BunnyTestingMultipleLookDirsAction( module_, name_, debugColor_ ) {}
+	BunnyTestingSavedLookDirsAction( MovementSubsystem *subsystem, const char *name_, int debugColor_ )
+		: BunnyTestingMultipleLookDirsAction( subsystem, name_, debugColor_ ) {}
 };
 
 #endif

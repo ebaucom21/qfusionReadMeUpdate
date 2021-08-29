@@ -274,19 +274,19 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 }
 
 void LandOnSavedAreasAction::BeforePlanning() {
-	BaseMovementAction::BeforePlanning();
+	BaseAction::BeforePlanning();
 	currAreaIndex = 0;
 	totalTestedAreas = 0;
 
 	this->savedLandingAreas.clear();
-	for( int areaNum: module->savedLandingAreas )
+	for( int areaNum: m_subsystem->savedLandingAreas )
 		this->savedLandingAreas.push_back( areaNum );
 
-	module->savedLandingAreas.clear();
+	m_subsystem->savedLandingAreas.clear();
 }
 
 void LandOnSavedAreasAction::AfterPlanning() {
-	BaseMovementAction::AfterPlanning();
+	BaseAction::AfterPlanning();
 	if( this->isDisabledForPlanning ) {
 		return;
 	}
@@ -294,12 +294,12 @@ void LandOnSavedAreasAction::AfterPlanning() {
 		return;
 	}
 
-	module->savedLandingAreas.clear();
+	m_subsystem->savedLandingAreas.clear();
 	for( int areaNum: this->savedLandingAreas )
-		module->savedLandingAreas.push_back( areaNum );
+		m_subsystem->savedLandingAreas.push_back( areaNum );
 }
 
-bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, Context *context ) {
+bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContext *context ) {
 	auto *botInput = &context->record->botInput;
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const float *origin = entityPhysicsState.Origin();
@@ -352,7 +352,7 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, Context *context
 	return true;
 }
 
-void LandOnSavedAreasAction::PlanPredictionStep( Context *context ) {
+void LandOnSavedAreasAction::PlanPredictionStep( PredictionContext *context ) {
 	if( !GenericCheckIsActionEnabled( context, &DummyAction() ) ) {
 		return;
 	}
@@ -429,7 +429,7 @@ void LandOnSavedAreasAction::PlanPredictionStep( Context *context ) {
 	}
 
 	// Disallow any input rotation while landing, it relies on a side aircontrol.
-	botInput->SetAllowedRotationMask( BotInputRotation::NONE );
+	botInput->SetAllowedRotationMask( InputRotation::NONE );
 
 	botInput->isUcmdSet = true;
 
@@ -437,8 +437,8 @@ void LandOnSavedAreasAction::PlanPredictionStep( Context *context ) {
 	context->isCompleted = true;
 }
 
-void LandOnSavedAreasAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	// If movement step failed, make sure that the next area (if any) will be tested after rollback
 	if( context->cannotApplyAction ) {
 		totalTestedAreas++;

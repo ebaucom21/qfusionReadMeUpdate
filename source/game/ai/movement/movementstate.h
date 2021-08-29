@@ -4,13 +4,12 @@
 #include "botinput.h"
 #include "../baseai.h"
 
-class MovementPredictionContext;
+class PredictionContext;
 
-class alignas ( 2 )AiCampingSpot
-{
+class alignas ( 2 )AiCampingSpot {
 	// Fields of this class are packed to allow cheap copying of class instances in bot movement prediction code
 	friend class Bot;
-	friend class BotCampingSpotState;
+	friend class CampingSpotState;
 
 	int16_t origin[3];
 	int16_t lookAtPoint[3];
@@ -57,10 +56,9 @@ public:
 	}
 };
 
-class alignas ( 2 )AiPendingLookAtPoint
-{
+class alignas ( 2 )AiPendingLookAtPoint {
 	// Fields of this class are packed to allow cheap copying of class instances in bot movement prediction code
-	friend struct BotPendingLookAtPointState;
+	friend struct PendingLookAtPointState;
 
 	int16_t origin[3];
 	// Floating point values greater than 1.0f are allowed (unless they are significantly greater than 1.0f);
@@ -88,12 +86,12 @@ public:
 	}
 };
 
-struct BotAerialMovementState {
+struct AerialMovementState {
 protected:
-	bool ShouldDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) const;
+	bool ShouldDeactivate( const edict_t *self, const class PredictionContext *context = nullptr ) const;
 };
 
-struct alignas ( 2 )BotJumppadMovementState : protected BotAerialMovementState {
+struct alignas ( 2 )JumppadMovementState : protected AerialMovementState {
 	// Fields of this class are packed to allow cheap copying of class instances in bot movement prediction code
 
 private:
@@ -107,7 +105,7 @@ public:
 	// If this flag is set, bot is in "jumppad" movement state
 	bool hasEnteredJumppad;
 
-	BotJumppadMovementState()
+	JumppadMovementState()
 		: jumppadEntNum( 0 ), hasTouchedJumppad( false ), hasEnteredJumppad( false ) {}
 
 	// Useless but kept for structural type conformance with other movement states
@@ -128,7 +126,7 @@ public:
 		jumppadEntNum = ( decltype( jumppadEntNum ) )( ENTNUM( const_cast<edict_t *>( triggerEnt ) ) );
 	}
 
-	void TryDeactivate( const edict_t *self, const MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const PredictionContext *context = nullptr ) {
 		if( ShouldDeactivate( self, context ) ) {
 			Deactivate();
 		}
@@ -138,8 +136,7 @@ public:
 	Vec3 JumpTarget() const { return Vec3( JumppadEntity()->target_ent->s.origin ); }
 };
 
-class alignas ( 2 )BotWeaponJumpMovementState : protected BotAerialMovementState
-{
+class alignas ( 2 )WeaponJumpMovementState : protected AerialMovementState {
 	int16_t jumpTarget[3];
 	int16_t fireTarget[3];
 	int16_t originAtStart[3];
@@ -152,7 +149,7 @@ public:
 	bool hasTriggeredWeaponJump : 1;
 	bool hasCorrectedWeaponJump : 1;
 
-	BotWeaponJumpMovementState()
+	WeaponJumpMovementState()
 		: millisToTriggerJumpLeft( 0 )
 		, weapon( 0 )
 		, hasPendingWeaponJump( false )
@@ -175,7 +172,7 @@ public:
 		return ( hasPendingWeaponJump || hasTriggeredWeaponJump || hasCorrectedWeaponJump );
 	}
 
-	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr );
+	void TryDeactivate( const edict_t *self, const class PredictionContext *context = nullptr );
 
 	void Deactivate() {
 		hasPendingWeaponJump = false;
@@ -196,14 +193,14 @@ public:
 	}
 };
 
-struct alignas ( 2 )BotPendingLookAtPointState {
+struct alignas ( 2 )PendingLookAtPointState {
 	AiPendingLookAtPoint pendingLookAtPoint;
 
 private:
 	unsigned char timeLeft;
 
 public:
-	BotPendingLookAtPointState() : timeLeft( 0 ) {}
+	PendingLookAtPointState() : timeLeft( 0 ) {}
 
 	void Frame( unsigned frameTime ) {
 		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft * 4 - (int)frameTime ) / 4 );
@@ -219,15 +216,14 @@ public:
 
 	void Deactivate() { timeLeft = 0; }
 
-	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const class PredictionContext *context = nullptr ) {
 		if( !IsActive() ) {
 			Deactivate();
 		}
 	}
 };
 
-class alignas ( 2 )BotCampingSpotState
-{
+class alignas ( 2 )CampingSpotState {
 	mutable AiCampingSpot campingSpot;
 	// When to change chosen strafe dir
 	mutable uint16_t moveDirsTimeLeft;
@@ -245,7 +241,7 @@ class alignas ( 2 )BotCampingSpotState
 	}
 
 public:
-	BotCampingSpotState()
+	CampingSpotState()
 		: moveDirsTimeLeft( 0 )
 		, lookAtPointTimeLeft( 0 )
 		, forwardMove( 0 )
@@ -273,7 +269,7 @@ public:
 
 	void Deactivate() { isTriggered = false; }
 
-	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr );
+	void TryDeactivate( const edict_t *self, const class PredictionContext *context = nullptr );
 
 	Vec3 Origin() const { return campingSpot.Origin(); }
 	float Radius() const { return campingSpot.Radius(); }
@@ -293,8 +289,7 @@ public:
 	}
 };
 
-class alignas ( 2 )BotKeyMoveDirsState
-{
+class alignas ( 2 )KeyMoveDirsState {
 public:
 	uint16_t timeLeft { 0 };
 	int8_t forwardMove { 0 };
@@ -308,7 +303,7 @@ public:
 
 	bool IsActive() const { return timeLeft != 0; }
 
-	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {}
+	void TryDeactivate( const edict_t *self, const class PredictionContext *context = nullptr ) {}
 
 	void Deactivate() { timeLeft = 0; }
 
@@ -322,8 +317,7 @@ public:
 	int RightMove() const { return rightMove; }
 };
 
-class alignas ( 2 )BotFlyUntilLandingMovementState : protected BotAerialMovementState
-{
+class alignas ( 2 )FlyUntilLandingMovementState : protected AerialMovementState {
 	int16_t target[3];
 	uint16_t landingDistanceThreshold;
 	bool isTriggered : 1;
@@ -332,7 +326,7 @@ class alignas ( 2 )BotFlyUntilLandingMovementState : protected BotAerialMovement
 	bool isLanding : 1;
 
 public:
-	BotFlyUntilLandingMovementState()
+	FlyUntilLandingMovementState()
 		: landingDistanceThreshold( 0 ),
 		  isTriggered( false ),
 		  usesDistanceThreshold( false ),
@@ -340,7 +334,7 @@ public:
 
 	void Frame( unsigned frameTime ) {}
 
-	bool CheckForLanding( const class MovementPredictionContext *context );
+	bool CheckForLanding( const class PredictionContext *context );
 
 	void Activate( const vec3_t target_, float landingDistanceThreshold_ ) {
 		SetPacked4uVec( target_, this->target );
@@ -365,7 +359,7 @@ public:
 
 	void Deactivate() { isTriggered = false; }
 
-	void TryDeactivate( const edict_t *self, const class MovementPredictionContext *context = nullptr ) {
+	void TryDeactivate( const edict_t *self, const class PredictionContext *context = nullptr ) {
 		if( ShouldDeactivate( self, context ) ) {
 			Deactivate();
 		}
@@ -376,31 +370,27 @@ public:
 
 class Bot;
 
-struct alignas ( 4 )BotMovementState {
+struct alignas ( 4 )MovementState {
 	// We want to pack members tightly to reduce copying cost of this struct during the planning process
 	static_assert( alignof( AiEntityPhysicsState ) == 4, "Members order by alignment is broken" );
 	AiEntityPhysicsState entityPhysicsState;
-	static_assert( alignof( BotCampingSpotState ) == 2, "Members order by alignment is broken" );
-	BotCampingSpotState campingSpotState;
-	static_assert( alignof( BotJumppadMovementState ) == 2, "Members order by alignment is broken" );
-	BotJumppadMovementState jumppadMovementState;
-	static_assert( alignof( BotWeaponJumpMovementState ) == 2, "Members order by alignment is broken" );
-	BotWeaponJumpMovementState weaponJumpMovementState;
-	static_assert( alignof( BotPendingLookAtPointState ) == 2, "Members order by alignment is broken" );
-	BotPendingLookAtPointState pendingLookAtPointState;
-	static_assert( alignof( BotFlyUntilLandingMovementState ) == 2, "Members order by alignment is broken" );
-	BotFlyUntilLandingMovementState flyUntilLandingMovementState;
-	static_assert( alignof( BotKeyMoveDirsState ) == 2, "Members order by alignment is broken" );
-	BotKeyMoveDirsState keyMoveDirsState;
+	static_assert( alignof( CampingSpotState ) == 2, "Members order by alignment is broken" );
+	CampingSpotState campingSpotState;
+	static_assert( alignof( JumppadMovementState ) == 2, "Members order by alignment is broken" );
+	JumppadMovementState jumppadMovementState;
+	static_assert( alignof( WeaponJumpMovementState ) == 2, "Members order by alignment is broken" );
+	WeaponJumpMovementState weaponJumpMovementState;
+	static_assert( alignof( PendingLookAtPointState ) == 2, "Members order by alignment is broken" );
+	PendingLookAtPointState pendingLookAtPointState;
+	static_assert( alignof( FlyUntilLandingMovementState ) == 2, "Members order by alignment is broken" );
+	FlyUntilLandingMovementState flyUntilLandingMovementState;
+	static_assert( alignof( KeyMoveDirsState ) == 2, "Members order by alignment is broken" );
+	KeyMoveDirsState keyMoveDirsState;
 
 	// A current input rotation kind that is used in this state.
 	// This value is saved to prevent choice jitter trying to apply an input rotation.
 	// (The current input rotation kind has a bit less restrictive application conditions).
-	BotInputRotation inputRotation;
-
-	BotMovementState()
-		: inputRotation( BotInputRotation::NONE ) {
-	}
+	InputRotation inputRotation { InputRotation::NONE };
 
 	void Frame( unsigned frameTime ) {
 		jumppadMovementState.Frame( frameTime );
@@ -411,7 +401,7 @@ struct alignas ( 4 )BotMovementState {
 		flyUntilLandingMovementState.Frame( frameTime );
 	}
 
-	void TryDeactivateContainedStates( const edict_t *self, MovementPredictionContext *context ) {
+	void TryDeactivateContainedStates( const edict_t *self, PredictionContext *context ) {
 		jumppadMovementState.TryDeactivate( self, context );
 		weaponJumpMovementState.TryDeactivate( self, context );
 		pendingLookAtPointState.TryDeactivate( self, context );

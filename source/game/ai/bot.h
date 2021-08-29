@@ -7,7 +7,7 @@
 #include "baseai.h"
 #include "vec3.h"
 
-#include "movement/movementmodule.h"
+#include "movement/movementsubsystem.h"
 #include "combat/weaponsusagemodule.h"
 #include "planning/tacticalspotscache.h"
 #include "awareness/awarenessmodule.h"
@@ -95,10 +95,8 @@ class Bot: public Ai {
 	friend class RoamGoal;
 	friend class WorldState;
 
-	friend class BotMovementModule;
-	friend class MovementPredictionContext;
-	// TODO: Remove this and refactor "kept in fov point" handling
-	friend class FallbackMovementAction;
+	friend class MovementSubsystem;
+	friend class PredictionContext;
 	friend class CorrectWeaponJumpAction;
 
 	friend class CachedTravelTimesMatrix;
@@ -288,11 +286,11 @@ public:
 	BotWeightConfig &WeightConfig() { return weightConfig; }
 
 	void OnInterceptedPredictedEvent( int ev, int parm ) {
-		movementModule.OnInterceptedPredictedEvent( ev, parm );
+		m_movementSubsystem.OnInterceptedPredictedEvent( ev, parm );
 	}
 
 	void OnInterceptedPMoveTouchTriggers( pmove_t *pm, const vec3_t previousOrigin ) {
-		movementModule.OnInterceptedPMoveTouchTriggers( pm, previousOrigin );
+		m_movementSubsystem.OnInterceptedPMoveTouchTriggers( pm, previousOrigin );
 	}
 
 	const AiEntityPhysicsState *EntityPhysicsState() const {
@@ -339,8 +337,8 @@ private:
 	// For tracking picked up items
 	const NavEntity *prevSelectedNavEntity { nullptr };
 
-	// Put the movement module at the object beginning so the relative offset is small
-	BotMovementModule movementModule;
+	// Put the movement subsystem at the object beginning so the relative offset is small
+	MovementSubsystem m_movementSubsystem;
 	BotAwarenessModule awarenessModule;
 
 	// Put planning module and weight config together
@@ -408,7 +406,7 @@ private:
 	}
 
 	bool CanChangeWeapons() const {
-		return movementModule.CanChangeWeapons();
+		return m_movementSubsystem.CanChangeWeapons();
 	}
 
 	void ChangeWeapons( const SelectedWeapons &selectedWeapons_ );
@@ -442,26 +440,26 @@ public:
 	}
 
 	void SetCampingSpot( const AiCampingSpot &campingSpot ) {
-		movementModule.SetCampingSpot( campingSpot );
+		m_movementSubsystem.SetCampingSpot( campingSpot );
 	}
 	void ResetCampingSpot() {
-		movementModule.ResetCampingSpot();
+		m_movementSubsystem.ResetCampingSpot();
 	}
 	bool HasActiveCampingSpot() const {
-		return movementModule.HasActiveCampingSpot();
+		return m_movementSubsystem.HasActiveCampingSpot();
 	}
 	void SetPendingLookAtPoint( const AiPendingLookAtPoint &lookAtPoint, unsigned timeoutPeriod ) {
-		return movementModule.SetPendingLookAtPoint( lookAtPoint, timeoutPeriod );
+		return m_movementSubsystem.SetPendingLookAtPoint( lookAtPoint, timeoutPeriod );
 	}
 	void ResetPendingLookAtPoint() {
-		movementModule.ResetPendingLookAtPoint();
+		m_movementSubsystem.ResetPendingLookAtPoint();
 	}
 	bool HasPendingLookAtPoint() const {
-		return movementModule.HasPendingLookAtPoint();
+		return m_movementSubsystem.HasPendingLookAtPoint();
 	}
 
 	bool CanInterruptMovement() const {
-		return movementModule.CanInterruptMovement();
+		return m_movementSubsystem.CanInterruptMovement();
 	}
 
 	const SelectedNavEntity &GetSelectedNavEntity() const {

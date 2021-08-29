@@ -1,7 +1,7 @@
-#include "basemovementaction.h"
+#include "baseaction.h"
 #include "movementlocal.h"
 
-void SwimMovementAction::PlanPredictionStep( Context *context ) {
+void SwimMovementAction::PlanPredictionStep( PredictionContext *context ) {
 	if( !GenericCheckIsActionEnabled( context ) ) {
 		return;
 	}
@@ -34,8 +34,8 @@ void SwimMovementAction::PlanPredictionStep( Context *context ) {
 	}
 }
 
-void SwimMovementAction::CheckPredictionStepResults( Context *context ) {
-	BaseMovementAction::CheckPredictionStepResults( context );
+void SwimMovementAction::CheckPredictionStepResults( PredictionContext *context ) {
+	BaseAction::CheckPredictionStepResults( context );
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
 	}

@@ -1,7 +1,7 @@
 #include "usestairsexitscript.h"
 #include "movementlocal.h"
 
-bool UseStairsExitScript::TryDeactivate( Context *context ) {
+bool UseStairsExitScript::TryDeactivate( PredictionContext *context ) {
 	// Call the superclass method first
 	if( GenericGroundMovementScript::TryDeactivate( context ) ) {
 		return true;
@@ -34,7 +34,7 @@ bool UseStairsExitScript::TryDeactivate( Context *context ) {
 	return true;
 }
 
-const uint16_t *TryFindBestStairsExitArea( Context *context, int stairsClusterNum ) {
+const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stairsClusterNum ) {
 	const int toAreaNum = context->NavTargetAasAreaNum();
 	if( !toAreaNum ) {
 		return nullptr;
@@ -91,7 +91,7 @@ const uint16_t *TryFindBestStairsExitArea( Context *context, int stairsClusterNu
 	return stairsBoundaryAreas[bestStairsAreaIndex];
 }
 
-MovementScript *FallbackMovementAction::TryFindStairsFallback( Context *context ) {
+MovementScript *FallbackAction::TryFindStairsFallback( PredictionContext *context ) {
 	const auto *aasWorld = AiAasWorld::Instance();
 
 	int currAreaNums[2] = { 0, 0 };
@@ -115,7 +115,7 @@ MovementScript *FallbackMovementAction::TryFindStairsFallback( Context *context 
 
 	// Note: Don't try to apply jumping shortcut, results are very poor.
 
-	auto *script = &module->useStairsExitScript;
+	auto *script = &m_subsystem->useStairsExitScript;
 	script->Activate( stairsClusterNum, *bestAreaNum );
 	return script;
 }

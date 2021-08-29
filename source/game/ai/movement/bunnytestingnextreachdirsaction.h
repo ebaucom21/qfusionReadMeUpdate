@@ -8,9 +8,9 @@ class BunnyTestingNextReachDirsAction final : public BunnyTestingSavedLookDirsAc
 
 	friend class BunnyToBestNavMeshPointAction;
 
-	void SaveSuggestedLookDirs( MovementPredictionContext *context ) override;
+	void SaveSuggestedLookDirs( PredictionContext *context ) override;
 public:
-	explicit BunnyTestingNextReachDirsAction( BotMovementModule *module_ );
+	explicit BunnyTestingNextReachDirsAction( MovementSubsystem *subsystem );
 
 	void BeforePlanning() override;
 };

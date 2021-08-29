@@ -1,10 +1,10 @@
 #ifndef WSW_16616c7d_398c_4acf_af00_726bd6ec9608_H
 #define WSW_16616c7d_398c_4acf_af00_726bd6ec9608_H
 
-#include "basemovementaction.h"
+#include "baseaction.h"
 
-class BunnyHopAction : public BaseMovementAction {
-	friend class MovementPredictionContext;
+class BunnyHopAction : public BaseAction {
+	friend class PredictionContext;
 protected:
 	int travelTimeAtSequenceStart { 0 };
 	int reachAtSequenceStart { 0 };
@@ -43,7 +43,7 @@ protected:
 
 	// This should be set if we want to continue prediction
 	// but give a path built by a current sequence an additional penalty
-	// accounted by MovementPredictionContext::CompleteOrSaveGoodEnoughPath()
+	// accounted by PredictionContext::CompleteOrSaveGoodEnoughPath()
 	unsigned sequencePathPenalty { 0 };
 
 	bool hasEnteredNavTargetArea { false };
@@ -52,33 +52,33 @@ protected:
 	bool hasALatchedHop { false };
 	bool didTheLatchedHop { false };
 
-	void SetupCommonBunnyHopInput( MovementPredictionContext *context );
+	void SetupCommonBunnyHopInput( PredictionContext *context );
 	// TODO: Mark as virtual in base class and mark as final here to avoid a warning about hiding parent member?
-	bool GenericCheckIsActionEnabled( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
-	bool CheckCommonBunnyHopPreconditions( MovementPredictionContext *context );
-	bool SetupBunnyHopping( const Vec3 &intendedLookVec, MovementPredictionContext *context );
-	bool CanFlyAboveGroundRelaxed( const MovementPredictionContext *context ) const;
-	bool CanSetWalljump( MovementPredictionContext *context,
+	bool GenericCheckIsActionEnabled( PredictionContext *context, BaseAction *suggestedAction );
+	bool CheckCommonBunnyHopPreconditions( PredictionContext *context );
+	bool SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionContext *context );
+	bool CanFlyAboveGroundRelaxed( const PredictionContext *context ) const;
+	bool CanSetWalljump( PredictionContext *context,
 						 const Vec3 &velocity2DDir,
 						 const Vec3 &intended2DLookDir ) const;
-	void TrySetWalljump( MovementPredictionContext *context,
+	void TrySetWalljump( PredictionContext *context,
 						 const Vec3 &velocity2DDir,
 						 const Vec3 &intended2DLookDir );
 
-	void ApplyPenaltyForHavingNearbyObstacles( MovementPredictionContext *context );
+	void ApplyPenaltyForHavingNearbyObstacles( PredictionContext *context );
 
 	// Can be overridden for finer control over tests
-	virtual bool CheckStepSpeedGainOrLoss( MovementPredictionContext *context );
+	virtual bool CheckStepSpeedGainOrLoss( PredictionContext *context );
 
-	bool CheckNavTargetAreaTransition( MovementPredictionContext *context );
+	bool CheckNavTargetAreaTransition( PredictionContext *context );
 
-	bool TryHandlingUnreachableTarget( MovementPredictionContext *context );
+	bool TryHandlingUnreachableTarget( PredictionContext *context );
 
-	bool TryHandlingWorseTravelTimeToTarget( MovementPredictionContext *context,
+	bool TryHandlingWorseTravelTimeToTarget( PredictionContext *context,
 		                                     int currTravelTimeToTarget,
 		                                     int groundedAreaNum );
 
-	bool WasOnGroundThisFrame( const MovementPredictionContext *context ) const;
+	bool WasOnGroundThisFrame( const PredictionContext *context ) const;
 
 	void EnsurePathPenalty( unsigned penalty ) {
 		assert( penalty < 30000 );
@@ -87,17 +87,17 @@ protected:
 
 	bool CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum );
 
-	bool HasMadeAnAdvancementPriorToLanding( MovementPredictionContext *context, int currTravelTimeToTarget );
+	bool HasMadeAnAdvancementPriorToLanding( PredictionContext *context, int currTravelTimeToTarget );
 public:
-	BunnyHopAction( BotMovementModule *module_, const char *name_, int debugColor_ = 0 )
-		: BaseMovementAction( module_, name_, debugColor_ ) {
+	BunnyHopAction( MovementSubsystem *subsystem, const char *name_, int debugColor_ = 0 )
+		: BaseAction( subsystem, name_, debugColor_ ) {
 		// Do NOT stop prediction on this! We have to check where the bot is going to land!
-		BaseMovementAction::stopPredictionOnTouchingNavEntity = false;
+		BaseAction::stopPredictionOnTouchingNavEntity = false;
 	}
 
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
-	void OnApplicationSequenceStarted( MovementPredictionContext *context ) override;
-	void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	void CheckPredictionStepResults( PredictionContext *context ) override;
+	void OnApplicationSequenceStarted( PredictionContext *context ) override;
+	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason reason,
 									   unsigned stoppedAtFrameIndex ) override;
 	void BeforePlanning() override;

@@ -13,22 +13,22 @@ class BunnyTestingMultipleTurnsAction : public BunnyHopAction {
 
 	static const float kAngularSpeed[kMaxAngles];
 public:
-	explicit BunnyTestingMultipleTurnsAction( BotMovementModule *module_ )
-		: BunnyHopAction( module_, "BunnyTestingMultipleTurnsAction", COLOR_RGB( 255, 0, 0 ) ) {}
+	explicit BunnyTestingMultipleTurnsAction( MovementSubsystem *subsystem )
+		: BunnyHopAction( subsystem, "BunnyTestingMultipleTurnsAction", COLOR_RGB( 255, 0, 0 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 
 	void BeforePlanning() override {
 		BunnyHopAction::BeforePlanning();
 		attemptNum = 0;
 	}
 
-	void OnApplicationSequenceStarted( MovementPredictionContext *context ) override {
+	void OnApplicationSequenceStarted( PredictionContext *context ) override {
 		BunnyHopAction::OnApplicationSequenceStarted( context );
 		hasWalljumped = false;
 	}
 
-	void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason stopReason,
 									   unsigned stoppedAtFrameIndex ) override;
 };

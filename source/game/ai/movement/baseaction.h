@@ -2,23 +2,22 @@
 #define WSW_5cf0a1e2_2a76_4db2_829e_e062cb495eb2_H
 
 class Bot;
-class BotMovementModule;
+class MovementSubsystem;
 
 #include "predictioncontext.h"
 
-class BaseMovementAction : public MovementPredictionConstants
-{
-	friend class MovementPredictionContext;
+class BaseAction : public MovementPredictionConstants {
+	friend class PredictionContext;
 	void RegisterSelf();
 
 protected:
 	// Must be set by RegisterSelf() call. We have to break a circular dependency.
 	Bot *bot { nullptr };
-	BotMovementModule *const module;
+	MovementSubsystem *const m_subsystem;
 	const char *name;
 
 	// An action could set this field in PlanPredictionStep()
-	// to avoid further redundant list lookup in MovementPredictionContext::NextMovementStep().
+	// to avoid further redundant list lookup in PredictionContext::NextMovementStep().
 	// The latter method gets and resets this field.
 	const CMShapeList *thisFrameCMShapeList { nullptr };
 
@@ -45,7 +44,7 @@ protected:
 	bool stopPredictionOnEnteringWater { true };
 	bool failPredictionOnEnteringHazardImpactZone { true };
 
-	BaseMovementAction &DummyAction();
+	BaseAction &DummyAction();
 	class FlyUntilLandingAction &FlyUntilLandingAction();
 	class LandOnSavedAreasAction &LandOnSavedAreasAction();
 
@@ -57,26 +56,26 @@ protected:
 		Assert( conditionLikeValue != 0, message );
 	}
 
-	bool GenericCheckIsActionEnabled( MovementPredictionContext *context, BaseMovementAction *suggestedAction = nullptr ) const;
+	bool GenericCheckIsActionEnabled( PredictionContext *context, BaseAction *suggestedAction = nullptr ) const;
 
-	void CheckDisableOrSwitchPreconditions( MovementPredictionContext *context, const char *methodTag );
+	void CheckDisableOrSwitchPreconditions( PredictionContext *context, const char *methodTag );
 
-	void DisableWithAlternative( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
-	void SwitchOrStop( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
-	void SwitchOrRollback( MovementPredictionContext *context, BaseMovementAction *suggestedAction );
+	void DisableWithAlternative( PredictionContext *context, BaseAction *suggestedAction );
+	void SwitchOrStop( PredictionContext *context, BaseAction *suggestedAction );
+	void SwitchOrRollback( PredictionContext *context, BaseAction *suggestedAction );
 
-	bool HasTouchedNavEntityThisFrame( MovementPredictionContext *context );
+	bool HasTouchedNavEntityThisFrame( PredictionContext *context );
 public:
-	inline BaseMovementAction( BotMovementModule *module_, const char *name_, int debugColor_ = 0 )
-		: module( module_ ), name( name_ ), debugColor( debugColor_ ) {
+	inline BaseAction( MovementSubsystem *subsystem, const char *name_, int debugColor_ = 0 )
+		: m_subsystem( subsystem ), name( name_ ), debugColor( debugColor_ ) {
 		RegisterSelf();
 	}
-	virtual void PlanPredictionStep( MovementPredictionContext *context ) = 0;
+	virtual void PlanPredictionStep( PredictionContext *context ) = 0;
 	virtual void ExecActionRecord( const MovementActionRecord *record,
 								   BotInput *inputWillBeUsed,
-								   MovementPredictionContext *context = nullptr );
+								   PredictionContext *context = nullptr );
 
-	virtual void CheckPredictionStepResults( MovementPredictionContext *context );
+	virtual void CheckPredictionStepResults( PredictionContext *context );
 
 	virtual void BeforePlanning();
 	virtual void AfterPlanning() {}
@@ -89,15 +88,15 @@ public:
 	// related to the frame for further checks during the entire application sequence.
 	// The second callback is provided for symmetry reasons
 	// (e.g. any resources that are allocated in the first callback might need cleanup).
-	virtual void OnApplicationSequenceStarted( MovementPredictionContext *context );
+	virtual void OnApplicationSequenceStarted( PredictionContext *context );
 
 	// Might be called in a next frame, thats what stoppedAtFrameIndex is.
 	// If application sequence has failed, stoppedAtFrameIndex is ignored.
-	virtual void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	virtual void OnApplicationSequenceStopped( PredictionContext *context,
 											   SequenceStopReason reason,
 											   unsigned stoppedAtFrameIndex );
 
-	unsigned SequenceDuration( const MovementPredictionContext *context ) const;
+	unsigned SequenceDuration( const PredictionContext *context ) const;
 
 	const char *Name() const { return name; }
 	int DebugColor() const { return debugColor; }
@@ -107,28 +106,28 @@ public:
 
 // Lets not create excessive headers for these dummy action declarations
 
-class HandleTriggeredJumppadAction : public BaseMovementAction {
+class HandleTriggeredJumppadAction : public BaseAction {
 public:
-	explicit HandleTriggeredJumppadAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "HandleTriggeredJumppadAction", COLOR_RGB( 0, 128, 128 ) ) {}
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	explicit HandleTriggeredJumppadAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "HandleTriggeredJumppadAction", COLOR_RGB( 0, 128, 128 ) ) {}
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
-class SwimMovementAction : public BaseMovementAction {
+class SwimMovementAction : public BaseAction {
 public:
-	explicit SwimMovementAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "SwimMovementAction", COLOR_RGB( 0, 0, 255 ) ) {
+	explicit SwimMovementAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "SwimMovementAction", COLOR_RGB( 0, 0, 255 ) ) {
 		this->stopPredictionOnEnteringWater = false;
 	}
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
+	void CheckPredictionStepResults( PredictionContext *context ) override;
 };
 
-class FlyUntilLandingAction : public BaseMovementAction {
+class FlyUntilLandingAction : public BaseAction {
 public:
-	explicit FlyUntilLandingAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "FlyUntilLandingAction", COLOR_RGB( 0, 255, 0 ) ) {}
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	explicit FlyUntilLandingAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "FlyUntilLandingAction", COLOR_RGB( 0, 255, 0 ) ) {}
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
 #endif

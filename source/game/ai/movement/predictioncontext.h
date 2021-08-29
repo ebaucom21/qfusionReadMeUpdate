@@ -1,7 +1,7 @@
 #ifndef WSW_86ec701e_71a0_4c5e_8b07_29fc000feb4e_H
 #define WSW_86ec701e_71a0_4c5e_8b07_29fc000feb4e_H
 
-class BaseMovementAction;
+class BaseAction;
 
 #include "botinput.h"
 #include "movementstate.h"
@@ -66,14 +66,13 @@ struct MovementPredictionConstants {
 };
 
 class Bot;
-class BotMovementModule;
+class MovementSubsystem;
 
-class MovementPredictionContext : public MovementPredictionConstants
-{
-	friend class FallbackMovementAction;
+class PredictionContext : public MovementPredictionConstants {
+	friend class FallbackAction;
 
 	Bot *const bot;
-	BotMovementModule *const module;
+	MovementSubsystem *const m_subsystem;
 public:
 	// Note: We have deliberately lowered this value
 	// to prevent fruitless prediction frames that lead to an overflow anyway
@@ -102,7 +101,7 @@ private:
 	struct PredictedMovementAction {
 		AiEntityPhysicsState entityPhysicsState;
 		MovementActionRecord record;
-		BaseMovementAction *action;
+		BaseAction *action;
 		int64_t timestamp;
 		unsigned stepMillis;
 		unsigned movementStatesMask;
@@ -117,7 +116,7 @@ private:
 	using PredictedPath = wsw::StaticVector<PredictedMovementAction, MAX_PREDICTED_STATES>;
 
 	PredictedPath predictedMovementActions;
-	wsw::StaticVector<BotMovementState, MAX_PREDICTED_STATES> botMovementStatesStack;
+	wsw::StaticVector<MovementState, MAX_PREDICTED_STATES> botMovementStatesStack;
 	wsw::StaticVector<player_state_t, MAX_PREDICTED_STATES> playerStatesStack;
 
 	PredictedPath goodEnoughPath;
@@ -196,14 +195,14 @@ private:
 public:
 	wsw::ai::movement::NearbyTriggersCache nearbyTriggersCache;
 
-	BotMovementState *movementState;
+	MovementState *movementState;
 	MovementActionRecord *record;
 
 	const player_state_t *oldPlayerState;
 	player_state_t *currPlayerState;
 
-	BaseMovementAction *actionSuggestedByAction;
-	BaseMovementAction *activeAction;
+	BaseAction *actionSuggestedByAction;
+	BaseAction *activeAction;
 
 	unsigned totalMillisAhead;
 	unsigned predictionStepMillis;
@@ -255,9 +254,9 @@ public:
 
 	FrameEvents frameEvents;
 
-	class BaseMovementAction *SuggestSuitableAction();
-	class BaseMovementAction *SuggestDefaultAction();
-	class BaseMovementAction *SuggestAnyAction();
+	class BaseAction *SuggestSuitableAction();
+	class BaseAction *SuggestDefaultAction();
+	class BaseAction *SuggestAnyAction();
 
 	Vec3 NavTargetOrigin() const;
 	float NavTargetRadius() const;
@@ -288,7 +287,7 @@ public:
 	const AiAasRouteCache *RouteCache() const;
 	const ArrayRange<int> TravelFlags() const;
 
-	explicit MovementPredictionContext( BotMovementModule *module );
+	explicit PredictionContext( MovementSubsystem *m_subsystem );
 
 	HitWhileRunningTestResult MayHitWhileRunning();
 
@@ -307,28 +306,28 @@ public:
 		return this->topOfStackIndex + 1 < MAX_PREDICTED_STATES;
 	}
 
-	void SaveActionOnStack( BaseMovementAction *action );
+	void SaveActionOnStack( BaseAction *action );
 
 	// Frame index is restricted to topOfStack or topOfStack + 1
-	void MarkSavepoint( BaseMovementAction *markedBy, unsigned frameIndex );
+	void MarkSavepoint( BaseAction *markedBy, unsigned frameIndex );
 
 	const char *ActiveActionName() const;
 
 	void SetPendingRollback();
 	void RollbackToSavepoint();
-	void SaveSuggestedActionForNextFrame( BaseMovementAction *action );
+	void SaveSuggestedActionForNextFrame( BaseAction *action );
 	unsigned MillisAheadForFrameStart( unsigned frameIndex ) const;
 
 	void SaveGoodEnoughPath( unsigned advancement, unsigned penaltyMillis );
 	void SaveLastResortPath( unsigned penaltyMillis );
 
-	class BaseMovementAction *GetCachedActionAndRecordForCurrTime( MovementActionRecord *record_ );
+	class BaseAction *GetCachedActionAndRecordForCurrTime( MovementActionRecord *record_ );
 
-	class BaseMovementAction *TryCheckAndLerpActions( PredictedMovementAction *prevAction,
+	class BaseAction *TryCheckAndLerpActions( PredictedMovementAction *prevAction,
 													  PredictedMovementAction *nextAction,
 													  MovementActionRecord *record_ );
 
-	class BaseMovementAction *LerpActionRecords( PredictedMovementAction *prevAction,
+	class BaseAction *LerpActionRecords( PredictedMovementAction *prevAction,
 		                                         PredictedMovementAction *nextAction,
 		                                         MovementActionRecord *record_ );
 
@@ -362,7 +361,7 @@ public:
 	void OnInterceptedPredictedEvent( int ev, int parm );
 	void OnInterceptedPMoveTouchTriggers( pmove_t *pm, vec3_t const previousOrigin );
 
-	class BaseMovementAction *GetActionAndRecordForCurrTime( MovementActionRecord *record_ );
+	class BaseAction *GetActionAndRecordForCurrTime( MovementActionRecord *record_ );
 
 	// Might be called for failed attempts too
 	void ShowBuiltPlanPath( bool useActionsColor = false ) const;

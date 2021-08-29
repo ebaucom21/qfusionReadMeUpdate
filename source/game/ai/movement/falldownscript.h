@@ -9,8 +9,8 @@ class FallDownScript: public MovementScript {
 	unsigned timeout { 0 };
 	float reachRadius { 0.0f };
 public:
-	explicit FallDownScript( const Bot *bot_, BotMovementModule *module_ )
-		: MovementScript( bot_, module_, COLOR_RGB( 128, 0, 0 ) ) {}
+	explicit FallDownScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: MovementScript( bot_, subsystem, COLOR_RGB( 128, 0, 0 ) ) {}
 
 	// Note: It is expected that bot origin Z should be <= target origin Z
 	// after completion of the fallback, so target Z matters a lot!
@@ -23,9 +23,9 @@ public:
 		MovementScript::Activate();
 	}
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 
-	void SetupMovement( MovementPredictionContext *context ) override;
+	void SetupMovement( PredictionContext *context ) override;
 };
 
 #endif

@@ -13,12 +13,12 @@ protected:
 
 	virtual void GetSteeringTarget( vec3_t target ) = 0;
 
-	bool ShouldSkipTests( MovementPredictionContext *context = nullptr );
+	bool ShouldSkipTests( PredictionContext *context = nullptr );
 
-	int GetCurrBotAreas( int *areaNums, MovementPredictionContext *context = nullptr );
+	int GetCurrBotAreas( int *areaNums, PredictionContext *context = nullptr );
 
 	bool TestActualWalkability( int targetAreaNum, const vec3_t targetOrigin,
-								MovementPredictionContext *context = nullptr );
+								PredictionContext *context = nullptr );
 
 	void GetAreaMidGroundPoint( int areaNum, vec3_t target ) {
 		const auto &area = AiAasWorld::Instance()->Areas()[areaNum];
@@ -26,18 +26,18 @@ protected:
 		target[2] = area.mins[2] + 1.0f - playerbox_stand_mins[2];
 	}
 
-	bool SetupForKeptPointInFov( MovementPredictionContext *context,
+	bool SetupForKeptPointInFov( PredictionContext *context,
 								 const float *steeringTarget,
 								 const float *keptInFovPoint );
 public:
 	static constexpr auto TRAVEL_FLAGS = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
 
-	GenericGroundMovementScript( const Bot *bot_, BotMovementModule *module_, int debugColor_ )
-		: MovementScript( bot_, module_, debugColor_ ) {}
+	GenericGroundMovementScript( const Bot *bot_, MovementSubsystem *subsystem, int debugColor_ )
+		: MovementScript( bot_, subsystem, debugColor_ ) {}
 
-	void SetupMovement( MovementPredictionContext *context ) override;
+	void SetupMovement( PredictionContext *context ) override;
 
-	bool TryDeactivate( MovementPredictionContext *context ) override;
+	bool TryDeactivate( PredictionContext *context ) override;
 };
 
 #endif

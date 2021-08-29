@@ -9,8 +9,8 @@ class JumpOverBarrierScript: public MovementScript {
 	bool hasReachedStart { false };
 	bool allowWalljumping { false };
 public:
-	explicit JumpOverBarrierScript( const Bot *bot_, BotMovementModule *module_ )
-		: MovementScript( bot_, module_, COLOR_RGB( 128, 0, 128 ) ) {}
+	explicit JumpOverBarrierScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: MovementScript( bot_, subsystem, COLOR_RGB( 128, 0, 128 ) ) {}
 
 	void Activate( const vec3_t start_, const vec3_t top_, bool allowWalljumping_ = true ) {
 		VectorCopy( start_, start );
@@ -20,9 +20,9 @@ public:
 		MovementScript::Activate();
 	}
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 
-	void SetupMovement( MovementPredictionContext *context ) override;
+	void SetupMovement( PredictionContext *context ) override;
 };
 
 #endif

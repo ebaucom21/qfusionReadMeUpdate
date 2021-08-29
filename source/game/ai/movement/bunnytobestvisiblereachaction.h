@@ -5,10 +5,10 @@
 
 class BunnyToBestVisibleReachAction: public BunnyHopAction {
 public:
-	explicit BunnyToBestVisibleReachAction( BotMovementModule *module_ )
-		: BunnyHopAction( module_, "BunnyToStairsOrRampExitAction", COLOR_RGB( 96, 0, 255 ) ) {}
+	explicit BunnyToBestVisibleReachAction( MovementSubsystem *subsystem )
+		: BunnyHopAction( subsystem, "BunnyToStairsOrRampExitAction", COLOR_RGB( 96, 0, 255 ) ) {}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
 };
 
 #endif

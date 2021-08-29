@@ -1,7 +1,7 @@
 #include "movementstate.h"
 #include "movementlocal.h"
 
-bool BotAerialMovementState::ShouldDeactivate( const edict_t *self, const Context *context ) const {
+bool AerialMovementState::ShouldDeactivate( const edict_t *self, const PredictionContext *context ) const {
 	const edict_t *groundEntity;
 	if( context ) {
 		groundEntity = context->movementState->entityPhysicsState.GroundEntity();
@@ -25,7 +25,7 @@ bool BotAerialMovementState::ShouldDeactivate( const edict_t *self, const Contex
 	return false;
 }
 
-bool BotFlyUntilLandingMovementState::CheckForLanding( const Context *context ) {
+bool FlyUntilLandingMovementState::CheckForLanding( const PredictionContext *context ) {
 	if( isLanding ) {
 		return true;
 	}
@@ -51,7 +51,7 @@ bool BotFlyUntilLandingMovementState::CheckForLanding( const Context *context ) 
 	return true;
 }
 
-void BotWeaponJumpMovementState::TryDeactivate( const edict_t *self, const Context *context ) {
+void WeaponJumpMovementState::TryDeactivate( const edict_t *self, const PredictionContext *context ) {
 	// If a bot has activated a trigger, give its movement state a priority
 	if( level.time - self->bot->LastTriggerTouchTime() < 64 ) {
 		Deactivate();
@@ -81,7 +81,7 @@ void BotWeaponJumpMovementState::TryDeactivate( const edict_t *self, const Conte
 	}
 }
 
-void BotCampingSpotState::TryDeactivate( const edict_t *self, const Context *context ) {
+void CampingSpotState::TryDeactivate( const edict_t *self, const PredictionContext *context ) {
 	const float *botOrigin = context ? context->movementState->entityPhysicsState.Origin() : self->s.origin;
 	const float distanceThreshold = 1.5f * campingSpot.Radius();
 	if( this->Origin().SquareDistance2DTo( botOrigin ) > distanceThreshold * distanceThreshold ) {
@@ -89,7 +89,7 @@ void BotCampingSpotState::TryDeactivate( const edict_t *self, const Context *con
 	}
 }
 
-AiPendingLookAtPoint BotCampingSpotState::GetOrUpdateRandomLookAtPoint() const {
+AiPendingLookAtPoint CampingSpotState::GetOrUpdateRandomLookAtPoint() const {
 	float turnSpeedMultiplier = 0.75f + 1.0f * campingSpot.Alertness();
 	if( campingSpot.hasLookAtPoint ) {
 		return AiPendingLookAtPoint( campingSpot.LookAtPoint(), turnSpeedMultiplier );
@@ -119,7 +119,7 @@ AiPendingLookAtPoint BotCampingSpotState::GetOrUpdateRandomLookAtPoint() const {
 		}     																						   \
 	}
 
-bool BotMovementState::TestActualStatesForExpectedMask( unsigned expectedStatesMask, const Bot *bot ) const {
+bool MovementState::TestActualStatesForExpectedMask( unsigned expectedStatesMask, const Bot *bot ) const {
 	// Might be set to null if verbose logging is not needed
 #ifdef ENABLE_MOVEMENT_DEBUG_OUTPUT
 	void ( *logFunc )( const char *format, ... ) = G_Printf;
@@ -134,7 +134,7 @@ bool BotMovementState::TestActualStatesForExpectedMask( unsigned expectedStatesM
 #else
 	void ( *logFunc )( const char *format, ... ) = nullptr;
 #endif
-	constexpr const char *format = "BotMovementState(%s): %s %d has mismatch with the mask value\n";
+	constexpr const char *format = "MovementState(%s): %s %d has mismatch with the mask value\n";
 
 	bool result = true;
 	CHECK_STATE_FLAG( jumppadMovementState, 0 );

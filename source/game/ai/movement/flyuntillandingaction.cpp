@@ -1,7 +1,7 @@
-#include "basemovementaction.h"
+#include "baseaction.h"
 #include "movementlocal.h"
 
-void FlyUntilLandingAction::PlanPredictionStep( Context *context ) {
+void FlyUntilLandingAction::PlanPredictionStep( PredictionContext *context ) {
 	if( !GenericCheckIsActionEnabled( context ) ) {
 		return;
 	}

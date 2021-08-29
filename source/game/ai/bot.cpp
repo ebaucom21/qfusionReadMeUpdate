@@ -17,7 +17,7 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 	: Ai( self_
 		, &planningModule.planner
 		, AiAasRouteCache::NewInstance( &travelFlags[0] )
-		, &movementModule.movementState.entityPhysicsState
+		, &m_movementSubsystem.movementState.entityPhysicsState
 		, PREFERRED_TRAVEL_FLAGS
 		, ALLOWED_TRAVEL_FLAGS
 		, skillLevel_ > 0.33f ? DEFAULT_YAW_SPEED * 1.5f : DEFAULT_YAW_SPEED
@@ -26,7 +26,7 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 	, selectedEnemies( this )
 	, lostEnemies( this )
 	, selectedNavEntity( nullptr, 0, 0, 0 )
-	, movementModule( this )
+	, m_movementSubsystem( this )
 	, awarenessModule( this )
 	, planningModule( this )
 	, weightConfig( self_ )
@@ -108,7 +108,7 @@ void Bot::TouchedOtherEntity( const edict_t *entity ) {
 
 	if( !Q_stricmp( entity->classname, "trigger_push" ) ) {
 		lastTouchedJumppadAt = level.time;
-		movementModule.ActivateJumppadState( entity );
+		m_movementSubsystem.ActivateJumppadState( entity );
 		return;
 	}
 
@@ -209,7 +209,7 @@ void Bot::GhostingFrame() {
 
 	planningModule.ClearGoalAndPlan();
 
-	movementModule.Reset();
+	m_movementSubsystem.Reset();
 
 	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
 	self->nextThink = level.time + 100;
@@ -307,7 +307,7 @@ void Bot::ActiveFrame() {
 
 	BotInput botInput;
 	// Might modify botInput
-	movementModule.Frame( &botInput );
+	m_movementSubsystem.Frame( &botInput );
 
 	CheckTargetProximity();
 
@@ -317,7 +317,7 @@ void Bot::ActiveFrame() {
 	}
 
 	// Apply modified botInput
-	movementModule.ApplyInput( &botInput );
+	m_movementSubsystem.ApplyInput( &botInput );
 	CallActiveClientThink( botInput );
 }
 

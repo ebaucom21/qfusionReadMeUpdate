@@ -47,12 +47,12 @@ public:
 		this->numAreas = numAreas_;
 	}
 
-	bool Exec( MovementPredictionContext *context, ScheduleWeaponJumpAction *action );
+	bool Exec( PredictionContext *context, ScheduleWeaponJumpAction *action );
 };
 
 static WeaponJumpWeaponsTester weaponJumpWeaponsTester;
 
-static void PrepareAnglesAndWeapon( Context *context ) {
+static void PrepareAnglesAndWeapon( PredictionContext *context ) {
 	const auto &weaponJumpState = context->movementState->weaponJumpMovementState;
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
@@ -80,7 +80,7 @@ static void PrepareAnglesAndWeapon( Context *context ) {
 
 int ScheduleWeaponJumpAction::dummyTravelTimes[ScheduleWeaponJumpAction::MAX_AREAS];
 
-void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
+void ScheduleWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
 		return;
@@ -119,7 +119,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 		return;
 	}
 
-	if( !module->weaponJumpAttemptsRateLimiter.TryAcquire( level.time ) ) {
+	if( !m_subsystem->weaponJumpAttemptsRateLimiter.TryAcquire( level.time ) ) {
 		Debug( "A weapon jumping attempt is disallowed by the rate limiter\n" );
 		this->SwitchOrRollback( context, defaultAction );
 		return;
@@ -144,7 +144,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( Context *context ) {
 
 	const bool worthWeaponJumping = bot->NavTargetWorthWeaponJumping();
 	// Recent failures should affect rushing attempts (but not shortcuts to target)
-	const bool failedRecently = level.time - module->lastWeaponJumpTriggeringFailedAt < 1250;
+	const bool failedRecently = level.time - m_subsystem->lastWeaponJumpTriggeringFailedAt < 1250;
 	const bool worthRushing = !failedRecently && bot->NavTargetWorthRushing();
 
 	int suitableWeapons[WEAP_TOTAL];
@@ -204,7 +204,7 @@ float ScheduleWeaponJumpAction::EstimateMapComputationalComplexity() const {
 	return 1.0f - f * f;
 }
 
-int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( Context *context, int *areaNums ) {
+int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionContext *context, int *areaNums ) {
 	const auto *aasWorld = AiAasWorld::Instance();
 	const auto *aasReach = aasWorld->Reachabilities();
 	const auto *aasAreas = aasWorld->Areas();
@@ -256,7 +256,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( Context *conte
 	return numAreas;
 }
 
-void ScheduleWeaponJumpAction::PrepareJumpTargets( Context *context, const int *areaNums, vec3_t *targets, int numAreas ) {
+void ScheduleWeaponJumpAction::PrepareJumpTargets( PredictionContext *context, const int *areaNums, vec3_t *targets, int numAreas ) {
 	const auto *aasAreas = AiAasWorld::Instance()->Areas();
 	// Aim at the height of a player (jump targets will be lower)
 	const float offset = -playerbox_stand_mins[2] + playerbox_stand_maxs[2];
@@ -268,7 +268,7 @@ void ScheduleWeaponJumpAction::PrepareJumpTargets( Context *context, const int *
 	}
 }
 
-bool ScheduleWeaponJumpAction::TryJumpDirectlyToTarget( Context *context, const int *suitableWeapons, int numWeapons ) {
+bool ScheduleWeaponJumpAction::TryJumpDirectlyToTarget( PredictionContext *context, const int *suitableWeapons, int numWeapons ) {
 	int areaNums[MAX_AREAS];
 	int travelTimes[MAX_AREAS];
 	vec3_t jumpTargets[MAX_AREAS];
@@ -309,7 +309,7 @@ bool ScheduleWeaponJumpAction::TryJumpDirectlyToTarget( Context *context, const 
 	return false;
 }
 
-int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( Context *context, int *areaNums ) {
+int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( PredictionContext *context, int *areaNums ) {
 	const auto *aasWorld = AiAasWorld::Instance();
 	const Vec3 navTargetOrigin( context->NavTargetOrigin() );
 
@@ -364,7 +364,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( Context *context,
 	return aasWorld->BBoxAreas( mins, maxs, areaNums, 64 );
 }
 
-int ScheduleWeaponJumpAction::FilterRawCandidateAreas( Context *context, int *areaNums, int numRawAreas ) {
+int ScheduleWeaponJumpAction::FilterRawCandidateAreas( PredictionContext *context, int *areaNums, int numRawAreas ) {
 	int *const filteredAreas = areaNums;
 	int numFilteredAreas = 0;
 
@@ -425,7 +425,7 @@ int ScheduleWeaponJumpAction::FilterRawCandidateAreas( Context *context, int *ar
 	return numFilteredAreas;
 }
 
-int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( Context *context, int *areaNums, int *travelTimes, int numAreas ) {
+int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *context, int *areaNums, int *travelTimes, int numAreas ) {
 	int *const passedTestAreas = areaNums;
 	int numPassedTestAreas = 0;
 
@@ -510,7 +510,7 @@ testPassed:;
 	return numPassedTestAreas;
 }
 
-bool ScheduleWeaponJumpAction::TryShortcutReachChain( Context *context, const int *suitableWeapons, int numWeapons ) {
+bool ScheduleWeaponJumpAction::TryShortcutReachChain( PredictionContext *context, const int *suitableWeapons, int numWeapons ) {
 	int areaNums[MAX_AREAS];
 	vec3_t jumpTargets[MAX_AREAS];
 
@@ -530,17 +530,17 @@ bool ScheduleWeaponJumpAction::TryShortcutReachChain( Context *context, const in
 	return ::weaponJumpWeaponsTester.Exec( context, this );
 }
 
-void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
+void TryTriggerWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	auto *weaponJumpState = &context->movementState->weaponJumpMovementState;
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		return;
 	}
 
 	// If shooting has been disabled after we have scheduled the weaponjump
 	if( GS_ShootingDisabled() ) {
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		SwitchOrRollback( context, defaultAction );
 		return;
 	}
@@ -553,7 +553,7 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
 
 	if( weaponJumpState->OriginAtStart().SquareDistanceTo( entityPhysicsState.Origin() ) > SQUARE( 24 ) ) {
 		Debug( "The bot origin has been changed. Deactivating the weapon jump state (should be replanned next frame)." );
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		// Keep the applied input, its very likely that the action will be activated again next frame.
 		context->isCompleted = true;
 		return;
@@ -574,17 +574,17 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( Context *context ) {
 	context->isCompleted = true;
 }
 
-void CorrectWeaponJumpAction::PlanPredictionStep( Context *context ) {
+void CorrectWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	auto *const defaultAction = context->SuggestDefaultAction();
 	auto *const weaponJumpState = &context->movementState->weaponJumpMovementState;
 	if( !GenericCheckIsActionEnabled( context, defaultAction ) ) {
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		return;
 	}
 
 	// If shooting has been disabled after we have scheduled the weaponjump
 	if( GS_ShootingDisabled() ) {
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		SwitchOrRollback( context, defaultAction );
 		return;
 	}
@@ -617,7 +617,7 @@ void CorrectWeaponJumpAction::PlanPredictionStep( Context *context ) {
 
 	if( weaponJumpFailed ) {
 		Debug( "The weapon jump attempt has failed, deactivating weapon jump state\n" );
-		module->ResetFailedWeaponJumpAttempt( context );
+		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		this->SwitchOrRollback( context, defaultAction );
 		return;
 	}
@@ -685,9 +685,9 @@ void WeaponJumpWeaponsTester::SetupForWeapon( int weaponNum ) {
 	detector.push = push;
 }
 
-void ScheduleWeaponJumpAction::SaveLandingAreas( Context *context, int areaNum ) {
-	module->savedLandingAreas.clear();
-	module->savedLandingAreas.push_back( areaNum );
+void ScheduleWeaponJumpAction::SaveLandingAreas( PredictionContext *context, int areaNum ) {
+	m_subsystem->savedLandingAreas.clear();
+	m_subsystem->savedLandingAreas.push_back( areaNum );
 
 	// Try add some nearby areas.
 	// Using areas reachable from the target area, add a nearby area if the target area is reachable from it too.
@@ -719,8 +719,8 @@ void ScheduleWeaponJumpAction::SaveLandingAreas( Context *context, int areaNum )
 				// Avoid fruitless further tests for this reverse reach.
 				goto nextDirectReach;
 			}
-			module->savedLandingAreas.push_back( reach.areanum );
-			if( module->savedLandingAreas.size() == module->savedLandingAreas.capacity() ) {
+			m_subsystem->savedLandingAreas.push_back( reach.areanum );
+			if( m_subsystem->savedLandingAreas.size() == m_subsystem->savedLandingAreas.capacity() ) {
 				return;
 			}
 		}
@@ -728,7 +728,7 @@ nextDirectReach:;
 	}
 }
 
-bool WeaponJumpWeaponsTester::Exec( MovementPredictionContext *context, ScheduleWeaponJumpAction *action ) {
+bool WeaponJumpWeaponsTester::Exec( PredictionContext *context, ScheduleWeaponJumpAction *action ) {
 	const float *botOrigin = context->movementState->entityPhysicsState.Origin();
 	auto *weaponJumpState = &context->movementState->weaponJumpMovementState;
 

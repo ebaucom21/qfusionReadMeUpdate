@@ -11,7 +11,7 @@ void UseWalkableTriggerScript::GetSteeringTarget( vec3_t target ) {
 	VectorAdd( trigger->r.absmin, target, target );
 }
 
-bool UseWalkableTriggerScript::TryDeactivate( Context *context ) {
+bool UseWalkableTriggerScript::TryDeactivate( PredictionContext *context ) {
 	if( GenericGroundMovementScript::TryDeactivate( context ) ) {
 		return true;
 	}
@@ -35,9 +35,9 @@ bool UseWalkableTriggerScript::TryDeactivate( Context *context ) {
 	return false;
 }
 
-MovementScript *FallbackMovementAction::TryFindWalkableTriggerFallback( Context *context ) {
+MovementScript *FallbackAction::TryFindWalkableTriggerFallback( PredictionContext *context ) {
 	if( const edict_t *trigger = FindClosestToTargetTrigger( context ) ) {
-		auto *script = &module->useWalkableTriggerScript;
+		auto *script = &m_subsystem->useWalkableTriggerScript;
 		script->Activate( trigger );
 		return script;
 	}
@@ -45,7 +45,7 @@ MovementScript *FallbackMovementAction::TryFindWalkableTriggerFallback( Context 
 	return nullptr;
 }
 
-const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( Context *context ) {
+const edict_t *FallbackAction::FindClosestToTargetTrigger( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	int fromAreaNums[2] { 0, 0 };
 	int numFromAreas = entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
@@ -62,7 +62,7 @@ const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( Context *cont
 
 typedef wsw::ai::movement::NearbyTriggersCache NearbyTriggersCache;
 
-const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
+const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
 																   const NearbyTriggersCache &triggersCache ) {
 	const int allowedTravelFlags = bot->AllowedTravelFlags();
 
@@ -85,7 +85,7 @@ const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( const Closest
 	return bestTravelTime < std::numeric_limits<int>::max() ? bestEnt : nullptr;
 }
 
-const edict_t *FallbackMovementAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
+const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerProblemParams &problemParams,
 																   const uint16_t *triggerEntNums,
 																   int numTriggerEnts,
 																   int *travelTime ) {

@@ -1,13 +1,13 @@
-#include "basemovementaction.h"
+#include "baseaction.h"
 #include "movementlocal.h"
 
-void BaseMovementAction::RegisterSelf() {
-	bot = module->bot;
-	this->actionNum = module->movementActions.size();
-	module->movementActions.push_back( this );
+void BaseAction::RegisterSelf() {
+	bot = m_subsystem->bot;
+	this->actionNum = m_subsystem->movementActions.size();
+	m_subsystem->movementActions.push_back( this );
 }
 
-void BaseMovementAction::Debug( const char *format, ... ) const {
+void BaseAction::Debug( const char *format, ... ) const {
 #if ( defined( ENABLE_MOVEMENT_DEBUG_OUTPUT ) || defined( CHECK_INFINITE_NEXT_STEP_LOOPS ) )
 	// Check if there is an already detected error in this case and perform output only it the condition passes
 #if !defined( ENABLE_MOVEMENT_DEBUG_OUTPUT )
@@ -26,7 +26,7 @@ void BaseMovementAction::Debug( const char *format, ... ) const {
 #endif
 }
 
-void BaseMovementAction::ExecActionRecord( const MovementActionRecord *record, BotInput *inputWillBeUsed, Context *context ) {
+void BaseAction::ExecActionRecord( const MovementActionRecord *record, BotInput *inputWillBeUsed, PredictionContext *context ) {
 	Assert( inputWillBeUsed );
 	// TODO: Discover why we still need to do that for pending look at points
 	// while the pending look at points seemingly gets applied in SimulateMockBotFrame()
@@ -62,7 +62,7 @@ void BaseMovementAction::ExecActionRecord( const MovementActionRecord *record, B
 	}
 }
 
-void BaseMovementAction::CheckPredictionStepResults( Context *context ) {
+void BaseAction::CheckPredictionStepResults( PredictionContext *context ) {
 	// These flags might be set by ExecActionRecord(). Skip checks in this case.
 	if( context->cannotApplyAction || context->isCompleted ) {
 		return;
@@ -94,7 +94,7 @@ void BaseMovementAction::CheckPredictionStepResults( Context *context ) {
 	}
 
 	if( stopPredictionOnEnteringWater && newEntityPhysicsState.waterLevel > 1 ) {
-		Assert( this != &module->swimMovementAction );
+		Assert( this != &m_subsystem->swimMovementAction );
 		Debug( "A prediction step has lead to entering water, should stop planning\n" );
 		context->isCompleted = true;
 		return;
@@ -179,7 +179,7 @@ void BaseMovementAction::CheckPredictionStepResults( Context *context ) {
 	}
 }
 
-bool BaseMovementAction::HasTouchedNavEntityThisFrame( Context *context ) {
+bool BaseAction::HasTouchedNavEntityThisFrame( PredictionContext *context ) {
 	const edict_t *gameEdicts = game.edicts;
 	const uint16_t *ents = context->frameEvents.otherTouchedTriggerEnts;
 	for( int i = 0, end = context->frameEvents.numOtherTouchedTriggers; i < end; ++i ) {
@@ -191,14 +191,14 @@ bool BaseMovementAction::HasTouchedNavEntityThisFrame( Context *context ) {
 	return false;
 }
 
-void BaseMovementAction::BeforePlanning() {
+void BaseAction::BeforePlanning() {
 	isDisabledForPlanning = false;
 	sequenceStartFrameIndex = std::numeric_limits<unsigned>::max();
 	sequenceEndFrameIndex = std::numeric_limits<unsigned>::max();
 	thisFrameCMShapeList = nullptr;
 }
 
-void BaseMovementAction::OnApplicationSequenceStarted( Context *context ) {
+void BaseAction::OnApplicationSequenceStarted( PredictionContext *context ) {
 	Debug( "OnApplicationSequenceStarted(context): context->topOfStackIndex=%d\n", context->topOfStackIndex );
 
 	constexpr auto invalidValue = std::numeric_limits<unsigned>::max();
@@ -209,7 +209,7 @@ void BaseMovementAction::OnApplicationSequenceStarted( Context *context ) {
 	thisFrameCMShapeList = nullptr;
 }
 
-void BaseMovementAction::OnApplicationSequenceStopped( Context *context,
+void BaseAction::OnApplicationSequenceStopped( PredictionContext *context,
 													   SequenceStopReason reason,
 													   unsigned stoppedAtFrameIndex ) {
 	constexpr auto invalidValue = std::numeric_limits<unsigned>::max();
@@ -243,7 +243,7 @@ void BaseMovementAction::OnApplicationSequenceStopped( Context *context,
 	}
 }
 
-unsigned BaseMovementAction::SequenceDuration( const Context *context ) const {
+unsigned BaseAction::SequenceDuration( const PredictionContext *context ) const {
 	unsigned millisAheadAtSequenceStart = context->MillisAheadForFrameStart( sequenceStartFrameIndex );
 	// TODO: Ensure that the method gets called only after prediction step in some way
 	// (We need a valid and actual prediction step millis)

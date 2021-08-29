@@ -1,10 +1,10 @@
 #ifndef WSW_48994890_0d2b_43cf_9d43_63041efc29ad_H
 #define WSW_48994890_0d2b_43cf_9d43_63041efc29ad_H
 
-#include "basemovementaction.h"
+#include "baseaction.h"
 
-class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction {
-	friend class MovementPredictionContext;
+class CombatDodgeSemiRandomlyToTargetAction : public BaseAction {
+	friend class PredictionContext;
 
 	float *lookDir { nullptr };
 	vec3_t tmpDir { 0, 0, 0 };
@@ -29,19 +29,19 @@ class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction {
 	// an overflow of prediction stack.
 	// Otherwise the combat action might be marked as disabled if all tested action application sequences fail
 	// and the control is transferred to this "next" action.
-	BaseMovementAction *allowFailureUsingThatAsNextAction { nullptr };
+	BaseAction *allowFailureUsingThatAsNextAction { nullptr };
 
 	inline bool IsAllowedToFail() { return allowFailureUsingThatAsNextAction != nullptr; }
 
-	void UpdateKeyMoveDirs( MovementPredictionContext *context );
+	void UpdateKeyMoveDirs( PredictionContext *context );
 
 public:
-	explicit CombatDodgeSemiRandomlyToTargetAction( BotMovementModule *module_ )
-		: BaseMovementAction( module_, "CombatDodgeSemiRandomlyToTargetAction", COLOR_RGB( 192, 192, 192 ) ) {}
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
-	void OnApplicationSequenceStarted( MovementPredictionContext *context ) override;
-	void OnApplicationSequenceStopped( MovementPredictionContext *context,
+	explicit CombatDodgeSemiRandomlyToTargetAction( MovementSubsystem *subsystem )
+		: BaseAction( subsystem, "CombatDodgeSemiRandomlyToTargetAction", COLOR_RGB( 192, 192, 192 ) ) {}
+	void PlanPredictionStep( PredictionContext *context ) override;
+	void CheckPredictionStepResults( PredictionContext *context ) override;
+	void OnApplicationSequenceStarted( PredictionContext *context ) override;
+	void OnApplicationSequenceStopped( PredictionContext *context,
 									   SequenceStopReason stopReason,
 									   unsigned stoppedAtFrameIndex ) override;
 	void BeforePlanning() override;

@@ -1,4 +1,4 @@
-#include "fallbackmovementaction.h"
+#include "fallbackaction.h"
 #include "movementscript.h"
 #include "movementlocal.h"
 #include "bestjumpablespotdetector.h"
@@ -6,9 +6,9 @@
 #include "../manager.h"
 #include "../trajectorypredictor.h"
 
-void FallbackMovementAction::PlanPredictionStep( Context *context ) {
+void FallbackAction::PlanPredictionStep( PredictionContext *context ) {
 	bool handledSpecialMovement = false;
-	if( auto *fallback = module->activeMovementScript ) {
+	if( auto *fallback = m_subsystem->activeMovementScript ) {
 		fallback->SetupMovement( context );
 		handledSpecialMovement = true;
 	} else if( context->IsInNavTargetArea() ) {
@@ -19,7 +19,7 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 	// If we have saved a path that is not perfect but good enough during attempts for bunny-hopping prediction
 	if( !context->goodEnoughPath.empty() || !context->lastResortPath.empty() ) {
 		const char *tag;
-		MovementPredictionContext::PredictedPath *path;
+		PredictionContext::PredictedPath *path;
 		if( !context->goodEnoughPath.empty() ) {
 			path = &context->goodEnoughPath;
 			tag = "a good enough";
@@ -48,17 +48,17 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 
 	auto *botInput = &context->record->botInput;
 	if( handledSpecialMovement ) {
-		botInput->SetAllowedRotationMask( BotInputRotation::NONE );
+		botInput->SetAllowedRotationMask( InputRotation::NONE );
 	} else {
 		const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 		if( !entityPhysicsState.GroundEntity() && CanWaitForLanding( context ) ) {
 			// Fallback path movement is the last hope action, wait for landing
 			SetupLostNavTargetMovement( context );
 		} else if( auto *fallback = TryFindMovementFallback( context ) ) {
-			module->activeMovementScript = fallback;
+			m_subsystem->activeMovementScript = fallback;
 			fallback->SetupMovement( context );
 			handledSpecialMovement = true;
-			botInput->SetAllowedRotationMask( BotInputRotation::NONE );
+			botInput->SetAllowedRotationMask( InputRotation::NONE );
 		} else {
 			// This often leads to bot blocking and suicide. TODO: Invesigate what else can be done.
 			botInput->Clear();
@@ -75,7 +75,7 @@ void FallbackMovementAction::PlanPredictionStep( Context *context ) {
 	context->isCompleted = true;
 }
 
-bool FallbackMovementAction::CanWaitForLanding( MovementPredictionContext *context ) {
+bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 	const int navTargetAreaNum = context->NavTargetAasAreaNum();
 	if( !navTargetAreaNum ) {
 		return false;
@@ -152,7 +152,7 @@ bool FallbackMovementAction::CanWaitForLanding( MovementPredictionContext *conte
 	return startTravelTime > endTravelTime;
 }
 
-void FallbackMovementAction::SetupNavTargetAreaMovement( Context *context ) {
+void FallbackAction::SetupNavTargetAreaMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
@@ -186,7 +186,7 @@ void FallbackMovementAction::SetupNavTargetAreaMovement( Context *context ) {
 	botInput->canOverrideLookVec = true;
 }
 
-void FallbackMovementAction::SetupLostNavTargetMovement( Context *context ) {
+void FallbackAction::SetupLostNavTargetMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
@@ -211,7 +211,7 @@ void FallbackMovementAction::SetupLostNavTargetMovement( Context *context ) {
 	botInput->SetIntendedLookDir( entityPhysicsState.ForwardDir(), true );
 }
 
-MovementScript *FallbackMovementAction::TryFindMovementFallback( Context *context ) {
+MovementScript *FallbackAction::TryFindMovementFallback( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	// First check for being in lava
@@ -278,7 +278,7 @@ MovementScript *FallbackMovementAction::TryFindMovementFallback( Context *contex
 
 	if( auto *fallback = TryNodeBasedFallbacksLeft( context ) ) {
 		// Check whether its really a node based fallback
-		auto *const nodeBasedFallback = &module->useWalkableNodeScript;
+		auto *const nodeBasedFallback = &m_subsystem->useWalkableNodeScript;
 		if( fallback == nodeBasedFallback ) {
 			const vec3_t &origin = nodeBasedFallback->NodeOrigin();
 			const int areaNum = nodeBasedFallback->NodeAreaNum();
@@ -296,7 +296,7 @@ MovementScript *FallbackMovementAction::TryFindMovementFallback( Context *contex
 	return nullptr;
 }
 
-MovementScript *FallbackMovementAction::TryNodeBasedFallbacksLeft( Context *context ) {
+MovementScript *FallbackAction::TryNodeBasedFallbacksLeft( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	const unsigned millisInBlockedState = bot->MillisInBlockedState();
@@ -306,7 +306,7 @@ MovementScript *FallbackMovementAction::TryNodeBasedFallbacksLeft( Context *cont
 
 	// Try using the nav target as a fallback movement target
 	Assert( context->NavTargetAasAreaNum() );
-	auto *nodeFallback = &module->useWalkableNodeScript;
+	auto *nodeFallback = &m_subsystem->useWalkableNodeScript;
 	if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 384.0f ) ) {
 		Vec3 target( context->NavTargetOrigin() );
 		target.Z() += -playerbox_stand_mins[2];
@@ -336,7 +336,7 @@ MovementScript *FallbackMovementAction::TryNodeBasedFallbacksLeft( Context *cont
 	return nullptr;
 }
 
-MovementScript *FallbackMovementAction::TryFindAasBasedFallback( Context *context ) {
+MovementScript *FallbackAction::TryFindAasBasedFallback( PredictionContext *context ) {
 	const int nextReachNum = context->NextReachNum();
 	if( !nextReachNum ) {
 		return nullptr;
@@ -351,7 +351,7 @@ MovementScript *FallbackMovementAction::TryFindAasBasedFallback( Context *contex
 
 	if( traveltype == TRAVEL_JUMPPAD || traveltype == TRAVEL_TELEPORT || traveltype == TRAVEL_ELEVATOR ) {
 		// Always follow these reachabilities
-		auto *fallback = &module->useWalkableNodeScript;
+		auto *fallback = &m_subsystem->useWalkableNodeScript;
 		// Note: We have to add several units to the target Z, otherwise a collision test
 		// on next frame is very likely to immediately deactivate it
 		fallback->Activate( ( Vec3( 0, 0, -playerbox_stand_mins[2] ) + nextReach.start ).Data(), 16.0f );
@@ -372,7 +372,7 @@ MovementScript *FallbackMovementAction::TryFindAasBasedFallback( Context *contex
 	}
 
 	// The only possible fallback left
-	auto *fallback = &module->jumpOverBarrierScript;
+	auto *fallback = &m_subsystem->jumpOverBarrierScript;
 	if( traveltype == TRAVEL_BARRIERJUMP || traveltype == TRAVEL_WATERJUMP ) {
 		fallback->Activate( nextReach.start, nextReach.end );
 		return fallback;

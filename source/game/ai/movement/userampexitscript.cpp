@@ -1,7 +1,7 @@
 #include "userampexitscript.h"
 #include "movementlocal.h"
 
-bool UseRampExitScript::TryDeactivate( Context *context ) {
+bool UseRampExitScript::TryDeactivate( PredictionContext *context ) {
 	// Call the superclass method first
 	if( GenericGroundMovementScript::TryDeactivate( context ) ) {
 		return true;
@@ -32,7 +32,7 @@ bool UseRampExitScript::TryDeactivate( Context *context ) {
 	return true;
 }
 
-const int *TryFindBestInclinedFloorExitArea( Context *context, int rampAreaNum, int forbiddenAreaNum ) {
+const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int rampAreaNum, int forbiddenAreaNum ) {
 	const auto *aasWorld = AiAasWorld::Instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
@@ -119,7 +119,7 @@ const int *TryFindBestInclinedFloorExitArea( Context *context, int rampAreaNum, 
 	return &aasReach[fromReachNums[bestIndex]].areanum;
 }
 
-MovementScript *FallbackMovementAction::TryFindRampFallback( Context *context, int rampAreaNum, int forbiddenAreaNum ) {
+MovementScript *FallbackAction::TryFindRampFallback( PredictionContext *context, int rampAreaNum, int forbiddenAreaNum ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const int *bestExitAreaNum = TryFindBestInclinedFloorExitArea( context, rampAreaNum, forbiddenAreaNum );
 	if( !bestExitAreaNum ) {
@@ -155,7 +155,7 @@ MovementScript *FallbackMovementAction::TryFindRampFallback( Context *context, i
 		}
 	}
 
-	auto *script = &module->useRampExitScript;
+	auto *script = &m_subsystem->useRampExitScript;
 	script->Activate( rampAreaNum, *bestExitAreaNum );
 	return script;
 }

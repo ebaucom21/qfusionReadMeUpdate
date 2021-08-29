@@ -34,36 +34,36 @@ inline float GetPMoveStatValue( const player_state_t *playerState, int statIndex
 	return value < 0 ? defaultValue : value;
 }
 
-inline float MovementPredictionContext::GetJumpSpeed() const {
+inline float PredictionContext::GetJumpSpeed() const {
 	return GetPMoveStatValue( this->currPlayerState, PM_STAT_JUMPSPEED, DEFAULT_JUMPSPEED * GRAVITY_COMPENSATE );
 }
 
-inline float MovementPredictionContext::GetDashSpeed() const {
+inline float PredictionContext::GetDashSpeed() const {
 	return GetPMoveStatValue( this->currPlayerState, PM_STAT_DASHSPEED, DEFAULT_DASHSPEED );
 }
 
-inline float MovementPredictionContext::GetRunSpeed() const {
+inline float PredictionContext::GetRunSpeed() const {
 	return GetPMoveStatValue( this->currPlayerState, PM_STAT_MAXSPEED, DEFAULT_PLAYERSPEED );
 }
 
-inline unsigned MovementPredictionContext::DefaultFrameTime() const {
+inline unsigned PredictionContext::DefaultFrameTime() const {
 	return defaultFrameTime;
 }
 
-inline Vec3 MovementPredictionContext::NavTargetOrigin() const {
+inline Vec3 PredictionContext::NavTargetOrigin() const {
 	return bot->NavTargetOrigin();
 }
 
-inline float MovementPredictionContext::NavTargetRadius() const {
+inline float PredictionContext::NavTargetRadius() const {
 	return bot->NavTargetRadius();
 }
 
-inline bool MovementPredictionContext::IsCloseToNavTarget() const {
+inline bool PredictionContext::IsCloseToNavTarget() const {
 	float distance = NavTargetRadius() + 32.0f;
 	return NavTargetOrigin().SquareDistanceTo( movementState->entityPhysicsState.Origin() ) < distance * distance;
 }
 
-inline int MovementPredictionContext::CurrAasAreaNum() const {
+inline int PredictionContext::CurrAasAreaNum() const {
 	if( int currAasAreaNum = movementState->entityPhysicsState.CurrAasAreaNum() ) {
 		return currAasAreaNum;
 	}
@@ -71,7 +71,7 @@ inline int MovementPredictionContext::CurrAasAreaNum() const {
 	return movementState->entityPhysicsState.DroppedToFloorAasAreaNum();
 }
 
-inline int MovementPredictionContext::CurrGroundedAasAreaNum() const {
+inline int PredictionContext::CurrGroundedAasAreaNum() const {
 	const auto *aasWorld = AiAasWorld::Instance();
 	const auto &entityPhysicsState = movementState->entityPhysicsState;
 	int areaNums[2] = { entityPhysicsState.CurrAasAreaNum(), entityPhysicsState.DroppedToFloorAasAreaNum() };
@@ -83,11 +83,11 @@ inline int MovementPredictionContext::CurrGroundedAasAreaNum() const {
 	return 0;
 }
 
-inline int MovementPredictionContext::NavTargetAasAreaNum() const {
+inline int PredictionContext::NavTargetAasAreaNum() const {
 	return bot->NavTargetAasAreaNum();
 }
 
-inline bool MovementPredictionContext::IsInNavTargetArea() const {
+inline bool PredictionContext::IsInNavTargetArea() const {
 	const int navTargetAreaNum = NavTargetAasAreaNum();
 	if( !navTargetAreaNum ) {
 		return false;
@@ -117,43 +117,43 @@ inline bool IsInsideHugeArea( const float *origin, const aas_area_t &area, float
 	return true;
 }
 
-inline void MovementPredictionContext::Assert( bool condition, const char *message ) const {
+inline void PredictionContext::Assert( bool condition, const char *message ) const {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
 	if( !condition ) {
 		if( message ) {
-			AI_FailWith( "MovementPredictionContext::Assert()", "%s\n", message );
+			AI_FailWith( "PredictionContext::Assert()", "%s\n", message );
 		} else {
-			AI_FailWith( "MovementPredictionContext::Assert()", "An assertion has failed\n" );
+			AI_FailWith( "PredictionContext::Assert()", "An assertion has failed\n" );
 		}
 	}
 #endif
 }
 
-inline void BaseMovementAction::Assert( bool condition, const char *message ) const {
+inline void BaseAction::Assert( bool condition, const char *message ) const {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
 	if( !condition ) {
 		if( message ) {
-			AI_FailWith("BaseMovementAction::Assert()", "An assertion has failed: %s\n", message );
+			AI_FailWith("BaseAction::Assert()", "An assertion has failed: %s\n", message );
 		} else {
-			AI_FailWith("BaseMovementAction::Assert()", "An assertion has failed\n");
+			AI_FailWith("BaseAction::Assert()", "An assertion has failed\n");
 		}
 	}
 #endif
 }
 
-inline const AiAasRouteCache *MovementPredictionContext::RouteCache() const {
+inline const AiAasRouteCache *PredictionContext::RouteCache() const {
 	return bot->RouteCache();
 }
 
-inline const ArrayRange<int> MovementPredictionContext::TravelFlags() const {
+inline const ArrayRange<int> PredictionContext::TravelFlags() const {
 	return bot->TravelFlags();
 }
 
-inline EnvironmentTraceCache &MovementPredictionContext::TraceCache() {
+inline EnvironmentTraceCache &PredictionContext::TraceCache() {
 	return environmentTestResultsStack.back();
 }
 
-inline void MovementPredictionContext::SaveActionOnStack( BaseMovementAction *action ) {
+inline void PredictionContext::SaveActionOnStack( BaseAction *action ) {
 	auto *topOfStack = &this->predictedMovementActions[this->topOfStackIndex];
 	// This was a source of an annoying bug! movement state has been modified during a prediction step!
 	// We expect that record state is a saved state BEFORE the step!
@@ -164,7 +164,7 @@ inline void MovementPredictionContext::SaveActionOnStack( BaseMovementAction *ac
 	topOfStack->timestamp = this->totalMillisAhead;
 
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
-	constexpr auto *tag = "MovementPredictionContext::SaveActionOnStack()";
+	constexpr auto *tag = "PredictionContext::SaveActionOnStack()";
 	if( !action ) {
 		AI_FailWith( tag, "The action is null\n" );
 	}
@@ -184,13 +184,13 @@ inline void MovementPredictionContext::SaveActionOnStack( BaseMovementAction *ac
 	this->topOfStackIndex++;
 }
 
-inline const char *MovementPredictionContext::ActiveActionName() const {
+inline const char *PredictionContext::ActiveActionName() const {
 	return activeAction ? activeAction->Name() : nullptr;
 }
 
-inline void MovementPredictionContext::MarkSavepoint( BaseMovementAction *markedBy, unsigned frameIndex ) {
+inline void PredictionContext::MarkSavepoint( BaseAction *markedBy, unsigned frameIndex ) {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
-	constexpr auto *tag = "MovementPredictionContext::MarkSavepoint()";
+	constexpr auto *tag = "PredictionContext::MarkSavepoint()";
 	if( !markedBy ) {
 		AI_FailWith( tag, "`markedBy` action is null\n" );
 	}
@@ -214,7 +214,7 @@ inline void MovementPredictionContext::MarkSavepoint( BaseMovementAction *marked
 	Debug( "%s has marked frame %d as a savepoint\n", markedBy->Name(), frameIndex );
 }
 
-inline void MovementPredictionContext::SetPendingRollback() {
+inline void PredictionContext::SetPendingRollback() {
 	this->cannotApplyAction = true;
 	this->shouldRollback = true;
 
@@ -223,15 +223,15 @@ inline void MovementPredictionContext::SetPendingRollback() {
 		return;
 	}
 
-	constexpr auto *tag = "MovementPredictionContext::SetPendingRollback()";
+	constexpr auto *tag = "PredictionContext::SetPendingRollback()";
 	constexpr auto *format = "%s: Attempt to rollback while the context is in completed state\n";
 	AI_FailWith( tag, format, ActiveActionName() );
 #endif
 }
 
-inline void MovementPredictionContext::RollbackToSavepoint() {
+inline void PredictionContext::RollbackToSavepoint() {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
-	constexpr auto *tag = "MovementPredictionContext::RollbackToSavepoint()";
+	constexpr auto *tag = "PredictionContext::RollbackToSavepoint()";
 	if( this->isCompleted ) {
 		constexpr auto *format = "%s: Attempt to rollback while the context is in completed state\n";
 		AI_FailWith( tag, format, ActiveActionName() );
@@ -255,14 +255,14 @@ inline void MovementPredictionContext::RollbackToSavepoint() {
 	this->topOfStackIndex = this->savepointTopOfStackIndex;
 }
 
-inline void MovementPredictionContext::SaveSuggestedActionForNextFrame( BaseMovementAction *action ) {
+inline void PredictionContext::SaveSuggestedActionForNextFrame( BaseAction *action ) {
 	//Assert(!this->actionSuggestedByAction);
 	this->actionSuggestedByAction = action;
 }
 
-inline unsigned MovementPredictionContext::MillisAheadForFrameStart( unsigned frameIndex ) const {
+inline unsigned PredictionContext::MillisAheadForFrameStart( unsigned frameIndex ) const {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
-	constexpr auto *tag = "MovementPredictionContext::MillisAheadForFrameStart()";
+	constexpr auto *tag = "PredictionContext::MillisAheadForFrameStart()";
 	constexpr auto *format = "The frame index %u must not be greater than the current ToS index %u\n";
 	if( frameIndex > topOfStackIndex ) {
 		AI_FailWith( tag, format, frameIndex, topOfStackIndex );
@@ -274,27 +274,27 @@ inline unsigned MovementPredictionContext::MillisAheadForFrameStart( unsigned fr
 	return totalMillisAhead;
 }
 
-inline BaseMovementAction &BaseMovementAction::DummyAction() {
+inline BaseAction &BaseAction::DummyAction() {
 	// We have to check the combat action since it might be disabled due to planning stack overflow.
 	if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemies().AreValid() ) {
-		if( !module->combatDodgeSemiRandomlyToTargetAction.IsDisabledForPlanning() ) {
-			return module->combatDodgeSemiRandomlyToTargetAction;
+		if( !m_subsystem->combatDodgeSemiRandomlyToTargetAction.IsDisabledForPlanning() ) {
+			return m_subsystem->combatDodgeSemiRandomlyToTargetAction;
 		}
 	}
 
-	return module->fallbackMovementAction;
+	return m_subsystem->fallbackMovementAction;
 }
 
-inline FlyUntilLandingAction &BaseMovementAction::FlyUntilLandingAction() {
-	return module->flyUntilLandingAction;
+inline FlyUntilLandingAction &BaseAction::FlyUntilLandingAction() {
+	return m_subsystem->flyUntilLandingAction;
 }
 
-inline LandOnSavedAreasAction &BaseMovementAction::LandOnSavedAreasAction() {
-	return module->landOnSavedAreasAction;
+inline LandOnSavedAreasAction &BaseAction::LandOnSavedAreasAction() {
+	return m_subsystem->landOnSavedAreasAction;
 }
 
-inline bool BaseMovementAction::GenericCheckIsActionEnabled( MovementPredictionContext *context,
-															 BaseMovementAction *suggestedAction ) const {
+inline bool BaseAction::GenericCheckIsActionEnabled( PredictionContext *context,
+															 BaseAction *suggestedAction ) const {
 	// Put likely case first
 	if( !isDisabledForPlanning ) {
 		return true;
@@ -307,9 +307,9 @@ inline bool BaseMovementAction::GenericCheckIsActionEnabled( MovementPredictionC
 	return false;
 }
 
-typedef MovementPredictionContext Context;
+typedef PredictionContext PredictionContext;
 
-inline void BaseMovementAction::CheckDisableOrSwitchPreconditions( Context *context, const char *methodTag ) {
+inline void BaseAction::CheckDisableOrSwitchPreconditions( PredictionContext *context, const char *methodTag ) {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
 	if( context->isCompleted ) {
 		AI_FailWith( va( "%s::%s()", Name(), methodTag ), "The context must not have `isCompleted` flag set" );
@@ -326,7 +326,7 @@ inline void BaseMovementAction::CheckDisableOrSwitchPreconditions( Context *cont
 #endif
 }
 
-inline void BaseMovementAction::DisableWithAlternative( Context *context, BaseMovementAction *suggestedAction ) {
+inline void BaseAction::DisableWithAlternative( PredictionContext *context, BaseAction *suggestedAction ) {
 	CheckDisableOrSwitchPreconditions( context, "DisableWithAlternative" );
 
 	context->cannotApplyAction = true;
@@ -334,7 +334,7 @@ inline void BaseMovementAction::DisableWithAlternative( Context *context, BaseMo
 	this->isDisabledForPlanning = true;
 }
 
-inline void BaseMovementAction::SwitchOrStop( Context *context, BaseMovementAction *suggestedAction ) {
+inline void BaseAction::SwitchOrStop( PredictionContext *context, BaseAction *suggestedAction ) {
 	CheckDisableOrSwitchPreconditions( context, "SwitchOrStop" );
 
 	// Few predicted frames are enough if the action cannot be longer applied (but have not caused rollback)
@@ -347,7 +347,7 @@ inline void BaseMovementAction::SwitchOrStop( Context *context, BaseMovementActi
 	DisableWithAlternative( context, suggestedAction );
 }
 
-inline void BaseMovementAction::SwitchOrRollback( Context *context, BaseMovementAction *suggestedAction ) {
+inline void BaseAction::SwitchOrRollback( PredictionContext *context, BaseAction *suggestedAction ) {
 	CheckDisableOrSwitchPreconditions( context, "SwitchOrRollback" );
 
 	if( context->topOfStackIndex > 0 ) {
@@ -370,7 +370,7 @@ inline float Distance2DSquared( const vec3_t a, const vec3_t b ) {
 #define SQUARE( x ) ( ( x ) * ( x ) )
 #endif
 
-static inline bool ShouldCrouchSlideNow( MovementPredictionContext *context ) {
+static inline bool ShouldCrouchSlideNow( PredictionContext *context ) {
 	if( !( context->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_CROUCHSLIDING ) ) {
 		return false;
 	}
@@ -390,7 +390,7 @@ static inline bool ShouldCrouchSlideNow( MovementPredictionContext *context ) {
 
 // Height threshold should be set according to used time step
 // (we might miss crouch sliding activation if its low and the time step is large)
-inline bool ShouldPrepareForCrouchSliding( MovementPredictionContext *context, float heightThreshold = 12.0f ) {
+inline bool ShouldPrepareForCrouchSliding( PredictionContext *context, float heightThreshold = 12.0f ) {
 	if( !(context->currPlayerState->pmove.stats[PM_STAT_FEATURES ] & PMFEAT_CROUCHSLIDING ) ) {
 		return false;
 	}

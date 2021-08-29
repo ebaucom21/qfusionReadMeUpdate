@@ -15,7 +15,7 @@ static inline void makeTraceDir( unsigned dirNum, const vec3_t front2DDir, const
 	VectorNormalizeFast( traceDir );
 }
 
-unsigned EnvironmentTraceCache::selectNonBlockedDirs( Context *context, unsigned *nonBlockedDirIndices ) {
+unsigned EnvironmentTraceCache::selectNonBlockedDirs( PredictionContext *context, unsigned *nonBlockedDirIndices ) {
 	// Test for all 8 lower bits of full-height mask
 	this->testForResultsMask( context, 0xFF );
 
@@ -29,7 +29,7 @@ unsigned EnvironmentTraceCache::selectNonBlockedDirs( Context *context, unsigned
 	return numNonBlockedDirs;
 }
 
-void EnvironmentTraceCache::makeRandomizedKeyMovesToTarget( Context *context, const Vec3 &intendedMoveDir, int *keyMoves ) {
+void EnvironmentTraceCache::makeRandomizedKeyMovesToTarget( PredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves ) {
 	unsigned nonBlockedDirIndices[8];
 	unsigned numNonBlockedDirs = selectNonBlockedDirs( context, nonBlockedDirIndices );
 
@@ -70,7 +70,7 @@ void EnvironmentTraceCache::makeRandomizedKeyMovesToTarget( Context *context, co
 	Vector2Set( keyMoves, 0, 0 );
 }
 
-void EnvironmentTraceCache::makeKeyMovesToTarget( Context *context, const Vec3 &intendedMoveDir, int *keyMoves ) {
+void EnvironmentTraceCache::makeKeyMovesToTarget( PredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves ) {
 	unsigned nonBlockedDirIndices[8];
 	unsigned numNonBlockedDirs = selectNonBlockedDirs( context, nonBlockedDirIndices );
 
@@ -102,7 +102,7 @@ void EnvironmentTraceCache::makeKeyMovesToTarget( Context *context, const Vec3 &
 	Vector2Set( keyMoves, 0, 0 );
 }
 
-void EnvironmentTraceCache::makeRandomKeyMoves( Context *context, int *keyMoves ) {
+void EnvironmentTraceCache::makeRandomKeyMoves( PredictionContext *context, int *keyMoves ) {
 	unsigned nonBlockedDirIndices[8];
 	unsigned numNonBlockedDirs = selectNonBlockedDirs( context, nonBlockedDirIndices );
 	if( numNonBlockedDirs ) {
@@ -114,7 +114,7 @@ void EnvironmentTraceCache::makeRandomKeyMoves( Context *context, int *keyMoves 
 	Vector2Set( keyMoves, 0, 0 );
 }
 
-void EnvironmentTraceCache::testForResultsMask( Context *context, unsigned requiredResultsMask ) {
+void EnvironmentTraceCache::testForResultsMask( PredictionContext *context, unsigned requiredResultsMask ) {
 	// There must not be any extra bits
 	Assert( ( requiredResultsMask & ~0xFFFFu ) == 0 );
 	// All required traces have been already cached
@@ -216,7 +216,7 @@ void EnvironmentTraceCache::testForResultsMask( Context *context, unsigned requi
 	Assert( ( this->resultsMask & requiredResultsMask ) == requiredResultsMask );
 }
 
-const CMShapeList *EnvironmentTraceCache::getShapeListForPMoveCollision( Context *context ) {
+const CMShapeList *EnvironmentTraceCache::getShapeListForPMoveCollision( PredictionContext *context ) {
     if( hasComputedShapeList ) {
         return cachedShapeList;
     }

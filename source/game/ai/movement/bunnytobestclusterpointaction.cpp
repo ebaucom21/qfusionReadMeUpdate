@@ -1,17 +1,17 @@
 #include "bunnytobestclusterpointaction.h"
 #include "movementlocal.h"
 
-BunnyToBestFloorClusterPointAction::BunnyToBestFloorClusterPointAction( BotMovementModule *module_ )
-	: BunnyTestingMultipleLookDirsAction( module_, NAME, COLOR_RGB( 255, 0, 255 ) ) {
-	suggestedAction = &module->bunnyTestingNextReachDirsAction;
+BunnyToBestFloorClusterPointAction::BunnyToBestFloorClusterPointAction( MovementSubsystem *subsystem )
+	: BunnyTestingMultipleLookDirsAction( subsystem, NAME, COLOR_RGB( 255, 0, 255 ) ) {
+	suggestedAction = &m_subsystem->bunnyTestingNextReachDirsAction;
 }
 
-void BunnyToBestFloorClusterPointAction::OnApplicationSequenceStarted( MovementPredictionContext *context ) {
+void BunnyToBestFloorClusterPointAction::OnApplicationSequenceStarted( PredictionContext *context ) {
 	Super::OnApplicationSequenceStarted( context );
 
 	FloorClusterAreasCache *const caches[2] = {
-		&module->predictionContext.sameFloorClusterAreasCache,
-		&module->predictionContext.nextFloorClusterAreasCache
+		&m_subsystem->predictionContext.sameFloorClusterAreasCache,
+		&m_subsystem->predictionContext.nextFloorClusterAreasCache
 	};
 
 	bool *const testedFlags[2] = { &this->hasTestedSameCluster, &this->hasTestedNextCluster };
@@ -36,7 +36,7 @@ void BunnyToBestFloorClusterPointAction::OnApplicationSequenceStarted( MovementP
     currDir = nullptr;
 }
 
-void BunnyToBestFloorClusterPointAction::OnApplicationSequenceFailed( MovementPredictionContext *context, unsigned ) {
+void BunnyToBestFloorClusterPointAction::OnApplicationSequenceFailed( PredictionContext *context, unsigned ) {
 	if( hasTestedNextCluster ) {
 		return;
 	}

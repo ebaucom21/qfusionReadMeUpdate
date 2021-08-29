@@ -11,8 +11,8 @@ class UseStairsExitScript: public GenericGroundMovementScript {
 		GetAreaMidGroundPoint( exitAreaNum, target );
 	}
 public:
-	UseStairsExitScript( const Bot *bot_, BotMovementModule *module_ )
-		: GenericGroundMovementScript( bot_, module_, COLOR_RGB( 0, 0, 192 ) ) {}
+	UseStairsExitScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: GenericGroundMovementScript( bot_, subsystem, COLOR_RGB( 0, 0, 192 ) ) {}
 
 	void Activate( int stairsClusterNum_, int stairsExitAreaNum_ ) {
 		this->stairsClusterNum = stairsClusterNum_;
@@ -20,9 +20,9 @@ public:
 		GenericGroundMovementScript::Activate();
 	}
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 };
 
-const uint16_t *TryFindBestStairsExitArea( MovementPredictionContext *context, int stairsClusterNum );
+const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stairsClusterNum );
 
 #endif

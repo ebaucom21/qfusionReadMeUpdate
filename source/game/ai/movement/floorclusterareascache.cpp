@@ -2,7 +2,7 @@
 #include "movementlocal.h"
 #include "../combat/tacticalspotsregistry.h"
 
-bool FloorClusterAreasCache::AreaPassesCollisionTest( Context *context, int areaNum ) const {
+bool FloorClusterAreasCache::AreaPassesCollisionTest( PredictionContext *context, int areaNum ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	Vec3 start( entityPhysicsState.Origin() );
@@ -66,7 +66,7 @@ bool NextFloorClusterAreasCache::AreaPassesCollisionTest( const Vec3 &start,
 	return trace.fraction != 1.0f && trace.endpos[2] >= area.mins[2];
 }
 
-bool SameFloorClusterAreasCache::NeedsToBeComputed( Context *context ) const {
+bool SameFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const auto *floorClusterNums = aasWorld->AreaFloorClusterNums();
 
@@ -93,7 +93,7 @@ bool SameFloorClusterAreasCache::NeedsToBeComputed( Context *context ) const {
 	return !FloorClusterAreasCache::AreaPassesCollisionTest( context, computedTargetAreaNum );
 }
 
-int FloorClusterAreasCache::GetClosestToTargetPoint( Context *context, float *resultPoint, int *resultAreaNum ) const {
+int FloorClusterAreasCache::GetClosestToTargetPoint( PredictionContext *context, float *resultPoint, int *resultAreaNum ) const {
 	// We have switched to using a cached value as far as it is feasible
 	// avoiding computing an actual point almost every frame
 	// (it has proven to cause jitter/looping)
@@ -123,7 +123,7 @@ int FloorClusterAreasCache::GetClosestToTargetPoint( Context *context, float *re
 	return 0;
 }
 
-void FloorClusterAreasCache::TryReusingOldHeap( MovementPredictionContext *context,
+void FloorClusterAreasCache::TryReusingOldHeap( PredictionContext *context,
 												int currGroundedAreaNum,
 												int expectedClusterNum,
 												CandidateAreasHeap &scratchpadHeap ) const {
@@ -156,7 +156,7 @@ void FloorClusterAreasCache::TryReusingOldHeap( MovementPredictionContext *conte
 	}
 }
 
-int SameFloorClusterAreasCache::FindClosestToTargetPoint( Context *context, int *resultAreaNum ) const {
+int SameFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *context, int *resultAreaNum ) const {
 	const int currGroundedAreaNum = context->CurrGroundedAasAreaNum();
 	if( !currGroundedAreaNum ) {
 		return false;
@@ -202,7 +202,7 @@ int SameFloorClusterAreasCache::FindClosestToTargetPoint( Context *context, int 
 	return 0;
 }
 
-void FloorClusterAreasCache::PrepareAreasForSmallCluster( MovementPredictionContext *__restrict context,
+void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__restrict context,
 														  const Hazard *__restrict hazardToEvade,
 														  int maxTravelTimeThreshold,
 														  const uint16_t *__restrict clusterAreaNums,
@@ -250,7 +250,7 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( MovementPredictionCont
 	}
 }
 
-void FloorClusterAreasCache::PrepareAreasForLargeCluster( MovementPredictionContext *__restrict context,
+void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__restrict context,
 														  const Hazard *__restrict hazardToEvade,
 														  int maxTravelTimeThreshold,
 														  const uint16_t *__restrict clusterAreaNums,
@@ -322,7 +322,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( MovementPredictionCont
 	}
 }
 
-void FloorClusterAreasCache::BuildCandidateAreasHeap( MovementPredictionContext *context,
+void FloorClusterAreasCache::BuildCandidateAreasHeap( PredictionContext *context,
 													  int maxTravelTimeThreshold,
 													  const uint16_t *clusterAreaNums,
 													  int numClusterAreas,
@@ -347,7 +347,7 @@ void FloorClusterAreasCache::BuildCandidateAreasHeap( MovementPredictionContext 
 	std::make_heap( result.begin(), result.end() );
 }
 
-bool NextFloorClusterAreasCache::NeedsToBeComputed( Context *context ) const {
+bool NextFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
 	const auto *floorClusterNums = aasWorld->AreaFloorClusterNums();
 
 	// There were no data computed
@@ -363,7 +363,7 @@ bool NextFloorClusterAreasCache::NeedsToBeComputed( Context *context ) const {
 	return !FloorClusterAreasCache::AreaPassesCollisionTest( context, computedTargetAreaNum );
 }
 
-int NextFloorClusterAreasCache::FindClosestToTargetPoint( Context *context, int *resultAreaNum ) const {
+int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *context, int *resultAreaNum ) const {
 	int currGroundedAreaNum = context->CurrGroundedAasAreaNum();
 	if( !currGroundedAreaNum ) {
 		return false;

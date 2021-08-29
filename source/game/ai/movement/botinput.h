@@ -3,7 +3,7 @@
 
 #include "../ailocal.h"
 
-enum class BotInputRotation : uint8_t {
+enum class InputRotation : uint8_t {
 	NONE = 0,
 	BACK = 1 << 0,
 	RIGHT = 1 << 1,
@@ -12,9 +12,8 @@ enum class BotInputRotation : uint8_t {
 	ALL_KINDS_MASK = ( 1 << 3 ) - 1
 };
 
-class alignas ( 4 )BotInput
-{
-	friend class MovementPredictionContext;
+class alignas ( 4 )BotInput {
+	friend class PredictionContext;
 	// Todo: Pack since it is required to be normalized now?
 	Vec3 intendedLookDir;
 	// A copy of self->s.angles for modification
@@ -22,7 +21,7 @@ class alignas ( 4 )BotInput
 	// the BotInput should be only mutable thing in the related code.
 	// Should be copied back to self->s.angles if it has been modified when the BotInput gets applied.
 	Vec3 alreadyComputedAngles;
-	BotInputRotation allowedRotationMask;
+	InputRotation allowedRotationMask;
 	uint8_t turnSpeedMultiplier;
 	signed ucmdForwardMove : 2;
 	signed ucmdSideMove : 2;
@@ -54,14 +53,14 @@ public:
 		memset( this, 0, sizeof( BotInput ) );
 		// Restore default values overwritten by the memset() call
 		turnSpeedMultiplier = 16;
-		allowedRotationMask = BotInputRotation::ALL_KINDS_MASK;
+		allowedRotationMask = InputRotation::ALL_KINDS_MASK;
 	}
 
-	void SetAllowedRotationMask( BotInputRotation rotationMask ) {
+	void SetAllowedRotationMask( InputRotation rotationMask ) {
 		this->allowedRotationMask = rotationMask;
 	}
 
-	bool IsRotationAllowed( BotInputRotation rotation ) {
+	bool IsRotationAllowed( InputRotation rotation ) {
 		return ( (int)allowedRotationMask & (int)rotation ) != 0;
 	}
 

@@ -3,7 +3,7 @@
 
 #include "../ailocal.h"
 
-class MovementPredictionContext;
+class PredictionContext;
 
 /**
  * Provides lazily-computed results of full-height or jumpable-height
@@ -50,7 +50,7 @@ private:
 	 * @param nonBlockedDirIndices a buffer for results
 	 * @return a number of non-blocked dirs
 	 */
-	unsigned selectNonBlockedDirs( class MovementPredictionContext *context, unsigned *nonBlockedDirIndices );
+	unsigned selectNonBlockedDirs( class PredictionContext *context, unsigned *nonBlockedDirIndices );
 public:
 	struct Query {
 		unsigned mask;
@@ -83,17 +83,17 @@ public:
 		this->aasAreaSettings = AiAasWorld::Instance()->AreaSettings();
 	}
 
-	void testForResultsMask( class MovementPredictionContext *context, unsigned requiredResultsMask );
+	void testForResultsMask( class PredictionContext *context, unsigned requiredResultsMask );
 
-	void testForQuery( class MovementPredictionContext *context, const Query &query ) {
+	void testForQuery( class PredictionContext *context, const Query &query ) {
 		testForResultsMask( context, query.mask );
 	}
 
-	const CMShapeList *getShapeListForPMoveCollision( class MovementPredictionContext *context );
+	const CMShapeList *getShapeListForPMoveCollision( class PredictionContext *context );
 
-	void makeRandomizedKeyMovesToTarget( MovementPredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves );
-	void makeKeyMovesToTarget( MovementPredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves );
-	void makeRandomKeyMoves( MovementPredictionContext *context, int *keyMoves );
+	void makeRandomizedKeyMovesToTarget( PredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves );
+	void makeKeyMovesToTarget( PredictionContext *context, const Vec3 &intendedMoveDir, int *keyMoves );
+	void makeRandomKeyMoves( PredictionContext *context, int *keyMoves );
 };
 
 #endif

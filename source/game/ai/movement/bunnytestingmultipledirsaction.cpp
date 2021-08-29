@@ -11,7 +11,7 @@ void BunnyTestingMultipleLookDirsAction::BeforePlanning() {
 	currDir = nullptr;
 }
 
-void BunnyTestingSavedLookDirsAction::OnApplicationSequenceStarted( MovementPredictionContext *context ) {
+void BunnyTestingSavedLookDirsAction::OnApplicationSequenceStarted( PredictionContext *context ) {
 	BunnyTestingMultipleLookDirsAction::OnApplicationSequenceStarted( context );
 	if( !currSuggestedLookDirNum ) {
 		suggestedLookDirs.clear();
@@ -31,7 +31,7 @@ void BunnyTestingSavedLookDirsAction::OnApplicationSequenceStarted( MovementPred
 	}
 }
 
-void BunnyTestingSavedLookDirsAction::OnApplicationSequenceFailed( MovementPredictionContext *context, unsigned ) {
+void BunnyTestingSavedLookDirsAction::OnApplicationSequenceFailed( PredictionContext *context, unsigned ) {
 	// If another suggested look dir does not exist
 	if( currSuggestedLookDirNum + 1 >= suggestedLookDirs.size() ) {
 		return;
@@ -44,7 +44,7 @@ void BunnyTestingSavedLookDirsAction::OnApplicationSequenceFailed( MovementPredi
 	context->SaveSuggestedActionForNextFrame( this );
 }
 
-void BunnyTestingMultipleLookDirsAction::OnApplicationSequenceStopped( Context *context,
+void BunnyTestingMultipleLookDirsAction::OnApplicationSequenceStopped( PredictionContext *context,
 																	   SequenceStopReason stopReason,
 																	   unsigned stoppedAtFrameIndex ) {
 	BunnyHopAction::OnApplicationSequenceStopped( context, stopReason, stoppedAtFrameIndex );
@@ -54,7 +54,7 @@ void BunnyTestingMultipleLookDirsAction::OnApplicationSequenceStopped( Context *
 	}
 }
 
-inline float SuggestObstacleAvoidanceCorrectionFraction( const Context *context ) {
+inline float SuggestObstacleAvoidanceCorrectionFraction( const PredictionContext *context ) {
 	// Might be negative!
 	float speedOverRunSpeed = context->movementState->entityPhysicsState.Speed() - context->GetRunSpeed();
 	if( speedOverRunSpeed > 500.0f ) {
@@ -63,7 +63,7 @@ inline float SuggestObstacleAvoidanceCorrectionFraction( const Context *context 
 	return 0.35f - 0.20f * speedOverRunSpeed / 500.0f;
 }
 
-void BunnyTestingMultipleLookDirsAction::PlanPredictionStep( Context *context ) {
+void BunnyTestingMultipleLookDirsAction::PlanPredictionStep( PredictionContext *context ) {
 	if( !GenericCheckIsActionEnabled( context, suggestedAction ) ) {
 		return;
 	}
@@ -273,7 +273,7 @@ AreaAndScore *BunnyTestingSavedLookDirsAction::TakeBestCandidateAreas( AreaAndSc
 	return inputBegin + numResultAreas;
 }
 
-void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( MovementPredictionContext *context,
+void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( PredictionContext *context,
 															 AreaAndScore *candidateAreasBegin,
 															 AreaAndScore *candidateAreasEnd ) {
 	const auto &__restrict entityPhysicsState = context->movementState->entityPhysicsState;

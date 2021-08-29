@@ -6,7 +6,7 @@
 
 class Bot;
 struct Hazard;
-class MovementPredictionContext;
+class PredictionContext;
 
 class FloorClusterAreasCache {
 protected:
@@ -52,7 +52,7 @@ protected:
 	 * @param numClusterAreas a number of areas in the floor cluster
 	 * @param result the heap being built
 	 */
-	void BuildCandidateAreasHeap( MovementPredictionContext *context,
+	void BuildCandidateAreasHeap( PredictionContext *context,
 								  int maxTravelTimeThreshold,
 								  const uint16_t *clusterAreaNums,
 								  int numClusterAreas,
@@ -68,7 +68,7 @@ protected:
 	 * @param numClusterAreas a number of areas in the floor cluster
 	 * @param result selected candidate areas
 	 */
-	void PrepareAreasForSmallCluster( MovementPredictionContext *__restrict context,
+	void PrepareAreasForSmallCluster( PredictionContext *__restrict context,
 									  const Hazard *__restrict hazardToEvade,
 									  int maxTravelTimeThreshold,
 								      const uint16_t *__restrict clusterAreaNums,
@@ -85,14 +85,14 @@ protected:
 	 * @param numClusterAreas a number of areas in the floor cluster
 	 * @param result selected candidate areas
 	 */
-	void PrepareAreasForLargeCluster( MovementPredictionContext *__restrict context,
+	void PrepareAreasForLargeCluster( PredictionContext *__restrict context,
 		                              const Hazard *__restrict hazardToEvade,
 		                              int maxTravelTimeThreshold,
 		                              const uint16_t *__restrict clusterAreaNums,
 		                              int numClusterAreas,
 		                              CandidateAreasHeap &__restrict result ) const;
 
-	virtual bool NeedsToBeComputed( MovementPredictionContext *context ) const = 0;
+	virtual bool NeedsToBeComputed( PredictionContext *context ) const = 0;
 
 	/**
 	 * Actually tries to find a closest to target point.
@@ -101,7 +101,7 @@ protected:
 	 * @param areaNum the best area num
 	 * @return an AAS travel time from the best area to target, zero on failure.
 	 */
-	virtual int FindClosestToTargetPoint( MovementPredictionContext *context, int *areaNum ) const = 0;
+	virtual int FindClosestToTargetPoint( PredictionContext *context, int *areaNum ) const = 0;
 
 	/**
 	 * Tries to populate an algorithm scratchpad heap
@@ -111,12 +111,12 @@ protected:
 	 * @param expectedClusterNum an actual cluster we are interested in
 	 * @param scratchpadHeap an algorithm scratchpad heap that is going to be used for retrieval of best next candidate
 	 */
-	void TryReusingOldHeap( MovementPredictionContext *context,
+	void TryReusingOldHeap( PredictionContext *context,
 							int currGroundedAreaNum,
 							int expectedClusterNum,
 							CandidateAreasHeap &scratchpadHeap ) const;
 
-	bool AreaPassesCollisionTest( MovementPredictionContext *context, int areaNum ) const;
+	bool AreaPassesCollisionTest( PredictionContext *context, int areaNum ) const;
 
 	virtual bool AreaPassesCollisionTest( const Vec3 &start, int areaNum, const vec3_t mins, const vec3_t maxs ) const = 0;
 public:
@@ -127,16 +127,16 @@ public:
 	 * @param areaNum an address to write the number of the best area if specified
 	 * @return an AAS travel time from the best area to target, zero on failure
 	 */
-	int GetClosestToTargetPoint( MovementPredictionContext *context, float *resultPoint, int *areaNum = nullptr ) const;
+	int GetClosestToTargetPoint( PredictionContext *context, float *resultPoint, int *areaNum = nullptr ) const;
 };
 
 class SameFloorClusterAreasCache final : public FloorClusterAreasCache {
 	// If an area is closer to a bot, it should be considered reached
 	static constexpr float REACHABILITY_RADIUS = 128.0f;
 
-	int FindClosestToTargetPoint( MovementPredictionContext *context, int *areaNum ) const override;
+	int FindClosestToTargetPoint( PredictionContext *context, int *areaNum ) const override;
 
-	bool NeedsToBeComputed( MovementPredictionContext *context ) const override;
+	bool NeedsToBeComputed( PredictionContext *context ) const override;
 
 	bool AreaPassesCollisionTest( const Vec3 &start, int areaNum, const vec3_t mins, const vec3_t maxs ) const override;
 public:
@@ -145,9 +145,9 @@ public:
 };
 
 class NextFloorClusterAreasCache final : public FloorClusterAreasCache {
-	int FindClosestToTargetPoint( MovementPredictionContext *context, int *areaNum ) const override;
+	int FindClosestToTargetPoint( PredictionContext *context, int *areaNum ) const override;
 
-	bool NeedsToBeComputed( MovementPredictionContext *context ) const override;
+	bool NeedsToBeComputed( PredictionContext *context ) const override;
 
 	bool AreaPassesCollisionTest( const Vec3 &start, int areaNum, const vec3_t mins, const vec3_t maxs ) const override;
 public:

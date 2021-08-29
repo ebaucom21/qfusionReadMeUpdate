@@ -8,15 +8,15 @@ class UseWalkableTriggerScript: public GenericGroundMovementScript {
 
 	void GetSteeringTarget( vec3_t target ) override;
 public:
-	explicit UseWalkableTriggerScript( const Bot *bot_, BotMovementModule *module_ )
-		: GenericGroundMovementScript( bot_, module_, COLOR_RGB( 192, 0, 192 ) ) {}
+	explicit UseWalkableTriggerScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: GenericGroundMovementScript( bot_, subsystem, COLOR_RGB( 192, 0, 192 ) ) {}
 
 	void Activate( const edict_t *trigger_ ) {
 		this->trigger = trigger_;
 		GenericGroundMovementScript::Activate();
 	}
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 };
 
 #endif

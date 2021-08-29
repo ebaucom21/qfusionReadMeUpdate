@@ -16,7 +16,7 @@
 #include "bunnytobestclusterpointaction.h"
 #include "campaspotaction.h"
 #include "combatdodgetotargetaction.h"
-#include "fallbackmovementaction.h"
+#include "fallbackaction.h"
 #include "weaponjumpactions.h"
 
 #include "falldownscript.h"
@@ -85,19 +85,18 @@ public:
 	}
 };
 
-class BotMovementModule {
+class MovementSubsystem {
 	friend class Bot;
-	friend struct BotMovementState;
-	friend class MovementPredictionContext;
-	friend class BaseMovementAction;
-	friend class FallbackMovementAction;
+	friend struct MovementState;
+	friend class PredictionContext;
+	friend class BaseAction;
+	friend class FallbackAction;
 	friend class HandleTriggeredJumppadAction;
 	friend class LandOnSavedAreasAction;
 	friend class RidePlatformAction;
 	friend class SwimMovementAction;
 	friend class FlyUntilLandingAction;
 	friend class CampASpotMovementAction;
-	friend class WalkCarefullyAction;
 	friend class BunnyToStairsOrRampExitAction;
 	friend class BunnyTestingNextReachDirsAction;
 	friend class BunnyToBestVisibleReachAction;
@@ -118,7 +117,7 @@ class BotMovementModule {
 
 	Bot *const bot;
 
-	static constexpr unsigned MAX_SAVED_AREAS = MovementPredictionContext::MAX_SAVED_LANDING_AREAS;
+	static constexpr unsigned MAX_SAVED_AREAS = PredictionContext::MAX_SAVED_LANDING_AREAS;
 	wsw::StaticVector<int, MAX_SAVED_AREAS> savedLandingAreas;
 	wsw::StaticVector<int, MAX_SAVED_AREAS> savedPlatformAreas;
 
@@ -130,9 +129,9 @@ class BotMovementModule {
 	Int64Align4 lastWeaponJumpTriggeringFailedAt { 0 };
 
 	// Must be initialized before any of movement actions constructors is called
-	wsw::StaticVector<BaseMovementAction *, 20> movementActions;
+	wsw::StaticVector<BaseAction *, 20> movementActions;
 
-	FallbackMovementAction fallbackMovementAction;
+	FallbackAction fallbackMovementAction;
 	HandleTriggeredJumppadAction handleTriggeredJumppadAction;
 	LandOnSavedAreasAction landOnSavedAreasAction;
 	RidePlatformAction ridePlatformAction;
@@ -149,9 +148,9 @@ class BotMovementModule {
 	TryTriggerWeaponJumpAction tryTriggerWeaponJumpAction;
 	CorrectWeaponJumpAction correctWeaponJumpAction;
 
-	BotMovementState movementState;
+	MovementState movementState;
 
-	MovementPredictionContext predictionContext;
+	PredictionContext predictionContext;
 
 	UseWalkableNodeScript useWalkableNodeScript;
 	UseRampExitScript useRampExitScript;
@@ -170,19 +169,19 @@ class BotMovementModule {
 
 	void CheckGroundPlatform();
 
-	void ApplyPendingTurnToLookAtPoint( BotInput *input, MovementPredictionContext *context = nullptr );
-	inline void InvertInput( BotInput *input, MovementPredictionContext *context = nullptr );
-	inline void TurnInputToSide( vec3_t sideDir, int sign, BotInput *input, MovementPredictionContext *context = nullptr );
-	inline bool TryRotateInput( BotInput *input, MovementPredictionContext *context = nullptr );
+	void ApplyPendingTurnToLookAtPoint( BotInput *input, PredictionContext *context = nullptr );
+	inline void InvertInput( BotInput *input, PredictionContext *context = nullptr );
+	inline void TurnInputToSide( vec3_t sideDir, int sign, BotInput *input, PredictionContext *context = nullptr );
+	inline bool TryRotateInput( BotInput *input, PredictionContext *context = nullptr );
 	void CheckBlockingDueToInputRotation();
 
-	void ResetFailedWeaponJumpAttempt( MovementPredictionContext *context ) {
+	void ResetFailedWeaponJumpAttempt( PredictionContext *context ) {
 		assert( context->movementState->weaponJumpMovementState.IsActive() );
 		context->movementState->weaponJumpMovementState.Deactivate();
 		this->lastWeaponJumpTriggeringFailedAt = level.time;
 	}
 public:
-	explicit BotMovementModule( Bot *bot_ );
+	explicit MovementSubsystem( Bot *bot_ );
 
 	void OnInterceptedPredictedEvent( int ev, int parm ) {
 		predictionContext.OnInterceptedPredictedEvent( ev, parm );
@@ -230,7 +229,7 @@ public:
 	bool CanInterruptMovement() const;
 
 	void Frame( BotInput *input );
-	void ApplyInput( BotInput *input, MovementPredictionContext *context = nullptr );
+	void ApplyInput( BotInput *input, PredictionContext *context = nullptr );
 };
 
 #endif

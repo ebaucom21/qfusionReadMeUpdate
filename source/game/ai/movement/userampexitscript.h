@@ -11,8 +11,8 @@ class UseRampExitScript: public GenericGroundMovementScript {
 		return GetAreaMidGroundPoint( exitAreaNum, target );
 	}
 public:
-	UseRampExitScript( const Bot *bot_, BotMovementModule *module_ )
-		: GenericGroundMovementScript( bot_, module_, COLOR_RGB( 192, 0, 0 ) ) {}
+	UseRampExitScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: GenericGroundMovementScript( bot_, subsystem, COLOR_RGB( 192, 0, 0 ) ) {}
 
 	void Activate( int rampAreaNum_, int exitAreaNum_ ) {
 		this->rampAreaNum = rampAreaNum_;
@@ -20,10 +20,10 @@ public:
 		GenericGroundMovementScript::Activate();
 	}
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 };
 
-const int *TryFindBestInclinedFloorExitArea( MovementPredictionContext *context,
+const int *TryFindBestInclinedFloorExitArea( PredictionContext *context,
 											 int rampAreaNum,
 											 int forbiddenAreaNum = 0 );
 

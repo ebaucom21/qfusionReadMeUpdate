@@ -1,7 +1,7 @@
-#include "basemovementaction.h"
+#include "baseaction.h"
 #include "movementlocal.h"
 
-void HandleTriggeredJumppadAction::PlanPredictionStep( Context *context ) {
+void HandleTriggeredJumppadAction::PlanPredictionStep( PredictionContext *context ) {
 	if( !GenericCheckIsActionEnabled( context, &DummyAction() ) ) {
 		return;
 	}
@@ -22,7 +22,7 @@ void HandleTriggeredJumppadAction::PlanPredictionStep( Context *context ) {
 	botInput->Clear();
 
 	const edict_t *jumppadEntity = jumppadMovementState->JumppadEntity();
-	float startLandingAtZ = module->landOnSavedAreasAction.SaveJumppadLandingAreas( jumppadEntity );
+	float startLandingAtZ = m_subsystem->landOnSavedAreasAction.SaveJumppadLandingAreas( jumppadEntity );
 	context->movementState->flyUntilLandingMovementState.Activate( startLandingAtZ );
 	// Stop prediction (jumppad triggers are not simulated by Exec() code)
 	context->isCompleted = true;

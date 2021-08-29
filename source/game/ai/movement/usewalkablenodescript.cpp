@@ -12,7 +12,7 @@ void UseWalkableNodeScript::Activate( const vec3_t nodeOrigin_, float reachRadiu
 	GenericGroundMovementScript::Activate();
 }
 
-bool UseWalkableNodeScript::TryDeactivate( Context *context ) {
+bool UseWalkableNodeScript::TryDeactivate( PredictionContext *context ) {
 	// Call the superclass method first
 	if( GenericGroundMovementScript::TryDeactivate( context ) ) {
 		return true;
@@ -42,7 +42,7 @@ bool UseWalkableNodeScript::TryDeactivate( Context *context ) {
 	return false;
 }
 
-MovementScript *FallbackMovementAction::TryFindWalkReachFallback( Context *context, const aas_reachability_t &nextReach ) {
+MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *context, const aas_reachability_t &nextReach ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	// Allow following WALK reachabilities but make sure
@@ -61,7 +61,7 @@ MovementScript *FallbackMovementAction::TryFindWalkReachFallback( Context *conte
 		return script;
 	}
 
-	auto *script = &module->useWalkableNodeScript;
+	auto *script = &m_subsystem->useWalkableNodeScript;
 	unsigned timeout = (unsigned)( 1000.0f * sqrtf( squareDistance ) / context->GetRunSpeed() );
 	// Note: We have to add several units to the target Z, otherwise a collision test
 	// on next frame is very likely to immediately deactivate it
@@ -71,7 +71,7 @@ MovementScript *FallbackMovementAction::TryFindWalkReachFallback( Context *conte
 	return script;
 }
 
-MovementScript *FallbackMovementAction::TryFindNearbyRampAreasFallback( Context *context ) {
+MovementScript *FallbackAction::TryFindNearbyRampAreasFallback( PredictionContext *context ) {
 	int currGroundedAreaNum = context->CurrGroundedAasAreaNum();
 	if( !currGroundedAreaNum ) {
 		return nullptr;
@@ -99,7 +99,7 @@ MovementScript *FallbackMovementAction::TryFindNearbyRampAreasFallback( Context 
 			const auto &bestArea = aasWorld->Areas()[*areaNum];
 			Vec3 areaPoint( bestArea.center );
 			areaPoint.Z() = bestArea.mins[2] + 1.0f + -playerbox_stand_mins[2];
-			auto *fallback = &module->useWalkableNodeScript;
+			auto *fallback = &m_subsystem->useWalkableNodeScript;
 			fallback->Activate( areaPoint.Data(), 32.0f, *areaNum );
 			return fallback;
 		}

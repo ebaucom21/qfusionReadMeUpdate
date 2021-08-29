@@ -13,11 +13,11 @@ class BunnyToBestFloorClusterPointAction final : public BunnyTestingMultipleLook
 
 	static constexpr const char *NAME = "BunnyToBestFloorClusterPointAction";
 
-	void OnApplicationSequenceStarted( MovementPredictionContext *context ) override;
+	void OnApplicationSequenceStarted( PredictionContext *context ) override;
 
-	void OnApplicationSequenceFailed( MovementPredictionContext *context, unsigned ) override;
+	void OnApplicationSequenceFailed( PredictionContext *context, unsigned ) override;
 public:
-	explicit BunnyToBestFloorClusterPointAction( BotMovementModule *module_ );
+	explicit BunnyToBestFloorClusterPointAction( MovementSubsystem *subsystem );
 
 	void BeforePlanning() override {
 		Super::BeforePlanning();

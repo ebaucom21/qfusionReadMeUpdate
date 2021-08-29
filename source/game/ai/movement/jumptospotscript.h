@@ -20,8 +20,8 @@ public:
 	int desiredAasContents { 0 };
 	int desiredAasFlags { AREA_GROUNDED };
 
-	JumpToSpotScript( const Bot *bot_, BotMovementModule *module_ )
-		: MovementScript( bot_, module_, COLOR_RGB( 255, 0, 128 ) ) {}
+	JumpToSpotScript( const Bot *bot_, MovementSubsystem *subsystem )
+		: MovementScript( bot_, subsystem, COLOR_RGB( 255, 0, 128 ) ) {}
 
 	void Activate( const vec3_t startOrigin_,
 				   const vec3_t targetOrigin_,
@@ -31,9 +31,9 @@ public:
 				   float endAirAccelFrac_ = 0.0f,
 				   float jumpBoostSpeed_ = 0.0f );
 
-	bool TryDeactivate( MovementPredictionContext *context = nullptr ) override;
+	bool TryDeactivate( PredictionContext *context = nullptr ) override;
 
-	void SetupMovement( MovementPredictionContext *context ) override;
+	void SetupMovement( PredictionContext *context ) override;
 };
 
 #endif

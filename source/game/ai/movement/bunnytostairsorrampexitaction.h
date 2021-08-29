@@ -8,11 +8,11 @@ class BunnyToStairsOrRampExitAction: public BunnyHopAction {
 	Vec3 lookDirStorage { vec3_origin };
 	int targetFloorCluster { 0 };
 
-	bool TryFindAndSaveLookDir( MovementPredictionContext *context );
-	void TrySaveExitFloorCluster( MovementPredictionContext *context, int exitAreaNum );
+	bool TryFindAndSaveLookDir( PredictionContext *context );
+	void TrySaveExitFloorCluster( PredictionContext *context, int exitAreaNum );
 public:
-	explicit BunnyToStairsOrRampExitAction( BotMovementModule *module_ ):
-		BunnyHopAction( module_, "BunnyToStairsOrRampExitAction", COLOR_RGB( 0, 255, 255 ) ) {}
+	explicit BunnyToStairsOrRampExitAction( MovementSubsystem *subsystem ):
+		BunnyHopAction( subsystem, "BunnyToStairsOrRampExitAction", COLOR_RGB( 0, 255, 255 ) ) {}
 
 	void BeforePlanning() override {
 		BunnyHopAction::BeforePlanning();
@@ -20,8 +20,8 @@ public:
 		intendedLookDir = nullptr;
 	}
 
-	void PlanPredictionStep( MovementPredictionContext *context ) override;
-	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
+	void PlanPredictionStep( PredictionContext *context ) override;
+	void CheckPredictionStepResults( PredictionContext *context ) override;
 };
 
 #endif

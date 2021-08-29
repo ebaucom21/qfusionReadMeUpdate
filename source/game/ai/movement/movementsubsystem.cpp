@@ -1,11 +1,11 @@
 #include "../bot.h"
-#include "movementmodule.h"
+#include "movementsubsystem.h"
 #include "movementlocal.h"
 #include "environmenttracecache.h"
 #include "bestjumpablespotdetector.h"
 #include "movementscript.h"
 
-BotMovementModule::BotMovementModule( Bot *bot_ )
+MovementSubsystem::MovementSubsystem( Bot *bot_ )
 	: bot( bot_ )
 	, weaponJumpAttemptsRateLimiter( 2 )
 	, fallbackMovementAction( this )
@@ -35,7 +35,7 @@ BotMovementModule::BotMovementModule( Bot *bot_ )
 	movementState.Reset();
 }
 
-bool BotMovementModule::CanChangeWeapons() const {
+bool MovementSubsystem::CanChangeWeapons() const {
 	auto &weaponJumpState = movementState.weaponJumpMovementState;
 	if( weaponJumpState.IsActive() ) {
 		return weaponJumpState.hasTriggeredWeaponJump;
@@ -51,7 +51,7 @@ bool BotMovementModule::CanChangeWeapons() const {
 	return !limiter.TryAcquire( levelTime + 384 );
 }
 
-bool BotMovementModule::CanInterruptMovement() const {
+bool MovementSubsystem::CanInterruptMovement() const {
 	if( movementState.jumppadMovementState.IsActive() ) {
 		return false;
 	}
@@ -67,7 +67,7 @@ bool BotMovementModule::CanInterruptMovement() const {
 	return !( self->groundentity && self->groundentity->use == Use_Plat && self->groundentity->moveinfo.state != STATE_TOP );
 }
 
-void BotMovementModule::Frame( BotInput *input ) {
+void MovementSubsystem::Frame( BotInput *input ) {
 	CheckBlockingDueToInputRotation();
 
 	ApplyPendingTurnToLookAtPoint( input );
@@ -82,14 +82,14 @@ void BotMovementModule::Frame( BotInput *input ) {
 	}
 
 	MovementActionRecord movementActionRecord;
-	BaseMovementAction *movementAction = predictionContext.GetActionAndRecordForCurrTime( &movementActionRecord );
+	BaseAction *movementAction = predictionContext.GetActionAndRecordForCurrTime( &movementActionRecord );
 
 	movementAction->ExecActionRecord( &movementActionRecord, input, nullptr );
 
 	CheckGroundPlatform();
 }
 
-void BotMovementModule::CheckGroundPlatform() {
+void MovementSubsystem::CheckGroundPlatform() {
 	const edict_t *self = game.edicts + bot->EntNum();
 	if( !self->groundentity ) {
 		return;
@@ -112,11 +112,11 @@ void BotMovementModule::CheckGroundPlatform() {
 	ridePlatformAction.TrySaveExitAreas( nullptr, self->groundentity );
 }
 
-void BotMovementModule::CheckBlockingDueToInputRotation() {
+void MovementSubsystem::CheckBlockingDueToInputRotation() {
 	if( movementState.campingSpotState.IsActive() ) {
 		return;
 	}
-	if( movementState.inputRotation == BotInputRotation::NONE ) {
+	if( movementState.inputRotation == InputRotation::NONE ) {
 		return;
 	}
 
@@ -154,8 +154,8 @@ void BotMovementModule::CheckBlockingDueToInputRotation() {
 	lastInputRotationFailureAt = level.time;
 }
 
-void BotMovementModule::ApplyPendingTurnToLookAtPoint( BotInput *botInput, MovementPredictionContext *context ) {
-	BotPendingLookAtPointState *pendingLookAtPointState;
+void MovementSubsystem::ApplyPendingTurnToLookAtPoint( BotInput *botInput, PredictionContext *context ) {
+	PendingLookAtPointState *pendingLookAtPointState;
 	AiEntityPhysicsState *entityPhysicsState_;
 	unsigned frameTime;
 	if( context ) {
@@ -191,8 +191,8 @@ void BotMovementModule::ApplyPendingTurnToLookAtPoint( BotInput *botInput, Movem
 static const char *lastNoLookDirAction = "";
 static const char *lastNoUcmdAction = "";
 
-void BotMovementModule::ApplyInput( BotInput *input, MovementPredictionContext *context ) {
-	constexpr const char *tag = "BotMovementModule::ApplyInput";
+void MovementSubsystem::ApplyInput( BotInput *input, PredictionContext *context ) {
+	constexpr const char *tag = "MovementSubsystem::ApplyInput";
 	// While these conditions can hold from time to time and that's not a bug
 	// it's better to eliminate these cases eventually completely.
 	if( !input->isLookDirSet ) {
@@ -239,10 +239,10 @@ void BotMovementModule::ApplyInput( BotInput *input, MovementPredictionContext *
 	}
 }
 
-bool BotMovementModule::TryRotateInput( BotInput *input, MovementPredictionContext *context ) {
+bool MovementSubsystem::TryRotateInput( BotInput *input, PredictionContext *context ) {
 
 	const float *botOrigin;
-	BotInputRotation *prevRotation;
+	InputRotation *prevRotation;
 
 	if( context ) {
 		botOrigin = context->movementState->entityPhysicsState.Origin();
@@ -254,15 +254,15 @@ bool BotMovementModule::TryRotateInput( BotInput *input, MovementPredictionConte
 
 	const float *const keptInFovPoint = bot->GetKeptInFovPoint();
 	if( !keptInFovPoint || nextRotateInputAttemptAt > level.time ) {
-		*prevRotation = BotInputRotation::NONE;
+		*prevRotation = InputRotation::NONE;
 		return false;
 	}
 
 	// Cut off an expensive PVS call early
-	if( input->IsRotationAllowed( BotInputRotation::ALL_KINDS_MASK ) ) {
+	if( input->IsRotationAllowed( InputRotation::ALL_KINDS_MASK ) ) {
 		// We do not utilize PVS cache since it might produce different results for predicted and actual bot origin
 		if( !trap_inPVS( keptInFovPoint, botOrigin ) ) {
-			*prevRotation = BotInputRotation::NONE;
+			*prevRotation = InputRotation::NONE;
 			return false;
 		}
 	}
@@ -271,40 +271,40 @@ bool BotMovementModule::TryRotateInput( BotInput *input, MovementPredictionConte
 	selfToPoint -= botOrigin;
 	selfToPoint.NormalizeFast();
 
-	if( input->IsRotationAllowed( BotInputRotation::BACK ) ) {
-		float backDotThreshold = ( *prevRotation == BotInputRotation::BACK ) ? -0.3f : -0.5f;
+	if( input->IsRotationAllowed( InputRotation::BACK ) ) {
+		float backDotThreshold = ( *prevRotation == InputRotation::BACK ) ? -0.3f : -0.5f;
 		if( selfToPoint.Dot( input->IntendedLookDir() ) < backDotThreshold ) {
-			*prevRotation = BotInputRotation::BACK;
+			*prevRotation = InputRotation::BACK;
 			InvertInput( input, context );
 			return true;
 		}
 	}
 
-	if( input->IsRotationAllowed( BotInputRotation::SIDE_KINDS_MASK ) ) {
+	if( input->IsRotationAllowed( InputRotation::SIDE_KINDS_MASK ) ) {
 		vec3_t intendedRightDir, intendedUpDir;
 		MakeNormalVectors( input->IntendedLookDir().Data(), intendedRightDir, intendedUpDir );
 		const float dotRight = selfToPoint.Dot( intendedRightDir );
 
-		if( input->IsRotationAllowed( BotInputRotation::RIGHT ) ) {
-			const float rightDotThreshold = ( *prevRotation == BotInputRotation::RIGHT ) ? 0.6f : 0.7f;
+		if( input->IsRotationAllowed( InputRotation::RIGHT ) ) {
+			const float rightDotThreshold = ( *prevRotation == InputRotation::RIGHT ) ? 0.6f : 0.7f;
 			if( dotRight > rightDotThreshold ) {
-				*prevRotation = BotInputRotation::RIGHT;
+				*prevRotation = InputRotation::RIGHT;
 				TurnInputToSide( intendedRightDir, +1, input, context );
 				return true;
 			}
 		}
 
-		if( input->IsRotationAllowed( BotInputRotation::LEFT ) ) {
-			const float leftDotThreshold = ( *prevRotation == BotInputRotation::LEFT ) ? -0.6f : -0.7f;
+		if( input->IsRotationAllowed( InputRotation::LEFT ) ) {
+			const float leftDotThreshold = ( *prevRotation == InputRotation::LEFT ) ? -0.6f : -0.7f;
 			if( dotRight < leftDotThreshold ) {
-				*prevRotation = BotInputRotation::LEFT;
+				*prevRotation = InputRotation::LEFT;
 				TurnInputToSide( intendedRightDir, -1, input, context );
 				return true;
 			}
 		}
 	}
 
-	*prevRotation = BotInputRotation::NONE;
+	*prevRotation = InputRotation::NONE;
 	return false;
 }
 
@@ -325,7 +325,7 @@ static inline void SetupInputForTransition( BotInput *input, const edict_t *grou
 	}
 }
 
-void BotMovementModule::InvertInput( BotInput *input, MovementPredictionContext *context ) {
+void MovementSubsystem::InvertInput( BotInput *input, PredictionContext *context ) {
 	input->SetForwardMovement( -input->ForwardMovement() );
 	input->SetRightMovement( -input->RightMovement() );
 
@@ -356,7 +356,7 @@ void BotMovementModule::InvertInput( BotInput *input, MovementPredictionContext 
 	input->SetForwardMovement( -1 );
 }
 
-void BotMovementModule::TurnInputToSide( vec3_t sideDir, int sign, BotInput *input, MovementPredictionContext *context ) {
+void MovementSubsystem::TurnInputToSide( vec3_t sideDir, int sign, BotInput *input, PredictionContext *context ) {
 	VectorScale( sideDir, sign, sideDir );
 
 	const edict_t *groundEntity;
@@ -387,11 +387,11 @@ void BotMovementModule::TurnInputToSide( vec3_t sideDir, int sign, BotInput *inp
 	SetupInputForTransition( input, groundEntity, sideDir );
 }
 
-MovementPredictionContext::MovementPredictionContext( BotMovementModule *module_ )
-	: bot( module_->bot )
-	, module( module_ )
-	, sameFloorClusterAreasCache( module->bot )
-	, nextFloorClusterAreasCache( module->bot )
+PredictionContext::PredictionContext( MovementSubsystem *subsystem )
+	: bot( subsystem->bot )
+	, m_subsystem( subsystem )
+	, sameFloorClusterAreasCache( m_subsystem->bot )
+	, nextFloorClusterAreasCache( m_subsystem->bot )
 	, movementState( nullptr )
 	, record( nullptr )
 	, oldPlayerState( nullptr )
@@ -408,7 +408,7 @@ MovementPredictionContext::MovementPredictionContext( BotMovementModule *module_
 	, cannotApplyAction( false )
 	, shouldRollback( false ) {}
 
-MovementPredictionContext::HitWhileRunningTestResult MovementPredictionContext::MayHitWhileRunning() {
+PredictionContext::HitWhileRunningTestResult PredictionContext::MayHitWhileRunning() {
 	if( const auto *cachedResult = mayHitWhileRunningCachesStack.GetCached() ) {
 		return *cachedResult;
 	}

@@ -1,7 +1,7 @@
 #include "jumpoverbarrierscript.h"
 #include "movementlocal.h"
 
-bool JumpOverBarrierScript::TryDeactivate( Context *context ) {
+bool JumpOverBarrierScript::TryDeactivate( PredictionContext *context ) {
 	assert( status == PENDING );
 
 	if( level.time - activatedAt > 750 ) {
@@ -25,7 +25,7 @@ bool JumpOverBarrierScript::TryDeactivate( Context *context ) {
 	return entityPhysicsState->Origin()[2] >= top[2];
 }
 
-void JumpOverBarrierScript::SetupMovement( Context *context ) {
+void JumpOverBarrierScript::SetupMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
