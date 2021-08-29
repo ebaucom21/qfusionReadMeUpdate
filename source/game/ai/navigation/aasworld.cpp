@@ -2340,7 +2340,7 @@ bool AiAasWorld::AreAreasInPvs( int areaNum1, int areaNum2 ) const {
 	assert( areaNum2 >= 0 );
 
 	// Return false if some area is dummy
-	if( !( areaNum2 * areaNum1 ) ) {
+	if( ( areaNum2 * areaNum1 ) == 0 ) {
 		return false;
 	}
 

@@ -278,12 +278,8 @@ class CachedEventsToPlayersMap {
 		int32_t playerEntNum;
 	};
 
-	Entry entries[MAX_EDICTS];
+	Entry entries[MAX_EDICTS] {};
 public:
-	CachedEventsToPlayersMap() {
-		memset( entries, 0, sizeof( entries ) );
-	}
-
 	int PlayerEntNumForEvent( int eventEntNum );
 
 	const edict_t *PlayerEntForEvent( int eventEntNum ) {
@@ -437,12 +433,8 @@ class PlayerTeleOutEventsCache {
 		Int64Align4 computedAt;
 		uint16_t triggerEntNum;
 		uint16_t playerEntNum;
-	} entries[MAX_EDICTS];
+	} entries[MAX_EDICTS] {};
 public:
-	PlayerTeleOutEventsCache() {
-		memset( entries, 0, sizeof( entries ) );
-	}
-
 	const edict_t *GetPlayerAndDestOriginByEvent( const edict_t *teleportOutEvent, const float **origin );
 };
 

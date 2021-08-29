@@ -7,7 +7,6 @@ void BotItemsSelector::UpdateInternalItemAndGoalWeights() {
 	memset( internalPickupGoalWeights, 0, sizeof( internalPickupGoalWeights ) );
 
 	const edict_t *self = game.edicts + bot->EntNum();
-	const auto *inventory = self->r.client->ps.inventory;
 
 	const auto *const botTeam = AiBaseTeam::GetTeamForNum( self->s.team );
 	const auto levelTime = level.time;

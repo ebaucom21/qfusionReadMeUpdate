@@ -9,8 +9,8 @@
 template <unsigned Limit = 32>
 class ArrayBasedFringe {
 	int fringe[Limit];
-	int head { 0 };
-	int tail { 0 };
+	unsigned head { 0 };
+	unsigned tail { 0 };
 public:
 	bool IsEmpty() const { return head >= tail; }
 

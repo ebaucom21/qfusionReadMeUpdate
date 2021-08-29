@@ -235,8 +235,8 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 				rampEndArea = reachAreaNum;
 				maxAreaHeight = reachArea.mins[2];
 			}
-			// We've found two areas
-			if( rampStartArea * rampEndArea ) {
+			// If we've found two areas (avoid an extra branch by using a multiplication)
+			if( ( rampStartArea * rampEndArea ) != 0 ) {
 				break;
 			}
 		}

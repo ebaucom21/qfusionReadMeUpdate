@@ -89,16 +89,16 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 	int numToAreas;
 
 	const edict_t *const fromEnt = game.edicts + fromEntNum;
-	if( Bot *bot = fromEnt->bot ) {
-		routeCache = fromEnt->bot->RouteCache();
-		numFromAreas = fromEnt->bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
+	if( Bot *const bot = fromEnt->bot ) {
+		routeCache = bot->RouteCache();
+		numFromAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
 	} else {
 		routeCache = AiAasRouteCache::Shared();
 		numFromAreas = FindEntityAreas( fromEnt, fromAreaNums );
 	}
 
 	const edict_t *const toEnt = game.edicts + toEntNum;
-	if( Bot *bot = toEnt->bot ) {
+	if( Bot *const bot = toEnt->bot ) {
 		numToAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( toAreaNums );
 	} else {
 		numToAreas = FindEntityAreas( toEnt, toAreaNums );

@@ -884,7 +884,7 @@ T *TacticalSpotsBuilder::AllocItem( T **items, int *numItems, int *itemsCapacity
 	}
 	T *newData = (T *)Q_malloc( sizeof( T ) * ( *itemsCapacity ) );
 	if( *items ) {
-		memcpy( newData, *items, sizeof( T ) * ( *numItems ) );
+		std::copy( *items, *items + *numItems, newData );
 		Q_free( *items );
 	}
 	*items = newData;

@@ -15,14 +15,15 @@ enum class InputRotation : uint8_t {
 class alignas ( 4 )BotInput {
 	friend class PredictionContext;
 	// Todo: Pack since it is required to be normalized now?
-	Vec3 intendedLookDir;
+	Vec3 intendedLookDir { 0, 0, 0 };
 	// A copy of self->s.angles for modification
 	// We do not want to do deeply hidden angles update in the aiming functions,
 	// the BotInput should be only mutable thing in the related code.
 	// Should be copied back to self->s.angles if it has been modified when the BotInput gets applied.
-	Vec3 alreadyComputedAngles;
-	InputRotation allowedRotationMask;
-	uint8_t turnSpeedMultiplier;
+	Vec3 alreadyComputedAngles { 0, 0, 0 };
+	InputRotation allowedRotationMask { InputRotation::ALL_KINDS_MASK };
+	uint8_t turnSpeedMultiplier { 16 };
+	// Unfortunately, we can't use bitfield member initializers with pre-20 language standards
 	signed ucmdForwardMove : 2;
 	signed ucmdSideMove : 2;
 	signed ucmdUpMove : 2;
@@ -40,20 +41,28 @@ public:
 	bool canOverrideLookVec : 1;
 	bool shouldOverrideLookVec : 1;
 	bool canOverridePitch : 1;
-	bool applyExtraViewPrecision : 1;
 
-	BotInput()
-		: intendedLookDir( NAN, NAN, NAN ),
-		  alreadyComputedAngles( NAN, NAN, NAN )
-	{
-		Clear();
+	BotInput() {
+		// We have to put this code block to the constructor too in order to suppress Clang-Tidy warnings
+		ucmdForwardMove = ucmdSideMove = ucmdUpMove = 0;
+		attackButton = specialButton = walkButton = false;
+		fireScriptWeapon = false;
+		isUcmdSet = isLookDirSet = false;
+		hasAlreadyComputedAngles = false;
+		canOverrideUcmd = shouldOverrideUcmd = false;
+		canOverrideLookVec = shouldOverrideLookVec = canOverridePitch = false;
 	}
 
 	void Clear() {
-		memset( this, 0, sizeof( BotInput ) );
-		// Restore default values overwritten by the memset() call
-		turnSpeedMultiplier = 16;
 		allowedRotationMask = InputRotation::ALL_KINDS_MASK;
+		turnSpeedMultiplier = 16;
+		ucmdForwardMove = ucmdSideMove = ucmdUpMove = 0;
+		attackButton = specialButton = walkButton = false;
+		fireScriptWeapon = false;
+		isUcmdSet = isLookDirSet = false;
+		hasAlreadyComputedAngles = false;
+		canOverrideUcmd = shouldOverrideUcmd = false;
+		canOverrideLookVec = shouldOverrideLookVec = canOverridePitch = false;
 	}
 
 	void SetAllowedRotationMask( InputRotation rotationMask ) {

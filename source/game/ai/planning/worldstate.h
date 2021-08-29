@@ -64,6 +64,7 @@ public:
 			case SatisfyOp::LS: return value < that.value;
 			case SatisfyOp::LE: return value <= that.value;
 		}
+		throw std::logic_error( "Unreachable" );
 	}
 
 	template <typename P>

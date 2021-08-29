@@ -58,7 +58,7 @@ void TacticalSpotsProblemSolver::pruneByReachTablesFromOrigin( SpotsAndScoreVect
 	candidates.truncate( numKeptSpots );
 }
 
-void TacticalSpotsProblemSolver::checkSpotsReachFromOrigin( SpotsAndScoreVector &candidates, int maxResultSpots ) {
+void TacticalSpotsProblemSolver::checkSpotsReachFromOrigin( SpotsAndScoreVector &candidates, unsigned maxResultSpots ) {
 	const auto *const routeCache = originParams.routeCache;
 	const auto *const spots = tacticalSpotsRegistry->spots;
 
@@ -78,7 +78,7 @@ void TacticalSpotsProblemSolver::checkSpotsReachFromOrigin( SpotsAndScoreVector 
 		}
 
 		auto &criteriaScores = scores[spotAndScore.scoreIndex];
-		criteriaScores.set( SpotSortCriterion::TravelTime, 1.0f - travelTime * factorNormalizationMultiplier );
+		criteriaScores.set( SpotSortCriterion::TravelTime, 1.0f - (float)travelTime * factorNormalizationMultiplier );
 		candidates[numKeptSpots++] = spotAndScore;
 		if( numKeptSpots >= maxResultSpots ) {
 			break;
@@ -119,7 +119,8 @@ void TacticalSpotsProblemSolver::pruneByReachTablesFromOriginAndBack( SpotsAndSc
 	spotsAndScores.truncate( numKeptSpots );
 }
 
-void TacticalSpotsProblemSolver::checkSpotsReachFromOriginAndBack( SpotsAndScoreVector &candidates, int maxResultSpots ) {
+void TacticalSpotsProblemSolver::checkSpotsReachFromOriginAndBack( SpotsAndScoreVector &candidates,
+																   unsigned maxResultSpots ) {
 	const auto *const routeCache = originParams.routeCache;
 	const auto *const spots = tacticalSpotsRegistry->spots;
 
@@ -145,7 +146,7 @@ void TacticalSpotsProblemSolver::checkSpotsReachFromOriginAndBack( SpotsAndScore
 			continue;
 		}
 
-		float factor = 1.0f - ( ( toTravelTime + backTravelTime ) * factorNormalizationMultiplier );
+		float factor = 1.0f - ( (float)( toTravelTime + backTravelTime ) * factorNormalizationMultiplier );
 		scores[spotAndScore.scoreIndex].set( SpotSortCriterion::TravelTime, factor );
 		candidates[numKeptSpots++] = spotAndScore;
 		if( numKeptSpots >= maxResultSpots ) {
@@ -302,7 +303,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 
 template <typename SpotsLikeVector>
 int TacticalSpotsProblemSolver::makeResultsPruningByProximityImpl( const SpotsLikeVector &spotsAndScores,
-																  vec3_t *origins, int maxSpots ) {
+																   vec3_t *origins, unsigned maxSpots ) {
 	const auto resultsSize = spotsAndScores.size();
 	if( maxSpots == 0 || resultsSize == 0 ) {
 		return 0;
@@ -318,7 +319,7 @@ int TacticalSpotsProblemSolver::makeResultsPruningByProximityImpl( const SpotsLi
 	const float squareProximityThreshold = problemParams.spotProximityThreshold * problemParams.spotProximityThreshold;
 	bool *const isSpotExcluded = tacticalSpotsRegistry->cleanAndGetExcludedSpotsMask();
 
-	int numSpots_ = 0;
+	unsigned numSpots_ = 0;
 	unsigned keptSpotIndex = 0;
 	for(;; ) {
 		if( keptSpotIndex >= resultsSize ) {
@@ -358,12 +359,12 @@ int TacticalSpotsProblemSolver::makeResultsPruningByProximityImpl( const SpotsLi
 }
 
 int TacticalSpotsProblemSolver::makeResultsPruningByProximity( const SpotsAndScoreVector &spotsAndScores,
-																 vec3_t *origins, int maxSpots ) {
+																 vec3_t *origins, unsigned maxSpots ) {
 	return makeResultsPruningByProximityImpl( spotsAndScores, origins, maxSpots );
 }
 
 int TacticalSpotsProblemSolver::makeResultsPruningByProximity( const OriginAndScoreVector &originsAndScores,
-																 vec3_t *origins, int maxSpots ) {
+																 vec3_t *origins, unsigned maxSpots ) {
 	return makeResultsPruningByProximityImpl( originsAndScores, origins, maxSpots );
 }
 
@@ -386,8 +387,8 @@ void TacticalSpotsProblemSolver::sortImpl( SpotLikeVector &v ) {
 			assert( std::fabs( rightVal ) < 1.01f );
 			assert( valueGroupsDistinctionScale > 1 );
 			// Values should belong to the [-valueGroupsDistinctionScale, +valueGroupsDistinctionScale] range
-			const int comparedLeftVal = (int)( valueGroupsDistinctionScale * leftVal );
-			const int comparedRightVal = (int)( valueGroupsDistinctionScale * rightVal );
+			const int comparedLeftVal = (int)( (float)valueGroupsDistinctionScale * leftVal );
+			const int comparedRightVal = (int)( (float)valueGroupsDistinctionScale * rightVal );
 			// A mismatch means that we have to yield a result
 			if( comparedLeftVal != comparedRightVal ) {
 				// Best spots should come first in a sequence of spots sorted by this comparator

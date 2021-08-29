@@ -82,11 +82,11 @@ protected:
 
 	virtual void pruneByReachTablesFromOrigin( SpotsAndScoreVector &spots );
 
-	virtual void checkSpotsReachFromOrigin( SpotsAndScoreVector &spots, int maxSpots );
+	virtual void checkSpotsReachFromOrigin( SpotsAndScoreVector &spots, unsigned maxSpots );
 
 	virtual void pruneByReachTablesFromOriginAndBack( SpotsAndScoreVector &spots );
 
-	virtual void checkSpotsReachFromOriginAndBack( SpotsAndScoreVector &spots, int maxSpots );
+	virtual void checkSpotsReachFromOriginAndBack( SpotsAndScoreVector &spots, unsigned maxSpots );
 
 	void pruneByReachTables( SpotsAndScoreVector &spots ) {
 		if( problemParams.checkToAndBackReach ) {
@@ -96,7 +96,7 @@ protected:
 		}
 	}
 
-	void checkSpotsReach( SpotsAndScoreVector &spotsAndScores, int maxResultSpots ) {
+	void checkSpotsReach( SpotsAndScoreVector &spotsAndScores, unsigned maxResultSpots ) {
 		if( problemParams.checkToAndBackReach ) {
 			checkSpotsReachFromOriginAndBack( spotsAndScores, maxResultSpots );
 		} else {
@@ -106,20 +106,20 @@ protected:
 
 	virtual void applyEnemiesInfluence( SpotsAndScoreVector &spotsAndScores );
 
-	int makeResultsPruningByProximity( const SpotsAndScoreVector &spotsAndScores, vec3_t *origins, int maxSpots );
-	int makeResultsPruningByProximity( const OriginAndScoreVector &originsAndScores, vec3_t *origins, int maxSpots );
+	int makeResultsPruningByProximity( const SpotsAndScoreVector &spotsAndScores, vec3_t *origins, unsigned maxSpots );
+	int makeResultsPruningByProximity( const OriginAndScoreVector &originsAndScores, vec3_t *origins, unsigned maxSpots );
 
 	// TODO: We don't need a non-sorting version?
-	void sortAndTakeNBestIfOptimizingAggressively( SpotsAndScoreVector &spotsAndScores, int limit ) {
-		assert( limit > 0 && limit <= MAX_SPOTS );
+	void sortAndTakeNBestIfOptimizingAggressively( SpotsAndScoreVector &spotsAndScores, unsigned limit ) {
+		assert( limit <= MAX_SPOTS );
 		if( !problemParams.optimizeAggressively ) {
 			return;
 		}
-		if( spotsAndScores.size() <= (unsigned)limit ) {
+		if( spotsAndScores.size() <= limit ) {
 			return;
 		}
 		sort( spotsAndScores );
-		spotsAndScores.truncate( (unsigned)limit );
+		spotsAndScores.truncate( limit );
 	}
 
 	template <typename SpotLikeVector>
@@ -139,7 +139,7 @@ private:
 	const BaseProblemParams &problemParams;
 
 	template <typename SpotsAndScores>
-	int makeResultsPruningByProximityImpl( const SpotsAndScores &spotsAndScores, vec3_t *origins, int maxSpots );
+	int makeResultsPruningByProximityImpl( const SpotsAndScores &spotsAndScores, vec3_t *origins, unsigned maxSpots );
 
 	// For debugging
 	unsigned addedCriteriaMask { 0 };

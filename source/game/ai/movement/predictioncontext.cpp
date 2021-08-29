@@ -337,21 +337,21 @@ void PredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, vec3_t con
 
 	nearbyTriggersCache.ensureValidForBounds( mins, maxs );
 
-	for( int i = 0; i < nearbyTriggersCache.numJumppadEnts; ++i ) {
+	for( unsigned i = 0; i < nearbyTriggersCache.numJumppadEnts; ++i ) {
 		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.jumppadEntNums[i] ) ) {
 			frameEvents.hasTouchedJumppad = true;
 			break;
 		}
 	}
 
-	for( int i = 0; i < nearbyTriggersCache.numTeleportEnts; ++i ) {
+	for( unsigned i = 0; i < nearbyTriggersCache.numTeleportEnts; ++i ) {
 		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.teleportEntNums[i] ) ) {
 			frameEvents.hasTouchedTeleporter = true;
 			break;
 		}
 	}
 
-	for( int i = 0; i < nearbyTriggersCache.numPlatformEnts; ++i ) {
+	for( unsigned i = 0; i < nearbyTriggersCache.numPlatformEnts; ++i ) {
 		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.platformEntNums[i] ) ) {
 			frameEvents.hasTouchedPlatform = true;
 			break;
@@ -359,15 +359,15 @@ void PredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, vec3_t con
 	}
 
 	if ( nearbyTriggersCache.numOtherEnts <= FrameEvents::MAX_TOUCHED_OTHER_TRIGGERS ) {
-		for( int i = 0; i < nearbyTriggersCache.numOtherEnts; ++i ) {
-			uint16_t entNum = nearbyTriggersCache.otherEntNums[i];
+		for( unsigned i = 0; i < nearbyTriggersCache.numOtherEnts; ++i ) {
+			const uint16_t entNum = nearbyTriggersCache.otherEntNums[i];
 			if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
 				frameEvents.otherTouchedTriggerEnts[frameEvents.numOtherTouchedTriggers++] = entNum;
 			}
 		}
 	} else {
-		for( int i = 0; i < nearbyTriggersCache.numOtherEnts; ++i ) {
-			uint16_t entNum = nearbyTriggersCache.otherEntNums[i];
+		for( unsigned i = 0; i < nearbyTriggersCache.numOtherEnts; ++i ) {
+			const uint16_t entNum = nearbyTriggersCache.otherEntNums[i];
 			if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
 				frameEvents.otherTouchedTriggerEnts[frameEvents.numOtherTouchedTriggers++] = entNum;
 				if( frameEvents.numOtherTouchedTriggers == FrameEvents::MAX_TOUCHED_OTHER_TRIGGERS ) {
@@ -550,7 +550,6 @@ BaseAction *PredictionContext::SuggestDefaultAction() {
 	// (these kinds of areas are still troublesome for bot movement).
 	auto *const defaultBunnyHopAction = &m_subsystem->bunnyToStairsOrRampExitAction;
 	auto *const combatMovementAction = &m_subsystem->combatDodgeSemiRandomlyToTargetAction;
-	auto *const savedCombatNextAction = combatMovementAction->allowFailureUsingThatAsNextAction;
 	BaseAction *suggestedAction = defaultBunnyHopAction;
 	if( bot->ShouldSkinBunnyInFavorOfCombatMovement() ) {
 		// Do not try bunnying first and start from this combat action directly
