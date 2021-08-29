@@ -11,6 +11,7 @@ Item {
     property color baseColor: "black"
 
     property int playersPerRow: 3
+    property int playersInFirstRow: playersPerRow
     readonly property int numPlayers: model ? model.length : 0
 
     visible: numPlayers
@@ -48,18 +49,39 @@ Item {
 
         Repeater {
             id: rowsRepeater
-            model: numPlayers ? Math.max(numPlayers / playersPerRow, 1) : 0
+            model: {
+                if (!numPlayers) {
+                    0
+                } else if (numPlayers <= playersInFirstRow) {
+                    1
+                } else {
+                    1 + Math.floor((numPlayers - playersInFirstRow) / playersPerRow) + 1
+                }
+            }
             delegate: Row {
                 Layout.alignment: Qt.AlignHCenter
                 readonly property int rowIndex: index
                 spacing: 16
                 Repeater {
-                    model: (rowIndex !== Math.floor(numPlayers / playersPerRow)) ?
-                        playersPerRow : (numPlayers % playersPerRow)
+                    model: {
+                        if (rowIndex === 0) {
+                            Math.min(numPlayers, playersInFirstRow)
+                        } else if(rowIndex + 1 != rowsRepeater.count) {
+                            playersPerRow
+                        } else {
+                            (numPlayers - playersInFirstRow) % playersPerRow
+                        }
+                    }
                     delegate: Row {
                         id: playerItem
                         spacing: 8
-                        readonly property int listIndex: rowIndex * playersPerRow + index
+                        readonly property int listIndex: {
+                            if (rowIndex === 0) {
+                                index
+                            } else {
+                                playersInFirstRow + (rowIndex - 1) * playersPerRow + index
+                            }
+                        }
                         Label {
                             width: implicitWidth + 8
                             horizontalAlignment: Qt.AlignLeft

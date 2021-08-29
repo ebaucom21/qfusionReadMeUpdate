@@ -56,18 +56,21 @@ Rectangle {
 
     ScoreboardSpecsPane {
         id: challengersPane
+        playersPerRow: 3
+        playersInFirstRow: 2
         anchors.top: teamTablesLoader.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.tableWidth - root.baseCellWidth
         height: implicitHeight
         model: scoreboard.challengersModel
-        playersPerRow: 2
         title: "Challengers"
     }
 
     ScoreboardSpecsPane {
         id: specsPane
+        playersPerRow: 3
+        playersInFirstRow: 3
         anchors.top: challengersPane.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
@@ -79,6 +82,8 @@ Rectangle {
 
     ScoreboardSpecsPane {
         id: chasersPane
+        playersPerRow: 3
+        playersInFirstRow: 3
         visible: scoreboard.hasChasers && scoreboard.chasersModel.length
         anchors.top: specsPane.bottom
         anchors.topMargin: 48
