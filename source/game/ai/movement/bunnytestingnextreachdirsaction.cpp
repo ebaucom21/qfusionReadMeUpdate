@@ -206,12 +206,12 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 
 	const float squareDistanceToArea = areaPoint.SquareDistanceTo( traceStartPoint );
 	// Skip way too close areas (otherwise the bot might fall into endless looping)
-	if( squareDistanceToArea < SQUARE( 128 ) ) {
+	if( squareDistanceToArea < SQUARE( 72 ) ) {
 		return true;
 	}
 
 	// Skip way too far areas (this is mainly an optimization for the following SolidWorldTrace() call)
-	if( squareDistanceToArea > SQUARE( 1024 + 512 ) ) {
+	if( squareDistanceToArea > SQUARE( 1024 ) ) {
 		return true;
 	}
 
@@ -226,6 +226,8 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 		return true;
 	}
 
+	bool dropDirPriority = false;
+
 	// Make sure the bot can see the ground
 	// On failure, restore minScore (it might have been set to the value of the rejected area score on this loop step)
 	if( startFloorClusterNum && startFloorClusterNum == aasFloorClusterNums[areaNum] ) {
@@ -233,8 +235,10 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 			return true;
 		}
 	} else {
+		// TraceArcInSolidWorld() is very coarse and should not be 100% trusted.
+		// Take the dir but make sure it gets tested last.
 		if( !TraceArcInSolidWorld( traceStartPoint.Data(), areaPoint.Data() ) ) {
-			return true;
+			dropDirPriority = true;
 		}
 
 		// This is very likely to indicate a significant elevation of the area over the bot area.
@@ -249,8 +253,17 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 		return false;
 	}
 
-	// Give next-in-chain areas greater scores
-	new( candidatesBegin + numCandidates )AreaAndScore( areaNum, numCandidates );
+	float score;
+	if( dropDirPriority ) {
+		// Further dirs get a greater (less-modulo negative) score in the same priority class,
+		// but these dirs should get tested after all dirs with a positive score.
+		score = -Q_Rcp( (float)( numCandidates + 1 ) );
+	} else {
+		// Further dirs get a greater score
+		score = (float)( numCandidates + 1 );
+	}
+
+	new( candidatesBegin + numCandidates )AreaAndScore( areaNum, score );
 	numCandidates++;
 	return true;
 }
