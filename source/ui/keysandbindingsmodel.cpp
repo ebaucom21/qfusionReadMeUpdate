@@ -265,8 +265,7 @@ struct ChangedSignalNameComposer {
 	char m_buffer[64];
 	bool m_initialized { false };
 
-	explicit ChangedSignalNameComposer( const wsw::StringView &signalPrefix )
-		: m_prefix( signalPrefix ) {}
+	explicit ChangedSignalNameComposer( const wsw::StringView &signalPrefix ): m_prefix( signalPrefix ) {}
 
 	void initBuffer();
 
@@ -283,12 +282,11 @@ void ChangedSignalNameComposer::initBuffer() {
 }
 
 auto ChangedSignalNameComposer::getSignalNameForNum( int num ) -> const char * {
-	assert( (unsigned)num <= (unsigned)9 );
+	assert( num >= 1 && num <= 9 );
 	if( !m_initialized ) {
 		initBuffer();
 		m_initialized = true;
 	}
-
 	m_buffer[m_prefix.length()] = (char)( num + '0' );
 	return m_buffer;
 }
@@ -297,12 +295,11 @@ void KeysAndBindingsModel::reloadKeyBindings( QJsonArray *rowsBegin, QJsonArray 
 											  const wsw::StringView &changedSignalPrefix ) {
 	ChangedSignalNameComposer signalNameComposer( changedSignalPrefix );
 	for( QJsonArray *row = rowsBegin; row != rowsEnd; ++row ) {
-		if( !reloadRowKeyBindings( *row ) ) {
-			continue;
+		if( reloadRowKeyBindings( *row ) ) {
+			// Property/signal index prefixes start from 1
+			const auto signalNum = (int)( row - rowsBegin ) + 1;
+			QMetaObject::invokeMethod( this, signalNameComposer.getSignalNameForNum( signalNum ) );
 		}
-
-		const auto signalNum = (int)( row - rowsBegin );
-		QMetaObject::invokeMethod( this, signalNameComposer.getSignalNameForNum( signalNum ) );
 	}
 }
 
