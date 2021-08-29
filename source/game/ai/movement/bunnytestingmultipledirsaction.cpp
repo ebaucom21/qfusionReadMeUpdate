@@ -178,35 +178,22 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 		return;
 	}
 
-	// First, compute "less bending" counterparts of given dirs for further dot comparisons
-	// (avoid normalizing on every iteration)
-	wsw::StaticVector<Vec3, kMaxSuggestedLookDirs> cachedLessBendingDirs;
-	for( const auto &__restrict suggestedDir: suggestedLookDirs ) {
-		const Vec3 &__restrict dir = suggestedDir.dir;
-		assert( std::fabs( dir.SquaredLength() - 1.0f ) < 0.1f );
-		cachedLessBendingDirs.emplace_back( Vec3( dir ) );
-		Vec3 &__restrict lessBendingDir = cachedLessBendingDirs.back();
-		lessBendingDir.Z() *= Z_NO_BEND_SCALE;
-		lessBendingDir *= Q_RSqrt( lessBendingDir.SquaredLength() );
-		assert( std::fabs( lessBendingDir.SquaredLength() - 1.0f ) < 0.1f );
-	}
-
 	// First prune similar suggested areas.
-	// (a code that fills suggested areas may test similarity
+	// (a caller code that supplies suggested areas may test similarity
 	// for its own optimization purposes but it is not mandatory).
 	for( size_t baseDirIndex = 0; baseDirIndex < suggestedLookDirs.size() - 1u; ++baseDirIndex ) {
-		const Vec3 &__restrict baseTestedDir = cachedLessBendingDirs[baseDirIndex];
-		for( size_t nextDirIndex = baseDirIndex + 1; nextDirIndex < suggestedLookDirs.size(); ) {
-			const Vec3 &__restrict nextTestedDir = cachedLessBendingDirs[nextDirIndex];
-			if( !areDirsSimilar( baseTestedDir, nextTestedDir ) ) {
+		const Vec3 &__restrict baseTestedDir = suggestedLookDirs[baseDirIndex].dir;
+		size_t nextDirIndex = baseDirIndex + 1;
+		while( nextDirIndex < suggestedLookDirs.size() ) {
+			const Vec3 &__restrict nextTestedDir = suggestedLookDirs[nextDirIndex].dir;
+			if( areDirsSimilar( baseTestedDir, nextTestedDir ) ) {
+				// This base dir was OK, move to the next one
 				nextDirIndex++;
-				continue;
+			} else {
+				// Prune the similar next dir. Replace by the last dir, then shrink the container.
+				suggestedLookDirs[nextDirIndex] = suggestedLookDirs.back();
+				suggestedLookDirs.pop_back();
 			}
-			// Prune the similar dir and its respective "less-bending" counterpart
-			suggestedLookDirs[nextDirIndex] = suggestedLookDirs.back();
-			suggestedLookDirs.pop_back();
-			cachedLessBendingDirs[nextDirIndex] = cachedLessBendingDirs.back();
-			cachedLessBendingDirs.pop_back();
 		}
 	}
 
@@ -223,29 +210,23 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 	// For every base dir from kept given ones
 	for( size_t baseDirIndex = 0; baseDirIndex <= lastBaseDirIndex; ++baseDirIndex ) {
 		const auto &__restrict base = suggestedLookDirs[baseDirIndex];
-		const auto &__restrict baseDir = base.dir;
 		// Produce a rotated dir for every possible rotation
 		for( const auto &rotator: dirRotatorsCache ) {
-			Vec3 rotated( rotator.rotate( baseDir ) );
-			Vec3 lessBendingRotated( rotated );
-			lessBendingRotated.Z() *= Z_NO_BEND_SCALE;
-			lessBendingRotated *= Q_RSqrt( lessBendingRotated.SquaredLength() );
-			// Check whether there is a similar dir using comparisons of respective "less bending" dirs
+			const Vec3 rotated( rotator.rotate( base.dir ) );
+			// Check whether there is a similar dir
 			bool hasASimilarDir = false;
-			for( const auto &__restrict lessBendingExisting: cachedLessBendingDirs ) {
-				if( areDirsSimilar( lessBendingRotated, lessBendingExisting ) ) {
+			for( const auto &__restrict existing: suggestedLookDirs ) {
+				if( areDirsSimilar( rotated, existing.dir ) ) {
 					hasASimilarDir = true;
 					break;
 				}
 			}
-			if( hasASimilarDir ) {
-				continue;
-			}
-			// Save the rotated dir as a suggested one. Also save the respective "less bending" one for further steps
-			cachedLessBendingDirs.push_back( lessBendingRotated );
-			suggestedLookDirs.emplace_back( SuggestedDir( rotated, base.area, rotator.pathPenalty ) );
-			if( suggestedLookDirs.size() == suggestedLookDirs.capacity() ) {
-				return;
+			if( !hasASimilarDir ) {
+				// Save the rotated dir as a suggested one
+				suggestedLookDirs.emplace_back( SuggestedDir( rotated, base.area, rotator.pathPenalty ) );
+				if( suggestedLookDirs.size() == suggestedLookDirs.capacity() ) {
+					return;
+				}
 			}
 		}
 	}
@@ -282,27 +263,25 @@ void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( PredictionContext *
 
 	AreaAndScore *takenAreasBegin = candidateAreasBegin;
 	assert( maxSuggestedLookDirs <= suggestedLookDirs.capacity() );
-	unsigned maxAreas = maxSuggestedLookDirs - suggestedLookDirs.size();
+	const unsigned maxAreas = maxSuggestedLookDirs;
 	AreaAndScore *takenAreasEnd = TakeBestCandidateAreas( candidateAreasBegin, candidateAreasEnd, maxAreas );
 
 	suggestedLookDirs.clear();
 	for( auto iter = takenAreasBegin; iter < takenAreasEnd; ++iter ) {
 		const int areaNum = ( *iter ).areaNum;
 		assert( (unsigned)areaNum < (unsigned)AiAasWorld::Instance()->NumAreas() );
-		Vec3 dir( context->NavTargetOrigin() );
+		Vec3 target( 0, 0, 0 );
 		if( areaNum != navTargetAreaNum ) {
 			const auto &area = aasAreas[areaNum];
-			dir.Set( area.center );
-			dir.Z() = area.mins[2] + 32.0f;
+			target.Set( area.center );
+			target.Z() = area.mins[2] + 32.0f;
+		} else {
+			context->NavTargetOrigin().CopyTo( target );
 		}
-		dir -= entityPhysicsState.Origin();
-		if( areaNum != navTargetAreaNum ) {
-			dir.Z() *= Z_NO_BEND_SCALE;
-		}
-		const auto squareLen = dir.SquaredLength();
-		if( squareLen > 1.0f ) {
-			dir *= Q_RSqrt( squareLen );
-			suggestedLookDirs.emplace_back( SuggestedDir( dir, areaNum ) );
+		if( target.SquareDistance2DTo( entityPhysicsState.Origin() ) > SQUARE( 24.0f ) ) {
+			Vec3 dir( target - entityPhysicsState.Origin() );
+			dir *= Q_RSqrt( dir.SquaredLength() );
+			suggestedLookDirs.emplace_back( SuggestedDir { dir, areaNum } );
 		}
 	}
 }
