@@ -132,11 +132,10 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 
 	// Lower restrictions for landing in the same floor cluster
 	if( const auto resultFloorClusterNum = aasWorld->FloorClusterNum( resultAreaNum ) ) {
-		if( fromAreaNums[0] && aasWorld->FloorClusterNum( fromAreaNums[0] ) == resultFloorClusterNum ) {
-			return true;
-		}
-		if( fromAreaNums[1] && aasWorld->FloorClusterNum( fromAreaNums[1] ) == resultFloorClusterNum ) {
-			return true;
+		for( int i = 0; i < numFromAreas; ++i ) {
+			if( fromAreaNums[i] && aasWorld->FloorClusterNum( fromAreaNums[i] ) == resultFloorClusterNum ) {
+				return true;
+			}
 		}
 		if( aasWorld->FloorClusterNum( navTargetAreaNum ) == resultFloorClusterNum ) {
 			return true;
@@ -149,7 +148,19 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 	}
 
 	// Consider an advancement to be a success
-	return startTravelTime > endTravelTime;
+	if( startTravelTime > endTravelTime ) {
+		return true;
+	}
+
+	// Permit having a slightly greater travel time if we can return quickly by walking in the worst case
+	for( int i = 0; i < numFromAreas; ++i ) {
+		const int backTravelTime = TravelTimeWalkingOrFallingShort( routeCache, resultAreaNum, fromAreaNums[i] );
+		if( backTravelTime && backTravelTime < 100 ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void FallbackAction::SetupNavTargetAreaMovement( PredictionContext *context ) {
