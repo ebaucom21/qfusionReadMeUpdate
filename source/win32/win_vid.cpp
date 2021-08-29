@@ -266,7 +266,9 @@ void AppActivate( BOOL fActive, BOOL minimize, BOOL destroy ) {
 		fActive = minimize = FALSE;
 	}
 
-	CL_ClearInputState();
+	if( !destroy ) {
+		CL_ClearInputState();
+	}
 
 	// we don't want to act like we're active if we're minimized
 	prevActiveApp = ActiveApp;
