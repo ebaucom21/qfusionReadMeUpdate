@@ -105,32 +105,29 @@ public:
 	bool IsDisabledForPlanning() const { return isDisabledForPlanning; }
 };
 
-#define DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( name, debugColor_ ) \
-	name( BotMovementModule *module_ ) : BaseMovementAction( module_, #name, debugColor_ )
-
 // Lets not create excessive headers for these dummy action declarations
 
-class HandleTriggeredJumppadAction : public BaseMovementAction
-{
+class HandleTriggeredJumppadAction : public BaseMovementAction {
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( HandleTriggeredJumppadAction, COLOR_RGB( 0, 128, 128 ) ) {}
+	explicit HandleTriggeredJumppadAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "HandleTriggeredJumppadAction", COLOR_RGB( 0, 128, 128 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 };
 
-class SwimMovementAction : public BaseMovementAction
-{
+class SwimMovementAction : public BaseMovementAction {
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( SwimMovementAction, COLOR_RGB( 0, 0, 255 ) ) {
+	explicit SwimMovementAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "SwimMovementAction", COLOR_RGB( 0, 0, 255 ) ) {
 		this->stopPredictionOnEnteringWater = false;
 	}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
 };
 
-class FlyUntilLandingAction : public BaseMovementAction
-{
+class FlyUntilLandingAction : public BaseMovementAction {
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( FlyUntilLandingAction, COLOR_RGB( 0, 255, 0 ) ) {}
+	explicit FlyUntilLandingAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "FlyUntilLandingAction", COLOR_RGB( 0, 255, 0 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 };
 

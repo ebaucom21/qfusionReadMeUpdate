@@ -3,16 +3,14 @@
 
 #include "basemovementaction.h"
 
-class LandOnSavedAreasAction : public BaseMovementAction
-{
+class LandOnSavedAreasAction : public BaseMovementAction {
 	friend class HandleTriggeredJumppadAction;
-	friend class BotTryWeaponJumpShortcutMovementAction;
 
 	wsw::StaticVector<int, MAX_SAVED_LANDING_AREAS> savedLandingAreas;
 	using FilteredAreas = wsw::StaticVector<AreaAndScore, MAX_SAVED_LANDING_AREAS * 2>;
 
-	int currAreaIndex;
-	unsigned totalTestedAreas;
+	int currAreaIndex { 0 };
+	unsigned totalTestedAreas { 0 };
 
 	int FindJumppadAreaNum( const edict_t *jumppadEntity );
 
@@ -26,11 +24,8 @@ class LandOnSavedAreasAction : public BaseMovementAction
 									  const FilteredAreas &filteredAreas );
 
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( LandOnSavedAreasAction, COLOR_RGB( 255, 0, 255 ) ) {
-		// Shut an analyzer up
-		this->currAreaIndex = 0;
-		this->totalTestedAreas = 0;
-	}
+	explicit LandOnSavedAreasAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "LandOnSavedAreasAction", COLOR_RGB( 255, 0, 255 ) ) {}
 
 	bool TryLandingStepOnArea( int areaNum, MovementPredictionContext *context );
 	void PlanPredictionStep( MovementPredictionContext *context ) override;

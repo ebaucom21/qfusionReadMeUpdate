@@ -3,10 +3,8 @@
 
 #include "basemovementaction.h"
 
-class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction
-{
+class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction {
 	friend class MovementPredictionContext;
-	friend class WalkCarefullyAction;
 
 	float *lookDir { nullptr };
 	vec3_t tmpDir { 0, 0, 0 };
@@ -38,7 +36,8 @@ class CombatDodgeSemiRandomlyToTargetAction : public BaseMovementAction
 	void UpdateKeyMoveDirs( MovementPredictionContext *context );
 
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( CombatDodgeSemiRandomlyToTargetAction, COLOR_RGB( 192, 192, 192 ) ) {}
+	explicit CombatDodgeSemiRandomlyToTargetAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "CombatDodgeSemiRandomlyToTargetAction", COLOR_RGB( 192, 192, 192 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
 	void OnApplicationSequenceStarted( MovementPredictionContext *context ) override;

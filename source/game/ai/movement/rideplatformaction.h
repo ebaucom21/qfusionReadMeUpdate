@@ -3,15 +3,12 @@
 
 #include "basemovementaction.h"
 
-class RidePlatformAction : public BaseMovementAction
-{
+class RidePlatformAction : public BaseMovementAction {
 	friend class BotMovementModule;
 
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( RidePlatformAction, COLOR_RGB( 128, 128, 0 ) ) {
-		// Shut an analyzer up
-		currTestedAreaIndex = 0;
-	}
+	explicit RidePlatformAction( BotMovementModule *module_ ) :
+		BaseMovementAction( module_, "RidePlatformAction", COLOR_RGB( 128, 128, 0 ) ) {}
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
 
@@ -29,7 +26,7 @@ public:
 
 private:
 	ExitAreasVector tmpExitAreas;
-	unsigned currTestedAreaIndex;
+	unsigned currTestedAreaIndex { 0 };
 
 	const edict_t *GetPlatform( MovementPredictionContext *context ) const;
 	// A context might be null!

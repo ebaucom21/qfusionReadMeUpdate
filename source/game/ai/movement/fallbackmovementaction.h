@@ -75,7 +75,9 @@ class FallbackMovementAction : public BaseMovementAction {
 
 	bool CanWaitForLanding( MovementPredictionContext *context );
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( FallbackMovementAction, COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit FallbackMovementAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "FallbackMovementAction", COLOR_RGB( 0, 0, 0 ) ) {}
+
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 	void CheckPredictionStepResults( MovementPredictionContext *context ) override {
 		AI_FailWith( __FUNCTION__, "This method should never get called (PlanMovmementStep() should stop planning)\n" );

@@ -46,7 +46,8 @@ class ScheduleWeaponJumpAction: public BaseMovementAction {
 
 	void SaveLandingAreas( MovementPredictionContext *context, int areaNum );
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( ScheduleWeaponJumpAction, COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit ScheduleWeaponJumpAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "ScheduleWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 
@@ -59,14 +60,16 @@ public:
 
 class TryTriggerWeaponJumpAction: public BaseMovementAction {
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( TryTriggerWeaponJumpAction, COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit TryTriggerWeaponJumpAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "TryTriggerWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 };
 
 class CorrectWeaponJumpAction: public BaseMovementAction {
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( CorrectWeaponJumpAction, COLOR_RGB( 0, 0, 0 ) ) {}
+	explicit CorrectWeaponJumpAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "CorrectWeaponJumpAction", COLOR_RGB( 0, 0, 0 ) ) {}
 
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 };

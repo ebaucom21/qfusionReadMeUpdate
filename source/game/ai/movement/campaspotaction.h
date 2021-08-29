@@ -3,17 +3,15 @@
 
 #include "basemovementaction.h"
 
-class CampASpotMovementAction : public BaseMovementAction
-{
-	unsigned disabledForApplicationFrameIndex;
+class CampASpotMovementAction : public BaseMovementAction {
+	unsigned disabledForApplicationFrameIndex { std::numeric_limits<unsigned>::max() };
 
 	bool TryUpdateKeyMoveDirs( MovementPredictionContext *context );
 	Vec3 GetUpdatedPendingLookDir( MovementPredictionContext *context );
-	bool TryApplyLookAtPoint( MovementPredictionContext *context );
 public:
-	DECLARE_MOVEMENT_ACTION_CONSTRUCTOR( CampASpotMovementAction, COLOR_RGB( 128, 0, 128 ) ) {
-		this->disabledForApplicationFrameIndex = std::numeric_limits<unsigned>::max();
-	}
+	explicit CampASpotMovementAction( BotMovementModule *module_ )
+		: BaseMovementAction( module_, "CampASpotMovementAction", COLOR_RGB( 128, 0, 128 ) ) {}
+
 	void PlanPredictionStep( MovementPredictionContext *context ) override;
 	void CheckPredictionStepResults( MovementPredictionContext *context ) override;
 	void OnApplicationSequenceStopped( MovementPredictionContext *context,
