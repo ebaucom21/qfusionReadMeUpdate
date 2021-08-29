@@ -63,6 +63,7 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 bool CG_IsSpectator();
 bool CG_HasTwoTeams();
 bool CG_IsOperator();
+bool CG_IsChallenger();
 bool CG_CanBeReady();
 bool CG_IsReady();
 int CG_MyRealTeam();
@@ -217,6 +218,7 @@ public:
 	Q_INVOKABLE void disconnect();
 
 	Q_INVOKABLE void toggleReady();
+	Q_INVOKABLE void toggleChallengerStatus();
 	Q_INVOKABLE void spectate();
 	Q_INVOKABLE void join();
 	Q_INVOKABLE void joinAlpha();
@@ -239,6 +241,12 @@ public:
 
 	Q_SIGNAL void isReadyChanged( bool isReady );
 	Q_PROPERTY( bool isReady MEMBER m_isReady NOTIFY isReadyChanged );
+
+	Q_SIGNAL void canToggleChallengerStatusChanged( bool canToggleChallengerStatus );
+	Q_PROPERTY( bool canToggleChallengerStatus MEMBER m_canToggleChallengerStatus NOTIFY canToggleChallengerStatusChanged );
+
+	Q_SIGNAL void isInChallengersQueueChanged( bool isInChallengersQueue );
+	Q_PROPERTY( bool isInChallengersQueue MEMBER m_isInChallengersQueue NOTIFY isInChallengersQueueChanged );
 
 	Q_INVOKABLE QVariant colorFromRgbString( const QString &string ) const;
 
@@ -422,6 +430,9 @@ private:
 	bool m_canSpectate { false };
 	bool m_canJoinAlpha { false };
 	bool m_canJoinBeta { false };
+
+	bool m_canToggleChallengerStatus { false };
+	bool m_isInChallengersQueue { false };
 
 	bool m_hasStartedBackgroundMapLoading { false };
 	bool m_hasSucceededBackgroundMapLoading { false };
@@ -1269,16 +1280,27 @@ void QtUISystem::checkPropertyChanges() {
 	const bool oldCanJoin = m_canJoin;
 	const bool oldCanJoinAlpha = m_canJoinAlpha;
 	const bool oldCanJoinBeta = m_canJoinBeta;
+	const bool oldCanToggleChallengerStatus = m_canToggleChallengerStatus;
+	const bool oldIsInChallengersQueue = m_isInChallengersQueue;
 
 	// TODO: This is fine for now but something more sophisticated should be really used
+	// TODO: Send these values via client stat flags
 	m_canSpectate = m_canJoin = m_canJoinAlpha = m_canJoinBeta = false;
-	if( actualClientState == CA_ACTIVE && GS_MatchState() <= MATCH_STATE_PLAYTIME ) {
+	if( actualClientState == CA_ACTIVE ) {
+		const bool hasChallengersQueue = GS_HasChallengers();
 		const int team = CG_MyRealTeam();
-		m_canSpectate = team != TEAM_SPECTATOR;
-		m_canJoin = team == TEAM_SPECTATOR;
-		if( CG_HasTwoTeams() ) {
-			m_canJoinAlpha = team != TEAM_ALPHA;
-			m_canJoinBeta = team != TEAM_BETA;
+		m_canSpectate = ( team != TEAM_SPECTATOR );
+		m_isInChallengersQueue = CG_IsChallenger();
+		if( GS_MatchState() <= MATCH_STATE_PLAYTIME ) {
+			if( hasChallengersQueue ) {
+				m_canToggleChallengerStatus = true;
+			} else {
+				m_canJoin = ( team == TEAM_SPECTATOR );
+				if( CG_HasTwoTeams() ) {
+					m_canJoinAlpha = ( team != TEAM_ALPHA );
+					m_canJoinBeta = ( team != TEAM_BETA );
+				}
+			}
 		}
 	}
 
@@ -1293,6 +1315,12 @@ void QtUISystem::checkPropertyChanges() {
 	}
 	if( oldCanJoinBeta != m_canJoinBeta ) {
 		Q_EMIT canJoinBetaChanged( m_canJoinBeta );
+	}
+	if( oldCanToggleChallengerStatus != m_canToggleChallengerStatus ) {
+		Q_EMIT canToggleChallengerStatusChanged( m_canToggleChallengerStatus );
+	}
+	if( oldIsInChallengersQueue != m_isInChallengersQueue ) {
+		Q_EMIT isInChallengersQueueChanged( m_isInChallengersQueue );
 	}
 
 	m_keysAndBindingsModel.checkUpdates();
@@ -1822,6 +1850,11 @@ void QtUISystem::joinBeta() {
 void QtUISystem::toggleReady() {
 	assert( m_canBeReady );
 	Cbuf_AddText( "ready" );
+}
+
+void QtUISystem::toggleChallengerStatus() {
+	assert( m_canToggleChallengerStatus );
+	Cbuf_AddText( m_isInChallengersQueue ? "spec" : "join" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {

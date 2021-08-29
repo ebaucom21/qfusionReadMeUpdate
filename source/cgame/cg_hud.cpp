@@ -496,6 +496,10 @@ bool CG_IsOperator() {
 	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_OPERATOR ) != 0;
 }
 
+bool CG_IsChallenger() {
+	return ( cg.predictedPlayerState.stats[STAT_FLAGS] & STAT_FLAG_CHALLENGER ) != 0;
+}
+
 int CG_MyRealTeam() {
 	return cg.predictedPlayerState.stats[STAT_REALTEAM];
 }

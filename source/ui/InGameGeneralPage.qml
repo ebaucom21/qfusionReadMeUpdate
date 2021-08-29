@@ -34,6 +34,14 @@ Item {
             }
         }
         InGameButton {
+            visible: wsw.canToggleChallengerStatus
+            text: wsw.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
+            onClicked: {
+                wsw.toggleChallengerStatus()
+                wsw.returnFromInGameMenu()
+            }
+        }
+        InGameButton {
             visible: wsw.canJoinAlpha
             text: "Join '" + hudDataModel.alphaName + "'"
             onClicked: {
