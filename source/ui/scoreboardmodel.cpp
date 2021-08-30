@@ -259,8 +259,7 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 
 	const bool mustResetChasers = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Chasers;
 	const bool mustResetChallengers = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Challengers;
-	const bool mustResetChasersOrChallengersReset = mustResetChasers | mustResetChallengers;
-	if( mustResetChasersOrChallengersReset ) {
+	if( mustResetChasers | mustResetChallengers ) {
 		unsigned clientIndices[kMaxPlayers];
 		std::fill( std::begin( clientIndices ), std::end( clientIndices ), ~0u );
 		for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
@@ -316,33 +315,32 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 	}
 
 	// Build index translation tables prior to dispatching updates, if needed
-	alignas( 16 ) int8_t playerIndexToIndexInChasersList[kMaxPlayers];
-	alignas( 16 ) int8_t playerIndexToIndexInChallengersList[kMaxPlayers];
-	std::fill( playerIndexToIndexInChasersList, playerIndexToIndexInChasersList + kMaxPlayers, -1 );
-	std::fill( playerIndexToIndexInChallengersList, playerIndexToIndexInChallengersList + kMaxPlayers, -1 );
-	if( !playerUpdates.empty() && !mustResetChasersOrChallengersReset ) {
+	static_assert( kMaxPlayers <= 32 );
+	unsigned chasersPlayerIndicesMask = 0, challengersPlayerIndicesMask = 0;
+	if( !playerUpdates.empty() ) {
 		if( !mustResetChasers ) {
-			for( unsigned i = 0; i < m_chasers.size(); ++i ) {
-				playerIndexToIndexInChasersList[m_chasers[i]] = (int8_t)i;
+			for( const unsigned playerIndex: m_chasers ) {
+				chasersPlayerIndicesMask |= ( 1u << playerIndex );
 			}
 		}
 		if( !mustResetChallengers ) {
-			for( unsigned i = 0; i < m_challengers.size(); ++i ) {
-				playerIndexToIndexInChallengersList[m_challengers[i]] = (int8_t)i;
+			for( const unsigned playerIndex: m_challengers ) {
+				challengersPlayerIndicesMask |= ( 1u << playerIndex );
 			}
 		}
 	}
 
 	for( const auto &playerUpdate: playerUpdates ) {
-		const auto playerIndex = playerUpdate.playerIndex;
+		const unsigned playerIndex = playerUpdate.playerIndex;
 		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
 			continue;
 		}
 
-		if( playerIndexToIndexInChasersList[playerIndex] >= 0 ) {
+		const unsigned playerBit = ( 1u << playerIndex );
+		if( chasersPlayerIndicesMask & playerBit ) {
 			m_chasersModel.markAsUpdated();
 		}
-		if( playerIndexToIndexInChallengersList[playerIndex] >= 0 ) {
+		if( challengersPlayerIndicesMask & playerBit ) {
 			m_challengersModel.markAsUpdated();
 		}
 

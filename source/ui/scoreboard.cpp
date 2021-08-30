@@ -274,22 +274,18 @@ auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList 
 		updatesMask |= (unsigned)UpdateFlags::Chasers;
 	}
 
-	for( unsigned i = 0; i < kMaxPlayers; ++i ) {
-		if( currData.challengersQueue[i] != m_oldRawData.challengersQueue[i] ) {
-			updatesMask |= (unsigned)UpdateFlags::Challengers;
-			break;
-		}
+	if( memcmp( currData.challengersQueue, m_oldRawData.challengersQueue, sizeof( currData.challengersQueue ) ) != 0 ) {
+		updatesMask |= (unsigned)UpdateFlags::Challengers;
 	}
 
 	for( unsigned i = 0; i < 4; ++i ) {
-		if( !isTeamUpdateNeeded[i] ) {
-			continue;
+		if( isTeamUpdateNeeded[i] ) {
+			TeamUpdates updates {};
+			updates.team = i;
+			updates.players = true;
+			teamUpdates.push_back( updates );
+			updatesMask |= (unsigned)UpdateFlags::Teams;
 		}
-		TeamUpdates updates {};
-		updates.team = i;
-		updates.players = true;
-		teamUpdates.push_back( updates );
-		updatesMask |= (unsigned)UpdateFlags::Teams;
 	}
 
 	if( updatesMask ) {
