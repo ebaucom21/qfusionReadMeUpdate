@@ -72,9 +72,8 @@ Item {
                             (numPlayers - playersInFirstRow) % playersPerRow
                         }
                     }
-                    delegate: Row {
+                    delegate: Item {
                         id: playerItem
-                        spacing: 8
                         readonly property int listIndex: {
                             if (rowIndex === 0) {
                                 index
@@ -82,7 +81,35 @@ Item {
                                 playersInFirstRow + (rowIndex - 1) * playersPerRow + index
                             }
                         }
+                        // Caution: This binding gets broken on a first procedural assignment
+                        width: nameLabel.width + pingLabel.width + 8
+                        height: Math.max(nameLabel.height, pingLabel.height)
+                        property real pendingWidth: width
+                        function updateWidth() {
+                            const newWidth = nameLabel.width + pingLabel.width + 8
+                            if (newWidth > width) {
+                                shrinkAnim.stop()
+                                width = newWidth
+                            } else if (newWidth < width) {
+                                shrinkAnim.stop()
+                                pendingWidth = newWidth
+                                shrinkAnim.start()
+                            }
+                        }
+                        SequentialAnimation {
+                            id: shrinkAnim
+                            PauseAnimation { duration: 250 }
+                            SmoothedAnimation {
+                                target: playerItem
+                                property: "width"
+                                to: playerItem.pendingWidth
+                                duration: 250
+                            }
+                        }
                         Label {
+                            id: nameLabel
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
                             width: implicitWidth + 8
                             horizontalAlignment: Qt.AlignLeft
                             font.weight: Font.Bold
@@ -90,8 +117,12 @@ Item {
                             font.letterSpacing: 1
                             style: Text.Raised
                             text: root.model[listIndex]["name"]
+                            onWidthChanged: playerItem.updateWidth()
                         }
                         Label {
+                            id: pingLabel
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
                             width: implicitWidth + 12
                             horizontalAlignment: Qt.AlignLeft
                             font.weight: Font.Bold
@@ -99,6 +130,7 @@ Item {
                             font.letterSpacing: 1
                             style: Text.Raised
                             text: root.model[listIndex]["ping"]
+                            onWidthChanged: playerItem.updateWidth()
                         }
                     }
                 }
