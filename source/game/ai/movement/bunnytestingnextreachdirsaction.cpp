@@ -206,7 +206,7 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 
 	const float squareDistanceToArea = areaPoint.SquareDistanceTo( traceStartPoint );
 	// Skip way too close areas (otherwise the bot might fall into endless looping)
-	if( squareDistanceToArea < SQUARE( 72 ) ) {
+	if( squareDistanceToArea < SQUARE( 96 ) ) {
 		return true;
 	}
 
@@ -253,14 +253,16 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 		return false;
 	}
 
+	assert( numCandidates < maxCandidates );
+
 	float score;
 	if( dropDirPriority ) {
-		// Further dirs get a greater (less-modulo negative) score in the same priority class,
-		// but these dirs should get tested after all dirs with a positive score.
-		score = -Q_Rcp( (float)( numCandidates + 1 ) );
+		// Closer areas get a greater (less-modulo negative) score in the same priority class
+		// but these areas should get tested after all areas with a positive score.
+		score = -( (float)( numCandidates + 1 ) );
 	} else {
-		// Further dirs get a greater score
-		score = (float)( numCandidates + 1 );
+		// Give closer areas a priority
+		score = (float)( maxCandidates + 1 - numCandidates );
 	}
 
 	new( candidatesBegin + numCandidates )AreaAndScore( areaNum, score );
