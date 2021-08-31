@@ -96,6 +96,9 @@ public:
 	inline constexpr size_type capacity() const { return N; }
 	inline bool empty() const { return count == 0; }
 
+	[[nodiscard]]
+	bool full() const { return count == N; }
+
 	inline reference &front() {
 		check_capacity_underflow( __FUNCTION__ );
 		return basePointer[next_index( beforeFirst )];

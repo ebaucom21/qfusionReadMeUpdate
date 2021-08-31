@@ -116,10 +116,11 @@ public:
             if (!type->DerivesFrom(baseType))
                 continue;
 
-            if (subtypesIds.size() < subtypesIds.capacity())
-                subtypesIds.push_back(type->GetTypeId());
-            else
-                API_ERRORV("Too many subtypes for type %s\n", name);
+            if( subtypesIds.full() ) {
+            	API_ERRORV("Too many subtypes for type %s\n", name);
+            } else {
+            	subtypesIds.push_back(type->GetTypeId());
+            }
         }
     }
 

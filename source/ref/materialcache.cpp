@@ -616,7 +616,7 @@ bool MaterialCache::parseSkinFileData( Skin *skin, const wsw::StringView &fileDa
 	// TODO: There should be static standard lookup instances
 	wsw::CharLookup newlineChars( "\r\n"_asView );
 	while( const auto maybeToken = splitter.getNext( newlineChars ) ) {
-		if( skin->m_meshPartMaterials.size() == skin->m_meshPartMaterials.capacity() ) {
+		if( skin->m_meshPartMaterials.full() ) {
 			return false;
 		}
 		const wsw::StringView token( maybeToken->trim() );
@@ -683,7 +683,7 @@ auto MaterialCache::registerSkin( const wsw::StringView &name ) -> Skin * {
 	}
 
 	assert( name.isZeroTerminated() && name.size() < MAX_QPATH );
-	if( m_skins.size() == m_skins.capacity() ) {
+	if( m_skins.full() ) {
 		Com_Printf( "Failed to load skin %s: Too many skins\n", name.data() );
 		return nullptr;
 	}

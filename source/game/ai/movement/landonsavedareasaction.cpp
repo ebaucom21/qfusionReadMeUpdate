@@ -152,7 +152,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 		// Closer to the jumppad entity target areas get greater score
 		float score = 1.0f / ( 1.0f + PointToAreaSquareDistance( targetOrigin, area ) );
 		filteredAreas.emplace_back( AreaAndScore( areaNum, score ) );
-		if( filteredAreas.size() == filteredAreas.capacity() ) {
+		if( filteredAreas.full() ) {
 			break;
 		}
 	}
@@ -235,7 +235,7 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 		}
 
 		filteredAreas.emplace_back( AreaAndScore( areaNum, score ) );
-		if( filteredAreas.size() == filteredAreas.capacity() ) {
+		if( filteredAreas.full() ) {
 			break;
 		}
 	}
@@ -258,7 +258,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 
 	// Always add the target area (with the lowest priority)
 	if( jumppadTargetAreaNum ) {
-		if( savedLandingAreas.size() == savedLandingAreas.capacity() ) {
+		if( savedLandingAreas.full() ) {
 			savedLandingAreas.pop_back();
 		}
 

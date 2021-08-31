@@ -273,7 +273,7 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 			}
 			float distance = DistanceFast( origin.Data(), ent->s.origin );
 			candidateEntities.push_back( EntAndScore( triggerEntities[i], radius - distance ) );
-			if( candidateEntities.size() == candidateEntities.capacity() ) {
+			if( candidateEntities.full() ) {
 				break;
 			}
 		}

@@ -217,7 +217,7 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 			}
 
 			candidateAreas.push_back( areaNum );
-			if( candidateAreas.size() == candidateAreas.capacity() ) {
+			if( candidateAreas.full() ) {
 				break;
 			}
 		}

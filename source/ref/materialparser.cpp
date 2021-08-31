@@ -20,31 +20,30 @@ static inline bool isAPlaceholder( const wsw::StringView &view ) {
 
 auto MaterialParser::tryAddingPassTCMod( TCMod modType ) -> tcmod_t * {
 	auto *const pass = currPass();
-	if( pass->numtcmods == MAX_SHADER_TCMODS ) {
-		return nullptr;
+	if( pass->numtcmods != MAX_SHADER_TCMODS ) {
+		if( !m_tcMods.full() ) {
+			// Set the tcmod data pointer if it has not been set yet
+			if( !pass->numtcmods ) {
+				pass->tcmods = m_tcMods.end();
+			}
+			pass->numtcmods++;
+			auto *const newMod = m_tcMods.unsafe_grow_back();
+			memset( newMod, 0, sizeof( tcmod_t ) );
+			newMod->type = (unsigned)modType;
+			return newMod;
+		}
 	}
-	if( m_tcMods.size() == m_tcMods.capacity() ) {
-		return nullptr;
-	}
-	// Set the tcmod data pointer if it has not been set yet
-	if( !pass->numtcmods ) {
-		pass->tcmods = m_tcMods.end();
-	}
-	pass->numtcmods++;
-	auto *newMod = m_tcMods.unsafe_grow_back();
-	memset( newMod, 0, sizeof( tcmod_t ) );
-	newMod->type = (unsigned)modType;
-	return newMod;
+	return nullptr;
 }
 
 auto MaterialParser::tryAddingDeform( Deform deformType ) -> deformv_t * {
-	if( m_deforms.size() == m_deforms.capacity() ) {
-		return nullptr;
+	if( !m_deforms.full() ) {
+		auto *const deform = m_deforms.unsafe_grow_back();
+		memset( deform, 0, sizeof( deformv_t ) );
+		deform->type = (unsigned)deformType;
+		return deform;
 	}
-	auto *deform = m_deforms.unsafe_grow_back();
-	memset( deform, 0, sizeof( deformv_t ) );
-	deform->type = (unsigned)deformType;
-	return deform;
+	return nullptr;
 }
 
 MaterialParser::MaterialParser( MaterialFactory *materialFactory,
@@ -85,7 +84,7 @@ auto MaterialParser::exec() -> shader_t * {
 			continue;
 		}
 
-		if( m_passes.size() == m_passes.capacity() ) {
+		if( m_passes.full() ) {
 			Com_Printf( S_COLOR_YELLOW "Too many passes\n" );
 			return nullptr;
 		}
@@ -1113,7 +1112,7 @@ bool MaterialParser::parseTemplate() {
 	wsw::StaticVector<wsw::StringView, 16> args;
 	for(;; ) {
 		if( const auto maybeToken = m_lexer->getNextTokenInLine() ) {
-			if( args.size() == args.capacity() ) {
+			if( args.full() ) {
 				return false;
 			}
 			args.push_back( *maybeToken );

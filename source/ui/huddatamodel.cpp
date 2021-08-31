@@ -446,7 +446,7 @@ auto ObituariesModel::data( const QModelIndex &index, int role ) const -> QVaria
 void ObituariesModel::addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
 								   const std::optional<wsw::StringView> &attacker ) {
 	// TODO: Add to pending entries in case of a huge feed size?
-	if( m_entries.size() == m_entries.capacity() ) {
+	if( m_entries.full() ) {
 		beginRemoveRows( QModelIndex(), 0, 0 );
 		m_entries.erase( m_entries.begin() );
 		endRemoveRows();
@@ -541,7 +541,7 @@ void MessageFeedModel::update( int64_t currTime ) {
 		beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() + (int)m_numPendingEntries - 1 );
 		unsigned cursor = m_pendingEntriesHead;
 		for( unsigned i = 0; i < m_numPendingEntries; ++i ) {
-			assert( m_entries.size() != m_entries.capacity() );
+			assert( !m_entries.full() );
 			m_entries.push_back( m_pendingEntries[cursor] );
 			cursor = ( cursor + 1 ) % kMaxEntries;
 		}
@@ -592,7 +592,7 @@ void AwardsModel::update( int64_t currTime ) {
 	}
 
 	if( !m_pendingEntries.empty() ) {
-		if( m_entries.size() == m_entries.capacity() ) {
+		if( m_entries.full() ) {
 			beginRemoveRows( QModelIndex(), 0, 0 );
 			m_entries.erase( m_entries.begin() );
 			endRemoveRows();

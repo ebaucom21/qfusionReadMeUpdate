@@ -228,7 +228,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 		// Interrupt if the capacity is exceeded. This is not really correct
 		// since the enemies are not sorted starting from the most dangerous one
 		// but fits realistic situations well. The gameplay is a mess otherwise anyway.
-		if( cachedEnemyData.size() == cachedEnemyData.capacity() ) {
+		if( cachedEnemyData.full() ) {
 			break;
 		}
 	}

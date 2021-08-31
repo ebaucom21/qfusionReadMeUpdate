@@ -73,7 +73,7 @@ void ActionRequestsModel::touch( const wsw::StringView &tag, unsigned timeout,
 		}
 	}
 
-	if( m_entries.size() == m_entries.capacity() ) {
+	if( m_entries.full() ) {
 		return;
 	}
 

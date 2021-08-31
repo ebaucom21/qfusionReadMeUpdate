@@ -11,7 +11,7 @@ void AlertTracker::EnableAutoAlert( const AiAlertSpot &alertSpot,
 		}
 	}
 
-	if( alertSpots.size() == alertSpots.capacity() ) {
+	if( alertSpots.full() ) {
 		AI_FailWith( tag, "Can't add an alert spot (id=%d)\n: too many spots", alertSpot.id );
 	}
 

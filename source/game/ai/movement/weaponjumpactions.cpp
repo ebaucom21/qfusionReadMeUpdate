@@ -334,7 +334,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( PredictionContext
 		for( int i = 0; i < clusterAreaNums[-1]; ++i ) {
 			const int areaNum = clusterAreaNums[i];
 			const float squareDistance = navTargetOrigin.SquareDistanceTo( aasAreas[areaNum].center );
-			if( heap.size() == heap.capacity() ) {
+			if( heap.full() ) {
 				if( squareDistance >= farthestPresentDistance ) {
 					continue;
 				}
@@ -720,7 +720,7 @@ void ScheduleWeaponJumpAction::SaveLandingAreas( PredictionContext *context, int
 				goto nextDirectReach;
 			}
 			m_subsystem->savedLandingAreas.push_back( reach.areanum );
-			if( m_subsystem->savedLandingAreas.size() == m_subsystem->savedLandingAreas.capacity() ) {
+			if( m_subsystem->savedLandingAreas.full() ) {
 				return;
 			}
 		}

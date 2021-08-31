@@ -181,7 +181,7 @@ bool Scoreboard::parseLayout( const wsw::StringView &string ) {
 
 	wsw::StringSplitter splitter( string );
 	while( const auto maybeTokenAndNum = splitter.getNextWithNum() ) {
-		if( m_columnKinds.size() == m_columnKinds.capacity() ) {
+		if( m_columnKinds.full() ) {
 			return false;
 		}
 		bool res = false;

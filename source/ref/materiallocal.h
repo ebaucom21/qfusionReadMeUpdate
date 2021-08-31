@@ -931,7 +931,7 @@ class MaterialParser {
 
 	[[nodiscard]]
 	bool tryAddingToSignature( int value ) {
-		if( m_deformSig.size() != m_deformSig.capacity() ) {
+		if( !m_deformSig.full() ) {
 			m_deformSig.push_back( value );
 			return true;
 		}

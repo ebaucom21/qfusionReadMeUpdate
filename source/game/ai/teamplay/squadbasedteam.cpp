@@ -1356,7 +1356,7 @@ void AiSquadBasedTeam::SetupSquads() {
 			}
 			candidatePairs.emplace_back( CandidatePair( bot, otherBot, score ) );
 			// Add a protection against overflow that still is possible in theory
-			if( candidatePairs.size() == candidatePairs.capacity() ) {
+			if( candidatePairs.full() ) {
 				goto sortPairs;
 			}
 		}

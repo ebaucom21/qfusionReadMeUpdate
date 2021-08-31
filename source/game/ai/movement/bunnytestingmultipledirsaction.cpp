@@ -198,7 +198,7 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 	}
 
 	// Ensure we can assume at least one free array cell in the loop below.
-	if( suggestedLookDirs.size() == suggestedLookDirs.capacity() ) {
+	if( suggestedLookDirs.full() ) {
 		return;
 	}
 
@@ -224,7 +224,7 @@ void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {
 			if( !hasASimilarDir ) {
 				// Save the rotated dir as a suggested one
 				suggestedLookDirs.emplace_back( SuggestedDir( rotated, base.area, rotator.pathPenalty ) );
-				if( suggestedLookDirs.size() == suggestedLookDirs.capacity() ) {
+				if( suggestedLookDirs.full() ) {
 					return;
 				}
 			}

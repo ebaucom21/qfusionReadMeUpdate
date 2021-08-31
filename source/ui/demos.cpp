@@ -360,7 +360,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 			}
 		}
 		if( !isAMandatoryKey ) {
-			if( otherKeysAndValues.size() != otherKeysAndValues.capacity() ) {
+			if( !otherKeysAndValues.full() ) {
 				otherKeysAndValues.push_back( *maybeKeyValue );
 			}
 			// Continue pairs retrieval regardless of pairs capacity exhaustion
@@ -372,7 +372,7 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 		tags.push_back( fileName.drop( prefixTagSpan->first ).take( prefixTagSpan->second ) );
 	}
 
-	while( reader.hasNextTag() && tags.size() != tags.capacity() ) {
+	while( reader.hasNextTag() && !tags.full() ) {
 		const auto maybeTag = reader.readNextTag();
 		if( maybeTag && maybeTag->length() <= kMaxStringLen && maybeTag->containsOnly( kAllowedTagChars ) ) {
 			tags.push_back( *maybeTag );

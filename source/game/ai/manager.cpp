@@ -379,7 +379,7 @@ void AiManager::FindHubAreas() {
 		// bestAreasHeap size should be always less than its capacity:
 		// 1) to ensure that there is a free room for next area;
 		// 2) to ensure that hubAreas capacity will not be exceeded.
-		if( bestAreasHeap.size() == bestAreasHeap.capacity() ) {
+		if( bestAreasHeap.full() ) {
 			std::pop_heap( bestAreasHeap.begin(), bestAreasHeap.end() );
 			bestAreasHeap.pop_back();
 		}

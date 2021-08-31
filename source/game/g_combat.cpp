@@ -848,7 +848,7 @@ void SplashPropagationSolver::pruneRawEnts( const int *rawEntNums, int numRawEnt
 		}
 		vulnerableEntNums.push_back( entNum );
 		vulnerableEntsMask[entNum] = true;
-		if( vulnerableEntNums.size() == vulnerableEntNums.capacity() ) {
+		if( vulnerableEntNums.full() ) {
 			return;
 		}
 	}
@@ -864,7 +864,7 @@ void SplashPropagationSolver::pruneRawEnts( const int *rawEntNums, int numRawEnt
 		}
 		vulnerableEntNums.push_back( entNum );
 		vulnerableEntsMask[entNum] = true;
-		if( vulnerableEntNums.size() == vulnerableEntNums.capacity() ) {
+		if( vulnerableEntNums.full() ) {
 			return;
 		}
 	}
@@ -1035,7 +1035,7 @@ void SplashPropagationSolver::collectSolidWaveObstacles( const int *rawEntNums,
 			continue;
 		}
 		waveObstacles.push_back( entNum );
-		if( waveObstacles.size() == waveObstacles.capacity() ) {
+		if( waveObstacles.full() ) {
 			break;
 		}
 	}

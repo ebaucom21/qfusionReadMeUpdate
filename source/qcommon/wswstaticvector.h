@@ -96,6 +96,9 @@ public:
 	inline bool empty() const { return count == 0; }
 
 	[[nodiscard]]
+	bool full() const { return count == N; }
+
+	[[nodiscard]]
 	auto data() -> T * { return basePointer; }
 	[[nodiscard]]
 	auto data() const -> const T * { return basePointer; }

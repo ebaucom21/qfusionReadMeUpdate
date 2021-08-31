@@ -244,7 +244,7 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__r
 			continue;
 		}
 
-		assert( result.size() < result.capacity() );
+		assert( !result.full() );
 		// Note: negate the travel time here so closest to target areas are evicted first from the max heap
 		new( result.unsafe_grow_back() )AreaAndScore( areaNum, -areaTime );
 	}
@@ -294,15 +294,11 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 		// As we have to cut off areas, let closest areas retain in the max-heap.
 		const float score = squareDistance;
 
-		if( distanceHeap.size() < distanceHeap.capacity() ) {
-			new( distanceHeap.unsafe_grow_back() )AreaAndScore( areaNum, score );
-			std::push_heap( distanceHeap.begin(), distanceHeap.end() );
-			continue;
+		if( distanceHeap.full() ) {
+			// Evict the farthest area
+			distanceHeap.pop_back();
+			std::pop_heap( distanceHeap.begin(), distanceHeap.end() );
 		}
-
-		// Evict the farthest area
-		std::pop_heap( distanceHeap.begin(), distanceHeap.end() );
-		distanceHeap.pop_back();
 
 		new( distanceHeap.unsafe_grow_back() )AreaAndScore( areaNum, score );
 		std::push_heap( distanceHeap.begin(), distanceHeap.end() );
@@ -316,7 +312,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 			continue;
 		}
 
-		assert( result.size() < result.capacity() );
+		assert( !result.full() );
 		// Note: negate the travel time here so closest to target areas are evicted first from the max heap
 		new( result.unsafe_grow_back() )AreaAndScore( areaNum, -areaTime );
 	}

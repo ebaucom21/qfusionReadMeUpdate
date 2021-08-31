@@ -135,7 +135,7 @@ void PathBlockingTracker::Update() {
 			continue;
 		}
 		potentialBlockers.push_back( enemy );
-		if( potentialBlockers.size() == potentialBlockers.capacity() ) {
+		if( potentialBlockers.full() ) {
 			break;
 		}
 	}

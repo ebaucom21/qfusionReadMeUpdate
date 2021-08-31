@@ -115,9 +115,11 @@ public:
 	[[nodiscard]]
 	bool empty() const { return m_entries.empty(); }
 	[[nodiscard]]
+	bool full() const { return m_entries.full(); }
+	[[nodiscard]]
 	bool isEmpty() const { return m_entries.empty(); }
 	[[nodiscard]]
-	bool isFull() const { return m_entries.size() == m_entries.capacity(); }
+	bool isFull() const { return m_entries.full(); }
 	[[nodiscard]]
 	auto size() const -> unsigned { return m_entries.size(); }
 	[[nodiscard]]

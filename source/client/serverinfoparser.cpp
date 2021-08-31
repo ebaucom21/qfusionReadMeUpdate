@@ -107,7 +107,7 @@ bool ServerInfoParser::parse( msg_t *msg_, ServerInfo *info_, uint64_t lastAckno
 }
 
 void ServerInfoParser::addHandler( const char *command, HandlerMethod handler ) {
-	if( m_handlers.size() == m_handlers.capacity() ) {
+	if( m_handlers.full() ) {
 		Com_Error( ERR_FATAL, "ServerList::ServerInfoParser::AddHandler(): too many handlers\n" );
 	}
 

@@ -71,7 +71,7 @@ class EventsTracker: public AiFrameAwareComponent {
 	bool CanDistinguishEnemyShotsFromTeammates( const GuessedEnemy &guessedEnemy );
 
 	void PushEnemyEventOrigin( const edict_t *enemy, const vec3_t origin ) {
-		if( eventsQueue.size() == eventsQueue.capacity() ) {
+		if( eventsQueue.full() ) {
 			eventsQueue.pop_back();
 		}
 		eventsQueue.emplace_front( DetectedEvent( origin, ENTNUM( enemy ) ) );

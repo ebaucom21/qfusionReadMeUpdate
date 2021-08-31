@@ -324,7 +324,7 @@ void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_
 		}
 
 		exitAreas.push_back( areaNum );
-		if( exitAreas.size() == exitAreas.capacity() ) {
+		if( exitAreas.full() ) {
 			break;
 		}
 	}

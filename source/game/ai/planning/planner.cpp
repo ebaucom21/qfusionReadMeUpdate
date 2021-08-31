@@ -416,12 +416,6 @@ class PlannerNodesHeap
 
 public:
 	void Push( PlannerNode *node ) {
-#ifdef _DEBUG
-		if( array.size() == array.capacity() ) {
-			AI_FailWith( "PlannerNodesHeap::Push()", "Capacity overflow" );
-		}
-#endif
-
 		array.push_back( node );
 		unsigned child = array.size() - 1;
 		array.back()->heapArrayIndex = child;
