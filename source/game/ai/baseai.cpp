@@ -216,52 +216,40 @@ void Ai::Think() {
 }
 
 void AiEntityPhysicsState::UpdateAreaNums() {
-	const AiAasWorld *aasWorld = AiAasWorld::Instance();
-	this->currAasAreaNum = ( decltype( this->currAasAreaNum ) )aasWorld->FindAreaNum( Origin() );
+	const AiAasWorld *const __restrict aasWorld = AiAasWorld::Instance();
+	this->currAasAreaNum = (uint16_t)aasWorld->FindAreaNum( Origin() );
 	// Use a computation shortcut when entity is on ground
 	if( this->groundEntNum >= 0 ) {
-		this->droppedToFloorOriginOffset = ( decltype( this->droppedToFloorOriginOffset ) )( -playerbox_stand_mins[2] );
-		this->droppedToFloorOriginOffset += 4.0f;
 		SetHeightOverGround( 0 );
-		Vec3 droppedOrigin( Origin() );
-		droppedOrigin.Z() -= this->droppedToFloorOriginOffset;
-		this->droppedToFloorAasAreaNum = ( decltype( this->droppedToFloorAasAreaNum ) )aasWorld->FindAreaNum( droppedOrigin );
-		return;
-	}
-
-	// Use a computation shortcut when the current area is grounded
-	if( aasWorld->AreaSettings()[this->currAasAreaNum].areaflags & AREA_GROUNDED ) {
-		float areaMinsZ = aasWorld->Areas()[this->currAasAreaNum].mins[2];
-		float selfZ = Self()->s.origin[2];
-		float heightOverGround_ = selfZ - areaMinsZ + playerbox_stand_maxs[2];
-		clamp_high( heightOverGround_, GROUND_TRACE_DEPTH );
-		SetHeightOverGround( heightOverGround_ );
-		this->droppedToFloorOriginOffset = ( decltype( this->droppedToFloorOriginOffset ) )( heightOverGround_ - 4.0f );
+		const Vec3 droppedOrigin( origin[0], origin[1], origin[2] + playerbox_stand_mins[2] + 8.0f );
+		if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->FindAreaNum( droppedOrigin ) ) ) {
+			this->droppedToFloorAasAreaNum = this->currAasAreaNum;
+		}
+	} else if( aasWorld->AreaGrounded( this->currAasAreaNum ) ) {
+		const float areaMinsZ = aasWorld->Areas()[this->currAasAreaNum].mins[2];
+		const float selfZ = Self()->s.origin[2];
+		SetHeightOverGround( ( selfZ - areaMinsZ ) + playerbox_stand_mins[2] );
 		this->droppedToFloorAasAreaNum = this->currAasAreaNum;
-		return;
+	} else {
+		// Try dropping the origin to floor
+		const edict_t *ent = Self();
+		const Vec3 traceEnd( origin[0], origin[1], origin[2] - GROUND_TRACE_DEPTH );
+		// TODO: We can replace this inefficient G_Trace() call
+		// by clipping against nearby solid entities which could be cached
+		trace_t trace;
+		G_Trace( &trace, this->origin, ent->r.mins, ent->r.maxs, traceEnd.Data(), ent, MASK_PLAYERSOLID );
+		// Check not only whether there is a hit but test whether is it really a ground (and not a wall or obstacle)
+		if( ( trace.fraction != 1.0f ) && ( origin[2] - trace.endpos[2] ) > -playerbox_stand_mins[2] ) {
+			SetHeightOverGround( ( trace.fraction * GROUND_TRACE_DEPTH ) + playerbox_stand_mins[2] );
+			const Vec3 droppedOrigin( trace.endpos[0], trace.endpos[1], trace.endpos[2] + 8.0f );
+			if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->FindAreaNum( droppedOrigin ) ) ) {
+				this->droppedToFloorAasAreaNum = this->currAasAreaNum;
+			}
+		} else {
+			SetHeightOverGround( std::numeric_limits<float>::infinity() );
+			this->droppedToFloorAasAreaNum = this->currAasAreaNum;
+		}
 	}
-
-	// Try drop an origin from air to floor
-	trace_t trace;
-	edict_t *ent = const_cast<edict_t *>( Self() );
-	Vec3 traceEnd( Origin() );
-	traceEnd.Z() -= GROUND_TRACE_DEPTH;
-	G_Trace( &trace, this->origin, ent->r.mins, ent->r.maxs, traceEnd.Data(), ent, MASK_PLAYERSOLID );
-	// Check not only whether there is a hit but test whether is it really a ground (and not a wall or obstacle)
-	if( trace.fraction != 1.0f && Origin()[2] - trace.endpos[2] > -playerbox_stand_mins[2] ) {
-		float heightOverGround_ = trace.fraction * GROUND_TRACE_DEPTH + playerbox_stand_mins[2];
-		this->droppedToFloorOriginOffset = ( decltype( this->droppedToFloorOriginOffset ) )( -playerbox_stand_mins[2] );
-		this->droppedToFloorOriginOffset -= heightOverGround_ - 4.0f;
-		SetHeightOverGround( heightOverGround_ );
-		Vec3 droppedOrigin( Origin() );
-		droppedOrigin.Z() -= this->droppedToFloorOriginOffset;
-		this->droppedToFloorAasAreaNum = ( decltype( this->droppedToFloorAasAreaNum ) )aasWorld->FindAreaNum( droppedOrigin );
-		return;
-	}
-
-	this->droppedToFloorOriginOffset = 0;
-	SetHeightOverGround( std::numeric_limits<float>::infinity() );
-	this->droppedToFloorAasAreaNum = this->currAasAreaNum;
 }
 
 float Ai::GetChangedAngle( float oldAngle, float desiredAngle, unsigned frameTime,

@@ -47,10 +47,14 @@ private:
 	uint16_t heightOverGround;
 
 	inline void SetHeightOverGround( float heightOverGround_ ) {
-		if( heightOverGround_ <= GROUND_TRACE_DEPTH ) {
-			this->heightOverGround = ( uint16_t )( heightOverGround_ * 256 );
+		if( heightOverGround_ >= 0.0f ) {
+			if( heightOverGround_ <= GROUND_TRACE_DEPTH ) {
+				this->heightOverGround = ( uint16_t )( heightOverGround_ * 256 );
+			} else {
+				this->heightOverGround = ( uint16_t )( ( GROUND_TRACE_DEPTH + 1 ) * 256 + 1 );
+			}
 		} else {
-			this->heightOverGround = ( uint16_t )( ( GROUND_TRACE_DEPTH + 1 ) * 256 + 1 );
+			this->heightOverGround = 0;
 		}
 	}
 
@@ -80,7 +84,6 @@ private:
 	void UpdateAreaNums();
 
 public:
-	int8_t droppedToFloorOriginOffset;
 	uint8_t waterLevel;
 
 	AiEntityPhysicsState()
@@ -93,7 +96,6 @@ public:
 		, groundNormalZ( 0 )
 		, currAasAreaNum( 0 )
 		, droppedToFloorAasAreaNum( 0 )
-		, droppedToFloorOriginOffset( 0 )
 		, waterLevel( 0 ) {}
 
 	inline void UpdateFromEntity( const edict_t *ent ) {
@@ -156,10 +158,6 @@ public:
 
 	int CurrAasAreaNum() const { return (int)currAasAreaNum; }
 	int DroppedToFloorAasAreaNum() const { return (int)droppedToFloorAasAreaNum; }
-
-	inline Vec3 DroppedToFloorOrigin() const {
-		return Vec3( origin[0], origin[1], origin[2] + droppedToFloorOriginOffset );
-	}
 
 	// Do not expose origin/velocity directly.
 	// These accessors help to trace access to origin, and packing is yet an open question.
