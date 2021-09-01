@@ -572,8 +572,7 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *cont
 			targetPoint.Set( AiAasWorld::Instance()->Reachabilities()[reachNum].start );
 			initial2DDistance = distanceToReachAtStart;
 		}
-	} else {
-		assert( context->IsInNavTargetArea() );
+	} else if( context->IsInNavTargetArea() ) {
 		targetPoint = context->NavTargetOrigin();
 		initial2DDistance = distanceInNavTargetAreaAtStart;
 	}
