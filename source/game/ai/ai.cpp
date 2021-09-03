@@ -326,25 +326,24 @@ void AI_AddNavEntity( edict_t *ent, ai_nav_entity_flags flags ) {
 }
 
 void AI_RemoveNavEntity( edict_t *ent ) {
-	auto *const navEntitiesRegistry = NavEntitiesRegistry::Instance();
-	if( !navEntitiesRegistry ) {
-		return;
+	if( auto *const navEntitiesRegistry = NavEntitiesRegistry::Instance() ) {
+		if( auto *const navEntity = navEntitiesRegistry->NavEntityForEntity( ent ) ) {
+			if( auto *const aiManager = AiManager::Instance() ) {
+				aiManager->notifyOfNavEntityRemoved( navEntity );
+			}
+			navEntitiesRegistry->RemoveNavEntity( navEntity );
+		}
 	}
-
-	NavEntity *const navEntity = navEntitiesRegistry->NavEntityForEntity( ent );
-	// (An nav. item absence is not an error, this function is called for each entity in game)
-	if( !navEntity ) {
-		return;
-	}
-
-	if( auto *const aiManager = AiManager::Instance() ) {
-		aiManager->NavEntityReachedBy( navEntity, nullptr );
-	}
-	navEntitiesRegistry->RemoveNavEntity( navEntity );
 }
 
 void AI_NavEntityReached( edict_t *ent ) {
-	AiManager::Instance()->NavEntityReachedSignal( ent );
+	if( auto *const navEntitiesRegistry = NavEntitiesRegistry::Instance() ) {
+		if( auto *const navEntity = navEntitiesRegistry->NavEntityForEntity( ent ) ) {
+			if( auto *const aiManager = AiManager::Instance() ) {
+				aiManager->notifyOfNavEntitySignaledAsReached( navEntity );
+			}
+		}
+	}
 }
 
 //==========================================

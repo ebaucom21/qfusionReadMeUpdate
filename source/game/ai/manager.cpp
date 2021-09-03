@@ -41,25 +41,19 @@ AiManager::AiManager( const char *gametype, const char *mapname ) {
 	std::fill_n( teams, MAX_CLIENTS, TEAM_SPECTATOR );
 }
 
-void AiManager::NavEntityReachedBy( const NavEntity *navEntity, const Ai *grabber ) {
-	if( !navEntity || !grabber ) {
-		return;
-	}
-
+void AiManager::notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity ) {
+	assert( navEntity );
 	// find all bots which have this node as goal and tell them their goal is reached
 	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
-		bot->OnNavEntityReachedBy( navEntity, grabber );
+		bot->onNavEntityReachedBySignal( navEntity );
 	}
 }
 
-void AiManager::NavEntityReachedSignal( const edict_t *ent ) {
-	if( !ent ) {
-		return;
-	}
-
+void AiManager::notifyOfNavEntityRemoved( const NavEntity *navEntity ) {
+	assert( navEntity );
 	// find all bots which have this node as goal and tell them their goal is reached
 	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
-		bot->OnEntityReachedSignal( ent );
+		bot->onNavEntityReachedBySignal( navEntity );
 	}
 }
 

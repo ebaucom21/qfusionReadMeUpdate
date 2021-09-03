@@ -123,19 +123,6 @@ void Bot::TouchedOtherEntity( const edict_t *entity ) {
 	}
 }
 
-bool Bot::HasJustPickedGoalItem() const {
-	if( lastNavTargetReachedAt < prevThinkAt ) {
-		return false;
-	}
-	if( !lastReachedNavTarget ) {
-		return false;
-	}
-	if( !lastReachedNavTarget->IsBasedOnNavEntity( prevSelectedNavEntity ) ) {
-		return false;
-	}
-	return true;
-}
-
 void Bot::CheckTargetProximity() {
 	planningModule.CheckTargetProximity();
 
@@ -169,7 +156,6 @@ const SelectedNavEntity &Bot::GetOrUpdateSelectedNavEntity() {
 
 void Bot::ForceSetNavEntity( const SelectedNavEntity &selectedNavEntity_ ) {
 	// Use direct access to the field to skip assertion
-	this->prevSelectedNavEntity = this->selectedNavEntity.navEntity;
 	this->selectedNavEntity = selectedNavEntity_;
 
 	if( !selectedNavEntity.IsEmpty() ) {

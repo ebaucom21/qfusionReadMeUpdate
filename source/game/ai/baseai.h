@@ -276,7 +276,6 @@ protected:
 
 	// An actually used nav target, be it a nav entity or a spot
 	const NavTarget *navTarget { nullptr };
-	const NavTarget *lastReachedNavTarget { nullptr };
 	NavSpot localNavSpotStorage { NavSpot::Dummy() };
 
 	// Negative  = enemy
@@ -292,6 +291,7 @@ protected:
 	void SetFrameAffinity( unsigned modulo, unsigned offset ) override;
 
 	virtual void OnNavTargetSet() {};
+	virtual void OnNavTargetReset() {};
 	virtual void OnNavTargetTouchHandled() {};
 
 	bool CanHandleNavTargetTouch( const edict_t *ent );
@@ -354,9 +354,17 @@ public:
 	// Accepts a touched entity and its old solid before touch
 	void TouchedEntity( edict_t *ent );
 
-	// TODO: Remove this, check item spawn time instead
-	virtual void OnNavEntityReachedBy( const NavEntity *navEntity, const Ai *grabber ) {}
-	virtual void OnEntityReachedSignal( const edict_t *entity ) {}
+	void onNavEntityReachedBySignal( const NavEntity *navEntity ) {
+		if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
+			ResetNavTarget();
+		}
+	}
+
+	void onNavEntityRemoved( const NavEntity *navEntity ) {
+		if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
+			ResetNavTarget();
+		}
+	}
 
 	void ResetNavigation();
 

@@ -151,7 +151,7 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		}
 	}
 
-	worldState->HasJustPickedGoalItemVar().SetValue( bot->HasJustPickedGoalItem() );
+	worldState->HasJustPickedGoalItemVar().SetValue( false );
 
 	worldState->HasPositionalAdvantageVar().SetValue( false );
 

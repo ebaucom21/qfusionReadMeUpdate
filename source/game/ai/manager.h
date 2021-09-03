@@ -80,8 +80,9 @@ public:
 	static void Init( const char *gametype, const char *mapname );
 	static void Shutdown();
 
-	void NavEntityReachedBy( const NavEntity *canceledGoal, const class Ai *goalGrabber );
-	void NavEntityReachedSignal( const edict_t *ent );
+	void notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity );
+	void notifyOfNavEntityRemoved( const NavEntity *navEntity );
+
 	void OnBotJoinedTeam( edict_t *ent, int team );
 
 	void RegisterEvent( const edict_t *ent, int event, int parm );

@@ -312,6 +312,10 @@ protected:
 		awarenessModule.SetFrameAffinity( modulo, offset );
 	}
 
+	void OnNavTargetReset() override {
+		selectedNavEntity.InvalidateNextFrame();
+	}
+
 	void OnNavTargetTouchHandled() override {
 		selectedNavEntity.InvalidateNextFrame();
 	}
@@ -334,8 +338,6 @@ private:
 	SelectedEnemies lostEnemies;
 	SelectedMiscTactics selectedTactics;
 	SelectedNavEntity selectedNavEntity;
-	// For tracking picked up items
-	const NavEntity *prevSelectedNavEntity { nullptr };
 
 	// Put the movement subsystem at the object beginning so the relative offset is small
 	MovementSubsystem m_movementSubsystem;
@@ -419,8 +421,6 @@ private:
 	void OnRespawn();
 
 	void CheckTargetProximity();
-
-	bool HasJustPickedGoalItem() const;
 public:
 	// These methods are exposed mostly for script interface
 	inline unsigned NextSimilarWorldStateInstanceId() {

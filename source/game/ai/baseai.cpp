@@ -109,7 +109,6 @@ bool Ai::CanHandleNavTargetTouch( const edict_t *ent ) {
 		return false;
 	}
 
-	lastReachedNavTarget = navTarget;
 	lastNavTargetReachedAt = level.time;
 	return true;
 }
@@ -127,7 +126,6 @@ bool Ai::TryReachNavTargetByProximity() {
 
 	float goalRadius = navTarget->RadiusOrDefault( GOAL_PROXIMITY_THRESHOLD );
 	if( ( navTarget->Origin() - self->s.origin ).SquaredLength() < goalRadius * goalRadius ) {
-		lastReachedNavTarget = navTarget;
 		lastNavTargetReachedAt = level.time;
 		return true;
 	}
