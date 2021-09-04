@@ -114,9 +114,6 @@ LRESULT CALLBACK LLWinKeyHook( int Code, WPARAM wParam, LPARAM lParam ) {
 	return CallNextHookEx( NULL, Code, wParam, lParam );
 }
 
-/*
-* VID_EnableAltTab
-*/
 void VID_EnableAltTab( bool enable ) {
 	if( enable ) {
 		if( s_alttab_disabled ) {
@@ -136,9 +133,6 @@ void VID_EnableAltTab( bool enable ) {
 	}
 }
 
-/*
-* VID_EnableWinKeys
-*/
 void VID_EnableWinKeys( bool enable ) {
 	if( enable ) {
 		if( !s_winkeys_hooked ) {
@@ -298,11 +292,6 @@ void AppActivate( BOOL fActive, BOOL minimize, BOOL destroy ) {
 	VID_AppActivate( fActive, minimize, destroy );
 }
 
-/*
-* MainWndProc
-*
-* main window procedure
-*/
 LONG WINAPI MainWndProc(
 	HWND hWnd,
 	UINT uMsg,
@@ -514,27 +503,18 @@ LONG WINAPI MainWndProc(
 	return DefWindowProcW( hWnd, uMsg, wParam, lParam );
 }
 
-/*
-** VID_GetWindowHandle - The sound module may require the handle when using directsound
-*/
 void *VID_GetWindowHandle( void ) {
 	return ( void * )cl_hwnd;
 }
 
-/*
-** VID_Sys_Init
-*/
 rserr_t VID_Sys_Init( const char *applicationName, const char *screenshotsPrefix, int startupColor,
 					  const int *iconXPM, void *parentWindow, bool verbose ) {
-	return RF_Init( applicationName, screenshotsPrefix, startupColor,
+	return R_Init( applicationName, screenshotsPrefix, startupColor,
 					IDI_APPICON_VALUE, iconXPM,
 					global_hInstance, (void *)MainWndProc, parentWindow,
 					verbose );
 }
 
-/*
-** VID_UpdateWindowPosAndSize
-*/
 void VID_UpdateWindowPosAndSize( int x, int y ) {
 	RECT r;
 	int style;
@@ -554,9 +534,6 @@ void VID_UpdateWindowPosAndSize( int x, int y ) {
 	MoveWindow( cl_hwnd, x, y, w, h, TRUE );
 }
 
-/*
-** VID_GetDefaultMode
-*/
 bool VID_GetDefaultMode( int *width, int *height ) {
 	DEVMODE dm;
 
@@ -575,9 +552,6 @@ bool VID_GetDefaultMode( int *width, int *height ) {
 	return true;
 }
 
-/*
-** VID_GetSysModes
-*/
 unsigned int VID_GetSysModes( vidmode_t *modes ) {
 	DEVMODE dm;
 	unsigned int i, count = 0, prevwidth = 0, prevheight = 0;
@@ -612,12 +586,6 @@ unsigned int VID_GetSysModes( vidmode_t *modes ) {
 	return count;
 }
 
-
-/*
-** VID_FlashWindow
-*
-* Sends a flash message to inactive window
-*/
 void VID_FlashWindow( int count ) {
 	FLASHWINFO fwi;
 
@@ -665,9 +633,6 @@ void VID_SetProcessDPIAware( void ) {
 	}
 }
 
-/*
-** VID_GetPixelRatio
-*/
 float VID_GetPixelRatio( void ) {
 	return vid_pixelRatio;
 }

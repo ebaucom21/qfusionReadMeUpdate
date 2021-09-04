@@ -231,7 +231,34 @@ void    GLimp_EndFrame( void );
 bool    GLimp_Init( const char *applicationName, void *hinstance, void *wndproc, void *parenthWnd,
 					int iconResource, const int *iconXPM );
 void    GLimp_Shutdown( void );
-rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullscreen, bool borderless );
+
+#ifdef None
+#undef None
+#endif
+
+enum class VidModeFlags : unsigned {
+	None                 = 0x0,
+	Fullscreen           = 0x1,
+	Borderless           = 0x2,
+	BorderlessFullscreen = Fullscreen | Borderless
+};
+
+[[nodiscard]]
+inline auto operator&( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
+	return (VidModeFlags)( (unsigned)lhs & (unsigned)rhs );
+}
+
+[[nodiscard]]
+inline auto operator|( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
+	return (VidModeFlags)( (unsigned)lhs | (unsigned)rhs );
+}
+
+[[nodiscard]]
+inline auto operator~( const VidModeFlags &flags ) -> VidModeFlags {
+	return (VidModeFlags)( ~( (unsigned)flags ) );
+}
+
+rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags );
 rserr_t GLimp_SetFullscreenMode( int displayFrequency, bool fullscreen );
 void    GLimp_AppActivate( bool active, bool minimize, bool destroy );
 bool    GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *ramp );

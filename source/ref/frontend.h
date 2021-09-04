@@ -23,48 +23,35 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 
-typedef struct {
-	// these fields serve as the frontend cache which can also queried by the public API
-	int scissor[4];
-	byte_vec4_t customColors[NUM_CUSTOMCOLORS];
-} ref_frontend_t;
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags );
 
-// public API
-rserr_t RF_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
-				 int iconResource, const int *iconXPM, void *hinstance, void *wndproc, void *parenthWnd,  bool verbose );
-rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless );
 void RF_AppActivate( bool active, bool minimize, bool destroy );
 void RF_Shutdown( bool verbose );
+
+void RF_BeginRegistration();
+void RF_EndRegistration();
+
 void RF_BeginFrame( bool forceClear, bool forceVsync, bool uncappedFPS );
-void RF_EndFrame( void );
-void RF_BeginRegistration( void );
-void RF_EndRegistration( void );
+void RF_EndFrame();
+
 void RF_RegisterWorldModel( const char *model );
-void RF_ClearScene( void );
+void RF_ClearScene();
 void RF_AddEntityToScene( const entity_t *ent );
 void RF_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b );
 void RF_AddPolyToScene( const poly_t *poly );
 void RF_AddLightStyleToScene( int style, float r, float g, float b );
 void RF_RenderScene( const refdef_t *fd );
+
 void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 						const vec4_t color, const shader_t *shader );
-void RF_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, float angle,
-							   const vec4_t color, const shader_t *shader );
 
-void RF_DrawExternalTextureOverlay( GLuint externalTexNum );
-
-void RF_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset );
-void RF_SetScissor( int x, int y, int w, int h );
-void RF_GetScissor( int *x, int *y, int *w, int *h );
-void RF_ResetScissor( void );
-void RF_SetCustomColor( int num, int r, int g, int b );
 void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent );
 const char *RF_GetSpeedsMessage( char *out, size_t size );
-int RF_GetAverageFrametime( void );
-void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data );
+
+int RF_GetAverageFrametime();
+
 void RF_TransformVectorToScreen( const refdef_t *rd, const vec3_t in, vec2_t out );
 bool RF_LerpTag( orientation_t *orient, const model_t *mod, int oldframe, int frame, float lerpfrac, const char *name );
-void RF_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius );
 void RF_Finish( void );
 
 #endif // R_FRONTEND_H

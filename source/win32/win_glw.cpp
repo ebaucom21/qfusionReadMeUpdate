@@ -279,17 +279,19 @@ rserr_t GLimp_SetFullscreenMode( int displayFrequency, bool fullscreen ) {
 	return rserr_ok;
 }
 
-rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullscreen, bool borderless ) {
+rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags ) {
+	const bool borderless = ( flags & VidModeFlags::Borderless ) != VidModeFlags::Borderless;
+	bool fullscreen = ( flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
+
 	const char *win_fs[] = { "W", "FS" };
 
 	Com_Printf( "Setting video mode:" );
 
 	// disable fullscreen if rendering to a parent window
 	if( glw_state.parenthWnd ) {
-		RECT parentWindowRect;
-
 		fullscreen = false;
 
+		RECT parentWindowRect;
 		GetWindowRect( glw_state.parenthWnd, &parentWindowRect );
 		width = parentWindowRect.right - parentWindowRect.left;
 		height = parentWindowRect.bottom - parentWindowRect.top;
@@ -325,7 +327,7 @@ rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency
 		return rserr_unknown;
 	}
 
-	return ( fullscreen == glConfig.fullScreen ? rserr_ok : rserr_invalid_fullscreen );
+	return ( fullscreen == glConfig.fullScreen ) ? rserr_ok : rserr_invalid_fullscreen;
 }
 
 void GLimp_Shutdown( void ) {

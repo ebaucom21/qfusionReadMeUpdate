@@ -46,15 +46,12 @@ static int CG_ForceTeam( int entNum, int team ) {
 * Updates the team colors in the renderer with the ones assigned to each team.
 */
 void CG_SetSceneTeamColors( void ) {
-	int team;
-	vec4_t color;
-
 	// send always white for the team spectators
-	RF_SetCustomColor( TEAM_SPECTATOR, 255, 255, 255 );
-
-	for( team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ ) {
+	R_SetCustomColor( TEAM_SPECTATOR, 255, 255, 255 );
+	for( int team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ ) {
+		vec4_t color;
 		CG_TeamColor( team, color );
-		RF_SetCustomColor( team, (uint8_t)( color[0] * 255 ), (uint8_t)( color[1] * 255 ), (uint8_t)( color[2] * 255 ) ); // update the renderer
+		R_SetCustomColor( team, (uint8_t)( color[0] * 255 ), (uint8_t)( color[1] * 255 ), (uint8_t)( color[2] * 255 ) );
 	}
 }
 

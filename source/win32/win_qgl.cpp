@@ -128,8 +128,7 @@ void QGL_Shutdown( void ) {
 const qgl_driverinfo_t *QGL_GetDriverInfo( void ) {
 	static const qgl_driverinfo_t driver =
 	{
-		"opengl32.dll",
-		"gl_driver_win"
+		"opengl32.dll"
 	};
 	return &driver;
 }

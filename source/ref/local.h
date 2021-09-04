@@ -1594,7 +1594,6 @@ rserr_t     R_Init( const char *applicationName, const char *screenshotPrefix, i
 void        R_BeginRegistration( void );
 void        R_EndRegistration( void );
 void        R_Shutdown( bool verbose );
-rserr_t     R_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless );
 
 //
 // r_scene.c

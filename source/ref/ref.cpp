@@ -4259,54 +4259,6 @@ static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal ) {
 	R_PopRefInst();
 }
 
-static ref_frontend_t rrf;
-
-rserr_t RF_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
-				 int iconResource, const int *iconXPM,
-				 void *hinstance, void *wndproc, void *parenthWnd,
-				 bool verbose ) {
-	rserr_t err;
-
-	memset( &rrf, 0, sizeof( rrf ) );
-
-	err = R_Init( applicationName, screenshotPrefix, startupColor,
-				  iconResource, iconXPM, hinstance, wndproc, parenthWnd, verbose );
-	if( err != rserr_ok ) {
-		return err;
-	}
-
-	return rserr_ok;
-}
-
-rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless ) {
-	rserr_t err;
-
-	if( glConfig.width == width && glConfig.height == height && glConfig.fullScreen != fullScreen ) {
-		return GLimp_SetFullscreenMode( displayFrequency, fullScreen );
-	}
-
-	if( TextureCache *instance = TextureCache::maybeInstance() ) {
-		instance->releaseRenderTargetAttachments();
-	}
-
-	RB_Shutdown();
-
-	err = R_SetMode( x, y, width, height, displayFrequency, fullScreen, borderless );
-	if( err != rserr_ok ) {
-		return err;
-	}
-
-	memset( rrf.customColors, 255, sizeof( rrf.customColors ) );
-
-	RB_Init();
-
-	TextureCache::instance()->createRenderTargetAttachments();
-
-	R_BindFrameBufferObject( 0 );
-
-	return rserr_ok;
-}
-
 void RF_AppActivate( bool active, bool minimize, bool destroy ) {
 	R_Flush();
 	GLimp_AppActivate( active, minimize, destroy );
@@ -4318,8 +4270,6 @@ void RF_Shutdown( bool verbose ) {
 	}
 
 	RB_Shutdown();
-
-	memset( &rrf, 0, sizeof( rrf ) );
 
 	R_Shutdown( verbose );
 }
@@ -4443,17 +4393,6 @@ void RF_RenderScene( const refdef_t *fd ) {
 void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 						const vec4_t color, const shader_t *shader ) {
 	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
-}
-
-void RF_SetCustomColor( int num, int r, int g, int b ) {
-	byte_vec4_t rgba;
-
-	Vector4Set( rgba, r, g, b, 255 );
-
-	if( *(int *)rgba != *(int *)rrf.customColors[num] ) {
-		R_SetCustomColor( num, r, g, b );
-		*(int *)rrf.customColors[num] = *(int *)rgba;
-	}
 }
 
 void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent ) {
@@ -5309,19 +5248,40 @@ static rserr_t R_PostInit( void ) {
 	return rserr_ok;
 }
 
-rserr_t R_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless ) {
-	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, fullScreen, borderless );
-	if( err != rserr_ok ) {
-		Com_Printf( "Could not GLimp_SetMode()\n" );
-		return err;
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags ) {
+	const bool fullscreen = ( flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
+	// If the fullscreen flag is the single difference, choose the lightweight path
+	if( glConfig.width == width && glConfig.height == height ) {
+		if( glConfig.fullScreen != fullscreen ) {
+			return GLimp_SetFullscreenMode( displayFrequency, fullscreen );
+		}
 	}
 
-	if( r_postinit ) {
+	if( TextureCache *instance = TextureCache::maybeInstance() ) {
+		instance->releaseRenderTargetAttachments();
+	}
+
+	RB_Shutdown();
+
+	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, flags );
+	if( err != rserr_ok ) {
+		Com_Printf( "Could not GLimp_SetMode()\n" );
+	} else if( r_postinit ) {
 		err = R_PostInit();
 		r_postinit = false;
 	}
 
-	return err;
+	if( err != rserr_ok ) {
+		return err;
+	}
+
+	RB_Init();
+
+	TextureCache::instance()->createRenderTargetAttachments();
+
+	R_BindFrameBufferObject( 0 );
+
+	return rserr_ok;
 }
 
 static void R_InitVolatileAssets( void ) {

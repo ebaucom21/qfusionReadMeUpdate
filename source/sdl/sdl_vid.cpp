@@ -34,52 +34,28 @@ static int VID_WndProc( void *wnd, int ev, int p1, int p2 ) {
 	return 0;
 }
 
-/*
- * VID_Sys_Init
- */
 rserr_t VID_Sys_Init( const char *applicationName, const char *screenshotsPrefix, int startupColor,
 					  const int *iconXPM, void *parentWindow, bool verbose ) {
-	return RF_Init( applicationName, screenshotsPrefix, startupColor, 0, iconXPM,
-					NULL, (void *)VID_WndProc, parentWindow, verbose );
+	return R_Init( applicationName, screenshotsPrefix, startupColor, 0, iconXPM, NULL, (void *)VID_WndProc, parentWindow, verbose );
 }
 
-/*
- * VID_UpdateWindowPosAndSize
- */
 void VID_UpdateWindowPosAndSize( int x, int y ) {
 	SDL_SetWindowPosition( sdl_window, x, y );
 }
 
-/*
- * VID_EnableAltTab
- */
 void VID_EnableAltTab( bool enable ) {
 }
 
-/*
- * VID_GetWindowHandle - The sound module may require the handle when using Window's directsound
- */
 void *VID_GetWindowHandle( void ) {
 	return (void *)NULL;
 }
 
-/*
- * VID_EnableWinKeys
- */
 void VID_EnableWinKeys( bool enable ) {
 }
 
-/*
- * VID_FlashWindow
- *
- * Sends a flash message to inactive window
- */
 void VID_FlashWindow( int count ) {
 }
 
-/*
- * VID_GetSysModes
- */
 unsigned int VID_GetSysModes( vidmode_t *modes ) {
 #ifdef __APPLE__
 	// only support borderless fullscreen because Alt+Tab doesn't work in fullscreen
@@ -126,9 +102,6 @@ unsigned int VID_GetSysModes( vidmode_t *modes ) {
 #endif
 }
 
-/*
- * VID_GetDefaultMode
- */
 bool VID_GetDefaultMode( int *width, int *height ) {
 	SDL_DisplayMode mode;
 	SDL_GetDesktopDisplayMode( 0, &mode );
@@ -139,9 +112,6 @@ bool VID_GetDefaultMode( int *width, int *height ) {
 	return true;
 }
 
-/*
- * VID_GetPixelRatio
- */
 float VID_GetPixelRatio( void ) {
 #if SDL_VERSION_ATLEAST( 2,0,4 )
 	float vdpi;

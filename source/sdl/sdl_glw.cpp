@@ -90,15 +90,14 @@ static void GLimp_CreateWindow( int x, int y, int width, int height ) {
 	GLimp_SetWindowIcon();
 }
 
-rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullscreen, bool borderless ) {
+rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags ) {
 	const char *win_fs[] = {"W", "FS"};
 
-#ifdef __APPLE__
-	if( fullscreen ) {
-		borderless = true;
-	} else {
-		borderless = false;
-	}
+	const bool fullscreen = ( flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
+#ifndef __APPLE__
+	const bool borderless = ( flags & VidModeFlags::Borderless ) != VidModeFlags::None;
+#else
+	const bool borderless = fullscreen;
 #endif
 
 	Com_Printf( "Initializing OpenGL display\n" );
