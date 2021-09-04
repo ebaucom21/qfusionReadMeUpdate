@@ -109,15 +109,6 @@ else()
 
 		set(REF_PLATFORM_LIBRARIES "")
 	endif()
-
-	if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-		file(GLOB REF_PLATFORM_SOURCES
-				"../unix/unix_glw.cpp"
-				"../unix/unix_qgl.cpp"
-				)
-
-		set(REF_PLATFORM_LIBRARIES "X11" "Xext" "Xinerama" "Xrandr" "Xxf86vm" "m")
-	endif()
 endif()
 
 file(GLOB FTLIB_HEADERS
@@ -245,46 +236,24 @@ endif()
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set(CLIENT_PLATFORM_HEADERS "")
 
-    if (USE_SDL2)
-        file(GLOB CLIENT_PLATFORM_SOURCES
-            "../unix/unix_fs.cpp"
-            "../unix/unix_net.cpp"
-            "../unix/unix_sys.cpp"
-            "../unix/unix_console.cpp"
-            "../unix/unix_threads.cpp"
+	file(GLOB CLIENT_PLATFORM_SOURCES
+		"../unix/unix_fs.cpp"
+		"../unix/unix_net.cpp"
+		"../unix/unix_sys.cpp"
+		"../unix/unix_console.cpp"
+		"../unix/unix_threads.cpp"
 
-            "../sdl/sdl_input.cpp"
-            "../sdl/sdl_input_joy.cpp"
-            "../sdl/sdl_vid.cpp"
-            "../sdl/sdl_sys.cpp"
-            "../sdl/sdl_clipboard.cpp"
-            "../sdl/sdl_time.cpp"
-            "../sdl/sdl_lib.cpp"
-            "../sdl/sdl_client.cpp"
-        )
+		"../sdl/sdl_input.cpp"
+		"../sdl/sdl_input_joy.cpp"
+		"../sdl/sdl_vid.cpp"
+		"../sdl/sdl_sys.cpp"
+		"../sdl/sdl_clipboard.cpp"
+		"../sdl/sdl_time.cpp"
+		"../sdl/sdl_lib.cpp"
+		"../sdl/sdl_client.cpp"
+		)
 
-        set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "m" "dl" "rt" "uuid")
-    else()
-        file(GLOB CLIENT_PLATFORM_SOURCES
-            "../unix/unix_fs.cpp"
-            "../unix/unix_lib.cpp"
-            "../unix/unix_net.cpp"
-            "../unix/unix_sys.cpp"
-            "../unix/unix_console.cpp"
-            "../unix/unix_clipboard.cpp"
-            "../unix/unix_time.cpp"
-            "../unix/unix_threads.cpp"
-
-            "../unix/keysym2ucs.c"
-            "../unix/unix_client.cpp"
-            "../unix/unix_input.cpp"
-            "../unix/unix_vid.cpp"
-
-            "../sdl/sdl_input_joy.cpp"
-        )
-    
-        set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "dl" "m" "X11" "Xi" "Xext" "Xrandr" "rt" "uuid")
-    endif()
+	set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "m" "dl" "rt" "uuid")
     set(CLIENT_BINARY_TYPE "")
 
     set(BUNDLE_RESOURCES "../ui/ui.qrc")
