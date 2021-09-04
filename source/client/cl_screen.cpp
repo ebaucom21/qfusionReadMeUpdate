@@ -57,24 +57,10 @@ static cvar_t *con_fontSystemFallbackFamily;
 static cvar_t *con_fontSystemMonoFamily;
 static cvar_t *con_fontSystemConsoleSize;
 
-//
-//	Variable width (proportional) fonts
-//
-
-//===============================================================================
-//FONT LOADING
-//===============================================================================
-
-/*
-* SCR_RegisterFont
-*/
 qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size ) {
 	return FTLIB_RegisterFont( family, con_fontSystemFallbackFamily->string, style, size );
 }
 
-/*
-* SCR_RegisterConsoleFont
-*/
 static void SCR_RegisterConsoleFont( void ) {
 	const char *con_fontSystemFamilyName;
 	const int con_fontSystemStyle = DEFAULT_SYSTEM_FONT_STYLE;
@@ -107,10 +93,6 @@ static void SCR_RegisterConsoleFont( void ) {
 	}
 }
 
-
-/*
-* SCR_InitFonts
-*/
 static void SCR_InitFonts( void ) {
 	con_fontSystemFamily = Cvar_Get( "con_fontSystemFamily", DEFAULT_SYSTEM_FONT_FAMILY, CVAR_ARCHIVE );
 	con_fontSystemMonoFamily = Cvar_Get( "con_fontSystemMonoFamily", DEFAULT_SYSTEM_FONT_FAMILY_MONO, CVAR_ARCHIVE );
@@ -120,9 +102,6 @@ static void SCR_InitFonts( void ) {
 	SCR_RegisterConsoleFont();
 }
 
-/*
-* SCR_ShutdownFonts
-*/
 static void SCR_ShutdownFonts( void ) {
 	cls.consoleFont = NULL;
 
@@ -130,28 +109,18 @@ static void SCR_ShutdownFonts( void ) {
 	con_fontSystemConsoleSize = NULL;
 }
 
-/*
-* SCR_CheckSystemFontsModified
-*
-* Reloads system fonts on demand
-*/
 static void SCR_CheckSystemFontsModified( void ) {
 	if( !con_fontSystemMonoFamily ) {
 		return;
 	}
 
-	if( con_fontSystemMonoFamily->modified
-		|| con_fontSystemConsoleSize->modified
-		) {
+	if( con_fontSystemMonoFamily->modified || con_fontSystemConsoleSize->modified ) {
 		SCR_RegisterConsoleFont();
 		con_fontSystemMonoFamily->modified = false;
 		con_fontSystemConsoleSize->modified = false;
 	}
 }
 
-/*
-* SCR_ResetSystemFontConsoleSize
-*/
 void SCR_ResetSystemFontConsoleSize( void ) {
 	if( !con_fontSystemConsoleSize ) {
 		return;
@@ -160,9 +129,6 @@ void SCR_ResetSystemFontConsoleSize( void ) {
 	SCR_CheckSystemFontsModified();
 }
 
-/*
-* SCR_ChangeSystemFontConsoleSize
-*/
 void SCR_ChangeSystemFontConsoleSize( int ch ) {
 	if( !con_fontSystemConsoleSize ) {
 		return;
@@ -170,12 +136,6 @@ void SCR_ChangeSystemFontConsoleSize( int ch ) {
 	Cvar_ForceSet( con_fontSystemConsoleSize->name, va( "%i", con_fontSystemConsoleSize->integer + ch ) );
 	SCR_CheckSystemFontsModified();
 }
-
-
-//===============================================================================
-//STRINGS HELPERS
-//===============================================================================
-
 
 static int SCR_HorizontalAlignForString( const int x, int align, int width ) {
 	int nx = x;
@@ -207,10 +167,6 @@ static int SCR_VerticalAlignForString( const int y, int align, int height ) {
 	return ny;
 }
 
-size_t SCR_FontSize( qfontface_t *font ) {
-	return FTLIB_FontSize( font );
-}
-
 size_t SCR_FontHeight( qfontface_t *font ) {
 	return FTLIB_FontHeight( font );
 }
@@ -223,45 +179,15 @@ size_t SCR_StrlenForWidth( const char *str, qfontface_t *font, size_t maxwidth, 
 	return FTLIB_StrlenForWidth( str, font, maxwidth, flags );
 }
 
-int SCR_FontUnderline( qfontface_t *font, int *thickness ) {
-	return FTLIB_FontUnderline( font, thickness );
-}
-
-size_t SCR_FontAdvance( qfontface_t *font ) {
-	return FTLIB_FontAdvance( font );
-}
-
-size_t SCR_FontXHeight( qfontface_t *font ) {
-	return FTLIB_FontXHeight( font );
-}
-
-fdrawchar_t SCR_SetDrawCharIntercept( fdrawchar_t intercept ) {
-	return FTLIB_SetDrawCharIntercept( intercept );
-}
-
-//===============================================================================
-//STRINGS DRAWING
-//===============================================================================
-
 void SCR_DrawRawChar( int x, int y, wchar_t num, qfontface_t *font, const vec4_t color ) {
 	FTLIB_DrawRawChar( x, y, num, font, color );
 }
 
-void SCR_DrawClampChar( int x, int y, wchar_t num, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color ) {
-	FTLIB_DrawClampChar( x, y, num, xmin, ymin, xmax, ymax, font, color );
-}
 
 void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color, int flags ) {
 	FTLIB_DrawClampString( x, y, str, xmin, ymin, xmax, ymax, font, color, flags );
 }
 
-int SCR_DrawMultilineString( int x, int y, const char *str, int halign, int maxwidth, int maxlines, qfontface_t *font, const vec4_t color, int flags ) {
-	return FTLIB_DrawMultilineString( x, y, str, halign, maxwidth, maxlines, font, color, flags );
-}
-
-/*
-* SCR_DrawString
-*/
 int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags ) {
 	int width;
 	int fontHeight;
@@ -318,65 +244,13 @@ size_t SCR_DrawStringWidth( int x, int y, int align, const char *str, size_t max
 	return 0;
 }
 
-//===============================================================================
-
-/*
-* SCR_RegisterPic
-*/
-struct shader_s *SCR_RegisterPic( const char *name ) {
-	return R_RegisterPic( name );
-}
-
-/*
-* SCR_DrawStretchPic
-*/
 void SCR_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, const float *color, const struct shader_s *shader ) {
 	RF_DrawStretchPic( x, y, w, h, s1, t1, s2, t2, color, shader );
 }
 
-/*
-* SCR_DrawFillRect
-*
-* Fills a box of pixels with a single color
-*/
 void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color ) {
 	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cls.whiteShader );
 }
-
-/*
-* SCR_DrawClampFillRect
-*
-* Fills a scissored box of pixels with a single color
-*/
-void SCR_DrawClampFillRect( int x, int y, int w, int h, int xmin, int ymin, int xmax, int ymax, const vec4_t color ) {
-	int x2 = x + w;
-	int y2 = y + h;
-
-	if( ( xmax <= xmin ) || ( ymax <= ymin ) ) {
-		return;
-	}
-
-	clamp_low( x, xmin );
-	clamp_low( y, ymin );
-	clamp_high( x2, xmax );
-	clamp_high( y2, ymax );
-
-	w = x2 - x;
-	h = y2 - y;
-	if( ( w <= 0 ) || ( h <= 0 ) ) {
-		return;
-	}
-
-	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cls.whiteShader );
-}
-
-/*
-===============================================================================
-
-BAR GRAPHS
-
-===============================================================================
-*/
 
 /*
 * CL_AddNetgraph
@@ -408,7 +282,6 @@ void CL_AddNetgraph( void ) {
 	SCR_DebugGraph( ping, 1.0f, 0.75f, 0.06f );
 }
 
-
 typedef struct {
 	float value;
 	vec4_t color;
@@ -417,9 +290,6 @@ typedef struct {
 static int current;
 static graphsamp_t values[1024];
 
-/*
-* SCR_DebugGraph
-*/
 void SCR_DebugGraph( float value, float r, float g, float b ) {
 	values[current].value = value;
 	values[current].color[0] = r;
@@ -431,9 +301,6 @@ void SCR_DebugGraph( float value, float r, float g, float b ) {
 	current &= 1023;
 }
 
-/*
-* SCR_DrawDebugGraph
-*/
 static void SCR_DrawDebugGraph( void ) {
 	int a, x, y, w, i, h, s;
 	float v;
@@ -462,11 +329,6 @@ static void SCR_DrawDebugGraph( void ) {
 	}
 }
 
-//============================================================================
-
-/*
-* SCR_InitScreen
-*/
 void SCR_InitScreen( void ) {
 	scr_consize = Cvar_Get( "scr_consize", "0.4", CVAR_ARCHIVE );
 	scr_conspeed = Cvar_Get( "scr_conspeed", "3", CVAR_ARCHIVE );
@@ -480,41 +342,22 @@ void SCR_InitScreen( void ) {
 	scr_initialized = true;
 }
 
-/*
-* SCR_GetScreenWidth
-*/
 unsigned int SCR_GetScreenWidth( void ) {
 	return VID_GetWindowWidth();
 }
 
-/*
-* SCR_GetScreenHeight
-*/
 unsigned int SCR_GetScreenHeight( void ) {
 	return VID_GetWindowHeight();
 }
 
-/*
-* SCR_ShutdownScreen
-*/
 void SCR_ShutdownScreen( void ) {
 	scr_initialized = false;
 }
 
-/*
-* SCR_EnableQuickMenu
-*/
 void SCR_EnableQuickMenu( bool enable ) {
 	cls.quickmenu = enable;
 }
 
-//=============================================================================
-
-/*
-* SCR_RunConsole
-*
-* Scroll it up or down
-*/
 void SCR_RunConsole( int msec ) {
 	// decide on the height of the console
 	if( Con_HasKeyboardFocus() ) {
@@ -538,9 +381,6 @@ void SCR_RunConsole( int msec ) {
 	}
 }
 
-/*
-* SCR_DrawConsole
-*/
 static void SCR_DrawConsole( void ) {
 	if( scr_con_current ) {
 		Con_DrawConsole();
@@ -548,16 +388,10 @@ static void SCR_DrawConsole( void ) {
 	}
 }
 
-/*
-* SCR_DrawNotify
-*/
 static void SCR_DrawNotify( void ) {
 	Con_DrawNotify();
 }
 
-/*
-* SCR_BeginLoadingPlaque
-*/
 void SCR_BeginLoadingPlaque( void ) {
 	wsw::ui::UISystem::instance()->forceMenuOff();
 
@@ -571,20 +405,11 @@ void SCR_BeginLoadingPlaque( void ) {
 	SCR_UpdateScreen();
 }
 
-/*
-* SCR_EndLoadingPlaque
-*/
 void SCR_EndLoadingPlaque( void ) {
 	cls.disable_screen = 0;
 	Con_ClearNotify();
 }
 
-
-//=======================================================
-
-/*
-* SCR_RegisterConsoleMedia
-*/
 void SCR_RegisterConsoleMedia() {
 	cls.whiteShader = R_RegisterPic( "$whiteimage" );
 	cls.consoleShader = R_RegisterPic( "gfx/ui/console" );
@@ -592,18 +417,10 @@ void SCR_RegisterConsoleMedia() {
 	SCR_InitFonts();
 }
 
-/*
-* SCR_ShutDownConsoleMedia
-*/
 void SCR_ShutDownConsoleMedia( void ) {
 	SCR_ShutdownFonts();
 }
 
-//============================================================================
-
-/*
-* SCR_RenderView
-*/
 static void SCR_RenderView( bool timedemo ) {
 	if( timedemo ) {
 		if( !cl.timedemo.startTime ) {
@@ -618,14 +435,6 @@ static void SCR_RenderView( bool timedemo ) {
 	}
 }
 
-//============================================================================
-
-/*
-* SCR_UpdateScreen
-*
-* This is called every frame, and can also be called explicitly to flush
-* text to the screen.
-*/
 void SCR_UpdateScreen( void ) {
 	// if the screen is disabled (loading plaque is up, or vid mode changing)
 	// do nothing at all

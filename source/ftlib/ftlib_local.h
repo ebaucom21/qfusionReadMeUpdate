@@ -146,8 +146,4 @@ void FTLIB_PrintFontList( void );
 qglyph_t *FTLIB_GetGlyph( qfontface_t *font, wchar_t num );
 const char *FTLIB_FontShaderName( qfontface_t *qfont, unsigned int shaderNum );
 
-// ftlib_draw.c
-size_t FTLIB_strWidth( const char *str, qfontface_t *font, size_t maxlen, int flags );
-fdrawchar_t FTLIB_SetDrawIntercept( fdrawchar_t intercept );
-
 #endif
