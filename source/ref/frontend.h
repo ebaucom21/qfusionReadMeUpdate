@@ -23,20 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 
-// sync-to-async frontend adapter
 typedef struct {
-	void            *owner;             // pointer to parent ref_frontend_t
-	void            *GLcontext;
-	unsigned        frameNum;
-	volatile bool   shutdown;
-	volatile bool   noWait;
-} ref_frontendAdapter_t;
-
-typedef struct {
-	void            *auxGLContext;
-
-	ref_frontendAdapter_t adapter;
-
 	// these fields serve as the frontend cache which can also queried by the public API
 	int scissor[4];
 	byte_vec4_t customColors[NUM_CUSTOMCOLORS];
@@ -47,9 +34,7 @@ rserr_t RF_Init( const char *applicationName, const char *screenshotPrefix, int 
 				 int iconResource, const int *iconXPM, void *hinstance, void *wndproc, void *parenthWnd,  bool verbose );
 rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullScreen, bool borderless );
 void RF_AppActivate( bool active, bool minimize, bool destroy );
-rserr_t RF_SetWindow( void *hinstance, void *wndproc, void *parenthWnd );
 void RF_Shutdown( bool verbose );
-void RF_SurfaceChangePending( void );
 void RF_BeginFrame( bool forceClear, bool forceVsync, bool uncappedFPS );
 void RF_EndFrame( void );
 void RF_BeginRegistration( void );
@@ -74,7 +59,6 @@ void RF_GetScissor( int *x, int *y, int *w, int *h );
 void RF_ResetScissor( void );
 void RF_SetCustomColor( int num, int r, int g, int b );
 void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent );
-bool RF_RenderingEnabled( void );
 const char *RF_GetSpeedsMessage( char *out, size_t size );
 int RF_GetAverageFrametime( void );
 void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, uint8_t *data );

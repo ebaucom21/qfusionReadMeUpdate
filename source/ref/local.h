@@ -1140,19 +1140,6 @@ void        Mod_StripLODSuffix( char *name );
 #define MAX_REF_SCENES          32 // max scenes rendered per frame
 #define MAX_REF_ENTITIES        ( MAX_ENTITIES + 48 ) // must not exceed 2048 because of sort key packing
 
-//===================================================================
-
-typedef struct refScreenTexSet_s {
-	Texture         *screenTex;
-	Texture         *screenTexCopy;
-	Texture         *screenPPCopies[2];
-	Texture         *screenDepthTex;
-	Texture         *screenDepthTexCopy;
-	Texture         *screenOverbrightTex; // the overbrights output target
-	Texture         *screenBloomLodTex[NUM_BLOOM_LODS][2]; // lods + backups for bloom
-	int multisampleTarget;                // multisample fbo
-} refScreenTexSet_t;
-
 typedef struct portalSurface_s {
 	const entity_t  *entity;
 	cplane_t plane, untransformed_plane;
@@ -1305,10 +1292,7 @@ typedef struct {
 	volatile bool dataSync;   // call R_Finish
 
 	char speedsMsg[2048];
-	qmutex_t        *speedsMsgLock;
-
 	msurface_t      *debugSurface;
-	qmutex_t        *debugSurfaceLock;
 
 	unsigned int numWorldSurfVis;
 	volatile unsigned char *worldSurfVis;
@@ -1471,10 +1455,7 @@ void        R_ScreenShot_f( void );
 //
 #define MAX_SUPER_STYLES    128
 
-unsigned int R_AddSurfaceDlighbits( const msurface_t *surf, unsigned int checkDlightBits );
-void        R_AddDynamicLights( unsigned int dlightbits, int state );
 void        R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius, bool noWorldLight );
-float       R_LightExposureForOrigin( const vec3_t origin );
 void        R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8_t *data, mlightmapRect_t *rects );
 void        R_InitLightStyles( model_t *mod );
 superLightStyle_t   *R_AddSuperLightStyle( model_t *mod, const int *lightmaps,
@@ -1496,7 +1477,6 @@ void        R_FreeFile_( void *buffer, const char *filename, int fileline );
 #define     R_LoadCacheFile( path,buffer ) R_LoadFile_( path,FS_CACHE,buffer,__FILE__,__LINE__ )
 #define     R_FreeFile( buffer ) R_FreeFile_( buffer,__FILE__,__LINE__ )
 
-bool        R_IsRenderingToScreen( void );
 void        R_BeginFrame( bool forceClear, int swapInterval );
 void        R_EndFrame( void );
 int         R_SetSwapInterval( int swapInterval, int oldSwapInterval );
@@ -1504,7 +1484,6 @@ void        R_SetGamma( float gamma );
 void        R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor );
 void        R_Set2DMode( bool enable );
 void        R_RenderView( const refdef_t *fd );
-const msurface_t *R_GetDebugSurface( void );
 const char *R_WriteSpeedsMessage( char *out, size_t size );
 void        R_RenderDebugSurface( const refdef_t *fd );
 void        R_Finish( void );
@@ -1560,10 +1539,6 @@ void        R_PopRefInst( void );
 
 void        R_BindFrameBufferObject( int object );
 
-void        R_Scissor( int x, int y, int w, int h );
-void        R_GetScissor( int *x, int *y, int *w, int *h );
-void        R_ResetScissor( void );
-
 //
 // r_mesh.c
 //
@@ -1607,7 +1582,6 @@ void R_DrawPortals( void );
 //
 void        R_BatchPolySurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfacePoly_t *poly );
 void        R_DrawPolys( void );
-void        R_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset );
 bool    R_SurfPotentiallyFragmented( const msurface_t *surf );
 
 //

@@ -279,9 +279,6 @@ rserr_t GLimp_SetFullscreenMode( int displayFrequency, bool fullscreen ) {
 	return rserr_ok;
 }
 
-/*
-** GLimp_SetMode
-*/
 rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, bool fullscreen, bool borderless ) {
 	const char *win_fs[] = { "W", "FS" };
 
@@ -331,15 +328,6 @@ rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency
 	return ( fullscreen == glConfig.fullScreen ? rserr_ok : rserr_invalid_fullscreen );
 }
 
-/*
-** GLimp_Shutdown
-**
-** This routine does all OS specific shutdown procedures for the OpenGL
-** subsystem. Under OpenGL this means NULLing out the current DC and
-** HGLRC, deleting the rendering context, and releasing the DC acquired
-** for the window. The state structure is also nulled out.
-**
-*/
 void GLimp_Shutdown( void ) {
 	if( qwglMakeCurrent && !qwglMakeCurrent( NULL, NULL ) ) {
 		Com_Printf( "ref::R_Shutdown() - wglMakeCurrent failed\n" );
@@ -402,13 +390,6 @@ void GLimp_Shutdown( void ) {
 		} \
 	} while( 0 )
 
-/*
-** GLimp_Init
-**
-** This routine is responsible for initializing the OS specific portions
-** of OpenGL. Under Win32 this means dealing with the pixelformats and
-** doing the wgl interface stuff.
-*/
 static int GLimp_Init_( const char *applicationName, void *hinstance, void *wndproc, void *parenthWnd,
 						int iconResource, const int *iconXPM, bool needPixelFormatARB ) {
 	size_t applicationNameSize = strlen( applicationName ) + 1;
@@ -599,9 +580,6 @@ fail:
 	return false;
 }
 
-/*
-** GLimp_UpdateGammaRamp
-*/
 bool GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *ramp ) {
 	unsigned short ramp256[3 * 256];
 
@@ -631,9 +609,6 @@ bool GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *r
 	return false;
 }
 
-/*
-** GLimp_SetGammaRamp
-*/
 void GLimp_SetGammaRamp( size_t stride, unsigned short size, unsigned short *ramp ) {
 	unsigned short ramp256[3 * 256];
 
@@ -652,29 +627,16 @@ void GLimp_SetGammaRamp( size_t stride, unsigned short size, unsigned short *ram
 	}
 }
 
-/*
-** GLimp_BeginFrame
-*/
 void GLimp_BeginFrame( void ) {
 
 }
 
-/*
-** GLimp_EndFrame
-**
-** Responsible for doing a swapbuffers and possibly for other stuff
-** as yet to be determined.  Probably better not to make this a GLimp
-** function and instead do a call to GLimp_SwapBuffers.
-*/
 void GLimp_EndFrame( void ) {
 	if( !qwglSwapBuffers( glw_state.hDC ) ) {
 		Sys_Error( "GLimp_EndFrame() - SwapBuffers() failed!" );
 	}
 }
 
-/*
-** GLimp_AppActivate
-*/
 void GLimp_AppActivate( bool active, bool minimize, bool destroy ) {
 	if( active ) {
 		Cvar_Set( "gl_drawbuffer", "GL_BACK" );
@@ -689,89 +651,17 @@ void GLimp_AppActivate( bool active, bool minimize, bool destroy ) {
 	}
 }
 
-/*
-** GLimp_SetWindow
-*/
-rserr_t GLimp_SetWindow( void *hinstance, void *wndproc, void *parenthWnd, bool *surfaceChangePending ) {
-	if( surfaceChangePending ) {
-		*surfaceChangePending = false;
-	}
-
-	return rserr_ok; // surface cannot be lost
-}
-
-/*
-** GLimp_RenderingEnabled
-*/
-bool GLimp_RenderingEnabled( void ) {
-	return true;
-}
-
-/*
-** GLimp_SetSwapInterval
-*/
 void GLimp_SetSwapInterval( int swapInterval ) {
 	if( qwglSwapIntervalEXT ) {
 		qwglSwapIntervalEXT( swapInterval );
 	}
 }
 
-/*
-** GLimp_MakeCurrent
-*/
 bool GLimp_MakeCurrent( void *context, void *surface ) {
 	if( qwglMakeCurrent && !qwglMakeCurrent( glw_state.hDC, (HGLRC)context ) ) {
 		return false;
 	}
 	return true;
-}
-
-/*
-** GLimp_EnableMultithreadedRendering
-*/
-void GLimp_EnableMultithreadedRendering( bool enable ) {
-}
-
-/*
-** GLimp_GetWindowSurface
-*/
-void *GLimp_GetWindowSurface( bool *renderable ) {
-	if( renderable ) {
-		*renderable = true;
-	}
-	return NULL;
-}
-
-/*
-** GLimp_UpdatePendingWindowSurface
-*/
-void GLimp_UpdatePendingWindowSurface( void ) {
-}
-
-/*
-** GLimp_SharedContext_Create
-*/
-bool GLimp_SharedContext_Create( void **context, void **surface ) {
-	HGLRC ctx = qwglCreateContext( glw_state.hDC );
-	if( !ctx ) {
-		return false;
-	}
-
-	qwglShareLists( glw_state.hGLRC, ctx );
-	*context = ctx;
-	if( surface ) {
-		*surface = NULL;
-	}
-	return true;
-}
-
-/*
-** GLimp_SharedContext_Destroy
-*/
-void GLimp_SharedContext_Destroy( void *context, void *surface ) {
-	if( qwglDeleteContext ) {
-		qwglDeleteContext( (HGLRC)context );
-	}
 }
 
 QVariant VID_GetMainContextHandle() {

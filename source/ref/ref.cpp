@@ -85,9 +85,6 @@ const char *QGLFunc::checkForError() {
 #endif
 #endif
 
-/*
-* R_TransformBounds
-*/
 void R_TransformBounds( const vec3_t origin, const mat3_t axis, vec3_t mins, vec3_t maxs, vec3_t bbox[8] ) {
 	int i;
 	vec3_t tmp;
@@ -108,9 +105,6 @@ void R_TransformBounds( const vec3_t origin, const mat3_t axis, vec3_t mins, vec
 	}
 }
 
-/*
-* R_TransformForWorld
-*/
 void R_TransformForWorld( void ) {
 	Matrix4_Identity( rn.objectMatrix );
 	Matrix4_Copy( rn.cameraMatrix, rn.modelviewMatrix );
@@ -118,9 +112,6 @@ void R_TransformForWorld( void ) {
 	RB_LoadObjectMatrix( mat4x4_identity );
 }
 
-/*
-* R_TranslateForEntity
-*/
 void R_TranslateForEntity( const entity_t *e ) {
 	Matrix4_Identity( rn.objectMatrix );
 
@@ -134,9 +125,6 @@ void R_TranslateForEntity( const entity_t *e ) {
 	RB_LoadObjectMatrix( rn.objectMatrix );
 }
 
-/*
-* R_TransformForEntity
-*/
 void R_TransformForEntity( const entity_t *e ) {
 	if( e->rtype != RT_MODEL ) {
 		R_TransformForWorld();
@@ -182,9 +170,6 @@ void R_TransformForEntity( const entity_t *e ) {
 	RB_LoadObjectMatrix( rn.objectMatrix );
 }
 
-/*
-* R_FogForBounds
-*/
 mfog_t *R_FogForBounds( const vec3_t mins, const vec3_t maxs ) {
 	unsigned int i, j;
 	mfog_t *fog;
@@ -222,9 +207,6 @@ mfog_t *R_FogForBounds( const vec3_t mins, const vec3_t maxs ) {
 	return NULL;
 }
 
-/*
-* R_FogForSphere
-*/
 mfog_t *R_FogForSphere( const vec3_t centre, const float radius ) {
 	int i;
 	vec3_t mins, maxs;
@@ -237,9 +219,6 @@ mfog_t *R_FogForSphere( const vec3_t centre, const float radius ) {
 	return R_FogForBounds( mins, maxs );
 }
 
-/*
-* R_CompletelyFogged
-*/
 bool R_CompletelyFogged( const mfog_t *fog, vec3_t origin, float radius ) {
 	// note that fog->distanceToEye < 0 is always true if
 	// globalfog is not NULL and we're inside the world boundaries
@@ -253,9 +232,6 @@ bool R_CompletelyFogged( const mfog_t *fog, vec3_t origin, float radius ) {
 	return false;
 }
 
-/*
-* R_LODForSphere
-*/
 int R_LODForSphere( const vec3_t origin, float radius ) {
 	float dist;
 	int lod;
@@ -275,33 +251,17 @@ int R_LODForSphere( const vec3_t origin, float radius ) {
 	return lod;
 }
 
-/*
-=============================================================
-
-CUSTOM COLORS
-
-=============================================================
-*/
-
-/*
-* R_InitCustomColors
-*/
 void R_InitCustomColors( void ) {
 	memset( rsh.customColors, 255, sizeof( rsh.customColors ) );
 }
 
-/*
-* R_SetCustomColor
-*/
 void R_SetCustomColor( int num, int r, int g, int b ) {
 	if( num < 0 || num >= NUM_CUSTOMCOLORS ) {
 		return;
 	}
 	Vector4Set( rsh.customColors[num], (uint8_t)r, (uint8_t)g, (uint8_t)b, 255 );
 }
-/*
-* R_GetCustomColor
-*/
+
 int R_GetCustomColor( int num ) {
 	if( num < 0 || num >= NUM_CUSTOMCOLORS ) {
 		return COLOR_RGBA( 255, 255, 255, 255 );
@@ -309,26 +269,12 @@ int R_GetCustomColor( int num ) {
 	return *(int *)rsh.customColors[num];
 }
 
-/*
-* R_ShutdownCustomColors
-*/
 void R_ShutdownCustomColors( void ) {
 	memset( rsh.customColors, 255, sizeof( rsh.customColors ) );
 }
 
-/*
-=============================================================
-
-SPRITE MODELS
-
-=============================================================
-*/
-
 static drawSurfaceType_t spriteDrawSurf = ST_SPRITE;
 
-/*
-* R_BatchSpriteSurf
-*/
 void R_BatchSpriteSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf ) {
 	int i;
 	vec3_t point;
@@ -382,9 +328,6 @@ void R_BatchSpriteSurf( const entity_t *e, const shader_t *shader, const mfog_t 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-/*
-* R_AddSpriteToDrawList
-*/
 static bool R_AddSpriteToDrawList( const entity_t *e ) {
 	float dist;
 
@@ -414,13 +357,8 @@ static bool R_AddSpriteToDrawList( const entity_t *e ) {
 	return true;
 }
 
-//==================================================================================
-
 static drawSurfaceType_t nullDrawSurf = ST_NULLMODEL;
 
-/*
-* R_InitNullModelVBO
-*/
 mesh_vbo_t *R_InitNullModelVBO( void ) {
 	float scale = 15;
 	vec4_t xyz[6] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
@@ -467,9 +405,6 @@ mesh_vbo_t *R_InitNullModelVBO( void ) {
 	return vbo;
 }
 
-/*
-* R_DrawNullSurf
-*/
 void R_DrawNullSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf ) {
 	assert( rsh.nullVBO != NULL );
 	if( !rsh.nullVBO ) {
@@ -481,9 +416,6 @@ void R_DrawNullSurf( const entity_t *e, const shader_t *shader, const mfog_t *fo
 	RB_DrawElements( 0, 6, 0, 6 );
 }
 
-/*
-* R_AddNullSurfToDrawList
-*/
 static bool R_AddNullSurfToDrawList( const entity_t *e ) {
 	if( !R_AddSurfToDrawList( rn.meshlist, e, R_FogForSphere( e->origin, 0.1f ),
 							  rsh.whiteShader, 0, 0, NULL, &nullDrawSurf ) ) {
@@ -492,8 +424,6 @@ static bool R_AddNullSurfToDrawList( const entity_t *e ) {
 
 	return true;
 }
-
-//==================================================================================
 
 static vec4_t pic_xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
 static vec4_t pic_normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
@@ -548,9 +478,6 @@ void R_Set2DMode( bool enable ) {
 	}
 }
 
-/*
-* R_DrawRotatedStretchPic
-*/
 void R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, float angle,
 							  const vec4_t color, const shader_t *shader ) {
 	int bcolor;
@@ -605,9 +532,6 @@ void R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, fl
 	RB_AddDynamicMesh( NULL, shader, NULL, NULL, 0, &pic_mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-/*
-* R_DrawStretchPic
-*/
 void R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 					   const vec4_t color, const shader_t *shader ) {
 	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
@@ -622,9 +546,6 @@ void R_DrawExternalTextureOverlay( GLuint externalTexNum ) {
 
 static const wsw::HashedStringView kBuiltinImage( "$builtinimage" );
 
-/*
-* R_DrawStretchQuick
-*/
 void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
 						 const vec4_t color, int program_type, Texture *image, int blendMask ) {
 	static shaderpass_t p;
@@ -663,33 +584,6 @@ void R_BindFrameBufferObject( int object ) {
 	RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
 }
 
-/*
-* R_Scissor
-*
-* Set scissor region for 2D drawing.
-* x and y represent the top left corner of the region/rectangle.
-*/
-void R_Scissor( int x, int y, int w, int h ) {
-	RB_Scissor( x, y, w, h );
-}
-
-/*
-* R_GetScissor
-*/
-void R_GetScissor( int *x, int *y, int *w, int *h ) {
-	RB_GetScissor( x, y, w, h );
-}
-
-/*
-* R_ResetScissor
-*/
-void R_ResetScissor( void ) {
-	RB_Scissor( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight );
-}
-
-/*
-* R_PolyBlend
-*/
 static void R_PolyBlend( void ) {
 	if( !r_polyblend->integer ) {
 		return;
@@ -703,9 +597,6 @@ static void R_PolyBlend( void ) {
 	RB_FlushDynamicMeshes();
 }
 
-/*
-* R_ApplyBrightness
-*/
 static void R_ApplyBrightness( void ) {
 	float c;
 	vec4_t color;
@@ -725,9 +616,6 @@ static void R_ApplyBrightness( void ) {
 						color, GLSL_PROGRAM_TYPE_NONE, whiteTexture, GLSTATE_SRCBLEND_ONE | GLSTATE_DSTBLEND_ONE );
 }
 
-/*
-* R_InitPostProcessingVBO
-*/
 mesh_vbo_t *R_InitPostProcessingVBO( void ) {
 	vec4_t xyz[4] = { {0,0,0,1}, {1,0,0,1}, {1,1,0,1}, {0,1,0,1} };
 	vec2_t texcoords[4] = { {0,1}, {1,1}, {1,0}, {0,0} };
@@ -754,11 +642,6 @@ mesh_vbo_t *R_InitPostProcessingVBO( void ) {
 	return vbo;
 }
 
-//=======================================================================
-
-/*
-* R_DefaultFarClip
-*/
 float R_DefaultFarClip( void ) {
 	float farclip_dist;
 
@@ -773,9 +656,6 @@ float R_DefaultFarClip( void ) {
 	return std::max( Z_NEAR, farclip_dist ) + Z_BIAS;
 }
 
-/*
-* R_SetVisFarClip
-*/
 static float R_SetVisFarClip( void ) {
 	int i;
 	float dist;
@@ -802,9 +682,6 @@ static float R_SetVisFarClip( void ) {
 	return rn.visFarClip;
 }
 
-/*
-* R_SetFarClip
-*/
 static void R_SetFarClip( void ) {
 	float farclip;
 
@@ -827,9 +704,6 @@ static void R_SetFarClip( void ) {
 	rn.farClip = std::max( Z_NEAR, farclip ) + Z_BIAS;
 }
 
-/*
-* R_SetupFrame
-*/
 static void R_SetupFrame( void ) {
 	int viewcluster;
 	int viewarea;
@@ -891,9 +765,6 @@ static void R_SetupFrame( void ) {
 	rf.frameCount++;
 }
 
-/*
-* R_SetupViewMatrices
-*/
 static void R_SetupViewMatrices( void ) {
 	refdef_t *rd = &rn.refdef;
 
@@ -914,9 +785,6 @@ static void R_SetupViewMatrices( void ) {
 	Matrix4_Multiply( rn.projectionMatrix, rn.cameraMatrix, rn.cameraProjectionMatrix );
 }
 
-/*
-* R_Clear
-*/
 static void R_Clear( int bitMask ) {
 	int fbo;
 	int bits;
@@ -953,9 +821,6 @@ static void R_Clear( int bitMask ) {
 	RB_Clear( bits, envColor[0], envColor[1], envColor[2], envColor[3] );
 }
 
-/*
-* R_SetupGL
-*/
 static void R_SetupGL( void ) {
 	RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
 	RB_Viewport( rn.viewport[0], rn.viewport[1], rn.viewport[2], rn.viewport[3] );
@@ -988,9 +853,6 @@ static void R_SetupGL( void ) {
 	}
 }
 
-/*
-* R_EndGL
-*/
 static void R_EndGL( void ) {
 	if( ( rn.renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_SetShaderStateMask( ~0, 0 );
@@ -1001,9 +863,6 @@ static void R_EndGL( void ) {
 	}
 }
 
-/*
-* R_DrawEntities
-*/
 static void R_DrawEntities( void ) {
 	unsigned int i;
 	entity_t *e;
@@ -1059,19 +918,11 @@ static void R_DrawEntities( void ) {
 	}
 }
 
-//=======================================================================
-
-/*
-* R_BindRefInstFBO
-*/
 static void R_BindRefInstFBO( void ) {
 	int fbo = rn.renderTarget;
 	R_BindFrameBufferObject( fbo );
 }
 
-/*
-* R_RenderView
-*/
 void R_RenderView( const refdef_t *fd ) {
 	int msec = 0;
 	bool shadowMap = rn.renderFlags & RF_SHADOWMAPVIEW ? true : false;
@@ -1124,7 +975,7 @@ void R_RenderView( const refdef_t *fd ) {
 			R_DrawWorld();
 
 			rn.fog_eye = R_FogForSphere( rn.viewOrigin, 0.5 );
-			rn.hdrExposure = R_LightExposureForOrigin( rn.viewOrigin );
+			rn.hdrExposure = 1.0f;
 		}
 
 		wsw::ref::Scene::Instance()->DrawCoronae();
@@ -1195,16 +1046,10 @@ void R_RenderView( const refdef_t *fd ) {
 static refinst_t riStack[REFINST_STACK_SIZE];
 static unsigned int riStackSize;
 
-/*
-* R_ClearRefInstStack
-*/
 void R_ClearRefInstStack( void ) {
 	riStackSize = 0;
 }
 
-/*
-* R_PushRefInst
-*/
 bool R_PushRefInst( void ) {
 	if( riStackSize == REFINST_STACK_SIZE ) {
 		return false;
@@ -1214,9 +1059,6 @@ bool R_PushRefInst( void ) {
 	return true;
 }
 
-/*
-* R_PopRefInst
-*/
 void R_PopRefInst( void ) {
 	if( !riStackSize ) {
 		return;
@@ -1227,9 +1069,6 @@ void R_PopRefInst( void ) {
 
 	R_SetupGL();
 }
-
-//=======================================================================
-
 
 void R_Finish( void ) {
 	qglFinish();
@@ -1255,9 +1094,6 @@ void R_DataSync( void ) {
 	}
 }
 
-/*
-* R_SetSwapInterval
-*/
 int R_SetSwapInterval( int swapInterval, int oldSwapInterval ) {
 	if( swapInterval != oldSwapInterval ) {
 		GLimp_SetSwapInterval( swapInterval );
@@ -1265,9 +1101,6 @@ int R_SetSwapInterval( int swapInterval, int oldSwapInterval ) {
 	return swapInterval;
 }
 
-/*
-* R_SetGamma
-*/
 void R_SetGamma( float gamma ) {
 	int i, v;
 	double invGamma, div;
@@ -1288,9 +1121,6 @@ void R_SetGamma( float gamma ) {
 	GLimp_SetGammaRamp( GAMMARAMP_STRIDE, glConfig.gammaRampSize, gammaRamp );
 }
 
-/*
-* R_SetWallFloorColors
-*/
 void R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor ) {
 	int i;
 	for( i = 0; i < 3; i++ ) {
@@ -1299,26 +1129,11 @@ void R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor ) {
 	}
 }
 
-/*
-* R_SetDrawBuffer
-*/
 void R_SetDrawBuffer( const char *drawbuffer ) {
 	Q_strncpyz( rf.drawBuffer, drawbuffer, sizeof( rf.drawBuffer ) );
 	rf.newDrawBuffer = true;
 }
 
-/*
-* R_IsRenderingToScreen
-*/
-bool R_IsRenderingToScreen( void ) {
-	bool surfaceRenderable = true;
-	GLimp_GetWindowSurface( &surfaceRenderable );
-	return surfaceRenderable;
-}
-
-/*
-* R_WriteSpeedsMessage
-*/
 const char *R_WriteSpeedsMessage( char *out, size_t size ) {
 	char backend_msg[1024];
 
@@ -1409,22 +1224,6 @@ const char *R_WriteSpeedsMessage( char *out, size_t size ) {
 	return out;
 }
 
-/*
-* R_GetDebugSurface
-*/
-const msurface_t *R_GetDebugSurface( void ) {
-	msurface_t *debugSurface;
-
-	QMutex_Lock( rf.debugSurfaceLock );
-	debugSurface = rf.debugSurface;
-	QMutex_Unlock( rf.debugSurfaceLock );
-
-	return debugSurface;
-}
-
-/*
-* R_RenderDebugSurface
-*/
 void R_RenderDebugSurface( const refdef_t *fd ) {
 	rtrace_t tr;
 	vec3_t forward;
@@ -1478,14 +1277,9 @@ void R_RenderDebugSurface( const refdef_t *fd ) {
 		}
 	}
 
-	QMutex_Lock( rf.debugSurfaceLock );
 	rf.debugSurface = debugSurf;
-	QMutex_Unlock( rf.debugSurfaceLock );
 }
 
-/*
-* R_BeginFrame
-*/
 void R_BeginFrame( bool forceClear, int swapInterval ) {
 	int64_t time = Sys_Milliseconds();
 
@@ -1528,9 +1322,6 @@ void R_BeginFrame( bool forceClear, int swapInterval ) {
 	R_Set2DMode( true );
 }
 
-/*
-* R_EndFrame
-*/
 void R_EndFrame( void ) {
 	// render previously batched 2D geometry, if any
 	RB_FlushDynamicMeshes();
@@ -1550,11 +1341,6 @@ void R_EndFrame( void ) {
 	//assert( qglGetError() == GL_NO_ERROR );
 }
 
-//===================================================================
-
-/*
-* R_NormToLatLong
-*/
 void R_NormToLatLong( const vec_t *normal, uint8_t latlong[2] ) {
 	float flatlong[2];
 
@@ -1563,9 +1349,6 @@ void R_NormToLatLong( const vec_t *normal, uint8_t latlong[2] ) {
 	latlong[1] = (int)( flatlong[1] * 255.0 / M_TWOPI ) & 255;
 }
 
-/*
-* R_LatLongToNorm4
-*/
 void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out ) {
 	static float * const sinTable = rsh.sinTableByte;
 	float sin_a, sin_b, cos_a, cos_b;
@@ -1578,18 +1361,12 @@ void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out ) {
 	Vector4Set( out, cos_b * sin_a, sin_b * sin_a, cos_a, 0 );
 }
 
-/*
-* R_LatLongToNorm
-*/
 void R_LatLongToNorm( const uint8_t latlong[2], vec3_t out ) {
 	vec4_t t;
 	R_LatLongToNorm4( latlong, t );
 	VectorCopy( t, out );
 }
 
-/*
-* R_LoadFile
-*/
 int R_LoadFile_( const char *path, int flags, void **buffer, const char *filename, int fileline ) {
 	uint8_t *buf;
 	unsigned int len;
@@ -1622,16 +1399,10 @@ int R_LoadFile_( const char *path, int flags, void **buffer, const char *filenam
 	return len;
 }
 
-/*
-* R_FreeFile
-*/
 void R_FreeFile_( void *buffer, const char *filename, int fileline ) {
 	Q_free( buffer );
 }
 
-/*
- * R_Localtime
- */
 static struct tm *R_Localtime( const time_t time, struct tm* _tm ) {
 #ifdef _WIN32
 	struct tm* __tm = localtime( &time );
@@ -1642,19 +1413,12 @@ static struct tm *R_Localtime( const time_t time, struct tm* _tm ) {
 	return _tm;
 }
 
-/*
-* R_TakeScreenShot
-*/
 void R_TakeScreenShot( const char *path, const char *name, const char *fmtString, int x, int y, int w, int h, bool silent ) {
 	const char *extension;
 	size_t path_size = strlen( path ) + 1;
 	char *checkname = NULL;
 	size_t checkname_size = 0;
 	int quality;
-
-	if( !R_IsRenderingToScreen() ) {
-		return;
-	}
 
 	if( r_screenshot_jpeg->integer ) {
 		extension = ".jpg";
@@ -1733,9 +1497,6 @@ void R_TakeScreenShot( const char *path, const char *name, const char *fmtString
 	R_ScreenShot( checkname, x, y, w, h, quality, silent );
 }
 
-/*
-* R_ScreenShot_f
-*/
 void R_ScreenShot_f( void ) {
 	int i;
 	const char *name;
@@ -1771,19 +1532,10 @@ void R_ScreenShot_f( void ) {
 				   Cmd_Argc() >= 3 && !Q_stricmp( Cmd_Argv( 2 ), "silent" ) ? true : false );
 }
 
-#include "local.h"
-#include "../qcommon/qcommon.h"
-#include <algorithm>
-
 #define WORLDSURF_DIST 1024.0f                  // hack the draw order for world surfaces
 
 static vec3_t modelOrg;                         // relative to view point
 
-//==================================================================================
-
-/*
-* R_SurfPotentiallyVisible
-*/
 bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
 	const shader_t *shader = surf->shader;
 	// Exclude old sky surfaces from rendering for now
@@ -1799,9 +1551,6 @@ bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
 	return true;
 }
 
-/*
-* R_SurfPotentiallyShadowed
-*/
 bool R_SurfPotentiallyShadowed( const msurface_t *surf ) {
 	if( surf->flags & ( SURF_SKY | SURF_NODLIGHT | SURF_NODRAW ) ) {
 		return false;
@@ -1812,9 +1561,6 @@ bool R_SurfPotentiallyShadowed( const msurface_t *surf ) {
 	return false;
 }
 
-/*
-* R_SurfPotentiallyLit
-*/
 bool R_SurfPotentiallyLit( const msurface_t *surf ) {
 	const shader_t *shader;
 
@@ -1828,16 +1574,10 @@ bool R_SurfPotentiallyLit( const msurface_t *surf ) {
 	return ( surf->mesh.numVerts != 0 /* && (surf->facetype != FACETYPE_TRISURF)*/ );
 }
 
-/*
-* R_CullSurface
-*/
 bool R_CullSurface( const entity_t *e, const msurface_t *surf, unsigned int clipflags ) {
 	return ( clipflags && R_CullBox( surf->mins, surf->maxs, clipflags ) );
 }
 
-/*
-* R_SurfaceDlightBits
-*/
 static unsigned int R_SurfaceDlightBits( const msurface_t *surf, unsigned int checkDlightBits ) {
 	float dist;
 	unsigned int surfDlightBits = 0;
@@ -1883,9 +1623,6 @@ static unsigned int R_SurfaceDlightBits( const msurface_t *surf, unsigned int ch
 	return surfDlightBits;
 }
 
-/*
-* R_DrawBSPSurf
-*/
 void R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int entShadowBits, drawSurfaceBSP_t *drawSurf ) {
 	const vboSlice_t *slice;
 	const vboSlice_t *shadowSlice;
@@ -1933,18 +1670,12 @@ void R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog
 	}
 }
 
-/*
-* R_AddSurfaceVBOSlice
-*/
 static void R_AddSurfaceVBOSlice( drawList_t *list, drawSurfaceBSP_t *drawSurf, const msurface_t *surf, int offset ) {
 	R_AddDrawListVBOSlice( list, offset + drawSurf - rsh.worldBrushModel->drawSurfaces,
 						   surf->mesh.numVerts, surf->mesh.numElems,
 						   surf->firstDrawSurfVert, surf->firstDrawSurfElem );
 }
 
-/*
-* R_AddSurfaceToDrawList
-*/
 static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSurf ) {
 	const shader_t *shader = drawSurf->shader;
 	const mfog_t *fog = drawSurf->fog;
@@ -1981,9 +1712,6 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 	return true;
 }
 
-/*
-* R_ClipSpecialWorldSurf
-*/
 static bool R_ClipSpecialWorldSurf( drawSurfaceBSP_t *drawSurf, const msurface_t *surf, const vec3_t origin, float *pdist ) {
 	portalSurface_t *portalSurface = NULL;
 	const shader_t *shader = drawSurf->shader;
@@ -2107,17 +1835,6 @@ static void R_UpdateSurfaceInDrawList( drawSurfaceBSP_t *drawSurf, unsigned int 
 	}
 }
 
-/*
-=============================================================
-
-BRUSH MODELS
-
-=============================================================
-*/
-
-/*
-* R_BrushModelBBox
-*/
 float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated ) {
 	int i;
 	const model_t   *model = e->model;
@@ -2149,9 +1866,6 @@ float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotat
 		Matrix3_TransformVector( ( e )->axis, temp, out ); \
 	}
 
-/*
-* R_AddBrushModelToDrawList
-*/
 bool R_AddBrushModelToDrawList( const entity_t *e ) {
 	unsigned int i;
 	vec3_t origin;
@@ -2229,17 +1943,6 @@ bool R_AddBrushModelToDrawList( const entity_t *e ) {
 	return true;
 }
 
-/*
-=============================================================
-
-WORLD MODEL
-
-=============================================================
-*/
-
-/*
-* R_PostCullVisLeaves
-*/
 static void R_PostCullVisLeaves( void ) {
 	unsigned i, j;
 	mleaf_t *leaf;
@@ -2261,9 +1964,6 @@ static void R_PostCullVisLeaves( void ) {
 	}
 }
 
-/*
-* R_CullVisLeaves
-*/
 static void R_CullVisLeaves( unsigned firstLeaf, unsigned numLeaves, unsigned clipFlags ) {
 	unsigned i, j;
 	mleaf_t *leaf;
@@ -2350,9 +2050,6 @@ static void R_CullVisLeaves( unsigned firstLeaf, unsigned numLeaves, unsigned cl
 	}
 }
 
-/*
-* R_CullVisSurfaces
-*/
 static void R_CullVisSurfaces( unsigned firstSurf, unsigned numSurfs, unsigned clipFlags ) {
 	unsigned i;
 	unsigned end;
@@ -2387,9 +2084,6 @@ static void R_CullVisSurfaces( unsigned firstSurf, unsigned numSurfs, unsigned c
 	}
 }
 
-/*
-* R_AddVisSurfaces
-*/
 static void R_AddVisSurfaces( unsigned dlightBits, unsigned shadowBits ) {
 
 	unsigned i;
@@ -2405,9 +2099,6 @@ static void R_AddVisSurfaces( unsigned dlightBits, unsigned shadowBits ) {
 	}
 }
 
-/*
-* R_AddWorldDrawSurfaces
-*/
 static void R_AddWorldDrawSurfaces( unsigned firstDrawSurf, unsigned numDrawSurfs ) {
 	unsigned i;
 
@@ -2423,9 +2114,6 @@ static void R_AddWorldDrawSurfaces( unsigned firstDrawSurf, unsigned numDrawSurf
 	}
 }
 
-/*
-* R_DrawWorld
-*/
 void R_DrawWorld( void ) {
 	unsigned int i;
 	int clipFlags;
@@ -2544,16 +2232,10 @@ drawList_t r_shadowlist;
 drawList_t r_portalmasklist;
 drawList_t r_portallist, r_skyportallist;
 
-/*
-* R_InitDrawList
-*/
 void R_InitDrawList( drawList_t *list ) {
 	memset( list, 0, sizeof( *list ) );
 }
 
-/*
-* R_InitDrawLists
-*/
 void R_InitDrawLists( void ) {
 	R_InitDrawList( &r_worldlist );
 	R_InitDrawList( &r_portalmasklist );
@@ -2562,9 +2244,6 @@ void R_InitDrawLists( void ) {
 	R_InitDrawList( &r_shadowlist );
 }
 
-/*
-* R_ClearDrawList
-*/
 void R_ClearDrawList( drawList_t *list ) {
 	if( !list ) {
 		return;
@@ -2579,9 +2258,6 @@ void R_ClearDrawList( drawList_t *list ) {
 	}
 }
 
-/*
-* R_ReserveDrawSurfaces
-*/
 static void R_ReserveDrawSurfaces( drawList_t *list, int minMeshes ) {
 	int oldSize, newSize;
 	sortedDrawSurf_t *newDs;
@@ -2601,9 +2277,6 @@ static void R_ReserveDrawSurfaces( drawList_t *list, int minMeshes ) {
 	list->maxDrawSurfs = newSize;
 }
 
-/*
-* R_PackDistKey
-*/
 static int R_PackDistKey( int renderFx, const shader_t *shader, float dist, unsigned order ) {
 	int shaderSort;
 
@@ -2636,18 +2309,12 @@ static int R_PackDistKey( int renderFx, const shader_t *shader, float dist, unsi
 	return ( shaderSort << 26 ) | ( std::max( 0x400 - (int)dist, 0 ) << 15 ) | ( order & 0x7FFF );
 }
 
-/*
-* R_PackSortKey
-*/
 static unsigned int R_PackSortKey( unsigned int shaderNum, int fogNum,
 								   int portalNum, unsigned int entNum ) {
 	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
 		   ( ( ( portalNum + 1 ) & 0x1F ) << 5 ) | ( (unsigned int)( fogNum + 1 ) & 0x1F );
 }
 
-/*
-* R_UnpackSortKey
-*/
 static void R_UnpackSortKey( unsigned int sortKey, unsigned int *shaderNum, int *fogNum,
 							 int *portalNum, unsigned int *entNum ) {
 	*shaderNum = ( sortKey >> 21 ) & 0x7FF;
@@ -2656,11 +2323,6 @@ static void R_UnpackSortKey( unsigned int sortKey, unsigned int *shaderNum, int 
 	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
 }
 
-/*
-* R_PackOpaqueOrder
-*
-* Returns sort order for opaque objects.
-*/
 unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
 	int order = 0;
 
@@ -2682,12 +2344,6 @@ unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLi
 	return order;
 }
 
-/*
-* R_AddSurfToDrawList
-*
-* Calculate sortkey and store info used for batching and sorting.
-* All 3D-geometry passes this function.
-*/
 void *R_AddSurfToDrawList( drawList_t *list, const entity_t *e, const mfog_t *fog, const shader_t *shader,
 						   float dist, unsigned int order, const portalSurface_t *portalSurf, void *drawSurf ) {
 	int distKey;
@@ -2726,17 +2382,11 @@ void *R_AddSurfToDrawList( drawList_t *list, const entity_t *e, const mfog_t *fo
 	return sds;
 }
 
-/*
-* R_UpdateDrawSurfDistKey
-*/
 void R_UpdateDrawSurfDistKey( void *psds, int renderFx, const shader_t *shader, float dist, unsigned order ) {
 	auto *sds = (sortedDrawSurf_t *)psds;
 	sds->distKey = R_PackDistKey( renderFx, shader, dist, order );
 }
 
-/*
-* R_GetDrawListSurfPortal
-*/
 portalSurface_t *R_GetDrawListSurfPortal( void *psds ) {
 	auto *sds = (sortedDrawSurf_t *)psds;
 	unsigned int sortKey = sds->sortKey;
@@ -2749,11 +2399,6 @@ portalSurface_t *R_GetDrawListSurfPortal( void *psds ) {
 	return portalNum >= 0 ? rn.portalSurfaces + portalNum : NULL;
 }
 
-/*
-* R_DrawSurfCompare
-*
-* Comparison callback function for R_SortDrawList
-*/
 static int R_DrawSurfCompare( const sortedDrawSurf_t *sbs1, const sortedDrawSurf_t *sbs2 ) {
 	if( sbs1->distKey > sbs2->distKey ) {
 		return 1;
@@ -2772,13 +2417,6 @@ static int R_DrawSurfCompare( const sortedDrawSurf_t *sbs1, const sortedDrawSurf
 	return 0;
 }
 
-/*
-* R_SortDrawList
-*
-* Regular quicksort. Note that for all kinds of transparent meshes
-* you probably want to set distance or draw order to prevent flickering
-* due to quicksort's unstable nature.
-*/
 void R_SortDrawList( drawList_t *list ) {
 	if( r_draworder->integer ) {
 		return;
@@ -2787,12 +2425,6 @@ void R_SortDrawList( drawList_t *list ) {
 		   ( int ( * )( const void *, const void * ) )R_DrawSurfCompare );
 }
 
-/*
-* R_ReserveVBOSlices
-*
-* Ensures there's enough space to store the minSlices amount of slices
-* plus some more.
-*/
 static void R_ReserveVBOSlices( drawList_t *list, unsigned int minSlices ) {
 	unsigned int oldSize, newSize;
 	vboSlice_t *slices, *newSlices;
@@ -2811,9 +2443,6 @@ static void R_ReserveVBOSlices( drawList_t *list, unsigned int minSlices ) {
 	list->maxVboSlices = newSize;
 }
 
-/*
-* R_AddDrawListVBOSlice
-*/
 void R_AddDrawListVBOSlice( drawList_t *list, unsigned int index, unsigned int numVerts, unsigned int numElems,
 							unsigned int firstVert, unsigned int firstElem ) {
 	vboSlice_t *slice;
@@ -2849,9 +2478,6 @@ void R_AddDrawListVBOSlice( drawList_t *list, unsigned int index, unsigned int n
 	}
 }
 
-/*
-* R_GetDrawListVBOSlice
-*/
 vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index ) {
 	if( index >= list->maxVboSlices ) {
 		return NULL;
@@ -2859,11 +2485,6 @@ vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index ) {
 	return &list->vboSlices[index];
 }
 
-/*
-* R_GetDrawListVBOSliceCounts
-*
-* The initial values are not reset
-*/
 void R_GetVBOSliceCounts( drawList_t *list, unsigned *numSliceVerts, unsigned *numSliceElems ) {
 	unsigned i;
 
@@ -3085,9 +2706,6 @@ static void _R_DrawSurfaces( drawList_t *list ) {
 	RB_BindFrameBufferObject();
 }
 
-/*
-* R_DrawSurfaces
-*/
 void R_DrawSurfaces( drawList_t *list ) {
 	bool triOutlines;
 
@@ -3099,9 +2717,6 @@ void R_DrawSurfaces( drawList_t *list ) {
 	RB_EnableTriangleOutlines( triOutlines );
 }
 
-/*
-* R_DrawOutlinedSurfaces
-*/
 void R_DrawOutlinedSurfaces( drawList_t *list ) {
 	bool triOutlines;
 
@@ -3116,9 +2731,6 @@ void R_DrawOutlinedSurfaces( drawList_t *list ) {
 	RB_EnableTriangleOutlines( triOutlines );
 }
 
-/*
-* R_CopyOffsetElements
-*/
 void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems ) {
 	int i;
 
@@ -3127,9 +2739,6 @@ void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset,
 	}
 }
 
-/*
-* R_CopyOffsetTriangles
-*/
 void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems ) {
 	int i;
 	int numTris = numElems / 3;
@@ -3141,9 +2750,6 @@ void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset
 	}
 }
 
-/*
-* R_BuildTrifanElements
-*/
 void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems ) {
 	int i;
 
@@ -3154,9 +2760,6 @@ void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems ) {
 	}
 }
 
-/*
-* R_BuildTangentVectors
-*/
 void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsArray,
 							vec2_t *stArray, int numTris, elem_t *elems, vec4_t *sVectorsArray ) {
 	int i, j;
@@ -3233,9 +2836,6 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 	}
 }
 
-/*
-* R_ClearScene
-*/
 void R_ClearScene( void ) {
 	rsc.numLocalEntities = 0;
 	rsc.numPolys = 0;
@@ -3269,9 +2869,6 @@ void R_ClearScene( void ) {
 	wsw::ref::Scene::Instance()->Clear();
 }
 
-/*
-* R_AddEntityToScene
-*/
 void R_AddEntityToScene( const entity_t *ent ) {
 	if( !r_drawentities->integer ) {
 		return;
@@ -3316,9 +2913,6 @@ void R_AddEntityToScene( const entity_t *ent ) {
 	}
 }
 
-/*
-* R_AddPolyToScene
-*/
 void R_AddPolyToScene( const poly_t *poly ) {
 	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
 
@@ -3361,9 +2955,6 @@ void R_AddPolyToScene( const poly_t *poly ) {
 	}
 }
 
-/*
-* R_AddLightStyleToScene
-*/
 void R_AddLightStyleToScene( int style, float r, float g, float b ) {
 	lightstyle_t *ls;
 
@@ -3378,14 +2969,9 @@ void R_AddLightStyleToScene( int style, float r, float g, float b ) {
 	ls->rgb[2] = std::max( 0.0f, b );
 }
 
-/*
-* R_RenderScene
-*/
 void R_RenderScene( const refdef_t *fd ) {
 	int l;
-	int fbFlags = 0;
 	int ppFrontBuffer = 0;
-	int samples = 0;
 	Texture *ppSource;
 	shader_t *cc;
 	Texture *bloomTex[NUM_BLOOM_LODS];
@@ -3423,14 +3009,9 @@ void R_RenderScene( const refdef_t *fd ) {
 	rn.renderTarget = 0;
 	rn.multisampleDepthResolved = false;
 
-	fbFlags = 0;
 	cc = rn.refdef.colorCorrection;
 	if( !( cc && cc->numpasses > 0 && cc->passes[0].images[0] ) ) {
 		cc = NULL;
-	}
-
-	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
-		samples = bound( 0, r_samples->integer, glConfig.maxFramebufferSamples );
 	}
 
 	// clip new scissor region to the one currently set
@@ -3450,15 +3031,10 @@ void R_RenderScene( const refdef_t *fd ) {
 	R_Set2DMode( true );
 
 	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
-		QMutex_Lock( rf.speedsMsgLock );
 		R_WriteSpeedsMessage( rf.speedsMsg, sizeof( rf.speedsMsg ) );
-		QMutex_Unlock( rf.speedsMsgLock );
 	}
 }
 
-/*
-* R_BatchPolySurf
-*/
 void R_BatchPolySurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfacePoly_t *poly ) {
 	mesh_t mesh;
 
@@ -3477,9 +3053,6 @@ void R_BatchPolySurf( const entity_t *e, const shader_t *shader, const mfog_t *f
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-/*
-* R_DrawPolys
-*/
 void R_DrawPolys( void ) {
 	unsigned int i;
 	drawSurfacePoly_t *p;
@@ -3503,52 +3076,6 @@ void R_DrawPolys( void ) {
 	}
 }
 
-/*
-* R_DrawStretchPoly
-*/
-void R_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset ) {
-	mesh_t mesh;
-	vec4_t translated[256];
-
-	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
-
-	if( !poly || !poly->numverts || !poly->shader ) {
-		return;
-	}
-
-	memset( &mesh, 0, sizeof( mesh ) );
-	mesh.numVerts = poly->numverts;
-	mesh.xyzArray = poly->verts;
-	mesh.normalsArray = poly->normals;
-	mesh.stArray = poly->stcoords;
-	mesh.colorsArray[0] = poly->colors;
-	mesh.numElems = poly->numelems;
-	mesh.elems = ( elem_t * )poly->elems;
-
-	if( ( x_offset || y_offset ) && ( poly->numverts <= ( sizeof( translated ) / sizeof( translated[0] ) ) ) ) {
-		int i;
-		const vec_t *src = poly->verts[0];
-		vec_t *dest = translated[0];
-
-		for( i = 0; i < poly->numverts; i++, src += 4, dest += 4 ) {
-			dest[0] = src[0] + x_offset;
-			dest[1] = src[1] + y_offset;
-			dest[2] = src[2];
-			dest[3] = src[3];
-		}
-
-		x_offset = 0;
-		y_offset = 0;
-
-		mesh.xyzArray = translated;
-	}
-
-	RB_AddDynamicMesh( NULL, poly->shader, NULL, NULL, 0, &mesh, GL_TRIANGLES, x_offset, y_offset );
-}
-
-/*
-* R_SurfPotentiallyFragmented
-*/
 bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {
 	if( surf->flags & ( SURF_NOMARKS | SURF_NOIMPACT | SURF_NODRAW ) ) {
 		return false;
@@ -3558,9 +3085,6 @@ bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {
 		/* || (surf->facetype == FACETYPE_TRISURF)*/ );
 }
 
-/*
-* R_BatchCoronaSurf
-*/
 void R_BatchCoronaSurf( const entity_t *e, const shader_t *shader,
 						const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf ) {
 	int i;
@@ -3614,13 +3138,6 @@ void R_BatchCoronaSurf( const entity_t *e, const shader_t *shader,
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-
-
-//===================================================================
-
-/*
-* R_LightForOrigin
-*/
 void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius, bool noWorldLight ) {
 	int i, j;
 	int k, s;
@@ -3773,39 +3290,6 @@ void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t d
 	}
 }
 
-/*
-* R_LightExposureForOrigin
-*/
-float R_LightExposureForOrigin( const vec3_t origin ) {
-	int i;
-	vec3_t dir;
-	vec4_t ambient, diffuse;
-	//vec4_t total;
-
-	R_LightForOrigin( origin, dir, ambient, diffuse, 0.1f, false );
-
-	for( i = 0; i < 3; i++ ) {
-		ambient[i] = R_LinearFloatFromsRGBFloat( ambient[i] );
-		diffuse[i] = R_LinearFloatFromsRGBFloat( diffuse[i] );
-	}
-
-	return r_hdr_exposure->value;
-
-	//if( r_lighting_grayscale->integer ) {
-	//	return ambient[0] + diffuse[0];
-	//}
-	//Vector4Add( ambient, diffuse, total );
-	//return log( ( ColorGrayscale( total ) + 1.0f ) * r_hdr_exposure->value )*//*ColorGrayscale( total ) * *//*exp( mapConfig.averageLightingIntensity ) * r_hdr_exposure->value;
-}
-
-/*
-=============================================================================
-
-LIGHTMAP ALLOCATION
-
-=============================================================================
-*/
-
 #define MAX_LIGHTMAP_IMAGES     1024
 
 static uint8_t *r_lightmapBuffer;
@@ -3814,9 +3298,6 @@ static Texture *r_lightmapTextures[MAX_LIGHTMAP_IMAGES];
 static int r_numUploadedLightmaps;
 static int r_maxLightmapBlockSize;
 
-/*
-* R_BuildLightmap
-*/
 static void R_BuildLightmap( int w, int h, bool deluxe, const uint8_t *data, uint8_t *dest, int blockWidth, int samples ) {
 	int x, y;
 	uint8_t *rgba;
@@ -3858,11 +3339,7 @@ static void R_BuildLightmap( int w, int h, bool deluxe, const uint8_t *data, uin
 	}
 }
 
-/*
-* R_UploadLightmap
-*/
 static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int samples, bool deluxe ) {
-	Texture *image;
 	if( !name || !data ) {
 		return r_numUploadedLightmaps;
 	}
@@ -3878,9 +3355,6 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 	return r_numUploadedLightmaps++;
 }
 
-/*
-* R_PackLightmaps
-*/
 static int R_PackLightmaps( int num, int w, int h, int dataSize, int stride, int samples, bool deluxe,
 							const char *name, const uint8_t *data, mlightmapRect_t *rects ) {
 	int i, x, y, root;
@@ -4012,9 +3486,6 @@ static int R_PackLightmaps( int num, int w, int h, int dataSize, int stride, int
 	return num;
 }
 
-/*
-* R_BuildLightmaps
-*/
 void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8_t *data, mlightmapRect_t *rects ) {
 	int i, j, p;
 	int numBlocks = numLightmaps;
@@ -4072,7 +3543,6 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		mlightmapRect_t *rect = rects;
 		int blockSize = w * h * LIGHTMAP_BYTES;
 		float texScale = 1.0f;
-		char tempbuf[16];
 
 		if( mapConfig.deluxeMaps ) {
 			numLightmaps /= 2;
@@ -4150,9 +3620,6 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 	Com_DPrintf( "Packed %i lightmap blocks into %i texture(s)\n", numBlocks, r_numUploadedLightmaps );
 }
 
-/*
-* R_TouchLightmapImages
-*/
 void R_TouchLightmapImages( model_t *mod ) {
 	unsigned int i;
 	mbrushmodel_t *loadbmodel;
@@ -4171,17 +3638,6 @@ void R_TouchLightmapImages( model_t *mod ) {
 	}
 }
 
-/*
-=============================================================================
-
-LIGHT STYLE MANAGEMENT
-
-=============================================================================
-*/
-
-/*
-* R_InitLightStyles
-*/
 void R_InitLightStyles( model_t *mod ) {
 	int i;
 	mbrushmodel_t *loadbmodel;
@@ -4199,9 +3655,6 @@ void R_InitLightStyles( model_t *mod ) {
 	}
 }
 
-/*
-* R_AddSuperLightStyle
-*/
 superLightStyle_t *R_AddSuperLightStyle( model_t *mod, const int *lightmaps,
 										 const uint8_t *lightmapStyles, const uint8_t *vertexStyles, mlightmapRect_t **lmRects ) {
 	unsigned int i, j;
@@ -4254,11 +3707,6 @@ superLightStyle_t *R_AddSuperLightStyle( model_t *mod, const int *lightmaps,
 	return sls;
 }
 
-/*
-* R_SuperLightStylesCmp
-*
-* Compare function for qsort
-*/
 static int R_SuperLightStylesCmp( superLightStyle_t *sls1, superLightStyle_t *sls2 ) {
 	int i;
 
@@ -4289,9 +3737,6 @@ static int R_SuperLightStylesCmp( superLightStyle_t *sls1, superLightStyle_t *sl
 	return 0; // equal
 }
 
-/*
-* R_SortSuperLightStyles
-*/
 void R_SortSuperLightStyles( model_t *mod ) {
 	mbrushmodel_t *loadbmodel;
 
@@ -4304,9 +3749,6 @@ void R_SortSuperLightStyles( model_t *mod ) {
 
 static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal );
 
-/*
-* R_AddPortalSurface
-*/
 portalSurface_t *R_AddPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) {
 	portalSurface_t *portalSurface;
 	bool depthPortal;
@@ -4340,9 +3782,6 @@ portalSurface_t *R_AddPortalSurface( const entity_t *ent, const shader_t *shader
 	return portalSurface;
 }
 
-/*
-* R_UpdatePortalSurface
-*/
 void R_UpdatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
 							const vec3_t mins, const vec3_t maxs, const shader_t *shader, void *drawSurf ) {
 	unsigned int i;
@@ -4636,7 +4075,7 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface ) {
 	// if we want to render to a texture, initialize texture
 	// but do not try to render to it more than once
 	if( captureTextureId >= 0 ) {
-		int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
+		//int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
 
 		// TODO:
 		//captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
@@ -4712,9 +4151,6 @@ static void R_DrawPortalsDepthMask( void ) {
 	RB_SetShaderStateMask( ~0, 0 );
 }
 
-/*
-* R_DrawPortals
-*/
 void R_DrawPortals( void ) {
 	unsigned int i;
 
@@ -4742,9 +4178,6 @@ void R_DrawPortals( void ) {
 	}
 }
 
-/*
-* R_AddSkyportalSurface
-*/
 portalSurface_t *R_AddSkyportalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) {
 	portalSurface_t *portalSurface;
 
@@ -4768,9 +4201,6 @@ portalSurface_t *R_AddSkyportalSurface( const entity_t *ent, const shader_t *sha
 	return rn.skyportalSurface;
 }
 
-/*
-* R_DrawSkyportal
-*/
 static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal ) {
 	if( !R_PushRefInst() ) {
 		return;
@@ -4831,39 +4261,6 @@ static void R_DrawSkyportal( const entity_t *e, skyportal_t *skyportal ) {
 
 static ref_frontend_t rrf;
 
-
-/*
-* RF_AdapterShutdown
-*/
-static void RF_AdapterShutdown( ref_frontendAdapter_t *adapter ) {
-	if( TextureCache *instance = TextureCache::maybeInstance() ) {
-		instance->releaseRenderTargetAttachments();
-	}
-
-	RB_Shutdown();
-
-	if( adapter->GLcontext ) {
-		GLimp_SharedContext_Destroy( adapter->GLcontext, NULL );
-	}
-
-	GLimp_EnableMultithreadedRendering( false );
-
-	memset( adapter, 0, sizeof( *adapter ) );
-}
-
-/*
-* RF_AdapterInit
-*/
-static bool RF_AdapterInit( ref_frontendAdapter_t *adapter ) {
-	RB_Init();
-
-	TextureCache::instance()->createRenderTargetAttachments();
-
-	R_BindFrameBufferObject( 0 );
-
-	return true;
-}
-
 rserr_t RF_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
 				 int iconResource, const int *iconXPM,
 				 void *hinstance, void *wndproc, void *parenthWnd,
@@ -4888,7 +4285,11 @@ rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, b
 		return GLimp_SetFullscreenMode( displayFrequency, fullScreen );
 	}
 
-	RF_AdapterShutdown( &rrf.adapter );
+	if( TextureCache *instance = TextureCache::maybeInstance() ) {
+		instance->releaseRenderTargetAttachments();
+	}
+
+	RB_Shutdown();
 
 	err = R_SetMode( x, y, width, height, displayFrequency, fullScreen, borderless );
 	if( err != rserr_ok ) {
@@ -4897,25 +4298,13 @@ rserr_t RF_SetMode( int x, int y, int width, int height, int displayFrequency, b
 
 	memset( rrf.customColors, 255, sizeof( rrf.customColors ) );
 
-	rrf.adapter.owner = (void *)&rrf;
-	if( RF_AdapterInit( &rrf.adapter ) != true ) {
-		return rserr_unknown;
-	}
+	RB_Init();
+
+	TextureCache::instance()->createRenderTargetAttachments();
+
+	R_BindFrameBufferObject( 0 );
 
 	return rserr_ok;
-}
-
-rserr_t RF_SetWindow( void *hinstance, void *wndproc, void *parenthWnd ) {
-	rserr_t err;
-	bool surfaceChangePending = false;
-
-	err = GLimp_SetWindow( hinstance, wndproc, parenthWnd, &surfaceChangePending );
-
-	if( err == rserr_ok && surfaceChangePending ) {
-		GLimp_UpdatePendingWindowSurface();
-	}
-
-	return err;
 }
 
 void RF_AppActivate( bool active, bool minimize, bool destroy ) {
@@ -4924,7 +4313,11 @@ void RF_AppActivate( bool active, bool minimize, bool destroy ) {
 }
 
 void RF_Shutdown( bool verbose ) {
-	RF_AdapterShutdown( &rrf.adapter );
+	if( TextureCache *instance = TextureCache::maybeInstance() ) {
+		instance->releaseRenderTargetAttachments();
+	}
+
+	RB_Shutdown();
 
 	memset( &rrf, 0, sizeof( rrf ) );
 
@@ -4970,8 +4363,6 @@ void RF_BeginFrame( bool forceClear, bool forceVsync, bool uncappedFPS ) {
 	int swapInterval;
 
 	RF_CheckCvars();
-
-	rrf.adapter.noWait = uncappedFPS;
 
 	R_DataSync();
 
@@ -5054,44 +4445,6 @@ void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2
 	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
 }
 
-void RF_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, float angle,
-							   const vec4_t color, const shader_t *shader ) {
-	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, angle, color, shader );
-}
-
-void RF_DrawExternalTextureOverlay( GLuint externalTexNum ) {
-	R_DrawExternalTextureOverlay( externalTexNum );
-}
-
-void RF_DrawStretchPoly( const poly_t *poly, float x_offset, float y_offset ) {
-	R_DrawStretchPoly( poly, x_offset, y_offset );
-}
-
-void RF_SetScissor( int x, int y, int w, int h ) {
-	R_Scissor( x, y, w, h );
-	Vector4Set( rrf.scissor, x, y, w, h );
-}
-
-void RF_GetScissor( int *x, int *y, int *w, int *h ) {
-	if( x ) {
-		*x = rrf.scissor[0];
-	}
-	if( y ) {
-		*y = rrf.scissor[1];
-	}
-	if( w ) {
-		*w = rrf.scissor[2];
-	}
-	if( h ) {
-		*h = rrf.scissor[3];
-	}
-}
-
-void RF_ResetScissor( void ) {
-	R_ResetScissor();
-	Vector4Set( rrf.scissor, 0, 0, glConfig.width, glConfig.height );
-}
-
 void RF_SetCustomColor( int num, int r, int g, int b ) {
 	byte_vec4_t rgba;
 
@@ -5103,41 +4456,17 @@ void RF_SetCustomColor( int num, int r, int g, int b ) {
 	}
 }
 
-/*
-void RF_IssueScreenShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, const char *fmtstring, bool silent ) {
-	RF_IssueEnvScreenShotReliableCmd( cmdpipe, REF_PIPE_CMD_SCREEN_SHOT, path, name, fmtstring, 0, 0, glConfig.width, glConfig.height, 0, silent, true );
-}
-
-void RF_IssueEnvShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, unsigned pixels ) {
-	RF_IssueEnvScreenShotReliableCmd( cmdpipe, REF_PIPE_CMD_ENV_SHOT, path, name, "", 0, 0, glConfig.width, glConfig.height, pixels, false, false );
-}
-
-void RF_IssueAviShotReliableCmd( ref_cmdpipe_t *cmdpipe, const char *path, const char *name, int x, int y, int w, int h ) {
-}*/
-
 void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent ) {
-	if( RF_RenderingEnabled() ) {
-		R_TakeScreenShot( path, name, fmtstring, 0, 0, glConfig.width, glConfig.height, silent );
-	}
-}
-
-bool RF_RenderingEnabled( void ) {
-	return GLimp_RenderingEnabled();
+	R_TakeScreenShot( path, name, fmtstring, 0, 0, glConfig.width, glConfig.height, silent );
 }
 
 const char *RF_GetSpeedsMessage( char *out, size_t size ) {
-	QMutex_Lock( rf.speedsMsgLock );
 	Q_strncpyz( out, rf.speedsMsg, size );
-	QMutex_Unlock( rf.speedsMsgLock );
 	return out;
 }
 
 int RF_GetAverageFrametime( void ) {
 	return rf.frameTime.average;
-}
-
-void RF_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data ) {
-	R_ReplaceRawSubPic( shader, x, y, width, height, data );
 }
 
 void RF_TransformVectorToScreen( const refdef_t *rd, const vec3_t in, vec2_t out ) {
@@ -5197,10 +4526,6 @@ bool RF_LerpTag( orientation_t *orient, const model_t *mod, int oldframe, int fr
 	}
 
 	return false;
-}
-
-void RF_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t diffuse, float radius ) {
-	R_LightForOrigin( origin, dir, ambient, diffuse, radius, false );
 }
 
 glconfig_t glConfig;
@@ -5421,9 +4746,6 @@ static bool isPlatformExtensionSupported( const char *ext ) {
 	return strstr( qglGetGLWExtensionsString(), ext ) != nullptr;
 }
 
-/*
-* R_RegisterGLExtensions
-*/
 static bool R_RegisterGLExtensions( void ) {
 	int i;
 	char *var, name[128];
@@ -5529,9 +4851,6 @@ static bool R_RegisterGLExtensions( void ) {
 	return true;
 }
 
-/*
-* R_PrintGLExtensionsInfo
-*/
 static void R_PrintGLExtensionsInfo( void ) {
 	int i;
 	size_t lastOffset;
@@ -5545,11 +4864,6 @@ static void R_PrintGLExtensionsInfo( void ) {
 	}
 }
 
-/*
-* R_FinalizeGLExtensions
-*
-* Verify correctness of values provided by the driver, init some variables
-*/
 static void R_FinalizeGLExtensions( void ) {
 	int versionMajor, versionMinor;
 	cvar_t *cvar;
@@ -5846,49 +5160,6 @@ static void R_PrintInfo() {
 	R_PrintGLExtensionsInfo();
 }
 
-/*
-* R_GLVersionHash
-*/
-static unsigned R_GLVersionHash( const char *vendorString,
-								 const char *rendererString, const char *versionString ) {
-	uint8_t *tmp;
-	size_t csize;
-	size_t tmp_size, pos;
-	unsigned hash;
-
-	tmp_size = strlen( vendorString ) + strlen( rendererString ) +
-			   strlen( versionString ) + strlen( ARCH ) + 1;
-
-	pos = 0;
-	tmp = (uint8_t *)Q_malloc( tmp_size );
-
-	csize = strlen( vendorString );
-	memcpy( tmp + pos, vendorString, csize );
-	pos += csize;
-
-	csize = strlen( rendererString );
-	memcpy( tmp + pos, rendererString, csize );
-	pos += csize;
-
-	csize = strlen( versionString );
-	memcpy( tmp + pos, versionString, csize );
-	pos += csize;
-
-	// shaders are not compatible between 32-bit and 64-bit at least on Nvidia
-	csize = strlen( ARCH );
-	memcpy( tmp + pos, ARCH, csize );
-	pos += csize;
-
-	hash = COM_SuperFastHash( tmp, tmp_size, tmp_size );
-
-	Q_free( tmp );
-
-	return hash;
-}
-
-/*
-* R_Init
-*/
 rserr_t R_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
 				int iconResource, const int *iconXPM,
 				void *hinstance, void *wndproc, void *parenthWnd,
@@ -5945,9 +5216,6 @@ rserr_t R_Init( const char *applicationName, const char *screenshotPrefix, int s
 	return rserr_ok;
 }
 
-/*
-* R_PostInit
-*/
 static rserr_t R_PostInit( void ) {
 	int i;
 	GLenum glerr;
@@ -5982,9 +5250,6 @@ static rserr_t R_PostInit( void ) {
 		glConfig.shadingLanguageVersionString = "";
 	}
 
-	glConfig.versionHash = R_GLVersionHash( glConfig.vendorString, glConfig.rendererString,
-											glConfig.versionString );
-
 	memset( &rsh, 0, sizeof( rsh ) );
 	memset( &rf, 0, sizeof( rf ) );
 
@@ -5998,8 +5263,6 @@ static rserr_t R_PostInit( void ) {
 
 	rf.frameTime.average = 1;
 	rf.swapInterval = -1;
-	rf.speedsMsgLock = QMutex_Create();
-	rf.debugSurfaceLock = QMutex_Create();
 
 	R_InitDrawLists();
 
@@ -6061,9 +5324,6 @@ rserr_t R_SetMode( int x, int y, int width, int height, int displayFrequency, bo
 	return err;
 }
 
-/*
-* R_InitVolatileAssets
-*/
 static void R_InitVolatileAssets( void ) {
 	// init volatile data
 	R_InitSkeletalCache();
@@ -6089,9 +5349,6 @@ static void R_InitVolatileAssets( void ) {
 	}
 }
 
-/*
-* R_DestroyVolatileAssets
-*/
 static void R_DestroyVolatileAssets( void ) {
 	wsw::ref::Scene::Instance()->DestroyVolatileAssets();
 
@@ -6100,9 +5357,6 @@ static void R_DestroyVolatileAssets( void ) {
 	R_ShutdownSkeletalCache();
 }
 
-/*
-* R_BeginRegistration
-*/
 void R_BeginRegistration( void ) {
 	R_DestroyVolatileAssets();
 
@@ -6121,9 +5375,6 @@ void R_BeginRegistration( void ) {
 	R_DataSync();
 }
 
-/*
-* R_EndRegistration
-*/
 void R_EndRegistration( void ) {
 	if( rsh.registrationOpen == false ) {
 		return;
@@ -6143,9 +5394,6 @@ void R_EndRegistration( void ) {
 	R_DataSync();
 }
 
-/*
-* R_Shutdown
-*/
 void R_Shutdown( bool verbose ) {
 	Cmd_RemoveCommand( "screenshot" );
 
@@ -6170,9 +5418,6 @@ void R_Shutdown( bool verbose ) {
 	if( glConfig.hwGamma ) {
 		GLimp_SetGammaRamp( GAMMARAMP_STRIDE, glConfig.gammaRampSize, glConfig.originalGammaRamp );
 	}
-
-	QMutex_Destroy( &rf.speedsMsgLock );
-	QMutex_Destroy( &rf.debugSurfaceLock );
 
 	// shut down OS specific OpenGL stuff like contexts, etc.
 	GLimp_Shutdown();

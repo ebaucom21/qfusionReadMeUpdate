@@ -871,9 +871,6 @@ static bool ChooseVisual( int colorbits, int stencilbits ) {
 	}
 }
 
-/*
-** GLimp_Init
-*/
 int GLimp_Init( const char *applicationName, void *hinstance, void *wndproc, void *parenthWnd,
 				int iconResource, const int *iconXPM ) {
 	int colorbits, stencilbits;
@@ -990,19 +987,9 @@ int GLimp_Init( const char *applicationName, void *hinstance, void *wndproc, voi
 	return 1;
 }
 
-/*
-** GLimp_BeginFrame
-*/
 void GLimp_BeginFrame( void ) {
 }
 
-/*
-** GLimp_EndFrame
-**
-** Responsible for doing a swapbuffers and possibly for other stuff
-** as yet to be determined.  Probably better not to make this a GLimp
-** function and instead do a call to GLimp_SwapBuffers.
-*/
 void GLimp_EndFrame( void ) {
 	qglXSwapBuffers( x11display.dpy, x11display.gl_win );
 
@@ -1016,9 +1003,6 @@ void GLimp_EndFrame( void ) {
 	}
 }
 
-/*
-** GLimp_GetGammaRamp
-*/
 bool GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *ramp ) {
 	int size;
 #ifndef X_XF86VidModeGetGammaRampSize
@@ -1040,56 +1024,23 @@ bool GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *r
 	return false;
 }
 
-/*
-** GLimp_SetGammaRamp
-*/
 void GLimp_SetGammaRamp( size_t stride, unsigned short size, unsigned short *ramp ) {
 	XF86VidModeSetGammaRamp( x11display.dpy, x11display.scr,
 							 size, ramp, ramp + stride, ramp + ( stride << 1 ) );
 }
 
-/*
-** GLimp_AppActivate
-*/
 void GLimp_AppActivate( bool active, bool minimize, bool destroy ) {
 }
 
-/*
-** GLimp_SetWindow
-*/
-rserr_t GLimp_SetWindow( void *hinstance, void *wndproc, void *parenthWnd, bool *surfaceChangePending ) {
-	if( surfaceChangePending ) {
-		*surfaceChangePending = false;
-	}
-
-	return rserr_ok; // surface cannot be lost
-}
-
-/*
-** GLimp_RenderingEnabled
-*/
-bool GLimp_RenderingEnabled( void ) {
-	return true;
-}
-
-/*
-** GLimp_SetSwapInterval
-*/
 void GLimp_SetSwapInterval( int swapInterval ) {
 	if( qglXSwapIntervalSGI ) {
 		qglXSwapIntervalSGI( swapInterval );
 	}
 }
 
-/*
-** GLimp_EnableMultithreadedRendering
-*/
 void GLimp_EnableMultithreadedRendering( bool enable ) {
 }
 
-/*
-** GLimp_GetWindowSurface
-*/
 void *GLimp_GetWindowSurface( bool *renderable ) {
 	if( renderable ) {
 		*renderable = true;
@@ -1097,15 +1048,6 @@ void *GLimp_GetWindowSurface( bool *renderable ) {
 	return ( void * )x11dispay.gl_win;
 }
 
-/*
-** GLimp_UpdatePendingWindowSurface
-*/
-void GLimp_UpdatePendingWindowSurface( void ) {
-}
-
-/*
-** GLimp_SharedContext_Create
-*/
 bool GLimp_SharedContext_Create( void **context, void **surface ) {
 	GLXContext ctx = qglXCreateContext( x11display.dpy, x11display.visinfo, x11display.ctx, True );
 	if( !ctx ) {
@@ -1119,16 +1061,10 @@ bool GLimp_SharedContext_Create( void **context, void **surface ) {
 	return true;
 }
 
-/*
-** GLimp_SharedContext_MakeCurrent
-*/
 bool GLimp_SharedContext_MakeCurrent( void *context, void *surface ) {
 	return qglXMakeCurrent( x11display.dpy, (GLXDrawable)surface, (GLXContext)context ) == True ? true : false;
 }
 
-/*
-** GLimp_SharedContext_Destroy
-*/
 void GLimp_SharedContext_Destroy( void *context, void *surface ) {
 	qglXDestroyContext( x11display.dpy, context );
 }

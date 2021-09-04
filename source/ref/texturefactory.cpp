@@ -949,10 +949,6 @@ static void wsw_stb_write_func( void *context, void *data, int size ) {
 * R_ScreenShot
 */
 void R_ScreenShot( const char *filename, int x, int y, int width, int height, int quality, bool silent ) {
-	if( !R_IsRenderingToScreen() ) {
-		return;
-	}
-
 	const char *extension = COM_FileExtension( filename );
 	if( !extension ) {
 		Com_Printf( "R_ScreenShot: Invalid filename\n" );

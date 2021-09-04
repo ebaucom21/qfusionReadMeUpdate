@@ -637,7 +637,7 @@ void SCR_UpdateScreen( void ) {
 		return;
 	}
 
-	if( !scr_initialized || !con_initialized || !cls.mediaInitialized || !RF_RenderingEnabled() ) {
+	if( !scr_initialized || !con_initialized || !cls.mediaInitialized ) {
 		return;     // not ready yet
 
 	}
