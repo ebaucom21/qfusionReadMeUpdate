@@ -819,13 +819,6 @@ static void normalizeColorTokensInString( wsw::StaticString<N> *buffer, const ws
 	buffer->erase( std::strlen( buffer->data() ) );
 }
 
-template <unsigned N>
-static void stripColorTokens( wsw::StaticString<N> *buffer ) {
-	// The returned value points to a static buffer
-	const char *colorless = COM_RemoveColorTokens( buffer->data() );
-	buffer->assign( colorless, std::strlen( colorless ) );
-}
-
 [[nodiscard]]
 static bool hasPrintableChars( const wsw::StringView &s ) {
 	for( char ch: s ) {
@@ -854,7 +847,7 @@ void Client::setName( const wsw::StringView &inputName ) {
 
 	wsw::StringView chosenName( normalizedName.asView() );
 	wsw::StaticString<MAX_NAME_BYTES> colorlessName( chosenName );
-	stripColorTokens( &colorlessName );
+	removeColorTokens( &colorlessName );
 
 	if( !hasPrintableChars( colorlessName.asView() ) ) {
 		chosenName = kDefaultPlayerName;
@@ -880,7 +873,7 @@ void Client::setName( const wsw::StringView &inputName ) {
 void Client::setCleanNameResolvingNameClash( const wsw::StringView &inputName ) {
 	wsw::StaticString<MAX_NAME_BYTES> chosenColorlessName( inputName );
 	wsw::StaticString<MAX_NAME_BYTES> chosenName( inputName );
-	stripColorTokens( &chosenColorlessName );
+	removeColorTokens( &chosenColorlessName );
 
 	for( int tryNum = 1; tryNum <= MAX_CLIENTS; tryNum++ ) {
 		if( !findClientWithTheSameColorlessName( chosenColorlessName.asView() ) ) {
@@ -897,7 +890,7 @@ void Client::setCleanNameResolvingNameClash( const wsw::StringView &inputName ) 
 
 		normalizeColorTokensInString( &chosenName, tryName.asView(), MAX_NAME_BYTES );
 		chosenColorlessName.assign( chosenName.asView() );
-		stripColorTokens( &chosenColorlessName );
+		removeColorTokens( &chosenColorlessName );
 	}
 
 	this->netname.assign( chosenName.asView() );
@@ -941,7 +934,7 @@ void Client::setClan( const wsw::StringView &inputClan ) {
 	normalizedClan.erase( writeIndex );
 
 	wsw::StaticString<MAX_CLANNAME_BYTES> colorlessClan( normalizedClan );
-	stripColorTokens( &colorlessClan );
+	removeColorTokens( &colorlessClan );
 
 	for( const auto &prefix: kIllegalClanPrefixes ) {
 		// startsWithIgnoringCase()

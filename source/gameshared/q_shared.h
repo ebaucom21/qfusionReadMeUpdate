@@ -236,6 +236,35 @@ int COM_SanitizeColorString( const char *str, char *buf, int bufsize, int maxpri
 const char *Q_ColorStringTerminator( const char *str, int finalcolor );
 int Q_ColorStrLastColor( int previous, const char *s, int maxlen );
 
+template <typename Buffer>
+inline void removeColorTokens( Buffer *__restrict buffer ) {
+	size_t readIndex = 0, writeIndex = 0;
+	while( readIndex + 1 < buffer->size() ) {
+		const char ch = ( *buffer )[readIndex];
+		if( ch != '^' ) {
+			( *buffer )[writeIndex++] = ch;
+			readIndex += 1;
+		} else {
+			const char nextCh = ( *buffer )[readIndex + 1];
+			if( (unsigned)( (int)nextCh - (int)'0' ) <= 9u ) {
+				readIndex += 2;
+			} else if( nextCh != '^' ) {
+				// Treat a malformed ^-escape sequence as two regular characters
+				( *buffer )[writeIndex++] = '^';
+				readIndex += 1;
+			} else {
+				( *buffer )[writeIndex++] = '^';
+				readIndex += 2;
+			}
+		}
+	}
+	if( readIndex != buffer->size() ) {
+		( *buffer )[writeIndex++] = ( *buffer )[readIndex];
+	}
+	// Truncate
+	buffer->erase( buffer->begin() + writeIndex );
+}
+
 size_t Q_WCharUtf8Length( wchar_t wc );
 size_t Q_WCharToUtf8( wchar_t wc, char *dest, size_t bufsize );
 char *Q_WCharToUtf8Char( wchar_t wc );

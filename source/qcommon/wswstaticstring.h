@@ -382,6 +382,18 @@ public:
 		return *this;
 	}
 
+	[[maybe_unused]]
+	auto erase( iterator it ) -> decltype( *this ) {
+		assert( it >= begin() && it <= end() );
+		return erase( (size_type)( it - begin() ), npos );
+	}
+
+	[[maybe_unused]]
+	auto erase( const_iterator it ) -> decltype( *this ) {
+		assert( it >= cbegin() && it <= cend() );
+		return erase( (size_type)( it - cbegin() ), npos );
+	}
+
 	void resize( size_type newLength, char fillByChar ) {
 		assert( newLength <= capacity() );
 		if( newLength > m_len ) {
