@@ -896,7 +896,7 @@ void CG_Reset( void ) {
 	CG_ResetDamageIndicator();
 	CG_ResetItemTimers();
 
-	CG_SC_ResetObituaries();
+	CG_SC_ResetFragsFeed();
 
 	CG_ClearDecals();
 	CG_ClearPolys();
@@ -1102,7 +1102,7 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 * CG_Shutdown
 */
 void CG_Shutdown( void ) {
-	CG_SC_ResetObituaries();
+	CG_SC_ResetFragsFeed();
 	CG_FreeLocalEntities();
 	CG_DemocamShutdown();
 	CG_UnregisterCGameCommands();

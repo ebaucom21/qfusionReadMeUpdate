@@ -89,7 +89,7 @@ class CompactChatModel : public ChatModel {
 class RichChatModel : public ChatModel {
 	friend class ChatProxy;
 
-	wsw::StaticString<MAX_NAME_CHARS + 1> m_lastMessageName;
+	wsw::StaticString<MAX_NAME_BYTES> m_lastMessageName;
 	QDate m_currHeadingDate;
 	int m_currHeadingHour { -999 };
 	int m_currHeadingMinute { 0 };

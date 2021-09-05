@@ -140,6 +140,29 @@ auto toStyledText( const wsw::StringView &text ) -> QString {
 	}
 }
 
+auto wrapInColorTags( const wsw::StringView &text, int rgb ) -> QString {
+	const int r = COLOR_R( rgb ), g = COLOR_G( rgb ), b = COLOR_B( rgb );
+	constexpr const char *digits = "0123456789ABCDEF";
+	const char colorBuffer[7] {
+		'#', digits[r / 16], digits[r % 16], digits[g / 16], digits[g % 16], digits[b / 16], digits[b % 16]
+	};
+
+	auto sizeToReserve = (int)text.size();
+	sizeToReserve += kFontOpeningTagPrefix.size() + kFontOpeningTagSuffix.size() + kFontClosingTag.size();
+	sizeToReserve += sizeof( colorBuffer );
+
+	QString result;
+	result.reserve( sizeToReserve );
+
+	result.append( kFontOpeningTagPrefix );
+	result.append( QLatin1String( colorBuffer, (int)std::size( colorBuffer ) ) );
+	result.append( kFontOpeningTagSuffix );
+	appendEscapingEntities( &result, text );
+	result.append( kFontClosingTag );
+
+	return result;
+}
+
 auto formatPing( int ping ) -> QByteArray {
 	ping = std::clamp( ping, 0, 999 );
 	int colorNum;

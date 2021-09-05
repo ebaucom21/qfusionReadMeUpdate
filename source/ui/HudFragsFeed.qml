@@ -14,7 +14,7 @@ Item {
 
     ListView {
         id: list
-        model: hudDataModel.getObituariesModel()
+        model: hudDataModel.getFragsFeedModel()
         width: parent.width - 16
         height: contentHeight
         anchors.centerIn: parent

@@ -15,6 +15,9 @@ namespace wsw::ui {
 auto toStyledText( const wsw::StringView &text ) -> QString;
 
 [[nodiscard]]
+auto wrapInColorTags( const wsw::StringView &text, int rgb ) -> QString;
+
+[[nodiscard]]
 auto formatPing( int ping ) -> QByteArray;
 
 [[nodiscard]]

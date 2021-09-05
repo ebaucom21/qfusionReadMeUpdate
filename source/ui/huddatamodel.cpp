@@ -97,7 +97,7 @@ public:
 	auto getAvailableStrongCrosshairs() const -> QStringList { return m_availableStrongCrosshairs; }
 
 	[[nodiscard]]
-	auto getObituaryIconPath( unsigned meansOfDeath ) const -> QByteArray {
+	auto getFragsFeedIconPath( unsigned meansOfDeath ) const -> QByteArray {
 		assert( meansOfDeath >= MOD_GUNBLADE_W && meansOfDeath < (unsigned)MOD_COUNT );
 		// No static guarantees here but we can spot bugs easily in this case
 		if( meansOfDeath >= MOD_GUNBLADE_W && meansOfDeath <= MOD_INSTAGUN_S ) {
@@ -421,21 +421,22 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 	}
 }
 
-auto ObituariesModel::roleNames() const -> QHash<int, QByteArray> {
+auto FragsFeedModel::roleNames() const -> QHash<int, QByteArray> {
 	return { { { Victim, "victim" }, { Attacker, "attacker" }, { IconPath, "iconPath" } } };
 }
 
-auto ObituariesModel::rowCount( const QModelIndex & ) const -> int {
+auto FragsFeedModel::rowCount( const QModelIndex & ) const -> int {
 	return (int)m_entries.size();
 }
 
-auto ObituariesModel::data( const QModelIndex &index, int role ) const -> QVariant {
+auto FragsFeedModel::data( const QModelIndex &index, int role ) const -> QVariant {
 	if( index.isValid() ) {
 		if( const auto row = index.row(); (unsigned)row < (unsigned)m_entries.size() ) {
+			const auto &entry = m_entries[row];
 			switch( role ) {
-				case Victim: return toStyledText( m_entries[row].victim.asView() );
-				case Attacker: return toStyledText( m_entries[row].attacker.asView() );
-				case IconPath: return weaponPropsCache.getObituaryIconPath( m_entries[row].meansOfDeath );
+				case Victim: return toDisplayedName( entry.victimName.asView(), entry.victimTeamColor );
+				case Attacker: return toDisplayedName( entry.attackerName.asView(), entry.attackerTeamColor );
+				case IconPath: return weaponPropsCache.getFragsFeedIconPath( entry.meansOfDeath );
 				default: return QVariant();
 			}
 		}
@@ -443,8 +444,21 @@ auto ObituariesModel::data( const QModelIndex &index, int role ) const -> QVaria
 	return QVariant();
 }
 
-void ObituariesModel::addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
-								   const std::optional<wsw::StringView> &attacker ) {
+auto FragsFeedModel::toDisplayedName( const wsw::StringView &rawName, const std::optional<int> &teamColor ) -> QString {
+	// Optimize for retrieval of an empty attacker
+	if( !rawName.empty() ) {
+		if( !teamColor ) {
+			return toStyledText( rawName );
+		} else {
+			return wrapInColorTags( rawName, *teamColor );
+		}
+	}
+	return QString();
+}
+
+void FragsFeedModel::addFrag( const std::pair<wsw::StringView, int> &victimAndTeam,
+							  int64_t timestamp, unsigned meansOfDeath,
+							  const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
 	// TODO: Add to pending entries in case of a huge feed size?
 	if( m_entries.full() ) {
 		beginRemoveRows( QModelIndex(), 0, 0 );
@@ -455,17 +469,32 @@ void ObituariesModel::addObituary( const wsw::StringView &victim, int64_t timest
 	beginInsertRows( QModelIndex(), (int)m_entries.size(), (int)m_entries.size() );
 
 	m_entries.emplace_back( Entry {} );
-	m_entries.back().meansOfDeath = meansOfDeath;
-	m_entries.back().timestamp = timestamp;
-	m_entries.back().victim.assign( victim );
-	if( attacker ) {
-		m_entries.back().attacker.assign( *attacker );
+	Entry &entry = m_entries.back();
+	entry.meansOfDeath = meansOfDeath;
+	entry.timestamp = timestamp;
+
+	if( m_hudDataModel->m_hasTwoTeams ) {
+		entry.victimName.assign( victimAndTeam.first );
+		removeColorTokens( &entry.victimName );
+		entry.victimTeamColor = victimAndTeam.second == TEAM_ALPHA ?
+			m_hudDataModel->m_rawAlphaColor : m_hudDataModel->m_rawBetaColor;
+		if( attackerAndTeam ) {
+			entry.attackerName.assign( attackerAndTeam->first );
+			removeColorTokens( &entry.attackerName );
+			entry.attackerTeamColor = attackerAndTeam->second == TEAM_ALPHA ?
+				m_hudDataModel->m_rawAlphaColor : m_hudDataModel->m_rawBetaColor;
+		}
+	} else {
+		entry.victimName.assign( victimAndTeam.first );
+		if( attackerAndTeam ) {
+			entry.attackerName.assign( attackerAndTeam->first );
+		}
 	}
 
 	endInsertRows();
 }
 
-void ObituariesModel::reset() {
+void FragsFeedModel::reset() {
 	beginResetModel();
 	m_entries.clear();
 	endResetModel();
@@ -483,7 +512,7 @@ static auto getNumTimedOutEntries( const Entries &entries, int64_t currTime, uns
 	return i;
 }
 
-void ObituariesModel::update( int64_t currTime ) {
+void FragsFeedModel::update( int64_t currTime ) {
 	if( const unsigned numTimedOutEntries = getNumTimedOutEntries( m_entries, currTime, 5000u ) ) {
 		beginRemoveRows( QModelIndex(), 0, (int)numTimedOutEntries - 1 );
 		m_entries.erase( m_entries.begin(), m_entries.begin() + numTimedOutEntries );
@@ -688,12 +717,12 @@ auto HudDataModel::getTeamListModel() -> QObject * {
 	return &m_teamListModel;
 }
 
-auto HudDataModel::getObituariesModel() -> QObject * {
-	if( !m_hasSetObituariesModelOwnership ) {
-		QQmlEngine::setObjectOwnership( &m_obituariesModel, QQmlEngine::CppOwnership );
-		m_hasSetObituariesModelOwnership = true;
+auto HudDataModel::getFragsFeedModel() -> QObject * {
+	if( !m_hasSetFragsFeedModelOwnership ) {
+		QQmlEngine::setObjectOwnership( &m_fragsFeedModel, QQmlEngine::CppOwnership );
+		m_hasSetFragsFeedModelOwnership = true;
 	}
-	return &m_obituariesModel;
+	return &m_fragsFeedModel;
 }
 
 auto HudDataModel::getMessageFeedModel() -> QObject * {
@@ -726,6 +755,12 @@ void HudDataModel::addStatusMessage( const wsw::StringView &message, int64_t tim
 	m_originalStatusMessage.assign( truncatedMessage );
 	m_formattedStatusMessage = toStyledText( truncatedMessage );
 	Q_EMIT statusMessageChanged( m_formattedStatusMessage );
+}
+
+void HudDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+								 int64_t timestamp, unsigned int meansOfDeath,
+								 const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
+	m_fragsFeedModel.addFrag( victimAndTeam, timestamp, meansOfDeath, attackerAndTeam );
 }
 
 static const wsw::StringView kDefaultHudName( "default"_asView );
@@ -923,7 +958,7 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	}
 
 	m_inventoryModel.checkPropertyChanges();
-	m_obituariesModel.update( currTime );
+	m_fragsFeedModel.update( currTime );
 	m_awardsModel.update( currTime );
 
 	const bool wasMessageFeedFadingOut = m_messageFeedModel.isFadingOut();

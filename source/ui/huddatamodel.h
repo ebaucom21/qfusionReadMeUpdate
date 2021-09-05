@@ -106,21 +106,21 @@ class TeamListModel : public QAbstractListModel {
 	void update( const ReplicatedScoreboardData &scoreboardData, unsigned povPlayerNum );
 };
 
-class ObituariesModel : public QAbstractListModel {
+class FragsFeedModel : public QAbstractListModel {
 	friend class HudDataModel;
 
-	enum Role {
-		Victim,
-		Attacker,
-		IconPath
-	};
+	enum Role { Victim = Qt::UserRole + 1, Attacker, IconPath };
 
 	struct Entry {
 		int64_t timestamp;
-		wsw::StaticString<32> victim;
-		wsw::StaticString<32> attacker;
+		wsw::StaticString<32> victimName, attackerName;
 		unsigned meansOfDeath { 0 };
+		std::optional<int> victimTeamColor, attackerTeamColor;
 	};
+
+	HudDataModel *const m_hudDataModel;
+
+	explicit FragsFeedModel( HudDataModel *hudDataModel ) : m_hudDataModel( hudDataModel ) {}
 
 	// TODO: Use a circular buffer / StaticDeque (check whether it's really functional)?
 	wsw::StaticVector<Entry, 4> m_entries;
@@ -132,8 +132,12 @@ class ObituariesModel : public QAbstractListModel {
 	[[nodiscard]]
 	auto data( const QModelIndex &index, int role ) const -> QVariant override;
 
-	void addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
-					  const std::optional<wsw::StringView> &attacker );
+	[[nodiscard]]
+	static auto toDisplayedName( const wsw::StringView &rawName, const std::optional<int> &teamColor ) -> QString;
+
+	void addFrag( const std::pair<wsw::StringView, int> &victimAndTeam,
+				  int64_t timestamp, unsigned meansOfDeath,
+				  const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam );
 
 	void reset();
 	void update( int64_t currTime );
@@ -204,9 +208,11 @@ class AwardsModel : public QAbstractListModel {
 class HudDataModel : public QObject {
 	Q_OBJECT
 
+	friend class FragsFeedModel;
+
 	InventoryModel m_inventoryModel;
 	TeamListModel m_teamListModel;
-	ObituariesModel m_obituariesModel;
+	FragsFeedModel m_fragsFeedModel { this };
 	MessageFeedModel m_messageFeedModel;
 	AwardsModel m_awardsModel;
 
@@ -264,7 +270,7 @@ class HudDataModel : public QObject {
 
 	bool m_hasSetInventoryModelOwnership { false };
 	bool m_hasSetTeamListModelOwnership { false };
-	bool m_hasSetObituariesModelOwnership { false };
+	bool m_hasSetFragsFeedModelOwnership {false };
 	bool m_hasSetMessageFeedModelOwnership { false };
 	bool m_hasSetAwardsModelOwnership { false };
 
@@ -381,7 +387,7 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE QObject *getTeamListModel();
 	[[nodiscard]]
-	Q_INVOKABLE QObject *getObituariesModel();
+	Q_INVOKABLE QObject *getFragsFeedModel();
 	[[nodiscard]]
 	Q_INVOKABLE QObject *getMessageFeedModel();
 	[[nodiscard]]
@@ -401,13 +407,13 @@ public:
 
 	HudDataModel();
 
-	void resetObituaries() {
-		m_obituariesModel.reset();
+	void resetFragsFeed() {
+		m_fragsFeedModel.reset();
 	}
-	void addObituary( const wsw::StringView &victim, int64_t timestamp, unsigned meansOfDeath,
-				      const std::optional<wsw::StringView> &attacker ) {
-		m_obituariesModel.addObituary( victim, timestamp, meansOfDeath, attacker );
-	}
+
+	void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+					   int64_t timestamp, unsigned meansOfDeath,
+					   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam );
 
 	void addToMessageFeed( const wsw::StringView &message, int64_t timestamp ) {
 		m_messageFeedModel.addMessage( message, timestamp );

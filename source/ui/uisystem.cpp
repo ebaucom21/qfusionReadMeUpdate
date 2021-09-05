@@ -124,10 +124,11 @@ public:
 
 	void handleOptionsStatusCommand( const wsw::StringView &status ) override;
 
-	void resetObituaries() override;
+	void resetFragsFeed() override;
 
-	void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
-				      const std::optional<wsw::StringView> &maybeAttacker ) override;
+	void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+					   unsigned meansOfDeath,
+					   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) override;
 
 	void addToMessageFeed( const wsw::StringView &message ) override;
 
@@ -1977,13 +1978,14 @@ void QtUISystem::handleOptionsStatusCommand( const wsw::StringView &status ) {
 	m_gametypeOptionsModel.handleOptionsStatusCommand( status );
 }
 
-void QtUISystem::resetObituaries() {
-	m_hudDataModel.resetObituaries();
+void QtUISystem::resetFragsFeed() {
+	m_hudDataModel.resetFragsFeed();
 }
 
-void QtUISystem::addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
-							  const std::optional<wsw::StringView> &maybeAttacker ) {
-	m_hudDataModel.addObituary( victim, getFrameTimestamp(), meansOfDeath, maybeAttacker );
+void QtUISystem::addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+							   unsigned meansOfDeath,
+							   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) {
+	m_hudDataModel.addFragEvent( victimAndTeam, getFrameTimestamp(), meansOfDeath, attackerAndTeam );
 }
 
 void QtUISystem::addToMessageFeed( const wsw::StringView &message ) {

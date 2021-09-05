@@ -23,13 +23,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/frontend.h"
 #include "../qcommon/qcommon.h"
 
-/*
-* CG_ForceTeam
-*/
-static int CG_ForceTeam( int entNum, int team ) {
+int CG_TeamToForcedTeam( int team ) {
 	if( cg_forceMyTeamAlpha->integer ) {
-		int myteam = cg.predictedPlayerState.stats[STAT_TEAM];
-		if( myteam == TEAM_BETA ) {
+		if( const int myTeam = cg.predictedPlayerState.stats[STAT_TEAM]; myTeam == TEAM_BETA ) {
 			if( team == TEAM_ALPHA ) {
 				return TEAM_BETA;
 			}
@@ -145,7 +141,7 @@ bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct Ski
 	}
 	ownerNum = owner->current.number;
 
-	team = CG_ForceTeam( owner->current.number, owner->current.team );
+	team = CG_TeamToForcedTeam( owner->current.team );
 
 	CG_CheckUpdateTeamModelRegistration( team ); // check for cvar changes
 
@@ -250,7 +246,7 @@ vec_t *CG_TeamColor( int team, vec4_t color ) {
 	cvar_t *teamForceColor = NULL, *teamForceColorToggle = NULL;
 	int forcedteam;
 
-	forcedteam = CG_ForceTeam( cg.view.POVent, team ); // check all teams against the client
+	forcedteam = CG_TeamToForcedTeam( team ); // check all teams against the client
 	if( forcedteam < TEAM_PLAYERS || forcedteam >= GS_MAX_TEAMS ) { // limit out of range and spectators team
 		forcedteam = TEAM_PLAYERS;
 	}
@@ -302,7 +298,7 @@ uint8_t *_ColorForEntity( int entNum, byte_vec4_t color, bool player ) {
 		owner = &cg_entities[cent->current.bodyOwner];
 	}
 
-	team = CG_ForceTeam( owner->current.number, owner->current.team );
+	team = CG_TeamToForcedTeam( owner->current.team );
 
 	switch( team ) {
 		case TEAM_ALPHA:

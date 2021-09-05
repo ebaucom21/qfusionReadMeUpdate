@@ -577,11 +577,11 @@ static void CG_SC_PlaySound() {
 	SoundSystem::Instance()->StartLocalSound( Cmd_Argv( 1 ) );
 }
 
-void CG_SC_ResetObituaries() {
-	wsw::ui::UISystem::instance()->resetObituaries();
+void CG_SC_ResetFragsFeed() {
+	wsw::ui::UISystem::instance()->resetFragsFeed();
 }
 
-static void CG_SC_Obituary() {
+static void CG_SC_FragEvent() {
 	if( Cmd_Argc() == 4 ) {
 		unsigned args[3];
 		for( int i = 0; i < 3; ++i ) {
@@ -595,13 +595,16 @@ static void CG_SC_Obituary() {
 		if( ( victim && victim < (unsigned)( MAX_CLIENTS + 1 ) ) && attacker < (unsigned)( MAX_CLIENTS + 1 ) ) {
 			if( meansOfDeath >= (unsigned)MOD_GUNBLADE_W && meansOfDeath < (unsigned)MOD_COUNT ) {
 				if( const wsw::StringView victimName( cgs.clientInfo[victim - 1].name ); !victimName.empty() ) {
-					std::optional<wsw::StringView> attackerName;
+					std::optional<std::pair<wsw::StringView, int>> attackerAndTeam;
 					if( attacker ) {
 						if( const wsw::StringView view( cgs.clientInfo[attacker - 1].name ); !view.empty() ) {
-							attackerName = view;
+							const int attackerRealTeam = cg_entities[attacker].current.team;
+							attackerAndTeam = std::make_pair( view, CG_TeamToForcedTeam( attackerRealTeam ) );
 						}
 					}
-					wsw::ui::UISystem::instance()->addObituary( victimName, meansOfDeath, attackerName );
+					const int victimTeam = cg_entities[victim].current.team;
+					const auto victimAndTeam( std::make_pair( victimName, CG_TeamToForcedTeam( victimTeam ) ) );
+					wsw::ui::UISystem::instance()->addFragEvent( victimAndTeam, meansOfDeath, attackerAndTeam );
 					if( attacker && attacker != victim && ISVIEWERENTITY( attacker ) ) {
 						wsw::StaticString<256> message;
 						if( cg_entities[attacker].current.team == cg_entities[victim].current.team ) {
@@ -644,7 +647,7 @@ static const svcmd_t cg_svcmds[] =
 	{ "tflt", CG_SC_MessageFault },
 	{ "cp", CG_SC_CenterPrint },
 	{ "cpf", CG_SC_CenterPrintFormat },
-	{ "obry", CG_SC_Obituary },
+	{ "fra", CG_SC_FragEvent },
 	{ "mm", CG_SC_MatchMessage },
 	{ "mapmsg", CG_SC_HelpMessage },
 	{ "demoget", CG_SC_DemoGet },

@@ -868,14 +868,9 @@ void G_CenterPrintFormatMsg( const edict_t *ent, int numVargs, const char *forma
 }
 
 
-/*
-* G_Obituary
-*
-* Prints death message to all clients
-*/
 void G_Obituary( edict_t *victim, edict_t *attacker, int mod ) {
 	if( victim && attacker ) {
-		trap_GameCmd( NULL, va( "obry %i %i %i", (int)(victim - game.edicts), (int)(attacker - game.edicts), mod ) );
+		trap_GameCmd( NULL, va( "fra %i %i %i", (int)(victim - game.edicts), (int)(attacker - game.edicts), mod ) );
 	}
 }
 

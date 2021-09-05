@@ -39,10 +39,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <new>
 #include <utility>
 
-#define CG_OBITUARY_HUD     1
-#define CG_OBITUARY_CENTER  2
-#define CG_OBITUARY_CONSOLE 4
-
 #define ITEM_RESPAWN_TIME   1000
 
 #define FLAG_TRAIL_DROP_DELAY 300
@@ -216,8 +212,6 @@ typedef struct {
 } cg_viewblend_t;
 
 #define PREDICTED_STEP_TIME 150 // stairs smoothing time
-#define MAX_AWARD_LINES 3
-#define MAX_AWARD_DISPLAYTIME 1750
 
 // view types
 enum {
@@ -532,7 +526,7 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 
 void CG_ClearPointedNum( void );
 
-void CG_SC_ResetObituaries( void );
+void CG_SC_ResetFragsFeed( void );
 
 //
 // cg_scoreboard.c
@@ -659,6 +653,7 @@ void CG_SC_AutoRecordAction( const char *action );
 //
 // cg_teams.c
 //
+int CG_TeamToForcedTeam( int team );
 void CG_RegisterTeamColor( int team );
 void CG_RegisterForceModels( void );
 void CG_SetSceneTeamColors( void );

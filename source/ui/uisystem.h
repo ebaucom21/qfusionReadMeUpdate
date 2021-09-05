@@ -83,9 +83,10 @@ public:
 
 	virtual void handleOptionsStatusCommand( const wsw::StringView &status ) = 0;
 
-	virtual void resetObituaries() = 0;
-	virtual void addObituary( const wsw::StringView &victim, unsigned meansOfDeath,
-						      const std::optional<wsw::StringView> &maybeAttacker ) = 0;
+	virtual void resetFragsFeed() = 0;
+	virtual void addFragEvent( const std::pair<wsw::StringView, int> &victimAndTeam,
+							   unsigned meansOfDeath,
+							   const std::optional<std::pair<wsw::StringView, int>> &attackerAndTeam ) = 0;
 
 	virtual void addToMessageFeed( const wsw::StringView &message ) = 0;
 
