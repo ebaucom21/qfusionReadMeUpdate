@@ -10,6 +10,7 @@
 #include "landonsavedareasaction.h"
 #include "rideplatformaction.h"
 #include "bunnytostairsorrampexitaction.h"
+#include "bunnyfollowingreachchainaction.h"
 #include "bunnytestingnextreachdirsaction.h"
 #include "bunnytestingmultipleturnsaction.h"
 #include "bunnytobestvisiblereachaction.h"
@@ -98,6 +99,7 @@ class MovementSubsystem {
 	friend class FlyUntilLandingAction;
 	friend class CampASpotMovementAction;
 	friend class BunnyToStairsOrRampExitAction;
+	friend class BunnyFollowingReachChainAction;
 	friend class BunnyTestingNextReachDirsAction;
 	friend class BunnyToBestVisibleReachAction;
 	friend class BunnyToBestFloorClusterPointAction;
@@ -139,6 +141,7 @@ class MovementSubsystem {
 	FlyUntilLandingAction flyUntilLandingAction;
 	CampASpotMovementAction campASpotMovementAction;
 	BunnyToStairsOrRampExitAction bunnyToStairsOrRampExitAction;
+	BunnyFollowingReachChainAction bunnyFollowingReachChainAction;
 	BunnyTestingNextReachDirsAction bunnyTestingNextReachDirsAction;
 	BunnyToBestVisibleReachAction bunnyToBestVisibleReachAction;
 	BunnyToBestFloorClusterPointAction bunnyToBestFloorClusterPointAction;
