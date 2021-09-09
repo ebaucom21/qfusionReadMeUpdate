@@ -225,15 +225,15 @@ public:
 		uint16_t otherTouchedTriggerEnts[MAX_TOUCHED_OTHER_TRIGGERS];
 		int numOtherTouchedTriggers;
 
+		uint16_t touchedJumppadEntNum;
+		uint16_t touchedTeleporterEntNum;
+		uint16_t touchedPlatformEntNum;
+
 		bool hasJumped: 1;
 		bool hasDoubleJumped: 1;
 		bool hasDashed: 1;
 		bool hasWalljumped: 1;
 		bool hasTakenFallDamage: 1;
-
-		bool hasTouchedJumppad: 1;
-		bool hasTouchedTeleporter: 1;
-		bool hasTouchedPlatform: 1;
 
 		FrameEvents() {
 			Clear();
@@ -246,13 +246,17 @@ public:
 			hasDashed = false;
 			hasWalljumped = false;
 			hasTakenFallDamage = false;
-			hasTouchedJumppad = false;
-			hasTouchedTeleporter = false;
-			hasTouchedPlatform = false;
+			touchedJumppadEntNum = 0;
+			touchedTeleporterEntNum = 0;
+			touchedPlatformEntNum = 0;
 		}
 	};
 
 	FrameEvents frameEvents;
+
+	int m_jumppadPathTriggerNum { 0 };
+	int m_teleporterPathTriggerNum { 0 };
+	int m_platformPathTriggerNum { 0 };
 
 	class BaseAction *SuggestSuitableAction();
 	class BaseAction *SuggestDefaultAction();
@@ -296,6 +300,8 @@ public:
 	void SetupStackForStep();
 
 	void NextMovementStep();
+
+	void SavePathTriggerNums();
 
 	const AiEntityPhysicsState &PhysicsStateBeforeStep() const {
 		return predictedMovementActions[topOfStackIndex].entityPhysicsState;

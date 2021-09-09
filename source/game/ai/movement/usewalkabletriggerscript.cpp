@@ -27,7 +27,7 @@ bool UseWalkableTriggerScript::TryDeactivate( PredictionContext *context ) {
 
 	vec3_t targetOrigin;
 	GetSteeringTarget( targetOrigin );
-	if( !TestActualWalkability( triggerAreaNumsCache.GetAreaNum( ENTNUM( trigger ) ), targetOrigin, context ) ) {
+	if( !TestActualWalkability( triggerAreaNumsCache.getAreaNum( ENTNUM( trigger ) ), targetOrigin, context ) ) {
 		status = INVALID;
 		return true;
 	}
@@ -108,7 +108,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 		const edict_t *ent = gameEdicts + triggerEntNums[i];
 
 		// Check whether the trigger is reachable by walking in 2 seconds (200 AAS time units)
-		const int entAreaNum = triggerAreaNumsCache.GetAreaNum( triggerEntNums[i] );
+		const int entAreaNum = triggerAreaNumsCache.getAreaNum( triggerEntNums[i] );
 
 		int travelTimeToTrigger = 0;
 		for( int j = 0; j < numFromAreas; ++j ) {

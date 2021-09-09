@@ -1,6 +1,6 @@
 #include "predictioncontext.h"
 #include "movementlocal.h"
-#include "../frameentitiescache.h"
+#include "../classifiedentitiescache.h"
 
 void PredictionContext::NextReachNumAndTravelTimeToNavTarget( int *reachNum, int *travelTimeToNavTarget ) {
 	*reachNum = 0;
@@ -338,22 +338,25 @@ void PredictionContext::OnInterceptedPMoveTouchTriggers( pmove_t *pm, vec3_t con
 	nearbyTriggersCache.ensureValidForBounds( mins, maxs );
 
 	for( unsigned i = 0; i < nearbyTriggersCache.numJumppadEnts; ++i ) {
-		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.jumppadEntNums[i] ) ) {
-			frameEvents.hasTouchedJumppad = true;
+		const uint16_t entNum = nearbyTriggersCache.jumppadEntNums[i];
+		if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
+			frameEvents.touchedJumppadEntNum = entNum;
 			break;
 		}
 	}
 
 	for( unsigned i = 0; i < nearbyTriggersCache.numTeleportEnts; ++i ) {
-		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.teleportEntNums[i] ) ) {
-			frameEvents.hasTouchedTeleporter = true;
+		const uint16_t entNum = nearbyTriggersCache.teleportEntNums[i];
+		if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
+			frameEvents.touchedTeleporterEntNum = entNum;
 			break;
 		}
 	}
 
 	for( unsigned i = 0; i < nearbyTriggersCache.numPlatformEnts; ++i ) {
-		if( GClip_EntityContact( mins, maxs, gameEdicts + nearbyTriggersCache.platformEntNums[i] ) ) {
-			frameEvents.hasTouchedPlatform = true;
+		const uint16_t entNum = nearbyTriggersCache.platformEntNums[i];
+		if( GClip_EntityContact( mins, maxs, gameEdicts + entNum ) ) {
+			frameEvents.touchedPlatformEntNum = entNum;
 			break;
 		}
 	}
@@ -823,6 +826,75 @@ bool PredictionContext::NextPredictionStep() {
 	return true;
 }
 
+void PredictionContext::SavePathTriggerNums() {
+	m_jumppadPathTriggerNum = m_teleporterPathTriggerNum = m_platformPathTriggerNum = 0;
+
+	const int targetAreaNum = bot->NavTargetAasAreaNum();
+	if( !targetAreaNum ) {
+		return;
+	}
+
+	int startAreaNums[2] { 0, 0 };
+	const int numStartAreas = bot->entityPhysicsState->PrepareRoutingStartAreas( startAreaNums );
+	if( startAreaNums[0] == targetAreaNum || startAreaNums[1] == targetAreaNum ) {
+		return;
+	}
+
+	const auto *const __restrict aasReach = AiAasWorld::Instance()->Reachabilities();
+	const auto *const __restrict routeCache = bot->RouteCache();
+	const auto *const __restrict botOrigin = bot->Origin();
+
+	int reachAreaNum = 0;
+	enum MetTriggerFlags : unsigned { Teleporter = 0x1, Jumppad = 0x2, Platform = 0x4 };
+	unsigned metTriggerBits = 0;
+	// Don't inspect the whole reach chain to target for performance/logical reasons, and also protect from routing bugs
+	for( int i = 0; i < 32; ++i ) {
+		int travelTime, reachNum = 0;
+		if( !reachAreaNum ) {
+			travelTime = routeCache->PreferredRouteToGoalArea( startAreaNums, numStartAreas, targetAreaNum, &reachNum );
+		} else {
+			travelTime = routeCache->PreferredRouteToGoalArea( reachAreaNum, targetAreaNum, &reachNum );
+		}
+		if( !travelTime || !reachNum ) {
+			break;
+		}
+		const auto &__restrict reach = aasReach[reachNum];
+		reachAreaNum = reach.areanum;
+		if( reachAreaNum == targetAreaNum ) {
+			break;
+		}
+		// Another cutoff
+		if( DistanceSquared( botOrigin, reach.start ) > SQUARE( 768 ) ) {
+			break;
+		}
+		if( const auto *const __restrict classTriggerNums = triggerAreaNumsCache.getTriggersForArea( reachAreaNum ) ) {
+			if( !m_teleporterPathTriggerNum ) {
+				if( const std::optional<uint16_t> maybeTeleporterNum = classTriggerNums->getFirstTeleporterNum() ) {
+					m_teleporterPathTriggerNum = *maybeTeleporterNum;
+					metTriggerBits |= Teleporter;
+				}
+			}
+			if( !m_jumppadPathTriggerNum ) {
+				if( const std::optional<uint16_t> maybeJumppadNum = classTriggerNums->getFirstJummpadNum() ) {
+					m_jumppadPathTriggerNum = *maybeJumppadNum;
+					metTriggerBits |= Jumppad;
+				}
+			}
+			if( !m_platformPathTriggerNum ) {
+				if( const std::optional<uint16_t> maybePlatformNum = classTriggerNums->getFirstPlatformNum() ) {
+					m_platformPathTriggerNum = *maybePlatformNum;
+					metTriggerBits |= Platform;
+				}
+			}
+			// Interrupt at this
+			// TODO: Don't even try testing for kinds of triggers that are not even present on the map
+			if( metTriggerBits == ( Teleporter | Jumppad | Platform ) ) {
+				break;
+			}
+		}
+	}
+}
+
 void PredictionContext::BuildPlan() {
 	for( auto *movementAction: m_subsystem->movementActions )
 		movementAction->BeforePlanning();
@@ -874,6 +946,8 @@ void PredictionContext::BuildPlan() {
 
 	this->lastResortPath.clear();
 	this->lastResortPathPenalty = std::numeric_limits<unsigned>::max();
+
+	SavePathTriggerNums();
 
 #ifndef CHECK_INFINITE_NEXT_STEP_LOOPS
 	for(;; ) {

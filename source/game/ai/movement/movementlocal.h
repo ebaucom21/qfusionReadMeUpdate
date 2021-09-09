@@ -416,13 +416,52 @@ inline bool ShouldPrepareForCrouchSliding( PredictionContext *context, float hei
 }
 
 class TriggerAreaNumsCache {
-	mutable int areaNums[MAX_EDICTS];
 public:
-	TriggerAreaNumsCache() {
-		memset( areaNums, 0, sizeof( areaNums ) );
-	}
+	class ClassTriggerNums {
+		friend class TriggerAreaNumsCache;
 
-	int GetAreaNum( int entNum ) const;
+		using SpanOfNums = std::pair<uint8_t, uint8_t>;
+
+		[[nodiscard]]
+		auto getFirstOf( const SpanOfNums &span ) const -> std::optional<uint16_t> {
+			return span.second ? std::optional( m_data[span.first] ) : std::nullopt;
+		}
+
+		SpanOfNums m_jumppadNumsSpan;
+		SpanOfNums m_teleporterNumsSpan;
+		SpanOfNums m_platformNumsSpan;
+		uint16_t m_data[15];
+		uint16_t m_size { 0 };
+
+		[[nodiscard]]
+		auto addNums( const uint16_t *nums, unsigned numOfNums ) -> std::pair<uint8_t, uint8_t> {
+			numOfNums = std::min<unsigned>( numOfNums, std::size( m_data ) - m_size );
+			const auto result = std::make_pair( (uint8_t)m_size, (uint8_t)numOfNums );
+			std::memcpy( m_data + m_size, nums, sizeof( nums[0] ) * numOfNums );
+			m_size += numOfNums;
+			assert( m_size <= std::size( m_data ) && m_size < std::numeric_limits<uint8_t>::max() );
+			return result;
+		}
+	public:
+		[[nodiscard]]
+		auto getFirstJummpadNum() const -> std::optional<uint16_t> { return getFirstOf( m_jumppadNumsSpan ); }
+		[[nodiscard]]
+		auto getFirstTeleporterNum() const -> std::optional<uint16_t> { return getFirstOf( m_teleporterNumsSpan ); }
+		[[nodiscard]]
+		auto getFirstPlatformNum() const -> std::optional<uint16_t> { return getFirstOf( m_platformNumsSpan ); }
+	};
+private:
+	mutable int m_areaNums[MAX_EDICTS] {};
+	mutable wsw::HashMap<int, ClassTriggerNums> m_triggersForArea;
+	// Don't insert junk nodes to indicate tested but empty areas, use this bitset instead
+	mutable wsw::BitSet<std::numeric_limits<uint16_t>::max()> m_testedTriggersForArea;
+	// TODO: Fuse with the set above into a 2-bit set
+	mutable wsw::BitSet<std::numeric_limits<uint16_t>::max()> m_hasTriggersForArea;
+public:
+	[[nodiscard]]
+	auto getAreaNum( int entNum ) const -> int;
+	[[nodiscard]]
+	auto getTriggersForArea( int areaNum ) const -> const ClassTriggerNums *;
 };
 
 extern TriggerAreaNumsCache triggerAreaNumsCache;

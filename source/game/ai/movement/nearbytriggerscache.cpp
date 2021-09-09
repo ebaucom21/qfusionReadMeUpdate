@@ -1,5 +1,5 @@
 #include "nearbytriggerscache.h"
-#include "../frameentitiescache.h"
+#include "../classifiedentitiescache.h"
 #include "../ailocal.h"
 
 namespace wsw::ai::movement {
@@ -69,11 +69,11 @@ void NearbyTriggersCache::ensureValidForBounds( const float *__restrict absMins,
 	VectorAdd( absMins, lastComputedForMins, lastComputedForMins );
 	VectorAdd( absMaxs, lastComputedForMaxs, lastComputedForMaxs );
 
-	const auto *const __restrict cache = wsw::ai::FrameEntitiesCache::instance();
-	numTeleportEnts = clipToRegion( cache->getAllTeleports(), teleportEntNums, kMaxClassEnts );
-	numJumppadEnts = clipToRegion( cache->getAllJumppads(), jumppadEntNums, kMaxClassEnts );
-	numPlatformEnts = clipToRegion( cache->getAllPlatforms(), platformEntNums, kMaxClassEnts );
-	numOtherEnts = clipToRegion( cache->getAllOtherTriggers(), otherEntNums, kMaxOtherEnts );
+	const auto *const __restrict cache = wsw::ai::ClassifiedEntitiesCache::instance();
+	numTeleportEnts = clipToRegion( cache->getAllPersistentMapTeleporters(), teleportEntNums, kMaxClassEnts );
+	numJumppadEnts = clipToRegion( cache->getAllPersistentMapJumppads(), jumppadEntNums, kMaxClassEnts );
+	numPlatformEnts = clipToRegion( cache->getAllPersistentMapPlatforms(), platformEntNums, kMaxClassEnts );
+	numOtherEnts = clipToRegion( cache->getAllOtherTriggersInThisFrame(), otherEntNums, kMaxOtherEnts );
 }
 
 }

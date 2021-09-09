@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <bitset>
 
 namespace wsw {
 
@@ -30,6 +31,9 @@ using TreeSet = std::set<T>;
 
 template <typename T>
 using HashSet = std::unordered_set<T>;
+
+template <size_t N>
+using BitSet = std::bitset<N>;
 
 }
 

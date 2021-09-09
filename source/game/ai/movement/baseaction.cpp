@@ -125,19 +125,40 @@ void BaseAction::CheckPredictionStepResults( PredictionContext *context ) {
 		}
 	}
 
-	if( this->stopPredictionOnTouchingJumppad && context->frameEvents.hasTouchedJumppad ) {
-		Debug( "A prediction step has lead to touching a jumppad, should stop planning\n" );
-		context->isCompleted = true;
+	if( this->stopPredictionOnTouchingJumppad ) {
+		if( const uint16_t touchedTriggerNum = context->frameEvents.touchedJumppadEntNum ) {
+			if( touchedTriggerNum == context->m_jumppadPathTriggerNum ) {
+				Debug( "A prediction step has lead to touching the jumppad, should stop planning\n" );
+				context->isCompleted = true;
+			} else {
+				Debug( "A prediction step has lead to touching a (wrong) jumppad, rolling back\n" );
+				context->SetPendingRollback();
+			}
+			return;
+		}
+	}
+	if( this->stopPredictionOnTouchingTeleporter ) {
+		if( const uint16_t touchedTriggerNum = context->frameEvents.touchedTeleporterEntNum ) {
+			if( touchedTriggerNum == context->m_teleporterPathTriggerNum ) {
+				Debug( "A prediction step has lead to touching the teleporter, should stop planning\n" );
+				context->isCompleted = true;
+			} else {
+				Debug( "A prediction step has lead to touching a (wrong) teleporter, rolling back\n" );
+				context->SetPendingRollback();
+			}
+		}
 		return;
 	}
-	if( this->stopPredictionOnTouchingTeleporter && context->frameEvents.hasTouchedTeleporter ) {
-		Debug( "A prediction step has lead to touching a teleporter, should stop planning\n" );
-		context->isCompleted = true;
-		return;
-	}
-	if( this->stopPredictionOnTouchingPlatform && context->frameEvents.hasTouchedPlatform ) {
-		Debug( "A prediction step has lead to touching a platform, should stop planning\n" );
-		context->isCompleted = true;
+	if( this->stopPredictionOnTouchingPlatform ) {
+		if( const uint16_t touchedPlatformNum = context->frameEvents.touchedPlatformEntNum ) {
+			if( touchedPlatformNum == context->m_platformPathTriggerNum ) {
+				Debug( "A prediction step has lead to touching the platform, should stop planning\n" );
+				context->isCompleted = true;
+			} else {
+				Debug( "A prediction step has lead to touching a (wrong) platform, rolling back\n" );
+				context->SetPendingRollback();
+			}
+		}
 		return;
 	}
 

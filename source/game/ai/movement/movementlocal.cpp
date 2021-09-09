@@ -1,22 +1,23 @@
 #include "movementlocal.h"
 #include "../manager.h"
+#include "../classifiedentitiescache.h"
 
 TriggerAreaNumsCache triggerAreaNumsCache;
 
-int TriggerAreaNumsCache::GetAreaNum( int entNum ) const {
-	int *const __restrict areaNumRef = &areaNums[entNum];
+auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
+	int *const __restrict areaNumRef = &m_areaNums[entNum];
 	// Put the likely case first
 	if( *areaNumRef ) {
 		return *areaNumRef;
 	}
 
 	// Find an area that has suitable flags matching the trigger type
-	const auto *const aasWorld = AiAasWorld::Instance();
-	const auto *const aasAreaSettings = aasWorld->AreaSettings();
-	const auto *const aiManager = AiManager::Instance();
+	const auto *const __restrict aasWorld = AiAasWorld::Instance();
+	const auto *const __restrict aasAreaSettings = aasWorld->AreaSettings();
+	const auto *const __restrict aiManager = AiManager::Instance();
 
 	int desiredAreaContents = ~0;
-	const edict_t *ent = game.edicts + entNum;
+	const edict_t *__restrict ent = game.edicts + entNum;
 	if( ent->classname ) {
 		if( !Q_stricmp( ent->classname, "trigger_push" ) ) {
 			desiredAreaContents = AREACONTENTS_JUMPPAD;
@@ -27,10 +28,10 @@ int TriggerAreaNumsCache::GetAreaNum( int entNum ) const {
 
 	*areaNumRef = 0;
 
-	int boxAreaNums[32];
-	int numBoxAreas = aasWorld->BBoxAreas( ent->r.absmin, ent->r.absmax, boxAreaNums, 32 );
+	int boxAreaNums[64];
+	const int numBoxAreas = aasWorld->BBoxAreas( ent->r.absmin, ent->r.absmax, boxAreaNums, 64 );
 	for( int i = 0; i < numBoxAreas; ++i ) {
-		int areaNum = boxAreaNums[i];
+		const int areaNum = boxAreaNums[i];
 		if( !( aasAreaSettings[areaNum].contents & desiredAreaContents ) ) {
 			continue;
 		}
@@ -42,6 +43,64 @@ int TriggerAreaNumsCache::GetAreaNum( int entNum ) const {
 	}
 
 	return *areaNumRef;
+}
+
+auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const ClassTriggerNums * {
+	const auto *const __restrict aasWorld = AiAasWorld::Instance();
+	assert( areaNum && (unsigned)areaNum < (unsigned)aasWorld->NumAreas() );
+
+	if( m_testedTriggersForArea[areaNum] ) {
+		if( m_hasTriggersForArea[areaNum] ) {
+			const auto it = m_triggersForArea.find( areaNum );
+			assert( it != m_triggersForArea.end() );
+			return &it->second;
+		}
+		return nullptr;
+	}
+
+	m_testedTriggersForArea[areaNum] = true;
+
+	unsigned numTeleporters = 0, numJumppads = 0, numPlatforms = 0;
+	uint16_t teleporterNums[MAX_EDICTS], jumppadNums[MAX_EDICTS], platformNums[MAX_EDICTS];
+
+	const auto &area = aasWorld->Areas()[areaNum];
+	const float *__restrict areaMins = area.mins;
+	const float *__restrict areaMaxs = area.maxs;
+
+	const auto *const __restrict gameEnts = game.edicts;
+	const auto *const __restrict entitiesCache = wsw::ai::ClassifiedEntitiesCache::instance();
+	for( const uint16_t num : entitiesCache->getAllPersistentMapJumppads() ) {
+		const auto *const __restrict ent = gameEnts + num;
+		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+			jumppadNums[numJumppads++] = num;
+		}
+	}
+
+	for( const uint16_t num : entitiesCache->getAllPersistentMapTeleporters() ) {
+		const auto *const __restrict ent = gameEnts + num;
+		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+			teleporterNums[numTeleporters++] = num;
+		}
+	}
+
+	for( const uint16_t num : entitiesCache->getAllPersistentMapPlatforms() ) {
+		const auto *const __restrict ent = gameEnts + num;
+		if( BoundsIntersect( ent->r.absmin, ent->r.absmax, areaMins, areaMaxs ) ) {
+			platformNums[numPlatforms++] = num;
+		}
+	}
+
+	m_testedTriggersForArea[areaNum] = true;
+	if( const auto numOfNums = ( numTeleporters + numJumppads + numPlatforms ) ) {
+		m_hasTriggersForArea[areaNum] = true;
+		auto [it, _] = m_triggersForArea.insert( std::make_pair( areaNum, ClassTriggerNums {} ) );
+		ClassTriggerNums *const storage = &it->second;
+		storage->m_teleporterNumsSpan   = storage->addNums( teleporterNums, numTeleporters );
+		storage->m_jumppadNumsSpan      = storage->addNums( jumppadNums, numJumppads );
+		storage->m_platformNumsSpan     = storage->addNums( platformNums, numPlatforms );
+		return storage;
+	}
+	return nullptr;
 }
 
 static const float kTopNodeCacheAddToMins[] = { -56, -56, -24 };
