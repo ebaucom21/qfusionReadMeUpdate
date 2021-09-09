@@ -66,13 +66,6 @@ class FallbackAction : public BaseAction {
 
 	MovementScript *TryNodeBasedFallbacksLeft( PredictionContext *context );
 
-	MovementScript *TryShortcutOtherFallbackByJumping( PredictionContext *context,
-															const vec3_t initialTarget,
-															int initialTargetAreaNum = 0 );
-
-	MovementScript *TryShortcutOtherFallbackByJumping( PredictionContext *context,
-															int initialTargetAreaNum );
-
 	bool CanWaitForLanding( PredictionContext *context );
 public:
 	explicit FallbackAction( MovementSubsystem *subsystem )

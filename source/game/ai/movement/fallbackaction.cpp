@@ -288,15 +288,6 @@ MovementScript *FallbackAction::TryFindMovementFallback( PredictionContext *cont
 	}
 
 	if( auto *fallback = TryNodeBasedFallbacksLeft( context ) ) {
-		// Check whether its really a node based fallback
-		auto *const nodeBasedFallback = &m_subsystem->useWalkableNodeScript;
-		if( fallback == nodeBasedFallback ) {
-			const vec3_t &origin = nodeBasedFallback->NodeOrigin();
-			const int areaNum = nodeBasedFallback->NodeAreaNum();
-			if( auto *jumpFallback = TryShortcutOtherFallbackByJumping( context, origin, areaNum ) ) {
-				return jumpFallback;
-			}
-		}
 		return fallback;
 	}
 

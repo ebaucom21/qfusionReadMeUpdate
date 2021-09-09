@@ -120,7 +120,6 @@ const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int ram
 }
 
 MovementScript *FallbackAction::TryFindRampFallback( PredictionContext *context, int rampAreaNum, int forbiddenAreaNum ) {
-	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const int *bestExitAreaNum = TryFindBestInclinedFloorExitArea( context, rampAreaNum, forbiddenAreaNum );
 	if( !bestExitAreaNum ) {
 		return nullptr;
@@ -131,29 +130,6 @@ MovementScript *FallbackAction::TryFindRampFallback( PredictionContext *context,
 
 	Vec3 areaPoint( exitArea.center );
 	areaPoint.Z() = exitArea.mins[2] + 1.0f - playerbox_stand_mins[2];
-
-	bool tryJumpShortcut = false;
-	// Try jumping below
-	if( exitArea.mins[2] < entityPhysicsState.Origin()[2] ) {
-		tryJumpShortcut = true;
-	} else {
-		// Dont try jumping if a bot can slide on an ramp
-		// Check whether a current area is actually slidable (and not just has an inclided floor)
-		if( aasWorld->AreaSettings()[rampAreaNum].areaflags & AREA_SLIDABLE_RAMP ) {
-			// Don't try jumping to a far exit area that is higher than the bot, keep sliding on a ramp.
-			if( exitArea.mins[2] > entityPhysicsState.Origin()[2] ) {
-				if( areaPoint.SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 96.0f ) ) {
-					tryJumpShortcut = true;
-				}
-			}
-		}
-	}
-
-	if( tryJumpShortcut ) {
-		if( auto *script = TryShortcutOtherFallbackByJumping( context, areaPoint.Data(), *bestExitAreaNum ) ) {
-			return script;
-		}
-	}
 
 	auto *script = &m_subsystem->useRampExitScript;
 	script->Activate( rampAreaNum, *bestExitAreaNum );

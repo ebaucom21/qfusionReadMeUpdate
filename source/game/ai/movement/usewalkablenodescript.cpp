@@ -48,17 +48,13 @@ MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *con
 	// Allow following WALK reachabilities but make sure
 	// they do not lead to junk areas and are fairly far away to prevent looping.
 	float squareDistance = DistanceSquared( entityPhysicsState.Origin(), nextReach.end );
-	if( squareDistance < SQUARE( 72.0f ) ) {
+	if( squareDistance < SQUARE( 32.0f ) ) {
 		return nullptr;
 	}
 
 	const auto &areaSettings = AiAasWorld::Instance()->AreaSettings()[nextReach.areanum];
 	if( areaSettings.areaflags & AREA_JUNK ) {
 		return nullptr;
-	}
-
-	if( auto *script = TryShortcutOtherFallbackByJumping( context, nextReach.end, nextReach.areanum ) ) {
-		return script;
 	}
 
 	auto *script = &m_subsystem->useWalkableNodeScript;
