@@ -103,22 +103,24 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 
 	assert( chosenReachNum >= -1 );
 
-	Vec3 lookTarget( 0, 0, 0 );
+	Vec3 lookVec( 0, 0, 0 );
 	if( chosenReachNum > 0 ) {
-		lookTarget.Set( aasReach[chosenReachNum].start );
-		lookTarget.Z() += 32.0f;
-		lookTarget.Z() *= Z_NO_BEND_SCALE;
+		lookVec.Set( aasReach[chosenReachNum].start );
+		lookVec.Z() += 32.0f;
+		lookVec -= entityPhysicsState.Origin();
+		lookVec.Z() *= Z_NO_BEND_SCALE;
 	} else {
 		const Vec3 navTargetOrigin( context->NavTargetOrigin() );
 		if( navTargetOrigin.SquareDistance2DTo( entityPhysicsState.Origin() ) > SQUARE( 8.0f ) ) {
-			navTargetOrigin.CopyTo( lookTarget );
+			navTargetOrigin.CopyTo( lookVec );
+			lookVec -= entityPhysicsState.Origin();
 		} else {
 			context->SetPendingRollback();
 			return;
 		}
 	}
 
-	if( !SetupBunnyHopping( Vec3( lookTarget - entityPhysicsState.Origin() ), context ) ) {
+	if( !SetupBunnyHopping( lookVec, context ) ) {
 		return;
 	}
 }
