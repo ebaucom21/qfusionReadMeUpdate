@@ -149,18 +149,22 @@ bool HudEditorModel::load( const QByteArray &fileName ) {
 bool HudEditorModel::save( const QByteArray &fileName ) {
 	const wsw::StringView fileNameView( fileName.data(), fileName.size() );
 	wsw::StaticString<MAX_QPATH> pathBuffer;
+	bool hasWrittenSuccessfully = false;
 	if( const auto maybePath = m_layoutModel.makeFilePath( &pathBuffer, fileNameView ) ) {
 		if( auto maybeHandle = wsw::fs::openAsWriteHandle( *maybePath ) ) {
 			wsw::StaticString<4096> dataBuffer;
 			if( m_layoutModel.serialize( &dataBuffer ) ) {
 				if( maybeHandle->write( dataBuffer.data(), dataBuffer.size() ) ) {
-					reloadExistingHuds();
-					return true;
+					hasWrittenSuccessfully = true;
 				}
 			}
 		}
 	}
-	return false;
+	// Make sure that the file handle has been closed to the moment of reloading
+	if( hasWrittenSuccessfully ) {
+		reloadExistingHuds();
+	}
+	return hasWrittenSuccessfully;
 }
 
 auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
