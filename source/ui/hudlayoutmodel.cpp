@@ -460,12 +460,12 @@ auto HudLayoutModel::parseEntry( const wsw::StringView &line ) -> std::optional<
 	}
 
 	if( lastTokenNum == 2 * std::size( kOrderedKeywords ) ) {
-		// TODO: Use designated initializers
-		FileEntry entry;
-		entry.anchorItem = AnchorItem( values[1].value() );
-		entry.selfAnchors = anchors[0].value();
-		entry.otherAnchors = anchors[1].value();
-		entry.kind = kind.value();
+		FileEntry entry {
+			.kind = kind.value(),
+			.selfAnchors = anchors[0].value(),
+			.otherAnchors = anchors[1].value(),
+			.anchorItem = AnchorItem( values[1].value() ),
+		};
 		return std::make_pair( entry, values[0].value() );
 	}
 
@@ -1090,15 +1090,14 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 	m_entries.clear();
 	m_entries.reserve( fileEntries.size() );
 	for( const FileEntry &fileEntry: fileEntries ) {
-		// TODO: This cries for designated initializers
-		Entry entry;
-		entry.kind = fileEntry.kind;
-		entry.selfAnchors = fileEntry.selfAnchors;
-		entry.otherAnchors = fileEntry.otherAnchors;
-		entry.anchorItem = fileEntry.anchorItem;
 		assert( fileEntry.kind && fileEntry.kind < std::size( kEditorPropsForKind ) + 1 );
-		entry.controllingCVar = kEditorPropsForKind[fileEntry.kind - 1].controllingCVar;
-		m_entries.push_back( entry );
+		m_entries.emplace_back( Entry {
+			.kind            = fileEntry.kind,
+			.selfAnchors     = fileEntry.selfAnchors,
+			.otherAnchors    = fileEntry.otherAnchors,
+			.anchorItem      = fileEntry.anchorItem,
+			.controllingCVar = kEditorPropsForKind[fileEntry.kind - 1].controllingCVar,
+		});
 	}
 	endResetModel();
 	return true;

@@ -174,27 +174,25 @@ bool GametypeOptionsModel::doReload() {
 			// The fourth part must be a placeholder in this case
 			if( parts[3].equals( wsw::StringView( "-" ) ) ) {
 				// TODO: Check whether parts[2] could be a valid command
-				// TODO: Looking forward to being able to use designated initializers
-				OptionEntry entry {};
-				entry.kind             = Kind::Boolean;
-				entry.titleSpanIndex   = addString( title );
-				entry.commandSpanIndex = addString( command );
-				m_allOptionEntries.emplace_back( std::move( entry ) );
+				m_allOptionEntries.emplace_back( OptionEntry {
+					.titleSpanIndex   = addString( title ),
+					.commandSpanIndex = addString( command ),
+					.kind             = Kind::Boolean,
+				});
 			} else {
 				return false;
 			}
 		} else if( kind.equalsIgnoreCase( kOneOfList ) ) {
 			if( const auto maybeListItemsSpan = addListItems( parts[3] ) ) {
-				[[maybe_unused]] const auto [_, numItems] = *maybeListItemsSpan;
 				// TODO: Check whether parts[2] could be a valid command
-				// TODO: Looking forward to being able to use designated initializers
-				OptionEntry entry {};
-				entry.kind                = Kind::OneOfList;
-				entry.titleSpanIndex      = addString( title );
-				entry.commandSpanIndex    = addString( command );
-				entry.model               = numItems;
-				entry.selectableItemsSpan = *maybeListItemsSpan;
-				m_allOptionEntries.emplace_back( std::move( entry ) );
+				[[maybe_unused]] const auto [_, numItems] = *maybeListItemsSpan;
+				m_allOptionEntries.emplace_back( OptionEntry {
+					.titleSpanIndex      = addString( title ),
+					.commandSpanIndex    = addString( command ),
+					.kind                = Kind::OneOfList,
+					.model               = numItems,
+					.selectableItemsSpan = *maybeListItemsSpan,
+				});
 			} else {
 				return false;
 			}

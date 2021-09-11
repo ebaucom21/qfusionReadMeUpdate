@@ -302,15 +302,14 @@ void TeamListModel::fillEntries( const ReplicatedScoreboardData &scoreboardData,
 		if( !scoreboardData.isPlayerGhosting( i ) && scoreboardData.getPlayerTeam( i ) == m_team ) {
 			const unsigned playerNum = scoreboardData.getPlayerNum( i );
 			if( playerNum != m_povPlayerNum ) {
-				// TODO: Looking forward to being able to use designated initializers
-				Entry entry;
-				entry.playerNum = playerNum;
-				entry.health    = scoreboardData.getPlayerHealth( i );
-				entry.armor     = scoreboardData.getPlayerArmor( i );
-				entry.weapon    = scoreboardData.getPlayerWeapon( i );
-				entry.location  = scoreboardData.getPlayerLocation( i );
-				entry.powerups  = scoreboardData.getPlayerPowerupBits( i );
-				entries.push_back( entry );
+				entries.emplace_back( Entry {
+					.playerNum = playerNum,
+					.health    = scoreboardData.getPlayerHealth( i ),
+					.armor     = scoreboardData.getPlayerArmor( i ),
+					.weapon    = scoreboardData.getPlayerWeapon( i ),
+					.location  = scoreboardData.getPlayerLocation( i ),
+					.powerups  = scoreboardData.getPlayerPowerupBits( i ),
+				});
 			}
 		}
 	}

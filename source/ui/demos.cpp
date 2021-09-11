@@ -174,11 +174,9 @@ void DemosResolver::enumerateFiles() {
 		newFileNames.add( path.asView() );
 	};
 
-	// TODO: Looking forward to be able to use designated initializers
-	wsw::fs::WalkDirOptions walkDirOptions {};
-	walkDirOptions.errorPolicy = wsw::fs::ContinueWalking;
-	walkDirOptions.maxDepth    = 1;
-	(void)wsw::fs::walkDir( kSearchPathRoot, visitor, walkDirOptions );
+	(void)wsw::fs::walkDir( kSearchPathRoot, visitor, wsw::fs::WalkDirOptions {
+		.errorPolicy = wsw::fs::ContinueWalking, .maxDepth = 1
+	});
 
 	m_addedNew.clear();
 	m_goneOld.clear();
@@ -386,20 +384,22 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 	if( std::find( parsedMandatoryValues, valuesEnd, std::nullopt ) == valuesEnd ) {
 		if( const auto maybeTimestamp = wsw::toNum<uint64_t>( *parsedMandatoryValues[1] ) ) {
 			if( const auto maybeDuration = wsw::toNum<int>( *parsedMandatoryValues[2] ) ) {
-				// TODO: Looking forward to being able using designated initializers
-				MetadataEntry entry;
-				entry.fileNameIndex  = stringData->add( fileName );
-				entry.fileNameHash   = wsw::HashedStringView( fileName ).getHash();
-				entry.baseNameSpan   = baseNameSpan;
-				entry.hashBinIndex   = entry.fileNameHash % kNumBins;
-				entry.rawTimestamp   = *maybeTimestamp;
-				entry.timestamp      = QDateTime::fromSecsSinceEpoch( *maybeTimestamp );
-				entry.sectionDate    = entry.timestamp.date();
-				entry.duration       = *maybeDuration;
-				entry.serverNameIndex   = adapter.add( *parsedMandatoryValues[0] );
-				entry.mapNameIndex      = adapter.add( *parsedMandatoryValues[3] );
-				entry.mapChecksumIndex  = adapter.addLowercase( *parsedMandatoryValues[4] );
-				entry.gametypeIndex 	= adapter.addLowercase( *parsedMandatoryValues[5] );
+				const uint32_t fileNameHash = wsw::HashedStringView( fileName ).getHash();
+				const QDateTime timestamp   = QDateTime::fromSecsSinceEpoch( (qint64)*maybeTimestamp );
+				MetadataEntry &__restrict entry = entries->emplace_back( MetadataEntry {
+					.rawTimestamp     = *maybeTimestamp,
+					.timestamp        = timestamp,
+					.sectionDate      = timestamp.date(),
+					.fileNameIndex    = stringData->add( fileName ),
+					.fileNameHash     = fileNameHash,
+					.baseNameSpan     = baseNameSpan,
+					.hashBinIndex     = fileNameHash % kNumBins,
+					.serverNameIndex  = adapter.add( *parsedMandatoryValues[0] ),
+					.mapNameIndex     = adapter.add( *parsedMandatoryValues[3] ),
+					.mapChecksumIndex = adapter.addLowercase( *parsedMandatoryValues[4] ),
+					.gametypeIndex 	  = adapter.addLowercase( *parsedMandatoryValues[5] ),
+					.duration         = *maybeDuration,
+				});
 				entry.numOtherKeysAndValues = 0;
 				for( const auto &[key, value]: otherKeysAndValues ) {
 					const auto keyIndex   = adapter.addLowercase( key );
@@ -410,7 +410,6 @@ void DemosResolver::parseMetadata( const char *data, size_t dataSize,
 				for( const auto &tag: tags ) {
 					entry.tagIndices[entry.numTags++] = adapter.addLowercase( tag );
 				}
-				entries->emplace_back( std::move( entry ) );
 			}
 		}
 	}
