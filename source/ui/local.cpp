@@ -1,7 +1,6 @@
 #include "local.h"
 #include "../qcommon/qcommon.h"
-#include "../qcommon/wswstringview.h"
-#include "../ref/frontend.h"
+#include "../ref/ref.h"
 
 #include <QColor>
 #include <QImage>

@@ -1297,13 +1297,6 @@ void R_RegisterWorldModel( const char *model ) {
 }
 
 /*
-* R_WaitWorldModel
-*/
-void R_WaitWorldModel( void ) {
-	// load all world images if not yet
-}
-
-/*
 * R_RegisterModel
 */
 struct model_s *R_RegisterModel( const char *name ) {

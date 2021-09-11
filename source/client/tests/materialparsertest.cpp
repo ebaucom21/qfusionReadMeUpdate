@@ -1,7 +1,7 @@
 #include "materialparsertest.h"
 #include "../../ref/materiallocal.h"
 #include "../../ref/image.h"
-#include "../../ref/local.h"
+#include "../../ref/ref.h"
 
 using wsw::operator""_asView;
 using wsw::operator""_asHView;

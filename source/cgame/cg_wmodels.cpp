@@ -32,7 +32,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
 #include "../client/snd_public.h"
-#include "../ref/frontend.h"
 
 
 //======================================================================
@@ -720,6 +719,6 @@ void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int eff
 		const float programRadius = weaponInfo->flashRadius * intensity;
 		const float coronaRadius = 0.5f * programRadius * addCoronaLight;
 		const auto *flashColor = weaponInfo->flashColor;
-		RF_AddLightToScene( flash.origin, programRadius, coronaRadius, flashColor[0], flashColor[1], flashColor[2] );
+		R_AddLightToScene( flash.origin, programRadius, coronaRadius, flashColor[0], flashColor[1], flashColor[2] );
 	}
 }

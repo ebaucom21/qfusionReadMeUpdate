@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cg_effects.c -- entity effects parsing and management
 
 #include "cg_local.h"
-#include "../ref/frontend.h"
 
 /*
 ==============================================================
@@ -95,7 +94,7 @@ void CG_AddLightStyles( void ) {
 	cg_lightStyle_t *ls;
 
 	for( i = 0, ls = cg_lightStyle; i < MAX_LIGHTSTYLES; i++, ls++ )
-		RF_AddLightStyleToScene( i, ls->value[0], ls->value[1], ls->value[2] );
+		R_AddLightStyleToScene( i, ls->value[0], ls->value[1], ls->value[2] );
 }
 
 /*
@@ -526,7 +525,7 @@ void CG_AddParticles( void ) {
 		p->poly.fognum = p->fog ? 0 : -1;
 		p->poly.shader = ( p->shader == NULL ) ? cgs.media.shaderParticle : p->shader;
 
-		RF_AddPolyToScene( &p->poly );
+		R_AddPolyToScene( &p->poly );
 	}
 
 	i = 0;

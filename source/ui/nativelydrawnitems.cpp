@@ -1,14 +1,10 @@
 #include "nativelydrawnitems.h"
+#include "../ref/ref.h"
 
 #include <QQmlProperty>
 
 #include "../qcommon/qcommon.h"
-#include "../ref/frontend.h"
 #include "../cgame/cg_boneposes.h"
-
-shader_t *R_CreateExplicitlyManaged2DMaterial();
-void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, const ImageOptions &options );
 
 namespace wsw::ui {
 
@@ -163,9 +159,9 @@ void NativelyDrawnImage::drawSelfNatively( int64_t, int64_t ) {
 		const int w = m_sourceSize.width();
 		const int h = m_sourceSize.height();
 		//Com_Printf( "Source size: %d %d\n", w, h );
-		RF_DrawStretchPic( x - w / 2, y - w / 2, w, h, 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
+		R_DrawStretchPic( x - w / 2, y - w / 2, w, h, 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
 	} else {
-		RF_DrawStretchPic( qmlX, qmlY, (int)width(), (int)height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
+		R_DrawStretchPic( qmlX, qmlY, (int)width(), (int)height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
 	}
 
 	R_Set2DMode( false );

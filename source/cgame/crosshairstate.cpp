@@ -4,11 +4,6 @@
 
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswfs.h"
-#include "../ref/frontend.h"
-
-shader_t *R_CreateExplicitlyManaged2DMaterial();
-void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExplicitlyManaged2DMaterialImage( shader_t *material, const char *name, const ImageOptions &options );
 
 using wsw::operator""_asView;
 

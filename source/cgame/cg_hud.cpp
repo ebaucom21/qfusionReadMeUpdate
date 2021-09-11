@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../client/client.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 extern cvar_t *cg_showHUD;
@@ -118,7 +117,7 @@ static void CG_DrawHUDRect( int x, int y, int align, int w, int h, int val, int 
 	x = CG_HorizontalAlignForWidth( x, align, w );
 	y = CG_VerticalAlignForHeight( y, align, h );
 
-	RF_DrawStretchPic( x, y, w, h, tc[0][0], tc[1][0], tc[0][1], tc[1][1], color, shader );
+	R_DrawStretchPic( x, y, w, h, tc[0][0], tc[1][0], tc[0][1], tc[1][1], color, shader );
 }
 
 void CG_ScreenCrosshairDamageUpdate() {
@@ -131,7 +130,7 @@ static void drawCrosshair( CrosshairState *state ) {
 		auto [material, width, height] = *maybeMaterialAndDimensions;
 		const int x = ( cgs.vidWidth - (int)width ) / 2;
 		const int y = ( cgs.vidHeight - (int)height ) / 2;
-		RF_DrawStretchPic( x, y, (int)width, (int)height, 0, 0, 1, 1, state->getDrawingColor(), material );
+		R_DrawStretchPic( x, y, (int)width, (int)height, 0, 0, 1, 1, state->getDrawingColor(), material );
 	}
 }
 
@@ -429,7 +428,7 @@ void CG_DrawTeamMates() {
 			shader = cgs.media.shaderTeamMateIndicator;
 		}
 
-		RF_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
+		R_DrawStretchPic( coords[0], coords[1], pic_size, pic_size, 0, 0, 1, 1, color, shader );
 	}
 }
 

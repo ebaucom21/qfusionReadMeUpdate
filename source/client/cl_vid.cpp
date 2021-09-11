@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // qfusion refresh engine.
 #include "client.h"
 #include "xpm.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 cvar_t *vid_width, *vid_height;
@@ -217,7 +216,7 @@ static rserr_t VID_ChangeMode( void ) {
 		return rserr_restart_required;
 	}
 
-	rserr_t err = R_TrySettingMode( x, y, w, h, frequency, flags );
+	rserr_t err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
 	if( err == rserr_restart_required ) {
 		return err;
 	}
@@ -250,7 +249,7 @@ static rserr_t VID_ChangeMode( void ) {
 
 			// Try again without the fullscreen flag
 			flags = flags & ~VidModeFlags::Fullscreen;
-			err = R_TrySettingMode( x, y, w, h, frequency, flags );
+			err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
 		}
 
 		if( err == rserr_invalid_mode ) {
@@ -263,7 +262,7 @@ static rserr_t VID_ChangeMode( void ) {
 				h = vid_ref_prevheight;
 				Cvar_ForceSet( vid_height->name, va( "%i", h ) );
 
-				err = R_TrySettingMode( x, y, w, h, frequency, flags );
+				err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
 				if( err == rserr_invalid_fullscreen ) {
 					Com_Printf( "VID_ChangeMode() - could not revert to safe fullscreen mode\n" );
 
@@ -272,7 +271,7 @@ static rserr_t VID_ChangeMode( void ) {
 
 					// Try again without the fullscreen flag
 					flags = flags & ~VidModeFlags::Fullscreen;
-					err = R_TrySettingMode( x, y, w, h, frequency, flags );
+					err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
 				}
 			}
 

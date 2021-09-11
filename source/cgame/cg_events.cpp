@@ -19,7 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 #include "cg_local.h"
 #include "../client/snd_public.h"
-#include "../ref/frontend.h"
 
 /*
 * CG_Event_WeaponBeam
@@ -128,7 +127,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 		// TODO: add player-impact model
 	}
 
-	RF_AddLightToScene( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
+	R_AddLightToScene( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
 }
 
 void CG_LaserBeamEffect( centity_t *cent ) {

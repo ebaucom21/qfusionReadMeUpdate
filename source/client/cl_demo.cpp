@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_demo.c  -- demo recording
 
 #include "client.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 using wsw::operator""_asView;

@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../qcommon/cvar.h"
 #include "../qcommon/qcommon.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 #include "../client/snd_public.h"
 
@@ -914,7 +913,7 @@ void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *t
 		CG_AddEntityToScene( &flag );
 	}
 
-	RF_AddLightToScene( flag.origin, 128.0f, 0.0f, teamcolor[0] / 255, teamcolor[1] / 255, teamcolor[2] / 255 );
+	R_AddLightToScene( flag.origin, 128.0f, 0.0f, teamcolor[0] / 255, teamcolor[1] / 255, teamcolor[2] / 255 );
 
 	// TODO: We have disabled the flag particles trail effects as they were god-awful
 }
@@ -1744,7 +1743,7 @@ void CG_AddEntities( void ) {
 				CG_BlasterTrail( cent, cent->ent.origin );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
-				RF_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
+				R_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
 				break;
 
 			case ET_ELECTRO_WEAK:
@@ -1754,50 +1753,50 @@ void CG_AddEntities( void ) {
 				CG_AddGenericEnt( cent );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_ElectroWeakTrail( cent->trailOrigin, cent->ent.origin, NULL );
-				RF_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
+				R_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
 				CG_AddGenericEnt( cent );
 				CG_ProjectileTrail( cent );
 				CG_EntityLoopSound( state, ATTN_NORM );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
-					RF_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
+					R_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
 				} else {
-					RF_AddLightToScene( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.8f, 0 );
+					R_AddLightToScene( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.8f, 0 );
 				}
 				break;
 			case ET_GRENADE:
 				CG_AddGenericEnt( cent );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_ProjectileTrail( cent );
-				RF_AddLightToScene( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
+				R_AddLightToScene( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
 				CG_AddGenericEnt( cent );
 				CG_EntityLoopSound( state, ATTN_STATIC );
-				RF_AddLightToScene( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
+				R_AddLightToScene( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
 				break;
 			case ET_WAVE:
 				CG_AddGenericEnt( cent );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_WaveCoronaAndTrail( cent, cent->ent.origin );
 				// Add the core light
-				RF_AddLightToScene( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
+				R_AddLightToScene( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
 				// Add the corona light
 				// We have initially thought to activate corona light only when corona damage is enabled,
 				// but it is not a good idea since it requires synchronization/prediction
 				// and the projectile gets activated rather fast anyway.
 				// Otherwise high ping players would only see an activated wave.
-				RF_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 1.0f, 1.0f );
+				R_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 1.0f, 1.0f );
 				break;
 			case ET_BOMBLET:
 				CG_AddGenericEnt( cent );
-				RF_AddLightToScene( cent->ent.origin, 0.0f, 56.0f, 1.0f, 0.6f, 0.0f );
+				R_AddLightToScene( cent->ent.origin, 0.0f, 56.0f, 1.0f, 0.6f, 0.0f );
 				if( ( cg.frameCount % 2 ) == ( cent->current.number % 2 ) ) {
 					if( cent->current.number % 2 ) {
-						RF_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.7f, 0.0f );
+						R_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.7f, 0.0f );
 					} else {
-						RF_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.3f, 0.0f );
+						R_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.3f, 0.0f );
 					}
 				}
 			case ET_SPRITE:
@@ -1897,7 +1896,7 @@ void CG_AddEntities( void ) {
 
 		// glow if light is set
 		if( canLight && state->light ) {
-			RF_AddLightToScene( cent->ent.origin,
+			R_AddLightToScene( cent->ent.origin,
 								COLOR_A( state->light ) * 4.0, 0.0f,
 								COLOR_R( state->light ) * ( 1.0 / 255.0 ),
 								COLOR_G( state->light ) * ( 1.0 / 255.0 ),

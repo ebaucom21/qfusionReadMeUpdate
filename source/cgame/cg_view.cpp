@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../client/client.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 cg_chasecam_t chaseCam;
@@ -574,7 +573,7 @@ void CG_AddEntityToScene( entity_t *ent ) {
 		}
 	}
 
-	RF_AddEntityToScene( ent );
+	R_AddEntityToScene( ent );
 }
 
 //============================================================================
@@ -1096,7 +1095,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	if( cgs.configStrings.getWorldModel() == std::nullopt ) {
 		CG_AddLocalSounds();
 
-		RF_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
+		R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
 
 		SoundSystem::Instance()->Update( vec3_origin, vec3_origin, axis_identity );
 
@@ -1145,7 +1144,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 	CG_ClearFragmentedDecals();
 
-	RF_ClearScene();
+	R_ClearScene();
 
 	if( CG_DemoCam_Update() ) {
 		CG_SetupViewDef( &cg.view, CG_DemoCam_GetViewType() );
@@ -1182,7 +1181,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddLocalSounds();
 	CG_SetSceneTeamColors(); // update the team colors in the renderer
 
-	RF_RenderScene( &cg.view.refdef );
+	R_RenderScene( &cg.view.refdef );
 
 	cg.oldAreabits = true;
 
@@ -1251,7 +1250,7 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color ) {
 	}
 	x = CG_HorizontalAlignForWidth( x, align, w );
 	y = CG_VerticalAlignForHeight( y, align, h );
-	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
+	R_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cgs.media.shaderNet );
 }
 
 void CG_DrawRSpeeds( int x, int y, int align, struct qfontface_s *font, const vec4_t color ) {
@@ -1380,7 +1379,7 @@ static void CG_SCRDrawViewBlend( void ) {
 		return;
 	}
 
-	RF_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
+	R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorblend, cgs.shaderWhite );
 }
 
 void CG_Draw2DView( void ) {

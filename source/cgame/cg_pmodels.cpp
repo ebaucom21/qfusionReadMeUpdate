@@ -32,7 +32,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
-#include "../ref/frontend.h"
 
 pmodel_t cg_entPModels[MAX_EDICTS];
 pmodelinfo_t *cg_PModelInfos;
@@ -859,7 +858,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 			balloon.radius = radius;
 			balloon.model = NULL;
 
-			RF_AddEntityToScene( &balloon );
+			R_AddEntityToScene( &balloon );
 		}
 
 		// add stun effect: not really a head icon, but there's no point in finding the head location twice
@@ -873,7 +872,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 				balloon.shaderRGBA[3] = ( 255 * ( 1.0f - cg.lerpfrac ) );
 			}
 
-			RF_AddEntityToScene( &balloon );
+			R_AddEntityToScene( &balloon );
 		}
 	}
 }

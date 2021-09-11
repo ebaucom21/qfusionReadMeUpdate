@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "ftlib.h"
 
 #include "../qcommon/qcommon.h"
+#include "../ref/ref.h"
 
 typedef struct shader_s shader_t;
 

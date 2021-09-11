@@ -312,7 +312,7 @@ shader_t *R_RegisterRawAlphaMask( const char *name, int width, int height, const
 /*
 * R_RegisterShader
 */
-shader_t *R_RegisterShader( const char *name, shaderType_e type ) {
+shader_t *R_RegisterShader( const char *name, int type ) {
 	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), type, false );
 }
 

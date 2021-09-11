@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // console.c
 
 #include "client.h"
-#include "../ref/frontend.h"
 
 #define CON_MAXLINES    500
 typedef struct {
@@ -753,7 +752,7 @@ void Con_DrawConsole( void ) {
 	}
 
 	// draw the background
-	RF_DrawStretchPic( 0, 0, viddef.width, lines, 0, 0, 1, 1, colorWhite, cls.consoleShader );
+	R_DrawStretchPic( 0, 0, viddef.width, lines, 0, 0, 1, 1, colorWhite, cls.consoleShader );
 	scaled = 2 * pixelRatio;
 	SCR_DrawFillRect( 0, lines - scaled, viddef.width, scaled, colorOrange );
 

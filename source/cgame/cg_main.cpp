@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../ref/frontend.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"

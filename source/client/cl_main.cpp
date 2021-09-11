@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/asyncstream.h"
 #include "../qcommon/hash.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 #include "serverlist.h"
@@ -852,7 +851,7 @@ void CL_Disconnect( const char *message ) {
 		cls.httpbaseurl = NULL;
 	}
 
-	RF_Finish();
+	R_Finish();
 
 	CL_EndRegistration();
 

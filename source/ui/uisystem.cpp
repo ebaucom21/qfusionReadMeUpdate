@@ -46,19 +46,6 @@ QVariant VID_GetMainContextHandle();
 bool GLimp_BeginUIRenderingHacks();
 bool GLimp_EndUIRenderingHacks();
 
-void R_Set2DMode( bool );
-void R_DrawExternalTextureOverlay( unsigned );
-shader_t *R_RegisterPic( const char * );
-shader_t *R_CreateExplicitlyManaged2DMaterial();
-void R_ReleaseExplicitlyManaged2DMaterial( shader_t *material );
-bool R_UpdateExternallyManaged2DMaterialImage( shader_t *material, const char *name, int w = -1, int h = -1 );
-struct model_s *R_RegisterModel( const char * );
-void RF_RegisterWorldModel( const char * );
-void RF_ClearScene();
-void RF_RenderScene( const refdef_t * );
-void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-						const vec4_t color, const shader_t *shader );
-
 // Hacks
 bool CG_IsSpectator();
 bool CG_HasTwoTeams();
@@ -994,7 +981,7 @@ void QtUISystem::drawSelfInMainContext() {
 	// TODO: Check why CL_BeginRegistration()/CL_EndRegistration() never gets called
 	auto *cursorMaterial = R_RegisterPic( "gfx/ui/cursor.tga" );
 	// TODO: Account for screen pixel density
-	RF_DrawStretchPic( (int)m_mouseXY[0], (int)m_mouseXY[1], 32, 32, 0.0f, 0.0f, 1.0f, 1.0f, color, cursorMaterial );
+	R_DrawStretchPic( (int)m_mouseXY[0], (int)m_mouseXY[1], 32, 32, 0.0f, 0.0f, 1.0f, 1.0f, color, cursorMaterial );
 	R_Set2DMode( false );
 }
 
@@ -1007,7 +994,7 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 
 	constexpr const char *worldModelName = "maps/ui.bsp";
 	if( !m_hasStartedBackgroundMapLoading ) {
-		RF_RegisterWorldModel( worldModelName );
+		R_RegisterWorldModel( worldModelName );
 		m_hasStartedBackgroundMapLoading = true;
 	} else if( !m_hasSucceededBackgroundMapLoading ) {
 		if( R_RegisterModel( worldModelName ) ) {
@@ -1045,8 +1032,8 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 	std::tie( rdf.scissor_x, rdf.scissor_y ) = std::make_pair( 0, 0 );
 	std::tie( rdf.scissor_width, rdf.scissor_height ) = widthAndHeight;
 
-	RF_ClearScene();
-	RF_RenderScene( &rdf );
+	R_ClearScene();
+	R_RenderScene( &rdf );
 }
 
 void QtUISystem::beginRegistration() {

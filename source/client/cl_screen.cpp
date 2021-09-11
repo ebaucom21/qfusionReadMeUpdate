@@ -32,7 +32,6 @@ end of unit intermissions
 */
 
 #include "client.h"
-#include "../ref/frontend.h"
 #include "../ui/uisystem.h"
 
 float scr_con_current;    // aproaches scr_conlines at scr_conspeed
@@ -245,11 +244,11 @@ size_t SCR_DrawStringWidth( int x, int y, int align, const char *str, size_t max
 }
 
 void SCR_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, const float *color, const struct shader_s *shader ) {
-	RF_DrawStretchPic( x, y, w, h, s1, t1, s2, t2, color, shader );
+	R_DrawStretchPic( x, y, w, h, s1, t1, s2, t2, color, shader );
 }
 
 void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color ) {
-	RF_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cls.whiteShader );
+	R_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cls.whiteShader );
 }
 
 /*

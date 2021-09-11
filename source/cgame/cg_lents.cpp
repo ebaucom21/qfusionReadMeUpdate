@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../client/snd_public.h"
-#include "../ref/frontend.h"
 
 #define MAX_LOCAL_ENTITIES  512
 
@@ -791,7 +790,7 @@ void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const 
 
 	AnglesToAxis( angles, ent.axis );
 
-	RF_AddEntityToScene( &ent );
+	R_AddEntityToScene( &ent );
 }
 
 /*
@@ -1647,7 +1646,7 @@ void CG_AddLocalEntities( void ) {
 		ent = &le->ent;
 
 		if( le->light && scale ) {
-			RF_AddLightToScene( le->lightOrigin, le->light * scale, 0, le->lightcolor[0], le->lightcolor[1], le->lightcolor[2] );
+			R_AddLightToScene( le->lightOrigin, le->light * scale, 0, le->lightcolor[0], le->lightcolor[1], le->lightcolor[2] );
 		}
 
 		if( le->type == LE_LASER ) {

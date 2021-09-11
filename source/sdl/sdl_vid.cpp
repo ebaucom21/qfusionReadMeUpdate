@@ -24,7 +24,6 @@
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include "../client/client.h"
-#include "../ref/frontend.h"
 #include "sdl_glw.h"
 
 SDL_Window *sdl_window;

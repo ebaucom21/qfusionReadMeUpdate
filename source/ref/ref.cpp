@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "program.h"
-#include "frontend.h"
 #include "materiallocal.h"
 #include "scene.h"
 #include "../qcommon/hash.h"
@@ -751,8 +750,6 @@ static void R_SetupFrame( void ) {
 				rf.worldDrawSurfVis = (unsigned char *)Q_realloc( (void *)rf.worldDrawSurfVis, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
 			}
 			rf.numWorldDrawSurfVis = rsh.worldBrushModel->numDrawSurfaces;
-
-			R_WaitWorldModel();
 		}
 	} else {
 		viewcluster = -1;
@@ -1070,7 +1067,7 @@ void R_PopRefInst( void ) {
 	R_SetupGL();
 }
 
-void R_Finish( void ) {
+void R_Finish() {
 	qglFinish();
 }
 
@@ -4271,7 +4268,7 @@ void RF_Shutdown( bool verbose ) {
 
 	RB_Shutdown();
 
-	R_Shutdown( verbose );
+	R_Shutdown_( verbose );
 }
 
 static void RF_CheckCvars( void ) {
@@ -4328,7 +4325,7 @@ void RF_EndFrame( void ) {
 
 void RF_BeginRegistration( void ) {
 	// sync to the backend thread to ensure it's not using old assets for drawing
-	R_BeginRegistration();
+	R_BeginRegistration_();
 
 	R_DeferDataSync();
 	R_DataSync();
@@ -4337,7 +4334,7 @@ void RF_BeginRegistration( void ) {
 }
 
 void RF_EndRegistration( void ) {
-	R_EndRegistration();
+	R_EndRegistration_();
 
 	R_DeferDataSync();
 	R_DataSync();
@@ -4345,22 +4342,7 @@ void RF_EndRegistration( void ) {
 	RB_EndRegistration();
 }
 
-void RF_RegisterWorldModel( const char *model ) {
-	R_RegisterWorldModel( model );
-}
-
-void RF_ClearScene( void ) {
-	R_ClearScene();
-}
-
-void RF_Finish( void ) {
-}
-
-void RF_AddEntityToScene( const entity_t *ent ) {
-	R_AddEntityToScene( ent );
-}
-
-void RF_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
+void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
 	if( !r_dynamiclight->integer ) {
 		return;
 	}
@@ -4376,23 +4358,6 @@ void RF_AddLightToScene( const vec3_t org, float programIntensity, float coronaI
 	}
 
 	wsw::ref::Scene::Instance()->AddLight( org, programIntensity, coronaIntensity, r, g, b );
-}
-
-void RF_AddPolyToScene( const poly_t *poly ) {
-	R_AddPolyToScene( poly );
-}
-
-void RF_AddLightStyleToScene( int style, float r, float g, float b ) {
-	R_AddLightStyleToScene( style, r, g, b );
-}
-
-void RF_RenderScene( const refdef_t *fd ) {
-	R_RenderScene( fd );
-}
-
-void RF_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-						const vec4_t color, const shader_t *shader ) {
-	R_DrawRotatedStretchPic( x, y, w, h, s1, t1, s2, t2, 0, color, shader );
 }
 
 void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent ) {
@@ -5248,8 +5213,8 @@ static rserr_t R_PostInit( void ) {
 	return rserr_ok;
 }
 
-rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, VidModeFlags flags ) {
-	const bool fullscreen = ( flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, unsigned flags ) {
+	const bool fullscreen = ( (VidModeFlags)flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
 	// If the fullscreen flag is the single difference, choose the lightweight path
 	if( glConfig.width == width && glConfig.height == height ) {
 		if( glConfig.fullScreen != fullscreen ) {
@@ -5317,7 +5282,7 @@ static void R_DestroyVolatileAssets( void ) {
 	R_ShutdownSkeletalCache();
 }
 
-void R_BeginRegistration( void ) {
+void R_BeginRegistration_( void ) {
 	R_DestroyVolatileAssets();
 
 	rsh.registrationSequence++;
@@ -5335,7 +5300,7 @@ void R_BeginRegistration( void ) {
 	R_DataSync();
 }
 
-void R_EndRegistration( void ) {
+void R_EndRegistration_( void ) {
 	if( rsh.registrationOpen == false ) {
 		return;
 	}
@@ -5354,7 +5319,7 @@ void R_EndRegistration( void ) {
 	R_DataSync();
 }
 
-void R_Shutdown( bool verbose ) {
+void R_Shutdown_( bool verbose ) {
 	Cmd_RemoveCommand( "screenshot" );
 
 	// free shaders, models, etc.

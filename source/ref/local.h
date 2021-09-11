@@ -48,7 +48,7 @@ typedef vec_t instancePoint_t[8]; // quaternion for rotation + xyz pos + uniform
 
 #define NUM_CUSTOMCOLORS        16
 
-#include "../cgame/ref.h"
+#include "ref.h"
 #include "refmath.h"
 #include "vattribs.h"
 
@@ -279,19 +279,6 @@ protected:
 
 	void applyFilter( Texture *texture, GLuint minify, GLuint magnify );
 	void applyAniso( Texture *texture, int aniso );
-};
-
-struct ImageOptions {
-	std::optional<std::pair<unsigned, unsigned>> desiredSize;
-	unsigned borderWidth { 0 };
-	bool fitSizeForCrispness { false };
-	bool useOutlineEffect { false };
-
-	template <typename T>
-	void setDesiredSize( T width, T height ) {
-		assert( width > 0 && height > 0 && width < (T)( 1 << 16 ) && height < (T)( 1 << 16 ) );
-		desiredSize = std::make_pair( (unsigned)width, (unsigned)height );
-	}
 };
 
 class TextureFactory : TextureManagementShared {
@@ -1064,12 +1051,6 @@ void        R_InitModels( void );
 void        R_ShutdownModels( void );
 void        R_FreeUnusedModels( void );
 
-void        R_ModelBounds( const model_t *model, vec3_t mins, vec3_t maxs );
-void        R_ModelFrameBounds( const struct model_s *model, int frame, vec3_t mins, vec3_t maxs );
-void        R_RegisterWorldModel( const char *model );
-void        R_WaitWorldModel( void );
-struct model_s *R_RegisterModel( const char *name );
-
 void R_GetTransformBufferForMesh( mesh_t *mesh, bool positions, bool normals, bool sVectors );
 
 void        Mod_ClearAll( void );
@@ -1486,7 +1467,6 @@ void        R_Set2DMode( bool enable );
 void        R_RenderView( const refdef_t *fd );
 const char *R_WriteSpeedsMessage( char *out, size_t size );
 void        R_RenderDebugSurface( const refdef_t *fd );
-void        R_Finish( void );
 void        R_Flush( void );
 
 /**
@@ -1517,17 +1497,7 @@ void        R_TransformForEntity( const entity_t *e );
 void        R_TranslateForEntity( const entity_t *e );
 void        R_TransformBounds( const vec3_t origin, const mat3_t axis, vec3_t mins, vec3_t maxs, vec3_t bbox[8] );
 
-void        R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-							  const vec4_t color, const shader_t *shader );
-void        R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-									 float angle, const vec4_t color, const shader_t *shader );
-void        R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
-								const vec4_t color, int program_type, Texture *image, int blendMask );
-
-void        R_DrawExternalTextureOverlay( GLuint externalTexNum );
-
 void        R_InitCustomColors( void );
-void        R_SetCustomColor( int num, int r, int g, int b );
 int         R_GetCustomColor( int num );
 void        R_ShutdownCustomColors( void );
 
@@ -1587,24 +1557,17 @@ bool    R_SurfPotentiallyFragmented( const msurface_t *surf );
 //
 // r_register.c
 //
-rserr_t     R_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
-					int iconResource, const int *iconXPM,
-					void *hinstance, void *wndproc, void *parenthWnd,
-					bool verbose );
-void        R_BeginRegistration( void );
-void        R_EndRegistration( void );
-void        R_Shutdown( bool verbose );
+
+
+void        R_BeginRegistration_();
+void        R_EndRegistration_();
+
+void        R_Shutdown_( bool verbose );
 
 //
 // r_scene.c
 //
 extern drawList_t r_worldlist, r_portalmasklist;
-
-void R_ClearScene( void );
-void R_AddEntityToScene( const entity_t *ent );
-void R_AddPolyToScene( const poly_t *poly );
-void R_AddLightStyleToScene( int style, float r, float g, float b );
-void R_RenderScene( const refdef_t *fd );
 
 void        R_DrawWorld( void );
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
@@ -1614,10 +1577,6 @@ bool    R_AddBrushModelToDrawList( const entity_t *e );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
 void    R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceBSP_t *drawSurf );
 
-struct Skin;
-Skin *R_RegisterSkinFile( const char *name );
-shader_t *R_FindShaderForSkinFile( const Skin *skin, const char *meshname );
-
 //
 // r_skm.c
 //
@@ -1625,9 +1584,7 @@ bool    R_AddSkeletalModelToDrawList( const entity_t *e );
 void    R_DrawSkeletalSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceSkeletal_t *drawSurf );
 float       R_SkeletalModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs );
 void        R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
-int         R_SkeletalGetBoneInfo( const model_t *mod, int bonenum, char *name, size_t name_size, int *flags );
-void        R_SkeletalGetBonePose( const model_t *mod, int bonenum, int frame, bonepose_t *bonepose );
-int         R_SkeletalGetNumBones( const model_t *mod, int *numFrames );
+
 bool        R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, int oldframenum, int framenum, float lerpfrac, const char *name );
 
 void        R_InitSkeletalCache( void );
@@ -1728,5 +1685,7 @@ typedef struct {
 } rtrace_t;
 
 msurface_t *R_TraceLine( rtrace_t *tr, const vec3_t start, const vec3_t end, int surfumask );
+
+void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent );
 
 #endif // R_LOCAL_H

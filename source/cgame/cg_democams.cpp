@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
 #include "../client/client.h"
-#include "../ref/frontend.h"
 
 // Thanks to Xavatar (xavatar2004@hotmail.com) for the path spline implementation
 

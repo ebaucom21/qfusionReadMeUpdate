@@ -8,8 +8,8 @@
 #include <QBuffer>
 
 #include "local.h"
-#include "../ref/frontend.h"
 #include "../qcommon/wswfs.h"
+#include "../ref/ref.h"
 
 #include "../../third-party/stb/stb_image.h"
 

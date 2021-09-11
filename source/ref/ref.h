@@ -175,4 +175,120 @@ typedef struct refdef_s {
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
 
+void R_ClearScene();
+void R_AddEntityToScene( const entity_t *ent );
+void R_AddPolyToScene( const poly_t *poly );
+void R_AddLightStyleToScene( int style, float r, float g, float b );
+void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b );
+void R_RenderScene( const refdef_t *fd );
+
+class Texture;
+
+void        R_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
+							  const vec4_t color, const shader_s *shader );
+void        R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
+									 float angle, const vec4_t color, const shader_s *shader );
+void        R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s2, float t2,
+								const vec4_t color, int program_type, Texture *image, int blendMask );
+
+void        R_DrawExternalTextureOverlay( unsigned externalTexNum );
+
+struct model_s;
+
+void        R_ModelBounds( const model_s *model, vec3_t mins, vec3_t maxs );
+void        R_ModelFrameBounds( const model_s *model, int frame, vec3_t mins, vec3_t maxs );
+void        R_RegisterWorldModel( const char *model );
+model_s *R_RegisterModel( const char *name );
+
+int         R_SkeletalGetBoneInfo( const model_s *mod, int bonenum, char *name, size_t name_size, int *flags );
+void        R_SkeletalGetBonePose( const model_s *mod, int bonenum, int frame, bonepose_t *bonepose );
+int         R_SkeletalGetNumBones( const model_s *mod, int *numFrames );
+
+shader_s    *R_RegisterShader( const char *name, int type );
+shader_s    *R_RegisterPic( const char *name );
+shader_s    *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data );
+shader_s    *R_RegisterSkin( const char *name );
+shader_s    *R_RegisterLinearPic( const char *name );
+
+struct ImageOptions {
+	std::optional<std::pair<unsigned, unsigned>> desiredSize;
+	unsigned borderWidth { 0 };
+	bool fitSizeForCrispness { false };
+	bool useOutlineEffect { false };
+
+	template <typename T>
+	void setDesiredSize( T width, T height ) {
+		assert( width > 0 && height > 0 && width < (T)( 1 << 16 ) && height < (T)( 1 << 16 ) );
+		desiredSize = std::make_pair( (unsigned)width, (unsigned)height );
+	}
+};
+
+shader_s *R_CreateExplicitlyManaged2DMaterial();
+void R_ReleaseExplicitlyManaged2DMaterial( shader_s *material );
+bool R_UpdateExplicitlyManaged2DMaterialImage( shader_s *material, const char *name, const ImageOptions &options );
+
+[[nodiscard]]
+auto R_GetShaderDimensions( const shader_s *shader ) -> std::optional<std::pair<unsigned, unsigned>>;
+
+void        R_ReplaceRawSubPic( shader_s *shader, int x, int y, int width, int height, const uint8_t *data );
+
+struct Skin;
+Skin *R_RegisterSkinFile( const char *name );
+shader_s *R_FindShaderForSkinFile( const Skin *skin, const char *meshname );
+
+void RF_TransformVectorToScreen( const refdef_t *rd, const vec3_t in, vec2_t out );
+bool RF_LerpTag( orientation_t *orient, const model_s *mod, int oldframe, int frame, float lerpfrac, const char *name );
+
+void        R_SetCustomColor( int num, int r, int g, int b );
+
+#ifdef None
+#undef None
+#endif
+
+enum class VidModeFlags : unsigned {
+	None                 = 0x0,
+	Fullscreen           = 0x1,
+	Borderless           = 0x2,
+	BorderlessFullscreen = Fullscreen | Borderless
+};
+
+[[nodiscard]]
+inline auto operator&( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
+	return (VidModeFlags)( (unsigned)lhs & (unsigned)rhs );
+}
+
+[[nodiscard]]
+inline auto operator|( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
+	return (VidModeFlags)( (unsigned)lhs | (unsigned)rhs );
+}
+
+[[nodiscard]]
+inline auto operator~( const VidModeFlags &flags ) -> VidModeFlags {
+	return (VidModeFlags)( ~( (unsigned)flags ) );
+}
+
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, unsigned flags );
+
+void RF_BeginRegistration();
+void RF_EndRegistration();
+
+void RF_AppActivate( bool active, bool minimize, bool destroy );
+void RF_Shutdown( bool verbose );
+
+void RF_BeginFrame( bool forceClear, bool forceVsync, bool uncappedFPS );
+void RF_EndFrame();
+
+void R_Set2DMode( bool );
+
+const char *RF_GetSpeedsMessage( char *out, size_t size );
+
+int RF_GetAverageFrametime();
+
+void R_Finish();
+
+rserr_t     R_Init( const char *applicationName, const char *screenshotPrefix, int startupColor,
+					int iconResource, const int *iconXPM,
+					void *hinstance, void *wndproc, void *parenthWnd,
+					bool verbose );
+
 #endif // __REF_H

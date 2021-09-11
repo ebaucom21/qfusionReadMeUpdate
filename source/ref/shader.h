@@ -299,19 +299,10 @@ typedef struct alignas( 8 ) shader_s {
 
 #define     Shader_ReadDepth( s ) ( ( s )->flags & SHADER_SOFT_PARTICLE )
 
-shader_t    *R_RegisterShader( const char *name, shaderType_e type );
-shader_t    *R_RegisterPic( const char *name );
-shader_t    *R_RegisterRawAlphaMask( const char *name, int width, int height, const uint8_t *data );
-shader_t    *R_RegisterSkin( const char *name );
-shader_t    *R_RegisterLinearPic( const char *name );
-
 unsigned    R_PackShaderOrder( const shader_t *shader );
 
 void        R_TouchShader( shader_t *s );
 
-[[nodiscard]]
-auto R_GetShaderDimensions( const shader_t *shader ) -> std::optional<std::pair<unsigned, unsigned>>;
 
-void        R_ReplaceRawSubPic( shader_t *shader, int x, int y, int width, int height, const uint8_t *data );
 
 #endif // R_SHADER_H

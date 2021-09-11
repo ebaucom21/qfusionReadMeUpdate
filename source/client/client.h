@@ -21,7 +21,7 @@
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/configstringstorage.h"
-#include "../cgame/ref.h"
+#include "../ref/ref.h"
 #include "../cgame/cg_public.h"
 #include "../ftlib/ftlib.h"
 #include "../qcommon/mmrating.h"
