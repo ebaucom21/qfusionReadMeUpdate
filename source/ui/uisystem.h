@@ -9,7 +9,7 @@ struct ReplicatedScoreboardData;
 
 namespace wsw { class StringView; }
 
-namespace wsw::cl { class ChatMessage; }
+namespace wsw::cl { struct ChatMessage; }
 
 namespace wsw::ui {
 

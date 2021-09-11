@@ -62,7 +62,7 @@ typedef struct ginfo_s {
 	int max_clients;        // <= sv_maxclients, <= max_edicts
 } ginfo_t;
 
-typedef struct {
+typedef struct server_s {
 	server_state_t state;       // precache commands are only valid during load
 
 	int64_t nextSnapTime;              // always sv.framenum * svc.snapFrameTime msec

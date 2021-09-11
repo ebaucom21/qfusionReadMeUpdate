@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <functional>
 
 #include "../gameshared/q_arch.h"
 #include "../gameshared/q_shared.h"

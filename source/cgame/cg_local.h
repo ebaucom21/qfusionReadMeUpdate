@@ -329,7 +329,7 @@ typedef struct {
 
 #define MAX_HELPMESSAGE_CHARS 4096
 
-typedef struct {
+typedef struct cg_state_s {
 	int64_t time;
 	float delay;
 

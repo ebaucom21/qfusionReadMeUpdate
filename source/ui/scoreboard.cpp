@@ -36,7 +36,7 @@ void Scoreboard::reload() {
 		clearSchema();
 	}
 
-	static_assert( std::is_pod_v<decltype( m_oldRawData )> );
+	static_assert( std::is_standard_layout_v<decltype( m_oldRawData )> );
 	std::memset( &m_oldRawData, 0, sizeof( ReplicatedScoreboardData ) );
 }
 

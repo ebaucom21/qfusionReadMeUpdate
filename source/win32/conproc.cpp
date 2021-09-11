@@ -57,7 +57,7 @@ static int CharToCode( char c );
 static BOOL SetConsoleCXCY( HANDLE hStdout, int cx, int cy );
 
 static int ccom_argc;
-static char **ccom_argv;
+static const char *const *ccom_argv;
 
 /*
 * CCheckParm
@@ -65,7 +65,7 @@ static char **ccom_argv;
 * Returns the position (1 to argc-1) in the program's argument list
 * where the given parameter apears, or 0 if not present
 */
-static int CCheckParm( char *parm ) {
+static int CCheckParm( const char *parm ) {
 	int i;
 
 	for( i = 1; i < ccom_argc; i++ ) {
