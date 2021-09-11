@@ -341,22 +341,21 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 	const float newSquare2DSpeed = newEntityPhysicsState.SquareSpeed2D();
 
 	// Check for unintended bouncing back (starting from some speed threshold)
-	if( oldSquare2DSpeed > 100 * 100 && newSquare2DSpeed > 1 * 1 ) {
-		Vec3 oldVelocity2DDir( oldVelocity[0], oldVelocity[1], 0 );
-		oldVelocity2DDir *= 1.0f / oldEntityPhysicsState.Speed2D();
-		Vec3 newVelocity2DDir( newVelocity[0], newVelocity[1], 0 );
-		newVelocity2DDir *= 1.0f / newEntityPhysicsState.Speed2D();
-		if( oldVelocity2DDir.Dot( newVelocity2DDir ) < 0.3f ) {
-			Debug( "A prediction step has lead to an unintended bouncing back\n" );
+	if( oldSquare2DSpeed > SQUARE( 100.0f ) ) {
+		if( newSquare2DSpeed > SQUARE( 1.0f ) ) {
+			Vec3 oldVelocity2DDir( oldVelocity[0], oldVelocity[1], 0 );
+			// TODO: Cache the inverse speed
+			oldVelocity2DDir *= Q_Rcp( oldEntityPhysicsState.Speed2D() );
+			Vec3 newVelocity2DDir( newVelocity[0], newVelocity[1], 0 );
+			newVelocity2DDir *= Q_Rcp( newEntityPhysicsState.Speed2D() );
+			if( oldVelocity2DDir.Dot( newVelocity2DDir ) < 0.3f ) {
+				Debug( "A prediction step has lead to an unintended bouncing back\n" );
+				return false;
+			}
+		} else {
+			Debug( "A prediction step has lead to close to zero 2D speed while it was significant\n" );
 			return false;
 		}
-	}
-
-	// Avoid bumping into walls.
-	// Note: the lower speed limit is raised to actually trigger this check.
-	if( newSquare2DSpeed < 50 * 50 && oldSquare2DSpeed > 100 * 100 ) {
-		Debug( "A prediction step has lead to close to zero 2D speed while it was significant\n" );
-		return false;
 	}
 
 	// Check for regular speed loss
@@ -390,17 +389,10 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 		return true;
 	}
 
-	// Stop in this seemingly unrecoverable case
-	if( speed2D < 100 ) {
-		const char *format_ = "A sequential speed loss interval of %d millis exceeds the tolerable one of %d millis\n";
-		Debug( format_, currentSpeedLossSequentialMillis, tolerableSpeedLossSequentialMillis );
-		return false;
-	}
-
 	// If the area is not a "skip collision" area
 	if( !( AiAasWorld::Instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_SKIP_COLLISION_MASK ) ) {
 		const float frac = ( threshold - speed2D ) * Q_Rcp( threshold );
-		EnsurePathPenalty( (unsigned)( 250 + 1250 * Q_Sqrt( frac ) ) );
+		EnsurePathPenalty( (unsigned)( 100 + 3000 * Q_Sqrt( frac ) ) );
 	}
 
 	return true;
