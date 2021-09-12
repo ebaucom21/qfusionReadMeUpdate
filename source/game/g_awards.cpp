@@ -101,7 +101,7 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 			if( attacker->r.client->awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
 				attacker->r.client->awardInfo.ebhit_count = 0;
 				attacker->r.client->awardInfo.accuracy_award++;
-				G_PlayerAward( attacker, S_COLOR_BLUE "Accuracy!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "Accuracy!" );
 			}
 			flag = COMBO_FLAG( WEAP_INSTAGUN );
 			break;
@@ -111,7 +111,7 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 			if( attacker->r.client->awardInfo.ebhit_count == EBHIT_FOR_AWARD ) {
 				attacker->r.client->awardInfo.ebhit_count = 0;
 				attacker->r.client->awardInfo.accuracy_award++;
-				G_PlayerAward( attacker, S_COLOR_BLUE "Accuracy!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "Accuracy!" );
 			}
 			flag = COMBO_FLAG( WEAP_ELECTROBOLT );
 			break;
@@ -160,40 +160,40 @@ void G_AwardPlayerHit( edict_t *targ, edict_t *attacker, int mod ) {
 	if( flag ) {
 		if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) && G_IsDead( targ ) ) { // RL...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
-				G_PlayerAward( attacker, S_COLOR_BLUE "RL to EB!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "RL to EB!" );
 			} else if( flag == COMBO_FLAG( WEAP_LASERGUN ) ) { // to LG
-				G_PlayerAward( attacker, S_COLOR_BLUE "RL to LG!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "RL to LG!" );
 			} else if( flag == COMBO_FLAG( WEAP_RIOTGUN ) ) { // to RG
-				G_PlayerAward( attacker, S_COLOR_BLUE "RL to RG!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "RL to RG!" );
 			} else if( flag == COMBO_FLAG( WEAP_GRENADELAUNCHER ) ) { // to GL
-				G_PlayerAward( attacker, S_COLOR_BLUE "RL to GL!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "RL to GL!" );
 			}
 
 			//else if( flag == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) )  // to RL
-			//	G_PlayerAward( attacker, S_COLOR_BLUE "RL to RL!" );
+			//	G_PlayerAward( attacker, S_COLOR_CYAN "RL to RL!" );
 		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GRENADELAUNCHER ) && G_IsDead( targ ) ) {   // GL...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
-				G_PlayerAward( attacker, S_COLOR_BLUE "GL to EB!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "GL to EB!" );
 			} else if( flag == COMBO_FLAG( WEAP_LASERGUN ) ) { // to LG
-				G_PlayerAward( attacker, S_COLOR_BLUE "GL to LG!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "GL to LG!" );
 			} else if( flag == COMBO_FLAG( WEAP_RIOTGUN ) ) { // to RG
-				G_PlayerAward( attacker, S_COLOR_BLUE "GL to RG!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "GL to RG!" );
 			} else if( flag == COMBO_FLAG( WEAP_ROCKETLAUNCHER ) ) { // to RL
-				G_PlayerAward( attacker, S_COLOR_BLUE "GL to RL!" );
+				G_PlayerAward( attacker, S_COLOR_CYAN "GL to RL!" );
 			}
 
 			//else if( flag == COMBO_FLAG( WEAP_GRENADELAUNCHER ) )  // to GL
-			//	G_PlayerAward( attacker, S_COLOR_BLUE "GL to GL!" );
+			//	G_PlayerAward( attacker, S_COLOR_CYAN "GL to GL!" );
 		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_LASERGUN ) && G_IsDead( targ ) ) {   // LG...
 			if( flag == COMBO_FLAG( WEAP_ELECTROBOLT ) ) { // to EB
 				if( attacker->r.client->awardInfo.lasthit == targ && level.time < attacker->r.client->awardInfo.lasthit_time + LB_TIMEOUT_FOR_COMBO ) {
-					G_PlayerAward( attacker, S_COLOR_BLUE "LG to EB!" );
+					G_PlayerAward( attacker, S_COLOR_CYAN "LG to EB!" );
 				}
 			}
 		} else if( attacker->r.client->awardInfo.combo[PLAYERNUM( targ )] == COMBO_FLAG( WEAP_GUNBLADE ) && G_IsDead( targ ) ) {
 			if( flag == COMBO_FLAG( WEAP_GUNBLADE ) ) {
 				if( attacker->r.client->awardInfo.lasthit == targ && level.time < attacker->r.client->awardInfo.lasthit_time + GUNBLADE_TIMEOUT_FOR_COMBO ) {
-					G_PlayerAward( attacker, S_COLOR_BLUE "Gunblade Combo!" );
+					G_PlayerAward( attacker, S_COLOR_CYAN "Gunblade Combo!" );
 				}
 			}
 		}
@@ -271,7 +271,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 	for( int i = 0; i < 3; ++i ) {
 		if( mod == weakMeansOfDeath[i] || mod == strongMeansOfDeath[i] ) {
 			( *directAwardCounts[i] )++;
-			G_PlayerAward( attacker, va( S_COLOR_BLUE "Direct %s Hit!", weaponNames[i] ) );
+			G_PlayerAward( attacker, va( S_COLOR_CYAN "Direct %s Hit!", weaponNames[i] ) );
 
 			// Midair
 			if( !self->groundentity && !self->waterlevel ) {
@@ -280,7 +280,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 				G_Trace( &trace, self->s.origin, self->r.mins, self->r.maxs, groundPoint, self, MASK_SOLID );
 				if( trace.fraction == 1.0f ) {
 					( *midairAwardCounts[i] )++;
-					G_PlayerAward( attacker, va( S_COLOR_BLUE "Air %s!", weaponNames[i] ) );
+					G_PlayerAward( attacker, va( S_COLOR_CYAN "Air %s!", weaponNames[i] ) );
 				}
 			}
 
@@ -394,7 +394,7 @@ void G_AwardPlayerPickup( edict_t *self, edict_t *item ) {
 		self->r.client->stats.AddToEntry( "mh_taken", 1 );
 		self->r.client->awardInfo.mh_control_award++;
 		if( self->r.client->awardInfo.mh_control_award % 5 == 0 ) {
-			G_PlayerAward( self, S_COLOR_CYAN "Mega-Health Control!" );
+			G_PlayerAward( self, S_COLOR_MAGENTA "Mega-Health Control!" );
 		}
 	}
 	// UH control
@@ -402,7 +402,7 @@ void G_AwardPlayerPickup( edict_t *self, edict_t *item ) {
 		self->r.client->stats.AddToEntry( "uh_taken", 1 );
 		self->r.client->awardInfo.uh_control_award++;
 		if( self->r.client->awardInfo.uh_control_award % 5 == 0 ) {
-			G_PlayerAward( self, S_COLOR_CYAN "Ultra-Health Control!" );
+			G_PlayerAward( self, S_COLOR_MAGENTA "Ultra-Health Control!" );
 		}
 	}
 	// RA control
@@ -410,7 +410,7 @@ void G_AwardPlayerPickup( edict_t *self, edict_t *item ) {
 		self->r.client->stats.AddToEntry( "ra_taken", 1 );
 		self->r.client->awardInfo.ra_control_award++;
 		if( self->r.client->awardInfo.ra_control_award % 5 == 0 ) {
-			G_PlayerAward( self, S_COLOR_CYAN "Red Armor Control!" );
+			G_PlayerAward( self, S_COLOR_MAGENTA "Red Armor Control!" );
 		}
 	}
 	// Other items counts
