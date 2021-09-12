@@ -232,17 +232,19 @@ inline void PredictionContext::SetPendingRollback() {
 inline void PredictionContext::RollbackToSavepoint() {
 #ifdef ENABLE_MOVEMENT_ASSERTIONS
 	constexpr auto *tag = "PredictionContext::RollbackToSavepoint()";
+	const char *activeActionName = ActiveActionName();
+	activeActionName = activeActionName ? activeActionName : "(null action)";
 	if( this->isCompleted ) {
 		constexpr auto *format = "%s: Attempt to rollback while the context is in completed state\n";
-		AI_FailWith( tag, format, ActiveActionName() );
+		AI_FailWith( tag, format, activeActionName );
 	}
 	if( !this->shouldRollback ) {
 		constexpr auto *format = "%s: Attempt to rollback while `shouldRollback` context flag is not set\n";
-		AI_FailWith( tag, format, ActiveActionName() );
+		AI_FailWith( tag, format, activeActionName );
 	}
 	if( !this->cannotApplyAction ) {
 		constexpr auto *format = "%s: Attempt to rollback while `cannotApplyAction` context flag is not set\n";
-		AI_FailWith( tag, format, ActiveActionName() );
+		AI_FailWith( tag, format, activeActionName );
 	}
 	if( this->savepointTopOfStackIndex > this->topOfStackIndex ) {
 		constexpr auto *format = "The savepoint index %u is greater than the current ToS index %u\n";
