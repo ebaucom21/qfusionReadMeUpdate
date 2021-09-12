@@ -684,14 +684,14 @@ int GClip_AreaEdicts( const vec3_t mins, const vec3_t maxs,
 	return std::min( count, maxcount );
 }
 
-static bool tryUsingOldHitBox = false;
+static bool tryUsingSmallHitBox = false;
 
-void enableOldHitBox() {
-	tryUsingOldHitBox = true;
+void enableSmallHitBox() {
+	tryUsingSmallHitBox = true;
 }
 
-void disableOldHitBox() {
-	tryUsingOldHitBox = false;
+void disableSmallHitBox() {
+	tryUsingSmallHitBox = false;
 }
 
 /*
@@ -718,22 +718,22 @@ static struct cmodel_s *GClip_CollisionModelForEntity( entity_state_t *s, entity
 		return trap_CM_ModelForBBox( r->mins, r->maxs );
 	}
 
-	if( !tryUsingOldHitBox ) {
+	if( !tryUsingSmallHitBox ) {
 		return trap_CM_OctagonModelForBBox( r->mins, r->maxs );
 	}
 
 	assert( playerbox_stand_maxs[0] == playerbox_stand_maxs[1] );
 	assert( playerbox_stand_mins[0] == playerbox_stand_mins[1] );
 	const float width = playerbox_stand_maxs[0] - playerbox_stand_mins[0];
-	const float minOldWidth = width;
-	const float maxOldWidth = (float)M_SQRT2 * width;
-	// It was/is not linear rather something like cosine but this is fine regardless of that
-	const float effectiveWidth = 0.5f * ( minOldWidth + maxOldWidth );
-	const float halfAddedExtent = 0.5f * ( effectiveWidth - width );
+	const float newWidth = 0.96f * width;
+	const float halfAddedExtent = 0.5f * ( newWidth - width );
+	assert( halfAddedExtent < 0.0f );
 	vec3_t mins { -halfAddedExtent, -halfAddedExtent, -halfAddedExtent };
 	vec3_t maxs { +halfAddedExtent, +halfAddedExtent, +halfAddedExtent };
 	VectorAdd( mins, r->mins, mins );
 	VectorAdd( maxs, r->maxs, maxs );
+	assert( mins[0] > r->mins[0] && mins[1] > r->mins[1] );
+	assert( maxs[0] < r->maxs[0] && maxs[1] < r->maxs[1] );
 	return trap_CM_OctagonModelForBBox( mins, maxs );
 }
 

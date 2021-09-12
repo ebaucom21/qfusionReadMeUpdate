@@ -885,16 +885,7 @@ void SV_Physics_LinearProjectile( edict_t *ent, int lookAheadTime ) {
 	}
 
 	trace_t trace;
-
-	// hacks
-	if( ent->s.type == ET_ELECTRO_WEAK ) {
-		enableOldHitBox();
-	}
 	G_Trace4D( &trace, start, ent->r.mins, ent->r.maxs, end, ent, mask, ent->timeDelta );
-	if( ent->s.type == ET_ELECTRO_WEAK ) {
-		disableOldHitBox();
-	}
-
 	VectorCopy( trace.endpos, ent->s.origin );
 	GClip_LinkEntity( ent );
 	SV_Impact( ent, &trace );

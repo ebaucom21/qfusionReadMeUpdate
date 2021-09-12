@@ -817,9 +817,8 @@ int GClip_FindInRadius( const vec3_t org, float rad, int *list, int maxcount );
 int GClip_AreaEdicts( const vec3_t mins, const vec3_t maxs, int *list, int maxcount, int areatype, int timeDelta );
 bool GClip_EntityContact( const vec3_t mins, const vec3_t maxs, const edict_t *ent );
 
-// A hack just to get hitbox compensation working in this codebase state
-void enableOldHitBox();
-void disableOldHitBox();
+void enableSmallHitBox();
+void disableSmallHitBox();
 
 //
 // g_combat.c

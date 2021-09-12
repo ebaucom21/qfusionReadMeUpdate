@@ -503,9 +503,7 @@ void W_Fire_Bullet( edict_t *self, vec3_t start, vec3_t angles, int seed, int ra
 	r = s * cos( alpha ) * hspread;
 	u = s * sin( alpha ) * vspread;
 
-	enableOldHitBox();
 	GS_TraceBullet( &trace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
-	disableOldHitBox();
 
 	if( trace.ent != -1 ) {
 		if( game.edicts[trace.ent].takedamage ) {
@@ -531,9 +529,7 @@ static void G_Fire_SunflowerPattern( edict_t *self, vec3_t start, vec3_t dir, in
 		r = cos( (float)*seed + fi ) * hspread * sqrt( fi );
 		u = sin( (float)*seed + fi ) * vspread * sqrt( fi );
 
-		enableOldHitBox();
 		GS_TraceBullet( &trace, start, dir, r, u, range, ENTNUM( self ), timeDelta );
-		disableOldHitBox();
 
 		if( trace.ent != -1 ) {
 			if( game.edicts[trace.ent].takedamage ) {
@@ -1341,9 +1337,9 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 
 	tr.ent = -1;
 	while( ignore ) {
-		enableOldHitBox();
+		enableSmallHitBox();
 		G_Trace4D( &tr, from, NULL, NULL, end, ignore, mask, timeDelta );
-		disableOldHitBox();
+		disableSmallHitBox();
 
 		VectorCopy( tr.endpos, from );
 		ignore = NULL;
@@ -1633,9 +1629,13 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 	if( GS_RaceGametype() ) {
 		mask = MASK_SOLID;
 	}
+
 	tr.ent = -1;
 	while( ignore ) {
+		enableSmallHitBox();
 		G_Trace4D( &tr, from, NULL, NULL, end, ignore, mask, timeDelta );
+		disableSmallHitBox();
+
 		VectorCopy( tr.endpos, from );
 		ignore = NULL;
 		if( tr.ent == -1 ) {
@@ -1829,9 +1829,7 @@ edict_t *W_Fire_Lasergun( edict_t *self, vec3_t start, vec3_t angles, float dama
 	laser_mod = mod;
 	laser_missed = true;
 
-	enableOldHitBox();
 	GS_TraceLaserBeam( &tr, start, angles, range, ENTNUM( self ), timeDelta, _LaserImpact );
-	disableOldHitBox();
 
 	laser->r.svflags |= SVF_FORCEOWNER;
 	VectorCopy( start, laser->s.origin );
@@ -1880,9 +1878,7 @@ edict_t *W_Fire_Lasergun_Weak( edict_t *self, vec3_t start, vec3_t end, float da
 	laser_mod = mod;
 	laser_missed = true;
 
-	enableOldHitBox();
 	GS_TraceCurveLaserBeam( &trace, start, self->s.angles, end, ENTNUM( self ), timeDelta, _LaserImpact );
-	disableOldHitBox();
 
 	laser->r.svflags |= SVF_FORCEOWNER;
 	VectorCopy( start, laser->s.origin );
