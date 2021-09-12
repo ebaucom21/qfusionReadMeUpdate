@@ -232,13 +232,9 @@ bool    GLimp_Init( const char *applicationName, void *hinstance, void *wndproc,
 					int iconResource, const int *iconXPM );
 void    GLimp_Shutdown( void );
 
-#ifdef None
-#undef None
-#endif
+struct VidModeOptions;
 
-
-
-rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, unsigned flags );
+rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, const VidModeOptions &options );
 rserr_t GLimp_SetFullscreenMode( int displayFrequency, bool fullscreen );
 void    GLimp_AppActivate( bool active, bool minimize, bool destroy );
 bool    GLimp_GetGammaRamp( size_t stride, unsigned short *psize, unsigned short *ramp );

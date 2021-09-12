@@ -5213,12 +5213,11 @@ static rserr_t R_PostInit( void ) {
 	return rserr_ok;
 }
 
-rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, unsigned flags ) {
-	const bool fullscreen = ( (VidModeFlags)flags & VidModeFlags::Fullscreen ) != VidModeFlags::None;
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, const VidModeOptions &options ) {
 	// If the fullscreen flag is the single difference, choose the lightweight path
 	if( glConfig.width == width && glConfig.height == height ) {
-		if( glConfig.fullScreen != fullscreen ) {
-			return GLimp_SetFullscreenMode( displayFrequency, fullscreen );
+		if( glConfig.fullScreen != options.fullscreen ) {
+			return GLimp_SetFullscreenMode( displayFrequency, options.fullscreen );
 		}
 	}
 
@@ -5228,7 +5227,7 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 
 	RB_Shutdown();
 
-	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, flags );
+	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, options );
 	if( err != rserr_ok ) {
 		Com_Printf( "Could not GLimp_SetMode()\n" );
 	} else if( r_postinit ) {

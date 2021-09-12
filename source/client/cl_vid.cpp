@@ -190,16 +190,10 @@ static rserr_t VID_ChangeMode( void ) {
 
 	const int frequency = vid_displayfrequency->integer;
 
-	VidModeFlags flags = VidModeFlags::None;
-	if( vid_borderless->integer ) {
-		flags = flags | VidModeFlags::Borderless;
-	}
-	if( vid_fullscreen->integer ) {
-		flags = flags | VidModeFlags::Fullscreen;
-	}
+	VidModeOptions options { .fullscreen = vid_fullscreen->integer != 0, .borderless = vid_borderless->integer != 0 };
 
 	int x, y, w, h;
-	if( ( flags & VidModeFlags::BorderlessFullscreen ) == VidModeFlags::BorderlessFullscreen ) {
+	if( options.fullscreen && options.borderless ) {
 		x = 0, y = 0;
 		if( !VID_GetDefaultMode( &w, &h ) ) {
 			w = vid_modes[0].width;
@@ -216,7 +210,7 @@ static rserr_t VID_ChangeMode( void ) {
 		return rserr_restart_required;
 	}
 
-	rserr_t err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
+	rserr_t err = R_TrySettingMode( x, y, w, h, frequency, options );
 	if( err == rserr_restart_required ) {
 		return err;
 	}
@@ -248,8 +242,8 @@ static rserr_t VID_ChangeMode( void ) {
 			vid_fullscreen->modified = false;
 
 			// Try again without the fullscreen flag
-			flags = flags & ~VidModeFlags::Fullscreen;
-			err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
+			options.fullscreen = false;
+			err = R_TrySettingMode( x, y, w, h, frequency, options );
 		}
 
 		if( err == rserr_invalid_mode ) {
@@ -262,7 +256,7 @@ static rserr_t VID_ChangeMode( void ) {
 				h = vid_ref_prevheight;
 				Cvar_ForceSet( vid_height->name, va( "%i", h ) );
 
-				err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
+				err = R_TrySettingMode( x, y, w, h, frequency, options );
 				if( err == rserr_invalid_fullscreen ) {
 					Com_Printf( "VID_ChangeMode() - could not revert to safe fullscreen mode\n" );
 
@@ -270,8 +264,8 @@ static rserr_t VID_ChangeMode( void ) {
 					vid_fullscreen->modified = false;
 
 					// Try again without the fullscreen flag
-					flags = flags & ~VidModeFlags::Fullscreen;
-					err = R_TrySettingMode( x, y, w, h, frequency, (unsigned)flags );
+					options.fullscreen = false;
+					err = R_TrySettingMode( x, y, w, h, frequency, options );
 				}
 			}
 

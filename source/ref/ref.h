@@ -241,33 +241,12 @@ bool RF_LerpTag( orientation_t *orient, const model_s *mod, int oldframe, int fr
 
 void        R_SetCustomColor( int num, int r, int g, int b );
 
-#ifdef None
-#undef None
-#endif
-
-enum class VidModeFlags : unsigned {
-	None                 = 0x0,
-	Fullscreen           = 0x1,
-	Borderless           = 0x2,
-	BorderlessFullscreen = Fullscreen | Borderless
+struct VidModeOptions {
+	bool fullscreen { false };
+	bool borderless { false };
 };
 
-[[nodiscard]]
-inline auto operator&( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
-	return (VidModeFlags)( (unsigned)lhs & (unsigned)rhs );
-}
-
-[[nodiscard]]
-inline auto operator|( const VidModeFlags &lhs, const VidModeFlags &rhs ) -> VidModeFlags {
-	return (VidModeFlags)( (unsigned)lhs | (unsigned)rhs );
-}
-
-[[nodiscard]]
-inline auto operator~( const VidModeFlags &flags ) -> VidModeFlags {
-	return (VidModeFlags)( ~( (unsigned)flags ) );
-}
-
-rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, unsigned flags );
+rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFrequency, const VidModeOptions &options );
 
 void RF_BeginRegistration();
 void RF_EndRegistration();

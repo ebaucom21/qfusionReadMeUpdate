@@ -279,9 +279,8 @@ rserr_t GLimp_SetFullscreenMode( int displayFrequency, bool fullscreen ) {
 	return rserr_ok;
 }
 
-rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, unsigned flags ) {
-	const bool borderless = ( flags & (unsigned)VidModeFlags::Borderless ) != 0;
-	bool fullscreen = ( flags & (unsigned)VidModeFlags::Fullscreen ) != 0;
+rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency, const VidModeOptions &options ) {
+	bool fullscreen = options.fullscreen;
 
 	const char *win_fs[] = { "W", "FS" };
 
@@ -309,7 +308,7 @@ rserr_t GLimp_SetMode( int x, int y, int width, int height, int displayFrequency
 
 	glConfig.width = width;
 	glConfig.height = height;
-	glConfig.borderless = borderless;
+	glConfig.borderless = options.borderless;
 
 	GLimp_SetFullscreenMode( displayFrequency, fullscreen );
 
