@@ -506,7 +506,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 
 	Com_SetServerCM( NULL, 0 );
 
-	memset( &sv, 0, sizeof( sv ) );
+	sv.clear();
 	Com_SetServerState( sv.state );
 
 	Com_FreePureList( &svs.purelist );

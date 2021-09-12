@@ -472,6 +472,7 @@ cgs_skeleton_t *CG_SetBoneposesForTemporaryEntity( entity_t *ent ) {
 */
 void CG_FreeTemporaryBoneposesCache( void ) {
 	Q_free(   TBC );
+	TBC = nullptr;
 	TBC_Size = 0;
 	TBC_Count = 0;
 
