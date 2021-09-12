@@ -57,7 +57,12 @@ protected:
 
 	explicit SoundSystem( client_state_s *client_ ) : client( client_ ) {}
 public:
-	static bool Init( client_state_s *client, void *hWnd, bool verbose );
+	struct InitOptions {
+		bool verbose { false };
+		bool useNullSystem { false };
+	};
+
+	static bool Init( client_state_s *client, void *hWnd, const InitOptions &options );
 	static void Shutdown( bool verbose );
 
 	static SoundSystem *Instance() {

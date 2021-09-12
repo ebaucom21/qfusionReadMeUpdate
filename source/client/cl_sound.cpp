@@ -41,9 +41,6 @@ const char *SoundSystem::PathForName( const char *name, wsw::String &reuse ) {
 	return reuse.c_str();
 }
 
-/*
-* CL_SoundModule_Init
-*/
 void CL_SoundModule_Init( bool verbose ) {
 	if( !s_module ) {
 		s_module = Cvar_Get( "s_module", "1", CVAR_LATCH_SOUND );
@@ -60,10 +57,12 @@ void CL_SoundModule_Init( bool verbose ) {
 
 	if( s_module->integer < 0 || s_module->integer > 1 ) {
 		Com_Printf( "Invalid value for s_module (%i), reseting to default\n", s_module->integer );
-		Cvar_ForceSet( "s_module", s_module->dvalue );
+		Cvar_ForceSet( s_module->name, "0" );
 	}
 
-	if( !SoundSystem::Init( &cl, VID_GetWindowHandle(), verbose ) ) {
+	const SoundSystem::InitOptions options { .verbose = verbose, .useNullSystem = !s_module->integer };
+	// TODO: Is the HWND really needed?
+	if( !SoundSystem::Init( &cl, VID_GetWindowHandle(), options ) ) {
 		Cvar_ForceSet( s_module->name, "0" );
 	}
 
@@ -72,9 +71,6 @@ void CL_SoundModule_Init( bool verbose ) {
 	}
 }
 
-/*
-* CL_SoundModule_Shutdown
-*/
 void CL_SoundModule_Shutdown( bool verbose ) {
 	SoundSystem::Shutdown( verbose );
 }

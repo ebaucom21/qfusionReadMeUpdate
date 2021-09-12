@@ -140,7 +140,7 @@ void ALSoundSystem::ListDevices() {
 	S_IssueStuffCmd( pipe, "devicelist" );
 }
 
-bool SoundSystem::Init( client_state_t *client, void *hWnd, bool verbose ) {
+bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &options ) {
 	s_volume = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
 	s_musicvolume = Cvar_Get( "s_musicvolume", "0.05", CVAR_ARCHIVE );
 	s_doppler = Cvar_Get( "s_doppler", "1.0", CVAR_ARCHIVE );
@@ -148,15 +148,18 @@ bool SoundSystem::Init( client_state_t *client, void *hWnd, bool verbose ) {
 	s_stereo2mono = Cvar_Get( "s_stereo2mono", "0", CVAR_ARCHIVE );
 	s_globalfocus = Cvar_Get( "s_globalfocus", "0", CVAR_ARCHIVE );
 
-	instance = ALSoundSystem::TryCreate( client, hWnd, verbose );
-	if( instance ) {
-		instance->PostInit();
-		return true;
+	if( !options.useNullSystem ) {
+		instance = ALSoundSystem::TryCreate( client, hWnd, options.verbose );
+		if( instance ) {
+			instance->PostInit();
+			return true;
+		}
 	}
 
 	::nullSoundSystemHolder.Init( client );
 	instance = nullSoundSystemHolder.Instance();
-	return false;
+	instance->PostInit();
+	return options.useNullSystem;
 }
 
 ALSoundSystem *ALSoundSystem::TryCreate( client_state_s *client, void *hWnd, bool verbose ) {
