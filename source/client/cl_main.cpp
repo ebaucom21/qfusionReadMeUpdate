@@ -1712,37 +1712,26 @@ void CL_SetClientState( int state ) {
 		Steam_AdvertiseGame( NULL, 0 );
 	}
 
-	auto *const uiSystem = wsw::ui::UISystem::instance();
 	switch( state ) {
 		case CA_DISCONNECTED:
 			Con_Close();
-			uiSystem->refresh( wsw::ui::UISystem::ShowCursor | wsw::ui::UISystem::UseOwnBackground );
-			uiSystem->forceMenuOn();
-			//CL_UIModule_MenuMain ();
-			//SCR_UpdateScreen();
 			break;
 		case CA_GETTING_TICKET:
 		case CA_CONNECTING:
 			cls.cgameActive = false;
 			Con_Close();
-			uiSystem->forceMenuOff();
 			SoundSystem::Instance()->StopBackgroundTrack();
 			SoundSystem::Instance()->Clear();
-			//SCR_UpdateScreen();
 			break;
 		case CA_CONNECTED:
 			cls.cgameActive = false;
 			Con_Close();
 			Cvar_FixCheatVars();
-			//SCR_UpdateScreen();
 			break;
 		case CA_ACTIVE:
 			cl_connectChain[0] = '\0';
 			CL_EndRegistration();
 			Con_Close();
-			uiSystem->refresh( 0 );
-			uiSystem->forceMenuOff();
-			//SCR_UpdateScreen();
 			CL_AddReliableCommand( "svmotd 1" );
 			SoundSystem::Instance()->Clear();
 			break;
@@ -1844,8 +1833,6 @@ void CL_RestartMedia( void ) {
 
 	// register console font and background
 	SCR_RegisterConsoleMedia();
-
-	wsw::ui::UISystem::instance()->forceMenuOff();
 }
 
 /*
@@ -2635,8 +2622,6 @@ void CL_Init( void ) {
 	CG_InitPersistentState();
 
 	CL_InitMedia();
-
-	wsw::ui::UISystem::instance()->forceMenuOff();
 
 	ML_Init();
 }

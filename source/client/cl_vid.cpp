@@ -424,11 +424,6 @@ static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
 	if( cgameActive ) {
 		CL_GameModule_Init();
 		Con_Close();
-		wsw::ui::UISystem::instance()->forceMenuOff();
-	} else {
-		if( auto maybeInstance = wsw::ui::UISystem::maybeInstance() ) {
-			( *maybeInstance )->forceMenuOn();
-		}
 	}
 
 	RF_EndRegistration();

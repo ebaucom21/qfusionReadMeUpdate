@@ -392,8 +392,6 @@ static void SCR_DrawNotify( void ) {
 }
 
 void SCR_BeginLoadingPlaque( void ) {
-	wsw::ui::UISystem::instance()->forceMenuOff();
-
 	SoundSystem::Instance()->StopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
 	cl.configStrings.clear();
@@ -458,21 +456,16 @@ void SCR_UpdateScreen( void ) {
 	bool canDrawDebugGraph = false;
 	bool canDrawConsoleNotify = false;
 
-	// TODO: Add more meaningful UI state flags
-	unsigned uiRefreshFlags = 0;
 	if( scr_draw_loading == 2 ) {
 		// loading plaque over APP_STARTUP_COLOR screen
 		scr_draw_loading = 0;
 	} else if( cls.state == CA_DISCONNECTED ) {
-		uiRefreshFlags = wsw::ui::UISystem::UseOwnBackground | wsw::ui::UISystem::ShowCursor;
 		canDrawConsole = true;
 	} else if( cls.state == CA_CONNECTED ) {
 		if( cls.cgameActive ) {
 			canRenderView = true;
 		}
 	} else if( cls.state == CA_ACTIVE ) {
-		uiRefreshFlags = wsw::ui::UISystem::ShowCursor;
-
 		canRenderView = true;
 
 		if( scr_timegraph->integer ) {
@@ -489,7 +482,7 @@ void SCR_UpdateScreen( void ) {
 
 	// Perform UI refresh (that may include binding UI GL context and unbinding it) first
 	auto *const uiSystem = wsw::ui::UISystem::instance();
-	uiSystem->refresh( uiRefreshFlags );
+	uiSystem->refresh();
 
 	// TODO: Pass as flags
 	const bool forcevsync = ( cls.state == CA_DISCONNECTED && scr_con_current );

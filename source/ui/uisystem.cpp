@@ -67,7 +67,7 @@ class QtUISystem : public QObject, public UISystem {
 	friend class NativelyDrawnImage;
 	friend class NativelyDrawnModel;
 public:
-	void refresh( unsigned refreshFlags ) override;
+	void refresh() override;
 
 	void drawSelfInMainContext() override;
 
@@ -82,9 +82,6 @@ public:
 	bool handleCharEvent( int ch ) override;
 	[[nodiscard]]
 	bool handleMouseMove( int frameTime, int dx, int dy ) override;
-
-	void forceMenuOn() override {};
-	void forceMenuOff() override {};
 
 	void toggleInGameMenu() override;
 
@@ -724,34 +721,22 @@ void QtUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
 }
 
 static SingletonHolder<QtUISystem> uiSystemInstanceHolder;
-// Hacks for allowing retrieval of a maybe-instance
-// (we do not want to add these hacks to SingletonHolder)
-static bool initialized = false;
 
 void UISystem::init( int width, int height ) {
 	uiSystemInstanceHolder.Init( width, height );
 	VideoPlaybackSystem::init();
-	initialized = true;
 }
 
 void UISystem::shutdown() {
 	VideoPlaybackSystem::shutdown();
 	uiSystemInstanceHolder.Shutdown();
-	initialized = false;
 }
 
 auto UISystem::instance() -> UISystem * {
 	return uiSystemInstanceHolder.Instance();
 }
 
-auto UISystem::maybeInstance() -> std::optional<UISystem *> {
-	if( initialized ) {
-		return uiSystemInstanceHolder.Instance();
-	}
-	return std::nullopt;
-}
-
-void QtUISystem::refresh( unsigned refreshFlags ) {
+void QtUISystem::refresh() {
 #ifndef _WIN32
 	QGuiApplication::processEvents( QEventLoop::AllEvents );
 #endif
