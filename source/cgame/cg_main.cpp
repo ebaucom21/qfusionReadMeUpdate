@@ -997,7 +997,7 @@ void CG_InitPersistentState() {
 
 	cg_showChasers = Cvar_Get( "cg_showChasers", "1", CVAR_ARCHIVE );
 
-	CrosshairState::init();
+	CrosshairState::initPersistentState();
 
 	CG_InitTemporaryBoneposesCache();
 }
@@ -1058,6 +1058,8 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	CG_PModelsInit();
 	CG_WModelsInit();
 
+	CrosshairState::handleCGameInit();
+
 	CG_ClearLightStyles();
 
 	CG_ClearLocalEntities();
@@ -1105,6 +1107,7 @@ void CG_Shutdown( void ) {
 	CG_FreeLocalEntities();
 	CG_DemocamShutdown();
 	CG_UnregisterCGameCommands();
+	CrosshairState::handleCGameShutdown();
 	CG_WModelsShutdown();
 	CG_PModelsShutdown();
 	CG_FreeTemporaryBoneposesCache();

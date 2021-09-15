@@ -126,7 +126,7 @@ static inline const char *kWeaponNames[WEAP_TOTAL - 1] = {
 	"gb", "mg", "rg", "gl", "rl", "pg", "lg", "eb", "sw", "ig"
 };
 
-void CrosshairState::init() {
+void CrosshairState::initPersistentState() {
 	wsw::StaticString<64> varNameBuffer;
 	varNameBuffer << "cg_crosshair_"_asView;
 	const auto prefixLen = varNameBuffer.length();
@@ -176,12 +176,12 @@ void CrosshairState::init() {
 	cg_separate_weapon_settings = Cvar_Get( "cg_separate_weapon_settings", "0", CVAR_ARCHIVE );
 }
 
-void CrosshairState::beginRegistration() {
+void CrosshairState::handleCGameShutdown() {
 	::g_regularCrosshairsMaterialCache.destroyMaterials();
 	::g_strongCrosshairsMaterialCache.destroyMaterials();
 }
 
-void CrosshairState::endRegistration() {
+void CrosshairState::handleCGameInit() {
 	::g_regularCrosshairsMaterialCache.initMaterials();
 	::g_strongCrosshairsMaterialCache.initMaterials();
 }

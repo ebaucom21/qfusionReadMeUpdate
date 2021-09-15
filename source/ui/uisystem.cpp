@@ -1022,11 +1022,9 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 }
 
 void QtUISystem::beginRegistration() {
-	CrosshairState::beginRegistration();
 }
 
 void QtUISystem::endRegistration() {
-	CrosshairState::endRegistration();
 }
 
 void QtUISystem::toggleInGameMenu() {

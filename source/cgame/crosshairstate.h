@@ -66,9 +66,9 @@ public:
 
 	void touchDamageState() { m_decayTimeLeft = m_decayTime; }
 
-	static void init();
-	static void beginRegistration();
-	static void endRegistration();
+	static void initPersistentState();
+	static void handleCGameInit();
+	static void handleCGameShutdown();
 	static void updateSharedPart();
 
 	template <typename Buffer, typename AppendArg = wsw::StringView>
