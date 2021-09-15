@@ -381,6 +381,10 @@ void CG_RegisterForceModels( void ) {
 	CG_RegisterForceModel( cg_teamALPHAmodel, cg_teamALPHAmodelForce, cg_teamALPHAskin, &cgs.teamModelInfo[TEAM_ALPHA], &cgs.teamCustomSkin[TEAM_ALPHA] );
 	CG_RegisterForceModel( cg_teamBETAmodel, cg_teamBETAmodelForce, cg_teamBETAskin, &cgs.teamModelInfo[TEAM_BETA], &cgs.teamCustomSkin[TEAM_BETA] );
 
+	cg_teamALPHAcolor->modified = true;
+	cg_teamBETAcolor->modified = true;
+	cg_teamPLAYERScolor->modified = true;
+	cg_teamPLAYERScolorForce->modified = true;
 	for( team = TEAM_ALPHA; team < GS_MAX_TEAMS; team++ ) {
 		CG_RegisterTeamColor( team );
 	}
