@@ -55,7 +55,6 @@ MaterialCache::MaterialCache() {
 		loadDirContents( dir );
 	}
 
-	m_freeMaterialIds.reserve( MAX_SHADERS );
 	for( unsigned i = 0; i < MAX_SHADERS; ++i ) {
 		m_freeMaterialIds.push_back( i );
 	}
@@ -73,66 +72,62 @@ void MaterialCache::loadDirContents( const wsw::StringView &dir ) {
 MaterialCache::~MaterialCache() {
 }
 
-/*
-* R_TouchShader
-*/
-void R_TouchShader( shader_t *s ) {
-	if( s->registrationSequence == rsh.registrationSequence ) {
-		return;
-	}
-
-	s->registrationSequence = rsh.registrationSequence;
-
-	// touch all images this shader references
-	auto *const textureCache = TextureCache::instance();
-	for( unsigned i = 0; i < s->numpasses; i++ ) {
-		shaderpass_t *pass = s->passes + i;
-
-		for( unsigned j = 0; j < MAX_SHADER_IMAGES; j++ ) {
-			Texture *image = pass->images[j];
-			if( image ) {
-				textureCache->touchTexture( image, s->imagetags );
-			} else if( !pass->program_type ) {
-				// only programs can have gaps in images
-				break;
+void MaterialCache::touchMaterial( shader_t *material ) {
+	if( material->registrationSequence != rsh.registrationSequence ) {
+		material->registrationSequence = rsh.registrationSequence;
+		assert(( material->imagetags & ~( IMAGE_TAG_BUILTIN | IMAGE_TAG_WORLD | IMAGE_TAG_GENERIC ) ) == 0 );
+		// touch all images this shader references
+		auto *const textureCache = TextureCache::instance();
+		for( unsigned i = 0; i < material->numpasses; i++ ) {
+			shaderpass_t *const pass = material->passes + i;
+			for( Texture *texture : pass->images ) {
+				if( texture ) {
+					textureCache->touchTexture( texture, material->imagetags );
+				}
 			}
 		}
 	}
 }
 
-void MaterialCache::freeUnusedMaterialsByType( const shaderType_e *types, unsigned int numTypes ) {
-	if( !numTypes ) {
-		for( shader_s *material = m_materialsHead; material; material = material->next[shader_t::kListLinks] ) {
-			if( material->registrationSequence != rsh.registrationSequence ) {
-				continue;
-			}
-			unlinkAndFree( material );
-		}
-		return;
-	}
+void R_TouchShader( shader_s *material ) {
+	MaterialCache::instance()->touchMaterial( material );
+}
 
-	for( shader_s *material = m_materialsHead; material; material = material->next[shader_t::kListLinks] ) {
-		if( material->registrationSequence == rsh.registrationSequence ) {
-			continue;
+void MaterialCache::freeUnusedMaterialsByType( const std::span<shaderType_e> &types ) {
+	const int registrationSequence = rsh.registrationSequence;
+	shader_s *nextMaterial = nullptr;
+	if( !types.empty() ) {
+		for( shader_s *material = m_materialsHead; material; material = nextMaterial ) {
+			nextMaterial = material->next[shader_t::ListLinks];
+			if( material->registrationSequence != registrationSequence ) {
+				if( std::find( types.begin(), types.end(), material->type ) != types.end() ) {
+					unlinkAndFree( material );
+				}
+			}
 		}
-		if( std::find( types, types + numTypes, material->type ) == types + numTypes ) {
-			continue;
+	} else {
+		for( shader_s *material = m_materialsHead; material; material = nextMaterial ) {
+			nextMaterial = material->next[shader_t::ListLinks];
+			if( material->registrationSequence != registrationSequence ) {
+				unlinkAndFree( material );
+			}
 		}
-		unlinkAndFree( material );
 	}
 }
 
 void MaterialCache::freeUnusedObjects() {
 	// TODO: Free unused skins
 
-	freeUnusedMaterialsByType( nullptr, 0 );
+	freeUnusedMaterialsByType( std::span<shaderType_e>() );
 }
 
-void MaterialCache::unlinkAndFree( shader_t *s ) {
-	m_materialById[s->id] = nullptr;
-	m_freeMaterialIds.push_back( s->id );
+void MaterialCache::unlinkAndFree( shader_t *material ) {
+	m_materialById[material->id] = nullptr;
+	m_freeMaterialIds.push_back( material->id );
 
-	abort();
+	wsw::unlink( material, &m_materialBins[material->binIndex], shader_s::BinLinks );
+	wsw::unlink( material, &m_materialsHead, shader_s::ListLinks );
+	m_factory.destroyMaterial( material );
 }
 
 auto MaterialCache::getNextMaterialId() -> unsigned {
@@ -230,23 +225,22 @@ unsigned R_PackShaderOrder( const shader_t *shader ) {
 void MaterialCache::touchMaterialsByName( const wsw::StringView &name ) {
 	const wsw::HashedStringView cleanView( makeCleanName( name ) );
 	const auto binIndex = cleanView.getHash() % kNumBins;
-	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
+	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::BinLinks] ) {
 		if( cleanView.equalsIgnoreCase( wsw::HashedStringView( material->name ) ) ) {
-			R_TouchShader( material );
+			touchMaterial( material );
 		}
 	}
 }
 
-auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture * )
-	-> shader_t * {
+auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool forceDefault ) -> shader_t * {
 	const wsw::HashedStringView cleanName( makeCleanName( name ) );
-	const auto binIndex = cleanName.getHash() % kNumBins;
+	const unsigned binIndex = cleanName.getHash() % kNumBins;
 
-	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::kBinLinks] ) {
+	for( shader_t *material = m_materialBins[binIndex]; material; material = material->next[shader_t::BinLinks] ) {
 		if( cleanName.equalsIgnoreCase( material->name ) ) {
 			// TODO: This should be a method
 			if( material->type == type || ( type == SHADER_TYPE_2D && material->type == SHADER_TYPE_2D_RAW ) ) {
-				R_TouchShader( material );
+				touchMaterial( material );
 				return material;
 			}
 		}
@@ -255,17 +249,21 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 	shader_t *material = nullptr;
 	if( forceDefault ) {
 		material = m_factory.newDefaultMaterial( type, cleanName, name );
+		assert( material->imagetags );
 	} else {
 		if( !( material = m_factory.newMaterial( type, cleanName, name ) ) ) {
 			material = m_factory.newDefaultMaterial( type, cleanName, name );
+			assert( material->imagetags );
 		}
 	}
 
 	if( material ) {
 		material->id = getNextMaterialId();
+		material->binIndex = binIndex;
 		m_materialById[material->id] = material;
-		material->registrationSequence = rsh.registrationSequence;
-		wsw::link( material, &m_materialBins[binIndex], shader_t::kBinLinks );
+		wsw::link( material, &m_materialBins[binIndex], shader_t::BinLinks );
+		wsw::link( material, &m_materialsHead, shader_t::ListLinks );
+		touchMaterial( material );
 		return material;
 	}
 
@@ -273,11 +271,11 @@ auto MaterialCache::loadMaterial( const wsw::StringView &name, int type, bool fo
 }
 
 shader_t *MaterialCache::loadDefaultMaterial( const wsw::StringView &name, int type ) {
-    return loadMaterial( name, type, true, TextureCache::instance()->noTexture() );
+    return loadMaterial( name, type, true );
 }
 
 shader_t *R_RegisterPic( const char *name ) {
-	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, false, TextureCache::instance()->noTexture() );
+	return MaterialCache::instance()->loadMaterial( wsw::StringView( name ), SHADER_TYPE_2D, false );
 }
 
 shader_t *R_CreateExplicitlyManaged2DMaterial() {
@@ -677,7 +675,7 @@ auto MaterialCache::registerSkin( const wsw::StringView &name ) -> Skin * {
 	if( Skin *existing = findSkinByName( name ) ) {
 		existing->m_registrationSequence = rsh.registrationSequence;
 		for( auto &[material, _] : existing->m_meshPartMaterials ) {
-			R_TouchShader( material );
+			touchMaterial( material );
 		}
 		return existing;
 	}

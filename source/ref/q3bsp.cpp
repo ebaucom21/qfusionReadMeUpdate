@@ -564,7 +564,7 @@ static void Mod_LoadShaderrefs( const lump_t *l ) {
 	// free world textures from the previous map that are not used on the new map
 	if( newMap ) {
 		std::array<shaderType_e, 2> shaderTypes = { SHADER_TYPE_DELUXEMAP, SHADER_TYPE_VERTEX };
-		materialCache->freeUnusedMaterialsByType( shaderTypes.data(), shaderTypes.size() );
+		materialCache->freeUnusedMaterialsByType( std::span( shaderTypes.begin(), shaderTypes.end() ) );
 		TextureCache::instance()->freeUnusedWorldTextures();
 	}
 }

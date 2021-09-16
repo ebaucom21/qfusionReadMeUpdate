@@ -16,6 +16,7 @@
 using wsw::operator""_asView;
 
 #include <optional>
+#include <span>
 
 enum class PassKey {
 	RgbGen,
@@ -567,8 +568,8 @@ class MaterialFactory {
 	wsw::StaticVector<TokenStream, 1> m_primaryTokenStreamHolder;
 
 	[[nodiscard]]
-	auto findImage( const wsw::StringView &name, int flags, int tags ) -> Texture *;
-	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags, int imageTags );
+	auto findImage( const wsw::StringView &name, int flags ) -> Texture *;
+	void loadMaterial( Texture **images, const wsw::StringView &fullName, int flags );
 
 	[[nodiscard]]
 	auto expandTemplate( const wsw::StringView &name, const wsw::StringView *args, size_t numArgs ) -> MaterialLexer *;
@@ -595,6 +596,8 @@ public:
 	auto newOpaqueEnvMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
 	[[nodiscard]]
 	auto newFogMaterial( const wsw::HashedStringView &cleanName, const wsw::StringView &name ) -> shader_t *;
+
+	void destroyMaterial( shader_s *material );
 
 	// TODO: Split this functionality into MaterialCache and MaterialLoader?
 
@@ -633,7 +636,7 @@ class MaterialCache {
 	wsw::Vector<wsw::StringView> m_fileMaterialNames;
 	wsw::Vector<std::pair<unsigned, unsigned>> m_fileSourceSpans;
 
-	wsw::Vector<uint16_t> m_freeMaterialIds;
+	wsw::StaticVector<uint16_t, MAX_SHADERS> m_freeMaterialIds;
 
 	wsw::StaticVector<Skin, 16> m_skins;
 
@@ -649,7 +652,7 @@ class MaterialCache {
 	[[nodiscard]]
 	bool tryAddingFileContents( const MaterialFileContents *contents );
 
-	void unlinkAndFree( shader_t *s );
+	void unlinkAndFree( shader_t *material );
 
 	[[nodiscard]]
 	auto getNextMaterialId() -> unsigned;
@@ -686,17 +689,19 @@ public:
 	[[nodiscard]]
 	auto findSourceByName( const wsw::HashedStringView &name ) -> MaterialSource *;
 
-	void freeUnusedMaterialsByType( const shaderType_e *types, unsigned numTypes );
+	void freeUnusedMaterialsByType( const std::span<shaderType_e> &types );
 
 	void freeUnusedObjects();
 
 	void touchMaterialsByName( const wsw::StringView &name );
 
+	void touchMaterial( shader_s *material );
+
 	[[nodiscard]]
 	auto getMaterialById( int id ) -> shader_t * { return m_materialById[id]; }
 
 	[[nodiscard]]
-	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault, Texture *defaultImage = nullptr ) -> shader_t *;
+	auto loadMaterial( const wsw::StringView &name, int type, bool forceDefault ) -> shader_t *;
 
 	[[nodiscard]]
 	auto loadDefaultMaterial( const wsw::StringView &name, int type ) -> shader_t *;
@@ -743,8 +748,6 @@ class MaterialParser {
 	float m_offsetMappingScale { 0.0f };
 
 	float m_portalDistance { 0.0f };
-
-	int m_imageTags { 0 };
 
 	int m_conditionalBlockDepth { 0 };
 
@@ -945,7 +948,7 @@ class MaterialParser {
 
 	[[nodiscard]]
 	auto findImage( const wsw::StringView &name, int flags ) -> Texture * {
-		return m_materialFactory->findImage( name, flags, m_imageTags );
+		return m_materialFactory->findImage( name, flags );
 	}
 
 	void fixLightmapsForVertexLight();

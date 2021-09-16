@@ -56,8 +56,9 @@ void MaterialFactory::release2DMaterialBypassingCache( shader_t *material ) {
 	if( material ) {
 		auto *image = material->passes[0].images[0];
 		assert( image );
+		TextureCache::instance()->getUnderlyingFactory()->releaseRaw2DTexture( (Raw2DTexture *)image );
 		material->~shader_t();
-		::free( material );
+		Q_free( material );
 	}
 }
 
@@ -77,17 +78,8 @@ auto MaterialFactory::initMaterial( int type, const wsw::HashedStringView &clean
 	assert( memSpec.sizeSoFar() >= sizeof( shader_t ) );
 	auto nameSpec = memSpec.add<char>( cleanName.size() + 1 );
 
-	// TODO: Overload a global delete operator for material
-	void *mem = malloc( memSpec.sizeSoFar() );
-	if( !mem ) {
-		throw std::bad_alloc();
-	}
-
-	// TODO: Should call constructors for all contained items
-	std::memset( mem, 0, memSpec.sizeSoFar() );
-
-	auto *s = new( mem )shader_t;
-	// TODO... all this initialization belongs to a (not yet implemented) constructor
+	void *const mem = Q_malloc( memSpec.sizeSoFar() );
+	auto *const s = new( mem )shader_t;
 	s->type = (decltype( s->type ) )type;
 
 	if( type >= SHADER_TYPE_BSP_MIN && type <= SHADER_TYPE_BSP_MAX ) {
@@ -128,7 +120,7 @@ auto MaterialFactory::newDefaultVertexMaterial( const wsw::HashedStringView &cle
 	pass->tcgen = TC_GEN_BASE;
 	pass->rgbgen.type = RGB_GEN_VERTEX;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
-	pass->images[0] = findImage( name, 0, IT_SRGB );
+	pass->images[0] = findImage( name, IT_SRGB );
 
 	return s;
 }
@@ -143,7 +135,7 @@ auto MaterialFactory::newDefaultDeluxeMaterial( const wsw::HashedStringView &cle
 
 	Texture *images[3] { nullptr, nullptr, nullptr };
 	// TODO: Name or clean name?
-	loadMaterial( images, name, 0, s->imagetags );
+	loadMaterial( images, name, 0 );
 
 	s->flags = SHADER_DEPTHWRITE | SHADER_CULL_FRONT | SHADER_LIGHTMAP;
 	s->vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT | VATTRIB_LMCOORDS0_BIT | VATTRIB_NORMAL_BIT | VATTRIB_SVECTOR_BIT;
@@ -157,7 +149,7 @@ auto MaterialFactory::newDefaultDeluxeMaterial( const wsw::HashedStringView &cle
 	pass->rgbgen.type = RGB_GEN_IDENTITY;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->program_type = GLSL_PROGRAM_TYPE_MATERIAL;
-	pass->images[0] = findImage( name, 0, IT_SRGB );
+	pass->images[0] = findImage( name, IT_SRGB );
 	pass->images[1] = images[0]; // normalmap
 	pass->images[2] = images[1]; // glossmap
 	pass->images[3] = images[2]; // decalmap
@@ -183,7 +175,7 @@ auto MaterialFactory::newDefaultCoronaMaterial( const wsw::HashedStringView &cle
 	pass->rgbgen.type = RGB_GEN_VERTEX;
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->tcgen = TC_GEN_BASE;
-	pass->images[0] = findImage( wsw::StringView( "*corona" ), 0, IT_SPECIAL );
+	pass->images[0] = findImage( wsw::StringView( "*corona" ), IT_SPECIAL );
 
 	return s;
 }
@@ -199,7 +191,7 @@ auto MaterialFactory::newDefaultDiffuseMaterial( const wsw::HashedStringView &cl
 
 	// load material images
 	// TODO: Name or clean name?
-	loadMaterial( materialImages, cleanName, 0, s->imagetags );
+	loadMaterial( materialImages, cleanName, 0 );
 
 	s->flags = SHADER_DEPTHWRITE | SHADER_CULL_FRONT;
 	s->vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT | VATTRIB_NORMAL_BIT;
@@ -213,7 +205,7 @@ auto MaterialFactory::newDefaultDiffuseMaterial( const wsw::HashedStringView &cl
 	pass->alphagen.type = ALPHA_GEN_IDENTITY;
 	pass->tcgen = TC_GEN_BASE;
 	pass->program_type = GLSL_PROGRAM_TYPE_MATERIAL;
-	pass->images[0] = findImage( name, 0, IT_SRGB );
+	pass->images[0] = findImage( name, IT_SRGB );
 	pass->images[1] = materialImages[0]; // normalmap
 	pass->images[2] = materialImages[1]; // glossmap
 	pass->images[3] = materialImages[2]; // decalmap
@@ -243,9 +235,9 @@ auto MaterialFactory::newDefault2DLikeMaterial( int type,
 	pass->alphagen.type = ALPHA_GEN_VERTEX;
 	pass->tcgen = TC_GEN_BASE;
 	if( type == SHADER_TYPE_2D_LINEAR ) {
-		pass->images[0] = findImage( name, s->flags, IT_SPECIAL | IT_SYNC );
+		pass->images[0] = findImage( name, s->flags | IT_SPECIAL | IT_SYNC );
 	} else if( type != SHADER_TYPE_2D_RAW ) {
-		pass->images[0] = findImage( name, s->flags, IT_SPECIAL | IT_SYNC | IT_SRGB );
+		pass->images[0] = findImage( name, s->flags | IT_SPECIAL | IT_SYNC | IT_SRGB );
 	}
 
 	return s;
@@ -285,6 +277,13 @@ auto MaterialFactory::newFogMaterial( const wsw::HashedStringView &cleanName, co
 	s->flags = SHADER_CULL_FRONT;
 	s->numpasses = 0;
 	return s;
+}
+
+void MaterialFactory::destroyMaterial( shader_s *material ) {
+	if( material ) {
+		material->~shader_s();
+		Q_free( material );
+	}
 }
 
 class BuiltinTexMatcher {
@@ -348,7 +347,7 @@ static BuiltinTexMatcher builtinTexMatcher;
 
 static const wsw::StringView kLightmapPrefix( "*lm" );
 
-auto MaterialFactory::findImage( const wsw::StringView &name, int flags, int tags ) -> Texture * {
+auto MaterialFactory::findImage( const wsw::StringView &name, int flags ) -> Texture * {
 	if( const auto maybeBuiltinTexNum = builtinTexMatcher.match( name ) ) {
 		return TextureCache::instance()->getBuiltinTexture( *maybeBuiltinTexNum );
 	}
@@ -360,11 +359,11 @@ auto MaterialFactory::findImage( const wsw::StringView &name, int flags, int tag
 	Texture *texture;
 	auto *const textureCache = TextureCache::instance();
 	if( flags & IT_CUBEMAP ) {
-		if( !( texture = textureCache->getMaterialCubemap( name, flags, tags ) ) ) {
+		if( !( texture = textureCache->getMaterialCubemap( name, flags ) ) ) {
 			texture = textureCache->whiteCubemapTexture();
 		}
 	} else {
-		if( !( texture = textureCache->getMaterial2DTexture( name, flags, tags ) ) ) {
+		if( !( texture = textureCache->getMaterial2DTexture( name, flags ) ) ) {
 			texture = textureCache->noTexture();
 		}
 	}
@@ -372,22 +371,22 @@ auto MaterialFactory::findImage( const wsw::StringView &name, int flags, int tag
 	return texture;
 }
 
-void MaterialFactory::loadMaterial( Texture **images, const wsw::StringView &fullName, int addFlags, int imagetags ) {
+void MaterialFactory::loadMaterial( Texture **images, const wsw::StringView &fullName, int addFlags ) {
 	// set defaults
 	images[0] = images[1] = images[2] = nullptr;
 
 	auto *const textureCache = TextureCache::instance();
 	// load normalmap image
-	images[0] = textureCache->getMaterial2DTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ), imagetags );
+	images[0] = textureCache->getMaterial2DTexture( fullName, kNormSuffix, ( addFlags | IT_NORMALMAP ) );
 
 	// load glossmap image
 	if( r_lighting_specular->integer ) {
-		images[1] = textureCache->getMaterial2DTexture( fullName, kGlossSuffix, addFlags, imagetags );
+		images[1] = textureCache->getMaterial2DTexture( fullName, kGlossSuffix, addFlags );
 	}
 
-	images[2] = textureCache->getMaterial2DTexture( fullName, kDecalSuffix, addFlags, imagetags );
+	images[2] = textureCache->getMaterial2DTexture( fullName, kDecalSuffix, addFlags );
 	if( !images[2] ) {
-		images[2] = textureCache->getMaterial2DTexture( fullName, kAddSuffix, addFlags, imagetags );
+		images[2] = textureCache->getMaterial2DTexture( fullName, kAddSuffix, addFlags );
 	}
 }
 

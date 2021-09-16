@@ -2169,6 +2169,7 @@ void RB_DrawShadedElements( void ) {
 		if( pass->flags & SHADERPASS_LIGHTMAP ) {
 			continue;
 		}
+		//Com_Printf( "Rendering shader %s\n", rb.currentShader->name.data() );
 		RB_RenderPass( pass );
 	}
 

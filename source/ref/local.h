@@ -152,12 +152,12 @@ public:
 	Texture *nextInBin() { return next[BinLinks]; }
 
 	int flags { 0 };
-	GLuint texnum { 0 };                              // gl texture binding
+	GLuint texnum { 0 };              // gl texture binding
 	GLuint target { 0 };
-	int width { -1 }, height { -1};                          // source image
-	int layers { -1 };                                 // texture array size
+	int width { -1 }, height { -1 };  // source image
+	int layers { -1 };                // texture array size
 	int samples { -1 };
-	int tags;                                   // usage tags of the image
+	int tags { 0 };                   // usage tags of the image, illegal by default so we're forced to set proper ones
 };
 
 class FontMask : public Texture {
@@ -226,7 +226,9 @@ protected:
 		this->flags = flags;
 	}
 public:
-	unsigned registrationSequence { 0 };
+	int registrationSequence { 0 };
+	unsigned binIndex { ~0u };
+
 	[[nodiscard]]
 	auto getName() const -> const wsw::HashedStringView & { return m_name; }
 };
@@ -361,14 +363,17 @@ private:
 	auto createUITextureHandleWrapper() -> Texture *;
 
 	void releaseBuiltinTexture( Texture *texture );
+
+	void releaseMaterialTexture( Material2DTexture *texture );
+	void releaseMaterialCubemap( MaterialCubemap *cubemap );
 public:
 	TextureFactory();
 
 	[[nodiscard]]
-	auto loadMaterialTexture( const wsw::HashedStringView &name, unsigned flags, unsigned tags ) -> Material2DTexture *;
+	auto loadMaterialTexture( const wsw::HashedStringView &name, unsigned flags ) -> Material2DTexture *;
 
 	[[nodiscard]]
-	auto loadMaterialCubemap( const wsw::HashedStringView &name, unsigned flags, unsigned tags ) -> MaterialCubemap *;
+	auto loadMaterialCubemap( const wsw::HashedStringView &name, unsigned flags ) -> MaterialCubemap *;
 
 	[[nodiscard]]
 	auto createFontMask( unsigned w, unsigned h, const uint8_t *data ) -> Texture *;
@@ -382,6 +387,15 @@ public:
 	void replaceLightmapLayer( Texture *texture, unsigned layer, const uint8_t *data );
 
 	void replaceFontMaskSamples( Texture *texture, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data );
+
+	[[nodiscard]]
+	auto asMaterial2DTexture( Texture *texture ) -> Material2DTexture * {
+		return m_materialTexturesAllocator.mayOwn( texture ) ? (Material2DTexture *)texture : nullptr;
+	}
+	[[nodiscard]]
+	auto asMaterialCubemap( Texture *texture ) -> MaterialCubemap * {
+		return m_materialCubemapsAllocator.mayOwn( texture ) ? (MaterialCubemap *)texture : nullptr;
+	}
 
 	[[nodiscard]]
 	auto createRaw2DTexture() -> Raw2DTexture *;
@@ -421,8 +435,7 @@ class TextureCache : TextureManagementShared {
 	template <typename T, typename Method>
 	[[nodiscard]]
 	auto getTexture(  const wsw::StringView &name, const wsw::StringView &suffix,
-					  unsigned flags, unsigned tags,
-					  T **listHead, T **bins, Method methodOfFactory ) -> T *;
+					  unsigned flags, T **listHead, T **bins, Method methodOfFactory ) -> T *;
 
 	void applyFilterOrAnisoInList( Texture *listHead, TextureFilter filter,
 								   int aniso, bool applyFilter, bool applyAniso );
@@ -453,15 +466,15 @@ public:
 
 	[[nodiscard]]
 	auto getMaterial2DTexture( const wsw::StringView &name, const wsw::StringView &suffix,
-							   unsigned flags, unsigned tags ) -> Material2DTexture *;
+							   unsigned tags ) -> Material2DTexture *;
 
 	[[nodiscard]]
-	auto getMaterial2DTexture( const wsw::StringView &name, unsigned flags, unsigned tags ) -> Material2DTexture * {
-		return getMaterial2DTexture( name, wsw::StringView(), flags, tags );
+	auto getMaterial2DTexture( const wsw::StringView &name, unsigned flags ) -> Material2DTexture * {
+		return getMaterial2DTexture( name, wsw::StringView(), flags );
 	}
 
 	[[nodiscard]]
-	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags, unsigned tags ) -> MaterialCubemap *;
+	auto getMaterialCubemap( const wsw::StringView &name, unsigned flags ) -> MaterialCubemap *;
 
 	[[nodiscard]]
 	auto noTexture() -> Texture * { return getBuiltinTexture( BuiltinTexNum::No ); }

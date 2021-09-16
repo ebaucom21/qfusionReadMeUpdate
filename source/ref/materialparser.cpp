@@ -678,15 +678,15 @@ bool MaterialParser::parseMaterial() {
 	// set defaults
 	const auto mipSize = m_minMipSize.value_or( 1 );
 
-	pass->images[1] = textureCache->getMaterial2DTexture( m_name, kNormSuffix, imageFlags, m_imageTags );
+	pass->images[1] = textureCache->getMaterial2DTexture( m_name, kNormSuffix, imageFlags );
 
 	// load glossmap image
 	if( r_lighting_specular->integer ) {
-		pass->images[2] = textureCache->getMaterial2DTexture( m_name, kGlossSuffix, imageFlags, m_imageTags );
+		pass->images[2] = textureCache->getMaterial2DTexture( m_name, kGlossSuffix, imageFlags );
 	}
 
-	if( !( pass->images[3] = textureCache->getMaterial2DTexture( m_name, kDecalSuffix, imageFlags, m_imageTags ) ) ) {
-		pass->images[3] = textureCache->getMaterial2DTexture( m_name, kAddSuffix, imageFlags, m_imageTags );
+	if( !( pass->images[3] = textureCache->getMaterial2DTexture( m_name, kDecalSuffix, imageFlags ) ) ) {
+		pass->images[3] = textureCache->getMaterial2DTexture( m_name, kAddSuffix, imageFlags );
 	}
 
 	return true;
@@ -1522,6 +1522,12 @@ shader_t *MaterialParser::build() {
 	s->flags = this->m_flags;
 	s->sort = this->m_sort;
 	s->vattribs = attribs;
+
+	if( s->type >= SHADER_TYPE_BSP_MIN && s->type <= SHADER_TYPE_BSP_MAX ) {
+		s->imagetags = IMAGE_TAG_WORLD;
+	} else {
+		s->imagetags = IMAGE_TAG_GENERIC;
+	}
 
 	s->passes = passesSpec.get( baseMem );
 	s->numpasses = m_passes.size();

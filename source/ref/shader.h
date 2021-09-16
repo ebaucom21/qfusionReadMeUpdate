@@ -257,14 +257,15 @@ struct DeformSig {
 
 // Shader information
 typedef struct alignas( 8 ) shader_s {
-	enum { kListLinks, kBinLinks };
+	enum { ListLinks, BinLinks };
 
 	shader_s *prev[2] { nullptr, nullptr };
 	shader_s *next[2] { nullptr, nullptr };
 
 	wsw::HashedStringView name;
 
-	unsigned int id { 0 };
+	unsigned id { 0 };
+	unsigned binIndex { ~0U };
 	int registrationSequence { 0 };
 	shaderType_e type { (shaderType_e)0 };
 

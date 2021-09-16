@@ -484,8 +484,7 @@ bool TextureFactory::updateRaw2DTexture( Raw2DTexture *texture, const wsw::Strin
 	return true;
 }
 
-auto TextureFactory::loadMaterialTexture( const wsw::HashedStringView &name,
-										  unsigned flags, unsigned tags ) -> Material2DTexture * {
+auto TextureFactory::loadMaterialTexture( const wsw::HashedStringView &name, unsigned flags ) -> Material2DTexture * {
 	if( m_materialTexturesAllocator.isFull() ) {
 		return nullptr;
 	}
@@ -527,8 +526,7 @@ auto TextureFactory::loadMaterialTexture( const wsw::HashedStringView &name,
 	return new( mem )Material2DTexture( ownedName, handle, bitmapProps, flags );
 }
 
-auto TextureFactory::loadMaterialCubemap( const wsw::HashedStringView &name,
-										  unsigned flags, unsigned tags ) -> MaterialCubemap * {
+auto TextureFactory::loadMaterialCubemap( const wsw::HashedStringView &name, unsigned flags ) -> MaterialCubemap * {
 	if( m_materialCubemapsAllocator.isFull() ) {
 		return nullptr;
 	}
@@ -749,6 +747,7 @@ auto TextureFactory::createBuiltin2DTexture( const Builtin2DTextureData &data ) 
 	texture->height = data.height;
 	texture->flags = data.flags;
 	texture->samples = data.samples;
+	texture->tags = IMAGE_TAG_BUILTIN;
 	return texture;
 }
 
@@ -850,7 +849,7 @@ auto TextureFactory::createBuiltinWhiteCubemap() -> Texture * {
 	texture->layers = 0;
 	texture->samples = 3;
 	texture->flags = flags;
-	texture->tags = IMAGE_TAG_GENERIC;
+	texture->tags = IMAGE_TAG_BUILTIN;
 	return texture;
 }
 
@@ -938,6 +937,16 @@ void TextureFactory::releaseBuiltinTexture( Texture *texture ) {
 		qglDeleteTextures( 1, &texture->texnum );
 		m_builtinTexturesAllocator.free( texture );
 	}
+}
+
+void TextureFactory::releaseMaterialTexture( Material2DTexture *texture ) {
+	qglDeleteTextures( 1, &texture->texnum );
+	m_materialTexturesAllocator.free( texture );
+}
+
+void TextureFactory::releaseMaterialCubemap( MaterialCubemap *cubemap ) {
+	qglDeleteTextures( 1, &cubemap->texnum );
+	m_materialCubemapsAllocator.free( cubemap );
 }
 
 static void wsw_stb_write_func( void *context, void *data, int size ) {

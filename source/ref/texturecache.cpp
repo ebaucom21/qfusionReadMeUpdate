@@ -111,7 +111,7 @@ template <typename T>
 auto TextureCache::findCachedTextureInBin( T *binHead, const wsw::HashedStringView &name, unsigned flags ) -> T * {
 	for( T *texture = binHead; texture; texture = (T *)texture->next[Texture::BinLinks] ) {
 		if( texture->getName().equalsIgnoreCase( name ) ) {
-			if( ( texture->flags & ~IT_LOADFLAGS ) == ( flags & ~IT_LOADFLAGS ) ) {
+			if( ( (unsigned)texture->flags & ~IT_LOADFLAGS ) == ( flags & ~IT_LOADFLAGS ) ) {
 				return texture;
 			}
 		}
@@ -122,35 +122,28 @@ auto TextureCache::findCachedTextureInBin( T *binHead, const wsw::HashedStringVi
 
 template <typename T, typename Method>
 auto TextureCache::getTexture( const wsw::StringView &name, const wsw::StringView &suffix,
-							   unsigned flags, unsigned tags,
-							   T **listHead, T **bins, Method methodOfFactory ) -> T * {
+							   unsigned flags, T **listHead, T **bins, Method methodOfFactory ) -> T * {
 	T *texture = nullptr;
 	if( const auto maybeCleanName = makeCleanName( name, suffix ) ) {
 		const wsw::HashedStringView hashedCleanName( *maybeCleanName );
 		const auto binIndex = hashedCleanName.getHash() % kNumHashBins;
 		if( !( texture = findCachedTextureInBin( bins[binIndex], hashedCleanName, flags ) ) ) {
-			if( ( texture = ( &m_factory->*methodOfFactory )( hashedCleanName, flags, tags ) ) ) {
+			if( ( texture = ( &m_factory->*methodOfFactory )( hashedCleanName, flags ) ) ) {
 				wsw::link( texture, &bins[binIndex], Texture::BinLinks );
 				wsw::link( texture, listHead, Texture::ListLinks );
+				texture->binIndex = binIndex;
 			}
 		}
-	}
-	if( texture ) {
-		touchTexture( texture, tags );
 	}
 	return texture;
 }
 
-auto TextureCache::getMaterial2DTexture( const wsw::StringView &name, const wsw::StringView &suffix,
-									     unsigned flags, unsigned tags ) -> Material2DTexture * {
-	return getTexture( name, suffix, flags, tags, &m_materialTexturesHead,
-					   m_materialTextureBins, &TextureFactory::loadMaterialTexture );
+auto TextureCache::getMaterial2DTexture( const wsw::StringView &name, const wsw::StringView &suffix, unsigned flags ) -> Material2DTexture * {
+	return getTexture( name, suffix, flags, &m_materialTexturesHead, m_materialTextureBins, &TextureFactory::loadMaterialTexture );
 }
 
-auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned flags,
-									   unsigned tags ) -> MaterialCubemap * {
-	return getTexture( name, ""_asView, flags, tags, &m_materialCubemapsHead,
-					   m_materialCubemapBins, &TextureFactory::loadMaterialCubemap );
+auto TextureCache::getMaterialCubemap( const wsw::StringView &name, unsigned flags ) -> MaterialCubemap * {
+	return getTexture( name, ""_asView, flags, &m_materialCubemapsHead, m_materialCubemapBins, &TextureFactory::loadMaterialCubemap );
 }
 
 auto TextureCache::wrapUITextureHandle( GLuint externalHandle ) -> Texture * {
@@ -350,8 +343,42 @@ void TextureCache::applyFilter( const wsw::StringView &name, int anisoLevel ) {
 }
 
 void TextureCache::touchTexture( Texture *texture, unsigned tags ) {
+	assert( tags );
+	assert( ( tags & ~( IMAGE_TAG_GENERIC | IMAGE_TAG_BUILTIN | IMAGE_TAG_WORLD ) ) == 0 );
+	assert( ( texture->tags & ~( IMAGE_TAG_GENERIC | IMAGE_TAG_BUILTIN | IMAGE_TAG_WORLD ) ) == 0 );
 	texture->tags |= tags;
+	MaterialTexture *materialTexture = m_factory.asMaterial2DTexture( texture );
+	if( !materialTexture ) {
+		materialTexture = m_factory.asMaterialCubemap( texture );
+	}
+	if( materialTexture ) {
+		materialTexture->registrationSequence = rsh.registrationSequence;
+	}
 }
 
-void TextureCache::freeUnusedWorldTextures() {}
-void TextureCache::freeAllUnusedTextures() {}
+void TextureCache::freeUnusedWorldTextures() {
+	const int registrationSequence = rsh.registrationSequence;
+	Material2DTexture *nextTexture = nullptr;
+	for( Material2DTexture *texture = m_materialTexturesHead; texture; texture = nextTexture ) {
+		nextTexture = (Material2DTexture *)texture->nextInList();
+		if( ( texture->tags & IMAGE_TAG_WORLD ) && ( texture->registrationSequence != registrationSequence ) ) {
+			// TODO: Could something better be done with these casts?
+			wsw::unlink( (Texture *)texture, (Texture **)&m_materialTexturesHead, Texture::ListLinks );
+			wsw::unlink( (Texture *)texture, (Texture **)&m_materialTextureBins[texture->binIndex], Texture::BinLinks );
+			m_factory.releaseMaterialTexture( texture );
+		}
+	}
+	MaterialCubemap *nextCubemap = nullptr;
+	for( MaterialCubemap *texture = m_materialCubemapsHead; texture; texture = nextCubemap ) {
+		nextCubemap = (MaterialCubemap *)texture->nextInList();
+		if( ( texture->tags & IMAGE_TAG_WORLD ) && ( texture->registrationSequence != registrationSequence ) ) {
+			wsw::unlink( (Texture *)texture, (Texture **)&m_materialCubemapsHead, Texture::ListLinks );
+			wsw::unlink( (Texture *)texture, (Texture **)&m_materialCubemapBins[texture->binIndex], Texture::BinLinks );
+			m_factory.releaseMaterialCubemap( texture );
+		}
+	}
+}
+
+void TextureCache::freeAllUnusedTextures() {
+	freeUnusedWorldTextures();
+}
