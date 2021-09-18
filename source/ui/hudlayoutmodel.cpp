@@ -163,6 +163,7 @@ bool HudEditorModel::save( const QByteArray &fileName ) {
 	// Make sure that the file handle has been closed to the moment of reloading
 	if( hasWrittenSuccessfully ) {
 		reloadExistingHuds();
+		Q_EMIT hudUpdated( fileName );
 	}
 	return hasWrittenSuccessfully;
 }

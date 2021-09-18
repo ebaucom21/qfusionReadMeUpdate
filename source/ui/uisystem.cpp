@@ -830,6 +830,8 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 
 	connect( m_component, &QQmlComponent::statusChanged, this, &QtUISystem::onComponentStatusChanged );
 	m_component->loadUrl( QUrl( "qrc:/RootItem.qml" ) );
+
+	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudDataModel, &HudDataModel::onHudUpdated );
 }
 
 void QtUISystem::renderQml() {

@@ -319,6 +319,8 @@ public:
 
 	Q_PROPERTY( unsigned maxHudNameLength READ getMaxHudNameLength CONSTANT );
 
+	Q_SIGNAL void hudUpdated( const QByteArray &name );
+
 	[[nodiscard]]
 	Q_INVOKABLE QObject *getLayoutModel();
 	[[nodiscard]]

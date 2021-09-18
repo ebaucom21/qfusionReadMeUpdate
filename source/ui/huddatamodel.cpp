@@ -789,6 +789,24 @@ void HudDataModel::checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model,
 	}
 }
 
+void HudDataModel::onHudUpdated( const QByteArray &name ) {
+	std::pair<InGameHudLayoutModel *, const cvar_s *> modelsAndVars[2] {
+		{ &m_clientLayoutModel, m_clientHudVar }, { &m_specLayoutModel, m_specHudVar }
+	};
+	const wsw::StringView nameView( name.data(), (size_t)name.size() );
+	for( auto [model, var] : modelsAndVars ) {
+		if( name.compare( var->string, Qt::CaseInsensitive ) == 0 ) {
+			if( !model->load( nameView ) ) {
+				if( nameView.equalsIgnoreCase( kDefaultHudName ) ) {
+					Cvar_ForceSet( var->name, kDefaultHudName.data() );
+					// See checkHudVarChanges()
+					(void)model->load( kDefaultHudName );
+				}
+			}
+		}
+	}
+}
+
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	checkHudVarChanges( m_clientHudVar, &m_clientLayoutModel, &m_clientHudName );
 	checkHudVarChanges( m_specHudVar, &m_specLayoutModel, &m_specHudName );

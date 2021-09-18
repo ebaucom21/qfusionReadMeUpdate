@@ -407,6 +407,8 @@ public:
 
 	HudDataModel();
 
+	Q_SLOT void onHudUpdated( const QByteArray &name );
+
 	void resetFragsFeed() {
 		m_fragsFeedModel.reset();
 	}
