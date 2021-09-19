@@ -282,11 +282,15 @@ const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingItemAndItemAnchorPairs
 	{ VCenter | Left, VCenter | Right },
 	{ VCenter | Right, VCenter | Left },
 
+	// Pairs of opposite corners
+	{ Top | Left, Bottom | Left }, { Top | Right, Bottom | Left },
+	{ Bottom | Left, Top | Right }, { Bottom | Right, Top | Left },
+
 	// Corner-corner pairs that don't lead to overlapping
-	{ Top | Left, Bottom | Left }, { Top | Left, Bottom | Right },
-	{ Top | Right, Bottom | Left }, { Top | Right, Bottom | Right },
-	{ Bottom | Left, Top | Left }, { Bottom | Left, Top | Right },
-	{ Bottom | Right, Top | Left }, { Bottom | Right, Top | Right },
+	{ Top | Left, Bottom | Left }, { Top | Left, Top | Right },
+	{ Top | Right, Bottom | Right }, { Top | Right, Top | Left },
+	{ Bottom | Left, Top | Left }, { Bottom | Left, Bottom | Right },
+	{ Bottom | Right, Top | Right }, { Bottom | Right, Bottom | Left },
 
 	// Corners to mid points of sides
 	{ Top | Left, Bottom | HCenter }, { Top | Right, Bottom | HCenter },
@@ -845,9 +849,9 @@ void HudEditorModel::updateMarkers( int draggedIndex ) {
 
 [[nodiscard]]
 static inline bool isClose( const QPointF &pt1, const QPointF &pt2 ) {
-	QPointF diff( pt1 - pt2 );
+	const QPointF diff( pt1 - pt2 );
 	// Units are device-independent so this is correct
-	return diff.x() * diff.x() + diff.y() * diff.y() < 12 * 12;
+	return diff.x() * diff.x() + diff.y() * diff.y() < 8.0 * 8.0;
 }
 
 template <typename Range>
