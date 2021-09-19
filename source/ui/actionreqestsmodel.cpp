@@ -62,8 +62,8 @@ void ActionRequestsModel::touch( const wsw::StringView &tag, unsigned timeout,
 	for( Entry &entry: m_entries ) {
 		if( entry.tag.equalsIgnoreCase( tag ) ) {
 			// Update the desc if needed
-			if( entry.desc.compare( QLatin1String( desc.data(), desc.size() ), Qt::CaseSensitive ) != 0 ) {
-				entry.desc = QString::fromUtf8( desc.data(), desc.size() );
+			if( entry.desc.compare( QLatin1String( desc.data(), (int)desc.size() ), Qt::CaseSensitive ) != 0 ) {
+				entry.desc = toStyledText( desc );
 				const auto row = (int)( std::addressof( entry ) - m_entries.begin() );
 				const QModelIndex modelIndex( index( row, 0 ) );
 				Q_EMIT dataChanged( modelIndex, modelIndex );
@@ -120,7 +120,8 @@ bool ActionRequestsModel::handleKeyEvent( int quakeKey ) {
 	for( const auto &entry: m_entries ) {
 		if( const auto maybeCommand = entry.getMatchingAction( quakeKey ) ) {
 			assert( maybeCommand->isZeroTerminated() );
-			Cbuf_ExecuteText( EXEC_APPEND, maybeCommand->data() );
+			Cbuf_AddText( maybeCommand->data() );
+			Cbuf_AddText( "\n" );
 			removeAt( (unsigned)( std::addressof( entry ) - m_entries.begin() ) );
 			return true;
 		}

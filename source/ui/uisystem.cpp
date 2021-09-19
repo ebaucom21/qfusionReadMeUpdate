@@ -1793,41 +1793,41 @@ void QtUISystem::updateCVarAwareControls() {
 }
 
 void QtUISystem::quit() {
-	Cbuf_AddText( "quit" );
+	Cbuf_AddText( "quit\n" );
 }
 
 void QtUISystem::disconnect() {
-	Cbuf_AddText( "disconnect" );
+	Cbuf_AddText( "disconnect\n" );
 }
 
 void QtUISystem::spectate() {
 	assert( m_canSpectate );
-	Cbuf_AddText( "spec" );
+	Cbuf_AddText( "spec\n" );
 }
 
 void QtUISystem::join() {
 	assert( m_canJoin );
-	Cbuf_AddText( "join" );
+	Cbuf_AddText( "join\n" );
 }
 
 void QtUISystem::joinAlpha() {
 	assert( m_canJoinAlpha );
-	Cbuf_AddText( "join alpha" );
+	Cbuf_AddText( "join alpha\n" );
 }
 
 void QtUISystem::joinBeta() {
 	assert( m_canJoinBeta );
-	Cbuf_AddText( "join beta" );
+	Cbuf_AddText( "join beta\n" );
 }
 
 void QtUISystem::toggleReady() {
 	assert( m_canBeReady );
-	Cbuf_AddText( "ready" );
+	Cbuf_AddText( "ready\n" );
 }
 
 void QtUISystem::toggleChallengerStatus() {
 	assert( m_canToggleChallengerStatus );
-	Cbuf_AddText( m_isInChallengersQueue ? "spec" : "join" );
+	Cbuf_AddText( m_isInChallengersQueue ? "spec\n" : "join\n" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {
@@ -1839,7 +1839,8 @@ void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool
 	}
 	command << ' ' << wsw::StringView( name.data(), (unsigned)name.size() );
 	command << ' ' << wsw::StringView( value.data(), (unsigned)value.size() );
-	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+	command << '\n';
+	Cbuf_AddText( command.data() );
 }
 
 auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {

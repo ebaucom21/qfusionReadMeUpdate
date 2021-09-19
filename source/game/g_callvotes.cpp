@@ -1969,7 +1969,7 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 				ent->r.client->netname.data(), G_CallVotes_String( &callvoteState.vote ) );
 
 	G_PrintMsg( NULL, "Press " S_COLOR_YELLOW "F1" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote yes"
-				S_COLOR_WHITE " or " S_COLOR_YELLOW "F2" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote no" );
+				S_COLOR_WHITE " or " S_COLOR_YELLOW "F2" S_COLOR_WHITE " to " S_COLOR_YELLOW "vote no\n" );
 
 	RequestActions();
 
