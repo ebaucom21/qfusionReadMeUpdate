@@ -275,12 +275,14 @@ void Sys_AppActivate( void ) {
 
 //========================================================================
 
+static char exe[4] = "exe";
+
 /*
 * ParseCommandLine
 */
 static void ParseCommandLine( LPSTR lpCmdLine ) {
 	argc = 1;
-	argv[0] = "exe";
+	argv[0] = exe;
 
 	while( *lpCmdLine && ( argc < MAX_NUM_ARGVS ) ) {
 		while( *lpCmdLine && ( *lpCmdLine <= 32 || *lpCmdLine > 126 ) )

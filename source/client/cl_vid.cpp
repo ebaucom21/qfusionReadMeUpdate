@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // is used for both the software and OpenGL rendering versions of the
 // qfusion refresh engine.
 #include "client.h"
-#include "xpm.h"
 #include "../ui/uisystem.h"
 
 cvar_t *vid_width, *vid_height;
@@ -109,34 +108,9 @@ static void VID_NewWindow( int width, int height ) {
 	viddef.height = height;
 }
 
-// Ignore conversion from a string literal to char * for XPM data
-#ifndef _MSC_VER
-#pragma GCC diagnostic push
-#	ifdef __clang__
-#	pragma GCC diagnostic ignored "-Wwritable-strings"
-#	else
-#	pragma GCC diagnostic ignored "-Wwrite-strings"
-#	endif
-#endif
-
 static rserr_t VID_Sys_Init_( void *parentWindow, bool verbose ) {
-	rserr_t res;
-#include APP_XPM_ICON
-	int *xpm_icon;
-
-	xpm_icon = XPM_ParseIcon( sizeof( app256x256_xpm ) / sizeof( app256x256_xpm[0] ), app256x256_xpm );
-
-	res = VID_Sys_Init( APPLICATION_UTF8, APP_SCREENSHOTS_PREFIX, APP_STARTUP_COLOR, xpm_icon,
-						parentWindow, verbose );
-
-	free( xpm_icon );
-
-	return res;
+	return VID_Sys_Init( APPLICATION_UTF8, APP_SCREENSHOTS_PREFIX, APP_STARTUP_COLOR, nullptr, parentWindow, verbose );
 }
-
-#ifndef _MSC_VER
-#pragma GCC diagnostic pop
-#endif
 
 /*
 ** VID_AppActivate
