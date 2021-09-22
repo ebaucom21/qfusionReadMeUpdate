@@ -10,7 +10,8 @@ Item {
     readonly property var availableStrongCrosshairs: hudDataModel.getAvailableStrongCrosshairs()
     readonly property bool isNotInTransition: root.StackView.view && !root.StackView.view.busy
     readonly property color underlayColor: Qt.rgba(1.0, 1.0, 1.0, 0.07)
-    readonly property color altUnderlayColor: Qt.rgba(1.0, 1.0, 1.0, 0.05)
+    readonly property real innerPaneMargin: 20.0
+    readonly property real innerPaneWidth: 0.5 * root.width - innerPaneMargin
 
     Column {
         anchors.centerIn: parent
@@ -67,6 +68,13 @@ Item {
                     cvarName: "cg_separate_weapon_settings"
                 }
             }
+
+            SettingsLabel {
+                text: "Weapon-specific settings"
+                Layout.topMargin: 16
+                Layout.maximumWidth: 99999
+                horizontalAlignment: Qt.AlignHCenter
+            }
         }
 
         Loader {
@@ -82,6 +90,9 @@ Item {
         ColumnLayout {
             width: 0.67 * root.width
             spacing: 12
+            opacity: 0.0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Component.onCompleted: opacity = 1.0
 
             SettingsRow {
                 text: "Crosshair"
@@ -120,81 +131,106 @@ Item {
 
     Component {
         id: separateCrosshairsComponent
+
         Item {
-            // Wrapping in an item is the only way to align the crosshairs column properly
+            id: separateCrosshairsPane
             implicitWidth: root.width
             width: root.width
-            implicitHeight: separateCrosshairsColumn.implicitHeight
+            implicitHeight: Math.max(weaponsList.height, detailsPane.height)
+            opacity: 0.0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Component.onCompleted: opacity = 1.0
+
+            property int selectedIndex: 0
+            property string weaponShortName: hudDataModel.getWeaponShortName(selectedIndex + 1)
+
+            ListView {
+                id: weaponsList
+                width: innerPaneWidth
+                height: contentHeight
+                model: 10
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.horizontalCenter
+                anchors.rightMargin: innerPaneMargin
+                interactive: false
+                delegate: Label {
+                    width: innerPaneWidth
+                    height: 36
+                    horizontalAlignment: Qt.AlignRight
+                    verticalAlignment: Qt.AlignVCenter
+                    font.pointSize: 12
+                    font.weight: Font.Bold
+                    font.capitalization: Font.AllUppercase
+                    font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
+                    Behavior on font.letterSpacing { NumberAnimation { duration: 67 } }
+                    color: (mouseArea.containsMouse || selectedIndex === index) ? Material.accent : Material.foreground
+                    text: hudDataModel.getWeaponFullName(index + 1)
+                    MouseArea {
+                        id: mouseArea
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        width: parent.implicitWidth
+                        height: parent.height
+                        hoverEnabled: true
+                        onClicked: selectedIndex = index
+                    }
+                }
+            }
 
             ColumnLayout {
-                id: separateCrosshairsColumn
-                anchors.left: parent.left
-                // Try making it visually fit the column
-                anchors.leftMargin: 0.125 * parent.width + 4
+                id: detailsPane
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.horizontalCenter
+                anchors.leftMargin: innerPaneMargin
+                width: innerPaneWidth
+                spacing: 8
 
-                Repeater {
-                    model: 10
-                    delegate: Item {
-                        implicitHeight: 54
-                        width: 0.5 * root.width
-                        readonly property string weaponShortName: hudDataModel.getWeaponShortName(index + 1)
+                Rectangle {
+                    Layout.preferredWidth: 192
+                    Layout.preferredHeight: 192
+                    Layout.alignment: Qt.AlignLeft
+                    Layout.leftMargin: 12
+                    Layout.bottomMargin: 32
+                    color: root.underlayColor
 
-                        Rectangle {
-                            width: parent.width + 96
-                            height: parent.height + separateCrosshairsColumn.spacing
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.horizontalCenterOffset: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: index % 2 ? root.underlayColor : root.altUnderlayColor
-                        }
-
-                        RowLayout {
-                            spacing: 8
-                            width: 0.5 * root.width
-                            anchors.centerIn: parent
-
-                            Image {
-                                Layout.preferredWidth: 24
-                                Layout.preferredHeight: 24
-                                Layout.alignment: Qt.AlignVCenter
-                                fillMode: Image.PreserveAspectCrop
-                                mipmap: true
-                                smooth: true
-                                source: hudDataModel.getWeaponIconPath(index + 1)
-                            }
-
-                            CVarAwareCrosshairSelector {
-                                // Hide natively drawn parts when running transitions
-                                drawNativePart: root.StackView.view && !root.StackView.view.busy
-                                nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
-                                desiredWidthOrHeight: separateSizeSlider.value
-                                color: separateColorPicker.selectedColor || "white"
-                                fieldWidth: wsw.maxRegularCrosshairSize
-                                Layout.preferredWidth: implicitWidth
-                                Layout.preferredHeight: implicitHeight
-                                Layout.leftMargin: 16
-                                Layout.rightMargin: 16
-                                cvarName: "cg_crosshair_" + weaponShortName
-                                model: availableCrosshairs
-                            }
-
-                            CVarAwareSlider {
-                                id: separateSizeSlider
-                                Layout.preferredWidth: 3.0 * (wsw.maxRegularCrosshairSize - wsw.minRegularCrosshairSize)
-                                cvarName: "cg_crosshair_size_" + weaponShortName
-                                from: wsw.minRegularCrosshairSize
-                                to: wsw.maxRegularCrosshairSize
-                                stepSize: wsw.crosshairSizeStep
-                            }
-
-                            CVarAwareColorPicker {
-                                id: separateColorPicker
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.leftMargin: 32
-                                cvarName: "cg_crosshair_color_" + weaponShortName
-                            }
-                        }
+                    NativelyDrawnModel {
+                        visible: root.isNotInTransition
+                        anchors.fill: parent
+                        modelName: hudDataModel.getWeaponModelPath(selectedIndex + 1)
+                        viewOrigin: Qt.vector3d(48.0, 0.0, 20.0)
+                        modelOrigin: Qt.vector3d(0.0, 0.0, 0.0)
+                        desiredModelHeight: 16.0
+                        rotationSpeed: -60.0
+                        outlineHeight: 0.5
                     }
+                }
+
+                CVarAwareCrosshairSelector {
+                    drawNativePart: root.isNotInTransition
+                    nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
+                    desiredWidthOrHeight: separateSizeSlider.value
+                    color: separateColorPicker.selectedColor || "white"
+                    fieldWidth: wsw.maxRegularCrosshairSize
+                    Layout.preferredWidth: implicitWidth
+                    Layout.preferredHeight: implicitHeight
+                    underlayColor: root.underlayColor
+                    cvarName: "cg_crosshair_" + weaponShortName
+                    model: availableCrosshairs
+                }
+
+                CVarAwareSlider {
+                    id: separateSizeSlider
+                    Layout.alignment: Qt.AlignLeft
+                    cvarName: "cg_crosshair_size_" + weaponShortName
+                    from: wsw.minRegularCrosshairSize
+                    to: wsw.maxRegularCrosshairSize
+                    stepSize: wsw.crosshairSizeStep
+                }
+
+                CVarAwareColorPicker {
+                    id: separateColorPicker
+                    Layout.alignment: Qt.AlignLeft
+                    cvarName: "cg_crosshair_color_" + weaponShortName
                 }
             }
         }

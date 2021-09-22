@@ -18,7 +18,7 @@ Item {
         id: label
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width * (1.0 - contentBias)
+        width: parent.width * (1.0 - contentBias) - 0.5 * spacing
         wrapMode: Text.WordWrap
         maximumLineCount: 99
         horizontalAlignment: Qt.AlignRight

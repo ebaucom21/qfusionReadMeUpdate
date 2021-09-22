@@ -32,8 +32,9 @@ class WeaponPropsCache {
 	struct Entry {
 		QByteArray fullName;
 		QByteArray shortName;
-		QByteArray iconPath;
 		QColor color;
+		QByteArray iconPath;
+		QByteArray modelPath;
 	};
 
 	wsw::StaticVector<Entry, WEAP_TOTAL - 1> m_entries;
@@ -41,18 +42,49 @@ class WeaponPropsCache {
 	QStringList m_availableCrosshairs;
 public:
 	WeaponPropsCache() {
-		QByteArray prefix( "image://wsw/gfx/hud/icons/weapon/" );
+		QByteArray iconPrefix( "image://wsw/gfx/hud/icons/weapon/" );
+		QByteArray modelPrefix( "models/weapons/" );
 
-		m_entries.emplace_back( { "Gunblade", "gb", prefix + "gunblade", QColor::fromRgbF( 1.0, 1.0, 0.5 ) } );
-		m_entries.emplace_back( { "Machinegun", "mg", prefix + "machinegun", QColor::fromRgbF( 0.5, 0.5, 0.5 ) } );
-		m_entries.emplace_back( { "Riotgun", "rg", prefix + "riot", QColor::fromRgbF( 1.0, 0.5, 0.0 ) } );
-		m_entries.emplace_back( { "Grenade Launcher", "gl", prefix + "grenade", QColor::fromRgbF( 0.0, 0.0, 1.0 ) } );
-		m_entries.emplace_back( { "Rocket Launcher", "rl", prefix + "rocket", QColor::fromRgbF( 0.7, 0.0, 0.0 ) } );
-		m_entries.emplace_back( { "Plasmagun", "pg", prefix + "plasma", QColor::fromRgbF( 0.0, 0.7, 0.0 ) } );
-		m_entries.emplace_back( { "Lasergun", "lg", prefix + "laser", QColor::fromRgbF( 0.9, 0.9, 0.0 ) } );
-		m_entries.emplace_back( { "Electrobolt", "eb", prefix + "electro", QColor::fromRgbF( 0.0, 0.5, 1.0 ) } );
-		m_entries.emplace_back( { "Shockwave", "sw", prefix + "shockwave", QColor::fromRgbF( 0.3, 0.7, 1.0 ) } );
-		m_entries.emplace_back( { "Instagun", "ig", prefix + "instagun", QColor::fromRgbF( 0.0, 1.0, 1.0 ) } );
+		m_entries.emplace_back( Entry {
+			"Gunblade", "gb", QColor::fromRgbF( 1.0, 1.0, 0.5 ),
+			iconPrefix + "gunblade", modelPrefix + "gunblade/gunblade.md3",
+		});
+		m_entries.emplace_back( Entry {
+			"Machinegun", "mg", QColor::fromRgbF( 0.5, 0.5, 0.5 ),
+			iconPrefix + "machinegun", modelPrefix + "machinegun/machinegun.md3",
+		});
+		m_entries.emplace_back( Entry {
+			"Riotgun", "rg", QColor::fromRgbF( 1.0, 0.5, 0.0 ),
+			iconPrefix + "riot", modelPrefix + "riotgun/riotgun.md3",
+		});
+		m_entries.emplace_back( Entry {
+			"Grenade Launcher", "gl", QColor::fromRgbF( 0.0, 0.0, 1.0 ),
+			iconPrefix + "grenade", modelPrefix + "glauncher/glauncher.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Rocket Launcher", "rl", QColor::fromRgbF( 0.7, 0.0, 0.0 ),
+			iconPrefix + "rocket", modelPrefix + "rlauncher/rlauncher.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Plasmagun", "pg", QColor::fromRgbF( 0.0, 0.7, 0.0 ),
+			iconPrefix + "plasma", modelPrefix + "plasmagun/plasmagun.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Lasergun", "lg",  QColor::fromRgbF( 0.9, 0.9, 0.0 ),
+			iconPrefix + "laser", modelPrefix + "lasergun/lasergun.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Electrobolt", "eb", QColor::fromRgbF( 0.0, 0.5, 1.0 ),
+			iconPrefix + "electro", modelPrefix + "electrobolt/electrobolt.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Shockwave", "sw", QColor::fromRgbF( 0.3, 0.7, 1.0 ),
+			iconPrefix + "shockwave", modelPrefix + "shockwave/shockwave.md3"
+		});
+		m_entries.emplace_back( Entry {
+			"Instagun", "ig", QColor::fromRgbF( 0.0, 1.0, 1.0 ),
+			iconPrefix + "instagun", modelPrefix + "instagun/instagun.md3"
+		});
 
 		QString buffer;
 		m_availableCrosshairs.reserve( kNumRegularCrosshairs );
@@ -71,6 +103,12 @@ public:
 	auto getWeaponIconPath( int weapon ) const -> QByteArray {
 		assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
 		return weapon ? m_entries[weapon - 1].iconPath : QByteArray();
+	}
+
+	[[nodiscard]]
+	auto getWeaponModelPath( int weapon ) const -> QByteArray {
+		assert( (unsigned)weapon < (unsigned)WEAP_TOTAL );
+		return weapon ? m_entries[weapon - 1].modelPath : QByteArray();
 	}
 
 	[[nodiscard]]
@@ -655,6 +693,10 @@ auto HudDataModel::getWeaponShortName( int weapon ) const -> QByteArray {
 
 auto HudDataModel::getWeaponIconPath( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponIconPath( weapon );
+}
+
+auto HudDataModel::getWeaponModelPath( int weapon ) const -> QByteArray {
+	return weaponPropsCache.getWeaponModelPath( weapon );
 }
 
 auto HudDataModel::getAvailableCrosshairs() const -> QStringList {
