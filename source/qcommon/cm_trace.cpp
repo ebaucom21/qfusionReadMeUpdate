@@ -978,6 +978,7 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 	const int numLeaves = CM_BoxLeafnums( cms, mins, maxs, leafNums, 1024, &topNode );
 
 	int numShapes = 0;
+	int possibleContents = 0;
 	const auto *leaves = cms->map_leafs;
 	const float *__restrict testedMins = mins;
 	const float *__restrict testedMaxs = maxs;
@@ -993,6 +994,7 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 			if( !BoundsIntersect( b->mins, b->maxs, testedMins, testedMaxs ) ) {
 				continue;
 			}
+			possibleContents |= b->contents;
 			destShapes[numShapes++] = b;
 		}
 
@@ -1011,12 +1013,14 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 					continue;
 				}
 				destShapes[numShapes++] = b;
+				possibleContents |= f->contents;
 			}
 		}
 	}
 
 	list->hasBounds = false;
 	list->numShapes = numShapes;
+	list->possibleContents = possibleContents;
 }
 
 void Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
@@ -1045,6 +1049,8 @@ void Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const f
 	if( list->hasBounds ) {
 		builder.storeTo( list->mins, list->maxs );
 	}
+
+	list->possibleContents = baseList->possibleContents;
 }
 
 void Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *start,
@@ -1110,6 +1116,10 @@ void CM_FreeShapeList( cmodel_state_t *cms, CMShapeList *list ) {
 	if( list ) {
 		::free( list );
 	}
+}
+
+int CM_PossibleShapeListContents( const CMShapeList *list ) {
+	return list->possibleContents;
 }
 
 CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {

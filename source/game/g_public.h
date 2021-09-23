@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    74
+#define GAME_API_VERSION    75
 
 //===============================================================
 
@@ -125,6 +125,7 @@ typedef struct {
 	int ( *CM_FindTopNodeForSphere )( const vec3_t center, float radius, unsigned maxValue );
 	CMShapeList *( *CM_AllocShapeList )();
 	void ( *CM_FreeShapeList )( CMShapeList *list );
+	int ( *CM_PossibleShapeListContents )( const CMShapeList *list );
 	CMShapeList *( *CM_BuildShapeList )( CMShapeList *, const float *mins, const float *maxs, int clipMask );
 	void ( *CM_ClipShapeList )( CMShapeList *, const CMShapeList *, const float *mins, const float *maxs );
 	void ( *CM_ClipToShapeList )( const CMShapeList *list, trace_t *tr, const float *start,

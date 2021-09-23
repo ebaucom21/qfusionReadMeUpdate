@@ -60,6 +60,8 @@ void AvxOps::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, cons
 	if( list->hasBounds ) {
 		builder.storeTo( list->mins, list->maxs );
 	}
+
+	list->possibleContents = baseList->possibleContents;
 }
 
 // Copied from https://stackoverflow.com/questions/60250527 to get the stuff working

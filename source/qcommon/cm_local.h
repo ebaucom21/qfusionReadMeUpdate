@@ -260,6 +260,9 @@ struct alignas( sizeof( void * ) )CMShapeList {
 
 	vec3_t mins, maxs;
 
+	// Could have more set bits than actual, but not less (so it's a conservative estimate).
+	// We don't compute exact contents for performance reasons.
+	int possibleContents { 0 };
 	int numShapes { 0 };
 	int numAvxFriendlyShapes { 0 };
 	int numOtherShapes { 0 };

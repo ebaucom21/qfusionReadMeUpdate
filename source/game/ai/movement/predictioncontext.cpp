@@ -278,6 +278,7 @@ static void Intercepted_PMoveTouchTriggers( pmove_t *pm, const vec3_t previous_o
 static PredictionContext *currPredictionContext;
 
 static const CMShapeList *pmoveShapeList;
+static bool pmoveShouldTestContents;
 
 static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins,
 							   const vec3_t maxs, const vec3_t end,
@@ -287,8 +288,11 @@ static void Intercepted_Trace( trace_t *t, const vec3_t start, const vec3_t mins
 }
 
 static int Intercepted_PointContents( const vec3_t p, int timeDelta ) {
-	int topNodeHint = ::collisionTopNodeCache.getTopNode( p, p, !currPredictionContext->topOfStackIndex );
-	return trap_CM_TransformedPointContents( p, nullptr, nullptr, nullptr, topNodeHint );
+	if( pmoveShouldTestContents ) [[unlikely]] {
+		int topNodeHint = ::collisionTopNodeCache.getTopNode( p, p, !currPredictionContext->topOfStackIndex );
+		return trap_CM_TransformedPointContents( p, nullptr, nullptr, nullptr, topNodeHint );
+	}
+	return 0;
 }
 
 void PredictionContext::OnInterceptedPredictedEvent( int ev, int parm ) {
@@ -1087,10 +1091,19 @@ void PredictionContext::NextMovementStep() {
 		pmoveShapeList = TraceCache().getShapeListForPMoveCollision( this );
 	}
 
-	// The naive solution of supplying a dummy trace function
-	// (that yields a zeroed output with fraction = 1) does not work.
-	// An actual logic tied to this flag has to be added in Pmove() for each module_Trace() call.
-	pm.skipCollision = !pmoveShapeList;
+	pm.skipCollision = false;
+	pmoveShouldTestContents = false;
+
+	if( pmoveShapeList ) {
+		if( GAME_IMPORT.CM_PossibleShapeListContents( pmoveShapeList ) & MASK_WATER ) {
+			pmoveShouldTestContents = true;
+		}
+	} else {
+		// The naive solution of supplying a dummy trace function
+		// (that yields a zeroed output with fraction = 1) does not work.
+		// An actual logic tied to this flag has to be added in Pmove() for each module_Trace() call.
+		pm.skipCollision = true;
+	}
 
 	::currPredictionContext = this;
 

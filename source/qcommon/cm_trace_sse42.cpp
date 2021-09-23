@@ -387,6 +387,7 @@ void Sse42Ops::BuildShapeList( CMShapeList *list, const float *mins, const float
 	const int numLeaves = CM_BoxLeafnums( cms, mins, maxs, leafNums, 1024, &topNode );
 
 	int numShapes = 0;
+	int possibleContents = 0;
 	const auto *leaves = cms->map_leafs;
 
 	__m128 testedMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0 );
@@ -408,6 +409,7 @@ void Sse42Ops::BuildShapeList( CMShapeList *list, const float *mins, const float
 				continue;
 			}
 			destShapes[numShapes++] = b;
+			possibleContents |= b->contents;
 		}
 
 		const auto *faces = leaf->faces;
@@ -428,12 +430,14 @@ void Sse42Ops::BuildShapeList( CMShapeList *list, const float *mins, const float
 					continue;
 				}
 				destShapes[numShapes++] = b;
+				possibleContents |= f->contents;
 			}
 		}
 	}
 
 	list->hasBounds = false;
 	list->numShapes = numShapes;
+	list->possibleContents = possibleContents;
 }
 
 void Sse42Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, const float *mins, const float *maxs ) {
@@ -469,6 +473,8 @@ void Sse42Ops::ClipShapeList( CMShapeList *list, const CMShapeList *baseList, co
 	if( list->hasBounds ) {
 		builder.storeTo( list->mins, list->maxs );
 	}
+
+	list->possibleContents = baseList->possibleContents;
 }
 
 void Sse42Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *start,

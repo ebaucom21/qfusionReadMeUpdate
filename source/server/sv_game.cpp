@@ -518,6 +518,7 @@ void SV_InitGameProgs( void ) {
 	import.CM_FindTopNodeForSphere = PF_CM_FindTopNodeForSphere;
 	import.CM_AllocShapeList = PF_CM_AllocShapeList;
 	import.CM_FreeShapeList = PF_CM_FreeShapeList;
+	import.CM_PossibleShapeListContents = CM_PossibleShapeListContents;
 	import.CM_BuildShapeList = PF_CM_BuildShapeList;
 	import.CM_ClipShapeList = PF_CM_ClipShapeList;
 	import.CM_ClipToShapeList = PF_CM_ClipToShapeList;
