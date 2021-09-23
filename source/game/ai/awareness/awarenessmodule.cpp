@@ -129,7 +129,7 @@ void BotAwarenessModule::Think() {
 	// Calling this also makes sense if the "update" flag has been retained from previous frames
 	UpdateBlockedAreasStatus();
 
-	keptInFovPointTracker.Update();
+	keptInFovPointTracker.update();
 
 	TryTriggerPlanningForNewHazard();
 }

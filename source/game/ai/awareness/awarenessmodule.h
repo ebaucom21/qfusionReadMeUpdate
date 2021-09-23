@@ -151,7 +151,7 @@ public:
 	}
 
 	const float *GetKeptInFovPoint() const {
-		return keptInFovPointTracker.GetActivePoint();
+		return keptInFovPointTracker.getActivePoint();
 	}
 
 	// In these calls use not active but bot's own enemy pool
