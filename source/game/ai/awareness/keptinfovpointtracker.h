@@ -22,6 +22,9 @@ class KeptInFovPointTracker {
 	auto selectCurrentPoint() -> std::optional<Vec3>;
 
 	[[nodiscard]]
+	bool isPointInPvs( const Vec3 &point ) const;
+
+	[[nodiscard]]
 	auto selectPointBasedOnEnemies( const SelectedEnemies &selectedEnemies ) -> std::optional<Vec3>;
 	[[nodiscard]]
 	auto selectPointBasedOnLostOrHiddenEnemy( const TrackedEnemy *enemy ) -> std::optional<Vec3>;

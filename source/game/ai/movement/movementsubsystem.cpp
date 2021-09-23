@@ -259,15 +259,6 @@ bool MovementSubsystem::TryRotateInput( BotInput *input, PredictionContext *cont
 		return false;
 	}
 
-	// Cut off an expensive PVS call early
-	if( input->IsRotationAllowed( InputRotation::ALL_KINDS_MASK ) ) {
-		// We do not utilize PVS cache since it might produce different results for predicted and actual bot origin
-		if( !trap_inPVS( keptInFovPoint, botOrigin ) ) {
-			*prevRotation = InputRotation::NONE;
-			return false;
-		}
-	}
-
 	Vec3 selfToPoint( keptInFovPoint );
 	selfToPoint -= botOrigin;
 	selfToPoint.NormalizeFast();

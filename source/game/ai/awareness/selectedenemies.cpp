@@ -196,7 +196,7 @@ float SelectedEnemies::ComputeThreatFactor( unsigned enemyNum ) const {
 	return entFactor;
 }
 
-float SelectedEnemies::ComputeThreatFactor( const edict_t *ent, unsigned *enemyNum ) const {
+float SelectedEnemies::ComputeThreatFactor( const edict_t *ent, const unsigned *enemyNum ) const {
 	if( !ent ) {
 		return 0.0f;
 	}

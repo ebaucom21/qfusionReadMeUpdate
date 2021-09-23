@@ -248,7 +248,7 @@ public:
 	float MaxThreatFactor() const;
 	float GetThreatFactor( unsigned enemyNum ) const;
 	float ComputeThreatFactor( unsigned enemyNum ) const;
-	float ComputeThreatFactor( const edict_t *ent, unsigned *enemyNum = nullptr ) const;
+	float ComputeThreatFactor( const edict_t *ent, const unsigned *enemyNum = nullptr ) const;
 };
 
 #endif
