@@ -659,7 +659,8 @@ loc0:
 	RecursiveHullCheck( tlc, node->children[side ^ 1], midf, p2f, mid, p2 );
 }
 
-void Ops::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec3_t end, const vec3_t mins, const vec3_t maxs, int brushmask ) {
+void Ops::SetupCollideContext( CMTraceContext *__restrict tlc, trace_t *__restrict tr, const float *start,
+							   const float *end, const float *mins, const float *maxs, int brushmask ) {
 	tlc->trace = tr;
 	tlc->contents = brushmask;
 	VectorCopy( start, tlc->start );
@@ -667,20 +668,22 @@ void Ops::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *st
 	VectorCopy( mins, tlc->mins );
 	VectorCopy( maxs, tlc->maxs );
 
-	// build a bounding box of the entire move
-	ClearBounds( tlc->absmins, tlc->absmaxs );
+	// TODO: Supply 4-component vectors as arguments of this method so we can use explicit SIMD overloads
+	BoundsBuilder boundsBuilder;
 
 	VectorAdd( start, tlc->mins, tlc->startmins );
-	AddPointToBounds( tlc->startmins, tlc->absmins, tlc->absmaxs );
+	boundsBuilder.addPoint( tlc->startmins );
 
 	VectorAdd( start, tlc->maxs, tlc->startmaxs );
-	AddPointToBounds( tlc->startmaxs, tlc->absmins, tlc->absmaxs );
+	boundsBuilder.addPoint( tlc->startmaxs );
 
 	VectorAdd( end, tlc->mins, tlc->endmins );
-	AddPointToBounds( tlc->endmins, tlc->absmins, tlc->absmaxs );
+	boundsBuilder.addPoint( tlc->endmins );
 
 	VectorAdd( end, tlc->maxs, tlc->endmaxs );
-	AddPointToBounds( tlc->endmaxs, tlc->absmins, tlc->absmaxs );
+	boundsBuilder.addPoint( tlc->endmaxs );
+
+	boundsBuilder.storeTo( tlc->absmins, tlc->absmaxs );
 }
 
 void Ops::Trace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,

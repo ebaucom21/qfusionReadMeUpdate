@@ -368,8 +368,8 @@ void Sse42Ops::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
 	}
 }
 
-void Sse42Ops::SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec3_t end,
-									const vec3_t mins, const vec3_t maxs, int brushmask ) {
+void Sse42Ops::SetupCollideContext( CMTraceContext *__restrict tlc, trace_t *__restrict tr, const float *start,
+									const float *end, const float *mins, const float *maxs, int brushmask ) {
 	Ops::SetupCollideContext( tlc, tr, start, end, mins, maxs, brushmask );
 	// Put the fence after the super method call (that does not use VEX encoding)
 	[[maybe_unused]] volatile VexScopedFence fence;

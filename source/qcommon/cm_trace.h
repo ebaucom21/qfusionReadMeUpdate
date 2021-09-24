@@ -42,8 +42,8 @@ struct Ops {
 
 	Ops(): cms( nullptr ) {}
 
-	virtual void SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec_t *end,
-									  const vec_t *mins, const vec_t *maxs, int brushmask );
+	virtual void SetupCollideContext( CMTraceContext *__restrict tlc, trace_t *__restrict tr, const float *start,
+									  const float *end, const float *mins, const float *maxs, int brushmask );
 
 	void SetupClipContext( CMTraceContext * ) {}
 
@@ -80,8 +80,8 @@ struct Sse42Ops: public Ops {
 	// Don't even bother about making prototypes if there is no attempt to compile SSE code
 	// (this should aid calls devirtualization)
 #ifdef CM_USE_SSE
-	void SetupCollideContext( CMTraceContext *tlc, trace_t *tr, const vec_t *start, const vec_t *end,
-							  const vec_t *mins, const vec_t *maxs, int brushmask ) override;
+	void SetupCollideContext( CMTraceContext *__restrict tlc, trace_t *__restrict tr, const float *start,
+							  const float *end, const float *mins, const float *maxs, int brushmask ) override;
 
 	void ClipBoxToLeaf( CMTraceContext *tlc, const cbrush_s *brushes, int numbrushes,
 						const cface_s *markfaces, int nummarkfaces ) override;
