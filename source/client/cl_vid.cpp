@@ -275,44 +275,47 @@ static bool VID_LoadRefresh() {
 
 [[nodiscard]]
 static auto getBestFittingMode( int requestedWidth, int requestedHeight ) -> std::pair<int, int> {
-	unsigned scanHeightFrom = 0;
-	int width = vid_modes[0].width;
-	int height = vid_modes[0].height;
-	if( int minWidthDiff = std::abs( width - requestedWidth ) ) {
-		for( unsigned i = 1; i < vid_num_modes; i++ ) {
-			const vidmode_t &mode = vid_modes[i];
-			const int diff = std::abs( mode.width - requestedWidth );
-			// select the bigger mode if the diff from the smaller and the larger is equal - use < for the smaller one
-			if( diff <= minWidthDiff ) {
-				// don't advance firstForHeight when searching for the larger mode
-				if( mode.width != width ) {
-					scanHeightFrom = i;
-					width = mode.width;
-				}
-				minWidthDiff = diff;
-			}
-			if( !diff || ( diff > minWidthDiff ) ) {
-				break;
-			}
-		}
-	}
-	if( int minHeightDiff = std::abs( height - requestedHeight ) ) {
-		for( unsigned i = scanHeightFrom + 1; i < vid_num_modes; i++ ) {
-			const vidmode_t &mode = vid_modes[i];
-			if( mode.width != width ) {
-				break;
-			}
-			const int diff = std::abs( mode.height - requestedHeight );
-			if( diff <= minHeightDiff ) {
-				height = mode.height;
-				minHeightDiff = diff;
-			}
-			if( !diff || ( diff > minHeightDiff ) ) {
+	assert( vid_num_modes );
+
+	int width = -1;
+	unsigned leastWidthPenalty = std::numeric_limits<unsigned>::max();
+	// Get a best matching mode for width first (which has a priority over height)
+	for( unsigned i = 0; i < vid_num_modes; ++i ) {
+		const auto &mode = vid_modes[i];
+		const auto absDiff = std::abs( mode.width - requestedWidth );
+		assert( absDiff < std::numeric_limits<unsigned>::max() >> 1 );
+		// Set a penalty bit for modes with lesser than requested width
+		const unsigned penalty = ( absDiff << 1u ) | ( mode.width >= requestedWidth ? 0 : 1 );
+		if( leastWidthPenalty > penalty ) {
+			leastWidthPenalty = penalty;
+			width = mode.width;
+			if( width == requestedWidth ) [[unlikely]] {
 				break;
 			}
 		}
 	}
 
+	int height = -1;
+	unsigned leastHeightPenalty = std::numeric_limits<unsigned>::max();
+	// Get a best matching mode for height preserving the selected width
+	for( unsigned i = 0; i < vid_num_modes; ++i ) {
+		// Require an exact match of the chosen width
+		if( const auto &mode = vid_modes[i]; mode.width == width ) {
+			const auto absDiff = (unsigned)std::abs( mode.height - requestedHeight );
+			assert( absDiff < std::numeric_limits<unsigned>::max() >> 1 );
+			// Set a penalty bit for modes with lesser than requested height
+			const unsigned penalty = ( absDiff << 1u ) | ( mode.height >= requestedHeight ? 0 : 1 );
+			if( leastHeightPenalty > penalty ) {
+				leastHeightPenalty = penalty;
+				height = mode.height;
+				if( height == requestedHeight ) [[unlikely]] {
+					break;
+				}
+			}
+		}
+	}
+
+	assert( width > 0 && height > 0 );
 	return { width, height };
 }
 
