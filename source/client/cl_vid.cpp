@@ -464,22 +464,36 @@ static int VID_CompareModes( const vidmode_t *first, const vidmode_t *second ) {
 }
 
 void VID_InitModes( void ) {
-	unsigned int numModes, i;
-
-	numModes = VID_GetSysModes( vid_modes );
-	if( !numModes ) {
+	const unsigned numAllModes = VID_GetSysModes( nullptr );
+	if( !numAllModes ) {
 		Sys_Error( "Failed to get video modes" );
 	}
 
-	vid_modes = (vidmode_t *)Q_malloc( numModes * sizeof( vidmode_t ) );
-	VID_GetSysModes( vid_modes );
+	assert( !vid_modes );
+	vid_modes = (vidmode_t *)Q_malloc( numAllModes * sizeof( vidmode_t ) );
+
+	if( const unsigned nextNumAllModes = VID_GetSysModes( vid_modes ); nextNumAllModes != numAllModes ) {
+		Sys_Error( "Failed to get video modes again" );
+	}
+
+	unsigned numModes = 0;
+	for( unsigned i = 0; i < numAllModes; ++i ) {
+		if( vid_modes[i].width >= 1024 && vid_modes[i].height >= 720 ) {
+			vid_modes[numModes++] = vid_modes[i];
+		}
+	}
+
+	if( !numModes ) {
+		Sys_Error( "Failed to find at least a single supported video mode" );
+	}
+
 	qsort( vid_modes, numModes, sizeof( vidmode_t ), ( int ( * )( const void *, const void * ) )VID_CompareModes );
 
 	// Remove duplicate modes in case the sys code failed to do so.
 	vid_num_modes = 0;
 	vid_max_height_mode_index = 0;
 	int prevWidth = 0, prevHeight = 0;
-	for( i = 0; i < numModes; i++ ) {
+	for( unsigned i = 0; i < numModes; i++ ) {
 		const int width = vid_modes[i].width;
 		const int height = vid_modes[i].height;
 		if( width != prevWidth || height != prevHeight ) {

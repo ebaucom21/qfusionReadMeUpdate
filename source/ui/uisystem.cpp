@@ -667,12 +667,9 @@ void QtUISystem::registerContextProperties( QQmlContext *context ) {
 void QtUISystem::retrieveVideoModes() {
 	int width, height;
 	for( unsigned i = 0; VID_GetModeInfo( &width, &height, i ); ++i ) {
-		// Exclude junk modes
-		if( width >= 1024 && height >= 600 ) {
-			s_videoModeWidthValuesList.append( width );
-			s_videoModeHeightValuesList.append( height );
-			s_videoModeHeadingsList.append( QString::asprintf( "%dx%d", width, height ) );
-		}
+		s_videoModeWidthValuesList.append( width );
+		s_videoModeHeightValuesList.append( height );
+		s_videoModeHeadingsList.append( QString::asprintf( "%dx%d", width, height ) );
 	}
 }
 
