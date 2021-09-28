@@ -68,34 +68,36 @@ auto GametypesModel::getListOfMaps( const GametypeDef &def ) const -> QJsonArray
 }
 
 auto GametypesModel::getBotConfig( int gametypeNum, int mapNum ) const -> QJsonObject {
-	// Illegal values could be passed due to some QML lifetime issues, return defaults in this case
-	if( (unsigned)gametypeNum >= (unsigned)m_gametypes.size() ) {
-		return QJsonObject();
-	}
-	const auto &def = m_gametypes[gametypeNum];
-	if( (unsigned)mapNum >= (unsigned)def.m_mapInfoList.size() ) {
-		return QJsonObject();
-	}
+	assert( (unsigned)gametypeNum < (unsigned)m_gametypes.size() );
+	const GametypeDef &def = m_gametypes[gametypeNum];
+	assert( (unsigned)mapNum < (unsigned)def.m_mapInfoList.size() );
+
 	const auto &botConfig = def.m_botConfig;
 	if( botConfig == GametypeDef::NoBots || botConfig == GametypeDef::ScriptSpawnedBots ) {
-		return QJsonObject();
+		return {};
 	}
 
-	int number;
-	bool fixed;
 	if( botConfig == GametypeDef::ExactNumBots ) {
-		number = (int)def.m_exactNumBots.value();
-		fixed = true;
-	} else {
-		assert( botConfig == GametypeDef::FixedNumBotsForMap || botConfig == GametypeDef::BestNumBotsForMap );
-		const auto [minPlayers, maxPlayers] = def.m_mapInfoList[mapNum].numPlayers.value();
-		assert( minPlayers && maxPlayers && minPlayers < maxPlayers );
-		number = (int)( ( minPlayers + maxPlayers ) / 2 );
-		fixed = ( botConfig == GametypeDef::FixedNumBotsForMap );
+		const int number = (int)def.m_exactNumBots.value();
+		assert( number > 0 );
+		return { { "allowed", true }, { "defined", true }, { "fixed", true }, { "number", number } };
 	}
 
-	assert( number > 0 );
-	return QJsonObject( { { "allowed", true }, { "defined", true }, { "number", number }, { "fixed", fixed } } );
+	assert( botConfig == GametypeDef::FixedNumBotsForMap || botConfig == GametypeDef::BestNumBotsForMap );
+	const auto [minPlayers, maxPlayers] = def.m_mapInfoList[mapNum].numPlayers.value();
+	assert( minPlayers > 0 && maxPlayers > 0 );
+	int number;
+	const bool fixed = botConfig == GametypeDef::FixedNumBotsForMap;
+	if( fixed ) {
+		assert( minPlayers == maxPlayers && maxPlayers > 1 );
+		number = (int)( maxPlayers - 1 );
+	} else {
+		number = (int)( ( maxPlayers + minPlayers ) / 2 );
+	}
+
+	// Make sure we can actually start the game and there's at least a single slot for the local player.
+	assert( number > 0 && number + 1 <= (int)maxPlayers );
+	return { { "allowed", true }, { "defined", true }, { "fixed", fixed }, { "number", number } };
 }
 
 class MapExistenceCache {

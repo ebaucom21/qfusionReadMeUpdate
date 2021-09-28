@@ -190,10 +190,15 @@ bool GametypeDefParser::parseMaps() {
 			return false;
 		}
 
+		// Caution! The (total) number of players is also displayed as a hint in the local game wizard.
+		// Assume that we should keep at least a single player slot for the listen server owner.
+		// Given the requirement that we should be able to actually start a spawned local game,
+		// 2 or more players is the minimum for these parsed numeric values.
+
 		const auto dashIndex = rangePart.indexOf( '-' );
 		if( dashIndex == std::nullopt ) {
 			auto maybeNum = wsw::toNum<unsigned>( rangePart );
-			if( !maybeNum || *maybeNum > 16 ) {
+			if( !maybeNum || *maybeNum < 2 || *maybeNum > 16 ) {
 				return false;
 			}
 			m_gametypeDef.addMap( token.take( *semicolonIndex ), *maybeNum, *maybeNum );
@@ -208,6 +213,9 @@ bool GametypeDefParser::parseMaps() {
 			return false;
 		}
 		if( *maybeMin >= *maybeMax ) {
+			return false;
+		}
+		if( *maybeMin < 2 || *maybeMax < 2 ) {
 			return false;
 		}
 		if( *maybeMin > 16 || *maybeMax > 16 ) {
