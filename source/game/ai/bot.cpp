@@ -328,30 +328,21 @@ void Bot::CallActiveClientThink( const BotInput &input ) {
 }
 
 void Bot::OnMovementToNavTargetBlocked() {
-	if( !selectedNavEntity.IsValid() || selectedNavEntity.IsEmpty() ) {
-		return;
+	if( selectedNavEntity.IsValid() && !selectedNavEntity.IsEmpty() ) {
+		// If a new nav target is set in blocked state, the bot remains blocked
+		// for few millis since the ground acceleration is finite.
+		// Prevent classifying just set nav targets as ones that have led to blocking.
+		if( level.time - lastBlockedNavTargetReportedAt > 400 ) {
+			lastBlockedNavTargetReportedAt = level.time;
+
+			if( const auto *navEntity = selectedNavEntity.GetNavEntity() ) {
+				planningModule.OnMovementToNavEntityBlocked( navEntity );
+			}
+
+			planningModule.ClearGoalAndPlan();
+			selectedNavEntity.InvalidateNextFrame();
+		}
 	}
-
-	// If a new nav target is set in blocked state, the bot remains blocked
-	// for few millis since the ground acceleration is finite.
-	// Prevent classifying just set nav targets as ones that have led to blocking.
-	if( level.time - lastBlockedNavTargetReportedAt < 400 ) {
-		return;
-	}
-
-	lastBlockedNavTargetReportedAt = level.time;
-
-	// Force replanning
-	planningModule.ClearGoalAndPlan();
-
-	const auto *navEntity = selectedNavEntity.GetNavEntity();
-	if( navEntity ) {
-		planningModule.OnMovementToNavEntityBlocked( navEntity );
-		selectedNavEntity.InvalidateNextFrame();
-		return;
-	}
-
-	selectedNavEntity.InvalidateNextFrame();
 }
 
 bool Bot::NavTargetWorthRushing() const {
