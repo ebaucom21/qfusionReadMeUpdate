@@ -1105,7 +1105,7 @@ void Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *st
 
 CMShapeList *CM_AllocShapeList( cmodel_state_t *cms ) {
 	// TODO: Use a necessary amount of memory
-	const size_t totalSize = 16 * 1024;
+	const size_t totalSize = 64 * 1024;
 	void *mem = ::malloc( totalSize );
 	if( !mem ) {
 		return nullptr;
