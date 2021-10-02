@@ -584,7 +584,6 @@ extern cvar_t *cg_noAutohop;
 extern cvar_t *cg_particles;
 extern cvar_t *cg_showhelp;
 extern cvar_t *cg_predictLaserBeam;
-extern cvar_t *cg_voiceChats;
 extern cvar_t *cg_showSelfShadow;
 extern cvar_t *cg_laserBeamSubdivisions;
 extern cvar_t *cg_projectileAntilagOffset;

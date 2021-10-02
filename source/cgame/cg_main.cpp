@@ -67,7 +67,7 @@ cvar_t *cg_gun_alpha;
 cvar_t *cg_volume_players;
 cvar_t *cg_volume_effects;
 cvar_t *cg_volume_announcer;
-cvar_t *cg_volume_voicechats;
+cvar_t *cg_volume_hitsound;
 cvar_t *cg_projectileTrail;
 cvar_t *cg_projectileFireTrail;
 cvar_t *cg_bloodTrail;
@@ -102,7 +102,6 @@ cvar_t *cg_chatShowIgnored;
 cvar_t *cg_cartoonEffects;
 cvar_t *cg_cartoonHitEffect;
 
-cvar_t *cg_volume_hitsound;
 cvar_t *cg_autoaction_demo;
 cvar_t *cg_autoaction_screenshot;
 cvar_t *cg_autoaction_stats;
@@ -623,11 +622,6 @@ static void CG_RegisterVariables( void ) {
 	cg_weaponFlashes =  Cvar_Get( "cg_weaponFlashes", "2", CVAR_ARCHIVE );
 
 	// wsw
-	cg_volume_players = Cvar_Get( "cg_volume_players", "1.0", CVAR_ARCHIVE );
-	cg_volume_effects = Cvar_Get( "cg_volume_effects", "1.0", CVAR_ARCHIVE );
-	cg_volume_announcer =   Cvar_Get( "cg_volume_announcer", "1.0", CVAR_ARCHIVE );
-	cg_volume_hitsound =    Cvar_Get( "cg_volume_hitsound", "1.0", CVAR_ARCHIVE );
-	cg_volume_voicechats =  Cvar_Get( "cg_volume_voicechats", "1.0", CVAR_ARCHIVE );
 	cg_handOffset =     Cvar_Get( "cg_handOffset", "5", CVAR_ARCHIVE );
 	cg_projectileTrail =    Cvar_Get( "cg_projectileTrail", "60", CVAR_ARCHIVE );
 	cg_projectileFireTrail =    Cvar_Get( "cg_projectileFireTrail", "90", CVAR_ARCHIVE );
@@ -635,9 +629,6 @@ static void CG_RegisterVariables( void ) {
 	cg_showBloodTrail = Cvar_Get( "cg_showBloodTrail", "1", CVAR_ARCHIVE );
 	cg_projectileFireTrailAlpha =   Cvar_Get( "cg_projectileFireTrailAlpha", "0.45", CVAR_ARCHIVE );
 	cg_bloodTrailAlpha =    Cvar_Get( "cg_bloodTrailAlpha", "1.0", CVAR_ARCHIVE );
-	cg_heavyRocketExplosions = Cvar_Get( "cg_heavyRocketExplosions", "1", CVAR_ARCHIVE );
-	cg_heavyGrenadeExplosions = Cvar_Get( "cg_heavyGrenadeExplosions", "1", CVAR_ARCHIVE );
-	cg_heavyShockwaveExplosions = Cvar_Get( "cg_heavyShockwaveExplosions", "1", CVAR_ARCHIVE );
 	cg_explosionsRing = Cvar_Get( "cg_explosionsRing", "1", CVAR_ARCHIVE );
 	cg_explosionsDust =    Cvar_Get( "cg_explosionsDust", "1", CVAR_ARCHIVE );
 	cg_gibs =       Cvar_Get( "cg_gibs", "1", CVAR_ARCHIVE );
@@ -996,6 +987,15 @@ void CG_InitPersistentState() {
 	cg_showCaptureAreas = Cvar_Get( "cg_showCaptureAreas", "1", CVAR_ARCHIVE );
 
 	cg_showChasers = Cvar_Get( "cg_showChasers", "1", CVAR_ARCHIVE );
+
+	cg_volume_players = Cvar_Get( "cg_volume_players", "1.0", CVAR_ARCHIVE );
+	cg_volume_effects = Cvar_Get( "cg_volume_effects", "1.0", CVAR_ARCHIVE );
+	cg_volume_announcer =   Cvar_Get( "cg_volume_announcer", "1.0", CVAR_ARCHIVE );
+	cg_volume_hitsound =    Cvar_Get( "cg_volume_hitsound", "1.0", CVAR_ARCHIVE );
+
+	cg_heavyRocketExplosions = Cvar_Get( "cg_heavyRocketExplosions", "1", CVAR_ARCHIVE );
+	cg_heavyGrenadeExplosions = Cvar_Get( "cg_heavyGrenadeExplosions", "1", CVAR_ARCHIVE );
+	cg_heavyShockwaveExplosions = Cvar_Get( "cg_heavyShockwaveExplosions", "1", CVAR_ARCHIVE );
 
 	CrosshairState::initPersistentState();
 
