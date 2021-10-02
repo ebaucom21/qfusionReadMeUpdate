@@ -118,19 +118,8 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 	worldState->HasQuadVar().SetValue( ::HasQuad( self ) );
 	worldState->HasShellVar().SetValue( ::HasShell( self ) );
 
-	const SelectedNavEntity &currSelectedNavEntity = bot->GetOrUpdateSelectedNavEntity();
-	if( currSelectedNavEntity.IsEmpty() ) {
-		// HACK! If there is no selected nav entity, set the value to the roaming spot origin.
-		if( bot->ShouldUseRoamSpotAsNavTarget() ) {
-			Vec3 spot( module->roamingManager.GetCachedRoamingSpot() );
-			Debug( "Using a roaming spot @ %.1f %.1f %.1f as a world state nav target var\n", spot.X(), spot.Y(), spot.Z() );
-			worldState->NavTargetOriginVar().SetValue( spot );
-		} else {
-			worldState->NavTargetOriginVar().SetIgnore( true );
-		}
-		worldState->GoalItemWaitTimeVar().SetIgnore( true );
-	} else {
-		const NavEntity *navEntity = currSelectedNavEntity.GetNavEntity();
+	if( const std::optional<SelectedNavEntity> &currSelectedNavEntity = bot->GetOrUpdateSelectedNavEntity() ) {
+		const NavEntity *navEntity = currSelectedNavEntity->navEntity;
 		worldState->NavTargetOriginVar().SetValue( navEntity->Origin() );
 		// Find a travel time to the goal itme nav entity in milliseconds
 		// We hope this router call gets cached by AAS subsystem
@@ -149,6 +138,16 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		} else {
 			worldState->GoalItemWaitTimeVar().SetValue( (unsigned)( spawnTime - level.time - travelTime ) );
 		}
+	} else {
+		// HACK! If there is no selected nav entity, set the value to the roaming spot origin.
+		if( bot->ShouldUseRoamSpotAsNavTarget() ) {
+			Vec3 spot( module->roamingManager.GetCachedRoamingSpot() );
+			Debug( "Using a roaming spot @ %.1f %.1f %.1f as a world state nav target var\n", spot.X(), spot.Y(), spot.Z() );
+			worldState->NavTargetOriginVar().SetValue( spot );
+		} else {
+			worldState->NavTargetOriginVar().SetIgnore( true );
+		}
+		worldState->GoalItemWaitTimeVar().SetIgnore( true );
 	}
 
 	worldState->HasJustPickedGoalItemVar().SetValue( false );

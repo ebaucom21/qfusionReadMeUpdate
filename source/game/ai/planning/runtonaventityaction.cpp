@@ -1,10 +1,10 @@
 #include "planninglocal.h"
-#include "../bot.h"
 
 void RunToNavEntityActionRecord::Activate() {
 	BotActionRecord::Activate();
+	assert( m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) );
 	// Set the nav target first as it gets used by further calls
-	Self()->SetNavTarget( navEntity );
+	Self()->SetNavTarget( m_selectedNavEntity.navEntity );
 	// Attack if view angles needed for movement fit aiming
 	Self()->GetMiscTactics().PreferRunRatherThanAttack();
 	// TODO: It's better to supply the cached world state via Activate() method argument
@@ -17,13 +17,8 @@ void RunToNavEntityActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status RunToNavEntityActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	const auto &selectedNavEntity = Self()->GetSelectedNavEntity();
-	if( !navEntity->IsBasedOnNavEntity( selectedNavEntity.GetNavEntity() ) ) {
-		Debug( "Nav target does no longer match selected nav entity\n" );
-		return INVALID;
-	}
-	if( navEntity->SpawnTime() == 0 ) {
-		Debug( "Illegal nav target spawn time (looks like it has been invalidated)\n" );
+	if( !m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) ) {
+		Debug( "The actual selected nav entity differs from the stored one\n" );
 		return INVALID;
 	}
 	if( currWorldState.DistanceToNavTarget() <= GOAL_PICKUP_ACTION_RADIUS ) {
@@ -36,6 +31,8 @@ AiActionRecord::Status RunToNavEntityActionRecord::UpdateStatus( const WorldStat
 }
 
 bool RunToNavEntityActionRecord::ShouldUseSneakyBehaviour( const WorldState &currWorldState ) const {
+	const NavEntity *const navEntity = m_selectedNavEntity.navEntity;
+
 	// Hack for following a sneaky movement of a leader (if any).
 	if( !navEntity->IsClient() ) {
 		return false;
@@ -201,17 +198,18 @@ PlannerNode *RunToNavEntityAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	const auto &itemNavEntity = Self()->GetSelectedNavEntity();
+	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
+	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
 
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), itemNavEntity.GetNavEntity() ) );
+	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = itemNavEntity.GetCost();
+	plannerNode.Cost() = selectedNavEntity.cost;
 
 	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().BotOriginVar().SetValue( itemNavEntity.GetNavEntity()->Origin() );
+	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
 	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, GOAL_PICKUP_ACTION_RADIUS );
 	plannerNode.WorldState().ResetTacticalSpots();
 

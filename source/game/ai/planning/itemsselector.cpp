@@ -212,7 +212,7 @@ struct NavEntityAndWeight {
 	inline bool operator<( const NavEntityAndWeight &that ) const { return weight > that.weight; }
 };
 
-SelectedNavEntity BotItemsSelector::SuggestGoalNavEntity( const SelectedNavEntity &currSelectedNavEntity ) {
+std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const NavEntity *currSelectedNavEntity ) {
 	UpdateInternalItemAndGoalWeights();
 
 	wsw::StaticVector<NavEntityAndWeight, MAX_NAVENTS> rawWeightCandidates;
@@ -262,7 +262,7 @@ SelectedNavEntity BotItemsSelector::SuggestGoalNavEntity( const SelectedNavEntit
 	// Make sure the candidates list is not empty and thus we can access the best candidate
 	if( rawWeightCandidates.empty() ) {
 		Debug( "Can't find a feasible long-term goal nav. entity\n" );
-		return SelectEmpty();
+		return std::nullopt;
 	}
 
 	// Sort all pre-selected candidates by their raw weights
@@ -290,7 +290,7 @@ SelectedNavEntity BotItemsSelector::SuggestGoalNavEntity( const SelectedNavEntit
 		++rawCandidatesIter;
 		if( rawCandidatesIter == rawCandidatesEnd ) {
 			Debug( "Can't find a feasible long-term goal nav. entity\n" );
-			return SelectEmpty();
+			return std::nullopt;
 		}
 		rawBestNavEnt = ( *rawCandidatesIter ).goal;
 		rawBestAreaNum = rawBestNavEnt->AasAreaNum();
@@ -305,7 +305,7 @@ SelectedNavEntity BotItemsSelector::SuggestGoalNavEntity( const SelectedNavEntit
 		currFloorClusterNum = aasFloorClusterNums[entityPhysicsState->DroppedToFloorAasAreaNum()];
 	}
 
-	const NavEntity *currGoalNavEntity = currSelectedNavEntity.navEntity;
+	const NavEntity *currGoalNavEntity = currSelectedNavEntity;
 	float currGoalEntWeight = 0.0f;
 	float currGoalEntCost = 0.0f;
 	const NavEntity *bestNavEnt = nullptr;
@@ -413,7 +413,7 @@ SelectedNavEntity BotItemsSelector::SuggestGoalNavEntity( const SelectedNavEntit
 
 	if( !bestNavEnt ) {
 		Debug( "Can't find a feasible long-term goal nav. entity\n" );
-		return SelectEmpty();
+		return std::nullopt;
 	}
 
 	// If it is time to pick a new goal (not just re-evaluate current one), do not be too sticky to the current goal

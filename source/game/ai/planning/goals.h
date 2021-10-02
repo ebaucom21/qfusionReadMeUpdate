@@ -4,6 +4,8 @@
 #include "planner.h"
 
 class BotPlanningModule;
+class SelectedEnemies;
+class BotWeightConfig;
 
 class BotGoal : public AiGoal {
 	wsw::StaticVector<AiAction *, AiPlanner::MAX_ACTIONS> extraApplicableActions;
@@ -21,7 +23,7 @@ protected:
 	Bot *Self() { return (Bot *)self; }
 	const Bot *Self() const { return (Bot *)self; }
 
-	const class SelectedNavEntity &SelectedNavEntity() const;
+	const std::optional<struct SelectedNavEntity> &getSelectedNavEntity() const;
 	const class SelectedEnemies &SelectedEnemies() const;
 	const class BotWeightConfig &WeightConfig() const;
 };

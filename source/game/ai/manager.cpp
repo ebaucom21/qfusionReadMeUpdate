@@ -45,7 +45,7 @@ void AiManager::notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity )
 	assert( navEntity );
 	// find all bots which have this node as goal and tell them their goal is reached
 	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
-		bot->onNavEntityReachedBySignal( navEntity );
+		bot->notifyOfNavEntitySignaledAsReached( navEntity );
 	}
 }
 
@@ -53,7 +53,7 @@ void AiManager::notifyOfNavEntityRemoved( const NavEntity *navEntity ) {
 	assert( navEntity );
 	// find all bots which have this node as goal and tell them their goal is reached
 	for( Bot *bot = botHandlesHead; bot; bot = bot->NextInAIList() ) {
-		bot->onNavEntityReachedBySignal( navEntity );
+		bot->notifyOfNavEntityRemoved( navEntity );
 	}
 }
 

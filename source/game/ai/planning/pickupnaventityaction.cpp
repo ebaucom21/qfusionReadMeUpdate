@@ -5,6 +5,8 @@ void PickupNavEntityActionRecord::Activate() {
 	BotActionRecord::Activate();
 	Self()->GetMiscTactics().shouldMoveCarefully = true;
 	Self()->GetMiscTactics().PreferAttackRatherThanRun();
+	assert( m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) );
+	const NavEntity *const navEntity = m_selectedNavEntity.navEntity;
 	Self()->SetCampingSpot( AiCampingSpot( navEntity->Origin(), GOAL_PICKUP_ACTION_RADIUS, 0.5f ) );
 	Self()->SetNavTarget( navEntity );
 }
@@ -21,16 +23,11 @@ AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldSta
 		return COMPLETED;
 	}
 
-	const SelectedNavEntity &currSelectedNavEntity = Self()->GetSelectedNavEntity();
-	if( !navEntity->IsBasedOnNavEntity( currSelectedNavEntity.GetNavEntity() ) ) {
-		Debug( "Nav entity does no longer match current selected nav entity\n" );
+	if( !m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) ) {
+		Debug( "The actual selected nav entity differs from the stored one\n" );
 		return INVALID;
 	}
-	if( !navEntity->SpawnTime() ) {
-		Debug( "Illegal nav entity spawn time (looks like it has been invalidated)\n" );
-		return INVALID;
-	}
-	if( navEntity->SpawnTime() - level.time > 0 ) {
+	if( m_selectedNavEntity.navEntity->SpawnTime() - level.time > 0 ) {
 		Debug( "The nav entity requires waiting for it\n" );
 		return INVALID;
 	}
@@ -75,8 +72,9 @@ PlannerNode *PickupNavEntityAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	const auto &itemNavEntity = Self()->GetSelectedNavEntity();
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), itemNavEntity.GetNavEntity() ) );
+	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
+	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
+	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
 	if( !plannerNode ) {
 		return nullptr;
 	}
@@ -84,10 +82,9 @@ PlannerNode *PickupNavEntityAction::TryApply( const WorldState &worldState ) {
 	// Picking up an item costs almost nothing
 	plannerNode.Cost() = 1.0f;
 
-
 	plannerNode.WorldState() = worldState;
 	plannerNode.WorldState().HasJustPickedGoalItemVar().SetValue( true ).SetIgnore( false );
-	plannerNode.WorldState().BotOriginVar().SetValue( itemNavEntity.GetNavEntity()->Origin() );
+	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
 	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, 12.0f );
 	plannerNode.WorldState().ResetTacticalSpots();
 

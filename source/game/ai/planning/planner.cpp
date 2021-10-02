@@ -26,7 +26,7 @@ AiAction::PlannerNodePtr AiAction::NewNodeForRecord( AiActionRecord *record ) {
 
 inline void PoolBase::Link( int16_t itemIndex, int16_t listIndex ) {
 #ifdef _DEBUG
-	Debug( "Link(): About to link item at index %d in %s list\n", (int)itemIndex, ListName( listIndex ) );
+	//Debug( "Link(): About to link item at index %d in %s list\n", (int)itemIndex, ListName( listIndex ) );
 #endif
 	ItemLinks &links = ItemLinksAt( itemIndex );
 	if( listFirst[listIndex] >= 0 ) {
@@ -42,7 +42,7 @@ inline void PoolBase::Link( int16_t itemIndex, int16_t listIndex ) {
 
 inline void PoolBase::Unlink( int16_t itemIndex, int16_t listIndex ) {
 #ifdef _DEBUG
-	Debug( "Unlink(): About to unlink item at index %d from %s list\n", (int)itemIndex, ListName( listIndex ) );
+	//Debug( "Unlink(): About to unlink item at index %d from %s list\n", (int)itemIndex, ListName( listIndex ) );
 #endif
 	ItemLinks &links = ItemLinksAt( itemIndex );
 	if( links.Prev() >= 0 ) {

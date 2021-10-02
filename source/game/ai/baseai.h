@@ -290,9 +290,9 @@ protected:
 
 	void SetFrameAffinity( unsigned modulo, unsigned offset ) override;
 
-	virtual void OnNavTargetSet() {};
-	virtual void OnNavTargetReset() {};
-	virtual void OnNavTargetTouchHandled() {};
+	virtual void invalidateNavTarget() {
+		navTarget = nullptr;
+	};
 
 	bool CanHandleNavTargetTouch( const edict_t *ent );
 	bool TryReachNavTargetByProximity();
@@ -354,34 +354,29 @@ public:
 	// Accepts a touched entity and its old solid before touch
 	void TouchedEntity( edict_t *ent );
 
-	void onNavEntityReachedBySignal( const NavEntity *navEntity ) {
+	virtual void notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity ) {
 		if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
 			ResetNavTarget();
 		}
 	}
 
-	void onNavEntityRemoved( const NavEntity *navEntity ) {
+	virtual void notifyOfNavEntityRemoved( const NavEntity *navEntity ) {
 		if( navTarget && navTarget->IsBasedOnNavEntity( navEntity ) ) {
 			ResetNavTarget();
 		}
 	}
-
-	void ResetNavigation();
 
 	inline void SetNavTarget( const NavTarget *navTarget_ ) {
 		this->navTarget = navTarget_;
-		OnNavTargetSet();
 	}
 
 	inline void SetNavTarget( const Vec3 &navTargetOrigin, float reachRadius ) {
 		localNavSpotStorage.Set( navTargetOrigin, reachRadius, NavTargetFlags::REACH_ON_RADIUS );
 		this->navTarget = &localNavSpotStorage;
-		OnNavTargetSet();
 	}
 
 	inline void ResetNavTarget() {
 		this->navTarget = nullptr;
-		OnNavTargetTouchHandled();
 	}
 
 	bool IsCloseToNavTarget( float proximityThreshold ) const {

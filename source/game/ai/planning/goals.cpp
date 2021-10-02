@@ -9,7 +9,7 @@ BotGoal::BotGoal( BotPlanningModule *module_, const char *name_, int debugColor_
 	this->debugColor = debugColor_;
 }
 
-inline const SelectedNavEntity &BotGoal::SelectedNavEntity() const {
+inline const std::optional<SelectedNavEntity> &BotGoal::getSelectedNavEntity() const {
 	return Self()->GetSelectedNavEntity();
 }
 
@@ -34,16 +34,14 @@ inline PlannerNode *BotGoal::ApplyExtraActions( PlannerNode *firstTransition, co
 void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	if( !SelectedNavEntity().IsValid() ) {
-		return;
-	}
-	if( SelectedNavEntity().IsEmpty() ) {
+	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = getSelectedNavEntity();
+	if( !maybeSelectedNavEntity ) {
 		return;
 	}
 
 	const auto &configGroup = WeightConfig().nativeGoals.grabItem;
-	// SelectedNavEntity().PickupGoalWeight() still might need some (minor) tweaking.
-	this->weight = configGroup.baseWeight + configGroup.selectedGoalWeightScale * SelectedNavEntity().PickupGoalWeight();
+	this->weight = configGroup.baseWeight;
+	this->weight += configGroup.selectedGoalWeightScale * maybeSelectedNavEntity->pickupGoalWeight;
 
 	// Hack! Lower a weight of this goal if there are threatening enemies
 	// and we have to wait for an item while being attacking
@@ -54,7 +52,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 		return;
 	}
 
-	const auto *navEntity = SelectedNavEntity().GetNavEntity();
+	const auto *navEntity = maybeSelectedNavEntity->navEntity;
 	// Skip if we do not have to wait for nav entity reached signal
 	if( !navEntity->ShouldBeReachedOnEvent() ) {
 		return;

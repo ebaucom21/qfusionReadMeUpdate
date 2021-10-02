@@ -672,9 +672,8 @@ void AiSquad::CheckMembersInventory() {
 		}
 
 		// Check whether a bot is likely to already have a dropped item as a goal
-		const SelectedNavEntity &selectedNavEntity = bot->GetSelectedNavEntity();
-		if( selectedNavEntity.IsValid() && !selectedNavEntity.IsEmpty() ) {
-			if( selectedNavEntity.navEntity->IsDroppedEntity() && selectedNavEntity.GetCost() > 3.0f ) {
+		if( const std::optional<SelectedNavEntity> &selectedNavEntity = bot->GetSelectedNavEntity() ) {
+			if( selectedNavEntity->navEntity->IsDroppedEntity() && selectedNavEntity->cost > 3.0f ) {
 				continue;
 			}
 		}
@@ -897,7 +896,9 @@ void AiSquad::SetDroppedEntityAsBotGoal( edict_t *ent ) {
 	}
 
 	const NavEntity *navEntity = NavEntitiesRegistry::Instance()->NavEntityForEntity( ent );
-	SelectedNavEntity selectedNavEntity( navEntity, 1.0f, 5.0f, level.time + 2000 );
+	SelectedNavEntity selectedNavEntity {
+		.timeoutAt = level.time + 5000, .navEntity = navEntity, .cost = 1.0f, .pickupGoalWeight = 5.0f
+	};
 	botEnt->bot->ForceSetNavEntity( selectedNavEntity );
 	botEnt->bot->ForcePlanBuilding();
 }

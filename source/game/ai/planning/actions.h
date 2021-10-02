@@ -2,6 +2,7 @@
 #define WSW_ea299e83_b6a8_432c_9c13_98d1fa0d0def_H
 
 #include "planner.h"
+#include "itemsselector.h"
 
 constexpr const float GOAL_PICKUP_ACTION_RADIUS = 72.0f;
 constexpr const float TACTICAL_SPOT_RADIUS = 40.0f;
@@ -33,13 +34,13 @@ public:
 };
 
 class RunToNavEntityActionRecord : public BotActionRecord {
-	const NavEntity *const navEntity;
+	const SelectedNavEntity m_selectedNavEntity;
 
 	bool ShouldUseSneakyBehaviour( const WorldState &currWorldState ) const;
 	bool IsInPhsForEnemyTeam() const;
 public:
-	RunToNavEntityActionRecord( PoolBase *pool_, Bot *self_, const NavEntity *navEntity_ )
-		: BotActionRecord( pool_, self_, "RunToNavEntityActionRecord" ), navEntity( navEntity_ ) {}
+	RunToNavEntityActionRecord( PoolBase *pool_, Bot *self_, const SelectedNavEntity &selectedNavEntity )
+		: BotActionRecord( pool_, self_, "RunToNavEntityActionRecord" ), m_selectedNavEntity( selectedNavEntity ) {}
 
 	void Activate() override;
 	void Deactivate() override;
@@ -69,10 +70,10 @@ public:                                                                         
 DECLARE_ACTION( RunToNavEntityAction, 3 );
 
 class PickupNavEntityActionRecord : public BotActionRecord {
-	const NavEntity *const navEntity;
+	const SelectedNavEntity m_selectedNavEntity;
 public:
-	PickupNavEntityActionRecord( PoolBase *pool_, Bot *self_, const NavEntity *navEntity_ )
-		: BotActionRecord( pool_, self_, "PickupNavEntityActionRecord" ), navEntity( navEntity_ ) {}
+	PickupNavEntityActionRecord( PoolBase *pool_, Bot *self_, const SelectedNavEntity &selectedNavEntity )
+		: BotActionRecord( pool_, self_, "PickupNavEntityActionRecord" ), m_selectedNavEntity( selectedNavEntity ) {}
 
 	void Activate() override;
 	void Deactivate() override;
@@ -82,10 +83,10 @@ public:
 DECLARE_ACTION( PickupNavEntityAction, 3 );
 
 class WaitForNavEntityActionRecord : public BotActionRecord {
-	const NavEntity *const navEntity;
+	const SelectedNavEntity m_selectedNavEntity;
 public:
-	WaitForNavEntityActionRecord( PoolBase *pool_, Bot *self_, const NavEntity *navEntity_ )
-		: BotActionRecord( pool_, self_, "WaitForNavEntityActionRecord" ), navEntity( navEntity_ ) {}
+	WaitForNavEntityActionRecord( PoolBase *pool_, Bot *self_, const SelectedNavEntity &selectedNavEntity )
+		: BotActionRecord( pool_, self_, "WaitForNavEntityActionRecord" ), m_selectedNavEntity( selectedNavEntity ) {}
 
 	void Activate() override;
 	void Deactivate() override;
@@ -161,13 +162,15 @@ DECLARE_COMBAT_ACTION_RECORD( AttackFromCurrentPositionActionRecord );
 DECLARE_ACTION( AttackFromCurrentPositionAction, 2 );
 
 class AttackAdvancingToTargetActionRecord : public BotActionRecord {
-	unsigned selectedEnemiesInstanceId;
-	NavSpot navSpot { Vec3( 0, 0, 0 ), 0.0f, NavTargetFlags::NONE };
+	const SelectedNavEntity m_selectedNavEntity;
+	const unsigned selectedEnemiesInstanceId;
 public:
 	AttackAdvancingToTargetActionRecord( PoolBase *pool_,
 										 Bot *self_,
+										 const SelectedNavEntity &selectedNavEntity,
 										 unsigned selectedEnemiesInstanceId_ )
 		: BotActionRecord( pool_, self_, "AttackAdvancingToTargetActionRecord" )
+		, m_selectedNavEntity( selectedNavEntity )
 		, selectedEnemiesInstanceId( selectedEnemiesInstanceId_ ) {}
 
 	void Activate() override;

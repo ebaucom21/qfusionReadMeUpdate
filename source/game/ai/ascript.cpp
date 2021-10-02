@@ -445,6 +445,7 @@ static const asClassDescriptor_t asAiPendingLookAtPointClassDescriptor =
     NULL, NULL
 };
 
+/*
 static bool objectSelectedNavEntity_isValid(const SelectedNavEntity *obj) { return obj->IsValid(); }
 static bool objectSelectedNavEntity_isEmpty(const SelectedNavEntity *obj) { return obj->IsEmpty(); }
 
@@ -500,7 +501,7 @@ static const asClassDescriptor_t asAiSelectedNavEntityClassDescriptor =
     EMPTY_PROPERTIES,
 
     NULL, NULL
-};
+};*/
 
 static bool objectSelectedEnemies_areValid(const SelectedEnemies *obj)
 {
@@ -837,10 +838,11 @@ unsigned objectBot_nextSimilarWorldStateInstanceId(Bot *bot)
     return CHECK_BOT_HANDLE(bot)->NextSimilarWorldStateInstanceId();
 }
 
+/*
 const SelectedNavEntity *objectBot_get_selectedNavEntity(const Bot *bot)
 {
     return &CHECK_BOT_HANDLE(bot)->GetSelectedNavEntity();
-}
+}*/
 
 const SelectedEnemies *objectBot_get_selectedEnemies(const Bot *bot)
 {
@@ -899,7 +901,7 @@ static const asMethod_t asbot_Methods[] =
 
     DECLARE_METHOD(uint, nextSimilarWorldStateInstanceId, (), objectBot_nextSimilarWorldStateInstanceId),
 
-    DECLARE_METHOD(const AISelectedNavEntity @, get_selectedNavEntity, () const, objectBot_get_selectedNavEntity),
+    //DECLARE_METHOD(const AISelectedNavEntity @, get_selectedNavEntity, () const, objectBot_get_selectedNavEntity),
     DECLARE_METHOD(const AISelectedEnemies @, get_selectedEnemies, () const, objectBot_get_selectedEnemies),
 
     DECLARE_METHOD(int, checkTravelTimeMillis, (const Vec3 &in from, const Vec3 &in to, bool allowUnreachable), objectBot_checkTravelTimeMillis),
@@ -936,7 +938,7 @@ const asClassDescriptor_t *asAIClassesDescriptors[] =
     &asAiOffenseSpotClassDescriptor,
     &asAiCampingSpotClassDescriptor,
     &asAiPendingLookAtPointClassDescriptor,
-    &asAiSelectedNavEntityClassDescriptor,
+    //&asAiSelectedNavEntityClassDescriptor,
     &asAiSelectedEnemiesClassDescriptor,
     &asAiWeightConfigVarGroupClassDescriptor,
     &asAiWeightConfigVarClassDescriptor,

@@ -25,7 +25,6 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 	, skillLevel( skillLevel_ )
 	, selectedEnemies( this )
 	, lostEnemies( this )
-	, selectedNavEntity( nullptr, 0, 0, 0 )
 	, m_movementSubsystem( this )
 	, awarenessModule( this )
 	, planningModule( this )
@@ -139,29 +138,36 @@ void Bot::CheckTargetProximity() {
 		return;
 	}
 
-	OnNavTargetTouchHandled();
+	invalidateNavTarget();
 }
 
-const SelectedNavEntity &Bot::GetOrUpdateSelectedNavEntity() {
-	if( selectedNavEntity.IsValid() && !selectedNavEntity.IsEmpty() ) {
-		return selectedNavEntity;
+const std::optional<SelectedNavEntity> &Bot::GetOrUpdateSelectedNavEntity() {
+	const NavEntity *currNavEntity = nullptr;
+	if( m_selectedNavEntity ) {
+		if( m_selectedNavEntity->timeoutAt < level.time ) {
+			return m_selectedNavEntity;
+		}
+		currNavEntity = m_selectedNavEntity->navEntity;
 	}
 
 	// Force an update using the currently selected nav entity
 	// (it's OK if it's not valid) as a reference info for selection
-	ForceSetNavEntity( planningModule.SuggestGoalNavEntity( selectedNavEntity ) );
+	ForceSetNavEntity( planningModule.SuggestGoalNavEntity( currNavEntity ) );
 	// Return the modified selected nav entity
-	return selectedNavEntity;
+	return m_selectedNavEntity;
 }
 
-void Bot::ForceSetNavEntity( const SelectedNavEntity &selectedNavEntity_ ) {
+void Bot::ForceSetNavEntity( const std::optional<SelectedNavEntity> &selectedNavEntity ) {
 	// Use direct access to the field to skip assertion
-	this->selectedNavEntity = selectedNavEntity_;
+	m_selectedNavEntity = selectedNavEntity;
 
-	if( !selectedNavEntity.IsEmpty() ) {
+	if( m_selectedNavEntity ) {
 		lastItemSelectedAt = level.time;
-	} else if( lastItemSelectedAt >= noItemAvailableSince ) {
-		noItemAvailableSince = level.time;
+	} else {
+		// Edge detection
+		if( lastItemSelectedAt >= noItemAvailableSince ) {
+			noItemAvailableSince = level.time;
+		}
 	}
 }
 
@@ -196,6 +202,9 @@ void Bot::GhostingFrame() {
 	planningModule.ClearGoalAndPlan();
 
 	m_movementSubsystem.Reset();
+
+	navTarget = nullptr;
+	m_selectedNavEntity = std::nullopt;
 
 	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
 	self->nextThink = level.time + 100;
@@ -247,7 +256,12 @@ void Bot::OnRespawn() {
 	VectorClear( self->r.client->ps.pmove.delta_angles );
 	self->r.client->last_activity = level.time;
 
-	ResetNavigation();
+	selectedEnemies.Invalidate();
+	planningModule.ClearGoalAndPlan();
+	m_movementSubsystem.Reset();
+	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
+	navTarget = nullptr;
+	m_selectedNavEntity = std::nullopt;
 }
 
 void Bot::Think() {
@@ -328,19 +342,17 @@ void Bot::CallActiveClientThink( const BotInput &input ) {
 }
 
 void Bot::OnMovementToNavTargetBlocked() {
-	if( selectedNavEntity.IsValid() && !selectedNavEntity.IsEmpty() ) {
+	if( m_selectedNavEntity ) {
 		// If a new nav target is set in blocked state, the bot remains blocked
 		// for few millis since the ground acceleration is finite.
 		// Prevent classifying just set nav targets as ones that have led to blocking.
 		if( level.time - lastBlockedNavTargetReportedAt > 400 ) {
 			lastBlockedNavTargetReportedAt = level.time;
 
-			if( const auto *navEntity = selectedNavEntity.GetNavEntity() ) {
-				planningModule.OnMovementToNavEntityBlocked( navEntity );
-			}
+			planningModule.OnMovementToNavEntityBlocked( m_selectedNavEntity->navEntity );
 
 			planningModule.ClearGoalAndPlan();
-			selectedNavEntity.InvalidateNextFrame();
+			m_selectedNavEntity = std::nullopt;
 		}
 	}
 }

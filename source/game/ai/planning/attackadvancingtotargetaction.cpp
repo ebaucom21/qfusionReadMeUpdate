@@ -3,11 +3,10 @@
 
 void AttackAdvancingToTargetActionRecord::Activate() {
 	BotActionRecord::Activate();
+	assert( m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) );
 	// Let's provide a spot origin that matches the nav entity
 	// (we should use spots since to conform to the rest of combat actions).
-	Vec3 origin( Self()->GetSelectedNavEntity().GetNavEntity()->Origin() );
-	this->navSpot.Set( origin, 16.0f, NavTargetFlags::REACH_ON_RADIUS );
-	Self()->SetNavTarget( &this->navSpot );
+	Self()->SetNavTarget( m_selectedNavEntity.navEntity );
 	Self()->GetMiscTactics().Clear();
 	Self()->GetMiscTactics().PreferAttackRatherThanRun();
 	// This flag affects weapons choice. This action is very likely to behave similar to retreating.
@@ -21,16 +20,8 @@ void AttackAdvancingToTargetActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status AttackAdvancingToTargetActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	const auto &selectedNavEntity = Self()->GetSelectedNavEntity();
-	if( !selectedNavEntity.IsValid() || selectedNavEntity.IsEmpty() ) {
-		Debug( "The currently selected nav entity is invalid or is empty\n" );
-		return INVALID;
-	}
-
-	const auto *const navEntity = selectedNavEntity.GetNavEntity();
-	constexpr float distanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( navEntity->Origin().SquareDistance2DTo( currWorldState.NavTargetOriginVar().Value() ) > distanceError ) {
-		Debug( "The nav target var value does not match selected nav entity\n" );
+	if( !m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) ) {
+		Debug( "The actual selected nav entity differs from the stored one\n" );
 		return INVALID;
 	}
 
@@ -56,7 +47,8 @@ PlannerNode *AttackAdvancingToTargetAction::TryApply( const WorldState &worldSta
 
 	// Prevent excessive fruitless branching
 	constexpr float distanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( worldState.BotOriginVar().Value().SquareDistanceTo( Self()->Origin() ) > distanceError ) {
+	constexpr float squareDistanceError = distanceError * distanceError;
+	if( worldState.BotOriginVar().Value().SquareDistanceTo( Self()->Origin() ) > squareDistanceError ) {
 		Debug( "This action is applicable only for the real bot origin\n" );
 		return nullptr;
 	}
@@ -78,14 +70,15 @@ PlannerNode *AttackAdvancingToTargetAction::TryApply( const WorldState &worldSta
 	// Check whether the nav target is based on the selected nav entity
 	// TODO: It could look much better in the planned flexible world state interface
 
-	const auto &selectedNavEntity = Self()->GetSelectedNavEntity();
-	if( !selectedNavEntity.IsValid() || selectedNavEntity.IsEmpty() ) {
+	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
+	if( !maybeSelectedNavEntity ) {
 		Debug( "The currently selected nav entity is invalid or is empty\n" );
 		return nullptr;
 	}
 
-	const auto *navEntity = selectedNavEntity.GetNavEntity();
-	if( navEntity->Origin().SquareDistance2DTo( worldState.NavTargetOriginVar().Value() ) > distanceError ) {
+	const SelectedNavEntity &selectedNavEntity = *maybeSelectedNavEntity;
+	const NavEntity *navEntity = selectedNavEntity.navEntity;
+	if( navEntity->Origin().SquareDistance2DTo( worldState.NavTargetOriginVar().Value() ) > squareDistanceError ) {
 		Debug( "The nav target var value does not match selected nav entity\n" );
 		return nullptr;
 	}
@@ -110,7 +103,8 @@ PlannerNode *AttackAdvancingToTargetAction::TryApply( const WorldState &worldSta
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), Self()->GetSelectedEnemies().InstanceId() ) );
+	const unsigned selectedEnemiesInstanceId = Self()->GetSelectedEnemies().InstanceId();
+	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity, selectedEnemiesInstanceId ) );
 	if( !plannerNode ) {
 		Debug( "Can't allocate planner node\n" );
 		return nullptr;

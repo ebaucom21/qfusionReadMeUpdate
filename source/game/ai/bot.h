@@ -312,12 +312,23 @@ protected:
 		awarenessModule.SetFrameAffinity( modulo, offset );
 	}
 
-	void OnNavTargetReset() override {
-		selectedNavEntity.InvalidateNextFrame();
+	void invalidateNavTarget() override {
+		Ai::invalidateNavTarget();
+		m_selectedNavEntity = std::nullopt;
 	}
 
-	void OnNavTargetTouchHandled() override {
-		selectedNavEntity.InvalidateNextFrame();
+	void notifyOfNavEntitySignaledAsReached( const NavEntity *navEntity_ ) override {
+		Ai::notifyOfNavEntitySignaledAsReached( navEntity_ );
+		if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity_ ) {
+			m_selectedNavEntity = std::nullopt;
+		}
+	}
+
+	void notifyOfNavEntityRemoved( const NavEntity *navEntity_ ) override {
+		Ai::notifyOfNavEntityRemoved( navEntity_ );
+		if( m_selectedNavEntity && m_selectedNavEntity->navEntity == navEntity_ ) {
+			m_selectedNavEntity = std::nullopt;
+		}
 	}
 
 	void TouchedOtherEntity( const edict_t *entity ) override;
@@ -337,7 +348,7 @@ private:
 	SelectedEnemies selectedEnemies;
 	SelectedEnemies lostEnemies;
 	SelectedMiscTactics selectedTactics;
-	SelectedNavEntity selectedNavEntity;
+	std::optional<SelectedNavEntity> m_selectedNavEntity;
 
 	// Put the movement subsystem at the object beginning so the relative offset is small
 	MovementSubsystem m_movementSubsystem;
@@ -394,17 +405,8 @@ private:
 	bool hasOnlyGunblade { false };
 
 	inline bool ShouldUseRoamSpotAsNavTarget() const {
-		const auto &selectedNavEntity = GetSelectedNavEntity();
-		// Wait for item selection in this case (the selection is just no longer valid).
-		if( !selectedNavEntity.IsValid() ) {
-			return false;
-		}
-		// There was a valid item selected
-		if( !selectedNavEntity.IsEmpty() ) {
-			return false;
-		}
-
-		return level.time - noItemAvailableSince > 3000;
+		const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = GetSelectedNavEntity();
+		return ( maybeSelectedNavEntity == std::nullopt ) && ( level.time - noItemAvailableSince > 3000 );
 	}
 
 	bool CanChangeWeapons() const {
@@ -433,7 +435,7 @@ public:
 
 	int64_t LastKnockbackAt() const { return lastKnockbackAt; }
 
-	void ForceSetNavEntity( const SelectedNavEntity &selectedNavEntity_ );
+	void ForceSetNavEntity( const std::optional<SelectedNavEntity> &selectedNavEntity );
 
 	void ForcePlanBuilding() {
 		planner->ClearGoalAndPlan();
@@ -462,8 +464,8 @@ public:
 		return m_movementSubsystem.CanInterruptMovement();
 	}
 
-	const SelectedNavEntity &GetSelectedNavEntity() const {
-		return selectedNavEntity;
+	const std::optional<SelectedNavEntity> &GetSelectedNavEntity() const {
+		return m_selectedNavEntity;
 	}
 
 	bool NavTargetWorthRushing() const;
@@ -481,7 +483,7 @@ public:
 	// The buffer is assumed to be capable to store all implemented weapons.
 	int GetWeaponsForWeaponJumping( int *weaponNumsBuffer );
 
-	const SelectedNavEntity &GetOrUpdateSelectedNavEntity();
+	const std::optional<SelectedNavEntity> &GetOrUpdateSelectedNavEntity();
 
 	const SelectedEnemies &GetSelectedEnemies() const { return selectedEnemies; }
 

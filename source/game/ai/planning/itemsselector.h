@@ -5,61 +5,22 @@
 #include "goalentities.h"
 #include "../../../qcommon/wswstaticvector.h"
 
-class SelectedNavEntity {
-	friend class Bot;
-	friend class BotItemsSelector;
-	friend class AiSquad;
-
+struct SelectedNavEntity {
+	int64_t timeoutAt;
 	const NavEntity *navEntity;
+	unsigned instanceId;
 	float cost;
 	float pickupGoalWeight;
-	int64_t selectedAt;
-	int64_t timeoutAt;
 
-	SelectedNavEntity( const NavEntity *navEntity_,
-					   float cost_,
-					   float pickupGoalWeight_,
-					   int64_t timeoutAt_ )
-		: navEntity( navEntity_ )
-		, cost( cost_ )
-		, pickupGoalWeight( pickupGoalWeight_ )
-		, selectedAt( level.time )
-		, timeoutAt( timeoutAt_ ) {}
-
-	void CheckValid( const char *message = nullptr ) const {
-		if( !IsValid() ) {
-			if( message ) {
-				AI_FailWith( "SelectedNavEntity::CheckValid()", "%s\n", message );
-			} else {
-				AI_FailWith( "SelectedNavEntity::CheckValid()", "A check has failed\n" );
-			}
-		}
+	[[nodiscard]]
+	bool isSame( const std::optional<SelectedNavEntity> &maybeThat ) const {
+		return maybeThat && instanceId == maybeThat->instanceId;
 	}
 
-public:
-	bool IsEmpty() const { return navEntity == nullptr; }
-	// Empty one is considered valid (until it times out)
-	bool IsValid() const { return timeoutAt > level.time; }
-
-	void InvalidateNextFrame() {
-		timeoutAt = level.time + 1;
-	}
-
-	// Avoid class/method name clash by using Get prefix
-	const NavEntity *GetNavEntity() const {
-		CheckValid();
-		return navEntity;
-	}
-
-	float GetCost() const {
-		CheckValid();
-		return cost;
-	}
-
-	float PickupGoalWeight() const {
-		CheckValid();
-		return pickupGoalWeight;
-	}
+	[[nodiscard]]
+	static auto nextInstanceId() -> unsigned { return ++s_nextInstanceId; }
+private:
+	static inline unsigned s_nextInstanceId { 0 };
 };
 
 class BotItemsSelector {
@@ -114,12 +75,10 @@ class BotItemsSelector {
 	void Debug( _Printf_format_string_ const char *format, ... );
 #endif
 
-	SelectedNavEntity SelectEmpty() {
-		return SelectedNavEntity( nullptr, std::numeric_limits<float>::max(), 0.0f, level.time + 200 );
-	}
-
 	SelectedNavEntity Select( const NavEntity *navEntity, float cost, unsigned timeout ) {
-		return SelectedNavEntity( navEntity, cost, GetGoalWeight( navEntity->Id() ), level.time + timeout );
+		return { .timeoutAt = level.time + timeout, .navEntity = navEntity,
+				 .instanceId = SelectedNavEntity::nextInstanceId(),
+				 .cost = cost, .pickupGoalWeight = GetGoalWeight( navEntity->Id() ) };
 	}
 
 	bool IsShortRangeReachable( const NavEntity *navEntity, const int *fromAreaNums, int numFromAreas ) const;
@@ -146,7 +105,7 @@ public:
 		return navTarget && navTarget->IsTopTierItem( overriddenEntityWeights );
 	}
 
-	SelectedNavEntity SuggestGoalNavEntity( const SelectedNavEntity &currSelectedNavEntity );
+	std::optional<SelectedNavEntity> SuggestGoalNavEntity( const NavEntity *currSelectedNavEntity );
 };
 
 #endif

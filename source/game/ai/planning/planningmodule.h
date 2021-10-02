@@ -108,8 +108,8 @@ public:
 		itemsSelector.OverrideEntityWeight( ent, weight );
 	}
 
-	SelectedNavEntity SuggestGoalNavEntity( const SelectedNavEntity &currSelectedNavEntity ) {
-		return itemsSelector.SuggestGoalNavEntity( currSelectedNavEntity );
+	std::optional<SelectedNavEntity> SuggestGoalNavEntity( const NavEntity *currNavEntity ) {
+		return itemsSelector.SuggestGoalNavEntity( currNavEntity );
 	}
 
 	bool IsTopTierItem( const NavTarget *navTarget ) const {

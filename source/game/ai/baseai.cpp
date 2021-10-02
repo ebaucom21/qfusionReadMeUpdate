@@ -36,10 +36,6 @@ void Ai::SetFrameAffinity( unsigned modulo, unsigned offset ) {
 	planner->SetFrameAffinity( modulo, offset );
 }
 
-void Ai::ResetNavigation() {
-	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-}
-
 void Ai::SetAttitude( const edict_t *ent, int attitude_ ) {
 	int entNum = ENTNUM( const_cast<edict_t*>( ent ) );
 	oldAttitude[entNum] = this->attitude[entNum];
@@ -138,7 +134,7 @@ void Ai::TouchedEntity( edict_t *ent ) {
 		// Clear goal area num to ensure bot will not repeatedly try to reach that area even if he has no goals.
 		// Usually it gets overwritten in this or next frame, when bot picks up next goal,
 		// but sometimes there are no other goals to pick up.
-		OnNavTargetTouchHandled();
+		invalidateNavTarget();
 		return;
 	}
 	TouchedOtherEntity( ent );

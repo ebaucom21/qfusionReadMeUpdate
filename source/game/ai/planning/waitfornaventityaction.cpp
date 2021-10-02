@@ -5,6 +5,8 @@ void WaitForNavEntityActionRecord::Activate() {
 	BotActionRecord::Activate();
 	Self()->GetMiscTactics().shouldMoveCarefully = true;
 	Self()->GetMiscTactics().PreferAttackRatherThanRun();
+	assert( m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) );
+	const NavEntity *navEntity = m_selectedNavEntity.navEntity;
 	Self()->SetNavTarget( navEntity );
 	Self()->SetCampingSpot( AiCampingSpot( navEntity->Origin(), GOAL_PICKUP_ACTION_RADIUS, 0.5f ) );
 }
@@ -21,15 +23,12 @@ AiActionRecord::Status WaitForNavEntityActionRecord::UpdateStatus( const WorldSt
 		return COMPLETED;
 	}
 
-	const auto &currSelectedNavEntity = Self()->GetSelectedNavEntity();
-	if( !navEntity->IsBasedOnNavEntity( currSelectedNavEntity.GetNavEntity() ) ) {
-		Debug( "Nav entity does no longer match current selected nav entity\n" );
+	if( !m_selectedNavEntity.isSame( Self()->GetSelectedNavEntity() ) ) {
+		Debug( "The actual selected nav entity differs from the stored one\n" );
 		return INVALID;
 	}
-	if( !navEntity->SpawnTime() ) {
-		Debug( "Illegal nav entity spawn time (looks like it has been invalidated)\n" );
-		return INVALID;
-	}
+
+	const NavEntity *navEntity = m_selectedNavEntity.navEntity;
 	// Wait duration is too long (more than it was estimated)
 	const auto waitDuration = (uint64_t)( navEntity->SpawnTime() - level.time );
 	if( waitDuration > navEntity->MaxWaitDuration() ) {
@@ -79,8 +78,9 @@ PlannerNode *WaitForNavEntityAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	const auto &itemNavEntity = Self()->GetSelectedNavEntity();
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), itemNavEntity.GetNavEntity() ) );
+	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
+	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
+	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
 	if( !plannerNode ) {
 		return nullptr;
 	}
@@ -89,7 +89,7 @@ PlannerNode *WaitForNavEntityAction::TryApply( const WorldState &worldState ) {
 
 	plannerNode.WorldState() = worldState;
 	plannerNode.WorldState().HasJustPickedGoalItemVar().SetValue( true ).SetIgnore( false );
-	plannerNode.WorldState().BotOriginVar().SetValue( itemNavEntity.GetNavEntity()->Origin() );
+	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
 	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, 12.0f );
 	plannerNode.WorldState().ResetTacticalSpots();
 
