@@ -10,9 +10,13 @@
 #include <cmath>
 #include <cstdlib>
 
-#ifndef PUBLIC_BUILD
-#define CHECK_ACTION_SUGGESTION_LOOPS
+// Suppress assertions for Windows non-public builds
+#if !defined( PUBLIC_BUILD ) && !defined( _WIN32 )
 #define ENABLE_MOVEMENT_ASSERTIONS
+#endif
+
+#if !defined( PUBLIC_BUILD )
+#define CHECK_ACTION_SUGGESTION_LOOPS
 #define CHECK_INFINITE_NEXT_STEP_LOOPS
 extern int nextStepIterationsCounter;
 static constexpr int NEXT_STEP_INFINITE_LOOP_THRESHOLD = 10000;
