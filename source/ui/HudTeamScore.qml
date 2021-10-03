@@ -8,6 +8,7 @@ Item {
 
     property int score
     property string name
+    property string clan
     property color color
     property bool leftAligned
     property string teamStatus
@@ -114,14 +115,27 @@ Item {
     }
 
     Label {
+        anchors.horizontalCenter: nameLabel.horizontalCenter
+        anchors.bottom: nameLabel.top
+        anchors.bottomMargin: -4
+        font.weight: Font.Black
+        font.letterSpacing: 3
+        font.pointSize: 13
+        font.capitalization: Font.AllUppercase
+        style: Text.Raised
+        text: clan
+    }
+
+    Label {
         id: nameLabel
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         anchors.leftMargin: 16
         anchors.rightMargin: 16
         font.weight: Font.ExtraBold
-        font.pointSize: 24
-        font.letterSpacing: 3
+        font.pointSize: clan.length > 0 ? 19 : 24
+        font.letterSpacing: clan.length > 0 ? 3 : 1
+        font.capitalization: Font.AllUppercase
         style: Text.Raised
         text: name
     }

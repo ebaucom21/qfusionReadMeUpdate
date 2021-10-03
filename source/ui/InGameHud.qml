@@ -194,6 +194,7 @@ Item {
                     leftAligned: true
                     color: hudDataModel.alphaColor
                     name: hudDataModel.alphaName
+                    clan: hudDataModel.alphaClan
                     score: hudDataModel.alphaScore
                     teamStatus: hudDataModel.alphaTeamStatus
                     playersStatus: hudDataModel.alphaPlayersStatus
@@ -207,6 +208,7 @@ Item {
                     leftAligned: false
                     color: hudDataModel.betaColor
                     name: hudDataModel.betaName
+                    clan: hudDataModel.betaClan
                     score: hudDataModel.betaScore
                     teamStatus: hudDataModel.betaTeamStatus
                     playersStatus: hudDataModel.betaPlayersStatus

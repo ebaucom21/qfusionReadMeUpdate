@@ -30,8 +30,10 @@ class NameChangesTracker {
 	static NameChangesTracker s_instance;
 public:
 	NameChangesTracker() noexcept {
-		m_nameCounters.fill( 0 );
-		m_clanCounters.fill( 0 );
+		// Fill by ones so an initial check for default-zero counter fields
+		// in various classes gets triggered upon first access.
+		m_nameCounters.fill( 1u );
+		m_clanCounters.fill( 1u );
 	}
 
 	[[nodiscard]]

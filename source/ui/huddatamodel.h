@@ -258,9 +258,14 @@ class HudDataModel : public QObject {
 	QByteArray m_styledAlphaName;
 	QByteArray m_styledBetaName;
 
+	QByteArray m_styledAlphaClan;
+	QByteArray m_styledBetaClan;
+
 	QByteArray m_alphaPlayersStatus, m_betaPlayersStatus;
 	int m_numAliveAlphaPlayers { 0 }, m_numAliveBetaPlayers { 0 };
 	int m_pendingNumAliveAlphaPlayers { 0 }, m_pendingNumAliveBetaPlayers { 0 };
+	unsigned m_lastIndividualAlphaClanCounter { 0 }, m_lastIndividualBetaClanCounter { 0 };
+	std::optional<int> m_pendingIndividualAlphaPlayerNum, m_pendingIndividualBetaPlayerNum;
 	wsw::StaticString<32> m_alphaTeamStatus, m_betaTeamStatus;
 	QByteArray m_styledAlphaTeamStatus, m_styledBetaTeamStatus;
 
@@ -305,7 +310,7 @@ class HudDataModel : public QObject {
 	}
 
 	static void setFormattedTime( QByteArray *dest, int value );
-	static void setStyledTeamName( QByteArray *dest, const wsw::StringView &name );
+	static void setStyledName( QByteArray *dest, const wsw::StringView &name );
 
 	[[nodiscard]]
 	auto getActiveWeaponIcon() const -> QByteArray;
@@ -328,6 +333,10 @@ public:
 	Q_PROPERTY( const QByteArray alphaName MEMBER m_styledAlphaName NOTIFY alphaNameChanged );
 	Q_SIGNAL void betaNameChanged( const QByteArray &betaName );
 	Q_PROPERTY( const QByteArray betaName MEMBER m_styledBetaName NOTIFY betaNameChanged );
+	Q_SIGNAL void alphaClanChanged( const QByteArray &alphaClan );
+	Q_PROPERTY( const QByteArray alphaClan MEMBER m_styledAlphaClan NOTIFY alphaClanChanged );
+	Q_SIGNAL void betaClanChanged( const QByteArray &betaClan );
+	Q_PROPERTY( const QByteArray betaClan MEMBER m_styledBetaClan NOTIFY betaClanChanged );
 	Q_SIGNAL void alphaColorChanged( const QColor &alphaColor );
 	Q_PROPERTY( QColor alphaColor MEMBER m_alphaColor NOTIFY alphaColorChanged );
 	Q_SIGNAL void betaColorChanged( const QColor &betaColor );

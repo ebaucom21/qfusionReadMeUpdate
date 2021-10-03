@@ -24,6 +24,7 @@ auto CG_WeaponAmmo( int weapon ) -> std::pair<int, int>;
 std::optional<unsigned> CG_ActiveChasePov();
 bool CG_IsPovAlive();
 wsw::StringView CG_PlayerName( unsigned playerNum );
+wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );
 
 namespace wsw::ui {
@@ -737,7 +738,7 @@ void HudDataModel::setFormattedTime( QByteArray *dest, int value ) {
 	}
 }
 
-void HudDataModel::setStyledTeamName( QByteArray *dest, const wsw::StringView &name ) {
+void HudDataModel::setStyledName( QByteArray *dest, const wsw::StringView &name ) {
 	// TODO: toStyledText() should allow accepting an external buffer of an arbitrary structurally compatible type
 	*dest = toStyledText( name ).toLatin1();
 }
@@ -899,15 +900,43 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	const wsw::StringView alphaName( ::cl.configStrings.getTeamAlphaName().value_or( wsw::StringView() ) );
 	if( !m_alphaName.equals( alphaName ) ) {
 		m_alphaName.assign( alphaName );
-		setStyledTeamName( &m_styledAlphaName, alphaName );
+		setStyledName( &m_styledAlphaName, alphaName );
 		Q_EMIT alphaNameChanged( m_styledAlphaName );
 	}
 
 	const wsw::StringView betaName( ::cl.configStrings.getTeamBetaName().value_or( wsw::StringView() ) );
 	if( !m_betaName.equals( betaName ) ) {
 		m_betaName.assign( betaName );
-		setStyledTeamName( &m_styledBetaName, betaName );
+		setStyledName( &m_styledBetaName, betaName );
 		Q_EMIT betaNameChanged( m_styledBetaName );
+	}
+
+	// Check separately displayed clan name changes.
+	// This also naturally accounts for switching to non-individual gametypes.
+	const auto *const nameChangesTracker = NameChangesTracker::instance();
+	if( m_pendingIndividualAlphaPlayerNum ) {
+		const unsigned counter = nameChangesTracker->getLastClanUpdateCounter( *m_pendingIndividualAlphaPlayerNum );
+		if( counter != m_lastIndividualAlphaClanCounter ) {
+			setStyledName( &m_styledAlphaClan, CG_PlayerClan( *m_pendingIndividualAlphaPlayerNum ) );
+			Q_EMIT alphaClanChanged( m_styledAlphaClan );
+		}
+	} else {
+		if( !m_styledAlphaClan.isEmpty() ) {
+			m_styledAlphaClan.clear();
+			Q_EMIT alphaClanChanged( m_styledAlphaClan );
+		}
+	}
+	if( m_pendingIndividualBetaPlayerNum ) {
+		const unsigned counter = nameChangesTracker->getLastClanUpdateCounter( *m_pendingIndividualBetaPlayerNum );
+		if( counter != m_lastIndividualBetaClanCounter ) {
+			setStyledName( &m_styledBetaClan, CG_PlayerClan( *m_pendingIndividualBetaPlayerNum ) );
+			Q_EMIT betaClanChanged( m_styledBetaClan );
+		}
+	} else {
+		if( !m_styledBetaClan.isEmpty() ) {
+			m_styledBetaClan = QByteArray();
+			Q_EMIT betaClanChanged( m_styledBetaClan );
+		}
 	}
 
 	if( m_numAliveAlphaPlayers != m_pendingNumAliveAlphaPlayers ) {
@@ -1044,9 +1073,9 @@ void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scorebo
 	m_pendingAlphaScore = scoreboardData.alphaScore;
 	m_pendingBetaScore = scoreboardData.betaScore;
 	if( CG_HasTwoTeams() ) {
+		updateTeamPlayerStatuses( scoreboardData );
 		if( const auto maybeActiveChasePov = CG_ActiveChasePov() ) {
 			m_teamListModel.update( scoreboardData, *maybeActiveChasePov );
-			updateTeamPlayerStatuses( scoreboardData );
 		}
 	}
 }
@@ -1068,13 +1097,42 @@ auto HudDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteA
 void HudDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData ) {
 	m_pendingNumAliveAlphaPlayers = 0;
 	m_pendingNumAliveBetaPlayers = 0;
-	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
-		if( scoreboardData.isPlayerConnected( i ) && !scoreboardData.isPlayerGhosting( i ) ) {
-			const int team = scoreboardData.getPlayerTeam( i );
-			if( team == TEAM_ALPHA ) {
-				m_pendingNumAliveAlphaPlayers++;
-			} else if( team == TEAM_BETA ) {
-				m_pendingNumAliveBetaPlayers++;
+
+	m_pendingIndividualAlphaPlayerNum = std::nullopt;
+	m_pendingIndividualBetaPlayerNum = std::nullopt;
+
+	if( GS_IndividualGameType() ) {
+		for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+			if( scoreboardData.isPlayerConnected( i ) ) {
+				if( const int team = scoreboardData.getPlayerTeam( i ); team > TEAM_PLAYERS ) {
+					if( team == TEAM_ALPHA ) {
+						m_pendingIndividualAlphaPlayerNum = scoreboardData.getPlayerNum( i );
+						if( !scoreboardData.isPlayerGhosting( i ) ) {
+							m_pendingNumAliveAlphaPlayers++;
+						}
+					} else {
+						m_pendingIndividualBetaPlayerNum = scoreboardData.getPlayerNum( i );
+						if( !scoreboardData.isPlayerGhosting( i ) ) {
+							m_pendingNumAliveBetaPlayers++;
+						}
+					}
+				}
+				// Check for early exit
+				if( m_pendingIndividualAlphaPlayerNum && m_pendingIndividualBetaPlayerNum ) {
+					break;
+				}
+			}
+		}
+	} else {
+		for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+			if( scoreboardData.isPlayerConnected( i ) && !scoreboardData.isPlayerGhosting( i ) ) {
+				if( const int team = scoreboardData.getPlayerTeam( i ); team > TEAM_PLAYERS ) {
+					if( team == TEAM_ALPHA ) {
+						m_pendingNumAliveAlphaPlayers++;
+					} else {
+						m_pendingNumAliveBetaPlayers++;
+					}
+				}
 			}
 		}
 	}
