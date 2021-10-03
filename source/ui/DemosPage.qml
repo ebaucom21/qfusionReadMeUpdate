@@ -272,9 +272,8 @@ Item {
                 anchors.top: timestampLabel.bottom
                 anchors.topMargin: 4
                 anchors.right: parent.right
-                width: 48
+                width: 56
                 highlighted: true
-                flat: true
                 text: "\u25B8"
 
                 onClicked: {

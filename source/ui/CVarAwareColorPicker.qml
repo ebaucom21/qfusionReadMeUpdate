@@ -239,6 +239,7 @@ RowLayout {
                  popup.closeSelf()
             }
             onRejected: popup.closeSelf()
+            onDismissed: popup.closeSelf()
 
             contentComponent: Item {
                 RowLayout {

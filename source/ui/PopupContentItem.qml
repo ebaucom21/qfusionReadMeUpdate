@@ -27,6 +27,7 @@ Item {
 
     signal accepted()
     signal rejected()
+    signal dismissed()
 
     Label {
         id: titleLabel
@@ -68,7 +69,7 @@ Item {
             id: rejectButton
             anchors.bottom: parent.bottom
             anchors.right: acceptButton.left
-            anchors.rightMargin: 4
+            anchors.rightMargin: 12
             visible: hasRejectButton
             enabled: rejectButtonEnabled
             flat: true
@@ -102,7 +103,6 @@ Item {
             anchors.right: parent.right
             visible: hasAcceptButton
             enabled: acceptButtonEnabled
-            flat: true
             highlighted: acceptButtonEnabled
             text: acceptButtonText
             onClicked: root.accepted()
@@ -111,7 +111,8 @@ Item {
 
     Keys.onPressed: {
         if (event.key === Qt.Key_Escape) {
-            root.rejected()
+            event.accepted = true
+            root.dismissed()
         }
     }
 }

@@ -43,6 +43,7 @@ Item {
             rejectButtonText: "Quit"
             onAccepted: popup.closeSelf()
             onRejected: wsw.quit()
+            onDismissed: popup.closeSelf()
         }
     }
 

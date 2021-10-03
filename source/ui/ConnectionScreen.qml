@@ -76,6 +76,7 @@ Item {
                     }
                 }
                 onRejected: wsw.clearFailedConnectionState()
+                onDismissed: wsw.clearFailedConnectionState()
                 contentComponent: Item {
                     Label {
                         id: descLabel
