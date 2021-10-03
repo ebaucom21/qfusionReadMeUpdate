@@ -4,8 +4,11 @@ import QtQuick.Controls.Material 2.12
 import net.warsow 2.6
 
 Item {
-    id: root
+    id: hudField
     anchors.fill: parent
+
+    property real alphaNameWidth
+    property real betaNameWidth
 
     Repeater {
         id: repeater
@@ -198,6 +201,8 @@ Item {
                     score: hudDataModel.alphaScore
                     teamStatus: hudDataModel.alphaTeamStatus
                     playersStatus: hudDataModel.alphaPlayersStatus
+                    siblingNameWidth: hudField.betaNameWidth
+                    onNameWidthChanged: hudField.alphaNameWidth = nameWidth
                 }
             }
 
@@ -212,6 +217,8 @@ Item {
                     score: hudDataModel.betaScore
                     teamStatus: hudDataModel.betaTeamStatus
                     playersStatus: hudDataModel.betaPlayersStatus
+                    siblingNameWidth: hudField.alphaNameWidth
+                    onNameWidthChanged: hudField.betaNameWidth = nameWidth
                 }
             }
 
@@ -251,7 +258,7 @@ Item {
             }
 
             function getQmlAnchor(anchorBit) {
-                const anchorItem = anchorItemIndex > 0 ? repeater.itemAt(anchorItemIndex - 1) : root
+                const anchorItem = anchorItemIndex > 0 ? repeater.itemAt(anchorItemIndex - 1) : hudField
                 return getQmlAnchorOfItem(selfAnchors, anchorItemAnchors, anchorBit, anchorItem)
             }
         }

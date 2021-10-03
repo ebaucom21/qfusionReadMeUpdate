@@ -14,9 +14,11 @@ Item {
     property string teamStatus
     property string playersStatus
 
-    property real progressAnimFrac: 0.0
+    property real siblingNameWidth
+    readonly property real nameWidth: nameLabel.implicitWidth
+    readonly property real maxNameWidth: Math.max(nameWidth, siblingNameWidth)
 
-    implicitWidth: 360
+    implicitWidth: scoreLabel.width + Math.max(270, maxNameWidth + 100)
     implicitHeight: 80
     width: implicitWidth
     height: implicitHeight
@@ -36,6 +38,11 @@ Item {
                 target: nameLabel
                 anchors.left: undefined
                 anchors.right: scoreLabel.left
+            }
+            AnchorChanges {
+                target: clanLabel
+                anchors.left: undefined
+                anchors.right: nameLabel.right
             }
             AnchorChanges {
                 target: teamStatusIndicator
@@ -59,6 +66,11 @@ Item {
             AnchorChanges {
                 target: nameLabel
                 anchors.left: scoreLabel.right
+                anchors.right: undefined
+            }
+            AnchorChanges {
+                target: clanLabel
+                anchors.left: nameLabel.left
                 anchors.right: undefined
             }
             AnchorChanges {
@@ -115,26 +127,23 @@ Item {
     }
 
     Label {
-        anchors.horizontalCenter: nameLabel.horizontalCenter
-        anchors.bottom: nameLabel.top
-        anchors.bottomMargin: -4
+        id: clanLabel
+        anchors.verticalCenter: colorBar.verticalCenter
         font.weight: Font.Black
-        font.letterSpacing: 3
-        font.pointSize: 13
-        font.capitalization: Font.AllUppercase
+        font.letterSpacing: 1.75
+        font.pointSize: 16
+        font.capitalization: Font.SmallCaps
         style: Text.Raised
         text: clan
     }
 
     Label {
         id: nameLabel
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: colorBar.height + 8 - 0.5 * nameLabel.height
         font.weight: Font.ExtraBold
-        font.pointSize: clan.length > 0 ? 19 : 24
-        font.letterSpacing: clan.length > 0 ? 3 : 1
+        font.pointSize: 25
+        font.letterSpacing: 1.25
         font.capitalization: Font.AllUppercase
         style: Text.Raised
         text: name
@@ -159,24 +168,5 @@ Item {
         font.weight: Font.ExtraBold
         font.pointSize: 20
         style: Text.Raised
-    }
-
-    SequentialAnimation {
-        running: progress
-        loops: Animation.Infinite
-        NumberAnimation {
-            target: root
-            property: "progressAnimFrac"
-            from: 0.0; to: 1.0
-            easing.type: Easing.OutQuad
-            duration: 100
-        }
-        NumberAnimation {
-            target: root
-            property: "progressAnimFrac"
-            from: 1.0; to: 0.0
-            easing.type: Easing.InQuad
-            duration: 100
-        }
     }
 }
