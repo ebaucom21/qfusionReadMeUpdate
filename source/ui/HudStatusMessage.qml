@@ -80,6 +80,7 @@ Item {
             font.letterSpacing: 2
             font.wordSpacing: 3
             font.capitalization: Font.SmallCaps
+            textFormat: Text.StyledText
             style: Text.Raised
             text: message
         }

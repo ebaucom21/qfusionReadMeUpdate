@@ -35,6 +35,7 @@ ListView {
                 font.weight: Font.Bold
                 font.pointSize: 14
                 font.letterSpacing: 2
+                textFormat: Text.StyledText
                 text: title
             }
             Label {
@@ -48,6 +49,7 @@ ListView {
                 font.weight: Font.Bold
                 font.pointSize: 12
                 font.letterSpacing: 2
+                textFormat: Text.StyledText
                 text: desc
             }
         }

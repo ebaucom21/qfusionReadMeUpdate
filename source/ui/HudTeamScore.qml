@@ -108,6 +108,7 @@ Item {
         font.letterSpacing: 3
         font.pointSize: 56
         style: Text.Raised
+        textFormat: Text.PlainText
         text: score
         transform: Scale {
             xScale: 1.00
@@ -122,6 +123,7 @@ Item {
         font.letterSpacing: 1.75
         font.pointSize: 16
         font.capitalization: Font.SmallCaps
+        textFormat: Text.StyledText
         style: Text.Raised
         text: clan
     }
@@ -134,18 +136,20 @@ Item {
         font.pointSize: 25
         font.letterSpacing: 1.25
         font.capitalization: Font.AllUppercase
+        textFormat: Text.StyledText
         style: Text.Raised
         text: name
     }
 
     Label {
         id: playersStatusIndicator
-        text: playersStatus
         anchors.leftMargin: 6
         anchors.rightMargin: 6
         anchors.verticalCenter: colorBar.verticalCenter
         font.weight: Font.ExtraBold
         font.pointSize: 20
         style: Text.Raised
+        textFormat: Text.StyledText
+        text: playersStatus
     }
 }

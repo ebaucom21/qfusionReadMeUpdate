@@ -96,6 +96,7 @@ Item {
             font.letterSpacing: 2
             font.wordSpacing: 3
             style: Text.Raised
+            textFormat: Text.StyledText
             text: model.message
         }
     }

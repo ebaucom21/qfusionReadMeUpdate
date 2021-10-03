@@ -51,12 +51,14 @@ Item {
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     style: Text.Raised
+                    textFormat: Text.PlainText
                     text: health
                 }
                 Label {
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     style: Text.Raised
+                    textFormat: Text.PlainText
                     text: "|"
                 }
                 Label {
@@ -65,6 +67,7 @@ Item {
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     style: Text.Raised
+                    textFormat: Text.PlainText
                     text: armor
                 }
                 Column {
@@ -103,6 +106,7 @@ Item {
                     font.pointSize: 12
                     font.letterSpacing: 1
                     style: Text.Raised
+                    textFormat: Text.StyledText
                     text: nickname
                     elide: Text.ElideMiddle
                 }
@@ -116,6 +120,7 @@ Item {
                     font.letterSpacing: 1
                     style: Text.Raised
                     elide: Text.ElideRight
+                    textFormat: Text.StyledText
                     text: location
                     opacity: 0.7
                 }

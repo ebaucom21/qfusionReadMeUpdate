@@ -36,6 +36,7 @@ Item {
         font.weight: Font.ExtraBold
         font.pointSize: 48
         style: Text.Raised
+        textFormat: Text.PlainText
         text: ":"
     }
 

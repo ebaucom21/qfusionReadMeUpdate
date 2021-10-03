@@ -35,6 +35,7 @@ Item {
                 font.letterSpacing: 1
                 font.pointSize: 12
                 style: Text.Raised
+                textFormat: Text.StyledText
                 text: attacker
             }
             Image {
@@ -51,6 +52,7 @@ Item {
                 font.letterSpacing: 1
                 font.pointSize: 12
                 style: Text.Raised
+                textFormat: Text.StyledText
                 text: victim
             }
         }
