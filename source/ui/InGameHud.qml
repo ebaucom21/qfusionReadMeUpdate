@@ -199,7 +199,6 @@ Item {
                     name: hudDataModel.alphaName
                     clan: hudDataModel.alphaClan
                     score: hudDataModel.alphaScore
-                    teamStatus: hudDataModel.alphaTeamStatus
                     playersStatus: hudDataModel.alphaPlayersStatus
                     siblingNameWidth: hudField.betaNameWidth
                     onNameWidthChanged: hudField.alphaNameWidth = nameWidth
@@ -215,7 +214,6 @@ Item {
                     name: hudDataModel.betaName
                     clan: hudDataModel.betaClan
                     score: hudDataModel.betaScore
-                    teamStatus: hudDataModel.betaTeamStatus
                     playersStatus: hudDataModel.betaPlayersStatus
                     siblingNameWidth: hudField.alphaNameWidth
                     onNameWidthChanged: hudField.betaNameWidth = nameWidth

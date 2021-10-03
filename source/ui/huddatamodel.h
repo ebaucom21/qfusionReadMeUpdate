@@ -266,8 +266,6 @@ class HudDataModel : public QObject {
 	int m_pendingNumAliveAlphaPlayers { 0 }, m_pendingNumAliveBetaPlayers { 0 };
 	unsigned m_lastIndividualAlphaClanCounter { 0 }, m_lastIndividualBetaClanCounter { 0 };
 	std::optional<int> m_pendingIndividualAlphaPlayerNum, m_pendingIndividualBetaPlayerNum;
-	wsw::StaticString<32> m_alphaTeamStatus, m_betaTeamStatus;
-	QByteArray m_styledAlphaTeamStatus, m_styledBetaTeamStatus;
 
 	ObjectiveIndicatorState m_indicatorStates[3];
 
@@ -349,10 +347,6 @@ public:
 	Q_PROPERTY( const QByteArray alphaPlayersStatus MEMBER m_alphaPlayersStatus NOTIFY alphaPlayersStatusChanged );
 	Q_SIGNAL void betaPlayersStatusChanged( const QByteArray &betaPlayersStatus );
 	Q_PROPERTY( const QByteArray betaPlayersStatus MEMBER m_betaPlayersStatus NOTIFY betaPlayersStatusChanged );
-	Q_SIGNAL void alphaTeamStatusChanged( const QByteArray &alphaTeamStatus );
-	Q_PROPERTY( const QByteArray alphaTeamStatus MEMBER m_styledAlphaTeamStatus NOTIFY alphaTeamStatusChanged );
-	Q_SIGNAL void betaTeamStatusChanged( const QByteArray &betaTeamStatus );
-	Q_PROPERTY( const QByteArray betaTeamStatus MEMBER m_styledBetaTeamStatus NOTIFY betaTeamStatusChanged );
 
 	Q_SIGNAL void indicator1StateChanged( const QVariant &indicator1State );
 	Q_PROPERTY( QVariant indicator1State READ getIndicator1State NOTIFY indicator1StateChanged );

@@ -11,7 +11,6 @@ Item {
     property string clan
     property color color
     property bool leftAligned
-    property string teamStatus
     property string playersStatus
 
     property real siblingNameWidth
@@ -45,11 +44,6 @@ Item {
                 anchors.right: nameLabel.right
             }
             AnchorChanges {
-                target: teamStatusIndicator
-                anchors.left: colorBar.left
-                anchors.right: undefined
-            }
-            AnchorChanges {
                 target: playersStatusIndicator
                 anchors.left: colorBar.left
                 anchors.right: undefined
@@ -72,11 +66,6 @@ Item {
                 target: clanLabel
                 anchors.left: nameLabel.left
                 anchors.right: undefined
-            }
-            AnchorChanges {
-                target: teamStatusIndicator
-                anchors.left: undefined
-                anchors.right: colorBar.right
             }
             AnchorChanges {
                 target: playersStatusIndicator
@@ -147,16 +136,6 @@ Item {
         font.capitalization: Font.AllUppercase
         style: Text.Raised
         text: name
-    }
-
-    Label {
-        id: teamStatusIndicator
-        text: teamStatus
-        anchors.margins: 4
-        anchors.bottom: parent.bottom
-        font.weight: Font.ExtraBold
-        font.pointSize: 24
-        style: Text.Raised
     }
 
     Label {

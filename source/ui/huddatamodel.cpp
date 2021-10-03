@@ -951,20 +951,6 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT betaPlayersStatusChanged( m_betaPlayersStatus );
 	}
 
-	const wsw::StringView alphaStatus( ::cl.configStrings.getTeamAlphaStatus().value_or( wsw::StringView() ) );
-	if( !m_alphaTeamStatus.equals( alphaStatus ) ) {
-		m_alphaTeamStatus.assign( alphaStatus );
-		m_styledAlphaTeamStatus = toStyledText( alphaStatus ).toUtf8();
-		Q_EMIT alphaTeamStatusChanged( m_styledAlphaTeamStatus );
-	}
-
-	const wsw::StringView betaStatus( ::cl.configStrings.getTeamBetaStatus().value_or( wsw::StringView() ) );
-	if( !m_betaTeamStatus.equals( betaStatus ) ) {
-		m_betaTeamStatus.assign( betaStatus );
-		m_styledBetaTeamStatus = toStyledText( betaStatus ).toUtf8();
-		Q_EMIT betaTeamStatusChanged( m_styledBetaTeamStatus );
-	}
-
 	if( const auto oldColor = m_rawAlphaColor; oldColor != ( m_rawAlphaColor = CG_TeamAlphaColor() ) ) {
 		m_alphaColor = toQColor( m_rawAlphaColor );
 		Q_EMIT alphaColorChanged( m_alphaColor );

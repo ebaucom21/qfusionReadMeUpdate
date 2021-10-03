@@ -183,8 +183,6 @@ typedef struct {
 #define CS_TEAM_PLAYERS_NAME    21
 #define CS_TEAM_ALPHA_NAME      22
 #define CS_TEAM_BETA_NAME       23
-#define CS_TEAM_ALPHA_STATUS    24
-#define CS_TEAM_BETA_STATUS     25
 
 #define CS_MATCHNAME        26
 #define CS_MATCHSCORE       27
