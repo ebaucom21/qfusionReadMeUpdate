@@ -97,8 +97,8 @@ void AiManager::UnlinkAi( Ai *ai ) {
 	// All links related to the unlinked AI become invalid.
 	// Reset CPU quota cycling state to prevent use-after-free.
 	globalCpuQuota.OnRemoved( bot );
-	for( int i = 0; i < 4; ++i ) {
-		thinkQuota->OnRemoved( bot );
+	for( ThinkQuota &quota: thinkQuota ) {
+		quota.OnRemoved( bot );
 	}
 }
 
