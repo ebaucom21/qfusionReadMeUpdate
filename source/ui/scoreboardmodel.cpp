@@ -27,11 +27,11 @@ static inline auto formatStatus( int value ) -> QVariant {
 }
 
 auto ScoreboardTeamModel::rowCount( const QModelIndex & ) const -> int {
-	return (int)m_proxy->m_playerIndicesForList[m_teamListIndex].size();
+	return (int)m_proxy->m_playerIndicesForLists[m_teamListIndex].size();
 }
 
 auto ScoreboardTeamModel::columnCount( const QModelIndex & ) const -> int {
-	return (int) m_proxy->m_scoreboard.getColumnsCount();
+	return (int)m_proxy->m_scoreboard.getColumnsCount();
 }
 
 auto ScoreboardTeamModel::roleNames() const -> QHash<int, QByteArray> {
@@ -43,7 +43,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 		return QVariant();
 	}
 	const auto &scb = m_proxy->m_scoreboard;
-	const auto &indices = m_proxy->m_playerIndicesForList;
+	const auto &indices = m_proxy->m_playerIndicesForLists;
 	const auto column = (unsigned)modelIndex.column();
 	if( column >= scb.getColumnsCount() ) {
 		return QVariant();
@@ -127,7 +127,7 @@ auto ScoreboardModelProxy::getImageAssetPath( int asset ) const -> QByteArray {
 }
 
 bool ScoreboardModelProxy::isMixedListRowAlpha( int row ) const {
-	const auto &nums = std::end( m_playerIndicesForList )[-1];
+	const auto &nums = std::end( m_playerIndicesForLists )[-1];
 	assert( (unsigned)row < nums.size() );
 	return m_scoreboard.getPlayerTeam( nums[row] ) == TEAM_ALPHA;
 }
@@ -231,36 +231,36 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		return;
 	}
 
-	for( auto &indices: m_playerIndicesForList ) {
+	for( auto &indices: m_playerIndicesForLists ) {
 		indices.clear();
 	}
 
 	// We should update player nums first so fully reset models get a correct data from the very beginning
 
-	using PlayerIndicesTable = std::array<uint8_t, kMaxPlayers>;
-	PlayerIndicesTable listPlayerTables[5];
+	static_assert( TEAM_SPECTATOR == 0 && TEAM_PLAYERS == 1 && TEAM_ALPHA == 2 && TEAM_BETA == 3 );
+	using TableOfRowsInTeam = std::array<uint8_t, kMaxPlayers>;
+	alignas( 16 ) TableOfRowsInTeam tablesOfRowsInTeams[5];
 
 	for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
-		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
-			continue;
-		}
-		const auto teamNum = m_scoreboard.getPlayerTeam( playerIndex );
-		auto &teamNums = m_playerIndicesForList[teamNum];
-		auto &teamTable = listPlayerTables[teamNum];
-		teamTable[playerIndex] = (uint8_t)teamNums.size();
-		teamNums.push_back( playerIndex );
-		if( teamNum == TEAM_ALPHA || teamNum == TEAM_BETA ) {
-			auto &mixedIndices = m_playerIndicesForList[TEAM_BETA + 1];
-			auto &mixedTable = listPlayerTables[TEAM_BETA + 1];
-			mixedTable[playerIndex] = (uint8_t)mixedIndices.size();
-			mixedIndices.push_back( playerIndex );
+		if( m_scoreboard.isPlayerConnected( playerIndex ) ) {
+			const auto teamNum                         = m_scoreboard.getPlayerTeam( playerIndex );
+			auto &indicesForTeam                       = m_playerIndicesForLists[teamNum];
+			auto &playerIndicesToRowsInTeamList        = tablesOfRowsInTeams[teamNum];
+			playerIndicesToRowsInTeamList[playerIndex] = (uint8_t)indicesForTeam.size();
+			indicesForTeam.push_back( playerIndex );
+			if( teamNum == TEAM_ALPHA || teamNum == TEAM_BETA ) {
+				auto &indicesForMixedList                   = m_playerIndicesForLists[TEAM_BETA + 1];
+				auto &playerIndicesToRowsInMixedList        = tablesOfRowsInTeams[TEAM_BETA + 1];
+				playerIndicesToRowsInMixedList[playerIndex] = (uint8_t)indicesForMixedList.size();
+				indicesForMixedList.push_back( playerIndex );
+			}
 		}
 	}
 
 	const bool mustResetChasers = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Chasers;
 	const bool mustResetChallengers = (unsigned)*maybeUpdateFlags & (unsigned)Scoreboard::UpdateFlags::Challengers;
 	if( mustResetChasers | mustResetChallengers ) {
-		unsigned clientIndices[kMaxPlayers];
+		alignas( 16 ) unsigned clientIndices[kMaxPlayers];
 		std::fill( std::begin( clientIndices ), std::end( clientIndices ), ~0u );
 		for( unsigned playerIndex = 0; playerIndex < kMaxPlayers; ++playerIndex ) {
 			if( m_scoreboard.isPlayerConnected( playerIndex ) ) {
@@ -290,20 +290,19 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 
 	bool wasTeamReset[4] { false, false, false, false };
 
-	// TODO: Use destructuring for fields
-	for( const auto &teamUpdate: teamUpdates ) {
+	for( const Scoreboard::TeamUpdates &teamUpdate: teamUpdates ) {
 		// TODO: Handle other team updates (not only player changes) as well
-		if( !teamUpdate.players ) {
-			continue;
-		}
-		wasTeamReset[teamUpdate.team] = true;
-		// Forcing a full reset is the easiest approach.
-		if( teamUpdate.team == TEAM_SPECTATOR ) {
-			m_specsModel.markAsUpdated();
-		} else {
-			auto &model = m_teamModelsHolder[teamUpdate.team - 1];
-			model.beginResetModel();
-			model.endResetModel();
+		if( teamUpdate.players ) {
+			assert( teamUpdate.team >= TEAM_SPECTATOR && teamUpdate.team <= TEAM_BETA );
+			wasTeamReset[teamUpdate.team] = true;
+			// Forcing a full reset is the easiest approach.
+			if( teamUpdate.team == TEAM_SPECTATOR ) {
+				m_specsModel.markAsUpdated();
+			} else {
+				auto &model = m_teamModelsHolder[teamUpdate.team - 1];
+				model.beginResetModel();
+				model.endResetModel();
+			}
 		}
 	}
 
@@ -330,35 +329,33 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 		}
 	}
 
-	for( const auto &playerUpdate: playerUpdates ) {
+	for( const Scoreboard::PlayerUpdates &playerUpdate: playerUpdates ) {
 		const unsigned playerIndex = playerUpdate.playerIndex;
-		if( !m_scoreboard.isPlayerConnected( playerIndex ) ) {
-			continue;
-		}
-
-		const unsigned playerBit = ( 1u << playerIndex );
-		if( chasersPlayerIndicesMask & playerBit ) {
-			m_chasersModel.markAsUpdated();
-		}
-		if( challengersPlayerIndicesMask & playerBit ) {
-			m_challengersModel.markAsUpdated();
-		}
-
-		const auto teamNum = (int)m_scoreboard.getPlayerTeam( playerIndex );
-		if( !wasTeamReset[teamNum] ) {
-			const auto &teamIndicesTable = listPlayerTables[teamNum];
-			const auto rowInTeam = (int)teamIndicesTable[playerIndex];
-			assert( (unsigned)rowInTeam < (unsigned)m_playerIndicesForList[teamNum].size() );
-			if( teamNum == TEAM_SPECTATOR ) {
-				m_specsModel.markAsUpdated();
-			} else {
-				const auto &mixedIndicesTable = listPlayerTables[teamNum];
-				const auto rowInMixedList = (int)mixedIndicesTable[playerIndex];
-				dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeam, rowInMixedList );
+		if( m_scoreboard.isPlayerConnected( playerIndex ) ) {
+			const unsigned playerBit = ( 1u << playerIndex );
+			if( chasersPlayerIndicesMask & playerBit ) {
+				m_chasersModel.markAsUpdated();
+			}
+			if( challengersPlayerIndicesMask & playerBit ) {
+				m_challengersModel.markAsUpdated();
+			}
+			const auto teamNum = (int)m_scoreboard.getPlayerTeam( playerIndex );
+			if( !wasTeamReset[teamNum] ) {
+				const auto &playerIndexToRowInTeamList = tablesOfRowsInTeams[teamNum];
+				const auto rowInTeamList               = (int)playerIndexToRowInTeamList[playerIndex];
+				assert( (unsigned)rowInTeamList < (unsigned)m_playerIndicesForLists[teamNum].size() );
+				if( teamNum == TEAM_SPECTATOR ) {
+					m_specsModel.markAsUpdated();
+				} else {
+					const auto &playerIndexToRowInMixedList = tablesOfRowsInTeams[TEAM_BETA + 1];
+					const auto rowInMixedList               = (int)playerIndexToRowInMixedList[playerIndex];
+					dispatchPlayerRowUpdates( playerUpdate, teamNum, rowInTeamList, rowInMixedList );
+				}
 			}
 		}
 	}
 
+	static_assert( std::size( wasTeamReset ) == 4 );
 	for( int i = 0; i < 4; ++i ) {
 		if( wasTeamReset[i] ) {
 			if( i != TEAM_SPECTATOR ) {

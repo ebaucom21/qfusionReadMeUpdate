@@ -80,7 +80,7 @@ public:
 
 	// Can't declare a plain array due to the type being noncopyable and we don't want to use a dynamic allocation.
 	StaticVector<ScoreboardTeamModel, 4> m_teamModelsHolder;
-	ScoreboardSpecsModelData m_specsModel { this, &m_playerIndicesForList[TEAM_SPECTATOR] };
+	ScoreboardSpecsModelData m_specsModel { this, &m_playerIndicesForLists[TEAM_SPECTATOR] };
 	ScoreboardSpecsModelData m_chasersModel { this, &m_chasers };
 	ScoreboardSpecsModelData m_challengersModel { this, &m_challengers };
 
@@ -90,7 +90,7 @@ public:
 
 	void checkVars();
 
-	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForList[5];
+	wsw::StaticVector<unsigned, MAX_CLIENTS> m_playerIndicesForLists[5];
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_chasers;
 	wsw::StaticVector<unsigned, MAX_CLIENTS> m_challengers;
 

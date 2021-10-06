@@ -274,20 +274,19 @@ auto Scoreboard::checkAndGetUpdates( const RawData &currData, PlayerUpdatesList 
 		updatesMask |= (unsigned)UpdateFlags::Chasers;
 	}
 
+	// This byte-wise comparison is 100% correct for this field.
 	if( memcmp( currData.challengersQueue, m_oldRawData.challengersQueue, sizeof( currData.challengersQueue ) ) != 0 ) {
 		updatesMask |= (unsigned)UpdateFlags::Challengers;
 	}
 
 	for( unsigned i = 0; i < 4; ++i ) {
 		if( isTeamUpdateNeeded[i] ) {
-			TeamUpdates updates {};
-			updates.team = i;
-			updates.players = true;
-			teamUpdates.push_back( updates );
+			teamUpdates.push_back( TeamUpdates { .team = (uint8_t)i, .players = true } );
 			updatesMask |= (unsigned)UpdateFlags::Teams;
 		}
 	}
 
+	// This condition saves an (implicit) memcpy call.
 	if( updatesMask ) {
 		m_oldRawData = currData;
 		return (UpdateFlags)updatesMask;
