@@ -296,10 +296,10 @@ void Scoreboard::endUpdating() {
 	alignas( 16 ) NumAndScore sortHandles[kMaxPlayers];
 	std::memset( sortHandles, 0, sizeof( sortHandles ) );
 
-	bool isPlayerConnected[kMaxPlayers], isPlayerGhosting[kMaxPlayers];
+	alignas( 16 ) bool isPlayerConnected[kMaxPlayers], isPlayerGhosting[kMaxPlayers];
 	std::fill( std::begin( isPlayerConnected ), std::end( isPlayerConnected ), false );
 	// Don't display players as dead/"ghosting" post-match
-	if( GS_MatchState() <= MATCH_STATE_POSTMATCH ) {
+	if( GS_MatchState() < MATCH_STATE_POSTMATCH ) {
 		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), true );
 	} else {
 		std::fill( std::begin( isPlayerGhosting ), std::end( isPlayerGhosting ), false );

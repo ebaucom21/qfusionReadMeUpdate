@@ -275,6 +275,7 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 					m_chasers.push_back( clientIndices[clientNum] );
 				}
 			}
+			m_chasersModel.markAsUpdated();
 		}
 		if( mustResetChallengers ) {
 			m_challengers.clear();
@@ -285,6 +286,7 @@ void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
 					break;
 				}
 			}
+			m_challengersModel.markAsUpdated();
 		}
 	}
 

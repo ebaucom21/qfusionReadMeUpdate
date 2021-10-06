@@ -10,8 +10,8 @@ TableView {
     rowSpacing: 0
     reuseItems: false
     interactive: false
-    contentHeight: 32 * rows
-    implicitHeight: 32 * rows
+    contentHeight: rowHeight * rows
+    implicitHeight: rowHeight * rows
 
     property color baseColor
 
@@ -22,6 +22,8 @@ TableView {
 
     property real baseCellWidth
     property real clanCellWidth
+
+    readonly property real rowHeight: 36
 
     function getCellColor(row, column) {
         let c = baseColor
@@ -49,7 +51,7 @@ TableView {
                            baseCellWidth) :
                        (kind === Scoreboard.Clan ? clanCellWidth : baseCellWidth)
 
-        implicitHeight: 36
+        implicitHeight: rowHeight
         onImplicitHeightChanged: forceLayoutTimer.start()
         onHeightChanged: forceLayoutTimer.start()
 
