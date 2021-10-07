@@ -671,7 +671,7 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 				// Check for completion if we have already made a hop before
 				if( didTheLatchedHop ) {
 					// Try a "direct" completion if we've landed some sufficient units ahead of the last hop origin
-					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > SQUARE( 48 ) ) {
+					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > SQUARE( 72 ) ) {
 						if( !sequencePathPenalty ) {
 							context->isCompleted = true;
 							return;

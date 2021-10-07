@@ -249,7 +249,7 @@ MovementScript *FallbackAction::TryFindMovementFallback( PredictionContext *cont
 
 	// All the following checks require a valid nav target
 	if( !context->NavTargetAasAreaNum() ) {
-		if( bot->MillisInBlockedState() > 500 ) {
+		if( bot->MillisInBlockedState() > 1250 ) {
 			if( auto *fallback = TryFindLostNavTargetFallback( context ) ) {
 				return fallback;
 			}
