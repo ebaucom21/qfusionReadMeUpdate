@@ -494,39 +494,48 @@ void NormToLatLong( const vec3_t normal, float latlong[2] );
 
 void MakeNormalVectors( const vec3_t forward, vec3_t right, vec3_t up );
 
-static inline void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up ) {
-	const float deg2Rad = (float)( M_PI ) / 180.0f;
+inline void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up ) {
+	constexpr float deg2Rad = (float)( M_PI ) / 180.0f;
 
-	const float yaw = deg2Rad * angles[YAW];
-	const float sy = sinf( yaw );
-	const float cy = cosf( yaw );
+	const float yaw     = deg2Rad * angles[YAW];
+	const float sinYaw  = sinf( yaw );
+	const float cosYaw  = cosf( yaw );
 
-	const float pitch = deg2Rad * angles[PITCH];
-	const float sp = sinf( pitch );
-	const float cp = cosf( pitch );
+	const float pitch    = deg2Rad * angles[PITCH];
+	const float sinPitch = sinf( pitch );
+	const float cosPitch = cosf( pitch );
 
-	const float roll = deg2Rad * angles[ROLL];
-	const float sr = sinf( roll );
-	const float cr = cosf( roll );
+	const bool calcRight = right != nullptr;
+	const bool calcUp    = up != nullptr;
+
+	float sinRoll = 0.0f;
+	float cosRoll = 1.0f;
+	if( const float rollDegrees = angles[ROLL]; rollDegrees != 0.0f ) [[unlikely]] {
+		if( calcRight | calcUp ) {
+			float roll = deg2Rad * rollDegrees;
+			sinRoll    = sinf( roll );
+			cosRoll    = cosf( roll );
+		}
+	}
 
 	if( forward ) {
-		forward[0] = cp * cy;
-		forward[1] = cp * sy;
-		forward[2] = -sp;
+		forward[0] = cosPitch * cosYaw;
+		forward[1] = cosPitch * sinYaw;
+		forward[2] = -sinPitch;
 	}
 
-	if( right ) {
-		const float t = sr * sp;
-		right[0] = ( -1 * t * cy + -1 * cr * -sy );
-		right[1] = ( -1 * t * sy + -1 * cr * cy );
-		right[2] = -1 * sr * cp;
+	if( calcRight ) {
+		float t  = sinRoll * sinPitch;
+		right[0] = ( -1 * t * cosYaw + -1 * cosRoll * -sinYaw );
+		right[1] = ( -1 * t * sinYaw + -1 * cosRoll * cosYaw );
+		right[2] = -1 * sinRoll * cosPitch;
 	}
 
-	if( up ) {
-		const float t = cr * sp;
-		up[0] = ( t * cy + -sr * -sy );
-		up[1] = ( t * sy + -sr * cy );
-		up[2] = cr * cp;
+	if( calcUp ) {
+		float t = cosRoll * sinPitch;
+		up[0]   = ( t * cosYaw + -sinRoll * -sinYaw );
+		up[1]   = ( t * sinYaw + -sinRoll * cosYaw );
+		up[2]   = cosRoll * cosPitch;
 	}
 }
 
