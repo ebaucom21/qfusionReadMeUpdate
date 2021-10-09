@@ -82,12 +82,12 @@ void AiAasWorld::Shutdown() {
 void AiAasWorld::Frame() {
 }
 
-int AiAasWorld::PointAreaNum( const vec3_t point, int topNodeHint ) const {
+int AiAasWorld::PointAreaNumNaive( const vec3_t point, int topNodeHint ) const {
 	if( !loaded ) {
 		return 0;
 	}
 
-	assert( topNodeHint > 0 );
+	assert( topNodeHint > 0 && topNodeHint < numnodes );
 	int nodenum = topNodeHint;
 
 	while( nodenum > 0 ) {
@@ -103,7 +103,7 @@ int AiAasWorld::PointAreaNum( const vec3_t point, int topNodeHint ) const {
 	return -nodenum;
 }
 
-int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs, int topNodeHint ) const {
+int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs ) const {
 	const vec_t *bounds[2] = { maxs, mins };
 	// Test all AABB vertices
 	vec3_t origin = { 0, 0, 0 };
@@ -112,7 +112,7 @@ int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs, int topNodeHi
 		origin[0] = bounds[( i >> 0 ) & 1][0];
 		origin[1] = bounds[( i >> 1 ) & 1][1];
 		origin[2] = bounds[( i >> 2 ) & 1][2];
-		int areaNum = PointAreaNum( origin, topNodeHint );
+		int areaNum = PointAreaNum( origin );
 		if( areaNum ) {
 			return areaNum;
 		}
@@ -120,8 +120,8 @@ int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs, int topNodeHi
 	return 0;
 }
 
-int AiAasWorld::FindAreaNum( const vec3_t origin, int topNodeHint ) const {
-	int areaNum = PointAreaNum( origin, topNodeHint );
+int AiAasWorld::FindAreaNum( const vec3_t origin ) const {
+	int areaNum = PointAreaNum( origin );
 
 	if( areaNum ) {
 		return areaNum;
@@ -131,24 +131,24 @@ int AiAasWorld::FindAreaNum( const vec3_t origin, int topNodeHint ) const {
 	VectorAdd( mins, origin, mins );
 	vec3_t maxs = { +8, +8, 16 };
 	VectorAdd( maxs, origin, maxs );
-	return FindAreaNum( mins, maxs, topNodeHint );
+	return FindAreaNum( mins, maxs );
 }
 
-int AiAasWorld::FindAreaNum( const edict_t *ent, int topNodeHint ) const {
+int AiAasWorld::FindAreaNum( const edict_t *ent ) const {
 	// Reject degenerate case
 	if( ent->r.absmin[0] == ent->r.absmax[0] &&
 		ent->r.absmin[1] == ent->r.absmax[1] &&
 		ent->r.absmin[2] == ent->r.absmax[2] ) {
-		return FindAreaNum( ent->s.origin, topNodeHint );
+		return FindAreaNum( ent->s.origin );
 	}
 
 	Vec3 testedOrigin( ent->s.origin );
-	int areaNum = PointAreaNum( testedOrigin.Data(), topNodeHint );
+	int areaNum = PointAreaNum( testedOrigin.Data() );
 	if( areaNum ) {
 		return areaNum;
 	}
 
-	return FindAreaNum( ent->r.absmin, ent->r.absmax, topNodeHint );
+	return FindAreaNum( ent->r.absmin, ent->r.absmax );
 }
 
 typedef struct aas_tracestack_s {
@@ -472,6 +472,17 @@ int AiAasWorld::findTopNodeForSphere( const float *center, float radius ) const 
 }
 
 void AiAasWorld::ComputeExtraAreaData() {
+	BoundsBuilder boundsBuilder;
+	for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
+		const auto &area = areas[areaNum];
+		boundsBuilder.addPoint( area.mins );
+		boundsBuilder.addPoint( area.maxs );
+	}
+
+	boundsBuilder.storeTo( m_worldMins, m_worldMaxs );
+	m_worldMins[3] = 0.0f;
+	m_worldMaxs[3] = 1.0f;
+
 	for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
 		TrySetAreaLedgeFlags( areaNum );
 		TrySetAreaWallFlags( areaNum );
@@ -502,6 +513,8 @@ void AiAasWorld::ComputeExtraAreaData() {
 	BuildSpecificAreaTypesLists();
 
 	computeInnerBoundsForAreas();
+
+	setupPointAreaNumLookupGrid();
 }
 
 void AiAasWorld::TrySetAreaLedgeFlags( int areaNum ) {
@@ -881,6 +894,128 @@ void AiAasWorld::computeInnerBoundsForAreas() {
         VectorCopy( innerMins, areaInnerBounds + areaNum * 6 + 0 );
         VectorCopy( innerMaxs, areaInnerBounds + areaNum * 6 + 3 );
     }
+}
+
+void AiAasWorld::setupPointAreaNumLookupGrid() {
+	const Vec3 worldMins( m_worldMins );
+	const Vec3 dimensions( Vec3( m_worldMaxs ) - worldMins );
+	const Vec3 cellDimensions( kAreaGridCellSize, kAreaGridCellSize, kAreaGridCellSize );
+	unsigned numCellsPerDimensions[3] { 0, 0, 0 };
+
+	size_t gridDataSize = sizeof( int32_t );
+	for( int i = 0; i < 3; ++i ) {
+		numCellsPerDimensions[i] = (unsigned)std::ceil( dimensions.Data()[i] / kAreaGridCellSize );
+		gridDataSize *= numCellsPerDimensions[i];
+	}
+
+	m_pointAreaNumLookupGridXStride = numCellsPerDimensions[1] * numCellsPerDimensions[2];
+	m_pointAreaNumLookupGridYStride = numCellsPerDimensions[2];
+
+	m_pointAreaNumLookupGridData = (int32_t *)Q_malloc( (size_t)gridDataSize );
+
+	size_t offset = 0;
+	for( unsigned iStep = 0; iStep < numCellsPerDimensions[0]; ++iStep ) {
+		const float minX = worldMins.X() + kAreaGridCellSize * (float)iStep;
+		for( unsigned jStep = 0; jStep < numCellsPerDimensions[1]; ++jStep ) {
+			const float minY = worldMins.Y() + kAreaGridCellSize * (float)jStep;
+			for( unsigned kStep = 0; kStep < numCellsPerDimensions[2]; ++kStep ) {
+				const float minZ = worldMins.Z() + kAreaGridCellSize * (float)kStep;
+				const Vec3 cellMins( minX, minY, minZ );
+				const Vec3 cellMaxs( cellMins + cellDimensions );
+				const int32_t encoded = computePointAreaNumLookupDataForCell( cellMins, cellMaxs );
+				m_pointAreaNumLookupGridData[offset++] = encoded;
+			}
+		}
+	}
+}
+
+auto AiAasWorld::computePointAreaNumLookupDataForCell( const Vec3 &cellMins, const Vec3 &cellMaxs ) const -> int32_t {
+	// Let cells overlap a bit so we don't have to care of border point lookup issues
+	const Vec3 expandedMins( Vec3( -2.0f, -2.0f, -2.0f ) + cellMins );
+	const Vec3 expandedMaxs( Vec3( +2.0f, +2.0f, +2.0f ) + cellMaxs );
+
+	int areaNums[16];
+	const int numBoxAreas = BBoxAreas( expandedMins, expandedMaxs, areaNums, 16 );
+	if( numBoxAreas == 1 ) {
+		const Vec3 *bounds[2] { &expandedMins, &expandedMaxs };
+		int lastCornerAreaNum = -1;
+		bool allInsideTheSameArea = true;
+		for( unsigned i = 0; i < 8; ++i ) {
+			const Vec3 corner( bounds[( i >> 2 ) & 1]->X(), bounds[( i >> 1 ) & 1]->Y(), bounds[( i >> 0 ) & 1]->Z() );
+			const int cornerAreaNum = PointAreaNumNaive( corner.Data() );
+			if( i > 0 ) {
+				if( cornerAreaNum != lastCornerAreaNum ) {
+					allInsideTheSameArea = false;
+					break;
+				}
+			}
+			lastCornerAreaNum = cornerAreaNum;
+		}
+		// If all corners are inside the same area, the entire box is inside the same area
+		if( allInsideTheSameArea ) {
+			assert( lastCornerAreaNum >= 0 );
+			return -lastCornerAreaNum;
+		}
+	}
+
+	// Supply original bounds (findTopNodeForBox() spreads bounds itself)
+	const int topNode = findTopNodeForBox( cellMins.Data(), cellMaxs.Data() );
+	assert( topNode > 0 && topNode < numnodes );
+	return topNode;
+}
+
+namespace {
+#ifndef WSW_USE_SSE2
+[[nodiscard]]
+inline bool isPointWithinWorldBounds( const float *point, const float *mins, const float *maxs ) {
+	return ( point[0] >= mins[0] ) & ( point[0] <= maxs[0] ) &
+		   ( point[1] >= mins[1] ) & ( point[1] <= maxs[1] ) &
+		   ( point[2] >= mins[2] ) & ( point[2] <= maxs[2] );
+}
+#else
+[[nodiscard]]
+inline bool isPointWithinWorldBounds( const float *point, const float *mins, const float *maxs ) {
+	assert( mins[3] == 0.0f && maxs[3] == 1.0f );
+	__m128 xmmPoint = _mm_setr_ps( point[0], point[1], point[2], 0.5f );
+	__m128 xmmMins  = _mm_load_ps( mins );
+	__m128 xmmMaxs  = _mm_load_ps( maxs );
+	__m128 xmmGt1   = _mm_cmpgt_ps( xmmMins, xmmPoint );
+	__m128 xmmGt2   = _mm_cmpgt_ps( xmmPoint, xmmMaxs );
+	return !_mm_movemask_ps( _mm_or_ps( xmmGt1, xmmGt2 ) );
+}
+#endif
+}
+
+int AiAasWorld::PointAreaNum( const float *point ) const {
+	assert( std::isfinite( point[0] ) );
+	assert( std::isfinite( point[1] ) );
+	assert( std::isfinite( point[2] ) );
+
+	if( loaded ) [[likely]] {
+		if( isPointWithinWorldBounds( point, m_worldMins, m_worldMaxs ) ) [[likely]] {
+			const Vec3 diffWithMins( Vec3( point ) - Vec3( m_worldMins ) );
+
+			constexpr const double invAreaGridCellSize = 1.0 / kAreaGridCellSize;
+			const auto xCellIndex = (unsigned)( (double)diffWithMins.X() * invAreaGridCellSize );
+			const auto yCellIndex = (unsigned)( (double)diffWithMins.Y() * invAreaGridCellSize );
+			const auto zCellIndex = (unsigned)( (double)diffWithMins.Z() * invAreaGridCellSize );
+
+			size_t offset = 0;
+			offset += xCellIndex * m_pointAreaNumLookupGridXStride;
+			offset += yCellIndex * m_pointAreaNumLookupGridYStride;
+			offset += zCellIndex;
+
+			int result = 0;
+			const int32_t encoded = m_pointAreaNumLookupGridData[offset];
+			if( const int areaNum = -encoded; areaNum > 0 ) {
+				result = areaNum;
+			} else if( const int topNodeHint = encoded; topNodeHint > 0 ) {
+				result = PointAreaNumNaive( point, topNodeHint );
+			}
+			return result;
+		}
+	}
+	return 0;
 }
 
 static void AAS_DData( unsigned char *data, int size ) {
@@ -1266,6 +1401,10 @@ AiAasWorld::~AiAasWorld() {
 
 	if( areaInnerBounds ) {
 	    Q_free( areaInnerBounds );
+	}
+
+	if( m_pointAreaNumLookupGridData ) {
+		Q_free( m_pointAreaNumLookupGridData );
 	}
 }
 

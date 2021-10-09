@@ -199,7 +199,7 @@ typedef struct aas_node_s {
 
 template <typename T> class ArrayRange;
 
-class AiAasWorld
+class alignas( 16 ) AiAasWorld
 {
 	friend class AasFileReader;
 
@@ -282,6 +282,14 @@ class AiAasWorld
 	// Mins/maxs are rounded and stored as six 16-bit signed integers.
 	int16_t *areaInnerBounds { nullptr };
 
+	static constexpr float kAreaGridCellSize { 32.0f };
+
+	int32_t *m_pointAreaNumLookupGridData { nullptr };
+	unsigned m_pointAreaNumLookupGridXStride { 0 };
+	unsigned m_pointAreaNumLookupGridYStride { 0 };
+
+	alignas( 16 ) vec4_t m_worldMins, m_worldMaxs;
+
 	static AiAasWorld *instance;
 
 	AiAasWorld() {
@@ -320,6 +328,10 @@ class AiAasWorld
 
 	void computeInnerBoundsForAreas();
 
+	void setupPointAreaNumLookupGrid();
+	[[nodiscard]]
+	auto computePointAreaNumLookupDataForCell( const Vec3 &cellMins, const Vec3 &cellMaxs ) const -> int32_t;
+
 	void TrySetAreaLedgeFlags( int areaNum );
 	void TrySetAreaWallFlags( int areaNum );
 	void TrySetAreaJunkFlags( int areaNum );
@@ -330,7 +342,7 @@ class AiAasWorld
 	// Should be called after all other flags are computed
 	void TrySetAreaSkipCollisionFlags();
 
-	int FindAreaNum( const vec3_t mins, const vec3_t maxs, int topNodeHint ) const;
+	int FindAreaNum( const vec3_t mins, const vec3_t maxs ) const;
 
 	static void setupBoxLookupTable( vec3_t *__restrict lookupTable,
 									 const float *__restrict absMins,
@@ -371,17 +383,19 @@ public:
 	int findTopNodeForSphere( const float *center, float radius ) const;
 
 	//returns the area the point is in
-	int PointAreaNum( const vec3_t point, int topNodeHint = 1 ) const;
+	int PointAreaNumNaive( const vec3_t point, int topNodeHint = 1 ) const;
+
+	int PointAreaNum( const float *point ) const;
 
 	// If an area is not found, tries to adjust the origin a bit
-	inline int FindAreaNum( const Vec3 &origin, int topNodeHint = 1 ) const {
-		return FindAreaNum( origin.Data(), topNodeHint );
+	int FindAreaNum( const Vec3 &origin ) const {
+		return FindAreaNum( origin.Data() );
 	}
 
 	// If an area is not found, tries to adjust the origin a bit
-	int FindAreaNum( const vec3_t origin, int topNodeHint = 1 ) const;
+	int FindAreaNum( const vec3_t origin ) const;
 	// Tries to find some area the ent is in
-	int FindAreaNum( const struct edict_s *ent, int topNodeHint = 1 ) const;
+	int FindAreaNum( const struct edict_s *ent ) const;
 
 	//returns true if the area is crouch only
 	inline bool AreaCrouch( int areanum ) const {
