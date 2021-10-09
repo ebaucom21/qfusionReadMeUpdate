@@ -69,12 +69,19 @@ class ScoreboardModelProxy : public QObject, ScoreboardShared {
 	friend class ScoreboardTeamModel;
 	friend class ScoreboardSpecsModelData;
 public:
-	enum Display {
+	enum Layout {
 		SideBySide,
 		ColumnWise,
 		Mixed
 	};
-	Q_ENUM( Display );
+	Q_ENUM( Layout );
+	enum TableStyle {
+		Checkerboard,
+		RowStripes,
+		ColumnStripes,
+		Flat
+	};
+	Q_ENUM( TableStyle );
 
 	Scoreboard m_scoreboard;
 
@@ -84,8 +91,13 @@ public:
 	ScoreboardSpecsModelData m_chasersModel { this, &m_chasers };
 	ScoreboardSpecsModelData m_challengersModel { this, &m_challengers };
 
-	cvar_s *m_displayVar { nullptr };
-	Display m_display { SideBySide };
+	cvar_s *m_layoutVar { nullptr };
+	cvar_s *m_tableStyleVar { nullptr };
+	std::pair<int, int> m_layoutValueBounds;
+	std::pair<int, int> m_tableStyleValueBounds;
+
+	Layout m_layout { SideBySide };
+	TableStyle m_tableStyle { Checkerboard };
 	bool m_hasChasers { false };
 
 	void checkVars();
@@ -135,8 +147,11 @@ public:
 	[[nodiscard]]
 	Q_INVOKABLE int getColumnsCount() const { return m_scoreboard.getColumnsCount(); }
 
-	Q_SIGNAL void displayChanged( Display display );
-	Q_PROPERTY( Display display MEMBER m_display NOTIFY displayChanged );
+	Q_SIGNAL void layoutChanged( Layout layout );
+	Q_PROPERTY( Layout layout MEMBER m_layout NOTIFY layoutChanged );
+	Q_SIGNAL void tableStyleChanged( TableStyle tableStyle );
+	Q_PROPERTY( TableStyle tableStyle MEMBER m_tableStyle NOTIFY tableStyleChanged );
+
 	Q_SIGNAL void hasChasersChanged( bool hasChasers );
 	Q_PROPERTY( bool hasChasers MEMBER m_hasChasers NOTIFY hasChasersChanged );
 

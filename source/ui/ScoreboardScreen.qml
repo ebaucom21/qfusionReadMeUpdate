@@ -26,9 +26,9 @@ Rectangle {
         sourceComponent: {
             if (!hudDataModel.hasTwoTeams) {
                 playersDisplayComponent
-            } else if (scoreboard.display === Scoreboard.Mixed) {
+            } else if (scoreboard.layout === Scoreboard.Mixed) {
                 mixedTeamsDisplayComponent
-            } else if (scoreboard.display === Scoreboard.SideBySide && root.width > 2 * root.tableWidth) {
+            } else if (scoreboard.layout === Scoreboard.SideBySide && root.width > 2 * root.tableWidth) {
                 sideBySideTeamsDisplayComponent
             } else {
                 columnWiseTeamsDisplayComponent

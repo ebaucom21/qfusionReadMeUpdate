@@ -25,15 +25,28 @@ TableView {
 
     readonly property real rowHeight: 36
 
-    function getCellColor(row, column) {
+    function getCellColor(row, column, tableStyle) {
         let c = baseColor
         if (mixedTeamsMode) {
             c = scoreboard.isMixedListRowAlpha(row) ? baseAlphaColor : baseBetaColor
         }
-        if (row % 2) {
-            return column % 2 ? Qt.darker(c, 1.1) : c
+        switch (tableStyle) {
+            case Scoreboard.Checkerboard: {
+                if (row % 2) {
+                    return column % 2 ? Qt.darker(c, 1.1) : c
+                }
+                return column % 2 ? c : Qt.lighter(c, 1.2)
+            }
+            case Scoreboard.RowStripes: {
+                return row % 2 ? Qt.darker(c, 1.1) : Qt.lighter(c, 1.1)
+            }
+            case Scoreboard.ColumnStripes: {
+                return column % 2 ? Qt.darker(c, 1.1) : Qt.lighter(c, 1.1)
+            }
+            case Scoreboard.Flat: {
+                return c
+            }
         }
-        return column % 2 ? c : Qt.lighter(c, 1.2)
     }
 
     delegate: Item {
@@ -59,7 +72,7 @@ TableView {
             anchors.fill: parent
             visible: !isColumnStatusOne
             opacity: 0.7
-            color: isColumnStatusOne ? "transparent" : getCellColor(row, column)
+            color: isColumnStatusOne ? "transparent" : getCellColor(row, column, scoreboard.tableStyle)
         }
 
         Label {
