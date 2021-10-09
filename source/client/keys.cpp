@@ -487,16 +487,15 @@ bool KeyHandlingSystem::updateAutoRepeatStatus( int key, bool down ) {
 void KeyHandlingSystem::handleEscapeKey() {
 	if( Con_HasKeyboardFocus() ) {
 		Con_ToggleConsole_f();
-		return;
-	}
-
-	if( cls.state != CA_ACTIVE && cls.state != CA_DISCONNECTED ) {
+	} else if( cls.state != CA_ACTIVE && cls.state != CA_DISCONNECTED ) {
 		Cbuf_AddText( "disconnect\n" );
-		return;
-	}
-
-	if( !wsw::ui::UISystem::instance()->handleKeyEvent( K_ESCAPE, true ) ) {
-		CL_GameModule_EscapeKey();
+	} else {
+		auto *const uiSystem = wsw::ui::UISystem::instance();
+		if( uiSystem->isShowingScoreboard() ) {
+			uiSystem->setScoreboardShown( false );
+		} else if( !uiSystem->handleKeyEvent( K_ESCAPE, true ) ) {
+			CL_GameModule_EscapeKey();
+		}
 	}
 }
 
