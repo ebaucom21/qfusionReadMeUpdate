@@ -7,71 +7,97 @@ Item {
     id: root
 
     visible: indicatorState.enabled
-    implicitWidth: maxFrameAreaSide
-    implicitHeight: 104
+    implicitWidth: collapsedHeight
+    implicitHeight: collapsedHeight + barHeight + 1.5 * barMargin
 
     property var indicatorState
+    property real barHeightFrac
 
     readonly property color indicatorColor: indicatorState.color
     readonly property int indicatorProgress: indicatorState.progress
     readonly property int indicatorAnim: indicatorState.anim
 
-    readonly property real minFrameAreaBaseOpacity: 0.5
-    readonly property real maxFrameAreaSide: 72
+    readonly property real minFrameBaseOpacity: 0.5
+    readonly property real maxFrameSide: 72
+    readonly property real collapsedHeight: 80
+    readonly property real borderWidth: 6
+
+    readonly property real barHeight: 16 * barHeightFrac
+    readonly property real barMargin: 8 * barHeightFrac
+
+    Item {
+        id: frameArea
+        anchors.top: parent.top
+        anchors.topMargin: -2
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: collapsedHeight
+        height: collapsedHeight
+    }
 
     Rectangle {
-        id: frameArea
-        property real baseOpacity: minFrameAreaBaseOpacity
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: maxFrameAreaSide - height
-        width: maxFrameAreaSide
-        height: maxFrameAreaSide
+        id: frame
+        property real baseOpacity: minFrameBaseOpacity
+        anchors.centerIn: frameArea
+        width: maxFrameSide
+        height: maxFrameSide
         color: "transparent"
         border.color: indicatorColor
-        border.width: 7
+        border.width: borderWidth
         opacity: Math.min(1.0, baseOpacity + (wsw.isShowingScoreboard ? 0.0 : 0.1))
         radius: 24
 
         function restoreDefaultProperties() {
             if (!alertAnim.running && !actionAnim.running) {
-                frameArea.width = maxFrameAreaSide
-                frameArea.height = maxFrameAreaSide
-                frameArea.baseOpacity = minFrameAreaBaseOpacity
+                frame.width = maxFrameSide
+                frame.height = maxFrameSide
+                frame.baseOpacity = minFrameBaseOpacity
             }
         }
+    }
+
+    Image {
+        anchors.horizontalCenter: frame.horizontalCenter
+        anchors.verticalCenter: frame.verticalCenter
+        width: 32
+        height: 32
+        smooth: true
+        mipmap: true
+        source: hudDataModel.getIndicatorIconPath(indicatorState.iconNum)
     }
 
     // Changing anim duration on the fly does not seem to work, declare two mutually exclusive instances as a workaround
 
     HudObjectiveIndicatorFrameAnim {
         id: alertAnim
+        target: frame
         running: indicatorAnim === HudDataModel.AlertAnim
-        minSide: maxFrameAreaSide - 6
-        maxSide: maxFrameAreaSide
-        minOpacity: minFrameAreaBaseOpacity
+        minSide: maxFrameSide - 6
+        maxSide: maxFrameSide
+        minOpacity: minFrameBaseOpacity
         step1Duration: 200
         step2Duration: 67
-        onRunningChanged: frameArea.restoreDefaultProperties()
+        onRunningChanged: frame.restoreDefaultProperties()
     }
 
     HudObjectiveIndicatorFrameAnim {
         id: actionAnim
+        target: frame
         running: indicatorAnim === HudDataModel.ActionAnim
-        minSide: maxFrameAreaSide - 4
-        maxSide: maxFrameAreaSide
-        minOpacity: minFrameAreaBaseOpacity
+        minSide: maxFrameSide - 4
+        maxSide: maxFrameSide
+        minOpacity: minFrameBaseOpacity
         step1Duration: 333
         step2Duration: 96
-        onRunningChanged: frameArea.restoreDefaultProperties()
+        onRunningChanged: frame.restoreDefaultProperties()
     }
 
     Rectangle {
         id: bar
         anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 20
+        anchors.bottomMargin: root.barMargin
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width - 2 * root.barMargin
+        height: root.barHeight
         color: wsw.colorWithAlpha(indicatorColor, 0.6)
 
         Rectangle {
@@ -83,15 +109,5 @@ Item {
             color: indicatorColor
             Behavior on width { SmoothedAnimation { duration: 67 } }
         }
-    }
-
-    Image {
-        anchors.horizontalCenter: frameArea.horizontalCenter
-        anchors.verticalCenter: frameArea.verticalCenter
-        width: 32
-        height: 32
-        smooth: true
-        mipmap: true
-        source: hudDataModel.getIndicatorIconPath(indicatorState.iconNum)
     }
 }
