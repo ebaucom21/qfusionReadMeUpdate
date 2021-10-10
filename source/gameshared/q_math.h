@@ -539,18 +539,92 @@ inline void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec
 	}
 }
 
-int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane );
-float anglemod( float a );
-float LerpAngle( float a1, float a2, const float frac );
-float AngleSubtract( float a1, float a2 );
-void AnglesSubtract( vec3_t v1, vec3_t v2, vec3_t v3 );
-float AngleNormalize360( float angle );
-float AngleNormalize180( float angle );
-float AngleDelta( float angle1, float angle2 );
-void VecToAngles( const vec3_t vec, vec3_t angles );
-void AnglesToAxis( const vec3_t angles, mat3_t axis );
-void NormalVectorToAxis( const vec3_t forward, mat3_t axis );
+inline float LerpAngle( float a2, float a1, float frac ) {
+	if( a1 - a2 > 180 ) {
+		a1 -= 360;
+	}
+	if( a1 - a2 < -180 ) {
+		a1 += 360;
+	}
+	return a2 + frac * ( a1 - a2 );
+}
+
+inline float AngleNormalize360( float angle ) {
+	return ( 360.0 / 65536 ) * ( (int)( angle * ( 65536 / 360.0 ) ) & 65535 );
+}
+
+inline float AngleNormalize180( float angle ) {
+	angle = AngleNormalize360( angle );
+	if( angle > 180.0 ) {
+		angle -= 360.0;
+	}
+	return angle;
+}
+
+inline float AngleDelta( float angle1, float angle2 ) {
+	return AngleNormalize180( angle1 - angle2 );
+}
+
+inline float anglemod( float a ) {
+	return ( 360.0 / 65536 ) * ( (int)( a * ( 65536 / 360.0 ) ) & 65535 );
+}
+
+inline void VecToAngles( const vec3_t vec, vec3_t angles ) {
+	float yaw, pitch;
+
+	if( vec[1] == 0 && vec[0] == 0 ) {
+		yaw = 0;
+		if( vec[2] > 0 ) {
+			pitch = 90;
+		} else {
+			pitch = 270;
+		}
+	} else {
+		if( vec[0] ) {
+			yaw = RAD2DEG( atan2( vec[1], vec[0] ) );
+		} else if( vec[1] > 0 ) {
+			yaw = 90;
+		} else {
+			yaw = -90;
+		}
+		if( yaw < 0 ) {
+			yaw += 360;
+		}
+
+		float forward = sqrt( vec[0] * vec[0] + vec[1] * vec[1] );
+		pitch = RAD2DEG( atan2( vec[2], forward ) );
+		if( pitch < 0 ) {
+			pitch += 360;
+		}
+	}
+
+	angles[PITCH] = -pitch;
+	angles[YAW] = yaw;
+	angles[ROLL] = 0;
+}
+
+inline void AnglesToAxis( const vec3_t angles, mat3_t axis ) {
+	AngleVectors( angles, &axis[0], &axis[3], &axis[6] );
+	VectorInverse( &axis[3] );
+}
+
+// similar to MakeNormalVectors but for rotational matrices
+// (FIXME: weird, what's the diff between this and MakeNormalVectors?)
+inline void NormalVectorToAxis( const vec3_t forward, mat3_t axis ) {
+	VectorCopy( forward, &axis[0] );
+	if( forward[0] || forward[1] ) {
+		VectorSet( &axis[3], forward[1], -forward[0], 0 );
+		VectorNormalize( &axis[3] );
+		CrossProduct( &axis[0], &axis[3], &axis[6] );
+	} else {
+		VectorSet( &axis[3], 1, 0, 0 );
+		VectorSet( &axis[6], 0, 1, 0 );
+	}
+}
+
 void BuildBoxPoints( vec3_t p[8], const vec3_t org, const vec3_t mins, const vec3_t maxs );
+
+int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane );
 
 vec_t ColorNormalize( const vec_t *in, vec_t *out );
 
