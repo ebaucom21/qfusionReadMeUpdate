@@ -1068,12 +1068,12 @@ void HudDataModel::updateScoreboardData( const ReplicatedScoreboardData &scorebo
 
 static const QByteArray kStatusesForNumberOfPlayers[] {
 	"",
-	"\u066D",
-	"\u066D \u066D",
-	"\u066D \u066D \u066D",
-	"\u066D \u066D \u066D \u066D",
-	"\u066D \u066D \u066D \u066D \u066D",
-	"\u066D \u066D \u066D \u066D \u066D \u066D"
+	"\u2605",
+	"\u2605 \u2605",
+	"\u2605 \u2605 \u2605",
+	"\u2605 \u2605 \u2605 \u2605",
+	"\u2605 \u2605 \u2605 \u2605 \u2605",
+	"\u2605 \u2605 \u2605 \u2605 \u2605 \u2605"
 };
 
 auto HudDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray {

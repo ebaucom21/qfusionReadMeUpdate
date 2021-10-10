@@ -40,6 +40,7 @@
 #include <QQmlProperty>
 
 #include <clocale>
+#include <span>
 
 QVariant VID_GetMainContextHandle();
 
@@ -296,6 +297,9 @@ public:
 	Q_PROPERTY( qreal maxStrongCrosshairSize MEMBER s_maxStrongCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
 	Q_PROPERTY( qreal fullscreenOverlayOpacity MEMBER s_fullscreenOverlayOpacity CONSTANT );
+	Q_PROPERTY( QString regularFontFamily MEMBER s_regularFontFamily CONSTANT );
+	Q_PROPERTY( QString symbolsFontFamily MEMBER s_symbolsFontFamily CONSTANT );
+	Q_PROPERTY( QString emojiFontFamily MEMBER s_emojiFontFamily CONSTANT );
 signals:
 	Q_SIGNAL void isShowingScoreboardChanged( bool isShowingScoreboard );
 	Q_SIGNAL void isShowingChatPopupChanged( bool isShowingChatPopup );
@@ -331,6 +335,19 @@ private:
 	static inline const qreal s_maxStrongCrosshairSize { kStrongCrosshairSizeProps.maxSize };
 	static inline const qreal s_crosshairSizeStep { 1.0 };
 	static inline const qreal s_fullscreenOverlayOpacity { 0.90 };
+
+	static inline const QString s_regularFontFamily { "Ubuntu" };
+	static inline const QString s_symbolsFontFamily { "Noto Sans Symbols2" };
+
+	// Windows system facilities cannot handle Noto Emoji.
+	// So far we need 3 glyphs to serve as icon replacements.
+	// Try relying on the system font on Windows platform.
+	// This should eventually be fixed.
+#ifndef _WIN32
+	static inline const QString s_emojiFontFamily { "Noto Color Emoji" };
+#else
+	static inline const QString s_emojiFontFamily { "Segoe UI Emoji" };
+#endif
 
 	int64_t m_lastDrawFrameTimestamp { 0 };
 
@@ -440,6 +457,7 @@ private:
 
 	static void initPersistentPart();
 	static void registerFonts();
+	static void registerFontFlavors( const wsw::StringView &prefix, std::span<const char *> suffixes );
 	static void registerFont( const wsw::StringView &path );
 	static void registerCustomQmlTypes();
 	static void retrieveVideoModes();
@@ -600,25 +618,36 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterType<VideoSource>( uri, 2, 6, "WswVideoSource" );
 }
 
-static const char *kFontSuffixes[] {
-	"-B", "-BI", "-C", "-L", "-LI", "-M", "-MI", "-R", "-RI", "-Th",
-	"Mono-B", "Mono-BI", "Mono-R", "Mono-RI"
+static const char *kUbuntuFontSuffixes[] {
+	"-B", "-BI", "-C", "-L", "-LI", "-M", "-MI", "-R", "-RI", "-Th"
 };
 
-void QtUISystem::registerFonts() {
-	QFontDatabase::removeAllApplicationFonts();
-
+void QtUISystem::registerFontFlavors( const wsw::StringView &prefix, std::span<const char *> suffixes ) {
 	wsw::StaticString<64> path;
-	path.append( "fonts/Ubuntu"_asView );
-	const auto pathPrefixLen = path.size();
-	for( const char *suffix: kFontSuffixes ) {
+	path << "fonts/"_asView << prefix;
+	const auto pathPrefixLen = path.length();
+	for( const char *suffix: suffixes ) {
 		path.erase( pathPrefixLen );
 		path.append( wsw::StringView( suffix ) );
 		path.append( ".ttf"_asView );
 		registerFont( path.asView() );
 	}
+}
 
-	QGuiApplication::setFont( QFont( "Ubuntu", 12 ) );
+void QtUISystem::registerFonts() {
+	QFontDatabase::removeAllApplicationFonts();
+
+	registerFontFlavors( "Ubuntu"_asView, kUbuntuFontSuffixes );
+	registerFont( "fonts/NotoSansSymbols2-Regular.ttf"_asView );
+
+	// See the related to s_emojiFontFamily remark
+#ifndef _WIN32
+	registerFont( "fonts/NotoColorEmoji.ttf"_asView );
+#endif
+
+	QFont font( "Ubuntu", 12 );
+	font.setStyleStrategy( (QFont::StyleStrategy)( font.styleStrategy() | QFont::NoFontMerging ) );
+	QGuiApplication::setFont( font );
 }
 
 void QtUISystem::registerFont( const wsw::StringView &path ) {

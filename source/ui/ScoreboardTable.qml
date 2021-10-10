@@ -84,6 +84,8 @@ TableView {
             padding: 4
             text: value
             textFormat: Text.StyledText
+            font.family: ((kind !== Scoreboard.Glyph && kind !== Scoreboard.Status) || value < 256) ?
+                wsw.regularFontFamily : wsw.symbolsFontFamily
             font.weight: Font.Bold
             font.pointSize: 12
             font.letterSpacing: 1

@@ -40,6 +40,7 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: Math.max(0.5 * (minFrameWidth - root.parent.width) + 8, 0)
         contentItem: Label {
+            font.family: wsw.symbolsFontFamily
             font.weight: Font.Medium
             font.pointSize: 12
             text: "\u276E"

@@ -146,8 +146,10 @@ Item {
         anchors.leftMargin: 6
         anchors.rightMargin: 6
         anchors.verticalCenter: colorBar.verticalCenter
+        anchors.verticalCenterOffset: +2
+        font.family: wsw.symbolsFontFamily
         font.weight: Font.ExtraBold
-        font.pointSize: 20
+        font.pointSize: 14
         style: Text.Raised
         textFormat: Text.StyledText
         text: playersStatus

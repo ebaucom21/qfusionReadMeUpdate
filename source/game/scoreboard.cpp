@@ -368,8 +368,8 @@ void Scoreboard::endUpdating() {
 		m_replicatedData.setPlayerScore( playerIndex, score );
 		assert( playerIndex == playerNum );
 		if( shouldSetReadyStatusIcon && readyStates[playerNum] ) {
-			// “✔” (U+2714)
-			m_replicatedData.setPlayerShort( playerIndex, m_statusSlot, 0x2714 );
+			// “✓” (U+2713)
+			m_replicatedData.setPlayerShort( playerIndex, m_statusSlot, 0x2713 );
 		}
 	}
 

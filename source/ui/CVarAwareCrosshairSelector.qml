@@ -85,7 +85,8 @@ Item {
         highlighted: down
         width: buttonWidth
         height: buttonWidth
-        text: "\u25C2"
+        font.family: wsw.symbolsFontFamily
+        text: "\u25C0"
         onClicked: value = value ? (value - 1) : model.length
     }
 
@@ -98,7 +99,8 @@ Item {
         highlighted: down
         width: buttonWidth
         height: buttonWidth
-        text: "\u25B8"
+        font.family: wsw.symbolsFontFamily
+        text: "\u25B6"
         onClicked: value = (value + 1) % (model.length + 1)
     }
 }

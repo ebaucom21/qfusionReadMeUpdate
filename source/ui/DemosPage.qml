@@ -50,6 +50,7 @@ Item {
     Label {
         anchors.left: queryField.right
         anchors.verticalCenter: queryField.verticalCenter
+        font.family: wsw.emojiFontFamily
         text: "\uD83D\uDD0D"
         visible: !queryField.text.length
     }
@@ -274,6 +275,7 @@ Item {
                 anchors.right: parent.right
                 width: 56
                 highlighted: true
+                font.family: wsw.symbolsFontFamily
                 text: "\u25B8"
 
                 onClicked: {

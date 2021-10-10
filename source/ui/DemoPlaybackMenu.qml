@@ -130,7 +130,8 @@ Item {
                 flat: true
                 display: AbstractButton.TextOnly
                 Layout.preferredWidth: 64
-                text: "\u23F8"
+                text: "\u23EF"
+                font.family: wsw.emojiFontFamily
                 font.pointSize: 20
                 onClicked: demoPlayer.pause()
             }
@@ -140,6 +141,7 @@ Item {
                 display: AbstractButton.TextOnly
                 Layout.preferredWidth: 64
                 text: "\u23F9"
+                font.family: wsw.emojiFontFamily
                 font.pointSize: 20
                 onClicked: demoPlayer.stop()
             }

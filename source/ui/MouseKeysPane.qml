@@ -82,9 +82,10 @@ Rectangle {
     Label {
         id: scrollUpShape
         anchors.bottom: wheelShape.top
-        anchors.bottomMargin: 2
+        anchors.bottomMargin: -8
         anchors.horizontalCenter: wheelShape.horizontalCenter
-        font.pointSize: 10
+        font.family: wsw.symbolsFontFamily
+        font.pointSize: 16
         text: "\u25B4"
         color: "transparent"
     }
@@ -92,18 +93,22 @@ Rectangle {
     Label {
         id: scrollDownShape
         anchors.top: wheelShape.bottom
-        anchors.topMargin: 0
+        anchors.topMargin: -2
         anchors.horizontalCenter: wheelShape.horizontalCenter
-        font.pointSize: 10
+        font.family: wsw.symbolsFontFamily
+        font.pointSize: 16
         text: "\u25BE"
         color: "transparent"
     }
 
     Label {
         id: middleButtonShape
-        anchors.centerIn: wheelShape
+        anchors.horizontalCenter: wheelShape.horizontalCenter
+        anchors.verticalCenter: wheelShape.verticalCenter
+        anchors.verticalCenterOffset: +3
+        font.family: wsw.symbolsFontFamily
+        font.pointSize: 16
         text: "\u25AA"
-        font.pointSize: 12
         color: "transparent"
     }
 
@@ -167,6 +172,8 @@ Rectangle {
             MouseKey {
                 text: modelData["text"]
                 quakeKey: modelData["quakeKey"]
+                isASpecialGlyph: true
+                fontPointSize: 16
                 isInEditorMode: root.isInEditorMode
                 Layout.preferredWidth: drawnButtonWidth
                 Layout.preferredHeight: buttonHeight

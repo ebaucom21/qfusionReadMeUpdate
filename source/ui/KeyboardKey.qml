@@ -26,6 +26,9 @@ Item {
         (mouseArea.containsMouse && !group) :
         (mouseArea.containsMouse || externallyHighlighted)
 
+    property bool isASpecialGlyph: (root.text.length === 1 && root.text.charCodeAt(0) > 127)
+    property real fontPointSize: 11
+
     readonly property color highlightColor: keysAndBindings.colorForGroup(root.group)
     readonly property color highlightBackground: Qt.rgba(highlightColor.r, highlightColor.g, highlightColor.b, 0.075)
 
@@ -67,7 +70,10 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 5
             anchors.verticalCenter: parent.verticalCenter
-            text: group ? '\u2715' : '\u2795'
+            anchors.verticalCenterOffset: 2
+            font.family: wsw.symbolsFontFamily
+            font.pointSize: 13
+            text: group ? String.fromCodePoint(0x1F7A9) : String.fromCodePoint(0x1F7A2)
         }
 
         MouseArea {
@@ -94,9 +100,12 @@ Item {
         }
 
         Label {
-            anchors.centerIn: parent
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: root.isASpecialGlyph ? +2 : 0
             text: !root.hidden ? root.text : ""
-            font.pointSize: 11
+            font.family: root.isASpecialGlyph ? wsw.symbolsFontFamily : wsw.regularFontFamily
+            font.pointSize: root.fontPointSize
             font.weight: Font.Medium
             color: Material.foreground
         }

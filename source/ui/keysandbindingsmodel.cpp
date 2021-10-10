@@ -61,7 +61,7 @@ static const KeyboardRowEntry kMainPadRow2[] {
 };
 
 static const KeyboardRowEntry kMainPadRow3[] {
-	{ "\u21C4", K_TAB, 1.5 },
+	{ "\u2B7E", K_TAB, 1.5 },
 	{ "Q", (int)'q' },
 	{ "W", (int)'w' },
 	{ "E", (int)'e' },
