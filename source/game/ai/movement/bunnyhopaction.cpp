@@ -669,10 +669,10 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 			// If we're currently at the best position
 			if( currTravelTimeToTarget == minTravelTimeToNavTargetSoFar ) {
 				// Check for completion if we have already made a hop before
-				if( didTheLatchedHop ) {
+				if( hopsCounter ) {
 					// Try a "direct" completion if we've landed some sufficient units ahead of the last hop origin
 					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > SQUARE( 72 ) ) {
-						if( !sequencePathPenalty ) {
+						if( !sequencePathPenalty && hopsCounter == 2 ) {
 							context->isCompleted = true;
 							return;
 						}
@@ -687,7 +687,13 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 						if( travelTimeAtSequenceStart ) {
 							advancement = travelTimeAtSequenceStart - currTravelTimeToTarget;
 						}
-						context->SaveGoodEnoughPath( advancement, sequencePathPenalty );
+						if( hopsCounter == 0 ) {
+							// Save a "last resort" path if we are about to mark the first hop
+							context->SaveLastResortPath( sequencePathPenalty );
+						} else {
+							// Save a "good enough" path if we are about to mark the second hop
+							context->SaveGoodEnoughPath( advancement, sequencePathPenalty );
+						}
 					}
 				}
 			}
@@ -696,10 +702,11 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 		if( !didTheLatchedHop ) {
 			if( hasALatchedHop ) {
 				didTheLatchedHop = true;
+				hopsCounter++;
 			}
 		} else {
-			// Don't waste further cycles (the completion condition won't hold)
-			if( sequencePathPenalty ) {
+			// Don't waste further cycles (the completion condition won't hold).
+			if( hopsCounter && sequencePathPenalty ) {
 				context->SetPendingRollback();
 				return;
 			}
@@ -707,7 +714,15 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 	}
 
 	// Check whether to continue prediction still makes sense
-	constexpr auto stackGrowthLimit = ( 3 * PredictionContext::MAX_PREDICTED_STATES ) / 4;
+	constexpr unsigned naturalLimit = PredictionContext::MAX_PREDICTED_STATES;
+	unsigned stackGrowthLimit;
+	if( hopsCounter > 1 ) {
+		stackGrowthLimit = ( 7 * naturalLimit ) / 8;
+	} else if( hopsCounter ) {
+		stackGrowthLimit = ( 5 * naturalLimit ) / 6;
+	} else {
+		stackGrowthLimit = ( 3 * naturalLimit ) / 4;
+	}
 	if( context->topOfStackIndex < stackGrowthLimit ) {
 		context->SaveSuggestedActionForNextFrame( this );
 		return;
@@ -762,6 +777,7 @@ void BunnyHopAction::OnApplicationSequenceStarted( PredictionContext *context ) 
 
 	hasALatchedHop = false;
 	didTheLatchedHop = false;
+	hopsCounter = 0;
 }
 
 void BunnyHopAction::OnApplicationSequenceStopped( PredictionContext *context,

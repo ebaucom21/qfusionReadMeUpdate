@@ -52,6 +52,8 @@ protected:
 	bool hasALatchedHop { false };
 	bool didTheLatchedHop { false };
 
+	unsigned hopsCounter { 0 };
+
 	void SetupCommonBunnyHopInput( PredictionContext *context );
 	// TODO: Mark as virtual in base class and mark as final here to avoid a warning about hiding parent member?
 	bool GenericCheckIsActionEnabled( PredictionContext *context, BaseAction *suggestedAction );
