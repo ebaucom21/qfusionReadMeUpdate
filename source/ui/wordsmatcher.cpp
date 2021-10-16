@@ -1,8 +1,3 @@
-/**
- * Distance computations are derived from this work
- * Copyright (C) 2019 Frederik Hertzum
- * SPDX-License-Identifier: GPL-3.0
- */
 
 #include "wordsmatcher.h"
 
@@ -11,13 +6,24 @@
 
 namespace wsw::ui {
 
-auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxDist ) -> std::optional<Match> {
-	if( a.length() > b.length() ) {
-		std::swap( a, b );
-	}
+class MatrixAdapter {
+	unsigned *const m_data;
+	const size_t m_rows;
+	const size_t m_cols;
+public:
+	MatrixAdapter( unsigned *data, size_t rows, size_t cols ): m_data( data ), m_rows( rows ), m_cols( cols ) {}
 
+	[[nodiscard]]
+	auto operator()( size_t i, size_t j ) -> unsigned & {
+		const size_t index = i * m_cols + j;
+		assert( index < m_rows * m_cols );
+		return m_data[index];
+	}
+};
+
+auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxDist ) -> std::optional<Match> {
 	unsigned prefixLen = 0;
-	for( unsigned i = 0, len = std::min( a.length(), b.length() ); i < len; ++i ) {
+	for( unsigned i = 0, len = (unsigned)std::min( a.length(), b.length() ); i < len; ++i ) {
 		if( a[i] != b[i] ) {
 			prefixLen = i;
 			break;
@@ -38,27 +44,40 @@ auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxD
 	a = a.dropRight( suffixLen );
 	b = b.dropRight( suffixLen );
 
-	assert( a.length() <= b.length() );
+	const unsigned rows = a.length() + 1;
+	const unsigned cols = b.length() + 1;
+	m_distanceBuffer.resize( rows * cols );
+	std::fill( m_distanceBuffer.begin(), m_distanceBuffer.end(), 0 );
 
-	const unsigned bufferSize = b.length() + 1;
-	m_distanceBuffer.resize( bufferSize );
+	MatrixAdapter d( m_distanceBuffer.data(), rows, cols );
+	for( size_t i = 0; i < rows; ++i ) {
+		d( i, 0 ) = (unsigned)i;
+	}
+	for( size_t j = 0; j < cols; ++j ) {
+		d( 0, j ) = (unsigned)j;
+	}
 
-	auto *const buffer = m_distanceBuffer.data();
-	std::iota( buffer, buffer + bufferSize, 0 );
-
-	for( unsigned i = 1; i < a.length() + 1; ++i) {
-		unsigned temp = buffer[0]++;
-		for( unsigned j = 1; j < bufferSize; ++j ) {
-			unsigned p = buffer[j - 1];
-			unsigned r = buffer[j];
-			temp = std::min( std::min( r, p ) + 1, temp + ( a[i - 1] == b[j - 1] ? 0 : 1 ) );
-			std::swap( buffer[j], temp );
+	for( size_t i = 1; i < rows; ++i ) {
+		for( size_t j = 1; j < cols; ++j ) {
+			const unsigned matchCost     = ( a[i - 1] != b[j - 1] ) ? 1 : 0;
+			const unsigned matchDist     = d( i - 1, j - 1 ) + matchCost;
+			const unsigned deletionDist  = d( i - 1, j ) + 1;
+			const unsigned insertionDist = d( i, j - 1 ) + 1;
+			unsigned cellDist = std::min( matchDist, std::min( deletionDist, insertionDist ) );
+			// Its better to turn -funswitch-loops on...
+			if( i > 1 && j > 1 ) [[likely]] {
+				// Check the transposition case
+				if( a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] ) {
+					cellDist = std::min( cellDist, d( i - 2, j - 2 ) + 1 );
+				}
+			}
+			d( i, j ) = cellDist;
 		}
 	}
 
-	// TODO: Cut off early
-	if( const auto dist = buffer[bufferSize - 1]; dist < maxDist ) {
-		return Match { dist, prefixLen + suffixLen };
+	// TODO: Add early exits
+	if( const unsigned dist = d( a.length(), b.length() ); dist < maxDist ) {
+		return Match { .editDistance = dist, .commonLength = prefixLen + suffixLen };
 	}
 
 	return std::nullopt;
