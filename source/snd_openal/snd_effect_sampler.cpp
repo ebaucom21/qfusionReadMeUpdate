@@ -322,7 +322,7 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 			constexpr auto invMaxDistance = 1.0f / maxDistance;
 			const float frac = std::min( maxDistance, tableDistance ) * invMaxDistance;
 			assert( frac >= 0.0f && frac <= 1.0f );
-			effect->indirectAttenuation = Q_Sqrt( Q_Sqrt( frac ) );
+			effect->indirectAttenuation = Q_Sqrt( frac );
 		} else {
 			effect->indirectAttenuation = 1.0f;
 		}
@@ -342,8 +342,8 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 		// [1000, 2500]
 		effect->hfReference = 1000.0f + ( 2.0f * smoothness ) * 1500.0f;
 	} else {
-		// [2500, 7500]
-		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 5000.0f;
+		// [2500, 5000]
+		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 2500.0f;
 	}
 
 	effect->gainHf = ( 0.4f + 0.4f * metallnessFactor );

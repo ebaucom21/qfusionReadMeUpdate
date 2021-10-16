@@ -103,6 +103,8 @@ class EaxReverbEffect final: public Effect {
 	static constexpr float MAX_REVERB_DECAY = 5.6f + 0.001f;
 	vec3_t tmpSourceOrigin { 0, 0, 0 };
 
+	float GetAttnFracBasedOnSampledEnvironment() const;
+
 	float GetSourceGain( src_s *src ) const override;
 public:
 	EaxReverbEffect(): Effect( AL_EFFECT_EAXREVERB ) {}

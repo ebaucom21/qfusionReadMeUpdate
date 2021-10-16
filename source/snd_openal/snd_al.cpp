@@ -267,19 +267,17 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	s_doppler->modified = false;
 
 	float attenuationMaxDistance = S_DEFAULT_ATTENUATION_MAXDISTANCE;
-	float attenuationRefDistance = S_DEFAULT_ATTENUATION_REFDISTANCE;
 	// Raise the attenuation in case of enabled effects.
 	// The default attenuation does not combine with effects well.
 	// Using a higher attenuation than the netcode assumes is fine
 	// and competitive players turn effects off anyway.
 	if( s_environment_effects->integer ) {
 		// Just make sure that our assumptions on these values stay valid.
-		static_assert( S_DEFAULT_ATTENUATION_MAXDISTANCE == 8000 && S_DEFAULT_ATTENUATION_REFDISTANCE == 125 );
-		attenuationMaxDistance = 1000;
-		attenuationRefDistance = 72;
+		static_assert( S_DEFAULT_ATTENUATION_MAXDISTANCE == 8000 );
+		attenuationMaxDistance = 4000;
 	}
 
-	S_SetAttenuationModel( S_DEFAULT_ATTENUATION_MODEL, attenuationMaxDistance, attenuationRefDistance );
+	S_SetAttenuationModel( S_DEFAULT_ATTENUATION_MODEL, attenuationMaxDistance, S_DEFAULT_ATTENUATION_REFDISTANCE );
 
 	S_LockBackgroundTrack( false );
 
