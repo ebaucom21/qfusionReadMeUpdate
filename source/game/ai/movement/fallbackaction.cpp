@@ -66,7 +66,11 @@ void FallbackAction::PlanPredictionStep( PredictionContext *context ) {
 				Vec3 intendedLookVec( keptInFovPoint );
 				intendedLookVec -= entityPhysicsState.Origin();
 				botInput->SetIntendedLookDir( intendedLookVec, false );
+			} else {
+				botInput->SetIntendedLookDir( entityPhysicsState.ForwardDir() );
 			}
+			botInput->canOverrideLookVec = true;
+			botInput->canOverridePitch = true;
 		}
 	}
 
