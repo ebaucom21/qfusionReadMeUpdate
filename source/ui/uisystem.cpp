@@ -298,6 +298,7 @@ public:
 	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
 	Q_PROPERTY( qreal fullscreenOverlayOpacity MEMBER s_fullscreenOverlayOpacity CONSTANT );
 	Q_PROPERTY( QString regularFontFamily MEMBER s_regularFontFamily CONSTANT );
+	Q_PROPERTY( QString headingFontFamily MEMBER s_headingFontFamily CONSTANT );
 	Q_PROPERTY( QString symbolsFontFamily MEMBER s_symbolsFontFamily CONSTANT );
 	Q_PROPERTY( QString emojiFontFamily MEMBER s_emojiFontFamily CONSTANT );
 signals:
@@ -337,6 +338,7 @@ private:
 	static inline const qreal s_fullscreenOverlayOpacity { 0.90 };
 
 	static inline const QString s_regularFontFamily { "Ubuntu" };
+	static inline const QString s_headingFontFamily { "IBM Plex Sans" };
 	static inline const QString s_symbolsFontFamily { "Noto Sans Symbols2" };
 
 	// Windows system facilities cannot handle Noto Emoji.
@@ -622,6 +624,11 @@ static const char *kUbuntuFontSuffixes[] {
 	"-B", "-BI", "-C", "-L", "-LI", "-M", "-MI", "-R", "-RI", "-Th"
 };
 
+static const char *kPlexSansFontSuffixes[] {
+	"-Bold", "-BoldItalic", "-ExtraLight", "-ExtraLightItalic", "-Italic", "-Light", "-LightItalic", "-Medium",
+	"-MediumItalic", "-Regular", "-SemiBold", "-SemiBoldItalic", "-Text", "-TextItalic", "-Thin", "-ThinItalic"
+};
+
 void QtUISystem::registerFontFlavors( const wsw::StringView &prefix, std::span<const char *> suffixes ) {
 	wsw::StaticString<64> path;
 	path << "fonts/"_asView << prefix;
@@ -638,6 +645,8 @@ void QtUISystem::registerFonts() {
 	QFontDatabase::removeAllApplicationFonts();
 
 	registerFontFlavors( "Ubuntu"_asView, kUbuntuFontSuffixes );
+	registerFontFlavors( "IBMPlexSans"_asView, kPlexSansFontSuffixes );
+
 	registerFont( "fonts/NotoSansSymbols2-Regular.ttf"_asView );
 
 	// See the related to s_emojiFontFamily remark
