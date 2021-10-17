@@ -22,24 +22,29 @@ Item {
         spacing: 20
 
         populate: Transition {
-            ParallelAnimation {
-                NumberAnimation {
-                    property: "width"; from: 0; to: 64; duration: 100
-                }
-                NumberAnimation {
-                    property: "opacity"; from: 0; to: 1; duration: 100
-                }
+            NumberAnimation {
+                property: "width"; from: 0; to: 64; duration: 100
+            }
+            NumberAnimation {
+                property: "opacity"; from: 0; to: 1; duration: 100
             }
         }
 
         add: Transition {
-            ParallelAnimation {
-                NumberAnimation {
-                    property: "width"; from: 0; to: 64; duration: 100
-                }
-                NumberAnimation {
-                    property: "opacity"; from: 0; to: 1; duration: 100
-                }
+            NumberAnimation {
+                property: "width"; from: 0; to: 64; duration: 100
+            }
+            NumberAnimation {
+                property: "opacity"; from: 0; to: 1; duration: 100
+            }
+        }
+
+        displaced: Transition {
+            NumberAnimation {
+                property: "width"; from: 0; to: 64; duration: 100
+            }
+            NumberAnimation {
+                property: "opacity"; from: 0; to: 1; duration: 100
             }
         }
 
