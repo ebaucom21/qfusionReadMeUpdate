@@ -131,7 +131,6 @@ void CG_BuildSolidList( void ) {
 				case ET_ROCKET:
 				case ET_GRENADE:
 				case ET_PLASMA:
-				case ET_BOMBLET:
 				case ET_LASERBEAM:
 				case ET_CURVELASERBEAM:
 				case ET_MINIMAP_ICON:

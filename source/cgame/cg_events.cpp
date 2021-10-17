@@ -1417,19 +1417,6 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			}
 			break;
 
-		case EV_BOMBLET_EXPLOSION:
-			if( parm ) {
-				// we have a direction
-				ByteToDir( parm, dir );
-				CG_BombletExplosion( ent->origin, dir, (float)ent->weapon * 8.0f );
-			} else {
-				// no direction
-				CG_BombletExplosion( ent->origin, vec3_origin, (float)ent->weapon * 8.0f );
-			}
-
-			CG_StartKickAnglesEffect( ent->origin, 64, ent->weapon, 300 );
-			break;
-
 		case EV_ROCKET_EXPLOSION:
 			ByteToDir( parm, dir );
 			CG_RocketExplosionMode( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
@@ -1458,10 +1445,6 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			} else {
 				SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxGrenadeWeakBounce[rand() & 1], ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 			}
-			break;
-
-		case EV_BOMBLET_BOUNCE:
-			SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxBombletBounce, ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 			break;
 
 		case EV_BLADE_IMPACT:

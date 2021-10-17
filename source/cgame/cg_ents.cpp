@@ -1789,16 +1789,6 @@ void CG_AddEntities( void ) {
 				// Otherwise high ping players would only see an activated wave.
 				R_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 1.0f, 1.0f );
 				break;
-			case ET_BOMBLET:
-				CG_AddGenericEnt( cent );
-				R_AddLightToScene( cent->ent.origin, 0.0f, 56.0f, 1.0f, 0.6f, 0.0f );
-				if( ( cg.frameCount % 2 ) == ( cent->current.number % 2 ) ) {
-					if( cent->current.number % 2 ) {
-						R_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.7f, 0.0f );
-					} else {
-						R_AddLightToScene( cent->ent.origin, 72.0f, 0.0f, 1.0f, 0.3f, 0.0f );
-					}
-				}
 			case ET_SPRITE:
 			case ET_RADAR:
 				CG_AddSpriteEnt( cent );
@@ -1934,7 +1924,6 @@ void CG_LerpEntities( void ) {
 			case ET_PLASMA:
 			case ET_GRENADE:
 			case ET_WAVE:
-			case ET_BOMBLET:
 			case ET_ITEM:
 			case ET_PLAYER:
 			case ET_CORPSE:
@@ -2043,7 +2032,6 @@ void CG_UpdateEntities( void ) {
 			case ET_PLASMA:
 			case ET_GRENADE:
 			case ET_WAVE:
-			case ET_BOMBLET:
 				cent->renderfx |= ( RF_NOSHADOW | RF_FULLBRIGHT );
 				CG_UpdateGenericEnt( cent );
 				break;

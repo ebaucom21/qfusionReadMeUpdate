@@ -767,8 +767,11 @@ static void SV_Physics_Toss( edict_t *ent ) {
 		SV_AddGravity( ent );
 	}
 
-	// move angles
-	VectorMA( ent->s.angles, FRAMETIME, ent->avelocity, ent->s.angles );
+	// Hacks
+	if( ent->s.type != ET_PLASMA && ent->s.type != ET_ROCKET ) {
+		// move angles
+		VectorMA( ent->s.angles, FRAMETIME, ent->avelocity, ent->s.angles );
+	}
 
 	// move origin
 	VectorScale( ent->velocity, FRAMETIME, move );
@@ -851,6 +854,16 @@ static void SV_Physics_Toss( edict_t *ent ) {
 	for( follower = ent->teamchain; follower; follower = follower->teamchain ) {
 		VectorCopy( ent->s.origin, follower->s.origin );
 		GClip_LinkEntity( follower );
+	}
+
+	// Hacks
+	if( ent->s.type == ET_PLASMA || ent->s.type == ET_ROCKET ) {
+		if( const auto squaredSpeed = VectorLengthSquared( ent->velocity ); squaredSpeed > 1.0f ) {
+			vec3_t velocityDir { ent->velocity[0], ent->velocity[1], ent->velocity[2] };
+			const float invSpeed = 1.0f / std::sqrt( squaredSpeed );
+			VectorScale( velocityDir, invSpeed, velocityDir );
+			VecToAngles( velocityDir, ent->s.angles );
+		}
 	}
 }
 

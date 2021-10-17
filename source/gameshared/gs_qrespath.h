@@ -218,8 +218,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define PATH_WAVE_WEAK_MODEL            "models/objects/projectile/shockwave/proj_shockwave.md3"
 #define PATH_WAVE_STRONG_MODEL          "models/objects/projectile/shockwave/proj_shockwave.md3"
 
-#define PATH_BOMBLET_MODEL "models/objects/projectile/rlauncher/bomblet.md3"
-
 #define PATH_BULLET_EXPLOSION_MODEL     "models/weapon_hits/bullet/hit_bullet.md3"
 #define PATH_GRENADE_EXPLOSION_MODEL        "models/weapon_hits/glauncher/hit_glauncher.md3"
 #define PATH_PLASMA_EXPLOSION_MODEL     "models/weapon_hits/plasmagun/hit_plasmagun.md3"
@@ -377,9 +375,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define S_WEAPON_ROCKET_S_FLY           "sounds/weapons/rocket_fly_strong"
 #define S_WEAPON_ROCKET_W_HIT           "sounds/weapons/rocket_strong_explosion"
 #define S_WEAPON_ROCKET_S_HIT           "sounds/weapons/rocket_strong_explosion"
-
-#define S_BOMBLET_BOUNCE       "sounds/weapons/bomblet_bounce"
-#define S_BOMBLET_EXPLOSION    "sounds/weapons/bomblet_explosion"
 
 #define S_WEAPON_PLASMAGUN_W_FLY        "sounds/weapons/plasmagun_strong_fly"
 #define S_WEAPON_PLASMAGUN_S_FLY        "sounds/weapons/plasmagun_strong_fly"

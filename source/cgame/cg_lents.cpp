@@ -1250,50 +1250,6 @@ void CG_GrenadeExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode,
 	}
 }
 
-void CG_BombletExplosion( const vec3_t pos, const vec3_t dir, float radius ) {
-	lentity_t *le;
-	vec3_t angles;
-	vec3_t decaldir;
-	vec3_t origin, vec;
-	float expvelocity = 8.0f;
-
-	VectorCopy( dir, decaldir );
-	VecToAngles( dir, angles );
-
-	//if( CG_PointContents( pos ) & MASK_WATER )
-	//jalfixme: (shouldn't we do the water sound variation?)
-
-	CG_SpawnDecal( pos, decaldir, random() * 360, radius * 0.5, 1, 1, 1, 1, 10, 1, false, cgs.media.shaderExplosionMark );
-
-	// animmap shader of the explosion
-	VectorMA( pos, radius * 0.15f, dir, origin );
-	le = CG_AllocSprite( LE_ALPHA_FADE, origin, radius * 0.5f, 8,
-						 1, 1, 1, 1,
-						 radius * 4, 0.75f, 0.533f, 0, // yellow dlight
-						 cgs.media.shaderRocketExplosion );
-
-	VectorSet( vec, crandom() * expvelocity, crandom() * expvelocity, crandom() * expvelocity );
-	VectorScale( dir, expvelocity, le->velocity );
-	VectorAdd( le->velocity, vec, le->velocity );
-	le->ent.rotation = rand() % 360;
-
-	// explosion ring sprite
-	if( cg_explosionsRing->integer ) {
-		VectorMA( pos, radius * 0.25f, dir, origin );
-		le = CG_AllocSprite( LE_ALPHA_FADE, origin, radius, 3,
-							 1, 1, 1, 1,
-							 0, 0, 0, 0, // no dlight
-							 cgs.media.shaderRocketExplosionRing );
-
-		le->ent.rotation = rand() % 360;
-	}
-
-	// Explosion particles
-	CG_ParticleExplosionEffect( pos, dir, 1, 0.5, 0, 32 );
-
-	SoundSystem::Instance()->StartFixedSound( cgs.media.sfxBombletExplosion, pos, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
-}
-
 /*
 * CG_GenericExplosion
 */
