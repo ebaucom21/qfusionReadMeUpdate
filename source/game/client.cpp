@@ -484,9 +484,9 @@ void Client::setSkinFromInfo() {
 
 	auto *ent = getEntity();
 	if( !ent->deadflag ) {
-		ent->s.modelindex = trap_ModelIndex( model.data() );
+		ent->s.modelindex = trap_ModelIndex( modelPath.data() );
 	}
-	ent->s.skinnum = trap_SkinIndex( skin.data() );
+	ent->s.skinnum = trap_SkinIndex( skinPath.data() );
 }
 
 void G_ClientClearStats( edict_t *ent ) {
