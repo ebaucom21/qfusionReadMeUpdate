@@ -4908,7 +4908,7 @@ static void R_Register( const char *screenshotsPrefix ) {
 	r_polyblend = Cvar_Get( "r_polyblend", "1", 0 );
 
 	r_brightness = Cvar_Get( "r_brightness", "0", CVAR_ARCHIVE );
-	r_sRGB = Cvar_Get( "r_sRGB", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	r_sRGB = Cvar_Get( "r_sRGB", "0", CVAR_DEVELOPER | CVAR_LATCH_VIDEO );
 
 	r_detailtextures = Cvar_Get( "r_detailtextures", "1", CVAR_ARCHIVE );
 

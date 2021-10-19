@@ -631,7 +631,7 @@ static void CG_RegisterVariables( void ) {
 	cg_bloodTrailAlpha =    Cvar_Get( "cg_bloodTrailAlpha", "1.0", CVAR_ARCHIVE );
 	cg_explosionsRing = Cvar_Get( "cg_explosionsRing", "1", CVAR_ARCHIVE );
 	cg_explosionsDust =    Cvar_Get( "cg_explosionsDust", "1", CVAR_ARCHIVE );
-	cg_gibs =       Cvar_Get( "cg_gibs", "1", CVAR_ARCHIVE );
+	cg_gibs =       Cvar_Get( "cg_gibs", "0", CVAR_DEVELOPER );
 	cg_outlineModels =  Cvar_Get( "cg_outlineModels", "0", CVAR_ARCHIVE );
 	cg_outlineWorld =   Cvar_Get( "cg_outlineWorld", "0", CVAR_ARCHIVE );
 	cg_outlinePlayers = Cvar_Get( "cg_outlinePlayers", "0", CVAR_ARCHIVE );
