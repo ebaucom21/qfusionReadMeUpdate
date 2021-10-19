@@ -276,7 +276,8 @@ Item {
                 width: 56
                 highlighted: true
                 font.family: wsw.symbolsFontFamily
-                text: "\u25B8"
+                text: "\u25B6"
+                contentItem.anchors.verticalCenterOffset: +4
 
                 onClicked: {
                     selectedIndex = -1

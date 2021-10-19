@@ -79,10 +79,11 @@ Item {
         id: textLabel
         anchors.left: image.right
         anchors.leftMargin: 8
-        anchors.bottom: image.bottom
-        font.weight: Font.Medium
-        font.letterSpacing: 1
-        font.pointSize: 12
+        anchors.verticalCenter: image.verticalCenter
+        font.family: wsw.headingFontFamily
+        font.weight: Font.Black
+        font.letterSpacing: 1.25
+        font.pointSize: 13
         textFormat: Text.PlainText
         text: root.text
     }
@@ -94,9 +95,10 @@ Item {
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
         horizontalAlignment: Qt.AlignRight
+        font.family: wsw.numbersFontFamily
         font.pointSize: 28
-        font.weight: Font.Medium
-        font.letterSpacing: 1
+        font.weight: Font.Black
+        font.letterSpacing: 1.25
         textFormat: Text.PlainText
         text: root.value
         style: Text.Raised

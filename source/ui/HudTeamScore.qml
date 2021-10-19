@@ -100,11 +100,12 @@ Item {
         id: scoreLabel
         width: Math.max(96, implicitWidth)
         anchors.top: colorBar.top
-        anchors.topMargin: -4
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
+        anchors.topMargin: -12
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
         horizontalAlignment: Qt.AlignHCenter
-        font.weight: Font.ExtraBold
+        font.family: wsw.numbersFontFamily
+        font.weight: Font.Black
         font.letterSpacing: 3
         font.pointSize: 56
         style: Text.Raised
@@ -119,6 +120,7 @@ Item {
     Label {
         id: clanLabel
         anchors.verticalCenter: colorBar.verticalCenter
+        font.family: wsw.headingFontFamily
         font.weight: Font.Black
         font.letterSpacing: 1.75
         font.pointSize: 16
@@ -132,9 +134,10 @@ Item {
         id: nameLabel
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: colorBar.height + 8 - 0.5 * nameLabel.height
-        font.weight: Font.ExtraBold
+        font.family: wsw.headingFontFamily
+        font.weight: Font.Black
         font.pointSize: 25
-        font.letterSpacing: 1.25
+        font.letterSpacing: 1.75
         font.capitalization: Font.AllUppercase
         textFormat: Text.StyledText
         style: Text.Raised

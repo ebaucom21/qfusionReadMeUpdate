@@ -14,7 +14,8 @@ Item {
         id: timeLabel
         visible: height > 0
         height: (typeof(timeFlags) !== "undefined" && !timeFlags) ? implicitHeight : 0
-        font.pointSize: 15
+        font.family: wsw.numbersFontFamily
+        font.pointSize: 14
         font.letterSpacing: 8
         font.weight: Font.Black
         anchors.centerIn: parent
@@ -30,8 +31,9 @@ Item {
         height: text.length > 0 ? implicitHeight : 0
         text: formatTimeFlags()
         anchors.centerIn: parent
+        font.family: wsw.headingFontFamily
         font.pointSize: 13
-        font.letterSpacing: 8
+        font.letterSpacing: 1.75
         font.weight: Font.Black
         horizontalAlignment: Qt.AlignHCenter
 

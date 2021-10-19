@@ -299,6 +299,7 @@ public:
 	Q_PROPERTY( qreal fullscreenOverlayOpacity MEMBER s_fullscreenOverlayOpacity CONSTANT );
 	Q_PROPERTY( QString regularFontFamily MEMBER s_regularFontFamily CONSTANT );
 	Q_PROPERTY( QString headingFontFamily MEMBER s_headingFontFamily CONSTANT );
+	Q_PROPERTY( QString numbersFontFamily MEMBER s_numbersFontFamily CONSTANT );
 	Q_PROPERTY( QString symbolsFontFamily MEMBER s_symbolsFontFamily CONSTANT );
 	Q_PROPERTY( QString emojiFontFamily MEMBER s_emojiFontFamily CONSTANT );
 signals:
@@ -339,6 +340,7 @@ private:
 
 	static inline const QString s_regularFontFamily { "Ubuntu" };
 	static inline const QString s_headingFontFamily { "IBM Plex Sans" };
+	static inline const QString s_numbersFontFamily { s_headingFontFamily };
 	static inline const QString s_symbolsFontFamily { "Noto Sans Symbols2" };
 
 	// Windows system facilities cannot handle Noto Emoji.

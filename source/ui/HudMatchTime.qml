@@ -4,8 +4,9 @@ import QtQuick.Controls.Material 2.12
 import net.warsow 2.6
 
 Item {
-    implicitWidth: 256
-    implicitHeight: 54 + 16
+    implicitWidth: separator.width + 2 * (sideMargin + Math.max(minutesLabel.width, secondsLabel.width)) + 16
+    implicitHeight: separator.height + matchStateLabel.anchors.topMargin + matchStateLabel.height
+
     width: implicitWidth
     height: implicitHeight
 
@@ -14,12 +15,17 @@ Item {
         yScale: 0.85
     }
 
+    readonly property real sideMargin: 8
+    readonly property string matchState: hudDataModel.matchState
+
     Label {
+        id: minutesLabel
         anchors.right: separator.left
-        anchors.rightMargin: 8
+        anchors.rightMargin: sideMargin
         anchors.baseline: separator.baseline
         transform: scaleTransform
-        font.weight: Font.ExtraBold
+        font.family: wsw.numbersFontFamily
+        font.weight: Font.Black
         font.pointSize: 40
         font.letterSpacing: 3
         style: Text.Raised
@@ -30,10 +36,12 @@ Item {
     Label {
         id: separator
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: -8
+        anchors.top: parent.top
+        // TextMetrics didn't turn to be really useful
+        anchors.topMargin: -12
         transform: scaleTransform
-        font.weight: Font.ExtraBold
+        font.family: wsw.numbersFontFamily
+        font.weight: Font.Black
         font.pointSize: 48
         style: Text.Raised
         textFormat: Text.PlainText
@@ -41,26 +49,33 @@ Item {
     }
 
     Label {
+        id: secondsLabel
         anchors.left: separator.right
-        anchors.leftMargin: 8
+        anchors.leftMargin: sideMargin
         anchors.baseline: separator.baseline
         transform: scaleTransform
-        font.weight: Font.ExtraBold
+        font.family: wsw.numbersFontFamily
+        font.weight: Font.Black
         font.pointSize: 40
-        font.letterSpacing: 3
+        font.letterSpacing: 1.75
         style: Text.Raised
         textFormat: Text.PlainText
         text: hudDataModel.matchTimeSeconds
     }
 
     Label {
+        id: matchStateLabel
+        visible: matchState.length > 0
+        height: visible ? implicitHeight : 0
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        font.weight: Font.ExtraBold
-        font.pointSize: 16
-        font.letterSpacing: 3
+        anchors.top: separator.bottom
+        anchors.topMargin: -20
+        font.family: wsw.headingFontFamily
+        font.weight: Font.Black
+        font.pointSize: 13
+        font.letterSpacing: 1.75
         style: Text.Raised
         textFormat: Text.PlainText
-        text: hudDataModel.matchState
+        text: matchState
     }
 }

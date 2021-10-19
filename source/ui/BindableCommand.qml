@@ -70,7 +70,9 @@ MouseArea {
             leftMargin: -2
             verticalCenter: parent.verticalCenter
         }
-        text: "\u2795"
+        font.pointSize: 12
+        font.weight: Font.Medium
+        text: "+"
     }
 
     Label {

@@ -50,6 +50,9 @@ Item {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
 
+                font.weight: Font.Medium
+                font.pointSize: 12
+
                 Component.onCompleted: forceActiveFocus()
 
                 onEditingFinished: {
@@ -83,8 +86,8 @@ Item {
                     Label {
                         Layout.alignment: Qt.AlignTop
                         Layout.rightMargin: 2
-                        font.pointSize: 11
-                        font.weight: Font.Bold
+                        font.pointSize: 12
+                        font.weight: Font.Black
                         font.letterSpacing: 0.5
                         textFormat: Text.StyledText
                         style: Text.Raised
@@ -93,7 +96,8 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        font.pointSize: 11
+                        font.pointSize: 12
+                        font.weight: Font.Medium
                         font.letterSpacing: 0.5
                         textFormat: Text.StyledText
                         clip: true

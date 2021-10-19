@@ -13,6 +13,9 @@ Item {
         PlayerSettings {}
     }
 
+    // A safety guard
+    Component.onDestruction: wsw.rollbackPendingCVarChanges()
+
     WswTabBar {
         id: tabBar
         enabled: !wsw.hasPendingCVarChanges
@@ -77,8 +80,6 @@ Item {
 
         Item {
             id: applyChangesPane
-            readonly property color defaultForegroundColor: Material.foreground
-            readonly property color defaultBackgroundColor: Material.background
 
             Rectangle {
                 anchors.left: parent.left
@@ -87,17 +88,17 @@ Item {
                 radius: 2
                 width: parent.width - 20
                 height: parent.height - 20
-                color: Material.accent
+                color: Qt.lighter(Material.background, 1.5)
             }
 
             Button {
                 anchors {
                     verticalCenter: parent.verticalCenter
                     right: parent.horizontalCenter
+                    rightMargin: 8
                 }
                 text: "Revert"
                 flat: true
-                Material.foreground: applyChangesPane.defaultBackgroundColor
                 onClicked: wsw.rollbackPendingCVarChanges()
             }
 
@@ -105,10 +106,11 @@ Item {
                 anchors {
                     verticalCenter: parent.verticalCenter
                     left: parent.horizontalCenter
+                    leftMargin: 8
                 }
                 text: "Accept"
-                flat: true
-                Material.foreground: applyChangesPane.defaultForegroundColor
+                flat: false
+                highlighted: true
                 onClicked: wsw.commitPendingCVarChanges()
             }
         }

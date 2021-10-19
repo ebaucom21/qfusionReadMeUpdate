@@ -7,7 +7,7 @@ Item {
     id: root
     width: implicitWidth
     height: implicitHeight
-    implicitWidth: 420
+    implicitWidth: 720
     implicitHeight: list.height + 20
     opacity: 0.9
 

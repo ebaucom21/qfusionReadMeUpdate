@@ -129,6 +129,7 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
+			font.family: wsw.headingFontFamily
 			font.pointSize: 14
 			font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
 			text: root.text

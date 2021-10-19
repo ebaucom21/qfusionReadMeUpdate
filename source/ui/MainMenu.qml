@@ -7,7 +7,27 @@ import net.warsow 2.6
 Item {
 	id: root
 
+    SequentialAnimation {
+        running: true
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: radialGradient
+            property: "horizontalRadius"
+            from: parent.width
+            to: 0.33 * parent.width
+            duration: 10000
+        }
+        NumberAnimation {
+            target: radialGradient
+            property: "horizontalRadius"
+            from: 0.33 * parent.width
+            to: parent.width
+            duration: 10000
+        }
+    }
+
     RadialGradient {
+        id: radialGradient
         anchors.fill: parent
         horizontalRadius: parent.width
         // Stretches it vertically making it almost a column in the expanded state

@@ -55,6 +55,7 @@ Item {
                         verticalAlignment: Qt.AlignVCenter
                         horizontalAlignment: isTextual ? Qt.AlignLeft : Qt.AlignHCenter
                         text: scoreboard.getColumnTitle(index)
+                        font.family: wsw.headingFontFamily
                         font.pointSize: 12
                         font.weight: Font.Bold
                         font.capitalization: Font.AllUppercase

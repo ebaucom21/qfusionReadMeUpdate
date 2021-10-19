@@ -31,8 +31,9 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
+        font.family: wsw.headingFontFamily
         font.capitalization: Font.AllUppercase
-        font.letterSpacing: 0.75
+        font.letterSpacing: 1.0
         font.pointSize: 12
         font.weight: Font.Bold
         text: root.title

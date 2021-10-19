@@ -42,6 +42,7 @@
         <file>HudMessageFeed.qml</file>
         <file>HudObjectiveIndicator.qml</file>
         <file>HudObjectiveIndicatorFrameAnim.qml</file>
+        <file>HudObjectiveIndicatorIconAnim.qml</file>
         <file>HudObjectiveStatus.qml</file>
         <file>HudTeamInfo.qml</file>
         <file>HudTeamScore.qml</file>

@@ -56,6 +56,7 @@ Item {
             width: progressBar.width
 
             Label {
+                font.family: wsw.headingFontFamily
                 font.pointSize: 11
                 font.letterSpacing: 1
                 font.weight: Font.Bold
@@ -68,6 +69,7 @@ Item {
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 horizontalAlignment: Qt.AlignHCenter
+                font.family: wsw.headingFontFamily
                 font.pointSize: 11
                 font.capitalization: Font.AllUppercase
                 font.letterSpacing: 1
@@ -77,6 +79,7 @@ Item {
             }
 
             Label {
+                font.family: wsw.numbersFontFamily
                 font.pointSize: 11
                 font.letterSpacing: 1
                 font.weight: Font.Bold
@@ -105,6 +108,7 @@ Item {
             anchors.top: progressBar.bottom
             anchors.topMargin: 8
             text: demoPlayer.formatDuration(demoPlayer.progress)
+            font.family: wsw.numbersFontFamily
             font.weight: Font.Bold
             font.letterSpacing: 1
             font.pointSize: 11
@@ -116,6 +120,7 @@ Item {
             anchors.top: progressBar.bottom
             anchors.topMargin: 8
             text: demoPlayer.formatDuration(demoPlayer.duration)
+            font.family: wsw.numbersFontFamily
             font.weight: Font.Bold
             font.letterSpacing: 1
             font.pointSize: 11

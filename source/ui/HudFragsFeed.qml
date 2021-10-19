@@ -32,8 +32,8 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Qt.AlignRight
                 font.weight: Font.Bold
-                font.letterSpacing: 1
-                font.pointSize: 12
+                font.letterSpacing: 1.25
+                font.pointSize: 14
                 style: Text.Raised
                 textFormat: Text.StyledText
                 text: attacker
@@ -49,8 +49,8 @@ Item {
             Label {
                 Layout.alignment: Qt.AlignVCenter
                 font.weight: Font.Bold
-                font.letterSpacing: 1
-                font.pointSize: 12
+                font.letterSpacing: 1.25
+                font.pointSize: 14
                 style: Text.Raised
                 textFormat: Text.StyledText
                 text: victim

@@ -39,9 +39,11 @@ Item {
         anchors.rightMargin: 16
         horizontalAlignment: Qt.AlignHCenter
         elide: Text.ElideRight
-        font.pointSize: 15
-        font.letterSpacing: 1.5
-        font.weight: Font.Normal
+        maximumLineCount: 2
+        font.family: wsw.headingFontFamily
+        font.pointSize: 14
+        font.letterSpacing: 1.25
+        font.weight: Font.Medium
         font.capitalization: Font.AllUppercase
         text: root.title
     }

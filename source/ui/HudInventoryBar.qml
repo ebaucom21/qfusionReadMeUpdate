@@ -7,57 +7,62 @@ import net.warsow 2.6
 
 Item {
     implicitWidth: list.contentWidth + 48
-    implicitHeight: 64 + 64
+    implicitHeight: cardHeight + 24
     width: implicitWidth
     height: implicitHeight
+
+    readonly property real cardWidth: 60
+    readonly property real cardHeight: 100
+    readonly property real animDuration: 100
+    readonly property real cardRadius: 9
 
     ListView {
         id: list
         anchors.centerIn: parent
         width: contentWidth
-        height: 64
+        height: cardHeight
         model: hudDataModel.getInventoryModel()
         orientation: ListView.Horizontal
         boundsBehavior: Flickable.StopAtBounds
-        spacing: 20
+        spacing: 24
 
         populate: Transition {
             NumberAnimation {
-                property: "width"; from: 0; to: 64; duration: 100
+                property: "width"; from: 0; to: cardWidth; duration: animDuration
             }
             NumberAnimation {
-                property: "opacity"; from: 0; to: 1; duration: 100
+                property: "opacity"; from: 0; to: 1; duration: animDuration
             }
         }
 
         add: Transition {
             NumberAnimation {
-                property: "width"; from: 0; to: 64; duration: 100
+                property: "width"; from: 0; to: cardWidth; duration: animDuration
             }
             NumberAnimation {
-                property: "opacity"; from: 0; to: 1; duration: 100
+                property: "opacity"; from: 0; to: 1; duration: animDuration
             }
         }
 
         displaced: Transition {
             NumberAnimation {
-                property: "width"; from: 0; to: 64; duration: 100
+                property: "width"; from: 0; to: cardWidth; duration: animDuration
             }
             NumberAnimation {
-                property: "opacity"; from: 0; to: 1; duration: 100
+                property: "opacity"; from: 0; to: 1; duration: animDuration
             }
         }
 
         delegate: Item {
-            width: 64
-            height: 64
+            width: cardWidth
+            height: cardHeight
 
             Rectangle {
                 id: frame
                 anchors.centerIn: parent
-                width: 56
-                height: 89
-                radius: 12
+                width: cardWidth
+                height: cardHeight
+                radius: cardRadius
                 color: "black"
                 opacity: 0.7
                 layer.enabled: true
@@ -66,10 +71,10 @@ Item {
 
             Rectangle {
                 anchors.centerIn: parent
-                width: 56; height: 89
-                radius: 12
+                width: cardWidth + 3; height: cardHeight + 3
+                radius: cardRadius - 2
                 color: "transparent"
-                border.width: 3
+                border.width: 4
                 border.color: Qt.lighter(model.color, 1.1)
                 visible: active
             }
@@ -94,10 +99,12 @@ Item {
 
             Label {
                 anchors.top: frame.top
-                anchors.topMargin: strongAmmoCount >= 0 ? 6 : 3
+                anchors.topMargin: strongAmmoCount >= 0 ? 6 : 4
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.weight: Font.ExtraBold
-                font.pointSize: strongAmmoCount >= 0 ? 13 : 18
+                font.family: wsw.numbersFontFamily
+                font.weight: Font.Black
+                font.pointSize: strongAmmoCount >= 0 ? 14 : 18
+                font.letterSpacing: 1.0
                 opacity: strongAmmoCount ? 1.0 : 0.5
                 textFormat: Text.PlainText
                 text: strongAmmoCount >= 0 ? (strongAmmoCount ? strongAmmoCount : "\u2013") : "\u221E"
@@ -106,10 +113,12 @@ Item {
 
             Label {
                 anchors.bottom: frame.bottom
-                anchors.bottomMargin: weakAmmoCount >= 0 ? 6 : 3
+                anchors.bottomMargin: weakAmmoCount >= 0 ? 6 : 4
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.weight: Font.ExtraBold
-                font.pointSize: weakAmmoCount >= 0 ? 13 : 18
+                font.family: wsw.numbersFontFamily
+                font.weight: Font.Black
+                font.pointSize: weakAmmoCount >= 0 ? 14 : 18
+                font.letterSpacing: 1.0
                 opacity: weakAmmoCount ? 1.0 : 0.5
                 textFormat: Text.PlainText
                 text: weakAmmoCount >= 0 ? (weakAmmoCount ? weakAmmoCount : "\u2013") : "\u221E"

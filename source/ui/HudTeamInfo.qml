@@ -48,13 +48,16 @@ Item {
                 Label {
                     Layout.preferredWidth: 32
                     horizontalAlignment: Qt.AlignRight
+                    font.family: wsw.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
+                    font.letterSpacing: 0.5
                     style: Text.Raised
                     textFormat: Text.PlainText
                     text: health
                 }
                 Label {
+                    font.family: wsw.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     style: Text.Raised
@@ -64,8 +67,10 @@ Item {
                 Label {
                     Layout.preferredWidth: 32
                     horizontalAlignment: Qt.AlignLeft
+                    font.family: wsw.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
+                    font.letterSpacing: 0.5
                     style: Text.Raised
                     textFormat: Text.PlainText
                     text: armor

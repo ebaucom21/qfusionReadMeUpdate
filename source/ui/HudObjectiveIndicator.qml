@@ -18,9 +18,9 @@ Item {
     readonly property int indicatorAnim: indicatorState.anim
 
     readonly property real minFrameBaseOpacity: 0.5
-    readonly property real maxFrameSide: 72
+    readonly property real maxFrameSide: 72 - 8
     readonly property real collapsedHeight: 80
-    readonly property real borderWidth: 6
+    readonly property real borderWidth: 5
 
     readonly property real barHeight: 16 * barHeightFrac
     readonly property real barMargin: 8 * barHeightFrac
@@ -47,7 +47,7 @@ Item {
         radius: 24
 
         function restoreDefaultProperties() {
-            if (!alertAnim.running && !actionAnim.running) {
+            if (!frameAlertAnim.running && !frameActionAnim.running) {
                 frame.width = maxFrameSide
                 frame.height = maxFrameSide
                 frame.baseOpacity = minFrameBaseOpacity
@@ -56,6 +56,7 @@ Item {
     }
 
     Image {
+        id: icon
         anchors.horizontalCenter: frame.horizontalCenter
         anchors.verticalCenter: frame.verticalCenter
         width: 32
@@ -63,12 +64,41 @@ Item {
         smooth: true
         mipmap: true
         source: hudDataModel.getIndicatorIconPath(indicatorState.iconNum)
+
+        function restoreDefaultProperties() {
+            if (!iconAlertAnim.running) {
+                icon.anchors.horizontalCenterOffset = 0
+            }
+            if (!iconActionAnim.running) {
+                icon.anchors.verticalCenterOffset = 0
+            }
+        }
     }
 
-    // Changing anim duration on the fly does not seem to work, declare two mutually exclusive instances as a workaround
+    // Changing anim duration on the fly does not seem to work, declare mutually exclusive instances as a workaround
+
+    HudObjectiveIndicatorIconAnim {
+        id: iconAlertAnim
+        target: icon
+        amplitude: 1.25
+        period: 300
+        running: indicatorAnim === HudDataModel.AlertAnim
+        targetProperty: "anchors.horizontalCenterOffset"
+        onRunningChanged: icon.restoreDefaultProperties()
+    }
+
+    HudObjectiveIndicatorIconAnim {
+        id: iconActionAnim
+        target: icon
+        amplitude: 2.0
+        period: 667
+        running: indicatorAnim === HudDataModel.ActionAnim
+        targetProperty: "anchors.verticalCenterOffset"
+        onRunningChanged: icon.restoreDefaultProperties()
+    }
 
     HudObjectiveIndicatorFrameAnim {
-        id: alertAnim
+        id: frameAlertAnim
         target: frame
         running: indicatorAnim === HudDataModel.AlertAnim
         minSide: maxFrameSide - 6
@@ -80,7 +110,7 @@ Item {
     }
 
     HudObjectiveIndicatorFrameAnim {
-        id: actionAnim
+        id: frameActionAnim
         target: frame
         running: indicatorAnim === HudDataModel.ActionAnim
         minSide: maxFrameSide - 4

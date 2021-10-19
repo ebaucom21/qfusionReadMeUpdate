@@ -13,12 +13,12 @@ Item {
 
         SettingsRow {
             text: "Nickname"
-            CVarAwareTextField { cvarName: "name" }
+            CVarAwareTextField { cvarName: "name"; font.weight: Font.Medium }
         }
 
         SettingsRow {
             text: "Clan"
-            CVarAwareTextField { cvarName: "clan" }
+            CVarAwareTextField { cvarName: "clan"; font.weight: Font.Medium }
         }
 
         SettingsGroupHeaderRow {

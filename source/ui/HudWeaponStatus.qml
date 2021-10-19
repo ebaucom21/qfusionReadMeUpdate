@@ -23,12 +23,14 @@ Item {
     }
 
     Label {
+        id: weaponNameLabel
         anchors.top: back.top
         anchors.topMargin: 12
         anchors.horizontalCenter: back.horizontalCenter
-        font.weight: Font.Medium
-        font.letterSpacing: 1
-        font.pointSize: 12
+        font.family: wsw.headingFontFamily
+        font.weight: Font.Black
+        font.letterSpacing: 1.25
+        font.pointSize: 13
         font.capitalization: Font.AllUppercase
         textFormat: Text.PlainText
         text: hudDataModel.activeWeaponName
@@ -45,32 +47,40 @@ Item {
         source: hudDataModel.activeWeaponIcon
     }
 
+
+    readonly property real strongAmmo: hudDataModel.activeWeaponStrongAmmo
+    readonly property real weakAmmo: hudDataModel.activeWeaponWeakAmmo
+    readonly property real primaryAmmo: strongAmmo || weakAmmo
+
+    readonly property string infinity: "\u221E"
+
     Label {
-        visible: hudDataModel.activeWeaponStrongAmmo && hudDataModel.activeWeaponWeakAmmo
-        anchors.left: strongCountLabel.left
-        anchors.bottom: strongCountLabel.top
-        font.weight: Font.Bold
-        font.letterSpacing: 1
-        font.pointSize: hudDataModel.activeWeaponWeakAmmo >= 0 ? 13 : 16
+        id: secondaryCountLabel
+        // Display as a secondary if there's strong ammo as well
+        visible: strongAmmo && weakAmmo
+        anchors.left: primaryCountLabel.left
+        anchors.bottom: primaryCountLabel.top
+        anchors.bottomMargin: weakAmmo >= 0 ? -4 : -24
+        font.family: wsw.numbersFontFamily
+        font.weight: Font.Black
+        font.letterSpacing: 1.25
+        font.pointSize: weakAmmo >= 0 ? 16 : 24
         style: Text.Raised
         textFormat: Text.PlainText
-        text: hudDataModel.activeWeaponWeakAmmo >= 0 ?
-            (hudDataModel.activeWeaponWeakAmmo ? hudDataModel.activeWeaponWeakAmmo : "") : "\u221E"
+        text: weakAmmo > 0 ? weakAmmo : infinity
     }
 
     Label {
-        id: strongCountLabel
+        id: primaryCountLabel
         anchors.left: back.left
         anchors.bottom: back.bottom
-        anchors.margins: 16
-        font.weight: Font.ExtraBold
-        font.letterSpacing: 1
-        font.pointSize: 28
+        anchors.leftMargin: 16
+        anchors.bottomMargin: primaryAmmo >= 0 ? 16 : 6
+        font.weight: Font.Black
+        font.letterSpacing: 1.25
+        font.pointSize: primaryAmmo >= 0 ? 32 : 40
         style: Text.Raised
         textFormat: Text.PlainText
-        text: {
-            const ammo = hudDataModel.activeWeaponStrongAmmo || hudDataModel.activeWeaponWeakAmmo
-            ammo >= 0 ? (ammo ? ammo : "") : "\u221E"
-        }
+        text: (primaryAmmo >= 0) ? primaryAmmo : infinity
     }
 }
