@@ -31,8 +31,8 @@ class DemosResolver : public QObject {
 	wsw::Vector<unsigned> m_addedNew;
 	wsw::Vector<unsigned> m_goneOld;
 
-	using StringSpan = std::pair<uint8_t, uint8_t>;
-	using StringDataStorage = wsw::StringSpanStorage<uint8_t, uint8_t>;
+	using StringSpan = std::pair<uint32_t, uint8_t>;
+	using StringDataStorage = wsw::StringSpanStorage<uint32_t, uint8_t>;
 
 	static constexpr unsigned kMaxOtherKeysAndValues = 8;
 	static constexpr unsigned kMaxTags = 8;
