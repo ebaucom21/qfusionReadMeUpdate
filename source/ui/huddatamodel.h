@@ -417,6 +417,8 @@ public:
 	Q_INVOKABLE QByteArray getWeaponIconPath( int weapon ) const;
 	[[nodiscard]]
 	Q_INVOKABLE QByteArray getWeaponModelPath( int weapon ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QColor getWeaponColor( int weapon ) const;
 
 	[[nodiscard]]
 	Q_INVOKABLE QStringList getAvailableCrosshairs() const;

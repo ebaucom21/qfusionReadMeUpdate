@@ -700,6 +700,10 @@ auto HudDataModel::getWeaponModelPath( int weapon ) const -> QByteArray {
 	return weaponPropsCache.getWeaponModelPath( weapon );
 }
 
+auto HudDataModel::getWeaponColor( int weapon ) const -> QColor {
+	return weaponPropsCache.getWeaponColor( weapon );
+}
+
 auto HudDataModel::getAvailableCrosshairs() const -> QStringList {
 	return weaponPropsCache.getAvailableCrosshairs();
 }

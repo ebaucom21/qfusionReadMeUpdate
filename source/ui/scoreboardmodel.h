@@ -8,7 +8,10 @@
 #include <QJsonArray>
 #include <QObject>
 
+#include <span>
+
 struct ReplicatedScoreboardData;
+struct AccuracyRows;
 
 namespace wsw::ui {
 
@@ -63,6 +66,27 @@ public:
 	auto asQmlArray() const -> QJsonArray;
 };
 
+class ScoreboardAccuracyData {
+	mutable bool m_isMarkedAsUpdated { false };
+
+	struct Entry {
+		uint8_t weapon, weak, strong;
+		[[nodiscard]]
+		bool operator==( const Entry &that ) const {
+			return weapon == that.weapon && weak == that.weak && strong == that.strong;
+		}
+	};
+
+	StaticVector<Entry, kNumAccuracySlots> m_trackedData;
+
+public:
+	void update( const AccuracyRows &accuracyRows );
+	[[nodiscard]]
+	bool isMarkedAsUpdated() const { return m_isMarkedAsUpdated; }
+	[[nodiscard]]
+	auto asQmlArray() const -> QJsonArray;
+};
+
 class ScoreboardModelProxy : public QObject, ScoreboardShared {
 	Q_OBJECT
 
@@ -90,6 +114,8 @@ public:
 	ScoreboardSpecsModelData m_specsModel { this, &m_playerIndicesForLists[TEAM_SPECTATOR] };
 	ScoreboardSpecsModelData m_chasersModel { this, &m_chasers };
 	ScoreboardSpecsModelData m_challengersModel { this, &m_challengers };
+
+	ScoreboardAccuracyData m_accuracyModel;
 
 	cvar_s *m_layoutVar { nullptr };
 	cvar_s *m_tableStyleVar { nullptr };
@@ -162,12 +188,18 @@ public:
 	Q_SIGNAL void challengersModelChanged();
 	Q_PROPERTY( QJsonArray challengersModel READ getChallengersModel NOTIFY challengersModelChanged );
 
+	Q_SIGNAL void accuracyModelChanged();
+	Q_PROPERTY( QJsonArray accuracyModel READ getAccuracyModel NOTIFY accuracyModelChanged );
+
 	[[nodiscard]]
 	auto getSpecsModel() -> QJsonArray { return m_specsModel.asQmlArray(); }
 	[[nodiscard]]
 	auto getChasersModel() -> QJsonArray { return m_chasersModel.asQmlArray(); }
 	[[nodiscard]]
 	auto getChallengersModel() -> QJsonArray { return m_challengersModel.asQmlArray(); }
+
+	[[nodiscard]]
+	auto getAccuracyModel() -> QJsonArray { return m_accuracyModel.asQmlArray(); }
 
 	[[nodiscard]]
 	auto getPlayersModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[0]; }
@@ -179,7 +211,7 @@ public:
 	auto getMixedModel() -> ScoreboardTeamModel * { return &m_teamModelsHolder[3]; }
 
 	void reload();
-	void update( const ReplicatedScoreboardData &currData );
+	void update( const ReplicatedScoreboardData &currData, const AccuracyRows &accuracyRows );
 };
 
 }

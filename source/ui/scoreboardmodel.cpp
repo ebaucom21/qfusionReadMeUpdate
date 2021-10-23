@@ -1,4 +1,5 @@
 #include "scoreboardmodel.h"
+#include "uisystem.h"
 #include "local.h"
 
 #include <QJsonObject>
@@ -101,6 +102,38 @@ auto ScoreboardSpecsModelData::asQmlArray() const -> QJsonArray {
 		}
 	}
 	return m_cachedArrayData;
+}
+
+void ScoreboardAccuracyData::update( const AccuracyRows &accuracyRows ) {
+	wsw::StaticVector<Entry, kNumAccuracySlots> newData;
+	for( unsigned i = 0; i < kNumAccuracySlots; ++i ) {
+		const uint8_t strong = accuracyRows.strong[i], weak = accuracyRows.weak[i];
+		if( strong + weak ) {
+			newData.emplace_back( Entry { .weapon = (uint8_t)( i + WEAP_GUNBLADE ), .weak = weak, .strong = strong } );
+		}
+	}
+	m_isMarkedAsUpdated = false;
+	if( m_trackedData.size() != newData.size() ) {
+		m_isMarkedAsUpdated = true;
+	} else {
+		if( !std::equal( m_trackedData.cbegin(), m_trackedData.cend(), newData.cbegin() ) ) {
+			m_isMarkedAsUpdated = true;
+		}
+	}
+	if( m_isMarkedAsUpdated ) {
+		m_trackedData.clear();
+		m_trackedData.insert( m_trackedData.end(), newData.begin(), newData.end() );
+	}
+}
+
+auto ScoreboardAccuracyData::asQmlArray() const -> QJsonArray {
+	QJsonArray result;
+	for( const Entry &entry: m_trackedData ) {
+		result.append( QJsonObject {
+			{ "weapon", entry.weapon }, { "weak", entry.weak }, { "strong", entry.strong }
+		});
+	}
+	return result;
 }
 
 void ScoreboardModelProxy::reload() {
@@ -261,8 +294,13 @@ void ScoreboardModelProxy::checkVars() {
 	}
 }
 
-void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData ) {
+void ScoreboardModelProxy::update( const ReplicatedScoreboardData &currData, const AccuracyRows &accuracyRows ) {
 	checkVars();
+
+	m_accuracyModel.update( accuracyRows );
+	if( m_accuracyModel.isMarkedAsUpdated() ) {
+		Q_EMIT accuracyModelChanged();
+	}
 
 	Scoreboard::PlayerUpdatesList playerUpdates;
 	Scoreboard::TeamUpdatesList teamUpdates;

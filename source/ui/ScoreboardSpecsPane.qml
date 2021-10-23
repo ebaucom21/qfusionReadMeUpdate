@@ -17,7 +17,7 @@ Item {
     visible: numPlayers
     implicitHeight: visible ?
         (label.anchors.topMargin + label.implicitHeight + label.anchors.topMargin +
-        column.anchors.topMargin + column.implicitHeight + column.anchors.bottomMargin + 4) : 0
+        column.anchors.topMargin + column.implicitHeight + column.anchors.bottomMargin + 8) : 0
 
 
     Rectangle {
@@ -46,7 +46,7 @@ Item {
         anchors.top: label.bottom
         anchors.topMargin: 16 + 2
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 16
+        spacing: 8
 
         Repeater {
             id: rowsRepeater
@@ -62,7 +62,7 @@ Item {
             delegate: Row {
                 Layout.alignment: Qt.AlignHCenter
                 readonly property int rowIndex: index
-                spacing: 16
+                spacing: 8
                 Repeater {
                     model: {
                         if (rowIndex === 0) {

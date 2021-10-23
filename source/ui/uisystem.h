@@ -1,11 +1,18 @@
 #ifndef WSW_0646db93_a5f6_4b71_9267_800aa42abe4b_H
 #define WSW_0646db93_a5f6_4b71_9267_800aa42abe4b_H
 
-#include <optional>
 #include <cstdint>
+#include <optional>
+#include <span>
 
 struct MessageFault;
 struct ReplicatedScoreboardData;
+
+struct AccuracyRows {
+	using Span = std::span<const uint8_t, 10>;
+	const Span weak;
+	const Span strong;
+};
 
 namespace wsw { class StringView; }
 
@@ -48,7 +55,7 @@ public:
 
 	virtual void handleConfigString( unsigned configStringNum, const wsw::StringView &string ) = 0;
 
-	virtual void updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) = 0;
+	virtual void updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) = 0;
 
 	virtual void setScoreboardShown( bool shown ) = 0;
 	[[nodiscard]]

@@ -726,6 +726,8 @@ typedef struct {
 // frame rates
 #define PS_MAX_STATS            64
 
+constexpr const unsigned kNumAccuracySlots = 10;
+
 typedef struct {
 	pmove_state_t pmove;        // for prediction
 
@@ -743,6 +745,9 @@ typedef struct {
 	short stats[PS_MAX_STATS];  // fast status bar updates
 	uint32_t plrkeys;           // infos on the pressed keys of chased player (self if not chasing)
 	uint8_t weaponState;
+
+	uint8_t strongAccuracy[kNumAccuracySlots];
+	uint8_t weakAccuracy[kNumAccuracySlots];
 } player_state_t;
 
 typedef struct {

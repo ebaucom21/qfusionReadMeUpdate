@@ -2040,6 +2040,25 @@ void Client::setUserInfo( const wsw::StringView &rawInfo ) {
 	}
 }
 
+static inline auto calcAccuracy( int64_t hits, int64_t shots ) {
+	// The ratio may go > 1 for beams / AOE weapons
+	hits = std::min( hits, shots );
+	int result;
+	// Try forcing a short integer division
+	if( shots < (int64_t)std::numeric_limits<uint16_t>::max() / 100 ) [[likely]] {
+		result = ( (uint16_t)100 * (uint16_t)hits ) / (uint16_t)shots;
+	} else if( shots < (int64_t)std::numeric_limits<int>::max() / 100 ) {
+		result = ( 100 * (int)hits ) / (int)shots;
+	} else {
+		result = (int)( ( 100 * hits ) / shots );
+	}
+	if( hits ) {
+		result = std::max( 1, result );
+	}
+	assert( result >= 0 && result <= 100 );
+	return (uint8_t)result;
+}
+
 void Client::setReplicatedStats() {
 	if( chase.active ) { // in chasecam it copies the other player stats
 		return;
@@ -2158,6 +2177,23 @@ void Client::setReplicatedStats() {
 	if( const auto *attacker = last_killer ) {
 		if( attacker->r.client && !GS_IsTeamDamage( &ent->s, &attacker->s ) ) {
 			ps.stats[STAT_LAST_KILLER] = (short)ENTNUM( attacker );
+		}
+	}
+
+	std::memset( ps.strongAccuracy, 0, sizeof( ps.strongAccuracy ) );
+	std::memset( ps.weakAccuracy, 0, sizeof( ps.weakAccuracy ) );
+	static_assert( kNumAccuracySlots + 1 == WEAP_TOTAL );
+	static_assert( AMMO_WEAK_GUNBLADE > AMMO_GUNBLADE );
+	const unsigned weakOffset = AMMO_WEAK_GUNBLADE - AMMO_GUNBLADE;
+	const unsigned strongOffset = 0;
+	for( unsigned i = 0; i < kNumAccuracySlots; ++i ) {
+		if( const int weakShots = stats.accuracy_shots[weakOffset + i] ) {
+			const int weakHits = stats.accuracy_hits[weakOffset + i];
+			ps.weakAccuracy[i] = calcAccuracy( weakHits, weakShots );
+		}
+		if( const int strongShots = stats.accuracy_shots[strongOffset + i] ) {
+			const int strongHits = stats.accuracy_hits[strongOffset + i];
+			ps.strongAccuracy[i] = calcAccuracy( strongHits, strongShots );
 		}
 	}
 }

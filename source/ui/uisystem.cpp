@@ -93,7 +93,7 @@ public:
 
 	void handleConfigString( unsigned configStringNum, const wsw::StringView &configString ) override;
 
-	void updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) override;
+	void updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) override;
 
 	[[nodiscard]]
 	bool isShowingScoreboard() const override;
@@ -1951,8 +1951,8 @@ void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::Stri
 	}
 }
 
-void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData ) {
-	m_scoreboardModel.update( scoreboardData );
+void QtUISystem::updateScoreboard( const ReplicatedScoreboardData &scoreboardData, const AccuracyRows &accuracyRows ) {
+	m_scoreboardModel.update( scoreboardData, accuracyRows );
 	m_playersModel.update( scoreboardData );
 	m_hudDataModel.updateScoreboardData( scoreboardData );
 }

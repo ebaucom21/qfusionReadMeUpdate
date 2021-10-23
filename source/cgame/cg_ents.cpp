@@ -368,7 +368,12 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 	}
 
 	CG_UpdatePlayerState();
-	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData );
+
+	static_assert( AccuracyRows::Span::extent == kNumAccuracySlots );
+	wsw::ui::UISystem::instance()->updateScoreboard( frame->scoreboardData, AccuracyRows {
+		.weak   = AccuracyRows::Span( frame->playerState.weakAccuracy ),
+		.strong = AccuracyRows::Span( frame->playerState.strongAccuracy )
+	});
 
 	for( i = 0; i < frame->numEntities; i++ )
 		CG_NewPacketEntityState( &frame->parsedEntities[i & ( MAX_PARSE_ENTITIES - 1 )] );

@@ -1162,6 +1162,8 @@ static const msg_field_t player_state_msg_fields[] = {
 	{ PSOFS( stats ), 16, PS_MAX_STATS, WIRE_BASE128 },
 
 	{ PSOFS( pmove.stats ), 16, PM_STAT_SIZE, WIRE_BASE128 },
+	{ PSOFS( strongAccuracy ), 8, kNumAccuracySlots, WIRE_FIXED_INT8 },
+	{ PSOFS( weakAccuracy ), 8, kNumAccuracySlots, WIRE_FIXED_INT8 },
 	{ PSOFS( inventory ), 32, MAX_ITEMS, WIRE_UBASE128 },
 };
 

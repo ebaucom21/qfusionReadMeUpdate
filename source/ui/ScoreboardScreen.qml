@@ -41,10 +41,7 @@ Rectangle {
         anchors.top: teamTablesLoader.top
         anchors.horizontalCenter: teamTablesLoader.horizontalCenter
         width: Math.max(teamTablesLoader.item.width, specsPane.width)
-        height: teamTablesLoader.item.height +
-            (challengersPane.visible ? challengersPane.anchors.topMargin + challengersPane.height : 0) +
-            (specsPane.visible ? specsPane.anchors.topMargin + specsPane.height : 0) +
-            (chasersPane.visible ? chasersPane.anchors.topMargin + chasersPane.height : 0)
+        height: teamTablesLoader.item.height + column.anchors.topMargin + column.height
 
         Component.onCompleted: wsw.registerHudOccluder(hudOccluder)
         Component.onDestruction: wsw.unregisterHudOccluder(hudOccluder)
@@ -54,44 +51,47 @@ Rectangle {
         onYChanged: wsw.updateHudOccluder(hudOccluder)
     }
 
-    ScoreboardSpecsPane {
-        id: challengersPane
-        playersPerRow: 3
-        playersInFirstRow: 2
+    Column {
+        id: column
         anchors.top: teamTablesLoader.bottom
         anchors.topMargin: 48
         anchors.horizontalCenter: parent.horizontalCenter
-        width: root.tableWidth - root.baseCellWidth
-        height: implicitHeight
-        model: scoreboard.challengersModel
-        title: "Challengers"
-    }
+        spacing: 32
 
-    ScoreboardSpecsPane {
-        id: specsPane
-        playersPerRow: 3
-        playersInFirstRow: 3
-        anchors.top: challengersPane.bottom
-        anchors.topMargin: 48
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: root.tableWidth - root.baseCellWidth
-        height: implicitHeight
-        model: scoreboard.specsModel
-        title: "Spectators"
-    }
+        ScoreboardSpecsPane {
+            playersPerRow: 3
+            playersInFirstRow: 2
+            width: root.tableWidth - root.baseCellWidth
+            height: implicitHeight
+            model: scoreboard.challengersModel
+            title: "Challengers"
+        }
 
-    ScoreboardSpecsPane {
-        id: chasersPane
-        playersPerRow: 3
-        playersInFirstRow: 3
-        visible: scoreboard.hasChasers && scoreboard.chasersModel.length
-        anchors.top: specsPane.bottom
-        anchors.topMargin: 48
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: root.tableWidth - root.baseCellWidth
-        height: implicitHeight
-        model: scoreboard.chasersModel
-        title: "Chasers"
+        ScoreboardSpecsPane {
+            id: specsPane
+            playersPerRow: 3
+            playersInFirstRow: 3
+            width: root.tableWidth - root.baseCellWidth
+            height: implicitHeight
+            model: scoreboard.specsModel
+            title: "Spectators"
+        }
+
+        ScoreboardSpecsPane {
+            playersPerRow: 3
+            playersInFirstRow: 3
+            visible: scoreboard.hasChasers && scoreboard.chasersModel.length
+            width: root.tableWidth - root.baseCellWidth
+            height: implicitHeight
+            model: scoreboard.chasersModel
+            title: "Chasers"
+        }
+
+        ScoreboardStatsPane {
+            id: statsPane
+            width: root.tableWidth - root.baseCellWidth
+            height: implicitHeight
+        }
     }
 
     Component {
