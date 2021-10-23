@@ -5,10 +5,8 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Item {
-    Label {
+    ProgressBar {
         anchors.centerIn: parent
-        text: "Profile"
-        font.weight: Font.ExtraBold
-        font.pointSize: 72
+        indeterminate: true
     }
 }
