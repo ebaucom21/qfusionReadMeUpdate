@@ -4847,7 +4847,7 @@ static void R_FinalizeGLExtensions( void ) {
 
 	glConfig.depthEpsilon = 1.0 / ( 1 << 22 );
 
-	glConfig.sSRGB = r_sRGB->integer;
+	glConfig.sSRGB = false;
 
 	cvar = Cvar_Get( "gl_ext_vertex_buffer_object_hack", "0", CVAR_ARCHIVE | CVAR_NOSET );
 	if( cvar && !cvar->integer ) {

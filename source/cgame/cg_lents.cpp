@@ -1477,7 +1477,7 @@ void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVe
 	vec3_t angles, velocity;
 	int time;
 
-	if( !cg_gibs->integer ) {
+	if( true ) {
 		return;
 	}
 
