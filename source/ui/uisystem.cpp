@@ -1296,6 +1296,7 @@ void QtUISystem::checkPropertyChanges() {
 	// TODO: This is fine for now but something more sophisticated should be really used
 	// TODO: Send these values via client stat flags
 	m_canSpectate = m_canJoin = m_canJoinAlpha = m_canJoinBeta = false;
+	m_isInChallengersQueue = m_canToggleChallengerStatus = false;
 	if( actualClientState == CA_ACTIVE ) {
 		const bool hasChallengersQueue = GS_HasChallengers();
 		const int team = CG_MyRealTeam();
