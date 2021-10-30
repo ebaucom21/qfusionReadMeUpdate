@@ -176,12 +176,12 @@ public:
 	}
 
 	NavSpot( const Vec3 &origin_, float radius_, NavTargetFlags flags_ )
-		: NavTarget( AiAasWorld::Instance()->FindAreaNum( origin_ ), origin_ )
+		: NavTarget( AiAasWorld::instance()->findAreaNum( origin_ ), origin_ )
 		, flags( flags_ | NavTargetFlags::REACH_ON_RADIUS ), radius( radius_ ) {}
 
 	void Set( const Vec3 &origin_, float radius_, NavTargetFlags flags_ ) {
 		NavTarget::origin = origin_;
-		NavTarget::aasAreaNum = AiAasWorld::Instance()->FindAreaNum( origin_ );
+		NavTarget::aasAreaNum = AiAasWorld::instance()->findAreaNum( origin_ );
 		this->radius = radius_;
 		this->flags = flags_ | NavTargetFlags::REACH_ON_RADIUS;
 	}

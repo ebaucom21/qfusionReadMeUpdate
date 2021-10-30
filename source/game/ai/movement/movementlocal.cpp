@@ -12,7 +12,7 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 	}
 
 	// Find an area that has suitable flags matching the trigger type
-	const auto *const __restrict aasWorld = AiAasWorld::Instance();
+	const auto *const __restrict aasWorld = AiAasWorld::instance();
 	const auto *const __restrict aasAreaSettings = aasWorld->AreaSettings();
 	const auto *const __restrict aiManager = AiManager::Instance();
 
@@ -29,7 +29,7 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 	*areaNumRef = 0;
 
 	int boxAreaNums[64];
-	const int numBoxAreas = aasWorld->BBoxAreas( ent->r.absmin, ent->r.absmax, boxAreaNums, 64 );
+	const int numBoxAreas = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, boxAreaNums, 64 );
 	for( int i = 0; i < numBoxAreas; ++i ) {
 		const int areaNum = boxAreaNums[i];
 		if( !( aasAreaSettings[areaNum].contents & desiredAreaContents ) ) {
@@ -46,7 +46,7 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 }
 
 auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const ClassTriggerNums * {
-	const auto *const __restrict aasWorld = AiAasWorld::Instance();
+	const auto *const __restrict aasWorld = AiAasWorld::instance();
 	assert( areaNum && (unsigned)areaNum < (unsigned)aasWorld->NumAreas() );
 
 	if( m_testedTriggersForArea[areaNum] ) {
@@ -219,7 +219,7 @@ bool ReachChainWalker::Exec() {
 		return false;
 	}
 
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	const auto *const aasReach = aasWorld->Reachabilities();
 
 	assert( (unsigned)lastReachNum < (unsigned)aasWorld->NumReach() );
@@ -246,7 +246,7 @@ bool ReachChainWalker::Exec() {
 }
 
 int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int fromAreaNum, int toAreaNum ) {
-	const auto *const aasReach = AiAasWorld::Instance()->Reachabilities();
+	const auto *const aasReach = AiAasWorld::instance()->Reachabilities();
 	constexpr const auto travelFlags = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
 	int travelTime = 0;
 	// Prevent infinite looping (still happens for some maps)

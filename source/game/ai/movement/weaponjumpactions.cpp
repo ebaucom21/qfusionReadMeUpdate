@@ -128,9 +128,9 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) 
 	// Avoid jumping to target if the bot is in the same floor cluster and is fairly close.
 	// This test rejects a case when there is a gap that requires walking around, but is rather good for all other cases.
 	if( const int groundedAreaNum = context->CurrGroundedAasAreaNum() ) {
-		const auto *aasWorld = AiAasWorld::Instance();
-		if( int currClusterNum = aasWorld->FloorClusterNum( groundedAreaNum ) ) {
-			if( int targetClusterNum = aasWorld->FloorClusterNum( context->NavTargetAasAreaNum() ) ) {
+		const auto *aasWorld = AiAasWorld::instance();
+		if( int currClusterNum = aasWorld->floorClusterNum( groundedAreaNum ) ) {
+			if( int targetClusterNum = aasWorld->floorClusterNum( context->NavTargetAasAreaNum() ) ) {
 				if( targetClusterNum == currClusterNum ) {
 					if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 144 ) ) {
 						Debug( "The bot is in the target floor cluster and is fairly close to target\n" );
@@ -197,7 +197,7 @@ bool ScheduleWeaponJumpAction::TryGetComputationQuota() const {
 }
 
 float ScheduleWeaponJumpAction::EstimateMapComputationalComplexity() const {
-	int numAreas = AiAasWorld::Instance()->NumAreas();
+	int numAreas = AiAasWorld::instance()->NumAreas();
 	assert( numAreas < std::numeric_limits<uint16_t>::max() );
 	float f = 1.0f - ( numAreas / (float)std::numeric_limits<uint16_t>::max() );
 	assert( f >= 0.0f && f <= 1.0f );
@@ -205,7 +205,7 @@ float ScheduleWeaponJumpAction::EstimateMapComputationalComplexity() const {
 }
 
 int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionContext *context, int *areaNums ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasReach = aasWorld->Reachabilities();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *routeCache = bot->RouteCache();
@@ -257,7 +257,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionCont
 }
 
 void ScheduleWeaponJumpAction::PrepareJumpTargets( PredictionContext *context, const int *areaNums, vec3_t *targets, int numAreas ) {
-	const auto *aasAreas = AiAasWorld::Instance()->Areas();
+	const auto *aasAreas = AiAasWorld::instance()->Areas();
 	// Aim at the height of a player (jump targets will be lower)
 	const float offset = -playerbox_stand_mins[2] + playerbox_stand_maxs[2];
 	for( int i = 0; i < numAreas; ++i ) {
@@ -310,13 +310,13 @@ bool ScheduleWeaponJumpAction::TryJumpDirectlyToTarget( PredictionContext *conte
 }
 
 int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( PredictionContext *context, int *areaNums ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const Vec3 navTargetOrigin( context->NavTargetOrigin() );
 
-	if( int floorClusterNum = aasWorld->FloorClusterNum( context->NavTargetAasAreaNum() ) ) {
-		const auto *clusterAreaNums = aasWorld->FloorClusterData( floorClusterNum ) + 1;
+	if( int floorClusterNum = aasWorld->floorClusterNum( context->NavTargetAasAreaNum() ) ) {
+		const auto *clusterAreaNums = aasWorld->floorClusterData( floorClusterNum ) + 1;
 		if( clusterAreaNums[-1] <= MAX_AREAS ) {
-			// We have saved lots of cycles on avoiding BBoxAreas() call anyway.
+			// We have saved lots of cycles on avoiding findAreasInBox() call anyway.
 			static_assert( sizeof( int ) > sizeof( *clusterAreaNums ), "Avoid copying/conversions in this case" );
 			for( int i = 0; i < clusterAreaNums[-1]; ++i ) {
 				areaNums[i] = clusterAreaNums[i];
@@ -361,14 +361,14 @@ int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( PredictionContext
 	Vec3 maxs( +384, +384, +32 );
 	mins += context->NavTargetOrigin();
 	maxs += context->NavTargetOrigin();
-	return aasWorld->BBoxAreas( mins, maxs, areaNums, 64 );
+	return aasWorld->findAreasInBox( mins, maxs, areaNums, 64 );
 }
 
 int ScheduleWeaponJumpAction::FilterRawCandidateAreas( PredictionContext *context, int *areaNums, int numRawAreas ) {
 	int *const filteredAreas = areaNums;
 	int numFilteredAreas = 0;
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 
@@ -383,9 +383,10 @@ int ScheduleWeaponJumpAction::FilterRawCandidateAreas( PredictionContext *contex
 	if( !numBotAreas ) {
 		return 0;
 	}
-	aasWorld->DecompressAreaVis( botAreaNums[0], botAreaVisRow );
+
+	aasWorld->decompressAreaVis( botAreaNums[0], botAreaVisRow );
 	if( numBotAreas == 2 ) {
-		aasWorld->AddToDecompressedAreaVis( botAreaNums[1], botAreaVisRow );
+		aasWorld->addToDecompressedAreaVis( botAreaNums[1], botAreaVisRow );
 	}
 
 	for( int i = 0; i < numRawAreas; ++i ) {
@@ -409,10 +410,10 @@ int ScheduleWeaponJumpAction::FilterRawCandidateAreas( PredictionContext *contex
 			continue;
 		}
 
-		if( int stairsClusterNum = aasWorld->StairsClusterNum( areaNum ) ) {
+		if( int stairsClusterNum = aasWorld->stairsClusterNum( areaNum ) ) {
 			// The first element is a length of numbers list.
 			// Two cluster boundary areas come as next and last ones.
-			const auto *stairsClusterAreaNums = aasWorld->StairsClusterData( stairsClusterNum );
+			const auto *stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum );
 			// If the area is not a boundary (uppper/lower) cluster area, skip it. Do not jump to stairs areas.
 			if( areaNum != stairsClusterAreaNums[1] && areaNum != stairsClusterAreaNums[stairsClusterAreaNums[0]] ) {
 				continue;
@@ -438,7 +439,7 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 	const auto *routeCache = bot->RouteCache();
 	const int targetAreaNum = context->NavTargetAasAreaNum();
 	const int currTravelTimeToTarget = context->TravelTimeToNavTarget();
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 
 	int reachNum;
@@ -692,7 +693,7 @@ void ScheduleWeaponJumpAction::SaveLandingAreas( PredictionContext *context, int
 	// Try add some nearby areas.
 	// Using areas reachable from the target area, add a nearby area if the target area is reachable from it too.
 	// Would be fine if we have reused initial raw bbox/cluster areas, but this complicates interface.
-	const auto &aasWorld = AiAasWorld::Instance();
+	const auto &aasWorld = AiAasWorld::instance();
 	const auto *aasReach = aasWorld->Reachabilities();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const auto &targetAreaSettings = aasAreaSettings[areaNum];

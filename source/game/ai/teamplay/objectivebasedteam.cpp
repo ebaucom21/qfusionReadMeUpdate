@@ -671,7 +671,7 @@ bool AiObjectiveBasedTeam::DefenceSpot::IsVisibleForDefenders() {
 }
 
 Bot *AiObjectiveBasedTeam::ObjectiveSpotImpl::FindBestByTravelTimeBot() {
-	const int spotAreaNum = AiAasWorld::Instance()->FindAreaNum( underlying->entity );
+	const int spotAreaNum = AiAasWorld::instance()->findAreaNum( underlying->entity );
 	int bestTravelTime = std::numeric_limits<int>::max();
 	Bot *bestBot = nullptr;
 	for( Bot *bot = botsListHead; bot; bot = bot->NextInObjective() ) {
@@ -748,9 +748,9 @@ void AiObjectiveBasedTeam::DefenceSpot::UpdateBotsStatus() {
 		}
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
-	const auto *aasFloorClusters = aasWorld->AreaFloorClusterNums();
-	const auto spotFloorClusterNum = aasFloorClusters[aasWorld->FindAreaNum( this->entity )];
+	const auto *aasWorld = AiAasWorld::instance();
+	const auto *aasFloorClusters = aasWorld->areaFloorClusterNums();
+	const auto spotFloorClusterNum = aasFloorClusters[aasWorld->findAreaNum( this->entity )];
 	const float *spotOrigin = this->entity->s.origin;
 	for( Bot *bot = botsListHead; bot; bot = bot->NextInObjective() ) {
 		if( bot == alreadyAssignedBot ) {
@@ -957,7 +957,7 @@ edict_t *AiObjectiveBasedTeam::ObjectiveSpotImpl::AllocHelperEnt( const vec3_t o
 	// Use MOVABLE flag so the area num gets updated automatically.
 	auto flags = NavEntityFlags::REACH_AT_RADIUS | NavEntityFlags::MOVABLE;
 	// Provide actual area num at spawn (even if its going to be checked next frame)
-	int areaNum = AiAasWorld::Instance()->FindAreaNum( origin );
+	int areaNum = AiAasWorld::instance()->findAreaNum( origin );
 	NavEntitiesRegistry::Instance()->AddNavEntity( ent, areaNum, flags );
 
 	currHelperEnt++;

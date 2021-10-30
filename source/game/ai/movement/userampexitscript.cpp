@@ -33,7 +33,7 @@ bool UseRampExitScript::TryDeactivate( PredictionContext *context ) {
 }
 
 const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int rampAreaNum, int forbiddenAreaNum ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const auto *aasReach = aasWorld->Reachabilities();
@@ -125,7 +125,7 @@ MovementScript *FallbackAction::TryFindRampFallback( PredictionContext *context,
 		return nullptr;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto &exitArea = aasWorld->Areas()[*bestExitAreaNum];
 
 	Vec3 areaPoint( exitArea.center );

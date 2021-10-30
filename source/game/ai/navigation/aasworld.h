@@ -1,3 +1,21 @@
+/*
+===========================================================================
+Copyright (C) 1999-2005 Id Software, Inc.
+This file is part of Quake III Arena source code.
+Quake III Arena source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License,
+or (at your option) any later version.
+Quake III Arena source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License
+along with Foobar; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+===========================================================================
+*/
+
 #ifndef WSW_5dd29ec8_a176_43b0_b48a_b41c8ff11162_H
 #define WSW_5dd29ec8_a176_43b0_b48a_b41c8ff11162_H
 
@@ -5,10 +23,9 @@
 #include "../../../gameshared/q_shared.h"
 #include "../vec3.h"
 
-//presence types
-#define PRESENCE_NONE               1
-#define PRESENCE_NORMAL             2
-#define PRESENCE_CROUCH             4
+#include "../../../qcommon/qcommon.h"
+#include "../../../qcommon/wswstringview.h"
+#include "../../../qcommon/wswstaticstring.h"
 
 //travel types
 #define MAX_TRAVELTYPES             32
@@ -199,88 +216,85 @@ typedef struct aas_node_s {
 
 template <typename T> class ArrayRange;
 
-class alignas( 16 ) AiAasWorld
-{
+class alignas( 16 ) AiAasWorld {
 	friend class AasFileReader;
 
-	bool loaded = false;
-	// Should be released by G_Free();
-	char *checksum = nullptr;
+	// Try grouping fields to avoid alignment gaps
 
-	//bounding boxes
-	int numbboxes;
-	aas_bbox_t *bboxes;
-	//vertexes
-	int numvertexes;
-	aas_vertex_t *vertexes;
-	//planes
-	int numplanes;
-	aas_plane_t *planes;
-	//edges
-	int numedges;
-	aas_edge_t *edges;
-	//edge index
-	int edgeindexsize;
-	aas_edgeindex_t *edgeindex;
-	//faces
-	int numfaces;
-	aas_face_t *faces;
-	//face index
-	int faceindexsize;
-	aas_faceindex_t *faceindex;
-	//convex areas
-	int numareas;
-	aas_area_t *areas;
-	//convex area settings
-	int numareasettings;
-	aas_areasettings_t *areasettings;
-	//reachablity list
-	int reachabilitysize;
-	aas_reachability_t *reachability;
-	//nodes of the bsp tree
-	int numnodes;
-	aas_node_t *nodes;
-	//cluster portals
-	int numportals;
-	aas_portal_t *portals;
-	//cluster portal index
-	int portalindexsize;
-	aas_portalindex_t *portalindex;
-	//clusters
-	int numclusters;
-	aas_cluster_t *clusters;
+	int m_numareas { 0 };
+	int m_numareasettings { 0 };
+	aas_area_t *m_areas { nullptr };
+	aas_areasettings_t *m_areasettings { nullptr };
 
-	uint16_t *areaFloorClusterNums;            // A number of a floor cluster for an area, 0 = not in a floor cluster
-	uint16_t *areaStairsClusterNums;           // A number of a stairs cluster for an area, 0 = not in a stairs cluster
+	int m_reachabilitysize { 0 };
+	int m_numnodes { 0 };
+	aas_reachability_t *m_reachability { nullptr };
+	aas_node_t *m_nodes { nullptr };
 
-	int numFloorClusters;
-	int numStairsClusters;
+	int m_numvertexes { 0 };
+	int m_numplanes { 0 };
+	aas_vertex_t *m_vertexes { nullptr };
+	aas_plane_t *m_planes { nullptr };
 
-	int *floorClusterDataOffsets;    // An element #i contains an offset of cluster elements sequence in the joint data
-	int *stairsClusterDataOffsets;   // An element #i contains an offset of cluster elements sequence in the joint data
+	int m_numedges { 0 };
+	int m_edgeindexsize { 0 };
+	aas_edge_t *m_edges { nullptr };
+	aas_edgeindex_t *m_edgeindex { nullptr };
 
-	uint16_t *floorClusterData;    // Contains floor clusters element sequences, each one is prepended by the length
-	uint16_t *stairsClusterData;    // Contains stairs clusters element sequences, each one is prepended by the length
+	int m_numfaces { 0 };
+	int m_faceindexsize { 0 };
+	aas_face_t *m_faces { nullptr };
+	aas_faceindex_t *m_faceindex { nullptr };
 
-	int *face2DProjVertexNums;     // Elements #i*2, #i*2+1 contain numbers of vertices of a 2d face proj for face #i
+	int m_numportals { 0 };
+	int m_portalindexsize { 0 };
+	aas_portal_t *m_portals { nullptr };
+	aas_portalindex_t *m_portalindex { nullptr };
 
-	int *areaMapLeafListOffsets;    // An element #i contains an offset of leafs list data in the joint data
-	int *areaMapLeafsData;          // Contains area map (collision/vis) leafs lists, each one is prepended by the length
+	int m_numclusters { 0 };
+	bool m_loaded { false };
+	aas_cluster_t *m_clusters { nullptr };
 
-	bool *floorClustersVisTable { nullptr };
+	// A number of a floor cluster for an area, 0 = not in a floor cluster
+	uint16_t *m_areaFloorClusterNums { nullptr };
+	// A number of a stairs cluster for an area, 0 = not in a stairs cluster
+	uint16_t *m_areaStairsClusterNums { nullptr };
 
-	uint16_t *areaVisData { nullptr };
-	int32_t *areaVisDataOffsets { nullptr };
+	int m_numFloorClusters { 0 };
+	int m_numStairsClusters { 0 };
 
-	uint16_t *groundedPrincipalRoutingAreas { nullptr };
-	uint16_t *jumppadReachPassThroughAreas { nullptr };
-	uint16_t *ladderReachPassThroughAreas { nullptr };
-	uint16_t *elevatorReachPassThroughAreas { nullptr };
-	uint16_t *walkOffLedgePassThroughAirAreas { nullptr };
+	// An element #i contains an offset of cluster elements sequence in the joint data
+	int *m_floorClusterDataOffsets { nullptr };
+	// An element #i contains an offset of cluster elements sequence in the joint data
+	int *m_stairsClusterDataOffsets { nullptr };
+
+	// Contains floor clusters element sequences, each one is prepended by the length
+	uint16_t *m_floorClusterData { nullptr };
+	// Contains stairs clusters element sequences, each one is prepended by the length
+	uint16_t *m_stairsClusterData { nullptr };
+
+	// Elements #i*2, #i*2+1 contain numbers of vertices of a 2d face proj for face #i
+	int *m_face2DProjVertexNums { nullptr };
+
+	// An element #i contains an offset of leafs list data in the joint data
+	int *m_areaMapLeafListOffsets { nullptr };
+	// Contains area map (collision/vis) leafs lists, each one is prepended by the length
+	int *m_areaMapLeafsData { nullptr };
+
+	bool *m_floorClustersVisTable { nullptr };
+
+	uint16_t *m_areaVisData { nullptr };
+	int32_t *m_areaVisDataOffsets { nullptr };
+
+	uint16_t *m_groundedPrincipalRoutingAreas { nullptr };
+	uint16_t *m_jumppadReachPassThroughAreas { nullptr };
+	uint16_t *m_ladderReachPassThroughAreas { nullptr };
+	uint16_t *m_elevatorReachPassThroughAreas { nullptr };
+	uint16_t *m_walkOffLedgePassThroughAirAreas { nullptr };
 
 	// Contains bounds of a maximal box that is fully within an area.
 	// Mins/maxs are rounded and stored as six 16-bit signed integers.
-	int16_t *areaInnerBounds { nullptr };
+	int16_t *m_areaInnerBounds { nullptr };
 
 	static constexpr float kAreaGridCellSize { 32.0f };
 
@@ -290,41 +304,47 @@ class alignas( 16 ) AiAasWorld
 
 	alignas( 16 ) vec4_t m_worldMins, m_worldMaxs;
 
-	static AiAasWorld *instance;
+	// Should be released by G_Free();
+	char *m_checksum { nullptr };
 
-	AiAasWorld() {
-		memset( this, 0, sizeof( AiAasWorld ) );
-	}
+	static AiAasWorld *s_instance;
 
-	bool Load( const char *mapname );
+	[[nodiscard]]
+	bool load( const wsw::StringView &baseMapName );
+	void postLoad( const wsw::StringView &baseMapName );
 
-	void PostLoad();
+	void swapData();
+	void categorizePlanes();
 
-	void SwapData();
-	void CategorizePlanes();
-
-	// Computes extra Qfusion area flags based on loaded world data
-	void ComputeExtraAreaData();
-	// Computes extra Qfusion area floor and stairs clusters
-	void ComputeLogicalAreaClusters();
+	// Computes extra area flags based on loaded world data
+	void computeExtraAreaData( const wsw::StringView &baseMapName );
+	// Computes extra area floor and stairs clusters
+	void computeLogicalAreaClusters();
     // Computes vertices of top 2D face projections
-	void ComputeFace2DProjVertices();
+	void computeFace2DProjVertices();
 	// Computes map (collision/vis) leafs for areas
-	void ComputeAreasLeafsLists();
+	void computeAreasLeafsLists();
 	// Builds lists of specific area types
-	void BuildSpecificAreaTypesLists();
+	void buildSpecificAreaTypesLists();
 
-	static const ArrayRange<char> StripMapName( const char *rawMapName, char buffer[MAX_QPATH] );
-	static const char *MakeFileName( const ArrayRange<char> &strippedName, const char *extension, char buffer[MAX_QPATH] );
+	[[nodiscard]]
+	static auto getBaseMapName( const wsw::StringView &fillName ) -> wsw::StringView;
 
-	void LoadAreaVisibility( const ArrayRange<char> &strippedMapName );
-	void ComputeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *listsDataSize );
+	static void makeFileName( wsw::StaticString<MAX_QPATH> &buffer,
+							  const wsw::StringView &strippedName,
+							  const wsw::StringView &extension );
 
-	void LoadFloorClustersVisibility( const ArrayRange<char> &strippedMapName );
+	void loadAreaVisibility( const wsw::StringView &baseMapName );
+	void computeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *listsDataSize );
+
+	void loadFloorClustersVisibility( const wsw::StringView &baseMapName );
+
 	// Returns the actual data size in bytes
-	uint32_t ComputeFloorClustersVisibility();
+	[[nodiscard]]
+	auto computeFloorClustersVisibility() -> uint32_t;
 
-	bool ComputeVisibilityForClustersPair( int floorClusterNum1, int floorClusterNum2 );
+	[[nodiscard]]
+	bool computeVisibilityForClustersPair( int floorClusterNum1, int floorClusterNum2 ) const;
 
 	void computeInnerBoundsForAreas();
 
@@ -332,182 +352,154 @@ class alignas( 16 ) AiAasWorld
 	[[nodiscard]]
 	auto computePointAreaNumLookupDataForCell( const Vec3 &cellMins, const Vec3 &cellMaxs ) const -> int32_t;
 
-	void TrySetAreaLedgeFlags( int areaNum );
-	void TrySetAreaWallFlags( int areaNum );
-	void TrySetAreaJunkFlags( int areaNum );
-	void TrySetAreaRampFlags( int areaNum );
+	void trySettingAreaLedgeFlags( int areaNum );
+	void trySettingAreaWallFlags( int areaNum );
+	void trySettingAreaJunkFlags( int areaNum );
+	void trySettingAreaRampFlags( int areaNum );
 
-	void TrySetAreaNoFallFlags( int areaNum );
+	void trySettingAreaNoFallFlags( int areaNum );
 
 	// Should be called after all other flags are computed
-	void TrySetAreaSkipCollisionFlags();
+	void trySettingAreaSkipCollisionFlags();
 
-	int FindAreaNum( const vec3_t mins, const vec3_t maxs ) const;
+	[[nodiscard]]
+	auto findAreaNum( const vec3_t mins, const vec3_t maxs ) const -> int;
 
 	static void setupBoxLookupTable( vec3_t *__restrict lookupTable,
 									 const float *__restrict absMins,
 									 const float *__restrict absMaxs );
 public:
-	AiAasWorld( AiAasWorld &&that );
+	AiAasWorld() = default;
 	~AiAasWorld();
 
 	// AiAasWorld should be init and shut down explicitly
 	// (a game library is not unloaded when a map changes)
-	static bool Init( const char *mapname );
-	static void Shutdown();
-	static AiAasWorld *Instance() { return instance; }
+	[[maybe_unused]]
+	static bool init( const wsw::StringView &mapName );
+	static void shutdown();
+	[[nodiscard]]
+	static auto instance() -> AiAasWorld * { return s_instance; }
 
-	inline bool IsLoaded() const { return loaded; }
-	inline const char *Checksum() const { return loaded ? (const char *)checksum : ""; }
+	[[nodiscard]]
+	bool isLoaded() const { return m_loaded; }
+	[[nodiscard]]
+	auto getChecksum() const { return m_loaded ? wsw::StringView( (const char *)m_checksum ) : wsw::StringView(); }
 
-	void Frame();
-
-	inline int TraceAreas( const Vec3 &start, const Vec3 &end, int *areas_, int maxareas ) const {
-		return TraceAreas( start.Data(), end.Data(), areas_, nullptr, maxareas );
+	[[nodiscard]]
+	auto traceAreas( const Vec3 &start, const Vec3 &end, int *areas_, int maxareas ) const -> int {
+		return traceAreas( start.Data(), end.Data(), areas_, nullptr, maxareas );
 	}
-	inline int TraceAreas( const vec3_t start, const vec3_t end, int *areas_, int maxareas ) const {
-		return TraceAreas( start, end, areas_, nullptr, maxareas );
+	[[nodiscard]]
+	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_, int maxareas ) const -> int {
+		return traceAreas( start, end, areas_, nullptr, maxareas );
 	}
 
 	//stores the areas the trace went through and returns the number of passed areas
-	int TraceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const;
+	[[nodiscard]]
+	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const -> int;
 
-	int BBoxAreas( const Vec3 &absMins, const Vec3 &absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const {
-		return BBoxAreas( absMins.Data(), absMaxs.Data(), areaNums, maxAreas, topNodeHint );
+	[[nodiscard]]
+	auto findAreasInBox( const Vec3 &absMins, const Vec3 &absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const -> int {
+		return findAreasInBox( absMins.Data(), absMaxs.Data(), areaNums, maxAreas, topNodeHint );
 	}
 
 	//returns the areas the bounding box is in
-	int BBoxAreas( const vec3_t absMins, const vec3_t absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const;
+	[[nodiscard]]
+	auto findAreasInBox( const vec3_t absMins, const vec3_t absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const -> int;
 
-	int findTopNodeForBox( const float *boxMins, const float *boxMaxs ) const;
-	int findTopNodeForSphere( const float *center, float radius ) const;
+	[[nodiscard]]
+	auto findTopNodeForBox( const float *boxMins, const float *boxMaxs ) const -> int;
+	[[nodiscard]]
+	auto findTopNodeForSphere( const float *center, float radius ) const -> int;
 
 	//returns the area the point is in
-	int PointAreaNumNaive( const vec3_t point, int topNodeHint = 1 ) const;
+	[[nodiscard]]
+	auto pointAreaNumNaive( const vec3_t point, int topNodeHint = 1 ) const -> int;
 
-	int PointAreaNum( const float *point ) const;
+	[[nodiscard]]
+	auto pointAreaNum( const float *point ) const -> int;
 
 	// If an area is not found, tries to adjust the origin a bit
-	int FindAreaNum( const Vec3 &origin ) const {
-		return FindAreaNum( origin.Data() );
+	[[nodiscard]]
+	auto findAreaNum( const Vec3 &origin ) const -> int {
+		return findAreaNum( origin.Data() );
 	}
 
 	// If an area is not found, tries to adjust the origin a bit
-	int FindAreaNum( const vec3_t origin ) const;
+	[[nodiscard]]
+	auto findAreaNum( const vec3_t origin ) const -> int;
 	// Tries to find some area the ent is in
-	int FindAreaNum( const struct edict_s *ent ) const;
+	[[nodiscard]]
+	auto findAreaNum( const struct edict_s *ent ) const -> int;
 
-	//returns true if the area is crouch only
-	inline bool AreaCrouch( int areanum ) const {
-		return areasettings[areanum].presencetype != PRESENCE_NORMAL;
-	}
-	//returns true if a player can swim in this area
-	inline bool AreaSwim( int areanum ) const {
-		return ( areasettings[areanum].areaflags & AREA_LIQUID ) != 0;
-	}
-	//returns true if the area is filled with a liquid
-	inline bool AreaLiquid( int areanum ) const {
-		return ( areasettings[areanum].areaflags & AREA_LIQUID ) != 0;
-	}
-	//returns true if the area contains lava
-	inline bool AreaLava( int areanum ) const {
-		return ( areasettings[areanum].contents & AREACONTENTS_LAVA ) != 0;
-	}
-	//returns true if the area contains slime
-	inline bool AreaSlime( int areanum ) const {
-		return ( areasettings[areanum].contents & AREACONTENTS_SLIME ) != 0;
-	}
 	//returns true if the area has one or more ground faces
-	inline bool AreaGrounded( int areanum ) const {
-		return ( areasettings[areanum].areaflags & AREA_GROUNDED ) != 0;
+	[[nodiscard]]
+	bool isAreaGrounded( int areanum ) const {
+		return ( m_areasettings[areanum].areaflags & AREA_GROUNDED ) != 0;
 	}
-	//returns true if the area has one or more ladder faces
-	inline bool AreaLadder( int areanum ) const {
-		return ( areasettings[areanum].areaflags & AREA_LADDER ) != 0;
-	}
-	//returns true if the area is a jump pad
-	inline bool AreaJumpPad( int areanum ) const {
-		return ( areasettings[areanum].contents & AREACONTENTS_JUMPPAD ) != 0;
-	}
-	inline bool AreaTeleporter( int areanum ) const {
-		return ( areasettings[areanum].contents & AREACONTENTS_TELEPORTER ) != 0;
+	[[nodiscard]]
+	bool isAreaATeleporter( int areanum ) const {
+		return ( m_areasettings[areanum].contents & AREACONTENTS_TELEPORTER ) != 0;
 	}
 	//returns true if the area is donotenter
-	inline bool AreaDoNotEnter( int areanum ) const {
-		return ( areasettings[areanum].contents & AREACONTENTS_DONOTENTER ) != 0;
+	[[nodiscard]]
+	bool isAreaADoNotEnterArea( int areanum ) const {
+		return ( m_areasettings[areanum].contents & AREACONTENTS_DONOTENTER ) != 0;
 	}
 
-	//bounding boxes
-	inline int NumBBoxes() const { return numbboxes; }
-	inline const aas_bbox_t *BBoxes() const { return bboxes; }
-	//vertexes
-	inline int NumVertexes() const { return numvertexes; }
-	inline const aas_vertex_t *Vertexes() const { return vertexes; }
-	//planes
-	inline int NumPlanes() const { return numplanes; }
-	inline const aas_plane_t *Planes() const { return planes; }
-	//edges
-	inline int NumEdges() const { return numedges; }
-	inline const aas_edge_t *Edges() const { return edges; }
-	//edge index
-	inline int EdgeIndexSize() const { return edgeindexsize; }
-	inline const aas_edgeindex_t *EdgeIndex() const { return edgeindex; }
-	//faces
-	inline int NumFaces() const { return numfaces; }
-	inline const aas_face_t *Faces() const { return faces; }
-	//face index
-	inline int FaceIndexSize() const { return faceindexsize; };
-	inline const aas_faceindex_t *FaceIndex() const { return faceindex; }
-	//convex areas
-	inline int NumAreas() const { return numareas; }
-	inline const aas_area_t *Areas() const { return areas; }
-	//convex area settings
-	inline int NumAreaSettings() const { return numareasettings; }
-	inline const aas_areasettings_t *AreaSettings() const { return areasettings; }
-	//reachablity list
-	inline int NumReachabilities() const { return reachabilitysize; }
-	inline int NumReach() const { return reachabilitysize; }
-	inline const aas_reachability_t *Reachabilities() const { return reachability; }
-	//nodes of the bsp tree
-	inline int NumNodes() const { return numnodes; }
-	inline const aas_node_t *Nodes() const { return nodes; }
-	//cluster portals
-	inline int NumPortals() const { return numportals; }
-	inline const aas_portal_t *Portals() const { return portals; }
-	//cluster portal index
-	inline int PortalIndexSize() const { return portalindexsize; }
-	inline const aas_portalindex_t *PortalIndex() const { return portalindex; }
-	//clusters
-	inline int NumClusters() const { return numclusters; }
-	inline const aas_cluster_t *Clusters() const { return clusters; }
+	const aas_vertex_t *Vertexes() const { return m_vertexes; }
+	const aas_plane_t *Planes() const { return m_planes; }
+	const aas_edge_t *Edges() const { return m_edges; }
+	const aas_edgeindex_t *EdgeIndex() const { return m_edgeindex; }
+	const aas_face_t *Faces() const { return m_faces; }
+	const aas_faceindex_t *FaceIndex() const { return m_faceindex; }
+	const aas_area_t *Areas() const { return m_areas; }
+	const aas_areasettings_t *AreaSettings() const { return m_areasettings; }
 
-	inline int NumFloorClusters() const { return numFloorClusters; }
-	inline int NumStairsClusters() const { return numStairsClusters; }
+	//reachablity list
+	int NumReachabilities() const { return m_reachabilitysize; }
+	int NumReach() const { return m_reachabilitysize; }
+	int NumAreas() const { return m_numareas; }
+	int NumFaces() const { return m_numfaces; }
+
+	const aas_reachability_t *Reachabilities() const { return m_reachability; }
+	const aas_node_t *Nodes() const { return m_nodes; }
+	int NumPortals() const { return m_numportals; }
+	const aas_portal_t *Portals() const { return m_portals; }
+	const aas_portalindex_t *PortalIndex() const { return m_portalindex; }
+	int NumClusters() const { return m_numclusters; }
+	const aas_cluster_t *Clusters() const { return m_clusters; }
 
 	// A feasible cluster num in non-zero
-	inline uint16_t FloorClusterNum( int areaNum ) const {
-		return loaded ? areaFloorClusterNums[areaNum] : (uint16_t)0;
+	[[nodiscard]]
+	auto floorClusterNum( int areaNum ) const -> uint16_t {
+		return m_loaded ? m_areaFloorClusterNums[areaNum] : (uint16_t)0;
 	}
 
-	inline uint16_t *AreaFloorClusterNums() const { return areaFloorClusterNums; }
+	[[nodiscard]]
+	auto areaFloorClusterNums() const -> const uint16_t * { return m_areaFloorClusterNums; }
 
 	// A feasible cluster num is non-zero
-	inline uint16_t StairsClusterNum( int areaNum ) const {
-		return loaded ? areaStairsClusterNums[areaNum] : (uint16_t)0;
+	[[nodiscard]]
+	auto stairsClusterNum( int areaNum ) const -> uint16_t {
+		return m_loaded ? m_areaStairsClusterNums[areaNum] : (uint16_t)0;
 	}
 
-	inline uint16_t *AreaStairsClusterNums() const { return areaStairsClusterNums; }
+	[[nodiscard]]
+	auto areaStairsClusterNums() const -> const uint16_t * { return m_areaStairsClusterNums; }
 
 	// In order to be conform with the rest of AAS code the zero cluster is dummy
-	inline const uint16_t *FloorClusterData( int floorClusterNum ) const {
-		assert( floorClusterNum >= 0 && floorClusterNum < numFloorClusters );
-		return floorClusterData + floorClusterDataOffsets[floorClusterNum];
+	[[nodiscard]]
+	auto floorClusterData( int floorClusterNum ) const -> const uint16_t * {
+		assert( floorClusterNum >= 0 && floorClusterNum < m_numFloorClusters );
+		return m_floorClusterData + m_floorClusterDataOffsets[floorClusterNum];
 	}
 
 	// In order to be conform with the rest of AAS code the zero cluster is dummy
-	inline const uint16_t *StairsClusterData( int stairsClusterNum ) const {
-		assert( stairsClusterNum >= 0 && stairsClusterNum < numStairsClusters );
-		return stairsClusterData + stairsClusterDataOffsets[stairsClusterNum];
+	[[nodiscard]]
+	auto stairsClusterData( int stairsClusterNum ) const -> const uint16_t * {
+		assert( stairsClusterNum >= 0 && stairsClusterNum < m_numStairsClusters );
+		return m_stairsClusterData + m_stairsClusterDataOffsets[stairsClusterNum];
 	}
 
 	/**
@@ -518,16 +510,19 @@ public:
 	 * @param targetAreaNum a target area
 	 * @return true if the segment between areas is fully inside the cluster boundaries.
 	 */
-	bool IsAreaWalkableInFloorCluster( int startAreaNum, int targetAreaNum ) const;
+	[[nodiscard]]
+	bool isAreaWalkableInFloorCluster( int startAreaNum, int targetAreaNum ) const;
 
-	inline const int *AreaMapLeafsList( int areaNum ) const {
-		assert( areaNum >= 0 && areaNum < numareas );
-		return areaMapLeafsData + areaMapLeafListOffsets[areaNum];
+	[[nodiscard]]
+	auto areaMapLeafsList( int areaNum ) const -> const int * {
+		assert( (unsigned)areaNum < (unsigned)m_numareas );
+		return m_areaMapLeafsData + m_areaMapLeafListOffsets[areaNum];
 	}
 
-	const int16_t *getAreaInnerBounds( int areaNum ) const {
-	    assert( (unsigned)areaNum < (unsigned)numareas );
-	    return areaInnerBounds + 6 * areaNum;
+	[[nodiscard]]
+	auto getAreaInnerBounds( int areaNum ) const -> const int16_t * {
+	    assert( (unsigned)areaNum < (unsigned)m_numareas );
+	    return m_areaInnerBounds + 6 * areaNum;
 	}
 
 	/**
@@ -536,12 +531,12 @@ public:
 	 * Not all principal areas are included in this list but only grounded ones
 	 * as they are tested using a separate code path during determination of areas blocked status.
 	 */
-	const uint16_t *GroundedPrincipalRoutingAreas() const { return groundedPrincipalRoutingAreas; }
+	const uint16_t *GroundedPrincipalRoutingAreas() const { return m_groundedPrincipalRoutingAreas; }
 
-	const uint16_t *JumppadReachPassThroughAreas() const { return jumppadReachPassThroughAreas; }
-	const uint16_t *LadderReachPassThroughAreas() const { return ladderReachPassThroughAreas; }
-	const uint16_t *ElevatorReachPassThroughAreas() const { return elevatorReachPassThroughAreas; }
-	const uint16_t *WalkOffLedgePassThroughAirAreas() const { return walkOffLedgePassThroughAirAreas; }
+	const uint16_t *JumppadReachPassThroughAreas() const { return m_jumppadReachPassThroughAreas; }
+	const uint16_t *LadderReachPassThroughAreas() const { return m_ladderReachPassThroughAreas; }
+	const uint16_t *ElevatorReachPassThroughAreas() const { return m_elevatorReachPassThroughAreas; }
+	const uint16_t *WalkOffLedgePassThroughAirAreas() const { return m_walkOffLedgePassThroughAirAreas; }
 
 	/**
 	 * Retrieves a cached mutual floor cluster visibility result.
@@ -552,11 +547,12 @@ public:
 	 * @note there could be false negatives as the visibility determination algorithm is probabilistic.
 	 * That's what the "certainly" part stands for.
 	 */
-	bool AreFloorClustersCertainlyVisible( int clusterNum1, int clusterNum2 ) const {
-		assert( (unsigned)clusterNum1 < (unsigned)numFloorClusters );
-		assert( (unsigned)clusterNum2 < (unsigned)numFloorClusters );
+	[[nodiscard]]
+	bool areFloorClustersCertainlyVisible( int clusterNum1, int clusterNum2 ) const {
+		assert( (unsigned)clusterNum1 < (unsigned)m_numFloorClusters );
+		assert( (unsigned)clusterNum2 < (unsigned)m_numFloorClusters );
 		// Skip the dummy zero leaf
-		return floorClustersVisTable[( clusterNum1 - 1 ) * ( numFloorClusters - 1 ) + clusterNum2 - 1];
+		return m_floorClustersVisTable[( clusterNum1 - 1 ) * ( m_numFloorClusters - 1 ) + clusterNum2 - 1];
 	}
 
 	/**
@@ -567,7 +563,8 @@ public:
 	 * @return true if areas are in PVS.This test is precise (no false positives/negatives are produced).
 	 * @note this is not that cheap to call. Prefer using {@code AreaVisList()} where possible.
 	 */
-	bool AreAreasInPvs( int areaNum1, int areaNum2 ) const;
+	[[nodiscard]]
+	bool areAreasInPvs( int areaNum1, int areaNum2 ) const;
 
 	/**
 	 * Returns a list of all areas that are certainly visible from the area.
@@ -575,9 +572,10 @@ public:
 	 * @param areaNum an area number
 	 * @return a list of area numbers certainly visible from the area. The first element is the list length.
 	 */
-	const uint16_t *AreaVisList( int areaNum ) const {
-		assert( (unsigned)areaNum < (unsigned)numareas );
-		return areaVisData + areaVisDataOffsets[areaNum];
+	[[nodiscard]]
+	auto areaVisList( int areaNum ) const -> const uint16_t * {
+		assert( (unsigned)areaNum < (unsigned)m_numareas );
+		return m_areaVisData + m_areaVisDataOffsets[areaNum];
 	}
 
 	/**
@@ -586,8 +584,8 @@ public:
 	 * @param row a buffer for a decompressed row
 	 * @return an address of the supplied buffer.
 	 */
-	const bool *DecompressAreaVis( int areaNum, bool *__restrict row ) const {
-		return DecompressAreaVis( AreaVisList( areaNum ), row );
+	const bool *decompressAreaVis( int areaNum, bool *__restrict row ) const {
+		return decompressAreaVis( areaVisList( areaNum ), row );
 	}
 
 	/**
@@ -597,9 +595,9 @@ public:
 	 * @return an address of the supplied buffer
 	 * @warning using this in a loop is not cheap. Consider using {@code FindInVisList()} in this case.
 	 */
-	bool *DecompressAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const {
-		::memset( row, 0, sizeof( bool ) * numareas );
-		return AddToDecompressedAreaVis( visList, row );
+	bool *decompressAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const {
+		::memset( row, 0, sizeof( bool ) * m_numareas );
+		return addToDecompressedAreaVis( visList, row );
 	}
 
 	/**
@@ -608,8 +606,8 @@ public:
 	 * @param row a buffer for a decompressed row
 	 * @return an address of the supplied buffer.
 	 */
-	bool *AddToDecompressedAreaVis( int areaNum, bool *__restrict row ) const {
-		return AddToDecompressedAreaVis( AreaVisList( areaNum ), row );
+	bool *addToDecompressedAreaVis( int areaNum, bool *__restrict row ) const {
+		return addToDecompressedAreaVis( areaVisList( areaNum ), row );
 	}
 
 	/**
@@ -620,13 +618,13 @@ public:
 	 * @param row a buffer for a decompressed row (a result of {@code DecompressAreaVis()} call for some other area)
 	 * @return an address of the supplied buffer
 	 */
-	bool *AddToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const;
+	bool *addToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const;
 
 	// Consider SSE2 instruction set always available for x86 targets
 #if !( defined ( __i386__ ) || defined ( __x86_64__ ) || defined( _M_IX86 ) || defined( _M_AMD64 ) || defined( _M_X64 ) )
-	static constexpr bool ScansVisFast() { return false; }
+	static constexpr bool scansVisFast() { return false; }
 #else
-	static constexpr bool ScansVisFast() { return true; }
+	static constexpr bool scansVisFast() { return true; }
 #endif
 
 	/**
@@ -637,7 +635,7 @@ public:
 	 * @param areaNum a number of area to find
 	 * @return true if the supplied area has been found.
 	 */
-	bool FindInVisList( const uint16_t *__restrict visList, int areaNum ) const;
+	bool findInVisList( const uint16_t *__restrict visList, int areaNum ) const;
 
 	/**
 	 * Scans the supplied list of areas trying to find some of supplied areas.
@@ -648,7 +646,7 @@ public:
 	 * @param areaNum2 a number of another area to find
 	 * @return true if some of supplied areas has been found.
 	 */
-	bool FindInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const;
+	bool findInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const;
 };
 
 #endif

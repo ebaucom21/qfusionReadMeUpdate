@@ -49,7 +49,7 @@ public:
 };
 
 EnemyComputationalProxy::EnemyComputationalProxy( const TrackedEnemy *enemy, float damageToKillBot, int num )
-	: aasWorld( AiAasWorld::Instance() )
+	: aasWorld( AiAasWorld::instance() )
 	, isZooming( enemy->ent->r.client ? (bool)enemy->ent->r.client->ps.stats[PM_STAT_ZOOMTIME] : false ) {
 	hitFlags = enemy->GetCheckForWeaponHitFlags( damageToKillBot );
 
@@ -223,9 +223,9 @@ DisableMapAreasRequest::DisableMapAreasRequest( const TrackedEnemy **begin,
 												const TrackedEnemy **end,
 												const float *botOrigin_,
 												float damageToKillBot_ )
-	: aasWorld( AiAasWorld::Instance() ){
+	: aasWorld( AiAasWorld::instance() ){
 	VectorCopy( botOrigin_, this->botOrigin );
-	botAreaNum = aasWorld->FindAreaNum( botOrigin_ );
+	botAreaNum = aasWorld->findAreaNum( botOrigin_ );
 	assert( end - begin > 0 && end - begin <= MAX_ENEMIES );
 	int num = 0;
 	for( const TrackedEnemy **iter = begin; iter != end; ++iter ) {
@@ -492,7 +492,7 @@ int EnemyComputationalProxy::ComputeAreaNums( int areaNums[MAX_AREAS] ) {
 	// Find some areas in the box.
 
 	int rawAreaNums[8];
-	int numRawAreas = aasWorld->BBoxAreas( enemyBoxMins, enemyBoxMaxs, rawAreaNums, 8 );
+	int numRawAreas = aasWorld->findAreasInBox( enemyBoxMins, enemyBoxMaxs, rawAreaNums, 8 );
 
 	int areaFlags[8];
 	const auto *const __restrict areaSettings = aasWorld->AreaSettings();
@@ -541,27 +541,27 @@ int EnemyComputationalProxy::ComputeAreaNums( int areaNums[MAX_AREAS] ) {
 }
 
 void EnemyComputationalProxy::SaveFloorClusterNum( const int *ownAreaNums, int numOwnAreas ) {
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 
 	floorClusterNum = 0;
 	for( int i = 0; i < numOwnAreas; ++i ) {
-		if( ( floorClusterNum = aasWorld->FloorClusterNum( ownAreaNums[i] ) ) ) {
+		if( ( floorClusterNum = aasWorld->floorClusterNum( ownAreaNums[i] ) ) ) {
 			return;
 		}
 	}
 }
 
 const bool *EnemyComputationalProxy::PrepareAreasVisRow( const int *ownAreaNums, int numOwnAreas, bool *row ) {
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 
 	if( !numOwnAreas ) {
 		memset( row, 0, aasWorld->NumAreas() * sizeof( *row ) );
 		return row;
 	}
 
-	aasWorld->DecompressAreaVis( ownAreaNums[0], row );
+	aasWorld->decompressAreaVis( ownAreaNums[0], row );
 	for( int i = 1; i < numOwnAreas; ++i ) {
-		aasWorld->AddToDecompressedAreaVis( ownAreaNums[i], row );
+		aasWorld->addToDecompressedAreaVis( ownAreaNums[i], row );
 	}
 
 	return row;

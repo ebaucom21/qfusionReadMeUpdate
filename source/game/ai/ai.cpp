@@ -167,8 +167,8 @@ void AI_InitLevel( void ) {
 	// We think values for this var should not be archived
 	ai_shareRoutingCache = trap_Cvar_Get( "ai_shareRoutingCache", "1", 0 );
 
-	AiAasWorld::Init( level.mapname );
-	AiAasRouteCache::Init( *AiAasWorld::Instance() );
+	AiAasWorld::init( wsw::StringView( level.mapname ) );
+	AiAasRouteCache::Init( *AiAasWorld::instance() );
 	TacticalSpotsRegistry::Init( level.mapname );
 	AiGroundTraceCache::Init();
 	HazardsSelectorCache::Init();
@@ -203,7 +203,7 @@ void AI_AfterLevelScriptShutdown() {
 	AiGroundTraceCache::Shutdown();
 	TacticalSpotsRegistry::Shutdown();
 	AiAasRouteCache::Shutdown();
-	AiAasWorld::Shutdown();
+	AiAasWorld::shutdown();
 }
 
 void AI_JoinedTeam( edict_t *ent, int team ) {
@@ -211,8 +211,6 @@ void AI_JoinedTeam( edict_t *ent, int team ) {
 }
 
 void AI_CommonFrame() {
-	AiAasWorld::Instance()->Frame();
-
 	EntitiesPvsCache::Instance()->Update();
 
 	NavEntitiesRegistry::Instance()->Update();
@@ -231,8 +229,8 @@ static inline void ExtendDimension( float *mins, float *maxs, int dimension ) {
 }
 
 static int FindGoalAASArea( edict_t *ent ) {
-	AiAasWorld *aasWorld = AiAasWorld::Instance();
-	if( !aasWorld->IsLoaded() ) {
+	AiAasWorld *aasWorld = AiAasWorld::instance();
+	if( !aasWorld->isLoaded() ) {
 		return 0;
 	}
 
@@ -252,7 +250,7 @@ static int FindGoalAASArea( edict_t *ent ) {
 	// Convert bounds to absolute ones
 	mins += ent->s.origin;
 	maxs += ent->s.origin;
-	const int numAreas = aasWorld->BBoxAreas( mins, maxs, areas, 16 );
+	const int numAreas = aasWorld->findAreasInBox( mins, maxs, areas, 16 );
 
 	int bestArea = 0;
 	float bestScore = 0.0f;
@@ -271,7 +269,7 @@ static int FindGoalAASArea( edict_t *ent ) {
 	}
 
 	// Fall back to a default method and hope it succeeds
-	return aasWorld->FindAreaNum( ent );
+	return aasWorld->findAreaNum( ent );
 }
 
 void AI_AddNavEntity( edict_t *ent, ai_nav_entity_flags flags ) {
@@ -401,7 +399,7 @@ void AI_RegisterEvent( edict_t *ent, int event, int parm ) {
 }
 
 bool AI_CanSpawnBots() {
-	return AiAasWorld::Instance()->IsLoaded();
+	return AiAasWorld::instance()->isLoaded();
 }
 
 void AI_SpawnBot( const char *team ) {

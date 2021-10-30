@@ -30,7 +30,7 @@ AiTrajectoryPredictor::StopEvent AiTrajectoryPredictor::Run( const Vec3 &startVe
 		contentMask |= CONTENTS_WATER;
 	}
 
-	this->aasWorld = AiAasWorld::Instance();
+	this->aasWorld = AiAasWorld::instance();
 
 	results->millisAhead = stepMillis;
 	for( unsigned i = 1; i <= numSteps; ++i ) {
@@ -173,7 +173,7 @@ int AiTrajectoryPredictor::InspectAasWorldTrace( Results *results ) {
 	areasBuffer[1] = 1;
 	int *areaNums = areasBuffer + 2;
 
-	int numAreas = aasWorld->TraceAreas( prevOrigin.Data(), results->origin, areaNums, 128 );
+	int numAreas = aasWorld->traceAreas( prevOrigin.Data(), results->origin, areaNums, 128 );
 	results->lastAreaNum = areaNums[numAreas - 1];
 	// Even if there are areas in the trace, the last area might be zero if areas trace ends in solid
 	if( !results->lastAreaNum ) {

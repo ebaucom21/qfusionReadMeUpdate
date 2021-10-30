@@ -1,19 +1,38 @@
+/*
+===========================================================================
+Copyright (C) 1999-2005 Id Software, Inc.
+This file is part of Quake III Arena source code.
+Quake III Arena source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License,
+or (at your option) any later version.
+Quake III Arena source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License
+along with Foobar; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+===========================================================================
+*/
+
 #include "aasworld.h"
 #include "aaselementsmask.h"
 #include "aasareaswalker.h"
 #include "../../../qcommon/wswstaticvector.h"
+#include "../../../qcommon/wswfs.h"
 #include "../ailocal.h"
 #include "../rewriteme.h"
 #include "../../../qcommon/md5.h"
 #include "../../../qcommon/base64.h"
 
-#undef min
-#undef max
 #include <memory>
 #include <tuple>
 
 #include <cmath>
 #include <cstdlib>
+
+using wsw::operator""_asView;
 
 template<typename T>
 class BufferBuilder {
@@ -48,51 +67,46 @@ public:
 };
 
 // Static member definition
-AiAasWorld *AiAasWorld::instance = nullptr;
+AiAasWorld *AiAasWorld::s_instance = nullptr;
 
-AiAasWorld::AiAasWorld( AiAasWorld &&that ) {
-	memcpy( this, &that, sizeof( AiAasWorld ) );
-	that.loaded = false;
-}
-
-bool AiAasWorld::Init( const char *mapname ) {
-	if( instance ) {
+bool AiAasWorld::init( const wsw::StringView &mapName ) {
+	if( s_instance ) {
 		AI_FailWith( "AiAasWorld::Init()", "An instance is already present\n" );
 	}
-	instance = (AiAasWorld *)Q_malloc( sizeof( AiAasWorld ) );
-	new(instance) AiAasWorld;
+
+	s_instance = (AiAasWorld *)Q_malloc( sizeof( AiAasWorld ) );
+	new( s_instance )AiAasWorld;
+
+	const wsw::StringView baseMapName( getBaseMapName( mapName ) );
 	// Try to initialize the instance
-	if( !instance->Load( mapname ) ) {
+	if( !s_instance->load( baseMapName ) ) {
 		return false;
 	}
-	instance->PostLoad();
+	s_instance->postLoad( baseMapName );
 	return true;
 }
 
-void AiAasWorld::Shutdown() {
+void AiAasWorld::shutdown() {
 	// This may be called on first map load when an instance has never been instantiated
-	if( instance ) {
-		instance->~AiAasWorld();
-		Q_free( instance );
+	if( s_instance ) {
+		s_instance->~AiAasWorld();
+		Q_free( s_instance );
 		// Allow the pointer to be reused, otherwise an assertion will fail on a next Init() call
-		instance = nullptr;
+		s_instance = nullptr;
 	}
 }
 
-void AiAasWorld::Frame() {
-}
-
-int AiAasWorld::PointAreaNumNaive( const vec3_t point, int topNodeHint ) const {
-	if( !loaded ) {
+int AiAasWorld::pointAreaNumNaive( const vec3_t point, int topNodeHint ) const {
+	if( !m_loaded ) [[unlikely]] {
 		return 0;
 	}
 
-	assert( topNodeHint > 0 && topNodeHint < numnodes );
+	assert( topNodeHint > 0 && topNodeHint < m_numnodes );
 	int nodenum = topNodeHint;
 
 	while( nodenum > 0 ) {
-		aas_node_t *node = &nodes[nodenum];
-		aas_plane_t *plane = &planes[node->planenum];
+		aas_node_t *node = &m_nodes[nodenum];
+		aas_plane_t *plane = &m_planes[node->planenum];
 		vec_t dist = DotProduct( point, plane->normal ) - plane->dist;
 		if( dist > 0 ) {
 			nodenum = node->children[0];
@@ -103,7 +117,7 @@ int AiAasWorld::PointAreaNumNaive( const vec3_t point, int topNodeHint ) const {
 	return -nodenum;
 }
 
-int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs ) const {
+int AiAasWorld::findAreaNum( const vec3_t mins, const vec3_t maxs ) const {
 	const vec_t *bounds[2] = { maxs, mins };
 	// Test all AABB vertices
 	vec3_t origin = { 0, 0, 0 };
@@ -112,7 +126,7 @@ int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs ) const {
 		origin[0] = bounds[( i >> 0 ) & 1][0];
 		origin[1] = bounds[( i >> 1 ) & 1][1];
 		origin[2] = bounds[( i >> 2 ) & 1][2];
-		int areaNum = PointAreaNum( origin );
+		int areaNum = pointAreaNum( origin );
 		if( areaNum ) {
 			return areaNum;
 		}
@@ -120,10 +134,8 @@ int AiAasWorld::FindAreaNum( const vec3_t mins, const vec3_t maxs ) const {
 	return 0;
 }
 
-int AiAasWorld::FindAreaNum( const vec3_t origin ) const {
-	int areaNum = PointAreaNum( origin );
-
-	if( areaNum ) {
+auto AiAasWorld::findAreaNum( const vec3_t origin ) const -> int {
+	if( const int areaNum = pointAreaNum( origin ) ) {
 		return areaNum;
 	}
 
@@ -131,24 +143,22 @@ int AiAasWorld::FindAreaNum( const vec3_t origin ) const {
 	VectorAdd( mins, origin, mins );
 	vec3_t maxs = { +8, +8, 16 };
 	VectorAdd( maxs, origin, maxs );
-	return FindAreaNum( mins, maxs );
+	return findAreaNum( mins, maxs );
 }
 
-int AiAasWorld::FindAreaNum( const edict_t *ent ) const {
+auto AiAasWorld::findAreaNum( const edict_t *ent ) const -> int {
 	// Reject degenerate case
 	if( ent->r.absmin[0] == ent->r.absmax[0] &&
 		ent->r.absmin[1] == ent->r.absmax[1] &&
 		ent->r.absmin[2] == ent->r.absmax[2] ) {
-		return FindAreaNum( ent->s.origin );
+		return findAreaNum( ent->s.origin );
 	}
 
-	Vec3 testedOrigin( ent->s.origin );
-	int areaNum = PointAreaNum( testedOrigin.Data() );
-	if( areaNum ) {
+	if( const int areaNum = pointAreaNum( ent->s.origin ) ) {
 		return areaNum;
 	}
 
-	return FindAreaNum( ent->r.absmin, ent->r.absmax );
+	return findAreaNum( ent->r.absmin, ent->r.absmax );
 }
 
 typedef struct aas_tracestack_s {
@@ -158,8 +168,8 @@ typedef struct aas_tracestack_s {
 	int nodenum;        //node found after splitting with planenum
 } aas_tracestack_t;
 
-int AiAasWorld::TraceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const {
-	if( !loaded ) {
+int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const {
+	if( !m_loaded ) {
 		return 0;
 	}
 
@@ -208,13 +218,13 @@ int AiAasWorld::TraceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 		}
 
 		//the node to test against
-		aas_node_t *aasnode = &nodes[nodenum];
+		const aas_node_t *aasnode = &m_nodes[nodenum];
 		//start point of current line to test against node
 		VectorCopy( tstack_p->start, cur_start );
 		//end point of the current line to test against node
 		VectorCopy( tstack_p->end, cur_end );
 		//the current node plane
-		aas_plane_t *plane = &planes[aasnode->planenum];
+		aas_plane_t *plane = &m_planes[aasnode->planenum];
 
 		float front = DotProduct( cur_start, plane->normal ) - plane->dist;
 		float back = DotProduct( cur_end, plane->normal ) - plane->dist;
@@ -313,9 +323,9 @@ void AiAasWorld::setupBoxLookupTable( vec3_t *lookupTable, const float *absMins,
 	VectorSet( lookupTable[15], absMaxs[0], absMaxs[1], absMaxs[2] );
 }
 
-int AiAasWorld::BBoxAreas( const vec3_t absMins, const vec3_t absMaxs,
-						   int *areaNums, int maxAreas, int topNodeHint ) const {
-	if( !loaded ) {
+auto AiAasWorld::findAreasInBox( const vec3_t absMins, const vec3_t absMaxs,
+								 int *areaNums, int maxAreas, int topNodeHint ) const -> int {
+	if( !m_loaded ) {
 		return 0;
 	}
 
@@ -334,7 +344,7 @@ int AiAasWorld::BBoxAreas( const vec3_t absMins, const vec3_t absMaxs,
 	// (we need a separate table as non-reentrancy could break some caller algorithms)
 	// Every word is capable of storing 32 = 2^5 bits so we need 2^16/2^5 words for the maximum number of areas allowed
 	uint32_t areasMask[(1 << 16) >> 5];
-	const int actualNumWords = numareas % 32 ? ( numareas + 1 ) / 32 : numareas / 32;
+	const int actualNumWords = m_numareas % 32 ? ( m_numareas + 1 ) / 32 : m_numareas / 32;
 	::memset( areasMask, 0, actualNumWords * sizeof( uint32_t ) );
 
 	assert( topNodeHint > 0 );
@@ -372,8 +382,8 @@ int AiAasWorld::BBoxAreas( const vec3_t absMins, const vec3_t absMaxs,
 			continue;
 		}
 
-		const auto *const node = &nodes[nodeNum];
-		const auto *const plane = &planes[node->planenum];
+		const auto *const node = &m_nodes[nodeNum];
+		const auto *const plane = &m_planes[node->planenum];
 		const auto *__restrict normal = plane->normal;
 		const int lookupTableIndex = plane->signBits * 2;
 		const auto *__restrict lookup0 = lookupTable[lookupTableIndex + 0];
@@ -408,8 +418,8 @@ int AiAasWorld::findTopNodeForBox( const float *boxMins, const float *boxMaxs ) 
 	// Caution! AAS root node is 1 contrary to the CM BSP
 	int currNode = 1, lastGoodNode = 1;
 	for(;; ) {
-		const auto *const node = &nodes[currNode];
-		const auto *const plane = &planes[node->planenum];
+		const auto *const node = &m_nodes[currNode];
+		const auto *const plane = &m_planes[node->planenum];
 		const auto *__restrict normal = plane->normal;
 		const int lookupTableIndex = plane->signBits * 2;
 		const auto *__restrict lookup0 = lookupTable[lookupTableIndex + 0];
@@ -451,8 +461,8 @@ int AiAasWorld::findTopNodeForSphere( const float *center, float radius ) const 
 	// Caution! AAS root node is 1 contrary to the CM BSP
 	int currNode = 1, lastGoodNode = 1;
 	for(;; ) {
-		const auto *__restrict node = nodes + currNode;
-		const auto *__restrict plane = planes + node->planenum;
+		const auto *__restrict node = m_nodes + currNode;
+		const auto *__restrict plane = m_planes + node->planenum;
 		float distanceToPlane = DotProduct( plane->normal, c ) - plane->dist;
 		int child;
 		if( distanceToPlane > +testedRadius ) {
@@ -471,10 +481,10 @@ int AiAasWorld::findTopNodeForSphere( const float *center, float radius ) const 
 	}
 }
 
-void AiAasWorld::ComputeExtraAreaData() {
+void AiAasWorld::computeExtraAreaData( const wsw::StringView &baseMapName ) {
 	BoundsBuilder boundsBuilder;
-	for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
-		const auto &area = areas[areaNum];
+	for( int areaNum = 1; areaNum < m_numareas; ++areaNum ) {
+		const auto &area = m_areas[areaNum];
 		boundsBuilder.addPoint( area.mins );
 		boundsBuilder.addPoint( area.maxs );
 	}
@@ -483,43 +493,40 @@ void AiAasWorld::ComputeExtraAreaData() {
 	m_worldMins[3] = 0.0f;
 	m_worldMaxs[3] = 1.0f;
 
-	for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
-		TrySetAreaLedgeFlags( areaNum );
-		TrySetAreaWallFlags( areaNum );
-		TrySetAreaJunkFlags( areaNum );
-		TrySetAreaRampFlags( areaNum );
+	for( int areaNum = 1; areaNum < m_numareas; ++areaNum ) {
+		trySettingAreaLedgeFlags( areaNum );
+		trySettingAreaWallFlags( areaNum );
+		trySettingAreaJunkFlags( areaNum );
+		trySettingAreaRampFlags( areaNum );
 	}
 
 	// Call after all other flags have been set
-	TrySetAreaSkipCollisionFlags();
+	trySettingAreaSkipCollisionFlags();
 
-	ComputeLogicalAreaClusters();
-	ComputeFace2DProjVertices();
-	ComputeAreasLeafsLists();
-
-	char strippedNameBuffer[MAX_QPATH];
-	const ArrayRange<char> strippedMapName( StripMapName( trap_GetConfigString( CS_WORLDMODEL ), strippedNameBuffer ) );
+	computeLogicalAreaClusters();
+	computeFace2DProjVertices();
+	computeAreasLeafsLists();
 
 	// Assumes clusters and area leaves to be already computed
-	LoadAreaVisibility( strippedMapName );
+	loadAreaVisibility( baseMapName );
 	// Depends of area visibility
-	LoadFloorClustersVisibility( strippedMapName );
+	loadFloorClustersVisibility( baseMapName );
 
 	// These computations expect (are going to expect) that logical clusters are valid
-	for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
-		TrySetAreaNoFallFlags( areaNum );
+	for( int areaNum = 1; areaNum < m_numareas; ++areaNum ) {
+		trySettingAreaNoFallFlags( areaNum );
 	}
 
-	BuildSpecificAreaTypesLists();
+	buildSpecificAreaTypesLists();
 
 	computeInnerBoundsForAreas();
 
 	setupPointAreaNumLookupGrid();
 }
 
-void AiAasWorld::TrySetAreaLedgeFlags( int areaNum ) {
-	auto *const __restrict aasAreaSettings = this->areasettings;
-	auto *const __restrict aasReach = this->reachability;
+void AiAasWorld::trySettingAreaLedgeFlags( int areaNum ) {
+	auto *const __restrict aasAreaSettings = this->m_areasettings;
+	auto *const __restrict aasReach = this->m_reachability;
 
 	auto *const __restrict areaSettings = aasAreaSettings + areaNum;
 	const int endReachNum = areaSettings->firstreachablearea + areaSettings->numreachableareas;
@@ -537,7 +544,7 @@ void AiAasWorld::TrySetAreaLedgeFlags( int areaNum ) {
 
 		// Check whether a reverse reachability exists (so we can walk/jump back)
 		// TODO: Build a table of reverse reachabilites as well? Could be useful for various purposes
-		const auto *__restrict nextAreaSettings = this->areasettings + reach.areanum;
+		const auto *__restrict nextAreaSettings = this->m_areasettings + reach.areanum;
 		const int endRevReachNum = nextAreaSettings->firstreachablearea + nextAreaSettings->numreachableareas;
 		for( int revReachNum = nextAreaSettings->firstreachablearea; revReachNum != endRevReachNum; ++revReachNum ) {
 			const auto &__restrict revReach = aasReach[revReachNum];
@@ -557,20 +564,20 @@ void AiAasWorld::TrySetAreaLedgeFlags( int areaNum ) {
 	}
 }
 
-void AiAasWorld::TrySetAreaWallFlags( int areaNum ) {
-	int faceIndexNum = areas[areaNum].firstface;
-	int endFaceIndexNum = areas[areaNum].firstface + areas[areaNum].numfaces;
+void AiAasWorld::trySettingAreaWallFlags( int areaNum ) {
+	int faceIndexNum = m_areas[areaNum].firstface;
+	int endFaceIndexNum = m_areas[areaNum].firstface + m_areas[areaNum].numfaces;
 	const float *zAxis = &axis_identity[AXIS_UP];
 
 	for(; faceIndexNum != endFaceIndexNum; ++faceIndexNum ) {
-		int faceIndex = faceindex[faceIndexNum];
+		int faceIndex = m_faceindex[faceIndexNum];
 		int areaBehindFace;
 		const aas_face_t *face;
 		if( faceIndex >= 0 ) {
-			face = &faces[faceIndex];
+			face = &m_faces[faceIndex];
 			areaBehindFace = face->backarea;
 		} else   {
-			face = &faces[-faceIndex];
+			face = &m_faces[-faceIndex];
 			areaBehindFace = face->frontarea;
 		}
 
@@ -579,17 +586,17 @@ void AiAasWorld::TrySetAreaWallFlags( int areaNum ) {
 			continue;
 		}
 
-		const aas_plane_t *facePlane = &planes[face->planenum];
+		const aas_plane_t *facePlane = &m_planes[face->planenum];
 		// Do not treat bounding ceilings and ground as a wall
 		if( fabsf( DotProduct( zAxis, facePlane->normal ) ) < 0.3f ) {
-			areasettings[areaNum].areaflags |= AREA_WALL;
+			m_areasettings[areaNum].areaflags |= AREA_WALL;
 			break;
 		}
 	}
 }
 
-void AiAasWorld::TrySetAreaJunkFlags( int areaNum ) {
-	const aas_area_t &area = areas[areaNum];
+void AiAasWorld::trySettingAreaJunkFlags( int areaNum ) {
+	const aas_area_t &area = m_areas[areaNum];
 	int junkFactor = 0;
 
 	// Changed to test only 2D dimensions, otherwise there will be way too many bogus ramp flags set
@@ -599,11 +606,11 @@ void AiAasWorld::TrySetAreaJunkFlags( int areaNum ) {
 		}
 	}
 	if( junkFactor > 1 ) {
-		areasettings[areaNum].areaflags |= AREA_JUNK;
+		m_areasettings[areaNum].areaflags |= AREA_JUNK;
 	}
 }
 
-void AiAasWorld::TrySetAreaRampFlags( int areaNum ) {
+void AiAasWorld::trySettingAreaRampFlags( int areaNum ) {
 	// Since we extend the trace end a bit below the area,
 	// this test is added to avoid classifying non-grounded areas as having a ramp
 	if( !( AreaSettings()[areaNum].areaflags & AREA_GROUNDED ) ) {
@@ -622,7 +629,7 @@ void AiAasWorld::TrySetAreaRampFlags( int areaNum ) {
 	// There is an obvious approach of testing ground faces of the area but it does not work for several reasons
 	// (some faces are falsely marked as FACE_GROUND).
 
-	const auto &area = areas[areaNum];
+	const auto &area = m_areas[areaNum];
 	// Since an area might contain both flat and inclined part, we cannot just test a trace going through the center
 	float stepX = 0.2f * ( area.maxs[0] - area.mins[0] );
 	float stepY = 0.2f * ( area.maxs[1] - area.mins[1] );
@@ -670,9 +677,9 @@ void AiAasWorld::TrySetAreaRampFlags( int areaNum ) {
 			//	continue;
 			//}
 
-			areasettings[areaNum].areaflags |= AREA_INCLINED_FLOOR;
+			m_areasettings[areaNum].areaflags |= AREA_INCLINED_FLOOR;
 			if( trace.plane.normal[2] <= 1.0f - SLIDEMOVE_PLANEINTERACT_EPSILON ) {
-				areasettings[areaNum].areaflags |= AREA_SLIDABLE_RAMP;
+				m_areasettings[areaNum].areaflags |= AREA_SLIDABLE_RAMP;
 				// All flags that could be set are present
 				return;
 			}
@@ -776,8 +783,8 @@ void NofallAreaFlagSolver::Exec() {
 	SharedFaceAreasWalker::Exec();
 }
 
-void AiAasWorld::TrySetAreaNoFallFlags( int areaNum ) {
-	auto &__restrict areaSettings = areasettings[areaNum];
+void AiAasWorld::trySettingAreaNoFallFlags( int areaNum ) {
+	auto &__restrict areaSettings = m_areasettings[areaNum];
 	if( areaSettings.areaflags & ( AREA_LIQUID | AREA_DISABLED ) ) {
 		return;
 	}
@@ -793,7 +800,7 @@ void AiAasWorld::TrySetAreaNoFallFlags( int areaNum ) {
 	}
 }
 
-void AiAasWorld::TrySetAreaSkipCollisionFlags() {
+void AiAasWorld::trySettingAreaSkipCollisionFlags() {
 	trace_t trace;
 
 	const float extents[3] = { 64, 48, 32 };
@@ -808,14 +815,14 @@ void AiAasWorld::TrySetAreaSkipCollisionFlags() {
 	const int clipMask = MASK_PLAYERSOLID | MASK_WATER | CONTENTS_TRIGGER | CONTENTS_JUMPPAD | CONTENTS_TELEPORTER;
 	const float playerHeight = playerbox_stand_maxs[2] - playerbox_stand_maxs[2];
 	const float playerRadius = 0.5f * ( M_SQRT2 * ( playerbox_stand_maxs[0] - playerbox_stand_mins[0] ) );
-	for( int i = 1; i < numareas; ++i ) {
-		int *const areaFlags = &areasettings[i].areaflags;
+	for( int i = 1; i < m_numareas; ++i ) {
+		int *const areaFlags = &m_areasettings[i].areaflags;
 		// If it is already known that the area is bounded by a solid wall or is an inclined floor area
 		if( *areaFlags & ( AREA_WALL | AREA_INCLINED_FLOOR ) ) {
 			continue;
 		}
 
-		auto &area = areas[i];
+		auto &area = m_areas[i];
 		for( int j = 0; j < 3; ++j ) {
 			const float extent = extents[j];
 			// Now make a bounding box not lesser than the area bounds or player bounds
@@ -852,26 +859,26 @@ nextArea:;
 }
 
 void AiAasWorld::computeInnerBoundsForAreas() {
-    areaInnerBounds = (int16_t *)Q_malloc( 6 * sizeof( int16_t ) * numareas );
+    m_areaInnerBounds = (int16_t *)Q_malloc( 6 * sizeof( int16_t ) * m_numareas );
 
-    VectorClear( areaInnerBounds + 0 );
-    VectorClear( areaInnerBounds + 3 );
+    VectorClear( m_areaInnerBounds + 0 );
+    VectorClear( m_areaInnerBounds + 3 );
 
     const vec3_t addToMins { +0.5f, +0.5f, +0.5f };
     const vec3_t addToMaxs { -0.5f, -0.5f, -0.5f };
-    for( int areaNum = 1; areaNum < numareas; ++areaNum ) {
-        const auto &area = areas[areaNum];
+    for( int areaNum = 1; areaNum < m_numareas; ++areaNum ) {
+        const auto &area = m_areas[areaNum];
         vec3_t innerMins, innerMaxs;
         VectorCopy( area.mins, innerMins );
         VectorCopy( area.maxs, innerMaxs );
 
         for( int faceIndexNum = area.firstface; faceIndexNum < area.firstface + area.numfaces; ++faceIndexNum ) {
-            const auto &face = faces[std::abs( faceindex[faceIndexNum] )];
+            const auto &face = m_faces[std::abs( m_faceindex[faceIndexNum] )];
             for( int edgeIndexNum = face.firstedge; edgeIndexNum < face.firstedge + face.numedges; ++edgeIndexNum ) {
-                const auto &edge = edges[std::abs( edgeindex[edgeIndexNum] )];
+                const auto &edge = m_edges[std::abs( m_edgeindex[edgeIndexNum] )];
                 for( int edgeVertex = 0; edgeVertex < 2; ++edgeVertex ) {
                     assert( edge.v[edgeVertex] >= 0 );
-                    const float *v = vertexes[edge.v[edgeVertex]];
+                    const float *v = m_vertexes[edge.v[edgeVertex]];
                     // For each coordinate check what "semi-space" it belongs to based on comparison to the area center.
                     // Select the maximal value of mins and minimal one of maxs.
                     for( int i = 0; i < 3; ++i ) {
@@ -891,8 +898,8 @@ void AiAasWorld::computeInnerBoundsForAreas() {
 
         VectorAdd( innerMins, addToMins, innerMins );
         VectorAdd( innerMaxs, addToMaxs, innerMaxs );
-        VectorCopy( innerMins, areaInnerBounds + areaNum * 6 + 0 );
-        VectorCopy( innerMaxs, areaInnerBounds + areaNum * 6 + 3 );
+        VectorCopy( innerMins, m_areaInnerBounds + areaNum * 6 + 0 );
+        VectorCopy( innerMaxs, m_areaInnerBounds + areaNum * 6 + 3 );
     }
 }
 
@@ -935,14 +942,14 @@ auto AiAasWorld::computePointAreaNumLookupDataForCell( const Vec3 &cellMins, con
 	const Vec3 expandedMaxs( Vec3( +2.0f, +2.0f, +2.0f ) + cellMaxs );
 
 	int areaNums[16];
-	const int numBoxAreas = BBoxAreas( expandedMins, expandedMaxs, areaNums, 16 );
+	const int numBoxAreas = findAreasInBox( expandedMins, expandedMaxs, areaNums, 16 );
 	if( numBoxAreas == 1 ) {
 		const Vec3 *bounds[2] { &expandedMins, &expandedMaxs };
 		int lastCornerAreaNum = -1;
 		bool allInsideTheSameArea = true;
 		for( unsigned i = 0; i < 8; ++i ) {
 			const Vec3 corner( bounds[( i >> 2 ) & 1]->X(), bounds[( i >> 1 ) & 1]->Y(), bounds[( i >> 0 ) & 1]->Z() );
-			const int cornerAreaNum = PointAreaNumNaive( corner.Data() );
+			const int cornerAreaNum = pointAreaNumNaive( corner.Data() );
 			if( i > 0 ) {
 				if( cornerAreaNum != lastCornerAreaNum ) {
 					allInsideTheSameArea = false;
@@ -960,7 +967,7 @@ auto AiAasWorld::computePointAreaNumLookupDataForCell( const Vec3 &cellMins, con
 
 	// Supply original bounds (findTopNodeForBox() spreads bounds itself)
 	const int topNode = findTopNodeForBox( cellMins.Data(), cellMaxs.Data() );
-	assert( topNode > 0 && topNode < numnodes );
+	assert( topNode > 0 && topNode < m_numnodes );
 	return topNode;
 }
 
@@ -986,12 +993,12 @@ inline bool isPointWithinWorldBounds( const float *point, const float *mins, con
 #endif
 }
 
-int AiAasWorld::PointAreaNum( const float *point ) const {
+int AiAasWorld::pointAreaNum( const float *point ) const {
 	assert( std::isfinite( point[0] ) );
 	assert( std::isfinite( point[1] ) );
 	assert( std::isfinite( point[2] ) );
 
-	if( loaded ) [[likely]] {
+	if( m_loaded ) [[likely]] {
 		if( isPointWithinWorldBounds( point, m_worldMins, m_worldMaxs ) ) [[likely]] {
 			const Vec3 diffWithMins( Vec3( point ) - Vec3( m_worldMins ) );
 
@@ -1010,7 +1017,7 @@ int AiAasWorld::PointAreaNum( const float *point ) const {
 			if( const int areaNum = -encoded; areaNum > 0 ) {
 				result = areaNum;
 			} else if( const int topNodeHint = encoded; topNodeHint > 0 ) {
-				result = PointAreaNumNaive( point, topNodeHint );
+				result = pointAreaNumNaive( point, topNodeHint );
 			}
 			return result;
 		}
@@ -1066,7 +1073,7 @@ class AasFileReader
 	char *LoadLump( int lumpNum, int size );
 
 public:
-	AasFileReader( const char *mapname );
+	AasFileReader( const wsw::StringView &mapName );
 
 	~AasFileReader() {
 		if( fp ) {
@@ -1074,10 +1081,10 @@ public:
 		}
 	}
 
-	inline bool IsValid() { return fp != 0; }
+	bool IsValid() { return fp != 0; }
 
 	template<typename T>
-	inline std::tuple<T*, int> LoadLump( int lumpNum ) {
+	std::tuple<T*, int> LoadLump( int lumpNum ) {
 		int oldOffset = lastoffset;
 		char *rawData = LoadLump( lumpNum, sizeof( T ) );
 		int length = lastoffset - oldOffset;
@@ -1092,20 +1099,17 @@ public:
 #define AASVERSION_OLD              4
 #define AASVERSION                  5
 
-AasFileReader::AasFileReader( const char *mapname )
+AasFileReader::AasFileReader( const wsw::StringView &baseMapName )
 	: lastoffset( 0 ) {
 	// Shut up an analyzer
 	memset( &header, 0, sizeof( header ) );
 
-	char strippedNameBuffer[MAX_QPATH];
-	char combinedNameBuffer[MAX_QPATH];
+	wsw::StaticString<MAX_QPATH> filePath;
+	AiAasWorld::makeFileName( filePath, baseMapName, ".aas"_asView );
 
-	const auto strippedName = AiAasWorld::StripMapName( mapname, strippedNameBuffer );
-	const char *const filename = AiAasWorld::MakeFileName( strippedName, ".aas", combinedNameBuffer );
-
-	fileSize = trap_FS_FOpenFile( filename, &fp, FS_READ );
+	fileSize = trap_FS_FOpenFile( filePath.data(), &fp, FS_READ );
 	if( !fp || fileSize <= 0 ) {
-		G_Printf( S_COLOR_RED "can't open %s\n", filename );
+		G_Printf( S_COLOR_RED "can't open %s\n", filePath.data() );
 		return;
 	}
 
@@ -1115,14 +1119,14 @@ AasFileReader::AasFileReader( const char *mapname )
 	//check header identification
 	header.ident = LittleLong( header.ident );
 	if( header.ident != AASID ) {
-		G_Printf( S_COLOR_RED "%s is not an AAS file\n", filename );
+		G_Printf( S_COLOR_RED "%s is not an AAS file\n", filePath.data() );
 		return;
 	}
 
 	//check the version
 	header.version = LittleLong( header.version );
 	if( header.version != AASVERSION_OLD && header.version != AASVERSION ) {
-		G_Printf( S_COLOR_RED "aas file %s is version %i, not %i\n", filename, header.version, AASVERSION );
+		G_Printf( S_COLOR_RED "aas file %s is version %i, not %i\n", filePath.data(), header.version, AASVERSION );
 		return;
 	}
 	if( header.version == AASVERSION ) {
@@ -1189,100 +1193,95 @@ bool AasFileReader::ComputeChecksum( char **base64Digest ) {
 	return true;
 }
 
-bool AiAasWorld::Load( const char *mapname ) {
-	AasFileReader reader( mapname );
+bool AiAasWorld::load( const wsw::StringView &mapName ) {
+	AasFileReader reader( mapName );
 
 	if( !reader.IsValid() ) {
 		return false;
 	}
 
-	std::tie( bboxes, numbboxes ) = reader.LoadLump<aas_bbox_t>( AASLUMP_BBOXES );
-	if( numbboxes && !bboxes ) {
+	std::tie( m_vertexes, m_numvertexes ) = reader.LoadLump<aas_vertex_t>( AASLUMP_VERTEXES );
+	if( m_numvertexes && !m_vertexes ) {
 		return false;
 	}
 
-	std::tie( vertexes, numvertexes ) = reader.LoadLump<aas_vertex_t>( AASLUMP_VERTEXES );
-	if( numvertexes && !vertexes ) {
+	std::tie( m_planes, m_numplanes ) = reader.LoadLump<aas_plane_t>( AASLUMP_PLANES );
+	if( m_numplanes && !m_planes ) {
 		return false;
 	}
 
-	std::tie( planes, numplanes ) = reader.LoadLump<aas_plane_t>( AASLUMP_PLANES );
-	if( numplanes && !planes ) {
+	std::tie( m_edges, m_numedges ) = reader.LoadLump<aas_edge_t>( AASLUMP_EDGES );
+	if( m_numedges && !m_edges ) {
 		return false;
 	}
 
-	std::tie( edges, numedges ) = reader.LoadLump<aas_edge_t>( AASLUMP_EDGES );
-	if( numedges && !edges ) {
+	std::tie( m_edgeindex, m_edgeindexsize ) = reader.LoadLump<int>( AASLUMP_EDGEINDEX );
+	if( m_edgeindexsize && !m_edgeindex ) {
 		return false;
 	}
 
-	std::tie( edgeindex, edgeindexsize ) = reader.LoadLump<int>( AASLUMP_EDGEINDEX );
-	if( edgeindexsize && !edgeindex ) {
+	std::tie( m_faces, m_numfaces ) = reader.LoadLump<aas_face_t>( AASLUMP_FACES );
+	if( m_numfaces && !m_faces ) {
 		return false;
 	}
 
-	std::tie( faces, numfaces ) = reader.LoadLump<aas_face_t>( AASLUMP_FACES );
-	if( numfaces && !faces ) {
+	std::tie( m_faceindex, m_faceindexsize ) = reader.LoadLump<int>( AASLUMP_FACEINDEX );
+	if( m_faceindexsize && !m_faceindex ) {
 		return false;
 	}
 
-	std::tie( faceindex, faceindexsize ) = reader.LoadLump<int>( AASLUMP_FACEINDEX );
-	if( faceindexsize && !faceindex ) {
+	std::tie( m_areas, m_numareas ) = reader.LoadLump<aas_area_t>( AASLUMP_AREAS );
+	if( m_numareas && !m_areas ) {
 		return false;
 	}
 
-	std::tie( areas, numareas ) = reader.LoadLump<aas_area_t>( AASLUMP_AREAS );
-	if( numareas && !areas ) {
+	std::tie( m_areasettings, m_numareasettings ) = reader.LoadLump<aas_areasettings_t>( AASLUMP_AREASETTINGS );
+	if( m_numareasettings && !m_areasettings ) {
 		return false;
 	}
 
-	std::tie( areasettings, numareasettings ) = reader.LoadLump<aas_areasettings_t>( AASLUMP_AREASETTINGS );
-	if( numareasettings && !areasettings ) {
+	std::tie( m_reachability, m_reachabilitysize ) = reader.LoadLump<aas_reachability_t>( AASLUMP_REACHABILITY );
+	if( m_reachabilitysize && !m_reachability ) {
 		return false;
 	}
 
-	std::tie( reachability, reachabilitysize ) = reader.LoadLump<aas_reachability_t>( AASLUMP_REACHABILITY );
-	if( reachabilitysize && !reachability ) {
+	std::tie( m_nodes, m_numnodes ) = reader.LoadLump<aas_node_t>( AASLUMP_NODES );
+	if( m_numnodes && !m_nodes ) {
 		return false;
 	}
 
-	std::tie( nodes, numnodes ) = reader.LoadLump<aas_node_t>( AASLUMP_NODES );
-	if( numnodes && !nodes ) {
+	std::tie( m_portals, m_numportals ) = reader.LoadLump<aas_portal_t>( AASLUMP_PORTALS );
+	if( m_numportals && !m_portals ) {
 		return false;
 	}
 
-	std::tie( portals, numportals ) = reader.LoadLump<aas_portal_t>( AASLUMP_PORTALS );
-	if( numportals && !portals ) {
+	std::tie( m_portalindex, m_portalindexsize ) = reader.LoadLump<int>( AASLUMP_PORTALINDEX );
+	if( m_portalindexsize && !m_portalindex ) {
 		return false;
 	}
 
-	std::tie( portalindex, portalindexsize ) = reader.LoadLump<int>( AASLUMP_PORTALINDEX );
-	if( portalindexsize && !portalindex ) {
+	std::tie( m_clusters, m_numclusters ) = reader.LoadLump<aas_cluster_t>( AASLUMP_CLUSTERS );
+	if( m_numclusters && !m_clusters ) {
 		return false;
 	}
 
-	std::tie( clusters, numclusters ) = reader.LoadLump<aas_cluster_t>( AASLUMP_CLUSTERS );
-	if( numclusters && !clusters ) {
+	m_checksum = nullptr;
+	if( !reader.ComputeChecksum( &m_checksum ) ) {
 		return false;
 	}
 
-	checksum = nullptr;
-	if( !reader.ComputeChecksum( &checksum ) ) {
-		return false;
-	}
+	swapData();
 
-	SwapData();
-
-	loaded = true;
+	m_loaded = true;
 	return true;
 }
 
-void AiAasWorld::PostLoad() {
+void AiAasWorld::postLoad( const wsw::StringView &baseMapName ) {
 	// This is important for further PostLoad() computations
 	AasElementsMask::Init( this );
 
-	CategorizePlanes();
-	ComputeExtraAreaData();
+	categorizePlanes();
+	computeExtraAreaData( baseMapName );
 }
 
 AiAasWorld::~AiAasWorld() {
@@ -1290,128 +1289,52 @@ AiAasWorld::~AiAasWorld() {
 	// To avoid possible issues if the code gets reorganized, call it always.
 	AasElementsMask::Shutdown();
 
-	if( !loaded ) {
+	if( !m_loaded ) {
 		return;
 	}
 
-	if( checksum ) {
-		Q_free( checksum );
-	}
+	Q_free( m_checksum );
 
-	// These items may be absent for some stripped AAS files, so check each one.
-	if( bboxes ) {
-		Q_free( bboxes );
-	}
-	if( vertexes ) {
-		Q_free( vertexes );
-	}
-	if( planes ) {
-		Q_free( planes );
-	}
-	if( edges ) {
-		Q_free( edges );
-	}
-	if( edgeindex ) {
-		Q_free( edgeindex );
-	}
-	if( faces ) {
-		Q_free( faces );
-	}
-	if( faceindex ) {
-		Q_free( faceindex );
-	}
-	if( areas ) {
-		Q_free( areas );
-	}
-	if( areasettings ) {
-		Q_free( areasettings );
-	}
-	if( reachability ) {
-		Q_free( reachability );
-	}
-	if( nodes ) {
-		Q_free( nodes );
-	}
-	if( portals ) {
-		Q_free( portals );
-	}
-	if( portalindex ) {
-		Q_free( portalindex );
-	}
-	if( clusters ) {
-		Q_free( clusters );
-	}
+	Q_free( m_vertexes );
+	Q_free( m_planes );
+	Q_free( m_edges );
+	Q_free( m_edgeindex );
+	Q_free( m_faces );
+	Q_free( m_faceindex );
+	Q_free( m_areas );
+	Q_free( m_areasettings );
+	Q_free( m_reachability );
+	Q_free( m_nodes );
+	Q_free( m_portals );
+	Q_free( m_portalindex );
+	Q_free( m_clusters );
 
-	if( areaFloorClusterNums ) {
-		Q_free( areaFloorClusterNums );
-	}
-	if( areaStairsClusterNums ) {
-		Q_free( areaStairsClusterNums );
-	}
-	if( floorClusterDataOffsets ) {
-		Q_free( floorClusterDataOffsets );
-	}
-	if( stairsClusterDataOffsets ) {
-		Q_free( stairsClusterDataOffsets );
-	}
-	if( floorClusterData ) {
-		Q_free( floorClusterData );
-	}
-	if( stairsClusterData ) {
-		Q_free( stairsClusterData );
-	}
+	Q_free( m_areaFloorClusterNums );
+	Q_free( m_areaStairsClusterNums );
+	Q_free( m_floorClusterDataOffsets );
+	Q_free( m_stairsClusterDataOffsets );
+	Q_free( m_floorClusterData );
+	Q_free( m_stairsClusterData );
 
-	if( face2DProjVertexNums ) {
-		Q_free( face2DProjVertexNums );
-	}
-
-	if( areaMapLeafListOffsets ) {
-		Q_free( areaMapLeafListOffsets );
-	}
-	if( areaMapLeafsData ) {
-		Q_free( areaMapLeafsData );
-	}
-
-	if( areaVisDataOffsets ) {
-		Q_free( areaVisDataOffsets );
-	}
-	if( areaVisData ) {
-		Q_free( areaVisData );
-	}
-
-	if( floorClustersVisTable ) {
-		Q_free( floorClustersVisTable );
-	}
-
-	if( groundedPrincipalRoutingAreas ) {
-		Q_free( groundedPrincipalRoutingAreas );
-	}
-	if( jumppadReachPassThroughAreas ) {
-		Q_free( jumppadReachPassThroughAreas );
-	}
-	if( ladderReachPassThroughAreas ) {
-		Q_free( ladderReachPassThroughAreas );
-	}
-	if( elevatorReachPassThroughAreas ) {
-		Q_free( elevatorReachPassThroughAreas );
-	}
-	if( walkOffLedgePassThroughAirAreas ) {
-		Q_free( walkOffLedgePassThroughAirAreas );
-	}
-
-	if( areaInnerBounds ) {
-	    Q_free( areaInnerBounds );
-	}
-
-	if( m_pointAreaNumLookupGridData ) {
-		Q_free( m_pointAreaNumLookupGridData );
-	}
+	Q_free( m_face2DProjVertexNums );
+	Q_free( m_areaMapLeafListOffsets );
+	Q_free( m_areaMapLeafsData );
+	Q_free( m_areaVisDataOffsets );
+	Q_free( m_areaVisData );
+	Q_free( m_floorClustersVisTable );
+	Q_free( m_groundedPrincipalRoutingAreas );
+	Q_free( m_jumppadReachPassThroughAreas );
+	Q_free( m_ladderReachPassThroughAreas );
+	Q_free( m_elevatorReachPassThroughAreas );
+	Q_free( m_walkOffLedgePassThroughAirAreas );
+	Q_free( m_areaInnerBounds );
+	Q_free( m_pointAreaNumLookupGridData );
 }
 
-void AiAasWorld::CategorizePlanes() {
+void AiAasWorld::categorizePlanes() {
 	// We do not trust the AAS compiler and classify planes on our own
-	for( int i = 0; i < numplanes; ++i ) {
-		auto *aasPlane = &planes[i];
+	for( int i = 0; i < m_numplanes; ++i ) {
+		auto *aasPlane = &m_planes[i];
 		cplane_t cmPlane;
 		VectorCopy( aasPlane->normal, cmPlane.normal );
 		cmPlane.dist = aasPlane->dist;
@@ -1421,19 +1344,8 @@ void AiAasWorld::CategorizePlanes() {
 	}
 }
 
-void AiAasWorld::SwapData() {
-	//bounding boxes
-	for( int i = 0; i < numbboxes; i++ ) {
-		bboxes[i].presencetype = LittleLong( bboxes[i].presencetype );
-		bboxes[i].flags = LittleLong( bboxes[i].flags );
-
-		for( int j = 0; j < 3; j++ ) {
-			bboxes[i].mins[j] = LittleLong( bboxes[i].mins[j] );
-			bboxes[i].maxs[j] = LittleLong( bboxes[i].maxs[j] );
-		}
-		// Note: we do not care about dimensions shift described below
-		// because these AAS bboxes are unused and should be removed.
-	}
+void AiAasWorld::swapData() {
+	// TODO: We don't really care of big endian
 
 	// We have to shift all vertices/bounding boxes by this value,
 	// as the entire bot code expects area mins to match ground,
@@ -1443,112 +1355,10 @@ void AiAasWorld::SwapData() {
 	// Also XY shifts seem to vary (?) from map to map and even in the same map.
 	const vec3_t shifts = { 0, 0, -24.0f + 0.25f };
 
-	//vertexes
-	for( int i = 0; i < numvertexes; i++ ) {
-		for( int j = 0; j < 3; j++ )
-			vertexes[i][j] = LittleFloat( vertexes[i][j] ) + shifts[j];
-	}
-
-	//planes
-	for( int i = 0; i < numplanes; i++ ) {
-		for( int j = 0; j < 3; j++ )
-			planes[i].normal[j] = LittleFloat( planes[i].normal[j] );
-		planes[i].dist = LittleFloat( planes[i].dist );
-		planes[i].type = LittleLong( planes[i].type );
-	}
-
-	//edges
-	for( int i = 0; i < numedges; i++ ) {
-		edges[i].v[0] = LittleLong( edges[i].v[0] );
-		edges[i].v[1] = LittleLong( edges[i].v[1] );
-	}
-
-	//edgeindex
-	for( int i = 0; i < edgeindexsize; i++ ) {
-		edgeindex[i] = LittleLong( edgeindex[i] );
-	}
-
-	//faces
-	for( int i = 0; i < numfaces; i++ ) {
-		faces[i].planenum = LittleLong( faces[i].planenum );
-		faces[i].faceflags = LittleLong( faces[i].faceflags );
-		faces[i].numedges = LittleLong( faces[i].numedges );
-		faces[i].firstedge = LittleLong( faces[i].firstedge );
-		faces[i].frontarea = LittleLong( faces[i].frontarea );
-		faces[i].backarea = LittleLong( faces[i].backarea );
-	}
-
-	//face index
-	for( int i = 0; i < faceindexsize; i++ ) {
-		faceindex[i] = LittleLong( faceindex[i] );
-	}
-
-	//convex areas
-	for( int i = 0; i < numareas; i++ ) {
-		areas[i].areanum = LittleLong( areas[i].areanum );
-		areas[i].numfaces = LittleLong( areas[i].numfaces );
-		areas[i].firstface = LittleLong( areas[i].firstface );
-
+	for( int i = 0; i < m_numvertexes; i++ ) {
 		for( int j = 0; j < 3; j++ ) {
-			areas[i].mins[j] = LittleFloat( areas[i].mins[j] ) + shifts[j];
-			areas[i].maxs[j] = LittleFloat( areas[i].maxs[j] ) + shifts[j];
-			areas[i].center[j] = LittleFloat( areas[i].center[j] ) + shifts[j];
+			m_vertexes[i][j] = m_vertexes[i][j] + shifts[j];
 		}
-	}
-
-	//area settings
-	for( int i = 0; i < numareasettings; i++ ) {
-		areasettings[i].contents = LittleLong( areasettings[i].contents );
-		areasettings[i].areaflags = LittleLong( areasettings[i].areaflags );
-		areasettings[i].presencetype = LittleLong( areasettings[i].presencetype );
-		areasettings[i].cluster = LittleLong( areasettings[i].cluster );
-		areasettings[i].clusterareanum = LittleLong( areasettings[i].clusterareanum );
-		areasettings[i].numreachableareas = LittleLong( areasettings[i].numreachableareas );
-		areasettings[i].firstreachablearea = LittleLong( areasettings[i].firstreachablearea );
-	}
-
-	//area reachability
-	for( int i = 0; i < reachabilitysize; i++ ) {
-		reachability[i].areanum = LittleLong( reachability[i].areanum );
-		reachability[i].facenum = LittleLong( reachability[i].facenum );
-		reachability[i].edgenum = LittleLong( reachability[i].edgenum );
-
-		for( int j = 0; j < 3; j++ ) {
-			reachability[i].start[j] = LittleFloat( reachability[i].start[j] ) + shifts[j];
-			reachability[i].end[j] = LittleFloat( reachability[i].end[j] ) + shifts[j];
-		}
-
-		reachability[i].traveltype = LittleLong( reachability[i].traveltype );
-		reachability[i].traveltime = LittleShort( reachability[i].traveltime );
-	}
-
-	//nodes
-	for( int i = 0; i < numnodes; i++ ) {
-		nodes[i].planenum = LittleLong( nodes[i].planenum );
-		nodes[i].children[0] = LittleLong( nodes[i].children[0] );
-		nodes[i].children[1] = LittleLong( nodes[i].children[1] );
-	}
-
-	//cluster portals
-	for( int i = 0; i < numportals; i++ ) {
-		portals[i].areanum = LittleLong( portals[i].areanum );
-		portals[i].frontcluster = LittleLong( portals[i].frontcluster );
-		portals[i].backcluster = LittleLong( portals[i].backcluster );
-		portals[i].clusterareanum[0] = LittleLong( portals[i].clusterareanum[0] );
-		portals[i].clusterareanum[1] = LittleLong( portals[i].clusterareanum[1] );
-	}
-
-	//cluster portal index
-	for( int i = 0; i < portalindexsize; i++ ) {
-		portalindex[i] = LittleLong( portalindex[i] );
-	}
-
-	//cluster
-	for( int i = 0; i < numclusters; i++ ) {
-		clusters[i].numareas = LittleLong( clusters[i].numareas );
-		clusters[i].numreachabilityareas = LittleLong( clusters[i].numreachabilityareas );
-		clusters[i].numportals = LittleLong( clusters[i].numportals );
-		clusters[i].firstportal = LittleLong( clusters[i].firstportal );
 	}
 }
 
@@ -1718,8 +1528,8 @@ struct ClassifyStairsArea {
 		}
 
 		// HACK: TODO: Refactor this (operator()) method params
-		const auto *aasWorld = AiAasWorld::Instance();
-		if( aasWorld->FloorClusterNum( &currArea - aasWorld->Areas() ) ) {
+		const auto *aasWorld = AiAasWorld::instance();
+		if( aasWorld->floorClusterNum( &currArea - aasWorld->Areas() ) ) {
 			// The area is already in a floor cluster
 			return -1;
 		}
@@ -1923,13 +1733,13 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 	return true;
 }
 
-void AiAasWorld::ComputeLogicalAreaClusters() {
+void AiAasWorld::computeLogicalAreaClusters() {
 	auto floodResultsBuffer = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
 
 	FloorClusterBuilder floorClusterBuilder( AasElementsMask::AreasMask(), floodResultsBuffer, this );
 
-	this->areaFloorClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
-	memset( this->areaFloorClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
+	m_areaFloorClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
+	memset( m_areaFloorClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
 
 	BufferBuilder<uint16_t> floorData( 256 );
 	BufferBuilder<int> floorDataOffsets( 32 );
@@ -1937,13 +1747,13 @@ void AiAasWorld::ComputeLogicalAreaClusters() {
 	BufferBuilder<int> stairsDataOffsets( 16 );
 
 	// Add dummy clusters at index 0 in order to conform to the rest of AAS code
-	numFloorClusters = 1;
+	m_numFloorClusters = 1;
 	floorDataOffsets.Add( 0 );
 	floorData.Add( 0 );
 
 	for( int i = 1; i < this->NumAreas(); ++i ) {
 		// If an area is already marked
-		if( areaFloorClusterNums[i] ) {
+		if( m_areaFloorClusterNums[i] ) {
 			continue;
 		}
 
@@ -1955,34 +1765,34 @@ void AiAasWorld::ComputeLogicalAreaClusters() {
 		int numClusterAreas = floorClusterBuilder.ResultSize();
 		const auto *clusterAreaNums = floorClusterBuilder.ResultAreas();
 		for( int j = 0; j < numClusterAreas; ++j ) {
-			areaFloorClusterNums[clusterAreaNums[j]] = (uint16_t)numFloorClusters;
+			m_areaFloorClusterNums[clusterAreaNums[j]] = (uint16_t)m_numFloorClusters;
 		}
 
-		numFloorClusters++;
+		m_numFloorClusters++;
 		floorDataOffsets.Add( floorData.Size() );
 		floorData.Add( (uint16_t)numClusterAreas );
 		floorData.Add( clusterAreaNums, numClusterAreas );
 	}
 
-	assert( numFloorClusters == (int)floorDataOffsets.Size() );
-	this->floorClusterDataOffsets = floorDataOffsets.FlattenResult();
+	assert( m_numFloorClusters == (int)floorDataOffsets.Size() );
+	m_floorClusterDataOffsets = floorDataOffsets.FlattenResult();
 	// Clear as no longer needed immediately for same reasons
 	floorDataOffsets.Clear();
-	this->floorClusterData = floorData.FlattenResult();
+	m_floorClusterData = floorData.FlattenResult();
 	floorData.Clear();
 
 	StairsClusterBuilder stairsClusterBuilder( AasElementsMask::AreasMask(), floodResultsBuffer, this );
 
-	this->areaStairsClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
-	memset( this->areaStairsClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
+	m_areaStairsClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
+	memset( m_areaStairsClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
 
-	numStairsClusters = 1;
+	m_numStairsClusters = 1;
 	stairsDataOffsets.Add( 0 );
 	stairsData.Add( 0 );
 
 	for( int i = 0; i < this->NumAreas(); ++i ) {
 		// If an area is already marked
-		if( areaFloorClusterNums[i] || areaStairsClusterNums[i] ) {
+		if( m_areaFloorClusterNums[i] || m_areaStairsClusterNums[i] ) {
 			continue;
 		}
 
@@ -1992,10 +1802,10 @@ void AiAasWorld::ComputeLogicalAreaClusters() {
 
 		// Important: Mark all areas in the built cluster
 		for( auto iter = stairsClusterBuilder.begin(), end = stairsClusterBuilder.end(); iter != end; ++iter ) {
-			areaStairsClusterNums[iter->areaNum] = (uint16_t)numStairsClusters;
+			m_areaStairsClusterNums[iter->areaNum] = (uint16_t)m_numStairsClusters;
 		}
 
-		numStairsClusters++;
+		m_numStairsClusters++;
 		// Add the current stairs data size to the offsets array
 		stairsDataOffsets.Add( stairsData.Size() );
 		// Add the actual stairs data length for the current cluster
@@ -2009,30 +1819,30 @@ void AiAasWorld::ComputeLogicalAreaClusters() {
 	// Clear as no longer needed to provide free space for further allocations
 	Q_free( floodResultsBuffer );
 
-	assert( numStairsClusters == (int)stairsDataOffsets.Size() );
-	this->stairsClusterDataOffsets = stairsDataOffsets.FlattenResult();
+	assert( m_numStairsClusters == (int)stairsDataOffsets.Size() );
+	m_stairsClusterDataOffsets = stairsDataOffsets.FlattenResult();
 	stairsDataOffsets.Clear();
-	this->stairsClusterData = stairsData.FlattenResult();
+	m_stairsClusterData = stairsData.FlattenResult();
 
 	constexpr auto *format =
 		"AiAasWorld: %d floor clusters, %d stairs clusters "
 		"(including dummy zero ones) have been detected\n";
-	G_Printf( format, numFloorClusters, numStairsClusters );
+	G_Printf( format, m_numFloorClusters, m_numStairsClusters );
 }
 
-void AiAasWorld::ComputeFace2DProjVertices() {
-	face2DProjVertexNums = (int *)Q_malloc( sizeof( int ) * 2 * this->NumFaces() );
-	int *vertexNumsPtr = face2DProjVertexNums;
+void AiAasWorld::computeFace2DProjVertices() {
+	m_face2DProjVertexNums = (int *)Q_malloc( sizeof( int ) * 2 * this->NumFaces() );
+	int *vertexNumsPtr = m_face2DProjVertexNums;
 
 	// Skip 2 vertices for the dummy zero face
 	vertexNumsPtr += 2;
 
-	const auto *faces = this->faces;
-	const auto *edgeIndex = this->edgeindex;
-	const auto *edges = this->edges;
-	const auto *vertices = this->vertexes;
+	const auto *faces = this->m_faces;
+	const auto *edgeIndex = this->m_edgeindex;
+	const auto *edges = this->m_edges;
+	const auto *vertices = this->m_vertexes;
 
-	for( int i = 1; i < numfaces; ++i ) {
+	for( int i = 1; i < m_numfaces; ++i ) {
 		const auto &face = faces[i];
 		int edgeIndexNum = face.firstedge;
 		const int endEdgeIndexNum = edgeIndexNum + face.numedges;
@@ -2057,7 +1867,7 @@ void AiAasWorld::ComputeFace2DProjVertices() {
 	}
 }
 
-void AiAasWorld::ComputeAreasLeafsLists() {
+void AiAasWorld::computeAreasLeafsLists() {
 	BufferBuilder<int> leafListsData( 512 );
 	BufferBuilder<int> listOffsets( 128 );
 
@@ -2067,7 +1877,7 @@ void AiAasWorld::ComputeAreasLeafsLists() {
 
 	int tmpNums[256 + 1], topNode;
 	for( int i = 1, end = this->NumAreas(); i < end; ++i ) {
-		const auto &area = areas[i];
+		const auto &area = m_areas[i];
 		// Supply tmpLeafNums + 1 as a buffer so we can prepend the numeber of leaves in-place
 		int numLeaves = trap_CM_BoxLeafnums( area.mins, area.maxs, tmpNums + 1, 256, &topNode );
 		// Not sure whether the call above can return a value greater than a supplied buffer capacity
@@ -2080,10 +1890,10 @@ void AiAasWorld::ComputeAreasLeafsLists() {
 		leafListsData.Add( tmpNums, numLeaves + 1 );
 	}
 
-	this->areaMapLeafListOffsets = listOffsets.FlattenResult();
+	m_areaMapLeafListOffsets = listOffsets.FlattenResult();
 	// Clear early to free some allocation space for flattening of the next result
 	listOffsets.Clear();
-	this->areaMapLeafsData = leafListsData.FlattenResult();
+	m_areaMapLeafsData = leafListsData.FlattenResult();
 }
 
 template <typename AcceptAreaFunc>
@@ -2131,7 +1941,7 @@ void ReachPassThroughAreasListBuilder<AcceptAreaFunc>::AddTracedAreas( const aas
 	AcceptAreaFunc acceptAreaFunc;
 
 	int tmpAreaNums[64];
-	int numReachAreas = aasWorld->TraceAreas( reach.start, reach.end, tmpAreaNums, 64 );
+	int numReachAreas = aasWorld->traceAreas( reach.start, reach.end, tmpAreaNums, 64 );
 	for( int j = 0; j < numReachAreas; ++j ) {
 		int areaNum = tmpAreaNums[j];
 		// Skip if already set
@@ -2155,13 +1965,13 @@ struct AcceptInAirArea {
 	}
 };
 
-void AiAasWorld::BuildSpecificAreaTypesLists() {
+void AiAasWorld::buildSpecificAreaTypesLists() {
 	BufferBuilder<uint16_t> groundedAreasBuilder( 1024 );
 
 	// Add a placeholder for actual size
 	groundedAreasBuilder.Add( 0 );
 	for( int i = 1, end = this->NumAreas(); i < end; ++i ) {
-		const int areaFlags = areasettings[i].areaflags;
+		const int areaFlags = m_areasettings[i].areaflags;
 		if( !( areaFlags & AREA_GROUNDED ) ) {
 			continue;
 		}
@@ -2169,15 +1979,15 @@ void AiAasWorld::BuildSpecificAreaTypesLists() {
 			continue;
 		}
 		// Skip areas that are not in floor clusters
-		if( !areaFloorClusterNums[i] ) {
+		if( !m_areaFloorClusterNums[i] ) {
 			continue;
 		}
 		groundedAreasBuilder.Add( (uint16_t)i );
 	}
 
-	this->groundedPrincipalRoutingAreas = groundedAreasBuilder.FlattenResult();
+	m_groundedPrincipalRoutingAreas = groundedAreasBuilder.FlattenResult();
 	// There was a placeholder for the size added, so the actual list size is lesser by one
-	this->groundedPrincipalRoutingAreas[0] = (uint16_t)( groundedAreasBuilder.Size() - 1 );
+	m_groundedPrincipalRoutingAreas[0] = (uint16_t)( groundedAreasBuilder.Size() - 1 );
 	groundedAreasBuilder.Clear();
 
 	ReachPassThroughAreasListBuilder<AcceptAnyArea> acceptAnyAreaBuilder( this, AasElementsMask::AreasMask() );
@@ -2188,12 +1998,12 @@ void AiAasWorld::BuildSpecificAreaTypesLists() {
 	// (An area is allowed to be present in multiple lists at the same time).
 	// We plan using a shared flood buffer across the entire AI codebase.
 	// This does not get called during a match time anyway.
-	this->jumppadReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_JUMPPAD );
-	this->ladderReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_LADDER );
-	this->elevatorReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_ELEVATOR );
+	m_jumppadReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_JUMPPAD );
+	m_ladderReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_LADDER );
+	m_elevatorReachPassThroughAreas = acceptAnyAreaBuilder.Exec( TRAVEL_ELEVATOR );
 
 	ReachPassThroughAreasListBuilder<AcceptInAirArea> acceptInAirAreaBuilder( this, AasElementsMask::AreasMask() );
-	this->walkOffLedgePassThroughAirAreas = acceptInAirAreaBuilder.Exec( TRAVEL_WALKOFFLEDGE );
+	m_walkOffLedgePassThroughAirAreas = acceptInAirAreaBuilder.Exec( TRAVEL_WALKOFFLEDGE );
 }
 
 template<typename T1, typename T2>
@@ -2201,7 +2011,7 @@ static inline float PerpDot2D( const T1 &v1, const T2 &v2 ) {
 	return v1[0] * v2[1] - v1[1] * v2[0];
 }
 
-bool AiAasWorld::IsAreaWalkableInFloorCluster( int startAreaNum, int targetAreaNum ) const {
+bool AiAasWorld::isAreaWalkableInFloorCluster( int startAreaNum, int targetAreaNum ) const {
 	// Lets keep this old behaviour.
 	// Consider it walkable even if the area is not necessarily belongs to some floor cluster.
 	// In this case an area itself is a "micro-cluster".
@@ -2210,7 +2020,7 @@ bool AiAasWorld::IsAreaWalkableInFloorCluster( int startAreaNum, int targetAreaN
 	}
 
 	// Make hints for a compiler
-	const auto *const __restrict floorClusterNums = this->areaFloorClusterNums;
+	const auto *const __restrict floorClusterNums = m_areaFloorClusterNums;
 
 	int startFloorClusterNum = floorClusterNums[startAreaNum];
 	if( !startFloorClusterNum ) {
@@ -2221,12 +2031,12 @@ bool AiAasWorld::IsAreaWalkableInFloorCluster( int startAreaNum, int targetAreaN
 		return false;
 	}
 
-	const auto *const __restrict aasAreas = this->areas;
-	const auto *const __restrict aasFaceIndex = this->faceindex;
-	const auto *const __restrict aasFaces = this->faces;
-	const auto *const __restrict aasPlanes = this->planes;
-	const auto *const __restrict aasVertices = this->vertexes;
-	const auto *const __restrict face2DProjVertexNums = this->face2DProjVertexNums;
+	const auto *const __restrict aasAreas = m_areas;
+	const auto *const __restrict aasFaceIndex = m_faceindex;
+	const auto *const __restrict aasFaces = m_faces;
+	const auto *const __restrict aasPlanes = m_planes;
+	const auto *const __restrict aasVertices = m_vertexes;
+	const auto *const __restrict face2DProjVertexNums = m_face2DProjVertexNums;
 
 	const vec3_t testedSegEnd { aasAreas[targetAreaNum].center[0], aasAreas[targetAreaNum].center[1], 0.0f };
 	vec3_t testedSegStart { aasAreas[startAreaNum].center[0], aasAreas[startAreaNum].center[1], 0.0f };
@@ -2328,73 +2138,51 @@ nextArea:;
 	return true;
 }
 
-const ArrayRange<char> AiAasWorld::StripMapName( const char *rawMapName, char buffer[MAX_QPATH] ) {
-	Q_strncpyz( buffer, rawMapName, MAX_QPATH );
-	const char *oldPrefix = "maps/";
-	const auto oldPrefixLen = strlen( oldPrefix );
-	const char *rangeBegin = buffer;
-	if( !memcmp( oldPrefix, buffer, oldPrefixLen ) ) {
-		rangeBegin += oldPrefixLen;
+static const wsw::StringView kMapsPrefix( "maps/" );
+static const wsw::StringView kAiPrefix( "ai/" );
+static const wsw::StringView kAasExtension( ".aas" );
+
+auto AiAasWorld::getBaseMapName( const wsw::StringView &fullName ) -> wsw::StringView {
+	wsw::StringView result( fullName );
+	result = result.trimLeft( '/' );
+	// TODO: Shouldn't we use common FS facilities?
+	if( result.startsWith( kMapsPrefix ) ) {
+		result = result.drop( kMapsPrefix.size() );
 	}
-	const char *rangeEnd = strchr( rangeBegin, '.' );
-	if( rangeEnd ) {
-		buffer[rangeEnd - buffer] = '\0';
-	} else {
-		rangeEnd = buffer + strlen( rangeBegin );
-		if( rangeBegin != buffer ) {
-			rangeEnd += oldPrefixLen;
-		}
+	if( result.endsWith( kAasExtension ) ) {
+		result = result.dropRight( kAasExtension.size() );
 	}
-	return ArrayRange<char>( rangeBegin, rangeEnd );
+	return result;
 }
 
-const char *AiAasWorld::MakeFileName( const ArrayRange<char> &strippedName, const char *extension, char buffer[MAX_QPATH] ) {
-	buffer[0] = buffer[MAX_QPATH - 1] = '\0';
-	const char *newPrefix = "ai/";
-	const auto newPrefixLen = strlen( newPrefix );
-	char *p = buffer;
-	if( (ptrdiff_t)newPrefixLen > MAX_QPATH - ( p - buffer ) ) {
-		return buffer;
-	}
-
-	memcpy( p, newPrefix, newPrefixLen );
-	p += newPrefixLen;
-	if( (ptrdiff_t)strippedName.size() > MAX_QPATH - ( p  - buffer ) ) {
-		return buffer;
-	}
-
-	memcpy( p, strippedName.begin(), strippedName.size() );
-	p += strippedName.size();
-	const auto extensionLen = strlen( extension );
-	if( (ptrdiff_t)( extensionLen + 1 ) > MAX_QPATH - ( p - buffer ) ) {
-		return buffer;
-	}
-
-	memcpy( p, extension, extensionLen + 1 );
-	assert( p[extensionLen] == '\0' );
-	return buffer;
+void AiAasWorld::makeFileName( wsw::StaticString<MAX_QPATH> &buffer,
+							   const wsw::StringView &strippedName,
+							   const wsw::StringView &extension ) {
+	assert( extension.startsWith( '.' ) );
+	buffer.clear();
+	buffer << kAiPrefix << strippedName << extension;
 }
 
 static constexpr uint32_t FLOOR_CLUSTERS_VIS_VERSION = 1337;
 static const char *FLOOR_CLUSTERS_VIS_TAG = "FloorClustersVis";
 static const char *FLOOR_CLUSTERS_VIS_EXT = ".floorvis";
 
-void AiAasWorld::LoadFloorClustersVisibility( const ArrayRange<char> &strippedMapName ) {
-	if( !numFloorClusters ) {
+void AiAasWorld::loadFloorClustersVisibility( const wsw::StringView &baseMapName ) {
+	if( !m_numFloorClusters ) {
 		return;
 	}
 
 	AiPrecomputedFileReader reader( va( "%sReader", FLOOR_CLUSTERS_VIS_TAG ), FLOOR_CLUSTERS_VIS_VERSION );
-	char filePath[MAX_QPATH];
-	MakeFileName( strippedMapName, FLOOR_CLUSTERS_VIS_EXT, filePath );
+	wsw::StaticString<MAX_QPATH> filePath;
+	makeFileName( filePath, baseMapName, wsw::StringView( FLOOR_CLUSTERS_VIS_EXT ) );
 
-	const auto expectedSize = (uint32_t)( ( numFloorClusters - 1 ) * ( numFloorClusters - 1 ) * sizeof( bool ) );
-	if( reader.BeginReading( filePath ) == AiPrecomputedFileReader::SUCCESS ) {
+	const auto expectedSize = (uint32_t)( ( m_numFloorClusters - 1 ) * ( m_numFloorClusters - 1 ) * sizeof( bool ) );
+	if( reader.BeginReading( filePath.data() ) == AiPrecomputedFileReader::SUCCESS ) {
 		uint8_t *data;
 		uint32_t dataLength;
 		if( reader.ReadLengthAndData( &data, &dataLength )  ) {
 			if( dataLength == expectedSize ) {
-				this->floorClustersVisTable = (bool *)data;
+				this->m_floorClustersVisTable = (bool *)data;
 				return;
 			}
 			Q_free( data );
@@ -2402,55 +2190,55 @@ void AiAasWorld::LoadFloorClustersVisibility( const ArrayRange<char> &strippedMa
 	}
 
 	G_Printf( "About to compute floor clusters mutual visibility...\n" );
-	const uint32_t actualSize = ComputeFloorClustersVisibility();
+	const uint32_t actualSize = computeFloorClustersVisibility();
 	// Make sure we are not going to write junk bytes
-	assert( floorClustersVisTable && expectedSize == actualSize );
+	assert( m_floorClustersVisTable && expectedSize == actualSize );
 
 	AiPrecomputedFileWriter writer( va( "%sWriter", FLOOR_CLUSTERS_VIS_TAG ), FLOOR_CLUSTERS_VIS_VERSION );
-	if( !writer.BeginWriting( filePath ) ) {
+	if( !writer.BeginWriting( filePath.data() ) ) {
 		return;
 	}
 
-	writer.WriteLengthAndData( (const uint8_t *)floorClustersVisTable, actualSize );
+	writer.WriteLengthAndData( (const uint8_t *)m_floorClustersVisTable, actualSize );
 }
 
-uint32_t AiAasWorld::ComputeFloorClustersVisibility() {
+uint32_t AiAasWorld::computeFloorClustersVisibility() {
 	// Must not be called for low number of clusters
-	assert( numFloorClusters );
+	assert( m_numFloorClusters );
 
-	const int stride = numFloorClusters - 1;
+	const int stride = m_numFloorClusters - 1;
 	// Do not allocate data for the dummy zero cluster
 	const auto dataSizeInBytes = (uint32_t)( stride * stride * sizeof( bool ) );
-	floorClustersVisTable = (bool *)Q_malloc( dataSizeInBytes );
-	memset( floorClustersVisTable, 0, dataSizeInBytes );
+	m_floorClustersVisTable = (bool *)Q_malloc( dataSizeInBytes );
+	memset( m_floorClustersVisTable, 0, dataSizeInBytes );
 
 	// Start loops from 0 even if we skip the zero cluster for table addressing convenience
 	for( int i = 0; i < stride; ++i ) {
-		floorClustersVisTable[i * stride + i] = true;
+		m_floorClustersVisTable[i * stride + i] = true;
 		for( int j = i + 1; j < stride; ++j ) {
 			// We should shift indices to get actual cluster numbers
 			// (we use index 0 for a 1-st valid cluster)
-			bool visible = ComputeVisibilityForClustersPair( i + 1, j + 1 );
-			floorClustersVisTable[i * stride + j] = visible;
-			floorClustersVisTable[j * stride + i] = visible;
+			bool visible = computeVisibilityForClustersPair( i + 1, j + 1 );
+			m_floorClustersVisTable[i * stride + j] = visible;
+			m_floorClustersVisTable[j * stride + i] = visible;
 		}
 	}
 
 	return dataSizeInBytes;
 }
 
-bool AiAasWorld::ComputeVisibilityForClustersPair( int floorClusterNum1, int floorClusterNum2 ) {
+bool AiAasWorld::computeVisibilityForClustersPair( int floorClusterNum1, int floorClusterNum2 ) const {
 	assert( floorClusterNum1 != floorClusterNum2 );
 
-	const auto *const __restrict areaNums1 = FloorClusterData( floorClusterNum1 ) + 1;
-	const auto *const __restrict areaNums2 = FloorClusterData( floorClusterNum2 ) + 1;
+	const auto *const __restrict areaNums1 = floorClusterData( floorClusterNum1 ) + 1;
+	const auto *const __restrict areaNums2 = floorClusterData( floorClusterNum2 ) + 1;
 	// The larger list should be iterated in the outer loop
 	const auto *const __restrict outerAreaNums = ( areaNums1[-1] > areaNums2[-1] ) ? areaNums1 : areaNums2;
 	const auto *const __restrict innerAreaNums = ( outerAreaNums == areaNums1 ) ? areaNums2 : areaNums1;
 
 	for( int i = 0; i < outerAreaNums[-1]; ++i ) {
 		// Get compressed vis list for the area in the outer list
-		const auto *const __restrict visList = AreaVisList( outerAreaNums[i] ) + 1;
+		const auto *const __restrict visList = areaVisList( outerAreaNums[i] ) + 1;
 		// Use a sequential scan for short lists
 		if( visList[-1] < 24 && innerAreaNums[-1] < 24 ) {
 			// For every inner area try finding an inner area num in the vis list
@@ -2462,7 +2250,7 @@ bool AiAasWorld::ComputeVisibilityForClustersPair( int floorClusterNum1, int flo
 			continue;
 		}
 
-		const bool *__restrict visRow = DecompressAreaVis( outerAreaNums[i], AasElementsMask::TmpAreasVisRow() );
+		const bool *__restrict visRow = decompressAreaVis( outerAreaNums[i], AasElementsMask::TmpAreasVisRow() );
 		// For every area in inner areas check whether it's set in the row
 		for( int j = 0; j < innerAreaNums[-1]; ++j ) {
 			if( visRow[innerAreaNums[j]] ) {
@@ -2474,7 +2262,7 @@ bool AiAasWorld::ComputeVisibilityForClustersPair( int floorClusterNum1, int flo
 	return false;
 }
 
-bool AiAasWorld::AreAreasInPvs( int areaNum1, int areaNum2 ) const {
+bool AiAasWorld::areAreasInPvs( int areaNum1, int areaNum2 ) const {
 	assert( areaNum1 >= 0 );
 	assert( areaNum2 >= 0 );
 
@@ -2488,8 +2276,8 @@ bool AiAasWorld::AreAreasInPvs( int areaNum1, int areaNum2 ) const {
 		return true;
 	}
 
-	const auto *const data = areaMapLeafsData;
-	const auto *const offsets = areaMapLeafListOffsets;
+	const auto *const data = m_areaMapLeafsData;
+	const auto *const offsets = m_areaMapLeafListOffsets;
 	const auto *const leafsList1 = data + offsets[areaNum1] + 1;
 	const auto *const leafsList2 = data + offsets[areaNum2] + 1;
 	for( int i = 0, iMax = leafsList1[-1]; i < iMax; ++i ) {
@@ -2507,33 +2295,33 @@ static constexpr uint32_t AREA_VIS_VERSION = 1338;
 static constexpr const char *AREA_VIS_TAG = "AasAreaVis";
 static constexpr const char *AREA_VIS_EXT = ".areavis";
 
-void AiAasWorld::LoadAreaVisibility( const ArrayRange<char> &strippedMapName ) {
-	if( !numFloorClusters ) {
+void AiAasWorld::loadAreaVisibility( const wsw::StringView &baseMapName ) {
+	if( !m_numFloorClusters ) {
 		return;
 	}
 
 	AiPrecomputedFileReader reader( va( "%sReader", AREA_VIS_TAG ), AREA_VIS_VERSION );
-	char filePath[MAX_QPATH];
-	MakeFileName( strippedMapName, AREA_VIS_EXT, filePath );
+	wsw::StaticString<MAX_QPATH> filePath;
+	makeFileName( filePath, baseMapName, wsw::StringView( AREA_VIS_EXT ) );
 
 	uint8_t *data;
 	uint32_t dataLength;
-	const uint32_t expectedOffsetsDataSize = sizeof( int32_t ) * numareas;
-	if( reader.BeginReading( filePath ) == AiPrecomputedFileReader::SUCCESS ) {
+	const uint32_t expectedOffsetsDataSize = sizeof( int32_t ) * m_numareas;
+	if( reader.BeginReading( filePath.data() ) == AiPrecomputedFileReader::SUCCESS ) {
 		if( reader.ReadLengthAndData( &data, &dataLength ) ) {
 			// Sanity check. The number of offsets should match the number of areas
 			if( expectedOffsetsDataSize == dataLength ) {
-				areaVisDataOffsets = (int32_t *)data;
+				m_areaVisDataOffsets = (int32_t *)data;
 				const char *tag = "AiAasWorld::LoadVisibility()/AiPrecomputedFileReader::ReadLengthAndData()";
 				constexpr const char *message = "G_Malloc() should return 16-byte aligned blocks";
 				// Just to give vars above another usage so lifting it is required not only for fitting line limit.
-				if( ( (uintptr_t)areaVisDataOffsets ) % 16 ) {
+				if( ( (uintptr_t)m_areaVisDataOffsets ) % 16 ) {
 					AI_FailWith( tag, message );
 				}
 				if( reader.ReadLengthAndData( &data, &dataLength ) ) {
-					areaVisData = (uint16_t *)data;
+					m_areaVisData = (uint16_t *)data;
 					// Having a proper alignment for area vis data is vital. Keep this assertion.
-					if( ( (uintptr_t)areaVisDataOffsets ) % 16 ) {
+					if( ( (uintptr_t)m_areaVisDataOffsets ) % 16 ) {
 						AI_FailWith( tag, message );
 					}
 					return;
@@ -2545,16 +2333,16 @@ void AiAasWorld::LoadAreaVisibility( const ArrayRange<char> &strippedMapName ) {
 	G_Printf( "About to compute AAS areas mutual visibility...\n" );
 
 	uint32_t offsetsDataSize, listsDataSize;
-	ComputeAreasVisibility( &offsetsDataSize, &listsDataSize );
+	computeAreasVisibility( &offsetsDataSize, &listsDataSize );
 	assert( expectedOffsetsDataSize == offsetsDataSize );
 
 	AiPrecomputedFileWriter writer( va( "%sWriter", AREA_VIS_TAG ), AREA_VIS_VERSION );
-	if( !writer.BeginWriting( filePath ) ) {
+	if( !writer.BeginWriting( filePath.data() ) ) {
 		return;
 	}
 
-	if( writer.WriteLengthAndData( (uint8_t *)this->areaVisDataOffsets, offsetsDataSize ) ) {
-		writer.WriteLengthAndData( (uint8_t *)this->areaVisData, listsDataSize );
+	if( writer.WriteLengthAndData( (const uint8_t *)m_areaVisDataOffsets, offsetsDataSize ) ) {
+		writer.WriteLengthAndData( (const uint8_t *)m_areaVisData, listsDataSize );
 	}
 }
 
@@ -2693,8 +2481,8 @@ public:
 	ptrdiff_t Offset() const { return listsPtr - listsData; }
 };
 
-void AiAasWorld::ComputeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *listsDataSize ) {
-	const int numAreas = numareas;
+void AiAasWorld::computeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *listsDataSize ) {
+	const int numAreas = m_numareas;
 	// This also ensures we can use 32-bit indices for total number of areas
 	assert( numAreas && numAreas <= std::numeric_limits<uint16_t>::max() );
 	SparseVisTable table( numAreas );
@@ -2704,11 +2492,11 @@ void AiAasWorld::ComputeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *li
 	// Assuming side = numAreas - 1 the number of elements in the upper part is (side - 1) * side / 2
 	const double progressNormalizer = numAreas <= 1 ? 0 : 100.0 / ( ( numAreas - 2 ) * ( numAreas - 1 ) / 2.0 );
 
-	const auto *const __restrict aasAreas = areas;
+	const auto *const __restrict aasAreas = m_areas;
 	for( int i = 1; i < numAreas; ++i ) {
 		for( int j = i + 1; j < numAreas; ++j ) {
 			numberSoFar++;
-			if( !AreAreasInPvs( i, j ) ) {
+			if( !areAreasInPvs( i, j ) ) {
 				continue;
 			}
 
@@ -2795,11 +2583,11 @@ void AiAasWorld::ComputeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *li
 	}
 #endif
 
-	this->areaVisData = listsData;
-	this->areaVisDataOffsets = listOffsets;
+	m_areaVisData = listsData;
+	m_areaVisDataOffsets = listOffsets;
 }
 
-bool *AiAasWorld::AddToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict buffer ) const {
+bool *AiAasWorld::addToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict buffer ) const {
 	const int size = *visList++;
 	for( int i = 0; i < size; ++i ) {
 		buffer[visList[i]] = true;
@@ -2833,7 +2621,7 @@ bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum1
 
 #include <xmmintrin.h>
 
-bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum ) const {
+bool AiAasWorld::findInVisList( const uint16_t *__restrict visList, int areaNum ) const {
 	assert( (unsigned)areaNum <= std::numeric_limits<uint16_t>::max() );
 	__m128i xmmMask = _mm_set1_epi16( (int16_t)areaNum );
 
@@ -2875,7 +2663,7 @@ bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum 
 	return false;
 }
 
-bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const {
+bool AiAasWorld::findInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const {
 	assert( (unsigned)areaNum1 <= std::numeric_limits<uint16_t>::max() );
 	assert( (unsigned)areaNum2 <= std::numeric_limits<uint16_t>::max() );
 	__m128i xmmMask1 = _mm_set1_epi16( (int16_t)areaNum1 );

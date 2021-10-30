@@ -11,7 +11,7 @@ bool UseStairsExitScript::TryDeactivate( PredictionContext *context ) {
 		return false;
 	}
 
-	const auto *aasAreaStairsClusterNums = AiAasWorld::Instance()->AreaStairsClusterNums();
+	const auto *aasAreaStairsClusterNums = AiAasWorld::instance()->areaStairsClusterNums();
 
 	int areaNums[2] = { 0, 0 };
 	int numBotAreas = GetCurrBotAreas( areaNums );
@@ -45,11 +45,11 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 		return nullptr;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = context->RouteCache();
 	const auto &travelFlags = context->TravelFlags();
 
-	const uint16_t *stairsClusterAreaNums = aasWorld->StairsClusterData( stairsClusterNum ) + 1;
+	const uint16_t *stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum ) + 1;
 	int numAreasInStairsCluster = stairsClusterAreaNums[-1];
 
 	// TODO: Support curved stairs, here and from StairsClusterBuilder side
@@ -92,14 +92,14 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 }
 
 MovementScript *FallbackAction::TryFindStairsFallback( PredictionContext *context ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 
 	int currAreaNums[2] = { 0, 0 };
 	const int numCurrAreas = context->movementState->entityPhysicsState.PrepareRoutingStartAreas( currAreaNums );
 
 	int stairsClusterNum = 0;
 	for( int i = 0; i < numCurrAreas; ++i ) {
-		if( ( stairsClusterNum = aasWorld->StairsClusterNum( currAreaNums[i] ) ) ) {
+		if( ( stairsClusterNum = aasWorld->stairsClusterNum( currAreaNums[i] ) ) ) {
 			break;
 		}
 	}

@@ -198,13 +198,13 @@ NavEntitiesRegistry::NavEntitiesRegistry() {
 }
 
 void NavEntitiesRegistry::Update() {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	for( auto *navEnt = activeNavEntsHead; navEnt; navEnt = navEnt->Next() ) {
 		if( ( navEnt->flags & NavEntityFlags::MOVABLE ) != NavEntityFlags::NONE ) {
 			// Isn't it an obvious cheating?
 			// So far only teammates are set as nav targets sometimes among all clients.
 			navEnt->origin.Set( navEnt->ent->s.origin );
-			navEnt->aasAreaNum = aasWorld->FindAreaNum( navEnt->ent->s.origin );
+			navEnt->aasAreaNum = aasWorld->findAreaNum( navEnt->ent->s.origin );
 		}
 	}
 }

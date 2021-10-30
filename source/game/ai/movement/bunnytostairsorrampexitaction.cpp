@@ -32,7 +32,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 		return false;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	if( aasWorld->AreaSettings()[ groundedAreaNum ].areaflags & AREA_INCLINED_FLOOR ) {
 		const int *exitAreaNum = TryFindBestInclinedFloorExitArea( context, groundedAreaNum, groundedAreaNum );
 		if( !exitAreaNum ) {
@@ -50,7 +50,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 		return true;
 	}
 
-	const int stairsClusterNum = aasWorld->StairsClusterNum( groundedAreaNum );
+	const int stairsClusterNum = aasWorld->stairsClusterNum( groundedAreaNum );
 	if( !stairsClusterNum ) {
 		Debug( "The current grounded area is neither an inclined floor area, nor a stairs cluster area\n" );
 		return false;
@@ -74,9 +74,9 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 }
 
 void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( PredictionContext *context, int exitAreaNum ) {
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	const auto *const aasReach = aasWorld->Reachabilities();
-	const auto *const aasFloorClusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *const aasFloorClusterNums = aasWorld->areaFloorClusterNums();
 	const auto *const routeCache = context->RouteCache();
 
 	// Check whether exit area is already in cluster
@@ -133,7 +133,7 @@ void BunnyToStairsOrRampExitAction::CheckPredictionStepResults( PredictionContex
 		return;
 	}
 
-	if( AiAasWorld::Instance()->FloorClusterNum( context->CurrGroundedAasAreaNum() ) != targetFloorCluster ) {
+	if( AiAasWorld::instance()->floorClusterNum( context->CurrGroundedAasAreaNum() ) != targetFloorCluster ) {
 		return;
 	}
 

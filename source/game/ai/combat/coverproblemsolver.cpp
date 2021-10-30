@@ -50,9 +50,9 @@ int CoverProblemSolver::findMany( vec3_t *spots, int maxSpots ) {
 }
 
 void CoverProblemSolver::pruneByAreaVisTables( SpotsAndScoreVector &spotsAndScores ) {
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	const auto *const aasAreas = aasWorld->Areas();
-	const int attackerAreaNum = aasWorld->FindAreaNum( problemParams.attackerOrigin );
+	const int attackerAreaNum = aasWorld->findAreaNum( problemParams.attackerOrigin );
 
 	// Check whether we may consider that an an area is fully visible for attacker if the table data indicates visibility.
 	// Currently table data is very coarse and is computed by a raycast from an area center to another area center.
@@ -68,7 +68,7 @@ void CoverProblemSolver::pruneByAreaVisTables( SpotsAndScoreVector &spotsAndScor
 	}
 
 	const auto *const spots = tacticalSpotsRegistry->spots;
-	const bool *attackerVisRow = aasWorld->DecompressAreaVis( attackerAreaNum, AasElementsMask::TmpAreasVisRow() );
+	const bool *attackerVisRow = aasWorld->decompressAreaVis( attackerAreaNum, AasElementsMask::TmpAreasVisRow() );
 
 	unsigned numFeasibleSpots = 0;
 	for( const SpotAndScore &spotAndScore: spotsAndScores ) {

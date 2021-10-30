@@ -7,7 +7,7 @@ void UseWalkableNodeScript::Activate( const vec3_t nodeOrigin_, float reachRadiu
 	this->nodeAasAreaNum = nodeAasAreaNum_;
 	this->timeout = timeout_;
 	if( !nodeAasAreaNum ) {
-		nodeAasAreaNum = AiAasWorld::Instance()->FindAreaNum( nodeOrigin_ );
+		nodeAasAreaNum = AiAasWorld::instance()->findAreaNum( nodeOrigin_ );
 	}
 	GenericGroundMovementScript::Activate();
 }
@@ -52,7 +52,7 @@ MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *con
 		return nullptr;
 	}
 
-	const auto &areaSettings = AiAasWorld::Instance()->AreaSettings()[nextReach.areanum];
+	const auto &areaSettings = AiAasWorld::instance()->AreaSettings()[nextReach.areanum];
 	if( areaSettings.areaflags & AREA_JUNK ) {
 		return nullptr;
 	}
@@ -63,7 +63,7 @@ MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *con
 	// on next frame is very likely to immediately deactivate it
 	Vec3 target( nextReach.end );
 	target.Z() += -playerbox_stand_mins[2];
-	script->Activate( target.Data(), 16.0f, AiAasWorld::Instance()->FindAreaNum( target ), timeout );
+	script->Activate( target.Data(), 16.0f, AiAasWorld::instance()->findAreaNum( target ), timeout );
 	return script;
 }
 
@@ -73,7 +73,7 @@ MovementScript *FallbackAction::TryFindNearbyRampAreasFallback( PredictionContex
 		return nullptr;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const auto *aasReach = aasWorld->Reachabilities();
 

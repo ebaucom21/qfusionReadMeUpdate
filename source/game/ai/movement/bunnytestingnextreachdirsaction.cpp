@@ -73,11 +73,11 @@ public:
 	NextReachDirsCollector( const Bot *bot_, PredictionContext *context_, AreaAndScore *candidates_, unsigned maxCandidates_ )
 		: ReachChainWalker( context_->RouteCache() )
 		, context( context_ )
-		, aasWorld( AiAasWorld::Instance() )
+		, aasWorld( AiAasWorld::instance() )
 		, aasAreas( aasWorld->Areas() )
 		, aasAreaSettings( aasWorld->AreaSettings() )
-		, aasFloorClusterNums( aasWorld->AreaFloorClusterNums() )
-		, aasStairsClusterNums( aasWorld->AreaStairsClusterNums() )
+		, aasFloorClusterNums( aasWorld->areaFloorClusterNums() )
+		, aasStairsClusterNums( aasWorld->areaStairsClusterNums() )
 		, candidatesBegin( candidates_ )
 		, traceStartPoint( context->movementState->entityPhysicsState.Origin() )
 		, maxCandidates( maxCandidates_ ) {
@@ -91,7 +91,7 @@ public:
 		}
 
 		if( ( groundedStartAreaNum = context->CurrGroundedAasAreaNum() ) ) {
-			startFloorClusterNum = aasWorld->FloorClusterNum( groundedStartAreaNum );
+			startFloorClusterNum = aasWorld->floorClusterNum( groundedStartAreaNum );
 			// Non-grounded areas cannot belong to a stairs cluster
 			CheckForStairsCluster( groundedStartAreaNum );
 		}
@@ -120,7 +120,7 @@ void BunnyTestingNextReachDirsAction::SaveSuggestedLookDirs( PredictionContext *
 		return;
 	}
 
-	const auto &stoppedAtReach = AiAasWorld::Instance()->Reachabilities()[collector.lastReachNum];
+	const auto &stoppedAtReach = AiAasWorld::instance()->Reachabilities()[collector.lastReachNum];
 	const auto travelType = stoppedAtReach.traveltype & TRAVELTYPE_MASK;
 	if( travelType != TRAVEL_TELEPORT && travelType != TRAVEL_JUMPPAD && travelType != TRAVEL_ELEVATOR ) {
 		return;
@@ -231,7 +231,7 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 	// Make sure the bot can see the ground
 	// On failure, restore minScore (it might have been set to the value of the rejected area score on this loop step)
 	if( startFloorClusterNum && startFloorClusterNum == aasFloorClusterNums[areaNum] ) {
-		if( !aasWorld->IsAreaWalkableInFloorCluster( groundedStartAreaNum, areaNum ) ) {
+		if( !aasWorld->isAreaWalkableInFloorCluster( groundedStartAreaNum, areaNum ) ) {
 			return true;
 		}
 	} else {

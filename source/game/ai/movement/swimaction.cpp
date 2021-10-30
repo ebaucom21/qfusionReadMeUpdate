@@ -17,7 +17,7 @@ void SwimMovementAction::PlanPredictionStep( PredictionContext *context ) {
 	context->record->botInput.canOverrideLookVec = true;
 	context->record->botInput.SetForwardMovement( 1 );
 
-	const auto &nextReach = AiAasWorld::Instance()->Reachabilities()[nextReachNum];
+	const auto &nextReach = AiAasWorld::instance()->Reachabilities()[nextReachNum];
 	if( nextReach.traveltype == TRAVEL_SWIM ) {
 		return;
 	}

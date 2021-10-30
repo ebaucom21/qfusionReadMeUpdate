@@ -84,7 +84,7 @@ class BotTacticalSpotsCache {
 	using ReachableEntities = wsw::StaticVector<EntAndScore, 16>;
 	void FindReachableClassEntities( const Vec3 &origin, float radius, const char *classname, ReachableEntities &result );
 
-	// AiAasWorld::FindAreaNum() fails so often for teleports/elevators, etc, so we have to use this method.
+	// AiAasWorld::findAreaNum() fails so often for teleports/elevators, etc, so we have to use this method.
 	// AiAasWorld is provided as an argument to avoid an implicit retrieval of global instance in a loop.
 	int FindMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const;
 

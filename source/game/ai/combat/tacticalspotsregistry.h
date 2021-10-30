@@ -71,23 +71,20 @@ public:
 		OriginParams( const edict_t *originEntity_, float searchRadius_, const AiAasRouteCache *routeCache_ )
 			: originEntity( originEntity_ ), searchRadius( searchRadius_ ), routeCache( routeCache_ ) {
 			VectorCopy( originEntity_->s.origin, this->origin );
-			const AiAasWorld *aasWorld = AiAasWorld::Instance();
-			originAreaNum = aasWorld->IsLoaded() ? aasWorld->FindAreaNum( originEntity ) : 0;
+			originAreaNum = AiAasWorld::instance()->findAreaNum( originEntity );
 		}
 
 		OriginParams( const vec3_t origin_, float searchRadius_, const AiAasRouteCache *routeCache_ )
 			: originEntity( nullptr ), searchRadius( searchRadius_ ), routeCache( routeCache_ ) {
 			VectorCopy( origin_, this->origin );
-			const AiAasWorld *aasWorld = AiAasWorld::Instance();
-			originAreaNum = aasWorld->IsLoaded() ? aasWorld->FindAreaNum( origin ) : 0;
+			originAreaNum = AiAasWorld::instance()->findAreaNum( origin );
 		}
 
 		OriginParams( const vec3_t origin_, const edict_t *originEntity_,
 					  float searchRadius_, const AiAasRouteCache *routeCache_ )
 			: originEntity( originEntity_ ), searchRadius( searchRadius_ ), routeCache( routeCache_ ) {
 			VectorCopy( origin_, this->origin );
-			const AiAasWorld *aasWorld = AiAasWorld::Instance();
-			originAreaNum = aasWorld->IsLoaded() ? aasWorld->FindAreaNum( originEntity ) : 0;
+			originAreaNum = AiAasWorld::instance()->findAreaNum( originEntity );
 		}
 
 		inline Vec3 MinBBoxBounds( float minHeightAdvantage = 0.0f ) const {
@@ -325,13 +322,13 @@ public:
 	}
 
 	int TravelTimeFromAreaToSpot( int areaNum, int spotNum ) const {
-		assert( (unsigned)areaNum < (unsigned)AiAasWorld::Instance()->NumAreas() );
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->NumAreas() );
 		assert( (unsigned)spotNum < (unsigned)numSpots );
 		return spotsAndAreasTravelTimeTable[2 * ( areaNum * numSpots + spotNum ) + 1];
 	}
 
 	int TravelTimeFromSpotToArea( int spotNum, int areaNum ) const {
-		assert( (unsigned)areaNum < (unsigned)AiAasWorld::Instance()->NumAreas() );
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->NumAreas() );
 		assert( (unsigned)spotNum < (unsigned)numSpots );
 		return spotsAndAreasTravelTimeTable[2 * ( areaNum * numSpots + spotNum ) + 0];
 	}

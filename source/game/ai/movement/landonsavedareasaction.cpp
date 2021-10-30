@@ -3,7 +3,7 @@
 
 int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 	// TODO: This can be precomputed at level start
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 
 	// Jumppad entity origin is not what one might think...
@@ -11,7 +11,7 @@ int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 	jumppadOrigin += jumppadEntity->r.absmax;
 	jumppadOrigin *= 0.5f;
 
-	int entAreaNum = aasWorld->FindAreaNum( jumppadOrigin );
+	int entAreaNum = aasWorld->findAreaNum( jumppadOrigin );
 	if( entAreaNum ) {
 		const auto &areaSettings = aasAreaSettings[entAreaNum];
 		const int contents = areaSettings.contents;
@@ -26,7 +26,7 @@ int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 	Vec3 maxs( +64, +64, +64 );
 	mins += jumppadOrigin;
 	maxs += jumppadOrigin;
-	int numAreas = aasWorld->BBoxAreas( mins, maxs, areaNums, 32 );
+	int numAreas = aasWorld->findAreasInBox( mins, maxs, areaNums, 32 );
 	for( int i = 0; i < numAreas; ++i ) {
 		const int areaNum = areaNums[i];
 		const auto &areaSettings = aasAreaSettings[areaNum];
@@ -112,7 +112,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 		return -999999.9f;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = bot->RouteCache();
 	if( int navTargetAreaNum = bot->NavTargetAasAreaNum() ) {
 		int reachNum = 0;
@@ -166,7 +166,7 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_t *jumppadEntity,
 																	int navTargetAreaNum,
 																	int jumppadTargetAreaNum ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = bot->RouteCache();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
@@ -179,8 +179,8 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 	// because the center might be biased and it leads to poor area selection e.g. on major wdm7 jumppad.
 	mins += jumppadEntity->target_ent->s.origin;
 	maxs += jumppadEntity->target_ent->s.origin;
-	int bboxAreas[48];
-	const int numBBoxAreas = aasWorld->BBoxAreas( mins, maxs, bboxAreas, 48 );
+	int boxAreas[48];
+	const int numAreasInBox = aasWorld->findAreasInBox( mins, maxs, boxAreas, 48 );
 
 	const int baseTravelTime = routeCache->PreferredRouteToGoalArea( jumppadTargetAreaNum, navTargetAreaNum );
 	// If the target is for some reasons unreachable or the jumppad target area is the nav target area too
@@ -192,8 +192,8 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 
 	// Filter raw nearby areas
 	FilteredAreas filteredAreas;
-	for( int i = 0; i < numBBoxAreas; ++i ) {
-		const int areaNum = bboxAreas[i];
+	for( int i = 0; i < numAreasInBox; ++i ) {
+		const int areaNum = boxAreas[i];
 		// Skip tests for the target area
 		if( areaNum == jumppadTargetAreaNum ) {
 			continue;
@@ -250,7 +250,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 														  int jumppadTargetAreaNum,
 														  const FilteredAreas &filteredAreas ) {
 	savedLandingAreas.clear();
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 
 	for( unsigned i = 0, end = std::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i )
@@ -304,7 +304,7 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContex
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const float *origin = entityPhysicsState.Origin();
 
-	const auto &area = AiAasWorld::Instance()->Areas()[areaNum];
+	const auto &area = AiAasWorld::instance()->Areas()[areaNum];
 	Vec3 areaPoint( area.center );
 	// Lower area point to a bottom of area. Area mins/maxs are absolute.
 	areaPoint.Z() = area.mins[2];
@@ -467,9 +467,9 @@ void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *cont
 		return;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaFloorClusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *aasAreaFloorClusterNums = aasWorld->areaFloorClusterNums();
 	// If the target area is in some floor cluster
 	if( int targetFloorClusterNum = aasAreaFloorClusterNums[targetAreaNum] ) {
 		int i = 0;

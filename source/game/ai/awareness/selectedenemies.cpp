@@ -633,7 +633,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 	// Hack! We assume WillRetreat() flag really produces retreating.
 	if( botSpeed2D > 300.0f || ( bot->WillRetreat() && botSpeed2D > 1 ) ) {
 		int botAreaNums[2] { 0, 0 };
-		const auto *const aasWorld = AiAasWorld::Instance();
+		const auto *const aasWorld = AiAasWorld::instance();
 		const auto *const aasAreaSettings = aasWorld->AreaSettings();
 		const int numBotAreas = physicsState->PrepareRoutingStartAreas( botAreaNums );
 		for( int i = 0; i < numBotAreas; ++i ) {
@@ -662,7 +662,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 
 			// Check whether we're not going to have worse travel time to target
 			const int targetAreaNum = bot->NavTargetAasAreaNum();
-			const int testedAreaNum = aasWorld->FindAreaNum( testedPoint );
+			const int testedAreaNum = aasWorld->findAreaNum( testedPoint );
 			int currTravelTime = bot->RouteCache()->PreferredRouteToGoalArea( botAreaNums, numBotAreas, targetAreaNum );
 			// Can't say much in this case
 			if( !currTravelTime ) {

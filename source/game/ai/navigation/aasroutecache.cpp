@@ -1,3 +1,21 @@
+/*
+===========================================================================
+Copyright (C) 1999-2005 Id Software, Inc.
+This file is part of Quake III Arena source code.
+Quake III Arena source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License,
+or (at your option) any later version.
+Quake III Arena source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License
+along with Foobar; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+===========================================================================
+*/
+
 #include "aasroutecache.h"
 #include "aaselementsmask.h"
 #include "../../../qcommon/wswstaticvector.h"
@@ -49,7 +67,7 @@ void AiAasRouteCache::Init( const AiAasWorld &aasWorld ) {
 
 	// AiAasRouteCache is quite large, so it should be allocated on heap
 	shared = (AiAasRouteCache *)Q_malloc( sizeof( AiAasRouteCache ) );
-	new( shared )AiAasRouteCache( *AiAasWorld::Instance() );
+	new( shared )AiAasRouteCache( *AiAasWorld::instance() );
 
 	instancesHead = shared;
 }
@@ -634,7 +652,7 @@ public:
 
 	static unsigned SuggestNumberOfBlocks() {
 		// ( 2^16 - 1 ) is the maximum supported number of reachabilities (we use short indices)
-		auto frac = AiAasWorld::Instance()->NumReach() / (float)std::numeric_limits<uint16_t>::max();
+		auto frac = AiAasWorld::instance()->NumReach() / (float)std::numeric_limits<uint16_t>::max();
 		// Requirements do not grow linear. This will be a better approximation.
 		frac = std::sqrt( frac );
 		return (unsigned)( 512.0f + 768.0f * frac );
@@ -1644,7 +1662,7 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		return false;
 	}
 
-	if( aasWorld.AreaDoNotEnter( fromAreaNum ) || aasWorld.AreaDoNotEnter( toAreaNum ) ) {
+	if( aasWorld.isAreaADoNotEnterArea( fromAreaNum ) || aasWorld.isAreaADoNotEnterArea( toAreaNum ) ) {
 		travelFlags |= TFL_DONOTENTER;
 	}
 

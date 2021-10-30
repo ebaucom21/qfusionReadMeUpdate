@@ -252,7 +252,7 @@ const CMShapeList *EnvironmentTraceCache::getShapeListForPMoveCollision( Predict
         return ( cachedShapeList = shapesListCache.prepareList( regionMins.Data(), regionMaxs.Data(), isZeroStep ) );
     }
 
-    const auto *aasWorld = AiAasWorld::Instance();
+    const auto *aasWorld = AiAasWorld::instance();
     const int areaNum = physicsState.CurrAasAreaNum();
     const auto areaFlags = aasWorld->AreaSettings()[areaNum].areaflags;
 

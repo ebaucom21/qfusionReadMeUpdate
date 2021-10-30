@@ -68,7 +68,7 @@ bool NextFloorClusterAreasCache::AreaPassesCollisionTest( const Vec3 &start,
 
 bool SameFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
-	const auto *floorClusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	if( !computedTargetAreaNum ) {
 		return true;
@@ -85,7 +85,7 @@ bool SameFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context )
 	// Walkability tests in cluster are cheap but sometimes produce false negatives,
 	// so do not check for walkability in the first second to prevent choice jitter
 	if( level.time - computedAt > 1000 ) {
-		if( !aasWorld->IsAreaWalkableInFloorCluster( context->CurrGroundedAasAreaNum(), computedTargetAreaNum ) ) {
+		if( !aasWorld->isAreaWalkableInFloorCluster( context->CurrGroundedAasAreaNum(), computedTargetAreaNum ) ) {
 			return true;
 		}
 	}
@@ -129,7 +129,7 @@ void FloorClusterAreasCache::TryReusingOldHeap( PredictionContext *context,
 												CandidateAreasHeap &scratchpadHeap ) const {
 	scratchpadHeap.clear();
 	// If the cached results were computed for specified cluster
-	if( aasWorld->AreaFloorClusterNums()[computedTargetAreaNum] == expectedClusterNum ) {
+	if( aasWorld->areaFloorClusterNums()[computedTargetAreaNum] == expectedClusterNum ) {
 		// If we're still in the same area and there are cached results
 		if( currGroundedAreaNum == computedForAreaNum && !oldCandidatesHeap.empty() ) {
 			// Populate the current heap (that is going to be modified) by backed heap values
@@ -145,7 +145,7 @@ void FloorClusterAreasCache::TryReusingOldHeap( PredictionContext *context,
 	computedForAreaNum = currGroundedAreaNum;
 	const auto maxTravelTimeThreshold = context->TravelTimeToNavTarget();
 	// Build new areas heap for the new flood start area
-	const auto *clusterAreaNums = aasWorld->FloorClusterData( expectedClusterNum ) + 1;
+	const auto *clusterAreaNums = aasWorld->floorClusterData( expectedClusterNum ) + 1;
 	// The number of areas in the cluster areas list prepends the first area num
 	const auto numClusterAreas = clusterAreaNums[-1];
 	BuildCandidateAreasHeap( context, maxTravelTimeThreshold, clusterAreaNums, numClusterAreas, scratchpadHeap );
@@ -163,7 +163,7 @@ int SameFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 	}
 
 	CandidateAreasHeap candidateAreasHeap;
-	const int currClusterNum = aasWorld->AreaFloorClusterNums()[currGroundedAreaNum];
+	const int currClusterNum = aasWorld->areaFloorClusterNums()[currGroundedAreaNum];
 	this->TryReusingOldHeap( context, currGroundedAreaNum, currClusterNum, candidateAreasHeap );
 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
@@ -181,7 +181,7 @@ int SameFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 		int travelTime = (int)( -candidateAreasHeap.back().score );
 		candidateAreasHeap.pop_back();
 
-		if( !aasWorld->IsAreaWalkableInFloorCluster( currGroundedAreaNum, areaNum ) ) {
+		if( !aasWorld->isAreaWalkableInFloorCluster( currGroundedAreaNum, areaNum ) ) {
 			continue;
 		}
 
@@ -344,7 +344,7 @@ void FloorClusterAreasCache::BuildCandidateAreasHeap( PredictionContext *context
 }
 
 bool NextFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
-	const auto *floorClusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	// There were no data computed
 	if( !computedTargetAreaNum ) {
@@ -367,7 +367,7 @@ int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 
 	const auto *const __restrict routeCache = bot->RouteCache();
 	const auto *const __restrict aasReach = aasWorld->Reachabilities();
-	const auto *const __restrict floorClusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *const __restrict floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	// We try to find a number of next floor cluster in reach chain
 	int nextClusterNum = 0;
@@ -400,7 +400,7 @@ int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 	}
 
 	// If we are currently in a floor cluster and its very likely that the next cluster is not visible
-	if( startClusterNum && !aasWorld->AreFloorClustersCertainlyVisible( startClusterNum, nextClusterNum ) ) {
+	if( startClusterNum && !aasWorld->areFloorClustersCertainlyVisible( startClusterNum, nextClusterNum ) ) {
 		return false;
 	}
 

@@ -10,7 +10,7 @@ struct Walker : public ReachChainWalker {
 	explicit Walker( PredictionContext *context )
 		: ReachChainWalker( context->RouteCache() )
 		, botOrigin( context->movementState->entityPhysicsState.Origin() )
-		, aasWorld( AiAasWorld::Instance() ) {}
+		, aasWorld( AiAasWorld::instance() ) {}
 
 	bool TestReachVis( const aas_reachability_t &reach, float playerZOffset = 0.0f, float reachZOffset = 12.0f );
 	bool PerformRaycast( const aas_reachability_t &reach, float playerZOffset, float reachZOffset );
@@ -75,9 +75,9 @@ bool Walker::Accept( int, const aas_reachability_t &reach, int travelTime ) {
 }
 
 bool Walker::PerformRaycast( const aas_reachability_t &reach, float playerZOffset, float reachZOffset ) {
-	const auto *__restrict clusterNums = aasWorld->AreaFloorClusterNums();
+	const auto *__restrict clusterNums = aasWorld->areaFloorClusterNums();
 	if( clusterNums[startAreaNum] && clusterNums[startAreaNum] == clusterNums[lastAreaNum] ) {
-		return aasWorld->IsAreaWalkableInFloorCluster( startAreaNum, lastAreaNum );
+		return aasWorld->isAreaWalkableInFloorCluster( startAreaNum, lastAreaNum );
 	}
 
 	trace_t trace;

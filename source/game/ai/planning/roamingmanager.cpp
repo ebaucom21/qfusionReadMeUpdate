@@ -5,7 +5,7 @@
 BotRoamingManager::BotRoamingManager( Bot *bot_ )
 	: bot( bot_ )
 	, tacticalSpotsRegistry( TacticalSpotsRegistry::Instance() )
-	, aasWorld( AiAasWorld::Instance() ) {
+	, aasWorld( AiAasWorld::instance() ) {
 	visitedAt = (int64_t *)Q_malloc( sizeof( int64_t ) * tacticalSpotsRegistry->numSpots );
 	ClearVisitedSpots();
 }
@@ -173,8 +173,8 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 	const Vec3 mins( Vec3( -192, -192, -128 ) + bot->Origin() );
 	const Vec3 maxs( Vec3( +192, +192, +128 ) + bot->Origin() );
 
-	int bboxAreaNums[64];
-	const int numBBoxAreas = aasWorld->BBoxAreas( mins, maxs, bboxAreaNums, 64 );
+	int boxAreaNums[64];
+	const int numAreasInBox = aasWorld->findAreasInBox( mins, maxs, boxAreaNums, 64 );
 
 	const int currAreaNum = bot->EntityPhysicsState()->CurrAasAreaNum();
 	const int groundedAreaNum = bot->EntityPhysicsState()->DroppedToFloorAasAreaNum();
@@ -183,9 +183,9 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	Candidates candidateAreas;
 
-	if( (int)candidateAreas.capacity() >= numBBoxAreas ) {
-		for( int i = 0; i < numBBoxAreas; ++i ) {
-			int areaNum = bboxAreaNums[i];
+	if( (int)candidateAreas.capacity() >= numAreasInBox ) {
+		for( int i = 0; i < numAreasInBox; ++i ) {
+			int areaNum = boxAreaNums[i];
 			if( currAreaNum == areaNum ) {
 				continue;
 			}
@@ -202,8 +202,8 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 			candidateAreas.push_back( areaNum );
 		}
 	} else {
-		for( int i = 0; i < numBBoxAreas; ++i ) {
-			int areaNum = bboxAreaNums[i];
+		for( int i = 0; i < numAreasInBox; ++i ) {
+			int areaNum = boxAreaNums[i];
 			if( currAreaNum == areaNum ) {
 				continue;
 			}

@@ -63,7 +63,7 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 		return false;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const auto *aasReach = aasWorld->Reachabilities();
 
@@ -71,8 +71,8 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 
 	if( predictor.StopEventFlags() >= AiTrajectoryPredictor::ENTER_AREA_NUM ) {
 		if( spotAndScore->areaNum > 0 ) {
-			const int floorClusterNum = aasWorld->FloorClusterNum( spotAndScore->areaNum );
-			if( floorClusterNum && floorClusterNum == aasWorld->FloorClusterNum( predictionResults.lastAreaNum ) ) {
+			const int floorClusterNum = aasWorld->floorClusterNum( spotAndScore->areaNum );
+			if( floorClusterNum && floorClusterNum == aasWorld->floorClusterNum( predictionResults.lastAreaNum ) ) {
 				if( Distance2DSquared( spotAndScore->origin, predictionResults.origin ) < SQUARE( 192.0f ) ) {
 					return true;
 				}
@@ -157,7 +157,7 @@ const SpotAndScore *BestRegularJumpableSpotDetector::Exec( const vec3_t startOri
 #endif
 
 	// Cannot be initialized in constructor called for the global instance
-	this->aasWorld = AiAasWorld::Instance();
+	this->aasWorld = AiAasWorld::instance();
 	const SpotAndScore *result = BestJumpableSpotDetector::Exec( startOrigin_, millis );
 	run2DSpeed = 0.0f;
 	jumpZSpeed = 0.0f;

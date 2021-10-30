@@ -288,7 +288,7 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 		}
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = RouteCache();
 
 	int fromAreaNums[2] { 0, 0 };
@@ -297,7 +297,7 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 	if( BotHasAlmostSameOrigin( origin ) ) {
 		numFromAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
 	} else {
-		fromAreaNums[0] = aasWorld->FindAreaNum( origin );
+		fromAreaNums[0] = aasWorld->findAreaNum( origin );
 		numFromAreas = fromAreaNums[0] ? 1 : 0;
 	}
 
@@ -327,7 +327,7 @@ int BotTacticalSpotsCache::FindMostFeasibleEntityAasArea( const edict_t *ent, co
 	int areaNums[24];
 	const Vec3 boxMins( Vec3( -20, -20, -12 ) + ent->r.absmin );
 	const Vec3 boxMaxs( Vec3( +20, +20, +12 ) + ent->r.absmax );
-	int numAreas = aasWorld->BBoxAreas( boxMins.Data(), boxMaxs.Data(), areaNums, 24 );
+	int numAreas = aasWorld->findAreasInBox( boxMins.Data(), boxMaxs.Data(), areaNums, 24 );
 
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	for( int i = 0; i < numAreas; ++i ) {

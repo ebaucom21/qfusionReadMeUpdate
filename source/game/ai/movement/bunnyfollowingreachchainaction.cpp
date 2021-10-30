@@ -47,7 +47,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 		m_cachedReachNum = context->NextReachNum();
 		m_cachedReachPointsToTrigger = false;
 		if( m_cachedReachNum ) {
-			const auto *const aasReach = AiAasWorld::Instance()->Reachabilities();
+			const auto *const aasReach = AiAasWorld::instance()->Reachabilities();
 			const auto &reach = aasReach[m_cachedReachNum];
 			const TravelTypeClass travelTypeClass = classifyTravelType( reach );
 			if( travelTypeClass == TravelTypeClass::Incompatible ) {
@@ -74,7 +74,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 	}
 
 	int chosenReachNum = -1;
-	const auto *const __restrict aasReach = AiAasWorld::Instance()->Reachabilities();
+	const auto *const __restrict aasReach = AiAasWorld::instance()->Reachabilities();
 	if( m_cachedReachNum ) {
 		const auto &reach = aasReach[m_cachedReachNum];
 		if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > SQUARE( 32.0f ) ) {

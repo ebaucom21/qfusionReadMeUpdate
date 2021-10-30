@@ -259,7 +259,7 @@ void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( PredictionContext *
 															 AreaAndScore *candidateAreasEnd ) {
 	const auto &__restrict entityPhysicsState = context->movementState->entityPhysicsState;
 	const int navTargetAreaNum = context->NavTargetAasAreaNum();
-	const auto *__restrict aasAreas = AiAasWorld::Instance()->Areas();
+	const auto *__restrict aasAreas = AiAasWorld::instance()->Areas();
 
 	AreaAndScore *takenAreasBegin = candidateAreasBegin;
 	assert( maxSuggestedLookDirs <= suggestedLookDirs.capacity() );
@@ -269,7 +269,7 @@ void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( PredictionContext *
 	suggestedLookDirs.clear();
 	for( auto iter = takenAreasBegin; iter < takenAreasEnd; ++iter ) {
 		const int areaNum = ( *iter ).areaNum;
-		assert( (unsigned)areaNum < (unsigned)AiAasWorld::Instance()->NumAreas() );
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->NumAreas() );
 		Vec3 target( 0, 0, 0 );
 		if( areaNum != navTargetAreaNum ) {
 			const auto &area = aasAreas[areaNum];

@@ -565,14 +565,14 @@ BaseAction *PredictionContext::SuggestDefaultAction() {
 			suggestedAction = combatMovementAction;
 		}
 	} else if( bot->Skill() < 0.33f ) {
-		const auto *aasWorld = AiAasWorld::Instance();
+		const auto *aasWorld = AiAasWorld::instance();
 		const int currGroundedAreaNum = CurrGroundedAasAreaNum();
 		// If the current area is not a ramp-like area
 		if( !( aasWorld->AreaSettings()[currGroundedAreaNum].areaflags & AREA_INCLINED_FLOOR ) ) {
 			// If the current area is not in a stairs cluster
-			if( !( aasWorld->AreaStairsClusterNums()[currGroundedAreaNum] ) ) {
+			if( !( aasWorld->areaStairsClusterNums()[currGroundedAreaNum] ) ) {
 				// If the current area is in a floor cluster
-				if( aasWorld->AreaFloorClusterNums()[currGroundedAreaNum ] ) {
+				if( aasWorld->areaFloorClusterNums()[currGroundedAreaNum ] ) {
 					// Use a basic movement for easy bots
 					suggestedAction = &m_subsystem->fallbackMovementAction;
 				}
@@ -844,7 +844,7 @@ void PredictionContext::SavePathTriggerNums() {
 		return;
 	}
 
-	const auto *const __restrict aasReach = AiAasWorld::Instance()->Reachabilities();
+	const auto *const __restrict aasReach = AiAasWorld::instance()->Reachabilities();
 	const auto *const __restrict routeCache = bot->RouteCache();
 	const auto *const __restrict botOrigin = bot->Origin();
 
@@ -1196,7 +1196,7 @@ void PredictionContext::SetDefaultBotInput() {
 		if( currAasAreaNum != navTargetAasAreaNum ) {
 			const int nextReachNum = this->NextReachNum();
 			if( nextReachNum ) {
-				const auto &nextReach = AiAasWorld::Instance()->Reachabilities()[nextReachNum];
+				const auto &nextReach = AiAasWorld::instance()->Reachabilities()[nextReachNum];
 				if( DistanceSquared( entityPhysicsState.Origin(), nextReach.start ) < 12 * 12 ) {
 					Vec3 intendedLookVec( nextReach.end );
 					intendedLookVec -= nextReach.start;

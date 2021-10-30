@@ -66,7 +66,7 @@ bool JumpToSpotScript::TryDeactivate( PredictionContext *context ) {
 		return false;
 	}
 
-	const auto *aasAreaSettings = AiAasWorld::Instance()->AreaSettings();
+	const auto *aasAreaSettings = AiAasWorld::instance()->AreaSettings();
 
 	int currAreaNums[2] = { 0, 0 };
 	const int numCurrAreas = entityPhysicsState->PrepareRoutingStartAreas( currAreaNums );
@@ -247,7 +247,7 @@ int BestAreaCenterJumpableSpotDetector::GetBoxAreas( int *boxAreaNums, int maxAr
 	Vec3 boxMaxs( +128, +128, +64 );
 	boxMins += startOrigin;
 	boxMaxs += startOrigin;
-	return aasWorld->BBoxAreas( boxMins, boxMaxs, boxAreaNums, maxAreaNums );
+	return aasWorld->findAreasInBox( boxMins, boxMaxs, boxAreaNums, maxAreaNums );
 }
 
 void BestAreaCenterJumpableSpotDetector::GetCandidateSpots( SpotAndScore **begin, SpotAndScore **end ) {
@@ -377,13 +377,13 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 		if( squareReachLength < SQUARE( 72.0f ) ) {
 			// If there is no significant sloppiness
 			if( fabsf( reachVec.Z() ) / sqrtf( SQUARE( reachVec.X() ) + SQUARE( reachVec.Y() ) ) < 0.3f ) {
-				const auto *aasWorld = AiAasWorld::Instance();
+				const auto *aasWorld = AiAasWorld::instance();
 				const auto *aasAreas = aasWorld->Areas();
 				const auto *aasAreaSettings = aasWorld->AreaSettings();
 
 				int tracedAreaNums[32];
 				tracedAreaNums[0] = 0;
-				const int numTracedAreas = aasWorld->TraceAreas( nextReach.start, nextReach.end, tracedAreaNums, 32 );
+				const int numTracedAreas = aasWorld->traceAreas( nextReach.start, nextReach.end, tracedAreaNums, 32 );
 				const float startAreaZ = aasAreas[tracedAreaNums[0]].mins[2];
 				int i = 1;
 				for(; i < numTracedAreas; ++i ) {
@@ -409,7 +409,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 					auto *fallback = &m_subsystem->useWalkableNodeScript;
 					Vec3 target( nextReach.end );
 					target.Z() += 1.0f - playerbox_stand_mins[2];
-					fallback->Activate( target.Data(), 24.0f, AiAasWorld::Instance()->FindAreaNum( target ), 500u );
+					fallback->Activate( target.Data(), 24.0f, AiAasWorld::instance()->findAreaNum( target ), 500u );
 					return fallback;
 				}
 			}
@@ -579,7 +579,7 @@ MovementScript *FallbackAction::TryFindLostNavTargetFallback( PredictionContext 
 void BestConnectedToHubAreasJumpableSpotDetector::GetCandidateSpots( SpotAndScore **begin, SpotAndScore **end ) {
 	spotsHeap.clear();
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const auto *aiManager = AiManager::Instance();
@@ -590,7 +590,7 @@ void BestConnectedToHubAreasJumpableSpotDetector::GetCandidateSpots( SpotAndScor
 	boxMaxs += startOrigin;
 
 	int boxAreas[256];
-	const int numBoxAreas = AiAasWorld::Instance()->BBoxAreas( boxMins, boxMaxs, boxAreas, 256 );
+	const int numBoxAreas = AiAasWorld::instance()->findAreasInBox( boxMins, boxMaxs, boxAreas, 256 );
 	for( int i = 0; i < numBoxAreas; ++i ) {
 		const int areaNum = boxAreas[i];
 		const auto &areaSettings = aasAreaSettings[areaNum];

@@ -203,7 +203,7 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionC
 		return true;
 	}
 
-	switch( AiAasWorld::Instance()->Reachabilities()[nextReachNum].traveltype ) {
+	switch( AiAasWorld::instance()->Reachabilities()[nextReachNum].traveltype ) {
 		case TRAVEL_TELEPORT:
 		case TRAVEL_JUMPPAD:
 		case TRAVEL_ELEVATOR:
@@ -390,7 +390,7 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 	}
 
 	// If the area is not a "skip collision" area
-	if( !( AiAasWorld::Instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_SKIP_COLLISION_MASK ) ) {
+	if( !( AiAasWorld::instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_SKIP_COLLISION_MASK ) ) {
 		const float frac = ( threshold - speed2D ) * Q_Rcp( threshold );
 		EnsurePathPenalty( (unsigned)( 100 + 3000 * Q_Sqrt( frac ) ) );
 	}
@@ -423,11 +423,11 @@ bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *cont
 		return true;
 	}
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 
 	// Allow further prediction if we're still in the same floor cluster
-	if( const int clusterNum = aasWorld->FloorClusterNum( minTravelTimeAreaNumSoFar ) ) {
-		if( clusterNum == aasWorld->FloorClusterNum( groundedAreaNum ) ) {
+	if( const int clusterNum = aasWorld->floorClusterNum( minTravelTimeAreaNumSoFar ) ) {
+		if( clusterNum == aasWorld->floorClusterNum( groundedAreaNum ) ) {
 			return true;
 		}
 	}
@@ -441,7 +441,7 @@ bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *cont
 			return true;
 		}
 		// Allow negative Z while being in a stairs cluster
-		if( aasWorld->StairsClusterNum( groundedAreaNum ) ) {
+		if( aasWorld->stairsClusterNum( groundedAreaNum ) ) {
 			EnsurePathPenalty( 350 );
 			return true;
 		}
@@ -458,7 +458,7 @@ bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *cont
 }
 
 bool BunnyHopAction::CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasReach = aasWorld->Reachabilities();
 	const auto &areaSettings = aasWorld->AreaSettings()[fromAreaNum];
 
@@ -561,7 +561,7 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *cont
 	std::optional<float> initial2DDistance;
 	if( reachAtSequenceStart ) {
 		if( const auto reachNum = context->NextReachNum(); reachNum == reachAtSequenceStart ) {
-			targetPoint.Set( AiAasWorld::Instance()->Reachabilities()[reachNum].start );
+			targetPoint.Set( AiAasWorld::instance()->Reachabilities()[reachNum].start );
 			initial2DDistance = distanceToReachAtStart;
 		}
 	} else if( context->IsInNavTargetArea() ) {
@@ -761,7 +761,7 @@ void BunnyHopAction::OnApplicationSequenceStarted( PredictionContext *context ) 
 			travelTimeAtSequenceStart = travelTime;
 			reachAtSequenceStart = reachNum;
 			if( reachNum ) {
-				const auto &reach = AiAasWorld::Instance()->Reachabilities()[reachNum];
+				const auto &reach = AiAasWorld::instance()->Reachabilities()[reachNum];
 				distanceToReachAtStart = originAtSequenceStart.Distance2DTo( reach.start );
 			} else {
 				distanceInNavTargetAreaAtStart = originAtSequenceStart.Distance2DTo( context->NavTargetOrigin() );

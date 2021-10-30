@@ -27,7 +27,7 @@ public:
 							const edict_t *ignoreEnt_,
 							const edict_t *targetEnt_ )
 		: SharedFaceAreasWalker(
-			AiAasWorld::Instance()->FindAreaNum( fireTarget_ ),
+			AiAasWorld::instance()->findAreaNum( fireTarget_ ),
 			AasElementsMask::AreasMask(),
 			AasElementsMask::FacesMask() )
 		, aasVertices( aasWorld->Vertexes() )

@@ -81,9 +81,9 @@ void DodgeHazardProblemSolver::selectCandidateSpots( const SpotsQueryVector &spo
 	const float minHeightAdvantage = problemParams.minHeightAdvantageOverOrigin;
 	const float originZ = originParams.origin[2];
 	const float *__restrict origin = originParams.origin;
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const int originAreaNum = originParams.originAreaNum;
-	const int originFloorClusterNum = aasWorld->FloorClusterNum( originAreaNum );
+	const int originFloorClusterNum = aasWorld->floorClusterNum( originAreaNum );
 	const int topNodeHint = trap_CM_FindTopNodeForSphere( originParams.origin, originParams.searchRadius );
 	trace_t trace;
 
@@ -111,8 +111,8 @@ void DodgeHazardProblemSolver::selectCandidateSpots( const SpotsQueryVector &spo
 		}
 
 		// Try rejecting candidates early if the spot is in the same floor cluster and does not seem to be walkable
-		if( originFloorClusterNum && aasWorld->FloorClusterNum( spot.aasAreaNum ) == originFloorClusterNum ) {
-			if( !aasWorld->IsAreaWalkableInFloorCluster( originAreaNum, spot.aasAreaNum )) {
+		if( originFloorClusterNum && aasWorld->floorClusterNum( spot.aasAreaNum ) == originFloorClusterNum ) {
+			if( !aasWorld->isAreaWalkableInFloorCluster( originAreaNum, spot.aasAreaNum )) {
 				continue;
 			}
 		}
@@ -189,7 +189,7 @@ std::pair<Vec3, bool> DodgeHazardProblemSolver::makeDodgeHazardDir() const {
 
 void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVector &spotsFromQuery,
 															  OriginAndScoreVector &result ) {
-	const auto &aasWorld = AiAasWorld::Instance();
+	const auto &aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 
 	bool *const failedAtArea = AasElementsMask::TmpAreasVisRow();
@@ -200,9 +200,9 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 	}
 
 	const int originAreaNum = originParams.originAreaNum;
-	const int stairsClusterNum = aasWorld->StairsClusterNum( originAreaNum );
+	const int stairsClusterNum = aasWorld->stairsClusterNum( originAreaNum );
 	if( stairsClusterNum ) {
-		const auto *stairsClusterData = aasWorld->StairsClusterData( stairsClusterNum ) + 1;
+		const auto *stairsClusterData = aasWorld->stairsClusterData( stairsClusterNum ) + 1;
 		for( int areaNum : { stairsClusterData[0], stairsClusterData[stairsClusterData[-1]] } ) {
 			if( !failedAtArea[areaNum] ) {
 				result.emplace_back( OriginAndScore::ForArea( aasAreas, areaNum, addNextScores().second ) );
@@ -249,7 +249,7 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 		return;
 	}
 
-	const int floorClusterNum = aasWorld->AreaFloorClusterNums()[originAreaNum];
+	const int floorClusterNum = aasWorld->areaFloorClusterNums()[originAreaNum];
 	if( !floorClusterNum ) {
 		return;
 	}
@@ -268,7 +268,7 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 	}
 
 	const float squareSearchRadius = originParams.searchRadius * originParams.searchRadius;
-	const auto *__restrict floorClusterData = aasWorld->FloorClusterData( floorClusterNum ) + 1;
+	const auto *__restrict floorClusterData = aasWorld->floorClusterData( floorClusterNum ) + 1;
 	for( int i = 0; i < floorClusterData[-1]; ++i ) {
 		const int areaNum = floorClusterData[i];
 		if( areaNum == skipAreaNum ) {
@@ -287,7 +287,7 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 		if( failedAtArea[areaNum] ) {
 			continue;
 		}
-		if( !aasWorld->IsAreaWalkableInFloorCluster( originAreaNum, areaNum ) ) {
+		if( !aasWorld->isAreaWalkableInFloorCluster( originAreaNum, areaNum ) ) {
 			continue;
 		}
 		result.emplace_back( OriginAndScore::ForArea( aasAreas, areaNum, addNextScores().second ) );

@@ -29,7 +29,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 			maybeTarget = Vec3( closestFloorPoint );
 		}
 	} else if( const int nextReachNum = context->NextReachNum() ) {
-		const auto &__restrict nextReach = AiAasWorld::Instance()->Reachabilities()[nextReachNum];
+		const auto &__restrict nextReach = AiAasWorld::instance()->Reachabilities()[nextReachNum];
 		// This check is not just a normalization check but also is a logical one (switch to end if close to start)
 		if( Distance2DSquared( botOrigin, nextReach.start ) > SQUARE( 16.0f ) ) {
 			maybeTarget = Vec3( nextReach.start );
@@ -205,7 +205,7 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContex
 						const auto floorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
 						// Restrict to NOFALL areas for now
 						// TODO: Use another prediction attempt with the same direction if jumping fails
-						if( AiAasWorld::Instance()->AreaSettings()[floorAreaNum].areaflags & AREA_NOFALL ) {
+						if( AiAasWorld::instance()->AreaSettings()[floorAreaNum].areaflags & AREA_NOFALL ) {
 							botInput->SetUpMovement( 1 );
 						}
 					}
@@ -266,7 +266,7 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Predicti
 	const int currGroundedAreaNum = context->CurrGroundedAasAreaNum();
 	if( newTravelTimeToTarget <= this->bestTravelTimeSoFar ) {
 		this->bestTravelTimeSoFar = newTravelTimeToTarget;
-		this->bestFloorClusterSoFar = AiAasWorld::Instance()->FloorClusterNum( currGroundedAreaNum );
+		this->bestFloorClusterSoFar = AiAasWorld::instance()->floorClusterNum( currGroundedAreaNum );
 	} else {
 		// If this flag is set, rollback immediately.
 		// We need to be sure the action leads to advancing to the nav target.
@@ -280,7 +280,7 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Predicti
 		if( newTravelTimeToTarget > this->bestTravelTimeSoFar + 50 ) {
 			bool rollback = true;
 			// If we're still in the best floor cluster, use more lenient increased travel time threshold
-			if( AiAasWorld::Instance()->FloorClusterNum( currGroundedAreaNum ) == bestFloorClusterSoFar ) {
+			if( AiAasWorld::instance()->floorClusterNum( currGroundedAreaNum ) == bestFloorClusterSoFar ) {
 				if( newTravelTimeToTarget < this->bestTravelTimeSoFar + 100 ) {
 					rollback = false;
 				}
@@ -326,7 +326,7 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Predic
 
 	this->bestTravelTimeSoFar = context->TravelTimeToNavTarget();
 	this->bestFloorClusterSoFar = 0;
-	if( int clusterNum = AiAasWorld::Instance()->FloorClusterNum( context->CurrGroundedAasAreaNum() ) ) {
+	if( int clusterNum = AiAasWorld::instance()->floorClusterNum( context->CurrGroundedAasAreaNum() ) ) {
 		this->bestFloorClusterSoFar = clusterNum;
 	}
 

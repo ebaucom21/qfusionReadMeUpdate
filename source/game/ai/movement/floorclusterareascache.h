@@ -36,7 +36,7 @@ protected:
 
 	FloorClusterAreasCache( Bot *bot_, float areaSelectionNearThreshold_, float areaSelectionFarThreshold_ )
 		: bot( bot_ )
-		, aasWorld( AiAasWorld::Instance() )
+		, aasWorld( AiAasWorld::instance() )
 		, areaSelectionNearThreshold( areaSelectionNearThreshold_ )
 		, areaSelectionFarThreshold( areaSelectionFarThreshold_ ) {
 		assert( areaSelectionNearThreshold_ > 0.0f );

@@ -116,13 +116,13 @@ void AdvantageProblemSolver::pruneByVisTables( SpotsQueryVector &spotsFromQuery 
 	}
 
 	const auto *const spots = tacticalSpotsRegistry->spots;
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	if( !keepVisibleAreaNum ) {
-		keepVisibleAreaNum = aasWorld->FindAreaNum( keepVisibleOrigin );
+		keepVisibleAreaNum = aasWorld->findAreaNum( keepVisibleOrigin );
 	}
 
 	// Decompress an AAS areas vis row for the area of the "keep visible origin/entity"
-	const auto *keepVisEntRow = aasWorld->DecompressAreaVis( keepVisibleAreaNum, AasElementsMask::TmpAreasVisRow() );
+	const auto *keepVisEntRow = aasWorld->decompressAreaVis( keepVisibleAreaNum, AasElementsMask::TmpAreasVisRow() );
 
 	unsigned numKeptSpots = 0;
 	// Filter spots in-place

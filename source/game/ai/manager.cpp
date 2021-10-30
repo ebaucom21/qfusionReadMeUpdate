@@ -190,7 +190,7 @@ bool AiManager::CheckCanSpawnBots() {
 		return false;
 	}
 
-	if( AiAasWorld::Instance()->IsLoaded() && TacticalSpotsRegistry::Instance()->IsLoaded() ) {
+	if( AiAasWorld::instance()->isLoaded() && TacticalSpotsRegistry::Instance()->IsLoaded() ) {
 		return true;
 	}
 
@@ -323,8 +323,8 @@ void AiManager::Frame() {
 }
 
 void AiManager::FindHubAreas() {
-	const auto *aasWorld = AiAasWorld::Instance();
-	if( !aasWorld->IsLoaded() ) {
+	const auto *aasWorld = AiAasWorld::instance();
+	if( !aasWorld->isLoaded() ) {
 		return;
 	}
 

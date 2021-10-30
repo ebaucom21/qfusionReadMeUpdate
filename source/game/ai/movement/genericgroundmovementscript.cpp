@@ -105,10 +105,10 @@ bool GenericGroundMovementScript::SetupForKeptPointInFov( PredictionContext *con
 		if( bot->ShouldSkinBunnyInFavorOfCombatMovement() ) {
 			return true;
 		}
-		const auto *aasWorld = AiAasWorld::Instance();
+		const auto *aasWorld = AiAasWorld::instance();
 		// Try keeping speed only in NOFALL areas that belong to some floor cluster
 		const int currGroundedAreaNum = context->CurrGroundedAasAreaNum();
-		if( !aasWorld->AreaFloorClusterNums()[currGroundedAreaNum] ) {
+		if( !aasWorld->areaFloorClusterNums()[currGroundedAreaNum] ) {
 			return true;
 		}
 		if( !( aasWorld->AreaSettings()[currGroundedAreaNum].areaflags & AREA_NOFALL ) ) {
@@ -188,7 +188,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 		}
 	}
 
-	const auto isInNofallArea = AiAasWorld::Instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_NOFALL;
+	const auto isInNofallArea = AiAasWorld::instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_NOFALL;
 
 	if( !entityPhysicsState.GroundEntity() ) {
 		if( intendedDotActual > 0.95f ) {

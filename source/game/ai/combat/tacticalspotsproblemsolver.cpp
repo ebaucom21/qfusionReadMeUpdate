@@ -176,7 +176,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 	// Pick at most as many enemies as the number of AAS tmp rows we can allocate
 	wsw::StaticVector<CachedEnemyData, AasElementsMask::TMP_ROW_REDUNDANCY_SCALE> cachedEnemyData;
 
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const int64_t levelTime = level.time;
 
 	for( const TrackedEnemy *enemy = problemParams.enemiesListHead; enemy; enemy = enemy->NextInTrackedList() ) {
@@ -220,10 +220,10 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 			if( AiGroundTraceCache::Instance()->TryDropToFloor( enemy->ent, 64.0f, tmpOrigin ) ) {
 				testedOrigin = tmpOrigin;
 			}
-			enemyData->groundedAreaNum = aasWorld->FindAreaNum( testedOrigin );
+			enemyData->groundedAreaNum = aasWorld->findAreaNum( testedOrigin );
 		}
 
-		enemyData->areaVisRow = aasWorld->DecompressAreaVis( enemyData->groundedAreaNum, areaVisRow );
+		enemyData->areaVisRow = aasWorld->decompressAreaVis( enemyData->groundedAreaNum, areaVisRow );
 
 		// Interrupt if the capacity is exceeded. This is not really correct
 		// since the enemies are not sorted starting from the most dangerous one
@@ -245,7 +245,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 	const auto *const spots = tacticalSpotsRegistry->spots;
 	for( auto &spotAndScore: candidates ) {
 		const auto &__restrict spot = spots[spotAndScore.spotNum];
-		const int spotFloorClusterNum = aasWorld->AreaFloorClusterNums()[spot.aasAreaNum];
+		const int spotFloorClusterNum = aasWorld->areaFloorClusterNums()[spot.aasAreaNum];
 		float spotVisScore = 0.0f;
 		for( const CachedEnemyData &enemyData: cachedEnemyData ) {
 			Vec3 toSpotDir( spot.origin );
@@ -278,7 +278,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 
 			// If the spot and the enemy are in the same floor cluster
 			if( spotFloorClusterNum && spotFloorClusterNum == enemyData.groundedAreaNum ) {
-				if( !aasWorld->IsAreaWalkableInFloorCluster( enemyData.groundedAreaNum, spotFloorClusterNum ) ) {
+				if( !aasWorld->isAreaWalkableInFloorCluster( enemyData.groundedAreaNum, spotFloorClusterNum ) ) {
 					continue;
 				}
 			} else {

@@ -119,20 +119,20 @@ int ClientToClientTable::FindTravelTime( int fromEntNum, int toEntNum ) const {
 }
 
 int ClientToClientTable::FindEntityAreas( const edict_t *ent, int *areaNums ) const {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	int numResultAreas = 0;
-	int areaNum = aasWorld->FindAreaNum( ent );
+	int areaNum = aasWorld->findAreaNum( ent );
 	if( areaNum ) {
 		areaNums[numResultAreas++] = areaNum;
 		// If the first area already has ground
-		if( aasWorld->AreaGrounded( areaNum ) ) {
+		if( aasWorld->isAreaGrounded( areaNum ) ) {
 			return numResultAreas;
 		}
 	}
 
 	vec3_t tmpOrigin;
 	if( AiGroundTraceCache::Instance()->TryDropToFloor( ent, 64.0f, tmpOrigin ) ) {
-		const int droppedAreaNum = aasWorld->FindAreaNum( tmpOrigin );
+		const int droppedAreaNum = aasWorld->findAreaNum( tmpOrigin );
 		if( droppedAreaNum && droppedAreaNum != areaNum ) {
 			areaNums[numResultAreas++] = droppedAreaNum;
 		}
@@ -430,7 +430,7 @@ bool AiSquad::CheckCanFightTogether() const {
 }
 
 int AiSquad::GetBotFloorCluster( Bot *bot ) const {
-	const auto *aasFloorClusters = AiAasWorld::Instance()->AreaFloorClusterNums();
+	const auto *aasFloorClusters = AiAasWorld::instance()->areaFloorClusterNums();
 	// Zero area nums are handled by the dummy zero cluster num for the zero area
 	if( int clusterNum = aasFloorClusters[bot->EntityPhysicsState()->CurrAasAreaNum()] ) {
 		return clusterNum;

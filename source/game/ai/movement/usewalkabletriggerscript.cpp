@@ -132,7 +132,7 @@ const edict_t *FallbackAction::FindClosestToTargetTrigger( const ClosestTriggerP
 		}
 
 		// All trigger seem to have absent s.origin, but the precomputed area is valid.
-		// AiAasWorld::FindAreaNum() hides this issue by testing entity bounds too and producing a feasible result
+		// AiAasWorld::findAreaNum() hides this issue by testing entity bounds too and producing a feasible result
 		Vec3 entOrigin( ent->r.absmin );
 		entOrigin += ent->r.absmax;
 		entOrigin *= 0.5f;

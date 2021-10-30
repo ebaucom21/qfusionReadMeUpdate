@@ -13,7 +13,7 @@ Ai::Ai( edict_t *self_,
 	: self( self_ )
 	, planner( planner_ )
 	, routeCache( routeCache_ )
-	, aasWorld( AiAasWorld::Instance() )
+	, aasWorld( AiAasWorld::instance() )
 	, entityPhysicsState( entityPhysicsState_ )
 	, travelFlagsRange( travelFlags, 2 )
 	, blockedTimeoutAt( level.time + 15000 )
@@ -55,9 +55,9 @@ int Ai::CheckTravelTimeMillis( const Vec3& from, const Vec3 &to, bool allowUnrea
 	int fromAreaNum;
 	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
 	if( ( from - self->s.origin ).SquaredLength() < squareDistanceError ) {
-		fromAreaNum = aasWorld->FindAreaNum( self );
+		fromAreaNum = aasWorld->findAreaNum( self );
 	} else {
-		fromAreaNum = aasWorld->FindAreaNum( from );
+		fromAreaNum = aasWorld->findAreaNum( from );
 	}
 
 	if( !fromAreaNum ) {
@@ -68,7 +68,7 @@ int Ai::CheckTravelTimeMillis( const Vec3& from, const Vec3 &to, bool allowUnrea
 		FailWith( "CheckTravelTimeMillis(): Can't find `from` AAS area" );
 	}
 
-	const int toAreaNum = aasWorld->FindAreaNum( to.Data() );
+	const int toAreaNum = aasWorld->findAreaNum( to.Data() );
 	if( !toAreaNum ) {
 		if( allowUnreachable ) {
 			return 0;
@@ -210,16 +210,16 @@ void Ai::Think() {
 }
 
 void AiEntityPhysicsState::UpdateAreaNums() {
-	const AiAasWorld *const __restrict aasWorld = AiAasWorld::Instance();
-	this->currAasAreaNum = (uint16_t)aasWorld->FindAreaNum( Origin() );
+	const AiAasWorld *const __restrict aasWorld = AiAasWorld::instance();
+	this->currAasAreaNum = (uint16_t)aasWorld->findAreaNum( Origin() );
 	// Use a computation shortcut when entity is on ground
 	if( this->groundEntNum >= 0 ) {
 		SetHeightOverGround( 0 );
 		const Vec3 droppedOrigin( origin[0], origin[1], origin[2] + playerbox_stand_mins[2] + 8.0f );
-		if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->FindAreaNum( droppedOrigin ) ) ) {
+		if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->findAreaNum( droppedOrigin ) ) ) {
 			this->droppedToFloorAasAreaNum = this->currAasAreaNum;
 		}
-	} else if( aasWorld->AreaGrounded( this->currAasAreaNum ) ) {
+	} else if( aasWorld->isAreaGrounded( this->currAasAreaNum ) ) {
 		const float areaMinsZ = aasWorld->Areas()[this->currAasAreaNum].mins[2];
 		const float selfZ = Self()->s.origin[2];
 		SetHeightOverGround( ( selfZ - areaMinsZ ) + playerbox_stand_mins[2] );
@@ -236,7 +236,7 @@ void AiEntityPhysicsState::UpdateAreaNums() {
 		if( ( trace.fraction != 1.0f ) && ( origin[2] - trace.endpos[2] ) > -playerbox_stand_mins[2] ) {
 			SetHeightOverGround( ( trace.fraction * GROUND_TRACE_DEPTH ) + playerbox_stand_mins[2] );
 			const Vec3 droppedOrigin( trace.endpos[0], trace.endpos[1], trace.endpos[2] + 8.0f );
-			if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->FindAreaNum( droppedOrigin ) ) ) {
+			if( !( this->droppedToFloorAasAreaNum = (uint16_t)aasWorld->findAreaNum( droppedOrigin ) ) ) {
 				this->droppedToFloorAasAreaNum = this->currAasAreaNum;
 			}
 		} else {

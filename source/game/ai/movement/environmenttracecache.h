@@ -80,7 +80,7 @@ public:
 	}
 
 	EnvironmentTraceCache() {
-		this->aasAreaSettings = AiAasWorld::Instance()->AreaSettings();
+		this->aasAreaSettings = AiAasWorld::instance()->AreaSettings();
 	}
 
 	void testForResultsMask( class PredictionContext *context, unsigned requiredResultsMask );

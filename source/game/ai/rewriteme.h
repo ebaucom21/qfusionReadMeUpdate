@@ -45,7 +45,10 @@ public:
 		SUCCESS
 	};
 private:
-	LoadingStatus ExpectFileString( const char *expected, const char *message );
+	LoadingStatus ExpectFileString( const char *expected, const char *message ) {
+		return ExpectFileString( wsw::StringView( expected ), message );
+	}
+	LoadingStatus ExpectFileString( const wsw::StringView &expected, const char *message );
 public:
 	AiPrecomputedFileReader( const char *tag_, uint32_t expectedVersion_, AllocFn allocFn_ = nullptr, FreeFn freeFn_ = nullptr )
 		: AiPrecomputedFileHandler( tag_, expectedVersion_, allocFn_, freeFn_ ) {}
@@ -69,6 +72,7 @@ public:
 	bool BeginWriting( const char *filePath_ );
 
 	bool WriteString( const char *string );
+	bool WriteString( const wsw::StringView &string );
 	bool WriteLengthAndData( const uint8_t *data, uint32_t dataLength );
 };
 

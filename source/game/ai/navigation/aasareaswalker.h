@@ -49,7 +49,7 @@ public:
 	SharedFaceAreasWalker( int startAreaNum, BitVector *visitedAreas_, BitVector *visitedFaces_ )
 		: visitedAreas( visitedAreas_ )
 		, visitedFaces( visitedFaces_ )
-		, aasWorld( AiAasWorld::Instance() )
+		, aasWorld( AiAasWorld::instance() )
 		, aasAreas( aasWorld->Areas() )
 		, aasFaces( aasWorld->Faces() )
 		, aasFaceIndex( aasWorld->FaceIndex() ) {

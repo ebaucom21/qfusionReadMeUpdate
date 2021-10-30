@@ -76,11 +76,11 @@ inline int PredictionContext::CurrAasAreaNum() const {
 }
 
 inline int PredictionContext::CurrGroundedAasAreaNum() const {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto &entityPhysicsState = movementState->entityPhysicsState;
 	int areaNums[2] = { entityPhysicsState.CurrAasAreaNum(), entityPhysicsState.DroppedToFloorAasAreaNum() };
 	for( int i = 0, end = ( areaNums[0] != areaNums[1] ? 2 : 1 ); i < end; ++i ) {
-		if( areaNums[i] && aasWorld->AreaGrounded( areaNums[i] ) ) {
+		if( areaNums[i] && aasWorld->isAreaGrounded( areaNums[i] ) ) {
 			return areaNums[i];
 		}
 	}

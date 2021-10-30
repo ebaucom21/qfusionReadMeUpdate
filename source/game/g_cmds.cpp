@@ -713,13 +713,13 @@ static void Cmd_Position_f( edict_t *ent ) {
 		}
 		ss << "]";
 
-		const auto *aasWorld = AiAasWorld::Instance();
-		if( !aasWorld->IsLoaded() ) {
+		const auto *aasWorld = AiAasWorld::instance();
+		if( !aasWorld->isLoaded() ) {
 			G_PrintMsg( ent, "%s\n", ss.str().c_str() );
 			return;
 		}
 
-		const int numAreas = aasWorld->BBoxAreas( ent->r.absmin, ent->r.absmax, nums, 32 );
+		const int numAreas = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, nums, 32 );
 		ss << ", AAS areas for box: [";
 		for( int i = 0; i < numAreas; ++i ) {
 			ss << nums[i] << ( ( i + 1 != numAreas ) ? "," : "" );

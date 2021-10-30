@@ -20,6 +20,12 @@ bool AiPrecomputedFileWriter::WriteString( const char *string ) {
 	return WriteLengthAndData( (const uint8_t *)string, length );
 }
 
+bool AiPrecomputedFileWriter::WriteString( const wsw::StringView &string ) {
+	assert( string.length() < 256 );
+	wsw::StaticString<256> ztBuffer( string );
+	return WriteLengthAndData( (const uint8_t *)ztBuffer.data(), string.length() + 1 );
+}
+
 bool AiPrecomputedFileWriter::WriteLengthAndData( const uint8_t *data, uint32_t dataLength ) {
 	if( trap_FS_Write( &dataLength, 4, fp ) <= 0 ) {
 		failedOnWrite = true;
@@ -69,7 +75,7 @@ bool AiPrecomputedFileReader::ReadLengthAndData( uint8_t **data, uint32_t *dataL
 	return true;
 }
 
-AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::ExpectFileString( const char *expected,
+AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::ExpectFileString( const wsw::StringView &expected,
 																				  const char *message ) {
 	uint32_t dataLength;
 	uint8_t *data;
@@ -79,14 +85,13 @@ AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::ExpectFileString
 	}
 
 	if( !dataLength ) {
-		return ( expected[0] == 0 ) ? SUCCESS : VERSION_MISMATCH;
+		return ( expected.empty() ) ? SUCCESS : VERSION_MISMATCH;
 	}
 
 	data[dataLength - 1] = 0;
 
 	LoadingStatus result = SUCCESS;
-	if( Q_stricmp( expected, ( const char *)data ) ) {
-		G_Printf( "%s: actual string is `%s`, expected string is `%s`\n", message, data, expected );
+	if( expected.equalsIgnoreCase( wsw::StringView( (const char *)data, dataLength ) ) ) {
 		result = VERSION_MISMATCH;
 	}
 
@@ -119,12 +124,12 @@ AiPrecomputedFileReader::LoadingStatus AiPrecomputedFileReader::BeginReading( co
 
 	LoadingStatus status;
 	if( useAasChecksum ) {
-		const auto *aasWorld = AiAasWorld::Instance();
-		if( !aasWorld->IsLoaded() ) {
+		const auto *aasWorld = AiAasWorld::instance();
+		if( !aasWorld->isLoaded() ) {
 			G_Printf( S_COLOR_RED "%s: Can't get checksum for non-loaded AAS world\n", tag );
 			return FAILURE;
 		}
-		if( ( status = ExpectFileString( aasWorld->Checksum(), "AAS checksum mismatch" ) ) != SUCCESS ) {
+		if( ( status = ExpectFileString( aasWorld->getChecksum(), "AAS checksum mismatch" ) ) != SUCCESS ) {
 			return status;
 		}
 	}
@@ -188,12 +193,12 @@ bool AiPrecomputedFileWriter::BeginWriting( const char *filePath_ ) {
 	}
 
 	if( useAasChecksum ) {
-		const auto *aasWorld = AiAasWorld::Instance();
-		if( !aasWorld->IsLoaded() ) {
+		const auto *aasWorld = AiAasWorld::instance();
+		if( !aasWorld->isLoaded() ) {
 			G_Printf( S_COLOR_RED "%s: Can't get checksum for non-loaded AAS world\n", tag );
 			return false;
 		}
-		if( !WriteString( aasWorld->Checksum() ) ) {
+		if( !WriteString( aasWorld->getChecksum() ) ) {
 			G_Printf( S_COLOR_RED "%s: Can't write AAS checksum to file\n", tag );
 			return false;
 		}

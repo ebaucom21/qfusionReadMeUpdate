@@ -129,7 +129,7 @@ void RidePlatformAction::SetupIdleRidingPlatformMovement( PredictionContext *con
 	float frac = ( platform->s.origin[2] - platform->moveinfo.end_origin[2] ) / height;
 	// If the bot is fairly close to the destination and there are saved areas, start looking at the first one
 	if( frac > 0.5f && !m_subsystem->savedPlatformAreas.empty() ) {
-		const auto &area = AiAasWorld::Instance()->Areas()[m_subsystem->savedPlatformAreas.front()];
+		const auto &area = AiAasWorld::instance()->Areas()[m_subsystem->savedPlatformAreas.front()];
 		Vec3 lookVec( area.center );
 		lookVec -= context->movementState->entityPhysicsState.Origin();
 		botInput->SetIntendedLookDir( lookVec, false );
@@ -161,7 +161,7 @@ void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 
-	const auto &area = AiAasWorld::Instance()->Areas()[suggestedAreas[currTestedAreaIndex]];
+	const auto &area = AiAasWorld::instance()->Areas()[suggestedAreas[currTestedAreaIndex]];
 	Vec3 intendedLookDir( area.center );
 	intendedLookDir.Z() = area.mins[2] + 32;
 	intendedLookDir -= entityPhysicsState.Origin();
@@ -272,7 +272,7 @@ const ExitAreasVector &RidePlatformAction::SuggestExitAreas( PredictionContext *
 };
 
 void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_t *platform, ExitAreasVector &exitAreas ) {
-	const auto &aasWorld = AiAasWorld::Instance();
+	const auto &aasWorld = AiAasWorld::instance();
 	const auto *aasAreas = aasWorld->Areas();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 
@@ -299,8 +299,8 @@ void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_
 
 	trace_t trace;
 	int bboxAreaNums[48];
-	const int numBBoxAreas = aasWorld->BBoxAreas( mins, maxs, bboxAreaNums, 48 );
-	for( int i = 0; i < numBBoxAreas; ++i ) {
+	const int numAreasInBox = aasWorld->findAreasInBox( mins, maxs, bboxAreaNums, 48 );
+	for( int i = 0; i < numAreasInBox; ++i ) {
 		const int areaNum = bboxAreaNums[i];
 		const auto &area = aasAreas[areaNum];
 		const auto &areaSettings = aasAreaSettings[areaNum];

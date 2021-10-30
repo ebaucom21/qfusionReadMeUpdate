@@ -81,19 +81,19 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 	float bestScore = -1.0f;
 	vec3_t bestVec { 0, 0, 0 };
 
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	// Check whether a computation of this area num has been deferred
 	if( testedAreaNum < 0 ) {
-		testedAreaNum = aasWorld->FindAreaNum( testedOrigin );
+		testedAreaNum = aasWorld->findAreaNum( testedOrigin );
 	}
 
 	// If the tested area num belongs to an AAS floor cluster
 	// we should test all nearby spots in the cluster
 	// as they are almost guaranteed to be walkable if
-	// IsAreaWalkableInFloorCluster() call succeeds.
+	// isAreaWalkableInFloorCluster() call succeeds.
 	// We should prefer tactical spots over random origins.
 	// TODO: We can group all spots by floor cluster nums at loading
-	if( aasWorld->FloorClusterNum( testedAreaNum ) ) {
+	if( aasWorld->floorClusterNum( testedAreaNum ) ) {
 		uint16_t insideSpotNum;
 		const auto *const __restrict spots = tacticalSpotsRegistry->spots;
 		// Must be cleaned up... todo: return a RAII wrapper?
@@ -115,7 +115,7 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 			}
 
 			// Check walkability in the cluster
-			if( !aasWorld->IsAreaWalkableInFloorCluster( testedAreaNum, spot.aasAreaNum ) ) {
+			if( !aasWorld->isAreaWalkableInFloorCluster( testedAreaNum, spot.aasAreaNum ) ) {
 				continue;
 			}
 

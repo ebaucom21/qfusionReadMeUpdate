@@ -111,7 +111,7 @@ MovementScript *FallbackAction::TryFindWalkOffLedgeReachFallback( PredictionCont
 	}
 
 	const int targetAreaNum = nextReach.areanum;
-	const auto &targetArea = AiAasWorld::Instance()->Areas()[targetAreaNum];
+	const auto &targetArea = AiAasWorld::instance()->Areas()[targetAreaNum];
 
 	auto *script = &m_subsystem->fallDownScript;
 	// Set target not to the reach. end but to the center of the target area (a reach end is often at ledge)

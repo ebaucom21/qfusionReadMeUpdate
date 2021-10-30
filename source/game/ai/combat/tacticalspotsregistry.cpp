@@ -149,7 +149,7 @@ bool TacticalSpotsRegistry::TryLoadPrecomputedData( const char *mapName ) {
 		return false;
 	}
 
-	const int numAasAreas = AiAasWorld::Instance()->NumAreas();
+	const int numAasAreas = AiAasWorld::instance()->NumAreas();
 
 	spotsAndAreasTravelTimeTable = (uint16_t *)data;
 	if( ( dataLength / sizeof( uint16_t ) ) != 2 * numSpots * numAasAreas ) {
@@ -290,7 +290,7 @@ void TacticalSpotsRegistry::SavePrecomputedData( const char *mapName ) {
 	Q_free( spots );
 	spots = nullptr;
 
-	const int numAreas = AiAasWorld::Instance()->NumAreas();
+	const int numAreas = AiAasWorld::instance()->NumAreas();
 
 	// Byte swap travel times
 	static_assert( sizeof( *spotsAndAreasTravelTimeTable ) == 2, "LittleShort() is not applicable" );
@@ -464,7 +464,7 @@ void TacticalSpotsBuilder::ComputeMutualSpotsVisibility() {
 void TacticalSpotsBuilder::ComputeTravelTimeTable() {
 	G_Printf( "Computing mutual travel time between spots and areas (it might take a while)...\n" );
 
-	const auto *const aasWorld = AiAasWorld::Instance();
+	const auto *const aasWorld = AiAasWorld::instance();
 	const auto *const aasAreaSettings = aasWorld->AreaSettings();
 	const auto *const routeCache = AiAasRouteCache::Shared();
 	const int numAreas = aasWorld->NumAreas();
@@ -524,8 +524,8 @@ bool TacticalSpotsBuilder::Build() {
 }
 
 bool TacticalSpotsBuilder::TestAas() {
-	const auto *aasWorld = AiAasWorld::Instance();
-	if( !aasWorld->IsLoaded() ) {
+	const auto *aasWorld = AiAasWorld::instance();
+	if( !aasWorld->isLoaded() ) {
 		G_Printf( S_COLOR_RED "TacticalSpotsBuilder::Build(): AAS world is not loaded\n" );
 		return false;
 	}
@@ -560,7 +560,7 @@ inline bool LooksLikeAGoodArea( const aas_areasettings_t &areaSettings, int badC
 }
 
 void TacticalSpotsBuilder::FindCandidateAreas() {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasReach = aasWorld->Reachabilities();
 	const auto *aasAreaSettings = aasWorld->AreaSettings();
 	const int numAasAreas = aasWorld->NumAreas();
@@ -613,7 +613,7 @@ void TacticalSpotsBuilder::FindCandidateAreas() {
 void TacticalSpotsBuilder::FindCandidatePoints() {
 	FindCandidateAreas();
 
-	const auto *aasAreas = AiAasWorld::Instance()->Areas();
+	const auto *aasAreas = AiAasWorld::instance()->Areas();
 
 	// Add areas centers first.
 	// Note: area centers gained priority over boundaries once we started sorting areas by score.
@@ -653,7 +653,7 @@ void TacticalSpotsBuilder::FindCandidatePoints() {
 }
 
 void TacticalSpotsBuilder::AddAreaFacePoints( int areaNum ) {
-	const auto *aasWorld = AiAasWorld::Instance();
+	const auto *aasWorld = AiAasWorld::instance();
 	const auto *aasFaceIndex = aasWorld->FaceIndex();
 	const auto *aasFaces = aasWorld->Faces();
 	const auto *aasEdgeIndex = aasWorld->EdgeIndex();
@@ -762,8 +762,8 @@ void TacticalSpotsBuilder::TryAddSpotFromPoint( const Vec3 &point ) {
 static constexpr float SPOT_SQUARE_PROXIMITY_THRESHOLD = 108 * 108;
 
 int TacticalSpotsBuilder::TestPointForGoodAreaNum( const vec3_t point ) {
-	const auto *aasWorld = AiAasWorld::Instance();
-	int areaNum = aasWorld->FindAreaNum( point );
+	const auto *aasWorld = AiAasWorld::instance();
+	int areaNum = aasWorld->findAreaNum( point );
 	if( !areaNum ) {
 		return 0;
 	}
