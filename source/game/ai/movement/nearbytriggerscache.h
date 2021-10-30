@@ -31,7 +31,7 @@ struct NearbyTriggersCache {
 	void ensureValidForBounds( const float *__restrict absMins, const float *__restrict absMaxs );
 private:
 	[[nodiscard]]
-	auto clipToRegion( const ArrayRange<uint16_t> &entNums, uint16_t *dest, size_t destSize ) -> unsigned;
+	auto clipToRegion( std::span<const uint16_t> entNums, uint16_t *dest, size_t destSize ) -> unsigned;
 };
 
 }

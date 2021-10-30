@@ -51,7 +51,7 @@ int CoverProblemSolver::findMany( vec3_t *spots, int maxSpots ) {
 
 void CoverProblemSolver::pruneByAreaVisTables( SpotsAndScoreVector &spotsAndScores ) {
 	const auto *const aasWorld = AiAasWorld::instance();
-	const auto *const aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 	const int attackerAreaNum = aasWorld->findAreaNum( problemParams.attackerOrigin );
 
 	// Check whether we may consider that an an area is fully visible for attacker if the table data indicates visibility.

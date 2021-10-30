@@ -27,6 +27,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../../../qcommon/wswstringview.h"
 #include "../../../qcommon/wswstaticstring.h"
 
+#include <span>
+
 //travel types
 #define MAX_TRAVELTYPES             32
 #define TRAVEL_INVALID              1       //temporary not possible
@@ -214,8 +216,6 @@ typedef struct aas_node_s {
 	//when a child is zero it's a solid leaf
 } aas_node_t;
 
-template <typename T> class ArrayRange;
-
 class alignas( 16 ) AiAasWorld {
 	friend class AasFileReader;
 
@@ -368,6 +368,14 @@ class alignas( 16 ) AiAasWorld {
 	static void setupBoxLookupTable( vec3_t *__restrict lookupTable,
 									 const float *__restrict absMins,
 									 const float *__restrict absMaxs );
+
+	template <typename T>
+	[[nodiscard]]
+	static auto internalSpanToRegularSpan( const T *internalSpan ) -> std::span<const T> {
+		const T *data = internalSpan + 1;
+		const size_t size = internalSpan[0];
+		return { data, data + size };
+	}
 public:
 	AiAasWorld() = default;
 	~AiAasWorld();
@@ -386,26 +394,30 @@ public:
 	auto getChecksum() const { return m_loaded ? wsw::StringView( (const char *)m_checksum ) : wsw::StringView(); }
 
 	[[nodiscard]]
-	auto traceAreas( const Vec3 &start, const Vec3 &end, int *areas_, int maxareas ) const -> int {
+	auto traceAreas( const Vec3 &start, const Vec3 &end, int *areas_, int maxareas ) const -> std::span<const int> {
 		return traceAreas( start.Data(), end.Data(), areas_, nullptr, maxareas );
 	}
+
 	[[nodiscard]]
-	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_, int maxareas ) const -> int {
+	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_, int maxareas ) const -> std::span<const int> {
 		return traceAreas( start, end, areas_, nullptr, maxareas );
 	}
 
 	//stores the areas the trace went through and returns the number of passed areas
 	[[nodiscard]]
-	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const -> int;
+	auto traceAreas( const vec3_t start, const vec3_t end, int *areas_,
+					 vec3_t *points, int maxareas ) const -> std::span<const int>;
 
 	[[nodiscard]]
-	auto findAreasInBox( const Vec3 &absMins, const Vec3 &absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const -> int {
+	auto findAreasInBox( const Vec3 &absMins, const Vec3 &absMaxs, int *areaNums,
+						 int maxAreas, int topNodeHint = 1 ) const -> std::span<const int> {
 		return findAreasInBox( absMins.Data(), absMaxs.Data(), areaNums, maxAreas, topNodeHint );
 	}
 
 	//returns the areas the bounding box is in
 	[[nodiscard]]
-	auto findAreasInBox( const vec3_t absMins, const vec3_t absMaxs, int *areaNums, int maxAreas, int topNodeHint = 1 ) const -> int;
+	auto findAreasInBox( const vec3_t absMins, const vec3_t absMaxs, int *areaNums,
+						 int maxAreas, int topNodeHint = 1 ) const -> std::span<const int>;
 
 	[[nodiscard]]
 	auto findTopNodeForBox( const float *boxMins, const float *boxMaxs ) const -> int;
@@ -447,28 +459,58 @@ public:
 		return ( m_areasettings[areanum].contents & AREACONTENTS_DONOTENTER ) != 0;
 	}
 
-	const aas_vertex_t *Vertexes() const { return m_vertexes; }
-	const aas_plane_t *Planes() const { return m_planes; }
-	const aas_edge_t *Edges() const { return m_edges; }
-	const aas_edgeindex_t *EdgeIndex() const { return m_edgeindex; }
-	const aas_face_t *Faces() const { return m_faces; }
-	const aas_faceindex_t *FaceIndex() const { return m_faceindex; }
-	const aas_area_t *Areas() const { return m_areas; }
-	const aas_areasettings_t *AreaSettings() const { return m_areasettings; }
-
-	//reachablity list
-	int NumReachabilities() const { return m_reachabilitysize; }
-	int NumReach() const { return m_reachabilitysize; }
-	int NumAreas() const { return m_numareas; }
-	int NumFaces() const { return m_numfaces; }
-
-	const aas_reachability_t *Reachabilities() const { return m_reachability; }
-	const aas_node_t *Nodes() const { return m_nodes; }
-	int NumPortals() const { return m_numportals; }
-	const aas_portal_t *Portals() const { return m_portals; }
-	const aas_portalindex_t *PortalIndex() const { return m_portalindex; }
-	int NumClusters() const { return m_numclusters; }
-	const aas_cluster_t *Clusters() const { return m_clusters; }
+	[[nodiscard]]
+	auto getVertices() const -> std::span<const aas_vertex_t> {
+		return { m_vertexes, m_vertexes + m_numvertexes };
+	}
+	[[nodiscard]]
+	auto getPlanes() const -> std::span<const aas_plane_t> {
+		return { m_planes, m_planes + m_numplanes };
+	}
+	[[nodiscard]]
+	auto getEdges() const -> std::span<const aas_edge_t> {
+		return { m_edges, m_edges + m_numedges };
+	}
+	[[nodiscard]]
+	auto getEdgeIndex() const -> std::span<const aas_edgeindex_t> {
+		return { m_edgeindex, m_edgeindex + m_edgeindexsize };
+	}
+	[[nodiscard]]
+	auto getFaces() const -> std::span<const aas_face_t> {
+		return { m_faces, m_faces + m_numfaces };
+	}
+	[[nodiscard]]
+	auto getFaceIndex() const -> std::span<const aas_faceindex_t> {
+		return { m_faceindex, m_faceindex + m_faceindexsize };
+	}
+	[[nodiscard]]
+	auto getAreas() const -> std::span<const aas_area_t> {
+		return { m_areas, m_areas + m_numareas };
+	}
+	[[nodiscard]]
+	auto getAreaSettings() const -> std::span<const aas_areasettings_s> {
+		return { m_areasettings, m_areasettings + m_numareasettings };
+	}
+	[[nodiscard]]
+	auto getReaches() const -> std::span<const aas_reachability_t> {
+		return { m_reachability, m_reachability + m_reachabilitysize };
+	}
+	[[nodiscard]]
+	auto getNodes() const -> std::span<const aas_node_t> {
+		return { m_nodes, m_nodes + m_numnodes };
+	}
+	[[nodiscard]]
+	auto getPortals() const -> std::span<const aas_portal_t> {
+		return { m_portals, m_portals + m_numportals };
+	}
+	[[nodiscard]]
+	auto getPortalIndex() const -> std::span<const aas_portalindex_t> {
+		return { m_portalindex, m_portalindex + m_portalindexsize };
+	}
+	[[nodiscard]]
+	auto getClusters() const -> std::span<const aas_cluster_t> {
+		return { m_clusters, m_clusters + m_numclusters };
+	}
 
 	// A feasible cluster num in non-zero
 	[[nodiscard]]
@@ -477,7 +519,9 @@ public:
 	}
 
 	[[nodiscard]]
-	auto areaFloorClusterNums() const -> const uint16_t * { return m_areaFloorClusterNums; }
+	auto areaFloorClusterNums() const -> std::span<const uint16_t> {
+		return { m_areaFloorClusterNums, m_areaFloorClusterNums + m_numareas };
+	}
 
 	// A feasible cluster num is non-zero
 	[[nodiscard]]
@@ -486,20 +530,22 @@ public:
 	}
 
 	[[nodiscard]]
-	auto areaStairsClusterNums() const -> const uint16_t * { return m_areaStairsClusterNums; }
-
-	// In order to be conform with the rest of AAS code the zero cluster is dummy
-	[[nodiscard]]
-	auto floorClusterData( int floorClusterNum ) const -> const uint16_t * {
-		assert( floorClusterNum >= 0 && floorClusterNum < m_numFloorClusters );
-		return m_floorClusterData + m_floorClusterDataOffsets[floorClusterNum];
+	auto areaStairsClusterNums() const -> std::span<const uint16_t> {
+		return { m_areaStairsClusterNums, m_areaStairsClusterNums + m_numareas };
 	}
 
 	// In order to be conform with the rest of AAS code the zero cluster is dummy
 	[[nodiscard]]
-	auto stairsClusterData( int stairsClusterNum ) const -> const uint16_t * {
+	auto floorClusterData( int floorClusterNum ) const -> std::span<const uint16_t> {
+		assert( floorClusterNum >= 0 && floorClusterNum < m_numFloorClusters );
+		return internalSpanToRegularSpan( m_floorClusterData + m_floorClusterDataOffsets[floorClusterNum] );
+	}
+
+	// In order to be conform with the rest of AAS code the zero cluster is dummy
+	[[nodiscard]]
+	auto stairsClusterData( int stairsClusterNum ) const -> std::span<const uint16_t> {
 		assert( stairsClusterNum >= 0 && stairsClusterNum < m_numStairsClusters );
-		return m_stairsClusterData + m_stairsClusterDataOffsets[stairsClusterNum];
+		return internalSpanToRegularSpan( m_stairsClusterData + m_stairsClusterDataOffsets[stairsClusterNum] );
 	}
 
 	/**
@@ -514,11 +560,12 @@ public:
 	bool isAreaWalkableInFloorCluster( int startAreaNum, int targetAreaNum ) const;
 
 	[[nodiscard]]
-	auto areaMapLeafsList( int areaNum ) const -> const int * {
+	auto areaMapLeafsList( int areaNum ) const -> std::span<const int> {
 		assert( (unsigned)areaNum < (unsigned)m_numareas );
-		return m_areaMapLeafsData + m_areaMapLeafListOffsets[areaNum];
+		return internalSpanToRegularSpan( m_areaMapLeafsData + m_areaMapLeafListOffsets[areaNum] );
 	}
 
+	// Returns an address of 6 short values
 	[[nodiscard]]
 	auto getAreaInnerBounds( int areaNum ) const -> const int16_t * {
 	    assert( (unsigned)areaNum < (unsigned)m_numareas );
@@ -531,12 +578,26 @@ public:
 	 * Not all principal areas are included in this list but only grounded ones
 	 * as they are tested using a separate code path during determination of areas blocked status.
 	 */
-	const uint16_t *GroundedPrincipalRoutingAreas() const { return m_groundedPrincipalRoutingAreas; }
-
-	const uint16_t *JumppadReachPassThroughAreas() const { return m_jumppadReachPassThroughAreas; }
-	const uint16_t *LadderReachPassThroughAreas() const { return m_ladderReachPassThroughAreas; }
-	const uint16_t *ElevatorReachPassThroughAreas() const { return m_elevatorReachPassThroughAreas; }
-	const uint16_t *WalkOffLedgePassThroughAirAreas() const { return m_walkOffLedgePassThroughAirAreas; }
+	[[nodiscard]]
+	auto groundedPrincipalRoutingAreas() const -> std::span<const uint16_t> {
+		return internalSpanToRegularSpan( m_groundedPrincipalRoutingAreas );
+	}
+	[[nodiscard]]
+	auto jumppadReachPassThroughAreas() const -> std::span<const uint16_t> {
+		return internalSpanToRegularSpan( m_jumppadReachPassThroughAreas );
+	}
+	[[nodiscard]]
+	auto ladderReachPassThroughAreas() const -> std::span<const uint16_t> {
+		return internalSpanToRegularSpan( m_ladderReachPassThroughAreas );
+	}
+	[[nodiscard]]
+	auto elevatorReachPassThroughAreas() const -> std::span<const uint16_t> {
+		return internalSpanToRegularSpan( m_elevatorReachPassThroughAreas );
+	}
+	[[nodiscard]]
+	auto walkOffLedgePassThroughAirAreas() const -> std::span<const uint16_t> {
+		return internalSpanToRegularSpan( m_walkOffLedgePassThroughAirAreas );
+	}
 
 	/**
 	 * Retrieves a cached mutual floor cluster visibility result.
@@ -573,9 +634,9 @@ public:
 	 * @return a list of area numbers certainly visible from the area. The first element is the list length.
 	 */
 	[[nodiscard]]
-	auto areaVisList( int areaNum ) const -> const uint16_t * {
+	auto areaVisList( int areaNum ) const -> std::span<const uint16_t> {
 		assert( (unsigned)areaNum < (unsigned)m_numareas );
-		return m_areaVisData + m_areaVisDataOffsets[areaNum];
+		return internalSpanToRegularSpan( m_areaVisData + m_areaVisDataOffsets[areaNum] );
 	}
 
 	/**
@@ -595,7 +656,7 @@ public:
 	 * @return an address of the supplied buffer
 	 * @warning using this in a loop is not cheap. Consider using {@code FindInVisList()} in this case.
 	 */
-	bool *decompressAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const {
+	bool *decompressAreaVis( std::span<const uint16_t> visList, bool *__restrict row ) const {
 		::memset( row, 0, sizeof( bool ) * m_numareas );
 		return addToDecompressedAreaVis( visList, row );
 	}
@@ -618,35 +679,7 @@ public:
 	 * @param row a buffer for a decompressed row (a result of {@code DecompressAreaVis()} call for some other area)
 	 * @return an address of the supplied buffer
 	 */
-	bool *addToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict row ) const;
-
-	// Consider SSE2 instruction set always available for x86 targets
-#if !( defined ( __i386__ ) || defined ( __x86_64__ ) || defined( _M_IX86 ) || defined( _M_AMD64 ) || defined( _M_X64 ) )
-	static constexpr bool scansVisFast() { return false; }
-#else
-	static constexpr bool scansVisFast() { return true; }
-#endif
-
-	/**
-	 * Scans the supplied list of areas trying to find an area.
-	 * The implementation may use platform-dependent optimizations
-	 * so calling this method should be preferred to manual naive scanning.
-	 * @param visList a list of areas (a result of {@code AreaVisList()} call.
-	 * @param areaNum a number of area to find
-	 * @return true if the supplied area has been found.
-	 */
-	bool findInVisList( const uint16_t *__restrict visList, int areaNum ) const;
-
-	/**
-	 * Scans the supplied list of areas trying to find some of supplied areas.
-	 * The implementation may use platform-dependent optimizations
-	 * so calling this method should be preferred to manual naive scanning.
-	 * @param visList a list of areas (a result of {@code AreaVisList()} call.
-	 * @param areaNum1 a number of an area to find
-	 * @param areaNum2 a number of another area to find
-	 * @return true if some of supplied areas has been found.
-	 */
-	bool findInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const;
+	bool *addToDecompressedAreaVis( std::span<const uint16_t> visList, bool *__restrict row ) const;
 };
 
 #endif

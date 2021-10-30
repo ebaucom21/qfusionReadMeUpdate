@@ -67,7 +67,7 @@ bool Walker::Accept( int, const aas_reachability_t &reach, int travelTime ) {
 		return TestReachVis( reach );
 	}
 
-	if( aasWorld->AreaSettings()[reach.areanum].areaflags & AREA_NOFALL ) {
+	if( aasWorld->getAreaSettings()[reach.areanum].areaflags & AREA_NOFALL ) {
 		return TestReachVis( reach );
 	}
 
@@ -75,7 +75,7 @@ bool Walker::Accept( int, const aas_reachability_t &reach, int travelTime ) {
 }
 
 bool Walker::PerformRaycast( const aas_reachability_t &reach, float playerZOffset, float reachZOffset ) {
-	const auto *__restrict clusterNums = aasWorld->areaFloorClusterNums();
+	const std::span<const uint16_t> clusterNums = aasWorld->areaFloorClusterNums();
 	if( clusterNums[startAreaNum] && clusterNums[startAreaNum] == clusterNums[lastAreaNum] ) {
 		return aasWorld->isAreaWalkableInFloorCluster( startAreaNum, lastAreaNum );
 	}

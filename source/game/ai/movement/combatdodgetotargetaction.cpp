@@ -29,7 +29,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 			maybeTarget = Vec3( closestFloorPoint );
 		}
 	} else if( const int nextReachNum = context->NextReachNum() ) {
-		const auto &__restrict nextReach = AiAasWorld::instance()->Reachabilities()[nextReachNum];
+		const auto &__restrict nextReach = AiAasWorld::instance()->getReaches()[nextReachNum];
 		// This check is not just a normalization check but also is a logical one (switch to end if close to start)
 		if( Distance2DSquared( botOrigin, nextReach.start ) > SQUARE( 16.0f ) ) {
 			maybeTarget = Vec3( nextReach.start );
@@ -205,7 +205,7 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContex
 						const auto floorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
 						// Restrict to NOFALL areas for now
 						// TODO: Use another prediction attempt with the same direction if jumping fails
-						if( AiAasWorld::instance()->AreaSettings()[floorAreaNum].areaflags & AREA_NOFALL ) {
+						if( AiAasWorld::instance()->getAreaSettings()[floorAreaNum].areaflags & AREA_NOFALL ) {
 							botInput->SetUpMovement( 1 );
 						}
 					}

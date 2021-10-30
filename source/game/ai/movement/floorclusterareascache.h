@@ -48,14 +48,12 @@ protected:
 	 * that closest to target areas get evicted first.
 	 * @param context a movement prediction context
 	 * @param maxTravelTimeThreshold skip areas if the travel time from area to target is not better than this
-	 * @param clusterAreaNums an array of area numbers of the floor cluster
-	 * @param numClusterAreas a number of areas in the floor cluster
+	 * @param clusterAreaNums area numbers of the floor cluster
 	 * @param result the heap being built
 	 */
 	void BuildCandidateAreasHeap( PredictionContext *context,
 								  int maxTravelTimeThreshold,
-								  const uint16_t *clusterAreaNums,
-								  int numClusterAreas,
+								  std::span<const uint16_t> clusterAreaNums,
 								  CandidateAreasHeap &result ) const;
 
 	/**
@@ -64,15 +62,13 @@ protected:
 	 * @param context a movement prediction context
 	 * @param hazardToEvade a hazard that may have impact on areas, nullable
 	 * @param maxTravelTimeThreshold skip areas if the travel time from area to target is not better than this
-	 * @param clusterAreaNums an array of area numbers of the floor cluster
-	 * @param numClusterAreas a number of areas in the floor cluster
+	 * @param clusterAreaNums area numbers of the floor cluster
 	 * @param result selected candidate areas
 	 */
 	void PrepareAreasForSmallCluster( PredictionContext *__restrict context,
 									  const Hazard *__restrict hazardToEvade,
 									  int maxTravelTimeThreshold,
-								      const uint16_t *__restrict clusterAreaNums,
-								      int numClusterAreas,
+								      std::span<const uint16_t> clusterAreaNums,
 								      CandidateAreasHeap &__restrict result ) const;
 
 	/**
@@ -81,15 +77,13 @@ protected:
 	 * @param context a movement prediction context
 	 * @param hazardToEvade a hazard that may have impact on areas, nullable
 	 * @param maxTravelTimeThreshold skip areas if the travel time from area to target is not better than this
-	 * @param clusterAreaNums an array of area numbers of the floor cluster
-	 * @param numClusterAreas a number of areas in the floor cluster
+	 * @param clusterAreaNums area numbers of the floor cluster
 	 * @param result selected candidate areas
 	 */
 	void PrepareAreasForLargeCluster( PredictionContext *__restrict context,
 		                              const Hazard *__restrict hazardToEvade,
 		                              int maxTravelTimeThreshold,
-		                              const uint16_t *__restrict clusterAreaNums,
-		                              int numClusterAreas,
+		                              std::span<const uint16_t> clusterAreaNums,
 		                              CandidateAreasHeap &__restrict result ) const;
 
 	virtual bool NeedsToBeComputed( PredictionContext *context ) const = 0;

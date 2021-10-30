@@ -73,7 +73,7 @@ const Vec3 &BotRoamingManager::GetRoamingSpot() {
 }
 
 inline const Vec3 &BotRoamingManager::SetTmpSpotFromArea( int areaNum ) {
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	tmpSpotOrigin.Set( area.center );
 	tmpSpotOrigin.Z() = area.mins[2] + 8.0f;
 	return tmpSpotOrigin;
@@ -141,9 +141,9 @@ int BotRoamingManager::TrySuggestRandomAasArea() {
 	const int currAreaNum = bot->EntityPhysicsState()->CurrAasAreaNum();
 	const int groundedAreaNum = bot->EntityPhysicsState()->DroppedToFloorAasAreaNum();
 
-	const int numAreas = aasWorld->NumAreas();
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto numAreas = (int)aasAreas.size();
 
 	Candidates candidateAreas;
 
@@ -173,19 +173,18 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 	const Vec3 mins( Vec3( -192, -192, -128 ) + bot->Origin() );
 	const Vec3 maxs( Vec3( +192, +192, +128 ) + bot->Origin() );
 
-	int boxAreaNums[64];
-	const int numAreasInBox = aasWorld->findAreasInBox( mins, maxs, boxAreaNums, 64 );
+	int boxAreaNumsBuffer[64];
+	const auto boxAreaNums = aasWorld->findAreasInBox( mins, maxs, boxAreaNumsBuffer, 64 );
 
 	const int currAreaNum = bot->EntityPhysicsState()->CurrAasAreaNum();
 	const int groundedAreaNum = bot->EntityPhysicsState()->DroppedToFloorAasAreaNum();
 
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	Candidates candidateAreas;
 
-	if( (int)candidateAreas.capacity() >= numAreasInBox ) {
-		for( int i = 0; i < numAreasInBox; ++i ) {
-			int areaNum = boxAreaNums[i];
+	if( (int)candidateAreas.capacity() >= boxAreaNums.size() ) {
+		for( const int areaNum : boxAreaNums ) {
 			if( currAreaNum == areaNum ) {
 				continue;
 			}
@@ -202,8 +201,7 @@ int BotRoamingManager::TrySuggestNearbyAasArea() {
 			candidateAreas.push_back( areaNum );
 		}
 	} else {
-		for( int i = 0; i < numAreasInBox; ++i ) {
-			int areaNum = boxAreaNums[i];
+		for( const int areaNum : boxAreaNums ) {
 			if( currAreaNum == areaNum ) {
 				continue;
 			}

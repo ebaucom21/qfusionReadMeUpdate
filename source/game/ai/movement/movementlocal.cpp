@@ -13,7 +13,7 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 
 	// Find an area that has suitable flags matching the trigger type
 	const auto *const __restrict aasWorld = AiAasWorld::instance();
-	const auto *const __restrict aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const auto *const __restrict aiManager = AiManager::Instance();
 
 	int desiredAreaContents = ~0;
@@ -28,10 +28,9 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 
 	*areaNumRef = 0;
 
-	int boxAreaNums[64];
-	const int numBoxAreas = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, boxAreaNums, 64 );
-	for( int i = 0; i < numBoxAreas; ++i ) {
-		const int areaNum = boxAreaNums[i];
+	int boxAreaNumsBuffer[64];
+	const auto boxAreaNums = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, boxAreaNumsBuffer, 64 );
+	for( const int areaNum: boxAreaNums ) {
 		if( !( aasAreaSettings[areaNum].contents & desiredAreaContents ) ) {
 			continue;
 		}
@@ -47,7 +46,6 @@ auto TriggerAreaNumsCache::getAreaNum( int entNum ) const -> int {
 
 auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const ClassTriggerNums * {
 	const auto *const __restrict aasWorld = AiAasWorld::instance();
-	assert( areaNum && (unsigned)areaNum < (unsigned)aasWorld->NumAreas() );
 
 	if( m_testedTriggersForArea[areaNum] ) {
 		if( m_hasTriggersForArea[areaNum] ) {
@@ -63,7 +61,7 @@ auto TriggerAreaNumsCache::getTriggersForArea( int areaNum ) const -> const Clas
 	unsigned numTeleporters = 0, numJumppads = 0, numPlatforms = 0;
 	uint16_t teleporterNums[MAX_EDICTS], jumppadNums[MAX_EDICTS], platformNums[MAX_EDICTS];
 
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	const float *__restrict areaMins = area.mins;
 	const float *__restrict areaMaxs = area.maxs;
 
@@ -220,9 +218,9 @@ bool ReachChainWalker::Exec() {
 	}
 
 	const auto *const aasWorld = AiAasWorld::instance();
-	const auto *const aasReach = aasWorld->Reachabilities();
+	const auto aasReach = aasWorld->getReaches();
 
-	assert( (unsigned)lastReachNum < (unsigned)aasWorld->NumReach() );
+	assert( (unsigned)lastReachNum < (unsigned)aasReach.size() );
 	if( !Accept( lastReachNum, aasReach[lastReachNum], lastTravelTime ) ) {
 		return true;
 	}
@@ -234,7 +232,6 @@ bool ReachChainWalker::Exec() {
 			return false;
 		}
 		lastAreaNum = areaNum;
-		assert( (unsigned)lastReachNum < (unsigned)aasWorld->NumReach() );
 		const auto &reach = aasReach[lastReachNum];
 		if( !Accept( lastReachNum, reach, lastTravelTime ) ) {
 			return true;
@@ -246,7 +243,7 @@ bool ReachChainWalker::Exec() {
 }
 
 int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int fromAreaNum, int toAreaNum ) {
-	const auto *const aasReach = AiAasWorld::instance()->Reachabilities();
+	const auto aasReaches = AiAasWorld::instance()->getReaches();
 	constexpr const auto travelFlags = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
 	int travelTime = 0;
 	// Prevent infinite looping (still happens for some maps)
@@ -267,7 +264,7 @@ int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int from
 		if( !travelTime ) {
 			travelTime = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, travelFlags );
 		}
-		const auto &__restrict reach = aasReach[reachNum];
+		const auto &__restrict reach = aasReaches[reachNum];
 		// Move to this area for the next iteration
 		fromAreaNum = reach.areanum;
 		// Check whether the travel type fits this function restrictions

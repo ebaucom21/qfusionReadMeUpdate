@@ -149,7 +149,7 @@ bool TacticalSpotsRegistry::TryLoadPrecomputedData( const char *mapName ) {
 		return false;
 	}
 
-	const int numAasAreas = AiAasWorld::instance()->NumAreas();
+	const auto numAasAreas = (int)AiAasWorld::instance()->getAreas().size();
 
 	spotsAndAreasTravelTimeTable = (uint16_t *)data;
 	if( ( dataLength / sizeof( uint16_t ) ) != 2 * numSpots * numAasAreas ) {
@@ -290,7 +290,7 @@ void TacticalSpotsRegistry::SavePrecomputedData( const char *mapName ) {
 	Q_free( spots );
 	spots = nullptr;
 
-	const int numAreas = AiAasWorld::instance()->NumAreas();
+	const auto numAreas = (int)AiAasWorld::instance()->getAreas().size();
 
 	// Byte swap travel times
 	static_assert( sizeof( *spotsAndAreasTravelTimeTable ) == 2, "LittleShort() is not applicable" );
@@ -465,9 +465,9 @@ void TacticalSpotsBuilder::ComputeTravelTimeTable() {
 	G_Printf( "Computing mutual travel time between spots and areas (it might take a while)...\n" );
 
 	const auto *const aasWorld = AiAasWorld::instance();
-	const auto *const aasAreaSettings = aasWorld->AreaSettings();
 	const auto *const routeCache = AiAasRouteCache::Shared();
-	const int numAreas = aasWorld->NumAreas();
+	const auto &aasAreaSettings = aasWorld->getAreaSettings();
+	const auto numAreas = (int)aasWorld->getAreas().size();
 	const int travelFlags = Bot::ALLOWED_TRAVEL_FLAGS;
 	constexpr int maxVal = std::numeric_limits<uint16_t>::max();
 	constexpr auto badAreaFlags = AREA_DISABLED;
@@ -530,7 +530,7 @@ bool TacticalSpotsBuilder::TestAas() {
 		return false;
 	}
 
-	if( aasWorld->NumAreas() > 256 && aasWorld->NumFaces() < 256 ) {
+	if( aasWorld->getAreas().size() > 256 && aasWorld->getFaces().size() < 256 ) {
 		G_Printf( S_COLOR_RED "TacticalSpotsBuilder::Build(): Looks like the AAS file is stripped\n" );
 		return false;
 	}
@@ -561,9 +561,9 @@ inline bool LooksLikeAGoodArea( const aas_areasettings_t &areaSettings, int badC
 
 void TacticalSpotsBuilder::FindCandidateAreas() {
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasReach = aasWorld->Reachabilities();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const int numAasAreas = aasWorld->NumAreas();
+	const auto aasReach = aasWorld->getReaches();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto numAasAreas = (int)aasWorld->getAreas().size();
 
 	const auto badContents = AREACONTENTS_WATER | AREACONTENTS_LAVA | AREACONTENTS_SLIME | AREACONTENTS_DONOTENTER;
 	for( int i = 1; i < numAasAreas; ++i ) {
@@ -613,7 +613,7 @@ void TacticalSpotsBuilder::FindCandidateAreas() {
 void TacticalSpotsBuilder::FindCandidatePoints() {
 	FindCandidateAreas();
 
-	const auto *aasAreas = AiAasWorld::instance()->Areas();
+	const auto aasAreas = AiAasWorld::instance()->getAreas();
 
 	// Add areas centers first.
 	// Note: area centers gained priority over boundaries once we started sorting areas by score.
@@ -654,16 +654,16 @@ void TacticalSpotsBuilder::FindCandidatePoints() {
 
 void TacticalSpotsBuilder::AddAreaFacePoints( int areaNum ) {
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasFaceIndex = aasWorld->FaceIndex();
-	const auto *aasFaces = aasWorld->Faces();
-	const auto *aasEdgeIndex = aasWorld->EdgeIndex();
-	const auto *aasEdges = aasWorld->Edges();
-	const auto *aasPlanes = aasWorld->Planes();
-	const auto *aasVertices = aasWorld->Vertexes();
+	const auto aasFaceIndex = aasWorld->getFaceIndex();
+	const auto aasFaces = aasWorld->getFaces();
+	const auto aasEdgeIndex = aasWorld->getEdgeIndex();
+	const auto aasEdges = aasWorld->getEdges();
+	const auto aasPlanes = aasWorld->getPlanes();
+	const auto aasVertices = aasWorld->getVertices();
 
 	const float maxZ = gridBuilder.WorldMaxs()[2] + 999.0f;
 
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	for( int faceIndexNum = area.firstface; faceIndexNum < area.firstface + area.numfaces; ++faceIndexNum ) {
 		const auto &face = aasFaces[ abs( aasFaceIndex[faceIndexNum] ) ];
 		// Skip boundaries with solid (some of areas split by face is solid)
@@ -768,7 +768,7 @@ int TacticalSpotsBuilder::TestPointForGoodAreaNum( const vec3_t point ) {
 		return 0;
 	}
 
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const auto &areaSettings = aasAreaSettings[areaNum];
 	constexpr auto badContents = AREACONTENTS_LAVA | AREACONTENTS_SLIME | AREACONTENTS_DONOTENTER;
 	if( !LooksLikeAGoodArea( areaSettings, badContents ) ) {
@@ -778,7 +778,7 @@ int TacticalSpotsBuilder::TestPointForGoodAreaNum( const vec3_t point ) {
 	// Check whether there are "good" (walk/teleport) reachabilities to the area and from the area
 	int numGoodReaches = 0;
 	const int endReachNum = areaSettings.firstreachablearea + areaSettings.numreachableareas;
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasReach = aasWorld->getReaches();
 	for( int reachNum = areaSettings.firstreachablearea; reachNum != endReachNum; ++reachNum ) {
 		const auto &reach = aasReach[reachNum];
 		if( reach.traveltype != TRAVEL_WALK && reach.traveltype != TRAVEL_TELEPORT ) {

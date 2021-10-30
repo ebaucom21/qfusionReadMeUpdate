@@ -54,10 +54,10 @@ class NextReachDirsCollector final : public ReachChainWalker {
 
 	PredictionContext *const context;
 	const AiAasWorld *const aasWorld;
-	const aas_area_t *const aasAreas;
-	const aas_areasettings_t *const aasAreaSettings;
-	const uint16_t *const aasFloorClusterNums;
-	const uint16_t *const aasStairsClusterNums;
+	const std::span<const aas_area_t> aasAreas;
+	const std::span<const aas_areasettings_t> aasAreaSettings;
+	const std::span<const uint16_t> aasFloorClusterNums;
+	const std::span<const uint16_t> aasStairsClusterNums;
 	const Hazard *hazardToEvade;
 	AreaAndScore *const candidatesBegin;
 	Vec3 traceStartPoint;
@@ -74,8 +74,8 @@ public:
 		: ReachChainWalker( context_->RouteCache() )
 		, context( context_ )
 		, aasWorld( AiAasWorld::instance() )
-		, aasAreas( aasWorld->Areas() )
-		, aasAreaSettings( aasWorld->AreaSettings() )
+		, aasAreas( aasWorld->getAreas() )
+		, aasAreaSettings( aasWorld->getAreaSettings() )
 		, aasFloorClusterNums( aasWorld->areaFloorClusterNums() )
 		, aasStairsClusterNums( aasWorld->areaStairsClusterNums() )
 		, candidatesBegin( candidates_ )
@@ -120,7 +120,7 @@ void BunnyTestingNextReachDirsAction::SaveSuggestedLookDirs( PredictionContext *
 		return;
 	}
 
-	const auto &stoppedAtReach = AiAasWorld::instance()->Reachabilities()[collector.lastReachNum];
+	const auto &stoppedAtReach = AiAasWorld::instance()->getReaches()[collector.lastReachNum];
 	const auto travelType = stoppedAtReach.traveltype & TRAVELTYPE_MASK;
 	if( travelType != TRAVEL_TELEPORT && travelType != TRAVEL_JUMPPAD && travelType != TRAVEL_ELEVATOR ) {
 		return;

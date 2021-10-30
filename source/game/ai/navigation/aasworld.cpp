@@ -168,9 +168,10 @@ typedef struct aas_tracestack_s {
 	int nodenum;        //node found after splitting with planenum
 } aas_tracestack_t;
 
-int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, vec3_t *points, int maxareas ) const {
+auto AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_,
+							 vec3_t *points, int maxareas ) const -> std::span<const int> {
 	if( !m_loaded ) {
-		return 0;
+		return {};
 	}
 
 	vec3_t cur_start, cur_end, cur_mid;
@@ -195,7 +196,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 		//if the trace stack is empty (ended up with a piece of the
 		//line to be traced in an area)
 		if( tstack_p < tracestack ) {
-			return numAreas;
+			return { areas_, areas_ + numAreas };
 		}
 
 		//number of the current node to test the line against
@@ -208,7 +209,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 			}
 			numAreas++;
 			if( numAreas >= maxareas ) {
-				return numAreas;
+				return { areas_, areas_ + numAreas };
 			}
 			continue;
 		}
@@ -238,7 +239,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
 				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
-				return numAreas;
+				return { areas_, areas_ + numAreas };
 			}
 		}
 		//if the whole to be traced line is totally at the back of this node
@@ -250,7 +251,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
 				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
-				return numAreas;
+				return { areas_, areas_ + numAreas };
 			}
 		}
 		//go down the tree both at the front and back of the node
@@ -278,7 +279,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
 				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
-				return numAreas;
+				return { areas_, areas_ + numAreas };
 			}
 			//now put the part near the start of the line on the stack so we will
 			//continue with thats part first. This way we'll find the first
@@ -290,7 +291,7 @@ int AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_, v
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
 				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
-				return numAreas;
+				return { areas_, areas_ + numAreas };
 			}
 		}
 	}
@@ -323,10 +324,10 @@ void AiAasWorld::setupBoxLookupTable( vec3_t *lookupTable, const float *absMins,
 	VectorSet( lookupTable[15], absMaxs[0], absMaxs[1], absMaxs[2] );
 }
 
-auto AiAasWorld::findAreasInBox( const vec3_t absMins, const vec3_t absMaxs,
-								 int *areaNums, int maxAreas, int topNodeHint ) const -> int {
+auto AiAasWorld::findAreasInBox( const vec3_t absMins, const vec3_t absMaxs, int *areaNums,
+								 int maxAreas, int topNodeHint ) const -> std::span<const int> {
 	if( !m_loaded ) {
-		return 0;
+		return {};
 	}
 
 	// A lookup table for inlined BoxOnPlaneSide() body
@@ -374,7 +375,7 @@ auto AiAasWorld::findAreasInBox( const vec3_t absMins, const vec3_t absMaxs,
 				continue;
 			}
 
-			return (int)( writePtr - areaNums );
+			return { areaNums, writePtr };
 		}
 
 		// Skip solid leaves
@@ -402,7 +403,7 @@ auto AiAasWorld::findAreasInBox( const vec3_t absMins, const vec3_t absMaxs,
 		assert( stackPtr - nodesStack < nodesStackSize );
 	}
 
-	return (int)( writePtr - areaNums );
+	return { areaNums, writePtr };
 }
 
 int AiAasWorld::findTopNodeForBox( const float *boxMins, const float *boxMaxs ) const {
@@ -613,11 +614,11 @@ void AiAasWorld::trySettingAreaJunkFlags( int areaNum ) {
 void AiAasWorld::trySettingAreaRampFlags( int areaNum ) {
 	// Since we extend the trace end a bit below the area,
 	// this test is added to avoid classifying non-grounded areas as having a ramp
-	if( !( AreaSettings()[areaNum].areaflags & AREA_GROUNDED ) ) {
+	if( !( m_areasettings[areaNum].areaflags & AREA_GROUNDED ) ) {
 		return;
 	}
 	// Skip junk areas as well
-	if( AreaSettings()[areaNum].areaflags & AREA_JUNK ) {
+	if( m_areasettings[areaNum].areaflags & AREA_JUNK ) {
 		return;
 	}
 
@@ -691,8 +692,8 @@ class NofallAreaFlagSolver: public SharedFaceAreasWalker<ArrayBasedFringe<64>> {
 	vec3_t testedBoxMins;
 	vec3_t testedBoxMaxs;
 
-	const aas_area_t *__restrict aasAreas;
-	const aas_areasettings_t *__restrict aasAreaSettings;
+	const std::span<const aas_area_t> aasAreas;
+	const std::span<const aas_areasettings_t> aasAreaSettings;
 
 	bool result { true };
 
@@ -707,9 +708,9 @@ public:
 };
 
 NofallAreaFlagSolver::NofallAreaFlagSolver( int areaNum_, AiAasWorld *aasWorld_ )
-	: SharedFaceAreasWalker( areaNum_, AasElementsMask::AreasMask(), AasElementsMask::FacesMask() ) {
-	this->aasAreas = aasWorld_->Areas();
-	this->aasAreaSettings = aasWorld_->AreaSettings();
+	: SharedFaceAreasWalker( areaNum_, AasElementsMask::AreasMask(), AasElementsMask::FacesMask() )
+	, aasAreas( aasWorld_->getAreas() )
+	, aasAreaSettings( aasWorld_->getAreaSettings() ) {
 
 	VectorSet( testedBoxMins, -48, -48, -99999 );
 	VectorSet( testedBoxMaxs, +48, +48, +16 );
@@ -941,9 +942,9 @@ auto AiAasWorld::computePointAreaNumLookupDataForCell( const Vec3 &cellMins, con
 	const Vec3 expandedMins( Vec3( -2.0f, -2.0f, -2.0f ) + cellMins );
 	const Vec3 expandedMaxs( Vec3( +2.0f, +2.0f, +2.0f ) + cellMaxs );
 
-	int areaNums[16];
-	const int numBoxAreas = findAreasInBox( expandedMins, expandedMaxs, areaNums, 16 );
-	if( numBoxAreas == 1 ) {
+	int areaNumsBuffer[16];
+	const auto areaNums = findAreasInBox( expandedMins, expandedMaxs, areaNumsBuffer, 16 );
+	if( areaNums.size() == 1 ) {
 		const Vec3 *bounds[2] { &expandedMins, &expandedMaxs };
 		int lastCornerAreaNum = -1;
 		bool allInsideTheSameArea = true;
@@ -1399,9 +1400,9 @@ public:
 
 template <typename ClassifyFunc>
 void AreasClusterBuilder<ClassifyFunc>::FloodAreasRecursive( int areaNum ) {
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto aasReaches = aasWorld->getReaches();
 
 	// TODO: Rewrite to stack-based non-recursive version
 
@@ -1416,7 +1417,7 @@ void AreasClusterBuilder<ClassifyFunc>::FloodAreasRecursive( int areaNum ) {
 	int reachNum = currAreaSettings.firstreachablearea;
 	const int maxReachNum = reachNum + currAreaSettings.numreachableareas;
 	for( ; reachNum < maxReachNum; ++reachNum ) {
-		const auto &reach = aasReach[reachNum];
+		const auto &reach = aasReaches[reachNum];
 		if( areasMask->IsSet( reach.areanum ) ) {
 			continue;
 		}
@@ -1498,7 +1499,7 @@ bool FloorClusterBuilder::IsFloodedRegionDegenerate() const {
 }
 
 bool FloorClusterBuilder::Build( int startAreaNum ) {
-	if( !classifyFunc.LooksLikeAFloorArea( aasWorld->AreaSettings()[startAreaNum] ) ) {
+	if( !classifyFunc.LooksLikeAFloorArea( aasWorld->getAreaSettings()[startAreaNum] ) ) {
 		return false;
 	}
 
@@ -1529,7 +1530,7 @@ struct ClassifyStairsArea {
 
 		// HACK: TODO: Refactor this (operator()) method params
 		const auto *aasWorld = AiAasWorld::instance();
-		if( aasWorld->floorClusterNum( &currArea - aasWorld->Areas() ) ) {
+		if( aasWorld->floorClusterNum( std::addressof( currArea ) - std::addressof( aasWorld->getAreas()[0] ) ) ) {
 			// The area is already in a floor cluster
 			return -1;
 		}
@@ -1595,8 +1596,8 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 
 	PrepareToFlood();
 
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 
 	if( !classifyFunc.LooksLikeAStairsArea( aasAreas[startAreaNum], aasAreaSettings[startAreaNum ] ) ) {
 		return false;
@@ -1710,7 +1711,7 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 	// The connectivity between steps 1<->2, 2<->3 is broken
 	// (there are no mutual walk reachabilities connecting some of steps of these false stairs)
 
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasReaches = aasWorld->getReaches();
 	for( int i = firstAreaIndex; i < lastAreaIndex - 1; ++i ) {
 		const int prevAreaNum = areasAndHeights[i + 0].areaNum;
 		const int currAreaNum = areasAndHeights[i + 1].areaNum;
@@ -1718,7 +1719,7 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 		int currReachNum = currAreaSettings.firstreachablearea;
 		const int maxReachNum = currReachNum + currAreaSettings.numreachableareas;
 		for(; currReachNum < maxReachNum; ++currReachNum ) {
-			const auto &reach = aasReach[currReachNum];
+			const auto &reach = aasReaches[currReachNum];
 			// We have dropped condition on travel type of the reachability as showing unsatisfiable results
 			if( reach.areanum == prevAreaNum ) {
 				break;
@@ -1734,12 +1735,12 @@ bool StairsClusterBuilder::Build( int startAreaNum ) {
 }
 
 void AiAasWorld::computeLogicalAreaClusters() {
-	auto floodResultsBuffer = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
+	auto floodResultsBuffer = (uint16_t *)Q_malloc( sizeof( uint16_t ) * m_numareas );
 
 	FloorClusterBuilder floorClusterBuilder( AasElementsMask::AreasMask(), floodResultsBuffer, this );
 
-	m_areaFloorClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
-	memset( m_areaFloorClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
+	m_areaFloorClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * m_numareas );
+	memset( m_areaFloorClusterNums, 0, sizeof( uint16_t ) * m_numareas );
 
 	BufferBuilder<uint16_t> floorData( 256 );
 	BufferBuilder<int> floorDataOffsets( 32 );
@@ -1751,7 +1752,7 @@ void AiAasWorld::computeLogicalAreaClusters() {
 	floorDataOffsets.Add( 0 );
 	floorData.Add( 0 );
 
-	for( int i = 1; i < this->NumAreas(); ++i ) {
+	for( int i = 1; i < m_numareas; ++i ) {
 		// If an area is already marked
 		if( m_areaFloorClusterNums[i] ) {
 			continue;
@@ -1783,14 +1784,14 @@ void AiAasWorld::computeLogicalAreaClusters() {
 
 	StairsClusterBuilder stairsClusterBuilder( AasElementsMask::AreasMask(), floodResultsBuffer, this );
 
-	m_areaStairsClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * this->NumAreas() );
-	memset( m_areaStairsClusterNums, 0, sizeof( uint16_t ) * this->NumAreas() );
+	m_areaStairsClusterNums = (uint16_t *)Q_malloc( sizeof( uint16_t ) * m_numareas );
+	memset( m_areaStairsClusterNums, 0, sizeof( uint16_t ) * m_numareas );
 
 	m_numStairsClusters = 1;
 	stairsDataOffsets.Add( 0 );
 	stairsData.Add( 0 );
 
-	for( int i = 0; i < this->NumAreas(); ++i ) {
+	for( int i = 0; i < m_numareas; ++i ) {
 		// If an area is already marked
 		if( m_areaFloorClusterNums[i] || m_areaStairsClusterNums[i] ) {
 			continue;
@@ -1831,7 +1832,7 @@ void AiAasWorld::computeLogicalAreaClusters() {
 }
 
 void AiAasWorld::computeFace2DProjVertices() {
-	m_face2DProjVertexNums = (int *)Q_malloc( sizeof( int ) * 2 * this->NumFaces() );
+	m_face2DProjVertexNums = (int *)Q_malloc( sizeof( int ) * 2 * m_numfaces );
 	int *vertexNumsPtr = m_face2DProjVertexNums;
 
 	// Skip 2 vertices for the dummy zero face
@@ -1876,7 +1877,7 @@ void AiAasWorld::computeAreasLeafsLists() {
 	listOffsets.Add( 0 );
 
 	int tmpNums[256 + 1], topNode;
-	for( int i = 1, end = this->NumAreas(); i < end; ++i ) {
+	for( int i = 1, end = m_numareas; i < end; ++i ) {
 		const auto &area = m_areas[i];
 		// Supply tmpLeafNums + 1 as a buffer so we can prepend the numeber of leaves in-place
 		int numLeaves = trap_CM_BoxLeafnums( area.mins, area.maxs, tmpNums + 1, 256, &topNode );
@@ -1918,9 +1919,9 @@ uint16_t *ReachPassThroughAreasListBuilder<AcceptAreaFunc>::Exec( int travelType
 	// Reserve a space for an actual list size
 	listBuilder.Add( 0 );
 
-	const auto *const aasReach = aasWorld->Reachabilities();
-	for( int i = 1, end = aasWorld->NumReachabilities(); i < end; ++i ) {
-		const auto &reach = aasReach[i];
+	const auto aasReaches = aasWorld->getReaches();
+	for( int i = 1, end = (int)aasReaches.size(); i < end; ++i ) {
+		const auto &reach = aasReaches[i];
 		if( ( reach.traveltype & TRAVELTYPE_MASK ) != travelType ) {
 			continue;
 		}
@@ -1937,13 +1938,12 @@ uint16_t *ReachPassThroughAreasListBuilder<AcceptAreaFunc>::Exec( int travelType
 template <typename AcceptAreaFunc>
 void ReachPassThroughAreasListBuilder<AcceptAreaFunc>::AddTracedAreas( const aas_reachability_t &reach,
 																	   BufferBuilder<uint16_t> &listBuilder ) {
-	const auto *const aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	AcceptAreaFunc acceptAreaFunc;
 
 	int tmpAreaNums[64];
-	int numReachAreas = aasWorld->traceAreas( reach.start, reach.end, tmpAreaNums, 64 );
-	for( int j = 0; j < numReachAreas; ++j ) {
-		int areaNum = tmpAreaNums[j];
+	const auto tracedAreas = aasWorld->traceAreas( reach.start, reach.end, tmpAreaNums, 64 );
+	for( const int areaNum: tracedAreas ) {
 		// Skip if already set
 		if( !areasMask->TrySet( areaNum ) ) {
 			continue;
@@ -1970,7 +1970,7 @@ void AiAasWorld::buildSpecificAreaTypesLists() {
 
 	// Add a placeholder for actual size
 	groundedAreasBuilder.Add( 0 );
-	for( int i = 1, end = this->NumAreas(); i < end; ++i ) {
+	for( int i = 1, end = m_numareas; i < end; ++i ) {
 		const int areaFlags = m_areasettings[i].areaflags;
 		if( !( areaFlags & AREA_GROUNDED ) ) {
 			continue;
@@ -2230,30 +2230,31 @@ uint32_t AiAasWorld::computeFloorClustersVisibility() {
 bool AiAasWorld::computeVisibilityForClustersPair( int floorClusterNum1, int floorClusterNum2 ) const {
 	assert( floorClusterNum1 != floorClusterNum2 );
 
-	const auto *const __restrict areaNums1 = floorClusterData( floorClusterNum1 ) + 1;
-	const auto *const __restrict areaNums2 = floorClusterData( floorClusterNum2 ) + 1;
-	// The larger list should be iterated in the outer loop
-	const auto *const __restrict outerAreaNums = ( areaNums1[-1] > areaNums2[-1] ) ? areaNums1 : areaNums2;
-	const auto *const __restrict innerAreaNums = ( outerAreaNums == areaNums1 ) ? areaNums2 : areaNums1;
+	const std::span<const uint16_t> areaNums1 = floorClusterData( floorClusterNum1 );
+	const std::span<const uint16_t> areaNums2 = floorClusterData( floorClusterNum2 );
 
-	for( int i = 0; i < outerAreaNums[-1]; ++i ) {
+	// The larger list should be iterated in the outer loop
+	const std::span<const uint16_t> &outerAreaNums = ( areaNums1.size() > areaNums2.size() ) ? areaNums1 : areaNums2;
+	const std::span<const uint16_t> &innerAreaNums = ( areaNums1.size() > areaNums2.size() ) ? areaNums2 : areaNums1;
+
+	for( const uint16_t outerAreaNum : outerAreaNums ) {
 		// Get compressed vis list for the area in the outer list
-		const auto *const __restrict visList = areaVisList( outerAreaNums[i] ) + 1;
+		const std::span<const uint16_t> outerVisList = areaVisList( outerAreaNum );
 		// Use a sequential scan for short lists
-		if( visList[-1] < 24 && innerAreaNums[-1] < 24 ) {
+		if( outerVisList.size() < 24 && innerAreaNums.size() < 24 ) {
 			// For every inner area try finding an inner area num in the vis list
-			for( int j = 0; j < innerAreaNums[-1]; ++j ) {
-				if( std::find( visList, visList + visList[-1], innerAreaNums[j] ) != visList + visList[-1] ) {
+			for( const uint16_t innerAreaNum : innerAreaNums ) {
+				if( std::find( outerVisList.begin(), outerVisList.end(), innerAreaNum ) != outerVisList.end() ) {
 					return true;
 				}
 			}
 			continue;
 		}
 
-		const bool *__restrict visRow = decompressAreaVis( outerAreaNums[i], AasElementsMask::TmpAreasVisRow() );
+		const bool *__restrict visRow = decompressAreaVis( outerVisList, AasElementsMask::TmpAreasVisRow() );
 		// For every area in inner areas check whether it's set in the row
-		for( int j = 0; j < innerAreaNums[-1]; ++j ) {
-			if( visRow[innerAreaNums[j]] ) {
+		for( const uint16_t innerAreaNum : innerAreaNums ) {
+			if( visRow[innerAreaNum] ) {
 				return true;
 			}
 		}
@@ -2587,118 +2588,11 @@ void AiAasWorld::computeAreasVisibility( uint32_t *offsetsDataSize, uint32_t *li
 	m_areaVisDataOffsets = listOffsets;
 }
 
-bool *AiAasWorld::addToDecompressedAreaVis( const uint16_t *__restrict visList, bool *__restrict buffer ) const {
-	const int size = *visList++;
-	for( int i = 0; i < size; ++i ) {
-		buffer[visList[i]] = true;
+bool *AiAasWorld::addToDecompressedAreaVis( std::span<const uint16_t> visList, bool *__restrict buffer ) const {
+	const uint16_t *__restrict data = visList.data();
+	const size_t size = visList.size();
+	for( size_t i = 0; i < size; ++i ) {
+		buffer[data[i]] = true;
 	}
 	return buffer;
 }
-
-#if !( defined ( __i386__ ) || defined ( __x86_64__ ) || defined( _M_IX86 ) || defined( _M_AMD64 ) || defined( _M_X64 ) )
-
-bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum ) const {
-	// Just the most generic portable version
-	for( int i = 0; i < visList[0]; ++i ) {
-		if( visList[i + 1] == areaNum ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool AiAasWorld::FindInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const {
-	// Just the most generic portable version
-	for( int i = 0; i < visList[0]; ++i ) {
-		if( visList[i + 1] == areaNum1 || visList[i + 1] == areaNum2 ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-#else
-
-#include <xmmintrin.h>
-
-bool AiAasWorld::findInVisList( const uint16_t *__restrict visList, int areaNum ) const {
-	assert( (unsigned)areaNum <= std::numeric_limits<uint16_t>::max() );
-	__m128i xmmMask = _mm_set1_epi16( (int16_t)areaNum );
-
-	const auto *__restrict p = (__m128i *)( visList + 1 );
-	// We ensure that the list data always starts at 16-byte boundaries
-	assert( !( ( (uintptr_t)p ) % 16 ) );
-
-	// The number of elements in the list
-	const int listSize = visList[0];
-	// Every vector contains 8 shorts
-	for( int i = 0; i < listSize / 8; ++i ) {
-		// Just load a single vector.
-		// Agner Fog says that an OOE architecture itself acts as unrolling
-		__m128i xmmVal = _mm_load_si128( p );
-		// Limit ourselves to SSE2 instruction set.
-		__m128i xmmCmp = _mm_cmpeq_epi16( xmmVal, xmmMask );
-		// If there was a non-zero comparison result for some component
-		if( _mm_movemask_epi8( xmmCmp ) != 0x0 ) {
-			return true;
-		}
-		p++;
-	}
-
-	if( listSize % 8 ) {
-		// If there is a gap between the list and the next list it's filled by zeroes during lists building.
-		// The next list starts 2 bytes below the next 16-byte boundary.
-		// Just shift the data so we get another zero instead of next list length (that could match an area occasionally)
-		// Mask:             | AN | AN | AN | AN | AN | AN | AN | AN | <- area to find
-		// Val before shift: | 10 | 23 | 49 | 44 | 0  | 0  | 0  | 23 | <- next list length
-		// Val after shift:  |  0 | 10 | 23 | 49 | 44 | 0  | 0  | 0  |
-		// Note: don't be confused by s*L*li instruction as the order or components starts from W (last one first).
-		// Correctness of this has been tested separately.
-		__m128i xmmVal = _mm_slli_si128( _mm_load_si128( p ), 2 );
-		if( _mm_movemask_epi8( _mm_cmpeq_epi16( xmmVal, xmmMask ) ) != 0x0 ) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool AiAasWorld::findInVisList( const uint16_t *__restrict visList, int areaNum1, int areaNum2 ) const {
-	assert( (unsigned)areaNum1 <= std::numeric_limits<uint16_t>::max() );
-	assert( (unsigned)areaNum2 <= std::numeric_limits<uint16_t>::max() );
-	__m128i xmmMask1 = _mm_set1_epi16( (int16_t)areaNum1 );
-	__m128i xmmMask2 = _mm_set1_epi16( (int16_t)areaNum2 );
-
-	auto *__restrict p = (__m128i *)( visList + 1 );
-	// We ensure that the list data always starts at 16-byte boundaries
-	assert( !( ( (uintptr_t)p ) % 16 ) );
-
-	// The number of elements in the list
-	const int listSize = visList[0];
-	// Every vector contains 8 shorts
-	for( int i = 0; i < listSize / 8; ++i ) {
-		__m128i xmmVal = _mm_load_si128( p );
-		// Limit ourselves to SSE2 instruction set.
-		__m128i xmmCmp1 = _mm_cmpeq_epi16( xmmVal, xmmMask1 );
-		__m128i xmmCmp2 = _mm_cmpeq_epi16( xmmVal, xmmMask2 );
-		__m128i xmmCmpOr = _mm_or_si128( xmmCmp1, xmmCmp2 );
-		// If some of vector components has matched areaNum1 or areaNum2
-		if( _mm_movemask_epi8( xmmCmpOr ) != 0x0 ) {
-			return true;
-		}
-		p++;
-	}
-
-	if( listSize % 8 ) {
-		__m128i xmmVal = _mm_slli_si128( _mm_load_si128( p ), 2 );
-		__m128i xmmCmp1 = _mm_cmpeq_epi16( xmmVal, xmmMask1 );
-		__m128i xmmCmp2 = _mm_cmpeq_epi16( xmmVal, xmmMask2 );
-		if( _mm_movemask_epi8( _mm_or_si128( xmmCmp1, xmmCmp2 ) ) != 0x0 ) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-#endif

@@ -104,7 +104,7 @@ void BaseAction::CheckPredictionStepResults( PredictionContext *context ) {
 	int oldAasAreaNum = oldEntityPhysicsState.CurrAasAreaNum();
 	int newAasAreaNum = newEntityPhysicsState.CurrAasAreaNum();
 	if( newAasAreaNum != oldAasAreaNum ) {
-		const auto *aasAreaSettings = AiAasWorld::instance()->AreaSettings();
+		const auto &aasAreaSettings = AiAasWorld::instance()->getAreaSettings();
 		const auto &currAreaSettings = aasAreaSettings[newAasAreaNum];
 		const auto &prevAreaSettings = aasAreaSettings[oldAasAreaNum];
 

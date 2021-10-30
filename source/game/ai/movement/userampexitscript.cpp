@@ -34,9 +34,9 @@ bool UseRampExitScript::TryDeactivate( PredictionContext *context ) {
 
 const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int rampAreaNum, int forbiddenAreaNum ) {
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto aasReach = aasWorld->getReaches();
 
 	// Find ramp start and end flat grounded areas
 
@@ -126,7 +126,7 @@ MovementScript *FallbackAction::TryFindRampFallback( PredictionContext *context,
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto &exitArea = aasWorld->Areas()[*bestExitAreaNum];
+	const auto &exitArea = aasWorld->getAreas()[*bestExitAreaNum];
 
 	Vec3 areaPoint( exitArea.center );
 	areaPoint.Z() = exitArea.mins[2] + 1.0f - playerbox_stand_mins[2];

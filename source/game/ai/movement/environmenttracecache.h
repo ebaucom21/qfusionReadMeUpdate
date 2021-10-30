@@ -24,7 +24,7 @@ public:
 	};
 private:
 	// Precache this reference as it is used on every prediction step
-	const aas_areasettings_t *aasAreaSettings;
+	const std::span<const aas_areasettings_s> aasAreaSettings;
 
 	TraceResult results[16];
 	const CMShapeList *cachedShapeList { nullptr };
@@ -79,9 +79,7 @@ public:
 		return results[query.index];
 	}
 
-	EnvironmentTraceCache() {
-		this->aasAreaSettings = AiAasWorld::instance()->AreaSettings();
-	}
+	EnvironmentTraceCache() : aasAreaSettings( AiAasWorld::instance()->getAreaSettings() ) {}
 
 	void testForResultsMask( class PredictionContext *context, unsigned requiredResultsMask );
 

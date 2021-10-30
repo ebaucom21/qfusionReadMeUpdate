@@ -324,21 +324,21 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 }
 
 int BotTacticalSpotsCache::FindMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const {
-	int areaNums[24];
+	int areaNumsBuffer[24];
 	const Vec3 boxMins( Vec3( -20, -20, -12 ) + ent->r.absmin );
 	const Vec3 boxMaxs( Vec3( +20, +20, +12 ) + ent->r.absmax );
-	int numAreas = aasWorld->findAreasInBox( boxMins.Data(), boxMaxs.Data(), areaNums, 24 );
+	const auto boxAreaNums = aasWorld->findAreasInBox( boxMins.Data(), boxMaxs.Data(), areaNumsBuffer, 24 );
 
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	for( int i = 0; i < numAreas; ++i ) {
-		int areaFlags = aasAreaSettings[areaNums[i]].areaflags;
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	for( const int areaNum : boxAreaNums ) {
+		int areaFlags = aasAreaSettings[areaNum].areaflags;
 		if( !( areaFlags & AREA_GROUNDED ) ) {
 			continue;
 		}
 		if( areaFlags & AREA_DISABLED ) {
 			continue;
 		}
-		return areaNums[i];
+		return areaNum;
 	}
 	return 0;
 }

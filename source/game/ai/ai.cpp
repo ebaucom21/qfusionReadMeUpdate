@@ -250,12 +250,11 @@ static int FindGoalAASArea( edict_t *ent ) {
 	// Convert bounds to absolute ones
 	mins += ent->s.origin;
 	maxs += ent->s.origin;
-	const int numAreas = aasWorld->findAreasInBox( mins, maxs, areas, 16 );
+	const auto areasSpan = aasWorld->findAreasInBox( mins, maxs, areas, 16 );
 
 	int bestArea = 0;
 	float bestScore = 0.0f;
-	for( int i = 0; i < numAreas; ++i ) {
-		const int areaNum = areas[i];
+	for( const int areaNum: areasSpan ) {
 		float score = 0.0f;
 		if( AiManager::Instance()->IsAreaReachableFromHubAreas( areaNum, &score ) ) {
 			if( score > bestScore ) {

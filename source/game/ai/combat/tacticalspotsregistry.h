@@ -128,7 +128,7 @@ public:
 		OriginAndScore( const Vec3 &origin_, uint16_t scoreIndex_ )
 			: origin( origin_ ), scoreIndex( scoreIndex_ ) {}
 
-		static OriginAndScore ForArea( const aas_area_t *aasAreas, int areaNum, uint16_t scoreIndex ) {
+		static OriginAndScore ForArea( std::span<const aas_area_t> aasAreas, int areaNum, uint16_t scoreIndex ) {
 			Vec3 origin( aasAreas[areaNum].center );
 			origin.Z() = aasAreas[areaNum].mins[2] + 8.0f;
 			OriginAndScore result( origin, 1.0f );
@@ -322,13 +322,13 @@ public:
 	}
 
 	int TravelTimeFromAreaToSpot( int areaNum, int spotNum ) const {
-		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->NumAreas() );
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->getAreas().size() );
 		assert( (unsigned)spotNum < (unsigned)numSpots );
 		return spotsAndAreasTravelTimeTable[2 * ( areaNum * numSpots + spotNum ) + 1];
 	}
 
 	int TravelTimeFromSpotToArea( int spotNum, int areaNum ) const {
-		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->NumAreas() );
+		assert( (unsigned)areaNum < (unsigned)AiAasWorld::instance()->getAreas().size() );
 		assert( (unsigned)spotNum < (unsigned)numSpots );
 		return spotsAndAreasTravelTimeTable[2 * ( areaNum * numSpots + spotNum ) + 0];
 	}

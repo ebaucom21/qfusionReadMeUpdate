@@ -430,7 +430,7 @@ bool AiSquad::CheckCanFightTogether() const {
 }
 
 int AiSquad::GetBotFloorCluster( Bot *bot ) const {
-	const auto *aasFloorClusters = AiAasWorld::instance()->areaFloorClusterNums();
+	const std::span<const uint16_t> aasFloorClusters = AiAasWorld::instance()->areaFloorClusterNums();
 	// Zero area nums are handled by the dummy zero cluster num for the zero area
 	if( int clusterNum = aasFloorClusters[bot->EntityPhysicsState()->CurrAasAreaNum()] ) {
 		return clusterNum;

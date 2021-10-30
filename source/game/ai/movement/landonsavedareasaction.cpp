@@ -4,7 +4,7 @@
 int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 	// TODO: This can be precomputed at level start
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 
 	// Jumppad entity origin is not what one might think...
 	Vec3 jumppadOrigin( jumppadEntity->r.absmin );
@@ -21,14 +21,13 @@ int LandOnSavedAreasAction::FindJumppadAreaNum( const edict_t *jumppadEntity ) {
 		}
 	}
 
-	int areaNums[32];
+	int areaNumsBuffer[32];
 	Vec3 mins( -64, -64, -64 );
 	Vec3 maxs( +64, +64, +64 );
 	mins += jumppadOrigin;
 	maxs += jumppadOrigin;
-	int numAreas = aasWorld->findAreasInBox( mins, maxs, areaNums, 32 );
-	for( int i = 0; i < numAreas; ++i ) {
-		const int areaNum = areaNums[i];
+	const auto areaNums = aasWorld->findAreasInBox( mins, maxs, areaNumsBuffer, 32 );
+	for( const int areaNum: areaNums ) {
 		const auto &areaSettings = aasAreaSettings[areaNum];
 		const int contents = areaSettings.contents;
 		if( !( contents & AREACONTENTS_JUMPPAD ) ) {
@@ -117,16 +116,16 @@ float LandOnSavedAreasAction::SaveJumppadLandingAreas( const edict_t *jumppadEnt
 	if( int navTargetAreaNum = bot->NavTargetAasAreaNum() ) {
 		int reachNum = 0;
 		if( routeCache->PreferredRouteToGoalArea( jumppadAreaNum, navTargetAreaNum, &reachNum ) ) {
-			int jumppadTargetAreaNum = aasWorld->Reachabilities()[reachNum].areanum;
+			int jumppadTargetAreaNum = aasWorld->getReaches()[reachNum].areanum;
 			return SaveLandingAreasForJumppadTargetArea( jumppadEntity, navTargetAreaNum, jumppadTargetAreaNum );
 		}
 	}
 
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasReach = aasWorld->getReaches();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	// The nav target is not reachable. Try to find any areas reachable from the jumppad area by using the jumppad
-	const auto &jumppadAreaSettings = aasWorld->AreaSettings()[jumppadAreaNum];
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto &jumppadAreaSettings = aasAreaSettings[jumppadAreaNum];
 	const float *targetOrigin = jumppadEntity->target_ent->s.origin;
 	FilteredAreas filteredAreas;
 	// Find an area closest to the jumppad target
@@ -168,8 +167,8 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 																	int jumppadTargetAreaNum ) {
 	const auto *aasWorld = AiAasWorld::instance();
 	const auto *routeCache = bot->RouteCache();
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 
 	// Get areas around the jumppad area
 	const auto &jumppadTargetArea = aasAreas[jumppadTargetAreaNum];
@@ -179,8 +178,9 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 	// because the center might be biased and it leads to poor area selection e.g. on major wdm7 jumppad.
 	mins += jumppadEntity->target_ent->s.origin;
 	maxs += jumppadEntity->target_ent->s.origin;
-	int boxAreas[48];
-	const int numAreasInBox = aasWorld->findAreasInBox( mins, maxs, boxAreas, 48 );
+
+	int boxAreasBuffer[48];
+	const auto boxAreaNums = aasWorld->findAreasInBox( mins, maxs, boxAreasBuffer, 48 );
 
 	const int baseTravelTime = routeCache->PreferredRouteToGoalArea( jumppadTargetAreaNum, navTargetAreaNum );
 	// If the target is for some reasons unreachable or the jumppad target area is the nav target area too
@@ -192,8 +192,7 @@ float LandOnSavedAreasAction::SaveLandingAreasForJumppadTargetArea( const edict_
 
 	// Filter raw nearby areas
 	FilteredAreas filteredAreas;
-	for( int i = 0; i < numAreasInBox; ++i ) {
-		const int areaNum = boxAreas[i];
+	for( const int areaNum: boxAreaNums ) {
 		// Skip tests for the target area
 		if( areaNum == jumppadTargetAreaNum ) {
 			continue;
@@ -251,7 +250,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 														  const FilteredAreas &filteredAreas ) {
 	savedLandingAreas.clear();
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 
 	for( unsigned i = 0, end = std::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i )
 		savedLandingAreas.push_back( filteredAreas[i].areaNum );
@@ -304,7 +303,7 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContex
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const float *origin = entityPhysicsState.Origin();
 
-	const auto &area = AiAasWorld::instance()->Areas()[areaNum];
+	const auto &area = AiAasWorld::instance()->getAreas()[areaNum];
 	Vec3 areaPoint( area.center );
 	// Lower area point to a bottom of area. Area mins/maxs are absolute.
 	areaPoint.Z() = area.mins[2];
@@ -468,8 +467,8 @@ void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *cont
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaFloorClusterNums = aasWorld->areaFloorClusterNums();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaFloorClusterNums = aasWorld->areaFloorClusterNums();
 	// If the target area is in some floor cluster
 	if( int targetFloorClusterNum = aasAreaFloorClusterNums[targetAreaNum] ) {
 		int i = 0;

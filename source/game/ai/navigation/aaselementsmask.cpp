@@ -1,6 +1,5 @@
 #include "aasworld.h"
 #include "aaselementsmask.h"
-#include "../../../qcommon/wswstaticvector.h"
 
 BitVector *AasElementsMask::areasMask = nullptr;
 BitVector *AasElementsMask::facesMask = nullptr;
@@ -11,22 +10,23 @@ bool *AasElementsMask::blockedAreasTable = nullptr;
 
 int AasElementsMask::numAreas = 0;
 
-void AasElementsMask::Init( AiAasWorld *parent ) {
+void AasElementsMask::Init( AiAasWorld *aasWorld ) {
 	assert( bitVectorsHolder.empty() );
-	assert( parent->NumAreas() );
-	assert( parent->NumFaces() );
+	const auto worldAreas = aasWorld->getAreas();
+	const auto worldFaces = aasWorld->getFaces();
+
+	assert( !worldAreas.empty() );
+	assert( !worldFaces.empty() );
 
 	// Every item corresponds to a single bit.
 	// We can allocate only with a byte granularity so add one byte for every item.
-	unsigned numAreasBytes = ( parent->NumAreas() / 8 ) + 4u;
-	areasMask = new( bitVectorsHolder.unsafe_grow_back() )BitVector(
-		(uint8_t *)Q_malloc( numAreasBytes ), numAreasBytes );
+	const size_t numAreasBytes = ( worldAreas.size() / 8 ) + 4u;
+	areasMask = new( bitVectorsHolder.unsafe_grow_back() )BitVector( (uint8_t *)Q_malloc( numAreasBytes ), numAreasBytes );
 
-	unsigned numFacesBytes = ( parent->NumFaces() / 8 ) + 4u;
-	facesMask = new( bitVectorsHolder.unsafe_grow_back() )BitVector(
-		(uint8_t *)Q_malloc( numFacesBytes ), numFacesBytes );
+	const size_t numFacesBytes = ( worldFaces.size() / 8 ) + 4u;
+	facesMask = new( bitVectorsHolder.unsafe_grow_back() )BitVector( (uint8_t *)Q_malloc( numFacesBytes ), numFacesBytes );
 
-	numAreas = parent->NumAreas();
+	numAreas = (int)worldAreas.size();
 
 	tmpAreasVisRow = (bool *)Q_malloc( sizeof( bool ) * numAreas * TMP_ROW_REDUNDANCY_SCALE );
 	// Don't share these buffers even it looks doable.
@@ -41,13 +41,9 @@ void AasElementsMask::Shutdown() {
 	areasMask = nullptr;
 	facesMask = nullptr;
 
-	if( tmpAreasVisRow ) {
-		Q_free( tmpAreasVisRow );
-		tmpAreasVisRow = nullptr;
-	}
+	Q_free( tmpAreasVisRow );
+	tmpAreasVisRow = nullptr;
 
-	if( blockedAreasTable ) {
-		Q_free( blockedAreasTable );
-		blockedAreasTable = nullptr;
-	}
+	Q_free( blockedAreasTable );
+	blockedAreasTable = nullptr;
 }

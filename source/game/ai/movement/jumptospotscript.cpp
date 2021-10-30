@@ -66,7 +66,7 @@ bool JumpToSpotScript::TryDeactivate( PredictionContext *context ) {
 		return false;
 	}
 
-	const auto *aasAreaSettings = AiAasWorld::instance()->AreaSettings();
+	const auto aasAreaSettings = AiAasWorld::instance()->getAreaSettings();
 
 	int currAreaNums[2] = { 0, 0 };
 	const int numCurrAreas = entityPhysicsState->PrepareRoutingStartAreas( currAreaNums );
@@ -217,9 +217,9 @@ void JumpToSpotScript::SetupMovement( PredictionContext *context ) {
 class BestAreaCenterJumpableSpotDetector: public BestRegularJumpableSpotDetector {
 	wsw::StaticVector<SpotAndScore, 64> spotsHeap;
 	void GetCandidateSpots( SpotAndScore **begin, SpotAndScore **end ) override;
-	inline int GetBoxAreas( int *boxAreaNums, int maxAreaNums );
-	void FillCandidateSpotsUsingRoutingTest( const int *boxAreaNums, int numBoxAreas );
-	void FillCandidateSpotsWithoutRoutingTest( const int *boxAreaNums, int numBoxAreas );
+	std::span<const int> GetBoxAreas( int *areasBuffer, int maxNumAreas  );
+	void FillCandidateSpotsUsingRoutingTest( std::span<const int> boxAreaNums );
+	void FillCandidateSpotsWithoutRoutingTest( std::span<const int> boxAreaNums );
 	inline bool TestAreaSettings( const aas_areasettings_t &areaSettings );
 public:
 	BestAreaCenterJumpableSpotDetector() {
@@ -242,7 +242,7 @@ inline bool BestAreaCenterJumpableSpotDetector::TestAreaSettings( const aas_area
 	return true;
 }
 
-int BestAreaCenterJumpableSpotDetector::GetBoxAreas( int *boxAreaNums, int maxAreaNums ) {
+std::span<const int> BestAreaCenterJumpableSpotDetector::GetBoxAreas( int *boxAreaNums, int maxAreaNums ) {
 	Vec3 boxMins( -128, -128, -32 );
 	Vec3 boxMaxs( +128, +128, +64 );
 	boxMins += startOrigin;
@@ -253,12 +253,12 @@ int BestAreaCenterJumpableSpotDetector::GetBoxAreas( int *boxAreaNums, int maxAr
 void BestAreaCenterJumpableSpotDetector::GetCandidateSpots( SpotAndScore **begin, SpotAndScore **end ) {
 	spotsHeap.clear();
 
-	int boxAreaNums[64];
-	int numBoxAreas = GetBoxAreas( boxAreaNums, 64 );
+	int boxAreaNumsBuffer[64];
+	const auto boxAreaNums = GetBoxAreas( boxAreaNumsBuffer, 64 );
 	if( routeCache ) {
-		FillCandidateSpotsUsingRoutingTest( boxAreaNums, numBoxAreas );
+		FillCandidateSpotsUsingRoutingTest( boxAreaNums );
 	} else {
-		FillCandidateSpotsWithoutRoutingTest( boxAreaNums, numBoxAreas );
+		FillCandidateSpotsWithoutRoutingTest( boxAreaNums );
 	}
 
 	std::make_heap( spotsHeap.begin(), spotsHeap.end() );
@@ -267,13 +267,12 @@ void BestAreaCenterJumpableSpotDetector::GetCandidateSpots( SpotAndScore **begin
 	*end = spotsHeap.end();
 }
 
-void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsUsingRoutingTest( const int *boxAreaNums, int numBoxAreas ) {
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsUsingRoutingTest( std::span<const int> boxAreaNums ) {
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const float areaPointZOffset = 1.0f - playerbox_stand_mins[2];
 
-	for( int i = 0; i < numBoxAreas; ++i ) {
-		const int areaNum = boxAreaNums[i];
+	for( const int areaNum: boxAreaNums ) {
 		if( !TestAreaSettings( aasAreaSettings[areaNum] ) ) {
 			continue;
 		}
@@ -295,13 +294,12 @@ void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsUsingRoutingTest( con
 	}
 }
 
-void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsWithoutRoutingTest( const int *boxAreaNums, int numBoxAreas ) {
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsWithoutRoutingTest( std::span<const int> boxAreaNums ) {
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const float areaPointZOffset = 1.0f - playerbox_stand_mins[2];
 
-	for( int i = 0; i < numBoxAreas; ++i ) {
-		const int areaNum = boxAreaNums[i];
+	for( const int areaNum: boxAreaNums ) {
 		if( !TestAreaSettings( aasAreaSettings[areaNum] ) ) {
 			continue;
 		}
@@ -378,15 +376,15 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 			// If there is no significant sloppiness
 			if( fabsf( reachVec.Z() ) / sqrtf( SQUARE( reachVec.X() ) + SQUARE( reachVec.Y() ) ) < 0.3f ) {
 				const auto *aasWorld = AiAasWorld::instance();
-				const auto *aasAreas = aasWorld->Areas();
-				const auto *aasAreaSettings = aasWorld->AreaSettings();
+				const auto aasAreas = aasWorld->getAreas();
+				const auto aasAreaSettings = aasWorld->getAreaSettings();
 
-				int tracedAreaNums[32];
-				tracedAreaNums[0] = 0;
-				const int numTracedAreas = aasWorld->traceAreas( nextReach.start, nextReach.end, tracedAreaNums, 32 );
+				int areaNumsBuffer[32];
+				areaNumsBuffer[0] = 0;
+				const auto tracedAreaNums = aasWorld->traceAreas( nextReach.start, nextReach.end, areaNumsBuffer, 32 );
 				const float startAreaZ = aasAreas[tracedAreaNums[0]].mins[2];
-				int i = 1;
-				for(; i < numTracedAreas; ++i ) {
+				size_t i = 1;
+				for(; i < tracedAreaNums.size(); ++i ) {
 					const int areaNum = tracedAreaNums[i];
 					// Stop on a non-grounded area
 					if( !( aasAreaSettings[areaNum].areaflags & AREA_GROUNDED ) ) {
@@ -405,7 +403,7 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 				}
 
 				// All areas pass the walkability test, use walking to a node that seems to be really close
-				if( i == numTracedAreas ) {
+				if( i == tracedAreaNums.size() ) {
 					auto *fallback = &m_subsystem->useWalkableNodeScript;
 					Vec3 target( nextReach.end );
 					target.Z() += 1.0f - playerbox_stand_mins[2];
@@ -580,8 +578,8 @@ void BestConnectedToHubAreasJumpableSpotDetector::GetCandidateSpots( SpotAndScor
 	spotsHeap.clear();
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreas = aasWorld->Areas();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const auto *aiManager = AiManager::Instance();
 
 	Vec3 boxMins( -searchRadius, -searchRadius, -32.0f - 0.33f * searchRadius );
@@ -589,10 +587,9 @@ void BestConnectedToHubAreasJumpableSpotDetector::GetCandidateSpots( SpotAndScor
 	boxMins += startOrigin;
 	boxMaxs += startOrigin;
 
-	int boxAreas[256];
-	const int numBoxAreas = AiAasWorld::instance()->findAreasInBox( boxMins, boxMaxs, boxAreas, 256 );
-	for( int i = 0; i < numBoxAreas; ++i ) {
-		const int areaNum = boxAreas[i];
+	int areasBuffer[256];
+	const auto boxAreaNums = AiAasWorld::instance()->findAreasInBox( boxMins, boxMaxs, areasBuffer, 256 );
+	for( const int areaNum: boxAreaNums ) {
 		const auto &areaSettings = aasAreaSettings[areaNum];
 		if( !( areaSettings.areaflags & AREA_GROUNDED ) ) {
 			continue;

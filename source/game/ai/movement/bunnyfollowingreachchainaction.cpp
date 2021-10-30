@@ -47,8 +47,8 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 		m_cachedReachNum = context->NextReachNum();
 		m_cachedReachPointsToTrigger = false;
 		if( m_cachedReachNum ) {
-			const auto *const aasReach = AiAasWorld::instance()->Reachabilities();
-			const auto &reach = aasReach[m_cachedReachNum];
+			const auto aasReaches = AiAasWorld::instance()->getReaches();
+			const auto &reach = aasReaches[m_cachedReachNum];
 			const TravelTypeClass travelTypeClass = classifyTravelType( reach );
 			if( travelTypeClass == TravelTypeClass::Incompatible ) {
 				context->SetPendingRollback();
@@ -63,7 +63,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 					context->SetPendingRollback();
 					return;
 				}
-				if( classifyTravelType( aasReach[m_cachedNextReachNum] ) == TravelTypeClass::Incompatible ) {
+				if( classifyTravelType( aasReaches[m_cachedNextReachNum] ) == TravelTypeClass::Incompatible ) {
 					context->SetPendingRollback();
 					return;
 				}
@@ -74,9 +74,9 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 	}
 
 	int chosenReachNum = -1;
-	const auto *const __restrict aasReach = AiAasWorld::instance()->Reachabilities();
+	const auto aasReaches = AiAasWorld::instance()->getReaches();
 	if( m_cachedReachNum ) {
-		const auto &reach = aasReach[m_cachedReachNum];
+		const auto &reach = aasReaches[m_cachedReachNum];
 		if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > SQUARE( 32.0f ) ) {
 			chosenReachNum = m_cachedReachNum;
 		} else if( m_cachedReachPointsToTrigger ) {
@@ -90,7 +90,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 			}
 		} else {
 			if( m_cachedNextReachNum ) {
-				const auto &nextReach = aasReach[m_cachedNextReachNum];
+				const auto &nextReach = aasReaches[m_cachedNextReachNum];
 				if( Distance2DSquared( nextReach.start, entityPhysicsState.Origin() ) > SQUARE( 32.0f ) ) {
 					chosenReachNum = m_cachedNextReachNum;
 				} else {
@@ -105,7 +105,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 
 	Vec3 lookVec( 0, 0, 0 );
 	if( chosenReachNum > 0 ) {
-		lookVec.Set( aasReach[chosenReachNum].start );
+		lookVec.Set( aasReaches[chosenReachNum].start );
 		lookVec.Z() += 32.0f;
 		lookVec -= entityPhysicsState.Origin();
 		lookVec.Z() *= Z_NO_BEND_SCALE;

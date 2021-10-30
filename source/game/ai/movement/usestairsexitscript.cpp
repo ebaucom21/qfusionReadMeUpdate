@@ -11,7 +11,7 @@ bool UseStairsExitScript::TryDeactivate( PredictionContext *context ) {
 		return false;
 	}
 
-	const auto *aasAreaStairsClusterNums = AiAasWorld::instance()->areaStairsClusterNums();
+	const auto aasAreaStairsClusterNums = AiAasWorld::instance()->areaStairsClusterNums();
 
 	int areaNums[2] = { 0, 0 };
 	int numBotAreas = GetCurrBotAreas( areaNums );
@@ -49,15 +49,14 @@ const uint16_t *TryFindBestStairsExitArea( PredictionContext *context, int stair
 	const auto *routeCache = context->RouteCache();
 	const auto &travelFlags = context->TravelFlags();
 
-	const uint16_t *stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum ) + 1;
-	int numAreasInStairsCluster = stairsClusterAreaNums[-1];
+	const std::span<const uint16_t> stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum );
 
 	// TODO: Support curved stairs, here and from StairsClusterBuilder side
 
 	// Determine whether highest or lowest area is closer to the nav target
 	const uint16_t *stairsBoundaryAreas[2];
-	stairsBoundaryAreas[0] = &stairsClusterAreaNums[0];
-	stairsBoundaryAreas[1] = &stairsClusterAreaNums[numAreasInStairsCluster - 1];
+	stairsBoundaryAreas[0] = std::addressof( stairsClusterAreaNums.front() );
+	stairsBoundaryAreas[1] = std::addressof( stairsClusterAreaNums.back() );
 
 	int bestStairsAreaIndex = -1;
 	int bestTravelTimeOfStairsAreas = std::numeric_limits<int>::max();

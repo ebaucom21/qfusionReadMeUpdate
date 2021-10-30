@@ -328,9 +328,12 @@ void AiManager::FindHubAreas() {
 		return;
 	}
 
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasReaches = aasWorld->getReaches();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	wsw::StaticVector<AreaAndScore, sizeof( hubAreas ) / sizeof( *hubAreas )> bestAreasHeap;
-	for( int i = 1; i < aasWorld->NumAreas(); ++i ) {
-		const auto &areaSettings = aasWorld->AreaSettings()[i];
+	for( size_t i = 1; i < aasAreaSettings.size(); ++i ) {
+		const auto &areaSettings = aasAreaSettings[i];
 		if( !( areaSettings.areaflags & AREA_GROUNDED ) ) {
 			continue;
 		}
@@ -342,7 +345,7 @@ void AiManager::FindHubAreas() {
 		}
 
 		// Reject degenerate areas, pass only relatively large areas
-		const auto &area = aasWorld->Areas()[i];
+		const auto &area = aasAreas[i];
 		if( area.maxs[0] - area.mins[0] < 56.0f ) {
 			continue;
 		}
@@ -355,7 +358,7 @@ void AiManager::FindHubAreas() {
 		int reachNum = areaSettings.firstreachablearea;
 		int lastReachNum = areaSettings.firstreachablearea + areaSettings.numreachableareas - 1;
 		while( reachNum <= lastReachNum ) {
-			const auto &reach = aasWorld->Reachabilities()[reachNum];
+			const auto &reach = aasReaches[reachNum];
 			if( reach.traveltype == TRAVEL_WALK || reach.traveltype == TRAVEL_WALKOFFLEDGE ) {
 				usefulReachCount++;
 			}
@@ -367,7 +370,7 @@ void AiManager::FindHubAreas() {
 			continue;
 		}
 
-		bestAreasHeap.push_back( AreaAndScore( i, usefulReachCount ) );
+		bestAreasHeap.push_back( AreaAndScore( (int)i, (float)usefulReachCount ) );
 		std::push_heap( bestAreasHeap.begin(), bestAreasHeap.end() );
 
 		// bestAreasHeap size should be always less than its capacity:

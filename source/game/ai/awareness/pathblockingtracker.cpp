@@ -86,13 +86,13 @@ private:
 	// Let the array head be closer to the memory hot spot
 	wsw::StaticVector<EnemyComputationalProxy, MAX_ENEMIES> enemyProxies;
 
-	void AddAreas( const uint16_t *__restrict areasList, bool *__restrict blockedAreasTable );
+	void AddAreas( std::span<const uint16_t> areasNums, bool *blockedAreasTable );
 
-	void AddGroundedAreas( bool *__restrict blockedAreasTable );
+	void AddGroundedAreas( bool *blockedAreasTable );
 
-	void AddNonGroundedAreas( const uint16_t *__restrict areasList, bool *__restrict blockedAreasTable );
+	void AddNonGroundedAreas( std::span<const uint16_t> areaNums, bool *blockedAreasTable );
 public:
-	void FillBlockedAreasTable( bool *__restrict blockedAreasTable ) override;
+	void FillBlockedAreasTable( bool *blockedAreasTable ) override;
 
 	DisableMapAreasRequest( const TrackedEnemy **begin, const TrackedEnemy **end,
 							const float *botOrigin_, float damageToKillBot_ );
@@ -234,10 +234,10 @@ DisableMapAreasRequest::DisableMapAreasRequest( const TrackedEnemy **begin,
 	}
 }
 
-void DisableMapAreasRequest::FillBlockedAreasTable( bool *__restrict blockedAreasTable ) {
+void DisableMapAreasRequest::FillBlockedAreasTable( bool *blockedAreasTable ) {
 	AddGroundedAreas( blockedAreasTable );
 
-	AddAreas( aasWorld->WalkOffLedgePassThroughAirAreas(), blockedAreasTable );
+	AddAreas( aasWorld->walkOffLedgePassThroughAirAreas(), blockedAreasTable );
 
 	// For every area in these list we use "all hit flags" mask
 	// as the a is extremely vulnerable while moving through these areas
@@ -246,14 +246,14 @@ void DisableMapAreasRequest::FillBlockedAreasTable( bool *__restrict blockedArea
 	// as the test has been performed earlier.
 	// As the total number of these areas is insignificant,
 	// this should not has any impact on performance.
-	const uint16_t *skipGroundedAreasLists[] = {
-		aasWorld->JumppadReachPassThroughAreas(),
-		aasWorld->LadderReachPassThroughAreas(),
-		aasWorld->ElevatorReachPassThroughAreas()
+	const std::span<const uint16_t> skipGroundedAreasLists[] = {
+		aasWorld->jumppadReachPassThroughAreas(),
+		aasWorld->ladderReachPassThroughAreas(),
+		aasWorld->elevatorReachPassThroughAreas()
 	};
 
-	for( const auto *areasList: skipGroundedAreasLists ) {
-		AddNonGroundedAreas( areasList, blockedAreasTable );
+	for( const auto &areaNums: skipGroundedAreasLists ) {
+		AddNonGroundedAreas( areaNums, blockedAreasTable );
 	}
 
 	// Requires sv_pps 62, a simple map and and a single bot
@@ -265,15 +265,11 @@ void DisableMapAreasRequest::FillBlockedAreasTable( bool *__restrict blockedArea
 	//}
 }
 
-void DisableMapAreasRequest::AddAreas( const uint16_t *__restrict areasList,
-									   bool *__restrict blockedAreasTable ) {
+void DisableMapAreasRequest::AddAreas( std::span<const uint16_t> areaNums, bool *blockedAreasTable ) {
 	const auto hitFlagsMask = (int)TrackedEnemy::HitFlags::ALL;
-	const auto *const __restrict aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 
-	// Skip the list size
-	const auto listSize = *areasList++;
-	for( int i = 0; i < listSize; ++i ) {
-		const auto areaNum = areasList[i];
+	for( const int areaNum : areaNums ) {
 		// Skip nearby areas
 		if( DistanceSquared( aasAreas[areaNum].center, botOrigin ) < 192.0f * 192.0f ) {
 			continue;
@@ -296,19 +292,18 @@ void DisableMapAreasRequest::AddAreas( const uint16_t *__restrict areasList,
 	}
 }
 
-void DisableMapAreasRequest::AddGroundedAreas( bool *__restrict blockedAreasTable ) {
+void DisableMapAreasRequest::AddGroundedAreas( bool *blockedAreasTable ) {
 	// TODO: We already ignore RAIL hit flags mask in the actual test fn., do we?
 	const auto hitFlagsMask = (int)TrackedEnemy::HitFlags::ALL & ~(int)( TrackedEnemy::HitFlags::RAIL );
 	// Do not take "rail" hit flags into account while testing grounded areas for blocking.
 	// A bot can easily dodge rail-like weapons using regular movement on ground.
-	const auto *const __restrict groundedAreaNums = aasWorld->GroundedPrincipalRoutingAreas() + 1;
-	const auto *const __restrict aasAreas = aasWorld->Areas();
+	const auto groundedAreaNums = aasWorld->groundedPrincipalRoutingAreas();
+	const auto aasAreas = aasWorld->getAreas();
 
 	const float squareDistanceThreshold = 192.0f * 192.0f;
 	// Check whether we are not in a huge area so we do not have to check the area num additionally
 	if( DistanceSquared( aasAreas[botAreaNum].center, botOrigin ) <= squareDistanceThreshold ) {
-		for( int i = 0; i < groundedAreaNums[-1]; ++i ) {
-			const int areaNum = groundedAreaNums[i];
+		for( const int areaNum : groundedAreaNums ) {
 			// Skip nearby areas (including the current one)
 			// These are coarse tests that are however sufficient to prevent blocking nearby areas around bot in most cases.
 			// Note that the additional area test is performed to prevent blocking of the current area
@@ -332,8 +327,7 @@ void DisableMapAreasRequest::AddGroundedAreas( bool *__restrict blockedAreasTabl
 	}
 
 	// Handle the rare but possible case when the current area is so huge that the distance threshold test fails for it
-	for( int i = 0; i < groundedAreaNums[-1]; ++i ) {
-		const int areaNum = groundedAreaNums[i];
+	for( const int areaNum : groundedAreaNums ) {
 		// Skip nearby areas
 		if( DistanceSquared( aasAreas[areaNum].center, botOrigin ) < squareDistanceThreshold ) {
 			continue;
@@ -355,14 +349,11 @@ void DisableMapAreasRequest::AddGroundedAreas( bool *__restrict blockedAreasTabl
 	}
 }
 
-void DisableMapAreasRequest::AddNonGroundedAreas( const uint16_t *__restrict areasList,
-												  bool *__restrict blockedAreasTable ) {
+void DisableMapAreasRequest::AddNonGroundedAreas( std::span<const uint16_t> areaNums, bool *blockedAreasTable ) {
 	const int hitFlagsMask = (int)TrackedEnemy::HitFlags::ALL;
-	const auto *const __restrict aasAreaSettings = aasWorld->AreaSettings();
-	const auto *const __restrict aasAreas = aasWorld->Areas();
-	// The first list element is its size
-	for( int i = 0; i < areasList[0]; ++i ) {
-		const auto areaNum = areasList[i + 1];
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	for( const int areaNum: areaNums ) {
 		// We actually test this instead of skipping during list building
 		// as AiAasWorld() getter signatures would have look awkward otherwise...
 		// This is not an expensive operation as the number of such areas is very limited.
@@ -421,7 +412,7 @@ bool EnemyComputationalProxy::CutOffForFlags( const aas_area_t &area, const floa
 }
 
 bool EnemyComputationalProxy::MayBlockOtherArea( int areaNum, int hitFlagsMask ) const {
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	float squareDistance = DistanceSquared( origin, area.center );
 	if( squareDistance > squareBaseBlockingRadius ) {
 		if( CutOffForFlags( area, squareDistance, hitFlagsMask ) ) {
@@ -433,7 +424,7 @@ bool EnemyComputationalProxy::MayBlockOtherArea( int areaNum, int hitFlagsMask )
 }
 
 bool EnemyComputationalProxy::MayBlockGroundedArea( int areaNum, int hitFlagsMask ) const {
-	const auto &__restrict area = aasWorld->Areas()[areaNum];
+	const auto &__restrict area = aasWorld->getAreas()[areaNum];
 	const float squareDistance = DistanceSquared( origin, area.center );
 	// Hit flags are combined from ROCKET, SHAFT.
 	// The limit for SHAFT is the greatest limit
@@ -492,17 +483,17 @@ int EnemyComputationalProxy::ComputeAreaNums( int areaNums[MAX_AREAS] ) {
 	// Find some areas in the box.
 
 	int rawAreaNums[8];
-	int numRawAreas = aasWorld->findAreasInBox( enemyBoxMins, enemyBoxMaxs, rawAreaNums, 8 );
+	const auto rawAreasSpan = aasWorld->findAreasInBox( enemyBoxMins, enemyBoxMaxs, rawAreaNums, 8 );
 
 	int areaFlags[8];
-	const auto *const __restrict areaSettings = aasWorld->AreaSettings();
-	for( int i = 0; i < numRawAreas; ++i ) {
+	const auto areaSettings = aasWorld->getAreaSettings();
+	for( size_t i = 0; i < rawAreasSpan.size(); ++i ) {
 		// TODO: an AAS world should supply a list of area flags (without other data that wastes bandwidth)
-		areaFlags[i] = areaSettings[rawAreaNums[i]].areaflags;
+		areaFlags[i] = areaSettings[rawAreasSpan[i]].areaflags;
 	}
 
 	// Try to select non-junk grounded areas first
-	for( int i = 0; i < numRawAreas; ++i ) {
+	for( size_t i = 0; i < rawAreasSpan.size(); ++i ) {
 		if( !( areaFlags[i] & AREA_JUNK ) ) {
 			if( areaFlags[i] & AREA_GROUNDED ) {
 				areaNums[numAreas++] = rawAreaNums[i];
@@ -516,7 +507,7 @@ int EnemyComputationalProxy::ComputeAreaNums( int areaNums[MAX_AREAS] ) {
 	// Compare area numbers to the (maybe) added first area
 
 	// Try adding non-junk arbitrary areas
-	for( int i = 0; i < numRawAreas; ++i ) {
+	for( size_t i = 0; i < rawAreasSpan.size(); ++i ) {
 		if( !( areaFlags[i] & AREA_JUNK ) ) {
 			if( areaNums[0] != rawAreaNums[i] ) {
 				areaNums[numAreas++] = rawAreaNums[i];
@@ -528,7 +519,7 @@ int EnemyComputationalProxy::ComputeAreaNums( int areaNums[MAX_AREAS] ) {
 	}
 
 	// Try adding any area left
-	for( int i = 0; i < numRawAreas; ++i ) {
+	for( size_t i = 0; i < rawAreasSpan.size(); ++i ) {
 		if( areaNums[0] != rawAreaNums[i] ) {
 			areaNums[numAreas++] = rawAreaNums[i];
 			if( numAreas == MAX_AREAS ) {
@@ -555,7 +546,7 @@ const bool *EnemyComputationalProxy::PrepareAreasVisRow( const int *ownAreaNums,
 	const auto *const aasWorld = AiAasWorld::instance();
 
 	if( !numOwnAreas ) {
-		memset( row, 0, aasWorld->NumAreas() * sizeof( *row ) );
+		memset( row, 0, aasWorld->getAreas().size() * sizeof( *row ) );
 		return row;
 	}
 

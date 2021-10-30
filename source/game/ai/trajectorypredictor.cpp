@@ -126,12 +126,11 @@ static inline int TestFlagsMismatch( int flagsValue, int expectedFlag, int *resu
 }
 
 template<int Flags>
-int AiTrajectoryPredictor::InspectAasWorldTraceForFlags( const int *areaNums, int numTracedAreas, Results *results ) {
-	const auto *areaSettings = aasWorld->AreaSettings();
+int AiTrajectoryPredictor::InspectAasWorldTraceForFlags( std::span<const int> tracedAreaNums, Results *results ) {
+	const auto areaSettings = aasWorld->getAreaSettings();
 
 	int result = 0;
-	for( int i = 0; i < numTracedAreas; ++i ) {
-		const int areaNum = areaNums[i];
+	for( const int areaNum: tracedAreaNums ) {
 		if( stopEventFlags & ( Flags & ENTER_AREA_NUM ) ) {
 			if( enterAreaNum == areaNum ) {
 				results->enterAreaNum = areaNum;
@@ -173,24 +172,24 @@ int AiTrajectoryPredictor::InspectAasWorldTrace( Results *results ) {
 	areasBuffer[1] = 1;
 	int *areaNums = areasBuffer + 2;
 
-	int numAreas = aasWorld->traceAreas( prevOrigin.Data(), results->origin, areaNums, 128 );
-	results->lastAreaNum = areaNums[numAreas - 1];
+	const auto numsSpan = aasWorld->traceAreas( prevOrigin.Data(), results->origin, areasBuffer + 2, 128 );
+	results->lastAreaNum = areaNums[numsSpan.size() - 1];
 	// Even if there are areas in the trace, the last area might be zero if areas trace ends in solid
 	if( !results->lastAreaNum ) {
-		results->lastAreaNum = areaNums[numAreas - 2];
+		results->lastAreaNum = areaNums[numsSpan.size() - 2];
 	}
 
 	// Now try selecting an optimized generated code version for the most frequent cases
 	if( stopEventFlags == ENTER_AREA_CONTENTS ) {
-		return InspectAasWorldTraceForFlags<ENTER_AREA_CONTENTS>( areaNums, numAreas, results );
+		return InspectAasWorldTraceForFlags<ENTER_AREA_CONTENTS>( numsSpan, results );
 	}
 
 	constexpr auto ENTER_MASK = ENTER_AREA_NUM | ENTER_AREA_FLAGS | ENTER_AREA_CONTENTS;
 	constexpr auto LEAVE_MASK = LEAVE_AREA_NUM | LEAVE_AREA_FLAGS | LEAVE_AREA_CONTENTS;
 
 	if( ( stopEventFlags & ENTER_MASK ) && ~( stopEventFlags & LEAVE_MASK ) ) {
-		return InspectAasWorldTraceForFlags<ENTER_MASK>( areaNums, numAreas, results );
+		return InspectAasWorldTraceForFlags<ENTER_MASK>( numsSpan, results );
 	}
 
-	return InspectAasWorldTraceForFlags<ENTER_MASK | LEAVE_MASK>( areaNums, numAreas, results );
+	return InspectAasWorldTraceForFlags<ENTER_MASK | LEAVE_MASK>( numsSpan, results );
 }

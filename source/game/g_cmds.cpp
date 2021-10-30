@@ -719,10 +719,10 @@ static void Cmd_Position_f( edict_t *ent ) {
 			return;
 		}
 
-		const int numAreas = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, nums, 32 );
+		const auto boxAreaNums = aasWorld->findAreasInBox( ent->r.absmin, ent->r.absmax, nums, 32 );
 		ss << ", AAS areas for box: [";
-		for( int i = 0; i < numAreas; ++i ) {
-			ss << nums[i] << ( ( i + 1 != numAreas ) ? "," : "" );
+		for( size_t i = 0; i < boxAreaNums.size(); ++i ) {
+			ss << nums[i] << ( ( i + 1 != boxAreaNums.size() ) ? "," : "" );
 		}
 		ss << "]";
 

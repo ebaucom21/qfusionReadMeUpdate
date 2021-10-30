@@ -40,9 +40,9 @@ protected:
 	BitVector *const __restrict visitedAreas;
 	BitVector *const __restrict visitedFaces;
 	const AiAasWorld *const __restrict aasWorld;
-	const aas_area_t *const __restrict aasAreas;
-	const aas_face_t *const __restrict aasFaces;
-	const aas_faceindex_t *const __restrict aasFaceIndex;
+	const std::span<const aas_area_t> aasAreas;
+	const std::span<const aas_face_t> aasFaces;
+	const std::span<const aas_faceindex_t> aasFaceIndex;
 
 	virtual bool ProcessAreaTransition( int currArea, int nextArea, const aas_face_t *face ) = 0;
 public:
@@ -50,9 +50,9 @@ public:
 		: visitedAreas( visitedAreas_ )
 		, visitedFaces( visitedFaces_ )
 		, aasWorld( AiAasWorld::instance() )
-		, aasAreas( aasWorld->Areas() )
-		, aasFaces( aasWorld->Faces() )
-		, aasFaceIndex( aasWorld->FaceIndex() ) {
+		, aasAreas( aasWorld->getAreas() )
+		, aasFaces( aasWorld->getFaces() )
+		, aasFaceIndex( aasWorld->getFaceIndex() ) {
 		visitedAreas->Clear();
 		visitedFaces->Clear();
 		queue.Add( startAreaNum );
@@ -65,8 +65,8 @@ public:
 			const int areaNum = queue.Pop();
 			visitedAreas->Set( areaNum, true );
 
-			const auto *__restrict area = aasAreas + areaNum;
-			for( int faceIndexNum = area->firstface; faceIndexNum < area->firstface + area->numfaces; ++faceIndexNum ) {
+			const auto &__restrict area = aasAreas[areaNum];
+			for( int faceIndexNum = area.firstface; faceIndexNum < area.firstface + area.numfaces; ++faceIndexNum ) {
 				const int faceIndex = aasFaceIndex[faceIndexNum];
 
 				// If the face has been already processed, skip it.
@@ -79,10 +79,10 @@ public:
 				const aas_face_t *face;
 				int nextAreaNum;
 				if( faceIndex >= 0 ) {
-					face = aasFaces + faceIndex;
+					face = &aasFaces[+faceIndex];
 					nextAreaNum = face->backarea;
 				} else {
-					face = aasFaces - faceIndex;
+					face = &aasFaces[-faceIndex];
 					nextAreaNum = face->frontarea;
 				}
 

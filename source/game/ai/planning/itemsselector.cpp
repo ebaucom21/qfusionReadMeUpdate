@@ -298,7 +298,7 @@ std::optional<SelectedNavEntity> BotItemsSelector::SuggestGoalNavEntity( const N
 
 	// Try checking whether the bot is in some floor cluster to give a greater weight for items in the same cluster
 	int currFloorClusterNum = 0;
-	const auto *aasFloorClusterNums = AiAasWorld::instance()->areaFloorClusterNums();
+	const std::span<const uint16_t> aasFloorClusterNums = AiAasWorld::instance()->areaFloorClusterNums();
 	if( aasFloorClusterNums[entityPhysicsState->CurrAasAreaNum()] ) {
 		currFloorClusterNum = aasFloorClusterNums[entityPhysicsState->CurrAasAreaNum()];
 	} else if( aasFloorClusterNums[entityPhysicsState->DroppedToFloorAasAreaNum()] ) {

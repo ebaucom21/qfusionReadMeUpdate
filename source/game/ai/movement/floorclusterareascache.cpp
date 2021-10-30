@@ -19,7 +19,7 @@ bool SameFloorClusterAreasCache::AreaPassesCollisionTest( const Vec3 &start,
 														  int areaNum,
 														  const vec3_t mins,
 														  const vec3_t maxs ) const {
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	Vec3 areaPoint( area.center );
 	areaPoint.Z() = area.mins[2] + 1.0f + ( -playerbox_stand_mins[2] );
 
@@ -36,7 +36,7 @@ bool NextFloorClusterAreasCache::AreaPassesCollisionTest( const Vec3 &start,
 														  int areaNum,
 														  const vec3_t mins,
 														  const vec3_t maxs ) const {
-	const auto &area = aasWorld->Areas()[areaNum];
+	const auto &area = aasWorld->getAreas()[areaNum];
 	Vec3 areaPoint( area.center );
 	areaPoint.Z() = area.mins[2] + 1.0f + ( -playerbox_stand_mins[2] );
 
@@ -68,7 +68,7 @@ bool NextFloorClusterAreasCache::AreaPassesCollisionTest( const Vec3 &start,
 
 bool SameFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
-	const auto *floorClusterNums = aasWorld->areaFloorClusterNums();
+	const auto floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	if( !computedTargetAreaNum ) {
 		return true;
@@ -104,7 +104,7 @@ int FloorClusterAreasCache::GetClosestToTargetPoint( PredictionContext *context,
 		computedTargetAreaPoint.Set( 0, 0, 0 );
 		if( ( computedTravelTime = FindClosestToTargetPoint( context, &computedTargetAreaNum ) ) ) {
 			computedAt = level.time;
-			const auto &area = aasWorld->Areas()[computedTargetAreaNum];
+			const auto &area = aasWorld->getAreas()[computedTargetAreaNum];
 			computedTargetAreaPoint.Set( area.center );
 			computedTargetAreaPoint.Z() = area.mins[2] + ( -playerbox_stand_mins[2] );
 		}
@@ -145,10 +145,9 @@ void FloorClusterAreasCache::TryReusingOldHeap( PredictionContext *context,
 	computedForAreaNum = currGroundedAreaNum;
 	const auto maxTravelTimeThreshold = context->TravelTimeToNavTarget();
 	// Build new areas heap for the new flood start area
-	const auto *clusterAreaNums = aasWorld->floorClusterData( expectedClusterNum ) + 1;
+	const auto clusterAreaNums = aasWorld->floorClusterData( expectedClusterNum );
 	// The number of areas in the cluster areas list prepends the first area num
-	const auto numClusterAreas = clusterAreaNums[-1];
-	BuildCandidateAreasHeap( context, maxTravelTimeThreshold, clusterAreaNums, numClusterAreas, scratchpadHeap );
+	BuildCandidateAreasHeap( context, maxTravelTimeThreshold, clusterAreaNums, scratchpadHeap );
 
 	// Save the heap
 	for( const auto &heapElem: scratchpadHeap ) {
@@ -205,13 +204,12 @@ int SameFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__restrict context,
 														  const Hazard *__restrict hazardToEvade,
 														  int maxTravelTimeThreshold,
-														  const uint16_t *__restrict clusterAreaNums,
-														  int numClusterAreas,
+														  std::span<const uint16_t> clusterAreaNums,
 														  CandidateAreasHeap &__restrict result ) const {
 	// Prevent misusing
-	assert( result.empty() && numClusterAreas >= 0 && (int)result.capacity() >= numClusterAreas );
+	assert( result.empty() && result.capacity() >= clusterAreaNums.size() );
 
-	const auto *__restrict aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 	const auto *__restrict routeCache = bot->RouteCache();
 	const float *__restrict botOrigin = context->movementState->entityPhysicsState.Origin();
 	const int toAreaNum = context->NavTargetAasAreaNum();
@@ -220,9 +218,7 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__r
 	const float squareNearThreshold = areaSelectionNearThreshold * areaSelectionNearThreshold;
 	const float squareFarThreshold = areaSelectionFarThreshold * areaSelectionFarThreshold;
 
-	for( int i = 0; i < numClusterAreas; ++i ) {
-		const int areaNum = clusterAreaNums[i];
-
+	for( const int areaNum : clusterAreaNums ) {
 		const auto &area = aasAreas[areaNum];
 		Vec3 areaPoint( area.center );
 		areaPoint.Z() = area.mins[2] + zOffset;
@@ -253,13 +249,12 @@ void FloorClusterAreasCache::PrepareAreasForSmallCluster( PredictionContext *__r
 void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__restrict context,
 														  const Hazard *__restrict hazardToEvade,
 														  int maxTravelTimeThreshold,
-														  const uint16_t *__restrict clusterAreaNums,
-														  int numClusterAreas,
+														  std::span<const uint16_t> clusterAreaNums,
 														  CandidateAreasHeap &__restrict result ) const {
 	// Prevent misusing
-	assert( result.empty() && numClusterAreas >= 0 && (int)result.capacity() < numClusterAreas );
+	assert( result.empty() && result.capacity() < clusterAreaNums.size() );
 
-	const auto *__restrict aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 	const auto *__restrict routeCache = bot->RouteCache();
 	const float *__restrict botOrigin = context->movementState->entityPhysicsState.Origin();
 	const float zOffset = 1.0f - playerbox_stand_mins[2];
@@ -270,9 +265,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 	// First cut off as many areas as possible.
 	// AreAreasInPVS() call is not that cheap as we expected.
 	CandidateAreasHeap distanceHeap;
-	for( int i = 0; i < numClusterAreas; ++i ) {
-		const int areaNum = clusterAreaNums[i];
-
+	for( const int areaNum : clusterAreaNums ) {
 		const auto &area = aasAreas[areaNum];
 		Vec3 areaPoint( area.center );
 		areaPoint.Z() = area.mins[2] + zOffset;
@@ -320,8 +313,7 @@ void FloorClusterAreasCache::PrepareAreasForLargeCluster( PredictionContext *__r
 
 void FloorClusterAreasCache::BuildCandidateAreasHeap( PredictionContext *context,
 													  int maxTravelTimeThreshold,
-													  const uint16_t *clusterAreaNums,
-													  int numClusterAreas,
+													  std::span<const uint16_t> clusterAreaNums,
 													  CandidateAreasHeap &result ) const {
 	result.clear();
 
@@ -330,13 +322,10 @@ void FloorClusterAreasCache::BuildCandidateAreasHeap( PredictionContext *context
 	if( bot->ShouldRushHeadless() || ( hazard && !hazard->SupportsImpactTests() ) ) {
 		hazard = nullptr;
 	}
-
-	assert( numClusterAreas >= 0 );
-	static_assert( !std::is_signed<decltype( HEAP_SIZE )>::value, "Remove this fruitless cast" );
-	if( numClusterAreas <= (int)HEAP_SIZE ) {
-		PrepareAreasForSmallCluster( context, hazard, maxTravelTimeThreshold, clusterAreaNums, numClusterAreas, result );
+	if( clusterAreaNums.size() <= HEAP_SIZE ) {
+		PrepareAreasForSmallCluster( context, hazard, maxTravelTimeThreshold, clusterAreaNums, result );
 	} else {
-		PrepareAreasForLargeCluster( context, hazard, maxTravelTimeThreshold, clusterAreaNums, numClusterAreas, result );
+		PrepareAreasForLargeCluster( context, hazard, maxTravelTimeThreshold, clusterAreaNums, result );
 	}
 
 	// Candidates written in `result` are not arranged in a heap (but must have feasible scores)
@@ -344,7 +333,7 @@ void FloorClusterAreasCache::BuildCandidateAreasHeap( PredictionContext *context
 }
 
 bool NextFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context ) const {
-	const auto *floorClusterNums = aasWorld->areaFloorClusterNums();
+	const auto floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	// There were no data computed
 	if( !computedTargetAreaNum ) {
@@ -366,8 +355,8 @@ int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 	}
 
 	const auto *const __restrict routeCache = bot->RouteCache();
-	const auto *const __restrict aasReach = aasWorld->Reachabilities();
-	const auto *const __restrict floorClusterNums = aasWorld->areaFloorClusterNums();
+	const auto aasReaches = aasWorld->getReaches();
+	const auto floorClusterNums = aasWorld->areaFloorClusterNums();
 
 	// We try to find a number of next floor cluster in reach chain
 	int nextClusterNum = 0;
@@ -381,7 +370,7 @@ int NextFloorClusterAreasCache::FindClosestToTargetPoint( PredictionContext *con
 		if( !routeCache->PreferredRouteToGoalArea( pathAreaNum, targetAreaNum, &reachNum ) ) {
 			return false;
 		}
-		const auto &reach = aasReach[reachNum];
+		const auto &reach = aasReaches[reachNum];
 		const auto travelType = reach.traveltype & TRAVELTYPE_MASK;
 		// We have met non bhop-compatible travel type prior to entering next floor cluster
 		if( travelType != TRAVEL_WALK && travelType != TRAVEL_WALKOFFLEDGE ) {

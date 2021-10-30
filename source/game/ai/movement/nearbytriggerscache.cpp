@@ -18,7 +18,7 @@ NearbyTriggersCache::NearbyTriggersCache() {
 	triggerEntNums[2] = &platformEntNums[0];
 }
 
-auto NearbyTriggersCache::clipToRegion( const ArrayRange<uint16_t> &entNums, uint16_t *dest, size_t destSize ) -> unsigned {
+auto NearbyTriggersCache::clipToRegion( std::span<const uint16_t> entNums, uint16_t *dest, size_t destSize ) -> unsigned {
 	const auto *__restrict regionMins = lastComputedForMins;
 	const auto *__restrict regionMaxs = lastComputedForMaxs;
 	const auto *__restrict gameEnts = game.edicts;

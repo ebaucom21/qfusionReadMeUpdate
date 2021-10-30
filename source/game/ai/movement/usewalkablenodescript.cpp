@@ -52,7 +52,7 @@ MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *con
 		return nullptr;
 	}
 
-	const auto &areaSettings = AiAasWorld::instance()->AreaSettings()[nextReach.areanum];
+	const auto &areaSettings = AiAasWorld::instance()->getAreaSettings()[nextReach.areanum];
 	if( areaSettings.areaflags & AREA_JUNK ) {
 		return nullptr;
 	}
@@ -74,8 +74,9 @@ MovementScript *FallbackAction::TryFindNearbyRampAreasFallback( PredictionContex
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto aasAreas = aasWorld->getAreas();
+	const auto aasReach = aasWorld->getReaches();
 
 	const auto &currAreaSettings = aasAreaSettings[currGroundedAreaNum];
 	int reachNum = currAreaSettings.firstreachablearea;
@@ -92,7 +93,7 @@ MovementScript *FallbackAction::TryFindNearbyRampAreasFallback( PredictionContex
 
 		// Set the current grounded area num as a forbidden to avoid looping
 		if( const int *areaNum = TryFindBestInclinedFloorExitArea( context, reachAreaNum, currGroundedAreaNum ) ) {
-			const auto &bestArea = aasWorld->Areas()[*areaNum];
+			const auto &bestArea = aasAreas[*areaNum];
 			Vec3 areaPoint( bestArea.center );
 			areaPoint.Z() = bestArea.mins[2] + 1.0f + -playerbox_stand_mins[2];
 			auto *fallback = &m_subsystem->useWalkableNodeScript;

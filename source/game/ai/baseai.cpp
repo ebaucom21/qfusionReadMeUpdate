@@ -220,7 +220,7 @@ void AiEntityPhysicsState::UpdateAreaNums() {
 			this->droppedToFloorAasAreaNum = this->currAasAreaNum;
 		}
 	} else if( aasWorld->isAreaGrounded( this->currAasAreaNum ) ) {
-		const float areaMinsZ = aasWorld->Areas()[this->currAasAreaNum].mins[2];
+		const float areaMinsZ = aasWorld->getAreas()[this->currAasAreaNum].mins[2];
 		const float selfZ = Self()->s.origin[2];
 		SetHeightOverGround( ( selfZ - areaMinsZ ) + playerbox_stand_mins[2] );
 		this->droppedToFloorAasAreaNum = this->currAasAreaNum;

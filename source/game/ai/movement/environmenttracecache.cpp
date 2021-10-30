@@ -254,7 +254,7 @@ const CMShapeList *EnvironmentTraceCache::getShapeListForPMoveCollision( Predict
 
     const auto *aasWorld = AiAasWorld::instance();
     const int areaNum = physicsState.CurrAasAreaNum();
-    const auto areaFlags = aasWorld->AreaSettings()[areaNum].areaflags;
+    const auto areaFlags = aasWorld->getAreaSettings()[areaNum].areaflags;
 
     if( ( areaFlags & AREA_SKIP_COLLISION_MASK ) && physicsState.HeightOverGround() > bottomExtent ) {
         if( sideExtent <= 32.0f ) {

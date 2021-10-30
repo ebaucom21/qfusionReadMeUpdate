@@ -111,7 +111,7 @@ bool GenericGroundMovementScript::SetupForKeptPointInFov( PredictionContext *con
 		if( !aasWorld->areaFloorClusterNums()[currGroundedAreaNum] ) {
 			return true;
 		}
-		if( !( aasWorld->AreaSettings()[currGroundedAreaNum].areaflags & AREA_NOFALL ) ) {
+		if( !( aasWorld->getAreaSettings()[currGroundedAreaNum].areaflags & AREA_NOFALL ) ) {
 			return true;
 		}
 		canUseDash = false;
@@ -188,7 +188,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 		}
 	}
 
-	const auto isInNofallArea = AiAasWorld::instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_NOFALL;
+	const auto isInNofallArea = AiAasWorld::instance()->getAreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_NOFALL;
 
 	if( !entityPhysicsState.GroundEntity() ) {
 		if( intendedDotActual > 0.95f ) {

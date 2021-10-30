@@ -634,7 +634,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 	if( botSpeed2D > 300.0f || ( bot->WillRetreat() && botSpeed2D > 1 ) ) {
 		int botAreaNums[2] { 0, 0 };
 		const auto *const aasWorld = AiAasWorld::instance();
-		const auto *const aasAreaSettings = aasWorld->AreaSettings();
+		const auto aasAreaSettings = aasWorld->getAreaSettings();
 		const int numBotAreas = physicsState->PrepareRoutingStartAreas( botAreaNums );
 		for( int i = 0; i < numBotAreas; ++i ) {
 			const auto flags = aasAreaSettings[botAreaNums[i]].areaflags;

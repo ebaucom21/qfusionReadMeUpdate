@@ -33,7 +33,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	if( aasWorld->AreaSettings()[ groundedAreaNum ].areaflags & AREA_INCLINED_FLOOR ) {
+	if( aasWorld->getAreaSettings()[ groundedAreaNum ].areaflags & AREA_INCLINED_FLOOR ) {
 		const int *exitAreaNum = TryFindBestInclinedFloorExitArea( context, groundedAreaNum, groundedAreaNum );
 		if( !exitAreaNum ) {
 			Debug( "Can't find an exit area of the current grouned inclined floor area\n" );
@@ -41,7 +41,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 		}
 
 		Debug( "Found a best exit area of an inclined floor area\n" );
-		lookDirStorage.Set( aasWorld->Areas()[*exitAreaNum].center );
+		lookDirStorage.Set( aasWorld->getAreas()[*exitAreaNum].center );
 		lookDirStorage -= context->movementState->entityPhysicsState.Origin();
 		lookDirStorage.Normalize();
 		intendedLookDir = lookDirStorage.Data();
@@ -63,7 +63,7 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 	}
 
 	Debug( "Found a best exit area of an stairs cluster\n" );
-	lookDirStorage.Set( aasWorld->Areas()[*exitAreaNum].center );
+	lookDirStorage.Set( aasWorld->getAreas()[*exitAreaNum].center );
 	lookDirStorage -= context->movementState->entityPhysicsState.Origin();
 	lookDirStorage.Normalize();
 	intendedLookDir = lookDirStorage.Data();
@@ -75,8 +75,8 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 
 void BunnyToStairsOrRampExitAction::TrySaveExitFloorCluster( PredictionContext *context, int exitAreaNum ) {
 	const auto *const aasWorld = AiAasWorld::instance();
-	const auto *const aasReach = aasWorld->Reachabilities();
-	const auto *const aasFloorClusterNums = aasWorld->areaFloorClusterNums();
+	const auto aasReach = aasWorld->getReaches();
+	const auto aasFloorClusterNums = aasWorld->areaFloorClusterNums();
 	const auto *const routeCache = context->RouteCache();
 
 	// Check whether exit area is already in cluster

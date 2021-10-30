@@ -29,22 +29,20 @@ public:
 
 	void update();
 
-	// TODO: Use std::span
-
 	[[nodiscard]]
-	auto getAllPersistentMapTeleporters() const -> ArrayRange<uint16_t> {
+	auto getAllPersistentMapTeleporters() const -> std::span<const uint16_t> {
 		return { m_allTeleporters.begin(), m_allTeleporters.end() };
 	}
 	[[nodiscard]]
-	auto getAllPersistentMapJumppads() const -> ArrayRange<uint16_t> {
+	auto getAllPersistentMapJumppads() const -> std::span<const uint16_t> {
 		return { m_allJumppads.begin(), m_allJumppads.end() };
 	}
 	[[nodiscard]]
-	auto getAllPersistentMapPlatforms() const -> ArrayRange<uint16_t> {
+	auto getAllPersistentMapPlatforms() const -> std::span<const uint16_t> {
 		return { m_allPlatforms.begin(), m_allPlatforms.end() };
 	}
 	[[nodiscard]]
-	auto getAllOtherTriggersInThisFrame() const -> ArrayRange<uint16_t> {
+	auto getAllOtherTriggersInThisFrame() const -> std::span<const uint16_t> {
 		return { m_allOtherTriggers.begin(), m_allOtherTriggers.end() };
 	}
 };

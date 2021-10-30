@@ -5,10 +5,10 @@
 #include "../bot.h"
 
 class ClosestFacePointSolver final : public SharedFaceAreasWalker<ArrayBasedFringe<>> {
-	const aas_vertex_t *const __restrict aasVertices;
-	const aas_edge_t *const __restrict aasEdges;
-	const aas_edgeindex_t *const __restrict aasEdgeIndex;
-	const aas_plane_t *const __restrict aasPlanes;
+	const std::span<const aas_vertex_t> aasVertices;
+	const std::span<const aas_edge_t> aasEdges;
+	const std::span<const aas_edgeindex_t> aasEdgeIndex;
+	const std::span<const aas_plane_t> aasPlanes;
 
 	edict_t *const ignoreEnt;
 	edict_t *const targetEnt;
@@ -30,10 +30,10 @@ public:
 			AiAasWorld::instance()->findAreaNum( fireTarget_ ),
 			AasElementsMask::AreasMask(),
 			AasElementsMask::FacesMask() )
-		, aasVertices( aasWorld->Vertexes() )
-		, aasEdges( aasWorld->Edges() )
-		, aasEdgeIndex( aasWorld->EdgeIndex() )
-		, aasPlanes( aasWorld->Planes() )
+		, aasVertices( aasWorld->getVertices() )
+		, aasEdges( aasWorld->getEdges() )
+		, aasEdgeIndex( aasWorld->getEdgeIndex() )
+		, aasPlanes( aasWorld->getPlanes() )
 		, ignoreEnt( const_cast<edict_t *>( ignoreEnt_ ) )
 		, targetEnt( const_cast<edict_t *>( targetEnt_ ) )
 		, fireOrigin( fireOrigin_ )
@@ -46,9 +46,9 @@ public:
 };
 
 bool ClosestFacePointSolver::ProcessAreaTransition( int currArea, int nextArea, const aas_face_t *face ) {
-	const auto *__restrict facePlane = aasPlanes + face->planenum;
+	const auto &__restrict facePlane = aasPlanes[face->planenum];
 	// Check whether the face is within the splash radius
-	if( std::fabs( fireTarget.Dot( facePlane->normal ) - facePlane->dist ) > splashRadius ) {
+	if( std::fabs( fireTarget.Dot( facePlane.normal ) - facePlane.dist ) > splashRadius ) {
 		return true;
 	}
 
@@ -62,7 +62,7 @@ bool ClosestFacePointSolver::ProcessAreaTransition( int currArea, int nextArea, 
 
 	// TODO: Using raycasts for closest face point determination is pretty bad but operating on AAS edge is error-prone...
 
-	Vec3 testedOffsetVec( facePlane->normal );
+	Vec3 testedOffsetVec( facePlane.normal );
 	testedOffsetVec *= -splashRadius;
 	Vec3 testedPoint( testedOffsetVec );
 	testedPoint += fireTarget;

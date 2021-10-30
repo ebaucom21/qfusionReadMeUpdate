@@ -21,7 +21,7 @@ protected:
 								PredictionContext *context = nullptr );
 
 	void GetAreaMidGroundPoint( int areaNum, vec3_t target ) {
-		const auto &area = AiAasWorld::instance()->Areas()[areaNum];
+		const auto &area = AiAasWorld::instance()->getAreas()[areaNum];
 		VectorCopy( area.center, target );
 		target[2] = area.mins[2] + 1.0f - playerbox_stand_mins[2];
 	}

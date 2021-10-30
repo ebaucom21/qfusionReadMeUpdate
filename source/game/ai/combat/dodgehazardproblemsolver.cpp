@@ -190,10 +190,10 @@ std::pair<Vec3, bool> DodgeHazardProblemSolver::makeDodgeHazardDir() const {
 void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVector &spotsFromQuery,
 															  OriginAndScoreVector &result ) {
 	const auto &aasWorld = AiAasWorld::instance();
-	const auto *aasAreas = aasWorld->Areas();
+	const auto aasAreas = aasWorld->getAreas();
 
 	bool *const failedAtArea = AasElementsMask::TmpAreasVisRow();
-	::memset( failedAtArea, 0, sizeof( bool ) * aasWorld->NumAreas() );
+	::memset( failedAtArea, 0, sizeof( bool ) * aasAreas.size() );
 	const auto &spots = tacticalSpotsRegistry->spots;
 	for( const auto &spotAndScore: spotsFromQuery ) {
 		failedAtArea[spots[spotAndScore].aasAreaNum] = true;
@@ -202,8 +202,8 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 	const int originAreaNum = originParams.originAreaNum;
 	const int stairsClusterNum = aasWorld->stairsClusterNum( originAreaNum );
 	if( stairsClusterNum ) {
-		const auto *stairsClusterData = aasWorld->stairsClusterData( stairsClusterNum ) + 1;
-		for( int areaNum : { stairsClusterData[0], stairsClusterData[stairsClusterData[-1]] } ) {
+		const std::span<const uint16_t> stairsClusterAreaNums = aasWorld->stairsClusterData( stairsClusterNum );
+		for( const int areaNum : { stairsClusterAreaNums.front(), stairsClusterAreaNums.back() } ) {
 			if( !failedAtArea[areaNum] ) {
 				result.emplace_back( OriginAndScore::ForArea( aasAreas, areaNum, addNextScores().second ) );
 			}
@@ -211,14 +211,14 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 		return;
 	}
 
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	const auto &originAreaSettings = aasAreaSettings[originAreaNum];
 	if( originAreaSettings.areaflags & AREA_INCLINED_FLOOR ) {
 		// TODO: Cache this at loading
 		float minAreaHeight = +99999;
 		float maxAreaHeight = -99999;
 		int rampStartArea = 0, rampEndArea = 0;
-		const auto &aasReach = aasWorld->Reachabilities();
+		const auto &aasReach = aasWorld->getReaches();
 		const int maxReachNum = originAreaSettings.firstreachablearea + originAreaSettings.numreachableareas;
 		for( int reachNum = originAreaSettings.firstreachablearea; reachNum < maxReachNum; ++reachNum ) {
 			const auto &reach = aasReach[reachNum];
@@ -226,7 +226,7 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 				continue;
 			}
 			const int reachAreaNum = aasReach[reachNum].areanum;
-			const auto &reachArea = aasWorld->Areas()[reachAreaNum];
+			const auto &reachArea = aasWorld->getAreas()[reachAreaNum];
 			if( reachArea.mins[2] < minAreaHeight ) {
 				rampStartArea = reachAreaNum;
 				minAreaHeight = reachArea.mins[2];
@@ -268,9 +268,8 @@ void DodgeHazardProblemSolver::selectFallbackSpotLikeOrigins( const SpotsQueryVe
 	}
 
 	const float squareSearchRadius = originParams.searchRadius * originParams.searchRadius;
-	const auto *__restrict floorClusterData = aasWorld->floorClusterData( floorClusterNum ) + 1;
-	for( int i = 0; i < floorClusterData[-1]; ++i ) {
-		const int areaNum = floorClusterData[i];
+	const std::span<const uint16_t> floorClusterAreaNums = aasWorld->floorClusterData( floorClusterNum );
+	for( const int areaNum: floorClusterAreaNums ) {
 		if( areaNum == skipAreaNum ) {
 			continue;
 		}

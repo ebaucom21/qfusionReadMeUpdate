@@ -64,8 +64,8 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasAreaSettings = aasWorld->AreaSettings();
-	const auto *aasReach = aasWorld->Reachabilities();
+	const auto aasAreaSettings = aasWorld->getAreaSettings();
+	const auto aasReach = aasWorld->getReaches();
 
 	trace_t trace;
 

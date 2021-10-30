@@ -203,7 +203,7 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionC
 		return true;
 	}
 
-	switch( AiAasWorld::instance()->Reachabilities()[nextReachNum].traveltype ) {
+	switch( AiAasWorld::instance()->getReaches()[nextReachNum].traveltype ) {
 		case TRAVEL_TELEPORT:
 		case TRAVEL_JUMPPAD:
 		case TRAVEL_ELEVATOR:
@@ -390,7 +390,7 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 	}
 
 	// If the area is not a "skip collision" area
-	if( !( AiAasWorld::instance()->AreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_SKIP_COLLISION_MASK ) ) {
+	if( !( AiAasWorld::instance()->getAreaSettings()[context->CurrAasAreaNum()].areaflags & AREA_SKIP_COLLISION_MASK ) ) {
 		const float frac = ( threshold - speed2D ) * Q_Rcp( threshold );
 		EnsurePathPenalty( (unsigned)( 100 + 3000 * Q_Sqrt( frac ) ) );
 	}
@@ -433,8 +433,8 @@ bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *cont
 	}
 
 	// Allow further prediction if we're in a NOFALL area.
-	if( aasWorld->AreaSettings()[groundedAreaNum].areaflags & AREA_NOFALL ) {
-		const auto *aasAreas = aasWorld->Areas();
+	if( aasWorld->getAreaSettings()[groundedAreaNum].areaflags & AREA_NOFALL ) {
+		const auto aasAreas = aasWorld->getAreas();
 		// Delta Z relative to the best area so far must be positive
 		if( aasAreas[groundedAreaNum].mins[2] > aasAreas[minTravelTimeAreaNumSoFar].mins[2] ) {
 			EnsurePathPenalty( 250 );
@@ -459,14 +459,14 @@ bool BunnyHopAction::TryHandlingWorseTravelTimeToTarget( PredictionContext *cont
 
 bool BunnyHopAction::CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum ) {
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasReach = aasWorld->Reachabilities();
-	const auto &areaSettings = aasWorld->AreaSettings()[fromAreaNum];
+	const auto aasReaches = aasWorld->getReaches();
+	const auto &areaSettings = aasWorld->getAreaSettings()[fromAreaNum];
 
 	// Limit number of tested rev. reach.
 	// TODO: Add and use reverse reach. table for this and many other purposes
 	int maxReachNum = areaSettings.firstreachablearea + std::min( areaSettings.numreachableareas, 16 );
 	for( int revReachNum = areaSettings.firstreachablearea; revReachNum != maxReachNum; revReachNum++ ) {
-		const auto &reach = aasReach[revReachNum];
+		const auto &reach = aasReaches[revReachNum];
 		if( reach.areanum != toAreaNum ) {
 			continue;
 		}
@@ -561,7 +561,7 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *cont
 	std::optional<float> initial2DDistance;
 	if( reachAtSequenceStart ) {
 		if( const auto reachNum = context->NextReachNum(); reachNum == reachAtSequenceStart ) {
-			targetPoint.Set( AiAasWorld::instance()->Reachabilities()[reachNum].start );
+			targetPoint.Set( AiAasWorld::instance()->getReaches()[reachNum].start );
 			initial2DDistance = distanceToReachAtStart;
 		}
 	} else if( context->IsInNavTargetArea() ) {
@@ -761,7 +761,7 @@ void BunnyHopAction::OnApplicationSequenceStarted( PredictionContext *context ) 
 			travelTimeAtSequenceStart = travelTime;
 			reachAtSequenceStart = reachNum;
 			if( reachNum ) {
-				const auto &reach = AiAasWorld::instance()->Reachabilities()[reachNum];
+				const auto &reach = AiAasWorld::instance()->getReaches()[reachNum];
 				distanceToReachAtStart = originAtSequenceStart.Distance2DTo( reach.start );
 			} else {
 				distanceInNavTargetAreaAtStart = originAtSequenceStart.Distance2DTo( context->NavTargetOrigin() );

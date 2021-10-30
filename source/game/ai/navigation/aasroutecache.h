@@ -430,20 +430,20 @@ public:
 
 	AreaOrPortalCacheTable *AllocRoutingCache( int numTravelTimes, bool zeroMemory = true );
 
-	void UpdateAreaRoutingCache( const aas_areasettings_t *aasAreaSettings,
-								 const aas_portal_t *aasPortals,
+	void UpdateAreaRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+								 std::span<const aas_portal_t> aasPortals,
 								 AreaOrPortalCacheTable *areaCache ) const;
 
-	AreaOrPortalCacheTable *GetAreaRoutingCache( const aas_areasettings_t *aasAreaSettings,
-												 const aas_portal_t *aasPortals,
+	AreaOrPortalCacheTable *GetAreaRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+												 std::span<const aas_portal_t> aasPortals,
 												 int clusterNum, int areaNum, int travelFlags );
 
 	const AreaOrPortalCacheTable *FindSiblingCache( int clusterNum, int clusterAreaNum, int travelFlags ) const;
 
 	void UpdatePortalRoutingCache( AreaOrPortalCacheTable *portalCache );
 
-	AreaOrPortalCacheTable *GetPortalRoutingCache( const aas_areasettings_t *aasAreaSettings,
-												   const aas_portal_t *aasPortals,
+	AreaOrPortalCacheTable *GetPortalRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+												   std::span<const aas_portal_t> aasPortals,
 												   int clusterNum, int areaNum, int travelFlags );
 
 	struct RoutingRequest {

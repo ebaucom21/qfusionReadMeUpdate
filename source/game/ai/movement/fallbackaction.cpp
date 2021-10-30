@@ -232,7 +232,7 @@ MovementScript *FallbackAction::TryFindMovementFallback( PredictionContext *cont
 	// First check for being in lava
 	// TODO: Inspect why waterType does not work as intended
 	if( entityPhysicsState.waterLevel >= 1 ) {
-		const auto *aasAreaSettings = AiAasWorld::instance()->AreaSettings();
+		const auto aasAreaSettings = AiAasWorld::instance()->getAreaSettings();
 		int currAreaNums[2] = { 0, 0 };
 		if( int numCurrAreas = entityPhysicsState.PrepareRoutingStartAreas( currAreaNums ) ) {
 			int i = 0;
@@ -264,7 +264,7 @@ MovementScript *FallbackAction::TryFindMovementFallback( PredictionContext *cont
 	// Check if the bot is standing on a ramp
 	if( entityPhysicsState.GroundEntity() && entityPhysicsState.GetGroundNormalZ() < 0.999f ) {
 		if( int groundedAreaNum = context->CurrGroundedAasAreaNum() ) {
-			if( AiAasWorld::instance()->AreaSettings()[groundedAreaNum].areaflags & AREA_INCLINED_FLOOR ) {
+			if( AiAasWorld::instance()->getAreaSettings()[groundedAreaNum].areaflags & AREA_INCLINED_FLOOR ) {
 				if( auto *fallback = TryFindRampFallback( context, groundedAreaNum ) ) {
 					return fallback;
 				}
@@ -348,7 +348,7 @@ MovementScript *FallbackAction::TryFindAasBasedFallback( PredictionContext *cont
 		return nullptr;
 	}
 
-	const auto &nextReach = AiAasWorld::instance()->Reachabilities()[nextReachNum];
+	const auto &nextReach = AiAasWorld::instance()->getReaches()[nextReachNum];
 	const int traveltype = nextReach.traveltype & TRAVELTYPE_MASK;
 
 	if( traveltype == TRAVEL_WALK ) {

@@ -58,7 +58,7 @@ protected:
 
 	// A template that allows code generation for specific flags statically omitting checks for non-specified flags
 	template <int Flags>
-	int InspectAasWorldTraceForFlags( const int *areaNums, int numTracedAreas, Results *results );
+	int InspectAasWorldTraceForFlags( std::span<const int> tracedAreaNums, Results *results );
 
 	template<typename BooleanLike>
 	void SetStopEventsBit( BooleanLike condition, int bit ) {

@@ -749,7 +749,7 @@ void AiObjectiveBasedTeam::DefenceSpot::UpdateBotsStatus() {
 	}
 
 	const auto *aasWorld = AiAasWorld::instance();
-	const auto *aasFloorClusters = aasWorld->areaFloorClusterNums();
+	const auto aasFloorClusters = aasWorld->areaFloorClusterNums();
 	const auto spotFloorClusterNum = aasFloorClusters[aasWorld->findAreaNum( this->entity )];
 	const float *spotOrigin = this->entity->s.origin;
 	for( Bot *bot = botsListHead; bot; bot = bot->NextInObjective() ) {

@@ -177,8 +177,8 @@ AiAasRouteCache::~AiAasRouteCache() {
 /**
  * We have switched to passing AAS arrays explicitly as arguments to avoid hidden costs of pointer chasing
  */
-inline int ClusterAreaNum( const aas_areasettings_t *aasAreaSettings,
-						   const aas_portal_t *aasPortals,
+inline int ClusterAreaNum( std::span<const aas_areasettings_t> aasAreaSettings,
+						   std::span<const aas_portal_t> aasPortals,
 						   int cluster, int areaNum ) {
 	const auto &areaSettings = aasAreaSettings[areaNum];
 	const int areaCluster = areaSettings.cluster;
@@ -218,14 +218,14 @@ void AiAasRouteCache::InitTravelFlagFromType() {
 }
 
 void AiAasRouteCache::InitDefaultBlockedAreasDigest( const AiAasWorld &aasWorld ) {
-	const int numAreas = aasWorld.NumAreas();
-	const auto *aasAreaSettings = aasWorld.AreaSettings();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
 	bool *const blockedAreasTable = AasElementsMask::BlockedAreasTable();
-	for( int i = 0; i < numAreas; ++i ) {
+	for( int i = 0; i < aasAreaSettings.size(); ++i ) {
 		blockedAreasTable[i] = (bool)( aasAreaSettings[i].areaflags & AREA_DISABLED );
 	}
 
-	::md5_digest( blockedAreasTable, numAreas, (uint8_t *)defaultBlockedAreasDigest );
+	const auto tableSizeInBytes = (int)( aasAreaSettings.size() * sizeof( bool ) );
+	::md5_digest( blockedAreasTable, tableSizeInBytes, (uint8_t *)defaultBlockedAreasDigest );
 }
 
 void AiAasRouteCache::UnlinkCache( AreaOrPortalCacheTable *cache ) {
@@ -262,17 +262,17 @@ void AiAasRouteCache::FreeRoutingCache( AreaOrPortalCacheTable *cache ) {
 
 void AiAasRouteCache::SetDisabledZones( DisableZoneRequest **requests, int numRequests ) {
 	// Copy the reference to a local var for faster access
-	AreaPathFindingData *const __restrict areaPathFindingData = this->areaPathFindingData;
-	const auto *const __restrict aasAreaSettings = aasWorld.AreaSettings();
-
-	const auto numAreas = aasWorld.NumAreas();
+	AreaPathFindingData *const areaPathFindingData = this->areaPathFindingData;
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	assert( aasAreaSettings.size() == aasWorld.getAreas().size() );
+	const auto numAreas = aasAreaSettings.size();
 
 	// First, save old area statuses and set new ones as non-blocked
 	for( int i = 0; i < numAreas; ++i ) {
 		areaPathFindingData[i].disabledStatus.ShiftCurrToOldStatus();
 	}
 
-	auto *const __restrict blockedAreasTable = AasElementsMask::BlockedAreasTable();
+	auto *const blockedAreasTable = AasElementsMask::BlockedAreasTable();
 	memset( blockedAreasTable, 0, numAreas * sizeof( bool ) );
 
 	for( int i = 0; i < numRequests; ++i ) {
@@ -361,22 +361,24 @@ static int AreaContentsTravelFlags( const aas_areasettings_t &areaSettings ) {
 }
 
 void AiAasRouteCache::InitCompactReachDataAreaDataAndHelpers() {
-	const int numAreas = aasWorld.NumAreas();
-	const int numReach = aasWorld.NumReach();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasPortals = aasWorld.getPortals();
+	const auto aasReaches = aasWorld.getReaches();
+
+	const size_t numAreas = aasAreaSettings.size();
+	const size_t numReaches = aasReaches.size();
 
 	static_assert( alignof( ReachPathFindingData ) < alignof( int ), "Alignment assumptions are broken" );
 	// We should check this as long as AAS world code does not operate on types of guaranteed fixed size
 	static_assert( sizeof( int ) == sizeof( int32_t ), "Assumptions on int being 32 bit are broken" );
 
-	size_t reachDataSize = numReach * sizeof( ReachPathFindingData );
+	const size_t reachDataSize = numReaches * sizeof( ReachPathFindingData );
 	reachPathFindingData = (ReachPathFindingData *)GetClearedRefCountedMemory( reachDataSize );
 
-	size_t areaDataSize = numAreas * sizeof( AreaPathFindingData );
+	const size_t areaDataSize = numAreas * sizeof( AreaPathFindingData );
 	areaPathFindingData = (AreaPathFindingData *)GetClearedMemory( areaDataSize );
 
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const auto *const aasPortals = aasWorld.Portals();
-	for( int i = 0; i < numAreas; ++i ) {
+	for( size_t i = 0; i < numAreas; ++i ) {
 		const auto &areaSettings = aasAreaSettings[i];
 		auto *const areaData = &areaPathFindingData[i];
 		areaData->firstReachNum = ToUint16CheckingRange( areaSettings.firstreachablearea );
@@ -393,9 +395,8 @@ void AiAasRouteCache::InitCompactReachDataAreaDataAndHelpers() {
 		}
 	}
 
-	const auto *const aasReach = aasWorld.Reachabilities();
-	for( int i = 0; i < numReach; ++i ) {
-		const auto &reach = aasReach[i];
+	for( size_t i = 0; i < numReaches; ++i ) {
+		const auto &reach = aasReaches[i];
 		uint16_t travelTime = reach.traveltime;
 		// Try to avoid ledge areas to prevent unintended falling
 		// by increasing the travel time by some penalty value (3 seconds).
@@ -432,42 +433,44 @@ void AiAasRouteCache::InitCompactReachDataAreaDataAndHelpers() {
 }
 
 AiAasRouteCache::AreaPathFindingData *AiAasRouteCache::CloneAreaPathFindingData() {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const int numAreas = aasWorld.NumAreas();
-	size_t dataSize = numAreas * sizeof( AreaPathFindingData );
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto numAreas = aasAreaSettings.size();
+	const size_t dataSize = numAreas * sizeof( AreaPathFindingData );
 	auto *const newData = (AreaPathFindingData *)GetClearedMemory( dataSize );
 	assert( this->areaPathFindingData );
 	memcpy( newData, this->areaPathFindingData, dataSize );
 	// Reset area routing status to a static one (that corresponds to the flags)
-	for( int i = 0; i < numAreas; ++i ) {
+	for( size_t i = 0; i < numAreas; ++i ) {
 		newData[i].disabledStatus.SetCurrStatus( ( aasAreaSettings[i].areaflags & AREA_DISABLED ) ? true : false );
 	}
 	return newData;
 }
 
 void AiAasRouteCache::CreateReversedReach() {
-	const auto revReachSize = aasWorld.NumAreas() * sizeof( RevReach );
-	const auto revLinkSize = aasWorld.NumReachabilities() * sizeof( RevLink );
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasReaches = aasWorld.getReaches();
+	const auto numAreas = aasAreaSettings.size();
+
+	const size_t revReachSize = numAreas * sizeof( RevReach );
+	const size_t revLinkSize = aasReaches.size() * sizeof( RevLink );
+
 	auto *ptr = (uint8_t *)GetClearedRefCountedMemory( revReachSize + revLinkSize );
 
 	this->aasRevReach = CastCheckingAlignment<RevReach>( ptr );
 	ptr += revReachSize;
 	this->aasRevLinks = CastCheckingAlignment<RevLink>( ptr );
 
-	const auto *const aasReach = aasWorld.Reachabilities();
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-
-	for( int i = 1, end = aasWorld.NumAreas(); i < end; ++i ) {
+	for( size_t i = 1; i < numAreas; ++i ) {
 		const auto &areaSettings = aasAreaSettings[i];
 		int numReachableAreas = areaSettings.numreachableareas;
 		if( numReachableAreas >= 128 ) {
-			G_Printf( S_COLOR_YELLOW "area %d has more than 128 reachabilities\n", i );
+			G_Printf( S_COLOR_YELLOW "area %d has more than 128 reachabilities\n", (int)i );
 			numReachableAreas = 128;
 		}
 
 		// Create reversed links for the reachabilities
 		for( int n = 0; n < numReachableAreas; n++ ) {
-			const auto *reach = aasReach + areaSettings.firstreachablearea + n;
+			const auto *reach = &aasReaches[areaSettings.firstreachablearea + n];
 
 			auto *revLink = CastCheckingAlignment<RevLink>( ptr );
 
@@ -485,9 +488,9 @@ void AiAasRouteCache::CreateReversedReach() {
 #define PAD( base, alignment ) ( ( ( base ) + ( alignment ) - 1 ) & ~( ( alignment ) - 1 ) )
 
 void AiAasRouteCache::CalculateAreaTravelTimes() {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const auto *const aasReach = aasWorld.Reachabilities();
-	const auto numAreas = aasWorld.NumAreas();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasReaches = aasWorld.getReaches();
+	const auto numAreas = aasAreaSettings.size();
 
 	// "area travel times" is a 3-dimensional array (is viewed as a 3-dimensional array).
 	// The outer index is addressed by area numbers.
@@ -495,7 +498,7 @@ void AiAasRouteCache::CalculateAreaTravelTimes() {
 	// starting from first for the area settings for the area.
 	// The inner index is addressed by a number of a link in reversed reachabilities chain for the reachability.
 	size_t size = numAreas * sizeof( uint16_t ** );
-	for( int i = 0; i < numAreas; i++ ) {
+	for( size_t i = 0; i < numAreas; i++ ) {
 		const auto &revReach = aasRevReach[i];
 		const int numReachAreas = aasAreaSettings[i].numreachableareas;
 		size += numReachAreas * sizeof( uint16_t * );
@@ -507,7 +510,7 @@ void AiAasRouteCache::CalculateAreaTravelTimes() {
 
 	ptr += numAreas * sizeof( uint16_t ** );
 
-	for( int i = 0; i < numAreas; i++ ) {
+	for( size_t i = 0; i < numAreas; i++ ) {
 		const auto &areaSettings = aasAreaSettings[i];
 
 		// This array is addressed by a relative number of reachability
@@ -520,7 +523,7 @@ void AiAasRouteCache::CalculateAreaTravelTimes() {
 			uint16_t *const linkTravelTimes = areaReachTravelTimes[l] = CastCheckingAlignment<uint16_t>( ptr );
 			ptr += PAD( revReach.numLinks, sizeof( void * ) ) * sizeof( uint16_t );
 
-			const auto &reach = aasReach[areaSettings.firstreachablearea + l];
+			const auto &reach = aasReaches[areaSettings.firstreachablearea + l];
 			int revLinkNum = revReach.firstRevLink;
 			const RevLink *revLink;
 			for( int n = 0; n < revReach.numLinks; revLinkNum = revLink->nextLink, n++ ) {
@@ -535,7 +538,7 @@ void AiAasRouteCache::CalculateAreaTravelTimes() {
 				// (every area that has a small height has other presence type than "normal"
 				// even if no crouching is really required (there is an void area above).
 				// This used to lead to producing incorrect time estimations.
-				float distance = sqrtf( DistanceSquared( aasReach[revLink->linkNum].end, reach.start ) );
+				float distance = sqrtf( DistanceSquared( aasReaches[revLink->linkNum].end, reach.start ) );
 				// Apply "distance factors" tweaked for actual average bot movement speed.
 				if( !( areaSettings.areaflags & AREA_LIQUID ) ) {
 					distance *= 0.23f;
@@ -555,10 +558,10 @@ void AiAasRouteCache::CalculateAreaTravelTimes() {
 }
 
 void AiAasRouteCache::InitPortalMaxTravelTimes() {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const auto *const aasPortals = aasWorld.Portals();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasPortals = aasWorld.getPortals();
 
-	const auto numPortals = aasWorld.NumPortals();
+	const auto numPortals = (int)aasPortals.size();
 
 	portalMaxTravelTimes = (int *)GetClearedRefCountedMemory( numPortals * sizeof( int ) );
 
@@ -652,7 +655,7 @@ public:
 
 	static unsigned SuggestNumberOfBlocks() {
 		// ( 2^16 - 1 ) is the maximum supported number of reachabilities (we use short indices)
-		auto frac = AiAasWorld::instance()->NumReach() / (float)std::numeric_limits<uint16_t>::max();
+		auto frac = AiAasWorld::instance()->getReaches().size() / (float)std::numeric_limits<uint16_t>::max();
 		// Requirements do not grow linear. This will be a better approximation.
 		frac = std::sqrt( frac );
 		return (unsigned)( 512.0f + 768.0f * frac );
@@ -1022,8 +1025,8 @@ void AiAasRouteCache::FreeAreaAndPortalMemoryPools() {
 }
 
 bool AiAasRouteCache::FreeOldestCache() {
-	const auto *aasAreaSettings = aasWorld.AreaSettings();
-	const auto *aasPortals = aasWorld.Portals();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasPortals = aasWorld.getPortals();
 	if( auto *cache = oldestCache ) {
 		if( cache->prev ) {
 			cache->prev->next = cache->next;
@@ -1073,9 +1076,9 @@ void AiAasRouteCache::FreeAllClusterAreaCache() {
 void AiAasRouteCache::ResetAllClusterAreaCache() {
 	assert( clusterAreaCache );
 
-	const auto *const aasClusters = aasWorld.Clusters();
-	for( int i = 0, end = aasWorld.NumClusters(); i < end; i++ ) {
-		const auto *cluster = &aasClusters[i];
+	const auto aasClusters = aasWorld.getClusters();
+	for( size_t i = 0, end = aasClusters.size(); i < end; i++ ) {
+		const auto *const cluster = &aasClusters[i];
 		for( int j = 0; j < cluster->numareas; j++ ) {
 			AreaOrPortalCacheTable *nextCache;
 			for( auto *cache = clusterAreaCache[i][j]; cache; cache = nextCache ) {
@@ -1088,11 +1091,11 @@ void AiAasRouteCache::ResetAllClusterAreaCache() {
 }
 
 void AiAasRouteCache::InitClusterAreaCache() {
-	const auto *const aasClusters = aasWorld.Clusters();
-	const auto numClusters = aasWorld.NumClusters();
+	const auto aasClusters = aasWorld.getClusters();
+	const auto numClusters = aasClusters.size();
 
 	size_t totalNumAreas = 0;
-	for( int i = 0; i < numClusters; i++ ) {
+	for( size_t i = 0; i < numClusters; i++ ) {
 		totalNumAreas += aasClusters[i].numareas;
 	}
 
@@ -1123,7 +1126,7 @@ void AiAasRouteCache::FreeAllPortalCache() {
 
 void AiAasRouteCache::ResetAllPortalCache() {
 	assert( portalCache );
-	for( int i = 0, end = aasWorld.NumAreas(); i < end; i++ ) {
+	for( int i = 0, end = aasWorld.getAreas().size(); i < end; i++ ) {
 		AreaOrPortalCacheTable *nextCache;
 		for( auto *cache = portalCache[i]; cache; cache = nextCache ) {
 			nextCache = cache->next;
@@ -1134,22 +1137,20 @@ void AiAasRouteCache::ResetAllPortalCache() {
 }
 
 void AiAasRouteCache::InitPortalCache() {
-	portalCache = (AreaOrPortalCacheTable **)GetClearedMemory( aasWorld.NumAreas() * sizeof( AreaOrPortalCacheTable * ) );
+	portalCache = (AreaOrPortalCacheTable **)GetClearedMemory( aasWorld.getAreas().size() * sizeof( AreaOrPortalCacheTable * ) );
 }
 
 void AiAasRouteCache::InitPathFindingNodes() {
-	const auto *aasClusters = aasWorld.Clusters();
-
 	maxReachAreas = 0;
-	for( int i = 0, end = aasWorld.NumClusters(); i < end; i++ ) {
-		int numReachAreas = aasClusters[i].numreachabilityareas;
+	for( const auto &cluster: aasWorld.getClusters() ) {
+		int numReachAreas = cluster.numreachabilityareas;
 		if( numReachAreas > maxReachAreas ) {
 			maxReachAreas = numReachAreas;
 		}
 	}
 
 	areaPathFindingNodes = (PathFinderNode *)GetClearedMemory( maxReachAreas * sizeof( PathFinderNode ) );
-	portalPathFindingNodes = (PathFinderNode *)GetClearedMemory( ( aasWorld.NumPortals() + 1 ) * sizeof( PathFinderNode ) );
+	portalPathFindingNodes = (PathFinderNode *)GetClearedMemory( ( aasWorld.getPortals().size() + 1 ) * sizeof( PathFinderNode ) );
 
 	oldestCache = nullptr;
 	newestCache = nullptr;
@@ -1203,14 +1204,14 @@ struct MonotonicIntegerHeap {
 // It's unlikely that routing is going performed from multiple threads simultaneously in foreseeable future.
 static MonotonicIntegerHeap globalHeap;
 
-void AiAasRouteCache::UpdateAreaRoutingCache( const aas_areasettings_t *aasAreaSettings,
-											  const aas_portal_t *aasPortals,
+void AiAasRouteCache::UpdateAreaRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+											  std::span<const aas_portal_t> aasPortals,
 											  AreaOrPortalCacheTable *areaCache ) const {
 	//NOTE: not more than 128 reachabilities per area allowed
 	uint16_t startAreaTravelTimes[128];
 
 	//number of reachability areas within this cluster
-	const int numReachAreas = aasWorld.Clusters()[areaCache->cluster].numreachabilityareas;
+	const int numReachAreas = aasWorld.getClusters()[areaCache->cluster].numreachabilityareas;
 	const int badTravelFlags = ~areaCache->travelFlags;
 
 	auto clusterAreaNum = ClusterAreaNum( aasAreaSettings, aasPortals, areaCache->cluster, areaCache->areaNum );
@@ -1356,8 +1357,8 @@ inline void AiAasRouteCache::AreaOrPortalCacheTable::SetPathFindingProps( int cl
 }
 
 AiAasRouteCache::AreaOrPortalCacheTable *
-AiAasRouteCache::GetAreaRoutingCache( const aas_areasettings_t *aasAreaSettings,
-									  const aas_portal_t *aasPortals,
+AiAasRouteCache::GetAreaRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+									  std::span<const aas_portal_t> aasPortals,
 									  int clusterNum, int areaNum, int travelFlags ) {
 	//number of the area in the cluster
 	const auto clusterAreaNum = ClusterAreaNum( aasAreaSettings, aasPortals, clusterNum, areaNum );
@@ -1371,7 +1372,7 @@ AiAasRouteCache::GetAreaRoutingCache( const aas_areasettings_t *aasAreaSettings,
 	}
 
 	if( !cache ) {
-		const int numTravelTimes = aasWorld.Clusters()[clusterNum].numreachabilityareas;
+		const int numTravelTimes = aasWorld.getClusters()[clusterNum].numreachabilityareas;
 		// Try checking whether siblings have a cache for this area
 		if( const auto *siblingCache = FindSiblingCache( clusterNum, clusterAreaNum, travelFlags ) ) {
 			// Allocate a raw memory chunk as we're about to overwrite it
@@ -1449,15 +1450,15 @@ AiAasRouteCache::FindSiblingCache( int clusterNum, int clusterAreaNum, int trave
 }
 
 void AiAasRouteCache::UpdatePortalRoutingCache( AreaOrPortalCacheTable *portalCache ) {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const auto *const aasPortalIndex = aasWorld.PortalIndex();
-	const auto *const aasPortals = aasWorld.Portals();
-	const auto *const aasClusters = aasWorld.Clusters();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasPortalIndex = aasWorld.getPortalIndex();
+	const auto aasPortals = aasWorld.getPortals();
+	const auto aasClusters = aasWorld.getClusters();
 	auto *const portalMaxTravelTimes = this->portalMaxTravelTimes;
 	auto *const pathFindingNodes = this->portalPathFindingNodes;
 
-	const auto numPortals = aasWorld.NumPortals();
-	for( int i = 0; i < numPortals + 1; ++i ) {
+	const size_t numPortals = aasPortals.size();
+	for( size_t i = 0; i < numPortals + 1; ++i ) {
 		pathFindingNodes[i].dijkstraLabel = UNREACHED;
 	}
 
@@ -1537,8 +1538,8 @@ void AiAasRouteCache::UpdatePortalRoutingCache( AreaOrPortalCacheTable *portalCa
 }
 
 AiAasRouteCache::AreaOrPortalCacheTable *
-AiAasRouteCache::GetPortalRoutingCache( const aas_areasettings_t *aasAreaSettings,
-										const aas_portal_t *aasPortals,
+AiAasRouteCache::GetPortalRoutingCache( std::span<const aas_areasettings_t> aasAreaSettings,
+										std::span<const aas_portal_t> aasPortals,
 										int clusterNum, int areaNum, int travelFlags ) {
 	AreaOrPortalCacheTable *cache;
 	//find the cached portal routing if existing
@@ -1549,8 +1550,8 @@ AiAasRouteCache::GetPortalRoutingCache( const aas_areasettings_t *aasAreaSetting
 	}
 	//if the portal routing isn't cached
 	if( !cache ) {
-		cache = AllocRoutingCache( aasWorld.NumPortals() );
-		cache->FixVarLenDataRefs( aasWorld.NumPortals() );
+		cache = AllocRoutingCache( aasWorld.getPortals().size() );
+		cache->FixVarLenDataRefs( aasWorld.getPortals().size() );
 		cache->SetPathFindingProps( clusterNum, areaNum, travelFlags );
 		//add the cache to the cache list
 		cache->prev = nullptr;
@@ -1654,11 +1655,12 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		return true;
 	}
 
-	if( fromAreaNum <= 0 || fromAreaNum >= aasWorld.NumAreas() ) {
+	const auto aasAreas = aasWorld.getAreas();
+	if( (unsigned)( fromAreaNum - 1 ) >= (unsigned)( aasAreas.size() - 1 ) ) {
 		return false;
 	}
 
-	if( toAreaNum <= 0 || toAreaNum >= aasWorld.NumAreas() ) {
+	if( (unsigned)( toAreaNum - 1 ) >= (unsigned)( aasAreas.size() - 1 ) ) {
 		return false;
 	}
 
@@ -1690,8 +1692,8 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 }
 
 bool AiAasRouteCache::RouteToGoalArea( const RoutingRequest &request, RoutingResult *result ) {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
-	const auto *const aasPortals = aasWorld.Portals();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
+	const auto aasPortals = aasWorld.getPortals();
 
 	auto clusterNum = aasAreaSettings[request.areaNum].cluster;
 	auto goalClusterNum = aasAreaSettings[request.goalAreaNum].cluster;
@@ -1722,7 +1724,7 @@ bool AiAasRouteCache::RouteToGoalArea( const RoutingRequest &request, RoutingRes
 		// The number of the area in the cluster
 		const auto clusterAreaNum = ClusterAreaNum( aasAreaSettings, aasPortals, clusterNum, request.areaNum );
 		// The cluster the area is in
-		const auto *cluster = &aasWorld.Clusters()[clusterNum];
+		const auto *cluster = &aasWorld.getClusters()[clusterNum];
 		// If the area is NOT a reachability area
 		if( clusterAreaNum >= cluster->numreachabilityareas ) {
 			return false;
@@ -1751,7 +1753,7 @@ bool AiAasRouteCache::RouteToGoalArea( const RoutingRequest &request, RoutingRes
 bool AiAasRouteCache::RouteToGoalPortal( const RoutingRequest &request,
 										 AreaOrPortalCacheTable *portalCache,
 										 RoutingResult *result ) {
-	const auto *const aasAreaSettings = aasWorld.AreaSettings();
+	const auto aasAreaSettings = aasWorld.getAreaSettings();
 	const auto clusterNum = aasAreaSettings[request.areaNum].cluster;
 	// If the area is a cluster portal, read directly from the portal cache
 	if( clusterNum < 0 ) {
@@ -1761,10 +1763,10 @@ bool AiAasRouteCache::RouteToGoalPortal( const RoutingRequest &request,
 		return true;
 	}
 
-	const auto *const aasPortalIndex = aasWorld.PortalIndex();
-	const auto *const aasPortals = aasWorld.Portals();
+	const auto aasPortalIndex = aasWorld.getPortalIndex();
+	const auto aasPortals = aasWorld.getPortals();
 	// The cluster the area is in
-	const auto *cluster = &aasWorld.Clusters()[clusterNum];
+	const auto *cluster = &aasWorld.getClusters()[clusterNum];
 
 	int bestTime = 0;
 	int bestReachNum = -1;
