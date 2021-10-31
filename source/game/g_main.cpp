@@ -811,3 +811,19 @@ const char *FS_FirstExtension( const char *filename, const char *extension[], in
 int FS_Seek( int file, int offset, int whence ) {
 	return trap_FS_Seek( file, offset, whence );
 }
+
+namespace wsw {
+
+auto createRegularLineStream() -> wsw::ConsoleLineStream * {
+	return GAME_IMPORT.createRegularLineStream();
+}
+
+auto createDeveloperLineStream() -> wsw::ConsoleLineStream * {
+	return GAME_IMPORT.createDeveloperLineStream();
+}
+
+void submitLineStream( wsw::ConsoleLineStream *stream ) {
+	return GAME_IMPORT.submitLineStream( stream );
+}
+
+}

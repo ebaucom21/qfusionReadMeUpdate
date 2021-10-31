@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sv_mm.h"
 #include "../qcommon/compression.h"
+#include "../qcommon/consolelines.h"
 
 game_export_t *ge;
 
@@ -581,6 +582,10 @@ void SV_InitGameProgs( void ) {
 	import.ExecuteClientThinks = SV_ExecuteClientThinks;
 
 	import.LocateEntities = SV_LocateEntities;
+
+	import.createRegularLineStream = wsw::createRegularLineStream;
+	import.createDeveloperLineStream = wsw::createDeveloperLineStream;
+	import.submitLineStream = wsw::submitLineStream;
 
 	import.MM_NewGetQuery = SV_MM_NewGetQuery;
 	import.MM_NewPostQuery = SV_MM_NewPostQuery;

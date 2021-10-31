@@ -668,61 +668,6 @@ void        Com_BeginRedirect( int target, char *buffer, int buffersize,
 void        Com_EndRedirect( void );
 void        Com_DeferConsoleLogReopen( void );
 
-#include "printstream.h"
-
-namespace wsw {
-
-class FailureTrigger {
-	wsw::streams::PrintStream *activeStream { nullptr };
-	const char *const fileName;
-	const int line;
-	com_error_code_t code { ERR_FATAL };
-
-	wsw::streams::PrintStream &startWritingToStream( com_error_code_t code_ );
-public:
-	FailureTrigger( const char *fileName_, int line_ );
-
-	[[noreturn]]
-	~FailureTrigger();
-
-	wsw::streams::PrintStream &drop() { return startWritingToStream( ERR_DROP ); }
-	wsw::streams::PrintStream &fatal() { return startWritingToStream( ERR_FATAL ); }
-};
-
-class LogLine {
-	wsw::streams::PrintStream *activeStream { nullptr };
-	const char *fileName;
-	int line;
-
-	wsw::streams::PrintStream &startWritingToStream( bool debugOne );
-public:
-	LogLine( const char *fileName_, int line_ );
-	~LogLine();
-
-	LogLine( const LogLine & ) = delete;
-	LogLine &operator=( const LogLine & ) = delete;
-	LogLine( LogLine && ) = delete;
-	LogLine &operator=( LogLine && ) = delete;
-
-	wsw::streams::PrintStream &operator()() {
-		return startWritingToStream( false );
-	}
-
-	wsw::streams::PrintStream &d() {
-		return startWritingToStream( true ) << wsw::streams::colors::grey;
-	}
-
-	wsw::streams::PrintStream &w() {
-		return startWritingToStream( false ) << wsw::streams::colors::yellow;
-	}
-
-	wsw::streams::PrintStream &e() {
-		return startWritingToStream( false ) << wsw::streams::colors::red;
-	}
-};
-
-}
-
 #ifndef _MSC_VER
 void Com_Printf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
 void Com_DPrintf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );

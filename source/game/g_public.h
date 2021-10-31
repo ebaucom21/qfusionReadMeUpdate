@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    78
+#define GAME_API_VERSION    79
 
 //===============================================================
 
@@ -67,6 +67,8 @@ typedef struct {
 } entity_shared_t;
 
 //===============================================================
+
+namespace wsw { class ConsoleLineStream; }
 
 struct CMShapeList;
 
@@ -194,6 +196,10 @@ typedef struct {
 	// The edict array is allocated in the game dll so it
 	// can vary in size from one game to another.
 	void ( *LocateEntities )( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts );
+
+	wsw::ConsoleLineStream *( *createRegularLineStream )();
+	wsw::ConsoleLineStream *( *createDeveloperLineStream )();
+	void ( *submitLineStream )( wsw::ConsoleLineStream * );
 
 	class QueryObject *( *MM_NewPostQuery )( const char *url );
 	class QueryObject *( *MM_NewGetQuery )( const char *url );

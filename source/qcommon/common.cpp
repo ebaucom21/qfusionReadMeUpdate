@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // common.c -- misc functions used in client and server
 #include "qcommon.h"
-#include "printstream.h"
-
+#include "consolelines.h"
+#include "freelistallocator.h"
 #include "wswstaticvector.h"
 
 #include <clocale>
@@ -40,7 +40,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <windows.h>
 #endif
 
-#include <setjmp.h>
 #include "wswcurl.h"
 #include "steam.h"
 #include "glob.h"
@@ -48,6 +47,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/cjson.h"
 #include "mmcommon.h"
 #include "compression.h"
+
+#include <setjmp.h>
+#include <mutex>
 
 #define MAX_NUM_ARGVS   50
 
@@ -74,10 +76,57 @@ static cvar_t *logconsole_flush;
 static cvar_t *logconsole_timestamp;
 static cvar_t *com_introPlayed3;
 
-// TODO: Merge these once a full switch to LogLine is performed
 static qmutex_t *com_print_mutex;
-static qmutex_t *com_logline_mutex;
-static qmutex_t *com_failure_mutex;
+
+class alignas( 16 ) ConsoleLineStreamsAllocator {
+	std::recursive_mutex m_mutex;
+	wsw::HeapBasedFreelistAllocator m_allocator;
+
+	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::ConsoleLineStream );
+	static constexpr size_t kCapacity = 1024;
+
+public:
+	enum Tag { Regular, Developer };
+
+	wsw::ConsoleLineStream m_nullStreams[2] { { nullptr, 0, Regular }, { nullptr, 0, Developer } };
+
+	ConsoleLineStreamsAllocator() : m_allocator( kSize, kCapacity ) {}
+
+	[[nodiscard]]
+	bool isANullStream( wsw::ConsoleLineStream *stream ) {
+		return stream - m_nullStreams < 2;
+	}
+
+	[[nodiscard]]
+	auto alloc( Tag tag ) -> wsw::ConsoleLineStream * {
+		[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
+		if( !m_allocator.isFull() ) [[likely]] {
+			uint8_t *mem = m_allocator.allocOrNull();
+			auto *buffer = (char *)( mem + sizeof( wsw::ConsoleLineStream ) );
+			return new( mem )wsw::ConsoleLineStream( buffer, MAX_PRINTMSG, tag );
+		} else if( auto *mem = (uint8_t *)::malloc( kSize ) ) {
+			auto *buffer = (char *)( mem + sizeof( wsw::ConsoleLineStream ) );
+			return new( mem )wsw::ConsoleLineStream( buffer, MAX_PRINTMSG, tag );
+		} else {
+			return &m_nullStreams[tag];
+		}
+	}
+
+	[[nodiscard]]
+	auto free( wsw::ConsoleLineStream *stream ) {
+		if( !isANullStream( stream ) ) [[likely]] {
+			[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
+			stream->~ConsoleLineStream();
+			if( m_allocator.mayOwn( stream ) ) [[likely]] {
+				m_allocator.free( stream );
+			} else {
+				::free( stream );
+			}
+		}
+	}
+};
+
+static ConsoleLineStreamsAllocator g_consoleLineStreamsAllocator;
 
 static int log_file = 0;
 
@@ -197,291 +246,32 @@ static void Com_ReopenConsoleLog( void ) {
 	}
 }
 
-class ConsoleLogStream : public wsw::streams::PrintStream {
-	friend class wsw::LogLine;
-	friend class wsw::FailureTrigger;
+auto wsw::createRegularLineStream() -> ConsoleLineStream * {
+	return g_consoleLineStreamsAllocator.alloc( ConsoleLineStreamsAllocator::Regular );
+}
 
-	enum { kLineSize = MAX_PRINTMSG };
+auto wsw::createDeveloperLineStream() -> ConsoleLineStream * {
+	constexpr auto tag = ConsoleLineStreamsAllocator::Developer;
+	if( !developer || !developer->integer ) {
+		return &g_consoleLineStreamsAllocator.m_nullStreams[tag];
+	}
+	return g_consoleLineStreamsAllocator.alloc( tag );
+}
 
-	char *lineBuffer;
-	size_t lineLenSoFar { 0 };
-
-	void print( const char *, va_list );
-
-	static const char *stripFilePrefix( const char *fileName );
-
-	void printLinePrefix( const char *fileName, int line );
-
-	void flush() {
-		if( !lineLenSoFar ) {
+void wsw::submitLineStream( ConsoleLineStream *stream ) {
+	if( stream->m_tag == ConsoleLineStreamsAllocator::Developer ) {
+		if( !developer || !developer->integer ) {
 			return;
 		}
-
-		if( lineBuffer[lineLenSoFar - 1] != '\n' ) {
-			if( lineLenSoFar < kLineSize + 2 ) {
-				lineBuffer[lineLenSoFar++] = '\n';
-				lineBuffer[lineLenSoFar++] = '\0';
-			} else {
-				lineBuffer[kLineSize - 2] = '\n';
-				lineBuffer[kLineSize - 1] = '\0';
-			}
-		}
-
-		Com_Printf( "%s", lineBuffer );
-		lineLenSoFar = 0;
 	}
-
-	[[noreturn]]
-	void drop() {
-		Com_Error( ERR_DROP, "%s", lineBuffer );
-	}
-
-	[[noreturn]]
-	void fatal() {
-		Com_Error( ERR_FATAL, "%s", lineBuffer );
-	}
-public:
-	explicit ConsoleLogStream( void ( *fn )( void *, const char *, ... ) )
-		: wsw::streams::PrintStream( fn, this ) {
-		lineBuffer = new char[kLineSize];
-	}
-
-	virtual ~ConsoleLogStream() {
-		delete[] lineBuffer;
-	}
-
-	static void printProxy( void *, const char *, ... );
-	static void debugPrintProxy( void *, const char *, ... );
-};
-
-class AllocatedLogStream;
-
-template <typename Stream>
-class LogStreamAllocator {
-	static constexpr const int kMaxStreams = 8;
-	static constexpr const int kMaxTopOfStack = kMaxStreams - 1;
-
-	wsw::StaticVector<Stream, kMaxStreams> streams;
-
-	int topOfStack { 0 };
-	int numToSReuses { 0 };
-public:
-	LogStreamAllocator() {
-		// Precache the initial stream
-		new( streams.unsafe_grow_back() )Stream( this );
-	}
-
-	std::pair<AllocatedLogStream *, bool> alloc() {
-		Stream *result;
-		if( topOfStack < kMaxTopOfStack ) {
-			assert( !numToSReuses );
-			if( streams.size() == topOfStack ) {
-				new( streams.unsafe_grow_back() )Stream( this );
-			}
-			result = &streams[topOfStack++];
-			return std::make_pair( result, false );
-		}
-
-		assert( topOfStack == kMaxTopOfStack );
-		result = &streams[kMaxTopOfStack];
-		numToSReuses++;
-		return std::make_pair( result, true );
-	}
-
-	void free( AllocatedLogStream *stream ) {
-		const Stream *streamsBegin = streams.begin();
-		const Stream *streamsBack = streamsBegin + kMaxTopOfStack;
-		const Stream *argAddr = (Stream *)stream;
-		if( argAddr != streamsBack ) {
-			// `topOfStack` points at the space after the top element
-			assert( topOfStack == (int)( argAddr - streamsBegin ) + 1 );
-			topOfStack--;
-			return;
-		}
-
-		if( !numToSReuses ) {
-			topOfStack--;
-			return;
-		}
-
-		numToSReuses--;
-	}
-};
-
-/**
- * A non-template base for descendants.
- * This allows referral to {@code deleteSelf()} without specifying a template parameter.
- */
-class AllocatedLogStream : public ConsoleLogStream {
-public:
-	virtual void deleteSelf() = 0;
-
-	explicit AllocatedLogStream( void ( *fn )( void *, const char *, ... ) )
-		: ConsoleLogStream( fn ) {}
-};
-
-template <typename Self>
-class AllocatorChildStream : public AllocatedLogStream {
-protected:
-	using AllocatorType = LogStreamAllocator<Self>;
-private:
-	AllocatorType *parent;
-protected:
-	void deleteSelf() override {
-		parent->free( this );
-	}
-
-	AllocatorChildStream( void ( *fn )( void *, const char *, ... ), LogStreamAllocator<Self> *parent_ )
-		: AllocatedLogStream( fn ), parent( parent_ ) {}
-};
-
-class RegularLogStream : public AllocatorChildStream<RegularLogStream> {
-public:
-	explicit RegularLogStream( AllocatorType *parent_ )
-		: AllocatorChildStream<RegularLogStream>( ConsoleLogStream::printProxy, parent_ ) {}
-};
-
-class DebugLogStream : public AllocatorChildStream<DebugLogStream> {
-public:
-	explicit DebugLogStream( AllocatorType *parent_ )
-		: AllocatorChildStream<DebugLogStream>( ConsoleLogStream::debugPrintProxy, parent_ ) {}
-};
-
-ConsoleLogStream fatalLogStream( ConsoleLogStream::printProxy );
-
-LogStreamAllocator<RegularLogStream> regularLogStreams;
-LogStreamAllocator<DebugLogStream> debugLogStreams;
-
-void ConsoleLogStream::printProxy( void *obj, const char *fmt, ... ) {
-	va_list va;
-	va_start( va, fmt );
-	( ( ConsoleLogStream *)obj )->print( fmt, va );
-	va_end( va );
-}
-
-void ConsoleLogStream::debugPrintProxy( void *obj, const char *fmt, ... ) {
-	if( !developer->integer ) {
-		return;
-	}
-
-	va_list va;
-	va_start( va, fmt );
-	( ( ConsoleLogStream *)obj )->print( fmt, va );
-	va_end( va );
-}
-
-void ConsoleLogStream::print( const char *fmt, va_list va ) {
-	assert( kLineSize >= lineLenSoFar );
-	int res = Q_vsnprintfz( lineBuffer + lineLenSoFar, kLineSize - lineLenSoFar, fmt, va );
-	if( res >= 0 ) {
-		lineLenSoFar += (unsigned)res;
-	}
-}
-
-const char *ConsoleLogStream::stripFilePrefix( const char *fileName ) {
-	// TODO: Stripping of file path prefix could be done in compile time.
-	// There were some troubles in forcing compile-time computations
-	// in this case so a more robust runtime version is currently used.
-
-#ifndef WIN32
-	const char *prefix = std::strstr( fileName, "qfusion/source/" );
-#else
-	const char *prefix = std::strstr( fileName, "qfusion\\source\\" );
-	// In case if some compiler uses forward slashes in filenames on Windows
-	if( !prefix ) {
-		prefix = std::strstr( fileName, "qfusion/source/" );
-	}
-#endif
-	return prefix ? prefix + sizeof( "qfusion/source" ) : fileName;
-}
-
-void ConsoleLogStream::printLinePrefix( const char *fileName, int line ) {
-	*this << '[';
-
-	size_t lineDigits;
-	if( line < 10 ) {
-		lineDigits = 1;
-	} else if( line < 100 ) {
-		lineDigits = 2;
-	} else if( line < 1000 ) {
-		lineDigits = 3;
+	// TODO: Eliminate Com_Printf()
+	if( !g_consoleLineStreamsAllocator.isANullStream( stream ) ) {
+		stream->m_data[std::min( stream->m_limit, stream->m_offset )] = '\0';
+		Com_Printf( "%s\n", stream->m_data );
 	} else {
-		lineDigits = 4;
+		Com_Printf( S_COLOR_RED "A null line stream was used. The line content was discarded\n" );
 	}
-
-	const size_t limit = 22 - lineDigits;
-	size_t nameLen = std::strlen( fileName );
-	if( nameLen <= limit ) {
-		*this << fileName;
-		for( size_t i = nameLen; i < limit; ++i ) {
-			*this << ' ';
-		}
-	} else {
-		for( size_t i = 0; i < nameLen; ++i ) {
-			*this << fileName[i + nameLen - limit];
-		}
-	}
-
-	*this << ':' << line << "]: ";
-}
-
-wsw::FailureTrigger::FailureTrigger( const char *fileName_, int line_ )
-	: fileName( fileName_ ), line( line_ ) {
-	QMutex_Lock( com_failure_mutex );
-}
-
-wsw::streams::PrintStream& wsw::FailureTrigger::startWritingToStream( com_error_code_t code_ ) {
-	const char *shownFileName = ConsoleLogStream::stripFilePrefix( fileName );
-	if( activeStream ) {
-		Com_Error( ERR_FATAL, "%s:%d: Internal error: A stream is already set", shownFileName, line );
-	}
-
-	code = code_;
-	activeStream = &fatalLogStream;
-	fatalLogStream.printLinePrefix( shownFileName, line );
-	return *activeStream;
-}
-
-wsw::FailureTrigger::~FailureTrigger() {
-	// TODO: Release properly on scope exit once Com_Error() starts using exceptions for stack unwinding
-	QMutex_Unlock( com_failure_mutex );
-	if( code == ERR_DROP ) {
-		fatalLogStream.drop();
-	} else {
-		fatalLogStream.fatal();
-	}
-}
-
-wsw::LogLine::LogLine( const char *fileName_, int line_ )
-	: fileName( fileName_ ), line( line_ ) {
-	// TODO: Either ensure this is a recursive mutex on every platform or use std::recursive_mutex
-	QMutex_Lock( com_logline_mutex );
-}
-
-wsw::streams::PrintStream &wsw::LogLine::startWritingToStream( bool debugOne ) {
-	const char *shownFileName = ConsoleLogStream::stripFilePrefix( fileName );
-	if( activeStream ) {
-		Com_Error( ERR_FATAL, "%s:%d: Internal error: A stream is already set", shownFileName, line );
-	}
-
-	auto [stream, hasToReuse] = !debugOne ? regularLogStreams.alloc() : debugLogStreams.alloc();
-	if( hasToReuse ) {
-		stream->flush();
-	}
-
-	stream->printLinePrefix( shownFileName, line );
-	activeStream = stream;
-	return *activeStream;
-}
-
-wsw::LogLine::~LogLine() {
-	*activeStream << wsw::streams::colors::white << '\n';
-
-	auto *realStream = (AllocatedLogStream *)activeStream;
-	realStream->flush();
-	realStream->deleteSelf();
-
-	QMutex_Unlock( com_logline_mutex );
+	g_consoleLineStreamsAllocator.free( stream );
 }
 
 /*
@@ -1021,8 +811,6 @@ void Qcommon_Init( int argc, char **argv ) {
 	QThreads_Init();
 
 	com_print_mutex = QMutex_Create();
-	com_logline_mutex = QMutex_Create();
-	com_failure_mutex = QMutex_Create();
 
 	// Force doing this early as this could fork for executing shell commands on UNIX.
 	// Required being able to call Com_Printf().
@@ -1264,8 +1052,6 @@ void Qcommon_Shutdown( void ) {
 	Cmd_Shutdown();
 	Cbuf_Shutdown();
 
-	QMutex_Destroy( &com_failure_mutex );
-	QMutex_Destroy( &com_logline_mutex );
 	QMutex_Destroy( &com_print_mutex );
 
 	QThreads_Shutdown();
