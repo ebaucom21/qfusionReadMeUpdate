@@ -13,7 +13,7 @@ class StringSplitter {
 	template <typename Separator>
 	[[nodiscard]]
 	static auto lenOf( Separator separator ) -> unsigned {
-		if constexpr( std::is_same<wsw::StringView, Separator>::value ) {
+		if constexpr( std::is_same_v<wsw::StringView, std::remove_cvref_t<Separator>> ) {
 			return separator.length();
 		}
 		return 1;

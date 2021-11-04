@@ -33,5 +33,5 @@ add_executable(
         userinfotest.cpp)
 
 add_test(NAME qcommontest COMMAND qcommontest)
-set_property(TARGET qcommontest PROPERTY CXX_STANDARD 17)
+set_property(TARGET qcommontest PROPERTY CXX_STANDARD 20)
 target_link_libraries(qcommontest PRIVATE Qt5::Test)

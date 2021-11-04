@@ -38,9 +38,9 @@ protected:
 			int res;
 			// Unfortunately, we have to fall back to snprintf due to
 			// a lack of full std::to_chars/std::format() support
-			if constexpr( std::is_same_v<std::remove_reference_t<T>, long double> ) {
+			if constexpr( std::is_same_v<std::remove_cvref_t<T>, long double> ) {
 				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%Lf", value );
-			} else if constexpr( std::is_same_v<std::remove_reference_t<T>, double> ) {
+			} else if constexpr( std::is_same_v<std::remove_cvref_t<T>, double> ) {
 				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%lf", value );
 			} else {
 				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%f", value );

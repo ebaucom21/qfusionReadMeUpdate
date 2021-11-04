@@ -125,3 +125,7 @@ int FS_GetFileList( char const*, char const*, char*, unsigned long, int, int ) {
 	abort();
 }
 
+int FS_Seek( int, int, int ) {
+	abort();
+}
+

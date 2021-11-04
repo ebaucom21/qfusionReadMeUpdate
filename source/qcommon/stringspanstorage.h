@@ -75,7 +75,7 @@ public:
 		m_charsBuffer.push_back( '\0' );
 		const auto resultSpanNum = (unsigned)m_spansBuffer.size();
 		assert( m_spansBuffer.size() < std::numeric_limits<unsigned>::max() );
-		if constexpr( std::is_same_v<InternalSpan, ResultSpan> ) {
+		if constexpr( std::is_same_v<std::remove_cvref_t<InternalSpan>, std::remove_cvref_t<ResultSpan>> ) {
 			ResultSpan resultSpan = { (Off)off, (Len)len };
 			m_spansBuffer.push_back( resultSpan );
 			return std::make_pair( resultSpanNum, resultSpan );

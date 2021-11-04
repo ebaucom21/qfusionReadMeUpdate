@@ -73,9 +73,9 @@ auto toNum( const char *s, const char **endPtr = nullptr ) -> std::optional<T> {
 			result = std::make_optional( (T)val );
 		}
 	} else {
-		constexpr bool isFloat = std::is_same<T, float>::value;
-		constexpr bool isDouble = std::is_same<T, double>::value;
-		constexpr bool isLongDouble = std::is_same<T, long double>::value;
+		constexpr bool isFloat = std::is_same_v<std::remove_cvref_t<T>, float>;
+		constexpr bool isDouble = std::is_same_v<std::remove_cvref_t<T>, double>;
+		constexpr bool isLongDouble = std::is_same_v<std::remove_cvref_t<T>, long double>;
 		static_assert( isFloat || isDouble || isLongDouble, "Weird floating-point type" );
 
 		T val, hugeVal;
