@@ -1064,8 +1064,6 @@ void        R_InitModels( void );
 void        R_ShutdownModels( void );
 void        R_FreeUnusedModels( void );
 
-void R_GetTransformBufferForMesh( mesh_t *mesh, bool positions, bool normals, bool sVectors );
-
 void        Mod_ClearAll( void );
 model_t     *Mod_ForName( const char *name, bool crash );
 mleaf_t     *Mod_PointInLeaf( float *p, model_t *model );

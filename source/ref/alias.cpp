@@ -186,6 +186,10 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	if( poutmodel->numframes <= 0 ) {
 		Com_Error( ERR_DROP, "model %s has no frames", mod->name );
 	}
+	if( poutmodel->numframes > 1 ) {
+		Com_DPrintf( "limiting model %s to a single frame", mod->name );
+		poutmodel->numframes = 1;
+	}
 	//	else if( poutmodel->numframes > MD3_MAX_FRAMES )
 	//		ri.Com_Error( ERR_DROP, "model %s has too many frames", mod->name );
 
@@ -527,129 +531,12 @@ bool R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel
 
 /*
 * R_DrawAliasSurf
-*
-* Interpolates between two frames and origins
 */
 void R_DrawAliasSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceAlias_t *drawSurf ) {
-	int i;
-	int framenum = e->frame, oldframenum = e->oldframe;
-	float backv[3], frontv[3];
-	vec3_t normal, oldnormal;
-	bool calcVerts, calcNormals, calcSTVectors;
-	vec3_t move;
-	const maliasframe_t *frame, *oldframe;
-	const maliasvertex_t *v, *ov;
-	float backlerp = e->backlerp;
-	const maliasmodel_t *model = ( const maliasmodel_t * )drawSurf->model->extradata;
 	const maliasmesh_t *aliasmesh = drawSurf->mesh;
-	vattribmask_t vattribs;
 
-	// see what vertex attribs backend needs
-	vattribs = RB_GetVertexAttribs();
-
-	if( ( framenum >= model->numframes ) || ( framenum < 0 ) ) {
-		framenum = 0;
-	}
-
-	if( ( oldframenum >= model->numframes ) || ( oldframenum < 0 ) ) {
-		oldframenum = 0;
-	}
-
-	frame = model->frames + framenum;
-	oldframe = model->frames + oldframenum;
-	for( i = 0; i < 3; i++ )
-		move[i] = frame->translate[i] + ( oldframe->translate[i] - frame->translate[i] ) * backlerp;
-
-	if( aliasmesh->vbo != NULL && !framenum && !oldframenum ) {
-		RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
-
-		RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
-	} else {
-		mesh_t dynamicMesh;
-		vec4_t *inVertsArray;
-		vec4_t *inNormalsArray;
-		vec4_t *inSVectorsArray;
-
-		// based on backend's needs
-		calcVerts = ( framenum || oldframenum ) ? true : false;
-		calcNormals = ( ( ( vattribs & VATTRIB_NORMAL_BIT ) != 0 ) && calcVerts ) ? true : false;
-		calcSTVectors = ( ( ( vattribs & VATTRIB_SVECTOR_BIT ) != 0 ) && calcNormals ) ? true : false;
-
-		memset( &dynamicMesh, 0, sizeof( dynamicMesh ) );
-
-		dynamicMesh.elems = aliasmesh->elems;
-		dynamicMesh.numElems = aliasmesh->numtris * 3;
-		dynamicMesh.numVerts = aliasmesh->numverts;
-
-		R_GetTransformBufferForMesh( &dynamicMesh, calcVerts, calcNormals, calcSTVectors );
-
-		inVertsArray = dynamicMesh.xyzArray;
-		inNormalsArray = dynamicMesh.normalsArray;
-		inSVectorsArray = dynamicMesh.sVectorsArray;
-
-		if( calcVerts ) {
-			if( framenum == oldframenum ) {
-				for( i = 0; i < 3; i++ )
-					frontv[i] = frame->scale[i];
-
-				v = aliasmesh->vertexes + framenum * aliasmesh->numverts;
-				for( i = 0; i < aliasmesh->numverts; i++, v++ ) {
-					Vector4Set( inVertsArray[i],
-								move[0] + v->point[0] * frontv[0],
-								move[1] + v->point[1] * frontv[1],
-								move[2] + v->point[2] * frontv[2],
-								1 );
-
-					if( calcNormals ) {
-						R_LatLongToNorm4( v->latlong, inNormalsArray[i] );
-					}
-				}
-			} else {
-				for( i = 0; i < 3; i++ ) {
-					backv[i] = backlerp * oldframe->scale[i];
-					frontv[i] = ( 1.0f - backlerp ) * frame->scale[i];
-				}
-
-				v = aliasmesh->vertexes + framenum * aliasmesh->numverts;
-				ov = aliasmesh->vertexes + oldframenum * aliasmesh->numverts;
-				for( i = 0; i < aliasmesh->numverts; i++, v++, ov++ ) {
-					VectorSet( inVertsArray[i],
-							   move[0] + v->point[0] * frontv[0] + ov->point[0] * backv[0],
-							   move[1] + v->point[1] * frontv[1] + ov->point[1] * backv[1],
-							   move[2] + v->point[2] * frontv[2] + ov->point[2] * backv[2] );
-
-					if( calcNormals ) {
-						R_LatLongToNorm( v->latlong, normal );
-						R_LatLongToNorm( ov->latlong, oldnormal );
-
-						Vector4Set( inNormalsArray[i],
-								   normal[0] + ( oldnormal[0] - normal[0] ) * backlerp,
-								   normal[1] + ( oldnormal[1] - normal[1] ) * backlerp,
-								   normal[2] + ( oldnormal[2] - normal[2] ) * backlerp, 0 );
-					}
-				}
-			}
-		}
-
-		if( calcSTVectors ) {
-			R_BuildTangentVectors( aliasmesh->numverts, inVertsArray, inNormalsArray, aliasmesh->stArray, aliasmesh->numtris, aliasmesh->elems, inSVectorsArray );
-		}
-
-		if( !calcVerts ) {
-			dynamicMesh.xyzArray = aliasmesh->xyzArray;
-		}
-		dynamicMesh.stArray = aliasmesh->stArray;
-		if( !calcNormals ) {
-			dynamicMesh.normalsArray = aliasmesh->normalsArray;
-		}
-		if( !calcSTVectors ) {
-			dynamicMesh.sVectorsArray = aliasmesh->sVectorsArray;
-		}
-
-		RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &dynamicMesh, GL_TRIANGLES, 0.0f, 0.0f );
-
-		RB_FlushDynamicMeshes();
-	}
+	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
+	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
 }
 
 /*
