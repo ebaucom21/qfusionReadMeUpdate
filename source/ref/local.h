@@ -1069,9 +1069,6 @@ model_t     *Mod_ForName( const char *name, bool crash );
 mleaf_t     *Mod_PointInLeaf( float *p, model_t *model );
 uint8_t     *Mod_ClusterPVS( int cluster, model_t *model );
 
-unsigned int Mod_Handle( const model_t *mod );
-model_t     *Mod_ForHandle( unsigned int elem );
-
 void        Mod_StripLODSuffix( char *name );
 
 //#include "program.h"
@@ -1200,11 +1197,11 @@ typedef struct {
 typedef struct {
 	// any asset (model, shader, texture, etc) with has not been registered
 	// or "touched" during the last registration sequence will be freed
-	volatile int registrationSequence;
-	volatile bool registrationOpen;
+	int registrationSequence;
+	bool registrationOpen;
 
 	// bumped each time R_RegisterWorldModel is called
-	volatile int worldModelSequence;
+	int worldModelSequence;
 
 	float sinTableByte[256];
 
