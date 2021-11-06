@@ -29,14 +29,6 @@ static refinst_t riStack[REFINST_STACK_SIZE];
 static unsigned riStackSize;
 
 /*
-=============================================================
-
-FRUSTUM AND PVS CULLING
-
-=============================================================
-*/
-
-/*
 * R_SetupFrustum
 */
 void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum ) {
@@ -94,267 +86,6 @@ void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum ) {
 	frustum[4].type = PLANE_NONAXIAL;
 	frustum[4].dist = DotProduct( rd->vieworg, frustum[4].normal ) - farClip;
 	frustum[4].signbits = SignbitsForPlane( &frustum[4] );
-}
-
-/*
-* R_CullBox
-*
-* Returns true if the box is completely outside the frustum
-*/
-bool R_CullBox( const vec3_t mins, const vec3_t maxs, const unsigned int clipflags ) {
-	unsigned int i, bit;
-	const cplane_t *p;
-
-	if( r_nocull->integer ) {
-		return false;
-	}
-
-	for( i = sizeof( rn.frustum ) / sizeof( rn.frustum[0] ), bit = 1, p = rn.frustum; i > 0; i--, bit <<= 1, p++ ) {
-		if( !( clipflags & bit ) ) {
-			continue;
-		}
-
-		switch( p->signbits & 7 ) {
-			case 0:
-				if( p->normal[0] * maxs[0] + p->normal[1] * maxs[1] + p->normal[2] * maxs[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 1:
-				if( p->normal[0] * mins[0] + p->normal[1] * maxs[1] + p->normal[2] * maxs[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 2:
-				if( p->normal[0] * maxs[0] + p->normal[1] * mins[1] + p->normal[2] * maxs[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 3:
-				if( p->normal[0] * mins[0] + p->normal[1] * mins[1] + p->normal[2] * maxs[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 4:
-				if( p->normal[0] * maxs[0] + p->normal[1] * maxs[1] + p->normal[2] * mins[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 5:
-				if( p->normal[0] * mins[0] + p->normal[1] * maxs[1] + p->normal[2] * mins[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 6:
-				if( p->normal[0] * maxs[0] + p->normal[1] * mins[1] + p->normal[2] * mins[2] < p->dist ) {
-					return true;
-				}
-				break;
-			case 7:
-				if( p->normal[0] * mins[0] + p->normal[1] * mins[1] + p->normal[2] * mins[2] < p->dist ) {
-					return true;
-				}
-				break;
-			default:
-				break;
-		}
-	}
-
-	return false;
-}
-
-/*
-* R_CullSphere
-*
-* Returns true if the sphere is completely outside the frustum
-*/
-bool R_CullSphere( const vec3_t centre, const float radius, const unsigned int clipflags ) {
-	unsigned int i;
-	unsigned int bit;
-	const cplane_t *p;
-
-	if( r_nocull->integer ) {
-		return false;
-	}
-
-	for( i = sizeof( rn.frustum ) / sizeof( rn.frustum[0] ), bit = 1, p = rn.frustum; i > 0; i--, bit <<= 1, p++ ) {
-		if( !( clipflags & bit ) ) {
-			continue;
-		}
-		if( DotProduct( centre, p->normal ) - p->dist <= -radius ) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-/*
-* R_VisCullBox
-*/
-bool R_VisCullBox( const vec3_t mins, const vec3_t maxs ) {
-	int s, stackdepth = 0;
-	vec3_t extmins, extmaxs;
-	int localstack[2048];
-
-	if( !rsh.worldModel || ( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		return false;
-	}
-	if( rn.renderFlags & RF_NOVIS ) {
-		return false;
-	}
-
-	for( s = 0; s < 3; s++ ) {
-		extmins[s] = mins[s] - 4;
-		extmaxs[s] = maxs[s] + 4;
-	}
-
-	const auto *__restrict nodes = rsh.worldBrushModel->nodes;
-
-	int nodeNum = 0;
-	for(;; ) {
-		if( nodeNum < 0 ) {
-			// TODO: Implement/reorder cull/vis cull calls
-			/*if( !rf.worldLeafVis[(mleaf_t *)node - rsh.worldBrushModel->leafs] )
-			{
-			    if( !stackdepth )
-			        return true;
-			    node = localstack[--stackdepth];
-			    continue;
-			}*/
-			return false;
-		}
-
-		const auto *__restrict node = nodes + nodeNum;
-
-		s = BOX_ON_PLANE_SIDE( extmins, extmaxs, &node->plane ) - 1;
-		if( s < 2 ) {
-			nodeNum = node->children[s];
-			continue;
-		}
-
-		// go down both sides
-		if( stackdepth < sizeof( localstack ) / sizeof( mnode_t * ) ) {
-			localstack[stackdepth++] = node->children[0];
-		}
-		nodeNum = node->children[1];
-	}
-}
-
-/*
-* R_VisCullSphere
-*/
-bool R_VisCullSphere( const vec3_t origin, float radius ) {
-	float dist;
-	int stackdepth = 0;
-	int localstack[2048];
-
-	if( !rsh.worldModel || ( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		return false;
-	}
-	if( rn.renderFlags & RF_NOVIS ) {
-		return false;
-	}
-
-	radius += 4;
-
-	const auto *__restrict nodes = rsh.worldBrushModel->nodes;
-
-	int nodeNum = 0;
-	for(;; ) {
-		if( nodeNum < 0 ) {
-			// TODO: Implement/reorder cull/vis cull calls
-			/*if( !rf.worldLeafVis[(mleaf_t *)node - rsh.worldBrushModel->leafs] )
-			{
-			    if( !stackdepth )
-			        return true;
-			    node = localstack[--stackdepth];
-			    continue;
-			}*/
-			return false;
-		}
-
-		const auto *__restrict node = nodes + nodeNum;
-
-		dist = PlaneDiff( origin, &node->plane );
-		if( dist > radius ) {
-			nodeNum = node->children[0];
-			continue;
-		} else if( dist < -radius ) {
-			nodeNum = node->children[1];
-			continue;
-		}
-
-		// go down both sides
-		if( stackdepth < sizeof( localstack ) / sizeof( mnode_t * ) ) {
-			localstack[stackdepth++] = node->children[0];
-		} else {
-			assert( 0 );
-		}
-		nodeNum = node->children[1];
-	}
-}
-
-/*
-* R_CullModelEntity
-*/
-int R_CullModelEntity( const entity_t *e, vec3_t mins, vec3_t maxs, float radius, bool sphereCull, bool pvsCull ) {
-	if( e->flags & RF_NOSHADOW ) {
-		if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
-			return 3;
-		}
-	}
-
-	if( e->flags & RF_WEAPONMODEL ) {
-		if( rn.renderFlags & RF_NONVIEWERREF ) {
-			return 1;
-		}
-		return 0;
-	}
-
-	if( e->flags & RF_VIEWERMODEL ) {
-		//if( !(rn.renderFlags & RF_NONVIEWERREF) )
-		if( !( rn.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
-			return 1;
-		}
-	}
-
-	if( e->flags & RF_NODEPTHTEST ) {
-		return 0;
-	}
-
-	// account for possible outlines
-	if( e->outlineHeight ) {
-		radius += e->outlineHeight * r_outlines_scale->value * 1.73 /*sqrt(3)*/;
-	}
-
-	if( sphereCull ) {
-		if( R_CullSphere( e->origin, radius, rn.clipFlags ) ) {
-			return 1;
-		}
-	} else {
-		if( R_CullBox( mins, maxs, rn.clipFlags ) ) {
-			return 1;
-		}
-	}
-
-	if( pvsCull ) {
-		if( sphereCull ) {
-			if( R_VisCullSphere( e->origin, radius ) ) {
-				return 2;
-			}
-		} else {
-			if( R_VisCullBox( mins, maxs ) ) {
-				return 2;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static bool R_CullSurface( const entity_t *e, const msurface_t *surf, unsigned clipflags ) {
-	return ( clipflags && R_CullBox( surf->mins, surf->maxs, clipflags ) );
 }
 
 static void R_AddSurfaceVBOSlice( drawList_t *list, drawSurfaceBSP_t *drawSurf, const msurface_t *surf, int offset ) {
@@ -840,9 +571,6 @@ static void R_CullVisSurfaces( unsigned firstSurf, unsigned numSurfs, unsigned c
 		msurface_t *surf = rsh.worldBrushModel->surfaces + firstSurf + i;
 		if( rf.worldSurfVis[i] ) {
 			// the surface is at partly visible in at least one leaf, frustum cull it
-			if( R_CullSurface( rsc.worldent, surf, clipFlags ) ) {
-				rf.worldSurfVis[i] = 0;
-			}
 			rf.worldSurfFullVis[i] = 0;
 		}
 		else {
@@ -1387,10 +1115,6 @@ bool R_AddBrushModelToDrawList( const entity_t *e ) {
 	vec3_t bmins, bmaxs;
 	const float radius = R_BrushModelBBox( e, bmins, bmaxs, &rotated );
 
-	if( R_CullModelEntity( e, bmins, bmaxs, radius, rotated, false ) ) {
-		return false;
-	}
-
 	vec3_t origin;
 	VectorAdd( e->model->mins, e->model->maxs, origin );
 	VectorMA( e->origin, 0.5, origin, origin );
@@ -1419,10 +1143,8 @@ bool R_AddBrushModelToDrawList( const entity_t *e ) {
 		const unsigned surfNum = bmodel->firstModelSurface + i;
 		const msurface_t *surf = rsh.worldBrushModel->surfaces + surfNum;
 		if( surf->drawSurf ) {
-			if( !R_CullSurface( e, surf, 0 ) ) {
-				rf.worldSurfVis[surfNum] = 1;
-				rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
-			}
+			rf.worldSurfVis[surfNum] = 1;
+			rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
 		}
 	}
 
@@ -2419,10 +2141,6 @@ uint32_t Scene::CullLights( unsigned clipFlags ) {
 
 	if( cvarValue & ~1 ) {
 		for( int i = 0; i < numCoronaLights; ++i ) {
-			const auto &light = coronaLights[i];
-			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-				continue;
-			}
 			drawnCoronaLightNums[numDrawnCoronaLights++] = (LightNumType)i;
 		}
 	}
@@ -2437,10 +2155,6 @@ uint32_t Scene::CullLights( unsigned clipFlags ) {
 
 	if( numProgramLights <= MAX_DLIGHTS ) {
 		for( int i = 0; i < numProgramLights; ++i ) {
-			const auto &light = programLights[i];
-			if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-				continue;
-			}
 			drawnProgramLightNums[numDrawnProgramLights++] = (LightNumType)i;
 		}
 		return BitsForNumberOfLights( numDrawnProgramLights );
@@ -2448,10 +2162,6 @@ uint32_t Scene::CullLights( unsigned clipFlags ) {
 
 	int numCulledLights = 0;
 	for( int i = 0; i < numProgramLights; ++i ) {
-		const auto &light = programLights[i];
-		if( R_CullSphere( light.center, light.radius, clipFlags ) ) {
-			continue;
-		}
 		drawnProgramLightNums[numCulledLights++] = (LightNumType)i;
 	}
 

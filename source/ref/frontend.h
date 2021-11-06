@@ -23,11 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_63ccf348_3b16_4f9c_9a49_cd5849918618_H
 
 void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum );
-bool R_CullBox( const vec3_t mins, const vec3_t maxs, const unsigned int clipflags );
-bool R_CullSphere( const vec3_t centre, const float radius, const unsigned int clipflags );
-bool R_VisCullBox( const vec3_t mins, const vec3_t maxs );
-bool R_VisCullSphere( const vec3_t origin, float radius );
-int R_CullModelEntity( const entity_t *e, vec3_t mins, vec3_t maxs, float radius, bool sphereCull, bool pvsCull );
 
 namespace wsw::ref {
 

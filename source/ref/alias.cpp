@@ -593,7 +593,6 @@ bool R_AddAliasModelToDrawList( const entity_t *e ) {
 	vec3_t mins, maxs;
 	float radius;
 	float distance;
-	int clipped;
 
 	mod = R_AliasModelLOD( e );
 	if( !( aliasmodel = ( ( const maliasmodel_t * )mod->extradata ) ) || !aliasmodel->nummeshes ) {
@@ -601,10 +600,6 @@ bool R_AddAliasModelToDrawList( const entity_t *e ) {
 	}
 
 	radius = R_AliasModelLerpBBox( e, mod, mins, maxs );
-	clipped = R_CullModelEntity( e, mins, maxs, radius, true, aliasmodel->numtris > 100 );
-	if( clipped ) {
-		return false;
-	}
 
 	// never render weapon models or non-occluders into shadowmaps
 	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {

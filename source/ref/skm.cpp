@@ -1359,7 +1359,6 @@ bool R_AddSkeletalModelToDrawList( const entity_t *e ) {
 	vec3_t mins, maxs;
 	float radius;
 	float distance;
-	int clipped;
 
 	mod = R_SkeletalModelLOD( e );
 	if( !( skmodel = ( ( mskmodel_t * )mod->extradata ) ) || !skmodel->nummeshes ) {
@@ -1367,10 +1366,6 @@ bool R_AddSkeletalModelToDrawList( const entity_t *e ) {
 	}
 
 	radius = R_SkeletalModelLerpBBox( e, mod, mins, maxs );
-	clipped = R_CullModelEntity( e, mins, maxs, radius, true, true );
-	if( clipped ) {
-		return false;
-	}
 
 	// never render weapon models or non-occluders into shadowmaps
 	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
