@@ -1406,6 +1406,8 @@ void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out );
 
 //====================================================================
 
+bool R_AddNullSurfToDrawList( const entity_t *e );
+
 //
 // r_alias.c
 //
@@ -1552,7 +1554,6 @@ void        R_Shutdown_( bool verbose );
 //
 extern drawList_t r_worldlist, r_portalmasklist;
 
-void        R_DrawWorld( void );
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
 bool    R_SurfPotentiallyLit( const msurface_t *surf );
 bool    R_AddBrushModelToDrawList( const entity_t *e );

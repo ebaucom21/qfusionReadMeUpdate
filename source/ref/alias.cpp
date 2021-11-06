@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_alias.c: Quake III Arena .md3 model format support
 
 #include "local.h"
-#include "scene.h"
+#include "frontend.h"
 #include "../qcommon/qcommon.h"
 #include <algorithm>
 
