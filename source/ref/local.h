@@ -1262,17 +1262,6 @@ typedef struct {
 	int viewcluster, viewarea;
 
 	struct {
-		unsigned int c_brush_polys, c_world_leafs;
-		unsigned int c_slices_verts, c_slices_elems;
-		unsigned int c_world_draw_surfs;
-		unsigned int t_cull_world_nodes, t_cull_world_surfs;
-		unsigned int t_world_node;
-		unsigned int t_add_world_surfs;
-		unsigned int t_add_polys, t_add_entities;
-		unsigned int t_draw_meshes;
-	} stats;
-
-	struct {
 		unsigned average;        // updates 4 times per second
 		int64_t time, oldTime;
 		unsigned count, oldCount;
@@ -1292,9 +1281,6 @@ typedef struct {
 
 	unsigned int numWorldDrawSurfVis;
 	volatile unsigned char *worldDrawSurfVis;
-
-	char drawBuffer[32];
-	bool newDrawBuffer;
 } r_globals_t;
 
 extern r_shared_t rsh;
@@ -1429,15 +1415,6 @@ bool    R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmo
 							 float lerpfrac, const char *name );
 void        R_AliasModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
 
-//
-// r_cmds.c
-//
-void        R_TakeScreenShot( const char *path, const char *name, const char *fmtString, int x, int y, int w, int h, bool silent );
-void        R_ScreenShot_f( void );
-
-//
-// r_cull.c
-//
 
 //
 // r_light.c
@@ -1473,7 +1450,6 @@ void        R_SetGamma( float gamma );
 void        R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor );
 void        R_Set2DMode( bool enable );
 void        R_RenderView( const refdef_t *fd );
-const char *R_WriteSpeedsMessage( char *out, size_t size );
 void        R_RenderDebugSurface( const refdef_t *fd );
 void        R_Flush( void );
 
@@ -1530,7 +1506,6 @@ portalSurface_t *R_GetDrawListSurfPortal( void *psds );
 void R_AddDrawListVBOSlice( drawList_t *list, unsigned int index, unsigned int numVerts, unsigned int numElems,
 					unsigned int firstVert, unsigned int firstElem );
 vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index );
-void R_GetVBOSliceCounts( drawList_t *list, unsigned *numSliceVerts, unsigned *numSliceElems );
 
 void R_InitDrawLists( void );
 
@@ -1579,7 +1554,6 @@ extern drawList_t r_worldlist, r_portalmasklist;
 
 void        R_DrawWorld( void );
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
-bool    R_SurfPotentiallyShadowed( const msurface_t *surf );
 bool    R_SurfPotentiallyLit( const msurface_t *surf );
 bool    R_AddBrushModelToDrawList( const entity_t *e );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
@@ -1693,7 +1667,5 @@ typedef struct {
 } rtrace_t;
 
 msurface_t *R_TraceLine( rtrace_t *tr, const vec3_t start, const vec3_t end, int surfumask );
-
-void RF_ScreenShot( const char *path, const char *name, const char *fmtstring, bool silent );
 
 #endif // R_LOCAL_H
