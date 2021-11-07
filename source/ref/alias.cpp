@@ -407,10 +407,7 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	}
 }
 
-/*
-* R_AliasModelLOD
-*/
-static model_t *R_AliasModelLOD( const entity_t *e ) {
+model_t *R_AliasModelLOD( const entity_t *e ) {
 	int lod;
 
 	if( !e->model->numlods || ( e->flags & RF_FORCENOLOD ) ) {
@@ -428,7 +425,7 @@ static model_t *R_AliasModelLOD( const entity_t *e ) {
 /*
 * R_AliasModelLerpBBox
 */
-static float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
+float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
 	int i;
 	int framenum = e->frame, oldframenum = e->oldframe;
 	const maliasmodel_t *aliasmodel = ( const maliasmodel_t * )mod->extradata;
@@ -530,16 +527,6 @@ bool R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel
 }
 
 /*
-* R_DrawAliasSurf
-*/
-void R_DrawAliasSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceAlias_t *drawSurf ) {
-	const maliasmesh_t *aliasmesh = drawSurf->mesh;
-
-	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
-	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
-}
-
-/*
 * R_AliasModelBBox
 */
 float R_AliasModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs ) {
@@ -578,76 +565,4 @@ void R_AliasModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t
 	VectorCopy( pframe->maxs, maxs );
 }
 
-/*
-* R_AddAliasModelToDrawList
-*
-* Returns true if the entity is added to draw list
-*/
-bool R_AddAliasModelToDrawList( const entity_t *e ) {
-	int i, j;
-	const model_t *mod;
-	const maliasmodel_t *aliasmodel;
-	const mfog_t *fog;
-	const shader_t *shader;
-	const maliasmesh_t *mesh;
-	vec3_t mins, maxs;
-	float radius;
-	float distance;
 
-	mod = R_AliasModelLOD( e );
-	if( !( aliasmodel = ( ( const maliasmodel_t * )mod->extradata ) ) || !aliasmodel->nummeshes ) {
-		return false;
-	}
-
-	radius = R_AliasModelLerpBBox( e, mod, mins, maxs );
-
-	// never render weapon models or non-occluders into shadowmaps
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
-		if( e->renderfx & RF_WEAPONMODEL ) {
-			return true;
-		}
-	}
-
-	// make sure weapon model is always closest to the viewer
-	if( e->renderfx & RF_WEAPONMODEL ) {
-		distance = 0;
-	} else {
-		distance = Distance( e->origin, rn.viewOrigin ) + 1;
-	}
-
-	fog = R_FogForSphere( e->origin, radius );
-#if 0
-	if( !( e->flags & RF_WEAPONMODEL ) && fog ) {
-		R_AliasModelLerpBBox( e, mod );
-		if( R_CompletelyFogged( fog, e->origin, radius ) ) {
-			return false;
-		}
-	}
-#endif
-
-	for( i = 0, mesh = aliasmodel->meshes; i < aliasmodel->nummeshes; i++, mesh++ ) {
-		shader = NULL;
-
-		if( e->customSkin ) {
-			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
-		} else if( e->customShader ) {
-			shader = e->customShader;
-		} else if( mesh->numskins ) {
-			for( j = 0; j < mesh->numskins; j++ ) {
-				shader = mesh->skins[j].shader;
-				if( shader ) {
-					int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-					R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, aliasmodel->drawSurfs + i );
-				}
-			}
-			continue;
-		}
-
-		if( shader ) {
-			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, aliasmodel->drawSurfs + i );
-		}
-	}
-
-	return true;
-}

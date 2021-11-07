@@ -1090,7 +1090,6 @@ void        Mod_StripLODSuffix( char *name );
 #define SUBDIVISIONS_MIN        3
 #define SUBDIVISIONS_MAX        16
 #define SUBDIVISIONS_DEFAULT    5
-
 #define MAX_PORTAL_SURFACES     32
 #define MAX_PORTAL_TEXTURES     64
 
@@ -1394,15 +1393,11 @@ void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out );
 #define R_LinearFloatFromsRGB( c ) Image_LinearFloatFromsRGBFloat( ( c ) * ( 1.0f / 255.0f ) )
 #define R_sRGBFloatFromLinear( c ) Image_sRGBFloatFromLinearFloat( ( c ) * ( 1.0f / 255.0f ) )
 
-//====================================================================
-
-bool R_AddNullSurfToDrawList( const entity_t *e );
-
 //
 // r_alias.c
 //
-bool    R_AddAliasModelToDrawList( const entity_t *e );
-void    R_DrawAliasSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceAlias_t *drawSurf );
+model_t *R_AliasModelLOD( const entity_t *e );
+float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
 bool    R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel, int framenum, int oldframenum,
 							 float lerpfrac, const char *name );
 void        R_AliasModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
@@ -1464,8 +1459,6 @@ float       R_DefaultFarClip( void );
 void        R_BatchSpriteSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf );
 
 struct mesh_vbo_s *R_InitNullModelVBO( void );
-void    R_DrawNullSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf );
-
 struct mesh_vbo_s *R_InitPostProcessingVBO( void );
 
 void        R_TransformForWorld( void );
@@ -1548,16 +1541,20 @@ bool    R_SurfPotentiallyVisible( const msurface_t *surf );
 bool    R_SurfPotentiallyLit( const msurface_t *surf );
 bool    R_AddBrushModelToDrawList( const entity_t *e );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
-void    R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceBSP_t *drawSurf );
+
+struct skmcacheentry_s;
 
 //
 // r_skm.c
 //
-bool    R_AddSkeletalModelToDrawList( const entity_t *e );
-void    R_DrawSkeletalSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceSkeletal_t *drawSurf );
+void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod );
+model_t *R_SkeletalModelLOD( const entity_t *e );
+skmcacheentry_s *R_GetSkeletalCache( int entNum, int lodNum );
+dualquat_t *R_GetSkeletalBones( skmcacheentry_s *cache );
+bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache );
 float       R_SkeletalModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs );
 void        R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
-
+float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
 bool        R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, int oldframenum, int framenum, float lerpfrac, const char *name );
 
 void        R_InitSkeletalCache( void );

@@ -847,10 +847,7 @@ void R_SkeletalGetBonePose( const model_t *mod, int bonenum, int frame, bonepose
 	}
 }
 
-/*
-* R_SkeletalModelLOD
-*/
-static model_t *R_SkeletalModelLOD( const entity_t *e ) {
+model_t *R_SkeletalModelLOD( const entity_t *e ) {
 	int lod;
 
 	if( !e->model->numlods || ( e->flags & RF_FORCENOLOD ) ) {
@@ -865,10 +862,7 @@ static model_t *R_SkeletalModelLOD( const entity_t *e ) {
 	return e->model->lods[std::min( lod, e->model->numlods ) - 1];
 }
 
-/*
-* R_SkeletalModelLerpBBox
-*/
-static float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
+float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
 	int i;
 	int frame = e->frame, oldframe = e->oldframe;
 	mskframe_t *pframe, *poldframe;
@@ -956,10 +950,7 @@ void R_InitSkeletalCache( void ) {
 	r_skmcache_free = NULL;
 }
 
-/*
-* R_GetSkeletalCache
-*/
-static skmcacheentry_t *R_GetSkeletalCache( int entNum, int lodNum ) {
+skmcacheentry_t *R_GetSkeletalCache( int entNum, int lodNum ) {
 	skmcacheentry_t *cache;
 
 	cache = r_skmcachekeys[entNum * ( MOD_MAX_LODS + 1 ) + lodNum];
@@ -967,6 +958,14 @@ static skmcacheentry_t *R_GetSkeletalCache( int entNum, int lodNum ) {
 		return NULL;
 	}
 	return cache;
+}
+
+dualquat_t *R_GetSkeletalBones( skmcacheentry_s *cache ) {
+	return (dualquat_t *)cache->data;
+}
+
+bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache ) {
+	return ( cache->boneposes == cache->oldboneposes && !cache->framenum );
 }
 
 /*
@@ -1147,48 +1146,6 @@ static void R_CacheBoneTransforms( skmcacheentry_t *cache ) {
 	}
 }
 
-//=======================================================================
-
-/*
-* R_DrawSkeletalSurf
-*/
-void R_DrawSkeletalSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
-	const model_t *mod = drawSurf->model;
-	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
-	const mskmesh_t *skmesh = drawSurf->mesh;
-	skmcacheentry_t *cache;	
-	dualquat_t *bonePoseRelativeDQ;
-
-	cache = NULL;
-	bonePoseRelativeDQ = NULL;
-
-	skmodel = ( ( mskmodel_t * )mod->extradata );
-	if( skmodel->numbones && skmodel->numframes > 0 ) {
-		cache = R_GetSkeletalCache( R_ENT2NUM( e ), mod->lodnum );
-	}
-
-	if( cache ) {
-		bonePoseRelativeDQ = ( dualquat_t * )cache->data;
-	}
-
-	if( !cache || ( cache->boneposes == cache->oldboneposes && !cache->framenum ) ) {
-		// fastpath: render static frame 0 as is
-		if( skmesh->vbo ) {
-			RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
-			RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
-			return;
-		}
-	}
-
-	if( bonePoseRelativeDQ && skmesh->vbo ) {
-		// another fastpath: transform the initial pose on the GPU
-		RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
-		RB_SetBonesData( skmodel->numbones, bonePoseRelativeDQ, skmesh->maxWeights );
-		RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
-		return;
-	}
-}
-
 /*
 * R_SkeletalModelLerpTag
 */
@@ -1272,7 +1229,7 @@ void R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec
 	VectorCopy( pframe->maxs, maxs );
 }
 
-static void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
+void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 	int entNum;
 	int framenum, oldframenum;
 	const mskmodel_t *skmodel;
@@ -1346,70 +1303,4 @@ static void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 	R_CacheBoneTransforms( cache );
 }
 
-/*
-* R_AddSkeletalModelToDrawList
-*/
-bool R_AddSkeletalModelToDrawList( const entity_t *e ) {
-	int i;
-	const mfog_t *fog;
-	const model_t *mod;
-	const shader_t *shader;
-	const mskmesh_t *mesh;
-	const mskmodel_t *skmodel;
-	vec3_t mins, maxs;
-	float radius;
-	float distance;
 
-	mod = R_SkeletalModelLOD( e );
-	if( !( skmodel = ( ( mskmodel_t * )mod->extradata ) ) || !skmodel->nummeshes ) {
-		return false;
-	}
-
-	radius = R_SkeletalModelLerpBBox( e, mod, mins, maxs );
-
-	// never render weapon models or non-occluders into shadowmaps
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
-		if( e->renderfx & RF_WEAPONMODEL ) {
-			return true;
-		}
-	}
-
-	// make sure weapon model is always closest to the viewer
-	if( e->renderfx & RF_WEAPONMODEL ) {
-		distance = 0;
-	} else {
-		distance = Distance( e->origin, rn.viewOrigin ) + 1;
-	}
-
-	fog = R_FogForSphere( e->origin, radius );
-#if 0
-	if( !( e->flags & RF_WEAPONMODEL ) && fog ) {
-		R_SkeletalModelLerpBBox( e, mod );
-		if( R_CompletelyFogged( fog, e->origin, skm_radius ) ) {
-			return false;
-		}
-	}
-#endif
-
-	// run quaternions lerping job in the background
-	R_AddSkeletalModelCache( e, mod );
-
-	for( i = 0, mesh = skmodel->meshes; i < (int)skmodel->nummeshes; i++, mesh++ ) {
-		shader = NULL;
-
-		if( e->customSkin ) {
-			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
-		} else if( e->customShader ) {
-			shader = e->customShader;
-		} else {
-			shader = mesh->skin.shader;
-		}
-
-		if( shader ) {
-			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, skmodel->drawSurfs + i );
-		}
-	}
-
-	return true;
-}

@@ -371,11 +371,7 @@ void R_ShutdownCustomColors( void ) {
 	memset( rsh.customColors, 255, sizeof( rsh.customColors ) );
 }
 
-static drawSurfaceType_t nullDrawSurf = ST_NULLMODEL;
-
 mesh_vbo_t *R_InitNullModelVBO( void ) {
-
-
 	const vattribmask_t vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT | VATTRIB_COLOR0_BIT;
 	mesh_vbo_s *vbo = R_CreateMeshVBO( &rf, 6, 6, 0, vattribs, VBO_TAG_NONE, vattribs );
 	if( !vbo ) {
@@ -419,22 +415,6 @@ mesh_vbo_t *R_InitNullModelVBO( void ) {
 	R_UploadVBOElemData( vbo, 0, 0, &mesh );
 
 	return vbo;
-}
-
-void R_DrawNullSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
-	assert( rsh.nullVBO != NULL );
-
-	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
-	RB_DrawElements( 0, 6, 0, 6 );
-}
-
-bool R_AddNullSurfToDrawList( const entity_t *e ) {
-	if( !R_AddSurfToDrawList( rn.meshlist, e, R_FogForSphere( e->origin, 0.1f ),
-							  rsh.whiteShader, 0, 0, NULL, &nullDrawSurf ) ) {
-		return false;
-	}
-
-	return true;
 }
 
 static vec4_t pic_xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
@@ -888,36 +868,6 @@ bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
 		return false;
 	}
 	return true;
-}
-
-
-void R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
-	const vboSlice_t *slice = R_GetDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
-
-	// shadowBits are shared for all rendering instances (normal view, portals, etc)
-	const unsigned dlightBits = drawSurf->dlightBits;
-
-	const int numVerts = slice->numVerts;
-	const int numElems = slice->numElems;
-	const int firstVert = drawSurf->firstVboVert + slice->firstVert;
-	const int firstElem = drawSurf->firstVboElem + slice->firstElem;
-
-	if( !numVerts ) {
-		return;
-	}
-
-	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
-
-	RB_SetDlightBits( dlightBits );
-
-	RB_SetLightstyle( drawSurf->superLightStyle );
-
-	if( drawSurf->numInstances ) {
-		RB_DrawElementsInstanced( firstVert, numVerts, firstElem, numElems,
-								  drawSurf->numInstances, drawSurf->instances );
-	} else {
-		RB_DrawElements( firstVert, numVerts, firstElem, numElems );
-	}
 }
 
 float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated ) {

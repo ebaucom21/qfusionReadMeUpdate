@@ -258,6 +258,82 @@ static void R_UpdateSurfaceInDrawList( drawSurfaceBSP_t *drawSurf, unsigned dlig
 	}
 }
 
+static void R_DrawAliasSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceAlias_t *drawSurf ) {
+	const maliasmesh_t *aliasmesh = drawSurf->mesh;
+
+	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
+	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
+}
+
+static void R_DrawSkeletalSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
+	const model_t *mod = drawSurf->model;
+	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
+	const mskmesh_t *skmesh = drawSurf->mesh;
+	skmcacheentry_s *cache = nullptr;
+	dualquat_t *bonePoseRelativeDQ = nullptr;
+
+	skmodel = ( ( mskmodel_t * )mod->extradata );
+	if( skmodel->numbones && skmodel->numframes > 0 ) {
+		cache = R_GetSkeletalCache( R_ENT2NUM( e ), mod->lodnum );
+	}
+
+	if( cache ) {
+		bonePoseRelativeDQ = R_GetSkeletalBones( cache );
+	}
+
+	if( !cache || R_SkeletalRenderAsFrame0( cache ) ) {
+		// fastpath: render static frame 0 as is
+		if( skmesh->vbo ) {
+			RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
+			RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+			return;
+		}
+	}
+
+	if( bonePoseRelativeDQ && skmesh->vbo ) {
+		// another fastpath: transform the initial pose on the GPU
+		RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
+		RB_SetBonesData( skmodel->numbones, bonePoseRelativeDQ, skmesh->maxWeights );
+		RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+		return;
+	}
+}
+
+void R_DrawBSPSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
+	const vboSlice_t *slice = R_GetDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
+
+	// shadowBits are shared for all rendering instances (normal view, portals, etc)
+	const unsigned dlightBits = drawSurf->dlightBits;
+
+	const int numVerts = slice->numVerts;
+	const int numElems = slice->numElems;
+	const int firstVert = drawSurf->firstVboVert + slice->firstVert;
+	const int firstElem = drawSurf->firstVboElem + slice->firstElem;
+
+	if( !numVerts ) {
+		return;
+	}
+
+	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
+
+	RB_SetDlightBits( dlightBits );
+
+	RB_SetLightstyle( drawSurf->superLightStyle );
+
+	if( drawSurf->numInstances ) {
+		RB_DrawElementsInstanced( firstVert, numVerts, firstElem, numElems,
+								  drawSurf->numInstances, drawSurf->instances );
+	} else {
+		RB_DrawElements( firstVert, numVerts, firstElem, numElems );
+	}
+}
+
+static void R_DrawNullSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	assert( rsh.nullVBO != NULL );
+
+	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
+	RB_DrawElements( 0, 6, 0, 6 );
+}
 
 static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	{
@@ -356,6 +432,124 @@ static bool R_AddSurfaceToDrawList( const entity_t *e, drawSurfaceBSP_t *drawSur
 	const unsigned sliceIndex = drawSurf - rsh.worldBrushModel->drawSurfaces;
 	R_AddDrawListVBOSlice( rn.meshlist, sliceIndex, 0, 0, 0, 0 );
 	R_AddDrawListVBOSlice( rn.meshlist, sliceIndex + rsh.worldBrushModel->numDrawSurfaces, 0, 0, 0, 0 );
+
+	return true;
+}
+
+static bool R_AddAliasModelToDrawList( const entity_t *e ) {
+	// never render weapon models or non-occluders into shadowmaps
+	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		if( e->renderfx & RF_WEAPONMODEL ) {
+			return true;
+		}
+	}
+
+	const model_t *mod = R_AliasModelLOD( e );
+	const maliasmodel_t *aliasmodel;
+	if( !( aliasmodel = ( ( const maliasmodel_t * )mod->extradata ) ) || !aliasmodel->nummeshes ) {
+		return false;
+	}
+
+	vec3_t mins, maxs;
+	const float radius = R_AliasModelLerpBBox( e, mod, mins, maxs );
+
+	float distance;
+	// make sure weapon model is always closest to the viewer
+	if( e->renderfx & RF_WEAPONMODEL ) {
+		distance = 0;
+	} else {
+		distance = Distance( e->origin, rn.viewOrigin ) + 1;
+	}
+
+	const mfog_t *fog = R_FogForSphere( e->origin, radius );
+
+	for( int i = 0; i < aliasmodel->nummeshes; i++ ) {
+		const maliasmesh_t *mesh = &aliasmodel->meshes[i];
+		const shader_t *shader = NULL;
+
+		if( e->customSkin ) {
+			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
+		} else if( e->customShader ) {
+			shader = e->customShader;
+		} else if( mesh->numskins ) {
+			for( int j = 0; j < mesh->numskins; j++ ) {
+				shader = mesh->skins[j].shader;
+				if( shader ) {
+					int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+					R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, aliasmodel->drawSurfs + i );
+				}
+			}
+			continue;
+		}
+
+		if( shader ) {
+			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+			R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, aliasmodel->drawSurfs + i );
+		}
+	}
+
+	return true;
+}
+
+static bool R_AddSkeletalModelToDrawList( const entity_t *e ) {
+	const model_t *mod = R_SkeletalModelLOD( e );
+	const mskmodel_t *skmodel;
+	if( !( skmodel = ( ( mskmodel_t * )mod->extradata ) ) || !skmodel->nummeshes ) {
+		return false;
+	}
+
+	vec3_t mins, maxs;
+	const float radius = R_SkeletalModelLerpBBox( e, mod, mins, maxs );
+
+	// never render weapon models or non-occluders into shadowmaps
+	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		if( e->renderfx & RF_WEAPONMODEL ) {
+			return true;
+		}
+	}
+
+	float distance;
+	// make sure weapon model is always closest to the viewer
+	if( e->renderfx & RF_WEAPONMODEL ) {
+		distance = 0;
+	} else {
+		distance = Distance( e->origin, rn.viewOrigin ) + 1;
+	}
+
+	const mfog_t *fog = R_FogForSphere( e->origin, radius );
+
+	// run quaternions lerping job in the background
+	R_AddSkeletalModelCache( e, mod );
+
+	for( unsigned i = 0; i < skmodel->nummeshes; i++ ) {
+		const mskmesh_t *mesh = &skmodel->meshes[i];
+		shader_t *shader = nullptr;
+
+		if( e->customSkin ) {
+			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
+		} else if( e->customShader ) {
+			shader = e->customShader;
+		} else {
+			shader = mesh->skin.shader;
+		}
+
+		if( shader ) {
+			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+			R_AddSurfToDrawList( rn.meshlist, e, fog, shader, distance, drawOrder, NULL, skmodel->drawSurfs + i );
+		}
+	}
+
+	return true;
+}
+
+static int nullDrawSurf = ST_NULLMODEL;
+
+static bool R_AddNullSurfToDrawList( const entity_t *e ) {
+
+	if( !R_AddSurfToDrawList( rn.meshlist, e, R_FogForSphere( e->origin, 0.1f ),
+							  rsh.whiteShader, 0, 0, NULL, &nullDrawSurf ) ) {
+		return false;
+	}
 
 	return true;
 }
