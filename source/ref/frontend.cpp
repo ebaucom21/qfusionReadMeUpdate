@@ -632,6 +632,13 @@ static void R_DrawEntities( void ) {
 			e->backlerp = 0;
 		}
 
+		if( e->flags & RF_VIEWERMODEL ) {
+			//if( !(rn.renderFlags & RF_NONVIEWERREF) )
+			if( !( rn.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+				continue;
+			}
+		}
+
 		switch( e->rtype ) {
 			case RT_MODEL:
 				if( !e->model ) {
