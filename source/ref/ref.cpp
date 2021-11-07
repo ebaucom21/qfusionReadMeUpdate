@@ -650,7 +650,8 @@ float R_DefaultFarClip() {
 	} else if( rsh.worldModel && rsh.worldBrushModel->globalfog ) {
 		farclip_dist = rsh.worldBrushModel->globalfog->shader->fog_dist;
 	} else {
-		farclip_dist = Z_NEAR;
+		// TODO: Restore computations of world bounds
+		farclip_dist = (float)( 1 << 16 );
 	}
 
 	return std::max( Z_NEAR, farclip_dist ) + Z_BIAS;

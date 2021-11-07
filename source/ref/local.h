@@ -1271,16 +1271,6 @@ typedef struct {
 
 	char speedsMsg[2048];
 	msurface_t      *debugSurface;
-
-	unsigned int numWorldSurfVis;
-	volatile unsigned char *worldSurfVis;
-	volatile unsigned char *worldSurfFullVis;
-
-	unsigned int numWorldLeafVis;
-	volatile unsigned char *worldLeafVis;
-
-	unsigned int numWorldDrawSurfVis;
-	volatile unsigned char *worldDrawSurfVis;
 } r_globals_t;
 
 extern r_shared_t rsh;

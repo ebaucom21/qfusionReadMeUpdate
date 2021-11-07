@@ -200,39 +200,36 @@ static void R_UpdateSurfaceInDrawList( drawSurfaceBSP_t *drawSurf, unsigned dlig
 	const unsigned end = drawSurf->firstWorldSurface + drawSurf->numWorldSurfaces;
 	const bool special = ( drawSurf->shader->flags & (SHADER_PORTAL) ) != 0;
 	for( unsigned i = drawSurf->firstWorldSurface; i < end; i++ ) {
-		if( rf.worldSurfVis[i] ) {
-			float sdist = 0;
-
-			if( special && !R_ClipSpecialWorldSurf( drawSurf, surf, origin, &sdist ) ) {
-				// clipped away
-				continue;
-			}
-
-			if( sdist > sdist )
-				dist = sdist;
-
-			unsigned checkDlightBits = dlightBits & ~curDlightBits;
-			if( checkDlightBits )
-				checkDlightBits = R_SurfaceDlightBits( surf, checkDlightBits );
-
-			// dynamic lights that affect the surface
-			if( checkDlightBits ) {
-				// ignore dlights that have already been marked as affectors
-				if( dlightFrame == rsc.frameCount ) {
-					curDlightBits |= checkDlightBits;
-				} else {
-					dlightFrame = rsc.frameCount;
-					curDlightBits = checkDlightBits;
-				}
-			}
-
-			// surfaces are sorted by their firstDrawVert index so to cut the final slice
-			// we only need to note the first and the last surface
-			if( firstVisSurf == NULL ) {
-				firstVisSurf = surf;
-			}
-			lastVisSurf = surf;
+		float sdist = 0;
+		if( special && !R_ClipSpecialWorldSurf( drawSurf, surf, origin, &sdist ) ) {
+			// clipped away
+			continue;
 		}
+
+		if( sdist > sdist )
+			dist = sdist;
+
+		unsigned checkDlightBits = dlightBits & ~curDlightBits;
+		if( checkDlightBits )
+			checkDlightBits = R_SurfaceDlightBits( surf, checkDlightBits );
+
+		// dynamic lights that affect the surface
+		if( checkDlightBits ) {
+			// ignore dlights that have already been marked as affectors
+			if( dlightFrame == rsc.frameCount ) {
+				curDlightBits |= checkDlightBits;
+			} else {
+				dlightFrame = rsc.frameCount;
+				curDlightBits = checkDlightBits;
+			}
+		}
+
+		// surfaces are sorted by their firstDrawVert index so to cut the final slice
+		// we only need to note the first and the last surface
+		if( firstVisSurf == NULL ) {
+			firstVisSurf = surf;
+		}
+		lastVisSurf = surf;
 		surf++;
 	}
 
@@ -467,136 +464,10 @@ void *R_AddSurfToDrawList( drawList_t *list, const entity_t *e, const mfog_t *fo
 	return sds;
 }
 
-static void R_PostCullVisLeaves( void ) {
-	for( unsigned i = 0; i < rsh.worldBrushModel->numvisleafs; i++ ) {
-		if( rf.worldLeafVis[i] ) {
-			const mleaf_t *const leaf = rsh.worldBrushModel->visleafs[i];
-			// add leaf bounds to view bounds
-			for( unsigned j = 0; j < 3; j++ ) {
-				rn.visMins[j] = std::min( rn.visMins[j], leaf->mins[j] );
-				rn.visMaxs[j] = std::max( rn.visMaxs[j], leaf->maxs[j] );
-			}
-		}
-	}
-}
-
-static void R_CullVisLeaves( unsigned firstLeaf, unsigned numLeaves, unsigned clipFlags ) {
-	unsigned i, j;
-	mleaf_t *leaf;
-	uint8_t *pvs;
-	uint8_t *areabits;
-	int arearowbytes, areabytes;
-	bool novis;
-
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
-		return;
-	}
-
-	novis = rn.renderFlags & RF_NOVIS || rf.viewcluster == -1 || !rsh.worldBrushModel->pvs;
-	arearowbytes = ( ( rsh.worldBrushModel->numareas + 7 ) / 8 );
-	areabytes = arearowbytes;
-#ifdef AREAPORTALS_MATRIX
-	areabytes *= rsh.worldBrushModel->numareas;
-#endif
-
-	pvs = Mod_ClusterPVS( rf.viewcluster, rsh.worldModel );
-	if( rf.viewarea > -1 && rn.refdef.areabits )
-#ifdef AREAPORTALS_MATRIX
-	{ areabits = rn.refdef.areabits + rf.viewarea * arearowbytes;}
-#else
-	{ areabits = rn.refdef.areabits;}
-#endif
-	else {
-		areabits = NULL;
-	}
-
-	for( i = 0; i < numLeaves; i++ ) {
-		int clipped;
-		unsigned bit, testFlags;
-		cplane_t *clipplane;
-		unsigned l = firstLeaf + i;
-
-		leaf = rsh.worldBrushModel->visleafs[l];
-		if( !novis ) {
-			// check for door connected areas
-			if( areabits ) {
-				if( leaf->area < 0 || !( areabits[leaf->area >> 3] & ( 1 << ( leaf->area & 7 ) ) ) ) {
-					continue; // not visible
-				}
-			}
-
-			if( !( pvs[leaf->cluster >> 3] & ( 1 << ( leaf->cluster & 7 ) ) ) ) {
-				continue; // not visible
-			}
-		}
-
-		// track leaves, which are entirely inside the frustum
-		clipped = 0;
-		testFlags = clipFlags;
-		for( j = sizeof( rn.frustum ) / sizeof( rn.frustum[0] ), bit = 1, clipplane = rn.frustum; j > 0; j--, bit <<= 1, clipplane++ ) {
-			if( testFlags & bit ) {
-				clipped = BoxOnPlaneSide( leaf->mins, leaf->maxs, clipplane );
-				if( clipped == 2 ) {
-					break;
-				} else if( clipped == 1 ) {
-					testFlags &= ~bit; // node is entirely on screen
-				}
-			}
-		}
-
-		if( clipped == 2 ) {
-			continue; // fully clipped
-		}
-
-		if( testFlags == 0 ) {
-			// fully visible
-			for( j = 0; j < leaf->numVisSurfaces; j++ ) {
-				assert( leaf->visSurfaces[j] < rf.numWorldSurfVis );
-				rf.worldSurfFullVis[leaf->visSurfaces[j]] = 1;
-			}
-		} else {
-			// partly visible
-			for( j = 0; j < leaf->numVisSurfaces; j++ ) {
-				assert( leaf->visSurfaces[j] < rf.numWorldSurfVis );
-				rf.worldSurfVis[leaf->visSurfaces[j]] = 1;
-			}
-		}
-
-		rf.worldLeafVis[l] = 1;
-	}
-}
-
-static void R_CullVisSurfaces( unsigned firstSurf, unsigned numSurfs, unsigned clipFlags ) {
-	for( unsigned i = firstSurf; i < firstSurf + numSurfs; i++ ) {
-		msurface_t *surf = rsh.worldBrushModel->surfaces + firstSurf + i;
-		if( rf.worldSurfVis[i] ) {
-			// the surface is at partly visible in at least one leaf, frustum cull it
-			rf.worldSurfFullVis[i] = 0;
-		}
-		else {
-			if( rf.worldSurfFullVis[i] ) {
-				// a fully visible surface, mark as visible
-				rf.worldSurfVis[i] = 1;
-			}
-		}
-
-		if( rf.worldSurfVis[i] ) {
-			if( !surf->drawSurf )
-				rf.worldSurfVis[i] = 0;
-			else
-				rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
-		}
-
-		surf++;
-	}
-}
-
 static void R_AddVisSurfaces( unsigned dlightBits, unsigned shadowBits ) {
 	for( unsigned i = 0; i < rsh.worldBrushModel->numModelDrawSurfaces; i++ ) {
 		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + i;
-		if( rf.worldDrawSurfVis[i] ) {
-			R_AddSurfaceToDrawList( rsc.worldent, drawSurf );
-		}
+		R_AddSurfaceToDrawList( rsc.worldent, drawSurf );
 	}
 }
 
@@ -604,9 +475,7 @@ static void R_AddWorldDrawSurfaces( unsigned firstDrawSurf, unsigned numDrawSurf
 	for( unsigned i = 0; i < numDrawSurfs; i++ ) {
 		unsigned s = firstDrawSurf + i;
 		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + s;
-		if( rf.worldDrawSurfVis[s] ) {
-			R_UpdateSurfaceInDrawList( drawSurf, rn.dlightBits, NULL );
-		}
+		R_UpdateSurfaceInDrawList( drawSurf, rn.dlightBits, NULL );
 	}
 }
 
@@ -865,9 +734,6 @@ void R_PopRefInst( void ) {
 static vec3_t modelOrg;                         // relative to view point
 
 void R_DrawWorld() {
-	assert( rf.numWorldSurfVis >= rsh.worldBrushModel->numsurfaces );
-	assert( rf.numWorldLeafVis >= rsh.worldBrushModel->numvisleafs );
-
 	if( !r_drawworld->integer ) {
 		return;
 	}
@@ -898,23 +764,6 @@ void R_DrawWorld() {
 
 	// cull dynamic lights
 	rn.dlightBits = wsw::ref::Scene::Instance()->CullLights( clipFlags );
-
-	if( rsh.worldBrushModel->numvisleafs > rsh.worldBrushModel->numsurfaces ) {
-		memset( (void *)rf.worldSurfVis, 1, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-		memset( (void *)rf.worldSurfFullVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-		memset( (void *)rf.worldLeafVis, 1, rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
-		memset( (void *)rf.worldDrawSurfVis, 0, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
-	} else {
-		memset( (void *)rf.worldSurfVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-		memset( (void *)rf.worldSurfFullVis, 0, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-		memset( (void *)rf.worldLeafVis, 0, rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
-		memset( (void *)rf.worldDrawSurfVis, 0, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
-		R_CullVisLeaves( 0, rsh.worldBrushModel->numvisleafs, clipFlags );
-	}
-
-	R_CullVisSurfaces( 0, rsh.worldBrushModel->numModelSurfaces, clipFlags );
-
-	R_PostCullVisLeaves();
 
 	R_AddVisSurfaces( dlightBits, shadowBits );
 
@@ -1146,22 +995,11 @@ bool R_AddBrushModelToDrawList( const entity_t *e ) {
 
 	dlightBits &= rn.dlightBits;
 
-	for( unsigned i = 0; i < bmodel->numModelSurfaces; i++ ) {
-		const unsigned surfNum = bmodel->firstModelSurface + i;
-		const msurface_t *surf = rsh.worldBrushModel->surfaces + surfNum;
-		if( surf->drawSurf ) {
-			rf.worldSurfVis[surfNum] = 1;
-			rf.worldDrawSurfVis[surf->drawSurf - 1] = 1;
-		}
-	}
-
 	for( unsigned i = 0; i < bmodel->numModelDrawSurfaces; i++ ) {
 		const unsigned surfNum = bmodel->firstModelDrawSurface + i;
 		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + surfNum;
-		if( rf.worldDrawSurfVis[surfNum] ) {
-			R_AddSurfaceToDrawList( e, drawSurf );
-			R_UpdateSurfaceInDrawList( drawSurf, dlightBits, origin );
-		}
+		R_AddSurfaceToDrawList( e, drawSurf );
+		R_UpdateSurfaceInDrawList( drawSurf, dlightBits, origin );
 	}
 
 	return true;
@@ -1196,9 +1034,6 @@ static void R_SetupFrame() {
 
 	// current viewcluster
 	if( !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		VectorCopy( rsh.worldModel->mins, rn.visMins );
-		VectorCopy( rsh.worldModel->maxs, rn.visMaxs );
-
 		mleaf_t *leaf = Mod_PointInLeaf( rn.pvsOrigin, rsh.worldModel );
 		rf.viewcluster = leaf->cluster;
 		rf.viewarea = leaf->area;
@@ -1206,29 +1041,6 @@ static void R_SetupFrame() {
 		if( rf.worldModelSequence != rsh.worldModelSequence ) {
 			rf.frameCount = 0;
 			rf.worldModelSequence = rsh.worldModelSequence;
-
-			if( !rf.numWorldSurfVis ) {
-				rf.worldSurfVis = (unsigned char *)Q_malloc( rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-				rf.worldSurfFullVis = (unsigned char *)Q_malloc( rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-			} else if( rf.numWorldSurfVis < rsh.worldBrushModel->numsurfaces ) {
-				rf.worldSurfVis = (unsigned char *)Q_realloc( (void *)rf.worldSurfVis, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-				rf.worldSurfFullVis = (unsigned char *)Q_realloc( (void *)rf.worldSurfFullVis, rsh.worldBrushModel->numsurfaces * sizeof( *rf.worldSurfVis ) );
-			}
-			rf.numWorldSurfVis = rsh.worldBrushModel->numsurfaces;
-
-			if( !rf.numWorldLeafVis ) {
-				rf.worldLeafVis = (unsigned char *)Q_malloc( rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
-			} else if( rf.numWorldLeafVis < rsh.worldBrushModel->numvisleafs ) {
-				rf.worldLeafVis = (unsigned char *)Q_realloc( (void *)rf.worldLeafVis, rsh.worldBrushModel->numvisleafs * sizeof( *rf.worldLeafVis ) );
-			}
-			rf.numWorldLeafVis = rsh.worldBrushModel->numvisleafs;
-
-			if( !rf.numWorldDrawSurfVis ) {
-				rf.worldDrawSurfVis = (unsigned char *)Q_malloc( rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
-			} else if( rf.numWorldDrawSurfVis < rsh.worldBrushModel->numDrawSurfaces ) {
-				rf.worldDrawSurfVis = (unsigned char *)Q_realloc( (void *)rf.worldDrawSurfVis, rsh.worldBrushModel->numDrawSurfaces * sizeof( *rf.worldDrawSurfVis ) );
-			}
-			rf.numWorldDrawSurfVis = rsh.worldBrushModel->numDrawSurfaces;
 		}
 	} else {
 		rf.viewcluster = -1;
@@ -1238,43 +1050,8 @@ static void R_SetupFrame() {
 	rf.frameCount++;
 }
 
-static float R_SetVisFarClip() {
-	if( !rsh.worldModel || ( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		return rn.visFarClip;
-	}
-
-	rn.visFarClip = 0;
-
-	float farClipDist = 0;
-	for( unsigned i = 0; i < 8; i++ ) {
-		vec3_t tmp;
-		tmp[0] = ( ( i & 1 ) ? rn.visMins[0] : rn.visMaxs[0] );
-		tmp[1] = ( ( i & 2 ) ? rn.visMins[1] : rn.visMaxs[1] );
-		tmp[2] = ( ( i & 4 ) ? rn.visMins[2] : rn.visMaxs[2] );
-
-		const float dist = DistanceSquared( tmp, rn.viewOrigin );
-		farClipDist = std::max( farClipDist, dist );
-	}
-
-	rn.visFarClip = std::sqrt( farClipDist );
-	return rn.visFarClip;
-}
-
 static void R_SetFarClip( void ) {
-	if( rn.refdef.rdflags & RDF_NOWORLDMODEL ) {
-		rn.farClip = R_DefaultFarClip();
-	} else {
-		float farclip = R_SetVisFarClip();
-		if( rsh.worldBrushModel->globalfog ) {
-			float fogdist = rsh.worldBrushModel->globalfog->shader->fog_dist;
-			if( farclip > fogdist ) {
-				farclip = fogdist;
-			} else {
-				rn.clipFlags &= ~16;
-			}
-		}
-		rn.farClip = std::max( Z_NEAR, farclip ) + Z_BIAS;
-	}
+	rn.farClip = R_DefaultFarClip();
 }
 
 static void R_Clear( int bitMask ) {
@@ -1327,8 +1104,6 @@ void R_RenderView( const refdef_t *fd ) {
 	rn.numPortalSurfaces = 0;
 	rn.numDepthPortalSurfaces = 0;
 	rn.skyportalSurface = nullptr;
-
-	ClearBounds( rn.visMins, rn.visMaxs );
 
 	if( r_novis->integer ) {
 		rn.renderFlags |= RF_NOVIS;
