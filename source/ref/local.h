@@ -687,7 +687,7 @@ void RB_SetRenderFlags( int flags );
 void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure );
 void RB_SetShaderStateMask( int ANDmask, int ORmask );
 void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis );
-bool RB_EnableTriangleOutlines( bool enable );
+bool RB_EnableWireframe( bool enable );
 
 vattribmask_t RB_GetVertexAttribs( void );
 
@@ -1436,7 +1436,6 @@ int         R_SetSwapInterval( int swapInterval, int oldSwapInterval );
 void        R_SetGamma( float gamma );
 void        R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor );
 void        R_Set2DMode( bool enable );
-void        R_RenderView( const refdef_t *fd );
 void        R_RenderDebugSurface( const refdef_t *fd );
 void        R_Flush( void );
 
@@ -1455,8 +1454,6 @@ mfog_t      *R_FogForSphere( const vec3_t centre, const float radius );
 bool    R_CompletelyFogged( const mfog_t *fog, vec3_t origin, float radius );
 int         R_LODForSphere( const vec3_t origin, float radius );
 float       R_DefaultFarClip( void );
-
-void        R_BatchSpriteSurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceType_t *drawSurf );
 
 struct mesh_vbo_s *R_InitNullModelVBO( void );
 struct mesh_vbo_s *R_InitPostProcessingVBO( void );
@@ -1483,20 +1480,10 @@ void        R_BindFrameBufferObject( int object );
 //
 void R_InitDrawList( drawList_t *list );
 void R_ClearDrawList( drawList_t *list );
-unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight );
-void *R_AddSurfToDrawList( drawList_t *list, const entity_t *e, const mfog_t *fog, const shader_t *shader,
-						   float dist, unsigned int order, const portalSurface_t *portalSurf, void *drawSurf );
-void R_UpdateDrawSurfDistKey( void *psds, int renderFx, const shader_t *shader, float dist, unsigned order );
-portalSurface_t *R_GetDrawListSurfPortal( void *psds );
-void R_AddDrawListVBOSlice( drawList_t *list, unsigned int index, unsigned int numVerts, unsigned int numElems,
-					unsigned int firstVert, unsigned int firstElem );
+
 vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index );
 
 void R_InitDrawLists( void );
-
-void R_SortDrawList( drawList_t *list );
-void R_DrawSurfaces( drawList_t *list );
-void R_DrawOutlinedSurfaces( drawList_t *list );
 
 void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems );
 void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems );
@@ -1509,17 +1496,17 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 //
 extern drawList_t r_portallist, r_skyportallist;
 
-portalSurface_t *R_AddPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf );
-portalSurface_t *R_AddSkyportalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf );
-void R_UpdatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
-									 const vec3_t mins, const vec3_t maxs, const shader_t *shader, void *drawSurf );
-void R_DrawPortals( void );
+void R_SubmitAliasSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );
+void R_SubmitSkeletalSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf );
+void R_SubmitBSPSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf );
+void R_SubmitNullSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+void R_SubmitPolySurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly );
+void R_SubmitCoronaSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 
 //
 // r_poly.c
 //
-void        R_BatchPolySurf( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfacePoly_t *poly );
-void        R_DrawPolys( void );
 bool    R_SurfPotentiallyFragmented( const msurface_t *surf );
 
 //
@@ -1538,8 +1525,6 @@ void        R_Shutdown_( bool verbose );
 extern drawList_t r_worldlist, r_portalmasklist;
 
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
-bool    R_SurfPotentiallyLit( const msurface_t *surf );
-bool    R_AddBrushModelToDrawList( const entity_t *e );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
 
 struct skmcacheentry_s;

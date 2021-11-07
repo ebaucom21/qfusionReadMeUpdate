@@ -694,55 +694,6 @@ void R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor ) {
 }
 
 void R_RenderDebugSurface( const refdef_t *fd ) {
-	if( fd->rdflags & RDF_NOWORLDMODEL ) {
-		return;
-	}
-
-	msurface_t *debugSurf = NULL;
-	if( r_speeds->integer == 4 || r_speeds->integer == 5 ) {
-		vec3_t forward, start, end;
-		VectorCopy( &fd->viewaxis[AXIS_FORWARD], forward );
-		VectorCopy( fd->vieworg, start );
-		VectorMA( start, 4096, forward, end );
-
-		rtrace_t tr;
-		msurface_t *surf = R_TraceLine( &tr, start, end, 0 );
-		if( surf && surf->drawSurf && !r_showtris->integer ) {
-			drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + surf->drawSurf - 1;
-
-			R_ClearDrawList( rn.meshlist );
-
-			R_ClearDrawList( rn.portalmasklist );
-
-			if( R_AddSurfToDrawList( rn.meshlist, R_NUM2ENT( tr.ent ), NULL, surf->shader, 0, 0, NULL, drawSurf ) ) {
-				if( rn.refdef.rdflags & RDF_FLIPPED ) {
-					RB_FlipFrontFace();
-				}
-
-				if( r_speeds->integer == 5 ) {
-					// VBO debug mode
-					R_AddDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces,
-								   drawSurf->numVerts, drawSurf->numElems,
-								   0, 0 );
-				} else {
-					// classic mode (showtris for individual surface)
-					R_AddDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces,
-								   surf->mesh.numVerts, surf->mesh.numElems,
-								   surf->firstDrawSurfVert, surf->firstDrawSurfElem );
-				}
-
-				R_DrawOutlinedSurfaces( rn.meshlist );
-
-				if( rn.refdef.rdflags & RDF_FLIPPED ) {
-					RB_FlipFrontFace();
-				}
-
-				debugSurf = surf;
-			}
-		}
-	}
-
-	rf.debugSurface = debugSurf;
 }
 
 void R_BeginFrame( bool forceClear, int swapInterval ) {
@@ -819,14 +770,11 @@ void R_LatLongToNorm( const uint8_t latlong[2], vec3_t out ) {
 }
 
 int R_LoadFile_( const char *path, int flags, void **buffer, const char *filename, int fileline ) {
-	uint8_t *buf;
-	unsigned len;
-	int fhandle;
+	uint8_t *buf = NULL; // quiet compiler warning
 
-	buf = NULL; // quiet compiler warning
-
+	int fhandle = 0;
 	// look for it in the filesystem or pack files
-	len = FS_FOpenFile( path, &fhandle, FS_READ | flags );
+	unsigned len = FS_FOpenFile( path, &fhandle, FS_READ | flags );
 
 	if( !fhandle ) {
 		if( buffer ) {
@@ -912,101 +860,6 @@ void R_ClearDrawList( drawList_t *list ) {
 		// clear VBO slices
 		if( list->vboSlices ) {
 			memset( list->vboSlices, 0, sizeof( *list->vboSlices ) * list->maxVboSlices );
-		}
-	}
-}
-
-unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
-	int order = 0;
-
-	// shader order
-	if( shader != NULL ) {
-		order = R_PackShaderOrder( shader );
-	}
-	// group by dlight
-	if( dlight ) {
-		order |= 0x40;
-	}
-	// group by dlight
-	if( fog != NULL ) {
-		order |= 0x80;
-	}
-	// group by lightmaps
-	order |= ( (MAX_LIGHTMAPS - numLightmaps) << 10 );
-
-	return order;
-}
-
-static int R_DrawSurfCompare( const sortedDrawSurf_t *sbs1, const sortedDrawSurf_t *sbs2 ) {
-	if( sbs1->distKey > sbs2->distKey ) {
-		return 1;
-	}
-	if( sbs2->distKey > sbs1->distKey ) {
-		return -1;
-	}
-
-	if( sbs1->sortKey > sbs2->sortKey ) {
-		return 1;
-	}
-	if( sbs2->sortKey > sbs1->sortKey ) {
-		return -1;
-	}
-
-	return 0;
-}
-
-void R_SortDrawList( drawList_t *list ) {
-	if( !r_draworder->integer ) {
-		qsort( list->drawSurfs, list->numDrawSurfs, sizeof( sortedDrawSurf_t ),
-			   ( int ( * )( const void *, const void * ) )R_DrawSurfCompare );
-	}
-}
-
-static void R_ReserveVBOSlices( drawList_t *list, unsigned minSlices ) {
-
-	const unsigned oldSize = list->maxVboSlices;
-	const unsigned newSize = std::max( minSlices, oldSize * 2 );
-
-	vboSlice_t *slices = list->vboSlices;
-	vboSlice_t *newSlices = (vboSlice_t *)Q_malloc( newSize * sizeof( vboSlice_t ) );
-	if( slices ) {
-		memcpy( newSlices, slices, oldSize * sizeof( vboSlice_t ) );
-		Q_free( slices );
-	}
-
-	list->vboSlices = newSlices;
-	list->maxVboSlices = newSize;
-}
-
-void R_AddDrawListVBOSlice( drawList_t *list, unsigned index, unsigned numVerts, unsigned numElems,
-							unsigned firstVert, unsigned firstElem ) {
-	if( index >= list->maxVboSlices ) {
-		unsigned minSlices = index + 1;
-		if( rsh.worldBrushModel ) {
-			minSlices = std::max( rsh.worldBrushModel->numDrawSurfaces, minSlices );
-		}
-		R_ReserveVBOSlices( list, minSlices );
-	}
-
-	vboSlice_t *slice = &list->vboSlices[index];
-	if( !slice->numVerts ) {
-		// initialize the slice
-		slice->firstVert = firstVert;
-		slice->firstElem = firstElem;
-		slice->numVerts = numVerts;
-		slice->numElems = numElems;
-	} else {
-		if( firstVert < slice->firstVert ) {
-			// prepend
-			slice->numVerts = slice->numVerts + slice->firstVert - firstVert;
-			slice->numElems = slice->numElems + slice->firstElem - firstElem;
-
-			slice->firstVert = firstVert;
-			slice->firstElem = firstElem;
-		} else {
-			// append
-			slice->numVerts = std::max( slice->numVerts, numVerts + firstVert - slice->firstVert );
-			slice->numElems = std::max( slice->numElems, numElems + firstElem - slice->firstElem );
 		}
 	}
 }
@@ -1120,79 +973,28 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 	}
 }
 
-
-
-void R_RenderScene( const refdef_t *fd ) {
-	if( r_norefresh->integer ) {
-		return;
-	}
-
-	R_Set2DMode( false );
-
-	RB_SetTime( fd->time );
-
-	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
-		rsc.refdef = *fd;
-	}
-
-	rn.refdef = *fd;
-	if( !rn.refdef.minLight ) {
-		rn.refdef.minLight = 0.1f;
-	}
-
-	fd = &rn.refdef;
-
-	rn.renderFlags = RF_NONE;
-
-	rn.farClip = R_DefaultFarClip();
-	rn.clipFlags = 15;
-	if( rsh.worldModel && !( fd->rdflags & RDF_NOWORLDMODEL ) && rsh.worldBrushModel->globalfog ) {
-		rn.clipFlags |= 16;
-	}
-	rn.meshlist = &r_worldlist;
-	rn.portalmasklist = &r_portalmasklist;
-	rn.dlightBits = 0;
-
-	rn.renderTarget = 0;
-	rn.multisampleDepthResolved = false;
-
-	// clip new scissor region to the one currently set
-	Vector4Set( rn.scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
-	Vector4Set( rn.viewport, fd->x, fd->y, fd->width, fd->height );
-	VectorCopy( fd->vieworg, rn.pvsOrigin );
-	VectorCopy( fd->vieworg, rn.lodOrigin );
-
-	R_BindFrameBufferObject( 0 );
-
-	R_RenderView( fd );
-
-	R_RenderDebugSurface( fd );
-
-	R_BindFrameBufferObject( 0 );
-
-	R_Set2DMode( true );
+void R_ClearScene() {
+	wsw::ref::Frontend::instance()->clearScene();
 }
 
+void R_AddEntityToScene( const entity_t *ent ) {
+	wsw::ref::Frontend::instance()->addEntityToScene( ent );
+}
 
+void R_AddPolyToScene( const poly_t *poly ) {
+	wsw::ref::Frontend::instance()->addPolyToScene( poly );
+}
 
-void R_DrawPolys( void ) {
-	if( rn.renderFlags & RF_ENVVIEW ) {
-		return;
-	}
+void R_AddLightStyleToScene( int style, float r, float g, float b ) {
+	wsw::ref::Frontend::instance()->addLightStyleToScene( style, r, g, b );
+}
 
-	for( unsigned i = 0; i < rsc.numPolys; i++ ) {
-		drawSurfacePoly_t *p = rsc.polys + i;
-		mfog_t *fog;
-		if( p->fogNum <= 0 || (unsigned)p->fogNum > rsh.worldBrushModel->numfogs ) {
-			fog = NULL;
-		} else {
-			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
-		}
+void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
+	wsw::ref::Frontend::instance()->addLight( org, programIntensity, coronaIntensity, r, g, b );
+}
 
-		if( !R_AddSurfToDrawList( rn.meshlist, rsc.polyent, fog, p->shader, 0, i, NULL, p ) ) {
-			continue;
-		}
-	}
+void R_RenderScene( const refdef_t *fd ) {
+	wsw::ref::Frontend::instance()->renderScene( fd );
 }
 
 bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {
@@ -1323,10 +1125,10 @@ void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t d
 		}
 	}
 
-	dynamic:
+dynamic:
 	// add dynamic lights
 	if( radius ) {
-		wsw::ref::Scene::Instance()->DynLightDirForOrigin( origin, radius, dir, diffuseLocal, ambientLocal );
+		wsw::ref::Frontend::instance()->dynLightDirForOrigin( origin, radius, dir, diffuseLocal, ambientLocal );
 	}
 
 	VectorNormalizeFast( dir );
@@ -1885,16 +1687,6 @@ void RF_EndRegistration( void ) {
 	R_DataSync();
 
 	RB_EndRegistration();
-}
-
-void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
-	if( r_dynamiclight->integer ) {
-		if( (bool)programIntensity | (bool)coronaIntensity ) [[likely]] {
-			if( (bool)r | (bool)g | (bool)b ) [[likely]] {
-				wsw::ref::Scene::Instance()->AddLight( org, programIntensity, coronaIntensity, r, g, b );
-			}
-		}
-	}
 }
 
 const char *RF_GetSpeedsMessage( char *out, size_t size ) {
@@ -2615,9 +2407,9 @@ static rserr_t R_PostInit( void ) {
 
 	R_InitModels();
 
-	wsw::ref::Scene::Init();
+	wsw::ref::Frontend::init();
 
-	R_ClearScene();
+	wsw::ref::Frontend::instance()->clearScene();
 
 	R_InitVolatileAssets();
 
@@ -2667,12 +2459,12 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 	return rserr_ok;
 }
 
-static void R_InitVolatileAssets( void ) {
+static void R_InitVolatileAssets() {
 	// init volatile data
 	R_InitSkeletalCache();
 	R_InitCustomColors();
 
-	wsw::ref::Scene::Instance()->InitVolatileAssets();
+	wsw::ref::Frontend::instance()->initVolatileAssets();
 
 	auto *materialCache = MaterialCache::instance();
 	rsh.envShader = materialCache->loadDefaultMaterial( wsw::StringView( "$environment" ), SHADER_TYPE_OPAQUE_ENV );
@@ -2692,8 +2484,8 @@ static void R_InitVolatileAssets( void ) {
 	}
 }
 
-static void R_DestroyVolatileAssets( void ) {
-	wsw::ref::Scene::Instance()->DestroyVolatileAssets();
+static void R_DestroyVolatileAssets() {
+	wsw::ref::Frontend::instance()->destroyVolatileAssets();
 
 	// kill volatile data
 	R_ShutdownCustomColors();
@@ -2738,7 +2530,7 @@ void R_EndRegistration_( void ) {
 void R_Shutdown_( bool verbose ) {
 	R_DestroyVolatileAssets();
 
-	wsw::ref::Scene::Shutdown();
+	wsw::ref::Frontend::shutdown();
 
 	R_ShutdownModels();
 

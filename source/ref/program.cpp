@@ -1972,10 +1972,8 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 		Vector4Set( shaderColor[3], 1.0f, 1.0f, 1.0f, 1.0f );
 		n = 0;
 
-		const auto *scene = wsw::ref::Scene::Instance();
-		const wsw::ref::Scene::LightNumType *rangeBegin, *rangeEnd;
-		scene->GetDrawnProgramLightNums( &rangeBegin, &rangeEnd );
-		for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter ) {
+		/*
+		for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter) {
 			if( program->loc.DynamicLightsPosition[n] < 0 ) {
 				break;
 			}
@@ -2003,7 +2001,7 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 			}
 
 			n++;
-		}
+		}*/
 
 		if( n & 3 ) {
 			qglUniform4fv( program->loc.DynamicLightsDiffuseAndInvRadius[n >> 2], 4, shaderColor[0] );

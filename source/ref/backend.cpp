@@ -1045,8 +1045,8 @@ static void RB_DrawElements_( void ) {
 
 	RB_EnableVertexAttribs();
 
-	if( rb.triangleOutlines ) {
-		RB_DrawOutlinedElements();
+	if( rb.wireframe ) {
+		RB_DrawWireframeElements();
 	} else {
 		RB_DrawShadedElements();
 	}
@@ -1117,15 +1117,13 @@ void RB_SetRenderFlags( int flags ) {
 }
 
 /*
-* RB_EnableTriangleOutlines
-*
 * Returns triangle outlines state before the call
 */
-bool RB_EnableTriangleOutlines( bool enable ) {
-	bool oldVal = rb.triangleOutlines;
+bool RB_EnableWireframe( bool enable ) {
+	const bool oldVal = rb.wireframe;
 
-	if( rb.triangleOutlines != enable ) {
-		rb.triangleOutlines = enable;
+	if( rb.wireframe != enable ) {
+		rb.wireframe = enable;
 
 		if( enable ) {
 			RB_SetShaderStateMask( 0, GLSTATE_NO_DEPTH_TEST );
@@ -1189,4 +1187,206 @@ bool RB_ScissorForBounds( vec3_t bbox[8], int *x, int *y, int *w, int *h ) {
 	*h = iy2 - iy1;
 
 	return true;
+}
+
+void R_SubmitAliasSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
+	const maliasmesh_t *aliasmesh = drawSurf->mesh;
+
+	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
+	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
+}
+
+void R_SubmitSkeletalSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
+	const model_t *mod = drawSurf->model;
+	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
+	const mskmesh_t *skmesh = drawSurf->mesh;
+	skmcacheentry_s *cache = nullptr;
+	dualquat_t *bonePoseRelativeDQ = nullptr;
+
+	skmodel = ( ( mskmodel_t * )mod->extradata );
+	if( skmodel->numbones && skmodel->numframes > 0 ) {
+		cache = R_GetSkeletalCache( R_ENT2NUM( e ), mod->lodnum );
+	}
+
+	if( cache ) {
+		bonePoseRelativeDQ = R_GetSkeletalBones( cache );
+	}
+
+	if( !cache || R_SkeletalRenderAsFrame0( cache ) ) {
+		// fastpath: render static frame 0 as is
+		if( skmesh->vbo ) {
+			RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
+			RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+			return;
+		}
+	}
+
+	if( bonePoseRelativeDQ && skmesh->vbo ) {
+		// another fastpath: transform the initial pose on the GPU
+		RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
+		RB_SetBonesData( skmodel->numbones, bonePoseRelativeDQ, skmesh->maxWeights );
+		RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+		return;
+	}
+}
+
+void R_SubmitBSPSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
+	const vboSlice_t *slice = R_GetDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
+
+	// shadowBits are shared for all rendering instances (normal view, portals, etc)
+	const unsigned dlightBits = drawSurf->dlightBits;
+
+	const int numVerts = slice->numVerts;
+	const int numElems = slice->numElems;
+	const int firstVert = drawSurf->firstVboVert + slice->firstVert;
+	const int firstElem = drawSurf->firstVboElem + slice->firstElem;
+
+	if( !numVerts ) {
+		return;
+	}
+
+	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
+
+	RB_SetDlightBits( dlightBits );
+
+	RB_SetLightstyle( drawSurf->superLightStyle );
+
+	if( drawSurf->numInstances ) {
+		RB_DrawElementsInstanced( firstVert, numVerts, firstElem, numElems,
+								  drawSurf->numInstances, drawSurf->instances );
+	} else {
+		RB_DrawElements( firstVert, numVerts, firstElem, numElems );
+	}
+}
+
+void R_SubmitNullSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	assert( rsh.nullVBO != NULL );
+
+	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
+	RB_DrawElements( 0, 6, 0, 6 );
+}
+
+void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	vec3_t v_left, v_up;
+	if( const float rotation = e->rotation ) {
+		RotatePointAroundVector( v_left, &rn.viewAxis[AXIS_FORWARD], &rn.viewAxis[AXIS_RIGHT], rotation );
+		CrossProduct( &rn.viewAxis[AXIS_FORWARD], v_left, v_up );
+	} else {
+		VectorCopy( &rn.viewAxis[AXIS_RIGHT], v_left );
+		VectorCopy( &rn.viewAxis[AXIS_UP], v_up );
+	}
+
+	if( rn.renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		VectorInverse( v_left );
+	}
+
+	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+
+	vec3_t point;
+	const float radius = e->radius * e->scale;
+	VectorMA( e->origin, -radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[0] );
+	VectorMA( point, -radius, v_left, xyz[3] );
+
+	VectorMA( e->origin, radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[1] );
+	VectorMA( point, -radius, v_left, xyz[2] );
+
+	byte_vec4_t colors[4];
+	for( unsigned i = 0; i < 4; i++ ) {
+		VectorNegate( &rn.viewAxis[AXIS_FORWARD], normals[i] );
+		Vector4Copy( e->color, colors[i] );
+	}
+
+	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+
+	mesh_t mesh;
+	mesh.elems = elems;
+	mesh.numElems = 6;
+	mesh.numVerts = 4;
+	mesh.xyzArray = xyz;
+	mesh.normalsArray = normals;
+	mesh.lmstArray[0] = NULL;
+	mesh.lmlayersArray[0] = NULL;
+	mesh.stArray = texcoords;
+	mesh.colorsArray[0] = colors;
+	mesh.colorsArray[1] = NULL;
+	mesh.sVectorsArray = NULL;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
+void R_SubmitPolySurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly ) {
+	mesh_t mesh;
+
+	mesh.elems = poly->elems;
+	mesh.numElems = poly->numElems;
+	mesh.numVerts = poly->numVerts;
+	mesh.xyzArray = poly->xyzArray;
+	mesh.normalsArray = poly->normalsArray;
+	mesh.lmstArray[0] = NULL;
+	mesh.lmlayersArray[0] = NULL;
+	mesh.stArray = poly->stArray;
+	mesh.colorsArray[0] = poly->colorsArray;
+	mesh.colorsArray[1] = NULL;
+	mesh.sVectorsArray = NULL;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
+void R_SubmitCoronaSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	/*
+	auto *const light = wsw::ref::Frontend::Instance()->LightForCoronaSurf( drawSurf );
+
+	float radius = light->radius;
+	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	byte_vec4_t colors[4];
+	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+	mesh_t mesh;
+
+	vec3_t origin;
+	VectorCopy( light->center, origin );
+
+	vec3_t v_left, v_up;
+	VectorCopy( &rn.viewAxis[AXIS_RIGHT], v_left );
+	VectorCopy( &rn.viewAxis[AXIS_UP], v_up );
+
+	if( rn.renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		VectorInverse( v_left );
+	}
+
+	vec3_t point;
+	VectorMA( origin, -radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[0] );
+	VectorMA( point, -radius, v_left, xyz[3] );
+
+	VectorMA( origin, radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[1] );
+	VectorMA( point, -radius, v_left, xyz[2] );
+
+	Vector4Set( colors[0],
+				bound( 0, light->color[0] * 96, 255 ),
+				bound( 0, light->color[1] * 96, 255 ),
+				bound( 0, light->color[2] * 96, 255 ),
+				255 );
+
+	for( unsigned i = 1; i < 4; i++ ) {
+		Vector4Copy( colors[0], colors[i] );
+	}
+
+	memset( &mesh, 0, sizeof( mesh ) );
+	mesh.numElems = 6;
+	mesh.elems = elems;
+	mesh.numVerts = 4;
+	mesh.xyzArray = xyz;
+	mesh.normalsArray = normals;
+	mesh.stArray = texcoords;
+	mesh.colorsArray[0] = colors;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	*/
 }

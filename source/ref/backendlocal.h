@@ -154,7 +154,7 @@ typedef struct r_backend_s {
 	bool doneDepthPass;
 	int donePassesTotal;
 
-	bool triangleOutlines;
+	bool wireframe;
 
 	const superLightStyle_t *superLightStyle;
 
@@ -185,7 +185,7 @@ void RB_DrawElementsReal( rbDrawElements_t *de );
 
 // r_backend_program.c
 void RB_InitShading( void );
-void RB_DrawOutlinedElements( void );
+void RB_DrawWireframeElements( void );
 void RB_DrawShadedElements( void );
 int RB_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
 						const deformv_t *deforms, int numDeforms, r_glslfeat_t features );
