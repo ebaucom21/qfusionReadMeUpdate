@@ -613,8 +613,10 @@ typedef struct {
 	vboSlice_t          *vboSlices;
 } drawList_t;
 
-typedef void (*drawSurf_cb)( const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
-typedef void (*batchDrawSurf_cb)( const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
+struct FrontendToBackendShared;
+
+typedef void (*drawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
+typedef void (*batchDrawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
 
 #include "shader.h"
 
@@ -1137,7 +1139,7 @@ typedef struct portalSurface_s {
 	skyportal_t     *skyPortal;
 } portalSurface_t;
 
-typedef struct {
+struct refinst_t {
 	unsigned int renderFlags;
 	unsigned int dlightBits;
 
@@ -1163,10 +1165,8 @@ typedef struct {
 	vec3_t pvsOrigin;
 	cplane_t clipPlane;
 
-	mat4_t objectMatrix;
 	mat4_t cameraMatrix;
 
-	mat4_t modelviewMatrix;
 	mat4_t projectionMatrix;
 
 	mat4_t cameraProjectionMatrix;                  // cameraMatrix * projectionMatrix
@@ -1187,7 +1187,7 @@ typedef struct {
 	drawList_t      *portalmasklist;        // sky and portal BSP surfaces are rendered before (sky-)portals
 											// to create depth mask
 	mfog_t          *fog_eye;
-} refinst_t;
+};
 
 //====================================================
 
@@ -1396,7 +1396,7 @@ void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out );
 //
 // r_alias.c
 //
-model_t *R_AliasModelLOD( const entity_t *e );
+model_t *R_AliasModelLOD( const entity_t *e, const float *viewOrigin, const float fovDotScale );
 float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
 bool    R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel, int framenum, int oldframenum,
 							 float lerpfrac, const char *name );
@@ -1449,31 +1449,16 @@ void        R_DataSync( void );
  */
 void        R_DeferDataSync( void );
 
-mfog_t      *R_FogForBounds( const vec3_t mins, const vec3_t maxs );
-mfog_t      *R_FogForSphere( const vec3_t centre, const float radius );
-bool    R_CompletelyFogged( const mfog_t *fog, vec3_t origin, float radius );
-int         R_LODForSphere( const vec3_t origin, float radius );
-float       R_DefaultFarClip( void );
+int         R_LODForSphere( const vec3_t origin, float radius, const float *viewOrigin, float fovLodScale );
 
 struct mesh_vbo_s *R_InitNullModelVBO( void );
 struct mesh_vbo_s *R_InitPostProcessingVBO( void );
 
-void        R_TransformForWorld( void );
-void        R_TransformForEntity( const entity_t *e );
-void        R_TranslateForEntity( const entity_t *e );
 void        R_TransformBounds( const vec3_t origin, const mat3_t axis, vec3_t mins, vec3_t maxs, vec3_t bbox[8] );
 
 void        R_InitCustomColors( void );
 int         R_GetCustomColor( int num );
 void        R_ShutdownCustomColors( void );
-
-#define ENTITY_OUTLINE( ent ) ( ( !( rn.renderFlags & RF_MIRRORVIEW ) && ( ( ent )->renderfx & RF_VIEWERMODEL ) ) ? 0 : ( ent )->outlineHeight )
-
-void        R_ClearRefInstStack( void );
-bool        R_PushRefInst( void );
-void        R_PopRefInst( void );
-
-void        R_BindFrameBufferObject( int object );
 
 //
 // r_mesh.c
@@ -1496,13 +1481,19 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 //
 extern drawList_t r_portallist, r_skyportallist;
 
-void R_SubmitAliasSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );
-void R_SubmitSkeletalSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf );
-void R_SubmitBSPSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf );
-void R_SubmitNullSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitPolySurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly );
-void R_SubmitCoronaSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+struct FrontendToBackendShared {
+	drawList_t *meshlist;
+	mat3_t viewAxis;
+	unsigned renderFlags;
+};
+
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf );
+void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf );
+void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly );
+void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 
 //
 // r_poly.c
@@ -1533,11 +1524,11 @@ struct skmcacheentry_s;
 // r_skm.c
 //
 void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod );
-model_t *R_SkeletalModelLOD( const entity_t *e );
+model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float fovLodScale );
 skmcacheentry_s *R_GetSkeletalCache( int entNum, int lodNum );
 dualquat_t *R_GetSkeletalBones( skmcacheentry_s *cache );
 bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache );
-float       R_SkeletalModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs );
+float       R_SkeletalModelBBox( const entity_t *e, const float *viewOrigin, float fovLodScale, vec3_t mins, vec3_t maxs );
 void        R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
 float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
 bool        R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, int oldframenum, int framenum, float lerpfrac, const char *name );
@@ -1628,7 +1619,6 @@ typedef struct {
 } mapconfig_t;
 
 extern mapconfig_t mapConfig;
-extern refinst_t rn;
 
 typedef struct {
 	float fraction;             // time completed, 1.0 = didn't hit anything

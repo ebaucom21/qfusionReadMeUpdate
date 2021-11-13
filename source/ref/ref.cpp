@@ -31,8 +31,6 @@ r_globals_t rf;
 
 mapconfig_t mapConfig;
 
-refinst_t rn;
-
 r_scene_t rsc;
 
 glconfig_t glConfig;
@@ -222,133 +220,6 @@ void R_TransformBounds( const vec3_t origin, const mat3_t axis, vec3_t mins, vec
 	}
 }
 
-void R_TransformForWorld( void ) {
-	Matrix4_Identity( rn.objectMatrix );
-	Matrix4_Copy( rn.cameraMatrix, rn.modelviewMatrix );
-
-	RB_LoadObjectMatrix( mat4x4_identity );
-}
-
-void R_TranslateForEntity( const entity_t *e ) {
-	Matrix4_Identity( rn.objectMatrix );
-
-	rn.objectMatrix[0] = e->scale;
-	rn.objectMatrix[5] = e->scale;
-	rn.objectMatrix[10] = e->scale;
-	rn.objectMatrix[12] = e->origin[0];
-	rn.objectMatrix[13] = e->origin[1];
-	rn.objectMatrix[14] = e->origin[2];
-
-	RB_LoadObjectMatrix( rn.objectMatrix );
-}
-
-void R_TransformForEntity( const entity_t *e ) {
-	if( e->rtype != RT_MODEL ) {
-		R_TransformForWorld();
-		return;
-	}
-	if( e == rsc.worldent ) {
-		R_TransformForWorld();
-		return;
-	}
-
-	if( e->scale != 1.0f ) {
-		rn.objectMatrix[0] = e->axis[0] * e->scale;
-		rn.objectMatrix[1] = e->axis[1] * e->scale;
-		rn.objectMatrix[2] = e->axis[2] * e->scale;
-		rn.objectMatrix[4] = e->axis[3] * e->scale;
-		rn.objectMatrix[5] = e->axis[4] * e->scale;
-		rn.objectMatrix[6] = e->axis[5] * e->scale;
-		rn.objectMatrix[8] = e->axis[6] * e->scale;
-		rn.objectMatrix[9] = e->axis[7] * e->scale;
-		rn.objectMatrix[10] = e->axis[8] * e->scale;
-	} else {
-		rn.objectMatrix[0] = e->axis[0];
-		rn.objectMatrix[1] = e->axis[1];
-		rn.objectMatrix[2] = e->axis[2];
-		rn.objectMatrix[4] = e->axis[3];
-		rn.objectMatrix[5] = e->axis[4];
-		rn.objectMatrix[6] = e->axis[5];
-		rn.objectMatrix[8] = e->axis[6];
-		rn.objectMatrix[9] = e->axis[7];
-		rn.objectMatrix[10] = e->axis[8];
-	}
-
-	rn.objectMatrix[3] = 0;
-	rn.objectMatrix[7] = 0;
-	rn.objectMatrix[11] = 0;
-	rn.objectMatrix[12] = e->origin[0];
-	rn.objectMatrix[13] = e->origin[1];
-	rn.objectMatrix[14] = e->origin[2];
-	rn.objectMatrix[15] = 1.0;
-
-	Matrix4_MultiplyFast( rn.cameraMatrix, rn.objectMatrix, rn.modelviewMatrix );
-
-	RB_LoadObjectMatrix( rn.objectMatrix );
-}
-
-mfog_t *R_FogForBounds( const vec3_t mins, const vec3_t maxs ) {
-	if( !rsh.worldModel || ( rn.refdef.rdflags & RDF_NOWORLDMODEL ) || !rsh.worldBrushModel->numfogs ) {
-		return NULL;
-	}
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
-		return NULL;
-	}
-	if( rsh.worldBrushModel->globalfog ) {
-		return rsh.worldBrushModel->globalfog;
-	}
-
-	for( unsigned i = 0; i < rsh.worldBrushModel->numfogs; i++ ) {
-		mfog_t *const fog = rsh.worldBrushModel->fogs;
-		if( fog->shader ) {
-			if( BoundsIntersect( mins, maxs, fog->mins, fog->maxs ) ) {
-				return fog;
-			}
-		}
-	}
-
-	return nullptr;
-}
-
-mfog_t *R_FogForSphere( const vec3_t centre, const float radius ) {
-	vec3_t mins, maxs;
-	for( unsigned i = 0; i < 3; i++ ) {
-		mins[i] = centre[i] - radius;
-		maxs[i] = centre[i] + radius;
-	}
-	return R_FogForBounds( mins, maxs );
-}
-
-bool R_CompletelyFogged( const mfog_t *fog, vec3_t origin, float radius ) {
-	// note that fog->distanceToEye < 0 is always true if
-	// globalfog is not NULL and we're inside the world boundaries
-	if( fog && fog->shader && fog == rn.fog_eye ) {
-		float vpnDist = ( ( rn.viewOrigin[0] - origin[0] ) * rn.viewAxis[AXIS_FORWARD + 0] +
-						  ( rn.viewOrigin[1] - origin[1] ) * rn.viewAxis[AXIS_FORWARD + 1] +
-						  ( rn.viewOrigin[2] - origin[2] ) * rn.viewAxis[AXIS_FORWARD + 2] );
-		return ( ( vpnDist + radius ) / fog->shader->fog_dist ) < -1;
-	}
-
-	return false;
-}
-
-int R_LODForSphere( const vec3_t origin, float radius ) {
-
-	float dist = DistanceFast( origin, rn.lodOrigin );
-	dist *= rn.lod_dist_scale_for_fov;
-
-	int lod = (int)( dist / radius );
-	if( r_lodscale->integer ) {
-		lod /= r_lodscale->integer;
-	}
-	lod += r_lodbias->integer;
-
-	if( lod < 1 ) {
-		return 0;
-	}
-	return lod;
-}
-
 void R_InitCustomColors( void ) {
 	memset( rsh.customColors, 255, sizeof( rsh.customColors ) );
 }
@@ -423,50 +294,6 @@ static vec2_t pic_st[4];
 static byte_vec4_t pic_colors[4];
 static elem_t pic_elems[6] = { 0, 1, 2, 0, 2, 3 };
 static mesh_t pic_mesh = { 4, 6, pic_elems, pic_xyz, pic_normals, NULL, pic_st, { 0, 0, 0, 0 }, { 0 }, { pic_colors, pic_colors, pic_colors, pic_colors }, NULL, NULL };
-
-/*
-* R_Set2DMode
-*
-* Note that this sets the viewport to size of the active framebuffer.
-*/
-void R_Set2DMode( bool enable ) {
-	const int width = rf.frameBufferWidth;
-	const int height = rf.frameBufferHeight;
-
-	if( rf.in2D == true && enable == true && width == rf.width2D && height == rf.height2D ) {
-		return;
-	} else if( rf.in2D == false && enable == false ) {
-		return;
-	}
-
-	rf.in2D = enable;
-
-	if( enable ) {
-		rf.width2D = width;
-		rf.height2D = height;
-
-		Matrix4_OrthogonalProjection( 0, width, height, 0, -99999, 99999, rn.projectionMatrix );
-		Matrix4_Copy( mat4x4_identity, rn.modelviewMatrix );
-		Matrix4_Copy( rn.projectionMatrix, rn.cameraProjectionMatrix );
-
-		// set 2D virtual screen size
-		RB_Scissor( 0, 0, width, height );
-		RB_Viewport( 0, 0, width, height );
-
-		RB_LoadProjectionMatrix( rn.projectionMatrix );
-		RB_LoadCameraMatrix( mat4x4_identity );
-		RB_LoadObjectMatrix( mat4x4_identity );
-
-		RB_SetShaderStateMask( ~0, GLSTATE_NO_DEPTH_TEST );
-
-		RB_SetRenderFlags( 0 );
-	} else {
-		// render previously batched 2D geometry, if any
-		RB_FlushDynamicMeshes();
-
-		RB_SetShaderStateMask( ~0, 0 );
-	}
-}
 
 void R_DrawRotatedStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, float angle,
 							  const vec4_t color, const shader_t *shader ) {
@@ -554,19 +381,6 @@ void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s
 	RB_FlushDynamicMeshes();
 }
 
-void R_BindFrameBufferObject( int object ) {
-	const int width = glConfig.width;
-	const int height = glConfig.height;
-
-	rf.frameBufferWidth = width;
-	rf.frameBufferHeight = height;
-
-	RB_BindFrameBufferObject();
-
-	RB_Viewport( rn.viewport[0], rn.viewport[1], rn.viewport[2], rn.viewport[3] );
-	RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
-}
-
 static void R_PolyBlend( void ) {
 	if( !r_polyblend->integer ) {
 		return;
@@ -622,19 +436,19 @@ mesh_vbo_t *R_InitPostProcessingVBO( void ) {
 	return vbo;
 }
 
-float R_DefaultFarClip() {
-	float farclip_dist;
+int R_LODForSphere( const vec3_t origin, float radius, const float *viewOrigin, float fovLodScale ) {
+	const float dist = DistanceFast( origin, viewOrigin ) * fovLodScale;
 
-	if( rn.refdef.rdflags & RDF_NOWORLDMODEL ) {
-		farclip_dist = 1024;
-	} else if( rsh.worldModel && rsh.worldBrushModel->globalfog ) {
-		farclip_dist = rsh.worldBrushModel->globalfog->shader->fog_dist;
-	} else {
-		// TODO: Restore computations of world bounds
-		farclip_dist = (float)( 1 << 16 );
+	int lod = (int)( dist / radius );
+	if( r_lodscale->integer ) {
+		lod /= r_lodscale->integer;
 	}
+	lod += r_lodbias->integer;
 
-	return std::max( Z_NEAR, farclip_dist ) + Z_BIAS;
+	if( lod < 1 ) {
+		return 0;
+	}
+	return lod;
 }
 
 void R_Finish() {
@@ -2413,8 +2227,6 @@ static rserr_t R_PostInit( void ) {
 
 	R_InitVolatileAssets();
 
-	R_ClearRefInstStack();
-
 	// TODO:......
 	const GLenum glerr = qglGetError();
 	if( glerr != GL_NO_ERROR ) {
@@ -2454,7 +2266,11 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 
 	TextureCache::instance()->createRenderTargetAttachments();
 
-	R_BindFrameBufferObject( 0 );
+	//
+	// TODO
+	//
+	// R_BindFrameBufferObject( 0 );
+	//
 
 	return rserr_ok;
 }

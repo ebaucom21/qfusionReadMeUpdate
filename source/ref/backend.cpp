@@ -1189,14 +1189,14 @@ bool RB_ScissorForBounds( vec3_t bbox[8], int *x, int *y, int *w, int *h ) {
 	return true;
 }
 
-void R_SubmitAliasSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
 	const maliasmesh_t *aliasmesh = drawSurf->mesh;
 
 	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
 	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
 }
 
-void R_SubmitSkeletalSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
 	const model_t *mod = drawSurf->model;
 	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
 	const mskmesh_t *skmesh = drawSurf->mesh;
@@ -1230,8 +1230,8 @@ void R_SubmitSkeletalSurfToBackend( const entity_t *e, const shader_t *shader, c
 	}
 }
 
-void R_SubmitBSPSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
-	const vboSlice_t *slice = R_GetDrawListVBOSlice( rn.meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
+void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
+	const vboSlice_t *slice = R_GetDrawListVBOSlice( fsh->meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
 
 	// shadowBits are shared for all rendering instances (normal view, portals, etc)
 	const unsigned dlightBits = drawSurf->dlightBits;
@@ -1259,24 +1259,24 @@ void R_SubmitBSPSurfToBackend( const entity_t *e, const shader_t *shader, const 
 	}
 }
 
-void R_SubmitNullSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	assert( rsh.nullVBO != NULL );
 
 	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
 	RB_DrawElements( 0, 6, 0, 6 );
 }
 
-void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	vec3_t v_left, v_up;
 	if( const float rotation = e->rotation ) {
-		RotatePointAroundVector( v_left, &rn.viewAxis[AXIS_FORWARD], &rn.viewAxis[AXIS_RIGHT], rotation );
-		CrossProduct( &rn.viewAxis[AXIS_FORWARD], v_left, v_up );
+		RotatePointAroundVector( v_left, &fsh->viewAxis[AXIS_FORWARD], &fsh->viewAxis[AXIS_RIGHT], rotation );
+		CrossProduct( &fsh->viewAxis[AXIS_FORWARD], v_left, v_up );
 	} else {
-		VectorCopy( &rn.viewAxis[AXIS_RIGHT], v_left );
-		VectorCopy( &rn.viewAxis[AXIS_UP], v_up );
+		VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+		VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 	}
 
-	if( rn.renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+	if( fsh->renderFlags & (RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
 		VectorInverse( v_left );
 	}
 
@@ -1295,7 +1295,7 @@ void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, con
 
 	byte_vec4_t colors[4];
 	for( unsigned i = 0; i < 4; i++ ) {
-		VectorNegate( &rn.viewAxis[AXIS_FORWARD], normals[i] );
+		VectorNegate( &fsh->viewAxis[AXIS_FORWARD], normals[i] );
 		Vector4Copy( e->color, colors[i] );
 	}
 
@@ -1318,7 +1318,7 @@ void R_SubmitSpriteSurfToBackend( const entity_t *e, const shader_t *shader, con
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitPolySurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly ) {
+void R_SubmitPolySurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly ) {
 	mesh_t mesh;
 
 	mesh.elems = poly->elems;
@@ -1336,7 +1336,7 @@ void R_SubmitPolySurfToBackend( const entity_t *e, const shader_t *shader, const
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitCoronaSurfToBackend( const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	/*
 	auto *const light = wsw::ref::Frontend::Instance()->LightForCoronaSurf( drawSurf );
 
@@ -1352,10 +1352,10 @@ void R_SubmitCoronaSurfToBackend( const entity_t *e, const shader_t *shader, con
 	VectorCopy( light->center, origin );
 
 	vec3_t v_left, v_up;
-	VectorCopy( &rn.viewAxis[AXIS_RIGHT], v_left );
-	VectorCopy( &rn.viewAxis[AXIS_UP], v_up );
+	VectorCopy( &rn->viewAxis[AXIS_RIGHT], v_left );
+	VectorCopy( &rn->viewAxis[AXIS_UP], v_up );
 
-	if( rn.renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+	if( rn->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
 		VectorInverse( v_left );
 	}
 

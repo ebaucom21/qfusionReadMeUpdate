@@ -847,18 +847,16 @@ void R_SkeletalGetBonePose( const model_t *mod, int bonenum, int frame, bonepose
 	}
 }
 
-model_t *R_SkeletalModelLOD( const entity_t *e ) {
-	int lod;
-
+model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float fovDotScale ) {
 	if( !e->model->numlods || ( e->flags & RF_FORCENOLOD ) ) {
 		return e->model;
 	}
 
-	lod = R_LODForSphere( e->origin, e->model->radius );
-
+	const int lod = R_LODForSphere( e->origin, e->model->radius, viewOrigin, fovDotScale );
 	if( lod < 1 ) {
 		return e->model;
 	}
+
 	return e->model->lods[std::min( lod, e->model->numlods ) - 1];
 }
 
@@ -1193,15 +1191,12 @@ bool R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, i
 /*
 * R_SkeletalModelBBox
 */
-float R_SkeletalModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs ) {
-	model_t *mod;
-
-	mod = R_SkeletalModelLOD( e );
-	if( !mod ) {
-		return 0;
+float R_SkeletalModelBBox( const entity_t *e, const float *viewOrigin, float fovLodScale, vec3_t mins, vec3_t maxs ) {
+	if( const model_t *mod = R_SkeletalModelLOD( e, viewOrigin, fovLodScale ) ) {
+		return R_SkeletalModelLerpBBox( e, mod, mins, maxs );
 	}
 
-	return R_SkeletalModelLerpBBox( e, mod, mins, maxs );
+	return 0;
 }
 
 /*

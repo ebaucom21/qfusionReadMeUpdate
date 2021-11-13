@@ -2142,6 +2142,9 @@ void RB_DrawWireframeElements( void ) {
 	RB_RenderPass( &r_triLinesPass );
 }
 
+// TODO: Show outlines in mirrors
+#define ENTITY_OUTLINE( ent ) ( ( ( ( ent )->renderfx & RF_VIEWERMODEL ) ) ? 0 : ( ent )->outlineHeight )
+
 /*
 * RB_DrawShadedElements
 */

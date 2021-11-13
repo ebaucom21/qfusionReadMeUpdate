@@ -24,11 +24,73 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "materiallocal.h"
 #include "../qcommon/singletonholder.h"
 
-#define REFINST_STACK_SIZE  64
-static refinst_t riStack[REFINST_STACK_SIZE];
-static unsigned riStackSize;
+static void R_TransformForWorld( void ) {
+	RB_LoadObjectMatrix( mat4x4_identity );
+}
 
-void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum ) {
+static void R_TranslateForEntity( const entity_t *e ) {
+	mat4_t objectMatrix;
+
+	Matrix4_Identity( objectMatrix );
+
+	objectMatrix[0] = e->scale;
+	objectMatrix[5] = e->scale;
+	objectMatrix[10] = e->scale;
+	objectMatrix[12] = e->origin[0];
+	objectMatrix[13] = e->origin[1];
+	objectMatrix[14] = e->origin[2];
+
+	RB_LoadObjectMatrix( objectMatrix );
+}
+
+static void R_TransformForEntity( const entity_t *e ) {
+	assert( e->rtype == RT_MODEL && e != rsc.worldent );
+
+	mat4_t objectMatrix;
+
+	if( e->scale != 1.0f ) {
+		objectMatrix[0] = e->axis[0] * e->scale;
+		objectMatrix[1] = e->axis[1] * e->scale;
+		objectMatrix[2] = e->axis[2] * e->scale;
+		objectMatrix[4] = e->axis[3] * e->scale;
+		objectMatrix[5] = e->axis[4] * e->scale;
+		objectMatrix[6] = e->axis[5] * e->scale;
+		objectMatrix[8] = e->axis[6] * e->scale;
+		objectMatrix[9] = e->axis[7] * e->scale;
+		objectMatrix[10] = e->axis[8] * e->scale;
+	} else {
+		objectMatrix[0] = e->axis[0];
+		objectMatrix[1] = e->axis[1];
+		objectMatrix[2] = e->axis[2];
+		objectMatrix[4] = e->axis[3];
+		objectMatrix[5] = e->axis[4];
+		objectMatrix[6] = e->axis[5];
+		objectMatrix[8] = e->axis[6];
+		objectMatrix[9] = e->axis[7];
+		objectMatrix[10] = e->axis[8];
+	}
+
+	objectMatrix[3] = 0;
+	objectMatrix[7] = 0;
+	objectMatrix[11] = 0;
+	objectMatrix[12] = e->origin[0];
+	objectMatrix[13] = e->origin[1];
+	objectMatrix[14] = e->origin[2];
+	objectMatrix[15] = 1.0;
+
+	RB_LoadObjectMatrix( objectMatrix );
+}
+
+/*
+* R_Set2DMode
+*
+* Note that this sets the viewport to size of the active framebuffer.
+*/
+void R_Set2DMode( bool enable ) {
+	wsw::ref::Frontend::instance()->set2DMode( enable );
+}
+
+static void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum ) {
 	// 0 - left
 	// 1 - right
 	// 2 - down
@@ -83,74 +145,6 @@ void R_SetupFrustum( const refdef_t *rd, float farClip, cplane_t *frustum ) {
 	frustum[4].signbits = SignbitsForPlane( &frustum[4] );
 }
 
-static void R_SetupGL() {
-	RB_Scissor( rn.scissor[0], rn.scissor[1], rn.scissor[2], rn.scissor[3] );
-	RB_Viewport( rn.viewport[0], rn.viewport[1], rn.viewport[2], rn.viewport[3] );
-
-	if( rn.renderFlags & RF_CLIPPLANE ) {
-		cplane_t *p = &rn.clipPlane;
-		Matrix4_ObliqueNearClipping( p->normal, -p->dist, rn.cameraMatrix, rn.projectionMatrix );
-	}
-
-	RB_SetZClip( Z_NEAR, rn.farClip );
-
-	RB_SetCamera( rn.viewOrigin, rn.viewAxis );
-
-	RB_SetLightParams( rn.refdef.minLight, ( rn.refdef.rdflags & RDF_NOWORLDMODEL ) != 0, rn.hdrExposure );
-
-	RB_SetRenderFlags( rn.renderFlags );
-
-	RB_LoadProjectionMatrix( rn.projectionMatrix );
-
-	RB_LoadCameraMatrix( rn.cameraMatrix );
-
-	RB_LoadObjectMatrix( mat4x4_identity );
-
-	if( rn.renderFlags & RF_FLIPFRONTFACE ) {
-		RB_FlipFrontFace();
-	}
-
-	if( ( rn.renderFlags & RF_SHADOWMAPVIEW ) ) {
-		RB_SetShaderStateMask( ~0, GLSTATE_NO_COLORWRITE );
-	}
-}
-
-static void R_EndGL() {
-	if( ( rn.renderFlags & RF_SHADOWMAPVIEW ) ) {
-		RB_SetShaderStateMask( ~0, 0 );
-	}
-
-	if( rn.renderFlags & RF_FLIPFRONTFACE ) {
-		RB_FlipFrontFace();
-	}
-}
-
-static void R_BindRefInstFBO() {
-	const int fbo = rn.renderTarget;
-	R_BindFrameBufferObject( fbo );
-}
-
-void R_ClearRefInstStack() {
-	riStackSize = 0;
-}
-
-bool R_PushRefInst() {
-	if( riStackSize == REFINST_STACK_SIZE ) {
-		riStack[riStackSize++] = rn;
-		R_EndGL();
-		return true;
-	}
-	return false;
-}
-
-void R_PopRefInst() {
-	if( riStackSize ) {
-		rn = riStack[--riStackSize];
-		R_BindRefInstFBO();
-		R_SetupGL();
-	}
-}
-
 static unsigned R_PackSortKey( unsigned shaderNum, int fogNum,
 							   int portalNum, unsigned entNum ) {
 	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
@@ -199,7 +193,7 @@ static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, in
 	unsigned order = 0;
 
 	// shader order
-	if( shader != NULL ) {
+	if( shader != nullptr ) {
 		order = R_PackShaderOrder( shader );
 	}
 	// group by dlight
@@ -207,7 +201,7 @@ static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, in
 		order |= 0x40;
 	}
 	// group by dlight
-	if( fog != NULL ) {
+	if( fog != nullptr ) {
 		order |= 0x80;
 	}
 	// group by lightmaps
@@ -220,12 +214,123 @@ static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, in
 
 namespace wsw::ref {
 
+auto Frontend::getDefaultFarClip() const -> float {
+	float dist;
+
+	if( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) {
+		dist = 1024;
+	} else if( rsh.worldModel && rsh.worldBrushModel->globalfog ) {
+		dist = rsh.worldBrushModel->globalfog->shader->fog_dist;
+	} else {
+		// TODO: Restore computations of world bounds
+		dist = (float)( 1 << 16 );
+	}
+
+	return std::max( Z_NEAR, dist ) + Z_BIAS;
+}
+
+auto Frontend::getFogForBounds( const float *mins, const float *maxs ) -> mfog_t * {
+	if( !rsh.worldModel || ( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) || !rsh.worldBrushModel->numfogs ) {
+		return nullptr;
+	}
+	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
+		return nullptr;
+	}
+	if( rsh.worldBrushModel->globalfog ) {
+		return rsh.worldBrushModel->globalfog;
+	}
+
+	for( unsigned i = 0; i < rsh.worldBrushModel->numfogs; i++ ) {
+		mfog_t *const fog = rsh.worldBrushModel->fogs;
+		if( fog->shader ) {
+			if( BoundsIntersect( mins, maxs, fog->mins, fog->maxs ) ) {
+				return fog;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+auto Frontend::getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t * {
+	vec3_t mins, maxs;
+	for( unsigned i = 0; i < 3; i++ ) {
+		mins[i] = centre[i] - radius;
+		maxs[i] = centre[i] + radius;
+	}
+	return getFogForBounds( mins, maxs );
+}
+
+bool Frontend::isPointCompletelyFogged( const mfog_t *fog, const float *origin, float radius ) {
+	// note that fog->distanceToEye < 0 is always true if
+	// globalfog is not nullptr and we're inside the world boundaries
+	if( fog && fog->shader && fog == m_state.fog_eye ) {
+		float vpnDist = (( m_state.viewOrigin[0] - origin[0] ) * m_state.viewAxis[AXIS_FORWARD + 0] +
+						 ( m_state.viewOrigin[1] - origin[1] ) * m_state.viewAxis[AXIS_FORWARD + 1] +
+						 ( m_state.viewOrigin[2] - origin[2] ) * m_state.viewAxis[AXIS_FORWARD + 2] );
+		return ( ( vpnDist + radius ) / fog->shader->fog_dist ) < -1;
+	}
+
+	return false;
+}
+
+void Frontend::bindFrameBuffer( int ) {
+	const int width = glConfig.width;
+	const int height = glConfig.height;
+
+	rf.frameBufferWidth = width;
+	rf.frameBufferHeight = height;
+
+	RB_BindFrameBufferObject();
+
+	RB_Viewport( m_state.viewport[0], m_state.viewport[1], m_state.viewport[2], m_state.viewport[3] );
+	RB_Scissor( m_state.scissor[0], m_state.scissor[1], m_state.scissor[2], m_state.scissor[3] );
+}
+
+void Frontend::set2DMode( bool enable ) {
+	const int width = rf.frameBufferWidth;
+	const int height = rf.frameBufferHeight;
+
+	if( rf.in2D == true && enable == true && width == rf.width2D && height == rf.height2D ) {
+		return;
+	} else if( rf.in2D == false && enable == false ) {
+		return;
+	}
+
+	rf.in2D = enable;
+
+	if( enable ) {
+		rf.width2D = width;
+		rf.height2D = height;
+
+		Matrix4_OrthogonalProjection( 0, width, height, 0, -99999, 99999, m_state.projectionMatrix );
+		Matrix4_Copy( m_state.projectionMatrix, m_state.cameraProjectionMatrix );
+
+		// set 2D virtual screen size
+		RB_Scissor( 0, 0, width, height );
+		RB_Viewport( 0, 0, width, height );
+
+		RB_LoadProjectionMatrix( m_state.projectionMatrix );
+		RB_LoadCameraMatrix( mat4x4_identity );
+		RB_LoadObjectMatrix( mat4x4_identity );
+
+		RB_SetShaderStateMask( ~0, GLSTATE_NO_DEPTH_TEST );
+
+		RB_SetRenderFlags( 0 );
+	} else {
+		// render previously batched 2D geometry, if any
+		RB_FlushDynamicMeshes();
+
+		RB_SetShaderStateMask( ~0, 0 );
+	}
+}
+
 auto Frontend::tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t * {
 	if( shader ) {
-		if( rn.numPortalSurfaces == MAX_PORTAL_SURFACES ) {
+		if( m_state.numPortalSurfaces == MAX_PORTAL_SURFACES ) {
 			const bool depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
 			if( !R_FASTSKY() || !depthPortal ) {
-				portalSurface_t *portalSurface = &rn.portalSurfaces[rn.numPortalSurfaces++];
+				portalSurface_t *portalSurface = &m_state.portalSurfaces[m_state.numPortalSurfaces++];
 				memset( portalSurface, 0, sizeof( portalSurface_t ) );
 				portalSurface->entity = ent;
 				portalSurface->shader = shader;
@@ -234,7 +339,7 @@ auto Frontend::tryAddingPortalSurface( const entity_t *ent, const shader_t *shad
 				memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
 
 				if( depthPortal ) {
-					rn.numDepthPortalSurfaces++;
+					m_state.numDepthPortalSurfaces++;
 				}
 
 				return portalSurface;
@@ -275,7 +380,7 @@ void Frontend::updatePortalSurface( portalSurface_t *portalSurface, const mesh_t
 
 		VectorMA( ent->origin, 0.25, centre, centre );
 
-		VectorNegate( &rn.viewAxis[AXIS_FORWARD], plane.normal );
+		VectorNegate( &m_state.viewAxis[AXIS_FORWARD], plane.normal );
 		plane.dist = DotProduct( plane.normal, centre );
 		CategorizePlane( &plane );
 	} else {
@@ -299,7 +404,7 @@ void Frontend::updatePortalSurface( portalSurface_t *portalSurface, const mesh_t
 	}
 
 	float dist;
-	if( ( dist = PlaneDiff( rn.viewOrigin, &plane ) ) <= BACKFACE_EPSILON ) {
+	if(( dist = PlaneDiff( m_state.viewOrigin, &plane ) ) <= BACKFACE_EPSILON ) {
 		// behind the portal plane
 		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
 			return;
@@ -333,7 +438,7 @@ auto Frontend::tryUpdatingPortalSurfaceAndDistance( drawSurfaceBSP_t *drawSurf, 
 		R_UnpackSortKey( sds->sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
 
 		if( portalNum >= 0 ) {
-			portalSurface_t *const portalSurface = rn.portalSurfaces + portalNum;
+			portalSurface_t *const portalSurface = m_state.portalSurfaces + portalNum;
 			vec3_t center;
 			if( origin ) {
 				VectorCopy( origin, center );
@@ -341,7 +446,7 @@ auto Frontend::tryUpdatingPortalSurfaceAndDistance( drawSurfaceBSP_t *drawSurf, 
 				VectorAdd( surf->mins, surf->maxs, center );
 				VectorScale( center, 0.5, center );
 			}
-			float dist = Distance( rn.refdef.vieworg, center );
+			float dist = Distance( m_state.refdef.vieworg, center );
 			// draw portals in front-to-back order
 			dist = 1024 - dist / 100.0f;
 			if( dist < 1 ) {
@@ -399,7 +504,7 @@ static drawSurfaceType_t spriteDrawSurf = ST_SPRITE;
 bool Frontend::addSpriteToSortList( const entity_t *e ) {
 	// TODO: This condition should be eliminated from this path
 	if( e->flags & RF_NOSHADOW ) {
-		if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+		if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
 			return false;
 		}
 	}
@@ -409,14 +514,14 @@ bool Frontend::addSpriteToSortList( const entity_t *e ) {
 	}
 
 	vec3_t eyeToSprite;
-	VectorSubtract( e->origin, rn.refdef.vieworg, eyeToSprite );
-	const float dist = DotProduct( eyeToSprite, &rn.viewAxis[0] );
+	VectorSubtract( e->origin, m_state.refdef.vieworg, eyeToSprite );
+	const float dist = DotProduct( eyeToSprite, &m_state.viewAxis[0] );
 	if( dist <= 0 ) {
 		return false;
 	}
 
-	return addEntryToSortList( rn.meshlist, e, R_FogForSphere( e->origin, e->radius ),
-							 e->customShader, dist, 0, nullptr, &spriteDrawSurf );
+	const mfog_t *fog = getFogForSphere( e->origin, e->radius );
+	return addEntryToSortList( m_state.meshlist, e, fog, e->customShader, dist, 0, nullptr, &spriteDrawSurf );
 }
 
 static void R_ReserveVBOSlices( drawList_t *list, unsigned drawSurfIndex ) {
@@ -453,14 +558,14 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 
 	drawSurf->dlightBits = 0;
 	drawSurf->visFrame = rf.frameCount;
-	drawSurf->listSurf = addEntryToSortList( rn.meshlist, e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface,
+	drawSurf->listSurf = addEntryToSortList( m_state.meshlist, e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface,
 											 drawSurf );
 	if( !drawSurf->listSurf ) {
 		return false;
 	}
 
 	if( portalSurface && !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
-		addEntryToSortList( rn.portalmasklist, e, nullptr, nullptr, 0, 0, nullptr, drawSurf );
+		addEntryToSortList( m_state.portalmasklist, e, nullptr, nullptr, 0, 0, nullptr, drawSurf );
 	}
 
 	unsigned dlightFrame = 0;
@@ -515,11 +620,11 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 
 		const auto drawSurfIndex = drawSurf - rsh.worldBrushModel->drawSurfaces;
 		// TODO: Reserve once per frame
-		if( drawSurfIndex >= rn.meshlist->maxVboSlices ) [[unlikely]] {
-			R_ReserveVBOSlices( rn.meshlist, drawSurfIndex );
+		if( drawSurfIndex >= m_state.meshlist->maxVboSlices ) [[unlikely]] {
+			R_ReserveVBOSlices( m_state.meshlist, drawSurfIndex );
 		}
 
-		vboSlice_t *slice = &rn.meshlist->vboSlices[drawSurfIndex];
+		vboSlice_t *slice = &m_state.meshlist->vboSlices[drawSurfIndex];
 		assert( !slice->numVerts && !slice->numElems && !slice->firstVert && !slice->firstElem );
 
 		slice->firstVert = firstVisSurf->firstDrawSurfVert;
@@ -543,13 +648,13 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 
 bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 	// never render weapon models or non-occluders into shadowmaps
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
 		if( e->renderfx & RF_WEAPONMODEL ) {
 			return true;
 		}
 	}
 
-	const model_t *mod = R_AliasModelLOD( e );
+	const model_t *mod = R_AliasModelLOD( e, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
 	const maliasmodel_t *aliasmodel;
 	if( !( aliasmodel = ( ( const maliasmodel_t * )mod->extradata ) ) || !aliasmodel->nummeshes ) {
 		return false;
@@ -563,10 +668,10 @@ bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 	if( e->renderfx & RF_WEAPONMODEL ) {
 		distance = 0;
 	} else {
-		distance = Distance( e->origin, rn.viewOrigin ) + 1;
+		distance = Distance( e->origin, m_state.viewOrigin ) + 1;
 	}
 
-	const mfog_t *fog = R_FogForSphere( e->origin, radius );
+	const mfog_t *const fog = getFogForSphere( e->origin, radius );
 
 	for( int i = 0; i < aliasmodel->nummeshes; i++ ) {
 		const maliasmesh_t *mesh = &aliasmodel->meshes[i];
@@ -581,7 +686,7 @@ bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 				shader = mesh->skins[j].shader;
 				if( shader ) {
 					int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-					addEntryToSortList( rn.meshlist, e, fog, shader, distance, drawOrder, nullptr,
+					addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr,
 										aliasmodel->drawSurfs + i );
 				}
 			}
@@ -590,7 +695,7 @@ bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 
 		if( shader ) {
 			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( rn.meshlist, e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
+			addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
 		}
 	}
 
@@ -598,7 +703,7 @@ bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 }
 
 bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
-	const model_t *mod = R_SkeletalModelLOD( e );
+	const model_t *mod = R_SkeletalModelLOD( e, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
 	const mskmodel_t *skmodel;
 	if( !( skmodel = ( ( mskmodel_t * )mod->extradata ) ) || !skmodel->nummeshes ) {
 		return false;
@@ -608,7 +713,7 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 	const float radius = R_SkeletalModelLerpBBox( e, mod, mins, maxs );
 
 	// never render weapon models or non-occluders into shadowmaps
-	if( rn.renderFlags & RF_SHADOWMAPVIEW ) {
+	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
 		if( e->renderfx & RF_WEAPONMODEL ) {
 			return true;
 		}
@@ -619,10 +724,10 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 	if( e->renderfx & RF_WEAPONMODEL ) {
 		distance = 0;
 	} else {
-		distance = Distance( e->origin, rn.viewOrigin ) + 1;
+		distance = Distance( e->origin, m_state.viewOrigin ) + 1;
 	}
 
-	const mfog_t *fog = R_FogForSphere( e->origin, radius );
+	const mfog_t *const fog = getFogForSphere( e->origin, radius );
 
 	// run quaternions lerping job in the background
 	R_AddSkeletalModelCache( e, mod );
@@ -641,7 +746,7 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 
 		if( shader ) {
 			const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( rn.meshlist, e, fog, shader, distance, drawOrder, nullptr, skmodel->drawSurfs + i );
+			addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr, skmodel->drawSurfs + i );
 		}
 	}
 
@@ -651,7 +756,7 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 static int nullDrawSurf = ST_NULLMODEL;
 
 bool Frontend::addNullSurfToSortList( const entity_t *e ) {
-	return addEntryToSortList( rn.meshlist, e, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
+	return addEntryToSortList( m_state.meshlist, e, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
 }
 
 static void R_ReserveDrawSurfaces( drawList_t *list ) {
@@ -683,7 +788,7 @@ void *Frontend::addEntryToSortList( drawList_t *list, const entity_t *e, const m
 
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
-		if( !( rn.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
+		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
 			// TODO: This should be moved to an outer loop
 			if( !rsh.worldBrushModel ) [[unlikely]] {
 				fog = nullptr;
@@ -696,7 +801,7 @@ void *Frontend::addEntryToSortList( drawList_t *list, const entity_t *e, const m
 				}
 
 				const int fogNum = fog ? (int)( fog - rsh.worldBrushModel->fogs ) : -1;
-				const int portalNum = portalSurf ? (int)( portalSurf - rn.portalSurfaces ) : -1;
+				const int portalNum = portalSurf ? (int)( portalSurf - m_state.portalSurfaces ) : -1;
 
 				sortedDrawSurf_t *const sds = &list->drawSurfs[list->numDrawSurfs++];
 				sds->drawSurf = ( drawSurfaceType_t * )drawSurf;
@@ -722,7 +827,7 @@ void Frontend::collectVisiblePolys() {
 			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
 		}
 
-		if( !addEntryToSortList( rn.meshlist, rsc.polyent, fog, p->shader, 0, i, nullptr, p ) ) {
+		if( !addEntryToSortList( m_state.meshlist, rsc.polyent, fog, p->shader, 0, i, nullptr, p ) ) {
 			continue;
 		}
 	}
@@ -738,7 +843,7 @@ void Frontend::collectVisibleEntities() {
 
 		if( e->flags & RF_VIEWERMODEL ) {
 			//if( !(rn.renderFlags & RF_NONVIEWERREF) )
-			if( !( rn.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+			if( !( m_state.renderFlags & (RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
 			}
 		}
@@ -775,7 +880,7 @@ void Frontend::collectVisibleEntities() {
 }
 
 void Frontend::collectVisibleWorldBrushes() {
-	const bool worldOutlines = mapConfig.forceWorldOutlines || ( rn.refdef.rdflags & RDF_WORLDOUTLINES );
+	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
 	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
 		rsc.worldent->outlineHeight = std::max( 0.0f, r_outlines_world->value );
 	} else {
@@ -794,6 +899,11 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 	if( !list->numDrawSurfs ) {
 		return;
 	}
+
+	FrontendToBackendShared fsh;
+	fsh.meshlist = m_state.meshlist;
+	fsh.renderFlags = m_state.renderFlags;
+	std:memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
 	unsigned prevEntNum = std::numeric_limits<unsigned>::max();
@@ -824,7 +934,7 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 		const shader_t *shader = MaterialCache::instance()->getMaterialById( shaderNum );
 		const entity_t *entity = R_NUM2ENT( entNum );
 		const mfog_t *fog = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const portalSurface_t *portalSurface = portalNum >= 0 ? rn.portalSurfaces + portalNum : nullptr;
+		const portalSurface_t *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
 		const int entityFX = entity->renderfx;
 		const bool depthWrite = shader->flags & SHADER_DEPTHWRITE ? true : false;
 
@@ -883,11 +993,11 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 				RB_FlushDynamicMeshes();
 				if( infiniteProj ) {
 					mat4_t projectionMatrix;
-					Matrix4_Copy( rn.projectionMatrix, projectionMatrix );
+					Matrix4_Copy( m_state.projectionMatrix, projectionMatrix );
 					Matrix4_PerspectiveProjectionToInfinity( Z_NEAR, projectionMatrix, glConfig.depthEpsilon );
 					RB_LoadProjectionMatrix( projectionMatrix );
 				} else {
-					RB_LoadProjectionMatrix( rn.projectionMatrix );
+					RB_LoadProjectionMatrix( m_state.projectionMatrix );
 				}
 			}
 
@@ -898,10 +1008,14 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 				}
 			} else {
 				if( ( entNum != prevEntNum ) || prevBatchDrawSurf ) {
-					if( shader->flags & SHADER_AUTOSPRITE ) {
+					if( entity == rsc.worldent ) [[likely]] {
+						R_TransformForWorld();
+					} else if( entity->rtype == RT_MODEL ) {
+						R_TransformForEntity( entity );
+					} else if( shader->flags & SHADER_AUTOSPRITE ) {
 						R_TranslateForEntity( entity );
 					} else {
-						R_TransformForEntity( entity );
+						R_TransformForWorld();
 					}
 				}
 			}
@@ -912,7 +1026,7 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 				RB_BindShader( entity, shader, fog );
 				RB_SetPortalSurface( portalSurface );
 
-				r_drawSurfCb[drawSurfType]( entity, shader, fog, portalSurface, 0, sds->drawSurf );
+				r_drawSurfCb[drawSurfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
 			}
 
 			prevShaderNum = shaderNum;
@@ -925,7 +1039,7 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 		}
 
 		if( batchDrawSurf ) {
-			r_batchDrawSurfCb[drawSurfType]( entity, shader, fog, portalSurface, 0, sds->drawSurf );
+			r_batchDrawSurfCb[drawSurfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
 		}
 	}
 
@@ -969,39 +1083,39 @@ bool Frontend::addBrushModelToSortList( const entity_t *e ) {
 }
 
 void Frontend::setupViewMatrices() {
-	refdef_t *rd = &rn.refdef;
+	refdef_t *rd = &m_state.refdef;
 
-	Matrix4_Modelview( rd->vieworg, rd->viewaxis, rn.cameraMatrix );
+	Matrix4_Modelview( rd->vieworg, rd->viewaxis, m_state.cameraMatrix );
 
 	if( rd->rdflags & RDF_USEORTHO ) {
 		Matrix4_OrthogonalProjection( -rd->ortho_x, rd->ortho_x, -rd->ortho_y, rd->ortho_y,
-									  -rn.farClip, rn.farClip, rn.projectionMatrix );
+									  -m_state.farClip, m_state.farClip, m_state.projectionMatrix );
 	} else {
-		Matrix4_PerspectiveProjection( rd->fov_x, rd->fov_y, Z_NEAR, rn.farClip, rn.projectionMatrix );
+		Matrix4_PerspectiveProjection( rd->fov_x, rd->fov_y, Z_NEAR, m_state.farClip, m_state.projectionMatrix );
 	}
 
 	if( rd->rdflags & RDF_FLIPPED ) {
-		rn.projectionMatrix[0] = -rn.projectionMatrix[0];
-		rn.renderFlags |= RF_FLIPFRONTFACE;
+		m_state.projectionMatrix[0] = -m_state.projectionMatrix[0];
+		m_state.renderFlags |= RF_FLIPFRONTFACE;
 	}
 
-	Matrix4_Multiply( rn.projectionMatrix, rn.cameraMatrix, rn.cameraProjectionMatrix );
+	Matrix4_Multiply( m_state.projectionMatrix, m_state.cameraMatrix, m_state.cameraProjectionMatrix );
 }
 
 void Frontend::clearActiveFrameBuffer() {
-	const bool rgbShadow = ( rn.renderFlags & ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB ) ) == ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB );
-	const bool depthPortal = ( rn.renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW ) ) != 0 && ( rn.renderFlags & RF_PORTAL_CAPTURE ) == 0;
+	const bool rgbShadow = ( m_state.renderFlags & (RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB ) ) == (RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB );
+	const bool depthPortal = ( m_state.renderFlags & (RF_MIRRORVIEW | RF_PORTALVIEW ) ) != 0 && ( m_state.renderFlags & RF_PORTAL_CAPTURE ) == 0;
 
 	bool clearColor = false;
 	vec4_t envColor;
 	if( rgbShadow ) {
 		clearColor = true;
 		Vector4Set( envColor, 1, 1, 1, 1 );
-	} else if( rn.refdef.rdflags & RDF_NOWORLDMODEL ) {
-		clearColor = rn.renderTarget != 0;
+	} else if( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) {
+		clearColor = m_state.renderTarget != 0;
 		Vector4Set( envColor, 1, 1, 1, 0 );
 	} else {
-		clearColor = !rn.numDepthPortalSurfaces || R_FASTSKY();
+		clearColor = !m_state.numDepthPortalSurfaces || R_FASTSKY();
 		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
 			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, envColor );
 		} else {
@@ -1021,51 +1135,51 @@ void Frontend::clearActiveFrameBuffer() {
 }
 
 void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
-	const bool shadowMap = rn.renderFlags & RF_SHADOWMAPVIEW ? true : false;
+	const bool shadowMap = m_state.renderFlags & RF_SHADOWMAPVIEW ? true : false;
 
-	rn.refdef = *fd;
+	m_state.refdef = *fd;
 
 	// load view matrices with default far clip value
 	setupViewMatrices();
 
-	rn.fog_eye = nullptr;
-	rn.hdrExposure = 1;
+	m_state.fog_eye = nullptr;
+	m_state.hdrExposure = 1;
 
-	rn.dlightBits = 0;
+	m_state.dlightBits = 0;
 
-	rn.numPortalSurfaces = 0;
-	rn.numDepthPortalSurfaces = 0;
-	rn.skyportalSurface = nullptr;
+	m_state.numPortalSurfaces = 0;
+	m_state.numDepthPortalSurfaces = 0;
+	m_state.skyportalSurface = nullptr;
 
 	if( r_novis->integer ) {
-		rn.renderFlags |= RF_NOVIS;
+		m_state.renderFlags |= RF_NOVIS;
 	}
 
 	if( r_lightmap->integer ) {
-		rn.renderFlags |= RF_LIGHTMAP;
+		m_state.renderFlags |= RF_LIGHTMAP;
 	}
 
 	if( r_drawflat->integer ) {
-		rn.renderFlags |= RF_DRAWFLAT;
+		m_state.renderFlags |= RF_DRAWFLAT;
 	}
 
-	R_ClearDrawList( rn.meshlist );
+	R_ClearDrawList( m_state.meshlist );
 
-	R_ClearDrawList( rn.portalmasklist );
+	R_ClearDrawList( m_state.portalmasklist );
 
-	if( !rsh.worldModel && !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+	if( !rsh.worldModel && !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 		return;
 	}
 
 	// build the transformation matrix for the given view angles
-	VectorCopy( rn.refdef.vieworg, rn.viewOrigin );
-	Matrix3_Copy( rn.refdef.viewaxis, rn.viewAxis );
+	VectorCopy( m_state.refdef.vieworg, m_state.viewOrigin );
+	Matrix3_Copy( m_state.refdef.viewaxis, m_state.viewAxis );
 
-	rn.lod_dist_scale_for_fov = std::tan( rn.refdef.fov_x * ( M_PI / 180 ) * 0.5f );
+	m_state.lod_dist_scale_for_fov = std::tan( m_state.refdef.fov_x * ( M_PI / 180 ) * 0.5f );
 
 	// current viewcluster
-	if( !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		mleaf_t *leaf = Mod_PointInLeaf( rn.pvsOrigin, rsh.worldModel );
+	if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		mleaf_t *leaf = Mod_PointInLeaf( m_state.pvsOrigin, rsh.worldModel );
 		rf.viewcluster = leaf->cluster;
 		rf.viewarea = leaf->area;
 
@@ -1080,20 +1194,20 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 
 	rf.frameCount++;
 
-	R_SetupFrustum( &rn.refdef, rn.farClip, rn.frustum );
+	R_SetupFrustum( &m_state.refdef, m_state.farClip, m_state.frustum );
 
 	// we know the initial farclip at this point after determining visible world leafs
 	// R_DrawEntities can make adjustments as well
 
 	if( !shadowMap ) {
-		if( !( rn.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
 				collectVisibleWorldBrushes();
 			}
 		}
 
-		rn.fog_eye = R_FogForSphere( rn.viewOrigin, 0.5 );
-		rn.hdrExposure = 1.0f;
+		m_state.fog_eye = getFogForSphere( m_state.viewOrigin, 0.5f );
+		m_state.hdrExposure = 1.0f;
 
 		collectVisiblePolys();
 	}
@@ -1104,7 +1218,7 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 
 	if( !shadowMap ) {
 		// now set  the real far clip value and reload view matrices
-		rn.farClip = R_DefaultFarClip();
+		m_state.farClip = getDefaultFarClip();
 
 		setupViewMatrices();
 
@@ -1119,32 +1233,60 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 			const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
 			return lhsKey < rhsKey;
 		};
-		std::sort( rn.meshlist->drawSurfs, rn.meshlist->drawSurfs + rn.meshlist->numDrawSurfs, cmp );
+		std::sort( m_state.meshlist->drawSurfs, m_state.meshlist->drawSurfs + m_state.meshlist->numDrawSurfs, cmp );
 	}
 
-	R_BindRefInstFBO();
+	bindFrameBuffer( m_state.renderTarget );
 
-	R_SetupGL();
+	RB_Scissor( m_state.scissor[0], m_state.scissor[1], m_state.scissor[2], m_state.scissor[3] );
+	RB_Viewport( m_state.viewport[0], m_state.viewport[1], m_state.viewport[2], m_state.viewport[3] );
+
+	if( m_state.renderFlags & RF_CLIPPLANE ) {
+		cplane_t *p = &m_state.clipPlane;
+		Matrix4_ObliqueNearClipping( p->normal, -p->dist, m_state.cameraMatrix, m_state.projectionMatrix );
+	}
+
+	RB_SetZClip( Z_NEAR, m_state.farClip );
+	RB_SetCamera( m_state.viewOrigin, m_state.viewAxis );
+	RB_SetLightParams( m_state.refdef.minLight, ( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) != 0, m_state.hdrExposure );
+	RB_SetRenderFlags( m_state.renderFlags );
+	RB_LoadProjectionMatrix( m_state.projectionMatrix );
+	RB_LoadCameraMatrix( m_state.cameraMatrix );
+	RB_LoadObjectMatrix( mat4x4_identity );
+
+	if( m_state.renderFlags & RF_FLIPFRONTFACE ) {
+		RB_FlipFrontFace();
+	}
+
+	if( ( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
+		RB_SetShaderStateMask( ~0, GLSTATE_NO_COLORWRITE );
+	}
 
 	drawPortals();
 
-	if( r_portalonly->integer && !( rn.renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW ) ) ) {
+	if( r_portalonly->integer && !( m_state.renderFlags & (RF_MIRRORVIEW | RF_PORTALVIEW ) ) ) {
 		return;
 	}
 
 	clearActiveFrameBuffer();
 
-	submitSortedSurfacesToBackend( rn.meshlist );
+	submitSortedSurfacesToBackend( m_state.meshlist );
 
-	if( r_showtris->integer && !( rn.renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( r_showtris->integer && !( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_EnableWireframe( true );
-		submitSortedSurfacesToBackend( rn.meshlist );
+		submitSortedSurfacesToBackend( m_state.meshlist );
 		RB_EnableWireframe( false );
 	}
 
 	R_TransformForWorld();
 
-	R_EndGL();
+	if( ( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
+		RB_SetShaderStateMask( ~0, 0 );
+	}
+
+	if( m_state.renderFlags & RF_FLIPFRONTFACE ) {
+		RB_FlipFrontFace();
+	}
 }
 
 /*
@@ -1177,12 +1319,12 @@ void Frontend::drawPortalSurface( portalSurface_t *portalSurface ) {
 	}
 
 	int x = 0, y = 0;
-	int w = rn.refdef.width;
-	int h = rn.refdef.height;
+	int w = m_state.refdef.width;
+	int h = m_state.refdef.height;
 
 	bool refraction = false;
 	cplane_t *const portal_plane = &portalSurface->plane;
-	const float dist = PlaneDiff( rn.viewOrigin, portal_plane );
+	const float dist = PlaneDiff( m_state.viewOrigin, portal_plane );
 	if( dist <= BACKFACE_EPSILON || !doReflection ) {
 		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) || !doRefraction ) {
 			return;
@@ -1226,10 +1368,6 @@ void Frontend::drawPortalSurface( portalSurface_t *portalSurface ) {
 
 	if( !best ) {
 		if( captureTextureId < 0 ) {
-			// still do a push&pop because to ensure the clean state
-			if( R_PushRefInst() ) {
-				R_PopRefInst();
-			}
 			return;
 		}
 	} else {
@@ -1239,16 +1377,15 @@ void Frontend::drawPortalSurface( portalSurface_t *portalSurface ) {
 		best->rtype = NUM_RTYPES;
 	}
 
-	const int prevRenderFlags = rn.renderFlags;
-	const bool prevFlipped = ( rn.refdef.rdflags & RDF_FLIPPED ) != 0;
-	if( !R_PushRefInst() ) {
-		return;
-	}
+	const int prevRenderFlags = m_state.renderFlags;
+	const bool prevFlipped = ( m_state.refdef.rdflags & RDF_FLIPPED ) != 0;
+
+	// TODO: Save frontend state
 
 	vec3_t viewerOrigin;
-	VectorCopy( rn.viewOrigin, viewerOrigin );
+	VectorCopy( m_state.viewOrigin, viewerOrigin );
 	if( prevFlipped ) {
-		VectorInverse( &rn.viewAxis[AXIS_RIGHT] );
+		VectorInverse( &m_state.viewAxis[AXIS_RIGHT] );
 	}
 
 	Texture *portalTexures[2] { nullptr, nullptr };
@@ -1262,26 +1399,26 @@ setup_and_render:
 		VectorInverse( portal_plane->normal );
 		portal_plane->dist = -portal_plane->dist;
 		CategorizePlane( portal_plane );
-		VectorCopy( rn.viewOrigin, origin );
-		Matrix3_Copy( rn.refdef.viewaxis, axis );
-		VectorCopy( viewerOrigin, rn.pvsOrigin );
+		VectorCopy( m_state.viewOrigin, origin );
+		Matrix3_Copy( m_state.refdef.viewaxis, axis );
+		VectorCopy( viewerOrigin, m_state.pvsOrigin );
 
-		rn.renderFlags |= RF_PORTALVIEW;
+		m_state.renderFlags |= RF_PORTALVIEW;
 		if( prevFlipped ) {
-			rn.renderFlags |= RF_FLIPFRONTFACE;
+			m_state.renderFlags |= RF_FLIPFRONTFACE;
 		}
 	} else if( mirror ) {
-		VectorReflect( rn.viewOrigin, portal_plane->normal, portal_plane->dist, origin );
+		VectorReflect( m_state.viewOrigin, portal_plane->normal, portal_plane->dist, origin );
 
-		VectorReflect( &rn.viewAxis[AXIS_FORWARD], portal_plane->normal, 0, &axis[AXIS_FORWARD] );
-		VectorReflect( &rn.viewAxis[AXIS_RIGHT], portal_plane->normal, 0, &axis[AXIS_RIGHT] );
-		VectorReflect( &rn.viewAxis[AXIS_UP], portal_plane->normal, 0, &axis[AXIS_UP] );
+		VectorReflect( &m_state.viewAxis[AXIS_FORWARD], portal_plane->normal, 0, &axis[AXIS_FORWARD] );
+		VectorReflect( &m_state.viewAxis[AXIS_RIGHT], portal_plane->normal, 0, &axis[AXIS_RIGHT] );
+		VectorReflect( &m_state.viewAxis[AXIS_UP], portal_plane->normal, 0, &axis[AXIS_UP] );
 
 		Matrix3_Normalize( axis );
 
-		VectorCopy( viewerOrigin, rn.pvsOrigin );
+		VectorCopy( viewerOrigin, m_state.pvsOrigin );
 
-		rn.renderFlags = ( prevRenderFlags ^ RF_FLIPFRONTFACE ) | RF_MIRRORVIEW;
+		m_state.renderFlags = ( prevRenderFlags ^ RF_FLIPFRONTFACE ) | RF_MIRRORVIEW;
 	} else {
 		vec3_t tvec;
 		mat3_t A, B, C, rot;
@@ -1299,12 +1436,12 @@ setup_and_render:
 		Matrix3_Multiply( C, A, rot );
 
 		// translate view origin
-		VectorSubtract( rn.viewOrigin, best->origin, tvec );
+		VectorSubtract( m_state.viewOrigin, best->origin, tvec );
 		Matrix3_TransformVector( rot, tvec, origin );
 		VectorAdd( origin, best->origin2, origin );
 
 		Matrix3_Transpose( A, B );
-		Matrix3_Multiply( rn.viewAxis, B, rot );
+		Matrix3_Multiply( m_state.viewAxis, B, rot );
 		Matrix3_Multiply( best->axis, rot, B );
 		Matrix3_Transpose( C, A );
 		Matrix3_Multiply( B, A, axis );
@@ -1317,34 +1454,34 @@ setup_and_render:
 		// for portals, vis data is taken from portal origin, not
 		// view origin, because the view point moves around and
 		// might fly into (or behind) a wall
-		VectorCopy( best->origin2, rn.pvsOrigin );
-		VectorCopy( best->origin2, rn.lodOrigin );
+		VectorCopy( best->origin2, m_state.pvsOrigin );
+		VectorCopy( best->origin2, m_state.lodOrigin );
 
-		rn.renderFlags |= RF_PORTALVIEW;
+		m_state.renderFlags |= RF_PORTALVIEW;
 
 		// ignore entities, if asked politely
 		if( best->renderfx & RF_NOPORTALENTS ) {
-			rn.renderFlags |= RF_ENVVIEW;
+			m_state.renderFlags |= RF_ENVVIEW;
 		}
 		if( prevFlipped ) {
-			rn.renderFlags |= RF_FLIPFRONTFACE;
+			m_state.renderFlags |= RF_FLIPFRONTFACE;
 		}
 	}
 
-	rn.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_FLIPPED );
+		m_state.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_FLIPPED );
 
-	rn.meshlist = &r_portallist;
-	rn.portalmasklist = nullptr;
+		m_state.meshlist = &r_portallist;
+		m_state.portalmasklist = nullptr;
 
-	rn.renderFlags |= RF_CLIPPLANE;
-	rn.renderFlags &= ~RF_SOFT_PARTICLES;
-	rn.clipPlane = *portal_plane;
+		m_state.renderFlags |= RF_CLIPPLANE;
+		m_state.renderFlags &= ~RF_SOFT_PARTICLES;
+		m_state.clipPlane = *portal_plane;
 
-	rn.farClip = R_DefaultFarClip();
+		m_state.farClip = getDefaultFarClip();
 
-	rn.clipFlags |= ( 1 << 5 );
-	rn.frustum[5] = *portal_plane;
-	CategorizePlane( &rn.frustum[5] );
+		m_state.clipFlags |= ( 1 << 5 );
+		m_state.frustum[5] = *portal_plane;
+	CategorizePlane( &m_state.frustum[5] );
 
 	// if we want to render to a texture, initialize texture
 	// but do not try to render to it more than once
@@ -1364,25 +1501,25 @@ setup_and_render:
 		x = y = 0;
 		w = captureTexture->width;
 		h = captureTexture->height;
-		rn.refdef.width = w;
-		rn.refdef.height = h;
-		rn.refdef.x = 0;
-		rn.refdef.y = 0;
+		m_state.refdef.width = w;
+		m_state.refdef.height = h;
+		m_state.refdef.x = 0;
+		m_state.refdef.y = 0;
 		// TODO.... rn.renderTarget = captureTexture->fbo;
-		rn.renderFlags |= RF_PORTAL_CAPTURE;
-		Vector4Set( rn.viewport, rn.refdef.x + x, rn.refdef.y + y, w, h );
-		Vector4Set( rn.scissor, rn.refdef.x + x, rn.refdef.y + y, w, h );
+		m_state.renderFlags |= RF_PORTAL_CAPTURE;
+		Vector4Set( m_state.viewport, m_state.refdef.x + x, m_state.refdef.y + y, w, h );
+		Vector4Set( m_state.scissor, m_state.refdef.x + x, m_state.refdef.y + y, w, h );
 	} else {
-		rn.renderFlags &= ~RF_PORTAL_CAPTURE;
+		m_state.renderFlags &= ~RF_PORTAL_CAPTURE;
 	}
 
-	VectorCopy( origin, rn.refdef.vieworg );
-	Matrix3_Copy( axis, rn.refdef.viewaxis );
+	VectorCopy( origin, m_state.refdef.vieworg );
+	Matrix3_Copy( axis, m_state.refdef.viewaxis );
 
-	renderViewFromThisCamera( &rn.refdef );
+	renderViewFromThisCamera( &m_state.refdef );
 
 	if( doRefraction && !refraction && ( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
-		rn.renderFlags = prevRenderFlags;
+		m_state.renderFlags = prevRenderFlags;
 		refraction = true;
 		captureTexture = nullptr;
 		captureTextureId = 1;
@@ -1393,12 +1530,12 @@ done:
 	portalSurface->texures[0] = portalTexures[0];
 	portalSurface->texures[1] = portalTexures[1];
 
-	R_PopRefInst();
+	// TODO: Restore frontend state
 }
 
 void Frontend::drawPortalsDepthMask() {
 	// TODO: This should be lifted to the caller for clarity
-	if( !rn.portalmasklist || !rn.portalmasklist->numDrawSurfs ) {
+	if( !m_state.portalmasklist || !m_state.portalmasklist->numDrawSurfs ) {
 		return;
 	}
 
@@ -1410,7 +1547,7 @@ void Frontend::drawPortalsDepthMask() {
 	RB_SetShaderStateMask( ~0, GLSTATE_DEPTHWRITE | GLSTATE_DEPTHFUNC_GT | GLSTATE_NO_COLORWRITE );
 	RB_DepthRange( depthmax, depthmax );
 
-	submitSortedSurfacesToBackend( rn.portalmasklist );
+	submitSortedSurfacesToBackend( m_state.portalmasklist );
 
 	RB_DepthRange( depthmin, depthmax );
 	RB_ClearDepth( depthmax );
@@ -1418,23 +1555,21 @@ void Frontend::drawPortalsDepthMask() {
 }
 
 void Frontend::drawSkyPortal( const entity_t *e, skyportal_t *skyportal ) {
-	if( !R_PushRefInst() ) {
-		return;
-	}
+	// TODO: Save frontend state
 
-	rn.renderFlags = ( rn.renderFlags | RF_PORTALVIEW );
+	m_state.renderFlags = ( m_state.renderFlags | RF_PORTALVIEW );
 	//rn.renderFlags &= ~RF_SOFT_PARTICLES;
-	VectorCopy( skyportal->vieworg, rn.pvsOrigin );
+	VectorCopy( skyportal->vieworg, m_state.pvsOrigin );
 
-	rn.farClip = R_DefaultFarClip();
+	m_state.farClip = getDefaultFarClip();
 
-	rn.clipFlags = 15;
-	rn.meshlist = &r_skyportallist;
-	rn.portalmasklist = nullptr;
+	m_state.clipFlags = 15;
+	m_state.meshlist = &r_skyportallist;
+	m_state.portalmasklist = nullptr;
 	//Vector4Set( rn.scissor, rn.refdef.x + x, rn.refdef.y + y, w, h );
 
 	if( skyportal->noEnts ) {
-		rn.renderFlags |= RF_ENVVIEW;
+		m_state.renderFlags |= RF_ENVVIEW;
 	}
 
 	if( skyportal->scale ) {
@@ -1442,10 +1577,10 @@ void Frontend::drawSkyPortal( const entity_t *e, skyportal_t *skyportal ) {
 
 		VectorAdd( rsh.worldModel->mins, rsh.worldModel->maxs, centre );
 		VectorScale( centre, 0.5f, centre );
-		VectorSubtract( centre, rn.viewOrigin, diff );
-		VectorMA( skyportal->vieworg, -skyportal->scale, diff, rn.refdef.vieworg );
+		VectorSubtract( centre, m_state.viewOrigin, diff );
+		VectorMA( skyportal->vieworg, -skyportal->scale, diff, m_state.refdef.vieworg );
 	} else {
-		VectorCopy( skyportal->vieworg, rn.refdef.vieworg );
+		VectorCopy( skyportal->vieworg, m_state.refdef.vieworg );
 	}
 
 	// FIXME
@@ -1453,46 +1588,45 @@ void Frontend::drawSkyPortal( const entity_t *e, skyportal_t *skyportal ) {
 		vec3_t angles;
 		mat3_t axis;
 
-		Matrix3_Copy( rn.refdef.viewaxis, axis );
+		Matrix3_Copy( m_state.refdef.viewaxis, axis );
 		VectorInverse( &axis[AXIS_RIGHT] );
 		Matrix3_ToAngles( axis, angles );
 
 		VectorAdd( angles, skyportal->viewanglesOffset, angles );
 		AnglesToAxis( angles, axis );
-		Matrix3_Copy( axis, rn.refdef.viewaxis );
+		Matrix3_Copy( axis, m_state.refdef.viewaxis );
 	}
 
-	rn.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_SKYPORTALINVIEW );
+	m_state.refdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER | RDF_SKYPORTALINVIEW );
 	if( skyportal->fov ) {
-		rn.refdef.fov_x = skyportal->fov;
-		rn.refdef.fov_y = CalcFov( rn.refdef.fov_x, rn.refdef.width, rn.refdef.height );
-		AdjustFov( &rn.refdef.fov_x, &rn.refdef.fov_y, glConfig.width, glConfig.height, false );
+		m_state.refdef.fov_x = skyportal->fov;
+		m_state.refdef.fov_y = CalcFov( m_state.refdef.fov_x, m_state.refdef.width, m_state.refdef.height );
+		AdjustFov( &m_state.refdef.fov_x, &m_state.refdef.fov_y, glConfig.width, glConfig.height, false );
 	}
 
-	renderViewFromThisCamera( &rn.refdef );
+	renderViewFromThisCamera( &m_state.refdef );
 
-	// restore modelview and projection matrices, scissoring, etc for the main view
-	R_PopRefInst();
+	// TODO: Restore frontend state
 }
 
 void Frontend::drawPortals() {
 	// TODO: These conditions should be lifted to the caller for clarity
 	if( rf.viewcluster != -1 ) {
-		if( !( rn.renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW | RF_SHADOWMAPVIEW ) ) ) {
+		if( !( m_state.renderFlags & (RF_MIRRORVIEW | RF_PORTALVIEW | RF_SHADOWMAPVIEW ) ) ) {
 			drawPortalsDepthMask();
 
 			// render skyportal
-			if( rn.skyportalSurface ) {
-				const portalSurface_t *ps = rn.skyportalSurface;
+			if( m_state.skyportalSurface ) {
+				const portalSurface_t *ps = m_state.skyportalSurface;
 				drawSkyPortal( ps->entity, ps->skyPortal );
 			}
 
 			// render regular portals
-			for( unsigned i = 0; i < rn.numPortalSurfaces; i++ ) {
-				portalSurface_t ps = rn.portalSurfaces[i];
+			for( unsigned i = 0; i < m_state.numPortalSurfaces; i++ ) {
+				portalSurface_t ps = m_state.portalSurfaces[i];
 				if( !ps.skyPortal ) {
 					drawPortalSurface( &ps );
-					rn.portalSurfaces[i] = ps;
+					m_state.portalSurfaces[i] = ps;
 				}
 			}
 		}
@@ -1601,7 +1735,7 @@ void Frontend::addPolyToScene( const poly_t *poly ) {
 				AddPointToBounds( dp->xyzArray[i], dpmins, dpmaxs );
 			}
 
-			mfog_t *const fog = R_FogForBounds( dpmins, dpmaxs );
+			mfog_t *const fog = getFogForBounds( dpmins, dpmaxs );
 			dp->fogNum = fog ? ( fog - rsh.worldBrushModel->fogs + 1 ) : -1;
 		}
 
@@ -1647,7 +1781,7 @@ void Frontend::addLight( const vec3_t origin, float programIntensity, float coro
 }
 
 void Frontend::renderScene( const refdef_s *fd ) {
-	R_Set2DMode( false );
+	set2DMode( false );
 
 	RB_SetTime( fd->time );
 
@@ -1655,43 +1789,43 @@ void Frontend::renderScene( const refdef_s *fd ) {
 		rsc.refdef = *fd;
 	}
 
-	rn.refdef = *fd;
-	if( !rn.refdef.minLight ) {
-		rn.refdef.minLight = 0.1f;
+	m_state.refdef = *fd;
+	if( !m_state.refdef.minLight ) {
+		m_state.refdef.minLight = 0.1f;
 	}
 
-	fd = &rn.refdef;
+	fd = &m_state.refdef;
 
-	rn.renderFlags = RF_NONE;
+	m_state.renderFlags = RF_NONE;
 
-	rn.farClip = R_DefaultFarClip();
-	rn.clipFlags = 15;
+	m_state.farClip = getDefaultFarClip();
+	m_state.clipFlags = 15;
 	if( rsh.worldModel && !( fd->rdflags & RDF_NOWORLDMODEL ) && rsh.worldBrushModel->globalfog ) {
-		rn.clipFlags |= 16;
+		m_state.clipFlags |= 16;
 	}
 
-	rn.meshlist = &r_worldlist;
-	rn.portalmasklist = &r_portalmasklist;
-	rn.dlightBits = 0;
+	m_state.meshlist = &r_worldlist;
+	m_state.portalmasklist = &r_portalmasklist;
+	m_state.dlightBits = 0;
 
-	rn.renderTarget = 0;
-	rn.multisampleDepthResolved = false;
+	m_state.renderTarget = 0;
+	m_state.multisampleDepthResolved = false;
 
 	// clip new scissor region to the one currently set
-	Vector4Set( rn.scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
-	Vector4Set( rn.viewport, fd->x, fd->y, fd->width, fd->height );
-	VectorCopy( fd->vieworg, rn.pvsOrigin );
-	VectorCopy( fd->vieworg, rn.lodOrigin );
+	Vector4Set( m_state.scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
+	Vector4Set( m_state.viewport, fd->x, fd->y, fd->width, fd->height );
+	VectorCopy( fd->vieworg, m_state.pvsOrigin );
+	VectorCopy( fd->vieworg, m_state.lodOrigin );
 
-	R_BindFrameBufferObject( 0 );
+	bindFrameBuffer( 0 );
 
 	renderViewFromThisCamera( fd );
 
 	R_RenderDebugSurface( fd );
 
-	R_BindFrameBufferObject( 0 );
+	bindFrameBuffer( 0 );
 
-	R_Set2DMode( true );
+	set2DMode( true );
 }
 
 void Frontend::dynLightDirForOrigin( const vec_t *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal ) {

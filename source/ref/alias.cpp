@@ -407,15 +407,12 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	}
 }
 
-model_t *R_AliasModelLOD( const entity_t *e ) {
-	int lod;
-
+model_t *R_AliasModelLOD( const entity_t *e, const float *viewOrigin, float fovDotScale ) {
 	if( !e->model->numlods || ( e->flags & RF_FORCENOLOD ) ) {
 		return e->model;
 	}
 
-	lod = R_LODForSphere( e->origin, e->model->radius );
-
+	const int lod = R_LODForSphere( e->origin, e->model->radius, viewOrigin, fovDotScale );
 	if( lod < 1 ) {
 		return e->model;
 	}
@@ -529,15 +526,12 @@ bool R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel
 /*
 * R_AliasModelBBox
 */
-float R_AliasModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs ) {
-	const model_t *mod;
-
-	mod = R_AliasModelLOD( e );
-	if( !mod ) {
-		return 0;
+float R_AliasModelBBox( const entity_t *e, const float *viewOrigin, float fovDotScale, vec3_t mins, vec3_t maxs ) {
+	if( const model_t *mod = R_AliasModelLOD( e, viewOrigin, fovDotScale ) ) {
+		return R_AliasModelLerpBBox( e, mod, mins, maxs );
 	}
 
-	return R_AliasModelLerpBBox( e, mod, mins, maxs );
+	return 0;
 }
 
 /*

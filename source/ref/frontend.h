@@ -26,6 +26,20 @@ namespace wsw::ref {
 
 class Frontend {
 private:
+	refinst_t m_state;
+
+	[[nodiscard]]
+	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
+	[[nodiscard]]
+	auto getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t *;
+	[[nodiscard]]
+	bool isPointCompletelyFogged( const mfog_t *fog, const float *origin, float radius );
+
+	void bindFrameBuffer( int );
+
+	[[nodiscard]]
+	auto getDefaultFarClip() const -> float;
+
 	void renderViewFromThisCamera( const refdef_t *fd );
 
 	void drawPortalSurface( portalSurface_t *portalSurface );
@@ -80,6 +94,8 @@ public:
 	void destroyVolatileAssets();
 
 	void renderScene( const refdef_t *rd );
+
+	void set2DMode( bool enable );
 
 	void dynLightDirForOrigin( const float *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
 };
