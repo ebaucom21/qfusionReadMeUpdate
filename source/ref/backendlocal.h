@@ -26,12 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_DYNAMIC_DRAWS           2048
 
-typedef struct r_backend_stats_s {
-	unsigned int numVerts, numElems;
-	unsigned int c_totalVerts, c_totalTris, c_totalStaticVerts, c_totalStaticTris, c_totalDraws, c_totalBinds;
-	unsigned int c_totalPrograms;
-} rbStats_t;
-
 typedef struct {
 	unsigned int numBones;
 	dualquat_t dualQuats[MAX_GLSL_UNIFORM_BONES];
@@ -97,8 +91,6 @@ typedef struct r_backend_s {
 	} gl;
 
 	int64_t time;
-
-	rbStats_t stats;
 
 	mat4_t cameraMatrix;
 	mat4_t objectMatrix;
@@ -194,6 +186,5 @@ void RB_BindImage( int tmu, const Texture *tex );
 void RB_BindArrayBuffer( int buffer );
 void RB_BindElementArrayBuffer( int buffer );
 void RB_SetInstanceData( int numInstances, instancePoint_t *instances );
-bool RB_ScissorForBounds( vec3_t bbox[8], int *x, int *y, int *w, int *h );
 
 #endif // R_BACKEND_LOCAL_H

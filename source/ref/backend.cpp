@@ -31,14 +31,11 @@ static elem_t dynamicStreamElems[RB_VBO_NUM_STREAMS][MAX_STREAM_VBO_ELEMENTS];
 
 rbackend_t rb;
 
-static void RB_SetGLDefaults( void );
-static void RB_RegisterStreamVBOs( void );
+static void RB_SetGLDefaults();
+static void RB_RegisterStreamVBOs();
 static void RB_SelectTextureUnit( int tmu );
 
-/*
-* RB_Init
-*/
-void RB_Init( void ) {
+void RB_Init() {
 	memset( &rb, 0, sizeof( rb ) );
 
 	// set default OpenGL state
@@ -53,23 +50,15 @@ void RB_Init( void ) {
 	RB_RegisterStreamVBOs();
 }
 
-/*
-* RB_Shutdown
-*/
-void RB_Shutdown( void ) {
+void RB_Shutdown() {
 }
 
-/*
-* RB_BeginRegistration
-*/
-void RB_BeginRegistration( void ) {
-	int i;
-
+void RB_BeginRegistration() {
 	RB_RegisterStreamVBOs();
 	RB_BindVBO( 0, 0 );
 
 	// unbind all texture targets on all TMUs
-	for( i = MAX_TEXTURE_UNITS - 1; i >= 0; i-- ) {
+	for( int i = MAX_TEXTURE_UNITS - 1; i >= 0; i-- ) {
 		RB_SelectTextureUnit( i );
 
 		qglBindTexture( GL_TEXTURE_CUBE_MAP, 0 );
@@ -83,31 +72,20 @@ void RB_BeginRegistration( void ) {
 	RB_FlushTextureCache();
 }
 
-/*
-* RB_EndRegistration
-*/
-void RB_EndRegistration( void ) {
+void RB_EndRegistration() {
 	RB_BindVBO( 0, 0 );
 }
 
-/*
-* RB_SetTime
-*/
 void RB_SetTime( int64_t time ) {
 	rb.time = time;
 	rb.nullEnt.shaderTime = Sys_Milliseconds();
 }
 
-/*
-* RB_BeginFrame
-*/
-void RB_BeginFrame( void ) {
+void RB_BeginFrame() {
 	Vector4Set( rb.nullEnt.shaderRGBA, 1, 1, 1, 1 );
 	rb.nullEnt.scale = 1;
 	VectorClear( rb.nullEnt.origin );
 	Matrix3_Identity( rb.nullEnt.axis );
-
-	memset( &rb.stats, 0, sizeof( rb.stats ) );
 
 	// start fresh each frame
 	RB_SetShaderStateMask( ~0, 0 );
@@ -115,27 +93,9 @@ void RB_BeginFrame( void ) {
 	RB_FlushTextureCache();
 }
 
-/*
-* RB_EndFrame
-*/
-void RB_EndFrame( void ) {
+void RB_EndFrame() {
 }
 
-/*
-* RB_StatsMessage
-*/
-void RB_StatsMessage( char *msg, size_t size ) {
-	Q_snprintfz( msg, size,
-				 "%4i verts %4i tris\n"
-				 "%4i draws %4i binds %4i progs",
-				 rb.stats.c_totalVerts, rb.stats.c_totalTris,
-				 rb.stats.c_totalDraws, rb.stats.c_totalBinds, rb.stats.c_totalPrograms
-				 );
-}
-
-/*
-* RB_SetGLDefaults
-*/
 static void RB_SetGLDefaults( void ) {
 	if( glConfig.stencilBits ) {
 		qglStencilMask( ( GLuint ) ~0 );
@@ -157,28 +117,17 @@ static void RB_SetGLDefaults( void ) {
 	qglEnable( GL_SCISSOR_TEST );
 }
 
-/*
-* RB_SelectTextureUnit
-*/
 static void RB_SelectTextureUnit( int tmu ) {
-	if( tmu == rb.gl.currentTMU ) {
-		return;
+	if( tmu != rb.gl.currentTMU ) {
+		rb.gl.currentTMU = tmu;
+		qglActiveTexture( tmu + GL_TEXTURE0 );
 	}
-
-	rb.gl.currentTMU = tmu;
-	qglActiveTexture( tmu + GL_TEXTURE0 );
 }
 
-/*
-* RB_FlushTextureCache
-*/
 void RB_FlushTextureCache( void ) {
 	rb.gl.flushTextures = true;
 }
 
-/*
-* RB_BindImage
-*/
 void RB_BindImage( int tmu, const Texture *tex ) {
 	assert( tex != NULL );
 	assert( tex->texnum != 0 );
@@ -189,22 +138,13 @@ void RB_BindImage( int tmu, const Texture *tex ) {
 	}
 
 	const GLuint texnum = tex->texnum;
-	if( rb.gl.currentTextures[tmu] == texnum ) {
-		return;
+	if( rb.gl.currentTextures[tmu] != texnum ) {
+		rb.gl.currentTextures[tmu] = texnum;
+		RB_SelectTextureUnit( tmu );
+		qglBindTexture( tex->target, tex->texnum );
 	}
-
-	rb.gl.currentTextures[tmu] = texnum;
-
-	RB_SelectTextureUnit( tmu );
-
-	qglBindTexture( tex->target, tex->texnum );
-
-	rb.stats.c_totalBinds++;
 }
 
-/*
-* RB_DepthRange
-*/
 void RB_DepthRange( float depthmin, float depthmax ) {
 	Q_clamp( depthmin, 0.0f, 1.0f );
 	Q_clamp( depthmax, 0.0f, 1.0f );
@@ -217,17 +157,11 @@ void RB_DepthRange( float depthmin, float depthmax ) {
 	qglDepthRange( depthmin, depthmax );
 }
 
-/*
-* RB_GetDepthRange
-*/
 void RB_GetDepthRange( float* depthmin, float *depthmax ) {
 	*depthmin = rb.gl.depthmin;
 	*depthmax = rb.gl.depthmax;
 }
 
-/*
-* RB_DepthOffset
-*/
 void RB_DepthOffset( bool enable ) {
 	float depthmin = rb.gl.depthmin;
 	float depthmax = rb.gl.depthmax;
@@ -240,65 +174,42 @@ void RB_DepthOffset( bool enable ) {
 	}
 }
 
-/*
-* RB_ClearDepth
-*/
 void RB_ClearDepth( float depth ) {
 	qglClearDepth( depth );
 }
 
-/*
-* RB_LoadCameraMatrix
-*/
 void RB_LoadCameraMatrix( const mat4_t m ) {
 	Matrix4_Copy( m, rb.cameraMatrix );
 }
 
-/*
-* RB_LoadObjectMatrix
-*/
 void RB_LoadObjectMatrix( const mat4_t m ) {
 	Matrix4_Copy( m, rb.objectMatrix );
 	Matrix4_MultiplyFast( rb.cameraMatrix, m, rb.modelviewMatrix );
 	Matrix4_Multiply( rb.projectionMatrix, rb.modelviewMatrix, rb.modelviewProjectionMatrix );
 }
 
-/*
-* RB_LoadProjectionMatrix
-*/
 void RB_LoadProjectionMatrix( const mat4_t m ) {
 	Matrix4_Copy( m, rb.projectionMatrix );
 	Matrix4_Multiply( m, rb.modelviewMatrix, rb.modelviewProjectionMatrix );
 }
 
-/*
-* RB_Cull
-*/
 void RB_Cull( int cull ) {
-	if( rb.gl.faceCull == cull ) {
-		return;
+	if( rb.gl.faceCull != cull ) {
+		if( cull ) {
+			if( !rb.gl.faceCull ) {
+				qglEnable( GL_CULL_FACE );
+			}
+			qglCullFace( cull );
+			rb.gl.faceCull = cull;
+		} else {
+			qglDisable( GL_CULL_FACE );
+			rb.gl.faceCull = 0;
+		}
 	}
-
-	if( !cull ) {
-		qglDisable( GL_CULL_FACE );
-		rb.gl.faceCull = 0;
-		return;
-	}
-
-	if( !rb.gl.faceCull ) {
-		qglEnable( GL_CULL_FACE );
-	}
-	qglCullFace( cull );
-	rb.gl.faceCull = cull;
 }
 
-/*
-* RB_SetState
-*/
 void RB_SetState( int state ) {
-	int diff;
-
-	diff = rb.gl.state ^ state;
+	const int diff = rb.gl.state ^ state;
 	if( !diff ) {
 		return;
 	}
@@ -440,24 +351,15 @@ void RB_SetState( int state ) {
 	rb.gl.state = state;
 }
 
-/*
-* RB_FrontFace
-*/
 void RB_FrontFace( bool front ) {
 	qglFrontFace( front ? GL_CW : GL_CCW );
 	rb.gl.frontFace = front;
 }
 
-/*
-* RB_FlipFrontFace
-*/
 void RB_FlipFrontFace( void ) {
 	RB_FrontFace( !rb.gl.frontFace );
 }
 
-/*
-* RB_BindArrayBuffer
-*/
 void RB_BindArrayBuffer( int buffer ) {
 	if( buffer != rb.gl.currentArrayVBO ) {
 		qglBindBuffer( GL_ARRAY_BUFFER, buffer );
@@ -466,9 +368,6 @@ void RB_BindArrayBuffer( int buffer ) {
 	}
 }
 
-/*
-* RB_BindElementArrayBuffer
-*/
 void RB_BindElementArrayBuffer( int buffer ) {
 	if( buffer != rb.gl.currentElemArrayVBO ) {
 		qglBindBuffer( GL_ELEMENT_ARRAY_BUFFER, buffer );
@@ -476,31 +375,20 @@ void RB_BindElementArrayBuffer( int buffer ) {
 	}
 }
 
-/*
-* RB_EnableVertexAttrib
-*/
 static void RB_EnableVertexAttrib( int index, bool enable ) {
-	unsigned int bit;
-	unsigned int diff;
-
-	bit = 1 << index;
-	diff = ( rb.gl.vertexAttribEnabled & bit ) ^ ( enable ? bit : 0 );
-	if( !diff ) {
-		return;
-	}
-
-	if( enable ) {
-		rb.gl.vertexAttribEnabled |= bit;
-		qglEnableVertexAttribArray( index );
-	} else {
-		rb.gl.vertexAttribEnabled &= ~bit;
-		qglDisableVertexAttribArray( index );
+	const unsigned bit = 1 << index;
+	const unsigned diff = ( rb.gl.vertexAttribEnabled & bit ) ^ ( enable ? bit : 0 );
+	if( diff ) {
+		if( enable ) {
+			rb.gl.vertexAttribEnabled |= bit;
+			qglEnableVertexAttribArray( index );
+		} else {
+			rb.gl.vertexAttribEnabled &= ~bit;
+			qglDisableVertexAttribArray( index );
+		}
 	}
 }
 
-/*
-* RB_Scissor
-*/
 void RB_Scissor( int x, int y, int w, int h ) {
 	if( ( rb.gl.scissor[0] == x ) && ( rb.gl.scissor[1] == y ) &&
 		( rb.gl.scissor[2] == w ) && ( rb.gl.scissor[3] == h ) ) {
@@ -514,9 +402,6 @@ void RB_Scissor( int x, int y, int w, int h ) {
 	rb.gl.scissorChanged = true;
 }
 
-/*
-* RB_GetScissor
-*/
 void RB_GetScissor( int *x, int *y, int *w, int *h ) {
 	if( x ) {
 		*x = rb.gl.scissor[0];
@@ -532,9 +417,6 @@ void RB_GetScissor( int *x, int *y, int *w, int *h ) {
 	}
 }
 
-/*
-* RB_ApplyScissor
-*/
 void RB_ApplyScissor( void ) {
 	int h = rb.gl.scissor[3];
 	if( rb.gl.scissorChanged ) {
@@ -543,9 +425,6 @@ void RB_ApplyScissor( void ) {
 	}
 }
 
-/*
-* RB_Viewport
-*/
 void RB_Viewport( int x, int y, int w, int h ) {
 	rb.gl.viewport[0] = x;
 	rb.gl.viewport[1] = y;
@@ -554,9 +433,6 @@ void RB_Viewport( int x, int y, int w, int h ) {
 	qglViewport( x, rb.gl.fbHeight - h - y, w, h );
 }
 
-/*
-* RB_Clear
-*/
 void RB_Clear( int bits, float r, float g, float b, float a ) {
 	int state = rb.gl.state;
 
@@ -600,36 +476,30 @@ void RB_BindFrameBufferObject() {
 * Allocate/keep alive dynamic vertex buffers object
 * we'll steam the dynamic geometry into
 */
-void RB_RegisterStreamVBOs( void ) {
-	int i;
-	rbDynamicStream_t *stream;
+void RB_RegisterStreamVBOs() {
 	vattribmask_t vattribs[RB_VBO_NUM_STREAMS] = {
 		VATTRIBS_MASK &~VATTRIB_INSTANCES_BITS,
 		COMPACT_STREAM_VATTRIBS
 	};
 
 	// allocate stream VBO's
-	for( i = 0; i < RB_VBO_NUM_STREAMS; i++ ) {
-		stream = &rb.dynamicStreams[i];
+	for( int i = 0; i < RB_VBO_NUM_STREAMS; i++ ) {
+		rbDynamicStream_t *stream = &rb.dynamicStreams[i];
 		if( stream->vbo ) {
 			R_TouchMeshVBO( stream->vbo );
-			continue;
+		} else {
+			stream->vbo = R_CreateMeshVBO( &rb,
+										   MAX_STREAM_VBO_VERTS, MAX_STREAM_VBO_ELEMENTS, 0,
+										   vattribs[i], VBO_TAG_STREAM, 0 );
+			stream->vertexData = (uint8_t *)Q_malloc( MAX_STREAM_VBO_VERTS * stream->vbo->vertexSize );
 		}
-		stream->vbo = R_CreateMeshVBO( &rb,
-									   MAX_STREAM_VBO_VERTS, MAX_STREAM_VBO_ELEMENTS, 0,
-									   vattribs[i], VBO_TAG_STREAM, 0 );
-		stream->vertexData = (uint8_t *)Q_malloc( MAX_STREAM_VBO_VERTS * stream->vbo->vertexSize );
 	}
 }
 
-/*
-* RB_BindVBO
-*/
 void RB_BindVBO( int id, int primitive ) {
-	mesh_vbo_t *vbo;
-
 	rb.primitive = primitive;
 
+	mesh_vbo_t *vbo;
 	if( id < RB_VBO_NONE ) {
 		vbo = rb.dynamicStreams[-id - 1].vbo;
 	} else if( id == RB_VBO_NONE ) {
@@ -650,41 +520,35 @@ void RB_BindVBO( int id, int primitive ) {
 	RB_BindElementArrayBuffer( vbo->elemId );
 }
 
-/*
-* RB_AddDynamicMesh
-*/
 void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
-						const struct mfog_s *fog, const struct portalSurface_s *portalSurface, unsigned int shadowBits,
+						const struct mfog_s *fog, const struct portalSurface_s *portalSurface, unsigned shadowBits,
 						const struct mesh_s *mesh, int primitive, float x_offset, float y_offset ) {
-	int numVerts = mesh->numVerts, numElems = mesh->numElems;
-	bool trifan = false;
-	int scissor[4];
-	rbDynamicDraw_t *prev = NULL, *draw;
-	bool merge = false;
-	vattribmask_t vattribs;
-	int streamId = RB_VBO_NONE;
-	rbDynamicStream_t *stream;
-	int destVertOffset;
-	elem_t *destElems;
 
 	// can't (and shouldn't because that would break batching) merge strip draw calls
 	// (consider simply disabling merge later in this case if models with tristrips are added in the future, but that's slow)
 	assert( ( primitive == GL_TRIANGLES ) || ( primitive == GL_LINES ) );
 
+	bool trifan = false;
+	int numVerts = mesh->numVerts, numElems = mesh->numElems;
 	if( !numElems ) {
 		numElems = ( std::max( numVerts, 2 ) - 2 ) * 3;
 		trifan = true;
 	}
+
 	if( !numVerts || !numElems || ( numVerts > MAX_STREAM_VBO_VERTS ) || ( numElems > MAX_STREAM_VBO_ELEMENTS ) ) {
 		return;
 	}
 
-	RB_GetScissor( &scissor[0], &scissor[1], &scissor[2], &scissor[3] );
-
+	rbDynamicDraw_t *prev = nullptr;
 	if( rb.numDynamicDraws ) {
 		prev = &rb.dynamicDraws[rb.numDynamicDraws - 1];
 	}
 
+	int scissor[4];
+	RB_GetScissor( &scissor[0], &scissor[1], &scissor[2], &scissor[3] );
+
+	int streamId = RB_VBO_NONE;
+	bool merge = false;
 	if( prev ) {
 		int prevRenderFX = 0, renderFX = 0;
 		if( prev->entity ) {
@@ -706,6 +570,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 		}
 	}
 
+	vattribmask_t vattribs;
 	if( streamId == RB_VBO_NONE ) {
 		RB_BindShader( entity, shader, fog );
 		vattribs = rb.currentVAttribs;
@@ -714,7 +579,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 		vattribs = prev->vattribs;
 	}
 
-	stream = &rb.dynamicStreams[-streamId - 1];
+	rbDynamicStream_t *const stream = &rb.dynamicStreams[-streamId - 1];
 
 	if( ( !merge && ( ( rb.numDynamicDraws + 1 ) > MAX_DYNAMIC_DRAWS ) ) ||
 		( ( stream->drawElements.firstVert + stream->drawElements.numVerts + numVerts ) > MAX_STREAM_VBO_VERTS ) ||
@@ -730,6 +595,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 		merge = false;
 	}
 
+	rbDynamicDraw_t *draw;
 	if( merge ) {
 		// merge continuous draw calls
 		draw = prev;
@@ -755,11 +621,11 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 		draw->drawElements.numInstances = 0;
 	}
 
-	destVertOffset = stream->drawElements.firstVert + stream->drawElements.numVerts;
+	const int destVertOffset = stream->drawElements.firstVert + stream->drawElements.numVerts;
 	R_FillVBOVertexDataBuffer( stream->vbo, vattribs, mesh,
 							   stream->vertexData + destVertOffset * stream->vbo->vertexSize );
 
-	destElems = dynamicStreamElems[-streamId - 1] + stream->drawElements.firstElem + stream->drawElements.numElems;
+	elem_t *destElems = dynamicStreamElems[-streamId - 1] + stream->drawElements.firstElem + stream->drawElements.numElems;
 	if( trifan ) {
 		R_BuildTrifanElements( destVertOffset, numElems, destElems );
 	} else {
@@ -774,23 +640,14 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 	stream->drawElements.numElems += numElems;
 }
 
-/*
-* RB_FlushDynamicMeshes
-*/
-void RB_FlushDynamicMeshes( void ) {
-	int i, numDraws = rb.numDynamicDraws;
-	rbDynamicStream_t *stream;
-	rbDynamicDraw_t *draw;
-	int sx, sy, sw, sh;
-	float offsetx = 0.0f, offsety = 0.0f, transx, transy;
-	mat4_t m;
-
+void RB_FlushDynamicMeshes() {
+	const int numDraws = rb.numDynamicDraws;
 	if( !numDraws ) {
 		return;
 	}
 
-	for( i = 0; i < RB_VBO_NUM_STREAMS; i++ ) {
-		stream = &rb.dynamicStreams[i];
+	for( int i = 0; i < RB_VBO_NUM_STREAMS; i++ ) {
+		rbDynamicStream_t *const stream = &rb.dynamicStreams[i];
 
 		// R_UploadVBO* are going to rebind buffer arrays for upload
 		// so update our local VBO state cache by calling RB_BindVBO
@@ -815,13 +672,17 @@ void RB_FlushDynamicMeshes( void ) {
 		}
 	}
 
+	int sx, sy, sw, sh;
 	RB_GetScissor( &sx, &sy, &sw, &sh );
 
+	mat4_t m;
 	Matrix4_Copy( rb.objectMatrix, m );
-	transx = m[12];
-	transy = m[13];
+	const float transx = m[12];
+	const float transy = m[13];
 
-	for( i = 0, draw = rb.dynamicDraws; i < numDraws; i++, draw++ ) {
+	float offsetx = 0.0f, offsety = 0.0f;
+	for( int i = 0; i < numDraws; i++ ) {
+		rbDynamicDraw_t *draw = rb.dynamicDraws + i;
 		RB_BindShader( draw->entity, draw->shader, draw->fog );
 		RB_BindVBO( draw->streamId, draw->primitive );
 		RB_SetPortalSurface( draw->portalSurface );
@@ -836,9 +697,8 @@ void RB_FlushDynamicMeshes( void ) {
 			RB_LoadObjectMatrix( m );
 		}
 
-		RB_DrawElements(
-			draw->drawElements.firstVert, draw->drawElements.numVerts,
-			draw->drawElements.firstElem, draw->drawElements.numElems );
+		const auto &drawElements = draw->drawElements;
+		RB_DrawElements( drawElements.firstVert, drawElements.numVerts, drawElements.firstElem, drawElements.numElems );
 	}
 
 	rb.numDynamicDraws = 0;
@@ -853,13 +713,10 @@ void RB_FlushDynamicMeshes( void ) {
 	}
 }
 
-/*
-* RB_EnableVertexAttribs
-*/
 static void RB_EnableVertexAttribs( void ) {
-	vattribmask_t vattribs = rb.currentVAttribs;
-	mesh_vbo_t *vbo = rb.currentVBO;
-	vattribmask_t hfa = vbo->halfFloatAttribs;
+	const vattribmask_t vattribs = rb.currentVAttribs;
+	const mesh_vbo_t *vbo = rb.currentVBO;
+	const vattribmask_t hfa = vbo->halfFloatAttribs;
 
 	assert( vattribs & VATTRIB_POSITION_BIT );
 
@@ -932,15 +789,11 @@ static void RB_EnableVertexAttribs( void ) {
 		qglVertexAttribPointer( VATTRIB_BONESWEIGHTS, 4, GL_UNSIGNED_BYTE,
 								   GL_TRUE, vbo->vertexSize, ( const GLvoid * )vbo->bonesWeightsOffset );
 	} else {
-		int i;
-		int lmattr;
-		int lmattrbit;
-
 		// lightmap texture coordinates - aliasing bones, so not disabling bones
-		lmattr = VATTRIB_LMCOORDS01;
-		lmattrbit = VATTRIB_LMCOORDS0_BIT;
+		int lmattr = VATTRIB_LMCOORDS01;
+		int lmattrbit = VATTRIB_LMCOORDS0_BIT;
 
-		for( i = 0; i < ( MAX_LIGHTMAPS + 1 ) / 2; i++ ) {
+		for( int i = 0; i < ( MAX_LIGHTMAPS + 1 ) / 2; i++ ) {
 			if( vattribs & lmattrbit ) {
 				RB_EnableVertexAttrib( lmattr, true );
 				qglVertexAttribPointer( lmattr, vbo->lmstSize[i],
@@ -957,7 +810,7 @@ static void RB_EnableVertexAttribs( void ) {
 		// lightmap array texture layers
 		lmattr = VATTRIB_LMLAYERS0123;
 
-		for( i = 0; i < ( MAX_LIGHTMAPS + 3 ) / 4; i++ ) {
+		for( int i = 0; i < ( MAX_LIGHTMAPS + 3 ) / 4; i++ ) {
 			if( vattribs & ( VATTRIB_LMLAYERS0123_BIT << i ) ) {
 				RB_EnableVertexAttrib( lmattr, true );
 				qglVertexAttribPointer( lmattr, 4, GL_UNSIGNED_BYTE,
@@ -986,75 +839,43 @@ static void RB_EnableVertexAttribs( void ) {
 	}
 }
 
-/*
-* RB_DrawElementsReal
-*/
 void RB_DrawElementsReal( rbDrawElements_t *de ) {
-	int firstVert, numVerts, firstElem, numElems;
-	int numInstances;
-
 	if( !( r_drawelements->integer || rb.currentEntity == &rb.nullEnt ) || !de ) {
 		return;
 	}
 
 	RB_ApplyScissor();
 
-	numVerts = de->numVerts;
-	numElems = de->numElems;
-	firstVert = de->firstVert;
-	firstElem = de->firstElem;
-	numInstances = de->numInstances;
+	const int numVerts = de->numVerts;
+	const int numElems = de->numElems;
+	const int firstVert = de->firstVert;
+	const int firstElem = de->firstElem;
+	const int numInstances = de->numInstances;
 
 	if( numInstances ) {
 		// the instance data is contained in vertex attributes
 		qglDrawElementsInstanced( rb.primitive, numElems, GL_UNSIGNED_SHORT,
 								  (GLvoid *)( firstElem * sizeof( elem_t ) ), numInstances );
-
-		rb.stats.c_totalDraws++;
 	} else {
-		numInstances = 1;
-
 		qglDrawRangeElements( rb.primitive, firstVert, firstVert + numVerts - 1, numElems,
 							  GL_UNSIGNED_SHORT, (GLvoid *)( firstElem * sizeof( elem_t ) ) );
-
-		rb.stats.c_totalDraws++;
-	}
-
-	rb.stats.c_totalVerts += numVerts * numInstances;
-	if( rb.primitive == GL_TRIANGLES ) {
-		rb.stats.c_totalTris += numElems * numInstances / 3;
 	}
 }
 
-/*
-* RB_GetVertexAttribs
-*/
-vattribmask_t RB_GetVertexAttribs( void ) {
-	return rb.currentVAttribs;
-}
-
-/*
-* RB_DrawElements_
-*/
 static void RB_DrawElements_( void ) {
-	if( !rb.drawElements.numVerts || !rb.drawElements.numElems ) {
-		return;
-	}
+	if( rb.drawElements.numVerts && rb.drawElements.numElems ) {
+		assert( rb.currentShader != NULL );
 
-	assert( rb.currentShader != NULL );
+		RB_EnableVertexAttribs();
 
-	RB_EnableVertexAttribs();
-
-	if( rb.wireframe ) {
-		RB_DrawWireframeElements();
-	} else {
-		RB_DrawShadedElements();
+		if( rb.wireframe ) {
+			RB_DrawWireframeElements();
+		} else {
+			RB_DrawShadedElements();
+		}
 	}
 }
 
-/*
-* RB_DrawElements
-*/
 void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems ) {
 	rb.currentVAttribs &= ~VATTRIB_INSTANCES_BITS;
 
@@ -1067,58 +888,40 @@ void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems )
 	RB_DrawElements_();
 }
 
-/*
-* RB_DrawElementsInstanced
-*
-* Draws <numInstances> instances of elements
-*/
 void RB_DrawElementsInstanced( int firstVert, int numVerts, int firstElem, int numElems,
 							   int numInstances, instancePoint_t *instances ) {
-	if( !numInstances ) {
-		return;
+	if( numInstances ) {
+		// currently not supporting dynamic instances
+		// they will need a separate stream so they can be used with both static and dynamic geometry
+		// (dynamic geometry will need changes to rbDynamicDraw_t)
+		assert( rb.currentVBOId > RB_VBO_NONE );
+		if( rb.currentVBOId > RB_VBO_NONE ) {
+			rb.drawElements.numVerts = numVerts;
+			rb.drawElements.numElems = numElems;
+			rb.drawElements.firstVert = firstVert;
+			rb.drawElements.firstElem = firstElem;
+			rb.drawElements.numInstances = 0;
+
+			if( rb.currentVBO->instancesOffset ) {
+				// static VBO's must come with their own set of instance data
+				rb.currentVAttribs |= VATTRIB_INSTANCES_BITS;
+			}
+
+			rb.drawElements.numInstances = numInstances;
+			RB_DrawElements_();
+		}
 	}
-
-	// currently not supporting dynamic instances
-	// they will need a separate stream so they can be used with both static and dynamic geometry
-	// (dynamic geometry will need changes to rbDynamicDraw_t)
-	assert( rb.currentVBOId > RB_VBO_NONE );
-	if( rb.currentVBOId <= RB_VBO_NONE ) {
-		return;
-	}
-
-	rb.drawElements.numVerts = numVerts;
-	rb.drawElements.numElems = numElems;
-	rb.drawElements.firstVert = firstVert;
-	rb.drawElements.firstElem = firstElem;
-	rb.drawElements.numInstances = 0;
-
-	if( rb.currentVBO->instancesOffset ) {
-		// static VBO's must come with their own set of instance data
-		rb.currentVAttribs |= VATTRIB_INSTANCES_BITS;
-	}
-
-	rb.drawElements.numInstances = numInstances;
-	RB_DrawElements_();
 }
 
-/*
-* RB_SetCamera
-*/
 void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis ) {
 	VectorCopy( cameraOrigin, rb.cameraOrigin );
 	Matrix3_Copy( cameraAxis, rb.cameraAxis );
 }
 
-/*
-* RB_SetRenderFlags
-*/
 void RB_SetRenderFlags( int flags ) {
 	rb.renderFlags = flags;
 }
 
-/*
-* Returns triangle outlines state before the call
-*/
 bool RB_EnableWireframe( bool enable ) {
 	const bool oldVal = rb.wireframe;
 
@@ -1135,58 +938,6 @@ bool RB_EnableWireframe( bool enable ) {
 	}
 
 	return oldVal;
-}
-
-/*
-* RB_ScissorForBounds
-*/
-bool RB_ScissorForBounds( vec3_t bbox[8], int *x, int *y, int *w, int *h ) {
-	int i;
-	int ix1, iy1, ix2, iy2;
-	float x1, y1, x2, y2;
-	vec4_t corner = { 0, 0, 0, 1 }, proj = { 0, 0, 0, 1 }, v = { 0, 0, 0, 1 };
-	mat4_t cameraProjectionMatrix;
-
-	Matrix4_Multiply( rb.projectionMatrix, rb.cameraMatrix, cameraProjectionMatrix );
-
-	x1 = y1 = 999999;
-	x2 = y2 = -999999;
-	for( i = 0; i < 8; i++ ) {
-		// compute and rotate the full bounding box
-		VectorCopy( bbox[i], corner );
-
-		Matrix4_Multiply_Vector( cameraProjectionMatrix, corner, proj );
-
-		if( proj[3] ) {
-			v[0] = ( proj[0] / proj[3] + 1.0f ) * 0.5f * rb.gl.viewport[2];
-			v[1] = ( proj[1] / proj[3] + 1.0f ) * 0.5f * rb.gl.viewport[3];
-			v[2] = ( proj[2] / proj[3] + 1.0f ) * 0.5f; // [-1..1] -> [0..1]
-		} else {
-			v[0] = 999999.0f;
-			v[1] = 999999.0f;
-			v[2] = 999999.0f;
-		}
-
-		x1 = std::min( x1, v[0] ); y1 = std::min( y1, v[1] );
-		x2 = std::max( x2, v[0] ); y2 = std::max( y2, v[1] );
-	}
-
-	ix1 = std::max( x1 - 1.0f, 0.0f ); ix2 = std::min( x2 + 1.0f, (float)rb.gl.viewport[2] );
-	if( ix1 >= ix2 ) {
-		return false; // FIXME
-
-	}
-	iy1 = std::max( y1 - 1.0f, 0.0f ); iy2 = std::min( y2 + 1.0f, (float)rb.gl.viewport[3] );
-	if( iy1 >= iy2 ) {
-		return false; // FIXME
-
-	}
-	*x = ix1;
-	*y = rb.gl.viewport[3] - iy2;
-	*w = ix2 - ix1;
-	*h = iy2 - iy1;
-
-	return true;
 }
 
 void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {

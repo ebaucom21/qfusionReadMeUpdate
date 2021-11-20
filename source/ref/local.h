@@ -622,13 +622,13 @@ struct portalSurface_s;
 struct refScreenTexSet_s;
 
 // core
-void RB_Init( void );
-void RB_Shutdown( void );
+void RB_Init();
+void RB_Shutdown();
 void RB_SetTime( int64_t time );
-void RB_BeginFrame( void );
-void RB_EndFrame( void );
-void RB_BeginRegistration( void );
-void RB_EndRegistration( void );
+void RB_BeginFrame();
+void RB_EndFrame();
+void RB_BeginRegistration();
+void RB_EndRegistration();
 
 void RB_LoadCameraMatrix( const mat4_t m );
 void RB_LoadObjectMatrix( const mat4_t m );
@@ -641,14 +641,13 @@ void RB_ClearDepth( float depth );
 void RB_Cull( int cull );
 void RB_SetState( int state );
 void RB_FrontFace( bool front );
-void RB_FlipFrontFace( void );
+void RB_FlipFrontFace();
 void RB_Scissor( int x, int y, int w, int h );
 void RB_GetScissor( int *x, int *y, int *w, int *h );
-void RB_ApplyScissor( void );
+void RB_ApplyScissor();
 void RB_Viewport( int x, int y, int w, int h );
 void RB_Clear( int bits, float r, float g, float b, float a );
 void RB_SetZClip( float zNear, float zFar );
-void RB_SetScreenImageSet( const struct refScreenTexSet_s *st );
 
 void RB_BindFrameBufferObject();
 
@@ -676,10 +675,6 @@ void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure );
 void RB_SetShaderStateMask( int ANDmask, int ORmask );
 void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis );
 bool RB_EnableWireframe( bool enable );
-
-vattribmask_t RB_GetVertexAttribs( void );
-
-void RB_StatsMessage( char *msg, size_t size );
 
 /*
 ==============================================================================

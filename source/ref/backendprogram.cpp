@@ -1969,7 +1969,6 @@ int RB_BindProgram( int program ) {
 	}
 	rb.currentProgramObject = object;
 	rb.dirtyUniformState = true;
-	rb.stats.c_totalPrograms++;
 	return object;
 }
 
