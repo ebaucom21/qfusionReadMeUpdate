@@ -595,23 +595,9 @@ typedef struct mesh_s {
 } mesh_t;
 
 typedef struct {
-	unsigned int firstVert, firstElem;
-	unsigned int numVerts, numElems; // real counts, including the overdraw
-} vboSlice_t;
-
-typedef struct {
-	unsigned int distKey;
-	unsigned int sortKey;
-	drawSurfaceType_t   *drawSurf;
+	drawSurfaceType_t *drawSurf;
+	unsigned distKey, sortKey;
 } sortedDrawSurf_t;
-
-typedef struct {
-	unsigned int numDrawSurfs, maxDrawSurfs;
-	sortedDrawSurf_t    *drawSurfs;
-
-	unsigned int maxVboSlices;
-	vboSlice_t          *vboSlices;
-} drawList_t;
 
 struct FrontendToBackendShared;
 
@@ -1183,7 +1169,8 @@ struct refinst_t {
 
 	refdef_t refdef;
 
-	drawList_t      *meshlist;              // meshes to be rendered
+	// TODO: We don't really need a growable vector, preallocate at it start
+	wsw::Vector<sortedDrawSurf_t> *list;
 	mfog_t          *fog_eye;
 };
 
@@ -1458,29 +1445,19 @@ void        R_InitCustomColors( void );
 int         R_GetCustomColor( int num );
 void        R_ShutdownCustomColors( void );
 
-//
-// r_mesh.c
-//
-void R_InitDrawList( drawList_t *list );
-void R_ClearDrawList( drawList_t *list );
-
-vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned int index );
-
-void R_InitDrawLists( void );
-
 void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems );
 void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems );
 void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems );
 void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsArray, vec2_t *stArray,
 							int numTris, elem_t *elems, vec4_t *sVectorsArray );
 
-//
-// r_portals.c
-//
-extern drawList_t r_portallist, r_skyportallist;
+struct VboSpan {
+	unsigned firstElem, numElems;
+	unsigned firstVert, numVerts;
+};
 
 struct FrontendToBackendShared {
-	drawList_t *meshlist;
+	wsw::Vector<sortedDrawSurf_t> *drawSurfList;
 	mat3_t viewAxis;
 	unsigned renderFlags;
 };
@@ -1507,11 +1484,6 @@ void        R_BeginRegistration_();
 void        R_EndRegistration_();
 
 void        R_Shutdown_( bool verbose );
-
-//
-// r_scene.c
-//
-extern drawList_t r_worldlist;
 
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );

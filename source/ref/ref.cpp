@@ -37,8 +37,6 @@ glconfig_t glConfig;
 
 r_shared_t rsh;
 
-drawList_t r_worldlist;
-
 cvar_t *r_norefresh;
 cvar_t *r_drawentities;
 cvar_t *r_drawworld;
@@ -649,33 +647,6 @@ float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotat
 		VectorMA( e->origin, e->scale, model->maxs, maxs );
 		return RadiusFromBounds( mins, maxs );
 	}
-}
-
-
-void R_InitDrawList( drawList_t *list ) {
-	memset( list, 0, sizeof( *list ) );
-}
-
-void R_InitDrawLists( void ) {
-	R_InitDrawList( &r_worldlist );
-}
-
-void R_ClearDrawList( drawList_t *list ) {
-	if( list ) {
-		// clear counters
-		list->numDrawSurfs = 0;
-		// clear VBO slices
-		if( list->vboSlices ) {
-			memset( list->vboSlices, 0, sizeof( *list->vboSlices ) * list->maxVboSlices );
-		}
-	}
-}
-
-vboSlice_t *R_GetDrawListVBOSlice( drawList_t *list, unsigned index ) {
-	if( index >= list->maxVboSlices ) {
-		return NULL;
-	}
-	return &list->vboSlices[index];
 }
 
 void R_CopyOffsetElements( const elem_t *inelems, int numElems, int vertsOffset, elem_t *outelems ) {
@@ -2184,8 +2155,6 @@ static rserr_t R_PostInit( void ) {
 
 	rf.frameTime.average = 1;
 	rf.swapInterval = -1;
-
-	R_InitDrawLists();
 
 	if( !R_RegisterGLExtensions() ) {
 		QGL_Shutdown();

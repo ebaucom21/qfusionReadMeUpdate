@@ -521,27 +521,7 @@ bool Frontend::addSpriteToSortList( const entity_t *e ) {
 	}
 
 	const mfog_t *fog = getFogForSphere( e->origin, e->radius );
-	return addEntryToSortList( m_state.meshlist, e, fog, e->customShader, dist, 0, nullptr, &spriteDrawSurf );
-}
-
-static void R_ReserveVBOSlices( drawList_t *list, unsigned drawSurfIndex ) {
-	unsigned minSlices = drawSurfIndex + 1;
-	if( rsh.worldBrushModel ) {
-		minSlices = std::max( rsh.worldBrushModel->numDrawSurfaces, minSlices );
-	}
-
-	const unsigned oldSize = list->maxVboSlices;
-	const unsigned newSize = std::max( minSlices, oldSize * 2 );
-
-	vboSlice_t *slices = list->vboSlices;
-	vboSlice_t *newSlices = (vboSlice_t *)Q_malloc( newSize * sizeof( vboSlice_t ) );
-	if( slices ) {
-		memcpy( newSlices, slices, oldSize * sizeof( vboSlice_t ) );
-		Q_free( slices );
-	}
-
-	list->vboSlices = newSlices;
-	list->maxVboSlices = newSize;
+	return addEntryToSortList( e, fog, e->customShader, dist, 0, nullptr, &spriteDrawSurf );
 }
 
 bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf, const float *maybeOrigin ) {
@@ -558,8 +538,7 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 
 	drawSurf->dlightBits = 0;
 	drawSurf->visFrame = rf.frameCount;
-	drawSurf->listSurf = addEntryToSortList( m_state.meshlist, e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface,
-											 drawSurf );
+	drawSurf->listSurf = addEntryToSortList( e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
 	if( !drawSurf->listSurf ) {
 		return false;
 	}
@@ -618,19 +597,10 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 	if( firstVisSurf ) {
 		const bool dlight = dlightFrame == rsc.frameCount;
 
-		const auto drawSurfIndex = drawSurf - rsh.worldBrushModel->drawSurfaces;
-		// TODO: Reserve once per frame
-		if( drawSurfIndex >= m_state.meshlist->maxVboSlices ) [[unlikely]] {
-			R_ReserveVBOSlices( m_state.meshlist, drawSurfIndex );
-		}
-
-		vboSlice_t *slice = &m_state.meshlist->vboSlices[drawSurfIndex];
-		assert( !slice->numVerts && !slice->numElems && !slice->firstVert && !slice->firstElem );
-
-		slice->firstVert = firstVisSurf->firstDrawSurfVert;
-		slice->firstElem = firstVisSurf->firstDrawSurfElem;
-		slice->numVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
-		slice->numElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
+		drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
+		drawSurf->firstSpanElem = firstVisSurf->firstDrawSurfElem;
+		drawSurf->numSpanVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
+		drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
 
 		// update the distance sorting key if it's a portal surface or a normal dlit surface
 		if( resultDist != 0 || dlight ) {
@@ -685,17 +655,16 @@ bool Frontend::addAliasModelToSortList( const entity_t *e ) {
 			for( int j = 0; j < mesh->numskins; j++ ) {
 				shader = mesh->skins[j].shader;
 				if( shader ) {
-					int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-					addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr,
-										aliasmodel->drawSurfs + i );
+					const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+					addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
 				}
 			}
 			continue;
 		}
 
 		if( shader ) {
-			int drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
+			const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+			addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
 		}
 	}
 
@@ -746,7 +715,7 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 
 		if( shader ) {
 			const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( m_state.meshlist, e, fog, shader, distance, drawOrder, nullptr, skmodel->drawSurfs + i );
+			addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, skmodel->drawSurfs + i );
 		}
 	}
 
@@ -756,36 +725,12 @@ bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
 static int nullDrawSurf = ST_NULLMODEL;
 
 bool Frontend::addNullSurfToSortList( const entity_t *e ) {
-	return addEntryToSortList( m_state.meshlist, e, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
+	return addEntryToSortList( e, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
 }
 
-static void R_ReserveDrawSurfaces( drawList_t *list ) {
-	int minMeshes = MIN_RENDER_MESHES;
-	if( rsh.worldBrushModel ) {
-		minMeshes += (int)rsh.worldBrushModel->numDrawSurfaces;
-	}
-
-	sortedDrawSurf_t *ds = list->drawSurfs;
-	const int maxMeshes = list->maxDrawSurfs;
-
-	const int oldSize = maxMeshes;
-	const int newSize = std::max( minMeshes, oldSize * 2 );
-
-	auto *newDs = (sortedDrawSurf_t *)Q_malloc( newSize * sizeof( sortedDrawSurf_t ) );
-	if( ds ) {
-		memcpy( newDs, ds, oldSize * sizeof( sortedDrawSurf_t ) );
-		Q_free( ds );
-	}
-
-	list->drawSurfs = newDs;
-	list->maxDrawSurfs = newSize;
-}
-
-void *Frontend::addEntryToSortList( drawList_t *list, const entity_t *e, const mfog_t *fog,
+void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
 									const shader_t *shader, float dist, unsigned order,
 									const portalSurface_t *portalSurf, void *drawSurf ) {
-	assert( list );
-
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
 		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
@@ -794,21 +739,18 @@ void *Frontend::addEntryToSortList( drawList_t *list, const entity_t *e, const m
 				fog = nullptr;
 			}
 
-			if( const int distKey = R_PackDistKey( e->renderfx, shader, dist, order ) ) [[likely]] {
-				// TODO: This should be moved to an outer loop
-				if( list->numDrawSurfs >= list->maxDrawSurfs ) [[unlikely]] {
-					R_ReserveDrawSurfaces( list );
-				}
+			if( const unsigned distKey = R_PackDistKey( e->renderfx, shader, dist, order ) ) [[likely]] {
 
 				const int fogNum = fog ? (int)( fog - rsh.worldBrushModel->fogs ) : -1;
 				const int portalNum = portalSurf ? (int)( portalSurf - m_state.portalSurfaces ) : -1;
 
-				sortedDrawSurf_t *const sds = &list->drawSurfs[list->numDrawSurfs++];
-				sds->drawSurf = ( drawSurfaceType_t * )drawSurf;
-				sds->sortKey = R_PackSortKey( shader->id, fogNum, portalNum, R_ENT2NUM( e ) );
-				sds->distKey = distKey;
+				m_state.list->emplace_back( sortedDrawSurf_t {
+					.drawSurf = (drawSurfaceType_t *)drawSurf,
+					.distKey  = distKey,
+					.sortKey  = R_PackSortKey( shader->id, fogNum, portalNum, R_ENT2NUM( e ) ),
+				});
 
-				return sds;
+				return std::addressof( m_state.list->back() );
 			}
 		}
 	}
@@ -827,7 +769,7 @@ void Frontend::collectVisiblePolys() {
 			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
 		}
 
-		if( !addEntryToSortList( m_state.meshlist, rsc.polyent, fog, p->shader, 0, i, nullptr, p ) ) {
+		if( !addEntryToSortList( rsc.polyent, fog, p->shader, 0, i, nullptr, p ) ) {
 			continue;
 		}
 	}
@@ -895,13 +837,14 @@ void Frontend::collectVisibleWorldBrushes() {
 	}
 }
 
-void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
-	if( !list->numDrawSurfs ) {
+void Frontend::submitSortedSurfacesToBackend() {
+	const auto *list = m_state.list;
+	if( list->empty() ) {
 		return;
 	}
 
 	FrontendToBackendShared fsh;
-	fsh.meshlist = m_state.meshlist;
+	fsh.drawSurfList = m_state.list;
 	fsh.renderFlags = m_state.renderFlags;
 	std:memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
@@ -917,8 +860,10 @@ void Frontend::submitSortedSurfacesToBackend( drawList_t *list ) {
 	bool prevInfiniteProj = false;
 	int prevEntityFX = -1;
 
-	for( unsigned i = 0; i < list->numDrawSurfs; i++ ) {
-		const sortedDrawSurf_t *sds = list->drawSurfs + i;
+	const size_t numDrawSurfs = list->size();
+	const sortedDrawSurf_t *const drawSurfs = list->data();
+	for( size_t i = 0; i < numDrawSurfs; i++ ) {
+		const sortedDrawSurf_t *sds = drawSurfs + i;
 		const unsigned sortKey = sds->sortKey;
 		const int drawSurfType = *(int *)sds->drawSurf;
 
@@ -1163,7 +1108,10 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 		m_state.renderFlags |= RF_DRAWFLAT;
 	}
 
-	R_ClearDrawList( m_state.meshlist );
+	m_state.list->clear();
+	if( rsh.worldBrushModel ) {
+		m_state.list->reserve( rsh.worldBrushModel->numDrawSurfaces );
+	}
 
 	if( !rsh.worldModel && !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 		return;
@@ -1231,7 +1179,7 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 			const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
 			return lhsKey < rhsKey;
 		};
-		std::sort( m_state.meshlist->drawSurfs, m_state.meshlist->drawSurfs + m_state.meshlist->numDrawSurfs, cmp );
+		std::sort( m_state.list->begin(), m_state.list->end(), cmp );
 	}
 
 	bindFrameBuffer( m_state.renderTarget );
@@ -1268,11 +1216,11 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 
 	clearActiveFrameBuffer();
 
-	submitSortedSurfacesToBackend( m_state.meshlist );
+	submitSortedSurfacesToBackend();
 
 	if( r_showtris->integer && !( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_EnableWireframe( true );
-		submitSortedSurfacesToBackend( m_state.meshlist );
+		submitSortedSurfacesToBackend();
 		RB_EnableWireframe( false );
 	}
 
@@ -1458,7 +1406,7 @@ void Frontend::renderScene( const refdef_s *fd ) {
 		m_state.clipFlags |= 16;
 	}
 
-	m_state.meshlist = &r_worldlist;
+	m_state.list = &m_meshDrawList;
 	m_state.dlightBits = 0;
 
 	m_state.renderTarget = 0;

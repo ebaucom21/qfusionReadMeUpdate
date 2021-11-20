@@ -64,6 +64,9 @@ typedef struct {
 	struct superLightStyle_s *superLightStyle;
 
 	void *listSurf;                 // only valid if visFrame == rf.frameCount
+
+	unsigned firstSpanVert, numSpanVerts;
+	unsigned firstSpanElem, numSpanElems;
 } drawSurfaceBSP_t;
 
 typedef struct {

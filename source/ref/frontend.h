@@ -28,6 +28,8 @@ class Frontend {
 private:
 	refinst_t m_state;
 
+	wsw::Vector<sortedDrawSurf_t> m_meshDrawList;
+
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
@@ -65,10 +67,10 @@ private:
 	bool addNullSurfToSortList( const entity_t *e );
 	bool addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf, const float *maybeOrigin );
 
-	void *addEntryToSortList( drawList_t *list, const entity_t *e, const mfog_t *fog, const shader_t *shader,
+	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
 							  float dist, unsigned order, const portalSurface_t *portalSurf, void *drawSurf );
 
-	void submitSortedSurfacesToBackend( drawList_t *list );
+	void submitSortedSurfacesToBackend();
 public:
 	static void init();
 	static void shutdown();

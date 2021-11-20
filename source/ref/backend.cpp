@@ -1231,19 +1231,14 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entit
 }
 
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
-	const vboSlice_t *slice = R_GetDrawListVBOSlice( fsh->meshlist, drawSurf - rsh.worldBrushModel->drawSurfaces );
-
 	// shadowBits are shared for all rendering instances (normal view, portals, etc)
 	const unsigned dlightBits = drawSurf->dlightBits;
 
-	const int numVerts = slice->numVerts;
-	const int numElems = slice->numElems;
-	const int firstVert = drawSurf->firstVboVert + slice->firstVert;
-	const int firstElem = drawSurf->firstVboElem + slice->firstElem;
-
-	if( !numVerts ) {
-		return;
-	}
+	const unsigned numVerts = drawSurf->numSpanVerts;
+	assert( numVerts );
+	const unsigned numElems = drawSurf->numSpanElems;
+	const unsigned firstVert = drawSurf->firstVboVert + drawSurf->firstSpanVert;
+	const unsigned firstElem = drawSurf->firstVboElem + drawSurf->firstSpanElem;
 
 	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
 
