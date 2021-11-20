@@ -38,9 +38,6 @@ glconfig_t glConfig;
 r_shared_t rsh;
 
 drawList_t r_worldlist;
-drawList_t r_shadowlist;
-drawList_t r_portalmasklist;
-drawList_t r_portallist, r_skyportallist;
 
 cvar_t *r_norefresh;
 cvar_t *r_drawentities;
@@ -661,10 +658,6 @@ void R_InitDrawList( drawList_t *list ) {
 
 void R_InitDrawLists( void ) {
 	R_InitDrawList( &r_worldlist );
-	R_InitDrawList( &r_portalmasklist );
-	R_InitDrawList( &r_portallist );
-	R_InitDrawList( &r_skyportallist );
-	R_InitDrawList( &r_shadowlist );
 }
 
 void R_ClearDrawList( drawList_t *list ) {

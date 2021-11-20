@@ -42,10 +42,6 @@ private:
 
 	void renderViewFromThisCamera( const refdef_t *fd );
 
-	void drawPortalSurface( portalSurface_t *portalSurface );
-	void drawSkyPortal( const entity_t *e, skyportal_t *skyportal );
-	void drawPortalsDepthMask();
-
 	[[nodiscard]]
 	auto tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
 
@@ -54,8 +50,6 @@ private:
 
 	void updatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
-
-	void drawPortals();
 
 	void collectVisiblePolys();
 	void collectVisibleWorldBrushes();

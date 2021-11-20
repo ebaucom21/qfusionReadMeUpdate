@@ -1184,8 +1184,6 @@ struct refinst_t {
 	refdef_t refdef;
 
 	drawList_t      *meshlist;              // meshes to be rendered
-	drawList_t      *portalmasklist;        // sky and portal BSP surfaces are rendered before (sky-)portals
-											// to create depth mask
 	mfog_t          *fog_eye;
 };
 
@@ -1513,7 +1511,7 @@ void        R_Shutdown_( bool verbose );
 //
 // r_scene.c
 //
-extern drawList_t r_worldlist, r_portalmasklist;
+extern drawList_t r_worldlist;
 
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
 float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
