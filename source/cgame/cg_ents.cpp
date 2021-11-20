@@ -1813,7 +1813,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 					CG_DrawEntityBox( cent );
 				}
 				CG_EntityLoopSound( state, ATTN_IDLE );
-				CG_LaserBeamEffect( cent );
+				CG_LaserBeamEffect( cent, drawSceneRequest );
 				CG_WeaponBeamEffect( cent );
 				canLight = true;
 				break;

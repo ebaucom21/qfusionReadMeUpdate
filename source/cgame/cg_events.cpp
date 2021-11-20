@@ -85,7 +85,8 @@ void CG_WeaponBeamEffect( centity_t *cent ) {
 	cent->localEffects[LOCALEFFECT_EV_WEAPONBEAM] = 0;
 }
 
-static centity_t *laserOwner = NULL;
+static centity_t *laserOwner = nullptr;
+static DrawSceneRequest *laserDrawSceneRequest = nullptr;
 
 static vec_t *_LaserColor( vec4_t color ) {
 	Vector4Set( color, 1, 1, 1, 1 );
@@ -121,18 +122,16 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	// it's a brush model
 	if( trace->ent == 0 || !( cg_entities[trace->ent].current.effects & EF_TAKEDAMAGE ) ) {
 		vec4_t color;
-		/// TODO:!!!!!!!!!!!!!!!!!!!!!!!
-		///CG_LaserGunImpact( trace->endpos, trace->plane.normal, 15.0f, dir, _LaserColor( color ), drawSceneRequest );
+		CG_LaserGunImpact( trace->endpos, trace->plane.normal, 15.0f, dir, _LaserColor( color ), laserDrawSceneRequest );
 	} else {
 		// it's a player
 		// TODO: add player-impact model
 	}
 
-	// TODO:!!!!!!!!!!!!!!!!!!!!!!!
-	//R_AddLightToScene( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
+	laserDrawSceneRequest->addLight( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
 }
 
-void CG_LaserBeamEffect( centity_t *cent ) {
+void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	struct sfx_s *sound = NULL;
 	float range;
 	trace_t trace;
@@ -160,6 +159,7 @@ void CG_LaserBeamEffect( centity_t *cent ) {
 	}
 
 	laserOwner = cent;
+	laserDrawSceneRequest = drawSceneRequest;
 	_LaserColor( color );
 
 	// interpolate the positions
@@ -273,7 +273,8 @@ void CG_LaserBeamEffect( centity_t *cent ) {
 		}
 	}
 
-	laserOwner = NULL;
+	laserOwner = nullptr;
+	laserDrawSceneRequest = nullptr;
 }
 
 void CG_Event_LaserBeam( int entNum, int weapon, int fireMode ) {

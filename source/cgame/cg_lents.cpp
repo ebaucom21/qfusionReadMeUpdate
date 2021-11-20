@@ -769,9 +769,6 @@ void CG_BladeImpact( const vec3_t pos, const vec3_t dir ) {
 	}
 }
 
-/*
-* CG_LasertGunImpact
-*/
 void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir,
 						const vec4_t color, DrawSceneRequest *drawSceneRequest ) {
 	entity_t ent;
