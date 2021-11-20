@@ -566,14 +566,14 @@ void CG_ResetDamageIndicator( void ) {
 /*
 * CG_AddEntityToScene
 */
-void CG_AddEntityToScene( entity_t *ent ) {
+void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	if( ent->model && ( !ent->boneposes || !ent->oldboneposes ) ) {
 		if( R_SkeletalGetNumBones( ent->model, NULL ) ) {
 			CG_SetBoneposesForTemporaryEntity( ent );
 		}
 	}
 
-	R_AddEntityToScene( ent );
+	drawSceneRequest->addEntity( ent );
 }
 
 //============================================================================
@@ -1144,8 +1144,6 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 	CG_ClearFragmentedDecals();
 
-	R_ClearScene();
-
 	if( CG_DemoCam_Update() ) {
 		CG_SetupViewDef( &cg.view, CG_DemoCam_GetViewType() );
 	} else {
@@ -1158,13 +1156,14 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 	CG_FireEvents( false );
 
-	CG_AddEntities();
-	CG_AddViewWeapon( &cg.weapon );
-	CG_AddLocalEntities();
-	CG_AddParticles();
-	CG_AddDecals();
-	CG_AddPolys();
-	CG_AddLightStyles();
+	DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( cg.view.refdef );
+
+	CG_AddEntities( drawSceneRequest );
+	CG_AddViewWeapon( &cg.weapon, drawSceneRequest );
+	CG_AddLocalEntities( drawSceneRequest );
+	CG_AddParticles( drawSceneRequest );
+	CG_AddPolys( drawSceneRequest );
+	CG_AddLightStyles( drawSceneRequest );
 
 	AnglesToAxis( cg.view.angles, rd->viewaxis );
 
@@ -1181,7 +1180,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddLocalSounds();
 	CG_SetSceneTeamColors(); // update the team colors in the renderer
 
-	R_RenderScene( &cg.view.refdef );
+	SubmitDrawSceneRequest( drawSceneRequest );
 
 	cg.oldAreabits = true;
 

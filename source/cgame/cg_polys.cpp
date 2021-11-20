@@ -423,10 +423,7 @@ void CG_WaveSpark( const vec3_t emitterOrigin ) {
 	CG_SpawnPolyBeam( emitterOrigin, end, NULL, 8, 64, 64, cgs.media.shaderWaveSparks, 0, 0 );
 }
 
-/*
-* CG_Addpolys
-*/
-void CG_AddPolys( void ) {
+void CG_AddPolys( DrawSceneRequest *drawSceneRequest ) {
 	int i;
 	float fade;
 	cpoly_t *cgpoly, *next, *hnode;
@@ -465,6 +462,6 @@ void CG_AddPolys( void ) {
 			}
 		}
 
-		R_AddPolyToScene( poly );
+		drawSceneRequest->addPoly( poly );
 	}
 }

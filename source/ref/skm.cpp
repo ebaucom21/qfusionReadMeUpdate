@@ -1072,9 +1072,8 @@ void R_ShutdownSkeletalCache( void ) {
 	r_skmcache_free = NULL;
 }
 
-static void R_CacheBoneTransforms( skmcacheentry_t *cache ) {
+static void R_CacheBoneTransforms( skmcacheentry_t *cache, const entity_t *e ) {
 	unsigned i, j;
-	const entity_t *e;
 	float frontlerp;
 	bonepose_t tempbonepose[256];
 	const bonepose_t *bp, *oldbp, *bonepose, *oldbonepose, *lerpedbonepose;
@@ -1083,11 +1082,10 @@ static void R_CacheBoneTransforms( skmcacheentry_t *cache ) {
 	const mskmodel_t *skmodel;
 	dualquat_t *bonePoseRelativeDQ;
 
-	e = R_NUM2ENT( cache->entNum );
 	skmodel = cache->skmodel;
 	bp = cache->boneposes;
 	oldbp = cache->oldboneposes;
-	frontlerp = 1.0 - e->backlerp;
+	frontlerp = 1.0f - e->backlerp;
 
 	// lerp boneposes and store results in cache
 
@@ -1231,7 +1229,7 @@ void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 	const bonepose_t *bp, *oldbp;
 	skmcacheentry_t *cache;
 
-	entNum = R_ENT2NUM( e );
+	entNum = e->number;
 	skmodel = ( ( mskmodel_t * )mod->extradata );
 	if( !skmodel->numbones || skmodel->numframes == 0 ) {
 		return;
@@ -1295,7 +1293,7 @@ void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 		return;
 	}
 
-	R_CacheBoneTransforms( cache );
+	R_CacheBoneTransforms( cache, e );
 }
 
 

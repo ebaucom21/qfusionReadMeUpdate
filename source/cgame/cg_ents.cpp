@@ -523,7 +523,7 @@ static void CG_EntAddTeamColorTransitionEffect( centity_t *cent ) {
 /*
 * CG_AddLinkedModel
 */
-static void CG_AddLinkedModel( centity_t *cent ) {
+static void CG_AddLinkedModel( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	static entity_t ent;
 	orientation_t tag;
 	struct model_s *model;
@@ -568,8 +568,8 @@ static void CG_AddLinkedModel( centity_t *cent ) {
 
 	CG_AddColoredOutLineEffect( &ent, cent->effects,
 								cent->outlineColor[0], cent->outlineColor[1], cent->outlineColor[2], cent->outlineColor[3] );
-	CG_AddEntityToScene( &ent );
-	CG_AddShellEffects( &ent, cent->effects );
+	CG_AddEntityToScene( &ent, drawSceneRequest );
+	CG_AddShellEffects( &ent, cent->effects, drawSceneRequest );
 }
 
 /*
@@ -744,7 +744,7 @@ void CG_LerpGenericEnt( centity_t *cent ) {
 /*
 * CG_AddGenericEnt
 */
-static void CG_AddGenericEnt( centity_t *cent ) {
+static void CG_AddGenericEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -823,17 +823,17 @@ static void CG_AddGenericEnt( centity_t *cent ) {
 
 	// flags are special
 	if( cent->effects & EF_FLAG_TRAIL ) {
-		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked" );
+		CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, "tag_linked", drawSceneRequest );
 	}
 
 	if( !cent->current.modelindex ) {
 		return;
 	}
 
-	CG_AddEntityToScene( &cent->ent );
+	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent );
+		CG_AddLinkedModel( cent, drawSceneRequest );
 	}
 }
 
@@ -844,7 +844,7 @@ static void CG_AddGenericEnt( centity_t *cent ) {
 /*
 * CG_AddFlagModelOnTag
 */
-void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname ) {
+void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest *drawSceneRequest ) {
 	static entity_t flag;
 	orientation_t tag;
 
@@ -898,7 +898,7 @@ void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *t
 								(uint8_t)( teamcolor[2] * 0.3 ),
 								255 );
 
-	CG_AddEntityToScene( &flag );
+	CG_AddEntityToScene( &flag, drawSceneRequest );
 
 	// add the light & energy effects
 	if( CG_GrabTag( &tag, &flag, "tag_color" ) ) {
@@ -915,10 +915,10 @@ void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *t
 		flag.customShader = cgs.media.shaderFlagFlare;
 		flag.outlineHeight = 0;
 
-		CG_AddEntityToScene( &flag );
+		CG_AddEntityToScene( &flag, drawSceneRequest );
 	}
 
-	R_AddLightToScene( flag.origin, 128.0f, 0.0f, teamcolor[0] / 255, teamcolor[1] / 255, teamcolor[2] / 255 );
+	drawSceneRequest->addLight( flag.origin, 128.0f, 0.0f, teamcolor[0] / 255, teamcolor[1] / 255, teamcolor[2] / 255 );
 
 	// TODO: We have disabled the flag particles trail effects as they were god-awful
 }
@@ -957,7 +957,7 @@ static void CG_UpdateFlagBaseEnt( centity_t *cent ) {
 /*
 * CG_AddFlagBaseEnt
 */
-static void CG_AddFlagBaseEnt( centity_t *cent ) {
+static void CG_AddFlagBaseEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -988,7 +988,7 @@ static void CG_AddFlagBaseEnt( centity_t *cent ) {
 	// add to refresh list
 	CG_AddCentityOutLineEffect( cent );
 
-	CG_AddEntityToScene( &cent->ent );
+	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	//CG_DrawTestBox( cent->ent.origin, item_box_mins, item_box_maxs, vec3_origin );
 
@@ -999,7 +999,7 @@ static void CG_AddFlagBaseEnt( centity_t *cent ) {
 	if( cent->effects & EF_FLAG_TRAIL ) {
 		byte_vec4_t teamcolor;
 
-		CG_AddFlagModelOnTag( cent, CG_TeamColorForEntity( cent->current.number, teamcolor ), "tag_flag1" );
+		CG_AddFlagModelOnTag( cent, CG_TeamColorForEntity( cent->current.number, teamcolor ), "tag_flag1", drawSceneRequest );
 	}
 }
 
@@ -1010,7 +1010,7 @@ static void CG_AddFlagBaseEnt( centity_t *cent ) {
 /*
 * CG_AddPlayerEnt
 */
-static void CG_AddPlayerEnt( centity_t *cent ) {
+static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	// render effects
 	cent->ent.renderfx = cent->renderfx;
 #ifndef CELSHADEDMATERIAL
@@ -1030,7 +1030,7 @@ static void CG_AddPlayerEnt( centity_t *cent ) {
 		return;
 	}
 
-	CG_AddPModel( cent );
+	CG_AddPModel( cent, drawSceneRequest );
 
 	// corpses can never have a model in modelindex2
 	if( cent->current.type == ET_CORPSE ) {
@@ -1038,7 +1038,7 @@ static void CG_AddPlayerEnt( centity_t *cent ) {
 	}
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent );
+		CG_AddLinkedModel( cent, drawSceneRequest );
 	}
 }
 
@@ -1049,7 +1049,7 @@ static void CG_AddPlayerEnt( centity_t *cent ) {
 /*
 * CG_AddSpriteEnt
 */
-static void CG_AddSpriteEnt( centity_t *cent ) {
+static void CG_AddSpriteEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	if( !cent->ent.scale ) {
 		return;
 	}
@@ -1072,10 +1072,10 @@ static void CG_AddSpriteEnt( centity_t *cent ) {
 	cent->ent.renderfx = cent->renderfx;
 
 	// add to refresh list
-	CG_AddEntityToScene( &cent->ent );
+	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 
 	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent );
+		CG_AddLinkedModel( cent, drawSceneRequest );
 	}
 }
 
@@ -1224,10 +1224,7 @@ static void CG_UpdateItemEnt( centity_t *cent ) {
 	}
 }
 
-/*
-* CG_AddItemEnt
-*/
-static void CG_AddItemEnt( centity_t *cent ) {
+static void CG_AddItemEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	int msec;
 
 	if( !cent->item ) {
@@ -1266,11 +1263,11 @@ static void CG_AddItemEnt( centity_t *cent ) {
 
 		// flags are special
 		if( cent->effects & EF_FLAG_TRAIL ) {
-			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL );
+			CG_AddFlagModelOnTag( cent, cent->ent.shaderRGBA, NULL, drawSceneRequest );
 			return;
 		}
 
-		CG_AddGenericEnt( cent );
+		CG_AddGenericEnt( cent, drawSceneRequest );
 		return;
 	} else {
 		if( cent->effects & EF_GHOST ) {
@@ -1287,7 +1284,7 @@ static void CG_AddItemEnt( centity_t *cent ) {
 	}
 
 	Matrix3_Identity( cent->ent.axis );
-	CG_AddEntityToScene( &cent->ent );
+	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 }
 
 //==========================================================================
@@ -1482,7 +1479,7 @@ static void CG_UpdatePortalSurfaceEnt( centity_t *cent ) {
 /*
 * CG_AddPortalSurfaceEnt
 */
-static void CG_AddPortalSurfaceEnt( centity_t *cent ) {
+static void CG_AddPortalSurfaceEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	if( !VectorCompare( cent->ent.origin, cent->ent.origin2 ) ) { // construct the view matrix for portal view
 		if( cent->current.effects & EF_ROTATE_AND_BOB ) {
 			float phase = cent->current.frame / 256.0f;
@@ -1494,7 +1491,7 @@ static void CG_AddPortalSurfaceEnt( centity_t *cent ) {
 		}
 	}
 
-	CG_AddEntityToScene( &cent->ent );
+	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 }
 
 //==================================================
@@ -1704,7 +1701,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 * CG_AddPacketEntitiesToScene
 * Add the entities to the rendering list
 */
-void CG_AddEntities( void ) {
+void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 	entity_state_t *state;
 	vec3_t autorotate;
 	int pnum;
@@ -1729,7 +1726,7 @@ void CG_AddEntities( void ) {
 
 		switch( cent->type ) {
 			case ET_GENERIC:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				if( cg_drawEntityBoxes->integer ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -1738,71 +1735,71 @@ void CG_AddEntities( void ) {
 				break;
 			case ET_GIB:
 				if( false ) {
-					CG_AddGenericEnt( cent );
+					CG_AddGenericEnt( cent, drawSceneRequest );
 					CG_EntityLoopSound( state, ATTN_STATIC );
 					canLight = true;
 				}
 				break;
 			case ET_BLASTER:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_BlasterTrail( cent, cent->ent.origin );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
-				R_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
+				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
 				break;
 
 			case ET_ELECTRO_WEAK:
 				cent->current.frame = cent->prev.frame = 0;
 				cent->ent.frame =  cent->ent.oldframe = 0;
 
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_ElectroWeakTrail( cent->trailOrigin, cent->ent.origin, NULL );
-				R_AddLightToScene( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
+				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_ProjectileTrail( cent );
 				CG_EntityLoopSound( state, ATTN_NORM );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
-					R_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
+					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
 				} else {
-					R_AddLightToScene( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.8f, 0 );
+					drawSceneRequest->addLight( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.8f, 0 );
 				}
 				break;
 			case ET_GRENADE:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_ProjectileTrail( cent );
-				R_AddLightToScene( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
+				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
-				R_AddLightToScene( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
+				drawSceneRequest->addLight( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
 				break;
 			case ET_WAVE:
-				CG_AddGenericEnt( cent );
+				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				CG_WaveCoronaAndTrail( cent, cent->ent.origin );
 				// Add the core light
-				R_AddLightToScene( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
+				drawSceneRequest->addLight( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
 				// Add the corona light
 				// We have initially thought to activate corona light only when corona damage is enabled,
 				// but it is not a good idea since it requires synchronization/prediction
 				// and the projectile gets activated rather fast anyway.
 				// Otherwise high ping players would only see an activated wave.
-				R_AddLightToScene( cent->ent.origin, 300.0f, 192.0f, 1.0f, 1.0f, 1.0f );
+				drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 1.0f, 1.0f );
 				break;
 			case ET_SPRITE:
 			case ET_RADAR:
-				CG_AddSpriteEnt( cent );
+				CG_AddSpriteEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				canLight = true;
 				break;
 
 			case ET_ITEM:
-				CG_AddItemEnt( cent );
+				CG_AddItemEnt( cent, drawSceneRequest );
 				if( cg_drawEntityBoxes->integer ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -1811,7 +1808,7 @@ void CG_AddEntities( void ) {
 				break;
 
 			case ET_PLAYER:
-				CG_AddPlayerEnt( cent );
+				CG_AddPlayerEnt( cent, drawSceneRequest );
 				if( cg_drawEntityBoxes->integer ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -1822,7 +1819,7 @@ void CG_AddEntities( void ) {
 				break;
 
 			case ET_CORPSE:
-				CG_AddPlayerEnt( cent );
+				CG_AddPlayerEnt( cent, drawSceneRequest );
 				if( cg_drawEntityBoxes->integer ) {
 					CG_DrawEntityBox( cent );
 				}
@@ -1840,12 +1837,12 @@ void CG_AddEntities( void ) {
 				break;
 
 			case ET_PORTALSURFACE:
-				CG_AddPortalSurfaceEnt( cent );
+				CG_AddPortalSurfaceEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				break;
 
 			case ET_FLAG_BASE:
-				CG_AddFlagBaseEnt( cent );
+				CG_AddFlagBaseEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				canLight = true;
 				break;
@@ -1891,7 +1888,7 @@ void CG_AddEntities( void ) {
 
 		// glow if light is set
 		if( canLight && state->light ) {
-			R_AddLightToScene( cent->ent.origin,
+			drawSceneRequest->addLight( cent->ent.origin,
 								COLOR_A( state->light ) * 4.0, 0.0f,
 								COLOR_R( state->light ) * ( 1.0 / 255.0 ),
 								COLOR_G( state->light ) * ( 1.0 / 255.0 ),

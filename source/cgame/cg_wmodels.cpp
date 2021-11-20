@@ -559,7 +559,7 @@ struct weaponinfo_s *CG_GetWeaponInfo( int weapon ) {
 *
 * Add weapon model(s) positioned at the tag
 */
-void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int effects, bool addCoronaLight, orientation_t *projectionSource, int64_t flash_time, int64_t barrel_time ) {
+void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int effects, bool addCoronaLight, orientation_t *projectionSource, int64_t flash_time, int64_t barrel_time, DrawSceneRequest *drawSceneRequest ) {
 	entity_t weapon;
 	weaponinfo_t *weaponInfo;
 	float intensity;
@@ -596,14 +596,14 @@ void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int eff
 	CG_AddColoredOutLineEffect( &weapon, effects, 0, 0, 0, 255 );
 
 	if( !( effects & EF_RACEGHOST ) ) {
-		CG_AddEntityToScene( &weapon );
+		CG_AddEntityToScene( &weapon, drawSceneRequest );
 	}
 
 	if( !weapon.model ) {
 		return;
 	}
 
-	CG_AddShellEffects( &weapon, effects );
+	CG_AddShellEffects( &weapon, effects, drawSceneRequest );
 
 	// update projection source
 	if( projectionSource != NULL ) {
@@ -632,10 +632,10 @@ void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int eff
 			CG_AddColoredOutLineEffect( &expansion, effects, 0, 0, 0, 255 );
 
 			if( !( effects & EF_RACEGHOST ) ) {
-				CG_AddEntityToScene( &expansion ); // skelmod
+				CG_AddEntityToScene( &expansion, drawSceneRequest ); // skelmod
 
 			}
-			CG_AddShellEffects( &expansion, effects );
+			CG_AddShellEffects( &expansion, effects, drawSceneRequest );
 		}
 	}
 
@@ -673,10 +673,10 @@ void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int eff
 			CG_AddColoredOutLineEffect( &barrel, effects, 0, 0, 0, ent->shaderRGBA[3] );
 
 			if( !( effects & EF_RACEGHOST ) ) {
-				CG_AddEntityToScene( &barrel ); // skelmod
+				CG_AddEntityToScene( &barrel, drawSceneRequest ); // skelmod
 
 			}
-			CG_AddShellEffects( &barrel, effects );
+			CG_AddShellEffects( &barrel, effects, drawSceneRequest );
 		}
 	}
 
@@ -712,13 +712,13 @@ void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weaponid, int eff
 		CG_PlaceModelOnTag( &flash, &weapon, tag );
 
 		if( !( effects & EF_RACEGHOST ) ) {
-			CG_AddEntityToScene( &flash );
+			CG_AddEntityToScene( &flash, drawSceneRequest );
 		}
 
 		// TODO: Does flash get drawn underwater?
 		const float programRadius = weaponInfo->flashRadius * intensity;
 		const float coronaRadius = 0.5f * programRadius * addCoronaLight;
 		const auto *flashColor = weaponInfo->flashColor;
-		R_AddLightToScene( flash.origin, programRadius, coronaRadius, flashColor[0], flashColor[1], flashColor[2] );
+		drawSceneRequest->addLight( flash.origin, programRadius, coronaRadius, flashColor[0], flashColor[1], flashColor[2] );
 	}
 }

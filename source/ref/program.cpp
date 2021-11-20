@@ -1952,7 +1952,7 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 		static float deluxemapOffset[( MAX_LIGHTMAPS + 3 ) & ( ~3 )];
 
 		for( i = 0; i < MAX_LIGHTMAPS && superLightStyle->lightmapStyles[i] != 255; i++ ) {
-			VectorCopy( rsc.lightStyles[superLightStyle->lightmapStyles[i]].rgb, rgb );
+			VectorCopy( lightStyles[superLightStyle->lightmapStyles[i]].rgb, rgb );
 
 			if( program->loc.LightstyleColor[i] >= 0 ) {
 				qglUniform3fv( program->loc.LightstyleColor[i], 1, rgb );

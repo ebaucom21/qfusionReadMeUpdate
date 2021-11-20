@@ -599,7 +599,7 @@ bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result ) {
 /*
 * CG_AddRaceGhostShell
 */
-static void CG_AddRaceGhostShell( entity_t *ent ) {
+static void CG_AddRaceGhostShell( entity_t *ent, DrawSceneRequest *drawSceneRequest ) {
 	entity_t shell;
 	float alpha = cg_raceGhostsAlpha->value;
 
@@ -621,15 +621,15 @@ static void CG_AddRaceGhostShell( entity_t *ent ) {
 	shell.color[2] *= alpha;
 	shell.color[3] = 255 * alpha;
 
-	CG_AddEntityToScene( &shell );
+	CG_AddEntityToScene( &shell, drawSceneRequest );
 }
 
 /*
 * CG_AddShellEffects
 */
-void CG_AddShellEffects( entity_t *ent, int effects ) {
+void CG_AddShellEffects( entity_t *ent, int effects, DrawSceneRequest *drawSceneRequest ) {
 	if( effects & EF_RACEGHOST ) {
-		CG_AddRaceGhostShell( ent );
+		CG_AddRaceGhostShell( ent, drawSceneRequest );
 	}
 }
 
@@ -788,7 +788,7 @@ void CG_AddColoredOutLineEffect( entity_t *ent, int effects, uint8_t r, uint8_t 
 /*
 * CG_PModel_AddFlag
 */
-static void CG_PModel_AddFlag( centity_t *cent ) {
+static void CG_PModel_AddFlag( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	int flag_team  = ( cent->current.team == TEAM_ALPHA ) ? TEAM_BETA : TEAM_ALPHA;
 	vec4_t teamcolor;
 	byte_vec4_t col;
@@ -802,13 +802,13 @@ static void CG_PModel_AddFlag( centity_t *cent ) {
 
 	Vector4Scale( teamcolor, 255, col );
 
-	CG_AddFlagModelOnTag( cent, col, "tag_flag1" );
+	CG_AddFlagModelOnTag( cent, col, "tag_flag1", drawSceneRequest );
 }
 
 /*
 * CG_PModel_AddHeadIcon
 */
-static void CG_AddHeadIcon( centity_t *cent ) {
+static void CG_AddHeadIcon( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	entity_t balloon;
 	bool stunned = false, showIcon = false;
 	struct shader_s *iconShader = NULL;
@@ -858,7 +858,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 			balloon.radius = radius;
 			balloon.model = NULL;
 
-			R_AddEntityToScene( &balloon );
+			drawSceneRequest->addEntity( &balloon );
 		}
 
 		// add stun effect: not really a head icon, but there's no point in finding the head location twice
@@ -872,7 +872,7 @@ static void CG_AddHeadIcon( centity_t *cent ) {
 				balloon.shaderRGBA[3] = ( 255 * ( 1.0f - cg.lerpfrac ) );
 			}
 
-			R_AddEntityToScene( &balloon );
+			drawSceneRequest->addEntity( &balloon );
 		}
 	}
 }
@@ -1123,7 +1123,7 @@ static bonepose_t blendpose[SKM_MAX_BONES];
 /*
 * CG_AddPModel
 */
-void CG_AddPModel( centity_t *cent ) {
+void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	int i, j;
 	pmodel_t *pmodel;
 	vec3_t tmpangles;
@@ -1259,18 +1259,18 @@ void CG_AddPModel( centity_t *cent ) {
 
 	if( !( cent->effects & EF_RACEGHOST ) ) {
 		CG_AddCentityOutLineEffect( cent );
-		CG_AddEntityToScene( &cent->ent );
+		CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 	}
 
 	if( !cent->ent.model ) {
 		return;
 	}
 
-	CG_PModel_AddFlag( cent );
+	CG_PModel_AddFlag( cent, drawSceneRequest );
 
-	CG_AddShellEffects( &cent->ent, cent->effects );
+	CG_AddShellEffects( &cent->ent, cent->effects, drawSceneRequest );
 
-	CG_AddHeadIcon( cent );
+	CG_AddHeadIcon( cent, drawSceneRequest );
 
 	// add teleporter sfx if needed
 	CG_PModel_SpawnTeleportEffect( cent );
@@ -1287,7 +1287,7 @@ void CG_AddPModel( centity_t *cent ) {
 
 	// add weapon model
 	CG_AddWeaponOnTag( &cent->ent, &tag_weapon, cent->current.weapon, cent->effects, addCoronaLight,
-		&pmodel->projectionSource, pmodel->flash_time, pmodel->barrel_time );
+		&pmodel->projectionSource, pmodel->flash_time, pmodel->barrel_time, drawSceneRequest );
 }
 
 #define MOVEDIREPSILON  0.3f

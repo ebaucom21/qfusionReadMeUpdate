@@ -17,8 +17,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-#ifndef __REF_H
-#define __REF_H
+
+#ifndef WSW_ac367414_9635_4452_b2fc_9477f5254db5_H
+#define WSW_ac367414_9635_4452_b2fc_9477f5254db5_H
+
+#include "../qcommon/wswstaticvector.h"
 
 // FIXME: move these to r_local.h?
 #define MAX_DLIGHTS             32
@@ -109,6 +112,8 @@ typedef enum {
 
 typedef struct entity_s {
 	refEntityType_t rtype;
+	unsigned number;
+
 	union {
 		int flags;
 		int renderfx;
@@ -175,12 +180,51 @@ typedef struct refdef_s {
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
 
-void R_ClearScene();
-void R_AddEntityToScene( const entity_t *ent );
-void R_AddPolyToScene( const poly_t *poly );
-void R_AddLightStyleToScene( int style, float r, float g, float b );
-void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b );
-void R_RenderScene( const refdef_t *fd );
+namespace wsw::ref { class Frontend; }
+
+class Scene {
+	friend class wsw::ref::Frontend;
+public:
+	struct Poly {
+		int type;
+		int fogNum;
+		int numElems;
+		int numVerts;
+
+		vec4_t *xyzArray;
+		vec4_t *normalsArray;
+		vec2_t *stArray;
+		byte_vec4_t *colorsArray;
+		uint16_t *elems;
+		struct shader_s *shader;
+	};
+protected:
+	Scene();
+
+	const unsigned m_numLocalEntities { 2 };
+	entity_t *m_worldent;
+	entity_t *m_polyent;
+
+	wsw::StaticVector<entity_t, MAX_ENTITIES + 48> m_entities;
+	wsw::StaticVector<entity_t *, MAX_ENTITIES + 48> m_brushModelEntities;
+	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
+};
+
+// TODO: Aggregate Scene as a member?
+class DrawSceneRequest : public Scene {
+	friend class wsw::ref::Frontend;
+	// TODO: Get rid of "refdef_t"
+	refdef_t m_refdef;
+
+	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
+public:
+	void addEntity( const entity_t *ent );
+	void addPoly( const poly_t *poly );
+	void addLight( const float *origin, float programIntensity, float coronaIntensity, float r, float g, float b );
+};
+
+DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );
+void SubmitDrawSceneRequest( DrawSceneRequest *request );
 
 class Texture;
 

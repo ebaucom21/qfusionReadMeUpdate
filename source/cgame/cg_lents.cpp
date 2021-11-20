@@ -772,7 +772,8 @@ void CG_BladeImpact( const vec3_t pos, const vec3_t dir ) {
 /*
 * CG_LasertGunImpact
 */
-void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color ) {
+void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir,
+						const vec4_t color, DrawSceneRequest *drawSceneRequest ) {
 	entity_t ent;
 	vec3_t ndir;
 	vec3_t angles;
@@ -790,7 +791,7 @@ void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const 
 
 	AnglesToAxis( angles, ent.axis );
 
-	R_AddEntityToScene( &ent );
+	drawSceneRequest->addEntity( &ent );
 }
 
 /*
@@ -1550,10 +1551,7 @@ void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVe
 	}
 }
 
-/*
-* CG_AddLocalEntities
-*/
-void CG_AddLocalEntities( void ) {
+void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 #define FADEINFRAMES 2
 	int f;
 	lentity_t *le, *next, *hnode;
@@ -1602,7 +1600,7 @@ void CG_AddLocalEntities( void ) {
 		ent = &le->ent;
 
 		if( le->light && scale ) {
-			R_AddLightToScene( le->lightOrigin, le->light * scale, 0, le->lightcolor[0], le->lightcolor[1], le->lightcolor[2] );
+			drawSceneRequest->addLight( le->lightOrigin, le->light * scale, 0, le->lightcolor[0], le->lightcolor[1], le->lightcolor[2] );
 		}
 
 		if( le->type == LE_LASER ) {
@@ -1775,7 +1773,7 @@ void CG_AddLocalEntities( void ) {
 		VectorCopy( ent->origin, ent->lightingOrigin );
 		VectorMA( le->velocity, time, le->accel, le->velocity );
 
-		CG_AddEntityToScene( ent );
+		CG_AddEntityToScene( ent, drawSceneRequest );
 	}
 }
 

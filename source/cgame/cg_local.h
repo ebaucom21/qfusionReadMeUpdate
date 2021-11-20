@@ -444,16 +444,15 @@ extern cvar_t *cg_gun_alpha;
 
 const struct cmodel_s *CG_CModelForEntity( int entNum );
 void CG_SoundEntityNewState( centity_t *cent );
-void CG_AddEntities( void );
+void CG_AddEntities( DrawSceneRequest *drawSceneRequest );
 void CG_LerpEntities( void );
 void CG_LerpGenericEnt( centity_t *cent );
 
 void CG_SetOutlineColor( byte_vec4_t outlineColor, byte_vec4_t color );
 void CG_AddColoredOutLineEffect( entity_t *ent, int effects, uint8_t r, uint8_t g, uint8_t b, uint8_t a );
 void CG_AddCentityOutLineEffect( centity_t *cent );
-void CG_AddItemGhostEffect( centity_t *cent );
 
-void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname );
+void CG_AddFlagModelOnTag( centity_t *cent, byte_vec4_t teamcolor, const char *tagname, DrawSceneRequest * );
 
 void CG_ResetItemTimers( void );
 centity_t *CG_GetItemTimerEnt( int num );
@@ -705,9 +704,9 @@ void CG_ClearChaseCam();
 //
 // cg_lents.c
 //
-void CG_ClearLocalEntities( void );
-void CG_AddLocalEntities( void );
-void CG_FreeLocalEntities( void );
+void CG_ClearLocalEntities();
+void CG_AddLocalEntities( DrawSceneRequest *request );
+void CG_FreeLocalEntities();
 
 void CG_BulletExplosion( const vec3_t origin, const vec_t *dir, const trace_t *trace );
 void CG_BubbleTrail( const vec3_t start, const vec3_t end, int dist );
@@ -733,7 +732,7 @@ void CG_SpawnSprite( const vec3_t origin, const vec3_t velocity, const vec3_t ac
 					 float radius, int time, int bounce, bool expandEffect, bool shrinkEffect,
 					 float r, float g, float b, float a,
 					 float light, float lr, float lg, float lb, struct shader_s *shader );
-void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color );
+void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color, DrawSceneRequest *drawSceneRequest );
 
 void CG_Dash( const entity_state_t *state );
 void CG_SpawnTracer( const vec3_t origin, const vec3_t dir, const vec3_t dir_per1, const vec3_t dir_per2 );
@@ -753,8 +752,6 @@ inline int CG_SpawnDecal( const vec3_t origin, const vec3_t dir, float orient, f
 	return 1;
 }
 
-inline void CG_AddDecals() {}
-
 //
 // cg_polys.c	-	wsw	: jal
 //
@@ -767,7 +764,7 @@ extern cvar_t *cg_instabeam_alpha;
 extern cvar_t *cg_instabeam_time;
 
 void CG_ClearPolys( void );
-void CG_AddPolys( void );
+void CG_AddPolys( DrawSceneRequest *drawSceneRequest );
 void CG_KillPolyBeamsByTag( int key );
 void CG_QuickPolyBeam( const vec3_t start, const vec3_t end, int width, struct shader_s *shader );
 void CG_LaserGunPolyBeam( const vec3_t start, const vec3_t end, const vec4_t color, int key );
@@ -786,13 +783,13 @@ void CG_RunLightStyles( void );
 
 void CG_SetLightStyle( unsigned i, const wsw::StringView &s );
 
-void CG_AddLightStyles( void );
+void CG_AddLightStyles( DrawSceneRequest * );
 
 inline void CG_ClearFragmentedDecals( void ) {}
 inline void CG_AddFragmentedDecal( vec3_t origin, vec3_t dir, float orient, float radius,
 							float r, float g, float b, float a, struct shader_s *shader ) {}
 
-void CG_AddParticles( void );
+void CG_AddParticles( DrawSceneRequest *drawSceneRequest );
 void CG_ParticleEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
 void CG_ParticleEffect2( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
 void CG_ParticleExplosionEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
@@ -808,7 +805,7 @@ void CG_HighVelImpactPuffParticles( const vec3_t org, const vec3_t dir, int coun
 //
 //	cg_vweap.c - client weapon
 //
-void CG_AddViewWeapon( cg_viewweapon_t *viewweapon );
+void CG_AddViewWeapon( cg_viewweapon_t *viewweapon, DrawSceneRequest *drawSceneRequest );
 void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon );
 void CG_ViewWeapon_StartAnimationEvent( int newAnim );
 void CG_ViewWeapon_RefreshAnimation( cg_viewweapon_t *viewweapon );

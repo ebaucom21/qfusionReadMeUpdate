@@ -121,13 +121,15 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	// it's a brush model
 	if( trace->ent == 0 || !( cg_entities[trace->ent].current.effects & EF_TAKEDAMAGE ) ) {
 		vec4_t color;
-		CG_LaserGunImpact( trace->endpos, trace->plane.normal, 15.0f, dir, _LaserColor( color ) );
+		/// TODO:!!!!!!!!!!!!!!!!!!!!!!!
+		///CG_LaserGunImpact( trace->endpos, trace->plane.normal, 15.0f, dir, _LaserColor( color ), drawSceneRequest );
 	} else {
 		// it's a player
 		// TODO: add player-impact model
 	}
 
-	R_AddLightToScene( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
+	// TODO:!!!!!!!!!!!!!!!!!!!!!!!
+	//R_AddLightToScene( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
 }
 
 void CG_LaserBeamEffect( centity_t *cent ) {

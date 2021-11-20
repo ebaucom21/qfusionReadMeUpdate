@@ -172,7 +172,7 @@ extern pmodel_t cg_entPModels[MAX_EDICTS];      //a pmodel handle for each cg_en
 //
 
 //utils
-void CG_AddShellEffects( entity_t *ent, int effects );
+void CG_AddShellEffects( entity_t *ent, int effects, DrawSceneRequest *drawSceneRequest );
 bool CG_GrabTag( orientation_t *tag, entity_t *ent, const char *tagname );
 void CG_PlaceModelOnTag( entity_t *ent, entity_t *dest, orientation_t *tag );
 void CG_PlaceRotatedModelOnTag( entity_t *ent, entity_t *dest, orientation_t *tag );
@@ -189,7 +189,7 @@ void CG_PModelsShutdown( void );
 void CG_ResetPModels( void );
 void CG_RegisterBasePModel( void );
 struct pmodelinfo_s *CG_RegisterPlayerModel( const char *filename );
-void CG_AddPModel( centity_t *cent );
+void CG_AddPModel( centity_t *cent, DrawSceneRequest *drawSceneRequest );
 bool CG_PModel_GetProjectionSource( int entnum, orientation_t *tag_result );
 void CG_UpdatePlayerModelEnt( centity_t *cent );
 void CG_PModel_AddAnimation( int entNum, int loweranim, int upperanim, int headanim, int channel );
@@ -202,7 +202,7 @@ void CG_WModelsInit();
 void CG_WModelsShutdown();
 struct weaponinfo_s *CG_CreateWeaponZeroModel( char *cgs_name );
 struct weaponinfo_s *CG_RegisterWeaponModel( char *cgs_name, int weaponTag );
-void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weapon, int effects, bool addCoronaLight, orientation_t *projectionSource, int64_t flash_time, int64_t barrel_time );
+void CG_AddWeaponOnTag( entity_t *ent, orientation_t *tag, int weapon, int effects, bool addCoronaLight, orientation_t *projectionSource, int64_t flash_time, int64_t barrel_time, DrawSceneRequest *drawSceneRequest );
 struct weaponinfo_s *CG_GetWeaponInfo( int currentweapon );
 
 //=================================================

@@ -44,7 +44,7 @@ static void R_TranslateForEntity( const entity_t *e ) {
 }
 
 static void R_TransformForEntity( const entity_t *e ) {
-	assert( e->rtype == RT_MODEL && e != rsc.worldent );
+	assert( e->rtype == RT_MODEL && e->number != kWorldEntNumber );
 
 	mat4_t objectMatrix;
 
@@ -565,21 +565,6 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 			}
 		}
 
-		// TODO: ...
-		unsigned dlightBits = 0;
-		unsigned checkDlightBits = dlightBits & ~curDlightBits;
-
-		// dynamic lights that affect the surface
-		if( checkDlightBits ) {
-			// ignore dlights that have already been marked as affectors
-			if( dlightFrame == rsc.frameCount ) {
-				curDlightBits |= checkDlightBits;
-			} else {
-				dlightFrame = rsc.frameCount;
-				curDlightBits = checkDlightBits;
-			}
-		}
-
 		// surfaces are sorted by their firstDrawVert index so to cut the final slice
 		// we only need to note the first and the last surface
 		if( !firstVisSurf ) {
@@ -588,23 +573,16 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 		lastVisSurf = surf;
 	}
 
-	if( dlightFrame == rsc.frameCount ) {
-		drawSurf->dlightBits = curDlightBits;
-		drawSurf->dlightFrame = dlightFrame;
-	}
-
 	// prepare the slice
 	if( firstVisSurf ) {
-		const bool dlight = dlightFrame == rsc.frameCount;
-
 		drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
 		drawSurf->firstSpanElem = firstVisSurf->firstDrawSurfElem;
 		drawSurf->numSpanVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
 		drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
 
 		// update the distance sorting key if it's a portal surface or a normal dlit surface
-		if( resultDist != 0 || dlight ) {
-			const unsigned order = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, dlight );
+		if( resultDist != 0 ) {
+			const unsigned order = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, false );
 			if( resultDist == 0 ) {
 				resultDist = WORLDSURF_DIST;
 			}
@@ -747,7 +725,7 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
 				m_state.list->emplace_back( sortedDrawSurf_t {
 					.drawSurf = (drawSurfaceType_t *)drawSurf,
 					.distKey  = distKey,
-					.sortKey  = R_PackSortKey( shader->id, fogNum, portalNum, R_ENT2NUM( e ) ),
+					.sortKey  = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
 				});
 
 				return std::addressof( m_state.list->back() );
@@ -758,9 +736,13 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
 	return nullptr;
 }
 
-void Frontend::collectVisiblePolys() {
-	for( unsigned i = 0; i < rsc.numPolys; i++ ) {
-		drawSurfacePoly_t *const p = rsc.polys + i;
+void Frontend::collectVisiblePolys( Scene *scene ) {
+	auto *const polys = scene->m_polys.data();
+	const unsigned numPolys = scene->m_polys.size();
+	const auto *polyEntity  = scene->m_polyent;
+
+	for( unsigned i = 0; i < numPolys; i++ ) {
+		auto *const p = polys + i;
 		mfog_t *fog;
 		// TODO: Use a single branch
 		if( p->fogNum <= 0 || (unsigned)p->fogNum > rsh.worldBrushModel->numfogs ) {
@@ -769,15 +751,17 @@ void Frontend::collectVisiblePolys() {
 			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
 		}
 
-		if( !addEntryToSortList( rsc.polyent, fog, p->shader, 0, i, nullptr, p ) ) {
-			continue;
-		}
+		(void)addEntryToSortList( polyEntity, fog, p->shader, 0, i, nullptr, p );
 	}
 }
 
-void Frontend::collectVisibleEntities() {
-	for( unsigned i = rsc.numLocalEntities; i < rsc.numEntities; i++ ) {
-		entity_t *e = R_NUM2ENT( i );
+void Frontend::collectVisibleEntities( Scene *scene ) {
+	auto *const entities = scene->m_entities.data();
+	const unsigned numEntities = scene->m_entities.size();
+	const auto *worldEnt = scene->m_worldent;
+
+	for( unsigned i = scene->m_numLocalEntities ; i < numEntities; i++ ) {
+		entity_t *const e = entities + i;
 
 		if( !r_lerpmodels->integer ) {
 			e->backlerp = 0;
@@ -805,8 +789,8 @@ void Frontend::collectVisibleEntities() {
 						addSkeletalModelToSortList( e );
 						break;
 					case mod_brush:
-						e->outlineHeight = rsc.worldent->outlineHeight;
-						Vector4Copy( rsc.worldent->outlineRGBA, e->outlineColor );
+						e->outlineHeight = worldEnt->outlineHeight;
+						Vector4Copy( worldEnt->outlineRGBA, e->outlineColor );
 						addBrushModelToSortList( e );
 					default:
 						break;
@@ -821,23 +805,25 @@ void Frontend::collectVisibleEntities() {
 	}
 }
 
-void Frontend::collectVisibleWorldBrushes() {
+void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
+	auto *const worldEnt = scene->m_worldent;
+
 	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
 	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
-		rsc.worldent->outlineHeight = std::max( 0.0f, r_outlines_world->value );
+		worldEnt->outlineHeight = std::max( 0.0f, r_outlines_world->value );
 	} else {
-		rsc.worldent->outlineHeight = 0;
+		worldEnt->outlineHeight = 0;
 	}
 
-	Vector4Copy( mapConfig.outlineColor, rsc.worldent->outlineColor );
+	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
 	for( unsigned i = 0; i < rsh.worldBrushModel->numModelDrawSurfaces; i++ ) {
 		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + i;
-		addBspSurfToSortList( rsc.worldent, drawSurf, nullptr );
+		addBspSurfToSortList( worldEnt, drawSurf, nullptr );
 	}
 }
 
-void Frontend::submitSortedSurfacesToBackend() {
+void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	const auto *list = m_state.list;
 	if( list->empty() ) {
 		return;
@@ -846,7 +832,7 @@ void Frontend::submitSortedSurfacesToBackend() {
 	FrontendToBackendShared fsh;
 	fsh.drawSurfList = m_state.list;
 	fsh.renderFlags = m_state.renderFlags;
-	std:memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
+	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
 	unsigned prevEntNum = std::numeric_limits<unsigned>::max();
@@ -877,7 +863,7 @@ void Frontend::submitSortedSurfacesToBackend() {
 		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
 
 		const shader_t *shader = MaterialCache::instance()->getMaterialById( shaderNum );
-		const entity_t *entity = R_NUM2ENT( entNum );
+		const entity_t *entity = scene->m_entities.data() + entNum;
 		const mfog_t *fog = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
 		const portalSurface_t *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
 		const int entityFX = entity->renderfx;
@@ -953,7 +939,7 @@ void Frontend::submitSortedSurfacesToBackend() {
 				}
 			} else {
 				if( ( entNum != prevEntNum ) || prevBatchDrawSurf ) {
-					if( entity == rsc.worldent ) [[likely]] {
+					if( entity->number == kWorldEntNumber ) [[likely]] {
 						R_TransformForWorld();
 					} else if( entity->rtype == RT_MODEL ) {
 						R_TransformForEntity( entity );
@@ -1079,7 +1065,7 @@ void Frontend::clearActiveFrameBuffer() {
 	RB_Clear( bits, envColor[0], envColor[1], envColor[2], envColor[3] );
 }
 
-void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
+void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	const bool shadowMap = m_state.renderFlags & RF_SHADOWMAPVIEW ? true : false;
 
 	m_state.refdef = *fd;
@@ -1148,18 +1134,18 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 	if( !shadowMap ) {
 		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
-				collectVisibleWorldBrushes();
+				collectVisibleWorldBrushes( scene );
 			}
 		}
 
 		m_state.fog_eye = getFogForSphere( m_state.viewOrigin, 0.5f );
 		m_state.hdrExposure = 1.0f;
 
-		collectVisiblePolys();
+		collectVisiblePolys( scene );
 	}
 
 	if( r_drawentities->integer ) {
-		collectVisibleEntities();
+		collectVisibleEntities( scene );
 	}
 
 	if( !shadowMap ) {
@@ -1216,11 +1202,11 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 
 	clearActiveFrameBuffer();
 
-	submitSortedSurfacesToBackend();
+	submitSortedSurfacesToBackend( scene );
 
 	if( r_showtris->integer && !( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_EnableWireframe( true );
-		submitSortedSurfacesToBackend();
+		submitSortedSurfacesToBackend( scene );
 		RB_EnableWireframe( false );
 	}
 
@@ -1235,126 +1221,17 @@ void Frontend::renderViewFromThisCamera( const refdef_t *fd ) {
 	}
 }
 
-void Frontend::clearScene() {
-	rsc.numLocalEntities = 0;
-	rsc.numPolys = 0;
-
-	rsc.worldent = R_NUM2ENT( rsc.numLocalEntities );
-	rsc.worldent->scale = 1.0f;
-	rsc.worldent->model = rsh.worldModel;
-	rsc.worldent->rtype = RT_MODEL;
-	Matrix3_Identity( rsc.worldent->axis );
-	rsc.numLocalEntities++;
-
-	rsc.polyent = R_NUM2ENT( rsc.numLocalEntities );
-	rsc.polyent->scale = 1.0f;
-	rsc.polyent->model = nullptr;
-	rsc.polyent->rtype = RT_MODEL;
-	Matrix3_Identity( rsc.polyent->axis );
-	rsc.numLocalEntities++;
-
-	rsc.skyent = R_NUM2ENT( rsc.numLocalEntities );
-	*rsc.skyent = *rsc.worldent;
-	rsc.numLocalEntities++;
-
-	rsc.numEntities = rsc.numLocalEntities;
-
-	rsc.numBmodelEntities = 0;
-
-	rsc.frameCount++;
-
+auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
 	R_ClearSkeletalCache();
+
+	assert( m_drawSceneRequestHolder.empty() );
+	return new( m_drawSceneRequestHolder.unsafe_grow_back() )DrawSceneRequest( refdef );
 }
 
-void Frontend::addEntityToScene( const entity_t *ent ) {
-	if( ( ( rsc.numEntities - rsc.numLocalEntities ) < MAX_ENTITIES ) && ent ) {
-		const int eNum = rsc.numEntities;
-		entity_t *de = R_NUM2ENT( eNum );
-
-		*de = *ent;
-		if( r_outlines_scale->value <= 0 ) {
-			de->outlineHeight = 0;
-		}
-
-		if( de->rtype == RT_MODEL ) {
-			if( de->model && de->model->type == mod_brush ) {
-				rsc.bmodelEntities[rsc.numBmodelEntities++] = de;
-			}
-			if( !( de->renderfx & RF_NOSHADOW ) ) {
-				// TODO
-			}
-		} else if( de->rtype == RT_SPRITE ) {
-			// simplifies further checks
-			de->model = nullptr;
-		}
-
-		if( de->renderfx & RF_ALPHAHACK ) {
-			if( de->shaderRGBA[3] == 255 ) {
-				de->renderfx &= ~RF_ALPHAHACK;
-			}
-		}
-
-		rsc.numEntities++;
-
-		// add invisible fake entity for depth write
-		if( ( de->renderfx & ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) == ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) {
-			entity_t tent = *ent;
-			tent.renderfx &= ~RF_ALPHAHACK;
-			tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
-			R_AddEntityToScene( &tent );
-		}
-	}
-}
-
-void Frontend::addPolyToScene( const poly_t *poly ) {
-	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
-
-	if( ( rsc.numPolys < MAX_POLYS ) && poly && poly->numverts ) {
-		drawSurfacePoly_t *dp = &rsc.polys[rsc.numPolys];
-
-		assert( poly->shader );
-		if( !poly->shader ) {
-			return;
-		}
-
-		dp->type = ST_POLY;
-		dp->shader = poly->shader;
-		dp->numVerts = std::min( poly->numverts, MAX_POLY_VERTS );
-		dp->xyzArray = poly->verts;
-		dp->normalsArray = poly->normals;
-		dp->stArray = poly->stcoords;
-		dp->colorsArray = poly->colors;
-		dp->numElems = poly->numelems;
-		dp->elems = ( elem_t * )poly->elems;
-		dp->fogNum = poly->fognum;
-
-		// if fogNum is unset, we need to find the volume for polygon bounds
-		if( !dp->fogNum ) {
-			vec3_t dpmins, dpmaxs;
-			ClearBounds( dpmins, dpmaxs );
-
-			for( int i = 0; i < dp->numVerts; i++ ) {
-				AddPointToBounds( dp->xyzArray[i], dpmins, dpmaxs );
-			}
-
-			mfog_t *const fog = getFogForBounds( dpmins, dpmaxs );
-			dp->fogNum = fog ? ( fog - rsh.worldBrushModel->fogs + 1 ) : -1;
-		}
-
-		rsc.numPolys++;
-	}
-}
-
-void Frontend::addLightStyleToScene( int style, float r, float g, float b ) {
-	if( style < 0 || style >= MAX_LIGHTSTYLES ) {
-		Com_Error( ERR_DROP, "R_AddLightStyleToScene: bad light style %i", style );
-		return;
-	}
-
-	lightstyle_t *const ls = &rsc.lightStyles[style];
-	ls->rgb[0] = std::max( 0.0f, r );
-	ls->rgb[1] = std::max( 0.0f, g );
-	ls->rgb[2] = std::max( 0.0f, b );
+void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
+	assert( request == m_drawSceneRequestHolder.data() );
+	renderScene( request, &request->m_refdef );
+	m_drawSceneRequestHolder.clear();
 }
 
 static SingletonHolder<Frontend> sceneInstanceHolder;
@@ -1379,17 +1256,10 @@ void Frontend::destroyVolatileAssets() {
 	//m_coronaShader = nullptr;
 }
 
-void Frontend::addLight( const vec3_t origin, float programIntensity, float coronaIntensity, float r, float g, float b ) {
-}
-
-void Frontend::renderScene( const refdef_s *fd ) {
+void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 	set2DMode( false );
 
 	RB_SetTime( fd->time );
-
-	if( !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
-		rsc.refdef = *fd;
-	}
 
 	m_state.refdef = *fd;
 	if( !m_state.refdef.minLight ) {
@@ -1420,7 +1290,7 @@ void Frontend::renderScene( const refdef_s *fd ) {
 
 	bindFrameBuffer( 0 );
 
-	renderViewFromThisCamera( fd );
+	renderViewFromThisCamera( scene, fd );
 
 	R_RenderDebugSurface( fd );
 
@@ -1431,5 +1301,113 @@ void Frontend::renderScene( const refdef_s *fd ) {
 
 void Frontend::dynLightDirForOrigin( const vec_t *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal ) {
 }
+
+}
+
+Scene::Scene() {
+	entity_t worldEntity;
+	memset( &worldEntity, 0, sizeof( worldEntity ) );
+	worldEntity.rtype = RT_MODEL;
+	worldEntity.number = 0;
+	worldEntity.model = rsh.worldModel;
+	worldEntity.scale = 1.0f;
+	Matrix3_Identity( worldEntity.axis );
+	m_entities.push_back( worldEntity );
+	m_worldent = std::addressof( m_entities.back() );
+
+	entity_t polyEntity;
+	memset( &polyEntity, 0, sizeof( polyEntity ) );
+	polyEntity.rtype = RT_MODEL;
+	polyEntity.number = 1;
+	polyEntity.model = nullptr;
+	polyEntity.scale = 1.0f;
+	Matrix3_Identity( polyEntity.axis );
+	m_entities.push_back( polyEntity );
+	m_polyent = std::addressof( m_entities.back() );
+}
+
+void DrawSceneRequest::addEntity( const entity_t *ent ) {
+	if( !m_entities.full() && ent ) [[likely]] {
+		m_entities.push_back( *ent );
+		entity_t *de = std::addressof( m_entities.back() );
+		de->number = m_entities.size() - 1;
+
+		if( r_outlines_scale->value <= 0 ) {
+			de->outlineHeight = 0;
+		}
+
+		if( de->rtype == RT_MODEL ) {
+			if( de->model && de->model->type == mod_brush ) {
+				m_brushModelEntities.push_back( de );
+			}
+			if( !( de->renderfx & RF_NOSHADOW ) ) {
+				// TODO
+			}
+		} else if( de->rtype == RT_SPRITE ) {
+			// simplifies further checks
+			de->model = nullptr;
+		}
+
+		if( de->renderfx & RF_ALPHAHACK ) {
+			if( de->shaderRGBA[3] == 255 ) {
+				de->renderfx &= ~RF_ALPHAHACK;
+			}
+		}
+
+		// add invisible fake entity for depth write
+		// TODO: This should belong to the CGame code
+		if( ( de->renderfx & ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) == ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) {
+			entity_t tent = *ent;
+			tent.renderfx &= ~RF_ALPHAHACK;
+			tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
+			addEntity( &tent );
+		}
+	}
+}
+
+void DrawSceneRequest::addPoly( const poly_t *poly ) {
+	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
+
+	if( !m_polys.full() && poly && poly->numverts ) [[likely]] {
+		auto *dp = m_polys.unsafe_grow_back();
+
+		assert( poly->shader );
+		if( !poly->shader ) {
+			return;
+		}
+
+		dp->type = ST_POLY;
+		dp->shader = poly->shader;
+		dp->numVerts = std::min( poly->numverts, MAX_POLY_VERTS );
+		dp->xyzArray = poly->verts;
+		dp->normalsArray = poly->normals;
+		dp->stArray = poly->stcoords;
+		dp->colorsArray = poly->colors;
+		dp->numElems = poly->numelems;
+		dp->elems = ( elem_t * )poly->elems;
+		dp->fogNum = poly->fognum;
+
+		// if fogNum is unset, we need to find the volume for polygon bounds
+		if( !dp->fogNum ) {
+			//
+			dp->fogNum = -1;
+
+			/*
+			 * TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			vec3_t dpmins, dpmaxs;
+			ClearBounds( dpmins, dpmaxs );
+
+			for( int i = 0; i < dp->numVerts; i++ ) {
+				AddPointToBounds( dp->xyzArray[i], dpmins, dpmaxs );
+			}
+
+			mfog_t *const fog = getFogForBounds( dpmins, dpmaxs );
+			dp->fogNum = fog ? ( fog - rsh.worldBrushModel->fogs + 1 ) : -1;
+			 */
+		}
+	}
+}
+
+void DrawSceneRequest::addLight( const float *origin, float programIntensity, float coronaIntensity, float r, float g, float b ) {
 
 }

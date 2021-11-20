@@ -1204,30 +1204,6 @@ typedef struct {
 	byte_vec4_t customColors[NUM_CUSTOMCOLORS];
 } r_shared_t;
 
-typedef struct {
-	// bumped each R_ClearScene
-	unsigned int frameCount;
-
-	unsigned int numEntities;
-	unsigned int numLocalEntities;
-	entity_t entities[MAX_REF_ENTITIES];
-	entity_t        *worldent;
-	entity_t        *polyent;
-	entity_t        *skyent;
-
-	unsigned int numPolys;
-	drawSurfacePoly_t polys[MAX_POLYS];
-
-	lightstyle_t lightStyles[MAX_LIGHTSTYLES];
-
-	unsigned int numBmodelEntities;
-	entity_t        *bmodelEntities[MAX_REF_ENTITIES];
-
-	float farClipMin, farClipBias;
-
-	refdef_t refdef;
-} r_scene_t;
-
 // global frontend variables are stored here
 // the backend should never attempt reading or modifying them
 typedef struct {
@@ -1258,11 +1234,11 @@ typedef struct {
 } r_globals_t;
 
 extern r_shared_t rsh;
-extern r_scene_t rsc;
 extern r_globals_t rf;
 
-#define R_ENT2NUM( ent ) ( ( ent ) - rsc.entities )
-#define R_NUM2ENT( num ) ( rsc.entities + ( num ) )
+extern lightstyle_t lightStyles[MAX_LIGHTSTYLES];
+
+constexpr const unsigned kWorldEntNumber = 0;
 
 extern cvar_t *r_norefresh;
 extern cvar_t *r_drawentities;
@@ -1467,7 +1443,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf );
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly );
+void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *poly );
 void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 
 //

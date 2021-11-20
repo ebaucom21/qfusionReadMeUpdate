@@ -1205,7 +1205,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entit
 
 	skmodel = ( ( mskmodel_t * )mod->extradata );
 	if( skmodel->numbones && skmodel->numframes > 0 ) {
-		cache = R_GetSkeletalCache( R_ENT2NUM( e ), mod->lodnum );
+		cache = R_GetSkeletalCache( e->number, mod->lodnum );
 	}
 
 	if( cache ) {
@@ -1313,8 +1313,10 @@ void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const enti
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitPolySurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfacePoly_t *poly ) {
+void R_SubmitPolySurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *p ) {
 	mesh_t mesh;
+
+	auto *poly = (Scene::Poly *)p;
 
 	mesh.elems = poly->elems;
 	mesh.numElems = poly->numElems;

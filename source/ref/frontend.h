@@ -28,6 +28,8 @@ class Frontend {
 private:
 	refinst_t m_state;
 
+	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
+
 	wsw::Vector<sortedDrawSurf_t> m_meshDrawList;
 
 	[[nodiscard]]
@@ -42,7 +44,7 @@ private:
 	[[nodiscard]]
 	auto getDefaultFarClip() const -> float;
 
-	void renderViewFromThisCamera( const refdef_t *fd );
+	void renderViewFromThisCamera( Scene *scene, const refdef_t *fd );
 
 	[[nodiscard]]
 	auto tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
@@ -53,9 +55,9 @@ private:
 	void updatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
 
-	void collectVisiblePolys();
-	void collectVisibleWorldBrushes();
-	void collectVisibleEntities();
+	void collectVisiblePolys( Scene *scene );
+	void collectVisibleWorldBrushes( Scene *scene );
+	void collectVisibleEntities( Scene *scene );
 
 	void setupViewMatrices();
 	void clearActiveFrameBuffer();
@@ -70,7 +72,7 @@ private:
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
 							  float dist, unsigned order, const portalSurface_t *portalSurf, void *drawSurf );
 
-	void submitSortedSurfacesToBackend();
+	void submitSortedSurfacesToBackend( Scene *scene );
 public:
 	static void init();
 	static void shutdown();
@@ -80,16 +82,15 @@ public:
 
 	void clearScene();
 
-	void addEntityToScene( const entity_t *ent );
-	void addPolyToScene( const poly_t *poly );
-	void addLightStyleToScene( int style, float r, float g, float b );
-	void addLight( const float *origin, float programIntensity, float coronaIntensity, float r, float g, float b );
+	[[nodiscard]]
+	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
+	void submitDrawSceneRequest( DrawSceneRequest *request );
 
 	void initVolatileAssets();
 
 	void destroyVolatileAssets();
 
-	void renderScene( const refdef_t *rd );
+	void renderScene( Scene *scene, const refdef_t *rd );
 
 	void set2DMode( bool enable );
 

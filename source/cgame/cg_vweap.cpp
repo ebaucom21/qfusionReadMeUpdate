@@ -355,7 +355,7 @@ void CG_CalcViewWeapon( cg_viewweapon_t *viewweapon ) {
 /*
 * CG_AddViewWeapon
 */
-void CG_AddViewWeapon( cg_viewweapon_t *viewweapon ) {
+void CG_AddViewWeapon( cg_viewweapon_t *viewweapon, DrawSceneRequest *drawSceneRequest ) {
 	orientation_t tag;
 	int64_t flash_time = 0;
 
@@ -368,8 +368,8 @@ void CG_AddViewWeapon( cg_viewweapon_t *viewweapon ) {
 	VectorCopy( cg_entities[viewweapon->POVnum].ent.lightingOrigin, viewweapon->ent.lightingOrigin );
 
 	CG_AddColoredOutLineEffect( &viewweapon->ent, cg.effects, 0, 0, 0, viewweapon->ent.shaderRGBA[3] );
-	CG_AddEntityToScene( &viewweapon->ent );
-	CG_AddShellEffects( &viewweapon->ent, cg.effects );
+	CG_AddEntityToScene( &viewweapon->ent, drawSceneRequest );
+	CG_AddShellEffects( &viewweapon->ent, cg.effects, drawSceneRequest );
 
 	if( cg_weaponFlashes->integer == 2 ) {
 		flash_time = cg_entPModels[viewweapon->POVnum].flash_time;
@@ -381,5 +381,5 @@ void CG_AddViewWeapon( cg_viewweapon_t *viewweapon ) {
 
 	// add attached weapon
 	CG_AddWeaponOnTag( &viewweapon->ent, &tag, viewweapon->weapon, cg.effects | EF_OUTLINE,
-		false, nullptr, flash_time, cg_entPModels[viewweapon->POVnum].barrel_time );
+		false, nullptr, flash_time, cg_entPModels[viewweapon->POVnum].barrel_time, drawSceneRequest );
 }

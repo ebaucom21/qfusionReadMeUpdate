@@ -385,10 +385,10 @@ void NativelyDrawnModel::drawSelfNatively( int64_t, int64_t timeDelta ) {
 		Matrix3_Copy( axis_identity, entity.axis );
 	}
 
-	R_ClearScene();
+	DrawSceneRequest *drawSceneRequest = CreateDrawSceneRequest( refdef );
 	CG_SetBoneposesForTemporaryEntity( &entity );
-	R_AddEntityToScene( &entity );
-	R_RenderScene( &refdef );
+	drawSceneRequest->addEntity( &entity );
+	SubmitDrawSceneRequest( drawSceneRequest );
 }
 
 }

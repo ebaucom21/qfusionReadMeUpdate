@@ -31,7 +31,7 @@ r_globals_t rf;
 
 mapconfig_t mapConfig;
 
-r_scene_t rsc;
+lightstyle_t lightStyles[MAX_LIGHTSTYLES];
 
 glconfig_t glConfig;
 
@@ -376,36 +376,6 @@ void R_DrawStretchQuick( int x, int y, int w, int h, float s1, float t1, float s
 	RB_FlushDynamicMeshes();
 }
 
-static void R_PolyBlend( void ) {
-	if( !r_polyblend->integer ) {
-		return;
-	}
-	if( rsc.refdef.blend[3] < 0.01f ) {
-		return;
-	}
-
-	R_Set2DMode( true );
-	R_DrawStretchPic( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight, 0, 0, 1, 1, rsc.refdef.blend, rsh.whiteShader );
-	RB_FlushDynamicMeshes();
-}
-
-static void R_ApplyBrightness( void ) {
-	float c = r_brightness->value;
-	if( c < 0.005 ) {
-		return;
-	}
-	if( c > 1.0 ) {
-		c = 1.0;
-	}
-
-	const vec4_t color { c, c, c, 1.0f };
-
-	R_Set2DMode( true );
-	auto *const whiteTexture = TextureCache::instance()->whiteTexture();
-	R_DrawStretchQuick( 0, 0, rf.frameBufferWidth, rf.frameBufferHeight, 0, 0, 1, 1,
-						color, GLSL_PROGRAM_TYPE_NONE, whiteTexture, GLSTATE_SRCBLEND_ONE | GLSTATE_DSTBLEND_ONE );
-}
-
 mesh_vbo_t *R_InitPostProcessingVBO( void ) {
 	const vattribmask_t vattribs = VATTRIB_POSITION_BIT | VATTRIB_TEXCOORDS_BIT;
 	mesh_vbo_t *vbo = R_CreateMeshVBO( &rf, 4, 6, 0, vattribs, VBO_TAG_NONE, vattribs );
@@ -536,10 +506,6 @@ void R_BeginFrame( bool forceClear, int swapInterval ) {
 void R_EndFrame( void ) {
 	// render previously batched 2D geometry, if any
 	RB_FlushDynamicMeshes();
-
-	R_PolyBlend();
-
-	R_ApplyBrightness();
 
 	// reset the 2D state so that the mode will be
 	// properly set back again in R_BeginFrame
@@ -751,28 +717,12 @@ void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsAr
 	}
 }
 
-void R_ClearScene() {
-	wsw::ref::Frontend::instance()->clearScene();
+DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef ) {
+	return wsw::ref::Frontend::instance()->createDrawSceneRequest( refdef );
 }
 
-void R_AddEntityToScene( const entity_t *ent ) {
-	wsw::ref::Frontend::instance()->addEntityToScene( ent );
-}
-
-void R_AddPolyToScene( const poly_t *poly ) {
-	wsw::ref::Frontend::instance()->addPolyToScene( poly );
-}
-
-void R_AddLightStyleToScene( int style, float r, float g, float b ) {
-	wsw::ref::Frontend::instance()->addLightStyleToScene( style, r, g, b );
-}
-
-void R_AddLightToScene( const vec3_t org, float programIntensity, float coronaIntensity, float r, float g, float b ) {
-	wsw::ref::Frontend::instance()->addLight( org, programIntensity, coronaIntensity, r, g, b );
-}
-
-void R_RenderScene( const refdef_t *fd ) {
-	wsw::ref::Frontend::instance()->renderScene( fd );
+void SubmitDrawSceneRequest( DrawSceneRequest *request ) {
+	wsw::ref::Frontend::instance()->submitDrawSceneRequest( request );
 }
 
 bool R_SurfPotentiallyFragmented( const msurface_t *surf ) {
@@ -795,7 +745,6 @@ void R_LightForOrigin( const vec3_t origin, vec3_t dir, vec4_t ambient, vec4_t d
 	vec_t *gridSize, *gridMins;
 	int *gridBounds;
 	mgridlight_t lightarray[8];
-	lightstyle_t *lightStyles = rsc.lightStyles;
 
 	VectorSet( ambientLocal, 0, 0, 0 );
 	VectorSet( diffuseLocal, 0, 0, 0 );
@@ -1288,7 +1237,7 @@ void R_InitLightStyles( model_t *mod ) {
 	loadbmodel->superLightStyles = (superLightStyle_t *)Q_malloc( sizeof( *loadbmodel->superLightStyles ) * MAX_LIGHTSTYLES );
 	loadbmodel->numSuperLightStyles = 0;
 
-	for( auto &lightStyle: rsc.lightStyles ) {
+	for( auto &lightStyle: lightStyles ) {
 		lightStyle.rgb[0] = 1;
 		lightStyle.rgb[1] = 1;
 		lightStyle.rgb[2] = 1;
@@ -2185,7 +2134,7 @@ static rserr_t R_PostInit( void ) {
 
 	wsw::ref::Frontend::init();
 
-	wsw::ref::Frontend::instance()->clearScene();
+	R_ClearSkeletalCache();
 
 	R_InitVolatileAssets();
 

@@ -86,15 +86,12 @@ void CG_SetLightStyle( unsigned i, const wsw::StringView &s ) {
 		cg_lightStyle[i].map[k] = (float)( s[k] - 'a' ) / (float)( 'm' - 'a' );
 }
 
-/*
-* CG_AddLightStyles
-*/
-void CG_AddLightStyles( void ) {
+void CG_AddLightStyles( DrawSceneRequest * ) {
 	int i;
 	cg_lightStyle_t *ls;
 
-	for( i = 0, ls = cg_lightStyle; i < MAX_LIGHTSTYLES; i++, ls++ )
-		R_AddLightStyleToScene( i, ls->value[0], ls->value[1], ls->value[2] );
+	//for( i = 0, ls = cg_lightStyle; i < MAX_LIGHTSTYLES; i++, ls++ )
+		//R_AddLightStyleToScene( i, ls->value[0], ls->value[1], ls->value[2] );
 }
 
 /*
@@ -461,10 +458,7 @@ void CG_ElectroIonsTrail2( const vec3_t start, const vec3_t end, const vec4_t co
 	}
 }
 
-/*
-* CG_AddParticles
-*/
-void CG_AddParticles( void ) {
+void CG_AddParticles( DrawSceneRequest *drawSceneRequest ) {
 	int i, j, k;
 	float alpha;
 	float time, time2;
@@ -525,7 +519,7 @@ void CG_AddParticles( void ) {
 		p->poly.fognum = p->fog ? 0 : -1;
 		p->poly.shader = ( p->shader == NULL ) ? cgs.media.shaderParticle : p->shader;
 
-		R_AddPolyToScene( &p->poly );
+		drawSceneRequest->addPoly( &p->poly );
 	}
 
 	i = 0;

@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 //=============================================================================
 
-void CG_AddEntityToScene( entity_t *ent );
+void CG_AddEntityToScene( entity_t *ent, DrawSceneRequest *drawSceneRequest );
 cgs_skeleton_t *CG_SkeletonForModel( struct model_s *model );
 
 bonepose_t *CG_RegisterTemporaryExternalBoneposes( cgs_skeleton_t *skel );

@@ -971,7 +971,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 			}
 
 			if( i == 1 ) {
-				vec_t *rgb = rsc.lightStyles[lightStyle->lightmapStyles[0]].rgb;
+				vec_t *rgb = lightStyles[lightStyle->lightmapStyles[0]].rgb;
 
 				// GLSL_SHADER_MATERIAL_FB_LIGHTMAP indicates that there's no need to renormalize
 				// the lighting vector for specular (saves 3 adds, 3 muls and 1 normalize per pixel)
@@ -1010,7 +1010,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 				Vector4Set( ambient, 1, 1, 1, 1 );
 				Vector4Set( diffuse, 1, 1, 1, 1 );
 			} else {
-				if( e->model && e != rsc.worldent ) {
+				if( e->model && e->number != kWorldEntNumber ) {
 					// get weighted incoming direction of world and dynamic lights
 					R_LightForOrigin( e->lightingOrigin, temp, ambient, diffuse,
 									  e->model->radius * e->scale, rb.noWorldLight );
@@ -1302,7 +1302,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 		vec3_t temp = { 0.1f, 0.2f, 0.7f };
 		float radius = 1;
 
-		if( e != rsc.worldent && e->model != NULL ) {
+		if( e->number != kWorldEntNumber && e->model != NULL ) {
 			radius = e->model->radius;
 		}
 
@@ -2092,7 +2092,7 @@ static inline const vec_t *RB_TriangleLinesColor( void ) {
 	if( rb.currentModelType != mod_bad ) {
 		return colorRed;
 	}
-	if( rb.currentEntity != rsc.worldent ) {
+	if( rb.currentEntity && rb.currentEntity->number != kWorldEntNumber ) {
 		return colorBlue;
 	}
 	return colorGreen;
