@@ -22,6 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_ac367414_9635_4452_b2fc_9477f5254db5_H
 
 #include "../qcommon/wswstaticvector.h"
+#include "../gameshared/q_math.h"
+
+#include <optional>
 
 // FIXME: move these to r_local.h?
 #define MAX_DLIGHTS             32
@@ -179,6 +182,13 @@ typedef struct refdef_s {
 	float minLight;                     // minimum value of ambient lighting applied to RF_MINLIGHT entities
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
+
+struct alignas( 16 ) BasicParticle {
+	float origin[4];
+	float oldOrigin[4];
+	float velocity[4];
+	float accel[4];
+};
 
 namespace wsw::ref { class Frontend; }
 

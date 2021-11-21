@@ -22,13 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 
-/*
-==============================================================
-
-LIGHT STYLE MANAGEMENT
-
-==============================================================
-*/
+#include "../qcommon/singletonholder.h"
+#include "../client/client.h"
+#include "../qcommon/links.h"
 
 typedef struct
 {
@@ -161,113 +157,6 @@ static void CG_ClearParticles( void ) {
 	)
 
 /*
-* CG_ParticleEffect
-*
-* Wall impact puffs
-*/
-void CG_ParticleEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity ) {
-	int j;
-	cparticle_t *p;
-	float d;
-
-	if( !cg_particles->integer ) {
-		return;
-	}
-
-	// Check for the default argument value
-	if( std::isnan( gravity ) ) {
-		gravity = -PARTICLE_GRAVITY;
-	}
-
-	if( cg_numparticles + count > MAX_PARTICLES ) {
-		count = MAX_PARTICLES - cg_numparticles;
-	}
-	for( p = &particles[cg_numparticles], cg_numparticles += count; count > 0; count--, p++ ) {
-		CG_InitParticle( p, 0.75, 1, r + random() * 0.1, g + random() * 0.1, b + random() * 0.1, NULL );
-
-		d = rand() & 31;
-		for( j = 0; j < 3; j++ ) {
-			p->org[j] = org[j] + ( ( rand() & 7 ) - 4 ) + d * dir[j];
-			p->vel[j] = crandom() * 20;
-		}
-
-		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = gravity;
-		p->alphavel = -1.0 / ( 0.5 + random() * 0.3 );
-	}
-}
-
-/*
-* CG_ParticleEffect2
-*/
-void CG_ParticleEffect2( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity ) {
-	int j;
-	float d;
-	cparticle_t *p;
-
-	if( !cg_particles->integer ) {
-		return;
-	}
-
-	// Check for the default argument value
-	if( std::isnan( gravity ) ) {
-		gravity = -PARTICLE_GRAVITY;
-	}
-
-	if( cg_numparticles + count > MAX_PARTICLES ) {
-		count = MAX_PARTICLES - cg_numparticles;
-	}
-	for( p = &particles[cg_numparticles], cg_numparticles += count; count > 0; count--, p++ ) {
-		CG_InitParticle( p, 0.75, 1, r, g, b, NULL );
-
-		d = rand() & 7;
-		for( j = 0; j < 3; j++ ) {
-			p->org[j] = org[j] + ( ( rand() & 7 ) - 4 ) + d * dir[j];
-			p->vel[j] = crandom() * 20;
-		}
-
-		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = gravity;
-		p->alphavel = -1.0 / ( 0.5 + random() * 0.3 );
-	}
-}
-
-/*
-* CG_ParticleExplosionEffect
-*/
-void CG_ParticleExplosionEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity ) {
-	int j;
-	cparticle_t *p;
-	float d;
-
-	if( !cg_particles->integer ) {
-		return;
-	}
-
-	// Check for the default argument value
-	if( std::isnan( gravity ) ) {
-		gravity = -PARTICLE_GRAVITY;
-	}
-
-	if( cg_numparticles + count > MAX_PARTICLES ) {
-		count = MAX_PARTICLES - cg_numparticles;
-	}
-	for( p = &particles[cg_numparticles], cg_numparticles += count; count > 0; count--, p++ ) {
-		CG_InitParticle( p, 0.75, 1, r + random() * 0.1, g + random() * 0.1, b + random() * 0.1, NULL );
-
-		d = rand() & 31;
-		for( j = 0; j < 3; j++ ) {
-			p->org[j] = org[j] + ( ( rand() & 7 ) - 4 ) + d * dir[j];
-			p->vel[j] = crandom() * 400;
-		}
-
-		//p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = gravity;
-		p->alphavel = -1.0 / ( 0.7 + random() * 0.25 );
-	}
-}
-
-/*
 * CG_ElectroWeakTrail
 */
 void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t color ) {
@@ -311,68 +200,6 @@ void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t col
 
 		VectorClear( p->accel );
 		VectorAdd( move, vec, move );
-	}
-}
-
-/*
-* CG_ImpactPuffParticles
-* Wall impact puffs
-*/
-void CG_ImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader ) {
-	int j;
-	float d;
-	cparticle_t *p;
-
-	if( !cg_particles->integer ) {
-		return;
-	}
-
-	if( cg_numparticles + count > MAX_PARTICLES ) {
-		count = MAX_PARTICLES - cg_numparticles;
-	}
-	for( p = &particles[cg_numparticles], cg_numparticles += count; count > 0; count--, p++ ) {
-		CG_InitParticle( p, scale, a, r, g, b, shader );
-
-		d = rand() & 15;
-		for( j = 0; j < 3; j++ ) {
-			p->org[j] = org[j] + ( ( rand() & 7 ) - 4 ) + d * dir[j];
-			p->vel[j] = dir[j] * 90 + crandom() * 40;
-		}
-
-		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = -PARTICLE_GRAVITY;
-		p->alphavel = -1.0 / ( 0.5 + random() * 0.3 );
-	}
-}
-
-/*
-* CG_HighVelImpactPuffParticles
-* High velocity wall impact puffs
-*/
-void CG_HighVelImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader ) {
-	int j;
-	float d;
-	cparticle_t *p;
-
-	if( !cg_particles->integer ) {
-		return;
-	}
-
-	if( cg_numparticles + count > MAX_PARTICLES ) {
-		count = MAX_PARTICLES - cg_numparticles;
-	}
-	for( p = &particles[cg_numparticles], cg_numparticles += count; count > 0; count--, p++ ) {
-		CG_InitParticle( p, scale, a, r, g, b, shader );
-
-		d = rand() & 15;
-		for( j = 0; j < 3; j++ ) {
-			p->org[j] = org[j] + ( ( rand() & 7 ) - 4 ) + d * dir[j];
-			p->vel[j] = dir[j] * 180 + crandom() * 40;
-		}
-
-		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = -PARTICLE_GRAVITY * 2;
-		p->alphavel = -5.0 / ( 0.5 + random() * 0.3 );
 	}
 }
 

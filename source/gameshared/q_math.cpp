@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //============================================================================
 
-static const vec3_t bytedirs[NUMVERTEXNORMALS] =
+const vec3_t kPredefinedDirs[NUMVERTEXNORMALS] =
 {
 #include "anorms.h"
 };
@@ -55,7 +55,7 @@ class DirToByteTable {
 
 	auto getFirstHashedFit( const vec3_t v ) const -> int {
 		int binIndex = Hash( v ) % kNumBins;
-		const auto *normals = ::bytedirs;
+		const auto *normals = ::kPredefinedDirs;
 		for( int num = bins[binIndex]; num != kNullLink; ) {
 			const auto *n = normals[num];
 			if( DotProduct( v, n ) > 0.95f ) {
@@ -67,7 +67,7 @@ class DirToByteTable {
 	}
 
 	auto scanForFirstFit( const vec3_t v ) const -> int {
-		const auto *normals = ::bytedirs;
+		const auto *normals = ::kPredefinedDirs;
 		for( int i = 0; i < kSize; ++i ) {
 			const auto *n = normals[i];
 			if( DotProduct( v, n ) > 0.95f ) {
@@ -85,7 +85,7 @@ public:
 		}
 
 		for( unsigned i = 0; i < kSize; ++i ) {
-			int binIndex = Hash( ::bytedirs[i] ) % kNumBins;
+			int binIndex = Hash( ::kPredefinedDirs[i] ) % kNumBins;
 			int oldHead = bins[binIndex];
 			// Link old bin head (or "null") as next for the newly added entry
 			next[i] = (uint8_t)oldHead;
@@ -135,7 +135,7 @@ int DirToByte( const vec3_t dir ) {
 	bestd = 0;
 	best = 0;
 	for( i = 0; i < NUMVERTEXNORMALS; i++ ) {
-		d = DotProduct( dir, bytedirs[i] );
+		d = DotProduct( dir, kPredefinedDirs[i] );
 		if( ( d == 1 ) && normalized ) {
 			return i;
 		}
@@ -152,7 +152,7 @@ void ByteToDir( int b, vec3_t dir ) {
 	if( b < 0 || b >= NUMVERTEXNORMALS ) {
 		VectorSet( dir, 0, 0, 0 );
 	} else {
-		VectorCopy( bytedirs[b], dir );
+		VectorCopy( kPredefinedDirs[b], dir );
 	}
 }
 
@@ -613,41 +613,6 @@ int Q_log2( int val ) {
 		answer++;
 	return answer;
 }
-
-/*
-* VectorReflect
-*/
-void VectorReflect( const vec3_t v, const vec3_t n, const vec_t dist, vec3_t out ) {
-	vec_t d;
-
-	d = -2 * ( DotProduct( v, n ) - dist );
-	VectorMA( v, d, n, out );
-}
-
-//============================================================================
-
-float LinearMovementWithOvershoot( vec_t start, vec_t end, float duration, float freq, float decay, float t ) {
-	float e;
-	vec_t amplitude;
-	float phase;
-
-	if( t < duration ) {
-		return start + ( end - start ) * t / duration;
-	}
-
-	e = decay * ( t - duration );
-	if( e > 5.0f ) {
-		// some reasonable exponent to stop oscillation
-		return end;
-	}
-
-	e = exp( e );
-	amplitude = (float)( end - start ) / duration;
-	phase = freq * M_TWOPI;
-	return end + amplitude * sin( ( t - duration ) * phase ) / e / phase;
-}
-
-//============================================================================
 
 void Matrix3_Identity( mat3_t m ) {
 	int i, j;

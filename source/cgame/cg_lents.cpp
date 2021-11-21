@@ -344,43 +344,8 @@ void CG_ElectroTrail2( const vec3_t start, const vec3_t end, int team ) {
 	}
 }
 
-/*
-* CG_ImpactSmokePuff
-*/
-void CG_ImpactSmokePuff( const vec3_t origin, const vec3_t dir, float radius, float alpha, int time, int speed ) {
-#define SMOKEPUFF_MAXVIEWDIST 700
-	lentity_t *le;
-	struct shader_s *shader = cgs.media.shaderSmokePuff;
-	vec3_t local_origin, local_dir;
-
-	if( CG_PointContents( origin ) & MASK_WATER ) {
-		return;
-	}
-
-	if( DistanceFast( origin, cg.view.origin ) * cg.view.fracDistFOV > SMOKEPUFF_MAXVIEWDIST ) {
-		return;
-	}
-
-	if( !VectorLength( dir ) ) {
-		VectorNegate( &cg.view.axis[AXIS_FORWARD], local_dir );
-	} else {
-		VectorNormalize2( dir, local_dir );
-	}
-
-	//offset the origin by half of the radius
-	VectorMA( origin, radius * 0.5f, local_dir, local_origin );
-
-	le = CG_AllocSprite( LE_SCALE_ALPHA_FADE, local_origin, radius + crandom(), time,
-						 1, 1, 1, alpha, 0, 0, 0, 0, shader );
-
-	le->ent.rotation = rand() % 360;
-	VectorScale( local_dir, speed, le->velocity );
-}
-
-/*
-* CG_BulletExplosion
-*/
-void CG_BulletExplosion( const vec3_t pos, const vec_t *dir, const trace_t *trace ) {
+void CG_BulletExplosion( const vec3_t pos, const vec_t *dir, const trace_t *trace,
+						 float minParticlesPercentage, float maxParticlesPercentage ) {
 	lentity_t *le;
 	vec3_t angles;
 	vec3_t local_dir, end;
@@ -424,7 +389,7 @@ void CG_BulletExplosion( const vec3_t pos, const vec_t *dir, const trace_t *trac
 		}
 	} else if( cg_particles->integer && ( tr->surfFlags & SURF_DUST ) ) {
 		// throw particles on dust
-		CG_ImpactSmokePuff( tr->endpos, tr->plane.normal, 4, 0.6f, 6, 8 );
+		//CG_ImpactSmokePuff( tr->endpos, tr->plane.normal, 4, 0.6f, 6, 8 );
 	} else {
 		le = CG_AllocModel( LE_ALPHA_FADE, pos, angles, 3, //3 frames for weak
 							1, 1, 1, 1, //full white no inducted alpha
@@ -433,9 +398,16 @@ void CG_BulletExplosion( const vec3_t pos, const vec_t *dir, const trace_t *trac
 							NULL );
 		le->ent.rotation = rand() % 360;
 		le->ent.scale = 1.0f;
-		if( cg_particles->integer ) {
-			CG_ImpactSmokePuff( tr->endpos, tr->plane.normal, 2, 0.6f, 6, 8 );
-		}
+
+		ConeFlockFiller flockFiller {
+			.origin        = tr->endpos,
+			.offset        = tr->plane.normal,
+			.dir           = tr->plane.normal,
+			.gravity       = 900.0f,
+			.minPercentage = minParticlesPercentage,
+			.maxPercentage = maxParticlesPercentage
+		};
+		cg.particleSystem.addSmallParticleFlock( colorWhite, flockFiller );
 
 		if( !( tr->surfFlags & SURF_NOMARKS ) ) {
 			CG_SpawnDecal( pos, local_dir, random() * 360, 8, 1, 1, 1, 1, 10, 1, false, cgs.media.shaderBulletMark );
@@ -508,6 +480,9 @@ void CG_PlasmaExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, floa
 	CG_SpawnDecal( pos, dir, 90, 16,
 				   1, 1, 1, 1, 4, 1, true,
 				   cgs.media.shaderPlasmaMark );
+
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir, .minTimeout = 50, .maxTimeout = 200 };
+	cg.particleSystem.addMediumParticleFlock( colorGreen, flockFiller );
 }
 
 /*
@@ -540,8 +515,8 @@ void CG_BoltExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, in
 	le->ent.rotation = rand() % 360;
 	le->ent.scale = ( fire_mode == FIRE_MODE_STRONG ) ? 1.5f : 1.0f;
 
-	// add white energy particles on the impact
-	CG_ImpactPuffParticles( pos, dir, 15, 0.75f, 1, 1, 1, 1, NULL );
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir };
+	cg.particleSystem.addLargeParticleFlock( colorBlue, flockFiller );
 
 	SoundSystem::Instance()->StartFixedSound( cgs.media.sfxElectroboltHit, pos, CHAN_AUTO,
 											  cg_volume_effects->value, ATTN_STATIC );
@@ -591,7 +566,8 @@ void CG_InstaExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, i
 	le->ent.scale = ( fire_mode == FIRE_MODE_STRONG ) ? 1.5f : 1.0f;
 
 	// add white energy particles on the impact
-	CG_ImpactPuffParticles( pos, dir, 15, 0.75f, 1, 1, 1, 1, NULL );
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir };
+	cg.particleSystem.addLargeParticleFlock( colorMagenta, flockFiller );
 
 	SoundSystem::Instance()->StartFixedSound( cgs.media.sfxElectroboltHit, pos, CHAN_AUTO,
 											  cg_volume_effects->value, ATTN_STATIC );
@@ -646,8 +622,8 @@ void CG_RocketExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, 
 		CG_ExplosionsDust( pos, dir, radius );
 	}
 
-	// Explosion particles
-	CG_ParticleExplosionEffect( pos, dir, 1, 0.5, 0, 32 );
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir, .gravity = 350.0f, .minSpeed = 150.0f, .maxSpeed = 300.0f };
+	cg.particleSystem.addLargeParticleFlock( colorOrange, flockFiller );
 
 	if( fire_mode == FIRE_MODE_STRONG ) {
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRocketLauncherStrongHit, pos, CHAN_AUTO, cg_volume_effects->value, ATTN_DISTANT );
@@ -697,8 +673,8 @@ void CG_WaveExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, fl
 
 	le->ent.rotation = rand() % 360;
 
-	// Explosion particles
-	CG_ParticleExplosionEffect( pos, dir, 0.9, 1.0, 1.0, 64, 0.0f );
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir, .minSpeed = 150.0f, .maxSpeed = 300.0f };
+	cg.particleSystem.addLargeParticleFlock( colorWhite, flockFiller );
 
 	if( fire_mode == FIRE_MODE_STRONG ) {
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxWaveStrongHit, pos, CHAN_AUTO, cg_volume_effects->value, ATTN_DISTANT );
@@ -732,6 +708,7 @@ void CG_BladeImpact( const vec3_t pos, const vec3_t dir ) {
 
 	VecToAngles( local_dir, angles );
 
+	bool addParticles = false;
 	if( trace.surfFlags & SURF_FLESH ||
 		( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_PLAYER )
 		|| ( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_CORPSE ) ) {
@@ -745,8 +722,7 @@ void CG_BladeImpact( const vec3_t pos, const vec3_t dir ) {
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxBladeFleshHit[(int)(random() * 3 )], pos, CHAN_AUTO,
 												  cg_volume_effects->value, ATTN_NORM );
 	} else if( trace.surfFlags & SURF_DUST ) {
-		// throw particles on dust
-		CG_ParticleEffect( trace.endpos, trace.plane.normal, 0.30f, 0.30f, 0.25f, 30 );
+		addParticles = true;
 
 		//fixme? would need a dust sound
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxBladeWallHit[(int)(random() * 2 )], pos, CHAN_AUTO,
@@ -759,13 +735,19 @@ void CG_BladeImpact( const vec3_t pos, const vec3_t dir ) {
 		le->ent.rotation = rand() % 360;
 		le->ent.scale = 1.0f;
 
-		CG_ParticleEffect( trace.endpos, trace.plane.normal, 0.30f, 0.30f, 0.25f, 15 );
+		addParticles = true;
 
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxBladeWallHit[(int)(random() * 2 )], pos, CHAN_AUTO,
 												  cg_volume_effects->value, ATTN_NORM );
 		if( !( trace.surfFlags & SURF_NOMARKS ) ) {
 			CG_SpawnDecal( pos, dir, random() * 10, 8, 1, 1, 1, 1, 10, 1, false, cgs.media.shaderBladeMark );
 		}
+	}
+
+	if( addParticles ) {
+		const vec3_t color { 0.30f, 0.30, 0.25f };
+		ConeFlockFiller flockFiller { .origin = pos, .offset = dir, .dir = dir, .angle = 60 };
+		cg.particleSystem.addMediumParticleFlock( color, flockFiller );
 	}
 }
 
@@ -828,6 +810,9 @@ void CG_GunBladeBlastImpact( const vec3_t pos, const vec3_t dir, float radius ) 
 	le_explo->ent.scale = radius / model_radius;
 
 	CG_SpawnDecal( pos, dir, random() * 360, 3 + ( radius * 0.5f ), 1, 1, 1, 1, 10, 1, false, cgs.media.shaderExplosionMark );
+
+	UniformFlockFiller flockFiller { .origin = origin, .offset = dir, .gravity = 0.0f, .bounceCount = 1 };
+	cg.particleSystem.addLargeParticleFlock( colorOrange, flockFiller );
 }
 
 static void CG_ProjectileFireTrail( centity_t *cent ) {
@@ -954,75 +939,28 @@ void CG_WaveCoronaAndTrail( centity_t *cent, const vec3_t org ) {
 
 	if( cent->localEffects[LOCALEFFECT_WAVETRAIL_LAST_DROP] + 16 < cg.time ) {
 		cent->localEffects[LOCALEFFECT_WAVETRAIL_LAST_DROP] = cg.time;
-		CG_ParticleEffect( org, vec3_origin, 1.0, 1.0, 1.0, 1, 0.0f );
+		// TODO: Emitters?
+		UniformFlockFiller flockFiller { .origin = org, .gravity = 0, .minSpeed = 150, .maxSpeed = 150 };
+		cg.particleSystem.addSmallParticleFlock( colorWhite, flockFiller );
 	}
 }
 
-/*
-* CG_BlasterTrail
-*/
 void CG_BlasterTrail( centity_t *ent, const vec3_t org ) {
 	if( ent->localEffects[LOCALEFFECT_BLASTER_SPARK_LAST_DROP] + 8 < cg.time ) {
 		ent->localEffects[LOCALEFFECT_BLASTER_SPARK_LAST_DROP] = cg.time;
-		CG_ParticleEffect( org, vec3_origin, 0.9f, 0.6f, 0.0f, 2, 350 );
-	}
-	if( random() > 0.9f ) {
-		CG_ParticleEffect( org, vec3_origin, 0.9f, 0.6f, 0.0f, 1, 750 );
-	}
-}
-
-/*
-* CG_NewBloodTrail
-*/
-void CG_NewBloodTrail( centity_t *cent ) {
-	lentity_t *le;
-	float len;
-	vec3_t vec;
-	int contents;
-	int trailTime;
-	float radius = 2.5f, alpha = cg_bloodTrailAlpha->value;
-	struct shader_s *shader = cgs.media.shaderBloodTrailPuff;
-
-	if( !cg_showBloodTrail->integer ) {
-		return;
-	}
-
-	if( !cg_bloodTrail->integer ) {
-		return;
-	}
-
-	// didn't move
-	VectorSubtract( cent->ent.origin, cent->trailOrigin, vec );
-	len = VectorNormalize( vec );
-	if( !len ) {
-		return;
-	}
-
-	// density is found by quantity per second
-	trailTime = (int)( 1000.0f / cg_bloodTrail->value );
-	if( trailTime < 1 ) {
-		trailTime = 1;
-	}
-
-	// we don't add more than one sprite each frame. If frame
-	// ratio is too slow, people will prefer having less sprites on screen
-	if( cent->localEffects[LOCALEFFECT_BLOODTRAIL_LAST_DROP] + trailTime < cg.time ) {
-		cent->localEffects[LOCALEFFECT_BLOODTRAIL_LAST_DROP] = cg.time;
-
-		contents = ( CG_PointContents( cent->trailOrigin ) & CG_PointContents( cent->ent.origin ) );
-		if( contents & MASK_WATER ) {
-			shader = cgs.media.shaderBloodTrailLiquidPuff;
-			radius = 4 + crandom();
-			alpha = 0.5f * cg_bloodTrailAlpha->value;
-		}
-
-		Q_clamp( alpha, 0.0f, 1.0f );
-		le = CG_AllocSprite( LE_SCALE_ALPHA_FADE, cent->trailOrigin, radius, 8,
-							 1.0f, 1.0f, 1.0f, alpha,
-							 0, 0, 0, 0,
-							 shader );
-		VectorSet( le->velocity, -vec[0] * 5 + crandom() * 5, -vec[1] * 5 + crandom() * 5, -vec[2] * 5 + crandom() * 5 + 3 );
-		le->ent.rotation = rand() % 360;
+		// TODO: Emitters?
+		ConeFlockFiller flockFiller {
+			.origin        = org,
+			.gravity       = -300,
+			.bounceCount   = 0,
+			.minSpeed      = 50,
+			.maxSpeed      = 125,
+			.minPercentage = 0.25f,
+			.maxPercentage = 0.5f,
+			.minTimeout    = 1,
+			.maxTimeout    = 500,
+		};
+		cg.particleSystem.addSmallParticleFlock( cg.time % 2 ? colorOrange : colorYellow, flockFiller );
 	}
 }
 
@@ -1234,8 +1172,8 @@ void CG_GrenadeExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode,
 		CG_ExplosionsDust( pos, dir, radius );
 	}
 
-	// Explosion particles
-	CG_ParticleExplosionEffect( pos, dir, 1, 0.5, 0, 32 );
+	UniformFlockFiller flockFiller { .origin = pos, .offset = dir, .minSpeed = 150.0f, .maxSpeed = 300.0f };
+	cg.particleSystem.addLargeParticleFlock( colorOrange, flockFiller );
 
 	if( fire_mode == FIRE_MODE_STRONG ) {
 		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGrenadeStrongExplosion, pos, CHAN_AUTO, cg_volume_effects->value, ATTN_DISTANT );
@@ -1297,23 +1235,6 @@ void CG_GenericExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, flo
 */
 void CG_GreenLaser( const vec3_t start, const vec3_t end ) {
 	CG_AllocLaser( start, end, 2.0f, 2.0f, 0.0f, 0.85f, 0.0f, 0.3f, cgs.media.shaderLaser );
-}
-
-void CG_SpawnTracer( const vec3_t origin, const vec3_t dir, const vec3_t dir_per1, const vec3_t dir_per2 ) {
-	lentity_t *tracer;
-	vec3_t dir_temp;
-
-	VectorMA( dir, crandom() * 2, dir_per1, dir_temp );
-	VectorMA( dir_temp, crandom() * 2, dir_per2, dir_temp );
-
-	VectorScale( dir_temp, VectorNormalize( dir_temp ), dir_temp );
-	VectorScale( dir_temp, random() * 400 + 420, dir_temp );
-
-	tracer = CG_AllocSprite( LE_EXPLOSION_TRACER, origin, 30, 7, 1, 1, 1, 1, 0, 0, 0, 0, cgs.media.shaderSmokePuff3 );
-	VectorCopy( dir_temp, tracer->velocity );
-	VectorSet( tracer->accel, -0.2f, -0.2f, -9.8f * 170 );
-	tracer->bounce = 50;
-	tracer->ent.rotation = cg.time;
 }
 
 void CG_Dash( const entity_state_t *state ) {

@@ -107,7 +107,18 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + TRAILTIME < cg.time ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
-			CG_HighVelImpactPuffParticles( trace->endpos, trace->plane.normal, 8, 0.5f, 1.0f, 0.8f, 0.2f, 1.0f, NULL );
+			ConeFlockFiller flockFiller {
+				.origin        = trace->endpos,
+				.offset        = trace->plane.normal,
+				.dir           = trace->plane.normal,
+				.gravity       = 900.0f,
+				.minPercentage = 0.5f,
+				.maxPercentage = 1.0f,
+				.minTimeout    = 75,
+				.maxTimeout    = 150
+			};
+
+			cg.particleSystem.addSmallParticleFlock( cg.frameCount % 2 ? colorYellow : colorWhite, flockFiller );
 
 			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxLasergunHit[rand() % 3], trace->endpos, CHAN_AUTO,
 													  cg_volume_effects->value, ATTN_STATIC );
@@ -435,24 +446,22 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 }
 
-/*
-* CG_LeadWaterSplash
-*/
 static void CG_LeadWaterSplash( trace_t *tr ) {
-	int contents;
-	vec_t *dir, *pos;
+	const int contents = tr->contents;
 
-	contents = tr->contents;
-	pos = tr->endpos;
-	dir = tr->plane.normal;
-
+	vec3_t color;
 	if( contents & CONTENTS_WATER ) {
-		CG_ParticleEffect( pos, dir, 0.47f, 0.48f, 0.8f, 8 );
+		VectorSet( color, 0.47f, 0.48f, 0.8f );
 	} else if( contents & CONTENTS_SLIME ) {
-		CG_ParticleEffect( pos, dir, 0.0f, 1.0f, 0.0f, 8 );
+		VectorSet( color, 0.0f, 1.0f, 0.0f );
 	} else if( contents & CONTENTS_LAVA ) {
-		CG_ParticleEffect( pos, dir, 1.0f, 0.67f, 0.0f, 8 );
+		VectorSet( color, 1.0f, 0.67f, 0.0f );
+	} else {
+		return;
 	}
+
+	ConeFlockFiller flockFiller { .origin = tr->endpos, .offset = tr->plane.normal };
+	cg.particleSystem.addSmallParticleFlock( color, flockFiller );
 }
 
 /*
@@ -478,146 +487,13 @@ static void CG_LeadBubbleTrail( trace_t *tr, vec3_t water_start ) {
 	CG_BubbleTrail( water_start, tr->endpos, 32 );
 }
 
-#if 0
-/*
-* CG_FireLead
-*/
-static void CG_FireLead( int self, vec3_t start, vec3_t axis[3], int hspread, int vspread, int *seed, trace_t *trace ) {
-	trace_t tr;
-	vec3_t dir;
-	vec3_t end;
-	float r;
-	float u;
-	vec3_t water_start;
-	bool water = false;
-	int content_mask = MASK_SHOT | MASK_WATER;
-
-#if 1
-
-	// circle
-	double alpha = M_PI * Q_crandom( seed ); // [-PI ..+PI]
-	double s = fabs( Q_crandom( seed ) ); // [0..1]
-	r = s * cos( alpha ) * hspread;
-	u = s * sin( alpha ) * vspread;
-#else
-
-	// square
-	r = Q_crandom( seed ) * hspread;
-	u = Q_crandom( seed ) * vspread;
-#endif
-
-	VectorMA( start, 8192, axis[0], end );
-	VectorMA( end, r, axis[1], end );
-	VectorMA( end, u, axis[2], end );
-
-	if( CG_PointContents( start ) & MASK_WATER ) {
-		water = true;
-		VectorCopy( start, water_start );
-		content_mask &= ~MASK_WATER;
-	}
-
-	CG_Trace( &tr, start, vec3_origin, vec3_origin, end, self, content_mask );
-
-	// see if we hit water
-	if( tr.contents & MASK_WATER ) {
-		water = true;
-		VectorCopy( tr.endpos, water_start );
-
-		if( !VectorCompare( start, tr.endpos ) ) {
-			vec3_t forward, right, up;
-
-			CG_LeadWaterSplash( &tr );
-
-			// change bullet's course when it enters water
-			VectorSubtract( end, start, dir );
-			VecToAngles( dir, dir );
-			AngleVectors( dir, forward, right, up );
-#if 1
-
-			// circle
-			alpha = M_PI * Q_crandom( seed ); // [-PI ..+PI]
-			s = fabs( Q_crandom( seed ) ); // [0..1]
-			r = s * cos( alpha ) * hspread * 1.5;
-			u = s * sin( alpha ) * vspread * 1.5;
-#else
-			r = Q_crandom( seed ) * hspread * 2;
-			u = Q_crandom( seed ) * vspread * 2;
-#endif
-			VectorMA( water_start, 8192, forward, end );
-			VectorMA( end, r, right, end );
-			VectorMA( end, u, up, end );
-		}
-
-		// re-trace ignoring water this time
-		CG_Trace( &tr, water_start, vec3_origin, vec3_origin, end, self, MASK_SHOT );
-	}
-
-	// save the final trace
-	*trace = tr;
-
-	// if went through water, determine where the end and make a bubble trail
-	if( water ) {
-		CG_LeadBubbleTrail( trace, water_start );
-	}
+static void CG_MachinegunImpact( trace_t *tr ) {
+	CG_BulletExplosion( tr->endpos, nullptr, tr, 0.10f, 0.60f );
 }
 
-/*
-* CG_BulletImpact
-*/
-static void CG_BulletImpact( trace_t *tr ) {
-	// bullet impact
-	CG_BulletExplosion( tr->endpos, NULL, tr );
-
-	// spawn decal
-	CG_SpawnDecal( tr->endpos, tr->plane.normal, random() * 360, 8, 1, 1, 1, 1, 8, 1, false, CG_MediaShader( cgs.media.shaderBulletMark ) );
-
-	// throw particles on dust
-	if( tr->surfFlags & SURF_DUST ) {
-		CG_ParticleEffect( tr->endpos, tr->plane.normal, 0.30f, 0.30f, 0.25f, 20 );
-	}
-
-	// impact sound
-	trap_S_StartFixedSound( CG_MediaSfx( cgs.media.sfxRic[rand() % 2] ), tr->endpos, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
-}
-
-/*
-* CG_FireBullet
-*/
-static void CG_FireBullet( int self, vec3_t start, vec3_t forward, int count, int spread, int seed, void ( *impact )( trace_t *tr /*, int impactnum*/ ) ) {
-	int i;
-	trace_t tr;
-	vec3_t dir, axis[3];
-	bool takedamage;
-
-	// calculate normal vectors
-	VecToAngles( forward, dir );
-	AngleVectors( dir, axis[0], axis[1], axis[2] );
-
-	for( i = 0; i < count; i++ ) {
-		CG_FireLead( self, start, axis, spread, spread, &seed, &tr );
-		takedamage = tr.ent && ( cg_entities[tr.ent].current.effects & EF_TAKEDAMAGE );
-
-		if( tr.fraction < 1.0f && !takedamage && !( tr.surfFlags & SURF_NOIMPACT ) ) {
-			impact( &tr );
-		}
-	}
-}
-#endif
-
-/*
-* CG_BulletImpact
-*/
-static void CG_BulletImpact( trace_t *tr ) {
-	// bullet impact
-	CG_BulletExplosion( tr->endpos, NULL, tr );
-
-	// throw particles on dust
-	if( cg_particles->integer && ( tr->surfFlags & SURF_DUST ) ) {
-		CG_ParticleEffect( tr->endpos, tr->plane.normal, 0.30f, 0.30f, 0.25f, 1 );
-	}
-
-	// spawn decal
-	CG_SpawnDecal( tr->endpos, tr->plane.normal, random() * 360, 8, 1, 1, 1, 1, 8, 1, false, cgs.media.shaderBulletMark );
+static void CG_RiotgunImpact( trace_t *tr ) {
+	// This produces a single particle (1 is the lowest number)
+	CG_BulletExplosion( tr->endpos, nullptr, tr, 0.0f, 0.0f );
 }
 
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
@@ -642,7 +518,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	}
 
 	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-		CG_BulletImpact( &trace );
+		CG_MachinegunImpact( &trace );
 
 		if( !water_trace ) {
 			if( trace.surfFlags & SURF_FLESH ||
@@ -650,7 +526,6 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 				( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_CORPSE ) ) {
 				// flesh impact sound
 			} else {
-				CG_ImpactPuffParticles( trace.endpos, trace.plane.normal, 1, 0.7, 1, 0.7, 0.0, 1.0, NULL );
 				SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRic[rand() % 2 ], trace.endpos, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
 			}
 		}
@@ -743,7 +618,7 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dir, int weapon, int fir
 	firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
 
 	CG_Fire_SunflowerPattern( origin, dir, &seed, owner, firedef->projectile_count,
-							  firedef->spread, firedef->v_spread, firedef->timeout, CG_BulletImpact );
+							  firedef->spread, firedef->v_spread, firedef->timeout, CG_RiotgunImpact );
 
 	// spawn a single sound at the impact
 	VectorMA( origin, firedef->timeout, dir, end );
@@ -1309,25 +1184,23 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			} else {
 				count = 6;
 			}
-
-			CG_ParticleEffect( ent->origin, dir, 1.0f, 0.67f, 0.0f, count );
+			{
+				const vec3_t c { 1.0f, 0.67f, 0.0f };
+				ConeFlockFiller flockFiller { .origin = ent->origin, .offset = dir, .dir = dir };
+				cg.particleSystem.addSmallParticleFlock( c, flockFiller );
+			}
 			break;
 
+		// TODO: Is this event used
 		case EV_BULLET_SPARKS:
 			ByteToDir( parm, dir );
-			CG_BulletExplosion( ent->origin, dir, NULL );
-			CG_ParticleEffect( ent->origin, dir, 1.0f, 0.67f, 0.0f, 6 );
 			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxRic[rand() % 2], ent->origin, CHAN_AUTO,
 													  cg_volume_effects->value, ATTN_IDLE );
 			break;
 
 		case EV_LASER_SPARKS:
 			ByteToDir( parm, dir );
-			CG_ParticleEffect2( ent->origin, dir,
-								COLOR_R( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-								COLOR_G( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-								COLOR_B( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-								ent->counterNum );
+			// ... TODO: Is this event really needed?
 			break;
 
 		case EV_GESTURE:

@@ -294,7 +294,10 @@ inline void VectorNormalizeFast( vec3_t v ) {
 	v[2] *= invLen;
 }
 
-void VectorReflect( const vec3_t v, const vec3_t n, const vec_t dist, vec3_t out );
+inline void VectorReflect( const float *v, const float *n, float dist, float *out ) {
+	const float d = -2 * ( DotProduct( v, n ) - dist );
+	VectorMA( v, d, n, out );
+}
 
 static inline void ClearBounds( vec3_t mins, vec3_t maxs ) {
 	mins[0] = mins[1] = mins[2] = 99999;
@@ -483,6 +486,8 @@ public:
 bool BoundsAndSphereIntersect( const vec3_t mins, const vec3_t maxs, const vec3_t centre, float radius );
 
 #define NUMVERTEXNORMALS    162
+extern const vec3_t kPredefinedDirs[NUMVERTEXNORMALS];
+
 int DirToByte( const vec3_t dir );
 int DirToByteFast( const vec3_t dir );
 void ByteToDir( int b, vec3_t dir );

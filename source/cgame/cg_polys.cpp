@@ -399,7 +399,7 @@ void CG_InstaPolyBeam( const vec3_t start, const vec3_t end, int team ) {
 * CG_PLink
 */
 void CG_PLink( const vec3_t start, const vec3_t end, const vec4_t color, int flags ) {
-	CG_SpawnPolyBeam( start, end, color, 4, 2000.0f, 0.0f, cgs.media.shaderLaser, 64, 0 );
+	CG_SpawnPolyBeam( start, end, color, 4, 10.0f, 0.0f, cgs.media.shaderLaser, 64, 0 );
 }
 
 void CG_WaveSpark( const vec3_t emitterOrigin ) {

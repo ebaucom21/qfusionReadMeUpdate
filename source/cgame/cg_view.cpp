@@ -1165,6 +1165,8 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddPolys( drawSceneRequest );
 	CG_AddLightStyles( drawSceneRequest );
 
+	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
+
 	AnglesToAxis( cg.view.angles, rd->viewaxis );
 
 	rd->rdflags = CG_RenderFlags();

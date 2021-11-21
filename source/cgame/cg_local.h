@@ -329,6 +329,8 @@ typedef struct {
 
 #define MAX_HELPMESSAGE_CHARS 4096
 
+#include "particlesystem.h"
+
 typedef struct cg_state_s {
 	int64_t time;
 	float delay;
@@ -423,6 +425,8 @@ typedef struct cg_state_s {
 
 	CrosshairState crosshairState { CrosshairState::Weak, 350 };
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
+
+	ParticleSystem particleSystem;
 } cg_state_t;
 
 extern cg_static_t cgs;
@@ -708,10 +712,10 @@ void CG_ClearLocalEntities();
 void CG_AddLocalEntities( DrawSceneRequest *request );
 void CG_FreeLocalEntities();
 
-void CG_BulletExplosion( const vec3_t origin, const vec_t *dir, const trace_t *trace );
+void CG_BulletExplosion( const vec3_t origin, const vec_t *dir, const trace_t *trace,
+						 float minParticlesPercentage, float maxParticlesPercentage );
 void CG_BubbleTrail( const vec3_t start, const vec3_t end, int dist );
 void CG_ProjectileTrail( centity_t *cent );
-void CG_NewBloodTrail( centity_t *cent );
 void CG_BloodDamageEffect( const vec3_t origin, const vec3_t dir, int damage );
 void CG_CartoonHitEffect( const vec3_t origin, const vec3_t dir, int damage );
 void CG_GreenLaser( const vec3_t start, const vec3_t end );
@@ -735,7 +739,6 @@ void CG_SpawnSprite( const vec3_t origin, const vec3_t velocity, const vec3_t ac
 void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color, DrawSceneRequest *drawSceneRequest );
 
 void CG_Dash( const entity_state_t *state );
-void CG_SpawnTracer( const vec3_t origin, const vec3_t dir, const vec3_t dir_per1, const vec3_t dir_per2 );
 void CG_Explosion_Puff_2( const vec3_t pos, const vec3_t vel, int radius );
 void CG_DustCircle( const vec3_t pos, const vec3_t dir, float radius, int count );
 void CG_ExplosionsDust( const vec3_t pos, const vec3_t dir, float radius );
@@ -790,17 +793,11 @@ inline void CG_AddFragmentedDecal( vec3_t origin, vec3_t dir, float orient, floa
 							float r, float g, float b, float a, struct shader_s *shader ) {}
 
 void CG_AddParticles( DrawSceneRequest *drawSceneRequest );
-void CG_ParticleEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
-void CG_ParticleEffect2( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
-void CG_ParticleExplosionEffect( const vec3_t org, const vec3_t dir, float r, float g, float b, int count, float gravity = NAN );
 void CG_BlasterTrail( centity_t *ent, const vec3_t org );
-void CG_FlyEffect( centity_t *ent, const vec3_t origin );
 void CG_ElectroIonsTrail( const vec3_t start, const vec3_t end, const vec4_t color );
 void CG_ElectroIonsTrail2( const vec3_t start, const vec3_t end, const vec4_t color );
 void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t color );
 void CG_WaveCoronaAndTrail( centity_t *ent, const vec3_t org );
-void CG_ImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader );
-void CG_HighVelImpactPuffParticles( const vec3_t org, const vec3_t dir, int count, float scale, float r, float g, float b, float a, struct shader_s *shader );
 
 //
 //	cg_vweap.c - client weapon
@@ -859,7 +856,4 @@ int CG_NumInlineModels();
 void CG_TransformedBoxTrace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs, const cmodel_s *cmodel, int brushmask, const vec3_t origin, const vec3_t angles );
 int CG_TransformedPointContents( const vec3_t p, const cmodel_s *cmodel, const vec3_t origin, const vec3_t angles );
 void CG_InlineModelBounds( const cmodel_s *cmodel, vec3_t mins, vec3_t maxs );
-bool CG_InPVS( const vec3_t p1, const vec3_t p2 );
 
-void *Q_malloc( size_t size, const char *filename, int fileline );
-void CG_MemFree( void *data, const char *filename, int fileline );
