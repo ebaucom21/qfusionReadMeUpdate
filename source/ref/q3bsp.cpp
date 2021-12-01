@@ -1221,7 +1221,8 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 		numVisSurfaces = numMarkSurfaces;
 		numFragmentSurfaces = numMarkSurfaces;
 
-		size = ( numVisSurfaces + numFragmentSurfaces ) * sizeof( unsigned );
+		// TODO: Fix the inconsistency of using numMarkSurfaces
+		size = ( numVisSurfaces + numFragmentSurfaces + numMarkSurfaces ) * sizeof( unsigned );
 		buffer = ( uint8_t * )Q_malloc( size );
 
 		out->visSurfaces = ( unsigned * )buffer;
@@ -1229,6 +1230,9 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 
 		out->fragmentSurfaces = ( unsigned * )buffer;
 		buffer += numFragmentSurfaces * sizeof( unsigned );
+
+		out->occluderSurfaces = ( unsigned *)buffer;
+		buffer += numMarkSurfaces * sizeof( unsigned );
 
 		numVisSurfaces = numFragmentSurfaces = 0;
 		for( j = 0; j < numMarkSurfaces; j++ ) {
@@ -1239,6 +1243,7 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 
 		out->numVisSurfaces = numVisSurfaces;
 		out->numFragmentSurfaces = numFragmentSurfaces;
+		out->numOccluderSurfaces = 0;
 	}
 }
 

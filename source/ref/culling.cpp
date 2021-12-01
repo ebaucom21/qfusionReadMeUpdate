@@ -282,67 +282,38 @@ auto Frontend::collectVisibleWorldLeaves() -> std::span<const unsigned> {
 	return { visibleLeaves, visibleLeaves + numVisibleLeaves };
 }
 
-// Just for testing purposes
-static void makeFakeSurface( OccluderSurface *s, int occluderNum ) {
-	if( occluderNum == 0 ) {
-		Vector4Set( s->vertices[0], 750, 0, -100, 0 );
-		Vector4Set( s->vertices[1], 600, 0, -100, 0 );
-		Vector4Set( s->vertices[2], 600, 0, +200, 0 );
-		Vector4Set( s->vertices[3], 750, 0, +200, 0 );
-	} else if( occluderNum == 1 ) {
-		Vector4Set( s->vertices[0], 550, 0, -100, 0 );
-		Vector4Set( s->vertices[1], 400, 0, -100, 0 );
-		Vector4Set( s->vertices[2], 400, 0, +200, 0 );
-		Vector4Set( s->vertices[3], 550, 0, +200, 0 );
-	} else if( occluderNum == 2 ) {
-		Vector4Set( s->vertices[0], 300, 0, -100, 0 );
-		Vector4Set( s->vertices[1], 100, 0, -100, 0 );
-		Vector4Set( s->vertices[2], 100, 0, +200, 0 );
-		Vector4Set( s->vertices[3], 300, 0, +200, 0 );
-	} else {
-		Vector4Set( s->vertices[0], -100, 0, -100, 0 );
-		Vector4Set( s->vertices[1], -300, 0, -100, 0 );
-		Vector4Set( s->vertices[2], -300, 0, +200, 0 );
-		Vector4Set( s->vertices[3], -100, 0, +200, 0 );
+void Frontend::showOccluderSurface( const msurface_t *surface ) {
+	const vec4_t *const __restrict allVertices = surface->mesh.xyzArray;
+	const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
+	const unsigned numSurfVertices = surface->numOccluderPolyIndices;
+	assert( numSurfVertices >= 4 && numSurfVertices <= 7 );
+
+	vec3_t surfCenter;
+	VectorSubtract( surface->maxs, surface->mins, surfCenter );
+	VectorMA( surface->mins, 0.5f, surfCenter, surfCenter );
+	for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
+		const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
+		const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
+		addDebugLine( v1, v2, COLOR_RGB( 192, 192, 96 ) );
 	}
-	s->numVertices = 4;
-
-	cplane_t plane;
-	PlaneFromPoints( s->vertices[0], s->vertices[1], s->vertices[2], &plane );
-	VectorCopy( plane.normal, s->plane );
-	s->plane[3] = plane.dist;
-
-	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < 4; ++i ) {
-		boundsBuilder.addPoint( s->vertices[i] );
-	}
-
-	boundsBuilder.storeTo( s->mins, s->maxs );
-	s->mins[3] = 0.0f;
-	s->maxs[3] = 1.0f;
 }
 
-static OccluderSurface g_occluders[4];
-
-auto Frontend::collectVisibleOccluders() -> std::span<const unsigned> {
-	makeFakeSurface( &g_occluders[0], 0 );
-	makeFakeSurface( &g_occluders[1], 1 );
-	makeFakeSurface( &g_occluders[2], 2 );
-	makeFakeSurface( &g_occluders[3], 3 );
-	rsh.worldBrushModel->occluderSurfaces = g_occluders;
-	rsh.worldBrushModel->numOccluderSurfaces = 4;
-
-	const OccluderSurface *const occluderSurfaces = rsh.worldBrushModel->occluderSurfaces;
-	const unsigned numWorldOccluderSurfaces = rsh.worldBrushModel->numOccluderSurfaces;
-	m_visibleOccluderSurfacesBuffer.reserve( numWorldOccluderSurfaces );
+auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const unsigned> {
+	// TODO: Separate occluders/surfaces!!!!!
+	m_visibleOccluderSurfacesBuffer.reserve( rsh.worldBrushModel->numModelSurfaces );
 	unsigned *const __restrict visibleOccluderSurfaces = m_visibleOccluderSurfacesBuffer.data.get();
+	const auto worldLeaves = rsh.worldBrushModel->visleafs;
+	const auto worldSurfaces = rsh.worldBrushModel->surfaces;
 
 	unsigned numVisibleOccluders = 0;
-	for( unsigned i = 0; i < numWorldOccluderSurfaces; ++i ) {
-		const OccluderSurface *__restrict surface = &occluderSurfaces[i];
-		// TODO: Clip against the nearest plane too to reject occluders just behind (is it an issue?)
-		if( m_frustum.computeBinaryResultFor4Planes( surface->mins, surface->maxs ) == 0 ) {
-			visibleOccluderSurfaces[numVisibleOccluders++] = i;
+	for( const unsigned leafNum: visibleLeaves ) {
+		const mleaf_t *const __restrict leaf = worldLeaves[leafNum];
+		// TODO: Separate occluders/surfaces!!!!!
+		for( unsigned i = 0; i < leaf->numOccluderSurfaces; ++i ) {
+			// TODO: Cull against the primary frustum if the leaf visibility is partial
+			visibleOccluderSurfaces[numVisibleOccluders++] = leaf->occluderSurfaces[i];
+			msurface_s *surf = worldSurfaces + leaf->occluderSurfaces[i];
+			showOccluderSurface( surf );
 		}
 	}
 
@@ -350,16 +321,16 @@ auto Frontend::collectVisibleOccluders() -> std::span<const unsigned> {
 }
 
 // TODO: Merge with buildFrustum and sort by a largest occluder fov?
-auto Frontend::selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const OccluderSurface *> {
-	const OccluderSurface *occluderSurfaces = rsh.worldBrushModel->occluderSurfaces;
+auto Frontend::selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const msurface_t *> {
 	const size_t numSelectedOccluders = std::min( visibleOccluders.size(), std::size( m_bestOccludersBuffer ) );
+	const auto worldSurfaces = rsh.worldBrushModel->surfaces;
 	for( size_t i = 0; i < numSelectedOccluders; ++i ) {
-		m_bestOccludersBuffer[i] = occluderSurfaces + visibleOccluders[i];
+		m_bestOccludersBuffer[i] = worldSurfaces + visibleOccluders[i];
 	}
 	return { m_bestOccludersBuffer, m_bestOccludersBuffer + numSelectedOccluders };
 }
 
-auto Frontend::buildFrustaOfOccluders( std::span<const OccluderSurface *> bestOccluders ) -> std::span<const Frustum> {
+auto Frontend::buildFrustaOfOccluders( std::span<const msurface_t *> bestOccluders ) -> std::span<const Frustum> {
 	const float *const viewOrigin = m_state.viewOrigin;
 	const unsigned numBestOccluders = bestOccluders.size();
 
@@ -367,8 +338,10 @@ auto Frontend::buildFrustaOfOccluders( std::span<const OccluderSurface *> bestOc
 	VectorMA( viewOrigin, 8.0, &m_state.viewAxis[0], pointInFrontOfView );
 
 	for( unsigned occluderNum = 0; occluderNum < numBestOccluders; ++occluderNum ) {
-		const OccluderSurface *const __restrict surface = bestOccluders[occluderNum];
-		const unsigned numSurfVertices = surface->numVertices;
+		const msurface_t *const __restrict surface = bestOccluders[occluderNum];
+		const vec4_t *const __restrict allVertices = surface->mesh.xyzArray;
+		const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
+		const unsigned numSurfVertices = surface->numOccluderPolyIndices;
 		assert( numSurfVertices >= 4 && numSurfVertices <= 7 );
 		Frustum *__restrict f = &m_occluderFrusta[occluderNum];
 
@@ -376,8 +349,8 @@ auto Frontend::buildFrustaOfOccluders( std::span<const OccluderSurface *> bestOc
 		VectorSubtract( surface->maxs, surface->mins, surfCenter );
 		VectorMA( surface->mins, 0.5f, surfCenter, surfCenter );
 		for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
-			const float *const v1 = surface->vertices[vertIndex + 0];
-			const float *const v2 = surface->vertices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0];
+			const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
+			const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
 
 			addDebugLine( v1, pointInFrontOfView );
 			addDebugLine( v1, v2 );

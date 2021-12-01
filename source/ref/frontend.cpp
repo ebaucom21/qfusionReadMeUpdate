@@ -762,8 +762,8 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
 	const std::span<const unsigned> visibleLeavesIndices = collectVisibleWorldLeaves();
-	const std::span<const unsigned> visibleOccluderIndices = collectVisibleOccluders();
-	const std::span<const OccluderSurface *> bestOccluders = selectBestOccluders( visibleOccluderIndices );
+	const std::span<const unsigned> visibleOccluderIndices = collectVisibleOccluders( visibleLeavesIndices );
+	const std::span<const msurface_t *> bestOccluders = selectBestOccluders( visibleOccluderIndices );
 	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( bestOccluders );
 
 	cullSurfacesInVisLeavesByOccluders( visibleLeavesIndices, occluderFrusta );

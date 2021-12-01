@@ -743,6 +743,13 @@ typedef struct msurface_s {
 	mfog_t *fog;
 
 	struct superLightStyle_s *superLightStyle;
+
+	uint8_t occluderPolyIndices[7];
+	uint8_t numOccluderPolyIndices;
+	// TODO:
+	bool wasTestedToBeAnOccluder;
+	// Converted to ^(1/2) as a sorting criterion
+	float sqrtOfOccluderPolyArea;
 } msurface_t;
 
 typedef struct mnode_s {
@@ -761,19 +768,12 @@ typedef struct mleaf_s {
 
 	unsigned *visSurfaces;
 	unsigned *fragmentSurfaces;
+	unsigned *occluderSurfaces;
 
 	unsigned numVisSurfaces;
 	unsigned numFragmentSurfaces;
+	unsigned numOccluderSurfaces;
 } mleaf_t;
-
-struct OccluderSurface {
-	float mins[4];
-	float maxs[4];
-	float plane[4];
-
-	vec4_t vertices[7];
-	unsigned numVertices;
-};
 
 typedef struct {
 	uint8_t ambient[MAX_LIGHTMAPS][3];
@@ -812,9 +812,6 @@ typedef struct mbrushmodel_s {
 	mleaf_t         *leafs;
 	mleaf_t         **visleafs;
 	unsigned int numvisleafs;
-
-	OccluderSurface *occluderSurfaces;
-	unsigned numOccluderSurfaces;
 
 	unsigned int numnodes;
 	mnode_t         *nodes;

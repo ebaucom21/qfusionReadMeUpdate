@@ -94,7 +94,7 @@ private:
 	BufferHolder<bool> m_surfVisibilityTable;
 	BufferHolder<unsigned> m_visibleOccluderSurfacesBuffer;
 
-	const OccluderSurface *m_bestOccludersBuffer[8];
+	const msurface_t *m_bestOccludersBuffer[8];
 	Frustum m_occluderFrusta[8];
 
 	[[nodiscard]]
@@ -128,14 +128,16 @@ private:
 
 	void submitDebugStuffToBackend( Scene *scene );
 
+	void showOccluderSurface( const msurface_t *surface );
+
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccluders() -> std::span<const unsigned>;
+	auto collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const OccluderSurface *>;
+	auto selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const msurface_t *>;
 	[[nodiscard]]
-	auto buildFrustaOfOccluders( std::span<const OccluderSurface *> bestOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccluders( std::span<const msurface_t *> bestOccluders ) -> std::span<const Frustum>;
 
 	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfVisibleLeaves,
 											 std::span<const Frustum> occluderFrusta );
