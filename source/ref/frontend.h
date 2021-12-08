@@ -22,15 +22,80 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef WSW_63ccf348_3b16_4f9c_9a49_cd5849918618_H
 #define WSW_63ccf348_3b16_4f9c_9a49_cd5849918618_H
 
+#include <memory>
+#include <span>
+
+struct alignas( 32 )Frustum {
+	float planeX[8];
+	float planeY[8];
+	float planeZ[8];
+	float planeD[8];
+	uint32_t xBlendMasks[8];
+	uint32_t yBlendMasks[8];
+	uint32_t zBlendMasks[8];
+
+	void setPlaneComponentsAtIndex( unsigned index, const float *n, float d );
+
+	// Call after setting up 5th+ planes
+	void fillComponentTails( unsigned numPlanesSoFar );
+
+	void setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY );
+
+	// TODO: This is just for exploratory purposes, culling should use bulk operations
+
+	// Returns an on-zero value if the bounds are completely outside the frustum
+	[[nodiscard]]
+	auto computeBinaryResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> int;
+	[[nodiscard]]
+	auto computeBinaryResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> int;
+
+	// Returns a pair of values.
+	// A non-zero first value indicates that the bounds are completely outside the frustum.
+	// Otherwise, a non-zero second value indicates that the bounds are partially outside the frustum.
+	[[nodiscard]]
+	auto computeTristateResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> std::pair<int, int>;
+	[[nodiscard]]
+	auto computeTristateResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> std::pair<int, int>;
+};
+
 namespace wsw::ref {
 
 class Frontend {
 private:
 	refinst_t m_state;
+	// TODO: Put in the state
+	Frustum m_frustum;
 
 	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
 
+	struct DebugLine {
+		float p1[3];
+		float p2[3];
+		int color;
+	};
+	wsw::Vector<DebugLine> m_debugLines;
+
 	wsw::Vector<sortedDrawSurf_t> m_meshDrawList;
+
+	template <typename T>
+	struct BufferHolder {
+		std::unique_ptr<T[]> data;
+		unsigned capacity { 0 };
+
+		void reserve( size_t newSize ) {
+			if( newSize > capacity ) [[unlikely]] {
+				data = std::make_unique<T[]>( newSize );
+				capacity = newSize;
+			}
+		}
+	};
+
+	BufferHolder<unsigned> m_visibleLeavesBuffer;
+	BufferHolder<bool> m_surfVisibilityTable;
+	BufferHolder<unsigned> m_visibleOccluderSurfacesBuffer;
+
+	const OccluderSurface *m_bestOccludersBuffer[8];
+	Frustum m_occluderFrusta[8];
 
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
@@ -59,6 +124,22 @@ private:
 	void collectVisibleWorldBrushes( Scene *scene );
 	void collectVisibleEntities( Scene *scene );
 
+	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
+
+	void submitDebugStuffToBackend( Scene *scene );
+
+	[[nodiscard]]
+	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
+	[[nodiscard]]
+	auto collectVisibleOccluders() -> std::span<const unsigned>;
+	[[nodiscard]]
+	auto selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const OccluderSurface *>;
+	[[nodiscard]]
+	auto buildFrustaOfOccluders( std::span<const OccluderSurface *> bestOccluders ) -> std::span<const Frustum>;
+
+	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfVisibleLeaves,
+											 std::span<const Frustum> occluderFrusta );
+
 	void setupViewMatrices();
 	void clearActiveFrameBuffer();
 
@@ -79,8 +160,6 @@ public:
 
 	[[nodiscard]]
 	static auto instance() -> Frontend *;
-
-	void clearScene();
 
 	[[nodiscard]]
 	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;

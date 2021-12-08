@@ -90,118 +90,6 @@ void R_Set2DMode( bool enable ) {
 	wsw::ref::Frontend::instance()->set2DMode( enable );
 }
 
-struct alignas( 32 )Frustum {
-	float planeX[8];
-	float planeY[8];
-	float planeZ[8];
-	float planeD[8];
-	uint32_t xBlendMasks[8];
-	uint32_t yBlendMasks[8];
-	uint32_t zBlendMasks[8];
-
-	// Call after setting up 5th+ planes
-	void fillComponentTails( unsigned numPlanesSoFar );
-
-	void setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY );
-
-	// TODO: This is just for exploratory purposes, culling should use bulk operations
-	[[nodiscard]]
-	auto computeMoveMaskFor4Planes( const vec3_t mins, const vec3_t maxs ) const -> int;
-};
-
-// An SSE2 baseline implementation
-// https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
-#define wsw_blend( a, b, mask ) _mm_or_ps( _mm_and_ps( a, mask ), _mm_andnot_ps( mask, b ) )
-
-auto Frustum::computeMoveMaskFor4Planes( const vec3_t mins, const vec3_t maxs ) const -> int {
-	// We don't think that we really need to supply arranged input components.
-	// We can just use broadcasts on any recent hardware.
-
-	const __m128 xmmMins = _mm_setr_ps( mins[0], mins[1], mins[2], 0.0f );
-	const __m128 xmmMaxs = _mm_setr_ps( maxs[0], maxs[1], maxs[2], 0.0f );
-
-	const __m128 xmmMinsX = _mm_shuffle_ps( xmmMins, xmmMins, _MM_SHUFFLE( 0, 0, 0, 0 ) );
-	const __m128 xmmMinsY = _mm_shuffle_ps( xmmMins, xmmMins, _MM_SHUFFLE( 1, 1, 1, 1 ) );
-	const __m128 xmmMinsZ = _mm_shuffle_ps( xmmMins, xmmMins, _MM_SHUFFLE( 2, 2, 2, 2 ) );
-
-	const __m128 xmmMaxsX = _mm_shuffle_ps( xmmMaxs, xmmMaxs, _MM_SHUFFLE( 0, 0, 0, 0 ) );
-	const __m128 xmmMaxsY = _mm_shuffle_ps( xmmMaxs, xmmMaxs, _MM_SHUFFLE( 1, 1, 1, 1 ) );
-	const __m128 xmmMaxsZ = _mm_shuffle_ps( xmmMaxs, xmmMaxs, _MM_SHUFFLE( 2, 2, 2, 2 ) );
-
-	const __m128 xmmXBlends = _mm_load_ps( (const float *)xBlendMasks );
-	const __m128 xmmYBlends = _mm_load_ps( (const float *)yBlendMasks );
-	const __m128 xmmZBlends = _mm_load_ps( (const float *)zBlendMasks );
-
-	// Select mins/maxs using masks for respective plane signbits
-	const __m128 xmmSelectedX = wsw_blend( xmmMinsX, xmmMaxsX, xmmXBlends );
-	const __m128 xmmSelectedY = wsw_blend( xmmMinsY, xmmMaxsY, xmmYBlends );
-	const __m128 xmmSelectedZ = wsw_blend( xmmMinsZ, xmmMaxsZ, xmmZBlends );
-
-	const __m128 xmmPlaneX = _mm_load_ps( planeX );
-	const __m128 xmmPlaneY = _mm_load_ps( planeY );
-	const __m128 xmmPlaneZ = _mm_load_ps( planeZ );
-	const __m128 xmmPlaneD = _mm_load_ps( planeD );
-
-	const __m128 xMulX = _mm_mul_ps( xmmSelectedX, xmmPlaneX );
-	const __m128 yMulY = _mm_mul_ps( xmmSelectedY, xmmPlaneY );
-	const __m128 zMulZ = _mm_mul_ps( xmmSelectedZ, xmmPlaneZ );
-	const __m128 xmmDot = _mm_add_ps( _mm_add_ps( xMulX, yMulY ), zMulZ );
-	return _mm_movemask_ps( _mm_sub_ps( xmmDot, xmmPlaneD ) );
-}
-
-#undef wsw_blend
-
-void Frustum::fillComponentTails( unsigned numPlanesSoFar ) {
-	// Sanity check
-	assert( numPlanesSoFar >= 5 );
-	for( unsigned i = numPlanesSoFar; i < 8; ++i ) {
-		planeX[i] = planeX[numPlanesSoFar];
-		planeY[i] = planeY[numPlanesSoFar];
-		planeZ[i] = planeZ[numPlanesSoFar];
-		planeD[i] = planeD[numPlanesSoFar];
-		xBlendMasks[i] = xBlendMasks[numPlanesSoFar];
-		yBlendMasks[i] = yBlendMasks[numPlanesSoFar];
-		zBlendMasks[i] = zBlendMasks[numPlanesSoFar];
-	}
-}
-
-void Frustum::setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY ) {
-	const float *const forward = &viewAxis[AXIS_FORWARD];
-	const float *const left    = &viewAxis[AXIS_RIGHT];
-	const float *const up      = &viewAxis[AXIS_UP];
-
-	const vec3_t right { -left[0], -left[1], -left[2] };
-
-	const float xRotationAngle = 90.0f - 0.5f * fovX;
-	const float yRotationAngle = 90.0f - 0.5f * fovY;
-
-	vec3_t planeNormals[4];
-	RotatePointAroundVector( planeNormals[0], up, forward, -xRotationAngle );
-	RotatePointAroundVector( planeNormals[1], up, forward, +xRotationAngle );
-	RotatePointAroundVector( planeNormals[2], right, forward, +yRotationAngle );
-	RotatePointAroundVector( planeNormals[3], right, forward, -yRotationAngle );
-
-	const uint32_t blendsForSign[2] { 0, ~( (uint32_t)0 ) };
-	for( unsigned i = 0; i < 4; ++i ) {
-		const float *const normal = planeNormals[i];
-
-		const float nX = planeX[i] = normal[0];
-		const float nY = planeY[i] = normal[1];
-		const float nZ = planeZ[i] = normal[2];
-
-		planeD[i] = DotProduct( viewOrigin, normal );
-
-		xBlendMasks[i] = blendsForSign[nX < 0];
-		yBlendMasks[i] = blendsForSign[nY < 0];
-		zBlendMasks[i] = blendsForSign[nZ < 0];
-	}
-}
-
-// TODO!!!!!!!!!!!!!!!!!!! This is just to test whether it works
-static Frustum frustum;
-static int totalSurfaces;
-static int passedSurfaces;
-
 static unsigned R_PackSortKey( unsigned shaderNum, int fogNum,
 							   int portalNum, unsigned entNum ) {
 	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
@@ -257,7 +145,6 @@ static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, in
 	if( dlight ) {
 		order |= 0x40;
 	}
-	// group by dlight
 	if( fog != nullptr ) {
 		order |= 0x80;
 	}
@@ -584,21 +471,6 @@ bool Frontend::addSpriteToSortList( const entity_t *e ) {
 bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf, const float *maybeOrigin ) {
 	assert( ( drawSurf->visFrame != rf.frameCount ) && "Should not be duplicated for now" );
 
-	// TODO: !!!!!!!!!!!!! This is just to test whether it works
-	bool culled = true;
-	totalSurfaces++;
-	for( unsigned i = 0; i < drawSurf->numWorldSurfaces; ++i ) {
-		msurface_t *surf = rsh.worldBrushModel->surfaces + drawSurf->firstWorldSurface + i;
-		if( frustum.computeMoveMaskFor4Planes( surf->mins, surf->maxs ) == 0 ) {
-			culled = false;
-			break;
-		}
-	}
-	if( culled ) {
-		return false;
-	}
-	passedSurfaces++;
-
 	portalSurface_t *portalSurface = nullptr;
 	const shader_t *shader = drawSurf->shader;
 	if( shader->flags & SHADER_PORTAL ) {
@@ -889,9 +761,30 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
+	const std::span<const unsigned> visibleLeavesIndices = collectVisibleWorldLeaves();
+	const std::span<const unsigned> visibleOccluderIndices = collectVisibleOccluders();
+	const std::span<const OccluderSurface *> bestOccluders = selectBestOccluders( visibleOccluderIndices );
+	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( bestOccluders );
+
+	cullSurfacesInVisLeavesByOccluders( visibleLeavesIndices, occluderFrusta );
+
+	// TODO: Compactify drawSurf indices based on the table
+
 	for( unsigned i = 0; i < rsh.worldBrushModel->numModelDrawSurfaces; i++ ) {
 		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + i;
-		addBspSurfToSortList( worldEnt, drawSurf, nullptr );
+
+		// TODO: !!!!!!!!!!!!! This is just to test whether it works
+		bool drawSurfCulled = true;
+		for( unsigned j = 0; j < drawSurf->numWorldSurfaces; ++j ) {
+			const unsigned surfNum = drawSurf->firstWorldSurface + j;
+			if( m_surfVisibilityTable.data[surfNum] ) {
+				drawSurfCulled = false;
+				break;
+			}
+		}
+		if( !drawSurfCulled ) {
+			addBspSurfToSortList( worldEnt, drawSurf, nullptr );
+		}
 	}
 }
 
@@ -1089,6 +982,7 @@ void Frontend::setupViewMatrices() {
 	refdef_t *rd = &m_state.refdef;
 
 	Matrix4_Modelview( rd->vieworg, rd->viewaxis, m_state.cameraMatrix );
+	//Com_Printf( "RD vieworg: %f %f %f\n", rd->vieworg[0], rd->vieworg[1], rd->vieworg[2] );
 
 	if( rd->rdflags & RDF_USEORTHO ) {
 		Matrix4_OrthogonalProjection( -rd->ortho_x, rd->ortho_x, -rd->ortho_y, rd->ortho_y,
@@ -1198,12 +1092,8 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 
 	rf.frameCount++;
 
-	//
-	// TODO: Setup the frustum here
-	//
-	frustum.setupFor4Planes( fd->vieworg, fd->viewaxis, fd->fov_x, fd->fov_y );
-	totalSurfaces = 0;
-	passedSurfaces = 0;
+	// TODO: This should be a member of m_state
+	m_frustum.setupFor4Planes( fd->vieworg, fd->viewaxis, fd->fov_x, fd->fov_y );
 
 	// we know the initial farclip at this point after determining visible world leafs
 	// R_DrawEntities can make adjustments as well
@@ -1234,8 +1124,6 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		// render to depth textures, mark shadowed entities and surfaces
 		// TODO
 	}
-
-	Com_Printf( "Total, passed: %d %d\n", totalSurfaces, passedSurfaces );
 
 	if( !r_draworder->integer ) {
 		const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
@@ -1298,6 +1186,48 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	if( m_state.renderFlags & RF_FLIPFRONTFACE ) {
 		RB_FlipFrontFace();
 	}
+
+	RB_SetShaderStateMask( ~0, GLSTATE_NO_DEPTH_TEST );
+
+	submitDebugStuffToBackend( scene );
+
+	RB_SetShaderStateMask( ~0, 0 );
+}
+
+void Frontend::submitDebugStuffToBackend( Scene *scene ) {
+	// TODO: Reduce this copying
+	vec4_t verts[2];
+	byte_vec4_t colors[2] { { 0, 0, 0, 1 }, { 0, 0, 0, 1 } };
+	elem_t elems[2] { 0, 1 };
+
+	mesh_t mesh {};
+	mesh.colorsArray[0] = colors;
+	mesh.xyzArray = verts;
+	mesh.numVerts = 2;
+	mesh.numElems = 2;
+	mesh.elems = elems;
+	verts[0][3] = verts[1][3] = 1.0f;
+	for( const DebugLine &line: m_debugLines ) {
+		VectorCopy( line.p1, verts[0] );
+		VectorCopy( line.p2, verts[1] );
+		std::memcpy( colors[0], &line.color, 4 );
+		std::memcpy( colors[1], &line.color, 4 );
+		RB_AddDynamicMesh( scene->m_worldent, rsh.whiteShader, nullptr, nullptr, 0, &mesh, GL_LINES, 0.0f, 0.0f );
+	}
+
+	RB_FlushDynamicMeshes();
+
+	m_debugLines.clear();
+}
+
+void Frontend::addDebugLine( const float *p1, const float *p2, int color ) {
+	int rgbaColor = color;
+	if( !COLOR_A( rgbaColor ) ) {
+		rgbaColor = COLOR_RGBA( COLOR_R( color ), COLOR_G( color ), COLOR_B( color ), 255 );
+	}
+	m_debugLines.emplace_back( DebugLine {
+		{ p1[0], p1[1], p1[2] }, { p2[0], p2[1], p2[2] }, rgbaColor
+	});
 }
 
 auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {

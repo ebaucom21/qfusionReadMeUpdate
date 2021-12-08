@@ -727,12 +727,12 @@ typedef struct msurface_s {
 	vec4_t plane;
 
 	union {
-		float origin[3];
-		float mins[3];
+		float origin[4];
+		float mins[4];
 	};
 	union {
-		float maxs[3];
-		float color[3];
+		float maxs[4];
+		float color[4];
 	};
 
 	mesh_t mesh;
@@ -756,8 +756,8 @@ typedef struct mleaf_s {
 	// leaf specific
 	int cluster, area;
 
-	float mins[3];
-	float maxs[3];                      // for bounding box culling
+	float mins[4];
+	float maxs[4];                      // for bounding box culling
 
 	unsigned *visSurfaces;
 	unsigned *fragmentSurfaces;
@@ -765,6 +765,15 @@ typedef struct mleaf_s {
 	unsigned numVisSurfaces;
 	unsigned numFragmentSurfaces;
 } mleaf_t;
+
+struct OccluderSurface {
+	float mins[4];
+	float maxs[4];
+	float plane[4];
+
+	vec4_t vertices[7];
+	unsigned numVertices;
+};
 
 typedef struct {
 	uint8_t ambient[MAX_LIGHTMAPS][3];
@@ -803,6 +812,9 @@ typedef struct mbrushmodel_s {
 	mleaf_t         *leafs;
 	mleaf_t         **visleafs;
 	unsigned int numvisleafs;
+
+	OccluderSurface *occluderSurfaces;
+	unsigned numOccluderSurfaces;
 
 	unsigned int numnodes;
 	mnode_t         *nodes;

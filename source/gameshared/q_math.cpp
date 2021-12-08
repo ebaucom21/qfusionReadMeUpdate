@@ -513,17 +513,14 @@ void CategorizePlane( cplane_t *plane ) {
 	}
 }
 
-/*
-* PlaneFromPoints
-*/
-void PlaneFromPoints( vec3_t verts[3], cplane_t *plane ) {
-	vec3_t v1, v2;
+void PlaneFromPoints( const float *v1, const float *v2, const float *v3, cplane_t *plane ) {
+	vec3_t _1To2, _1To3;
 
-	VectorSubtract( verts[1], verts[0], v1 );
-	VectorSubtract( verts[2], verts[0], v2 );
-	CrossProduct( v2, v1, plane->normal );
+	VectorSubtract( v2, v1, _1To2 );
+	VectorSubtract( v3, v1, _1To3 );
+	CrossProduct( _1To3, _1To2, plane->normal );
 	VectorNormalize( plane->normal );
-	plane->dist = DotProduct( verts[0], plane->normal );
+	plane->dist = DotProduct( v1, plane->normal );
 }
 
 #define PLANE_NORMAL_EPSILON    0.00001

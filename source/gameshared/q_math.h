@@ -644,7 +644,10 @@ void AdjustFov( float *fov_x, float *fov_y, float width, float height, bool lock
 int SignbitsForPlane( const cplane_t *out );
 int PlaneTypeForNormal( const vec3_t normal );
 void CategorizePlane( cplane_t *plane );
-void PlaneFromPoints( vec3_t verts[3], cplane_t *plane );
+void PlaneFromPoints( const float *v1, const float *v2, const float *v3, cplane_t *plane );
+inline void PlaneFromPoints( const vec3_t verts[3], cplane_t *plane ) {
+	PlaneFromPoints( verts[0], verts[1], verts[2], plane );
+}
 
 bool ComparePlanes( const vec3_t p1normal, vec_t p1dist, const vec3_t p2normal, vec_t p2dist );
 void SnapVector( vec3_t normal );
