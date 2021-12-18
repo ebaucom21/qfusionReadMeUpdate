@@ -90,12 +90,21 @@ private:
 		}
 	};
 
-	BufferHolder<unsigned> m_visibleLeavesBuffer;
-	BufferHolder<bool> m_surfVisibilityTable;
-	BufferHolder<unsigned> m_visibleOccluderSurfacesBuffer;
+	struct SortedOccluder {
+		unsigned surfNum;
+		float score;
+		[[nodiscard]]
+		bool operator<( const SortedOccluder &that ) const { return score > that.score; }
+	};
 
-	const msurface_t *m_bestOccludersBuffer[8];
-	Frustum m_occluderFrusta[8];
+	BufferHolder<unsigned> m_visibleLeavesBuffer;
+	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer;
+	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer;
+
+	BufferHolder<bool> m_surfVisibilityTable;
+	BufferHolder<SortedOccluder> m_visibleOccludersBuffer;
+
+	Frustum m_occluderFrusta[64];
 
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
@@ -133,14 +142,20 @@ private:
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const unsigned>;
+	auto collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const SortedOccluder>;
 	[[nodiscard]]
-	auto selectBestOccluders( std::span<const unsigned> visibleOccluders ) -> std::span<const msurface_t *>;
-	[[nodiscard]]
-	auto buildFrustaOfOccluders( std::span<const msurface_t *> bestOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
 
-	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfVisibleLeaves,
-											 std::span<const Frustum> occluderFrusta );
+	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
+											 std::span<const Frustum> occluderFrusta,
+											 bool *surfVisibilityTable );
+
+	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, bool *surfVisibilityTable );
+
+	[[nodiscard]]
+	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
+								std::span<const Frustum> occluderFrusta )
+								-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	void setupViewMatrices();
 	void clearActiveFrameBuffer();

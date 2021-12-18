@@ -761,12 +761,39 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
-	const std::span<const unsigned> visibleLeavesIndices = collectVisibleWorldLeaves();
-	const std::span<const unsigned> visibleOccluderIndices = collectVisibleOccluders( visibleLeavesIndices );
-	const std::span<const msurface_t *> bestOccluders = selectBestOccluders( visibleOccluderIndices );
-	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( bestOccluders );
+	const unsigned numWorldSurfaces = rsh.worldBrushModel->numModelSurfaces;
+	const unsigned numWorldLeaves = rsh.worldBrushModel->numvisleafs;
 
-	cullSurfacesInVisLeavesByOccluders( visibleLeavesIndices, occluderFrusta );
+	// Put the allocation code here, so we don't bloat the arch-specific code
+	m_surfVisibilityTable.reserve( numWorldSurfaces );
+	m_visibleLeavesBuffer.reserve( numWorldLeaves );
+	m_visibleOccludersBuffer.reserve( numWorldSurfaces );
+	m_occluderPassFullyVisibleLeavesBuffer.reserve( numWorldLeaves );
+	m_occluderPassPartiallyVisibleLeavesBuffer.reserve( numWorldLeaves );
+
+	// Assume that every surface is not visible by default
+	bool *const __restrict surfVisibilityTable = m_surfVisibilityTable.data.get();
+	memset( surfVisibilityTable, 0, sizeof( bool ) * numWorldSurfaces );
+
+	// Cull world leaves by the primary frustum
+	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves();
+
+	// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
+	const std::span<const SortedOccluder> visibleOccluders  = collectVisibleOccluders( visibleLeaves );
+	// Build frusta of occluders, while performing some additional frusta pruning
+	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( visibleOccluders );
+
+	if( occluderFrusta.empty() ) {
+		// No "good enough" occluders found.
+		// Just mark every surface that falls into the primary frustum visible in this case.
+		markSurfacesOfLeavesAsVisible( visibleLeaves, surfVisibilityTable );
+	} else {
+		// Test every leaf that falls into the primary frustum against frusta of occluders
+		const auto [nonOccludedLeaves, partiallyOccludedLeaves] = cullLeavesByOccluders( visibleLeaves, occluderFrusta );
+		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, surfVisibilityTable );
+		// Test every surface that belongs to partially occluded leaves
+		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, surfVisibilityTable );
+	}
 
 	// TODO: Compactify drawSurf indices based on the table
 
