@@ -744,6 +744,8 @@ typedef struct msurface_s {
 
 	struct superLightStyle_s *superLightStyle;
 
+	vec4_t occluderPolyMins, occluderPolyMaxs;
+
 	uint8_t occluderPolyIndices[7];
 	uint8_t numOccluderPolyIndices;
 	// TODO:

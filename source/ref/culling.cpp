@@ -191,17 +191,17 @@ void Frustum::setPlaneComponentsAtIndex( unsigned index, const float *n, float d
 	zBlendMasks[index] = blendsForSign[nZ < 0];
 }
 
-void Frustum::fillComponentTails( unsigned numPlanesSoFar ) {
+void Frustum::fillComponentTails( unsigned indexOfPlaneToReplicate ) {
 	// Sanity check
-	assert( numPlanesSoFar >= 5 );
-	for( unsigned i = numPlanesSoFar; i < 8; ++i ) {
-		planeX[i] = planeX[numPlanesSoFar];
-		planeY[i] = planeY[numPlanesSoFar];
-		planeZ[i] = planeZ[numPlanesSoFar];
-		planeD[i] = planeD[numPlanesSoFar];
-		xBlendMasks[i] = xBlendMasks[numPlanesSoFar];
-		yBlendMasks[i] = yBlendMasks[numPlanesSoFar];
-		zBlendMasks[i] = zBlendMasks[numPlanesSoFar];
+	assert( indexOfPlaneToReplicate >= 4 && indexOfPlaneToReplicate < 8 );
+	for( unsigned i = indexOfPlaneToReplicate; i < 8; ++i ) {
+		planeX[i] = planeX[indexOfPlaneToReplicate];
+		planeY[i] = planeY[indexOfPlaneToReplicate];
+		planeZ[i] = planeZ[indexOfPlaneToReplicate];
+		planeD[i] = planeD[indexOfPlaneToReplicate];
+		xBlendMasks[i] = xBlendMasks[indexOfPlaneToReplicate];
+		yBlendMasks[i] = yBlendMasks[indexOfPlaneToReplicate];
+		zBlendMasks[i] = zBlendMasks[indexOfPlaneToReplicate];
 	}
 }
 
@@ -334,17 +334,28 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 }
 
 auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum> {
-	const float *const viewOrigin = m_state.viewOrigin;
-	const auto *const worldSurfaces = rsh.worldBrushModel->surfaces;
-	// TODO: Don't sort, build a heap instead?
-	const unsigned numBestOccluders = std::min<unsigned>( std::size( m_occluderFrusta ), sortedOccluders.size() );
+	const float *const viewOrigin     = m_state.viewOrigin;
+	const auto *const worldSurfaces   = rsh.worldBrushModel->surfaces;
+	Frustum *const occluderFrusta     = m_occluderFrusta;
+	const unsigned maxOccluders       = std::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
+	constexpr float selfOcclusionBias = 4.0f;
 
 	const auto before = Sys_Microseconds();
 
-	vec3_t pointInFrontOfView;
-	VectorMA( viewOrigin, 8.0, &m_state.viewAxis[0], pointInFrontOfView );
+	bool hadCulledFrusta = false;
+	// Note: We don't process more occluders due to performance and not memory capacity reasons.
+	// Best occluders come first so they should make their way into the final result.
+	alignas( 16 )bool isCulledByOtherTable[std::size( m_occluderFrusta )];
+	std::memset( isCulledByOtherTable, 0, sizeof( bool ) * maxOccluders );
 
-	for( unsigned occluderNum = 0; occluderNum < numBestOccluders; ++occluderNum ) {
+	// Note: An outer loop over all surfaces would have been allowed to avoid redundant component shuffles
+	// but this approach requires building all frusta prior to that, which is more expensive.
+
+	for( unsigned occluderNum = 0; occluderNum < maxOccluders; ++occluderNum ) {
+		if( isCulledByOtherTable[occluderNum] ) {
+			continue;
+		}
+
 		const msurface_t *const __restrict surface  = worldSurfaces + sortedOccluders[occluderNum].surfNum;
 		const vec4_t *const __restrict allVertices  = surface->mesh.xyzArray;
 		const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
@@ -352,7 +363,7 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 
 		assert( numSurfVertices >= 4 && numSurfVertices <= 7 );
 
-		Frustum *__restrict f = &m_occluderFrusta[occluderNum];
+		Frustum *const __restrict f = &occluderFrusta[occluderNum];
 
 		vec3_t surfCenter;
 		VectorSubtract( surface->maxs, surface->mins, surfCenter );
@@ -360,9 +371,6 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 		for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
 			const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
 			const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
-
-			addDebugLine( v1, pointInFrontOfView );
-			addDebugLine( v1, v2 );
 
 			cplane_t plane;
 			// TODO: Inline?
@@ -375,21 +383,102 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 				plane.dist = -plane.dist;
 			}
 
-			const vec3_t midpointOfEdge {
-				0.5f * (v1[0] + v2[0]), 0.5f * (v1[1] + v2[1]), 0.5f * (v1[2] + v2[2] )
-			};
-
-			vec3_t normalPoint;
-			VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
-			addDebugLine( midpointOfEdge, normalPoint );
-
 			f->setPlaneComponentsAtIndex( vertIndex, plane.normal, plane.dist );
 		}
 
 		vec4_t cappingPlane;
 		Vector4Copy( surface->plane, cappingPlane );
 		// Don't let the surface occlude itself
-		constexpr float selfOcclusionBias = 4.0f;
+		if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
+			Vector4Negate( cappingPlane, cappingPlane );
+			cappingPlane[3] += selfOcclusionBias;
+		} else {
+			cappingPlane[3] -= selfOcclusionBias;
+		}
+
+		f->setPlaneComponentsAtIndex( numSurfVertices, cappingPlane, cappingPlane[3] );
+		f->fillComponentTails( numSurfVertices );
+
+		// We have built the frustum.
+		// Cull all other frusta by it.
+		// Note that the "culled-by" relation is not symmetrical so we have to check from the beginning.
+
+		for( unsigned otherOccluderNum = 0; otherOccluderNum < maxOccluders; ++otherOccluderNum ) {
+			if( otherOccluderNum != occluderNum ) [[likely]] {
+				if( !isCulledByOtherTable[otherOccluderNum] ) {
+					const msurface_t *__restrict surf = worldSurfaces + sortedOccluders[otherOccluderNum].surfNum;
+					LOAD_BOX_COMPONENTS( surf->occluderPolyMins, surf->occluderPolyMaxs );
+					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside );
+					if( zeroIfFullyInside == 0 ) {
+						isCulledByOtherTable[otherOccluderNum] = true;
+						hadCulledFrusta = true;
+					}
+				}
+			}
+		}
+	}
+
+	unsigned numSelectedOccluders = maxOccluders;
+	if( hadCulledFrusta ) {
+		unsigned numPresevedOccluders = 0;
+		for( unsigned occluderNum = 0; occluderNum < maxOccluders; ++occluderNum ) {
+			if( !isCulledByOtherTable[occluderNum] ) {
+				// TODO: This is a memcpy() call, make the compactification more efficient or use a manual SIMD copy
+				occluderFrusta[numPresevedOccluders++] = occluderFrusta[occluderNum];
+			}
+		}
+		numSelectedOccluders = numPresevedOccluders;
+	}
+
+	Com_Printf( "Frusta setup took %d micros. Selected %d/%d occluders\n", (int)( Sys_Microseconds() - before ), numSelectedOccluders, maxOccluders );
+
+#if 1
+	vec3_t pointInFrontOfView;
+	VectorMA( viewOrigin, 8.0, &m_state.viewAxis[0], pointInFrontOfView );
+
+	// Show preserved frusta
+	for( unsigned occluderNum = 0; occluderNum < maxOccluders; ++occluderNum ) {
+		if( isCulledByOtherTable[occluderNum] ) {
+			continue;
+		}
+
+		const msurface_t *const __restrict surface  = worldSurfaces + sortedOccluders[occluderNum].surfNum;
+		const vec4_t *const __restrict allVertices  = surface->mesh.xyzArray;
+		const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
+		const unsigned numSurfVertices              = surface->numOccluderPolyIndices;
+
+		//addDebugLine( surface->occluderPolyMins, surface->occluderPolyMaxs, COLOR_RGB( 0, 128, 255 ) );
+
+		vec3_t surfCenter;
+		VectorAvg( surface->mins, surface->maxs, surfCenter );
+		for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
+			const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
+			const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
+
+			addDebugLine( v1, pointInFrontOfView );
+			addDebugLine( v1, v2 );
+
+			/*
+			cplane_t plane;
+			// TODO: Inline?
+			PlaneFromPoints( v1, v2, viewOrigin, &plane );
+
+			// Make the normal point inside the frustum
+			// TODO: Build in a such order that we do not have to check this
+			if( DotProduct( plane.normal, surfCenter ) - plane.dist < 0 ) {
+				VectorNegate( plane.normal, plane.normal );
+				plane.dist = -plane.dist;
+			}
+
+			vec3_t midpointOfEdge, normalPoint;
+			VectorAvg( v1, v2, midpointOfEdge );
+			VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
+			addDebugLine( midpointOfEdge, normalPoint );*/
+		}
+
+		vec4_t cappingPlane;
+		Vector4Copy( surface->plane, cappingPlane );
+		// Don't let the surface occlude itself
 		if( DotProduct( cappingPlane, viewOrigin ) - cappingPlane[3] > 0 ) {
 			Vector4Negate( cappingPlane, cappingPlane );
 			cappingPlane[3] += selfOcclusionBias;
@@ -400,14 +489,10 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 		vec3_t cappingPlanePoint;
 		VectorMA( surfCenter, 32.0f, cappingPlane, cappingPlanePoint );
 		addDebugLine( surfCenter, cappingPlanePoint );
-
-		f->setPlaneComponentsAtIndex( numSurfVertices, cappingPlane, cappingPlane[3] );
-		f->fillComponentTails( numSurfVertices + 1 );
 	}
+#endif
 
-	Com_Printf( "Frusta setup took %d micros\n", (int)( Sys_Microseconds() - before ) );
-
-	return { m_occluderFrusta, m_occluderFrusta + numBestOccluders };
+	return { occluderFrusta, occluderFrusta + numSelectedOccluders };
 }
 
 auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,

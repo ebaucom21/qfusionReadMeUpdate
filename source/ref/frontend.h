@@ -36,7 +36,7 @@ struct alignas( 32 )Frustum {
 
 	void setPlaneComponentsAtIndex( unsigned index, const float *n, float d );
 
-	// Call after setting up 5th+ planes
+	// Call after setting up 4th+ planes
 	void fillComponentTails( unsigned numPlanesSoFar );
 
 	void setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY );
@@ -104,7 +104,7 @@ private:
 	BufferHolder<bool> m_surfVisibilityTable;
 	BufferHolder<SortedOccluder> m_visibleOccludersBuffer;
 
-	Frustum m_occluderFrusta[64];
+	Frustum m_occluderFrusta[128];
 
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;

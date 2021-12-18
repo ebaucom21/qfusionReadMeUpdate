@@ -441,6 +441,17 @@ static bool setupOccluderContourPoly( msurface_t *surf ) {
 	surf->sqrtOfOccluderPolyArea = (float)std::sqrt( bestAreaSoFar );
 	std::memcpy( surf->occluderPolyIndices, resultIndices, sizeof( uint8_t ) * numResultIndices );
 
+	BoundsBuilder boundsBuilder;
+	for( unsigned i = 0; i < numResultIndices; ++i ) {
+		const float *vertex = surf->mesh.xyzArray[resultIndices[i]];
+		boundsBuilder.addPoint( vertex );
+	}
+
+	// TODO: Allow doing scalar 4-component stores explicitly
+	boundsBuilder.storeToWithAddedEpsilon( surf->occluderPolyMins, surf->occluderPolyMaxs );
+	surf->occluderPolyMins[3] = 0.0f;
+	surf->occluderPolyMaxs[3] = 1.0f;
+
 	return true;
 }
 
