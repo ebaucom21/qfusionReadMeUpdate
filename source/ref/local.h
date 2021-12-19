@@ -734,6 +734,10 @@ typedef struct msurface_s {
 		float color[4];
 	};
 
+	mutable unsigned occlusionCullingFrame;
+	// TODO: Decouple surfaces and occluders
+	mutable unsigned occludersSelectionFrame;
+
 	mesh_t mesh;
 
 	instancePoint_t *instances;
@@ -745,9 +749,6 @@ typedef struct msurface_s {
 
 	vec4_t occluderPolyMins, occluderPolyMaxs;
 	vec3_t occluderPolyInnerPoint;
-
-	// TODO: Decouple surfaces and occluders
-	mutable unsigned occludersSelectionFrame;
 
 	uint8_t occluderPolyIndices[7];
 	uint8_t numOccluderPolyIndices;

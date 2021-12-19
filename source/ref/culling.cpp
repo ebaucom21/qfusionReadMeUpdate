@@ -546,11 +546,12 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 
 void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfVisibleLeaves,
 												   std::span<const Frustum> occluderFrusta,
-												   int8_t *surfVisibilityTable ) {
+												   MergedSurfSpan *mergedSurfSpans ) {
 	assert( !occluderFrusta.empty() );
 
 	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	const auto leaves = rsh.worldBrushModel->visleafs;
+	const unsigned occlusionCullingFrame = m_occlusionCullingFrame;
 
 	const auto before = Sys_Microseconds();
 
@@ -563,8 +564,9 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
-			if( surfVisibilityTable[surfNum] < 0 ) {
-				const msurface_t *__restrict surf = surfaces + leafSurfaceNums[surfIndex];
+			const msurface_t *const __restrict surf = surfaces + surfNum;
+			if( surf->occlusionCullingFrame != occlusionCullingFrame ) {
+				surf->occlusionCullingFrame = occlusionCullingFrame;
 
 				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
 
@@ -582,7 +584,14 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 					}
 				} while( ++frustumNum != numBestOccluders );
 
-				surfVisibilityTable[surfNum] = (int8_t)surfVisible;
+				if( surfVisible ) {
+					assert( surf->drawSurf > 0 );
+					const unsigned mergedSurfNum = surf->drawSurf - 1;
+					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
+					// TODO: Branchless min/max
+					span->firstSurface = std::min( span->firstSurface, (int)surfNum );
+					span->lastSurface = std::max( span->lastSurface, (int)surfNum );
+				}
 			}
 		}
 	}
@@ -591,12 +600,19 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 }
 
 void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves,
-											  int8_t *surfVisibilityTable ) {
+											  MergedSurfSpan *mergedSurfSpans ) {
+	const auto surfaces = rsh.worldBrushModel->surfaces;
 	const auto leaves = rsh.worldBrushModel->visleafs;
 	for( const unsigned leafNum: indicesOfLeaves ) {
 		const auto *__restrict leaf = leaves[leafNum];
 		for( unsigned i = 0; i < leaf->numVisSurfaces; ++i ) {
-			surfVisibilityTable[leaf->visSurfaces[i]] = (int8_t)true;
+			const unsigned surfNum = leaf->visSurfaces[i];
+			assert( surfaces[surfNum].drawSurf > 0 );
+			const unsigned mergedSurfNum = surfaces[surfNum].drawSurf - 1;
+			MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
+			// TODO: Branchless min/max
+			span->firstSurface = std::min( span->firstSurface, (int)surfNum );
+			span->lastSurface = std::max( span->lastSurface, (int)surfNum );
 		}
 	}
 }

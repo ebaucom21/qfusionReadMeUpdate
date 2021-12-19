@@ -468,7 +468,9 @@ bool Frontend::addSpriteToSortList( const entity_t *e ) {
 	return addEntryToSortList( e, fog, e->customShader, dist, 0, nullptr, &spriteDrawSurf );
 }
 
-bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf, const float *maybeOrigin ) {
+bool Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
+										   msurface_t *firstVisSurf, msurface_t *lastVisSurf,
+										   const float *maybeOrigin ) {
 	assert( ( drawSurf->visFrame != rf.frameCount ) && "Should not be duplicated for now" );
 
 	portalSurface_t *portalSurface = nullptr;
@@ -494,9 +496,6 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 	unsigned dlightFrame = 0;
 	unsigned curDlightBits = 0;
 
-	msurface_t *firstVisSurf = nullptr;
-	msurface_t *lastVisSurf  = nullptr;
-
 	float resultDist = 0;
 
 	msurface_t *const modelSurfaces = rsh.worldBrushModel->surfaces + drawSurf->firstWorldSurface;
@@ -508,31 +507,21 @@ bool Frontend::addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSu
 				resultDist = std::max( resultDist, *maybePortalDistance );
 			}
 		}
-
-		// surfaces are sorted by their firstDrawVert index so to cut the final slice
-		// we only need to note the first and the last surface
-		if( !firstVisSurf ) {
-			firstVisSurf = surf;
-		}
-		lastVisSurf = surf;
 	}
 
-	// prepare the slice
-	if( firstVisSurf ) {
-		drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
-		drawSurf->firstSpanElem = firstVisSurf->firstDrawSurfElem;
-		drawSurf->numSpanVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
-		drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
+	drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
+	drawSurf->firstSpanElem = firstVisSurf->firstDrawSurfElem;
+	drawSurf->numSpanVerts = lastVisSurf->mesh.numVerts + lastVisSurf->firstDrawSurfVert - firstVisSurf->firstDrawSurfVert;
+	drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
 
-		// update the distance sorting key if it's a portal surface or a normal dlit surface
-		if( resultDist != 0 ) {
-			const unsigned order = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, false );
-			if( resultDist == 0 ) {
-				resultDist = WORLDSURF_DIST;
-			}
-			sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
-			sds->distKey = R_PackDistKey( 0, drawSurf->shader, resultDist, order );
+	// update the distance sorting key if it's a portal surface or a normal dlit surface
+	if( resultDist != 0 ) {
+		const unsigned order = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, false );
+		if( resultDist == 0 ) {
+			resultDist = WORLDSURF_DIST;
 		}
+		sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
+		sds->distKey = R_PackDistKey( 0, drawSurf->shader, resultDist, order );
 	}
 
 	return true;
@@ -762,19 +751,24 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
 	m_occludersSelectionFrame++;
+	m_occlusionCullingFrame++;
 
+	const unsigned numMergedSurfaces = rsh.worldBrushModel->numDrawSurfaces;
 	const unsigned numWorldSurfaces = rsh.worldBrushModel->numModelSurfaces;
 	const unsigned numWorldLeaves = rsh.worldBrushModel->numvisleafs;
 
 	// Put the allocation code here, so we don't bloat the arch-specific code
-	m_surfVisibilityTable.reserve( numWorldSurfaces );
 	m_visibleLeavesBuffer.reserve( numWorldLeaves );
 	m_visibleOccludersBuffer.reserve( numWorldSurfaces );
 	m_occluderPassFullyVisibleLeavesBuffer.reserve( numWorldLeaves );
 	m_occluderPassPartiallyVisibleLeavesBuffer.reserve( numWorldLeaves );
 
-	int8_t *const surfVisibilityTable = m_surfVisibilityTable.data.get();
-	std::fill( surfVisibilityTable, surfVisibilityTable + numWorldSurfaces, (int8_t)-1 );
+	m_drawSurfSurfSpans.reserve( numMergedSurfaces );
+	MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
+	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
+		mergedSurfSpans[i].firstSurface = std::numeric_limits<int>::max();
+		mergedSurfSpans[i].lastSurface = std::numeric_limits<int>::min();
+	}
 
 	// Cull world leaves by the primary frustum
 	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves();
@@ -787,31 +781,25 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 	if( occluderFrusta.empty() ) {
 		// No "good enough" occluders found.
 		// Just mark every surface that falls into the primary frustum visible in this case.
-		markSurfacesOfLeavesAsVisible( visibleLeaves, surfVisibilityTable );
+		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans );
 	} else {
 		// Test every leaf that falls into the primary frustum against frusta of occluders
 		const auto [nonOccludedLeaves, partiallyOccludedLeaves] = cullLeavesByOccluders( visibleLeaves, occluderFrusta );
-		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, surfVisibilityTable );
+		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans );
 		// Test every surface that belongs to partially occluded leaves
-		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, surfVisibilityTable );
+		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans );
 	}
 
-	// TODO: Compactify drawSurf indices based on the table
-
-	for( unsigned i = 0; i < rsh.worldBrushModel->numModelDrawSurfaces; i++ ) {
-		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + i;
-
-		// TODO: !!!!!!!!!!!!! This is just to test whether it works
-		bool drawSurfCulled = true;
-		for( unsigned j = 0; j < drawSurf->numWorldSurfaces; ++j ) {
-			const unsigned surfNum = drawSurf->firstWorldSurface + j;
-			if( surfVisibilityTable[surfNum] > 0 ) {
-				drawSurfCulled = false;
-				break;
-			}
-		}
-		if( !drawSurfCulled ) {
-			addBspSurfToSortList( worldEnt, drawSurf, nullptr );
+	msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
+	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
+	const auto numWorldModelDrawSurfaces = rsh.worldBrushModel->numModelDrawSurfaces;
+	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelDrawSurfaces; ++mergedSurfNum ) {
+		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
+		if( surfSpan.firstSurface <= surfSpan.lastSurface ) {
+			drawSurfaceBSP_t *const mergedSurf = mergedSurfaces + mergedSurfNum;
+			msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
+			msurface_t *const lastVisSurf = surfaces + surfSpan.lastSurface;
+			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr );
 		}
 	}
 }
@@ -980,12 +968,12 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	RB_BindFrameBufferObject();
 }
 
-bool Frontend::addBrushModelToSortList( const entity_t *e ) {
+void Frontend::addBrushModelToSortList( const entity_t *e ) {
 	const model_t *const model = e->model;
 	const mbrushmodel_t *const bmodel = ( mbrushmodel_t * )model->extradata;
 
 	if( bmodel->numModelDrawSurfaces == 0 ) {
-		return false;
+		return;
 	}
 
 	bool rotated;
@@ -996,14 +984,17 @@ bool Frontend::addBrushModelToSortList( const entity_t *e ) {
 	VectorAdd( e->model->mins, e->model->maxs, origin );
 	VectorMA( e->origin, 0.5, origin, origin );
 
+	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
+	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
+
 	// TODO: Lift addBspSurfToSortList condition here
 	for( unsigned i = 0; i < bmodel->numModelDrawSurfaces; i++ ) {
 		const unsigned surfNum = bmodel->firstModelDrawSurface + i;
-		drawSurfaceBSP_t *drawSurf = rsh.worldBrushModel->drawSurfaces + surfNum;
-		addBspSurfToSortList( e, drawSurf, origin );
+		drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
+		msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
+		msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
+		addMergedBspSurfToSortList( e, mergedSurface, firstVisSurface, lastVisSurface, origin );
 	}
-
-	return true;
 }
 
 void Frontend::setupViewMatrices() {

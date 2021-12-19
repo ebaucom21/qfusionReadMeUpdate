@@ -67,6 +67,7 @@ private:
 	Frustum m_frustum;
 
 	unsigned m_occludersSelectionFrame { 0 };
+	unsigned m_occlusionCullingFrame { 0 };
 
 	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
 
@@ -103,10 +104,16 @@ private:
 	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer;
 	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer;
 
-	BufferHolder<int8_t> m_surfVisibilityTable;
 	BufferHolder<SortedOccluder> m_visibleOccludersBuffer;
 
 	Frustum m_occluderFrusta[64];
+
+	struct MergedSurfSpan {
+		int firstSurface;
+		int lastSurface;
+	};
+
+	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpans;
 
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
@@ -150,9 +157,9 @@ private:
 
 	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 											 std::span<const Frustum> occluderFrusta,
-											 int8_t *surfVisibilityTable );
+											 MergedSurfSpan *mergedSurfSpans );
 
-	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, int8_t *surfVisibilityTable );
+	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, MergedSurfSpan *mergedSurfSpans );
 
 	[[nodiscard]]
 	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
@@ -165,9 +172,10 @@ private:
 	bool addSpriteToSortList( const entity_t *e );
 	bool addAliasModelToSortList( const entity_t *e );
 	bool addSkeletalModelToSortList( const entity_t *e );
-	bool addBrushModelToSortList( const entity_t *e );
+	void addBrushModelToSortList( const entity_t *e );
 	bool addNullSurfToSortList( const entity_t *e );
-	bool addBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf, const float *maybeOrigin );
+	bool addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
+									 msurface_t *firstVisSurf, msurface_t *lastVisSurf, const float *maybeOrigin );
 
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
 							  float dist, unsigned order, const portalSurface_t *portalSurf, void *drawSurf );
