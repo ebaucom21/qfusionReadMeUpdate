@@ -744,6 +744,7 @@ typedef struct msurface_s {
 	struct superLightStyle_s *superLightStyle;
 
 	vec4_t occluderPolyMins, occluderPolyMaxs;
+	vec3_t occluderPolyInnerPoint;
 
 	// TODO: Decouple surfaces and occluders
 	mutable unsigned occludersSelectionFrame;

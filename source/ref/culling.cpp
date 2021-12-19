@@ -372,9 +372,6 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 
 		Frustum *const __restrict f = &occluderFrusta[occluderNum];
 
-		vec3_t surfCenter;
-		VectorSubtract( surface->maxs, surface->mins, surfCenter );
-		VectorMA( surface->mins, 0.5f, surfCenter, surfCenter );
 		for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
 			const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
 			const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
@@ -384,8 +381,7 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 			PlaneFromPoints( v1, v2, viewOrigin, &plane );
 
 			// Make the normal point inside the frustum
-			// TODO: Build in a such order that we do not have to check this
-			if( DotProduct( plane.normal, surfCenter ) - plane.dist < 0 ) {
+			if( DotProduct( plane.normal, surface->occluderPolyInnerPoint ) - plane.dist < 0 ) {
 				VectorNegate( plane.normal, plane.normal );
 				plane.dist = -plane.dist;
 			}
@@ -439,7 +435,7 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 
 	Com_Printf( "Frusta setup took %d micros. Selected %d/%d occluders\n", (int)( Sys_Microseconds() - before ), numSelectedOccluders, maxOccluders );
 
-#if 1
+#if 0
 	vec3_t pointInFrontOfView;
 	VectorMA( viewOrigin, 8.0, &m_state.viewAxis[0], pointInFrontOfView );
 
@@ -465,13 +461,11 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 			addDebugLine( v1, pointInFrontOfView );
 			addDebugLine( v1, v2 );
 
-			/*
 			cplane_t plane;
 			// TODO: Inline?
 			PlaneFromPoints( v1, v2, viewOrigin, &plane );
 
 			// Make the normal point inside the frustum
-			// TODO: Build in a such order that we do not have to check this
 			if( DotProduct( plane.normal, surfCenter ) - plane.dist < 0 ) {
 				VectorNegate( plane.normal, plane.normal );
 				plane.dist = -plane.dist;
@@ -480,7 +474,7 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 			vec3_t midpointOfEdge, normalPoint;
 			VectorAvg( v1, v2, midpointOfEdge );
 			VectorMA( midpointOfEdge, 8.0f, plane.normal, normalPoint );
-			addDebugLine( midpointOfEdge, normalPoint );*/
+			addDebugLine( midpointOfEdge, normalPoint );
 		}
 
 		vec4_t cappingPlane;
@@ -494,8 +488,8 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 		}
 
 		vec3_t cappingPlanePoint;
-		VectorMA( surfCenter, 32.0f, cappingPlane, cappingPlanePoint );
-		addDebugLine( surfCenter, cappingPlanePoint );
+		VectorMA( surface->occluderPolyInnerPoint, 32.0f, cappingPlane, cappingPlanePoint );
+		addDebugLine( surface->occluderPolyInnerPoint, cappingPlanePoint );
 	}
 #endif
 

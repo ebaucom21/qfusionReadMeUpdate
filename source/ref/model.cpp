@@ -441,16 +441,22 @@ static bool setupOccluderContourPoly( msurface_t *surf ) {
 	surf->sqrtOfOccluderPolyArea = (float)std::sqrt( bestAreaSoFar );
 	std::memcpy( surf->occluderPolyIndices, resultIndices, sizeof( uint8_t ) * numResultIndices );
 
+	// This is not a true centroid but should be fine for frusta setup
+	double innerPoint[3] { 0.0, 0.0, 0.0 };
+
 	BoundsBuilder boundsBuilder;
 	for( unsigned i = 0; i < numResultIndices; ++i ) {
 		const float *vertex = surf->mesh.xyzArray[resultIndices[i]];
 		boundsBuilder.addPoint( vertex );
+		VectorAdd( innerPoint, vertex, innerPoint );
 	}
 
 	// TODO: Allow doing scalar 4-component stores explicitly
 	boundsBuilder.storeToWithAddedEpsilon( surf->occluderPolyMins, surf->occluderPolyMaxs );
 	surf->occluderPolyMins[3] = 0.0f;
 	surf->occluderPolyMaxs[3] = 1.0f;
+
+	VectorScale( innerPoint, 1.0 / numResultIndices, surf->occluderPolyInnerPoint );
 
 	return true;
 }
