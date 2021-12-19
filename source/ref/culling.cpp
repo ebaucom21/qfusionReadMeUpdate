@@ -277,6 +277,7 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 	const float *const __restrict viewAxis   = m_state.viewAxis;
 
 	SortedOccluder *const visibleOccluders = m_visibleOccludersBuffer.data.get();
+	const unsigned occludersSelectionFrame = m_occludersSelectionFrame;
 
 	const auto worldLeaves   = rsh.worldBrushModel->visleafs;
 	const auto worldSurfaces = rsh.worldBrushModel->surfaces;
@@ -289,6 +290,12 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 		for( unsigned i = 0; i < leaf->numOccluderSurfaces; ++i ) {
 			const unsigned surfNum  = leaf->occluderSurfaces[i];
 			const msurface_s *surf  = worldSurfaces + leaf->occluderSurfaces[i];
+			if( surf->occludersSelectionFrame == occludersSelectionFrame ) {
+				continue;
+			}
+
+			surf->occludersSelectionFrame = occludersSelectionFrame;
+
 			const float absViewDot  = std::abs( DotProduct( viewAxis, surf->plane ) );
 			if( absViewDot < 0.3f ) {
 				continue;
@@ -545,7 +552,7 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 
 void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfVisibleLeaves,
 												   std::span<const Frustum> occluderFrusta,
-												   bool *surfVisibilityTable ) {
+												   int8_t *surfVisibilityTable ) {
 	assert( !occluderFrusta.empty() );
 
 	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
@@ -562,25 +569,27 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
-			const msurface_t *surf = surfaces + surfNum;
+			if( surfVisibilityTable[surfNum] < 0 ) {
+				const msurface_t *__restrict surf = surfaces + leafSurfaceNums[surfIndex];
 
-			LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
+				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
 
-			bool surfVisible = true;
-			unsigned frustumNum = 0;
-			do {
-				const Frustum *__restrict f = &occluderFrusta[frustumNum];
+				bool surfVisible = true;
+				unsigned frustumNum = 0;
+				do {
+					const Frustum *__restrict f = &occluderFrusta[frustumNum];
 
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside )
+					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, const int zeroIfFullyInside )
 
-				if( !zeroIfFullyInside ) [[unlikely]] {
-					surfVisible = false;
-					addDebugLine( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
-					break;
-				}
-			} while( ++frustumNum != numBestOccluders );
+					if( !zeroIfFullyInside ) [[unlikely]] {
+						surfVisible = false;
+						addDebugLine( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
+						break;
+					}
+				} while( ++frustumNum != numBestOccluders );
 
-			surfVisibilityTable[surfNum] = surfVisible;
+				surfVisibilityTable[surfNum] = (int8_t)surfVisible;
+			}
 		}
 	}
 
@@ -588,12 +597,12 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 }
 
 void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves,
-											  bool *surfVisibilityTable ) {
+											  int8_t *surfVisibilityTable ) {
 	const auto leaves = rsh.worldBrushModel->visleafs;
 	for( const unsigned leafNum: indicesOfLeaves ) {
 		const auto *__restrict leaf = leaves[leafNum];
 		for( unsigned i = 0; i < leaf->numVisSurfaces; ++i ) {
-			surfVisibilityTable[leaf->visSurfaces[i]] = true;
+			surfVisibilityTable[leaf->visSurfaces[i]] = (int8_t)true;
 		}
 	}
 }

@@ -66,6 +66,8 @@ private:
 	// TODO: Put in the state
 	Frustum m_frustum;
 
+	unsigned m_occludersSelectionFrame { 0 };
+
 	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
 
 	struct DebugLine {
@@ -101,10 +103,10 @@ private:
 	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer;
 	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer;
 
-	BufferHolder<bool> m_surfVisibilityTable;
+	BufferHolder<int8_t> m_surfVisibilityTable;
 	BufferHolder<SortedOccluder> m_visibleOccludersBuffer;
 
-	Frustum m_occluderFrusta[128];
+	Frustum m_occluderFrusta[64];
 
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
@@ -148,9 +150,9 @@ private:
 
 	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 											 std::span<const Frustum> occluderFrusta,
-											 bool *surfVisibilityTable );
+											 int8_t *surfVisibilityTable );
 
-	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, bool *surfVisibilityTable );
+	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, int8_t *surfVisibilityTable );
 
 	[[nodiscard]]
 	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,

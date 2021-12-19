@@ -761,6 +761,8 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
+	m_occludersSelectionFrame++;
+
 	const unsigned numWorldSurfaces = rsh.worldBrushModel->numModelSurfaces;
 	const unsigned numWorldLeaves = rsh.worldBrushModel->numvisleafs;
 
@@ -771,9 +773,8 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 	m_occluderPassFullyVisibleLeavesBuffer.reserve( numWorldLeaves );
 	m_occluderPassPartiallyVisibleLeavesBuffer.reserve( numWorldLeaves );
 
-	// Assume that every surface is not visible by default
-	bool *const __restrict surfVisibilityTable = m_surfVisibilityTable.data.get();
-	memset( surfVisibilityTable, 0, sizeof( bool ) * numWorldSurfaces );
+	int8_t *const surfVisibilityTable = m_surfVisibilityTable.data.get();
+	std::fill( surfVisibilityTable, surfVisibilityTable + numWorldSurfaces, (int8_t)-1 );
 
 	// Cull world leaves by the primary frustum
 	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves();
@@ -804,7 +805,7 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 		bool drawSurfCulled = true;
 		for( unsigned j = 0; j < drawSurf->numWorldSurfaces; ++j ) {
 			const unsigned surfNum = drawSurf->firstWorldSurface + j;
-			if( m_surfVisibilityTable.data[surfNum] ) {
+			if( surfVisibilityTable[surfNum] > 0 ) {
 				drawSurfCulled = false;
 				break;
 			}

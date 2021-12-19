@@ -722,7 +722,6 @@ typedef struct msurface_s {
 
 	unsigned int drawSurf;
 
-	mutable int fragmentframe;                  // for multi-check avoidance
 
 	vec4_t plane;
 
@@ -746,9 +745,12 @@ typedef struct msurface_s {
 
 	vec4_t occluderPolyMins, occluderPolyMaxs;
 
+	// TODO: Decouple surfaces and occluders
+	mutable unsigned occludersSelectionFrame;
+
 	uint8_t occluderPolyIndices[7];
 	uint8_t numOccluderPolyIndices;
-	// TODO:
+	// TODO: Should not be a member unless there's free room due to alignment
 	bool wasTestedToBeAnOccluder;
 	// Converted to ^(1/2) as a sorting criterion
 	float sqrtOfOccluderPolyArea;
