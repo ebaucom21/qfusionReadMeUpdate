@@ -211,12 +211,17 @@ public:
 protected:
 	Scene();
 
-	const unsigned m_numLocalEntities { 2 };
 	entity_t *m_worldent;
 	entity_t *m_polyent;
 
-	wsw::StaticVector<entity_t, MAX_ENTITIES + 48> m_entities;
-	wsw::StaticVector<entity_t *, MAX_ENTITIES + 48> m_brushModelEntities;
+	wsw::StaticVector<entity_t *, MAX_ENTITIES + 48> m_entities;
+	wsw::StaticVector<entity_t, 2> m_localEntities;
+	// TODO: Use different subtypes so the storage is more compact
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_nullModelEntities;
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_aliasModelEntities;
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_skeletalModelEntities;
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_brushModelEntities;
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
 	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
 };
 

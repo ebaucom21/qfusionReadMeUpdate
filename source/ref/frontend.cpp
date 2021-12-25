@@ -693,48 +693,34 @@ void Frontend::collectVisibleEntities( Scene *scene ) {
 	const unsigned numEntities = scene->m_entities.size();
 	const auto *worldEnt = scene->m_worldent;
 
-	for( unsigned i = scene->m_numLocalEntities ; i < numEntities; i++ ) {
-		entity_t *const e = entities + i;
+	for( auto &e: scene->m_nullModelEntities ) {
+		addNullSurfToSortList( std::addressof( e ) );
+	}
 
-		if( !r_lerpmodels->integer ) {
-			e->backlerp = 0;
-		}
-
-		if( e->flags & RF_VIEWERMODEL ) {
-			//if( !(rn.renderFlags & RF_NONVIEWERREF) )
-			if( !( m_state.renderFlags & (RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+	for( auto &e: scene->m_aliasModelEntities ) {
+		if( e.flags & RF_VIEWERMODEL ) [[unlikely]] {
+			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
 			}
 		}
+		addAliasModelToSortList( std::addressof( e ) );
+	}
 
-		// TODO: Keep model of different types in different lists
-		switch( e->rtype ) {
-			case RT_MODEL:
-				if( !e->model ) {
-					addNullSurfToSortList( e );
-					continue;
-				}
-				switch( e->model->type ) {
-					case mod_alias:
-						addAliasModelToSortList( e );
-						break;
-					case mod_skeletal:
-						addSkeletalModelToSortList( e );
-						break;
-					case mod_brush:
-						e->outlineHeight = worldEnt->outlineHeight;
-						Vector4Copy( worldEnt->outlineRGBA, e->outlineColor );
-						addBrushModelToSortList( e );
-					default:
-						break;
-				}
-				break;
-				case RT_SPRITE:
-					addSpriteToSortList( e );
-					break;
-				default:
-					break;
+	for( auto &e: scene->m_skeletalModelEntities ) {
+		if( e.flags & RF_VIEWERMODEL ) [[unlikely]] {
+			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+				continue;
+			}
 		}
+		addSkeletalModelToSortList( std::addressof( e ) );
+	}
+
+	for( auto &e: scene->m_brushModelEntities ) {
+		addBrushModelToSortList( std::addressof( e ) );
+	}
+
+	for( auto &e: scene->m_spriteEntities ) {
+		addSpriteToSortList( std::addressof( e ) );
 	}
 }
 
@@ -844,7 +830,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
 
 		const shader_t *shader = MaterialCache::instance()->getMaterialById( shaderNum );
-		const entity_t *entity = scene->m_entities.data() + entNum;
+		const entity_t *entity = scene->m_entities[entNum];
 		const mfog_t *fog = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
 		const portalSurface_t *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
 		const int entityFX = entity->renderfx;
@@ -1333,62 +1319,78 @@ void Frontend::dynLightDirForOrigin( const vec_t *origin, float radius, vec3_t d
 }
 
 Scene::Scene() {
-	entity_t worldEntity;
-	memset( &worldEntity, 0, sizeof( worldEntity ) );
-	worldEntity.rtype = RT_MODEL;
-	worldEntity.number = 0;
-	worldEntity.model = rsh.worldModel;
-	worldEntity.scale = 1.0f;
-	Matrix3_Identity( worldEntity.axis );
-	m_entities.push_back( worldEntity );
-	m_worldent = std::addressof( m_entities.back() );
+	m_worldent = m_localEntities.unsafe_grow_back();
+	memset( m_worldent, 0, sizeof( entity_t ) );
+	m_worldent->rtype = RT_MODEL;
+	m_worldent->number = 0;
+	m_worldent->model = rsh.worldModel;
+	m_worldent->scale = 1.0f;
+	Matrix3_Identity( m_worldent->axis );
+	m_entities.push_back( m_worldent );
 
-	entity_t polyEntity;
-	memset( &polyEntity, 0, sizeof( polyEntity ) );
-	polyEntity.rtype = RT_MODEL;
-	polyEntity.number = 1;
-	polyEntity.model = nullptr;
-	polyEntity.scale = 1.0f;
-	Matrix3_Identity( polyEntity.axis );
-	m_entities.push_back( polyEntity );
-	m_polyent = std::addressof( m_entities.back() );
+	m_polyent = m_localEntities.unsafe_grow_back();
+	memset( m_polyent, 0, sizeof( entity_t ) );
+	m_polyent->rtype = RT_MODEL;
+	m_polyent->number = 1;
+	m_polyent->model = nullptr;
+	m_polyent->scale = 1.0f;
+	Matrix3_Identity( m_polyent->axis );
+	m_entities.push_back( m_polyent );
 }
 
 void DrawSceneRequest::addEntity( const entity_t *ent ) {
 	if( !m_entities.full() && ent ) [[likely]] {
-		m_entities.push_back( *ent );
-		entity_t *de = std::addressof( m_entities.back() );
-		de->number = m_entities.size() - 1;
+		entity_t *added = nullptr;
 
-		if( r_outlines_scale->value <= 0 ) {
-			de->outlineHeight = 0;
-		}
-
-		if( de->rtype == RT_MODEL ) {
-			if( de->model && de->model->type == mod_brush ) {
-				m_brushModelEntities.push_back( de );
+		if( ent->rtype == RT_MODEL ) {
+			if( const model_t *__restrict model = ent->model ) [[likely]] {
+				if( model->type == mod_alias ) {
+					m_aliasModelEntities.push_back( *ent );
+					added = std::addressof( m_aliasModelEntities.back() );
+				} else if( model->type == mod_skeletal ) {
+					m_skeletalModelEntities.push_back( *ent );
+					added = std::addressof( m_skeletalModelEntities.back() );
+				} else if( model->type == mod_brush ) {
+					m_brushModelEntities.push_back( *ent );
+					added = std::addressof( m_brushModelEntities.back() );
+				}
+			} else {
+				m_nullModelEntities.push_back( *ent );
+				added = std::addressof( m_nullModelEntities.back() );
 			}
-			if( !( de->renderfx & RF_NOSHADOW ) ) {
-				// TODO
-			}
-		} else if( de->rtype == RT_SPRITE ) {
+		} else if( ent->rtype == RT_SPRITE ) {
+			m_spriteEntities.push_back( *ent );
+			added = std::addressof( m_spriteEntities.back() );
 			// simplifies further checks
-			de->model = nullptr;
+			added->model = nullptr;
 		}
 
-		if( de->renderfx & RF_ALPHAHACK ) {
-			if( de->shaderRGBA[3] == 255 ) {
-				de->renderfx &= ~RF_ALPHAHACK;
+		if( added ) {
+			if( r_outlines_scale->value <= 0 ) {
+				added->outlineHeight = 0;
 			}
-		}
 
-		// add invisible fake entity for depth write
-		// TODO: This should belong to the CGame code
-		if( ( de->renderfx & ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) == ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) {
-			entity_t tent = *ent;
-			tent.renderfx &= ~RF_ALPHAHACK;
-			tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
-			addEntity( &tent );
+			if( !r_lerpmodels->integer ) {
+				added->backlerp = 0;
+			}
+
+			if( added->renderfx & RF_ALPHAHACK ) {
+				if( added->shaderRGBA[3] == 255 ) {
+					added->renderfx &= ~RF_ALPHAHACK;
+				}
+			}
+
+			m_entities.push_back( added );
+			added->number = m_entities.size() - 1;
+
+			// add invisible fake entity for depth write
+			// TODO: This should belong to the CGame code
+			if( ( added->renderfx & ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) == ( RF_WEAPONMODEL | RF_ALPHAHACK ) ) {
+				entity_t tent = *ent;
+				tent.renderfx &= ~RF_ALPHAHACK;
+				tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
+				addEntity( &tent );
+			}
 		}
 	}
 }
