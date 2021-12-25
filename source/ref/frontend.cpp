@@ -445,30 +445,137 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 
 static drawSurfaceType_t spriteDrawSurf = ST_SPRITE;
 
-bool Frontend::addSpriteToSortList( const entity_t *e ) {
-	// TODO: This condition should be eliminated from this path
-	if( e->flags & RF_NOSHADOW ) {
-		if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
-			return false;
+void Frontend::addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities,
+												std::span<VisTestedModel> visibleModels ) {
+	for( const VisTestedModel &visTestedModel: visibleModels ) {
+		const entity_t *const __restrict entity = aliasModelEntities + visTestedModel.indexInEntitiesGroup;
+
+		float distance;
+		// make sure weapon model is always closest to the viewer
+		if( entity->renderfx & RF_WEAPONMODEL ) {
+			distance = 0;
+		} else {
+			distance = Distance( entity->origin, m_state.viewOrigin ) + 1;
+		}
+
+		const mfog_t *const fog = getFogForBounds( visTestedModel.absMins, visTestedModel.absMaxs );
+
+		const auto *const aliasmodel = (const maliasmodel_t *)visTestedModel.selectedLod->extradata;
+		for( int meshNum = 0; meshNum < aliasmodel->nummeshes; meshNum++ ) {
+			const maliasmesh_t *mesh = &aliasmodel->meshes[meshNum];
+			const shader_t *shader = nullptr;
+
+			if( entity->customSkin ) {
+				shader = R_FindShaderForSkinFile( entity->customSkin, mesh->name );
+			} else if( entity->customShader ) {
+				shader = entity->customShader;
+			} else if( mesh->numskins ) {
+				for( int skinNum = 0; skinNum < mesh->numskins; skinNum++ ) {
+					shader = mesh->skins[skinNum].shader;
+					if( shader ) {
+						void *drawSurf = aliasmodel->drawSurfs + meshNum;
+						const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+						addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf );
+					}
+				}
+				continue;
+			}
+
+			if( shader ) {
+				const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + meshNum );
+			}
 		}
 	}
-
-	if( e->radius <= 0 || e->customShader == nullptr || e->scale <= 0 ) {
-		return false;
-	}
-
-	vec3_t eyeToSprite;
-	VectorSubtract( e->origin, m_state.refdef.vieworg, eyeToSprite );
-	const float dist = DotProduct( eyeToSprite, &m_state.viewAxis[0] );
-	if( dist <= 0 ) {
-		return false;
-	}
-
-	const mfog_t *fog = getFogForSphere( e->origin, e->radius );
-	return addEntryToSortList( e, fog, e->customShader, dist, 0, nullptr, &spriteDrawSurf );
 }
 
-bool Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
+void Frontend::addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities,
+												   std::span<VisTestedModel> visibleModels ) {
+	for( const VisTestedModel &visTestedModel: visibleModels ) {
+		const entity_t *const __restrict entity = skeletalModelEntities + visTestedModel.indexInEntitiesGroup;
+
+		float distance;
+		// make sure weapon model is always closest to the viewer
+		if( entity->renderfx & RF_WEAPONMODEL ) {
+			distance = 0;
+		} else {
+			distance = Distance( entity->origin, m_state.viewOrigin ) + 1;
+		}
+
+		const mfog_t *const fog = getFogForBounds( visTestedModel.absMins, visTestedModel.absMaxs );
+
+		const model_t *const mod = visTestedModel.selectedLod;
+		R_AddSkeletalModelCache( entity, mod );
+
+		const auto *const skmodel = ( const mskmodel_t * )mod->extradata;
+		for( unsigned meshNum = 0; meshNum < skmodel->nummeshes; meshNum++ ) {
+			const mskmesh_t *const mesh = &skmodel->meshes[meshNum];
+			shader_t *shader = nullptr;
+
+			if( entity->customSkin ) {
+				shader = R_FindShaderForSkinFile( entity->customSkin, mesh->name );
+			} else if( entity->customShader ) {
+				shader = entity->customShader;
+			} else {
+				shader = mesh->skin.shader;
+			}
+
+			if( shader ) {
+				void *drawSurf = skmodel->drawSurfs + meshNum;
+				const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
+				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf );
+			}
+		}
+	}
+}
+
+static int nullDrawSurf = ST_NULLMODEL;
+
+void Frontend::addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices ) {
+	for( const auto index: indices ) {
+		(void)addEntryToSortList( nullModelEntities + index, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
+	}
+}
+
+void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices ) {
+	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
+	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
+
+	for( const auto index: indices ) {
+		const entity_t *const __restrict entity = brushModelEntities ;
+		const model_t *const model = entity->model;
+		const auto *const brushModel = ( mbrushmodel_t * )model->extradata;
+
+		if( brushModel->numModelDrawSurfaces ) [[likely]] {
+			vec3_t origin;
+			VectorAdd( entity->model->mins, entity->model->maxs, origin );
+			VectorMA( entity->origin, 0.5, origin, origin );
+
+			for( unsigned i = 0; i < brushModel->numModelDrawSurfaces; i++ ) {
+				const unsigned surfNum = brushModel->firstModelDrawSurface + i;
+				drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
+				msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
+				msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
+				addMergedBspSurfToSortList( entity, mergedSurface, firstVisSurface, lastVisSurface, origin );
+			}
+		}
+	}
+}
+
+void Frontend::addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices ) {
+	for( const unsigned index: indices ) {
+		const entity_t *const __restrict entity = spriteEntities + index;
+
+		vec3_t eyeToSprite;
+		VectorSubtract( entity->origin, m_state.refdef.vieworg, eyeToSprite );
+		if( const float dist = DotProduct( eyeToSprite, &m_state.viewAxis[0] ); dist > 0 ) [[likely]] {
+			const mfog_t *const fog = getFogForSphere( entity->origin, entity->radius );
+			addEntryToSortList( entity, fog, entity->customShader, dist, 0, nullptr, &spriteDrawSurf );
+		}
+	}
+}
+
+void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
 										   msurface_t *firstVisSurf, msurface_t *lastVisSurf,
 										   const float *maybeOrigin ) {
 	assert( ( drawSurf->visFrame != rf.frameCount ) && "Should not be duplicated for now" );
@@ -486,7 +593,7 @@ bool Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 	drawSurf->visFrame = rf.frameCount;
 	drawSurf->listSurf = addEntryToSortList( e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
 	if( !drawSurf->listSurf ) {
-		return false;
+		return;
 	}
 
 	if( portalSurface && !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
@@ -523,120 +630,6 @@ bool Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 		sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
 		sds->distKey = R_PackDistKey( 0, drawSurf->shader, resultDist, order );
 	}
-
-	return true;
-}
-
-bool Frontend::addAliasModelToSortList( const entity_t *e ) {
-	// never render weapon models or non-occluders into shadowmaps
-	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
-		if( e->renderfx & RF_WEAPONMODEL ) {
-			return true;
-		}
-	}
-
-	const model_t *mod = R_AliasModelLOD( e, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
-	const maliasmodel_t *aliasmodel;
-	if( !( aliasmodel = ( ( const maliasmodel_t * )mod->extradata ) ) || !aliasmodel->nummeshes ) {
-		return false;
-	}
-
-	vec3_t mins, maxs;
-	const float radius = R_AliasModelLerpBBox( e, mod, mins, maxs );
-
-	float distance;
-	// make sure weapon model is always closest to the viewer
-	if( e->renderfx & RF_WEAPONMODEL ) {
-		distance = 0;
-	} else {
-		distance = Distance( e->origin, m_state.viewOrigin ) + 1;
-	}
-
-	const mfog_t *const fog = getFogForSphere( e->origin, radius );
-
-	for( int i = 0; i < aliasmodel->nummeshes; i++ ) {
-		const maliasmesh_t *mesh = &aliasmodel->meshes[i];
-		const shader_t *shader = nullptr;
-
-		if( e->customSkin ) {
-			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
-		} else if( e->customShader ) {
-			shader = e->customShader;
-		} else if( mesh->numskins ) {
-			for( int j = 0; j < mesh->numskins; j++ ) {
-				shader = mesh->skins[j].shader;
-				if( shader ) {
-					const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-					addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
-				}
-			}
-			continue;
-		}
-
-		if( shader ) {
-			const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + i );
-		}
-	}
-
-	return true;
-}
-
-bool Frontend::addSkeletalModelToSortList( const entity_t *e ) {
-	const model_t *mod = R_SkeletalModelLOD( e, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
-	const mskmodel_t *skmodel;
-	if( !( skmodel = ( ( mskmodel_t * )mod->extradata ) ) || !skmodel->nummeshes ) {
-		return false;
-	}
-
-	vec3_t mins, maxs;
-	const float radius = R_SkeletalModelLerpBBox( e, mod, mins, maxs );
-
-	// never render weapon models or non-occluders into shadowmaps
-	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
-		if( e->renderfx & RF_WEAPONMODEL ) {
-			return true;
-		}
-	}
-
-	float distance;
-	// make sure weapon model is always closest to the viewer
-	if( e->renderfx & RF_WEAPONMODEL ) {
-		distance = 0;
-	} else {
-		distance = Distance( e->origin, m_state.viewOrigin ) + 1;
-	}
-
-	const mfog_t *const fog = getFogForSphere( e->origin, radius );
-
-	// run quaternions lerping job in the background
-	R_AddSkeletalModelCache( e, mod );
-
-	for( unsigned i = 0; i < skmodel->nummeshes; i++ ) {
-		const mskmesh_t *mesh = &skmodel->meshes[i];
-		shader_t *shader = nullptr;
-
-		if( e->customSkin ) {
-			shader = R_FindShaderForSkinFile( e->customSkin, mesh->name );
-		} else if( e->customShader ) {
-			shader = e->customShader;
-		} else {
-			shader = mesh->skin.shader;
-		}
-
-		if( shader ) {
-			const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-			addEntryToSortList( e, fog, shader, distance, drawOrder, nullptr, skmodel->drawSurfs + i );
-		}
-	}
-
-	return true;
-}
-
-static int nullDrawSurf = ST_NULLMODEL;
-
-bool Frontend::addNullSurfToSortList( const entity_t *e ) {
-	return addEntryToSortList( e, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
 }
 
 void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
@@ -688,43 +681,33 @@ void Frontend::collectVisiblePolys( Scene *scene ) {
 	}
 }
 
-void Frontend::collectVisibleEntities( Scene *scene ) {
-	auto *const entities = scene->m_entities.data();
-	const unsigned numEntities = scene->m_entities.size();
-	const auto *worldEnt = scene->m_worldent;
+void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta ) {
+	uint16_t indices[MAX_ENTITIES];
+	m_visTestedModelsBuffer.reserve( MAX_ENTITIES );
+	VisTestedModel *const visModels = m_visTestedModelsBuffer.data.get();
 
-	for( auto &e: scene->m_nullModelEntities ) {
-		addNullSurfToSortList( std::addressof( e ) );
-	}
+	const std::span<const entity_t> nullModelEntities = scene->m_nullModelEntities;
+	const auto visibleNullModelEntityIndices = cullNullModelEntities( nullModelEntities, &m_frustum, frusta, indices );
+	addNullModelEntitiesToSortList( nullModelEntities.data(), visibleNullModelEntityIndices );
 
-	for( auto &e: scene->m_aliasModelEntities ) {
-		if( e.flags & RF_VIEWERMODEL ) [[unlikely]] {
-			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
-				continue;
-			}
-		}
-		addAliasModelToSortList( std::addressof( e ) );
-	}
+	const std::span<const entity_t> aliasModelEntities = scene->m_aliasModelEntities;
+	const auto visibleAliasModels = cullAliasModelEntities( aliasModelEntities, &m_frustum, frusta, visModels );
+	addAliasModelEntitiesToSortList( aliasModelEntities.data(), visibleAliasModels );
 
-	for( auto &e: scene->m_skeletalModelEntities ) {
-		if( e.flags & RF_VIEWERMODEL ) [[unlikely]] {
-			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
-				continue;
-			}
-		}
-		addSkeletalModelToSortList( std::addressof( e ) );
-	}
+	const std::span<const entity_t> skeletalModelEntities = scene->m_skeletalModelEntities;
+	const auto visibleSkeletalModels = cullSkeletalModelEntities( skeletalModelEntities, &m_frustum, frusta, visModels );
+	addSkeletalModelEntitiesToSortList( skeletalModelEntities.data(), visibleSkeletalModels );
 
-	for( auto &e: scene->m_brushModelEntities ) {
-		addBrushModelToSortList( std::addressof( e ) );
-	}
+	const std::span<const entity_t> brushModelEntities = scene->m_brushModelEntities;
+	const auto visibleBrushModelEntityIndices = cullBrushModelEntities( brushModelEntities, &m_frustum, frusta, indices );
+	addBrushModelEntitiesToSortList( brushModelEntities.data(), visibleBrushModelEntityIndices );
 
-	for( auto &e: scene->m_spriteEntities ) {
-		addSpriteToSortList( std::addressof( e ) );
-	}
+	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
+	const auto visibleSpriteEntityIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices );
+	addSpriteEntitiesToSortList( spriteEntities.data(), visibleSpriteEntityIndices );
 }
 
-void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
+auto Frontend::collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Frustum> {
 	auto *const worldEnt = scene->m_worldent;
 
 	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
@@ -788,6 +771,8 @@ void Frontend::collectVisibleWorldBrushes( Scene *scene ) {
 			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr );
 		}
 	}
+
+	return occluderFrusta;
 }
 
 void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
@@ -954,35 +939,6 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	RB_BindFrameBufferObject();
 }
 
-void Frontend::addBrushModelToSortList( const entity_t *e ) {
-	const model_t *const model = e->model;
-	const mbrushmodel_t *const bmodel = ( mbrushmodel_t * )model->extradata;
-
-	if( bmodel->numModelDrawSurfaces == 0 ) {
-		return;
-	}
-
-	bool rotated;
-	vec3_t bmins, bmaxs;
-	const float radius = R_BrushModelBBox( e, bmins, bmaxs, &rotated );
-
-	vec3_t origin;
-	VectorAdd( e->model->mins, e->model->maxs, origin );
-	VectorMA( e->origin, 0.5, origin, origin );
-
-	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
-	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
-
-	// TODO: Lift addBspSurfToSortList condition here
-	for( unsigned i = 0; i < bmodel->numModelDrawSurfaces; i++ ) {
-		const unsigned surfNum = bmodel->firstModelDrawSurface + i;
-		drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
-		msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
-		msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
-		addMergedBspSurfToSortList( e, mergedSurface, firstVisSurface, lastVisSurface, origin );
-	}
-}
-
 void Frontend::setupViewMatrices() {
 	refdef_t *rd = &m_state.refdef;
 
@@ -1103,10 +1059,12 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	// we know the initial farclip at this point after determining visible world leafs
 	// R_DrawEntities can make adjustments as well
 
+	std::span<const Frustum> occluderFrusta;
+
 	if( !shadowMap ) {
 		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
-				collectVisibleWorldBrushes( scene );
+				occluderFrusta = collectVisibleWorldBrushes( scene );
 			}
 		}
 
@@ -1117,7 +1075,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	}
 
 	if( r_drawentities->integer ) {
-		collectVisibleEntities( scene );
+		collectVisibleEntities( scene, occluderFrusta );
 	}
 
 	if( !shadowMap ) {

@@ -80,6 +80,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	const __m128 xmmDot##boxSuffix = _mm_add_ps( _mm_add_ps( xMulX##boxSuffix, yMulY##boxSuffix ), zMulZ##boxSuffix );
 
 // Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
+#define COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( f, nonZeroIfFullyOutside ) \
+	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( f ) \
+	/* Select mins/maxs using masks for respective plane signbits */ \
+	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( , ) \
+	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( , ) \
+	nonZeroIfFullyOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot, xmmPlaneD ) );
+
+// Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
 #define COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, zeroIfFullyInside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
     /* Select a farthest corner using masks for respective plane signbits */ \
@@ -121,14 +129,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 auto Frustum::computeBinaryResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> int {
 	LOAD_BOX_COMPONENTS( mins, maxs )
-	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( this )
-
-	// Select mins/maxs using masks for respective plane signbits
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( , )
-
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( , )
-
-	return _mm_movemask_ps( _mm_sub_ps( xmmDot, xmmPlaneD ) );
+	COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( this, const int nonZeroIfFullyOutside )
+	return nonZeroIfFullyOutside;
 }
 
 auto Frustum::computeTristateResultFor4Planes( const vec_t *mins, const vec_t *maxs ) const -> std::pair<int, int> {
@@ -615,6 +617,256 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 			span->lastSurface = std::max( span->lastSurface, (int)surfNum );
 		}
 	}
+}
+
+auto Frontend::cullNullModelEntities( std::span<const entity_t> entitiesSpan,
+									  const Frustum *__restrict primaryFrustum,
+									  std::span<const Frustum> occluderFrusta,
+									  uint16_t *tmpIndices )
+									  -> std::span<const uint16_t> {
+	const auto *const entities  = entitiesSpan.data();
+	const unsigned numEntities  = entitiesSpan.size();
+
+	unsigned numPassedEntities = 0;
+	for( unsigned i = 0; i < numEntities; ++i ) {
+		const entity_t *const __restrict entity = &entities[i];
+		vec4_t mins { -16, -16, -16, -0 };
+		vec4_t maxs { +16, +16, +16, +1 };
+		VectorAdd( mins, entity->origin, mins );
+		VectorAdd( maxs, entity->origin, maxs );
+
+		LOAD_BOX_COMPONENTS( mins, maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedEntities++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedEntities };
+}
+
+auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
+									   const Frustum *__restrict primaryFrustum,
+									   std::span<const Frustum> occluderFrusta,
+									   VisTestedModel *tmpBuffer )
+									   -> std::span<VisTestedModel> {
+	const auto *const entities = entitiesSpan.data();
+	const unsigned numEntities = entitiesSpan.size();
+
+	unsigned numPassedEntities = 0;
+	for( unsigned i = 0; i < numEntities; ++i ) {
+		const entity_t *const __restrict entity = &entities[i];
+		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
+			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+				continue;
+			}
+		}
+
+		const model_t *mod = R_AliasModelLOD( entity, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
+		const auto *aliasmodel = ( const maliasmodel_t * )mod->extradata;
+		// TODO: Could this ever happen
+		if( !aliasmodel ) [[unlikely]] {
+			continue;
+		}
+		if( !aliasmodel->nummeshes ) [[unlikely]] {
+			continue;
+		}
+
+		vec4_t absMins, absMaxs;
+		R_AliasModelLerpBBox( entity, mod, absMins, absMaxs );
+		VectorAdd( absMins, entity->origin, absMins );
+		VectorAdd( absMaxs, entity->origin, absMaxs );
+
+		// Don't let it to be culled away
+		// TODO: Keep it separate from other models?
+		if( entity->flags & RF_WEAPONMODEL ) [[unlikely]] {
+			VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
+			VectorCopy( absMins, tested->absMins );
+			VectorCopy( absMaxs, tested->absMaxs );
+			tested->selectedLod = mod;
+			tested->indexInEntitiesGroup = i;
+			continue;
+		}
+
+		LOAD_BOX_COMPONENTS( absMins, absMaxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					addDebugLine( absMins, absMaxs, COLOR_RGB( 0, 128, 255 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
+				VectorCopy( absMins, tested->absMins );
+				VectorCopy( absMaxs, tested->absMaxs );
+				tested->selectedLod = mod;
+				tested->indexInEntitiesGroup = i;
+			}
+		}
+	}
+
+	return { tmpBuffer, numPassedEntities };
+}
+
+auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan,
+										  const Frustum *__restrict primaryFrustum,
+										  std::span<const Frustum> occluderFrusta,
+										  VisTestedModel *tmpBuffer )
+										  -> std::span<VisTestedModel> {
+	const auto *const entities = entitiesSpan.data();
+	const unsigned numEntities = entitiesSpan.size();
+
+	unsigned numPassedEntities = 0;
+	for( unsigned i = 0; i < numEntities; i++ ) {
+		const entity_t *const __restrict entity = &entities[i];
+		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
+			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+				continue;
+			}
+		}
+
+		const model_t *mod = R_SkeletalModelLOD( entity, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
+		const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
+		if( !skmodel ) [[unlikely]] {
+			continue;
+		}
+		if( !skmodel->nummeshes ) [[unlikely]] {
+			continue;
+		}
+
+		vec4_t absMins, absMaxs;
+		R_SkeletalModelLerpBBox( entity, mod, absMins, absMaxs );
+		VectorAdd( absMins, entity->origin, absMins );
+		VectorAdd( absMaxs, entity->origin, absMaxs );
+
+		LOAD_BOX_COMPONENTS( absMins, absMaxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					addDebugLine( absMins, absMaxs, COLOR_RGB( 0, 255, 128 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
+				VectorCopy( absMins, tested->absMins );
+				VectorCopy( absMaxs, tested->absMaxs );
+				tested->selectedLod = mod;
+				tested->indexInEntitiesGroup = i;
+			}
+		}
+	}
+
+	return { tmpBuffer, numPassedEntities };
+}
+
+auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
+									   const Frustum *__restrict primaryFrustum,
+									   std::span<const Frustum> occluderFrusta,
+									   uint16_t *tmpIndices )
+									   -> std::span<const uint16_t> {
+	const auto *const entities = entitiesSpan.data();
+	const unsigned numEntities = entitiesSpan.size();
+
+	unsigned numPassedEntities = 0;
+	for( unsigned i = 0; i < numEntities; ++i ) {
+		const entity_t *const __restrict entity = &entities[i];
+		const model_t *const model = entity->model;
+		const auto *const brushModel = ( mbrushmodel_t * )model->extradata;
+		if( !brushModel->numModelDrawSurfaces ) [[unlikely]] {
+			continue;
+		}
+
+		vec4_t absMins, absMaxs;
+		// Returns absolute bounds
+		R_BrushModelBBox( entity, absMins, absMaxs );
+
+		LOAD_BOX_COMPONENTS( absMins, absMaxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					addDebugLine( absMins, absMaxs, COLOR_RGB( 128, 255, 128 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedEntities++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedEntities };
+}
+
+auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
+								   const Frustum *__restrict primaryFrustum,
+								   std::span<const Frustum> occluderFrusta,
+								   uint16_t *tmpIndices )
+								   -> std::span<const uint16_t> {
+	const auto *const entities = entitiesSpan.data();
+	const unsigned numEntities = entitiesSpan.size();
+
+	unsigned numPassedEntities = 0;
+	for( unsigned i = 0; i < numEntities; ++i ) {
+		const entity_t *const __restrict entity = &entities[i];
+		// TODO: This condition should be eliminated from this path
+		if( entity->flags & RF_NOSHADOW ) {
+			if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
+				continue;
+			}
+		}
+
+		if( entity->radius <= 0 || entity->customShader == nullptr || entity->scale <= 0 ) {
+			continue;
+		}
+
+		const float *origin = entity->origin;
+		const float halfRadius = 0.5f * entity->radius;
+		const vec4_t mins { origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f };
+		const vec4_t maxs { origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f };
+		// TODO: Add frustum/sphere tests
+		LOAD_BOX_COMPONENTS( mins, maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					addDebugLine( mins, maxs, COLOR_RGB( 255, 96, 255 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedEntities++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedEntities };
 }
 
 }

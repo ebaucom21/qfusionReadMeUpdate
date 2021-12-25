@@ -115,6 +115,15 @@ private:
 
 	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpans;
 
+	struct VisTestedModel {
+		// TODO: Pass lod number?
+		const model_t *selectedLod;
+		vec3_t absMins, absMaxs;
+		unsigned indexInEntitiesGroup;
+	};
+
+	BufferHolder<VisTestedModel> m_visTestedModelsBuffer;
+
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
@@ -139,8 +148,53 @@ private:
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
 
 	void collectVisiblePolys( Scene *scene );
-	void collectVisibleWorldBrushes( Scene *scene );
-	void collectVisibleEntities( Scene *scene );
+
+	[[nodiscard]]
+	auto collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Frustum>;
+
+	void collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta );
+
+	[[nodiscard]]
+	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
+								const Frustum *__restrict primaryFrustum,
+								std::span<const Frustum> occluderFrusta,
+								uint16_t *tmpIndices )
+								-> std::span<const uint16_t>;
+
+	[[nodiscard]]
+	auto cullAliasModelEntities( std::span<const entity_t> aliasModelEntities,
+								 const Frustum *__restrict primaryFrustum,
+								 std::span<const Frustum> occluderFrusta,
+								 VisTestedModel *tmpBuffer )
+								 -> std::span<VisTestedModel>;
+
+	[[nodiscard]]
+	auto cullSkeletalModelEntities( std::span<const entity_t> skeletalModelEntities,
+									const Frustum *__restrict primaryFrustum,
+									std::span<const Frustum> occluderFrusta,
+									VisTestedModel *tmpBuffer )
+									-> std::span<VisTestedModel>;
+
+	[[nodiscard]]
+	auto cullBrushModelEntities( std::span<const entity_t> brushModelEntities,
+								 const Frustum *__restrict primaryFrustum,
+								 std::span<const Frustum> occluderFrusta,
+								 uint16_t *tmpIndices )
+								 -> std::span<const uint16_t>;
+
+	[[nodiscard]]
+	auto cullSpriteEntities( std::span<const entity_t> spriteEntities,
+							 const Frustum *__restrict primaryFrustum,
+							 std::span<const Frustum> occluderFrusta,
+							 uint16_t *tmpIndices )
+							 -> std::span<const uint16_t>;
+
+	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
+	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
+
+	void addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices );
+	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices );
+	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
 
 	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
@@ -169,12 +223,7 @@ private:
 	void setupViewMatrices();
 	void clearActiveFrameBuffer();
 
-	bool addSpriteToSortList( const entity_t *e );
-	bool addAliasModelToSortList( const entity_t *e );
-	bool addSkeletalModelToSortList( const entity_t *e );
-	void addBrushModelToSortList( const entity_t *e );
-	bool addNullSurfToSortList( const entity_t *e );
-	bool addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
+	void addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
 									 msurface_t *firstVisSurf, msurface_t *lastVisSurf, const float *maybeOrigin );
 
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,

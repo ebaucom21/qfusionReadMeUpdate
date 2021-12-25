@@ -418,7 +418,7 @@ model_t *R_AliasModelLOD( const entity_t *e, const float *viewOrigin, float fovD
 /*
 * R_AliasModelLerpBBox
 */
-float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
+void R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
 	int i;
 	int framenum = e->frame, oldframenum = e->oldframe;
 	const maliasmodel_t *aliasmodel = ( const maliasmodel_t * )mod->extradata;
@@ -426,7 +426,7 @@ float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, 
 
 	if( !aliasmodel->nummeshes ) {
 		ClearBounds( mins, maxs );
-		return 0;
+		return;
 	}
 
 	if( ( framenum >= aliasmodel->numframes ) || ( framenum < 0 ) ) {
@@ -451,7 +451,7 @@ float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, 
 		VectorCopy( pframe->mins, mins );
 		VectorCopy( pframe->maxs, maxs );
 		if( e->scale == 1 ) {
-			return pframe->radius;
+			return;
 		}
 	} else {
 		const float
@@ -468,7 +468,6 @@ float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, 
 
 	VectorScale( mins, e->scale, mins );
 	VectorScale( maxs, e->scale, maxs );
-	return RadiusFromBounds( mins, maxs );
 }
 
 /*
@@ -517,17 +516,6 @@ bool R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel
 	orient->origin[2] = oldtag->origin[2] + ( tag->origin[2] - oldtag->origin[2] ) * lerpfrac;
 
 	return true;
-}
-
-/*
-* R_AliasModelBBox
-*/
-float R_AliasModelBBox( const entity_t *e, const float *viewOrigin, float fovDotScale, vec3_t mins, vec3_t maxs ) {
-	if( const model_t *mod = R_AliasModelLOD( e, viewOrigin, fovDotScale ) ) {
-		return R_AliasModelLerpBBox( e, mod, mins, maxs );
-	}
-
-	return 0;
 }
 
 /*

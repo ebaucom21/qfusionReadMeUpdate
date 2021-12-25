@@ -1368,8 +1368,8 @@ void R_LatLongToNorm4( const uint8_t latlong[2], vec4_t out );
 // r_alias.c
 //
 model_t *R_AliasModelLOD( const entity_t *e, const float *viewOrigin, const float fovDotScale );
-float R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
-bool    R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel, int framenum, int oldframenum,
+void R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
+bool R_AliasModelLerpTag( orientation_t *orient, const maliasmodel_t *aliasmodel, int framenum, int oldframenum,
 							 float lerpfrac, const char *name );
 void        R_AliasModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
 
@@ -1472,7 +1472,8 @@ void        R_EndRegistration_();
 void        R_Shutdown_( bool verbose );
 
 bool    R_SurfPotentiallyVisible( const msurface_t *surf );
-float       R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated );
+
+void R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated = nullptr );
 
 struct skmcacheentry_s;
 
@@ -1484,10 +1485,9 @@ model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float f
 skmcacheentry_s *R_GetSkeletalCache( int entNum, int lodNum );
 dualquat_t *R_GetSkeletalBones( skmcacheentry_s *cache );
 bool R_SkeletalRenderAsFrame0( skmcacheentry_s *cache );
-float       R_SkeletalModelBBox( const entity_t *e, const float *viewOrigin, float fovLodScale, vec3_t mins, vec3_t maxs );
-void        R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
-float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
-bool        R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, int oldframenum, int framenum, float lerpfrac, const char *name );
+void R_SkeletalModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t maxs );
+void R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs );
+bool R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, int oldframenum, int framenum, float lerpfrac, const char *name );
 
 void        R_InitSkeletalCache( void );
 void        R_ClearSkeletalCache( void );

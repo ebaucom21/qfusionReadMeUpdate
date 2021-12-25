@@ -860,7 +860,7 @@ model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float f
 	return e->model->lods[std::min( lod, e->model->numlods ) - 1];
 }
 
-float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
+void R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
 	int i;
 	int frame = e->frame, oldframe = e->oldframe;
 	mskframe_t *pframe, *poldframe;
@@ -869,7 +869,7 @@ float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t min
 
 	if( !skmodel->nummeshes ) {
 		ClearBounds( mins, maxs );
-		return 0;
+		return;
 	}
 
 	if( frame < 0 || frame >= (int)skmodel->numframes ) {
@@ -895,13 +895,13 @@ float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t min
 		VectorCopy( mod->mins, mins );
 		VectorCopy( mod->maxs, maxs );
 		if( e->scale == 1 ) {
-			return mod->radius;
+			return;
 		}
 	} if( pframe == poldframe ) {
 		VectorCopy( pframe->mins, mins );
 		VectorCopy( pframe->maxs, maxs );
 		if( e->scale == 1 ) {
-			return pframe->radius;
+			return;
 		}
 	} else {
 		thismins = pframe->mins;
@@ -918,7 +918,6 @@ float R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t min
 
 	VectorScale( mins, e->scale, mins );
 	VectorScale( maxs, e->scale, maxs );
-	return RadiusFromBounds( mins, maxs );
 }
 
 //=======================================================================
@@ -1184,17 +1183,6 @@ bool R_SkeletalModelLerpTag( orientation_t *orient, const mskmodel_t *skmodel, i
 	DualQuat_ToMatrix3AndVector( dq, orient->axis, orient->origin );
 
 	return true;
-}
-
-/*
-* R_SkeletalModelBBox
-*/
-float R_SkeletalModelBBox( const entity_t *e, const float *viewOrigin, float fovLodScale, vec3_t mins, vec3_t maxs ) {
-	if( const model_t *mod = R_SkeletalModelLOD( e, viewOrigin, fovLodScale ) ) {
-		return R_SkeletalModelLerpBBox( e, mod, mins, maxs );
-	}
-
-	return 0;
 }
 
 /*

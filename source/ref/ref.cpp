@@ -593,7 +593,7 @@ bool R_SurfPotentiallyVisible( const msurface_t *surf ) {
 	return true;
 }
 
-float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated ) {
+void R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotated ) {
 	const model_t *model = e->model;
 
 	if( !Matrix3_Compare( e->axis, axis_identity ) ) {
@@ -604,14 +604,12 @@ float R_BrushModelBBox( const entity_t *e, vec3_t mins, vec3_t maxs, bool *rotat
 			mins[i] = e->origin[i] - model->radius * e->scale;
 			maxs[i] = e->origin[i] + model->radius * e->scale;
 		}
-		return model->radius * e->scale;
 	} else {
 		if( rotated ) {
 			*rotated = false;
 		}
 		VectorMA( e->origin, e->scale, model->mins, mins );
 		VectorMA( e->origin, e->scale, model->maxs, maxs );
-		return RadiusFromBounds( mins, maxs );
 	}
 }
 
