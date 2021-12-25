@@ -22,19 +22,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "program.h"
-#include "frontend.h"
 #include "../qcommon/q_trie.h"
-#include "../qcommon/qcommon.h"
 
 #include <algorithm>
 
 #define MAX_GLSL_PROGRAMS           1024
 #define GLSL_PROGRAMS_HASH_SIZE     256
-
-#define GLSL_DEFAULT_CACHE_FILE_NAME    "glsl/glsl.cache.default"
-
-#define GLSL_CACHE_FILE_NAME            "cache/glsl.cache"
-#define GLSL_BINARY_CACHE_FILE_NAME     "cache/glsl.cache.bin"
 
 typedef struct {
 	r_glslfeat_t bit;
@@ -54,8 +47,6 @@ typedef struct glsl_program_s {
 	int object;
 	int vertexShader;
 	int fragmentShader;
-
-	int binaryCachePos;
 
 	struct loc_s {
 		int ModelViewMatrix,
@@ -112,20 +103,12 @@ typedef struct glsl_program_s {
 			DynamicLightsDiffuseAndInvRadius[MAX_DLIGHTS >> 2],
 			NumDynamicLights,
 
-			AttrBonesIndices,
-			AttrBonesWeights,
 			DualQuats,
 
 			InstancePoints,
 
 			WallColor,
 			FloorColor,
-
-			ShadowmapTextureParams[GLSL_SHADOWMAP_LIMIT],
-			ShadowmapMatrix[GLSL_SHADOWMAP_LIMIT],
-			ShadowAlpha[( GLSL_SHADOWMAP_LIMIT + 3 ) / 4],
-			ShadowDir[GLSL_SHADOWMAP_LIMIT],
-			ShadowEntityDist[GLSL_SHADOWMAP_LIMIT],
 
 			BlendMix,
 			ColorMod,
@@ -153,8 +136,6 @@ static bool r_glslprograms_initialized;
 static unsigned int r_numglslprograms;
 static glsl_program_t r_glslprograms[MAX_GLSL_PROGRAMS];
 static glsl_program_t *r_glslprograms_hash[GLSL_PROGRAM_TYPE_MAXTYPE][GLSL_PROGRAMS_HASH_SIZE];
-
-static int r_glslbincache_storemode;
 
 static void RP_GetUniformLocations( glsl_program_t *program );
 static void RP_BindAttrbibutesLocations( glsl_program_t *program );
@@ -429,15 +410,6 @@ static const glsl_feature_t glsl_features_shadowmap[] =
 	{ GLSL_SHADER_COMMON_INSTANCED_TRANSFORMS, "#define APPLY_INSTANCED_TRANSFORMS\n", "_instanced" },
 	{ GLSL_SHADER_COMMON_INSTANCED_ATTRIB_TRANSFORMS, "#define APPLY_INSTANCED_TRANSFORMS\n#define APPLY_INSTANCED_ATTRIB_TRANSFORMS\n", "_instanced_va" },
 
-	{ GLSL_SHADER_SHADOWMAP_DITHER, "#define APPLY_DITHER\n", "_dither" },
-	{ GLSL_SHADER_SHADOWMAP_PCF, "#define APPLY_PCF\n", "_pcf" },
-	{ GLSL_SHADER_SHADOWMAP_SHADOW2, "#define NUM_SHADOWS 2\n", "_2" },
-	{ GLSL_SHADER_SHADOWMAP_SHADOW3, "#define NUM_SHADOWS 3\n", "_3" },
-	{ GLSL_SHADER_SHADOWMAP_SHADOW4, "#define NUM_SHADOWS 4\n", "_4" },
-	{ GLSL_SHADER_SHADOWMAP_SAMPLERS, "#define APPLY_SHADOW_SAMPLERS\n", "_shadowsamp" },
-	{ GLSL_SHADER_SHADOWMAP_24BIT, "#define APPLY_RGB_SHADOW_24BIT\n", "_rgb24" },
-	{ GLSL_SHADER_SHADOWMAP_NORMALCHECK, "#define APPLY_SHADOW_NORMAL_CHECK\n", "_nc" },
-
 	{ 0, NULL, NULL }
 };
 
@@ -661,15 +633,10 @@ static const glsl_feature_t * const glsl_programtypes_features[] =
 #define QF_GLSL_VERSION120 "#version 120\n"
 #define QF_GLSL_VERSION130 "#version 130\n"
 #define QF_GLSL_VERSION140 "#version 140\n"
-#define QF_GLSL_VERSION300ES "#version 300 es\n"
-#define QF_GLSL_VERSION310ES "#version 310 es\n"
 
 #define QF_GLSL_ENABLE_ARB_GPU_SHADER5 "#extension GL_ARB_gpu_shader5 : enable\n"
-#define QF_GLSL_ENABLE_EXT_GPU_SHADER5 "#extension GL_EXT_gpu_shader5 : enable\n"
 #define QF_GLSL_ENABLE_ARB_DRAW_INSTANCED "#extension GL_ARB_draw_instanced : enable\n"
-#define QF_GLSL_ENABLE_EXT_SHADOW_SAMPLERS "#extension GL_EXT_shadow_samplers : enable\n"
 #define QF_GLSL_ENABLE_EXT_TEXTURE_ARRAY "#extension GL_EXT_texture_array : enable\n"
-#define QF_GLSL_ENABLE_OES_TEXTURE_3D "#extension GL_OES_texture_3D : enable\n"
 
 #define QF_BUILTIN_GLSL_MACROS "" \
 	"#if !defined(myhalf)\n" \
@@ -740,67 +707,6 @@ static const glsl_feature_t * const glsl_programtypes_features[] =
 	"#define qf_textureArray texture\n" \
 	"#define qf_texture3D texture\n" \
 	"#define qf_textureOffset(a,b,c,d) textureOffset(a,b,ivec2(c,d))\n" \
-	"#define qf_shadow texture\n" \
-	"\n"
-
-#define QF_BUILTIN_GLSL_MACROS_GLSL100ES "" \
-	"#define qf_varying varying\n" \
-	"#define qf_flat_varying varying\n" \
-	"#ifdef VERTEX_SHADER\n" \
-	"# define qf_attribute attribute\n" \
-	"#endif\n" \
-	"#ifdef FRAGMENT_SHADER\n" \
-	"# if defined(GL_FRAGMENT_PRECISION_HIGH) && defined(QF_FRAGMENT_PRECISION_HIGH)\n" \
-	"   precision highp float;\n" \
-	"# else\n" \
-	"   precision mediump float;\n" \
-	"# endif\n" \
-	"# ifdef GL_EXT_texture_array\n" \
-	"   precision lowp sampler2DArray;\n" \
-	"# endif\n" \
-	"# ifdef GL_OES_texture_3D\n" \
-	"   precision lowp sampler3D;\n" \
-	"# endif\n" \
-	"# ifdef GL_EXT_shadow_samplers\n" \
-	"   precision lowp sampler2DShadow;\n" \
-	"# endif\n" \
-	"# define qf_FragColor gl_FragColor\n" \
-	"#endif\n" \
-	" qf_varying myhalf4 qf_FrontColor;\n" \
-	"#define qf_texture texture2D\n" \
-	"#define qf_textureLod texture2DLod\n" \
-	"#define qf_textureCube textureCube\n" \
-	"#define qf_textureArray texture2DArray\n" \
-	"#define qf_texture3D texture3D\n" \
-	"#define qf_shadow shadow2DEXT\n" \
-	"\n"
-
-#define QF_BUILTIN_GLSL_MACROS_GLSL300ES "" \
-	"#ifdef VERTEX_SHADER\n" \
-	"# define qf_varying out\n" \
-	"# define qf_flat_varying flat out\n" \
-	"# define qf_attribute in\n" \
-	"#endif\n" \
-	"#ifdef FRAGMENT_SHADER\n" \
-	"# ifdef QF_FRAGMENT_PRECISION_HIGH\n" \
-	"   precision highp float;\n" \
-	"# else\n" \
-	"   precision mediump float;\n" \
-	"# endif\n" \
-	"  precision lowp sampler2DArray;\n" \
-	"  precision lowp sampler3D;\n" \
-	"  precision lowp sampler2DShadow;\n" \
-	"  layout(location = 0) out vec4 qf_FragColor;\n" \
-	"  layout(location = 1) out vec4 qf_BrightColor;\n" \
-	"# define qf_varying in\n" \
-	"# define qf_flat_varying flat in\n" \
-	"#endif\n" \
-	" qf_varying myhalf4 qf_FrontColor;\n" \
-	"#define qf_texture texture\n" \
-	"#define qf_textureLod textureLod\n" \
-	"#define qf_textureCube texture\n" \
-	"#define qf_textureArray texture\n" \
-	"#define qf_texture3D texture\n" \
 	"#define qf_shadow texture\n" \
 	"\n"
 
@@ -1638,69 +1544,6 @@ int RP_GetProgramObject( int elem ) {
 }
 
 /*
-* RP_GetProgramBinary
-*
-* Retrieves the binary from the program object
-*/
-static void *RP_GetProgramBinary( int elem, int *format, unsigned *length ) {
-	void *binary;
-	glsl_program_t *program = r_glslprograms + elem - 1;
-	GLenum GLFormat;
-	GLint GLlength;
-	GLint linked = 0;
-
-	if( !glConfig.ext.get_program_binary ) {
-		return NULL;
-	}
-	if( !program->object ) {
-		return NULL;
-	}
-
-	qglGetProgramiv( program->object, GL_LINK_STATUS, &linked );
-	if( !linked ) {
-		return NULL;
-	}
-
-	// FIXME: need real pointer to glGetProgramiv here,
-	// aliasing to glGetObjectParameterivARB doesn't work
-	qglGetProgramiv( program->object, GL_PROGRAM_BINARY_LENGTH, &GLlength );
-	if( !GLlength ) {
-		return NULL;
-	}
-
-	binary = Q_malloc( GLlength );
-	qglGetProgramBinary( program->object, GLlength, nullptr, &GLFormat, binary );
-
-	*format = GLFormat;
-	*length = GLlength;
-
-	return binary;
-}
-
-/*
-* RP_ProgramList_f
-*/
-void RP_ProgramList_f( void ) {
-	int i;
-	glsl_program_t *program;
-	char fullName[1024];
-
-	Com_Printf( "------------------\n" );
-	for( i = 0, program = r_glslprograms; i < MAX_GLSL_PROGRAMS; i++, program++ ) {
-		if( !program->name ) {
-			break;
-		}
-
-		Q_strncpyz( fullName, program->name, sizeof( fullName ) );
-		R_ProgramFeatures2Defines( glsl_programtypes_features[program->type], program->features, fullName, sizeof( fullName ) );
-
-		Com_Printf( " %3i %s", i + 1, fullName );
-		Com_Printf( "\n" );
-	}
-	Com_Printf( "%i programs total\n", i );
-}
-
-/*
 * RP_UpdateShaderUniforms
 */
 void RP_UpdateShaderUniforms( int elem,
@@ -2132,13 +1975,11 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 		locDuDvMapTexture,
 		locReflectionTexture,
 		locRefractionTexture,
-		locShadowmapTexture[GLSL_SHADOWMAP_LIMIT],
 		locCelShadeTexture,
 		locCelLightTexture,
 		locDiffuseTexture,
 		locStripesTexture,
 		locDepthTexture,
-		locBloomTexture[NUM_BLOOM_LODS],
 		locYUVTextureY,
 		locYUVTextureU,
 		locYUVTextureV,
@@ -2176,14 +2017,6 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 	locReflectionTexture = qglGetUniformLocation( program->object, "u_ReflectionTexture" );
 	locRefractionTexture = qglGetUniformLocation( program->object, "u_RefractionTexture" );
 
-	for( i = 0; i < GLSL_SHADOWMAP_LIMIT; i++ ) {
-		locShadowmapTexture[i] = qglGetUniformLocation( program->object,
-														   va_r( tmp, sizeof( tmp ), "u_ShadowmapTexture%i", i ) );
-		if( locShadowmapTexture[i] < 0 ) {
-			break;
-		}
-	}
-
 	locCelShadeTexture = qglGetUniformLocation( program->object, "u_CelShadeTexture" );
 	locCelLightTexture = qglGetUniformLocation( program->object, "u_CelLightTexture" );
 	locDiffuseTexture = qglGetUniformLocation( program->object, "u_DiffuseTexture" );
@@ -2194,9 +2027,6 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 	locYUVTextureY = qglGetUniformLocation( program->object, "u_YUVTextureY" );
 	locYUVTextureU = qglGetUniformLocation( program->object, "u_YUVTextureU" );
 	locYUVTextureV = qglGetUniformLocation( program->object, "u_YUVTextureV" );
-
-	for( i = 0; i < NUM_BLOOM_LODS; i++ )
-		locBloomTexture[i] = qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_BloomTexture%i", i ) );
 
 	locColorLUT = qglGetUniformLocation( program->object, "u_ColorLUT" );
 
@@ -2262,29 +2092,6 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 	}
 	program->loc.NumDynamicLights = qglGetUniformLocation( program->object, "u_NumDynamicLights" );
 
-	// shadowmaps
-	for( i = 0; i < GLSL_SHADOWMAP_LIMIT; i++ ) {
-		program->loc.ShadowmapTextureParams[i] =
-			qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_ShadowmapTextureParams[%i]", i ) );
-		if( program->loc.ShadowmapTextureParams[i] < 0 ) {
-			break;
-		}
-
-		program->loc.ShadowmapMatrix[i] =
-			qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_ShadowmapMatrix%i", i ) );
-
-		program->loc.ShadowDir[i] =
-			qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_ShadowDir[%i]", i ) );
-
-		program->loc.ShadowEntityDist[i] =
-			qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_ShadowEntityDist[%i]", i ) );
-
-		if( !( i & 3 ) ) {
-			program->loc.ShadowAlpha[i >> 2] =
-				qglGetUniformLocation( program->object, va_r( tmp, sizeof( tmp ), "u_ShadowAlpha[%i]", i >> 2 ) );
-		}
-	}
-
 	program->loc.BlendMix = qglGetUniformLocation( program->object, "u_BlendMix" );
 	program->loc.ColorMod = qglGetUniformLocation( program->object, "u_ColorMod" );
 
@@ -2327,21 +2134,12 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 		qglUniform1i( locRefractionTexture, 3 );
 	}
 
-	for( i = 0; i < GLSL_SHADOWMAP_LIMIT && locShadowmapTexture[i] >= 0; i++ )
-		qglUniform1i( locShadowmapTexture[i], i );
-
-//	if( locBaseTexture >= 0 )
-//		qglUniform1iARB( locBaseTexture, 0 );
 	if( locCelShadeTexture >= 0 ) {
 		qglUniform1i( locCelShadeTexture, 1 );
 	}
 	if( locDiffuseTexture >= 0 ) {
 		qglUniform1i( locDiffuseTexture, 2 );
 	}
-//	if( locDecalTexture >= 0 )
-//		qglUniform1iARB( locDecalTexture, 3 );
-//	if( locEntityDecalTexture >= 0 )
-//		qglUniform1iARB( locEntityDecalTexture, 4 );
 	if( locStripesTexture >= 0 ) {
 		qglUniform1i( locStripesTexture, 5 );
 	}
@@ -2369,9 +2167,6 @@ static void RP_GetUniformLocations( glsl_program_t *program ) {
 	if( locColorLUT >= 0 ) {
 		qglUniform1i( locColorLUT, 1 );
 	}
-
-	for( i = 0; i < NUM_BLOOM_LODS && locBloomTexture[i] >= 0; i++ )
-		qglUniform1i( locBloomTexture[i], 2 + i );
 }
 
 /*
