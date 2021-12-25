@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // common.c -- misc functions used in client and server
 #include "qcommon.h"
-#include "consolelines.h"
+#include "loglines.h"
 #include "freelistallocator.h"
 #include "wswstaticvector.h"
 
@@ -68,6 +68,7 @@ cvar_t *developer;
 cvar_t *timescale;
 cvar_t *dedicated;
 cvar_t *versioncvar;
+cvar_t *com_logCategoryMask;
 
 static cvar_t *fixedtime;
 static cvar_t *logconsole = NULL;
@@ -78,45 +79,47 @@ static cvar_t *com_introPlayed3;
 
 static qmutex_t *com_print_mutex;
 
-class alignas( 16 ) ConsoleLineStreamsAllocator {
+class alignas( 16 ) LogLineStreamsAllocator {
 	std::recursive_mutex m_mutex;
 	wsw::HeapBasedFreelistAllocator m_allocator;
 
-	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::ConsoleLineStream );
+	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::LogLineStream );
 	static constexpr size_t kCapacity = 1024;
 
 public:
-	enum Tag { Regular, Developer };
+	wsw::LogLineStream m_nullStreams[4] {
+		{ nullptr, 0, wsw::LogLineCategory::Debug },
+		{ nullptr, 0, wsw::LogLineCategory::Info },
+		{ nullptr, 0, wsw::LogLineCategory::Warning },
+		{ nullptr, 0, wsw::LogLineCategory::Error } };
 
-	wsw::ConsoleLineStream m_nullStreams[2] { { nullptr, 0, Regular }, { nullptr, 0, Developer } };
-
-	ConsoleLineStreamsAllocator() : m_allocator( kSize, kCapacity ) {}
+	LogLineStreamsAllocator() : m_allocator( kSize, kCapacity ) {}
 
 	[[nodiscard]]
-	bool isANullStream( wsw::ConsoleLineStream *stream ) {
-		return stream - m_nullStreams < 2;
+	bool isANullStream( wsw::LogLineStream *stream ) {
+		return (size_t)( stream - m_nullStreams ) < std::size( m_nullStreams );
 	}
 
 	[[nodiscard]]
-	auto alloc( Tag tag ) -> wsw::ConsoleLineStream * {
+	auto alloc( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
 		[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
 		if( !m_allocator.isFull() ) [[likely]] {
 			uint8_t *mem = m_allocator.allocOrNull();
-			auto *buffer = (char *)( mem + sizeof( wsw::ConsoleLineStream ) );
-			return new( mem )wsw::ConsoleLineStream( buffer, MAX_PRINTMSG, tag );
+			auto *buffer = (char *)( mem + sizeof( wsw::LogLineStream ) );
+			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category );
 		} else if( auto *mem = (uint8_t *)::malloc( kSize ) ) {
-			auto *buffer = (char *)( mem + sizeof( wsw::ConsoleLineStream ) );
-			return new( mem )wsw::ConsoleLineStream( buffer, MAX_PRINTMSG, tag );
+			auto *buffer = (char *)( mem + sizeof( wsw::LogLineStream ) );
+			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category );
 		} else {
-			return &m_nullStreams[tag];
+			return &m_nullStreams[(unsigned)category];
 		}
 	}
 
 	[[nodiscard]]
-	auto free( wsw::ConsoleLineStream *stream ) {
+	auto free( wsw::LogLineStream *stream ) {
 		if( !isANullStream( stream ) ) [[likely]] {
 			[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
-			stream->~ConsoleLineStream();
+			stream->~LogLineStream();
 			if( m_allocator.mayOwn( stream ) ) [[likely]] {
 				m_allocator.free( stream );
 			} else {
@@ -126,7 +129,7 @@ public:
 	}
 };
 
-static ConsoleLineStreamsAllocator g_consoleLineStreamsAllocator;
+static LogLineStreamsAllocator logLineStreamsAllocator;
 
 static int log_file = 0;
 
@@ -246,32 +249,31 @@ static void Com_ReopenConsoleLog( void ) {
 	}
 }
 
-auto wsw::createRegularLineStream() -> ConsoleLineStream * {
-	return g_consoleLineStreamsAllocator.alloc( ConsoleLineStreamsAllocator::Regular );
-}
-
-auto wsw::createDeveloperLineStream() -> ConsoleLineStream * {
-	constexpr auto tag = ConsoleLineStreamsAllocator::Developer;
-	if( !developer || !developer->integer ) {
-		return &g_consoleLineStreamsAllocator.m_nullStreams[tag];
+auto wsw::createLogLineStream( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
+	if( !com_logCategoryMask ) [[unlikely]] {
+		throw std::runtime_error( "Can't use log line streams prior to CVar initialization" );
 	}
-	return g_consoleLineStreamsAllocator.alloc( tag );
+	if( !( com_logCategoryMask->integer & ( 1 << (unsigned)category ) ) ) {
+		return &::logLineStreamsAllocator.m_nullStreams[(unsigned)category];
+	}
+	return ::logLineStreamsAllocator.alloc( category );
 }
 
-void wsw::submitLineStream( ConsoleLineStream *stream ) {
-	if( stream->m_tag == ConsoleLineStreamsAllocator::Developer ) {
-		if( !developer || !developer->integer ) {
-			return;
-		}
+static const char *kLogLineColors[4] { S_COLOR_WHITE, S_COLOR_WHITE, S_COLOR_YELLOW, S_COLOR_RED };
+
+void wsw::submitLogLineStream( LogLineStream *stream ) {
+	// It wasn't permitted to be created, a stub was forcefully supplied instead
+	if( !( com_logCategoryMask->integer & ( 1 << (unsigned)stream->m_category ) ) ) {
+		return;
 	}
 	// TODO: Eliminate Com_Printf()
-	if( !g_consoleLineStreamsAllocator.isANullStream( stream ) ) {
+	if( !::logLineStreamsAllocator.isANullStream( stream ) ) {
 		stream->m_data[std::min( stream->m_limit, stream->m_offset )] = '\0';
-		Com_Printf( "%s\n", stream->m_data );
+		Com_Printf( "%s%s\n", kLogLineColors[(unsigned)stream->m_category], stream->m_data );
 	} else {
 		Com_Printf( S_COLOR_RED "A null line stream was used. The line content was discarded\n" );
 	}
-	g_consoleLineStreamsAllocator.free( stream );
+	::logLineStreamsAllocator.free( stream );
 }
 
 /*
@@ -848,6 +850,12 @@ void Qcommon_Init( int argc, char **argv ) {
 	dedicated =     Cvar_Get( "dedicated", "0", CVAR_NOSET );
 #endif
 	developer =     Cvar_Get( "developer", "0", 0 );
+
+	if( developer->integer ) {
+		com_logCategoryMask = Cvar_Get( "com_logCategoryMask", "-1", 0 );
+	} else {
+		com_logCategoryMask = Cvar_Get( "com_logCategoryMask", "14", CVAR_NOSET );
+	}
 
 	Com_LoadCompressionLibraries();
 

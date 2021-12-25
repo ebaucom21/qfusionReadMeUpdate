@@ -814,16 +814,12 @@ int FS_Seek( int file, int offset, int whence ) {
 
 namespace wsw {
 
-auto createRegularLineStream() -> wsw::ConsoleLineStream * {
-	return GAME_IMPORT.createRegularLineStream();
+auto createLineStream( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
+	return GAME_IMPORT.createLogLineStream( category );
 }
 
-auto createDeveloperLineStream() -> wsw::ConsoleLineStream * {
-	return GAME_IMPORT.createDeveloperLineStream();
-}
-
-void submitLineStream( wsw::ConsoleLineStream *stream ) {
-	return GAME_IMPORT.submitLineStream( stream );
+void submitLineStream( wsw::LogLineStream *stream ) {
+	return GAME_IMPORT.submitLogLineStream( stream );
 }
 
 }
