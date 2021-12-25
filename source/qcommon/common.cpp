@@ -69,6 +69,7 @@ cvar_t *timescale;
 cvar_t *dedicated;
 cvar_t *versioncvar;
 cvar_t *com_logCategoryMask;
+cvar_t *com_logSeverityMask;
 
 static cvar_t *fixedtime;
 static cvar_t *logconsole = NULL;
@@ -79,6 +80,15 @@ static cvar_t *com_introPlayed3;
 
 static qmutex_t *com_print_mutex;
 
+// TODO: Use magic_enum to get the enum cardinality?
+static const char *kLogLineColorForSeverity[4] {
+	S_COLOR_GREY, S_COLOR_WHITE, S_COLOR_YELLOW, S_COLOR_RED
+};
+
+static const char *kLogLinePrefixForCategory[10] {
+	"COM", " SV", " CL", "  S", "  R", " UI", " GS", " CG", "  G", " AI"
+};
+
 class alignas( 16 ) LogLineStreamsAllocator {
 	std::recursive_mutex m_mutex;
 	wsw::HeapBasedFreelistAllocator m_allocator;
@@ -86,32 +96,45 @@ class alignas( 16 ) LogLineStreamsAllocator {
 	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::LogLineStream );
 	static constexpr size_t kCapacity = 1024;
 
+	static constexpr size_t kSeveritiesCount = std::size( kLogLineColorForSeverity );
+	static constexpr size_t kCategoriesCount = std::size( kLogLinePrefixForCategory );
+
+	wsw::StaticVector<wsw::LogLineStream, kSeveritiesCount * kCategoriesCount> m_nullStreams;
 public:
-	wsw::LogLineStream m_nullStreams[4] {
-		{ nullptr, 0, wsw::LogLineCategory::Debug },
-		{ nullptr, 0, wsw::LogLineCategory::Info },
-		{ nullptr, 0, wsw::LogLineCategory::Warning },
-		{ nullptr, 0, wsw::LogLineCategory::Error } };
-
-	LogLineStreamsAllocator() : m_allocator( kSize, kCapacity ) {}
-
-	[[nodiscard]]
-	bool isANullStream( wsw::LogLineStream *stream ) {
-		return (size_t)( stream - m_nullStreams ) < std::size( m_nullStreams );
+	LogLineStreamsAllocator() : m_allocator( kSize, kCapacity ) {
+		// TODO: This is very flaky, but alternatives aren't perfect either...
+		for( unsigned i = 0; i < kCategoriesCount; ++i ) {
+			assert( std::strlen( kLogLinePrefixForCategory[i] ) == 3 );
+			const auto category( ( wsw::LogLineCategory( i ) ) );
+			for( unsigned j = 0; j < kSeveritiesCount; ++j ) {
+				const auto severity( ( wsw::LogLineSeverity )j );
+				new( m_nullStreams.unsafe_grow_back() )wsw::LogLineStream( nullptr, 0, category, severity );
+			}
+		}
 	}
 
 	[[nodiscard]]
-	auto alloc( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
+	auto nullStreamFor( wsw::LogLineCategory category, wsw::LogLineSeverity severity ) -> wsw::LogLineStream * {
+		return std::addressof( m_nullStreams[(unsigned)category * kSeveritiesCount + (unsigned)severity] );
+	}
+
+	[[nodiscard]]
+	bool isANullStream( wsw::LogLineStream *stream ) {
+		return (size_t)( stream - m_nullStreams.data() ) < std::size( m_nullStreams );
+	}
+
+	[[nodiscard]]
+	auto alloc( wsw::LogLineCategory category, wsw::LogLineSeverity severity ) -> wsw::LogLineStream * {
 		[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
 		if( !m_allocator.isFull() ) [[likely]] {
 			uint8_t *mem = m_allocator.allocOrNull();
 			auto *buffer = (char *)( mem + sizeof( wsw::LogLineStream ) );
-			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category );
+			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category, severity );
 		} else if( auto *mem = (uint8_t *)::malloc( kSize ) ) {
 			auto *buffer = (char *)( mem + sizeof( wsw::LogLineStream ) );
-			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category );
+			return new( mem )wsw::LogLineStream( buffer, MAX_PRINTMSG, category, severity );
 		} else {
-			return &m_nullStreams[(unsigned)category];
+			return nullStreamFor( category, severity );
 		}
 	}
 
@@ -249,27 +272,33 @@ static void Com_ReopenConsoleLog( void ) {
 	}
 }
 
-auto wsw::createLogLineStream( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
-	if( !com_logCategoryMask ) [[unlikely]] {
+auto wsw::createLogLineStream( wsw::LogLineCategory category, wsw::LogLineSeverity severity ) -> wsw::LogLineStream * {
+	if( !com_logCategoryMask || !com_logSeverityMask ) [[unlikely]] {
 		throw std::runtime_error( "Can't use log line streams prior to CVar initialization" );
 	}
 	if( !( com_logCategoryMask->integer & ( 1 << (unsigned)category ) ) ) {
-		return &::logLineStreamsAllocator.m_nullStreams[(unsigned)category];
+		return ::logLineStreamsAllocator.nullStreamFor( category, severity );
 	}
-	return ::logLineStreamsAllocator.alloc( category );
+	if( !( com_logSeverityMask->integer & ( 1 << (unsigned)severity ) ) ) {
+		return ::logLineStreamsAllocator.nullStreamFor( category, severity );
+	}
+	return ::logLineStreamsAllocator.alloc( category, severity );
 }
-
-static const char *kLogLineColors[4] { S_COLOR_WHITE, S_COLOR_WHITE, S_COLOR_YELLOW, S_COLOR_RED };
 
 void wsw::submitLogLineStream( LogLineStream *stream ) {
 	// It wasn't permitted to be created, a stub was forcefully supplied instead
 	if( !( com_logCategoryMask->integer & ( 1 << (unsigned)stream->m_category ) ) ) {
 		return;
 	}
+	if( !( com_logSeverityMask->integer & ( 1 << (unsigned)stream->m_severity ) ) ) {
+		return;
+	}
 	// TODO: Eliminate Com_Printf()
 	if( !::logLineStreamsAllocator.isANullStream( stream ) ) {
 		stream->m_data[std::min( stream->m_limit, stream->m_offset )] = '\0';
-		Com_Printf( "%s%s\n", kLogLineColors[(unsigned)stream->m_category], stream->m_data );
+		const char *color = kLogLineColorForSeverity[(unsigned)stream->m_severity];
+		const char *prefix = kLogLinePrefixForCategory[(unsigned)stream->m_category];
+		Com_Printf( "%s[%s] %s\n", color, prefix, stream->m_data );
 	} else {
 		Com_Printf( S_COLOR_RED "A null line stream was used. The line content was discarded\n" );
 	}
@@ -853,8 +882,10 @@ void Qcommon_Init( int argc, char **argv ) {
 
 	if( developer->integer ) {
 		com_logCategoryMask = Cvar_Get( "com_logCategoryMask", "-1", 0 );
+		com_logSeverityMask = Cvar_Get( "com_logSeverityMask", "-1", 0 );
 	} else {
-		com_logCategoryMask = Cvar_Get( "com_logCategoryMask", "14", CVAR_NOSET );
+		com_logCategoryMask = Cvar_Get( "com_logCategoryMask", "-1", CVAR_NOSET );
+		com_logSeverityMask = Cvar_Get( "com_logSeverityMask", "14", CVAR_NOSET );
 	}
 
 	Com_LoadCompressionLibraries();

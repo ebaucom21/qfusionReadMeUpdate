@@ -814,8 +814,8 @@ int FS_Seek( int file, int offset, int whence ) {
 
 namespace wsw {
 
-auto createLineStream( wsw::LogLineCategory category ) -> wsw::LogLineStream * {
-	return GAME_IMPORT.createLogLineStream( category );
+auto createLineStream( wsw::LogLineCategory category, wsw::LogLineSeverity severity ) -> wsw::LogLineStream * {
+	return GAME_IMPORT.createLogLineStream( category, severity );
 }
 
 void submitLineStream( wsw::LogLineStream *stream ) {

@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    80
+#define GAME_API_VERSION    81
 
 //===============================================================
 
@@ -70,7 +70,8 @@ typedef struct {
 
 namespace wsw {
 	class LogLineStream;
-	enum class LogLineCategory : uint32_t;
+	enum class LogLineCategory : uint8_t;
+	enum class LogLineSeverity : uint8_t;
 }
 
 struct CMShapeList;
@@ -200,7 +201,7 @@ typedef struct {
 	// can vary in size from one game to another.
 	void ( *LocateEntities )( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts );
 
-	wsw::LogLineStream *( *createLogLineStream )( wsw::LogLineCategory );
+	wsw::LogLineStream *( *createLogLineStream )( wsw::LogLineCategory, wsw::LogLineSeverity );
 	void ( *submitLogLineStream )( wsw::LogLineStream * );
 
 	class QueryObject *( *MM_NewPostQuery )( const char *url );

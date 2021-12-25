@@ -7,10 +7,11 @@ class LogLineStreamsAllocator;
 
 namespace wsw {
 
-enum class LogLineCategory : uint32_t { Debug, Info, Warning, Error };
+enum class LogLineCategory : uint8_t { Common, Server, Client, Sound, Renderer, UI, GameShared, CGame, Game, AI };
+enum class LogLineSeverity : uint8_t { Debug, Info, Warning, Error };
 
 struct LogLineStream {
-	friend auto createLogLineStream( LogLineCategory ) -> LogLineStream *;
+	friend auto createLogLineStream( LogLineCategory, LogLineSeverity ) -> LogLineStream *;
 	friend void submitLogLineStream( LogLineStream * );
 	friend class ::LogLineStreamsAllocator;
 
@@ -18,9 +19,10 @@ struct LogLineStream {
 	const unsigned m_limit { 0 };
 	unsigned m_offset { 0 };
 	const LogLineCategory m_category;
+	const LogLineSeverity m_severity;
 public:
-	LogLineStream( char *data, unsigned limit, LogLineCategory category ) noexcept
-		: m_data( data ), m_limit( limit ), m_category( category ) {}
+	LogLineStream( char *data, unsigned limit, LogLineCategory category, LogLineSeverity severity ) noexcept
+		: m_data( data ), m_limit( limit ), m_category( category ), m_severity( severity ) {}
 
 	[[nodiscard]]
 	auto reserve( size_t size ) -> char * {
@@ -33,7 +35,7 @@ public:
 };
 
 [[nodiscard]]
-auto createLogLineStream( LogLineCategory ) -> LogLineStream *;
+auto createLogLineStream( LogLineCategory, LogLineSeverity ) -> LogLineStream *;
 
 void submitLogLineStream( LogLineStream * );
 
@@ -41,17 +43,12 @@ class PendingLogLine {
 	wsw::LogLineStream *m_stream;
 	wsw::TextStreamWriter<LogLineStream> m_writer;
 public:
-	PendingLogLine( wsw::LogLineStream *stream, const char *prefix, size_t prefixLen )
-		: m_stream( stream ), m_writer( stream ) {
-		m_writer.writeChars( prefix, prefixLen );
-	}
+	explicit PendingLogLine( wsw::LogLineStream *stream ) : m_stream( stream ), m_writer( stream ) {}
 
 	[[nodiscard]]
 	auto operator()() -> TextStreamWriter<LogLineStream> & { return m_writer; }
 
-	~PendingLogLine() {
-		submitLogLineStream( m_stream );
-	}
+	~PendingLogLine() { submitLogLineStream( m_stream ); }
 };
 
 }
