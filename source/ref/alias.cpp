@@ -186,10 +186,6 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	if( poutmodel->numframes <= 0 ) {
 		Com_Error( ERR_DROP, "model %s has no frames", mod->name );
 	}
-	if( poutmodel->numframes > 1 ) {
-		Com_DPrintf( "limiting model %s to a single frame", mod->name );
-		poutmodel->numframes = 1;
-	}
 	//	else if( poutmodel->numframes > MD3_MAX_FRAMES )
 	//		ri.Com_Error( ERR_DROP, "model %s has too many frames", mod->name );
 
