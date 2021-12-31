@@ -58,10 +58,10 @@ static shaderpass_t r_GLSLpasses[MAX_BUILTIN_GLSLPASSES];
 
 static void RB_SetShaderpassState( int state );
 
-static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t programFeatures );
+static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures );
 static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t programFeatures );
 static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t programFeatures );
+static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures );
 static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures );
 static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, r_glslfeat_t programFeatures );
 static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t programFeatures );
@@ -98,8 +98,9 @@ void RP_UpdateOutlineUniforms( int elem, float projDistance );
 void RP_UpdateDiffuseLightUniforms( int elem,
 									const vec3_t lightDir, const vec4_t lightAmbient, const vec4_t lightDiffuse );
 
-unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *superLightStyle,
-											 const vec3_t entOrigin, const mat3_t entAxis, unsigned int dlightbits );
+void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
+									 int elem, const superLightStyle_t *superLightStyle,
+									 const vec3_t entOrigin, const mat3_t entAxis, unsigned int dlightbits );
 
 void RP_UpdateFogUniforms( int elem, byte_vec4_t color, float clearDist, float opaqueDist,
 						   cplane_t *fogPlane, cplane_t *eyePlane, float eyeFogDist );
@@ -814,10 +815,7 @@ static void RB_UpdateFogUniforms( int program, const mfog_t *fog ) {
 						  fog->shader->fog_dist, &fogPlane, &vpnPlane, dist );
 }
 
-/*
-* RB_RenderMeshGLSL_Material
-*/
-static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	int i;
 	int program;
 	vec3_t lightDir = { 0.0f, 0.0f, 0.0f };
@@ -845,7 +843,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 	if( ( rb.currentModelType == mod_brush && !mapConfig.deluxeMappingEnabled )
 	    /*|| ( normalmap == rsh.blankBumpTexture && !glossmap && !decalmap && !entdecalmap )*/ ) {
 		// render as plain Q3A shader, which is less computation-intensive
-		RB_RenderMeshGLSL_Q3AShader( pass, programFeatures );
+		RB_RenderMeshGLSL_Q3AShader( fsh, pass, programFeatures );
 		return;
 	}
 
@@ -1058,7 +1056,7 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 		}
 
 		// dynamic lights
-		RP_UpdateDynamicLightsUniforms( program, lightStyle, rb.currentEntity->origin, rb.currentEntity->axis,
+		RP_UpdateDynamicLightsUniforms( fsh, program, lightStyle, rb.currentEntity->origin, rb.currentEntity->axis,
 										rb.currentDlightBits );
 
 		// r_drawflat
@@ -1241,10 +1239,7 @@ r_glslfeat_t RB_TcGenToProgramFeatures( int tcgen, vec_t *tcgenVec, mat4_t texMa
 	return programFeatures;
 }
 
-/*
-* RB_RenderMeshGLSL_Q3AShader
-*/
-static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	int state;
 	int program;
 	int rgbgen = pass->rgbgen.type;
@@ -1404,7 +1399,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 
 		// dynamic lights
 		if( isLightmapped || isWorldVertexLight ) {
-			RP_UpdateDynamicLightsUniforms( program, lightStyle, e->origin, e->axis, rb.currentDlightBits );
+			RP_UpdateDynamicLightsUniforms( fsh, program, lightStyle, e->origin, e->axis, rb.currentDlightBits );
 		}
 
 		// r_drawflat
@@ -1421,9 +1416,6 @@ static void RB_RenderMeshGLSL_Q3AShader( const shaderpass_t *pass, r_glslfeat_t 
 	}
 }
 
-/*
-* RB_RenderMeshGLSL_Celshade
-*/
 static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
 	const mfog_t *fog = rb.fog;
 
@@ -1686,10 +1678,7 @@ static void RB_RenderMeshGLSL_KawaseBlur( const shaderpass_t *pass, r_glslfeat_t
 	}
 }
 
-/*
-* RB_RenderMeshGLSLProgrammed
-*/
-void RB_RenderMeshGLSLProgrammed( const shaderpass_t *pass, int programType ) {
+void RB_RenderMeshGLSLProgrammed( const FrontendToBackendShared *fsh, const shaderpass_t *pass, int programType ) {
 	r_glslfeat_t features = 0;
 
 	if( rb.greyscale || pass->flags & SHADERPASS_GREYSCALE ) {
@@ -1712,7 +1701,7 @@ void RB_RenderMeshGLSLProgrammed( const shaderpass_t *pass, int programType ) {
 
 	switch( programType ) {
 		case GLSL_PROGRAM_TYPE_MATERIAL:
-			RB_RenderMeshGLSL_Material( pass, features );
+			RB_RenderMeshGLSL_Material( fsh, pass, features );
 			break;
 		case GLSL_PROGRAM_TYPE_DISTORTION:
 			RB_RenderMeshGLSL_Distortion( pass, features );
@@ -1725,7 +1714,7 @@ void RB_RenderMeshGLSLProgrammed( const shaderpass_t *pass, int programType ) {
 			RB_RenderMeshGLSL_Outline( pass, features );
 			break;
 		case GLSL_PROGRAM_TYPE_Q3A_SHADER:
-			RB_RenderMeshGLSL_Q3AShader( pass, features );
+			RB_RenderMeshGLSL_Q3AShader( fsh, pass, features );
 			break;
 		case GLSL_PROGRAM_TYPE_CELSHADE:
 			RB_RenderMeshGLSL_Celshade( pass, features );
@@ -1972,19 +1961,16 @@ int RB_BindProgram( int program ) {
 	return object;
 }
 
-/*
-* RB_RenderPass
-*/
-static void RB_RenderPass( const shaderpass_t *pass ) {
+static void RB_RenderPass( const FrontendToBackendShared *fsh, const shaderpass_t *pass ) {
 	// for depth texture we render light's view to, ignore passes that do not write into depth buffer
 	if( ( rb.renderFlags & RF_SHADOWMAPVIEW ) && !( pass->flags & GLSTATE_DEPTHWRITE ) ) {
 		return;
 	}
 
 	if( pass->program_type ) {
-		RB_RenderMeshGLSLProgrammed( pass, pass->program_type );
+		RB_RenderMeshGLSLProgrammed( fsh, pass, pass->program_type );
 	} else {
-		RB_RenderMeshGLSLProgrammed( pass, GLSL_PROGRAM_TYPE_Q3A_SHADER );
+		RB_RenderMeshGLSLProgrammed( fsh, pass, GLSL_PROGRAM_TYPE_Q3A_SHADER );
 	}
 
 	if( rb.dirtyUniformState ) {
@@ -2097,10 +2083,7 @@ static inline const vec_t *RB_TriangleLinesColor( void ) {
 	return colorGreen;
 }
 
-/*
-* RB_DrawOutlinedElements
-*/
-void RB_DrawWireframeElements( void ) {
+void RB_DrawWireframeElements( const FrontendToBackendShared *fsh ) {
 	static shaderpass_t r_triLinesPass;
 	static vec4_t r_triLinesColor;
 	shaderpass_t *pass;
@@ -2138,16 +2121,13 @@ void RB_DrawWireframeElements( void ) {
 
 	RB_SetShaderState();
 
-	RB_RenderPass( &r_triLinesPass );
+	RB_RenderPass( fsh, &r_triLinesPass );
 }
 
 // TODO: Show outlines in mirrors
 #define ENTITY_OUTLINE( ent ) ( ( ( ( ent )->renderfx & RF_VIEWERMODEL ) ) ? 0 : ( ent )->outlineHeight )
 
-/*
-* RB_DrawShadedElements
-*/
-void RB_DrawShadedElements( void ) {
+void RB_DrawShadedElements( const FrontendToBackendShared *fsh ) {
 	unsigned i;
 	bool addGLSLOutline = false;
 	shaderpass_t *pass;
@@ -2172,18 +2152,18 @@ void RB_DrawShadedElements( void ) {
 			continue;
 		}
 		//Com_Printf( "Rendering shader %s\n", rb.currentShader->name.data() );
-		RB_RenderPass( pass );
+		RB_RenderPass( fsh, pass );
 	}
 
 	// shadow map
 	if( rb.currentShadowBits && ( rb.currentShader->sort >= SHADER_SORT_OPAQUE )
 		&& ( rb.currentShader->sort <= SHADER_SORT_ALPHATEST ) ) {
-		RB_RenderPass( &r_GLSLpasses[BUILTIN_GLSLPASS_SHADOWMAP] );
+		RB_RenderPass( fsh, &r_GLSLpasses[BUILTIN_GLSLPASS_SHADOWMAP] );
 	}
 
 	// outlines
 	if( addGLSLOutline ) {
-		RB_RenderPass( &r_GLSLpasses[BUILTIN_GLSLPASS_OUTLINE] );
+		RB_RenderPass( fsh, &r_GLSLpasses[BUILTIN_GLSLPASS_OUTLINE] );
 	}
 
 	// fog
@@ -2196,6 +2176,6 @@ void RB_DrawShadedElements( void ) {
 		} else {
 			fogPass->flags |= GLSTATE_DEPTHFUNC_EQ;
 		}
-		RB_RenderPass( fogPass );
+		RB_RenderPass( fsh, fogPass );
 	}
 }

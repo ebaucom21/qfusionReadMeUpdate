@@ -869,4 +869,46 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 	return { tmpIndices, numPassedEntities };
 }
 
+auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
+						   const Frustum *__restrict primaryFrustum,
+						   std::span<const Frustum> occluderFrusta,
+						   uint16_t *tmpIndices, uint16_t *tmpIndices2 )
+						   -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>> {
+	const auto *const lights = lightsSpan.data();
+	const unsigned numLights = lightsSpan.size();
+
+	unsigned numPassedCoronaLights = 0;
+	unsigned numPassedProgramLights = 0;
+	for( unsigned i = 0; i < numLights; ++i ) {
+		const Scene::DynamicLight *const light = &lights[i];
+		const float *const __restrict origin = light->origin;
+		const float halfRadius = 0.5f * std::max( light->programRadius, light->coronaRadius );
+		const vec4_t mins { origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f };
+		const vec4_t maxs { origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f };
+
+		// TODO: Add frustum/sphere tests
+		LOAD_BOX_COMPONENTS( mins, maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					addDebugLine( mins, maxs, COLOR_RGB( 0, 255, 0 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedCoronaLights] = i;
+				numPassedCoronaLights += light->hasCoronaLight;
+				tmpIndices2[numPassedProgramLights] = i;
+				numPassedProgramLights += light->hasProgramLight;
+			}
+		}
+	}
+
+	return { { tmpIndices, numPassedCoronaLights }, { tmpIndices, numPassedProgramLights } };
+}
+
 }

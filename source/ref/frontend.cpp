@@ -542,22 +542,21 @@ void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntiti
 	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
 
 	for( const auto index: indices ) {
-		const entity_t *const __restrict entity = brushModelEntities ;
+		const entity_t *const __restrict entity = brushModelEntities + index;
 		const model_t *const model = entity->model;
 		const auto *const brushModel = ( mbrushmodel_t * )model->extradata;
+		assert( brushModel->numModelDrawSurfaces );
 
-		if( brushModel->numModelDrawSurfaces ) [[likely]] {
-			vec3_t origin;
-			VectorAdd( entity->model->mins, entity->model->maxs, origin );
-			VectorMA( entity->origin, 0.5, origin, origin );
+		vec3_t origin;
+		VectorAdd( entity->model->mins, entity->model->maxs, origin );
+		VectorMA( entity->origin, 0.5, origin, origin );
 
-			for( unsigned i = 0; i < brushModel->numModelDrawSurfaces; i++ ) {
-				const unsigned surfNum = brushModel->firstModelDrawSurface + i;
-				drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
-				msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
-				msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
-				addMergedBspSurfToSortList( entity, mergedSurface, firstVisSurface, lastVisSurface, origin );
-			}
+		for( unsigned i = 0; i < brushModel->numModelDrawSurfaces; i++ ) {
+			const unsigned surfNum = brushModel->firstModelDrawSurface + i;
+			drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
+			msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
+			msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
+			addMergedBspSurfToSortList( entity, mergedSurface, firstVisSurface, lastVisSurface, origin );
 		}
 	}
 }
@@ -589,7 +588,8 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 	const mfog_t *fog = drawSurf->fog;
 	const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, drawSurf->numLightmaps, false );
 
-	drawSurf->dlightBits = 0;
+	// TODO: Compute light-surface interaction
+	drawSurf->dlightBits = m_allVisibleProgramLightBits;
 	drawSurf->visFrame = rf.frameCount;
 	drawSurf->listSurf = addEntryToSortList( e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
 	if( !drawSurf->listSurf ) {
@@ -599,9 +599,6 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 	if( portalSurface && !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) ) ) {
 		//addEntryToSortList( m_state.portalmasklist, e, nullptr, nullptr, 0, 0, nullptr, drawSurf );
 	}
-
-	unsigned dlightFrame = 0;
-	unsigned curDlightBits = 0;
 
 	float resultDist = 0;
 
@@ -629,6 +626,25 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 		}
 		sortedDrawSurf_t *const sds = (sortedDrawSurf_t *)drawSurf->listSurf;
 		sds->distKey = R_PackDistKey( 0, drawSurf->shader, resultDist, order );
+	}
+}
+
+void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
+										  std::span<const uint16_t> indices ) {
+	const float *const __restrict forwardAxis = m_state.viewAxis;
+	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+
+	for( const unsigned index: indices ) {
+		const Scene::DynamicLight *light = &lights[index];
+
+		vec3_t toLight;
+		VectorSubtract( light->origin, viewOrigin, toLight );
+		const float distanceLike = DotProduct( toLight, forwardAxis );
+
+		// TODO: Account for fogs
+		const mfog_t *fog = nullptr;
+		void *drawSurf = m_coronaDrawSurfaces + index;
+		addEntryToSortList( polyEntity, fog, m_coronaShader, distanceLike, 0, nullptr, drawSurf );
 	}
 }
 
@@ -707,18 +723,51 @@ void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> fr
 	addSpriteEntitiesToSortList( spriteEntities.data(), visibleSpriteEntityIndices );
 }
 
-auto Frontend::collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Frustum> {
-	auto *const worldEnt = scene->m_worldent;
+void Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta ) {
+	static_assert( decltype( Scene::m_dynamicLights )::capacity() == kMaxLightsInScene );
+	uint16_t tmpIndices[kMaxLightsInScene], tmpIndices2[kMaxLightsInScene];
 
-	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
-	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
-		worldEnt->outlineHeight = std::max( 0.0f, r_outlines_world->value );
+	const auto [visibleCoronaLightIndices, visibleProgramLightIndices] =
+		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta, tmpIndices, tmpIndices2 );
+
+	addCoronaLightsToSortList( scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
+
+	assert( m_allVisibleProgramLightBits == 0 );
+	assert( m_numVisibleProgramLights == 0 );
+
+	if( visibleProgramLightIndices.size() <= kMaxProgramLightsInView ) {
+		std::copy( visibleProgramLightIndices.begin(), visibleProgramLightIndices.end(), m_programLightIndices );
+		m_numVisibleProgramLights = visibleProgramLightIndices.size();
 	} else {
-		worldEnt->outlineHeight = 0;
+		const float *const __restrict viewOrigin = m_state.viewOrigin;
+		const Scene::DynamicLight *const lights = scene->m_dynamicLights.data();
+		wsw::StaticVector<std::pair<unsigned, float>, kMaxLightsInScene> lightsHeap;
+		const auto cmp = []( const std::pair<unsigned, float> &lhs, const std::pair<unsigned, float> &rhs ) {
+			return lhs.second > rhs.second;
+		};
+		for( const unsigned index: visibleProgramLightIndices ) {
+			const Scene::DynamicLight *light = &lights[index];
+			const float squareDistance = DistanceSquared( light->origin, viewOrigin );
+			const float score = light->programRadius * Q_RSqrt( squareDistance );
+			lightsHeap.emplace_back( { index, score } );
+			std::push_heap( lightsHeap.begin(), lightsHeap.end(), cmp );
+		}
+		unsigned numVisibleProgramLights = 0;
+		do {
+			std::pop_heap( lightsHeap.begin(), lightsHeap.end(), cmp );
+			const unsigned lightIndex = lightsHeap.back().first;
+			m_programLightIndices[numVisibleProgramLights++] = lightIndex;
+			lightsHeap.pop_back();
+		} while( numVisibleProgramLights < kMaxProgramLightsInView );
+		m_numVisibleProgramLights = numVisibleProgramLights;
 	}
 
-	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
+	for( unsigned i = 0; i < m_numVisibleProgramLights; ++i ) {
+		m_allVisibleProgramLightBits |= ( 1u << i );
+	}
+}
 
+auto Frontend::cullWorldSurfaces() -> std::span<const Frustum> {
 	m_occludersSelectionFrame++;
 	m_occlusionCullingFrame++;
 
@@ -759,8 +808,25 @@ auto Frontend::collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Fru
 		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans );
 	}
 
+	return occluderFrusta;
+}
+
+void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
+	auto *const worldEnt = scene->m_worldent;
+
+	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
+	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
+		// TODO: Shouldn't it affect culling?
+		worldEnt->outlineHeight = std::max( 0.0f, r_outlines_world->value );
+	} else {
+		worldEnt->outlineHeight = 0;
+	}
+
+	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
+
 	msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
+	const MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
 	const auto numWorldModelDrawSurfaces = rsh.worldBrushModel->numModelDrawSurfaces;
 	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelDrawSurfaces; ++mergedSurfNum ) {
 		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
@@ -771,8 +837,6 @@ auto Frontend::collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Fru
 			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr );
 		}
 	}
-
-	return occluderFrusta;
 }
 
 void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
@@ -782,8 +846,11 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	}
 
 	FrontendToBackendShared fsh;
-	fsh.drawSurfList = m_state.list;
 	fsh.renderFlags = m_state.renderFlags;
+	fsh.dynamicLights = scene->m_dynamicLights.data();
+	fsh.programLightIndices = m_programLightIndices;
+	fsh.numProgramLights = m_numVisibleProgramLights;
+	fsh.coronaDrawSurfaces = m_coronaDrawSurfaces;
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
@@ -1061,10 +1128,16 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 
 	std::span<const Frustum> occluderFrusta;
 
+	m_numVisibleProgramLights = 0;
+	m_allVisibleProgramLightBits = 0;
+
+	bool drawWorld = false;
+
 	if( !shadowMap ) {
 		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
-				occluderFrusta = collectVisibleWorldBrushes( scene );
+				drawWorld = true;
+				occluderFrusta = cullWorldSurfaces();
 			}
 		}
 
@@ -1072,6 +1145,15 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		m_state.hdrExposure = 1.0f;
 
 		collectVisiblePolys( scene );
+	}
+
+	if( r_dynamiclight->integer ) {
+		collectVisibleLights( scene, occluderFrusta );
+	}
+
+	if( drawWorld ) {
+		// We must know lights at this point
+		addVisibleWorldSurfacesToSortList( scene );
 	}
 
 	if( r_drawentities->integer ) {
@@ -1206,6 +1288,10 @@ void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
 	m_drawSceneRequestHolder.clear();
 }
 
+Frontend::Frontend() {
+	std::fill( std::begin( m_coronaDrawSurfaces ), std::end( m_coronaDrawSurfaces ), ST_CORONA );
+}
+
 static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
@@ -1221,11 +1307,11 @@ Frontend *Frontend::instance() {
 }
 
 void Frontend::initVolatileAssets() {
-	//m_coronaShader = MaterialCache::instance()->loadDefaultMaterial( "$corona"_asView, SHADER_TYPE_CORONA );
+	m_coronaShader = MaterialCache::instance()->loadDefaultMaterial( "$corona"_asView, SHADER_TYPE_CORONA );
 }
 
 void Frontend::destroyVolatileAssets() {
-	//m_coronaShader = nullptr;
+	m_coronaShader = nullptr;
 }
 
 void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
@@ -1396,6 +1482,22 @@ void DrawSceneRequest::addPoly( const poly_t *poly ) {
 	}
 }
 
-void DrawSceneRequest::addLight( const float *origin, float programIntensity, float coronaIntensity, float r, float g, float b ) {
-
+void DrawSceneRequest::addLight( const float *origin, float programRadius, float coronaRadius, float r, float g, float b ) {
+	assert( ( r >= 0.0f && r >= 0.0f && b >= 0.0f ) && ( r > 0.0f || g > 0.0f || b > 0.0f ) );
+	if( !m_dynamicLights.full() ) [[likely]] {
+		if( const int cvarValue = r_dynamiclight->integer ) [[likely]] {
+			const bool hasProgramLight = programRadius > 0.0f && ( cvarValue & 1 ) != 0;
+			const bool hasCoronaLight = coronaRadius > 0.0f && ( cvarValue & 2 ) != 0;
+			if( hasProgramLight | hasCoronaLight ) [[likely]] {
+				m_dynamicLights.emplace_back( DynamicLight {
+					.origin          = { origin[0], origin[1], origin[2] },
+					.programRadius   = programRadius,
+					.coronaRadius    = coronaRadius,
+					.color           = { r, g, b },
+					.hasProgramLight = hasProgramLight,
+					.hasCoronaLight  = hasCoronaLight
+				});
+			}
+		}
+	}
 }

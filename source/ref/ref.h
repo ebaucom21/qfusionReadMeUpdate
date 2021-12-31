@@ -208,8 +208,19 @@ public:
 		uint16_t *elems;
 		struct shader_s *shader;
 	};
+
+	struct DynamicLight {
+		float origin[3];
+		float programRadius;
+		float coronaRadius;
+		float color[3];
+		bool hasProgramLight;
+		bool hasCoronaLight;
+	};
 protected:
 	Scene();
+
+	wsw::StaticVector<DynamicLight, 1024> m_dynamicLights;
 
 	entity_t *m_worldent;
 	entity_t *m_polyent;
@@ -228,14 +239,15 @@ protected:
 // TODO: Aggregate Scene as a member?
 class DrawSceneRequest : public Scene {
 	friend class wsw::ref::Frontend;
+
 	// TODO: Get rid of "refdef_t"
 	refdef_t m_refdef;
-
-	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
 public:
+	void addLight( const float *origin, float programRadius, float coronaRadius, float r, float g, float b );
 	void addEntity( const entity_t *ent );
 	void addPoly( const poly_t *poly );
-	void addLight( const float *origin, float programIntensity, float coronaIntensity, float r, float g, float b );
+
+	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
 };
 
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );

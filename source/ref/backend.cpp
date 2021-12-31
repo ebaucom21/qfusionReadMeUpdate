@@ -698,7 +698,7 @@ void RB_FlushDynamicMeshes() {
 		}
 
 		const auto &drawElements = draw->drawElements;
-		RB_DrawElements( drawElements.firstVert, drawElements.numVerts, drawElements.firstElem, drawElements.numElems );
+		RB_DrawElements( nullptr, drawElements.firstVert, drawElements.numVerts, drawElements.firstElem, drawElements.numElems );
 	}
 
 	rb.numDynamicDraws = 0;
@@ -862,21 +862,21 @@ void RB_DrawElementsReal( rbDrawElements_t *de ) {
 	}
 }
 
-static void RB_DrawElements_( void ) {
-	if( rb.drawElements.numVerts && rb.drawElements.numElems ) {
-		assert( rb.currentShader != NULL );
+static void RB_DrawElements_( const FrontendToBackendShared *fsh ) {
+	if( rb.drawElements.numVerts && rb.drawElements.numElems ) [[likely]] {
+		assert( rb.currentShader );
 
 		RB_EnableVertexAttribs();
 
 		if( rb.wireframe ) {
-			RB_DrawWireframeElements();
+			RB_DrawWireframeElements( fsh );
 		} else {
-			RB_DrawShadedElements();
+			RB_DrawShadedElements( fsh );
 		}
 	}
 }
 
-void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems ) {
+void RB_DrawElements( const FrontendToBackendShared *fsh, int firstVert, int numVerts, int firstElem, int numElems ) {
 	rb.currentVAttribs &= ~VATTRIB_INSTANCES_BITS;
 
 	rb.drawElements.numVerts = numVerts;
@@ -885,10 +885,11 @@ void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems )
 	rb.drawElements.firstElem = firstElem;
 	rb.drawElements.numInstances = 0;
 
-	RB_DrawElements_();
+	RB_DrawElements_( fsh );
 }
 
-void RB_DrawElementsInstanced( int firstVert, int numVerts, int firstElem, int numElems,
+void RB_DrawElementsInstanced( const FrontendToBackendShared *fsh,
+							   int firstVert, int numVerts, int firstElem, int numElems,
 							   int numInstances, instancePoint_t *instances ) {
 	if( numInstances ) {
 		// currently not supporting dynamic instances
@@ -908,7 +909,7 @@ void RB_DrawElementsInstanced( int firstVert, int numVerts, int firstElem, int n
 			}
 
 			rb.drawElements.numInstances = numInstances;
-			RB_DrawElements_();
+			RB_DrawElements_( fsh );
 		}
 	}
 }
@@ -940,14 +941,14 @@ bool RB_EnableWireframe( bool enable ) {
 	return oldVal;
 }
 
-void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
 	const maliasmesh_t *aliasmesh = drawSurf->mesh;
 
 	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
-	RB_DrawElements( 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
+	RB_DrawElements( fsh, 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
 }
 
-void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
 	const model_t *mod = drawSurf->model;
 	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
 	const mskmesh_t *skmesh = drawSurf->mesh;
@@ -967,7 +968,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entit
 		// fastpath: render static frame 0 as is
 		if( skmesh->vbo ) {
 			RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
-			RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+			RB_DrawElements( fsh, 0, skmesh->numverts, 0, skmesh->numtris * 3 );
 			return;
 		}
 	}
@@ -976,7 +977,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *, const entit
 		// another fastpath: transform the initial pose on the GPU
 		RB_BindVBO( skmesh->vbo->index, GL_TRIANGLES );
 		RB_SetBonesData( skmodel->numbones, bonePoseRelativeDQ, skmesh->maxWeights );
-		RB_DrawElements( 0, skmesh->numverts, 0, skmesh->numtris * 3 );
+		RB_DrawElements( fsh, 0, skmesh->numverts, 0, skmesh->numtris * 3 );
 		return;
 	}
 }
@@ -998,10 +999,9 @@ void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_
 	RB_SetLightstyle( drawSurf->superLightStyle );
 
 	if( drawSurf->numInstances ) {
-		RB_DrawElementsInstanced( firstVert, numVerts, firstElem, numElems,
-								  drawSurf->numInstances, drawSurf->instances );
+		RB_DrawElementsInstanced( fsh, firstVert, numVerts, firstElem, numElems, drawSurf->numInstances, drawSurf->instances );
 	} else {
-		RB_DrawElements( firstVert, numVerts, firstElem, numElems );
+		RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
 	}
 }
 
@@ -1009,7 +1009,7 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	assert( rsh.nullVBO != NULL );
 
 	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
-	RB_DrawElements( 0, 6, 0, 6 );
+	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
 void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
@@ -1064,7 +1064,7 @@ void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const enti
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitPolySurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *p ) {
+void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *p ) {
 	mesh_t mesh;
 
 	auto *poly = (Scene::Poly *)p;
@@ -1084,11 +1084,11 @@ void R_SubmitPolySurfToBackend( const FrontendToBackendShared *, const entity_t 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
-	/*
-	auto *const light = wsw::ref::Frontend::Instance()->LightForCoronaSurf( drawSurf );
+void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	auto *const light = fsh->dynamicLights + ( (const int *)drawSurf - fsh->coronaDrawSurfaces );
+	assert( light && light->hasCoronaLight );
 
-	float radius = light->radius;
+	const float radius = light->coronaRadius;
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
 	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
@@ -1097,13 +1097,13 @@ void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *, const entity_
 	mesh_t mesh;
 
 	vec3_t origin;
-	VectorCopy( light->center, origin );
+	VectorCopy( light->origin, origin );
 
 	vec3_t v_left, v_up;
-	VectorCopy( &rn->viewAxis[AXIS_RIGHT], v_left );
-	VectorCopy( &rn->viewAxis[AXIS_UP], v_up );
+	VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+	VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 
-	if( rn->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+	if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
 		VectorInverse( v_left );
 	}
 
@@ -1122,9 +1122,9 @@ void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *, const entity_
 				bound( 0, light->color[2] * 96, 255 ),
 				255 );
 
-	for( unsigned i = 1; i < 4; i++ ) {
-		Vector4Copy( colors[0], colors[i] );
-	}
+	Vector4Copy( colors[0], colors[1] );
+	Vector4Copy( colors[0], colors[2] );
+	Vector4Copy( colors[0], colors[3] );
 
 	memset( &mesh, 0, sizeof( mesh ) );
 	mesh.numElems = 6;
@@ -1136,5 +1136,4 @@ void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *, const entity_
 	mesh.colorsArray[0] = colors;
 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
-	*/
 }

@@ -62,6 +62,16 @@ namespace wsw::ref {
 
 class Frontend {
 private:
+	shader_t *m_coronaShader;
+
+	static constexpr unsigned kMaxLightsInScene = 1024;
+	static constexpr unsigned kMaxProgramLightsInView = 16;
+
+	int m_coronaDrawSurfaces[kMaxLightsInScene];
+	unsigned m_allVisibleProgramLightBits { 0 };
+	unsigned m_numVisibleProgramLights { 0 };
+	uint16_t m_programLightIndices[kMaxProgramLightsInView];
+
 	refinst_t m_state;
 	// TODO: Put in the state
 	Frustum m_frustum;
@@ -150,9 +160,13 @@ private:
 	void collectVisiblePolys( Scene *scene );
 
 	[[nodiscard]]
-	auto collectVisibleWorldBrushes( Scene *scene ) -> std::span<const Frustum>;
+	auto cullWorldSurfaces() -> std::span<const Frustum>;
+
+	void addVisibleWorldSurfacesToSortList( Scene *scene );
 
 	void collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta );
+
+	void collectVisibleLights( Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
 	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
@@ -189,12 +203,22 @@ private:
 							 uint16_t *tmpIndices )
 							 -> std::span<const uint16_t>;
 
+	[[nodiscard]]
+	auto cullLights( std::span<const Scene::DynamicLight> lights,
+					 const Frustum *__restrict primaryFrustum,
+					 std::span<const Frustum> occluderFrusta,
+					 uint16_t *tmpIndices, uint16_t *tmpIndices2 )
+					 -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
+
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
 
 	void addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices );
 	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices );
 	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
+
+	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
+									std::span<const uint16_t> indices );
 
 	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
@@ -231,6 +255,8 @@ private:
 
 	void submitSortedSurfacesToBackend( Scene *scene );
 public:
+	Frontend();
+
 	static void init();
 	static void shutdown();
 

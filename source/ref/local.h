@@ -658,8 +658,8 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 						const struct mesh_s *mesh, int primitive, float x_offset, float y_offset );
 void RB_FlushDynamicMeshes( void );
 
-void RB_DrawElements( int firstVert, int numVerts, int firstElem, int numElems );
-void RB_DrawElementsInstanced( int firstVert, int numVerts, int firstElem, int numElems,
+void RB_DrawElements( const FrontendToBackendShared *fsh, int firstVert, int numVerts, int firstElem, int numElems );
+void RB_DrawElementsInstanced( const FrontendToBackendShared *fsh, int firstVert, int numVerts, int firstElem, int numElems,
 							   int numInstances, instancePoint_t *instances );
 
 void RB_FlushTextureCache( void );
@@ -1443,9 +1443,12 @@ struct VboSpan {
 };
 
 struct FrontendToBackendShared {
-	wsw::Vector<sortedDrawSurf_t> *drawSurfList;
+	const Scene::DynamicLight *dynamicLights;
+	const uint16_t *programLightIndices;
+	const int *coronaDrawSurfaces;
 	mat3_t viewAxis;
 	unsigned renderFlags;
+	unsigned numProgramLights;
 };
 
 void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );

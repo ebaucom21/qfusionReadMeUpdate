@@ -177,8 +177,10 @@ void RB_DrawElementsReal( rbDrawElements_t *de );
 
 // r_backend_program.c
 void RB_InitShading( void );
-void RB_DrawWireframeElements( void );
-void RB_DrawShadedElements( void );
+
+void RB_DrawWireframeElements( const FrontendToBackendShared *fsh );
+void RB_DrawShadedElements( const FrontendToBackendShared *fsh );
+
 int RB_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
 						const deformv_t *deforms, int numDeforms, r_glslfeat_t features );
 int RB_BindProgram( int program );

@@ -1779,11 +1779,9 @@ void RP_UpdateFogUniforms( int elem, byte_vec4_t color, float clearDist, float o
 	}
 }
 
-/*
-* RP_UpdateDynamicLightsUniforms
-*/
-unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *superLightStyle,
-											 const vec3_t entOrigin, const mat3_t entAxis, unsigned int dlightbits ) {
+void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
+									 int elem, const superLightStyle_t *superLightStyle,
+									 const vec3_t entOrigin, const mat3_t entAxis, unsigned int dlightbits ) {
 	int i, n, c;
 	vec3_t dlorigin, tvec;
 	glsl_program_t *program = r_glslprograms + elem - 1;
@@ -1815,14 +1813,14 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 		Vector4Set( shaderColor[3], 1.0f, 1.0f, 1.0f, 1.0f );
 		n = 0;
 
-		/*
-		for( const auto *iter = rangeBegin; iter < rangeEnd; ++iter) {
+		const int numProgramLights = (int)fsh->numProgramLights;
+		for( i = 0; i < numProgramLights; ++i ) {
 			if( program->loc.DynamicLightsPosition[n] < 0 ) {
 				break;
 			}
 
-			const auto *light = scene->ProgramLightForNum( *iter );
-			VectorSubtract( light->center, entOrigin, dlorigin );
+			const auto *const light = fsh->dynamicLights + fsh->programLightIndices[i];
+			VectorSubtract( light->origin, entOrigin, dlorigin );
 			if( !identityAxis ) {
 				VectorCopy( dlorigin, tvec );
 				Matrix3_TransformVector( entAxis, tvec, dlorigin );
@@ -1834,7 +1832,7 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 			shaderColor[0][c] = light->color[0];
 			shaderColor[1][c] = light->color[1];
 			shaderColor[2][c] = light->color[2];
-			shaderColor[3][c] = 1.0f / light->radius;
+			shaderColor[3][c] = Q_Rcp( std::max( light->programRadius, light->coronaRadius ) );
 
 			// DynamicLightsDiffuseAndInvRadius is transposed for SIMD, but it's still 4x4
 			if( c == 3 ) {
@@ -1844,7 +1842,7 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 			}
 
 			n++;
-		}*/
+		}
 
 		if( n & 3 ) {
 			qglUniform4fv( program->loc.DynamicLightsDiffuseAndInvRadius[n >> 2], 4, shaderColor[0] );
@@ -1864,8 +1862,6 @@ unsigned int RP_UpdateDynamicLightsUniforms( int elem, const superLightStyle_t *
 			qglUniform4fv( program->loc.DynamicLightsDiffuseAndInvRadius[n >> 2], 4, shaderColor[0] );
 		}
 	}
-
-	return 0;
 }
 
 /*
