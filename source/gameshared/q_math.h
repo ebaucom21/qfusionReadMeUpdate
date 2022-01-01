@@ -483,6 +483,124 @@ public:
 #endif
 };
 
+template <unsigned N>
+class BoundingDopBuilder {
+	static_assert( ( N == 14 || N == 26 ) );
+
+public:
+	BoundingDopBuilder() noexcept {
+		constexpr float minsVal = std::numeric_limits<float>::max();
+		constexpr float maxsVal = std::numeric_limits<float>::min();
+
+		Vector4Set( m_mins + 0, minsVal, minsVal, minsVal, minsVal );
+		Vector4Set( m_maxs + 0, maxsVal, maxsVal, maxsVal, maxsVal );
+
+		if constexpr( N == 26 ) {
+			Vector4Set( m_mins + 8, minsVal, minsVal, minsVal, minsVal );
+			Vector4Set( m_maxs + 8, maxsVal, maxsVal, maxsVal, maxsVal );
+			Vector4Set( m_mins + 8, minsVal, minsVal, minsVal, minsVal );
+			Vector4Set( m_maxs + 8, maxsVal, maxsVal, maxsVal, maxsVal );
+			m_mins[13] = minsVal, m_maxs[13] = maxsVal;
+		} else {
+			VectorSet( m_mins + 4, minsVal, minsVal, minsVal );
+			VectorSet( m_maxs + 4, maxsVal, maxsVal, maxsVal );
+		}
+	}
+
+	explicit BoundingDopBuilder( const float *initialPoint ) noexcept {
+		float *const __restrict mins = m_mins;
+		float *const __restrict maxs = m_maxs;
+
+		const float x = initialPoint[0], y = initialPoint[1], z = initialPoint[2];
+		mins[0] = x, maxs[0] = x, mins[1] = y, maxs[1] = y, mins[2] = z, maxs[2] = z;
+
+		const float d3 = x + y + z, d4 = -x + y + z;
+		mins[3] = d3, maxs[3] = d3, mins[4] = d4, maxs[4] = d4;
+
+		const float d5 = -x - y + z, d6 = x - y + z;
+		mins[5] = d5, maxs[5] = d5, mins[6] = d6, maxs[6] = d6;
+
+		if constexpr( N == 26 ) {
+			const float d7 = x + y, d8 = x + z, d9 = y + z;
+			mins[7] = d7, maxs[7] = d7, mins[8] = d8, maxs[8] = d8, mins[9] = d9, maxs[9] = d9;
+			
+			const float d10 = x - y, d11 = x - z, d12 = -y + z;
+			mins[10] = d10, maxs[10] = d10, mins[11] = d11, maxs[11] = d11, mins[12] = d12, maxs[12] = d12;
+		}
+	}
+
+	void addPoint( const float *p ) noexcept {
+		float *const __restrict mins = m_mins;
+		float *const __restrict maxs = m_maxs;
+
+		const float x = p[0], y = p[1], z = p[2];
+		mins[0] = std::min( mins[0], x ), maxs[0] = std::max( maxs[0], x );
+		mins[1] = std::min( mins[1], y ), maxs[1] = std::max( maxs[1], y );
+		mins[2] = std::min( mins[2], z ), maxs[2] = std::max( maxs[2], z );
+
+		const float d3 = x + y + z, d4 = -x + y + z;
+		mins[3] = std::min( mins[3], d3 ), maxs[3] = std::max( maxs[3], d3 );
+		mins[4] = std::min( mins[4], d4 ), maxs[4] = std::max( maxs[4], d4 );
+
+		const float d5 = -x - y + z, d6 = x - y + z;
+		mins[5] = std::min( mins[5], d5 ), maxs[5] = std::max( maxs[5], d5 );
+		mins[6] = std::min( mins[6], d6 ), maxs[6] = std::max( maxs[6], d6 );
+
+		if constexpr( N == 26 ) {
+			const float d7 = x + y, d8 = x + z, d9 = y + z;
+			mins[7] = std::min( mins[7], d7 ), maxs[7] = std::max( maxs[7], d7 );
+			mins[8] = std::min( mins[8], d8 ), maxs[8] = std::max( maxs[8], d8 );
+			mins[9] = std::min( mins[9], d9 ), maxs[9] = std::max( maxs[9], d9 );
+
+			const float d10 = x - y, d11 = x - z, d12 = -y + z;
+			mins[10] = std::min( mins[10], d10 ), maxs[10] = std::max( maxs[10], d10 );
+			mins[11] = std::min( mins[11], d11 ), maxs[11] = std::max( maxs[11], d11 );
+			mins[12] = std::min( mins[12], d12 ), maxs[12] = std::max( maxs[12], d12 );
+		}
+
+		markAsTouched();
+	}
+
+	void storeTo( float *mins, float *maxs ) noexcept {
+		checkTouched();
+
+		Vector4Copy( m_mins + 0, mins + 0 );
+		Vector4Copy( m_maxs + 0, maxs + 0 );
+
+		if constexpr( N == 26 ) {
+			Vector4Copy( m_mins + 4, mins + 4 );
+			Vector4Copy( m_maxs + 4, maxs + 4 );
+			Vector4Copy( m_mins + 8, mins + 8 );
+			Vector4Copy( m_maxs + 8, maxs + 8 );
+			mins[12] = mins[13] = mins[14] = mins[15] = m_mins[12];
+			maxs[12] = maxs[13] = maxs[14] = maxs[15] = m_maxs[12];
+		} else {
+			VectorCopy( m_mins + 4, mins + 4 );
+			VectorCopy( m_maxs + 4, maxs + 4 );
+			mins[7] = m_mins[6], maxs[7] = m_maxs[6];
+		}
+	}
+private:
+	void markAsTouched() {
+#ifdef _DEBUG
+		m_touched = true;
+#endif
+	}
+
+	void checkTouched() const {
+#ifdef _DEBUG
+		assert( m_touched );
+#endif
+	}
+
+	float m_mins[( N == 14 ) ? 7 : 13];
+	float m_maxs[( N == 14 ) ? 7 : 13];
+
+	#ifdef _DEBUG
+	bool m_touched { false };
+#endif
+};
+
 bool BoundsAndSphereIntersect( const vec3_t mins, const vec3_t maxs, const vec3_t centre, float radius );
 
 #define NUMVERTEXNORMALS    162

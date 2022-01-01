@@ -515,10 +515,7 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 * Make bounding box of an autosprite surf symmetric and enlarges it
 * to account for rotation along the longest axis.
 */
-static void Mod_CalculateAutospriteBounds( msurface_t *surf ) {
-	float *const mins = surf->mins;
-	float *const maxs = surf->maxs;
-
+static void Mod_CalculateAutospriteBounds( msurface_t *surf, vec3_t mins, vec3_t maxs ) {
 	// find the longest axis
 	int longestAxis = 2;
 	vec3_t radius, center;
@@ -561,14 +558,13 @@ static void Mod_FinishFaces( model_t *mod ) {
 			continue;
 		}
 
-		// calculate bounding box of a surface
 		float *vert = mesh->xyzArray[0];
-		VectorCopy( vert, surf->mins );
-		VectorCopy( vert, surf->maxs );
+		// calculate bounding DOP of a surface
+		BoundingDopBuilder<14> boundingDopBuilder( vert );
 		vert += 4;
 
 		for( unsigned j = 1; j < mesh->numVerts; j++ ) {
-			AddPointToBounds( vert, surf->mins, surf->maxs );
+			boundingDopBuilder.addPoint( vert );
 			vert += 4;
 		}
 
@@ -578,21 +574,29 @@ static void Mod_FinishFaces( model_t *mod ) {
 			for( unsigned j = 0; j < surf->numInstances; j++ ) {
 				vec3_t temp;
 				VectorMA( vert, vert[3], surf->mins, temp );
-				AddPointToBounds( temp, surf->mins, surf->maxs );
+				boundingDopBuilder.addPoint( temp );
 
 				VectorMA( vert, vert[3], surf->maxs, temp );
-				AddPointToBounds( temp, surf->mins, surf->maxs );
+				boundingDopBuilder.addPoint( temp );
 
 				vert += 8;
 			}
 		}
+
+		boundingDopBuilder.storeTo( surf->mins, surf->maxs );
 
 		// handle autosprites
 		if( shader->flags & SHADER_AUTOSPRITE ) {
 			// handle autosprites as trisurfs to avoid backface culling
 			surf->facetype = FACETYPE_TRISURF;
 
-			Mod_CalculateAutospriteBounds( surf );
+			vec3_t inoutMins, inoutMaxs;
+			VectorCopy( surf->mins, inoutMins );
+			VectorCopy( surf->maxs, inoutMaxs );
+			Mod_CalculateAutospriteBounds( surf, inoutMins, inoutMaxs );
+			boundingDopBuilder.addPoint( inoutMins );
+			boundingDopBuilder.addPoint( inoutMaxs );
+			boundingDopBuilder.storeTo( surf->mins, surf->maxs );
 		}
 	}
 }

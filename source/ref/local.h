@@ -714,25 +714,15 @@ typedef struct mshaderref_s {
 } mshaderref_t;
 
 typedef struct msurface_s {
-	unsigned int facetype, flags;
-
-	unsigned int firstDrawSurfVert, firstDrawSurfElem;
-
-	unsigned int numInstances;
-
-	unsigned int drawSurf;
-
 
 	vec4_t plane;
 
-	union {
-		float origin[4];
-		float mins[4];
-	};
-	union {
-		float maxs[4];
-		float color[4];
-	};
+	float mins[8], maxs[8];
+
+	unsigned facetype, flags;
+	unsigned firstDrawSurfVert, firstDrawSurfElem;
+	unsigned numInstances;
+	unsigned drawSurf;
 
 	mutable unsigned occlusionCullingFrame;
 	// TODO: Decouple surfaces and occluders
