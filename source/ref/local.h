@@ -759,8 +759,8 @@ typedef struct mleaf_s {
 	// leaf specific
 	int cluster, area;
 
-	float mins[4];
-	float maxs[4];                      // for bounding box culling
+	float mins[8];
+	float maxs[8];                      // for bounding box culling
 
 	unsigned *visSurfaces;
 	unsigned *fragmentSurfaces;

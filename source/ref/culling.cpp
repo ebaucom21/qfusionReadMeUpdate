@@ -872,7 +872,8 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 						   const Frustum *__restrict primaryFrustum,
 						   std::span<const Frustum> occluderFrusta,
-						   uint16_t *tmpIndices, uint16_t *tmpIndices2 )
+						   uint16_t *tmpCoronaLightIndices,
+						   uint16_t *tmpProgramLightIndices )
 						   -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>> {
 	const auto *const lights = lightsSpan.data();
 	const unsigned numLights = lightsSpan.size();
@@ -900,15 +901,15 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 				}
 			}
 			if( !occluded ) {
-				tmpIndices[numPassedCoronaLights] = i;
+				tmpCoronaLightIndices[numPassedCoronaLights] = i;
 				numPassedCoronaLights += light->hasCoronaLight;
-				tmpIndices2[numPassedProgramLights] = i;
+				tmpProgramLightIndices[numPassedProgramLights] = i;
 				numPassedProgramLights += light->hasProgramLight;
 			}
 		}
 	}
 
-	return { { tmpIndices, numPassedCoronaLights }, { tmpIndices, numPassedProgramLights } };
+	return { { tmpCoronaLightIndices, numPassedCoronaLights }, { tmpProgramLightIndices, numPassedProgramLights } };
 }
 
 }

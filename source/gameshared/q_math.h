@@ -496,11 +496,11 @@ public:
 		Vector4Set( m_maxs + 0, maxsVal, maxsVal, maxsVal, maxsVal );
 
 		if constexpr( N == 26 ) {
+			Vector4Set( m_mins + 4, minsVal, minsVal, minsVal, minsVal );
+			Vector4Set( m_maxs + 4, maxsVal, maxsVal, maxsVal, maxsVal );
 			Vector4Set( m_mins + 8, minsVal, minsVal, minsVal, minsVal );
 			Vector4Set( m_maxs + 8, maxsVal, maxsVal, maxsVal, maxsVal );
-			Vector4Set( m_mins + 8, minsVal, minsVal, minsVal, minsVal );
-			Vector4Set( m_maxs + 8, maxsVal, maxsVal, maxsVal, maxsVal );
-			m_mins[13] = minsVal, m_maxs[13] = maxsVal;
+			m_mins[12] = minsVal, m_maxs[12] = maxsVal;
 		} else {
 			VectorSet( m_mins + 4, minsVal, minsVal, minsVal );
 			VectorSet( m_maxs + 4, maxsVal, maxsVal, maxsVal );
@@ -561,6 +561,14 @@ public:
 		markAsTouched();
 	}
 
+	void addOtherDop( float *mins, float *maxs ) noexcept {
+		// TODO: Use SIMD if it's on a speed-critical path
+		for( unsigned i = 0; i < N / 2; ++i ) {
+			m_mins[i] = std::min( m_mins[i], mins[i] );
+			m_maxs[i] = std::max( m_maxs[i], maxs[i] );
+		}
+	}
+
 	void storeTo( float *mins, float *maxs ) noexcept {
 		checkTouched();
 
@@ -600,6 +608,9 @@ private:
 	bool m_touched { false };
 #endif
 };
+
+void createBounding14DopForSphere( float *mins, float *maxs, const float *center, float radius );
+void createBounding26DopForSphere( float *mins, float *maxs, const float *center, float radius );
 
 bool BoundsAndSphereIntersect( const vec3_t mins, const vec3_t maxs, const vec3_t centre, float radius );
 

@@ -1813,13 +1813,21 @@ void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
 		Vector4Set( shaderColor[3], 1.0f, 1.0f, 1.0f, 1.0f );
 		n = 0;
 
-		const int numProgramLights = (int)fsh->numProgramLights;
-		for( i = 0; i < numProgramLights; ++i ) {
+		for( i = 0; i < fsh->numProgramLights; ++i ) {
+			const unsigned lightBit = 1 << i;
+			if( !( dlightbits & lightBit ) ) {
+				continue;
+			}
+
+			dlightbits &= ~lightBit;
+
 			if( program->loc.DynamicLightsPosition[n] < 0 ) {
 				break;
 			}
 
 			const auto *const light = fsh->dynamicLights + fsh->programLightIndices[i];
+			assert( light->hasProgramLight && light->programRadius >= 1.0f );
+
 			VectorSubtract( light->origin, entOrigin, dlorigin );
 			if( !identityAxis ) {
 				VectorCopy( dlorigin, tvec );
@@ -1832,7 +1840,7 @@ void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
 			shaderColor[0][c] = light->color[0];
 			shaderColor[1][c] = light->color[1];
 			shaderColor[2][c] = light->color[2];
-			shaderColor[3][c] = Q_Rcp( std::max( light->programRadius, light->coronaRadius ) );
+			shaderColor[3][c] = Q_Rcp( light->programRadius );
 
 			// DynamicLightsDiffuseAndInvRadius is transposed for SIMD, but it's still 4x4
 			if( c == 3 ) {
@@ -1842,6 +1850,11 @@ void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
 			}
 
 			n++;
+
+			dlightbits &= ~lightBit;
+			if( !dlightbits ) {
+				break;
+			}
 		}
 
 		if( n & 3 ) {

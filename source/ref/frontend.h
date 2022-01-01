@@ -65,12 +65,12 @@ private:
 	shader_t *m_coronaShader;
 
 	static constexpr unsigned kMaxLightsInScene = 1024;
-	static constexpr unsigned kMaxProgramLightsInView = 16;
+	static constexpr unsigned kMaxProgramLightsInView = 32;
 
 	int m_coronaDrawSurfaces[kMaxLightsInScene];
-	unsigned m_allVisibleProgramLightBits { 0 };
 	unsigned m_numVisibleProgramLights { 0 };
 	uint16_t m_programLightIndices[kMaxProgramLightsInView];
+	struct { float mins[8], maxs[8]; } m_lightBoundingDops[kMaxProgramLightsInView];
 
 	refinst_t m_state;
 	// TODO: Put in the state
@@ -100,6 +100,14 @@ private:
 				data = std::make_unique<T[]>( newSize );
 				capacity = newSize;
 			}
+		}
+
+		void reserveZeroed( size_t newSize ) {
+			if( newSize > capacity ) [[unlikely]] {
+				data = std::make_unique<T[]>( newSize );
+				capacity = newSize;
+			}
+			std::memset( data.get(), 0, sizeof( T ) * newSize );
 		}
 	};
 
@@ -134,6 +142,8 @@ private:
 
 	BufferHolder<VisTestedModel> m_visTestedModelsBuffer;
 
+	BufferHolder<uint32_t> m_leafLightBitsOfSurfacesHolder;
+
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
@@ -160,13 +170,14 @@ private:
 	void collectVisiblePolys( Scene *scene );
 
 	[[nodiscard]]
-	auto cullWorldSurfaces() -> std::span<const Frustum>;
+	auto cullWorldSurfaces() -> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>>;
 
 	void addVisibleWorldSurfacesToSortList( Scene *scene );
 
 	void collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta );
 
-	void collectVisibleLights( Scene *scene, std::span<const Frustum> frusta );
+	[[nodiscard]]
+	auto collectVisibleLights( Scene *scene, std::span<const Frustum> frusta ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
@@ -207,14 +218,16 @@ private:
 	auto cullLights( std::span<const Scene::DynamicLight> lights,
 					 const Frustum *__restrict primaryFrustum,
 					 std::span<const Frustum> occluderFrusta,
-					 uint16_t *tmpIndices, uint16_t *tmpIndices2 )
+					 uint16_t *tmpCoronaLightIndices,
+					 uint16_t *tmpProgramLightIndices )
 					 -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
 
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
 
 	void addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices );
-	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices );
+	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices,
+										  std::span<const Scene::DynamicLight> lights );
 	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
 
 	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
@@ -244,11 +257,21 @@ private:
 								std::span<const Frustum> occluderFrusta )
 								-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
+	void markLightsOfSurfaces( const Scene *scene,
+							   std::span<std::span<const unsigned>> spansOfLeaves,
+							   std::span<const uint16_t> visibleLightIndices );
+
+	void markLightsOfLeaves( const Scene *scene,
+							 std::span<const unsigned> indicesOfLeaves,
+							 std::span<const uint16_t> visibleLightIndices,
+							 unsigned *lightBitsOfSurfaces );
+
 	void setupViewMatrices();
 	void clearActiveFrameBuffer();
 
-	void addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
-									 msurface_t *firstVisSurf, msurface_t *lastVisSurf, const float *maybeOrigin );
+	void addMergedBspSurfToSortList( const entity_t *entity, drawSurfaceBSP_t *drawSurf,
+									 msurface_t *firstVisSurf, msurface_t *lastVisSurf,
+									 const float *maybeOrigin, std::span<const Scene::DynamicLight> lights );
 
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
 							  float dist, unsigned order, const portalSurface_t *portalSurf, void *drawSurf );

@@ -537,7 +537,8 @@ void Frontend::addNullModelEntitiesToSortList( const entity_t *nullModelEntities
 	}
 }
 
-void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices ) {
+void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices,
+												std::span<const Scene::DynamicLight> lights ) {
 	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
 	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
 
@@ -556,7 +557,7 @@ void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntiti
 			drawSurfaceBSP_t *const mergedSurface = mergedSurfaces + surfNum;
 			msurface_t *const firstVisSurface = surfaces + mergedSurface->firstWorldSurface;
 			msurface_t *const lastVisSurface = firstVisSurface + mergedSurface->numWorldSurfaces - 1;
-			addMergedBspSurfToSortList( entity, mergedSurface, firstVisSurface, lastVisSurface, origin );
+			addMergedBspSurfToSortList( entity, mergedSurface, firstVisSurface, lastVisSurface, origin, lights );
 		}
 	}
 }
@@ -574,24 +575,46 @@ void Frontend::addSpriteEntitiesToSortList( const entity_t *spriteEntities, std:
 	}
 }
 
-void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *drawSurf,
+[[nodiscard]]
+static inline bool doOverlapTestFor14Dops( const float *mins1, const float *maxs1, const float *mins2, const float *maxs2 ) {
+	// TODO: Inline into call sites/reduce redundant loads
+
+	const __m128 xmmMins1_03 = _mm_loadu_ps( mins1 + 0 ), xmmMaxs1_03 = _mm_loadu_ps( maxs1 + 0 );
+	const __m128 xmmMins2_03 = _mm_loadu_ps( mins2 + 0 ), xmmMaxs2_03 = _mm_loadu_ps( maxs2 + 0 );
+	const __m128 xmmMins1_47 = _mm_loadu_ps( mins1 + 4 ), xmmMaxs1_47 = _mm_loadu_ps( maxs1 + 4 );
+	const __m128 xmmMins2_47 = _mm_loadu_ps( mins2 + 4 ), xmmMaxs2_47 = _mm_loadu_ps( maxs2 + 4 );
+
+	// Mins1 [0..3] > Maxs2[0..3]
+	__m128 cmp1 = _mm_cmpgt_ps( xmmMins1_03, xmmMaxs2_03 );
+	// Mins2 [0..3] > Maxs1[0..3]
+	__m128 cmp2 = _mm_cmpgt_ps( xmmMins2_03, xmmMaxs1_03 );
+	// Mins1 [4..7] > Maxs2[4..7]
+	__m128 cmp3 = _mm_cmpgt_ps( xmmMins1_47, xmmMaxs2_47 );
+	// Mins2 [4..7] > Maxs1[4..7]
+	__m128 cmp4 = _mm_cmpgt_ps( xmmMins2_47, xmmMaxs1_47 );
+	// Zero if no comparison was successful
+	return _mm_movemask_ps( _mm_or_ps( _mm_or_ps( cmp1, cmp2 ), _mm_or_ps( cmp3, cmp4 ) ) ) == 0;
+}
+
+void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
+										   drawSurfaceBSP_t *drawSurf,
 										   msurface_t *firstVisSurf, msurface_t *lastVisSurf,
-										   const float *maybeOrigin ) {
+										   const float *maybeOrigin,
+										   std::span<const Scene::DynamicLight> lightsSpan ) {
 	assert( ( drawSurf->visFrame != rf.frameCount ) && "Should not be duplicated for now" );
 
 	portalSurface_t *portalSurface = nullptr;
 	const shader_t *shader = drawSurf->shader;
 	if( shader->flags & SHADER_PORTAL ) {
-		portalSurface = tryAddingPortalSurface( e, shader, drawSurf );
+		portalSurface = tryAddingPortalSurface( entity, shader, drawSurf );
 	}
 
 	const mfog_t *fog = drawSurf->fog;
 	const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, drawSurf->numLightmaps, false );
 
-	// TODO: Compute light-surface interaction
-	drawSurf->dlightBits = m_allVisibleProgramLightBits;
+	drawSurf->dlightBits = 0;
 	drawSurf->visFrame = rf.frameCount;
-	drawSurf->listSurf = addEntryToSortList( e, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
+	drawSurf->listSurf = addEntryToSortList( entity, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
 	if( !drawSurf->listSurf ) {
 		return;
 	}
@@ -601,16 +624,45 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 	}
 
 	float resultDist = 0;
-
-	msurface_t *const modelSurfaces = rsh.worldBrushModel->surfaces + drawSurf->firstWorldSurface;
-	const bool special = ( drawSurf->shader->flags & ( SHADER_PORTAL ) ) != 0;
-	for( unsigned i = 0; i < drawSurf->numWorldSurfaces; i++ ) {
-		msurface_t *const surf = &modelSurfaces[i];
-		if( special ) {
-			if( const auto maybePortalDistance = tryUpdatingPortalSurfaceAndDistance( drawSurf, surf, maybeOrigin ) ) {
-				resultDist = std::max( resultDist, *maybePortalDistance );
+	if( drawSurf->shader->flags & ( SHADER_PORTAL ) ) [[unlikely]] {
+		for( msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
+			if( const auto maybeDistance = tryUpdatingPortalSurfaceAndDistance( drawSurf, surf, maybeOrigin ) ) {
+				resultDist = std::max( resultDist, *maybeDistance );
 			}
 		}
+	}
+
+	unsigned dlightBits = 0;
+	if( m_numVisibleProgramLights ) {
+		const Scene::DynamicLight *const lights = lightsSpan.data();
+		const unsigned *const surfaceDlightBits = m_leafLightBitsOfSurfacesHolder.data.get();
+		const msurface_t *const worldSurfaces = rsh.worldBrushModel->surfaces;
+		const unsigned numLights = lightsSpan.size();
+
+		msurface_t *surf = firstVisSurf;
+		do {
+			// Coarse bits are combined light bits of leaves.
+			// Check against individual surfaces if a coarse bit is set.
+			// TODO: Iterate over all bits in the outer loop?
+			// TODO: Think of using SIMD-friendly indices + left-packing instead of integer bits
+			if( const unsigned coarseBits = surfaceDlightBits[surf - worldSurfaces] ) {
+				assert( numLights );
+				unsigned lightNum = 0;
+				unsigned testedBits = 0;
+				do {
+					const unsigned lightBit = 1u << lightNum;
+					testedBits |= lightBit;
+					if( coarseBits & lightBit ) [[likely]] {
+						const auto *lightDop = &m_lightBoundingDops[lightNum];
+						if( doOverlapTestFor14Dops( lightDop->mins, lightDop->maxs, surf->mins, surf->maxs ) ) {
+							dlightBits |= lightBit;
+						}
+					}
+				} while( ++lightNum < numLights && testedBits != coarseBits );
+			}
+			// TODO: Exclude culled/occluded surfaces in range [firstVisSurf, lastVisSurf] from light bits computation
+			// TODO: Compute an accumulative table of light bits of visible surfaces for merged surfaces
+		} while( ++surf < lastVisSurf + 1 );
 	}
 
 	drawSurf->firstSpanVert = firstVisSurf->firstDrawSurfVert;
@@ -619,7 +671,8 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *e, drawSurfaceBSP_t *
 	drawSurf->numSpanElems = lastVisSurf->mesh.numElems + lastVisSurf->firstDrawSurfElem - firstVisSurf->firstDrawSurfElem;
 
 	// update the distance sorting key if it's a portal surface or a normal dlit surface
-	if( resultDist != 0 ) {
+	if( resultDist != 0 || dlightBits != 0 ) {
+		drawSurf->dlightBits = dlightBits;
 		const unsigned order = R_PackOpaqueOrder( drawSurf->fog, drawSurf->shader, drawSurf->numLightmaps, false );
 		if( resultDist == 0 ) {
 			resultDist = WORLDSURF_DIST;
@@ -716,23 +769,24 @@ void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> fr
 
 	const std::span<const entity_t> brushModelEntities = scene->m_brushModelEntities;
 	const auto visibleBrushModelEntityIndices = cullBrushModelEntities( brushModelEntities, &m_frustum, frusta, indices );
-	addBrushModelEntitiesToSortList( brushModelEntities.data(), visibleBrushModelEntityIndices );
+	std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
+	addBrushModelEntitiesToSortList( brushModelEntities.data(), visibleBrushModelEntityIndices, dynamicLights );
 
 	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
 	const auto visibleSpriteEntityIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices );
 	addSpriteEntitiesToSortList( spriteEntities.data(), visibleSpriteEntityIndices );
 }
 
-void Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta ) {
+auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
+	-> std::span<const uint16_t> {
 	static_assert( decltype( Scene::m_dynamicLights )::capacity() == kMaxLightsInScene );
-	uint16_t tmpIndices[kMaxLightsInScene], tmpIndices2[kMaxLightsInScene];
+	uint16_t tmpCoronaLightIndices[kMaxLightsInScene], tmpProgramLightIndices[kMaxLightsInScene];
 
 	const auto [visibleCoronaLightIndices, visibleProgramLightIndices] =
-		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta, tmpIndices, tmpIndices2 );
+		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta, tmpCoronaLightIndices, tmpProgramLightIndices );
 
 	addCoronaLightsToSortList( scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
 
-	assert( m_allVisibleProgramLightBits == 0 );
 	assert( m_numVisibleProgramLights == 0 );
 
 	if( visibleProgramLightIndices.size() <= kMaxProgramLightsInView ) {
@@ -763,11 +817,66 @@ void Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occl
 	}
 
 	for( unsigned i = 0; i < m_numVisibleProgramLights; ++i ) {
-		m_allVisibleProgramLightBits |= ( 1u << i );
+		Scene::DynamicLight *const light = scene->m_dynamicLights.data() + m_programLightIndices[i];
+		float *const mins = m_lightBoundingDops[i].mins, *const maxs = m_lightBoundingDops[i].maxs;
+		createBounding14DopForSphere( mins, maxs, light->origin, light->programRadius );
+	}
+
+	return { m_programLightIndices, m_numVisibleProgramLights };
+}
+
+void Frontend::markLightsOfSurfaces( const Scene *scene,
+									 std::span<std::span<const unsigned>> spansOfLeaves,
+								   	 std::span<const uint16_t> visibleLightIndices ) {
+	// TODO: Fuse these calls
+	m_leafLightBitsOfSurfacesHolder.reserveZeroed( rsh.worldBrushModel->numModelSurfaces );
+	unsigned *const lightBitsOfSurfaces = m_leafLightBitsOfSurfacesHolder.data.get();
+
+	if( !visibleLightIndices.empty() ) {
+		for( const std::span<const unsigned> &leaves: spansOfLeaves ) {
+			markLightsOfLeaves( scene, leaves, visibleLightIndices, lightBitsOfSurfaces );
+		}
 	}
 }
 
-auto Frontend::cullWorldSurfaces() -> std::span<const Frustum> {
+void Frontend::markLightsOfLeaves( const Scene *scene,
+						           std::span<const unsigned> indicesOfLeaves,
+						           std::span<const uint16_t> visibleLightIndices,
+						           unsigned *leafLightBitsOfSurfaces ) {
+	const uint16_t *const lightIndices = visibleLightIndices.data();
+	const unsigned numVisibleLights = visibleLightIndices.size();
+	const auto leaves = rsh.worldBrushModel->visleafs;
+
+	assert( numVisibleLights && numVisibleLights <= kMaxProgramLightsInView );
+
+	for( const unsigned leafIndex: indicesOfLeaves ) {
+		const mleaf_t *const __restrict leaf = leaves[leafIndex];
+		unsigned leafLightBits = 0;
+
+		unsigned programLightNum = 0;
+		do {
+			const auto *lightDop = &m_lightBoundingDops[programLightNum];
+			if( doOverlapTestFor14Dops( lightDop->mins, lightDop->maxs, leaf->mins, leaf->maxs ) ) {
+				leafLightBits |= ( 1u << programLightNum );
+			}
+		} while( ++programLightNum < numVisibleLights );
+
+		if( leafLightBits ) [[unlikely]] {
+			const unsigned *const leafSurfaceNums = leaf->visSurfaces;
+			const unsigned numLeafSurfaces = leaf->numVisSurfaces;
+			assert( numLeafSurfaces );
+			unsigned surfIndex = 0;
+			do {
+				const unsigned surfNum = leafSurfaceNums[surfIndex];
+				leafLightBitsOfSurfaces[surfNum] |= leafLightBits;
+			} while( ++surfIndex < numLeafSurfaces );
+		}
+	}
+}
+
+auto Frontend::cullWorldSurfaces()
+	-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>> {
+
 	m_occludersSelectionFrame++;
 	m_occlusionCullingFrame++;
 
@@ -796,19 +905,22 @@ auto Frontend::cullWorldSurfaces() -> std::span<const Frustum> {
 	// Build frusta of occluders, while performing some additional frusta pruning
 	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( visibleOccluders );
 
+	std::span<const unsigned> nonOccludedLeaves;
+	std::span<const unsigned> partiallyOccludedLeaves;
 	if( occluderFrusta.empty() ) {
 		// No "good enough" occluders found.
 		// Just mark every surface that falls into the primary frustum visible in this case.
 		markSurfacesOfLeavesAsVisible( visibleLeaves, mergedSurfSpans );
+		nonOccludedLeaves = visibleLeaves;
 	} else {
 		// Test every leaf that falls into the primary frustum against frusta of occluders
-		const auto [nonOccludedLeaves, partiallyOccludedLeaves] = cullLeavesByOccluders( visibleLeaves, occluderFrusta );
+		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( visibleLeaves, occluderFrusta );
 		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans );
 		// Test every surface that belongs to partially occluded leaves
 		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans );
 	}
 
-	return occluderFrusta;
+	return { occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves };
 }
 
 void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
@@ -824,19 +936,24 @@ void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
 
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
+	const auto before = Sys_Microseconds();
+
 	msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
 	const MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
 	const auto numWorldModelDrawSurfaces = rsh.worldBrushModel->numModelDrawSurfaces;
+	std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
 	for( unsigned mergedSurfNum = 0; mergedSurfNum < numWorldModelDrawSurfaces; ++mergedSurfNum ) {
 		const MergedSurfSpan &surfSpan = mergedSurfSpans[mergedSurfNum];
 		if( surfSpan.firstSurface <= surfSpan.lastSurface ) {
 			drawSurfaceBSP_t *const mergedSurf = mergedSurfaces + mergedSurfNum;
 			msurface_t *const firstVisSurf = surfaces + surfSpan.firstSurface;
 			msurface_t *const lastVisSurf = surfaces + surfSpan.lastSurface;
-			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr );
+			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr, dynamicLights );
 		}
 	}
+
+	Com_Printf( "World surfaces submission for sorting took %d micros\n", (int)( Sys_Microseconds() - before ) );
 }
 
 void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
@@ -1127,9 +1244,10 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	// R_DrawEntities can make adjustments as well
 
 	std::span<const Frustum> occluderFrusta;
+	std::span<const unsigned> nonOccludedLeaves;
+	std::span<const unsigned> partiallyOccludedLeaves;
 
 	m_numVisibleProgramLights = 0;
-	m_allVisibleProgramLightBits = 0;
 
 	bool drawWorld = false;
 
@@ -1137,7 +1255,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 			if( r_drawworld->integer && rsh.worldModel ) {
 				drawWorld = true;
-				occluderFrusta = cullWorldSurfaces();
+				std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces();
 			}
 		}
 
@@ -1147,8 +1265,13 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		collectVisiblePolys( scene );
 	}
 
-	if( r_dynamiclight->integer ) {
-		collectVisibleLights( scene, occluderFrusta );
+	if( const int dynamicLightValue = r_dynamiclight->integer ) {
+		[[maybe_unused]] const auto visibleLightIndices = collectVisibleLights( scene, occluderFrusta );
+		if( dynamicLightValue & 1 ) {
+			std::span<const unsigned> spansStorage[2] { nonOccludedLeaves, partiallyOccludedLeaves };
+			std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
+			markLightsOfSurfaces( scene, spansOfLeaves, visibleLightIndices );
+		}
 	}
 
 	if( drawWorld ) {

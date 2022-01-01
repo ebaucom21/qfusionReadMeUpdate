@@ -468,9 +468,17 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 	loadbmodel->visleafs = (mleaf_t **)Q_malloc( ( count + 1 ) * sizeof( *loadbmodel->visleafs ) );
 	memset( loadbmodel->visleafs, 0, ( count + 1 ) * sizeof( *loadbmodel->visleafs ) );
 
+	constexpr float minsVal = std::numeric_limits<float>::max();
+	constexpr float maxsVal = std::numeric_limits<float>::min();
+
 	unsigned numVisLeafs = 0;
 	for( unsigned i = 0; i < count; i++ ) {
 		mleaf_t *const __restrict leaf = loadbmodel->leafs + i;
+		Vector4Set( leaf->mins + 0, minsVal, minsVal, minsVal, minsVal );
+		Vector4Set( leaf->mins + 4, minsVal, minsVal, minsVal, minsVal );
+		Vector4Set( leaf->maxs + 0, maxsVal, maxsVal, maxsVal, maxsVal );
+		Vector4Set( leaf->maxs + 4, maxsVal, maxsVal, maxsVal, maxsVal );
+
 		if( leaf->cluster < 0 || !leaf->numVisSurfaces ) {
 			leaf->visSurfaces = nullptr;
 			leaf->numVisSurfaces = 0;
@@ -480,6 +488,7 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 			leaf->numOccluderSurfaces = 0;
 			leaf->occluderSurfaces = nullptr;
 		} else {
+			BoundingDopBuilder<14> boundingDopBuilder;
 			unsigned numVisSurfaces = 0;
 			unsigned numFragmentSurfaces = 0;
 			unsigned numOccluderSurfaces = 0;
@@ -487,6 +496,7 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 				const unsigned surfNum = leaf->visSurfaces[j];
 				msurface_t *const surf = loadbmodel->surfaces + surfNum;
 				if( R_SurfPotentiallyVisible( surf ) ) {
+					boundingDopBuilder.addOtherDop( surf->mins, surf->maxs );
 					leaf->visSurfaces[numVisSurfaces++] = surfNum;
 					if( R_SurfPotentiallyFragmented( surf ) ) {
 						leaf->fragmentSurfaces[numFragmentSurfaces++] = surfNum;
@@ -500,6 +510,7 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 			leaf->numFragmentSurfaces = numFragmentSurfaces;
 			leaf->numOccluderSurfaces = numOccluderSurfaces;
 			if( numVisSurfaces ) {
+				boundingDopBuilder.storeTo( leaf->mins, leaf->maxs );
 				loadbmodel->visleafs[numVisLeafs++] = leaf;
 			}
 		}

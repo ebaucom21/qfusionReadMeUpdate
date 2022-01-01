@@ -571,6 +571,66 @@ void SnapPlane( vec3_t normal, vec_t *dist ) {
 	}
 }
 
+template <unsigned N>
+static void createBoundingKDopForSphere( float *mins, float *maxs, const float *center, float radius ) {
+	// Contrary to a bounding box, we can't just shift all bounds by the center value.
+	// TODO: Optimize, derive equations or at least remove redundant ops.
+	// This is just to make things working for an evaluation of the concept.
+	BoundingDopBuilder<N> boundingDopBuilder;
+
+	const float halfRadius = 0.5f * radius;
+	for( unsigned coordNum = 0; coordNum < 3; ++coordNum ) {
+		vec3_t pt { center[0], center[1], center[2] };
+		pt[coordNum] = +halfRadius + center[coordNum];
+		boundingDopBuilder.addPoint( pt );
+		pt[coordNum] = -halfRadius + center[coordNum];
+		boundingDopBuilder.addPoint( pt );
+	}
+
+	for( unsigned i = 0; i < 8; ++i ) {
+		constexpr const float invSqrt3 = 1.0f / 1.732051f;
+		const float signs[2] { -1.0f, +1.0f };
+		const vec3_t pt {
+			signs[( i >> 2 ) & 1] * ( halfRadius * invSqrt3 ) + center[0],
+			signs[( i >> 1 ) & 1] * ( halfRadius * invSqrt3 ) + center[1],
+			signs[( i >> 0 ) & 1] * ( halfRadius * invSqrt3 ) + center[2]
+		};
+		boundingDopBuilder.addPoint( pt );
+	}
+
+	if constexpr( N == 26 ) {
+		constexpr const float invSqrt2 = 1.0f / 1.414214f;
+		const vec3_t bevelTouchPoints[] {
+			{ +invSqrt2, +invSqrt2, 0.0f }, { -invSqrt2, +invSqrt2, 0.0f },
+			{ +invSqrt2, -invSqrt2, 0.0f }, { -invSqrt2, -invSqrt2, 0.0f },
+
+			{ +invSqrt2, 0.0f, +invSqrt2 }, { -invSqrt2, 0.0f, +invSqrt2 },
+			{ +invSqrt2, 0.0f, -invSqrt2 }, { -invSqrt2, 0.0f, -invSqrt2 },
+
+			{ 0.0f, +invSqrt2, +invSqrt2 }, { 0.0f, -invSqrt2, +invSqrt2 },
+			{ 0.0f, +invSqrt2, -invSqrt2 }, { 0.0f, -invSqrt2, -invSqrt2 }
+		};
+		for( const vec3_t &refPt: bevelTouchPoints ) {
+			const vec3_t pt {
+				halfRadius * refPt[0] + center[0],
+				halfRadius * refPt[1] + center[1],
+				halfRadius * refPt[2] + center[2]
+			};
+			boundingDopBuilder.addPoint( pt );
+		}
+	}
+
+	boundingDopBuilder.storeTo( mins, maxs );
+}
+
+void createBounding14DopForSphere( float *mins, float *maxs, const float *center, float radius ) {
+	createBoundingKDopForSphere<14>( mins, maxs, center, radius );
+}
+
+void createBounding26DopForSphere( float *mins, float *maxs, const float *center, float radius ) {
+	createBoundingKDopForSphere<26>( mins, maxs, center, radius );
+}
+
 bool BoundsAndSphereIntersect( const vec3_t mins, const vec3_t maxs, const vec3_t centre, float radius ) {
 	int i;
 	float dmin = 0;
