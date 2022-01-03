@@ -718,8 +718,7 @@ void CG_BubbleTrail( const vec3_t start, const vec3_t end, int dist );
 void CG_ProjectileTrail( centity_t *cent );
 void CG_BloodDamageEffect( const vec3_t origin, const vec3_t dir, int damage );
 void CG_CartoonHitEffect( const vec3_t origin, const vec3_t dir, int damage );
-void CG_GreenLaser( const vec3_t start, const vec3_t end );
-void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team );
+inline void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {}
 void CG_PlasmaExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
 void CG_GrenadeExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
 void CG_GenericExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
@@ -779,24 +778,19 @@ void CG_WaveSpark( const vec3_t emitterOrigin );
 //
 // cg_effects.c
 //
-void CG_ClearEffects( void );
-
-void CG_ClearLightStyles( void );
-void CG_RunLightStyles( void );
-
-void CG_SetLightStyle( unsigned i, const wsw::StringView &s );
-
-void CG_AddLightStyles( DrawSceneRequest * );
+inline void CG_ClearEffects( void ) {}
+inline void CG_ClearLightStyles( void ) {}
+inline void CG_RunLightStyles( void ) {}
+inline void CG_SetLightStyle( unsigned i, const wsw::StringView &s ) {}
 
 inline void CG_ClearFragmentedDecals( void ) {}
 inline void CG_AddFragmentedDecal( vec3_t origin, vec3_t dir, float orient, float radius,
 							float r, float g, float b, float a, struct shader_s *shader ) {}
 
-void CG_AddParticles( DrawSceneRequest *drawSceneRequest );
 void CG_BlasterTrail( centity_t *ent, const vec3_t org );
-void CG_ElectroIonsTrail( const vec3_t start, const vec3_t end, const vec4_t color );
-void CG_ElectroIonsTrail2( const vec3_t start, const vec3_t end, const vec4_t color );
-void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t color );
+inline void CG_ElectroIonsTrail( const vec3_t start, const vec3_t end, const vec4_t color ) {}
+inline void CG_ElectroIonsTrail2( const vec3_t start, const vec3_t end, const vec4_t color ) {}
+inline void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t color ) {}
 void CG_WaveCoronaAndTrail( centity_t *ent, const vec3_t org );
 
 //

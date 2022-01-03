@@ -1165,7 +1165,6 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 			break;
 
 		case EV_GREEN_LASER:
-			CG_GreenLaser( ent->origin, ent->origin2 );
 			break;
 
 		case EV_PNODE:

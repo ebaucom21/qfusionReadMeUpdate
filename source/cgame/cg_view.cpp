@@ -1161,9 +1161,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddEntities( drawSceneRequest );
 	CG_AddViewWeapon( &cg.weapon, drawSceneRequest );
 	CG_AddLocalEntities( drawSceneRequest );
-	CG_AddParticles( drawSceneRequest );
 	CG_AddPolys( drawSceneRequest );
-	CG_AddLightStyles( drawSceneRequest );
 
 	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
 

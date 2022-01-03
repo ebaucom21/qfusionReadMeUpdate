@@ -25,9 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_LOCAL_ENTITIES  512
 
-static vec3_t debris_maxs = { 4, 4, 8 };
-static vec3_t debris_mins = { -4, -4, 0 };
-
 typedef enum
 {
 	LE_FREE,
@@ -75,9 +72,6 @@ typedef struct lentity_s
 lentity_t cg_localents[MAX_LOCAL_ENTITIES];
 lentity_t cg_localents_headnode, *cg_free_lents;
 
-/*
-* CG_ClearLocalEntities
-*/
 void CG_ClearLocalEntities( void ) {
 	int i;
 
@@ -91,9 +85,6 @@ void CG_ClearLocalEntities( void ) {
 		cg_localents[i].next = &cg_localents[i + 1];
 }
 
-/*
-* CG_AllocLocalEntity
-*/
 static lentity_t *CG_AllocLocalEntity( letype_t type, float r, float g, float b, float a ) {
 	lentity_t *le;
 
@@ -152,9 +143,6 @@ static lentity_t *CG_AllocLocalEntity( letype_t type, float r, float g, float b,
 	return le;
 }
 
-/*
-* CG_FreeLocalEntity
-*/
 static void CG_FreeLocalEntity( lentity_t *le ) {
 	if( le->static_boneposes ) {
 		Q_free(   le->static_boneposes );
@@ -170,9 +158,6 @@ static void CG_FreeLocalEntity( lentity_t *le ) {
 	cg_free_lents = le;
 }
 
-/*
-* CG_AllocModel
-*/
 static lentity_t *CG_AllocModel( letype_t type, const vec3_t origin, const vec3_t angles, int frames,
 								 float r, float g, float b, float a, float light, float lr, float lg, float lb, struct model_s *model, struct shader_s *shader ) {
 	lentity_t *le;
@@ -199,9 +184,6 @@ static lentity_t *CG_AllocModel( letype_t type, const vec3_t origin, const vec3_
 	return le;
 }
 
-/*
-* CG_AllocSprite
-*/
 static lentity_t *CG_AllocSprite( letype_t type, const vec3_t origin, float radius, int frames,
 								  float r, float g, float b, float a, float light, float lr, float lg, float lb, struct shader_s *shader ) {
 	lentity_t *le;
@@ -223,25 +205,6 @@ static lentity_t *CG_AllocSprite( letype_t type, const vec3_t origin, float radi
 	Matrix3_Identity( le->ent.axis );
 	VectorCopy( origin, le->ent.origin );
 	VectorCopy( origin, le->lightOrigin );
-
-	return le;
-}
-
-/*
-* CG_AllocLaser
-*/
-static lentity_t *CG_AllocLaser( const vec3_t start, const vec3_t end, float radius, int frames,
-								 float r, float g, float b, float a, struct shader_s *shader ) {
-	lentity_t *le;
-
-	le = CG_AllocLocalEntity( LE_LASER, 1, 1, 1, 1 );
-	le->frames = frames;
-
-	le->ent.radius = radius;
-	le->ent.customShader = shader;
-	Vector4Set( le->ent.shaderRGBA, r * 255, g * 255, b * 255, a * 255 );
-	VectorCopy( start, le->ent.origin );
-	VectorCopy( end, le->ent.origin2 );
 
 	return le;
 }
@@ -1230,13 +1193,6 @@ void CG_GenericExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, flo
 	SoundSystem::Instance()->StartFixedSound( cgs.media.sfxExplosionLfe, pos, CHAN_AUTO, cg_volume_effects->value, ATTN_DISTANT );
 }
 
-/*
-* CG_GreenLaser
-*/
-void CG_GreenLaser( const vec3_t start, const vec3_t end ) {
-	CG_AllocLaser( start, end, 2.0f, 2.0f, 0.0f, 0.85f, 0.0f, 0.3f, cgs.media.shaderLaser );
-}
-
 void CG_Dash( const entity_state_t *state ) {
 	lentity_t *le;
 	vec3_t pos, dvect, angle = { 0, 0, 0 };
@@ -1390,85 +1346,6 @@ void CG_ExplosionsDust( const vec3_t pos, const vec3_t dir, float radius ) {
 	}
 }
 
-void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {
-	lentity_t *le;
-	int i, j, count;
-	vec3_t angles, velocity;
-	int time;
-
-	if( true ) {
-		return;
-	}
-
-	time = 50;
-	count = 14 + cg_gibs->integer; // 15 models minimum
-	Q_clamp( count, 15, 128 );
-
-	for( i = 0; i < count; i++ ) {
-		vec4_t color;
-
-		// coloring
-		switch( rand() % 3 ) {
-			case 0:
-
-				// orange
-				Vector4Set( color, 1, 0.5, 0, 1 );
-				break;
-			case 1:
-
-				// purple
-				Vector4Set( color, 1, 0, 1, 1 );
-				break;
-			case 2:
-			default:
-				if( ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) {
-					// team
-					CG_TeamColor( team, color );
-					for( j = 0; j < 3; j++ ) {
-						color[j] = bound( 60.0f / 255.0f, color[j], 1.0f );
-					}
-				} else {
-					// grey
-					Vector4Set( color, 60.0f / 255.0f, 60.0f / 255.0f, 60.0f / 255.0f, 1.0f );
-				}
-				break;
-		}
-
-		le = CG_AllocModel( LE_ALPHA_FADE, origin, vec3_origin, time + time * random(),
-							color[0], color[1], color[2], color[3],
-							0, 0, 0, 0,
-							NULL,
-							NULL );
-
-		// random rotation and scale variations
-		VectorSet( angles, crandom() * 360, crandom() * 360, crandom() * 360 );
-		AnglesToAxis( angles, le->ent.axis );
-		le->ent.scale = 0.8f - ( random() * 0.25 );
-		le->ent.renderfx = RF_FULLBRIGHT | RF_NOSHADOW;
-
-		velocity[0] = crandom() * 0.5;
-		velocity[1] = crandom() * 0.5;
-		velocity[2] = 0.5 + random() * 0.5; // always have upwards
-		VectorNormalize( velocity );
-		VectorScale( velocity, std::min( damage * 10, 300 ), velocity );
-
-		velocity[0] += crandom() * bound( 0, damage, 150 );
-		velocity[1] += crandom() * bound( 0, damage, 150 );
-		velocity[2] += random() * bound( 0, damage, 250 );
-
-		VectorAdd( initialVelocity, velocity, le->velocity );
-
-		le->avelocity[0] = random() * 1200;
-		le->avelocity[1] = random() * 1200;
-		le->avelocity[2] = random() * 1200;
-
-		//friction and gravity
-		VectorSet( le->accel, -0.2f, -0.2f, -900 );
-
-		le->bounce = 75;
-	}
-}
-
 void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 #define FADEINFRAMES 2
 	int f;
@@ -1602,91 +1479,8 @@ void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 			AnglesToAxis( le->angles, le->ent.axis );
 		}
 
-		// apply rotational friction
-		if( le->bounce ) { // FIXME?
-			int i;
-			const float adj = 100 * 6 * time; // magic constants here
-
-			for( i = 0; i < 3; i++ ) {
-				if( le->avelocity[i] > 0.0f ) {
-					le->avelocity[i] -= adj;
-					if( le->avelocity[i] < 0.0f ) {
-						le->avelocity[i] = 0.0f;
-					}
-				} else if( le->avelocity[i] < 0.0f ) {
-					le->avelocity[i] += adj;
-					if( le->avelocity[i] > 0.0f ) {
-						le->avelocity[i] = 0.0f;
-					}
-				}
-			}
-		}
-
-		if( le->bounce ) {
-			trace_t trace;
-			vec3_t next_origin;
-
-			VectorMA( ent->origin, time, le->velocity, next_origin );
-
-			CG_Trace( &trace, ent->origin, debris_mins, debris_maxs, next_origin, 0, MASK_SOLID );
-
-			// remove the particle when going out of the map
-			if( ( trace.contents & CONTENTS_NODROP ) || ( trace.surfFlags & SURF_SKY ) ) {
-				le->frames = 0;
-			} else if( trace.fraction != 1.0 ) {   // found solid
-				float dot;
-				float xyzspeed, orig_xyzspeed;
-				float bounce;
-
-				orig_xyzspeed = VectorLength( le->velocity );
-
-				// Reflect velocity
-				dot = DotProduct( le->velocity, trace.plane.normal );
-				VectorMA( le->velocity, -2.0f * dot, trace.plane.normal, le->velocity );
-
-				//put new origin in the impact point, but move it out a bit along the normal
-				VectorMA( trace.endpos, 1, trace.plane.normal, ent->origin );
-
-				// make sure we don't gain speed from bouncing off
-				bounce = 2.0f * le->bounce * 0.01f;
-				if( bounce < 1.5f ) {
-					bounce = 1.5f;
-				}
-				xyzspeed = orig_xyzspeed / bounce;
-
-				VectorNormalize( le->velocity );
-				VectorScale( le->velocity, xyzspeed, le->velocity );
-
-				//the entity has not speed enough. Stop checks
-				if( xyzspeed * time < 1.0f ) {
-					trace_t traceground;
-					vec3_t ground_origin;
-
-					//see if we have ground
-					VectorCopy( ent->origin, ground_origin );
-					ground_origin[2] += ( debris_mins[2] - 4 );
-					CG_Trace( &traceground, ent->origin, debris_mins, debris_maxs, ground_origin, 0, MASK_SOLID );
-					if( traceground.fraction != 1.0 ) {
-						le->bounce = 0;
-						VectorClear( le->velocity );
-						VectorClear( le->accel );
-						VectorClear( le->avelocity );
-						if( le->type == LE_EXPLOSION_TRACER ) {
-							// blx
-							le->type = LE_FREE;
-							CG_FreeLocalEntity( le );
-						}
-					}
-				}
-
-			} else {
-				VectorCopy( ent->origin, ent->origin2 );
-				VectorCopy( next_origin, ent->origin );
-			}
-		} else {
-			VectorCopy( ent->origin, ent->origin2 );
-			VectorMA( ent->origin, time, le->velocity, ent->origin );
-		}
+		VectorCopy( ent->origin, ent->origin2 );
+		VectorMA( ent->origin, time, le->velocity, ent->origin );
 
 		VectorCopy( ent->origin, ent->lightingOrigin );
 		VectorMA( le->velocity, time, le->accel, le->velocity );
@@ -1695,9 +1489,6 @@ void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 	}
 }
 
-/*
-* CG_FreeLocalEntities
-*/
 void CG_FreeLocalEntities( void ) {
 	lentity_t *le, *next, *hnode;
 
