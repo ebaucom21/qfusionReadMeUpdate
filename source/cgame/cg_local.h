@@ -52,16 +52,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 enum {
 	LOCALEFFECT_EV_PLAYER_TELEPORT_IN
 	, LOCALEFFECT_EV_PLAYER_TELEPORT_OUT
-	, LOCALEFFECT_VSAY_HEADICON
-	, LOCALEFFECT_VSAY_HEADICON_TIMEOUT
-	, LOCALEFFECT_ROCKETTRAIL_LAST_DROP
-	, LOCALEFFECT_ROCKETFIRE_LAST_DROP
-	, LOCALEFFECT_GRENADETRAIL_LAST_DROP
-	, LOCALEFFECT_WAVECORONA_LAST_DROP
-	, LOCALEFFECT_WAVESPARK_LAST_DROP
-	, LOCALEFFECT_WAVETRAIL_LAST_DROP
-	, LOCALEFFECT_BLASTER_SPARK_LAST_DROP
-	, LOCALEFFECT_BLOODTRAIL_LAST_DROP
 	, LOCALEFFECT_LASERBEAM
 	, LOCALEFFECT_LASERBEAM_SMOKE_TRAIL
 	, LOCALEFFECT_EV_WEAPONBEAM
@@ -330,6 +320,7 @@ typedef struct {
 #define MAX_HELPMESSAGE_CHARS 4096
 
 #include "particlesystem.h"
+#include "effectssystemfacade.h"
 
 typedef struct cg_state_s {
 	int64_t time;
@@ -426,6 +417,7 @@ typedef struct cg_state_s {
 	CrosshairState crosshairState { CrosshairState::Weak, 350 };
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 
+	EffectsSystemFacade effectsSystem;
 	ParticleSystem particleSystem;
 } cg_state_t;
 
@@ -712,47 +704,14 @@ void CG_ClearLocalEntities();
 void CG_AddLocalEntities( DrawSceneRequest *request );
 void CG_FreeLocalEntities();
 
-void CG_BulletExplosion( const vec3_t origin, const vec_t *dir, const trace_t *trace,
-						 float minParticlesPercentage, float maxParticlesPercentage );
-void CG_BubbleTrail( const vec3_t start, const vec3_t end, int dist );
-void CG_ProjectileTrail( centity_t *cent );
-void CG_BloodDamageEffect( const vec3_t origin, const vec3_t dir, int damage );
-void CG_CartoonHitEffect( const vec3_t origin, const vec3_t dir, int damage );
 inline void CG_SmallPileOfGibs( const vec3_t origin, int damage, const vec3_t initialVelocity, int team ) {}
-void CG_PlasmaExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
-void CG_GrenadeExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
-void CG_GenericExplosion( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
-void CG_RocketExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
-void CG_WaveExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, float radius );
-void CG_ElectroTrail2( const vec3_t start, const vec3_t end, int team );
-void CG_ImpactSmokePuff( const vec3_t origin, const vec3_t dir, float radius, float alpha, int time, int speed );
-void CG_BoltExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, int surfFlags );
-void CG_InstaExplosionMode( const vec3_t pos, const vec3_t dir, int fire_mode, int surfFlags, int owner );
-void CG_BladeImpact( const vec3_t pos, const vec3_t dir );
-void CG_GunBladeBlastImpact( const vec3_t pos, const vec3_t dir, float radius );
 void CG_PModel_SpawnTeleportEffect( centity_t *cent );
-void CG_SpawnSprite( const vec3_t origin, const vec3_t velocity, const vec3_t accel,
-					 float radius, int time, int bounce, bool expandEffect, bool shrinkEffect,
-					 float r, float g, float b, float a,
-					 float light, float lr, float lg, float lb, struct shader_s *shader );
 void CG_LaserGunImpact( const vec3_t pos, const vec3_t dir, float radius, const vec3_t laser_dir, const vec4_t color, DrawSceneRequest *drawSceneRequest );
-
-void CG_Dash( const entity_state_t *state );
-void CG_Explosion_Puff_2( const vec3_t pos, const vec3_t vel, int radius );
-void CG_DustCircle( const vec3_t pos, const vec3_t dir, float radius, int count );
-void CG_ExplosionsDust( const vec3_t pos, const vec3_t dir, float radius );
 
 //
 // cg_decals.c
 //
 extern cvar_t *cg_addDecals;
-
-inline void CG_ClearDecals() {}
-
-inline int CG_SpawnDecal( const vec3_t origin, const vec3_t dir, float orient, float radius,
-				   float r, float g, float b, float a, float die, float fadetime, bool fadealpha, struct shader_s *shader ) {
-	return 1;
-}
 
 //
 // cg_polys.c	-	wsw	: jal
@@ -768,17 +727,16 @@ extern cvar_t *cg_instabeam_time;
 void CG_ClearPolys( void );
 void CG_AddPolys( DrawSceneRequest *drawSceneRequest );
 void CG_KillPolyBeamsByTag( int key );
+void CG_ElectroTrail2( const vec3_t start, const vec3_t end, int team );
 void CG_QuickPolyBeam( const vec3_t start, const vec3_t end, int width, struct shader_s *shader );
 void CG_LaserGunPolyBeam( const vec3_t start, const vec3_t end, const vec4_t color, int key );
 void CG_ElectroPolyBeam( const vec3_t start, const vec3_t end, int team );
 void CG_InstaPolyBeam( const vec3_t start, const vec3_t end, int team );
 void CG_PLink( const vec3_t start, const vec3_t end, const vec4_t color, int flags );
-void CG_WaveSpark( const vec3_t emitterOrigin );
 
 //
 // cg_effects.c
 //
-inline void CG_ClearEffects( void ) {}
 inline void CG_ClearLightStyles( void ) {}
 inline void CG_RunLightStyles( void ) {}
 inline void CG_SetLightStyle( unsigned i, const wsw::StringView &s ) {}
@@ -786,12 +744,6 @@ inline void CG_SetLightStyle( unsigned i, const wsw::StringView &s ) {}
 inline void CG_ClearFragmentedDecals( void ) {}
 inline void CG_AddFragmentedDecal( vec3_t origin, vec3_t dir, float orient, float radius,
 							float r, float g, float b, float a, struct shader_s *shader ) {}
-
-void CG_BlasterTrail( centity_t *ent, const vec3_t org );
-inline void CG_ElectroIonsTrail( const vec3_t start, const vec3_t end, const vec4_t color ) {}
-inline void CG_ElectroIonsTrail2( const vec3_t start, const vec3_t end, const vec4_t color ) {}
-inline void CG_ElectroWeakTrail( const vec3_t start, const vec3_t end, const vec4_t color ) {}
-void CG_WaveCoronaAndTrail( centity_t *ent, const vec3_t org );
 
 //
 //	cg_vweap.c - client weapon

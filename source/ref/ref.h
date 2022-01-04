@@ -244,6 +244,9 @@ class DrawSceneRequest : public Scene {
 	refdef_t m_refdef;
 public:
 	void addLight( const float *origin, float programRadius, float coronaRadius, float r, float g, float b );
+	void addLight( const float *origin, float programRadius, float coronaRadius, const float *color ) {
+		addLight( origin, programRadius, coronaRadius, color[0], color[1], color[2] );
+	}
 	void addEntity( const entity_t *ent );
 	void addPoly( const poly_t *poly );
 

@@ -1494,132 +1494,11 @@ static void CG_AddPortalSurfaceEnt( centity_t *cent, DrawSceneRequest *drawScene
 	CG_AddEntityToScene( &cent->ent, drawSceneRequest );
 }
 
-//==================================================
-// ET_PARTICLES
-//==================================================
-
 static void CG_AddParticlesEnt( centity_t *cent ) {
-	// origin = origin
-	// angles = angles
-	// sound = sound
-	// light = light color
-	// frame = speed
-	// team = RGBA
-	// modelindex = shader
-	// modelindex2 = radius (spread)
-	// effects & 0xFF = size
-	// skinNum/counterNum = time (fade in seconds);
-	// effects = spherical, bounce, gravity,
-	// weapon = frequency
-
-	vec3_t dir;
-	float speed;
-	int spriteTime;
-	int spriteRadius;
-	int mintime;
-	vec3_t accel;
-	int bounce = 0;
-	bool expandEffect = false;
-	bool shrinkEffect = false;
-	vec3_t angles;
-	int i;
-
-	// duration of each particle
-	spriteTime = cent->current.counterNum;
-	if( !spriteTime ) {
-		return;
-	}
-
-	spriteRadius = cent->current.effects & 0xFF;
-	if( !spriteRadius ) {
-		return;
-	}
-
-	if( !cent->current.weapon ) { // weapon is count per second
-		return;
-	}
-
-	mintime = 1000 / cent->current.weapon;
-
-	if( cent->localEffects[LOCALEFFECT_ROCKETTRAIL_LAST_DROP] + mintime > cg.time ) { // just reusing a define
-		return;
-	}
-
-	cent->localEffects[LOCALEFFECT_ROCKETTRAIL_LAST_DROP] = cg.time;
-
-	speed = cent->current.frame;
-
-	if( ( cent->current.effects >> 8 ) & 1 ) { // SPHERICAL DROP
-		angles[0] = brandom( 0, 360 );
-		angles[1] = brandom( 0, 360 );
-		angles[2] = brandom( 0, 360 );
-
-		AngleVectors( angles, dir, NULL, NULL );
-		VectorNormalizeFast( dir );
-		VectorScale( dir, speed, dir );
-	} else {   // DIRECTIONAL DROP
-		float r, u;
-		double alpha;
-		double s;
-		int seed = cg.time % 255;
-		int spread = (unsigned)cent->current.modelindex2 * 25;
-
-		// interpolate dropping angles
-		for( i = 0; i < 3; i++ )
-			angles[i] = LerpAngle( cent->prev.angles[i], cent->current.angles[i], cg.lerpfrac );
-
-		Matrix3_FromAngles( angles, cent->ent.axis );
-
-		alpha = M_PI * Q_crandom( &seed ); // [-PI ..+PI]
-		s = fabs( Q_crandom( &seed ) ); // [0..1]
-		r = s * cos( alpha ) * spread;
-		u = s * sin( alpha ) * spread;
-
-		// apply spread on the direction
-		VectorMA( vec3_origin, 1024, &cent->ent.axis[AXIS_FORWARD], dir );
-		VectorMA( dir, r, &cent->ent.axis[AXIS_RIGHT], dir );
-		VectorMA( dir, u, &cent->ent.axis[AXIS_UP], dir );
-
-		VectorNormalizeFast( dir );
-		VectorScale( dir, speed, dir );
-	}
-
-	// interpolate origin
-	for( i = 0; i < 3; i++ )
-		cent->ent.origin[i] = cent->ent.origin2[i] = cent->prev.origin[i] + cg.lerpfrac * ( cent->current.origin[i] - cent->prev.origin[i] );
-
-	if( ( cent->current.effects >> 9 ) & 1 ) { // BOUNCES ON WALLS/FLOORS
-		bounce = 35;
-	}
-
-	VectorClear( accel );
-	if( ( cent->current.effects >> 10 ) & 1 ) { // GRAVITY
-		VectorSet( accel, -0.2f, -0.2f, -175.0f );
-	}
-
-	if( ( cent->current.effects >> 11 ) & 1 ) { // EXPAND_EFFECT
-		expandEffect = true;
-	}
-
-	if( ( cent->current.effects >> 12 ) & 1 ) { // SHRINK_EFFECT
-		shrinkEffect = true;
-	}
-
-	CG_SpawnSprite( cent->ent.origin, dir, accel,
-					spriteRadius, spriteTime, bounce, expandEffect, shrinkEffect,
-					cent->ent.shaderRGBA[0] / 255.0f,
-					cent->ent.shaderRGBA[1] / 255.0f,
-					cent->ent.shaderRGBA[2] / 255.0f,
-					cent->ent.shaderRGBA[3] / 255.0f,
-					cent->current.light ? spriteRadius * 4 : 0, // light radius
-					COLOR_R( cent->current.light ) / 255.0f,
-					COLOR_G( cent->current.light ) / 255.0f,
-					COLOR_B( cent->current.light ) / 255.0f,
-					cent->ent.customShader );
 }
 
 void CG_UpdateParticlesEnt( centity_t *cent ) {
-	// set entity color based on team
+	// TODO: This forces TEAM_PLAYERS color for these entities
 	CG_TeamColorForEntity( cent->current.number, cent->ent.shaderRGBA );
 
 	// set up the data in the old position
@@ -1742,7 +1621,6 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 			case ET_BLASTER:
 				CG_AddGenericEnt( cent, drawSceneRequest );
-				CG_BlasterTrail( cent, cent->ent.origin );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
@@ -1754,12 +1632,10 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 
 				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
-				CG_ElectroWeakTrail( cent->trailOrigin, cent->ent.origin, NULL );
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
 				CG_AddGenericEnt( cent, drawSceneRequest );
-				CG_ProjectileTrail( cent );
 				CG_EntityLoopSound( state, ATTN_NORM );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
@@ -1770,7 +1646,6 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 			case ET_GRENADE:
 				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
-				CG_ProjectileTrail( cent );
 				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
@@ -1781,7 +1656,6 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 			case ET_WAVE:
 				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_STATIC );
-				CG_WaveCoronaAndTrail( cent, cent->ent.origin );
 				// Add the core light
 				drawSceneRequest->addLight( cent->ent.origin, 128.0f, 128.0f, 0.0f, 0.3f, 1.0f );
 				// Add the corona light

@@ -888,9 +888,7 @@ void CG_Reset( void ) {
 
 	CG_SC_ResetFragsFeed();
 
-	CG_ClearDecals();
 	CG_ClearPolys();
-	CG_ClearEffects();
 	CG_ClearLocalEntities();
 
 	// start up announcer events queue from clean
@@ -1080,9 +1078,7 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 
 	CG_LoadingString( "" );
 
-	CG_ClearDecals();
 	CG_ClearPolys();
-	CG_ClearEffects();
 
 	CG_ClearChaseCam();
 

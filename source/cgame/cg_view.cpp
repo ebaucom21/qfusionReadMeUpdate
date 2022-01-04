@@ -1164,6 +1164,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddPolys( drawSceneRequest );
 
 	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
+	cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
 
 	AnglesToAxis( cg.view.angles, rd->viewaxis );
 

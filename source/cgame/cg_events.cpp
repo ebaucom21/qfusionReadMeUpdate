@@ -52,9 +52,9 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, cg.view.POVent, MASK_SOLID );
 	if( trace.ent != -1 ) {
 		if( weapondef->weapon_id == WEAP_ELECTROBOLT ) {
-			CG_BoltExplosionMode( trace.endpos, trace.plane.normal, FIRE_MODE_STRONG, trace.surfFlags );
+			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal );
 		} else if( weapondef->weapon_id == WEAP_INSTAGUN ) {
-			CG_InstaExplosionMode( trace.endpos, trace.plane.normal, FIRE_MODE_STRONG, trace.surfFlags, ownerNum );
+			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, ownerNum );
 		}
 	}
 
@@ -484,16 +484,12 @@ static void CG_LeadBubbleTrail( trace_t *tr, vec3_t water_start ) {
 	VectorAdd( water_start, tr->endpos, pos );
 	VectorScale( pos, 0.5, pos );
 
-	CG_BubbleTrail( water_start, tr->endpos, 32 );
-}
-
-static void CG_MachinegunImpact( trace_t *tr ) {
-	CG_BulletExplosion( tr->endpos, nullptr, tr, 0.10f, 0.60f );
+	// TODO
+	//CG_BubbleTrail( water_start, tr->endpos, 32 );
 }
 
 static void CG_RiotgunImpact( trace_t *tr ) {
-	// This produces a single particle (1 is the lowest number)
-	CG_BulletExplosion( tr->endpos, nullptr, tr, 0.0f, 0.0f );
+	cg.effectsSystem.spawnPelletImpactEffect( tr );
 }
 
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
@@ -518,8 +514,9 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	}
 
 	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-		CG_MachinegunImpact( &trace );
+		cg.effectsSystem.spawnBulletImpactEffect( &trace );
 
+		// TODO: Delegate to the effects system
 		if( !water_trace ) {
 			if( trace.surfFlags & SURF_FLESH ||
 				( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_PLAYER ) ||
@@ -764,10 +761,10 @@ void CG_Event_Fall( entity_state_t *state, int parm ) {
 		CG_Trace( &trace, start, vec3_origin, vec3_origin, end, state->number, MASK_PLAYERSOLID );
 		if( trace.ent == -1 ) {
 			start[2] += playerbox_stand_mins[2] + 8;
-			CG_DustCircle( start, tv( 0, 0, 1 ), 50, 12 );
+			cg.effectsSystem.spawnLandingDustImpactEffect( start, tv( 0, 0, 1 ) );
 		} else if( !( trace.surfFlags & SURF_NODAMAGE ) ) {
 			VectorMA( trace.endpos, 8, trace.plane.normal, end );
-			CG_DustCircle( end, trace.plane.normal, 50, 12 );
+			cg.effectsSystem.spawnLandingDustImpactEffect( end, trace.plane.normal );
 		}
 	}
 }
@@ -852,7 +849,7 @@ void CG_Event_Dash( entity_state_t *state, int parm ) {
 			break;
 	}
 
-	CG_Dash( state ); // Dash smoke effect
+	cg.effectsSystem.spawnDashEffect( cg_entities[state->number].prev.origin, state->origin );
 
 	// since most dash animations jump with right leg, reset the jump to start with left leg after a dash
 	cg_entities[state->number].jumpedLeft = true;
@@ -893,7 +890,7 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev ) {
 			vec3_t pos;
 			VectorCopy( state->origin, pos );
 			pos[2] += 15;
-			CG_DustCircle( pos, normal, 65, 12 );
+			cg.effectsSystem.spawnWalljumpDustImpactEffect( pos, normal );
 		}
 	}
 }
@@ -1175,12 +1172,12 @@ static void handlePlayerTeleportOutEvent( entity_state_t *ent, int parm, bool pr
 static void handlePlasmaExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_PlasmaExplosion( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
+
+	cg.effectsSystem.spawnPlasmaExplosionEffect( ent->origin, dir, ent->firemode );
+
 	if( ent->firemode == FIRE_MODE_STRONG ) {
-		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxPlasmaStrongHit, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 		CG_StartKickAnglesEffect( ent->origin, 50, ent->weapon * 8, 100 );
 	} else {
-		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxPlasmaWeakHit, ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
 		CG_StartKickAnglesEffect( ent->origin, 30, ent->weapon * 8, 75 );
 	}
 }
@@ -1188,13 +1185,13 @@ static void handlePlasmaExplosionEvent( entity_state_t *ent, int parm, bool pred
 static void handleBoltExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_BoltExplosionMode( ent->origin, dir, ent->firemode, 0 );
+	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, dir );
 }
 
 static void handleInstaExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_InstaExplosionMode( ent->origin, dir, ent->firemode, 0, ent->ownerNum );
+	cg.effectsSystem.spawnInstagunHitEffect( ent->origin, dir, ent->ownerNum );
 }
 
 static void handleGrenadeExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
@@ -1202,10 +1199,9 @@ static void handleGrenadeExplosionEvent( entity_state_t *ent, int parm, bool pre
 	if( parm ) {
 		// we have a direction
 		ByteToDir( parm, dir );
-		CG_GrenadeExplosionMode( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
+		cg.effectsSystem.spawnGrenadeExplosionEffect( ent->origin, dir, ent->firemode );
 	} else {
-		// no direction
-		CG_GrenadeExplosionMode( ent->origin, vec3_origin, ent->firemode, (float)ent->weapon * 8.0f );
+		cg.effectsSystem.spawnGrenadeExplosionEffect( ent->origin, &axis_identity[AXIS_UP], ent->firemode );
 	}
 
 	if( ent->firemode == FIRE_MODE_STRONG ) {
@@ -1218,7 +1214,8 @@ static void handleGrenadeExplosionEvent( entity_state_t *ent, int parm, bool pre
 static void handleRocketExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_RocketExplosionMode( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
+
+	cg.effectsSystem.spawnRocketExplosionEffect( ent->origin, dir, ent->firemode );
 
 	if( ent->firemode == FIRE_MODE_STRONG ) {
 		CG_StartKickAnglesEffect( ent->origin, 135, ent->weapon * 8, 300 );
@@ -1230,7 +1227,8 @@ static void handleRocketExplosionEvent( entity_state_t *ent, int parm, bool pred
 static void handleShockwaveExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_WaveExplosionMode( ent->origin, dir, ent->firemode, (float)ent->weapon * 8.0f );
+
+	cg.effectsSystem.spawnShockwaveExplosionEffect( ent->origin, dir, ent->firemode );
 
 	if( ent->firemode == FIRE_MODE_STRONG ) {
 		CG_StartKickAnglesEffect( ent->origin, 90, ent->weapon * 8, 200 );
@@ -1239,29 +1237,11 @@ static void handleShockwaveExplosionEvent( entity_state_t *ent, int parm, bool p
 	}
 }
 
-static void handleGrenadeBounceEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( parm == FIRE_MODE_STRONG ) {
-		SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxGrenadeStrongBounce[rand() & 1], ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
-	} else {
-		SoundSystem::Instance()->StartRelativeSound( cgs.media.sfxGrenadeWeakBounce[rand() & 1], ent->number, CHAN_AUTO, cg_volume_effects->value, ATTN_IDLE );
-	}
-}
-
 static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_GunBladeBlastImpact( ent->origin, dir, (float)ent->weapon * 8 );
 
-	if( ent->skinnum > 64 ) {
-		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[2], ent->origin, CHAN_AUTO,
-												  cg_volume_effects->value, ATTN_DISTANT );
-	} else if( ent->skinnum > 34 ) {
-		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[1], ent->origin, CHAN_AUTO,
-												  cg_volume_effects->value, ATTN_NORM );
-	} else {
-		SoundSystem::Instance()->StartFixedSound( cgs.media.sfxGunbladeStrongHit[0], ent->origin, CHAN_AUTO,
-												  cg_volume_effects->value, ATTN_IDLE );
-	}
+	cg.effectsSystem.spawnGunbladeBlastHitEffect( ent->origin, dir );
 
 	//ent->skinnum is knockback value
 	CG_StartKickAnglesEffect( ent->origin, ent->skinnum * 8, ent->weapon * 8, 200 );
@@ -1274,8 +1254,7 @@ static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	CG_BloodDamageEffect( ent->origin, dir, ent->damage );
-	CG_CartoonHitEffect( ent->origin, dir, ent->damage );
+	cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage );
 }
 
 static void handleMoverEvent( entity_state_t *ent, int parm ) {
@@ -1315,8 +1294,8 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_PAIN: return CG_Event_Pain( ent, parm );
 		case EV_DIE: return CG_Event_Die( ent, parm );
 		case EV_GIB: return;
-		case EV_EXPLOSION1: return CG_GenericExplosion( ent->origin, vec3_origin, FIRE_MODE_WEAK, parm * 8 );
-		case EV_EXPLOSION2: return CG_GenericExplosion( ent->origin, vec3_origin, FIRE_MODE_STRONG, parm * 16 );
+		case EV_EXPLOSION1: return cg.effectsSystem.spawnGenericExplosionEffect( ent->origin, FIRE_MODE_WEAK, parm * 8 );
+		case EV_EXPLOSION2: return cg.effectsSystem.spawnGenericExplosionEffect( ent->origin, FIRE_MODE_STRONG, parm * 16 );
 		case EV_GREEN_LASER: return;
 		case EV_PNODE: return handlePnodeEvent( ent, parm, predicted );
 		case EV_SPARKS: return handleSparksEvent( ent, parm, predicted );
@@ -1335,8 +1314,8 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted ) {
 		case EV_GRENADE_EXPLOSION: return handleGrenadeExplosionEvent( ent, parm, predicted );
 		case EV_ROCKET_EXPLOSION: return handleRocketExplosionEvent( ent, parm, predicted );
 		case EV_WAVE_EXPLOSION: return handleShockwaveExplosionEvent( ent, parm, predicted );
-		case EV_GRENADE_BOUNCE: return handleGrenadeBounceEvent( ent, parm, predicted );
-		case EV_BLADE_IMPACT: return CG_BladeImpact( ent->origin, ent->origin2 );
+		case EV_GRENADE_BOUNCE: return cg.effectsSystem.spawnGrenadeBounceEffect( ent->number, parm );
+		case EV_BLADE_IMPACT: return cg.effectsSystem.spawnGunbladeBladeHitEffect( ent->origin, ent->origin2 );
 		case EV_GUNBLADEBLAST_IMPACT: return handleGunbladeBlastImpactEvent( ent, parm, predicted );
 		case EV_BLOOD: return handleBloodEvent( ent, parm, predicted );
 

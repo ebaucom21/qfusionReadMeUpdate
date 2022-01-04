@@ -323,6 +323,20 @@ void CG_LaserGunPolyBeam( const vec3_t start, const vec3_t end, const vec4_t col
 	}
 }
 
+void CG_ElectroTrail2( const vec3_t start, const vec3_t end, int team ) {
+	vec4_t color = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	if( cg_ebbeam_time->value < 0.05f ) {
+		return;
+	}
+
+	if( cg_teamColoredBeams->integer && ( ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) ) {
+		CG_TeamColor( team, color );
+	}
+
+	CG_ElectroPolyBeam( start, end, team );
+}
+
 /*
 * CG_ElectroPolyBeam
 */
@@ -402,26 +416,6 @@ void CG_PLink( const vec3_t start, const vec3_t end, const vec4_t color, int fla
 	CG_SpawnPolyBeam( start, end, color, 4, 10.0f, 0.0f, cgs.media.shaderLaser, 64, 0 );
 }
 
-void CG_WaveSpark( const vec3_t emitterOrigin ) {
-	vec3_t end;
-	float dirScale;
-
-	// First make a random direction
-	// TODO: Extract a function, a similar code is used in sound environment sampling (not in this branch yet)
-	float theta = (float)( ( M_PI * 2 ) * 0.999999 * random() );
-	float phi = (float)( M_PI * random() );
-	float sinTheta = sinf( theta );
-	float cosTheta = cosf( theta );
-	float sinPhi = sinf( phi );
-	float cosPhi = cosf( phi );
-
-	VectorSet( end, sinTheta * cosPhi, sinTheta * sinPhi, cosTheta );
-	dirScale = 5.0f + 20.0f * random();
-	VectorScale( end, dirScale, end );
-	VectorAdd( end, emitterOrigin, end );
-
-	CG_SpawnPolyBeam( emitterOrigin, end, NULL, 8, 64, 64, cgs.media.shaderWaveSparks, 0, 0 );
-}
 
 void CG_AddPolys( DrawSceneRequest *drawSceneRequest ) {
 	int i;
