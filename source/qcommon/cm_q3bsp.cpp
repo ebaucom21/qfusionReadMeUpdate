@@ -507,6 +507,7 @@ static void CMod_LoadFaces( cmodel_state_t *cms, lump_t *l ) {
 		out->numfacets = 0;
 		out->facets = NULL;
 		cms->map_face_brushdata[i] = NULL;
+		out->globalNumber = (unsigned)( i + 1 );
 		if( LittleLong( in->facetype ) != FACETYPE_PATCH ) {
 			continue;
 		}
@@ -540,6 +541,7 @@ static void CMod_LoadFaces_RBSP( cmodel_state_t *cms, lump_t *l ) {
 		out->numfacets = 0;
 		out->facets = NULL;
 		cms->map_face_brushdata[0] = NULL;
+		out->globalNumber = (unsigned)( i + 1 );
 		if( LittleLong( in->facetype ) != FACETYPE_PATCH ) {
 			continue;
 		}
@@ -930,6 +932,7 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 		out->brushsides = cms->map_brushsides + LittleLong( in->firstside );
 		CM_BoundBrush( cms, out );
 
+		out->globalNumber = (unsigned)( i + 1 );
 		out->numSseGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simddata );
 		out->simd = out->simddata;
 	}

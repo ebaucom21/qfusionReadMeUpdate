@@ -980,6 +980,13 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 	// TODO: This can be optimized
 	const int numLeaves = CM_BoxLeafnums( cms, mins, maxs, leafNums, 1024, &topNode );
 
+	auto *const checkedFacesMask = ( uint64_t *)list->scratchpad;
+	assert( cms->numfaces + 1 < MAX_MAP_FACES && "Should account for the +1 globalNumber shift" );
+	std::memset( checkedFacesMask, 0, cms->numfaces );
+	auto *const checkedBrushesMask = ( uint64_t *)( (uint8_t *)list->scratchpad + MAX_MAP_FACES / 8 );
+	assert( cms->numbrushes + 1 < MAX_MAP_BRUSHES && "Should account for the +1 globalNumber shift" );
+	std::memset( checkedBrushesMask, 0, cms->numbrushes );
+
 	int numShapes = 0;
 	int possibleContents = 0;
 	const auto *leaves = cms->map_leafs;
@@ -991,6 +998,12 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 		const auto *brushes = leaf->brushes;
 		for( int j = 0; j < leaf->numbrushes; ++j ) {
 			const auto *__restrict b = &brushes[j];
+			const uint64_t qwordIndex = b->globalNumber / 64;
+			const uint64_t qwordMask = (uint64_t)1 << ( b->globalNumber % 64 );
+			if( checkedBrushesMask[qwordIndex] & qwordMask ) {
+				continue;
+			}
+			checkedBrushesMask[qwordIndex] |= qwordMask;
 			if( !( b->contents & clipMask ) ) {
 				continue;
 			}
@@ -1004,6 +1017,12 @@ void Ops::BuildShapeList( CMShapeList *list, const float *mins, const float *max
 		const auto *faces = leaf->faces;
 		for( int j = 0; j < leaf->numfaces; ++j ) {
 			const auto *__restrict f = &faces[j];
+			const uint64_t qwordIndex = f->globalNumber / 64;
+			const uint64_t qwordMask = (uint64_t)1 << ( f->globalNumber % 64 );
+			if( checkedFacesMask[qwordIndex] & qwordMask ) {
+				continue;
+			}
+			checkedFacesMask[qwordIndex] |= qwordMask;
 			if( !( f->contents & clipMask ) ) {
 				continue;
 			}
@@ -1105,7 +1124,7 @@ void Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *st
 
 CMShapeList *CM_AllocShapeList( cmodel_state_t *cms ) {
 	// TODO: Use a necessary amount of memory
-	const size_t totalSize = 64 * 1024;
+	const size_t totalSize = 72 * 1024;
 	void *mem = ::malloc( totalSize );
 	if( !mem ) {
 		return nullptr;

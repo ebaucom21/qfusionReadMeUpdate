@@ -78,6 +78,8 @@ typedef struct cbrush_s {
 
 	vec_bounds_t mins, maxs, center;
 	float radius;
+	// 0 by default, non-zero if could be shared by leaves
+	unsigned globalNumber;
 
 	int contents;
 	int numsides;
@@ -91,6 +93,8 @@ typedef struct cface_s {
 
 	vec_bounds_t mins, maxs, center;
 	float radius;
+	// 0 by default, non-zero if could be shared by leaves
+	unsigned globalNumber;
 
 	int contents;
 	int numfacets;
@@ -272,9 +276,9 @@ struct alignas( sizeof( void * ) )CMShapeList {
 	CMShapeList( void *mem, size_t size ) {
 		assert( !( (uintptr_t)mem % sizeof( void * ) ) );
 		shapes = (const cbrush_t **)mem;
-		// Use last 3.5K bytes as a scratchpad
+		// Use last 32K bytes as a scratchpad
 		// (these magic numbers are for avoiding possible cache bank conflicts but keep the pointed chunk aligned)
-		scratchpad = ( (uint8_t *)mem + ( size - ( 4096 - 512 - 48 ) ) );
+		scratchpad = ( (uint8_t *)mem + ( size - ( ( 1 << 15 ) - 512 - 48 ) ) );
 	}
 };
 
