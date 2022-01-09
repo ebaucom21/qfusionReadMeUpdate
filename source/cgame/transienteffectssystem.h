@@ -26,11 +26,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/randomgenerator.h"
 #include "../ref/ref.h"
 
+class CMShapeList;
 class DrawSceneRequest;
 
 /// Manages "fire-and-forget" effects that usually get spawned upon events.
 class TransientEffectsSystem {
 public:
+	TransientEffectsSystem();
+	~TransientEffectsSystem();
+
 	void spawnExplosion( const float *origin, const float *color, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
 	void spawnElectroboltHitEffect( const float *origin, const float *dir );
@@ -72,7 +76,31 @@ private:
 		entity_t entity;
 	};
 
+	static constexpr unsigned kNumHullVertices = 162;
+
+	struct SimulatedHull {
+		SimulatedHull *prev { nullptr }, *next { nullptr };
+		CMShapeList *const shapeList { nullptr };
+		const uint16_t *meshIndices { nullptr };
+		const int64_t spawnTime { 0 };
+		const unsigned lifetime { 0 };
+		unsigned numMeshIndices { 0 };
+		vec4_t color;
+		vec3_t origin;
+
+		// Old/current
+		vec4_t vertexPositions[2][kNumHullVertices];
+		vec3_t vertexVelocities[kNumHullVertices];
+		// 0.0f or 1.0f, just to reduce branching during the vertices update
+		float vertexMovability[kNumHullVertices];
+
+		unsigned positionsFrame { 0 };
+
+		void simulate( int64_t currTime, float timeDeltaSeconds );
+	};
+
 	void unlinkAndFree( EntityEffect *effect );
+	void unlinkAndFree( SimulatedHull *hull );
 
 	[[nodiscard]]
 	auto addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
@@ -83,9 +111,26 @@ private:
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
 
-	wsw::HeapBasedFreelistAllocator m_effectsAllocator { sizeof( EntityEffect ), 256 };
+	[[nodiscard]]
+	auto allocSimulatedHull( int64_t currTime, unsigned lifetime ) -> SimulatedHull *;
 
-	EntityEffect *m_modelEffectsHead { nullptr };
+	void setupHullVertices( SimulatedHull *hull, const float *origin, float speed, const float *color );
+
+	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+
+	void submitHull( SimulatedHull *hull, DrawSceneRequest *request );
+
+	static constexpr unsigned kMaxSimulatedHulls = 64;
+
+	wsw::StaticVector<CMShapeList *, kMaxSimulatedHulls> m_freeShapeLists;
+
+	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
+	wsw::HeapBasedFreelistAllocator m_simulatedHullsAllocator { sizeof( SimulatedHull ), kMaxSimulatedHulls };
+
+	EntityEffect *m_entityEffectsHead { nullptr };
+	SimulatedHull *m_simulatedHullsHead { nullptr };
+
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };
 };

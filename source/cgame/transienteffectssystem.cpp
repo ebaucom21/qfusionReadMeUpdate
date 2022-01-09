@@ -21,10 +21,137 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "transienteffectssystem.h"
 #include "../cgame/cg_local.h"
+#include "../client/client.h"
 #include "../qcommon/links.h"
 
 #include <cstdlib>
 #include <cstring>
+
+class BasicHullsHolder {
+public:
+	BasicHullsHolder() {
+		constexpr const uint8_t icosahedronFaces[20][3] {
+			{ 0, 11, 5 }, { 0, 5, 1 }, { 0, 1, 7 }, { 0, 7, 10 }, { 0, 10, 11 },
+			{ 1, 5, 9 }, { 5, 11, 4 }, { 11, 10, 2 }, { 10, 7, 6 }, { 7, 1, 8 },
+			{ 3, 9, 4 }, { 3, 4, 2 }, { 3, 2, 6 }, { 3, 6, 8 }, { 3, 8, 9 },
+			{ 4, 9, 5 }, { 2, 4, 11 }, { 6, 2, 10 }, { 8, 6, 7 }, { 9, 8, 1 },
+		};
+
+		constexpr const float a = 0.525731f, b = 0.850651f;
+		const vec3_t icosahedronVertices[12] {
+			{ -a, +b, +0 }, { +a, +b, +0 }, { -a, -b, +0 }, { +a, -b, +0 },
+			{ +0, -a, +b }, { +0, +a, +b }, { +0, -a, -b }, { +0, +a, -b },
+			{ +b, +0, -a }, { +b, +0, +a }, { -b, +0, -a }, { -b, +0, +a },
+		};
+
+		for( const auto &v : icosahedronVertices ) {
+			m_vertices.emplace_back( Vertex { { v[0], v[1], v[2], 1.0f } } );
+		}
+		for( const auto &f: icosahedronFaces ) {
+			m_faces.emplace_back( Face { { f[0], f[1], f[2] } } );
+		}
+
+		m_icoshphereEntries.emplace_back( Entry { 0, 3 * (unsigned)m_faces.size(), (unsigned)m_vertices.size() } );
+
+		MidpointMap midpointCache;
+		unsigned oldFacesSize = 0, facesSize = m_faces.size();
+		while( !m_icoshphereEntries.full() ) {
+			for( unsigned i = oldFacesSize; i < facesSize; ++i ) {
+				const Face &face = m_faces[i];
+				const uint16_t v1 = face.data[0], v2 = face.data[1], v3 = face.data[2];
+				assert( v1 != v2 && v2 != v3 && v1 != v3 );
+				const uint16_t p = getMidPoint( v1, v2, &midpointCache );
+				const uint16_t q = getMidPoint( v2, v3, &midpointCache );
+				const uint16_t r = getMidPoint( v3, v1, &midpointCache );
+				m_faces.emplace_back( Face { { v1, p, r } } );
+				m_faces.emplace_back( Face { { v2, q, p } } );
+				m_faces.emplace_back( Face { { v3, r, q } } );
+				m_faces.emplace_back( Face { { p, q, r } } );
+			}
+			oldFacesSize = facesSize;
+			facesSize = m_faces.size();
+			const unsigned firstIndex = 3 * oldFacesSize;
+			const unsigned numIndices = 3 * ( facesSize - oldFacesSize );
+			m_icoshphereEntries.emplace_back( Entry {firstIndex, numIndices, (unsigned)m_vertices.size() } );
+		}
+
+		m_vertices.shrink_to_fit();
+		m_faces.shrink_to_fit();
+	}
+
+	[[nodiscard]]
+	auto getIcosphereForLevel( unsigned level ) -> std::pair<std::span<const vec4_t>, std::span<const uint16_t>> {
+		assert( level < m_icoshphereEntries.size() );
+		const auto *vertexData = (const vec4_t *)m_vertices.data();
+		const auto *indexData = (const uint16_t *)m_faces.data();
+		const Entry &entry = m_icoshphereEntries[level];
+		std::span<const vec4_t> verticesSpan { vertexData, entry.numVertices };
+		std::span<const uint16_t> indicesSpan { indexData + entry.firstIndex, entry.numIndices };
+		return { verticesSpan, indicesSpan };
+	}
+private:
+	struct alignas( 4 ) Vertex { float data[4]; };
+	static_assert( sizeof( Vertex ) == sizeof( vec4_t ) );
+	struct alignas( 2 ) Face { uint16_t data[3]; };
+
+	using MidpointMap = wsw::TreeMap<unsigned, uint16_t>;
+
+	[[nodiscard]]
+	auto getMidPoint( uint16_t i1, uint16_t i2, MidpointMap *midpointCache ) -> uint16_t {
+		const unsigned smallest = ( i1 < i2 ) ? i1 : i2;
+		const unsigned largest = ( i1 < i2 ) ? i2 : i1;
+		const unsigned key = ( smallest << 16 ) | largest;
+		if( const auto it = midpointCache->find( key ); it != midpointCache->end() ) {
+			return it->second;
+		}
+
+		Vertex midpoint {};
+		const float *v1 = m_vertices[i1].data, *v2 = m_vertices[i2].data;
+		VectorAvg( v1, v2, midpoint.data );
+		VectorNormalize( midpoint.data );
+		midpoint.data[3] = 1.0f;
+
+		const auto index = (uint16_t)m_vertices.size();
+		m_vertices.push_back( midpoint );
+		midpointCache->insert( std::make_pair( key, index ) );
+		return index;
+	}
+
+	wsw::Vector<Vertex> m_vertices;
+	wsw::Vector<Face> m_faces;
+
+	struct Entry { const unsigned firstIndex, numIndices, numVertices; };
+	wsw::StaticVector<Entry, 5> m_icoshphereEntries;
+};
+
+static BasicHullsHolder basicHullsHolder;
+
+TransientEffectsSystem::TransientEffectsSystem() {
+	// TODO: Take care of exception-safety
+	while( !m_freeShapeLists.full() ) {
+		if( auto *shapeList = CM_AllocShapeList( cl.cms ) ) {
+			m_freeShapeLists.push_back( shapeList );
+		} else {
+			throw std::bad_alloc();
+		}
+	}
+}
+
+TransientEffectsSystem::~TransientEffectsSystem() {
+	EntityEffect *nextEffect = nullptr;
+	for( EntityEffect *effect = m_entityEffectsHead; effect; effect = nextEffect ) {
+		nextEffect = effect->next;
+		unlinkAndFree( effect );
+	}
+	SimulatedHull *nextHull = nullptr;
+	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
+		nextHull = hull->next;
+		unlinkAndFree( hull );
+	}
+	for( CMShapeList *shapeList: m_freeShapeLists ) {
+		CM_FreeShapeList( cl.cms, shapeList );
+	}
+}
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, const float *color, float radius ) {
 	EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
@@ -200,20 +327,20 @@ auto TransientEffectsSystem::addSpriteEffect( shader_s *material, const float *o
 }
 
 auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect * {
-	void *mem = m_effectsAllocator.allocOrNull();
+	void *mem = m_entityEffectsAllocator.allocOrNull();
 	if( !mem ) [[unlikely]] {
 		// TODO: Prioritize effects so unimportant ones get evicted first
 		EntityEffect *oldestEffect = nullptr;
 		// TODO: Choose by nearest timeout/lifetime fraction?
 		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
-		for( EntityEffect *effect = m_modelEffectsHead; effect; effect = effect->next ) {
-			if( oldestSpawnTime < effect->spawnTime ) {
+		for( EntityEffect *effect = m_entityEffectsHead; effect; effect = effect->next ) {
+			if( oldestSpawnTime > effect->spawnTime ) {
 				oldestSpawnTime = effect->spawnTime;
 				oldestEffect = effect;
 			}
 		}
 		assert( oldestEffect );
-		wsw::unlink( oldestEffect, &m_modelEffectsHead );
+		wsw::unlink( oldestEffect, &m_entityEffectsHead );
 		oldestEffect->~EntityEffect();
 		mem = oldestEffect;
 	}
@@ -244,24 +371,88 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 	effect->rcpFadeOutDuration = Q_Rcp( (float)fadeOutDuration );
 	effect->spawnTime = currTime;
 
-	wsw::link( effect, &m_modelEffectsHead );
+	wsw::link( effect, &m_entityEffectsHead );
 	return effect;
 }
 
+auto TransientEffectsSystem::allocSimulatedHull( int64_t currTime, unsigned int lifetime ) -> SimulatedHull * {
+	void *mem = m_simulatedHullsAllocator.allocOrNull();
+	CMShapeList *hullShapeList;
+	if( mem ) [[likely]] {
+		hullShapeList = m_freeShapeLists.back();
+		m_freeShapeLists.pop_back();
+	} else {
+		SimulatedHull *oldestHull = nullptr;
+		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
+		for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = hull->next ) {
+			if( oldestSpawnTime > hull->spawnTime ) {
+				oldestSpawnTime = hull->spawnTime;
+				oldestHull = hull;
+			}
+		}
+		assert( oldestHull );
+		wsw::unlink( oldestHull, &m_simulatedHullsHead );
+		hullShapeList = oldestHull->shapeList;
+		oldestHull->~SimulatedHull();
+		mem = oldestHull;
+	}
+
+	auto *hull = new( mem )SimulatedHull { .shapeList = hullShapeList, .spawnTime = currTime, .lifetime = lifetime };
+	wsw::link( hull, &m_simulatedHullsHead );
+	return hull;
+}
+
+void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float *origin,
+												float speed, const float *color ) {
+	const float originX = origin[0], originY = origin[1], originZ = origin[2];
+	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( 2 );
+	const auto *__restrict vertices = verticesSpan.data();
+	assert( verticesSpan.size() == kNumHullVertices );
+	vec4_t *const __restrict positions = hull->vertexPositions[0];
+	vec3_t *const __restrict velocities = hull->vertexVelocities;
+	VectorCopy( origin, hull->origin );
+	Vector4Copy( color, hull->color );
+	hull->meshIndices = indicesSpan.data();
+	hull->numMeshIndices = indicesSpan.size();
+	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+		// Vertex positions are absolute to simplify simulation
+		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
+		// Unit vertices define directions
+		VectorScale( vertices[i], speed, velocities[i] );
+		hull->vertexMovability[i] = 1.0f;
+	}
+}
+
 void TransientEffectsSystem::unlinkAndFree( EntityEffect *effect ) {
-	wsw::unlink( effect, &m_modelEffectsHead );
+	wsw::unlink( effect, &m_entityEffectsHead );
 	effect->~EntityEffect();
-	m_effectsAllocator.free( effect );
+	m_entityEffectsAllocator.free( effect );
+}
+
+void TransientEffectsSystem::unlinkAndFree( SimulatedHull *hull ) {
+	wsw::unlink( hull, &m_simulatedHullsHead );
+	m_freeShapeLists.push_back( hull->shapeList );
+	hull->~SimulatedHull();
+	m_simulatedHullsAllocator.free( hull );
 }
 
 void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)std::min<int64_t>( 33, currTime - m_lastTime );
+
+	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
+	simulateHullsAndSubmit( currTime, timeDeltaSeconds, request );
+
+	m_lastTime = currTime;
+}
+
+void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
+															 DrawSceneRequest *request ) {
 	const model_s *const dashModel = cgs.media.modDash;
 	const float backlerp = 1.0f - cg.lerpfrac;
 
 	EntityEffect *nextEffect = nullptr;
-	for( EntityEffect *__restrict effect = m_modelEffectsHead; effect; effect = nextEffect ) {
+	for( EntityEffect *__restrict effect = m_entityEffectsHead; effect; effect = nextEffect ) {
 		nextEffect = effect->next;
 
 		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
@@ -311,8 +502,80 @@ void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawScene
 			}
 		}
 	}
+}
 
-	// TODO: Simulate all volumetrics
+void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds,
+													 DrawSceneRequest *request ) {
+	SimulatedHull *nextHull = nullptr;
+	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
+		nextHull = hull->next;
+		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+			hull->simulate( currTime, timeDeltaSeconds );
+		} else {
+			unlinkAndFree( hull );
+		}
+	}
 
-	m_lastTime = currTime;
+	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
+		submitHull( hull, request );
+	}
+}
+
+void TransientEffectsSystem::submitHull( SimulatedHull *hull, DrawSceneRequest *request ) {
+	const vec4_t *const positions = hull->vertexPositions[hull->positionsFrame];
+	for( unsigned i = 0; i < hull->numMeshIndices; i += 3 ) {
+		const float *const v1 = positions[hull->meshIndices[i + 0]];
+		const float *const v2 = positions[hull->meshIndices[i + 1]];
+		const float *const v3 = positions[hull->meshIndices[i + 2]];
+		CG_PLink( v1, v2, hull->color, 0 );
+		CG_PLink( v1, v3, hull->color, 0 );
+		CG_PLink( v2, v3, hull->color, 0 );
+
+		vec3_t _1To2, _1To3, normal;
+		VectorSubtract( v2, v1, _1To2 );
+		VectorSubtract( v3, v1, _1To3 );
+		CrossProduct( _1To2, _1To3, normal );
+		VectorNormalize( normal );
+		VectorScale( normal, 16.0f, normal );
+		VectorAdd( normal, v1, normal );
+		CG_PLink( v1, normal, colorRed, 0 );
+	}
+}
+
+void TransientEffectsSystem::SimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds ) {
+	const vec4_t *const __restrict oldPositions = vertexPositions[positionsFrame];
+	positionsFrame = ( positionsFrame + 1 ) % 2;
+	vec4_t *const __restrict newPositions = vertexPositions[positionsFrame];
+	vec3_t *const __restrict velocities = vertexVelocities;
+
+	BoundsBuilder boundsBuilder;
+	assert( timeDeltaSeconds < 0.1f );
+	const float speedMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
+	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+		// Compute ideal positions
+		VectorMA( oldPositions[i], timeDeltaSeconds * vertexMovability[i], velocities[i], newPositions[i] );
+		VectorScale( velocities[i], speedMultiplier, velocities[i] );
+		// TODO: We should be able to supply vec4
+		boundsBuilder.addPoint( newPositions[i] );
+	}
+
+	vec3_t verticesMins, verticesMaxs;
+	boundsBuilder.storeToWithAddedEpsilon( verticesMins, verticesMaxs );
+
+	// TODO: Add a fused call
+	CM_BuildShapeList( cl.cms, shapeList, verticesMins, verticesMaxs, MASK_SOLID | MASK_WATER );
+	CM_ClipShapeList( cl.cms, shapeList, shapeList, verticesMins, verticesMaxs );
+
+	trace_t trace;
+	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+		if( vertexMovability[i] != 0.0f ) {
+			CM_ClipToShapeList( cl.cms, shapeList, &trace, oldPositions[i], newPositions[i], vec3_origin, vec3_origin, MASK_SOLID );
+			if( trace.fraction != 1.0f ) [[unlikely]] {
+				// TODO: Let it slide along the surface
+				VectorAdd( trace.endpos, trace.plane.normal, newPositions[i] );
+				// Park the vertex at the position
+				vertexMovability[i] = 0.0f;
+			}
+		}
+	}
 }
