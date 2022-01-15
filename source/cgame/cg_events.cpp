@@ -108,9 +108,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			ConeFlockFiller flockFiller {
-				.origin        = trace->endpos,
-				.offset        = trace->plane.normal,
-				.dir           = trace->plane.normal,
+				.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
+				.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+				.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
 				.gravity       = 900.0f,
 				.minPercentage = 0.5f,
 				.maxPercentage = 1.0f,
@@ -460,7 +460,10 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 		return;
 	}
 
-	ConeFlockFiller flockFiller { .origin = tr->endpos, .offset = tr->plane.normal };
+	ConeFlockFiller flockFiller {
+		.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
+		.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] }
+	};
 	cg.particleSystem.addSmallParticleFlock( color, flockFiller );
 }
 
@@ -1118,9 +1121,13 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		count = 6;
 	}
 
-	const vec3_t c { 1.0f, 0.67f, 0.0f };
-	ConeFlockFiller flockFiller { .origin = ent->origin, .offset = dir, .dir = dir };
-	cg.particleSystem.addSmallParticleFlock( c, flockFiller );
+	const vec3_t color { 1.0f, 0.67f, 0.0f };
+	ConeFlockFiller flockFiller {
+		.origin = { ent->origin[0], ent->origin[1], ent->origin[2] },
+		.offset = { dir[0], dir[1], dir[2] },
+		.dir    = { dir[0], dir[1], dir[2] }
+	};
+	cg.particleSystem.addSmallParticleFlock( color, flockFiller );
 }
 
 static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predicted ) {

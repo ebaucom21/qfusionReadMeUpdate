@@ -17,12 +17,13 @@ ParticleSystem::ParticleSystem() {
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxSmallFlockSize, kMaxSmallFlocks );
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxMediumFlockSize, kMaxMediumFlocks );
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxLargeFlockSize, kMaxLargeFlocks );
+	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxTrailFlockSize, kMaxTrailFlocks );
 }
 
 ParticleSystem::~ParticleSystem() {
 	for( FlocksBin &bin: m_bins ) {
-		Flock *nextFlock = nullptr;
-		for( Flock *flock = bin.head; flock; flock = nextFlock ) {
+		ParticleFlock *nextFlock = nullptr;
+		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
 			releaseFlock( flock );
 		}
@@ -37,23 +38,23 @@ auto ParticleSystem::cgTimeFixme() -> int64_t {
 	return cg.time;
 }
 
-void ParticleSystem::releaseFlock( Flock *flock ) {
+void ParticleSystem::releaseFlock( ParticleFlock *flock ) {
 	FlocksBin &bin = m_bins[flock->binIndex];
 	wsw::unlink( flock, &bin.head );
 	m_freeShapeLists.push_back( flock->shapeList );
-	flock->~Flock();
+	flock->~ParticleFlock();
 	bin.allocator.free( flock );
 }
 
-auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Flock * {
+auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> ParticleFlock * {
 	assert( binIndex < std::size( m_bins ) );
 	FlocksBin &bin = m_bins[binIndex];
 
 	uint8_t *mem = bin.allocator.allocOrNull();
 	if( !mem ) [[unlikely]] {
-		Flock *oldestFlock = nullptr;
+		ParticleFlock *oldestFlock = nullptr;
 		auto leastTimeout = std::numeric_limits<int64_t>::max();
-		for( Flock *flock = bin.head; flock; flock = flock->next ) {
+		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			if( flock->timeoutAt < leastTimeout ) {
 				leastTimeout = flock->timeoutAt;
 				oldestFlock = flock;
@@ -61,7 +62,7 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Flock
 		}
 		assert( oldestFlock );
 		wsw::unlink( oldestFlock, &bin.head );
-		oldestFlock->~Flock();
+		oldestFlock->~ParticleFlock();
 		mem = (uint8_t *)oldestFlock;
 	}
 
@@ -69,10 +70,10 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Flock
 	CMShapeList *const shapeList = m_freeShapeLists.back();
 	m_freeShapeLists.pop_back();
 
-	auto *const particles = (BaseParticle *)( mem + sizeof( Flock ) );
+	auto *const particles = (BaseParticle *)( mem + sizeof( ParticleFlock ) );
 	assert( ( (uintptr_t)particles % 16 ) == 0 );
 
-	auto *const flock = new( mem )Flock {
+	auto *const flock = new( mem )ParticleFlock {
 		.particles = particles,
 		.numParticlesLeft = bin.maxParticlesPerFlock,
 		.binIndex = binIndex,
@@ -190,8 +191,8 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest * ) {
 
 	// We split simulation/rendering loops for a better instructions cache utilization
 	for( FlocksBin &bin: m_bins ) {
-		Flock *nextFlock = nullptr;
-		for( Flock *flock = bin.head; flock; flock = nextFlock ) {
+		ParticleFlock *nextFlock = nullptr;
+		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
 			// Safety measure
 			if( currTime > flock->timeoutAt ) {
@@ -203,13 +204,13 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest * ) {
 	}
 
 	for( FlocksBin &bin: m_bins ) {
-		for( Flock *flock = bin.head; flock; flock = flock->next ) {
+		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			// TODO: Submit for rendering
 		}
 	}
 }
 
-void ParticleSystem::Flock::simulate( int64_t currTime, float deltaSeconds ) {
+void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 	if( !numParticlesLeft ) {
 		return;
 	}

@@ -63,8 +63,9 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 	}
 
 	UniformFlockFiller flockFiller {
-		.origin = origin, .offset = offset, .gravity = 350.0f,
-		.minSpeed = 150.0f, .maxSpeed = 300.0f,
+		.origin = { origin[0], origin[1], origin[2] },
+		.offset = { offset[0], offset[1], offset[2] },
+		.gravity = 350.0f, .minSpeed = 150.0f, .maxSpeed = 300.0f,
 		.minPercentage = 1.0f, .maxPercentage = 1.0f
 	};
 
@@ -81,7 +82,11 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 	sfx_s *sfx = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sfxPlasmaStrongHit : cgs.media.sfxPlasmaWeakHit;
 	startSound( sfx, soundOrigin, ATTN_IDLE );
 
-	UniformFlockFiller flockFiller { .origin = origin, .offset = impactNormal, .minTimeout = 50, .maxTimeout = 200 };
+	UniformFlockFiller flockFiller {
+		.origin = { origin[0], origin[1], origin[2] },
+		.offset = { impactNormal[0], impactNormal[1], impactNormal[2] },
+		.minTimeout = 50, .maxTimeout = 200
+	};
 	cg.particleSystem.addMediumParticleFlock( colorGreen, flockFiller );
 
 	m_transientEffectsSystem.spawnPlasmaImpactEffect( origin, impactNormal );
@@ -89,6 +94,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 
 void EffectsSystemFacade::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	m_transientEffectsSystem.simulateFrameAndSubmit( currTime, request );
+	m_trackedEffectsSystem.simulateFrameAndSubmit( currTime, request );
 }
 
 void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
@@ -105,7 +111,9 @@ void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( cg_showBloodTrail->integer && cg_bloodTrail->integer ) {
 		ConeFlockFiller flockFiller {
-			.origin = origin, .offset = dir, .dir = dir,
+			.origin = { origin[0], origin[1], origin[2] },
+			.offset = { dir[0], dir[1], dir[2] },
+			.dir    = { dir[0], dir[1], dir[2] },
 			.gravity = 150.0f, .bounceCount = 0,
 			.minSpeed = 50.0f, .maxSpeed = 75.0f,
 			.minPercentage = 0.5f, .maxPercentage = 0.5f
@@ -117,10 +125,12 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 }
 
 void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
-	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
-	UniformFlockFiller flockFiller { .origin = origin, .offset = dir };
+	UniformFlockFiller flockFiller {
+		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
+	};
 	cg.particleSystem.addLargeParticleFlock( colorBlue, flockFiller );
 
+	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
 	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, dir );
@@ -135,11 +145,13 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		}
 	}
 
-	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
-	UniformFlockFiller flockFiller { .origin = origin, .offset = dir };
+	UniformFlockFiller flockFiller {
+		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
+	};
 	cg.particleSystem.addLargeParticleFlock( color, flockFiller );
 
 	// TODO: Don't we need an IG-specific sound
+	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
 	m_transientEffectsSystem.spawnInstagunHitEffect( origin, dir, color );
@@ -176,7 +188,12 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
 
 			const vec3_t color { 0.30f, 0.30, 0.25f };
-			ConeFlockFiller flockFiller { .origin = pos, .offset = dir, .dir = dir, .angle = 60 };
+			ConeFlockFiller flockFiller {
+				.origin = { pos[0], pos[1], pos[2] },
+				.offset = { dir[0], dir[1], dir[2] },
+				.dir    = { dir[0], dir[1], dir[2] },
+				.angle  = 60
+			};
 			cg.particleSystem.addMediumParticleFlock( color, flockFiller );
 		}
 	}
@@ -185,7 +202,11 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
-	UniformFlockFiller flockFiller { .origin = origin, .offset = dir, .gravity = 0.0f, .bounceCount = 1 };
+	UniformFlockFiller flockFiller {
+		.origin = { origin[0], origin[1], origin[2] },
+		.offset = { dir[0], dir[1], dir[2] },
+		.gravity = 0.0f, .bounceCount = 1
+	};
 	cg.particleSystem.addLargeParticleFlock( colorOrange, flockFiller );
 
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
@@ -205,9 +226,9 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, flo
 	// TODO: Vary percentage by surface type too
 
 	ConeFlockFiller flockFiller {
-		.origin        = trace->endpos,
-		.offset        = trace->plane.normal,
-		.dir           = trace->plane.normal,
+		.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
+		.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+		.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
 		.gravity       = 900.0f,
 		.minPercentage = minPercentage,
 		.maxPercentage = maxPercentage

@@ -192,6 +192,7 @@ static void CG_NewPacketEntityState( entity_state_t *state ) {
 			cent->prev = *state;
 
 			memset( cent->localEffects, 0, sizeof( cent->localEffects ) );
+			cg.effectsSystem.resetEntityEffects( cent->current.number );
 
 			// Init the animation when new into PVS
 			if( cg.frame.valid && ( state->type == ET_PLAYER || state->type == ET_CORPSE ) ) {
@@ -1621,6 +1622,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 			case ET_BLASTER:
 				CG_AddGenericEnt( cent, drawSceneRequest );
+				cg.effectsSystem.touchBlastTrail( cent->current.number, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				// We use relatively large light radius because this projectile moves very fast, so make it noticeable
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.7f, 0.0f );
@@ -1631,12 +1633,14 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				cent->ent.frame =  cent->ent.oldframe = 0;
 
 				CG_AddGenericEnt( cent, drawSceneRequest );
+				cg.effectsSystem.touchElectroTrail( cent->current.number, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;
 			case ET_ROCKET:
 				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_NORM );
+				cg.effectsSystem.touchRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
 					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
 				} else {
@@ -1645,11 +1649,13 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				break;
 			case ET_GRENADE:
 				CG_AddGenericEnt( cent, drawSceneRequest );
+				cg.effectsSystem.touchGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
 				CG_AddGenericEnt( cent, drawSceneRequest );
+				cg.effectsSystem.touchPlasmaTrail( cent->current.number, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
 				break;

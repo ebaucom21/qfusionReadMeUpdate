@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef WSW_17bd35f8_e886_4cc0_a896_33e286002b87_H
 #define WSW_17bd35f8_e886_4cc0_a896_33e286002b87_H
 
+#include "trackedeffectssystem.h"
 #include "transienteffectssystem.h"
 #include "../qcommon/randomgenerator.h"
 
@@ -65,6 +66,31 @@ public:
 
 	void spawnDashEffect( const float *oldOrigin, const float *newOrigin );
 
+	void touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchRocketTrail( entNum, origin, currTime );
+	}
+	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchGrenadeTrail( entNum, origin, currTime );
+	}
+	void touchPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchPlasmaTrail( entNum, origin, currTime );
+	}
+	void touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchBlastTrail( entNum, origin, currTime );
+	}
+	void touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchElectroTrail( entNum, origin, currTime );
+	}
+
+	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
+		m_trackedEffectsSystem.spawnPlayerTeleInEffect( entNum, origin, model );
+	}
+	void spawnPlayerTeleOutEffect( int entNum, const float *origin, model_s *model ) {
+		m_trackedEffectsSystem.spawnPlayerTeleOutEffect( entNum, origin, model );
+	}
+
+	void resetEntityEffects( int entNum ) { m_trackedEffectsSystem.resetEntityEffects( entNum ); }
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
 	void startSound( sfx_s *sfx, const float *origin, float attenuation );
@@ -76,6 +102,7 @@ private:
 	void spawnBulletLikeImpactEffect( const trace_s *trace, float minPercentage, float maxPercentage );
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
+	TrackedEffectsSystem m_trackedEffectsSystem;
 	TransientEffectsSystem m_transientEffectsSystem;
 	wsw::RandomGenerator m_rng;
 };
