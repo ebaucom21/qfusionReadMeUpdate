@@ -527,6 +527,8 @@ public:
 			const float d10 = x - y, d11 = x - z, d12 = -y + z;
 			mins[10] = d10, maxs[10] = d10, mins[11] = d11, maxs[11] = d11, mins[12] = d12, maxs[12] = d12;
 		}
+
+		markAsTouched();
 	}
 
 	void addPoint( const float *p ) noexcept {
@@ -567,6 +569,8 @@ public:
 			m_mins[i] = std::min( m_mins[i], mins[i] );
 			m_maxs[i] = std::max( m_maxs[i], maxs[i] );
 		}
+
+		markAsTouched();
 	}
 
 	void storeTo( float *mins, float *maxs ) noexcept {

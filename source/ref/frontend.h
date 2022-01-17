@@ -40,22 +40,6 @@ struct alignas( 32 )Frustum {
 	void fillComponentTails( unsigned numPlanesSoFar );
 
 	void setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, float fovX, float fovY );
-
-	// TODO: This is just for exploratory purposes, culling should use bulk operations
-
-	// Returns an on-zero value if the bounds are completely outside the frustum
-	[[nodiscard]]
-	auto computeBinaryResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> int;
-	[[nodiscard]]
-	auto computeBinaryResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> int;
-
-	// Returns a pair of values.
-	// A non-zero first value indicates that the bounds are completely outside the frustum.
-	// Otherwise, a non-zero second value indicates that the bounds are partially outside the frustum.
-	[[nodiscard]]
-	auto computeTristateResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> std::pair<int, int>;
-	[[nodiscard]]
-	auto computeTristateResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> std::pair<int, int>;
 };
 
 namespace wsw::ref {
@@ -236,8 +220,6 @@ private:
 	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
 	void submitDebugStuffToBackend( Scene *scene );
-
-	void showOccluderSurface( const msurface_t *surface );
 
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;

@@ -936,8 +936,6 @@ void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
 
 	Vector4Copy( mapConfig.outlineColor, worldEnt->outlineColor );
 
-	const auto before = Sys_Microseconds();
-
 	msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
 	const MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
@@ -952,8 +950,6 @@ void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
 			addMergedBspSurfToSortList( worldEnt, mergedSurf, firstVisSurf, lastVisSurf, nullptr, dynamicLights );
 		}
 	}
-
-	Com_Printf( "World surfaces submission for sorting took %d micros\n", (int)( Sys_Microseconds() - before ) );
 }
 
 void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {

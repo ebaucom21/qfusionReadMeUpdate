@@ -24,6 +24,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "materiallocal.h"
 
+#define SHOW_CULLED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
+//#define SHOW_OCCLUDERS
+//#define SHOW_OCCLUDERS_FRUSTA
+
 // A SSE2 baseline implementation
 // https://fgiesen.wordpress.com/2016/04/03/sse-mind-the-gap/
 #define wsw_blend( a, b, mask ) _mm_or_ps( _mm_and_ps( a, mask ), _mm_andnot_ps( mask, b ) )
@@ -88,6 +92,20 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	nonZeroIfFullyOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot, xmmPlaneD ) );
 
 // Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
+#define COMPUTE_TRISTATE_RESULT_FOR_4_PLANES( frustum, nonZeroIfOutside, nonZeroIfPartiallyOutside ) \
+	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( frustum ) \
+	/* Select mins/maxs using masks for respective plane signbits */ \
+	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _nearest, ) \
+	/* Select maxs/mins using masks for respective plane signbits (as if masks were inverted) */ \
+	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _farthest, ) \
+	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _nearest, ) \
+	/* If some bit is set, the nearest dot is < plane distance at least for some plane (separating plane in this case) */ \
+	nonZeroIfOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_nearest, xmmPlaneD ) ); \
+	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _farthest, ) \
+	/* If some bit is set, the farthest dot is < plane distance at least for some plane */ \
+	nonZeroIfPartiallyOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_farthest, xmmPlaneD ) );
+
+// Assumes that LOAD_BOX_COMPONENTS was expanded in the scope
 #define COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( f, zeroIfFullyInside ) \
 	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( f ) \
     /* Select a farthest corner using masks for respective plane signbits */ \
@@ -126,58 +144,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
     /* Note: We assume that signed zeros are negativ, this is fine for culling purposes */ \
 	nonZeroIfOutside = _mm_movemask_ps( _mm_or_ps( xmmDiff_03_nearest, xmmDiff_47_nearest ) ); \
 	nonZeroIfPartiallyOutside = _mm_movemask_ps( _mm_or_ps( xmmDiff_03_farthest, xmmDiff_47_farthest ) );
-
-auto Frustum::computeBinaryResultFor4Planes( const vec4_t mins, const vec4_t maxs ) const -> int {
-	LOAD_BOX_COMPONENTS( mins, maxs )
-	COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( this, const int nonZeroIfFullyOutside )
-	return nonZeroIfFullyOutside;
-}
-
-auto Frustum::computeTristateResultFor4Planes( const vec_t *mins, const vec_t *maxs ) const -> std::pair<int, int> {
-	LOAD_BOX_COMPONENTS( mins, maxs )
-	LOAD_COMPONENTS_OF_4_FRUSTUM_PLANES( this )
-
-	// Select mins/maxs using masks for respective plane signbits
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _nearest, )
-	// Select maxs/mins using masks for respective plane signbits (as if masks were inverted)
-	BLEND_COMPONENT_MAXS_AND_MINS_USING_MASKS( _farthest, )
-
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _nearest, )
-
-	// If some bit is set, the nearest dot is < plane distance at least for some plane (separating plane in this case)
-	const int nearestOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_nearest, xmmPlaneD ) );
-
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _farthest, )
-
-	// If some bit is set, the farthest dot is < plane distance at least for some plane
-	const int farthestOutside = _mm_movemask_ps( _mm_sub_ps( xmmDot_farthest, xmmPlaneD ) );
-	return { nearestOutside, farthestOutside };
-}
-
-auto Frustum::computeBinaryResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> int {
-	LOAD_BOX_COMPONENTS( mins, maxs )
-	LOAD_COMPONENTS_OF_8_FRUSTUM_PLANES( this )
-
-	// Select mins/maxs using masks for respective plane signbits, planes 0..3
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _03, _03 )
-	// Select mins/maxs using masks for respective plane signbits, planes 4..7
-	BLEND_COMPONENT_MINS_AND_MAXS_USING_MASKS( _47, _47 )
-
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _03, _03 )
-	COMPUTE_DOT_PRODUCT_OF_BOX_COMPONENTS_AND_PLANES( _47, _47 )
-	
-	const __m128 xmmDiff_03 = _mm_sub_ps( xmmDot_03, xmmPlaneD_03 );
-	const __m128 xmmDiff_47 = _mm_sub_ps( xmmDot_47, xmmPlaneD_47 );
-
-	// We do not need an exact match with masks of AVX version, just checking for non-zero bits is sufficient
-	return _mm_movemask_ps( _mm_or_ps( xmmDiff_03, xmmDiff_47 ) );
-}
-
-auto Frustum::computeTristateResultFor8Planes( const vec4_t mins, const vec4_t maxs ) const -> std::pair<int, int> {
-	LOAD_BOX_COMPONENTS( mins, maxs )
-	COMPUTE_TRISTATE_RESULT_FOR_8_PLANES( this, const int r1, const int r2 )
-	return { r1, r2 };
-}
 
 void Frustum::setPlaneComponentsAtIndex( unsigned index, const float *n, float d ) {
 	const uint32_t blendsForSign[2] { 0, ~( (uint32_t)0 ) };
@@ -231,12 +197,11 @@ void Frustum::setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, f
 namespace wsw::ref {
 
 auto Frontend::collectVisibleWorldLeaves() -> std::span<const unsigned> {
-	const auto *const pvs         = Mod_ClusterPVS( rf.viewcluster, rsh.worldModel );
-	const unsigned numWorldLeaves = rsh.worldBrushModel->numvisleafs;
-	const auto leaves             = rsh.worldBrushModel->visleafs;
-	unsigned *const visibleLeaves = m_visibleLeavesBuffer.data.get();
-
-	const auto before = Sys_Microseconds();
+	const auto *const pvs             = Mod_ClusterPVS( rf.viewcluster, rsh.worldModel );
+	const unsigned numWorldLeaves     = rsh.worldBrushModel->numvisleafs;
+	const auto leaves                 = rsh.worldBrushModel->visleafs;
+	unsigned *const visibleLeaves     = m_visibleLeavesBuffer.data.get();
+	const Frustum *__restrict frustum = &m_frustum;
 
 	unsigned numVisibleLeaves = 0;
 	for( unsigned leafNum = 0; leafNum < numWorldLeaves; ++leafNum ) {
@@ -244,37 +209,18 @@ auto Frontend::collectVisibleWorldLeaves() -> std::span<const unsigned> {
 		// TODO: Handle area bits as well
 		// TODO: Can we just iterate over all leaves in the cluster
 		if( pvs[leaf->cluster >> 3] & ( 1 << ( leaf->cluster & 7 ) ) ) {
+			LOAD_BOX_COMPONENTS( leaf->mins, leaf->maxs )
 			// TODO: Re-add partial visibility of leaves
-			const int nonZeroIfFullyOutside = m_frustum.computeBinaryResultFor4Planes( leaf->mins, leaf->maxs );
+			COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( frustum, const int nonZeroIfFullyOutside )
 			visibleLeaves[numVisibleLeaves] = leafNum;
 			numVisibleLeaves += ( nonZeroIfFullyOutside == 0 );
 		}
 	}
 
-	Com_Printf( "Culling of leaves by the primary frustum took %d micros\n", (int)( Sys_Microseconds() - before ) );
-
 	return { visibleLeaves, visibleLeaves + numVisibleLeaves };
 }
 
-void Frontend::showOccluderSurface( const msurface_t *surface ) {
-	const vec4_t *const __restrict allVertices = surface->mesh.xyzArray;
-	const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
-	const unsigned numSurfVertices = surface->numOccluderPolyIndices;
-	assert( numSurfVertices >= 4 && numSurfVertices <= 7 );
-
-	vec3_t surfCenter;
-	VectorSubtract( surface->maxs, surface->mins, surfCenter );
-	VectorMA( surface->mins, 0.5f, surfCenter, surfCenter );
-	for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
-		const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
-		const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
-		//addDebugLine( v1, v2, COLOR_RGB( 192, 192, 96 ) );
-	}
-}
-
 auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const SortedOccluder> {
-	const auto before = Sys_Microseconds();
-
 	const float *const __restrict viewOrigin = m_state.viewOrigin;
 	const float *const __restrict viewAxis   = m_state.viewAxis;
 
@@ -283,6 +229,8 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 
 	const auto worldLeaves   = rsh.worldBrushModel->visleafs;
 	const auto worldSurfaces = rsh.worldBrushModel->surfaces;
+
+	const Frustum *const __restrict frustum = &m_frustum;
 
 	unsigned numVisibleOccluders = 0;
 	for( const unsigned leafNum: visibleLeaves ) {
@@ -303,20 +251,19 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 				continue;
 			}
 
-			const auto [nonZeroIfFullyOutside, nonZeroIfPartiallyOutside] =
-				m_frustum.computeTristateResultFor4Planes( surf->mins, surf->maxs );
+			// This is not optimal for this collectVisibleOccluders() method
+			// but it does not matter that much in this case and its more useful for everything else.
+			LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
+			COMPUTE_TRISTATE_RESULT_FOR_4_PLANES( frustum, int nonZeroIfOutside, int nonZeroIfPartiallyOutside )
 
 			// Fully outside the primary frustum
-			if( nonZeroIfFullyOutside ) {
+			if( nonZeroIfOutside ) {
 				continue;
 			}
 
-			// TODO: Store as a field
-			const vec3_t surfCenter {
-				0.5f * ( surf->mins[0] + surf->maxs[0] ),
-				0.5f * ( surf->mins[1] + surf->maxs[1] ),
-				0.5f * ( surf->mins[2] + surf->maxs[2] )
-			};
+			vec3_t surfCenter;
+			// TODO: Store as a field?
+			VectorAvg( surf->mins, surf->maxs, surfCenter );
 
 			// Partially visible
 			if( nonZeroIfPartiallyOutside ) {
@@ -337,7 +284,24 @@ auto Frontend::collectVisibleOccluders( std::span<const unsigned> visibleLeaves 
 	// TODO: Don't sort, build a heap instead?
 	std::sort( visibleOccluders, visibleOccluders + numVisibleOccluders );
 
-	Com_Printf( "The initial occluders selection took %d micros\n", (int)( Sys_Microseconds() - before ) );
+#ifdef SHOW_OCCLUDERS
+	for( unsigned i = 0; i < numVisibleOccluders; ++i ) {
+		const msurface_t *const __restrict surface = worldSurfaces + visibleOccluders[i].surfNum;
+		const vec4_t *const __restrict allVertices = surface->mesh.xyzArray;
+		const uint8_t *const __restrict polyIndices = surface->occluderPolyIndices;
+		const unsigned numSurfVertices = surface->numOccluderPolyIndices;
+		assert( numSurfVertices >= 4 && numSurfVertices <= 7 );
+
+		vec3_t surfCenter;
+		VectorSubtract( surface->maxs, surface->mins, surfCenter );
+		VectorMA( surface->mins, 0.5f, surfCenter, surfCenter );
+		for( unsigned vertIndex = 0; vertIndex < numSurfVertices; ++vertIndex ) {
+			const float *const v1 = allVertices[polyIndices[vertIndex + 0]];
+			const float *const v2 = allVertices[polyIndices[( vertIndex + 1 != numSurfVertices ) ? vertIndex + 1 : 0]];
+			addDebugLine( v1, v2, COLOR_RGB( 192, 192, 96 ) );
+		}
+	}
+#endif
 
 	return { visibleOccluders, visibleOccluders + numVisibleOccluders };
 }
@@ -348,8 +312,6 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 	Frustum *const occluderFrusta     = m_occluderFrusta;
 	const unsigned maxOccluders       = std::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
 	constexpr float selfOcclusionBias = 4.0f;
-
-	const auto before = Sys_Microseconds();
 
 	bool hadCulledFrusta = false;
 	// Note: We don't process more occluders due to performance and not memory capacity reasons.
@@ -425,19 +387,17 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 
 	unsigned numSelectedOccluders = maxOccluders;
 	if( hadCulledFrusta ) {
-		unsigned numPresevedOccluders = 0;
+		unsigned numPreservedOccluders = 0;
 		for( unsigned occluderNum = 0; occluderNum < maxOccluders; ++occluderNum ) {
 			if( !isCulledByOtherTable[occluderNum] ) {
 				// TODO: This is a memcpy() call, make the compactification more efficient or use a manual SIMD copy
-				occluderFrusta[numPresevedOccluders++] = occluderFrusta[occluderNum];
+				occluderFrusta[numPreservedOccluders++] = occluderFrusta[occluderNum];
 			}
 		}
-		numSelectedOccluders = numPresevedOccluders;
+		numSelectedOccluders = numPreservedOccluders;
 	}
 
-	Com_Printf( "Frusta setup took %d micros. Selected %d/%d occluders\n", (int)( Sys_Microseconds() - before ), numSelectedOccluders, maxOccluders );
-
-#if 0
+#ifdef SHOW_OCCLUDERS_FRUSTA
 	vec3_t pointInFrontOfView;
 	VectorMA( viewOrigin, 8.0, &m_state.viewAxis[0], pointInFrontOfView );
 
@@ -508,8 +468,6 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 	unsigned numPartiallyVisibleLeaves = 0;
 	unsigned numFullyVisibleLeaves     = 0;
 
-	const auto before = Sys_Microseconds();
-
 	for( const unsigned leafIndex: indicesOfLeaves ) {
 		const mleaf_t *const leaf = leaves[leafIndex];
 		int wasPartiallyInside   = 0;
@@ -525,7 +483,7 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 
 			if( !( nonZeroIfOutside | nonZeroIfPartiallyOutside ) ) {
 				wasFullyInside = true;
-				addDebugLine( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
+				SHOW_CULLED( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
 				break;
 			}
 
@@ -541,8 +499,6 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 		}
 	}
 
-	Com_Printf( "Culling of leaves by %d occluders took %d micros\n", numOccluders, (int)( Sys_Microseconds() - before ) );
-
 	return { { fullyVisibleLeaves, numFullyVisibleLeaves }, { partiallyVisibleLeaves, numPartiallyVisibleLeaves } };
 }
 
@@ -554,8 +510,6 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 	const msurface_t *const surfaces = rsh.worldBrushModel->surfaces;
 	const auto leaves = rsh.worldBrushModel->visleafs;
 	const unsigned occlusionCullingFrame = m_occlusionCullingFrame;
-
-	const auto before = Sys_Microseconds();
 
 	// Cull individual surfaces by up to 16 best frusta
 	const unsigned numBestOccluders = std::min<unsigned>( 16, occluderFrusta.size() );
@@ -581,7 +535,7 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 
 					if( !zeroIfFullyInside ) [[unlikely]] {
 						surfVisible = false;
-						addDebugLine( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
+						SHOW_CULLED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 						break;
 					}
 				} while( ++frustumNum != numBestOccluders );
@@ -597,8 +551,6 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 			}
 		}
 	}
-
-	Com_Printf( "Culling of surfaces by %d occluders took %d micros\n", (int)numBestOccluders, (int)( Sys_Microseconds() - before ) );
 }
 
 void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves,
@@ -705,7 +657,7 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 			for( const Frustum &__restrict f: occluderFrusta ) {
 				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
 				if( zeroIfFullyInside == 0 ) {
-					addDebugLine( absMins, absMaxs, COLOR_RGB( 0, 128, 255 ) );
+					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 0, 128, 255 ) );
 					occluded = true;
 					break;
 				}
@@ -761,7 +713,7 @@ auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan
 			for( const Frustum &__restrict f: occluderFrusta ) {
 				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
 				if( zeroIfFullyInside == 0 ) {
-					addDebugLine( absMins, absMaxs, COLOR_RGB( 0, 255, 128 ) );
+					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 0, 255, 128 ) );
 					occluded = true;
 					break;
 				}
@@ -807,7 +759,7 @@ auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
 			for( const Frustum &__restrict f: occluderFrusta ) {
 				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
 				if( zeroIfFullyInside == 0 ) {
-					addDebugLine( absMins, absMaxs, COLOR_RGB( 128, 255, 128 ) );
+					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 128, 255, 128 ) );
 					occluded = true;
 					break;
 				}
@@ -855,7 +807,7 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 			for( const Frustum &__restrict f: occluderFrusta ) {
 				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
 				if( zeroIfFullyInside == 0 ) {
-					addDebugLine( mins, maxs, COLOR_RGB( 255, 96, 255 ) );
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 96, 255 ) );
 					occluded = true;
 					break;
 				}
@@ -895,7 +847,7 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 			for( const Frustum &__restrict f: occluderFrusta ) {
 				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
 				if( zeroIfFullyInside == 0 ) {
-					addDebugLine( mins, maxs, COLOR_RGB( 0, 255, 0 ) );
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 0, 255, 0 ) );
 					occluded = true;
 					break;
 				}
