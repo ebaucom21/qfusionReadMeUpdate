@@ -417,6 +417,8 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	nullptr,
 	/* ST_POLY */
 	nullptr,
+	/* ST_PARTICLE */
+	nullptr,
 	/* ST_CORONA */
 	nullptr,
 	/* ST_nullptrMODEL */
@@ -437,6 +439,8 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	( batchDrawSurf_cb ) & R_SubmitSpriteSurfToBackend,
 	/* ST_POLY */
 	( batchDrawSurf_cb ) & R_SubmitPolySurfToBackend,
+	/* ST_PARTICLE */
+	( batchDrawSurf_cb ) & R_SubmitParticleSurfToBackend,
 	/* ST_CORONA */
 	( batchDrawSurf_cb ) & R_SubmitCoronaSurfToBackend,
 	/* ST_nullptrMODEL */
@@ -682,6 +686,36 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 	}
 }
 
+void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
+									   std::span<const uint16_t> aggregateIndices ) {
+	const float *const __restrict forwardAxis = m_state.viewAxis;
+	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+
+	unsigned numParticleDrawSurfaces = 0;
+	ParticleDrawSurface *const particleDrawSurfaces  = m_particleDrawSurfaces.get();
+	for( const unsigned aggregateIndex: aggregateIndices ) {
+		const Scene::ParticlesAggregate *const __restrict pa = particles + aggregateIndex;
+		for( unsigned i = 0; i < pa->numParticles; ++i ) {
+			const BaseParticle *__restrict particle = pa->particles + i;
+
+			vec3_t toParticle;
+			VectorSubtract( particle->origin, viewOrigin, toParticle );
+			const float distanceLike = DotProduct( toParticle, forwardAxis );
+
+			// TODO: Account for fogs
+			const mfog_t *fog = nullptr;
+
+			auto *const drawSurf     = &particleDrawSurfaces[numParticleDrawSurfaces++];
+			drawSurf->surfType       = ST_PARTICLE;
+			drawSurf->aggregateIndex = aggregateIndex;
+			drawSurf->particleIndex  = i;
+
+			// TODO: Inline/add some kind of bulk insertion
+			addEntryToSortList( particleEntity, fog, m_particleShader, distanceLike, 0, nullptr, drawSurf );
+		}
+	}
+}
+
 void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 										  std::span<const uint16_t> indices ) {
 	const float *const __restrict forwardAxis = m_state.viewAxis;
@@ -775,6 +809,13 @@ void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> fr
 	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
 	const auto visibleSpriteEntityIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices );
 	addSpriteEntitiesToSortList( spriteEntities.data(), visibleSpriteEntityIndices );
+}
+
+void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta ) {
+	uint16_t tmpIndices[1024];
+	const std::span<const Scene::ParticlesAggregate> particleAggregates = scene->m_particles;
+	const auto visibleAggregateIndices = cullParticleAggregates( particleAggregates, &m_frustum, frusta, tmpIndices );
+	addParticlesToSortList( scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
 }
 
 auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
@@ -959,11 +1000,13 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	}
 
 	FrontendToBackendShared fsh;
-	fsh.renderFlags = m_state.renderFlags;
-	fsh.dynamicLights = scene->m_dynamicLights.data();
-	fsh.programLightIndices = m_programLightIndices;
-	fsh.numProgramLights = m_numVisibleProgramLights;
-	fsh.coronaDrawSurfaces = m_coronaDrawSurfaces;
+	fsh.renderFlags          = m_state.renderFlags;
+	fsh.dynamicLights        = scene->m_dynamicLights.data();
+	fsh.programLightIndices  = m_programLightIndices;
+	fsh.numProgramLights     = m_numVisibleProgramLights;
+	fsh.particleAggregates   = scene->m_particles.data();
+	fsh.particleDrawSurfaces = m_particleDrawSurfaces.get();
+	fsh.coronaDrawSurfaces   = m_coronaDrawSurfaces;
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
@@ -1280,6 +1323,8 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	}
 
 	if( !shadowMap ) {
+		collectVisibleParticles( scene, occluderFrusta );
+
 		// now set  the real far clip value and reload view matrices
 		m_state.farClip = getDefaultFarClip();
 
@@ -1427,10 +1472,12 @@ Frontend *Frontend::instance() {
 
 void Frontend::initVolatileAssets() {
 	m_coronaShader = MaterialCache::instance()->loadDefaultMaterial( "$corona"_asView, SHADER_TYPE_CORONA );
+	m_particleShader = MaterialCache::instance()->loadDefaultMaterial( "$particle"_asView, SHADER_TYPE_CORONA );
 }
 
 void Frontend::destroyVolatileAssets() {
 	m_coronaShader = nullptr;
+	m_particleShader = nullptr;
 }
 
 void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
@@ -1618,5 +1665,16 @@ void DrawSceneRequest::addLight( const float *origin, float programRadius, float
 				});
 			}
 		}
+	}
+}
+
+void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
+									 const BaseParticle *particles, unsigned numParticles ) {
+	if( !m_particles.full() ) [[likely]] {
+		m_particles.emplace_back( ParticlesAggregate {
+			.mins = { mins[0], mins[1], mins[2], mins[3] },
+			.maxs = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.particles = particles, .numParticles = numParticles
+		});
 	}
 }

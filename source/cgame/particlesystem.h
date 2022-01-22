@@ -11,15 +11,6 @@ template <typename> class SingletonHolder;
 
 #include <span>
 
-struct alignas( 16 ) BaseParticle {
-	float origin[4];
-	float oldOrigin[4];
-	float velocity[4];
-	float accel[4];
-	int64_t timeoutAt;
-	unsigned bouncesLeft;
-};
-
 // Mutability of fields makes adjusting parameters in a loop more convenient
 struct UniformFlockFiller {
 	float origin[3] { 1.0f / 0.0f, 1.0f / 0.0f, 1.0f / 0.0f };
@@ -67,6 +58,8 @@ struct alignas( 16 ) ParticleFlock {
 	// TODO: Make links work with "m_"
 	ParticleFlock *prev { nullptr }, *next { nullptr };
 	float color[4];
+	float mins[4];
+	float maxs[4];
 
 	void simulate( int64_t currTime, float deltaSeconds );
 };

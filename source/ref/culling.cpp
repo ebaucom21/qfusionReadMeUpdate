@@ -864,4 +864,37 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 	return { { tmpCoronaLightIndices, numPassedCoronaLights }, { tmpProgramLightIndices, numPassedProgramLights } };
 }
 
+auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate> aggregatesSpan,
+									   const Frustum *__restrict primaryFrustum,
+									   std::span<const Frustum> occluderFrusta,
+									   uint16_t *tmpIndices )
+									   -> std::span<const uint16_t> {
+	const auto *const aggregates = aggregatesSpan.data();
+	const unsigned numAggregates = aggregatesSpan.size();
+
+	unsigned numPassedAggregates = 0;
+	for( unsigned i = 0; i < numAggregates; ++i ) {
+		const Scene::ParticlesAggregate *aggregate = aggregates + i;
+
+		LOAD_BOX_COMPONENTS( aggregate->mins, aggregate->maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 255, 0 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedAggregates++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedAggregates };
+}
+
 }

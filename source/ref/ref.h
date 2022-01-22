@@ -183,11 +183,13 @@ typedef struct refdef_s {
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
 
-struct alignas( 16 ) BasicParticle {
+struct alignas( 16 ) BaseParticle {
 	float origin[4];
 	float oldOrigin[4];
 	float velocity[4];
 	float accel[4];
+	int64_t timeoutAt;
+	unsigned bouncesLeft;
 };
 
 namespace wsw::ref { class Frontend; }
@@ -217,6 +219,16 @@ public:
 		bool hasProgramLight;
 		bool hasCoronaLight;
 	};
+
+	// A flock of particles or just a bunch of particles with enclosing bounds
+	struct ParticlesAggregate {
+		// TODO: Decouple?
+		int drawSurfType;
+		float mins[4], maxs[4];
+		const BaseParticle *particles;
+		unsigned numParticles { 0 };
+	};
+
 protected:
 	Scene();
 
@@ -234,6 +246,7 @@ protected:
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_brushModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
 	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
+	wsw::StaticVector<ParticlesAggregate, 1024> m_particles;
 };
 
 // TODO: Aggregate Scene as a member?
@@ -247,6 +260,10 @@ public:
 	void addLight( const float *origin, float programRadius, float coronaRadius, const float *color ) {
 		addLight( origin, programRadius, coronaRadius, color[0], color[1], color[2] );
 	}
+
+	// TODO: Allow adding multiple particle aggregates at once
+	void addParticles( const float *mins, const float *maxs, const BaseParticle *particles, unsigned numParticles );
+
 	void addEntity( const entity_t *ent );
 	void addPoly( const poly_t *poly );
 

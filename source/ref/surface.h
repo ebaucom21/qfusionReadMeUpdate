@@ -27,6 +27,7 @@ enum drawSurfaceType_t : int {
 	ST_SKELETAL,
 	ST_SPRITE,
 	ST_POLY,
+	ST_PARTICLE,
 	ST_CORONA,
 	ST_NULLMODEL,
 

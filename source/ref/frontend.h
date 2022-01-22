@@ -47,6 +47,7 @@ namespace wsw::ref {
 class Frontend {
 private:
 	shader_t *m_coronaShader;
+	shader_t *m_particleShader;
 
 	static constexpr unsigned kMaxLightsInScene = 1024;
 	static constexpr unsigned kMaxProgramLightsInView = 32;
@@ -55,6 +56,8 @@ private:
 	unsigned m_numVisibleProgramLights { 0 };
 	uint16_t m_programLightIndices[kMaxProgramLightsInView];
 	struct { float mins[8], maxs[8]; } m_lightBoundingDops[kMaxProgramLightsInView];
+
+	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces { std::make_unique<ParticleDrawSurface[]>( 1 << 20 ) };
 
 	refinst_t m_state;
 	// TODO: Put in the state
@@ -206,6 +209,14 @@ private:
 					 uint16_t *tmpProgramLightIndices )
 					 -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
 
+	void collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta );
+
+	[[nodiscard]]
+	auto cullParticleAggregates( std::span<const Scene::ParticlesAggregate> aggregates,
+								 const Frustum *__restrict primaryFrustum,
+								 std::span<const Frustum> occluderFrusta,
+								 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
 
@@ -213,6 +224,9 @@ private:
 	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices,
 										  std::span<const Scene::DynamicLight> lights );
 	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
+
+	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
+								 std::span<const uint16_t> aggregateIndices );
 
 	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );

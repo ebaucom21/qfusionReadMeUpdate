@@ -184,7 +184,7 @@ auto ConeFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxPart
 	return { resultTimeout, numParticles };
 }
 
-void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest * ) {
+void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Limit delta by sane bounds
 	const float deltaSeconds = 1e-3f * (float)std::clamp( (int)( currTime - m_lastTime ), 1, 33 );
 	m_lastTime = currTime;
@@ -194,18 +194,19 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest * ) {
 		ParticleFlock *nextFlock = nullptr;
 		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
-			// Safety measure
-			if( currTime > flock->timeoutAt ) {
-				releaseFlock( flock );
-			} else {
+			if( currTime < flock->timeoutAt ) [[likely]] {
 				flock->simulate( currTime, deltaSeconds );
+			} else {
+				releaseFlock( flock );
 			}
 		}
 	}
 
 	for( FlocksBin &bin: m_bins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
-			// TODO: Submit for rendering
+			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
+				drawSceneRequest->addParticles( flock->mins, flock->maxs, flock->particles, numParticles );
+			}
 		}
 	}
 }
@@ -222,15 +223,6 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 
 		VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
 		boundsBuilder.addPoint( particle->origin );
-
-		// Just for debugging as we can't draw yet
-		vec3_t dir;
-		VectorCopy( particle->velocity, dir );
-		VectorNormalizeFast( dir );
-
-		vec3_t origin2;
-		VectorMA( particle->origin, 4.0f, dir, origin2 );
-		CG_PLink( particle->origin, origin2, color, 0 );
 	}
 
 	vec3_t possibleMins, possibleMaxs;
@@ -238,6 +230,11 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 	// TODO: Add a fused call
 	CM_BuildShapeList( cl.cms, shapeList, possibleMins, possibleMaxs, MASK_SOLID );
 	CM_ClipShapeList( cl.cms, shapeList, shapeList, possibleMins, possibleMaxs );
+
+	// TODO: Let the BoundsBuilder store 4-component vectors
+	VectorCopy( possibleMins, this->mins );
+	VectorCopy( possibleMaxs, this->maxs );
+	this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
 
 	trace_t trace;
 

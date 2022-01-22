@@ -1432,9 +1432,13 @@ struct VboSpan {
 	unsigned firstVert, numVerts;
 };
 
+struct ParticleDrawSurface { int surfType; uint16_t aggregateIndex; uint16_t particleIndex; };
+
 struct FrontendToBackendShared {
 	const Scene::DynamicLight *dynamicLights;
 	const uint16_t *programLightIndices;
+	const Scene::ParticlesAggregate *particleAggregates;
+	const ParticleDrawSurface *particleDrawSurfaces;
 	const int *coronaDrawSurfaces;
 	mat3_t viewAxis;
 	unsigned renderFlags;
@@ -1447,6 +1451,7 @@ void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_
 void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *poly );
+void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
 
 //

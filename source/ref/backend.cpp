@@ -1084,6 +1084,58 @@ void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
+void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	const auto *particleDrawSurf = (ParticleDrawSurface *)drawSurf;
+	const auto *aggregate = fsh->particleAggregates + particleDrawSurf->aggregateIndex;
+	assert( particleDrawSurf->particleIndex < aggregate->numParticles );
+	const auto *particle = aggregate->particles + particleDrawSurf->particleIndex;
+
+	const float radius = 8;
+	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	byte_vec4_t colors[4];
+	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+	mesh_t mesh;
+
+	vec3_t origin;
+	VectorCopy( particle->origin, origin );
+
+	vec3_t v_left, v_up;
+	VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+	VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+
+	if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		VectorInverse( v_left );
+	}
+
+	vec3_t point;
+	VectorMA( origin, -radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[0] );
+	VectorMA( point, -radius, v_left, xyz[3] );
+
+	VectorMA( origin, radius, v_up, point );
+	VectorMA( point, radius, v_left, xyz[1] );
+	VectorMA( point, -radius, v_left, xyz[2] );
+
+	Vector4Set( colors[0], 255, 255, 255, 255 );
+
+	Vector4Copy( colors[0], colors[1] );
+	Vector4Copy( colors[0], colors[2] );
+	Vector4Copy( colors[0], colors[3] );
+
+	memset( &mesh, 0, sizeof( mesh ) );
+	mesh.numElems = 6;
+	mesh.elems = elems;
+	mesh.numVerts = 4;
+	mesh.xyzArray = xyz;
+	mesh.normalsArray = normals;
+	mesh.stArray = texcoords;
+	mesh.colorsArray[0] = colors;
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
 void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	auto *const light = fsh->dynamicLights + ( (const int *)drawSurf - fsh->coronaDrawSurfaces );
 	assert( light && light->hasCoronaLight );
