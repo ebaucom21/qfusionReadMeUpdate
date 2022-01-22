@@ -897,4 +897,37 @@ auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate
 	return { tmpIndices, numPassedAggregates };
 }
 
+auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalMesh> meshesSpan,
+								   const Frustum *__restrict primaryFrustum,
+								   std::span<const Frustum> occluderFrusta,
+								   uint16_t *tmpIndices )
+								   -> std::span<const uint16_t> {
+	const auto *const meshes = meshesSpan.data();
+	const unsigned numMeshes = meshesSpan.size();
+
+	unsigned numPassedMeshes = 0;
+	for( unsigned i = 0; i < numMeshes; ++i ) {
+		const Scene::ExternalMesh *mesh = meshes + i;
+
+		LOAD_BOX_COMPONENTS( mesh->mins, mesh->maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 128, 128 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedMeshes++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedMeshes };
+}
+
 }

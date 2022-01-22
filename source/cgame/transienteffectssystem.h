@@ -84,8 +84,9 @@ private:
 		const uint16_t *meshIndices { nullptr };
 		const int64_t spawnTime { 0 };
 		const unsigned lifetime { 0 };
+		int64_t lastColorChange { 0 };
 		unsigned numMeshIndices { 0 };
-		vec4_t color;
+		vec4_t mins, maxs;
 		vec3_t origin;
 
 		// Old/current
@@ -93,6 +94,7 @@ private:
 		vec3_t vertexVelocities[kNumHullVertices];
 		// 0.0f or 1.0f, just to reduce branching during the vertices update
 		float vertexMovability[kNumHullVertices];
+		byte_vec4_t vertexColors[kNumHullVertices];
 
 		unsigned positionsFrame { 0 };
 
@@ -118,8 +120,6 @@ private:
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
-
-	void submitHull( SimulatedHull *hull, DrawSceneRequest *request );
 
 	static constexpr unsigned kMaxSimulatedHulls = 64;
 

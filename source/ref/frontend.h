@@ -217,6 +217,14 @@ private:
 								 std::span<const Frustum> occluderFrusta,
 								 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
+	void collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta );
+
+	[[nodiscard]]
+	auto cullExternalMeshes( std::span<const Scene::ExternalMesh> meshes,
+							 const Frustum *__restrict primaryFrustum,
+							 std::span<const Frustum> occluderFrusta,
+							 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
 
@@ -227,6 +235,9 @@ private:
 
 	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
 								 std::span<const uint16_t> aggregateIndices );
+
+	void addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalMesh *meshes,
+									  std::span<const uint16_t> indicesOfMeshes );
 
 	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );

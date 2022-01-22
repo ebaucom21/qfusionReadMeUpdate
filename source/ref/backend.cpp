@@ -1012,6 +1012,25 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
+void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+	const auto *externalMesh = (Scene::ExternalMesh *)drawSurf;
+
+	RB_FlushDynamicMeshes();
+
+	mesh_t mesh;
+	memset( &mesh, 0, sizeof( mesh ) );
+
+	mesh.elems = const_cast<uint16_t *>( externalMesh->indices );
+	mesh.numElems = externalMesh->numIndices;
+	mesh.numVerts = externalMesh->numVertices;
+	mesh.xyzArray = const_cast<vec4_t *>( externalMesh->positions );
+	mesh.colorsArray[0] = const_cast<byte_vec4_t *>( externalMesh->colors );
+
+	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+
+	RB_FlushDynamicMeshes();
+}
+
 void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	vec3_t v_left, v_up;
 	if( const float rotation = e->rotation ) {

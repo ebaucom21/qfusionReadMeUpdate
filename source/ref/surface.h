@@ -25,6 +25,7 @@ enum drawSurfaceType_t : int {
 	ST_BSP,
 	ST_ALIAS,
 	ST_SKELETAL,
+	ST_EXTERNAL_MESH,
 	ST_SPRITE,
 	ST_POLY,
 	ST_PARTICLE,

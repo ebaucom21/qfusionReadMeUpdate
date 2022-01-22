@@ -413,6 +413,8 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	( drawSurf_cb ) &R_SubmitAliasSurfToBackend,
 	/* ST_SKELETAL */
 	( drawSurf_cb ) &R_SubmitSkeletalSurfToBackend,
+	/* ST_EXTERNAL_MESH */
+	( drawSurf_cb ) &R_SubmitExternalMeshToBackend,
 	/* ST_SPRITE */
 	nullptr,
 	/* ST_POLY */
@@ -434,6 +436,8 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	/* ST_ALIAS */
 	nullptr,
 	/* ST_SKELETAL */
+	nullptr,
+	/* ST_EXTERNAL_MESH */
 	nullptr,
 	/* ST_SPRITE */
 	( batchDrawSurf_cb ) & R_SubmitSpriteSurfToBackend,
@@ -716,6 +720,25 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	}
 }
 
+void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalMesh *meshes,
+											std::span<const uint16_t> indicesOfMeshes ) {
+	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+	for( const unsigned meshIndex: indicesOfMeshes ) {
+		const Scene::ExternalMesh *const __restrict mesh = meshes + meshIndex;
+
+		vec3_t meshCenter;
+		VectorAvg( mesh->mins, mesh->maxs, meshCenter );
+		// We guess nothing better could be done
+		const float distance = DistanceFast( meshCenter, viewOrigin );
+
+		// TODO: Account for fogs
+		const mfog_t *fog = nullptr;
+
+		const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
+		addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, (void *)mesh );
+	}
+}
+
 void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 										  std::span<const uint16_t> indices ) {
 	const float *const __restrict forwardAxis = m_state.viewAxis;
@@ -816,6 +839,13 @@ void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> f
 	const std::span<const Scene::ParticlesAggregate> particleAggregates = scene->m_particles;
 	const auto visibleAggregateIndices = cullParticleAggregates( particleAggregates, &m_frustum, frusta, tmpIndices );
 	addParticlesToSortList( scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
+}
+
+void Frontend::collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta ) {
+	uint16_t tmpIndices[256];
+	const std::span<const Scene::ExternalMesh> meshes = scene->m_externalMeshes;
+	const auto visibleMeshesIndices = cullExternalMeshes( meshes, &m_frustum, frusta, tmpIndices );
+	addExternalMeshesToSortList( scene->m_polyent, scene->m_externalMeshes.data(), visibleMeshesIndices );
 }
 
 auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
@@ -1005,7 +1035,6 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	fsh.programLightIndices  = m_programLightIndices;
 	fsh.numProgramLights     = m_numVisibleProgramLights;
 	fsh.particleAggregates   = scene->m_particles.data();
-	fsh.particleDrawSurfaces = m_particleDrawSurfaces.get();
 	fsh.coronaDrawSurfaces   = m_coronaDrawSurfaces;
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
@@ -1320,6 +1349,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 
 	if( r_drawentities->integer ) {
 		collectVisibleEntities( scene, occluderFrusta );
+		collectVisibleExternalMeshes( scene, occluderFrusta );
 	}
 
 	if( !shadowMap ) {
@@ -1675,6 +1705,23 @@ void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
 			.mins = { mins[0], mins[1], mins[2], mins[3] },
 			.maxs = { maxs[0], maxs[1], maxs[2], maxs[3] },
 			.particles = particles, .numParticles = numParticles
+		});
+	}
+}
+
+void DrawSceneRequest::addExternalMesh( const float *mins, const float *maxs,
+										const shader_s *material,
+										std::span<const vec4_t> vertices,
+										std::span<const byte_vec4_t> colors,
+										std::span<const uint16_t> indices ) {
+	if( !m_externalMeshes.full() ) [[likely]] {
+		m_externalMeshes.emplace_back( ExternalMesh {
+			.drawSurfType = ST_EXTERNAL_MESH,
+			.mins = { mins[0], mins[1], mins[2], mins[3] },
+			.maxs = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.material = material,
+			.positions = vertices.data(), .colors = colors.data(), .indices = indices.data(),
+			.numVertices = (unsigned)vertices.size(), .numIndices = (unsigned)indices.size()
 		});
 	}
 }

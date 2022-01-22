@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../gameshared/q_math.h"
 
 #include <optional>
+#include <span>
 
 // FIXME: move these to r_local.h?
 #define MAX_DLIGHTS             32
@@ -222,13 +223,21 @@ public:
 
 	// A flock of particles or just a bunch of particles with enclosing bounds
 	struct ParticlesAggregate {
-		// TODO: Decouple?
-		int drawSurfType;
 		float mins[4], maxs[4];
 		const BaseParticle *particles;
 		unsigned numParticles { 0 };
 	};
 
+	struct ExternalMesh {
+		int drawSurfType;
+		float mins[4], maxs[4];
+		const shader_s *material;
+		const vec4_t *positions;
+		const byte_vec4_t *colors;
+		const uint16_t *indices;
+		unsigned numVertices;
+		unsigned numIndices;
+	};
 protected:
 	Scene();
 
@@ -247,6 +256,7 @@ protected:
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
 	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
 	wsw::StaticVector<ParticlesAggregate, 1024> m_particles;
+	wsw::StaticVector<ExternalMesh, 256> m_externalMeshes;
 };
 
 // TODO: Aggregate Scene as a member?
@@ -263,6 +273,12 @@ public:
 
 	// TODO: Allow adding multiple particle aggregates at once
 	void addParticles( const float *mins, const float *maxs, const BaseParticle *particles, unsigned numParticles );
+
+	void addExternalMesh( const float *mins, const float *maxs,
+						  const shader_s *material,
+						  std::span<const vec4_t> positions,
+						  std::span<const byte_vec4_t> colors,
+						  std::span<const uint16_t> indices );
 
 	void addEntity( const entity_t *ent );
 	void addPoly( const poly_t *poly );

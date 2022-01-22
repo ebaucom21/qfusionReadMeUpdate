@@ -154,6 +154,7 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 }
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, const float *color, float radius ) {
+	/*
 	EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
 
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
@@ -161,7 +162,14 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	effect->lightRadius = 300.0f * radius * lightRadiusScale;
 	VectorCopy( colorOrange, effect->lightColor );
 
-	(void)addSpriteEffect( cgs.media.shaderRocketExplosion, origin, 0.67f * radius, 500u );
+	//(void)addSpriteEffect( cgs.media.shaderRocketExplosion, origin, 0.67f * radius, 500u );
+	 */
+
+	for( int i = 0; i < 5; ++i ) {
+		if( auto *hull = allocSimulatedHull( m_lastTime, 1000 ) ) {
+			setupHullVertices( hull, origin, 90 - 10 * i, colorWhite );
+		}
+	}
 }
 
 void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage ) {
@@ -404,14 +412,22 @@ auto TransientEffectsSystem::allocSimulatedHull( int64_t currTime, unsigned int 
 
 void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float *origin,
 												float speed, const float *color ) {
+	const byte_vec4_t initialColor {
+		(uint8_t)( color[0] * 255 ),
+		(uint8_t)( color[1] * 255 ),
+		(uint8_t)( color[2] * 255 ),
+		(uint8_t)( color[3] * 255 )
+	};
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
 	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( 2 );
 	const auto *__restrict vertices = verticesSpan.data();
 	assert( verticesSpan.size() == kNumHullVertices );
-	vec4_t *const __restrict positions = hull->vertexPositions[0];
-	vec3_t *const __restrict velocities = hull->vertexVelocities;
+	vec4_t *const __restrict positions    = hull->vertexPositions[0];
+	vec3_t *const __restrict velocities   = hull->vertexVelocities;
+	vec4_t *const __restrict altPositions = hull->vertexPositions[1];
+	float *const __restrict movability    = hull->vertexMovability;
+	byte_vec4_t *const __restrict colors  = hull->vertexColors;
 	VectorCopy( origin, hull->origin );
-	Vector4Copy( color, hull->color );
 	hull->meshIndices = indicesSpan.data();
 	hull->numMeshIndices = indicesSpan.size();
 	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
@@ -419,7 +435,10 @@ void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float
 		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
 		// Unit vertices define directions
 		VectorScale( vertices[i], speed, velocities[i] );
-		hull->vertexMovability[i] = 1.0f;
+		// Set the 4th component to 1.0 for alternating positions once as well
+		altPositions[i][3] = 1.0f;
+		movability[i] = 1.0f;
+		Vector4Copy( initialColor, colors[i] );
 	}
 }
 
@@ -505,9 +524,8 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 }
 
 void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds,
-													 DrawSceneRequest *request ) {
-	SimulatedHull *nextHull = nullptr;
-	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
+													 DrawSceneRequest *drawSceneRequest ) {
+	for( SimulatedHull *hull = m_simulatedHullsHead, *nextHull = nullptr; hull; hull = nextHull ) {
 		nextHull = hull->next;
 		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
 			hull->simulate( currTime, timeDeltaSeconds );
@@ -516,29 +534,11 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 		}
 	}
 
-	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
-		submitHull( hull, request );
-	}
-}
-
-void TransientEffectsSystem::submitHull( SimulatedHull *hull, DrawSceneRequest *request ) {
-	const vec4_t *const positions = hull->vertexPositions[hull->positionsFrame];
-	for( unsigned i = 0; i < hull->numMeshIndices; i += 3 ) {
-		const float *const v1 = positions[hull->meshIndices[i + 0]];
-		const float *const v2 = positions[hull->meshIndices[i + 1]];
-		const float *const v3 = positions[hull->meshIndices[i + 2]];
-		CG_PLink( v1, v2, hull->color, 0 );
-		CG_PLink( v1, v3, hull->color, 0 );
-		CG_PLink( v2, v3, hull->color, 0 );
-
-		vec3_t _1To2, _1To3, normal;
-		VectorSubtract( v2, v1, _1To2 );
-		VectorSubtract( v3, v1, _1To3 );
-		CrossProduct( _1To2, _1To3, normal );
-		VectorNormalize( normal );
-		VectorScale( normal, 16.0f, normal );
-		VectorAdd( normal, v1, normal );
-		CG_PLink( v1, normal, colorRed, 0 );
+	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = hull->next ) {
+		std::span<const vec4_t> positionsSpan { hull->vertexPositions[hull->positionsFrame], kNumHullVertices };
+		std::span<const byte_vec4_t> colorsSpan { hull->vertexColors, kNumHullVertices };
+		std::span<const uint16_t> indicesSpan { hull->meshIndices, hull->numMeshIndices };
+		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, nullptr, positionsSpan, colorsSpan, indicesSpan );
 	}
 }
 
@@ -561,6 +561,10 @@ void TransientEffectsSystem::SimulatedHull::simulate( int64_t currTime, float ti
 
 	vec3_t verticesMins, verticesMaxs;
 	boundsBuilder.storeToWithAddedEpsilon( verticesMins, verticesMaxs );
+	// TODO: Allow bounds builder to store 4-vectors
+	VectorCopy( verticesMins, mins );
+	VectorCopy( verticesMaxs, maxs );
+	mins[3] = 0.0f, maxs[3] = 1.0f;
 
 	// TODO: Add a fused call
 	CM_BuildShapeList( cl.cms, shapeList, verticesMins, verticesMaxs, MASK_SOLID | MASK_WATER );
