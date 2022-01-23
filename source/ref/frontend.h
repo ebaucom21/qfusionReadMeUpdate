@@ -57,7 +57,10 @@ private:
 	uint16_t m_programLightIndices[kMaxProgramLightsInView];
 	struct { float mins[8], maxs[8]; } m_lightBoundingDops[kMaxProgramLightsInView];
 
-	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces { std::make_unique<ParticleDrawSurface[]>( 1 << 20 ) };
+	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces {
+		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates )
+	};
+	ExternalMeshDrawSurface m_externalMeshDrawSurfaces[Scene::kMaxPartsInCompoundMesh * Scene::kMaxCompoundMeshes];
 
 	refinst_t m_state;
 	// TODO: Put in the state
@@ -220,7 +223,7 @@ private:
 	void collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto cullExternalMeshes( std::span<const Scene::ExternalMesh> meshes,
+	auto cullExternalMeshes( std::span<const Scene::ExternalCompoundMesh> meshes,
 							 const Frustum *__restrict primaryFrustum,
 							 std::span<const Frustum> occluderFrusta,
 							 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
@@ -236,7 +239,7 @@ private:
 	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
 								 std::span<const uint16_t> aggregateIndices );
 
-	void addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalMesh *meshes,
+	void addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalCompoundMesh *meshes,
 									  std::span<const uint16_t> indicesOfMeshes );
 
 	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,

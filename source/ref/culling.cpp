@@ -897,7 +897,7 @@ auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate
 	return { tmpIndices, numPassedAggregates };
 }
 
-auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalMesh> meshesSpan,
+auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalCompoundMesh> meshesSpan,
 								   const Frustum *__restrict primaryFrustum,
 								   std::span<const Frustum> occluderFrusta,
 								   uint16_t *tmpIndices )
@@ -907,7 +907,7 @@ auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalMesh> meshesSp
 
 	unsigned numPassedMeshes = 0;
 	for( unsigned i = 0; i < numMeshes; ++i ) {
-		const Scene::ExternalMesh *mesh = meshes + i;
+		const Scene::ExternalCompoundMesh *mesh = meshes + i;
 
 		LOAD_BOX_COMPONENTS( mesh->mins, mesh->maxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );

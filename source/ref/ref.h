@@ -193,6 +193,15 @@ struct alignas( 16 ) BaseParticle {
 	unsigned bouncesLeft;
 };
 
+struct ExternalMesh {
+	float mins[4], maxs[4];
+	const shader_s *material;
+	const vec4_t *positions;
+	const byte_vec4_t *colors;
+	const uint16_t *indices;
+	unsigned numVertices, numIndices;
+};
+
 namespace wsw::ref { class Frontend; }
 
 class Scene {
@@ -228,15 +237,9 @@ public:
 		unsigned numParticles { 0 };
 	};
 
-	struct ExternalMesh {
-		int drawSurfType;
+	struct ExternalCompoundMesh {
 		float mins[4], maxs[4];
-		const shader_s *material;
-		const vec4_t *positions;
-		const byte_vec4_t *colors;
-		const uint16_t *indices;
-		unsigned numVertices;
-		unsigned numIndices;
+		std::span<const ExternalMesh> parts;
 	};
 protected:
 	Scene();
@@ -255,8 +258,15 @@ protected:
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_brushModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
 	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
-	wsw::StaticVector<ParticlesAggregate, 1024> m_particles;
-	wsw::StaticVector<ExternalMesh, 256> m_externalMeshes;
+
+	static constexpr unsigned kMaxParticlesInAggregate = 256;
+	static constexpr unsigned kMaxParticleAggregates = 1024;
+
+	static constexpr unsigned kMaxPartsInCompoundMesh = 8;
+	static constexpr unsigned kMaxCompoundMeshes = 64;
+
+	wsw::StaticVector<ParticlesAggregate, kMaxParticleAggregates> m_particles;
+	wsw::StaticVector<ExternalCompoundMesh, kMaxCompoundMeshes> m_externalMeshes;
 };
 
 // TODO: Aggregate Scene as a member?
@@ -274,11 +284,7 @@ public:
 	// TODO: Allow adding multiple particle aggregates at once
 	void addParticles( const float *mins, const float *maxs, const BaseParticle *particles, unsigned numParticles );
 
-	void addExternalMesh( const float *mins, const float *maxs,
-						  const shader_s *material,
-						  std::span<const vec4_t> positions,
-						  std::span<const byte_vec4_t> colors,
-						  std::span<const uint16_t> indices );
+	void addExternalMesh( const float *mins, const float *maxs, std::span<const ExternalMesh> parts );
 
 	void addEntity( const entity_t *ent );
 	void addPoly( const poly_t *poly );

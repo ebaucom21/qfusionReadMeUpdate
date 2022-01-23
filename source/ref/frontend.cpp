@@ -699,8 +699,8 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	ParticleDrawSurface *const particleDrawSurfaces  = m_particleDrawSurfaces.get();
 	for( const unsigned aggregateIndex: aggregateIndices ) {
 		const Scene::ParticlesAggregate *const __restrict pa = particles + aggregateIndex;
-		for( unsigned i = 0; i < pa->numParticles; ++i ) {
-			const BaseParticle *__restrict particle = pa->particles + i;
+		for( unsigned particleIndex = 0; particleIndex < pa->numParticles; ++particleIndex ) {
+			const BaseParticle *__restrict particle = pa->particles + particleIndex;
 
 			vec3_t toParticle;
 			VectorSubtract( particle->origin, viewOrigin, toParticle );
@@ -712,7 +712,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			auto *const drawSurf     = &particleDrawSurfaces[numParticleDrawSurfaces++];
 			drawSurf->surfType       = ST_PARTICLE;
 			drawSurf->aggregateIndex = aggregateIndex;
-			drawSurf->particleIndex  = i;
+			drawSurf->particleIndex  = particleIndex;
 
 			// TODO: Inline/add some kind of bulk insertion
 			addEntryToSortList( particleEntity, fog, m_particleShader, distanceLike, 0, nullptr, drawSurf );
@@ -720,22 +720,34 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	}
 }
 
-void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalMesh *meshes,
+void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
+											const Scene::ExternalCompoundMesh *meshes,
 											std::span<const uint16_t> indicesOfMeshes ) {
 	const float *const __restrict viewOrigin  = m_state.viewOrigin;
-	for( const unsigned meshIndex: indicesOfMeshes ) {
-		const Scene::ExternalMesh *const __restrict mesh = meshes + meshIndex;
 
-		vec3_t meshCenter;
-		VectorAvg( mesh->mins, mesh->maxs, meshCenter );
-		// We guess nothing better could be done
-		const float distance = DistanceFast( meshCenter, viewOrigin );
+	unsigned numMeshDrawSurfaces = 0;
+	ExternalMeshDrawSurface *const meshDrawSurfaces = m_externalMeshDrawSurfaces;
+	for( const unsigned compoundMeshIndex: indicesOfMeshes ) {
+		const Scene::ExternalCompoundMesh *const __restrict compoundMesh = meshes + compoundMeshIndex;
+		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
+			const ExternalMesh &__restrict mesh = compoundMesh->parts[partIndex];
 
-		// TODO: Account for fogs
-		const mfog_t *fog = nullptr;
+			vec3_t meshCenter;
+			VectorAvg( mesh.mins, mesh.maxs, meshCenter );
+			// We guess nothing better could be done
+			const float distance = DistanceFast( meshCenter, viewOrigin );
 
-		const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
-		addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, (void *)mesh );
+			// TODO: Account for fogs
+			const mfog_t *fog = nullptr;
+
+			auto *const drawSurf        = &meshDrawSurfaces[numMeshDrawSurfaces++];
+			drawSurf->surfType          = ST_EXTERNAL_MESH;
+			drawSurf->compoundMeshIndex = compoundMeshIndex;
+			drawSurf->partIndex         = partIndex;
+
+			const shader_s *material = mesh.material ? mesh.material : rsh.whiteShader;
+			addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf );
+		}
 	}
 }
 
@@ -843,7 +855,7 @@ void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> f
 
 void Frontend::collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t tmpIndices[256];
-	const std::span<const Scene::ExternalMesh> meshes = scene->m_externalMeshes;
+	const std::span<const Scene::ExternalCompoundMesh> meshes = scene->m_externalMeshes;
 	const auto visibleMeshesIndices = cullExternalMeshes( meshes, &m_frustum, frusta, tmpIndices );
 	addExternalMeshesToSortList( scene->m_polyent, scene->m_externalMeshes.data(), visibleMeshesIndices );
 }
@@ -1036,6 +1048,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	fsh.numProgramLights     = m_numVisibleProgramLights;
 	fsh.particleAggregates   = scene->m_particles.data();
 	fsh.coronaDrawSurfaces   = m_coronaDrawSurfaces;
+	fsh.compoundMeshes       = scene->m_externalMeshes.data();
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
@@ -1700,6 +1713,7 @@ void DrawSceneRequest::addLight( const float *origin, float programRadius, float
 
 void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
 									 const BaseParticle *particles, unsigned numParticles ) {
+	assert( numParticles <= kMaxParticlesInAggregate );
 	if( !m_particles.full() ) [[likely]] {
 		m_particles.emplace_back( ParticlesAggregate {
 			.mins = { mins[0], mins[1], mins[2], mins[3] },
@@ -1709,19 +1723,13 @@ void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
 	}
 }
 
-void DrawSceneRequest::addExternalMesh( const float *mins, const float *maxs,
-										const shader_s *material,
-										std::span<const vec4_t> vertices,
-										std::span<const byte_vec4_t> colors,
-										std::span<const uint16_t> indices ) {
+void DrawSceneRequest::addExternalMesh( const float *mins, const float *maxs, const std::span<const ExternalMesh> parts ) {
+	assert( parts.size() <= kMaxPartsInCompoundMesh );
 	if( !m_externalMeshes.full() ) [[likely]] {
-		m_externalMeshes.emplace_back( ExternalMesh {
-			.drawSurfType = ST_EXTERNAL_MESH,
-			.mins = { mins[0], mins[1], mins[2], mins[3] },
-			.maxs = { maxs[0], maxs[1], maxs[2], maxs[3] },
-			.material = material,
-			.positions = vertices.data(), .colors = colors.data(), .indices = indices.data(),
-			.numVertices = (unsigned)vertices.size(), .numIndices = (unsigned)indices.size()
+		m_externalMeshes.emplace_back( ExternalCompoundMesh {
+			.mins  = { mins[0], mins[1], mins[2], mins[3] },
+			.maxs  = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.parts = parts
 		});
 	}
 }

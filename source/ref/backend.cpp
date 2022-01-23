@@ -1012,8 +1012,8 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
-void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
-	const auto *externalMesh = (Scene::ExternalMesh *)drawSurf;
+void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf ) {
+	const ExternalMesh *externalMesh = &fsh->compoundMeshes[drawSurf->compoundMeshIndex].parts[drawSurf->partIndex];
 
 	RB_FlushDynamicMeshes();
 

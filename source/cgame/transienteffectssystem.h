@@ -84,7 +84,6 @@ private:
 		const uint16_t *meshIndices { nullptr };
 		const int64_t spawnTime { 0 };
 		const unsigned lifetime { 0 };
-		int64_t lastColorChange { 0 };
 		unsigned numMeshIndices { 0 };
 		vec4_t mins, maxs;
 		vec3_t origin;
@@ -97,6 +96,9 @@ private:
 		byte_vec4_t vertexColors[kNumHullVertices];
 
 		unsigned positionsFrame { 0 };
+
+		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
+		ExternalMesh meshSubmissionBuffer[1];
 
 		void simulate( int64_t currTime, float timeDeltaSeconds );
 	};

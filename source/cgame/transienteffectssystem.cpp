@@ -535,10 +535,16 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 	}
 
 	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = hull->next ) {
-		std::span<const vec4_t> positionsSpan { hull->vertexPositions[hull->positionsFrame], kNumHullVertices };
-		std::span<const byte_vec4_t> colorsSpan { hull->vertexColors, kNumHullVertices };
-		std::span<const uint16_t> indicesSpan { hull->meshIndices, hull->numMeshIndices };
-		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, nullptr, positionsSpan, colorsSpan, indicesSpan );
+		ExternalMesh *mesh = &hull->meshSubmissionBuffer[0];
+		VectorCopy( hull->mins, mesh->mins );
+		VectorCopy( hull->maxs, mesh->maxs );
+		mesh->positions    = hull->vertexPositions[hull->positionsFrame];
+		mesh->colors       = hull->vertexColors;
+		mesh->indices      = hull->meshIndices;
+		mesh->numVertices  = kNumHullVertices;
+		mesh->numIndices   = hull->numMeshIndices;
+		mesh->material     = nullptr;
+		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->meshSubmissionBuffer, 1 } );
 	}
 }
 
