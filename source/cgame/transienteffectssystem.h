@@ -76,26 +76,30 @@ private:
 		entity_t entity;
 	};
 
-	static constexpr unsigned kNumHullVertices = 162;
+	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 
-	struct SimulatedHull {
-		SimulatedHull *prev { nullptr }, *next { nullptr };
-		CMShapeList *const shapeList { nullptr };
+	struct BaseRegularSimulatedHull {
+		CMShapeList *shapeList { nullptr };
 		const uint16_t *meshIndices { nullptr };
-		const int64_t spawnTime { 0 };
-		const unsigned lifetime { 0 };
-		unsigned numMeshIndices { 0 };
+		int64_t spawnTime { 0 };
+
 		vec4_t mins, maxs;
 		vec3_t origin;
 
-		// Old/current
-		vec4_t vertexPositions[2][kNumHullVertices];
-		vec3_t vertexVelocities[kNumHullVertices];
-		// 0.0f or 1.0f, just to reduce branching during the vertices update
-		float vertexMovability[kNumHullVertices];
-		byte_vec4_t vertexColors[kNumHullVertices];
+		unsigned lifetime { 0 };
 
-		unsigned positionsFrame { 0 };
+		// Old/current
+		vec4_t *vertexPositions[2];
+		vec3_t *vertexVelocities;
+		// 0.0f or 1.0f, just to reduce branching during the vertices update
+		float *vertexMovability;
+		byte_vec4_t *vertexColors;
+
+		uint16_t numMeshIndices { 0 };
+		uint16_t numMeshVertices { 0 };
+
+		uint8_t positionsFrame { 0 };
+		uint8_t subdivLevel { 0 };
 
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];
@@ -103,8 +107,99 @@ private:
 		void simulate( int64_t currTime, float timeDeltaSeconds );
 	};
 
+	template <unsigned SubdivLevel>
+	struct RegularSimulatedHull : public BaseRegularSimulatedHull {
+		static constexpr auto kNumVertices = kNumVerticesForSubdivLevel[SubdivLevel];
+
+		RegularSimulatedHull<SubdivLevel> *prev { nullptr }, *next {nullptr };
+
+		vec4_t storageOfPositions[2][kNumVertices];
+		vec3_t storageOfVelocities[kNumVertices];
+		float storageOfMovability[kNumVertices];
+		byte_vec4_t storageOfColors[kNumVertices];
+
+		RegularSimulatedHull() {
+			this->vertexPositions[0] = storageOfPositions[0];
+			this->vertexPositions[1] = storageOfPositions[1];
+			this->vertexVelocities   = storageOfVelocities;
+			this->vertexMovability   = storageOfMovability;
+			this->vertexColors       = storageOfColors;
+			this->subdivLevel        = subdivLevel;
+		}
+	};
+
+	struct BaseConcentricSimulatedHull {
+		const uint16_t *meshIndices { nullptr };
+		// Externally managed, should point to the unit mesh data
+		const vec4_t *vertexMoveDirections;
+		// Distances to the nearest obstacle (or the maximum growth radius in case of no obstacles)
+		float *limitsAtDirections;
+		int64_t spawnTime { 0 };
+
+		struct Layer {
+			vec4_t mins, maxs;
+			vec4_t *vertexPositions;
+			// Contains pairs (speed, distance from origin along the direction)
+			vec2_t *vertexSpeedsAndDistances;
+			byte_vec4_t *vertexColors;
+			ExternalMesh *submittedMesh;
+			// Subtracted from limitsAtDirections for this layer, must be non-negative.
+			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
+			float finalOffset { 0 };
+		};
+
+		Layer *layers { nullptr };
+
+		vec4_t mins, maxs;
+		vec3_t origin;
+
+		unsigned numLayers { 0 };
+		unsigned lifetime { 0 };
+
+		uint16_t numMeshIndices { 0 };
+		uint16_t numMeshVertices { 0 };
+
+		uint8_t subdivLevel { 0 };
+
+		void simulate( int64_t currTime, float timeDeltaSeconds );
+	};
+
+	template <unsigned SubdivLevel, unsigned NumLayers>
+	struct ConcentricSimulatedHull : public BaseConcentricSimulatedHull {
+		static constexpr auto kNumVertices = kNumVerticesForSubdivLevel[SubdivLevel];
+
+		ConcentricSimulatedHull<SubdivLevel, NumLayers> *prev { nullptr }, *next { nullptr };
+
+		Layer storageOfLayers[NumLayers];
+		float storageOfLimits[kNumVertices];
+		vec4_t storageOfPositions[kNumVertices * NumLayers];
+		vec2_t storageOfSpeedsAndDistances[kNumVertices * NumLayers];
+		byte_vec4_t storageOfColors[kNumVertices * NumLayers];
+		ExternalMesh storageOfMeshes[NumLayers];
+
+		ConcentricSimulatedHull() {
+			this->numLayers = NumLayers;
+			this->subdivLevel = SubdivLevel;
+			this->layers = &storageOfLayers[0];
+			this->limitsAtDirections = &storageOfLimits[0];
+			for( unsigned i = 0; i < NumLayers; ++i ) {
+				Layer *const layer              = &layers[i];
+				layer->vertexPositions          = &storageOfPositions[i * kNumVertices];
+				layer->vertexSpeedsAndDistances = &storageOfSpeedsAndDistances[i * kNumVertices];
+				layer->vertexColors             = &storageOfColors[i * kNumVertices];
+				layer->submittedMesh            = &storageOfMeshes[i];
+			}
+		}
+	};
+
+	using FireHull  = ConcentricSimulatedHull<2, 4>;
+	using SmokeHull = RegularSimulatedHull<3>;
+	using WaveHull  = RegularSimulatedHull<2>;
+
 	void unlinkAndFree( EntityEffect *effect );
-	void unlinkAndFree( SimulatedHull *hull );
+	void unlinkAndFree( FireHull *hull );
+	void unlinkAndFree( SmokeHull *hull );
+	void unlinkAndFree( WaveHull *hull );
 
 	[[nodiscard]]
 	auto addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
@@ -115,23 +210,33 @@ private:
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
 
+	template <typename Hull, bool HasShapeLists>
 	[[nodiscard]]
-	auto allocSimulatedHull( int64_t currTime, unsigned lifetime ) -> SimulatedHull *;
+	auto allocHull( Hull **head, wsw::FreelistAllocator *allocator, int64_t currTime, unsigned lifetime ) -> Hull *;
 
-	void setupHullVertices( SimulatedHull *hull, const float *origin, float speed, const float *color );
+	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color, float speed );
+	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin, const float *color,
+							std::span<const float> speeds, std::span<const float> finalOffsets );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 
-	static constexpr unsigned kMaxSimulatedHulls = 64;
+	static constexpr unsigned kMaxFireHulls  = 32;
+	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls;
+	static constexpr unsigned kMaxWaveHulls  = kMaxFireHulls;
 
-	wsw::StaticVector<CMShapeList *, kMaxSimulatedHulls> m_freeShapeLists;
+	wsw::StaticVector<CMShapeList *, kMaxSmokeHulls + kMaxWaveHulls> m_freeShapeLists;
+	CMShapeList *m_tmpShapeList { nullptr };
 
 	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
-	wsw::HeapBasedFreelistAllocator m_simulatedHullsAllocator { sizeof( SimulatedHull ), kMaxSimulatedHulls };
+	wsw::HeapBasedFreelistAllocator m_fireHullsAllocator { sizeof( FireHull ), kMaxFireHulls };
+	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
+	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
 
 	EntityEffect *m_entityEffectsHead { nullptr };
-	SimulatedHull *m_simulatedHullsHead { nullptr };
+	FireHull *m_fireHullsHead { nullptr };
+	SmokeHull *m_smokeHullsHead { nullptr };
+	WaveHull *m_waveHullsHead { nullptr };
 
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };

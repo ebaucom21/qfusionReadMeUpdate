@@ -129,28 +129,35 @@ static BasicHullsHolder basicHullsHolder;
 TransientEffectsSystem::TransientEffectsSystem() {
 	// TODO: Take care of exception-safety
 	while( !m_freeShapeLists.full() ) {
-		if( auto *shapeList = CM_AllocShapeList( cl.cms ) ) {
+		if( auto *shapeList = CM_AllocShapeList( cl.cms ) ) [[likely]] {
 			m_freeShapeLists.push_back( shapeList );
 		} else {
 			throw std::bad_alloc();
 		}
 	}
+	// TODO: Take care of exception-safety
+	if( !( m_tmpShapeList = CM_AllocShapeList( cl.cms ) ) ) [[unlikely]] {
+		throw std::bad_alloc();
+	}
 }
 
 TransientEffectsSystem::~TransientEffectsSystem() {
-	EntityEffect *nextEffect = nullptr;
-	for( EntityEffect *effect = m_entityEffectsHead; effect; effect = nextEffect ) {
-		nextEffect = effect->next;
+	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFree( effect );
 	}
-	SimulatedHull *nextHull = nullptr;
-	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = nextHull ) {
-		nextHull = hull->next;
+	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFree( hull );
+	}
+	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFree( hull );
+	}
+	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFree( hull );
 	}
 	for( CMShapeList *shapeList: m_freeShapeLists ) {
 		CM_FreeShapeList( cl.cms, shapeList );
 	}
+	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, const float *color, float radius ) {
@@ -165,10 +172,12 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	//(void)addSpriteEffect( cgs.media.shaderRocketExplosion, origin, 0.67f * radius, 500u );
 	 */
 
-	for( int i = 0; i < 5; ++i ) {
-		if( auto *hull = allocSimulatedHull( m_lastTime, 1000 ) ) {
-			setupHullVertices( hull, origin, 90 - 10 * i, colorWhite );
-		}
+	vec4_t colorVec { 1.0f, 1.0f, 1.0f, 0.05f };
+
+	const float speeds[4] { 90.0f, 80.0f, 70.0f, 50.0f };
+	const float finalOffsets[4] { 0.0f, 2.0f, 4.0f, 6.0f };
+	if( auto *hull = allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, m_lastTime, 1000 ) ) {
+		setupHullVertices( hull, origin, colorVec, speeds, finalOffsets );
 	}
 }
 
@@ -383,35 +392,49 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 	return effect;
 }
 
-auto TransientEffectsSystem::allocSimulatedHull( int64_t currTime, unsigned int lifetime ) -> SimulatedHull * {
-	void *mem = m_simulatedHullsAllocator.allocOrNull();
-	CMShapeList *hullShapeList;
+// TODO: Turn on "Favor small code" for this template
+
+template <typename Hull, bool HasShapeList>
+auto TransientEffectsSystem::allocHull( Hull **head, wsw::FreelistAllocator *allocator,
+										int64_t currTime, unsigned lifetime ) -> Hull * {
+	void *mem = allocator->allocOrNull();
+	CMShapeList *hullShapeList = nullptr;
 	if( mem ) [[likely]] {
-		hullShapeList = m_freeShapeLists.back();
-		m_freeShapeLists.pop_back();
+		if constexpr( HasShapeList ) {
+			hullShapeList = m_freeShapeLists.back();
+			m_freeShapeLists.pop_back();
+		}
 	} else {
-		SimulatedHull *oldestHull = nullptr;
+		Hull *oldestHull = nullptr;
 		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
-		for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = hull->next ) {
+		for( Hull *hull = *head; hull; hull = hull->next ) {
 			if( oldestSpawnTime > hull->spawnTime ) {
 				oldestSpawnTime = hull->spawnTime;
 				oldestHull = hull;
 			}
 		}
 		assert( oldestHull );
-		wsw::unlink( oldestHull, &m_simulatedHullsHead );
-		hullShapeList = oldestHull->shapeList;
-		oldestHull->~SimulatedHull();
+		wsw::unlink( oldestHull, head );
+		if constexpr( HasShapeList ) {
+			hullShapeList = oldestHull->shapeList;
+		}
+		oldestHull->~Hull();
 		mem = oldestHull;
 	}
 
-	auto *hull = new( mem )SimulatedHull { .shapeList = hullShapeList, .spawnTime = currTime, .lifetime = lifetime };
-	wsw::link( hull, &m_simulatedHullsHead );
+	auto *const hull = new( mem )Hull;
+	hull->spawnTime  = currTime;
+	hull->lifetime   = lifetime;
+	if constexpr( HasShapeList ) {
+		hull->shapeList = hullShapeList;
+	}
+
+	wsw::link( hull, head );
 	return hull;
 }
 
-void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float *origin,
-												float speed, const float *color ) {
+void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin,
+												const float *color, float speed ) {
 	const byte_vec4_t initialColor {
 		(uint8_t)( color[0] * 255 ),
 		(uint8_t)( color[1] * 255 ),
@@ -419,9 +442,8 @@ void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float
 		(uint8_t)( color[3] * 255 )
 	};
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
-	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( 2 );
+	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
 	const auto *__restrict vertices = verticesSpan.data();
-	assert( verticesSpan.size() == kNumHullVertices );
 	vec4_t *const __restrict positions    = hull->vertexPositions[0];
 	vec3_t *const __restrict velocities   = hull->vertexVelocities;
 	vec4_t *const __restrict altPositions = hull->vertexPositions[1];
@@ -430,7 +452,8 @@ void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float
 	VectorCopy( origin, hull->origin );
 	hull->meshIndices = indicesSpan.data();
 	hull->numMeshIndices = indicesSpan.size();
-	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+	hull->numMeshVertices = verticesSpan.size();
+	for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 		// Vertex positions are absolute to simplify simulation
 		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
 		// Unit vertices define directions
@@ -442,17 +465,104 @@ void TransientEffectsSystem::setupHullVertices( SimulatedHull *hull, const float
 	}
 }
 
+void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
+												const float *origin, const float *color,
+												std::span<const float> speeds, std::span<const float> finalOffsets ) {
+	assert( speeds.size() == finalOffsets.size() && speeds.size() == hull->numLayers );
+
+	const byte_vec4_t initialColor {
+		(uint8_t)( color[0] * 255 ),
+		(uint8_t)( color[1] * 255 ),
+		(uint8_t)( color[2] * 255 ),
+		(uint8_t)( color[3] * 255 )
+	};
+
+	const float originX = origin[0], originY = origin[1], originZ = origin[2];
+	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
+	const vec4_t *__restrict vertices = verticesSpan.data();
+
+	// Calculate move limits in each direction
+
+	assert( !speeds.empty() );
+	const float speed = *std::max_element( speeds.begin(), speeds.end() );
+
+	const float radius = 0.5f * speed * ( 1e-3f * (float)hull->lifetime );
+	const vec3_t growthMins { originX - speed * radius, originY - speed * radius, originZ - speed * radius };
+	const vec3_t growthMaxs { originX + speed * radius, originY + speed * radius, originZ + speed * radius };
+
+	// TODO: Add a fused call
+	CM_BuildShapeList( cl.cms, m_tmpShapeList, growthMins, growthMaxs, MASK_SOLID );
+	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, growthMins, growthMaxs );
+
+	trace_t trace;
+	for( size_t i = 0; i < verticesSpan.size(); ++i ) {
+		// Vertices of the unit hull define directions
+		const float *dir = verticesSpan[i];
+
+		vec3_t limitPoint;
+		VectorMA( origin, radius, dir, limitPoint );
+
+		CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, origin, limitPoint, vec3_origin, vec3_origin, MASK_SOLID );
+		if( const float f = trace.fraction; f < 1.0f ) {
+			hull->limitsAtDirections[i] = f * radius;
+		} else {
+			hull->limitsAtDirections[i] = radius;
+		}
+	}
+
+	// Setup layers data
+	assert( hull->numLayers >= 1 && hull->numLayers < 8 );
+	for( unsigned layerNum = 0; layerNum < hull->numLayers; ++layerNum ) {
+		BaseConcentricSimulatedHull::Layer *layer   = &hull->layers[layerNum];
+		vec4_t *const __restrict positions          = layer->vertexPositions;
+		byte_vec4_t *const __restrict colors        = layer->vertexColors;
+		vec2_t *const __restrict speedsAndDistances = layer->vertexSpeedsAndDistances;
+
+		const float layerSpeed = speeds[layerNum];
+		layer->finalOffset = finalOffsets[layerNum];
+
+		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
+			// Position XYZ is computed prior to submission in stateless fashion
+			positions[i][3] = 1.0f;
+
+			speedsAndDistances[i][0] = layerSpeed;
+			speedsAndDistances[i][1] = 0.0f;
+
+			Vector4Copy( initialColor, colors[i] );
+		}
+	}
+
+	VectorCopy( origin, hull->origin );
+	hull->vertexMoveDirections = vertices;
+	hull->meshIndices          = indicesSpan.data();
+	hull->numMeshVertices      = verticesSpan.size();
+	hull->numMeshIndices       = indicesSpan.size();
+}
+
 void TransientEffectsSystem::unlinkAndFree( EntityEffect *effect ) {
 	wsw::unlink( effect, &m_entityEffectsHead );
 	effect->~EntityEffect();
 	m_entityEffectsAllocator.free( effect );
 }
 
-void TransientEffectsSystem::unlinkAndFree( SimulatedHull *hull ) {
-	wsw::unlink( hull, &m_simulatedHullsHead );
+void TransientEffectsSystem::unlinkAndFree( SmokeHull *hull ) {
+	wsw::unlink( hull, &m_smokeHullsHead );
 	m_freeShapeLists.push_back( hull->shapeList );
-	hull->~SimulatedHull();
-	m_simulatedHullsAllocator.free( hull );
+	hull->~SmokeHull();
+	m_smokeHullsAllocator.free( hull );
+}
+
+void TransientEffectsSystem::unlinkAndFree( WaveHull *hull ) {
+	wsw::unlink( hull, &m_waveHullsHead );
+	m_freeShapeLists.push_back( hull->shapeList );
+	hull->~WaveHull();
+	m_waveHullsAllocator.free( hull );
+}
+
+void TransientEffectsSystem::unlinkAndFree( FireHull *hull ) {
+	wsw::unlink( hull, &m_fireHullsHead );
+	hull->~FireHull();
+	m_fireHullsAllocator.free( hull );
 }
 
 void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
@@ -525,39 +635,79 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 
 void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds,
 													 DrawSceneRequest *drawSceneRequest ) {
-	for( SimulatedHull *hull = m_simulatedHullsHead, *nextHull = nullptr; hull; hull = nextHull ) {
-		nextHull = hull->next;
+	wsw::StaticVector<BaseRegularSimulatedHull *, kMaxSmokeHulls + kMaxWaveHulls> activeRegularHulls;
+	wsw::StaticVector<BaseConcentricSimulatedHull *, kMaxFireHulls> activeConcentricHulls;
+	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
 			hull->simulate( currTime, timeDeltaSeconds );
+			activeConcentricHulls.push_back( hull );
+		} else {
+			unlinkAndFree( hull );
+		}
+	}
+	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+			hull->simulate( currTime, timeDeltaSeconds );
+			activeRegularHulls.push_back( hull );
+		} else {
+			unlinkAndFree( hull );
+		}
+	}
+	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+			hull->simulate( currTime, timeDeltaSeconds );
+			activeRegularHulls.push_back( hull );
 		} else {
 			unlinkAndFree( hull );
 		}
 	}
 
-	for( SimulatedHull *hull = m_simulatedHullsHead; hull; hull = hull->next ) {
-		ExternalMesh *mesh = &hull->meshSubmissionBuffer[0];
-		VectorCopy( hull->mins, mesh->mins );
-		VectorCopy( hull->maxs, mesh->maxs );
-		mesh->positions    = hull->vertexPositions[hull->positionsFrame];
-		mesh->colors       = hull->vertexColors;
-		mesh->indices      = hull->meshIndices;
-		mesh->numVertices  = kNumHullVertices;
-		mesh->numIndices   = hull->numMeshIndices;
-		mesh->material     = nullptr;
+	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
+		assert( std::size( hull->meshSubmissionBuffer ) == 1 );
+		ExternalMesh *__restrict mesh = &hull->meshSubmissionBuffer[0];
+		Vector4Copy( hull->mins, mesh->mins );
+		Vector4Copy( hull->maxs, mesh->maxs );
+		mesh->positions   = hull->vertexPositions[hull->positionsFrame];
+		mesh->colors      = hull->vertexColors;
+		mesh->indices     = hull->meshIndices;
+		mesh->numVertices = hull->numMeshVertices;
+		mesh->numIndices  = hull->numMeshIndices;
+		mesh->material    = nullptr;
 		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->meshSubmissionBuffer, 1 } );
+	}
+
+	for( const BaseConcentricSimulatedHull *__restrict hull: activeConcentricHulls ) {
+		assert( hull->numLayers );
+		// Meshes should be placed in memory continuously, so we can supply a span
+		assert( hull->layers[hull->numLayers - 1].submittedMesh - hull->layers[0].submittedMesh + 1 == hull->numLayers );
+		for( unsigned i = 0; i < hull->numLayers; ++i ) {
+			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
+			ExternalMesh *__restrict mesh = hull->layers[i].submittedMesh;
+			Vector4Copy( layer->mins, mesh->mins );
+			Vector4Copy( layer->maxs, mesh->maxs );
+			mesh->positions   = layer->vertexPositions;
+			mesh->colors      = layer->vertexColors;
+			mesh->indices     = hull->meshIndices;
+			mesh->numVertices = hull->numMeshVertices;
+			mesh->numIndices  = hull->numMeshIndices;
+			mesh->material    = nullptr;
+		}
+		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->layers[0].submittedMesh, hull->numLayers } );
 	}
 }
 
-void TransientEffectsSystem::SimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds ) {
+void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds ) {
 	const vec4_t *const __restrict oldPositions = vertexPositions[positionsFrame];
+	// Switch old/new positions buffer
 	positionsFrame = ( positionsFrame + 1 ) % 2;
 	vec4_t *const __restrict newPositions = vertexPositions[positionsFrame];
 	vec3_t *const __restrict velocities = vertexVelocities;
+	const unsigned numVertices = numMeshVertices;
 
 	BoundsBuilder boundsBuilder;
 	assert( timeDeltaSeconds < 0.1f );
 	const float speedMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
-	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+	for( unsigned i = 0; i < numVertices; ++i ) {
 		// Compute ideal positions
 		VectorMA( oldPositions[i], timeDeltaSeconds * vertexMovability[i], velocities[i], newPositions[i] );
 		VectorScale( velocities[i], speedMultiplier, velocities[i] );
@@ -577,7 +727,7 @@ void TransientEffectsSystem::SimulatedHull::simulate( int64_t currTime, float ti
 	CM_ClipShapeList( cl.cms, shapeList, shapeList, verticesMins, verticesMaxs );
 
 	trace_t trace;
-	for( unsigned i = 0; i < kNumHullVertices; ++i ) {
+	for( unsigned i = 0; i < numVertices; ++i ) {
 		if( vertexMovability[i] != 0.0f ) {
 			CM_ClipToShapeList( cl.cms, shapeList, &trace, oldPositions[i], newPositions[i], vec3_origin, vec3_origin, MASK_SOLID );
 			if( trace.fraction != 1.0f ) [[unlikely]] {
@@ -588,4 +738,61 @@ void TransientEffectsSystem::SimulatedHull::simulate( int64_t currTime, float ti
 			}
 		}
 	}
+}
+
+void TransientEffectsSystem::BaseConcentricSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds ) {
+	// Just move all vertices along directions clipping by limits
+
+	BoundsBuilder hullBoundsBuilder;
+
+	const float *__restrict growthOrigin = this->origin;
+	const unsigned numVertices = this->numMeshVertices;
+
+	const float speedMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
+
+	// Sanity check
+	assert( numLayers >= 1 && numLayers < 8 );
+	for( unsigned layerNum = 0; layerNum < numLayers; ++layerNum ) {
+		BoundsBuilder layerBoundsBuilder;
+
+		BaseConcentricSimulatedHull::Layer *layer   = &layers[layerNum];
+		vec4_t *const __restrict positions          = layer->vertexPositions;
+		vec2_t *const __restrict speedsAndDistances = layer->vertexSpeedsAndDistances;
+
+		const float finalOffset = layer->finalOffset;
+		for( unsigned i = 0; i < numVertices; ++i ) {
+			float speed = speedsAndDistances[i][0];
+			float distanceSoFar = speedsAndDistances[i][1];
+
+			speed *= speedMultiplier;
+			distanceSoFar += speed * timeDeltaSeconds;
+
+			// Limit growth by the precomputed obstacle distance
+			const float limit = std::max( 0.0f, limitsAtDirections[i] - finalOffset );
+			distanceSoFar = std::min( distanceSoFar, limit );
+
+			VectorMA( growthOrigin, distanceSoFar, vertexMoveDirections[i], positions[i] );
+
+			// TODO: Allow supplying 4-component in-memory vectors directly
+			layerBoundsBuilder.addPoint( positions[i] );
+
+			// Write back to memory
+			speedsAndDistances[i][0] = speed;
+			speedsAndDistances[i][1] = distanceSoFar;
+		}
+
+		// TODO: Allow storing 4-component float vectors to memory directly
+		layerBoundsBuilder.storeTo( layer->mins, layer->maxs );
+		layer->mins[3] = 0.0f, layer->maxs[3] = 1.0f;
+
+		// Don't relying on what hull is external is more robust
+
+		// TODO: Allow adding other builder directly
+		hullBoundsBuilder.addPoint( layer->mins );
+		hullBoundsBuilder.addPoint( layer->maxs );
+	}
+
+	// TODO: Allow storing 4-component float vectors to memory directly
+	hullBoundsBuilder.storeTo( this->mins, this->maxs );
+	this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
 }
