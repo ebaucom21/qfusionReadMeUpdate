@@ -82,6 +82,7 @@ private:
 		CMShapeList *shapeList { nullptr };
 		const uint16_t *meshIndices { nullptr };
 		int64_t spawnTime { 0 };
+		int64_t lastColorChangeTime { 0 };
 
 		vec4_t mins, maxs;
 		vec3_t origin;
@@ -101,10 +102,16 @@ private:
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
 
+		unsigned colorChangeInterval { std::numeric_limits<unsigned>::max() };
+		float colorDropChance { 0.0f };
+		float colorReplacementChance { 0.0f };
+		// Has an external lifetime
+		std::span<const byte_vec4_t> colorReplacementPalette;
+
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];
 
-		void simulate( int64_t currTime, float timeDeltaSeconds );
+		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
 
 	template <unsigned SubdivLevel>
@@ -124,7 +131,7 @@ private:
 			this->vertexVelocities   = storageOfVelocities;
 			this->vertexMovability   = storageOfMovability;
 			this->vertexColors       = storageOfColors;
-			this->subdivLevel        = subdivLevel;
+			this->subdivLevel        = SubdivLevel;
 		}
 	};
 
@@ -135,6 +142,7 @@ private:
 		// Distances to the nearest obstacle (or the maximum growth radius in case of no obstacles)
 		float *limitsAtDirections;
 		int64_t spawnTime { 0 };
+		int64_t lastColorChangeTime { 0 };
 
 		struct Layer {
 			vec4_t mins, maxs;
@@ -146,6 +154,10 @@ private:
 			// Subtracted from limitsAtDirections for this layer, must be non-negative.
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
 			float finalOffset { 0 };
+
+			float colorDropChance { 0.0f };
+			float colorReplacementChance { 0.0f };
+			std::span<const byte_vec4_t> colorReplacementPalette;
 		};
 
 		Layer *layers { nullptr };
@@ -156,12 +168,14 @@ private:
 		unsigned numLayers { 0 };
 		unsigned lifetime { 0 };
 
+		unsigned colorChangeInterval { std::numeric_limits<unsigned>::max() };
+
 		uint16_t numMeshIndices { 0 };
 		uint16_t numMeshVertices { 0 };
 
 		uint8_t subdivLevel { 0 };
 
-		void simulate( int64_t currTime, float timeDeltaSeconds );
+		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
 
 	template <unsigned SubdivLevel, unsigned NumLayers>
@@ -192,7 +206,7 @@ private:
 		}
 	};
 
-	using FireHull  = ConcentricSimulatedHull<2, 4>;
+	using FireHull  = ConcentricSimulatedHull<3, 5>;
 	using SmokeHull = RegularSimulatedHull<3>;
 	using WaveHull  = RegularSimulatedHull<2>;
 
@@ -214,12 +228,19 @@ private:
 	[[nodiscard]]
 	auto allocHull( Hull **head, wsw::FreelistAllocator *allocator, int64_t currTime, unsigned lifetime ) -> Hull *;
 
-	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color, float speed );
+	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
+							float speed, float speedSpread );
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin, const float *color,
-							std::span<const float> speeds, std::span<const float> finalOffsets );
+							std::span<const vec2_t> speedsAndSpreads,
+							std::span<const float> finalOffsets );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+
+	static void processColorChange( byte_vec4_t *__restrict colors, unsigned numColors,
+							        std::span<const byte_vec4_t> replacementPalette,
+									float dropChance, float replacementChance,
+									wsw::RandomGenerator *__restrict rng );
 
 	static constexpr unsigned kMaxFireHulls  = 32;
 	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls;
