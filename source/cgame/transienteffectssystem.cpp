@@ -51,11 +51,11 @@ public:
 			m_faces.emplace_back( Face { { f[0], f[1], f[2] } } );
 		}
 
-		m_icoshphereEntries.emplace_back( Entry { 0, 3 * (unsigned)m_faces.size(), (unsigned)m_vertices.size() } );
+		m_icosphereEntries.emplace_back( Entry { 0, 3 * (unsigned)m_faces.size(), (unsigned)m_vertices.size() } );
 
 		MidpointMap midpointCache;
 		unsigned oldFacesSize = 0, facesSize = m_faces.size();
-		while( !m_icoshphereEntries.full() ) {
+		while( !m_icosphereEntries.full() ) {
 			for( unsigned i = oldFacesSize; i < facesSize; ++i ) {
 				const Face &face = m_faces[i];
 				const uint16_t v1 = face.data[0], v2 = face.data[1], v3 = face.data[2];
@@ -72,27 +72,107 @@ public:
 			facesSize = m_faces.size();
 			const unsigned firstIndex = 3 * oldFacesSize;
 			const unsigned numIndices = 3 * ( facesSize - oldFacesSize );
-			m_icoshphereEntries.emplace_back( Entry {firstIndex, numIndices, (unsigned)m_vertices.size() } );
+			m_icosphereEntries.emplace_back( Entry { firstIndex, numIndices, (unsigned)m_vertices.size() } );
 		}
 
+		// TODO: Use fixed vectors
 		m_vertices.shrink_to_fit();
 		m_faces.shrink_to_fit();
+
+		// TODO can we do that during faces construction.
+		buildNeighbours();
 	}
 
+	void buildNeighbours() {
+		constexpr uint8_t kNumVertexNeighbours = 5;
+		alignas( 16 )uint8_t knownNeighboursCount[3072];
+
+		// Note that neighbours of the same vertex differ for different subdivision level
+		// so we have to recompute all neighbours for each entry (each subdivision level).
+		for( Entry &entry: m_icosphereEntries ) {
+			entry.firstNeighboursElement = m_neighbours.size();
+			m_neighbours.resize( m_neighbours.size() + entry.numVertices );
+
+			Neighbours *const indicesOfNeighboursForVertex = m_neighbours.data() + entry.firstNeighboursElement;
+			// Fill by ~0 to spot non-feasible indices fast
+			std::memset( indicesOfNeighboursForVertex, 255, entry.numVertices * sizeof( Neighbours ) );
+
+			assert( entry.numVertices < std::size( knownNeighboursCount ) );
+			std::memset( knownNeighboursCount, 0, entry.numVertices );
+
+			unsigned numVerticesWithCompleteNeighbours = 0;
+			const unsigned faceOffset = entry.firstIndex / 3;
+			const unsigned facesCount = entry.numIndices / 3;
+			for( unsigned faceIndex = faceOffset; faceIndex < faceOffset + facesCount; ++faceIndex ) {
+				const Face &face = m_faces[faceIndex];
+				bool isDoneWithThisEntry = false;
+				for( unsigned i = 0; i < 3; ++i ) {
+					const auto indexOfVertex = face.data[i];
+					assert( indexOfVertex < entry.numVertices );
+					assert( knownNeighboursCount[indexOfVertex] <= kNumVertexNeighbours );
+					// If neighbours are not complete yet
+					if( knownNeighboursCount[indexOfVertex] != kNumVertexNeighbours ) {
+						uint16_t *const indicesOfVertex = indicesOfNeighboursForVertex[indexOfVertex].data;
+						// For each other vertex try adding it to neighbours
+						for( unsigned j = 0; j < 3; ++j ) {
+							if( i != j ) {
+								const auto otherIndex = face.data[j];
+								assert( otherIndex != indexOfVertex );
+								uint16_t *indicesEnd = indicesOfVertex + knownNeighboursCount[indexOfVertex];
+								if( std::find( indicesOfVertex, indicesEnd, otherIndex ) == indicesEnd ) {
+									knownNeighboursCount[indexOfVertex]++;
+									*indicesEnd = otherIndex;
+								}
+							}
+						}
+						assert( knownNeighboursCount[indexOfVertex] <= kNumVertexNeighbours );
+						// If neighbours become complete for this entry
+						if( knownNeighboursCount[indexOfVertex] == kNumVertexNeighbours ) {
+							numVerticesWithCompleteNeighbours++;
+							if( numVerticesWithCompleteNeighbours == entry.numVertices ) {
+								isDoneWithThisEntry = true;
+								break;
+							}
+						}
+					}
+				}
+				// Would like to use labeled-breaks if they were a thing
+				if( isDoneWithThisEntry ) {
+					break;
+				}
+			}
+		}
+
+		// TODO: Use a fixed vector
+		m_neighbours.shrink_to_fit();
+	}
+
+	struct IcosphereData {
+		std::span<const vec4_t> vertices;
+		std::span<const uint16_t> indices;
+		std::span<const uint16_t[5]> vertexNeighbours;
+	};
+
 	[[nodiscard]]
-	auto getIcosphereForLevel( unsigned level ) -> std::pair<std::span<const vec4_t>, std::span<const uint16_t>> {
-		assert( level < m_icoshphereEntries.size() );
-		const auto *vertexData = (const vec4_t *)m_vertices.data();
-		const auto *indexData = (const uint16_t *)m_faces.data();
-		const Entry &entry = m_icoshphereEntries[level];
+	auto getIcosphereForLevel( unsigned level ) -> IcosphereData {
+		assert( level < m_icosphereEntries.size() );
+		// Return primitive/opaque data
+		using OpaqueNeighbours     = uint16_t[5];
+		const auto *vertexData     = (const vec4_t *)m_vertices.data();
+		const auto *indexData      = (const uint16_t *)m_faces.data();
+		const auto *neighboursData = (const OpaqueNeighbours *)m_neighbours.data();
+		const Entry &entry         = m_icosphereEntries[level];
 		std::span<const vec4_t> verticesSpan { vertexData, entry.numVertices };
 		std::span<const uint16_t> indicesSpan { indexData + entry.firstIndex, entry.numIndices };
-		return { verticesSpan, indicesSpan };
+		return { verticesSpan, indicesSpan, { neighboursData + entry.firstNeighboursElement, entry.numVertices } };
 	}
 private:
 	struct alignas( 4 ) Vertex { float data[4]; };
 	static_assert( sizeof( Vertex ) == sizeof( vec4_t ) );
 	struct alignas( 2 ) Face { uint16_t data[3]; };
+	static_assert( sizeof( Face ) == sizeof( uint16_t[3] ) );
+	struct alignas( 2 ) Neighbours { uint16_t data[5]; };
+	static_assert( sizeof( Neighbours ) == sizeof( uint16_t[5] ) );
 
 	using MidpointMap = wsw::TreeMap<unsigned, uint16_t>;
 
@@ -119,9 +199,10 @@ private:
 
 	wsw::Vector<Vertex> m_vertices;
 	wsw::Vector<Face> m_faces;
+	wsw::Vector<Neighbours> m_neighbours;
 
-	struct Entry { const unsigned firstIndex, numIndices, numVertices; };
-	wsw::StaticVector<Entry, 5> m_icoshphereEntries;
+	struct Entry { unsigned firstIndex, numIndices, numVertices, firstNeighboursElement; };
+	wsw::StaticVector<Entry, 5> m_icosphereEntries;
 };
 
 static BasicHullsHolder basicHullsHolder;
@@ -485,7 +566,7 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 	wsw::RandomGenerator *__restrict rng = &m_rng;
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
-	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
+	const auto [verticesSpan, indicesSpan, _] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
 	const auto *__restrict vertices = verticesSpan.data();
 	vec4_t *const __restrict positions    = hull->vertexPositions[0];
 	vec3_t *const __restrict velocities   = hull->vertexVelocities;
@@ -523,7 +604,7 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 	};
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
-	const auto [verticesSpan, indicesSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
+	const auto [verticesSpan, indicesSpan, _] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
 	const vec4_t *__restrict vertices = verticesSpan.data();
 
 	// Calculate move limits in each direction
