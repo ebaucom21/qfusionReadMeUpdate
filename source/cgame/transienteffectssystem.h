@@ -230,9 +230,19 @@ private:
 
 	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
 							float speed, float speedSpread );
+
+	struct HullLayerParams {
+		const float speed, speedSpread;
+		const float finalOffset;
+		const float speedSpikeChance;
+		const float minSpeedSpike, maxSpeedSpike;
+		const bool smoothSecondaryNeighbours = false;
+		const std::span<const byte_vec4_t> colorReplacementPalette;
+		const float colorDropChance, colorReplacementChance;
+	};
+
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin, const float *color,
-							std::span<const vec2_t> speedsAndSpreads,
-							std::span<const float> finalOffsets );
+							std::span<const HullLayerParams> paramsOfLayers );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
@@ -245,6 +255,8 @@ private:
 	static constexpr unsigned kMaxFireHulls  = 32;
 	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls;
 	static constexpr unsigned kMaxWaveHulls  = kMaxFireHulls;
+
+	static const HullLayerParams kFireHullLayerParams[5];
 
 	wsw::StaticVector<CMShapeList *, kMaxSmokeHulls + kMaxWaveHulls> m_freeShapeLists;
 	CMShapeList *m_tmpShapeList { nullptr };

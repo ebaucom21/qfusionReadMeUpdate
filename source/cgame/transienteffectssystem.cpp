@@ -241,7 +241,7 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
-static const byte_vec4_t kExplosionReplacementPalette[] {
+static const byte_vec4_t kFireReplacementPalette[] {
 	{ 255, 108, 0, 24 },
 	{ 255, 72, 0, 24 },
 	{ 255, 255, 255, 24 },
@@ -249,10 +249,47 @@ static const byte_vec4_t kExplosionReplacementPalette[] {
 	{ 255, 144, 0, 12 },
 };
 
+static const byte_vec4_t kFireReplacementPalette2[] {
+	{ 255, 108, 0, 24 },
+	{ 255, 72, 0, 24 },
+	{ 255, 128, 0, 16 },
+	{ 0, 0, 0, 15 },
+	{ 0, 0, 0, 15 },
+	{ 0, 0, 0, 15 },
+};
+
 static const byte_vec4_t kSmokeReplacementPalette[] {
 	{ 255, 255, 255, 12 },
 	{ 255, 255, 255, 24 },
 	{ 255, 255, 255, 16 },
+};
+
+const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullLayerParams[5] {
+	{
+		.speed = 25.0f, .speedSpread = 5.0f, .finalOffset = 8.0f,
+		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f, .smoothSecondaryNeighbours = true,
+		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.003f, .colorReplacementChance = 0.015f
+	},
+	{
+		.speed = 35.0f, .speedSpread = 5.0f, .finalOffset = 6.0f,
+		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.008f, .colorReplacementChance = 0.025f
+	},
+	{
+		.speed = 45.0f, .speedSpread = 7.5f, .finalOffset = 4.0f,
+		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.025f, .colorReplacementChance = 0.045f,
+	},
+	{
+		.speed = 52.5f, .speedSpread = 10.0f, .finalOffset = 2.0f,
+		.speedSpikeChance = 0.08f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 20.0f,
+		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.035f, .colorReplacementChance = 0.065f,
+	},
+	{
+		.speed = 60.0f, .speedSpread = 12.5f, .finalOffset = 0.0f,
+		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 30.0f,
+		.colorReplacementPalette = kFireReplacementPalette2, .colorDropChance = 0.045f, .colorReplacementChance = 0.085f
+	},
 };
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, const float *color, float radius ) {
@@ -271,27 +308,16 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	const vec4_t smokeColor { 1.0f, 1.0f, 1.0f, 0.03f };
 	const vec4_t fireColor { 1.0f, 0.7f, 0.1f, 0.8f };
 
-	const vec2_t speedsAndSpreads[5] {
-		{ 25.0f, 5.0f }, { 35.0f, 5.0f }, { 45.0f, 12.5f }, { 52.5f, 12.5f }, { 60.0f, 20.0f }
-	};
-
-	const float finalOffsets[5] { 8.0f, 6.0f, 4.0f, 2.0f, 0.0f };
-	if( auto *hull = allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, m_lastTime, 850 ) ) {
-		setupHullVertices( hull, origin, fireColor, speedsAndSpreads, finalOffsets );
+	if( auto *hull = allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, m_lastTime, 800 ) ) {
+		setupHullVertices( hull, origin, fireColor, kFireHullLayerParams );
 		hull->colorChangeInterval = 15;
-		for( unsigned i = 0; i < hull->numLayers; ++i ) {
-			auto *layer = &hull->layers[i];
-			layer->colorReplacementPalette = kExplosionReplacementPalette;
-			layer->colorReplacementChance = 0.015f * (float)( i + 1 );
-			layer->colorDropChance = 0.005f * (float)i;
-		}
 	}
 
 	if( auto *hull = allocHull<WaveHull, true>( &m_waveHullsHead, &m_waveHullsAllocator, m_lastTime, 250 ) ) {
 		setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
 	}
 
-	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 850 ) ) {
+	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 800 ) ) {
 		setupHullVertices( hull, origin, smokeColor, 128.0f, 10.0f );
 		hull->colorReplacementPalette = kSmokeReplacementPalette;
 		hull->colorChangeInterval = 15;
@@ -592,9 +618,8 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 
 void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 												const float *origin, const float *color,
-												std::span<const vec2_t> speedsAndSpreads,
-												std::span<const float> finalOffsets ) {
-	assert( speedsAndSpreads.size() == finalOffsets.size() && speedsAndSpreads.size() == hull->numLayers );
+												std::span<const HullLayerParams> layerParams ) {
+	assert( layerParams.size() == hull->numLayers );
 
 	const byte_vec4_t initialColor {
 		(uint8_t)( color[0] * 255 ),
@@ -604,22 +629,21 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 	};
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
-	const auto [verticesSpan, indicesSpan, _] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
+	const auto [verticesSpan, indicesSpan, neighboursSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
 	const vec4_t *__restrict vertices = verticesSpan.data();
 
 	// Calculate move limits in each direction
 
-	assert( !speedsAndSpreads.empty() );
-	float speed = speedsAndSpreads[0][0];
-	for( unsigned i = 1; i < speedsAndSpreads.size(); ++i ) {
-		speed = std::max( speed, speedsAndSpreads[i][0] );
+	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike;
+	for( unsigned i = 1; i < layerParams.size(); ++i ) {
+		maxVertexSpeed = std::max( maxVertexSpeed, layerParams[i].speed + layerParams[i].maxSpeedSpike );
 	}
 
 	wsw::RandomGenerator *const __restrict rng = &m_rng;
 
-	const float radius = 0.5f * speed * ( 1e-3f * (float)hull->lifetime );
-	const vec3_t growthMins { originX - speed * radius, originY - speed * radius, originZ - speed * radius };
-	const vec3_t growthMaxs { originX + speed * radius, originY + speed * radius, originZ + speed * radius };
+	const float radius = 0.5f * maxVertexSpeed * ( 1e-3f * (float)hull->lifetime );
+	const vec3_t growthMins { originX - radius, originY - radius, originZ - radius };
+	const vec3_t growthMaxs { originX + radius, originY + radius, originZ + radius };
 
 	// TODO: Add a fused call
 	CM_BuildShapeList( cl.cms, m_tmpShapeList, growthMins, growthMaxs, MASK_SOLID );
@@ -641,29 +665,61 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		}
 	}
 
+	float spikeSpeedBoost[3072];
+	assert( verticesSpan.size() < std::size( spikeSpeedBoost ) );
+
 	// Setup layers data
 	assert( hull->numLayers >= 1 && hull->numLayers < 8 );
 	for( unsigned layerNum = 0; layerNum < hull->numLayers; ++layerNum ) {
 		BaseConcentricSimulatedHull::Layer *layer   = &hull->layers[layerNum];
+		const HullLayerParams *__restrict params    = &layerParams[layerNum];
 		vec4_t *const __restrict positions          = layer->vertexPositions;
 		byte_vec4_t *const __restrict colors        = layer->vertexColors;
 		vec2_t *const __restrict speedsAndDistances = layer->vertexSpeedsAndDistances;
 
-		const float baseSpeed = speedsAndSpreads[layerNum][0];
-		const float spread = speedsAndSpreads[layerNum][1];
-		const float minSpeed = std::max( 0.0f, baseSpeed - 0.5f * spread );
-		const float maxSpeed = baseSpeed + 0.5f * spread;
+		assert( params->speed >= 0.0f && params->speedSpread >= 0.0f );
+		assert( params->minSpeedSpike < params->maxSpeedSpike );
+		const float minRegularSpeed = std::max( 0.0f, params->speed - 0.5f * params->speedSpread );
+		const float maxRegularSpeed = params->speed + 0.5f * params->speedSpread;
 
-		layer->finalOffset = finalOffsets[layerNum];
+		layer->finalOffset             = params->finalOffset;
+		layer->colorReplacementPalette = params->colorReplacementPalette;
+		layer->colorDropChance         = params->colorDropChance;
+		layer->colorReplacementChance  = params->colorReplacementChance;
+
+		std::fill( spikeSpeedBoost, spikeSpeedBoost + verticesSpan.size(), 0.0f );
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 			// Position XYZ is computed prior to submission in stateless fashion
 			positions[i][3] = 1.0f;
 
-			speedsAndDistances[i][0] = rng->nextFloat( minSpeed, maxSpeed );
+			speedsAndDistances[i][0] = rng->nextFloat( minRegularSpeed, maxRegularSpeed );
+			if( rng->nextFloat() < params->speedSpikeChance ) [[unlikely]] {
+				const float boost = rng->nextFloat( params->minSpeedSpike, params->maxSpeedSpike );
+				spikeSpeedBoost[i] += boost;
+				const auto &indicesOfNeighbours = neighboursSpan[i];
+				if( params->smoothSecondaryNeighbours ) [[unlikely]] {
+					for( const unsigned neighbourIndex: indicesOfNeighbours ) {
+						const float neighbourBoost = rng->nextFloat( 0.33f, 0.75f ) * boost;
+						spikeSpeedBoost[neighbourIndex] += neighbourBoost;
+						for( const unsigned secondaryNeighbourIndex: neighboursSpan[neighbourIndex] ) {
+							spikeSpeedBoost[secondaryNeighbourIndex] += 0.5f * neighbourBoost;
+						}
+					}
+				} else {
+					for( const unsigned neighbourIndex: indicesOfNeighbours ) {
+						spikeSpeedBoost[neighbourIndex] += rng->nextFloat( 0.33f, 0.75f ) * boost;
+					}
+				}
+			}
+
 			speedsAndDistances[i][1] = 0.0f;
 
 			Vector4Copy( initialColor, colors[i] );
+		}
+
+		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
+			speedsAndDistances[i][0] += std::min( spikeSpeedBoost[i], maxVertexSpeed );
 		}
 	}
 
@@ -971,8 +1027,12 @@ void TransientEffectsSystem::processColorChange( byte_vec4_t *__restrict colors,
 				if( rng->nextFloat() < dropChance ) [[unlikely]] {
 					colors[i][3] = 0;
 				} else if( rng->nextFloat() < replacementChance ) [[unlikely]] {
-					const auto *color = replacementPalette[rng->nextBounded( replacementPalette.size() )];
-					Vector4Copy( color, colors[i] );
+					const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size() )];
+					auto *existingColor = colors[i];
+					// In order to replace, the alpha must be less than the existing one
+					if( chosenColor[3] < existingColor[3] ) {
+						Vector4Copy( chosenColor, existingColor );
+					}
 				}
 			}
 		} while( ++i < numColors );
