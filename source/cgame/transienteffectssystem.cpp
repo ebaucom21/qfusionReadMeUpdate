@@ -918,15 +918,71 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	CM_BuildShapeList( cl.cms, shapeList, verticesMins, verticesMaxs, MASK_SOLID | MASK_WATER );
 	CM_ClipShapeList( cl.cms, shapeList, shapeList, verticesMins, verticesMaxs );
 
-	trace_t trace;
+	trace_t clipTrace, slideTrace;
 	for( unsigned i = 0; i < numVertices; ++i ) {
-		if( vertexMovability[i] != 0.0f ) {
-			CM_ClipToShapeList( cl.cms, shapeList, &trace, oldPositions[i], newPositions[i], vec3_origin, vec3_origin, MASK_SOLID );
-			if( trace.fraction != 1.0f ) [[unlikely]] {
-				// TODO: Let it slide along the surface
-				VectorAdd( trace.endpos, trace.plane.normal, newPositions[i] );
-				// Park the vertex at the position
-				vertexMovability[i] = 0.0f;
+		if( vertexMovability[i] > 0.0f ) {
+			CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
+								vec3_origin, vec3_origin, MASK_SOLID );
+			if( clipTrace.fraction != 1.0f ) [[unlikely]] {
+				bool parkVertexAtTheContactPosition = true;
+				float squareSpeed = VectorLengthSquared( velocities[i] );
+				squareSpeed *= vertexMovability[i] * vertexMovability[i];
+				if( squareSpeed > 10.0f * 10.0f ) {
+					vec3_t velocityDir;
+					const float rcpSpeed = Q_RSqrt( squareSpeed );
+					VectorScale( velocities[i], rcpSpeed, velocityDir );
+					if( const float dot = std::fabs( DotProduct( velocityDir, clipTrace.plane.normal ) ); dot < 0.95f ) {
+						const float speed               = Q_Rcp( rcpSpeed );
+						const float idealMoveThisFrame  = timeDeltaSeconds * speed;
+						const float distanceToObstacle  = idealMoveThisFrame * clipTrace.fraction;
+						const float distanceAlongNormal = dot * distanceToObstacle;
+
+						//   a'     c'
+						//      ^ <--- ^    b' + c' = a'    | a' = lengthAlongNormal * surface normal'
+						//      |     /                     | b' = -distanceToObstacle * velocity dir'
+						//      |    /                      | c' = slide vec
+						//      |   / b'                    | P  = trace endpos
+						//      |  /
+						//      | /
+						// ____ |/__________
+						//      P
+
+						// c = a - b;
+
+						vec3_t normalVec;
+						VectorScale( clipTrace.plane.normal, distanceAlongNormal, normalVec );
+						vec3_t vecToObstacle;
+						VectorScale( velocityDir, -distanceToObstacle, vecToObstacle );
+						vec3_t slideVec;
+						VectorSubtract( normalVec, vecToObstacle, slideVec );
+
+						// If the slide distance is sufficient for checks
+						if( VectorLengthSquared( slideVec ) > 1.0f * 1.0f ) {
+							vec3_t slideStartPoint, slideEndPoint;
+							// Add an offset from the surface while testing sliding
+							VectorAdd( clipTrace.endpos, clipTrace.plane.normal, slideStartPoint );
+							VectorAdd( slideStartPoint, slideVec, slideEndPoint );
+
+							CM_ClipToShapeList( cl.cms, shapeList, &slideTrace, slideStartPoint, slideEndPoint,
+												vec3_origin, vec3_origin, MASK_SOLID );
+							if( slideTrace.fraction == 1.0f ) {
+								VectorCopy( slideEndPoint, newPositions[i] );
+								parkVertexAtTheContactPosition = false;
+								// TODO: Modify velocity as well?
+							}
+							// Otherwise, don't bother with parking at the slide obstacle, just park it at the contact
+						} else {
+							// Just save the position, try sliding next step
+							VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
+							parkVertexAtTheContactPosition = false;
+						}
+					}
+				}
+				if( parkVertexAtTheContactPosition ) {
+					VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
+					// Park the vertex at the position
+					vertexMovability[i] = 0.0f;
+				}
 			}
 		}
 	}
