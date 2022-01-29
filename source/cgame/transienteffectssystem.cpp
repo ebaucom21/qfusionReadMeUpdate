@@ -207,6 +207,8 @@ private:
 
 static BasicHullsHolder basicHullsHolder;
 
+vec3_t TransientEffectsSystem::s_scratchpad[std::end( TransientEffectsSystem::kNumVerticesForSubdivLevel )[-1]];
+
 TransientEffectsSystem::TransientEffectsSystem() {
 	// TODO: Take care of exception-safety
 	while( !m_freeShapeLists.full() ) {
@@ -305,7 +307,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	 */
 
 	const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
-	const vec4_t smokeColor { 1.0f, 1.0f, 1.0f, 0.03f };
+	const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
 	const vec4_t fireColor { 1.0f, 0.7f, 0.1f, 0.8f };
 
 	if( auto *hull = allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, m_lastTime, 800 ) ) {
@@ -317,12 +319,38 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 		setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
 	}
 
-	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 800 ) ) {
-		setupHullVertices( hull, origin, smokeColor, 128.0f, 10.0f );
+	// TODO: Allocating two hulls at once could look better as a single operation
+
+	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 2500 ) ) {
+		hull->archimedesBottomAccel   = +45.0f;
+		hull->archimedesTopAccel      = +150.0f;
+		hull->xyExpansionTopAccel     = +50.0f;
+		hull->xyExpansionBottomAccel  = -40.0f;
+
 		hull->colorReplacementPalette = kSmokeReplacementPalette;
-		hull->colorChangeInterval = 15;
-		hull->colorReplacementChance = 0.02f;
-		hull->colorDropChance = 0.001f;
+		hull->colorChangeInterval     = 15;
+		hull->colorReplacementChance  = 0.020f;
+		hull->colorDropChance         = 0.002f;
+
+		hull->expansionStartAt = m_lastTime + 500;
+
+		setupHullVertices( hull, origin, smokeColor, 100.0f, 15.0f );
+	}
+
+	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 2500 ) ) {
+		hull->archimedesBottomAccel   = +35.0f;
+		hull->archimedesTopAccel      = +150.0f;
+		hull->xyExpansionTopAccel     = +65.0f;
+		hull->xyExpansionBottomAccel  = -35.0f;
+
+		hull->colorReplacementPalette = kSmokeReplacementPalette;
+		hull->colorChangeInterval     = 15;
+		hull->colorReplacementChance  = 0.035f;
+		hull->colorDropChance         = 0.003f;
+
+		hull->expansionStartAt = m_lastTime + 500;
+
+		setupHullVertices( hull, origin, smokeColor, 120.0f, 7.5f );
 	}
 }
 
@@ -594,26 +622,32 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
 	const auto [verticesSpan, indicesSpan, _] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
 	const auto *__restrict vertices = verticesSpan.data();
-	vec4_t *const __restrict positions    = hull->vertexPositions[0];
-	vec3_t *const __restrict velocities   = hull->vertexVelocities;
-	vec4_t *const __restrict altPositions = hull->vertexPositions[1];
-	float *const __restrict movability    = hull->vertexMovability;
-	byte_vec4_t *const __restrict colors  = hull->vertexColors;
-	VectorCopy( origin, hull->origin );
-	hull->meshIndices = indicesSpan.data();
-	hull->numMeshIndices = indicesSpan.size();
-	hull->numMeshVertices = verticesSpan.size();
+
+	std::memset( hull->vertexForceVelocities, 0, verticesSpan.size() * sizeof( hull->vertexForceVelocities[0] ) );
+
+	vec4_t *const __restrict positions       = hull->vertexPositions[0];
+	vec3_t *const __restrict burstVelocities = hull->vertexBurstVelocities;
+	vec4_t *const __restrict altPositions    = hull->vertexPositions[1];
+	byte_vec4_t *const __restrict colors     = hull->vertexColors;
+
 	for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 		// Vertex positions are absolute to simplify simulation
 		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
 		const float vertexSpeed = rng->nextFloat( minSpeed, maxSpeed );
 		// Unit vertices define directions
-		VectorScale( vertices[i], vertexSpeed, velocities[i] );
+		VectorScale( vertices[i], vertexSpeed, burstVelocities[i] );
 		// Set the 4th component to 1.0 for alternating positions once as well
 		altPositions[i][3] = 1.0f;
-		movability[i] = 1.0f;
 		Vector4Copy( initialColor, colors[i] );
 	}
+
+	hull->minZLastFrame = originZ - 1.0f;
+	hull->maxZLastFrame = originZ + 1.0f;
+
+	VectorCopy( origin, hull->origin );
+	hull->meshIndices     = indicesSpan.data();
+	hull->numMeshIndices  = indicesSpan.size();
+	hull->numMeshVertices = verticesSpan.size();
 }
 
 void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
@@ -665,8 +699,7 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		}
 	}
 
-	float spikeSpeedBoost[3072];
-	assert( verticesSpan.size() < std::size( spikeSpeedBoost ) );
+	float *const __restrict spikeSpeedBoost = TransientEffectsSystem::s_scratchpad[0];
 
 	// Setup layers data
 	assert( hull->numLayers >= 1 && hull->numLayers < 8 );
@@ -889,22 +922,66 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 
 void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds,
 																 wsw::RandomGenerator *__restrict rng ) {
-	const vec4_t *const __restrict oldPositions = vertexPositions[positionsFrame];
+	const vec4_t *const __restrict oldPositions = this->vertexPositions[positionsFrame];
 	// Switch old/new positions buffer
 	positionsFrame = ( positionsFrame + 1 ) % 2;
-	vec4_t *const __restrict newPositions = vertexPositions[positionsFrame];
-	vec3_t *const __restrict velocities = vertexVelocities;
-	const unsigned numVertices = numMeshVertices;
+	vec4_t *const __restrict newPositions = this->vertexPositions[positionsFrame];
+
+	vec3_t *const __restrict forceVelocities = this->vertexForceVelocities;
+	vec3_t *const __restrict burstVelocities = this->vertexBurstVelocities;
+
+	// Caution! This is access to the shared global state
+	vec3_t *const __restrict combinedVelocities = TransientEffectsSystem::s_scratchpad;
+
+	const unsigned numVertices = this->numMeshVertices;
 
 	BoundsBuilder boundsBuilder;
 	assert( timeDeltaSeconds < 0.1f );
-	const float speedMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
-	for( unsigned i = 0; i < numVertices; ++i ) {
-		// Compute ideal positions
-		VectorMA( oldPositions[i], timeDeltaSeconds * vertexMovability[i], velocities[i], newPositions[i] );
-		VectorScale( velocities[i], speedMultiplier, velocities[i] );
-		// TODO: We should be able to supply vec4
-		boundsBuilder.addPoint( newPositions[i] );
+
+	// Compute ideal positions (as if there were no obstacles)
+
+	const float burstSpeedDecayMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
+	if( expansionStartAt > currTime ) {
+		for( unsigned i = 0; i < numVertices; ++i ) {
+			VectorScale( burstVelocities[i], burstSpeedDecayMultiplier, burstVelocities[i] );
+			VectorAdd( burstVelocities[i], forceVelocities[i], combinedVelocities[i] );
+			VectorMA( oldPositions[i], timeDeltaSeconds, combinedVelocities[i], newPositions[i] );
+			// TODO: We should be able to supply vec4
+			boundsBuilder.addPoint( newPositions[i] );
+		}
+	} else {
+		const float rcpDeltaZ = ( maxZLastFrame - minZLastFrame ) > 0.1f ? Q_Rcp( maxZLastFrame - minZLastFrame ) : 1.0f;
+		float maxSquareDistance2D = 0.0f;
+		for ( unsigned i = 0; i < numVertices; ++i ) {
+			const float dx = oldPositions[i][0] - avgXLastFrame;
+			const float dy = oldPositions[i][1] - avgYLastFrame;
+			maxSquareDistance2D = std::max( dx * dx + dy * dy, maxSquareDistance2D );
+		}
+		const float rcpMaxDistance2D = Q_RSqrt( maxSquareDistance2D );
+		for( unsigned i = 0; i < numVertices; ++i ) {
+			const float zFrac = Q_Sqrt( ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ );
+			const float archimedesAccel = std::lerp( archimedesBottomAccel, archimedesTopAccel, zFrac );
+			forceVelocities[i][2] += archimedesAccel * timeDeltaSeconds;
+
+			vec2_t toVertex2D { oldPositions[i][0] - avgXLastFrame, oldPositions[i][1] - avgYLastFrame };
+			const float squareDistance2D = toVertex2D[0] * toVertex2D[0] + toVertex2D[1] * toVertex2D[1];
+			if( squareDistance2D > 1.0f * 1.0f ) [[likely]] {
+				const float rcpDistance2D  = Q_RSqrt( squareDistance2D );
+				const float distance2D     = Q_Rcp( rcpDistance2D );
+				const float distanceFrac   = distance2D * rcpMaxDistance2D;
+				const float expansionAccel = std::lerp( xyExpansionBottomAccel, xyExpansionTopAccel, zFrac );
+				const float multiplier     = ( expansionAccel * timeDeltaSeconds ) * ( rcpDistance2D * distanceFrac );
+				forceVelocities[i][0] += multiplier * toVertex2D[0];
+				forceVelocities[i][1] += multiplier * toVertex2D[1];
+			}
+
+			VectorScale( burstVelocities[i], burstSpeedDecayMultiplier, burstVelocities[i] );
+			VectorAdd( burstVelocities[i], forceVelocities[i], combinedVelocities[i] );
+
+			VectorMA( oldPositions[i], timeDeltaSeconds, combinedVelocities[i], newPositions[i] );
+			// TODO: We should be able to supply vec4
+			boundsBuilder.addPoint( newPositions[i] );
+		}
 	}
 
 	vec3_t verticesMins, verticesMaxs;
@@ -918,74 +995,76 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	CM_BuildShapeList( cl.cms, shapeList, verticesMins, verticesMaxs, MASK_SOLID | MASK_WATER );
 	CM_ClipShapeList( cl.cms, shapeList, shapeList, verticesMins, verticesMaxs );
 
+	minZLastFrame = std::numeric_limits<float>::max();
+	maxZLastFrame = std::numeric_limits<float>::min();
+	avgXLastFrame = avgYLastFrame = 0.0f;
+
 	trace_t clipTrace, slideTrace;
 	for( unsigned i = 0; i < numVertices; ++i ) {
-		if( vertexMovability[i] > 0.0f ) {
-			CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
-								vec3_origin, vec3_origin, MASK_SOLID );
-			if( clipTrace.fraction != 1.0f ) [[unlikely]] {
-				bool parkVertexAtTheContactPosition = true;
-				float squareSpeed = VectorLengthSquared( velocities[i] );
-				squareSpeed *= vertexMovability[i] * vertexMovability[i];
-				if( squareSpeed > 10.0f * 10.0f ) {
-					vec3_t velocityDir;
-					const float rcpSpeed = Q_RSqrt( squareSpeed );
-					VectorScale( velocities[i], rcpSpeed, velocityDir );
-					if( const float dot = std::fabs( DotProduct( velocityDir, clipTrace.plane.normal ) ); dot < 0.95f ) {
-						const float speed               = Q_Rcp( rcpSpeed );
-						const float idealMoveThisFrame  = timeDeltaSeconds * speed;
-						const float distanceToObstacle  = idealMoveThisFrame * clipTrace.fraction;
-						const float distanceAlongNormal = dot * distanceToObstacle;
+		CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
+							vec3_origin, vec3_origin, MASK_SOLID );
+		if( clipTrace.fraction != 1.0f ) [[unlikely]] {
+			bool putVertexAtTheContactPosition = true;
+			if( const float squareSpeed = VectorLengthSquared( combinedVelocities[i] ); squareSpeed > 10.0f * 10.0f ) {
+				vec3_t velocityDir;
+				const float rcpSpeed = Q_RSqrt( squareSpeed );
+				VectorScale( combinedVelocities[i], rcpSpeed, velocityDir );
+				if( const float dot = std::fabs( DotProduct( velocityDir, clipTrace.plane.normal ) ); dot < 0.95f ) {
+					const float speed               = Q_Rcp( rcpSpeed );
+					const float idealMoveThisFrame  = timeDeltaSeconds * speed;
+					const float distanceToObstacle  = idealMoveThisFrame * clipTrace.fraction;
+					const float distanceAlongNormal = dot * distanceToObstacle;
 
-						//   a'     c'
-						//      ^ <--- ^    b' + c' = a'    | a' = lengthAlongNormal * surface normal'
-						//      |     /                     | b' = -distanceToObstacle * velocity dir'
-						//      |    /                      | c' = slide vec
-						//      |   / b'                    | P  = trace endpos
-						//      |  /
-						//      | /
-						// ____ |/__________
-						//      P
+					//   a'     c'
+					//      ^ <--- ^    b' + c' = a'    | a' = lengthAlongNormal * surface normal'
+					//      |     /                     | b' = -distanceToObstacle * velocity dir'
+					//      |    /                      | c' = slide vec
+					//      |   / b'                    | P  = trace endpos
+					//      |  /
+					//      | /
+					// ____ |/__________
+					//      P
 
-						// c = a - b;
+					// c = a - b;
 
-						vec3_t normalVec;
-						VectorScale( clipTrace.plane.normal, distanceAlongNormal, normalVec );
-						vec3_t vecToObstacle;
-						VectorScale( velocityDir, -distanceToObstacle, vecToObstacle );
-						vec3_t slideVec;
-						VectorSubtract( normalVec, vecToObstacle, slideVec );
+					vec3_t normalVec;
+					VectorScale( clipTrace.plane.normal, distanceAlongNormal, normalVec );
+					vec3_t vecToObstacle;
+					VectorScale( velocityDir, -distanceToObstacle, vecToObstacle );
+					vec3_t slideVec;
+					VectorSubtract( normalVec, vecToObstacle, slideVec );
 
-						// If the slide distance is sufficient for checks
-						if( VectorLengthSquared( slideVec ) > 1.0f * 1.0f ) {
-							vec3_t slideStartPoint, slideEndPoint;
-							// Add an offset from the surface while testing sliding
-							VectorAdd( clipTrace.endpos, clipTrace.plane.normal, slideStartPoint );
-							VectorAdd( slideStartPoint, slideVec, slideEndPoint );
+					// If the slide distance is sufficient for checks
+					if( VectorLengthSquared( slideVec ) > 1.0f * 1.0f ) {
+						vec3_t slideStartPoint, slideEndPoint;
+						// Add an offset from the surface while testing sliding
+						VectorAdd( clipTrace.endpos, clipTrace.plane.normal, slideStartPoint );
+						VectorAdd( slideStartPoint, slideVec, slideEndPoint );
 
-							CM_ClipToShapeList( cl.cms, shapeList, &slideTrace, slideStartPoint, slideEndPoint,
-												vec3_origin, vec3_origin, MASK_SOLID );
-							if( slideTrace.fraction == 1.0f ) {
-								VectorCopy( slideEndPoint, newPositions[i] );
-								parkVertexAtTheContactPosition = false;
-								// TODO: Modify velocity as well?
-							}
-							// Otherwise, don't bother with parking at the slide obstacle, just park it at the contact
-						} else {
-							// Just save the position, try sliding next step
-							VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
-							parkVertexAtTheContactPosition = false;
+						CM_ClipToShapeList( cl.cms, shapeList, &slideTrace, slideStartPoint, slideEndPoint,
+											vec3_origin, vec3_origin, MASK_SOLID );
+						if( slideTrace.fraction == 1.0f ) {
+							VectorCopy( slideEndPoint, newPositions[i] );
+							putVertexAtTheContactPosition = false;
+							// TODO: Modify velocity as well?
 						}
 					}
 				}
-				if( parkVertexAtTheContactPosition ) {
-					VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
-					// Park the vertex at the position
-					vertexMovability[i] = 0.0f;
-				}
+			}
+
+			if( putVertexAtTheContactPosition ) {
+				VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
 			}
 		}
+
+		minZLastFrame = std::min( minZLastFrame, newPositions[i][2] );
+		maxZLastFrame = std::max( maxZLastFrame, newPositions[i][2] );
+		avgXLastFrame += newPositions[i][0], avgYLastFrame += newPositions[i][1];
 	}
+
+	const float rcpNumVertices = Q_Rcp( (float)numVertices );
+	avgXLastFrame *= rcpNumVertices;
+	avgYLastFrame *= rcpNumVertices;
 
 	if( lastColorChangeTime + colorChangeInterval < currTime ) {
 		lastColorChangeTime = currTime;

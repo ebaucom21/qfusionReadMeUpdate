@@ -88,12 +88,17 @@ private:
 		vec3_t origin;
 
 		unsigned lifetime { 0 };
+		// Archimedes/xy expansion activation offset
+		int64_t expansionStartAt { std::numeric_limits<int64_t>::max() };
 
 		// Old/current
 		vec4_t *vertexPositions[2];
-		vec3_t *vertexVelocities;
-		// 0.0f or 1.0f, just to reduce branching during the vertices update
-		float *vertexMovability;
+
+		// Velocities of an initial burst, decelerate with time
+		vec3_t *vertexBurstVelocities;
+		// Velocities produced by external forces during simulation
+		vec3_t *vertexForceVelocities;
+
 		byte_vec4_t *vertexColors;
 
 		uint16_t numMeshIndices { 0 };
@@ -108,6 +113,11 @@ private:
 		// Has an external lifetime
 		std::span<const byte_vec4_t> colorReplacementPalette;
 
+		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
+		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
+		float minZLastFrame { std::numeric_limits<float>::max() }, maxZLastFrame { std::numeric_limits<float>::min() };
+		float avgXLastFrame { 0.0f }, avgYLastFrame { 0.0f };
+
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];
 
@@ -121,17 +131,17 @@ private:
 		RegularSimulatedHull<SubdivLevel> *prev { nullptr }, *next {nullptr };
 
 		vec4_t storageOfPositions[2][kNumVertices];
-		vec3_t storageOfVelocities[kNumVertices];
-		float storageOfMovability[kNumVertices];
+		vec3_t storageOfBurstVelocities[kNumVertices];
+		vec3_t storageOfForceVelocities[kNumVertices];
 		byte_vec4_t storageOfColors[kNumVertices];
 
 		RegularSimulatedHull() {
-			this->vertexPositions[0] = storageOfPositions[0];
-			this->vertexPositions[1] = storageOfPositions[1];
-			this->vertexVelocities   = storageOfVelocities;
-			this->vertexMovability   = storageOfMovability;
-			this->vertexColors       = storageOfColors;
-			this->subdivLevel        = SubdivLevel;
+			this->vertexPositions[0]    = storageOfPositions[0];
+			this->vertexPositions[1]    = storageOfPositions[1];
+			this->vertexBurstVelocities = storageOfBurstVelocities;
+			this->vertexForceVelocities = storageOfForceVelocities;
+			this->vertexColors          = storageOfColors;
+			this->subdivLevel           = SubdivLevel;
 		}
 	};
 
@@ -253,7 +263,7 @@ private:
 									wsw::RandomGenerator *__restrict rng );
 
 	static constexpr unsigned kMaxFireHulls  = 32;
-	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls;
+	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls * 2;
 	static constexpr unsigned kMaxWaveHulls  = kMaxFireHulls;
 
 	static const HullLayerParams kFireHullLayerParams[5];
@@ -265,6 +275,9 @@ private:
 	wsw::HeapBasedFreelistAllocator m_fireHullsAllocator { sizeof( FireHull ), kMaxFireHulls };
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
+
+	// Use the same buffer for vectors and scalars to aid DCache/TLB utilization
+	static vec3_t s_scratchpad[std::end( kNumVerticesForSubdivLevel )[-1]];
 
 	EntityEffect *m_entityEffectsHead { nullptr };
 	FireHull *m_fireHullsHead { nullptr };
