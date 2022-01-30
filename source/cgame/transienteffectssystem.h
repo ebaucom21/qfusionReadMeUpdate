@@ -217,13 +217,14 @@ private:
 	};
 
 	using FireHull  = ConcentricSimulatedHull<3, 5>;
-	using SmokeHull = RegularSimulatedHull<3>;
+	using SmokeHull = RegularSimulatedHull<2>;
 	using WaveHull  = RegularSimulatedHull<2>;
 
-	void unlinkAndFree( EntityEffect *effect );
-	void unlinkAndFree( FireHull *hull );
-	void unlinkAndFree( SmokeHull *hull );
-	void unlinkAndFree( WaveHull *hull );
+	void unlinkAndFreeEntityEffect( EntityEffect *effect );
+
+	void unlinkAndFreeFireHull( FireHull *hull );
+	void unlinkAndFreeSmokeHull( SmokeHull *hull );
+	void unlinkAndFreeWaveHull( WaveHull *hull );
 
 	[[nodiscard]]
 	auto addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
@@ -237,6 +238,21 @@ private:
 	template <typename Hull, bool HasShapeLists>
 	[[nodiscard]]
 	auto allocHull( Hull **head, wsw::FreelistAllocator *allocator, int64_t currTime, unsigned lifetime ) -> Hull *;
+
+	[[nodiscard]]
+	auto allocFireHull( int64_t currTime, unsigned lifetime ) -> FireHull * {
+		return allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, currTime, lifetime );
+	}
+
+	[[nodiscard]]
+	auto allocSmokeHull( int64_t currTime, unsigned lifetime ) -> SmokeHull * {
+		return allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, currTime, lifetime );
+	}
+
+	[[nodiscard]]
+	auto allocWaveHull( int64_t currTime, unsigned lifetime ) -> WaveHull * {
+		return allocHull<WaveHull, true>( &m_waveHullsHead, &m_waveHullsAllocator, currTime, lifetime );
+	}
 
 	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
 							float speed, float speedSpread );

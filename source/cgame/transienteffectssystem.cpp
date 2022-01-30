@@ -226,16 +226,16 @@ TransientEffectsSystem::TransientEffectsSystem() {
 
 TransientEffectsSystem::~TransientEffectsSystem() {
 	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
-		unlinkAndFree( effect );
+		unlinkAndFreeEntityEffect( effect );
 	}
 	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFree( hull );
+		unlinkAndFreeFireHull( hull );
 	}
 	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFree( hull );
+		unlinkAndFreeSmokeHull( hull );
 	}
 	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
-		unlinkAndFree( hull );
+		unlinkAndFreeWaveHull( hull );
 	}
 	for( CMShapeList *shapeList: m_freeShapeLists ) {
 		CM_FreeShapeList( cl.cms, shapeList );
@@ -310,22 +310,22 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
 	const vec4_t fireColor { 1.0f, 0.7f, 0.1f, 0.8f };
 
-	if( auto *hull = allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, m_lastTime, 800 ) ) {
+	if( auto *hull = allocFireHull( m_lastTime, 800 ) ) {
 		setupHullVertices( hull, origin, fireColor, kFireHullLayerParams );
 		hull->colorChangeInterval = 15;
 	}
 
-	if( auto *hull = allocHull<WaveHull, true>( &m_waveHullsHead, &m_waveHullsAllocator, m_lastTime, 250 ) ) {
+	if( auto *hull = allocWaveHull( m_lastTime, 250 ) ) {
 		setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
 	}
 
 	// TODO: Allocating two hulls at once could look better as a single operation
 
-	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 2500 ) ) {
+	if( auto *hull = allocSmokeHull( m_lastTime, 2500 ) ) {
 		hull->archimedesBottomAccel   = +45.0f;
 		hull->archimedesTopAccel      = +150.0f;
 		hull->xyExpansionTopAccel     = +50.0f;
-		hull->xyExpansionBottomAccel  = -40.0f;
+		hull->xyExpansionBottomAccel  = -30.0f;
 
 		hull->colorReplacementPalette = kSmokeReplacementPalette;
 		hull->colorChangeInterval     = 15;
@@ -334,14 +334,14 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 		hull->expansionStartAt = m_lastTime + 500;
 
-		setupHullVertices( hull, origin, smokeColor, 100.0f, 15.0f );
+		setupHullVertices( hull, origin, smokeColor, 100.0f, 10.0f );
 	}
 
-	if( auto *hull = allocHull<SmokeHull, true>( &m_smokeHullsHead, &m_smokeHullsAllocator, m_lastTime, 2500 ) ) {
+	if( auto *hull = allocSmokeHull( m_lastTime, 2500 ) ) {
 		hull->archimedesBottomAccel   = +35.0f;
 		hull->archimedesTopAccel      = +150.0f;
 		hull->xyExpansionTopAccel     = +65.0f;
-		hull->xyExpansionBottomAccel  = -35.0f;
+		hull->xyExpansionBottomAccel  = -25.0f;
 
 		hull->colorReplacementPalette = kSmokeReplacementPalette;
 		hull->colorChangeInterval     = 15;
@@ -350,7 +350,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 		hull->expansionStartAt = m_lastTime + 500;
 
-		setupHullVertices( hull, origin, smokeColor, 120.0f, 7.5f );
+		setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
 	}
 }
 
@@ -763,27 +763,27 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 	hull->numMeshIndices       = indicesSpan.size();
 }
 
-void TransientEffectsSystem::unlinkAndFree( EntityEffect *effect ) {
+void TransientEffectsSystem::unlinkAndFreeEntityEffect( EntityEffect *effect ) {
 	wsw::unlink( effect, &m_entityEffectsHead );
 	effect->~EntityEffect();
 	m_entityEffectsAllocator.free( effect );
 }
 
-void TransientEffectsSystem::unlinkAndFree( SmokeHull *hull ) {
+void TransientEffectsSystem::unlinkAndFreeSmokeHull( SmokeHull *hull ) {
 	wsw::unlink( hull, &m_smokeHullsHead );
 	m_freeShapeLists.push_back( hull->shapeList );
 	hull->~SmokeHull();
 	m_smokeHullsAllocator.free( hull );
 }
 
-void TransientEffectsSystem::unlinkAndFree( WaveHull *hull ) {
+void TransientEffectsSystem::unlinkAndFreeWaveHull( WaveHull *hull ) {
 	wsw::unlink( hull, &m_waveHullsHead );
 	m_freeShapeLists.push_back( hull->shapeList );
 	hull->~WaveHull();
 	m_waveHullsAllocator.free( hull );
 }
 
-void TransientEffectsSystem::unlinkAndFree( FireHull *hull ) {
+void TransientEffectsSystem::unlinkAndFreeFireHull( FireHull *hull ) {
 	wsw::unlink( hull, &m_fireHullsHead );
 	hull->~FireHull();
 	m_fireHullsAllocator.free( hull );
@@ -809,7 +809,7 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 		nextEffect = effect->next;
 
 		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
-			unlinkAndFree( effect );
+			unlinkAndFreeEntityEffect( effect );
 			continue;
 		}
 
@@ -830,7 +830,7 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 			float *const zScale = effect->entity.axis + ( 2 * 3 ) + 2;
 			*zScale -= 4.0f * timeDeltaSeconds;
 			if( *zScale < 0.01f ) {
-				unlinkAndFree( effect );
+				unlinkAndFreeEntityEffect( effect );
 				continue;
 			}
 		}
@@ -866,7 +866,7 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
 			activeConcentricHulls.push_back( hull );
 		} else {
-			unlinkAndFree( hull );
+			unlinkAndFreeFireHull( hull );
 		}
 	}
 	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
@@ -874,7 +874,7 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
 			activeRegularHulls.push_back( hull );
 		} else {
-			unlinkAndFree( hull );
+			unlinkAndFreeSmokeHull( hull );
 		}
 	}
 	for( WaveHull *hull = m_waveHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
@@ -882,7 +882,7 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
 			activeRegularHulls.push_back( hull );
 		} else {
-			unlinkAndFree( hull );
+			unlinkAndFreeWaveHull( hull );
 		}
 	}
 
