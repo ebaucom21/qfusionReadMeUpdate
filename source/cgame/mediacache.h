@@ -202,7 +202,10 @@ public:
 	CachedModel modInstagunWallHit { this, wsw::StringView( PATH_INSTABLAST_IMPACT_MODEL ) };
 	CachedModel modLasergunWallExplo { this, wsw::StringView( PATH_LASERGUN_IMPACT_MODEL ) };
 
-	CachedMaterial shaderParticle { this, wsw::StringView( "particle" ) };
+	CachedMaterial shaderSparkParticle { this, wsw::StringView( "gfx/misc/particle_spark" ) };
+	CachedMaterial shaderDebrisParticle { this, wsw::StringView( "gfx/misc/particle_debris" ) };
+	CachedMaterial shaderBloodParticle { this, wsw::StringView( "gfx/misc/particle_blood" ) };
+	CachedMaterial shaderFlareParticle { this, wsw::StringView( "gfx/misc/particle_flare" ) };
 
 	CachedMaterial shaderNet { this, wsw::StringView( "gfx/hud/net" ) };
 	CachedMaterial shaderSelect { this, wsw::StringView( "gfx/hud/select" ) };

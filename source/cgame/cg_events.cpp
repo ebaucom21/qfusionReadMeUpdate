@@ -118,7 +118,15 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 				.maxTimeout    = 150
 			};
 
-			cg.particleSystem.addSmallParticleFlock( cg.frameCount % 2 ? colorYellow : colorWhite, flockFiller );
+			Particle::RenderingParams particleRenderingParams {
+				.material = cgs.media.shaderSparkParticle,
+				.kind     = Particle::Spark,
+				.length   = 4.0f,
+				.width    = 1.0f
+			};
+
+			const float *color = cg.frameCount % 2 ? colorYellow : colorWhite;
+			cg.particleSystem.addSmallParticleFlock( particleRenderingParams, color, flockFiller );
 
 			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxLasergunHit[rand() % 3], trace->endpos, CHAN_AUTO,
 													  cg_volume_effects->value, ATTN_STATIC );
@@ -464,7 +472,15 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 		.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
 		.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] }
 	};
-	cg.particleSystem.addSmallParticleFlock( color, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderSparkParticle,
+		.kind     = Particle::Spark,
+		.length   = 5.0f,
+		.width    = 2.0f,
+	};
+
+	cg.particleSystem.addSmallParticleFlock( particleRenderingParams, color, flockFiller );
 }
 
 /*
@@ -1121,13 +1137,21 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		count = 6;
 	}
 
-	const vec3_t color { 1.0f, 0.67f, 0.0f };
+	const vec4_t color { 1.0f, 0.67f, 0.0f, 1.0f };
 	ConeFlockFiller flockFiller {
 		.origin = { ent->origin[0], ent->origin[1], ent->origin[2] },
 		.offset = { dir[0], dir[1], dir[2] },
 		.dir    = { dir[0], dir[1], dir[2] }
 	};
-	cg.particleSystem.addSmallParticleFlock( color, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderSparkParticle,
+		.kind     = Particle::Spark,
+		.length   = 4.0f,
+		.width    = 1.0f
+	};
+
+	cg.particleSystem.addSmallParticleFlock( particleRenderingParams, color, flockFiller );
 }
 
 static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predicted ) {

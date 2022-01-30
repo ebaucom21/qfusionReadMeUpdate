@@ -25,8 +25,9 @@ struct UniformFlockFiller {
 	unsigned maxTimeout { 700u };
 
 	[[nodiscard]]
-	auto fill( BaseParticle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
+	auto fill( Particle *__restrict, unsigned maxParticles,
+			   wsw::RandomGenerator *__restrict,
+			   const float *initialColor, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
@@ -45,12 +46,14 @@ struct ConeFlockFiller {
 	unsigned maxTimeout { 700u };
 
 	[[nodiscard]]
-	auto fill( BaseParticle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
+	auto fill( Particle *__restrict, unsigned maxParticles,
+			   wsw::RandomGenerator *__restrict,
+			   const float *initialColor, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
 
 struct alignas( 16 ) ParticleFlock {
-	BaseParticle *particles;
+	Particle::RenderingParams params;
+	Particle *particles;
 	int64_t timeoutAt;
 	unsigned numParticlesLeft;
 	unsigned binIndex;
@@ -79,7 +82,7 @@ private:
 		const unsigned maxParticlesPerFlock;
 
 		FlocksBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
-			: allocator( sizeof( ParticleFlock ) + sizeof( BaseParticle ) * maxParticlesPerFlock, maxFlocks )
+			: allocator( sizeof( ParticleFlock ) + sizeof( Particle ) * maxParticlesPerFlock, maxFlocks )
 			, maxParticlesPerFlock( maxParticlesPerFlock ) {}
 	};
 
@@ -114,41 +117,51 @@ public:
 	~ParticleSystem();
 
 	template <typename Filler>
-	void addSmallParticleFlock( const float *baseColor, Filler &&filler ) {
+	void addSmallParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
 		ParticleFlock *flock = createFlock( 0, currTime );
-		auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxSmallFlockSize, &m_rng, currTime );
 		Vector4Copy( baseColor, flock->color );
+		flock->params = params;
+
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxSmallFlockSize,
+															&m_rng, flock->color, currTime );
 		flock->timeoutAt = timeoutAt;
 		flock->numParticlesLeft = numParticles;
 	}
 
 	template <typename Filler>
-	void addMediumParticleFlock( const float *baseColor, Filler &&filler ) {
+	void addMediumParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
 		ParticleFlock *flock = createFlock( 1, currTime );
-		auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxMediumFlockSize, &m_rng, currTime );
 		Vector4Copy( baseColor, flock->color );
+		flock->params = params;
+
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxMediumFlockSize, &m_rng,
+															flock->color, currTime );
 		flock->timeoutAt = timeoutAt;
 		flock->numParticlesLeft = numParticles;
 	}
 
 	template <typename Filler>
-	void addLargeParticleFlock( const float *baseColor, Filler &&filler ) {
+	void addLargeParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
 		ParticleFlock *flock = createFlock( 2, currTime );
-		auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxLargeFlockSize, &m_rng, currTime );
 		Vector4Copy( baseColor, flock->color );
+		flock->params = params;
+
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxLargeFlockSize,
+															&m_rng, flock->color, currTime );
 		flock->timeoutAt = timeoutAt;
 		flock->numParticlesLeft = numParticles;
 	}
 
 	[[nodiscard]]
-	auto createTrailFlock() -> ParticleFlock * {
+	auto createTrailFlock( const Particle::RenderingParams &params, const float *initialColor ) -> ParticleFlock * {
 		// Don't let it evict anything
 		const int64_t currTime = std::numeric_limits<int64_t>::min();
 		ParticleFlock *flock = createFlock( 3, currTime );
-		Vector4Set( flock->color, 1.0f, 1.0f, 1.0f, 1.0f );
+		Vector4Copy( initialColor, flock->color );
+		flock->params = params;
 		// Externally managed
 		flock->timeoutAt = std::numeric_limits<int64_t>::max();
 		flock->numParticlesLeft = 0;

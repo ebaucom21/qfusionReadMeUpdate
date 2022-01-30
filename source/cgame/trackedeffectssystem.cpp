@@ -97,12 +97,18 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, const float *origin, 
 		wsw::link( trail, &m_particleTrailsHead );
 		trail->entNum = entNum;
 
+		const Particle::RenderingParams particleRenderingParams {
+			.material = cgs.media.shaderFlareParticle,
+			.kind     = Particle::Sprite,
+			.radius   = 8.0f
+		};
+
 		// Don't drop right now, just mark for computing direction next frames
-		trail->particleFlock = cg.particleSystem.createTrailFlock();
+		trail->particleFlock = cg.particleSystem.createTrailFlock( particleRenderingParams, color );
 		VectorCopy( origin, trail->lastDropOrigin );
-		Vector4Copy( color, trail->particleFlock->color );
 		return trail;
 	}
+
 	return nullptr;
 }
 
@@ -136,8 +142,9 @@ void TrackedEffectsSystem::updateParticleTrail( ParticleTrail *trail, const floa
 				}
 
 				// Creates not less than 1 particle
-				auto [_, numParticles] = filler->fill( flock->particles + flock->numParticlesLeft,
-													   trail->maxParticlesPerDrop, &m_rng, currTime );
+				const auto [_, numParticles] = filler->fill( flock->particles + flock->numParticlesLeft,
+															 trail->maxParticlesPerDrop, &m_rng,
+															 flock->color, currTime );
 				assert( numParticles );
 				flock->numParticlesLeft += numParticles;
 				VectorAdd( filler->origin, stepVec, filler->origin );

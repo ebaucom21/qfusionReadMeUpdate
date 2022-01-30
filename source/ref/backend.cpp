@@ -1109,7 +1109,6 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	assert( particleDrawSurf->particleIndex < aggregate->numParticles );
 	const auto *particle = aggregate->particles + particleDrawSurf->particleIndex;
 
-	const float radius = 8;
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
 	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
@@ -1117,27 +1116,71 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
 	mesh_t mesh;
 
-	vec3_t origin;
-	VectorCopy( particle->origin, origin );
+	assert( aggregate->params.kind == Particle::Sprite || aggregate->params.kind == Particle::Spark );
+	if( aggregate->params.kind == Particle::Sprite ) {
+		vec3_t v_left, v_up;
+		VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+		VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 
-	vec3_t v_left, v_up;
-	VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
-	VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+		if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+			VectorInverse( v_left );
+		}
 
-	if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
-		VectorInverse( v_left );
+		const float radius = aggregate->params.radius;
+		assert( radius >= 1.0f );
+
+		vec3_t point;
+		VectorMA( particle->origin, -radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[0] );
+		VectorMA( point, -radius, v_left, xyz[3] );
+
+		VectorMA( particle->origin, radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[1] );
+		VectorMA( point, -radius, v_left, xyz[2] );
+	} else {
+		mat3_t axis, localAxis;
+		if( const float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 0.0001f ) [[likely]] {
+			const float rcpSpeed = Q_RSqrt( squareSpeed );
+			VectorScale( particle->velocity, rcpSpeed, axis );
+			MakeNormalVectors( axis, axis + 3, axis + 6 );
+		} else {
+			VectorCopy( &axis_identity[AXIS_UP], &axis[AXIS_FORWARD] );
+			VectorCopy( &axis_identity[AXIS_RIGHT], &axis[AXIS_RIGHT] );
+			VectorCopy( &axis_identity[AXIS_FORWARD], &axis[AXIS_UP] );
+		}
+
+		Matrix3_Transpose( axis, localAxis );
+
+		const float length = aggregate->params.length;
+		const float width = aggregate->params.width;
+		assert( length >= 1.0f && width >= 1.0f );
+
+		const float xmin = 0;
+		const float xmax = length;
+		const float ymin = -0.5f * width;
+		const float ymax = +0.5f * width;
+
+		VectorSet( xyz[0], xmin, 0, ymin );
+		VectorSet( xyz[1], xmin, 0, ymax );
+		VectorSet( xyz[2], xmax, 0, ymax );
+		VectorSet( xyz[3], xmax, 0, ymin );
+
+		vec3_t tmp[4];
+		Matrix3_TransformVector( localAxis, xyz[0], tmp[0] );
+		VectorAdd( tmp[0], particle->origin, xyz[0] );
+		Matrix3_TransformVector( localAxis, xyz[1], tmp[1] );
+		VectorAdd( tmp[1], particle->origin, xyz[1] );
+		Matrix3_TransformVector( localAxis, xyz[2], tmp[2] );
+		VectorAdd( tmp[2], particle->origin, xyz[2] );
+		Matrix3_TransformVector( localAxis, xyz[3], tmp[3] );
+		VectorAdd( tmp[3], particle->origin, xyz[3] );
 	}
 
-	vec3_t point;
-	VectorMA( origin, -radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[0] );
-	VectorMA( point, -radius, v_left, xyz[3] );
-
-	VectorMA( origin, radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[1] );
-	VectorMA( point, -radius, v_left, xyz[2] );
-
-	Vector4Set( colors[0], 255, 255, 255, 255 );
+	Vector4Set( colors[0],
+				(uint8_t)( 255 * particle->color[0] ),
+				(uint8_t)( 255 * particle->color[1] ),
+				(uint8_t)( 255 * particle->color[2] ),
+				(uint8_t)( 255 * particle->color[3] ) );
 
 	Vector4Copy( colors[0], colors[1] );
 	Vector4Copy( colors[0], colors[2] );

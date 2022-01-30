@@ -70,7 +70,7 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	CMShapeList *const shapeList = m_freeShapeLists.back();
 	m_freeShapeLists.pop_back();
 
-	auto *const particles = (BaseParticle *)( mem + sizeof( ParticleFlock ) );
+	auto *const particles = (Particle *)( mem + sizeof( ParticleFlock ) );
 	assert( ( (uintptr_t)particles % 16 ) == 0 );
 
 	auto *const flock = new( mem )ParticleFlock {
@@ -84,8 +84,9 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	return flock;
 }
 
-auto UniformFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxParticles,
-							   wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
+auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
+							   wsw::RandomGenerator *__restrict rng,
+							   const float *initialColor, int64_t currTime ) __restrict
 	-> std::pair<int64_t, unsigned> {
 	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
 
@@ -112,7 +113,7 @@ auto UniformFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxP
 	const unsigned timeoutSpread = maxTimeout - minTimeout;
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
-		BaseParticle *const __restrict p = particles + i;
+		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -gravity, 0 );
 		p->bouncesLeft = bounceCount;
@@ -127,13 +128,17 @@ auto UniformFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxP
 		p->timeoutAt = baseTimeoutAt + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless/track the relative part?
 		resultTimeout = std::max( p->timeoutAt, resultTimeout );
+
+		p->color = initialColor;
 	}
 
 	return { resultTimeout, numParticles };
 }
 
-auto ConeFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxParticles,
-							wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
+auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
+							wsw::RandomGenerator *__restrict rng,
+							const float *initialColor,
+							int64_t currTime ) __restrict
 	-> std::pair<int64_t, unsigned> {
 	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
 
@@ -163,7 +168,7 @@ auto ConeFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxPart
 
 	// TODO: Make cached conical samples for various angles?
 	for( unsigned i = 0; i < numParticles; ++i ) {
-		BaseParticle *const __restrict p = particles + i;
+		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -gravity, 0 );
 		p->bouncesLeft = bounceCount;
@@ -179,12 +184,14 @@ auto ConeFlockFiller::fill( BaseParticle *__restrict particles, unsigned maxPart
 		p->timeoutAt = baseTimeoutAt + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless/track the relative part?
 		resultTimeout = std::max( p->timeoutAt, resultTimeout );
+
+		p->color = initialColor;
 	}
 
 	return { resultTimeout, numParticles };
 }
 
-void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
+void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	// Limit delta by sane bounds
 	const float deltaSeconds = 1e-3f * (float)std::clamp( (int)( currTime - m_lastTime ), 1, 33 );
 	m_lastTime = currTime;
@@ -205,7 +212,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequ
 	for( FlocksBin &bin: m_bins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
-				drawSceneRequest->addParticles( flock->mins, flock->maxs, flock->particles, numParticles );
+				request->addParticles( flock->mins, flock->maxs, flock->params, flock->particles, numParticles );
 			}
 		}
 	}
@@ -218,7 +225,7 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 
 	BoundsBuilder boundsBuilder;
 	for( unsigned i = 0; i < numParticlesLeft; ++i ) {
-		BaseParticle *const __restrict particle = particles + i;
+		Particle *const __restrict particle = particles + i;
 		VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
 
 		VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
@@ -240,7 +247,7 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
 	for( unsigned i = 0; i < numParticlesLeft; ) {
-		BaseParticle *const __restrict p = particles + i;
+		Particle *const __restrict p = particles + i;
 		if( p->timeoutAt > currTime ) [[likely]] {
 			CM_ClipToShapeList( cl.cms, shapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
 			if( trace.fraction == 1.0f ) [[likely]] {

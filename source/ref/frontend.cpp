@@ -700,7 +700,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	for( const unsigned aggregateIndex: aggregateIndices ) {
 		const Scene::ParticlesAggregate *const __restrict pa = particles + aggregateIndex;
 		for( unsigned particleIndex = 0; particleIndex < pa->numParticles; ++particleIndex ) {
-			const BaseParticle *__restrict particle = pa->particles + particleIndex;
+			const Particle *__restrict particle = pa->particles + particleIndex;
 
 			vec3_t toParticle;
 			VectorSubtract( particle->origin, viewOrigin, toParticle );
@@ -715,7 +715,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			drawSurf->particleIndex  = particleIndex;
 
 			// TODO: Inline/add some kind of bulk insertion
-			addEntryToSortList( particleEntity, fog, m_particleShader, distanceLike, 0, nullptr, drawSurf );
+			addEntryToSortList( particleEntity, fog, pa->params.material, distanceLike, 0, nullptr, drawSurf );
 		}
 	}
 }
@@ -1712,13 +1712,16 @@ void DrawSceneRequest::addLight( const float *origin, float programRadius, float
 }
 
 void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
-									 const BaseParticle *particles, unsigned numParticles ) {
+									 const Particle::RenderingParams &params,
+									 const Particle *particles, unsigned numParticles ) {
 	assert( numParticles <= kMaxParticlesInAggregate );
 	if( !m_particles.full() ) [[likely]] {
 		m_particles.emplace_back( ParticlesAggregate {
-			.mins = { mins[0], mins[1], mins[2], mins[3] },
-			.maxs = { maxs[0], maxs[1], maxs[2], maxs[3] },
-			.particles = particles, .numParticles = numParticles
+			.particles    = particles,
+			.params       = params,
+			.mins         = { mins[0], mins[1], mins[2], mins[3] },
+			.maxs         = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.numParticles = numParticles
 		});
 	}
 }

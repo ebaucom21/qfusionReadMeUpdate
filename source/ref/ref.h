@@ -184,12 +184,25 @@ typedef struct refdef_s {
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
 
-struct alignas( 16 ) BaseParticle {
+struct alignas( 16 ) Particle {
+	enum Kind { Sprite, Spark };
+
+	// Common for flocks/aggregates
+	struct RenderingParams {
+		shader_s *material { nullptr };
+		Kind kind { Sprite };
+		float length { 0.0f };
+		float width { 0.0f };
+		float radius { 0.0f };
+	};
+
 	float origin[4];
 	float oldOrigin[4];
 	float velocity[4];
 	float accel[4];
 	int64_t timeoutAt;
+	// Points to an external buffer with a greater lifetime
+	const float *color;
 	unsigned bouncesLeft;
 };
 
@@ -232,8 +245,9 @@ public:
 
 	// A flock of particles or just a bunch of particles with enclosing bounds
 	struct ParticlesAggregate {
+		const Particle *particles;
+		Particle::RenderingParams params;
 		float mins[4], maxs[4];
-		const BaseParticle *particles;
 		unsigned numParticles { 0 };
 	};
 
@@ -282,7 +296,8 @@ public:
 	}
 
 	// TODO: Allow adding multiple particle aggregates at once
-	void addParticles( const float *mins, const float *maxs, const BaseParticle *particles, unsigned numParticles );
+	void addParticles( const float *mins, const float *maxs, const Particle::RenderingParams &params,
+					   const Particle *particles, unsigned numParticles );
 
 	void addExternalMesh( const float *mins, const float *maxs, std::span<const ExternalMesh> parts );
 

@@ -69,7 +69,14 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		.minPercentage = 1.0f, .maxPercentage = 1.0f
 	};
 
-	cg.particleSystem.addLargeParticleFlock( color, flockFiller );
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderDebrisParticle,
+		.kind     = Particle::Spark,
+		.length   = 5.0f,
+		.width    = 2.0f
+	};
+
+	cg.particleSystem.addLargeParticleFlock( particleRenderingParams, color, flockFiller );
 
 	m_transientEffectsSystem.spawnExplosion( spriteOrigin, color );
 }
@@ -87,7 +94,15 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 		.offset = { impactNormal[0], impactNormal[1], impactNormal[2] },
 		.minTimeout = 50, .maxTimeout = 200
 	};
-	cg.particleSystem.addMediumParticleFlock( colorGreen, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderSparkParticle,
+		.kind     = Particle::Spark,
+		.length   = 3.0f,
+		.width    = 1.0f
+	};
+
+	cg.particleSystem.addMediumParticleFlock( particleRenderingParams, colorGreen, flockFiller );
 
 	m_transientEffectsSystem.spawnPlasmaImpactEffect( origin, impactNormal );
 }
@@ -118,7 +133,15 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.minSpeed = 50.0f, .maxSpeed = 75.0f,
 			.minPercentage = 0.5f, .maxPercentage = 0.5f
 		};
-		cg.particleSystem.addSmallParticleFlock( colorRed, flockFiller );
+
+		Particle::RenderingParams particleRenderingParams {
+			.material = cgs.media.shaderBloodParticle,
+			.kind     = Particle::Spark,
+			.length   = 3.0f,
+			.width    = 1.5f
+		};
+
+		cg.particleSystem.addSmallParticleFlock( particleRenderingParams, colorMagenta, flockFiller );
 	}
 
 	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage );
@@ -128,7 +151,15 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 	UniformFlockFiller flockFiller {
 		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
 	};
-	cg.particleSystem.addLargeParticleFlock( colorBlue, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderSparkParticle,
+		.kind     = Particle::Spark,
+		.length   = 8.0f,
+		.width    = 2.0f
+	};
+
+	cg.particleSystem.addLargeParticleFlock( particleRenderingParams, colorBlue, flockFiller );
 
 	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
@@ -148,7 +179,15 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	UniformFlockFiller flockFiller {
 		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
 	};
-	cg.particleSystem.addLargeParticleFlock( color, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderSparkParticle,
+		.kind     = Particle::Spark,
+		.length   = 8.0f,
+		.width    = 1.0
+	};
+
+	cg.particleSystem.addLargeParticleFlock( particleRenderingParams, color, flockFiller );
 
 	// TODO: Don't we need an IG-specific sound
 	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
@@ -187,14 +226,22 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 			// TODO: Check sound origin
 			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
 
-			const vec3_t color { 0.30f, 0.30, 0.25f };
+			const vec4_t color { 0.30f, 0.30, 0.25f, 1.0f };
 			ConeFlockFiller flockFiller {
 				.origin = { pos[0], pos[1], pos[2] },
 				.offset = { dir[0], dir[1], dir[2] },
 				.dir    = { dir[0], dir[1], dir[2] },
 				.angle  = 60
 			};
-			cg.particleSystem.addMediumParticleFlock( color, flockFiller );
+
+			Particle::RenderingParams particleRenderingParams {
+				.material = cgs.media.shaderSparkParticle,
+				.kind     = Particle::Spark,
+				.length   = 4.0f,
+				.width    = 1.0f
+			};
+
+			cg.particleSystem.addMediumParticleFlock( particleRenderingParams, color, flockFiller );
 		}
 	}
 }
@@ -203,11 +250,20 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
 	UniformFlockFiller flockFiller {
-		.origin = { origin[0], origin[1], origin[2] },
-		.offset = { dir[0], dir[1], dir[2] },
-		.gravity = 0.0f, .bounceCount = 1
+		.origin  = { origin[0], origin[1], origin[2] },
+		.offset  = { dir[0], dir[1], dir[2] },
+		.gravity = 0.0f,
+		.bounceCount = 1
 	};
-	cg.particleSystem.addLargeParticleFlock( colorOrange, flockFiller );
+
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderDebrisParticle,
+		.kind     = Particle::Spark,
+		.length   = 4.0f,
+		.width    = 2.0f
+	};
+
+	cg.particleSystem.addLargeParticleFlock( particleRenderingParams, colorOrange, flockFiller );
 
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
 }
@@ -234,7 +290,14 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, flo
 		.maxPercentage = maxPercentage
 	};
 
-	cg.particleSystem.addSmallParticleFlock( colorWhite, flockFiller );
+	Particle::RenderingParams particleRenderingParams {
+		.material = cgs.media.shaderDebrisParticle,
+		.kind     = Particle::Spark,
+		.length   = 5.0f,
+		.width    = 1.0f
+	};
+
+	cg.particleSystem.addSmallParticleFlock( particleRenderingParams, colorWhite, flockFiller );
 
 	m_transientEffectsSystem.spawnBulletLikeImpactEffect( trace->endpos, trace->plane.normal );
 }
