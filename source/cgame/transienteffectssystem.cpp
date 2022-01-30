@@ -269,28 +269,54 @@ static const byte_vec4_t kSmokeReplacementPalette[] {
 const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullLayerParams[5] {
 	{
 		.speed = 25.0f, .speedSpread = 5.0f, .finalOffset = 8.0f,
-		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f, .smoothSecondaryNeighbours = true,
-		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.003f, .colorReplacementChance = 0.015f
+		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.smoothSecondaryNeighbours = true,
+		.regularColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.003f, .replacementChance = 0.015f
+		},
+		.decayColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.25f
+		}
 	},
 	{
 		.speed = 35.0f, .speedSpread = 5.0f, .finalOffset = 6.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
-		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.008f, .colorReplacementChance = 0.025f
+		.regularColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.008f, .replacementChance = 0.025f
+		},
+		.decayColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.25f
+		}
 	},
 	{
 		.speed = 45.0f, .speedSpread = 7.5f, .finalOffset = 4.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
-		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.025f, .colorReplacementChance = 0.045f,
+		.regularColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.025f, .replacementChance = 0.045f,
+		},
+		.decayColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.50f,
+		}
 	},
 	{
 		.speed = 52.5f, .speedSpread = 10.0f, .finalOffset = 2.0f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 20.0f,
-		.colorReplacementPalette = kFireReplacementPalette, .colorDropChance = 0.035f, .colorReplacementChance = 0.065f,
+		.regularColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.035f, .replacementChance = 0.065f,
+		},
+		.decayColorProps = {
+			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.75f,
+		}
 	},
 	{
 		.speed = 60.0f, .speedSpread = 12.5f, .finalOffset = 0.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 30.0f,
-		.colorReplacementPalette = kFireReplacementPalette2, .colorDropChance = 0.045f, .colorReplacementChance = 0.085f
+		.regularColorProps = {
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.045f, .replacementChance = 0.085f
+		},
+		.decayColorProps = {
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.25f, .replacementChance = 0.50f
+		}
 	},
 };
 
@@ -312,11 +338,12 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 	if( auto *hull = allocFireHull( m_lastTime, 800 ) ) {
 		setupHullVertices( hull, origin, fireColor, kFireHullLayerParams );
-		hull->colorChangeInterval = 15;
+		hull->decayStartAt = m_lastTime + 600;
 	}
 
 	if( auto *hull = allocWaveHull( m_lastTime, 250 ) ) {
 		setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
+		hull->regularColorProps.interval = std::numeric_limits<unsigned>::max();
 	}
 
 	// TODO: Allocating two hulls at once could look better as a single operation
@@ -327,10 +354,10 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 		hull->xyExpansionTopAccel     = +50.0f;
 		hull->xyExpansionBottomAccel  = -30.0f;
 
-		hull->colorReplacementPalette = kSmokeReplacementPalette;
-		hull->colorChangeInterval     = 15;
-		hull->colorReplacementChance  = 0.020f;
-		hull->colorDropChance         = 0.002f;
+		hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
+		hull->regularColorProps.interval           = 15;
+		hull->regularColorProps.dropChance         = 0.002f;
+		hull->regularColorProps.replacementChance  = 0.020f;
 
 		hull->expansionStartAt = m_lastTime + 500;
 
@@ -343,10 +370,10 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 		hull->xyExpansionTopAccel     = +65.0f;
 		hull->xyExpansionBottomAccel  = -25.0f;
 
-		hull->colorReplacementPalette = kSmokeReplacementPalette;
-		hull->colorChangeInterval     = 15;
-		hull->colorReplacementChance  = 0.035f;
-		hull->colorDropChance         = 0.003f;
+		hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
+		hull->regularColorProps.interval           = 15;
+		hull->regularColorProps.replacementChance  = 0.035f;
+		hull->regularColorProps.dropChance         = 0.003f;
 
 		hull->expansionStartAt = m_lastTime + 500;
 
@@ -715,10 +742,9 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		const float minRegularSpeed = std::max( 0.0f, params->speed - 0.5f * params->speedSpread );
 		const float maxRegularSpeed = params->speed + 0.5f * params->speedSpread;
 
-		layer->finalOffset             = params->finalOffset;
-		layer->colorReplacementPalette = params->colorReplacementPalette;
-		layer->colorDropChance         = params->colorDropChance;
-		layer->colorReplacementChance  = params->colorReplacementChance;
+		layer->finalOffset       = params->finalOffset;
+		layer->regularColorProps = params->regularColorProps;
+		layer->decayColorProps   = params->decayColorProps;
 
 		std::fill( spikeSpeedBoost, spikeSpeedBoost + verticesSpan.size(), 0.0f );
 
@@ -1066,10 +1092,10 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	avgXLastFrame *= rcpNumVertices;
 	avgYLastFrame *= rcpNumVertices;
 
-	if( lastColorChangeTime + colorChangeInterval < currTime ) {
+	const ColorChangeProps &colorChangeProps = currTime < decayStartAt ? regularColorProps : decayColorProps;
+	if( lastColorChangeTime + colorChangeProps.interval < currTime ) {
+		processColorChange( vertexColors, numVertices, colorChangeProps, rng );
 		lastColorChangeTime = currTime;
-		processColorChange( vertexColors, numVertices, colorReplacementPalette,
-							colorDropChance, colorReplacementChance, rng );
 	}
 }
 
@@ -1130,20 +1156,21 @@ void TransientEffectsSystem::BaseConcentricSimulatedHull::simulate( int64_t curr
 	hullBoundsBuilder.storeTo( this->mins, this->maxs );
 	this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
 
-	if( lastColorChangeTime + colorChangeInterval < currTime ) {
-		lastColorChangeTime = currTime;
-		for( unsigned i = 0; i < numLayers; ++i ) {
-			Layer *const layer = &layers[i];
-			processColorChange( layer->vertexColors, numVertices, layer->colorReplacementPalette,
-								layer->colorDropChance, layer->colorReplacementChance, rng );
+	for( unsigned i = 0; i < numLayers; ++i ) {
+		Layer *const layer = &layers[i];
+		const ColorChangeProps &props = currTime < decayStartAt ? layer->regularColorProps : layer->decayColorProps;
+		if( layer->lastColorChangeTime + props.interval < currTime ) {
+			processColorChange( layer->vertexColors, numVertices, props, rng );
+			layer->lastColorChangeTime = currTime;
 		}
 	}
 }
 
 void TransientEffectsSystem::processColorChange( byte_vec4_t *__restrict colors, unsigned numColors,
-												 std::span<const byte_vec4_t> replacementPalette,
-												 float dropChance, float replacementChance,
+												 const ColorChangeProps &colorChangeProps,
 												 wsw::RandomGenerator *__restrict rng ) {
+	const auto replacementPalette = colorChangeProps.replacementPalette;
+	const float dropChance = colorChangeProps.dropChance;
 
 	assert( numColors );
 	unsigned i = 0;
@@ -1156,6 +1183,7 @@ void TransientEffectsSystem::processColorChange( byte_vec4_t *__restrict colors,
 			}
 		} while( ++i < numColors );
 	} else {
+		const float replacementChance = colorChangeProps.replacementChance;
 		do {
 			// Don't process elements that became void
 			if( colors[i][3] != 0 ) {

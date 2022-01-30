@@ -78,6 +78,14 @@ private:
 
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 
+	struct ColorChangeProps {
+		// Points to an externally-owned buffer, usually with &'static lifetime
+		std::span<const byte_vec4_t> replacementPalette;
+		unsigned interval { 15 };
+		float dropChance { 0.0f };
+		float replacementChance { 0.0f };
+	};
+
 	struct BaseRegularSimulatedHull {
 		CMShapeList *shapeList { nullptr };
 		const uint16_t *meshIndices { nullptr };
@@ -90,6 +98,7 @@ private:
 		unsigned lifetime { 0 };
 		// Archimedes/xy expansion activation offset
 		int64_t expansionStartAt { std::numeric_limits<int64_t>::max() };
+		int64_t decayStartAt { std::numeric_limits<int64_t>::max() };
 
 		// Old/current
 		vec4_t *vertexPositions[2];
@@ -107,11 +116,8 @@ private:
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
 
-		unsigned colorChangeInterval { std::numeric_limits<unsigned>::max() };
-		float colorDropChance { 0.0f };
-		float colorReplacementChance { 0.0f };
-		// Has an external lifetime
-		std::span<const byte_vec4_t> colorReplacementPalette;
+		ColorChangeProps regularColorProps;
+		ColorChangeProps decayColorProps;
 
 		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
 		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
@@ -152,22 +158,23 @@ private:
 		// Distances to the nearest obstacle (or the maximum growth radius in case of no obstacles)
 		float *limitsAtDirections;
 		int64_t spawnTime { 0 };
-		int64_t lastColorChangeTime { 0 };
+		int64_t decayStartAt { std::numeric_limits<int64_t>::max() };
 
 		struct Layer {
 			vec4_t mins, maxs;
+			int64_t lastColorChangeTime { 0 };
 			vec4_t *vertexPositions;
 			// Contains pairs (speed, distance from origin along the direction)
 			vec2_t *vertexSpeedsAndDistances;
 			byte_vec4_t *vertexColors;
 			ExternalMesh *submittedMesh;
+
 			// Subtracted from limitsAtDirections for this layer, must be non-negative.
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
 			float finalOffset { 0 };
 
-			float colorDropChance { 0.0f };
-			float colorReplacementChance { 0.0f };
-			std::span<const byte_vec4_t> colorReplacementPalette;
+			ColorChangeProps regularColorProps;
+			ColorChangeProps decayColorProps;
 		};
 
 		Layer *layers { nullptr };
@@ -177,8 +184,6 @@ private:
 
 		unsigned numLayers { 0 };
 		unsigned lifetime { 0 };
-
-		unsigned colorChangeInterval { std::numeric_limits<unsigned>::max() };
 
 		uint16_t numMeshIndices { 0 };
 		uint16_t numMeshVertices { 0 };
@@ -262,9 +267,9 @@ private:
 		const float finalOffset;
 		const float speedSpikeChance;
 		const float minSpeedSpike, maxSpeedSpike;
-		const bool smoothSecondaryNeighbours = false;
-		const std::span<const byte_vec4_t> colorReplacementPalette;
-		const float colorDropChance, colorReplacementChance;
+		const bool smoothSecondaryNeighbours { false };
+		ColorChangeProps regularColorProps;
+		ColorChangeProps decayColorProps;
 	};
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin, const float *color,
@@ -274,8 +279,7 @@ private:
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 
 	static void processColorChange( byte_vec4_t *__restrict colors, unsigned numColors,
-							        std::span<const byte_vec4_t> replacementPalette,
-									float dropChance, float replacementChance,
+									const ColorChangeProps &colorChangeProps,
 									wsw::RandomGenerator *__restrict rng );
 
 	static constexpr unsigned kMaxFireHulls  = 32;
