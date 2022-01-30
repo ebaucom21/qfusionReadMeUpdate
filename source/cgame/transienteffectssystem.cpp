@@ -228,6 +228,9 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeEntityEffect( effect );
 	}
+	for( LightEffect *effect = m_lightEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+		unlinkAndFreeLightEffect( effect );
+	}
 	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeFireHull( hull );
 	}
@@ -324,11 +327,6 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 	/*
 	EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
 
-	constexpr float lightRadiusScale = 1.0f / 64.0f;
-	// 300 for radius of 64
-	effect->lightRadius = 300.0f * radius * lightRadiusScale;
-	VectorCopy( colorOrange, effect->lightColor );
-
 	//(void)addSpriteEffect( cgs.media.shaderRocketExplosion, origin, 0.67f * radius, 500u );
 	 */
 
@@ -379,6 +377,13 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 		setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
 	}
+
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 700, 100, 300 );
+	VectorCopy( origin, lightEffect->origin );
+	VectorCopy( fireColor, lightEffect->color );
+	// 250 for radius of 64
+	constexpr float lightRadiusScale = 1.0f / 64.0f;
+	lightEffect->radius = 250.0f * radius * lightRadiusScale;
 }
 
 void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage ) {
@@ -421,33 +426,42 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 }
 
 void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
-	EntityEffect *effect = addModelEffect( cgs.media.modElectroBoltWallHit, origin, dir, 600 );
-	VectorMA( origin, 4.0f, dir, effect->lightOrigin );
-	VectorCopy( colorWhite, effect->lightColor );
-	effect->lightRadius = 144.0f;
+	(void)addModelEffect( cgs.media.modElectroBoltWallHit, origin, dir, 600 );
+
+	// TODO: Use a real time instead of last time as this can have a noticeable impact on fading in
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
+	VectorMA( origin, 4.0f, dir, lightEffect->origin );
+	Vector4Copy( colorWhite, lightEffect->color );
+	lightEffect->radius = 144.0f;
 }
 
 void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir, const float *color ) {
-	EntityEffect *effect = addModelEffect( cgs.media.modInstagunWallHit, origin, dir, 600u );
-	VectorMA( origin, 4.0f, dir, effect->lightOrigin );
-	VectorCopy( colorMagenta, effect->lightColor );
-	effect->lightRadius = 144.0f;
+	(void)addModelEffect( cgs.media.modInstagunWallHit, origin, dir, 600u );
+
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
+	VectorMA( origin, 4.0f, dir, lightEffect->origin );
+	VectorCopy( colorMagenta, lightEffect->color );
+	lightEffect->radius = 144.0f;
 }
 
 void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const float *dir ) {
-	EntityEffect *effect = addModelEffect( cgs.media.modPlasmaExplosion, origin, dir, 400u );
-	VectorMA( origin, 4.0f, dir, effect->lightOrigin );
-	VectorCopy( colorGreen, effect->lightColor );
-	effect->lightRadius = 108.0f;
-	effect->fadedInScale = effect->fadedOutScale = 5.0f;
+	EntityEffect *const entityEffect = addModelEffect( cgs.media.modPlasmaExplosion, origin, dir, 400u );
+	entityEffect->fadedInScale = entityEffect->fadedOutScale = 5.0f;
+
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 350, 33, 150 );
+	VectorMA( origin, 4.0f, dir, lightEffect->origin );
+	VectorCopy( colorGreen, lightEffect->color );
+	lightEffect->radius = 108.0f;
 }
 
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
-	EntityEffect *effect = addModelEffect( cgs.media.modBladeWallExplo, origin, dir, 600u );
-	VectorMA( origin, 8.0f, dir, effect->lightOrigin );
-	VectorCopy( colorYellow, effect->lightColor );
-	effect->fadedInScale = effect->fadedOutScale = 5.0f;
-	effect->lightRadius = 200.0f;
+	EntityEffect *const entityEffect = addModelEffect( cgs.media.modBladeWallExplo, origin, dir, 600u );
+	entityEffect->fadedInScale = entityEffect->fadedOutScale = 5.0f;
+
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500u, 50u, 200u );
+	VectorMA( origin, 8.0f, dir, lightEffect->origin );
+	VectorCopy( colorYellow, lightEffect->color );
+	lightEffect->radius = 200.0f;
 }
 
 void TransientEffectsSystem::spawnGunbladeBladeImpactEffect( const float *origin, const float *dir ) {
@@ -517,7 +531,6 @@ auto TransientEffectsSystem::addModelEffect( model_s *model, const float *origin
 
 	NormalVectorToAxis( dir, &effect->entity.axis[0] );
 	VectorCopy( origin, effect->entity.origin );
-	VectorCopy( origin, effect->lightOrigin );
 
 	return effect;
 }
@@ -538,7 +551,6 @@ auto TransientEffectsSystem::addSpriteEffect( shader_s *material, const float *o
 
 	Matrix3_Identity( effect->entity.axis );
 	VectorCopy( origin, effect->entity.origin );
-	VectorCopy( origin, effect->lightOrigin );
 
 	return effect;
 }
@@ -589,6 +601,41 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 	effect->spawnTime = currTime;
 
 	wsw::link( effect, &m_entityEffectsHead );
+	return effect;
+}
+
+auto TransientEffectsSystem::allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
+											   unsigned fadeOutOffset ) -> LightEffect * {
+	void *mem = m_lightEffectsAllocator.allocOrNull();
+	// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Generalize
+	if( !mem ) [[unlikely]] {
+		// TODO: Prioritize effects so unimportant ones get evicted first
+		LightEffect *oldestEffect = nullptr;
+		// TODO: Choose by nearest timeout/lifetime fraction?
+		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
+		for( LightEffect *effect = m_lightEffectsHead; effect; effect = effect->next ) {
+			if( oldestSpawnTime > effect->spawnTime ) {
+				oldestSpawnTime = effect->spawnTime;
+				oldestEffect = effect;
+			}
+		}
+		assert( oldestEffect );
+		wsw::unlink( oldestEffect, &m_lightEffectsHead );
+		oldestEffect->~LightEffect();
+		mem = oldestEffect;
+	}
+
+	assert( fadeInDuration > 0 );
+	assert( fadeInDuration < fadeOutOffset );
+	assert( fadeOutOffset < duration );
+
+	auto *effect           = new( mem )LightEffect;
+	effect->duration       = duration;
+	effect->spawnTime      = currTime;
+	effect->fadeInDuration = fadeInDuration;
+	effect->fadeOutOffset  = fadeOutOffset;
+
+	wsw::link( effect, &m_lightEffectsHead );
 	return effect;
 }
 
@@ -795,6 +842,12 @@ void TransientEffectsSystem::unlinkAndFreeEntityEffect( EntityEffect *effect ) {
 	m_entityEffectsAllocator.free( effect );
 }
 
+void TransientEffectsSystem::unlinkAndFreeLightEffect( LightEffect *effect ) {
+	wsw::unlink( effect, &m_lightEffectsHead );
+	effect->~LightEffect();
+	m_lightEffectsAllocator.free( effect );
+}
+
 void TransientEffectsSystem::unlinkAndFreeSmokeHull( SmokeHull *hull ) {
 	wsw::unlink( hull, &m_smokeHullsHead );
 	m_freeShapeLists.push_back( hull->shapeList );
@@ -821,6 +874,7 @@ void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawScene
 
 	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 	simulateHullsAndSubmit( currTime, timeDeltaSeconds, request );
+	simulateLightEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 
 	m_lastTime = currTime;
 }
@@ -872,15 +926,41 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 		effect->entity.shaderRGBA[3] = (uint8_t)( 255 * alpha );
 
 		request->addEntity( &effect->entity );
-		if( effect->lightRadius > 1.0f ) {
-			// Move the light as well
-			VectorAdd( effect->lightOrigin, moveVec, effect->lightOrigin );
-			const float lightFrac = 1.0f - lifetimeFrac;
-			if( const float lightRadius = effect->lightRadius * lightFrac; lightRadius > 1.0f ) {
-				request->addLight( effect->lightOrigin, lightRadius, 0.0f, effect->lightColor );
-			}
+	}
+}
+
+void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
+															DrawSceneRequest *request ) {
+	LightEffect *nextEffect = nullptr;
+	for( LightEffect *__restrict effect = m_lightEffectsHead; effect; effect = nextEffect ) {
+		nextEffect = effect->next;
+
+		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
+			unlinkAndFreeLightEffect( effect );
+			continue;
+		}
+
+		assert( effect->fadeInDuration && effect->duration > effect->fadeOutOffset );
+		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
+		assert( lifetimeMillis < effect->duration );
+
+		float scaleFrac;
+		if( lifetimeMillis < effect->fadeInDuration ) {
+			scaleFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->fadeInDuration );
+		} else if( lifetimeMillis < effect->fadeOutOffset ) {
+			scaleFrac = 1.0f;
+		} else {
+			// TODO: Precache?
+			const float rcpFadeOutDuration = Q_Rcp( (float)( effect->duration - effect->fadeOutOffset ) );
+			scaleFrac = 1.0f - (float)( lifetimeMillis - effect->fadeOutOffset ) * rcpFadeOutDuration;
+		}
+
+		if( const float currRadius = scaleFrac * effect->radius; currRadius >= 1.0f ) [[likely]] {
+			request->addLight( effect->origin, currRadius, 0.0f, effect->color );
 		}
 	}
+
+	// TODO: Add and use a bulk submission of lights
 }
 
 void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds,

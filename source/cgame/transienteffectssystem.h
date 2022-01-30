@@ -62,9 +62,6 @@ private:
 		float rcpFadeInDuration { 0.0f };
 		float rcpFadeOutDuration { 0.0f };
 		float velocity[3] { 0.0f, 0.0f, 0.0f };
-		float lightOrigin[3] { 0.0f, 0.0f, 0.0f };
-		float lightColor[3] { 1.0f, 1.0f, 1.0f };
-		float lightRadius { 0.0f };
 		// The entity scale once it fades in
 		float fadedInScale { 1.0f };
 		// The entity scale once it fades out (no shrinking by default)
@@ -74,6 +71,18 @@ private:
 		// The entity alpha once it fades out (alpha fade out is on by default)
 		float fadedOutAlpha { 0.0f };
 		entity_t entity;
+	};
+
+	struct LightEffect {
+		LightEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime { 0 };
+		unsigned duration { 0 };
+		unsigned fadeInDuration { 0 };
+		unsigned fadeOutOffset { 0 };
+
+		float origin[3] { 0.0f, 0.0f, 0.0f };
+		float color[3] { 0.0f, 0.0f, 0.0f };
+		float radius { 0.0f };
 	};
 
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
@@ -226,6 +235,7 @@ private:
 	using WaveHull  = RegularSimulatedHull<2>;
 
 	void unlinkAndFreeEntityEffect( EntityEffect *effect );
+	void unlinkAndFreeLightEffect( LightEffect *effect );
 
 	void unlinkAndFreeFireHull( FireHull *hull );
 	void unlinkAndFreeSmokeHull( SmokeHull *hull );
@@ -239,6 +249,10 @@ private:
 
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
+
+	[[nodiscard]]
+	auto allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
+						   unsigned fadeOutOffset ) -> LightEffect *;
 
 	template <typename Hull, bool HasShapeLists>
 	[[nodiscard]]
@@ -277,6 +291,7 @@ private:
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 
 	static void processColorChange( byte_vec4_t *__restrict colors, unsigned numColors,
 									const ColorChangeProps &colorChangeProps,
@@ -292,6 +307,7 @@ private:
 	CMShapeList *m_tmpShapeList { nullptr };
 
 	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
+	wsw::HeapBasedFreelistAllocator m_lightEffectsAllocator { sizeof( LightEffect ), 72 };
 	wsw::HeapBasedFreelistAllocator m_fireHullsAllocator { sizeof( FireHull ), kMaxFireHulls };
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
@@ -300,6 +316,7 @@ private:
 	static vec3_t s_scratchpad[std::end( kNumVerticesForSubdivLevel )[-1]];
 
 	EntityEffect *m_entityEffectsHead { nullptr };
+	LightEffect *m_lightEffectsHead { nullptr };
 	FireHull *m_fireHullsHead { nullptr };
 	SmokeHull *m_smokeHullsHead { nullptr };
 	WaveHull *m_waveHullsHead { nullptr };
