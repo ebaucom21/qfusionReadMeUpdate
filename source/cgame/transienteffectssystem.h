@@ -277,10 +277,11 @@ private:
 							float speed, float speedSpread );
 
 	struct HullLayerParams {
-		const float speed, speedSpread;
+		const float speed;
 		const float finalOffset;
 		const float speedSpikeChance;
 		const float minSpeedSpike, maxSpeedSpike;
+		const float biasAlongChosenDir;
 		const bool smoothSecondaryNeighbours { false };
 		ColorChangeProps regularColorProps;
 		ColorChangeProps decayColorProps;

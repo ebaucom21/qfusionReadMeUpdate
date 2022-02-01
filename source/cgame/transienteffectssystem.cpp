@@ -271,8 +271,9 @@ static const byte_vec4_t kSmokeReplacementPalette[] {
 
 const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullLayerParams[5] {
 	{
-		.speed = 25.0f, .speedSpread = 5.0f, .finalOffset = 8.0f,
+		.speed = 25.0f, .finalOffset = 8.0f,
 		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 25.0f,
 		.smoothSecondaryNeighbours = true,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.003f, .replacementChance = 0.015f
@@ -282,8 +283,9 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		}
 	},
 	{
-		.speed = 35.0f, .speedSpread = 5.0f, .finalOffset = 6.0f,
+		.speed = 35.0f, .finalOffset = 6.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 25.0f,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.008f, .replacementChance = 0.025f
 		},
@@ -292,8 +294,9 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		}
 	},
 	{
-		.speed = 45.0f, .speedSpread = 7.5f, .finalOffset = 4.0f,
+		.speed = 45.0f, .finalOffset = 4.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 20.0f,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.025f, .replacementChance = 0.045f,
 		},
@@ -302,8 +305,9 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		}
 	},
 	{
-		.speed = 52.5f, .speedSpread = 10.0f, .finalOffset = 2.0f,
+		.speed = 52.5f, .finalOffset = 2.0f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 20.0f,
+		.biasAlongChosenDir = 15.0f,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.035f, .replacementChance = 0.065f,
 		},
@@ -312,8 +316,9 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		}
 	},
 	{
-		.speed = 60.0f, .speedSpread = 12.5f, .finalOffset = 0.0f,
-		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 30.0f,
+		.speed = 60.0f, .finalOffset = 0.0f,
+		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 20.0f,
+		.biasAlongChosenDir = 20.0f,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.045f, .replacementChance = 0.085f
 		},
@@ -742,9 +747,10 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 
 	// Calculate move limits in each direction
 
-	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike;
+	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike + layerParams[0].biasAlongChosenDir;
 	for( unsigned i = 1; i < layerParams.size(); ++i ) {
-		maxVertexSpeed = std::max( maxVertexSpeed, layerParams[i].speed + layerParams[i].maxSpeedSpike );
+		const auto &params = layerParams[i];
+		maxVertexSpeed = std::max( maxVertexSpeed, params.speed + params.maxSpeedSpike + params.biasAlongChosenDir );
 	}
 
 	wsw::RandomGenerator *const __restrict rng = &m_rng;
@@ -783,11 +789,11 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		vec4_t *const __restrict positions          = layer->vertexPositions;
 		byte_vec4_t *const __restrict colors        = layer->vertexColors;
 		vec2_t *const __restrict speedsAndDistances = layer->vertexSpeedsAndDistances;
+		const float *const __restrict randomBiasDir = verticesSpan[rng->nextBounded( verticesSpan.size() )];
 
-		assert( params->speed >= 0.0f && params->speedSpread >= 0.0f );
+		assert( params->speed >= 0.0f && params->minSpeedSpike >= 0.0f && params->biasAlongChosenDir >= 0.0f );
 		assert( params->minSpeedSpike < params->maxSpeedSpike );
-		const float minRegularSpeed = std::max( 0.0f, params->speed - 0.5f * params->speedSpread );
-		const float maxRegularSpeed = params->speed + 0.5f * params->speedSpread;
+		assert( std::fabs( VectorLengthFast( randomBiasDir ) - 1.0f ) < 0.01f );
 
 		layer->finalOffset       = params->finalOffset;
 		layer->regularColorProps = params->regularColorProps;
@@ -799,7 +805,10 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 			// Position XYZ is computed prior to submission in stateless fashion
 			positions[i][3] = 1.0f;
 
-			speedsAndDistances[i][0] = rng->nextFloat( minRegularSpeed, maxRegularSpeed );
+			const float *vertexDir     = vertices[i];
+			const float dotWithBiasDir = DotProduct( vertexDir, randomBiasDir );
+			speedsAndDistances[i][0]   = params->speed + std::max( 0.0f, dotWithBiasDir ) * params->biasAlongChosenDir;
+
 			if( rng->nextFloat() < params->speedSpikeChance ) [[unlikely]] {
 				const float boost = rng->nextFloat( params->minSpeedSpike, params->maxSpeedSpike );
 				spikeSpeedBoost[i] += boost;
