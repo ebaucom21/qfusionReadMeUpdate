@@ -70,6 +70,10 @@ void MaterialCache::loadDirContents( const wsw::StringView &dir ) {
 }
 
 MaterialCache::~MaterialCache() {
+	for( Skin *skin = m_skinsHead, *nextSkin = nullptr; skin; skin = nextSkin ) { nextSkin = skin->next;
+		skin->~Skin();
+		m_skinsAllocator.free( skin );
+	}
 }
 
 void MaterialCache::touchMaterial( shader_t *material ) {
@@ -116,7 +120,13 @@ void MaterialCache::freeUnusedMaterialsByType( const std::span<shaderType_e> &ty
 }
 
 void MaterialCache::freeUnusedObjects() {
-	// TODO: Free unused skins
+	for( Skin *skin = m_skinsHead, *nextSkin = nullptr; skin; skin = nextSkin ) { nextSkin = skin->next;
+		if( skin->m_registrationSequence != (unsigned)rsh.registrationSequence ) {
+			wsw::unlink( skin, &m_skinsHead );
+			skin->~Skin();
+			m_skinsAllocator.free( skin );
+		}
+	}
 
 	freeUnusedMaterialsByType( std::span<shaderType_e>() );
 }
@@ -568,9 +578,9 @@ auto MaterialCache::findSourceByName( const wsw::HashedStringView &name ) -> Mat
 
 // TODO: Can it be const?
 auto MaterialCache::findSkinByName( const wsw::StringView &name ) -> Skin * {
-	for( Skin &skin: m_skins ) {
-		if( skin.getName().equalsIgnoreCase( name ) ) {
-			return std::addressof( skin );
+	for( Skin *skin = m_skinsHead; skin; skin = skin->next ) {
+		if( skin->getName().equalsIgnoreCase( name ) ) {
+			return skin;
 		}
 	}
 	return nullptr;
@@ -647,26 +657,27 @@ auto MaterialCache::parseSkinFileData( const wsw::StringView &name, const wsw::S
 	// Hacks! The method code would've been much nicer with a stack construction
 	// of an instance and a further call of emplace_back( std::move( ... ) )
 	// but Skin is not movable and we do not want to make one of its member types movable.
-	const auto oldSize = m_skins.size();
-	void *mem = m_skins.unsafe_grow_back();
-	Skin *skin;
-	try {
-		skin = new( mem )Skin();
-	} catch( ... ) {
-		m_skins.unsafe_set_size( oldSize );
-		throw;
-	}
 
+	assert( !m_skinsAllocator.isFull() );
+	void *mem = nullptr;
+	Skin *skin = nullptr;
 	try {
+		mem = m_skinsAllocator.allocOrNull();
+		skin = new( mem )Skin;
 		if( !parseSkinFileData( skin, fileData ) ) {
-			m_skins.pop_back();
+			skin->~Skin();
+			m_skinsAllocator.free( skin );
 			return nullptr;
 		}
-		skin->m_registrationSequence = rsh.registrationSequence;
 		skin->m_stringDataStorage.add( name );
 		return skin;
 	} catch( ... ) {
-		m_skins.pop_back();
+		if( skin ) {
+			skin->~Skin();
+		}
+		if( mem ) {
+			m_skinsAllocator.free( mem );
+		}
 		throw;
 	}
 }
@@ -681,14 +692,18 @@ auto MaterialCache::registerSkin( const wsw::StringView &name ) -> Skin * {
 	}
 
 	assert( name.isZeroTerminated() && name.size() < MAX_QPATH );
-	if( m_skins.full() ) {
+	if( m_skinsAllocator.isFull() ) {
 		Com_Printf( "Failed to load skin %s: Too many skins\n", name.data() );
 		return nullptr;
 	}
 
 	char buffer[1024];
 	if( const auto maybeFileData = readSkinFileData( name, buffer, sizeof( buffer ) ) ) {
-		return parseSkinFileData( name, *maybeFileData );
+		if( Skin *skin = parseSkinFileData( name, *maybeFileData ) ) {
+			skin->m_registrationSequence = rsh.registrationSequence;
+			wsw::link( skin, &m_skinsHead );
+			return skin;
+		}
 	}
 
 	return nullptr;

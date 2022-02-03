@@ -459,6 +459,7 @@ public:
 	auto getBool() -> std::optional<bool>;
 };
 
+#include "../qcommon/freelistallocator.h"
 #include <vector>
 
 struct PlaceholderSpan {
@@ -548,6 +549,7 @@ private:
 	wsw::StaticVector<std::pair<shader_s *, unsigned>, 8> m_meshPartMaterials;
 	unsigned m_registrationSequence { 0 };
 public:
+	Skin *prev { nullptr }, *next { nullptr };
 	[[nodiscard]]
 	auto getName() const -> wsw::StringView { return m_stringDataStorage.back(); }
 };
@@ -627,6 +629,8 @@ class MaterialCache {
 	shader_t *m_materialBins[kNumBins] {};
 	shader_t *m_materialById[MAX_SHADERS] {};
 
+	Skin *m_skinsHead { nullptr };
+
 	wsw::String m_pathNameBuffer;
 	wsw::String m_cleanNameBuffer;
 	wsw::String m_fileContentsBuffer;
@@ -638,7 +642,7 @@ class MaterialCache {
 
 	wsw::StaticVector<uint16_t, MAX_SHADERS> m_freeMaterialIds;
 
-	wsw::StaticVector<Skin, 16> m_skins;
+	wsw::MemberBasedFreelistAllocator<sizeof( Skin ), 16> m_skinsAllocator;
 
 	[[nodiscard]]
 	auto loadFileContents( const wsw::StringView &fileName ) -> MaterialFileContents *;
