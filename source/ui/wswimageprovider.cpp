@@ -124,9 +124,9 @@ bool WswImageResponse::loadTga( const QByteArray &fileData ) {
 	}
 
 	if( chans == 3 ) {
-		m_image = QImage( bytes, w, h, QImage::Format_RGB888, stbi_image_free );
+		m_image = QImage( bytes, w, h, QImage::Format_RGB888, stbi_image_free, bytes );
 	} else if( chans == 4 ) {
-		m_image = QImage( bytes, w, h, QImage::Format_RGBA8888, stbi_image_free );
+		m_image = QImage( bytes, w, h, QImage::Format_RGBA8888, stbi_image_free, bytes );
 	} else {
 		Com_Printf( S_COLOR_YELLOW "%s: Weird number of %s.tga image channels %d\n", kTag, m_name.constData(), chans );
 		stbi_image_free( bytes );

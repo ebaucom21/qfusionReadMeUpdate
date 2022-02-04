@@ -543,4 +543,13 @@ void R_AliasModelFrameBounds( const model_t *mod, int frame, vec3_t mins, vec3_t
 	VectorCopy( pframe->maxs, maxs );
 }
 
-
+void Mod_DestroyAliasMD3Model( maliasmodel_t *model ) {
+	for( int k = 0; k < model->nummeshes; k++ ) {
+		maliasmesh_t *mesh = &model->meshes[k];
+		Q_free( mesh->skins );
+		Q_free( mesh->xyzArray );
+	}
+	Q_free( model->frames );
+	Q_free( model->skins );
+	Q_free( model );
+}

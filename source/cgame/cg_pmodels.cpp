@@ -51,7 +51,14 @@ void CG_PModelsShutdown() {
 	pmodelinfo_t *nextInfo;
 	for( pmodelinfo_t *info = cg_PModelInfos; info; info = nextInfo ) {
 		nextInfo = info->next;
-		Q_free(   info );
+		Q_free( info->name );
+		cg_sexedSfx_s *nextSfx = nullptr;
+		for( cg_sexedSfx_s *sexedSfx = info->sexedSfx; sexedSfx; sexedSfx = nextSfx ) {
+			nextSfx = sexedSfx->next;
+			Q_free( sexedSfx->name );
+			Q_free( sexedSfx );
+		}
+		Q_free( info );
 	}
 
 	cg_PModelInfos = nullptr;

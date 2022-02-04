@@ -1762,3 +1762,27 @@ void Mod_LoadQ3BrushModel( model_t *mod, model_t *parent, void *buffer, bspForma
 
 	Mod_Finish( &header->lumps[LUMP_FACES], &header->lumps[LUMP_LIGHTING], gridSize, ambient, outline );
 }
+
+void Mod_DestroyQ3BrushModel( mbrushmodel_t *model ) {
+	for( unsigned i = 0; i < model->numsurfaces; ++i ) {
+		Q_free( model->surfaces[i].mesh.xyzArray );
+	}
+	for( unsigned i = 0; i < model->numleafs; ++i ) {
+		Q_free( model->leafs[i].visSurfaces );
+	}
+
+	Q_free( model->pvs );
+	Q_free( model->lightgrid );
+	Q_free( model->lightarray );
+	Q_free( model->superLightStyles );
+	Q_free( model->lightmapImages );
+	Q_free( model->planes );
+	Q_free( model->fogs );
+	Q_free( model->nodes );
+	Q_free( model->visleafs );
+	Q_free( model->leafs );
+	Q_free( model->surfaces );
+	Q_free( model->drawSurfaces );
+	Q_free( model->submodels );
+	Q_free( model->inlines );
+}

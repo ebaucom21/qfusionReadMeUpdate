@@ -457,13 +457,13 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 static void CG_LeadWaterSplash( trace_t *tr ) {
 	const int contents = tr->contents;
 
-	vec3_t color;
+	vec4_t color;
 	if( contents & CONTENTS_WATER ) {
-		VectorSet( color, 0.47f, 0.48f, 0.8f );
+		Vector4Set( color, 0.47f, 0.48f, 0.8f, 1.0f );
 	} else if( contents & CONTENTS_SLIME ) {
-		VectorSet( color, 0.0f, 1.0f, 0.0f );
+		Vector4Set( color, 0.0f, 1.0f, 0.0f, 1.0f );
 	} else if( contents & CONTENTS_LAVA ) {
-		VectorSet( color, 1.0f, 0.67f, 0.0f );
+		Vector4Set( color, 1.0f, 0.67f, 0.0f, 1.0f );
 	} else {
 		return;
 	}

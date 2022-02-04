@@ -264,6 +264,8 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 	}
 	texts[header->num_text] = '\0';
 
+	poutmodel->stringsDataToFree = texts;
+
 	// load vertex arrays
 	vposition = NULL;
 	vtexcoord = NULL;
@@ -937,8 +939,6 @@ static skmcacheentry_t *r_skmcache_head;    // actual entries are linked to this
 static skmcacheentry_t *r_skmcache_free;    // actual entries are linked to this
 static skmcacheentry_t *r_skmcachekeys[MAX_REF_ENTITIES * ( MOD_MAX_LODS + 1 )];      // entities linked to cache entries
 
-#define R_SKMCacheAlloc( size ) Q_malloc( r_skmcachepool, ( size ), 16, 1 )
-
 /*
 * R_InitSkeletalCache
 */
@@ -1067,6 +1067,14 @@ void R_ClearSkeletalCache( void ) {
 * R_ShutdownSkeletalCache
 */
 void R_ShutdownSkeletalCache( void ) {
+	for( auto *head: { r_skmcache_head, r_skmcache_free } ) {
+		for( skmcacheentry_s *cache = head, *next = nullptr; cache; cache = next ) {
+			next = cache->next;
+			Q_free( cache->data );
+			Q_free( cache );
+		}
+	}
+
 	r_skmcache_head = NULL;
 	r_skmcache_free = NULL;
 }
@@ -1282,6 +1290,17 @@ void R_AddSkeletalModelCache( const entity_t *e, const model_t *mod ) {
 	}
 
 	R_CacheBoneTransforms( cache, e );
+}
+
+void Mod_DestroySkeletalModel( mskmodel_t *model ) {
+	Q_free( model->stringsDataToFree );
+	Q_free( model->bones );
+	Q_free( model->elems );
+	Q_free( model->blends );
+	Q_free( model->sVectorsArray );
+	Q_free( model->meshes );
+	Q_free( model->frames );
+	Q_free( model );
 }
 
 

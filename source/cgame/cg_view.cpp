@@ -1162,8 +1162,9 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	CG_AddViewWeapon( &cg.weapon, drawSceneRequest );
 	CG_AddLocalEntities( drawSceneRequest );
 
-	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
 	cg.effectsSystem.simulateFrameAndSubmit( cg.time, drawSceneRequest );
+	// Run the particle system last (don't submit flocks that could be invalidated by the effect system this frame)
+	cg.particleSystem.runFrame( cg.time, drawSceneRequest );
 
 	CG_AddPolys( drawSceneRequest );
 

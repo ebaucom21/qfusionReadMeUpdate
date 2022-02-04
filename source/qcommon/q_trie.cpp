@@ -384,6 +384,24 @@ static void Trie_Destroy_Rec(
 	free( node );
 }
 
+static void Trie_Destroy_Rec_WithValues(
+	struct trie_node_s *node
+) {
+	assert( node );
+	if( node->sibling ) {
+		Trie_Destroy_Rec_WithValues( node->sibling );
+	}
+	if( node->child ) {
+		Trie_Destroy_Rec_WithValues( node->child );
+	}
+	free( node->data );
+	free( node );
+}
+
+void Trie_DestroyWithValues( struct trie_s *trie ) {
+	Trie_Destroy_Rec_WithValues( trie->root );
+}
+
 static struct trie_node_s *TRIE_Find_Rec(
 	struct trie_node_s *node,
 	const char *key,

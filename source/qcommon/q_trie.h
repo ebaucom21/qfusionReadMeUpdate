@@ -54,6 +54,8 @@ trie_error_t Trie_Destroy(
 	struct trie_s *trie         // the trie to destroy
 	);
 
+void Trie_DestroyWithValues( struct trie_s *trie );
+
 trie_error_t Trie_Clear(
 	struct trie_s *trie         // the trie to clear from keys and values
 	);

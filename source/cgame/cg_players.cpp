@@ -120,7 +120,8 @@ void CG_UpdateSexedSoundsRegistration( pmodelinfo_t *pmodelinfo ) {
 	// free loaded sounds
 	for( sexedSfx = pmodelinfo->sexedSfx; sexedSfx; sexedSfx = next ) {
 		next = sexedSfx->next;
-		Q_free(   sexedSfx );
+		Q_free( sexedSfx->name );
+		Q_free( sexedSfx );
 	}
 	pmodelinfo->sexedSfx = NULL;
 

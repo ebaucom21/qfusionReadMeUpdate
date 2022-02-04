@@ -38,6 +38,10 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspFormatDesc_t *unused );
 void Mod_LoadQ3BrushModel( model_t *mod, model_t *parent, void *buffer, bspFormatDesc_t *format );
 
+void Mod_DestroyAliasMD3Model( maliasmodel_t *model );
+void Mod_DestroySkeletalModel( mskmodel_t *model );
+void Mod_DestroyQ3BrushModel( mbrushmodel_t *model );
+
 static void R_InitMapConfig( const char *model );
 static void R_FinishMapConfig( const model_t *mod );
 
@@ -1170,6 +1174,14 @@ void R_InitModels() {
 }
 
 static void Mod_Free( model_t *model ) {
+	if( model->type == mod_alias ) {
+		Mod_DestroyAliasMD3Model( (maliasmodel_s *)model->extradata );
+	} else if( model->type == mod_skeletal ) {
+		Mod_DestroySkeletalModel( (mskmodel_s *)model->extradata );
+	} else if( model->type == mod_brush ) {
+		Mod_DestroyQ3BrushModel( (mbrushmodel_s *)model->extradata );
+	}
+	Q_free( model->name );
 	memset( model, 0, sizeof( *model ) );
 	model->type = mod_free;
 }

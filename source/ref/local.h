@@ -1006,6 +1006,7 @@ typedef struct mskmodel_s {
 	unsigned int numframes;
 	mskframe_t      *frames;
 	bonepose_t      *invbaseposes;
+	void            *stringsDataToFree;
 } mskmodel_t;
 
 //===================================================================

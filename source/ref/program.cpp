@@ -2223,7 +2223,7 @@ void RP_Shutdown( void ) {
 		RF_DeleteProgram( program );
 	}
 
-	Trie_Destroy( glsl_cache_trie );
+	Trie_DestroyWithValues( glsl_cache_trie );
 	glsl_cache_trie = NULL;
 
 	r_numglslprograms = 0;

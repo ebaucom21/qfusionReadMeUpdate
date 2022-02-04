@@ -88,6 +88,16 @@ static bonenode_t *CG_CreateBonesTreeNode( cgs_skeleton_t *skel, int bone ) {
 	return bonenode;
 }
 
+static void DestroyBonesTreeNode( bonenode_t *node ) {
+	if( node ) {
+		for( int i = 0; i < node->numbonechildren; ++i ) {
+			DestroyBonesTreeNode( node->bonechildren[i] );
+		}
+		Q_free( node->bonechildren );
+		Q_free( node );
+	}
+}
+
 /*
 * CG_SkeletonForModel
 */
@@ -479,7 +489,13 @@ void CG_FreeTemporaryBoneposesCache( void ) {
 	cgs_skeleton_t * nextSkel;
 	for( cgs_skeleton_t *skel = skel_headnode; skel; skel = nextSkel ) {
 		nextSkel = skel->next;
-		Q_free(   skel );
+		cg_tagmask_s *nextTagmask;
+		for( cg_tagmask_t *tagmask = skel->tagmasks; tagmask; tagmask = nextTagmask ) {
+			nextTagmask = tagmask->next;
+			Q_free( tagmask );
+		}
+		DestroyBonesTreeNode( skel->bonetree );
+		Q_free( skel );
 	}
 
 	skel_headnode = nullptr;
