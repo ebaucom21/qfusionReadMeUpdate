@@ -101,8 +101,8 @@ private:
 	void unlinkAndFree( TeleEffect *teleEffect );
 
 	[[nodiscard]]
-	auto allocParticleTrail( int entNum, const Particle::RenderingParams &params, unsigned particleSystemBin,
-							 const float *origin, const float *color ) -> ParticleTrail *;
+	auto allocParticleTrail( int entNum, const float *origin, unsigned particleSystemBin,
+							 Particle::AppearanceRules &&appearanceRules  ) -> ParticleTrail *;
 
 	void updateParticleTrail( ParticleTrail *trail, const float *origin, ConeFlockFiller *filler, int64_t currTime );
 

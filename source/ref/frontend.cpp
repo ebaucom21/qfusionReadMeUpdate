@@ -715,7 +715,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			drawSurf->particleIndex  = particleIndex;
 
 			// TODO: Inline/add some kind of bulk insertion
-			addEntryToSortList( particleEntity, fog, pa->params.material, distanceLike, 0, nullptr, drawSurf );
+			addEntryToSortList( particleEntity, fog, pa->appearanceRules.material, distanceLike, 0, nullptr, drawSurf );
 		}
 	}
 }
@@ -1712,16 +1712,16 @@ void DrawSceneRequest::addLight( const float *origin, float programRadius, float
 }
 
 void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
-									 const Particle::RenderingParams &params,
+									 const Particle::AppearanceRules &appearanceRules,
 									 const Particle *particles, unsigned numParticles ) {
 	assert( numParticles <= kMaxParticlesInAggregate );
 	if( !m_particles.full() ) [[likely]] {
 		m_particles.emplace_back( ParticlesAggregate {
-			.particles    = particles,
-			.params       = params,
-			.mins         = { mins[0], mins[1], mins[2], mins[3] },
-			.maxs         = { maxs[0], maxs[1], maxs[2], maxs[3] },
-			.numParticles = numParticles
+			.particles       = particles,
+			.appearanceRules = appearanceRules,
+			.mins            = { mins[0], mins[1], mins[2], mins[3] },
+			.maxs            = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.numParticles    = numParticles
 		});
 	}
 }

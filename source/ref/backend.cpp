@@ -1107,7 +1107,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	const auto *particleDrawSurf = (ParticleDrawSurface *)drawSurf;
 	const auto *aggregate = fsh->particleAggregates + particleDrawSurf->aggregateIndex;
 	assert( particleDrawSurf->particleIndex < aggregate->numParticles );
-	const auto *particle = aggregate->particles + particleDrawSurf->particleIndex;
+	const Particle *const __restrict particle = aggregate->particles + particleDrawSurf->particleIndex;
+	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
 
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
@@ -1116,8 +1117,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
 	mesh_t mesh;
 
-	assert( aggregate->params.kind == Particle::Sprite || aggregate->params.kind == Particle::Spark );
-	if( aggregate->params.kind == Particle::Sprite ) {
+	assert( appearanceRules->kind == Particle::Sprite || appearanceRules->kind == Particle::Spark );
+	if( appearanceRules->kind == Particle::Sprite ) {
 		vec3_t v_left, v_up;
 		VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
 		VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
@@ -1126,7 +1127,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 			VectorInverse( v_left );
 		}
 
-		const float radius = aggregate->params.radius;
+		const float radius = appearanceRules->radius;
 		assert( radius >= 1.0f );
 
 		vec3_t point;
@@ -1151,8 +1152,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 		Matrix3_Transpose( axis, localAxis );
 
-		const float length = aggregate->params.length;
-		const float width = aggregate->params.width;
+		const float length = appearanceRules->length;
+		const float width = appearanceRules->width;
 		assert( length >= 1.0f && width >= 1.0f );
 
 		const float xmin = 0;
@@ -1176,11 +1177,32 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		VectorAdd( tmp[3], particle->origin, xyz[3] );
 	}
 
+	assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac < 1.0f );
+
+	vec4_t colorBuffer;
+	const float *interpolatedColor = colorBuffer;
+	if( particle->lifetimeFrac < appearanceRules->fadeInLifetimeFrac ) [[unlikely]] {
+		// Fade in
+		const float fadeInFrac = particle->lifetimeFrac * Q_Rcp( appearanceRules->fadeInLifetimeFrac );
+		Vector4Lerp( appearanceRules->initialColor, fadeInFrac, appearanceRules->fadedInColor, colorBuffer );
+	} else {
+		const float startFadeOutAtLifetimeFrac = 1.0f - appearanceRules->fadeOutLifetimeFrac;
+		if( particle->lifetimeFrac > startFadeOutAtLifetimeFrac ) [[unlikely]] {
+			// Fade out
+			float fadeOutFrac = particle->lifetimeFrac - startFadeOutAtLifetimeFrac;
+			fadeOutFrac *= Q_Rcp( appearanceRules->fadeOutLifetimeFrac );
+			Vector4Lerp( appearanceRules->fadedInColor, fadeOutFrac, appearanceRules->fadedOutColor, colorBuffer );
+		} else {
+			// Use the color of the "faded-in" state
+			interpolatedColor = appearanceRules->fadedInColor;
+		}
+	}
+
 	Vector4Set( colors[0],
-				(uint8_t)( 255 * particle->color[0] ),
-				(uint8_t)( 255 * particle->color[1] ),
-				(uint8_t)( 255 * particle->color[2] ),
-				(uint8_t)( 255 * particle->color[3] ) );
+				(uint8_t)( 255 * interpolatedColor[0] ),
+				(uint8_t)( 255 * interpolatedColor[1] ),
+				(uint8_t)( 255 * interpolatedColor[2] ),
+				(uint8_t)( 255 * interpolatedColor[3] ) );
 
 	Vector4Copy( colors[0], colors[1] );
 	Vector4Copy( colors[0], colors[2] );

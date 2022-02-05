@@ -26,8 +26,7 @@ struct UniformFlockFiller {
 
 	[[nodiscard]]
 	auto fill( Particle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict,
-			   const float *initialColor, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
+			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
@@ -47,12 +46,11 @@ struct ConeFlockFiller {
 
 	[[nodiscard]]
 	auto fill( Particle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict,
-			   const float *initialColor, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
+			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
 
 struct alignas( 16 ) ParticleFlock {
-	Particle::RenderingParams params;
+	Particle::AppearanceRules appearanceRules;
 	Particle *particles;
 	int64_t timeoutAt;
 	unsigned numParticlesLeft;
@@ -60,7 +58,6 @@ struct alignas( 16 ) ParticleFlock {
 	CMShapeList *shapeList;
 	// TODO: Make links work with "m_"
 	ParticleFlock *prev { nullptr }, *next { nullptr };
-	float color[4];
 	float mins[4];
 	float maxs[4];
 
@@ -125,47 +122,37 @@ public:
 	~ParticleSystem();
 
 	template <typename Filler>
-	void addSmallParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
+	void addSmallParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock = createFlock( 0, currTime );
-		Vector4Copy( baseColor, flock->color );
-		flock->params = params;
-
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxSmallFlockSize,
-															&m_rng, flock->color, currTime );
+		ParticleFlock *flock   = createFlock( 0, currTime );
+		flock->appearanceRules = appearanceRules;
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxSmallFlockSize, &m_rng, currTime );
 		flock->timeoutAt = timeoutAt;
 		flock->numParticlesLeft = numParticles;
 	}
 
 	template <typename Filler>
-	void addMediumParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
+	void addMediumParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock = createFlock( 1, currTime );
-		Vector4Copy( baseColor, flock->color );
-		flock->params = params;
-
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxMediumFlockSize, &m_rng,
-															flock->color, currTime );
-		flock->timeoutAt = timeoutAt;
+		ParticleFlock *flock   = createFlock( 1, currTime );
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxMediumFlockSize, &m_rng, currTime );
+		flock->timeoutAt        = timeoutAt;
 		flock->numParticlesLeft = numParticles;
+		flock->appearanceRules  = appearanceRules;
 	}
 
 	template <typename Filler>
-	void addLargeParticleFlock( const Particle::RenderingParams &params, const float *baseColor, Filler &&filler ) {
+	void addLargeParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
 		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock = createFlock( 2, currTime );
-		Vector4Copy( baseColor, flock->color );
-		flock->params = params;
-
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxLargeFlockSize,
-															&m_rng, flock->color, currTime );
-		flock->timeoutAt = timeoutAt;
+		ParticleFlock *flock   = createFlock( 2, currTime );
+		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxLargeFlockSize, &m_rng, currTime );
+		flock->timeoutAt        = timeoutAt;
 		flock->numParticlesLeft = numParticles;
+		flock->appearanceRules  = appearanceRules;
 	}
 
 	[[nodiscard]]
-	auto createTrailFlock( const Particle::RenderingParams &params, unsigned binIndex,
-						   const float *initialColor ) -> ParticleFlock *;
+	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules, unsigned binIndex ) -> ParticleFlock *;
 
 	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 

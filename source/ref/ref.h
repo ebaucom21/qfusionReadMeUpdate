@@ -187,23 +187,31 @@ typedef struct refdef_s {
 struct alignas( 16 ) Particle {
 	enum Kind { Sprite, Spark };
 
-	// Common for flocks/aggregates
-	struct RenderingParams {
+	// Common for flocks/aggregates.
+	// The name "rules" seems to be more appropriate than "params" for these stateless/shared objects.
+	struct AppearanceRules {
 		shader_s *material { nullptr };
 		Kind kind { Sprite };
 		float length { 0.0f };
 		float width { 0.0f };
 		float radius { 0.0f };
+		// Points to an external buffer with a greater lifetime
+		const float *initialColor { nullptr };
+		const float *fadedInColor { nullptr };
+		const float *fadedOutColor { nullptr };
+		float fadeInLifetimeFrac { 0.25f };
+		float fadeOutLifetimeFrac { 0.25f };
 	};
 
 	float origin[4];
 	float oldOrigin[4];
 	float velocity[4];
 	float accel[4];
-	int64_t timeoutAt;
-	// Points to an external buffer with a greater lifetime
-	const float *color;
-	unsigned bouncesLeft;
+	int64_t spawnTime;
+	// Gets updated every simulation frame prior to submission for rendering
+	float lifetimeFrac;
+	uint16_t lifetime;
+	uint16_t bouncesLeft;
 };
 
 struct ExternalMesh {
@@ -246,7 +254,7 @@ public:
 	// A flock of particles or just a bunch of particles with enclosing bounds
 	struct ParticlesAggregate {
 		const Particle *particles;
-		Particle::RenderingParams params;
+		Particle::AppearanceRules appearanceRules;
 		float mins[4], maxs[4];
 		unsigned numParticles { 0 };
 	};
@@ -296,7 +304,8 @@ public:
 	}
 
 	// TODO: Allow adding multiple particle aggregates at once
-	void addParticles( const float *mins, const float *maxs, const Particle::RenderingParams &params,
+	void addParticles( const float *mins, const float *maxs,
+					   const Particle::AppearanceRules &appearanceRules,
 					   const Particle *particles, unsigned numParticles );
 
 	void addExternalMesh( const float *mins, const float *maxs, std::span<const ExternalMesh> parts );

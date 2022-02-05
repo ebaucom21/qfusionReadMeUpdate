@@ -93,24 +93,23 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	return flock;
 }
 
-auto ParticleSystem::createTrailFlock( const Particle::RenderingParams &params, unsigned binIndex,
-									   const float *initialColor ) -> ParticleFlock * {
+auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, unsigned binIndex ) -> ParticleFlock * {
 	assert( binIndex == kClippedTrailFlocksBin || binIndex == kNonClippedTrailFlocksBin );
 
 	// Don't let it evict anything
 	const int64_t currTime = std::numeric_limits<int64_t>::min();
 	ParticleFlock *flock = createFlock( binIndex, currTime );
-	Vector4Copy( initialColor, flock->color );
-	flock->params = params;
+
 	// Externally managed
 	flock->timeoutAt = std::numeric_limits<int64_t>::max();
 	flock->numParticlesLeft = 0;
+
+	flock->appearanceRules = rules;
 	return flock;
 }
 
 auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
-							   wsw::RandomGenerator *__restrict rng,
-							   const float *initialColor, int64_t currTime ) __restrict
+							   wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
 	-> std::pair<int64_t, unsigned> {
 	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
 
@@ -132,9 +131,8 @@ auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParti
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
 	assert( minTimeout && minTimeout <= maxTimeout && maxTimeout < 3000 );
-	auto resultTimeout = std::numeric_limits<int64_t>::min();
-	const int64_t baseTimeoutAt  = currTime + minTimeout;
 	const unsigned timeoutSpread = maxTimeout - minTimeout;
+	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
@@ -149,20 +147,17 @@ auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParti
 		VectorScale( randomDir, speed, p->velocity );
 		p->velocity[3] = 0.0f;
 
-		p->timeoutAt = baseTimeoutAt + rng->nextBoundedFast( timeoutSpread );
-		// TODO: Branchless/track the relative part?
-		resultTimeout = std::max( p->timeoutAt, resultTimeout );
-
-		p->color = initialColor;
+		p->spawnTime = currTime;
+		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
+		// TODO: Branchless?
+		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 	}
 
 	return { resultTimeout, numParticles };
 }
 
 auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
-							wsw::RandomGenerator *__restrict rng,
-							const float *initialColor,
-							int64_t currTime ) __restrict
+							wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
 	-> std::pair<int64_t, unsigned> {
 	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
 
@@ -182,9 +177,8 @@ auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticle
 	const float r = Q_Sqrt( 1.0f - minZ * minZ );
 
 	assert( minTimeout && minTimeout <= maxTimeout && maxTimeout < 3000 );
-	auto resultTimeout = std::numeric_limits<int64_t>::min();
-	const int64_t baseTimeoutAt  = currTime + minTimeout;
 	const unsigned timeoutSpread = maxTimeout - minTimeout;
+	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
 	mat3_t transformMatrix;
 	VectorCopy( dir, transformMatrix );
@@ -205,11 +199,10 @@ auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticle
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
 		Matrix3_TransformVector( transformMatrix, untransformed, p->velocity );
 
-		p->timeoutAt = baseTimeoutAt + rng->nextBoundedFast( timeoutSpread );
-		// TODO: Branchless/track the relative part?
-		resultTimeout = std::max( p->timeoutAt, resultTimeout );
-
-		p->color = initialColor;
+		p->spawnTime = currTime;
+		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
+		// TODO: Branchless?
+		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 	}
 
 	return { resultTimeout, numParticles };
@@ -236,7 +229,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	for( FlocksBin &bin: m_bins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
-				request->addParticles( flock->mins, flock->maxs, flock->params, flock->particles, numParticles );
+				request->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, numParticles );
 			}
 		}
 	}
@@ -278,12 +271,14 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
 	for( unsigned i = 0; i < numParticlesLeft; ) {
 		Particle *const __restrict p = particles + i;
-		if( p->timeoutAt > currTime ) [[likely]] {
+		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			CM_ClipToShapeList( cl.cms, shapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
 			if( trace.fraction == 1.0f ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
-				timeoutOfParticlesLeft = std::max( p->timeoutAt, timeoutOfParticlesLeft );
+				// TODO: Cache the reciprocal?
+				p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+				timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++i;
 				continue;
 			}
@@ -309,8 +304,10 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 						// This is not really correct but is OK.
 						VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
 
+						// TODO: Cache the reciprocal?
+						p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+						timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 						++i;
-						timeoutOfParticlesLeft = std::max( p->timeoutAt, timeoutOfParticlesLeft );
 						continue;
 					}
 				}
@@ -338,16 +335,20 @@ void ParticleFlock::simulateWithoutClipping( int64_t currTime, float deltaSecond
 
 	BoundsBuilder boundsBuilder;
 	for( unsigned i = 0; i < numParticlesLeft; ) {
-		Particle *const __restrict particle = particles + i;
-		if( particle->timeoutAt > currTime ) [[likely]] {
+		Particle *const __restrict p = particles + i;
+		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			// TODO: Two origins are redundant for non-clipped particles
-			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
+			VectorMA( p->velocity, deltaSeconds, p->accel, p->velocity );
 
-			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
-			VectorCopy( particle->origin, particle->oldOrigin );
+			VectorMA( p->oldOrigin, deltaSeconds, p->velocity, p->origin );
+			VectorCopy( p->origin, p->oldOrigin );
 
-			boundsBuilder.addPoint( particle->origin );
-			timeoutOfParticlesLeft = std::max( particle->timeoutAt, timeoutOfParticlesLeft );
+			boundsBuilder.addPoint( p->origin );
+
+			timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
+			// TODO: Cache the reciprocal?
+			p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+
 			++i;
 		} else {
 			particles[i] = particles[numParticlesLeft];

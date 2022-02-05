@@ -333,7 +333,7 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 	},
 };
 
-void TransientEffectsSystem::spawnExplosion( const float *origin, const float *color, float radius ) {
+void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
 	/*
 	EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
 

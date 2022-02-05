@@ -89,9 +89,8 @@ void TrackedEffectsSystem::spawnPlayerTeleEffect( int clientNum, const float *or
 	effect->model = model;
 }
 
-auto TrackedEffectsSystem::allocParticleTrail( int entNum, const Particle::RenderingParams &params,
-											   unsigned particleSystemBin, const float *origin,
-											   const float *color ) -> ParticleTrail * {
+auto TrackedEffectsSystem::allocParticleTrail( int entNum, const float *origin, unsigned particleSystemBin,
+											   Particle::AppearanceRules &&appearanceRules ) -> ParticleTrail * {
 	// Don't try evicting other effects in case of failure
 	// (this could lead to wasting CPU cycles every frame in case when it starts kicking in)
 	if( void *mem = m_particleTrailsAllocator.allocOrNull() ) [[likely]] {
@@ -100,7 +99,7 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, const Particle::Rende
 		trail->entNum = entNum;
 
 		// Don't drop right now, just mark for computing direction next frames
-		trail->particleFlock = cg.particleSystem.createTrailFlock( params, particleSystemBin, color );
+		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, particleSystemBin );
 		VectorCopy( origin, trail->lastDropOrigin );
 		trail->maxParticlesInFlock = ParticleSystem::kMaxNonClippedTrailFlockSize;
 		return trail;
@@ -140,8 +139,7 @@ void TrackedEffectsSystem::updateParticleTrail( ParticleTrail *trail, const floa
 
 				// Creates not less than 1 particle
 				const auto [_, numParticles] = filler->fill( flock->particles + flock->numParticlesLeft,
-															 trail->maxParticlesPerDrop, &m_rng,
-															 flock->color, currTime );
+															 trail->maxParticlesPerDrop, &m_rng, currTime );
 				assert( numParticles );
 				flock->numParticlesLeft += numParticles;
 				VectorAdd( filler->origin, stepVec, filler->origin );
@@ -152,6 +150,10 @@ void TrackedEffectsSystem::updateParticleTrail( ParticleTrail *trail, const floa
 		}
 	}
 }
+
+static const vec4_t kRocketOrGrenadeTrailInitialColor { 1.0f, 0.7f, 0.3f, 1.0f };
+static const vec4_t kRocketOrGrenadeTrailFadedInColor { 1.0f, 1.0f, 1.0f, 0.5f };
+static const vec4_t kRocketOrGrenadeTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
 void TrackedEffectsSystem::touchRocketOrGrenadeTrail( int entNum, const float *origin,
 													  ConeFlockFiller *flockFiller, int64_t currTime ) {
@@ -164,10 +166,14 @@ void TrackedEffectsSystem::touchRocketOrGrenadeTrail( int entNum, const float *o
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( hasSmokeTrail ) {
 		if( !effects->particleTrail ) [[unlikely]] {
-			Particle::RenderingParams params {
-				.material = cgs.media.shaderFlareParticle, .kind = Particle::Sprite, .radius = 6.0f
-			};
-			effects->particleTrail = allocParticleTrail( entNum, params, kClippedTrailsBin, origin, colorOrange );
+			effects->particleTrail = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+				.material = cgs.media.shaderFlareParticle,
+				.kind     = Particle::Sprite,
+				.radius   = 6.0f,
+				.initialColor  = kRocketOrGrenadeTrailInitialColor,
+				.fadedInColor  = kRocketOrGrenadeTrailFadedInColor,
+				.fadedOutColor = kRocketOrGrenadeTrailFadedOutColor
+			});
 		}
 		if( effects->particleTrail ) [[likely]] {
 			updateParticleTrail( effects->particleTrail, origin, flockFiller, currTime );
@@ -188,14 +194,22 @@ void TrackedEffectsSystem::touchRocketOrGrenadeTrail( int entNum, const float *o
 	}
 }
 
+static const vec4_t kPlasmaTrailInitialColor { 0.0f, 1.0f, 0.5f, 1.0f };
+static const vec4_t kPlasmaTrailFadedInColor { 0.5f, 1.0f, 0.5f, 1.0f };
+static const vec4_t kPlasmaTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+
 void TrackedEffectsSystem::touchPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
 	if( cg_projectileTrail->integer ) {
 		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 		if( !effects->particleTrail ) {
-			Particle::RenderingParams params {
-				.material = cgs.media.shaderFlareParticle, .kind = Particle::Sprite, .radius = 4.0f
-			};
-			effects->particleTrail = allocParticleTrail( entNum, params, kNonClippedTrailsBin, origin, colorGreen );
+			effects->particleTrail = allocParticleTrail( entNum, origin, kNonClippedTrailsBin, {
+				.material = cgs.media.shaderFlareParticle,
+				.kind     = Particle::Sprite,
+				.radius   = 4.0f,
+				.initialColor  = kPlasmaTrailInitialColor,
+				.fadedInColor  = kPlasmaTrailFadedInColor,
+				.fadedOutColor = kPlasmaTrailFadedOutColor
+			});
 			effects->particleTrail->dropDistance = 8.0f;
 		}
 		if( ParticleTrail *trail = effects->particleTrail ) {
@@ -204,14 +218,22 @@ void TrackedEffectsSystem::touchPlasmaTrail( int entNum, const float *origin, in
 	}
 }
 
+static const vec4_t kBlastTrailInitialColor { 1.0f, 0.9f, 0.3f, 1.0f };
+static const vec4_t kBlastTrailFadedInColor { 1.0f, 1.0f, 1.0f, 0.5f };
+static const vec4_t kBlastTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 	if( cg_projectileTrail->integer ) {
 		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 		if( !effects->particleTrail ) {
-			Particle::RenderingParams params {
-				.material = cgs.media.shaderFlareParticle, .kind = Particle::Sprite, .length = 3.0f
-			};
-			effects->particleTrail = allocParticleTrail( entNum, params, kClippedTrailsBin, origin, colorYellow );
+			effects->particleTrail = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+				.material = cgs.media.shaderFlareParticle,
+				.kind     = Particle::Sprite,
+				.radius   = 3.0f,
+				.initialColor  = kBlastTrailInitialColor,
+				.fadedInColor  = kBlastTrailFadedInColor,
+				.fadedOutColor = kBlastTrailFadedOutColor
+			});
 		}
 		if( ParticleTrail *trail = effects->particleTrail ) {
 			updateParticleTrail( trail, origin, &m_blastParticlesFlockFiller, currTime );
@@ -219,14 +241,22 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 	}
 }
 
+static const vec4_t kElectroTrailInitialColor { 0.5f, 0.7f, 1.0f, 1.0f };
+static const vec4_t kElectroTrailFadedInColor { 0.7f, 0.7f, 1.0f, 1.0f };
+static const vec4_t kElectroTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+
 void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
 	if( cg_projectileTrail->integer ) {
 		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 		if( !effects->particleTrail ) {
-			Particle::RenderingParams params {
-				.material = cgs.media.shaderFlareParticle, .kind = Particle::Spark, .length = 8.0f, .width = 4.0f
-			};
-			effects->particleTrail = allocParticleTrail( entNum, params, kNonClippedTrailsBin, origin, colorBlue );
+			effects->particleTrail = allocParticleTrail( entNum, origin, kNonClippedTrailsBin, {
+				.material = cgs.media.shaderFlareParticle,
+				.kind     = Particle::Sprite,
+				.radius   = 6.0f,
+				.initialColor  = kElectroTrailInitialColor,
+				.fadedInColor  = kElectroTrailFadedInColor,
+				.fadedOutColor = kElectroTrailFadedOutColor
+			});
 			effects->particleTrail->dropDistance = 8.0f;
 		}
 		if( ParticleTrail *trail = effects->particleTrail ) {
