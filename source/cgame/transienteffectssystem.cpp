@@ -274,7 +274,8 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		.speed = 25.0f, .finalOffset = 8.0f,
 		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 25.0f,
-		.smoothSecondaryNeighbours = true,
+		.initialColor = { 1.0f, 0.70f, 0.1f, 0.7f },
+		.smoothSecondaryNeighbours = false,
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.003f, .replacementChance = 0.015f
 		},
@@ -286,6 +287,7 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		.speed = 35.0f, .finalOffset = 6.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 25.0f,
+		.initialColor = { 1.0f, 0.65f, 0.1f, 0.5f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.008f, .replacementChance = 0.025f
 		},
@@ -297,6 +299,7 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		.speed = 45.0f, .finalOffset = 4.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
+		.initialColor = { 1.0f, 0.65f, 0.1f, 0.5f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.025f, .replacementChance = 0.045f,
 		},
@@ -308,6 +311,7 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		.speed = 52.5f, .finalOffset = 2.0f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 20.0f,
 		.biasAlongChosenDir = 15.0f,
+		.initialColor = { 1.0f, 0.60f, 0.1f, 0.37f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.035f, .replacementChance = 0.065f,
 		},
@@ -319,6 +323,7 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 		.speed = 60.0f, .finalOffset = 0.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 20.0f,
 		.biasAlongChosenDir = 20.0f,
+		.initialColor = { 1.0f, 0.60f, 0.1f, 0.33f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.045f, .replacementChance = 0.085f
 		},
@@ -337,10 +342,9 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 	const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
 	const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
-	const vec4_t fireColor { 1.0f, 0.7f, 0.1f, 0.8f };
 
 	if( auto *hull = allocFireHull( m_lastTime, 800 ) ) {
-		setupHullVertices( hull, origin, fireColor, kFireHullLayerParams );
+		setupHullVertices( hull, origin, kFireHullLayerParams );
 		hull->decayStartAt = m_lastTime + 600;
 	}
 
@@ -385,7 +389,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, const float *c
 
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 700, 100, 300 );
 	VectorCopy( origin, lightEffect->origin );
-	VectorCopy( fireColor, lightEffect->color );
+	VectorCopy( kFireHullLayerParams[0].initialColor, lightEffect->color );
 	// 250 for radius of 64
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
 	lightEffect->radius = 250.0f * radius * lightRadiusScale;
@@ -729,17 +733,9 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 	hull->numMeshVertices = verticesSpan.size();
 }
 
-void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
-												const float *origin, const float *color,
+void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
 												std::span<const HullLayerParams> layerParams ) {
 	assert( layerParams.size() == hull->numLayers );
-
-	const byte_vec4_t initialColor {
-		(uint8_t)( color[0] * 255 ),
-		(uint8_t)( color[1] * 255 ),
-		(uint8_t)( color[2] * 255 ),
-		(uint8_t)( color[3] * 255 )
-	};
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
 	const auto [verticesSpan, indicesSpan, neighboursSpan] = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel );
@@ -800,6 +796,13 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		layer->decayColorProps   = params->decayColorProps;
 
 		std::fill( spikeSpeedBoost, spikeSpeedBoost + verticesSpan.size(), 0.0f );
+
+		const byte_vec4_t initialColor {
+			(uint8_t)( params->initialColor[0] * 255 ),
+			(uint8_t)( params->initialColor[1] * 255 ),
+			(uint8_t)( params->initialColor[2] * 255 ),
+			(uint8_t)( params->initialColor[3] * 255 )
+		};
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 			// Position XYZ is computed prior to submission in stateless fashion
