@@ -63,6 +63,11 @@ Flickable {
             CVarAwareCheckBox { cvarName: "r_detailtextures" }
         }
 
+        SettingsRow {
+            text: "Volumetric explosions"
+            CVarAwareCheckBox { cvarName: "cg_volumetricExplosions" }
+        }
+
         SettingsGroupHeaderRow { text: "Esport features" }
 
         SettingsRow {

@@ -77,8 +77,9 @@ cvar_t *cg_bloodTrailAlpha;
 cvar_t *cg_heavyRocketExplosions;
 cvar_t *cg_heavyGrenadeExplosions;
 cvar_t *cg_heavyShockwaveExplosions;
-cvar_t *cg_explosionsRing;
-cvar_t *cg_explosionsDust;
+cvar_t *cg_volumetricExplosions;
+cvar_t *cg_volumetricExplosionsWave;
+cvar_t *cg_volumetricExplosionsSmoke;
 cvar_t *cg_gibs;
 cvar_t *cg_outlineModels;
 cvar_t *cg_outlineWorld;
@@ -629,8 +630,6 @@ static void CG_RegisterVariables( void ) {
 	cg_showBloodTrail = Cvar_Get( "cg_showBloodTrail", "1", CVAR_ARCHIVE );
 	cg_projectileFireTrailAlpha =   Cvar_Get( "cg_projectileFireTrailAlpha", "0.45", CVAR_ARCHIVE );
 	cg_bloodTrailAlpha =    Cvar_Get( "cg_bloodTrailAlpha", "1.0", CVAR_ARCHIVE );
-	cg_explosionsRing = Cvar_Get( "cg_explosionsRing", "1", CVAR_ARCHIVE );
-	cg_explosionsDust =    Cvar_Get( "cg_explosionsDust", "1", CVAR_ARCHIVE );
 	cg_gibs =       Cvar_Get( "cg_gibs", "0", CVAR_DEVELOPER );
 	cg_outlineModels =  Cvar_Get( "cg_outlineModels", "0", CVAR_ARCHIVE );
 	cg_outlineWorld =   Cvar_Get( "cg_outlineWorld", "0", CVAR_ARCHIVE );
@@ -994,6 +993,10 @@ void CG_InitPersistentState() {
 	cg_heavyRocketExplosions = Cvar_Get( "cg_heavyRocketExplosions", "1", CVAR_ARCHIVE );
 	cg_heavyGrenadeExplosions = Cvar_Get( "cg_heavyGrenadeExplosions", "1", CVAR_ARCHIVE );
 	cg_heavyShockwaveExplosions = Cvar_Get( "cg_heavyShockwaveExplosions", "1", CVAR_ARCHIVE );
+
+	cg_volumetricExplosions = Cvar_Get( "cg_volumetricExplosions", "1", CVAR_ARCHIVE );
+	cg_volumetricExplosionsWave = Cvar_Get( "cg_volumetricExplosionsWave", "1", CVAR_ARCHIVE );
+	cg_volumetricExplosionsSmoke = Cvar_Get( "cg_volumetricExplosionsSmoke", "1", CVAR_ARCHIVE );
 
 	CrosshairState::initPersistentState();
 

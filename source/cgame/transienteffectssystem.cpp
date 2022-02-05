@@ -334,65 +334,72 @@ const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullL
 };
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
-	/*
-	EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
-
-	//(void)addSpriteEffect( cgs.media.shaderRocketExplosion, origin, 0.67f * radius, 500u );
-	 */
-
-	const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
-	const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
-
-	if( auto *hull = allocFireHull( m_lastTime, 800 ) ) {
-		setupHullVertices( hull, origin, kFireHullLayerParams );
-		hull->decayStartAt = m_lastTime + 600;
-	}
-
-	if( auto *hull = allocWaveHull( m_lastTime, 250 ) ) {
-		setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
-		hull->regularColorProps.interval = std::numeric_limits<unsigned>::max();
-	}
-
-	// TODO: Allocating two hulls at once could look better as a single operation
-
-	if( auto *hull = allocSmokeHull( m_lastTime, 2500 ) ) {
-		hull->archimedesBottomAccel   = +45.0f;
-		hull->archimedesTopAccel      = +150.0f;
-		hull->xyExpansionTopAccel     = +50.0f;
-		hull->xyExpansionBottomAccel  = -30.0f;
-
-		hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
-		hull->regularColorProps.interval           = 15;
-		hull->regularColorProps.dropChance         = 0.002f;
-		hull->regularColorProps.replacementChance  = 0.020f;
-
-		hull->expansionStartAt = m_lastTime + 500;
-
-		setupHullVertices( hull, origin, smokeColor, 100.0f, 10.0f );
-	}
-
-	if( auto *hull = allocSmokeHull( m_lastTime, 2500 ) ) {
-		hull->archimedesBottomAccel   = +35.0f;
-		hull->archimedesTopAccel      = +150.0f;
-		hull->xyExpansionTopAccel     = +65.0f;
-		hull->xyExpansionBottomAccel  = -25.0f;
-
-		hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
-		hull->regularColorProps.interval           = 15;
-		hull->regularColorProps.replacementChance  = 0.035f;
-		hull->regularColorProps.dropChance         = 0.003f;
-
-		hull->expansionStartAt = m_lastTime + 500;
-
-		setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
-	}
-
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 700, 100, 300 );
 	VectorCopy( origin, lightEffect->origin );
 	VectorCopy( kFireHullLayerParams[0].initialColor, lightEffect->color );
 	// 250 for radius of 64
+	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
 	lightEffect->radius = 250.0f * radius * lightRadiusScale;
+
+	if( cg_volumetricExplosions->integer ) {
+		if( FireHull *const hull = allocFireHull( m_lastTime, 800 ) ) {
+			setupHullVertices( hull, origin, kFireHullLayerParams );
+			hull->decayStartAt = m_lastTime + 600;
+		}
+
+		if( cg_volumetricExplosionsWave->integer ) {
+			const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
+			if( WaveHull *const hull = allocWaveHull( m_lastTime, 250 ) ) {
+				setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
+				hull->regularColorProps.interval = std::numeric_limits<unsigned>::max();
+			}
+		}
+
+		// TODO: It would look better if smoke hulls are coupled together/allocated at once
+
+		if( cg_volumetricExplosionsSmoke->integer ) {
+			const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
+
+			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2500 ) ) {
+				hull->archimedesBottomAccel   = +45.0f;
+				hull->archimedesTopAccel      = +150.0f;
+				hull->xyExpansionTopAccel     = +50.0f;
+				hull->xyExpansionBottomAccel  = -30.0f;
+
+				hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
+				hull->regularColorProps.interval           = 15;
+				hull->regularColorProps.dropChance         = 0.002f;
+				hull->regularColorProps.replacementChance  = 0.020f;
+
+				hull->expansionStartAt = m_lastTime + 500;
+
+				setupHullVertices( hull, origin, smokeColor, 100.0f, 10.0f );
+			}
+
+			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2500 ) ) {
+				hull->archimedesBottomAccel   = +35.0f;
+				hull->archimedesTopAccel      = +150.0f;
+				hull->xyExpansionTopAccel     = +65.0f;
+				hull->xyExpansionBottomAccel  = -25.0f;
+
+				hull->regularColorProps.replacementPalette = kSmokeReplacementPalette;
+				hull->regularColorProps.interval           = 15;
+				hull->regularColorProps.replacementChance  = 0.035f;
+				hull->regularColorProps.dropChance         = 0.003f;
+
+				hull->expansionStartAt = m_lastTime + 500;
+
+				setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
+			}
+		}
+	} else {
+		EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
+		// TODO: Unify this with hulls (quake random dirs seem to be vertices of the 2-nd tess level icosphere)
+		const auto *randomDir       = kPredefinedDirs[m_rng.nextBounded( std::size( kPredefinedDirs ) )];
+		const float randomMagnitude = m_rng.nextFloat( -5.0f, 5.0f );
+		VectorScale( randomDir, randomMagnitude, effect->velocity );
+	}
 }
 
 void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const float *dir, int damage ) {
