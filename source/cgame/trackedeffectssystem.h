@@ -72,7 +72,7 @@ private:
 		int64_t lastParticleAt { 0 };
 		float dropDistance { 16.0f };
 		unsigned maxParticlesPerDrop { 1 };
-		unsigned maxParticlesInFlock { ParticleSystem::kMaxTrailFlockSize };
+		unsigned maxParticlesInFlock { ~0u };
 		int entNum { std::numeric_limits<int>::max() };
 	};
 
@@ -101,13 +101,17 @@ private:
 	void unlinkAndFree( TeleEffect *teleEffect );
 
 	[[nodiscard]]
-	auto allocParticleTrail( int entNum, const float *origin, const float *color ) -> ParticleTrail *;
+	auto allocParticleTrail( int entNum, const Particle::RenderingParams &params, unsigned particleSystemBin,
+							 const float *origin, const float *color ) -> ParticleTrail *;
 
 	void updateParticleTrail( ParticleTrail *trail, const float *origin, ConeFlockFiller *filler, int64_t currTime );
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 
 	void touchRocketOrGrenadeTrail( int entNum, const float *origin, ConeFlockFiller *filler, int64_t currTime );
+
+	static constexpr unsigned kClippedTrailsBin = ParticleSystem::kClippedTrailFlocksBin;
+	static constexpr unsigned kNonClippedTrailsBin = ParticleSystem::kNonClippedTrailFlocksBin;
 
 	FireTrail *m_fireTrailsHead { nullptr };
 	ParticleTrail *m_particleTrailsHead { nullptr };

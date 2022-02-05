@@ -65,11 +65,16 @@ struct alignas( 16 ) ParticleFlock {
 	float maxs[4];
 
 	void simulate( int64_t currTime, float deltaSeconds );
+	void simulateWithoutClipping( int64_t currTime, float deltaSeconds );
 };
 
 class ParticleSystem {
 public:
-	static constexpr unsigned kMaxTrailFlockSize = 64;
+	static constexpr unsigned kMaxClippedTrailFlockSize = 64;
+	static constexpr unsigned kMaxNonClippedTrailFlockSize = 32;
+
+	static constexpr unsigned kClippedTrailFlocksBin = 3;
+	static constexpr unsigned kNonClippedTrailFlocksBin = 4;
 private:
 	template<typename> friend class SingletonHolder;
 
@@ -80,6 +85,7 @@ private:
 		ParticleFlock *head { nullptr };
 		wsw::HeapBasedFreelistAllocator allocator;
 		const unsigned maxParticlesPerFlock;
+		bool needsShapeLists { true };
 
 		FlocksBin( unsigned maxParticlesPerFlock, unsigned maxFlocks )
 			: allocator( sizeof( ParticleFlock ) + sizeof( Particle ) * maxParticlesPerFlock, maxFlocks )
@@ -89,23 +95,25 @@ private:
 	static constexpr unsigned kMaxSmallFlocks  = 128;
 	static constexpr unsigned kMaxMediumFlocks = 64;
 	static constexpr unsigned kMaxLargeFlocks  = 16;
-	static constexpr unsigned kMaxTrailFlocks  = 96;
+
+	static constexpr unsigned kMaxClippedTrailFlocks    = 32;
+	static constexpr unsigned kMaxNonClippedTrailFlocks = 64;
 
 	static constexpr unsigned kMaxSmallFlockSize  = 8;
 	static constexpr unsigned kMaxMediumFlockSize = 48;
 	static constexpr unsigned kMaxLargeFlockSize  = 128;
 
-	static constexpr unsigned kMaxNumberOfAllFlocks = kMaxSmallFlocks +
-		kMaxMediumFlocks + kMaxLargeFlocks + kMaxTrailFlocks;
+	static constexpr unsigned kMaxNumberOfClippedFlocks = kMaxClippedTrailFlocks +
+		kMaxSmallFlocks + kMaxMediumFlocks + kMaxLargeFlocks;
 
-	wsw::StaticVector<CMShapeList *, kMaxNumberOfAllFlocks> m_freeShapeLists;
+	wsw::StaticVector<CMShapeList *, kMaxNumberOfClippedFlocks> m_freeShapeLists;
 
-	wsw::StaticVector<FlocksBin, 4> m_bins;
+	wsw::StaticVector<FlocksBin, 5> m_bins;
 	int64_t m_lastTime { 0 };
 
 	wsw::RandomGenerator m_rng;
 
-	void releaseFlock( ParticleFlock *flock );
+	void unlinkAndFree( ParticleFlock *flock );
 
 	[[nodiscard]]
 	auto createFlock( unsigned binIndex, int64_t currTime ) -> ParticleFlock *;
@@ -156,19 +164,10 @@ public:
 	}
 
 	[[nodiscard]]
-	auto createTrailFlock( const Particle::RenderingParams &params, const float *initialColor ) -> ParticleFlock * {
-		// Don't let it evict anything
-		const int64_t currTime = std::numeric_limits<int64_t>::min();
-		ParticleFlock *flock = createFlock( 3, currTime );
-		Vector4Copy( initialColor, flock->color );
-		flock->params = params;
-		// Externally managed
-		flock->timeoutAt = std::numeric_limits<int64_t>::max();
-		flock->numParticlesLeft = 0;
-		return flock;
-	}
+	auto createTrailFlock( const Particle::RenderingParams &params, unsigned binIndex,
+						   const float *initialColor ) -> ParticleFlock *;
 
-	void releaseTrailFlock( ParticleFlock *flock ) { releaseFlock( flock ); }
+	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 
 	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 };

@@ -17,7 +17,9 @@ ParticleSystem::ParticleSystem() {
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxSmallFlockSize, kMaxSmallFlocks );
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxMediumFlockSize, kMaxMediumFlocks );
 	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxLargeFlockSize, kMaxLargeFlocks );
-	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxTrailFlockSize, kMaxTrailFlocks );
+	new( m_bins.unsafe_grow_back() )FlocksBin( kMaxClippedTrailFlockSize, kMaxClippedTrailFlocks );
+	auto *lastBin = new( m_bins.unsafe_grow_back() )FlocksBin( kMaxNonClippedTrailFlockSize, kMaxNonClippedTrailFlocks );
+	lastBin->needsShapeLists = false;
 }
 
 ParticleSystem::~ParticleSystem() {
@@ -25,7 +27,7 @@ ParticleSystem::~ParticleSystem() {
 		ParticleFlock *nextFlock = nullptr;
 		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
-			releaseFlock( flock );
+			unlinkAndFree( flock );
 		}
 	}
 	for( CMShapeList *list : m_freeShapeLists ) {
@@ -38,10 +40,12 @@ auto ParticleSystem::cgTimeFixme() -> int64_t {
 	return cg.time;
 }
 
-void ParticleSystem::releaseFlock( ParticleFlock *flock ) {
+void ParticleSystem::unlinkAndFree( ParticleFlock *flock ) {
 	FlocksBin &bin = m_bins[flock->binIndex];
 	wsw::unlink( flock, &bin.head );
-	m_freeShapeLists.push_back( flock->shapeList );
+	if( flock->shapeList ) {
+		m_freeShapeLists.push_back( flock->shapeList );
+	}
 	flock->~ParticleFlock();
 	bin.allocator.free( flock );
 }
@@ -50,6 +54,7 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	assert( binIndex < std::size( m_bins ) );
 	FlocksBin &bin = m_bins[binIndex];
 
+	CMShapeList *shapeList = nullptr;
 	uint8_t *mem = bin.allocator.allocOrNull();
 	if( !mem ) [[unlikely]] {
 		ParticleFlock *oldestFlock = nullptr;
@@ -62,13 +67,17 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 		}
 		assert( oldestFlock );
 		wsw::unlink( oldestFlock, &bin.head );
+		shapeList = oldestFlock->shapeList;
 		oldestFlock->~ParticleFlock();
 		mem = (uint8_t *)oldestFlock;
 	}
 
-	assert( mem && !m_freeShapeLists.empty() );
-	CMShapeList *const shapeList = m_freeShapeLists.back();
-	m_freeShapeLists.pop_back();
+	assert( mem );
+	if( bin.needsShapeLists && !shapeList ) {
+		assert( !m_freeShapeLists.empty() );
+		shapeList = m_freeShapeLists.back();
+		m_freeShapeLists.pop_back();
+	}
 
 	auto *const particles = (Particle *)( mem + sizeof( ParticleFlock ) );
 	assert( ( (uintptr_t)particles % 16 ) == 0 );
@@ -81,6 +90,21 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	};
 
 	wsw::link( flock, &bin.head );
+	return flock;
+}
+
+auto ParticleSystem::createTrailFlock( const Particle::RenderingParams &params, unsigned binIndex,
+									   const float *initialColor ) -> ParticleFlock * {
+	assert( binIndex == kClippedTrailFlocksBin || binIndex == kNonClippedTrailFlocksBin );
+
+	// Don't let it evict anything
+	const int64_t currTime = std::numeric_limits<int64_t>::min();
+	ParticleFlock *flock = createFlock( binIndex, currTime );
+	Vector4Copy( initialColor, flock->color );
+	flock->params = params;
+	// Externally managed
+	flock->timeoutAt = std::numeric_limits<int64_t>::max();
+	flock->numParticlesLeft = 0;
 	return flock;
 }
 
@@ -204,7 +228,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 			if( currTime < flock->timeoutAt ) [[likely]] {
 				flock->simulate( currTime, deltaSeconds );
 			} else {
-				releaseFlock( flock );
+				unlinkAndFree( flock );
 			}
 		}
 	}
@@ -219,7 +243,13 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 }
 
 void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
-	if( !numParticlesLeft ) {
+	if( !numParticlesLeft ) [[unlikely]] {
+		// Could be awaiting filling, don't modify its timeout
+		return;
+	}
+
+	if( !shapeList ) [[unlikely]] {
+		simulateWithoutClipping( currTime, deltaSeconds );
 		return;
 	}
 
@@ -299,4 +329,45 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 		// Dispose next frame
 		timeoutAt = 0;
 	}
+}
+
+void ParticleFlock::simulateWithoutClipping( int64_t currTime, float deltaSeconds ) {
+	assert( !shapeList && numParticlesLeft );
+
+	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
+
+	BoundsBuilder boundsBuilder;
+	for( unsigned i = 0; i < numParticlesLeft; ) {
+		Particle *const __restrict particle = particles + i;
+		if( particle->timeoutAt > currTime ) [[likely]] {
+			// TODO: Two origins are redundant for non-clipped particles
+			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
+
+			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
+			VectorCopy( particle->origin, particle->oldOrigin );
+
+			boundsBuilder.addPoint( particle->origin );
+			timeoutOfParticlesLeft = std::max( particle->timeoutAt, timeoutOfParticlesLeft );
+			++i;
+		} else {
+			particles[i] = particles[numParticlesLeft];
+			numParticlesLeft--;
+		}
+	}
+
+	// We still have to compute and store bounds as they're used by the renderer culling systems
+	if( numParticlesLeft ) {
+		vec3_t possibleMins, possibleMaxs;
+		boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
+		// TODO: Let the BoundsBuilder store 4-component vectors
+		VectorCopy( possibleMins, this->mins );
+		VectorCopy( possibleMaxs, this->maxs );
+		this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
+	} else {
+		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::min();
+		Vector4Set( this->mins, minVal, minVal, minVal, minVal );
+		Vector4Set( this->maxs, maxVal, maxVal, maxVal, maxVal );
+	}
+
+	timeoutAt = timeoutOfParticlesLeft;
 }
