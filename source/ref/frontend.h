@@ -26,13 +26,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <span>
 
 struct alignas( 32 )Frustum {
-	float planeX[8];
-	float planeY[8];
-	float planeZ[8];
-	float planeD[8];
-	uint32_t xBlendMasks[8];
-	uint32_t yBlendMasks[8];
-	uint32_t zBlendMasks[8];
+	alignas( 32 ) float planeX[8];
+	alignas( 32 ) float planeY[8];
+	alignas( 32 ) float planeZ[8];
+	alignas( 32 ) float planeD[8];
+	alignas( 32 ) uint32_t xBlendMasks[8];
+	alignas( 32 ) uint32_t yBlendMasks[8];
+	alignas( 32 ) uint32_t zBlendMasks[8];
 
 	void setPlaneComponentsAtIndex( unsigned index, const float *n, float d );
 
@@ -44,7 +44,7 @@ struct alignas( 32 )Frustum {
 
 namespace wsw::ref {
 
-class Frontend {
+class alignas( 32 ) Frontend {
 private:
 	shader_t *m_coronaShader;
 	shader_t *m_particleShader;

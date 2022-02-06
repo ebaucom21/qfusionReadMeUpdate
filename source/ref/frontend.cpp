@@ -1499,7 +1499,7 @@ Frontend::Frontend() {
 	std::fill( std::begin( m_coronaDrawSurfaces ), std::end( m_coronaDrawSurfaces ), ST_CORONA );
 }
 
-static SingletonHolder<Frontend> sceneInstanceHolder;
+alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
 	sceneInstanceHolder.Init();

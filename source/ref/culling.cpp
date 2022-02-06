@@ -316,7 +316,9 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 	bool hadCulledFrusta = false;
 	// Note: We don't process more occluders due to performance and not memory capacity reasons.
 	// Best occluders come first so they should make their way into the final result.
-	alignas( 16 )bool isCulledByOtherTable[std::size( m_occluderFrusta )];
+	alignas( 16 )bool isCulledByOtherTable[64];
+	// MSVC fails to get the member array count in compile time
+	assert( std::size( isCulledByOtherTable ) == std::size( m_occluderFrusta ) );
 	std::memset( isCulledByOtherTable, 0, sizeof( bool ) * maxOccluders );
 
 	// Note: An outer loop over all surfaces would have been allowed to avoid redundant component shuffles

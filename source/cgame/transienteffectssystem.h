@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/randomgenerator.h"
 #include "../ref/ref.h"
 
-class CMShapeList;
+struct CMShapeList;
 class DrawSceneRequest;
 
 /// Manages "fire-and-forget" effects that usually get spawned upon events.

@@ -14,10 +14,7 @@ class RandomGenerator {
 	// Initialize just to suppress Clang-Tidy warnings
 	uint32_t m_a { 0 }, m_b { 0 }, m_c { 0 }, m_d { 0 };
 
-#ifdef _MSC_VER
-	using std::bit_cast;
-#else
-	// Not yet in GCC 10
+	// TODO: Replace by std::bit_cast once it's reliably supported by compilers
 	template <typename U, typename T>
 	static auto bit_cast( T t ) -> U {
 		static_assert( sizeof( T ) == sizeof( U ) );
@@ -25,7 +22,6 @@ class RandomGenerator {
 		__builtin_memcpy( &result, &t, sizeof( T ) );
 		return result;
 	}
-#endif
 public:
 	[[nodiscard]]
 	constexpr RandomGenerator() {

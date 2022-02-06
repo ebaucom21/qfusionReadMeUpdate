@@ -192,6 +192,10 @@ private:
 	}
 };
 
+#ifdef _MSC_VER
+#define __builtin_popcount __popcnt
+#endif
+
 IndexPatternsCache::IndexPatternsCache() {
 	for( unsigned bits = 0; bits < 4; ++bits ) {
 		m_max4ElemCombinationsForBound.push_back( 0 );
