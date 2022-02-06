@@ -912,7 +912,7 @@ void Frontend::markLightsOfSurfaces( const Scene *scene,
 									 std::span<std::span<const unsigned>> spansOfLeaves,
 								   	 std::span<const uint16_t> visibleLightIndices ) {
 	// TODO: Fuse these calls
-	m_leafLightBitsOfSurfacesHolder.reserveZeroed( rsh.worldBrushModel->numModelSurfaces );
+	m_leafLightBitsOfSurfacesHolder.reserveZeroed( rsh.worldBrushModel->numsurfaces );
 	unsigned *const lightBitsOfSurfaces = m_leafLightBitsOfSurfacesHolder.data.get();
 
 	if( !visibleLightIndices.empty() ) {
