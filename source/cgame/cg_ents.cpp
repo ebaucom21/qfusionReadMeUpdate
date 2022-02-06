@@ -1642,9 +1642,9 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				CG_EntityLoopSound( state, ATTN_NORM );
 				cg.effectsSystem.touchRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
-					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.6f, 0 );
+					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.7f, 0.3f );
 				} else {
-					drawSceneRequest->addLight( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.8f, 0 );
+					drawSceneRequest->addLight( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.7f, 0.3f );
 				}
 				break;
 			case ET_GRENADE:

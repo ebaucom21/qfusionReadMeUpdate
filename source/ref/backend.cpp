@@ -1128,7 +1128,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		}
 
 		const float radius = appearanceRules->radius;
-		assert( radius >= 1.0f );
+		assert( radius >= 0.1f );
 
 		vec3_t point;
 		VectorMA( particle->origin, -radius, v_up, point );
@@ -1154,7 +1154,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 		const float length = appearanceRules->length;
 		const float width = appearanceRules->width;
-		assert( length >= 1.0f && width >= 1.0f );
+		assert( length >= 0.1f && width >= 0.1f );
 
 		const float xmin = 0;
 		const float xmax = length;

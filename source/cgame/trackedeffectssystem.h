@@ -70,7 +70,7 @@ private:
 		float lastDropOrigin[3];
 		int64_t touchedAt { 0 };
 		int64_t lastParticleAt { 0 };
-		float dropDistance { 16.0f };
+		float dropDistance { 12.0f };
 		unsigned maxParticlesPerDrop { 1 };
 		unsigned maxParticlesInFlock { ~0u };
 		int entNum { std::numeric_limits<int>::max() };
@@ -122,33 +122,33 @@ private:
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
 	ConeFlockFiller m_rocketParticlesFlockFiller {
-		.gravity     = -200,
+		.gravity     = -250,
 		.angle       = 15,
 		.bounceCount = 0,
 		.minSpeed    = 75,
-		.maxSpeed    = 150,
-		.minTimeout  = 150,
-		.maxTimeout  = 300
+		.maxSpeed    = 100,
+		.minTimeout  = 200,
+		.maxTimeout  = 250
 	};
 
 	ConeFlockFiller m_grenadeParticlesFlockFiller {
-		.gravity     = +200,
-		.angle       = 30,
+		.gravity     = -250,
+		.angle       = 7.5f,
 		.bounceCount = 0,
 		.minSpeed    = 75,
 		.maxSpeed    = 100,
-		.minTimeout  = 150,
-		.maxTimeout  = 300
+		.minTimeout  = 175,
+		.maxTimeout  = 225
 	};
 
 	ConeFlockFiller m_blastParticlesFlockFiller {
-		.gravity     = -300,
-		.angle       = 30,
+		.gravity     = -450,
+		.angle       = 60,
 		.bounceCount = 0,
-		.minSpeed    = 50,
-		.maxSpeed    = 50,
-		.minTimeout  = 300,
-		.maxTimeout  = 450
+		.minSpeed    = 150,
+		.maxSpeed    = 200,
+		.minTimeout  = 250,
+		.maxTimeout  = 300
 	};
 
 	ConeFlockFiller m_plasmaParticlesFlockFiller {
@@ -157,13 +157,13 @@ private:
 		.bounceCount = 0,
 		.minSpeed    = 100,
 		.maxSpeed    = 150,
-		.minTimeout  = 100,
-		.maxTimeout  = 150
+		.minTimeout  = 75,
+		.maxTimeout  = 125
 	};
 
 	ConeFlockFiller m_electroParticlesFlockFiller {
 		.gravity     = 0,
-		.angle       = 60,
+		.angle       = 30,
 		.bounceCount = 0,
 		.minSpeed    = 50,
 		.maxSpeed    = 50,

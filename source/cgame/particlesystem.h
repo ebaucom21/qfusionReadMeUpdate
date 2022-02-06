@@ -35,7 +35,7 @@ struct ConeFlockFiller {
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float dir[3] { 0.0f, 0.0f, 1.0f };
 	float gravity { 600 };
-	float angle { 75 };
+	float angle { 45 };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };
@@ -91,14 +91,14 @@ private:
 
 	static constexpr unsigned kMaxSmallFlocks  = 128;
 	static constexpr unsigned kMaxMediumFlocks = 64;
-	static constexpr unsigned kMaxLargeFlocks  = 16;
+	static constexpr unsigned kMaxLargeFlocks  = 20;
 
 	static constexpr unsigned kMaxClippedTrailFlocks    = 32;
 	static constexpr unsigned kMaxNonClippedTrailFlocks = 64;
 
 	static constexpr unsigned kMaxSmallFlockSize  = 8;
 	static constexpr unsigned kMaxMediumFlockSize = 48;
-	static constexpr unsigned kMaxLargeFlockSize  = 128;
+	static constexpr unsigned kMaxLargeFlockSize  = 144;
 
 	static constexpr unsigned kMaxNumberOfClippedFlocks = kMaxClippedTrailFlocks +
 		kMaxSmallFlocks + kMaxMediumFlocks + kMaxLargeFlocks;

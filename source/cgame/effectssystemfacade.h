@@ -49,7 +49,7 @@ public:
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
 	void spawnBulletImpactEffect( const trace_s *trace ) {
-		spawnBulletLikeImpactEffect( trace, 0.10f, 0.60f );
+		spawnBulletLikeImpactEffect( trace, 0.25f, 0.50f );
 	}
 
 	void spawnPelletImpactEffect( const trace_s *trace ) {

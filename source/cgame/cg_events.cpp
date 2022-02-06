@@ -493,7 +493,8 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 		if( initialColor ) {
 			ConeFlockFiller flockFiller {
 				.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
-				.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] }
+				.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
+				.angle  = 15.0f
 			};
 			Particle::AppearanceRules appearanceRules {
 				.material = cgs.media.shaderSparkParticle,

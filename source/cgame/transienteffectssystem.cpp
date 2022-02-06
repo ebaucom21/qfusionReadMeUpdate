@@ -400,7 +400,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			}
 		}
 	} else {
-		EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, radius, 800u );
+		const float spriteRadius = 40.0f * radius * lightRadiusScale;
+		EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, spriteRadius, 800u );
 		// TODO: Unify this with hulls (quake random dirs seem to be vertices of the 2-nd tess level icosphere)
 		const auto *randomDir       = kPredefinedDirs[m_rng.nextBounded( std::size( kPredefinedDirs ) )];
 		const float randomMagnitude = m_rng.nextFloat( -5.0f, 5.0f );
