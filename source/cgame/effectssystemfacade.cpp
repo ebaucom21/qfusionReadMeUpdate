@@ -65,24 +65,24 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
-	UniformFlockFiller flockFiller {
-		.origin = { origin[0], origin[1], origin[2] },
-		.offset = { offset[0], offset[1], offset[2] },
-		.gravity = 350.0f, .minSpeed = 150.0f, .maxSpeed = 300.0f,
-		.minPercentage = 1.0f, .maxPercentage = 1.0f
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderDebrisParticle,
-		.kind     = Particle::Spark,
-		.length   = 5.0f,
-		.width    = 2.0f,
-		.initialColor  = kExplosionInitialColor,
-		.fadedInColor  = kExplosionFadedInColor,
-		.fadedOutColor = kExplosionFadedOutColor,
-	};
-
-	cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	if( cg_particles->integer ) {
+		UniformFlockFiller flockFiller {
+			.origin = { origin[0], origin[1], origin[2] },
+			.offset = { offset[0], offset[1], offset[2] },
+			.gravity = 350.0f, .minSpeed = 150.0f, .maxSpeed = 300.0f,
+			.minPercentage = 1.0f, .maxPercentage = 1.0f
+		};
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderDebrisParticle,
+			.kind     = Particle::Spark,
+			.length   = 5.0f,
+			.width    = 2.0f,
+			.initialColor  = kExplosionInitialColor,
+			.fadedInColor  = kExplosionFadedInColor,
+			.fadedOutColor = kExplosionFadedOutColor,
+		};
+		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	}
 
 	m_transientEffectsSystem.spawnExplosion( spriteOrigin );
 }
@@ -99,23 +99,23 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 	sfx_s *sfx = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sfxPlasmaStrongHit : cgs.media.sfxPlasmaWeakHit;
 	startSound( sfx, soundOrigin, ATTN_IDLE );
 
-	UniformFlockFiller flockFiller {
-		.origin = { origin[0], origin[1], origin[2] },
-		.offset = { impactNormal[0], impactNormal[1], impactNormal[2] },
-		.minTimeout = 50, .maxTimeout = 200
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderSparkParticle,
-		.kind     = Particle::Spark,
-		.length   = 3.0f,
-		.width    = 1.0f,
-		.initialColor  = kPlasmaInitialColor,
-		.fadedInColor  = kPlasmaFadedInColor,
-		.fadedOutColor = kPlasmaFadedOutColor
-	};
-
-	cg.particleSystem.addMediumParticleFlock( appearanceRules, flockFiller );
+	if( cg_particles->integer ) {
+		UniformFlockFiller flockFiller {
+			.origin = { origin[0], origin[1], origin[2] },
+			.offset = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.minTimeout = 50, .maxTimeout = 200
+		};
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderSparkParticle,
+			.kind     = Particle::Spark,
+			.length   = 3.0f,
+			.width    = 1.0f,
+			.initialColor  = kPlasmaInitialColor,
+			.fadedInColor  = kPlasmaFadedInColor,
+			.fadedOutColor = kPlasmaFadedOutColor
+		};
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockFiller );
+	}
 
 	m_transientEffectsSystem.spawnPlasmaImpactEffect( origin, impactNormal );
 }
@@ -150,7 +150,6 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.minSpeed = 50.0f, .maxSpeed = 75.0f,
 			.minPercentage = 0.5f, .maxPercentage = 0.5f
 		};
-
 		Particle::AppearanceRules appearanceRules {
 			.material = cgs.media.shaderBloodParticle,
 			.kind     = Particle::Spark,
@@ -160,7 +159,6 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.fadedInColor  = kBloodFadedInColor,
 			.fadedOutColor = kBloodFadedOutColor
 		};
-
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 	}
 
@@ -172,21 +170,21 @@ static const vec4_t kElectroboltHitFadedInColor { 0.1f, 0.5f, 1.0f, 1.0f };
 static const vec4_t kElectroboltHitFadedOutColor { 0.1f, 0.5f, 1.0f, 1.0f };
 
 void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
-	UniformFlockFiller flockFiller {
-		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderSparkParticle,
-		.kind     = Particle::Spark,
-		.length   = 8.0f,
-		.width    = 2.0f,
-		.initialColor  = kElectroboltHitInitialColor,
-		.fadedInColor  = kElectroboltHitFadedInColor,
-		.fadedOutColor = kElectroboltHitFadedOutColor
-	};
-
-	cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	if( cg_particles->integer ) {
+		UniformFlockFiller flockFiller {
+			.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
+		};
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderSparkParticle,
+			.kind     = Particle::Spark,
+			.length   = 8.0f,
+			.width    = 2.0f,
+			.initialColor  = kElectroboltHitInitialColor,
+			.fadedInColor  = kElectroboltHitFadedInColor,
+			.fadedOutColor = kElectroboltHitFadedOutColor
+		};
+		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	}
 
 	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
@@ -203,55 +201,61 @@ static const vec4_t kInstagunHitFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kInstagunHitFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *dir, int ownerNum ) {
-	const float *initialColor  = kInstagunHitInitialColor;
-	const float *fadedInColor  = kInstagunHitFadedInColor;
-	const float *fadedOutColor = kInstagunHitFadedOutColor;
-	if( cg_teamColoredInstaBeams->integer && ownerNum && ( ownerNum < gs.maxclients + 1 ) ) {
-		if( const int team = cg_entities[ownerNum].current.team; ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) {
-			vec3_t teamColor;
-			CG_TeamColor( team, teamColor );
-			VectorScale( teamColor, 0.67f, teamColor );
+	const float *effectColor = kInstagunHitFadedInColor;
+	if( cg_particles->integer ) {
+		const float *initialColor  = kInstagunHitInitialColor;
+		const float *fadedInColor  = kInstagunHitFadedInColor;
+		const float *fadedOutColor = kInstagunHitFadedOutColor;
 
-			float *const initialColorBuffer  = instagunHitInitialColorForTeam[team - TEAM_ALPHA];
-			float *const fadedInColorBuffer  = instagunHitFadedInColorForTeam[team - TEAM_ALPHA];
-			float *const fadedOutColorBuffer = instagunHitFadedOutColorForTeam[team - TEAM_ALPHA];
+		if( cg_teamColoredInstaBeams->integer && ownerNum && ( ownerNum < gs.maxclients + 1 ) ) {
+			if( const int team = cg_entities[ownerNum].current.team; ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) {
+				vec3_t teamColor;
+				CG_TeamColor( team, teamColor );
+				VectorScale( teamColor, 0.67f, teamColor );
 
-			VectorCopy( teamColor, initialColorBuffer );
-			VectorCopy( teamColor, fadedInColorBuffer );
-			VectorCopy( teamColor, fadedOutColorBuffer );
+				float *const initialColorBuffer  = instagunHitInitialColorForTeam[team - TEAM_ALPHA];
+				float *const fadedInColorBuffer  = instagunHitFadedInColorForTeam[team - TEAM_ALPHA];
+				float *const fadedOutColorBuffer = instagunHitFadedOutColorForTeam[team - TEAM_ALPHA];
 
-			// Preserve the reference alpha
-			initialColorBuffer[3]  = kInstagunHitInitialColor[3];
-			fadedInColorBuffer[3]  = kInstagunHitFadedInColor[3];
-			fadedOutColorBuffer[3] = kInstagunHitFadedOutColor[3];
+				VectorCopy( teamColor, initialColorBuffer );
+				VectorCopy( teamColor, fadedInColorBuffer );
+				VectorCopy( teamColor, fadedOutColorBuffer );
 
-			initialColor  = initialColorBuffer;
-			fadedInColor  = fadedInColorBuffer;
-			fadedOutColor = fadedOutColorBuffer;
+				// Preserve the reference alpha
+				initialColorBuffer[3]  = kInstagunHitInitialColor[3];
+				fadedInColorBuffer[3]  = kInstagunHitFadedInColor[3];
+				fadedOutColorBuffer[3] = kInstagunHitFadedOutColor[3];
+
+				initialColor  = initialColorBuffer;
+				fadedInColor  = fadedInColorBuffer;
+				fadedOutColor = fadedOutColorBuffer;
+
+				effectColor = fadedInColorBuffer;
+			}
 		}
+
+		UniformFlockFiller flockFiller {
+			.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
+		};
+
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderSparkParticle,
+			.kind     = Particle::Spark,
+			.length   = 8.0f,
+			.width    = 1.0,
+			.initialColor  = initialColor,
+			.fadedInColor  = fadedInColor,
+			.fadedOutColor = fadedOutColor
+		};
+
+		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
 	}
-
-	UniformFlockFiller flockFiller {
-		.origin = { origin[0], origin[1], origin[2] }, .offset = { dir[0], dir[1], dir[2] }
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderSparkParticle,
-		.kind     = Particle::Spark,
-		.length   = 8.0f,
-		.width    = 1.0,
-		.initialColor  = initialColor,
-		.fadedInColor  = fadedInColor,
-		.fadedOutColor = fadedOutColor
-	};
-
-	cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
 
 	// TODO: Don't we need an IG-specific sound
 	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnInstagunHitEffect( origin, dir, fadedInColor );
+	m_transientEffectsSystem.spawnInstagunHitEffect( origin, dir, effectColor );
 }
 
 static const vec4_t kGunbladeHitInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };
@@ -288,24 +292,24 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 			// TODO: Check sound origin
 			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
 
-			ConeFlockFiller flockFiller {
-				.origin = { pos[0], pos[1], pos[2] },
-				.offset = { dir[0], dir[1], dir[2] },
-				.dir    = { dir[0], dir[1], dir[2] },
-				.angle  = 60
-			};
-
-			Particle::AppearanceRules appearanceRules {
-				.material = cgs.media.shaderSparkParticle,
-				.kind     = Particle::Spark,
-				.length   = 4.0f,
-				.width    = 1.0f,
-				.initialColor  = kGunbladeHitInitialColor,
-				.fadedInColor  = kGunbladeHitFadedInColor,
-				.fadedOutColor = kGunbladeHitFadedOutColor
-			};
-
-			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockFiller );
+			if( cg_particles->integer ) {
+				ConeFlockFiller flockFiller {
+					.origin = { pos[0], pos[1], pos[2] },
+					.offset = { dir[0], dir[1], dir[2] },
+					.dir    = { dir[0], dir[1], dir[2] },
+					.angle  = 60
+				};
+				Particle::AppearanceRules appearanceRules {
+					.material = cgs.media.shaderSparkParticle,
+					.kind     = Particle::Spark,
+					.length   = 4.0f,
+					.width    = 1.0f,
+					.initialColor  = kGunbladeHitInitialColor,
+					.fadedInColor  = kGunbladeHitFadedInColor,
+					.fadedOutColor = kGunbladeHitFadedOutColor
+				};
+				cg.particleSystem.addMediumParticleFlock( appearanceRules, flockFiller );
+			}
 		}
 	}
 }
@@ -317,24 +321,24 @@ static const vec4_t kGunbladeBlastFadedOutColor { 1.0f, 0.8f, 0.1f, 0.0f };
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
-	UniformFlockFiller flockFiller {
-		.origin  = { origin[0], origin[1], origin[2] },
-		.offset  = { dir[0], dir[1], dir[2] },
-		.gravity = 0.0f,
-		.bounceCount = 1
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderDebrisParticle,
-		.kind     = Particle::Spark,
-		.length   = 4.0f,
-		.width    = 2.0f,
-		.initialColor  = kGunbladeBlastInitialColor,
-		.fadedInColor  = kGunbladeBlastFadedInColor,
-		.fadedOutColor = kGunbladeBlastFadedOutColor
-	};
-
-	cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	if( cg_particles->integer ) {
+		UniformFlockFiller flockFiller {
+			.origin  = { origin[0], origin[1], origin[2] },
+			.offset  = { dir[0], dir[1], dir[2] },
+			.gravity = 0.0f,
+			.bounceCount = 1
+		};
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderDebrisParticle,
+			.kind     = Particle::Spark,
+			.length   = 4.0f,
+			.width    = 2.0f,
+			.initialColor  = kGunbladeBlastInitialColor,
+			.fadedInColor  = kGunbladeBlastFadedInColor,
+			.fadedOutColor = kGunbladeBlastFadedOutColor
+		};
+		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockFiller );
+	}
 
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
 }
@@ -354,28 +358,27 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, flo
 		}
 	}
 
-	// TODO: Vary percentage by surface type too
-
-	ConeFlockFiller flockFiller {
-		.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
-		.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-		.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-		.gravity       = 900.0f,
-		.minPercentage = minPercentage,
-		.maxPercentage = maxPercentage
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderDebrisParticle,
-		.kind     = Particle::Spark,
-		.length   = 5.0f,
-		.width    = 1.0f,
-		.initialColor  = kBulletImpactInitialColor,
-		.fadedInColor  = kBulletImpactFadedInColor,
-		.fadedOutColor = kBulletImpactFadedOutColor
-	};
-
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+	if( cg_particles->integer ) {
+		// TODO: Vary percentage by surface type too
+		ConeFlockFiller flockFiller {
+			.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
+			.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+			.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+			.gravity       = 900.0f,
+			.minPercentage = minPercentage,
+			.maxPercentage = maxPercentage
+		};
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderDebrisParticle,
+			.kind     = Particle::Spark,
+			.length   = 5.0f,
+			.width    = 1.0f,
+			.initialColor  = kBulletImpactInitialColor,
+			.fadedInColor  = kBulletImpactFadedInColor,
+			.fadedOutColor = kBulletImpactFadedOutColor
+		};
+		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+	}
 
 	m_transientEffectsSystem.spawnBulletLikeImpactEffect( trace->endpos, trace->plane.normal );
 }

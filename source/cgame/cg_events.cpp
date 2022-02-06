@@ -111,28 +111,28 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + TRAILTIME < cg.time ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
-			ConeFlockFiller flockFiller {
-				.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
-				.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-				.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-				.gravity       = 900.0f,
-				.minPercentage = 0.5f,
-				.maxPercentage = 1.0f,
-				.minTimeout    = 75,
-				.maxTimeout    = 150
-			};
-
-			Particle::AppearanceRules appearanceRules {
-				.material = cgs.media.shaderSparkParticle,
-				.kind     = Particle::Spark,
-				.length   = 4.0f,
-				.width    = 1.0f,
-				.initialColor  = kLaserImpactInitialColor,
-				.fadedInColor  = kLaserImpactFadedInColor,
-				.fadedOutColor = kLaserImpactFadedOutColor
-			};
-
-			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+			if( cg_particles->integer ) {
+				ConeFlockFiller flockFiller {
+					.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
+					.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+					.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+					.gravity       = 900.0f,
+					.minPercentage = 0.5f,
+					.maxPercentage = 1.0f,
+					.minTimeout    = 75,
+					.maxTimeout    = 150
+				};
+				Particle::AppearanceRules appearanceRules {
+					.material = cgs.media.shaderSparkParticle,
+					.kind     = Particle::Spark,
+					.length   = 4.0f,
+					.width    = 1.0f,
+					.initialColor  = kLaserImpactInitialColor,
+					.fadedInColor  = kLaserImpactFadedInColor,
+					.fadedOutColor = kLaserImpactFadedOutColor
+				};
+				cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+			}
 
 			SoundSystem::Instance()->StartFixedSound( cgs.media.sfxLasergunHit[rand() % 3], trace->endpos, CHAN_AUTO,
 													  cg_volume_effects->value, ATTN_STATIC );
@@ -473,41 +473,40 @@ static const vec4_t kLavaSplashFadedInColor { 1.0f, 0.67f, 0.0f, 1.0f };
 static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 1.0f };
 
 static void CG_LeadWaterSplash( trace_t *tr ) {
-	const float *initialColor = nullptr, *fadedInColor = nullptr, *fadedOutColor = nullptr;
+	if( cg_particles->integer ) {
+		const float *initialColor = nullptr, *fadedInColor = nullptr, *fadedOutColor = nullptr;
 
-	const int contents = tr->contents;
-	if( contents & CONTENTS_WATER ) {
-		initialColor  = kWaterSplashInitialColor;
-		fadedInColor  = kWaterSplashFadedInColor;
-		fadedOutColor = kWaterSplashFadedOutColor;
-	} else if( contents & CONTENTS_SLIME ) {
-		initialColor  = kSlimeSplashInitialColor;
-		fadedInColor  = kSlimeSplashFadedInColor;
-		fadedOutColor = kSlimeSplashFadedOutColor;
-	} else if( contents & CONTENTS_LAVA ) {
-		initialColor  = kLavaSplashInitialColor;
-		fadedInColor  = kLavaSplashFadedInColor;
-		fadedOutColor = kLavaSplashFadedOutColor;
-	} else {
-		return;
+		if( tr->contents & CONTENTS_WATER ) {
+			initialColor  = kWaterSplashInitialColor;
+			fadedInColor  = kWaterSplashFadedInColor;
+			fadedOutColor = kWaterSplashFadedOutColor;
+		} else if( tr->contents & CONTENTS_SLIME ) {
+			initialColor  = kSlimeSplashInitialColor;
+			fadedInColor  = kSlimeSplashFadedInColor;
+			fadedOutColor = kSlimeSplashFadedOutColor;
+		} else if( tr->contents & CONTENTS_LAVA ) {
+			initialColor  = kLavaSplashInitialColor;
+			fadedInColor  = kLavaSplashFadedInColor;
+			fadedOutColor = kLavaSplashFadedOutColor;
+		}
+
+		if( initialColor ) {
+			ConeFlockFiller flockFiller {
+				.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
+				.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] }
+			};
+			Particle::AppearanceRules appearanceRules {
+				.material = cgs.media.shaderSparkParticle,
+				.kind     = Particle::Spark,
+				.length   = 2.0f,
+				.width    = 1.0f,
+				.initialColor  = initialColor,
+				.fadedInColor  = fadedInColor,
+				.fadedOutColor = fadedOutColor,
+			};
+			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+		}
 	}
-
-	ConeFlockFiller flockFiller {
-		.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
-		.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] }
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderSparkParticle,
-		.kind     = Particle::Spark,
-		.length   = 2.0f,
-		.width    = 1.0f,
-		.initialColor  = initialColor,
-		.fadedInColor  = fadedInColor,
-		.fadedOutColor = fadedOutColor,
-	};
-
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 }
 
 /*
@@ -1157,34 +1156,36 @@ static const vec4_t kSparksFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kSparksFadedOutColor { 0.5f, 0.5f, 0.5f, 0.5f };
 
 static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
-	vec3_t dir;
-	ByteToDir( parm, dir );
+	if( cg_particles->integer ) {
+		vec3_t dir;
+		ByteToDir( parm, dir );
 
-	int count;
-	if( ent->damage > 0 ) {
-		count = (int)( ent->damage * 0.25f );
-		Q_clamp( count, 1, 10 );
-	} else {
-		count = 6;
+		int count;
+		if( ent->damage > 0 ) {
+			count = (int)( ent->damage * 0.25f );
+			Q_clamp( count, 1, 10 );
+		} else {
+			count = 6;
+		}
+
+		ConeFlockFiller flockFiller {
+			.origin = { ent->origin[0], ent->origin[1], ent->origin[2] },
+			.offset = { dir[0], dir[1], dir[2] },
+			.dir    = { dir[0], dir[1], dir[2] }
+		};
+
+		Particle::AppearanceRules appearanceRules {
+			.material = cgs.media.shaderSparkParticle,
+			.kind     = Particle::Spark,
+			.length   = 4.0f,
+			.width    = 1.0f,
+			.initialColor  = kSparksInitialColor,
+			.fadedInColor  = kSparksFadedInColor,
+			.fadedOutColor = kSparksFadedOutColor
+		};
+
+		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 	}
-
-	ConeFlockFiller flockFiller {
-		.origin = { ent->origin[0], ent->origin[1], ent->origin[2] },
-		.offset = { dir[0], dir[1], dir[2] },
-		.dir    = { dir[0], dir[1], dir[2] }
-	};
-
-	Particle::AppearanceRules appearanceRules {
-		.material = cgs.media.shaderSparkParticle,
-		.kind     = Particle::Spark,
-		.length   = 4.0f,
-		.width    = 1.0f,
-		.initialColor  = kSparksInitialColor,
-		.fadedInColor  = kSparksFadedInColor,
-		.fadedOutColor = kSparksFadedOutColor
-	};
-
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 }
 
 static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
