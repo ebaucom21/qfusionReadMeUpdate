@@ -825,6 +825,7 @@ void Matrix3_Transpose( const mat3_t in, mat3_t out );
 void Matrix3_FromAngles( const vec3_t angles, mat3_t m );
 void Matrix3_ToAngles( const mat3_t m, vec3_t angles );
 void Matrix3_Rotate( const mat3_t in, vec_t angle, vec_t x, vec_t y, vec_t z, mat3_t out );
+void Matrix3_ForRotationOfDirs( const float *fromDir, const float *toDir, mat3_t out );
 void Matrix3_FromPoints( const vec3_t v1, const vec3_t v2, const vec3_t v3, mat3_t m );
 void Matrix3_Normalize( mat3_t m );
 

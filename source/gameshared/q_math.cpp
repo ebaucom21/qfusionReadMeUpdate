@@ -750,10 +750,8 @@ void Matrix3_ToAngles( const mat3_t m, vec3_t angles ) {
 	angles[ROLL] = roll;
 }
 
-void Matrix3_Rotate( const mat3_t in, vec_t angle, vec_t x, vec_t y, vec_t z, mat3_t out ) {
+static void Matrix3_RotateBySinCos( const mat3_t in, float s, float c, vec_t x, vec_t y, vec_t z, mat3_t out ) {
 	mat3_t t, b;
-	vec_t c = cos( DEG2RAD( angle ) );
-	vec_t s = sin( DEG2RAD( angle ) );
 	vec_t mc = 1 - c, t1, t2;
 
 	t[0] = ( x * x * mc ) + c;
@@ -777,6 +775,42 @@ void Matrix3_Rotate( const mat3_t in, vec_t angle, vec_t x, vec_t y, vec_t z, ma
 
 	Matrix3_Copy( in, b );
 	Matrix3_Multiply( b, t, out );
+}
+
+void Matrix3_Rotate( const mat3_t in, vec_t angle, vec_t x, vec_t y, vec_t z, mat3_t out ) {
+	const float radians = DEG2RAD( angle );
+	vec_t s = std::sin( radians );
+	vec_t c = std::cos( radians );
+
+	Matrix3_RotateBySinCos( in, s, c, x, y, z, out );
+}
+
+void Matrix3_ForRotationOfDirs( const float *fromDir, const float *toDir, mat3_t out ) {
+	assert( ( VectorLengthSquared( fromDir ) - 1.0f ) < 0.001f );
+	assert( ( VectorLengthFast( toDir ) - 1.0f ) < 0.001f );
+
+	const float dot = DotProduct( fromDir, toDir );
+	if( dot > +0.999f ) [[unlikely]] {
+		VectorSet( out + 0, +1.0f, +0.0f, +0.0f );
+		VectorSet( out + 3, +0.0f, +1.0f, +0.0f );
+		VectorSet( out + 6, +0.0f, +0.0f, +1.0f );
+		return;
+	}
+
+	if( dot < -0.999f ) [[unlikely]] {
+		VectorSet( out + 0, -1.0f, +0.0f, +0.0f );
+		VectorSet( out + 3, +0.0f, -1.0f, +0.0f );
+		VectorSet( out + 6, +0.0f, +0.0f, -1.0f );
+		return;
+	}
+
+	vec3_t axis;
+	CrossProduct( fromDir, toDir, axis );
+
+	const float c = dot;
+	const float s = sqrt( 1.0f - dot * dot );
+
+	Matrix3_RotateBySinCos( axis_identity, s, c, axis[0], axis[1], axis[2], out );
 }
 
 void Matrix3_FromPoints( const vec3_t v1, const vec3_t v2, const vec3_t v3, mat3_t m ) {
