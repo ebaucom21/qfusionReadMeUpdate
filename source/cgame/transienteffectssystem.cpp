@@ -246,6 +246,13 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
+static const byte_vec4_t kFireCoreReplacementPalette[] {
+	{ 255, 170, 144, 144 },
+	{ 255, 170, 128, 172 },
+	{ 255, 144, 108, 128 },
+	{ 255, 144, 108, 72 }
+};
+
 static const byte_vec4_t kFireReplacementPalette[] {
 	{ 255, 108, 0, 24 },
 	{ 255, 72, 0, 24 },
@@ -271,59 +278,58 @@ static const byte_vec4_t kSmokeReplacementPalette[] {
 
 const TransientEffectsSystem::HullLayerParams TransientEffectsSystem::kFireHullLayerParams[5] {
 	{
-		.speed = 25.0f, .finalOffset = 8.0f,
-		.speedSpikeChance = 0.07f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 25.0f,
-		.initialColor = { 1.0f, 0.70f, 0.1f, 0.7f },
-		.smoothSecondaryNeighbours = false,
+		.speed = 22.5f, .finalOffset = 8.0f,
+		.speedSpikeChance = 0.09f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 20.0f,
+		.initialColor = { 1.0f, 0.9f, 0.7f, 1.0f },
 		.regularColorProps = {
-			.replacementPalette = kFireReplacementPalette, .dropChance = 0.003f, .replacementChance = 0.015f
+			.replacementPalette = kFireCoreReplacementPalette, .dropChance = 0.008f, .replacementChance = 0.035f
 		},
 		.decayColorProps = {
-			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.25f
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.25f, .replacementChance = 0.25f
 		}
 	},
 	{
 		.speed = 35.0f, .finalOffset = 6.0f,
-		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 25.0f,
-		.initialColor = { 1.0f, 0.65f, 0.1f, 0.5f },
+		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 20.0f,
+		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.008f, .replacementChance = 0.025f
 		},
 		.decayColorProps = {
-			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.25f
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.25f, .replacementChance = 0.25f
 		}
 	},
 	{
 		.speed = 45.0f, .finalOffset = 4.0f,
-		.speedSpikeChance = 0.04f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.65f, 0.1f, 0.5f },
+		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.025f, .replacementChance = 0.045f,
 		},
 		.decayColorProps = {
-			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.50f,
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.25f, .replacementChance = 0.50f,
 		}
 	},
 	{
 		.speed = 52.5f, .finalOffset = 2.0f,
-		.speedSpikeChance = 0.08f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 20.0f,
+		.speedSpikeChance = 0.08f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 15.0f,
-		.initialColor = { 1.0f, 0.60f, 0.1f, 0.37f },
+		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette, .dropChance = 0.035f, .replacementChance = 0.065f,
 		},
 		.decayColorProps = {
-			.replacementPalette = kFireReplacementPalette, .dropChance = 0.25f, .replacementChance = 0.75f,
+			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.25f, .replacementChance = 0.75f,
 		}
 	},
 	{
 		.speed = 60.0f, .finalOffset = 0.0f,
-		.speedSpikeChance = 0.10f, .minSpeedSpike = 15.0f, .maxSpeedSpike = 20.0f,
-		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.60f, 0.1f, 0.33f },
+		.speedSpikeChance = 0.10f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 15.0f,
+		.initialColor = { 1.0f, 0.7f, 0.5f, 0.3f },
 		.regularColorProps = {
 			.replacementPalette = kFireReplacementPalette2, .dropChance = 0.045f, .replacementChance = 0.085f
 		},
@@ -344,8 +350,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 
 	if( cg_volumetricExplosions->integer ) {
 		if( FireHull *const hull = allocFireHull( m_lastTime, 800 ) ) {
-			setupHullVertices( hull, origin, kFireHullLayerParams );
-			hull->decayStartAt = m_lastTime + 600;
+			setupHullVertices( hull, origin, 0.9f, kFireHullLayerParams );
+			hull->decayStartAt = m_lastTime + 550;
 		}
 
 		if( cg_volumetricExplosionsWave->integer ) {
@@ -741,7 +747,7 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 }
 
 void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
-												std::span<const HullLayerParams> layerParams ) {
+												float scale, std::span<const HullLayerParams> layerParams ) {
 	assert( layerParams.size() == hull->numLayers );
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
@@ -750,11 +756,18 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 
 	// Calculate move limits in each direction
 
-	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike + layerParams[0].biasAlongChosenDir;
+	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike + layerParams[0].biasAlongChosenDir ;
 	for( unsigned i = 1; i < layerParams.size(); ++i ) {
 		const auto &params = layerParams[i];
 		maxVertexSpeed = std::max( maxVertexSpeed, params.speed + params.maxSpeedSpike + params.biasAlongChosenDir );
 	}
+
+	// To prevent noticeable z-fighting in case if hulls of different layers start matching (e.g due to bias)
+	constexpr float maxSmallRandomOffset = 1.5f;
+
+	maxVertexSpeed += maxSmallRandomOffset;
+	// Scale by the fine-tuning scale multiplier
+	maxVertexSpeed *= scale;
 
 	wsw::RandomGenerator *const __restrict rng = &m_rng;
 
@@ -775,11 +788,7 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		VectorMA( origin, radius, dir, limitPoint );
 
 		CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, origin, limitPoint, vec3_origin, vec3_origin, MASK_SOLID );
-		if( const float f = trace.fraction; f < 1.0f ) {
-			hull->limitsAtDirections[i] = f * radius;
-		} else {
-			hull->limitsAtDirections[i] = radius;
-		}
+		hull->limitsAtDirections[i] = trace.fraction * radius;
 	}
 
 	float *const __restrict spikeSpeedBoost = TransientEffectsSystem::s_scratchpad[0];
@@ -819,22 +828,14 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 			const float dotWithBiasDir = DotProduct( vertexDir, randomBiasDir );
 			speedsAndDistances[i][0]   = params->speed + std::max( 0.0f, dotWithBiasDir ) * params->biasAlongChosenDir;
 
-			if( rng->nextFloat() < params->speedSpikeChance ) [[unlikely]] {
+			if( rng->nextFloat() > params->speedSpikeChance ) [[likely]] {
+				speedsAndDistances[i][0] += rng->nextFloat( 0.0f, maxSmallRandomOffset );
+			} else {
 				const float boost = rng->nextFloat( params->minSpeedSpike, params->maxSpeedSpike );
 				spikeSpeedBoost[i] += boost;
 				const auto &indicesOfNeighbours = neighboursSpan[i];
-				if( params->smoothSecondaryNeighbours ) [[unlikely]] {
-					for( const unsigned neighbourIndex: indicesOfNeighbours ) {
-						const float neighbourBoost = rng->nextFloat( 0.33f, 0.75f ) * boost;
-						spikeSpeedBoost[neighbourIndex] += neighbourBoost;
-						for( const unsigned secondaryNeighbourIndex: neighboursSpan[neighbourIndex] ) {
-							spikeSpeedBoost[secondaryNeighbourIndex] += 0.5f * neighbourBoost;
-						}
-					}
-				} else {
-					for( const unsigned neighbourIndex: indicesOfNeighbours ) {
-						spikeSpeedBoost[neighbourIndex] += rng->nextFloat( 0.33f, 0.75f ) * boost;
-					}
+				for( const unsigned neighbourIndex: indicesOfNeighbours ) {
+					spikeSpeedBoost[neighbourIndex] += rng->nextFloat( 0.50f, 0.75f ) * boost;
 				}
 			}
 
@@ -845,6 +846,8 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 			speedsAndDistances[i][0] += std::min( spikeSpeedBoost[i], maxVertexSpeed );
+			// Scale by the fine-tuning scale multiplier
+			speedsAndDistances[i][0] *= scale;
 		}
 	}
 

@@ -283,13 +283,12 @@ private:
 		const float minSpeedSpike, maxSpeedSpike;
 		const float biasAlongChosenDir;
 		const float initialColor[4];
-		const bool smoothSecondaryNeighbours { false };
 		ColorChangeProps regularColorProps;
 		ColorChangeProps decayColorProps;
 	};
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
-							std::span<const HullLayerParams> paramsOfLayers );
+							float scale, std::span<const HullLayerParams> paramsOfLayers );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
