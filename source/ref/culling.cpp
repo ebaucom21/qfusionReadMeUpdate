@@ -932,4 +932,71 @@ auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalCompoundMesh> 
 	return { tmpIndices, numPassedMeshes };
 }
 
+auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
+							  const Frustum *__restrict primaryFrustum,
+							  std::span<const Frustum> occluderFrusta,
+							  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+	unsigned numPassedPolys = 0;
+	for( unsigned i = 0; i < numPolys; ++i ) {
+		const QuadPoly *const __restrict poly = polys[i];
+		const float width = poly->width;
+
+		// This should make an OK estimate
+		alignas( 16 ) vec4_t polyMins, polyMaxs;
+		polyMins[3] = 0.0f, polyMaxs[3] = 1.0f;
+		for( int j = 0; j < 3; ++j ) {
+			polyMins[j] = std::min( poly->from[j] - width, poly->to[j] - width );
+			polyMaxs[j] = std::max( poly->from[j] + width, poly->to[j] + width );
+		}
+
+		LOAD_BOX_COMPONENTS( polyMins, polyMaxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 144, 172 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedPolys++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedPolys };
+}
+
+auto Frontend::cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
+								 const Frustum *__restrict primaryFrustum,
+								 std::span<const Frustum> occluderFrusta,
+								 uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+	unsigned numPassedPolys = 0;
+	for( unsigned i = 0; i < numPolys; ++i ) {
+		const ComplexPoly *const poly = polys[i];
+
+		LOAD_BOX_COMPONENTS( poly->mins, poly->maxs );
+		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+		if( nonZeroIfFullyOutside == 0 ) {
+			bool occluded = false;
+			for( const Frustum &__restrict f: occluderFrusta ) {
+				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
+				if( zeroIfFullyInside == 0 ) {
+					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 144, 172 ) );
+					occluded = true;
+					break;
+				}
+			}
+			if( !occluded ) {
+				tmpIndices[numPassedPolys++] = i;
+			}
+		}
+	}
+
+	return { tmpIndices, numPassedPolys };
+}
+
 }

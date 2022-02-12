@@ -1400,7 +1400,8 @@ centity_t *CG_GetItemTimerEnt( int num ) {
 * CG_AddBeamEnt
 */
 static void CG_AddBeamEnt( centity_t *cent ) {
-	CG_QuickPolyBeam( cent->current.origin, cent->current.origin2, cent->current.frame * 0.5f, cgs.media.shaderLaser ); // wsw : jalfixme: missing the color (comes inside cent->current.colorRGBA)
+	const float width = cent->current.frame * 0.5f;
+	cg.effectsSystem.spawnWorldLaserBeam( cent->current.origin, cent->current.origin2, width );
 }
 
 //==========================================================================

@@ -320,6 +320,7 @@ typedef struct {
 #define MAX_HELPMESSAGE_CHARS 4096
 
 #include "particlesystem.h"
+#include "polyeffectssystem.h"
 #include "effectssystemfacade.h"
 
 typedef struct cg_state_s {
@@ -418,6 +419,7 @@ typedef struct cg_state_s {
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 
 	EffectsSystemFacade effectsSystem;
+	PolyEffectsSystem polyEffectsSystem;
 	ParticleSystem particleSystem;
 } cg_state_t;
 
@@ -654,6 +656,7 @@ void CG_RegisterForceModels( void );
 void CG_SetSceneTeamColors( void );
 bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct Skin **skin );
 vec_t *CG_TeamColor( int team, vec4_t color );
+void AdjustTeamColorValue( vec4_t color );
 uint8_t *CG_TeamColorForEntity( int entNum, byte_vec4_t color );
 uint8_t *CG_PlayerColorForEntity( int entNum, byte_vec4_t color );
 
@@ -719,21 +722,9 @@ extern cvar_t *cg_addDecals;
 //
 extern cvar_t *cg_ebbeam_old;
 extern cvar_t *cg_ebbeam_width;
-extern cvar_t *cg_ebbeam_alpha;
 extern cvar_t *cg_ebbeam_time;
 extern cvar_t *cg_instabeam_width;
-extern cvar_t *cg_instabeam_alpha;
 extern cvar_t *cg_instabeam_time;
-
-void CG_ClearPolys( void );
-void CG_AddPolys( DrawSceneRequest *drawSceneRequest );
-void CG_KillPolyBeamsByTag( int key );
-void CG_ElectroTrail2( const vec3_t start, const vec3_t end, int team );
-void CG_QuickPolyBeam( const vec3_t start, const vec3_t end, int width, struct shader_s *shader );
-void CG_LaserGunPolyBeam( const vec3_t start, const vec3_t end, const vec4_t color, int key );
-void CG_ElectroPolyBeam( const vec3_t start, const vec3_t end, int team );
-void CG_InstaPolyBeam( const vec3_t start, const vec3_t end, int team );
-void CG_PLink( const vec3_t start, const vec3_t end, const vec4_t color, int flags );
 
 //
 // cg_effects.c

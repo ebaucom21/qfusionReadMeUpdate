@@ -31,7 +31,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAX_DLIGHTS             32
 #define MAX_ENTITIES            2048
 #define MAX_POLY_VERTS          3000
-#define MAX_POLYS               2048
+#define MAX_QUAD_POLYS          256
+#define MAX_COMPLEX_POLYS       64
 
 // entity_state_t->renderfx flags
 #define RF_MINLIGHT             0x1       // always have some light (viewmodel)
@@ -82,17 +83,31 @@ typedef struct fragment_s {
 	vec3_t normal;
 } fragment_t;
 
-typedef struct poly_s {
-	int numverts;
-	vec4_t *verts;
+struct QuadPoly {
+	// TODO: Get rid of this
+	int drawSurfType;
+	struct shader_s *material;
+	float color[4];
+	float from[3];
+	float to[3];
+	float dir[3];
+	float width;
+	float length;
+	float tileLength;
+};
+
+struct ComplexPoly {
+	// TODO: Get rid of this
+	int drawSurfType;
+	struct shader_s *material;
+	vec4_t *positions;
 	vec4_t *normals;
-	vec2_t *stcoords;
+	vec2_t *texcoords;
 	byte_vec4_t *colors;
-	int numelems;
-	unsigned short *elems;
-	struct shader_s *shader;
-	int fognum;
-} poly_t;
+	uint16_t *indices;
+	unsigned numVertices, numIndices;
+	float mins[4], maxs[4];
+};
 
 typedef struct {
 	float rgb[3];                       // 0.0 - 2.0
@@ -228,20 +243,6 @@ namespace wsw::ref { class Frontend; }
 class Scene {
 	friend class wsw::ref::Frontend;
 public:
-	struct Poly {
-		int type;
-		int fogNum;
-		int numElems;
-		int numVerts;
-
-		vec4_t *xyzArray;
-		vec4_t *normalsArray;
-		vec2_t *stArray;
-		byte_vec4_t *colorsArray;
-		uint16_t *elems;
-		struct shader_s *shader;
-	};
-
 	struct DynamicLight {
 		float origin[3];
 		float programRadius;
@@ -279,7 +280,10 @@ protected:
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_skeletalModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_brushModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
-	wsw::StaticVector<Poly, MAX_POLYS> m_polys;
+
+	// These polys are externally owned with a lifetime greater than the frame
+	wsw::StaticVector<QuadPoly *, MAX_QUAD_POLYS> m_quadPolys;
+	wsw::StaticVector<ComplexPoly *, MAX_COMPLEX_POLYS> m_complexPolys;
 
 	static constexpr unsigned kMaxParticlesInAggregate = 256;
 	static constexpr unsigned kMaxParticleAggregates = 1024;
@@ -311,7 +315,19 @@ public:
 	void addExternalMesh( const float *mins, const float *maxs, std::span<const ExternalMesh> parts );
 
 	void addEntity( const entity_t *ent );
-	void addPoly( const poly_t *poly );
+
+	// No copying is being performed
+	void addPoly( QuadPoly *poly ) {
+		if( !m_quadPolys.full() ) [[likely]] {
+			m_quadPolys.push_back( poly );
+		}
+	}
+
+	void addPoly( ComplexPoly *poly ) {
+		if( !m_complexPolys.full() ) [[likely]] {
+			m_complexPolys.push_back( poly );
+		}
+	}
 
 	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
 };

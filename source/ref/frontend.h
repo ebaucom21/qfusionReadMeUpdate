@@ -157,7 +157,7 @@ private:
 	void updatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
 
-	void collectVisiblePolys( Scene *scene );
+	void collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
 	auto cullWorldSurfaces() -> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>>;
@@ -227,6 +227,20 @@ private:
 							 const Frustum *__restrict primaryFrustum,
 							 std::span<const Frustum> occluderFrusta,
 							 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// TODO: Check why spans can't be supplied
+	[[nodiscard]]
+	auto cullQuadPolys( QuadPoly **polys, unsigned numPolys,
+						const Frustum *__restrict primaryFrustum,
+						std::span<const Frustum> occluderFrusta,
+						uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// TODO: Check why spans can't be supplied
+	[[nodiscard]]
+	auto cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
+						   const Frustum *__restrict primaryFrustum,
+						   std::span<const Frustum> occluderFrusta,
+						   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );

@@ -144,10 +144,8 @@ cvar_t *cg_teamColoredInstaBeams;
 
 cvar_t *cg_ebbeam_old;
 cvar_t *cg_ebbeam_width;
-cvar_t *cg_ebbeam_alpha;
 cvar_t *cg_ebbeam_time;
 cvar_t *cg_instabeam_width;
-cvar_t *cg_instabeam_alpha;
 cvar_t *cg_instabeam_time;
 
 cvar_t *cg_playList;
@@ -676,11 +674,9 @@ static void CG_RegisterVariables( void ) {
 
 	cg_ebbeam_old = Cvar_Get( "cg_ebbeam_old", "0", CVAR_ARCHIVE );
 	cg_ebbeam_width = Cvar_Get( "cg_ebbeam_width", "64", CVAR_ARCHIVE );
-	cg_ebbeam_alpha = Cvar_Get( "cg_ebbeam_alpha", "0.4", CVAR_ARCHIVE );
-	cg_ebbeam_time = Cvar_Get( "cg_ebbeam_time", "0.6", CVAR_ARCHIVE );
+	cg_ebbeam_time = Cvar_Get( "cg_ebbeam_time", "0.4", CVAR_ARCHIVE );
 
 	cg_instabeam_width = Cvar_Get( "cg_instabeam_width", "7", CVAR_ARCHIVE );
-	cg_instabeam_alpha = Cvar_Get( "cg_instabeam_alpha", "0.4", CVAR_ARCHIVE );
 	cg_instabeam_time = Cvar_Get( "cg_instabeam_time", "0.4", CVAR_ARCHIVE );
 
 	cg_playList = Cvar_Get( "cg_playList", S_PLAYLIST_MATCH, CVAR_ARCHIVE );
@@ -887,7 +883,6 @@ void CG_Reset( void ) {
 
 	CG_SC_ResetFragsFeed();
 
-	CG_ClearPolys();
 	CG_ClearLocalEntities();
 
 	// start up announcer events queue from clean
@@ -1080,8 +1075,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	CG_ValidateItemList();
 
 	CG_LoadingString( "" );
-
-	CG_ClearPolys();
 
 	CG_ClearChaseCam();
 

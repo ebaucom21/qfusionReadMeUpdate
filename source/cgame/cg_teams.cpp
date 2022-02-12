@@ -275,6 +275,16 @@ vec_t *CG_TeamColor( int team, vec4_t color ) {
 	return color;
 }
 
+void AdjustTeamColorValue( vec4_t color ) {
+	// TODO: Use proper HSV conversions instead of this
+	constexpr float minValue = 90.0f / 255.0f;
+	const vec3_t minTeamColor { minValue, minValue, minValue };
+	const float total = color[0] + color[1] + color[2];
+	if( total < minValue ) {
+		VectorCopy( minTeamColor, color );
+	}
+}
+
 /*
 *
 */

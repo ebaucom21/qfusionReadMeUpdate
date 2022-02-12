@@ -417,7 +417,9 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	( drawSurf_cb ) &R_SubmitExternalMeshToBackend,
 	/* ST_SPRITE */
 	nullptr,
-	/* ST_POLY */
+	/* ST_QUAD_POLY */
+	nullptr,
+	/* ST_COMPLEX_POLY */
 	nullptr,
 	/* ST_PARTICLE */
 	nullptr,
@@ -441,8 +443,10 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	nullptr,
 	/* ST_SPRITE */
 	( batchDrawSurf_cb ) & R_SubmitSpriteSurfToBackend,
-	/* ST_POLY */
-	( batchDrawSurf_cb ) & R_SubmitPolySurfToBackend,
+	/* ST_QUAD_POLY */
+	( batchDrawSurf_cb ) & R_SubmitQuadPolyToBackend,
+	/* ST_COMPLEX_POLY */
+	( batchDrawSurf_cb ) & R_SubmitComplexPolyToBackend,
 	/* ST_PARTICLE */
 	( batchDrawSurf_cb ) & R_SubmitParticleSurfToBackend,
 	/* ST_CORONA */
@@ -800,22 +804,28 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
 	return nullptr;
 }
 
-void Frontend::collectVisiblePolys( Scene *scene ) {
-	auto *const polys = scene->m_polys.data();
-	const unsigned numPolys = scene->m_polys.size();
-	const auto *polyEntity  = scene->m_polyent;
+void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta ) {
+	uint16_t tmpComplexIndices[MAX_COMPLEX_POLYS];
+	ComplexPoly **complexPolys = scene->m_complexPolys.data();
 
-	for( unsigned i = 0; i < numPolys; i++ ) {
-		auto *const p = polys + i;
-		mfog_t *fog;
-		// TODO: Use a single branch
-		if( p->fogNum <= 0 || (unsigned)p->fogNum > rsh.worldBrushModel->numfogs ) {
-			fog = nullptr;
-		} else {
-			fog = rsh.worldBrushModel->fogs + p->fogNum - 1;
-		}
+	const auto visibleComplexPolyIndices = cullComplexPolys( complexPolys, scene->m_complexPolys.size(), &m_frustum, frusta, tmpComplexIndices );
 
-		(void)addEntryToSortList( polyEntity, fog, p->shader, 0, i, nullptr, p );
+	uint16_t tmpQuadIndices[MAX_QUAD_POLYS];
+	QuadPoly **quadPolys = scene->m_quadPolys.data();
+	const auto visibleQuadPolyIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_frustum, frusta, tmpQuadIndices );
+
+	const auto *polyEntity = scene->m_polyent;
+
+	for( const unsigned index: visibleComplexPolyIndices ) {
+		ComplexPoly *p  = complexPolys[index];
+		p->drawSurfType = ST_COMPLEX_POLY;
+		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p );
+	}
+
+	for( const unsigned index: visibleQuadPolyIndices ) {
+		QuadPoly *p     = quadPolys[index];
+		p->drawSurfType = ST_QUAD_POLY;
+		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p );
 	}
 }
 
@@ -1343,7 +1353,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		m_state.fog_eye = getFogForSphere( m_state.viewOrigin, 0.5f );
 		m_state.hdrExposure = 1.0f;
 
-		collectVisiblePolys( scene );
+		collectVisiblePolys( scene, occluderFrusta );
 	}
 
 	if( const int dynamicLightValue = r_dynamiclight->integer ) {
@@ -1644,49 +1654,6 @@ void DrawSceneRequest::addEntity( const entity_t *ent ) {
 				tent.renderfx |= RF_NOCOLORWRITE | RF_NOSHADOW;
 				addEntity( &tent );
 			}
-		}
-	}
-}
-
-void DrawSceneRequest::addPoly( const poly_t *poly ) {
-	assert( sizeof( *poly->elems ) == sizeof( elem_t ) );
-
-	if( !m_polys.full() && poly && poly->numverts ) [[likely]] {
-		auto *dp = m_polys.unsafe_grow_back();
-
-		assert( poly->shader );
-		if( !poly->shader ) {
-			return;
-		}
-
-		dp->type = ST_POLY;
-		dp->shader = poly->shader;
-		dp->numVerts = std::min( poly->numverts, MAX_POLY_VERTS );
-		dp->xyzArray = poly->verts;
-		dp->normalsArray = poly->normals;
-		dp->stArray = poly->stcoords;
-		dp->colorsArray = poly->colors;
-		dp->numElems = poly->numelems;
-		dp->elems = ( elem_t * )poly->elems;
-		dp->fogNum = poly->fognum;
-
-		// if fogNum is unset, we need to find the volume for polygon bounds
-		if( !dp->fogNum ) {
-			//
-			dp->fogNum = -1;
-
-			/*
-			 * TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			vec3_t dpmins, dpmaxs;
-			ClearBounds( dpmins, dpmaxs );
-
-			for( int i = 0; i < dp->numVerts; i++ ) {
-				AddPointToBounds( dp->xyzArray[i], dpmins, dpmaxs );
-			}
-
-			mfog_t *const fog = getFogForBounds( dpmins, dpmaxs );
-			dp->fogNum = fog ? ( fog - rsh.worldBrushModel->fogs + 1 ) : -1;
-			 */
 		}
 	}
 }

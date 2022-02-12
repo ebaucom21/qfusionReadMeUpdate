@@ -77,9 +77,9 @@ void CG_WeaponBeamEffect( centity_t *cent ) {
 	}
 
 	if( cent->localEffects[LOCALEFFECT_EV_WEAPONBEAM] == WEAP_ELECTROBOLT ) {
-		CG_ElectroTrail2( projection.origin, cent->laserPoint, cent->current.team );
+		cg.effectsSystem.spawnElectroboltBeam( projection.origin, cent->laserPoint, cent->current.team );
 	} else {
-		CG_InstaPolyBeam( projection.origin, cent->laserPoint, cent->current.team );
+		cg.effectsSystem.spawnInstagunBeam( projection.origin, cent->laserPoint, cent->current.team );
 	}
 
 	cent->localEffects[LOCALEFFECT_EV_WEAPONBEAM] = 0;
@@ -92,6 +92,7 @@ static vec_t *_LaserColor( vec4_t color ) {
 	Vector4Set( color, 1, 1, 1, 1 );
 	if( cg_teamColoredBeams->integer && ( laserOwner != NULL ) && ( laserOwner->current.team == TEAM_ALPHA || laserOwner->current.team == TEAM_BETA ) ) {
 		CG_TeamColor( laserOwner->current.team, color );
+		AdjustTeamColorValue( color );
 	}
 	return color;
 }
@@ -165,6 +166,7 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 	vec3_t laserOrigin, laserAngles, laserPoint;
 	int i, j;
 
+	// TODO: Move the entire handling of lasers to the effects system and get rid of this state
 	if( cent->localEffects[LOCALEFFECT_LASERBEAM] <= cg.time ) {
 		if( cent->localEffects[LOCALEFFECT_LASERBEAM] ) {
 			if( !cent->laserCurved ) {
@@ -227,8 +229,7 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			VectorCopy( laserOrigin, projectsource.origin );
 		}
 
-		CG_KillPolyBeamsByTag( cent->current.number );
-		CG_LaserGunPolyBeam( projectsource.origin, trace.endpos, color, cent->current.number );
+		cg.effectsSystem.updateStraightLaserBeam( cent->current.number, projectsource.origin, trace.endpos, cg.time );
 	} else {
 		float frac, subdivisions = cg_laserBeamSubdivisions->integer;
 		vec3_t from, dir, end, blendPoint;
@@ -243,11 +244,6 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			sound = cgs.media.sfxLasergunWeakHum;
 		}
 
-		// TODO: What's the point of it since drawing an impact sprite
-		// shifted from an actually drawn beam impact point is all it does?
-		// trace the beam: for tracing we use the real beam origin
-		//GS_TraceCurveLaserBeam( &trace, laserOrigin, laserAngles, laserPoint, cent->current.number, 0, _LaserImpact );
-
 		// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
 		if( !CG_PModel_GetProjectionSource( cent->current.number, &projectsource ) ) {
 			VectorCopy( laserOrigin, projectsource.origin );
@@ -255,13 +251,14 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 
 		Q_clamp( subdivisions, CURVELASERBEAM_SUBDIVISIONS, MAX_CURVELASERBEAM_SUBDIVISIONS );
 
-		CG_KillPolyBeamsByTag( cent->current.number );
-
 		// we redraw the full beam again, and trace each segment for stop dead impact
 		VectorCopy( laserPoint, blendPoint );
 		VectorCopy( projectsource.origin, from );
 		VectorSubtract( blendPoint, projectsource.origin, dir );
 		VecToAngles( dir, blendAngles );
+
+		vec3_t points[MAX_CURVELASERBEAM_SUBDIVISIONS + 1];
+		VectorCopy( from, points[0] );
 
 		for( i = 1; i <= (int)subdivisions; i++ ) {
 			frac = ( ( range / subdivisions ) * (float)i ) / (float)range;
@@ -273,9 +270,8 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			VectorMA( projectsource.origin, range * frac, dir, end );
 
 			GS_TraceLaserBeam( &trace, from, tmpangles, DistanceFast( from, end ), passthrough, 0, _LaserImpact );
-			// Hack to fill some gaps between segments still might be seen while doing a fast side-to-side beam movement
-			VectorMA( from, -0.2f, dir, from );
-			CG_LaserGunPolyBeam( from, trace.endpos, color, cent->current.number );
+			VectorCopy( trace.endpos, points[i] );
+
 			if( trace.fraction != 1.0f ) {
 				break;
 			}
@@ -283,6 +279,9 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			passthrough = trace.ent;
 			VectorCopy( trace.endpos, from );
 		}
+
+		std::span<const vec3_t> pointsSpan( points, (size_t)( i + 1 ) );
+		cg.effectsSystem.updateCurvedLaserBeam( cent->current.number, pointsSpan, cg.time );
 	}
 
 	// enable continuous flash on the weapon owner
@@ -1149,7 +1148,7 @@ static void handlePnodeEvent( entity_state_t *ent, int parm, bool predicted ) {
 	color[1] = COLOR_G( ent->colorRGBA ) * ( 1.0 / 255.0 );
 	color[2] = COLOR_B( ent->colorRGBA ) * ( 1.0 / 255.0 );
 	color[3] = COLOR_A( ent->colorRGBA ) * ( 1.0 / 255.0 );
-	CG_PLink( ent->origin, ent->origin2, color, parm );
+	cg.effectsSystem.spawnGameDebugBeam( ent->origin, ent->origin2, color, parm );
 }
 
 static const vec4_t kSparksInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };

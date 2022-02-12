@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/randomgenerator.h"
 #include "../gameshared/q_shared.h"
 #include "particlesystem.h"
+#include "polyeffectssystem.h"
 
 class DrawSceneRequest;
 struct model_s;
@@ -55,6 +56,9 @@ public:
 	}
 
 	void resetEntityEffects( int entNum );
+
+	void updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime );
+	void updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime );
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
@@ -89,6 +93,9 @@ private:
 
 	struct AttachedClientEffects {
 		TeleEffect *teleEffects[2] { nullptr, nullptr };
+		PolyEffectsSystem::StraightBeam *straightLaserBeam { nullptr };
+		PolyEffectsSystem::CurvedBeam *curvedLaserBeam { nullptr };
+		int64_t straightLaserBeamTouchedAt { 0 }, curvedLaserBeamTouchedAt { 0 };
 	};
 
 	struct AttachedEntityEffects {

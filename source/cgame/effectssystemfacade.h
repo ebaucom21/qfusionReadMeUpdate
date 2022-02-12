@@ -82,6 +82,20 @@ public:
 		m_trackedEffectsSystem.touchElectroTrail( entNum, origin, currTime );
 	}
 
+	void updateStraightLaserBeam( int entNum, const float *from, const float *to, int64_t currTime ) {
+		m_trackedEffectsSystem.updateStraightLaserBeam( entNum, from, to, currTime );
+	}
+
+	void updateCurvedLaserBeam( int entNum, std::span<const vec3_t> points, int64_t currTime ) {
+		m_trackedEffectsSystem.updateCurvedLaserBeam( entNum, points, currTime );
+	}
+
+	void spawnElectroboltBeam( const float *from, const float *to, int team );
+	void spawnInstagunBeam( const float *from, const float *to, int team );
+
+	void spawnWorldLaserBeam( const float *from, const float *to, float width );
+	void spawnGameDebugBeam( const float *from, const float *to, const float *color, int parm );
+
 	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
 		m_trackedEffectsSystem.spawnPlayerTeleInEffect( entNum, origin, model );
 	}

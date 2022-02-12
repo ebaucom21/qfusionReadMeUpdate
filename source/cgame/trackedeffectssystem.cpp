@@ -286,6 +286,16 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 			unlinkAndFree( effects->teleEffects[1] );
 		}
 		assert( !effects->teleEffects[0] && !effects->teleEffects[1] );
+		if( effects->curvedLaserBeam ) {
+			cg.polyEffectsSystem.destroyCurvedBeamEffect( effects->curvedLaserBeam );
+			effects->curvedLaserBeam = nullptr;
+			effects->curvedLaserBeamTouchedAt = 0;
+		}
+		if( effects->straightLaserBeam ) {
+			cg.polyEffectsSystem.destroyStraightBeamEffect( effects->straightLaserBeam );
+			effects->straightLaserBeam = nullptr;
+			effects->straightLaserBeamTouchedAt = 0;
+		}
 	}
 
 	assert( entNum >= 0 && entNum < MAX_EDICTS );
@@ -298,6 +308,28 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 		unlinkAndFree( effects->fireTrail );
 		assert( !effects->fireTrail );
 	}
+}
+
+void TrackedEffectsSystem::updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime ) {
+	assert( ownerNum && ownerNum <= MAX_CLIENTS );
+	AttachedClientEffects *effects = &m_attachedClientEffects[ownerNum - 1];
+	if( !effects->straightLaserBeam ) {
+		effects->straightLaserBeam = cg.polyEffectsSystem.createStraightBeamEffect( cgs.media.shaderLaserGunBeam );
+	}
+
+	effects->straightLaserBeamTouchedAt = currTime;
+	cg.polyEffectsSystem.updateStraightBeamEffect( effects->straightLaserBeam, colorWhite, 12.0f, 64.0f, from, to );
+}
+
+void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime ) {
+	assert( ownerNum && ownerNum <= MAX_CLIENTS );
+	AttachedClientEffects *effects = &m_attachedClientEffects[ownerNum - 1];
+	if( !effects->curvedLaserBeam ) {
+		effects->curvedLaserBeam = cg.polyEffectsSystem.createCurvedBeamEffect( cgs.media.shaderLaserGunBeam );
+	}
+
+	effects->curvedLaserBeamTouchedAt = currTime;
+	cg.polyEffectsSystem.updateCurvedBeamEffect( effects->curvedLaserBeam, colorWhite, 12.0f, 64.0f, points );
 }
 
 void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
@@ -335,4 +367,21 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 	// TODO: Submit fire trails
 
 	// The actual drawing of trails is performed by the particle system
+
+	PolyEffectsSystem *const polyEffectsSystem = &cg.polyEffectsSystem;
+	for( unsigned i = 0; i < MAX_CLIENTS; ++i ) {
+		AttachedClientEffects *const effects = &m_attachedClientEffects[i];
+		if( effects->curvedLaserBeam ) {
+			if( effects->curvedLaserBeamTouchedAt < currTime ) {
+				polyEffectsSystem->destroyCurvedBeamEffect( effects->curvedLaserBeam );
+				effects->curvedLaserBeam = nullptr;
+			}
+		}
+		if( effects->straightLaserBeam ) {
+			if( effects->straightLaserBeamTouchedAt < currTime ) {
+				polyEffectsSystem->destroyStraightBeamEffect( effects->straightLaserBeam );
+				effects->straightLaserBeam = nullptr;
+			}
+		}
+	}
 }

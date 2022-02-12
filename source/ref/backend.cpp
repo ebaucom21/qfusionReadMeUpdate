@@ -1083,22 +1083,73 @@ void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const enti
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitPolySurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, void *p ) {
+void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, QuadPoly *p ) {
+	const float xmin = 0.0f;
+	const float xmax = p->length;
+	const float ymin = -0.5f * p->width;
+	const float ymax = +0.5f * p->width;
+
+	float stx = 1.0f, sty = 1.0f;
+	if( p->tileLength > 0 && xmax > p->tileLength ) {
+		stx = xmax * Q_Rcp( p->tileLength );
+	}
+
+	vec4_t positions[4];
+	byte_vec4_t colors[4];
+	vec2_t texcoords[4];
+	uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
+
+	Vector4Set( positions[0], xmin, 0, ymin, 1 );
+	Vector4Set( positions[1], xmin, 0, ymax, 1 );
+	Vector4Set( positions[2], xmax, 0, ymax, 1 );
+	Vector4Set( positions[3], xmax, 0, ymin, 1 );
+
+	Vector2Set( texcoords[0], 0.0f, 0.0f );
+	Vector2Set( texcoords[1], 0.0f, sty );
+	Vector2Set( texcoords[2], stx, sty );
+	Vector2Set( texcoords[3], stx, 0.0f );
+
+	colors[0][0] = ( uint8_t )( p->color[0] * 255 );
+	colors[0][1] = ( uint8_t )( p->color[1] * 255 );
+	colors[0][2] = ( uint8_t )( p->color[2] * 255 );
+	colors[0][3] = ( uint8_t )( p->color[3] * 255 );
+
+	mat3_t axis, localAxis;
+	VectorCopy( p->dir, axis );
+	MakeNormalVectors( axis, axis + 3, axis + 6 );
+	Matrix3_Transpose( axis, localAxis );
+
+	for( unsigned i = 0; i < 4; ++i ) {
+		vec3_t perp;
+		Matrix3_TransformVector( localAxis, positions[i], perp );
+		VectorAdd( perp, p->from, positions[i] );
+		Vector4Copy( colors[0], colors[i] );
+	}
+
 	mesh_t mesh;
+	memset( &mesh, 0, sizeof( mesh ) );
 
-	auto *poly = (Scene::Poly *)p;
+	mesh.elems          = indices;
+	mesh.numElems       = 6;
+	mesh.numVerts       = 4;
+	mesh.xyzArray       = positions;
+	mesh.stArray        = texcoords;
+	mesh.colorsArray[0] = colors;
 
-	mesh.elems = poly->elems;
-	mesh.numElems = poly->numElems;
-	mesh.numVerts = poly->numVerts;
-	mesh.xyzArray = poly->xyzArray;
-	mesh.normalsArray = poly->normalsArray;
-	mesh.lmstArray[0] = NULL;
-	mesh.lmlayersArray[0] = NULL;
-	mesh.stArray = poly->stArray;
-	mesh.colorsArray[0] = poly->colorsArray;
-	mesh.colorsArray[1] = NULL;
-	mesh.sVectorsArray = NULL;
+	RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+}
+
+void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ComplexPoly *poly ) {
+	mesh_t mesh;
+	memset( &mesh, 0, sizeof( mesh ) );
+
+	mesh.elems = poly->indices;
+	mesh.numElems = poly->numIndices;
+	mesh.numVerts = poly->numVertices;
+	mesh.xyzArray = poly->positions;
+	mesh.normalsArray = poly->normals;
+	mesh.stArray = poly->texcoords;
+	mesh.colorsArray[0] = poly->colors;
 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
