@@ -157,100 +157,60 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	laserDrawSceneRequest->addLight( lightOrigin, 144.0f, 0.0f, 0.75f, 0.75f, 0.375f );
 }
 
-void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
-	struct sfx_s *sound = NULL;
-	float range;
-	trace_t trace;
-	orientation_t projectsource;
-	vec4_t color;
-	vec3_t laserOrigin, laserAngles, laserPoint;
-	int i, j;
+void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) {
+	const signed ownerEntNum = owner->current.number;
+	const bool isOwnerThePov = ISVIEWERENTITY( ownerEntNum );
+	const bool isCurved      = owner->laserCurved;
+	auto *const soundSystem  = SoundSystem::Instance();
 
 	// TODO: Move the entire handling of lasers to the effects system and get rid of this state
-	if( cent->localEffects[LOCALEFFECT_LASERBEAM] <= cg.time ) {
-		if( cent->localEffects[LOCALEFFECT_LASERBEAM] ) {
-			if( !cent->laserCurved ) {
-				sound = cgs.media.sfxLasergunStrongStop;
+	if( owner->localEffects[LOCALEFFECT_LASERBEAM] <= cg.time ) {
+		if( owner->localEffects[LOCALEFFECT_LASERBEAM] ) {
+			sfx_s *sound = isCurved ? cgs.media.sfxLasergunWeakStop : cgs.media.sfxLasergunStrongStop;
+			if( isOwnerThePov ) {
+				soundSystem->StartGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
 			} else {
-				sound = cgs.media.sfxLasergunWeakStop;
-			}
-
-			if( ISVIEWERENTITY( cent->current.number ) ) {
-				SoundSystem::Instance()->StartGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
-			} else {
-				SoundSystem::Instance()->StartRelativeSound( sound, cent->current.number, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
+				soundSystem->StartRelativeSound( sound, ownerEntNum, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 			}
 		}
-		cent->localEffects[LOCALEFFECT_LASERBEAM] = 0;
+		owner->localEffects[LOCALEFFECT_LASERBEAM] = 0;
 		return;
 	}
 
-	laserOwner = cent;
-	laserDrawSceneRequest = drawSceneRequest;
-	_LaserColor( color );
-
-	// interpolate the positions
-
-	if( ISVIEWERENTITY( cent->current.number ) && !cg.view.thirdperson ) {
+	vec3_t laserOrigin, laserAngles, laserPoint;
+	if( isOwnerThePov && !cg.view.thirdperson ) {
 		VectorCopy( cg.predictedPlayerState.pmove.origin, laserOrigin );
 		laserOrigin[2] += cg.predictedPlayerState.viewheight;
 		VectorCopy( cg.predictedPlayerState.viewangles, laserAngles );
 
-		VectorLerp( cent->laserPointOld, cg.lerpfrac, cent->laserPoint, laserPoint );
+		VectorLerp( owner->laserPointOld, cg.lerpfrac, owner->laserPoint, laserPoint );
 	} else {
-		VectorLerp( cent->laserOriginOld, cg.lerpfrac, cent->laserOrigin, laserOrigin );
-		VectorLerp( cent->laserPointOld, cg.lerpfrac, cent->laserPoint, laserPoint );
-		if( !cent->laserCurved ) {
+		VectorLerp( owner->laserOriginOld, cg.lerpfrac, owner->laserOrigin, laserOrigin );
+		VectorLerp( owner->laserPointOld, cg.lerpfrac, owner->laserPoint, laserPoint );
+		if( isCurved ) {
+			// Use player entity angles
+			for( int i = 0; i < 3; i++ ) {
+				laserAngles[i] = LerpAngle( owner->prev.angles[i], owner->current.angles[i], cg.lerpfrac );
+			}
+		} else {
+			// Make up the angles from the start and end points (s->angles is not so precise)
 			vec3_t dir;
-
-			// make up the angles from the start and end points (s->angles is not so precise)
 			VectorSubtract( laserPoint, laserOrigin, dir );
 			VecToAngles( dir, laserAngles );
-		} else {   // use player entity angles
-			for( i = 0; i < 3; i++ )
-				laserAngles[i] = LerpAngle( cent->prev.angles[i], cent->current.angles[i], cg.lerpfrac );
 		}
 	}
 
-	if( !cent->laserCurved ) {
-		range = GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
+	// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
+	orientation_t projectsource;
+	if( !CG_PModel_GetProjectionSource( ownerEntNum, &projectsource ) ) {
+		VectorCopy( laserOrigin, projectsource.origin );
+	}
 
-		if( cent->current.effects & EF_QUAD ) {
-			sound = cgs.media.sfxLasergunStrongQuadHum;
-		} else {
-			sound = cgs.media.sfxLasergunStrongHum;
-		}
+	laserOwner = owner;
+	laserDrawSceneRequest = drawSceneRequest;
 
-		// trace the beam: for tracing we use the real beam origin
-		GS_TraceLaserBeam( &trace, laserOrigin, laserAngles, range, cent->current.number, 0, _LaserImpact );
-
-		// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
-		if( !CG_PModel_GetProjectionSource( cent->current.number, &projectsource ) ) {
-			VectorCopy( laserOrigin, projectsource.origin );
-		}
-
-		cg.effectsSystem.updateStraightLaserBeam( cent->current.number, projectsource.origin, trace.endpos, cg.time );
-	} else {
-		float frac, subdivisions = cg_laserBeamSubdivisions->integer;
-		vec3_t from, dir, end, blendPoint;
-		int passthrough = cent->current.number;
-		vec3_t tmpangles, blendAngles;
-
-		range = GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
-
-		if( cent->current.effects & EF_QUAD ) {
-			sound = cgs.media.sfxLasergunWeakQuadHum;
-		} else {
-			sound = cgs.media.sfxLasergunWeakHum;
-		}
-
-		// draw the beam: for drawing we use the weapon projection source (already handles the case of viewer entity)
-		if( !CG_PModel_GetProjectionSource( cent->current.number, &projectsource ) ) {
-			VectorCopy( laserOrigin, projectsource.origin );
-		}
-
-		Q_clamp( subdivisions, CURVELASERBEAM_SUBDIVISIONS, MAX_CURVELASERBEAM_SUBDIVISIONS );
-
+	if( isCurved ) {
+		vec3_t from, dir, blendPoint, blendAngles;
 		// we redraw the full beam again, and trace each segment for stop dead impact
 		VectorCopy( laserPoint, blendPoint );
 		VectorCopy( projectsource.origin, from );
@@ -259,20 +219,34 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 
 		vec3_t points[MAX_CURVELASERBEAM_SUBDIVISIONS + 1];
 		VectorCopy( from, points[0] );
+		size_t numAddedPoints = 1;
 
-		for( i = 1; i <= (int)subdivisions; i++ ) {
-			frac = ( ( range / subdivisions ) * (float)i ) / (float)range;
+		int passthrough             = ownerEntNum;
+		const auto range            = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
+		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
+		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
+		const int subdivisions      = std::clamp( cg_laserBeamSubdivisions->integer, minSubdivisions, maxSubdivisions );
+		const float rcpSubdivisions = Q_Rcp( (float)subdivisions );
+		for( int segmentNum = 0; segmentNum < subdivisions; segmentNum++ ) {
+			const auto frac = (float)( segmentNum + 1 ) * rcpSubdivisions;
 
-			for( j = 0; j < 3; j++ )
+			vec3_t tmpangles;
+			for( int j = 0; j < 3; j++ ) {
 				tmpangles[j] = LerpAngle( laserAngles[j], blendAngles[j], frac );
+			}
 
-			AngleVectors( tmpangles, dir, NULL, NULL );
+			vec3_t end;
+			AngleVectors( tmpangles, dir, nullptr, nullptr );
 			VectorMA( projectsource.origin, range * frac, dir, end );
 
+			float *const addedPoint = points[numAddedPoints++];
+
+			trace_t trace;
 			GS_TraceLaserBeam( &trace, from, tmpangles, DistanceFast( from, end ), passthrough, 0, _LaserImpact );
-			VectorCopy( trace.endpos, points[i] );
+			VectorCopy( trace.endpos, addedPoint );
 
 			if( trace.fraction != 1.0f ) {
+				VectorCopy( trace.endpos, addedPoint );
 				break;
 			}
 
@@ -280,21 +254,33 @@ void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest ) {
 			VectorCopy( trace.endpos, from );
 		}
 
-		std::span<const vec3_t> pointsSpan( points, (size_t)( i + 1 ) );
-		cg.effectsSystem.updateCurvedLaserBeam( cent->current.number, pointsSpan, cg.time );
+		std::span<const vec3_t> pointsSpan( points, numAddedPoints );
+		cg.effectsSystem.updateCurvedLaserBeam( ownerEntNum, pointsSpan, cg.time );
+	} else {
+		const auto range = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
+
+		trace_t trace;
+		// trace the beam: for tracing we use the real beam origin
+		GS_TraceLaserBeam( &trace, laserOrigin, laserAngles, range, ownerEntNum, 0, _LaserImpact );
+
+		cg.effectsSystem.updateStraightLaserBeam( ownerEntNum, projectsource.origin, trace.endpos, cg.time );
 	}
 
 	// enable continuous flash on the weapon owner
 	if( cg_weaponFlashes->integer ) {
-		cg_entPModels[cent->current.number].flash_time = cg.time + CG_GetWeaponInfo( WEAP_LASERGUN )->flashTime;
+		cg_entPModels[ownerEntNum].flash_time = cg.time + CG_GetWeaponInfo( WEAP_LASERGUN )->flashTime;
+	}
+
+	sfx_s *sound;
+	if( isCurved ) {
+		sound = owner->current.effects & EF_QUAD ? cgs.media.sfxLasergunWeakQuadHum : cgs.media.sfxLasergunWeakHum;
+	} else {
+		sound = owner->current.effects & EF_QUAD ? cgs.media.sfxLasergunStrongQuadHum : cgs.media.sfxLasergunStrongHum;
 	}
 
 	if( sound ) {
-		if( ISVIEWERENTITY( cent->current.number ) ) {
-			SoundSystem::Instance()->AddLoopSound( sound, cent->current.number, cg_volume_effects->value, ATTN_NONE );
-		} else {
-			SoundSystem::Instance()->AddLoopSound( sound, cent->current.number, cg_volume_effects->value, ATTN_STATIC );
-		}
+		const float attenuation = isOwnerThePov ? ATTN_NONE : ATTN_STATIC;
+		soundSystem->AddLoopSound( sound, ownerEntNum, cg_volume_effects->value, attenuation );
 	}
 
 	laserOwner = nullptr;

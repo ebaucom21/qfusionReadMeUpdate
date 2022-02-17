@@ -762,7 +762,7 @@ void CG_ClearAnnouncerEvents( void );
 
 // I don't know where to put these ones
 void CG_WeaponBeamEffect( centity_t *cent );
-void CG_LaserBeamEffect( centity_t *cent, DrawSceneRequest *drawSceneRequest );
+void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest );
 
 
 //
