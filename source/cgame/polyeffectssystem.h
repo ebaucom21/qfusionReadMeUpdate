@@ -47,8 +47,19 @@ public:
 								   float tileLength, const float *from, const float *to );
 	void destroyStraightBeamEffect( StraightBeam * );
 
-	void spawnTransientBeamEffect( const float *from, const float *to, float width, float tileLength,
-								   shader_s *material, const float *color, unsigned timeout, unsigned fadeOutOffset );
+	struct TransientBeamParams {
+		shader_s *material { nullptr };
+		const float *color { nullptr };
+		const float *lightColor { nullptr };
+		float width { 0.0f };
+		float tileLength { 0.0f };
+		float lightRadius { 0.0f };
+		unsigned timeout;
+		unsigned lightTimeout;
+		unsigned fadeOutOffset;
+	};
+
+	void spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params );
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
@@ -76,6 +87,12 @@ private:
 		unsigned fadeOutOffset;
 		float rcpFadeOutTime;
 		vec4_t initialColor;
+		// Contrary to tracked laser beams, the light position is computed in an "immediate" mode.
+		// As these beams are multifunctional, the light appearance is more configurable.
+		vec3_t lightColor;
+		float lightRadius { 0.0f };
+		unsigned lightTimeout;
+		float rcpLightTimeout;
 		QuadPoly poly;
 	};
 

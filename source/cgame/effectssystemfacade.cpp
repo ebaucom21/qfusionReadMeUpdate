@@ -469,11 +469,17 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 	}
 
 	const auto timeoutSeconds = std::clamp( cg_ebbeam_time->value, 0.1f, 1.0f );
-	const auto width          = std::clamp( cg_ebbeam_width->value, 0.0f, 128.0f );
-	const auto timeout        = (unsigned)( 1.0f * 1000 * timeoutSeconds );
-	const auto fadeOutOffset  = (unsigned)( 0.5f * 1000 * timeoutSeconds );
-	const auto tileLength     = 128.0f;
-	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, width, tileLength, material, color, timeout, fadeOutOffset );
+	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
+		.material      = material,
+		.color         = color,
+		.lightColor    = color,
+		.width         = std::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
+		.tileLength    = 128.0f,
+		.lightRadius   = 200.0f,
+		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
+		.lightTimeout  = (unsigned)( 0.2f * 1000 * timeoutSeconds ),
+		.fadeOutOffset = (unsigned)( 0.5f * 1000 * timeoutSeconds ),
+	});
 }
 
 void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t end, int team ) {
@@ -488,27 +494,36 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 	}
 
 	const auto timeoutSeconds = std::clamp( cg_instabeam_time->value, 0.1f, 1.0f );
-	const auto width          = std::clamp( cg_instabeam_width->value, 0.0f, 128.0f );
-	const auto timeout        = (unsigned)( 1.0f * 1000 * timeoutSeconds );
-	const auto fadeOutOffset  = (unsigned)( 0.5f * 1000 * timeoutSeconds );
-	const auto tileLength     = 128.0f;
-	shader_s *material        = cgs.media.shaderInstaBeam;
-	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, width, tileLength, material, color, timeout, fadeOutOffset );
+	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
+		.material      = cgs.media.shaderInstaBeam,
+		.color         = color,
+		.lightColor    = color,
+		.width         = std::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
+		.tileLength    = 128.0f,
+		.lightRadius   = 250.0f,
+		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
+		.lightTimeout  = (unsigned)( 0.2f * 1000 * timeoutSeconds ),
+		.fadeOutOffset = (unsigned)( 0.5f * 1000 * timeoutSeconds )
+	});
 }
-
 
 void EffectsSystemFacade::spawnWorldLaserBeam( const float *from, const float *to, float width ) {
 	// TODO: Either disable fading out or make it tracked
-	const auto timeout       = std::max( 2u, cgs.snapFrameTime );
-	const auto fadeOutOffset = timeout - 1u;
-	shader_s *material       = cgs.media.shaderLaser;
-	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, width, 0.0f, material, colorWhite, timeout, fadeOutOffset );
+	const auto timeout = std::max( 2u, cgs.snapFrameTime );
+	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
+		.material      = cgs.media.shaderLaser,
+		.timeout       = timeout,
+		.fadeOutOffset = timeout - 1u
+	});
 }
 
 void EffectsSystemFacade::spawnGameDebugBeam( const float *from, const float *to, const float *color, int ) {
 	// TODO: Utilize the parameter
-	const auto timeout       = 500u;
-	const auto fadeOutOffset = 450u;
-	shader_s *material       = cgs.media.shaderLaser;
-	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, 8.0f, 0.0f, material, color, timeout, fadeOutOffset );
+	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
+		.material      = cgs.media.shaderLaser,
+		.color         = color,
+		.width         = 8.0f,
+		.timeout       = 500u,
+		.fadeOutOffset = 450u
+	});
 }

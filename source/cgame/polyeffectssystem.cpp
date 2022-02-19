@@ -193,15 +193,13 @@ void PolyEffectsSystem::destroyTransientBeamEffect( TransientBeamEffect *effect 
 	m_transientBeamsAllocator.free( effect );
 }
 
-void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, float width,
-												  float tileLength, shader_s *material,
-												  const float *color, unsigned timeout, unsigned fadeOutOffset ) {
-	if( width < 1.0f || !material ) [[unlikely]] {
+void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params ) {
+	if( params.width < 1.0f || !params.material ) [[unlikely]] {
 		return;
 	}
 
 	const float squareLength = DistanceSquared( from, to );
-	if( squareLength < width * width ) [[unlikely]] {
+	if( squareLength < params.width * params.width ) [[unlikely]] {
 		return;
 	}
 
@@ -229,21 +227,40 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 		mem = oldestEffect;
 	}
 
-	assert( fadeOutOffset && fadeOutOffset < timeout && timeout < std::numeric_limits<uint16_t>::max() );
+	assert( params.fadeOutOffset && params.fadeOutOffset < params.timeout );
+	assert( params.timeout < std::numeric_limits<uint16_t>::max() );
 
-	auto *effect            = new( mem )TransientBeamEffect;
-	effect->spawnTime       = m_lastTime;
-	effect->timeout         = timeout;
-	effect->fadeOutOffset   = fadeOutOffset;
-	effect->rcpFadeOutTime  = Q_Rcp( (float)( timeout - fadeOutOffset ) );
-	effect->poly.width      = width;
+	auto *effect = new( mem )TransientBeamEffect;
+
+	effect->spawnTime        = m_lastTime;
+	effect->timeout          = params.timeout;
+	effect->fadeOutOffset    = params.fadeOutOffset;
+	effect->rcpFadeOutTime   = Q_Rcp( (float)( params.timeout - params.fadeOutOffset ) );
+
+	effect->poly.width      = params.width;
 	effect->poly.length     = Q_Rcp( rcpLength );
-	effect->poly.material   = material;
-	effect->poly.tileLength = tileLength;
+	effect->poly.material   = params.material;
+	effect->poly.tileLength = params.tileLength;
+
 	VectorCopy( from, effect->poly.from );
 	VectorCopy( to, effect->poly.to );
 	VectorCopy( dir, effect->poly.dir );
-	Vector4Copy( color, effect->initialColor );
+
+	if( params.color ) {
+		Vector4Copy( params.color, effect->initialColor );
+	} else {
+		Vector4Copy( colorWhite, effect->initialColor );
+	}
+
+	assert( ( params.lightColor != nullptr ) == ( params.lightRadius > 1.0f ) );
+	if( params.lightColor ) {
+		assert( params.lightTimeout && params.lightTimeout < params.timeout );
+		VectorCopy( params.lightColor, effect->lightColor );
+		effect->lightTimeout    = params.lightTimeout;
+		effect->lightRadius     = params.lightRadius;
+		effect->rcpLightTimeout = Q_Rcp( (float)params.lightTimeout );
+	}
+
 	wsw::link( effect, &m_transientBeamsHead );
 }
 
@@ -271,9 +288,21 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			if( currTime <= startFadeOutAt ) {
 				Vector4Copy( beam->initialColor, beam->poly.color );
 			} else {
-				const auto frac = 1.0f - ( (float)( currTime - startFadeOutAt ) * beam->rcpFadeOutTime );
-				assert( frac > 0.0f && frac < 1.0f );
-				Vector4Scale( beam->initialColor, frac, beam->poly.color );
+				assert( beam->rcpFadeOutTime > 0.0f && std::isfinite( beam->rcpFadeOutTime ) );
+				const auto fadeOutFrac = 1.0f - ( (float)( currTime - startFadeOutAt ) * beam->rcpFadeOutTime );
+				assert( fadeOutFrac > 0.0f && fadeOutFrac < 1.0f );
+				Vector4Scale( beam->initialColor, fadeOutFrac, beam->poly.color );
+			}
+
+			if( beam->lightRadius > 1.0f && currTime < beam->spawnTime + beam->lightTimeout ) {
+				assert( beam->rcpLightTimeout > 0.0f && std::isfinite( beam->rcpLightTimeout ) );
+
+				vec3_t lightOrigin;
+				const auto lightOriginLerpFrac = (float)( currTime - beam->spawnTime ) * beam->rcpLightTimeout;
+				assert( lightOriginLerpFrac >= 0.0f && lightOriginLerpFrac <= 1.0f );
+				VectorLerp( beam->poly.from, lightOriginLerpFrac, beam->poly.to, lightOrigin );
+
+				request->addLight( lightOrigin, beam->lightRadius, beam->lightRadius, beam->lightColor );
 			}
 
 			request->addPoly( &beam->poly );
