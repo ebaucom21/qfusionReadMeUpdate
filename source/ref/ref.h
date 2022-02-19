@@ -235,7 +235,10 @@ struct ExternalMesh {
 	const vec4_t *positions;
 	const byte_vec4_t *colors;
 	const uint16_t *indices;
+	const uint16_t *nextLevelIndices { nullptr };
+	const void *nextLevelNeighbours;
 	unsigned numVertices, numIndices;
+	unsigned numNextLevelVertices, numNextLevelIndices;
 };
 
 namespace wsw::ref { class Frontend; }

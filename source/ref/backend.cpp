@@ -1012,6 +1012,77 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
+static constexpr unsigned kTessBufferSize = 2562;
+
+alignas( 16 ) static vec4_t tmpTessPositions[kTessBufferSize];
+alignas( 16 ) static vec4_t tmpTessFloatColors[kTessBufferSize];
+static int8_t tessNeighboursCount[kTessBufferSize];
+alignas( 16 ) static vec4_t tessPositions[kTessBufferSize];
+alignas( 16 ) static byte_vec4_t tessByteColors[kTessBufferSize];
+
+// Assuming that the simulation preserves vertex directions, adds interpolated vertices using neighbour information.
+static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numVertices, unsigned numNextLevelVertices,
+									const uint16_t nextLevelNeighbours[][5] ) {
+	assert( std::size( tmpTessPositions ) >= numNextLevelVertices );
+	assert( numNextLevelVertices > numVertices );
+	const unsigned numAddedVertices = numNextLevelVertices - numVertices;
+
+	// Zero neighbour accum buffers for the added part
+	std::memset( tmpTessPositions + numVertices, 0, sizeof( vec4_t ) * numAddedVertices );
+	std::memset( tmpTessFloatColors + numVertices, 0, sizeof( vec4_t ) * numAddedVertices );
+	std::memset( tessNeighboursCount + numVertices, 0, sizeof( int8_t ) * numAddedVertices );
+
+	// For each vertex in the original mesh
+	for( unsigned vertexIndex = 0; vertexIndex < numVertices; ++vertexIndex ) {
+		const auto byteColor  = mesh->colors[vertexIndex];
+		const float *position = mesh->positions[vertexIndex];
+
+		// Copy the color as-is to the resulting color buffer
+		Vector4Copy( byteColor, tessByteColors[vertexIndex] );
+		// Copy for the further smooth pass
+		Vector4Copy( position, tmpTessPositions[vertexIndex] );
+
+		// For each neighbour of this vertex in the tesselated mesh
+		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+			if( neighbourIndex >= numVertices ) {
+				VectorAdd( tmpTessPositions[neighbourIndex], position, tmpTessPositions[neighbourIndex] );
+				// Add integer values as is to the float accumulation buffer
+				Vector4Add( tmpTessFloatColors[neighbourIndex], byteColor, tmpTessFloatColors[neighbourIndex] );
+				tessNeighboursCount[neighbourIndex]++;
+			}
+		}
+	}
+
+	for( unsigned vertexIndex = numVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+		// Wtf? how do such vertices exist?
+		if( !tessNeighboursCount[vertexIndex] ) {
+			continue;
+		}
+		const float scale = Q_Rcp( (float)tessNeighboursCount[vertexIndex] );
+		VectorScale( tmpTessPositions[vertexIndex], scale, tmpTessPositions[vertexIndex] );
+		tmpTessPositions[vertexIndex][3] = 1.0f;
+		// Write the vertex color to the resulting color buffer
+		Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
+	}
+
+	// Each icosphere vertex has 5 neighbours (we don't make a distinction between old and added ones for this pass)
+	constexpr float icoAvgScale = 1.0f / 5.0f;
+	constexpr float smoothFrac  = 0.5f;
+
+	// Apply the smooth pass for positions
+	for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+		alignas( 16 ) vec4_t sumOfNeighbourPositions { 0, 0, 0, 0 };
+
+		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+			Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+		}
+
+		Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
+		// Write combined results
+		Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
+	}
+}
+
 void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf ) {
 	const ExternalMesh *externalMesh = &fsh->compoundMeshes[drawSurf->compoundMeshIndex].parts[drawSurf->partIndex];
 
@@ -1020,11 +1091,25 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 	mesh_t mesh;
 	memset( &mesh, 0, sizeof( mesh ) );
 
-	mesh.elems = const_cast<uint16_t *>( externalMesh->indices );
-	mesh.numElems = externalMesh->numIndices;
-	mesh.numVerts = externalMesh->numVertices;
-	mesh.xyzArray = const_cast<vec4_t *>( externalMesh->positions );
-	mesh.colorsArray[0] = const_cast<byte_vec4_t *>( externalMesh->colors );
+	// HACK Perform an additional tesselation of some hulls.
+	// CPU-side tesselation is the single option in the current codebase state.
+	if( const auto *nextLevelIndices = externalMesh->nextLevelIndices ) {
+		auto *nextLevelNeighbours     = (const uint16_t (*)[5])externalMesh->nextLevelNeighbours;
+		unsigned numVertices          = externalMesh->numVertices;
+		unsigned numNextLevelVertices = externalMesh->numNextLevelVertices;
+		buildNextTessLevelData( externalMesh, numVertices, numNextLevelVertices, nextLevelNeighbours );
+		mesh.elems          = const_cast<uint16_t *>( nextLevelIndices );
+		mesh.numElems       = externalMesh->numNextLevelIndices;
+		mesh.numVerts       = externalMesh->numNextLevelVertices;
+		mesh.xyzArray       = ::tessPositions;
+		mesh.colorsArray[0] = ::tessByteColors;
+	} else {
+		mesh.elems          = const_cast<uint16_t *>( externalMesh->indices );
+		mesh.numElems       = externalMesh->numIndices;
+		mesh.numVerts       = externalMesh->numVertices;
+		mesh.xyzArray       = const_cast<vec4_t *>( externalMesh->positions );
+		mesh.colorsArray[0] = const_cast<byte_vec4_t *>( externalMesh->colors );
+	}
 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 

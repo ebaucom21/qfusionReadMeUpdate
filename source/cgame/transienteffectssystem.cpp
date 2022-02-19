@@ -27,6 +27,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cstdlib>
 #include <cstring>
 
+struct IcosphereData {
+	std::span<const vec4_t> vertices;
+	std::span<const uint16_t> indices;
+	std::span<const uint16_t[5]> vertexNeighbours;
+};
+
 class BasicHullsHolder {
 public:
 	BasicHullsHolder() {
@@ -146,12 +152,6 @@ public:
 		// TODO: Use a fixed vector
 		m_neighbours.shrink_to_fit();
 	}
-
-	struct IcosphereData {
-		std::span<const vec4_t> vertices;
-		std::span<const uint16_t> indices;
-		std::span<const uint16_t[5]> vertexNeighbours;
-	};
 
 	[[nodiscard]]
 	auto getIcosphereForLevel( unsigned level ) -> IcosphereData {
@@ -1033,6 +1033,8 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 		assert( hull->numLayers );
 		// Meshes should be placed in memory continuously, so we can supply a span
 		assert( hull->layers[hull->numLayers - 1].submittedMesh - hull->layers[0].submittedMesh + 1 == hull->numLayers );
+
+		const IcosphereData nextLevelData = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel + 1 );
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {
 			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
 			ExternalMesh *__restrict mesh = hull->layers[i].submittedMesh;
@@ -1044,6 +1046,11 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 			mesh->numVertices = hull->numMeshVertices;
 			mesh->numIndices  = hull->numMeshIndices;
 			mesh->material    = nullptr;
+
+			mesh->nextLevelNeighbours  = nextLevelData.vertexNeighbours.data();
+			mesh->nextLevelIndices     = nextLevelData.indices.data();
+			mesh->numNextLevelVertices = nextLevelData.vertices.size();
+			mesh->numNextLevelIndices  = nextLevelData.indices.size();
 		}
 		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->layers[0].submittedMesh, hull->numLayers } );
 	}
