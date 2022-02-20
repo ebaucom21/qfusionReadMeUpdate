@@ -1442,9 +1442,11 @@ struct FrontendToBackendShared {
 	const Scene::ParticlesAggregate *particleAggregates;
 	const Scene::ExternalCompoundMesh *compoundMeshes;
 	const int *coronaDrawSurfaces;
+	vec3_t viewOrigin;
 	mat3_t viewAxis;
 	unsigned renderFlags;
 	unsigned numProgramLights;
+	float fovTangent;
 };
 
 void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );

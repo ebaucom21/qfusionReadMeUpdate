@@ -1056,10 +1056,12 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	fsh.dynamicLights        = scene->m_dynamicLights.data();
 	fsh.programLightIndices  = m_programLightIndices;
 	fsh.numProgramLights     = m_numVisibleProgramLights;
+	fsh.fovTangent           = m_state.lod_dist_scale_for_fov;
 	fsh.particleAggregates   = scene->m_particles.data();
 	fsh.coronaDrawSurfaces   = m_coronaDrawSurfaces;
 	fsh.compoundMeshes       = scene->m_externalMeshes.data();
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
+	VectorCopy( m_state.viewOrigin, fsh.viewOrigin );
 
 	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
 	unsigned prevEntNum = std::numeric_limits<unsigned>::max();

@@ -35,6 +35,8 @@ struct IcosphereData {
 
 class BasicHullsHolder {
 public:
+	static constexpr unsigned kMaxSubdivLevel = 4;
+
 	BasicHullsHolder() {
 		constexpr const uint8_t icosahedronFaces[20][3] {
 			{ 0, 11, 5 }, { 0, 5, 1 }, { 0, 1, 7 }, { 0, 7, 10 }, { 0, 10, 11 },
@@ -202,7 +204,8 @@ private:
 	wsw::Vector<Neighbours> m_neighbours;
 
 	struct Entry { unsigned firstIndex, numIndices, numVertices, firstNeighboursElement; };
-	wsw::StaticVector<Entry, 5> m_icosphereEntries;
+	// zero for the icosahedron, [1..kMaxSubdivLevel] for subdivisions
+	wsw::StaticVector<Entry, kMaxSubdivLevel + 1> m_icosphereEntries;
 };
 
 static BasicHullsHolder basicHullsHolder;
@@ -1018,15 +1021,31 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
 		assert( std::size( hull->meshSubmissionBuffer ) == 1 );
 		ExternalMesh *__restrict mesh = &hull->meshSubmissionBuffer[0];
+
 		Vector4Copy( hull->mins, mesh->mins );
 		Vector4Copy( hull->maxs, mesh->maxs );
-		mesh->positions   = hull->vertexPositions[hull->positionsFrame];
-		mesh->colors      = hull->vertexColors;
-		mesh->indices     = hull->meshIndices;
-		mesh->numVertices = hull->numMeshVertices;
-		mesh->numIndices  = hull->numMeshIndices;
-		mesh->material    = nullptr;
+
+		mesh->positions = hull->vertexPositions[hull->positionsFrame];
+		mesh->colors    = hull->vertexColors;
+		mesh->material  = nullptr;
+		mesh->numLods   = 1;
+		mesh->lods[0]   = {
+			.indices                     = hull->meshIndices,
+			.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
+			.numIndices                  = hull->numMeshIndices,
+			.numVertices                 = hull->numMeshVertices,
+		};
+
 		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->meshSubmissionBuffer, 1 } );
+	}
+
+	static_assert( ExternalMesh::kMaxLods == BasicHullsHolder::kMaxSubdivLevel + 1 );
+	IcosphereData icospheresForLevels[BasicHullsHolder::kMaxSubdivLevel + 1];
+	// TODO: Should be provided by the hulls holder itself
+	if( !activeConcentricHulls.empty() ) {
+		for( unsigned level = 0; level <= BasicHullsHolder::kMaxSubdivLevel; ++level ) {
+			icospheresForLevels[level] = ::basicHullsHolder.getIcosphereForLevel( level );
+		}
 	}
 
 	for( const BaseConcentricSimulatedHull *__restrict hull: activeConcentricHulls ) {
@@ -1034,24 +1053,48 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 		// Meshes should be placed in memory continuously, so we can supply a span
 		assert( hull->layers[hull->numLayers - 1].submittedMesh - hull->layers[0].submittedMesh + 1 == hull->numLayers );
 
-		const IcosphereData nextLevelData = ::basicHullsHolder.getIcosphereForLevel( hull->subdivLevel + 1 );
+		// TODO: Use different lods for different layers?
+		ExternalMesh::LodProps lods[ExternalMesh::kMaxLods];
+		unsigned numLods = 0;
+
+		if( hull->subdivLevel < BasicHullsHolder::kMaxSubdivLevel ) {
+			const IcosphereData &dynTessData = icospheresForLevels[hull->subdivLevel + 1];
+			lods[numLods++] = {
+				.indices                     = dynTessData.indices.data(),
+				.neighbours                  = dynTessData.vertexNeighbours.data(),
+				.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
+				.numIndices                  = (uint16_t)dynTessData.indices.size(),
+				.numVertices                 = (uint16_t)dynTessData.vertices.size(),
+			};
+		}
+
+		float lodTangentsRatio = 0.15f;
+		for( int level = (signed)hull->subdivLevel; level >= 0; --level ) {
+			const IcosphereData &levelData = icospheresForLevels[level];
+			lods[numLods++] = {
+				.indices                     = levelData.indices.data(),
+				.maxRatioOfViewTangentsToUse = lodTangentsRatio,
+				.numIndices                  = (uint16_t)levelData.indices.size(),
+				.numVertices                 = (uint16_t)levelData.vertices.size(),
+			};
+			lodTangentsRatio *= 0.5f;
+		}
+
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {
 			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
 			ExternalMesh *__restrict mesh = hull->layers[i].submittedMesh;
+
 			Vector4Copy( layer->mins, mesh->mins );
 			Vector4Copy( layer->maxs, mesh->maxs );
-			mesh->positions   = layer->vertexPositions;
-			mesh->colors      = layer->vertexColors;
-			mesh->indices     = hull->meshIndices;
-			mesh->numVertices = hull->numMeshVertices;
-			mesh->numIndices  = hull->numMeshIndices;
-			mesh->material    = nullptr;
 
-			mesh->nextLevelNeighbours  = nextLevelData.vertexNeighbours.data();
-			mesh->nextLevelIndices     = nextLevelData.indices.data();
-			mesh->numNextLevelVertices = nextLevelData.vertices.size();
-			mesh->numNextLevelIndices  = nextLevelData.indices.size();
+			mesh->positions = layer->vertexPositions;
+			mesh->colors    = layer->vertexColors;
+			mesh->material  = nullptr;
+			mesh->numLods   = numLods;
+			assert( numLods <= ExternalMesh::kMaxLods );
+			std::copy( lods, lods + numLods, mesh->lods );
 		}
+
 		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->layers[0].submittedMesh, hull->numLayers } );
 	}
 }

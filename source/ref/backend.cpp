@@ -1021,19 +1021,19 @@ alignas( 16 ) static vec4_t tessPositions[kTessBufferSize];
 alignas( 16 ) static byte_vec4_t tessByteColors[kTessBufferSize];
 
 // Assuming that the simulation preserves vertex directions, adds interpolated vertices using neighbour information.
-static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numVertices, unsigned numNextLevelVertices,
-									const uint16_t nextLevelNeighbours[][5] ) {
+static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+									unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] ) {
 	assert( std::size( tmpTessPositions ) >= numNextLevelVertices );
-	assert( numNextLevelVertices > numVertices );
-	const unsigned numAddedVertices = numNextLevelVertices - numVertices;
+	assert( numNextLevelVertices > numSimulatedVertices );
+	const unsigned numAddedVertices = numNextLevelVertices - numSimulatedVertices;
 
 	// Zero neighbour accum buffers for the added part
-	std::memset( tmpTessPositions + numVertices, 0, sizeof( vec4_t ) * numAddedVertices );
-	std::memset( tmpTessFloatColors + numVertices, 0, sizeof( vec4_t ) * numAddedVertices );
-	std::memset( tessNeighboursCount + numVertices, 0, sizeof( int8_t ) * numAddedVertices );
+	std::memset( tmpTessPositions + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
+	std::memset( tmpTessFloatColors + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
+	std::memset( tessNeighboursCount + numSimulatedVertices, 0, sizeof( int8_t ) * numAddedVertices );
 
 	// For each vertex in the original mesh
-	for( unsigned vertexIndex = 0; vertexIndex < numVertices; ++vertexIndex ) {
+	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
 		const auto byteColor  = mesh->colors[vertexIndex];
 		const float *position = mesh->positions[vertexIndex];
 
@@ -1044,7 +1044,7 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numVertic
 
 		// For each neighbour of this vertex in the tesselated mesh
 		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-			if( neighbourIndex >= numVertices ) {
+			if( neighbourIndex >= numSimulatedVertices ) {
 				VectorAdd( tmpTessPositions[neighbourIndex], position, tmpTessPositions[neighbourIndex] );
 				// Add integer values as is to the float accumulation buffer
 				Vector4Add( tmpTessFloatColors[neighbourIndex], byteColor, tmpTessFloatColors[neighbourIndex] );
@@ -1053,7 +1053,7 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numVertic
 		}
 	}
 
-	for( unsigned vertexIndex = numVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+	for( unsigned vertexIndex = numSimulatedVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
 		// Wtf? how do such vertices exist?
 		if( !tessNeighboursCount[vertexIndex] ) {
 			continue;
@@ -1086,6 +1086,34 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numVertic
 void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf ) {
 	const ExternalMesh *externalMesh = &fsh->compoundMeshes[drawSurf->compoundMeshIndex].parts[drawSurf->partIndex];
 
+	// Checking it this late is not a very nice things but otherwise
+	// the API gets way too complicated due to some technical details.
+	const float squareExtent = DistanceSquared( externalMesh->mins, externalMesh->maxs );
+	if( squareExtent < 1.0f ) {
+		return;
+	}
+
+	vec3_t center;
+	VectorAvg( externalMesh->mins, externalMesh->maxs, center );
+	const float squareDistance = DistanceSquared( fsh->viewOrigin, center );
+
+	unsigned chosenLodIndex = 0;
+	assert( externalMesh->numLods );
+	// Otherwise, don't even bother checking lod conditions
+	if( squareDistance > 64.0f * 64.0f ) [[likely]] {
+		const float extent       = Q_Sqrt( squareExtent );
+		const float rcpDistance  = Q_RSqrt( squareDistance );
+		const float viewTangent  = extent * rcpDistance;
+		const float tangentRatio = viewTangent * Q_Rcp( fsh->fovTangent );
+		for( unsigned lodIndex = 0; lodIndex < externalMesh->numLods; ++lodIndex ) {
+			if( externalMesh->lods[lodIndex].maxRatioOfViewTangentsToUse > tangentRatio ) {
+				chosenLodIndex = lodIndex;
+			}
+		}
+	}
+
+	const ExternalMesh::LodProps *chosenLod = &externalMesh->lods[chosenLodIndex];
+
 	RB_FlushDynamicMeshes();
 
 	mesh_t mesh;
@@ -1093,20 +1121,26 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 
 	// HACK Perform an additional tesselation of some hulls.
 	// CPU-side tesselation is the single option in the current codebase state.
-	if( const auto *nextLevelIndices = externalMesh->nextLevelIndices ) {
-		auto *nextLevelNeighbours     = (const uint16_t (*)[5])externalMesh->nextLevelNeighbours;
-		unsigned numVertices          = externalMesh->numVertices;
-		unsigned numNextLevelVertices = externalMesh->numNextLevelVertices;
-		buildNextTessLevelData( externalMesh, numVertices, numNextLevelVertices, nextLevelNeighbours );
-		mesh.elems          = const_cast<uint16_t *>( nextLevelIndices );
-		mesh.numElems       = externalMesh->numNextLevelIndices;
-		mesh.numVerts       = externalMesh->numNextLevelVertices;
+	// Non-null specified neighbours indicate requested tesselation.
+	if( chosenLod->neighbours ) {
+		auto *nextLevelNeighbours = (const uint16_t (*)[5])chosenLod->neighbours;
+		assert( chosenLodIndex + 1 < externalMesh->numLods );
+		const auto &nonTessLod = externalMesh->lods[chosenLodIndex + 1];
+		assert( nonTessLod.numVertices < chosenLod->numVertices );
+		assert( nonTessLod.numIndices < chosenLod->numIndices );
+		const unsigned numSimulatedVertices = nonTessLod.numVertices;
+		const unsigned numNextLevelVertices = chosenLod->numVertices;
+		buildNextTessLevelData( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
+		mesh.numElems       = chosenLod->numIndices;
+		mesh.numVerts       = chosenLod->numVertices;
 		mesh.xyzArray       = ::tessPositions;
 		mesh.colorsArray[0] = ::tessByteColors;
 	} else {
-		mesh.elems          = const_cast<uint16_t *>( externalMesh->indices );
-		mesh.numElems       = externalMesh->numIndices;
-		mesh.numVerts       = externalMesh->numVertices;
+		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
+		mesh.numElems       = chosenLod->numIndices;
+		mesh.numVerts       = chosenLod->numVertices;
+		// Vertices are shared for all lods (except dynamically tesselated ones)
 		mesh.xyzArray       = const_cast<vec4_t *>( externalMesh->positions );
 		mesh.colorsArray[0] = const_cast<byte_vec4_t *>( externalMesh->colors );
 	}

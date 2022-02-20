@@ -234,11 +234,17 @@ struct ExternalMesh {
 	const shader_s *material;
 	const vec4_t *positions;
 	const byte_vec4_t *colors;
-	const uint16_t *indices;
-	const uint16_t *nextLevelIndices { nullptr };
-	const void *nextLevelNeighbours;
-	unsigned numVertices, numIndices;
-	unsigned numNextLevelVertices, numNextLevelIndices;
+	struct LodProps {
+		const uint16_t *indices;
+		const void *neighbours { nullptr };
+		// mesh view angle tangent / fov tangent
+		float maxRatioOfViewTangentsToUse;
+		uint16_t numIndices;
+		uint16_t numVertices;
+	};
+	static constexpr unsigned kMaxLods = 5;
+	LodProps lods[kMaxLods];
+	unsigned numLods;
 };
 
 namespace wsw::ref { class Frontend; }
