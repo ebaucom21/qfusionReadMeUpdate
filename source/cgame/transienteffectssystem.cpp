@@ -210,8 +210,6 @@ private:
 
 static BasicHullsHolder basicHullsHolder;
 
-vec3_t TransientEffectsSystem::s_scratchpad[std::end( TransientEffectsSystem::kNumVerticesForSubdivLevel )[-1]];
-
 TransientEffectsSystem::TransientEffectsSystem() {
 	// TODO: Take care of exception-safety
 	while( !m_freeShapeLists.full() ) {
@@ -795,7 +793,7 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 		hull->limitsAtDirections[i] = trace.fraction * radius;
 	}
 
-	float *const __restrict spikeSpeedBoost = TransientEffectsSystem::s_scratchpad[0];
+	auto *const __restrict spikeSpeedBoost = (float *)alloca( sizeof( float ) * verticesSpan.size() );
 
 	// Setup layers data
 	assert( hull->numLayers >= 1 && hull->numLayers < 8 );
@@ -1109,10 +1107,8 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	vec3_t *const __restrict forceVelocities = this->vertexForceVelocities;
 	vec3_t *const __restrict burstVelocities = this->vertexBurstVelocities;
 
-	// Caution! This is access to the shared global state
-	vec3_t *const __restrict combinedVelocities = TransientEffectsSystem::s_scratchpad;
-
 	const unsigned numVertices = this->numMeshVertices;
+	auto *const __restrict combinedVelocities = (vec3_t *)alloca( sizeof( vec3_t ) * numVertices );
 
 	BoundsBuilder boundsBuilder;
 	assert( timeDeltaSeconds < 0.1f );
@@ -1178,11 +1174,20 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	maxZLastFrame = std::numeric_limits<float>::min();
 	avgXLastFrame = avgYLastFrame = 0.0f;
 
+	// int type is used to mitigate possible branching while performing bool->float conversions
+	auto *const __restrict isVertexNonContacting          = (int *)alloca( sizeof( int ) * numVertices );
+	auto *const __restrict indicesOfNonContactingVertices = (unsigned *)alloca( sizeof( unsigned ) * numVertices );
+
 	trace_t clipTrace, slideTrace;
+	unsigned numNonContactingVertices = 0;
 	for( unsigned i = 0; i < numVertices; ++i ) {
 		CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
 							vec3_origin, vec3_origin, MASK_SOLID );
-		if( clipTrace.fraction != 1.0f ) [[unlikely]] {
+		if( clipTrace.fraction == 1.0f ) [[likely]] {
+			isVertexNonContacting[i] = 1;
+			indicesOfNonContactingVertices[numNonContactingVertices++] = i;
+		} else {
+			isVertexNonContacting[i] = 0;
 			bool putVertexAtTheContactPosition = true;
 			if( const float squareSpeed = VectorLengthSquared( combinedVelocities[i] ); squareSpeed > 10.0f * 10.0f ) {
 				vec3_t velocityDir;
@@ -1234,11 +1239,70 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 			if( putVertexAtTheContactPosition ) {
 				VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
 			}
-		}
 
-		minZLastFrame = std::min( minZLastFrame, newPositions[i][2] );
-		maxZLastFrame = std::max( maxZLastFrame, newPositions[i][2] );
-		avgXLastFrame += newPositions[i][0], avgYLastFrame += newPositions[i][1];
+			// The final position for contacting vertices is considered to be known.
+			const float *__restrict position = newPositions[i];
+			minZLastFrame = std::min( minZLastFrame, position[2] );
+			maxZLastFrame = std::max( maxZLastFrame, position[2] );
+			avgXLastFrame += position[0];
+			avgYLastFrame += position[1];
+
+			// Make the contacting vertex transparent
+			vertexColors[i][3] = 0;
+		}
+	}
+
+	if( numNonContactingVertices ) {
+		// Update positions of non-contacting vertices
+		unsigned i;
+		if( numNonContactingVertices != numVertices ) {
+			const IcosphereData &icosphereData           = ::basicHullsHolder.getIcosphereForLevel( subdivLevel );
+			auto *const __restrict neighboursForVertices = icosphereData.vertexNeighbours.data();
+			auto *const __restrict neighboursFreeMoveSum = (int *)alloca( sizeof( int ) * numNonContactingVertices );
+
+			std::memset( neighboursFreeMoveSum, 0, sizeof( float ) * numNonContactingVertices );
+
+			i = 0;
+			do {
+				const unsigned vertexIndex = indicesOfNonContactingVertices[i];
+				assert( vertexIndex < numVertices );
+				for( const unsigned neighbourIndex: neighboursForVertices[vertexIndex] ) {
+					// Add to the integer accumulator
+					neighboursFreeMoveSum[i] += isVertexNonContacting[neighbourIndex];
+				}
+			} while( ++i < numNonContactingVertices );
+
+			assert( std::size( neighboursForVertices[0] ) == 5 );
+			constexpr float rcpNumVertexNeighbours = 0.2f;
+
+			i = 0;
+			do {
+				const unsigned vertexIndex = indicesOfNonContactingVertices[i];
+				const float neighboursFrac = (float)neighboursFreeMoveSum[i] * rcpNumVertexNeighbours;
+				assert( neighboursFrac >= 0.0f && neighboursFrac <= 1.0f );
+				const float lerpFrac = ( 1.0f / 3.0f ) + ( 2.0f / 3.0f ) * neighboursFrac;
+
+				float *const __restrict position = newPositions[vertexIndex];
+				VectorLerp( oldPositions[vertexIndex], lerpFrac, position, position );
+
+				minZLastFrame = std::min( minZLastFrame, position[2] );
+				maxZLastFrame = std::max( maxZLastFrame, position[2] );
+				avgXLastFrame += position[0];
+				avgYLastFrame += position[1];
+			} while( ++i < numNonContactingVertices );
+		} else {
+			// Just update positions.
+			// This is worth the separate branch as its quite common for smoke hulls.
+			i = 0;
+			do {
+				const unsigned vertexIndex       = indicesOfNonContactingVertices[i];
+				const float *__restrict position = newPositions[vertexIndex];
+				minZLastFrame = std::min( minZLastFrame, position[2] );
+				maxZLastFrame = std::max( maxZLastFrame, position[2] );
+				avgXLastFrame += position[0];
+				avgYLastFrame += position[1];
+			} while( ++i < numNonContactingVertices );
+		}
 	}
 
 	const float rcpNumVertices = Q_Rcp( (float)numVertices );

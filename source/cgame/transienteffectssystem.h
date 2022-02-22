@@ -313,9 +313,6 @@ private:
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
 
-	// Use the same buffer for vectors and scalars to aid DCache/TLB utilization
-	static vec3_t s_scratchpad[std::end( kNumVerticesForSubdivLevel )[-1]];
-
 	EntityEffect *m_entityEffectsHead { nullptr };
 	LightEffect *m_lightEffectsHead { nullptr };
 	FireHull *m_fireHullsHead { nullptr };
