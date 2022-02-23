@@ -272,12 +272,9 @@ static const byte_vec4_t kFireReplacementPalette[] {
 };
 
 static const byte_vec4_t kFireReplacementPalette2[] {
-	{ 255, 108, 0, 24 },
 	{ 255, 72, 0, 24 },
+	{ 255, 224, 0, 24 },
 	{ 255, 128, 0, 16 },
-	{ 0, 0, 0, 15 },
-	{ 0, 0, 0, 15 },
-	{ 0, 0, 0, 15 },
 };
 
 static const byte_vec4_t kSmokeReplacementPalette[] {
@@ -375,7 +372,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 		// TODO: It would look better if smoke hulls are coupled together/allocated at once
 
 		if( cg_volumetricExplosionsSmoke->integer ) {
-			const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.03f };
+			const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.06f };
 
 			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2500 ) ) {
 				hull->archimedesBottomAccel   = +45.0f;
