@@ -1327,7 +1327,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
 	byte_vec4_t colors[4];
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
-	mesh_t mesh;
+
+	assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
 	assert( appearanceRules->kind == Particle::Sprite || appearanceRules->kind == Particle::Spark );
 	if( appearanceRules->kind == Particle::Sprite ) {
@@ -1339,8 +1340,24 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 			VectorInverse( v_left );
 		}
 
-		const float radius = appearanceRules->radius;
-		assert( radius >= 0.1f );
+		assert( appearanceRules->radius >= 0.1f );
+
+		float radius = appearanceRules->radius;
+		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
+			// Grow faster than the linear growth
+			radius = appearanceRules->radius * Q_Sqrt( particle->lifetimeFrac );
+			if( radius < 0.1f ) {
+				return;
+			}
+		} else if( appearanceRules->sizeBehaviour == Particle::Shrinking ) {
+			// Shrink faster than the linear growth
+			float frac = 1.0f - particle->lifetimeFrac;
+			frac = frac * frac;
+			radius = appearanceRules->radius * frac;
+			if( radius < 0.1f ) {
+				return;
+			}
+		}
 
 		vec3_t point;
 		VectorMA( particle->origin, -radius, v_up, point );
@@ -1364,9 +1381,27 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 		Matrix3_Transpose( axis, localAxis );
 
-		const float length = appearanceRules->length;
-		const float width = appearanceRules->width;
-		assert( length >= 0.1f && width >= 0.1f );
+		assert( appearanceRules->length >= 0.1f && appearanceRules->width >= 0.1f );
+
+		float length = appearanceRules->length;
+		float width  = appearanceRules->width;
+		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
+			// Grow faster than linear growth
+			const float frac = Q_Sqrt( particle->lifetimeFrac );
+			length = appearanceRules->length * frac;
+			width  = appearanceRules->width * frac;
+			if( length < 0.1f || width < 0.1f ) {
+				return;
+			}
+		} else if( appearanceRules->sizeBehaviour == Particle::Shrinking ) {
+			float frac = 1.0f - particle->lifetimeFrac;
+			frac *= frac;
+			length = appearanceRules->length * frac;
+			width  = appearanceRules->width * frac;
+			if( length < 0.1f || width < 0.1f ) {
+				return;
+			}
+		}
 
 		const float xmin = 0;
 		const float xmax = length;
@@ -1420,6 +1455,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	Vector4Copy( colors[0], colors[2] );
 	Vector4Copy( colors[0], colors[3] );
 
+	mesh_t mesh;
 	memset( &mesh, 0, sizeof( mesh ) );
 	mesh.numElems = 6;
 	mesh.elems = elems;

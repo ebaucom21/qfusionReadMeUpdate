@@ -202,6 +202,12 @@ typedef struct refdef_s {
 struct alignas( 16 ) Particle {
 	enum Kind { Sprite, Spark };
 
+	enum SizeBehaviour {
+		SizeNotChanging,
+		Expanding,
+		Shrinking
+	};
+
 	// Common for flocks/aggregates.
 	// The name "rules" seems to be more appropriate than "params" for these stateless/shared objects.
 	struct AppearanceRules {
@@ -216,6 +222,8 @@ struct alignas( 16 ) Particle {
 		const float *fadedOutColor { nullptr };
 		float fadeInLifetimeFrac { 0.25f };
 		float fadeOutLifetimeFrac { 0.25f };
+
+		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
 
 	float origin[4];

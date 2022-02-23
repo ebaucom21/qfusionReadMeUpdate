@@ -36,12 +36,8 @@ public:
 	TrackedEffectsSystem() = default;
 	~TrackedEffectsSystem();
 
-	void touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
-		touchRocketOrGrenadeTrail( entNum, origin, &m_rocketParticlesFlockFiller, currTime );
-	}
-	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
-		touchRocketOrGrenadeTrail( entNum, origin, &m_grenadeParticlesFlockFiller, currTime );
-	}
+	void touchRocketTrail( int entNum, const float *origin, int64_t currTime );
+	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime );
 
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime );
 	void touchElectroTrail( int entNum, const float *origin, int64_t currTime );
@@ -61,12 +57,6 @@ public:
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
-	struct FireTrail {
-		FireTrail *prev { nullptr }, *next { nullptr };
-		int64_t touchedAt { 0 };
-		int entNum { std::numeric_limits<int>::max() };
-	};
-
 	struct ParticleTrail {
 		ParticleTrail *prev { nullptr }, *next { nullptr };
 		ParticleFlock *particleFlock { nullptr };
@@ -98,11 +88,10 @@ private:
 	};
 
 	struct AttachedEntityEffects {
-		FireTrail *fireTrail { nullptr };
 		ParticleTrail *particleTrail { nullptr };
+		ParticleTrail *particleTrail2 { nullptr };
 	};
 
-	void unlinkAndFree( FireTrail *fireTrail );
 	void unlinkAndFree( ParticleTrail *particleTrail );
 	void unlinkAndFree( TeleEffect *teleEffect );
 
@@ -114,57 +103,73 @@ private:
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 
-	void touchRocketOrGrenadeTrail( int entNum, const float *origin, ConeFlockFiller *filler, int64_t currTime );
-
 	static constexpr unsigned kClippedTrailsBin = ParticleSystem::kClippedTrailFlocksBin;
 	static constexpr unsigned kNonClippedTrailsBin = ParticleSystem::kNonClippedTrailFlocksBin;
 
-	FireTrail *m_fireTrailsHead { nullptr };
 	ParticleTrail *m_particleTrailsHead { nullptr };
 	TeleEffect *m_teleEffectsHead { nullptr };
 
-	wsw::HeapBasedFreelistAllocator m_fireTrailsAllocator { sizeof( FireTrail ), 64 };
-	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 64 };
+	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
 	ConeFlockFiller m_rocketParticlesFlockFiller {
-		.gravity     = -250,
+		.gravity     = -200,
 		.angle       = 15,
 		.bounceCount = 0,
 		.minSpeed    = 75,
-		.maxSpeed    = 100,
+		.maxSpeed    = 150,
+		.minTimeout  = 250,
+		.maxTimeout  = 350
+	};
+
+	ConeFlockFiller m_rocketFireParticlesFlockFiller {
+		.gravity     = -200,
+		.angle       = 7.5,
+		.bounceCount = 0,
+		.minSpeed    = 100,
+		.maxSpeed    = 150,
+		.minTimeout  = 150,
+		.maxTimeout  = 200
+	};
+
+	ConeFlockFiller m_grenadeFuseParticlesFlockFiller {
+		.gravity     = -200,
+		.angle       = 5,
+		.bounceCount = 0,
+		.minSpeed    = 50,
+		.maxSpeed    = 75,
+		.minTimeout  = 100,
+		.maxTimeout  = 150
+	};
+
+	ConeFlockFiller m_grenadeSmokeParticlesFlockFiller {
+		.gravity     = -200,
+		.angle       = 7.5f,
+		.bounceCount = 0,
+		.minSpeed    = 50,
+		.maxSpeed    = 75,
 		.minTimeout  = 200,
 		.maxTimeout  = 250
 	};
 
-	ConeFlockFiller m_grenadeParticlesFlockFiller {
-		.gravity     = -250,
-		.angle       = 7.5f,
+	ConeFlockFiller m_blastSmokeParticlesFlockFiller {
+		.gravity     = -300,
+		.angle       = 15,
 		.bounceCount = 0,
-		.minSpeed    = 75,
-		.maxSpeed    = 100,
-		.minTimeout  = 175,
-		.maxTimeout  = 225
+		.minSpeed    = 125,
+		.maxSpeed    = 150,
+		.minTimeout  = 200,
+		.maxTimeout  = 250
 	};
 
-	ConeFlockFiller m_blastParticlesFlockFiller {
-		.gravity     = -450,
-		.angle       = 60,
+	ConeFlockFiller m_blastIonsParticlesFlockFiller {
+		.gravity     = -300,
+		.angle       = 15,
 		.bounceCount = 0,
 		.minSpeed    = 150,
 		.maxSpeed    = 200,
 		.minTimeout  = 250,
 		.maxTimeout  = 300
-	};
-
-	ConeFlockFiller m_plasmaParticlesFlockFiller {
-		.gravity     = 0,
-		.angle       = 15,
-		.bounceCount = 0,
-		.minSpeed    = 100,
-		.maxSpeed    = 150,
-		.minTimeout  = 75,
-		.maxTimeout  = 125
 	};
 
 	ConeFlockFiller m_electroParticlesFlockFiller {
