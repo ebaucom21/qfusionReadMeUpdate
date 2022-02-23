@@ -34,6 +34,7 @@ struct IcosphereData {
 };
 
 class BasicHullsHolder {
+	struct Entry { unsigned firstIndex, numIndices, numVertices, firstNeighboursElement; };
 public:
 	static constexpr unsigned kMaxSubdivLevel = 4;
 
@@ -59,11 +60,12 @@ public:
 			m_faces.emplace_back( Face { { f[0], f[1], f[2] } } );
 		}
 
-		m_icosphereEntries.emplace_back( Entry { 0, 3 * (unsigned)m_faces.size(), (unsigned)m_vertices.size() } );
+		wsw::StaticVector<Entry, kMaxSubdivLevel + 1> icosphereEntries;
+		icosphereEntries.emplace_back( Entry { 0, 3 * (unsigned)m_faces.size(), (unsigned)m_vertices.size() } );
 
 		MidpointMap midpointCache;
 		unsigned oldFacesSize = 0, facesSize = m_faces.size();
-		while( !m_icosphereEntries.full() ) {
+		while( !icosphereEntries.full() ) {
 			for( unsigned i = oldFacesSize; i < facesSize; ++i ) {
 				const Face &face = m_faces[i];
 				const uint16_t v1 = face.data[0], v2 = face.data[1], v3 = face.data[2];
@@ -80,7 +82,7 @@ public:
 			facesSize = m_faces.size();
 			const unsigned firstIndex = 3 * oldFacesSize;
 			const unsigned numIndices = 3 * ( facesSize - oldFacesSize );
-			m_icosphereEntries.emplace_back( Entry { firstIndex, numIndices, (unsigned)m_vertices.size() } );
+			icosphereEntries.emplace_back( Entry { firstIndex, numIndices, (unsigned)m_vertices.size() } );
 		}
 
 		// TODO: Use fixed vectors
@@ -88,16 +90,69 @@ public:
 		m_faces.shrink_to_fit();
 
 		// TODO can we do that during faces construction.
-		buildNeighbours();
+		buildNeighbours( icosphereEntries );
+
+		// Build data of the public interface
+		for( unsigned level = 0; level < kMaxSubdivLevel + 1; ++level ) {
+			using OpaqueNeighbours     = uint16_t[5];
+			const auto *vertexData     = (const vec4_t *)m_vertices.data();
+			const auto *indexData      = (const uint16_t *)m_faces.data();
+			const auto *neighboursData = (const OpaqueNeighbours *)m_neighbours.data();
+			const Entry &entry         = icosphereEntries[level];
+			std::span<const vec4_t> verticesSpan { vertexData, entry.numVertices };
+			std::span<const uint16_t> indicesSpan { indexData + entry.firstIndex, entry.numIndices };
+			std::span<const uint16_t[5]> neighboursSpan { neighboursData + entry.firstNeighboursElement, entry.numVertices };
+			m_icospheresForLevels.emplace_back( IcosphereData { verticesSpan, indicesSpan, neighboursSpan } );
+		}
 	}
 
-	void buildNeighbours() {
+	[[nodiscard]]
+	auto getIcosphereForLevel( unsigned level ) -> IcosphereData {
+		return m_icospheresForLevels[level];
+	}
+
+	[[nodiscard]]
+	auto getAllIcospheresForLevels() -> std::span<const IcosphereData, kMaxSubdivLevel + 1> {
+		return std::span<const IcosphereData, kMaxSubdivLevel + 1> { m_icospheresForLevels.data(), kMaxSubdivLevel + 1 };
+	}
+private:
+	struct alignas( 4 ) Vertex { float data[4]; };
+	static_assert( sizeof( Vertex ) == sizeof( vec4_t ) );
+	struct alignas( 2 ) Face { uint16_t data[3]; };
+	static_assert( sizeof( Face ) == sizeof( uint16_t[3] ) );
+	struct alignas( 2 ) Neighbours { uint16_t data[5]; };
+	static_assert( sizeof( Neighbours ) == sizeof( uint16_t[5] ) );
+
+	using MidpointMap = wsw::TreeMap<unsigned, uint16_t>;
+
+	[[nodiscard]]
+	auto getMidPoint( uint16_t i1, uint16_t i2, MidpointMap *midpointCache ) -> uint16_t {
+		const unsigned smallest = ( i1 < i2 ) ? i1 : i2;
+		const unsigned largest = ( i1 < i2 ) ? i2 : i1;
+		const unsigned key = ( smallest << 16 ) | largest;
+		if( const auto it = midpointCache->find( key ); it != midpointCache->end() ) {
+			return it->second;
+		}
+
+		Vertex midpoint {};
+		const float *v1 = m_vertices[i1].data, *v2 = m_vertices[i2].data;
+		VectorAvg( v1, v2, midpoint.data );
+		VectorNormalize( midpoint.data );
+		midpoint.data[3] = 1.0f;
+
+		const auto index = (uint16_t)m_vertices.size();
+		m_vertices.push_back( midpoint );
+		midpointCache->insert( std::make_pair( key, index ) );
+		return index;
+	}
+
+	void buildNeighbours( wsw::StaticVector<Entry, kMaxSubdivLevel + 1> &icosphereEntries ) {
 		constexpr uint8_t kNumVertexNeighbours = 5;
 		alignas( 16 )uint8_t knownNeighboursCount[3072];
 
 		// Note that neighbours of the same vertex differ for different subdivision level
 		// so we have to recompute all neighbours for each entry (each subdivision level).
-		for( Entry &entry: m_icosphereEntries ) {
+		for( Entry &entry: icosphereEntries ) {
 			entry.firstNeighboursElement = m_neighbours.size();
 			m_neighbours.resize( m_neighbours.size() + entry.numVertices );
 
@@ -155,57 +210,11 @@ public:
 		m_neighbours.shrink_to_fit();
 	}
 
-	[[nodiscard]]
-	auto getIcosphereForLevel( unsigned level ) -> IcosphereData {
-		assert( level < m_icosphereEntries.size() );
-		// Return primitive/opaque data
-		using OpaqueNeighbours     = uint16_t[5];
-		const auto *vertexData     = (const vec4_t *)m_vertices.data();
-		const auto *indexData      = (const uint16_t *)m_faces.data();
-		const auto *neighboursData = (const OpaqueNeighbours *)m_neighbours.data();
-		const Entry &entry         = m_icosphereEntries[level];
-		std::span<const vec4_t> verticesSpan { vertexData, entry.numVertices };
-		std::span<const uint16_t> indicesSpan { indexData + entry.firstIndex, entry.numIndices };
-		return { verticesSpan, indicesSpan, { neighboursData + entry.firstNeighboursElement, entry.numVertices } };
-	}
-private:
-	struct alignas( 4 ) Vertex { float data[4]; };
-	static_assert( sizeof( Vertex ) == sizeof( vec4_t ) );
-	struct alignas( 2 ) Face { uint16_t data[3]; };
-	static_assert( sizeof( Face ) == sizeof( uint16_t[3] ) );
-	struct alignas( 2 ) Neighbours { uint16_t data[5]; };
-	static_assert( sizeof( Neighbours ) == sizeof( uint16_t[5] ) );
-
-	using MidpointMap = wsw::TreeMap<unsigned, uint16_t>;
-
-	[[nodiscard]]
-	auto getMidPoint( uint16_t i1, uint16_t i2, MidpointMap *midpointCache ) -> uint16_t {
-		const unsigned smallest = ( i1 < i2 ) ? i1 : i2;
-		const unsigned largest = ( i1 < i2 ) ? i2 : i1;
-		const unsigned key = ( smallest << 16 ) | largest;
-		if( const auto it = midpointCache->find( key ); it != midpointCache->end() ) {
-			return it->second;
-		}
-
-		Vertex midpoint {};
-		const float *v1 = m_vertices[i1].data, *v2 = m_vertices[i2].data;
-		VectorAvg( v1, v2, midpoint.data );
-		VectorNormalize( midpoint.data );
-		midpoint.data[3] = 1.0f;
-
-		const auto index = (uint16_t)m_vertices.size();
-		m_vertices.push_back( midpoint );
-		midpointCache->insert( std::make_pair( key, index ) );
-		return index;
-	}
-
 	wsw::Vector<Vertex> m_vertices;
 	wsw::Vector<Face> m_faces;
 	wsw::Vector<Neighbours> m_neighbours;
 
-	struct Entry { unsigned firstIndex, numIndices, numVertices, firstNeighboursElement; };
-	// zero for the icosahedron, [1..kMaxSubdivLevel] for subdivisions
-	wsw::StaticVector<Entry, kMaxSubdivLevel + 1> m_icosphereEntries;
+	wsw::StaticVector<IcosphereData, kMaxSubdivLevel + 1> m_icospheresForLevels;
 };
 
 static BasicHullsHolder basicHullsHolder;
@@ -381,6 +390,10 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 
 				hull->expansionStartAt = m_lastTime + 500;
 
+				hull->lodCurrLevelTangentRatio = 0.15f;
+				hull->tesselateClosestLod      = true;
+				hull->leprNextLevelColors      = true;
+
 				setupHullVertices( hull, origin, smokeColor, 100.0f, 10.0f );
 			}
 
@@ -396,6 +409,10 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 				hull->regularColorProps.dropChance         = 0.003f;
 
 				hull->expansionStartAt = m_lastTime + 500;
+
+				hull->lodCurrLevelTangentRatio = 0.15f;
+				hull->tesselateClosestLod      = true;
+				hull->leprNextLevelColors      = true;
 
 				setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
 			}
@@ -743,9 +760,6 @@ void TransientEffectsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, 
 	hull->maxZLastFrame = originZ + 1.0f;
 
 	VectorCopy( origin, hull->origin );
-	hull->meshIndices     = indicesSpan.data();
-	hull->numMeshIndices  = indicesSpan.size();
-	hull->numMeshVertices = verticesSpan.size();
 }
 
 void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
@@ -856,8 +870,6 @@ void TransientEffectsSystem::setupHullVertices( BaseConcentricSimulatedHull *hul
 	VectorCopy( origin, hull->origin );
 	hull->vertexMoveDirections = vertices;
 	hull->meshIndices          = indicesSpan.data();
-	hull->numMeshVertices      = verticesSpan.size();
-	hull->numMeshIndices       = indicesSpan.size();
 }
 
 void TransientEffectsSystem::unlinkAndFreeEntityEffect( EntityEffect *effect ) {
@@ -1018,6 +1030,8 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
 		assert( std::size( hull->meshSubmissionBuffer ) == 1 );
+		assert( hull->subdivLevel );
+
 		ExternalMesh *__restrict mesh = &hull->meshSubmissionBuffer[0];
 
 		Vector4Copy( hull->mins, mesh->mins );
@@ -1026,24 +1040,15 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 		mesh->positions = hull->vertexPositions[hull->positionsFrame];
 		mesh->colors    = hull->vertexColors;
 		mesh->material  = nullptr;
-		mesh->numLods   = 1;
-		mesh->lods[0]   = {
-			.indices                     = hull->meshIndices,
-			.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
-			.numIndices                  = hull->numMeshIndices,
-			.numVertices                 = hull->numMeshVertices,
-		};
+		mesh->numLods   = setupLods( mesh->lods, LodSetupParams {
+			.currSubdivLevel       = hull->subdivLevel,
+			.minSubdivLevel        = hull->subdivLevel - 1u,
+			.currLevelTangentRatio = hull->lodCurrLevelTangentRatio,
+			.tesselateClosestLod   = hull->tesselateClosestLod,
+			.lerpNextLevelColors   = hull->leprNextLevelColors
+		});
 
 		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->meshSubmissionBuffer, 1 } );
-	}
-
-	static_assert( ExternalMesh::kMaxLods == BasicHullsHolder::kMaxSubdivLevel + 1 );
-	IcosphereData icospheresForLevels[BasicHullsHolder::kMaxSubdivLevel + 1];
-	// TODO: Should be provided by the hulls holder itself
-	if( !activeConcentricHulls.empty() ) {
-		for( unsigned level = 0; level <= BasicHullsHolder::kMaxSubdivLevel; ++level ) {
-			icospheresForLevels[level] = ::basicHullsHolder.getIcosphereForLevel( level );
-		}
 	}
 
 	for( const BaseConcentricSimulatedHull *__restrict hull: activeConcentricHulls ) {
@@ -1053,30 +1058,13 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 
 		// TODO: Use different lods for different layers?
 		ExternalMesh::LodProps lods[ExternalMesh::kMaxLods];
-		unsigned numLods = 0;
-
-		if( hull->subdivLevel < BasicHullsHolder::kMaxSubdivLevel ) {
-			const IcosphereData &dynTessData = icospheresForLevels[hull->subdivLevel + 1];
-			lods[numLods++] = {
-				.indices                     = dynTessData.indices.data(),
-				.neighbours                  = dynTessData.vertexNeighbours.data(),
-				.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
-				.numIndices                  = (uint16_t)dynTessData.indices.size(),
-				.numVertices                 = (uint16_t)dynTessData.vertices.size(),
-			};
-		}
-
-		float lodTangentsRatio = 0.15f;
-		for( int level = (signed)hull->subdivLevel; level >= 0; --level ) {
-			const IcosphereData &levelData = icospheresForLevels[level];
-			lods[numLods++] = {
-				.indices                     = levelData.indices.data(),
-				.maxRatioOfViewTangentsToUse = lodTangentsRatio,
-				.numIndices                  = (uint16_t)levelData.indices.size(),
-				.numVertices                 = (uint16_t)levelData.vertices.size(),
-			};
-			lodTangentsRatio *= 0.5f;
-		}
+		const unsigned numLods = setupLods( lods, LodSetupParams {
+			.currSubdivLevel       = hull->subdivLevel,
+			.minSubdivLevel        = 0u,
+			.currLevelTangentRatio = 0.15f,
+			.tesselateClosestLod   = true,
+			.lerpNextLevelColors   = false
+		});
 
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {
 			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
@@ -1097,6 +1085,39 @@ void TransientEffectsSystem::simulateHullsAndSubmit( int64_t currTime, float tim
 	}
 }
 
+auto TransientEffectsSystem::setupLods( ExternalMesh::LodProps *lods, LodSetupParams &&params ) -> unsigned {
+	const auto &icospheresForLevels = ::basicHullsHolder.getAllIcospheresForLevels();
+	assert( params.currSubdivLevel < icospheresForLevels.size() );
+	assert( params.currSubdivLevel >= params.minSubdivLevel );
+
+	unsigned numLods = 0;
+	if( params.tesselateClosestLod && params.currSubdivLevel < BasicHullsHolder::kMaxSubdivLevel ) {
+		const IcosphereData &dynTessData = icospheresForLevels[params.currSubdivLevel + 1];
+		lods[numLods++] = {
+			.indices                     = dynTessData.indices.data(),
+			.neighbours                  = dynTessData.vertexNeighbours.data(),
+			.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
+			.numIndices                  = (uint16_t)dynTessData.indices.size(),
+			.numVertices                 = (uint16_t)dynTessData.vertices.size(),
+			.lerpNextLevelColors         = params.lerpNextLevelColors
+		};
+	}
+
+	float lodTangentsRatio = params.currLevelTangentRatio;
+	for( int level = (signed)params.currSubdivLevel; level >= (signed)params.minSubdivLevel; --level ) {
+		const IcosphereData &levelData = icospheresForLevels[level];
+		lods[numLods++] = {
+			.indices                     = levelData.indices.data(),
+			.maxRatioOfViewTangentsToUse = lodTangentsRatio,
+			.numIndices                  = (uint16_t)levelData.indices.size(),
+			.numVertices                 = (uint16_t)levelData.vertices.size(),
+		};
+		lodTangentsRatio *= 0.5f;
+	}
+
+	return numLods;
+}
+
 void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds,
 																 wsw::RandomGenerator *__restrict rng ) {
 	const vec4_t *const __restrict oldPositions = this->vertexPositions[positionsFrame];
@@ -1107,7 +1128,7 @@ void TransientEffectsSystem::BaseRegularSimulatedHull::simulate( int64_t currTim
 	vec3_t *const __restrict forceVelocities = this->vertexForceVelocities;
 	vec3_t *const __restrict burstVelocities = this->vertexBurstVelocities;
 
-	const unsigned numVertices = this->numMeshVertices;
+	const unsigned numVertices = ::basicHullsHolder.getIcosphereForLevel( subdivLevel ).vertices.size();
 	auto *const __restrict combinedVelocities = (vec3_t *)alloca( sizeof( vec3_t ) * numVertices );
 
 	BoundsBuilder boundsBuilder;
@@ -1323,7 +1344,7 @@ void TransientEffectsSystem::BaseConcentricSimulatedHull::simulate( int64_t curr
 	BoundsBuilder hullBoundsBuilder;
 
 	const float *__restrict growthOrigin = this->origin;
-	const unsigned numVertices = this->numMeshVertices;
+	const unsigned numVertices = basicHullsHolder.getIcosphereForLevel( subdivLevel ).vertices.size();
 
 	const float speedMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
 

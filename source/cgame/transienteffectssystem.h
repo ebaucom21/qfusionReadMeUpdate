@@ -97,7 +97,6 @@ private:
 
 	struct BaseRegularSimulatedHull {
 		CMShapeList *shapeList { nullptr };
-		const uint16_t *meshIndices { nullptr };
 		int64_t spawnTime { 0 };
 		int64_t lastColorChangeTime { 0 };
 
@@ -119,9 +118,6 @@ private:
 
 		byte_vec4_t *vertexColors;
 
-		uint16_t numMeshIndices { 0 };
-		uint16_t numMeshVertices { 0 };
-
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
 
@@ -135,6 +131,10 @@ private:
 
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];
+
+		float lodCurrLevelTangentRatio { 0.25f };
+		bool tesselateClosestLod { false };
+		bool leprNextLevelColors { false };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
@@ -193,9 +193,6 @@ private:
 
 		unsigned numLayers { 0 };
 		unsigned lifetime { 0 };
-
-		uint16_t numMeshIndices { 0 };
-		uint16_t numMeshVertices { 0 };
 
 		uint8_t subdivLevel { 0 };
 
@@ -289,6 +286,17 @@ private:
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
 							float scale, std::span<const HullLayerParams> paramsOfLayers );
+
+	struct LodSetupParams {
+		unsigned currSubdivLevel;
+		unsigned minSubdivLevel;
+		float currLevelTangentRatio;
+		bool tesselateClosestLod;
+		bool lerpNextLevelColors;
+	};
+
+	[[nodiscard]]
+	static auto setupLods( ExternalMesh::LodProps *lods, LodSetupParams &&params ) -> unsigned;
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );

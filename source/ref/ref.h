@@ -241,6 +241,7 @@ struct ExternalMesh {
 		float maxRatioOfViewTangentsToUse;
 		uint16_t numIndices;
 		uint16_t numVertices;
+		bool lerpNextLevelColors { false };
 	};
 	static constexpr unsigned kMaxLods = 5;
 	LodProps lods[kMaxLods];

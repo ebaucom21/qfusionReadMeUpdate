@@ -1021,11 +1021,15 @@ alignas( 16 ) static vec4_t tessPositions[kTessBufferSize];
 alignas( 16 ) static byte_vec4_t tessByteColors[kTessBufferSize];
 
 // Assuming that the simulation preserves vertex directions, adds interpolated vertices using neighbour information.
+template <bool SmoothColors>
 static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimulatedVertices,
 									unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] ) {
 	assert( std::size( tmpTessPositions ) >= numNextLevelVertices );
 	assert( numNextLevelVertices > numSimulatedVertices );
 	const unsigned numAddedVertices = numNextLevelVertices - numSimulatedVertices;
+
+	std::memset( tessPositions, 0, sizeof( vec4_t ) * numNextLevelVertices );
+	std::memset( tessByteColors, 0, sizeof( byte_vec4_t ) * numNextLevelVertices );
 
 	// Zero neighbour accum buffers for the added part
 	std::memset( tmpTessPositions + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
@@ -1037,8 +1041,14 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		const auto byteColor  = mesh->colors[vertexIndex];
 		const float *position = mesh->positions[vertexIndex];
 
-		// Copy the color as-is to the resulting color buffer
-		Vector4Copy( byteColor, tessByteColors[vertexIndex] );
+		if constexpr( SmoothColors ) {
+			// Write the color to the accum buffer for smoothing it later
+			Vector4Copy( byteColor, tmpTessFloatColors[vertexIndex] );
+		} else {
+			// Write the color directly to the resulting color buffer
+			Vector4Copy( byteColor, tessByteColors[vertexIndex] );
+		}
+
 		// Copy for the further smooth pass
 		Vector4Copy( position, tmpTessPositions[vertexIndex] );
 
@@ -1058,28 +1068,56 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		if( !tessNeighboursCount[vertexIndex] ) {
 			continue;
 		}
+
 		const float scale = Q_Rcp( (float)tessNeighboursCount[vertexIndex] );
 		VectorScale( tmpTessPositions[vertexIndex], scale, tmpTessPositions[vertexIndex] );
 		tmpTessPositions[vertexIndex][3] = 1.0f;
-		// Write the vertex color to the resulting color buffer
-		Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
+
+		if constexpr( SmoothColors ) {
+			// Just scale by the averaging multiplier
+			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tmpTessFloatColors[vertexIndex] );
+		} else {
+			// Write the vertex color directly to the resulting color buffer
+			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
+		}
 	}
 
 	// Each icosphere vertex has 5 neighbours (we don't make a distinction between old and added ones for this pass)
 	constexpr float icoAvgScale = 1.0f / 5.0f;
 	constexpr float smoothFrac  = 0.5f;
 
-	// Apply the smooth pass for positions
-	for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
-		alignas( 16 ) vec4_t sumOfNeighbourPositions { 0, 0, 0, 0 };
+	// Apply the smooth pass
+	if constexpr( SmoothColors ) {
+		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
+			alignas( 16 ) vec4_t sumOfNeighbourColors { 0.0f, 0.0f, 0.0f, 0.0f };
 
-		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-			Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+				Vector4Add( tmpTessFloatColors[neighbourIndex], sumOfNeighbourColors, sumOfNeighbourColors );
+			}
+
+			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
+
+			// Write the average color
+			Vector4Scale( sumOfNeighbourColors, icoAvgScale, tessByteColors[vertexIndex] );
+
+			// Write combined positions
+			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
 		}
+	} else {
+		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
 
-		Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
-		// Write combined results
-		Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
+			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+			}
+
+			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
+
+			// Write combined positions
+			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
+		}
 	}
 }
 
@@ -1130,7 +1168,11 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		assert( nonTessLod.numIndices < chosenLod->numIndices );
 		const unsigned numSimulatedVertices = nonTessLod.numVertices;
 		const unsigned numNextLevelVertices = chosenLod->numVertices;
-		buildNextTessLevelData( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		if( chosenLod->lerpNextLevelColors ) {
+			buildNextTessLevelData<true>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		} else {
+			buildNextTessLevelData<false>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		}
 		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
 		mesh.numElems       = chosenLod->numIndices;
 		mesh.numVerts       = chosenLod->numVertices;
