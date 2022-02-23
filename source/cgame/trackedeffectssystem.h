@@ -43,7 +43,6 @@ public:
 		touchRocketOrGrenadeTrail( entNum, origin, &m_grenadeParticlesFlockFiller, currTime );
 	}
 
-	void touchPlasmaTrail( int entNum, const float *origin, int64_t currTime );
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime );
 	void touchElectroTrail( int entNum, const float *origin, int64_t currTime );
 

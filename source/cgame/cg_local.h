@@ -90,9 +90,6 @@ typedef struct {
 
 	gsitem_t    *item;
 
-	//effects
-	vec3_t trailOrigin;         // for particle trails
-
 	// local effects from events timers
 	int64_t localEffects[MAX_LOCALEFFECTS];
 

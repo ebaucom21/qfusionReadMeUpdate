@@ -170,7 +170,6 @@ static void CG_NewPacketEntityState( entity_state_t *state ) {
 		cent->linearProjectileCanDraw = CG_UpdateLinearProjectilePosition( cent );
 
 		VectorCopy( cent->current.linearMovementVelocity, cent->velocity );
-		VectorCopy( cent->current.origin, cent->trailOrigin );
 	} else {
 		// if it moved too much force the teleported bit
 		if(  abs( (int)( cent->current.origin[0] - state->origin[0] ) ) > 512
@@ -216,7 +215,6 @@ static void CG_NewPacketEntityState( entity_state_t *state ) {
 		}
 
 		cent->current = *state;
-		VectorCopy( state->origin, cent->trailOrigin );
 		VectorCopy( cent->velocity, cent->prevVelocity );
 
 		//VectorCopy( cent->extrapolatedOrigin, cent->prevExtrapolatedOrigin );
@@ -1583,19 +1581,19 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 * Add the entities to the rendering list
 */
 void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
-	entity_state_t *state;
 	vec3_t autorotate;
-	int pnum;
-	centity_t *cent;
-	bool canLight;
-
 	// bonus items rotate at a fixed rate
 	VectorSet( autorotate, 0, ( cg.time % 3600 ) * 0.1 * ( cg.view.flipped ? -1.0f : 1.0f ), 0 );
 	AnglesToAxis( autorotate, cg.autorotateAxis );
 
-	for( pnum = 0; pnum < cg.frame.numEntities; pnum++ ) {
-		state = &cg.frame.parsedEntities[pnum & ( MAX_PARSE_ENTITIES - 1 )];
-		cent = &cg_entities[state->number];
+	// TODO: Sort all other entities by type as well
+	auto *const plasmaStateIndices = (uint16_t *)alloca( sizeof( uint16_t ) * cg.frame.numEntities );
+	unsigned numPlasmaEnts = 0;
+
+	for( int pnum = 0; pnum < cg.frame.numEntities; pnum++ ) {
+		const int stateIndex  = pnum & ( MAX_PARSE_ENTITIES - 1 );
+		entity_state_t *state = &cg.frame.parsedEntities[stateIndex];
+		centity_t *cent       = &cg_entities[state->number];
 
 		if( cent->current.linearMovement ) {
 			if( !cent->linearProjectileCanDraw ) {
@@ -1603,7 +1601,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 			}
 		}
 
-		canLight = !state->linearMovement;
+		bool canLight = !state->linearMovement;
 
 		switch( cent->type ) {
 			case ET_GENERIC:
@@ -1655,10 +1653,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
 			case ET_PLASMA:
-				CG_AddGenericEnt( cent, drawSceneRequest );
-				cg.effectsSystem.touchPlasmaTrail( cent->current.number, cent->ent.origin, cg.time );
-				CG_EntityLoopSound( state, ATTN_STATIC );
-				drawSceneRequest->addLight( cent->ent.origin, 0.0f, 72.0f, 0.0f, 1.0f, 0.5f );
+				plasmaStateIndices[numPlasmaEnts++] = (uint16_t)stateIndex;
 				break;
 			case ET_WAVE:
 				CG_AddGenericEnt( cent, drawSceneRequest );
@@ -1775,8 +1770,33 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 								COLOR_G( state->light ) * ( 1.0 / 255.0 ),
 								COLOR_B( state->light ) * ( 1.0 / 255.0 ) );
 		}
+	}
 
-		VectorCopy( cent->ent.origin, cent->trailOrigin );
+	for( unsigned i = 0; i < numPlasmaEnts; ++i ) {
+		entity_state_t *state = &cg.frame.parsedEntities[plasmaStateIndices[i]];
+		centity_t *cent       = &cg_entities[state->number];
+		CG_AddGenericEnt( cent, drawSceneRequest );
+		CG_EntityLoopSound( state, ATTN_STATIC );
+
+		constexpr float desiredProgramLightRadius = 128.0f;
+		float programLightRadius = 0.0f;
+
+		// TODO: This should be handled at rendering layer during culling/light prioritization
+		const float squareDistance = DistanceSquared( cg.view.refdef.vieworg, state->origin );
+		// TODO: Using fov tangent ratio is a more correct approach (but nobody actually notices in zooomed in state)
+		if( squareDistance < 384.0f * 384.0f ) {
+			programLightRadius = desiredProgramLightRadius;
+		} else if( squareDistance < 768.0f * 768.0f ) {
+			if( ( ( cg.frameCount % 2 ) == ( state->number % 2 ) ) ) {
+				programLightRadius = desiredProgramLightRadius;
+			}
+		} else {
+			if( ( cg.frameCount % 4 ) == ( state->number % 4 ) ) {
+				programLightRadius = desiredProgramLightRadius;
+			}
+		}
+
+		drawSceneRequest->addLight( cent->ent.origin, programLightRadius, 64.0f, 0.0f, 1.0f, 0.5f );
 	}
 }
 

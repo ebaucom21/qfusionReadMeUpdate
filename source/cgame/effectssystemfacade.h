@@ -72,9 +72,6 @@ public:
 	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
 		m_trackedEffectsSystem.touchGrenadeTrail( entNum, origin, currTime );
 	}
-	void touchPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
-		m_trackedEffectsSystem.touchPlasmaTrail( entNum, origin, currTime );
-	}
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 		m_trackedEffectsSystem.touchBlastTrail( entNum, origin, currTime );
 	}

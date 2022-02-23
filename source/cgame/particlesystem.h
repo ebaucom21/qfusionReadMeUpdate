@@ -68,7 +68,7 @@ struct alignas( 16 ) ParticleFlock {
 class ParticleSystem {
 public:
 	static constexpr unsigned kMaxClippedTrailFlockSize = 64;
-	static constexpr unsigned kMaxNonClippedTrailFlockSize = 32;
+	static constexpr unsigned kMaxNonClippedTrailFlockSize = 64;
 
 	static constexpr unsigned kClippedTrailFlocksBin = 3;
 	static constexpr unsigned kNonClippedTrailFlocksBin = 4;
@@ -94,7 +94,7 @@ private:
 	static constexpr unsigned kMaxLargeFlocks  = 20;
 
 	static constexpr unsigned kMaxClippedTrailFlocks    = 32;
-	static constexpr unsigned kMaxNonClippedTrailFlocks = 64;
+	static constexpr unsigned kMaxNonClippedTrailFlocks = 16;
 
 	static constexpr unsigned kMaxSmallFlockSize  = 8;
 	static constexpr unsigned kMaxMediumFlockSize = 48;

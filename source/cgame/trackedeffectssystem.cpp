@@ -202,32 +202,6 @@ void TrackedEffectsSystem::touchRocketOrGrenadeTrail( int entNum, const float *o
 	}
 }
 
-static const vec4_t kPlasmaTrailInitialColor { 0.2f, 1.0f, 0.5f, 0.9f };
-static const vec4_t kPlasmaTrailFadedInColor { 0.7f, 1.0f, 0.8f, 0.1f };
-static const vec4_t kPlasmaTrailFadedOutColor { 0.7f, 1.0f, 0.8f, 0.00f };
-
-void TrackedEffectsSystem::touchPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
-	if( cg_projectileTrail->integer ) {
-		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
-		if( !effects->particleTrail ) {
-			effects->particleTrail = allocParticleTrail( entNum, origin, kNonClippedTrailsBin, {
-				.material = cgs.media.shaderBlastParticle,
-				.kind     = Particle::Sprite,
-				.radius   = 5.0f,
-				.initialColor  = kPlasmaTrailInitialColor,
-				.fadedInColor  = kPlasmaTrailFadedInColor,
-				.fadedOutColor = kPlasmaTrailFadedOutColor,
-				.fadeInLifetimeFrac  = 0.15f,
-				.fadeOutLifetimeFrac = 0.80f
-			});
-		}
-		if( ParticleTrail *trail = effects->particleTrail ) {
-			trail->dropDistance = 4.0f;
-			updateParticleTrail( trail, origin, &m_plasmaParticlesFlockFiller, currTime );
-		}
-	}
-}
-
 static const vec4_t kBlastTrailInitialColor { 1.0f, 0.5f, 0.4f, 1.0f };
 static const vec4_t kBlastTrailFadedInColor { 1.0f, 0.8f, 0.4f, 1.0f };
 static const vec4_t kBlastTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
