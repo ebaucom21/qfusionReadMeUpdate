@@ -25,25 +25,22 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 TrackedEffectsSystem::~TrackedEffectsSystem() {
 	// TODO: unlinkAndFree() does some unnecessary extra work that slows the dtor down
-	for( ParticleTrail *trail = m_particleTrailsHead, *nextSmokeTrail = nullptr; trail; trail = nextSmokeTrail ) {
+	for( ParticleTrail *trail = m_attachedTrailsHead, *next = nullptr; trail; trail = next ) { next = trail->next;
 		unlinkAndFree( trail );
 	}
-	for( TeleEffect *effect = m_teleEffectsHead, *nextEffect = nullptr; effect; effect = nextEffect ) {
+	for( ParticleTrail *trail = m_lingeringTrailsHead, *next = nullptr; trail; trail = next ) { next = trail->next;
+		unlinkAndFree( trail );
+	}
+	for( TeleEffect *effect = m_teleEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFree( effect );
 	}
 }
 
 void TrackedEffectsSystem::unlinkAndFree( ParticleTrail *particleTrail ) {
-	assert( particleTrail->entNum > 0 && particleTrail->entNum < MAX_EDICTS );
-
-	wsw::unlink( particleTrail, &m_particleTrailsHead );
-
-	AttachedEntityEffects *effects = &m_attachedEntityEffects[particleTrail->entNum];
-	if( effects->particleTrail == particleTrail ) {
-		effects->particleTrail = nullptr;
+	if( particleTrail->attachmentIndices ) [[unlikely]] {
+		wsw::unlink( particleTrail, &m_attachedTrailsHead );
 	} else {
-		assert( effects->particleTrail2 == particleTrail );
-		effects->particleTrail2 = nullptr;
+		wsw::unlink( particleTrail, &m_lingeringTrailsHead );
 	}
 
 	cg.particleSystem.destroyTrailFlock( particleTrail->particleFlock );
@@ -84,17 +81,18 @@ void TrackedEffectsSystem::spawnPlayerTeleEffect( int clientNum, const float *or
 	effect->model = model;
 }
 
-auto TrackedEffectsSystem::allocParticleTrail( int entNum, const float *origin, unsigned particleSystemBin,
+auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
+											   const float *origin, unsigned particleSystemBin,
 											   Particle::AppearanceRules &&appearanceRules ) -> ParticleTrail * {
 	// Don't try evicting other effects in case of failure
 	// (this could lead to wasting CPU cycles every frame in case when it starts kicking in)
+	// TODO: Try picking lingering trails in case if it turns out to be really needed?
 	if( void *mem = m_particleTrailsAllocator.allocOrNull() ) [[likely]] {
 		auto *__restrict trail = new( mem )ParticleTrail;
 
 		// Don't drop right now, just mark for computing direction next frames
 		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, particleSystemBin );
 
-		trail->entNum = entNum;
 		VectorCopy( origin, trail->lastDropOrigin );
 		if( particleSystemBin == kClippedTrailsBin ) {
 			trail->maxParticlesInFlock = ParticleSystem::kMaxClippedTrailFlockSize;
@@ -102,15 +100,20 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, const float *origin, 
 			trail->maxParticlesInFlock = ParticleSystem::kMaxNonClippedTrailFlockSize;
 		}
 
-		wsw::link( trail, &m_particleTrailsHead );
+		assert( entNum && entNum < MAX_EDICTS );
+		assert( trailIndex == 0 || trailIndex == 1 );
+		assert( !m_attachedEntityEffects[entNum].particleTrails[trailIndex] );
+		trail->attachmentIndices = { (uint16_t)entNum, (uint8_t)trailIndex };
+
+		wsw::link( trail, &m_attachedTrailsHead );
 		return trail;
 	}
 
 	return nullptr;
 }
 
-void TrackedEffectsSystem::updateParticleTrail( ParticleTrail *trail, const float *origin,
-												ConeFlockFiller *filler, int64_t currTime ) {
+void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
+														ConeFlockFiller *filler, int64_t currTime ) {
 	trail->touchedAt = currTime;
 
 	ParticleFlock *__restrict flock = trail->particleFlock;
@@ -163,8 +166,8 @@ static const vec4_t kRocketFireTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( cg_projectileTrail->integer ) {
-		if( !effects->particleTrail ) [[unlikely]] {
-			effects->particleTrail = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[0] ) [[unlikely]] {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderFlareParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 20.0f,
@@ -176,13 +179,13 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.sizeBehaviour = Particle::Expanding
 			});
 		}
-		if( effects->particleTrail ) [[likely]] {
-			updateParticleTrail( effects->particleTrail, origin, &m_rocketParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
+			updateAttachedParticleTrail( trail, origin, &m_rocketParticlesFlockFiller, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
-		if( !effects->particleTrail2 ) [[unlikely]] {
-			effects->particleTrail2 = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[1] ) [[unlikely]] {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderBlastParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 8.0f,
@@ -194,8 +197,8 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
-		if( effects->particleTrail2 ) [[likely]] {
-			updateParticleTrail( effects->particleTrail2, origin, &m_rocketFireParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
+			updateAttachedParticleTrail( trail, origin, &m_rocketFireParticlesFlockFiller, currTime );
 		}
 	}
 }
@@ -211,8 +214,8 @@ static const vec4_t kGrenadeSmokeTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( cg_projectileTrail->integer ) {
-		if( !effects->particleTrail ) {
-			effects->particleTrail = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[0] ) {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderFlareParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 16.0f,
@@ -224,14 +227,14 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
-		if( effects->particleTrail ) {
-			effects->particleTrail->dropDistance = 8.0f;
-			updateParticleTrail( effects->particleTrail, origin, &m_grenadeSmokeParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[0] ) {
+			trail->dropDistance = 8.0f;
+			updateAttachedParticleTrail( trail, origin, &m_grenadeSmokeParticlesFlockFiller, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
-		if( !effects->particleTrail2 ) [[unlikely]] {
-			effects->particleTrail2 = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[1] ) [[unlikely]] {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderBlastParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 8.0f,
@@ -243,8 +246,8 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
-		if( effects->particleTrail2 ) {
-			updateParticleTrail( effects->particleTrail2, origin, &m_grenadeFuseParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[1] ) {
+			updateAttachedParticleTrail( trail, origin, &m_grenadeFuseParticlesFlockFiller, currTime );
 		}
 	}
 }
@@ -260,8 +263,8 @@ static const vec4_t kBlastIonsTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 1.0f };
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( cg_projectileTrail->integer ) {
-		if( !effects->particleTrail ) [[unlikely]] {
-			effects->particleTrail = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[0] ) [[unlikely]] {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderFlareParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 10.0f,
@@ -273,13 +276,13 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.sizeBehaviour = Particle::Expanding
 			});
 		}
-		if( effects->particleTrail ) [[likely]] {
-			updateParticleTrail( effects->particleTrail, origin, &m_blastSmokeParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
+			updateAttachedParticleTrail( trail, origin, &m_blastSmokeParticlesFlockFiller, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
-		if( !effects->particleTrail2 ) [[unlikely]] {
-			effects->particleTrail2 = allocParticleTrail( entNum, origin, kClippedTrailsBin, {
+		if( !effects->particleTrails[1] ) [[unlikely]] {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
 				.material = cgs.media.shaderBlastParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 5.0f,
@@ -289,8 +292,8 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
-		if( effects->particleTrail2 ) [[likely]] {
-			updateParticleTrail( effects->particleTrail2, origin, &m_blastIonsParticlesFlockFiller, currTime );
+		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
+			updateAttachedParticleTrail( trail, origin, &m_blastIonsParticlesFlockFiller, currTime );
 		}
 	}
 }
@@ -302,8 +305,8 @@ static const vec4_t kElectroTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
 	if( cg_projectileTrail->integer ) {
 		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
-		if( !effects->particleTrail ) {
-			effects->particleTrail = allocParticleTrail( entNum, origin, kNonClippedTrailsBin, {
+		if( !effects->particleTrails[0] ) {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
 				.material = cgs.media.shaderFlareParticle,
 				.kind     = Particle::Sprite,
 				.radius   = 6.0f,
@@ -312,11 +315,23 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, i
 				.fadedOutColor = kElectroTrailFadedOutColor
 			});
 		}
-		if( ParticleTrail *trail = effects->particleTrail ) {
+		if( ParticleTrail *trail = effects->particleTrails[0] ) {
 			trail->dropDistance = 8.0f;
-			updateParticleTrail( trail, origin, &m_electroParticlesFlockFiller, currTime );
+			updateAttachedParticleTrail( trail, origin, &m_electroParticlesFlockFiller, currTime );
 		}
 	}
+}
+
+void TrackedEffectsSystem::makeParticleTrailLingering( ParticleTrail *particleTrail ) {
+	wsw::unlink( particleTrail, &m_attachedTrailsHead );
+	wsw::link( particleTrail, &m_lingeringTrailsHead );
+
+	const auto [entNum, trailIndex] = *particleTrail->attachmentIndices;
+	particleTrail->attachmentIndices = std::nullopt;
+
+	AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
+	assert( entityEffects->particleTrails[trailIndex] == particleTrail );
+	entityEffects->particleTrails[trailIndex] = nullptr;
 }
 
 void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
@@ -344,13 +359,13 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 
 	assert( entNum >= 0 && entNum < MAX_EDICTS );
 	AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
-	if( effects->particleTrail ) {
-		unlinkAndFree( effects->particleTrail );
-		assert( !effects->particleTrail );
+	if( effects->particleTrails[0] ) {
+		makeParticleTrailLingering( effects->particleTrails[0] );
+		assert( !effects->particleTrails[0] );
 	}
-	if( effects->particleTrail2 ) {
-		unlinkAndFree( effects->particleTrail2 );
-		assert( !effects->particleTrail2 );
+	if( effects->particleTrails[1] ) {
+		makeParticleTrailLingering( effects->particleTrails[1] );
+		assert( !effects->particleTrails[1] );
 	}
 }
 
@@ -378,9 +393,17 @@ void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const 
 
 void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Collect orphans
-	for( ParticleTrail *trail = m_particleTrailsHead, *nextSmokeTrail = nullptr; trail; trail = nextSmokeTrail ) {
-		nextSmokeTrail = trail->next;
+	for( ParticleTrail *trail = m_attachedTrailsHead, *next = nullptr; trail; trail = next ) { next = trail->next;
 		if( trail->touchedAt != currTime ) [[unlikely]] {
+			makeParticleTrailLingering( trail );
+		}
+	}
+
+	for( ParticleTrail *trail = m_lingeringTrailsHead, *next = nullptr; trail; trail = next ) { next = trail->next;
+		if( trail->particleFlock->numParticlesLeft ) {
+			// Prevent an automatic disposal of the flock
+			trail->particleFlock->timeoutAt = std::numeric_limits<int64_t>::max();
+		} else {
 			unlinkAndFree( trail );
 		}
 	}

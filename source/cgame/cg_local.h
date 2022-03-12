@@ -415,9 +415,9 @@ typedef struct cg_state_s {
 	CrosshairState crosshairState { CrosshairState::Weak, 350 };
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 
+	ParticleSystem particleSystem;
 	EffectsSystemFacade effectsSystem;
 	PolyEffectsSystem polyEffectsSystem;
-	ParticleSystem particleSystem;
 } cg_state_t;
 
 extern cg_static_t cgs;

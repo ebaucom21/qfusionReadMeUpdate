@@ -66,7 +66,13 @@ private:
 		float dropDistance { 12.0f };
 		unsigned maxParticlesPerDrop { 1 };
 		unsigned maxParticlesInFlock { ~0u };
-		int entNum { std::numeric_limits<int>::max() };
+
+		struct AttachmentIndices {
+			uint16_t entNum;
+			uint8_t trailNum;
+		};
+
+		std::optional<AttachmentIndices> attachmentIndices;
 	};
 
 	struct TeleEffect {
@@ -88,25 +94,29 @@ private:
 	};
 
 	struct AttachedEntityEffects {
-		ParticleTrail *particleTrail { nullptr };
-		ParticleTrail *particleTrail2 { nullptr };
+		ParticleTrail *particleTrails[2] { nullptr, nullptr };
 	};
+
+	void makeParticleTrailLingering( ParticleTrail *trail );
 
 	void unlinkAndFree( ParticleTrail *particleTrail );
 	void unlinkAndFree( TeleEffect *teleEffect );
 
 	[[nodiscard]]
-	auto allocParticleTrail( int entNum, const float *origin, unsigned particleSystemBin,
+	auto allocParticleTrail( int entNum, unsigned trailIndex,
+							 const float *origin, unsigned particleSystemBin,
 							 Particle::AppearanceRules &&appearanceRules  ) -> ParticleTrail *;
 
-	void updateParticleTrail( ParticleTrail *trail, const float *origin, ConeFlockFiller *filler, int64_t currTime );
+	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin, ConeFlockFiller *filler, int64_t currTime );
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 
 	static constexpr unsigned kClippedTrailsBin = ParticleSystem::kClippedTrailFlocksBin;
 	static constexpr unsigned kNonClippedTrailsBin = ParticleSystem::kNonClippedTrailFlocksBin;
 
-	ParticleTrail *m_particleTrailsHead { nullptr };
+	ParticleTrail *m_attachedTrailsHead { nullptr };
+	ParticleTrail *m_lingeringTrailsHead { nullptr };
+
 	TeleEffect *m_teleEffectsHead { nullptr };
 
 	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
