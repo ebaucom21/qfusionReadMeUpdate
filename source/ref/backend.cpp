@@ -1255,47 +1255,70 @@ void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity
 		stx = xmax * Q_Rcp( p->tileLength );
 	}
 
-	vec4_t positions[4];
-	byte_vec4_t colors[4];
-	vec2_t texcoords[4];
-	uint16_t indices[6] = { 0, 1, 2, 0, 2, 3 };
+	constexpr const unsigned kMaxPlanes = 2;
+	vec4_t positionsBuffer[kMaxPlanes * 4];
+	byte_vec4_t colorsBuffer[kMaxPlanes * 4];
+	vec2_t texcoordsBuffer[kMaxPlanes * 4];
+	uint16_t indicesBuffer[kMaxPlanes * 6];
 
-	Vector4Set( positions[0], xmin, 0, ymin, 1 );
-	Vector4Set( positions[1], xmin, 0, ymax, 1 );
-	Vector4Set( positions[2], xmax, 0, ymax, 1 );
-	Vector4Set( positions[3], xmax, 0, ymin, 1 );
+	Vector2Set( texcoordsBuffer[0], 0.0f, 0.0f );
+	Vector2Set( texcoordsBuffer[1], 0.0f, sty );
+	Vector2Set( texcoordsBuffer[2], stx, sty );
+	Vector2Set( texcoordsBuffer[3], stx, 0.0f );
 
-	Vector2Set( texcoords[0], 0.0f, 0.0f );
-	Vector2Set( texcoords[1], 0.0f, sty );
-	Vector2Set( texcoords[2], stx, sty );
-	Vector2Set( texcoords[3], stx, 0.0f );
+	colorsBuffer[0][0] = ( uint8_t )( p->color[0] * 255 );
+	colorsBuffer[0][1] = ( uint8_t )( p->color[1] * 255 );
+	colorsBuffer[0][2] = ( uint8_t )( p->color[2] * 255 );
+	colorsBuffer[0][3] = ( uint8_t )( p->color[3] * 255 );
 
-	colors[0][0] = ( uint8_t )( p->color[0] * 255 );
-	colors[0][1] = ( uint8_t )( p->color[1] * 255 );
-	colors[0][2] = ( uint8_t )( p->color[2] * 255 );
-	colors[0][3] = ( uint8_t )( p->color[3] * 255 );
+	unsigned numVertices = 0, numIndices = 0;
+	constexpr const float planeRollStep = 90.0f / (float)( kMaxPlanes - 1 );
+	const unsigned numPlanes = ( p->flags & QuadPoly::XLike ) ? kMaxPlanes : 1;
+	for( unsigned planeNum = 0; planeNum < numPlanes; ++planeNum ) {
+		uint16_t *const indices   = indicesBuffer + numIndices;
+		vec4_t *const positions   = positionsBuffer + numVertices;
+		byte_vec4_t *const colors = colorsBuffer + numVertices;
+		vec2_t *const texcoords   = texcoordsBuffer + numVertices;
 
-	mat3_t axis, localAxis;
-	VectorCopy( p->dir, axis );
-	MakeNormalVectors( axis, axis + 3, axis + 6 );
-	Matrix3_Transpose( axis, localAxis );
+		VectorSet( indices + 0, 0 + numVertices, 1 + numVertices, 2 + numVertices );
+		VectorSet( indices + 3, 0 + numVertices, 2 + numVertices, 3 + numVertices );
 
-	for( unsigned i = 0; i < 4; ++i ) {
-		vec3_t perp;
-		Matrix3_TransformVector( localAxis, positions[i], perp );
-		VectorAdd( perp, p->from, positions[i] );
-		Vector4Copy( colors[0], colors[i] );
+		Vector4Set( positions[0], xmin, 0, ymin, 1 );
+		Vector4Set( positions[1], xmin, 0, ymax, 1 );
+		Vector4Set( positions[2], xmax, 0, ymax, 1 );
+		Vector4Set( positions[3], xmax, 0, ymin, 1 );
+
+		mat3_t axis, localAxis;
+		vec3_t angles;
+		VecToAngles( p->dir, angles );
+		angles[ROLL] += planeRollStep * (float)planeNum;
+		AnglesToAxis( angles, axis );
+
+		Matrix3_Transpose( axis, localAxis );
+
+		for( unsigned i = 0; i < 4; ++i ) {
+			vec3_t perp;
+			Matrix3_TransformVector( localAxis, positions[i], perp );
+			VectorAdd( perp, p->from, positions[i] );
+			// Set the proper vertex color
+			Vector4Copy( colorsBuffer[0], colors[i] );
+			// Copy texcoords of the first plane
+			Vector2Copy( texcoordsBuffer[i], texcoords[i] );
+		}
+
+		numVertices += 4;
+		numIndices += 6;
 	}
 
 	mesh_t mesh;
 	memset( &mesh, 0, sizeof( mesh ) );
 
-	mesh.elems          = indices;
-	mesh.numElems       = 6;
-	mesh.numVerts       = 4;
-	mesh.xyzArray       = positions;
-	mesh.stArray        = texcoords;
-	mesh.colorsArray[0] = colors;
+	mesh.elems          = indicesBuffer;
+	mesh.numElems       = numIndices;
+	mesh.numVerts       = numVertices;
+	mesh.xyzArray       = positionsBuffer;
+	mesh.stArray        = texcoordsBuffer;
+	mesh.colorsArray[0] = colorsBuffer;
 
 	RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }

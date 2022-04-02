@@ -69,6 +69,14 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	effect->poly.numVertices = 0;
 	effect->poly.numIndices  = 0;
 
+	const float ymin = -0.5f * width;
+	const float ymax = +0.5f * width;
+
+	vec4_t *positions = effect->poly.positions;
+	byte_vec4_t *colors = effect->poly.colors;
+	vec2_t *texcoords = effect->poly.texcoords;
+	uint16_t *indices = effect->poly.indices;
+
 	// TODO:!!!!!!!!! Don't submit separate quads, utilize adjacency
 	for( unsigned segmentNum = 0; segmentNum + 1 < points.size(); ++segmentNum ) {
 		const float *const from = points[segmentNum + 0];
@@ -84,50 +92,49 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 
 		const float xmin = 0.0f;
 		const float xmax = length;
-		const float ymin = -0.5f * width;
-		const float ymax = +0.5f * width;
 
 		// TODO: Tile correctly
 		float stx = 1.0f, sty = 1.0f;
 
-		vec4_t *const positions   = effect->poly.positions + 4 * segmentNum;
-		byte_vec4_t *const colors = effect->poly.colors    + 4 * segmentNum;
-		vec2_t *const texcoords   = effect->poly.texcoords + 4 * segmentNum;
-		uint16_t *const indices   = effect->poly.indices   + 6 * segmentNum;
+		for( unsigned planeNum = 0; planeNum < 2; ++planeNum ) {
+			const unsigned firstSegmentIndex = effect->poly.numVertices;
+			VectorSet( indices + 0, firstSegmentIndex + 0, firstSegmentIndex + 1, firstSegmentIndex + 2 );
+			VectorSet( indices + 3, firstSegmentIndex + 0, firstSegmentIndex + 2, firstSegmentIndex + 3 );
 
-		const unsigned firstSegmentIndex = effect->poly.numVertices;
-		VectorSet( indices + 0, firstSegmentIndex + 0, firstSegmentIndex + 1, firstSegmentIndex + 2 );
-		VectorSet( indices + 3, firstSegmentIndex + 0, firstSegmentIndex + 2, firstSegmentIndex + 3 );
+			Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
+			Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
+			Vector4Set( positions[2], xmax, 0.0f, ymax, 1.0f );
+			Vector4Set( positions[3], xmax, 0.0f, ymin, 1.0f );
 
-		Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
-		Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
-		Vector4Set( positions[2], xmax, 0.0f, ymax, 1.0f );
-		Vector4Set( positions[3], xmax, 0.0f, ymin, 1.0f );
+			Vector2Set( texcoords[0], 0.0f, 0.0f );
+			Vector2Set( texcoords[1], 0.0f, sty );
+			Vector2Set( texcoords[2], stx, sty );
+			Vector2Set( texcoords[3], stx, 0.0f );
 
-		Vector2Set( texcoords[0], 0.0f, 0.0f );
-		Vector2Set( texcoords[1], 0.0f, sty );
-		Vector2Set( texcoords[2], stx, sty );
-		Vector2Set( texcoords[3], stx, 0.0f );
+			vec3_t dir, angles;
+			VectorSubtract( to, from, dir );
+			VectorScale( dir, rcpLength, dir );
+			VecToAngles( dir, angles );
+			angles[ROLL] += 90.0f * (float)planeNum;
 
-		vec3_t dir;
-		VectorSubtract( to, from, dir );
-		VectorScale( dir, rcpLength, dir );
+			mat3_t axis, localAxis;
+			AnglesToAxis( angles, axis );
+			Matrix3_Transpose( axis, localAxis );
 
-		mat3_t axis, localAxis;
-		VectorCopy( dir, axis );
-		MakeNormalVectors( axis, axis + 3, axis + 6 );
-		Matrix3_Transpose( axis, localAxis );
+			for( unsigned vertexInQuad = 0; vertexInQuad < 4; ++vertexInQuad ) {
+				vec3_t tmp;
+				Matrix3_TransformVector( localAxis, positions[vertexInQuad], tmp );
+				VectorAdd( tmp, from, positions[vertexInQuad] );
+				Vector4Copy( byteColor, colors[vertexInQuad] );
+				boundsBuilder.addPoint( positions[vertexInQuad] );
+			}
 
-		for( unsigned vertexInQuad = 0; vertexInQuad < 4; ++vertexInQuad ) {
-			vec3_t tmp;
-			Matrix3_TransformVector( localAxis, positions[vertexInQuad], tmp );
-			VectorAdd( tmp, from, positions[vertexInQuad] );
-			Vector4Copy( byteColor, colors[vertexInQuad] );
-			boundsBuilder.addPoint( positions[vertexInQuad] );
+			effect->poly.numVertices += 4;
+			effect->poly.numIndices += 6;
+
+			positions += 4, colors += 4, texcoords += 4;
+			indices += 6;
 		}
-
-		effect->poly.numVertices += 4;
-		effect->poly.numIndices  += 6;
 	}
 
 	if( effect->poly.numVertices ) [[likely]] {
@@ -150,6 +157,7 @@ auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material ) -> Straig
 	effect->poly.material = material;
 	effect->poly.width    = 0.0f;
 	effect->poly.length   = 0.0f;
+	effect->poly.flags    = QuadPoly::XLike;
 	return effect;
 }
 

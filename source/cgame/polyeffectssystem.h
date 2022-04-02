@@ -73,11 +73,14 @@ private:
 	struct CurvedBeamEffect : public CurvedBeam {
 		CurvedBeamEffect *prev { nullptr }, *next { nullptr };
 		ComplexPoly poly;
+
+		static constexpr unsigned kNumPlanes = 2;
+
 		// TODO: We don't need that much for adjacent quads
-		vec4_t storageOfPositions[4 * kMaxCurvedBeamSegments];
-		vec2_t storageOfTexCoords[4 * kMaxCurvedBeamSegments];
-		byte_vec4_t storageOfColors[4 * kMaxCurvedBeamSegments];
-		uint16_t storageOfIndices[6 * kMaxCurvedBeamSegments];
+		vec4_t storageOfPositions[kNumPlanes * kMaxCurvedBeamSegments * 4];
+		vec2_t storageOfTexCoords[kNumPlanes * kMaxCurvedBeamSegments * 4];
+		byte_vec4_t storageOfColors[kNumPlanes * kMaxCurvedBeamSegments * 4];
+		uint16_t storageOfIndices[kNumPlanes * kMaxCurvedBeamSegments * 6];
 	};
 
 	struct TransientBeamEffect {

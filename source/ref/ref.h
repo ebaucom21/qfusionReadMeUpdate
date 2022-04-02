@@ -84,8 +84,11 @@ typedef struct fragment_s {
 } fragment_t;
 
 struct QuadPoly {
-	// TODO: Get rid of this
+	enum Flags : unsigned { XLike = 0x1 };
+
+	// TODO: Get rid of this field
 	int drawSurfType;
+	unsigned flags { 0 };
 	struct shader_s *material;
 	float color[4];
 	float from[3];
