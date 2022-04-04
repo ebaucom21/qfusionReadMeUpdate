@@ -57,6 +57,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	auto *const __restrict effect = (CurvedBeamEffect *)handle;
 	assert( (uintptr_t)effect == (uintptr_t)handle );
 
+	assert( tileLength > 0.0f );
+
 	BoundsBuilder boundsBuilder;
 
 	const byte_vec4_t byteColor {
@@ -72,10 +74,13 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	const float ymin = -0.5f * width;
 	const float ymax = +0.5f * width;
 
-	vec4_t *positions = effect->poly.positions;
-	byte_vec4_t *colors = effect->poly.colors;
-	vec2_t *texcoords = effect->poly.texcoords;
-	uint16_t *indices = effect->poly.indices;
+	float totalLengthSoFar    = 0.0f;
+	const float rcpTileLength = Q_Rcp( tileLength );
+
+	vec4_t *__restrict positions   = effect->poly.positions;
+	byte_vec4_t *__restrict colors = effect->poly.colors;
+	vec2_t *__restrict texcoords   = effect->poly.texcoords;
+	uint16_t *__restrict indices   = effect->poly.indices;
 
 	// TODO:!!!!!!!!! Don't submit separate quads, utilize adjacency
 	for( unsigned segmentNum = 0; segmentNum + 1 < points.size(); ++segmentNum ) {
@@ -93,22 +98,42 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 		const float xmin = 0.0f;
 		const float xmax = length;
 
-		// TODO: Tile correctly
-		float stx = 1.0f, sty = 1.0f;
+		totalLengthSoFar += length;
+		const float stx = totalLengthSoFar * rcpTileLength;
 
 		for( unsigned planeNum = 0; planeNum < 2; ++planeNum ) {
 			const unsigned firstSegmentIndex = effect->poly.numVertices;
 			VectorSet( indices + 0, firstSegmentIndex + 0, firstSegmentIndex + 1, firstSegmentIndex + 2 );
 			VectorSet( indices + 3, firstSegmentIndex + 0, firstSegmentIndex + 2, firstSegmentIndex + 3 );
 
-			Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
-			Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
+			for( unsigned i = 0; i < 4; ++i ) {
+				Vector4Copy( byteColor, colors[i] );
+			}
+
+			unsigned firstUntransformedVertexInQuad;
+			if( segmentNum ) [[likely]] {
+				firstUntransformedVertexInQuad = 2;
+
+				// TODO: Don't add copies of previous vertices, utilize indexing
+				Vector4Copy( positions[-1 - 4], positions[0] );
+				Vector4Copy( positions[-2 - 4], positions[1] );
+
+				Vector2Copy( texcoords[-1 - 4], texcoords[0] );
+				Vector2Copy( texcoords[-2 - 4], texcoords[1] );
+			} else {
+				firstUntransformedVertexInQuad = 0;
+
+				Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
+				Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
+
+				Vector2Set( texcoords[0], 0.0f, 0.0f );
+				Vector2Set( texcoords[1], 0.0f, 1.0f );
+			}
+
 			Vector4Set( positions[2], xmax, 0.0f, ymax, 1.0f );
 			Vector4Set( positions[3], xmax, 0.0f, ymin, 1.0f );
 
-			Vector2Set( texcoords[0], 0.0f, 0.0f );
-			Vector2Set( texcoords[1], 0.0f, sty );
-			Vector2Set( texcoords[2], stx, sty );
+			Vector2Set( texcoords[2], stx, 1.0f );
 			Vector2Set( texcoords[3], stx, 0.0f );
 
 			vec3_t dir, angles;
@@ -121,11 +146,10 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 			AnglesToAxis( angles, axis );
 			Matrix3_Transpose( axis, localAxis );
 
-			for( unsigned vertexInQuad = 0; vertexInQuad < 4; ++vertexInQuad ) {
+			for( unsigned vertexInQuad = firstUntransformedVertexInQuad; vertexInQuad < 4; ++vertexInQuad ) {
 				vec3_t tmp;
 				Matrix3_TransformVector( localAxis, positions[vertexInQuad], tmp );
 				VectorAdd( tmp, from, positions[vertexInQuad] );
-				Vector4Copy( byteColor, colors[vertexInQuad] );
 				boundsBuilder.addPoint( positions[vertexInQuad] );
 			}
 

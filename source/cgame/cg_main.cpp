@@ -18,7 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cg_local.h"
-#include "../qcommon/qcommon.h"
+#include "../gameshared/gs_public.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
@@ -655,7 +655,7 @@ static void CG_RegisterVariables( void ) {
 
 	cg_voiceChats =     Cvar_Get( "cg_voiceChats", "1", CVAR_ARCHIVE );
 
-	cg_laserBeamSubdivisions = Cvar_Get( "cg_laserBeamSubdivisions", "10", CVAR_ARCHIVE );
+	cg_laserBeamSubdivisions = Cvar_Get( "cg_laserBeamSubdivisions", "24", CVAR_ARCHIVE );
 	cg_projectileAntilagOffset = Cvar_Get( "cg_projectileAntilagOffset", "1.0", CVAR_ARCHIVE );
 
 	cg_raceGhosts =     Cvar_Get( "cg_raceGhosts", "0", CVAR_ARCHIVE );
