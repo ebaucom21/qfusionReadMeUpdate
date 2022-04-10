@@ -32,6 +32,26 @@ class DrawSceneRequest;
 /// Manages "fire-and-forget" effects that usually get spawned upon events.
 class TransientEffectsSystem {
 public:
+	struct ColorChangeTimelineNode {
+		std::span<const byte_vec4_t> replacementPalette;
+		// Specifying it as a fraction is more flexible than absolute offsets
+		float nodeActivationLifetimeFraction { 1.0f };
+		unsigned colorChangeInterval { 15 };
+		float dropChance { 0.0f };
+		float replacementChance { 0.0f };
+	};
+
+	struct HullLayerParams {
+		const float speed;
+		const float finalOffset;
+		const float speedSpikeChance;
+		const float minSpeedSpike, maxSpeedSpike;
+		const float biasAlongChosenDir;
+		const float initialColor[4];
+
+		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
+	};
+
 	TransientEffectsSystem();
 	~TransientEffectsSystem();
 
@@ -87,18 +107,14 @@ private:
 
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 
-	struct ColorChangeProps {
-		// Points to an externally-owned buffer, usually with &'static lifetime
-		std::span<const byte_vec4_t> replacementPalette;
-		unsigned interval { 15 };
-		float dropChance { 0.0f };
-		float replacementChance { 0.0f };
+	struct ColorChangeState {
+		int64_t lastColorChangeAt { 0 };
+		unsigned lastNodeIndex { 0 };
 	};
 
 	struct BaseRegularSimulatedHull {
 		CMShapeList *shapeList { nullptr };
 		int64_t spawnTime { 0 };
-		int64_t lastColorChangeTime { 0 };
 
 		vec4_t mins, maxs;
 		vec3_t origin;
@@ -106,7 +122,6 @@ private:
 		unsigned lifetime { 0 };
 		// Archimedes/xy expansion activation offset
 		int64_t expansionStartAt { std::numeric_limits<int64_t>::max() };
-		int64_t decayStartAt { std::numeric_limits<int64_t>::max() };
 
 		// Old/current
 		vec4_t *vertexPositions[2];
@@ -118,11 +133,8 @@ private:
 
 		byte_vec4_t *vertexColors;
 
-		uint8_t positionsFrame { 0 };
-		uint8_t subdivLevel { 0 };
-
-		ColorChangeProps regularColorProps;
-		ColorChangeProps decayColorProps;
+		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
+		ColorChangeState colorChangeState;
 
 		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
 		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
@@ -135,6 +147,9 @@ private:
 		float lodCurrLevelTangentRatio { 0.25f };
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
+
+		uint8_t positionsFrame { 0 };
+		uint8_t subdivLevel { 0 };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
@@ -167,11 +182,9 @@ private:
 		// Distances to the nearest obstacle (or the maximum growth radius in case of no obstacles)
 		float *limitsAtDirections;
 		int64_t spawnTime { 0 };
-		int64_t decayStartAt { std::numeric_limits<int64_t>::max() };
 
 		struct Layer {
 			vec4_t mins, maxs;
-			int64_t lastColorChangeTime { 0 };
 			vec4_t *vertexPositions;
 			// Contains pairs (speed, distance from origin along the direction)
 			vec2_t *vertexSpeedsAndDistances;
@@ -182,8 +195,8 @@ private:
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
 			float finalOffset { 0 };
 
-			ColorChangeProps regularColorProps;
-			ColorChangeProps decayColorProps;
+			std::span<const ColorChangeTimelineNode> colorChangeTimeline;
+			ColorChangeState colorChangeState;
 		};
 
 		Layer *layers { nullptr };
@@ -273,16 +286,7 @@ private:
 	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
 							float speed, float speedSpread );
 
-	struct HullLayerParams {
-		const float speed;
-		const float finalOffset;
-		const float speedSpikeChance;
-		const float minSpeedSpike, maxSpeedSpike;
-		const float biasAlongChosenDir;
-		const float initialColor[4];
-		ColorChangeProps regularColorProps;
-		ColorChangeProps decayColorProps;
-	};
+
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
 							float scale, std::span<const HullLayerParams> paramsOfLayers );
@@ -302,15 +306,20 @@ private:
 	void simulateHullsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 
-	static void processColorChange( byte_vec4_t *__restrict colors, unsigned numColors,
-									const ColorChangeProps &colorChangeProps,
+	static void processColorChange( int64_t currTime, int64_t spawnTime, unsigned effectDuration,
+									std::span<const ColorChangeTimelineNode> timeline,
+		    						std::span<byte_vec4_t> colors,
+									ColorChangeState *__restrict state,
 									wsw::RandomGenerator *__restrict rng );
+
+	[[nodiscard]]
+	static auto computeCurrTimelineNodeIndex( unsigned startFromIndex, int64_t currTime,
+											  int64_t spawnTime, unsigned effectDuration,
+											  std::span<const ColorChangeTimelineNode> timeline ) -> unsigned;
 
 	static constexpr unsigned kMaxFireHulls  = 32;
 	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls * 2;
 	static constexpr unsigned kMaxWaveHulls  = kMaxFireHulls;
-
-	static const HullLayerParams kFireHullLayerParams[5];
 
 	wsw::StaticVector<CMShapeList *, kMaxSmokeHulls + kMaxWaveHulls> m_freeShapeLists;
 	CMShapeList *m_tmpShapeList { nullptr };
