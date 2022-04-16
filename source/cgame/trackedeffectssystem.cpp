@@ -176,6 +176,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.fadedOutColor = kRocketTrailFadedOutColor,
 				.fadeInLifetimeFrac  = 0.45f,
 				.fadeOutLifetimeFrac = 0.50f,
+				.lifetimeFracOffsetMillis = 16,
 				.sizeBehaviour = Particle::Expanding
 			});
 		}
@@ -194,6 +195,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.fadedOutColor = kRocketFireTrailFadedOutColor,
 				.fadeInLifetimeFrac  = 0.30f,
 				.fadeOutLifetimeFrac = 0.45f,
+				.lifetimeFracOffsetMillis = 8,
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
@@ -224,6 +226,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.fadedOutColor = kGrenadeSmokeTrailFadedOutColor,
 				.fadeInLifetimeFrac  = 0.25f,
 				.fadeOutLifetimeFrac = 0.35f,
+				.lifetimeFracOffsetMillis = 8,
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}
@@ -273,6 +276,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.fadedOutColor = kBlastSmokeTrailFadedOutColor,
 				.fadeInLifetimeFrac  = 0.10f,
 				.fadeOutLifetimeFrac = 0.20f,
+				.lifetimeFracOffsetMillis = 8,
 				.sizeBehaviour = Particle::Expanding
 			});
 		}
@@ -289,6 +293,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.initialColor  = kBlastIonsTrailInitialColor,
 				.fadedInColor  = kBlastIonsTrailFadedInColor,
 				.fadedOutColor = kBlastIonsTrailFadedOutColor,
+				.lifetimeFracOffsetMillis = 8,
 				.sizeBehaviour = Particle::Shrinking
 			});
 		}

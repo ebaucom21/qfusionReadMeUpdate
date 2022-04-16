@@ -258,6 +258,17 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	}
 }
 
+[[nodiscard]]
+static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle,
+												const Particle::AppearanceRules &__restrict rules ) -> float {
+	assert( (unsigned)rules.lifetimeFracOffsetMillis < (unsigned)particle.lifetime );
+	const auto offset                 = (int)rules.lifetimeFracOffsetMillis;
+	const auto correctedDuration      = (int)particle.lifetime - offset;
+	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
+	const auto correctedLifetimeSoFar = std::max( 0, lifetimeSoFar - offset );
+	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
+}
+
 void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 	if( !numParticlesLeft ) [[unlikely]] {
 		// Could be awaiting filling, don't modify its timeout
@@ -299,8 +310,7 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 			if( trace.fraction == 1.0f ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
-				// TODO: Cache the reciprocal?
-				p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
 				timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++i;
 				continue;
@@ -327,8 +337,7 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 						// This is not really correct but is OK.
 						VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
 
-						// TODO: Cache the reciprocal?
-						p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+						p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
 						timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 						++i;
 						continue;

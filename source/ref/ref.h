@@ -225,6 +225,9 @@ struct alignas( 16 ) Particle {
 		const float *fadedOutColor { nullptr };
 		float fadeInLifetimeFrac { 0.25f };
 		float fadeOutLifetimeFrac { 0.25f };
+		// Keep the lifetime frac zero if lifetime is not greater than this value.
+		// This is useful for offsetting particle growth start point from some entity origin.
+		unsigned lifetimeFracOffsetMillis { 0 };
 
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
