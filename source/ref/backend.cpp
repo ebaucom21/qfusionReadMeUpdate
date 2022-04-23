@@ -1019,6 +1019,10 @@ alignas( 16 ) static vec4_t tmpTessFloatColors[kTessBufferSize];
 static int8_t tessNeighboursCount[kTessBufferSize];
 alignas( 16 ) static vec4_t tessPositions[kTessBufferSize];
 alignas( 16 ) static byte_vec4_t tessByteColors[kTessBufferSize];
+// TODO: Discover what's up with these vertices
+// TODO: These vertices should be known statically at least
+alignas( 16 ) static uint16_t neighbourLessVertices[kTessBufferSize];
+alignas( 16 ) static bool isVertexNeighbourLess[kTessBufferSize];
 
 // Assuming that the simulation preserves vertex directions, adds interpolated vertices using neighbour information.
 template <bool SmoothColors>
@@ -1030,6 +1034,8 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 
 	std::memset( tessPositions, 0, sizeof( vec4_t ) * numNextLevelVertices );
 	std::memset( tessByteColors, 0, sizeof( byte_vec4_t ) * numNextLevelVertices );
+
+	std::memset( isVertexNeighbourLess, 0, sizeof( bool ) * numNextLevelVertices );
 
 	// Zero neighbour accum buffers for the added part
 	std::memset( tmpTessPositions + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
@@ -1063,9 +1069,12 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		}
 	}
 
+	unsigned numNeighbourLessVertices = 0;
 	for( unsigned vertexIndex = numSimulatedVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
 		// Wtf? how do such vertices exist?
-		if( !tessNeighboursCount[vertexIndex] ) {
+		if( !tessNeighboursCount[vertexIndex] ) [[unlikely]] {
+			neighbourLessVertices[numNeighbourLessVertices++] = vertexIndex;
+			isVertexNeighbourLess[vertexIndex] = true;
 			continue;
 		}
 
@@ -1079,6 +1088,34 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		} else {
 			// Write the vertex color directly to the resulting color buffer
 			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
+		}
+	}
+
+	// Hack for neighbour-less vertices: apply a gathering pass
+	// (the opposite to what we do for each vertex in the original mesh)
+	for( unsigned i = 0; i < numNeighbourLessVertices; ++i ) {
+		const unsigned vertexIndex = neighbourLessVertices[i];
+		vec4_t accumulatedColor { 0.0f, 0.0f, 0.0f, 0.0f };
+		unsigned numAccumulatedColors = 0;
+		for( unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+			if( !isVertexNeighbourLess[neighbourIndex] ) [[likely]] {
+				numAccumulatedColors++;
+				if constexpr( SmoothColors ) {
+					const float *const __restrict neighbourColor = tmpTessFloatColors[neighbourIndex];
+					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
+				} else {
+					const uint8_t *const __restrict neighbourColor = tessByteColors[neighbourIndex];
+					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
+				}
+			}
+		}
+		if( numAccumulatedColors ) [[likely]] {
+			const float scale = Q_Rcp( (float)numAccumulatedColors );
+			if constexpr( SmoothColors ) {
+				Vector4Scale( accumulatedColor, scale, tmpTessFloatColors[vertexIndex] );
+			} else {
+				Vector4Scale( accumulatedColor, scale, tessByteColors[vertexIndex] );
+			}
 		}
 	}
 
