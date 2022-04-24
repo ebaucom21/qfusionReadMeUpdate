@@ -275,6 +275,8 @@ static const byte_vec4_t kFireReplacementPalette2[] {
 	{ 255, 72, 0, 24 },
 	{ 255, 224, 0, 24 },
 	{ 255, 128, 0, 16 },
+	{ 0, 0, 0, 56 },
+	{ 0, 0, 0, 32 }
 };
 
 static const byte_vec4_t kSmokeReplacementPalette[] {
@@ -285,9 +287,12 @@ static const byte_vec4_t kSmokeReplacementPalette[] {
 
 // This does not look nice, but we have to supply externally owned chunks of memory as params of each layer
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer0ColorChangeTimeline[2] {
+static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer0ColorChangeTimeline[3] {
 	{
-		.replacementPalette = kFireCoreReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f,
+	},
+	{
+		.replacementPalette = kFireCoreReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
 		.dropChance = 0.008f, .replacementChance = 0.035f
 	},
 	{
@@ -296,9 +301,12 @@ static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer0Colo
 	}
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer1ColorChangeTimeline[2] {
+static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer1ColorChangeTimeline[3] {
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
 		.dropChance = 0.008f, .replacementChance = 0.025f
 	},
 	{
@@ -307,9 +315,12 @@ static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer1Colo
 	}
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer2ColorChangeTimeline[2] {
+static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer2ColorChangeTimeline[3] {
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
 		.dropChance = 0.025f, .replacementChance = 0.045f
 	},
 	{
@@ -318,9 +329,12 @@ static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer2Colo
 	}
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer3ColorChangeTimeline[2] {
+static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer3ColorChangeTimeline[3] {
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
 		.dropChance = 0.035f, .replacementChance = 0.065f
 	},
 	{
@@ -329,10 +343,13 @@ static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer3Colo
 	}
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer4ColorChangeTimeline[2] {
+static const TransientEffectsSystem::ColorChangeTimelineNode kFireHullLayer4ColorChangeTimeline[3] {
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.0f,
-		.dropChance = 0.25f, .replacementChance = 0.75f
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.25f,
+		.dropChance = 0.035f, .replacementChance = 0.085f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -352,14 +369,14 @@ static const TransientEffectsSystem::HullLayerParams kFireHullLayerParams[5] {
 		.speed = 35.0f, .finalOffset = 6.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
+		.initialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer1ColorChangeTimeline
 	},
 	{
 		.speed = 45.0f, .finalOffset = 4.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
+		.initialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer2ColorChangeTimeline
 	},
 	{
@@ -378,12 +395,24 @@ static const TransientEffectsSystem::HullLayerParams kFireHullLayerParams[5] {
 	},
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[1] {
-	{ .replacementPalette = kSmokeReplacementPalette, .dropChance = 0.002f, .replacementChance = 0.020f }
+static const TransientEffectsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[2] {
+	{
+		.replacementPalette = kSmokeReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.dropChance = 0.002f, .replacementChance = 0.020f
+	},
+	{
+		.nodeActivationLifetimeFraction = 0.75f, .dropChance = 0.05f, .replacementChance = 0.0f
+	}
 };
 
-static const TransientEffectsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[1] {
-	{ .replacementPalette = kSmokeReplacementPalette, .dropChance = 0.003f, .replacementChance = 0.035f }
+static const TransientEffectsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[2] {
+	{
+		.replacementPalette = kSmokeReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
+		.dropChance = 0.003f, .replacementChance = 0.035f
+	},
+	{
+		.nodeActivationLifetimeFraction = 0.75f, .dropChance = 0.05f, .replacementChance = 0.0f
+	}
 };
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
@@ -412,36 +441,36 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 		if( cg_volumetricExplosionsSmoke->integer ) {
 			const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.06f };
 
-			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2500 ) ) {
+			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
 				hull->archimedesBottomAccel   = +45.0f;
-				hull->archimedesTopAccel      = +150.0f;
-				hull->xyExpansionTopAccel     = +50.0f;
+				hull->archimedesTopAccel      = +170.0f;
+				hull->xyExpansionTopAccel     = +75.0f;
 				hull->xyExpansionBottomAccel  = -30.0f;
 
 				hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
-				hull->expansionStartAt    = m_lastTime + 500;
+				hull->expansionStartAt    = m_lastTime + 450;
 
-				hull->lodCurrLevelTangentRatio = 0.15f;
+				hull->lodCurrLevelTangentRatio = 0.12f;
 				hull->tesselateClosestLod      = true;
 				hull->leprNextLevelColors      = true;
 
-				setupHullVertices( hull, origin, smokeColor, 100.0f, 10.0f );
+				setupHullVertices( hull, origin, smokeColor, 85.0f, 7.5f );
 			}
 
-			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2500 ) ) {
+			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
 				hull->archimedesBottomAccel   = +35.0f;
-				hull->archimedesTopAccel      = +150.0f;
-				hull->xyExpansionTopAccel     = +65.0f;
+				hull->archimedesTopAccel      = +175.0f;
+				hull->xyExpansionTopAccel     = +95.0f;
 				hull->xyExpansionBottomAccel  = -25.0f;
 
 				hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
-				hull->expansionStartAt    = m_lastTime + 500;
+				hull->expansionStartAt    = m_lastTime + 450;
 
-				hull->lodCurrLevelTangentRatio = 0.15f;
+				hull->lodCurrLevelTangentRatio = 0.12f;
 				hull->tesselateClosestLod      = true;
 				hull->leprNextLevelColors      = true;
 
-				setupHullVertices( hull, origin, smokeColor, 120.0f, 10.0f );
+				setupHullVertices( hull, origin, smokeColor, 100.0f, 7.5f );
 			}
 		}
 	} else {
