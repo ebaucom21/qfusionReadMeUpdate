@@ -52,9 +52,11 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, cg.view.POVent, MASK_SOLID );
 	if( trace.ent != -1 ) {
 		if( weapondef->weapon_id == WEAP_ELECTROBOLT ) {
-			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal );
+			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
+			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal, invDir );
 		} else if( weapondef->weapon_id == WEAP_INSTAGUN ) {
-			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, ownerNum );
+			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
+			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum );
 		}
 	}
 
@@ -519,10 +521,6 @@ static void CG_LeadBubbleTrail( trace_t *tr, vec3_t water_start ) {
 	//CG_BubbleTrail( water_start, tr->endpos, 32 );
 }
 
-static void CG_RiotgunImpact( trace_t *tr ) {
-	cg.effectsSystem.spawnPelletImpactEffect( tr );
-}
-
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
 	float r, u;
 	double alpha, s;
@@ -545,7 +543,8 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	}
 
 	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-		cg.effectsSystem.spawnBulletImpactEffect( &trace );
+		const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
+		cg.effectsSystem.spawnBulletImpactEffect( &trace, invDir );
 
 		// TODO: Delegate to the effects system
 		if( !water_trace ) {
@@ -564,25 +563,22 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	}
 }
 
-/*
-* CG_Fire_SunflowerPattern
-*/
 static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int ignore, int count,
-									  int hspread, int vspread, int range, void ( *impact )( trace_t *tr ) ) {
-	int i;
-	float r;
-	float u;
-	float fi;
-	trace_t trace, *water_trace;
-
+									  int hspread, int vspread, int range ) {
 	assert( seed );
+	assert( std::abs( VectorLengthSquared( dir ) - 1.0f ) < 0.001f );
 
-	for( i = 0; i < count; i++ ) {
-		fi = i * 2.4; //magic value creating Fibonacci numbers
-		r = cos( (float)*seed + fi ) * hspread * sqrt( fi );
-		u = sin( (float)*seed + fi ) * vspread * sqrt( fi );
+	for( int i = 0; i < count; i++ ) {
+		// TODO: Is this correct?
+		const float phi = 2.4f * (float)i; //magic value creating Fibonacci numbers
+		const float sqrtPhi = std::sqrt( phi );
 
-		water_trace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
+		// TODO: Is this correct?
+		const float r = std::cos( (float)*seed + phi ) * (float)hspread * sqrtPhi;
+		const float u = std::sin( (float)*seed + phi ) * (float)vspread * sqrtPhi;
+
+		trace_t trace;
+		trace_t *water_trace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
 		if( water_trace ) {
 			trace_t *tr = water_trace;
 			if( !VectorCompare( tr->endpos, start ) ) {
@@ -591,7 +587,9 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		}
 
 		if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-			impact( &trace );
+			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
+			// TODO: Join in clusters to reduce the number of simulation regions
+			cg.effectsSystem.spawnPelletImpactEffect( &trace, invDir );
 		}
 
 		if( water_trace ) {
@@ -646,7 +644,7 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dir, int weapon, int fir
 	firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
 
 	CG_Fire_SunflowerPattern( origin, dir, &seed, owner, firedef->projectile_count,
-							  firedef->spread, firedef->v_spread, firedef->timeout, CG_RiotgunImpact );
+							  firedef->spread, firedef->v_spread, firedef->timeout );
 
 	// spawn a single sound at the impact
 	VectorMA( origin, firedef->timeout, dir, end );
@@ -1233,16 +1231,26 @@ static void handlePlasmaExplosionEvent( entity_state_t *ent, int parm, bool pred
 	}
 }
 
+static inline void decodeBoltImpact( int parm, vec3_t impactNormal, vec3_t impactDir ) {
+	const unsigned impactDirByte = ( (unsigned)parm >> 8 ) & 0xFF;
+	const unsigned impactNormalByte   = ( (unsigned)parm >> 0 ) & 0xFF;
+
+	ByteToDir( (int)impactNormalByte, impactNormal );
+	ByteToDir( (int)impactDirByte, impactDir );
+}
+
 static void handleBoltExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
-	vec3_t dir;
-	ByteToDir( parm, dir );
-	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, dir );
+	vec3_t impactNormal, impactDir;
+	decodeBoltImpact( parm, impactNormal, impactDir );
+
+	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, impactNormal, impactDir );
 }
 
 static void handleInstaExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
-	vec3_t dir;
-	ByteToDir( parm, dir );
-	cg.effectsSystem.spawnInstagunHitEffect( ent->origin, dir, ent->ownerNum );
+	vec3_t impactNormal, impactDir;
+	decodeBoltImpact( parm, impactNormal, impactDir );
+
+	cg.effectsSystem.spawnInstagunHitEffect( ent->origin, impactNormal, impactDir, ent->ownerNum );
 }
 
 static void handleGrenadeExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {

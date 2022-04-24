@@ -42,18 +42,18 @@ public:
 
 	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage );
 
-	void spawnElectroboltHitEffect( const float *origin, const float *dir );
-	void spawnInstagunHitEffect( const float *origin, const float *dir, int ownerNum );
+	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir );
+	void spawnInstagunHitEffect( const float *origin, const float *impactNormal, const float *impactDir, int ownerNum );
 
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
-	void spawnBulletImpactEffect( const trace_s *trace ) {
-		spawnBulletLikeImpactEffect( trace, 0.25f, 0.50f );
+	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir ) {
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.33f, 0.67f );
 	}
 
-	void spawnPelletImpactEffect( const trace_s *trace ) {
-		spawnBulletLikeImpactEffect( trace, 0.0f, 0.0f );
+	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir ) {
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.25f );
 	}
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
@@ -109,7 +109,7 @@ private:
 
 	void spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx, float radius, bool addSoundLfe );
 
-	void spawnBulletLikeImpactEffect( const trace_s *trace, float minPercentage, float maxPercentage );
+	void spawnBulletLikeImpactEffect( const trace_s *trace, const float *impactDir, float minPercentage, float maxPercentage );
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;

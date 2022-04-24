@@ -995,10 +995,6 @@ edict_t *W_Fire_Plasma( edict_t *self, vec3_t start, vec3_t angles, float damage
 * W_Touch_Bolt
 */
 static void W_Touch_Bolt( edict_t *self, edict_t *other, cplane_t *plane, int surfFlags ) {
-	edict_t *event;
-	bool missed = true;
-	int hitType;
-
 	if( surfFlags & SURF_NOIMPACT ) {
 		G_FreeEdict( self );
 		return;
@@ -1008,27 +1004,52 @@ static void W_Touch_Bolt( edict_t *self, edict_t *other, cplane_t *plane, int su
 		return;
 	}
 
-	hitType = G_Projectile_HitStyle( self, other );
+	const int hitType = G_Projectile_HitStyle( self, other );
 	if( hitType == PROJECTILE_TOUCH_NOT ) {
 		return;
 	}
 
+	bool missed = true;
+	edict_t *event = nullptr;
 	if( other->takedamage ) {
-		vec3_t invdir;
 		G_Damage( other, self, self->r.owner, self->velocity, self->velocity, self->s.origin, self->projectileInfo.maxDamage, self->projectileInfo.maxKnockback, self->projectileInfo.stun, 0, MOD_ELECTROBOLT_W );
-		VectorNormalize2( self->velocity, invdir );
-		VectorScale( invdir, -1, invdir );
-		event = G_SpawnEvent( EV_BOLT_EXPLOSION, DirToByte( invdir ), self->s.origin );
+
+		vec3_t invDir;
+		VectorNormalize2( self->velocity, invDir );
+		const int impactDirByte = DirToByte( invDir );
+
+		VectorScale( invDir, -1, invDir );
+
+		const int normalByte = DirToByte( invDir );
+		const int parmByte   = ( impactDirByte << 8 ) | normalByte;
+
+		event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, self->s.origin );
 		event->s.firemode = FIRE_MODE_WEAK;
+
 		if( other->r.client ) {
 			missed = false;
 		}
 	} else if( !( surfFlags & SURF_NOIMPACT ) ) {
+		int parmByte = 0;
+		if( plane ) {
+			if( const float squareLen = VectorLengthSquared( self->velocity ); squareLen > 1.0f ) {
+				const float rcpLen = Q_RSqrt( squareLen );
+				vec3_t velocityDir;
+				VectorScale( self->velocity, rcpLen, velocityDir );
+				const int impactDirByte = DirToByte( velocityDir );
+				const int normalByte    = DirToByte( plane->normal );
+				parmByte = ( impactDirByte << 8 ) | normalByte;
+			}
+		}
+
 		// add explosion event
-		event = G_SpawnEvent( EV_BOLT_EXPLOSION, DirToByte( plane ? plane->normal : NULL ), self->s.origin );
+		event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, self->s.origin );
 		event->s.firemode = FIRE_MODE_WEAK;
 	}
-	event->s.ownerNum = ENTNUM( self->r.owner ); // race related, shouldn't matter for basewsw
+
+	if( event ) {
+		event->s.ownerNum = ENTNUM( self->r.owner ); // race related, shouldn't matter for basewsw
+	}
 
 	if( missed && self->r.client ) {
 		G_AwardPlayerMissedElectrobolt( self->r.owner, MOD_ELECTROBOLT_W ); // hit something that isnt a player
@@ -1075,6 +1096,8 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 	clamp_high( mindamage, maxdamage );
 	clamp_high( minknockback, maxknockback );
 
+	const int impactDirByte = DirToByte( dir );
+
 	tr.ent = -1;
 	while( ignore ) {
 		G_Trace4D( &tr, from, NULL, NULL, end, ignore, mask, timeDelta );
@@ -1116,8 +1139,11 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 				}
 			}
 
+			const int normalByte = DirToByte( tr.plane.normal );
+			const int parmByte   = ( impactDirByte << 8 ) | normalByte;
+
 			// spawn a impact event on each damaged ent
-			event = G_SpawnEvent( EV_BOLT_EXPLOSION, DirToByte( tr.plane.normal ), tr.endpos );
+			event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, tr.endpos );
 			event->s.firemode = fireMode;
 			if( hit->r.client ) {
 				missed = false;
@@ -1190,6 +1216,8 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 		range = FULL_DAMAGE_RANGE + 1;
 	}
 
+	const int impactDirByte = DirToByte( dir );
+
 	tr.ent = -1;
 	while( ignore ) {
 		enableSmallHitBox();
@@ -1238,8 +1266,11 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 				}
 			}
 
+			const int normalByte = DirToByte( tr.plane.normal );
+			const int parmByte   = ( impactDirByte << 8 ) | normalByte;
+
 			// spawn a impact event on each damaged ent
-			event = G_SpawnEvent( EV_BOLT_EXPLOSION, DirToByte( tr.plane.normal ), tr.endpos );
+			event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, tr.endpos );
 			event->s.firemode = FIRE_MODE_STRONG;
 			if( hit->r.client ) {
 				missed = false;
@@ -1485,6 +1516,8 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 		mask = MASK_SOLID;
 	}
 
+	const int impactDirByte = DirToByte( dir );
+
 	tr.ent = -1;
 	while( ignore ) {
 		enableSmallHitBox();
@@ -1508,8 +1541,11 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 		if( ( hit != self ) && ( hit->takedamage ) ) {
 			G_Damage( hit, self, self, dir, dir, tr.endpos, damage, knockback, stun, dmgflags, mod );
 
+			const int normalByte = DirToByte( tr.plane.normal );
+			const int parmByte   = ( impactDirByte << 8 ) | normalByte;
+
 			// spawn a impact event on each damaged ent
-			event = G_SpawnEvent( EV_INSTA_EXPLOSION, DirToByte( tr.plane.normal ), tr.endpos );
+			event = G_SpawnEvent( EV_INSTA_EXPLOSION, parmByte, tr.endpos );
 			event->s.ownerNum = ENTNUM( self );
 			event->s.firemode = FIRE_MODE_STRONG;
 			if( hit->r.client ) {

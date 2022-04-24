@@ -173,41 +173,46 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 
 static const vec4_t kElectroboltHitInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kElectroboltHitFadedInColor { 0.7f, 0.7f, 1.0f, 1.0f };
-static const vec4_t kElectroboltHitFadedOutColor { 0.1f, 0.5f, 1.0f, 0.0f };
+static const vec4_t kElectroboltHitFadedOutColor { 0.1f, 0.1f, 1.0f, 0.0f };
 
-void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
+void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *impactNormal,
+													 const float *impactDir ) {
 	if( cg_particles->integer ) {
+		vec3_t coneDir;
+		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+
 		ConeFlockFiller flockFiller {
 			.origin  = { origin[0], origin[1], origin[2] },
-			.offset  = { 2.0f * dir[0], 2.0f * dir[1], 2.0f * dir[2] },
-			.dir     = { dir[0], dir[1], dir[2] },
-			.gravity     = 150.0f,
-			.bounceCount = 0,
-			.minSpeed    = 450.0f,
-			.maxSpeed    = 500.0f,
-			.minPercentage = 0.5f,
-			.maxPercentage = 0.7f,
-			.minTimeout = 200,
-			.maxTimeout = 250
+			.offset  = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir     = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity     = GRAVITY,
+			.angle       = 45.0f,
+			.bounceCount = 1,
+			.minSpeed    = 500.0f,
+			.maxSpeed    = 950.0f,
+			.minPercentage = 0.33f,
+			.maxPercentage = 0.67f,
+			.minTimeout = 100,
+			.maxTimeout = 300
 		};
 		Particle::AppearanceRules appearanceRules {
 			.material = cgs.media.shaderDebrisParticle,
 			.kind     = Particle::Spark,
-			.length   = 10.0f,
-			.width    = 2.0f,
+			.length   = 12.5f,
+			.width    = 2.5f,
 			.initialColor  = kElectroboltHitInitialColor,
 			.fadedInColor  = kElectroboltHitFadedInColor,
 			.fadedOutColor = kElectroboltHitFadedOutColor,
-			.fadeInLifetimeFrac  = 0.2f,
-			.fadeOutLifetimeFrac = 0.5f,
+			.fadeInLifetimeFrac  = 0.05f,
+			.fadeOutLifetimeFrac = 0.50f,
 		};
-		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockFiller );
 	}
 
-	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
+	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, dir );
+	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal );
 }
 
 static vec4_t instagunHitInitialColorForTeam[2];
@@ -215,10 +220,11 @@ static vec4_t instagunHitFadedInColorForTeam[2];
 static vec4_t instagunHitFadedOutColorForTeam[2];
 
 static const vec4_t kInstagunHitInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kInstagunHitFadedInColor { 1.0f, 0.0f, 1.0f, 1.0f };
+static const vec4_t kInstagunHitFadedInColor { 1.0f, 0.0f, 1.0f, 0.7f };
 static const vec4_t kInstagunHitFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
 
-void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *dir, int ownerNum ) {
+void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
+												  const float *impactDir, int ownerNum ) {
 	const float *effectColor = kInstagunHitFadedInColor;
 	if( cg_particles->integer ) {
 		const float *initialColor  = kInstagunHitInitialColor;
@@ -252,38 +258,44 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 			}
 		}
 
+		vec3_t coneDir;
+		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+
 		ConeFlockFiller flockFiller {
 			.origin  = { origin[0], origin[1], origin[2] },
-			.offset  = { 2.0f * dir[0], 2.0f * dir[1], 2.0f * dir[2] },
-			.dir     = { dir[0], dir[1], dir[2] },
-			.gravity     = 150.0f,
-			.bounceCount = 0,
-			.minSpeed    = 200.0f,
-			.maxSpeed    = 300.0f,
+			.offset  = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir     = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity     = GRAVITY,
+			.angle       = 45.0f,
+			.bounceCount = 1,
+			.minSpeed    = 750.0f,
+			.maxSpeed    = 950.0f,
 			.minPercentage = 0.5f,
-			.maxPercentage = 0.7f,
-			.minTimeout = 300,
-			.maxTimeout = 400
+			.maxPercentage = 1.0f,
+			.minTimeout = 150,
+			.maxTimeout = 225
 		};
 
 		Particle::AppearanceRules appearanceRules {
 			.material = cgs.media.shaderSparkParticle,
 			.kind     = Particle::Spark,
-			.length   = 10.0f,
+			.length   = 12.5f,
 			.width    = 2.0f,
 			.initialColor  = initialColor,
 			.fadedInColor  = fadedInColor,
-			.fadedOutColor = fadedOutColor
+			.fadedOutColor = fadedOutColor,
+			.fadeInLifetimeFrac  = 0.05f,
+			.fadeOutLifetimeFrac = 0.25f
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 	}
 
 	// TODO: Don't we need an IG-specific sound
-	const vec3_t soundOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
+	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnInstagunHitEffect( origin, dir, effectColor );
+	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, effectColor );
 }
 
 static const vec4_t kGunbladeHitInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };
@@ -378,7 +390,8 @@ static const vec4_t kBulletImpactInitialColor { 1.0f, 0.8f, 0.7f, 1.0f };
 static const vec4_t kBulletImpactFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kBulletImpactFadedOutColor { 1.0f, 1.0f, 1.0f, 1.0f };
 
-void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, float minPercentage, float maxPercentage ) {
+void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, const float *impactDir,
+													   float minPercentage, float maxPercentage ) {
 	if( trace->surfFlags & SURF_NOIMPACT ) {
 		return;
 	}
@@ -389,16 +402,26 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, flo
 		}
 	}
 
+	const float *const impactNormal = trace->plane.normal;
+	const float *const impactOrigin = trace->endpos;
+
 	if( cg_particles->integer ) {
+		vec3_t coneDir;
+		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+
 		// TODO: Vary percentage by surface type too
 		ConeFlockFiller flockFiller {
-			.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
-			.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-			.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-			.gravity       = 800.0f,
+			.origin        = { impactOrigin[0], impactOrigin[1], impactOrigin[2] },
+			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity       = GRAVITY,
 			.angle         = 30.0f,
+			.minSpeed      = 450.0f,
+			.maxSpeed      = 500.0f,
 			.minPercentage = minPercentage,
-			.maxPercentage = maxPercentage
+			.maxPercentage = maxPercentage,
+			.minTimeout    = 250,
+			.maxTimeout    = 550,
 		};
 		Particle::AppearanceRules appearanceRules {
 			.material = cgs.media.shaderSparkParticle,
@@ -412,7 +435,7 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, flo
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockFiller );
 	}
 
-	m_transientEffectsSystem.spawnBulletLikeImpactEffect( trace->endpos, trace->plane.normal );
+	m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 }
 
 void EffectsSystemFacade::spawnDustImpactEffect( const float *origin, const float *dir, float radius ) {
