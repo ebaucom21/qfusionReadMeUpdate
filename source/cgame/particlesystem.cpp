@@ -151,6 +151,11 @@ auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParti
 		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
+
+		const uint32_t randomDword = rng->next();
+		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
+		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
+		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 	}
 
 	return { resultTimeout, numParticles };
@@ -226,6 +231,11 @@ auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticle
 		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
+
+		const uint32_t randomDword = rng->next();
+		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
+		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
+		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 	}
 
 	return { resultTimeout, numParticles };

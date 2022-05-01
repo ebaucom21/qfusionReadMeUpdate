@@ -215,16 +215,25 @@ struct alignas( 16 ) Particle {
 	// The name "rules" seems to be more appropriate than "params" for these stateless/shared objects.
 	struct AppearanceRules {
 		shader_s *material { nullptr };
+
 		Kind kind { Sprite };
+
 		float length { 0.0f };
 		float width { 0.0f };
 		float radius { 0.0f };
+
+		float lengthSpread { 0.0f };
+		float widthSpread { 0.0f };
+		float radiusSpread { 0.0f };
+
 		// Points to an external buffer with a greater lifetime
 		const float *initialColor { nullptr };
 		const float *fadedInColor { nullptr };
 		const float *fadedOutColor { nullptr };
+
 		float fadeInLifetimeFrac { 0.25f };
 		float fadeOutLifetimeFrac { 0.25f };
+
 		// Keep the lifetime frac zero if lifetime is not greater than this value.
 		// This is useful for offsetting particle growth start point from some entity origin.
 		unsigned lifetimeFracOffsetMillis { 0 };
@@ -236,11 +245,22 @@ struct alignas( 16 ) Particle {
 	float oldOrigin[4];
 	float velocity[4];
 	float accel[4];
+
 	int64_t spawnTime;
 	// Gets updated every simulation frame prior to submission for rendering
 	float lifetimeFrac;
+
 	uint16_t lifetime;
-	uint16_t bouncesLeft;
+	uint8_t bouncesLeft;
+
+	static constexpr float kByteParamNormalizer = 1.0f / 128.0f;
+
+	// Should be set once upon spawn. Fractions are stored in a compact representation,
+	// floating-point values should be reconstructed by multiplying by kByteParamNormalizer
+	// The real parameter value is a multiple of this fraction by AppearanceRules:: parameter spread
+	int8_t instanceLengthFraction { 0 };
+	int8_t instanceWidthFraction { 0 };
+	int8_t instanceRadiusFraction { 0 };
 };
 
 struct ExternalMesh {
