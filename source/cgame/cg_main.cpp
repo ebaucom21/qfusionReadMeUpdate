@@ -77,9 +77,8 @@ cvar_t *cg_bloodTrailAlpha;
 cvar_t *cg_heavyRocketExplosions;
 cvar_t *cg_heavyGrenadeExplosions;
 cvar_t *cg_heavyShockwaveExplosions;
-cvar_t *cg_volumetricExplosions;
-cvar_t *cg_volumetricExplosionsWave;
-cvar_t *cg_volumetricExplosionsSmoke;
+cvar_t *cg_explosionsWave;
+cvar_t *cg_explosionsSmoke;
 cvar_t *cg_gibs;
 cvar_t *cg_outlineModels;
 cvar_t *cg_outlineWorld;
@@ -989,9 +988,8 @@ void CG_InitPersistentState() {
 	cg_heavyGrenadeExplosions = Cvar_Get( "cg_heavyGrenadeExplosions", "1", CVAR_ARCHIVE );
 	cg_heavyShockwaveExplosions = Cvar_Get( "cg_heavyShockwaveExplosions", "1", CVAR_ARCHIVE );
 
-	cg_volumetricExplosions = Cvar_Get( "cg_volumetricExplosions", "1", CVAR_ARCHIVE );
-	cg_volumetricExplosionsWave = Cvar_Get( "cg_volumetricExplosionsWave", "1", CVAR_ARCHIVE );
-	cg_volumetricExplosionsSmoke = Cvar_Get( "cg_volumetricExplosionsSmoke", "1", CVAR_ARCHIVE );
+	cg_explosionsWave = Cvar_Get( "cg_explosionsWave", "1", CVAR_ARCHIVE );
+	cg_explosionsSmoke = Cvar_Get( "cg_explosionsSmoke", "1", CVAR_ARCHIVE );
 
 	CrosshairState::initPersistentState();
 

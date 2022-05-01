@@ -424,62 +424,53 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
 	lightEffect->radius = 250.0f * radius * lightRadiusScale;
 
-	if( cg_volumetricExplosions->integer ) {
-		if( FireHull *const hull = allocFireHull( m_lastTime, 800 ) ) {
-			setupHullVertices( hull, origin, 0.9f, kFireHullLayerParams );
+	if( FireHull *const hull = allocFireHull( m_lastTime, 800 ) ) {
+		setupHullVertices( hull, origin, 0.9f, kFireHullLayerParams );
+	}
+
+	if( cg_explosionsWave->integer ) {
+		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
+		if( WaveHull *const hull = allocWaveHull( m_lastTime, 250 ) ) {
+			setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
+		}
+	}
+
+	// TODO: It would look better if smoke hulls are coupled together/allocated at once
+
+	if( cg_explosionsSmoke->integer ) {
+		const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.06f };
+
+		if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
+			hull->archimedesBottomAccel   = +45.0f;
+			hull->archimedesTopAccel      = +170.0f;
+			hull->xyExpansionTopAccel     = +75.0f;
+			hull->xyExpansionBottomAccel  = -30.0f;
+
+			hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
+			hull->expansionStartAt    = m_lastTime + 450;
+
+			hull->lodCurrLevelTangentRatio = 0.12f;
+			hull->tesselateClosestLod      = true;
+			hull->leprNextLevelColors      = true;
+
+			setupHullVertices( hull, origin, smokeColor, 85.0f, 7.5f );
 		}
 
-		if( cg_volumetricExplosionsWave->integer ) {
-			const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
-			if( WaveHull *const hull = allocWaveHull( m_lastTime, 250 ) ) {
-				setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
-			}
+		if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
+			hull->archimedesBottomAccel   = +35.0f;
+			hull->archimedesTopAccel      = +175.0f;
+			hull->xyExpansionTopAccel     = +95.0f;
+			hull->xyExpansionBottomAccel  = -25.0f;
+
+			hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
+			hull->expansionStartAt    = m_lastTime + 450;
+
+			hull->lodCurrLevelTangentRatio = 0.12f;
+			hull->tesselateClosestLod      = true;
+			hull->leprNextLevelColors      = true;
+
+			setupHullVertices( hull, origin, smokeColor, 100.0f, 7.5f );
 		}
-
-		// TODO: It would look better if smoke hulls are coupled together/allocated at once
-
-		if( cg_volumetricExplosionsSmoke->integer ) {
-			const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.06f };
-
-			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
-				hull->archimedesBottomAccel   = +45.0f;
-				hull->archimedesTopAccel      = +170.0f;
-				hull->xyExpansionTopAccel     = +75.0f;
-				hull->xyExpansionBottomAccel  = -30.0f;
-
-				hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
-				hull->expansionStartAt    = m_lastTime + 450;
-
-				hull->lodCurrLevelTangentRatio = 0.12f;
-				hull->tesselateClosestLod      = true;
-				hull->leprNextLevelColors      = true;
-
-				setupHullVertices( hull, origin, smokeColor, 85.0f, 7.5f );
-			}
-
-			if( SmokeHull *const hull = allocSmokeHull( m_lastTime, 2000 ) ) {
-				hull->archimedesBottomAccel   = +35.0f;
-				hull->archimedesTopAccel      = +175.0f;
-				hull->xyExpansionTopAccel     = +95.0f;
-				hull->xyExpansionBottomAccel  = -25.0f;
-
-				hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
-				hull->expansionStartAt    = m_lastTime + 450;
-
-				hull->lodCurrLevelTangentRatio = 0.12f;
-				hull->tesselateClosestLod      = true;
-				hull->leprNextLevelColors      = true;
-
-				setupHullVertices( hull, origin, smokeColor, 100.0f, 7.5f );
-			}
-		}
-	} else {
-		const float spriteRadius = 40.0f * radius * lightRadiusScale;
-		EntityEffect *effect = addSpriteEffect( cgs.media.shaderRocketExplosion, origin, spriteRadius, 800u );
-		// TODO: Unify this with hulls (quake random dirs seem to be vertices of the 2-nd tess level icosphere)
-		const auto *randomDir       = kPredefinedDirs[m_rng.nextBounded( std::size( kPredefinedDirs ) )];
-		const float randomMagnitude = m_rng.nextFloat( -5.0f, 5.0f );
-		VectorScale( randomDir, randomMagnitude, effect->velocity );
 	}
 }
 
