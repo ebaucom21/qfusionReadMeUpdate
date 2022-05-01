@@ -214,7 +214,18 @@ struct alignas( 16 ) Particle {
 	// Common for flocks/aggregates.
 	// The name "rules" seems to be more appropriate than "params" for these stateless/shared objects.
 	struct AppearanceRules {
-		shader_s *material { nullptr };
+		// Points to an external buffer with a greater lifetime.
+		shader_s **materials;
+
+		// Points to external buffers with a greater lifetime
+		const vec4_t *initialColors;
+		const vec4_t *fadedInColors;
+		const vec4_t *fadedOutColors;
+
+		// Unfortunately, std::span can't be used for materials and colors due to value type restrictions.
+		// TODO: Use our custom span type
+		uint8_t numMaterials { 1 };
+		uint8_t numColors { 1 };
 
 		Kind kind { Sprite };
 
@@ -225,11 +236,6 @@ struct alignas( 16 ) Particle {
 		float lengthSpread { 0.0f };
 		float widthSpread { 0.0f };
 		float radiusSpread { 0.0f };
-
-		// Points to an external buffer with a greater lifetime
-		const float *initialColor { nullptr };
-		const float *fadedInColor { nullptr };
-		const float *fadedOutColor { nullptr };
 
 		float fadeInLifetimeFrac { 0.25f };
 		float fadeOutLifetimeFrac { 0.25f };
@@ -261,6 +267,11 @@ struct alignas( 16 ) Particle {
 	int8_t instanceLengthFraction { 0 };
 	int8_t instanceWidthFraction { 0 };
 	int8_t instanceRadiusFraction { 0 };
+
+	// Keeps an index of an instance material in the AppearanceRules span
+	uint8_t instanceMaterialIndex { 0 };
+	// Keeps an index of instance color parameters in AppearanceRules color-related spans
+	uint8_t instanceColorIndex { 0 };
 };
 
 struct ExternalMesh {

@@ -31,6 +31,8 @@ public:
 		operator T*() { return m_handle; }
 		[[nodiscard]]
 		operator const T*() const { return m_handle; }
+		[[nodiscard]]
+		auto getAddressOfHandle() -> T ** { return &m_handle; }
 	};
 
 	class CachedSound : public CachedHandle<sfx_s> {

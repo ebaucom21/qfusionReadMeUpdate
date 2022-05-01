@@ -107,7 +107,8 @@ private:
 							 const float *origin, unsigned particleSystemBin,
 							 Particle::AppearanceRules &&appearanceRules  ) -> ParticleTrail *;
 
-	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin, ConeFlockFiller *filler, int64_t currTime );
+	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
+									  ConeFlockParams *params, int64_t currTime );
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 
@@ -122,7 +123,7 @@ private:
 	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
-	ConeFlockFiller m_rocketParticlesFlockFiller {
+	ConeFlockParams m_rocketParticlesFlockParams {
 		.gravity     = -200,
 		.angle       = 15,
 		.bounceCount = 0,
@@ -132,7 +133,7 @@ private:
 		.maxTimeout  = 350
 	};
 
-	ConeFlockFiller m_rocketFireParticlesFlockFiller {
+	ConeFlockParams m_rocketFireParticlesFlockParams {
 		.gravity     = -200,
 		.angle       = 7.5,
 		.bounceCount = 0,
@@ -142,7 +143,7 @@ private:
 		.maxTimeout  = 200
 	};
 
-	ConeFlockFiller m_grenadeFuseParticlesFlockFiller {
+	ConeFlockParams m_grenadeFuseParticlesFlockParams {
 		.gravity     = -200,
 		.angle       = 5,
 		.bounceCount = 0,
@@ -152,7 +153,7 @@ private:
 		.maxTimeout  = 150
 	};
 
-	ConeFlockFiller m_grenadeSmokeParticlesFlockFiller {
+	ConeFlockParams m_grenadeSmokeParticlesFlockParams {
 		.gravity     = -200,
 		.angle       = 7.5f,
 		.bounceCount = 0,
@@ -162,7 +163,7 @@ private:
 		.maxTimeout  = 250
 	};
 
-	ConeFlockFiller m_blastSmokeParticlesFlockFiller {
+	ConeFlockParams m_blastSmokeParticlesFlockParams {
 		.gravity     = -300,
 		.angle       = 15,
 		.bounceCount = 0,
@@ -172,7 +173,7 @@ private:
 		.maxTimeout  = 250
 	};
 
-	ConeFlockFiller m_blastIonsParticlesFlockFiller {
+	ConeFlockParams m_blastIonsParticlesFlockParams {
 		.gravity     = -300,
 		.angle       = 15,
 		.bounceCount = 0,
@@ -182,7 +183,7 @@ private:
 		.maxTimeout  = 300
 	};
 
-	ConeFlockFiller m_electroParticlesFlockFiller {
+	ConeFlockParams m_electroParticlesFlockParams {
 		.gravity     = 0,
 		.angle       = 30,
 		.bounceCount = 0,

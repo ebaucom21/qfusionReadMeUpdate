@@ -718,8 +718,10 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			drawSurf->aggregateIndex = aggregateIndex;
 			drawSurf->particleIndex  = particleIndex;
 
+			shader_s *material = pa->appearanceRules.materials[particle->instanceMaterialIndex];
+
 			// TODO: Inline/add some kind of bulk insertion
-			addEntryToSortList( particleEntity, fog, pa->appearanceRules.material, distanceLike, 0, nullptr, drawSurf );
+			addEntryToSortList( particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf );
 		}
 	}
 }

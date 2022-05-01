@@ -12,7 +12,7 @@ template <typename> class SingletonHolder;
 #include <span>
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
-struct UniformFlockFiller {
+struct UniformFlockParams {
 	float origin[3] { 1.0f / 0.0f, 1.0f / 0.0f, 1.0f / 0.0f };
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float gravity { 600 };
@@ -23,14 +23,10 @@ struct UniformFlockFiller {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
-
-	[[nodiscard]]
-	auto fill( Particle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
-struct ConeFlockFiller {
+struct ConeFlockParams {
 	float origin[3];
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float dir[3] { 0.0f, 0.0f, 1.0f };
@@ -43,11 +39,23 @@ struct ConeFlockFiller {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
-
-	[[nodiscard]]
-	auto fill( Particle *__restrict, unsigned maxParticles,
-			   wsw::RandomGenerator *__restrict, int64_t currTime ) __restrict -> std::pair<int64_t, unsigned>;
 };
+
+[[nodiscard]]
+auto fillParticleFlock( const UniformFlockParams *__restrict params,
+				        Particle *__restrict particles,
+				        unsigned maxParticles,
+				        const Particle::AppearanceRules *__restrict appearanceRules,
+				        wsw::RandomGenerator *__restrict rng,
+				        int64_t currTime ) -> std::pair<int64_t, unsigned>;
+
+[[nodiscard]]
+auto fillParticleFlock( const ConeFlockParams *__restrict params,
+				        Particle *__restrict particles,
+				        unsigned maxParticles,
+						const Particle::AppearanceRules *__restrict appearanceRules,
+				  		wsw::RandomGenerator *__restrict rng,
+						int64_t currTime ) -> std::pair<int64_t, unsigned>;
 
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
@@ -115,41 +123,24 @@ private:
 	[[nodiscard]]
 	auto createFlock( unsigned binIndex, int64_t currTime ) -> ParticleFlock *;
 
-	[[nodiscard]]
-	static auto cgTimeFixme() -> int64_t;
+	template <typename FlockParams>
+	void addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
+							   const FlockParams &flockParams,
+							   unsigned binIndex, unsigned maxParticles );
 public:
 	ParticleSystem();
 	~ParticleSystem();
 
-	template <typename Filler>
-	void addSmallParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
-		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock   = createFlock( 0, currTime );
-		flock->appearanceRules = appearanceRules;
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxSmallFlockSize, &m_rng, currTime );
-		flock->timeoutAt = timeoutAt;
-		flock->numParticlesLeft = numParticles;
-	}
+	// Use this non-templated interface to reduce call site code bloat
 
-	template <typename Filler>
-	void addMediumParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
-		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock   = createFlock( 1, currTime );
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxMediumFlockSize, &m_rng, currTime );
-		flock->timeoutAt        = timeoutAt;
-		flock->numParticlesLeft = numParticles;
-		flock->appearanceRules  = appearanceRules;
-	}
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
 
-	template <typename Filler>
-	void addLargeParticleFlock( const Particle::AppearanceRules &appearanceRules, Filler &&filler ) {
-		const int64_t currTime = cgTimeFixme();
-		ParticleFlock *flock   = createFlock( 2, currTime );
-		const auto [timeoutAt, numParticles] = filler.fill( flock->particles, kMaxLargeFlockSize, &m_rng, currTime );
-		flock->timeoutAt        = timeoutAt;
-		flock->numParticlesLeft = numParticles;
-		flock->appearanceRules  = appearanceRules;
-	}
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
+
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
 
 	[[nodiscard]]
 	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules, unsigned binIndex ) -> ParticleFlock *;

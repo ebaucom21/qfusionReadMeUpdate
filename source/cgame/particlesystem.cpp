@@ -35,11 +35,6 @@ ParticleSystem::~ParticleSystem() {
 	}
 }
 
-// Just to break the header dependency loop
-auto ParticleSystem::cgTimeFixme() -> int64_t {
-	return cg.time;
-}
-
 void ParticleSystem::unlinkAndFree( ParticleFlock *flock ) {
 	FlocksBin &bin = m_bins[flock->binIndex];
 	wsw::unlink( flock, &bin.head );
@@ -93,6 +88,49 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	return flock;
 }
 
+template <typename FlockParams>
+void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
+										   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles ) {
+	const int64_t currTime = cg.time;
+	ParticleFlock *flock   = createFlock( binIndex, currTime );
+	const auto [timeoutAt, numParticles] = fillParticleFlock( std::addressof( flockParams ),
+															  flock->particles, maxParticles,
+															  std::addressof( appearanceRules ), &m_rng, currTime );
+	flock->timeoutAt        = timeoutAt;
+	flock->numParticlesLeft = numParticles;
+	flock->appearanceRules  = appearanceRules;
+}
+
+void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
+											const UniformFlockParams &flockParams ) {
+	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+}
+
+void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
+											const ConeFlockParams &flockParams ) {
+	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+}
+
+void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
+											 const UniformFlockParams &flockParams ) {
+	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+}
+
+void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
+											 const ConeFlockParams &flockParams ) {
+	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+}
+
+void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
+											const UniformFlockParams &flockParams ) {
+	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+}
+
+void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
+											const ConeFlockParams &flockParams ) {
+	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+}
+
 auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, unsigned binIndex ) -> ParticleFlock * {
 	assert( binIndex == kClippedTrailFlocksBin || binIndex == kNonClippedTrailFlocksBin );
 
@@ -108,47 +146,58 @@ auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, u
 	return flock;
 }
 
-auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
-							   wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
+auto fillParticleFlock( const UniformFlockParams *__restrict params,
+						Particle *__restrict particles,
+						unsigned maxParticles,
+						const Particle::AppearanceRules *__restrict appearanceRules,
+						wsw::RandomGenerator *__restrict rng,
+						int64_t currTime )
 	-> std::pair<int64_t, unsigned> {
-	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
+	const vec3_t initialOrigin {
+		params->origin[0] + params->offset[0],
+		params->origin[1] + params->offset[1],
+		params->origin[2] + params->offset[2]
+	};
 
 	unsigned numParticles = maxParticles;
 	// We do not specify the exact bounds but a percentage
 	// so we can use the same filler for different bin flocks.
-	if( this->minPercentage != 1.0f && this->maxPercentage != 1.0f ) {
-		assert( this->minPercentage >= 0.0f && this->minPercentage <= 1.0f );
-		assert( this->maxPercentage >= 0.0f && this->minPercentage <= 1.0f );
-		const float percentage = rng->nextFloat( this->minPercentage, this->maxPercentage );
+	if( params->minPercentage != 1.0f && params->maxPercentage != 1.0f ) {
+		assert( params->minPercentage >= 0.0f && params->minPercentage <= 1.0f );
+		assert( params->maxPercentage >= 0.0f && params->minPercentage <= 1.0f );
+		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
 		numParticles = std::clamp( numParticles, 1u, maxParticles );
 	}
 
-	assert( minSpeed >= 0.0f && minSpeed <= 1000.0f );
-	assert( maxSpeed >= 0.0f && maxSpeed <= 1000.0f );
-	assert( minSpeed <= maxSpeed );
+	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
+	assert( params->maxSpeed >= 0.0f && params->maxSpeed <= 1000.0f );
+	assert( params->minSpeed <= params->maxSpeed );
 
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
-	assert( minTimeout && minTimeout <= maxTimeout && maxTimeout < 3000 );
-	const unsigned timeoutSpread = maxTimeout - minTimeout;
+	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
+	const unsigned timeoutSpread = params->maxTimeout - params->minTimeout;
 	auto resultTimeout = std::numeric_limits<int64_t>::min();
+
+	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
+	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
-		Vector4Set( p->accel, 0, 0, -gravity, 0 );
-		p->bouncesLeft = bounceCount;
+		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
+		p->bouncesLeft = params->bounceCount;
 
 		// We shouldn't really care of bias for some dirs in this case
 		const float *randomDir = dirs[rng->nextBoundedFast( NUMVERTEXNORMALS )];
-		const float speed = rng->nextFloat( minSpeed, maxSpeed );
+		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
 
 		VectorScale( randomDir, speed, p->velocity );
 		p->velocity[3] = 0.0f;
 
 		p->spawnTime = currTime;
-		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->lifetime = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -156,55 +205,79 @@ auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParti
 		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
 		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+
+		// We try relying on branch prediction facilities
+		// TODO: Add template/if constexpr specializations
+		if( hasMultipleMaterials ) {
+			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+		} else {
+			p->instanceMaterialIndex = 0;
+		}
+		if( hasMultipleColors ) {
+			p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+		} else {
+			p->instanceColorIndex = 0;
+		}
 	}
 
 	return { resultTimeout, numParticles };
 }
 
-auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
-							wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
+auto fillParticleFlock( const ConeFlockParams *__restrict params,
+						Particle *__restrict particles,
+						unsigned maxParticles,
+						const Particle::AppearanceRules *__restrict appearanceRules,
+						wsw::RandomGenerator *__restrict rng,
+						int64_t currTime )
 	-> std::pair<int64_t, unsigned> {
-	const vec3_t initialOrigin { origin[0] + offset[0], origin[1] + offset[1], origin[2] + offset[2] };
+	const vec3_t initialOrigin {
+		params->origin[0] + params->offset[0],
+		params->origin[1] + params->offset[1],
+		params->origin[2] + params->offset[2]
+	};
 
 	unsigned numParticles = maxParticles;
-	if( this->minPercentage != 1.0f && this->maxPercentage != 1.0f ) {
-		assert( this->minPercentage >= 0.0f && this->minPercentage <= 1.0f );
-		assert( this->maxPercentage >= 0.0f && this->minPercentage <= 1.0f );
+	if( params->minPercentage != 1.0f && params->maxPercentage != 1.0f ) {
+		assert( params->minPercentage >= 0.0f && params->minPercentage <= 1.0f );
+		assert( params->maxPercentage >= 0.0f && params->minPercentage <= 1.0f );
 		// We do not specify the exact bounds but a percentage
 		// so we can use the same filler for different bin flocks.
-		const float percentage = rng->nextFloat( this->minPercentage, this->maxPercentage );
+		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
 		numParticles = std::clamp( numParticles, 1u, maxParticles );
 	}
 
 	// TODO: Supply a cosine value as a parameter?
-	const float minZ = std::cos( (float)DEG2RAD( angle ) );
+	const float minZ = std::cos( (float)DEG2RAD( params->angle ) );
 	const float r = Q_Sqrt( 1.0f - minZ * minZ );
 
-	assert( minTimeout && minTimeout <= maxTimeout && maxTimeout < 3000 );
-	const unsigned timeoutSpread = maxTimeout - minTimeout;
+	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
+	const unsigned timeoutSpread = params->maxTimeout - params->minTimeout;
 	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
 	mat3_t transformMatrix;
-	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], dir, transformMatrix );
+	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], params->dir, transformMatrix );
+
+	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
+	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 
 	// TODO: Make cached conical samples for various angles?
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
-		Vector4Set( p->accel, 0, 0, -gravity, 0 );
-		p->bouncesLeft = bounceCount;
+		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
+		p->bouncesLeft = params->bounceCount;
 
 		// https://math.stackexchange.com/a/205589
 		const float z = minZ + ( 1.0f - minZ ) * rng->nextFloat( -1.0f, 1.0f );
 		const float phi = 2.0f * (float)M_PI * rng->nextFloat();
 
-		const float speed = rng->nextFloat( minSpeed, maxSpeed );
+		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
 		Matrix3_TransformVector( transformMatrix, untransformed, p->velocity );
 
 		p->spawnTime = currTime;
-		p->lifetime = minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->lifetime = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -212,6 +285,19 @@ auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticle
 		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
 		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+
+		// We try relying on branch prediction facilities
+		// TODO: Add template/if constexpr specializations
+		if( hasMultipleMaterials ) {
+			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+		} else {
+			p->instanceMaterialIndex = 0;
+		}
+		if( hasMultipleColors ) {
+			p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+		} else {
+			p->instanceColorIndex = 0;
+		}
 	}
 
 	return { resultTimeout, numParticles };
