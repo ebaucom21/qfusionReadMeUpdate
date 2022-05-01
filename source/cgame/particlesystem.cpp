@@ -161,30 +161,6 @@ auto UniformFlockFiller::fill( Particle *__restrict particles, unsigned maxParti
 	return { resultTimeout, numParticles };
 }
 
-static void makeMatrixForDirToDirRotation( const float *fromDir, const float *toDir, mat3_t result ) {
-	assert( ( VectorLengthFast( toDir ) - 1.0f ) < 0.01f );
-
-	const float dot = DotProduct( fromDir, toDir );
-	if( dot > +0.999f ) [[unlikely]] {
-		std::memset( result, 0, sizeof( mat3_t ) );
-		result[0] = result[4] = result[8] = +1.0f;
-		return;
-	}
-
-	if( dot < -0.999f ) [[unlikely]] {
-		std::memset( result, 0, sizeof( mat3_t ) );
-		result[0] = result[4] = result[8] = -1.0f;
-		return;
-	}
-
-	vec3_t axis;
-	CrossProduct( fromDir, toDir, axis );
-
-	const float angle = std::acos( dot );
-	Matrix3_Identity( result );
-	Matrix3_Rotate( result, angle, axis[0], axis[1], axis[2], result );
-}
-
 auto ConeFlockFiller::fill( Particle *__restrict particles, unsigned maxParticles,
 							wsw::RandomGenerator *__restrict rng, int64_t currTime ) __restrict
 	-> std::pair<int64_t, unsigned> {
