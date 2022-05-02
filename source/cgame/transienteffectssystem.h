@@ -101,6 +101,8 @@ private:
 	auto allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
 						   unsigned fadeOutOffset ) -> LightEffect *;
 
+	void spawnElectroboltLikeImpactHull( const float *origin, const float *baseColor );
+
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 

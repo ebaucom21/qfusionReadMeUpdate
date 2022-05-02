@@ -213,7 +213,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	if( cg_explosionsWave->integer ) {
 		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
 		if( auto *const hull = hullsSystem->allocWaveHull( m_lastTime, 250 ) ) {
-			hullsSystem->setupHullVertices( hull, origin, waveColor, 500.0f, 10.0f );
+			hullsSystem->setupHullVertices( hull, origin, waveColor, 500.0f, 50.0f );
 		}
 	}
 
@@ -303,6 +303,9 @@ void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, con
 	VectorMA( origin, 4.0f, dir, lightEffect->origin );
 	Vector4Copy( colorWhite, lightEffect->color );
 	lightEffect->radius = 144.0f;
+
+	const vec4_t baseHullColor { 0.3f, 0.6f, 1.0f, 1.0f };
+	spawnElectroboltLikeImpactHull( origin, baseHullColor );
 }
 
 void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir, const float *color ) {
@@ -312,6 +315,21 @@ void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const 
 	VectorMA( origin, 4.0f, dir, lightEffect->origin );
 	VectorCopy( colorMagenta, lightEffect->color );
 	lightEffect->radius = 144.0f;
+
+	spawnElectroboltLikeImpactHull( origin, color );
+}
+
+void TransientEffectsSystem::spawnElectroboltLikeImpactHull( const float *origin, const float *baseColor ) {
+	if( cg_explosionsWave->integer ) {
+		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
+			const vec4_t hullColor { baseColor[0], baseColor[1], baseColor[2], 0.075f };
+			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 750.0f, 100.0f );
+		}
+		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
+			const vec4_t hullColor { baseColor[0], baseColor[1], baseColor[2], 0.1f };
+			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 125.0f, 50.0f );
+		}
+	}
 }
 
 void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const float *dir ) {
@@ -322,6 +340,13 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 	VectorMA( origin, 4.0f, dir, lightEffect->origin );
 	VectorCopy( colorGreen, lightEffect->color );
 	lightEffect->radius = 108.0f;
+
+	if( cg_explosionsWave->integer ) {
+		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 150 ) ) {
+			const vec4_t hullColor { colorGreen[0], colorGreen[1], colorGreen[2], 0.05f };
+			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 300.0f, 75.0f );
+		}
+	}
 }
 
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
@@ -332,6 +357,13 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 	VectorMA( origin, 8.0f, dir, lightEffect->origin );
 	VectorCopy( colorYellow, lightEffect->color );
 	lightEffect->radius = 200.0f;
+
+	if( cg_explosionsWave->integer ) {
+		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
+			const vec4_t hullColor { 1.0f, 0.9f, 0.3f, 0.05f };
+			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 500.0f, 50.0f );
+		}
+	}
 }
 
 void TransientEffectsSystem::spawnGunbladeBladeImpactEffect( const float *origin, const float *dir ) {
