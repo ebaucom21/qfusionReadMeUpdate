@@ -319,6 +319,7 @@ typedef struct {
 #include "particlesystem.h"
 #include "polyeffectssystem.h"
 #include "effectssystemfacade.h"
+#include "simulatedhullssystem.h"
 
 typedef struct cg_state_s {
 	int64_t time;
@@ -416,6 +417,7 @@ typedef struct cg_state_s {
 	CrosshairState strongCrosshairState { CrosshairState::Strong, 300 };
 
 	ParticleSystem particleSystem;
+	SimulatedHullsSystem simulatedHullsSystem;
 	EffectsSystemFacade effectsSystem;
 	PolyEffectsSystem polyEffectsSystem;
 } cg_state_t;
