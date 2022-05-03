@@ -174,16 +174,17 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.initialColors  = &kRocketTrailInitialColor,
 				.fadedInColors  = &kRocketTrailFadedInColor,
 				.fadedOutColors = &kRocketTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 20.0f,
-				.fadeInLifetimeFrac  = 0.45f,
-				.fadeOutLifetimeFrac = 0.50f,
-				.lifetimeFracOffsetMillis = 16,
-				.sizeBehaviour = Particle::Expanding
+				.kind                 = Particle::Sprite,
+				.radius               = 20.0f,
+				.radiusSpread         = 3.0f,
+				.fadeInLifetimeFrac   = 0.45f,
+				.fadeOutLifetimeFrac  = 0.50f,
+				.sizeBehaviour        = Particle::Expanding,
+				.lifetimeFracOffsetMillis = 8,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &m_rocketParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &m_rocketSmokeParticlesFlockParams, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
@@ -193,12 +194,12 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.initialColors  = &kRocketFireTrailInitialColor,
 				.fadedInColors  = &kRocketFireTrailFadedInColor,
 				.fadedOutColors = &kRocketFireTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 8.0f,
+				.kind                = Particle::Sprite,
+				.radius              = 8.0f,
 				.fadeInLifetimeFrac  = 0.30f,
 				.fadeOutLifetimeFrac = 0.45f,
+				.sizeBehaviour       = Particle::Shrinking,
 				.lifetimeFracOffsetMillis = 8,
-				.sizeBehaviour = Particle::Shrinking
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -224,12 +225,13 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.initialColors  = &kGrenadeSmokeTrailInitialColor,
 				.fadedInColors  = &kGrenadeSmokeTrailFadedInColor,
 				.fadedOutColors = &kGrenadeSmokeTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 16.0f,
+				.kind                = Particle::Sprite,
+				.radius              = 16.0f,
+				.radiusSpread        = 2.0f,
 				.fadeInLifetimeFrac  = 0.25f,
 				.fadeOutLifetimeFrac = 0.35f,
+				.sizeBehaviour       = Particle::Shrinking,
 				.lifetimeFracOffsetMillis = 8,
-				.sizeBehaviour = Particle::Shrinking
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) {
@@ -244,11 +246,11 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.initialColors  = &kGrenadeFuseTrailInitialColor,
 				.fadedInColors  = &kGrenadeFuseTrailFadedInColor,
 				.fadedOutColors = &kGrenadeFuseTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 8.0f,
+				.kind                = Particle::Sprite,
+				.radius              = 8.0f,
 				.fadeInLifetimeFrac  = 0.075f,
 				.fadeOutLifetimeFrac = 0.150f,
-				.sizeBehaviour = Particle::Shrinking
+				.sizeBehaviour       = Particle::Shrinking,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) {
@@ -258,12 +260,27 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 }
 
 static const vec4_t kBlastSmokeTrailInitialColor { 1.0f, 0.5f, 0.4f, 0.0f };
-static const vec4_t kBlastSmokeTrailFadedInColor { 1.0f, 0.8f, 0.4f, 0.25f };
+static const vec4_t kBlastSmokeTrailFadedInColor { 1.0f, 0.8f, 0.4f, 0.1f };
 static const vec4_t kBlastSmokeTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
-static const vec4_t kBlastIonsTrailInitialColor { 1.0f, 0.5f, 0.4f, 1.0f };
-static const vec4_t kBlastIonsTrailFadedInColor { 1.0f, 0.8f, 0.4f, 1.0f };
-static const vec4_t kBlastIonsTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 1.0f };
+static const vec4_t kBlastIonsTrailInitialColors[] {
+	{ 1.0f, 0.7f, 0.5f, 1.0f },
+	{ 1.0f, 0.7f, 0.5f, 1.0f },
+	{ 1.0f, 0.7f, 0.5f, 1.0f },
+	{ 1.0f, 0.7f, 0.5f, 1.0f }
+};
+static const vec4_t kBlastIonsTrailFadedInColors[] {
+	{ 1.0f, 0.7f, 0.5f, 1.0f },
+	{ 1.0f, 0.8f, 0.6f, 1.0f },
+	{ 1.0f, 0.9f, 0.9f, 1.0f },
+	{ 1.0f, 0.9f, 0.8f, 1.0f }
+};
+static const vec4_t kBlastIonsTrailFadedOutColors[] {
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f }
+};
 
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
@@ -274,12 +291,13 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.initialColors  = &kBlastSmokeTrailInitialColor,
 				.fadedInColors  = &kBlastSmokeTrailFadedInColor,
 				.fadedOutColors = &kBlastSmokeTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 10.0f,
+				.kind                = Particle::Sprite,
+				.radius              = 9.0f,
+				.radiusSpread        = 2.0f,
 				.fadeInLifetimeFrac  = 0.10f,
 				.fadeOutLifetimeFrac = 0.20f,
-				.lifetimeFracOffsetMillis = 8,
-				.sizeBehaviour = Particle::Expanding
+				.sizeBehaviour       = Particle::Expanding,
+				.lifetimeFracOffsetMillis = 4,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -290,13 +308,15 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
 				.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-				.initialColors  = &kBlastIonsTrailInitialColor,
-				.fadedInColors  = &kBlastIonsTrailFadedInColor,
-				.fadedOutColors = &kBlastIonsTrailFadedOutColor,
-				.kind     = Particle::Sprite,
-				.radius   = 5.0f,
-				.lifetimeFracOffsetMillis = 8,
-				.sizeBehaviour = Particle::Shrinking
+				.initialColors  = kBlastIonsTrailInitialColors,
+				.fadedInColors  = kBlastIonsTrailFadedInColors,
+				.fadedOutColors = kBlastIonsTrailFadedOutColors,
+				.numColors      = std::size( kBlastIonsTrailInitialColors ),
+				.kind           = Particle::Sprite,
+				.radius         = 3.0f,
+				.radiusSpread   = 0.75f,
+				.sizeBehaviour  = Particle::Shrinking,
+				.lifetimeFracOffsetMillis = 4,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -305,27 +325,53 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 	}
 }
 
-static const vec4_t kElectroTrailInitialColor { 0.5f, 0.7f, 1.0f, 1.0f };
-static const vec4_t kElectroTrailFadedInColor { 0.7f, 0.7f, 1.0f, 1.0f };
-static const vec4_t kElectroTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kElectroCloudTrailInitialColor { 0.5f, 0.7f, 1.0f, 1.0f };
+static const vec4_t kElectroCloudTrailFadedInColor { 0.7f, 0.7f, 1.0f, 0.1f };
+static const vec4_t kElectroCloudTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+
+static const vec4_t kElectroIonsTrailColors[] {
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 0.5f, 0.7f, 1.0f, 1.0f },
+	{ 0.5f, 0.7f, 1.0f, 1.0f },
+	{ 0.5f, 0.7f, 1.0f, 1.0f },
+	{ 0.5f, 0.7f, 1.0f, 1.0f },
+	{ 0.5f, 0.7f, 1.0f, 1.0f },
+	{ 0.3f, 0.3f, 1.0f, 1.0f },
+};
 
 void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
-	if( cg_projectileTrail->integer ) {
-		AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
-		if( !effects->particleTrails[0] ) {
-			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
-				.materials      = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-				.initialColors  = &kElectroTrailInitialColor,
-				.fadedInColors  = &kElectroTrailFadedInColor,
-				.fadedOutColors = &kElectroTrailFadedOutColor,
-				.kind           = Particle::Sprite,
-				.radius         = 6.0f,
-			});
-		}
-		if( ParticleTrail *trail = effects->particleTrails[0] ) {
-			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &m_electroParticlesFlockParams, currTime );
-		}
+	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
+	if( !effects->particleTrails[0] ) {
+		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
+			.materials      = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.initialColors  = &kElectroCloudTrailInitialColor,
+			.fadedInColors  = &kElectroCloudTrailFadedInColor,
+			.fadedOutColors = &kElectroCloudTrailFadedOutColor,
+			.kind           = Particle::Sprite,
+			.radius         = 8.0f,
+			.radiusSpread   = 2.0f,
+			.sizeBehaviour  = Particle::Expanding
+		});
+	}
+	if( ParticleTrail *trail = effects->particleTrails[0] ) {
+		updateAttachedParticleTrail( trail, origin, &m_electroCloudParticlesFlockParams, currTime );
+	}
+
+	if( !effects->particleTrails[1] ) {
+		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin, {
+			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.initialColors  = kElectroIonsTrailColors,
+			.fadedInColors  = kElectroIonsTrailColors,
+			.fadedOutColors = kElectroIonsTrailColors,
+			.numColors      = std::size( kElectroIonsTrailColors ),
+			.kind           = Particle::Sprite,
+			.radius         = 3.0f,
+			.radiusSpread   = 0.75f,
+			.sizeBehaviour  = Particle::Shrinking
+		});
+	}
+	if( ParticleTrail *trail = effects->particleTrails[1] ) {
+		updateAttachedParticleTrail( trail, origin, &m_electroIonsParticlesFlockParams, currTime );
 	}
 }
 

@@ -759,7 +759,7 @@ gs_weapon_definition_t gs_weaponDefs[] =
 			35,                             // minimum knockback
 
 			//projectile def
-			9000,                           // speed
+			7500,                           // speed
 			0,                              // spread
 			0,                              // v_spread
 			0,                              // friction

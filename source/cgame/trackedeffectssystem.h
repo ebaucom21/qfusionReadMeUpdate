@@ -123,7 +123,7 @@ private:
 	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
-	ConeFlockParams m_rocketParticlesFlockParams {
+	ConeFlockParams m_rocketSmokeParticlesFlockParams {
 		.gravity     = -200,
 		.angle       = 15,
 		.bounceCount = 0,
@@ -135,7 +135,7 @@ private:
 
 	ConeFlockParams m_rocketFireParticlesFlockParams {
 		.gravity     = -200,
-		.angle       = 7.5,
+		.angle       = 7.5f,
 		.bounceCount = 0,
 		.minSpeed    = 100,
 		.maxSpeed    = 150,
@@ -164,33 +164,43 @@ private:
 	};
 
 	ConeFlockParams m_blastSmokeParticlesFlockParams {
-		.gravity     = -300,
+		.gravity     = -150,
 		.angle       = 15,
 		.bounceCount = 0,
-		.minSpeed    = 125,
-		.maxSpeed    = 150,
+		.minSpeed    = 150,
+		.maxSpeed    = 200,
 		.minTimeout  = 200,
 		.maxTimeout  = 250
 	};
 
 	ConeFlockParams m_blastIonsParticlesFlockParams {
-		.gravity     = -300,
+		.gravity     = -150,
 		.angle       = 15,
 		.bounceCount = 0,
-		.minSpeed    = 150,
-		.maxSpeed    = 200,
-		.minTimeout  = 250,
-		.maxTimeout  = 300
+		.minSpeed    = 200,
+		.maxSpeed    = 300,
+		.minTimeout  = 300,
+		.maxTimeout  = 350
 	};
 
-	ConeFlockParams m_electroParticlesFlockParams {
+	ConeFlockParams m_electroCloudParticlesFlockParams {
 		.gravity     = 0,
-		.angle       = 30,
+		.angle       = 12,
 		.bounceCount = 0,
-		.minSpeed    = 50,
-		.maxSpeed    = 50,
+		.minSpeed    = 75,
+		.maxSpeed    = 100,
 		.minTimeout  = 100,
 		.maxTimeout  = 150
+	};
+
+	ConeFlockParams m_electroIonsParticlesFlockParams {
+		.gravity     = 0,
+		.angle       = 12,
+		.bounceCount = 0,
+		.minSpeed    = 200,
+		.maxSpeed    = 300,
+		.minTimeout  = 250,
+		.maxTimeout  = 300
 	};
 
 	AttachedEntityEffects m_attachedEntityEffects[MAX_EDICTS];
