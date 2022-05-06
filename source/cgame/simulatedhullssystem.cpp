@@ -391,6 +391,17 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 	auto *const __restrict spikeSpeedBoost = (float *)alloca( sizeof( float ) * verticesSpan.size() );
 
+	const float *const __restrict globalBiasDir = verticesSpan[rng->nextBounded( verticesSpan.size() ) ];
+	assert( std::fabs( VectorLengthFast( globalBiasDir ) - 1.0f ) < 0.001f );
+
+	// Compute a hull-global bias for every vertex once
+	auto *const __restrict globalVertexDotBias = (float *)alloca( sizeof( float ) * verticesSpan.size() );
+	for( unsigned i = 0; i < verticesSpan.size(); ++i ) {
+		const float *__restrict vertex = verticesSpan[i];
+		// We have decided that permitting a negative bias yields better results.
+		globalVertexDotBias[i] = DotProduct( vertex, globalBiasDir );
+	}
+
 	// Setup layers data
 	assert( hull->numLayers >= 1 && hull->numLayers < 8 );
 	for( unsigned layerNum = 0; layerNum < hull->numLayers; ++layerNum ) {
@@ -399,11 +410,11 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 		vec4_t *const __restrict positions          = layer->vertexPositions;
 		byte_vec4_t *const __restrict colors        = layer->vertexColors;
 		vec2_t *const __restrict speedsAndDistances = layer->vertexSpeedsAndDistances;
-		const float *const __restrict randomBiasDir = verticesSpan[rng->nextBounded( verticesSpan.size() )];
+		const float *const __restrict layerBiasDir  = verticesSpan[rng->nextBounded( verticesSpan.size() )];
 
 		assert( params->speed >= 0.0f && params->minSpeedSpike >= 0.0f && params->biasAlongChosenDir >= 0.0f );
 		assert( params->minSpeedSpike < params->maxSpeedSpike );
-		assert( std::fabs( VectorLengthFast( randomBiasDir ) - 1.0f ) < 0.01f );
+		assert( std::fabs( VectorLengthFast( layerBiasDir ) - 1.0f ) < 0.001f );
 
 		layer->finalOffset         = params->finalOffset;
 		layer->colorChangeTimeline = params->colorChangeTimeline;
@@ -421,9 +432,11 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 			// Position XYZ is computed prior to submission in stateless fashion
 			positions[i][3] = 1.0f;
 
-			const float *vertexDir     = vertices[i];
-			const float dotWithBiasDir = DotProduct( vertexDir, randomBiasDir );
-			speedsAndDistances[i][0]   = params->speed + std::max( 0.0f, dotWithBiasDir ) * params->biasAlongChosenDir;
+			const float *vertexDir   = vertices[i];
+			const float layerDotBias = DotProduct( vertexDir, layerBiasDir );
+			const float layerSqrBias = std::copysign( layerDotBias * layerDotBias, layerDotBias );
+			const float vertexBias   = std::max( layerSqrBias, globalVertexDotBias[i] );
+			speedsAndDistances[i][0] = params->speed + vertexBias * params->biasAlongChosenDir;
 
 			if( rng->nextFloat() > params->speedSpikeChance ) [[likely]] {
 				speedsAndDistances[i][0] += rng->nextFloat( 0.0f, maxSmallRandomOffset );
