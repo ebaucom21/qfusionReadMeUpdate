@@ -68,9 +68,6 @@ struct alignas( 16 ) ParticleFlock {
 	ParticleFlock *prev { nullptr }, *next { nullptr };
 	float mins[4];
 	float maxs[4];
-
-	void simulate( int64_t currTime, float deltaSeconds );
-	void simulateWithoutClipping( int64_t currTime, float deltaSeconds );
 };
 
 class ParticleSystem {
@@ -127,6 +124,9 @@ private:
 	void addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
 							   const FlockParams &flockParams,
 							   unsigned binIndex, unsigned maxParticles );
+
+	static void simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
+	static void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
 public:
 	ParticleSystem();
 	~ParticleSystem();

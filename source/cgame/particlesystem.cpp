@@ -314,7 +314,14 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
 			if( currTime < flock->timeoutAt ) [[likely]] {
-				flock->simulate( currTime, deltaSeconds );
+				// Otherwise, the flock could be awaiting filling, don't modify its timeout
+				if( flock->numParticlesLeft ) [[likely]] {
+					if( flock->shapeList ) {
+						simulate( flock, currTime, deltaSeconds );
+					} else {
+						simulateWithoutClipping( flock, currTime, deltaSeconds );
+					}
+				}
 			} else {
 				unlinkAndFree( flock );
 			}
@@ -341,22 +348,13 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
 }
 
-void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
-	if( !numParticlesLeft ) [[unlikely]] {
-		// Could be awaiting filling, don't modify its timeout
-		return;
-	}
-
-	if( !shapeList ) [[unlikely]] {
-		simulateWithoutClipping( currTime, deltaSeconds );
-		return;
-	}
+void ParticleSystem::simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
+	assert( flock->shapeList && flock->numParticlesLeft );
 
 	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < numParticlesLeft; ++i ) {
-		Particle *const __restrict particle = particles + i;
+	for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
+		Particle *const __restrict particle = flock->particles + i;
 		VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
-
 		VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
 		boundsBuilder.addPoint( particle->origin );
 	}
@@ -364,37 +362,39 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 	vec3_t possibleMins, possibleMaxs;
 	boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
 	// TODO: Add a fused call
-	CM_BuildShapeList( cl.cms, shapeList, possibleMins, possibleMaxs, MASK_SOLID );
-	CM_ClipShapeList( cl.cms, shapeList, shapeList, possibleMins, possibleMaxs );
+	CM_BuildShapeList( cl.cms, flock->shapeList, possibleMins, possibleMaxs, MASK_SOLID );
+	CM_ClipShapeList( cl.cms, flock->shapeList, flock->shapeList, possibleMins, possibleMaxs );
 
 	// TODO: Let the BoundsBuilder store 4-component vectors
-	VectorCopy( possibleMins, this->mins );
-	VectorCopy( possibleMaxs, this->maxs );
-	this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
+	VectorCopy( possibleMins, flock->mins );
+	VectorCopy( possibleMaxs, flock->maxs );
+	flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 
 	trace_t trace;
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
-	for( unsigned i = 0; i < numParticlesLeft; ) {
-		Particle *const __restrict p = particles + i;
+	for( unsigned i = 0; i < flock->numParticlesLeft; ) {
+		Particle *const __restrict p = flock->particles + i;
 		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
-			CM_ClipToShapeList( cl.cms, shapeList, &trace, p->oldOrigin, p->origin, vec3_origin, vec3_origin, MASK_SOLID );
+			CM_ClipToShapeList( cl.cms, flock->shapeList, &trace, p->oldOrigin,
+								p->origin, vec3_origin, vec3_origin, MASK_SOLID );
 			if( trace.fraction == 1.0f ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
-				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
+				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
 				timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++i;
 				continue;
 			}
 
-			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) {
-				if( p->bouncesLeft ) {
+			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
+				if( p->bouncesLeft ) [[likely]] {
 					p->bouncesLeft--;
 
 					// Reflect the velocity
 					vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
-					if( const float oldSquareSpeed = VectorLengthSquared( oldVelocityDir ); oldSquareSpeed > 1.0f ) {
+					const float oldSquareSpeed = VectorLengthSquared( oldVelocityDir );
+					if( oldSquareSpeed > 1.0f ) [[likely]] {
 						const float invOldSpeed = Q_RSqrt( oldSquareSpeed );
 						VectorScale( oldVelocityDir, invOldSpeed, oldVelocityDir );
 
@@ -409,7 +409,7 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 						// This is not really correct but is OK.
 						VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
 
-						p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
+						p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
 						timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
 						++i;
 						continue;
@@ -420,26 +420,26 @@ void ParticleFlock::simulate( int64_t currTime, float deltaSeconds ) {
 
 		// Dispose this particle
 		// TODO: Avoid this memcpy call by copying components directly via intrinsics
-		--numParticlesLeft;
-		particles[i] = particles[numParticlesLeft];
+		--flock->numParticlesLeft;
+		flock->particles[i] = flock->particles[flock->numParticlesLeft];
 	}
 
-	if( numParticlesLeft ) {
-		timeoutAt = timeoutOfParticlesLeft;
+	if( flock->numParticlesLeft ) {
+		flock->timeoutAt = timeoutOfParticlesLeft;
 	} else {
 		// Dispose next frame
-		timeoutAt = 0;
+		flock->timeoutAt = 0;
 	}
 }
 
-void ParticleFlock::simulateWithoutClipping( int64_t currTime, float deltaSeconds ) {
-	assert( !shapeList && numParticlesLeft );
+void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
+	assert( !flock->shapeList && flock->numParticlesLeft );
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
 
 	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < numParticlesLeft; ) {
-		Particle *const __restrict p = particles + i;
+	for( unsigned i = 0; i < flock->numParticlesLeft; ) {
+		Particle *const __restrict p = flock->particles + i;
 		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			// TODO: Two origins are redundant for non-clipped particles
 			VectorMA( p->velocity, deltaSeconds, p->accel, p->velocity );
@@ -450,28 +450,28 @@ void ParticleFlock::simulateWithoutClipping( int64_t currTime, float deltaSecond
 			boundsBuilder.addPoint( p->origin );
 
 			timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
-			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
 
 			++i;
 		} else {
-			numParticlesLeft--;
-			particles[i] = particles[numParticlesLeft];
+			flock->numParticlesLeft--;
+			flock->particles[i] = flock->particles[flock->numParticlesLeft];
 		}
 	}
 
 	// We still have to compute and store bounds as they're used by the renderer culling systems
-	if( numParticlesLeft ) {
+	if( flock->numParticlesLeft ) {
 		vec3_t possibleMins, possibleMaxs;
 		boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
 		// TODO: Let the BoundsBuilder store 4-component vectors
-		VectorCopy( possibleMins, this->mins );
-		VectorCopy( possibleMaxs, this->maxs );
-		this->mins[3] = 0.0f, this->maxs[3] = 1.0f;
+		VectorCopy( possibleMins, flock->mins );
+		VectorCopy( possibleMaxs, flock->maxs );
+		flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 	} else {
 		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::min();
-		Vector4Set( this->mins, minVal, minVal, minVal, minVal );
-		Vector4Set( this->maxs, maxVal, maxVal, maxVal, maxVal );
+		Vector4Set( flock->mins, minVal, minVal, minVal, minVal );
+		Vector4Set( flock->maxs, maxVal, maxVal, maxVal, maxVal );
 	}
 
-	timeoutAt = timeoutOfParticlesLeft;
+	flock->timeoutAt = timeoutOfParticlesLeft;
 }
