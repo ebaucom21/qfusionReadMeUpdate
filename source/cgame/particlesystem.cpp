@@ -450,13 +450,12 @@ void ParticleFlock::simulateWithoutClipping( int64_t currTime, float deltaSecond
 			boundsBuilder.addPoint( p->origin );
 
 			timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
-			// TODO: Cache the reciprocal?
-			p->lifetimeFrac = (float)( currTime - p->spawnTime ) * Q_Rcp( p->lifetime );
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, appearanceRules );
 
 			++i;
 		} else {
-			particles[i] = particles[numParticlesLeft];
 			numParticlesLeft--;
+			particles[i] = particles[numParticlesLeft];
 		}
 	}
 
