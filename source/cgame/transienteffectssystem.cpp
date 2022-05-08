@@ -72,8 +72,8 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer0ColorC
 		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f,
 	},
 	{
-		.replacementPalette = kFireCoreReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.008f, .replacementChance = 0.035f
+		.replacementPalette = kFireCoreReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
+		.dropChance = 0.008f, .replacementChance = 0.05f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -87,7 +87,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer1ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.008f, .replacementChance = 0.025f
+		.dropChance = 0.008f, .replacementChance = 0.05f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -101,7 +101,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer2ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.025f, .replacementChance = 0.045f
+		.dropChance = 0.025f, .replacementChance = 0.085f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -111,11 +111,11 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer2ColorC
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer3ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+		.nodeActivationLifetimeFraction = 0.05f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.035f, .replacementChance = 0.065f
+		.dropChance = 0.035f, .replacementChance = 0.10f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -129,7 +129,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer4ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.035f, .replacementChance = 0.085f
+		.dropChance = 0.035f, .replacementChance = 0.125f
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
@@ -162,14 +162,14 @@ static const SimulatedHullsSystem::HullLayerParams kFireHullLayerParams[5] {
 	{
 		.speed = 52.5f, .finalOffset = 2.0f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 15.0f,
+		.biasAlongChosenDir = 20.0f,
 		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer3ColorChangeTimeline
 	},
 	{
 		.speed = 60.0f, .finalOffset = 0.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 15.0f,
+		.biasAlongChosenDir = 20.0f,
 		.initialColor = { 1.0f, 0.7f, 0.5f, 0.3f },
 		.colorChangeTimeline = kFireHullLayer4ColorChangeTimeline
 	},
@@ -206,8 +206,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
-	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 800 ) ) {
-		hullsSystem->setupHullVertices( hull, origin, 0.9f, kFireHullLayerParams );
+	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 750 ) ) {
+		hullsSystem->setupHullVertices( hull, origin, 0.85f, kFireHullLayerParams );
 	}
 
 	if( cg_explosionsWave->integer ) {
