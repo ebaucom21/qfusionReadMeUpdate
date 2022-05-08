@@ -1402,8 +1402,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 		assert( appearanceRules->radius >= 0.1f );
 
-		float radiusShift = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-		float radius      = std::max( 0.0f, appearanceRules->radius + radiusShift );
+		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+		float radius     = std::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
 
 		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
 			// Grow faster than the linear growth
@@ -1445,10 +1445,11 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 
 		assert( appearanceRules->length >= 0.1f && appearanceRules->width >= 0.1f );
 
-		float lengthShift = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
-		float widthShift  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
-		float length      = std::max( 0.0f, appearanceRules->length + lengthShift );
-		float width       = std::max( 0.0f, appearanceRules->width + widthShift );
+		float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
+		float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+
+		float length = std::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
+		float width  = std::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
 
 		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
 			// Grow faster than linear growth
