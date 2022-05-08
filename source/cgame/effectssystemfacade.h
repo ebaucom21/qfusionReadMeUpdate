@@ -115,6 +115,8 @@ private:
 	TrackedEffectsSystem m_trackedEffectsSystem;
 	TransientEffectsSystem m_transientEffectsSystem;
 	wsw::RandomGenerator m_rng;
+
+	static shader_s *s_bloodMaterials[3];
 };
 
 #endif

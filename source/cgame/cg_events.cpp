@@ -1307,13 +1307,11 @@ static void handleGunbladeBlastImpactEvent( entity_state_t *ent, int parm, bool 
 }
 
 static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
-	if( cg_showBloodTrail->integer == 2 && ISVIEWERENTITY( ent->ownerNum ) ) {
-		return;
+	if( cg_showPOVBlood->integer || !ISVIEWERENTITY( ent->ownerNum ) ) {
+		vec3_t dir;
+		ByteToDir( parm, dir );
+		cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage );
 	}
-
-	vec3_t dir;
-	ByteToDir( parm, dir );
-	cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage );
 }
 
 static void handleMoverEvent( entity_state_t *ent, int parm ) {

@@ -137,33 +137,73 @@ void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
 
-static const vec4_t kBloodInitialColor { 1.0f, 0.0f, 0.0f, 0.9f };
-static const vec4_t kBloodFadedInColor { 1.0f, 0.5f, 0.9f, 1.0f };
-static const vec4_t kBloodFadedOutColor { 1.0f, 0.0f, 0.9f, 0.3f };
+static const vec4_t kBloodInitialColors[5] {
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	{ 1.0f, 0.0f, 0.0f, 1.0f },
+	{ 0.0f, 1.0f, 0.5f, 1.0f },
+	{ 0.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f }
+};
+
+static const vec4_t kBloodFadedInColors[5] {
+	{ 1.0f, 0.3f, 0.7f, 1.0f },
+	{ 1.0f, 0.6f, 0.3f, 1.0f },
+	{ 0.3f, 1.0f, 0.5f, 1.0f },
+	{ 0.3f, 0.7f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+};
+
+static const vec4_t kBloodFadedOutColors[5] {
+	{ 0.9f, 0.3f, 0.7f, 1.0f },
+	{ 0.9f, 0.5f, 0.0f, 1.0f },
+	{ 0.0f, 0.5f, 0.0f, 1.0f },
+	{ 0.0f, 0.7f, 1.0f, 1.0f },
+	{ 0.3f, 0.3f, 0.3f, 1.0f },
+};
+
+static_assert( std::size( kBloodInitialColors ) == std::size( kBloodFadedInColors ) );
+static_assert( std::size( kBloodInitialColors ) == std::size( kBloodFadedOutColors ) );
+
+shader_s *EffectsSystemFacade::s_bloodMaterials[3];
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
-	if( cg_showBloodTrail->integer && cg_bloodTrail->integer ) {
+	if( const int palette        = cg_bloodTrailPalette->integer ) {
+		const int indexForStyle  = std::clamp<int>( palette - 1, 0, std::size( kBloodInitialColors ) - 1 );
+		const int baseTime       = std::clamp<int>( cg_bloodTrailTime->integer, 200, 500 );
+		const int timeSpread     = std::max( 50, baseTime / 8 );
+
 		ConeFlockParams flockParams {
-			.origin = { origin[0], origin[1], origin[2] },
-			.offset = { dir[0], dir[1], dir[2] },
-			.dir    = { dir[0], dir[1], dir[2] },
-			.gravity     = -125.0f,
-			.angle       = 60.0f,
-			.bounceCount = 0,
-			.minSpeed  = 50.0f,
-			.maxSpeed  = 75.0f,
-			.minPercentage = 1.0f,
-			.maxPercentage = 1.0f,
-			.minTimeout = 250,
-			.maxTimeout = 300
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { 3.0f * dir[0], 3.0f * dir[1], 3.0f * dir[2] },
+			.dir           = { dir[0], dir[1], dir[2] },
+			.gravity       = -125.0f,
+			.angle         = 60.0f,
+			.bounceCount   = 0,
+			.minSpeed      = 35.0f,
+			.maxSpeed      = 75.0f,
+			.minPercentage = 0.33f,
+			.maxPercentage = 0.67f,
+			.minTimeout    = (unsigned)( baseTime - timeSpread / 2 ),
+			.maxTimeout    = (unsigned)( baseTime + timeSpread / 2 )
 		};
+		// We have to supply a buffer with a non-stack lifetime
+		if( !s_bloodMaterials[0] ) [[unlikely]] {
+			static_assert( std::size( s_bloodMaterials ) == 3 );
+			// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
+			s_bloodMaterials[0] = cgs.media.shaderBloodParticle;
+			s_bloodMaterials[1] = cgs.media.shaderBlastParticle;
+			s_bloodMaterials[2] = cgs.media.shaderBlastParticle;
+		}
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderBloodParticle.getAddressOfHandle(),
-			.initialColors  = &kBloodInitialColor,
-			.fadedInColors  = &kBloodFadedInColor,
-			.fadedOutColors = &kBloodFadedOutColor,
+			.materials      = s_bloodMaterials,
+			.initialColors  = kBloodInitialColors + indexForStyle,
+			.fadedInColors  = kBloodFadedInColors + indexForStyle,
+			.fadedOutColors = kBloodFadedOutColors + indexForStyle,
+			.numMaterials   = std::size( s_bloodMaterials ),
 			.kind           = Particle::Sprite,
-			.radius         = 2.5f,
+			.radius         = 2.50f,
+			.radiusSpread   = 1.49f,
+			.sizeBehaviour  = Particle::Expanding
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 	}
