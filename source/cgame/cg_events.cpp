@@ -566,7 +566,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int ignore, int count,
 									  int hspread, int vspread, int range ) {
 	assert( seed );
-	assert( std::abs( VectorLengthSquared( dir ) - 1.0f ) < 0.001f );
+	assert( std::abs( VectorLengthFast( dir ) - 1.0f ) < 0.001f );
 
 	for( int i = 0; i < count; i++ ) {
 		// TODO: Is this correct?
@@ -634,12 +634,11 @@ static void CG_Fire_RandomPattern( vec3_t start, vec3_t dir, int *seed, int igno
 }
 #endif
 
-/*
-* CG_Event_FireRiotgun
-*/
-static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
-	trace_t trace;
-	vec3_t end;
+static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int firemode, int seed, int owner ) {
+	vec3_t dir;
+	VectorCopy( dirVec, dir );
+	VectorNormalizeFast( dir );
+
 	gs_weapon_definition_t *weapondef = GS_GetWeaponDef( weapon );
 	firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
 
@@ -647,6 +646,8 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dir, int weapon, int fir
 							  firedef->spread, firedef->v_spread, firedef->timeout );
 
 	// spawn a single sound at the impact
+	vec3_t end;
+	trace_t trace;
 	VectorMA( origin, firedef->timeout, dir, end );
 	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, owner, MASK_SHOT );
 
