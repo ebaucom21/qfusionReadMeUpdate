@@ -49,11 +49,11 @@ public:
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
 	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.33f, 0.67f );
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.33f, 0.67f, 0, 0 );
 	}
 
-	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.25f );
+	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total ) {
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.25f, index, total );
 	}
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
@@ -109,7 +109,9 @@ private:
 
 	void spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx, float radius, bool addSoundLfe );
 
-	void spawnBulletLikeImpactEffect( const trace_s *trace, const float *impactDir, float minPercentage, float maxPercentage );
+	void spawnBulletLikeImpactEffect( const trace_s *trace, const float *impactDir,
+									  float minPercentage, float maxPercentage,
+									  unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo );
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;

@@ -222,6 +222,8 @@ struct alignas( 16 ) Particle {
 		const vec4_t *fadedInColors;
 		const vec4_t *fadedOutColors;
 
+		const float *lightColor { nullptr };
+
 		// Unfortunately, std::span can't be used for materials and colors due to value type restrictions.
 		// TODO: Use our custom span type
 		uint8_t numMaterials { 1 };
@@ -239,6 +241,10 @@ struct alignas( 16 ) Particle {
 
 		float fadeInLifetimeFrac { 0.25f };
 		float fadeOutLifetimeFrac { 0.25f };
+
+		float lightRadius { 0.0f };
+		uint16_t lightFrameAffinityIndex { 0 };
+		uint16_t lightFrameAffinityModulo { 0 };
 
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 

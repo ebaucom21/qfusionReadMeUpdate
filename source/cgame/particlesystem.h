@@ -68,6 +68,7 @@ struct alignas( 16 ) ParticleFlock {
 	ParticleFlock *prev { nullptr }, *next { nullptr };
 	float mins[4];
 	float maxs[4];
+	unsigned lastLitParticleIndex;
 };
 
 class ParticleSystem {
@@ -148,6 +149,8 @@ public:
 	void destroyTrailFlock( ParticleFlock *flock ) { unlinkAndFree( flock ); }
 
 	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
+
+	void tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
 };
 
 #endif

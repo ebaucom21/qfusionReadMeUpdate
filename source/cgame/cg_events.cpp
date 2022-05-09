@@ -589,7 +589,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
 			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
 			// TODO: Join in clusters to reduce the number of simulation regions
-			cg.effectsSystem.spawnPelletImpactEffect( &trace, invDir );
+			cg.effectsSystem.spawnPelletImpactEffect( &trace, invDir, (unsigned)i, (unsigned)count );
 		}
 
 		if( water_trace ) {

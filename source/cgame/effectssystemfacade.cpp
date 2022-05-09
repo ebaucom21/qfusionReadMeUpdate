@@ -236,15 +236,17 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 			.maxTimeout = 300
 		};
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.initialColors  = &kElectroboltHitInitialColor,
-			.fadedInColors  = &kElectroboltHitFadedInColor,
-			.fadedOutColors = &kElectroboltHitFadedOutColor,
+			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.initialColors       = &kElectroboltHitInitialColor,
+			.fadedInColors       = &kElectroboltHitFadedInColor,
+			.fadedOutColors      = &kElectroboltHitFadedOutColor,
+			.lightColor          = kElectroboltHitFadedInColor,
 			.kind                = Particle::Spark,
 			.length              = 12.5f,
 			.width               = 2.5f,
 			.fadeInLifetimeFrac  = 0.05f,
 			.fadeOutLifetimeFrac = 0.50f,
+			.lightRadius         = 72.0f
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -317,15 +319,17 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		};
 
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-			.initialColors  = initialColors,
-			.fadedInColors  = fadedInColors,
-			.fadedOutColors = fadedOutColors,
-			.kind   = Particle::Spark,
-			.length = 12.5f,
-			.width  = 2.0f,
+			.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.initialColors       = initialColors,
+			.fadedInColors       = fadedInColors,
+			.fadedOutColors      = fadedOutColors,
+			.lightColor          = initialColors[0],
+			.kind                = Particle::Spark,
+			.length              = 12.5f,
+			.width               = 2.0f,
 			.fadeInLifetimeFrac  = 0.05f,
-			.fadeOutLifetimeFrac = 0.25f
+			.fadeOutLifetimeFrac = 0.25f,
+			.lightRadius         = 72.0f
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -431,7 +435,11 @@ static const vec4_t kBulletImpactFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kBulletImpactFadedOutColor { 1.0f, 1.0f, 1.0f, 1.0f };
 
 void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, const float *impactDir,
-													   float minPercentage, float maxPercentage ) {
+													   float minPercentage, float maxPercentage,
+													   unsigned lightFrameAffinityIndex,
+													   unsigned lightFrameAffinityModulo ) {
+	assert( !lightFrameAffinityModulo || ( lightFrameAffinityIndex < lightFrameAffinityModulo ) );
+
 	if( trace->surfFlags & SURF_NOIMPACT ) {
 		return;
 	}
@@ -468,9 +476,13 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, con
 			.initialColors  = &kBulletImpactInitialColor,
 			.fadedInColors  = &kBulletImpactFadedInColor,
 			.fadedOutColors = &kBulletImpactFadedOutColor,
-			.kind     = Particle::Spark,
-			.length   = 5.0f,
-			.width    = 1.0f,
+			.lightColor     = kBulletImpactInitialColor,
+			.kind           = Particle::Spark,
+			.length         = 5.0f,
+			.width          = 1.0f,
+			.lightRadius    = 56.0f,
+			.lightFrameAffinityIndex  = (uint16_t)lightFrameAffinityIndex,
+			.lightFrameAffinityModulo = (uint16_t)lightFrameAffinityModulo
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 	}

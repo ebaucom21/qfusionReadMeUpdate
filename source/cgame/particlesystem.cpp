@@ -332,8 +332,46 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
 				request->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, numParticles );
+				const Particle::AppearanceRules &rules = flock->appearanceRules;
+				if( rules.lightColor ) [[unlikely]] {
+					// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
+					if( const auto modulo = (unsigned)rules.lightFrameAffinityModulo; modulo > 1 ) {
+						using CountType = decltype( cg.frameCount );
+						const auto frameIndexByModulo = cg.frameCount % (CountType)modulo;
+						if( frameIndexByModulo == (CountType)rules.lightFrameAffinityIndex ) {
+							tryAddingLight( flock, request );
+						}
+					} else {
+						tryAddingLight( flock, request );
+					}
+				}
 			}
 		}
+	}
+}
+
+void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+	const Particle::AppearanceRules &rules = flock->appearanceRules;
+	assert( rules.lightColor && rules.lightRadius > 0.0f );
+	assert( flock->numParticlesLeft );
+
+	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numParticlesLeft;
+	const Particle &particle = flock->particles[flock->lastLitParticleIndex];
+
+	float lightRadius = rules.lightRadius;
+	if( particle.lifetimeFrac < rules.fadeInLifetimeFrac ) {
+		// Fade in
+		lightRadius *= particle.lifetimeFrac * Q_Rcp( rules.fadeInLifetimeFrac );
+	} else {
+		const float startFadeOutAtLifetimeFrac = 1.0f - rules.fadeOutLifetimeFrac;
+		if( particle.lifetimeFrac > startFadeOutAtLifetimeFrac ) {
+			// Fade out
+			lightRadius *= ( particle.lifetimeFrac - startFadeOutAtLifetimeFrac ) * Q_Rcp( rules.fadeOutLifetimeFrac );
+		}
+	}
+
+	if( lightRadius > 1.0f ) {
+		drawSceneRequest->addLight( particle.origin, lightRadius, 0.0f, rules.lightColor );
 	}
 }
 
