@@ -250,7 +250,7 @@ struct alignas( 16 ) Particle {
 
 		// Keep the lifetime frac zero if lifetime is not greater than this value.
 		// This is useful for offsetting particle growth start point from some entity origin.
-		unsigned lifetimeFracOffsetMillis { 0 };
+		unsigned lifetimeOffsetMillis { 0 };
 	};
 
 	float origin[4];

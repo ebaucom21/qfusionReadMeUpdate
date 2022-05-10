@@ -50,7 +50,7 @@ void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int 
 }
 
 static const vec4_t kExplosionInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
-static const vec4_t kExplosionFadedInColor { 1.0f, 0.7f, 0.3f, 1.0f };
+static const vec4_t kExplosionFadedInColor { 1.0f, 0.7f, 0.3f, 0.5f };
 static const vec4_t kExplosionFadedOutColor { 0.5f, 0.3f, 0.0f, 0.0f };
 
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx,
@@ -67,10 +67,15 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( cg_particles->integer ) {
 		UniformFlockParams flockParams {
-			.origin = { origin[0], origin[1], origin[2] },
-			.offset = { offset[0], offset[1], offset[2] },
-			.gravity = 200.0f, .minSpeed = 100.0f, .maxSpeed = 150.0f,
-			.minPercentage = 1.0f, .maxPercentage = 1.0f
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { offset[0], offset[1], offset[2] },
+			.gravity       = 100.0f,
+			.minSpeed      = 75.0f,
+			.maxSpeed      = 150.0f,
+			.minPercentage = 0.5f,
+			.maxPercentage = 1.0f,
+			.minTimeout    = 300,
+			.maxTimeout    = 500
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
@@ -78,8 +83,10 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.fadedInColors  = &kExplosionFadedInColor,
 			.fadedOutColors = &kExplosionFadedOutColor,
 			.kind           = Particle::Spark,
-			.length         = 4.0f,
-			.width          = 2.0f,
+			.length         = 6.0f,
+			.width          = 3.0f,
+			.lengthSpread   = 1.0f,
+			.widthSpread    = 0.5f,
 		};
 		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
 	}
@@ -101,11 +108,13 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 
 	if( cg_particles->integer ) {
 		UniformFlockParams flockParams {
-			.origin = { origin[0], origin[1], origin[2] },
-			.offset = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.gravity = 250.0f,
-			.minPercentage = 0.5f, .maxPercentage = 0.8f,
-			.minTimeout = 150, .maxTimeout = 175,
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.gravity       = 250.0f,
+			.minPercentage = 0.5f,
+			.maxPercentage = 0.8f,
+			.minTimeout    = 125,
+			.maxTimeout    = 175,
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
@@ -114,6 +123,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 			.fadedOutColors = &kPlasmaFadedOutColor,
 			.kind           = Particle::Sprite,
 			.radius         = 1.5f,
+			.radiusSpread   = 0.25f,
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -201,8 +211,8 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.fadedOutColors = kBloodFadedOutColors + indexForStyle,
 			.numMaterials   = std::size( s_bloodMaterials ),
 			.kind           = Particle::Sprite,
-			.radius         = 2.50f,
-			.radiusSpread   = 1.49f,
+			.radius         = 2.5f,
+			.radiusSpread   = 1.0f,
 			.sizeBehaviour  = Particle::Expanding
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -224,31 +234,31 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
 		ConeFlockParams flockParams {
-			.origin  = { origin[0], origin[1], origin[2] },
-			.offset  = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.dir     = { coneDir[0], coneDir[1], coneDir[2] },
-			.gravity     = GRAVITY,
-			.angle       = 45.0f,
-			.bounceCount = 1,
-			.minSpeed    = 500.0f,
-			.maxSpeed    = 950.0f,
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity       = GRAVITY,
+			.angle         = 45.0f,
+			.bounceCount   = 1,
+			.minSpeed      = 500.0f,
+			.maxSpeed      = 950.0f,
 			.minPercentage = 0.33f,
 			.maxPercentage = 0.67f,
-			.minTimeout = 100,
-			.maxTimeout = 300
+			.minTimeout    = 100,
+			.maxTimeout    = 300
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 			.initialColors       = &kElectroboltHitInitialColor,
 			.fadedInColors       = &kElectroboltHitFadedInColor,
 			.fadedOutColors      = &kElectroboltHitFadedOutColor,
-			.lightColor          = kElectroboltHitFadedInColor,
 			.kind                = Particle::Spark,
 			.length              = 12.5f,
-			.width               = 2.5f,
+			.width               = 2.0f,
+			.lengthSpread        = 2.5f,
+			.widthSpread         = 1.0f,
 			.fadeInLifetimeFrac  = 0.05f,
 			.fadeOutLifetimeFrac = 0.50f,
-			.lightRadius         = 72.0f
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -264,7 +274,7 @@ static vec4_t instagunHitFadedInColorForTeam[2];
 static vec4_t instagunHitFadedOutColorForTeam[2];
 
 static const vec4_t kInstagunHitInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kInstagunHitFadedInColor { 1.0f, 0.0f, 1.0f, 0.7f };
+static const vec4_t kInstagunHitFadedInColor { 1.0f, 0.0f, 1.0f, 0.5f };
 static const vec4_t kInstagunHitFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
@@ -306,18 +316,18 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
 		ConeFlockParams flockParams {
-			.origin  = { origin[0], origin[1], origin[2] },
-			.offset  = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.dir     = { coneDir[0], coneDir[1], coneDir[2] },
-			.gravity     = GRAVITY,
-			.angle       = 45.0f,
-			.bounceCount = 1,
-			.minSpeed    = 750.0f,
-			.maxSpeed    = 950.0f,
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity       = GRAVITY,
+			.angle         = 45.0f,
+			.bounceCount   = 1,
+			.minSpeed      = 750.0f,
+			.maxSpeed      = 950.0f,
 			.minPercentage = 0.5f,
 			.maxPercentage = 1.0f,
-			.minTimeout = 150,
-			.maxTimeout = 225
+			.minTimeout    = 150,
+			.maxTimeout    = 225
 		};
 
 		Particle::AppearanceRules appearanceRules {
@@ -325,13 +335,13 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 			.initialColors       = initialColors,
 			.fadedInColors       = fadedInColors,
 			.fadedOutColors      = fadedOutColors,
-			.lightColor          = initialColors[0],
 			.kind                = Particle::Spark,
-			.length              = 12.5f,
-			.width               = 2.0f,
+			.length              = 10.0f,
+			.width               = 1.5f,
+			.lengthSpread        = 2.5f,
+			.widthSpread         = 0.5f,
 			.fadeInLifetimeFrac  = 0.05f,
 			.fadeOutLifetimeFrac = 0.25f,
-			.lightRadius         = 72.0f
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -390,9 +400,11 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 					.initialColors  = &kGunbladeHitInitialColor,
 					.fadedInColors  = &kGunbladeHitFadedInColor,
 					.fadedOutColors = &kGunbladeHitFadedOutColor,
-					.kind     = Particle::Spark,
-					.length   = 4.0f,
-					.width    = 1.0f,
+					.kind           = Particle::Spark,
+					.length         = 4.0f,
+					.width          = 1.0f,
+					.lengthSpread   = 1.0f,
+					.widthSpread    = 0.25f,
 				};
 				cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 			}
@@ -400,8 +412,8 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	}
 }
 
-static const vec4_t kGunbladeBlastInitialColor { 1.0f, 0.8f, 0.4f, 1.0f };
-static const vec4_t kGunbladeBlastFadedInColor { 1.0f, 0.8f, 0.4f, 0.7f };
+static const vec4_t kGunbladeBlastInitialColor { 1.0f, 0.8f, 0.5f, 1.0f };
+static const vec4_t kGunbladeBlastFadedInColor { 1.0f, 0.8f, 0.5f, 0.7f };
 static const vec4_t kGunbladeBlastFadedOutColor { 0.5f, 0.3f, 0.1f, 0.0f };
 
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
@@ -409,13 +421,13 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 
 	if( cg_particles->integer ) {
 		UniformFlockParams flockParams {
-			.origin  = { origin[0], origin[1], origin[2] },
-			.offset  = { dir[0], dir[1], dir[2] },
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { dir[0], dir[1], dir[2] },
 			.gravity       = -100.0f,
 			.bounceCount   = 1,
 			.minSpeed      = 100,
 			.maxSpeed      = 150,
-			.minPercentage = 0.8f,
+			.minPercentage = 0.7f,
 			.maxPercentage = 1.0f
 		};
 		Particle::AppearanceRules appearanceRules {
@@ -423,8 +435,9 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 			.initialColors  = &kGunbladeBlastInitialColor,
 			.fadedInColors  = &kGunbladeBlastFadedInColor,
 			.fadedOutColors = &kGunbladeBlastFadedOutColor,
-			.kind     = Particle::Sprite,
-			.radius   = 2.0f,
+			.kind           = Particle::Sprite,
+			.radius         = 2.0f,
+			.radiusSpread   = 0.25f
 		};
 		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
 	}
@@ -482,7 +495,9 @@ void EffectsSystemFacade::spawnBulletLikeImpactEffect( const trace_t *trace, con
 			.kind           = Particle::Spark,
 			.length         = 5.0f,
 			.width          = 1.0f,
-			.lightRadius    = 56.0f,
+			.lengthSpread   = 3.0f,
+			.widthSpread    = 0.2f,
+			.lightRadius    = 48.0f,
 			.lightFrameAffinityIndex  = (uint16_t)lightFrameAffinityIndex,
 			.lightFrameAffinityModulo = (uint16_t)lightFrameAffinityModulo
 		};

@@ -378,8 +378,8 @@ void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *dra
 [[nodiscard]]
 static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle,
 												const Particle::AppearanceRules &__restrict rules ) -> float {
-	assert( (unsigned)rules.lifetimeFracOffsetMillis < (unsigned)particle.lifetime );
-	const auto offset                 = (int)rules.lifetimeFracOffsetMillis;
+	assert( (unsigned)rules.lifetimeOffsetMillis < (unsigned)particle.lifetime );
+	const auto offset                 = (int)rules.lifetimeOffsetMillis;
 	const auto correctedDuration      = (int)particle.lifetime - offset;
 	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
 	const auto correctedLifetimeSoFar = std::max( 0, lifetimeSoFar - offset );

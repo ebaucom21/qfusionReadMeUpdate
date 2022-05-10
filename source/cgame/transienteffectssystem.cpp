@@ -46,23 +46,23 @@ static const byte_vec4_t kFireCoreReplacementPalette[] {
 static const byte_vec4_t kFireReplacementPalette[] {
 	{ 255, 108, 0, 24 },
 	{ 255, 72, 0, 24 },
-	{ 255, 255, 255, 24 },
+	{ 255, 172, 0, 24 },
 	{ 255, 128, 0, 16 },
 	{ 255, 144, 0, 12 },
 };
 
 static const byte_vec4_t kFireReplacementPalette2[] {
 	{ 255, 72, 0, 24 },
-	{ 255, 224, 0, 24 },
+	{ 0, 0, 0, 24 },
 	{ 255, 128, 0, 16 },
 	{ 0, 0, 0, 56 },
 	{ 0, 0, 0, 32 }
 };
 
 static const byte_vec4_t kSmokeReplacementPalette[] {
-	{ 255, 255, 255, 12 },
-	{ 255, 255, 255, 24 },
-	{ 255, 255, 255, 16 },
+	{ 192, 192, 192, 12 },
+	{ 192, 192, 192, 10 },
+	{ 192, 192, 192, 16 },
 };
 
 // This does not look nice, but we have to supply externally owned chunks of memory as params of each layer
@@ -211,7 +211,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	}
 
 	if( cg_explosionsWave->integer ) {
-		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.06f };
+		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.05f };
 		if( auto *const hull = hullsSystem->allocWaveHull( m_lastTime, 250 ) ) {
 			hullsSystem->setupHullVertices( hull, origin, waveColor, 500.0f, 50.0f );
 		}
@@ -220,7 +220,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	// TODO: It would look better if smoke hulls are coupled together/allocated at once
 
 	if( cg_explosionsSmoke->integer ) {
-		const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.06f };
+		const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.05f };
 
 		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
 			hull->archimedesBottomAccel   = +45.0f;
@@ -357,7 +357,7 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 	lightEffect->radius = 108.0f;
 
 	if( cg_explosionsWave->integer ) {
-		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 150 ) ) {
+		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 175 ) ) {
 			const vec4_t hullColor { colorGreen[0], colorGreen[1], colorGreen[2], 0.05f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 300.0f, 75.0f );
 		}
@@ -375,7 +375,7 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 
 	if( cg_explosionsWave->integer ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
-			const vec4_t hullColor { 1.0f, 0.9f, 0.3f, 0.05f };
+			const vec4_t hullColor { 1.0f, 0.9f, 0.5f, 0.05f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 500.0f, 50.0f );
 		}
 	}

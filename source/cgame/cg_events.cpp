@@ -448,16 +448,16 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 }
 
 static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kWaterSplashFadedInColor { 0.47f, 0.48f, 0.8f, 1.0f };
-static const vec4_t kWaterSplashFadedOutColor { 0.47f, 0.48f, 0.8f, 0.0f };
+static const vec4_t kWaterSplashFadedInColor { 1.0f, 1.0f, 1.0f, 0.3f };
+static const vec4_t kWaterSplashFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
 
-static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 0.0f, 1.0f };
-static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 1.0f };
+static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
+static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 0.3f };
 static const vec4_t kSlimeSplashFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
 
 static const vec4_t kLavaSplashInitialColor { 1.0f, 0.67f, 0.0f, 1.0f };
 static const vec4_t kLavaSplashFadedInColor { 1.0f, 0.67f, 0.0f, 1.0f };
-static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 1.0f };
+static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 0.0f };
 
 static void CG_LeadWaterSplash( trace_t *tr ) {
 	if( cg_particles->integer ) {
@@ -479,18 +479,29 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 
 		if( initialColors ) {
 			ConeFlockParams flockParams {
-				.origin = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
-				.offset = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
-				.angle  = 15.0f
+				.origin        = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
+				.offset        = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
+				.gravity       = 1.25f * GRAVITY,
+				.angle         = 7.5f,
+				.minSpeed      = 300,
+				.maxSpeed      = 500,
+				.minPercentage = 1.0f,
+				.maxPercentage = 1.0f,
+				.minTimeout    = 200,
+				.maxTimeout    = 500,
 			};
 			Particle::AppearanceRules appearanceRules {
-				.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-				.initialColors  = initialColors,
-				.fadedInColors  = fadedInColors,
-				.fadedOutColors = fadedOutColors,
-				.kind           = Particle::Spark,
-				.length         = 2.0f,
-				.width          = 1.0f,
+				.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+				.initialColors       = initialColors,
+				.fadedInColors       = fadedInColors,
+				.fadedOutColors      = fadedOutColors,
+				.kind                = Particle::Spark,
+				.length              = 7.0f,
+				.width               = 1.0f,
+				.lengthSpread        = 2.0f,
+				.widthSpread         = 0.25f,
+				.fadeInLifetimeFrac  = 0.25f,
+				.fadeOutLifetimeFrac = 0.50f,
 			};
 			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 		}

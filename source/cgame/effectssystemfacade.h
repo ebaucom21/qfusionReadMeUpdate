@@ -49,11 +49,11 @@ public:
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
 	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.33f, 0.67f, 0, 0 );
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.50f, 0.75f, 0, 0 );
 	}
 
 	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.25f, index, total );
+		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.33f, index, total );
 	}
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
