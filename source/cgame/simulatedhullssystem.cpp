@@ -565,7 +565,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			.minSubdivLevel        = 0u,
 			.currLevelTangentRatio = 0.15f,
 			.tesselateClosestLod   = true,
-			.lerpNextLevelColors   = false
+			.lerpNextLevelColors   = true
 		});
 
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {

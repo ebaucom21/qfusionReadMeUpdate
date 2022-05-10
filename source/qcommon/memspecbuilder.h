@@ -36,8 +36,22 @@ public:
 	template <typename T>
 	[[nodiscard]]
 	auto add( size_t numElems ) -> ChunkSpec<T> {
-		if( m_size % alignof( T ) ) {
-			m_size += alignof( T ) - m_size % alignof( T );
+		if( const auto remainder = m_size % alignof( T ) ) {
+			m_size += alignof( T ) - remainder;
+		}
+		ChunkSpec<T> result;
+		result.m_offset = m_size;
+		m_size += sizeof( T ) * numElems;
+		return result;
+	}
+
+	template <typename T>
+	[[nodiscard]]
+	auto addAligned( size_t numElems, size_t alignment ) -> ChunkSpec<T> {
+		assert( alignment && alignment >= alignof( T ) );
+		assert( !( alignment & ( alignment - 1 ) ) );
+		if( const auto remainder = m_size % alignment ) {
+			m_size += alignment - remainder;
 		}
 		ChunkSpec<T> result;
 		result.m_offset = m_size;

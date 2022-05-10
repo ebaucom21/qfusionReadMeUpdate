@@ -231,7 +231,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
 			hull->expansionStartAt    = m_lastTime + 450;
 
-			hull->lodCurrLevelTangentRatio = 0.12f;
+			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 
@@ -247,7 +247,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
 			hull->expansionStartAt    = m_lastTime + 450;
 
-			hull->lodCurrLevelTangentRatio = 0.12f;
+			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 

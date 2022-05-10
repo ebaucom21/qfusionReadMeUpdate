@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "local.h"
 #include "program.h"
 #include "backendlocal.h"
-#include "../qcommon/qcommon.h"
+#include "../qcommon/memspecbuilder.h"
 #include <algorithm>
 
 // Smaller buffer for 2D polygons. Also a workaround for some instances of a hardly explainable bug on Adreno
@@ -1012,35 +1012,100 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
-static constexpr unsigned kTessBufferSize = 2562;
+class MeshTesselationHelper {
+public:
+	vec4_t *m_tmpTessPositions { nullptr };
+	vec4_t *m_tmpTessFloatColors { nullptr };
+	int8_t *m_tessNeighboursCount { nullptr };
+	vec4_t *m_tessPositions { nullptr };
+	byte_vec4_t *m_tessByteColors { nullptr };
+	uint16_t *m_neighbourLessVertices { nullptr };
+	bool *m_isVertexNeighbourLess { nullptr };
 
-alignas( 16 ) static vec4_t tmpTessPositions[kTessBufferSize];
-alignas( 16 ) static vec4_t tmpTessFloatColors[kTessBufferSize];
-static int8_t tessNeighboursCount[kTessBufferSize];
-alignas( 16 ) static vec4_t tessPositions[kTessBufferSize];
-alignas( 16 ) static byte_vec4_t tessByteColors[kTessBufferSize];
-// TODO: Discover what's up with these vertices
-// TODO: These vertices should be known statically at least
-alignas( 16 ) static uint16_t neighbourLessVertices[kTessBufferSize];
-alignas( 16 ) static bool isVertexNeighbourLess[kTessBufferSize];
+	std::unique_ptr<uint8_t[]> m_allocationBuffer;
+	unsigned m_lastNumNextLevelVertices { 0 };
+	unsigned m_lastAllocationSize { 0 };
 
-// Assuming that the simulation preserves vertex directions, adds interpolated vertices using neighbour information.
+	template <bool SmoothColors>
+	void exec( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+			   unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
+private:
+	static constexpr unsigned kAlignment = 16;
+
+	void setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices );
+
+	template <bool SmoothColors>
+	void runPassOverOriginalVertices( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+									  const uint16_t nextLevelNeighbours[][5] );
+	template <bool SmoothColors>
+	[[nodiscard]]
+	auto collectNeighbourLessVertices( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) -> unsigned;
+	template <bool SmoothColors>
+	void processNeighbourLessVertices( unsigned numNeighbourLessVertices, const uint16_t nextLevelNeighbours[][5] );
+	template <bool SmoothColors>
+	void runSmoothVerticesPass( unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
+};
+
 template <bool SmoothColors>
-static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimulatedVertices,
-									unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] ) {
-	assert( std::size( tmpTessPositions ) >= numNextLevelVertices );
-	assert( numNextLevelVertices > numSimulatedVertices );
+void MeshTesselationHelper::exec( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+								  unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] ) {
+	setupBuffers( numSimulatedVertices, numNextLevelVertices );
+
+	runPassOverOriginalVertices<SmoothColors>( mesh, numSimulatedVertices, nextLevelNeighbours );
+	unsigned numNeighbourLessVertices = collectNeighbourLessVertices<SmoothColors>( numSimulatedVertices, numNextLevelVertices );
+	processNeighbourLessVertices<SmoothColors>( numNeighbourLessVertices, nextLevelNeighbours );
+	runSmoothVerticesPass<SmoothColors>( numNextLevelVertices, nextLevelNeighbours );
+}
+
+void MeshTesselationHelper::setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) {
+	if( m_lastNumNextLevelVertices != numNextLevelVertices ) {
+		// Compute offsets from the base ptr
+		wsw::MemSpecBuilder memSpecBuilder( wsw::MemSpecBuilder::initiallyEmpty() );
+
+		const auto tmpTessPositionsSpec       = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tmpTessFloatColorsSpec     = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tessPositionsSpec          = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tmpTessNeighboursCountSpec = memSpecBuilder.add<int8_t>( numNextLevelVertices );
+		const auto tessByteColorsSpec         = memSpecBuilder.add<byte_vec4_t>( numNextLevelVertices );
+		const auto neighbourLessVerticesSpec  = memSpecBuilder.add<uint16_t>( numNextLevelVertices );
+		const auto isNextVertexNeighbourLess  = memSpecBuilder.add<bool>( numNextLevelVertices );
+
+		if ( m_lastAllocationSize < memSpecBuilder.sizeSoFar() ) [[unlikely]] {
+			m_lastAllocationSize = memSpecBuilder.sizeSoFar();
+			m_allocationBuffer   = std::make_unique<uint8_t[]>( m_lastAllocationSize );
+		}
+
+		void *const basePtr     = m_allocationBuffer.get();
+		m_tmpTessPositions      = tmpTessPositionsSpec.get( basePtr );
+		m_tmpTessFloatColors    = tmpTessFloatColorsSpec.get( basePtr );
+		m_tessNeighboursCount   = tmpTessNeighboursCountSpec.get( basePtr );
+		m_tessPositions         = tessPositionsSpec.get( basePtr );
+		m_tessByteColors        = tessByteColorsSpec.get( basePtr );
+		m_neighbourLessVertices = neighbourLessVerticesSpec.get( basePtr );
+		m_isVertexNeighbourLess = isNextVertexNeighbourLess.get( basePtr );
+
+		m_lastNumNextLevelVertices = numNextLevelVertices;
+	}
+
+	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
 	const unsigned numAddedVertices = numNextLevelVertices - numSimulatedVertices;
 
-	std::memset( tessPositions, 0, sizeof( vec4_t ) * numNextLevelVertices );
-	std::memset( tessByteColors, 0, sizeof( byte_vec4_t ) * numNextLevelVertices );
+	std::memset( m_tessPositions, 0, sizeof( m_tessPositions[0] ) * numNextLevelVertices );
+	std::memset( m_tessByteColors, 0, sizeof( m_tessByteColors[0] ) * numNextLevelVertices );
+	std::memset( m_isVertexNeighbourLess, 0, sizeof( m_isVertexNeighbourLess[0] ) * numNextLevelVertices );
 
-	std::memset( isVertexNeighbourLess, 0, sizeof( bool ) * numNextLevelVertices );
+	std::memset( m_tmpTessPositions + numSimulatedVertices, 0, sizeof( m_tmpTessPositions[0] ) * numAddedVertices );
+	std::memset( m_tmpTessFloatColors + numSimulatedVertices, 0, sizeof( m_tmpTessFloatColors[0] ) * numAddedVertices );
+	std::memset( m_tessNeighboursCount + numSimulatedVertices, 0, sizeof( m_tessNeighboursCount[0] ) * numAddedVertices );
+}
 
-	// Zero neighbour accum buffers for the added part
-	std::memset( tmpTessPositions + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
-	std::memset( tmpTessFloatColors + numSimulatedVertices, 0, sizeof( vec4_t ) * numAddedVertices );
-	std::memset( tessNeighboursCount + numSimulatedVertices, 0, sizeof( int8_t ) * numAddedVertices );
+template <bool SmoothColors>
+void MeshTesselationHelper::runPassOverOriginalVertices( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+														 const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
+	int8_t *const __restrict tessNeighboursCount = m_tessNeighboursCount;
 
 	// For each vertex in the original mesh
 	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
@@ -1068,6 +1133,19 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 			}
 		}
 	}
+}
+
+template <bool SmoothColors>
+auto MeshTesselationHelper::collectNeighbourLessVertices( unsigned numSimulatedVertices,
+														  unsigned numNextLevelVertices ) -> unsigned {
+	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
+
+	vec4_t *const __restrict tmpTessPositions        = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	vec4_t *const __restrict  tmpTessFloatColors     = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	int8_t *const __restrict tessNeighboursCount     = m_tessNeighboursCount;
+	uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
+	bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
+	byte_vec4_t *const __restrict tessByteColors     = m_tessByteColors;
 
 	unsigned numNeighbourLessVertices = 0;
 	for( unsigned vertexIndex = numSimulatedVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
@@ -1091,11 +1169,22 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		}
 	}
 
+	return numNeighbourLessVertices;
+}
+
+template <bool SmoothColors>
+void MeshTesselationHelper::processNeighbourLessVertices( unsigned numNeighbourLessVertices,
+														  const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessFloatColors            = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	const uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
+	const bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
+	byte_vec4_t *const __restrict tessByteColors           = m_tessByteColors;
+
 	// Hack for neighbour-less vertices: apply a gathering pass
 	// (the opposite to what we do for each vertex in the original mesh)
 	for( unsigned i = 0; i < numNeighbourLessVertices; ++i ) {
 		const unsigned vertexIndex = neighbourLessVertices[i];
-		vec4_t accumulatedColor { 0.0f, 0.0f, 0.0f, 0.0f };
+		alignas( 16 ) vec4_t accumulatedColor { 0.0f, 0.0f, 0.0f, 0.0f };
 		unsigned numAccumulatedColors = 0;
 		for( unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
 			if( !isVertexNeighbourLess[neighbourIndex] ) [[likely]] {
@@ -1118,6 +1207,15 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 			}
 		}
 	}
+}
+
+template <bool SmoothColors>
+void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices,
+												   const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	vec4_t *const __restrict tessPositions       = std::assume_aligned<kAlignment>( m_tessPositions );
+	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
 
 	// Each icosphere vertex has 5 neighbours (we don't make a distinction between old and added ones for this pass)
 	constexpr float icoAvgScale = 1.0f / 5.0f;
@@ -1157,6 +1255,8 @@ static void buildNextTessLevelData( const ExternalMesh *mesh, unsigned numSimula
 		}
 	}
 }
+
+static MeshTesselationHelper meshTesselationHelper;
 
 void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf ) {
 	const ExternalMesh *externalMesh = &fsh->compoundMeshes[drawSurf->compoundMeshIndex].parts[drawSurf->partIndex];
@@ -1205,16 +1305,17 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		assert( nonTessLod.numIndices < chosenLod->numIndices );
 		const unsigned numSimulatedVertices = nonTessLod.numVertices;
 		const unsigned numNextLevelVertices = chosenLod->numVertices;
+		MeshTesselationHelper *const tesselationHelper = &::meshTesselationHelper;
 		if( chosenLod->lerpNextLevelColors ) {
-			buildNextTessLevelData<true>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+			tesselationHelper->exec<true>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
 		} else {
-			buildNextTessLevelData<false>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+			tesselationHelper->exec<false>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
 		}
 		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
 		mesh.numElems       = chosenLod->numIndices;
 		mesh.numVerts       = chosenLod->numVertices;
-		mesh.xyzArray       = ::tessPositions;
-		mesh.colorsArray[0] = ::tessByteColors;
+		mesh.xyzArray       = tesselationHelper->m_tessPositions;
+		mesh.colorsArray[0] = tesselationHelper->m_tessByteColors;
 	} else {
 		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
 		mesh.numElems       = chosenLod->numIndices;
