@@ -38,6 +38,8 @@ public:
 
 	void spawnExplosion( const float *origin, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
+	void spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
+									const float *bloodColor, unsigned duration );
 	void spawnElectroboltHitEffect( const float *origin, const float *dir );
 	void spawnInstagunHitEffect( const float *origin, const float *dir, const float *color );
 	void spawnPlasmaImpactEffect( const float *origin, const float *dir );

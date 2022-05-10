@@ -169,7 +169,7 @@ shader_s *EffectsSystemFacade::s_bloodMaterials[3];
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( const int palette        = cg_bloodTrailPalette->integer ) {
 		const int indexForStyle  = std::clamp<int>( palette - 1, 0, std::size( kBloodInitialColors ) - 1 );
-		const int baseTime       = std::clamp<int>( cg_bloodTrailTime->integer, 200, 500 );
+		const int baseTime       = std::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
 		const int timeSpread     = std::max( 50, baseTime / 8 );
 
 		ConeFlockParams flockParams {
@@ -191,7 +191,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			static_assert( std::size( s_bloodMaterials ) == 3 );
 			// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
 			s_bloodMaterials[0] = cgs.media.shaderBloodParticle;
-			s_bloodMaterials[1] = cgs.media.shaderBlastParticle;
+			s_bloodMaterials[1] = cgs.media.shaderBloodParticle;
 			s_bloodMaterials[2] = cgs.media.shaderBlastParticle;
 		}
 		Particle::AppearanceRules appearanceRules {
@@ -206,6 +206,8 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.sizeBehaviour  = Particle::Expanding
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+		const float *effectColor = kBloodFadedInColors[indexForStyle];
+		m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damage, effectColor, (unsigned)baseTime );
 	}
 
 	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage );

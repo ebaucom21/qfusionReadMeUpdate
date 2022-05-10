@@ -295,6 +295,21 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 	}
 }
 
+void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
+														const float *bloodColor, unsigned duration ) {
+	if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, duration ) ) {
+		const vec4_t hullColor { bloodColor[0], bloodColor[1], bloodColor[2], 0.1f };
+		const vec3_t hullOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
+		float speed = 100.0f;
+		if( damage < 25 ) {
+			speed = 50.0f;
+		} else if( damage < 50 ) {
+			speed = 75.0f;
+		}
+		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, speed, 0.1f * speed );
+	}
+}
+
 void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
 	(void)addModelEffect( cgs.media.modElectroBoltWallHit, origin, dir, 600 );
 
