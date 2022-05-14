@@ -760,17 +760,17 @@ void QtUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
 static SingletonHolder<QtUISystem> uiSystemInstanceHolder;
 
 void UISystem::init( int width, int height ) {
-	uiSystemInstanceHolder.Init( width, height );
+	uiSystemInstanceHolder.init( width, height );
 	VideoPlaybackSystem::init();
 }
 
 void UISystem::shutdown() {
 	VideoPlaybackSystem::shutdown();
-	uiSystemInstanceHolder.Shutdown();
+	uiSystemInstanceHolder.shutdown();
 }
 
 auto UISystem::instance() -> UISystem * {
-	return uiSystemInstanceHolder.Instance();
+	return uiSystemInstanceHolder.instance();
 }
 
 void QtUISystem::refresh() {

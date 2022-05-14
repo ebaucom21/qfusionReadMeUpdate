@@ -60,7 +60,7 @@ static SingletonHolder<ALSoundSystem> alSoundSystemHolder;
 static SingletonHolder<NullSoundSystem> nullSoundSystemHolder;
 
 void NullSoundSystem::DeleteSelf( bool ) {
-	::nullSoundSystemHolder.Shutdown();
+	::nullSoundSystemHolder.shutdown();
 }
 
 cvar_t *s_volume;
@@ -109,9 +109,9 @@ static void SF_Play_f( void ) {
 */
 static void SF_Music_f( void ) {
 	if( Cmd_Argc() == 2 ) {
-		::alSoundSystemHolder.Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
+		::alSoundSystemHolder.instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
 	} else if( Cmd_Argc() == 3 ) {
-		::alSoundSystemHolder.Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
+		::alSoundSystemHolder.instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
 	} else {
 		Com_Printf( "music <intro|playlist> [loop|shuffle]\n" );
 		return;
@@ -122,7 +122,7 @@ static void SF_Music_f( void ) {
 * SF_SoundList
 */
 static void SF_SoundList_f() {
-	::alSoundSystemHolder.Instance()->ListSounds();
+	::alSoundSystemHolder.instance()->ListSounds();
 }
 
 void ALSoundSystem::ListSounds() {
@@ -133,7 +133,7 @@ void ALSoundSystem::ListSounds() {
 * SF_ListDevices_f
 */
 static void SF_ListDevices_f() {
-	::alSoundSystemHolder.Instance()->ListDevices();
+	::alSoundSystemHolder.instance()->ListDevices();
 }
 
 void ALSoundSystem::ListDevices() {
@@ -156,8 +156,8 @@ bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &o
 		}
 	}
 
-	::nullSoundSystemHolder.Init( client );
-	instance = nullSoundSystemHolder.Instance();
+	::nullSoundSystemHolder.init( client );
+	instance = nullSoundSystemHolder.instance();
 	instance->PostInit();
 	return options.useNullSystem;
 }
@@ -216,13 +216,13 @@ ALSoundSystem *ALSoundSystem::TryCreate( client_state_s *client, void *hWnd, boo
 
 	S_InitBuffers();
 
-	::alSoundSystemHolder.Init( client, pipe, thread );
-	return ::alSoundSystemHolder.Instance();
+	::alSoundSystemHolder.init( client, pipe, thread );
+	return ::alSoundSystemHolder.instance();
 }
 
 void ALSoundSystem::DeleteSelf( bool verbose ) {
 	useVerboseShutdown = verbose;
-	::alSoundSystemHolder.Shutdown();
+	::alSoundSystemHolder.shutdown();
 }
 
 ALSoundSystem::~ALSoundSystem() {
@@ -360,11 +360,11 @@ void ALSoundSystem::StopAllSounds( unsigned flags ) {
 }
 
 void SF_StopBackgroundTrack() {
-	::alSoundSystemHolder.Instance()->StopBackgroundTrack();
+	::alSoundSystemHolder.instance()->StopBackgroundTrack();
 }
 
 void SF_PrevBackgroundTrack() {
-	::alSoundSystemHolder.Instance()->PrevBackgroundTrack();
+	::alSoundSystemHolder.instance()->PrevBackgroundTrack();
 }
 
 void ALSoundSystem::PrevBackgroundTrack() {
@@ -372,7 +372,7 @@ void ALSoundSystem::PrevBackgroundTrack() {
 }
 
 void SF_NextBackgroundTrack() {
-	::alSoundSystemHolder.Instance()->NextBackgroundTrack();
+	::alSoundSystemHolder.instance()->NextBackgroundTrack();
 }
 
 void ALSoundSystem::NextBackgroundTrack() {
@@ -380,7 +380,7 @@ void ALSoundSystem::NextBackgroundTrack() {
 }
 
 void SF_PauseBackgroundTrack() {
-	::alSoundSystemHolder.Instance()->PauseBackgroundTrack();
+	::alSoundSystemHolder.instance()->PauseBackgroundTrack();
 }
 
 void ALSoundSystem::PauseBackgroundTrack() {

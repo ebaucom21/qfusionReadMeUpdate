@@ -7,15 +7,15 @@
 static SingletonHolder<SnapShadowTable> shadowTableHolder;
 
 void SnapShadowTable::Init() {
-	::shadowTableHolder.Init();
+	::shadowTableHolder.init();
 }
 
 void SnapShadowTable::Shutdown() {
-	::shadowTableHolder.Shutdown();
+	::shadowTableHolder.shutdown();
 }
 
 SnapShadowTable *SnapShadowTable::Instance() {
-	return ::shadowTableHolder.Instance();
+	return ::shadowTableHolder.instance();
 }
 
 SnapShadowTable::SnapShadowTable() {
@@ -30,15 +30,15 @@ SnapShadowTable::SnapShadowTable() {
 static SingletonHolder<SnapVisTable> visTableHolder;
 
 void SnapVisTable::Init( cmodel_state_t *cms ) {
-	::visTableHolder.Init( cms );
+	::visTableHolder.init( cms );
 }
 
 void SnapVisTable::Shutdown() {
-	::visTableHolder.Shutdown();
+	::visTableHolder.shutdown();
 }
 
 SnapVisTable *SnapVisTable::Instance() {
-	return ::visTableHolder.Instance();
+	return ::visTableHolder.instance();
 }
 
 SnapVisTable::SnapVisTable( cmodel_state_t *cms_ ): cms( cms_ ) {

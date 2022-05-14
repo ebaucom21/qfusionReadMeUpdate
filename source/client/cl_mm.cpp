@@ -319,15 +319,15 @@ public:
 static SingletonHolder<CLStatsowFacade> instanceHolder;
 
 void CLStatsowFacade::Init() {
-	::instanceHolder.Init();
+	::instanceHolder.init();
 }
 
 void CLStatsowFacade::Shutdown() {
-	::instanceHolder.Shutdown();
+	::instanceHolder.shutdown();
 }
 
 CLStatsowFacade *CLStatsowFacade::Instance() {
-	return ::instanceHolder.Instance();
+	return ::instanceHolder.instance();
 }
 
 CLStartLoggingInTask *CLStatsowFacade::NewStartLoggingInTask( const char *user, const char *password ) {

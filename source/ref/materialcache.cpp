@@ -38,15 +38,15 @@ using wsw::operator""_asView;
 static SingletonHolder<MaterialCache> materialCacheInstanceHolder;
 
 void MaterialCache::init() {
-	::materialCacheInstanceHolder.Init();
+	::materialCacheInstanceHolder.init();
 }
 
 void MaterialCache::shutdown() {
-	::materialCacheInstanceHolder.Shutdown();
+	::materialCacheInstanceHolder.shutdown();
 }
 
 auto MaterialCache::instance() -> MaterialCache * {
-	return ::materialCacheInstanceHolder.Instance();
+	return ::materialCacheInstanceHolder.instance();
 }
 
 MaterialCache::MaterialCache() {

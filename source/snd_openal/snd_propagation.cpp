@@ -1888,15 +1888,15 @@ public:
 static SingletonHolder<PropagationTable> propagationTableHolder;
 
 PropagationTable *PropagationTable::Instance() {
-	return propagationTableHolder.Instance();
+	return propagationTableHolder.instance();
 }
 
 void PropagationTable::Init() {
-	propagationTableHolder.Init();
+	propagationTableHolder.init();
 }
 
 void PropagationTable::Shutdown() {
-	propagationTableHolder.Shutdown();
+	propagationTableHolder.shutdown();
 }
 
 inline void PropagationTable::PropagationProps::SetDir( const vec3_t dir ) {
@@ -2032,15 +2032,15 @@ public:
 static SingletonHolder<CachedLeafsGraph> leafsGraphHolder;
 
 CachedLeafsGraph *CachedLeafsGraph::Instance() {
-	return leafsGraphHolder.Instance();
+	return leafsGraphHolder.instance();
 }
 
 void CachedLeafsGraph::Init() {
-	leafsGraphHolder.Init();
+	leafsGraphHolder.init();
 }
 
 void CachedLeafsGraph::Shutdown() {
-	leafsGraphHolder.Shutdown();
+	leafsGraphHolder.shutdown();
 }
 
 CachedLeafsGraph::~CachedLeafsGraph() {

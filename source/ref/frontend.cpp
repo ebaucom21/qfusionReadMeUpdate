@@ -1516,15 +1516,15 @@ Frontend::Frontend() {
 alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
 
 void Frontend::init() {
-	sceneInstanceHolder.Init();
+	sceneInstanceHolder.init();
 }
 
 void Frontend::shutdown() {
-	sceneInstanceHolder.Shutdown();
+	sceneInstanceHolder.shutdown();
 }
 
 Frontend *Frontend::instance() {
-	return sceneInstanceHolder.Instance();
+	return sceneInstanceHolder.instance();
 }
 
 void Frontend::initVolatileAssets() {

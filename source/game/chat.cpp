@@ -1073,15 +1073,15 @@ void IgnoreFilter::onUserInfoChanged( const edict_t *user ) {
 static SingletonHolder<ChatHandlersChain> chatHandlersChainHolder;
 
 void ChatHandlersChain::init() {
-	::chatHandlersChainHolder.Init();
+	::chatHandlersChainHolder.init();
 }
 
 void ChatHandlersChain::shutdown() {
-	::chatHandlersChainHolder.Shutdown();
+	::chatHandlersChainHolder.shutdown();
 }
 
 ChatHandlersChain *ChatHandlersChain::instance() {
-	return ::chatHandlersChainHolder.Instance();
+	return ::chatHandlersChainHolder.instance();
 }
 
 void ChatHandlersChain::reset() {

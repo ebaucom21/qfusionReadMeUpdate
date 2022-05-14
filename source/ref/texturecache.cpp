@@ -29,22 +29,22 @@ static bool g_initialized;
 wsw::StaticString<64> TextureManagementShared::s_cleanNameBuffer;
 
 void TextureCache::init() {
-	g_instanceHolder.Init();
+	g_instanceHolder.init();
 	g_initialized = true;
 }
 
 void TextureCache::shutdown() {
-	g_instanceHolder.Shutdown();
+	g_instanceHolder.shutdown();
 	g_initialized = false;
 }
 
 auto TextureCache::instance() -> TextureCache * {
-	return g_instanceHolder.Instance();
+	return g_instanceHolder.instance();
 }
 
 auto TextureCache::maybeInstance() -> TextureCache * {
 	if( g_initialized ) {
-		return g_instanceHolder.Instance();
+		return g_instanceHolder.instance();
 	}
 	return nullptr;
 }

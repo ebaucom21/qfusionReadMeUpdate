@@ -163,15 +163,15 @@ auto VideoDecoder::decodeNextFrame() -> QImage {
 static SingletonHolder<VideoPlaybackSystem> g_instanceHolder;
 
 void VideoPlaybackSystem::init() {
-	g_instanceHolder.Init();
+	g_instanceHolder.init();
 }
 
 void VideoPlaybackSystem::shutdown() {
-	g_instanceHolder.Shutdown();
+	g_instanceHolder.shutdown();
 }
 
 auto VideoPlaybackSystem::instance() -> VideoPlaybackSystem * {
-	return g_instanceHolder.Instance();
+	return g_instanceHolder.instance();
 }
 
 void VideoPlaybackSystem::registerSource( VideoSource *source ) {

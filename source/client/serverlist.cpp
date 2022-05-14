@@ -36,7 +36,7 @@ static std::atomic<int> numActiveResolvers;
 static SingletonHolder<ServerList> serverListHolder;
 
 void ServerList::init() {
-	serverListHolder.Init();
+	serverListHolder.init();
 	initialized = true;
 
 	const char *infoServersStr = Cvar_String( "infoservers" );
@@ -80,12 +80,12 @@ void ServerList::init() {
 
 void ServerList::shutdown() {
 	initialized = false;
-	serverListHolder.Shutdown();
+	serverListHolder.shutdown();
 	// The mutex is not disposed intentionally
 }
 
 auto ServerList::instance() -> ServerList * {
-	return serverListHolder.Instance();
+	return serverListHolder.instance();
 }
 
 void *ServerList::resolverThreadFunc( void *param ) {

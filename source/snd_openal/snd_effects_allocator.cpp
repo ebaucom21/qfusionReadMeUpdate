@@ -4,15 +4,15 @@
 static SingletonHolder<EffectsAllocator> instanceHolder;
 
 EffectsAllocator *EffectsAllocator::Instance() {
-	return instanceHolder.Instance();
+	return instanceHolder.instance();
 }
 
 void EffectsAllocator::Init() {
-	instanceHolder.Init();
+	instanceHolder.init();
 }
 
 void EffectsAllocator::Shutdown() {
-	instanceHolder.Shutdown();
+	instanceHolder.shutdown();
 }
 
 void *EffectsAllocator::AllocEntry( const src_t *src, ALint forType ) {

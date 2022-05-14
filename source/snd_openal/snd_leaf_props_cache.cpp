@@ -189,15 +189,15 @@ bool LeafPropsWriter::WriteProps( const LeafProps &props ) {
 static SingletonHolder<LeafPropsCache> instanceHolder;
 
 LeafPropsCache *LeafPropsCache::Instance() {
-	return instanceHolder.Instance();
+	return instanceHolder.instance();
 }
 
 void LeafPropsCache::Init() {
-	instanceHolder.Init();
+	instanceHolder.init();
 }
 
 void LeafPropsCache::Shutdown() {
-	instanceHolder.Shutdown();
+	instanceHolder.shutdown();
 }
 
 void LeafPropsCache::ResetExistingState() {

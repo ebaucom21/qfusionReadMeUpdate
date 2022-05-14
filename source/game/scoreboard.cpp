@@ -22,15 +22,15 @@ static const wsw::StringView kBuiltinColumnTitles[] { kNameTitle, kClanTitle, kP
 static SingletonHolder<wsw::g::Scoreboard> instanceHolder;
 
 void Scoreboard::init() {
-	instanceHolder.Init();
+	instanceHolder.init();
 }
 
 void Scoreboard::shutdown() {
-	instanceHolder.Shutdown();
+	instanceHolder.shutdown();
 }
 
 auto Scoreboard::instance() -> Scoreboard * {
-	return instanceHolder.Instance();
+	return instanceHolder.instance();
 }
 
 void Scoreboard::expectState( State expectedState ) {

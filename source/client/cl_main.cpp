@@ -2663,6 +2663,7 @@ void CL_Shutdown( void ) {
 	CL_ShutdownMedia();
 
 	CL_ShutdownAsyncStream();
+	ServerList::shutdown();
 
 	CL_ShutdownLocal();
 

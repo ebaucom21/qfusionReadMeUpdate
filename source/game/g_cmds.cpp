@@ -1271,15 +1271,15 @@ static void Cmd_Upstate_f( edict_t *ent ) {
 static SingletonHolder<ClientCommandsHandler> clientCommandsHandlerHolder;
 
 void ClientCommandsHandler::init() {
-	::clientCommandsHandlerHolder.Init();
+	::clientCommandsHandlerHolder.init();
 }
 
 void ClientCommandsHandler::shutdown() {
-	::clientCommandsHandlerHolder.Shutdown();
+	::clientCommandsHandlerHolder.shutdown();
 }
 
 ClientCommandsHandler *ClientCommandsHandler::instance() {
-	return ::clientCommandsHandlerHolder.Instance();
+	return ::clientCommandsHandlerHolder.instance();
 }
 
 void ClientCommandsHandler::precacheCommands() {

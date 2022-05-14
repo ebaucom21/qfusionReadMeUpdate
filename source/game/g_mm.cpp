@@ -559,15 +559,15 @@ void StatsowFacade::FlushRacePlayTimes() {
 static SingletonHolder<StatsowFacade> statsInstanceHolder;
 
 void StatsowFacade::Init() {
-	statsInstanceHolder.Init();
+	statsInstanceHolder.init();
 }
 
 void StatsowFacade::Shutdown() {
-	statsInstanceHolder.Shutdown();
+	statsInstanceHolder.shutdown();
 }
 
 StatsowFacade *StatsowFacade::Instance() {
-	return statsInstanceHolder.Instance();
+	return statsInstanceHolder.instance();
 }
 
 void StatsowFacade::ClearEntries() {

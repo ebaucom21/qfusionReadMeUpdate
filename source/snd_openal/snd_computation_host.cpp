@@ -10,15 +10,15 @@
 static SingletonHolder<ParallelComputationHost> instanceHolder;
 
 ParallelComputationHost *ParallelComputationHost::Instance() {
-	return instanceHolder.Instance();
+	return instanceHolder.instance();
 };
 
 void ParallelComputationHost::Init() {
-	instanceHolder.Init();
+	instanceHolder.init();
 }
 
 void ParallelComputationHost::Shutdown() {
-	instanceHolder.Shutdown();
+	instanceHolder.shutdown();
 }
 
 int ParallelComputationHost::SuggestNumberOfTasks() {

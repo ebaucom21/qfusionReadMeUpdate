@@ -42,15 +42,15 @@ static SingletonHolder<wsw::cl::KeyBindingsSystem> keyBindingsSystemHolder;
 namespace wsw::cl {
 
 void KeyBindingsSystem::init() {
-	::keyBindingsSystemHolder.Init();
+	::keyBindingsSystemHolder.init();
 }
 
 void KeyBindingsSystem::shutdown() {
-	::keyBindingsSystemHolder.Shutdown();
+	::keyBindingsSystemHolder.shutdown();
 }
 
 auto KeyBindingsSystem::instance() -> KeyBindingsSystem * {
-	return ::keyBindingsSystemHolder.Instance();
+	return ::keyBindingsSystemHolder.instance();
 }
 
 KeyBindingsSystem::KeysAndNames::KeysAndNames() {
@@ -392,20 +392,20 @@ static SingletonHolder<wsw::cl::KeyHandlingSystem> keyHandlingSystemHolder;
 namespace wsw::cl {
 
 void KeyHandlingSystem::init() {
-	::keyHandlingSystemHolder.Init();
+	::keyHandlingSystemHolder.init();
 }
 
 void KeyHandlingSystem::shutdown() {
-	::keyHandlingSystemHolder.Shutdown();
+	::keyHandlingSystemHolder.shutdown();
 }
 
 auto KeyHandlingSystem::instance() -> KeyHandlingSystem * {
-	return ::keyHandlingSystemHolder.Instance();
+	return ::keyHandlingSystemHolder.instance();
 }
 
 #ifdef _WIN32
 auto KeyHandlingSystem::instanceOrNull() -> KeyHandlingSystem * {
-	return key_initialized ? ::keyHandlingSystemHolder.Instance() : nullptr;
+	return key_initialized ? ::keyHandlingSystemHolder.instance() : nullptr;
 }
 #endif
 

@@ -6,15 +6,15 @@ namespace wsw::ai {
 static SingletonHolder<ClassifiedEntitiesCache> instanceHolder;
 
 void ClassifiedEntitiesCache::init() {
-	instanceHolder.Init();
+	instanceHolder.init();
 }
 
 void ClassifiedEntitiesCache::shutdown() {
-	instanceHolder.Shutdown();
+	instanceHolder.shutdown();
 }
 
 auto ClassifiedEntitiesCache::instance() -> ClassifiedEntitiesCache * {
-	return instanceHolder.Instance();
+	return instanceHolder.instance();
 }
 
 template <typename Container>
