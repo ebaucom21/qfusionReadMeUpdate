@@ -54,7 +54,7 @@ static const byte_vec4_t kFireReplacementPalette[] {
 static const byte_vec4_t kFireReplacementPalette2[] {
 	{ 255, 72, 0, 24 },
 	{ 0, 0, 0, 24 },
-	{ 255, 128, 0, 16 },
+	{ 255, 128, 0, 32 },
 	{ 0, 0, 0, 56 },
 	{ 0, 0, 0, 32 }
 };
@@ -77,7 +77,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer0ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.25f, .replacementChance = 0.25f
+		.dropChance = 0.1f, .replacementChance = 0.25f
 	}
 };
 
@@ -91,7 +91,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer1ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.25f, .replacementChance = 0.25f
+		.dropChance = 0.2f, .replacementChance = 0.25f
 	}
 };
 
@@ -105,7 +105,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer2ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.25f, .replacementChance = 0.50f
+		.dropChance = 0.2f, .replacementChance = 0.50f
 	}
 };
 
@@ -119,7 +119,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer3ColorC
 	},
 	{
 		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.25f, .replacementChance = 0.75f
+		.dropChance = 0.2f, .replacementChance = 0.75f
 	}
 };
 
@@ -141,36 +141,41 @@ static const SimulatedHullsSystem::HullLayerParams kFireHullLayerParams[5] {
 	{
 		.speed = 22.5f, .finalOffset = 8.0f,
 		.speedSpikeChance = 0.09f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.9f, 0.7f, 1.0f },
+		.biasAlongChosenDir = 30.0f,
+		.baseInitialColor = { 1.0f, 0.9f, 0.9f, 1.0f },
+		.bulgeInitialColor = { 1.0f, 1.0f, 0.9f, 1.0f },
 		.colorChangeTimeline = kFireHullLayer0ColorChangeTimeline
 	},
 	{
 		.speed = 35.0f, .finalOffset = 6.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
+		.biasAlongChosenDir = 25.0f,
+		.baseInitialColor = { 1.0f, 0.9f, 0.7f, 0.9f },
+		.bulgeInitialColor = { 1.0f, 0.9f, 0.8f, 0.9f },
 		.colorChangeTimeline = kFireHullLayer1ColorChangeTimeline
 	},
 	{
 		.speed = 45.0f, .finalOffset = 4.0f,
 		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
+		.biasAlongChosenDir = 25.0f,
+		.baseInitialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
+		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer2ColorChangeTimeline
 	},
 	{
 		.speed = 52.5f, .finalOffset = 2.0f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
+		.baseInitialColor = { 1.0f, 0.6f, 0.3f, 0.5f },
+		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer3ColorChangeTimeline
 	},
 	{
 		.speed = 60.0f, .finalOffset = 0.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.initialColor = { 1.0f, 0.7f, 0.5f, 0.3f },
+		.baseInitialColor = { 1.0f, 0.5f, 0.3f, 0.3f },
+		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer4ColorChangeTimeline
 	},
 };
@@ -198,7 +203,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorC
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 700, 100, 300 );
 	VectorCopy( origin, lightEffect->origin );
-	VectorCopy( kFireHullLayerParams[0].initialColor, lightEffect->color );
+	VectorCopy( kFireHullLayerParams[0].baseInitialColor, lightEffect->color );
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;

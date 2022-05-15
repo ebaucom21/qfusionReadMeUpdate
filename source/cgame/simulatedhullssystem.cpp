@@ -421,12 +421,8 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 		std::fill( spikeSpeedBoost, spikeSpeedBoost + verticesSpan.size(), 0.0f );
 
-		const byte_vec4_t initialColor {
-			(uint8_t)( params->initialColor[0] * 255 ),
-			(uint8_t)( params->initialColor[1] * 255 ),
-			(uint8_t)( params->initialColor[2] * 255 ),
-			(uint8_t)( params->initialColor[3] * 255 )
-		};
+		const float *const __restrict baseColor  = params->baseInitialColor;
+		const float *const __restrict bulgeColor = params->bulgeInitialColor;
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
 			// Position XYZ is computed prior to submission in stateless fashion
@@ -436,6 +432,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 			const float layerDotBias = DotProduct( vertexDir, layerBiasDir );
 			const float layerSqrBias = std::copysign( layerDotBias * layerDotBias, layerDotBias );
 			const float vertexBias   = std::max( layerSqrBias, globalVertexDotBias[i] );
+
 			speedsAndDistances[i][0] = params->speed + vertexBias * params->biasAlongChosenDir;
 
 			if( rng->nextFloat() > params->speedSpikeChance ) [[likely]] {
@@ -451,7 +448,12 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 			speedsAndDistances[i][1] = 0.0f;
 
-			Vector4Copy( initialColor, colors[i] );
+			const float colorLerpFrac  = vertexBias * vertexBias;
+			const float complementFrac = 1.0f - colorLerpFrac;
+			colors[i][0] = (uint8_t)( 255.0f * ( baseColor[0] * colorLerpFrac + bulgeColor[0] * complementFrac ) );
+			colors[i][1] = (uint8_t)( 255.0f * ( baseColor[1] * colorLerpFrac + bulgeColor[1] * complementFrac ) );
+			colors[i][2] = (uint8_t)( 255.0f * ( baseColor[2] * colorLerpFrac + bulgeColor[2] * complementFrac ) );
+			colors[i][3] = (uint8_t)( 255.0f * ( baseColor[3] * colorLerpFrac + bulgeColor[3] * complementFrac ) );
 		}
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {

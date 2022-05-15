@@ -27,7 +27,8 @@ public:
 		const float speedSpikeChance;
 		const float minSpeedSpike, maxSpeedSpike;
 		const float biasAlongChosenDir;
-		const float initialColor[4];
+		const float baseInitialColor[4];
+		const float bulgeInitialColor[4];
 
 		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 	};
