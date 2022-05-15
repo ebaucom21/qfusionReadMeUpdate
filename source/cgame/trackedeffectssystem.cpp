@@ -158,8 +158,8 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 }
 
 static const vec4_t kRocketTrailInitialColor { 1.0f, 0.7f, 0.3f, 1.0f };
-static const vec4_t kRocketTrailFadedInColor { 1.0f, 1.0f, 1.0f, 0.1f };
-static const vec4_t kRocketTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kRocketTrailFadedInColor { 0.7f, 0.7f, 0.7f, 0.15f };
+static const vec4_t kRocketTrailFadedOutColor { 0.0f, 0.0f, 0.0f, 0.0f };
 
 static const vec4_t kRocketFireTrailInitialColor { 1.0f, 0.5f, 0.0f, 0.0f };
 static const vec4_t kRocketFireTrailFadedInColor { 1.0f, 0.7f, 0.3f, 1.0f };
@@ -235,8 +235,8 @@ static const vec4_t kGrenadeFuseTrailFadedInColor { 1.0f, 0.7f, 0.3f, 1.0f };
 static const vec4_t kGrenadeFuseTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
 static const vec4_t kGrenadeSmokeTrailInitialColor { 1.0f, 0.7f, 0.3f, 0.0f };
-static const vec4_t kGrenadeSmokeTrailFadedInColor { 1.0f, 1.0f, 1.0f, 0.2f };
-static const vec4_t kGrenadeSmokeTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kGrenadeSmokeTrailFadedInColor { 0.7f, 0.7f, 0.7f, 0.2f };
+static const vec4_t kGrenadeSmokeTrailFadedOutColor { 0.0f, 0.0f, 0.0f, 0.0f };
 
 static ConeFlockParams g_grenadeFuseParticlesFlockParams {
 	.gravity     = -250,

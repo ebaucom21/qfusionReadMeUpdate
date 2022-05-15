@@ -212,7 +212,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 750 ) ) {
-		hullsSystem->setupHullVertices( hull, origin, 0.85f, kFireHullLayerParams );
+		const float scale = cg_explosionsSmoke->integer ? 0.80f : 0.85f;
+		hullsSystem->setupHullVertices( hull, origin, scale, kFireHullLayerParams );
 	}
 
 	if( cg_explosionsWave->integer ) {
@@ -225,7 +226,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	// TODO: It would look better if smoke hulls are coupled together/allocated at once
 
 	if( cg_explosionsSmoke->integer ) {
-		const vec4_t smokeColor { 1.0f, 0.9f, 0.9f, 0.05f };
+		const vec4_t smokeColor { 0.3f, 0.3f, 0.3f, 0.075f };
 
 		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
 			hull->archimedesBottomAccel   = +45.0f;
@@ -240,7 +241,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 
-			hullsSystem->setupHullVertices( hull, origin, smokeColor, 85.0f, 7.5f );
+			hullsSystem->setupHullVertices( hull, origin, smokeColor, 85.0f, 10.0f );
 		}
 
 		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
@@ -256,7 +257,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 
-			hullsSystem->setupHullVertices( hull, origin, smokeColor, 100.0f, 7.5f );
+			hullsSystem->setupHullVertices( hull, origin, smokeColor, 100.0f, 12.5f );
 		}
 	}
 }
