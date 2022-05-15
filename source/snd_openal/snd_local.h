@@ -84,8 +84,6 @@ extern cvar_t *s_environment_effects;
 extern cvar_t *s_environment_sampling_quality;
 extern cvar_t *s_effects_number_threshold;
 extern cvar_t *s_hrtf;
-// Has effect only if environment effects are turned on
-extern cvar_t *s_realistic_obstruction;
 
 extern int s_attenuation_model;
 extern float s_attenuation_maxdistance;
@@ -166,7 +164,6 @@ typedef struct {
 
 struct PanningUpdateState {
 	static constexpr auto MAX_POINTS = 80;
-	int64_t timeoutAt;
 	vec3_t reflectionPoints[MAX_POINTS];
 	unsigned numPassedSecondaryRays;
 };

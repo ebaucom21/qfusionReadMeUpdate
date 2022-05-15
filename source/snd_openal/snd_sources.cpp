@@ -149,14 +149,7 @@ static void source_kill( src_t *src ) {
 * source_spatialize
 */
 static void source_spatialize( src_t *src ) {
-	if( src->envUpdateState.lastEnvUpdateAt ) {
-		// Delegate setting source origin to the effect in this case
-		if( Effect::Cast<const EaxReverbEffect *>( src->envUpdateState.effect ) ) {
-			return;
-		}
-	}
-
-	if( !src->attenuation ) {
+	if( src->attenuation == 0.0f ) {
 		qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
 		// this was set at source_setup, no need to redo every frame
 		//qalSourcefv( src->source, AL_POSITION, vec3_origin );
@@ -168,6 +161,13 @@ static void source_spatialize( src_t *src ) {
 		VectorCopy( entlist[src->entNum].origin, src->origin );
 		VectorCopy( entlist[src->entNum].velocity, src->velocity );
 	}
+
+	// Delegate setting source origin to the effect in this case
+	if( Effect::Cast<const EaxReverbEffect *>( src->envUpdateState.effect ) ) {
+		return;
+	}
+
+	// TODO: Track last submitted values, don't rely on AL wrt. reducing switching of states?
 
 	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
 	qalSourcefv( src->source, AL_POSITION, src->origin );

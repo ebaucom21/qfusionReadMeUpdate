@@ -233,12 +233,7 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 												EaxReverbEffect *effect_ ) {
 	ResetMutableState( listenerProps_, src_, effect_ );
 
-	// A "realistic obstruction" requires a higher amount of secondary (and thus primary) rays
-	if( s_realistic_obstruction->integer ) {
-		numPrimaryRays = GetNumSamplesForCurrentQuality( 16, MAX_REVERB_PRIMARY_RAY_SAMPLES );
-	} else {
-		numPrimaryRays = GetNumSamplesForCurrentQuality( 16, MAX_REVERB_PRIMARY_RAY_SAMPLES / 2 );
-	}
+	numPrimaryRays = GetNumSamplesForCurrentQuality( 16, MAX_REVERB_PRIMARY_RAY_SAMPLES );
 
 	SetupPrimaryRayDirs();
 

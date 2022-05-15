@@ -275,18 +275,15 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 	}
 
 	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
-	// The velocity is kept untouched for now.
-	qalSourcefv( src->source, AL_VELOCITY, src->velocity );
 
 	const float *sourceOrigin = src->origin;
 	// Setting effect panning vectors is not sufficient for "realistic" obstruction,
 	// as the dry path is still propagates like if there were no obstacles and walls.
 	// We try modifying the source origin as well to simulate sound propagation.
 	// These conditions must be met:
-	// 1) "realistic" obstruction is enabled
-	// 2) the direct path is fully obstructed
-	// 3) there is a definite indirect precomputed propagation path
-	if( s_realistic_obstruction->integer && directObstruction == 1.0f ) {
+	// 1) the direct path is fully obstructed
+	// 2) there is a definite propagation path
+	if( directObstruction == 1.0f ) {
 		// Provide a fake origin for the source that is at the same distance
 		// as the real origin and is aligned to the sound propagation "window"
 		// TODO: Precache at least the listener leaf for this sound backend update frame
@@ -314,4 +311,6 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 	}
 
 	qalSourcefv( src->source, AL_POSITION, sourceOrigin );
+	// The velocity is kept untouched for now.
+	qalSourcefv( src->source, AL_VELOCITY, src->velocity );
 }
