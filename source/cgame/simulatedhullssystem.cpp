@@ -948,33 +948,53 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 
 	const auto replacementPalette = currNode.replacementPalette;
 	const float dropChance        = currNode.dropChance;
+	const float replacementChance = currNode.replacementChance;
 
-	const auto numColors = colorsSpan.size();
+	const bool mayDrop    = dropChance > 0.0f;
+	const bool mayReplace = replacementChance > 0.0f && !replacementPalette.empty();
+	if( !mayDrop && !mayReplace ) {
+		return;
+	}
+
+	const auto numColors           = colorsSpan.size();
 	byte_vec4_t *__restrict colors = colorsSpan.data();
 
 	unsigned i = 0;
-	if( replacementPalette.empty() ) {
+	if( mayDrop && mayReplace ) {
 		do {
-			if( colors[i][3] != 0 ) {
-				if( rng->nextFloat() < dropChance ) {
+			// Don't process elements that became void
+			if( colors[i][3] != 0 ) [[likely]] {
+				if( rng->nextFloat() < dropChance ) [[unlikely]] {
 					colors[i][3] = 0;
+				} else if( rng->nextFloat() < replacementChance ) [[unlikely]] {
+					const auto *chosenColor   = replacementPalette[rng->nextBounded( replacementPalette.size() )];
+					auto *const existingColor = colors[i];
+					// In order to replace, the alpha must not be greater than the existing one
+					if( chosenColor[3] <= existingColor[3] ) {
+						Vector4Copy( chosenColor, existingColor );
+					}
+				}
+			}
+		} while( ++i < numColors );
+	} else if( mayReplace ) {
+		do {
+			// Don't process elements that became void
+			if( colors[i][3] != 0 ) [[likely]] {
+				if( rng->nextFloat() < replacementChance ) [[unlikely]] {
+					const auto *chosenColor   = replacementPalette[rng->nextBounded( replacementPalette.size() )];
+					auto *const existingColor = colors[i];
+					// In order to replace, the alpha must not be greater than the existing one
+					if( chosenColor[3] <= existingColor[3] ) {
+						Vector4Copy( chosenColor, existingColor );
+					}
 				}
 			}
 		} while( ++i < numColors );
 	} else {
-		const float replacementChance = currNode.replacementChance;
 		do {
-			// Don't process elements that became void
-			if( colors[i][3] != 0 ) {
+			if( colors[i][3] != 0 ) [[likely]] {
 				if( rng->nextFloat() < dropChance ) [[unlikely]] {
 					colors[i][3] = 0;
-				} else if( rng->nextFloat() < replacementChance ) [[unlikely]] {
-					const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size() )];
-					auto *existingColor = colors[i];
-					// In order to replace, the alpha must be less than the existing one
-					if( chosenColor[3] < existingColor[3] ) {
-						Vector4Copy( chosenColor, existingColor );
-					}
 				}
 			}
 		} while( ++i < numColors );
