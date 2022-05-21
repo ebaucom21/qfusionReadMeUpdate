@@ -464,9 +464,23 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	}
 }
 
-static const vec4_t kGunbladeBlastInitialColor { 1.0f, 0.8f, 0.5f, 1.0f };
-static const vec4_t kGunbladeBlastFadedInColor { 1.0f, 0.8f, 0.5f, 0.7f };
-static const vec4_t kGunbladeBlastFadedOutColor { 0.5f, 0.3f, 0.1f, 0.0f };
+static const vec4_t kGunbladeBlastInitialColors[3] {
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
+};
+
+static const vec4_t kGunbladeBlastFadedInColors[3] {
+	{ 1.0f, 0.8f, 0.5f, 0.7f },
+	{ 1.0f, 0.8f, 0.4f, 0.7f },
+	{ 1.0f, 0.7f, 0.4f, 0.7f },
+};
+
+static const vec4_t kGunbladeBlastFadedOutColors[3] {
+	{ 0.5f, 0.3f, 0.1f, 0.0f },
+	{ 0.7f, 0.3f, 0.1f, 0.0f },
+	{ 0.9f, 0.3f, 0.1f, 0.0f },
+};
 
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
@@ -475,23 +489,24 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 		UniformFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { dir[0], dir[1], dir[2] },
-			.gravity       = -100.0f,
+			.gravity       = -50.0f,
 			.bounceCount   = 1,
-			.minSpeed      = 100,
-			.maxSpeed      = 150,
-			.minPercentage = 0.7f,
+			.minSpeed      = 50,
+			.maxSpeed      = 100,
+			.minPercentage = 1.0f,
 			.maxPercentage = 1.0f
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.initialColors  = &kGunbladeBlastInitialColor,
-			.fadedInColors  = &kGunbladeBlastFadedInColor,
-			.fadedOutColors = &kGunbladeBlastFadedOutColor,
+			.initialColors  = kGunbladeBlastInitialColors,
+			.fadedInColors  = kGunbladeBlastFadedInColors,
+			.fadedOutColors = kGunbladeBlastFadedOutColors,
+			.numColors      = 3,
 			.kind           = Particle::Sprite,
-			.radius         = 2.0f,
+			.radius         = 1.50f,
 			.radiusSpread   = 0.25f
 		};
-		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );

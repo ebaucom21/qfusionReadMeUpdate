@@ -215,6 +215,9 @@ SimulatedHullsSystem::~SimulatedHullsSystem() {
 	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeFireHull( hull );
 	}
+	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		unlinkAndFreeBlastHull( hull );
+	}
 	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeSmokeHull( hull );
 	}
@@ -247,9 +250,20 @@ void SimulatedHullsSystem::unlinkAndFreeFireHull( FireHull *hull ) {
 	m_fireHullsAllocator.free( hull );
 }
 
+void SimulatedHullsSystem::unlinkAndFreeBlastHull( BlastHull *hull ) {
+	wsw::unlink( hull, &m_blastHullsHead );
+	hull->~BlastHull();
+	m_blastHullsAllocator.free( hull );
+}
+
 [[nodiscard]]
 auto SimulatedHullsSystem::allocFireHull( int64_t currTime, unsigned lifetime ) -> FireHull * {
 	return allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, currTime, lifetime );
+}
+
+[[nodiscard]]
+auto SimulatedHullsSystem::allocBlastHull( int64_t currTime, unsigned int lifetime ) -> BlastHull * {
+	return allocHull<BlastHull, false>( &m_blastHullsHead, &m_blastHullsAllocator, currTime, lifetime );
 }
 
 [[nodiscard]]
@@ -512,6 +526,14 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			activeConcentricHulls.push_back( hull );
 		} else {
 			unlinkAndFreeFireHull( hull );
+		}
+	}
+	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
+		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			activeConcentricHulls.push_back( hull );
+		} else {
+			unlinkAndFreeBlastHull( hull );
 		}
 	}
 	for( SmokeHull *hull = m_smokeHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;

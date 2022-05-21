@@ -180,6 +180,106 @@ static const SimulatedHullsSystem::HullLayerParams kFireHullLayerParams[5] {
 	},
 };
 
+#define asByteColor( r, g, b, a ) {  \
+		(uint8_t)( ( r ) * 255.0f ), \
+		(uint8_t)( ( g ) * 255.0f ), \
+		(uint8_t)( ( b ) * 255.0f ), \
+		(uint8_t)( ( a ) * 255.0f )  \
+	}
+
+static const byte_vec4_t kBlastHullLayer0ReplacementPalette[] {
+	asByteColor( 0.7f, 0.6f, 0.5f, 0.7f ),
+	asByteColor( 0.7f, 0.6f, 0.4f, 0.7f ),
+	asByteColor( 0.7f, 0.6f, 0.3f, 0.7f ),
+};
+
+static const byte_vec4_t kBlastHullLayer1ReplacementPalette[] {
+	asByteColor( 0.7f, 0.5f, 0.5f, 0.3f ),
+	asByteColor( 0.7f, 0.4f, 0.4f, 0.3f ),
+	asByteColor( 0.7f, 0.6f, 0.3f, 0.3f ),
+};
+
+static const byte_vec4_t kBlastHullLayer2ReplacementPalette[] {
+	asByteColor( 0.7f, 0.5f, 0.3f, 0.3f ),
+	asByteColor( 0.7f, 0.6f, 0.3f, 0.3f ),
+	asByteColor( 0.7f, 0.5f, 0.4f, 0.3f ),
+};
+
+static const byte_vec4_t kBlastHullDecayPalette[] {
+	asByteColor( 0.7f, 0.5f, 0.4f, 0.05f ),
+	asByteColor( 0.7f, 0.3f, 0.2f, 0.05f ),
+	asByteColor( 0.7f, 0.4f, 0.1f, 0.05f )
+};
+
+static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer0ColorChangeTimeline[3] {
+	{
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.05f
+	},
+	{
+		.replacementPalette = kBlastHullLayer0ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
+		.dropChance = 0.025f, .replacementChance = 0.10f
+	},
+	{
+		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.75f,
+		.dropChance = 0.3f, .replacementChance = 0.50f
+	}
+};
+
+static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer1ColorChangeTimeline[3] {
+	{
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kBlastHullLayer1ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
+		.dropChance = 0.05f, .replacementChance = 0.15f
+	},
+	{
+		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.75f,
+		.dropChance = 0.3f, .replacementChance = 0.75f
+	}
+};
+
+static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer2ColorChangeTimeline[3] {
+	{
+		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
+	},
+	{
+		.replacementPalette = kBlastHullLayer2ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
+		.dropChance = 0.05f, .replacementChance = 0.15f
+	},
+	{
+		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.75f,
+		.dropChance = 0.3f, .replacementChance = 0.75f
+	}
+};
+
+static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
+	{
+		.speed = 30.0f, .finalOffset = 5.0f,
+		.speedSpikeChance = 0.10f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
+		.biasAlongChosenDir = 10.0f,
+		.baseInitialColor = { 1.0f, 0.9f, 0.8f, 1.0f },
+		.bulgeInitialColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.colorChangeTimeline = kBlastHullLayer0ColorChangeTimeline
+	},
+	{
+		.speed = 40.0f, .finalOffset = 2.5f,
+		.speedSpikeChance = 0.08f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
+		.biasAlongChosenDir = 10.0f,
+		.baseInitialColor = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.bulgeInitialColor = { 1.0f, 0.8f, 0.5f, 1.0f },
+		.colorChangeTimeline = kBlastHullLayer1ColorChangeTimeline
+	},
+	{
+		.speed = 50.0f, .finalOffset = 0.0f,
+		.speedSpikeChance = 0.08f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
+		.biasAlongChosenDir = 10.0f,
+		.baseInitialColor = { 0.7, 0.6f, 0.4f, 0.7f },
+		.bulgeInitialColor = { 1.0f, 0.7f, 0.4f, 0.7f },
+		.colorChangeTimeline = kBlastHullLayer2ColorChangeTimeline
+	},
+};
+
 static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[2] {
 	{
 		.replacementPalette = kSmokeReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
@@ -373,18 +473,23 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 }
 
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
-	EntityEffect *const entityEffect = addModelEffect( cgs.media.modBladeWallExplo, origin, dir, 600u );
-	entityEffect->fadedInScale = entityEffect->fadedOutScale = 5.0f;
-
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500u, 50u, 200u );
 	VectorMA( origin, 8.0f, dir, lightEffect->origin );
 	VectorCopy( colorYellow, lightEffect->color );
 	lightEffect->radius = 200.0f;
 
+	const vec3_t hullOrigin { origin[0] + 8.0f * dir[0], origin[1] + 8.0f * dir[1], origin[2] + 8.0f * dir[2] };
+
+	if( auto *hull = cg.simulatedHullsSystem.allocBlastHull( m_lastTime, 550 ) ) {
+		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, 0.75f, kBlastHullLayerParams );
+		assert( !hull->layers[0].useDrawOnTopHack );
+		hull->layers[0].useDrawOnTopHack = true;
+	}
+
 	if( cg_explosionsWave->integer ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
-			const vec4_t hullColor { 1.0f, 0.9f, 0.5f, 0.05f };
-			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 500.0f, 50.0f );
+			const vec4_t waveHullColor { 1.0f, 0.9f, 0.6f, 0.05f };
+			cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, waveHullColor, 300.0f, 30.0f );
 		}
 	}
 }
