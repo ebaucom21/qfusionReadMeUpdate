@@ -108,7 +108,6 @@ private:
 	};
 
 	struct BaseConcentricSimulatedHull {
-		const uint16_t *meshIndices { nullptr };
 		// Externally managed, should point to the unit mesh data
 		const vec4_t *vertexMoveDirections;
 		// Distances to the nearest obstacle (or the maximum growth radius in case of no obstacles)
@@ -129,6 +128,8 @@ private:
 
 			std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 			ColorChangeState colorChangeState;
+
+			bool useDrawOnTopHack { false };
 		};
 
 		Layer *layers { nullptr };

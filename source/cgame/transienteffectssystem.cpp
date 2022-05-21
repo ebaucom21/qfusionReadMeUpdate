@@ -214,6 +214,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 750 ) ) {
 		const float scale = cg_explosionsSmoke->integer ? 0.80f : 0.85f;
 		hullsSystem->setupHullVertices( hull, origin, scale, kFireHullLayerParams );
+		assert( !hull->layers[0].useDrawOnTopHack );
+		hull->layers[0].useDrawOnTopHack = true;
 	}
 
 	if( cg_explosionsWave->integer ) {

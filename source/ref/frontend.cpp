@@ -735,13 +735,33 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 	ExternalMeshDrawSurface *const meshDrawSurfaces = m_externalMeshDrawSurfaces;
 	for( const unsigned compoundMeshIndex: indicesOfMeshes ) {
 		const Scene::ExternalCompoundMesh *const __restrict compoundMesh = meshes + compoundMeshIndex;
+
+		float bestDistance    = std::numeric_limits<float>::max();
+		auto *const distances = (float *)alloca( sizeof( float * ) * compoundMesh->parts.size() );
+
 		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
 			const ExternalMesh &__restrict mesh = compoundMesh->parts[partIndex];
 
+			// This is very incorrect, but still produces satisfiable results
+			// with the .useDrawOnTopHack flag set appropriately and with the current appearance of hulls.
+			// Order-independent transparency is the proper solution.
+			// Splitting the hull in two parts, front and back one is also more correct than the present code,
+			// but this would have huge performance impact with the current dynamic submission of vertices.
+
 			vec3_t meshCenter;
 			VectorAvg( mesh.mins, mesh.maxs, meshCenter );
-			// We guess nothing better could be done
 			const float distance = DistanceFast( meshCenter, viewOrigin );
+			distances[partIndex] = distance;
+			bestDistance         = std::min( distance, bestDistance );
+		}
+
+		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
+			const ExternalMesh &__restrict mesh = compoundMesh->parts[partIndex];
+
+			float distance = distances[partIndex];
+			if( mesh.useDrawOnTopHack ) [[unlikely]] {
+				distance = std::max( 0.0f, bestDistance - 1.0f );
+			}
 
 			// TODO: Account for fogs
 			const mfog_t *fog = nullptr;

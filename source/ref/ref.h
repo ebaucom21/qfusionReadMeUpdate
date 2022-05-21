@@ -297,6 +297,7 @@ struct ExternalMesh {
 	static constexpr unsigned kMaxLods = 5;
 	LodProps lods[kMaxLods];
 	unsigned numLods;
+	bool useDrawOnTopHack;
 };
 
 namespace wsw::ref { class Frontend; }
