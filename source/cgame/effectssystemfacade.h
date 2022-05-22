@@ -48,13 +48,9 @@ public:
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
-	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.50f, 0.75f, 0, 0 );
-	}
+	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir );
 
-	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total ) {
-		spawnBulletLikeImpactEffect( trace, impactDir, 0.0f, 0.33f, index, total );
-	}
+	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total );
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
@@ -109,9 +105,14 @@ private:
 
 	void spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx, float radius, bool addSoundLfe );
 
-	void spawnBulletLikeImpactEffect( const trace_s *trace, const float *impactDir,
-									  float minPercentage, float maxPercentage,
-									  unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo );
+	// the pointer looks better than optional in this case
+
+	void spawnBulletRicochetParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
+									   const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
+
+	void spawnBulletDebrisParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
+									 const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
+
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;
