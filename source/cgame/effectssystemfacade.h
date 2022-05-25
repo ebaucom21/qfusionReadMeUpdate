@@ -110,8 +110,8 @@ private:
 	void spawnBulletRicochetParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
 									   const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
 
-	void spawnBulletDebrisParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
-									 const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
+	void spawnBulletImpactDebrisParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
+										   const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
