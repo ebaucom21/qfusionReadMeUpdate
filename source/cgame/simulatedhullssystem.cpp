@@ -913,7 +913,7 @@ auto SimulatedHullsSystem::computeCurrTimelineNodeIndex( unsigned startFromIndex
 		if( currIndex == timeline.size() ) {
 			break;
 		}
-		if( timeline[currIndex].nodeActivationLifetimeFraction > currLifetimeFraction ) {
+		if( timeline[currIndex].activateAtLifetimeFraction > currLifetimeFraction ) {
 			break;
 		}
 		lastGoodIndex = currIndex;
@@ -971,19 +971,65 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 	}
 
 	// Compute the current node in an immediate mode. This is inexpensive for a realistic input.
-	state->lastNodeIndex = computeCurrTimelineNodeIndex( state->lastNodeIndex, currTime,
-														 spawnTime, effectDuration, timeline );
+	state->lastNodeIndex = computeCurrTimelineNodeIndex( state->lastNodeIndex, currTime, spawnTime,
+														 effectDuration, timeline );
+
+	constexpr int64_t colorChangeIntervalMillis = 15;
 
 	const ColorChangeTimelineNode &currNode = timeline[state->lastNodeIndex];
-	if( state->lastColorChangeAt + currNode.colorChangeInterval > currTime ) [[likely]] {
+	if( state->lastColorChangeAt + colorChangeIntervalMillis > currTime ) [[likely]] {
 		return;
 	}
 
+	// Do nothing during the first frame
+	if( state->lastColorChangeAt <= 0 ) [[unlikely]] {
+		state->lastColorChangeAt = currTime;
+		return;
+	}
+
+	const auto timeDeltaSeconds = 1e-3f * (float)( currTime - state->lastColorChangeAt );
+	assert( timeDeltaSeconds >= 1e-3f * (float)colorChangeIntervalMillis );
 	state->lastColorChangeAt = currTime;
 
+	float currSegmentLifetimePercentage;
+	if( state->lastNodeIndex + 1 < timeline.size() ) {
+		const ColorChangeTimelineNode &nextNode = timeline[state->lastNodeIndex + 1];
+		currSegmentLifetimePercentage = nextNode.activateAtLifetimeFraction - currNode.activateAtLifetimeFraction;
+	} else {
+		currSegmentLifetimePercentage = 1.0f - currNode.activateAtLifetimeFraction;
+	}
+
+	assert( currSegmentLifetimePercentage >= 0.0f && currSegmentLifetimePercentage <= 1.0f );
+	assert( currSegmentLifetimePercentage > 1e-3f );
+
+	// Reconstruct duration of this timeline segment
+	const float currSegmentDurationSeconds = currSegmentLifetimePercentage * ( 1e-3f * (float)effectDuration );
+
+	float dropChance, replacementChance;
+	// Protect from going out of value bounds (e.g. after a freeze due to external reasons)
+	if( timeDeltaSeconds < currSegmentDurationSeconds ) [[likely]] {
+		// Compute how much this color change frame takes of the segment
+		// TODO: Don't convert to seconds prior to the division?
+		const auto currFrameFractionOfTheSegment = timeDeltaSeconds * Q_Rcp( currSegmentDurationSeconds );
+		assert( currFrameFractionOfTheSegment > 0.0f && currFrameFractionOfTheSegment <= 1.0f );
+		// Convert accumulative chances for the entire segment to chances for this color change frame.
+		dropChance        = currNode.sumOfDropChanceForThisSegment * currFrameFractionOfTheSegment;
+		replacementChance = currNode.sumOfReplacementChanceForThisSegment * currFrameFractionOfTheSegment;
+	} else {
+		dropChance        = currNode.sumOfDropChanceForThisSegment;
+		replacementChance = currNode.sumOfReplacementChanceForThisSegment;
+	}
+
+	// Don't let the chance drop to zero if the specified integral chance is non-zero
+	constexpr float minDropChance = 1e-3f, minReplacementChance = 1e-3f;
+	if( currNode.sumOfDropChanceForThisSegment > 0.0f ) {
+		dropChance = std::max( dropChance, minDropChance );
+	}
+	if( currNode.sumOfReplacementChanceForThisSegment > 0.0f ) {
+		replacementChance = std::max( replacementChance, minReplacementChance );
+	}
+
 	const auto replacementPalette = currNode.replacementPalette;
-	const float dropChance        = currNode.dropChance;
-	const float replacementChance = currNode.replacementChance;
 
 	const bool mayDrop    = dropChance > 0.0f;
 	const bool mayReplace = replacementChance > 0.0f && !replacementPalette.empty();

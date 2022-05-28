@@ -69,71 +69,66 @@ static const byte_vec4_t kSmokeReplacementPalette[] {
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer0ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f,
 	},
 	{
-		.replacementPalette = kFireCoreReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
-		.dropChance = 0.008f, .replacementChance = 0.05f
+		.activateAtLifetimeFraction = 0.33f, .replacementPalette = kFireCoreReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.1f, .sumOfReplacementChanceForThisSegment = 0.1f,
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.1f, .replacementChance = 0.25f
+		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer1ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.008f, .replacementChance = 0.05f
+		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.2f, .sumOfReplacementChanceForThisSegment = 0.1f,
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.2f, .replacementChance = 0.25f
+		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer2ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.025f, .replacementChance = 0.085f
+		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.5f, .sumOfReplacementChanceForThisSegment = 0.2f,
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.2f, .replacementChance = 0.50f
+		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer3ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.05f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kFireReplacementPalette, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.035f, .replacementChance = 0.10f
+		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.7f, .sumOfReplacementChanceForThisSegment = 0.3f,
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.2f, .replacementChance = 0.75f
+		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer4ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.25f,
-		.dropChance = 0.035f, .replacementChance = 0.125f
+		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 0.7f, .sumOfReplacementChanceForThisSegment = 0.7f,
 	},
 	{
-		.replacementPalette = kFireReplacementPalette2, .nodeActivationLifetimeFraction = 0.75f,
-		.dropChance = 0.25f, .replacementChance = 0.50f
+		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
@@ -182,21 +177,23 @@ static const SimulatedHullsSystem::HullLayerParams kFireHullLayerParams[5] {
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[2] {
 	{
-		.replacementPalette = kSmokeReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
-		.dropChance = 0.002f, .replacementChance = 0.020f
+		.replacementPalette = kSmokeReplacementPalette,
+		.sumOfReplacementChanceForThisSegment = 0.5f,
 	},
 	{
-		.nodeActivationLifetimeFraction = 0.75f, .dropChance = 0.05f, .replacementChance = 0.0f
+		.activateAtLifetimeFraction = 0.75f,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[2] {
 	{
-		.replacementPalette = kSmokeReplacementPalette, .nodeActivationLifetimeFraction = 0.0f,
-		.dropChance = 0.003f, .replacementChance = 0.035f
+		.replacementPalette = kSmokeReplacementPalette,
+		.sumOfReplacementChanceForThisSegment = 0.7f,
 	},
 	{
-		.nodeActivationLifetimeFraction = 0.75f, .dropChance = 0.05f, .replacementChance = 0.0f
+		.activateAtLifetimeFraction = 0.75f,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
@@ -405,43 +402,41 @@ static const byte_vec4_t kBlastHullDecayPalette[] {
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer0ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.05f
+		.sumOfDropChanceForThisSegment = 0.1f,
 	},
 	{
-		.replacementPalette = kBlastHullLayer0ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
-		.dropChance = 0.075f, .replacementChance = 0.10f
+		.activateAtLifetimeFraction = 0.33f, .replacementPalette = kBlastHullLayer0ReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.1f, .sumOfReplacementChanceForThisSegment = 0.3f,
 	},
 	{
-		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.67f,
-		.dropChance = 0.25f, .replacementChance = 0.50f
+		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer1ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kBlastHullLayer1ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
-		.dropChance = 0.075f, .replacementChance = 0.20f
+		.activateAtLifetimeFraction = 0.33f, .replacementPalette = kBlastHullLayer1ReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.1f, .sumOfReplacementChanceForThisSegment = 0.5f,
 	},
 	{
-		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.67f,
-		.dropChance = 0.25f, .replacementChance = 0.75f
+		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer2ColorChangeTimeline[3] {
 	{
-		.nodeActivationLifetimeFraction = 0.0f, .dropChance = 0.0f, .replacementChance = 0.0f
 	},
 	{
-		.replacementPalette = kBlastHullLayer2ReplacementPalette, .nodeActivationLifetimeFraction = 0.33f,
-		.dropChance = 0.075f, .replacementChance = 0.25f
+		.activateAtLifetimeFraction = 0.33f, .replacementPalette = kBlastHullLayer2ReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.1f, .sumOfReplacementChanceForThisSegment = 0.7f,
 	},
 	{
-		.replacementPalette = kBlastHullDecayPalette, .nodeActivationLifetimeFraction = 0.67f,
-		.dropChance = 0.25f, .replacementChance = 0.75f
+		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
+		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 

@@ -13,12 +13,13 @@ class SimulatedHullsSystem {
 	friend class TransientEffectsSystem;
 public:
 	struct ColorChangeTimelineNode {
-		std::span<const byte_vec4_t> replacementPalette;
 		// Specifying it as a fraction is more flexible than absolute offsets
-		float nodeActivationLifetimeFraction { 1.0f };
-		unsigned colorChangeInterval { 15 };
-		float dropChance { 0.0f };
-		float replacementChance { 0.0f };
+		float activateAtLifetimeFraction { 0.0f };
+		std::span<const byte_vec4_t> replacementPalette;
+		// 1.0f does not guarantee a full replacement
+		float sumOfDropChanceForThisSegment { 0.0f };
+		// 1.0f does not guarantee a full replacement
+		float sumOfReplacementChanceForThisSegment { 0.0f };
 	};
 
 	struct HullLayerParams {
