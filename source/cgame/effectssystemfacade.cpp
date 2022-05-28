@@ -560,7 +560,7 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 
 		const std::pair<uint16_t, uint16_t> lightFrames { index, total };
 
-		if( m_rng.nextFloat() < 0.25f ) {
+		if( m_rng.tryWithChance( 0.25f ) ) {
 			// TODO: Check surface type (we don't really have a sufficient information on that)
 			spawnBulletRicochetParticles( impactOrigin, impactNormal, coneDir, &lightFrames );
 		}

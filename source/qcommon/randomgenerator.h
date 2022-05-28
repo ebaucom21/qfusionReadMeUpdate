@@ -13,15 +13,6 @@ namespace wsw {
 class RandomGenerator {
 	// Initialize just to suppress Clang-Tidy warnings
 	uint32_t m_a { 0 }, m_b { 0 }, m_c { 0 }, m_d { 0 };
-
-	// TODO: Replace by std::bit_cast once it's reliably supported by compilers
-	template <typename U, typename T>
-	static auto bit_cast( T t ) -> U {
-		static_assert( sizeof( T ) == sizeof( U ) );
-		U result;
-		__builtin_memcpy( &result, &t, sizeof( T ) );
-		return result;
-	}
 public:
 	[[nodiscard]]
 	constexpr RandomGenerator() {
@@ -90,6 +81,12 @@ public:
 		const double doubleMax = max;
 		constexpr double normalizer = 1.0 / std::numeric_limits<uint32_t>::max();
 		return (float)( doubleMin + ( doubleMax - doubleMin ) * ( normalizer * (double)next() ) );
+	}
+
+	[[nodiscard]]
+	constexpr bool tryWithChance( float chance ) {
+		assert( chance >= 0.0f && chance <= 1.0f );
+		return (double)next() <= (double)std::numeric_limits<uint32_t>::max() * (double)chance;
 	}
 };
 

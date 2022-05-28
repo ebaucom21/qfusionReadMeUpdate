@@ -449,15 +449,15 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 			speedsAndDistances[i][0] = params->speed + vertexBias * params->biasAlongChosenDir;
 
-			if( rng->nextFloat() > params->speedSpikeChance ) [[likely]] {
-				speedsAndDistances[i][0] += rng->nextFloat( 0.0f, maxSmallRandomOffset );
-			} else {
+			if( rng->tryWithChance( params->speedSpikeChance ) ) [[unlikely]] {
 				const float boost = rng->nextFloat( params->minSpeedSpike, params->maxSpeedSpike );
 				spikeSpeedBoost[i] += boost;
 				const auto &indicesOfNeighbours = neighboursSpan[i];
 				for( const unsigned neighbourIndex: indicesOfNeighbours ) {
 					spikeSpeedBoost[neighbourIndex] += rng->nextFloat( 0.50f, 0.75f ) * boost;
 				}
+			} else {
+				speedsAndDistances[i][0] += rng->nextFloat( 0.0f, maxSmallRandomOffset );
 			}
 
 			speedsAndDistances[i][1] = 0.0f;
@@ -937,14 +937,14 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 		if( colors[i][3] != 0 ) [[likely]] {
 			[[maybe_unused]] bool dropped = false;
 			if constexpr( MayDrop ) {
-				if( rng->nextFloat() < dropChance ) [[unlikely]] {
+				if( rng->tryWithChance( dropChance ) ) [[unlikely]] {
 					colors[i][3] = 0;
 					dropped = true;
 				}
 			}
 			if constexpr( MayReplace ) {
 				if( !dropped ) {
-					if( rng->nextFloat() < replacementChance ) [[unlikely]] {
+					if( rng->tryWithChance( replacementChance ) ) [[unlikely]] {
 						const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size())];
 						auto *const existingColor = colors[i];
 						// In order to replace, the alpha must not be greater than the existing one
