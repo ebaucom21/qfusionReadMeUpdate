@@ -923,6 +923,41 @@ auto SimulatedHullsSystem::computeCurrTimelineNodeIndex( unsigned startFromIndex
 	return lastGoodIndex;
 }
 
+template <bool MayDrop, bool MayReplace>
+static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerator *__restrict rng,
+						  [[maybe_unused]] std::span<const byte_vec4_t> replacementPalette,
+						  [[maybe_unused]] float dropChance, [[maybe_unused]] float replacementChance ) {
+
+	byte_vec4_t *const __restrict colors = colorsSpan.data();
+	const unsigned numColors             = colorsSpan.size();
+
+	unsigned i = 0;
+	do {
+		// Don't process elements that became void
+		if( colors[i][3] != 0 ) [[likely]] {
+			[[maybe_unused]] bool dropped = false;
+			if constexpr( MayDrop ) {
+				if( rng->nextFloat() < dropChance ) [[unlikely]] {
+					colors[i][3] = 0;
+					dropped = true;
+				}
+			}
+			if constexpr( MayReplace ) {
+				if( !dropped ) {
+					if( rng->nextFloat() < replacementChance ) [[unlikely]] {
+						const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size())];
+						auto *const existingColor = colors[i];
+						// In order to replace, the alpha must not be greater than the existing one
+						if( chosenColor[3] <= existingColor[3] ) {
+							Vector4Copy( chosenColor, existingColor );
+						}
+					}
+				}
+			}
+		}
+	} while( ++i < numColors );
+}
+
 void SimulatedHullsSystem::processColorChange( int64_t currTime,
 											   int64_t spawnTime,
 											   unsigned effectDuration,
@@ -952,51 +987,14 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 
 	const bool mayDrop    = dropChance > 0.0f;
 	const bool mayReplace = replacementChance > 0.0f && !replacementPalette.empty();
-	if( !mayDrop && !mayReplace ) {
-		return;
-	}
 
-	const auto numColors           = colorsSpan.size();
-	byte_vec4_t *__restrict colors = colorsSpan.data();
+	// Call specialized implementations for each case
 
-	unsigned i = 0;
 	if( mayDrop && mayReplace ) {
-		do {
-			// Don't process elements that became void
-			if( colors[i][3] != 0 ) [[likely]] {
-				if( rng->nextFloat() < dropChance ) [[unlikely]] {
-					colors[i][3] = 0;
-				} else if( rng->nextFloat() < replacementChance ) [[unlikely]] {
-					const auto *chosenColor   = replacementPalette[rng->nextBounded( replacementPalette.size() )];
-					auto *const existingColor = colors[i];
-					// In order to replace, the alpha must not be greater than the existing one
-					if( chosenColor[3] <= existingColor[3] ) {
-						Vector4Copy( chosenColor, existingColor );
-					}
-				}
-			}
-		} while( ++i < numColors );
+		changeColors<true, true>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
 	} else if( mayReplace ) {
-		do {
-			// Don't process elements that became void
-			if( colors[i][3] != 0 ) [[likely]] {
-				if( rng->nextFloat() < replacementChance ) [[unlikely]] {
-					const auto *chosenColor   = replacementPalette[rng->nextBounded( replacementPalette.size() )];
-					auto *const existingColor = colors[i];
-					// In order to replace, the alpha must not be greater than the existing one
-					if( chosenColor[3] <= existingColor[3] ) {
-						Vector4Copy( chosenColor, existingColor );
-					}
-				}
-			}
-		} while( ++i < numColors );
-	} else {
-		do {
-			if( colors[i][3] != 0 ) [[likely]] {
-				if( rng->nextFloat() < dropChance ) [[unlikely]] {
-					colors[i][3] = 0;
-				}
-			}
-		} while( ++i < numColors );
+		changeColors<false, true>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+	} else if( mayDrop ) {
+		changeColors<true, false>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
 	}
 }
