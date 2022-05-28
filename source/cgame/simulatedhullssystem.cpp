@@ -379,7 +379,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 	maxVertexSpeed += maxSmallRandomOffset;
 	// Scale by the fine-tuning scale multiplier
-	maxVertexSpeed *= scale;
+	maxVertexSpeed *= 1.5f * scale;
 
 	wsw::RandomGenerator *const __restrict rng = &m_rng;
 

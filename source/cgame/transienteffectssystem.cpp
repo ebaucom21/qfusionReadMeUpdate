@@ -36,33 +36,35 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	}
 }
 
+#define asByteColor( r, g, b, a ) {  \
+		(uint8_t)( ( r ) * 255.0f ), \
+		(uint8_t)( ( g ) * 255.0f ), \
+		(uint8_t)( ( b ) * 255.0f ), \
+		(uint8_t)( ( a ) * 255.0f )  \
+	}
+
 static const byte_vec4_t kFireCoreReplacementPalette[] {
-	{ 255, 170, 144, 144 },
-	{ 255, 170, 128, 172 },
-	{ 255, 144, 108, 128 },
-	{ 255, 144, 108, 72 }
+	asByteColor( 1.00f, 0.67f, 0.56f, 0.56f ),
+	asByteColor( 1.00f, 0.67f, 0.50f, 0.67f ),
+	asByteColor( 1.00f, 0.56f, 0.42f, 0.50f ),
+	asByteColor( 1.00f, 0.56f, 0.42f, 0.28f ),
 };
 
 static const byte_vec4_t kFireReplacementPalette[] {
-	{ 255, 108, 0, 24 },
-	{ 255, 72, 0, 24 },
-	{ 255, 172, 0, 24 },
-	{ 255, 128, 0, 16 },
-	{ 255, 144, 0, 12 },
+	asByteColor( 1.00f, 0.42f, 0.00f, 0.15f ),
+	asByteColor( 1.00f, 0.28f, 0.00f, 0.15f ),
+	asByteColor( 1.00f, 0.67f, 0.00f, 0.15f ),
+	asByteColor( 1.00f, 0.50f, 0.00f, 0.15f ),
+	asByteColor( 1.00f, 0.56f, 0.00f, 0.15f ),
 };
 
-static const byte_vec4_t kFireReplacementPalette2[] {
-	{ 255, 72, 0, 24 },
-	{ 0, 0, 0, 24 },
-	{ 255, 128, 0, 32 },
-	{ 0, 0, 0, 56 },
-	{ 0, 0, 0, 32 }
-};
-
-static const byte_vec4_t kSmokeReplacementPalette[] {
-	{ 192, 192, 192, 12 },
-	{ 192, 192, 192, 10 },
-	{ 192, 192, 192, 16 },
+static const byte_vec4_t kFireDecayPalette[] {
+	asByteColor( 0.3f, 0.2f, 0.2f, 0.3f ),
+	asByteColor( 0.2f, 0.2f, 0.2f, 0.4f ),
+	asByteColor( 0.3f, 0.3f, 0.3f, 0.4f ),
+	asByteColor( 0.3f, 0.1f, 0.1f, 0.3f ),
+	asByteColor( 0.2f, 0.1f, 0.1f, 0.3f ),
+	asByteColor( 0.3f, 0.2f, 0.2f, 0.3f ),
 };
 
 // This does not look nice, but we have to supply externally owned chunks of memory as params of each layer
@@ -71,12 +73,12 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer0ColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.33f, .replacementPalette = kFireCoreReplacementPalette,
-		.sumOfDropChanceForThisSegment = 0.1f, .sumOfReplacementChanceForThisSegment = 0.1f,
+		.activateAtLifetimeFraction = 0.35f, .replacementPalette = kFireCoreReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.0f, .sumOfReplacementChanceForThisSegment = 0.1f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.6f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 3.5f, .sumOfReplacementChanceForThisSegment = 0.5f,
 	}
 };
 
@@ -84,12 +86,12 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer1ColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
-		.sumOfDropChanceForThisSegment = 0.2f, .sumOfReplacementChanceForThisSegment = 0.1f,
+		.activateAtLifetimeFraction = 0.35f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.0f, .sumOfReplacementChanceForThisSegment = 0.2f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.6f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 2.5f, .sumOfReplacementChanceForThisSegment = 3.5f,
 	}
 };
 
@@ -97,12 +99,13 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer2ColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
-		.sumOfDropChanceForThisSegment = 0.5f, .sumOfReplacementChanceForThisSegment = 0.2f,
+		.activateAtLifetimeFraction = 0.3f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.0f, .sumOfReplacementChanceForThisSegment = 0.3f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.6f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 2.0f, .sumOfReplacementChanceForThisSegment = 4.0f,
+		.allowIncreasingOpacity = true
 	}
 };
 
@@ -110,12 +113,13 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer3ColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette,
-		.sumOfDropChanceForThisSegment = 0.7f, .sumOfReplacementChanceForThisSegment = 0.3f,
+		.activateAtLifetimeFraction = 0.3f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.0f, .sumOfReplacementChanceForThisSegment = 0.5f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.55f, .replacementPalette = kFireDecayPalette,
+		.sumOfDropChanceForThisSegment = 2.0f, .sumOfReplacementChanceForThisSegment = 4.5f,
+		.allowIncreasingOpacity = true
 	}
 };
 
@@ -123,84 +127,104 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kFireHullLayer4ColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 0.7f, .sumOfReplacementChanceForThisSegment = 0.7f,
+		.activateAtLifetimeFraction = 0.1f, .replacementPalette = kFireReplacementPalette,
+		.sumOfDropChanceForThisSegment = 0.0f, .sumOfReplacementChanceForThisSegment = 0.5f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f, .replacementPalette = kFireReplacementPalette2,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.5f, .replacementPalette = kFireDecayPalette,
+		.sumOfDropChanceForThisSegment = 2.0f, .sumOfReplacementChanceForThisSegment = 4.5f,
+		.allowIncreasingOpacity = true
 	}
 };
 
 static const SimulatedHullsSystem::HullLayerParams kFireHullLayerParams[5] {
 	{
 		.speed = 22.5f, .finalOffset = 8.0f,
-		.speedSpikeChance = 0.09f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
+		.speedSpikeChance = 0.05f, .minSpeedSpike = 10.0f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 30.0f,
 		.baseInitialColor = { 1.0f, 0.9f, 0.9f, 1.0f },
-		.bulgeInitialColor = { 1.0f, 1.0f, 0.9f, 1.0f },
+		.bulgeInitialColor = { 1.0f, 1.0f, 1.0f, 1.0f },
 		.colorChangeTimeline = kFireHullLayer0ColorChangeTimeline
 	},
 	{
 		.speed = 35.0f, .finalOffset = 6.0f,
-		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.speedSpikeChance = 0.05f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 25.0f,
-		.baseInitialColor = { 1.0f, 0.9f, 0.7f, 0.9f },
-		.bulgeInitialColor = { 1.0f, 0.9f, 0.8f, 0.9f },
+		.baseInitialColor = { 1.0f, 0.9f, 0.9f, 0.7f },
+		.bulgeInitialColor = { 1.0f, 1.0f, 1.0f, 0.9f },
 		.colorChangeTimeline = kFireHullLayer1ColorChangeTimeline
 	},
 	{
 		.speed = 45.0f, .finalOffset = 4.0f,
-		.speedSpikeChance = 0.04f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 25.0f,
-		.baseInitialColor = { 1.0f, 0.7f, 0.5f, 0.7f },
-		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
+		.speedSpikeChance = 0.05f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 20.0f,
+		.baseInitialColor = { 1.0f, 0.9f, 0.4f, 0.7f },
+		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.9f },
 		.colorChangeTimeline = kFireHullLayer2ColorChangeTimeline
 	},
 	{
 		.speed = 52.5f, .finalOffset = 2.0f,
-		.speedSpikeChance = 0.08f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.speedSpikeChance = 0.05f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 		.biasAlongChosenDir = 20.0f,
-		.baseInitialColor = { 1.0f, 0.6f, 0.3f, 0.5f },
+		.baseInitialColor = { 1.0f, 0.6f, 0.3f, 0.7f },
 		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer3ColorChangeTimeline
 	},
 	{
 		.speed = 60.0f, .finalOffset = 0.0f,
-		.speedSpikeChance = 0.10f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
-		.biasAlongChosenDir = 20.0f,
-		.baseInitialColor = { 1.0f, 0.5f, 0.3f, 0.3f },
+		.speedSpikeChance = 0.05f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
+		.biasAlongChosenDir = 10.0f,
+		.baseInitialColor = { 1.0f, 0.5f, 0.2f, 0.7f },
 		.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
 		.colorChangeTimeline = kFireHullLayer4ColorChangeTimeline
 	},
 };
 
-static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[2] {
+static const byte_vec4_t kSmokeFadeInPalette[] {
+	asByteColor( 0.25f, 0.25f, 0.25f, 0.15f ),
+	asByteColor( 0.30f, 0.30f, 0.30f, 0.15f ),
+	asByteColor( 0.35f, 0.35f, 0.35f, 0.15f ),
+	asByteColor( 0.40f, 0.40f, 0.40f, 0.15f ),
+};
+
+static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[4] {
 	{
-		.replacementPalette = kSmokeReplacementPalette,
-		.sumOfReplacementChanceForThisSegment = 0.5f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.30f, .replacementPalette = kSmokeFadeInPalette,
+		.sumOfReplacementChanceForThisSegment = 3.5f,
+		.allowIncreasingOpacity = true,
+	},
+	{
+		.activateAtLifetimeFraction = 0.40f,
+	},
+	{
+		.activateAtLifetimeFraction = 0.85f,
+		.sumOfDropChanceForThisSegment = 3.0f
 	}
 };
 
-static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[2] {
+static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[4] {
 	{
-		.replacementPalette = kSmokeReplacementPalette,
-		.sumOfReplacementChanceForThisSegment = 0.7f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.75f,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.activateAtLifetimeFraction = 0.25f, .replacementPalette = kSmokeFadeInPalette,
+		.sumOfReplacementChanceForThisSegment = 3.0f,
+		.allowIncreasingOpacity = true,
+	},
+	{
+		.activateAtLifetimeFraction = 0.40f,
+	},
+	{
+		.activateAtLifetimeFraction = 0.85f,
+		.sumOfDropChanceForThisSegment = 3.0f
 	}
 };
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 700, 100, 300 );
+	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 100, 300 );
 	VectorCopy( origin, lightEffect->origin );
-	VectorCopy( kFireHullLayerParams[0].baseInitialColor, lightEffect->color );
+	VectorCopy( kFireHullLayerParams[0].bulgeInitialColor, lightEffect->color );
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
@@ -208,8 +232,8 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
-	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 750 ) ) {
-		const float scale = cg_explosionsSmoke->integer ? 0.80f : 0.85f;
+	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, cg_explosionsSmoke->integer ? 450 : 500 ) ) {
+		const float scale = 1.65f * ( cg_explosionsSmoke->integer ? 0.80f : 0.85f );
 		hullsSystem->setupHullVertices( hull, origin, scale, kFireHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
 		hull->layers[0].useDrawOnTopHack = true;
@@ -225,7 +249,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	// TODO: It would look better if smoke hulls are coupled together/allocated at once
 
 	if( cg_explosionsSmoke->integer ) {
-		const vec4_t smokeColor { 0.3f, 0.3f, 0.3f, 0.075f };
+		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
 
 		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
 			hull->archimedesBottomAccel   = +45.0f;
@@ -234,13 +258,13 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->xyExpansionBottomAccel  = -30.0f;
 
 			hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
-			hull->expansionStartAt    = m_lastTime + 450;
+			hull->expansionStartAt    = m_lastTime + 300;
 
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 
-			hullsSystem->setupHullVertices( hull, origin, smokeColor, 85.0f, 10.0f );
+			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 85.0f, 10.0f );
 		}
 
 		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
@@ -250,13 +274,13 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->xyExpansionBottomAccel  = -25.0f;
 
 			hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
-			hull->expansionStartAt    = m_lastTime + 450;
+			hull->expansionStartAt    = m_lastTime + 300;
 
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 
-			hullsSystem->setupHullVertices( hull, origin, smokeColor, 100.0f, 12.5f );
+			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 100.0f, 12.5f );
 		}
 	}
 }
@@ -369,33 +393,26 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 	}
 }
 
-#define asByteColor( r, g, b, a ) {  \
-		(uint8_t)( ( r ) * 255.0f ), \
-		(uint8_t)( ( g ) * 255.0f ), \
-		(uint8_t)( ( b ) * 255.0f ), \
-		(uint8_t)( ( a ) * 255.0f )  \
-	}
-
 static const byte_vec4_t kBlastHullLayer0ReplacementPalette[] {
-	asByteColor( 0.7f, 0.6f, 0.5f, 0.1f ),
-	asByteColor( 0.7f, 0.6f, 0.4f, 0.1f ),
-	asByteColor( 0.7f, 0.6f, 0.3f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.5f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.4f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.4f, 0.1f ),
 };
 
 static const byte_vec4_t kBlastHullLayer1ReplacementPalette[] {
-	asByteColor( 0.7f, 0.5f, 0.5f, 0.1f ),
-	asByteColor( 0.7f, 0.4f, 0.4f, 0.1f ),
-	asByteColor( 0.7f, 0.6f, 0.3f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.5f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.4f, 0.1f ),
+	asByteColor( 0.7f, 0.6f, 0.4f, 0.1f ),
 };
 
 static const byte_vec4_t kBlastHullLayer2ReplacementPalette[] {
-	asByteColor( 0.7f, 0.5f, 0.3f, 0.1f ),
-	asByteColor( 0.7f, 0.6f, 0.3f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.3f, 0.1f ),
+	asByteColor( 0.7f, 0.7f, 0.4f, 0.1f ),
 	asByteColor( 0.7f, 0.5f, 0.4f, 0.1f ),
 };
 
 static const byte_vec4_t kBlastHullDecayPalette[] {
-	asByteColor( 0.7f, 0.5f, 0.4f, 0.05f ),
+	asByteColor( 0.7f, 0.7f, 0.4f, 0.05f ),
 	asByteColor( 0.7f, 0.3f, 0.2f, 0.05f ),
 	asByteColor( 0.7f, 0.4f, 0.1f, 0.05f )
 };
@@ -410,7 +427,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer0Color
 	},
 	{
 		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.sumOfDropChanceForThisSegment = 1.5f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
@@ -423,7 +440,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer1Color
 	},
 	{
 		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.sumOfDropChanceForThisSegment = 1.5f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
@@ -436,7 +453,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kBlastHullLayer2Color
 	},
 	{
 		.activateAtLifetimeFraction = 0.67f, .replacementPalette = kBlastHullDecayPalette,
-		.sumOfDropChanceForThisSegment = 1.0f, .sumOfReplacementChanceForThisSegment = 1.0f,
+		.sumOfDropChanceForThisSegment = 1.5f, .sumOfReplacementChanceForThisSegment = 1.0f,
 	}
 };
 
@@ -445,7 +462,7 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 		.speed = 30.0f, .finalOffset = 5.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
 		.biasAlongChosenDir = 15.0f,
-		.baseInitialColor = { 1.0f, 0.9f, 0.8f, 1.0f },
+		.baseInitialColor = { 1.0f, 1.0f, 0.6f, 1.0f },
 		.bulgeInitialColor = { 1.0f, 1.0f, 1.0f, 1.0f },
 		.colorChangeTimeline = kBlastHullLayer0ColorChangeTimeline
 	},
@@ -453,7 +470,7 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 		.speed = 40.0f, .finalOffset = 2.5f,
 		.speedSpikeChance = 0.08f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
 		.biasAlongChosenDir = 15.0f,
-		.baseInitialColor = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.baseInitialColor = { 1.0f, 0.7f, 0.4f, 1.0f },
 		.bulgeInitialColor = { 1.0f, 0.8f, 0.5f, 1.0f },
 		.colorChangeTimeline = kBlastHullLayer1ColorChangeTimeline
 	},
@@ -476,7 +493,7 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 	const vec3_t hullOrigin { origin[0] + 8.0f * dir[0], origin[1] + 8.0f * dir[1], origin[2] + 8.0f * dir[2] };
 
 	if( auto *hull = cg.simulatedHullsSystem.allocBlastHull( m_lastTime, 450 ) ) {
-		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, 1.5f, kBlastHullLayerParams );
+		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, 1.25f, kBlastHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
 		hull->layers[0].useDrawOnTopHack = true;
 	}
