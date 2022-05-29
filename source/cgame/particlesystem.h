@@ -18,6 +18,7 @@ struct UniformFlockParams {
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
 	float gravity { 600 };
 	float drag { 0.0f };
+	float restitution { 0.75f };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };
@@ -37,6 +38,7 @@ struct ConeFlockParams {
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
 	float gravity { 600 };
 	float drag { 0.0f };
+	float restitution { 0.75f };
 	float angle { 45 };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
@@ -69,6 +71,7 @@ struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
 	// Caution: No drag simulation is currently performed for non-clipped flocks
 	float drag { 0.0f };
+	float restitution { 0.75f };
 	Particle *particles;
 	int64_t timeoutAt;
 	unsigned numParticlesLeft;

@@ -99,6 +99,7 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	flock->timeoutAt        = timeoutAt;
 	flock->numParticlesLeft = numParticles;
 	flock->drag             = flockParams.drag;
+	flock->restitution      = flockParams.restitution;
 	flock->appearanceRules  = appearanceRules;
 }
 
@@ -495,7 +496,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, int64_t currTime
 						vec3_t reflectedVelocityDir;
 						VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
 
-						const float newSpeed = 0.75f * Q_Rcp( invOldSpeed );
+						const float newSpeed = flock->restitution * Q_Rcp( invOldSpeed );
 						// Save the reflected velocity
 						VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
 
