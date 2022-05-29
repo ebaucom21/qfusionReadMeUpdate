@@ -175,6 +175,10 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 	assert( params->maxSpeed >= 0.0f && params->maxSpeed <= 1000.0f );
 	assert( params->minSpeed <= params->maxSpeed );
 
+	// Negative shift speed could be feasible
+	assert( params->minShiftSpeed <= params->maxShiftSpeed );
+	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
+
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
 	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
@@ -183,6 +187,7 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
+	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
@@ -195,6 +200,14 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
 
 		VectorScale( randomDir, speed, p->velocity );
+
+		// We try relying on branch prediction facilities
+		// TODO: Add template/if constexpr specializations
+		if( hasSpeedShift ) {
+			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
+			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
+		}
+
 		p->velocity[3] = 0.0f;
 
 		p->spawnTime = currTime;
@@ -207,8 +220,6 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 
-		// We try relying on branch prediction facilities
-		// TODO: Add template/if constexpr specializations
 		if( hasMultipleMaterials ) {
 			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
 		} else {
@@ -248,6 +259,15 @@ auto fillParticleFlock( const ConeFlockParams *__restrict params,
 		numParticles = std::clamp( numParticles, 1u, maxParticles );
 	}
 
+	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
+	assert( params->maxSpeed >= 0.0f && params->maxSpeed <= 1000.0f );
+	assert( params->minSpeed <= params->maxSpeed );
+	assert( std::fabs( VectorLength( params->dir ) - 1.0f ) < 1e-3f );
+
+	// Negative shift speed could be feasible
+	assert( params->minShiftSpeed <= params->maxShiftSpeed );
+	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
+
 	// TODO: Supply a cosine value as a parameter?
 	const float minZ = std::cos( (float)DEG2RAD( params->angle ) );
 	const float r = Q_Sqrt( 1.0f - minZ * minZ );
@@ -261,6 +281,7 @@ auto fillParticleFlock( const ConeFlockParams *__restrict params,
 
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
+	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 
 	// TODO: Make cached conical samples for various angles?
 	for( unsigned i = 0; i < numParticles; ++i ) {
@@ -277,6 +298,13 @@ auto fillParticleFlock( const ConeFlockParams *__restrict params,
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
 		Matrix3_TransformVector( transformMatrix, untransformed, p->velocity );
 
+		// We try relying on branch prediction facilities
+		// TODO: Add template/if constexpr specializations
+		if( hasSpeedShift ) {
+			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
+			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
+		}
+
 		p->spawnTime = currTime;
 		p->lifetime = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
 		// TODO: Branchless?
@@ -287,8 +315,6 @@ auto fillParticleFlock( const ConeFlockParams *__restrict params,
 		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 
-		// We try relying on branch prediction facilities
-		// TODO: Add template/if constexpr specializations
 		if( hasMultipleMaterials ) {
 			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
 		} else {
