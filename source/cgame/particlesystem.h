@@ -16,6 +16,7 @@ struct UniformFlockParams {
 	float origin[3] { 1.0f / 0.0f, 1.0f / 0.0f, 1.0f / 0.0f };
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float gravity { 600 };
+	float drag { 0.0f };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };
@@ -31,6 +32,7 @@ struct ConeFlockParams {
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float dir[3] { 0.0f, 0.0f, 1.0f };
 	float gravity { 600 };
+	float drag { 0.0f };
 	float angle { 45 };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
@@ -59,6 +61,8 @@ auto fillParticleFlock( const ConeFlockParams *__restrict params,
 
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
+	// Caution: No drag simulation is currently performed for non-clipped flocks
+	float drag { 0.0f };
 	Particle *particles;
 	int64_t timeoutAt;
 	unsigned numParticlesLeft;
@@ -125,6 +129,8 @@ private:
 	void addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
 							   const FlockParams &flockParams,
 							   unsigned binIndex, unsigned maxParticles );
+
+	static void runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] );
 
 	static void simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
 	static void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );

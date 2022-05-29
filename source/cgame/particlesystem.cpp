@@ -98,6 +98,7 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 															  std::addressof( appearanceRules ), &m_rng, currTime );
 	flock->timeoutAt        = timeoutAt;
 	flock->numParticlesLeft = numParticles;
+	flock->drag             = flockParams.drag;
 	flock->appearanceRules  = appearanceRules;
 }
 
@@ -375,6 +376,42 @@ void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *dra
 	}
 }
 
+void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] ) {
+	assert( flock->numParticlesLeft );
+
+	BoundsBuilder boundsBuilder;
+
+	if( flock->drag > 0.0f ) {
+		for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
+			Particle *const __restrict particle = flock->particles + i;
+			if( const float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
+				const float rcpSpeed = Q_RSqrt( squareSpeed );
+				const float speed    = Q_Rcp( rcpSpeed );
+				vec4_t velocityDir;
+				VectorScale( particle->velocity, rcpSpeed, velocityDir );
+				const float forceLike  = flock->drag * speed * speed;
+				const float deltaSpeed = -forceLike * deltaSeconds;
+				VectorMA( particle->velocity, deltaSpeed, velocityDir, particle->velocity );
+			}
+			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
+			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
+			// TODO: Supply this 4-component vector explicitly
+			boundsBuilder.addPoint( particle->origin );
+		}
+	} else {
+		for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
+			Particle *const __restrict particle = flock->particles + i;
+			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
+			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
+			// TODO: Supply this 4-component vector explicitly
+			boundsBuilder.addPoint( particle->origin );
+		}
+	}
+
+	boundsBuilder.storeToWithAddedEpsilon( resultBounds[0], resultBounds[1] );
+}
+
+
 [[nodiscard]]
 static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle,
 												const Particle::AppearanceRules &__restrict rules ) -> float {
@@ -389,23 +426,16 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 void ParticleSystem::simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
 	assert( flock->shapeList && flock->numParticlesLeft );
 
-	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
-		Particle *const __restrict particle = flock->particles + i;
-		VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
-		VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
-		boundsBuilder.addPoint( particle->origin );
-	}
+	vec3_t possibleBounds[2];
+	runStepKinematics( flock, deltaSeconds, possibleBounds );
 
-	vec3_t possibleMins, possibleMaxs;
-	boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
 	// TODO: Add a fused call
-	CM_BuildShapeList( cl.cms, flock->shapeList, possibleMins, possibleMaxs, MASK_SOLID );
-	CM_ClipShapeList( cl.cms, flock->shapeList, flock->shapeList, possibleMins, possibleMaxs );
+	CM_BuildShapeList( cl.cms, flock->shapeList, possibleBounds[0], possibleBounds[1], MASK_SOLID );
+	CM_ClipShapeList( cl.cms, flock->shapeList, flock->shapeList, possibleBounds[0], possibleBounds[1] );
 
 	// TODO: Let the BoundsBuilder store 4-component vectors
-	VectorCopy( possibleMins, flock->mins );
-	VectorCopy( possibleMaxs, flock->maxs );
+	VectorCopy( possibleBounds[0], flock->mins );
+	VectorCopy( possibleBounds[1], flock->maxs );
 	flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 
 	trace_t trace;
@@ -480,6 +510,7 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 		Particle *const __restrict p = flock->particles + i;
 		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			// TODO: Two origins are redundant for non-clipped particles
+			// TODO: Simulate drag
 			VectorMA( p->velocity, deltaSeconds, p->accel, p->velocity );
 
 			VectorMA( p->oldOrigin, deltaSeconds, p->velocity, p->origin );
