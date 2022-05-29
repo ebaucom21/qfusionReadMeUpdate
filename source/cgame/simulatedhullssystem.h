@@ -15,11 +15,14 @@ public:
 	struct ColorChangeTimelineNode {
 		// Specifying it as a fraction is more flexible than absolute offsets
 		float activateAtLifetimeFraction { 0.0f };
+		// Colors get chosen randomly during replacement from this span
 		std::span<const byte_vec4_t> replacementPalette;
 		// 1.0f does not guarantee a full replacement
 		float sumOfDropChanceForThisSegment { 0.0f };
 		// 1.0f does not guarantee a full replacement
 		float sumOfReplacementChanceForThisSegment { 0.0f };
+		// True if vertex colors may be replaced by more opaque colors
+		bool allowIncreasingOpacity { false };
 	};
 
 	struct HullLayerParams {

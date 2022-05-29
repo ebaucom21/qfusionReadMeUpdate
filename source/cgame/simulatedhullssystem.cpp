@@ -923,7 +923,9 @@ auto SimulatedHullsSystem::computeCurrTimelineNodeIndex( unsigned startFromIndex
 	return lastGoodIndex;
 }
 
-template <bool MayDrop, bool MayReplace>
+enum ColorChangeFlags : unsigned { MayDrop = 0x1, MayReplace = 0x2, MayIncreaseOpacity = 0x4 };
+
+template <unsigned Flags>
 static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerator *__restrict rng,
 						  [[maybe_unused]] std::span<const byte_vec4_t> replacementPalette,
 						  [[maybe_unused]] float dropChance, [[maybe_unused]] float replacementChance ) {
@@ -936,20 +938,23 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 		// Don't process elements that became void
 		if( colors[i][3] != 0 ) [[likely]] {
 			[[maybe_unused]] bool dropped = false;
-			if constexpr( MayDrop ) {
+			if constexpr( Flags & MayDrop ) {
 				if( rng->tryWithChance( dropChance ) ) [[unlikely]] {
 					colors[i][3] = 0;
 					dropped = true;
 				}
 			}
-			if constexpr( MayReplace ) {
+			if constexpr( Flags & MayReplace ) {
 				if( !dropped ) {
 					if( rng->tryWithChance( replacementChance ) ) [[unlikely]] {
 						const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size())];
 						auto *const existingColor = colors[i];
-						// In order to replace, the alpha must not be greater than the existing one
-						if( chosenColor[3] <= existingColor[3] ) {
+						if constexpr( Flags & MayIncreaseOpacity ) {
 							Vector4Copy( chosenColor, existingColor );
+						} else {
+							if( chosenColor[3] <= existingColor[3] ) {
+								Vector4Copy( chosenColor, existingColor );
+							}
 						}
 					}
 				}
@@ -1037,10 +1042,23 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 	// Call specialized implementations for each case
 
 	if( mayDrop && mayReplace ) {
-		changeColors<true, true>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		if( currNode.allowIncreasingOpacity ) {
+			constexpr auto kFlags = MayDrop | MayReplace | MayIncreaseOpacity;
+			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		} else {
+			constexpr auto kFlags = MayDrop | MayReplace;
+			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		}
 	} else if( mayReplace ) {
-		changeColors<false, true>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		if( currNode.allowIncreasingOpacity ) {
+			constexpr auto kFlags = MayReplace | MayIncreaseOpacity;
+			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		} else {
+			constexpr auto kFlags = MayReplace;
+			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		}
 	} else if( mayDrop ) {
-		changeColors<true, false>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		constexpr auto kFlags = MayDrop;
+		changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
 	}
 }
