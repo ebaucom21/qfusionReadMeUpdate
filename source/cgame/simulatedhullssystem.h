@@ -26,13 +26,13 @@ public:
 	};
 
 	struct HullLayerParams {
-		const float speed;
-		const float finalOffset;
-		const float speedSpikeChance;
-		const float minSpeedSpike, maxSpeedSpike;
-		const float biasAlongChosenDir;
-		const float baseInitialColor[4];
-		const float bulgeInitialColor[4];
+		float speed;
+		float finalOffset;
+		float speedSpikeChance;
+		float minSpeedSpike, maxSpeedSpike;
+		float biasAlongChosenDir;
+		float baseInitialColor[4];
+		float bulgeInitialColor[4];
 
 		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 	};
