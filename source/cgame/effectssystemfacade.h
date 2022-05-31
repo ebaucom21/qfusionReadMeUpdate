@@ -105,14 +105,6 @@ private:
 
 	void spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx, float radius, bool addSoundLfe );
 
-	// the pointer looks better than optional in this case
-
-	void spawnBulletRicochetParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
-									   const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
-
-	void spawnBulletImpactDebrisParticles( const float *impactOrigin, const float *impactNormal, const float *coneDir,
-										   const std::pair<uint16_t, uint16_t> *pelletLightFrames = nullptr );
-
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;
