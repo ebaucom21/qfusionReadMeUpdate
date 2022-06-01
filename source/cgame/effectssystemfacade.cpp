@@ -553,8 +553,22 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 		const float *const impactOrigin = trace->endpos;
 
 		if( cg_particles->integer ) {
-			vec3_t coneDir;
-			VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+			// Vary the entire flock direction every hit
+			const float z   = m_rng.nextFloat( 0.60f, 0.95f );
+			const float r   = Q_Sqrt( 1.0f - z * z );
+			const float phi = m_rng.nextFloat( 0.0f, 2.0f * (float)M_PI );
+			const vec3_t newZDir { r * std::cos( phi ), r * std::sin( phi ), z };
+
+			mat3_t transformMatrix;
+			Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], newZDir, transformMatrix );
+
+			vec3_t reflectedImpactDir;
+			VectorReflect( impactDir, impactNormal, 0.0f, reflectedImpactDir );
+
+			vec3_t flockDir;
+			Matrix3_TransformVector( transformMatrix, reflectedImpactDir, flockDir );
+			// wtf?
+			VectorNormalizeFast( flockDir );
 
 			// TODO: Check surface type (we don't really have a sufficient information on that)
 
@@ -574,7 +588,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			ConeFlockParams impactFlockParams {
 				.origin        = { impactOrigin[0], impactOrigin[1], impactOrigin[2] },
 				.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-				.dir           = { coneDir[0], coneDir[1], coneDir[2] },
+				.dir           = { flockDir[0], flockDir[1], flockDir[2] },
 				.gravity       = GRAVITY,
 				.angle         = 30.0f,
 				.bounceCount   = 1,
@@ -598,14 +612,15 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			ricochetAppearanceRules.widthSpread   = 0.05f;
 
 			ConeFlockParams ricochetFlockParams( impactFlockParams );
-			ricochetFlockParams.minSpeed      = 750.0f;
+			ricochetFlockParams.minSpeed      = 550.0f;
 			ricochetFlockParams.maxSpeed      = 950.0f;
+			ricochetFlockParams.angle         = 15.0f;
 			ricochetFlockParams.bounceCount   = 2;
 			ricochetFlockParams.restitution   = 0.5f;
-			ricochetFlockParams.drag          = 0.0025f;
-			ricochetFlockParams.minPercentage = 0.7f;
+			ricochetFlockParams.drag          = 0.005f;
+			ricochetFlockParams.minPercentage = 0.5f;
 			ricochetFlockParams.maxPercentage = 1.0f;
-			ricochetFlockParams.minTimeout    = 75;
+			ricochetFlockParams.minTimeout    = 100;
 			ricochetFlockParams.maxTimeout    = 300;
 
 			cg.particleSystem.addSmallParticleFlock( ricochetAppearanceRules, ricochetFlockParams );
@@ -622,6 +637,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			ConeFlockParams debrisFlockParams( ricochetFlockParams );
 			debrisFlockParams.minSpeed      = 75.0f;
 			debrisFlockParams.maxSpeed      = 125.0f;
+			debrisFlockParams.angle         = 30.0f;
 			debrisFlockParams.restitution   = 0.3f;
 			debrisFlockParams.minPercentage = 0.3f;
 			debrisFlockParams.maxPercentage = 0.9f;
