@@ -115,7 +115,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			if( cg_particles->integer ) {
-				ConeFlockParams flockParams {
+				ConicalFlockParams flockParams {
 					.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
 					.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
 					.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
@@ -478,7 +478,7 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 		}
 
 		if( initialColors ) {
-			ConeFlockParams flockParams {
+			ConicalFlockParams flockParams {
 				.origin        = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
 				.offset        = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
 				.gravity       = 1.25f * GRAVITY,
@@ -1164,7 +1164,7 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 			count = 6;
 		}
 
-		ConeFlockParams flockParams {
+		ConicalFlockParams flockParams {
 			.origin = { ent->origin[0], ent->origin[1], ent->origin[2] },
 			.offset = { dir[0], dir[1], dir[2] },
 			.dir    = { dir[0], dir[1], dir[2] }

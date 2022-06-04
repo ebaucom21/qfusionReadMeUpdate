@@ -104,33 +104,33 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 }
 
 void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
-											const UniformFlockParams &flockParams ) {
-	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+											const EllipsoidalFlockParams &flockParams ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
 }
 
 void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
-											const ConeFlockParams &flockParams ) {
-	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
+											const ConicalFlockParams &flockParams ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 0, kMaxSmallFlockSize );
 }
 
 void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
-											 const UniformFlockParams &flockParams ) {
-	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+											 const EllipsoidalFlockParams &flockParams ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
 }
 
 void ParticleSystem::addMediumParticleFlock( const Particle::AppearanceRules &rules,
-											 const ConeFlockParams &flockParams ) {
-	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
+											 const ConicalFlockParams &flockParams ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 1, kMaxMediumFlockSize );
 }
 
 void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
-											const UniformFlockParams &flockParams ) {
-	addParticleFlockImpl<UniformFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+											const EllipsoidalFlockParams &flockParams ) {
+	addParticleFlockImpl<EllipsoidalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
 }
 
 void ParticleSystem::addLargeParticleFlock( const Particle::AppearanceRules &rules,
-											const ConeFlockParams &flockParams ) {
-	addParticleFlockImpl<ConeFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
+											const ConicalFlockParams &flockParams ) {
+	addParticleFlockImpl<ConicalFlockParams>( rules, flockParams, 2, kMaxLargeFlockSize );
 }
 
 auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, unsigned binIndex ) -> ParticleFlock * {
@@ -148,7 +148,7 @@ auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, u
 	return flock;
 }
 
-auto fillParticleFlock( const UniformFlockParams *__restrict params,
+auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 						Particle *__restrict particles,
 						unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,
@@ -189,6 +189,9 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
+	const bool isSpherical          = params->stretchScale == 1.0f;
+
+	assert( std::fabs( VectorLength( params->stretchDir ) - 1.0f ) < 1e-3f );
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
@@ -196,14 +199,31 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
 		p->bouncesLeft = params->bounceCount;
 
-		// We shouldn't really care of bias for some dirs in this case
-		const float *randomDir = dirs[rng->nextBoundedFast( NUMVERTEXNORMALS )];
+		const float *__restrict randomDir = dirs[rng->nextBounded( NUMVERTEXNORMALS )];
 		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
-
-		VectorScale( randomDir, speed, p->velocity );
 
 		// We try relying on branch prediction facilities
 		// TODO: Add template/if constexpr specializations
+		if( isSpherical ) {
+			VectorScale( randomDir, speed, p->velocity );
+		} else {
+			const float stretchScale = params->stretchScale;
+			const float stretchDot   = DotProduct( randomDir, params->stretchDir );
+			vec3_t alignedPart, perpPart;
+			VectorScale( params->stretchDir, stretchDot, alignedPart );
+			VectorSubtract( randomDir, alignedPart, perpPart );
+			// Compute using the prior knowledge instead of a late normalization to break dependency chains
+			const float newAlignedSquareLen = ( stretchDot * stretchScale ) * ( stretchDot * stretchScale );
+			const float perpSquareLen       = VectorLengthSquared( perpPart );
+			// TODO: Supply hints that the arg is non-zero
+			const float rcpNewDirLen  = Q_RSqrt( newAlignedSquareLen + perpSquareLen );
+			const float velocityScale = speed * rcpNewDirLen;
+			// Combine the perpendicular part with the aligned part using the strech scale
+			VectorMA( perpPart, stretchScale, alignedPart, p->velocity );
+			// Normalize and scale by the speed
+			VectorScale( p->velocity, velocityScale, p->velocity );
+		}
+
 		if( hasSpeedShift ) {
 			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
 			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
@@ -236,7 +256,7 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 	return { resultTimeout, numParticles };
 }
 
-auto fillParticleFlock( const ConeFlockParams *__restrict params,
+auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 						Particle *__restrict particles,
 						unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,

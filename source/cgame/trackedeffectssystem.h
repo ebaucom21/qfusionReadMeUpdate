@@ -108,7 +108,7 @@ private:
 							 Particle::AppearanceRules &&appearanceRules  ) -> ParticleTrail *;
 
 	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
-									  ConeFlockParams *params, int64_t currTime );
+									  ConicalFlockParams *params, int64_t currTime );
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 

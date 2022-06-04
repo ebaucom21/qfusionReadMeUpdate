@@ -12,10 +12,13 @@ template <typename> class SingletonHolder;
 #include <span>
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
-struct UniformFlockParams {
+struct EllipsoidalFlockParams {
 	float origin[3] { 1.0f / 0.0f, 1.0f / 0.0f, 1.0f / 0.0f };
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
+	// So far, only stretching/flattening the sphere along the single dir seems to be useful
+	float stretchDir[3] { 0.0f, 0.0f, 1.0f };
+	float stretchScale { 1.0f };
 	float gravity { 600 };
 	float drag { 0.0f };
 	float restitution { 0.75f };
@@ -31,7 +34,7 @@ struct UniformFlockParams {
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
-struct ConeFlockParams {
+struct ConicalFlockParams {
 	float origin[3];
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float dir[3] { 0.0f, 0.0f, 1.0f };
@@ -52,7 +55,7 @@ struct ConeFlockParams {
 };
 
 [[nodiscard]]
-auto fillParticleFlock( const UniformFlockParams *__restrict params,
+auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 				        Particle *__restrict particles,
 				        unsigned maxParticles,
 				        const Particle::AppearanceRules *__restrict appearanceRules,
@@ -60,7 +63,7 @@ auto fillParticleFlock( const UniformFlockParams *__restrict params,
 				        int64_t currTime ) -> std::pair<int64_t, unsigned>;
 
 [[nodiscard]]
-auto fillParticleFlock( const ConeFlockParams *__restrict params,
+auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 				        Particle *__restrict particles,
 				        unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,
@@ -149,14 +152,14 @@ public:
 
 	// Use this non-templated interface to reduce call site code bloat
 
-	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
-	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
+	void addSmallParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
 
-	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
-	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
+	void addMediumParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
 
-	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const UniformFlockParams &flockParams );
-	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConeFlockParams &flockParams );
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
+	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
 
 	[[nodiscard]]
 	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules, unsigned binIndex ) -> ParticleFlock *;

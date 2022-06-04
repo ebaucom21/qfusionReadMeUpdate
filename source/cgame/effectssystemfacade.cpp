@@ -97,8 +97,8 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
-	if( cg_particles->integer && cg_explosionsSmoke->integer ) {
-		UniformFlockParams flockParams {
+	if( cg_particles->integer ) {
+		EllipsoidalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { offset[0], offset[1], offset[2] },
 			.gravity       = 100.0f,
@@ -159,7 +159,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 	startSound( sfx, soundOrigin, ATTN_IDLE );
 
 	if( cg_particles->integer ) {
-		UniformFlockParams flockParams {
+		EllipsoidalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.gravity       = 250.0f,
@@ -234,7 +234,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 		const int baseTime       = std::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
 		const int timeSpread     = std::max( 50, baseTime / 8 );
 
-		ConeFlockParams flockParams {
+		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { 3.0f * dir[0], 3.0f * dir[1], 3.0f * dir[2] },
 			.dir           = { dir[0], dir[1], dir[2] },
@@ -285,7 +285,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
-		ConeFlockParams flockParams {
+		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
@@ -367,7 +367,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
-		ConeFlockParams flockParams {
+		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
@@ -441,7 +441,7 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 			startSound( cgs.media.sfxBladeWallHit[m_rng.nextBounded( 2 )], pos, ATTN_NORM );
 
 			if( cg_particles->integer ) {
-				ConeFlockParams flockParams {
+				ConicalFlockParams flockParams {
 					.origin = { pos[0], pos[1], pos[2] },
 					.offset = { dir[0], dir[1], dir[2] },
 					.dir    = { dir[0], dir[1], dir[2] },
@@ -486,7 +486,7 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
 	if( cg_particles->integer ) {
-		UniformFlockParams flockParams {
+		EllipsoidalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { dir[0], dir[1], dir[2] },
 			.gravity       = -50.0f,
@@ -558,7 +558,7 @@ static const Particle::AppearanceRules kBulletImpactAppearanceRules {
 	.sizeBehaviour  = Particle::Shrinking,
 };
 
-static const ConeFlockParams kBulletImpactFlockParams {
+static const ConicalFlockParams kBulletImpactFlockParams {
 	.gravity       = GRAVITY,
 	.angle         = 30.0f,
 	.bounceCount   = 1,
@@ -583,7 +583,7 @@ static const Particle::AppearanceRules kBulletRicochetAppearanceRules {
 	.sizeBehaviour  = Particle::Expanding,
 };
 
-static const ConeFlockParams kBulletRicochetFlockParams {
+static const ConicalFlockParams kBulletRicochetFlockParams {
 	.gravity       = GRAVITY,
 	.drag          = 0.006f,
 	.restitution   = 0.5f,
@@ -628,7 +628,7 @@ static const Particle::AppearanceRules kBulletDebrisAppearanceRules {
 	.sizeBehaviour  = Particle::Expanding,
 };
 
-static const ConeFlockParams kBulletDebrisFlockParams {
+static const ConicalFlockParams kBulletDebrisFlockParams {
 	.gravity       = GRAVITY,
 	.restitution   = 0.3f,
 	.angle         = 30.0f,
@@ -657,7 +657,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 		Particle::AppearanceRules impactAppearanceRules( kBulletImpactAppearanceRules );
 		impactAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-		ConeFlockParams impactFlockParams( kBulletImpactFlockParams );
+		ConicalFlockParams impactFlockParams( kBulletImpactFlockParams );
 		VectorCopy( impactOrigin, impactFlockParams.origin );
 		VectorCopy( impactNormal, impactFlockParams.offset );
 		VectorCopy( flockDir, impactFlockParams.dir );
@@ -670,7 +670,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
 			ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-			ConeFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
+			ConicalFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
 			VectorCopy( impactOrigin, ricochetFlockParams.origin );
 			VectorCopy( impactNormal, ricochetFlockParams.offset );
 			VectorCopy( flockDir, ricochetFlockParams.dir );
@@ -682,7 +682,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			Particle::AppearanceRules debrisAppearanceRules( kBulletDebrisAppearanceRules );
 			debrisAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-			ConeFlockParams debrisFlockParams( kBulletDebrisFlockParams );
+			ConicalFlockParams debrisFlockParams( kBulletDebrisFlockParams );
 			VectorCopy( impactOrigin, debrisFlockParams.origin );
 			VectorCopy( impactNormal, debrisFlockParams.offset );
 			VectorCopy( flockDir, debrisFlockParams.dir );
@@ -711,7 +711,7 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 		Particle::AppearanceRules impactAppearanceRules( kBulletImpactAppearanceRules );
 		impactAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-		ConeFlockParams impactFlockParams( kBulletImpactFlockParams );
+		ConicalFlockParams impactFlockParams( kBulletImpactFlockParams );
 		VectorCopy( impactOrigin, impactFlockParams.origin );
 		VectorCopy( impactNormal, impactFlockParams.offset );
 		VectorCopy( flockDir, impactFlockParams.dir );
@@ -727,7 +727,7 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 				ricochetAppearanceRules.lightFrameAffinityIndex = index;
 				ricochetAppearanceRules.lightFrameAffinityModulo = total;
 
-				ConeFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
+				ConicalFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
 				VectorCopy( impactOrigin, ricochetFlockParams.origin );
 				VectorCopy( impactNormal, ricochetFlockParams.offset );
 				VectorCopy( flockDir, ricochetFlockParams.dir );
@@ -743,7 +743,7 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 				debrisAppearanceRules.lightFrameAffinityIndex = index;
 				debrisAppearanceRules.lightFrameAffinityModulo = total;
 
-				ConeFlockParams debrisFlockParams( kBulletDebrisFlockParams );
+				ConicalFlockParams debrisFlockParams( kBulletDebrisFlockParams );
 				VectorCopy( impactOrigin, debrisFlockParams.origin );
 				VectorCopy( impactNormal, debrisFlockParams.offset );
 				VectorCopy( flockDir, debrisFlockParams.dir );

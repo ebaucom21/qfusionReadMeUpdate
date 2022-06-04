@@ -113,7 +113,7 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 }
 
 void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
-														ConeFlockParams *params, int64_t currTime ) {
+														ConicalFlockParams *params, int64_t currTime ) {
 	trail->touchedAt = currTime;
 
 	ParticleFlock *__restrict flock = trail->particleFlock;
@@ -165,7 +165,7 @@ static const vec4_t kRocketFireTrailInitialColor { 1.0f, 0.5f, 0.0f, 0.0f };
 static const vec4_t kRocketFireTrailFadedInColor { 1.0f, 0.7f, 0.3f, 1.0f };
 static const vec4_t kRocketFireTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
-static ConeFlockParams g_rocketSmokeParticlesFlockParams {
+static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 15,
 	.bounceCount = 0,
@@ -175,7 +175,7 @@ static ConeFlockParams g_rocketSmokeParticlesFlockParams {
 	.maxTimeout  = 400
 };
 
-static ConeFlockParams g_rocketFireParticlesFlockParams {
+static ConicalFlockParams g_rocketFireParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 7.5f,
 	.bounceCount = 0,
@@ -238,7 +238,7 @@ static const vec4_t kGrenadeSmokeTrailInitialColor { 1.0f, 0.7f, 0.3f, 0.0f };
 static const vec4_t kGrenadeSmokeTrailFadedInColor { 0.7f, 0.7f, 0.7f, 0.2f };
 static const vec4_t kGrenadeSmokeTrailFadedOutColor { 0.0f, 0.0f, 0.0f, 0.0f };
 
-static ConeFlockParams g_grenadeFuseParticlesFlockParams {
+static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 5,
 	.bounceCount = 0,
@@ -248,7 +248,7 @@ static ConeFlockParams g_grenadeFuseParticlesFlockParams {
 	.maxTimeout  = 150
 };
 
-static ConeFlockParams g_grenadeSmokeParticlesFlockParams {
+static ConicalFlockParams g_grenadeSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 7.5f,
 	.bounceCount = 0,
@@ -326,7 +326,7 @@ static const vec4_t kBlastIonsTrailFadedOutColors[] {
 	{ 1.0f, 1.0f, 1.0f, 1.0f }
 };
 
-static ConeFlockParams g_blastSmokeParticlesFlockParams {
+static ConicalFlockParams g_blastSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 20,
 	.bounceCount = 0,
@@ -336,7 +336,7 @@ static ConeFlockParams g_blastSmokeParticlesFlockParams {
 	.maxTimeout  = 225
 };
 
-ConeFlockParams g_blastIonsParticlesFlockParams {
+ConicalFlockParams g_blastIonsParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 12,
 	.bounceCount = 0,
@@ -403,7 +403,7 @@ static const vec4_t kElectroIonsTrailColors[] {
 	{ 0.3f, 0.3f, 1.0f, 1.0f },
 };
 
-static ConeFlockParams g_electroCloudParticlesFlockParams {
+static ConicalFlockParams g_electroCloudParticlesFlockParams {
 	.gravity     = 0,
 	.angle       = 18,
 	.bounceCount = 0,
@@ -413,7 +413,7 @@ static ConeFlockParams g_electroCloudParticlesFlockParams {
 	.maxTimeout  = 200
 };
 
-static ConeFlockParams g_electroIonsParticlesFlockParams {
+static ConicalFlockParams g_electroIonsParticlesFlockParams {
 	.gravity     = 0,
 	.angle       = 12,
 	.bounceCount = 0,
