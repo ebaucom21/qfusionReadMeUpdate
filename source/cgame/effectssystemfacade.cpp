@@ -512,9 +512,88 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
 }
 
+[[nodiscard]]
+static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
+	if( trace->surfFlags & SURF_NOIMPACT ) [[unlikely]]	{
+		return false;
+	}
+	if( const int entNum = trace->ent; entNum > 0 ) {
+		if( const unsigned entType = cg_entities[entNum].type; entType == ET_PLAYER || entType == ET_CORPSE ) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void makeRicochetDir( const float *impactDir, const float *impactNormal, wsw::RandomGenerator *rng, float *result ) {
+	const float z   = rng->nextFloat( 0.60f, 0.95f );
+	const float r   = Q_Sqrt( 1.0f - z * z );
+	const float phi = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
+	const vec3_t newZDir { r * std::cos( phi ), r * std::sin( phi ), z };
+
+	mat3_t transformMatrix;
+	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], newZDir, transformMatrix );
+
+	vec3_t reflectedImpactDir;
+	VectorReflect( impactDir, impactNormal, 0.0f, reflectedImpactDir );
+
+	Matrix3_TransformVector( transformMatrix, reflectedImpactDir, result );
+	// wtf?
+	VectorNormalizeFast( result );
+}
+
 static const vec4_t kBulletRicochetInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kBulletRicochetFadedInColor { 0.9f, 0.9f, 1.0f, 1.0f };
 static const vec4_t kBulletRicochetFadedOutColor { 0.9f, 0.9f, 0.8f, 1.0f };
+
+static const Particle::AppearanceRules kBulletImpactAppearanceRules {
+	.initialColors  = &kBulletRicochetInitialColor,
+	.fadedInColors  = &kBulletRicochetFadedInColor,
+	.fadedOutColors = &kBulletRicochetFadedOutColor,
+	.kind           = Particle::Spark,
+	.length         = 20.0f,
+	.width          = 1.0f,
+	.lengthSpread   = 4.0f,
+	.widthSpread    = 0.2f,
+	.sizeBehaviour  = Particle::Shrinking,
+};
+
+static const ConeFlockParams kBulletImpactFlockParams {
+	.gravity       = GRAVITY,
+	.angle         = 30.0f,
+	.bounceCount   = 1,
+	.minSpeed      = 700.0f,
+	.maxSpeed      = 900.0f,
+	.minTimeout    = 75,
+	.maxTimeout    = 150,
+};
+
+static const Particle::AppearanceRules kBulletRicochetAppearanceRules {
+	.initialColors  = &kBulletRicochetInitialColor,
+	.fadedInColors  = &kBulletRicochetFadedInColor,
+	.fadedOutColors = &kBulletRicochetFadedOutColor,
+	.lightColor     = kBulletRicochetFadedInColor,
+	.numColors      = std::size( kBulletRicochetInitialColor ),
+	.kind           = Particle::Spark,
+	.length         = 5.0f,
+	.width          = 0.75f,
+	.lengthSpread   = 1.0f,
+	.widthSpread    = 0.05f,
+	.lightRadius    = 16.0f,
+	.sizeBehaviour  = Particle::Expanding,
+};
+
+static const ConeFlockParams kBulletRicochetFlockParams {
+	.gravity       = GRAVITY,
+	.drag          = 0.006f,
+	.restitution   = 0.5f,
+	.angle         = 15.0f,
+	.bounceCount   = 2,
+	.minSpeed      = 550.0f,
+	.maxSpeed      = 950.0f,
+	.minTimeout    = 200,
+	.maxTimeout    = 300,
+};
 
 static const vec4_t kBulletImpactDebrisInitialColors[3] {
 	{ 1.0f, 1.0f, 1.0f, 1.0f },
@@ -534,117 +613,81 @@ static const vec4_t kBulletImpactDebrisFadedOutColors[3] {
 	{ 1.0f, 0.7f, 0.3f, 1.0f },
 };
 
-[[nodiscard]]
-static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
-	if( trace->surfFlags & SURF_NOIMPACT ) [[unlikely]]	{
-		return false;
-	}
-	if( const int entNum = trace->ent; entNum > 0 ) {
-		if( const unsigned entType = cg_entities[entNum].type; entType == ET_PLAYER || entType == ET_CORPSE ) {
-			return false;
-		}
-	}
-	return true;
-}
+static const Particle::AppearanceRules kBulletDebrisAppearanceRules {
+	.initialColors  = kBulletImpactDebrisInitialColors,
+	.fadedInColors  = kBulletImpactDebrisFadedInColors,
+	.fadedOutColors = kBulletImpactDebrisFadedOutColors,
+	.lightColor     = kBulletImpactDebrisFadedInColors[0],
+	.numColors      = std::size( kBulletImpactDebrisFadedInColors ),
+	.kind           = Particle::Spark,
+	.length         = 2.5f,
+	.width          = 0.75f,
+	.lengthSpread   = 1.0f,
+	.widthSpread    = 0.05f,
+	.lightRadius    = 16.0f,
+	.sizeBehaviour  = Particle::Expanding,
+};
+
+static const ConeFlockParams kBulletDebrisFlockParams {
+	.gravity       = GRAVITY,
+	.restitution   = 0.3f,
+	.angle         = 30.0f,
+	.bounceCount   = 1,
+	.minSpeed      = 75.0f,
+	.maxSpeed      = 125.0f,
+	.minShiftSpeed = 50.0f,
+	.maxShiftSpeed = 125.0f,
+	.minTimeout    = 200,
+	.maxTimeout    = 700,
+};
 
 void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const float *impactDir ) {
 	if( canShowBulletLikeImpactForHit( trace ) ) {
 		const float *const impactNormal = trace->plane.normal;
 		const float *const impactOrigin = trace->endpos;
 
+		vec3_t flockDir;
+		// Vary the entire flock direction every hit
+		makeRicochetDir( impactDir, impactNormal, &m_rng, flockDir );
+
+		// Spawn the impact rosette regardless of the var value
+		// TODO: Check surface type (we don't really have a sufficient information on that)
+
+		// TODO: Copying does not seem to be justified in this case
+		Particle::AppearanceRules impactAppearanceRules( kBulletImpactAppearanceRules );
+		impactAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+
+		ConeFlockParams impactFlockParams( kBulletImpactFlockParams );
+		VectorCopy( impactOrigin, impactFlockParams.origin );
+		VectorCopy( impactNormal, impactFlockParams.offset );
+		VectorCopy( flockDir, impactFlockParams.dir );
+		impactFlockParams.minPercentage = 1.0f;
+		impactFlockParams.maxPercentage = 1.0f;
+
+		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
+
 		if( cg_particles->integer ) {
-			// Vary the entire flock direction every hit
-			const float z   = m_rng.nextFloat( 0.60f, 0.95f );
-			const float r   = Q_Sqrt( 1.0f - z * z );
-			const float phi = m_rng.nextFloat( 0.0f, 2.0f * (float)M_PI );
-			const vec3_t newZDir { r * std::cos( phi ), r * std::sin( phi ), z };
+			Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
+			ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-			mat3_t transformMatrix;
-			Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], newZDir, transformMatrix );
-
-			vec3_t reflectedImpactDir;
-			VectorReflect( impactDir, impactNormal, 0.0f, reflectedImpactDir );
-
-			vec3_t flockDir;
-			Matrix3_TransformVector( transformMatrix, reflectedImpactDir, flockDir );
-			// wtf?
-			VectorNormalizeFast( flockDir );
-
-			// TODO: Check surface type (we don't really have a sufficient information on that)
-
-			Particle::AppearanceRules impactAppearanceRules {
-				.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-				.initialColors  = &kBulletRicochetInitialColor,
-				.fadedInColors  = &kBulletRicochetFadedInColor,
-				.fadedOutColors = &kBulletRicochetFadedOutColor,
-				.kind           = Particle::Spark,
-				.length         = 16.0f,
-				.width          = 1.0f,
-				.lengthSpread   = 4.0f,
-				.widthSpread    = 0.2f,
-				.sizeBehaviour  = Particle::Shrinking,
-			};
-
-			ConeFlockParams impactFlockParams {
-				.origin        = { impactOrigin[0], impactOrigin[1], impactOrigin[2] },
-				.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-				.dir           = { flockDir[0], flockDir[1], flockDir[2] },
-				.gravity       = GRAVITY,
-				.angle         = 30.0f,
-				.bounceCount   = 1,
-				.minSpeed      = 700.0f,
-				.maxSpeed      = 900.0f,
-				.minPercentage = 1.0f,
-				.maxPercentage = 1.0f,
-				.minTimeout    = 75,
-				.maxTimeout    = 150,
-			};
-
-			cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
-
-			Particle::AppearanceRules ricochetAppearanceRules( impactAppearanceRules );
-			ricochetAppearanceRules.sizeBehaviour = Particle::Expanding;
-			ricochetAppearanceRules.lightColor    = kBulletRicochetFadedInColor;
-			ricochetAppearanceRules.lightRadius   = 16.0f;
-			ricochetAppearanceRules.length        = 7.0f;
-			ricochetAppearanceRules.lengthSpread  = 1.0f;
-			ricochetAppearanceRules.width         = 0.75f;
-			ricochetAppearanceRules.widthSpread   = 0.05f;
-
-			ConeFlockParams ricochetFlockParams( impactFlockParams );
-			ricochetFlockParams.minSpeed      = 550.0f;
-			ricochetFlockParams.maxSpeed      = 950.0f;
-			ricochetFlockParams.angle         = 15.0f;
-			ricochetFlockParams.bounceCount   = 2;
-			ricochetFlockParams.restitution   = 0.5f;
-			ricochetFlockParams.drag          = 0.005f;
-			ricochetFlockParams.minPercentage = 0.5f;
+			ConeFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
+			VectorCopy( impactOrigin, ricochetFlockParams.origin );
+			VectorCopy( impactNormal, ricochetFlockParams.offset );
+			VectorCopy( flockDir, ricochetFlockParams.dir );
+			ricochetFlockParams.minPercentage = 0.7f;
 			ricochetFlockParams.maxPercentage = 1.0f;
-			ricochetFlockParams.minTimeout    = 100;
-			ricochetFlockParams.maxTimeout    = 300;
 
 			cg.particleSystem.addSmallParticleFlock( ricochetAppearanceRules, ricochetFlockParams );
 
-			Particle::AppearanceRules debrisAppearanceRules( ricochetAppearanceRules );
-			debrisAppearanceRules.initialColors  = kBulletImpactDebrisInitialColors;
-			debrisAppearanceRules.fadedInColors  = kBulletImpactDebrisFadedInColors;
-			debrisAppearanceRules.fadedOutColors = kBulletImpactDebrisFadedOutColors;
-			debrisAppearanceRules.lightColor     = kBulletImpactDebrisFadedInColors[0];
-			debrisAppearanceRules.numColors      = std::size( kBulletImpactDebrisInitialColors );
-			debrisAppearanceRules.length         = 2.5f;
-			debrisAppearanceRules.lengthSpread   = 1.0f;
+			Particle::AppearanceRules debrisAppearanceRules( kBulletDebrisAppearanceRules );
+			debrisAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
-			ConeFlockParams debrisFlockParams( ricochetFlockParams );
-			debrisFlockParams.minSpeed      = 75.0f;
-			debrisFlockParams.maxSpeed      = 125.0f;
-			debrisFlockParams.angle         = 30.0f;
-			debrisFlockParams.restitution   = 0.3f;
+			ConeFlockParams debrisFlockParams( kBulletDebrisFlockParams );
+			VectorCopy( impactOrigin, debrisFlockParams.origin );
+			VectorCopy( impactNormal, debrisFlockParams.offset );
+			VectorCopy( flockDir, debrisFlockParams.dir );
 			debrisFlockParams.minPercentage = 0.3f;
 			debrisFlockParams.maxPercentage = 0.9f;
-			debrisFlockParams.minShiftSpeed = 50.0f;
-			debrisFlockParams.maxShiftSpeed = 75.0f;
-			debrisFlockParams.minTimeout    = 200;
-			debrisFlockParams.maxTimeout    = 700;
 
 			cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
 		}
@@ -653,110 +696,62 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 	}
 }
 
-// Mix with ricochet colors as the pellet impact effect visually combines these 2 kinds
-static const vec4_t kPelletImpactDebrisInitialColors[4] {
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 0.9f, 1.0f },
-};
-
-static const vec4_t kPelletImpactDebrisFadedInColors[4] {
-	{ 1.0f, 0.8f, 0.5f, 1.0f },
-	{ 1.0f, 0.8f, 0.4f, 1.0f },
-	{ 1.0f, 1.0f, 0.9f, 1.0f },
-	{ 1.0f, 1.0f, 0.9f, 1.0f },
-};
-
-static const vec4_t kPelletImpactDebrisFadedOutColors[4] {
-	{ 1.0f, 0.8f, 0.5f, 1.0f },
-	{ 1.0f, 0.8f, 0.4f, 1.0f },
-	{ 1.0f, 1.0f, 0.9f, 1.0f },
-	{ 1.0f, 1.0f, 0.9f, 1.0f },
-};
-
 void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const float *impactDir,
 												   unsigned index, unsigned total ) {
 	if( canShowBulletLikeImpactForHit( trace ) ) {
 		const float *const impactNormal = trace->plane.normal;
 		const float *const impactOrigin = trace->endpos;
 
+		vec3_t flockDir;
+		makeRicochetDir( impactDir, impactNormal, &m_rng, flockDir );
+
+		// Spawn the impact rosette regardless of the var value
+		// TODO: Check surface type (we don't really have a sufficient information on that)
+
+		Particle::AppearanceRules impactAppearanceRules( kBulletImpactAppearanceRules );
+		impactAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+
+		ConeFlockParams impactFlockParams( kBulletImpactFlockParams );
+		VectorCopy( impactOrigin, impactFlockParams.origin );
+		VectorCopy( impactNormal, impactFlockParams.offset );
+		VectorCopy( flockDir, impactFlockParams.dir );
+		impactFlockParams.minPercentage = 0.3f;
+		impactFlockParams.maxPercentage = 0.7f;
+
+		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
+
 		if( cg_particles->integer ) {
-			vec3_t coneDir;
-			VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+			if( m_rng.tryWithChance( 0.5f ) ) {
+				Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
+				ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+				ricochetAppearanceRules.lightFrameAffinityIndex = index;
+				ricochetAppearanceRules.lightFrameAffinityModulo = total;
 
-			// TODO: Check surface type (we don't really have a sufficient information on that)
+				ConeFlockParams ricochetFlockParams( kBulletRicochetFlockParams );
+				VectorCopy( impactOrigin, ricochetFlockParams.origin );
+				VectorCopy( impactNormal, ricochetFlockParams.offset );
+				VectorCopy( flockDir, ricochetFlockParams.dir );
+				ricochetFlockParams.minPercentage = 0.0f;
+				ricochetFlockParams.maxPercentage = 0.3f;
 
-			if( m_rng.tryWithChance( 0.25f ) ) [[unlikely]] {
-				ConeFlockParams impactFlockParams {
-					.origin        = { impactOrigin[0], impactOrigin[1], impactOrigin[2] },
-					.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-					.dir           = { coneDir[0], coneDir[1], coneDir[2] },
-					.gravity       = GRAVITY,
-					.angle         = 30.0f,
-					.bounceCount   = 1,
-					.minSpeed      = 700.0f,
-					.maxSpeed      = 900.0f,
-					.minPercentage = 0.3f,
-					.maxPercentage = 1.0f,
-					.minTimeout    = 150,
-					.maxTimeout    = 300,
-				};
-
-				Particle::AppearanceRules impactAppearanceRules {
-					.materials                = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-					.initialColors            = &kBulletRicochetInitialColor,
-					.fadedInColors            = &kBulletRicochetFadedInColor,
-					.fadedOutColors           = &kBulletRicochetFadedOutColor,
-					.lightColor               = kBulletRicochetFadedInColor,
-					.kind                     = Particle::Spark,
-					.length                   = 16.0f,
-					.width                    = 1.0f,
-					.lengthSpread             = 4.0f,
-					.widthSpread              = 0.2f,
-					.lightRadius              = 16.0f,
-					.lightFrameAffinityIndex  = (uint16_t)index,
-					.lightFrameAffinityModulo = (uint16_t)total,
-					.sizeBehaviour            = Particle::Shrinking,
-				};
-
-				cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
+				cg.particleSystem.addSmallParticleFlock( ricochetAppearanceRules, ricochetFlockParams );
 			}
 
-			ConeFlockParams ricochetAndDebrisFlockParams {
-				.origin        = { impactOrigin[0], impactOrigin[1], impactOrigin[2] },
-				.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-				.dir           = { coneDir[0], coneDir[1], coneDir[2] },
-				.gravity       = GRAVITY,
-				.angle         = 45.0f,
-				.bounceCount   = 1,
-				.minSpeed      = 250.0f,
-				.maxSpeed      = 450.0f,
-				.minPercentage = 0.00f,
-				.maxPercentage = 0.33f,
-				.minTimeout    = 150,
-				.maxTimeout    = 300,
-			};
+			if( m_rng.tryWithChance( 0.5f ) ) {
+				Particle::AppearanceRules debrisAppearanceRules( kBulletDebrisAppearanceRules );
+				debrisAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+				debrisAppearanceRules.lightFrameAffinityIndex = index;
+				debrisAppearanceRules.lightFrameAffinityModulo = total;
 
-			Particle::AppearanceRules ricochetAndDebrisAppearanceRules {
-				.materials                = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-				.initialColors            = kPelletImpactDebrisInitialColors,
-				.fadedInColors            = kPelletImpactDebrisFadedInColors,
-				.fadedOutColors           = kPelletImpactDebrisFadedOutColors,
-				.lightColor               = kPelletImpactDebrisFadedInColors[0],
-				.numColors                = std::size( kPelletImpactDebrisInitialColors ),
-				.kind                     = Particle::Spark,
-				.length                   = 4.0f,
-				.width                    = 0.75f,
-				.lengthSpread             = 0.5f,
-				.widthSpread              = 0.05f,
-				.lightRadius              = 16.0f,
-				.lightFrameAffinityIndex  = (uint16_t)index,
-				.lightFrameAffinityModulo = (uint16_t)total,
-				.sizeBehaviour            = Particle::Expanding
-			};
+				ConeFlockParams debrisFlockParams( kBulletDebrisFlockParams );
+				VectorCopy( impactOrigin, debrisFlockParams.origin );
+				VectorCopy( impactNormal, debrisFlockParams.offset );
+				VectorCopy( flockDir, debrisFlockParams.dir );
+				debrisFlockParams.minPercentage = 0.0f;
+				debrisFlockParams.maxPercentage = 0.3f;
 
-			cg.particleSystem.addSmallParticleFlock( ricochetAndDebrisAppearanceRules, ricochetAndDebrisFlockParams );
+				cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
+			}
 		}
 
 		m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
