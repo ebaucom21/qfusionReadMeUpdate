@@ -72,6 +72,13 @@ private:
 		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 		ColorChangeState colorChangeState;
 
+		// It's actually cheaper to process these vertices as regular ones
+		// and overwrite possible changes after processColorChange() calls.
+		// We can't just set the alpha to zero like it used to be,
+		// as zero-alpha vertices still may be overwritten with new color replacement rules.
+		std::span<const uint16_t> noColorChangeIndices;
+		const uint8_t *noColorChangeVertexColor { nullptr };
+
 		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
 		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
 		float minZLastFrame { std::numeric_limits<float>::max() }, maxZLastFrame { std::numeric_limits<float>::min() };
@@ -208,7 +215,8 @@ private:
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
 							float scale, std::span<const HullLayerParams> paramsOfLayers );
 
-	static void processColorChange( int64_t currTime, int64_t spawnTime, unsigned effectDuration,
+	[[maybe_unused]]
+	static bool processColorChange( int64_t currTime, int64_t spawnTime, unsigned effectDuration,
 									std::span<const ColorChangeTimelineNode> timeline,
 									std::span<byte_vec4_t> colors,
 									ColorChangeState *__restrict state,

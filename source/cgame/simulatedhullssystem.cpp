@@ -826,8 +826,13 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 	avgXLastFrame *= rcpNumVertices;
 	avgYLastFrame *= rcpNumVertices;
 
-	processColorChange( currTime, spawnTime, lifetime, colorChangeTimeline,
-						{ vertexColors, numVertices }, &colorChangeState, rng );
+	const bool hasChangedColors = processColorChange( currTime, spawnTime, lifetime, colorChangeTimeline,
+													  { vertexColors, numVertices }, &colorChangeState, rng );
+	if( hasChangedColors && noColorChangeVertexColor && !noColorChangeIndices.empty() ) {
+		for( const auto index: noColorChangeIndices ) {
+			Vector4Copy( noColorChangeVertexColor, vertexColors[index] );
+		}
+	}
 }
 
 void SimulatedHullsSystem::BaseConcentricSimulatedHull::simulate( int64_t currTime, float timeDeltaSeconds,
@@ -963,7 +968,7 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 	} while( ++i < numColors );
 }
 
-void SimulatedHullsSystem::processColorChange( int64_t currTime,
+bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 											   int64_t spawnTime,
 											   unsigned effectDuration,
 											   std::span<const ColorChangeTimelineNode> timeline,
@@ -972,7 +977,7 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 											   wsw::RandomGenerator *__restrict rng ) {
 	// This helps to handle non-color-changing hulls in a least-effort fashion
 	if( state->lastNodeIndex >= timeline.size() ) [[unlikely]] {
-		return;
+		return false;
 	}
 
 	// Compute the current node in an immediate mode. This is inexpensive for a realistic input.
@@ -983,13 +988,13 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 
 	const ColorChangeTimelineNode &currNode = timeline[state->lastNodeIndex];
 	if( state->lastColorChangeAt + colorChangeIntervalMillis > currTime ) [[likely]] {
-		return;
+		return false;
 	}
 
 	// Do nothing during the first frame
 	if( state->lastColorChangeAt <= 0 ) [[unlikely]] {
 		state->lastColorChangeAt = currTime;
-		return;
+		return false;
 	}
 
 	const auto timeDeltaSeconds = 1e-3f * (float)( currTime - state->lastColorChangeAt );
@@ -1061,4 +1066,6 @@ void SimulatedHullsSystem::processColorChange( int64_t currTime,
 		constexpr auto kFlags = MayDrop;
 		changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
 	}
+
+	return true;
 }

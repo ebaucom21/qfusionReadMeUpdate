@@ -254,6 +254,9 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorC
 	}
 };
 
+static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
+static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
+
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 100, 300 );
 	VectorCopy( origin, lightEffect->origin );
@@ -302,8 +305,11 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->xyExpansionTopAccel     = +75.0f;
 			hull->xyExpansionBottomAccel  = -30.0f;
 
-			hull->colorChangeTimeline = kInnerSmokeHullColorChangeTimeline;
-			hull->expansionStartAt    = m_lastTime + 150;
+			hull->colorChangeTimeline      = kInnerSmokeHullColorChangeTimeline;
+			hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
+			hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
+
+			hull->expansionStartAt = m_lastTime + 150;
 
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
@@ -318,8 +324,11 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->xyExpansionTopAccel     = +95.0f;
 			hull->xyExpansionBottomAccel  = -25.0f;
 
-			hull->colorChangeTimeline = kOuterSmokeHullColorChangeTimeline;
-			hull->expansionStartAt    = m_lastTime + 150;
+			hull->colorChangeTimeline      = kOuterSmokeHullColorChangeTimeline;
+			hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
+			hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
+
+			hull->expansionStartAt = m_lastTime + 150;
 
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
