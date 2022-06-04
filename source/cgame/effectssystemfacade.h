@@ -103,7 +103,7 @@ private:
 	void startSound( sfx_s *sfx, const float *origin, float attenuation );
 	void startRelativeSound( sfx_s *sfx, int entNum, float attenuation );
 
-	void spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx, float radius, bool addSoundLfe );
+	void spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx, float radius, bool addSoundLfe );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 

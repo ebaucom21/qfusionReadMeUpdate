@@ -46,50 +46,51 @@ void EffectsSystemFacade::spawnGrenadeExplosionEffect( const float *origin, cons
 }
 
 void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int mode, float radius ) {
-	spawnExplosionEffect( origin, vec3_origin, cgs.media.sfxRocketLauncherStrongHit, radius, true );
+	const vec3_t dir { 0.0f, 0.0f, 1.0f };
+	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
 }
 
-static const vec4_t kEarlyExplosionSmokeInitialColors[3] {
-	{ 1.0f, 0.9f, 0.7f, 1.0f },
-	{ 1.0f, 0.9f, 0.7f, 1.0f },
-	{ 1.0f, 0.9f, 0.7f, 1.0f },
-};
-
-static const vec4_t kEarlyExplosionSmokeFadedInColors[3] {
-	{ 0.3f, 0.3f, 0.3f, 0.1f },
-	{ 0.4f, 0.4f, 0.4f, 0.1f },
-	{ 0.5f, 0.5f, 0.5f, 0.1f },
-};
-
-static const vec4_t kEarlyExplosionSmokeFadedOutColors[3] {
-	{ 0.0f, 0.0f, 0.0f, 0.0f },
-	{ 0.3f, 0.3f, 0.3f, 0.0f },
-	{ 0.5f, 0.5f, 0.5f, 0.0f },
-};
-
-static const vec4_t kLateExplosionSmokeInitialColors[3] {
+static const vec4_t kExplosionSmokeInitialColors[3] {
 	{ 0.5f, 0.5f, 0.5f, 0.0f },
 	{ 0.5f, 0.5f, 0.5f, 0.0f },
 	{ 0.5f, 0.5f, 0.5f, 0.0f },
 };
 
-static const vec4_t kLateExplosionSmokeFadedInColors[3] {
-	{ 0.30f, 0.30f, 0.30f, 0.075f },
-	{ 0.45f, 0.45f, 0.45f, 0.075f },
-	{ 0.60f, 0.60f, 0.60f, 0.075f },
+static const vec4_t kExplosionSmokeFadedInColors[3] {
+	{ 0.25f, 0.25f, 0.25f, 0.075f },
+	{ 0.50f, 0.50f, 0.50f, 0.075f },
+	{ 0.75f, 0.75f, 0.75f, 0.075f },
 };
 
-static const vec4_t kLateExplosionSmokeFadedOutColors[3] {
-	{ 0.3f, 0.3f, 0.3f, 0.0f },
-	{ 0.5f, 0.5f, 0.5f, 0.0f },
-	{ 0.7f, 0.7f, 0.7f, 0.0f },
+static const vec4_t kExplosionSmokeFadedOutColors[3] {
+	{ 0.2f, 0.2f, 0.2f, 0.0f },
+	{ 0.4f, 0.4f, 0.4f, 0.0f },
+	{ 0.6f, 0.6f, 0.6f, 0.0f },
 };
 
-void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *offset, sfx_s *sfx,
+static const vec4_t kExplosionSparksInitialColors[3] {
+	{ 1.0f, 1.0f, 1.0f, 0.0f },
+	{ 1.0f, 1.0f, 1.0f, 0.0f },
+	{ 1.0f, 1.0f, 1.0f, 0.0f },
+};
+
+static const vec4_t kExplosionSparksFadedInColors[3] {
+	{ 1.0f, 0.6f, 0.3f, 1.0f },
+	{ 1.0f, 0.8f, 0.4f, 1.0f },
+	{ 1.0f, 0.7f, 0.5f, 1.0f }
+};
+
+static const vec4_t kExplosionSparksFadedOutColors[3] {
+	{ 0.5f, 0.5f, 0.5f, 0.3f },
+	{ 0.5f, 0.5f, 0.5f, 0.3f },
+	{ 0.5f, 0.5f, 0.5f, 0.3f }
+};
+
+void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
 												float radius, bool addSoundLfe ) {
 	vec3_t spriteOrigin, almostExactOrigin;
-	VectorMA( origin, 8.0f, offset, spriteOrigin );
-	VectorAdd( origin, offset, almostExactOrigin );
+	VectorMA( origin, 8.0f, dir, spriteOrigin );
+	VectorAdd( origin, dir, almostExactOrigin );
 
 	startSound( sfx, almostExactOrigin, ATTN_DISTANT );
 
@@ -97,50 +98,68 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
-	if( cg_particles->integer ) {
+	if( cg_explosionsSmoke->integer ) {
+		Particle::AppearanceRules appearanceRules {
+			.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.initialColors       = kExplosionSmokeInitialColors,
+			.fadedInColors       = kExplosionSmokeFadedInColors,
+			.fadedOutColors      = kExplosionSmokeFadedOutColors,
+			.numColors           = std::size( kExplosionSmokeFadedInColors ),
+			.kind                = Particle::Sprite,
+			.radius              = 10.0f,
+			.radiusSpread        = 5.0f,
+			.fadeInLifetimeFrac  = 0.35,
+			.fadeOutLifetimeFrac = 0.20f
+		};
+
 		EllipsoidalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { offset[0], offset[1], offset[2] },
-			.gravity       = 100.0f,
-			.minSpeed      = 100.0f,
-			.maxSpeed      = 150.0f,
-			.minPercentage = 0.50f,
-			.maxPercentage = 0.75f,
-			.minTimeout    = 400,
-			.maxTimeout    = 500,
+			.offset        = { dir[0], dir[1], dir[2] },
+			.stretchScale  = 1.25f,
+			.gravity       = -50.0f,
+			.restitution   = 0.33f,
+			.minSpeed      = 10.0f,
+			.maxSpeed      = 60.0f,
+			.minShiftSpeed = 20.0f,
+			.maxShiftSpeed = 35.0f,
+			.minPercentage = 1.0f,
+			.maxPercentage = 1.0f,
+			.minTimeout    = 1250,
+			.maxTimeout    = 1750,
 		};
 
+		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+	}
+
+	if( cg_particles->integer ) {
 		Particle::AppearanceRules appearanceRules {
-			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.initialColors       = kEarlyExplosionSmokeInitialColors,
-			.fadedInColors       = kEarlyExplosionSmokeFadedInColors,
-			.fadedOutColors      = kEarlyExplosionSmokeFadedOutColors,
-			.numColors           = 3,
-			.kind                = Particle::Sprite,
-			.radius              = 6.0f,
-			.radiusSpread        = 5.0f,
-			.fadeInLifetimeFrac  = 0.10f,
-			.fadeOutLifetimeFrac = 0.33f
+			.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.initialColors  = kExplosionSparksInitialColors,
+			.fadedInColors  = kExplosionSparksFadedInColors,
+			.fadedOutColors = kExplosionSparksFadedOutColors,
+			.numColors      = std::size( kExplosionSparksFadedOutColors ),
+			.kind           = Particle::Sprite,
+			.radius         = 1.25f,
+			.radiusSpread   = 0.25f
 		};
 
-		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+		EllipsoidalFlockParams flockParams {
+			.origin        = { origin[0], origin[1], origin[2] },
+			.offset        = { dir[0], dir[1], dir[2] },
+			.gravity       = 0.25f * GRAVITY,
+			.drag          = 0.025f,
+			.restitution   = 0.33f,
+			.minSpeed      = 150.0f,
+			.maxSpeed      = 400.0f,
+			.minShiftSpeed = 200.0f,
+			.maxShiftSpeed = 300.0f,
+			.minPercentage = 0.3f,
+			.maxPercentage = 0.6f,
+			.minTimeout    = 400,
+			.maxTimeout    = 750
+		};
 
-		flockParams.gravity       = -50.0f;
-		flockParams.minSpeed      = 10.0f;
-		flockParams.maxSpeed      = 60.0f;
-		flockParams.minPercentage = 0.5f;
-		flockParams.maxPercentage = 1.0f;
-		flockParams.minTimeout    = 1250;
-		flockParams.maxTimeout    = 1750;
-
-		appearanceRules.initialColors      = kLateExplosionSmokeInitialColors;
-		appearanceRules.fadedInColors      = kLateExplosionSmokeFadedInColors;
-		appearanceRules.fadedOutColors     = kLateExplosionSmokeFadedOutColors;
-		appearanceRules.radius             = 10.0f;
-		appearanceRules.radiusSpread       = 7.0f;
-		appearanceRules.fadeInLifetimeFrac = 0.45f;
-
-		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
 	m_transientEffectsSystem.spawnExplosion( spriteOrigin );

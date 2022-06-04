@@ -213,11 +213,11 @@ struct FireHullLayerParamsHolder {
 static const FireHullLayerParamsHolder kFireHullParams;
 
 static const byte_vec4_t kSmokeFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.150f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.125f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.125f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.100f ),
-	asByteColor( 0.80f, 0.80f, 0.80f, 0.100f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.075f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.075f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.075f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.075f ),
+	asByteColor( 0.80f, 0.80f, 0.80f, 0.075f ),
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[4] {
@@ -266,16 +266,19 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
 	float fireHullScale;
+	unsigned fireHullTimeout;
 	std::span<const SimulatedHullsSystem::HullLayerParams> fireHullLayerParams;
 	if( cg_explosionsSmoke->integer ) {
 		fireHullScale       = 1.32f;
+		fireHullTimeout     = 550;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
 	} else {
 		fireHullScale       = 1.40f;
+		fireHullTimeout     = 500;
 		fireHullLayerParams = kFireHullParams.darkHullLayerParams;
 	}
 
-	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, 500 ) ) {
+	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, fireHullTimeout ) ) {
 		hullsSystem->setupHullVertices( hull, origin, fireHullScale, fireHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
 		hull->layers[0].useDrawOnTopHack = true;
