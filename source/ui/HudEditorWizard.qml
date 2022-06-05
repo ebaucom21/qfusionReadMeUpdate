@@ -286,17 +286,16 @@ Item {
                     if (hudEditorModel.load(selectedForLoadingFileName)) {
                         swipeView.currentIndex = 1
                     } else {
-                        // TODO: What to do? Shake?
+                        console.warn("Failed to load the HUD editor model from", selectedForLoadingFileName)
+                        root.exitRequested()
                     }
                 } else if (swipeView.currentIndex === 1) {
                     swipeView.currentIndex = 2
                 } else {
-                    if (hudEditorModel.save(selectedForSavingFileName)) {
-                        root.exitRequested()
-                    } else {
-                        // TODO: Shake?
-                        swipeView.currentIndex = 0
+                    if (!hudEditorModel.save(selectedForSavingFileName)) {
+                        console.warn("Failed to save the HUD editor model to", selectedForSavingFileName)
                     }
+                    root.exitRequested()
                 }
             }
         }
@@ -311,9 +310,11 @@ Item {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
             if (swipeView.currentIndex) {
                 swipeView.currentIndex = swipeView.currentIndex - 1
-                event.accepted = true
-                return true
+            } else {
+                root.exitRequested()
             }
+            event.accepted = true
+            return true
         }
         return false
     }

@@ -11,7 +11,7 @@ StackView {
     readonly property var listOfHuds: hudEditorModel.existingHuds
 
     function startHudEditorWizard() {
-        clear(StackView.Immediatate)
+        clear(StackView.Immediate)
         push(editorWizardComponent)
     }
 

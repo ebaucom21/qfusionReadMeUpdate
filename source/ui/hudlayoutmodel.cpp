@@ -684,7 +684,7 @@ auto HudEditorModel::getLayoutModel() -> QObject * {
 auto HudEditorModel::getToolboxModel() -> QObject * {
 	if( !m_hasSetToolboxModelOwnership ) {
 		QQmlEngine::setObjectOwnership( &m_toolboxModel, QQmlEngine::CppOwnership );
-		m_hasSetLayoutModelOwnership = true;
+		m_hasSetToolboxModelOwnership = true;
 	}
 	return &m_toolboxModel;
 }
