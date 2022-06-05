@@ -160,6 +160,25 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		};
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
+
+		appearanceRules.kind         = Particle::Spark;
+		appearanceRules.length       = 25.0f;
+		appearanceRules.lengthSpread = 7.5f;
+		appearanceRules.width        = 4.0f;
+		appearanceRules.widthSpread  = 1.0f;
+		appearanceRules.sizeBehaviour = Particle::Shrinking;
+
+		flockParams.minSpeed      = 450;
+		flockParams.maxSpeed      = 600;
+		flockParams.drag          = 0.01f;
+		flockParams.minTimeout    = 100;
+		flockParams.maxTimeout    = 150;
+		flockParams.minPercentage = 0.5f;
+		flockParams.maxPercentage = 1.0f;
+		flockParams.minShiftSpeed = 50.0f;
+		flockParams.maxShiftSpeed = 100.0f;
+
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
 	m_transientEffectsSystem.spawnExplosion( spriteOrigin );
