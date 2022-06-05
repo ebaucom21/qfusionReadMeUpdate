@@ -23,7 +23,7 @@ Item {
 
             SettingsRow {
                 text: "Mouse sensitivity"
-                CVarAwareSlider {
+                CVarAwareSliderWithBox {
                     from: 0.1
                     to: 10.0
                     cvarName: "sensitivity"
@@ -52,12 +52,13 @@ Item {
 
             SettingsRow {
                 text: "Strong crosshair size"
-                CVarAwareSlider {
+                CVarAwareSliderWithBox {
                     id: strongSizeSlider
                     from: wsw.minStrongCrosshairSize
                     to: wsw.maxStrongCrosshairSize
                     stepSize: wsw.crosshairSizeStep
                     cvarName: "cg_crosshair_strong_size"
+                    fractionalPartDigits: 0
                 }
             }
 
@@ -110,12 +111,13 @@ Item {
 
             SettingsRow {
                 text: "Crosshair size"
-                CVarAwareSlider {
+                CVarAwareSliderWithBox {
                     id: sizeSlider
                     from: wsw.minRegularCrosshairSize
                     to: wsw.maxRegularCrosshairSize
                     stepSize: wsw.crosshairSizeStep
                     cvarName: "cg_crosshair_size"
+                    fractionalPartDigits: 0
                 }
             }
 
@@ -218,13 +220,14 @@ Item {
                     model: availableCrosshairs
                 }
 
-                CVarAwareSlider {
+                CVarAwareSliderWithBox {
                     id: separateSizeSlider
                     Layout.alignment: Qt.AlignLeft
                     cvarName: "cg_crosshair_size_" + weaponShortName
                     from: wsw.minRegularCrosshairSize
                     to: wsw.maxRegularCrosshairSize
                     stepSize: wsw.crosshairSizeStep
+                    fractionalPartDigits: 0
                 }
 
                 CVarAwareColorPicker {

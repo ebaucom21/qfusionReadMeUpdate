@@ -43,16 +43,18 @@ StackView {
                 }
                 SettingsRow {
                     text: "Field of view while zooming"
-                    CVarAwareSlider {
+                    CVarAwareSliderWithBox {
                         cvarName: "zoomfov"
                         from: 5.0; to: 75.0;
+                        fractionalPartDigits: 0
                     }
                 }
                 SettingsRow {
                     text: "Field of view"
-                    CVarAwareSlider {
+                    CVarAwareSliderWithBox {
                         cvarName: "fov"
                         from: 80.0; to: 140.0
+                        fractionalPartDigits: 0
                     }
                 }
 

@@ -19,6 +19,7 @@
         <file>CVarAwareModelSelector.qml</file>
         <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
+	<file>CVarAwareSliderWithBox.qml</file>
         <file>CVarAwareTextField.qml</file>
         <file>CVarAwareVideoModesComboBox.qml</file>
         <file>DemoPlaybackMenu.qml</file>
