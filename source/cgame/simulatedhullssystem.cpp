@@ -928,7 +928,7 @@ auto SimulatedHullsSystem::computeCurrTimelineNodeIndex( unsigned startFromIndex
 	return lastGoodIndex;
 }
 
-enum ColorChangeFlags : unsigned { MayDrop = 0x1, MayReplace = 0x2, MayIncreaseOpacity = 0x4 };
+enum ColorChangeFlags : unsigned { MayDrop = 0x1, MayReplace = 0x2, MayIncreaseOpacity = 0x4, AssumePow2Palette = 0x8 };
 
 template <unsigned Flags>
 static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerator *__restrict rng,
@@ -937,6 +937,11 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 
 	byte_vec4_t *const __restrict colors = colorsSpan.data();
 	const unsigned numColors             = colorsSpan.size();
+
+	[[maybe_unused]] unsigned paletteIndexMask = 0;
+	if constexpr( Flags & AssumePow2Palette ) {
+		paletteIndexMask = (unsigned)( replacementPalette.size() - 1 );
+	}
 
 	unsigned i = 0;
 	do {
@@ -952,14 +957,22 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 			if constexpr( Flags & MayReplace ) {
 				if( !dropped ) {
 					if( rng->tryWithChance( replacementChance ) ) [[unlikely]] {
-						const auto *chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size())];
+						const uint8_t *chosenColor;
+						if constexpr( Flags & AssumePow2Palette ) {
+							chosenColor = replacementPalette[rng->next() & paletteIndexMask];
+						} else {
+							chosenColor = replacementPalette[rng->nextBounded( replacementPalette.size() ) ];
+						}
 						auto *const existingColor = colors[i];
 						if constexpr( Flags & MayIncreaseOpacity ) {
 							Vector4Copy( chosenColor, existingColor );
 						} else {
-							if( chosenColor[3] <= existingColor[3] ) {
-								Vector4Copy( chosenColor, existingColor );
-							}
+							// Branching could be perfectly avoided in this case
+							// (replacement is actually not that "unlikely" for some parts of hull lifetimes
+							// so slightly optimizing it makes sense).
+							const uint8_t *srcColorsToSelect[2] { existingColor, chosenColor };
+							const uint8_t *selectedColor = srcColorsToSelect[chosenColor[3] <= existingColor[3]];
+							Vector4Copy( selectedColor, existingColor );
 						}
 					}
 				}
@@ -967,6 +980,28 @@ static void changeColors( std::span<byte_vec4_t> colorsSpan, wsw::RandomGenerato
 		}
 	} while( ++i < numColors );
 }
+
+static const struct ColorChangeFnTableHolder {
+	using Fn = void (*)( std::span<byte_vec4_t>, wsw::RandomGenerator *, std::span<const byte_vec4_t>, float, float );
+	Fn table[16] {};
+
+#define ADD_FN_FOR_FLAGS_TO_TABLE( Flags ) do { table[Flags] = &::changeColors<Flags>; } while( 0 )
+	ColorChangeFnTableHolder() noexcept {
+		// Add a reference to a template instantiation for each feasible combination of flags.
+		// (Don't force generating code for unfeasible ones
+		// by a brute-force instantiation of templates for all 16 values).
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayDrop | MayReplace | MayIncreaseOpacity | AssumePow2Palette );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayDrop | MayReplace | MayIncreaseOpacity );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayDrop | MayReplace | AssumePow2Palette );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayDrop | MayReplace );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayReplace | MayIncreaseOpacity | AssumePow2Palette );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayReplace | MayIncreaseOpacity );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayReplace | AssumePow2Palette );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayReplace );
+		ADD_FN_FOR_FLAGS_TO_TABLE( MayDrop );
+	}
+#undef ADD_FN_FOR_FLAGS_TO_TABLE
+} colorChangeFnTableHolder;
 
 bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 											   int64_t spawnTime,
@@ -1039,32 +1074,20 @@ bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 		replacementChance = std::max( replacementChance, minReplacementChance );
 	}
 
-	const auto replacementPalette = currNode.replacementPalette;
-
+	const auto palette    = currNode.replacementPalette;
 	const bool mayDrop    = dropChance > 0.0f;
-	const bool mayReplace = replacementChance > 0.0f && !replacementPalette.empty();
+	const bool mayReplace = replacementChance > 0.0f && !palette.empty();
 
-	// Call specialized implementations for each case
+	if( mayDrop | mayReplace ) {
+		const bool isPalettePow2  = ( palette.size() & ( palette.size() - 1u ) ) == 0;
+		const unsigned dropBit    = ( mayDrop ) ? MayDrop : 0;
+		const unsigned replaceBit = ( mayReplace ) ? MayReplace : 0;
+		const unsigned opacityBit = ( currNode.allowIncreasingOpacity ) ? MayIncreaseOpacity : 0;
+		const unsigned pow2Bit    = ( mayReplace & isPalettePow2 ) ? AssumePow2Palette : 0;
+		const unsigned fnIndex    = dropBit | replaceBit | opacityBit | pow2Bit;
 
-	if( mayDrop && mayReplace ) {
-		if( currNode.allowIncreasingOpacity ) {
-			constexpr auto kFlags = MayDrop | MayReplace | MayIncreaseOpacity;
-			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
-		} else {
-			constexpr auto kFlags = MayDrop | MayReplace;
-			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
-		}
-	} else if( mayReplace ) {
-		if( currNode.allowIncreasingOpacity ) {
-			constexpr auto kFlags = MayReplace | MayIncreaseOpacity;
-			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
-		} else {
-			constexpr auto kFlags = MayReplace;
-			changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
-		}
-	} else if( mayDrop ) {
-		constexpr auto kFlags = MayDrop;
-		changeColors<kFlags>( colorsSpan, rng, replacementPalette, dropChance, replacementChance );
+		// Call the respective template specialization for flags
+		::colorChangeFnTableHolder.table[fnIndex]( colorsSpan, rng, palette, dropChance, replacementChance );
 	}
 
 	return true;
