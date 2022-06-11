@@ -168,7 +168,6 @@ static const vec4_t kRocketFireTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 15,
-	.bounceCount = 0,
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 350,
@@ -178,7 +177,6 @@ static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 static ConicalFlockParams g_rocketFireParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 7.5f,
-	.bounceCount = 0,
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 125,
@@ -241,7 +239,6 @@ static const vec4_t kGrenadeSmokeTrailFadedOutColor { 0.0f, 0.0f, 0.0f, 0.0f };
 static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 5,
-	.bounceCount = 0,
 	.minSpeed    = 50,
 	.maxSpeed    = 75,
 	.minTimeout  = 100,
@@ -251,7 +248,6 @@ static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
 static ConicalFlockParams g_grenadeSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 7.5f,
-	.bounceCount = 0,
 	.minSpeed    = 50,
 	.maxSpeed    = 75,
 	.minTimeout  = 200,
@@ -329,7 +325,6 @@ static const vec4_t kBlastIonsTrailFadedOutColors[] {
 static ConicalFlockParams g_blastSmokeParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 20,
-	.bounceCount = 0,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 175,
@@ -339,7 +334,6 @@ static ConicalFlockParams g_blastSmokeParticlesFlockParams {
 ConicalFlockParams g_blastIonsParticlesFlockParams {
 	.gravity     = -250,
 	.angle       = 12,
-	.bounceCount = 0,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,
@@ -406,7 +400,6 @@ static const vec4_t kElectroIonsTrailColors[] {
 static ConicalFlockParams g_electroCloudParticlesFlockParams {
 	.gravity     = 0,
 	.angle       = 18,
-	.bounceCount = 0,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 150,
@@ -416,7 +409,6 @@ static ConicalFlockParams g_electroCloudParticlesFlockParams {
 static ConicalFlockParams g_electroIonsParticlesFlockParams {
 	.gravity     = 0,
 	.angle       = 12,
-	.bounceCount = 0,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,

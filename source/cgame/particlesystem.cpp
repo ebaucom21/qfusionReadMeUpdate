@@ -100,7 +100,20 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	flock->numParticlesLeft = numParticles;
 	flock->drag             = flockParams.drag;
 	flock->restitution      = flockParams.restitution;
+	flock->minBounceCount   = flockParams.minBounceCount;
+	flock->maxBounceCount   = flockParams.maxBounceCount;
 	flock->appearanceRules  = appearanceRules;
+
+	if( flock->minBounceCount < flock->maxBounceCount ) {
+		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
+		// Hence that probability of not dropping it for varyingCount + 1 impacts is 1.0f - finalDropProbability
+		// (We assume that almost all particles must be dropped the next step after the max one, hence the +1)
+		// The probability of not dropping it every step is pow( finalKeepProbability, 1.0f / ( varyingCount + 1 ) )
+		constexpr float finalDropProbability = 0.95f;
+		constexpr float finalKeepProbability = 1.00f - finalDropProbability;
+		const unsigned varyingCount          = flock->maxBounceCount - flock->minBounceCount;
+		flock->keepOnImpactProbability       = std::pow( finalKeepProbability, Q_Rcp( (float)( varyingCount + 1 ) ) );
+	}
 }
 
 void ParticleSystem::addSmallParticleFlock( const Particle::AppearanceRules &rules,
@@ -145,6 +158,7 @@ auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, u
 	flock->numParticlesLeft = 0;
 
 	flock->appearanceRules = rules;
+
 	return flock;
 }
 
@@ -209,7 +223,6 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
-		p->bouncesLeft = params->bounceCount;
 
 		const float *__restrict randomDir = dirs[rng->nextBounded( NUMVERTEXNORMALS )];
 		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
@@ -243,8 +256,10 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 
 		p->velocity[3] = 0.0f;
 
-		p->spawnTime = currTime;
-		p->lifetime = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->spawnTime   = currTime;
+		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->bounceCount = 0;
+
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -350,7 +365,6 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		Particle *const __restrict p = particles + i;
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
-		p->bouncesLeft = params->bounceCount;
 
 		// https://math.stackexchange.com/a/205589
 		const float z   = rng->nextFloat( minZ, maxZ );
@@ -368,8 +382,10 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
 		}
 
-		p->spawnTime = currTime;
-		p->lifetime = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->spawnTime   = currTime;
+		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->bounceCount = 0;
+
 		// TODO: Branchless?
 		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -415,7 +431,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 				// Otherwise, the flock could be awaiting filling, don't modify its timeout
 				if( flock->numParticlesLeft ) [[likely]] {
 					if( flock->shapeList ) {
-						simulate( flock, currTime, deltaSeconds );
+						simulate( flock, &m_rng, currTime, deltaSeconds );
 					} else {
 						simulateWithoutClipping( flock, currTime, deltaSeconds );
 					}
@@ -520,7 +536,8 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
 }
 
-void ParticleSystem::simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
+void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
+							   int64_t currTime, float deltaSeconds ) {
 	assert( flock->shapeList && flock->numParticlesLeft );
 
 	vec3_t possibleBounds[2];
@@ -553,9 +570,16 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, int64_t currTime
 			}
 
 			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
-				if( p->bouncesLeft ) [[likely]] {
-					p->bouncesLeft--;
+				p->bounceCount++;
 
+				bool keepTheParticle = true;
+				if( p->bounceCount > flock->maxBounceCount ) {
+					keepTheParticle = false;
+				} else if( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
+					keepTheParticle = rng->tryWithChance( flock->keepOnImpactProbability );
+				}
+
+				if( keepTheParticle ) [[likely]]  {
 					// Reflect the velocity
 					vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
 					const float oldSquareSpeed = VectorLengthSquared( oldVelocityDir );

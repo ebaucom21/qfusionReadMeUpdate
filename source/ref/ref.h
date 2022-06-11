@@ -263,7 +263,7 @@ struct alignas( 16 ) Particle {
 	float lifetimeFrac;
 
 	uint16_t lifetime;
-	uint8_t bouncesLeft;
+	uint8_t bounceCount;
 
 	static constexpr float kByteParamNormalizer = 1.0f / 128.0f;
 

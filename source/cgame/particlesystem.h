@@ -22,7 +22,8 @@ struct EllipsoidalFlockParams {
 	float gravity { 600 };
 	float drag { 0.0f };
 	float restitution { 0.75f };
-	unsigned bounceCount { 3 };
+	unsigned minBounceCount { 1 };
+	unsigned maxBounceCount { 1 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };
 	float minShiftSpeed { 0.0f };
@@ -44,7 +45,8 @@ struct ConicalFlockParams {
 	float restitution { 0.75f };
 	float angle { 45.0f };
 	float innerAngle { 0.0f };
-	unsigned bounceCount { 3 };
+	unsigned minBounceCount { 1 };
+	unsigned maxBounceCount { 1 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };
 	float minShiftSpeed { 0.0f };
@@ -80,6 +82,8 @@ struct alignas( 16 ) ParticleFlock {
 	int64_t timeoutAt;
 	unsigned numParticlesLeft;
 	unsigned binIndex;
+	unsigned minBounceCount { 0 }, maxBounceCount { 0 };
+	float keepOnImpactProbability { 1.0f };
 	CMShapeList *shapeList;
 	// TODO: Make links work with "m_"
 	ParticleFlock *prev { nullptr }, *next { nullptr };
@@ -145,7 +149,8 @@ private:
 
 	static void runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] );
 
-	static void simulate( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
+	static void simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
+						  int64_t currTime, float deltaSeconds );
 	static void simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds );
 public:
 	ParticleSystem();
@@ -162,6 +167,8 @@ public:
 	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const EllipsoidalFlockParams &flockParams );
 	void addLargeParticleFlock( const Particle::AppearanceRules &rules, const ConicalFlockParams &flockParams );
 
+	// Caution: Trail particles aren't assumed to be bouncing by default
+	// (otherwise, respective flock fields should be set manually)
 	[[nodiscard]]
 	auto createTrailFlock( const Particle::AppearanceRules &appearanceRules, unsigned binIndex ) -> ParticleFlock *;
 
