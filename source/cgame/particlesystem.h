@@ -42,7 +42,8 @@ struct ConicalFlockParams {
 	float gravity { 600 };
 	float drag { 0.0f };
 	float restitution { 0.75f };
-	float angle { 45 };
+	float angle { 45.0f };
+	float innerAngle { 0.0f };
 	unsigned bounceCount { 3 };
 	float minSpeed { 300 };
 	float maxSpeed { 300 };

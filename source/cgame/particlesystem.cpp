@@ -289,9 +289,18 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	assert( params->minShiftSpeed <= params->maxShiftSpeed );
 	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
 
-	// TODO: Supply a cosine value as a parameter?
+	assert( params->angle >= 0.0f && params->angle <= 180.0f );
+	assert( params->innerAngle >= 0.0f && params->innerAngle <= 180.0f );
+	assert( params->innerAngle < params->angle );
+
+	// TODO: Supply cosine values as parameters?
+
+	float maxZ = 1.0f;
+	if( params->innerAngle > 0.0f ) [[unlikely]] {
+		maxZ = std::cos( (float) DEG2RAD( params->innerAngle ) );
+	}
+
 	const float minZ = std::cos( (float)DEG2RAD( params->angle ) );
-	const float r = Q_Sqrt( 1.0f - minZ * minZ );
 
 	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
 	const unsigned timeoutSpread = params->maxTimeout - params->minTimeout;
@@ -312,8 +321,9 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		p->bouncesLeft = params->bounceCount;
 
 		// https://math.stackexchange.com/a/205589
-		const float z = minZ + ( 1.0f - minZ ) * rng->nextFloat( -1.0f, 1.0f );
-		const float phi = 2.0f * (float)M_PI * rng->nextFloat();
+		const float z   = rng->nextFloat( minZ, maxZ );
+		const float r   = Q_Sqrt( 1.0f - z * z );
+		const float phi = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
 
 		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
