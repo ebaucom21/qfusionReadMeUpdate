@@ -191,6 +191,18 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool isSpherical          = params->stretchScale == 1.0f;
 
+	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
+	if( hasMultipleColors ) {
+		if( const unsigned maybeMask = appearanceRules->numColors - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+			colorsIndexMask = maybeMask;
+		}
+	}
+	if( hasMultipleMaterials ) {
+		if( const unsigned maybeMask = appearanceRules->numMaterials - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+			materialsIndexMask = maybeMask;
+		}
+	}
+
 	assert( std::fabs( VectorLength( params->stretchDir ) - 1.0f ) < 1e-3f );
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
@@ -242,12 +254,20 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 
 		if( hasMultipleMaterials ) {
-			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+			if( materialsIndexMask ) {
+				p->instanceMaterialIndex = rng->next() & materialsIndexMask;
+			} else {
+				p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+			}
 		} else {
 			p->instanceMaterialIndex = 0;
 		}
 		if( hasMultipleColors ) {
-			p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+			if( colorsIndexMask ) {
+				p->instanceColorIndex = rng->next() & colorsIndexMask;
+			} else {
+				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+			}
 		} else {
 			p->instanceColorIndex = 0;
 		}
@@ -313,6 +333,18 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 
+	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
+	if( hasMultipleColors ) {
+		if( const unsigned maybeMask = appearanceRules->numColors - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+			colorsIndexMask = maybeMask;
+		}
+	}
+	if( hasMultipleMaterials ) {
+		if( const unsigned maybeMask = appearanceRules->numMaterials - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+			materialsIndexMask = maybeMask;
+		}
+	}
+
 	// TODO: Make cached conical samples for various angles?
 	for( unsigned i = 0; i < numParticles; ++i ) {
 		Particle *const __restrict p = particles + i;
@@ -347,12 +379,20 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
 
 		if( hasMultipleMaterials ) {
-			p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+			if( materialsIndexMask ) {
+				p->instanceMaterialIndex = rng->next() & materialsIndexMask;
+			} else {
+				p->instanceMaterialIndex = (uint8_t)rng->nextBounded( appearanceRules->numMaterials );
+			}
 		} else {
 			p->instanceMaterialIndex = 0;
 		}
 		if( hasMultipleColors ) {
-			p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+			if( colorsIndexMask ) {
+				p->instanceColorIndex = rng->next() & colorsIndexMask;
+			} else {
+				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+			}
 		} else {
 			p->instanceColorIndex = 0;
 		}
