@@ -1476,6 +1476,33 @@ void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const ent
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
+[[nodiscard]]
+static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::SizeBehaviour sizeBehaviour ) {
+	assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
+	// Disallowed intentionally to avoid extra branching while testing the final particle dimensions for feasibility
+	assert( sizeBehaviour != Particle::SizeNotChanging );
+
+	float result;
+	if( sizeBehaviour == Particle::Expanding ) {
+		// Grow faster than the linear growth
+		result = Q_Sqrt( lifetimeFrac );
+	} else if( sizeBehaviour == Particle::Shrinking ) {
+		// Shrink faster than the linear growth
+		result = ( 1.0f - lifetimeFrac );
+		result *= result;
+	} else {
+		assert( sizeBehaviour == Particle::ExpandingAndShrinking );
+		if( lifetimeFrac < 0.5f ) {
+			result = Q_Sqrt( 2.0f * lifetimeFrac );
+		} else {
+			result = 2.0f * ( 1.0f - lifetimeFrac );
+			result *= result;
+		}
+	}
+	assert( result >= 0.0f && result <= 1.0f );
+	return result;
+}
+
 void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
 	const auto *particleDrawSurf = (ParticleDrawSurface *)drawSurf;
 	const auto *aggregate = fsh->particleAggregates + particleDrawSurf->aggregateIndex;
@@ -1498,17 +1525,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
 		float radius     = std::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
 
-		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
-			// Grow faster than the linear growth
-			radius = radius * Q_Sqrt( particle->lifetimeFrac );
-			if( radius < 0.1f ) {
-				return;
-			}
-		} else if( appearanceRules->sizeBehaviour == Particle::Shrinking ) {
-			// Shrink faster than the linear growth
-			float frac = 1.0f - particle->lifetimeFrac;
-			frac       = frac * frac;
-			radius     = radius * frac;
+		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
+			radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
 			if( radius < 0.1f ) {
 				return;
 			}
@@ -1539,19 +1557,10 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		float length = std::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
 		float width  = std::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
 
-		if( appearanceRules->sizeBehaviour == Particle::Expanding ) {
-			// Grow faster than linear growth
-			const float frac = Q_Sqrt( particle->lifetimeFrac );
-			length = appearanceRules->length * frac;
-			width  = appearanceRules->width * frac;
-			if( length < 0.1f || width < 0.1f ) {
-				return;
-			}
-		} else if( appearanceRules->sizeBehaviour == Particle::Shrinking ) {
-			float frac = 1.0f - particle->lifetimeFrac;
-			frac *= frac;
-			length = appearanceRules->length * frac;
-			width  = appearanceRules->width * frac;
+		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
+			const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
+			length *= sizeFrac;
+			width  *= sizeFrac;
 			if( length < 0.1f || width < 0.1f ) {
 				return;
 			}

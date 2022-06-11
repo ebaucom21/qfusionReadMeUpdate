@@ -208,7 +208,8 @@ struct alignas( 16 ) Particle {
 	enum SizeBehaviour {
 		SizeNotChanging,
 		Expanding,
-		Shrinking
+		Shrinking,
+		ExpandingAndShrinking,
 	};
 
 	// Common for flocks/aggregates.
