@@ -60,7 +60,6 @@ private:
 	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces {
 		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates )
 	};
-	ExternalMeshDrawSurface m_externalMeshDrawSurfaces[Scene::kMaxPartsInCompoundMesh * Scene::kMaxCompoundMeshes];
 
 	refinst_t m_state;
 	// TODO: Put in the state
@@ -298,7 +297,8 @@ private:
 									 const float *maybeOrigin, std::span<const Scene::DynamicLight> lights );
 
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
-							  float dist, unsigned order, const portalSurface_t *portalSurf, void *drawSurf );
+							  float dist, unsigned order, const portalSurface_t *portalSurf,
+							  const void *drawSurf, unsigned surfType );
 
 	void submitSortedSurfacesToBackend( Scene *scene );
 public:

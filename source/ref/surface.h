@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef R_SURFACE_H
 #define R_SURFACE_H
 
-enum drawSurfaceType_t : int {
+enum drawSurfaceType_t : unsigned {
 	ST_NONE,
 	ST_BSP,
 	ST_ALIAS,
@@ -37,31 +37,26 @@ enum drawSurfaceType_t : int {
 };
 
 typedef struct {
-	drawSurfaceType_t type;
+	unsigned visFrame;          // should be drawn when node is crossed
 
-	unsigned int visFrame;          // should be drawn when node is crossed
+	unsigned dlightBits;
+	unsigned dlightFrame;
 
-	unsigned int dlightBits;
-	unsigned int dlightFrame;
+	unsigned numVerts;
+	unsigned numElems;
 
-	unsigned int numVerts;
-	unsigned int numElems;
+	unsigned firstVboVert, firstVboElem;
 
-	unsigned int firstVboVert, firstVboElem;
+	unsigned firstWorldSurface, numWorldSurfaces;
 
-	unsigned int firstWorldSurface, numWorldSurfaces;
-
-	unsigned int numInstances;
+	unsigned numInstances;
 	instancePoint_t *instances;
 
-	unsigned int numLightmaps;
+	unsigned numLightmaps;
 
 	struct shader_s *shader;
-
 	struct mfog_s *fog;
-
 	struct mesh_vbo_s *vbo;
-
 	struct superLightStyle_s *superLightStyle;
 
 	void *listSurf;                 // only valid if visFrame == rf.frameCount
@@ -78,18 +73,12 @@ typedef struct {
 } drawSurfaceSky_t;
 
 typedef struct {
-	drawSurfaceType_t type;
-
 	struct maliasmesh_s *mesh;
-
 	struct model_s *model;
 } drawSurfaceAlias_t;
 
 typedef struct {
-	drawSurfaceType_t type;
-
 	struct mskmesh_s *mesh;
-
 	struct model_s *model;
 } drawSurfaceSkeletal_t;
 

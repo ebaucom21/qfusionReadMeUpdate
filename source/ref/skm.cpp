@@ -733,7 +733,6 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 
 	poutmodel->drawSurfs = ( drawSurfaceSkeletal_t * )pmem; pmem += sizeof( *poutmodel->drawSurfs ) * header->num_meshes;
 	for( i = 0; i < header->num_meshes; i++ ) {
-		poutmodel->drawSurfs[i].type = ST_SKELETAL;
 		poutmodel->drawSurfs[i].model = mod;
 		poutmodel->drawSurfs[i].mesh = poutmodel->meshes + i;
 	}

@@ -86,8 +86,6 @@ typedef struct fragment_s {
 struct QuadPoly {
 	enum Flags : unsigned { XLike = 0x1 };
 
-	// TODO: Get rid of this field
-	int drawSurfType;
 	unsigned flags { 0 };
 	struct shader_s *material;
 	float color[4];
@@ -100,8 +98,6 @@ struct QuadPoly {
 };
 
 struct ComplexPoly {
-	// TODO: Get rid of this
-	int drawSurfType;
 	struct shader_s *material;
 	vec4_t *positions;
 	vec4_t *normals;

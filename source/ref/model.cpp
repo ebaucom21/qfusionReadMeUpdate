@@ -952,7 +952,6 @@ merge:
 
 		// allocate a drawsurf
 		drawSurfaceBSP_t *const drawSurf = &loadbmodel->drawSurfaces[loadbmodel->numDrawSurfaces++];
-		drawSurf->type = ST_BSP;
 		drawSurf->superLightStyle = surf->superLightStyle;
 		drawSurf->instances = surf->instances;
 		drawSurf->numInstances = surf->numInstances;

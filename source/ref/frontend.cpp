@@ -487,15 +487,16 @@ void Frontend::addAliasModelEntitiesToSortList( const entity_t *aliasModelEntiti
 					if( shader ) {
 						void *drawSurf = aliasmodel->drawSurfs + meshNum;
 						const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-						addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf );
+						addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf, ST_ALIAS );
 					}
 				}
 				continue;
 			}
 
 			if( shader ) {
+				void *drawSurf = aliasmodel->drawSurfs + meshNum;
 				const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, aliasmodel->drawSurfs + meshNum );
+				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf, ST_ALIAS );
 			}
 		}
 	}
@@ -535,17 +536,15 @@ void Frontend::addSkeletalModelEntitiesToSortList( const entity_t *skeletalModel
 			if( shader ) {
 				void *drawSurf = skmodel->drawSurfs + meshNum;
 				const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, 0, false );
-				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf );
+				addEntryToSortList( entity, fog, shader, distance, drawOrder, nullptr, drawSurf, ST_SKELETAL );
 			}
 		}
 	}
 }
 
-static int nullDrawSurf = ST_NULLMODEL;
-
 void Frontend::addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices ) {
 	for( const auto index: indices ) {
-		(void)addEntryToSortList( nullModelEntities + index, nullptr, rsh.whiteShader, 0, 0, nullptr, &nullDrawSurf );
+		(void)addEntryToSortList( nullModelEntities + index, nullptr, rsh.whiteShader, 0, 0, nullptr, nullptr, ST_NULLMODEL );
 	}
 }
 
@@ -582,7 +581,7 @@ void Frontend::addSpriteEntitiesToSortList( const entity_t *spriteEntities, std:
 		VectorSubtract( entity->origin, m_state.refdef.vieworg, eyeToSprite );
 		if( const float dist = DotProduct( eyeToSprite, &m_state.viewAxis[0] ); dist > 0 ) [[likely]] {
 			const mfog_t *const fog = getFogForSphere( entity->origin, entity->radius );
-			addEntryToSortList( entity, fog, entity->customShader, dist, 0, nullptr, &spriteDrawSurf );
+			addEntryToSortList( entity, fog, entity->customShader, dist, 0, nullptr, &spriteDrawSurf, ST_SPRITE );
 		}
 	}
 }
@@ -626,7 +625,7 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 
 	drawSurf->dlightBits = 0;
 	drawSurf->visFrame = rf.frameCount;
-	drawSurf->listSurf = addEntryToSortList( entity, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf );
+	drawSurf->listSurf = addEntryToSortList( entity, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf, ST_BSP );
 	if( !drawSurf->listSurf ) {
 		return;
 	}
@@ -714,14 +713,13 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			const mfog_t *fog = nullptr;
 
 			auto *const drawSurf     = &particleDrawSurfaces[numParticleDrawSurfaces++];
-			drawSurf->surfType       = ST_PARTICLE;
 			drawSurf->aggregateIndex = aggregateIndex;
 			drawSurf->particleIndex  = particleIndex;
 
 			shader_s *material = pa->appearanceRules.materials[particle->instanceMaterialIndex];
 
 			// TODO: Inline/add some kind of bulk insertion
-			addEntryToSortList( particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf );
+			addEntryToSortList( particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf, ST_PARTICLE );
 		}
 	}
 }
@@ -732,7 +730,6 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 	const float *const __restrict viewOrigin  = m_state.viewOrigin;
 
 	unsigned numMeshDrawSurfaces = 0;
-	ExternalMeshDrawSurface *const meshDrawSurfaces = m_externalMeshDrawSurfaces;
 	for( const unsigned compoundMeshIndex: indicesOfMeshes ) {
 		const Scene::ExternalCompoundMesh *const __restrict compoundMesh = meshes + compoundMeshIndex;
 
@@ -764,15 +761,10 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 			}
 
 			// TODO: Account for fogs
-			const mfog_t *fog = nullptr;
-
-			auto *const drawSurf        = &meshDrawSurfaces[numMeshDrawSurfaces++];
-			drawSurf->surfType          = ST_EXTERNAL_MESH;
-			drawSurf->compoundMeshIndex = compoundMeshIndex;
-			drawSurf->partIndex         = partIndex;
-
+			const mfog_t *fog        = nullptr;
+			const void *drawSurf     = std::addressof( mesh );
 			const shader_s *material = mesh.material ? mesh.material : rsh.whiteShader;
-			addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf );
+			addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_EXTERNAL_MESH );
 		}
 	}
 }
@@ -791,14 +783,13 @@ void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scen
 
 		// TODO: Account for fogs
 		const mfog_t *fog = nullptr;
-		void *drawSurf = m_coronaDrawSurfaces + index;
-		addEntryToSortList( polyEntity, fog, m_coronaShader, distanceLike, 0, nullptr, drawSurf );
+		void *drawSurf = const_cast<Scene::DynamicLight *>( light );
+		addEntryToSortList( polyEntity, fog, m_coronaShader, distanceLike, 0, nullptr, drawSurf, ST_CORONA );
 	}
 }
 
-void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
-									const shader_t *shader, float dist, unsigned order,
-									const portalSurface_t *portalSurf, void *drawSurf ) {
+void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader, float dist,
+									unsigned order, const portalSurface_t *portalSurf, const void *drawSurf, unsigned surfType ) {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
 		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
@@ -816,6 +807,7 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog,
 					.drawSurf = (drawSurfaceType_t *)drawSurf,
 					.distKey  = distKey,
 					.sortKey  = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
+					.surfType = surfType
 				});
 
 				return std::addressof( m_state.list->back() );
@@ -839,15 +831,13 @@ void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frust
 	const auto *polyEntity = scene->m_polyent;
 
 	for( const unsigned index: visibleComplexPolyIndices ) {
-		ComplexPoly *p  = complexPolys[index];
-		p->drawSurfType = ST_COMPLEX_POLY;
-		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p );
+		ComplexPoly *const p = complexPolys[index];
+		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p, ST_COMPLEX_POLY );
 	}
 
 	for( const unsigned index: visibleQuadPolyIndices ) {
-		QuadPoly *p     = quadPolys[index];
-		p->drawSurfType = ST_QUAD_POLY;
-		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p );
+		QuadPoly *const p = quadPolys[index];
+		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
 	}
 }
 
@@ -1101,12 +1091,12 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	const sortedDrawSurf_t *const drawSurfs = list->data();
 	for( size_t i = 0; i < numDrawSurfs; i++ ) {
 		const sortedDrawSurf_t *sds = drawSurfs + i;
-		const unsigned sortKey = sds->sortKey;
-		const int drawSurfType = *(int *)sds->drawSurf;
+		const unsigned sortKey      = sds->sortKey;
+		const unsigned surfType     = sds->surfType;
 
-		assert( drawSurfType > ST_NONE && drawSurfType < ST_MAX_TYPES );
+		assert( surfType > ST_NONE && surfType < ST_MAX_TYPES );
 
-		batchDrawSurf = ( r_batchDrawSurfCb[drawSurfType] ? true : false );
+		batchDrawSurf = ( r_batchDrawSurfCb[surfType] ? true : false );
 
 		unsigned shaderNum, entNum;
 		int fogNum, portalNum;
@@ -1203,12 +1193,12 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 			}
 
 			if( !batchDrawSurf ) {
-				assert( r_drawSurfCb[drawSurfType] );
+				assert( r_drawSurfCb[surfType] );
 
 				RB_BindShader( entity, shader, fog );
 				RB_SetPortalSurface( portalSurface );
 
-				r_drawSurfCb[drawSurfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
+				r_drawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
 			}
 
 			prevShaderNum = shaderNum;
@@ -1221,7 +1211,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 		}
 
 		if( batchDrawSurf ) {
-			r_batchDrawSurfCb[drawSurfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
+			r_batchDrawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
 		}
 	}
 

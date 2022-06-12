@@ -255,7 +255,6 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	//
 	drawSurf = poutmodel->drawSurfs = ( drawSurfaceAlias_t * )buf; buf += sizeof( drawSurfaceAlias_t ) * poutmodel->nummeshes;
 	for( i = 0; i < poutmodel->nummeshes; i++, drawSurf++ ) {
-		drawSurf->type = ST_ALIAS;
 		drawSurf->model = mod;
 		drawSurf->mesh = poutmodel->meshes + i;
 	}
@@ -378,7 +377,6 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 	//
 	for( i = 0; i < poutmodel->nummeshes; i++ ) {
 		drawSurf = poutmodel->drawSurfs + i;
-		drawSurf->type = ST_ALIAS;
 		drawSurf->model = mod;
 		drawSurf->mesh = poutmodel->meshes + i;
 	}

@@ -941,14 +941,14 @@ bool RB_EnableWireframe( bool enable ) {
 	return oldVal;
 }
 
-void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf ) {
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceAlias_t *drawSurf ) {
 	const maliasmesh_t *aliasmesh = drawSurf->mesh;
 
 	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
 	RB_DrawElements( fsh, 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
 }
 
-void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf ) {
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceSkeletal_t *drawSurf ) {
 	const model_t *mod = drawSurf->model;
 	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
 	const mskmesh_t *skmesh = drawSurf->mesh;
@@ -982,7 +982,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 	}
 }
 
-void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf ) {
+void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, const drawSurfaceBSP_t *drawSurf ) {
 	// shadowBits are shared for all rendering instances (normal view, portals, etc)
 	const unsigned dlightBits = drawSurf->dlightBits;
 
@@ -1005,7 +1005,7 @@ void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_
 	}
 }
 
-void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * ) {
 	assert( rsh.nullVBO != NULL );
 
 	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
@@ -1258,9 +1258,7 @@ void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices
 
 static MeshTesselationHelper meshTesselationHelper;
 
-void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf ) {
-	const ExternalMesh *externalMesh = &fsh->compoundMeshes[drawSurf->compoundMeshIndex].parts[drawSurf->partIndex];
-
+void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ExternalMesh *externalMesh ) {
 	// Checking it this late is not a very nice things but otherwise
 	// the API gets way too complicated due to some technical details.
 	const float squareExtent = DistanceSquared( externalMesh->mins, externalMesh->maxs );
@@ -1330,7 +1328,7 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 	RB_FlushDynamicMeshes();
 }
 
-void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
+void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * ) {
 	vec3_t v_left, v_up;
 	if( const float rotation = e->rotation ) {
 		RotatePointAroundVector( v_left, &fsh->viewAxis[AXIS_FORWARD], &fsh->viewAxis[AXIS_RIGHT], rotation );
@@ -1382,7 +1380,7 @@ void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const enti
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, QuadPoly *p ) {
+void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const QuadPoly *p ) {
 	const float xmin = 0.0f;
 	const float xmax = p->length;
 	const float ymin = -0.5f * p->width;
@@ -1461,7 +1459,7 @@ void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ComplexPoly *poly ) {
+void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ComplexPoly *poly ) {
 	mesh_t mesh;
 	memset( &mesh, 0, sizeof( mesh ) );
 
@@ -1503,11 +1501,10 @@ static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::S
 	return result;
 }
 
-void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
-	const auto *particleDrawSurf = (ParticleDrawSurface *)drawSurf;
-	const auto *aggregate = fsh->particleAggregates + particleDrawSurf->aggregateIndex;
-	assert( particleDrawSurf->particleIndex < aggregate->numParticles );
-	const Particle *const __restrict particle = aggregate->particles + particleDrawSurf->particleIndex;
+void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ParticleDrawSurface *drawSurf ) {
+	const auto *aggregate = fsh->particleAggregates + drawSurf->aggregateIndex;
+	assert( drawSurf->particleIndex < aggregate->numParticles );
+	const Particle *const __restrict particle = aggregate->particles + drawSurf->particleIndex;
 	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
 
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
@@ -1653,8 +1650,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf ) {
-	auto *const light = fsh->dynamicLights + ( (const int *)drawSurf - fsh->coronaDrawSurfaces );
+void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const Scene::DynamicLight *light ) {
 	assert( light && light->hasCoronaLight );
 
 	const float radius = light->coronaRadius;

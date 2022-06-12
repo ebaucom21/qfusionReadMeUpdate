@@ -595,14 +595,15 @@ typedef struct mesh_s {
 } mesh_t;
 
 typedef struct {
-	drawSurfaceType_t *drawSurf;
+	const void *drawSurf;
 	unsigned distKey, sortKey;
+	unsigned surfType;
 } sortedDrawSurf_t;
 
 struct FrontendToBackendShared;
 
-typedef void (*drawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
-typedef void (*batchDrawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, void * );
+typedef void (*drawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, const void * );
+typedef void (*batchDrawSurf_cb)( const FrontendToBackendShared *fsh, const entity_t *, const struct shader_s *, const struct mfog_s *, const struct portalSurface_s *, unsigned int, const void * );
 
 #include "shader.h"
 
@@ -1428,13 +1429,7 @@ void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems );
 void R_BuildTangentVectors( int numVertexes, vec4_t *xyzArray, vec4_t *normalsArray, vec2_t *stArray,
 							int numTris, elem_t *elems, vec4_t *sVectorsArray );
 
-struct VboSpan {
-	unsigned firstElem, numElems;
-	unsigned firstVert, numVerts;
-};
-
-struct ParticleDrawSurface { int surfType; uint16_t aggregateIndex; uint16_t particleIndex; };
-struct ExternalMeshDrawSurface { int surfType; uint16_t compoundMeshIndex; uint16_t partIndex; };
+struct ParticleDrawSurface { uint16_t aggregateIndex; uint16_t particleIndex; };
 
 struct FrontendToBackendShared {
 	const Scene::DynamicLight *dynamicLights;
@@ -1449,16 +1444,16 @@ struct FrontendToBackendShared {
 	float fovTangent;
 };
 
-void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceAlias_t *drawSurf );
-void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceSkeletal_t *drawSurf );
-void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, drawSurfaceBSP_t *drawSurf );
-void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ExternalMeshDrawSurface *drawSurf );
-void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, QuadPoly *poly );
-void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, ComplexPoly *poly );
-void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
-void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, drawSurfaceType_t *drawSurf );
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceAlias_t *drawSurf );
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceSkeletal_t *drawSurf );
+void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, const drawSurfaceBSP_t *drawSurf );
+void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * );
+void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ExternalMesh *externalMesh );
+void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * );
+void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const QuadPoly *poly );
+void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ComplexPoly *poly );
+void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ParticleDrawSurface *drawSurf );
+void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const Scene::DynamicLight *light );
 
 //
 // r_poly.c
