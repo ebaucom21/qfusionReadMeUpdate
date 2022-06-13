@@ -165,18 +165,19 @@ static const vec4_t kRocketFireTrailInitialColor { 1.0f, 0.5f, 0.0f, 0.0f };
 static const vec4_t kRocketFireTrailFadedInColor { 1.0f, 0.7f, 0.3f, 1.0f };
 static const vec4_t kRocketFireTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
-static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
+static ConicalFlockParams rocketSmokeParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 15,
+	.angle       = 45,
+	.innerAngle  = 18,
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 350,
 	.maxTimeout  = 400
 };
 
-static ConicalFlockParams g_rocketFireParticlesFlockParams {
+static ConicalFlockParams rocketFireParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 7.5f,
+	.angle       = 15,
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 125,
@@ -203,7 +204,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &g_rocketSmokeParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &::rocketSmokeParticlesFlockParams, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
@@ -223,7 +224,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &g_rocketFireParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &::rocketFireParticlesFlockParams, currTime );
 		}
 	}
 }
@@ -236,18 +237,20 @@ static const vec4_t kGrenadeSmokeTrailInitialColor { 1.0f, 0.7f, 0.3f, 0.0f };
 static const vec4_t kGrenadeSmokeTrailFadedInColor { 0.7f, 0.7f, 0.7f, 0.2f };
 static const vec4_t kGrenadeSmokeTrailFadedOutColor { 0.0f, 0.0f, 0.0f, 0.0f };
 
-static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
+static ConicalFlockParams grenadeFuseParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 5,
+	.angle       = 60,
+	.innerAngle  = 30,
 	.minSpeed    = 50,
 	.maxSpeed    = 75,
 	.minTimeout  = 100,
 	.maxTimeout  = 150
 };
 
-static ConicalFlockParams g_grenadeSmokeParticlesFlockParams {
+static ConicalFlockParams grenadeSmokeParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 7.5f,
+	.angle       = 30,
+	.innerAngle  = 12,
 	.minSpeed    = 50,
 	.maxSpeed    = 75,
 	.minTimeout  = 200,
@@ -274,7 +277,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &g_grenadeSmokeParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &::grenadeSmokeParticlesFlockParams, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
@@ -294,13 +297,13 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &g_grenadeFuseParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &::grenadeFuseParticlesFlockParams, currTime );
 		}
 	}
 }
 
-static const vec4_t kBlastSmokeTrailInitialColor { 1.0f, 0.5f, 0.4f, 0.0f };
-static const vec4_t kBlastSmokeTrailFadedInColor { 1.0f, 0.8f, 0.4f, 0.2f };
+static const vec4_t kBlastSmokeTrailInitialColor { 1.0f, 0.5f, 0.5f, 0.0f };
+static const vec4_t kBlastSmokeTrailFadedInColor { 1.0f, 0.8f, 0.5f, 0.1f };
 static const vec4_t kBlastSmokeTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
 
 static const vec4_t kBlastIonsTrailInitialColors[] {
@@ -322,18 +325,18 @@ static const vec4_t kBlastIonsTrailFadedOutColors[] {
 	{ 1.0f, 1.0f, 1.0f, 1.0f }
 };
 
-static ConicalFlockParams g_blastSmokeParticlesFlockParams {
+static ConicalFlockParams blastSmokeParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 20,
+	.angle       = 24,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 175,
 	.maxTimeout  = 225
 };
 
-ConicalFlockParams g_blastIonsParticlesFlockParams {
+static ConicalFlockParams blastIonsParticlesFlockParams {
 	.gravity     = -250,
-	.angle       = 12,
+	.angle       = 30,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,
@@ -359,7 +362,8 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &g_blastSmokeParticlesFlockParams, currTime );
+			trail->dropDistance = 8.0f;
+			updateAttachedParticleTrail( trail, origin, &::blastSmokeParticlesFlockParams, currTime );
 		}
 	}
 	if( cg_projectileFireTrail->integer ) {
@@ -378,7 +382,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &g_blastIonsParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, &::blastIonsParticlesFlockParams, currTime );
 		}
 	}
 }
@@ -397,18 +401,18 @@ static const vec4_t kElectroIonsTrailColors[] {
 	{ 0.3f, 0.3f, 1.0f, 1.0f },
 };
 
-static ConicalFlockParams g_electroCloudParticlesFlockParams {
+static ConicalFlockParams electroCloudParticlesFlockParams {
 	.gravity     = 0,
-	.angle       = 18,
+	.angle       = 30,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 150,
 	.maxTimeout  = 200
 };
 
-static ConicalFlockParams g_electroIonsParticlesFlockParams {
+static ConicalFlockParams electroIonsParticlesFlockParams {
 	.gravity     = 0,
-	.angle       = 12,
+	.angle       = 18,
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,
@@ -432,8 +436,8 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, i
 		});
 	}
 	if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
-		trail->dropDistance = 24.0f;
-		updateAttachedParticleTrail( trail, origin, &g_electroCloudParticlesFlockParams, currTime );
+		trail->dropDistance = 16.0f;
+		updateAttachedParticleTrail( trail, origin, &::electroCloudParticlesFlockParams, currTime );
 	}
 
 	if( !effects->particleTrails[1] ) [[unlikely]] {
@@ -451,7 +455,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, i
 	}
 	if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
 		trail->dropDistance = 16.0f;
-		updateAttachedParticleTrail( trail, origin, &g_electroIonsParticlesFlockParams, currTime );
+		updateAttachedParticleTrail( trail, origin, &::electroIonsParticlesFlockParams, currTime );
 	}
 }
 

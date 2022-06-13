@@ -300,8 +300,8 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.fadedOutColors = kBloodFadedOutColors + indexForStyle,
 			.numMaterials   = std::size( s_bloodMaterials ),
 			.kind           = Particle::Sprite,
-			.radius         = 2.5f,
-			.radiusSpread   = 1.0f,
+			.radius         = 1.50f,
+			.radiusSpread   = 0.75f,
 			.sizeBehaviour  = Particle::Expanding
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -560,9 +560,11 @@ static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
 }
 
 static void makeRicochetDir( const float *impactDir, const float *impactNormal, wsw::RandomGenerator *rng, float *result ) {
-	const float z   = rng->nextFloat( 0.60f, 0.95f );
-	const float r   = Q_Sqrt( 1.0f - z * z );
-	const float phi = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
+	// Raise the density towards the pole
+	const float zFrac = Q_Sqrt( rng->nextFloat() );
+	const float z     = 0.30f + 0.65f * zFrac;
+	const float r     = Q_Sqrt( 1.0f - z * z );
+	const float phi   = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
 	const vec3_t newZDir { r * std::cos( phi ), r * std::sin( phi ), z };
 
 	mat3_t transformMatrix;
@@ -585,18 +587,19 @@ static const Particle::AppearanceRules kBulletImpactAppearanceRules {
 	.fadedInColors  = &kBulletRicochetFadedInColor,
 	.fadedOutColors = &kBulletRicochetFadedOutColor,
 	.kind           = Particle::Spark,
-	.length         = 20.0f,
+	.length         = 16.0f,
 	.width          = 1.0f,
 	.lengthSpread   = 4.0f,
-	.widthSpread    = 0.2f,
+	.widthSpread    = 0.1f,
 	.sizeBehaviour  = Particle::Shrinking,
 };
 
 static const ConicalFlockParams kBulletImpactFlockParams {
 	.gravity       = GRAVITY,
-	.angle         = 30.0f,
-	.minSpeed      = 700.0f,
-	.maxSpeed      = 900.0f,
+	.angle         = 45,
+	.innerAngle    = 15,
+	.minSpeed      = 550.0f,
+	.maxSpeed      = 800.0f,
 	.minTimeout    = 75,
 	.maxTimeout    = 150,
 };
@@ -616,14 +619,14 @@ static const Particle::AppearanceRules kBulletRicochetAppearanceRules {
 };
 
 static const ConicalFlockParams kBulletRicochetFlockParams {
-	.gravity       = GRAVITY,
-	.drag          = 0.006f,
-	.restitution   = 0.5f,
-	.angle         = 15.0f,
-	.minSpeed      = 550.0f,
-	.maxSpeed      = 950.0f,
-	.minTimeout    = 200,
-	.maxTimeout    = 300,
+	.gravity     = GRAVITY,
+	.drag        = 0.006f,
+	.restitution = 0.5f,
+	.angle       = 18.0f,
+	.minSpeed    = 700.0f,
+	.maxSpeed    = 950.0f,
+	.minTimeout  = 250,
+	.maxTimeout  = 300,
 };
 
 static const vec4_t kBulletImpactDebrisInitialColors[3] {
@@ -660,13 +663,15 @@ static const Particle::AppearanceRules kBulletDebrisAppearanceRules {
 };
 
 static const ConicalFlockParams kBulletDebrisFlockParams {
-	.gravity       = GRAVITY,
-	.restitution   = 0.3f,
-	.angle         = 30.0f,
-	.minSpeed      = 75.0f,
-	.maxSpeed      = 125.0f,
-	.minTimeout    = 200,
-	.maxTimeout    = 700,
+	.gravity        = GRAVITY,
+	.restitution    = 0.3f,
+	.angle          = 30.0f,
+	.minBounceCount = 1,
+	.maxBounceCount = 3,
+	.minSpeed       = 75.0f,
+	.maxSpeed       = 125.0f,
+	.minTimeout     = 200,
+	.maxTimeout     = 700,
 };
 
 [[nodiscard]]

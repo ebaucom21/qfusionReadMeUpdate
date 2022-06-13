@@ -99,7 +99,7 @@ static vec_t *_LaserColor( vec4_t color ) {
 	return color;
 }
 
-static const vec4_t kLaserImpactInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kLaserImpactInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kLaserImpactFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
 static const vec4_t kLaserImpactFadedOutColor { 1.0f, 0.9f, 0.0f, 0.0f };
 
@@ -115,24 +115,30 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			if( cg_particles->integer ) {
-				ConicalFlockParams flockParams {
+				EllipsoidalFlockParams flockParams {
 					.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
 					.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-					.dir           = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-					.gravity       = 900.0f,
-					.minPercentage = 0.5f,
+					.stretchDir    = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+					.stretchScale  = 0.5f,
+					.gravity       = 2.0f * GRAVITY,
+					.minSpeed      = 150,
+					.maxSpeed      = 200,
+					.minShiftSpeed = 100,
+					.maxShiftSpeed = 125,
+					.minPercentage = 1.0f,
 					.maxPercentage = 1.0f,
-					.minTimeout    = 75,
-					.maxTimeout    = 150
+					.minTimeout    = 150,
+					.maxTimeout    = 300,
 				};
 				Particle::AppearanceRules appearanceRules {
-					.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 					.initialColors  = &kLaserImpactInitialColor,
 					.fadedInColors  = &kLaserImpactFadedInColor,
 					.fadedOutColors = &kLaserImpactFadedOutColor,
-					.kind           = Particle::Spark,
-					.length         = 4.0f,
-					.width          = 1.0f,
+					.kind           = Particle::Sprite,
+					.radius         = 1.25f,
+					.radiusSpread   = 0.25f,
+					.sizeBehaviour  = Particle::Shrinking
 				};
 				cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 			}
@@ -447,11 +453,11 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 }
 
-static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
+static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
 static const vec4_t kWaterSplashFadedInColor { 1.0f, 1.0f, 1.0f, 0.3f };
 static const vec4_t kWaterSplashFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
 
-static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
+static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
 static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 0.3f };
 static const vec4_t kSlimeSplashFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
 
@@ -482,13 +488,13 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 				.origin        = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
 				.offset        = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
 				.gravity       = 1.25f * GRAVITY,
-				.angle         = 7.5f,
-				.minSpeed      = 300,
-				.maxSpeed      = 500,
-				.minPercentage = 1.0f,
+				.angle         = 18,
+				.minSpeed      = 500,
+				.maxSpeed      = 700,
+				.minPercentage = 0.5f,
 				.maxPercentage = 1.0f,
-				.minTimeout    = 200,
-				.maxTimeout    = 500,
+				.minTimeout    = 75,
+				.maxTimeout    = 150,
 			};
 			Particle::AppearanceRules appearanceRules {
 				.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
@@ -496,14 +502,14 @@ static void CG_LeadWaterSplash( trace_t *tr ) {
 				.fadedInColors       = fadedInColors,
 				.fadedOutColors      = fadedOutColors,
 				.kind                = Particle::Spark,
-				.length              = 7.0f,
-				.width               = 1.0f,
-				.lengthSpread        = 2.0f,
+				.length              = 16.0f,
+				.width               = 1.5f,
+				.lengthSpread        = 5.0f,
 				.widthSpread         = 0.25f,
 				.fadeInLifetimeFrac  = 0.25f,
 				.fadeOutLifetimeFrac = 0.50f,
 			};
-			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 		}
 	}
 }
@@ -1322,6 +1328,9 @@ static void handleBloodEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( cg_showPOVBlood->integer || !ISVIEWERENTITY( ent->ownerNum ) ) {
 		vec3_t dir;
 		ByteToDir( parm, dir );
+		if( VectorCompare( dir, vec3_origin ) ) {
+			dir[2] = 1.0f;
+		}
 		cg.effectsSystem.spawnPlayerHitEffect( ent->origin, dir, ent->damage );
 	}
 }
