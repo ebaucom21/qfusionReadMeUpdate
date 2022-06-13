@@ -299,8 +299,7 @@ class alignas( 16 ) AiAasWorld {
 	static constexpr float kAreaGridCellSize { 32.0f };
 
 	int32_t *m_pointAreaNumLookupGridData { nullptr };
-	unsigned m_pointAreaNumLookupGridXStride { 0 };
-	unsigned m_pointAreaNumLookupGridYStride { 0 };
+	unsigned m_numGridCellsPerDimensions[3] { 0, 0, 0 };
 
 	alignas( 16 ) vec4_t m_worldMins, m_worldMaxs;
 

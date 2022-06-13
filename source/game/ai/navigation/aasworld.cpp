@@ -908,25 +908,23 @@ void AiAasWorld::setupPointAreaNumLookupGrid() {
 	const Vec3 worldMins( m_worldMins );
 	const Vec3 dimensions( Vec3( m_worldMaxs ) - worldMins );
 	const Vec3 cellDimensions( kAreaGridCellSize, kAreaGridCellSize, kAreaGridCellSize );
-	unsigned numCellsPerDimensions[3] { 0, 0, 0 };
 
 	size_t gridDataSize = sizeof( int32_t );
 	for( int i = 0; i < 3; ++i ) {
-		numCellsPerDimensions[i] = (unsigned)std::ceil( dimensions.Data()[i] / kAreaGridCellSize );
-		gridDataSize *= numCellsPerDimensions[i];
+		// Truncating the fractional part is used during lookups.
+		// Add +1 to account for points that are located on world boundaries (they aren't that uncommon).
+		m_numGridCellsPerDimensions[i] = (unsigned)std::floor( dimensions.Data()[i] / kAreaGridCellSize ) + 1;
+		gridDataSize *= m_numGridCellsPerDimensions[i];
 	}
-
-	m_pointAreaNumLookupGridXStride = numCellsPerDimensions[1] * numCellsPerDimensions[2];
-	m_pointAreaNumLookupGridYStride = numCellsPerDimensions[2];
 
 	m_pointAreaNumLookupGridData = (int32_t *)Q_malloc( (size_t)gridDataSize );
 
 	size_t offset = 0;
-	for( unsigned iStep = 0; iStep < numCellsPerDimensions[0]; ++iStep ) {
+	for( unsigned iStep = 0; iStep < m_numGridCellsPerDimensions[0]; ++iStep ) {
 		const float minX = worldMins.X() + kAreaGridCellSize * (float)iStep;
-		for( unsigned jStep = 0; jStep < numCellsPerDimensions[1]; ++jStep ) {
+		for( unsigned jStep = 0; jStep < m_numGridCellsPerDimensions[1]; ++jStep ) {
 			const float minY = worldMins.Y() + kAreaGridCellSize * (float)jStep;
-			for( unsigned kStep = 0; kStep < numCellsPerDimensions[2]; ++kStep ) {
+			for( unsigned kStep = 0; kStep < m_numGridCellsPerDimensions[2]; ++kStep ) {
 				const float minZ = worldMins.Z() + kAreaGridCellSize * (float)kStep;
 				const Vec3 cellMins( minX, minY, minZ );
 				const Vec3 cellMaxs( cellMins + cellDimensions );
@@ -1003,14 +1001,18 @@ int AiAasWorld::pointAreaNum( const float *point ) const {
 		if( isPointWithinWorldBounds( point, m_worldMins, m_worldMaxs ) ) [[likely]] {
 			const Vec3 diffWithMins( Vec3( point ) - Vec3( m_worldMins ) );
 
-			constexpr const double invAreaGridCellSize = 1.0 / kAreaGridCellSize;
-			const auto xCellIndex = (unsigned)( (double)diffWithMins.X() * invAreaGridCellSize );
-			const auto yCellIndex = (unsigned)( (double)diffWithMins.Y() * invAreaGridCellSize );
-			const auto zCellIndex = (unsigned)( (double)diffWithMins.Z() * invAreaGridCellSize );
+			constexpr double rcpAreaGridCellSize = 1.0 / kAreaGridCellSize;
+			const auto xCellIndex = (unsigned)( (double)diffWithMins.X() * rcpAreaGridCellSize );
+			const auto yCellIndex = (unsigned)( (double)diffWithMins.Y() * rcpAreaGridCellSize );
+			const auto zCellIndex = (unsigned)( (double)diffWithMins.Z() * rcpAreaGridCellSize );
+
+			assert( xCellIndex < m_numGridCellsPerDimensions[0] );
+			assert( yCellIndex < m_numGridCellsPerDimensions[1] );
+			assert( zCellIndex < m_numGridCellsPerDimensions[2] );
 
 			size_t offset = 0;
-			offset += xCellIndex * m_pointAreaNumLookupGridXStride;
-			offset += yCellIndex * m_pointAreaNumLookupGridYStride;
+			offset += xCellIndex * m_numGridCellsPerDimensions[1] * m_numGridCellsPerDimensions[2];
+			offset += yCellIndex * m_numGridCellsPerDimensions[2];
 			offset += zCellIndex;
 
 			int result = 0;

@@ -606,7 +606,6 @@ static const Particle::AppearanceRules kBulletRicochetAppearanceRules {
 	.fadedInColors  = &kBulletRicochetFadedInColor,
 	.fadedOutColors = &kBulletRicochetFadedOutColor,
 	.lightColor     = kBulletRicochetFadedInColor,
-	.numColors      = std::size( kBulletRicochetInitialColor ),
 	.kind           = Particle::Spark,
 	.length         = 5.0f,
 	.width          = 0.75f,

@@ -300,7 +300,7 @@ void RidePlatformAction::FindExitAreas( PredictionContext *context, const edict_
 	trace_t trace;
 	int boxAreaNumsBuffer[48];
 	const auto boxAreaNums = aasWorld->findAreasInBox( mins, maxs, boxAreaNumsBuffer, 48 );
-	for( const int areaNum: boxAreaNumsBuffer ) {
+	for( const int areaNum: boxAreaNums ) {
 		const auto &area = aasAreas[areaNum];
 		const auto &areaSettings = aasAreaSettings[areaNum];
 		if( !( areaSettings.areaflags & AREA_GROUNDED ) ) {
