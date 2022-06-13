@@ -665,11 +665,16 @@ static const ConicalFlockParams kBulletDebrisFlockParams {
 	.angle         = 30.0f,
 	.minSpeed      = 75.0f,
 	.maxSpeed      = 125.0f,
-	.minShiftSpeed = 50.0f,
-	.maxShiftSpeed = 125.0f,
 	.minTimeout    = 200,
 	.maxTimeout    = 700,
 };
+
+[[nodiscard]]
+static inline auto scaleSpeedForUpShift( float baseSpeed, float upShiftScale ) -> float {
+	assert( upShiftScale >= 0.0f && upShiftScale <= 1.0f );
+	// Apply the upper bound to avoid triggering an assertion on speed feasibility
+	return std::min( 999.9f, baseSpeed * ( 1.0f + upShiftScale ) );
+}
 
 void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const float *impactDir ) {
 	if( canShowBulletLikeImpactForHit( trace ) ) {
@@ -697,6 +702,8 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
 
 		if( cg_particles->integer ) {
+			const float upShiftScale = Q_Sqrt( std::max( 0.0f, impactNormal[2] ) );
+
 			Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
 			ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
@@ -706,6 +713,10 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			VectorCopy( flockDir, ricochetFlockParams.dir );
 			ricochetFlockParams.minPercentage = 0.7f;
 			ricochetFlockParams.maxPercentage = 1.0f;
+			ricochetFlockParams.minShiftSpeed = 100.0f * upShiftScale;
+			ricochetFlockParams.maxShiftSpeed = 150.0f * upShiftScale;
+			ricochetFlockParams.minSpeed      = scaleSpeedForUpShift( ricochetFlockParams.minSpeed, upShiftScale );
+			ricochetFlockParams.maxSpeed      = scaleSpeedForUpShift( ricochetFlockParams.maxSpeed, upShiftScale );
 
 			cg.particleSystem.addSmallParticleFlock( ricochetAppearanceRules, ricochetFlockParams );
 
@@ -718,6 +729,10 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 			VectorCopy( flockDir, debrisFlockParams.dir );
 			debrisFlockParams.minPercentage = 0.3f;
 			debrisFlockParams.maxPercentage = 0.9f;
+			debrisFlockParams.minShiftSpeed = 150.0f * upShiftScale;
+			debrisFlockParams.maxShiftSpeed = 200.0f * upShiftScale;
+			debrisFlockParams.minSpeed      = scaleSpeedForUpShift( debrisFlockParams.minSpeed, upShiftScale );
+			debrisFlockParams.maxSpeed      = scaleSpeedForUpShift( debrisFlockParams.maxSpeed, upShiftScale );
 
 			cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
 		}
@@ -751,6 +766,8 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
 
 		if( cg_particles->integer ) {
+			[[maybe_unused]] const float upShiftScale = Q_Sqrt( std::max( 0.0f, impactNormal[2] ) );
+
 			if( m_rng.tryWithChance( 0.5f ) ) {
 				Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
 				ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
@@ -763,6 +780,10 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 				VectorCopy( flockDir, ricochetFlockParams.dir );
 				ricochetFlockParams.minPercentage = 0.0f;
 				ricochetFlockParams.maxPercentage = 0.3f;
+				ricochetFlockParams.minShiftSpeed = 150.0f * upShiftScale;
+				ricochetFlockParams.maxShiftSpeed = 200.0f * upShiftScale;
+				ricochetFlockParams.minSpeed      = scaleSpeedForUpShift( ricochetFlockParams.minSpeed, upShiftScale );
+				ricochetFlockParams.maxSpeed      = scaleSpeedForUpShift( ricochetFlockParams.maxSpeed, upShiftScale );
 
 				cg.particleSystem.addSmallParticleFlock( ricochetAppearanceRules, ricochetFlockParams );
 			}
@@ -779,6 +800,10 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 				VectorCopy( flockDir, debrisFlockParams.dir );
 				debrisFlockParams.minPercentage = 0.0f;
 				debrisFlockParams.maxPercentage = 0.3f;
+				debrisFlockParams.minShiftSpeed = 150.0f * upShiftScale;
+				debrisFlockParams.maxShiftSpeed = 200.0f * upShiftScale;
+				debrisFlockParams.minSpeed      = scaleSpeedForUpShift( debrisFlockParams.minSpeed, upShiftScale );
+				debrisFlockParams.maxSpeed      = scaleSpeedForUpShift( debrisFlockParams.maxSpeed, upShiftScale );
 
 				cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
 			}
