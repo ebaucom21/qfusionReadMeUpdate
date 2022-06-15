@@ -125,8 +125,7 @@ bool Walker::Exec() {
 	if( ReachChainWalker::Exec() && foundReach ) {
 		result.Set( foundReach->start );
 		result -= botOrigin;
-		result.NormalizeFast();
-		return true;
+		return (bool)result.normalizeFast();
 	}
 	return false;
 }

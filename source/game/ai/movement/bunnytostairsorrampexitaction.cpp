@@ -43,7 +43,10 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 		Debug( "Found a best exit area of an inclined floor area\n" );
 		lookDirStorage.Set( aasWorld->getAreas()[*exitAreaNum].center );
 		lookDirStorage -= context->movementState->entityPhysicsState.Origin();
-		lookDirStorage.Normalize();
+		if( !lookDirStorage.normalize() ) {
+			return false;
+		}
+
 		intendedLookDir = lookDirStorage.Data();
 
 		TrySaveExitFloorCluster( context, *exitAreaNum );
@@ -65,7 +68,10 @@ bool BunnyToStairsOrRampExitAction::TryFindAndSaveLookDir( PredictionContext *co
 	Debug( "Found a best exit area of an stairs cluster\n" );
 	lookDirStorage.Set( aasWorld->getAreas()[*exitAreaNum].center );
 	lookDirStorage -= context->movementState->entityPhysicsState.Origin();
-	lookDirStorage.Normalize();
+	if( !lookDirStorage.normalize() ) {
+		return false;
+	}
+
 	intendedLookDir = lookDirStorage.Data();
 
 	// Try find an area that is a boundary area of the exit area and is in a floor cluster

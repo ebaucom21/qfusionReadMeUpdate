@@ -3,6 +3,9 @@
 
 #include "../../gameshared/q_math.h"
 
+#include <optional>
+#include <stdexcept>
+
 class Vec3
 {
 	vec3_t vec;
@@ -45,24 +48,66 @@ public:
 		return dx * dx + dy * dy;
 	}
 
-	float Normalize() {
-		float squareLength = VectorLengthSquared( vec );
-		if( squareLength > 0 ) {
-			float invLength = 1.0f / sqrtf( squareLength );
-			VectorScale( vec, invLength, vec );
-			return 1.0f / invLength;
+	// A poor man's replacement to named arguments.
+	// The default value just helps to avoid division by zero.
+	// Greater values are useful for implementing various domain-specific logic
+	// when directions of non-zero but relatively short vectors are not considered feasible.
+	struct NormalizationParams { float minAcceptableLength { 1e-3f }; };
+
+	[[nodiscard]]
+	auto normalize( NormalizationParams params = { .minAcceptableLength = 1e-3f } ) -> std::optional<float> {
+		assert( params.minAcceptableLength > 0.0f );
+		const float squaredThreshold = params.minAcceptableLength * params.minAcceptableLength;
+		const float squaredLength    = VectorLengthSquared( vec );
+		if( squaredLength >= squaredThreshold ) [[likely]] {
+			// We have to return the exact length by the contract,
+			// so no reciprocal optimization is applied, even if it could be quite precise.
+			const float length    = std::sqrt( squaredLength );
+			const float rcpLength = 1.0f / length;
+			VectorScale( vec, rcpLength, vec );
+			return length;
 		}
-		return 0.0f;
+		return std::nullopt;
 	}
 
-	float NormalizeFast() {
-		float squareLength = VectorLengthSquared( vec );
-		if( squareLength > 0 ) {
-			float invLength = Q_RSqrt( squareLength );
-			VectorScale( vec, invLength, vec );
-			return squareLength * invLength;
+	[[maybe_unused]]
+	auto normalizeOrFail( NormalizationParams params = { .minAcceptableLength = 1e-3f } ) -> float {
+		assert( params.minAcceptableLength > 0.0f );
+		const float squaredThreshold = params.minAcceptableLength * params.minAcceptableLength;
+		const float squaredLength    = VectorLengthSquared( vec );
+		if( squaredLength >= squaredThreshold ) [[likely]] {
+			const float length    = std::sqrt( squaredLength );
+			const float rcpLength = 1.0f / length;
+			VectorScale( vec, rcpLength, vec );
+			return length;
 		}
-		return 0.0f;
+		throw std::logic_error( "Normalization failure" );
+	}
+
+	[[nodiscard]]
+	auto normalizeFast( NormalizationParams params = { .minAcceptableLength = 1e-3f } ) -> std::optional<float> {
+		assert( params.minAcceptableLength > 0.0f );
+		const float squaredThreshold = params.minAcceptableLength * params.minAcceptableLength;
+		const float squaredLength    = VectorLengthSquared( vec );
+		if( squaredLength >= squaredThreshold ) [[likely]] {
+			const float rcpLength = Q_RSqrt( squaredLength );
+			VectorScale( vec, rcpLength, vec );
+			return squaredLength * rcpLength;
+		}
+		return std::nullopt;
+	}
+
+	[[maybe_unused]]
+	auto normalizeFastOrThrow( NormalizationParams params = { .minAcceptableLength = 1e-3f } ) -> float {
+		assert( params.minAcceptableLength > 0.0f );
+		const float squaredThreshold = params.minAcceptableLength * params.minAcceptableLength;
+		const float squaredLength    = VectorLengthSquared( vec );
+		if( squaredLength >= squaredThreshold ) [[likely]] {
+			const float rcpLength = Q_RSqrt( squaredLength );
+			VectorScale( vec, rcpLength, vec );
+			return squaredLength * rcpLength;
+		}
+		throw std::logic_error( "Fast normalization failure" );
 	}
 
 	float *Data() { return vec; }

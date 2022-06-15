@@ -211,7 +211,9 @@ float SelectedEnemies::ComputeThreatFactor( const edict_t *ent, const unsigned *
 
 	Vec3 enemyToBotDir( bot->Origin() );
 	enemyToBotDir -= ent->s.origin;
-	enemyToBotDir.NormalizeFast();
+	if( !enemyToBotDir.normalizeFast() ) {
+		return 1.0f;
+	}
 
 	float dot;
 	if( enemyNum != nullptr ) {
@@ -507,8 +509,11 @@ const float *SelectedEnemies::GetBotViewDirDotToEnemyDirValues() const {
 		Vec3 botToEnemyDir( enemies[i]->LastSeenOrigin() );
 		botToEnemyDir -= bot->Origin();
 		botToEnemyDir.Z() -= viewHeight;
-		botToEnemyDir.NormalizeFast();
-		botViewDirDotToEnemyDir.values[i] = botViewDir.Dot( botToEnemyDir );
+		if( botToEnemyDir.normalizeFast() ) {
+			botViewDirDotToEnemyDir.values[i] = botViewDir.Dot( botToEnemyDir );
+		} else {
+			botViewDirDotToEnemyDir.values[i] = 1.0f;
+		}
 	}
 
 	botViewDirDotToEnemyDir.computedAt = levelTime;
@@ -526,8 +531,11 @@ const float *SelectedEnemies::GetEnemyViewDirDotToBotDirValues() const {
 		Vec3 enemyToBotDir( bot->Origin() );
 		enemyToBotDir -= enemies[i]->LastSeenOrigin();
 		enemyToBotDir.Z() -= viewHeight;
-		enemyToBotDir.NormalizeFast();
-		enemyViewDirDotToBotDir.values[i] = enemies[i]->LookDir().Dot( enemyToBotDir );
+		if( enemyToBotDir.normalizeFast() ) {
+			enemyViewDirDotToBotDir.values[i] = enemies[i]->LookDir().Dot( enemyToBotDir );
+		} else {
+			enemyViewDirDotToBotDir.values[i] = 1.0f;
+		}
 	}
 
 	enemyViewDirDotToBotDir.computedAt = levelTime;

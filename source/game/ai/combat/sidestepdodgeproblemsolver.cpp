@@ -74,7 +74,8 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 	Vec3 keepVisible2DDir( problemParams.keepVisibleOrigin );
 	keepVisible2DDir -= originParams.origin;
 	keepVisible2DDir.Z() = 0;
-	keepVisible2DDir.Normalize();
+
+	const auto checkAgainstKeepVisibleOrigin = (bool)keepVisible2DDir.normalize();
 
 	edict_t *const ignore = originParams.originEntity ? const_cast<edict_t *>( originParams.originEntity ) : nullptr;
 
@@ -119,18 +120,26 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 				continue;
 			}
 
-			// Check actual visibility of the origin specified in problem params
-			G_Trace( &trace, testedOrigin.Data(), nullptr, nullptr, problemParams.keepVisibleOrigin, ignore, MASK_SOLID );
-			if( trace.fraction != 1.0f || trace.startsolid ) {
-				continue;
+			if( checkAgainstKeepVisibleOrigin ) {
+				// Check actual visibility of the origin specified in problem params
+				G_Trace( &trace, testedOrigin.Data(), nullptr, nullptr, problemParams.keepVisibleOrigin, ignore, MASK_SOLID );
+				if( trace.fraction != 1.0f || trace.startsolid ) {
+					continue;
+				}
 			}
 
 			Vec3 dir( vec );
 			const float distance = std::sqrt( squareDistance );
 			dir *= 1.0f / distance;
 
+			float score;
 			// Give side spots a greater score, but make sure the score is always positive for each spot
-			float score = ( 1.0f - fabsf( dir.Dot( keepVisible2DDir ) ) ) + 0.1f;
+			if( checkAgainstKeepVisibleOrigin ) {
+				score = ( 1.0f - fabsf( dir.Dot( keepVisible2DDir ) ) ) + 0.1f;
+			} else {
+				score = 1.0f;
+			}
+
 			// Modulate score by distance (give nearby spots a priority too)
 			score *= 0.5f + 0.5f * ( 1.0f - ( distance / originParams.searchRadius ) );
 			// Modulate by velocity influence
@@ -197,7 +206,9 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 			Vec3 spot2DDir( testedOrigin.Data() );
 			spot2DDir -= originParams.origin;
 			spot2DDir.Z() = 0;
-			spot2DDir.Normalize();
+			if( !spot2DDir.normalize() ) {
+				continue;
+			}
 
 			// Give side spots a greater score, but make sure the score is always positive for each spot
 			float score = ( 1.0f - std::fabs( spot2DDir.Dot( keepVisible2DDir ) ) ) + 0.1f;

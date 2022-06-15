@@ -596,14 +596,20 @@ void CorrectWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *const record = context->record;
 
+	bool weaponJumpFailed = false;
+
 	Vec3 velocity( entityPhysicsState.Velocity() );
-	const float speed = velocity.Normalize();
 	Vec3 newVelocity( weaponJumpState->FireTarget() );
 	newVelocity -= entityPhysicsState.Origin();
-	newVelocity.NormalizeFast();
 
-	bool weaponJumpFailed = false;
-	if( level.time - bot->lastOwnKnockbackAt > context->DefaultFrameTime() ) {
+	const float speed = entityPhysicsState.Speed();
+	if( speed < 300.0f ) {
+		Debug( "The actual speed is insufficient\n" );
+		weaponJumpFailed = true;
+	} else if( !newVelocity.normalizeFast() ) {
+		Debug( "Failed to make the new velocity direction\n" );
+		weaponJumpFailed = true;
+	} else if( level.time - bot->lastOwnKnockbackAt > context->DefaultFrameTime() ) {
 		Debug( "The own knockback was not accepted during the last frame\n" );
 		weaponJumpFailed = true;
 	} else if(  bot->lastOwnKnockbackKick < 25 ) {
@@ -648,10 +654,12 @@ void WeaponJumpableSpotDetector::GetVelocityForJumpingToSpot( vec3_t velocity, c
 	Vec3 dir( spot->origin );
 	dir.Z() += zOffsets[spot->tag];
 	dir -= origin;
-	dir.NormalizeFast();
-
-	dir.CopyTo( velocity );
-	VectorScale( velocity, push, velocity );
+	if( dir.normalizeFast() ) {
+		dir.CopyTo( velocity );
+		VectorScale( velocity, push, velocity );
+	} else {
+		VectorSet( velocity, 0.0f, 0.0f, 1.0f );
+	}
 }
 
 void WeaponJumpWeaponsTester::SetupForWeapon( int weaponNum ) {

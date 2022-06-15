@@ -47,7 +47,13 @@ bool GenericGroundMovementScript::SetupForKeptPointInFov( PredictionContext *con
 
 	Vec3 intendedMoveDir( steeringTarget );
 	intendedMoveDir -= entityPhysicsState.Origin();
-	const float distanceToTarget = intendedMoveDir.Normalize();
+	const auto maybeDistanceToTarget = intendedMoveDir.normalizeFast();
+	if( !maybeDistanceToTarget ) {
+		return false;
+	}
+
+	const float distanceToTarget = *maybeDistanceToTarget;
+
 	int keyMoves[2];
 	// While using makeRandomizedKeyMovesToTarget() is desirable,
 	// we do not use movement prediction and thus it should be avoided due to possible bot mistakes.
@@ -170,7 +176,9 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 
 	const float squareDistanceToTarget = intendedLookDir.SquaredLength();
 	intendedLookDir.Z() *= Z_NO_BEND_SCALE;
-	intendedLookDir.Normalize();
+	if( !intendedLookDir.normalize() ) {
+		return;
+	}
 
 	botInput->SetIntendedLookDir( intendedLookDir, true );
 
@@ -178,12 +186,10 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 	float intendedDotActual = 1.0f;
 	// We should operate on vectors in 2D plane, otherwise we get dot product match rather selfdom.
 	Vec3 intendedLookDir2D( intendedLookDir.X(), intendedLookDir.Y(), 0.0f );
-	if( intendedLookDir2D.SquaredLength() > 0.001f ) {
-		intendedLookDir2D.Normalize();
+	if( intendedLookDir2D.normalize() ) {
 		Vec3 forward2DDir( entityPhysicsState.ForwardDir() );
 		forward2DDir.Z() = 0;
-		if( forward2DDir.SquaredLength() > 0.001f ) {
-			forward2DDir.Normalize();
+		if( forward2DDir.normalize() ) {
 			intendedDotActual = intendedLookDir2D.Dot( forward2DDir );
 		}
 	}

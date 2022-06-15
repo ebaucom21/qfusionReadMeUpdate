@@ -36,7 +36,9 @@ void FallDownScript::SetupMovement( PredictionContext *context ) {
 	toTargetDir.Z() += game.edicts[bot->EntNum()].viewheight;
 	toTargetDir -= entityPhysicsState.GroundEntity() ? startOrigin : targetOrigin;
 	toTargetDir *= -1.0f;
-	toTargetDir.Normalize();
+	if( !toTargetDir.normalize() ) {
+		return;
+	}
 
 	botInput->isUcmdSet = true;
 
@@ -70,7 +72,11 @@ void FallDownScript::SetupMovement( PredictionContext *context ) {
 
 	// We're falling and might miss the target
 	Vec3 velocityDir( entityPhysicsState.Velocity() );
-	velocityDir *= 1.0f / entityPhysicsState.Speed();
+	if( entityPhysicsState.Speed() < 1 ) {
+		return;
+	}
+
+	velocityDir *= Q_Rcp( entityPhysicsState.Speed() );
 
 	// If the velocity fairly conforms the direction to target
 	if( velocityDir.Dot( toTargetDir ) > 0.95f ) {
@@ -80,7 +86,10 @@ void FallDownScript::SetupMovement( PredictionContext *context ) {
 
 	// Stop looking down and try gain some side velocity using the slight forward air-control
 	toTargetDir.Z() = 0;
-	toTargetDir.Normalize();
+	if( !toTargetDir.normalize() ) {
+		return;
+	}
+
 	botInput->SetIntendedLookDir( toTargetDir, false );
 
 	if( entityPhysicsState.ForwardDir().Dot( toTargetDir ) < 0.95f ) {

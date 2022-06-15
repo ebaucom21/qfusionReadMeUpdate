@@ -173,7 +173,10 @@ void FallbackAction::SetupNavTargetAreaMovement( PredictionContext *context ) {
 
 	Vec3 intendedLookDir( context->NavTargetOrigin() );
 	intendedLookDir -= entityPhysicsState.Origin();
-	intendedLookDir.NormalizeFast();
+	if( !intendedLookDir.normalizeFast() ) {
+		return;
+	}
+
 	botInput->SetIntendedLookDir( intendedLookDir, true );
 
 	if( entityPhysicsState.GroundEntity() ) {

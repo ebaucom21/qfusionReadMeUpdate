@@ -99,7 +99,10 @@ void JumpToSpotScript::SetupMovement( PredictionContext *context ) {
 	toTargetDir.Z() += game.edicts[bot->EntNum()].viewheight;
 	toTargetDir -= targetOrigin;
 	toTargetDir *= -1.0f;
-	toTargetDir.Normalize();
+
+	if( !toTargetDir.normalize() ) {
+		return;
+	}
 
 	int forwardMovement = 1;
 	float viewDot = toTargetDir.Dot( entityPhysicsState.ForwardDir() );
@@ -200,8 +203,7 @@ void JumpToSpotScript::SetupMovement( PredictionContext *context ) {
 		if( fabsf( forwardDir.Z() ) < 0.3f ) {
 			if( DistanceSquared( entityPhysicsState.Origin(), targetOrigin ) > SQUARE( 48 ) ) {
 				forwardDir.Z() = 0;
-				forwardDir.NormalizeFast();
-				if( toTargetDir.Dot( forwardDir ) > 0.9f ) {
+				if( forwardDir.normalizeFast() && toTargetDir.Dot( forwardDir ) > 0.9f ) {
 					Vec3 modifiedVelocity( forwardDir );
 					modifiedVelocity *= context->GetRunSpeed();
 					context->record->SetModifiedVelocity( modifiedVelocity );
@@ -459,7 +461,10 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 	Vec3 startVelocity( nextReach.end );
 	startVelocity -= entityPhysicsState.Origin();
 	startVelocity.Z() = 0;
-	startVelocity.Normalize();
+	if( !startVelocity.normalize() ) {
+		return nullptr;
+	}
+
 	startVelocity *= startSpeed2D;
 
 	const float defaultJumpSpeed = context->GetJumpSpeed();

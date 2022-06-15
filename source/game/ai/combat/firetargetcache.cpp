@@ -203,7 +203,7 @@ void BotFireTargetCache::AdjustDropAimTypeParams( const SelectedEnemies &selecte
 	}
 
 	Vec3 velocity2DVec( fireOriginToTarget );
-	velocity2DVec.NormalizeFast();
+	velocity2DVec.normalizeFastOrThrow();
 	velocity2DVec *= fireDef.ProjectileSpeed();
 	velocity2DVec.Z() = 0;
 	const float squareVelocity2D = velocity2DVec.SquaredLength();
@@ -257,10 +257,14 @@ bool PredictProjectileNoClip( const Vec3 &fireOrigin, float projectileSpeed, vec
 	float targetToFireDistSq = targetToFire.SquaredLength();
 	float targetToFireDist = sqrtf( targetToFireDistSq );
 	Vec3 targetToFireDir( targetToFire );
-	targetToFireDir.Normalize();
+	if( !targetToFireDir.normalize() ) {
+		return false;
+	}
 
 	Vec3 targetVelocityDir( targetVelocity );
-	targetVelocityDir.Normalize();
+	if( !targetVelocityDir.normalize() ) {
+		return false;
+	}
 
 	float cosTheta = targetToFireDir.Dot( targetVelocityDir );
 

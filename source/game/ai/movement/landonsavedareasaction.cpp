@@ -322,8 +322,11 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContex
 		// Most likely case (the bot is outside of the area bounds)
 		intendedLookDir.Set( areaPoint );
 		intendedLookDir -= origin;
-		intendedLookDir.NormalizeFast();
+		if( !intendedLookDir.normalizeFast() ) {
+			return false;
+		}
 	}
+
 	botInput->SetIntendedLookDir( intendedLookDir, true );
 
 	// Apply QW-like air control if possible:
@@ -413,8 +416,11 @@ void LandOnSavedAreasAction::PlanPredictionStep( PredictionContext *context ) {
 	} else {
 		AI_FailWith( "LandOnSavedAreasAction::PlanPredictionStep()", "Neither jumppad nor weapon jump states is active" );
 	}
+
 	toTargetDir *= -1;
-	toTargetDir.NormalizeFast();
+	if( !toTargetDir.normalizeFast() ) {
+		toTargetDir.Set( 0.0f, 0.0f, -1.0f );
+	}
 
 	auto *botInput = &context->record->botInput;
 	botInput->SetIntendedLookDir( toTargetDir );

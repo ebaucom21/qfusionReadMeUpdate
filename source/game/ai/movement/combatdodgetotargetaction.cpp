@@ -86,8 +86,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 
 			Vec3 enemyLookDir( selectedEnemies.LookDir() );
 			enemyLookDir.Z() *= Z_NO_BEND_SCALE;
-			enemyLookDir.NormalizeFast();
-			assert( std::fabs( enemyLookDir.LengthFast() - 1.0f ) < 0.01f );
+			enemyLookDir.normalizeFastOrThrow();
 
 			// We don't want a fully deterministic choice by the dot product (so best dirs are always first).
 			// We select randomly using weights giving greater weights to better dirs.

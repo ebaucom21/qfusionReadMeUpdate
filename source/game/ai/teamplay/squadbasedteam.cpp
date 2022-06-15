@@ -769,12 +769,10 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 
 		Vec3 enemyToSquadCenterDir( squadCenter );
 		enemyToSquadCenterDir -= extrapolatedLastSeenPosition;
-		if( enemyToSquadCenterDir.SquaredLength() < 1 ) {
+		if( !enemyToSquadCenterDir.normalizeFast() ) {
 			maybeStealers.push_back( MaybeStealer( enemy, extrapolatedLastSeenPosition ) );
 			continue;
 		}
-
-		enemyToSquadCenterDir.NormalizeFast();
 
 		float directionFactor = enemyToSquadCenterDir.Dot( enemyVelocityDir );
 		if( directionFactor < 0 ) {
@@ -855,8 +853,9 @@ void AiSquad::FindSupplierCandidates( Bot *consumer, Bot **suppliersListHead ) c
 		if( applyDirectionFactor ) {
 			Vec3 botToThatBot( bot->Origin() );
 			botToThatBot -= consumer->Origin();
-			botToThatBot.NormalizeFast();
-			score *= 0.5f + 0.5f * botToThatBot.Dot( botVelocityDir );
+			if( botToThatBot.normalizeFast() ) {
+				score *= 0.5f + 0.5f * botToThatBot.Dot( botVelocityDir );
+			}
 		}
 		candidates.push_back( BotAndScore( bot, score ) );
 	}

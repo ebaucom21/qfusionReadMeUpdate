@@ -527,7 +527,9 @@ bool BunnyHopAction::CheckNavTargetAreaTransition( PredictionContext *context ) 
 
 	Vec3 toTargetDir( context->NavTargetOrigin() );
 	toTargetDir -= entityPhysicsState.Origin();
-	toTargetDir.NormalizeFast();
+	if( !toTargetDir.normalizeFast() ) {
+		return true;
+	}
 
 	Vec3 velocityDir( entityPhysicsState.Velocity() );
 	velocityDir *= Q_Rcp( entityPhysicsState.Speed() );
@@ -594,7 +596,8 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *cont
 
 	if( distance2DToTarget > 12.0f ) {
 		Vec3 dirToReach( targetPoint - newEntityPhysicsState.Origin() );
-		dirToReach.NormalizeFast();
+		dirToReach.normalizeFastOrThrow();
+
 		Vec3 velocityDir( newEntityPhysicsState.Velocity() );
 		velocityDir *= Q_Rcp( newEntityPhysicsState.Speed() );
 		constexpr const float maxFracDistance = min2DAdvancementToTarget, invMaxFracDistance = 1.0f / maxFracDistance;

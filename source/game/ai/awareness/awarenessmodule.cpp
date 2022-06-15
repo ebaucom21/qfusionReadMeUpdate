@@ -173,10 +173,14 @@ bool BotAwarenessModule::HurtEvent::IsValidFor( const Bot *bot_ ) const {
 		return false;
 	}
 
-	Vec3 lookDir( bot_->EntityPhysicsState()->ForwardDir() );
+	const Vec3 lookDir( bot_->EntityPhysicsState()->ForwardDir() );
 	Vec3 toThreat( Vec3( inflictor->s.origin ) - bot_->Origin() );
-	toThreat.NormalizeFast();
-	return toThreat.Dot( lookDir ) < bot_->FovDotFactor();
+	if( toThreat.normalizeFast() ) [[likely]] {
+		return toThreat.Dot( lookDir ) < bot_->FovDotFactor();
+	}
+
+	// Assume that we can't turn to this direction in order to react to threat as it is not defined.
+	return false;
 }
 
 void BotAwarenessModule::TryTriggerPlanningForNewHazard() {
@@ -232,14 +236,18 @@ void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiFr
 
 	const float invDistance = Q_RSqrt( squareDistance );
 	toEnemyDir *= invDistance;
+	// TODO: Check against the actual bot fov
 	if( toEnemyDir.Dot( botLookDir ) >= 0 ) {
 		return;
 	}
 
-	// Try to guess enemy origin
+	// Try guessing the enemy origin
 	toEnemyDir.X() += -0.25f + 0.50f * random();
 	toEnemyDir.Y() += -0.10f + 0.20f * random();
-	toEnemyDir.NormalizeFast();
+	if( !toEnemyDir.normalizeFast() ) [[unlikely]] {
+		return;
+	}
+
 	hurtEvent.inflictor = newThreat;
 	hurtEvent.lastHitTimestamp = level.time;
 	hurtEvent.possibleOrigin = Q_Rcp( invDistance ) * toEnemyDir + bot->Origin();
@@ -328,7 +336,9 @@ static bool IsEnemyVisible( const edict_t *self, const edict_t *enemyEnt ) {
 
 	Vec3 enemyToBotDir( self->s.origin );
 	enemyToBotDir -= enemyEnt->s.origin;
-	enemyToBotDir.NormalizeFast();
+	if( !enemyToBotDir.normalizeFast() ) [[unlikely]] {
+		return true;
+	}
 
 	vec3_t right, up;
 	MakeNormalVectors( enemyToBotDir.Data(), right, up );

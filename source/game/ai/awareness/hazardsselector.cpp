@@ -219,7 +219,10 @@ void HazardsSelectorCache::Shutdown() {
 
 SameDirBeamsList::SameDirBeamsList( const edict_t *firstEntity, const edict_t *bot )
 	: avgDirection( firstEntity->velocity ), lineEqnPoint( firstEntity->s.origin ) {
-	avgDirection.NormalizeFast();
+	if( !avgDirection.normalizeFast() ) {
+		isAlreadySkipped = true;
+		return;
+	}
 
 	// If distance from an infinite line of beam to bot is greater than threshold, skip;
 	// Let's compute distance from bot to the beam infinite line;
@@ -251,7 +254,9 @@ SameDirBeamsList::~SameDirBeamsList() {
 bool SameDirBeamsList::TryAddProjectile( const edict_t *projectile ) {
 	Vec3 direction( projectile->velocity );
 
-	direction.NormalizeFast();
+	if( !direction.normalizeFast() ) {
+		return false;
+	}
 
 	if( direction.Dot( avgDirection ) < DIR_DOT_THRESHOLD ) {
 		return false;
@@ -264,7 +269,7 @@ bool SameDirBeamsList::TryAddProjectile( const edict_t *projectile ) {
 
 	// Update average direction
 	avgDirection += direction;
-	avgDirection.NormalizeFast();
+	avgDirection.normalizeFastOrThrow();
 
 	sortedProjectiles[projectilesCount++] = EntAndLineParam( ENTNUM( projectile ), ComputeLineEqnParam( projectile ) );
 	std::push_heap( sortedProjectiles, sortedProjectiles + projectilesCount );
@@ -356,7 +361,10 @@ void PlasmaBeamsBuilder::FindMostHazardousBeams() {
 
 			// It works for single-projectile beams too
 			Vec3 beamDir( beam->startProjectile->velocity );
-			beamDir.NormalizeFast();
+			if( !beamDir.normalizeFast() ) {
+				continue;
+			}
+
 			tracedBeamEnd += 256.0f * beamDir;
 
 			G_Trace( &trace, tracedBeamStart.Data(), nullptr, nullptr, tracedBeamEnd.Data(), nullptr, MASK_AISOLID );
@@ -505,7 +513,7 @@ void HazardsSelector::FindLaserHazards( const EntNumsVector &entNums ) {
 			direction += forward;
 			direction += right;
 			direction += up;
-			direction.NormalizeFast();
+			direction.normalizeFastOrThrow();
 		}
 
 		// Modify potential damage from a beam by its owner accuracy

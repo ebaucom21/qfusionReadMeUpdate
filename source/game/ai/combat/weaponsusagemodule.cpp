@@ -166,7 +166,10 @@ void BotWeaponsUsageModule::LookAtEnemy( float coordError, const vec_t *fire_ori
 
 	Vec3 toTargetDir( target );
 	toTargetDir -= fire_origin;
-	toTargetDir.NormalizeFast();
+	if( !toTargetDir.normalizeFast() ) {
+		return;
+	}
+
 
 	for( int i = 0; i < 3; ++i ) {
 		target[i] += ( aimingRandomHolder.GetCoordRandom( i ) - 0.5f ) * coordError;
@@ -250,7 +253,10 @@ bool BotWeaponsUsageModule::CheckSplashTeamDamage( const vec3_t hitOrigin,
 	// Make sure the tested explosion origin is not on a solid plane
 	Vec3 traceStart( aimParams.fireOrigin );
 	traceStart -= hitOrigin;
-	traceStart.NormalizeFast();
+	if( !traceStart.normalizeFast() ) {
+		return false;
+	}
+
 	traceStart += hitOrigin;
 
 	int entNums[32];
@@ -291,7 +297,10 @@ bool BotWeaponsUsageModule::IsShotBlockedBySolidWall( trace_t *tr,
 	adjustedParams.fireTarget[1] -= 20.0f;
 	Vec3 adjustedLookDir( adjustedParams.fireTarget );
 	adjustedLookDir -= adjustedParams.fireOrigin;
-	adjustedLookDir.NormalizeFast();
+	if( !adjustedLookDir.normalizeFast() ) {
+		return true;
+	}
+
 	TryTraceShot( tr, adjustedLookDir, adjustedParams, fireDef );
 	if( tr->fraction == 1.0f ) {
 		return false;
@@ -304,7 +313,10 @@ bool BotWeaponsUsageModule::IsShotBlockedBySolidWall( trace_t *tr,
 	adjustedParams.fireTarget[1] += 40.0f;
 	adjustedLookDir.Set( adjustedParams.fireTarget );
 	adjustedLookDir -= adjustedParams.fireOrigin;
-	adjustedLookDir.NormalizeFast();
+	if( !adjustedLookDir.normalizeFast() ) {
+		return true;
+	}
+
 	TryTraceShot( tr, adjustedLookDir, adjustedParams, fireDef );
 	if( tr->fraction == 1.0f ) {
 		return false;
@@ -324,7 +336,10 @@ bool BotWeaponsUsageModule::CheckShot( const AimParams &aimParams,
 
 	Vec3 toTarget( aimParams.fireTarget );
 	toTarget -= aimParams.fireOrigin;
-	toTarget.NormalizeFast();
+	if( !toTarget.normalizeFast() ) {
+		return true;
+	}
+
 	float toTargetDotLookDir = toTarget.Dot( newLookDir );
 
 	// Precache this result, it is not just a value getter

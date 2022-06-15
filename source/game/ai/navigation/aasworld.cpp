@@ -1857,7 +1857,9 @@ void AiAasWorld::computeFace2DProjVertices() {
 			int ev2 = edge.v[1];
 			Vec3 dir( vertices[ev1] );
 			dir -= vertices[ev2];
-			dir.NormalizeFast();
+			if( !dir.normalizeFast() ) {
+				continue;
+			}
 			if( fabsf( dir.Z() ) > 0.001f ) {
 				continue;
 			}
@@ -2045,7 +2047,7 @@ bool AiAasWorld::isAreaWalkableInFloorCluster( int startAreaNum, int targetAreaN
 
 	Vec3 rayDir( testedSegEnd );
 	rayDir -= testedSegStart;
-	rayDir.NormalizeFast();
+	rayDir.normalizeFastOrThrow();
 
 	int currAreaNum = startAreaNum;
 	while( currAreaNum != targetAreaNum ) {

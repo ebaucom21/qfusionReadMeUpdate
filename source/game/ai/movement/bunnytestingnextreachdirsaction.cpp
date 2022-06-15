@@ -137,7 +137,10 @@ void BunnyTestingNextReachDirsAction::SaveSuggestedLookDirs( PredictionContext *
 
 	Vec3 toTriggerDir( stoppedAtReach.start );
 	toTriggerDir -= context->movementState->entityPhysicsState.Origin();
-	toTriggerDir.Normalize();
+	if( !toTriggerDir.normalizeFast() ) {
+		return;
+	}
+
 	// The target area of reachStoppedAt is the area "behind" trigger.
 	// The prediction gets always interrupted on touching trigger.
 	// Just supply a dummy value and rely on touching the trigger during prediction.

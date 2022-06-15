@@ -176,7 +176,9 @@ void MovementSubsystem::ApplyPendingTurnToLookAtPoint( BotInput *botInput, Predi
 	const AiPendingLookAtPoint &pendingLookAtPoint = pendingLookAtPointState->pendingLookAtPoint;
 	Vec3 toPointDir( pendingLookAtPoint.Origin() );
 	toPointDir -= entityPhysicsState_->Origin();
-	toPointDir.NormalizeFast();
+	if( !toPointDir.normalizeFast() ) {
+		return;
+	}
 
 	botInput->SetIntendedLookDir( toPointDir, true );
 	botInput->isLookDirSet = true;
@@ -261,7 +263,10 @@ bool MovementSubsystem::TryRotateInput( BotInput *input, PredictionContext *cont
 
 	Vec3 selfToPoint( keptInFovPoint );
 	selfToPoint -= botOrigin;
-	selfToPoint.NormalizeFast();
+	if( !selfToPoint.normalizeFast() ) {
+		*prevRotation = InputRotation::NONE;
+		return false;
+	}
 
 	if( input->IsRotationAllowed( InputRotation::BACK ) ) {
 		float backDotThreshold = ( *prevRotation == InputRotation::BACK ) ? -0.3f : -0.5f;
@@ -417,8 +422,13 @@ PredictionContext::HitWhileRunningTestResult PredictionContext::MayHitWhileRunni
 
 	Vec3 botToEnemyDir( selectedEnemies.LastSeenOrigin() );
 	botToEnemyDir -= entityPhysicsState.Origin();
-	// We are sure it has non-zero length (enemies collide with the bot)
-	botToEnemyDir.NormalizeFast();
+	if( !botToEnemyDir.normalizeFast() ) {
+		HitWhileRunningTestResult result;
+		result.canHitAsIs = true;
+		result.mayHitOverridingPitch = true;
+		mayHitWhileRunningCachesStack.SetCachedValue( result );
+		return result;
+	}
 
 	// Check whether the bot may hit while running
 	if( botToEnemyDir.Dot( botLookDir ) > STRAIGHT_MOVEMENT_DOT_THRESHOLD ) {

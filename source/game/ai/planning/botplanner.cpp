@@ -66,14 +66,15 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		worldState->MightSeeLostEnemyAfterTurnVar().SetValue( false );
 		Vec3 toEnemiesDir( lostEnemies.LastSeenOrigin() );
 		toEnemiesDir -= bot->Origin();
-		toEnemiesDir.NormalizeFast();
-		if( toEnemiesDir.Dot( bot->EntityPhysicsState()->ForwardDir() ) < bot->FovDotFactor() ) {
-			edict_t *self = game.edicts + bot->EntNum();
-			if( EntitiesPvsCache::Instance()->AreInPvs( self, lostEnemies.TraceKey() ) ) {
-				trace_t trace;
-				G_Trace( &trace, self->s.origin, nullptr, nullptr, lostEnemies.LastSeenOrigin().Data(), self, MASK_AISOLID );
-				if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies.TraceKey() ) {
-					worldState->MightSeeLostEnemyAfterTurnVar().SetValue( true );
+		if( toEnemiesDir.normalizeFast() ) {
+			if( toEnemiesDir.Dot( bot->EntityPhysicsState()->ForwardDir() ) < bot->FovDotFactor() ) {
+				edict_t *self = game.edicts + bot->EntNum();
+				if( EntitiesPvsCache::Instance()->AreInPvs( self, lostEnemies.TraceKey() ) ) {
+					trace_t trace;
+					G_Trace( &trace, self->s.origin, nullptr, nullptr, lostEnemies.LastSeenOrigin().Data(), self, MASK_AISOLID );
+					if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies.TraceKey() ) {
+						worldState->MightSeeLostEnemyAfterTurnVar().SetValue( true );
+					}
 				}
 			}
 		}

@@ -28,9 +28,10 @@ void BunnyToBestFloorClusterPointAction::OnApplicationSequenceStarted( Predictio
 		}
 
 		localDirStorage -= context->movementState->entityPhysicsState.Origin();
-		localDirStorage.Normalize();
-        currDir = localDirStorage.Data();
-		return;
+		if( localDirStorage.normalize() ) {
+			currDir = localDirStorage.Data();
+			return;
+		}
 	}
 
     currDir = nullptr;

@@ -79,8 +79,15 @@ void EventsTracker::ComputeTeammatesVisData( const vec3_t forwardDir, float fovD
 		}
 		Vec3 dir( mate->s.origin );
 		dir -= self->s.origin;
-		distancesToTeammates[i] = dir.NormalizeFast();
-		float dot = dir.Dot( forwardDir );
+		float dot, distance;
+		if( const auto maybeDistance = dir.normalizeFast() ) {
+			dot = dir.Dot( forwardDir );
+			distance = *maybeDistance;
+		} else {
+			dot = 1.0f;
+			distance = 0.0f;
+		}
+		distancesToTeammates[i] = distance;
 		if( dot < fovDotFactor ) {
 			areAllTeammatesInFov = false;
 		}
@@ -100,7 +107,12 @@ bool EventsTracker::CanDistinguishEnemyShotsFromTeammates( const GuessedEnemy &g
 
 	Vec3 toEnemyDir( guessedEnemy.origin );
 	toEnemyDir -= bot->Origin();
-	const float distanceToEnemy = toEnemyDir.NormalizeFast();
+	const auto maybeDistanceToEnemy = toEnemyDir.normalizeFast();
+	if( !maybeDistanceToEnemy ) {
+		return false;
+	}
+
+	const float distanceToEnemy = *maybeDistanceToEnemy;
 
 	const auto *gameEdicts = game.edicts;
 	const Vec3 forwardDir( bot->EntityPhysicsState()->ForwardDir() );

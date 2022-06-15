@@ -20,7 +20,9 @@ AiActionRecord::Status TurnToLostEnemyActionRecord::UpdateStatus( const WorldSta
 
 	Vec3 toEnemyDir( lastSeenEnemyOrigin );
 	toEnemyDir -= ent->s.origin;
-	toEnemyDir.NormalizeFast();
+	if( !toEnemyDir.normalizeFast() ) {
+		return COMPLETED;
+	}
 
 	if( toEnemyDir.Dot( lookDir ) >= Self()->FovDotFactor() ) {
 		return COMPLETED;

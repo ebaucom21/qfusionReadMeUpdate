@@ -67,8 +67,12 @@ void DodgeHazardProblemSolver::modifyScoreByVelocityConformance( V &input, const
 	const float *__restrict origin = originParams.origin;
 	for( auto &spotAndScoreLike: input ) {
 		Vec3 toSpotDir = Vec3( ::SpotOriginOf( spotAndScoreLike ) ) - origin;
-		toSpotDir.NormalizeFast();
-		float velocityDotFactor = 0.5f * ( 1.0f + velocityDir.Dot( toSpotDir ) );
+		float velocityDotFactor;
+		if( toSpotDir.normalizeFast() ) {
+			velocityDotFactor = 0.5f * ( 1.0f + velocityDir.Dot( toSpotDir ) );
+		} else {
+			velocityDotFactor = 1.0f;
+		}
 		scores[spotAndScoreLike.scoreIndex].set( SpotSortCriterion::VelocityConformance, velocityDotFactor );
 	}
 }
@@ -138,7 +142,9 @@ std::pair<Vec3, bool> DodgeHazardProblemSolver::makeDodgeHazardDir() const {
 		Vec3 originToHitDir = problemParams.hazardHitPoint - originParams.origin;
 		float degrees = originParams.originEntity ? -originParams.originEntity->s.angles[YAW] : -90;
 		RotatePointAroundVector( result.Data(), &axis_identity[AXIS_UP], originToHitDir.Data(), degrees );
-		result.NormalizeFast();
+		if( !result.normalizeFast() ) {
+			result = Vec3( 1, 0, 0 );
+		}
 		if( std::fabs( result.X() ) < 0.3 ) {
 			result.X() = 0;
 		}
@@ -154,8 +160,7 @@ std::pair<Vec3, bool> DodgeHazardProblemSolver::makeDodgeHazardDir() const {
 	Vec3 selfToHitPoint = problemParams.hazardHitPoint - originParams.origin;
 	selfToHitPoint.Z() = 0;
 	// If bot is not hit in its center, try pick a direction that is opposite to a vector from bot center to hit point
-	if( selfToHitPoint.SquaredLength() > 4 * 4 ) {
-		selfToHitPoint.NormalizeFast();
+	if( selfToHitPoint.normalizeFast( { .minAcceptableLength = 4.0f } ) ) {
 		// Check whether this direction really helps to dodge the hazard
 		// (the less is the abs. value of the dot product, the closer is the chosen direction to a perpendicular one)
 		if( std::fabs( selfToHitPoint.Dot( originParams.origin ) ) < 0.5f ) {

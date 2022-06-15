@@ -20,7 +20,9 @@ AiActionRecord::Status TurnToThreatOriginActionRecord::UpdateStatus( const World
 
 	Vec3 toThreatDir( threatPossibleOrigin );
 	toThreatDir -= ent->s.origin;
-	toThreatDir.NormalizeFast();
+	if( !toThreatDir.normalizeFast() ) {
+		return COMPLETED;
+	}
 
 	if( toThreatDir.Dot( lookDir ) > Self()->FovDotFactor() ) {
 		return COMPLETED;

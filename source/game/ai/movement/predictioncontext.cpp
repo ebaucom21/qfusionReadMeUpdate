@@ -146,9 +146,9 @@ bool PredictionContext::CheckPredictedVelocity( PredictedMovementAction *prevAct
 	vec3_t expectedVelocity;
 	VectorLerp( prevPhysicsState.Velocity(), checkLerpFrac, nextPhysicsState.Velocity(), expectedVelocity );
 	Vec3 expectedVelocityDir( expectedVelocity );
-	expectedVelocityDir.Normalize();
+	expectedVelocityDir.normalizeFastOrThrow();
 	Vec3 actualVelocityDir( bot->Velocity() );
-	actualVelocityDir.Normalize();
+	actualVelocityDir.normalizeFastOrThrow();
 
 	float cosine = expectedVelocityDir.Dot( actualVelocityDir );
 	static const float MIN_COSINE = std::cos( (float) DEG2RAD( 3.0f ) );
@@ -1200,7 +1200,7 @@ void PredictionContext::SetDefaultBotInput() {
 				if( DistanceSquared( entityPhysicsState.Origin(), nextReach.start ) < 12 * 12 ) {
 					Vec3 intendedLookVec( nextReach.end );
 					intendedLookVec -= nextReach.start;
-					intendedLookVec.NormalizeFast();
+					intendedLookVec.normalizeFastOrThrow();
 					intendedLookVec *= 16.0f;
 					intendedLookVec += nextReach.start;
 					intendedLookVec -= entityPhysicsState.Origin();
@@ -1333,13 +1333,13 @@ void PredictionContext::CheatingCorrectVelocity( const vec3_t target ) {
 	Vec3 toTargetDir2D( target );
 	toTargetDir2D -= entityPhysicsState.Origin();
 	toTargetDir2D.Z() = 0;
-	toTargetDir2D.NormalizeFast();
+	if( toTargetDir2D.normalizeFast() && entityPhysicsState.Speed2D() > 1 ) {
+		Vec3 velocity2DDir( entityPhysicsState.Velocity() );
+		velocity2DDir.Z() = 0;
+		velocity2DDir *= Q_Rcp( entityPhysicsState.Speed2D() );
 
-	Vec3 velocity2DDir( entityPhysicsState.Velocity() );
-	velocity2DDir.Z() = 0;
-	velocity2DDir *= 1.0f / entityPhysicsState.Speed2D();
-
-	CheatingCorrectVelocity( velocity2DDir.Dot( toTargetDir2D ), toTargetDir2D );
+		CheatingCorrectVelocity( velocity2DDir.Dot( toTargetDir2D ), toTargetDir2D );
+	}
 }
 
 void PredictionContext::CheatingCorrectVelocity( float velocity2DDirDotToTarget2DDir, const Vec3 &toTargetDir2D ) {
@@ -1359,11 +1359,14 @@ void PredictionContext::CheatingCorrectVelocity( float velocity2DDirDotToTarget2
 
 	Vec3 newVelocity( entityPhysicsState.Velocity() );
 	// Normalize current velocity direction
-	newVelocity *= 1.0f / speed;
+	newVelocity *= Q_Rcp( speed );
 	// Modify velocity direction
 	newVelocity += 0.06f * toTargetDir2D;
 	// Normalize velocity direction again after modification
-	newVelocity.Normalize();
+	if( !newVelocity.normalizeFast() ) {
+		return;
+	}
+
 	// Restore velocity magnitude
 	newVelocity *= speed;
 

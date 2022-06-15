@@ -165,7 +165,15 @@ void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, 
 	Vec3 intendedLookDir( area.center );
 	intendedLookDir.Z() = area.mins[2] + 32;
 	intendedLookDir -= entityPhysicsState.Origin();
-	float distance = intendedLookDir.NormalizeFast();
+
+	const auto maybeDistance = intendedLookDir.normalizeFast();
+	if( maybeDistance ) {
+		Debug( "Warning: Failed to normalize intended look dir\n" );
+		this->isDisabledForPlanning = true;
+		context->SetPendingRollback();
+		return;
+	}
+
 	botInput->SetIntendedLookDir( intendedLookDir, true );
 
 	botInput->isUcmdSet = true;
@@ -180,7 +188,7 @@ void RidePlatformAction::SetupExitPlatformMovement( PredictionContext *context, 
 		return;
 	}
 
-	if( distance > 64.0f ) {
+	if( *maybeDistance > 64.0f ) {
 		botInput->SetSpecialButton( true );
 	}
 }

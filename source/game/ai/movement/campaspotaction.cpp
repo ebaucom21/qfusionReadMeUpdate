@@ -10,7 +10,9 @@ bool CampASpotMovementAction::TryUpdateKeyMoveDirs( PredictionContext *context )
 	int keyMoves[2];
 	Vec3 botToSpotDir( campingSpotState->Origin() );
 	botToSpotDir -= context->movementState->entityPhysicsState.Origin();
-	botToSpotDir.Normalize();
+	if( !botToSpotDir.normalize() ) {
+		return false;
+	}
 
 	context->TraceCache().makeRandomizedKeyMovesToTarget( context, botToSpotDir, keyMoves );
 	campingSpotState->SetKeyMoveDirs( keyMoves[0], keyMoves[1] );
@@ -34,7 +36,10 @@ Vec3 CampASpotMovementAction::GetUpdatedPendingLookDir( PredictionContext *conte
 
 	Vec3 intendedLookDir( lookAtPointState->pendingLookAtPoint.Origin() );
 	intendedLookDir -= context->movementState->entityPhysicsState.Origin();
-	intendedLookDir.Normalize();
+	if( !intendedLookDir.normalize() ) {
+		intendedLookDir = context->movementState->entityPhysicsState.ForwardDir();
+	}
+
 	return intendedLookDir;
 }
 
@@ -113,7 +118,10 @@ void CampASpotMovementAction::PlanPredictionStep( PredictionContext *context ) {
 
 	Vec3 botToSpotDir( spotOrigin );
 	botToSpotDir -= entityPhysicsState.Origin();
-	botToSpotDir.Normalize();
+	if( !botToSpotDir.normalize() ) {
+		return;
+	}
+
 	DirToKeyInput( botToSpotDir, intendedLookDir.Data(), entityPhysicsState.RightDir().Data(), botInput );
 
 	botInput->SetWalkButton( random() > campingSpotState->Alertness() * 0.75f );

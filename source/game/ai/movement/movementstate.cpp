@@ -98,8 +98,10 @@ AiPendingLookAtPoint CampingSpotState::GetOrUpdateRandomLookAtPoint() const {
 		return AiPendingLookAtPoint( campingSpot.LookAtPoint(), turnSpeedMultiplier );
 	}
 
+	// TODO: Pick it properly using UV selection
 	Vec3 lookAtPoint( -0.5f + random(), -0.5f + random(), -0.25f + 0.5f * random() );
-	lookAtPoint.NormalizeFast();
+	lookAtPoint.normalizeFastOrThrow();
+
 	// The magnitude does not actually mattter.
 	// Just make sure we don't end with denormalized direction later.
 	lookAtPoint *= 1000.0f;
