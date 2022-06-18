@@ -792,3 +792,49 @@ void CG_TransformedBoxTrace( trace_t *tr, const vec3_t start, const vec3_t end, 
 int CG_TransformedPointContents( const vec3_t p, const cmodel_s *cmodel, const vec3_t origin, const vec3_t angles );
 void CG_InlineModelBounds( const cmodel_s *cmodel, vec3_t mins, vec3_t maxs );
 
+[[nodiscard]]
+bool getElectroboltTeamColor( int team, float *color );
+[[nodiscard]]
+bool getInstagunTeamColor( int team, float *color );
+[[nodiscard]]
+auto getTeamForOwner( int ownerNum ) -> int;
+
+struct ParticleColorsForTeamHolder {
+	vec4_t initialColorForTeam[2];
+	vec4_t fadedInColorForTeam[2];
+	vec4_t fadedOutColorForTeam[2];
+
+	const vec4_t initialColor;
+	const vec4_t fadedInColor;
+	const vec4_t fadedOutColor;
+
+	using ColorRefsTuple = std::tuple<const vec4_t *, const vec4_t *, const vec4_t *>;
+
+	[[nodiscard]]
+	auto getColorsForTeam( int team, const vec4_t overlayColor ) -> ColorRefsTuple {
+		float *const initialColorBuffer  = initialColorForTeam[team - TEAM_ALPHA];
+		float *const fadedInColorBuffer  = fadedInColorForTeam[team - TEAM_ALPHA];
+		float *const fadedOutColorBuffer = fadedOutColorForTeam[team - TEAM_ALPHA];
+
+		// TODO: Preserve HSV value, or make consistently lighter
+		VectorCopy( overlayColor, initialColorBuffer );
+		VectorCopy( overlayColor, fadedInColorBuffer );
+		VectorCopy( overlayColor, fadedOutColorBuffer );
+
+		// Preserve the reference alpha
+		initialColorBuffer[3]  = initialColor[3];
+		fadedInColorBuffer[3]  = fadedInColor[3];
+		fadedOutColorBuffer[3] = fadedOutColor[3];
+
+		const vec4_t *newInitialColors  = &initialColorForTeam[team - TEAM_ALPHA];
+		const vec4_t *newFadedInColors  = &fadedInColorForTeam[team - TEAM_ALPHA];
+		const vec4_t *newFadedOutColors = &fadedOutColorForTeam[team - TEAM_ALPHA];
+
+		return { newInitialColors, newFadedInColors, newFadedOutColors };
+	}
+
+	[[nodiscard]]
+	auto getDefaultColors() -> ColorRefsTuple {
+		return { &initialColor, &fadedInColor, &fadedOutColor };
+	}
+};

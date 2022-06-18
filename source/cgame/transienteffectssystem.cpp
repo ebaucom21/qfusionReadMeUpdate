@@ -393,38 +393,35 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 	}
 }
 
-void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir ) {
-	(void)addModelEffect( cgs.media.modElectroBoltWallHit, origin, dir, 600 );
-
-	// TODO: Use a real time instead of last time as this can have a noticeable impact on fading in
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
-	VectorMA( origin, 4.0f, dir, lightEffect->origin );
-	Vector4Copy( colorWhite, lightEffect->color );
-	lightEffect->radius = 144.0f;
-
-	const vec4_t baseHullColor { 0.3f, 0.6f, 1.0f, 1.0f };
-	spawnElectroboltLikeImpactHull( origin, baseHullColor );
+void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir,
+														const float *decalColor, const float *energyColor ) {
+	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modElectroBoltWallHit );
 }
 
-void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir, const float *color ) {
-	(void)addModelEffect( cgs.media.modInstagunWallHit, origin, dir, 600u );
+void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir,
+													 const float *decalColor, const float *energyColor ) {
+	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modInstagunWallHit );
+}
+
+void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin, const float *dir, 
+															const float *decalColor, const float *energyColor, 
+															model_s *model ) {
+	EntityEffect *entityEffect = addModelEffect( model, origin, dir, 600u );
+	VectorSet( entityEffect->entity.shaderRGBA, (uint8_t)( decalColor[0] * 255 ),
+			   (uint8_t)( decalColor[1] * 255 ), (uint8_t)( decalColor[2] * 255 ) );
 
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
 	VectorMA( origin, 4.0f, dir, lightEffect->origin );
 	VectorCopy( colorMagenta, lightEffect->color );
 	lightEffect->radius = 144.0f;
 
-	spawnElectroboltLikeImpactHull( origin, color );
-}
-
-void TransientEffectsSystem::spawnElectroboltLikeImpactHull( const float *origin, const float *baseColor ) {
 	if( cg_explosionsWave->integer ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
-			const vec4_t hullColor { baseColor[0], baseColor[1], baseColor[2], 0.075f };
+			const vec4_t hullColor { energyColor[0], energyColor[1], energyColor[2], 0.075f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 750.0f, 100.0f );
 		}
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
-			const vec4_t hullColor { baseColor[0], baseColor[1], baseColor[2], 0.1f };
+			const vec4_t hullColor { energyColor[0], energyColor[1], energyColor[2], 0.1f };
 			cg.simulatedHullsSystem.setupHullVertices( hull, origin, hullColor, 125.0f, 50.0f );
 		}
 	}

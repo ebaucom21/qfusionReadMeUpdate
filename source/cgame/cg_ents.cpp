@@ -1632,7 +1632,7 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 				cent->ent.frame =  cent->ent.oldframe = 0;
 
 				CG_AddGenericEnt( cent, drawSceneRequest );
-				cg.effectsSystem.touchElectroTrail( cent->current.number, cent->ent.origin, cg.time );
+				cg.effectsSystem.touchElectroTrail( cent->current.number, cent->current.ownerNum, cent->ent.origin, cg.time );
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 192.0f, 144.0f, 0.9f, 0.9f, 1.0f );
 				break;

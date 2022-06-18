@@ -387,9 +387,11 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 	}
 }
 
-static const vec4_t kElectroCloudTrailInitialColor { 0.5f, 0.7f, 1.0f, 1.0f };
-static const vec4_t kElectroCloudTrailFadedInColor { 0.7f, 0.7f, 1.0f, 0.2f };
-static const vec4_t kElectroCloudTrailFadedOutColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static ParticleColorsForTeamHolder electroCloudTrailParticleColorsHolder {
+	.initialColor  = { 0.5f, 0.7f, 1.0f, 1.0f },
+	.fadedInColor  = { 0.7f, 0.7f, 1.0f, 0.2f },
+	.fadedOutColor = { 1.0f, 1.0f, 1.0f, 0.0f },
+};
 
 static const vec4_t kElectroIonsTrailColors[] {
 	{ 1.0f, 1.0f, 1.0f, 1.0f },
@@ -399,6 +401,12 @@ static const vec4_t kElectroIonsTrailColors[] {
 	{ 0.5f, 0.7f, 1.0f, 1.0f },
 	{ 0.5f, 0.7f, 1.0f, 1.0f },
 	{ 0.3f, 0.3f, 1.0f, 1.0f },
+};
+
+static ParticleColorsForTeamHolder electroIonsParticleColorsHolder {
+	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedOutColor = { 0.5f, 0.5f, 0.5f, 1.0f }
 };
 
 static ConicalFlockParams electroCloudParticlesFlockParams {
@@ -419,14 +427,51 @@ static ConicalFlockParams electroIonsParticlesFlockParams {
 	.maxTimeout  = 300
 };
 
-void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
+void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
+	const vec4_t *initialCloudColors;
+	const vec4_t *fadedInCloudColors;
+	const vec4_t *fadedOutCloudColors;
+
+	uint8_t numIonsTrailColors;
+	const vec4_t *initialIonsColors;
+	const vec4_t *fadedInIonsColors;
+	const vec4_t *fadedOutIonsColors;
+
+	bool useTeamColors = false;
+	[[maybe_unused]] vec4_t teamColor;
+	[[maybe_unused]] int team = TEAM_PLAYERS;
+	// The trail is not a beam, but should conform to the strong beam color as well
+	if( cg_teamColoredBeams->integer ) {
+		team = getTeamForOwner( ownerNum );
+		if( team == TEAM_ALPHA || team == TEAM_BETA ) {
+			CG_TeamColor( team, teamColor );
+			useTeamColors = true;
+		}
+	}
+
+	ParticleColorsForTeamHolder *const cloudColorsHolder = &::electroCloudTrailParticleColorsHolder;
+	if( useTeamColors ) {
+		std::tie( initialCloudColors, fadedInCloudColors, fadedOutCloudColors ) =
+			cloudColorsHolder->getColorsForTeam( team, teamColor );
+		// TODO: Make ions colors lighter at least
+		std::tie( initialIonsColors, fadedInIonsColors, fadedOutIonsColors ) =
+			::electroIonsParticleColorsHolder.getColorsForTeam( team, teamColor );
+		// There's no support for producing multiple colors with team color overlay.
+		// Use the single color, the trail appearance looks worse than default anyway.
+		numIonsTrailColors = 1;
+	} else {
+		std::tie( initialCloudColors, fadedInCloudColors, fadedOutCloudColors ) = cloudColorsHolder->getDefaultColors();
+		initialIonsColors = fadedInIonsColors = fadedOutIonsColors = kElectroIonsTrailColors;
+		numIonsTrailColors = (uint8_t)std::size( kElectroIonsTrailColors );
+	}
+
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( !effects->particleTrails[0] ) [[unlikely]] {
 		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
 			.materials             = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-			.initialColors         = &kElectroCloudTrailInitialColor,
-			.fadedInColors         = &kElectroCloudTrailFadedInColor,
-			.fadedOutColors        = &kElectroCloudTrailFadedOutColor,
+			.initialColors         = initialCloudColors,
+			.fadedInColors         = fadedInCloudColors,
+			.fadedOutColors        = fadedOutCloudColors,
 			.kind                  = Particle::Sprite,
 			.radius                = 9.0f,
 			.radiusSpread          = 1.0f,
@@ -443,10 +488,10 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, const float *origin, i
 	if( !effects->particleTrails[1] ) [[unlikely]] {
 		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin, {
 			.materials             = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.initialColors         = kElectroIonsTrailColors,
-			.fadedInColors         = kElectroIonsTrailColors,
-			.fadedOutColors        = kElectroIonsTrailColors,
-			.numColors             = std::size( kElectroIonsTrailColors ),
+			.initialColors         = initialIonsColors,
+			.fadedInColors         = fadedInIonsColors,
+			.fadedOutColors        = fadedOutIonsColors,
+			.numColors             = numIonsTrailColors,
 			.kind                  = Particle::Sprite,
 			.radius                = 3.0f,
 			.radiusSpread          = 0.75f,
@@ -506,6 +551,16 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 	}
 }
 
+static void getLaserColorOverlayForOwner( int ownerNum, vec4_t color ) {
+	if( cg_teamColoredBeams->integer ) {
+		if( int team = getTeamForOwner( ownerNum ); team == TEAM_ALPHA || team == TEAM_BETA ) {
+			CG_TeamColor( team, color );
+			return;
+		}
+	}
+	Vector4Copy( colorWhite, color );
+}
+
 void TrackedEffectsSystem::updateStraightLaserBeam( int ownerNum, const float *from, const float *to, int64_t currTime ) {
 	assert( ownerNum && ownerNum <= MAX_CLIENTS );
 	AttachedClientEffects *effects = &m_attachedClientEffects[ownerNum - 1];
@@ -513,8 +568,11 @@ void TrackedEffectsSystem::updateStraightLaserBeam( int ownerNum, const float *f
 		effects->straightLaserBeam = cg.polyEffectsSystem.createStraightBeamEffect( cgs.media.shaderLaserGunBeam );
 	}
 
+	vec4_t color;
+	getLaserColorOverlayForOwner( ownerNum, color );
+
 	effects->straightLaserBeamTouchedAt = currTime;
-	cg.polyEffectsSystem.updateStraightBeamEffect( effects->straightLaserBeam, colorWhite, 12.0f, 64.0f, from, to );
+	cg.polyEffectsSystem.updateStraightBeamEffect( effects->straightLaserBeam, color, 12.0f, 64.0f, from, to );
 }
 
 void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const vec3_t> points, int64_t currTime ) {
@@ -524,8 +582,11 @@ void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const 
 		effects->curvedLaserBeam = cg.polyEffectsSystem.createCurvedBeamEffect( cgs.media.shaderLaserGunBeam );
 	}
 
+	vec4_t color;
+	getLaserColorOverlayForOwner( ownerNum, color );
+
 	effects->curvedLaserBeamTouchedAt = currTime;
-	cg.polyEffectsSystem.updateCurvedBeamEffect( effects->curvedLaserBeam, colorWhite, 12.0f, 64.0f, points );
+	cg.polyEffectsSystem.updateCurvedBeamEffect( effects->curvedLaserBeam, color, 12.0f, 64.0f, points );
 }
 
 void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {

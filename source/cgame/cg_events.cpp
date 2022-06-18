@@ -53,7 +53,7 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	if( trace.ent != -1 ) {
 		if( weapondef->weapon_id == WEAP_ELECTROBOLT ) {
 			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
-			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal, invDir );
+			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum );
 		} else if( weapondef->weapon_id == WEAP_INSTAGUN ) {
 			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
 			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum );
@@ -99,9 +99,11 @@ static vec_t *_LaserColor( vec4_t color ) {
 	return color;
 }
 
-static const vec4_t kLaserImpactInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kLaserImpactFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kLaserImpactFadedOutColor { 1.0f, 0.9f, 0.0f, 0.0f };
+static ParticleColorsForTeamHolder laserImpactParticleColorsHolder {
+	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedOutColor = { 1.0f, 0.9f, 0.0f, 0.0f },
+};
 
 static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	if( !trace || trace->ent < 0 ) {
@@ -111,10 +113,32 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 	if( laserOwner ) {
 #define TRAILTIME ( (int)( 1000.0f / 20.0f ) ) // density as quantity per second
 
+		// Track it regardless of cg_particles settings to prevent hacks with toggling the var on/off
 		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + TRAILTIME < cg.time ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			if( cg_particles->integer ) {
+				const vec4_t *initialColors;
+				const vec4_t *fadedInColors;
+				const vec4_t *fadedOutColors;
+
+				bool useTeamColors = false;
+				if( cg_teamColoredBeams->integer ) {
+					if( const int team = laserOwner->current.team; team == TEAM_ALPHA || team == TEAM_BETA ) {
+						useTeamColors = true;
+					}
+				}
+
+				ParticleColorsForTeamHolder *holder = &::laserImpactParticleColorsHolder;
+				if( useTeamColors ) {
+					vec4_t teamColor;
+					const int team = laserOwner->current.team;
+					CG_TeamColor( team, teamColor );
+					std::tie( initialColors, fadedInColors, fadedOutColors ) = holder->getColorsForTeam( team, teamColor );
+				} else {
+					std::tie( initialColors, fadedInColors, fadedOutColors ) = holder->getDefaultColors();
+				}
+
 				EllipsoidalFlockParams flockParams {
 					.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
 					.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
@@ -132,9 +156,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 				};
 				Particle::AppearanceRules appearanceRules {
 					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-					.initialColors  = &kLaserImpactInitialColor,
-					.fadedInColors  = &kLaserImpactFadedInColor,
-					.fadedOutColors = &kLaserImpactFadedOutColor,
+					.initialColors  = initialColors,
+					.fadedInColors  = fadedInColors,
+					.fadedOutColors = fadedOutColors,
 					.kind           = Particle::Sprite,
 					.radius         = 1.25f,
 					.radiusSpread   = 0.25f,
@@ -1259,7 +1283,7 @@ static void handleBoltExplosionEvent( entity_state_t *ent, int parm, bool predic
 	vec3_t impactNormal, impactDir;
 	decodeBoltImpact( parm, impactNormal, impactDir );
 
-	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, impactNormal, impactDir );
+	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, impactNormal, impactDir, ent->ownerNum );
 }
 
 static void handleInstaExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {

@@ -312,15 +312,45 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage );
 }
 
-static const vec4_t kElectroboltHitInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kElectroboltHitFadedInColor { 0.7f, 0.7f, 1.0f, 1.0f };
-static const vec4_t kElectroboltHitFadedOutColor { 0.1f, 0.1f, 1.0f, 0.0f };
+static ParticleColorsForTeamHolder electroboltParticleColorsHolder {
+	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedInColor  = { 0.7f, 0.7f, 1.0f, 1.0f },
+	.fadedOutColor = { 0.1f, 0.1f, 1.0f, 0.0f }
+};
+
+[[nodiscard]]
+auto getTeamForOwner( int ownerNum ) -> int {
+	if( ownerNum && ownerNum < gs.maxclients + 1 ) [[likely]] {
+		return cg_entities[ownerNum].current.team;
+	}
+	return TEAM_SPECTATOR;
+}
 
 void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *impactNormal,
-													 const float *impactDir ) {
+													 const float *impactDir, int ownerNum ) {
+	const int team = getTeamForOwner( ownerNum );
+
+	vec4_t teamColor, decalColor, energyColor;
+	const bool useTeamColor = getElectroboltTeamColor( team, teamColor );
+	if( useTeamColor ) {
+		Vector4Copy( teamColor, decalColor );
+		Vector4Copy( teamColor, energyColor );
+	} else {
+		Vector4Copy( colorWhite, decalColor );
+		Vector4Set( energyColor, 0.3f, 0.6f, 1.0f, 1.0f );
+	}
+
 	if( cg_particles->integer ) {
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+
+		ParticleColorsForTeamHolder *colorsHolder = &::electroboltParticleColorsHolder;
+		const vec4_t *initialColors, *fadedInColors, *fadedOutColors;
+		if( useTeamColor ) {
+			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getColorsForTeam( team, teamColor );
+		} else {
+			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getDefaultColors();
+		}
 
 		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
@@ -337,9 +367,9 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.initialColors       = &kElectroboltHitInitialColor,
-			.fadedInColors       = &kElectroboltHitFadedInColor,
-			.fadedOutColors      = &kElectroboltHitFadedOutColor,
+			.initialColors       = initialColors,
+			.fadedInColors       = fadedInColors,
+			.fadedOutColors      = fadedOutColors,
 			.kind                = Particle::Spark,
 			.length              = 12.5f,
 			.width               = 2.0f,
@@ -354,54 +384,39 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal );
+	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal, decalColor, energyColor );
 }
 
-static vec4_t instagunHitInitialColorForTeam[2];
-static vec4_t instagunHitFadedInColorForTeam[2];
-static vec4_t instagunHitFadedOutColorForTeam[2];
-
-static const vec4_t kInstagunHitInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kInstagunHitFadedInColor { 1.0f, 0.0f, 1.0f, 0.5f };
-static const vec4_t kInstagunHitFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
+static ParticleColorsForTeamHolder instagunParticleColorsHolder {
+	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedInColor  = { 1.0f, 0.0f, 1.0f, 0.5f },
+	.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f }
+};
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
 												  const float *impactDir, int ownerNum ) {
-	const float *effectColor = kInstagunHitFadedInColor;
+	vec4_t teamColor, decalColor, energyColor;
+	const int team = getTeamForOwner( ownerNum );
+	const bool useTeamColor = getInstagunTeamColor( team, teamColor );
+	if( useTeamColor ) {
+		Vector4Copy( teamColor, decalColor );
+		Vector4Copy( teamColor, energyColor );
+	} else {
+		Vector4Set( decalColor, 1.0f, 0.0f, 0.4f, 1.0f );
+		Vector4Set( energyColor, 1.0f, 0.0f, 0.4f, 1.0f );
+	}
+
 	if( cg_particles->integer ) {
-		const vec4_t *initialColors  = &kInstagunHitInitialColor;
-		const vec4_t *fadedInColors  = &kInstagunHitFadedInColor;
-		const vec4_t *fadedOutColors = &kInstagunHitFadedOutColor;
-
-		if( cg_teamColoredInstaBeams->integer && ownerNum && ( ownerNum < gs.maxclients + 1 ) ) {
-			if( const int team = cg_entities[ownerNum].current.team; ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) {
-				vec3_t teamColor;
-				CG_TeamColor( team, teamColor );
-				VectorScale( teamColor, 0.67f, teamColor );
-
-				float *const initialColorBuffer  = instagunHitInitialColorForTeam[team - TEAM_ALPHA];
-				float *const fadedInColorBuffer  = instagunHitFadedInColorForTeam[team - TEAM_ALPHA];
-				float *const fadedOutColorBuffer = instagunHitFadedOutColorForTeam[team - TEAM_ALPHA];
-
-				VectorCopy( teamColor, initialColorBuffer );
-				VectorCopy( teamColor, fadedInColorBuffer );
-				VectorCopy( teamColor, fadedOutColorBuffer );
-
-				// Preserve the reference alpha
-				initialColorBuffer[3]  = kInstagunHitInitialColor[3];
-				fadedInColorBuffer[3]  = kInstagunHitFadedInColor[3];
-				fadedOutColorBuffer[3] = kInstagunHitFadedOutColor[3];
-
-				initialColors  = &instagunHitInitialColorForTeam[team - TEAM_ALPHA];
-				fadedInColors  = &instagunHitFadedInColorForTeam[team - TEAM_ALPHA];
-				fadedOutColors = &instagunHitFadedOutColorForTeam[team - TEAM_ALPHA];
-
-				effectColor = fadedInColorBuffer;
-			}
-		}
-
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+
+		ParticleColorsForTeamHolder *colorsHolder = &::instagunParticleColorsHolder;
+		const vec4_t *initialColors, *fadedInColors, *fadedOutColors;
+		if( useTeamColor ) {
+			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getColorsForTeam( team, teamColor );
+		} else {
+			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getDefaultColors();
+		}
 
 		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
@@ -438,7 +453,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, effectColor );
+	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor );
 }
 
 static const vec4_t kGunbladeHitInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };
@@ -838,14 +853,22 @@ void EffectsSystemFacade::spawnDashEffect( const float *oldOrigin, const float *
 	}
 }
 
+bool getElectroboltTeamColor( int team, float *color ) {
+	if( cg_teamColoredBeams->integer && ( ( team == TEAM_ALPHA || team == TEAM_BETA ) ) ) {
+		CG_TeamColor( team, color );
+		return true;
+	}
+	return false;
+}
+
 void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t end, int team ) {
 	if( cg_ebbeam_time->value <= 0.0f || cg_ebbeam_width->integer <= 0 ) {
 		return;
 	}
 
-	vec4_t color { 1.0f, 1.0f, 1.0f, 1.0f };
-	if( cg_teamColoredBeams->integer && ( ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) ) ) {
-		CG_TeamColor( team, color );
+	vec4_t color;
+	if( !getElectroboltTeamColor( team, color ) ) {
+		Vector4Copy( colorWhite, color );
 	}
 
 	struct shader_s *material = cgs.media.shaderElectroBeam;
@@ -871,15 +894,22 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 	});
 }
 
+bool getInstagunTeamColor( int team, float *color ) {
+	if( cg_teamColoredInstaBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
+		CG_TeamColor( team, color );
+		return true;
+	}
+	return false;
+}
+
 void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t end, int team ) {
 	if( cg_instabeam_time->value <= 0.0f || cg_instabeam_width->integer <= 0 ) {
 		return;
 	}
 
-	vec4_t color { 1.0f, 0.0f, 0.4f, 0.35f };
-	if( cg_teamColoredInstaBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
-		CG_TeamColor( team, color );
-		AdjustTeamColorValue( color );
+	vec4_t color;
+	if( !getInstagunTeamColor( team, color ) ) {
+		Vector4Set( color, 1.0f, 0.0f, 0.4f, 0.35f );
 	}
 
 	const auto timeoutSeconds = std::clamp( cg_instabeam_time->value, 0.1f, 1.0f );

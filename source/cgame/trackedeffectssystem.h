@@ -40,7 +40,7 @@ public:
 	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime );
 
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime );
-	void touchElectroTrail( int entNum, const float *origin, int64_t currTime );
+	void touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime );
 
 	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
 		spawnPlayerTeleEffect( entNum, origin, model, 0 );

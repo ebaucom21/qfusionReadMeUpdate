@@ -42,7 +42,7 @@ public:
 
 	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage );
 
-	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir );
+	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir, int ownerNum );
 	void spawnInstagunHitEffect( const float *origin, const float *impactNormal, const float *impactDir, int ownerNum );
 
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
@@ -71,8 +71,8 @@ public:
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 		m_trackedEffectsSystem.touchBlastTrail( entNum, origin, currTime );
 	}
-	void touchElectroTrail( int entNum, const float *origin, int64_t currTime ) {
-		m_trackedEffectsSystem.touchElectroTrail( entNum, origin, currTime );
+	void touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchElectroTrail( entNum, ownerNum, origin, currTime );
 	}
 
 	void updateStraightLaserBeam( int entNum, const float *from, const float *to, int64_t currTime ) {
