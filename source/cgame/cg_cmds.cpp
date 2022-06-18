@@ -598,11 +598,11 @@ static void CG_SC_FragEvent() {
 					if( attacker ) {
 						if( const wsw::StringView view( cgs.clientInfo[attacker - 1].name ); !view.empty() ) {
 							const int attackerRealTeam = cg_entities[attacker].current.team;
-							attackerAndTeam = std::make_pair( view, CG_TeamToForcedTeam( attackerRealTeam ) );
+							attackerAndTeam = std::make_pair( view, attackerRealTeam );
 						}
 					}
 					const int victimTeam = cg_entities[victim].current.team;
-					const auto victimAndTeam( std::make_pair( victimName, CG_TeamToForcedTeam( victimTeam ) ) );
+					const auto victimAndTeam( std::make_pair( victimName, victimTeam ) );
 					wsw::ui::UISystem::instance()->addFragEvent( victimAndTeam, meansOfDeath, attackerAndTeam );
 					if( attacker && attacker != victim && ISVIEWERENTITY( attacker ) ) {
 						wsw::StaticString<256> message;

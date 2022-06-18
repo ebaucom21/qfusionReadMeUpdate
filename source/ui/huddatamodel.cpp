@@ -15,8 +15,9 @@ int CG_ActiveWeapon();
 bool CG_HasWeapon( int weapon );
 int CG_Health();
 int CG_Armor();
-int CG_TeamAlphaColor();
-int CG_TeamBetaColor();
+int CG_TeamAlphaDisplayedColor();
+int CG_TeamBetaDisplayedColor();
+int CG_TeamToForcedTeam( int team );
 wsw::ui::ObjectiveIndicatorState CG_HudIndicatorState( int );
 std::optional<wsw::StringView> CG_HudIndicatorIconPath( int );
 auto CG_GetMatchClockTime() -> std::pair<int, int>;
@@ -514,13 +515,19 @@ void FragsFeedModel::addFrag( const std::pair<wsw::StringView, int> &victimAndTe
 	if( m_hudDataModel->m_hasTwoTeams ) {
 		entry.victimName.assign( victimAndTeam.first );
 		removeColorTokens( &entry.victimName );
-		entry.victimTeamColor = victimAndTeam.second == TEAM_ALPHA ?
-			m_hudDataModel->m_rawAlphaColor : m_hudDataModel->m_rawBetaColor;
+
+		entry.victimTeamColor = ( victimAndTeam.second == TEAM_ALPHA ) ?
+			CG_TeamAlphaDisplayedColor() : CG_TeamBetaDisplayedColor();
 		if( attackerAndTeam ) {
 			entry.attackerName.assign( attackerAndTeam->first );
 			removeColorTokens( &entry.attackerName );
-			entry.attackerTeamColor = attackerAndTeam->second == TEAM_ALPHA ?
-				m_hudDataModel->m_rawAlphaColor : m_hudDataModel->m_rawBetaColor;
+			// Avoid a redundant team color lookup in this case
+			if( attackerAndTeam->second == victimAndTeam.second ) {
+				entry.attackerTeamColor = entry.victimTeamColor;
+			} else {
+				entry.attackerTeamColor = ( attackerAndTeam->second == TEAM_ALPHA ) ?
+					CG_TeamAlphaDisplayedColor() : CG_TeamBetaDisplayedColor();
+			}
 		}
 	} else {
 		entry.victimName.assign( victimAndTeam.first );
@@ -955,12 +962,12 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT betaPlayersStatusChanged( m_betaPlayersStatus );
 	}
 
-	if( const auto oldColor = m_rawAlphaColor; oldColor != ( m_rawAlphaColor = CG_TeamAlphaColor() ) ) {
+	if( const auto oldColor = m_rawAlphaColor; oldColor != ( m_rawAlphaColor = CG_TeamAlphaDisplayedColor() ) ) {
 		m_alphaColor = toQColor( m_rawAlphaColor );
 		Q_EMIT alphaColorChanged( m_alphaColor );
 	}
 
-	if( const auto oldColor = m_rawBetaColor; oldColor != ( m_rawBetaColor = CG_TeamBetaColor() ) ) {
+	if( const auto oldColor = m_rawBetaColor; oldColor != ( m_rawBetaColor = CG_TeamBetaDisplayedColor() ) ) {
 		m_betaColor = toQColor( m_rawBetaColor );
 		Q_EMIT betaColorChanged( m_betaColor );
 	}

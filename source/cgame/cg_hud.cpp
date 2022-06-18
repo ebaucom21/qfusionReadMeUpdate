@@ -528,11 +528,11 @@ static auto getTeamColor( int team ) -> int {
 	return COLOR_RGB( (int)( color[0] * 255 ), (int)( color[1] * 255 ), (int)( color[2] * 255 ) );
 }
 
-int CG_TeamAlphaColor() {
+int CG_TeamAlphaDisplayedColor() {
 	return getTeamColor( TEAM_ALPHA );
 }
 
-int CG_TeamBetaColor() {
+int CG_TeamBetaDisplayedColor() {
 	return getTeamColor( TEAM_BETA );
 }
 
@@ -560,9 +560,9 @@ auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
 	int packedColor = ~0;
 	if( const int colorTeam = stats[STAT_INDICATOR_1_COLORTEAM + num] ) {
 		if( colorTeam == TEAM_ALPHA ) {
-			packedColor = CG_TeamAlphaColor();
+			packedColor = CG_TeamAlphaDisplayedColor();
 		} else if( colorTeam == TEAM_BETA ) {
-			packedColor = CG_TeamBetaColor();
+			packedColor = CG_TeamBetaDisplayedColor();
 		}
 	}
 
