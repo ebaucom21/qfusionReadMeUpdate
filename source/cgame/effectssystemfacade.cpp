@@ -848,26 +848,12 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 		CG_TeamColor( team, color );
 	}
 
-	struct shader_s *material;
-	if( cg_ebbeam_old->integer ) {
-		if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
-			if( team == TEAM_ALPHA ) {
-				material = cgs.media.shaderElectroBeamOldAlpha;
-			} else {
-				material = cgs.media.shaderElectroBeamOldBeta;
-			}
+	struct shader_s *material = cgs.media.shaderElectroBeam;
+	if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
+		if( team == TEAM_ALPHA ) {
+			material = cgs.media.shaderElectroBeamAlpha;
 		} else {
-			material = cgs.media.shaderElectroBeamOld;
-		}
-	} else {
-		if( cg_teamColoredBeams->integer && ( team == TEAM_ALPHA || team == TEAM_BETA ) ) {
-			if( team == TEAM_ALPHA ) {
-				material = cgs.media.shaderElectroBeamAAlpha;
-			} else {
-				material = cgs.media.shaderElectroBeamABeta;
-			}
-		} else {
-			material = cgs.media.shaderElectroBeamA;
+			material = cgs.media.shaderElectroBeamBeta;
 		}
 	}
 

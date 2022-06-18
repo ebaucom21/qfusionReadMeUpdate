@@ -249,16 +249,9 @@ public:
 	CachedMaterial shaderElectroboltMark { this, wsw::StringView( "gfx/decals/d_electrobolt_hit" ) };
 	CachedMaterial shaderInstagunMark { this, wsw::StringView( "gfx/decals/d_instagun_hit" ) };
 
-	CachedMaterial shaderElectroBeamOld { this, wsw::StringView( "gfx/misc/electro" ) };
-	CachedMaterial shaderElectroBeamOldAlpha { this, wsw::StringView( "gfx/misc/electro_alpha" ) };
-	CachedMaterial shaderElectroBeamOldBeta { this, wsw::StringView( "gfx/misc/electro_beta" ) };
-	CachedMaterial shaderElectroBeamA { this, wsw::StringView( "gfx/misc/electro2a" ) };
-	CachedMaterial shaderElectroBeamAAlpha { this, wsw::StringView( "gfx/misc/electro2a_alpha" ) };
-	CachedMaterial shaderElectroBeamABeta { this, wsw::StringView( "gfx/misc/electro2a_beta" ) };
-	CachedMaterial shaderElectroBeamB { this, wsw::StringView( "gfx/misc/electro2b" ) };
-	CachedMaterial shaderElectroBeamBAlpha { this, wsw::StringView( "gfx/misc/electro2b_alpha" ) };
-	CachedMaterial shaderElectroBeamBBeta { this, wsw::StringView( "gfx/misc/electro2b_beta" ) };
-	CachedMaterial shaderElectroBeamRing { this, wsw::StringView( "gfx/misc/beamring.tga" ) };
+	CachedMaterial shaderElectroBeam { this, wsw::StringView( "gfx/misc/electro" ) };
+	CachedMaterial shaderElectroBeamAlpha { this, wsw::StringView( "gfx/misc/electro_alpha" ) };
+	CachedMaterial shaderElectroBeamBeta { this, wsw::StringView( "gfx/misc/electro_beta" ) };
 	CachedMaterial shaderWaveCorona { this, wsw::StringView( "gfx/misc/shockwave_corona" ) };
 	CachedMaterial shaderWaveSparks { this, wsw::StringView( "gfx/misc/shockwave_sparks" ) };
 	CachedMaterial shaderInstaBeam { this, wsw::StringView( "gfx/misc/instagun" ) };

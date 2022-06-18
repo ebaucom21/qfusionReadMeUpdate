@@ -718,7 +718,6 @@ extern cvar_t *cg_addDecals;
 //
 // cg_polys.c	-	wsw	: jal
 //
-extern cvar_t *cg_ebbeam_old;
 extern cvar_t *cg_ebbeam_width;
 extern cvar_t *cg_ebbeam_time;
 extern cvar_t *cg_instabeam_width;

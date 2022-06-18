@@ -141,7 +141,6 @@ cvar_t *cg_teamColoredInstaBeams;
 
 //cvar_t *cg_teamColorBeamMinimum;
 
-cvar_t *cg_ebbeam_old;
 cvar_t *cg_ebbeam_width;
 cvar_t *cg_ebbeam_time;
 cvar_t *cg_instabeam_width;
@@ -671,7 +670,6 @@ static void CG_RegisterVariables( void ) {
 	cg_teamColoredBeams = Cvar_Get( "cg_teamColoredBeams", "0", CVAR_ARCHIVE );
 	cg_teamColoredInstaBeams = Cvar_Get( "cg_teamColoredInstaBeams", "1", CVAR_ARCHIVE );
 
-	cg_ebbeam_old = Cvar_Get( "cg_ebbeam_old", "0", CVAR_ARCHIVE );
 	cg_ebbeam_width = Cvar_Get( "cg_ebbeam_width", "64", CVAR_ARCHIVE );
 	cg_ebbeam_time = Cvar_Get( "cg_ebbeam_time", "0.4", CVAR_ARCHIVE );
 
