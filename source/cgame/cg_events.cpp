@@ -371,11 +371,9 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 
 	if( sound ) {
 		if( ISVIEWERENTITY( entNum ) ) {
-			SoundSystem::Instance()->StartGlobalSound( sound, CHAN_MUZZLEFLASH, cg_volume_effects->value );
+			SoundSystem::Instance()->StartGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
 		} else {
-			// fixed position is better for location, but the channels are used from worldspawn
-			// and openal runs out of channels quick on cheap cards. Relative sound uses per-entity channels.
-			SoundSystem::Instance()->StartRelativeSound( sound, entNum, CHAN_MUZZLEFLASH, cg_volume_effects->value, attenuation );
+			SoundSystem::Instance()->StartRelativeSound( sound, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
 		}
 
 		if( ( cg_entities[entNum].current.effects & EF_QUAD ) && ( weapon != WEAP_LASERGUN ) ) {
