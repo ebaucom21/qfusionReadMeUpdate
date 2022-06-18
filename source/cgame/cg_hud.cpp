@@ -521,12 +521,19 @@ int CG_Armor() {
 	return cg.predictedPlayerState.stats[STAT_ARMOR];
 }
 
+[[nodiscard]]
+static auto getTeamColor( int team ) -> int {
+	vec4_t color;
+	CG_TeamColor( team, color );
+	return COLOR_RGB( (int)( color[0] * 255 ), (int)( color[1] * 255 ), (int)( color[2] * 255 ) );
+}
+
 int CG_TeamAlphaColor() {
-	return COM_ReadColorRGBString( cg_teamALPHAcolor->string );
+	return getTeamColor( TEAM_ALPHA );
 }
 
 int CG_TeamBetaColor() {
-	return COM_ReadColorRGBString( cg_teamBETAcolor->string );
+	return getTeamColor( TEAM_BETA );
 }
 
 auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
