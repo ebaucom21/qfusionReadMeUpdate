@@ -590,6 +590,11 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 						vec3_t reflectedVelocityDir;
 						VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
 
+						// Hacks to overcome current issues with false positives due to spawning in solid
+						if( p->lifetime > 32 ) [[likely]] {
+							addRandomRotationToDir( reflectedVelocityDir, rng, 0.70f, 0.97f );
+						}
+
 						const float newSpeed = flock->restitution * Q_Rcp( invOldSpeed );
 						// Save the reflected velocity
 						VectorScale( reflectedVelocityDir, newSpeed, p->velocity );

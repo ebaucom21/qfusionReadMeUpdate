@@ -575,9 +575,20 @@ static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
 }
 
 static void makeRicochetDir( const float *impactDir, const float *impactNormal, wsw::RandomGenerator *rng, float *result ) {
-	// Raise the density towards the pole
-	const float zFrac = Q_Sqrt( rng->nextFloat() );
-	const float z     = 0.30f + 0.65f * zFrac;
+	VectorReflect( impactDir, impactNormal, 0.0f, result );
+
+	const float coneAngleCosine = Q_Sqrt( rng->nextFloat( 0.30f, 0.95f ) );
+	addRandomRotationToDir( result, rng, coneAngleCosine );
+}
+
+void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float minConeAngleCosine, float maxConeAngleCosine ) {
+	const float coneAngleCosine = rng->nextFloat( minConeAngleCosine, maxConeAngleCosine );
+	addRandomRotationToDir( dir, rng, coneAngleCosine );
+}
+
+void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAngleCosine ) {
+	assert( coneAngleCosine > 0.0f && coneAngleCosine < 1.0f );
+	const float z     = coneAngleCosine;
 	const float r     = Q_Sqrt( 1.0f - z * z );
 	const float phi   = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
 	const vec3_t newZDir { r * std::cos( phi ), r * std::sin( phi ), z };
@@ -585,12 +596,11 @@ static void makeRicochetDir( const float *impactDir, const float *impactNormal, 
 	mat3_t transformMatrix;
 	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], newZDir, transformMatrix );
 
-	vec3_t reflectedImpactDir;
-	VectorReflect( impactDir, impactNormal, 0.0f, reflectedImpactDir );
-
-	Matrix3_TransformVector( transformMatrix, reflectedImpactDir, result );
+	vec3_t result;
+	Matrix3_TransformVector( transformMatrix, dir, result );
 	// wtf?
 	VectorNormalizeFast( result );
+	VectorCopy( result, dir );
 }
 
 static const vec4_t kBulletRicochetInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };

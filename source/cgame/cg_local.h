@@ -799,6 +799,9 @@ bool getInstagunTeamColor( int team, float *color );
 [[nodiscard]]
 auto getTeamForOwner( int ownerNum ) -> int;
 
+void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float minConeAngleCosine, float maxConeAngleCosine );
+void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAngleCosine );
+
 struct ParticleColorsForTeamHolder {
 	vec4_t initialColorForTeam[2];
 	vec4_t fadedInColorForTeam[2];
