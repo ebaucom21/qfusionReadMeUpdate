@@ -787,13 +787,19 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 	for( unsigned i = 0; i < numEntities; ++i ) {
 		const entity_t *const __restrict entity = &entities[i];
 		// TODO: This condition should be eliminated from this path
-		if( entity->flags & RF_NOSHADOW ) {
-			if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
+		if( entity->flags & RF_NOSHADOW ) [[unlikely]] {
+			if( m_state.renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
 				continue;
 			}
 		}
 
-		if( entity->radius <= 0 || entity->customShader == nullptr || entity->scale <= 0 ) {
+		if( entity->radius <= 0 || entity->customShader == nullptr || entity->scale <= 0 ) [[unlikely]] {
+			continue;
+		}
+
+		// Hacks for ET_RADAR indicators
+		if( entity->flags & RF_NODEPTHTEST ) [[unlikely]] {
+			tmpIndices[numPassedEntities++] = i;
 			continue;
 		}
 
