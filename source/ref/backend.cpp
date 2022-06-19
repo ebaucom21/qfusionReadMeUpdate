@@ -1491,10 +1491,9 @@ static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::S
 	} else {
 		assert( sizeBehaviour == Particle::ExpandingAndShrinking );
 		if( lifetimeFrac < 0.5f ) {
-			result = Q_Sqrt( 2.0f * lifetimeFrac );
+			result = 2.0f * lifetimeFrac;
 		} else {
 			result = 2.0f * ( 1.0f - lifetimeFrac );
-			result *= result;
 		}
 	}
 	assert( result >= 0.0f && result <= 1.0f );
