@@ -684,16 +684,6 @@ int GClip_AreaEdicts( const vec3_t mins, const vec3_t maxs,
 	return std::min( count, maxcount );
 }
 
-static bool tryUsingSmallHitBox = false;
-
-void enableSmallHitBox() {
-	tryUsingSmallHitBox = true;
-}
-
-void disableSmallHitBox() {
-	tryUsingSmallHitBox = false;
-}
-
 /*
 * GClip_CollisionModelForEntity
 *
@@ -718,23 +708,7 @@ static struct cmodel_s *GClip_CollisionModelForEntity( entity_state_t *s, entity
 		return trap_CM_ModelForBBox( r->mins, r->maxs );
 	}
 
-	if( !tryUsingSmallHitBox ) {
-		return trap_CM_OctagonModelForBBox( r->mins, r->maxs );
-	}
-
-	assert( playerbox_stand_maxs[0] == playerbox_stand_maxs[1] );
-	assert( playerbox_stand_mins[0] == playerbox_stand_mins[1] );
-	const float width = playerbox_stand_maxs[0] - playerbox_stand_mins[0];
-	const float newWidth = 0.96f * width;
-	const float halfAddedExtent = 0.5f * ( newWidth - width );
-	assert( halfAddedExtent < 0.0f );
-	vec3_t mins { -halfAddedExtent, -halfAddedExtent, -halfAddedExtent };
-	vec3_t maxs { +halfAddedExtent, +halfAddedExtent, +halfAddedExtent };
-	VectorAdd( mins, r->mins, mins );
-	VectorAdd( maxs, r->maxs, maxs );
-	assert( mins[0] > r->mins[0] && mins[1] > r->mins[1] );
-	assert( maxs[0] < r->maxs[0] && maxs[1] < r->maxs[1] );
-	return trap_CM_OctagonModelForBBox( mins, maxs );
+	return trap_CM_OctagonModelForBBox( r->mins, r->maxs );
 }
 
 

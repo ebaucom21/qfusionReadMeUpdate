@@ -1212,9 +1212,7 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 
 	tr.ent = -1;
 	while( ignore ) {
-		enableSmallHitBox();
 		G_Trace4D( &tr, from, NULL, NULL, end, ignore, mask, timeDelta );
-		disableSmallHitBox();
 
 		VectorCopy( tr.endpos, from );
 		ignore = NULL;
@@ -1512,9 +1510,7 @@ void W_Fire_Instagun( edict_t *self, vec3_t start, vec3_t angles, float damage, 
 
 	tr.ent = -1;
 	while( ignore ) {
-		enableSmallHitBox();
 		G_Trace4D( &tr, from, NULL, NULL, end, ignore, mask, timeDelta );
-		disableSmallHitBox();
 
 		VectorCopy( tr.endpos, from );
 		ignore = NULL;
