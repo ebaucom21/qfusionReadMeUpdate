@@ -1017,6 +1017,9 @@ static void W_Touch_Bolt( edict_t *self, edict_t *other, cplane_t *plane, int su
 
 		event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, self->s.origin );
 		event->s.firemode = FIRE_MODE_WEAK;
+		if( self->r.owner ) {
+			event->s.ownerNum = self->r.owner->s.number;
+		}
 
 		if( other->r.client ) {
 			missed = false;
@@ -1037,6 +1040,9 @@ static void W_Touch_Bolt( edict_t *self, edict_t *other, cplane_t *plane, int su
 		// add explosion event
 		event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, self->s.origin );
 		event->s.firemode = FIRE_MODE_WEAK;
+		if( self->r.owner ) {
+			event->s.ownerNum = self->r.owner->s.number;
+		}
 	}
 
 	if( event ) {
@@ -1139,6 +1145,9 @@ void W_Fire_Electrobolt_Combined( edict_t *self, vec3_t start, vec3_t angles, fl
 			event->s.firemode = fireMode;
 			if( hit->r.client ) {
 				missed = false;
+			}
+			if( self ) {
+				event->s.ownerNum = self->s.number;
 			}
 
 			damaged = hit;
@@ -1262,6 +1271,9 @@ void W_Fire_Electrobolt_FullInstant( edict_t *self, vec3_t start, vec3_t angles,
 			// spawn a impact event on each damaged ent
 			event = G_SpawnEvent( EV_BOLT_EXPLOSION, parmByte, tr.endpos );
 			event->s.firemode = FIRE_MODE_STRONG;
+			if( self ) {
+				event->s.ownerNum = self->s.number;
+			}
 			if( hit->r.client ) {
 				missed = false;
 			}
