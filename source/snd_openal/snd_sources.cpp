@@ -93,7 +93,6 @@ static void source_setup( src_t *src, sfx_t *sfx, bool forceStereo, int priority
 
 	alSourcef( src->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
 	alSourcef( src->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
-	alSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	ENV_RegisterSource( src );
 }
@@ -217,7 +216,6 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float
 
 	alSourcef( src->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
 	alSourcef( src->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
-	alSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	if( new_source ) {
 		if( src->attenuation ) {

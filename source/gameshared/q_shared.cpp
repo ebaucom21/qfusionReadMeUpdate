@@ -1847,9 +1847,11 @@ bool Info_SetValueForKey( char *info, const char *key, const char *value ) {
 	return true;
 }
 
-auto calcSoundGainForAttenuation( float dist, float attenuation ) -> float {
+auto calcSoundGainForDistance( float dist ) -> float {
 	constexpr float refDistance = kSoundAttenuationRefDistance;
 	constexpr float maxDistance = kSoundAttenuationMaxDistance;
+	constexpr float attenuation = 1.0f;
+
 	dist = std::min( std::max( dist, refDistance ), maxDistance );
 
 	// AL_INVERSE_DISTANCE_CLAMPED

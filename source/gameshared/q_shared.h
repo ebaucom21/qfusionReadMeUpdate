@@ -345,7 +345,7 @@ constexpr const float kSoundAttenuationMaxDistance = 8000.0f;
 constexpr const float kSoundAttenuationRefDistance = 150.0f;
 
 [[nodiscard]]
-auto calcSoundGainForAttenuation( float dist, float attenuation ) -> float;
+auto calcSoundGainForDistance( float distance ) -> float;
 
 //=============================================
 

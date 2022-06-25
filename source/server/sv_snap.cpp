@@ -483,7 +483,7 @@ static bool SNAP_SnapCullSoundEntity( const cmodel_state_t *cms, const edict_t *
 
 	// extend the influence sphere cause the player could be moving
 	const float dist = DistanceFast( ent->s.origin, listener_origin ) - 128;
-	const float gain = calcSoundGainForAttenuation( dist < 0 ? 0 : dist, attenuation );
+	const float gain = calcSoundGainForDistance( dist );
 	// curved attenuations can keep barely audible sounds for long distances
 	return gain <= 0.05f;
 }
