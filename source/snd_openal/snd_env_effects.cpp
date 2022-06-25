@@ -12,25 +12,25 @@ void Effect::CheckCurrentlyBoundEffect( src_t *src ) {
 	// We limit every source to have only a single effect.
 	// This is required to comply with the runtime effects count restriction.
 	// If the effect type has been changed, we have to delete an existing effect.
-	qalGetEffecti( src->effect, AL_EFFECT_TYPE, &effectType );
+	alGetEffecti( src->effect, AL_EFFECT_TYPE, &effectType );
 	if( this->type == effectType ) {
 		return;
 	}
 
 	// Detach the slot from the source
-	qalSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL );
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL );
 	// Detach the effect from the slot
-	qalAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
+	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
 
 	// TODO: Can we reuse the effect?
-	qalDeleteEffects( 1, &src->effect );
+	alDeleteEffects( 1, &src->effect );
 
 	IntiallySetupEffect( src );
 }
 
 void Effect::IntiallySetupEffect( src_t *src ) {
-	qalGenEffects( 1, &src->effect );
-	qalEffecti( src->effect, AL_EFFECT_TYPE, this->type );
+	alGenEffects( 1, &src->effect );
+	alEffecti( src->effect, AL_EFFECT_TYPE, this->type );
 }
 
 float Effect::GetSourceGain( src_s *src ) const {
@@ -38,7 +38,7 @@ float Effect::GetSourceGain( src_s *src ) const {
 }
 
 void Effect::AdjustGain( src_t *src ) const {
-	qalSourcef( src->source, AL_GAIN, GetSourceGain( src ) );
+	alSourcef( src->source, AL_GAIN, GetSourceGain( src ) );
 }
 
 void Effect::AttachEffect( src_t *src ) {
@@ -46,18 +46,18 @@ void Effect::AttachEffect( src_t *src ) {
 	AdjustGain( src );
 
 	// Attach the filter to the source
-	qalSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
+	alSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
 	// Attach the effect to the slot
-	qalAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
+	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
 	// Feed the slot from the source
-	qalSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
 }
 
 void UnderwaterFlangerEffect::IntiallySetupEffect( src_t *src ) {
 	Effect::IntiallySetupEffect( src );
 	// This is the only place where the flanger gets tweaked
-	qalEffectf( src->effect, AL_FLANGER_DEPTH, 0.5f );
-	qalEffectf( src->effect, AL_FLANGER_FEEDBACK, -0.4f );
+	alEffectf( src->effect, AL_FLANGER_DEPTH, 0.5f );
+	alEffectf( src->effect, AL_FLANGER_FEEDBACK, -0.4f );
 }
 
 float UnderwaterFlangerEffect::GetSourceGain( src_t *src ) const {
@@ -78,7 +78,7 @@ float UnderwaterFlangerEffect::GetSourceGain( src_t *src ) const {
 void UnderwaterFlangerEffect::BindOrUpdate( src_t *src ) {
 	CheckCurrentlyBoundEffect( src );
 
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 0.0f );
+	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 0.0f );
 
 	AttachEffect( src );
 }
@@ -119,17 +119,17 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	const float reverbHfGainFrac = 0.5f + 0.5f * ( 1.0f - attenuation );
 	assert( reverbHfGainFrac >= 0.5f && reverbHfGainFrac <= 1.0f );
 
-	qalEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
-	qalEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
-	qalEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf * reverbHfGainFrac );
-	qalEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
-	qalEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
-	qalEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->lateReverbGain );
-	qalEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
+	alEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
+	alEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
+	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf * reverbHfGainFrac );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
+	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
+	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->lateReverbGain );
+	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
 
-	qalEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->hfReference );
+	alEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->hfReference );
 
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
+	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
 
 	AttachEffect( src );
 }
@@ -259,8 +259,8 @@ void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, co
 	VectorCopy( basePan, lateReverbPan );
 	VectorScale( lateReverbPan, lateReverbPanScale, lateReverbPan );
 
-	qalEffectfv( src->effect, AL_EAXREVERB_REFLECTIONS_PAN, reflectionsPan );
-	qalEffectfv( src->effect, AL_EAXREVERB_LATE_REVERB_PAN, lateReverbPan );
+	alEffectfv( src->effect, AL_EAXREVERB_REFLECTIONS_PAN, reflectionsPan );
+	alEffectfv( src->effect, AL_EAXREVERB_LATE_REVERB_PAN, lateReverbPan );
 }
 
 void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin ) {
@@ -268,13 +268,13 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 		// It MUST already be a relative sound
 #ifndef PUBLIC_BUILD
 		ALint value;
-		qalGetSourcei( src->source, AL_SOURCE_RELATIVE, &value );
+		alGetSourcei( src->source, AL_SOURCE_RELATIVE, &value );
 		assert( value == AL_TRUE );
 #endif
 		return;
 	}
 
-	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
+	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
 
 	const float *sourceOrigin = src->origin;
 	// Setting effect panning vectors is not sufficient for "realistic" obstruction,
@@ -310,7 +310,7 @@ void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const ve
 		}
 	}
 
-	qalSourcefv( src->source, AL_POSITION, sourceOrigin );
+	alSourcefv( src->source, AL_POSITION, sourceOrigin );
 	// The velocity is kept untouched for now.
-	qalSourcefv( src->source, AL_VELOCITY, src->velocity );
+	alSourcefv( src->source, AL_VELOCITY, src->velocity );
 }

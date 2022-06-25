@@ -48,9 +48,9 @@ static void S_AdjustGain( src_t *src ) {
 	}
 
 	if( src->volumeVar ) {
-		qalSourcef( src->source, AL_GAIN, src->fvol * src->volumeVar->value );
+		alSourcef( src->source, AL_GAIN, src->fvol * src->volumeVar->value );
 	} else {
-		qalSourcef( src->source, AL_GAIN, src->fvol * s_volume->value );
+		alSourcef( src->source, AL_GAIN, src->fvol * s_volume->value );
 	}
 }
 
@@ -84,16 +84,16 @@ static void source_setup( src_t *src, sfx_t *sfx, bool forceStereo, int priority
 	VectorClear( src->origin );
 	VectorClear( src->velocity );
 
-	qalSourcefv( src->source, AL_POSITION, vec3_origin );
-	qalSourcefv( src->source, AL_VELOCITY, vec3_origin );
-	qalSourcef( src->source, AL_GAIN, fvol * s_volume->value );
-	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
-	qalSourcei( src->source, AL_LOOPING, AL_FALSE );
-	qalSourcei( src->source, AL_BUFFER, buffer );
+	alSourcefv( src->source, AL_POSITION, vec3_origin );
+	alSourcefv( src->source, AL_VELOCITY, vec3_origin );
+	alSourcef( src->source, AL_GAIN, fvol * s_volume->value );
+	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
+	alSourcei( src->source, AL_LOOPING, AL_FALSE );
+	alSourcei( src->source, AL_BUFFER, buffer );
 
-	qalSourcef( src->source, AL_REFERENCE_DISTANCE, s_attenuation_refdistance );
-	qalSourcef( src->source, AL_MAX_DISTANCE, s_attenuation_maxdistance );
-	qalSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
+	alSourcef( src->source, AL_REFERENCE_DISTANCE, s_attenuation_refdistance );
+	alSourcef( src->source, AL_MAX_DISTANCE, s_attenuation_maxdistance );
+	alSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	ENV_RegisterSource( src );
 }
@@ -111,22 +111,22 @@ static void source_kill( src_t *src ) {
 	}
 
 	if( src->isActive ) {
-		qalSourceStop( source );
+		alSourceStop( source );
 	} else {
 		// Un-queue all queued buffers
-		qalGetSourcei( source, AL_BUFFERS_QUEUED, &numbufs );
+		alGetSourcei( source, AL_BUFFERS_QUEUED, &numbufs );
 		while( numbufs-- ) {
-			qalSourceUnqueueBuffers( source, 1, &buffer );
+			alSourceUnqueueBuffers( source, 1, &buffer );
 		}
 	}
 
 	// Un-queue all processed buffers
-	qalGetSourcei( source, AL_BUFFERS_PROCESSED, &numbufs );
+	alGetSourcei( source, AL_BUFFERS_PROCESSED, &numbufs );
 	while( numbufs-- ) {
-		qalSourceUnqueueBuffers( source, 1, &buffer );
+		alSourceUnqueueBuffers( source, 1, &buffer );
 	}
 
-	qalSourcei( src->source, AL_BUFFER, AL_NONE );
+	alSourcei( src->source, AL_BUFFER, AL_NONE );
 
 	src->sfx = 0;
 	src->lastUse = 0;
@@ -150,10 +150,10 @@ static void source_kill( src_t *src ) {
 */
 static void source_spatialize( src_t *src ) {
 	if( src->attenuation == 0.0f ) {
-		qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
+		alSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
 		// this was set at source_setup, no need to redo every frame
-		//qalSourcefv( src->source, AL_POSITION, vec3_origin );
-		//qalSourcefv( src->source, AL_VELOCITY, vec3_origin );
+		//alSourcefv( src->source, AL_POSITION, vec3_origin );
+		//alSourcefv( src->source, AL_VELOCITY, vec3_origin );
 		return;
 	}
 
@@ -169,9 +169,9 @@ static void source_spatialize( src_t *src ) {
 
 	// TODO: Track last submitted values, don't rely on AL wrt. reducing switching of states?
 
-	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
-	qalSourcefv( src->source, AL_POSITION, src->origin );
-	qalSourcefv( src->source, AL_VELOCITY, src->velocity );
+	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_FALSE );
+	alSourcefv( src->source, AL_POSITION, src->origin );
+	alSourcefv( src->source, AL_VELOCITY, src->velocity );
 }
 
 /*
@@ -207,7 +207,7 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float
 
 	if( new_source ) {
 		source_setup( src, sfx, false, priority, entNum, -1, fvol, attenuation );
-		qalSourcei( src->source, AL_LOOPING, AL_TRUE );
+		alSourcei( src->source, AL_LOOPING, AL_TRUE );
 		src->isLooping = true;
 
 		entlist[entNum].src = src;
@@ -215,9 +215,9 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float
 
 	S_AdjustGain( src );
 
-	qalSourcef( src->source, AL_REFERENCE_DISTANCE, s_attenuation_refdistance );
-	qalSourcef( src->source, AL_MAX_DISTANCE, s_attenuation_maxdistance );
-	qalSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
+	alSourcef( src->source, AL_REFERENCE_DISTANCE, s_attenuation_refdistance );
+	alSourcef( src->source, AL_MAX_DISTANCE, s_attenuation_maxdistance );
+	alSourcef( src->source, AL_ROLLOFF_FACTOR, attenuation );
 
 	if( new_source ) {
 		if( src->attenuation ) {
@@ -226,7 +226,7 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float
 
 		source_spatialize( src );
 
-		qalSourcePlay( src->source );
+		alSourcePlay( src->source );
 	}
 
 	entlist[entNum].touched = true;
@@ -235,30 +235,30 @@ static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float
 static void S_ShutdownSourceEFX( src_t *src ) {
 	if( src->directFilter ) {
 		// Detach the filter from the source
-		qalSourcei( src->source, AL_DIRECT_FILTER, AL_FILTER_NULL );
-		qalDeleteFilters( 1, &src->directFilter );
+		alSourcei( src->source, AL_DIRECT_FILTER, AL_FILTER_NULL );
+		alDeleteFilters( 1, &src->directFilter );
 		src->directFilter = 0;
 	}
 
 	if( src->effect && src->effectSlot ) {
 		// Detach the effect from the source
-		qalSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, 0 );
+		alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, 0 );
 		// Detach the effect from the slot
-		qalAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
+		alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
 	}
 
 	if( src->effect ) {
-		qalDeleteEffects( 1, &src->effect );
+		alDeleteEffects( 1, &src->effect );
 		src->effect = 0;
 	}
 
 	if( src->effectSlot ) {
-		qalDeleteAuxiliaryEffectSlots( 1, &src->effectSlot );
+		alDeleteAuxiliaryEffectSlots( 1, &src->effectSlot );
 		src->effectSlot = 0;
 	}
 
 	// Suppress errors if any
-	qalGetError();
+	alGetError();
 }
 
 static bool S_InitSourceEFX( src_t *src ) {
@@ -266,56 +266,56 @@ static bool S_InitSourceEFX( src_t *src ) {
 	src->effect = 0;
 	src->effectSlot = 0;
 
-	qalGenFilters( 1, &src->directFilter );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alGenFilters( 1, &src->directFilter );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
-	qalFilteri( src->directFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alFilteri( src->directFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
 	// Set default filter values (no actual attenuation)
-	qalFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f );
-	qalFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
+	alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f );
+	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
 
 	// Attach the filter to the source
-	qalSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
-	qalGenEffects( 1, &src->effect );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alGenEffects( 1, &src->effect );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
-	qalEffecti( src->effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alEffecti( src->effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
 	// Actually disable the reverb effect
-	qalEffectf( src->effect, AL_REVERB_GAIN, 0.0f );
-	if ( qalGetError() != AL_NO_ERROR ) {
+	alEffectf( src->effect, AL_REVERB_GAIN, 0.0f );
+	if ( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
-	qalGenAuxiliaryEffectSlots( 1, &src->effectSlot );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alGenAuxiliaryEffectSlots( 1, &src->effectSlot );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
 	// Attach the effect to the slot
-	qalAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
 	// Feed the slot from the source
-	qalSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
-	if( qalGetError() != AL_NO_ERROR ) {
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
+	if( alGetError() != AL_NO_ERROR ) {
 		goto cleanup;
 	}
 
@@ -338,7 +338,7 @@ bool S_InitSources( int maxEntities, bool verbose ) {
 	// Limit the number of sources (and attached effects) to this value a-priori.
 	// This code also relies on recent versions on the library.
 	// There still is a failure if a user tries to load a dated library.
-	if ( useEfx && !strcmp( qalGetString( AL_VENDOR ), "OpenAL Community" ) ) {
+	if ( useEfx && !strcmp( alGetString( AL_VENDOR ), "OpenAL Community" ) ) {
 		maxSrc = 64;
 	}
 
@@ -347,8 +347,8 @@ bool S_InitSources( int maxEntities, bool verbose ) {
 
 	// Allocate as many sources as possible
 	for( i = 0; i < maxSrc; i++ ) {
-		qalGenSources( 1, &srclist[i].source );
-		if( qalGetError() != AL_NO_ERROR ) {
+		alGenSources( 1, &srclist[i].source );
+		if( alGetError() != AL_NO_ERROR ) {
 			break;
 		}
 
@@ -357,7 +357,7 @@ bool S_InitSources( int maxEntities, bool verbose ) {
 				if( src_count >= 16 ) {
 					// We have created a minimally acceptable sources/effects set.
 					// Just delete an orphan source without corresponding effects and stop sources creation.
-					qalDeleteSources( 1, &srclist[i].source );
+					alDeleteSources( 1, &srclist[i].source );
 					break;
 				}
 
@@ -412,8 +412,8 @@ void S_ShutdownSources( void ) {
 	for( i = 0; i < src_count; i++ ) {
 		// This call expects that the AL source is valid
 		S_ShutdownSourceEFX( &srclist[i] );
-		qalSourceStop( srclist[i].source );
-		qalDeleteSources( 1, &srclist[i].source );
+		alSourceStop( srclist[i].source );
+		alDeleteSources( 1, &srclist[i].source );
 	}
 
 	memset( srclist, 0, sizeof( srclist ) );
@@ -477,7 +477,7 @@ void S_UpdateSources( void ) {
 
 		entNum = src->entNum;
 
-		qalGetSourcei( src->source, AL_SOURCE_STATE, &state );
+		alGetSourcei( src->source, AL_SOURCE_STATE, &state );
 		if( state == AL_STOPPED ) {
 			// Do not even bother adding the source to the list of zombie sources in these cases:
 			// 1) There's no effect attached
@@ -605,7 +605,7 @@ static void S_ProcessZombieSources( src_t **zombieSources, int numZombieSources,
 	// Note that effects status might have been changed.
 
 	vec3_t listenerOrigin;
-	qalGetListener3f( AL_POSITION, listenerOrigin + 0, listenerOrigin + 1, listenerOrigin + 2 );
+	alGetListener3f( AL_POSITION, listenerOrigin + 0, listenerOrigin + 1, listenerOrigin + 2 );
 
 	src_t *disableEffectCandidates[MAX_SRC];
 	float sourceScores[MAX_SRC];
@@ -754,9 +754,9 @@ void S_StartLocalSound( sfx_t *sfx, float fvol ) {
 	S_UseBuffer( sfx );
 
 	source_setup( src, sfx, true, SRCPRI_LOCAL, -1, 0, fvol, ATTN_NONE );
-	qalSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
+	alSourcei( src->source, AL_SOURCE_RELATIVE, AL_TRUE );
 
-	qalSourcePlay( src->source );
+	alSourcePlay( src->source );
 }
 
 /*
@@ -786,7 +786,7 @@ static void S_StartSound( sfx_t *sfx, const vec3_t origin, int entNum, int chann
 
 	source_spatialize( src );
 
-	qalSourcePlay( src->source );
+	alSourcePlay( src->source );
 }
 
 /*

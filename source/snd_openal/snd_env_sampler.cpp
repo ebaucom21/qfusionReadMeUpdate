@@ -94,16 +94,16 @@ void ENV_UnregisterSource( src_t *src ) {
 	}
 
 	// Detach the slot from the source
-	qalSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL );
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL );
 	// Detach the effect from the slot
-	qalAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
+	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
 	// Detach the direct filter
-	qalSourcei( src->source, AL_DIRECT_FILTER, AL_FILTER_NULL );
+	alSourcei( src->source, AL_DIRECT_FILTER, AL_FILTER_NULL );
 	// Restore the original source gain
 	if( src->volumeVar ) {
-		qalSourcef( src->source, AL_GAIN, src->fvol * src->volumeVar->value );
+		alSourcef( src->source, AL_GAIN, src->fvol * src->volumeVar->value );
 	} else {
-		qalSourcef( src->source, AL_GAIN, src->fvol * s_volume->value );
+		alSourcef( src->source, AL_GAIN, src->fvol * s_volume->value );
 	}
 }
 

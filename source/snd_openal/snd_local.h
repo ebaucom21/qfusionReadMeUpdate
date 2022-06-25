@@ -32,28 +32,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_public.h"
 #include "snd_cmdque.h"
 
-#include "qal.h"
+#define AL_ALEXT_PROTOTYPES
+
+#include <AL/al.h>
+#include <AL/alc.h>
+#include <AL/alext.h>
+#include <AL/efx.h>
 
 #include <algorithm>
 #include <functional>
 
-#ifdef _WIN32
-#define ALDRIVER "OpenAL32.dll"
-#define ALDEVICE_DEFAULT NULL
-#elif defined ( __MACOSX__ )
-#define ALDRIVER "/System/Library/Frameworks/OpenAL.framework/OpenAL"
-#define ALDEVICE_DEFAULT NULL
-#else
-#define ALDRIVER "libopenal.so.1"
-#define ALDRIVER_ALT "libopenal.so.0"
-#define ALDEVICE_DEFAULT NULL
-#endif
-
-#ifdef __MACOSX__
-#define MAX_SRC 64
-#else
 #define MAX_SRC 128
-#endif
 
 typedef struct sfx_s {
 	char filename[MAX_QPATH];

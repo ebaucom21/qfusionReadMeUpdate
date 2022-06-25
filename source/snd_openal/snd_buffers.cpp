@@ -103,8 +103,8 @@ bool S_UnloadBuffer( sfx_t *sfx ) {
 		if( !buffer ) {
 			continue;
 		}
-		qalDeleteBuffers( 1, &buffer );
-		if( ( error = qalGetError() ) != AL_NO_ERROR ) {
+		alDeleteBuffers( 1, &buffer );
+		if( ( error = alGetError() ) != AL_NO_ERROR ) {
 			Com_Printf( "Couldn't delete sound buffer for %s (%s)", sfx->filename, S_ErrorMessage( error ) );
 			sfx->isLocked = true;
 			return false;
@@ -192,7 +192,7 @@ struct BufferHolder {
 	explicit BufferHolder( ALuint buffer_ ): buffer( buffer_ ) {}
 	~BufferHolder() {
 		if( buffer ) {
-			qalDeleteBuffers( 1, &buffer );
+			alDeleteBuffers( 1, &buffer );
 		}
 	}
 	ALuint ReleaseOwnership() {
@@ -291,14 +291,14 @@ static ALuint S_BindBufferData( const char *tag, const snd_info_t &info, const v
 	ALenum error;
 	ALuint buffer;
 	ALenum format = S_SoundFormat( info.width, info.channels );
-	qalGenBuffers( 1, &buffer );
-	if( ( error = qalGetError() ) != AL_NO_ERROR ) {
+	alGenBuffers( 1, &buffer );
+	if( ( error = alGetError() ) != AL_NO_ERROR ) {
 		Com_Printf( "Couldn't create a sound buffer for %s (%s)\n", tag, S_ErrorMessage( error ) );
 		return 0;
 	}
 
-	qalBufferData( buffer, format, data, info.size, info.rate );
-	error = qalGetError();
+	alBufferData( buffer, format, data, info.size, info.rate );
+	error = alGetError();
 
 	// If we ran out of memory, start evicting the least recently used sounds
 	while( error == AL_OUT_OF_MEMORY ) {
@@ -308,9 +308,9 @@ static ALuint S_BindBufferData( const char *tag, const snd_info_t &info, const v
 		}
 
 		// Try load it again
-		qalGetError();
-		qalBufferData( buffer, format, data, info.size, info.rate );
-		error = qalGetError();
+		alGetError();
+		alBufferData( buffer, format, data, info.size, info.rate );
+		error = alGetError();
 	}
 
 	// Some other error condition

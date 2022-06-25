@@ -164,18 +164,6 @@ bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &o
 ALSoundSystem *ALSoundSystem::TryCreate( client_state_s *client, void *hWnd, bool verbose ) {
 	s_num_ent_spats = 0;
 
-#ifdef OPENAL_RUNTIME
-	if( !QAL_Init( ALDRIVER, verbose ) ) {
-#ifdef ALDRIVER_ALT
-		if( !QAL_Init( ALDRIVER_ALT, verbose ) )
-#endif
-		{
-			Com_Printf( "Failed to load OpenAL library: %s\n", ALDRIVER );
-			return false;
-		}
-	}
-#endif
-
 	s_environment_effects = Cvar_Get( "s_environment_effects", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
 
 	s_environment_sampling_quality = Cvar_Get( "s_environment_sampling_quality", "0.5", CVAR_ARCHIVE );
@@ -257,8 +245,6 @@ ALSoundSystem::~ALSoundSystem() {
 	Cmd_RemoveCommand( "pausemusic" );
 	Cmd_RemoveCommand( "soundlist" );
 	Cmd_RemoveCommand( "s_devices" );
-
-	QAL_Shutdown();
 }
 
 void ALSoundSystem::PostInit() {
