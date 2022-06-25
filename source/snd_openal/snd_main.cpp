@@ -249,23 +249,6 @@ ALSoundSystem::~ALSoundSystem() {
 
 void ALSoundSystem::PostInit() {
 	ENV_Init();
-
-	int model = S_DEFAULT_ATTENUATION_MODEL;
-	float maxDistance = S_DEFAULT_ATTENUATION_MAXDISTANCE;
-	float refDistance = S_DEFAULT_ATTENUATION_REFDISTANCE;
-
-#ifndef PUBLIC_BUILD
-	constexpr const auto varFlags = CVAR_DEVELOPER | CVAR_LATCH_SOUND;
-	cvar_t *modelVar = Cvar_Get( "s_attenuation_model", va( "%i", model ), varFlags );
-	cvar_t *maxDistanceVar = Cvar_Get( "s_attenuation_maxdistance", va( "%f", maxDistance ), varFlags );
-	cvar_t *refDistanceVar = Cvar_Get( "s_attenuation_refdistance", va( "%f", refDistance ), varFlags );
-
-	model = modelVar->integer;
-	maxDistance = maxDistanceVar->value;
-	refDistance = refDistanceVar->value;
-#endif
-
-	S_IssueSetAttenuationCmd( pipe, model, maxDistance, refDistance );
 }
 
 void ALSoundSystem::BeginRegistration() {

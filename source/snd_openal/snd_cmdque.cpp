@@ -116,19 +116,6 @@ void S_IssueLoadSfxCmd( sndCmdPipe_t *queue, int sfx ) {
 }
 
 /*
-* S_IssueSetAttenuationCmd
-*/
-void S_IssueSetAttenuationCmd( sndCmdPipe_t *queue, int model,
-							   float maxdistance, float refdistance ) {
-	sndCmdSetAttenuationModel_t cmd;
-	cmd.id = SND_CMD_SET_ATTENUATION_MODEL;
-	cmd.model = model;
-	cmd.maxdistance = maxdistance;
-	cmd.refdistance = refdistance;
-	S_EnqueueCmd( queue, &cmd, sizeof( cmd ) );
-}
-
-/*
 * S_IssueSetEntitySpatializationCmd
 */
 void S_IssueSetEntitySpatializationCmd( sndCmdPipe_t *queue, const smdCmdSpatialization_t *spat ) {

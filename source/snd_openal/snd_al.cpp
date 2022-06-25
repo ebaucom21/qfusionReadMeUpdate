@@ -28,10 +28,6 @@ ALCcontext *alContext = NULL;
 #define UPDATE_MSEC 10
 static int64_t s_last_update_time;
 
-int s_attenuation_model = 0;
-float s_attenuation_maxdistance = 0;
-float s_attenuation_refdistance = 0;
-
 /*
 * Commands
 */
@@ -246,8 +242,6 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	s_sound_velocity->modified = true;
 	s_doppler->modified = false;
 
-	S_SetAttenuationModel( S_DEFAULT_ATTENUATION_MODEL, S_DEFAULT_ATTENUATION_MAXDISTANCE, S_DEFAULT_ATTENUATION_REFDISTANCE );
-
 	S_LockBackgroundTrack( false );
 
 	if( !S_InitDecoders( verbose ) ) {
@@ -291,37 +285,6 @@ static void S_Shutdown( bool verbose ) {
 	if( alDevice ) {
 		alcCloseDevice( alDevice );
 		alDevice = NULL;
-	}
-}
-
-/*
-* S_SetAttenuationModel
-*/
-void S_SetAttenuationModel( int model, float maxdistance, float refdistance ) {
-	s_attenuation_model = model;
-	s_attenuation_maxdistance = maxdistance;
-	s_attenuation_refdistance = refdistance;
-
-	switch( model ) {
-		case 0:
-			alDistanceModel( AL_LINEAR_DISTANCE );
-			break;
-		case 1:
-		default:
-			alDistanceModel( AL_LINEAR_DISTANCE_CLAMPED );
-			break;
-		case 2:
-			alDistanceModel( AL_INVERSE_DISTANCE );
-			break;
-		case 3:
-			alDistanceModel( AL_INVERSE_DISTANCE_CLAMPED );
-			break;
-		case 4:
-			alDistanceModel( AL_EXPONENT_DISTANCE );
-			break;
-		case 5:
-			alDistanceModel( AL_EXPONENT_DISTANCE_CLAMPED );
-			break;
 	}
 }
 
@@ -474,15 +437,6 @@ static unsigned S_HandleFreeSfxCmd( const sndCmdFreeSfx_t *cmd ) {
 static unsigned S_HandleLoadSfxCmd( const sndCmdLoadSfx_t *cmd ) {
 	//Com_Printf("S_HandleLoadSfxCmd\n");
 	S_LoadBuffer( S_GetBufferById( cmd->sfx ) );
-	return sizeof( *cmd );
-}
-
-/*
-* S_HandleSetAttenuationModelCmd
-*/
-static unsigned S_HandleSetAttenuationModelCmd( const sndCmdSetAttenuationModel_t *cmd ) {
-	//Com_Printf("S_HandleSetAttenuationModelCmd\n");
-	S_SetAttenuationModel( cmd->model, cmd->maxdistance, cmd->refdistance );
 	return sizeof( *cmd );
 }
 
@@ -661,8 +615,6 @@ static pipeCmdHandler_t sndCmdHandlers[SND_CMD_NUM_CMDS] =
 	(pipeCmdHandler_t)S_HandleFreeSfxCmd,
 	/* SND_CMD_LOAD_SFX */
 	(pipeCmdHandler_t)S_HandleLoadSfxCmd,
-	/* SND_CMD_SET_ATTENUATION_MODEL */
-	(pipeCmdHandler_t)S_HandleSetAttenuationModelCmd,
 	/* SND_CMD_SET_ENTITY_SPATIALIZATION */
 	(pipeCmdHandler_t)S_HandleSetEntitySpatializationCmd,
 	/* SND_CMD_SET_LISTENER */

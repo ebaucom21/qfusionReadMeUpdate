@@ -74,10 +74,6 @@ extern cvar_t *s_environment_sampling_quality;
 extern cvar_t *s_effects_number_threshold;
 extern cvar_t *s_hrtf;
 
-extern int s_attenuation_model;
-extern float s_attenuation_maxdistance;
-extern float s_attenuation_refdistance;
-
 extern ALCdevice *alDevice;
 extern ALCcontext *alContext;
 
@@ -89,8 +85,6 @@ extern ALCcontext *alContext;
 
 void S_Clear( void );
 void S_Activate( bool active );
-
-void S_SetAttenuationModel( int model, float maxdistance, float refdistance );
 
 // playing
 struct sfx_s *S_RegisterSound( const char *sample );

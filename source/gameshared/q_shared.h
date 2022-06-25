@@ -341,12 +341,11 @@ void Info_CleanValue( const char *in, char *out, size_t outsize );
 // sound
 //============================================
 
-//#define S_DEFAULT_ATTENUATION_MODEL		1
-#define S_DEFAULT_ATTENUATION_MODEL         3
-#define S_DEFAULT_ATTENUATION_MAXDISTANCE   8000
-#define S_DEFAULT_ATTENUATION_REFDISTANCE   125
+constexpr const float kSoundAttenuationMaxDistance = 8000.0f;
+constexpr const float kSoundAttenuationRefDistance = 150.0f;
 
-float Q_GainForAttenuation( int model, float maxdistance, float refdistance, float dist, float attenuation );
+[[nodiscard]]
+auto calcSoundGainForAttenuation( float dist, float attenuation ) -> float;
 
 //=============================================
 

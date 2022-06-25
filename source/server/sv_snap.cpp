@@ -474,45 +474,6 @@ void SnapEntNumsList::Sort()  {
 }
 
 /*
-* SNAP_GainForAttenuation
-*/
-static float SNAP_GainForAttenuation( float dist, float attenuation ) {
-	int model = S_DEFAULT_ATTENUATION_MODEL;
-	float maxdistance = S_DEFAULT_ATTENUATION_MAXDISTANCE;
-	float refdistance = S_DEFAULT_ATTENUATION_REFDISTANCE;
-
-#if !defined( PUBLIC_BUILD ) && !defined( DEDICATED_ONLY )
-#define DUMMY_CVAR ( cvar_t * )( (void *)1 )
-	static cvar_t *s_attenuation_model = DUMMY_CVAR;
-	static cvar_t *s_attenuation_maxdistance = DUMMY_CVAR;
-	static cvar_t *s_attenuation_refdistance = DUMMY_CVAR;
-
-	if( s_attenuation_model == DUMMY_CVAR ) {
-		s_attenuation_model = Cvar_Find( "s_attenuation_model" );
-	}
-	if( s_attenuation_maxdistance == DUMMY_CVAR ) {
-		s_attenuation_maxdistance = Cvar_Find( "s_attenuation_maxdistance" );
-	}
-	if( s_attenuation_refdistance == DUMMY_CVAR ) {
-		s_attenuation_refdistance = Cvar_Find( "s_attenuation_refdistance" );
-	}
-
-	if( s_attenuation_model && s_attenuation_model != DUMMY_CVAR ) {
-		model = s_attenuation_model->integer;
-	}
-	if( s_attenuation_maxdistance && s_attenuation_maxdistance != DUMMY_CVAR ) {
-		maxdistance = s_attenuation_maxdistance->value;
-	}
-	if( s_attenuation_refdistance && s_attenuation_refdistance != DUMMY_CVAR ) {
-		refdistance = s_attenuation_refdistance->value;
-	}
-#undef DUMMY_CVAR
-#endif
-
-	return Q_GainForAttenuation( model, maxdistance, refdistance, dist, attenuation );
-}
-
-/*
 * SNAP_SnapCullSoundEntity
 */
 static bool SNAP_SnapCullSoundEntity( const cmodel_state_t *cms, const edict_t *ent, const vec3_t listener_origin, float attenuation ) {
@@ -522,7 +483,7 @@ static bool SNAP_SnapCullSoundEntity( const cmodel_state_t *cms, const edict_t *
 
 	// extend the influence sphere cause the player could be moving
 	const float dist = DistanceFast( ent->s.origin, listener_origin ) - 128;
-	const float gain = SNAP_GainForAttenuation( dist < 0 ? 0 : dist, attenuation );
+	const float gain = calcSoundGainForAttenuation( dist < 0 ? 0 : dist, attenuation );
 	// curved attenuations can keep barely audible sounds for long distances
 	return gain <= 0.05f;
 }
