@@ -97,14 +97,8 @@ void S_StartLocalSound( sfx_t *sfx, float fvol );
 
 void S_AddLoopSound( struct sfx_s *sfx, int entnum, float fvol, float attenuation );
 
-// cinema
-void S_RawSamples( unsigned int samples, unsigned int rate,
-				   unsigned short width, unsigned short channels, const uint8_t *data, bool music );
 void S_RawSamples2( unsigned int samples, unsigned int rate,
 					unsigned short width, unsigned short channels, const uint8_t *data, bool music, float fvol );
-void S_PositionedRawSamples( int entnum, float fvol, float attenuation,
-							 unsigned int samples, unsigned int rate,
-							 unsigned short width, unsigned short channels, const uint8_t *data );
 
 // music
 void S_StartBackgroundTrack( const char *intro, const char *loop, int mode );
@@ -292,7 +286,6 @@ void S_StopAviDemo( void );
 //====================================================================
 
 unsigned S_GetRawSamplesLength( void );
-unsigned S_GetPositionedRawSamplesLength( int entnum );
 
 void SF_StopBackgroundTrack( void );
 void SF_PrevBackgroundTrack( void );
