@@ -276,118 +276,6 @@ struct LeafPropsBuilder {
 	}
 };
 
-// Using TreeMaps/HashMaps with strings as keys is an anti-pattern.
-// This is a hack to get things done.
-// TODO: Replace by a sane trie implementation.
-
-namespace std {
-	template<>
-	struct hash<wsw::StringView> {
-		auto operator()( const wsw::StringView &s ) const noexcept -> std::size_t {
-			std::string_view stdView( s.data(), s.size() );
-			std::hash<std::string_view> hash;
-			return hash.operator()( stdView );
-		}
-	};
-}
-
-/**
- * An immutable part, safe to refer from multiple threads
- */
-class SurfaceClassData {
-	wsw::String m_namesData;
-	wsw::HashSet<wsw::StringView> m_simpleNames;
-	wsw::Vector<wsw::StringView> m_patterns;
-
-	[[nodiscard]]
-	bool loadDataFromFile( const wsw::StringView &prefix );
-public:
-	explicit SurfaceClassData( const wsw::StringView &prefix );
-
-	[[nodiscard]]
-	bool isThisKindOfSurface( const wsw::StringView &name ) const;
-};
-
-SurfaceClassData::SurfaceClassData( const wsw::StringView &prefix ) {
-	if( !loadDataFromFile( prefix ) ) {
-		Com_Printf( S_COLOR_YELLOW "Failed to load a class data for \"%s\" surfaces\n", prefix.data() );
-		return;
-	}
-
-	wsw::CharLookup separators( wsw::StringView( "\r\n" ) );
-	wsw::StringSplitter splitter( wsw::StringView( m_namesData.data(), m_namesData.size() ) );
-	while( auto maybeToken = splitter.getNext( separators ) ) {
-		auto rawToken = maybeToken->trim();
-		if( rawToken.empty() ) {
-			continue;
-		}
-		// Ensure that tokens are zero-terminated
-		auto offset = ( rawToken.data() - m_namesData.data() );
-		m_namesData[offset + rawToken.length()] = '\0';
-		wsw::StringView token( rawToken.data(), rawToken.size(), wsw::StringView::ZeroTerminated );
-		if( token.indexOf( '*' ) != std::nullopt ) {
-			m_patterns.push_back( token );
-		} else {
-			m_simpleNames.insert( token );
-		}
-	}
-}
-
-bool SurfaceClassData::loadDataFromFile( const wsw::StringView &prefix ) {
-	wsw::StaticString<MAX_QPATH> path;
-	path << "sounds/surfaces/"_asView << prefix << ".txt"_asView;
-
-	if( auto maybeHandle = wsw::fs::openAsReadHandle( path.asView() ) ) {
-		const auto size = maybeHandle->getInitialFileSize();
-		m_namesData.resize( size );
-		return maybeHandle->readExact( m_namesData.data(), size );
-	}
-	return false;
-}
-
-bool SurfaceClassData::isThisKindOfSurface( const wsw::StringView &name ) const {
-	assert( name.isZeroTerminated() );
-	if( m_simpleNames.find( name ) != m_simpleNames.end() ) {
-		return true;
-	}
-	for( const wsw::StringView &pattern: m_patterns ) {
-		assert( pattern.isZeroTerminated() );
-		if( glob_match( pattern.data(), name.data(), 0 ) ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-/**
- * An mutable part, one per thread.
- */
-class SurfaceClassCache {
-	const SurfaceClassData *const m_surfaceClassData;
-	mutable wsw::HashMap<int, bool> m_isThisKindOfSurface;
-public:
-	explicit SurfaceClassCache( const SurfaceClassData *surfaceClassData )
-		: m_surfaceClassData( surfaceClassData ) {}
-
-	[[nodiscard]]
-	bool isThisKindOfSurface( int shaderRef, const wsw::StringView &shaderName ) const {
-		auto it = m_isThisKindOfSurface.find( shaderRef );
-		if( it != m_isThisKindOfSurface.end() ) {
-			return it->second;
-		}
-
-		bool result = m_surfaceClassData->isThisKindOfSurface( shaderName );
-		m_isThisKindOfSurface.insert( std::make_pair( shaderRef, result ) );
-		return result;
-	}
-};
-
-struct SurfaceClasses {
-	const SurfaceClassData smoothSurfaces { "smooth"_asView };
-	const SurfaceClassData absorptiveSurfaces { "absorptive"_asView };
-	const SurfaceClassData metallicSurfaces { "metallic"_asView };
-};
-
 class LeafPropsSampler: public GenericRaycastSampler {
 	static constexpr unsigned MAX_RAYS = 1024;
 
@@ -402,15 +290,9 @@ class LeafPropsSampler: public GenericRaycastSampler {
 	unsigned numRaysHitAbsorptiveSurface { 0 };
 	unsigned numRaysHitMetal { 0 };
 
-	SurfaceClassCache m_smoothSurfaces;
-	SurfaceClassCache m_absorptiveSurfaces;
-	SurfaceClassCache m_metallicSurfaces;
 public:
-	explicit LeafPropsSampler( const SurfaceClasses *classes, bool fastAndCoarse )
-		: maxRays( fastAndCoarse ? MAX_RAYS / 2 : MAX_RAYS )
-		, m_smoothSurfaces( &classes->smoothSurfaces )
-		, m_absorptiveSurfaces( &classes->absorptiveSurfaces )
-		, m_metallicSurfaces( &classes->metallicSurfaces ) {
+	explicit LeafPropsSampler( bool fastAndCoarse )
+		: maxRays( fastAndCoarse ? MAX_RAYS / 2 : MAX_RAYS ) {
 		SetupSamplingRayDirs( dirs, maxRays );
 	}
 
@@ -432,16 +314,14 @@ class LeafPropsComputationTask: public ParallelComputationHost::PartialTask {
 
 	LeafProps ComputeLeafProps( int leafNum );
 public:
-	explicit LeafPropsComputationTask( LeafProps *leafProps_, const SurfaceClasses *classes, bool fastAndCoarse_ )
-		: leafProps( leafProps_ ), sampler( classes, fastAndCoarse_ ), fastAndCoarse( fastAndCoarse_ ) {}
+	explicit LeafPropsComputationTask( LeafProps *leafProps_, bool fastAndCoarse_ )
+		: leafProps( leafProps_ ), sampler( fastAndCoarse_ ), fastAndCoarse( fastAndCoarse_ ) {}
 
 	void Exec() override;
 };
 
 bool LeafPropsCache::ComputeNewState( bool fastAndCoarse ) {
 	leafProps[0] = LeafProps();
-
-	const SurfaceClasses surfaceClasses;
 
 	const int actualNumLeafs = NumLeafs();
 
@@ -460,7 +340,7 @@ bool LeafPropsCache::ComputeNewState( bool fastAndCoarse ) {
 		if( !taskMem ) {
 			break;
 		}
-		auto *const task = new( taskMem )LeafPropsComputationTask( leafProps, &surfaceClasses, fastAndCoarse );
+		auto *const task = new( taskMem )LeafPropsComputationTask( leafProps, fastAndCoarse );
 		if( !computationHost->TryAddTask( task ) ) {
 			break;
 		}
@@ -564,15 +444,13 @@ bool LeafPropsSampler::CheckAndAddHitSurfaceProps( const trace_t &trace ) {
 		return false;
 	}
 
-	const auto shaderNum = trace.shaderNum;
-	const wsw::StringView shaderName( S_ShaderrefName( shaderNum ) );
-	if( m_smoothSurfaces.isThisKindOfSurface( shaderNum, shaderName ) ) {
+	if( surfFlags & ( SURF_WSW_METAL | SURF_WSW_GLASS ) ) {
 		numRaysHitSmoothSurface++;
-	} else if( m_absorptiveSurfaces.isThisKindOfSurface( shaderNum, shaderName ) ) {
+	} else if( surfFlags & ( SURF_WSW_STUCCO | SURF_WSW_WOOD | SURF_WSW_DIRT | SURF_WSW_SAND ) ) {
 		numRaysHitAbsorptiveSurface++;
 	}
 
-	if( m_metallicSurfaces.isThisKindOfSurface( shaderNum, shaderName ) ) {
+	if( surfFlags & SURF_WSW_METAL ) {
 		numRaysHitMetal++;
 	}
 

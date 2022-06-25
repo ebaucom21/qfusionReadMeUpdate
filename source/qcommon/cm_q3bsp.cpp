@@ -23,6 +23,164 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cm_local.h"
 #include "patch.h"
 #include "qfiles.h"
+#include "glob.h"
+
+#include "wswfs.h"
+#include "wswstaticstring.h"
+#include "wswstringsplitter.h"
+
+#include <memory>
+
+using wsw::operator""_asView;
+
+// Using TreeMaps/HashMaps with strings as keys is an anti-pattern.
+// This is a hack to get things done.
+// TODO: Replace by a sane trie implementation.
+
+namespace std {
+	template<>
+	struct hash<wsw::StringView> {
+		auto operator()( const wsw::StringView &s ) const noexcept -> std::size_t {
+			std::string_view stdView( s.data(), s.size() );
+			std::hash<std::string_view> hash;
+			return hash.operator()( stdView );
+		}
+	};
+}
+
+class SurfExtraFlagsCache {
+	struct SurfClassData {
+		wsw::Vector<char> fileData;
+		wsw::HashSet<wsw::StringView> simpleNames;
+		wsw::Vector<wsw::StringView> patterns;
+		unsigned surfFlag;
+
+		[[nodiscard]]
+		bool isThisClassOfSurface( const wsw::StringView &name ) const;
+	};
+
+	struct CacheEntry {
+		std::unique_ptr<char[]> name;
+		unsigned flags;
+	};
+
+	wsw::Vector<SurfClassData> m_classData;
+	wsw::HashMap<wsw::StringView, CacheEntry> m_lookupCache;
+	bool m_triedLoading { false };
+
+	[[nodiscard]]
+	auto loadDataFromFile( const wsw::StringView &prefix ) -> std::optional<wsw::Vector<char>>;
+
+	void loadAndAddClass( const wsw::StringView &prefix, unsigned surfFlag );
+public:
+
+	[[nodiscard]]
+	auto getExtraFlagsForMaterial( const wsw::StringView &material ) -> unsigned;
+};
+
+void SurfExtraFlagsCache::loadAndAddClass( const wsw::StringView &prefix, unsigned surfFlag ) {
+	if( std::optional<wsw::Vector<char>> maybeFileData = loadDataFromFile( prefix ) ) {
+		wsw::Vector<char> fileData( std::move( *maybeFileData ) );
+		wsw::CharLookup separators( "\0\r\n"_asView );
+		wsw::StringSplitter splitter( wsw::StringView( fileData.data(), fileData.size() ) );
+		wsw::HashSet<wsw::StringView> simpleNames;
+		wsw::Vector<wsw::StringView> patterns;
+		while( const std::optional<wsw::StringView> maybeToken = splitter.getNext( separators ) ) {
+			if( const wsw::StringView rawToken = maybeToken->trim(); !rawToken.empty() ) {
+				const auto offset = (size_t)( rawToken.data() - fileData.data() );
+				assert( offset < fileData.size() );
+				// Ensure that tokens are zero-terminated
+				fileData[offset + rawToken.length()] = '\0';
+				wsw::StringView token( rawToken.data(), rawToken.size(), wsw::StringView::ZeroTerminated );
+				if( token.contains( '*' ) ) {
+					patterns.push_back( token );
+				} else {
+					simpleNames.insert( token );
+				}
+			}
+		}
+		m_classData.emplace_back( SurfClassData {
+			.fileData    = std::move( fileData ),
+			.simpleNames = std::move( simpleNames ),
+			.patterns    = std::move( patterns ),
+			.surfFlag    = surfFlag,
+		});
+	}
+}
+
+auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &prefix ) -> std::optional<wsw::Vector<char>> {
+	wsw::StaticString<MAX_QPATH> path;
+	path << "maps/surfaces/"_asView << prefix << ".txt"_asView;
+
+	if( std::optional<wsw::fs::ReadHandle> maybeHandle = wsw::fs::openAsReadHandle( path.asView() ) ) {
+		if( const size_t size = maybeHandle->getInitialFileSize() ) {
+			wsw::Vector<char> result;
+			result.resize( size + 1 );
+			if( maybeHandle->readExact( result.data(), size ) ) {
+				result[size] = '\0';
+				return result;
+			}
+		}
+	}
+
+	return std::nullopt;
+}
+
+bool SurfExtraFlagsCache::SurfClassData::isThisClassOfSurface( const wsw::StringView &name ) const {
+	assert( name.isZeroTerminated() );
+	if( simpleNames.find( name ) != simpleNames.end() ) {
+		return true;
+	}
+	for( const wsw::StringView &pattern: patterns ) {
+		assert( pattern.isZeroTerminated() );
+		if( glob_match( pattern.data(), name.data(), 0 ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+auto SurfExtraFlagsCache::getExtraFlagsForMaterial( const wsw::StringView &material ) -> unsigned {
+	// Postpone loading to the first use (we would like to have logging systems initialized)
+	if( !m_triedLoading ) [[unlikely]] {
+		m_triedLoading = true;
+
+		loadAndAddClass( "stone"_asView, SURF_WSW_STONE );
+		loadAndAddClass( "stucco"_asView, SURF_WSW_STUCCO );
+		loadAndAddClass( "dirt"_asView, SURF_WSW_DIRT );
+		loadAndAddClass( "sand"_asView, SURF_WSW_SAND );
+		loadAndAddClass( "wood"_asView, SURF_WSW_WOOD );
+		loadAndAddClass( "metal"_asView, SURF_WSW_METAL );
+		loadAndAddClass( "glass"_asView, SURF_WSW_GLASS );
+	}
+
+	if( auto it = m_lookupCache.find( material ); it != m_lookupCache.end() ) {
+		return it->second.flags;
+	}
+
+	unsigned flags = 0;
+	for( const SurfClassData &classData: m_classData ) {
+		if( classData.isThisClassOfSurface( material ) ) {
+			flags |= classData.surfFlag;
+			// They are mutually exclusive for now, but things could change
+			break;
+		}
+	}
+
+	// There's no lightweight heap-allocated string without a redundant local buffer, we have to use char arrays
+	const unsigned nameLength = material.length();
+	std::unique_ptr<char[]> name( new char[nameLength + 1] );
+	char *const nameData = name.get();
+	material.copyTo( nameData, nameLength + 1 );
+
+	// Be cautious with moves, the key data should point to the value buffer
+	CacheEntry entry { .name = std::move( name ), .flags = flags };
+	m_lookupCache.insert( std::make_pair( wsw::StringView( nameData, nameLength ), std::move( entry ) ) );
+
+	return flags;
+}
+
+static SurfExtraFlagsCache surfExtraFlagsCache;
 
 #define MAX_FACET_PLANES 32
 
@@ -385,8 +543,11 @@ static void CMod_LoadSurfaces( cmodel_state_t *cms, lump_t *l ) {
 		out->contents = LittleLong( in->contents );
 	}
 
-	for( i = 0; i < count; i++ )
-		cms->map_shaderrefs[i].name = buffer + ( size_t )( ( void * )cms->map_shaderrefs[i].name );
+	for( i = 0; i < count; i++ ) {
+		cshaderref_t *shaderref = &cms->map_shaderrefs[i];
+		shaderref->name = buffer + ( size_t )( ( void * )shaderref->name );
+		shaderref->flags |= (int)::surfExtraFlagsCache.getExtraFlagsForMaterial( wsw::StringView( shaderref->name ) );
+	}
 
 	// For non-FBSP maps (i.e. Q3, RTCW), unset FBSP-specific surface flags
 	if( strcmp( cms->cmap_bspFormat->header, QFBSPHEADER ) ) {
