@@ -193,74 +193,75 @@ void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {
-	const auto *updateState = &src->panningUpdateState;
-
-	// Unfortunately we have to recompute directions every panning update
-	// as the source might have moved and we update panning much more frequently than emission points
-	// (TODO: use cached results for non-moving sources?)
-	vec3_t reflectionDirs[PanningUpdateState::MAX_POINTS];
-	unsigned numReflectionDirs = 0;
-
-	// A weighted sum of directions. Will be used for reflections panning.
-	vec3_t reverbPanDir = { 0, 0, 0 };
-	for( unsigned i = 0; i < updateState->numPassedSecondaryRays; ++i ) {
-		float *dir = &reflectionDirs[numReflectionDirs][0];
-		VectorSubtract( listenerOrigin, src->panningUpdateState.reflectionPoints[i], dir );
-		float squareDistance = VectorLengthSquared( dir );
-		// Do not even take into account directions that have very short segments
-		if( squareDistance < 72.0f * 72.0f ) {
-			continue;
-		}
-
-		numReflectionDirs++;
-		const float distance = std::sqrt( squareDistance );
-		VectorScale( dir, 1.0f / distance, dir );
-		// Store the distance as the 4-th vector component
-
-		// Note: let's apply a factor giving far reflection points direction greater priority.
-		// Otherwise the reverb is often panned to a nearest wall and that's totally wrong.
-		float factor = 0.3f + 0.7f * ( distance / REVERB_ENV_DISTANCE_THRESHOLD );
-		VectorMA( reverbPanDir, factor, dir, reverbPanDir );
-	}
-
-	if( numReflectionDirs ) {
-		VectorNormalize( reverbPanDir );
-	}
-
 	// "If there is an active EaxReverbEffect, setting source origin/velocity is delegated to it".
 	UpdateDelegatedSpatialization( src, listenerOrigin );
 
-	vec3_t basePan;
-	// Convert to "speakers" coordinate system
-	basePan[0] = -DotProduct( reverbPanDir, &listenerAxes[AXIS_RIGHT] );
-	// Not sure about "minus" sign in this case...
-	// We need something like 9.1 sound system (that has channels distinction in height) to test that
-	basePan[1] = -DotProduct( reverbPanDir, &listenerAxes[AXIS_UP] );
-	basePan[2] = -DotProduct( reverbPanDir, &listenerAxes[AXIS_FORWARD] );
-
-	float reflectionsPanScale;
-	float lateReverbPanScale;
-	// Let late reverb be more focused for huge/vast environments
-	// Do not pan early reverb for own sounds.
-	// Pan early reverb much less for own sounds.
-	const float decayFrac = std::min( 1.0f, decayTime / MAX_REVERB_DECAY );
-	// If the sound is relative to the listener, lower the panning
-	if( src->attenuation == 1.0f ) {
-		lateReverbPanScale = 0.25f * decayFrac;
-		reflectionsPanScale = 0.0f;
-	} else {
-		lateReverbPanScale = 0.5f * decayFrac;
-		reflectionsPanScale = 0.5f * lateReverbPanScale;
+	// Disable reverb panning for non-listener-related sounds for now
+	if( src->attenuation != ATTN_NONE ) {
+		return;
 	}
 
-	vec3_t reflectionsPan, lateReverbPan;
-	VectorCopy( basePan, reflectionsPan );
-	VectorScale( reflectionsPan, reflectionsPanScale, reflectionsPan );
-	VectorCopy( basePan, lateReverbPan );
-	VectorScale( lateReverbPan, lateReverbPanScale, lateReverbPan );
+	const auto *updateState = &src->panningUpdateState;
 
-	alEffectfv( src->effect, AL_EAXREVERB_REFLECTIONS_PAN, reflectionsPan );
-	alEffectfv( src->effect, AL_EAXREVERB_LATE_REVERB_PAN, lateReverbPan );
+	float earlyPanDir[3] { 0.0f, 0.0f, 0.0f };
+	float latePanDir[3] { 0.0f, 0.0f, 0.0f };
+
+	unsigned numAccountedDirs = 0;
+	for( unsigned i = 0; i < updateState->numPassedSecondaryRays; ++i ) {
+		float dir[3];
+		VectorSubtract( listenerOrigin, src->panningUpdateState.reflectionPoints[i], dir );
+
+		float squareDistance = VectorLengthSquared( dir );
+		// Do not even take into account directions that have very short segments
+		if( squareDistance < 48.0f * 48.0f ) {
+			continue;
+		}
+
+		numAccountedDirs++;
+
+		const float rcpDistance = Q_RSqrt( squareDistance );
+		VectorScale( dir, rcpDistance, dir );
+
+		const float distance         = squareDistance * rcpDistance;
+		constexpr float rcpThreshold = 1.0f / REVERB_ENV_DISTANCE_THRESHOLD;
+		const float distanceFrac     = std::min( 1.0f, distance * rcpThreshold );
+
+		// Give far reflections a priority. Disallow zero values to guarantee that the normalization would succeed.
+		const float lateFrac = 0.3f + 0.7f * distanceFrac;
+		VectorMA( latePanDir, lateFrac, dir, latePanDir );
+
+		// Give near reflections a priority
+		const float earlyFrac = 1.0f - 0.7f * distanceFrac;
+		VectorMA( earlyPanDir, earlyFrac, dir, earlyPanDir );
+	}
+
+	float earlyPan[3] { 0.0f, 0.0f, 0.0f };
+	float latePan[3] { 0.0f, 0.0f, 0.0f };
+	if( numAccountedDirs ) {
+		VectorNormalizeFast( earlyPanDir );
+		VectorNormalizeFast( latePanDir );
+
+		// Convert to "speakers" coordinate system
+		earlyPan[0] = -DotProduct( earlyPanDir, &listenerAxes[AXIS_RIGHT] );
+		latePan[0]  = -DotProduct( latePanDir, &listenerAxes[AXIS_RIGHT] );
+
+		// Not sure about "minus" sign in this case...
+		// We need something like 9.1 sound system (that has channels distinction in height) to test that
+		earlyPan[1] = -DotProduct( earlyPanDir, &listenerAxes[AXIS_UP] );
+		latePan[1]  = -DotProduct( latePanDir, &listenerAxes[AXIS_UP] );
+
+		earlyPan[2] = -DotProduct( earlyPanDir, &listenerAxes[AXIS_FORWARD] );
+		latePan[2]  = -DotProduct( latePanDir, &listenerAxes[AXIS_FORWARD] );
+
+		// We should be more confident regarding the direction if most of primary rays did yield results
+		const float panningStrengthScale = 0.3f * (float)numAccountedDirs * Q_Rcp( (float)updateState->numPrimaryRays );
+
+		VectorScale( earlyPan, panningStrengthScale, earlyPan );
+		VectorScale( latePan, panningStrengthScale, latePan );
+	}
+
+	alEffectfv( src->effect, AL_EAXREVERB_REFLECTIONS_PAN, earlyPan );
+	alEffectfv( src->effect, AL_EAXREVERB_LATE_REVERB_PAN, latePan );
 }
 
 void EaxReverbEffect::UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin ) {

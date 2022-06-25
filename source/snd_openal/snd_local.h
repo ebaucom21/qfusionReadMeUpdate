@@ -142,6 +142,7 @@ typedef struct {
 struct PanningUpdateState {
 	static constexpr auto MAX_POINTS = 80;
 	vec3_t reflectionPoints[MAX_POINTS];
+	unsigned numPrimaryRays;
 	unsigned numPassedSecondaryRays;
 };
 

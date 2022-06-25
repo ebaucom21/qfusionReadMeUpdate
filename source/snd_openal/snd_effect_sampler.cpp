@@ -359,6 +359,7 @@ void ReverbEffectSampler::EmitSecondaryRays() {
 	int listenerLeafNum = listenerProps->GetLeafNum();
 
 	auto *const panningUpdateState = &src->panningUpdateState;
+	panningUpdateState->numPrimaryRays = numPrimaryRays;
 
 	trace_t trace;
 
