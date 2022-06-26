@@ -98,7 +98,7 @@ void MediaCache::registerMaterials() {
 void MediaCache::registerSound( CachedSound *sound ) {
 	if( !sound->m_handle ) {
 		assert( sound->m_name.isZeroTerminated() );
-		sound->m_handle = SoundSystem::Instance()->RegisterSound( sound->m_name.data());
+		sound->m_handle = SoundSystem::instance()->registerSound( sound->m_name.data() );
 	}
 }
 
@@ -111,7 +111,7 @@ void MediaCache::registerSoundsArray( MediaCache::LinkedSoundsArray *array ) {
 	char buffer[1024];
 	for( unsigned i = 0; i < array->m_numHandles; ++i ) {
 		if( !array->m_handles[i] ) {
-			array->m_handles[i] = SoundSystem::Instance()->RegisterSound( formatName( buffer, array, i ) );
+			array->m_handles[i] = SoundSystem::instance()->registerSound( formatName( buffer, array, i ) );
 		}
 	}
 }

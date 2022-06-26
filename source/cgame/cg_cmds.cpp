@@ -76,7 +76,7 @@ static void CG_SC_ChatPrint( void ) {
 	}
 
 	if( cg_chatBeep->integer ) {
-		SoundSystem::Instance()->StartLocalSound( cgs.media.sfxChat, 1.0f );
+		SoundSystem::instance()->startLocalSound( cgs.media.sfxChat, 1.0f );
 	}
 }
 
@@ -187,7 +187,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 		}
 	} else if( i >= CS_SOUNDS && i < CS_SOUNDS + MAX_SOUNDS ) {
 		if( !string.startsWith( '*' ) ) {
-			cgs.soundPrecache[i - CS_SOUNDS] = SoundSystem::Instance()->RegisterSound( string.data() );
+			cgs.soundPrecache[i - CS_SOUNDS] = SoundSystem::instance()->registerSound( string.data() );
 		}
 	} else if( i >= CS_IMAGES && i < CS_IMAGES + MAX_IMAGES ) {
 		if( string.indexOf( kCorrectionSubstring ) != std::nullopt ) { // HACK HACK HACK -- for color correction LUTs
@@ -573,7 +573,7 @@ static void CG_SC_PlaySound() {
 		return;
 	}
 
-	SoundSystem::Instance()->StartLocalSound( Cmd_Argv( 1 ) );
+	SoundSystem::instance()->startLocalSound( Cmd_Argv( 1 ), 1.0f );
 }
 
 void CG_SC_ResetFragsFeed() {

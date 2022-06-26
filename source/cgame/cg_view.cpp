@@ -108,7 +108,7 @@ static void CG_AddLocalSounds( void ) {
 
 			if( remainingSeconds != lastSecond ) {
 				if( 1 + remainingSeconds < 4 ) {
-					struct sfx_s *sound = SoundSystem::Instance()->RegisterSound( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1 + remainingSeconds, 1 ) );
+					struct sfx_s *sound = SoundSystem::instance()->registerSound( va( S_ANNOUNCER_COUNTDOWN_COUNT_1_to_3_SET_1_to_2, 1 + remainingSeconds, 1 ) );
 					CG_AddAnnouncerEvent( sound, false );
 				}
 
@@ -125,13 +125,13 @@ static void CG_AddLocalSounds( void ) {
 	// Stop background music in postmatch state
 	if( GS_MatchState() >= MATCH_STATE_POSTMATCH ) {
 		if( !postmatchsilence_set && !demostream ) {
-			SoundSystem::Instance()->StopBackgroundTrack();
+			SoundSystem::instance()->stopBackgroundTrack();
 			postmatchsilence_set = true;
 			background = false;
 		}
 	} else {
 		if( cgs.demoPlaying && cgs.demoAudioStream && !demostream ) {
-			SoundSystem::Instance()->StartBackgroundTrack( cgs.demoAudioStream, NULL, 0 );
+			SoundSystem::instance()->startBackgroundTrack( cgs.demoAudioStream, NULL, 0 );
 			demostream = true;
 		}
 
@@ -1097,7 +1097,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 		R_DrawStretchPic( 0, 0, cgs.vidWidth, cgs.vidHeight, 0, 0, 1, 1, colorBlack, cgs.shaderWhite );
 
-		SoundSystem::Instance()->Update( vec3_origin, vec3_origin, axis_identity );
+		SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
 
 		return;
 	}
@@ -1187,7 +1187,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 
 	cg.oldAreabits = true;
 
-	SoundSystem::Instance()->Update( cg.view.origin, cg.view.velocity, cg.view.axis );
+	SoundSystem::instance()->updateListener( cg.view.origin, cg.view.velocity, cg.view.axis );
 
 	CG_Draw2D();
 

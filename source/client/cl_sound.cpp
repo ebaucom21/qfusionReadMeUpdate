@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static cvar_t *s_module = nullptr;
 
-SoundSystem *SoundSystem::instance = nullptr;
+SoundSystem *SoundSystem::s_instance = nullptr;
 
 auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
 	if( !name ) {
@@ -64,7 +64,7 @@ void CL_SoundModule_Init( bool verbose ) {
 
 	const SoundSystem::InitOptions options { .verbose = verbose, .useNullSystem = !s_module->integer };
 	// TODO: Is the HWND really needed?
-	if( !SoundSystem::Init( &cl, VID_GetWindowHandle(), options ) ) {
+	if( !SoundSystem::init( &cl, options ) ) {
 		Cvar_ForceSet( s_module->name, "0" );
 	}
 
@@ -74,5 +74,5 @@ void CL_SoundModule_Init( bool verbose ) {
 }
 
 void CL_SoundModule_Shutdown( bool verbose ) {
-	SoundSystem::Shutdown( verbose );
+	SoundSystem::shutdown( verbose );
 }

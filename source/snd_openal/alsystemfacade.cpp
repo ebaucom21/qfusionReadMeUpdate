@@ -12,7 +12,7 @@ extern cvar_s *s_globalfocus;
 
 namespace wsw::snd {
 
-wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::TryCreate( client_state_s *client, void *hWnd, bool verbose ) {
+wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::tryCreate( client_state_s *client, bool verbose ) {
 	auto *arg = (ThreadProcArg *)Q_malloc( sizeof( ThreadProcArg ) );
 	if( !arg ) {
 		return nullptr;
@@ -44,7 +44,7 @@ wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::TryCreate( client_state_s *cli
 
 	if( !instance->m_backend.m_initialized ) {
 		// This should dispose the thread and the pipe
-		instance->DeleteSelf( verbose );
+		instance->deleteSelf( verbose );
 		return nullptr;
 	}
 
@@ -53,7 +53,7 @@ wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::TryCreate( client_state_s *cli
 	return instance;
 }
 
-void ALSoundSystem::DeleteSelf( bool verbose ) {
+void ALSoundSystem::deleteSelf( bool verbose ) {
 	m_useVerboseShutdown = verbose;
 	::alSoundSystemHolder.shutdown();
 }
@@ -68,9 +68,10 @@ ALSoundSystem::ALSoundSystem( client_state_s *client, qbufPipe_s *pipe, qthread_
 }
 
 ALSoundSystem::~ALSoundSystem() {
-	StopAllSounds( StopAndClear | StopMusic );
+	stopAllSounds( StopAndClear | StopMusic );
 	// wake up the mixer
-	Activate( true );
+	activate( true );
+
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
@@ -89,11 +90,11 @@ ALSoundSystem::~ALSoundSystem() {
 	QBufPipe_Destroy( &m_pipe );
 }
 
-void ALSoundSystem::PostInit() {
+void ALSoundSystem::postInit() {
 	ENV_Init();
 }
 
-void ALSoundSystem::BeginRegistration() {
+void ALSoundSystem::beginRegistration() {
 	s_registration_sequence++;
 	if( !s_registration_sequence ) {
 		s_registration_sequence = 1;
@@ -105,7 +106,7 @@ void ALSoundSystem::BeginRegistration() {
 	QBufPipe_Finish( m_pipe );
 }
 
-void ALSoundSystem::EndRegistration() {
+void ALSoundSystem::endRegistration() {
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
@@ -129,10 +130,7 @@ void ALSoundSystem::EndRegistration() {
 	ENV_EndRegistration();
 }
 
-/*
-* SF_RegisterSound
-*/
-sfx_t *ALSoundSystem::RegisterSound( const char *name ) {
+sfx_t *ALSoundSystem::registerSound( const char *name ) {
 	sfx_t *sfx = S_FindBuffer( getPathForName( name, &m_tmpPathBuffer1 ) );
 	m_loadSfxCall.exec( sfx->id );
 	sfx->used = Sys_Milliseconds();
@@ -140,7 +138,7 @@ sfx_t *ALSoundSystem::RegisterSound( const char *name ) {
 	return sfx;
 }
 
-void ALSoundSystem::Activate( bool active ) {
+void ALSoundSystem::activate( bool active ) {
 	if( !active && s_globalfocus->integer ) {
 		return;
 	}
@@ -150,7 +148,7 @@ void ALSoundSystem::Activate( bool active ) {
 	m_activateCall.exec( active );
 }
 
-void ALSoundSystem::StartBackgroundTrack( const char *intro, const char *loop, int mode ) {
+void ALSoundSystem::startBackgroundTrack( const char *intro, const char *loop, int mode ) {
 	const char *introPath = getPathForName( intro, &m_tmpPathBuffer1 );
 	const char *loopPath  = getPathForName( loop, &m_tmpPathBuffer2 );
 
@@ -160,7 +158,7 @@ void ALSoundSystem::StartBackgroundTrack( const char *intro, const char *loop, i
 	m_startBackgroundTrackCall.exec( (uintptr_t)boxedIntro, (uintptr_t)boxedLoop, mode );
 }
 
-void ALSoundSystem::Update( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
+void ALSoundSystem::updateListener( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
 	m_setEntitySpatialParamsCall.flush();
 
 	std::array<Vec3, 3> argAxis {

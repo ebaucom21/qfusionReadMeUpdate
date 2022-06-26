@@ -445,7 +445,7 @@ static void CG_RegisterSounds( void ) {
 			if( !CG_LoadingItemName( name.data() ) ) {
 				return;
 			}
-			cgs.soundPrecache[i] = SoundSystem::Instance()->RegisterSound( name.data() );
+			cgs.soundPrecache[i] = SoundSystem::instance()->registerSound( name.data() );
 		}
 	}
 
@@ -852,14 +852,14 @@ void CG_StartBackgroundTrack( void ) {
 			Q_strncpyz( intro, COM_Parse( &string ), sizeof( intro ) );
 			Q_strncpyz( loop, COM_Parse( &string ), sizeof( loop ) );
 			if( intro[0] ) {
-				SoundSystem::Instance()->StartBackgroundTrack( intro, loop, 0 );
+				SoundSystem::instance()->startBackgroundTrack( intro, loop, 0 );
 				return;
 			}
 		}
 	}
 
 	if( cg_playList->string[0] ) {
-		SoundSystem::Instance()->StartBackgroundTrack( cg_playList->string, NULL, cg_playListShuffle->integer ? 1 : 0 );
+		SoundSystem::instance()->startBackgroundTrack( cg_playList->string, NULL, cg_playListShuffle->integer ? 1 : 0 );
 	}
 }
 

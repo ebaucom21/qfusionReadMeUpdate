@@ -392,7 +392,7 @@ static void SCR_DrawNotify( void ) {
 }
 
 void SCR_BeginLoadingPlaque( void ) {
-	SoundSystem::Instance()->StopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
 	cl.configStrings.clear();
 

@@ -276,8 +276,8 @@ void AppActivate( BOOL fActive, BOOL minimize, BOOL destroy ) {
 
 	if( prevActiveApp != ActiveApp ) {
 		// Use the Win32-specific SoundSystem accessor hack
-		if( auto *soundSystem = SoundSystem::InstanceOrNull() ) {
-			soundSystem->Activate( ActiveApp );
+		if( auto *soundSystem = SoundSystem::instanceOrNull() ) {
+			soundSystem->activate( ActiveApp );
 		}
 	}
 
@@ -474,7 +474,7 @@ LONG WINAPI MainWndProc(
 		break;
 
 		case WM_ENTERSIZEMOVE:
-			SoundSystem::Instance()->Clear();
+			SoundSystem::instance()->clear();
 			break;
 
 		case WM_IME_STARTCOMPOSITION:

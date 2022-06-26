@@ -26,11 +26,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_public.h"
 
 void EffectsSystemFacade::startSound( sfx_s *sfx, const float *origin, float attenuation ) {
-	SoundSystem::Instance()->StartFixedSound( sfx, origin, CHAN_AUTO, cg_volume_effects->value, attenuation );
+	SoundSystem::instance()->startFixedSound( sfx, origin, CHAN_AUTO, cg_volume_effects->value, attenuation );
 }
 
 void EffectsSystemFacade::startRelativeSound( sfx_s *sfx, int entNum, float attenuation ) {
-	SoundSystem::Instance()->StartRelativeSound( sfx, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
+	SoundSystem::instance()->startRelativeSound( sfx, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
 }
 
 void EffectsSystemFacade::spawnRocketExplosionEffect( const float *origin, const float *dir, int mode ) {

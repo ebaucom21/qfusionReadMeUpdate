@@ -14,85 +14,87 @@ public:
 		ALSoundSystem *instance;
 	};
 
-	static ALSoundSystem *TryCreate( client_state_s *client, void *hWnd, bool verbose );
+	[[nodiscard]]
+	static auto tryCreate( client_state_s *client, bool verbose ) -> ALSoundSystem *;
 
 	ALSoundSystem( client_state_s *client, qbufPipe_s *pipe, qthread_s *thread, bool verbose );
 	~ALSoundSystem() override;
 
-	void DeleteSelf( bool verbose ) override;
+	void deleteSelf( bool verbose ) override;
 
-	void PostInit() override;
+	void postInit() override;
 
-	void BeginRegistration() override;
-	void EndRegistration() override;
+	void beginRegistration() override;
+	void endRegistration() override;
 
-	void StopAllSounds( unsigned flags ) override {
+	void stopAllSounds( unsigned flags ) override {
 		m_stopAllSoundsCall.exec( flags );
 	}
 
-	void Clear() override {
+	void clear() override {
 		m_clearCall.exec();
 	}
 
-	void Update( const float *origin, const float *velocity, const mat3_t axis ) override;
+	void updateListener( const float *origin, const float *velocity, const mat3_t axis ) override;
 
-	void Activate( bool isActive ) override;
+	void activate( bool isActive ) override;
 
-	void SetEntitySpatialization( int entNum, const float *origin, const float *velocity ) override {
+	void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) override {
 		m_setEntitySpatialParamsCall.exec( entNum, Vec3( origin ), Vec3( velocity ) );
 	}
 
-	sfx_s *RegisterSound( const char *name ) override;
+	[[nodiscard]]
+	auto registerSound( const char *name ) -> sfx_s * override;
 
-	void StartFixedSound( sfx_s *sfx, const float *origin, int channel, float volume, float attenuation ) override {
+	void startFixedSound( sfx_s *sfx, const float *origin, int channel, float volume, float attenuation ) override {
 		if( sfx ) {
 			m_startFixedSoundCall.exec( sfx->id, Vec3( origin ), channel, volume, attenuation );
 		}
 	}
 
-	void StartRelativeSound( sfx_s *sfx, int entNum, int channel, float volume, float attenuation ) override {
+	void startRelativeSound( sfx_s *sfx, int entNum, int channel, float volume, float attenuation ) override {
 		if( sfx ) {
 			m_startRelativeSoundCall.exec( sfx->id, entNum, channel, volume, attenuation );
 		}
 	}
 
-	void StartGlobalSound( sfx_s *sfx, int channel, float volume ) override {
+	void startGlobalSound( sfx_s *sfx, int channel, float volume ) override {
 		if( sfx ) {
 			m_startGlobalSoundCall.exec( sfx->id, channel, volume );
 		}
 	}
 
-	void StartLocalSound( const char *name, float volume ) override {
-		StartLocalSound( RegisterSound( name ), volume );
+	void startLocalSound( const char *name, float volume ) override {
+		startLocalSound( registerSound( name ), volume );
 	}
 
-	void StartLocalSound( sfx_s *sfx, float volume ) override {
+	void startLocalSound( sfx_s *sfx, float volume ) override {
 		if( sfx ) {
 			m_startLocalSoundCall.exec( sfx->id, volume );
 		}
 	}
 
-	void AddLoopSound( sfx_s *sfx, int entNum, float volume, float attenuation ) override {
+	void addLoopSound( sfx_s *sfx, int entNum, float volume, float attenuation ) override {
 		if( sfx ) {
 			m_addLoopSoundCall.exec( sfx->id, entNum, volume, attenuation );
 		}
 	}
 
-	void StartBackgroundTrack( const char *intro, const char *loop, int mode ) override;
+	void startBackgroundTrack( const char *intro, const char *loop, int mode ) override;
 
-	void StopBackgroundTrack() override {
+	void stopBackgroundTrack() override {
 		m_stopBackgroundTrackCall.exec();
 	}
 
-	void PrevBackgroundTrack() override {
+	void prevBackgroundTrack() override {
 		m_advanceBackgroundTrackCall.exec( -1 );
 	}
 
-	void NextBackgroundTrack() override {
+	void nextBackgroundTrack() override {
 		m_advanceBackgroundTrackCall.exec( +1 );
 	}
 
-	void PauseBackgroundTrack() override {
+	void pauseBackgroundTrack() override {
 		m_advanceBackgroundTrackCall.exec( 0 );
 	}
 private:

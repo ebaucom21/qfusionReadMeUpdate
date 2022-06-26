@@ -384,7 +384,7 @@ static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
 	CL_SoundModule_Init( verbose );
 
 	RF_BeginRegistration();
-	SoundSystem::Instance()->BeginRegistration();
+	SoundSystem::instance()->beginRegistration();
 
 	FTLIB_PrecacheFonts( verbose );
 
@@ -404,7 +404,7 @@ static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
 	}
 
 	RF_EndRegistration();
-	SoundSystem::Instance()->EndRegistration();
+	SoundSystem::instance()->endRegistration();
 
 	vid_ref_modified = false;
 	vid_ref_verbose = true;

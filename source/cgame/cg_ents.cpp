@@ -1525,7 +1525,7 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 
 	if( attenuation == ATTN_NONE ) {
 		if( cgs.soundPrecache[soundindex] ) {
-			SoundSystem::Instance()->StartGlobalSound( cgs.soundPrecache[soundindex], channel & ~CHAN_FIXED, 1.0f );
+			SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel & ~CHAN_FIXED, 1.0f );
 		}
 		return;
 	}
@@ -1556,11 +1556,11 @@ void CG_SoundEntityNewState( centity_t *cent ) {
 	}
 
 	if( fixed ) {
-		SoundSystem::Instance()->StartFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
+		SoundSystem::instance()->startFixedSound( cgs.soundPrecache[soundindex], cent->current.origin, channel, 1.0f, attenuation );
 	} else if( ISVIEWERENTITY( owner ) ) {
-		SoundSystem::Instance()->StartGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
+		SoundSystem::instance()->startGlobalSound( cgs.soundPrecache[soundindex], channel, 1.0f );
 	} else {
-		SoundSystem::Instance()->StartRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
+		SoundSystem::instance()->startRelativeSound( cgs.soundPrecache[soundindex], owner, channel, 1.0f, attenuation );
 	}
 }
 
@@ -1573,7 +1573,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 		return;
 	}
 
-	SoundSystem::Instance()->AddLoopSound( cgs.soundPrecache[state->sound], state->number, cg_volume_effects->value, ISVIEWERENTITY( state->number ) ? ATTN_NONE : ATTN_IDLE );
+	SoundSystem::instance()->addLoopSound( cgs.soundPrecache[state->sound], state->number, cg_volume_effects->value, ISVIEWERENTITY( state->number ) ? ATTN_NONE : ATTN_IDLE );
 }
 
 /*
@@ -1889,7 +1889,7 @@ void CG_LerpEntities( void ) {
 		if( spatialize ) {
 			vec3_t origin, velocity;
 			CG_GetEntitySpatilization( number, origin, velocity );
-			SoundSystem::Instance()->SetEntitySpatialization( number, origin, velocity );
+			SoundSystem::instance()->setEntitySpatialParams( number, origin, velocity );
 		}
 	}
 }

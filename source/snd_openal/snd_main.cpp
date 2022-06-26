@@ -29,39 +29,41 @@ class NullSoundSystem : public SoundSystem {
 public:
 	explicit NullSoundSystem( client_state_s *client_ ) : SoundSystem( client_ ) {}
 
-	void DeleteSelf( bool ) override;
+	void deleteSelf( bool ) override;
 
-	void PostInit() override {}
+	void postInit() override {}
 
-	void BeginRegistration() override {}
-	void EndRegistration() override {}
+	void beginRegistration() override {}
+	void endRegistration() override {}
 
-	void StopAllSounds( unsigned ) override {}
+	void stopAllSounds( unsigned ) override {}
 
-	void Clear() override {}
-	void Update( const float *, const float *, const mat3_t ) override {}
-	void Activate( bool ) override {}
+	void clear() override {}
+	void updateListener( const float *, const float *, const mat3_t ) override {}
+	void activate( bool ) override {}
 
-	void SetEntitySpatialization( int, const float *, const float * ) override {};
+	void setEntitySpatialParams( int, const float *, const float * ) override {};
 
-	sfx_s *RegisterSound( const char * ) override { return nullptr; }
-	void StartFixedSound( sfx_s *, const float *, int, float, float ) override {}
-	void StartRelativeSound( sfx_s *, int, int, float, float ) override {}
-	void StartGlobalSound( sfx_s *, int, float ) override {}
-	void StartLocalSound( const char *, float ) override {}
-	void StartLocalSound( sfx_s *, float ) override {}
-	void AddLoopSound( sfx_s *, int, float, float ) override {}
+	[[nodiscard]]
+	auto registerSound( const char * ) -> sfx_s * override { return nullptr; }
 
-	void StartBackgroundTrack( const char *, const char *, int ) override {}
-	void StopBackgroundTrack() override {}
-	void NextBackgroundTrack() override {}
-	void PrevBackgroundTrack() override {}
-	void PauseBackgroundTrack() override {}
+	void startFixedSound( sfx_s *, const float *, int, float, float ) override {}
+	void startRelativeSound( sfx_s *, int, int, float, float ) override {}
+	void startGlobalSound( sfx_s *, int, float ) override {}
+	void startLocalSound( const char *, float ) override {}
+	void startLocalSound( sfx_s *, float ) override {}
+	void addLoopSound( sfx_s *, int, float, float ) override {}
+
+	void startBackgroundTrack( const char *, const char *, int ) override {}
+	void stopBackgroundTrack() override {}
+	void nextBackgroundTrack() override {}
+	void prevBackgroundTrack() override {}
+	void pauseBackgroundTrack() override {}
 };
 
 static SingletonHolder<NullSoundSystem> nullSoundSystemHolder;
 
-void NullSoundSystem::DeleteSelf( bool ) {
+void NullSoundSystem::deleteSelf( bool ) {
 	::nullSoundSystemHolder.shutdown();
 }
 
@@ -77,11 +79,11 @@ cvar_t *s_hrtf;
 cvar_t *s_stereo2mono;
 cvar_t *s_globalfocus;
 
-static void SF_Music_f( void ) {
+static void SF_Music_f() {
 	if( Cmd_Argc() == 2 ) {
-		SoundSystem::Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
+		SoundSystem::instance()->startBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
 	} else if( Cmd_Argc() == 3 ) {
-		SoundSystem::Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
+		SoundSystem::instance()->startBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
 	} else {
 		Com_Printf( "music <intro|playlist> [loop|shuffle]\n" );
 		return;
@@ -89,22 +91,22 @@ static void SF_Music_f( void ) {
 }
 
 static void SF_StopBackgroundTrack() {
-	SoundSystem::Instance()->StopBackgroundTrack();
+	SoundSystem::instance()->stopBackgroundTrack();
 }
 
 static void SF_PrevBackgroundTrack() {
-	SoundSystem::Instance()->PrevBackgroundTrack();
+	SoundSystem::instance()->prevBackgroundTrack();
 }
 
 static void SF_NextBackgroundTrack() {
-	SoundSystem::Instance()->NextBackgroundTrack();
+	SoundSystem::instance()->nextBackgroundTrack();
 }
 
 static void SF_PauseBackgroundTrack() {
-	SoundSystem::Instance()->PauseBackgroundTrack();
+	SoundSystem::instance()->pauseBackgroundTrack();
 }
 
-bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &options ) {
+bool SoundSystem::init( client_state_t *client, const InitOptions &options ) {
 	s_volume         = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
 	s_musicvolume    = Cvar_Get( "s_musicvolume", "0.05", CVAR_ARCHIVE );
 	s_doppler        = Cvar_Get( "s_doppler", "1.0", CVAR_ARCHIVE );
@@ -124,29 +126,29 @@ bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &o
 	Cmd_AddCommand( "pausemusic", SF_PauseBackgroundTrack );
 
 	if( !options.useNullSystem ) {
-		instance = wsw::snd::ALSoundSystem::TryCreate( client, hWnd, options.verbose );
-		if( instance ) {
-			instance->PostInit();
+		s_instance = wsw::snd::ALSoundSystem::tryCreate( client, options.verbose );
+		if( s_instance ) {
+			s_instance->postInit();
 			return true;
 		}
 	}
 
 	::nullSoundSystemHolder.init( client );
-	instance = nullSoundSystemHolder.instance();
-	instance->PostInit();
+	s_instance = nullSoundSystemHolder.instance();
+	s_instance->postInit();
 	return options.useNullSystem;
 }
 
-void SoundSystem::Shutdown( bool verbose ) {
+void SoundSystem::shutdown( bool verbose ) {
 	Cmd_RemoveCommand( "music" );
 	Cmd_RemoveCommand( "stopmusic" );
 	Cmd_RemoveCommand( "prevmusic" );
 	Cmd_RemoveCommand( "nextmusic" );
 	Cmd_RemoveCommand( "pausemusic" );
 
-	if( instance ) {
-		instance->DeleteSelf( verbose );
-		instance = nullptr;
+	if( s_instance ) {
+		s_instance->deleteSelf( verbose );
+		s_instance = nullptr;
 	}
 }
 
@@ -210,7 +212,7 @@ const char *S_ErrorMessage( ALenum error ) {
 void S_Trace( trace_t *tr, const vec3_t start,
 			  const vec3_t end, const vec3_t mins,
 			  const vec3_t maxs, int mask, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		CM_TransformedBoxTrace( cms, tr, start, end, mins, maxs, nullptr, mask, nullptr, nullptr, topNodeHint );
 		return;
 	}
@@ -221,7 +223,7 @@ void S_Trace( trace_t *tr, const vec3_t start,
 
 wsw::StringView S_ShaderrefName( int shaderNum ) {
 	const char *s = nullptr;
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		s = CM_ShaderrefName( cms, shaderNum );
 	}
 	// Should really always return a valid name ref
@@ -229,49 +231,49 @@ wsw::StringView S_ShaderrefName( int shaderNum ) {
 }
 
 int S_PointContents( const float *p, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_TransformedPointContents( cms, p, nullptr, nullptr, nullptr, topNodeHint );
 	}
 	return 0;
 }
 
 int S_PointLeafNum( const vec3_t p, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_PointLeafnum( cms, p, topNodeHint );
 	}
 	return 0;
 }
 
 int S_NumLeafs() {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_NumLeafs( cms );
 	}
 	return 0;
 }
 
 const vec3_t *S_GetLeafBounds( int leafnum ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_GetLeafBounds( cms, leafnum );
 	}
 	return nullptr;
 }
 
 bool S_LeafsInPVS( int leafNum1, int leafNum2 ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return ( leafNum1 == leafNum2 ) || CM_LeafsInPVS( cms, leafNum1, leafNum2 );
 	}
 	return true;
 }
 
 int S_FindTopNodeForBox( const vec3_t mins, const vec3_t maxs ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_FindTopNodeForBox( cms, mins, maxs );
 	}
 	return 0;
 }
 
 int S_FindTopNodeForSphere( const vec3_t center, float radius ) {
-	if( const auto *cms = SoundSystem::Instance()->GetClient()->cms ) {
+	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
 		return CM_FindTopNodeForSphere( cms, center, radius );
 	}
 	return 0;

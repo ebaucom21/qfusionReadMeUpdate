@@ -33,9 +33,9 @@ struct sfx_s;
 struct client_state_s;
 
 class SoundSystem {
-	static SoundSystem *instance;
+	static SoundSystem *s_instance;
 
-	client_state_s *const client;
+	client_state_s *const m_client;
 
 #ifdef WIN32
 	/**
@@ -47,73 +47,75 @@ class SoundSystem {
 	/**
 	 * A hack that makes the instance state accessible for the Win32-specific code
 	 */
-	static SoundSystem *InstanceOrNull() { return instance; }
+	static SoundSystem *instanceOrNull() { return s_instance; }
 #endif
 protected:
 	[[nodiscard]]
 	static auto getPathForName( const char *name, wsw::String *reuse ) -> const char *;
 
-	explicit SoundSystem( client_state_s *client_ ) : client( client_ ) {}
+	explicit SoundSystem( client_state_s *client ) : m_client( client ) {}
 public:
 	struct InitOptions {
 		bool verbose { false };
 		bool useNullSystem { false };
 	};
 
-	static bool Init( client_state_s *client, void *hWnd, const InitOptions &options );
-	static void Shutdown( bool verbose );
+	[[nodiscard]]
+	static bool init( client_state_s *client, const InitOptions &options );
 
-	static SoundSystem *Instance() {
-		assert( instance );
-		return instance;
+	static void shutdown( bool verbose );
+
+	[[nodiscard]]
+	static auto instance() -> SoundSystem * {
+		assert( s_instance );
+		return s_instance;
 	}
 
-	client_state_s *GetClient() { return client; }
-	const client_state_s *GetClient() const { return client; }
+	// TODO: Build within the client code so we don't need this
+	[[nodiscard]]
+	auto getClient() -> client_state_s * { return m_client; }
+	[[nodiscard]]
+	auto getClient() const -> const client_state_s * { return m_client; }
 
 	virtual ~SoundSystem() = default;
 
-	virtual void DeleteSelf( bool verbose ) = 0;
+	// TODO: Fix this
+	virtual void deleteSelf( bool verbose ) = 0;
 
 	/**
 	 * @todo this is just to break a circular dependency. Refactor global objects into SoundSystem member fields.
 	 */
-	virtual void PostInit() = 0;
+	virtual void postInit() = 0;
 
-	virtual void BeginRegistration() = 0;
-	virtual void EndRegistration() = 0;
+	virtual void beginRegistration() = 0;
+	virtual void endRegistration() = 0;
 
-	enum StopFlags : unsigned {
-		StopAndClear = 0x1,
-		StopMusic = 0x2
-	};
+	enum StopFlags : unsigned { StopAndClear = 0x1, StopMusic = 0x2 };
 
-	virtual void StopAllSounds( unsigned flags = 0 ) = 0;
+	virtual void stopAllSounds( unsigned flags = 0 ) = 0;
 
-	virtual void Clear() = 0;
-	virtual void Update( const float *origin, const float *velocity, const mat3_t axis ) = 0;
-	virtual void Activate( bool isActive ) = 0;
+	virtual void clear() = 0;
+	virtual void updateListener( const float *origin, const float *velocity, const mat3_t axis ) = 0;
+	virtual void activate( bool isActive ) = 0;
 
-	virtual void SetEntitySpatialization( int entNum, const float *origin, const float *velocity ) = 0;
+	virtual void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) = 0;
 
-	virtual sfx_s *RegisterSound( const char *name ) = 0;
-	virtual void StartFixedSound( sfx_s *sfx, const float *origin, int channel, float fvol, float attenuation ) = 0;
-	virtual void StartRelativeSound( sfx_s *sfx, int entNum, int channel, float fvol, float attenuation ) = 0;
-	virtual void StartGlobalSound( sfx_s *sfx, int channel, float fvol ) = 0;
+	[[nodiscard]]
+	virtual auto registerSound( const char *name ) -> sfx_s * = 0;
 
-	void StartLocalSound( const char *name ) {
-		StartLocalSound( name, 1.0f );
-	}
+	virtual void startFixedSound( sfx_s *sfx, const float *origin, int channel, float fvol, float attenuation ) = 0;
+	virtual void startRelativeSound( sfx_s *sfx, int entNum, int channel, float fvol, float attenuation ) = 0;
+	virtual void startGlobalSound( sfx_s *sfx, int channel, float fvol ) = 0;
 
-	virtual void StartLocalSound( const char *name, float fvol ) = 0;
-	virtual void StartLocalSound( sfx_s *sfx, float fvol ) = 0;
-	virtual void AddLoopSound( sfx_s *sfx, int entNum, float fvol, float attenuation ) = 0;
+	virtual void startLocalSound( const char *name, float fvol ) = 0;
+	virtual void startLocalSound( sfx_s *sfx, float fvol ) = 0;
+	virtual void addLoopSound( sfx_s *sfx, int entNum, float fvol, float attenuation ) = 0;
 
-	virtual void StartBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
-	virtual void StopBackgroundTrack() = 0;
-	virtual void NextBackgroundTrack() = 0;
-	virtual void PrevBackgroundTrack() = 0;
-	virtual void PauseBackgroundTrack() = 0;
+	virtual void startBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
+	virtual void stopBackgroundTrack() = 0;
+	virtual void nextBackgroundTrack() = 0;
+	virtual void prevBackgroundTrack() = 0;
+	virtual void pauseBackgroundTrack() = 0;
 };
 
 #endif
