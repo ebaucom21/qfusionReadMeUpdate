@@ -56,9 +56,15 @@ void QThreads_Shutdown( void );
 qbufPipe_t *QBufPipe_Create( size_t bufSize, int flags );
 void QBufPipe_Destroy( qbufPipe_t **pqueue );
 void QBufPipe_Finish( qbufPipe_t *queue );
-void QBufPipe_WriteCmd( qbufPipe_t *queue, const void *cmd, unsigned cmd_size );
+
+void QBufPipe_WriteCmd( qbufPipe_t *queue, const void *cmd, unsigned bytesToAdvance, unsigned bytesOfCmdToCopy );
+
 int QBufPipe_ReadCmds( qbufPipe_t *queue, unsigned( **cmdHandlers )( const void * ) );
-void QBufPipe_Wait( qbufPipe_t *queue, int ( *read )( qbufPipe_t *, unsigned( ** )( const void * ), bool ),
-					unsigned( **cmdHandlers )( const void * ), unsigned timeout_msec );
+
+using PipeHandlerFn = size_t (*)( void *, int, uint8_t * );
+using PipeWaiterFn = int (*)( qbufPipe_t *, void *, PipeHandlerFn, bool );
+
+int QBufPipe_ReadCmds( qbufPipe_t *queue, void *handlerArg, PipeHandlerFn handlerFn );
+void QBufPipe_Wait( qbufPipe_t *queue, PipeWaiterFn waiterFn, void *handlerArg, PipeHandlerFn handlerFn, unsigned timeout_msec );
 
 #endif // Q_THREADS_H

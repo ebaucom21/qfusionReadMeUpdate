@@ -69,7 +69,7 @@ void ReliablePipe::EnqueueMatchReport( QueryObject *matchReport ) {
 	}
 
 	BackgroundWriter::AddReportCmd cmd( backgroundWriter, matchReport );
-	QBufPipe_WriteCmd( reportsPipe, &cmd, sizeof( cmd ) );
+	QBufPipe_WriteCmd( reportsPipe, &cmd, sizeof( cmd ), sizeof( cmd ) );
 }
 
 ReliablePipe::BackgroundWriter::Handler ReliablePipe::BackgroundWriter::pipeHandlers[1] = {

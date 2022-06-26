@@ -240,7 +240,7 @@ static void QBufPipe_BufLenAdd( qbufPipe_t *pipe, int val ) {
 * Note that there are race conditions here but in the worst case we're going
 * to erroneously drop cmd's instead of stepping on the reader's toes.
 */
-void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) {
+void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdvance, unsigned bytesOfCmdToCopy ) {
 	void *buf;
 	unsigned write_remains;
 
@@ -259,7 +259,7 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) 
 	write_remains = pipe->bufSize - pipe->write_pos;
 
 	if( sizeof( int ) > write_remains ) {
-		while( pipe->cmdbuf_len + cmd_size + write_remains > pipe->bufSize ) {
+		while( pipe->cmdbuf_len + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
 				continue;
@@ -270,10 +270,10 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) 
 		// not enough space to enpipe even the reset cmd, rewind
 		QBufPipe_BufLenAdd( pipe, write_remains ); // atomic
 		pipe->write_pos = 0;
-	} else if( cmd_size > write_remains ) {
+	} else if( bytesToAdvance > write_remains ) {
 		int *cmd;
 
-		while( pipe->cmdbuf_len + sizeof( int ) + cmd_size + write_remains > pipe->bufSize ) {
+		while( pipe->cmdbuf_len + sizeof( int ) + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
 				continue;
@@ -288,7 +288,7 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) 
 		QBufPipe_BufLenAdd( pipe, sizeof( *cmd ) + write_remains ); // atomic
 		pipe->write_pos = 0;
 	} else {
-		while( pipe->cmdbuf_len + cmd_size > pipe->bufSize ) {
+		while( pipe->cmdbuf_len + bytesToAdvance > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
 				continue;
@@ -297,9 +297,9 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) 
 		}
 	}
 
-	buf = QBufPipe_AllocCmd( pipe, cmd_size );
-	memcpy( buf, pcmd, cmd_size );
-	QBufPipe_BufLenAdd( pipe, cmd_size ); // atomic
+	buf = QBufPipe_AllocCmd( pipe, bytesToAdvance );
+	memcpy( buf, pcmd, bytesOfCmdToCopy );
+	QBufPipe_BufLenAdd( pipe, bytesToAdvance ); // atomic
 
 	// wake the other thread waiting for signal
 	QMutex_Lock( pipe->nonempty_mutex );
@@ -307,10 +307,16 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned cmd_size ) 
 	QMutex_Unlock( pipe->nonempty_mutex );
 }
 
-/*
-* QBufPipe_ReadCmds
-*/
-int QBufPipe_ReadCmds( qbufPipe_t *pipe, unsigned( **cmdHandlers )( const void * ) ) {
+static size_t CallLegacyHandlers( void *arg, int cmd, uint8_t *data ) {
+	auto handlers = ( unsigned( ** )( const void * ) )arg;
+	return (size_t)handlers[cmd]( data );
+}
+
+int QBufPipe_ReadCmds( qbufPipe_t *queue, unsigned( **cmdHandlers )( const void * ) ) {
+	return QBufPipe_ReadCmds( queue, cmdHandlers, CallLegacyHandlers );
+}
+
+int QBufPipe_ReadCmds( qbufPipe_t *pipe, void *handlerArg, PipeHandlerFn handlerFn ) {
 	int read = 0;
 
 	if( !pipe ) {
@@ -343,7 +349,8 @@ int QBufPipe_ReadCmds( qbufPipe_t *pipe, unsigned( **cmdHandlers )( const void *
 			continue;
 		}
 
-		cmd_size = cmdHandlers[cmd]( pipe->buf + pipe->read_pos );
+		cmd_size = (int)handlerFn( handlerArg, cmd, (uint8_t *)( pipe->buf + pipe->read_pos ) );
+
 		read++;
 
 		if( !cmd_size ) {
@@ -367,8 +374,7 @@ int QBufPipe_ReadCmds( qbufPipe_t *pipe, unsigned( **cmdHandlers )( const void *
 /*
 * QBufPipe_Wait
 */
-void QBufPipe_Wait( qbufPipe_t *pipe, int ( *read )( qbufPipe_t *, unsigned( ** )( const void * ), bool ),
-					unsigned( **cmdHandlers )( const void * ), unsigned timeout_msec ) {
+void QBufPipe_Wait( qbufPipe_t *pipe, PipeWaiterFn waiterFn, void *handlerArg, PipeHandlerFn handlerFn, unsigned timeout_msec ) {
 	while( !pipe->terminated ) {
 		int res;
 		bool timeout = false;
@@ -385,7 +391,7 @@ void QBufPipe_Wait( qbufPipe_t *pipe, int ( *read )( qbufPipe_t *, unsigned( ** 
 
 		// we're guaranteed at this point that either cmdbuf_len is > 0
 		// or that waiting on the condition variable has timed out
-		res = read( pipe, cmdHandlers, timeout );
+		res = waiterFn( pipe, handlerArg, handlerFn, timeout );
 		if( res < 0 ) {
 			// done
 			return;
