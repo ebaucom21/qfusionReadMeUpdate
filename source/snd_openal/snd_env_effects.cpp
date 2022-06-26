@@ -92,19 +92,20 @@ float EaxReverbEffect::GetAttnFracBasedOnSampledEnvironment() const {
 	assert( secondaryRaysObstruction >= 0.0f && secondaryRaysObstruction <= 1.0f );
 	assert( indirectAttenuation >= 0.0f && indirectAttenuation <= 1.0f );
 
-	// Both partial obstruction factors are within [0, 1] range, so we can get an average
-	const float obstructionFrac =  0.5f * ( this->directObstruction + this->secondaryRaysObstruction );
+	// Both partial obstruction factors are within [0, 1] range, so we can get a weighted average
+	const float obstructionFrac = 0.1f * this->directObstruction + 0.9f * this->secondaryRaysObstruction;
 	assert( obstructionFrac >= 0.0f && obstructionFrac <= 1.0f );
 
-	const float attenuation = std::max( indirectAttenuation, 0.7f * obstructionFrac );
-	assert( attenuation >= 0.0f && attenuation <= 1.0f );
-	return attenuation;
+	// Q_Sqrt may go slightly out of bounds without clamping
+	return std::max( std::clamp( Q_Sqrt( indirectAttenuation ), 0.0f, 1.0f ), 0.7f * obstructionFrac );
 }
 
 float EaxReverbEffect::GetSourceGain( src_t *src ) const {
 	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
-	const float sourceGainFrac = ( 1.0f - attenuation );
-	assert( sourceGainFrac >= 0.0f && sourceGainFrac <= 1.0f );
+	// Don't let it diminish to zero for legit sources
+	// (the case of indirectAttenuation == 1.0 is not that uncommon due to map quirks)
+	const float sourceGainFrac = ( 1.0f - 0.7f * attenuation );
+	assert( sourceGainFrac >= 0.3f && sourceGainFrac <= 1.0f );
 	const float result = ( src->fvol * src->volumeVar->value ) * sourceGainFrac;
 	assert( result >= 0.0f && result <= 1.0f );
 	return result;
@@ -116,8 +117,8 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
 	const float filterHfGainFrac = 0.1f + 0.9f * ( 1.0f - attenuation );
 	assert( filterHfGainFrac >= 0.1f && filterHfGainFrac <= 1.0f );
-	const float reverbHfGainFrac = 0.5f + 0.5f * ( 1.0f - attenuation );
-	assert( reverbHfGainFrac >= 0.5f && reverbHfGainFrac <= 1.0f );
+	const float reverbHfGainFrac = 0.6f + 0.4f * ( 1.0f - attenuation );
+	assert( reverbHfGainFrac >= 0.6f && reverbHfGainFrac <= 1.0f );
 
 	alEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
 	alEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
