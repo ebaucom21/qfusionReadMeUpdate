@@ -74,9 +74,6 @@ extern cvar_t *s_environment_sampling_quality;
 extern cvar_t *s_effects_number_threshold;
 extern cvar_t *s_hrtf;
 
-extern ALCdevice *alDevice;
-extern ALCcontext *alContext;
-
 #define SRCPRI_AMBIENT  0   // Ambient sound effects
 #define SRCPRI_LOOP 1   // Looping (not ambient) sound effects
 #define SRCPRI_ONESHOT  2   // One-shot sounds
@@ -84,7 +81,6 @@ extern ALCcontext *alContext;
 #define SRCPRI_STREAM   4   // Streams (music, cutscenes)
 
 void S_Clear( void );
-void S_Activate( bool active );
 
 // playing
 struct sfx_s *S_RegisterSound( const char *sample );
@@ -281,68 +277,7 @@ bool S_ResetStream( snd_stream_t *stream );
 bool S_EoStream( snd_stream_t *stream );
 int S_SeekSteam( snd_stream_t *stream, int ofs, int whence );
 
-void S_BeginAviDemo( void );
-void S_StopAviDemo( void );
-
-//====================================================================
-
 unsigned S_GetRawSamplesLength( void );
-
-void SF_StopBackgroundTrack( void );
-void SF_PrevBackgroundTrack( void );
-void SF_NextBackgroundTrack( void );
-void SF_PauseBackgroundTrack( void );
-
-class ALSoundSystem : public SoundSystem {
-	friend class SoundSystem;
-
-	qbufPipe_s *pipe;
-	qthread_s *thread;
-	bool useVerboseShutdown { false };
-
-	template <typename> friend class SingletonHolder;
-
-	static ALSoundSystem *TryCreate( client_state_s *client, void *hWnd, bool verbose );
-
-	ALSoundSystem( client_state_s *client_, qbufPipe_s *pipe_, qthread_s *thread_ )
-		: SoundSystem( client_ ), pipe( pipe_ ), thread( thread_ ) {}
-
-	~ALSoundSystem() override;
-public:
-	void DeleteSelf( bool verbose ) override;
-
-	void PostInit() override;
-
-	void BeginRegistration() override;
-	void EndRegistration() override;
-
-	void StopAllSounds( unsigned flags ) override;
-
-	void Clear() override;
-	void Update( const float *origin, const float *velocity, const mat3_t axis ) override;
-	void Activate( bool isActive ) override;
-
-	void SetEntitySpatialization( int entNum, const float *origin, const float *velocity ) override;
-
-	sfx_s *RegisterSound( const char *name ) override;
-	void StartFixedSound( sfx_s *sfx, const float *origin, int channel, float fvol, float attenuation ) override;
-	void StartRelativeSound( sfx_s *sfx, int entNum, int channel, float fvol, float attenuation ) override;
-	void StartGlobalSound( sfx_s *sfx, int channel, float fvol ) override;
-	void StartLocalSound( const char *name, float fvol ) override;
-	void StartLocalSound( sfx_s *sfx, float fvol ) override;
-	void AddLoopSound( sfx_s *sfx, int entNum, float fvol, float attenuation ) override;
-
-	void StartBackgroundTrack( const char *intro, const char *loop, int mode ) override;
-	void StopBackgroundTrack() override;
-	void LockBackgroundTrack( bool lock ) override;
-
-	void ListSounds();
-	void ListDevices();
-
-	void PrevBackgroundTrack();
-	void NextBackgroundTrack();
-	void PauseBackgroundTrack();
-};
 
 // This stuff is used by the sound system implementation and is defined in the client code
 

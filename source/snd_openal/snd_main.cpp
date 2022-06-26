@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_env_sampler.h"
 #include "../client/client.h"
 #include "../qcommon/singletonholder.h"
+#include "alsystemfacade.h"
 
 class NullSoundSystem : public SoundSystem {
 public:
@@ -53,10 +54,11 @@ public:
 
 	void StartBackgroundTrack( const char *, const char *, int ) override {}
 	void StopBackgroundTrack() override {}
-	void LockBackgroundTrack( bool lock ) override {}
+	void NextBackgroundTrack() override {}
+	void PrevBackgroundTrack() override {}
+	void PauseBackgroundTrack() override {}
 };
 
-static SingletonHolder<ALSoundSystem> alSoundSystemHolder;
 static SingletonHolder<NullSoundSystem> nullSoundSystemHolder;
 
 void NullSoundSystem::DeleteSelf( bool ) {
@@ -65,7 +67,6 @@ void NullSoundSystem::DeleteSelf( bool ) {
 
 cvar_t *s_volume;
 cvar_t *s_musicvolume;
-cvar_t *s_openAL_device;
 
 cvar_t *s_doppler;
 cvar_t *s_sound_velocity;
@@ -74,81 +75,56 @@ cvar_t *s_environment_sampling_quality;
 cvar_t *s_effects_number_threshold;
 cvar_t *s_hrtf;
 cvar_t *s_stereo2mono;
-static cvar_t *s_globalfocus;
+cvar_t *s_globalfocus;
 
-static int s_registration_sequence = 1;
-static bool s_registering;
-
-// batch entity spatializations
-static unsigned s_num_ent_spats;
-static smdCmdSpatialization_t s_ent_spats[SND_SPATIALIZE_ENTS_MAX];
-static const unsigned s_max_ent_spats = sizeof( s_ent_spats ) / sizeof( s_ent_spats[0] );
-
-/*
-* Commands
-*/
-
-#ifdef ENABLE_PLAY
-static void SF_Play_f( void ) {
-	int i;
-	char name[MAX_QPATH];
-
-	i = 1;
-	while( i < trap_Cmd_Argc() ) {
-		Q_strncpyz( name, trap_Cmd_Argv( i ), sizeof( name ) );
-
-		S_StartLocalSound( name );
-		i++;
-	}
-}
-#endif // ENABLE_PLAY
-
-/*
-* SF_Music
-*/
 static void SF_Music_f( void ) {
 	if( Cmd_Argc() == 2 ) {
-		::alSoundSystemHolder.instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
+		SoundSystem::Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
 	} else if( Cmd_Argc() == 3 ) {
-		::alSoundSystemHolder.instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
+		SoundSystem::Instance()->StartBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
 	} else {
 		Com_Printf( "music <intro|playlist> [loop|shuffle]\n" );
 		return;
 	}
 }
 
-/*
-* SF_SoundList
-*/
-static void SF_SoundList_f() {
-	::alSoundSystemHolder.instance()->ListSounds();
+static void SF_StopBackgroundTrack() {
+	SoundSystem::Instance()->StopBackgroundTrack();
 }
 
-void ALSoundSystem::ListSounds() {
-	S_IssueStuffCmd( pipe, "soundlist" );
+static void SF_PrevBackgroundTrack() {
+	SoundSystem::Instance()->PrevBackgroundTrack();
 }
 
-/*
-* SF_ListDevices_f
-*/
-static void SF_ListDevices_f() {
-	::alSoundSystemHolder.instance()->ListDevices();
+static void SF_NextBackgroundTrack() {
+	SoundSystem::Instance()->NextBackgroundTrack();
 }
 
-void ALSoundSystem::ListDevices() {
-	S_IssueStuffCmd( pipe, "devicelist" );
+static void SF_PauseBackgroundTrack() {
+	SoundSystem::Instance()->PauseBackgroundTrack();
 }
 
 bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &options ) {
-	s_volume = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
-	s_musicvolume = Cvar_Get( "s_musicvolume", "0.05", CVAR_ARCHIVE );
-	s_doppler = Cvar_Get( "s_doppler", "1.0", CVAR_ARCHIVE );
+	s_volume         = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
+	s_musicvolume    = Cvar_Get( "s_musicvolume", "0.05", CVAR_ARCHIVE );
+	s_doppler        = Cvar_Get( "s_doppler", "1.0", CVAR_ARCHIVE );
 	s_sound_velocity = Cvar_Get( "s_sound_velocity", "8500", CVAR_DEVELOPER );
-	s_stereo2mono = Cvar_Get( "s_stereo2mono", "0", CVAR_ARCHIVE );
-	s_globalfocus = Cvar_Get( "s_globalfocus", "0", CVAR_ARCHIVE );
+	s_stereo2mono    = Cvar_Get( "s_stereo2mono", "0", CVAR_ARCHIVE );
+	s_globalfocus    = Cvar_Get( "s_globalfocus", "0", CVAR_ARCHIVE );
+
+	s_environment_effects          = Cvar_Get( "s_environment_effects", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
+	s_environment_sampling_quality = Cvar_Get( "s_environment_sampling_quality", "0.5", CVAR_ARCHIVE );
+	s_effects_number_threshold     = Cvar_Get( "s_effects_number_threshold", "15", CVAR_ARCHIVE );
+	s_hrtf                         = Cvar_Get( "s_hrtf", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
+
+	Cmd_AddCommand( "music", SF_Music_f );
+	Cmd_AddCommand( "stopmusic", SF_StopBackgroundTrack );
+	Cmd_AddCommand( "prevmusic", SF_PrevBackgroundTrack );
+	Cmd_AddCommand( "nextmusic", SF_NextBackgroundTrack );
+	Cmd_AddCommand( "pausemusic", SF_PauseBackgroundTrack );
 
 	if( !options.useNullSystem ) {
-		instance = ALSoundSystem::TryCreate( client, hWnd, options.verbose );
+		instance = wsw::snd::ALSoundSystem::TryCreate( client, hWnd, options.verbose );
 		if( instance ) {
 			instance->PostInit();
 			return true;
@@ -161,265 +137,74 @@ bool SoundSystem::Init( client_state_t *client, void *hWnd, const InitOptions &o
 	return options.useNullSystem;
 }
 
-ALSoundSystem *ALSoundSystem::TryCreate( client_state_s *client, void *hWnd, bool verbose ) {
-	s_num_ent_spats = 0;
-
-	s_environment_effects = Cvar_Get( "s_environment_effects", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
-
-	s_environment_sampling_quality = Cvar_Get( "s_environment_sampling_quality", "0.5", CVAR_ARCHIVE );
-	if ( s_environment_sampling_quality->value < 0 || s_environment_sampling_quality->value > 1.0f ) {
-		Cvar_ForceSet( s_environment_sampling_quality->name, "0.5" );
-	}
-
-	s_effects_number_threshold = Cvar_Get( "s_effects_number_threshold", "15", CVAR_ARCHIVE );
-	s_hrtf = Cvar_Get( "s_hrtf", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
-
-#ifdef ENABLE_PLAY
-	trap_Cmd_AddCommand( "play", SF_Play_f );
-#endif
-	Cmd_AddCommand( "music", SF_Music_f );
-	Cmd_AddCommand( "stopmusic", SF_StopBackgroundTrack );
-	Cmd_AddCommand( "prevmusic", SF_PrevBackgroundTrack );
-	Cmd_AddCommand( "nextmusic", SF_NextBackgroundTrack );
-	Cmd_AddCommand( "pausemusic", SF_PauseBackgroundTrack );
-	Cmd_AddCommand( "soundlist", SF_SoundList_f );
-	Cmd_AddCommand( "s_devices", SF_ListDevices_f );
-
-	auto *pipe = S_CreateSoundCmdPipe();
-	if( !pipe ) {
-		return nullptr;
-	}
-
-	auto *thread = QThread_Create( S_BackgroundUpdateProc, pipe );
-
-	S_IssueInitCmd( pipe, hWnd, MAX_EDICTS, verbose );
-
-	S_FinishSoundCmdPipe( pipe );
-
-	if( !alContext ) {
-		return nullptr;
-	}
-
-	S_InitBuffers();
-
-	::alSoundSystemHolder.init( client, pipe, thread );
-	return ::alSoundSystemHolder.instance();
-}
-
-void ALSoundSystem::DeleteSelf( bool verbose ) {
-	useVerboseShutdown = verbose;
-	::alSoundSystemHolder.shutdown();
-}
-
-ALSoundSystem::~ALSoundSystem() {
-	StopAllSounds( StopAndClear | StopMusic );
-
-	// wake up the mixer
-	Activate( true );
-
-	// wait for the queue to be processed
-	S_FinishSoundCmdPipe( pipe );
-
-	S_ShutdownBuffers();
-
-	ENV_Shutdown();
-
-	// shutdown backend
-	S_IssueShutdownCmd( pipe, useVerboseShutdown );
-
-	// wait for the queue to be processed
-	S_FinishSoundCmdPipe( pipe );
-
-	// wait for the backend thread to die
-	QThread_Join( thread );
-
-	S_DestroySoundCmdPipe( &pipe );
-
-#ifdef ENABLE_PLAY
-	Cmd_RemoveCommand( "play" );
-#endif
+void SoundSystem::Shutdown( bool verbose ) {
 	Cmd_RemoveCommand( "music" );
 	Cmd_RemoveCommand( "stopmusic" );
 	Cmd_RemoveCommand( "prevmusic" );
 	Cmd_RemoveCommand( "nextmusic" );
 	Cmd_RemoveCommand( "pausemusic" );
-	Cmd_RemoveCommand( "soundlist" );
-	Cmd_RemoveCommand( "s_devices" );
-}
 
-void ALSoundSystem::PostInit() {
-	ENV_Init();
-}
-
-void ALSoundSystem::BeginRegistration() {
-	s_registration_sequence++;
-	if( !s_registration_sequence ) {
-		s_registration_sequence = 1;
+	if( instance ) {
+		instance->DeleteSelf( verbose );
+		instance = nullptr;
 	}
-	s_registering = true;
-
-	// wait for the queue to be processed
-	S_FinishSoundCmdPipe( pipe );
 }
 
-void ALSoundSystem::EndRegistration() {
-	// wait for the queue to be processed
-	S_FinishSoundCmdPipe( pipe );
-
-	S_ForEachBuffer( [=]( sfx_t *sfx ) {
-		if( sfx->filename[0] && sfx->registration_sequence != s_registration_sequence ) {
-			S_IssueFreeSfxCmd( pipe, sfx->id );
+ALuint S_SoundFormat( int width, int channels ) {
+	if( width == 1 ) {
+		if( channels == 1 ) {
+			return AL_FORMAT_MONO8;
+		} else if( channels == 2 ) {
+			return AL_FORMAT_STEREO8;
 		}
-	});
-
-	// wait for the queue to be processed
-	S_FinishSoundCmdPipe( pipe );
-
-	S_ForEachBuffer( [=]( sfx_t *sfx ) {
-		if( sfx->registration_sequence && sfx->registration_sequence != s_registration_sequence ) {
-			S_MarkBufferFree( sfx );
+	} else if( width == 2 ) {
+		if( channels == 1 ) {
+			return AL_FORMAT_MONO16;
+		} else if( channels == 2 ) {
+			return AL_FORMAT_STEREO16;
 		}
-	});
+	}
 
-	s_registering = false;
-
-	ENV_EndRegistration();
+	Com_Printf( "Unknown sound format: %i channels, %i bits.\n", channels, width * 8 );
+	return AL_FORMAT_MONO16;
 }
 
 /*
-* SF_RegisterSound
+* S_GetBufferLength
+*
+* Returns buffer length expressed in milliseconds
 */
-sfx_t *ALSoundSystem::RegisterSound( const char *name ) {
-	sfx_t *sfx = S_FindBuffer( PathForName( name, tmpString1 ) );
-	S_IssueLoadSfxCmd( pipe, sfx->id );
-	sfx->used = Sys_Milliseconds();
-	sfx->registration_sequence = s_registration_sequence;
-	return sfx;
-}
+ALuint S_GetBufferLength( ALuint buffer ) {
+	ALint size, bits, channels, freq;
 
-void ALSoundSystem::Activate( bool active ) {
-	if( !active && s_globalfocus->integer ) {
-		return;
+	alGetBufferi( buffer, AL_SIZE, &size );
+	alGetBufferi( buffer, AL_BITS, &bits );
+	alGetBufferi( buffer, AL_FREQUENCY, &freq );
+	alGetBufferi( buffer, AL_CHANNELS, &channels );
+
+	if( alGetError() != AL_NO_ERROR ) {
+		return 0;
 	}
-
-	LockBackgroundTrack( !active );
-
-	S_IssueActivateCmd( pipe, active );
+	return (ALuint)( (ALfloat)( size / ( bits / 8 ) / channels ) * 1000.0 / freq + 0.5f );
 }
 
-void ALSoundSystem::StartBackgroundTrack( const char *intro, const char *loop, int mode ) {
-	const char *introPath = PathForName( intro, tmpString1 );
-	const char *loopPath = PathForName( intro, tmpString2 );
-	// The path values are deeply copied by this call so using temporary objects is correct
-	S_IssueStartBackgroundTrackCmd( pipe, introPath, loopPath, mode );
-}
-
-void ALSoundSystem::StopBackgroundTrack() {
-	S_IssueStopBackgroundTrackCmd( pipe );
-}
-
-void ALSoundSystem::LockBackgroundTrack( bool lock ) {
-	S_IssueLockBackgroundTrackCmd( pipe, lock );
-}
-
-void ALSoundSystem::StopAllSounds( unsigned flags ) {
-	S_IssueStopAllSoundsCmd( pipe, flags );
-}
-
-void SF_StopBackgroundTrack() {
-	::alSoundSystemHolder.instance()->StopBackgroundTrack();
-}
-
-void SF_PrevBackgroundTrack() {
-	::alSoundSystemHolder.instance()->PrevBackgroundTrack();
-}
-
-void ALSoundSystem::PrevBackgroundTrack() {
-	S_IssueAdvanceBackgroundTrackCmd( pipe, -1 );
-}
-
-void SF_NextBackgroundTrack() {
-	::alSoundSystemHolder.instance()->NextBackgroundTrack();
-}
-
-void ALSoundSystem::NextBackgroundTrack() {
-	S_IssueAdvanceBackgroundTrackCmd( pipe, 1 );
-}
-
-void SF_PauseBackgroundTrack() {
-	::alSoundSystemHolder.instance()->PauseBackgroundTrack();
-}
-
-void ALSoundSystem::PauseBackgroundTrack() {
-	S_IssueAdvanceBackgroundTrackCmd( pipe, 0 );
-}
-
-void ALSoundSystem::SetEntitySpatialization( int entnum, const vec3_t origin, const vec3_t velocity ) {
-	smdCmdSpatialization_t *spat;
-
-	if( s_num_ent_spats == s_max_ent_spats ) {
-		// flush all spatializations at once to free room
-		S_IssueSetMulEntitySpatializationCmd( pipe, s_num_ent_spats, s_ent_spats );
-		s_num_ent_spats = 0;
+const char *S_ErrorMessage( ALenum error ) {
+	switch( error ) {
+		case AL_NO_ERROR:
+			return "No error";
+		case AL_INVALID_NAME:
+			return "Invalid name";
+		case AL_INVALID_ENUM:
+			return "Invalid enumerator";
+		case AL_INVALID_VALUE:
+			return "Invalid value";
+		case AL_INVALID_OPERATION:
+			return "Invalid operation";
+		case AL_OUT_OF_MEMORY:
+			return "Out of memory";
+		default:
+			return "Unknown error";
 	}
-
-	spat = &s_ent_spats[s_num_ent_spats++];
-	spat->entnum = entnum;
-	VectorCopy( origin, spat->origin );
-	VectorCopy( velocity, spat->velocity );
-}
-
-void ALSoundSystem::StartFixedSound( sfx_t *sfx, const vec3_t origin, int channel, float fvol, float attenuation ) {
-	if( sfx ) {
-		S_IssueStartFixedSoundCmd( pipe, sfx->id, origin, channel, fvol, attenuation );
-	}
-}
-
-void ALSoundSystem::StartRelativeSound( sfx_t *sfx, int entnum, int channel, float fvol, float attenuation ) {
-	if( sfx ) {
-		S_IssueStartRelativeSoundCmd( pipe, sfx->id, entnum, channel, fvol, attenuation );
-	}
-}
-
-void ALSoundSystem::StartGlobalSound( sfx_t *sfx, int channel, float fvol ) {
-	if( sfx ) {
-		S_IssueStartGlobalSoundCmd( pipe, sfx->id, channel, fvol );
-	}
-}
-
-void ALSoundSystem::StartLocalSound( const char *sound, float fvol ) {
-	sfx_t *sfx = RegisterSound( sound );
-	if( !sfx ) {
-		Com_Printf( "S_StartLocalSoundByName: can't cache %s\n", sound );
-		return;
-	}
-
-	S_IssueStartLocalSoundCmd( pipe, sfx->id, fvol );
-}
-
-void ALSoundSystem::StartLocalSound( sfx_t *sfx, float fvol ) {
-	if( sfx ) {
-		S_IssueStartLocalSoundCmd( pipe, sfx->id, fvol );
-	}
-}
-
-void ALSoundSystem::Clear() {
-	S_IssueClearCmd( pipe );
-}
-
-void ALSoundSystem::AddLoopSound( sfx_s *sfx, int entNum, float fvol, float attenuation ) {
-	if( sfx ) {
-		S_IssueAddLoopSoundCmd( pipe, sfx->id, entNum, fvol, attenuation );
-	}
-}
-
-void ALSoundSystem::Update( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
-	if( s_num_ent_spats ) {
-		S_IssueSetMulEntitySpatializationCmd( pipe, s_num_ent_spats, s_ent_spats );
-		s_num_ent_spats = 0;
-	}
-
-	S_IssueSetListenerCmd( pipe, origin, velocity, axis );
 }
 
 void S_Trace( trace_t *tr, const vec3_t start,

@@ -222,43 +222,4 @@ typedef struct {
 	float velocity[SND_SPATIALIZE_ENTS_MAX][3];
 } sndCmdSetMulEntitySpatialization_t;
 
-sndCmdPipe_t *S_CreateSoundCmdPipe( void );
-void S_DestroySoundCmdPipe( sndCmdPipe_t **pqueue );
-int S_ReadEnqueuedCmds( sndCmdPipe_t *queue, pipeCmdHandler_t *cmdHandlers );
-void S_WaitEnqueuedCmds( qbufPipe_t *queue, int ( *read )( qbufPipe_t *, unsigned( ** )( const void * ), bool ),
-						 unsigned( **cmdHandlers )( const void * ), unsigned timeout_msec );
-void S_FinishSoundCmdPipe( sndCmdPipe_t *queue );
-
-void S_IssueInitCmd( sndCmdPipe_t *queue, void *hwnd, int maxents, bool verbose );
-void S_IssueShutdownCmd( sndCmdPipe_t *queue, bool verbose );
-void S_IssueClearCmd( sndCmdPipe_t *queue );
-void S_IssueStopAllSoundsCmd( sndCmdPipe_t *queue, unsigned flags );
-void S_IssueFreeSfxCmd( sndCmdPipe_t *queue, int sfx );
-void S_IssueLoadSfxCmd( sndCmdPipe_t *queue, int sfx );
-void S_IssueSetAttenuationCmd( sndCmdPipe_t *queue, int model,
-							   float maxdistance, float refdistance );
-void S_IssueSetEntitySpatializationCmd( sndCmdPipe_t *queue, const smdCmdSpatialization_t *spat );
-void S_IssueSetListenerCmd( sndCmdPipe_t *queue, const vec3_t origin,
-							const vec3_t velocity, const mat3_t axis );
-void S_IssueStartLocalSoundCmd( sndCmdPipe_t *queue, int sfx, float fvol );
-void S_IssueStartFixedSoundCmd( sndCmdPipe_t *queue, int sfx, const vec3_t origin,
-								int channel, float fvol, float attenuation );
-void S_IssueStartGlobalSoundCmd( sndCmdPipe_t *queue, int sfx, int channel,
-								 float fvol );
-void S_IssueStartRelativeSoundCmd( sndCmdPipe_t *queue, int sfx, int entnum,
-								   int channel, float fvol, float attenuation );
-void S_IssueStartBackgroundTrackCmd( sndCmdPipe_t *queue, const char *intro,
-									 const char *loop, int mode );
-void S_IssueStopBackgroundTrackCmd( sndCmdPipe_t *queue );
-void S_IssueLockBackgroundTrackCmd( sndCmdPipe_t *queue, bool lock );
-void S_IssueAddLoopSoundCmd( sndCmdPipe_t *queue, int sfx, int entnum,
-							 float fvol, float attenuation );
-void S_IssueAdvanceBackgroundTrackCmd( sndCmdPipe_t *queue, int val );
-void S_IssuePauseBackgroundTrackCmd( sndCmdPipe_t *queue );
-void S_IssueActivateCmd( sndCmdPipe_t *queue, bool active );
-void S_IssueAviDemoCmd( sndCmdPipe_t *queue, bool begin );
-void S_IssueStuffCmd( sndCmdPipe_t *queue, const char *text );
-void S_IssueSetMulEntitySpatializationCmd( sndCmdPipe_t *queue, unsigned numEnts,
-										   const smdCmdSpatialization_t *spat );
-
 #endif // SND_CMDQUEUE_H

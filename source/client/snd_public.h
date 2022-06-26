@@ -50,10 +50,8 @@ class SoundSystem {
 	static SoundSystem *InstanceOrNull() { return instance; }
 #endif
 protected:
-	wsw::String tmpString1 { MAX_QPATH };
-	wsw::String tmpString2 { MAX_QPATH };
-
-	static const char *PathForName( const char *name, wsw::String &reuse );
+	[[nodiscard]]
+	static auto getPathForName( const char *name, wsw::String *reuse ) -> const char *;
 
 	explicit SoundSystem( client_state_s *client_ ) : client( client_ ) {}
 public:
@@ -113,7 +111,9 @@ public:
 
 	virtual void StartBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
 	virtual void StopBackgroundTrack() = 0;
-	virtual void LockBackgroundTrack( bool lock ) = 0;
+	virtual void NextBackgroundTrack() = 0;
+	virtual void PrevBackgroundTrack() = 0;
+	virtual void PauseBackgroundTrack() = 0;
 };
 
 #endif

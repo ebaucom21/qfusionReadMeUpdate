@@ -24,21 +24,23 @@ static cvar_t *s_module = nullptr;
 
 SoundSystem *SoundSystem::instance = nullptr;
 
-const char *SoundSystem::PathForName( const char *name, wsw::String &reuse ) {
+auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
+	if( !name ) {
+		return nullptr;
+	}
 	if( COM_FileExtension( name ) ) {
 		return name;
 	}
 
-	reuse.clear();
-	reuse += name;
+	reuse->clear();
+	reuse->append( name );
 
-	const char *extension = FS_FirstExtension( name, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS );
-	if( extension ) {
-		reuse += extension;
+	if( const char *extension = FS_FirstExtension( name, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
+		reuse->append( extension );
 	}
 
 	// if not found, we just pass it without the extension
-	return reuse.c_str();
+	return reuse->c_str();
 }
 
 void CL_SoundModule_Init( bool verbose ) {
@@ -73,13 +75,4 @@ void CL_SoundModule_Init( bool verbose ) {
 
 void CL_SoundModule_Shutdown( bool verbose ) {
 	SoundSystem::Shutdown( verbose );
-}
-
-void SoundSystem::Shutdown( bool verbose ) {
-	if( !instance ) {
-		return;
-	}
-
-	instance->DeleteSelf( verbose );
-	instance = nullptr;
 }
