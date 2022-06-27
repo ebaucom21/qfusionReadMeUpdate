@@ -312,21 +312,25 @@ protected:
 			: BatchedInterThreadCall( adapter, name ), m_endpoint( endpoint ), m_method( method ) {}
 
 		void exec( const Arg1 &arg1, const Arg2 &arg2, const Arg3 &arg3 ) {
-			if( m_pendingCmd.entries.full() ) [[unlikely]] {
+			if( m_pendingCmd.count == BufferSize ) [[unlikely]] {
 				flush();
 			}
-			m_pendingCmd.entries.emplace_back( { .arg1 = arg1, .arg2 = arg2, .arg3 = arg3 } );
+			auto *const entry = ( (typename Cmd::Entry *)( m_pendingCmd.entriesStorage  ) ) + m_pendingCmd.count;
+			entry->arg1 = arg1;
+			entry->arg2 = arg2;
+			entry->arg3 = arg3;
+			m_pendingCmd.count++;
 		}
 
 		void flush() override {
-			if( !m_pendingCmd.entries.empty() ) {
+			if( m_pendingCmd.count ) {
 				if( !m_adapter->m_sync ) [[likely]] {
 					m_pendingCmd.id = m_id;
 					QBufPipe_WriteCmd( m_adapter->m_pipe, &m_pendingCmd, kPaddedCmdSize, sizeof( Cmd ) );
 				} else {
 					performEndpointMethodCalls( m_pendingCmd );
 				}
-				m_pendingCmd.entries.clear();
+				m_pendingCmd.count = 0;
 			}
 		}
 	private:
@@ -336,8 +340,14 @@ protected:
 				Arg2 arg2;
 				Arg3 arg3;
 			};
+
 			unsigned id;
-			wsw::StaticVector<Entry, BufferSize> entries;
+			unsigned count;
+
+			static_assert( alignof( Entry ) < kAlignment );
+
+			// Make sure it's perfectly relocatable
+			alignas( alignof( Entry ) ) uint8_t entriesStorage[BufferSize * sizeof( Entry )];
 		};
 
 		static constexpr size_t kPaddedCmdSize = pad( sizeof( Cmd ) );
@@ -349,7 +359,9 @@ protected:
 		}
 
 		void performEndpointMethodCalls( const Cmd &cmd ) {
-			for( const typename Cmd::Entry &entry: cmd.entries ) {
+			const auto *entries = (const typename Cmd::Entry *)cmd.entriesStorage;
+			for( unsigned i = 0; i < cmd.count; ++i ) {
+				const typename Cmd::Entry &entry = entries[i];
 				( m_endpoint->*m_method )( entry.arg1, entry.arg2, entry.arg3 );
 			}
 		}
