@@ -25,8 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "frontend.h"
 #include "../qcommon/qcommon.h"
 
-#include <algorithm>
-
 // typedefs
 typedef struct iqmheader iqmheader_t;
 typedef struct iqmvertexarray iqmvertexarray_t;
@@ -858,7 +856,7 @@ model_t *R_SkeletalModelLOD( const entity_t *e, const float *viewOrigin, float f
 		return e->model;
 	}
 
-	return e->model->lods[std::min( lod, e->model->numlods ) - 1];
+	return e->model->lods[wsw::min( lod, e->model->numlods ) - 1];
 }
 
 void R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, vec3_t maxs ) {
@@ -912,8 +910,8 @@ void R_SkeletalModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins
 		oldmaxs = poldframe->maxs;
 
 		for( i = 0; i < 3; i++ ) {
-			mins[i] = std::min( thismins[i], oldmins[i] );
-			maxs[i] = std::max( thismaxs[i], oldmaxs[i] );
+			mins[i] = wsw::min( thismins[i], oldmins[i] );
+			maxs[i] = wsw::max( thismaxs[i], oldmaxs[i] );
 		}
 	}
 

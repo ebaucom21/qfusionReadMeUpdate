@@ -54,7 +54,7 @@ public:
 		if( const auto it = m_keysAndValues.find( key ); it != m_keysAndValues.end() ) {
 			return it.value();
 		}
-		throw std::logic_error( "Failed to find a value by key" );
+		wsw::failWithLogicError( "Failed to find a value by key" );
 	}
 
 	[[nodiscard]]

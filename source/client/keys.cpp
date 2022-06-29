@@ -23,6 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/singletonholder.h"
 
+#include <tuple>
+
 using wsw::operator""_asView;
 
 /*
@@ -586,7 +588,7 @@ void KeyHandlingSystem::handleKeyEvent( int key, bool down, int64_t time ) {
 			m_numKeysDown++;
 		}
 	} else {
-		m_numKeysDown = std::max( 0, m_numKeysDown - 1 );
+		m_numKeysDown = wsw::max( 0, m_numKeysDown - 1 );
 	}
 
 	runSubsystemHandlers( key, down, wasDown, time );

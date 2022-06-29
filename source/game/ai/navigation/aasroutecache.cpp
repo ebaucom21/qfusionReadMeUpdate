@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../../../qcommon/md5.h"
 
 #include <cstdlib>
-#include <algorithm>
 #include <limits>
 #include <cmath>
 
@@ -1318,7 +1317,7 @@ void AiAasRouteCache::UpdateAreaRoutingCache( std::span<const aas_areasettings_t
 				}
 
 				*timeToRelax = t;
-				maxTravelTimeSoFar = std::max( relaxedTime, maxTravelTimeSoFar );
+				maxTravelTimeSoFar = wsw::max( relaxedTime, maxTravelTimeSoFar );
 
 				const auto reachOffset = reachNum - nextAreaData.firstReachNum;
 				assert( (unsigned) reachOffset < 255 );

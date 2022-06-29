@@ -1852,7 +1852,7 @@ auto calcSoundGainForDistance( float dist ) -> float {
 	constexpr float maxDistance = kSoundAttenuationMaxDistance;
 	constexpr float attenuation = 1.0f;
 
-	dist = std::min( std::max( dist, refDistance ), maxDistance );
+	dist = wsw::min( wsw::max( dist, refDistance ), maxDistance );
 
 	// AL_INVERSE_DISTANCE_CLAMPED
 	// gain = AL_REFERENCE_DISTANCE / (AL_REFERENCE_DISTANCE + AL_ROLLOFF_FACTOR * (distance - AL_REFERENCE_DISTANCE));

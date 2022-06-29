@@ -3,7 +3,7 @@
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswvector.h"
 
 #include <QAbstractListModel>
 #include <QQuickItem>

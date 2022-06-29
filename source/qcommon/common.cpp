@@ -274,7 +274,7 @@ static void Com_ReopenConsoleLog( void ) {
 
 auto wsw::createLogLineStream( wsw::LogLineCategory category, wsw::LogLineSeverity severity ) -> wsw::LogLineStream * {
 	if( !com_logCategoryMask || !com_logSeverityMask ) [[unlikely]] {
-		throw std::runtime_error( "Can't use log line streams prior to CVar initialization" );
+		wsw::failWithRuntimeError( "Can't use log line streams prior to CVar initialization" );
 	}
 	if( !( com_logCategoryMask->integer & ( 1 << (unsigned)category ) ) ) {
 		return ::logLineStreamsAllocator.nullStreamFor( category, severity );
@@ -295,7 +295,7 @@ void wsw::submitLogLineStream( LogLineStream *stream ) {
 	}
 	// TODO: Eliminate Com_Printf()
 	if( !::logLineStreamsAllocator.isANullStream( stream ) ) {
-		stream->m_data[std::min( stream->m_limit, stream->m_offset )] = '\0';
+		stream->m_data[wsw::min( stream->m_limit, stream->m_offset )] = '\0';
 		const char *color = kLogLineColorForSeverity[(unsigned)stream->m_severity];
 		const char *prefix = kLogLinePrefixForCategory[(unsigned)stream->m_category];
 		Com_Printf( "%s[%s] %s\n", color, prefix, stream->m_data );
@@ -759,7 +759,7 @@ void *Q_malloc( size_t size ) {
 	void *buf = std::calloc( size, 1 );
 
 	if( !buf ) {
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 
 	return buf;
@@ -769,7 +769,7 @@ void *Q_realloc( void *buf, size_t newsize ) {
 	void *newbuf = realloc( buf, newsize );
 
 	if( !newbuf && newsize ) {
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 
 	// TODO: Zero memory too? There's no portable way of doing that

@@ -41,7 +41,6 @@ in NO WAY supported by Steve Yeager.
 #define M_SQRT1_2 ( 0.70710678118654752440 )
 #endif
 
-#include <algorithm>
 #include <utility>
 #include <stdarg.h>
 
@@ -143,7 +142,7 @@ inline float Clamp( float value, float minValue, float maxValue ) {
 }
 
 inline float BoundedFraction( float value, float bound ) {
-	return std::min( value, bound ) / bound;
+	return wsw::min( value, bound ) / bound;
 }
 
 inline unsigned From0UpToMax( unsigned maxValue, float ratio ) {

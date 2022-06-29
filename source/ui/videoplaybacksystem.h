@@ -6,7 +6,7 @@
 #include <QVideoFrame>
 
 #include "../qcommon/wswfs.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswvector.h"
 
 namespace wsw::ui {
 

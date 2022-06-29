@@ -477,8 +477,8 @@ auto BotWeaponSelector::suggestScriptWeapon( const WorldState &worldState )
 		score *= weaponDef.tier / 3.0f;
 
 		// Treat points in +/- 192 units of best range as in best range too
-		float bestRangeLowerBounds = weaponDef.bestRange - std::min( 192.0f, weaponDef.bestRange - weaponDef.minRange );
-		float bestRangeUpperBounds = weaponDef.bestRange + std::min( 192.0f, weaponDef.maxRange - weaponDef.bestRange );
+		float bestRangeLowerBounds = weaponDef.bestRange - wsw::min( 192.0f, weaponDef.bestRange - weaponDef.minRange );
+		float bestRangeUpperBounds = weaponDef.bestRange + wsw::min( 192.0f, weaponDef.maxRange - weaponDef.bestRange );
 
 		if( distanceToEnemy < bestRangeLowerBounds ) {
 			score *= distanceToEnemy / bestRangeLowerBounds;

@@ -80,8 +80,8 @@ static bool isWithinNMinutes( int minute1, int minute2 ) {
 	if( minute1 == minute2 ) {
 		return true;
 	}
-	const int minMinute = std::min( minute1, minute2 );
-	const int maxMinute = std::max( minute1, minute2 );
+	const int minMinute = wsw::min( minute1, minute2 );
+	const int maxMinute = wsw::max( minute1, minute2 );
 	if( maxMinute - minMinute < N + 1 ) {
 		return true;
 	}
@@ -113,7 +113,7 @@ void RichChatModel::beginRemoveOldestLine( Line *line ) {
 		beginRemoveRows( QModelIndex(), numEntries - 1, numEntries - 1 );
 		m_entries.pop_back();
 	} else {
-		throw std::logic_error( "unreachable: the shared line must have its RichChatModel entry counterparts" );
+		wsw::failWithLogicError( "unreachable: the shared line must have its RichChatModel entry counterparts" );
 	}
 }
 
@@ -282,7 +282,7 @@ void ChatProxy::handleMessageFault( const MessageFault &fault ) {
 		} else if( fault.kind == MessageFault::Flood ) {
 			Q_EMIT floodDetected();
 		} else {
-			throw std::logic_error( "Unreachable" );
+			wsw::failWithLogicError( "Unreachable" );
 		}
 	}
 }

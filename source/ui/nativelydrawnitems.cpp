@@ -109,8 +109,8 @@ void NativelyDrawnImage::reloadIfNeeded() {
 	options.borderWidth         = m_borderWidth;
 	if( m_desiredSize.isValid() && !m_desiredSize.isEmpty() ) {
 		options.setDesiredSize( m_desiredSize.width(), m_desiredSize.height() );
-		const int minSide   = std::min( m_desiredSize.width(), m_desiredSize.height() );
-		options.borderWidth = std::clamp( m_borderWidth, 0, minSide / 2 - 1 );
+		const int minSide   = wsw::min( m_desiredSize.width(), m_desiredSize.height() );
+		options.borderWidth = wsw::clamp( m_borderWidth, 0, minSide / 2 - 1 );
 	}
 
 	m_isMaterialLoaded = R_UpdateExplicitlyManaged2DMaterialImage( m_material, nameBytes, options );
@@ -373,7 +373,7 @@ void NativelyDrawnModel::drawSelfNatively( int64_t, int64_t timeDelta ) {
 	// Scale units per second
 	constexpr float transitionSpeed = 1.5f;
 	const auto timeDeltaSeconds = 1e-3f * (float)timeDelta;
-	m_transitionScale = std::min( m_transitionScale + transitionSpeed * timeDeltaSeconds, 1.0f );
+	m_transitionScale = wsw::min( m_transitionScale + transitionSpeed * timeDeltaSeconds, 1.0f );
 	entity.scale *= m_transitionScale;
 
 	if( const auto rotationSpeed = (float)m_rotationSpeed; rotationSpeed != 0.0f ) {

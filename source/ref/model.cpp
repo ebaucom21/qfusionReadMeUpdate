@@ -558,11 +558,11 @@ static void Mod_CalculateAutospriteBounds( msurface_t *surf, vec3_t mins, vec3_t
 	const int shorterAxis2 = ( longestAxis + 2 ) % 3;
 
 	// enlarge the bounding box, accounting for rotation along the longest axis
-	maxs[shorterAxis1] = std::max( maxs[shorterAxis1], center[shorterAxis1] + radius[shorterAxis2] );
-	maxs[shorterAxis2] = std::max( maxs[shorterAxis2], center[shorterAxis2] + radius[shorterAxis1] );
+	maxs[shorterAxis1] = wsw::max( maxs[shorterAxis1], center[shorterAxis1] + radius[shorterAxis2] );
+	maxs[shorterAxis2] = wsw::max( maxs[shorterAxis2], center[shorterAxis2] + radius[shorterAxis1] );
 
-	mins[shorterAxis1] = std::min( mins[shorterAxis1], center[shorterAxis1] - radius[shorterAxis2] );
-	mins[shorterAxis2] = std::min( mins[shorterAxis2], center[shorterAxis2] - radius[shorterAxis1] );
+	mins[shorterAxis1] = wsw::min( mins[shorterAxis1], center[shorterAxis1] - radius[shorterAxis2] );
+	mins[shorterAxis2] = wsw::min( mins[shorterAxis2], center[shorterAxis2] - radius[shorterAxis1] );
 }
 
 static void Mod_FinishFaces( model_t *mod ) {

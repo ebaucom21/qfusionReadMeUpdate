@@ -22,7 +22,7 @@ inline void add( Container *c, int num ) {
 	if( !c->full() ) {
 		c->push_back( (uint16_t)num );
 	} else {
-		throw std::length_error( "Too many entities of such kind, AI is incapable to function on this map" );
+		wsw::failWithRuntimeError( "Too many entities of such kind, AI is incapable to function on this map" );
 	}
 }
 

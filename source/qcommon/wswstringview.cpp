@@ -1,6 +1,9 @@
 #include "wswstringview.h"
 
+#include <span>
+#include <cstring>
 #include <algorithm>
+#include <cctype>
 
 namespace wsw {
 

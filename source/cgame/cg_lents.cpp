@@ -320,25 +320,25 @@ void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 			case LE_NO_FADE:
 				break;
 			case LE_RGB_FADE:
-				fade = std::min( fade, fadeIn );
+				fade = wsw::min( fade, fadeIn );
 				ent->shaderRGBA[0] = ( uint8_t )( fade * le->color[0] );
 				ent->shaderRGBA[1] = ( uint8_t )( fade * le->color[1] );
 				ent->shaderRGBA[2] = ( uint8_t )( fade * le->color[2] );
 				break;
 			case LE_SCALE_ALPHA_FADE:
-				fade = std::min( fade, fadeIn );
+				fade = wsw::min( fade, fadeIn );
 				ent->scale = 1.0f + 1.0f / scale;
-				ent->scale = std::min( ent->scale, 5.0f );
+				ent->scale = wsw::min( ent->scale, 5.0f );
 				ent->shaderRGBA[3] = ( uint8_t )( fade * le->color[3] );
 				break;
 			case LE_INVERSESCALE_ALPHA_FADE:
-				fade = std::min( fade, fadeIn );
+				fade = wsw::min( fade, fadeIn );
 				ent->scale = scale + 0.1f;
 				Q_clamp( ent->scale, 0.1f, 1.0f );
 				ent->shaderRGBA[3] = ( uint8_t )( fade * le->color[3] );
 				break;
 			case LE_ALPHA_FADE:
-				fade = std::min( fade, fadeIn );
+				fade = wsw::min( fade, fadeIn );
 				ent->shaderRGBA[3] = ( uint8_t )( fade * le->color[3] );
 				break;
 			default:

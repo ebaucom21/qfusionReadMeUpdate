@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "backendlocal.h"
 #include "../qcommon/memspecbuilder.h"
-#include <algorithm>
 
 // Smaller buffer for 2D polygons. Also a workaround for some instances of a hardly explainable bug on Adreno
 // that caused dynamic draws to slow everything down in some cases when normals are used with dynamic VBOs.
@@ -531,7 +530,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 	bool trifan = false;
 	int numVerts = mesh->numVerts, numElems = mesh->numElems;
 	if( !numElems ) {
-		numElems = ( std::max( numVerts, 2 ) - 2 ) * 3;
+		numElems = ( wsw::max( numVerts, 2 ) - 2 ) * 3;
 		trifan = true;
 	}
 
@@ -1519,7 +1518,7 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		assert( appearanceRules->radius >= 0.1f );
 
 		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-		float radius     = std::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
+		float radius     = wsw::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
 
 		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
 			radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
@@ -1550,8 +1549,8 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 		float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
 		float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
 
-		float length = std::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
-		float width  = std::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
+		float length = wsw::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
+		float width  = wsw::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
 
 		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
 			const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );

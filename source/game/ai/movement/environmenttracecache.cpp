@@ -227,11 +227,11 @@ const CMShapeList *EnvironmentTraceCache::getShapeListForPMoveCollision( Predict
     const auto &__restrict physicsState = context->movementState->entityPhysicsState;
     // TODO: This is just a hack. There should be guarantees that millis for the
     // current step are always set prior to shape list retrieval in this frame
-    const unsigned millis = std::max( context->predictionStepMillis, 48u );
+    const unsigned millis = wsw::max( context->predictionStepMillis, 48u );
     const float moveDist = ( 0.001f * (float)millis * physicsState.Speed() );
-    const float sideExtent = std::max( kTraceDepth, moveDist );
+    const float sideExtent = wsw::max( kTraceDepth, moveDist );
 
-    const float zExtent = std::max( moveDist, 16.0f );
+    const float zExtent = wsw::max( moveDist, 16.0f );
     float topExtent, bottomExtent;
     if ( physicsState.Velocity()[2] > 0 ) {
         std::tie( topExtent, bottomExtent ) = std::make_pair( zExtent, 16.0f );

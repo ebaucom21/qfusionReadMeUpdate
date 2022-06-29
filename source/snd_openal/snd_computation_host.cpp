@@ -5,7 +5,6 @@
 #include "../qcommon/singletonholder.h"
 
 #include <thread>
-#include <algorithm>
 
 static SingletonHolder<ParallelComputationHost> instanceHolder;
 
@@ -34,7 +33,7 @@ int ParallelComputationHost::SuggestNumberOfTasks() {
 		// A widely available implementation of HT.
 		// Let's use all logical cores except a single one.
 		// There's going to be lots of cache misses so utilizing HT can be beneficial.
-		return std::max( 2u, numLogicalProcessors - 1 );
+		return wsw::max( 2u, numLogicalProcessors - 1 );
 	}
 	return numPhysicalProcessors;
 }

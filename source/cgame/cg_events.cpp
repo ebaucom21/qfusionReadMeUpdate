@@ -257,7 +257,7 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 		const auto range            = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef_weak.timeout;
 		const int minSubdivisions   = CURVELASERBEAM_SUBDIVISIONS;
 		const int maxSubdivisions   = MAX_CURVELASERBEAM_SUBDIVISIONS;
-		const int subdivisions      = std::clamp( cg_laserBeamSubdivisions->integer, minSubdivisions, maxSubdivisions );
+		const int subdivisions      = wsw::clamp( cg_laserBeamSubdivisions->integer, minSubdivisions, maxSubdivisions );
 		const float rcpSubdivisions = Q_Rcp( (float)subdivisions );
 		for( int segmentNum = 0; segmentNum < subdivisions; segmentNum++ ) {
 			const auto frac = (float)( segmentNum + 1 ) * rcpSubdivisions;

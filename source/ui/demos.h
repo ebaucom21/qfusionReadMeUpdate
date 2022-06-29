@@ -3,7 +3,6 @@
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/stringspanstorage.h"
-#include "../qcommon/wswstdtypes.h"
 #include "local.h"
 
 #include <QAbstractListModel>

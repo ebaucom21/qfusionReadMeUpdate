@@ -26,8 +26,6 @@ class Scoreboard : public wsw::ScoreboardShared {
 
 	ReplicatedScoreboardData m_replicatedData;
 
-	using Error = std::logic_error;
-
 	enum State : unsigned { NoState, Schema, Update };
 	State m_state { NoState };
 

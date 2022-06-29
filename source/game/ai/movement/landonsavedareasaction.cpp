@@ -252,7 +252,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 	const auto *aasWorld = AiAasWorld::instance();
 	const auto aasAreas = aasWorld->getAreas();
 
-	for( unsigned i = 0, end = std::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i )
+	for( unsigned i = 0, end = wsw::min( filteredAreas.size(), savedLandingAreas.capacity() ); i < end; ++i )
 		savedLandingAreas.push_back( filteredAreas[i].areaNum );
 
 	// Always add the target area (with the lowest priority)
@@ -266,7 +266,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 
 	float maxAreaZ = std::numeric_limits<float>::min();
 	for( int areaNum: savedLandingAreas ) {
-		maxAreaZ = std::max( maxAreaZ, aasAreas[areaNum].mins[2] );
+		maxAreaZ = wsw::max( maxAreaZ, aasAreas[areaNum].mins[2] );
 	}
 
 	return maxAreaZ;
@@ -496,7 +496,7 @@ void LandOnSavedAreasAction::CheckPredictionStepResults( PredictionContext *cont
 		for( int i = 0; i < numCurrAreas; ++i ) {
 			int travelFlags = TFL_WALK | TFL_WALKOFFLEDGE | TFL_AIR;
 			if( int travelTime = routeCache->TravelTimeToGoalArea( currAreaNums[i], targetAreaNum, travelFlags ) ) {
-				bestTravelTime = std::min( travelTime, bestTravelTime );
+				bestTravelTime = wsw::min( travelTime, bestTravelTime );
 			}
 		}
 		// If the target area is short-range reachable by walking (in 150 seconds^-2)

@@ -43,7 +43,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <sys/time.h>
 #endif
 
-#include <algorithm>
 #include <utility>
 #include <tuple>
 
@@ -1844,7 +1843,7 @@ int NET_Monitor( int msec, socket_t *sockets[], void ( *read_cb )( socket_t *, v
 			case SOCKET_TCP:
 #endif
 				assert( sockets[i]->handle > 0 );
-				fdmax = std::max( (int)sockets[i]->handle, fdmax );
+				fdmax = wsw::max( (int)sockets[i]->handle, fdmax );
 				FD_SET( sockets[i]->handle, &fdsetr ); // network socket
 				if( p_fdsetw ) {
 					FD_SET( sockets[i]->handle, p_fdsetw );

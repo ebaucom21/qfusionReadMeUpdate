@@ -30,17 +30,17 @@ int CoverProblemSolver::findMany( vec3_t *spots, int maxSpots ) {
 	// These calls rely on vis tables to some degree and thus should not be extremely expensive.
 	// Make sure we select not less than 5 candidates if possible even if maxSpots is lesser.
 	pruneByCoarseRayTests( candidateSpots, topNode, entNums );
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 5, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 5, maxSpots ) );
 
 	// Make sure we select not less than 5 candidates if possible even if maxSpots is lesser.
 	applyEnemiesInfluence( candidateSpots );
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 5, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 5, maxSpots ) );
 
 	// Even "fine" collision checks are actually faster than pathfinding.
 	selectCoverSpots( candidateSpots, topNode, entNums );
 
 	// Make sure we select not less than 3 candidates if possible even if maxSpots is lesser.
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 3, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 3, maxSpots ) );
 
 	checkSpotsReach( candidateSpots, maxSpots );
 

@@ -8,7 +8,7 @@
 #include "../gameshared/q_arch.h"
 #include "../gameshared/q_shared.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswvector.h"
 #include "../qcommon/freelistallocator.h"
 
 // TODO we can use a specialized one based on a freelist allocator

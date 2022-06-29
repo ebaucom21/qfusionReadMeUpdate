@@ -136,7 +136,7 @@ static float G_CheckArmor( edict_t *ent, float damage, int dflags ) {
 		return 0.0f;
 	}
 
-	maxsave = std::min( damage, client->armor / g_armor_degradation->value );
+	maxsave = wsw::min( damage, client->armor / g_armor_degradation->value );
 
 	if( maxsave <= 0.0f ) {
 		return 0.0f;
@@ -869,10 +869,10 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 	float maxKnockback    = m_inflictor->projectileInfo.maxKnockback;
 	assert( maxDamage > 0 || maxKnockback > 0 );
 
-	const float minDamage = std::min( m_inflictor->projectileInfo.minDamage, maxDamage );
-	float minKnockback    = std::min( m_inflictor->projectileInfo.minKnockback, maxKnockback );
+	const float minDamage = wsw::min( m_inflictor->projectileInfo.minDamage, maxDamage );
+	float minKnockback    = wsw::min( m_inflictor->projectileInfo.minKnockback, maxKnockback );
 	const float maxStun   = (float)m_inflictor->projectileInfo.stun;
-	const float minStun   = std::min( 1.0f, maxStun );
+	const float minStun   = wsw::min( 1.0f, maxStun );
 
 	const float *const origin       = m_inflictor->s.origin;
 	const float radius              = m_inflictor->projectileInfo.radius;
@@ -885,9 +885,9 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 
 		G_SplashFrac( entNum, origin, radius, pushDir, &kickFrac, &dmgFrac );
 
-		float damage = std::max( 0.0f, minDamage + ( ( maxDamage - minDamage ) * dmgFrac ) );
-		float stun = std::max( 0.0f, minStun + ( ( maxStun - minStun ) * dmgFrac ) );
-		float knockback = std::max( 0.0f, minKnockback + ( ( maxKnockback - minKnockback ) * kickFrac ) );
+		float damage = wsw::max( 0.0f, minDamage + ( ( maxDamage - minDamage ) * dmgFrac ) );
+		float stun = wsw::max( 0.0f, minStun + ( ( maxStun - minStun ) * dmgFrac ) );
+		float knockback = wsw::max( 0.0f, minKnockback + ( ( maxKnockback - minKnockback ) * kickFrac ) );
 
 		// Weapon jumps hack : when knockback on self, use strong weapon definition
 		const edict_t *ent = gameEdicts + entNum;
@@ -898,7 +898,7 @@ void SplashPropagationSolver::computeDamageParams( const EntNumsVector &vulnerab
 				const float selfDamageScale   = def->firedef.selfdamage;
 				maxKnockback = (float)def->firedef.knockback;
 				minKnockback = (float)def->firedef.minknockback;
-				minKnockback = std::min( minKnockback, maxKnockback );
+				minKnockback = wsw::min( minKnockback, maxKnockback );
 				if( isRaceGametype ) {
 					RS_SplashFrac( entNum, origin, radius, pushDir, &kickFrac, nullptr, splashFrac );
 				} else {
@@ -975,7 +975,7 @@ void SplashPropagationSolver::applyDamage( const DamageParams &params ) {
 		} else if( ent->s.type == ET_WAVE ) {
 			W_Detonate_Wave( ent, m_inflictor, nullptr, 0 );
 		} else {
-			throw std::logic_error( "A match over an explosive projectile type is non-exhausting" );
+			wsw::failWithLogicError( "A match over an explosive projectile type is non-exhausting" );
 		}
 	}
 }
@@ -1062,7 +1062,7 @@ auto SplashPropagationSolver::propagate( const DamageParamRefsVector &entParams,
 			// so it's actually better as no additional branching is performed.
 			if( DistanceSquared( otherCellCenter, explosionOrigin ) < squareRadius ) {
 				// Make coordinates for the step destination cell point
-				const auto newCoordIndex = std::min( (int)entry.coordIndices[coordNum] + sign, (int)numCoordSteps - 1 );
+				const auto newCoordIndex = wsw::min( (int)entry.coordIndices[coordNum] + sign, (int)numCoordSteps - 1 );
 				unsigned coordIndices[] { entry.coordIndices[0], entry.coordIndices[1], entry.coordIndices[2] };
 				coordIndices[coordNum] = (unsigned)newCoordIndex;
 				const unsigned cellIndex = xStride * coordIndices[0] + yStride * coordIndices[1] + coordIndices[2];

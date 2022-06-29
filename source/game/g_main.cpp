@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_local.h"
 #include "scoreboard.h"
 #include "chat.h"
+#include "commandshandler.h"
 
 game_locals_t game;
 level_locals_t level;
@@ -644,7 +645,7 @@ void G_ExitLevel( void ) {
 	level.exitNow = false;
 
 	nextmapname = G_SelectNextMapName();
-	timeLimit = g_timelimit->integer > 0 ? std::max( g_timelimit->integer, 60 ) : 60;
+	timeLimit = g_timelimit->integer > 0 ? wsw::max( g_timelimit->integer, 60 ) : 60;
 	timeLimit *= 60 * 1000;
 
 	// if it's the same map see if we can restart without loading
@@ -724,7 +725,7 @@ void *Q_malloc( size_t size ) {
 	void *buf = std::calloc( size, 1 );
 
 	if( !buf ) {
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 
 	return buf;
@@ -734,7 +735,7 @@ void *Q_realloc( void *buf, size_t newsize ) {
 	void *newbuf = realloc( buf, newsize );
 
 	if( !newbuf && newsize ) {
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 
 	// TODO: Zero memory too? There's no portable way of doing that

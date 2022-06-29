@@ -165,7 +165,7 @@ float GenericRaycastSampler::ComputeRoomSizeFactor() const {
 	// Sort hit distances so the nearest one is the first
 	std::sort( contestedDistances, contestedDistances + numContestedDistances );
 
-	const float connectivityDistance = std::max( 256.0f, sigma );
+	const float connectivityDistance = wsw::max( 256.0f, sigma );
 
 	float prevDistance = contestedDistances[0];
 	// Stop on first distance that violates "connectivity".

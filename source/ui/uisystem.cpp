@@ -674,7 +674,7 @@ void QtUISystem::registerFont( const wsw::StringView &path ) {
 
 	wsw::StaticString<256> message;
 	message << "Failed to register "_asView << path;
-	throw std::runtime_error( message.data() );
+	wsw::failWithRuntimeError( message.data() );
 }
 
 void QtUISystem::registerContextProperties( QQmlContext *context ) {
@@ -933,7 +933,7 @@ void QtUISystem::drawSelfInMainContext() {
 	}
 
 	const int64_t timestamp = getFrameTimestamp();
-	const int64_t delta = std::min( (int64_t)33, timestamp - m_lastDrawFrameTimestamp );
+	const int64_t delta = wsw::min( (int64_t)33, timestamp - m_lastDrawFrameTimestamp );
 	m_lastDrawFrameTimestamp = timestamp;
 
 	wsw::StaticVector<NativelyDrawn *, kMaxNativelyDrawnItems> underlayHeap, overlayHeap;
@@ -1582,10 +1582,10 @@ bool QtUISystem::isDebuggingNativelyDrawnItems() const {
 void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
 	auto *const nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
-		throw std::logic_error( "An item is not an instance of NativelyDrawn" );
+		wsw::failWithLogicError( "An item is not an instance of NativelyDrawn" );
 	}
 	if( m_numNativelyDrawnItems == kMaxNativelyDrawnItems ) {
-		throw std::logic_error( "Too many natively drawn items" );
+		wsw::failWithLogicError( "Too many natively drawn items" );
 	}
 	wsw::link( nativelyDrawn, &this->m_nativelyDrawnListHead );
 	nativelyDrawn->m_isLinked = true;
@@ -1595,10 +1595,10 @@ void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {
 void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 	auto *nativelyDrawn = dynamic_cast<NativelyDrawn *>( item );
 	if( !nativelyDrawn ) {
-		throw std::logic_error( "An item is not an instance of NativelyDrawn" );
+		wsw::failWithLogicError( "An item is not an instance of NativelyDrawn" );
 	}
 	if( !nativelyDrawn->m_isLinked ) {
-		throw std::logic_error( "The NativelyDrawn instance is not linked to the list" );
+		wsw::failWithLogicError( "The NativelyDrawn instance is not linked to the list" );
 	}
 	wsw::unlink( nativelyDrawn, &this->m_nativelyDrawnListHead );
 	nativelyDrawn->m_isLinked = false;
@@ -1608,7 +1608,7 @@ void QtUISystem::unregisterNativelyDrawnItem( QQuickItem *item ) {
 
 void QtUISystem::registerHudOccluder( QQuickItem *item ) {
 	if( const auto it = std::find( m_hudOccluders.begin(), m_hudOccluders.end(), item ); it != m_hudOccluders.end() ) {
-		throw std::logic_error( "This HUD occluder item has been already registered" );
+		wsw::failWithLogicError( "This HUD occluder item has been already registered" );
 	}
 	m_hudOccluders.push_back( item );
 	Q_EMIT hudOccludersChanged();
@@ -1619,7 +1619,7 @@ void QtUISystem::unregisterHudOccluder( QQuickItem *item ) {
 		m_hudOccluders.erase( it );
 		Q_EMIT hudOccludersChanged();
 	} else {
-		throw std::logic_error( "This HUD occluder item has not been registered" );
+		wsw::failWithLogicError( "This HUD occluder item has not been registered" );
 	}
 }
 
@@ -1645,10 +1645,10 @@ bool QtUISystem::isHudItemOccluded( QQuickItem *item ) {
 void QtUISystem::registerNativelyDrawnItemsOccluder( QQuickItem *item ) {
 	auto &occluders = m_nativelyDrawnItemsOccluders;
 	if( const auto it = std::find( occluders.begin(), occluders.end(), item ); it != occluders.end() ) {
-		throw std::logic_error( "This occluder of natively drawn items has been already registered" );
+		wsw::failWithLogicError( "This occluder of natively drawn items has been already registered" );
 	}
 	if( occluders.size() == kMaxOccludersOfNativelyDrawnItems ) {
-		throw std::logic_error( "Too many occluders of natively drawn items" );
+		wsw::failWithLogicError( "Too many occluders of natively drawn items" );
 	}
 	occluders.push_back( item );
 }
@@ -1657,7 +1657,7 @@ void QtUISystem::unregisterNativelyDrawnItemsOccluder( QQuickItem *item ) {
 	auto &occluders = m_nativelyDrawnItemsOccluders;
 	const auto it = std::find( occluders.begin(), occluders.end(), item );
 	if( it == occluders.end() ) {
-		throw std::logic_error( "This occluder of natively drawn items has not been registered" );
+		wsw::failWithLogicError( "This occluder of natively drawn items has not been registered" );
 	}
 	occluders.erase( it );
 }
@@ -1670,7 +1670,7 @@ auto QtUISystem::findCVarOrThrow( const QByteArray &name ) const -> cvar_t * {
 	message += "Failed to find a var \"";
 	message += std::string_view( name.data(), (size_t)name.size() );
 	message += "\" by name";
-	throw std::logic_error( message );
+	wsw::failWithLogicError( message.c_str() );
 }
 
 QVariant QtUISystem::getCVarValue( const QString &name ) const {
@@ -1732,7 +1732,7 @@ void QtUISystem::markPendingCVarChanges( QQuickItem *control, const QString &nam
 	} else {
 		const cvar_t *const var = it->second;
 		if( expectedCVarName.compare( var->name, Qt::CaseInsensitive ) != 0 ) {
-			throw std::logic_error( "Multiple CVar values for this control are disallowed" );
+			wsw::failWithLogicError( "Multiple CVar values for this control are disallowed" );
 		}
 		// Check if changes really going to have an effect
 		if( QVariant( var->string ) != value ) {
@@ -1795,7 +1795,7 @@ void QtUISystem::rollbackPendingCVarChanges() {
 void QtUISystem::registerCVarAwareControl( QQuickItem *control ) {
 	assert( control );
 	if( m_cvarAwareControls.contains( control ) ) {
-		throw std::logic_error( "A CVar-aware control has been already registered" );
+		wsw::failWithLogicError( "A CVar-aware control has been already registered" );
 	}
 	m_cvarAwareControls.insert( control );
 }
@@ -1803,7 +1803,7 @@ void QtUISystem::registerCVarAwareControl( QQuickItem *control ) {
 void QtUISystem::unregisterCVarAwareControl( QQuickItem *control ) {
 	assert( control );
 	if( !m_cvarAwareControls.remove( control ) ) {
-		throw std::logic_error( "Failed to unregister a CVar-aware control" );
+		wsw::failWithLogicError( "Failed to unregister a CVar-aware control" );
 	}
 }
 

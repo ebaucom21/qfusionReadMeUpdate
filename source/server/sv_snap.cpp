@@ -456,7 +456,7 @@ void SnapEntNumsList::AddEntNum( int entNum ) {
 
 	added[entNum] = true;
 	// Should be a CMOV
-	maxNumSoFar = std::max( entNum, maxNumSoFar );
+	maxNumSoFar = wsw::max( entNum, maxNumSoFar );
 }
 
 void SnapEntNumsList::Sort()  {

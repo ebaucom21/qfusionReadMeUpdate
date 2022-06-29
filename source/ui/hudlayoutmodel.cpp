@@ -1,6 +1,8 @@
 #include "hudlayoutmodel.h"
+#include "../qcommon/wswexceptions.h"
 #include "../qcommon/wswfs.h"
 #include "../qcommon/wswtonum.h"
+#include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstringsplitter.h"
 
 #include <QPointF>
@@ -173,7 +175,7 @@ auto HudLayoutModel::makeFilePath( wsw::StaticString<MAX_QPATH> *buffer,
 	if( baseFileName.length() > kMaxHudNameLength ) {
 		return std::nullopt;
 	}
-	if( baseFileName.length() > std::min( 16u, buffer->capacity() ) ) {
+	if( baseFileName.length() > wsw::min( 16u, buffer->capacity() ) ) {
 		return std::nullopt;
 	}
 	if( baseFileName.contains( '/' ) || baseFileName.contains( '\\' ) || baseFileName.contains( '.' ) ) {
@@ -198,7 +200,7 @@ static const wsw::StringView *const kOrderedKeywords[] { &kItem, &kSelf, &kOther
 
 bool HudEditorLayoutModel::serialize( wsw::StaticString<4096> *buffer_ ) {
 	if( m_entries.size() >= 32 ) {
-		throw std::logic_error( "Too many entries, this shouldn't happen" );
+		wsw::failWithLogicError( "Too many entries, this shouldn't happen" );
 	}
 
 	// Prune toolbox-attached items. This requires remapping indices.
@@ -987,14 +989,14 @@ auto HudEditorModel::getPointForAnchors( const QRectF &r, int anchors ) -> QPoin
 		case HudLayoutModel::Left: x = r.left(); break;
 		case HudLayoutModel::HCenter: x = 0.5 * ( r.left() + r.right() ); break;
 		case HudLayoutModel::Right: x = r.right(); break;
-		default: throw std::invalid_argument( "Invalid X anchor bits" );
+		default: wsw::failWithInvalidArgument( "Invalid X anchor bits" );
 	}
 	qreal y;
 	switch( anchors & kVerticalBitsMask ) {
 		case HudLayoutModel::Top: y = r.top(); break;
 		case HudLayoutModel::VCenter: y = 0.5 * ( r.top() + r.bottom() ); break;
 		case HudLayoutModel::Bottom: y = r.bottom(); break;
-		default: throw std::invalid_argument( "Invalid Y anchor bits" );
+		default: wsw::failWithInvalidArgument( "Invalid Y anchor bits" );
 	}
 	return QPointF( x, y );
 }
@@ -1039,7 +1041,7 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case AwardsArea: return NoFlags;
 		case StatusMessage: return NoFlags;
 		case ObjectiveStatus: return NoFlags;
-		default: throw std::logic_error( "unreachable" );
+		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
 

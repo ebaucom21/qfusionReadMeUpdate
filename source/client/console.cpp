@@ -430,7 +430,7 @@ static void Con_Linefeed( bool notify ) {
 	if( con.numlines == con.totallines ) {
 		Q_free( con.text[con.numlines - 1] );
 	}
-	memmove( con.text + 1, con.text, sizeof( con.text[0] ) * std::min( con.numlines, con.totallines - 1 ) );
+	memmove( con.text + 1, con.text, sizeof( con.text[0] ) * wsw::min( con.numlines, con.totallines - 1 ) );
 	con.text[0] = NULL;
 
 	// mark time for transparent overlay
@@ -698,7 +698,7 @@ void Con_DrawNotify( void ) {
 
 			QMutex_Lock( con.mutex );
 
-			for( i = std::min( NUM_CON_TIMES, con.numlines ) - 1; i >= 0; i-- ) {
+			for( i = wsw::min( NUM_CON_TIMES, con.numlines ) - 1; i >= 0; i-- ) {
 				time = con.times[i];
 				if( time == 0 ) {
 					continue;
@@ -1012,7 +1012,7 @@ static void Con_CompleteCommandLine() {
 		}
 
 		Q_strncpyz( key_lines[edit_line] + skip, cmd, sizeof( key_lines[edit_line] ) - ( 1 + skip ) );
-		key_linepos = std::min( (unsigned)( cmd_len + skip ), (unsigned)sizeof( key_lines[edit_line] ) - 1 );
+		key_linepos = wsw::min( (unsigned)( cmd_len + skip ), (unsigned)sizeof( key_lines[edit_line] ) - 1 );
 
 		if( c + v + a == 1 && key_linepos < sizeof( key_lines[edit_line] ) - 1 ) {
 			key_lines[edit_line][key_linepos] = ' ';
@@ -1466,7 +1466,7 @@ static void Con_KeyDown( int key ) {
 				int oldpos = key_linepos;
 				key_linepos = Q_Utf8SyncPos( key_lines[edit_line], key_linepos - 1,
 											 UTF8SYNC_LEFT );
-				key_linepos = std::max( key_linepos, 1u ); // Q_Utf8SyncPos could jump over [
+				key_linepos = wsw::max( key_linepos, 1u ); // Q_Utf8SyncPos could jump over [
 				memmove( key_lines[edit_line] + key_linepos,
 						 key_lines[edit_line] + oldpos, strlen( key_lines[edit_line] + oldpos ) + 1 );
 			}

@@ -1,4 +1,5 @@
 #include "demos.h"
+#include "../qcommon/demometadata.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/links.h"
 #include "../qcommon/wswtonum.h"
@@ -226,7 +227,7 @@ void DemosResolver::purgeMetadata( const wsw::StringView &fileName ) {
 			return;
 		}
 	}
-	throw std::logic_error( "unreachable" );
+	wsw::failWithLogicError( "unreachable" );
 }
 
 void DemosResolver::resolveMetadata( unsigned first, unsigned last ) {
@@ -547,14 +548,14 @@ void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
 			}
 		}
 
-		if( const auto maybeMatch = matcher.match( entry->getMapName(), std::max( 1u, maxDist + 1 ) ) ) {
+		if( const auto maybeMatch = matcher.match( entry->getMapName(), wsw::max( 1u, maxDist + 1 ) ) ) {
 			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
 			}
 		}
 
-		if( const auto maybeMatch = matcher.match( entry->getGametype(), std::max( 1u, maxDist + 1 ) ) ) {
+		if( const auto maybeMatch = matcher.match( entry->getGametype(), wsw::max( 1u, maxDist + 1 ) ) ) {
 			if( !resultAccum.addOrInterrupt( *maybeMatch ) ) {
 				m_lastQueryResults.push_back( index );
 				continue;
@@ -577,7 +578,7 @@ void DemosResolver::runQueryUsingWordMatcher( const wsw::StringView &word ) {
 		// Results with the same prefix (actually, prefix + postfix) length are sorted by an edit distance
 
 		// Limit prefix len that is taken into account
-		const unsigned commonLength = std::min( (unsigned)maxPrefixLen, resultAccum.commonLength );
+		const unsigned commonLength = wsw::min( (unsigned)maxPrefixLen, resultAccum.commonLength );
 		// A better (larger) prefix match has lesser penalty bits
 		const uint64_t prefixPenaltyBits = (uint64_t)( maxPrefixLen - commonLength ) << prefixLenShift;
 
@@ -702,7 +703,7 @@ void DemoPlayer::stop() {
 }
 
 void DemoPlayer::seek( qreal frac ) {
-	const int totalSeconds = std::clamp( (int)( std::round( m_duration * frac + 0.5 ) ), 0, m_duration );
+	const int totalSeconds = wsw::clamp( (int)( std::round( m_duration * frac + 0.5 ) ), 0, m_duration );
 	const auto [seconds, minutes] = std::div( totalSeconds, 60 );
 	wsw::StaticString<32> buffer( "demojump %02d:%02d", (int)seconds, (int)minutes );
 	Cbuf_ExecuteText( EXEC_APPEND, buffer.data() );

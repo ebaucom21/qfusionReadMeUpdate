@@ -67,7 +67,7 @@ auto ServerListModel::data( const QModelIndex &modelIndex, int role ) const -> Q
 	const auto *const server = getServerAtIndex( arrayIndex );
 	if( !server ) {
 		if( arrayIndex != (int)m_servers.size() ) {
-			throw std::logic_error( "Attempt to retrieve a data out of bounds" );
+			wsw::failWithLogicError( "Attempt to retrieve a data out of bounds" );
 		}
 		// Allow accessing the bottom-right empty cell
 		return QVariant();
@@ -98,7 +98,7 @@ auto ServerListModel::data( const QModelIndex &modelIndex, int role ) const -> Q
 
 void ServerListModel::onServerAdded( const PolledGameServer *server ) {
 	if( findIndexOfServer( server ) ) {
-		throw std::logic_error( "The server is already present" );
+		wsw::failWithLogicError( "The server is already present" );
 	}
 
 	const auto serversCount = (int)m_servers.size();
@@ -118,7 +118,7 @@ void ServerListModel::onServerAdded( const PolledGameServer *server ) {
 void ServerListModel::onServerRemoved( const PolledGameServer *server ) {
 	const auto maybeServerIndex = findIndexOfServer( server );
 	if( !maybeServerIndex ) {
-		throw std::logic_error( "Failed to find the server for removal" );
+		wsw::failWithLogicError( "Failed to find the server for removal" );
 	}
 
 	// Swap with the last row.
@@ -152,7 +152,7 @@ void ServerListModel::onServerRemoved( const PolledGameServer *server ) {
 void ServerListModel::onServerUpdated( const PolledGameServer *server ) {
 	const auto maybeServerIndex = findIndexOfServer( server );
 	if( !maybeServerIndex ) {
-		throw std::logic_error( "Failed to find the server for update" );
+		wsw::failWithLogicError( "Failed to find the server for update" );
 	}
 
 	const auto row = (int)*maybeServerIndex / 2;

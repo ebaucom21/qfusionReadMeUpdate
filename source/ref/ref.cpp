@@ -25,7 +25,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "materiallocal.h"
 #include "frontend.h"
-#include <algorithm>
 
 r_globals_t rf;
 
@@ -457,7 +456,7 @@ void R_SetGamma( float gamma ) {
 
 		for( int i = 0; i < glConfig.gammaRampSize; i++ ) {
 			int v = ( int )( 65535.0 * pow( ( (double)i + 0.5 ) * div, invGamma ) + 0.5 );
-			v = std::max( 0, std::min( 65535, v ) );
+			v = wsw::max( 0, wsw::min( 65535, v ) );
 			row1[i] = row2[i] = row3[i] = v;
 		}
 
@@ -956,7 +955,7 @@ static int R_PackLightmaps( int num, int w, int h, int dataSize, int stride, int
 							const char *name, const uint8_t *data, mlightmapRect_t *rects ) {
 	const int maxX = r_maxLightmapBlockSize / w;
 	const int maxY = r_maxLightmapBlockSize / h;
-	const int max = std::min( maxX, maxY );
+	const int max = wsw::min( maxX, maxY );
 
 	Com_DPrintf( "Packing %i lightmap(s) -> ", num );
 
@@ -1109,7 +1108,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		size = layerWidth * h;
 	} else {
 		if( !mapConfig.lightmapsPacking ) {
-			size = std::max( w, h );
+			size = wsw::max( w, h );
 		} else {
 			for( size = 1; ( size < r_lighting_maxlmblocksize->integer )
 						   && ( size < glConfig.maxTextureSize ); size <<= 1 ) ;
@@ -1144,7 +1143,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		int lightmapNum = 0;
 		mlightmapRect_t *rect = rects;
 		const int blockSize = w * h * LIGHTMAP_BYTES;
-		const int numLayers = std::min( glConfig.maxTextureLayers, 256 ); // layer index is a uint8_t
+		const int numLayers = wsw::min( glConfig.maxTextureLayers, 256 ); // layer index is a uint8_t
 		auto *const textureFactory = TextureCache::instance()->getUnderlyingFactory();
 		for( int i = 0; i < numLightmaps; i++ ) {
 			Texture *image = nullptr;
@@ -1810,7 +1809,7 @@ static void R_FinalizeGLExtensions( void ) {
 
 	// don't allow too high values for lightmap block size as they negatively impact performance
 	if( r_lighting_maxlmblocksize->integer > glConfig.maxTextureSize / 4 &&
-		!( glConfig.maxTextureSize / 4 < std::min( QF_LIGHTMAP_WIDTH,QF_LIGHTMAP_HEIGHT ) * 2 ) ) {
+		!( glConfig.maxTextureSize / 4 < wsw::min( QF_LIGHTMAP_WIDTH,QF_LIGHTMAP_HEIGHT ) * 2 ) ) {
 		Cvar_ForceSet( "r_lighting_maxlmblocksize", va_r( tmp, sizeof( tmp ), "%i", glConfig.maxTextureSize / 4 ) );
 	}
 }

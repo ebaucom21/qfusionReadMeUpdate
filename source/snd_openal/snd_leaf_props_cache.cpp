@@ -6,10 +6,8 @@
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstdtypes.h"
 #include "../qcommon/wswfs.h"
 
-#include <algorithm>
 #include <new>
 #include <limits>
 #include <cstdlib>
@@ -333,7 +331,7 @@ bool LeafPropsCache::ComputeNewState( bool fastAndCoarse ) {
 	LeafPropsComputationTask *submittedTasks[64];
 	int actualNumTasks = 0;
 	// Do not spawn more tasks than the actual number of leaves. Otherwise it fails for very small maps
-	const int suggestedNumTasks = std::min( actualNumLeafs, std::min( computationHost->SuggestNumberOfTasks(), 64 ) );
+	const int suggestedNumTasks = wsw::min( actualNumLeafs, wsw::min( computationHost->SuggestNumberOfTasks(), 64 ) );
 	for( int i = 0; i < suggestedNumTasks; ++i ) {
 		void *taskMem = Q_malloc( sizeof( LeafPropsComputationTask ) );
 		// Never really happens with Q_malloc()... Use just malloc() instead?

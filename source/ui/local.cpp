@@ -163,7 +163,7 @@ auto wrapInColorTags( const wsw::StringView &text, int rgb ) -> QString {
 }
 
 auto formatPing( int ping ) -> QByteArray {
-	ping = std::clamp( ping, 0, 999 );
+	ping = wsw::clamp( ping, 0, 999 );
 	int colorNum;
 	if( ping < 50 ) {
 		colorNum = 2;
@@ -252,13 +252,13 @@ auto rasterizeSvg( const void *rawSvgData, size_t rawSvgDataSize,
 				   void *dest, size_t destCapacity, const ImageOptions &options )
 				   -> std::optional<std::pair<unsigned, unsigned>> {
 	if( !options.desiredSize ) {
-		throw std::logic_error( "The desired size must be specified" );
+		wsw::failWithLogicError( "The desired size must be specified" );
 	}
 
 	const auto [desiredWidth, desiredHeight] = *options.desiredSize;
 	const size_t expectedSize = 4 * desiredWidth * desiredHeight;
 	if( destCapacity < expectedSize ) {
-		throw std::out_of_range( "The dest buffer has an insufficient capacity" );
+		wsw::failWithOutOfRange( "The dest buffer has an insufficient capacity" );
 	}
 
 	const QByteArray data( QByteArray::fromRawData( (const char *)rawSvgData, (int)rawSvgDataSize ) );

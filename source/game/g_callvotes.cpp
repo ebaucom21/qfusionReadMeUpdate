@@ -23,9 +23,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "chat.h"
 #include "../qcommon/base64.h"
 #include "../qcommon/configstringstorage.h"
-#include "../qcommon/snap.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswstring.h"
+#include "../qcommon/wswvector.h"
 
 using wsw::operator""_asView;
 
@@ -141,7 +142,7 @@ static void G_VoteMapExtraHelp( edict_t *ent ) {
 
 	message << "- Available maps:"_asView;
 
-	const int start = std::max( 0, atoi( trap_Cmd_Argv( 2 ) - 1 ) );
+	const int start = wsw::max( 0, atoi( trap_Cmd_Argv( 2 ) - 1 ) );
 
 	int i = start;
 	while( auto maybeNames = trap_ML_GetMapByNum( i ) ) {

@@ -46,7 +46,7 @@ void BunnyTestingNextReachDirsAction::BeforePlanning() {
 	float skillFrac = ( skill - 0.33f ) / ( 0.66f - 0.33f );
 	Assert( skillFrac > 0.0f && skillFrac < 1.0f );
 	maxSuggestedLookDirs = (unsigned)( 2 + ( skillFrac * skillFrac ) * kMaxSuggestedLookDirs );
-	maxSuggestedLookDirs = std::min( maxSuggestedLookDirs, (unsigned)kMaxSuggestedLookDirs );
+	maxSuggestedLookDirs = wsw::min( maxSuggestedLookDirs, (unsigned)kMaxSuggestedLookDirs );
 }
 
 class NextReachDirsCollector final : public ReachChainWalker {

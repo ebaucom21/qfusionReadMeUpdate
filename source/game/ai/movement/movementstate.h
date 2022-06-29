@@ -74,13 +74,13 @@ public:
 	float TurnSpeedMultiplier() const { return turnSpeedMultiplier / 16.0f; };
 
 	AiPendingLookAtPoint( const vec3_t origin_, float turnSpeedMultiplier_ )
-		: turnSpeedMultiplier( (uint16_t)( std::min( 255.0f, turnSpeedMultiplier_ * 16.0f ) ) )
+		: turnSpeedMultiplier( (uint16_t)( wsw::min( 255.0f, turnSpeedMultiplier_ * 16.0f ) ) )
 	{
 		SetPacked4uVec( origin_, origin );
 	}
 
 	AiPendingLookAtPoint( const Vec3 &origin_, float turnSpeedMultiplier_ )
-		: turnSpeedMultiplier(  (uint16_t)( std::min( 255.0f, turnSpeedMultiplier_ * 16.0f ) ) )
+		: turnSpeedMultiplier(  (uint16_t)( wsw::min( 255.0f, turnSpeedMultiplier_ * 16.0f ) ) )
 	{
 		SetPacked4uVec( origin_, origin );
 	}
@@ -203,7 +203,7 @@ public:
 	PendingLookAtPointState() : timeLeft( 0 ) {}
 
 	void Frame( unsigned frameTime ) {
-		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft * 4 - (int)frameTime ) / 4 );
+		timeLeft = ( decltype( timeLeft ) ) wsw::max( 0, ( (int)timeLeft * 4 - (int)frameTime ) / 4 );
 	}
 
 	bool IsActive() const { return timeLeft > 0; }
@@ -211,7 +211,7 @@ public:
 	// Timeout period is limited by 1000 millis
 	void Activate( const AiPendingLookAtPoint &pendingLookAtPoint_, unsigned timeoutPeriod = 500U ) {
 		this->pendingLookAtPoint = pendingLookAtPoint_;
-		this->timeLeft = ( decltype( this->timeLeft ) )( std::min( 1000U, timeoutPeriod ) / 4 );
+		this->timeLeft = ( decltype( this->timeLeft ) )( wsw::min( 1000U, timeoutPeriod ) / 4 );
 	}
 
 	void Deactivate() { timeLeft = 0; }
@@ -249,8 +249,8 @@ public:
 		, isTriggered( false ) {}
 
 	void Frame( unsigned frameTime ) {
-		moveDirsTimeLeft = ( uint16_t ) std::max( 0, (int)moveDirsTimeLeft - (int)frameTime );
-		lookAtPointTimeLeft = ( uint16_t ) std::max( 0, (int)lookAtPointTimeLeft - (int)frameTime );
+		moveDirsTimeLeft = ( uint16_t ) wsw::max( 0, (int)moveDirsTimeLeft - (int)frameTime );
+		lookAtPointTimeLeft = ( uint16_t ) wsw::max( 0, (int)lookAtPointTimeLeft - (int)frameTime );
 	}
 
 	bool IsActive() const { return isTriggered; }
@@ -298,7 +298,7 @@ public:
 	static constexpr uint16_t TIMEOUT_PERIOD = 500;
 
 	void Frame( unsigned frameTime ) {
-		timeLeft = ( decltype( timeLeft ) ) std::max( 0, ( (int)timeLeft - (int)frameTime ) );
+		timeLeft = ( decltype( timeLeft ) ) wsw::max( 0, ( (int)timeLeft - (int)frameTime ) );
 	}
 
 	bool IsActive() const { return timeLeft != 0; }

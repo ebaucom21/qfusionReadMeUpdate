@@ -21,7 +21,7 @@
 #include "../gameshared/q_keycodes.h"
 
 #include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswstring.h"
 
 template <typename> class SingletonHolder;
 

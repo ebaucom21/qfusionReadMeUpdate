@@ -7,7 +7,6 @@
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
 
-#include <algorithm>
 #include <limits>
 #include <memory>
 #include <random>
@@ -1333,7 +1332,7 @@ bool PropagationTableBuilder::Build() {
 }
 
 int PropagationTableBuilder::InstantiateTasks( TaskType *tasks[MAX_TASKS], ParallelComputationHost *computationHost ) {
-	const int suggestedNumTasks = std::min( (int)MAX_TASKS, computationHost->SuggestNumberOfTasks() );
+	const int suggestedNumTasks = wsw::min( (int)MAX_TASKS, computationHost->SuggestNumberOfTasks() );
 
 	// First try creating tasks
 	int actualNumTasks = 0;
@@ -1804,7 +1803,7 @@ int *FinePropagationTask::UnwindScalingWeights( IteratorType *iterator, int *arr
 
 void PropagationBuilderTask::BuildInfluxDirForLeaf( float *allocatedDir, const int *leafsChain, int numLeafsInChain ) {
 	assert( numLeafsInChain > 1 );
-	const int maxTestedLeafs = std::min( numLeafsInChain, (int)WeightedDirBuilder::MAX_DIRS );
+	const int maxTestedLeafs = wsw::min( numLeafsInChain, (int)WeightedDirBuilder::MAX_DIRS );
 
 	WeightedDirBuilder builder;
 	for( int i = 1; i < maxTestedLeafs; ++i ) {

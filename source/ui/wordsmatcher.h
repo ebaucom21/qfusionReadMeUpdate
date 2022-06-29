@@ -2,8 +2,10 @@
 #define WSW_04250cc2_5bf4_40d6_8c1b_b5305692255f_H
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstringview.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswstring.h"
+#include "../qcommon/wswvector.h"
 
 #include <functional>
 

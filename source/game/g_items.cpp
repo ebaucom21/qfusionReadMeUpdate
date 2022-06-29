@@ -336,13 +336,13 @@ bool Add_Armor( edict_t *other, const gsitem_t *item, bool pick_it ) {
 	if( GS_Armor_TagForCount( client->armor ) == ARMOR_NONE ) {
 		maxarmorcount = pickupitem_maxcount;
 	} else {
-		maxarmorcount = std::max( (float)GS_Armor_MaxCountForTag( GS_Armor_TagForCount( client->armor ) ), pickupitem_maxcount );
+		maxarmorcount = wsw::max( (float)GS_Armor_MaxCountForTag( GS_Armor_TagForCount( client->armor ) ), pickupitem_maxcount );
 	}
 
 	if( !pickupitem_maxcount ) {
 		newarmorcount = client->armor + GS_Armor_PickupCountForTag( item->tag );
 	} else {
-		newarmorcount = std::min( client->armor + GS_Armor_PickupCountForTag( item->tag ), maxarmorcount );
+		newarmorcount = wsw::min( client->armor + GS_Armor_PickupCountForTag( item->tag ), maxarmorcount );
 	}
 
 	// it can't be picked up if it doesn't add any armor

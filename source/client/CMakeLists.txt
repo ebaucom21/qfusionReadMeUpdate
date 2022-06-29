@@ -65,6 +65,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/snap_*.cpp"
 	"../qcommon/threads.cpp"
 	"../qcommon/wswcurl.cpp"
+	"../qcommon/wswexceptions.cpp"
 	"../qcommon/wswfs.cpp"
 	"../qcommon/wswstringview.cpp"
     "../server/*.cpp"

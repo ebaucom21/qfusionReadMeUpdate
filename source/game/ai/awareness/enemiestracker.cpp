@@ -548,7 +548,7 @@ void AiEnemiesTracker::UpdateEnemyWeight( TrackedEnemy *enemy ) {
 	// This method gets called before all enemies are viewed.
 	// For seen enemy registration actual weights of known enemies are mandatory
 	// (enemies may get evicted based on their weights and weight of a just seen enemy).
-	if( level.time - enemy->LastSeenAt() > std::max( 64u, reactionTime ) ) {
+	if( level.time - enemy->LastSeenAt() > wsw::max( 64u, reactionTime ) ) {
 		enemy->weight = 0;
 		return;
 	}
@@ -614,7 +614,7 @@ const TrackedEnemy *AiEnemiesTracker::ChooseVisibleEnemy( const edict_t *challen
 	// Choose not more than maxActiveEnemies candidates
 	// that have a score not than twice less than the current best one
 	float bestCurrentActiveScore = candidates.front().score;
-	for( unsigned i = 0, end = std::min( candidates.size(), maxActiveEnemies ); i < end; ++i ) {
+	for( unsigned i = 0, end = wsw::min( candidates.size(), maxActiveEnemies ); i < end; ++i ) {
 		if( candidates[i].score < 0.5f * bestCurrentActiveScore ) {
 			break;
 		}
@@ -641,7 +641,7 @@ const TrackedEnemy *AiEnemiesTracker::ChooseVisibleEnemy( const edict_t *challen
 	// Note: start from the worst-score enemy.
 	// Enemies are linked to the list head, so the best enemy should be linked last
 	// (and be the first one at the start of iteration via NextInActiveList() calls)
-	for( int i = (int)std::min( mergedActiveEnemies.size(), maxActiveEnemies ) - 1; i >= 0; --i ) {
+	for( int i = (int)wsw::min( mergedActiveEnemies.size(), maxActiveEnemies ) - 1; i >= 0; --i ) {
 		const auto &entAndScore = mergedActiveEnemies[i];
 		TrackedEnemy *enemy = entityToEnemyTable + entAndScore.entNum;
 		enemy->scoreAsActiveEnemy = entAndScore.score;

@@ -1273,7 +1273,7 @@ static void G_CheckNumBots( void ) {
 		trap_Cvar_Set( "g_numbots", "0" );
 	}
 
-	const int maxNumBots = developer->integer ? gs.maxclients : std::min( 9, gs.maxclients );
+	const int maxNumBots = developer->integer ? gs.maxclients : wsw::min( 9, gs.maxclients );
 	if( g_numbots->integer > maxNumBots ) {
 		trap_Cvar_Set( "g_numbots", va( "%i", maxNumBots ) );
 	}

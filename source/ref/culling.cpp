@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "materiallocal.h"
 
+#include <algorithm>
+
 #define SHOW_CULLED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
 //#define SHOW_OCCLUDERS
 //#define SHOW_OCCLUDERS_FRUSTA
@@ -310,7 +312,7 @@ auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOcc
 	const float *const viewOrigin     = m_state.viewOrigin;
 	const auto *const worldSurfaces   = rsh.worldBrushModel->surfaces;
 	Frustum *const occluderFrusta     = m_occluderFrusta;
-	const unsigned maxOccluders       = std::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
+	const unsigned maxOccluders       = wsw::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
 	constexpr float selfOcclusionBias = 4.0f;
 
 	bool hadCulledFrusta = false;
@@ -514,7 +516,7 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 	const unsigned occlusionCullingFrame = m_occlusionCullingFrame;
 
 	// Cull individual surfaces by up to 16 best frusta
-	const unsigned numBestOccluders = std::min<unsigned>( 16, occluderFrusta.size() );
+	const unsigned numBestOccluders = wsw::min<unsigned>( 16, occluderFrusta.size() );
 	for( const unsigned leafNum: indicesOfVisibleLeaves ) {
 		const mleaf_s *const leaf             = leaves[leafNum];
 		const unsigned *const leafSurfaceNums = leaf->visSurfaces;
@@ -547,8 +549,8 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 					const unsigned mergedSurfNum = surf->drawSurf - 1;
 					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
 					// TODO: Branchless min/max
-					span->firstSurface = std::min( span->firstSurface, (int)surfNum );
-					span->lastSurface = std::max( span->lastSurface, (int)surfNum );
+					span->firstSurface = wsw::min( span->firstSurface, (int)surfNum );
+					span->lastSurface = wsw::max( span->lastSurface, (int)surfNum );
 				}
 			}
 		}
@@ -567,8 +569,8 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 			const unsigned mergedSurfNum = surfaces[surfNum].drawSurf - 1;
 			MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
 			// TODO: Branchless min/max
-			span->firstSurface = std::min( span->firstSurface, (int)surfNum );
-			span->lastSurface = std::max( span->lastSurface, (int)surfNum );
+			span->firstSurface = wsw::min( span->firstSurface, (int)surfNum );
+			span->lastSurface = wsw::max( span->lastSurface, (int)surfNum );
 		}
 	}
 }
@@ -843,7 +845,7 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 	for( unsigned i = 0; i < numLights; ++i ) {
 		const Scene::DynamicLight *const light = &lights[i];
 		const float *const __restrict origin = light->origin;
-		const float halfRadius = 0.5f * std::max( light->programRadius, light->coronaRadius );
+		const float halfRadius = 0.5f * wsw::max( light->programRadius, light->coronaRadius );
 		const vec4_t mins { origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f };
 		const vec4_t maxs { origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f };
 
@@ -951,8 +953,8 @@ auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 		alignas( 16 ) vec4_t polyMins, polyMaxs;
 		polyMins[3] = 0.0f, polyMaxs[3] = 1.0f;
 		for( int j = 0; j < 3; ++j ) {
-			polyMins[j] = std::min( poly->from[j] - width, poly->to[j] - width );
-			polyMaxs[j] = std::max( poly->from[j] + width, poly->to[j] + width );
+			polyMins[j] = wsw::min( poly->from[j] - width, poly->to[j] - width );
+			polyMaxs[j] = wsw::max( poly->from[j] + width, poly->to[j] + width );
 		}
 
 		LOAD_BOX_COMPONENTS( polyMins, polyMaxs );

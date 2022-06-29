@@ -4,6 +4,7 @@
 #include "../qcommon/wswstringview.h"
 
 #include <cstdint>
+#include <sstream>
 
 using wsw::operator""_asView;
 
@@ -870,7 +871,7 @@ void RespectHandler::ClientEntry::addToReportStats( RespectStats *reportedStats 
 }
 
 void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore ) {
-	const int numArgs = std::min( trap_Cmd_Argc(), MAX_CLIENTS );
+	const int numArgs = wsw::min( trap_Cmd_Argc(), MAX_CLIENTS );
 	if( numArgs < 2 ) {
 		printIgnoreCommandUsage( ent, ignore );
 		return;
@@ -1014,7 +1015,7 @@ void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent ) {
 		return;
 	}
 
-	wsw::StringStream ss;
+	std::stringstream ss;
 	ss << action;
 	const char *separator = " ";
 	bool wereTeammatesMet = false;

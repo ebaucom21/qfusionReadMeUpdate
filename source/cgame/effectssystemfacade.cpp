@@ -268,9 +268,9 @@ shader_s *EffectsSystemFacade::s_bloodMaterials[3];
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( const int palette        = cg_bloodTrailPalette->integer ) {
-		const int indexForStyle  = std::clamp<int>( palette - 1, 0, std::size( kBloodInitialColors ) - 1 );
-		const int baseTime       = std::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
-		const int timeSpread     = std::max( 50, baseTime / 8 );
+		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodInitialColors ) - 1 );
+		const int baseTime       = wsw::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
+		const int timeSpread     = wsw::max( 50, baseTime / 8 );
 
 		ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
@@ -703,7 +703,7 @@ static const ConicalFlockParams kBulletDebrisFlockParams {
 static inline auto scaleSpeedForUpShift( float baseSpeed, float upShiftScale ) -> float {
 	assert( upShiftScale >= 0.0f && upShiftScale <= 1.0f );
 	// Apply the upper bound to avoid triggering an assertion on speed feasibility
-	return std::min( 999.9f, baseSpeed * ( 1.0f + upShiftScale ) );
+	return wsw::min( 999.9f, baseSpeed * ( 1.0f + upShiftScale ) );
 }
 
 void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const float *impactDir ) {
@@ -732,7 +732,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const f
 		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
 
 		if( cg_particles->integer ) {
-			const float upShiftScale = Q_Sqrt( std::max( 0.0f, impactNormal[2] ) );
+			const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
 
 			Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
 			ricochetAppearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
@@ -796,7 +796,7 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 		cg.particleSystem.addSmallParticleFlock( impactAppearanceRules, impactFlockParams );
 
 		if( cg_particles->integer ) {
-			[[maybe_unused]] const float upShiftScale = Q_Sqrt( std::max( 0.0f, impactNormal[2] ) );
+			[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
 
 			if( m_rng.tryWithChance( 0.5f ) ) {
 				Particle::AppearanceRules ricochetAppearanceRules( kBulletRicochetAppearanceRules );
@@ -890,12 +890,12 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 		}
 	}
 
-	const auto timeoutSeconds = std::clamp( cg_ebbeam_time->value, 0.1f, 1.0f );
+	const auto timeoutSeconds = wsw::clamp( cg_ebbeam_time->value, 0.1f, 1.0f );
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
 		.material      = material,
 		.color         = color,
 		.lightColor    = color,
-		.width         = std::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
+		.width         = wsw::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
 		.tileLength    = 128.0f,
 		.lightRadius   = 200.0f,
 		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
@@ -922,12 +922,12 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 		Vector4Set( color, 1.0f, 0.0f, 0.4f, 0.35f );
 	}
 
-	const auto timeoutSeconds = std::clamp( cg_instabeam_time->value, 0.1f, 1.0f );
+	const auto timeoutSeconds = wsw::clamp( cg_instabeam_time->value, 0.1f, 1.0f );
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
 		.material      = cgs.media.shaderInstaBeam,
 		.color         = color,
 		.lightColor    = color,
-		.width         = std::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
+		.width         = wsw::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
 		.tileLength    = 128.0f,
 		.lightRadius   = 250.0f,
 		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
@@ -938,7 +938,7 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 
 void EffectsSystemFacade::spawnWorldLaserBeam( const float *from, const float *to, float width ) {
 	// TODO: Either disable fading out or make it tracked
-	const auto timeout = std::max( 2u, cgs.snapFrameTime );
+	const auto timeout = wsw::max( 2u, cgs.snapFrameTime );
 	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
 		.material      = cgs.media.shaderLaser,
 		.timeout       = timeout,

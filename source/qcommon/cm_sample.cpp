@@ -1,9 +1,6 @@
 #include "qcommon.h"
 #include "cm_local.h"
 
-#include <algorithm>
-#include <limits>
-
 /*
 * CM_PointLeafnum
 */

@@ -116,7 +116,7 @@ void BotAwarenessModule::Think() {
 	CheckForNewHazards();
 
 	if( selectedEnemies.AreValid() ) {
-		if( level.time - selectedEnemies.LastSeenAt() > std::min( 64u, reactionTime ) ) {
+		if( level.time - selectedEnemies.LastSeenAt() > wsw::min( 64u, reactionTime ) ) {
 			selectedEnemies.Invalidate();
 		}
 	}
@@ -326,7 +326,7 @@ static bool IsEnemyVisible( const edict_t *self, const edict_t *enemyEnt ) {
 		if( !dims[0] || !dims[1] || !dims[2] ) {
 			return false;
 		}
-		if( std::max( dims[0], std::max( dims[1], dims[2] ) ) < 8 ) {
+		if( wsw::max( dims[0], wsw::max( dims[1], dims[2] ) ) < 8 ) {
 			return false;
 		}
 	}
@@ -344,7 +344,7 @@ static bool IsEnemyVisible( const edict_t *self, const edict_t *enemyEnt ) {
 	MakeNormalVectors( enemyToBotDir.Data(), right, up );
 
 	// Add some inner margin to the hitbox (a real model is less than it and the computations are coarse).
-	const float sideOffset = ( 0.8f * std::min( dims[0], dims[1] ) ) / 2;
+	const float sideOffset = ( 0.8f * wsw::min( dims[0], dims[1] ) ) / 2;
 	float zOffset[2] = { enemyEnt->r.maxs[2] - 0.1f * dims[2], enemyEnt->r.mins[2] + 0.1f * dims[2] };
 	// Switch the side from left to right
 	for( int i = -1; i <= 1; i += 2 ) {

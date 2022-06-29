@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "local.h"
 #include "../qcommon/qcommon.h"
 #include "materiallocal.h"
-#include <algorithm>
 #include <array>
 
 typedef struct {
@@ -620,8 +619,8 @@ static int Mod_AddUpdatePatchGroup( const rdface_t *in ) {
 
 		loadmodel_numpatchgroups++;
 	} else {
-		group->flatness[0] = std::max( group->flatness[0], flatness[0] );
-		group->flatness[1] = std::max( group->flatness[1], flatness[1] );
+		group->flatness[0] = wsw::max( group->flatness[0], flatness[0] );
+		group->flatness[1] = wsw::max( group->flatness[1], flatness[1] );
 	}
 
 	return i;
@@ -1516,7 +1515,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 			}
 			VectorScale( colorf, ambientf, ambient );
 
-			if( std::max( celcolorf[0], std::max( celcolorf[1], celcolorf[2] ) ) > 1.0f ) {
+			if( wsw::max( celcolorf[0], wsw::max( celcolorf[1], celcolorf[2] ) ) > 1.0f ) {
 				VectorScale( celcolorf, 1.0f / 255.0f, celcolorf );   // [0..1] RGB -> [0..255] RGB
 			}
 			VectorCopy( celcolorf, outline );
@@ -1594,7 +1593,7 @@ static void Mod_Finish( const lump_t *faces, const lump_t *light, vec3_t gridSiz
 		loadbmodel->gridMins[j] = loadbmodel->gridSize[j] * ceil( ( loadbmodel->submodels[0].mins[j] + 1 ) / loadbmodel->gridSize[j] );
 		maxs[j] = loadbmodel->gridSize[j] * floor( ( loadbmodel->submodels[0].maxs[j] - 1 ) / loadbmodel->gridSize[j] );
 		loadbmodel->gridBounds[j] = ( maxs[j] - loadbmodel->gridMins[j] ) / loadbmodel->gridSize[j];
-		loadbmodel->gridBounds[j] = std::max( loadbmodel->gridBounds[j], 0 ) + 1;
+		loadbmodel->gridBounds[j] = wsw::max( loadbmodel->gridBounds[j], 0 ) + 1;
 	}
 	loadbmodel->gridBounds[3] = loadbmodel->gridBounds[1] * loadbmodel->gridBounds[0];
 

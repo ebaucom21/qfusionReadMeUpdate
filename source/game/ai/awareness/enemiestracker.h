@@ -323,7 +323,7 @@ public:
 
 	// Call it after Frame() in the same frame
 	void OnDamage( float damage ) {
-		frameDamages[frameIndex] = (uint8_t)std::min( damage, 255.0f );
+		frameDamages[frameIndex] = (uint8_t)wsw::min( damage, 255.0f );
 		totalDamage += damage;
 		totalAttacks++;
 		lastDamageAt = level.time;
@@ -333,7 +333,7 @@ public:
 	// but you want to mark frame as a frame of activity anyway
 	void Touch() { lastTouchAt = level.time; }
 
-	int64_t LastActivityAt() const { return std::max( lastDamageAt, lastTouchAt ); }
+	int64_t LastActivityAt() const { return wsw::max( lastDamageAt, lastTouchAt ); }
 };
 
 class AiEnemiesTracker : public AiFrameAwareComponent {

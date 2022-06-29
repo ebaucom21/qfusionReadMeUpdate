@@ -75,7 +75,7 @@ auto ScoreboardTeamModel::data( const QModelIndex &modelIndex, int role ) const 
 		case Glyph: return formatGlyph( scb.getPlayerGlyphForColumn( playerIndex, column ) );
 		case Icon: return scb.getPlayerIconForColumn( playerIndex, column );
 	}
-	throw std::logic_error( "Unreachable" );
+	wsw::failWithLogicError( "Unreachable" );
 }
 
 auto ScoreboardSpecsModelData::asQmlArray() const -> QJsonArray {
@@ -177,13 +177,13 @@ static auto getEnumValueBounds() -> std::pair<int, int> {
 		if( const char *const key = meta.key( i ) ) {
 			bool ok = false;
 			if( const int value = meta.keyToValue( key, &ok ); ok ) {
-				minValue = std::min( minValue, value );
-				maxValue = std::max( maxValue, value );
+				minValue = wsw::min( minValue, value );
+				maxValue = wsw::max( maxValue, value );
 			}
 		}
 	}
 	if( minValue > maxValue ) {
-		throw std::logic_error( "Failed to retrieve enum value bounds" );
+		wsw::failWithLogicError( "Failed to retrieve enum value bounds" );
 	}
 	return { minValue, maxValue };
 }

@@ -554,7 +554,7 @@ auto CG_HudIndicatorState( int num ) -> wsw::ui::ObjectiveIndicatorState {
 		iconNum = 0;
 	}
 
-	const int progress = std::clamp<int>( stats[STAT_INDICATOR_1_PROGRESS + num], -100, +100 );
+	const int progress = wsw::clamp<int>( stats[STAT_INDICATOR_1_PROGRESS + num], -100, +100 );
 	const bool enabled = stats[STAT_INDICATOR_1_ENABLED + num] != 0;
 
 	int packedColor = ~0;

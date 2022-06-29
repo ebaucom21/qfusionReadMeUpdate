@@ -138,14 +138,14 @@ void *Q_malloc( size_t size ) {
 	if( auto *p = ::calloc( size, 1 ) ) {
 		return p;
 	}
-	throw std::bad_alloc();
+	wsw::failWithBadAlloc();
 }
 
 void *Q_realloc( void *p, size_t size ) {
 	if( auto *newp = ::realloc( p, size ) ) {
 		return newp;
 	}
-	throw std::bad_alloc();
+	wsw::failWithBadAlloc();
 }
 
 void Q_free( void *p ) {

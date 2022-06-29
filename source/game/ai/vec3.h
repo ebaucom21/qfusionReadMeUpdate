@@ -2,9 +2,9 @@
 #define WSW_046c64e4_0cf8_4378_bbe0_4b2b3394c273_H
 
 #include "../../gameshared/q_math.h"
+#include "../../qcommon/wswexceptions.h"
 
 #include <optional>
-#include <stdexcept>
 
 class Vec3
 {
@@ -81,7 +81,7 @@ public:
 			VectorScale( vec, rcpLength, vec );
 			return length;
 		}
-		throw std::logic_error( "Normalization failure" );
+		wsw::failWithRuntimeError( "Normalization failure" );
 	}
 
 	[[nodiscard]]
@@ -107,7 +107,7 @@ public:
 			VectorScale( vec, rcpLength, vec );
 			return squaredLength * rcpLength;
 		}
-		throw std::logic_error( "Fast normalization failure" );
+		wsw::failWithRuntimeError( "Fast normalization failure" );
 	}
 
 	float *Data() { return vec; }

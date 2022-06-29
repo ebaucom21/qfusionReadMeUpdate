@@ -2,13 +2,11 @@
 #define WSW_348385b1_722e_499e_9e68_c3f6855fb36b_H
 
 #include <cstdint>
-#include <functional>
 #include <utility>
 #include <tuple>
 
 #include "hash.h"
 #include "links.h"
-#include "wswstdtypes.h"
 
 namespace wsw {
 

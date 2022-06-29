@@ -9,8 +9,8 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstaticvector.h"
+#include "../qcommon/wswvector.h"
 #include "../qcommon/stringspanstorage.h"
-#include "../qcommon/wswstdtypes.h"
 
 namespace wsw::ui {
 

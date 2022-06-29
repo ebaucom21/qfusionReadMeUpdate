@@ -3,7 +3,6 @@
 
 #include "mmquery.h"
 
-#include <memory>
 #include <utility>
 #include <functional>
 #include <random>

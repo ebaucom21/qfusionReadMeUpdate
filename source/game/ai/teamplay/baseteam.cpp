@@ -83,7 +83,7 @@ void AiBaseTeam::InitTeamAffinity() const {
 	// We round frame time to integer milliseconds
 	int frameTime = 1000 / ServerFps();
 	// 4 for 60 fps or more, 1 for 16 fps or less
-	teamAffinityModulo = std::min( 4, std::max( 1, 64 / frameTime ) );
+	teamAffinityModulo = wsw::min( 4, wsw::max( 1, 64 / frameTime ) );
 	if( teamNum == TEAM_PLAYERS ) {
 		teamAffinityOffset = 0;
 		const_cast<AiBaseTeam*>( this )->SetFrameAffinity( teamAffinityModulo, teamAffinityOffset );

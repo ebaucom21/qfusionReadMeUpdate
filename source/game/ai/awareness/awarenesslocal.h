@@ -4,6 +4,8 @@
 #include "entitiespvscache.h"
 #include "../../../qcommon/wswstaticvector.h"
 
+#include <algorithm>
+
 static inline bool IsGenericProjectileVisible( const edict_t *self, const edict_t *ent ) {
 	trace_t trace;
 	auto *self_ = const_cast<edict_t *>( self );

@@ -5,7 +5,6 @@
 #include "../bot.h"
 #include "../../../qcommon/links.h"
 
-#include <algorithm>
 #include <limits>
 #include <cmath>
 #include <cstdlib>
@@ -254,7 +253,7 @@ AiSquad::~AiSquad() {
 
 AiSquad::SquadEnemiesTracker *AiSquad::NewEnemiesTracker() {
 	float skillLevel = trap_Cvar_Value( "sv_skilllevel" ); // {0, 1, 2}
-	float skill = std::min( 1.0f, 0.33f * ( 0.1f + skillLevel + random() ) ); // (0..1)
+	float skill = wsw::min( 1.0f, 0.33f * ( 0.1f + skillLevel + random() ) ); // (0..1)
 	void *mem = Q_malloc( sizeof( SquadEnemiesTracker ) );
 	return new( mem )SquadEnemiesTracker( this, skill );
 }
@@ -762,7 +761,7 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 		// Extrapolate last seen position but not more for 1 second
 		// TODO: Test for collisions with the solid (it may be expensive)
 		// If an extrapolated origin is inside solid, further trace test will treat an enemy as invisible
-		float extrapolationSeconds = std::min( 1.0f, 0.001f * ( level.time - enemy->LastSeenAt() ) );
+		float extrapolationSeconds = wsw::min( 1.0f, 0.001f * ( level.time - enemy->LastSeenAt() ) );
 		Vec3 extrapolatedLastSeenPosition( enemy->LastSeenVelocity() );
 		extrapolatedLastSeenPosition *= extrapolationSeconds;
 		extrapolatedLastSeenPosition += enemy->LastSeenOrigin();
@@ -794,7 +793,7 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 	// Use trace instead of path travel time estimation because pathfinder may fail to find a path.
 	trace_t trace;
 	const auto *pvsCache = EntitiesPvsCache::Instance();
-	for( unsigned i = 0, end = std::min( 4u, maybeStealers.size() ); i < end; ++i ) {
+	for( unsigned i = 0, end = wsw::min( 4u, maybeStealers.size() ); i < end; ++i ) {
 		MaybeStealer stealer = maybeStealers[i];
 		for( const Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
 			auto *const botEnt = const_cast<edict_t*>( bot->self );
@@ -1045,7 +1044,7 @@ edict_t *AiSquad::TryDropWeapon( Bot *consumer, Bot *supplier, int weapon, const
 			continue;
 		}
 
-		newMaxBestWeaponTier = std::max( newMaxBestWeaponTier, weaponTiers[otherWeapon] );
+		newMaxBestWeaponTier = wsw::max( newMaxBestWeaponTier, weaponTiers[otherWeapon] );
 	}
 
 	// If the does not keep its top weapon tier after dropping a weapon

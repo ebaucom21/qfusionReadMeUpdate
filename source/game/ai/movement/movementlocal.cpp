@@ -250,7 +250,7 @@ int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int from
 	int numHops = 0;
 	for(;; ) {
 		if( fromAreaNum == toAreaNum ) {
-			return std::max( 1, travelTime );
+			return wsw::max( 1, travelTime );
 		}
 		if( numHops++ == 48 ) {
 			return 0;

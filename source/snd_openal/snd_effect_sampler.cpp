@@ -315,7 +315,7 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 			// Putting a reference limit at 2^16 does not feel good so we clamp to a value 4x lower.
 			constexpr auto maxDistance = (float)( 1u << 14u );
 			constexpr auto invMaxDistance = 1.0f / maxDistance;
-			const float frac = std::min( maxDistance, tableDistance ) * invMaxDistance;
+			const float frac = wsw::min( maxDistance, tableDistance ) * invMaxDistance;
 			assert( frac >= 0.0f && frac <= 1.0f );
 			effect->indirectAttenuation = Q_Sqrt( frac );
 		} else {
@@ -326,10 +326,10 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	// Consider the indirect path distance having the same effect as the room size.
 
 	// Must be within [0.0 ... 0.1] range
-	effect->lateReverbDelay = 0.011f + 0.088f * std::max( effect->indirectAttenuation, roomSizeFactor );
+	effect->lateReverbDelay = 0.011f + 0.088f * wsw::max( effect->indirectAttenuation, roomSizeFactor );
 	// Must be within [0.0, 0.3] range.
 	effect->reflectionsDelay = 0.007f + 0.29f *
-		std::max( effect->indirectAttenuation, ( 0.5f + 0.5f * skyFactor ) * roomSizeFactor );
+		wsw::max( effect->indirectAttenuation, ( 0.5f + 0.5f * skyFactor ) * roomSizeFactor );
 
 	// 0.5 is the value of a neutral surface
 	const float smoothness = leafProps.getSmoothnessFactor();

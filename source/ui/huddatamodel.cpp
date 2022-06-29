@@ -371,7 +371,7 @@ void TeamListModel::update( const ReplicatedScoreboardData &scoreboardData, unsi
 	}
 
 	if( povTeam < 0 ) {
-		throw std::logic_error( "Failed to find the current POV in the scoreboard" );
+		wsw::failWithLogicError( "Failed to find the current POV in the scoreboard" );
 	}
 
 	// The POV player is in another team.
@@ -1088,7 +1088,7 @@ static const QByteArray kStatusesForNumberOfPlayers[] {
 };
 
 auto HudDataModel::getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray {
-	return kStatusesForNumberOfPlayers[std::min( numPlayers, (int)std::size( kStatusesForNumberOfPlayers ) - 1 )];
+	return kStatusesForNumberOfPlayers[wsw::min( numPlayers, (int)std::size( kStatusesForNumberOfPlayers ) - 1 )];
 }
 
 void HudDataModel::updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData ) {

@@ -2,6 +2,7 @@
 #define WSW_da942a7a_e77d_4eaf_9ad8_e1b4b6fc5240_H
 
 #include "../../qcommon/wswstaticvector.h"
+#include "../../qcommon/links.h"
 #include "awareness/awarenessmodule.h"
 #include "planning/planningmodule.h"
 #include "baseai.h"
@@ -16,8 +17,6 @@
 
 #include "planning/goals.h"
 #include "planning/actions.h"
-
-#include <functional>
 
 class AiSquad;
 class AiEnemiesTracker;
@@ -430,7 +429,7 @@ public:
 	}
 
 	int64_t LastTriggerTouchTime() const {
-		return std::max( lastTouchedJumppadAt, std::max( lastTouchedTeleportAt, lastTouchedElevatorAt ) );
+		return wsw::max( lastTouchedJumppadAt, wsw::max( lastTouchedTeleportAt, lastTouchedElevatorAt ) );
 	}
 
 	int64_t LastKnockbackAt() const { return lastKnockbackAt; }

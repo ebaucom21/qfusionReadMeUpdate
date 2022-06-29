@@ -2,7 +2,6 @@
 #include "snd_effect_sampler.h"
 #include "snd_propagation.h"
 
-#include <algorithm>
 #include <limits>
 #include <cmath>
 
@@ -97,7 +96,7 @@ float EaxReverbEffect::GetAttnFracBasedOnSampledEnvironment() const {
 	assert( obstructionFrac >= 0.0f && obstructionFrac <= 1.0f );
 
 	// Q_Sqrt may go slightly out of bounds without clamping
-	return std::max( std::clamp( Q_Sqrt( indirectAttenuation ), 0.0f, 1.0f ), 0.7f * obstructionFrac );
+	return wsw::max( wsw::clamp( Q_Sqrt( indirectAttenuation ), 0.0f, 1.0f ), 0.7f * obstructionFrac );
 }
 
 float EaxReverbEffect::GetSourceGain( src_t *src ) const {
@@ -225,7 +224,7 @@ void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, co
 
 		const float distance         = squareDistance * rcpDistance;
 		constexpr float rcpThreshold = 1.0f / REVERB_ENV_DISTANCE_THRESHOLD;
-		const float distanceFrac     = std::min( 1.0f, distance * rcpThreshold );
+		const float distanceFrac     = wsw::min( 1.0f, distance * rcpThreshold );
 
 		// Give far reflections a priority. Disallow zero values to guarantee that the normalization would succeed.
 		const float lateFrac = 0.3f + 0.7f * distanceFrac;

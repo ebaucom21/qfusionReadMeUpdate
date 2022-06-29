@@ -28,17 +28,17 @@ int AdvantageProblemSolver::findMany( vec3_t *spots, int maxSpots ) {
 	// Now cast rays in a collision world... it's actually cheaper than pathfinding.
 	// Make sure we select not less than 5 candidates if possible even if maxSpots is lesser.
 	checkOriginVisibility( candidateSpots );
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 5, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 5, maxSpots ) );
 
 	// Apply enemy influence... this is not that expensive
 	applyEnemiesInfluence( candidateSpots );
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 5, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 5, maxSpots ) );
 
 	// Make sure we select not less than 3 candidates if possible even if maxSpots is lesser
 	applyVisAndOtherFactors( candidateSpots );
 
 	// Should be always sorted before the last selection call
-	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, std::max( 3, maxSpots ) );
+	sortAndTakeNBestIfOptimizingAggressively( candidateSpots, wsw::max( 3, maxSpots ) );
 
 	checkSpotsReach( candidateSpots, maxSpots );
 
@@ -92,10 +92,10 @@ void AdvantageProblemSolver::selectCandidateSpots( const SpotsQueryVector &spots
 
 		auto [criteriaScores, scoresIndex] = this->addNextScores();
 		float originAdvantageScore = ( heightOverOrigin - minHeightAdvantageOverOrigin );
-		originAdvantageScore = std::min( originAdvantageScore, rangeOfAdvantageOverOrigin );
+		originAdvantageScore = wsw::min( originAdvantageScore, rangeOfAdvantageOverOrigin );
 		originAdvantageScore *= originAdvantageNormalizer;
 		float entityAdvantageScore = ( heightOverEntity - minHeightAdvantageOverEntity );
-		entityAdvantageScore = std::min( entityAdvantageScore, rangeOfAdvantageOverEntity );
+		entityAdvantageScore = wsw::min( entityAdvantageScore, rangeOfAdvantageOverEntity );
 		entityAdvantageScore *= entityAdvantageNormalizer;
 		criteriaScores->set( SpotSortCriterion::HeightOverOrigin, originAdvantageScore );
 		criteriaScores->set( SpotSortCriterion::HeightOverEntity, entityAdvantageScore );

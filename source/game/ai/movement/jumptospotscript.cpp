@@ -40,12 +40,12 @@ bool JumpToSpotScript::TryDeactivate( PredictionContext *context ) {
 	assert( status == PENDING );
 
 	// If the fallback is still active, invalidate it
-	if ( level.time - activatedAt > std::max( 250u, timeout ) ) {
+	if ( level.time - activatedAt > wsw::max( 250u, timeout ) ) {
 		return DeactivateWithStatus( INVALID );
 	}
 
 	// If the fallback movement has just started, skip tests
-	if( level.time - activatedAt < std::min( 250u, timeout ) ) {
+	if( level.time - activatedAt < wsw::min( 250u, timeout ) ) {
 		return false;
 	}
 

@@ -28,10 +28,8 @@
 #include "../qcommon/mmrating.h"
 #include "../game/g_public.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <cmath>
-#include <memory>
 #include <new>
 #include <utility>
 

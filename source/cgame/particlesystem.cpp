@@ -10,7 +10,7 @@ ParticleSystem::ParticleSystem() {
 		if( CMShapeList *list = CM_AllocShapeList( cl.cms ) ) [[likely]] {
 			m_freeShapeLists.push_back( list );
 		} else {
-			throw std::bad_alloc();
+			wsw::failWithBadAlloc();
 		}
 	} while( !m_freeShapeLists.full() );
 
@@ -183,7 +183,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		assert( params->maxPercentage >= 0.0f && params->minPercentage <= 1.0f );
 		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
-		numParticles = std::clamp( numParticles, 1u, maxParticles );
+		numParticles = wsw::clamp( numParticles, 1u, maxParticles );
 	}
 
 	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
@@ -261,7 +261,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		p->bounceCount = 0;
 
 		// TODO: Branchless?
-		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
+		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
 		const uint32_t randomDword = rng->next();
 		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
@@ -312,7 +312,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		// so we can use the same filler for different bin flocks.
 		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
-		numParticles = std::clamp( numParticles, 1u, maxParticles );
+		numParticles = wsw::clamp( numParticles, 1u, maxParticles );
 	}
 
 	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
@@ -387,7 +387,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		p->bounceCount = 0;
 
 		// TODO: Branchless?
-		resultTimeout = std::max( p->spawnTime + p->lifetime, resultTimeout );
+		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
 		const uint32_t randomDword = rng->next();
 		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
@@ -419,7 +419,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 
 void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	// Limit delta by sane bounds
-	const float deltaSeconds = 1e-3f * (float)std::clamp( (int)( currTime - m_lastTime ), 1, 33 );
+	const float deltaSeconds = 1e-3f * (float)wsw::clamp( (int)( currTime - m_lastTime ), 1, 33 );
 	m_lastTime = currTime;
 
 	// We split simulation/rendering loops for a better instructions cache utilization
@@ -532,7 +532,7 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 	const auto offset                 = (int)rules.lifetimeOffsetMillis;
 	const auto correctedDuration      = (int)particle.lifetime - offset;
 	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
-	const auto correctedLifetimeSoFar = std::max( 0, lifetimeSoFar - offset );
+	const auto correctedLifetimeSoFar = wsw::max( 0, lifetimeSoFar - offset );
 	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
 }
 
@@ -564,7 +564,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
 				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
-				timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
+				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 				++i;
 				continue;
 			}
@@ -604,7 +604,7 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 						VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
 
 						p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
-						timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
+						timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 						++i;
 						continue;
 					}
@@ -644,7 +644,7 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 
 			boundsBuilder.addPoint( p->origin );
 
-			timeoutOfParticlesLeft = std::max( particleTimeoutAt, timeoutOfParticlesLeft );
+			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
 
 			++i;

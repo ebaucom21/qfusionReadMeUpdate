@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "local.h"
 #include "frontend.h"
 #include "../qcommon/qcommon.h"
-#include <algorithm>
 
 /*
 * Mod_AliasBuildStaticVBOForMesh
@@ -397,7 +396,7 @@ void Mod_LoadAliasMD3Model( model_t *mod, model_t *parent, void *buffer, bspForm
 
 		AddPointToBounds( poutframe->mins, mod->mins, mod->maxs );
 		AddPointToBounds( poutframe->maxs, mod->mins, mod->maxs );
-		mod->radius = std::max( mod->radius, poutframe->radius );
+		mod->radius = wsw::max( mod->radius, poutframe->radius );
 	}
 }
 
@@ -410,7 +409,7 @@ model_t *R_AliasModelLOD( const entity_t *e, const float *viewOrigin, float fovD
 	if( lod < 1 ) {
 		return e->model;
 	}
-	return e->model->lods[std::min( lod, e->model->numlods ) - 1];
+	return e->model->lods[wsw::min( lod, e->model->numlods ) - 1];
 }
 
 /*
@@ -459,8 +458,8 @@ void R_AliasModelLerpBBox( const entity_t *e, const model_t *mod, vec3_t mins, v
 		*oldmaxs = poldframe->maxs;
 
 		for( i = 0; i < 3; i++ ) {
-			mins[i] = std::min( thismins[i], oldmins[i] );
-			maxs[i] = std::max( thismaxs[i], oldmaxs[i] );
+			mins[i] = wsw::min( thismins[i], oldmins[i] );
+			maxs[i] = wsw::max( thismaxs[i], oldmaxs[i] );
 		}
 	}
 

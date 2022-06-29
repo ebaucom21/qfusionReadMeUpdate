@@ -2,10 +2,6 @@
 #define QFUSION_CL_MM_H
 
 #include "../qcommon/mmfacade.h"
-#include "../qcommon/wswstdtypes.h"
-
-#include <functional>
-#include <memory>
 
 /**
  * Provides a Statsow services facade for a game client.

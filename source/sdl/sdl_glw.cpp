@@ -24,8 +24,6 @@
 #include "../ref/local.h"
 #include "sdl_glw.h"
 
-#include <algorithm>
-
 glwstate_t glw_state = {NULL, NULL};
 
 static bool GLimp_InitGL( int stencilbits );
@@ -161,7 +159,7 @@ bool GLimp_Init( const char *applicationName, void *hinstance, void *wndproc, vo
 static bool GLimp_InitGL( int stencilbits ) {
 	int colorBits, depthBits, stencilBits;
 
-	SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, std::max( 0, stencilbits ) );
+	SDL_GL_SetAttribute( SDL_GL_STENCIL_SIZE, wsw::max( 0, stencilbits ) );
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 3 );
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );

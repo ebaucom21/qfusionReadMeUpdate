@@ -24,8 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "../qcommon/q_trie.h"
 
-#include <algorithm>
-
 #define MAX_GLSL_PROGRAMS           1024
 #define GLSL_PROGRAMS_HASH_SIZE     256
 
@@ -1752,7 +1750,7 @@ void RP_UpdateOutlineUniforms( int elem, float projDistance ) {
 		qglUniform1f( program->loc.OutlineHeight, projDistance );
 	}
 	if( program->loc.OutlineCutOff >= 0 ) {
-		qglUniform1f( program->loc.OutlineCutOff, std::max( 0.0f, r_outlines_cutoff->value ) );
+		qglUniform1f( program->loc.OutlineCutOff, wsw::max( 0.0f, r_outlines_cutoff->value ) );
 	}
 }
 

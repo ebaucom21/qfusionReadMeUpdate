@@ -4,7 +4,6 @@
 #include "botplanner.h"
 #include "planninglocal.h"
 #include "../combat/dodgehazardproblemsolver.h"
-#include <algorithm>
 #include <limits>
 #include <stdarg.h>
 

@@ -7,8 +7,11 @@
 #include <QJsonObject>
 
 #include <array>
+#include <unordered_map>
+
 #include "../qcommon/qcommon.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswstring.h"
+#include "../qcommon/wswvector.h"
 
 class QQuickItem;
 
@@ -145,14 +148,14 @@ private:
 	void reloadColumnCommandBindings( QJsonArray &columns, const wsw::StringView &changedSignal );
 
 	[[nodiscard]]
-	auto registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+	auto registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
 							    const CommandsColumnEntry *begin,
 							    const CommandsColumnEntry *end,
 							    BindingGroup bindingGroup,
 							    int startFromNum ) -> int;
 
 	template <typename Array>
-	auto registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+	auto registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
 								const Array &commands,
 								BindingGroup bindingGroup,
 								int startFromNum ) -> int;
@@ -180,9 +183,9 @@ private:
 	static constexpr auto kMaxCommands = 48;
 	std::array<BindingGroup, kMaxCommands> m_commandBindingGroups;
 
-	wsw::HashMap<wsw::String, int> m_otherBindingNums;
-	wsw::HashMap<wsw::String, int> m_weaponBindingNums;
-	wsw::HashMap<wsw::String, int> m_respectBindingNums;
+	std::unordered_map<wsw::String, int> m_otherBindingNums;
+	std::unordered_map<wsw::String, int> m_weaponBindingNums;
+	std::unordered_map<wsw::String, int> m_respectBindingNums;
 
 	std::array<wsw::StringView, kMaxCommands> m_commandsForGlobalNums;
 	std::array<wsw::StringView, kMaxCommands> m_commandsDescForGlobalNums;

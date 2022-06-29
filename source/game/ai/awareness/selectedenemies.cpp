@@ -659,7 +659,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 			botVelocity2DDir *= Q_Rcp( botSpeed2D );
 
 			// Check whether we're going to hit an obstacle on knockback
-			speedFactor = Q_Sqrt( std::min( botSpeed2D, 1000.0f ) * 1e-3f );
+			speedFactor = Q_Sqrt( wsw::min( botSpeed2D, 1000.0f ) * 1e-3f );
 			Vec3 testedPoint( Vec3( botOrigin ) + ( ( 64.0f + 96.0f * speedFactor ) * botVelocity2DDir ) );
 			edict_t *self = game.edicts + bot->EntNum();
 			// Let's check against other players as well to prevent blocking of teammates

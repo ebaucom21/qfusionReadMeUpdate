@@ -257,7 +257,7 @@ void AvxOps::ClipToAvxFriendlyShape( CMTraceContext *__restrict tlc, const cbrus
 			const auto *const sidey = (float *)( buffer + floatStrideInBytes );
 			const auto *const sidez = (float *)( buffer + 2 * floatStrideInBytes );
 			const auto *const sided = (float *)( buffer + 6 * floatStrideInBytes );
-			tlc->trace->fraction = std::max( 0.0f, enterfrac );
+			tlc->trace->fraction = wsw::max( 0.0f, enterfrac );
 			cplane_s *destPlane = &tlc->trace->plane;
 			const int indexMask = _mm256_movemask_ps( ymmIndexMask );
 			assert( indexMask );

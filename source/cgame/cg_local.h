@@ -33,10 +33,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_public.h"
 
-#include <algorithm>
 #include <cmath>
-#include <memory>
 #include <new>
+#include <tuple>
 #include <utility>
 
 #define ITEM_RESPAWN_TIME   1000

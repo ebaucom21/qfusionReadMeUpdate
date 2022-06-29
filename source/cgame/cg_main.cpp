@@ -210,7 +210,7 @@ void CG_LocalPrint( const char *format, ... ) {
 	const int res = Q_vsnprintfz( msg, sizeof( msg ), format, argptr );
 	va_end( argptr );
 
-	const wsw::StringView msgView( msg, std::min( (size_t)res, sizeof( msg ) ) );
+	const wsw::StringView msgView( msg, wsw::min( (size_t)res, sizeof( msg ) ) );
 	wsw::ui::UISystem::instance()->addToMessageFeed( msgView.trim() );
 
 	Con_PrintSilent( msg );

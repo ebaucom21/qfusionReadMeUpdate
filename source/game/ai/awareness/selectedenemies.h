@@ -95,6 +95,17 @@ class SelectedEnemies: public Selection {
 
 	const float *GetBotViewDirDotToEnemyDirValues() const;
 	const float *GetEnemyViewDirDotToBotDirValues() const;
+
+	// Breaks the heavy-weight <algorithm> dependency
+	[[nodiscard]]
+	static auto getMaxArrayValue( const float *values, size_t numValues ) -> float {
+		assert( numValues != 0 );
+		float maxValue = values[0];
+		for( size_t i = 1; i < numValues; ++i ) {
+			maxValue = wsw::max( maxValue, values[i] );
+		}
+		return maxValue;
+	}
 public:
 	bool AreValid() const;
 
@@ -200,13 +211,11 @@ public:
 	float TotalInflictedDamage() const;
 
 	float MaxDotProductOfBotViewAndDirToEnemy() const {
-		auto *dots = GetBotViewDirDotToEnemyDirValues();
-		return *std::max_element( dots, dots + enemies.size() );
+		return getMaxArrayValue( GetBotViewDirDotToEnemyDirValues(), enemies.size() );
 	}
 
 	float MaxDotProductOfEnemyViewAndDirToBot() const {
-		auto *dots = GetEnemyViewDirDotToBotDirValues();
-		return *std::max_element( dots, dots + enemies.size() );
+		return getMaxArrayValue( GetEnemyViewDirDotToBotDirValues(), enemies.size() );
 	}
 
 	// Checks whether a bot can potentially hit enemies from its origin if it adjusts view angles properly

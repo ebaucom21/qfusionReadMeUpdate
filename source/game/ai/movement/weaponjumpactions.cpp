@@ -342,7 +342,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForJumpingToTarget( PredictionContext
 				std::pop_heap( heap.begin(), heap.end() );
 				heap.pop_back();
 			} else {
-				farthestPresentDistance = std::max( squareDistance, farthestPresentDistance );
+				farthestPresentDistance = wsw::max( squareDistance, farthestPresentDistance );
 			}
 			// Note: AreaAndScore::operator< puts best by score areas first,
 			// so far areas get a huge negative score and are evicted first in the max-heap.

@@ -2,6 +2,7 @@
 #define WSW_5d66d1d6_f1e7_4f33_84ee_835f7b833e2a_H
 
 #include "../gameshared/q_arch.h"
+#include "wswbasicmath.h"
 
 #include <cassert>
 #include <cstdlib>
@@ -15,10 +16,6 @@ namespace wsw {
 auto getHashAndLength( const char *s ) -> std::pair<uint32_t, size_t>;
 [[nodiscard]]
 auto getHashForLength( const char *s, size_t length ) -> uint32_t;
-
-template <typename T>
-[[nodiscard]]
-constexpr auto min( T a, T b ) -> T { return a < b ? a : b; }
 
 // TODO: Make it consteval-only when this functionality has a reliable compiler support
 [[nodiscard]]
@@ -127,7 +124,7 @@ public:
 
 	[[nodiscard]]
 	bool equals( const wsw::StringView &that ) const {
-		return m_len == that.m_len && !std::strncmp( m_s, that.m_s, m_len );
+		return m_len == that.m_len && !::strncmp( m_s, that.m_s, m_len );
 	}
 
 	[[nodiscard]]

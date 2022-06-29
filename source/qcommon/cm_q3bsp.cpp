@@ -28,7 +28,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "wswfs.h"
 #include "wswstaticstring.h"
 #include "wswstringsplitter.h"
+#include "wswvector.h"
 
+#include <unordered_map>
+#include <unordered_set>
 #include <memory>
 
 using wsw::operator""_asView;
@@ -51,7 +54,7 @@ namespace std {
 class SurfExtraFlagsCache {
 	struct SurfClassData {
 		wsw::Vector<char> fileData;
-		wsw::HashSet<wsw::StringView> simpleNames;
+		std::unordered_set<wsw::StringView> simpleNames;
 		wsw::Vector<wsw::StringView> patterns;
 		unsigned surfFlag;
 
@@ -65,7 +68,7 @@ class SurfExtraFlagsCache {
 	};
 
 	wsw::Vector<SurfClassData> m_classData;
-	wsw::HashMap<wsw::StringView, CacheEntry> m_lookupCache;
+	std::unordered_map<wsw::StringView, CacheEntry> m_lookupCache;
 	bool m_triedLoading { false };
 
 	[[nodiscard]]
@@ -83,7 +86,7 @@ void SurfExtraFlagsCache::loadAndAddClass( const wsw::StringView &prefix, unsign
 		wsw::Vector<char> fileData( std::move( *maybeFileData ) );
 		wsw::CharLookup separators( "\0\r\n"_asView );
 		wsw::StringSplitter splitter( wsw::StringView( fileData.data(), fileData.size() ) );
-		wsw::HashSet<wsw::StringView> simpleNames;
+		std::unordered_set<wsw::StringView> simpleNames;
 		wsw::Vector<wsw::StringView> patterns;
 		while( const std::optional<wsw::StringView> maybeToken = splitter.getNext( separators ) ) {
 			if( const wsw::StringView rawToken = maybeToken->trim(); !rawToken.empty() ) {

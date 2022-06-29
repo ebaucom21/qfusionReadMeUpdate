@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "sv_snap.h"
+#include "../qcommon/demometadata.h"
 
 using wsw::operator""_asView;
 
@@ -403,7 +404,7 @@ void SV_DemoList_f( client_t *client ) {
 	numdemos = FS_GetFileList( SV_DEMO_DIR, APP_DEMO_EXTENSION_STR, NULL, 0, 0, 0 );
 	if( numdemos ) {
 		if( start < 0 ) {
-			start = std::max( 0, numdemos - DEMOS_PER_VIEW );
+			start = wsw::max( 0, numdemos - DEMOS_PER_VIEW );
 		} else if( start > numdemos - 1 ) {
 			start = numdemos - 1;
 		}

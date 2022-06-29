@@ -201,7 +201,7 @@ auto TextureCache::getPortalTexture( unsigned viewportWidth, unsigned viewportHe
 
 auto TextureCache::getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight,
 									  int flags, unsigned frameNum ) -> PortalTexture * {
-	const auto sizeLimit = (unsigned)std::max( 0, r_portalmaps_maxtexsize->integer );
+	const auto sizeLimit = (unsigned)wsw::max( 0, r_portalmaps_maxtexsize->integer );
 	const auto [realWidth, realHeight] = R_GetRenderBufferSize( viewportWidth, viewportHeight, sizeLimit );
 
 	const int realFlags = IT_SPECIAL | IT_FRAMEBUFFER | IT_DEPTHRB | flags;

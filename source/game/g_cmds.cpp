@@ -19,10 +19,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 #include "g_local.h"
 #include "chat.h"
+#include "commandshandler.h"
 
 #include "../qcommon/singletonholder.h"
-#include "../qcommon/wswstdtypes.h"
 #include "ai/navigation/aasworld.h"
+
+#include <sstream>
 
 using wsw::operator""_asView;
 using wsw::operator""_asHView;
@@ -696,7 +698,7 @@ static void Cmd_Position_f( edict_t *ent ) {
 	}
 
 	if( !Q_stricmp( action, "details" ) ) {
-		wsw::StringStream ss;
+		std::stringstream ss;
 		ss << va( "Origin: %.6f %.6f %.6f, ", ent->s.origin[0], ent->s.origin[1], ent->s.origin[2] );
 		ss << va( "angles: %.6f %.6f\n", ent->s.angles[0], ent->s.angles[1] );
 		if( G_ISGHOSTING( ent ) ) {
@@ -730,7 +732,7 @@ static void Cmd_Position_f( edict_t *ent ) {
 		return;
 	}
 
-	wsw::StringStream ss;
+	std::stringstream ss;
 	ss << "Usage:\n";
 	ss << "position save - Save the current position (origin and angles)\n";
 	ss << "position showSaved - Displays an information about the saved position\n";
@@ -878,12 +880,12 @@ auto FloodFilter::detectFlood( const edict_t *ent, unsigned flags ) -> std::opti
 			if( !( flags & DontPrint ) ) {
 				G_PrintMsg( ent, "You can't talk for %d more seconds\n", (int)( diff / 1000 ) + 1 );
 			}
-			return std::min( std::numeric_limits<uint16_t>::max(), (uint16_t)diff );
+			return wsw::min( std::numeric_limits<uint16_t>::max(), (uint16_t)diff );
 		}
 	}
 
-	const int protectionMillis = std::max( 1000 * g_floodprotection_seconds->integer, 0 );
-	const int penaltySeconds   = std::max( g_floodprotection_penalty->integer, 0 );
+	const int protectionMillis = wsw::max( 1000 * g_floodprotection_seconds->integer, 0 );
+	const int penaltySeconds   = wsw::max( g_floodprotection_penalty->integer, 0 );
 	const int penaltyMillis    = 1000 * penaltySeconds;
 
 	FloodState *state = nullptr;

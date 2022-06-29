@@ -58,7 +58,7 @@ void ServerList::init() {
 	}
 
 	// Set this first as some resolvers may return almost immediately
-	::numActiveResolvers = std::min( (int)kMaxInfoServers, numInfoServers );
+	::numActiveResolvers = wsw::min( (int)kMaxInfoServers, numInfoServers );
 
 	int numSpawnedResolvers = 0;
 	for( const char *ptr = infoServersStr; ptr; ) {

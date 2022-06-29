@@ -226,7 +226,7 @@ void CrosshairState::update( unsigned weapon ) {
 
 	checkValueVar( m_valueVar, isStrong ? kNumStrongCrosshairs : kNumRegularCrosshairs );
 
-	m_decayTimeLeft = std::max( 0, m_decayTimeLeft - cg.frameTime );
+	m_decayTimeLeft = wsw::max( 0, m_decayTimeLeft - cg.frameTime );
 }
 
 void CrosshairState::clear() {

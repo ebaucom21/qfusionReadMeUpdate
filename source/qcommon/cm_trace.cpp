@@ -23,6 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cm_local.h"
 #include "cm_trace.h"
 
+#include <iterator> // std::size()
+
 static inline void CM_SetBuiltinBrushBounds( vec_bounds_t mins, vec_bounds_t maxs ) {
 	for( int i = 0; i < (int)( sizeof( vec_bounds_t ) / sizeof( vec_t ) ); ++i ) {
 		mins[i] = +999999;

@@ -26,8 +26,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswstaticvector.h"
 #include "ai/vec3.h"
 
-// The only sane implementation among 40 y/o garbage
 #include <chrono>
+#include <tuple>
 
 extern cvar_t *g_votable_gametypes;
 extern cvar_t *g_disable_vote_gametype;

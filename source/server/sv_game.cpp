@@ -470,7 +470,7 @@ static void SV_LocateEntities( struct edict_s *edicts, int edict_size, int num_e
 	sv.gi.edict_size = edict_size;
 	sv.gi.num_edicts = num_edicts;
 	sv.gi.max_edicts = max_edicts;
-	sv.gi.max_clients = std::min( num_edicts, sv_maxclients->integer );
+	sv.gi.max_clients = wsw::min( num_edicts, sv_maxclients->integer );
 }
 
 uint64_t NextServerSideCommandCounter();

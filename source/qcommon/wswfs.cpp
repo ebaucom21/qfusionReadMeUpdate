@@ -1,6 +1,7 @@
 #include "wswfs.h"
 #include "qcommon.h"
 #include "wswstaticstring.h"
+#include "wswexceptions.h"
 
 namespace wsw::fs {
 
@@ -21,7 +22,7 @@ bool IOHandle::isAtEof() const {
 
 bool IOHandle::rewind() {
 	if( !m_underlying ) {
-		throw std::logic_error( "Using a moved object" );
+		wsw::failWithLogicError( "Using a moved object" );
 	}
 	// TODO: It should reset errors of underlying objects
 	m_hadError = ( FS_Seek( m_underlying, 0, FS_SEEK_SET ) != 0 );
@@ -33,7 +34,7 @@ auto ReadHandle::read( uint8_t *buffer, size_t bufferSize ) -> std::optional<siz
 		return std::nullopt;
 	}
 	if( !m_underlying ) {
-		throw std::logic_error( "Using a moved object" );
+		wsw::failWithLogicError( "Using a moved object" );
 	}
 	// TODO: Does it check errno?
 	if( int bytesRead = FS_Read( buffer, bufferSize, m_underlying ); bytesRead >= 0 ) {
@@ -53,7 +54,7 @@ bool WriteHandle::write( const uint8_t *buffer, size_t length ) {
 		return false;
 	}
 	if( !m_underlying ) {
-		throw std::logic_error( "Using a moved object" );
+		wsw::failWithLogicError( "Using a moved object" );
 	}
 	// TODO: Does it check errno?
 	if( int res = FS_Write( buffer, length, m_underlying ); res >= 0 && ( (size_t)res == length ) ) {
@@ -150,7 +151,7 @@ auto BufferedReader::readToNewline( char *buffer, size_t bufferSize ) -> std::op
 	char *p = buffer;
 	for(;; ) {
 		// Scan the present reader buffer
-		const auto maxCharsToScan = std::min( (unsigned)bufferSize, m_limitPos - m_currPos );
+		const auto maxCharsToScan = wsw::min( (unsigned)bufferSize, m_limitPos - m_currPos );
 		for( unsigned i = m_currPos, end = m_currPos + maxCharsToScan; i < end; ++i ) {
 			const auto ch = (char)m_buffer[i];
 			if( ch == '\n' ) {
@@ -270,7 +271,7 @@ auto SearchResultHolder::getFileForNum( int num ) -> wsw::StringView {
 	}
 
 	// Should not happen once we start really holding search result values
-	throw std::exception();
+	wsw::failWithRuntimeError();
 }
 
 // TODO: All of this should be supported by underlying APIs

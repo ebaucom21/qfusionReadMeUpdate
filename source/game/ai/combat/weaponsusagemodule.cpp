@@ -263,7 +263,7 @@ bool BotWeaponsUsageModule::CheckSplashTeamDamage( const vec3_t hitOrigin,
 	// This call might return an actual entities count exceeding the buffer capacity
 	int numEnts = GClip_FindInRadius( const_cast<float *>( hitOrigin ), fireDef.SplashRadius(), entNums, 32 );
 	const edict_t *gameEdicts = game.edicts;
-	for( int i = 0, end = std::min( 32, numEnts ); i < end; ++i ) {
+	for( int i = 0, end = wsw::min( 32, numEnts ); i < end; ++i ) {
 		const edict_t *ent = gameEdicts + entNums[i];
 		if( ent->s.team != self->s.team ) {
 			continue;

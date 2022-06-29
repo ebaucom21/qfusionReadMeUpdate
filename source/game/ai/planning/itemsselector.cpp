@@ -172,7 +172,7 @@ BotItemsSelector::ItemAndGoalWeights BotItemsSelector::ComputeHealthWeights( con
 		return ItemAndGoalWeights( 0.2f + 0.3f * ( 1.0f - self->health * Q_Rcp( self->max_health ) ), 0.05f );
 	}
 
-	float healthFactor = std::max( 0.0f, 1.0f - self->health * Q_Rcp( self->max_health ) );
+	float healthFactor = wsw::max( 0.0f, 1.0f - self->health * Q_Rcp( self->max_health ) );
 	return ItemAndGoalWeights( healthFactor, healthFactor );
 }
 

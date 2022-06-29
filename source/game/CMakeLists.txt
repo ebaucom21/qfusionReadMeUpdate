@@ -42,6 +42,8 @@ file(GLOB GAME_SOURCES
 	"../qcommon/hash.cpp"
 	"../qcommon/cjson.cpp"
 	"../qcommon/userinfo.cpp"
+	"../qcommon/wswexceptions.cpp"
+	"../qcommon/wswstringview.cpp"
 	"../qcommon/wswfs.cpp"
 )
 

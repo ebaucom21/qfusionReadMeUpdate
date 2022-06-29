@@ -31,8 +31,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswfs.h"
 #include "materiallocal.h"
 
-#include <algorithm>
-
 using wsw::operator""_asView;
 
 static SingletonHolder<MaterialCache> materialCacheInstanceHolder;
@@ -142,7 +140,7 @@ void MaterialCache::unlinkAndFree( shader_t *material ) {
 
 auto MaterialCache::getNextMaterialId() -> unsigned {
 	if( m_freeMaterialIds.empty() ) {
-		throw std::logic_error( "underflow" );
+		wsw::failWithLogicError( "underflow" );
 	}
 	const unsigned result = m_freeMaterialIds.back();
 	m_freeMaterialIds.pop_back();

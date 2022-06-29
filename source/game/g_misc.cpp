@@ -84,7 +84,7 @@ void ThrowClientHead( edict_t *self, int damage ) {
 	self->flags |= FL_NO_KNOCKBACK;
 
 	self->movetype = MOVETYPE_BOUNCE;
-	VelocityForDamage( std::max( damage, 50 ), vd );
+	VelocityForDamage( wsw::max( damage, 50 ), vd );
 	VectorAdd( self->velocity, vd, self->velocity );
 
 	G_AddEvent( self, EV_GIB, 0, false );
@@ -628,8 +628,8 @@ static void func_explosive_spawn( edict_t *self, edict_t *other, edict_t *activa
 void SP_func_explosive( edict_t *self ) {
 	G_InitMover( self );
 
-	self->projectileInfo.maxDamage = std::max( self->dmg, 1 );
-	self->projectileInfo.minDamage = std::min( self->dmg, 1 );
+	self->projectileInfo.maxDamage = wsw::max( self->dmg, 1 );
+	self->projectileInfo.minDamage = wsw::min( self->dmg, 1 );
 	self->projectileInfo.maxKnockback = self->projectileInfo.maxDamage;
 	self->projectileInfo.minKnockback = self->projectileInfo.minDamage;
 	self->projectileInfo.stun = self->projectileInfo.maxDamage * 100;

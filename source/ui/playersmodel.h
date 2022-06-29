@@ -6,7 +6,6 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswstaticvector.h"
-#include "../qcommon/wswstdtypes.h"
 
 struct ReplicatedScoreboardData;
 

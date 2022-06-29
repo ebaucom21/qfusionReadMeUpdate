@@ -5,7 +5,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
-#include <memory>
 
 #include "qthreads.h"
 #include "wswstaticvector.h"

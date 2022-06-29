@@ -84,7 +84,7 @@ protected:
 
 	void EnsurePathPenalty( unsigned penalty ) {
 		assert( penalty < 30000 );
-		sequencePathPenalty = std::max( sequencePathPenalty, penalty );
+		sequencePathPenalty = wsw::max( sequencePathPenalty, penalty );
 	}
 
 	bool CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int toAreaNum );

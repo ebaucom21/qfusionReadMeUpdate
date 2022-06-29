@@ -31,9 +31,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <errno.h>
 
-#include <algorithm>
-#include <functional>
-
 static void CL_MM_Logout_f() {
 	CLStatsowFacade::Instance()->Logout( false );
 }

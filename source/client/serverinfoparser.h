@@ -1,7 +1,6 @@
 #ifndef WSW_SERVERINFOPARSER_H
 #define WSW_SERVERINFOPARSER_H
 
-#include "../qcommon/wswstdtypes.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswstaticvector.h"
 

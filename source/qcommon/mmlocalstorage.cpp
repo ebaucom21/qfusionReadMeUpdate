@@ -1,11 +1,9 @@
 #include "qcommon.h"
 #include "mmlocalstorage.h"
 #include "singletonholder.h"
-#include "wswstdtypes.h"
 
 #include "../../third-party/sqlite-amalgamation/sqlite3.h"
 
-#include <algorithm>
 #include <initializer_list>
 #include <functional>
 

@@ -595,7 +595,7 @@ int AiObjectiveBasedTeam::DefenceSpot::FindSpots( vec3_t spots[MAX_HELPER_ENTS],
 	problemParams.setMaxFeasibleTravelTimeMillis( 7500 );
 	problemParams.setOptimizeAggressively( true );
 	AdvantageProblemSolver solver( originParams, problemParams );
-	return solver.findMany( spots, std::min( (int)MAX_HELPER_ENTS, numRequestedSpots ) );
+	return solver.findMany( spots, wsw::min( (int)MAX_HELPER_ENTS, numRequestedSpots ) );
 }
 
 void AiObjectiveBasedTeam::DefenceSpot::UpdateBotsStatusForAlert() {
@@ -849,7 +849,7 @@ int AiObjectiveBasedTeam::OffenseSpot::FindSpots( vec3_t spots[MAX_HELPER_ENTS],
 	problemParams.setOriginWeightFalloffDistanceRatio( 0.25f );
 
 	AdvantageProblemSolver solver( originParams, problemParams );
-	return solver.findMany( spots, std::min( (int)MAX_HELPER_ENTS, numRequestedSpots ) );
+	return solver.findMany( spots, wsw::min( (int)MAX_HELPER_ENTS, numRequestedSpots ) );
 }
 
 void AiObjectiveBasedTeam::OffenseSpot::UpdateBotsStatus() {

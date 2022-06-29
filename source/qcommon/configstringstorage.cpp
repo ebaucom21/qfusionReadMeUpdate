@@ -3,6 +3,7 @@
 #include "qcommon.h"
 
 #include <cstddef>
+#include <stdexcept>
 
 namespace wsw {
 

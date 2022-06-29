@@ -748,7 +748,7 @@ void TransientEffectsSystem::unlinkAndFreeLightEffect( LightEffect *effect ) {
 
 void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	// Limit the time step
-	const float timeDeltaSeconds = 1e-3f * (float)std::min<int64_t>( 33, currTime - m_lastTime );
+	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
 
 	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 	simulateLightEffectsAndSubmit( currTime, timeDeltaSeconds, request );

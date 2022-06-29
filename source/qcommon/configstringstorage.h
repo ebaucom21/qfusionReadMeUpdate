@@ -2,6 +2,7 @@
 #define WSW_64e10710_4a93_4f7e_8746_1158315f7bc4_H
 
 #include "qcommon.h"
+#include "wswexceptions.h"
 #include "wswstringview.h"
 
 namespace wsw {
@@ -49,7 +50,7 @@ protected:
 	[[nodiscard]]
 	static auto checkIndex( unsigned index ) -> unsigned {
 		if( index >= kMaxStrings ) {
-			throw std::out_of_range( "The index is out of range" );
+			wsw::failWithOutOfRange( "The index is out of range" );
 		}
 		return index;
 	}
@@ -57,7 +58,7 @@ protected:
 	[[nodiscard]]
 	static auto groupNumToIndex( unsigned num, unsigned startNum, unsigned maxGroupStrings ) -> unsigned {
 		if( num >= maxGroupStrings || num + startNum >= kMaxStrings ) {
-			throw std::out_of_range( "The num is out of range" );
+			wsw::failWithOutOfRange( "The num is out of range" );
 		}
 		return num + startNum;
 	}
@@ -65,10 +66,10 @@ protected:
 	[[nodiscard]]
 	static auto callvoteNumToIndex( unsigned num, unsigned field ) -> unsigned {
 		if( num >= MAX_CALLVOTEINFOS / kNumCallvoteFields ) {
-			throw std::out_of_range( "The num is out of range" );
+			wsw::failWithOutOfRange( "The num is out of range" );
 		}
 		if( CS_CALLVOTEINFOS + num * kNumCallvoteFields + field >= kMaxStrings ) {
-			throw std::out_of_range( "The num is out of range" );
+			wsw::failWithOutOfRange( "The num is out of range" );
 		}
 		return CS_CALLVOTEINFOS + num * kNumCallvoteFields + field;
 	}

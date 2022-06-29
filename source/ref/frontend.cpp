@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "materiallocal.h"
 #include "../qcommon/singletonholder.h"
 
+#include <algorithm>
+
 static void R_TransformForWorld( void ) {
 	RB_LoadObjectMatrix( mat4x4_identity );
 }
@@ -131,7 +133,7 @@ static int R_PackDistKey( int renderFx, const shader_t *shader, float dist, unsi
 		shaderSort = SHADER_SORT_ADDITIVE;
 	}
 
-	return ( shaderSort << 26 ) | ( std::max( 0x400 - (int)dist, 0 ) << 15 ) | ( order & 0x7FFF );
+	return ( shaderSort << 26 ) | ( wsw::max( 0x400 - (int)dist, 0 ) << 15 ) | ( order & 0x7FFF );
 }
 
 static unsigned R_PackOpaqueOrder( const mfog_t *fog, const shader_t *shader, int numLightmaps, bool dlight ) {
@@ -170,7 +172,7 @@ auto Frontend::getDefaultFarClip() const -> float {
 		dist = (float)( 1 << 16 );
 	}
 
-	return std::max( Z_NEAR, dist ) + Z_BIAS;
+	return wsw::max( Z_NEAR, dist ) + Z_BIAS;
 }
 
 auto Frontend::getFogForBounds( const float *mins, const float *maxs ) -> mfog_t * {
@@ -638,7 +640,7 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 	if( drawSurf->shader->flags & ( SHADER_PORTAL ) ) [[unlikely]] {
 		for( msurface_s *surf = firstVisSurf; surf <= lastVisSurf; ++surf ) {
 			if( const auto maybeDistance = tryUpdatingPortalSurfaceAndDistance( drawSurf, surf, maybeOrigin ) ) {
-				resultDist = std::max( resultDist, *maybeDistance );
+				resultDist = wsw::max( resultDist, *maybeDistance );
 			}
 		}
 	}
@@ -749,7 +751,7 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 			VectorAvg( mesh.mins, mesh.maxs, meshCenter );
 			const float distance = DistanceFast( meshCenter, viewOrigin );
 			distances[partIndex] = distance;
-			bestDistance         = std::min( distance, bestDistance );
+			bestDistance         = wsw::min( distance, bestDistance );
 		}
 
 		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
@@ -757,7 +759,7 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 
 			float distance = distances[partIndex];
 			if( mesh.useDrawOnTopHack ) [[unlikely]] {
-				distance = std::max( 0.0f, bestDistance - 1.0f );
+				distance = wsw::max( 0.0f, bestDistance - 1.0f );
 			}
 
 			// TODO: Account for fogs
@@ -1034,7 +1036,7 @@ void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
 	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
 	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
 		// TODO: Shouldn't it affect culling?
-		worldEnt->outlineHeight = std::max( 0.0f, r_outlines_world->value );
+		worldEnt->outlineHeight = wsw::max( 0.0f, r_outlines_world->value );
 	} else {
 		worldEnt->outlineHeight = 0;
 	}

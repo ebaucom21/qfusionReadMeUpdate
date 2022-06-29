@@ -1,8 +1,10 @@
 #include "simulatedhullssystem.h"
 
 #include "../qcommon/links.h"
-#include "../qcommon/wswstdtypes.h"
 #include "../client/client.h"
+#include "../qcommon/wswvector.h"
+
+#include <unordered_map>
 
 struct IcosphereData {
 	std::span<const vec4_t> vertices;
@@ -100,7 +102,7 @@ private:
 	struct alignas( 2 ) Neighbours { uint16_t data[5]; };
 	static_assert( sizeof( Neighbours ) == sizeof( uint16_t[5] ) );
 
-	using MidpointMap = wsw::TreeMap<unsigned, uint16_t>;
+	using MidpointMap = std::unordered_map<unsigned, uint16_t>;
 
 	[[nodiscard]]
 	auto getMidPoint( uint16_t i1, uint16_t i2, MidpointMap *midpointCache ) -> uint16_t {
@@ -202,12 +204,12 @@ SimulatedHullsSystem::SimulatedHullsSystem() {
 		if( auto *shapeList = CM_AllocShapeList( cl.cms ) ) [[likely]] {
 			m_freeShapeLists.push_back( shapeList );
 		} else {
-			throw std::bad_alloc();
+			wsw::failWithBadAlloc();
 		}
 	}
 	// TODO: Take care of exception-safety
 	if( !( m_tmpShapeList = CM_AllocShapeList( cl.cms ) ) ) [[unlikely]] {
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 }
 
@@ -326,7 +328,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, co
 		(uint8_t)( color[3] * 255 )
 	};
 
-	const float minSpeed = std::max( 0.0f, speed - 0.5f * speedSpead );
+	const float minSpeed = wsw::max( 0.0f, speed - 0.5f * speedSpead );
 	const float maxSpeed = speed + 0.5f * speedSpead;
 	wsw::RandomGenerator *__restrict rng = &m_rng;
 
@@ -371,7 +373,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 	float maxVertexSpeed = layerParams[0].speed + layerParams[0].maxSpeedSpike + layerParams[0].biasAlongChosenDir ;
 	for( unsigned i = 1; i < layerParams.size(); ++i ) {
 		const auto &params = layerParams[i];
-		maxVertexSpeed = std::max( maxVertexSpeed, params.speed + params.maxSpeedSpike + params.biasAlongChosenDir );
+		maxVertexSpeed = wsw::max( maxVertexSpeed, params.speed + params.maxSpeedSpike + params.biasAlongChosenDir );
 	}
 
 	// To prevent noticeable z-fighting in case if hulls of different layers start matching (e.g due to bias)
@@ -445,7 +447,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 			const float *vertexDir   = vertices[i];
 			const float layerDotBias = DotProduct( vertexDir, layerBiasDir );
 			const float layerSqrBias = std::copysign( layerDotBias * layerDotBias, layerDotBias );
-			const float vertexBias   = std::max( layerSqrBias, globalVertexDotBias[i] );
+			const float vertexBias   = wsw::max( layerSqrBias, globalVertexDotBias[i] );
 
 			speedsAndDistances[i][0] = params->speed + vertexBias * params->biasAlongChosenDir;
 
@@ -471,7 +473,7 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 		}
 
 		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
-			speedsAndDistances[i][0] += std::min( spikeSpeedBoost[i], maxVertexSpeed );
+			speedsAndDistances[i][0] += wsw::min( spikeSpeedBoost[i], maxVertexSpeed );
 			// Scale by the fine-tuning scale multiplier
 			speedsAndDistances[i][0] *= scale;
 		}
@@ -516,7 +518,7 @@ auto SimulatedHullsSystem::setupLods( ExternalMesh::LodProps *lods, LodSetupPara
 
 void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Limit the time step
-	const float timeDeltaSeconds = 1e-3f * (float)std::min<int64_t>( 33, currTime - m_lastTime );
+	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
 
 	wsw::StaticVector<BaseRegularSimulatedHull *, kMaxSmokeHulls + kMaxWaveHulls> activeRegularHulls;
 	wsw::StaticVector<BaseConcentricSimulatedHull *, kMaxFireHulls> activeConcentricHulls;
@@ -647,7 +649,7 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 		for ( unsigned i = 0; i < numVertices; ++i ) {
 			const float dx = oldPositions[i][0] - avgXLastFrame;
 			const float dy = oldPositions[i][1] - avgYLastFrame;
-			maxSquareDistance2D = std::max( dx * dx + dy * dy, maxSquareDistance2D );
+			maxSquareDistance2D = wsw::max( dx * dx + dy * dy, maxSquareDistance2D );
 		}
 		const float rcpMaxDistance2D = Q_RSqrt( maxSquareDistance2D );
 		for( unsigned i = 0; i < numVertices; ++i ) {
@@ -759,8 +761,8 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 			// The final position for contacting vertices is considered to be known.
 			const float *__restrict position = newPositions[i];
-			minZLastFrame = std::min( minZLastFrame, position[2] );
-			maxZLastFrame = std::max( maxZLastFrame, position[2] );
+			minZLastFrame = wsw::min( minZLastFrame, position[2] );
+			maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
 			avgXLastFrame += position[0];
 			avgYLastFrame += position[1];
 
@@ -802,8 +804,8 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 				float *const __restrict position = newPositions[vertexIndex];
 				VectorLerp( oldPositions[vertexIndex], lerpFrac, position, position );
 
-				minZLastFrame = std::min( minZLastFrame, position[2] );
-				maxZLastFrame = std::max( maxZLastFrame, position[2] );
+				minZLastFrame = wsw::min( minZLastFrame, position[2] );
+				maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
 				avgXLastFrame += position[0];
 				avgYLastFrame += position[1];
 			} while( ++i < numNonContactingVertices );
@@ -814,8 +816,8 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			do {
 				const unsigned vertexIndex       = indicesOfNonContactingVertices[i];
 				const float *__restrict position = newPositions[vertexIndex];
-				minZLastFrame = std::min( minZLastFrame, position[2] );
-				maxZLastFrame = std::max( maxZLastFrame, position[2] );
+				minZLastFrame = wsw::min( minZLastFrame, position[2] );
+				maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
 				avgXLastFrame += position[0];
 				avgYLastFrame += position[1];
 			} while( ++i < numNonContactingVertices );
@@ -864,8 +866,8 @@ void SimulatedHullsSystem::BaseConcentricSimulatedHull::simulate( int64_t currTi
 			distanceSoFar += speed * timeDeltaSeconds;
 
 			// Limit growth by the precomputed obstacle distance
-			const float limit = std::max( 0.0f, limitsAtDirections[i] - finalOffset );
-			distanceSoFar = std::min( distanceSoFar, limit );
+			const float limit = wsw::max( 0.0f, limitsAtDirections[i] - finalOffset );
+			distanceSoFar = wsw::min( distanceSoFar, limit );
 
 			VectorMA( growthOrigin, distanceSoFar, vertexMoveDirections[i], positions[i] );
 
@@ -1068,10 +1070,10 @@ bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 	// Don't let the chance drop to zero if the specified integral chance is non-zero
 	constexpr float minDropChance = 1e-3f, minReplacementChance = 1e-3f;
 	if( currNode.sumOfDropChanceForThisSegment > 0.0f ) {
-		dropChance = std::max( dropChance, minDropChance );
+		dropChance = wsw::max( dropChance, minDropChance );
 	}
 	if( currNode.sumOfReplacementChanceForThisSegment > 0.0f ) {
-		replacementChance = std::max( replacementChance, minReplacementChance );
+		replacementChance = wsw::max( replacementChance, minReplacementChance );
 	}
 
 	const auto palette    = currNode.replacementPalette;

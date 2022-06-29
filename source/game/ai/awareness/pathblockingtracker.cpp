@@ -186,7 +186,7 @@ bool PathBlockingTracker::IsAPotentialBlocker( const TrackedEnemy *enemy,
 
 	if( damageToKillBot < 50 && damageToKillEnemy < 50 ) {
 		// Just check weapons. Note: GB has 0 tier, GL has 1 tier, the rest of weapons have a greater tier
-		return ( std::min( 1, enemyWeaponTier ) / (float)std::min( 1, botBestWeaponTier ) ) > 0.7f + 0.8f * offensiveness;
+		return ( wsw::min( 1, enemyWeaponTier ) / (float)wsw::min( 1, botBestWeaponTier ) ) > 0.7f + 0.8f * offensiveness;
 	}
 
 	const auto &selectedEnemies = bot->GetSelectedEnemies();

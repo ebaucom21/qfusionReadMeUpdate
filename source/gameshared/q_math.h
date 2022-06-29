@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GAME_QMATH_H
 
 #include "q_arch.h"
+#include "../qcommon/wswbasicmath.h"
 
 //==============================================================
 //
@@ -369,12 +370,12 @@ public:
 		m_mins = _mm_min_ps( xmmP, m_mins );
 		m_maxs = _mm_max_ps( xmmP, m_maxs );
 #else
-		m_mins[0] = std::min( p[0], m_mins[0] );
-		m_maxs[0] = std::max( p[0], m_maxs[0] );
-		m_mins[1] = std::min( p[1], m_mins[1] );
-		m_maxs[1] = std::max( p[1], m_maxs[1] );
-		m_mins[2] = std::min( p[2], m_mins[2] );
-		m_maxs[2] = std::max( p[2], m_maxs[2] );
+		m_mins[0] = wsw::min( p[0], m_mins[0] );
+		m_maxs[0] = wsw::max( p[0], m_maxs[0] );
+		m_mins[1] = wsw::min( p[1], m_mins[1] );
+		m_maxs[1] = wsw::max( p[1], m_maxs[1] );
+		m_mins[2] = wsw::min( p[2], m_mins[2] );
+		m_maxs[2] = wsw::max( p[2], m_maxs[2] );
 #endif
 
 		markAsTouched();
@@ -545,28 +546,28 @@ public:
 		float *const __restrict maxs = m_maxs;
 
 		const float x = p[0], y = p[1], z = p[2];
-		mins[0] = std::min( mins[0], x ), maxs[0] = std::max( maxs[0], x );
-		mins[1] = std::min( mins[1], y ), maxs[1] = std::max( maxs[1], y );
-		mins[2] = std::min( mins[2], z ), maxs[2] = std::max( maxs[2], z );
+		mins[0] = wsw::min( mins[0], x ), maxs[0] = wsw::max( maxs[0], x );
+		mins[1] = wsw::min( mins[1], y ), maxs[1] = wsw::max( maxs[1], y );
+		mins[2] = wsw::min( mins[2], z ), maxs[2] = wsw::max( maxs[2], z );
 
 		const float d3 = x + y + z, d4 = -x + y + z;
-		mins[3] = std::min( mins[3], d3 ), maxs[3] = std::max( maxs[3], d3 );
-		mins[4] = std::min( mins[4], d4 ), maxs[4] = std::max( maxs[4], d4 );
+		mins[3] = wsw::min( mins[3], d3 ), maxs[3] = wsw::max( maxs[3], d3 );
+		mins[4] = wsw::min( mins[4], d4 ), maxs[4] = wsw::max( maxs[4], d4 );
 
 		const float d5 = -x - y + z, d6 = x - y + z;
-		mins[5] = std::min( mins[5], d5 ), maxs[5] = std::max( maxs[5], d5 );
-		mins[6] = std::min( mins[6], d6 ), maxs[6] = std::max( maxs[6], d6 );
+		mins[5] = wsw::min( mins[5], d5 ), maxs[5] = wsw::max( maxs[5], d5 );
+		mins[6] = wsw::min( mins[6], d6 ), maxs[6] = wsw::max( maxs[6], d6 );
 
 		if constexpr( N == 26 ) {
 			const float d7 = x + y, d8 = x + z, d9 = y + z;
-			mins[7] = std::min( mins[7], d7 ), maxs[7] = std::max( maxs[7], d7 );
-			mins[8] = std::min( mins[8], d8 ), maxs[8] = std::max( maxs[8], d8 );
-			mins[9] = std::min( mins[9], d9 ), maxs[9] = std::max( maxs[9], d9 );
+			mins[7] = wsw::min( mins[7], d7 ), maxs[7] = wsw::max( maxs[7], d7 );
+			mins[8] = wsw::min( mins[8], d8 ), maxs[8] = wsw::max( maxs[8], d8 );
+			mins[9] = wsw::min( mins[9], d9 ), maxs[9] = wsw::max( maxs[9], d9 );
 
 			const float d10 = x - y, d11 = x - z, d12 = -y + z;
-			mins[10] = std::min( mins[10], d10 ), maxs[10] = std::max( maxs[10], d10 );
-			mins[11] = std::min( mins[11], d11 ), maxs[11] = std::max( maxs[11], d11 );
-			mins[12] = std::min( mins[12], d12 ), maxs[12] = std::max( maxs[12], d12 );
+			mins[10] = wsw::min( mins[10], d10 ), maxs[10] = wsw::max( maxs[10], d10 );
+			mins[11] = wsw::min( mins[11], d11 ), maxs[11] = wsw::max( maxs[11], d11 );
+			mins[12] = wsw::min( mins[12], d12 ), maxs[12] = wsw::max( maxs[12], d12 );
 		}
 
 		markAsTouched();
@@ -575,8 +576,8 @@ public:
 	void addOtherDop( float *mins, float *maxs ) noexcept {
 		// TODO: Use SIMD if it's on a speed-critical path
 		for( unsigned i = 0; i < N / 2; ++i ) {
-			m_mins[i] = std::min( m_mins[i], mins[i] );
-			m_maxs[i] = std::max( m_maxs[i], maxs[i] );
+			m_mins[i] = wsw::min( m_mins[i], mins[i] );
+			m_maxs[i] = wsw::max( m_maxs[i], maxs[i] );
 		}
 
 		markAsTouched();

@@ -71,7 +71,7 @@ typedef struct superLightStyle_s {
 #include "glimp.h"
 #include "surface.h"
 
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswvector.h"
 
 enum {
 	IT_NONE
@@ -302,7 +302,7 @@ private:
 	Allocator m_materialCubemapsAllocator { sizeof( MaterialCubemap ), kMaxMaterialCubemaps };
 	Allocator m_raw2DTexturesAllocator { sizeof( Raw2DTexture ), kMaxRaw2DTextures };
 	Allocator m_fontMasksAllocator { sizeof( FontMask ), kMaxFontMasks };
-	Allocator m_lightmapsAllocator { std::max( sizeof( Lightmap ), sizeof( LightmapArray ) ), kMaxLightmaps };
+	Allocator m_lightmapsAllocator { wsw::max( sizeof( Lightmap ), sizeof( LightmapArray ) ), kMaxLightmaps };
 	Allocator m_builtinTexturesAllocator { sizeof( Texture ), kMaxBuiltinTextures };
 
 	static constexpr unsigned kMaxNameLen = 63;
@@ -539,7 +539,7 @@ public:
 				m_data = newData;
 				m_capacity = size;
 			} else {
-				throw std::bad_alloc();
+				wsw::failWithBadAlloc();
 			}
 		}
 		return m_data;

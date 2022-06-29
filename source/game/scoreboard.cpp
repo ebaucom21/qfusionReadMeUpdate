@@ -2,6 +2,8 @@
 #include "../qcommon/singletonholder.h"
 #include "g_local.h"
 
+#include <algorithm>
+
 using wsw::operator""_asView;
 
 const ReplicatedScoreboardData *G_GetScoreboardData( unsigned clientNum ) {
@@ -35,22 +37,22 @@ auto Scoreboard::instance() -> Scoreboard * {
 
 void Scoreboard::expectState( State expectedState ) {
 	if( m_state != expectedState ) {
-		throw Error( "Unexpected state" );
+		wsw::failWithLogicError( "Unexpected state" );
 	}
 }
 
 void Scoreboard::checkPlayerNum( unsigned playerNum ) const {
 	if( playerNum >= (unsigned)gs.maxclients ) {
-		throw Error( "Illegal player num" );
+		wsw::failWithLogicError( "Illegal player num" );
 	}
 }
 
 void Scoreboard::checkSlot( unsigned slot, ColumnKind expectedKind ) const {
 	if( !slot || slot >= m_columnKinds.size() + 1 ) {
-		throw Error( "Illegal column slot" );
+		wsw::failWithLogicError( "Illegal column slot" );
 	}
 	if( m_columnKinds[slot - 1] != expectedKind ) {
-		throw Error( "Illegal column kind" );
+		wsw::failWithLogicError( "Illegal column kind" );
 	}
 }
 
@@ -61,48 +63,48 @@ auto Scoreboard::registerUserColumn( const wsw::StringView &title, ColumnKind ki
 	expectState( Schema );
 	// Reserve space for ping, score and status
 	if( m_columnKinds.size() + 3 == m_columnKinds.capacity() ) {
-		throw Error( "Too many columns" );
+		wsw::failWithLogicError( "Too many columns" );
 	}
 	if( !titleColumnSpan ) {
-		throw Error( "titleColumnSpan must be non-zero" );
+		wsw::failWithLogicError( "titleColumnSpan must be non-zero" );
 	}
 	if( titleColumnSpan > 3 ) {
-		throw Error( "titleColumnSpan is limited by 3" );
+		wsw::failWithLogicError( "titleColumnSpan is limited by 3" );
 	}
 	// Check whether a previous span still has an effect
 	if( m_titleSpanColumnsLeft ) {
 		if( kind != Icon ) {
-			throw Error( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
+			wsw::failWithLogicError( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
 		}
 		if( titleColumnSpan > 1 ) {
-			throw Error( "Can't start a new title column span while a previous one is incomplete" );
+			wsw::failWithLogicError( "Can't start a new title column span while a previous one is incomplete" );
 		}
 		titleColumnSpan = 0;
 	} else {
 		if( titleColumnSpan > 1 ) {
 			if( kind != Icon ) {
-				throw Error( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
+				wsw::failWithLogicError( "Columns must be of Icon kind if there's a title spanning over multiple columns" );
 			}
 		}
 	}
 	wsw::StringView titleToUse( title );
 	if( title.empty() ) {
 		if( titleColumnSpan > 1 ) {
-			throw Error( "A title can't be empty for titleColumnSpan > 1" );
+			wsw::failWithLogicError( "A title can't be empty for titleColumnSpan > 1" );
 		}
 		titleToUse = kPlaceholder;
 	} else {
 		if( title.length() > kMaxTitleLen ) {
-			throw Error( "The title is too long" );
+			wsw::failWithLogicError( "The title is too long" );
 		}
 		for( const wsw::StringView &builtin : kBuiltinColumnTitles ) {
 			if( builtin.equalsIgnoreCase( title ) ) {
-				throw Error( "Can't use a title of a builtin column" );
+				wsw::failWithLogicError( "Can't use a title of a builtin column" );
 			}
 		}
 		for( const wsw::StringView &existing: m_columnTitlesStorage ) {
 			if( existing.equalsIgnoreCase( title ) ) {
-				throw Error( "Duplicated column title" );
+				wsw::failWithLogicError( "Duplicated column title" );
 			}
 		}
 	}
@@ -140,13 +142,13 @@ void Scoreboard::beginDefiningSchema() {
 auto Scoreboard::registerAsset( const wsw::StringView &path ) -> unsigned {
 	expectState( Schema );
 	if( m_columnAssetsStorage.size() == kMaxAssets ) {
-		throw Error( "Too many assets" );
+		wsw::failWithLogicError( "Too many assets" );
 	}
 	// TODO: Check whether it contains whitespaces?
 	// TODO: We need globally defined CharLookup instances
 	for( const wsw::StringView &existing: m_columnAssetsStorage ) {
 		if( existing.equalsIgnoreCase( path ) ) {
-			throw Error( "The asset is already registered" );
+			wsw::failWithLogicError( "The asset is already registered" );
 		}
 	}
 	// A zero asset could be used to (temporarily) hide an icon
@@ -158,7 +160,7 @@ void Scoreboard::endDefiningSchema() {
 	m_state = NoState;
 
 	if( m_titleSpanColumnsLeft ) {
-		throw Error( "Can't end defining schema while a current title column span is incomplete" );
+		wsw::failWithLogicError( "Can't end defining schema while a current title column span is incomplete" );
 	}
 
 	m_columnKinds.push_back( Score );
@@ -226,7 +228,7 @@ void Scoreboard::setPlayerIcon( const Client *client, unsigned slot, unsigned ic
 	checkSlot( slot, Icon );
 	slot = slot - 1;
 	if( icon && icon > m_columnAssetsStorage.size() ) {
-		throw Error( "Icon index is out of bounds" );
+		wsw::failWithLogicError( "Icon index is out of bounds" );
 	}
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)icon );
 }
@@ -239,7 +241,7 @@ void Scoreboard::setPlayerNumber( const Client *client, unsigned slot, int numbe
 	slot = slot - 1;
 	// Saturate values out-of-range
 	using Limits = std::numeric_limits<int16_t>;
-	const auto value = (int16_t)std::clamp( number, (int)Limits::min(), (int)Limits::max() );
+	const auto value = (int16_t)wsw::clamp( number, (int)Limits::min(), (int)Limits::max() );
 	m_replicatedData.setPlayerShort( playerNum, slot, value );
 }
 
@@ -250,7 +252,7 @@ void Scoreboard::setPlayerGlyph( const Client *client, unsigned slot, unsigned c
 	checkSlot( slot, Glyph );
 	slot = slot - 1;
 	if( codePoint > (unsigned)std::numeric_limits<uint16_t>::max() ) {
-		throw Error( "Illegal code point (malformed or out of the Unicode BMP)" );
+		wsw::failWithLogicError( "Illegal code point (malformed or out of the Unicode BMP)" );
 	}
 	m_replicatedData.setPlayerShort( playerNum, slot, (int16_t)codePoint );
 }
@@ -260,7 +262,7 @@ void Scoreboard::setPlayerStatusIcon( const Client *client, unsigned icon ) {
 	expectState( Update );
 	checkPlayerNum( playerNum );
 	if( icon && icon > m_columnAssetsStorage.size() ) {
-		throw Error( "Icon index is out of bounds" );
+		wsw::failWithLogicError( "Icon index is out of bounds" );
 	}
 	static_assert( kMaxAssets < 32 );
 	m_replicatedData.setPlayerShort( playerNum, m_statusSlot, (int16_t)icon );
@@ -272,10 +274,10 @@ void Scoreboard::setPlayerStatusGlyph( const Client *client, unsigned codePoint 
 	checkPlayerNum( playerNum );
 	static_assert( kMaxAssets < 32 );
 	if( codePoint && codePoint < 32 ) {
-		throw Error( "Illegal code point (a dozen of first numeric values is reserved for icons)" );
+		wsw::failWithLogicError( "Illegal code point (a dozen of first numeric values is reserved for icons)" );
 	}
 	if( codePoint > (unsigned)std::numeric_limits<uint16_t>::max() ) {
-		throw Error( "Illegal code point (malformed or out of the Unicode BMP)" );
+		wsw::failWithLogicError( "Illegal code point (malformed or out of the Unicode BMP)" );
 	}
 	m_replicatedData.setPlayerShort( playerNum, m_statusSlot, (int16_t)codePoint );
 }
@@ -343,9 +345,9 @@ void Scoreboard::endUpdating() {
 					score = client->stats.score;
 					if( !G_ISGHOSTING( ent ) ) {
 						isPlayerGhosting[playerIndex] = false;
-						const int health = std::clamp( HEALTH_TO_INT( ent->health ), 0, 999 );
+						const int health = wsw::clamp( HEALTH_TO_INT( ent->health ), 0, 999 );
 						m_replicatedData.setPlayerHealth( playerIndex, health );
-						const int armor = std::clamp( ARMOR_TO_INT( client->armor ), 0, 999 );
+						const int armor = wsw::clamp( ARMOR_TO_INT( client->armor ), 0, 999 );
 						m_replicatedData.setPlayerArmor( playerIndex, armor );
 						assert( (unsigned)client->ps.stats[STAT_WEAPON] < 16u );
 						m_replicatedData.setPlayerWeapon( playerIndex, client->ps.stats[STAT_WEAPON] );
@@ -435,7 +437,7 @@ auto Scoreboard::getRawReplicatedData( unsigned clientNum ) -> const ReplicatedS
 			return preparePlayerSpecificData( i, clientNum );
 		}
 	}
-	throw std::logic_error( "unreachable" );
+	wsw::failWithLogicError( "unreachable" );
 }
 
 [[nodiscard]]

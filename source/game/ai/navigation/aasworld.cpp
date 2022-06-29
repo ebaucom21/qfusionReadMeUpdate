@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "aaselementsmask.h"
 #include "aasareaswalker.h"
 #include "../../../qcommon/wswstaticvector.h"
+#include "../../../qcommon/wswvector.h"
 #include "../../../qcommon/wswfs.h"
 #include "../ailocal.h"
 #include "../rewriteme.h"
@@ -29,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <memory>
 #include <tuple>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -1886,7 +1888,7 @@ void AiAasWorld::computeAreasLeafsLists() {
 		// Supply tmpLeafNums + 1 as a buffer so we can prepend the numeber of leaves in-place
 		int numLeaves = trap_CM_BoxLeafnums( area.mins, area.maxs, tmpNums + 1, 256, &topNode );
 		// Not sure whether the call above can return a value greater than a supplied buffer capacity
-		numLeaves = std::min( 256, numLeaves );
+		numLeaves = wsw::min( 256, numLeaves );
 		// Put the number of leaves to the list head
 		tmpNums[0] = numLeaves;
 		// The offset of the newly added data is the current builder size

@@ -2,15 +2,14 @@
 #define WSW_0e010d8b_fcfd_448e_af29_aeee22d405f9_H
 
 #include "wswstaticvector.h"
+#include "wswexceptions.h"
 
 #include <utility>
-#include <functional>
-#include <stdexcept>
 #include <cassert>
 
 namespace wsw {
 
-template <typename K, typename V, unsigned Capacity, typename KeyCmp = std::equal_to<K>>
+template <typename K, typename V, unsigned Capacity>
 class SmallAssocArray {
 	// TODO: We can use specializations for small/primitive POD types
 	// that keep keys and values separate to utilize a SIMD lookup
@@ -38,9 +37,8 @@ public:
 
 	[[nodiscard]]
 	auto find( const K &key ) const noexcept -> const_iterator {
-		KeyCmp cmp;
 		for( const auto &entry: m_entries ) {
-			if( cmp( entry.first, key ) ) {
+			if( entry.first == key ) {
 				return const_iterator( std::addressof( entry ) );
 			}
 		}
@@ -55,7 +53,7 @@ public:
 		if( const auto it = find( key ); it != cend() ) {
 			return it.value();
 		}
-		throw std::out_of_range( "Failed to find an entry by key" );
+		wsw::failWithOutOfRange( "Failed to find an entry by key" );
 	}
 
 	[[nodiscard]]
@@ -71,9 +69,8 @@ public:
 	// Bits of STL compatibility
 	[[maybe_unused]]
 	auto insert_or_assign( const K &key, const V &value ) -> const_iterator {
-		KeyCmp cmp;
 		for( auto &entry: m_entries ) {
-			if( cmp( entry.first, key ) ) {
+			if( entry.first == key ) {
 				entry.second = value;
 				return const_iterator( std::addressof( entry ) );
 			}
@@ -91,7 +88,7 @@ public:
 	void insertOrThrow( const K &key, const V &value ) {
 		auto [_, success] = insert( key, value );
 		if( !success ) {
-			throw std::out_of_range( "This key is already present" );
+			wsw::failWithLogicError( "This key is already present" );
 		}
 	}
 

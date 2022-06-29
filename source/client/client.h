@@ -33,13 +33,10 @@
 #include "keys.h"
 #include "console.h"
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
-#include <functional>
 #include <limits>
-#include <memory>
 #include <new>
 #include <utility>
 

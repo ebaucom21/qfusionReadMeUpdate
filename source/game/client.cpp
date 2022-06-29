@@ -20,6 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_local.h"
 #include "chat.h"
 
+#include <tuple>
+#include <cctype>
+
 using wsw::operator""_asView;
 using wsw::operator""_asHView;
 
@@ -1056,7 +1059,7 @@ void Client::handleUserInfoChanges() {
 	}
 
 	if( const auto maybeStyleString = m_userInfo.get( kInfoKeyMovementStyle ) ) {
-		const int style = std::clamp( wsw::toNum<int>( *maybeStyleString ).value_or( 0 ), 0, GS_MAXBUNNIES - 1 );
+		const int style = wsw::clamp( wsw::toNum<int>( *maybeStyleString ).value_or( 0 ), 0, GS_MAXBUNNIES - 1 );
 		if( trap_GetClientState( PLAYERNUM( getEntity() ) ) < CS_SPAWNED ) {
 			if( style != movestyle ) {
 				movestyle = movestyle_latched = style;
@@ -1730,7 +1733,7 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 	ps.playerNum = PLAYERNUM( getEntity() );
 
 	deltas.add( timeDelta_ );
-	timeDelta = std::clamp( deltas.avg(), -g_antilag_maxtimedelta->integer, 0 );
+	timeDelta = wsw::clamp( deltas.avg(), -g_antilag_maxtimedelta->integer, 0 );
 
 	if( hasNewActivity( oldUcmd ) ) {
 		last_activity = level.time;
@@ -2042,7 +2045,7 @@ void Client::setUserInfo( const wsw::StringView &rawInfo ) {
 
 static inline auto calcAccuracy( int64_t hits, int64_t shots ) {
 	// The ratio may go > 1 for beams / AOE weapons
-	hits = std::min( hits, shots );
+	hits = wsw::min( hits, shots );
 	int result;
 	// Try forcing a short integer division
 	if( shots < (int64_t)std::numeric_limits<uint16_t>::max() / 100 ) [[likely]] {
@@ -2053,7 +2056,7 @@ static inline auto calcAccuracy( int64_t hits, int64_t shots ) {
 		result = (int)( ( 100 * hits ) / shots );
 	}
 	if( hits ) {
-		result = std::max( 1, result );
+		result = wsw::max( 1, result );
 	}
 	assert( result >= 0 && result <= 100 );
 	return (uint8_t)result;

@@ -28,8 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "md5.h"
 #include "q_trie.h"
 
-#include <algorithm>
-
 /*
 =============================================================================
 
@@ -1195,7 +1193,7 @@ static int FS_ReadZipFile( uint8_t *buf, size_t len, filehandle_t *fh ) {
 	do {
 		// read in chunks but attempt to read the whole file first
 		if( !zipEntry->zstream.avail_in && zipEntry->restReadCompressed ) {
-			block = std::min( zipEntry->restReadCompressed, (size_t)FS_ZIP_BUFSIZE );
+			block = wsw::min( zipEntry->restReadCompressed, (size_t)FS_ZIP_BUFSIZE );
 
 			read = fread( zipEntry->readBuffer, 1, block, fh->fstream );
 
@@ -1421,7 +1419,7 @@ int FS_Seek( int file, int offset, int whence ) {
 
 	remaining = offset;
 	do {
-		block = std::min( remaining, sizeof( buf ) );
+		block = wsw::min( remaining, sizeof( buf ) );
 
 		FS_ReadZipFile( buf, block, fh );
 
@@ -2099,7 +2097,7 @@ static unsigned FS_ZipSearchCentralDir( FILE *fin ) {
 		}
 
 		readPos = fileSize - backRead;
-		readSize = std::min( FS_ZIP_BUFREADCOMMENT + 4u, backRead );
+		readSize = wsw::min( FS_ZIP_BUFREADCOMMENT + 4u, backRead );
 		if( readSize < 4 ) {
 			continue;
 		}
@@ -2839,7 +2837,7 @@ static int FS_GetFileListExt_( const char *dir, const char *extension, char *buf
 				}
 			}
 
-			limit = maxFiles ? std::min( fs_numsearchfiles, maxFiles ) : fs_numsearchfiles;
+			limit = maxFiles ? wsw::min( fs_numsearchfiles, maxFiles ) : fs_numsearchfiles;
 			found = FS_PathGetFileListExt( search, dir, extension, files + allfound,
 										   fs_numsearchfiles - allfound );
 
@@ -3315,7 +3313,7 @@ static void FS_LoadDeferredPaks( int newpaks ) {
 	int i;
 	volatile int cnt;
 	qthread_t *threads[FS_PACKFILE_NUM_THREADS - 1] = { NULL };
-	const int num_threads = std::min( newpaks, FS_PACKFILE_NUM_THREADS ) - 1;
+	const int num_threads = wsw::min( newpaks, FS_PACKFILE_NUM_THREADS ) - 1;
 	pack_t **packs;
 	searchpath_t *search;
 	deferred_pack_arg_t *arg;

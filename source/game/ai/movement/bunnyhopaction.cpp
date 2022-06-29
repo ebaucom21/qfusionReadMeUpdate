@@ -464,7 +464,7 @@ bool BunnyHopAction::CheckDirectReachWalkingOrFallingShort( int fromAreaNum, int
 
 	// Limit number of tested rev. reach.
 	// TODO: Add and use reverse reach. table for this and many other purposes
-	int maxReachNum = areaSettings.firstreachablearea + std::min( areaSettings.numreachableareas, 16 );
+	int maxReachNum = areaSettings.firstreachablearea + wsw::min( areaSettings.numreachableareas, 16 );
 	for( int revReachNum = areaSettings.firstreachablearea; revReachNum != maxReachNum; revReachNum++ ) {
 		const auto &reach = aasReaches[revReachNum];
 		if( reach.areanum != toAreaNum ) {
@@ -601,7 +601,7 @@ bool BunnyHopAction::HasMadeAnAdvancementPriorToLanding( PredictionContext *cont
 		Vec3 velocityDir( newEntityPhysicsState.Velocity() );
 		velocityDir *= Q_Rcp( newEntityPhysicsState.Speed() );
 		constexpr const float maxFracDistance = min2DAdvancementToTarget, invMaxFracDistance = 1.0f / maxFracDistance;
-		const float distance2DFrac = invMaxFracDistance * std::min( maxFracDistance, distance2DToTarget );
+		const float distance2DFrac = invMaxFracDistance * wsw::min( maxFracDistance, distance2DToTarget );
 		assert( distance2DFrac >= -0.01 && distance2DFrac <= 1.01f );
 		// Require a better velocity conformance for landing closer to the target
 		const float dotThreshold = 0.9f - 0.2f * distance2DFrac;

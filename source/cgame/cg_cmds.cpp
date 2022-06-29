@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 
-#include "../qcommon/wswstdtypes.h"
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/qcommon.h"
 #include "../client/snd_public.h"
@@ -124,7 +123,7 @@ static void CG_SC_MessageFault() {
 						} else if( kind == MessageFault::Muted ) {
 							CG_LocalPrint( "You are muted on this server\n" );
 						} else {
-							throw std::logic_error( "unreachable" );
+							wsw::failWithLogicError( "unreachable" );
 						}
 						wsw::ui::UISystem::instance()->handleMessageFault( { *maybeCommandNum, kind, timeout } );
 					}
@@ -544,7 +543,7 @@ static void CG_SC_ActionRequest() {
 				// Expect a number of commands
 				if ( const auto maybeNumCommands = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
 					// Read (key, command) pairs
-					const auto maxArgNum = (int)std::min( 9u, *maybeNumCommands ) + argNum;
+					const auto maxArgNum = (int)wsw::min( 9u, *maybeNumCommands ) + argNum;
 					wsw::StaticVector<std::pair<wsw::StringView, int>, 9> actions;
 					const auto *bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
 					while( argNum < maxArgNum ) {

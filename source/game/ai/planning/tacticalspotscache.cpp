@@ -221,7 +221,7 @@ int BotTacticalSpotsCache::FindNearbyEntities( const Vec3 &origin, float radius,
 
 	if( numRadiusEntities <= maxCachedEntities ) {
 		// In this case we can avoid buffer capacity checks on each step
-		for( int i = 0, end = std::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
+		for( int i = 0, end = wsw::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
 			edict_t *ent = gameEdicts + radiusEntNums[i];
 			if( !ent->r.inuse ) {
 				continue;
@@ -233,7 +233,7 @@ int BotTacticalSpotsCache::FindNearbyEntities( const Vec3 &origin, float radius,
 			triggerEntNums[numEntities++] = radiusEntNums[i];
 		}
 	} else {
-		for( int i = 0, end = std::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
+		for( int i = 0, end = wsw::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
 			edict_t *ent = game.edicts + radiusEntNums[i];
 			if( !ent->r.inuse ) {
 				continue;
@@ -315,7 +315,7 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 		}
 
 		// AAS travel time is in seconds^-2
-		const float factor = Q_Sqrt( 1.01f - std::min( travelTime, 200 ) * Q_Rcp( 200 ) );
+		const float factor = Q_Sqrt( 1.01f - wsw::min( travelTime, 200 ) * Q_Rcp( 200 ) );
 		result.push_back( EntAndScore( candidate.entNum, candidate.score * factor ) );
 	}
 

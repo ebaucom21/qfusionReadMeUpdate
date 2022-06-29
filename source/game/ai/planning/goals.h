@@ -49,7 +49,7 @@ public:
 	}
 
 	float GetAndResetAdditionalWeight() {
-		float result = std::max( 0.0f, additionalWeight );
+		float result = wsw::max( 0.0f, additionalWeight );
 		this->additionalWeight = 0;
 		return result;
 	}

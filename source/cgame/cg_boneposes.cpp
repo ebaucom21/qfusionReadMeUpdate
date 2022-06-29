@@ -427,9 +427,9 @@ static void CG_ExpandTemporaryBoneposesCache( int num ) {
 
 	temp = TBC;
 
-	TBC = ( bonepose_t * )Q_malloc( sizeof( bonepose_t ) * ( TBC_Size + std::max( num, TBC_Block_Size ) ) );
+	TBC = ( bonepose_t * )Q_malloc( sizeof( bonepose_t ) * ( TBC_Size + wsw::max( num, TBC_Block_Size ) ) );
 	memcpy( TBC, temp, sizeof( bonepose_t ) * TBC_Size );
-	TBC_Size += std::max( num, TBC_Block_Size );
+	TBC_Size += wsw::max( num, TBC_Block_Size );
 
 	Q_free(   temp );
 }

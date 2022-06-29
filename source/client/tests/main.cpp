@@ -59,7 +59,7 @@ int Q_vsnprintfz( char *buffer, size_t size, const char *fmt, va_list va ) {
 	int res = vsnprintf( buffer, size, fmt, va );
 	if( size ) {
 		if( res >= 0 ) {
-			buffer[std::min((size_t) res, size )] = '\0';
+			buffer[wsw::min((size_t) res, size )] = '\0';
 		} else {
 			buffer[size] = '\0';
 		}

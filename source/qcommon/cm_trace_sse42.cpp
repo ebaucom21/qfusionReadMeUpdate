@@ -349,7 +349,7 @@ void Sse42Ops::ClipBoxToBrush( CMTraceContext *tlc, const cbrush_t *brush ) {
 			const auto *const sidey = (float *)( buffer + floatStrideInBytes );
 			const auto *const sidez = (float *)( buffer + 2 * floatStrideInBytes );
 			const auto *const sided = (float *)( buffer + 6 * floatStrideInBytes );
-			enterfrac = std::max( 0.0f, enterfrac );
+			enterfrac = wsw::max( 0.0f, enterfrac );
 			tlc->trace->fraction = enterfrac;
 			cplane_s *destPlane = &tlc->trace->plane;
 			// All side operations are performed in the FP execution domain in the loop body

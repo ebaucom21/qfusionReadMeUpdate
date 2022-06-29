@@ -6,7 +6,8 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswstaticvector.h"
+#include "../qcommon/wswstring.h"
 
 namespace wsw::ui {
 

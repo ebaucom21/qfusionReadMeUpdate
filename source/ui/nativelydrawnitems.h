@@ -7,7 +7,7 @@
 #include <QRectF>
 
 #include "../qcommon/qcommon.h"
-#include "../qcommon/wswstdtypes.h"
+#include "../qcommon/wswvector.h"
 // TODO:
 #include "../cgame/cg_local.h"
 

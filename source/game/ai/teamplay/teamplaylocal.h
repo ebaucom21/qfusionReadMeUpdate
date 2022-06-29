@@ -1,9 +1,6 @@
 #ifndef WSW_5b8e8bc5_0b56_427f_a425_d00fa41edf1d_H
 #define WSW_5b8e8bc5_0b56_427f_a425_d00fa41edf1d_H
 
-#include <algorithm>
-#include <functional>
-
 /**
  * A helper for sorting linked lists (in ascending order by default).
  * A list item must be structurally compatible to an argument of {@code ::Link(Item *, Item **, int)}.

@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_local.h"
 #include "g_as_local.h"
 #include "scoreboard.h"
+#include "commandshandler.h"
 
 //=======================================================================
 
@@ -3155,7 +3156,7 @@ static void asFunc_FireInstaShot( asvec3_t *origin, asvec3_t *angles, int range,
 }
 
 static edict_t *asFunc_FireWeakBolt( asvec3_t *origin, asvec3_t *angles, int speed, int damage, int knockback, int stun, edict_t *owner ) {
-	return W_Fire_Electrobolt_Weak( owner, origin->v, angles->v, speed, damage, std::min( 1, knockback ), knockback, stun, 5000, MOD_ELECTROBOLT_W, 0 );
+	return W_Fire_Electrobolt_Weak( owner, origin->v, angles->v, speed, damage, wsw::min( 1, knockback ), knockback, stun, 5000, MOD_ELECTROBOLT_W, 0 );
 }
 
 static void asFunc_FireStrongBolt( asvec3_t *origin, asvec3_t *angles, int range, int damage, int knockback, int stun, edict_t *owner ) {
@@ -3163,15 +3164,15 @@ static void asFunc_FireStrongBolt( asvec3_t *origin, asvec3_t *angles, int range
 }
 
 static edict_t *asFunc_FirePlasma( asvec3_t *origin, asvec3_t *angles, int speed, int radius, int damage, int knockback, int stun, edict_t *owner ) {
-	return W_Fire_Plasma( owner, origin->v, angles->v, damage, std::min( 1, knockback ), knockback, stun, std::min( 1, damage ), radius, speed, 5000, MOD_PLASMA_S, 0 );
+	return W_Fire_Plasma( owner, origin->v, angles->v, damage, wsw::min( 1, knockback ), knockback, stun, wsw::min( 1, damage ), radius, speed, 5000, MOD_PLASMA_S, 0 );
 }
 
 static edict_t *asFunc_FireRocket( asvec3_t *origin, asvec3_t *angles, int speed, int radius, int damage, int knockback, int stun, edict_t *owner ) {
-	return W_Fire_Rocket( owner, origin->v, angles->v, speed, damage, std::min( 1, knockback ), knockback, stun, std::min( 1, damage ), radius, 5000, MOD_ROCKET_S, 0 );
+	return W_Fire_Rocket( owner, origin->v, angles->v, speed, damage, wsw::min( 1, knockback ), knockback, stun, wsw::min( 1, damage ), radius, 5000, MOD_ROCKET_S, 0 );
 }
 
 static edict_t *asFunc_FireGrenade( asvec3_t *origin, asvec3_t *angles, int speed, int radius, int damage, int knockback, int stun, edict_t *owner ) {
-	return W_Fire_Grenade( owner, origin->v, angles->v, speed, damage, std::min( 1, knockback ), knockback, stun, std::min( 1, damage ), radius, 5000, MOD_GRENADE_S, 0, false );
+	return W_Fire_Grenade( owner, origin->v, angles->v, speed, damage, wsw::min( 1, knockback ), knockback, stun, wsw::min( 1, damage ), radius, 5000, MOD_GRENADE_S, 0, false );
 }
 
 static void asFunc_FireRiotgun( asvec3_t *origin, asvec3_t *angles, int range, int spread, int count, int damage, int knockback, int stun, edict_t *owner ) {
@@ -3183,7 +3184,7 @@ static void asFunc_FireBullet( asvec3_t *origin, asvec3_t *angles, int range, in
 }
 
 static edict_t *asFunc_FireBlast( asvec3_t *origin, asvec3_t *angles, int speed, int radius, int damage, int knockback, int stun, edict_t *owner ) {
-	return W_Fire_GunbladeBlast( owner, origin->v, angles->v, damage, std::min( 1, knockback ), knockback, stun, std::min( 1, damage ), radius, speed, 5000, MOD_SPLASH, 0 );
+	return W_Fire_GunbladeBlast( owner, origin->v, angles->v, damage, wsw::min( 1, knockback ), knockback, stun, wsw::min( 1, damage ), radius, speed, 5000, MOD_SPLASH, 0 );
 }
 
 static unsigned asFunc_G_RegisterHelpMessage( asstring_t *str ) {

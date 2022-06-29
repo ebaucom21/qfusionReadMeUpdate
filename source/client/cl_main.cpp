@@ -443,7 +443,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket ) {
 
 	if( ( tmp = Q_strrstr( connectstring, "@" ) ) != NULL ) {
 		assert( tmp - connectstring >= 0 );
-		Q_strncpyz( password, connectstring, std::min( sizeof( password ), (size_t)( tmp - connectstring + 1 ) ) );
+		Q_strncpyz( password, connectstring, wsw::min( sizeof( password ), (size_t)( tmp - connectstring + 1 ) ) );
 		Cvar_Set( "password", password );
 		connectstring = connectstring + ( tmp - connectstring ) + 1;
 	}
@@ -2135,7 +2135,7 @@ int CL_SmoothTimeDeltas( void ) {
 		return cl.serverTimeDeltas[cl.currentSnapNum & MASK_TIMEDELTAS_BACKUP];
 	}
 
-	i = cl.receivedSnapNum - std::min( MAX_TIMEDELTAS_BACKUP, 8 );
+	i = cl.receivedSnapNum - wsw::min( MAX_TIMEDELTAS_BACKUP, 8 );
 	if( i < 0 ) {
 		i = 0;
 	}
@@ -2402,8 +2402,8 @@ void CL_Frame( int realMsec, int gameMsec ) {
 			Cvar_ForceSet( "cl_maxfps", STR_TOSTR( absMinFps ) );
 		}
 		maxFps = VID_AppIsMinimized() ? absMinFps : cl_maxfps->value;
-		minMsec = (int)std::max( ( 1000.0f / maxFps ), 1.0f );
-		roundingMsec += std::max( ( 1000.0f / maxFps ), 1.0f ) - minMsec;
+		minMsec = (int)wsw::max( ( 1000.0f / maxFps ), 1.0f );
+		roundingMsec += wsw::max( ( 1000.0f / maxFps ), 1.0f ) - minMsec;
 	} else {
 		maxFps = 10000.0f;
 		minMsec = 1;

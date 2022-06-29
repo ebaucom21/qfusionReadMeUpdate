@@ -5,6 +5,8 @@
 #include <QImage>
 #include <array>
 
+#include "../qcommon/wswexceptions.h"
+
 namespace wsw { class StringView; }
 
 struct ImageOptions;

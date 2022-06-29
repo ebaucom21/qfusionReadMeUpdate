@@ -27,7 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 using wsw::operator""_asView;
 using wsw::operator""_asHView;
 
-#include <algorithm>
 #include <tuple>
 #include <memory>
 #include <utility>
@@ -57,7 +56,7 @@ bool TextureFactory::tryUpdatingFilterOrAniso( TextureFilter filter, int givenAn
 											   bool *doApplyFilter, bool *doApplyAniso ) {
 	*doApplyFilter = m_textureFilter != filter;
 
-	*anisoToApply = std::clamp( givenAniso, 1, glConfig.maxTextureFilterAnisotropic );
+	*anisoToApply = wsw::clamp( givenAniso, 1, glConfig.maxTextureFilterAnisotropic );
 	// TODO: The extension spec allows specifying aniso with non-trilinear filtering modes.
 	// Should we really allow doing that?
 	const bool shouldApplyAniso = m_anisoLevel != *anisoToApply;
@@ -76,7 +75,7 @@ auto TextureFactory::generateHandle( const wsw::StringView &label ) -> GLuint {
 	qglGenTextures( 1, &handle );
 	// TODO
 	//if( qglObjectLabel ) {
-	//	qglObjectLabel( GL_TEXTURE, handle, std::min( label.length(), (size_t)glConfig.maxObjectLabelLen ), label.data() );
+	//	qglObjectLabel( GL_TEXTURE, handle, wsw::min( label.length(), (size_t)glConfig.maxObjectLabelLen ), label.data() );
 	//}
 
 	assert( qglGetError() == GL_NO_ERROR );
@@ -290,7 +289,7 @@ static void applyOutlineEffectRgba( Rgba *__restrict dest, const Rgba *__restric
 			if( column + 1 < width ) {
 				accumAlpha += (float)src[width * line + ( column + 1)].a;
 			}
-			const Rgba blendDest { 0, 0, 0, (uint8_t)std::min( 255.0f, accumAlpha ) };
+			const Rgba blendDest { 0, 0, 0, (uint8_t)wsw::min( 255.0f, accumAlpha ) };
 			const Rgba &blendSrc = src[width * line + column];
 			const auto srcFrac   = (float)blendSrc.a * ( 1.0f / 255.0f );
 			const auto destFrac  = 1.0f - srcFrac;
@@ -899,7 +898,7 @@ auto TextureFactory::createBuiltinCoronaTexture() -> Texture * {
 		const auto unitDY = (float)( y - halfSide ) * invHalfSide;
 
 		float frac = 1.0f - Q_Sqrt( unitDX * unitDX + unitDY * unitDY );
-		frac = std::clamp( frac, 0.0f, 1.0f );
+		frac = wsw::clamp( frac, 0.0f, 1.0f );
 		frac = frac * frac;
 
 		const auto value = (uint8_t)( 128.0f * frac );
@@ -1006,8 +1005,8 @@ auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight, std::optional<u
 	// or hardware limits and ensure it's a POW2-texture if we don't support such textures
 	unsigned limit = glConfig.maxRenderbufferSize;
 	if( inLimit ) {
-		limit = std::min( limit, *inLimit );
+		limit = wsw::min( limit, *inLimit );
 	}
-	limit = std::max( 1u, limit );
-	return std::make_pair( std::min( inWidth, limit ), std::min( inHeight, limit ) );
+	limit = wsw::max( 1u, limit );
+	return std::make_pair( wsw::min( inWidth, limit ), wsw::min( inHeight, limit ) );
 }

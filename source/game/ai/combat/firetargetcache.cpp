@@ -214,7 +214,7 @@ void BotFireTargetCache::AdjustDropAimTypeParams( const SelectedEnemies &selecte
 	const float distance2D = Q_Sqrt( squareDistance2D );
 	const float velocity2D = Q_Sqrt( squareVelocity2D );
 	const float time = distance2D / velocity2D;
-	const float height = std::max( 0.0f, 0.5f * level.gravity * time * time - 32.0f );
+	const float height = wsw::max( 0.0f, 0.5f * level.gravity * time * time - 32.0f );
 
 	// Modify both cached and temporary values
 	cachedFireTarget.origin.Z() += height;
@@ -288,9 +288,9 @@ bool PredictProjectileNoClip( const Vec3 &fireOrigin, float projectileSpeed, vec
 		float uglyNumber = sqrtf( discriminant );
 		float t0 = 0.5f * ( -b + uglyNumber ) / a;
 		float t1 = 0.5f * ( -b - uglyNumber ) / a;
-		t = std::min( t0, t1 );
+		t = wsw::min( t0, t1 );
 		if( t < EPSILON ) {
-			t = std::max( t0, t1 );
+			t = wsw::max( t0, t1 );
 		}
 
 		if( t < EPSILON ) {

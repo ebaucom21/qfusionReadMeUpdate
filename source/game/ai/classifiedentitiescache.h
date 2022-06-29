@@ -4,6 +4,8 @@
 #include "../../qcommon/wswstaticvector.h"
 #include "ailocal.h"
 
+#include <bitset>
+
 template <typename> class SingletonHolder;
 
 namespace wsw::ai {
@@ -17,7 +19,7 @@ private:
 	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allJumppads;
 	wsw::StaticVector<uint16_t, kMaxClassTriggerEnts> m_allPlatforms;
 	wsw::StaticVector<uint16_t, MAX_EDICTS> m_allOtherTriggers;
-	wsw::BitSet<MAX_EDICTS> m_persistentEntitiesMask;
+	std::bitset<MAX_EDICTS> m_persistentEntitiesMask;
 	bool m_hasRetrievedPersistentEntities { false };
 
 	void retrievePersistentEntities();

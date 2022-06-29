@@ -7,6 +7,8 @@
 #include "../bot.h"
 #include "../../../qcommon/links.h"
 
+#include <memory>
+
 enum class SpotSortCriterion {
 	GenericScore,
 	OriginDistance,

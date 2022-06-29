@@ -194,7 +194,7 @@ bool MaterialParser::parsePassKey() {
 			case PassKey::Detail: return parseDetail();
 			case PassKey::Grayscale: return parseGrayscale();
 			case PassKey::Skip: return parseSkip();
-			default: throw std::logic_error( "unreachable" );
+			default: wsw::failWithLogicError( "unreachable" );
 		}
 	}
 
@@ -229,7 +229,7 @@ bool MaterialParser::parseKey() {
 			case MaterialKey::Skip: return parseSkip();
 			case MaterialKey::SoftParticle: return parseSoftParticle();
 			case MaterialKey::ForceWorldOutlines: return parseForceWorldOutlines();
-			default: throw std::logic_error( "unreachable" );
+			default: wsw::failWithLogicError( "unreachable" );
 		}
 	}
 
@@ -827,7 +827,7 @@ bool MaterialParser::parseAlphaGen() {
 
 	// treat custom distanceramp as portal
 	if( pass->alphagen.func.type == SHADER_FUNC_RAMP && pass->alphagen.func.args[1] == 1 ) {
-		m_portalDistance = std::max( std::abs( pass->alphagen.func.args[3] ), m_portalDistance );
+		m_portalDistance = wsw::max( std::abs( pass->alphagen.func.args[3] ), m_portalDistance );
 	}
 
 	return true;
@@ -852,7 +852,7 @@ bool MaterialParser::parseAlphaGenPortal() {
 	pass->alphagen.func.type = SHADER_FUNC_RAMP;
 
 	Vector4Set( pass->alphagen.func.args, 0, 1, 0, dist );
-	m_portalDistance = std::max( dist, m_portalDistance );
+	m_portalDistance = wsw::max( dist, m_portalDistance );
 	return true;
 }
 
@@ -954,7 +954,7 @@ bool MaterialParser::parseNofiltering() {
 
 bool MaterialParser::parseSmallestMipSize() {
 	if( const auto maybeMipSize = m_lexer->getInt() ) {
-		m_minMipSize = std::optional( std::max( 1, *maybeMipSize ) );
+		m_minMipSize = std::optional( wsw::max( 1, *maybeMipSize ) );
 		return true;
 	}
 	return false;
@@ -1245,7 +1245,7 @@ int MaterialParser::getIntConditionVarValue( IntConditionVar var ) {
 		case IntConditionVar::MaxTextureSize: return glConfig.maxTextureSize;
 		case IntConditionVar::MaxTextureCubemapSize: return glConfig.maxTextureCubemapSize;
 		case IntConditionVar::MaxTextureUnits: return glConfig.maxTextureUnits;
-		default: throw std::logic_error( "unreachable" );
+		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
 
@@ -1255,7 +1255,7 @@ bool MaterialParser::getBoolConditionVarValue( BoolConditionVar var ) {
 		case BoolConditionVar::Glsl: return true;
 		case BoolConditionVar::DeluxeMaps: return mapConfig.deluxeMaps;
 		case BoolConditionVar::PortalMaps: return r_portalmaps->integer;
-		default: throw std::logic_error( "unreachable" );
+		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
 

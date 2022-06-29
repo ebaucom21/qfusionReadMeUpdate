@@ -271,9 +271,9 @@ static edict_t *W_Fire_LinearProjectile( edict_t *self, vec3_t start, vec3_t ang
 	projectile->timeStamp = level.time;
 	projectile->timeDelta = timeDelta;
 
-	projectile->projectileInfo.minDamage = std::min( (float)minDamage, damage );
+	projectile->projectileInfo.minDamage = wsw::min( (float)minDamage, damage );
 	projectile->projectileInfo.maxDamage = damage;
-	projectile->projectileInfo.minKnockback = std::min( minKnockback, maxKnockback );
+	projectile->projectileInfo.minKnockback = wsw::min( minKnockback, maxKnockback );
 	projectile->projectileInfo.maxKnockback = maxKnockback;
 	projectile->projectileInfo.stun = stun;
 	projectile->projectileInfo.radius = radius;
@@ -337,9 +337,9 @@ static edict_t *W_Fire_TossProjectile( edict_t *self, vec3_t start, vec3_t angle
 
 	projectile->gravity *= gravityScale;
 
-	projectile->projectileInfo.minDamage = std::min( (float)minDamage, damage );
+	projectile->projectileInfo.minDamage = wsw::min( (float)minDamage, damage );
 	projectile->projectileInfo.maxDamage = damage;
-	projectile->projectileInfo.minKnockback = std::min( minKnockback, maxKnockback );
+	projectile->projectileInfo.minKnockback = wsw::min( minKnockback, maxKnockback );
 	projectile->projectileInfo.maxKnockback = maxKnockback;
 	projectile->projectileInfo.stun = stun;
 	projectile->projectileInfo.radius = radius;
@@ -2539,7 +2539,7 @@ void G_FireWeapon( edict_t *ent, int parm ) {
 	}
 
 	if( !GS_RaceGametype() ) {
-		timeOffset = std::min( 50, timeOffset );
+		timeOffset = wsw::min( 50, timeOffset );
 	}
 
 	assert( projectile->s.linearMovement );

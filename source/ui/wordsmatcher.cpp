@@ -1,5 +1,5 @@
-
 #include "wordsmatcher.h"
+#include "local.h"
 
 #include <numeric>
 #include <vector>
@@ -23,7 +23,7 @@ public:
 
 auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxDist ) -> std::optional<Match> {
 	unsigned prefixLen = 0;
-	for( unsigned i = 0, len = (unsigned)std::min( a.length(), b.length() ); i < len; ++i ) {
+	for( unsigned i = 0, len = (unsigned)wsw::min( a.length(), b.length() ); i < len; ++i ) {
 		if( a[i] != b[i] ) {
 			prefixLen = i;
 			break;
@@ -34,7 +34,7 @@ auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxD
 	b = b.drop( prefixLen );
 
 	unsigned suffixLen = 0;
-	for( unsigned i = 0, len = std::min( a.length(), b.length() ); i < len; ++i ) {
+	for( unsigned i = 0, len = wsw::min( a.length(), b.length() ); i < len; ++i ) {
 		if( a[a.length() - 1 - i] != b[b.length() - 1 - i] ) {
 			suffixLen = i;
 			break;
@@ -63,12 +63,12 @@ auto WordsMatcher::distance( wsw::StringView a, wsw::StringView b, unsigned maxD
 			const unsigned matchDist     = d( i - 1, j - 1 ) + matchCost;
 			const unsigned deletionDist  = d( i - 1, j ) + 1;
 			const unsigned insertionDist = d( i, j - 1 ) + 1;
-			unsigned cellDist = std::min( matchDist, std::min( deletionDist, insertionDist ) );
+			unsigned cellDist = wsw::min( matchDist, wsw::min( deletionDist, insertionDist ) );
 			// Its better to turn -funswitch-loops on...
 			if( i > 1 && j > 1 ) [[likely]] {
 				// Check the transposition case
 				if( a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] ) {
-					cellDist = std::min( cellDist, d( i - 2, j - 2 ) + 1 );
+					cellDist = wsw::min( cellDist, d( i - 2, j - 2 ) + 1 );
 				}
 			}
 			d( i, j ) = cellDist;
@@ -124,7 +124,7 @@ auto WordsMatcher::matchByDistance( const wsw::StringView &input, const wsw::Str
 
 WordsMatcher::WordsMatcher( const wsw::StringView &word ) {
 	if( word.empty() ) {
-		throw std::logic_error( "Should not be used for empty words" );
+		wsw::failWithLogicError( "Should not be used for empty words" );
 	}
 
 	m_stringDataBuffer.reserve( word.size() );

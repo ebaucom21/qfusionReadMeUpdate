@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 #include "../qcommon/wswstringsplitter.h"
+#include "commandshandler.h"
 
 const field_t fields[] = {
 	{ "classname", FOFS( classname ), F_LSTRING },

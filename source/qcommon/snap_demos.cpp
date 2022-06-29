@@ -21,8 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "configstringstorage.h"
 
-#include <algorithm>
-
 using wsw::operator""_asView;
 
 #define DEMO_SAFEWRITE( demofile,msg,force ) \
@@ -410,8 +408,8 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 	meta_data_realsize = LittleLong( meta_data_realsize );
 	meta_data_fullsize = LittleLong( meta_data_fullsize );
 
-	FS_Read( ( void * )meta_data, std::min( meta_data_size, (size_t)meta_data_realsize ), demofile );
-	meta_data[std::min( (size_t)meta_data_realsize, meta_data_size - 1 )] = '\0'; // termination \0
+	FS_Read( ( void * )meta_data, wsw::min( meta_data_size, (size_t)meta_data_realsize ), demofile );
+	meta_data[wsw::min( (size_t)meta_data_realsize, meta_data_size - 1 )] = '\0'; // termination \0
 
 	return meta_data_realsize;
 }

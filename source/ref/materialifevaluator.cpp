@@ -126,7 +126,7 @@ auto MaterialIfEvaluator::evalCmpExpr() -> std::optional<Value> {
 		case CmpOp::EQ: return Value( (int)left == (int)right );
 		case CmpOp::GE: return Value( (int)left >= (int)right );
 		case CmpOp::GT: return Value( (int)left > (int)right );
-		default: throw std::logic_error( "unreachable" );
+		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
 
@@ -166,7 +166,7 @@ auto MaterialIfEvaluator::evalLogicExpr() -> std::optional<Value> {
 	switch( op ) {
 		case LogicOp::And: return Value( (bool)left && (bool)right );
 		case LogicOp::Or: return Value( (bool)left || (bool)right );
-		default: throw std::logic_error( "unreachable" );
+		default: wsw::failWithLogicError( "unreachable" );
 	}
 }
 

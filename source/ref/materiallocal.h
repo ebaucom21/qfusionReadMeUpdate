@@ -3,7 +3,6 @@
 
 #include "../gameshared/q_shared.h"
 #include "../qcommon/memspecbuilder.h"
-#include "../qcommon/wswstdtypes.h"
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/qcommon.h"
 

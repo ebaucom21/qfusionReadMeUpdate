@@ -25,13 +25,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswstdtypes.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <chrono>
-#include <functional>
 #include <new>
 #include <utility>
 #include <thread>
@@ -1148,7 +1145,7 @@ static inline double ComputeAccuracy( int hits, int shots ) {
 	}
 
 	// copied from cg_scoreboard.c, but changed the last -1 to 0 (no hits is zero acc, right??)
-	return ( std::min( (int)( std::floor( ( 100.0f * ( hits ) ) / ( (float)( shots ) ) + 0.5f ) ), 99 ) );
+	return ( wsw::min( (int)( std::floor( ( 100.0f * ( hits ) ) / ( (float)( shots ) ) + 0.5f ) ), 99 ) );
 }
 
 void StatsowFacade::ClientEntry::AddWeapons( JsonWriter &writer, const char **weaponNames ) {

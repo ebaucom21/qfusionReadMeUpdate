@@ -1,7 +1,6 @@
 #ifndef WSW_4ea8b521_0c4d_4316_9c48_bfd9aee07092_H
 #define WSW_4ea8b521_0c4d_4316_9c48_bfd9aee07092_H
 
-#include <memory>
 #include <stdexcept>
 #include <stdint.h>
 #include <assert.h>

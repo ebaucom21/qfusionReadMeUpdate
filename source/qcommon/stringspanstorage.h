@@ -4,7 +4,8 @@
 #include "wswstringview.h"
 #include "wswstaticstring.h"
 #include "wswstaticvector.h"
-#include "wswstdtypes.h"
+#include "wswstring.h"
+#include "wswvector.h"
 #include <limits>
 
 namespace wsw {

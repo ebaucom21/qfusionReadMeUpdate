@@ -6,7 +6,8 @@
 #include "predictioncontext.h"
 #include "environmenttracecache.h"
 
-// For macOS Clang
+#include <unordered_map>
+#include <bitset>
 #include <cmath>
 #include <cstdlib>
 
@@ -441,7 +442,7 @@ public:
 
 		[[nodiscard]]
 		auto addNums( const uint16_t *nums, unsigned numOfNums ) -> std::pair<uint8_t, uint8_t> {
-			numOfNums = std::min<unsigned>( numOfNums, std::size( m_data ) - m_size );
+			numOfNums = wsw::min<unsigned>( numOfNums, std::size( m_data ) - m_size );
 			const auto result = std::make_pair( (uint8_t)m_size, (uint8_t)numOfNums );
 			std::memcpy( m_data + m_size, nums, sizeof( nums[0] ) * numOfNums );
 			m_size += numOfNums;
@@ -458,11 +459,11 @@ public:
 	};
 private:
 	mutable int m_areaNums[MAX_EDICTS] {};
-	mutable wsw::HashMap<int, ClassTriggerNums> m_triggersForArea;
+	mutable std::unordered_map<int, ClassTriggerNums> m_triggersForArea;
 	// Don't insert junk nodes to indicate tested but empty areas, use this bitset instead
-	mutable wsw::BitSet<std::numeric_limits<uint16_t>::max()> m_testedTriggersForArea;
+	mutable std::bitset<std::numeric_limits<uint16_t>::max()> m_testedTriggersForArea;
 	// TODO: Fuse with the set above into a 2-bit set
-	mutable wsw::BitSet<std::numeric_limits<uint16_t>::max()> m_hasTriggersForArea;
+	mutable std::bitset<std::numeric_limits<uint16_t>::max()> m_hasTriggersForArea;
 public:
 	[[nodiscard]]
 	auto getAreaNum( int entNum ) const -> int;

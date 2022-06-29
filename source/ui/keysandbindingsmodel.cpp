@@ -1,6 +1,7 @@
 #include <QQuickItem>
 
 #include "keysandbindingsmodel.h"
+#include "../qcommon/wswexceptions.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../client/keys.h"
 
@@ -433,7 +434,7 @@ auto KeysAndBindingsModel::getCommandNum( const wsw::StringView &bindingView ) c
 	}
 
 	const wsw::StringView prefixes[2] = { kUsePrefix, kSayPrefix };
-	const wsw::HashMap<wsw::String, int> *mapsOfNums[2] = { &m_weaponBindingNums, &m_respectBindingNums };
+	const std::unordered_map<wsw::String, int> *mapsOfNums[2] = { &m_weaponBindingNums, &m_respectBindingNums };
 	for( int i = 0; i < 2; ++i ) {
 		if( !bindingView.startsWith( prefixes[i] ) ) {
 			continue;
@@ -513,7 +514,7 @@ auto KeysAndBindingsModel::getKeyNameToDisplay( int quakeKey ) const -> QByteArr
 	if( auto maybeName = wsw::cl::KeyBindingsSystem::instance()->getNameForKey( quakeKey ) ) {
 		return QByteArray( maybeName->data(), maybeName->size() ).toUpper();
 	}
-	throw std::logic_error( "FIXME no name for key" );
+	wsw::failWithLogicError( "FIXME no name for key" );
 }
 
 auto KeysAndBindingsModel::getCommandNameToDisplay( int commandNum ) const -> QByteArray {
@@ -589,7 +590,7 @@ static CommandsColumnEntry kRespectCommandsColumn2[] {
 	{ "Say lol!", "say lol" }
 };
 
-auto KeysAndBindingsModel::registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
 												  const CommandsColumnEntry *begin,
 												  const CommandsColumnEntry *end,
 												  BindingGroup bindingGroup,
@@ -621,7 +622,7 @@ auto KeysAndBindingsModel::registerKnownCommands( wsw::HashMap<wsw::String, int>
 }
 
 template <typename Array>
-auto KeysAndBindingsModel::registerKnownCommands( wsw::HashMap<wsw::String, int> &dest,
+auto KeysAndBindingsModel::registerKnownCommands( std::unordered_map<wsw::String, int> &dest,
 												  const Array &commands,
 												  BindingGroup bindingGroup,
 												  int startFromNum ) -> int {

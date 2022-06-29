@@ -135,7 +135,7 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 
 			VectorCopy( trail->lastDropOrigin, params->origin );
 
-			const unsigned numSteps = (unsigned)std::max( 1.0f, distance * Q_Rcp( trail->dropDistance ) );
+			const unsigned numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( trail->dropDistance ) );
 			for( unsigned i = 0; i < numSteps; ++i ) {
 				if( flock->numParticlesLeft + trail->maxParticlesPerDrop >= trail->maxParticlesInFlock ) [[unlikely]] {
 					break;

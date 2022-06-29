@@ -74,7 +74,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 
 	// LG range seems to be an appropriate threshold
 	const auto *weaponDef = GS_GetWeaponDef( WEAP_LASERGUN );
-	const float distanceThreshold = std::max( weaponDef->firedef.timeout, weaponDef->firedef_weak.timeout );
+	const float distanceThreshold = wsw::max( weaponDef->firedef.timeout, weaponDef->firedef_weak.timeout );
 	if( botOrigin.SquareDistanceTo( navEntity->Origin() ) > distanceThreshold * distanceThreshold ) {
 		return;
 	}
@@ -86,7 +86,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 	// Force killing enemies instead
 	this->module->killEnemyGoal.SetAdditionalWeight( this->weight );
 	// Clamp the weight of this goal
-	this->weight = std::min( this->weight, 1.0f );
+	this->weight = wsw::min( this->weight, 1.0f );
 }
 
 void GrabItemGoal::GetDesiredWorldState( WorldState *worldState ) {

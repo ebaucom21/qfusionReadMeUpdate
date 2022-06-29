@@ -4,7 +4,8 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cassert>
-#include <stdexcept>
+
+#include "wswexceptions.h"
 
 #ifdef __SANITIZE_ADDRESS__
 #include <sanitizer/asan_interface.h>
@@ -187,7 +188,7 @@ public:
 		if( auto *result = allocOrNull( index ) ) {
 			return result;
 		}
-		throw std::bad_alloc();
+		wsw::failWithBadAlloc();
 	}
 
 	void free( void *p ) noexcept {
@@ -274,7 +275,7 @@ public:
 			m_mallocData = std::malloc( realChunkSize( size, alignment ) * capacity + alignment );
 		}
 		if( !m_mallocData ) {
-			throw std::bad_alloc();
+			wsw::failWithBadAlloc();
 		}
 		if( isAlignedByDefault ) {
 			set( m_mallocData, size, capacity, alignment );

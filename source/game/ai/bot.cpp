@@ -3,7 +3,6 @@
 #include "teamplay/objectivebasedteam.h"
 #include "../g_gametypes.h"
 #include "manager.h"
-#include <algorithm>
 #include <array>
 
 #ifndef _MSC_VER
