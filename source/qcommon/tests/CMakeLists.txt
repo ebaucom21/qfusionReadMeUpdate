@@ -17,6 +17,7 @@ add_executable(
         "../configstringstorage.cpp"
         "../hash.cpp"
         "../wswfs.cpp"
+	"../wswstringview.cpp"
         "../userinfo.cpp"
         boundsbuildertest.cpp
         bufferedreadertest.cpp

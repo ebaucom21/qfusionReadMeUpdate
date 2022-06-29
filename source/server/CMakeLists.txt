@@ -49,6 +49,7 @@ file(GLOB SERVER_SOURCES
     "../qcommon/anticheat.cpp"
     "../qcommon/wswcurl.cpp"
 	"../qcommon/wswfs.cpp"
+	"../qcommon/wswstringview.cpp"
     "../qcommon/cjson.cpp"
     "../qcommon/threads.cpp"
     "../qcommon/steam.cpp"

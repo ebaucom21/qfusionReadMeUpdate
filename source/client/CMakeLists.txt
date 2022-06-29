@@ -66,6 +66,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/threads.cpp"
 	"../qcommon/wswcurl.cpp"
 	"../qcommon/wswfs.cpp"
+	"../qcommon/wswstringview.cpp"
     "../server/*.cpp"
     "*.cpp"
     "../gameshared/q_*.cpp"

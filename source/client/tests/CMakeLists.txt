@@ -19,6 +19,7 @@ add_executable(
         "tokenstreamtest.cpp"
         "../../gameshared/q_math.cpp"
         "../../qcommon/hash.cpp"
+        "../../qcommon/wswstringview.cpp"
         "../../ref/materialifevaluator.cpp"
         "../../ref/materiallexer.cpp"
         "../../ref/materialparser.cpp"
