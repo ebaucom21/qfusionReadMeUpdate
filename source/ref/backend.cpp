@@ -940,14 +940,14 @@ bool RB_EnableWireframe( bool enable ) {
 	return oldVal;
 }
 
-void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceAlias_t *drawSurf ) {
+void R_SubmitAliasSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceAlias_t *drawSurf ) {
 	const maliasmesh_t *aliasmesh = drawSurf->mesh;
 
 	RB_BindVBO( aliasmesh->vbo->index, GL_TRIANGLES );
 	RB_DrawElements( fsh, 0, aliasmesh->numverts, 0, aliasmesh->numtris * 3 );
 }
 
-void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const drawSurfaceSkeletal_t *drawSurf ) {
+void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceSkeletal_t *drawSurf ) {
 	const model_t *mod = drawSurf->model;
 	const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
 	const mskmesh_t *skmesh = drawSurf->mesh;
@@ -981,7 +981,7 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 	}
 }
 
-void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned entShadowBits, const drawSurfaceBSP_t *drawSurf ) {
+void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf ) {
 	// shadowBits are shared for all rendering instances (normal view, portals, etc)
 	const unsigned dlightBits = drawSurf->dlightBits;
 
@@ -1004,7 +1004,7 @@ void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_
 	}
 }
 
-void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * ) {
+void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const void * ) {
 	assert( rsh.nullVBO != NULL );
 
 	RB_BindVBO( rsh.nullVBO->index, GL_LINES );
@@ -1257,7 +1257,7 @@ void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices
 
 static MeshTesselationHelper meshTesselationHelper;
 
-void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ExternalMesh *externalMesh ) {
+void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const ExternalMesh *externalMesh ) {
 	// Checking it this late is not a very nice things but otherwise
 	// the API gets way too complicated due to some technical details.
 	const float squareExtent = DistanceSquared( externalMesh->mins, externalMesh->maxs );
@@ -1327,150 +1327,166 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 	RB_FlushDynamicMeshes();
 }
 
-void R_SubmitSpriteSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const void * ) {
-	vec3_t v_left, v_up;
-	if( const float rotation = e->rotation ) {
-		RotatePointAroundVector( v_left, &fsh->viewAxis[AXIS_FORWARD], &fsh->viewAxis[AXIS_RIGHT], rotation );
-		CrossProduct( &fsh->viewAxis[AXIS_FORWARD], v_left, v_up );
-	} else {
-		VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
-		VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
-	}
-
-	if( fsh->renderFlags & (RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
-		VectorInverse( v_left );
-	}
-
-	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
-	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
-
-	vec3_t point;
-	const float radius = e->radius * e->scale;
-	VectorMA( e->origin, -radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[0] );
-	VectorMA( point, -radius, v_left, xyz[3] );
-
-	VectorMA( e->origin, radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[1] );
-	VectorMA( point, -radius, v_left, xyz[2] );
-
-	byte_vec4_t colors[4];
-	for( unsigned i = 0; i < 4; i++ ) {
-		VectorNegate( &fsh->viewAxis[AXIS_FORWARD], normals[i] );
-		Vector4Copy( e->color, colors[i] );
-	}
-
-	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
-	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
-
+void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+								   const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
 	mesh_t mesh;
-	mesh.elems = elems;
-	mesh.numElems = 6;
-	mesh.numVerts = 4;
-	mesh.xyzArray = xyz;
-	mesh.normalsArray = normals;
-	mesh.lmstArray[0] = NULL;
-	mesh.lmlayersArray[0] = NULL;
-	mesh.stArray = texcoords;
-	mesh.colorsArray[0] = colors;
-	mesh.colorsArray[1] = NULL;
-	mesh.sVectorsArray = NULL;
 
-	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	for( size_t surfInSpan = 0; surfInSpan < surfSpan.size(); ++surfInSpan ) {
+
+		vec3_t v_left, v_up;
+		if( const float rotation = e->rotation; rotation != 0.0f ) {
+			RotatePointAroundVector( v_left, &fsh->viewAxis[AXIS_FORWARD], &fsh->viewAxis[AXIS_RIGHT], rotation );
+			CrossProduct( &fsh->viewAxis[AXIS_FORWARD], v_left, v_up );
+		} else {
+			VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+		}
+
+		if( fsh->renderFlags & (RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+			VectorInverse( v_left );
+		}
+
+		vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+		vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+
+		vec3_t point;
+		const float radius = e->radius * e->scale;
+		VectorMA( e->origin, -radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[0] );
+		VectorMA( point, -radius, v_left, xyz[3] );
+
+		VectorMA( e->origin, radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[1] );
+		VectorMA( point, -radius, v_left, xyz[2] );
+
+		byte_vec4_t colors[4];
+		for( unsigned i = 0; i < 4; i++ ) {
+			VectorNegate( &fsh->viewAxis[AXIS_FORWARD], normals[i] );
+			Vector4Copy( e->color, colors[i] );
+		}
+
+		elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+		vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+
+		mesh.elems = elems;
+		mesh.numElems = 6;
+		mesh.numVerts = 4;
+		mesh.xyzArray = xyz;
+		mesh.normalsArray = normals;
+		mesh.lmstArray[0] = NULL;
+		mesh.lmlayersArray[0] = NULL;
+		mesh.stArray = texcoords;
+		mesh.colorsArray[0] = colors;
+		mesh.colorsArray[1] = NULL;
+		mesh.sVectorsArray = NULL;
+
+		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	}
 }
 
-void R_SubmitQuadPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const QuadPoly *p ) {
-	const float xmin = 0.0f;
-	const float xmax = p->length;
-	const float ymin = -0.5f * p->width;
-	const float ymax = +0.5f * p->width;
-
-	float stx = 1.0f, sty = 1.0f;
-	if( p->tileLength > 0 && xmax > p->tileLength ) {
-		stx = xmax * Q_Rcp( p->tileLength );
-	}
-
+void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog,
+								 const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
 	constexpr const unsigned kMaxPlanes = 2;
 	vec4_t positionsBuffer[kMaxPlanes * 4];
 	byte_vec4_t colorsBuffer[kMaxPlanes * 4];
 	vec2_t texcoordsBuffer[kMaxPlanes * 4];
 	uint16_t indicesBuffer[kMaxPlanes * 6];
 
-	Vector2Set( texcoordsBuffer[0], 0.0f, 0.0f );
-	Vector2Set( texcoordsBuffer[1], 0.0f, sty );
-	Vector2Set( texcoordsBuffer[2], stx, sty );
-	Vector2Set( texcoordsBuffer[3], stx, 0.0f );
+	for( const sortedDrawSurf_t &sds: surfSpan ) {
+		const auto *__restrict p = (const QuadPoly *)sds.drawSurf;
 
-	colorsBuffer[0][0] = ( uint8_t )( p->color[0] * 255 );
-	colorsBuffer[0][1] = ( uint8_t )( p->color[1] * 255 );
-	colorsBuffer[0][2] = ( uint8_t )( p->color[2] * 255 );
-	colorsBuffer[0][3] = ( uint8_t )( p->color[3] * 255 );
+		const float xmin = 0.0f;
+		const float xmax = p->length;
+		const float ymin = -0.5f * p->width;
+		const float ymax = +0.5f * p->width;
 
-	unsigned numVertices = 0, numIndices = 0;
-	constexpr const float planeRollStep = 90.0f / (float)( kMaxPlanes - 1 );
-	const unsigned numPlanes = ( p->flags & QuadPoly::XLike ) ? kMaxPlanes : 1;
-	for( unsigned planeNum = 0; planeNum < numPlanes; ++planeNum ) {
-		uint16_t *const indices   = indicesBuffer + numIndices;
-		vec4_t *const positions   = positionsBuffer + numVertices;
-		byte_vec4_t *const colors = colorsBuffer + numVertices;
-		vec2_t *const texcoords   = texcoordsBuffer + numVertices;
-
-		VectorSet( indices + 0, 0 + numVertices, 1 + numVertices, 2 + numVertices );
-		VectorSet( indices + 3, 0 + numVertices, 2 + numVertices, 3 + numVertices );
-
-		Vector4Set( positions[0], xmin, 0, ymin, 1 );
-		Vector4Set( positions[1], xmin, 0, ymax, 1 );
-		Vector4Set( positions[2], xmax, 0, ymax, 1 );
-		Vector4Set( positions[3], xmax, 0, ymin, 1 );
-
-		mat3_t axis, localAxis;
-		vec3_t angles;
-		VecToAngles( p->dir, angles );
-		angles[ROLL] += planeRollStep * (float)planeNum;
-		AnglesToAxis( angles, axis );
-
-		Matrix3_Transpose( axis, localAxis );
-
-		for( unsigned i = 0; i < 4; ++i ) {
-			vec3_t perp;
-			Matrix3_TransformVector( localAxis, positions[i], perp );
-			VectorAdd( perp, p->from, positions[i] );
-			// Set the proper vertex color
-			Vector4Copy( colorsBuffer[0], colors[i] );
-			// Copy texcoords of the first plane
-			Vector2Copy( texcoordsBuffer[i], texcoords[i] );
+		float stx = 1.0f, sty = 1.0f;
+		if( p->tileLength > 0 && xmax > p->tileLength ) {
+			stx = xmax * Q_Rcp( p->tileLength );
 		}
 
-		numVertices += 4;
-		numIndices += 6;
+		Vector2Set( texcoordsBuffer[0], 0.0f, 0.0f );
+		Vector2Set( texcoordsBuffer[1], 0.0f, sty );
+		Vector2Set( texcoordsBuffer[2], stx, sty );
+		Vector2Set( texcoordsBuffer[3], stx, 0.0f );
+
+		colorsBuffer[0][0] = ( uint8_t )( p->color[0] * 255 );
+		colorsBuffer[0][1] = ( uint8_t )( p->color[1] * 255 );
+		colorsBuffer[0][2] = ( uint8_t )( p->color[2] * 255 );
+		colorsBuffer[0][3] = ( uint8_t )( p->color[3] * 255 );
+
+		unsigned numVertices = 0, numIndices = 0;
+		constexpr const float planeRollStep = 90.0f / (float)( kMaxPlanes - 1 );
+		const unsigned numPlanes = ( p->flags & QuadPoly::XLike ) ? kMaxPlanes : 1;
+		for( unsigned planeNum = 0; planeNum < numPlanes; ++planeNum ) {
+			uint16_t *const indices   = indicesBuffer + numIndices;
+			vec4_t *const positions   = positionsBuffer + numVertices;
+			byte_vec4_t *const colors = colorsBuffer + numVertices;
+			vec2_t *const texcoords   = texcoordsBuffer + numVertices;
+
+			VectorSet( indices + 0, 0 + numVertices, 1 + numVertices, 2 + numVertices );
+			VectorSet( indices + 3, 0 + numVertices, 2 + numVertices, 3 + numVertices );
+
+			Vector4Set( positions[0], xmin, 0, ymin, 1 );
+			Vector4Set( positions[1], xmin, 0, ymax, 1 );
+			Vector4Set( positions[2], xmax, 0, ymax, 1 );
+			Vector4Set( positions[3], xmax, 0, ymin, 1 );
+
+			mat3_t axis, localAxis;
+			vec3_t angles;
+			VecToAngles( p->dir, angles );
+			angles[ROLL] += planeRollStep * (float)planeNum;
+			AnglesToAxis( angles, axis );
+
+			Matrix3_Transpose( axis, localAxis );
+
+			for( unsigned i = 0; i < 4; ++i ) {
+				vec3_t perp;
+				Matrix3_TransformVector( localAxis, positions[i], perp );
+				VectorAdd( perp, p->from, positions[i] );
+				// Set the proper vertex color
+				Vector4Copy( colorsBuffer[0], colors[i] );
+				// Copy texcoords of the first plane
+				Vector2Copy( texcoordsBuffer[i], texcoords[i] );
+			}
+
+			numVertices += 4;
+			numIndices += 6;
+		}
+
+		mesh_t mesh;
+		memset( &mesh, 0, sizeof( mesh ) );
+
+		mesh.elems          = indicesBuffer;
+		mesh.numElems       = numIndices;
+		mesh.numVerts       = numVertices;
+		mesh.xyzArray       = positionsBuffer;
+		mesh.stArray        = texcoordsBuffer;
+		mesh.colorsArray[0] = colorsBuffer;
+
+		RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 	}
-
-	mesh_t mesh;
-	memset( &mesh, 0, sizeof( mesh ) );
-
-	mesh.elems          = indicesBuffer;
-	mesh.numElems       = numIndices;
-	mesh.numVerts       = numVertices;
-	mesh.xyzArray       = positionsBuffer;
-	mesh.stArray        = texcoordsBuffer;
-	mesh.colorsArray[0] = colorsBuffer;
-
-	RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitComplexPolyToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ComplexPoly *poly ) {
+void R_SubmitComplexPolysToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+									const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
 	mesh_t mesh;
-	memset( &mesh, 0, sizeof( mesh ) );
 
-	mesh.elems = poly->indices;
-	mesh.numElems = poly->numIndices;
-	mesh.numVerts = poly->numVertices;
-	mesh.xyzArray = poly->positions;
-	mesh.normalsArray = poly->normals;
-	mesh.stArray = poly->texcoords;
-	mesh.colorsArray[0] = poly->colors;
+	for( const sortedDrawSurf_t &sds: surfSpan ) {
+		const auto *__restrict poly = (const ComplexPoly *)sds.drawSurf;
 
-	RB_AddDynamicMesh( e, shader, fog, portalSurface, shadowBits, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+		memset( &mesh, 0, sizeof( mesh ) );
+
+		mesh.elems = poly->indices;
+		mesh.numElems = poly->numIndices;
+		mesh.numVerts = poly->numVertices;
+		mesh.xyzArray = poly->positions;
+		mesh.normalsArray = poly->normals;
+		mesh.stArray = poly->texcoords;
+		mesh.colorsArray[0] = poly->colors;
+
+		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	}
 }
 
 [[nodiscard]]
@@ -1499,11 +1515,9 @@ static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::S
 	return result;
 }
 
-void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const ParticleDrawSurface *drawSurf ) {
-	const auto *aggregate = fsh->particleAggregates + drawSurf->aggregateIndex;
-	assert( drawSurf->particleIndex < aggregate->numParticles );
-	const Particle *const __restrict particle = aggregate->particles + drawSurf->particleIndex;
-	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
+void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+									 const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
+	mesh_t mesh;
 
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
@@ -1511,156 +1525,159 @@ void R_SubmitParticleSurfToBackend( const FrontendToBackendShared *fsh, const en
 	byte_vec4_t colors[4];
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
 
-	assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
+	for( const sortedDrawSurf_t &sds: surfSpan ) {
+		const auto *drawSurf = (const ParticleDrawSurface *)sds.drawSurf;
 
-	assert( appearanceRules->kind == Particle::Sprite || appearanceRules->kind == Particle::Spark );
-	if( appearanceRules->kind == Particle::Sprite ) {
-		assert( appearanceRules->radius >= 0.1f );
+		const auto *aggregate = fsh->particleAggregates + drawSurf->aggregateIndex;
+		assert( drawSurf->particleIndex < aggregate->numParticles );
+		const Particle *const __restrict particle = aggregate->particles + drawSurf->particleIndex;
+		const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
 
-		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-		float radius     = wsw::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
+		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
-		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
-			radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
-			if( radius < 0.1f ) {
-				return;
+		assert( appearanceRules->kind == Particle::Sprite || appearanceRules->kind == Particle::Spark );
+		if( appearanceRules->kind == Particle::Sprite ) {
+			assert( appearanceRules->radius >= 0.1f );
+
+			float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+			float radius     = wsw::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
+
+			if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
+				radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
+				if( radius < 0.1f ) {
+					continue;
+				}
 			}
-		}
 
-		vec3_t v_left, v_up;
-		VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
-		VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+			vec3_t v_left, v_up;
+			VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 
-		if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
-			VectorInverse( v_left );
-		}
-
-		vec3_t point;
-		VectorMA( particle->origin, -radius, v_up, point );
-		VectorMA( point, radius, v_left, xyz[0] );
-		VectorMA( point, -radius, v_left, xyz[3] );
-
-		VectorMA( particle->origin, radius, v_up, point );
-		VectorMA( point, radius, v_left, xyz[1] );
-		VectorMA( point, -radius, v_left, xyz[2] );
-	} else {
-		assert( appearanceRules->length >= 0.1f && appearanceRules->width >= 0.1f );
-
-		float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
-		float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
-
-		float length = wsw::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
-		float width  = wsw::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
-
-		if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
-			const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
-			length *= sizeFrac;
-			width  *= sizeFrac;
-			if( length < 0.1f || width < 0.1f ) {
-				return;
+			if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+				VectorInverse( v_left );
 			}
-		}
 
-		mat3_t axis, localAxis;
-		if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
-			if( float squareDist = DistanceSquared( particle->origin, fsh->viewOrigin ); squareDist > 1.0f ) [[likely]] {
-				const float rcpSpeed = Q_RSqrt( squareSpeed );
-				const float rcpDist  = Q_RSqrt( squareDist );
-				VectorScale( particle->velocity, rcpSpeed, &axis[AXIS_FORWARD] );
-				VectorSubtract( fsh->viewOrigin, particle->origin, &axis[AXIS_RIGHT] );
-				VectorScale( &axis[AXIS_RIGHT], rcpDist, &axis[AXIS_RIGHT] );
-				CrossProduct( &axis[AXIS_FORWARD], &axis[AXIS_RIGHT], &axis[AXIS_UP] );
+			vec3_t point;
+			VectorMA( particle->origin, -radius, v_up, point );
+			VectorMA( point, radius, v_left, xyz[0] );
+			VectorMA( point, -radius, v_left, xyz[3] );
+
+			VectorMA( particle->origin, radius, v_up, point );
+			VectorMA( point, radius, v_left, xyz[1] );
+			VectorMA( point, -radius, v_left, xyz[2] );
+		} else {
+			assert( appearanceRules->length >= 0.1f && appearanceRules->width >= 0.1f );
+
+			float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
+			float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+
+			float length = wsw::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
+			float width  = wsw::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
+
+			if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
+				const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
+				length *= sizeFrac;
+				width  *= sizeFrac;
+				if( length < 0.1f || width < 0.1f ) {
+					continue;
+				}
+			}
+
+			mat3_t axis, localAxis;
+			if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
+				if( float squareDist = DistanceSquared( particle->origin, fsh->viewOrigin ); squareDist > 1.0f ) [[likely]] {
+					const float rcpSpeed = Q_RSqrt( squareSpeed );
+					const float rcpDist  = Q_RSqrt( squareDist );
+					VectorScale( particle->velocity, rcpSpeed, &axis[AXIS_FORWARD] );
+					VectorSubtract( fsh->viewOrigin, particle->origin, &axis[AXIS_RIGHT] );
+					VectorScale( &axis[AXIS_RIGHT], rcpDist, &axis[AXIS_RIGHT] );
+					CrossProduct( &axis[AXIS_FORWARD], &axis[AXIS_RIGHT], &axis[AXIS_UP] );
+				} else {
+					continue;
+				}
 			} else {
-				return;
+				continue;
 			}
-		} else {
-			return;
+
+			Matrix3_Transpose( axis, localAxis );
+
+			const float xmin = 0;
+			const float xmax = length;
+			const float ymin = -0.5f * width;
+			const float ymax = +0.5f * width;
+
+			VectorSet( xyz[0], xmin, 0, ymin );
+			VectorSet( xyz[1], xmin, 0, ymax );
+			VectorSet( xyz[2], xmax, 0, ymax );
+			VectorSet( xyz[3], xmax, 0, ymin );
+
+			vec3_t tmp[4];
+			Matrix3_TransformVector( localAxis, xyz[0], tmp[0] );
+			VectorAdd( tmp[0], particle->origin, xyz[0] );
+			Matrix3_TransformVector( localAxis, xyz[1], tmp[1] );
+			VectorAdd( tmp[1], particle->origin, xyz[1] );
+			Matrix3_TransformVector( localAxis, xyz[2], tmp[2] );
+			VectorAdd( tmp[2], particle->origin, xyz[2] );
+			Matrix3_TransformVector( localAxis, xyz[3], tmp[3] );
+			VectorAdd( tmp[3], particle->origin, xyz[3] );
 		}
 
-		Matrix3_Transpose( axis, localAxis );
+		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac < 1.0f );
 
-		const float xmin = 0;
-		const float xmax = length;
-		const float ymin = -0.5f * width;
-		const float ymax = +0.5f * width;
+		const float *const __restrict initialColor  = appearanceRules->initialColors[particle->instanceColorIndex];
+		const float *const __restrict fadedInColor  = appearanceRules->fadedInColors[particle->instanceColorIndex];
+		const float *const __restrict fadedOutColor = appearanceRules->fadedOutColors[particle->instanceColorIndex];
 
-		VectorSet( xyz[0], xmin, 0, ymin );
-		VectorSet( xyz[1], xmin, 0, ymax );
-		VectorSet( xyz[2], xmax, 0, ymax );
-		VectorSet( xyz[3], xmax, 0, ymin );
-
-		vec3_t tmp[4];
-		Matrix3_TransformVector( localAxis, xyz[0], tmp[0] );
-		VectorAdd( tmp[0], particle->origin, xyz[0] );
-		Matrix3_TransformVector( localAxis, xyz[1], tmp[1] );
-		VectorAdd( tmp[1], particle->origin, xyz[1] );
-		Matrix3_TransformVector( localAxis, xyz[2], tmp[2] );
-		VectorAdd( tmp[2], particle->origin, xyz[2] );
-		Matrix3_TransformVector( localAxis, xyz[3], tmp[3] );
-		VectorAdd( tmp[3], particle->origin, xyz[3] );
-	}
-
-	assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac < 1.0f );
-
-	const float *const __restrict initialColor  = appearanceRules->initialColors[particle->instanceColorIndex];
-	const float *const __restrict fadedInColor  = appearanceRules->fadedInColors[particle->instanceColorIndex];
-	const float *const __restrict fadedOutColor = appearanceRules->fadedOutColors[particle->instanceColorIndex];
-
-	vec4_t colorBuffer;
-	const float *interpolatedColor = colorBuffer;
-	if( particle->lifetimeFrac < appearanceRules->fadeInLifetimeFrac ) [[unlikely]] {
-		// Fade in
-		const float fadeInFrac = particle->lifetimeFrac * Q_Rcp( appearanceRules->fadeInLifetimeFrac );
-		Vector4Lerp( initialColor, fadeInFrac, fadedInColor, colorBuffer );
-	} else {
-		const float startFadeOutAtLifetimeFrac = 1.0f - appearanceRules->fadeOutLifetimeFrac;
-		if( particle->lifetimeFrac > startFadeOutAtLifetimeFrac ) [[unlikely]] {
-			// Fade out
-			float fadeOutFrac = particle->lifetimeFrac - startFadeOutAtLifetimeFrac;
-			fadeOutFrac *= Q_Rcp( appearanceRules->fadeOutLifetimeFrac );
-			Vector4Lerp( fadedInColor, fadeOutFrac, fadedOutColor, colorBuffer );
+		vec4_t colorBuffer;
+		const float *interpolatedColor = colorBuffer;
+		if( particle->lifetimeFrac < appearanceRules->fadeInLifetimeFrac ) [[unlikely]] {
+			// Fade in
+			const float fadeInFrac = particle->lifetimeFrac * Q_Rcp( appearanceRules->fadeInLifetimeFrac );
+			Vector4Lerp( initialColor, fadeInFrac, fadedInColor, colorBuffer );
 		} else {
-			// Use the color of the "faded-in" state
-			interpolatedColor = fadedInColor;
+			const float startFadeOutAtLifetimeFrac = 1.0f - appearanceRules->fadeOutLifetimeFrac;
+			if( particle->lifetimeFrac > startFadeOutAtLifetimeFrac ) [[unlikely]] {
+				// Fade out
+				float fadeOutFrac = particle->lifetimeFrac - startFadeOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( appearanceRules->fadeOutLifetimeFrac );
+				Vector4Lerp( fadedInColor, fadeOutFrac, fadedOutColor, colorBuffer );
+			} else {
+				// Use the color of the "faded-in" state
+				interpolatedColor = fadedInColor;
+			}
 		}
+
+		Vector4Set( colors[0],
+					(uint8_t)( 255 * interpolatedColor[0] ),
+					(uint8_t)( 255 * interpolatedColor[1] ),
+					(uint8_t)( 255 * interpolatedColor[2] ),
+					(uint8_t)( 255 * interpolatedColor[3] ) );
+
+		Vector4Copy( colors[0], colors[1] );
+		Vector4Copy( colors[0], colors[2] );
+		Vector4Copy( colors[0], colors[3] );
+
+		memset( &mesh, 0, sizeof( mesh ) );
+		mesh.numElems = 6;
+		mesh.elems = elems;
+		mesh.numVerts = 4;
+		mesh.xyzArray = xyz;
+		mesh.normalsArray = normals;
+		mesh.stArray = texcoords;
+		mesh.colorsArray[0] = colors;
+
+		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 	}
-
-	Vector4Set( colors[0],
-				(uint8_t)( 255 * interpolatedColor[0] ),
-				(uint8_t)( 255 * interpolatedColor[1] ),
-				(uint8_t)( 255 * interpolatedColor[2] ),
-				(uint8_t)( 255 * interpolatedColor[3] ) );
-
-	Vector4Copy( colors[0], colors[1] );
-	Vector4Copy( colors[0], colors[2] );
-	Vector4Copy( colors[0], colors[3] );
-
-	mesh_t mesh;
-	memset( &mesh, 0, sizeof( mesh ) );
-	mesh.numElems = 6;
-	mesh.elems = elems;
-	mesh.numVerts = 4;
-	mesh.xyzArray = xyz;
-	mesh.normalsArray = normals;
-	mesh.stArray = texcoords;
-	mesh.colorsArray[0] = colors;
-
-	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 }
 
-void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned shadowBits, const Scene::DynamicLight *light ) {
-	assert( light && light->hasCoronaLight );
-
-	const float radius = light->coronaRadius;
+void R_SubmitCoronaSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+								   const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
+	mesh_t mesh;
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
 	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
 	byte_vec4_t colors[4];
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
-	mesh_t mesh;
-
-	vec3_t origin;
-	VectorCopy( light->origin, origin );
 
 	vec3_t v_left, v_up;
 	VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
@@ -1670,33 +1687,44 @@ void R_SubmitCoronaSurfToBackend( const FrontendToBackendShared *fsh, const enti
 		VectorInverse( v_left );
 	}
 
-	vec3_t point;
-	VectorMA( origin, -radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[0] );
-	VectorMA( point, -radius, v_left, xyz[3] );
+	for( const sortedDrawSurf_t &sds: surfSpan ) {
+		const auto *light = (const Scene::DynamicLight *)sds.drawSurf;
 
-	VectorMA( origin, radius, v_up, point );
-	VectorMA( point, radius, v_left, xyz[1] );
-	VectorMA( point, -radius, v_left, xyz[2] );
+		assert( light && light->hasCoronaLight );
 
-	Vector4Set( colors[0],
-				bound( 0, light->color[0] * 96, 255 ),
-				bound( 0, light->color[1] * 96, 255 ),
-				bound( 0, light->color[2] * 96, 255 ),
-				255 );
+		const float radius = light->coronaRadius;
 
-	Vector4Copy( colors[0], colors[1] );
-	Vector4Copy( colors[0], colors[2] );
-	Vector4Copy( colors[0], colors[3] );
+		vec3_t origin;
+		VectorCopy( light->origin, origin );
 
-	memset( &mesh, 0, sizeof( mesh ) );
-	mesh.numElems = 6;
-	mesh.elems = elems;
-	mesh.numVerts = 4;
-	mesh.xyzArray = xyz;
-	mesh.normalsArray = normals;
-	mesh.stArray = texcoords;
-	mesh.colorsArray[0] = colors;
+		vec3_t point;
+		VectorMA( origin, -radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[0] );
+		VectorMA( point, -radius, v_left, xyz[3] );
 
-	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+		VectorMA( origin, radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[1] );
+		VectorMA( point, -radius, v_left, xyz[2] );
+
+		Vector4Set( colors[0],
+					bound( 0, light->color[0] * 96, 255 ),
+					bound( 0, light->color[1] * 96, 255 ),
+					bound( 0, light->color[2] * 96, 255 ),
+					255 );
+
+		Vector4Copy( colors[0], colors[1] );
+		Vector4Copy( colors[0], colors[2] );
+		Vector4Copy( colors[0], colors[3] );
+
+		memset( &mesh, 0, sizeof( mesh ) );
+		mesh.numElems = 6;
+		mesh.elems = elems;
+		mesh.numVerts = 4;
+		mesh.xyzArray = xyz;
+		mesh.normalsArray = normals;
+		mesh.stArray = texcoords;
+		mesh.colorsArray[0] = colors;
+
+		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	}
 }

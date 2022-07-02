@@ -444,15 +444,15 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	/* ST_EXTERNAL_MESH */
 	nullptr,
 	/* ST_SPRITE */
-	( batchDrawSurf_cb ) & R_SubmitSpriteSurfToBackend,
+	( batchDrawSurf_cb ) & R_SubmitSpriteSurfsToBackend,
 	/* ST_QUAD_POLY */
-	( batchDrawSurf_cb ) & R_SubmitQuadPolyToBackend,
+	( batchDrawSurf_cb ) & R_SubmitQuadPolysToBackend,
 	/* ST_COMPLEX_POLY */
-	( batchDrawSurf_cb ) & R_SubmitComplexPolyToBackend,
+	( batchDrawSurf_cb ) & R_SubmitComplexPolysToBackend,
 	/* ST_PARTICLE */
-	( batchDrawSurf_cb ) & R_SubmitParticleSurfToBackend,
+	( batchDrawSurf_cb ) & R_SubmitParticleSurfsToBackend,
 	/* ST_CORONA */
-	( batchDrawSurf_cb ) & R_SubmitCoronaSurfToBackend,
+	( batchDrawSurf_cb ) & R_SubmitCoronaSurfsToBackend,
 	/* ST_nullptrMODEL */
 	nullptr,
 	};
@@ -1077,17 +1077,23 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 	VectorCopy( m_state.viewOrigin, fsh.viewOrigin );
 
-	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
-	unsigned prevEntNum = std::numeric_limits<unsigned>::max();
-	int prevPortalNum = std::numeric_limits<int>::min();
-	int prevFogNum = std::numeric_limits<int>::min();
+	auto *const materialCache = MaterialCache::instance();
 
-	bool batchDrawSurf = false;
-	bool prevBatchDrawSurf = false;
+	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
+	unsigned prevEntNum    = std::numeric_limits<unsigned>::max();
+	int prevPortalNum      = std::numeric_limits<int>::min();
+	int prevFogNum         = std::numeric_limits<int>::min();
+
+	const sortedDrawSurf_t *batchSpanBegin = nullptr;
+
+	bool prevIsDrawSurfBatched = false;
 	float depthmin = 0.0f, depthmax = 0.0f;
 	bool depthHack = false, cullHack = false;
 	bool prevInfiniteProj = false;
 	int prevEntityFX = -1;
+
+	const mfog_t *prevFog = nullptr;
+	const portalSurface_t *prevPortalSurface = nullptr;
 
 	const size_t numDrawSurfs = list->size();
 	const sortedDrawSurf_t *const drawSurfs = list->data();
@@ -1098,24 +1104,26 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 
 		assert( surfType > ST_NONE && surfType < ST_MAX_TYPES );
 
-		batchDrawSurf = ( r_batchDrawSurfCb[surfType] ? true : false );
+		const bool isDrawSurfBatched = ( r_batchDrawSurfCb[surfType] ? true : false );
 
 		unsigned shaderNum, entNum;
 		int fogNum, portalNum;
 		// decode draw surface properties
 		R_UnpackSortKey( sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
 
-		const shader_t *shader = MaterialCache::instance()->getMaterialById( shaderNum );
-		const entity_t *entity = scene->m_entities[entNum];
-		const mfog_t *fog = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const portalSurface_t *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
-		const int entityFX = entity->renderfx;
-		const bool depthWrite = shader->flags & SHADER_DEPTHWRITE ? true : false;
+		const shader_t *shader    = materialCache->getMaterialById( shaderNum );
+		const entity_t *entity    = scene->m_entities[entNum];
+		const mfog_t *fog         = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
+		const auto *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
+		const int entityFX        = entity->renderfx;
+
+		// TODO?
+		// const bool depthWrite     = shader->flags & SHADER_DEPTHWRITE ? true : false;
 
 		// see if we need to reset mesh properties in the backend
 
 		bool reset = false;
-		if( !prevBatchDrawSurf ) {
+		if( !prevIsDrawSurfBatched ) {
 			reset = true;
 		} else if( shaderNum != prevShaderNum ) {
 			reset = true;
@@ -1123,15 +1131,30 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 			reset = true;
 		} else if( portalNum != prevPortalNum ) {
 			reset = true;
-		} else if( ( entNum != prevEntNum && !( shader->flags & SHADER_ENTITY_MERGABLE ) ) ) {
+		} else if( entNum != prevEntNum ) {
 			reset = true;
 		} else if( entityFX != prevEntityFX ) {
 			reset = true;
 		}
 
 		if( reset ) {
-			if( prevBatchDrawSurf && !batchDrawSurf ) {
+			if( batchSpanBegin ) {
+				batchDrawSurf_cb callback            = r_batchDrawSurfCb[batchSpanBegin->surfType];
+				const shader_s *prevShader           = materialCache->getMaterialById( prevShaderNum );
+				const entity_t *prevEntity           = scene->m_entities[prevEntNum];
+				const sortedDrawSurf_t *batchSpanEnd = sds;
+
+				assert( batchSpanEnd > batchSpanBegin );
+
 				RB_FlushDynamicMeshes();
+				callback( &fsh, prevEntity, prevShader, prevFog, prevPortalSurface, { batchSpanBegin, batchSpanEnd } );
+				RB_FlushDynamicMeshes();
+			}
+
+			if( isDrawSurfBatched ) {
+				batchSpanBegin = sds;
+			} else {
+				batchSpanBegin = nullptr;
 			}
 
 			// hack the depth range to prevent view model from poking into walls
@@ -1175,13 +1198,13 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 				}
 			}
 
-			if( batchDrawSurf ) {
+			if( isDrawSurfBatched ) {
 				// don't transform batched surfaces
-				if( !prevBatchDrawSurf ) {
+				if( !prevIsDrawSurfBatched ) {
 					RB_LoadObjectMatrix( mat4x4_identity );
 				}
 			} else {
-				if( ( entNum != prevEntNum ) || prevBatchDrawSurf ) {
+				if( ( entNum != prevEntNum ) || prevIsDrawSurfBatched ) {
 					if( entity->number == kWorldEntNumber ) [[likely]] {
 						R_TransformForWorld();
 					} else if( entity->rtype == RT_MODEL ) {
@@ -1194,32 +1217,40 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 				}
 			}
 
-			if( !batchDrawSurf ) {
+			if( !isDrawSurfBatched ) {
 				assert( r_drawSurfCb[surfType] );
 
 				RB_BindShader( entity, shader, fog );
 				RB_SetPortalSurface( portalSurface );
 
-				r_drawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
+				r_drawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, sds->drawSurf );
 			}
 
 			prevShaderNum = shaderNum;
 			prevEntNum = entNum;
 			prevFogNum = fogNum;
-			prevBatchDrawSurf = batchDrawSurf;
+			prevIsDrawSurfBatched = isDrawSurfBatched;
 			prevPortalNum = portalNum;
 			prevInfiniteProj = infiniteProj;
 			prevEntityFX = entityFX;
-		}
-
-		if( batchDrawSurf ) {
-			r_batchDrawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, 0, sds->drawSurf );
+			prevFog = fog;
+			prevPortalSurface = portalSurface;
 		}
 	}
 
-	if( batchDrawSurf ) {
+	if( batchSpanBegin ) {
+		batchDrawSurf_cb callback            = r_batchDrawSurfCb[batchSpanBegin->surfType];
+		const shader_t *prevShader           = materialCache->getMaterialById( prevShaderNum );
+		const entity_t *prevEntity           = scene->m_entities[prevEntNum];
+		const sortedDrawSurf_t *batchSpanEnd = drawSurfs + numDrawSurfs;
+
+		assert( batchSpanEnd > batchSpanBegin );
+
+		RB_FlushDynamicMeshes();
+		callback( &fsh, prevEntity, prevShader, prevFog, prevPortalSurface, { batchSpanBegin, batchSpanEnd } );
 		RB_FlushDynamicMeshes();
 	}
+
 	if( depthHack ) {
 		RB_DepthRange( depthmin, depthmax );
 	}
