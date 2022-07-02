@@ -704,6 +704,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	ParticleDrawSurface *const particleDrawSurfaces  = m_particleDrawSurfaces.get();
 	for( const unsigned aggregateIndex: aggregateIndices ) {
 		const Scene::ParticlesAggregate *const __restrict pa = particles + aggregateIndex;
+		const unsigned mergeabilityKey = aggregateIndex;
 		for( unsigned particleIndex = 0; particleIndex < pa->numParticles; ++particleIndex ) {
 			const Particle *__restrict particle = pa->particles + particleIndex;
 
@@ -721,7 +722,8 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 			shader_s *material = pa->appearanceRules.materials[particle->instanceMaterialIndex];
 
 			// TODO: Inline/add some kind of bulk insertion
-			addEntryToSortList( particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf, ST_PARTICLE );
+			addEntryToSortList( particleEntity, fog, material, distanceLike, 0, nullptr, drawSurf,
+								ST_PARTICLE, mergeabilityKey );
 		}
 	}
 }
@@ -791,7 +793,8 @@ void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scen
 }
 
 void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader, float dist,
-									unsigned order, const portalSurface_t *portalSurf, const void *drawSurf, unsigned surfType ) {
+									unsigned order, const portalSurface_t *portalSurf, const void *drawSurf,
+									unsigned surfType, unsigned mergeabilityKey ) {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
 		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
@@ -806,10 +809,11 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 				const int portalNum = portalSurf ? (int)( portalSurf - m_state.portalSurfaces ) : -1;
 
 				m_state.list->emplace_back( sortedDrawSurf_t {
-					.drawSurf = (drawSurfaceType_t *)drawSurf,
-					.distKey  = distKey,
-					.sortKey  = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
-					.surfType = surfType
+					.drawSurf        = (drawSurfaceType_t *)drawSurf,
+					.distKey         = distKey,
+					.sortKey         = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
+					.surfType        = surfType,
+					.mergeabilityKey = mergeabilityKey
 				});
 
 				return std::addressof( m_state.list->back() );
@@ -1086,7 +1090,9 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 
 	const sortedDrawSurf_t *batchSpanBegin = nullptr;
 
-	bool prevIsDrawSurfBatched = false;
+	unsigned prevMergeabilityKey = 0;
+	bool prevIsDrawSurfBatched   = false;
+
 	float depthmin = 0.0f, depthmax = 0.0f;
 	bool depthHack = false, cullHack = false;
 	bool prevInfiniteProj = false;
@@ -1126,6 +1132,8 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 		if( !prevIsDrawSurfBatched ) {
 			reset = true;
 		} else if( shaderNum != prevShaderNum ) {
+			reset = true;
+		} else if( sds->mergeabilityKey != prevMergeabilityKey ) {
 			reset = true;
 		} else if( fogNum != prevFogNum ) {
 			reset = true;
@@ -1230,6 +1238,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 			prevEntNum = entNum;
 			prevFogNum = fogNum;
 			prevIsDrawSurfBatched = isDrawSurfBatched;
+			prevMergeabilityKey = sds->mergeabilityKey;
 			prevPortalNum = portalNum;
 			prevInfiniteProj = infiniteProj;
 			prevEntityFX = entityFX;

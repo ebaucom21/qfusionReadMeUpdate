@@ -598,6 +598,8 @@ typedef struct {
 	const void *drawSurf;
 	unsigned distKey, sortKey;
 	unsigned surfType;
+	// Currently works just in addition to common mergeability checks.
+	unsigned mergeabilityKey;
 } sortedDrawSurf_t;
 
 struct FrontendToBackendShared;

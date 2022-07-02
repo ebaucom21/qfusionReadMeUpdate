@@ -1525,13 +1525,21 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 	byte_vec4_t colors[4];
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
 
+	const auto *const firstDrawSurf = (const ParticleDrawSurface *)surfSpan.front().drawSurf;
+	const auto *const aggregate = fsh->particleAggregates + firstDrawSurf->aggregateIndex;
+	// Less if the aggregate is visually split by some surfaces of other kinds
+	assert( surfSpan.size() <= aggregate->numParticles );
+
+	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
+
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *drawSurf = (const ParticleDrawSurface *)sds.drawSurf;
 
-		const auto *aggregate = fsh->particleAggregates + drawSurf->aggregateIndex;
+		// Ensure that the aggregate is the same
+		assert( fsh->particleAggregates + drawSurf->aggregateIndex == aggregate );
+
 		assert( drawSurf->particleIndex < aggregate->numParticles );
 		const Particle *const __restrict particle = aggregate->particles + drawSurf->particleIndex;
-		const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
 
 		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
