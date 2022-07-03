@@ -889,21 +889,21 @@ void Frontend::collectVisibleExternalMeshes( Scene *scene, std::span<const Frust
 }
 
 auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
-	-> std::span<const uint16_t> {
+	-> std::pair<std::span<const uint16_t>, std::span<const uint16_t>> {
 	static_assert( decltype( Scene::m_dynamicLights )::capacity() == kMaxLightsInScene );
-	uint16_t tmpCoronaLightIndices[kMaxLightsInScene], tmpProgramLightIndices[kMaxLightsInScene];
 
-	const auto [visibleCoronaLightIndices, visibleProgramLightIndices] =
-		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta, tmpCoronaLightIndices, tmpProgramLightIndices );
-
-	addCoronaLightsToSortList( scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
+	const auto [allVisibleLightIndices, visibleCoronaLightIndices, visibleProgramLightIndices] =
+		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta,
+					m_allVisibleLightIndices, m_visibleCoronaLightIndices, m_visibleProgramLightIndices );
 
 	assert( m_numVisibleProgramLights == 0 );
+	assert( m_numAllVisibleLights == 0 );
 
-	if( visibleProgramLightIndices.size() <= kMaxProgramLightsInView ) {
-		std::copy( visibleProgramLightIndices.begin(), visibleProgramLightIndices.end(), m_programLightIndices );
-		m_numVisibleProgramLights = visibleProgramLightIndices.size();
-	} else {
+	m_numAllVisibleLights     = allVisibleLightIndices.size();
+	m_numVisibleProgramLights = visibleProgramLightIndices.size();
+
+	// Prune m_visibleProgramLightIndices in-place
+	if( visibleProgramLightIndices.size() > kMaxProgramLightsInView ) {
 		const float *const __restrict viewOrigin = m_state.viewOrigin;
 		const Scene::DynamicLight *const lights = scene->m_dynamicLights.data();
 		wsw::StaticVector<std::pair<unsigned, float>, kMaxLightsInScene> lightsHeap;
@@ -921,19 +921,19 @@ auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occl
 		do {
 			std::pop_heap( lightsHeap.begin(), lightsHeap.end(), cmp );
 			const unsigned lightIndex = lightsHeap.back().first;
-			m_programLightIndices[numVisibleProgramLights++] = lightIndex;
+			m_visibleProgramLightIndices[numVisibleProgramLights++] = lightIndex;
 			lightsHeap.pop_back();
 		} while( numVisibleProgramLights < kMaxProgramLightsInView );
 		m_numVisibleProgramLights = numVisibleProgramLights;
 	}
 
 	for( unsigned i = 0; i < m_numVisibleProgramLights; ++i ) {
-		Scene::DynamicLight *const light = scene->m_dynamicLights.data() + m_programLightIndices[i];
+		Scene::DynamicLight *const light = scene->m_dynamicLights.data() + m_visibleProgramLightIndices[i];
 		float *const mins = m_lightBoundingDops[i].mins, *const maxs = m_lightBoundingDops[i].maxs;
 		createBounding14DopForSphere( mins, maxs, light->origin, light->programRadius );
 	}
 
-	return { m_programLightIndices, m_numVisibleProgramLights };
+	return { { m_visibleProgramLightIndices, m_numVisibleProgramLights }, visibleCoronaLightIndices };
 }
 
 void Frontend::markLightsOfSurfaces( const Scene *scene,
@@ -954,7 +954,6 @@ void Frontend::markLightsOfLeaves( const Scene *scene,
 						           std::span<const unsigned> indicesOfLeaves,
 						           std::span<const uint16_t> visibleLightIndices,
 						           unsigned *leafLightBitsOfSurfaces ) {
-	const uint16_t *const lightIndices = visibleLightIndices.data();
 	const unsigned numVisibleLights = visibleLightIndices.size();
 	const auto leaves = rsh.worldBrushModel->visleafs;
 
@@ -1070,14 +1069,13 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	}
 
 	FrontendToBackendShared fsh;
-	fsh.renderFlags          = m_state.renderFlags;
-	fsh.dynamicLights        = scene->m_dynamicLights.data();
-	fsh.programLightIndices  = m_programLightIndices;
-	fsh.numProgramLights     = m_numVisibleProgramLights;
-	fsh.fovTangent           = m_state.lod_dist_scale_for_fov;
-	fsh.particleAggregates   = scene->m_particles.data();
-	fsh.coronaDrawSurfaces   = m_coronaDrawSurfaces;
-	fsh.compoundMeshes       = scene->m_externalMeshes.data();
+	fsh.dynamicLights               = scene->m_dynamicLights.data();
+	fsh.particleAggregates          = scene->m_particles.data();
+	fsh.compoundMeshes              = scene->m_externalMeshes.data();
+	fsh.allVisibleLightIndices      = { m_allVisibleLightIndices, m_numAllVisibleLights };
+	fsh.visibleProgramLightIndices  = { m_visibleProgramLightIndices, m_numVisibleProgramLights };
+	fsh.renderFlags                 = m_state.renderFlags;
+	fsh.fovTangent                  = m_state.lod_dist_scale_for_fov;
 	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
 	VectorCopy( m_state.viewOrigin, fsh.viewOrigin );
 
@@ -1394,6 +1392,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	std::span<const unsigned> nonOccludedLeaves;
 	std::span<const unsigned> partiallyOccludedLeaves;
 
+	m_numAllVisibleLights     = 0;
 	m_numVisibleProgramLights = 0;
 
 	bool drawWorld = false;
@@ -1413,11 +1412,15 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 	}
 
 	if( const int dynamicLightValue = r_dynamiclight->integer ) {
-		[[maybe_unused]] const auto visibleLightIndices = collectVisibleLights( scene, occluderFrusta );
+		[[maybe_unused]]
+		const auto [visibleProgramLightIndices, visibleCoronaLightIndices] = collectVisibleLights( scene, occluderFrusta );
+		if( dynamicLightValue & 2 ) {
+			addCoronaLightsToSortList( scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
+		}
 		if( dynamicLightValue & 1 ) {
 			std::span<const unsigned> spansStorage[2] { nonOccludedLeaves, partiallyOccludedLeaves };
 			std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
-			markLightsOfSurfaces( scene, spansOfLeaves, visibleLightIndices );
+			markLightsOfSurfaces( scene, spansOfLeaves, visibleProgramLightIndices );
 		}
 	}
 
@@ -1562,7 +1565,6 @@ void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
 }
 
 Frontend::Frontend() {
-	std::fill( std::begin( m_coronaDrawSurfaces ), std::end( m_coronaDrawSurfaces ), ST_CORONA );
 }
 
 alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;
@@ -1721,11 +1723,16 @@ void DrawSceneRequest::addLight( const float *origin, float programRadius, float
 			const bool hasProgramLight = programRadius > 0.0f && ( cvarValue & 1 ) != 0;
 			const bool hasCoronaLight = coronaRadius > 0.0f && ( cvarValue & 2 ) != 0;
 			if( hasProgramLight | hasCoronaLight ) [[likely]] {
+				// Bounds are used for culling and also for applying lights to particles
+				const float maxRadius = wsw::max( programRadius, coronaRadius );
 				m_dynamicLights.emplace_back( DynamicLight {
 					.origin          = { origin[0], origin[1], origin[2] },
 					.programRadius   = programRadius,
 					.coronaRadius    = coronaRadius,
+					.maxRadius       = maxRadius,
 					.color           = { r, g, b },
+					.mins            = { origin[0] - maxRadius, origin[1] - maxRadius, origin[2] - maxRadius, 0.0f },
+					.maxs            = { origin[0] + maxRadius, origin[1] + maxRadius, origin[2] + maxRadius, 1.0f },
 					.hasProgramLight = hasProgramLight,
 					.hasCoronaLight  = hasCoronaLight
 				});

@@ -1811,7 +1811,7 @@ void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
 		Vector4Set( shaderColor[3], 1.0f, 1.0f, 1.0f, 1.0f );
 		n = 0;
 
-		for( i = 0; i < fsh->numProgramLights; ++i ) {
+		for( i = 0; i < (int)fsh->visibleProgramLightIndices.size(); ++i ) {
 			const unsigned lightBit = 1 << i;
 			if( !( dlightbits & lightBit ) ) {
 				continue;
@@ -1823,7 +1823,7 @@ void RP_UpdateDynamicLightsUniforms( const FrontendToBackendShared *fsh,
 				break;
 			}
 
-			const auto *const light = fsh->dynamicLights + fsh->programLightIndices[i];
+			const auto *const light = fsh->dynamicLights + fsh->visibleProgramLightIndices[i];
 			assert( light->hasProgramLight && light->programRadius >= 1.0f );
 
 			VectorSubtract( light->origin, entOrigin, dlorigin );

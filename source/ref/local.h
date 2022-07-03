@@ -1435,14 +1435,13 @@ struct ParticleDrawSurface { uint16_t aggregateIndex; uint16_t particleIndex; };
 
 struct FrontendToBackendShared {
 	const Scene::DynamicLight *dynamicLights;
-	const uint16_t *programLightIndices;
 	const Scene::ParticlesAggregate *particleAggregates;
 	const Scene::ExternalCompoundMesh *compoundMeshes;
-	const int *coronaDrawSurfaces;
+	std::span<const uint16_t> visibleProgramLightIndices;
+	std::span<const uint16_t> allVisibleLightIndices;
 	vec3_t viewOrigin;
 	mat3_t viewAxis;
 	unsigned renderFlags;
-	unsigned numProgramLights;
 	float fovTangent;
 };
 

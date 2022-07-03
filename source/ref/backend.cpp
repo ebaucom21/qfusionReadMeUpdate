@@ -1532,6 +1532,31 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
 
+	bool applyLight                 = false;
+	unsigned numAffectingLights     = 0;
+	uint16_t *affectingLightIndices = nullptr;
+	if( appearanceRules->lit && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
+		const uint16_t *__restrict allLightIndices = fsh->allVisibleLightIndices.data();
+		const auto *__restrict dynamicLights       = fsh->dynamicLights;
+
+		const unsigned numAllLightIndices = fsh->allVisibleLightIndices.size();
+		affectingLightIndices             = (uint16_t *)alloca( sizeof( uint16_t ) * numAllLightIndices );
+
+		unsigned lightIndexNum = 0;
+		do {
+			const uint16_t lightIndex = allLightIndices[lightIndexNum];
+			const Scene::DynamicLight *light = dynamicLights + lightIndex;
+
+			// TODO: Use SIMD explicitly
+			const bool overlaps = BoundsIntersect( light->mins, light->maxs, aggregate->mins, aggregate->maxs );
+
+			affectingLightIndices[numAffectingLights] = lightIndex;
+			numAffectingLights += overlaps;
+		} while( ++lightIndexNum < numAllLightIndices );
+
+		applyLight = numAffectingLights > 0;
+	}
+
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *drawSurf = (const ParticleDrawSurface *)sds.drawSurf;
 
@@ -1637,7 +1662,6 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 		const float *const __restrict fadedOutColor = appearanceRules->fadedOutColors[particle->instanceColorIndex];
 
 		vec4_t colorBuffer;
-		const float *interpolatedColor = colorBuffer;
 		if( particle->lifetimeFrac < appearanceRules->fadeInLifetimeFrac ) [[unlikely]] {
 			// Fade in
 			const float fadeInFrac = particle->lifetimeFrac * Q_Rcp( appearanceRules->fadeInLifetimeFrac );
@@ -1651,15 +1675,34 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 				Vector4Lerp( fadedInColor, fadeOutFrac, fadedOutColor, colorBuffer );
 			} else {
 				// Use the color of the "faded-in" state
-				interpolatedColor = fadedInColor;
+				Vector4Copy( fadedInColor, colorBuffer );
 			}
 		}
 
+		if( applyLight ) {
+			alignas( 16 ) vec4_t addedLight { 0.0f, 0.0f, 0.0f, 1.0f };
+			unsigned lightNum = 0;
+			do {
+				const Scene::DynamicLight *light = fsh->dynamicLights + affectingLightIndices[lightNum];
+				const float squareDistance = DistanceSquared( light->origin, particle->origin );
+				// May go outside [0.0, 1.0] as we test against the bounding box of the entire aggregate
+				float impactStrength = 1.0f - Q_Sqrt( squareDistance ) * Q_Rcp( light->maxRadius );
+				// Just clamp so the code stays branchless
+				impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
+				VectorMA( addedLight, impactStrength, light->color, addedLight );
+			} while( ++lightNum < numAffectingLights );
+			// The clipping due to LDR limitations sucks...
+			// TODO: Pass as a floating-point attribute to a GPU program?
+			colorBuffer[0] = wsw::min( 1.0f, colorBuffer[0] + addedLight[0] );
+			colorBuffer[1] = wsw::min( 1.0f, colorBuffer[1] + addedLight[1] );
+			colorBuffer[2] = wsw::min( 1.0f, colorBuffer[2] + addedLight[2] );
+		}
+
 		Vector4Set( colors[0],
-					(uint8_t)( 255 * interpolatedColor[0] ),
-					(uint8_t)( 255 * interpolatedColor[1] ),
-					(uint8_t)( 255 * interpolatedColor[2] ),
-					(uint8_t)( 255 * interpolatedColor[3] ) );
+					(uint8_t)( 255 * colorBuffer[0] ),
+					(uint8_t)( 255 * colorBuffer[1] ),
+					(uint8_t)( 255 * colorBuffer[2] ),
+					(uint8_t)( 255 * colorBuffer[3] ) );
 
 		Vector4Copy( colors[0], colors[1] );
 		Vector4Copy( colors[0], colors[2] );

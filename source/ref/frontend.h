@@ -52,9 +52,11 @@ private:
 	static constexpr unsigned kMaxLightsInScene = 1024;
 	static constexpr unsigned kMaxProgramLightsInView = 32;
 
-	int m_coronaDrawSurfaces[kMaxLightsInScene];
 	unsigned m_numVisibleProgramLights { 0 };
-	uint16_t m_programLightIndices[kMaxProgramLightsInView];
+	unsigned m_numAllVisibleLights { 0 };
+	uint16_t m_visibleProgramLightIndices[kMaxProgramLightsInView];
+	uint16_t m_allVisibleLightIndices[kMaxLightsInScene];
+	uint16_t m_visibleCoronaLightIndices[kMaxLightsInScene];
 	struct { float mins[8], maxs[8]; } m_lightBoundingDops[kMaxProgramLightsInView];
 
 	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces {
@@ -166,7 +168,8 @@ private:
 	void collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto collectVisibleLights( Scene *scene, std::span<const Frustum> frusta ) -> std::span<const uint16_t>;
+	auto collectVisibleLights( Scene *scene, std::span<const Frustum> frusta )
+		-> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
 
 	[[nodiscard]]
 	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
@@ -207,9 +210,10 @@ private:
 	auto cullLights( std::span<const Scene::DynamicLight> lights,
 					 const Frustum *__restrict primaryFrustum,
 					 std::span<const Frustum> occluderFrusta,
+					 uint16_t *tmpAllLightIndices,
 					 uint16_t *tmpCoronaLightIndices,
 					 uint16_t *tmpProgramLightIndices )
-					 -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
+					 -> std::tuple<std::span<const uint16_t>, std::span<const uint16_t>, std::span<const uint16_t>>;
 
 	void collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta );
 

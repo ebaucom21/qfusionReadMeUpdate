@@ -243,6 +243,8 @@ struct alignas( 16 ) Particle {
 		uint16_t lightFrameAffinityIndex { 0 };
 		uint16_t lightFrameAffinityModulo { 0 };
 
+		bool lit { false };
+
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 
 		// Keep the lifetime frac zero if lifetime is not greater than this value.
@@ -306,7 +308,10 @@ public:
 		float origin[3];
 		float programRadius;
 		float coronaRadius;
+		float maxRadius;
 		float color[3];
+		float mins[4];
+		float maxs[4];
 		bool hasProgramLight;
 		bool hasCoronaLight;
 	};

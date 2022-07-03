@@ -834,23 +834,23 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 						   const Frustum *__restrict primaryFrustum,
 						   std::span<const Frustum> occluderFrusta,
+						   uint16_t *tmpAllLightIndices,
 						   uint16_t *tmpCoronaLightIndices,
 						   uint16_t *tmpProgramLightIndices )
-						   -> std::pair<std::span<const uint16_t>, std::span<const uint16_t>> {
+	-> std::tuple<std::span<const uint16_t>, std::span<const uint16_t>, std::span<const uint16_t>> {
+
 	const auto *const lights = lightsSpan.data();
 	const unsigned numLights = lightsSpan.size();
 
-	unsigned numPassedCoronaLights = 0;
+	unsigned numAllPassedLights     = 0;
+	unsigned numPassedCoronaLights  = 0;
 	unsigned numPassedProgramLights = 0;
+
 	for( unsigned i = 0; i < numLights; ++i ) {
-		const Scene::DynamicLight *const light = &lights[i];
-		const float *const __restrict origin = light->origin;
-		const float halfRadius = 0.5f * wsw::max( light->programRadius, light->coronaRadius );
-		const vec4_t mins { origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f };
-		const vec4_t maxs { origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f };
+		const Scene::DynamicLight *const __restrict light = &lights[i];
 
 		// TODO: Add frustum/sphere tests
-		LOAD_BOX_COMPONENTS( mins, maxs );
+		LOAD_BOX_COMPONENTS( light->mins, light->maxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
 		if( nonZeroIfFullyOutside == 0 ) {
 			bool occluded = false;
@@ -863,6 +863,8 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 				}
 			}
 			if( !occluded ) {
+				tmpAllLightIndices[numAllPassedLights] = i;
+				numAllPassedLights += 1;
 				tmpCoronaLightIndices[numPassedCoronaLights] = i;
 				numPassedCoronaLights += light->hasCoronaLight;
 				tmpProgramLightIndices[numPassedProgramLights] = i;
@@ -871,7 +873,9 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 		}
 	}
 
-	return { { tmpCoronaLightIndices, numPassedCoronaLights }, { tmpProgramLightIndices, numPassedProgramLights } };
+	return { { tmpAllLightIndices,     numAllPassedLights },
+			 { tmpCoronaLightIndices,  numPassedCoronaLights },
+			 { tmpProgramLightIndices, numPassedProgramLights } };
 }
 
 auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate> aggregatesSpan,
