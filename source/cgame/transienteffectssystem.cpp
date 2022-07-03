@@ -314,6 +314,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
+			hull->applyVertexDynLight      = true;
 
 			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 85.0f, 10.0f );
 		}
@@ -333,6 +334,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->lodCurrLevelTangentRatio = 0.10f;
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
+			hull->applyVertexDynLight      = true;
 
 			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 100.0f, 12.5f );
 		}

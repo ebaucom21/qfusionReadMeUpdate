@@ -1026,7 +1026,7 @@ public:
 	unsigned m_lastAllocationSize { 0 };
 
 	template <bool SmoothColors>
-	void exec( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+	void exec( const ExternalMesh *mesh, const byte_vec4_t *overrideColors, unsigned numSimulatedVertices,
 			   unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
 private:
 	static constexpr unsigned kAlignment = 16;
@@ -1034,8 +1034,8 @@ private:
 	void setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices );
 
 	template <bool SmoothColors>
-	void runPassOverOriginalVertices( const ExternalMesh *mesh, unsigned numSimulatedVertices,
-									  const uint16_t nextLevelNeighbours[][5] );
+	void runPassOverOriginalVertices( const ExternalMesh *mesh, const byte_vec4_t *overrideColors,
+									  unsigned numSimulatedVertices, const uint16_t nextLevelNeighbours[][5] );
 	template <bool SmoothColors>
 	[[nodiscard]]
 	auto collectNeighbourLessVertices( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) -> unsigned;
@@ -1046,11 +1046,12 @@ private:
 };
 
 template <bool SmoothColors>
-void MeshTesselationHelper::exec( const ExternalMesh *mesh, unsigned numSimulatedVertices,
-								  unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] ) {
+void MeshTesselationHelper::exec( const ExternalMesh *mesh, const byte_vec4_t *overrideColors,
+								  unsigned numSimulatedVertices, unsigned numNextLevelVertices,
+								  const uint16_t nextLevelNeighbours[][5] ) {
 	setupBuffers( numSimulatedVertices, numNextLevelVertices );
 
-	runPassOverOriginalVertices<SmoothColors>( mesh, numSimulatedVertices, nextLevelNeighbours );
+	runPassOverOriginalVertices<SmoothColors>( mesh, overrideColors, numSimulatedVertices, nextLevelNeighbours );
 	unsigned numNeighbourLessVertices = collectNeighbourLessVertices<SmoothColors>( numSimulatedVertices, numNextLevelVertices );
 	processNeighbourLessVertices<SmoothColors>( numNeighbourLessVertices, nextLevelNeighbours );
 	runSmoothVerticesPass<SmoothColors>( numNextLevelVertices, nextLevelNeighbours );
@@ -1099,16 +1100,19 @@ void MeshTesselationHelper::setupBuffers( unsigned numSimulatedVertices, unsigne
 }
 
 template <bool SmoothColors>
-void MeshTesselationHelper::runPassOverOriginalVertices( const ExternalMesh *mesh, unsigned numSimulatedVertices,
+void MeshTesselationHelper::runPassOverOriginalVertices( const ExternalMesh *mesh,
+														 const byte_vec4_t *overrideColors,
+														 unsigned numSimulatedVertices,
 														 const uint16_t nextLevelNeighbours[][5] ) {
 	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
 	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	const byte_vec4_t *const __restrict colors   = overrideColors ? overrideColors : mesh->colors;
 	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
 	int8_t *const __restrict tessNeighboursCount = m_tessNeighboursCount;
 
 	// For each vertex in the original mesh
 	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
-		const auto byteColor  = mesh->colors[vertexIndex];
+		const auto byteColor  = colors[vertexIndex];
 		const float *position = mesh->positions[vertexIndex];
 
 		if constexpr( SmoothColors ) {
@@ -1257,6 +1261,31 @@ void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices
 
 static MeshTesselationHelper meshTesselationHelper;
 
+[[nodiscard]]
+static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
+										const float *mins, const float *maxs,
+										uint16_t *affectingLightIndices ) -> unsigned {
+	assert( mins[3] == 0.0f && maxs[3] == 1.0f );
+
+	const uint16_t *lightIndices = lightIndicesSpan.data();
+	const auto numLights         = (unsigned)lightIndicesSpan.size();
+
+	unsigned lightIndexNum = 0;
+	unsigned numAffectingLights = 0;
+	do {
+		const uint16_t lightIndex = lightIndices[lightIndexNum];
+		const Scene::DynamicLight *light = lights + lightIndex;
+
+		// TODO: Use SIMD explicitly without these redundant loads/shuffles
+		const bool overlaps = BoundsIntersect( light->mins, light->maxs, mins, maxs );
+
+		affectingLightIndices[numAffectingLights] = lightIndex;
+		numAffectingLights += overlaps;
+	} while( ++lightIndexNum < numLights );
+
+	return numAffectingLights;
+}
+
 void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const ExternalMesh *externalMesh ) {
 	// Checking it this late is not a very nice things but otherwise
 	// the API gets way too complicated due to some technical details.
@@ -1291,6 +1320,55 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 	mesh_t mesh;
 	memset( &mesh, 0, sizeof( mesh ) );
 
+	byte_vec4_t *overrideColors = nullptr;
+	if( externalMesh->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
+		auto *const __restrict affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) *
+															fsh->allVisibleLightIndices.size() );
+
+		const unsigned numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights, fsh->allVisibleLightIndices,
+																		externalMesh->mins, externalMesh->maxs,
+																		affectingLightIndices );
+		if( numAffectingLights > 0 ) {
+			unsigned numVertices;
+			// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
+			if( chosenLod->neighbours ) {
+				assert( chosenLodIndex + 1 < externalMesh->numLods );
+				numVertices = externalMesh->lods[chosenLodIndex + 1].numVertices;
+			} else {
+				numVertices = chosenLod->numVertices;
+			}
+
+			overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+
+			assert( numVertices );
+			unsigned vertexIndex = 0;
+			do {
+				const float *__restrict vertexOrigin  = externalMesh->positions[vertexIndex];
+				auto *const __restrict givenColor     = externalMesh->colors[vertexIndex];
+				auto *const __restrict resultingColor = overrideColors[vertexIndex];
+
+				alignas( 16 ) vec4_t accumColor;
+				VectorScale( givenColor, ( 1.0f / 255.0f ), accumColor );
+
+				unsigned lightNum = 0;
+				do {
+					const Scene::DynamicLight *light = fsh->dynamicLights + affectingLightIndices[lightNum];
+					const float squareLightToVertexDistance = DistanceSquared( light->origin, vertexOrigin );
+					// May go outside [0.0, 1.0] as we test against the bounding box of the entire hull
+					float impactStrength = 1.0f - Q_Sqrt( squareLightToVertexDistance ) * Q_Rcp( light->maxRadius );
+					// Just clamp so the code stays branchless
+					impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
+					VectorMA( accumColor, impactStrength, light->color, accumColor );
+				} while( ++lightNum < numAffectingLights );
+
+				resultingColor[0] = (uint8_t)( 255.0f * wsw::clamp( accumColor[0], 0.0f, 1.0f ) );
+				resultingColor[1] = (uint8_t)( 255.0f * wsw::clamp( accumColor[1], 0.0f, 1.0f ) );
+				resultingColor[2] = (uint8_t)( 255.0f * wsw::clamp( accumColor[2], 0.0f, 1.0f ) );
+				resultingColor[3] = givenColor[3];
+			} while( ++vertexIndex < numVertices );
+		}
+	}
+
 	// HACK Perform an additional tesselation of some hulls.
 	// CPU-side tesselation is the single option in the current codebase state.
 	// Non-null specified neighbours indicate requested tesselation.
@@ -1304,9 +1382,11 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		const unsigned numNextLevelVertices = chosenLod->numVertices;
 		MeshTesselationHelper *const tesselationHelper = &::meshTesselationHelper;
 		if( chosenLod->lerpNextLevelColors ) {
-			tesselationHelper->exec<true>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+			tesselationHelper->exec<true>( externalMesh, overrideColors,
+										   numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
 		} else {
-			tesselationHelper->exec<false>( externalMesh, numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+			tesselationHelper->exec<false>( externalMesh, overrideColors,
+											numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
 		}
 		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
 		mesh.numElems       = chosenLod->numIndices;
@@ -1535,25 +1615,11 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 	bool applyLight                 = false;
 	unsigned numAffectingLights     = 0;
 	uint16_t *affectingLightIndices = nullptr;
-	if( appearanceRules->lit && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
-		const uint16_t *__restrict allLightIndices = fsh->allVisibleLightIndices.data();
-		const auto *__restrict dynamicLights       = fsh->dynamicLights;
+	if( appearanceRules->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
+		affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) * fsh->allVisibleLightIndices.size() );
 
-		const unsigned numAllLightIndices = fsh->allVisibleLightIndices.size();
-		affectingLightIndices             = (uint16_t *)alloca( sizeof( uint16_t ) * numAllLightIndices );
-
-		unsigned lightIndexNum = 0;
-		do {
-			const uint16_t lightIndex = allLightIndices[lightIndexNum];
-			const Scene::DynamicLight *light = dynamicLights + lightIndex;
-
-			// TODO: Use SIMD explicitly
-			const bool overlaps = BoundsIntersect( light->mins, light->maxs, aggregate->mins, aggregate->maxs );
-
-			affectingLightIndices[numAffectingLights] = lightIndex;
-			numAffectingLights += overlaps;
-		} while( ++lightIndexNum < numAllLightIndices );
-
+		numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights, fsh->allVisibleLightIndices,
+														 aggregate->mins, aggregate->maxs, affectingLightIndices );
 		applyLight = numAffectingLights > 0;
 	}
 

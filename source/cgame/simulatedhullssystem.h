@@ -90,6 +90,7 @@ private:
 		float lodCurrLevelTangentRatio { 0.25f };
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
+		bool applyVertexDynLight { false };
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
@@ -152,6 +153,7 @@ private:
 		unsigned lifetime { 0 };
 
 		uint8_t subdivLevel { 0 };
+		bool applyVertexDynLight { false };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};

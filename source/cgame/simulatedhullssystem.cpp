@@ -564,11 +564,12 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		Vector4Copy( hull->mins, mesh->mins );
 		Vector4Copy( hull->maxs, mesh->maxs );
 
-		mesh->positions        = hull->vertexPositions[hull->positionsFrame];
-		mesh->colors           = hull->vertexColors;
-		mesh->material         = nullptr;
-		mesh->useDrawOnTopHack = false;
-		mesh->numLods          = setupLods( mesh->lods, LodSetupParams {
+		mesh->positions            = hull->vertexPositions[hull->positionsFrame];
+		mesh->colors               = hull->vertexColors;
+		mesh->material             = nullptr;
+		mesh->useDrawOnTopHack     = false;
+		mesh->applyVertexDynLight  = hull->applyVertexDynLight;
+		mesh->numLods              = setupLods( mesh->lods, LodSetupParams {
 			.currSubdivLevel       = hull->subdivLevel,
 			.minSubdivLevel        = hull->subdivLevel - 1u,
 			.currLevelTangentRatio = hull->lodCurrLevelTangentRatio,
@@ -601,11 +602,12 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			Vector4Copy( layer->mins, mesh->mins );
 			Vector4Copy( layer->maxs, mesh->maxs );
 
-			mesh->positions        = layer->vertexPositions;
-			mesh->colors           = layer->vertexColors;
-			mesh->material         = nullptr;
-			mesh->numLods          = numLods;
-			mesh->useDrawOnTopHack = layer->useDrawOnTopHack;
+			mesh->positions           = layer->vertexPositions;
+			mesh->colors              = layer->vertexColors;
+			mesh->material            = nullptr;
+			mesh->numLods             = numLods;
+			mesh->applyVertexDynLight = hull->applyVertexDynLight;
+			mesh->useDrawOnTopHack    = layer->useDrawOnTopHack;
 			assert( numLods <= ExternalMesh::kMaxLods );
 			std::copy( lods, lods + numLods, mesh->lods );
 		}

@@ -243,7 +243,7 @@ struct alignas( 16 ) Particle {
 		uint16_t lightFrameAffinityIndex { 0 };
 		uint16_t lightFrameAffinityModulo { 0 };
 
-		bool lit { false };
+		bool applyVertexDynLight { false };
 
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 
@@ -297,6 +297,7 @@ struct ExternalMesh {
 	LodProps lods[kMaxLods];
 	unsigned numLods;
 	bool useDrawOnTopHack;
+	bool applyVertexDynLight;
 };
 
 namespace wsw::ref { class Frontend; }
