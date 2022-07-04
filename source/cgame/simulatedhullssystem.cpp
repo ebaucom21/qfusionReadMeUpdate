@@ -125,9 +125,131 @@ private:
 		return index;
 	}
 
+	static constexpr unsigned kNumVertexNeighbours = 5;
+	static constexpr unsigned kNumFaceNeighbours = 5;
+
+	struct NeighbourFaces { uint16_t data[kNumVertexNeighbours]; };
+
+	// Returns the number of vertices that got their neighbour faces list completed during this call
+	[[nodiscard]]
+	auto addFaceToNeighbours( uint16_t faceNum, NeighbourFaces *neighbourFaces,
+							  uint8_t *knownNeighboursCounts ) -> unsigned {
+		unsigned result = 0;
+
+		for( unsigned i = 0; i < 3; ++i ) {
+			const uint16_t vertexNum      = m_faces[faceNum].data[i];
+			uint8_t *const countForVertex = &knownNeighboursCounts[vertexNum];
+			assert( *countForVertex <= kNumFaceNeighbours );
+			if( *countForVertex < kNumFaceNeighbours ) {
+				uint16_t *const indicesBegin = neighbourFaces[vertexNum].data;
+				uint16_t *const indicesEnd   = indicesBegin + *countForVertex;
+				// TODO: Is this search really needed?
+				if( std::find( indicesBegin, indicesEnd, faceNum ) == indicesEnd ) {
+					( *countForVertex )++;
+					*indicesEnd = (uint16_t)faceNum;
+					// The neighbours list becomes complete
+					if( *countForVertex == kNumFaceNeighbours ) {
+						result++;
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+
+	[[nodiscard]]
+	auto findFaceWithVertex( const NeighbourFaces *neighbourFaces, unsigned vertexNum, unsigned pickedFacesMask )
+		-> std::optional<std::pair<unsigned, unsigned>> {
+
+		// Assume that face #0 is always picked
+		for( unsigned faceIndex = 1; faceIndex < kNumFaceNeighbours; ++faceIndex ) {
+			if( !( pickedFacesMask & ( 1u << faceIndex ) ) ) {
+				const Face &face = m_faces[neighbourFaces->data[faceIndex]];
+				for( unsigned indexInFace = 0; indexInFace < 3; ++indexInFace ) {
+					if( face.data[indexInFace] == vertexNum ) {
+						return std::pair<unsigned, unsigned> { faceIndex, indexInFace };
+					}
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	void buildNeighboursForVertexUsingNeighbourFaces( unsigned vertexNum, Neighbours *neighbourVertices,
+													  const NeighbourFaces *neighbourFaces ) {
+		wsw::StaticVector<uint16_t, kNumVertexNeighbours> vertexNums;
+
+		// Pick the first face unconditionally
+		const Face &firstFace    = m_faces[neighbourFaces->data[0]];
+		unsigned pickedFacesMask = 0x1;
+
+		// Add 2 vertices of the first face
+		for( unsigned i = 0; i < 3; ++i ) {
+			if( firstFace.data[i] == vertexNum ) {
+				vertexNums.push_back( firstFace.data[( i + 1 ) % 3] );
+				vertexNums.push_back( firstFace.data[( i + 2 ) % 3] );
+				break;
+			}
+		}
+
+		assert( vertexNums.size() == 2 );
+		while( !vertexNums.full() ) {
+			bool prepend = false;
+			// Try finding a face that contacts with the last added face forming a triangle fan
+			auto maybeIndices = findFaceWithVertex( neighbourFaces, vertexNums.back(), pickedFacesMask );
+			if( !maybeIndices ) {
+				// Find a face that contacts with the first added face forming a triangle fan
+				maybeIndices = findFaceWithVertex( neighbourFaces, vertexNums.front(), pickedFacesMask );
+				prepend = true;
+			}
+
+			const auto [faceIndex, indexInFace] = maybeIndices.value();
+			const Face &face = m_faces[neighbourFaces->data[faceIndex]];
+			const unsigned otherIndex1 = ( indexInFace + 1 ) % 3;
+			const unsigned otherIndex2 = ( indexInFace + 2 ) % 3;
+
+			// Make sure the face contains the original vertex.
+			assert( face.data[otherIndex1] == vertexNum || face.data[otherIndex2] == vertexNum );
+
+			// Add the remaining one to the neighbour vertices list.
+			unsigned indexOfVertexToAdd = otherIndex1;
+			if( face.data[otherIndex1] == vertexNum ) {
+				indexOfVertexToAdd = otherIndex2;
+			}
+
+			const uint16_t vertexNumToAdd = face.data[indexOfVertexToAdd];
+			if( prepend ) {
+				vertexNums.insert( vertexNums.begin(), vertexNumToAdd );
+			} else {
+				vertexNums.push_back( vertexNumToAdd );
+			}
+
+			pickedFacesMask |= ( 1u << faceIndex );
+		}
+
+		// Now check the normal direction with regard to direction to vertex
+
+		const float *const v1 = m_vertices[vertexNum].data;
+		const float *const v2 = m_vertices[vertexNums[0]].data;
+		const float *const v3 = m_vertices[vertexNums[1]].data;
+
+		vec3_t v1To2, v1To3, cross;
+		VectorSubtract( v2, v1, v1To2 );
+		VectorSubtract( v3, v1, v1To3 );
+		CrossProduct( v1To2, v1To3, cross );
+		// The vertex is a direction from (0, 0, 0) to itself
+		if( DotProduct( v1, cross ) < 0 ) {
+			std::reverse( vertexNums.begin(), vertexNums.end() );
+		}
+
+		std::copy( vertexNums.begin(), vertexNums.end(), neighbourVertices->data );
+	}
+
 	void buildNeighbours( wsw::StaticVector<Entry, kMaxSubdivLevel + 1> &icosphereEntries ) {
-		constexpr uint8_t kNumVertexNeighbours = 5;
-		alignas( 16 )uint8_t knownNeighboursCount[3072];
+		NeighbourFaces neighbourFacesForVertex[3072];
+		uint8_t knownNeighbourFacesCounts[3072];
 
 		// Note that neighbours of the same vertex differ for different subdivision level
 		// so we have to recompute all neighbours for each entry (each subdivision level).
@@ -135,53 +257,37 @@ private:
 			entry.firstNeighboursElement = m_neighbours.size();
 			m_neighbours.resize( m_neighbours.size() + entry.numVertices );
 
-			Neighbours *const indicesOfNeighboursForVertex = m_neighbours.data() + entry.firstNeighboursElement;
+			Neighbours *const neighbourVerticesForVertex = m_neighbours.data() + entry.firstNeighboursElement;
+
 			// Fill by ~0 to spot non-feasible indices fast
-			std::memset( indicesOfNeighboursForVertex, 255, entry.numVertices * sizeof( Neighbours ) );
+			std::memset( neighbourVerticesForVertex, 255, entry.numVertices * sizeof( Neighbours ) );
+			std::memset( neighbourFacesForVertex, 255, entry.numVertices * sizeof( NeighbourFaces ) );
 
-			assert( entry.numVertices < std::size( knownNeighboursCount ) );
-			std::memset( knownNeighboursCount, 0, entry.numVertices );
+			assert( entry.numVertices < std::size( knownNeighbourFacesCounts ) );
+			std::memset( knownNeighbourFacesCounts, 0, sizeof( uint8_t ) * entry.numVertices );
 
-			unsigned numVerticesWithCompleteNeighbours = 0;
 			const unsigned faceOffset = entry.firstIndex / 3;
 			const unsigned facesCount = entry.numIndices / 3;
+
+			// Build lists of neighbour face indices for every vertex
+
+			unsigned numVerticesWithCompleteNeighbourFaces = 0;
 			for( unsigned faceIndex = faceOffset; faceIndex < faceOffset + facesCount; ++faceIndex ) {
-				const Face &face = m_faces[faceIndex];
-				bool isDoneWithThisEntry = false;
-				for( unsigned i = 0; i < 3; ++i ) {
-					const auto indexOfVertex = face.data[i];
-					assert( indexOfVertex < entry.numVertices );
-					assert( knownNeighboursCount[indexOfVertex] <= kNumVertexNeighbours );
-					// If neighbours are not complete yet
-					if( knownNeighboursCount[indexOfVertex] != kNumVertexNeighbours ) {
-						uint16_t *const indicesOfVertex = indicesOfNeighboursForVertex[indexOfVertex].data;
-						// For each other vertex try adding it to neighbours
-						for( unsigned j = 0; j < 3; ++j ) {
-							if( i != j ) {
-								const auto otherIndex = face.data[j];
-								assert( otherIndex != indexOfVertex );
-								uint16_t *indicesEnd = indicesOfVertex + knownNeighboursCount[indexOfVertex];
-								if( std::find( indicesOfVertex, indicesEnd, otherIndex ) == indicesEnd ) {
-									knownNeighboursCount[indexOfVertex]++;
-									*indicesEnd = otherIndex;
-								}
-							}
-						}
-						assert( knownNeighboursCount[indexOfVertex] <= kNumVertexNeighbours );
-						// If neighbours become complete for this entry
-						if( knownNeighboursCount[indexOfVertex] == kNumVertexNeighbours ) {
-							numVerticesWithCompleteNeighbours++;
-							if( numVerticesWithCompleteNeighbours == entry.numVertices ) {
-								isDoneWithThisEntry = true;
-								break;
-							}
-						}
-					}
-				}
-				// Would like to use labeled-breaks if they were a thing
-				if( isDoneWithThisEntry ) {
+				numVerticesWithCompleteNeighbourFaces += addFaceToNeighbours( faceIndex,
+																			  neighbourFacesForVertex,
+																			  knownNeighbourFacesCounts );
+				if( numVerticesWithCompleteNeighbourFaces == entry.numVertices ) {
 					break;
 				}
+			}
+
+			// Build lists of neighbour vertex indices for every vertex
+			for( unsigned vertexIndex = 0; vertexIndex < entry.numVertices; ++vertexIndex ) {
+				assert( knownNeighbourFacesCounts[vertexIndex] == kNumFaceNeighbours );
+
+				buildNeighboursForVertexUsingNeighbourFaces( vertexIndex,
+															 &neighbourVerticesForVertex[vertexIndex],
+															 &neighbourFacesForVertex[vertexIndex] );
 			}
 		}
 
