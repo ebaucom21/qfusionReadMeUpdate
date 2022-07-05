@@ -603,7 +603,8 @@ auto SimulatedHullsSystem::setupLods( ExternalMesh::LodProps *lods, LodSetupPara
 			.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
 			.numIndices                  = (uint16_t)dynTessData.indices.size(),
 			.numVertices                 = (uint16_t)dynTessData.vertices.size(),
-			.lerpNextLevelColors         = params.lerpNextLevelColors
+			.lerpNextLevelColors         = params.lerpNextLevelColors,
+			.tesselate                   = true,
 		};
 	}
 
@@ -612,6 +613,7 @@ auto SimulatedHullsSystem::setupLods( ExternalMesh::LodProps *lods, LodSetupPara
 		const IcosphereData &levelData = icospheresForLevels[level];
 		lods[numLods++] = {
 			.indices                     = levelData.indices.data(),
+			.neighbours                  = levelData.vertexNeighbours.data(),
 			.maxRatioOfViewTangentsToUse = lodTangentsRatio,
 			.numIndices                  = (uint16_t)levelData.indices.size(),
 			.numVertices                 = (uint16_t)levelData.vertices.size(),
@@ -670,12 +672,13 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		Vector4Copy( hull->mins, mesh->mins );
 		Vector4Copy( hull->maxs, mesh->maxs );
 
-		mesh->positions            = hull->vertexPositions[hull->positionsFrame];
-		mesh->colors               = hull->vertexColors;
-		mesh->material             = nullptr;
-		mesh->useDrawOnTopHack     = false;
-		mesh->applyVertexDynLight  = hull->applyVertexDynLight;
-		mesh->numLods              = setupLods( mesh->lods, LodSetupParams {
+		mesh->positions              = hull->vertexPositions[hull->positionsFrame];
+		mesh->colors                 = hull->vertexColors;
+		mesh->material               = nullptr;
+		mesh->useDrawOnTopHack       = false;
+		mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+		mesh->applyVertexViewDotFade = hull->applyVertexViewDotFade;
+		mesh->numLods  = setupLods( mesh->lods, LodSetupParams {
 			.currSubdivLevel       = hull->subdivLevel,
 			.minSubdivLevel        = hull->subdivLevel - 1u,
 			.currLevelTangentRatio = hull->lodCurrLevelTangentRatio,
@@ -708,12 +711,13 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			Vector4Copy( layer->mins, mesh->mins );
 			Vector4Copy( layer->maxs, mesh->maxs );
 
-			mesh->positions           = layer->vertexPositions;
-			mesh->colors              = layer->vertexColors;
-			mesh->material            = nullptr;
-			mesh->numLods             = numLods;
-			mesh->applyVertexDynLight = hull->applyVertexDynLight;
-			mesh->useDrawOnTopHack    = layer->useDrawOnTopHack;
+			mesh->positions              = layer->vertexPositions;
+			mesh->colors                 = layer->vertexColors;
+			mesh->material               = nullptr;
+			mesh->numLods                = numLods;
+			mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+			mesh->applyVertexViewDotFade = hull->applyVertexViewDotFade;
+			mesh->useDrawOnTopHack       = layer->useDrawOnTopHack;
 			assert( numLods <= ExternalMesh::kMaxLods );
 			std::copy( lods, lods + numLods, mesh->lods );
 		}

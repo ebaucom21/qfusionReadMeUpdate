@@ -292,12 +292,14 @@ struct ExternalMesh {
 		uint16_t numIndices;
 		uint16_t numVertices;
 		bool lerpNextLevelColors { false };
+		bool tesselate { false };
 	};
 	static constexpr unsigned kMaxLods = 5;
 	LodProps lods[kMaxLods];
 	unsigned numLods;
 	bool useDrawOnTopHack;
 	bool applyVertexDynLight;
+	bool applyVertexViewDotFade;
 };
 
 namespace wsw::ref { class Frontend; }

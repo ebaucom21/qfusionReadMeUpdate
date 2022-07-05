@@ -213,11 +213,11 @@ struct FireHullLayerParamsHolder {
 static const FireHullLayerParamsHolder kFireHullParams;
 
 static const byte_vec4_t kSmokeFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.075f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.075f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.075f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.075f ),
-	asByteColor( 0.80f, 0.80f, 0.80f, 0.075f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.10f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.10f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.10f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.10f ),
+	asByteColor( 0.80f, 0.80f, 0.80f, 0.10f ),
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[4] {
@@ -315,6 +315,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 			hull->applyVertexDynLight      = true;
+			hull->applyVertexViewDotFade   = true;
 
 			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 85.0f, 10.0f );
 		}
@@ -335,6 +336,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->tesselateClosestLod      = true;
 			hull->leprNextLevelColors      = true;
 			hull->applyVertexDynLight      = true;
+			hull->applyVertexViewDotFade   = true;
 
 			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 100.0f, 12.5f );
 		}

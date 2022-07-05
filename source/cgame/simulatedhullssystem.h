@@ -91,6 +91,7 @@ private:
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
+		bool applyVertexViewDotFade { false };
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
@@ -154,6 +155,7 @@ private:
 
 		uint8_t subdivLevel { 0 };
 		bool applyVertexDynLight { false };
+		bool applyVertexViewDotFade { false };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};

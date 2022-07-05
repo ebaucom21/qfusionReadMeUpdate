@@ -1321,6 +1321,77 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 	memset( &mesh, 0, sizeof( mesh ) );
 
 	byte_vec4_t *overrideColors = nullptr;
+
+	if( externalMesh->applyVertexViewDotFade && chosenLod->neighbours ) {
+		using Neighbours = const uint16_t (*)[5];
+		Neighbours neighboursOfVertices;
+		unsigned numVertices;
+
+		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
+		if( chosenLod->tesselate ) {
+			assert( chosenLodIndex + 1 < externalMesh->numLods );
+			const ExternalMesh::LodProps &nonTessLod = externalMesh->lods[chosenLodIndex + 1];
+			neighboursOfVertices = (Neighbours)nonTessLod.neighbours;
+			numVertices          = nonTessLod.numVertices;
+		} else {
+			neighboursOfVertices = (Neighbours)chosenLod->neighbours;
+			numVertices = chosenLod->numVertices;
+		}
+
+		const vec4_t *const positions          = externalMesh->positions;
+		const byte_vec4_t *const givenColors   = externalMesh->colors;
+		const float *__restrict viewOrigin     = fsh->viewOrigin;
+
+		overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+
+		unsigned vertexNum = 0;
+		do {
+			const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
+			const float *const __restrict vertexOrigin = positions[vertexNum];
+			vec3_t accumDir { 0.0f, 0.0f, 0.0f };
+			unsigned neighbourIndex = 0;
+			bool hasAddedDirs = false;
+			do {
+				const float *__restrict v1 = positions[vertexNum];
+				const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
+				const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
+				vec3_t v1To2, v1To3, cross;
+				VectorSubtract( v2, v1, v1To2 );
+				VectorSubtract( v3, v1, v1To3 );
+				CrossProduct( v1To2, v1To3, cross );
+				if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
+					const float rcpLength = Q_RSqrt( squaredLength );
+					VectorMA( accumDir, rcpLength, cross, accumDir );
+					hasAddedDirs = true;
+				}
+			} while( ++neighbourIndex < 5 );
+
+			VectorCopy( givenColors[vertexNum], overrideColors[vertexNum] );
+			if( hasAddedDirs ) [[likely]] {
+				vec3_t viewDir;
+				VectorSubtract( vertexOrigin, viewOrigin, viewDir );
+				const float squareDistanceToVertex = VectorLengthSquared( viewDir );
+				if( squareDistanceToVertex > 1.0f ) [[likely]] {
+					vec3_t normal;
+					VectorCopy( accumDir, normal );
+					VectorNormalizeFast( normal );
+					assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.1f );
+					const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+					VectorScale( viewDir, rcpDistance, viewDir );
+					assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.1f );
+					const float frac = std::fabs( DotProduct( viewDir, normal ) );
+					const uint8_t givenByteAlpha = givenColors[vertexNum][3];
+					const float modifiedAlpha = frac * (float)givenByteAlpha;
+					overrideColors[vertexNum][3] = (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
+				} else {
+					overrideColors[vertexNum][3] = 0;
+				}
+			} else {
+				overrideColors[vertexNum][3] = 0;
+			}
+		} while( ++vertexNum < numVertices );
+	}
+
 	if( externalMesh->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
 		auto *const __restrict affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) *
 															fsh->allVisibleLightIndices.size() );
@@ -1331,14 +1402,20 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		if( numAffectingLights > 0 ) {
 			unsigned numVertices;
 			// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
-			if( chosenLod->neighbours ) {
+			if( chosenLod->tesselate ) {
 				assert( chosenLodIndex + 1 < externalMesh->numLods );
 				numVertices = externalMesh->lods[chosenLodIndex + 1].numVertices;
 			} else {
 				numVertices = chosenLod->numVertices;
 			}
 
-			overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+			const byte_vec4_t *alphaSourceColors;
+			if( overrideColors ) {
+				alphaSourceColors = overrideColors;
+			} else {
+				overrideColors    = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+				alphaSourceColors = externalMesh->colors;
+			}
 
 			assert( numVertices );
 			unsigned vertexIndex = 0;
@@ -1364,15 +1441,14 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 				resultingColor[0] = (uint8_t)( 255.0f * wsw::clamp( accumColor[0], 0.0f, 1.0f ) );
 				resultingColor[1] = (uint8_t)( 255.0f * wsw::clamp( accumColor[1], 0.0f, 1.0f ) );
 				resultingColor[2] = (uint8_t)( 255.0f * wsw::clamp( accumColor[2], 0.0f, 1.0f ) );
-				resultingColor[3] = givenColor[3];
+				resultingColor[3] = alphaSourceColors[vertexIndex][3];
 			} while( ++vertexIndex < numVertices );
 		}
 	}
 
 	// HACK Perform an additional tesselation of some hulls.
 	// CPU-side tesselation is the single option in the current codebase state.
-	// Non-null specified neighbours indicate requested tesselation.
-	if( chosenLod->neighbours ) {
+	if( chosenLod->tesselate ) {
 		auto *nextLevelNeighbours = (const uint16_t (*)[5])chosenLod->neighbours;
 		assert( chosenLodIndex + 1 < externalMesh->numLods );
 		const auto &nonTessLod = externalMesh->lods[chosenLodIndex + 1];
@@ -1399,7 +1475,7 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		mesh.numVerts       = chosenLod->numVertices;
 		// Vertices are shared for all lods (except dynamically tesselated ones)
 		mesh.xyzArray       = const_cast<vec4_t *>( externalMesh->positions );
-		mesh.colorsArray[0] = const_cast<byte_vec4_t *>( externalMesh->colors );
+		mesh.colorsArray[0] = overrideColors ? overrideColors : const_cast<byte_vec4_t *>( externalMesh->colors );
 	}
 
 	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
