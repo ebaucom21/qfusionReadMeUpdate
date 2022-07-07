@@ -110,37 +110,37 @@ public:
 	BotWeaponSelector( Bot *bot_, unsigned weaponChoicePeriod_ )
 		: bot( bot_ ), weaponChoicePeriod( weaponChoicePeriod_ ) {}
 
-	void Frame( const WorldState &cachedWorldState );
-	void Think( const WorldState &cachedWorldState );
+	void Frame();
+	void Think();
 
 private:
 	[[nodiscard]]
-	bool checkFastWeaponSwitchAction( const WorldState &worldState );
+	bool checkFastWeaponSwitchAction();
 
 	[[nodiscard]]
 	bool hasWeakOrStrong( int weapon ) const;
 
-	void selectWeapon( const WorldState &worldState );
+	void selectWeapon();
 
 	[[nodiscard]]
-	auto suggestSniperRangeWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestSniperRangeWeapon( float distanceToEnemy ) -> std::optional<int>;
 	[[nodiscard]]
-	auto suggestFarRangeWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestFarRangeWeapon( float distanceToEnemy ) -> std::optional<int>;
 	[[nodiscard]]
-	auto suggestMiddleRangeWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestMiddleRangeWeapon( float distanceToEnemy ) -> std::optional<int>;
 	[[nodiscard]]
-	auto suggestCloseRangeWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestCloseRangeWeapon( float distanceToEnemy ) -> std::optional<int>;
 
 	[[nodiscard]]
-	auto suggestFarOrSniperStaticCombatWeapon( const WorldState &ws, bool hasEB, bool hasMG ) -> std::optional<int>;
+	auto suggestFarOrSniperPositionalCombatWeapon( bool hasEB, bool hasMG ) -> std::optional<int>;
 
 	[[nodiscard]]
-	auto suggestInstagibWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestInstagibWeapon( float distanceToEnemy ) -> std::optional<int>;
 	[[nodiscard]]
-	auto suggestFinishWeapon( const WorldState &worldState ) -> std::optional<int>;
+	auto suggestFinishWeapon() -> std::optional<int>;
 
 	[[nodiscard]]
-	auto suggestScriptWeapon( const WorldState &worldState ) -> std::optional<std::pair<int, int>>;
+	auto suggestScriptWeapon( float distanceToEnemy ) -> std::optional<std::pair<int, int>>;
 
 	void setSelectedWeapons( const WeaponsToSelect &weaponsToSelect, unsigned timeoutPeriod );
 };

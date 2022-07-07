@@ -6,10 +6,6 @@ PlannerNode *KillEnemyAction::TryApply( const WorldState &worldState ) {
 		Debug( "Enemy is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.HealthVar().Ignore() || worldState.ArmorVar().Ignore() ) {
-		Debug( "Health or armor are ignored in the given world state\n" );
-		return nullptr;
-	}
 	if( worldState.HasPositionalAdvantageVar().Ignore() ) {
 		Debug( "Has bot positional advantage is ignored in the given world state\n" );
 		return nullptr;

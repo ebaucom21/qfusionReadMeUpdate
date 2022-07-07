@@ -18,6 +18,8 @@ public:
 protected:
 	BotPlanningModule *const module;
 
+	float DamageToBeKilled() const;
+
 	PlannerNode *ApplyExtraActions( PlannerNode *firstTransition, const WorldState &worldState );
 
 	Bot *Self() { return (Bot *)self; }

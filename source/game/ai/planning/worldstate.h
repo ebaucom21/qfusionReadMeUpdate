@@ -609,15 +609,9 @@ public:
 	DECLARE_UNSIGNED_VAR( GoalItemWaitTime )
 	DECLARE_UNSIGNED_VAR( SimilarWorldStateInstanceId )
 
-	DECLARE_SHORT_VAR( Health )
-	DECLARE_SHORT_VAR( Armor )
-	DECLARE_SHORT_VAR( RawDamageToKill )
 	DECLARE_SHORT_VAR( PotentialHazardDamage )
 	DECLARE_SHORT_VAR( ThreatInflictedDamage )
 
-	DECLARE_BOOL_VAR( HasQuad )
-	DECLARE_BOOL_VAR( HasShell )
-	DECLARE_BOOL_VAR( EnemyHasQuad )
 	DECLARE_BOOL_VAR( HasThreateningEnemy )
 	DECLARE_BOOL_VAR( HasJustPickedGoalItem )
 
@@ -671,29 +665,6 @@ public:
 		RunAwayTeleportOriginVar().Reset();
 		RunAwayJumppadOriginVar().Reset();
 		RunAwayElevatorOriginVar().Reset();
-	}
-
-	float DamageToBeKilled() const {
-		float damageToBeKilled = ::DamageToKill( HealthVar(), ArmorVar() );
-		if( HasShellVar() ) {
-			damageToBeKilled *= QUAD_DAMAGE_SCALE;
-		}
-		if( EnemyHasQuadVar() ) {
-			damageToBeKilled *= 1.0f / QUAD_DAMAGE_SCALE;
-		}
-		return damageToBeKilled;
-	}
-
-	float DamageToKill() const {
-		float damageToKill = RawDamageToKillVar();
-		if( HasQuadVar() ) {
-			damageToKill *= 1.0f / QUAD_DAMAGE_SCALE;
-		}
-		return damageToKill;
-	}
-
-	float KillToBeKilledDamageRatio() const {
-		return DamageToKill() / DamageToBeKilled();
 	}
 
 	void DebugPrint( const char *tag ) const;

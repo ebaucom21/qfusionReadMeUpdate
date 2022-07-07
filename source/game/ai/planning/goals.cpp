@@ -290,7 +290,7 @@ void ReactToHazardGoal::UpdateWeight( const WorldState &currWorldState ) {
 
 	const auto &configGroup = WeightConfig().nativeGoals.reactToHazard;
 
-	float damageFraction = currWorldState.PotentialHazardDamageVar() / currWorldState.DamageToBeKilled();
+	float damageFraction = currWorldState.PotentialHazardDamageVar() / DamageToBeKilled();
 	float weight_ = configGroup.baseWeight + configGroup.dmgFracCoeff * damageFraction;
 	weight_ = BoundedFraction( weight_, configGroup.weightBound );
 	weight_ = configGroup.weightBound * Q_Sqrt( weight_ );
@@ -314,7 +314,7 @@ void ReactToThreatGoal::UpdateWeight( const WorldState &currWorldState ) {
 	}
 
 	const auto &configGroup = WeightConfig().nativeGoals.reactToThreat;
-	float damageRatio = currWorldState.ThreatInflictedDamageVar() / currWorldState.DamageToBeKilled();
+	float damageRatio = currWorldState.ThreatInflictedDamageVar() / DamageToBeKilled();
 	float weight_ = configGroup.baseWeight + configGroup.dmgFracCoeff * damageRatio;
 	float offensiveness = Self()->GetEffectiveOffensiveness();
 	if( offensiveness >= 0.5f ) {

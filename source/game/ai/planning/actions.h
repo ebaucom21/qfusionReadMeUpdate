@@ -30,6 +30,10 @@ protected:
 public:
 	BotAction( BotPlanningModule *module_, const char *name_ );
 
+	float DamageToBeKilled() const;
+	float DamageToKill() const;
+	float KillToBeKilledDamageRatio() const;
+
 	inline const class BotWeightConfig &WeightConfig() const;
 };
 

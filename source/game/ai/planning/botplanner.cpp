@@ -37,14 +37,10 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 	if( selectedEnemies.AreValid() ) {
 		worldState->EnemyOriginVar().SetValue( selectedEnemies.LastSeenOrigin() );
 		worldState->HasThreateningEnemyVar().SetValue( selectedEnemies.AreThreatening() );
-		worldState->RawDamageToKillVar().SetValue( (short)selectedEnemies.DamageToKill() );
-		worldState->EnemyHasQuadVar().SetValue( selectedEnemies.HaveQuad() );
 		worldState->CanHitEnemyVar().SetValue( selectedEnemies.CanBeHit() );
 	} else {
 		worldState->EnemyOriginVar().SetIgnore( true );
 		worldState->HasThreateningEnemyVar().SetIgnore( true );
-		worldState->RawDamageToKillVar().SetIgnore( true );
-		worldState->EnemyHasQuadVar().SetIgnore( true );
 		worldState->EnemyCanHitVar().SetIgnore( true );
 		worldState->CanHitEnemyVar().SetIgnore( true );
 	}
@@ -75,16 +71,6 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		worldState->LostEnemyLastSeenOriginVar().SetIgnore( true );
 		worldState->MightSeeLostEnemyAfterTurnVar().SetIgnore( true );
 	}
-
-	const edict_t *self = game.edicts + bot->EntNum();
-	worldState->HealthVar().SetValue( (short)HEALTH_TO_INT( self->health ) );
-	worldState->ArmorVar().SetValue( self->r.client->ps.stats[STAT_ARMOR] );
-
-	worldState->HasQuadVar().SetValue( ::HasQuad( self ) );
-	worldState->HasShellVar().SetValue( ::HasShell( self ) );
-
-	worldState->HasQuadVar().SetValue( ::HasQuad( self ) );
-	worldState->HasShellVar().SetValue( ::HasShell( self ) );
 
 	if( const std::optional<SelectedNavEntity> &currSelectedNavEntity = bot->GetOrUpdateSelectedNavEntity() ) {
 		const NavEntity *navEntity = currSelectedNavEntity->navEntity;

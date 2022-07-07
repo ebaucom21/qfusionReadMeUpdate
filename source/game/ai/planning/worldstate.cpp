@@ -181,18 +181,11 @@ void WorldState::DebugPrint( const char *tag ) const {
 	PRINT_VAR( GoalItemWaitTime );
 	PRINT_VAR( SimilarWorldStateInstanceId );
 
-	PRINT_VAR( Health );
-	PRINT_VAR( Armor );
-	PRINT_VAR( RawDamageToKill );
-
 	PRINT_VAR( BotOrigin );
 	PRINT_VAR( EnemyOrigin );
 	PRINT_VAR( NavTargetOrigin );
 	PRINT_VAR( PendingOrigin );
 
-	PRINT_VAR( HasQuad );
-	PRINT_VAR( HasShell );
-	PRINT_VAR( EnemyHasQuad );
 	PRINT_VAR( HasThreateningEnemy );
 	PRINT_VAR( HasJustPickedGoalItem );
 
@@ -230,18 +223,11 @@ void WorldState::DebugPrintDiff( const WorldState &that, const char *oldTag, con
 	PRINT_DIFF( GoalItemWaitTime );
 	PRINT_DIFF( SimilarWorldStateInstanceId );
 
-	PRINT_DIFF( Health );
-	PRINT_DIFF( Armor );
-	PRINT_DIFF( RawDamageToKill );
-
 	PRINT_DIFF( BotOrigin );
 	PRINT_DIFF( EnemyOrigin );
 	PRINT_DIFF( NavTargetOrigin );
 	PRINT_DIFF( PendingOrigin );
 
-	PRINT_DIFF( HasQuad );
-	PRINT_DIFF( HasShell );
-	PRINT_DIFF( EnemyHasQuad );
 	PRINT_DIFF( HasThreateningEnemy );
 	PRINT_DIFF( HasJustPickedGoalItem );
 

@@ -15,21 +15,18 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 		Debug( "Enemy is ignored in the given world state\n" );
 		return false;
 	}
-	if( worldState.HealthVar().Ignore() || worldState.ArmorVar().Ignore() ) {
-		Debug( "Health or armor are ignored in the given world state\n" );
-		return false;
-	}
 
 	float offensiveness = Self()->GetEffectiveOffensiveness();
 	if( offensiveness == 1.0f ) {
 		return false;
 	}
 
+	/*TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	if( worldState.EnemyHasQuadVar() && !worldState.HasQuadVar() ) {
 		return true;
-	}
+	}*/
 
-	if( worldState.HasThreateningEnemyVar() && worldState.DamageToBeKilled() < 25 ) {
+	if( worldState.HasThreateningEnemyVar() && DamageToBeKilled() < 25 ) {
 		return true;
 	}
 
@@ -41,7 +38,7 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 			Debug( "Enemy does not have good sniper range weapons and thus taking cover makes no sense\n" );
 			return false;
 		}*/
-		if( worldState.DamageToBeKilled() > 80 ) {
+		if( DamageToBeKilled() > 80 ) {
 			Debug( "Bot can resist more than 80 damage units on sniper range and thus taking cover makes no sense\n" );
 			return false;
 		}
@@ -77,7 +74,7 @@ bool RunAwayAction::CheckMiddleRangeKDDamageRatio( const WorldState &worldState 
 		}
 	}*/
 
-	return worldState.KillToBeKilledDamageRatio() > 1.5f + 1.5f * offensiveness;
+	return KillToBeKilledDamageRatio() > 1.5f + 1.5f * offensiveness;
 }
 
 bool RunAwayAction::CheckCloseRangeKDDamageRatio( const WorldState &worldState ) const {
@@ -96,5 +93,5 @@ bool RunAwayAction::CheckCloseRangeKDDamageRatio( const WorldState &worldState )
 		return true;
 	}*/
 
-	return worldState.KillToBeKilledDamageRatio() > 2.0f + 1.0f * offensiveness;
+	return KillToBeKilledDamageRatio() > 2.0f + 1.0f * offensiveness;
 }

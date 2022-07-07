@@ -13,11 +13,11 @@ inline bool operator!=( const AiScriptWeaponDef &first, const AiScriptWeaponDef 
 }
 
 void BotWeaponsUsageModule::Frame( const WorldState &cachedWorldState ) {
-	weaponSelector.Frame( cachedWorldState );
+	weaponSelector.Frame();
 }
 
 void BotWeaponsUsageModule::Think( const WorldState &cachedWorldState ) {
-	weaponSelector.Think( cachedWorldState );
+	weaponSelector.Think();
 }
 
 void BotWeaponsUsageModule::UpdateScriptWeaponsStatus() {
