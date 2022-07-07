@@ -41,13 +41,6 @@ class BotPlanningModule {
 	PickupNavEntityAction pickupNavEntityAction;
 	WaitForNavEntityAction waitForNavEntityAction;
 
-	KillEnemyAction killEnemyAction;
-	AdvanceToGoodPositionAction advanceToGoodPositionAction;
-	RetreatToGoodPositionAction retreatToGoodPositionAction;
-	GotoAvailableGoodPositionAction gotoAvailableGoodPositionAction;
-	AttackFromCurrentPositionAction attackFromCurrentPositionAction;
-	AttackAdvancingToTargetAction attackAdvancingToTargetAction;
-
 	FleeToSpotAction fleeToSpotAction;
 	StartGotoCoverAction startGotoCoverAction;
 	TakeCoverAction takeCoverAction;

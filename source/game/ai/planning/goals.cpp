@@ -163,14 +163,6 @@ void KillEnemyGoal::GetDesiredWorldState( WorldState *worldState ) {
 PlannerNode *KillEnemyGoal::GetWorldStateTransitions( const WorldState &worldState ) {
 	PlannerNode *firstTransition = nullptr;
 
-	TRY_APPLY_ACTION( attackAdvancingToTargetAction );
-	TRY_APPLY_ACTION( advanceToGoodPositionAction );
-	TRY_APPLY_ACTION( retreatToGoodPositionAction );
-	TRY_APPLY_ACTION( gotoAvailableGoodPositionAction );
-	TRY_APPLY_ACTION( attackFromCurrentPositionAction );
-
-	TRY_APPLY_ACTION( killEnemyAction );
-
 	return ApplyExtraActions( firstTransition, worldState );
 }
 
@@ -281,13 +273,6 @@ void AttackOutOfDespairGoal::OnPlanBuildingCompleted( const AiActionRecord *plan
 
 PlannerNode *AttackOutOfDespairGoal::GetWorldStateTransitions( const WorldState &worldState ) {
 	PlannerNode *firstTransition = nullptr;
-
-	TRY_APPLY_ACTION( advanceToGoodPositionAction );
-	TRY_APPLY_ACTION( retreatToGoodPositionAction );
-	TRY_APPLY_ACTION( gotoAvailableGoodPositionAction );
-	TRY_APPLY_ACTION( attackFromCurrentPositionAction );
-
-	TRY_APPLY_ACTION( killEnemyAction );
 
 	return ApplyExtraActions( firstTransition, worldState );
 }

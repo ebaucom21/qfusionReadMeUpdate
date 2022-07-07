@@ -15,12 +15,6 @@ BotPlanningModule::BotPlanningModule( Bot *bot_ )
 	, runToNavEntityAction( this )
 	, pickupNavEntityAction( this )
 	, waitForNavEntityAction( this )
-	, killEnemyAction( this )
-	, advanceToGoodPositionAction( this )
-	, retreatToGoodPositionAction( this )
-	, gotoAvailableGoodPositionAction( this )
-	, attackFromCurrentPositionAction( this )
-	, attackAdvancingToTargetAction( this )
 	, fleeToSpotAction( this )
 	, startGotoCoverAction( this )
 	, takeCoverAction( this )
@@ -53,13 +47,6 @@ void BotPlanningModule::RegisterBuiltinGoalsAndActions() {
 	RegisterBuiltinAction( runToNavEntityAction );
 	RegisterBuiltinAction( pickupNavEntityAction );
 	RegisterBuiltinAction( waitForNavEntityAction );
-
-	RegisterBuiltinAction( killEnemyAction );
-	RegisterBuiltinAction( advanceToGoodPositionAction );
-	RegisterBuiltinAction( retreatToGoodPositionAction );
-	RegisterBuiltinAction( gotoAvailableGoodPositionAction );
-	RegisterBuiltinAction( attackFromCurrentPositionAction );
-	RegisterBuiltinAction( attackAdvancingToTargetAction );
 
 	RegisterBuiltinAction( fleeToSpotAction );
 	RegisterBuiltinAction( startGotoCoverAction );

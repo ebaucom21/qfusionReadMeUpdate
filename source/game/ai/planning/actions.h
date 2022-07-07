@@ -122,64 +122,6 @@ public:                                                         \
 DECLARE_DUMMY_ACTION_RECORD( KillEnemyActionRecord )
 DECLARE_ACTION( KillEnemyAction, 5 );
 
-class CombatActionRecord : public BotActionRecord {
-protected:
-	NavSpot navSpot;
-	unsigned selectedEnemiesInstanceId;
-
-	bool CheckCommonCombatConditions( const WorldState &currWorldState ) const;
-public:
-	CombatActionRecord( PoolBase *pool_,
-						Bot *self_,
-						const char *name_,
-						const Vec3 &tacticalSpotOrigin,
-						unsigned selectedEnemiesInstanceId )
-		: BotActionRecord( pool_, self_, name_ )
-		, navSpot( tacticalSpotOrigin, 32.0f, NavTargetFlags::REACH_ON_RADIUS )
-		, selectedEnemiesInstanceId( selectedEnemiesInstanceId ) {}
-};
-
-#define DECLARE_COMBAT_ACTION_RECORD( recordName )                                                                   \
-class recordName : public CombatActionRecord {                                                                       \
-public:                                                                                                              \
-	recordName( PoolBase * pool_, Bot *self_, const Vec3 &tacticalSpotOrigin, unsigned selectedEnemiesInstanceId_ )  \
-		: CombatActionRecord( pool_, self_, #recordName, tacticalSpotOrigin, selectedEnemiesInstanceId_ ) {}         \
-	void Activate() override;                                                                                        \
-	void Deactivate() override;                                                                                      \
-	Status UpdateStatus( const WorldState &currWorldState ) override;                                                \
-};
-
-DECLARE_COMBAT_ACTION_RECORD( AdvanceToGoodPositionActionRecord );
-DECLARE_ACTION( AdvanceToGoodPositionAction, 2 );
-
-DECLARE_COMBAT_ACTION_RECORD( RetreatToGoodPositionActionRecord );
-DECLARE_ACTION( RetreatToGoodPositionAction, 2 );
-
-DECLARE_COMBAT_ACTION_RECORD( GotoAvailableGoodPositionActionRecord );
-DECLARE_ACTION( GotoAvailableGoodPositionAction, 2 );
-
-DECLARE_COMBAT_ACTION_RECORD( AttackFromCurrentPositionActionRecord );
-DECLARE_ACTION( AttackFromCurrentPositionAction, 2 );
-
-class AttackAdvancingToTargetActionRecord : public BotActionRecord {
-	const SelectedNavEntity m_selectedNavEntity;
-	const unsigned selectedEnemiesInstanceId;
-public:
-	AttackAdvancingToTargetActionRecord( PoolBase *pool_,
-										 Bot *self_,
-										 const SelectedNavEntity &selectedNavEntity,
-										 unsigned selectedEnemiesInstanceId_ )
-		: BotActionRecord( pool_, self_, "AttackAdvancingToTargetActionRecord" )
-		, m_selectedNavEntity( selectedNavEntity )
-		, selectedEnemiesInstanceId( selectedEnemiesInstanceId_ ) {}
-
-	void Activate() override;
-	void Deactivate() override;
-	Status UpdateStatus( const WorldState &currWorldState ) override;
-};
-
-DECLARE_ACTION( AttackAdvancingToTargetAction, 2 );
-
 class RunAwayActionRecord : public BotActionRecord {
 protected:
 	NavSpot navSpot { Vec3( 0, 0, 0 ), 0.0f, NavTargetFlags::NONE };

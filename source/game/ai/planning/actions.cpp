@@ -18,15 +18,3 @@ void BotActionRecord::Deactivate() {
 	AiActionRecord::Deactivate();
 	Self()->GetMiscTactics().Clear();
 }
-
-bool CombatActionRecord::CheckCommonCombatConditions( const WorldState &currWorldState ) const {
-	if( currWorldState.EnemyOriginVar().Ignore() ) {
-		Debug( "Enemy is not specified\n" );
-		return false;
-	}
-	if( Self()->GetSelectedEnemies().InstanceId() != selectedEnemiesInstanceId ) {
-		Debug( "New enemies have been selected\n" );
-		return false;
-	}
-	return true;
-}
