@@ -32,51 +32,42 @@ AiActionRecord::Status TurnToLostEnemyActionRecord::UpdateStatus( const WorldSta
 }
 
 PlannerNode *TurnToLostEnemyAction::TryApply( const WorldState &worldState ) {
-	if( worldState.IsReactingToEnemyLostVar().Ignore() ) {
-		Debug( "Is bot reacting to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.IsReactingToEnemyLostVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsReactingToEnemyLost ) ) ) {
 		Debug( "Bot is already reacting to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.HasReactedToEnemyLostVar().Ignore() ) {
-		Debug( "Has bot reacted to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasReactedToEnemyLostVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) ) ) {
 		Debug( "Bot has already reacted to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.LostEnemyLastSeenOriginVar().Ignore() ) {
-		Debug( "Lost enemy origin is ignored in the given world state\n" );
+
+	std::optional<OriginVar> lostEnemyOrigin = worldState.getOriginVar( WorldState::LostEnemyLastSeenOrigin );
+	if( !lostEnemyOrigin ) {
+		Debug( "Lost enemy origin is missing in the given world state\n" );
 		return nullptr;
 	}
 
-	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( ( worldState.BotOriginVar().Value() - Self()->Origin() ).SquaredLength() > squareDistanceError ) {
+	const Vec3 botOrigin( worldState.getOriginVar( WorldState::BotOrigin ).value() );
+	if( botOrigin.FastDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
 	}
-	if( worldState.MightSeeLostEnemyAfterTurnVar().Ignore() ) {
-		Debug( "Might bot see lost enemy after turn is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.MightSeeLostEnemyAfterTurnVar() ) {
+
+	if( isUnspecifiedOrFalse( worldState.getBoolVar( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
 		Debug( "Bot cannot see lost enemy after turn in the given world state\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self(), worldState.LostEnemyLastSeenOriginVar().Value() ) ) );
+	TurnToLostEnemyActionRecord *record = pool.New( Self(), *lostEnemyOrigin );
+
+	PlannerNode *plannerNode = newNodeForRecord( record, worldState, 500.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = 400.0f;
-	plannerNode.WorldState() = worldState;
 	// Can't hit current enemy (if any) after applying this action
-	plannerNode.WorldState().CanHitEnemyVar().SetValue( false );
-	plannerNode.WorldState().HasReactedToEnemyLostVar().SetValue( true );
+	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
+	plannerNode->worldState.setBoolVar( WorldState::HasReactedToEnemyLost, BoolVar( true ) );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

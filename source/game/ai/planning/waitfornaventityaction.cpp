@@ -18,7 +18,7 @@ void WaitForNavEntityActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status WaitForNavEntityActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	if( currWorldState.HasJustPickedGoalItemVar() ) {
+	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Goal item has been just picked up\n" );
 		return COMPLETED;
 	}
@@ -37,11 +37,13 @@ AiActionRecord::Status WaitForNavEntityActionRecord::UpdateStatus( const WorldSt
 		Debug( format, waitDuration, navEntity->MaxWaitDuration() );
 		return INVALID;
 	}
-	if( currWorldState.DistanceToNavTarget() > GOAL_PICKUP_ACTION_RADIUS ) {
+
+	if( navEntity->Origin().SquareDistanceTo( Self()->Origin() ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
 		Debug( "Distance to the item is too large to wait for it\n" );
 		return INVALID;
 	}
-	if( currWorldState.HasThreateningEnemyVar() ) {
+
+	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
 		Debug( "The bot has a threatening enemy\n" );
 		return INVALID;
 	}
@@ -50,48 +52,41 @@ AiActionRecord::Status WaitForNavEntityActionRecord::UpdateStatus( const WorldSt
 }
 
 PlannerNode *WaitForNavEntityAction::TryApply( const WorldState &worldState ) {
-	if( worldState.NavTargetOriginVar().Ignore() ) {
+	const std::optional<OriginVar> navTargetOriginVar( worldState.getOriginVar( WorldState::NavTargetOrigin ) );
+	if( !navTargetOriginVar ) {
 		Debug( "Nav target is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-	if( worldState.DistanceToNavTarget() > GOAL_PICKUP_ACTION_RADIUS ) {
+	const Vec3 navTargetOrigin( *navTargetOriginVar );
+	const Vec3 botOrigin( worldState.getOriginVar( WorldState::BotOrigin ).value() );
+	if( navTargetOrigin.SquareDistanceTo( botOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
 		Debug( "Distance to goal item nav target is too large to wait for an item in the given world state\n" );
 		return nullptr;
 	}
 
-	if( worldState.HasJustPickedGoalItemVar().Ignore() ) {
-		Debug( "Has bot picked a goal item is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasJustPickedGoalItemVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Bot has just picked a goal item in the given world state\n" );
 		return nullptr;
 	}
 
-	if( worldState.GoalItemWaitTimeVar().Ignore() ) {
+	const std::optional<UIntVar> waitTimeVar = worldState.getUIntVar( WorldState::GoalItemWaitTime );
+	if( !waitTimeVar ) {
 		Debug( "Goal item wait time is not specified in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.GoalItemWaitTimeVar() == 0 ) {
-		Debug( "Goal item wait time is zero in the given world state\n" );
 		return nullptr;
 	}
 
 	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
 	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
+	WaitForNavEntityActionRecord *record = pool.New( Self(), selectedNavEntity );
+
+	PlannerNode *plannerNode = newNodeForRecord( record, worldState, (float)*waitTimeVar );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = worldState.GoalItemWaitTimeVar();
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *navTargetOriginVar );
+	plannerNode->worldState.setBoolVar( WorldState::HasPickedGoalItem, BoolVar( true ) );
 
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().HasJustPickedGoalItemVar().SetValue( true ).SetIgnore( false );
-	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
-	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, 12.0f );
-	plannerNode.WorldState().ResetTacticalSpots();
-
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

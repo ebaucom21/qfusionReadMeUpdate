@@ -11,6 +11,15 @@ class Bot;
 
 class BotPlanningModule;
 
+[[nodiscard]]
+inline bool isSpecifiedAndTrue( const std::optional<BoolVar> &var ) {
+	return var && *var;
+}
+[[nodiscard]]
+inline bool isUnspecifiedOrFalse( const std::optional<BoolVar> &var ) {
+	return !var || !*var;
+}
+
 class BotActionRecord : public AiActionRecord {
 protected:
 	Bot *Self() { return (Bot *)self; }
@@ -24,6 +33,8 @@ public:
 
 class BotAction : public AiAction {
 protected:
+	using DualOrigin = std::pair<Vec3, Vec3>;
+
 	BotPlanningModule *const module;
 	Bot *Self() { return (Bot *)self; }
 	const Bot *Self() const { return (const Bot *)self; }
@@ -155,7 +166,7 @@ public:                                                                         
 
 class RunAwayAction : public BotAction {
 protected:
-	bool CheckCommonRunAwayPreconditions( const WorldState &worldState ) const;
+	bool checkCommonPreconditionsForStartingRunningAway( const WorldState &worldState ) const;
 	bool CheckMiddleRangeKDDamageRatio( const WorldState &worldState ) const;
 	bool CheckCloseRangeKDDamageRatio( const WorldState &worldState ) const;
 public:

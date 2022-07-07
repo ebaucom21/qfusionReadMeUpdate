@@ -106,8 +106,8 @@ public:
 };
 
 class ReactToEnemyLostGoal : public BotGoal {
-	void ModifyWeightForTurningBack( const WorldState &currWorldState );
-	void ModifyWeightForPursuit( const WorldState &currWorldState );
+	void ModifyWeightForTurningBack( const WorldState &currWorldState, const Vec3 &enemyOrigin );
+	void ModifyWeightForPursuit( const WorldState &currWorldState, const Vec3 &enemyOrigin );
 	bool HuntEnemiesLeftInMinority( const WorldState &currWorldState ) const;
 	int FindNumPlayersAlive( int team ) const;
 public:

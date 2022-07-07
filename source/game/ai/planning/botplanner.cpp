@@ -4,11 +4,9 @@
 #include "botplanner.h"
 #include "planninglocal.h"
 #include "../combat/dodgehazardproblemsolver.h"
-#include <limits>
-#include <stdarg.h>
 
 BotPlanner::BotPlanner( Bot *bot_, BotPlanningModule *module_ )
-	: AiPlanner( bot_ ), bot( bot_ ), module( module_ ), cachedWorldState( bot_ ) {}
+	: AiPlanner( bot_ ), bot( bot_ ), module( module_ ) {}
 
 const int *BotPlanner::Inventory() const {
 	return game.edicts[bot->EntNum()].r.client->ps.inventory;
@@ -27,135 +25,85 @@ bool BotPlanner::FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin ) 
 }
 
 void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
-	worldState->SetIgnoreAll( false );
-
-	worldState->BotOriginVar().SetValue( bot->Origin() );
-	worldState->PendingOriginVar().SetIgnore( true );
+	worldState->setOriginVar( WorldState::BotOrigin, OriginVar( Vec3( bot->Origin() ) ) );
 
 	const auto &selectedEnemies = bot->GetSelectedEnemies();
 
 	if( selectedEnemies.AreValid() ) {
-		worldState->EnemyOriginVar().SetValue( selectedEnemies.LastSeenOrigin() );
-		worldState->HasThreateningEnemyVar().SetValue( selectedEnemies.AreThreatening() );
-		worldState->CanHitEnemyVar().SetValue( selectedEnemies.CanBeHit() );
-	} else {
-		worldState->EnemyOriginVar().SetIgnore( true );
-		worldState->HasThreateningEnemyVar().SetIgnore( true );
-		worldState->EnemyCanHitVar().SetIgnore( true );
-		worldState->CanHitEnemyVar().SetIgnore( true );
+		worldState->setOriginVar( WorldState::EnemyOrigin, OriginVar( selectedEnemies.LastSeenOrigin() ) );
+		worldState->setBoolVar( WorldState::HasThreateningEnemy, BoolVar( selectedEnemies.AreThreatening() ) );
+		worldState->setBoolVar( WorldState::CanHitEnemy, BoolVar( selectedEnemies.CanBeHit() ) );
+		worldState->setBoolVar( WorldState::EnemyCanHit, BoolVar( selectedEnemies.CanHit() ) );
 	}
 
-	auto &lostEnemies = bot->lostEnemies;
-	if( lostEnemies.AreValid() ) {
-		worldState->IsReactingToEnemyLostVar().SetValue( false );
-		worldState->HasReactedToEnemyLostVar().SetValue( false );
-		worldState->LostEnemyLastSeenOriginVar().SetValue( lostEnemies.LastSeenOrigin() );
-		worldState->MightSeeLostEnemyAfterTurnVar().SetValue( false );
-		Vec3 toEnemiesDir( lostEnemies.LastSeenOrigin() );
-		toEnemiesDir -= bot->Origin();
+	if( const SelectedEnemies &lostEnemies = bot->lostEnemies; lostEnemies.AreValid() ) {
+		const Vec3 &enemyOrigin( lostEnemies.LastSeenOrigin() );
+		worldState->setOriginVar( WorldState::LostEnemyLastSeenOrigin, OriginVar( enemyOrigin ) );
+		Vec3 toEnemiesDir( enemyOrigin - bot->Origin() );
 		if( toEnemiesDir.normalizeFast() ) {
 			if( toEnemiesDir.Dot( bot->EntityPhysicsState()->ForwardDir() ) < bot->FovDotFactor() ) {
 				edict_t *self = game.edicts + bot->EntNum();
 				if( EntitiesPvsCache::Instance()->AreInPvs( self, lostEnemies.TraceKey() ) ) {
 					trace_t trace;
-					G_Trace( &trace, self->s.origin, nullptr, nullptr, lostEnemies.LastSeenOrigin().Data(), self, MASK_AISOLID );
+					G_Trace( &trace, self->s.origin, nullptr, nullptr, enemyOrigin.Data(), self, MASK_AISOLID );
 					if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies.TraceKey() ) {
-						worldState->MightSeeLostEnemyAfterTurnVar().SetValue( true );
+						worldState->setBoolVar( WorldState::MightSeeLostEnemyAfterTurn, BoolVar( true ) );
 					}
 				}
 			}
 		}
-	} else {
-		worldState->IsReactingToEnemyLostVar().SetIgnore( true );
-		worldState->HasReactedToEnemyLostVar().SetIgnore( true );
-		worldState->LostEnemyLastSeenOriginVar().SetIgnore( true );
-		worldState->MightSeeLostEnemyAfterTurnVar().SetIgnore( true );
 	}
 
 	if( const std::optional<SelectedNavEntity> &currSelectedNavEntity = bot->GetOrUpdateSelectedNavEntity() ) {
 		const NavEntity *navEntity = currSelectedNavEntity->navEntity;
-		worldState->NavTargetOriginVar().SetValue( navEntity->Origin() );
-		// Find a travel time to the goal itme nav entity in milliseconds
-		// We hope this router call gets cached by AAS subsystem
-		int areaNums[2] = { 0, 0 };
-		int numAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
-		const auto *routeCache = bot->RouteCache();
-		unsigned travelTime = 10U * routeCache->PreferredRouteToGoalArea( areaNums, numAreas, navEntity->AasAreaNum() );
-		// AAS returns 1 seconds^-2 as a lowest feasible value
-		if( travelTime <= 10 ) {
-			travelTime = 0;
-		}
-		int64_t spawnTime = navEntity->SpawnTime();
-		// If the goal item spawns before the moment when it gets reached
-		if( level.time + travelTime >= spawnTime ) {
-			worldState->GoalItemWaitTimeVar().SetValue( 0 );
-		} else {
-			worldState->GoalItemWaitTimeVar().SetValue( (unsigned)( spawnTime - level.time - travelTime ) );
+		worldState->setOriginVar( WorldState::NavTargetOrigin, OriginVar( navEntity->Origin() ) );
+
+		if( const int64_t spawnTime = navEntity->SpawnTime(); spawnTime >= level.time ) {
+			// Find a travel time to the goal itme nav entity in milliseconds
+			// We hope this router call gets cached by AAS subsystem
+			int areaNums[2] = { 0, 0 };
+			int numAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
+			const auto *routeCache = bot->RouteCache();
+			int travelTime = 10 * routeCache->PreferredRouteToGoalArea( areaNums, numAreas, navEntity->AasAreaNum() );
+			// AAS returns 1 seconds^-2 as a lowest feasible value
+			if( travelTime <= 10 ) {
+				travelTime = 0;
+			}
+			// If the goal item spawns after the moment when it gets reached
+			if( const int64_t reachTime = level.time + travelTime; reachTime > spawnTime ) {
+				const int64_t waitTime = reachTime - spawnTime;
+				// Sanity checks
+				// TODO: What about script-spawned items?
+				assert( waitTime > 0 && waitTime < 60'000 );
+				worldState->setUIntVar( WorldState::GoalItemWaitTime, UIntVar( waitTime ) );
+			}
 		}
 	} else {
 		// HACK! If there is no selected nav entity, set the value to the roaming spot origin.
 		if( bot->ShouldUseRoamSpotAsNavTarget() ) {
 			Vec3 spot( module->roamingManager.GetCachedRoamingSpot() );
 			Debug( "Using a roaming spot @ %.1f %.1f %.1f as a world state nav target var\n", spot.X(), spot.Y(), spot.Z() );
-			worldState->NavTargetOriginVar().SetValue( spot );
-		} else {
-			worldState->NavTargetOriginVar().SetIgnore( true );
+			worldState->setOriginVar( WorldState::NavTargetOrigin, OriginVar( spot ) );
 		}
-		worldState->GoalItemWaitTimeVar().SetIgnore( true );
 	}
 
-	worldState->HasJustPickedGoalItemVar().SetValue( false );
-
-	worldState->HasPositionalAdvantageVar().SetValue( false );
-
-	worldState->HasJustKilledEnemyVar().SetValue( false );
-
-	// If methods corresponding to these comparisons are extracted, their names will be confusing
-	// (they are useful for filling world state only as not always corresponding to what a human caller expect).
-	worldState->HasJustTeleportedVar().SetValue( level.time - bot->lastTouchedTeleportAt < 64 + 1 );
-	worldState->HasJustTouchedJumppadVar().SetValue( level.time - bot->lastTouchedJumppadAt < 64 + 1 );
-	worldState->HasJustEnteredElevatorVar().SetValue( level.time - bot->lastTouchedElevatorAt < 64 + 1 );
-
-	worldState->HasPendingCoverSpotVar().SetIgnore( true );
-	worldState->HasPendingRunAwayTeleportVar().SetIgnore( true );
-	worldState->HasPendingRunAwayJumppadVar().SetIgnore( true );
-	worldState->HasPendingRunAwayElevatorVar().SetIgnore( true );
-
-	worldState->IsRunningAwayVar().SetIgnore( true );
-	worldState->HasRunAwayVar().SetIgnore( true );
-
 	const Hazard *activeHazard = bot->PrimaryHazard();
-	worldState->HasReactedToHazardVar().SetValue( false );
 	if( bot->Skill() > 0.33f && activeHazard ) {
-		worldState->PotentialHazardDamageVar().SetValue( (short)activeHazard->damage );
-		worldState->HazardHitPointVar().SetValue( activeHazard->hitPoint );
-		worldState->HazardDirectionVar().SetValue( activeHazard->direction );
+		worldState->setFloatVar( WorldState::PotentialHazardDamage, FloatVar( activeHazard->damage ) );
+		worldState->setOriginVar( WorldState::HazardHitPoint, OriginVar( activeHazard->hitPoint ) );
+		// TODO: It should be some DirVar
+		worldState->setOriginVar( WorldState::HazardDirection, OriginVar( activeHazard->direction ) );
+		// TODO: Find it in a lazy fashion (use OriginLazyVar)
 		vec3_t dodgeHazardSpot;
 		if( FindDodgeHazardSpot( *activeHazard, dodgeHazardSpot ) ) {
-			worldState->DodgeHazardSpotVar().SetValue( dodgeHazardSpot );
-		} else {
-			worldState->DodgeHazardSpotVar().SetIgnore( true );
+			worldState->setOriginVar( WorldState::DodgeHazardSpot, OriginVar( Vec3( dodgeHazardSpot ) ) );
 		}
-	} else {
-		worldState->PotentialHazardDamageVar().SetIgnore( true );
-		worldState->HazardHitPointVar().SetIgnore( true );
-		worldState->HazardDirectionVar().SetIgnore( true );
-		worldState->DodgeHazardSpotVar().SetIgnore( true );
 	}
 
 	if( const auto *activeThreat = bot->ActiveHurtEvent() ) {
-		worldState->ThreatInflictedDamageVar().SetValue( (short)activeThreat->totalDamage );
-		worldState->ThreatPossibleOriginVar().SetValue( activeThreat->possibleOrigin );
-		worldState->HasReactedToThreatVar().SetValue( false );
-	} else {
-		worldState->ThreatInflictedDamageVar().SetIgnore( true );
-		worldState->ThreatPossibleOriginVar().SetIgnore( true );
-		worldState->HasReactedToThreatVar().SetIgnore( true );
+		worldState->setFloatVar( WorldState::ThreatInflictedDamage, FloatVar( activeThreat->totalDamage ) );
+		worldState->setOriginVar( WorldState::ThreatPossibleOrigin, OriginVar( activeThreat->possibleOrigin ) );
 	}
-
-	worldState->ResetTacticalSpots();
-
-	worldState->SimilarWorldStateInstanceIdVar().SetIgnore( true );
 
 	cachedWorldState = *worldState;
 }
@@ -168,5 +116,5 @@ bool BotPlanner::ShouldSkipPlanning() const {
 void BotPlanner::BeforePlanning() {
 	AiPlanner::BeforePlanning();
 
-	module->tacticalSpotsCache.Clear();
+	module->tacticalSpotsCache.clear();
 }

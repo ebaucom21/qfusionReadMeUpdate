@@ -1,5 +1,6 @@
 #include "weaponselector.h"
 #include "../bot.h"
+#include "../planning/planninglocal.h" // ???
 
 void BotWeaponSelector::Frame() {
 	if( nextFastWeaponSwitchActionCheckAt > level.time ) {

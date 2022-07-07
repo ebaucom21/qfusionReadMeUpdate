@@ -110,6 +110,9 @@ public:
 		wsw::failWithRuntimeError( "Fast normalization failure" );
 	}
 
+	[[nodiscard]]
+	bool operator==( const Vec3 &that ) const { return VectorCompare( vec, that.vec ); }
+
 	float *Data() { return vec; }
 	const float *Data() const { return vec; }
 

@@ -3,46 +3,32 @@
 #include "../groundtracecache.h"
 
 PlannerNode *StartGotoRunAwayElevatorAction::TryApply( const WorldState &worldState ) {
-	if( !CheckCommonRunAwayPreconditions( worldState ) ) {
+	if( !checkCommonPreconditionsForStartingRunningAway( worldState ) ) {
 		return nullptr;
 	}
 
-	if( worldState.HasJustEnteredElevatorVar().Ignore() ) {
-		Debug( "Has bot just entered an elevator is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasJustEnteredElevatorVar() ) {
-		Debug( "Bot has just entered an elevator in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.PendingOriginVar().Ignore() ) {
+	if( worldState.getOriginVar( WorldState::PendingElevatorDest ) ) {
 		Debug( "Pending origin is already present in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.RunAwayElevatorOriginVar().IgnoreOrAbsent() ) {
-		Debug( "An elevator for running away is ignored or absent in the given world state\n" );
+
+	const Vec3 enemyOrigin = worldState.getOriginVar( WorldState::EnemyOrigin ).value();
+	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	std::optional<DualOrigin> maybeFromTo = module->tacticalSpotsCache.getRunAwayElevatorOrigin( botOrigin, enemyOrigin );
+	if( !maybeFromTo ) {
+		Debug( "Failed to find a (cached) runaway elevator\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self() ) ) );
+	PlannerNode *const plannerNode = newNodeForRecord( pool.New( Self() ), worldState, 1.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = 1.0f;
+	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, OriginVar( maybeFromTo->first ) );
+	plannerNode->worldState.setOriginVar( WorldState::PendingElevatorDest, OriginVar( maybeFromTo->second ) );
 
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().HasPendingRunAwayElevatorVar().SetValue( true ).SetIgnore( false );
-	// Set nav target to the elevator origin
-	plannerNode.WorldState().NavTargetOriginVar().SetValue( worldState.RunAwayElevatorOriginVar().Value() );
-	plannerNode.WorldState().NavTargetOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, GOAL_PICKUP_ACTION_RADIUS );
-	plannerNode.WorldState().NavTargetOriginVar().SetIgnore( false );
-	// Set pending origin to the elevator destination
-	plannerNode.WorldState().PendingOriginVar().SetValue( worldState.RunAwayElevatorOriginVar().Value2() );
-	plannerNode.WorldState().PendingOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, GOAL_PICKUP_ACTION_RADIUS );
-	plannerNode.WorldState().PendingOriginVar().SetIgnore( false );
-
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }
 
 void DoRunAwayViaElevatorActionRecord::Activate() {
@@ -92,62 +78,43 @@ AiActionRecord::Status DoRunAwayViaElevatorActionRecord::UpdateStatus( const Wor
 }
 
 PlannerNode *DoRunAwayViaElevatorAction::TryApply( const WorldState &worldState ) {
-	if( !CheckCommonRunAwayPreconditions( worldState ) ) {
+	const std::optional<OriginVar> pendingOriginVar( worldState.getOriginVar( WorldState::PendingElevatorDest ) );
+	if( !pendingOriginVar ) {
+		Debug( "The pending elevator dest origin is missing in the given world state\n" );
 		return nullptr;
 	}
 
-	if( !worldState.HasJustEnteredElevatorVar().Ignore() && worldState.HasJustEnteredElevatorVar() ) {
-		Debug( "Bot has just entered elevator in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasPendingRunAwayElevatorVar().Ignore() || !worldState.HasPendingRunAwayElevatorVar() ) {
-		Debug( "Has bot a pending elevator for running away is ignored or absent in the given world state\n" );
-		return nullptr;
-	}
+	const Vec3 botOrigin       = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 navTargetOrigin = worldState.getOriginVar( WorldState::NavTargetOrigin ).value();
 
-#ifdef _DEBUG
-	// Sanity check
-	if( worldState.NavTargetOriginVar().Ignore() ) {
-		worldState.DebugPrint( "Given WS" );
-		AI_FailWith( this->name, "Nav target origin is ignored in the given world state\n" );
-	}
-	if( worldState.PendingOriginVar().Ignore() ) {
-		worldState.DebugPrint( "Given WS" );
-		AI_FailWith( this->name, "Pending origin is ignored in the given world state\n" );
-	}
-#endif
-
-	if( worldState.DistanceToNavTarget() > GOAL_PICKUP_ACTION_RADIUS ) {
+	if( botOrigin.FastDistanceTo( navTargetOrigin ) > GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Bot is too far from the nav target (elevator origin)\n" );
 		return nullptr;
 	}
 
-	Vec3 elevatorOrigin = worldState.NavTargetOriginVar().Value();
+	const Vec3 &elevatorOrigin = navTargetOrigin;
 	unsigned selectedEnemiesInstanceId = Self()->GetSelectedEnemies().InstanceId();
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self(), elevatorOrigin, selectedEnemiesInstanceId ) ) );
+
+	const float elevatorDistance = ( elevatorOrigin - *pendingOriginVar ).LengthFast();
+	// Assume that elevator speed is 400 units per second
+	const float speedInUnitsPerMillis = 400 / 1000.0f;
+	const float cost = elevatorDistance * Q_Rcp( speedInUnitsPerMillis );
+
+	DoRunAwayViaElevatorActionRecord *record = pool.New( Self(), elevatorOrigin, selectedEnemiesInstanceId );
+	
+	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, cost );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	float elevatorDistance = ( elevatorOrigin - worldState.PendingOriginVar().Value() ).LengthFast();
-	// Assume that elevator speed is 400 units per second
-	float speedInUnitsPerMillis = 400 / 1000.0f;
-	plannerNode.Cost() = elevatorDistance / speedInUnitsPerMillis;
-
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().HasJustEnteredElevatorVar().SetValue( true ).SetIgnore( false );
 	// Set bot origin to the elevator destination
-	plannerNode.WorldState().BotOriginVar().SetValue( worldState.PendingOriginVar().Value() );
-	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, GOAL_PICKUP_ACTION_RADIUS );
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *pendingOriginVar );
 	// Reset pending origin
-	plannerNode.WorldState().PendingOriginVar().SetIgnore( true );
-	plannerNode.WorldState().HasPendingRunAwayElevatorVar().SetIgnore( true );
-	// Tactical spots should be recomputed for the new bot origin
-	plannerNode.WorldState().ResetTacticalSpots();
+	plannerNode->worldState.clearOriginVar( WorldState::PendingElevatorDest );
 
-	plannerNode.WorldState().IsRunningAwayVar().SetValue( true ).SetIgnore( false );
-	plannerNode.WorldState().CanHitEnemyVar().SetValue( false ).SetIgnore( false );
-	plannerNode.WorldState().EnemyCanHitVar().SetValue( false ).SetIgnore( false );
+	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( true ) );
+	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
+	plannerNode->worldState.setBoolVar( WorldState::EnemyCanHit, BoolVar( false ) );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

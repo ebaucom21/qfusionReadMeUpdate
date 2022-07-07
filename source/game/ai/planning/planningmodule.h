@@ -24,6 +24,12 @@ class BotPlanningModule {
 	friend class BotTacticalSpotsCache;
 	friend class WorldState;
 
+	friend class StartGotoRunAwayElevatorAction;
+	friend class StartGotoRunAwayTeleportAction;
+	friend class StartGotoRunAwayJumppadAction;
+
+	friend class StartGotoCoverAction;
+
 	Bot *const bot;
 
 	BotPlanner planner;
@@ -111,14 +117,6 @@ public:
 
 	void SetFrameAffinity( unsigned modulo, unsigned offset ) {
 		planner.SetFrameAffinity( modulo, offset );
-	}
-
-	const ArrayRange<AiGoal *> Goals() const {
-		return ArrayRange<AiGoal *>( planner.goals.begin(), planner.goals.size() );
-	}
-
-	const ArrayRange<AiAction *> Actions() const {
-		return ArrayRange<AiAction *>( planner.actions.begin(), planner.actions.size() );
 	}
 
 	bool IsPerformingPursuit() const;

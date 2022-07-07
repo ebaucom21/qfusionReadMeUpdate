@@ -4,229 +4,160 @@
 #include "../combat/coverproblemsolver.h"
 
 inline const AiAasRouteCache *BotTacticalSpotsCache::RouteCache() {
-	return bot->RouteCache();
+	return m_bot->RouteCache();
 }
 
 inline float BotTacticalSpotsCache::Skill() const {
-	return bot->Skill();
+	return m_bot->Skill();
 }
 
-inline bool BotTacticalSpotsCache::BotHasAlmostSameOrigin( const Vec3 &unpackedOrigin ) const {
-	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	return unpackedOrigin.SquareDistanceTo( bot->Origin() ) <= squareDistanceError;
+bool BotTacticalSpotsCache::botHasAlmostSameOrigin( const Vec3 &unpackedOrigin ) const {
+	return unpackedOrigin.SquareDistanceTo( unpackedOrigin ) < 1.0f;
+}
+
+void BotTacticalSpotsCache::clear() {
+	m_coverSpotsTacticalSpotsCache.clear();
+
+	m_nearbyEntitiesCache.clear();
+
+	m_runAwayTeleportOriginsCache.clear();
+	m_runAwayJumppadOriginsCache.clear();
+	m_runAwayElevatorOriginsCache.clear();
 }
 
 template <typename ProblemParams>
-inline bool BotTacticalSpotsCache::FindForOrigin( const ProblemParams &problemParams,
+inline bool BotTacticalSpotsCache::findForOrigin( const ProblemParams &problemParams,
 												  const Vec3 &origin, float searchRadius, vec3_t result ) {
-	if( BotHasAlmostSameOrigin( origin ) ) {
+	if( botHasAlmostSameOrigin( origin ) ) {
 		// Provide a bot entity to aid trace checks
-		AdvantageProblemSolver::OriginParams originParams( game.edicts + bot->EntNum(), searchRadius, RouteCache() );
+		AdvantageProblemSolver::OriginParams originParams( game.edicts + m_bot->EntNum(), searchRadius, RouteCache() );
 		return AdvantageProblemSolver( originParams, problemParams ).findSingle( result );
 	}
 	TacticalSpotsRegistry::OriginParams originParams( origin.Data(), searchRadius, RouteCache() );
 	return AdvantageProblemSolver( originParams, problemParams ).findSingle( result );
 }
 
-const short *BotTacticalSpotsCache::GetSingleOriginSpot( SingleOriginSpotsCache *cache, const short *origin,
-														 const short *enemyOrigin, SingleOriginFindMethod findMethod ) {
-	short *cachedSpot;
-	if( cache->TryGetCachedSpot( origin, enemyOrigin, &cachedSpot ) ) {
-		return cachedSpot;
+template <typename Result, typename Method>
+auto BotTacticalSpotsCache::getThroughCache( SpotsCache<Result> *cache, const float *botOrigin,
+											 const float *enemyOrigin, Method method ) -> std::optional<Result> {
+	if( std::optional<Result> cached = cache->tryGettingCached( botOrigin, enemyOrigin ) ) {
+		return cached;
 	}
 
-	CachedSpot<short[3]> *newSpot = cache->Alloc();
-	// Can't allocate a spot. It also means a limit of such tactical spots per think frame has been exceeded.
-	if( !newSpot ) {
-		return nullptr;
+	if( cache->m_entries.full() ) {
+		return std::nullopt;
 	}
 
-	VectorCopy( origin, newSpot->origin );
-	VectorCopy( enemyOrigin, newSpot->enemyOrigin );
+	std::optional<Result> result = ( this->*method )( Vec3( botOrigin ), Vec3( enemyOrigin ) );
+	cache->m_entries.emplace_back( {
+		.validForBotOrigin   = { botOrigin[0], botOrigin[1], botOrigin[2] },
+		.validForEnemyOrigin = { enemyOrigin[0], enemyOrigin[1], enemyOrigin[2] },
+		.payload             = result,
+	});
 
-	vec3_t foundSpotOrigin;
-	if( !( this->*findMethod )( GetUnpacked4uVec( origin ), GetUnpacked4uVec( enemyOrigin ), foundSpotOrigin ) ) {
-		newSpot->succeeded = false;
-		return nullptr;
-	}
-
-	for( unsigned i = 0; i < 3; ++i )
-		newSpot->spotData[i] = (short)( ( (int)foundSpotOrigin[i] ) / 4 );
-
-	newSpot->succeeded = true;
-	return newSpot->spotData;
+	return result;
 }
 
-const short *BotTacticalSpotsCache::GetDualOriginSpot( DualOriginSpotsCache *cache, const short *origin,
-													   const short *enemyOrigin, DualOriginFindMethod findMethod ) {
-	short *cachedSpot;
-	if( cache->TryGetCachedSpot( origin, enemyOrigin, &cachedSpot ) ) {
-		return cachedSpot;
-	}
+[[nodiscard]]
+auto BotTacticalSpotsCache::getSingleOriginSpot( SingleOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
+												 const Vec3 &enemyOrigin, FindSingleOriginMethod findMethod )
+												 -> std::optional<Vec3> {
+	return getThroughCache( cachedSpots, botOrigin.Data(), enemyOrigin.Data(), findMethod );
+}
 
-	CachedSpot<short[6]> *newSpot = cache->Alloc();
-	// Can't allocate a spot. It also means a limit of such tactical spots per think frame has been exceeded.
-	if( !newSpot ) {
-		return nullptr;
-	}
-
-	VectorCopy( origin, newSpot->origin );
-	VectorCopy( enemyOrigin, newSpot->enemyOrigin );
-
-	vec3_t foundOrigins[2];
-	if( !( this->*findMethod )( GetUnpacked4uVec( origin ), GetUnpacked4uVec( enemyOrigin ), foundOrigins ) ) {
-		newSpot->succeeded = false;
-		return nullptr;
-	}
-
-	for( unsigned i = 0; i < 3; ++i ) {
-		newSpot->spotData[i + 0] = (short)( ( ( foundOrigins[0][i] ) / 4 ) );
-		newSpot->spotData[i + 3] = (short)( ( ( foundOrigins[1][i] ) / 4 ) );
-	}
-
-	newSpot->succeeded = true;
-	return newSpot->spotData;
+[[nodiscard]]
+auto BotTacticalSpotsCache::getDualOriginSpot( DualOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
+											   const Vec3 &enemyOrigin, FindDualOriginMethod findMethod )
+											   -> std::optional<DualOrigin> {
+	return getThroughCache( cachedSpots, botOrigin.Data(), enemyOrigin.Data(), findMethod );
 }
 
 template <typename ProblemParams>
-inline void BotTacticalSpotsCache::TakeEnemiesIntoAccount( ProblemParams &problemParams ) {
+inline void BotTacticalSpotsCache::takeEnemiesIntoAccount( ProblemParams &problemParams ) {
 	if( Skill() < 0.33f ) {
 		return;
 	}
-	const auto &selectedEnemies = bot->GetSelectedEnemies();
+	const auto &selectedEnemies = m_bot->GetSelectedEnemies();
 	if( !selectedEnemies.AreValid() ) {
 		return;
 	}
 	// TODO: Provide PrimaryEnemy() getter?
 	assert( selectedEnemies.IsPrimaryEnemy( *selectedEnemies.begin() ) );
-	problemParams.setImpactfulEnemies( bot->TrackedEnemiesHead(), *selectedEnemies.begin() );
+	problemParams.setImpactfulEnemies( m_bot->TrackedEnemiesHead(), *selectedEnemies.begin() );
 }
 
-bool BotTacticalSpotsCache::FindCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
-	const float searchRadius = 192.0f + 512.0f * Skill();
+auto BotTacticalSpotsCache::findCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<Vec3> {
+	const float searchRadius = kLasergunRange;
 	CoverProblemSolver::ProblemParams problemParams( enemyOrigin.Data(), 32.0f );
 	problemParams.setMinHeightAdvantageOverOrigin( -searchRadius );
 	problemParams.setCheckToAndBackReach( false );
 	problemParams.setMaxFeasibleTravelTimeMillis( 1250 );
-	TakeEnemiesIntoAccount( problemParams );
+	takeEnemiesIntoAccount( problemParams );
 
-	if( BotHasAlmostSameOrigin( origin ) ) {
-		TacticalSpotsRegistry::OriginParams originParams( game.edicts + bot->EntNum(), searchRadius, RouteCache() );
-		return CoverProblemSolver( originParams, problemParams ).findSingle( result );
+	vec3_t result;
+	if( botHasAlmostSameOrigin( origin ) ) {
+		TacticalSpotsRegistry::OriginParams originParams( game.edicts + m_bot->EntNum(), searchRadius, RouteCache() );
+		if( CoverProblemSolver( originParams, problemParams ).findSingle( result ) ) {
+			return Vec3( result );
+		}
 	}
+
 	TacticalSpotsRegistry::OriginParams originParams( origin.Data(), searchRadius, RouteCache() );
-	return CoverProblemSolver( originParams, problemParams ).findSingle( result );
+	if( CoverProblemSolver( originParams, problemParams ).findSingle( result ) ) {
+		return Vec3( result );
+	}
+
+	return std::nullopt;
 }
 
-const BotTacticalSpotsCache::NearbyEntitiesCache::NearbyEntitiesCacheEntry
-*BotTacticalSpotsCache::NearbyEntitiesCache::TryGetCachedEntities( const Vec3 &origin, float radius ) {
-	for( unsigned i = 0; i < numEntries; ++i ) {
-		NearbyEntitiesCacheEntry &entry = entries[i];
-		if( !VectorCompare( origin.Data(), entry.botOrigin ) ) {
-			continue;
-		}
-		if( radius != entry.radius ) {
-			continue;
-		}
-		return &entry;
+auto BotTacticalSpotsCache::findNearbyEntities( const Vec3 &origin, float radius ) -> std::span<const uint16_t> {
+	if( const NearbyEntitiesCache::Entry *cacheEntry = m_nearbyEntitiesCache.tryGettingCached( origin, radius ) ) {
+		return { cacheEntry->entNums, cacheEntry->numEntities };
 	}
 
-	return nullptr;
-}
-
-int BotTacticalSpotsCache::FindNearbyEntities( const Vec3 &origin, float radius, int **entNums ) {
-	if( const auto *nearbyEntitiesCacheEntry = nearbyEntitiesCache.TryGetCachedEntities( origin, radius ) ) {
-		*entNums = (int *)nearbyEntitiesCacheEntry->entNums;
-		return nearbyEntitiesCacheEntry->numEntities;
+	NearbyEntitiesCache::Entry *const cacheEntry = m_nearbyEntitiesCache.tryAlloc( origin.Data(), radius );
+	if( !cacheEntry ) {
+		return {};
 	}
 
-	auto *nearbyEntitiesCacheEntry = nearbyEntitiesCache.Alloc();
-	if( !nearbyEntitiesCacheEntry ) {
-		return 0;
-	}
-
-	VectorCopy( origin.Data(), nearbyEntitiesCacheEntry->botOrigin );
-	nearbyEntitiesCacheEntry->radius = radius;
-
-	constexpr int maxCachedEntities = NearbyEntitiesCache::MAX_CACHED_NEARBY_ENTITIES;
+	const unsigned maxCachedEntities = std::size( cacheEntry->entNums );
 	// Find more than maxCachedEntities entities in radius (most entities will usually be filtered out)
-	constexpr int maxRadiusEntities = 2 * maxCachedEntities;
 
-	int radiusEntNums[maxRadiusEntities];
-	// Note that this value might be greater than maxRadiusEntities (an actual number of entities is returned)
-	int numRadiusEntities = GClip_FindInRadius( const_cast<float *>( origin.Data() ), radius, radiusEntNums, maxRadiusEntities );
+	int radiusEntNums[64];
+	assert( maxCachedEntities < std::size( radiusEntNums ) );
+	int numRadiusEntities = GClip_FindInRadius( origin.Data(), radius, radiusEntNums, std::size( radiusEntNums ) );
+	// Note that this value might be greater than the buffer capacity (an actual number of entities is returned)
+	numRadiusEntities = wsw::min<int>( numRadiusEntities, std::size( radiusEntNums ) );
 
-	int numEntities = 0;
-	// Copy to locals for faster access (a compiler might be paranoid about aliasing)
-	edict_t *gameEdicts = game.edicts;
-	int *triggerEntNums = nearbyEntitiesCacheEntry->entNums;
-
-	if( numRadiusEntities <= maxCachedEntities ) {
-		// In this case we can avoid buffer capacity checks on each step
-		for( int i = 0, end = wsw::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
-			edict_t *ent = gameEdicts + radiusEntNums[i];
-			if( !ent->r.inuse ) {
-				continue;
-			}
-			if( !ent->classname ) {
-				continue;
-			}
-
-			triggerEntNums[numEntities++] = radiusEntNums[i];
-		}
-	} else {
-		for( int i = 0, end = wsw::min( numRadiusEntities, maxRadiusEntities ); i < end; ++i ) {
-			edict_t *ent = game.edicts + radiusEntNums[i];
-			if( !ent->r.inuse ) {
-				continue;
-			}
-			if( !ent->classname ) {
-				continue;
-			}
-
-			triggerEntNums[numEntities++] = radiusEntNums[i];
-			if( numEntities == maxCachedEntities ) {
+	assert( cacheEntry->numEntities == 0 );
+	const auto *const gameEnts = game.edicts;
+	for( int i = 0; i < numRadiusEntities; ++i ) {
+		const auto *const ent = gameEnts + radiusEntNums[i];
+		if( ent->r.inuse && ent->classname && ent->touch ) {
+			if( !cacheEntry->tryAddingNext( radiusEntNums[i] ) ) [[unlikely]] {
 				break;
 			}
 		}
 	}
 
-	nearbyEntitiesCacheEntry->numEntities = numEntities;
-	*entNums = (int *)nearbyEntitiesCacheEntry->entNums;
-	return numEntities;
+	return{ cacheEntry->entNums, cacheEntry->numEntities };
 }
 
-void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, float radius, const char *classname,
+void BotTacticalSpotsCache::findReachableClassEntities( const Vec3 &origin, float radius, const char *classname,
 														BotTacticalSpotsCache::ReachableEntities &result ) {
-	int *triggerEntities;
-	int numEntities = FindNearbyEntities( origin, radius, &triggerEntities );
+	const std::span<const uint16_t> entNums = findNearbyEntities( origin, radius );
 
 	ReachableEntities candidateEntities;
-	// Copy to locals for faster access (a compiler might be paranoid about aliasing)
-	edict_t *gameEdicts = game.edicts;
+	const auto *gameEnts = game.edicts;
 
-	if( numEntities > (int)candidateEntities.capacity() ) {
-		for( int i = 0; i < numEntities; ++i ) {
-			edict_t *ent = gameEdicts + triggerEntities[i];
-			// Specify expected strcmp() result explicitly to avoid misinterpreting the condition
-			// (Strings are equal if an strcmp() result is zero)
-			if( strcmp( ent->classname, classname ) != 0 ) {
-				continue;
-			}
-			float distance = DistanceFast( origin.Data(), ent->s.origin );
-			candidateEntities.push_back( EntAndScore( triggerEntities[i], radius - distance ) );
-			if( candidateEntities.full() ) {
+	for( const int entNum: entNums ) {
+		const auto *const ent = gameEnts + entNum;
+		if( !Q_stricmp( ent->classname, classname ) ) {
+			const float distance = DistanceFast( origin.Data(), ent->s.origin );
+			candidateEntities.push_back( EntAndScore( entNum, radius - distance ) );
+			if( candidateEntities.full() ) [[unlikely]] {
 				break;
 			}
-		}
-	} else {
-		for( int i = 0; i < numEntities; ++i ) {
-			edict_t *ent = gameEdicts + triggerEntities[i];
-			if( strcmp( ent->classname, classname ) != 0 ) {
-				continue;
-			}
-			float distance = DistanceFast( origin.Data(), ent->s.origin );
-			candidateEntities.push_back( EntAndScore( triggerEntities[i], radius - distance ) );
 		}
 	}
 
@@ -236,17 +167,17 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 	int fromAreaNums[2] { 0, 0 };
 	int numFromAreas;
 	// If an origin matches actual bot origin
-	if( BotHasAlmostSameOrigin( origin ) ) {
-		numFromAreas = bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
+	if( botHasAlmostSameOrigin( origin ) ) {
+		numFromAreas = m_bot->EntityPhysicsState()->PrepareRoutingStartAreas( fromAreaNums );
 	} else {
 		fromAreaNums[0] = aasWorld->findAreaNum( origin );
 		numFromAreas = fromAreaNums[0] ? 1 : 0;
 	}
 
 	for( EntAndScore &candidate: candidateEntities ) {
-		const edict_t *ent = gameEdicts + candidate.entNum;
+		const auto *const ent = gameEnts + candidate.entNum;
 
-		const int toAreaNum = FindMostFeasibleEntityAasArea( ent, aasWorld );
+		const int toAreaNum = findMostFeasibleEntityAasArea( ent, aasWorld );
 		if( !toAreaNum ) {
 			continue;
 		}
@@ -265,7 +196,7 @@ void BotTacticalSpotsCache::FindReachableClassEntities( const Vec3 &origin, floa
 	std::sort( result.begin(), result.end() );
 }
 
-int BotTacticalSpotsCache::FindMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const {
+int BotTacticalSpotsCache::findMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const {
 	int areaNumsBuffer[24];
 	const Vec3 boxMins( Vec3( -20, -20, -12 ) + ent->r.absmin );
 	const Vec3 boxMaxs( Vec3( +20, +20, +12 ) + ent->r.absmax );
@@ -273,7 +204,7 @@ int BotTacticalSpotsCache::FindMostFeasibleEntityAasArea( const edict_t *ent, co
 
 	const auto aasAreaSettings = aasWorld->getAreaSettings();
 	for( const int areaNum : boxAreaNums ) {
-		int areaFlags = aasAreaSettings[areaNum].areaflags;
+		const int areaFlags = aasAreaSettings[areaNum].areaflags;
 		if( !( areaFlags & AREA_GROUNDED ) ) {
 			continue;
 		}
@@ -285,19 +216,20 @@ int BotTacticalSpotsCache::FindMostFeasibleEntityAasArea( const edict_t *ent, co
 	return 0;
 }
 
-bool BotTacticalSpotsCache::FindRunAwayTeleportOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] ) {
+auto BotTacticalSpotsCache::findRunAwayTeleportOrigin( const Vec3 &origin, const Vec3 &enemyOrigin )
+	-> std::optional<DualOrigin> {
 	ReachableEntities reachableEntities;
-	FindReachableClassEntities( origin, 128.0f + 384.0f * Skill(), "trigger_teleport", reachableEntities );
+	findReachableClassEntities( origin, kLasergunRange, "trigger_teleport", reachableEntities );
 
-	trace_t trace;
-	const auto *pvsCache = EntitiesPvsCache::Instance();
-	edict_t *enemyEnt = const_cast<edict_t *>( bot->GetSelectedEnemies().Ent() );
+	const auto *const pvsCache = EntitiesPvsCache::Instance();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
-		edict_t *ent = game.edicts + entAndScore.entNum;
+		const auto *const ent = gameEnts + entAndScore.entNum;
 		if( !ent->target ) {
 			continue;
 		}
-		edict_t *dest = G_Find( NULL, FOFS( targetname ), ent->target );
+		const auto *const dest = G_Find( nullptr, FOFS( targetname ), ent->target );
 		if( !dest ) {
 			continue;
 		}
@@ -306,59 +238,56 @@ bool BotTacticalSpotsCache::FindRunAwayTeleportOrigin( const Vec3 &origin, const
 			continue;
 		}
 
+		trace_t trace;
 		G_Trace( &trace, enemyEnt->s.origin, nullptr, nullptr, dest->s.origin, enemyEnt, MASK_AISOLID );
 		if( trace.fraction == 1.0f || trace.ent > 0 ) {
 			continue;
 		}
 
-		// Copy trigger origin
-		VectorCopy( ent->s.origin, result[0] );
-		// Copy trigger destination
-		VectorCopy( dest->s.origin, result[1] );
-		return true;
+		const Vec3 movesFrom( ent->s.origin ), movesTo( dest->s.origin );
+		return std::make_pair( movesFrom, movesTo );
 	}
 
-	return false;
+	return std::nullopt;
 }
 
-bool BotTacticalSpotsCache::FindRunAwayJumppadOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] ) {
+auto BotTacticalSpotsCache::findRunAwayJumppadOrigin( const Vec3 &origin, const Vec3 &enemyOrigin )
+	-> std::optional<DualOrigin> {
 	ReachableEntities reachableEntities;
-	FindReachableClassEntities( origin, 128.0f + 384.0f * Skill(), "trigger_push", reachableEntities );
+	findReachableClassEntities( origin, kLasergunRange, "trigger_push", reachableEntities );
 
-	trace_t trace;
-	const auto *pvsCache = EntitiesPvsCache::Instance();
-	edict_t *enemyEnt = const_cast<edict_t *>( bot->GetSelectedEnemies().Ent() );
+	const auto *const pvsCache = EntitiesPvsCache::Instance();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
-		edict_t *ent = game.edicts + entAndScore.entNum;
+		const auto *const ent = gameEnts + entAndScore.entNum;
 		if( !pvsCache->AreInPvs( enemyEnt, ent ) ) {
 			continue;
 		}
 
+		trace_t trace;
 		G_Trace( &trace, enemyEnt->s.origin, nullptr, nullptr, ent->target_ent->s.origin, enemyEnt, MASK_AISOLID );
 		if( trace.fraction == 1.0f || trace.ent > 0 ) {
 			continue;
 		}
 
-		// Copy trigger origin
-		VectorCopy( ent->s.origin, result[0] );
-		// Copy trigger destination
-		VectorCopy( ent->target_ent->s.origin, result[1] );
-		return true;
+		const Vec3 movesFrom( ent->s.origin ), movesTo( ent->target_ent->s.origin );
+		return std::make_pair( movesFrom, movesTo );
 	}
 
-	return false;
+	return std::nullopt;
 }
 
-bool BotTacticalSpotsCache::FindRunAwayElevatorOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] ) {
+auto BotTacticalSpotsCache::findRunAwayElevatorOrigin( const Vec3 &origin, const Vec3 &enemyOrigin )
+	-> std::optional<DualOrigin> {
 	ReachableEntities reachableEntities;
-	FindReachableClassEntities( origin, 128.0f + 384.0f * Skill(), "func_plat", reachableEntities );
+	findReachableClassEntities( origin, kLasergunRange, "func_plat", reachableEntities );
 
-	trace_t trace;
-	const auto *pvsCache = EntitiesPvsCache::Instance();
-	edict_t *enemyEnt = const_cast<edict_t *>( bot->GetSelectedEnemies().Ent() );
-	edict_t *gameEdicts = game.edicts;
+	const auto *const pvsCache = EntitiesPvsCache::Instance();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
-		edict_t *ent = gameEdicts + entAndScore.entNum;
+		const auto *const ent = gameEnts + entAndScore.entNum;
 		// Can't run away via elevator if the elevator has been always activated
 		if( ent->moveinfo.state != STATE_BOTTOM ) {
 			continue;
@@ -368,19 +297,19 @@ bool BotTacticalSpotsCache::FindRunAwayElevatorOrigin( const Vec3 &origin, const
 			continue;
 		}
 
+		trace_t trace;
 		G_Trace( &trace, enemyEnt->s.origin, nullptr, nullptr, ent->moveinfo.end_origin, enemyEnt, MASK_AISOLID );
 		if( trace.fraction == 1.0f || trace.ent > 0 ) {
 			continue;
 		}
 
 		// Copy trigger origin
-		VectorCopy( ent->s.origin, result[0] );
+		Vec3 movesFrom( ent->s.origin );
 		// Drop origin to the elevator bottom
-		result[0][2] = ent->r.absmin[2] + 16;
-		// Copy trigger destination
-		VectorCopy( ent->moveinfo.end_origin, result[1] );
-		return true;
+		movesFrom.Z() = ent->r.absmin[2] + 16;
+		Vec3 movesTo( ent->moveinfo.end_origin );
+		return std::make_pair( movesFrom, movesTo );
 	}
 
-	return false;
+	return std::nullopt;
 }

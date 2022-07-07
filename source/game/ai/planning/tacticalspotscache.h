@@ -4,165 +4,171 @@
 #include "../ailocal.h"
 
 class BotTacticalSpotsCache {
-	template <typename SpotData>
-	struct CachedSpot {
-		short origin[3];
-		short enemyOrigin[3];
-		SpotData spotData;
-		bool succeeded;
-	};
+public:
+	explicit BotTacticalSpotsCache( Bot *bot ) : m_bot( bot ) {}
 
+	void clear();
+
+	[[nodiscard]]
+	auto getCoverSpot( const Vec3 &botOrigin, const Vec3 &enemyOrigin ) -> std::optional<Vec3> {
+		return getSingleOriginSpot( &m_coverSpotsTacticalSpotsCache, botOrigin, enemyOrigin,
+									&BotTacticalSpotsCache::findCoverSpot );
+	}
+
+	using DualOrigin = std::pair<Vec3, Vec3>;
+
+	[[nodiscard]]
+	auto getRunAwayTeleportOrigin( const Vec3 &botOrigin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin> {
+		return getDualOriginSpot( &m_runAwayTeleportOriginsCache, botOrigin, enemyOrigin,
+								  &BotTacticalSpotsCache::findRunAwayTeleportOrigin );
+	}
+
+	[[nodiscard]]
+	auto getRunAwayJumppadOrigin( const Vec3 &botOrigin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin> {
+		return getDualOriginSpot( &m_runAwayJumppadOriginsCache, botOrigin, enemyOrigin,
+								  &BotTacticalSpotsCache::findRunAwayJumppadOrigin );
+	}
+
+	[[nodiscard]]
+	auto getRunAwayElevatorOrigin( const Vec3 &botOrigin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin> {
+		return getDualOriginSpot( &m_runAwayElevatorOriginsCache, botOrigin, enemyOrigin,
+								  &BotTacticalSpotsCache::findRunAwayElevatorOrigin );
+	}
+private:
 	// Use just a plain array for caching spots.
 	// High number of distinct (and thus searched for) spots will kill TacticalSpotsRegistry performance first.
-	template <typename SpotData>
+	template <typename Payload>
 	struct SpotsCache {
-		static constexpr auto MAX_SPOTS = 3;
-		CachedSpot<SpotData> spots[MAX_SPOTS];
-		unsigned numSpots;
+		struct Entry {
+			float validForBotOrigin[3];
+			float validForEnemyOrigin[3];
+			std::optional<Payload> payload;
+		};
 
-		SpotsCache() { Clear(); }
+		wsw::StaticVector<Entry, 3> m_entries;
 
-		void Clear() {
-			numSpots = 0;
-			memset( spots, 0, sizeof( spots ) );
-		}
+		void clear() { m_entries.clear(); }
 
-		CachedSpot<SpotData> *Alloc() {
-			if( numSpots == MAX_SPOTS ) {
-				return nullptr;
-			}
-			return &spots[numSpots++];
-		}
-
-		bool TryGetCachedSpot( const short *origin, const short *enemyOrigin, short **result ) const {
-			for( unsigned i = 0, end = numSpots; i < end; ++i ) {
-				const CachedSpot<SpotData> &spot = spots[i];
-				if( !VectorCompare( origin, spot.origin ) ) {
-					continue;
+		[[nodiscard]]
+		auto tryGettingCached( const float *botOrigin, const float *enemyOrigin ) const -> std::optional<Payload> {
+			for( const Entry &entry: m_entries ) {
+				if( VectorCompare( botOrigin, entry.validForBotOrigin ) ) {
+					if( VectorCompare( enemyOrigin, entry.validForEnemyOrigin ) ) {
+						return entry.payload;
+					}
 				}
-				if( !VectorCompare( enemyOrigin, spot.enemyOrigin ) ) {
-					continue;
-				}
-				*result = spot.succeeded ? (short *)spot.spotData : nullptr;
-				return true;
 			}
-			return false;
+			return std::nullopt;
 		}
 	};
 
-	typedef SpotsCache<short[3]> SingleOriginSpotsCache;
-	SingleOriginSpotsCache sniperRangeTacticalSpotsCache;
-	SingleOriginSpotsCache farRangeTacticalSpotsCache;
-	SingleOriginSpotsCache middleRangeTacticalSpotsCache;
-	SingleOriginSpotsCache closeRangeTacticalSpotsCache;
-	SingleOriginSpotsCache coverSpotsTacticalSpotsCache;
+	Bot *const m_bot;
 
-	typedef SpotsCache<short[6]> DualOriginSpotsCache;
-	DualOriginSpotsCache runAwayTeleportOriginsCache;
-	DualOriginSpotsCache runAwayJumppadOriginsCache;
-	DualOriginSpotsCache runAwayElevatorOriginsCache;
+	typedef SpotsCache<Vec3> SingleOriginSpotsCache;
+	SingleOriginSpotsCache m_coverSpotsTacticalSpotsCache;
 
-	Bot *const bot;
+	typedef SpotsCache<DualOrigin> DualOriginSpotsCache;
+	DualOriginSpotsCache m_runAwayTeleportOriginsCache;
+	DualOriginSpotsCache m_runAwayJumppadOriginsCache;
+	DualOriginSpotsCache m_runAwayElevatorOriginsCache;
 
-	bool FindCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
+	[[nodiscard]]
+	auto findCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<Vec3>;
 
 	template <typename ProblemParams>
-	inline void TakeEnemiesIntoAccount( ProblemParams &problemParams );
+	inline void takeEnemiesIntoAccount( ProblemParams &problemParams );
 
 	// We can't(?) refer to a nested class in a forward declaration, so declare the parameter as a template one
 	template <typename ProblemParams>
-	inline bool FindForOrigin( const ProblemParams &problemParams, const Vec3 &origin, float searchRadius, vec3_t result );
+	inline bool findForOrigin( const ProblemParams &problemParams, const Vec3 &origin, float searchRadius, vec3_t result );
 
-	bool FindRunAwayTeleportOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] );
-	bool FindRunAwayJumppadOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] );
-	bool FindRunAwayElevatorOrigin( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result[2] );
+	[[nodiscard]]
+	auto findRunAwayTeleportOrigin( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin>;
+	[[nodiscard]]
+	auto findRunAwayJumppadOrigin( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin>;
+	[[nodiscard]]
+	auto findRunAwayElevatorOrigin( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<DualOrigin>;
 
 	using ReachableEntities = wsw::StaticVector<EntAndScore, 16>;
-	void FindReachableClassEntities( const Vec3 &origin, float radius, const char *classname, ReachableEntities &result );
+	void findReachableClassEntities( const Vec3 &origin, float radius, const char *classname, ReachableEntities &result );
 
 	// AiAasWorld::findAreaNum() fails so often for teleports/elevators, etc, so we have to use this method.
 	// AiAasWorld is provided as an argument to avoid an implicit retrieval of global instance in a loop.
-	int FindMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const;
+	int findMostFeasibleEntityAasArea( const edict_t *ent, const AiAasWorld *aasWorld ) const;
 
-	class NearbyEntitiesCache {
-public:
-		static constexpr unsigned MAX_CACHED_NEARBY_ENTITIES = 32;
-		struct NearbyEntitiesCacheEntry {
-			int entNums[MAX_CACHED_NEARBY_ENTITIES];
-			int numEntities { 0 };
+	struct NearbyEntitiesCache {
+		struct Entry {
+			uint16_t entNums[32];
+			unsigned numEntities { 0 };
+			float radius { 0.0f };
 			vec3_t botOrigin;
-			float radius { 0 };
+
+			bool tryAddingNext( int entNum ) {
+				assert( entNum > 0 && entNum < MAX_EDICTS );
+				if( numEntities != std::size( entNums ) ) {
+					entNums[numEntities++] = (uint16_t)entNum;
+					return true;
+				}
+				return false;
+			}
 		};
 
-private:
-		static constexpr unsigned MAX_ENTITIES_CACHE_ENTRIES = 4;
-		NearbyEntitiesCacheEntry entries[MAX_ENTITIES_CACHE_ENTRIES];
-		unsigned numEntries { 0 };
-public:
-		void Clear() { numEntries = 0; }
-		NearbyEntitiesCacheEntry *Alloc() {
-			if( numEntries == MAX_ENTITIES_CACHE_ENTRIES ) {
-				return nullptr;
+		void clear() { m_entries.clear(); }
+
+		[[nodiscard]]
+		auto tryAlloc( const float *botOrigin, float radius ) -> Entry * {
+			if( !m_entries.full() ) {
+				Entry *e       = m_entries.unsafe_grow_back();
+				e->numEntities = 0;
+				e->radius      = radius;
+				VectorCopy( botOrigin, e->botOrigin );
+				return e;
 			}
-			return &entries[numEntries++];
+			return nullptr;
 		}
-		const NearbyEntitiesCacheEntry *TryGetCachedEntities( const Vec3 &origin, float radius );
+
+		[[nodiscard]]
+		auto tryGettingCached( const Vec3 &origin, float radius ) const -> const Entry * {
+			for( const Entry &entry: m_entries ) {
+				if( VectorCompare( entry.botOrigin, origin.Data() ) && entry.radius == radius ) {
+					return std::addressof( entry );
+				}
+			}
+			return nullptr;
+		}
+
+		wsw::StaticVector<Entry, 3> m_entries;
 	};
 
-	NearbyEntitiesCache nearbyEntitiesCache;
+	NearbyEntitiesCache m_nearbyEntitiesCache;
 
-	int FindNearbyEntities( const Vec3 &origin, float radius, int **entNums );
+	[[nodiscard]]
+	auto findNearbyEntities( const Vec3 &origin, float radius ) -> std::span<const uint16_t>;
 
 	// These functions are extracted to be able to mock a bot entity
 	// by a player entity easily for testing and tweaking the cache
 	inline const class AiAasRouteCache *RouteCache();
 	inline float Skill() const;
-	inline bool BotHasAlmostSameOrigin( const Vec3 &unpackedOrigin ) const;
 
-	typedef bool (BotTacticalSpotsCache::*SingleOriginFindMethod)( const Vec3 &, const Vec3 &, vec3_t );
-	const short *GetSingleOriginSpot( SingleOriginSpotsCache *cachedSpots, const short *origin,
-									  const short *enemyOrigin, SingleOriginFindMethod findMethod );
+	[[nodiscard]]
+	bool botHasAlmostSameOrigin( const Vec3 &origin ) const;
 
-	typedef bool (BotTacticalSpotsCache::*DualOriginFindMethod)( const Vec3 &, const Vec3 &, vec3_t[2] );
-	const short *GetDualOriginSpot( DualOriginSpotsCache *cachedSpots, const short *origin,
-									const short *enemyOrigin, DualOriginFindMethod findMethod );
+	template <typename Result, typename Method>
+	auto getThroughCache( SpotsCache<Result> *cache, const float *botOrigin,
+						  const float *enemyOrigin, Method method ) -> std::optional<Result>;
 
-public:
-	explicit BotTacticalSpotsCache( Bot *bot_ ) : bot( bot_ ) {}
+	typedef std::optional<Vec3> ( BotTacticalSpotsCache::*FindSingleOriginMethod )( const Vec3 &, const Vec3 & );
 
-	inline void Clear() {
-		sniperRangeTacticalSpotsCache.Clear();
-		farRangeTacticalSpotsCache.Clear();
-		middleRangeTacticalSpotsCache.Clear();
-		closeRangeTacticalSpotsCache.Clear();
-		coverSpotsTacticalSpotsCache.Clear();
+	[[nodiscard]]
+	auto getSingleOriginSpot( SingleOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
+							  const Vec3 &enemyOrigin, FindSingleOriginMethod findMethod ) -> std::optional<Vec3>;
 
-		nearbyEntitiesCache.Clear();
+	typedef std::optional<DualOrigin> ( BotTacticalSpotsCache::*FindDualOriginMethod )( const Vec3 &, const Vec3 & );
 
-		runAwayTeleportOriginsCache.Clear();
-		runAwayJumppadOriginsCache.Clear();
-		runAwayElevatorOriginsCache.Clear();
-	}
+	[[nodiscard]]
+	auto getDualOriginSpot( DualOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
+							const Vec3 &enemyOrigin, FindDualOriginMethod findMethod ) -> std::optional<DualOrigin>;
 
-	inline const short *GetCoverSpot( const short *origin, const short *enemyOrigin ) {
-		return GetSingleOriginSpot( &coverSpotsTacticalSpotsCache, origin, enemyOrigin,
-									&BotTacticalSpotsCache::FindCoverSpot );
-	}
-
-	const short *GetRunAwayTeleportOrigin( const short *origin, const short *enemyOrigin ) {
-		return GetDualOriginSpot( &runAwayTeleportOriginsCache, origin, enemyOrigin,
-								  &BotTacticalSpotsCache::FindRunAwayTeleportOrigin );
-	}
-
-	const short *GetRunAwayJumppadOrigin( const short *origin, const short *enemyOrigin ) {
-		return GetDualOriginSpot( &runAwayJumppadOriginsCache, origin, enemyOrigin,
-								  &BotTacticalSpotsCache::FindRunAwayJumppadOrigin );
-	}
-
-	const short *GetRunAwayElevatorOrigin( const short *origin, const short *enemyOrigin ) {
-		return GetDualOriginSpot( &runAwayElevatorOriginsCache, origin, enemyOrigin,
-								  &BotTacticalSpotsCache::FindRunAwayElevatorOrigin );
-	}
 };
 
 #endif

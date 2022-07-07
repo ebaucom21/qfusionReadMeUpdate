@@ -7,21 +7,33 @@
 #include "../navigation/aasworld.h"
 #include "../../../gameshared/q_collision.h"
 
-AiAction::PlannerNodePtr AiAction::NewNodeForRecord( AiActionRecord *record ) {
+PlannerNode *AiAction::newNodeForRecord( AiActionRecord *record, const WorldState &worldState, float cost ) {
 	if( !record ) {
-		Debug( "Can't allocate an action record\n" );
-		return PlannerNodePtr( nullptr );
+		Debug( "Failed to allocate an action record\n" );
+		return nullptr;
 	}
 
 	PlannerNode *node = self->planner->plannerNodesPool.New( self );
 	if( !node ) {
 		Debug( "Can't allocate a planner node\n" );
 		record->DeleteSelf();
-		return PlannerNodePtr( nullptr );
+		return nullptr;
 	}
 
-	node->actionRecord = record;
-	return PlannerNodePtr( node );
+#ifndef PUBLIC_BUILD
+	Debug( "Old world state was produced by %s\n", worldState.producedByAction );
+#endif
+
+	node->actionRecord   = record;
+	node->worldState     = worldState;
+	node->transitionCost = cost;
+
+#ifndef PUBLIC_BUILD
+	node->producedByAction = this->name;
+	node->worldState.producedByAction = this->name;
+#endif
+
+	return node;
 }
 
 inline void PoolBase::Link( int16_t itemIndex, int16_t listIndex ) {
@@ -323,7 +335,7 @@ public:
 	}
 
 	void Add( PlannerNode *node ) {
-#ifndef _DEBUG
+#ifdef _DEBUG
 		if( PlannerNode *sameWorldStateNode = SameWorldStateNode( node ) ) {
 			AI_Debug( "PlannerNodesHashSet::Add()", "A node that contains same world state is already present\n" );
 			// This helps to discover broken equality operators
@@ -469,7 +481,7 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 
 	PlannerNode *startNode = plannerNodesPool.New( ai );
 	startNode->worldState = currWorldState;
-	startNode->worldStateHash = startNode->worldState.Hash();
+	startNode->worldStateHash = startNode->worldState.computeHash();
 	startNode->transitionCost = 0.0f;
 	startNode->costSoFar = 0.0f;
 	startNode->heapCost = 0.0f;
@@ -477,7 +489,11 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 	startNode->nextTransition = nullptr;
 	startNode->actionRecord = nullptr;
 
-	WorldState goalWorldState( ai );
+#ifndef PUBLIC_BUILD
+	startNode->producedByAction = startNode->worldState.producedByAction = "(Initial state)";
+#endif
+
+	WorldState goalWorldState;
 	goal->GetDesiredWorldState( &goalWorldState );
 
 	// Use prime numbers as hash bins count parameters
@@ -487,8 +503,15 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 	PlannerNodesHeap openNodesHeap;
 	openNodesHeap.Push( startNode );
 
+	//Debug( "======================== Building a plan =====================\n");
+
 	while( PlannerNode *currNode = openNodesHeap.Pop() ) {
-		if( goalWorldState.IsSatisfiedBy( currNode->worldState ) ) {
+#ifndef PUBLIC_BUILD
+		//Debug( "!!! Curr node %s\n", currNode->producedByAction );
+		assert( currNode->producedByAction == currNode->worldState.producedByAction );
+#endif
+
+		if( goalWorldState.isSatisfiedBy( currNode->worldState ) ) {
 			AiActionRecord *plan = ReconstructPlan( currNode );
 			goal->OnPlanBuildingCompleted( plan );
 			plannerNodesPool.Clear();
@@ -499,6 +522,9 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 
 		PlannerNode *firstTransition = goal->GetWorldStateTransitions( currNode->worldState );
 		for( PlannerNode *transition = firstTransition; transition; transition = transition->nextTransition ) {
+			assert( transition->producedByAction == transition->worldState.producedByAction );
+			assert( transition->producedByAction != currNode->producedByAction );
+			//Debug( "+++ Transition %s\n", transition->producedByAction );
 			float cost = currNode->costSoFar + transition->transitionCost;
 			bool isInOpen = openNodesSet.ContainsSameWorldState( transition );
 			bool isInClosed = closedNodesSet.ContainsSameWorldState( transition );
@@ -637,7 +663,7 @@ void AiPlanner::Think() {
 	}
 
 	// Prepare current world state for planner
-	WorldState currWorldState( ai );
+	WorldState currWorldState;
 	PrepareCurrWorldState( &currWorldState );
 
 	// If there is no active plan (the active plan was not assigned or has been completed in previous think frame)

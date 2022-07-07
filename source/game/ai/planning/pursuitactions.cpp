@@ -2,34 +2,29 @@
 #include "../bot.h"
 
 PlannerNode *StartLostEnemyPursuitAction::TryApply( const WorldState &worldState ) {
-	if( worldState.IsReactingToEnemyLostVar().Ignore() ) {
-		Debug( "Is bot reacting to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.IsReactingToEnemyLostVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsReactingToEnemyLost ) ) ) {
 		Debug( "Bot is already reacting to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.HasReactedToEnemyLostVar().Ignore() ) {
-		Debug( "Has bot reacted to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasReactedToEnemyLostVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) ) ) {
 		Debug( "Bot has already reacted to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.LostEnemyLastSeenOriginVar().Ignore() ) {
+
+	std::optional<OriginVar> lostEnemyOriginVar = worldState.getOriginVar( WorldState::LostEnemyLastSeenOrigin );
+	if( !lostEnemyOriginVar ) {
 		Debug( "Lost enemy origin is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-	const float distanceToEnemy = worldState.BotOriginVar().DistanceTo( worldState.LostEnemyLastSeenOriginVar() );
-	if( distanceToEnemy < 1.5f * GOAL_PICKUP_ACTION_RADIUS ) {
+	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const float distanceToEnemy = botOrigin.FastDistanceTo( *lostEnemyOriginVar );
+	if( distanceToEnemy < GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Bot is already close to the last seen enemy origin\n" );
 		return nullptr;
 	}
 
-	// Vary pursuit max distance threshold depending of offensiveness.
+	// Vary pursuit max distance threshold depending on offensiveness.
 	// Never pursue enemies farther than LG range (otherwise a poor bot behaviour is observed).
 	const float maxDistanceThreshold = 96.0f + ( kLasergunRange - 96.0f ) * Self()->GetEffectiveOffensiveness();
 	if( distanceToEnemy > maxDistanceThreshold ) {
@@ -37,76 +32,72 @@ PlannerNode *StartLostEnemyPursuitAction::TryApply( const WorldState &worldState
 		return nullptr;
 	}
 
-	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( ( worldState.BotOriginVar().Value() - Self()->Origin() ).SquaredLength() > squareDistanceError ) {
+	if( ( botOrigin - Self()->Origin() ).SquaredLength() > 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
 	}
-	if( worldState.MightSeeLostEnemyAfterTurnVar().Ignore() ) {
-		Debug( "Might bot see lost enemy after turn is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.MightSeeLostEnemyAfterTurnVar() ) {
-		Debug( "Bot might see lost enemy after turn in the given world state. Pursuing makes no sense.\n" );
+
+	// TODO: Query in lazy fashion?
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
+		Debug( "Bot might see lost enemy after turn, pursuit would be pointless\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self() ) ) );
+	PlannerNode *const plannerNode = newNodeForRecord( pool.New( Self() ), worldState, 1.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	// (this action is dummy)
-	plannerNode.Cost() = 1.0f;
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().NavTargetOriginVar().SetValue( worldState.LostEnemyLastSeenOriginVar().Value() );
-	plannerNode.WorldState().NavTargetOriginVar().SetIgnore( false );
-	plannerNode.WorldState().NavTargetOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, maxDistanceThreshold );
-	plannerNode.WorldState().IsReactingToEnemyLostVar().SetValue( true ).SetIgnore( false );
+	plannerNode->worldState.setBoolVar( WorldState::IsReactingToEnemyLost, BoolVar( true ) );
+	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, *lostEnemyOriginVar );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }
 
 PlannerNode *StopLostEnemyPursuitAction::TryApply( const WorldState &worldState ) {
-	if( worldState.IsReactingToEnemyLostVar().Ignore() ) {
-		Debug( "Is bot reacting to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.IsReactingToEnemyLostVar() ) {
+	if( isUnspecifiedOrFalse( worldState.getBoolVar( WorldState::IsReactingToEnemyLost ) ) ) {
 		Debug( "Bot is not reacting to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.HasReactedToEnemyLostVar().Ignore() ) {
-		Debug( "Has bot reacted to enemy lost is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasReactedToEnemyLostVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) ) ) {
 		Debug( "Bot has already reacted to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.LostEnemyLastSeenOriginVar().Ignore() ) {
+
+	std::optional<OriginVar> lostEnemyOriginVar = worldState.getOriginVar( WorldState::LostEnemyLastSeenOrigin );
+	if( !lostEnemyOriginVar ) {
 		Debug( "Lost enemy origin is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.NavTargetOriginVar().Ignore() ) {
+
+	std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
+	if( !navTargetOriginVar ) {
 		Debug( "Nav target origin is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.DistanceToNavTarget() > 1.5f * GOAL_PICKUP_ACTION_RADIUS ) {
-		Debug( "Bot is too far from the nav target\n" );
+
+	const Vec3 lostEnemyOrigin = *lostEnemyOriginVar;
+	const Vec3 navTargetOrigin = *navTargetOriginVar;
+	const Vec3 botOrigin       = worldState.getOriginVar( WorldState::BotOrigin ).value();
+
+	if( lostEnemyOrigin.SquareDistanceTo( navTargetOrigin ) > 1.0f ) {
+		Debug( "The lost enemy origin does not match nav target in the given world state\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self() ) ) );
+	if( botOrigin.SquareDistanceTo( navTargetOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
+		Debug( "The bot is way too far from nav target in the given world state\n" );
+		return nullptr;
+	}
+
+	PlannerNode *const plannerNode = newNodeForRecord( pool.New( Self() ), worldState, 1.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = 1.0f;
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().NavTargetOriginVar().SetIgnore( true );
-	plannerNode.WorldState().HasReactedToEnemyLostVar().SetValue( true );
-	plannerNode.WorldState().IsReactingToEnemyLostVar().SetValue( false );
+	plannerNode->worldState.clearOriginVar( WorldState::NavTargetOrigin );
+	plannerNode->worldState.setBoolVar( WorldState::HasReactedToEnemyLost, BoolVar( true ) );
+	plannerNode->worldState.setBoolVar( WorldState::IsReactingToEnemyLost, BoolVar( false ) );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

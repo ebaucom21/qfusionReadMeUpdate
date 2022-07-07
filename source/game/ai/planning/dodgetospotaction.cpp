@@ -25,51 +25,44 @@ AiActionRecord::Status DodgeToSpotActionRecord::UpdateStatus( const WorldState &
 }
 
 PlannerNode *DodgeToSpotAction::TryApply( const WorldState &worldState ) {
-	if( worldState.PotentialHazardDamageVar().Ignore() ) {
+	if( !worldState.getFloatVar( WorldState::PotentialHazardDamage ) ) {
 		Debug( "Potential hazard damage is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-#ifndef _DEBUG
-	// Sanity check
-	if( worldState.HazardHitPointVar().Ignore() ) {
-		AI_FailWith( "BotDodgeToSpotAction::TryApply()", "Hazard hit point is ignored in the given world state\n" );
-	}
-	if( worldState.HazardDirectionVar().Ignore() ) {
-		AI_FailWith( "BotDodgeToSpotAction::TryApply()", "Hazard direction is ignored in the given world state\n" );
-	}
-#endif
-
-	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( ( worldState.BotOriginVar().Value() - Self()->Origin() ).SquaredLength() > squareDistanceError ) {
+	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const float *actualOrigin = Self()->Origin();
+	if( botOrigin.DistanceTo( actualOrigin ) >= 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
 	}
 
-	if( worldState.DodgeHazardSpotVar().Ignore() ) {
-		Debug( "Spot for dodging a hazard is ignored in the given world state, can't dodge\n" );
+	// TODO: Make it to be a lazy var
+	const std::optional<OriginVar> dodgeSpotVar = worldState.getOriginVar( WorldState::DodgeHazardSpot );
+	if( !dodgeSpotVar ) {
+		Debug( "Spot for dodging a hazard is missing in the given world state, can't dodge\n" );
 		return nullptr;
 	}
 
-	const Vec3 spotOrigin = worldState.DodgeHazardSpotVar().Value();
-	int travelTimeMillis = Self()->CheckTravelTimeMillis( worldState.BotOriginVar().Value(), spotOrigin );
+	const Vec3 spotOrigin = *dodgeSpotVar;
+	const int travelTimeMillis = Self()->CheckTravelTimeMillis( botOrigin, spotOrigin );
 	if( !travelTimeMillis ) {
 		Debug( "Warning: can't find travel time from the bot origin to the spot origin in the given world state\n" );
 		return nullptr;
 	}
+	
+	DodgeToSpotActionRecord *record = pool.New( Self(), spotOrigin );
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self(), spotOrigin ) ) );
+	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, (float)travelTimeMillis );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = travelTimeMillis;
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().BotOriginVar().SetValue( spotOrigin );
-	plannerNode.WorldState().PotentialHazardDamageVar().SetIgnore( true );
-	plannerNode.WorldState().HazardHitPointVar().SetIgnore( true );
-	plannerNode.WorldState().HazardDirectionVar().SetIgnore( true );
-	plannerNode.WorldState().HasReactedToHazardVar().SetIgnore( false ).SetValue( true );
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( spotOrigin ) );
+	plannerNode->worldState.setBoolVar( WorldState::HasReactedToHazard, BoolVar( true ) );
+	plannerNode->worldState.clearFloatVar( WorldState::PotentialHazardDamage );
+	plannerNode->worldState.clearOriginVar( WorldState::HazardHitPoint );
+	plannerNode->worldState.clearOriginVar( WorldState::HazardDirection );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

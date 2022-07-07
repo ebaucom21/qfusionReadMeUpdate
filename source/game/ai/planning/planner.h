@@ -103,6 +103,8 @@ struct PlannerNode : PoolItem {
 	PlannerNode *prevInHashBin { nullptr };
 	PlannerNode *nextInHashBin { nullptr };
 
+	const char *producedByAction { nullptr };
+
 	// An A-star edge "distance"
 	float transitionCost { std::numeric_limits<float>::max() };
 	// An A-star node "G"
@@ -151,39 +153,7 @@ protected:
 		va_end( va );
 	}
 
-	class PlannerNodePtr {
-		PlannerNode *node;
-	public:
-		PlannerNodePtr( const PlannerNodePtr &that ) = delete;
-		PlannerNodePtr &operator=( const PlannerNodePtr &that ) = delete;
-
-		explicit PlannerNodePtr( PlannerNode *node_ ) : node( node_ ) {}
-
-		PlannerNodePtr( PlannerNodePtr &&that ) : node( that.node ) {
-			that.node = nullptr;
-		}
-
-		PlannerNodePtr &operator=( PlannerNodePtr &&that ) {
-			node = that.node;
-			that.node = nullptr;
-			return *this;
-		}
-
-		PlannerNode *ReleaseOwnership() {
-			PlannerNode *result = node;
-			// Clear node reference to avoid being deleted in the destructor
-			node = nullptr;
-			return result;
-		}
-
-		inline ~PlannerNodePtr();
-		inline PlannerNode *PrepareActionResult();
-		inline class WorldState &WorldState();
-		inline float &Cost();
-		operator bool() const { return node != nullptr; }
-	};
-
-	PlannerNodePtr NewNodeForRecord( AiActionRecord *record );
+	PlannerNode *newNodeForRecord( AiActionRecord *record, const WorldState &worldState, float cost );
 public:
 	AiAction( Ai *self_, const char *name_ )
 		: self( self_ ), name( name_ ) {}
@@ -248,36 +218,5 @@ public:
 
 	void DeletePlan( AiActionRecord *head );
 };
-
-inline AiAction::PlannerNodePtr::~PlannerNodePtr() {
-	if( this->node ) {
-		this->node->DeleteSelf();
-	}
-}
-
-inline PlannerNode *AiAction::PlannerNodePtr::PrepareActionResult() {
-	PlannerNode *result = this->node;
-	this->node = nullptr;
-
-#ifndef PUBLIC_BUILD
-	if( !result->worldState.IsCopiedFromOtherWorldState() ) {
-		AI_FailWith( "PlannerNodePtr::PrepareActionResult()", "World state has not been copied from parent one" );
-	}
-#endif
-
-	// Compute modified world state hash
-	// This computation have been put here to avoid error-prone copy-pasting.
-	// Another approach is to use lazy hash code computation but it adds branching on each hash code access
-	result->worldStateHash = result->worldState.Hash();
-	return result;
-}
-
-inline WorldState &AiAction::PlannerNodePtr::WorldState() {
-	return node->worldState;
-}
-
-inline float &AiAction::PlannerNodePtr::Cost() {
-	return node->transitionCost;
-}
 
 #endif

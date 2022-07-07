@@ -2,42 +2,28 @@
 #include "../bot.h"
 
 PlannerNode *KillEnemyAction::TryApply( const WorldState &worldState ) {
-	if( worldState.EnemyOriginVar().Ignore() ) {
+	if( !worldState.getOriginVar( WorldState::EnemyOrigin ) ) {
 		Debug( "Enemy is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.HasPositionalAdvantageVar().Ignore() ) {
-		Debug( "Has bot positional advantage is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.HasPositionalAdvantageVar() ) {
+	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPositionalAdvantage ) ) ) {
 		Debug( "Bot does not have positional advantage in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.CanHitEnemyVar().Ignore() ) {
-		Debug( "Can bot hit enemy is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.CanHitEnemyVar() ) {
+	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::CanHitEnemy ) ) ) {
 		Debug( "Bot can't hit enemy in the given world state\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self() ) );
+	PlannerNode *const plannerNode = newNodeForRecord( pool.New( Self() ), worldState, 1.0f );
 	if( !plannerNode ) {
-		Debug( "Can't allocate planner node\n" );
 		return nullptr;
 	}
 
-	// Set low dummy cost
-	plannerNode.Cost() = 1.0f;
+	UIntVar stateDistinctionVar( Self()->NextSimilarWorldStateInstanceId() );
 
-	plannerNode.WorldState() = worldState;
+	plannerNode->worldState.setBoolVar( WorldState::HasJustKilledEnemy, BoolVar( true ) );
+	plannerNode->worldState.setUIntVar( WorldState::SimilarWorldStateInstanceId, stateDistinctionVar );
 
-	plannerNode.WorldState().HasJustKilledEnemyVar().SetValue( true ).SetIgnore( false );
-
-	unsigned similarWorldStateInstanceId = Self()->NextSimilarWorldStateInstanceId();
-	plannerNode.WorldState().SimilarWorldStateInstanceIdVar().SetValue( similarWorldStateInstanceId ).SetIgnore( false );
-
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

@@ -384,9 +384,10 @@ private:
 
 	AiObjectiveSpot *objectiveSpot { nullptr };
 
-	int64_t lastTouchedTeleportAt { 0 };
-	int64_t lastTouchedJumppadAt { 0 };
-	int64_t lastTouchedElevatorAt { 0 };
+	int64_t m_lastTouchedTeleportAt { 0 };
+	int64_t m_lastTouchedJumppadAt { 0 };
+	int64_t m_lastTouchedElevatorAt { 0 };
+
 	int64_t lastKnockbackAt { 0 };
 	int64_t lastOwnKnockbackAt { 0 };
 	int lastOwnKnockbackKick { 0 };
@@ -429,8 +430,11 @@ public:
 	}
 
 	int64_t LastTriggerTouchTime() const {
-		return wsw::max( lastTouchedJumppadAt, wsw::max( lastTouchedTeleportAt, lastTouchedElevatorAt ) );
+		return wsw::max( m_lastTouchedJumppadAt, wsw::max( m_lastTouchedTeleportAt, m_lastTouchedElevatorAt ) );
 	}
+
+	int64_t LastTeleportTouchTime() const { return m_lastTouchedTeleportAt; }
+	int64_t LastJumppadTouchTime() const { return m_lastTouchedJumppadAt; }
 
 	int64_t LastKnockbackAt() const { return lastKnockbackAt; }
 

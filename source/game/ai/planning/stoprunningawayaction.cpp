@@ -2,36 +2,29 @@
 #include "../bot.h"
 
 PlannerNode *StopRunningAwayAction::TryApply( const WorldState &worldState ) {
-	if( worldState.IsRunningAwayVar().Ignore() ) {
-		Debug( "Is bot running away is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.IsRunningAwayVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsRunningAway ) ) ) {
 		Debug( "Bot is not running away in the given world state\n" );
 		return nullptr;
 	}
-	if( !worldState.HasRunAwayVar().Ignore() && worldState.HasRunAwayVar() ) {
+	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) ) ) {
 		Debug( "Bot has already run away in the given world state\n" );
 		return nullptr;
 	}
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::EnemyCanHit ) ) ) {
+		Debug( "Enemy still can hit in the given world state\n" );
+		return nullptr;
+	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self() ) ) );
+	PlannerNode *const plannerNode( newNodeForRecord( pool.New( Self() ), worldState, 1.0f ) );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = 1.0f;
+	UIntVar stateDistinctionVar( Self()->NextSimilarWorldStateInstanceId() );
 
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().HasJustTeleportedVar().SetIgnore( true );
-	plannerNode.WorldState().HasJustTouchedJumppadVar().SetIgnore( true );
-	plannerNode.WorldState().HasJustEnteredElevatorVar().SetIgnore( true );
+	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( false ) );
+	plannerNode->worldState.setBoolVar( WorldState::HasRunAway, BoolVar( true ) );
+	plannerNode->worldState.setUIntVar( WorldState::SimilarWorldStateInstanceId, stateDistinctionVar );
 
-	plannerNode.WorldState().IsRunningAwayVar().SetValue( false ).SetIgnore( false );
-	plannerNode.WorldState().HasRunAwayVar().SetValue( true ).SetIgnore( false );
-
-	unsigned similarWorldStateInstanceId = Self()->NextSimilarWorldStateInstanceId();
-	plannerNode.WorldState().SimilarWorldStateInstanceIdVar().SetValue( similarWorldStateInstanceId ).SetIgnore( false );
-
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

@@ -1,36 +1,52 @@
 #include "planninglocal.h"
 #include "../bot.h"
 
-bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldState ) const {
-	if( !worldState.HasRunAwayVar().Ignore() && worldState.HasRunAwayVar() ) {
+bool RunAwayAction::checkCommonPreconditionsForStartingRunningAway( const WorldState &worldState ) const {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) ) ) {
 		Debug( "Bot has already run away in the given world state\n" );
 		return false;
 	}
-	if( !worldState.IsRunningAwayVar().Ignore() && worldState.IsRunningAwayVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsRunningAway ) ) ) {
 		Debug( "Bot is already running away in the given world state\n" );
 		return false;
 	}
 
-	if( worldState.EnemyOriginVar().Ignore() ) {
+	const std::optional<OriginVar> botOriginVar = worldState.getOriginVar( WorldState::BotOrigin );
+	if( !botOriginVar ) {
+		Debug( "Weird world state - missing bot origin\n" );
+		return false;
+	}
+
+	const std::optional<OriginVar> enemyOriginVar = worldState.getOriginVar( WorldState::EnemyOrigin );
+	if( !enemyOriginVar ) {
 		Debug( "Enemy is ignored in the given world state\n" );
 		return false;
 	}
 
-	float offensiveness = Self()->GetEffectiveOffensiveness();
-	if( offensiveness == 1.0f ) {
+	const Vec3 botOrigin = *botOriginVar;
+	if( botOrigin.SquareDistanceTo( Self()->Origin() ) > 1.0f ) {
+		Debug( "This action is only applicable to the current world state\n" );
 		return false;
 	}
 
-	/*TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	if( worldState.EnemyHasQuadVar() && !worldState.HasQuadVar() ) {
-		return true;
-	}*/
+	const float offensiveness = Self()->GetEffectiveOffensiveness();
+	if( offensiveness == 1.0f ) {
+		Debug( "The effective offensiveness does not permit running away\n" );
+		return false;
+	}
 
-	if( worldState.HasThreateningEnemyVar() && DamageToBeKilled() < 25 ) {
+	const SelectedEnemies &selectedEnemies = Self()->GetSelectedEnemies();
+	if( selectedEnemies.HaveQuad() ) {
+		if( const auto *inventory = Self()->Inventory(); !inventory[POWERUP_QUAD] && !inventory[POWERUP_SHELL] ) {
+			return true;
+		}
+	}
+
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasThreateningEnemy ) ) && DamageToBeKilled() < 50 ) {
 		return true;
 	}
 
-	const float distanceToEnemy = worldState.DistanceToEnemy();
+	const float distanceToEnemy = botOrigin.FastDistanceTo( *enemyOriginVar );
 	if( distanceToEnemy > kLasergunRange ) {
 		/*
 		 * TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -46,10 +62,18 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 	}
 
 	if( distanceToEnemy > 0.33f * kLasergunRange ) {
-		return CheckMiddleRangeKDDamageRatio( worldState );
+		if( !CheckMiddleRangeKDDamageRatio( worldState ) ) {
+			Debug( "The additional checks do not suggest running away on the middle range\n" );
+			return false;
+		}
+		return true;
 	}
 
-	return CheckCloseRangeKDDamageRatio( worldState );
+	if( !CheckCloseRangeKDDamageRatio( worldState ) ) {
+		Debug( "The additional checks do not suggest running away on the close range\n" );
+		return false;
+	}
+	return true;
 }
 
 bool RunAwayAction::CheckMiddleRangeKDDamageRatio( const WorldState &worldState ) const {

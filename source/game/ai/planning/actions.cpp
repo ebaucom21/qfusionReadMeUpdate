@@ -1,4 +1,5 @@
 #include "actions.h"
+#include "planninglocal.h"
 #include "../bot.h"
 #include "../groundtracecache.h"
 #include "../combat/tacticalspotsregistry.h"

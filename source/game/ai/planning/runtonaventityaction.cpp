@@ -21,11 +21,13 @@ AiActionRecord::Status RunToNavEntityActionRecord::UpdateStatus( const WorldStat
 		Debug( "The actual selected nav entity differs from the stored one\n" );
 		return INVALID;
 	}
-	if( currWorldState.DistanceToNavTarget() <= GOAL_PICKUP_ACTION_RADIUS ) {
+
+	if( m_selectedNavEntity.navEntity->Origin().FastDistanceTo( Self()->Origin() ) <= GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Nav target pickup distance has been reached\n" );
 		return COMPLETED;
 	}
 
+	// Update upon each check
 	Self()->GetMiscTactics().shouldBeSilent = ShouldUseSneakyBehaviour( currWorldState );
 	return VALID;
 }
@@ -54,20 +56,20 @@ bool RunToNavEntityActionRecord::ShouldUseSneakyBehaviour( const WorldState &cur
 	}
 
 	// If there's a defined enemy origin (and a defined enemy consequently)
-	if( !currWorldState.EnemyOriginVar().Ignore() ) {
+	if( currWorldState.getOriginVar( WorldState::EnemyOrigin ) ) {
 		// TODO: Lift testing of a value within the "Ignore" monad
 
 		// Interrupt sneaking immediately if there's a threatening enemy
-		if( !currWorldState.HasThreateningEnemyVar().Ignore() && currWorldState.HasThreateningEnemyVar() ) {
+		if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
 			return false;
 		}
 		// Don't try being sneaky if the bot can hit an enemy
 		// (we can try doing that but bot behaviour is rather poor)
-		if( !currWorldState.CanHitEnemyVar().Ignore() && currWorldState.CanHitEnemyVar() ) {
+		if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::CanHitEnemy ) ) ) {
 			return false;
 		}
 		// Interrupt sneaking immediately if an enemy can hit
-		if( !currWorldState.EnemyCanHitVar().Ignore() && currWorldState.EnemyCanHitVar() ) {
+		if( !isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::EnemyCanHit ) ) ) {
 			return false;
 		}
 	}
@@ -179,39 +181,35 @@ bool RunToNavEntityActionRecord::IsInPhsForEnemyTeam() const {
 }
 
 PlannerNode *RunToNavEntityAction::TryApply( const WorldState &worldState ) {
-	if( worldState.GoalItemWaitTimeVar().Ignore() ) {
-		Debug( "Goal item is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.NavTargetOriginVar().Ignore() ) {
+	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
+	if( !navTargetOriginVar ) {
 		Debug( "Nav target is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( worldState.DistanceToNavTarget() <= GOAL_PICKUP_ACTION_RADIUS ) {
+
+	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	if( botOrigin.FastDistanceTo( *navTargetOriginVar ) <= GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Distance to goal item nav target is too low in the given world state\n" );
 		return nullptr;
 	}
 
-	constexpr float roundingSquareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( ( worldState.BotOriginVar().Value() - Self()->Origin() ).SquaredLength() > roundingSquareDistanceError ) {
+	if( ( botOrigin - Self()->Origin() ).SquaredLength() > 1.0f ) {
 		Debug( "Selected goal item is valid only for current bot origin\n" );
 		return nullptr;
 	}
 
-	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
+	const std::optional<SelectedNavEntity> maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
 	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
+	RunToNavEntityActionRecord *record = pool.New( Self(), selectedNavEntity );
 
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
+	// TODO: The cost is totally wrong, supply travel time millis !!!!!!!!!!!!!!!!
+	PlannerNode *plannerNode = newNodeForRecord( record, worldState, selectedNavEntity.cost );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = selectedNavEntity.cost;
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *navTargetOriginVar );
+	// TODO plannerNode.WorldState().ResetTacticalSpots();
 
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
-	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, GOAL_PICKUP_ACTION_RADIUS );
-	plannerNode.WorldState().ResetTacticalSpots();
-
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

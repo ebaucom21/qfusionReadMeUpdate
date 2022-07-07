@@ -105,18 +105,18 @@ void Bot::TouchedOtherEntity( const edict_t *entity ) {
 	}
 
 	if( !Q_stricmp( entity->classname, "trigger_push" ) ) {
-		lastTouchedJumppadAt = level.time;
+		m_lastTouchedJumppadAt = level.time;
 		m_movementSubsystem.ActivateJumppadState( entity );
 		return;
 	}
 
 	if( !Q_stricmp( entity->classname, "trigger_teleport" ) ) {
-		lastTouchedTeleportAt = level.time;
+		m_lastTouchedTeleportAt = level.time;
 		return;
 	}
 
 	if( !Q_stricmp( entity->classname, "func_plat" ) ) {
-		lastTouchedElevatorAt = level.time;
+		m_lastTouchedElevatorAt = level.time;
 		return;
 	}
 }

@@ -18,7 +18,7 @@ void PickupNavEntityActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	if( currWorldState.HasJustPickedGoalItemVar() ) {
+	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Goal item has been just picked up\n" );
 		return COMPLETED;
 	}
@@ -31,12 +31,10 @@ AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldSta
 		Debug( "The nav entity requires waiting for it\n" );
 		return INVALID;
 	}
-	if( currWorldState.DistanceToNavTarget() > GOAL_PICKUP_ACTION_RADIUS ) {
+
+	const Vec3 navEntityOrigin( m_selectedNavEntity.navEntity->Origin() );
+	if( navEntityOrigin.SquareDistanceTo( Self()->Origin() ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
 		Debug( "The nav entity is too far from the bot to pickup it\n" );
-		return INVALID;
-	}
-	if( currWorldState.HasThreateningEnemyVar() ) {
-		Debug( "The bot has threatening enemy\n" );
 		return INVALID;
 	}
 
@@ -44,49 +42,42 @@ AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldSta
 }
 
 PlannerNode *PickupNavEntityAction::TryApply( const WorldState &worldState ) {
-	if( worldState.GoalItemWaitTimeVar().Ignore() ) {
-		Debug( "Goal item is ignored in the given world state\n" );
-		return nullptr;
-	}
-
-	if( worldState.DistanceToNavTarget() > GOAL_PICKUP_ACTION_RADIUS ) {
-		Debug( "Distance to goal item nav target is too large to pick up an item in the given world state\n" );
-		return nullptr;
-	}
-
-	if( worldState.HasJustPickedGoalItemVar().Ignore() ) {
-		Debug( "Has bot picked a goal item is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( worldState.HasJustPickedGoalItemVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Bot has just picked a goal item in the given world state\n" );
 		return nullptr;
 	}
 
-	if( worldState.GoalItemWaitTimeVar().Ignore() ) {
-		Debug( "Goal item wait time is not specified in the given world state\n" );
+	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
+	if( !navTargetOriginVar ) {
+		Debug( "The nav target origin is unspecified in the current world state\n" );
 		return nullptr;
 	}
-	if( worldState.GoalItemWaitTimeVar() > 0 ) {
-		Debug( "Goal item wait time is non-zero in the given world state\n" );
+
+	const Vec3 navTargetOrigin( *navTargetOriginVar );
+	const Vec3 botOrigin( worldState.getOriginVar( WorldState::BotOrigin ).value() );
+	if( navTargetOrigin.SquareDistanceTo( botOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
+		Debug( "Distance to goal item nav target is too large to pick up an item in the given world state\n" );
+		return nullptr;
+	}
+
+	if( worldState.getUIntVar( WorldState::GoalItemWaitTime ) ) {
+		Debug( "Goal item wait time is specified in the given world state\n" );
 		return nullptr;
 	}
 
 	const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity();
 	const SelectedNavEntity &selectedNavEntity = maybeSelectedNavEntity.value();
-	PlannerNodePtr plannerNode = NewNodeForRecord( pool.New( Self(), selectedNavEntity ) );
+	PickupNavEntityActionRecord *record = pool.New( Self(), selectedNavEntity );
+
+	PlannerNode *plannerNode = newNodeForRecord( record, worldState, 1.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	// Picking up an item costs almost nothing
-	plannerNode.Cost() = 1.0f;
+	plannerNode->worldState.setBoolVar( WorldState::HasPickedGoalItem, BoolVar( true ) );
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( navTargetOrigin ) );
 
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().HasJustPickedGoalItemVar().SetValue( true ).SetIgnore( false );
-	plannerNode.WorldState().BotOriginVar().SetValue( selectedNavEntity.navEntity->Origin() );
-	plannerNode.WorldState().BotOriginVar().SetSatisfyOp( OriginVar::SatisfyOp::EQ, 12.0f );
-	plannerNode.WorldState().ResetTacticalSpots();
+	// plannerNode.WorldState().ResetTacticalSpots();
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }

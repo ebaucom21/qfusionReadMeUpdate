@@ -32,32 +32,31 @@ AiActionRecord::Status TurnToThreatOriginActionRecord::UpdateStatus( const World
 }
 
 PlannerNode *TurnToThreatOriginAction::TryApply( const WorldState &worldState ) {
-	if( worldState.ThreatPossibleOriginVar().Ignore() ) {
-		Debug( "Threat possible origin is ignored in the given world state\n" );
-		return nullptr;
-	}
-	if( !worldState.HasReactedToThreatVar().Ignore() && worldState.HasReactedToThreatVar() ) {
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToThreat ) ) ) {
 		Debug( "Bot has already reacted to threat in the given world state\n" );
 		return nullptr;
 	}
 
-	constexpr float squareDistanceError = OriginVar::MAX_ROUNDING_SQUARE_DISTANCE_ERROR;
-	if( ( worldState.BotOriginVar().Value() - Self()->Origin() ).SquaredLength() > squareDistanceError ) {
+	const std::optional<OriginVar> threatOrigin = worldState.getOriginVar( WorldState::ThreatPossibleOrigin );
+	if( !threatOrigin ) {
+		Debug( "Threat possible origin is ignored in the given world state\n" );
+		return nullptr;
+	}
+
+	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	if( botOrigin.FastDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
 	}
 
-	PlannerNodePtr plannerNode( NewNodeForRecord( pool.New( Self(), worldState.ThreatPossibleOriginVar().Value() ) ) );
+	PlannerNode *const plannerNode = newNodeForRecord( pool.New( Self(), *threatOrigin ), worldState, 500.0f );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode.Cost() = 500;
-	plannerNode.WorldState() = worldState;
-	plannerNode.WorldState().ThreatPossibleOriginVar().SetIgnore( true );
+	plannerNode->worldState.setBoolVar( WorldState::HasReactedToThreat, BoolVar( true ) );
 	// If a bot has reacted to threat, he can't hit current enemy (if any)
-	plannerNode.WorldState().CanHitEnemyVar().SetValue( false );
-	plannerNode.WorldState().HasReactedToThreatVar().SetValue( true ).SetIgnore( false );
+	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
 
-	return plannerNode.PrepareActionResult();
+	return plannerNode;
 }
