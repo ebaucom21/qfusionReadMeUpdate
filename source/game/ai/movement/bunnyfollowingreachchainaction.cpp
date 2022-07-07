@@ -77,12 +77,12 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 	const auto aasReaches = AiAasWorld::instance()->getReaches();
 	if( m_cachedReachNum ) {
 		const auto &reach = aasReaches[m_cachedReachNum];
-		if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > SQUARE( 32.0f ) ) {
+		if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > wsw::square( 32.0f ) ) {
 			chosenReachNum = m_cachedReachNum;
 		} else if( m_cachedReachPointsToTrigger ) {
 			chosenReachNum = m_cachedReachNum;
 			// Keep looking at the trigger but make sure we can normalize
-			if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > SQUARE( 1.0f ) ) {
+			if( Distance2DSquared( reach.start, entityPhysicsState.Origin() ) > wsw::square( 1.0f ) ) {
 				chosenReachNum = m_cachedReachNum;
 			} else {
 				context->SetPendingRollback();
@@ -91,7 +91,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 		} else {
 			if( m_cachedNextReachNum ) {
 				const auto &nextReach = aasReaches[m_cachedNextReachNum];
-				if( Distance2DSquared( nextReach.start, entityPhysicsState.Origin() ) > SQUARE( 32.0f ) ) {
+				if( Distance2DSquared( nextReach.start, entityPhysicsState.Origin() ) > wsw::square( 32.0f ) ) {
 					chosenReachNum = m_cachedNextReachNum;
 				} else {
 					context->SetPendingRollback();
@@ -111,7 +111,7 @@ void BunnyFollowingReachChainAction::PlanPredictionStep( PredictionContext *cont
 		lookVec.Z() *= Z_NO_BEND_SCALE;
 	} else {
 		const Vec3 navTargetOrigin( context->NavTargetOrigin() );
-		if( navTargetOrigin.SquareDistance2DTo( entityPhysicsState.Origin() ) > SQUARE( 8.0f ) ) {
+		if( navTargetOrigin.SquareDistance2DTo( entityPhysicsState.Origin() ) > wsw::square( 8.0f ) ) {
 			navTargetOrigin.CopyTo( lookVec );
 			lookVec -= entityPhysicsState.Origin();
 		} else {

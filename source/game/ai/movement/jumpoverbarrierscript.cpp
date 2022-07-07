@@ -36,7 +36,7 @@ void JumpOverBarrierScript::SetupMovement( PredictionContext *context ) {
 
 	if( !hasReachedStart ) {
 		float squareDistance = Distance2DSquared( start, entityPhysicsState.Origin() );
-		if( squareDistance > SQUARE( 16.0f ) ) {
+		if( squareDistance > wsw::square( 16.0f ) ) {
 			intendedLookDir -= start;
 			intendedLookDir *= -1.0f / intendedLookDir.LengthFast();
 
@@ -56,7 +56,7 @@ void JumpOverBarrierScript::SetupMovement( PredictionContext *context ) {
 			}
 			// Note that the distance threshold is lower than usual for fallbacks,
 			// since we're going to be stopped by a barrier anyway and shouldn't miss it
-			if( !entityPhysicsState.GroundEntity() || squareDistance < SQUARE( 128.0f ) ) {
+			if( !entityPhysicsState.GroundEntity() || squareDistance < wsw::square( 128.0f ) ) {
 				return;
 			}
 

@@ -20,7 +20,7 @@ bool UseWalkableNodeScript::TryDeactivate( PredictionContext *context ) {
 
 	// If the spot can be reached by radius
 	const float *botOrigin = context ? context->movementState->entityPhysicsState.Origin() : bot->Origin();
-	if( Distance2DSquared( botOrigin, nodeOrigin ) < SQUARE( reachRadius ) ) {
+	if( Distance2DSquared( botOrigin, nodeOrigin ) < wsw::square( reachRadius ) ) {
 		status = COMPLETED;
 		return true;
 	}
@@ -48,7 +48,7 @@ MovementScript *FallbackAction::TryFindWalkReachFallback( PredictionContext *con
 	// Allow following WALK reachabilities but make sure
 	// they do not lead to junk areas and are fairly far away to prevent looping.
 	float squareDistance = DistanceSquared( entityPhysicsState.Origin(), nextReach.end );
-	if( squareDistance < SQUARE( 32.0f ) ) {
+	if( squareDistance < wsw::square( 32.0f ) ) {
 		return nullptr;
 	}
 

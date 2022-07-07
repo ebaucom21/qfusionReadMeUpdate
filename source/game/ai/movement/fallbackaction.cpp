@@ -316,7 +316,7 @@ MovementScript *FallbackAction::TryNodeBasedFallbacksLeft( PredictionContext *co
 	// Try using the nav target as a fallback movement target
 	Assert( context->NavTargetAasAreaNum() );
 	auto *nodeFallback = &m_subsystem->useWalkableNodeScript;
-	if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 384.0f ) ) {
+	if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < wsw::square( 384.0f ) ) {
 		Vec3 target( context->NavTargetOrigin() );
 		target.Z() += -playerbox_stand_mins[2];
 		nodeFallback->Activate( target.Data(), 32.0f, context->NavTargetAasAreaNum() );

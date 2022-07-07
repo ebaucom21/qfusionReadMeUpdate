@@ -25,20 +25,20 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 	std::optional<Vec3> maybeTarget;
 	const float *__restrict botOrigin = entityPhysicsState.Origin();
 	if( context->sameFloorClusterAreasCache.GetClosestToTargetPoint( context, closestFloorPoint ) ) {
-		if( Distance2DSquared( botOrigin, closestFloorPoint ) > SQUARE( 1.0f ) ) {
+		if( Distance2DSquared( botOrigin, closestFloorPoint ) > wsw::square( 1.0f ) ) {
 			maybeTarget = Vec3( closestFloorPoint );
 		}
 	} else if( const int nextReachNum = context->NextReachNum() ) {
 		const auto &__restrict nextReach = AiAasWorld::instance()->getReaches()[nextReachNum];
 		// This check is not just a normalization check but also is a logical one (switch to end if close to start)
-		if( Distance2DSquared( botOrigin, nextReach.start ) > SQUARE( 16.0f ) ) {
+		if( Distance2DSquared( botOrigin, nextReach.start ) > wsw::square( 16.0f ) ) {
 			maybeTarget = Vec3( nextReach.start );
-		} else if( Distance2DSquared( botOrigin, nextReach.end ) > SQUARE( 1.0f ) ) {
+		} else if( Distance2DSquared( botOrigin, nextReach.end ) > wsw::square( 1.0f ) ) {
 			maybeTarget = Vec3( nextReach.end );
 		}
 	} else if( context->NavTargetAasAreaNum() ) {
 		Vec3 navTargetOrigin( context->NavTargetOrigin() );
-		if( navTargetOrigin.SquareDistance2DTo( botOrigin ) > SQUARE( 1.0f ) ) {
+		if( navTargetOrigin.SquareDistance2DTo( botOrigin ) > wsw::square( 1.0f ) ) {
 			maybeTarget = navTargetOrigin;
 		}
 	}
@@ -53,7 +53,7 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 		Vec3 desiredMoveDir( Vec3( *maybeTarget ) - botOrigin );
 		desiredMoveDir.Z() *= Z_NO_BEND_SCALE;
 		const float desiredDirSquareLen = desiredMoveDir.SquaredLength();
-		if( desiredDirSquareLen > SQUARE( 12.0f ) ) {
+		if( desiredDirSquareLen > wsw::square( 12.0f ) ) {
 			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
 			hasDefinedMoveDir = true;
 
@@ -193,7 +193,7 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContex
 				Vec3 keyMoveDir( 0, 0, 0 );
 				keyMoveDir += (float)combatMovementState->ForwardMove() * entityPhysicsState.ForwardDir();
 				keyMoveDir += (float)combatMovementState->RightMove() * entityPhysicsState.RightDir();
-				if( const auto squareKeyDirLen = keyMoveDir.SquaredLength(); squareKeyDirLen > SQUARE( 0.5f ) ) {
+				if( const auto squareKeyDirLen = keyMoveDir.SquaredLength(); squareKeyDirLen > wsw::square( 0.5f ) ) {
 					keyMoveDir *= Q_RSqrt( squareKeyDirLen );
 					assert( std::fabs( keyMoveDir.LengthFast() - 1.0f ) < 0.01f );
 					Vec3 velocity2DDir( entityPhysicsState.Velocity() );
@@ -311,7 +311,7 @@ void CombatDodgeSemiRandomlyToTargetAction::CheckPredictionStepResults( Predicti
 	}
 
 	// Check for blocking
-	if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) < SQUARE( minDistance ) ) {
+	if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) < wsw::square( minDistance ) ) {
 		Debug( "The total covered distance since the sequence start is too low\n" );
 		context->SetPendingRollback();
 		return;

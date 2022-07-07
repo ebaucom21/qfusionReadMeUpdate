@@ -373,10 +373,6 @@ inline float Distance2DSquared( const vec3_t a, const vec3_t b ) {
 	return dx * dx + dy * dy;
 }
 
-#ifndef SQUARE
-#define SQUARE( x ) ( ( x ) * ( x ) )
-#endif
-
 static inline bool ShouldCrouchSlideNow( PredictionContext *context ) {
 	if( !( context->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_CROUCHSLIDING ) ) {
 		return false;

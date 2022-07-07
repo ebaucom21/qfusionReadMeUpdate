@@ -868,7 +868,7 @@ void PredictionContext::SavePathTriggerNums() {
 			break;
 		}
 		// Another cutoff
-		if( DistanceSquared( botOrigin, reach.start ) > SQUARE( 768 ) ) {
+		if( DistanceSquared( botOrigin, reach.start ) > wsw::square( 768 ) ) {
 			break;
 		}
 		if( const auto *const __restrict classTriggerNums = triggerAreaNumsCache.getTriggersForArea( reachAreaNum ) ) {

@@ -277,7 +277,7 @@ void BunnyTestingSavedLookDirsAction::SaveCandidateAreaDirs( PredictionContext *
 		} else {
 			context->NavTargetOrigin().CopyTo( target );
 		}
-		if( target.SquareDistance2DTo( entityPhysicsState.Origin() ) > SQUARE( 24.0f ) ) {
+		if( target.SquareDistance2DTo( entityPhysicsState.Origin() ) > wsw::square( 24.0f ) ) {
 			Vec3 dir( target - entityPhysicsState.Origin() );
 			dir *= Q_RSqrt( dir.SquaredLength() );
 			suggestedLookDirs.emplace_back( SuggestedDir { dir, areaNum } );

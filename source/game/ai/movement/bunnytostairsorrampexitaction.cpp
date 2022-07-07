@@ -130,7 +130,7 @@ void BunnyToStairsOrRampExitAction::CheckPredictionStepResults( PredictionContex
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	// Make sure we don't stop prediction at start.
 	// The distance threshold is low due to troublesome movement in these kinds of areas.
-	if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) < SQUARE( 20 ) ) {
+	if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) < wsw::square( 20 ) ) {
 		return;
 	}
 

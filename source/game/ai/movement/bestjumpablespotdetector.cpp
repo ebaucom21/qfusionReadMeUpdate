@@ -73,7 +73,7 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 		if( spotAndScore->areaNum > 0 ) {
 			const int floorClusterNum = aasWorld->floorClusterNum( spotAndScore->areaNum );
 			if( floorClusterNum && floorClusterNum == aasWorld->floorClusterNum( predictionResults.lastAreaNum ) ) {
-				if( Distance2DSquared( spotAndScore->origin, predictionResults.origin ) < SQUARE( 192.0f ) ) {
+				if( Distance2DSquared( spotAndScore->origin, predictionResults.origin ) < wsw::square( 192.0f ) ) {
 					return true;
 				}
 			}
@@ -103,7 +103,7 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 		VectorAdd( predictionResults.trace->endpos, predictionResults.trace->plane.normal, originForMissTest );
 	} else {
 		// Reject a-priori in this case
-		if( DistanceSquared( predictionResults.trace->endpos, spotAndScore->origin ) > SQUARE( 128 ) ) {
+		if( DistanceSquared( predictionResults.trace->endpos, spotAndScore->origin ) > wsw::square( 128 ) ) {
 			return false;
 		}
 
@@ -129,10 +129,10 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 	}
 
 	const float squareDistance = DistanceSquared( spotAndScore->origin, originForMissTest );
-	if( squareDistance > SQUARE( 48.0f ) ) {
+	if( squareDistance > wsw::square( 48.0f ) ) {
 		return false;
 	}
-	if( squareDistance < SQUARE( 24.0f ) ) {
+	if( squareDistance < wsw::square( 24.0f ) ) {
 		return true;
 	}
 
@@ -143,7 +143,7 @@ bool BestJumpableSpotDetector::InspectBumpingPoint( const SpotAndScore *spotAndS
 void BestRegularJumpableSpotDetector::GetVelocityForJumpingToSpot( vec3_t velocity, const SpotAndScore *spot ) {
 	VectorSubtract( spot->origin, startOrigin, velocity );
 	velocity[2] = 0;
-	float scale2D =  run2DSpeed / sqrtf( SQUARE( velocity[0] ) + SQUARE( velocity[1] ) );
+	float scale2D =  run2DSpeed / sqrtf( wsw::square( velocity[0] ) + wsw::square( velocity[1] ) );
 	velocity[0] *= scale2D;
 	velocity[1] *= scale2D;
 	velocity[2] = jumpZSpeed;

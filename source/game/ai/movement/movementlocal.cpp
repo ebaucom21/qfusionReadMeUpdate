@@ -273,7 +273,7 @@ int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int from
 			continue;
 		}
 		if( travelType == TRAVEL_WALKOFFLEDGE ) {
-			if( DistanceSquared( reach.start, reach.end ) < SQUARE( 0.8 * AI_JUMPABLE_HEIGHT ) ) {
+			if( DistanceSquared( reach.start, reach.end ) < wsw::square( 0.8 * AI_JUMPABLE_HEIGHT ) ) {
 				continue;
 			}
 		}
@@ -292,8 +292,8 @@ bool TraceArcInSolidWorld( const vec3_t from, const vec3_t to ) {
 	// Lets figure out deltaZ making an assumption that all forward momentum is converted to the direction to the point
 	// Note that we got rid of idea making these tests depending of a current AI entity physics state due to flicker issues.
 
-	const float squareDistanceToMidPoint = SQUARE( from[0] - midPoint.X() ) + SQUARE( from[1] - midPoint.Y() );
-	if( squareDistanceToMidPoint < SQUARE( 32 ) ) {
+	const float squareDistanceToMidPoint = wsw::square( from[0] - midPoint.X() ) + wsw::square( from[1] - midPoint.Y() );
+	if( squareDistanceToMidPoint < wsw::square( 32 ) ) {
 		StaticWorldTrace( &trace, from, to, brushMask );
 		return trace.fraction == 1.0f;
 	}

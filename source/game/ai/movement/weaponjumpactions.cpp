@@ -132,7 +132,7 @@ void ScheduleWeaponJumpAction::PlanPredictionStep( PredictionContext *context ) 
 		if( int currClusterNum = aasWorld->floorClusterNum( groundedAreaNum ) ) {
 			if( int targetClusterNum = aasWorld->floorClusterNum( context->NavTargetAasAreaNum() ) ) {
 				if( targetClusterNum == currClusterNum ) {
-					if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( 144 ) ) {
+					if( context->NavTargetOrigin().SquareDistanceTo( entityPhysicsState.Origin() ) < wsw::square( 144 ) ) {
 						Debug( "The bot is in the target floor cluster and is fairly close to target\n" );
 						this->SwitchOrRollback( context, defaultAction );
 						return;
@@ -214,7 +214,7 @@ int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionCont
 	const int targetAreaNum = context->NavTargetAasAreaNum();
 	int currAreaNum = context->CurrGroundedAasAreaNum();
 
-	float squareDistanceThreshold = SQUARE( 256 + 64 );
+	float squareDistanceThreshold = wsw::square( 256 + 64 );
 
 	int numAreas = 0;
 	int numHops = 0;
@@ -231,8 +231,8 @@ int ScheduleWeaponJumpAction::GetCandidatesForReachChainShortcut( PredictionCont
 		const auto &nextReach = aasReach[reachNum];
 		const auto travelType = nextReach.traveltype & TRAVELTYPE_MASK;
 		if( travelType != TRAVEL_WALK && travelType != TRAVEL_WALKOFFLEDGE ) {
-			if( !( travelType == TRAVEL_JUMP && DistanceSquared( nextReach.start, nextReach.end ) < SQUARE( 64 ) ) ) {
-				squareDistanceThreshold = SQUARE( 96 );
+			if( !( travelType == TRAVEL_JUMP && DistanceSquared( nextReach.start, nextReach.end ) < wsw::square( 64 ) ) ) {
+				squareDistanceThreshold = wsw::square( 96 );
 			}
 		}
 
@@ -407,7 +407,7 @@ int ScheduleWeaponJumpAction::FilterRawCandidateAreas( PredictionContext *contex
 		// There will be further distance tests, but this coarse and broad one helps to save expensive routing calls
 		const float squareDistance = DistanceSquared( botOrigin, area.center );
 		// Note: the lower limit might seem insufficient but sometimes short vertical weapon-jumps are needed
-		if( squareDistance < SQUARE( 40 ) || squareDistance > SQUARE( 1024 + 512 ) ) {
+		if( squareDistance < wsw::square( 40 ) || squareDistance > wsw::square( 1024 + 512 ) ) {
 			continue;
 		}
 
@@ -467,7 +467,7 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 		deltaHeight = aasAreas[testedAreaNum].mins[2] + 16.0f - entityPhysicsState.Origin()[2];
 		if( deltaHeight > 0 ) {
 			float squareDistance = Distance2DSquared( aasAreas[testedAreaNum].center, entityPhysicsState.Origin() );
-			if( squareDistance / ( deltaHeight * deltaHeight ) < SQUARE( 3.0f / 2.0f ) ) {
+			if( squareDistance / ( deltaHeight * deltaHeight ) < wsw::square( 3.0f / 2.0f ) ) {
 				goto testPassed;
 			}
 		}
@@ -553,7 +553,7 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( PredictionContext *context 
 
 	PrepareAnglesAndWeapon( context );
 
-	if( weaponJumpState->OriginAtStart().SquareDistanceTo( entityPhysicsState.Origin() ) > SQUARE( 24 ) ) {
+	if( weaponJumpState->OriginAtStart().SquareDistanceTo( entityPhysicsState.Origin() ) > wsw::square( 24 ) ) {
 		Debug( "The bot origin has been changed. Deactivating the weapon jump state (should be replanned next frame)." );
 		m_subsystem->ResetFailedWeaponJumpAttempt( context );
 		// Keep the applied input, its very likely that the action will be activated again next frame.

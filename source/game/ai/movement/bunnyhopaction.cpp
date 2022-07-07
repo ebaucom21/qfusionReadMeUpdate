@@ -41,7 +41,7 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 				constexpr const float kShortRange = 56.0f;
 				constexpr const float kMidRange = 128.0f;
 				// Unable to hit even at the initial path part
-				if( squareDistance < SQUARE( kShortRange ) ) {
+				if( squareDistance < wsw::square( kShortRange ) ) {
 					Debug( "Cannot apply action: cannot hit an enemy while keeping the crosshair on it is required\n" );
 					context->SetPendingRollback();
 					this->isDisabledForPlanning = true;
@@ -49,7 +49,7 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 				}
 				// Things are very likely to change so consider the path legit.
 				// Apply a penalty if it seems to be necessary.
-				if( squareDistance < SQUARE( kMidRange ) ) {
+				if( squareDistance < wsw::square( kMidRange ) ) {
 					float frac = ( Q_Sqrt( squareDistance ) - kShortRange );
 					frac *= 1.0f / ( kMidRange - kShortRange );
 					EnsurePathPenalty( (unsigned)( 500 - 200 * frac ) );
@@ -289,7 +289,7 @@ bool BunnyHopAction::CanSetWalljump( PredictionContext *context, const Vec3 &vel
 void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( PredictionContext *context ) {
 	// Skip at start to let the bot escape any obstacles at the current in-game position
 	if( context->totalMillisAhead < 128 ) {
-		if( originAtSequenceStart.Distance2DTo( context->movementState->entityPhysicsState.Origin() ) < SQUARE( 36 ) ) {
+		if( originAtSequenceStart.Distance2DTo( context->movementState->entityPhysicsState.Origin() ) < wsw::square( 36 ) ) {
 			return;
 		}
 	}
@@ -341,8 +341,8 @@ bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
 	const float newSquare2DSpeed = newEntityPhysicsState.SquareSpeed2D();
 
 	// Check for unintended bouncing back (starting from some speed threshold)
-	if( oldSquare2DSpeed > SQUARE( 100.0f ) ) {
-		if( newSquare2DSpeed > SQUARE( 1.0f ) ) {
+	if( oldSquare2DSpeed > wsw::square( 100.0f ) ) {
+		if( newSquare2DSpeed > wsw::square( 1.0f ) ) {
 			Vec3 oldVelocity2DDir( oldVelocity[0], oldVelocity[1], 0 );
 			// TODO: Cache the inverse speed
 			oldVelocity2DDir *= Q_Rcp( oldEntityPhysicsState.Speed2D() );
@@ -655,7 +655,7 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 		}
 	}
 
-	if( squareDistanceFromStart < SQUARE( 64 ) ) {
+	if( squareDistanceFromStart < wsw::square( 64 ) ) {
 		if( SequenceDuration( context ) < 384 ) {
 			context->SaveSuggestedActionForNextFrame( this );
 			return;
@@ -674,7 +674,7 @@ void BunnyHopAction::CheckPredictionStepResults( PredictionContext *context ) {
 				// Check for completion if we have already made a hop before
 				if( hopsCounter ) {
 					// Try a "direct" completion if we've landed some sufficient units ahead of the last hop origin
-					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > SQUARE( 72 ) ) {
+					if( latchedHopOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() ) > wsw::square( 72 ) ) {
 						if( !sequencePathPenalty && hopsCounter == 2 ) {
 							context->isCompleted = true;
 							return;

@@ -33,7 +33,7 @@ void BunnyTestingMultipleTurnsAction::PlanPredictionStep( PredictionContext *con
 		} else {
 			if( context->frameEvents.hasWalljumped ) {
 				// Keep rotating the look dir if a walljump happened at the very beginning of the path
-				if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) > SQUARE( 32 ) ) {
+				if( originAtSequenceStart.SquareDistance2DTo( entityPhysicsState.Origin() ) > wsw::square( 32 ) ) {
 					hasWalljumped = true;
 				}
 			}

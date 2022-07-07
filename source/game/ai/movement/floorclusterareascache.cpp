@@ -78,7 +78,7 @@ bool SameFloorClusterAreasCache::NeedsToBeComputed( PredictionContext *context )
 		return true;
 	}
 
-	if( computedTargetAreaPoint.SquareDistanceTo( entityPhysicsState.Origin() ) < SQUARE( REACHABILITY_RADIUS ) ) {
+	if( computedTargetAreaPoint.SquareDistanceTo( entityPhysicsState.Origin() ) < wsw::square( REACHABILITY_RADIUS ) ) {
 		return true;
 	}
 

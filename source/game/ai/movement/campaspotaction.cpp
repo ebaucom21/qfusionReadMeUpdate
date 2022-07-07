@@ -148,7 +148,7 @@ void CampASpotMovementAction::CheckPredictionStepResults( PredictionContext *con
 
 	const float oldSquareDistanceToOrigin = spotOrigin.SquareDistance2DTo( oldEntityPhysicsState.Origin() );
 	const float newSquareDistanceToOrigin = spotOrigin.SquareDistance2DTo( newEntityPhysicsState.Origin() );
-	if( oldSquareDistanceToOrigin > SQUARE( 1.3f * radius ) ) {
+	if( oldSquareDistanceToOrigin > wsw::square( 1.3f * radius ) ) {
 		if( newSquareDistanceToOrigin > oldSquareDistanceToOrigin ) {
 			Debug( "A prediction step has lead to even greater distance to the spot origin while bot should return to it\n" );
 			context->SetPendingRollback();
@@ -161,7 +161,7 @@ void CampASpotMovementAction::CheckPredictionStepResults( PredictionContext *con
 		return;
 	}
 
-	if( newSquareDistanceToOrigin < SQUARE( radius ) ) {
+	if( newSquareDistanceToOrigin < wsw::square( radius ) ) {
 		const unsigned sequenceDuration = this->SequenceDuration( context );
 		const unsigned completionMillisThreshold = (unsigned) ( 512 * ( 1.0f - 0.5f * campingSpotState.Alertness() ) );
 		if( sequenceDuration > completionMillisThreshold ) {

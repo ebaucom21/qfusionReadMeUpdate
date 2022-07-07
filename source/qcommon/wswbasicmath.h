@@ -27,8 +27,20 @@ constexpr wsw_forceinline auto max( const T &a, const T &b ) -> T {
 
 template <typename T>
 [[nodiscard]]
-constexpr wsw_forceinline auto clamp( const T &v, const T &lo, const T &hi ) {
+constexpr wsw_forceinline auto clamp( const T &v, const T &lo, const T &hi ) -> T {
 	return min( max( v, lo ), hi );
+}
+
+template <typename T>
+[[nodiscard]]
+constexpr wsw_forceinline auto square( const T &v ) -> T {
+	return v * v;
+}
+
+template <typename T>
+[[nodiscard]]
+constexpr wsw_forceinline auto cube( const T &v ) -> T {
+	return v * v * v;
 }
 
 }

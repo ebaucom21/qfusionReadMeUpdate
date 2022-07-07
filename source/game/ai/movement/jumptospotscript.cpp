@@ -201,7 +201,7 @@ void JumpToSpotScript::SetupMovement( PredictionContext *context ) {
 		Vec3 forwardDir( entityPhysicsState.ForwardDir() );
 		// Check whether the bot is not leaning too hard to avoid weird-looking movement
 		if( fabsf( forwardDir.Z() ) < 0.3f ) {
-			if( DistanceSquared( entityPhysicsState.Origin(), targetOrigin ) > SQUARE( 48 ) ) {
+			if( DistanceSquared( entityPhysicsState.Origin(), targetOrigin ) > wsw::square( 48 ) ) {
 				forwardDir.Z() = 0;
 				if( forwardDir.normalizeFast() && toTargetDir.Dot( forwardDir ) > 0.9f ) {
 					Vec3 modifiedVelocity( forwardDir );
@@ -282,7 +282,7 @@ void BestAreaCenterJumpableSpotDetector::FillCandidateSpotsUsingRoutingTest( std
 		const auto &area = aasAreas[areaNum];
 		Vec3 areaPoint( area.center );
 		areaPoint.Z() = area.mins[2] + areaPointZOffset;
-		if( areaPoint.SquareDistanceTo( startOrigin ) < SQUARE( 64.0f ) ) {
+		if( areaPoint.SquareDistanceTo( startOrigin ) < wsw::square( 64.0f ) ) {
 			continue;
 		}
 		int travelTime = routeCache->PreferredRouteToGoalArea( areaNum, navTargetAreaNum );
@@ -374,9 +374,9 @@ MovementScript *FallbackAction::TryFindJumpLikeReachFallback( PredictionContext 
 		reachVec -= nextReach.end;
 		float squareReachLength = reachVec.SquaredLength();
 		// If a reachability is rather short
-		if( squareReachLength < SQUARE( 72.0f ) ) {
+		if( squareReachLength < wsw::square( 72.0f ) ) {
 			// If there is no significant sloppiness
-			if( fabsf( reachVec.Z() ) / sqrtf( SQUARE( reachVec.X() ) + SQUARE( reachVec.Y() ) ) < 0.3f ) {
+			if( fabsf( reachVec.Z() ) / sqrtf( wsw::square( reachVec.X() ) + wsw::square( reachVec.Y() ) ) < 0.3f ) {
 				const auto *aasWorld = AiAasWorld::instance();
 				const auto aasAreas = aasWorld->getAreas();
 				const auto aasAreaSettings = aasWorld->getAreaSettings();
@@ -613,7 +613,7 @@ void BestConnectedToHubAreasJumpableSpotDetector::GetCandidateSpots( SpotAndScor
 		Vec3 areaPoint( area.center );
 		areaPoint.Z() = area.mins[2] + 4.0f - playerbox_stand_mins[2];
 		float squareDistance = areaPoint.SquareDistanceTo( startOrigin );
-		if( squareDistance < SQUARE( 48.0f ) ) {
+		if( squareDistance < wsw::square( 48.0f ) ) {
 			continue;
 		}
 

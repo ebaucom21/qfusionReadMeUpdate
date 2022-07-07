@@ -101,7 +101,7 @@ bool Walker::TestReachVis( const aas_reachability_t &reach, float playerZOffset,
 		markReachThreshold = 96.0f;
 
 		// Interrupt at way too far reachabilities
-		if( squareDistance > SQUARE( 512 ) ) {
+		if( squareDistance > wsw::square( 512 ) ) {
 			return false;
 		}
 
@@ -112,7 +112,7 @@ bool Walker::TestReachVis( const aas_reachability_t &reach, float playerZOffset,
 
 	// Unfortunately we have to check the trace first
 	// as a sequence of successful vis checks from the beginning is expected
-	if( squareDistance < SQUARE( markReachThreshold ) ) {
+	if( squareDistance < wsw::square( markReachThreshold ) ) {
 		// Continue walking the reach chain w/o marking the found reach
 		return true;
 	}

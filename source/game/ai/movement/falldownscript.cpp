@@ -109,7 +109,7 @@ MovementScript *FallbackAction::TryFindWalkOffLedgeReachFallback( PredictionCont
 
 	// If the falling distance is really low, treat is just as walking to a node
 	const float squareFallingHeight = DistanceSquared( nextReach.start, nextReach.end );
-	if( squareFallingHeight < SQUARE( 40.0f ) ) {
+	if( squareFallingHeight < wsw::square( 40.0f ) ) {
 		auto *script = &m_subsystem->useWalkableNodeScript;
 		float squareDistance = DistanceSquared( entityPhysicsState.Origin(), nextReach.start );
 		unsigned timeout = 100 + (unsigned)( 1000.0f * sqrtf( squareDistance ) / context->GetRunSpeed() );

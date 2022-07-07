@@ -198,7 +198,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 
 	if( !entityPhysicsState.GroundEntity() ) {
 		if( intendedDotActual > 0.95f ) {
-			if( allowAirAccel && isInNofallArea && squareDistanceToTarget > SQUARE( 96.0f ) ) {
+			if( allowAirAccel && isInNofallArea && squareDistanceToTarget > wsw::square( 96.0f ) ) {
 				context->CheatingAccelerate( 0.5f );
 			}
 			return;
@@ -229,7 +229,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 		assert( frac >= 0.0f && frac <= 1.001f );
 		// Raise threshold for a low `frac`
 		float threshold = 16.0f + ( isInNofallArea ? 16.0f : 32.0f ) * ( 1.0f - frac );
-		if( squareDistanceToTarget > SQUARE( threshold ) ) {
+		if( squareDistanceToTarget > wsw::square( threshold ) ) {
 			botInput->SetWalkButton( false );
 		}
 	}
@@ -254,7 +254,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 		return;
 	}
 
-	if( squareDistanceToTarget < SQUARE( 72.0f ) ) {
+	if( squareDistanceToTarget < wsw::square( 72.0f ) ) {
 		return;
 	}
 
@@ -278,7 +278,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 		return;
 	}
 
-	if( !isInNofallArea && ( squareDistanceToTarget < SQUARE( 128.0f ) || speed2D > 550.0f ) ) {
+	if( !isInNofallArea && ( squareDistanceToTarget < wsw::square( 128.0f ) || speed2D > 550.0f ) ) {
 		return;
 	}
 

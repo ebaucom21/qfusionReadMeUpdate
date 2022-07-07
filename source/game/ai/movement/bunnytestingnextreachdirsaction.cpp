@@ -209,19 +209,19 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 
 	const float squareDistanceToArea = areaPoint.SquareDistanceTo( traceStartPoint );
 	// Skip way too close areas (otherwise the bot might fall into endless looping)
-	if( squareDistanceToArea < SQUARE( 96 ) ) {
+	if( squareDistanceToArea < wsw::square( 96 ) ) {
 		return true;
 	}
 
 	// Skip way too far areas (this is mainly an optimization for the following SolidWorldTrace() call)
-	if( squareDistanceToArea > SQUARE( 1024 ) ) {
+	if( squareDistanceToArea > wsw::square( 1024 ) ) {
 		return true;
 	}
 
 	// Skip "junk" areas if they are far.
 	// Avoid wasting CPU cycles for these areas.
 	// They might still be useful being close to a bot, e.g. if a bot is trapped at unrecognized stairs cluster.
-	if( squareDistanceToArea > SQUARE( 256 + 64 ) && ( areaSettings.areaflags & AREA_JUNK ) ) {
+	if( squareDistanceToArea > wsw::square( 256 + 64 ) && ( areaSettings.areaflags & AREA_JUNK ) ) {
 		return true;
 	}
 
