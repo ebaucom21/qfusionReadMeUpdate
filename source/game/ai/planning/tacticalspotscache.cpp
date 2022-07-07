@@ -102,64 +102,6 @@ inline void BotTacticalSpotsCache::TakeEnemiesIntoAccount( ProblemParams &proble
 	problemParams.setImpactfulEnemies( bot->TrackedEnemiesHead(), *selectedEnemies.begin() );
 }
 
-bool BotTacticalSpotsCache::FindSniperRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
-	AdvantageProblemSolver::ProblemParams problemParams( enemyOrigin.Data() );
-	problemParams.setMinSpotDistanceToEntity( WorldState::FAR_RANGE_MAX );
-	problemParams.setMinHeightAdvantageOverOrigin( std::numeric_limits<float>::min() );
-	problemParams.setMinHeightAdvantageOverEntity( std::numeric_limits<float>::min() );
-	problemParams.setCheckToAndBackReach( false );
-	problemParams.setMaxFeasibleTravelTimeMillis( 12500 );
-	problemParams.setOptimizeAggressively( true );
-	TakeEnemiesIntoAccount( problemParams );
-
-	return FindForOrigin( problemParams, origin, std::numeric_limits<float>::max(), result );
-}
-
-bool BotTacticalSpotsCache::FindFarRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
-	AdvantageProblemSolver::ProblemParams problemParams( enemyOrigin.Data() );
-	problemParams.setMinSpotDistanceToEntity( WorldState::MIDDLE_RANGE_MAX );
-	problemParams.setMaxSpotDistanceToEntity( WorldState::FAR_RANGE_MAX );
-	problemParams.setEntityWeightFalloffDistanceRatio( 0.25f );
-	problemParams.setMinHeightAdvantageOverOrigin( -256.0f );
-	problemParams.setMinHeightAdvantageOverEntity( -256.0f );
-	problemParams.setCheckToAndBackReach( false );
-	problemParams.setMaxFeasibleTravelTimeMillis( 7500 );
-	problemParams.setOptimizeAggressively( true );
-	TakeEnemiesIntoAccount( problemParams );
-
-	return FindForOrigin( problemParams, origin, std::numeric_limits<float>::max(), result );
-}
-
-bool BotTacticalSpotsCache::FindMiddleRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
-	AdvantageProblemSolver::ProblemParams problemParams( enemyOrigin.Data() );
-	problemParams.setMinSpotDistanceToEntity( WorldState::CLOSE_RANGE_MAX );
-	problemParams.setMaxSpotDistanceToEntity( WorldState::MIDDLE_RANGE_MAX );
-	problemParams.setEntityWeightFalloffDistanceRatio( 0.5f );
-	problemParams.setMinHeightAdvantageOverOrigin( -64.0f );
-	problemParams.setMinHeightAdvantageOverEntity( +16.0f );
-	problemParams.setCheckToAndBackReach( false );
-	problemParams.setMaxFeasibleTravelTimeMillis( 4000 );
-	TakeEnemiesIntoAccount( problemParams );
-
-	return FindForOrigin( problemParams, origin, std::numeric_limits<float>::max(), result );
-}
-
-bool BotTacticalSpotsCache::FindCloseRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
-	AdvantageProblemSolver::ProblemParams problemParams( enemyOrigin.Data() );
-	float meleeRange = GS_GetWeaponDef( WEAP_GUNBLADE )->firedef_weak.timeout;
-	problemParams.setMinSpotDistanceToEntity( meleeRange );
-	problemParams.setMaxSpotDistanceToEntity( WorldState::CLOSE_RANGE_MAX );
-	problemParams.setEntityWeightFalloffDistanceRatio( 0.8f );
-	problemParams.setMinHeightAdvantageOverOrigin( -64.0f );
-	problemParams.setMinHeightAdvantageOverEntity( +16.0f );
-	// Bot should be able to retreat from close combat
-	problemParams.setCheckToAndBackReach( true );
-	problemParams.setMaxFeasibleTravelTimeMillis( 2000 );
-	TakeEnemiesIntoAccount( problemParams );
-
-	return FindForOrigin( problemParams, origin, std::numeric_limits<float>::max(), result );
-}
-
 bool BotTacticalSpotsCache::FindCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result ) {
 	const float searchRadius = 192.0f + 512.0f * Skill();
 	CoverProblemSolver::ProblemParams problemParams( enemyOrigin.Data(), 32.0f );

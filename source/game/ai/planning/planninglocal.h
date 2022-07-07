@@ -3,10 +3,6 @@
 
 #include "../bot.h"
 
-inline float LgRange() {
-	return GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
-}
-
 inline PlannerNode::PlannerNode( PoolBase *pool, Ai *self )
 	: PoolItem( pool ),	worldState( self ) {}
 

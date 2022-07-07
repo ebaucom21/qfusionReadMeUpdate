@@ -33,11 +33,14 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 		return true;
 	}
 
-	if( worldState.EnemyIsOnSniperRange() || worldState.EnemyIsOnSniperRange() ) {
+	const float distanceToEnemy = worldState.DistanceToEnemy();
+	if( distanceToEnemy > kLasergunRange ) {
+		/*
+		 * TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		if( !worldState.EnemyHasGoodSniperRangeWeaponsVar() && !worldState.EnemyHasGoodFarRangeWeaponsVar() ) {
 			Debug( "Enemy does not have good sniper range weapons and thus taking cover makes no sense\n" );
 			return false;
-		}
+		}*/
 		if( worldState.DamageToBeKilled() > 80 ) {
 			Debug( "Bot can resist more than 80 damage units on sniper range and thus taking cover makes no sense\n" );
 			return false;
@@ -45,7 +48,7 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 		return true;
 	}
 
-	if( worldState.EnemyIsOnMiddleRange() ) {
+	if( distanceToEnemy > 0.33f * kLasergunRange ) {
 		return CheckMiddleRangeKDDamageRatio( worldState );
 	}
 
@@ -54,6 +57,7 @@ bool RunAwayAction::CheckCommonRunAwayPreconditions( const WorldState &worldStat
 
 bool RunAwayAction::CheckMiddleRangeKDDamageRatio( const WorldState &worldState ) const {
 	float offensiveness = Self()->GetEffectiveOffensiveness();
+	/* TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	if( worldState.HasThreateningEnemyVar() ) {
 		if( worldState.HasGoodMiddleRangeWeaponsVar() ) {
 			if( worldState.KillToBeKilledDamageRatio() < 1.0f + 1.0f * offensiveness ) {
@@ -71,13 +75,14 @@ bool RunAwayAction::CheckMiddleRangeKDDamageRatio( const WorldState &worldState 
 		if( worldState.KillToBeKilledDamageRatio() < 1.5f + 3.0f * offensiveness ) {
 			return false;
 		}
-	}
+	}*/
 
 	return worldState.KillToBeKilledDamageRatio() > 1.5f + 1.5f * offensiveness;
 }
 
 bool RunAwayAction::CheckCloseRangeKDDamageRatio( const WorldState &worldState ) const {
 	float offensiveness = Self()->GetEffectiveOffensiveness();
+	/* TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	if( worldState.HasThreateningEnemyVar() ) {
 		if( worldState.HasGoodCloseRangeWeaponsVar() ) {
 			if( worldState.KillToBeKilledDamageRatio() < 1.0f + 1.0f * offensiveness ) {
@@ -89,7 +94,7 @@ bool RunAwayAction::CheckCloseRangeKDDamageRatio( const WorldState &worldState )
 			}
 		}
 		return true;
-	}
+	}*/
 
 	return worldState.KillToBeKilledDamageRatio() > 2.0f + 1.0f * offensiveness;
 }

@@ -39,20 +39,12 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		worldState->HasThreateningEnemyVar().SetValue( selectedEnemies.AreThreatening() );
 		worldState->RawDamageToKillVar().SetValue( (short)selectedEnemies.DamageToKill() );
 		worldState->EnemyHasQuadVar().SetValue( selectedEnemies.HaveQuad() );
-		worldState->EnemyHasGoodSniperRangeWeaponsVar().SetValue( selectedEnemies.HaveGoodSniperRangeWeapons() );
-		worldState->EnemyHasGoodFarRangeWeaponsVar().SetValue( selectedEnemies.HaveGoodFarRangeWeapons() );
-		worldState->EnemyHasGoodMiddleRangeWeaponsVar().SetValue( selectedEnemies.HaveGoodMiddleRangeWeapons() );
-		worldState->EnemyHasGoodCloseRangeWeaponsVar().SetValue( selectedEnemies.HaveGoodCloseRangeWeapons() );
 		worldState->CanHitEnemyVar().SetValue( selectedEnemies.CanBeHit() );
 	} else {
 		worldState->EnemyOriginVar().SetIgnore( true );
 		worldState->HasThreateningEnemyVar().SetIgnore( true );
 		worldState->RawDamageToKillVar().SetIgnore( true );
 		worldState->EnemyHasQuadVar().SetIgnore( true );
-		worldState->EnemyHasGoodSniperRangeWeaponsVar().SetIgnore( true );
-		worldState->EnemyHasGoodFarRangeWeaponsVar().SetIgnore( true );
-		worldState->EnemyHasGoodMiddleRangeWeaponsVar().SetIgnore( true );
-		worldState->EnemyHasGoodCloseRangeWeaponsVar().SetIgnore( true );
 		worldState->EnemyCanHitVar().SetIgnore( true );
 		worldState->CanHitEnemyVar().SetIgnore( true );
 	}
@@ -90,30 +82,6 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 
 	worldState->HasQuadVar().SetValue( ::HasQuad( self ) );
 	worldState->HasShellVar().SetValue( ::HasShell( self ) );
-
-	bool hasGoodSniperRangeWeapons = false;
-	bool hasGoodFarRangeWeapons = false;
-	bool hasGoodMiddleRangeWeapons = false;
-	bool hasGoodCloseRangeWeapons = false;
-
-	if( BoltsReadyToFireCount() || BulletsReadyToFireCount() || InstasReadyToFireCount() ) {
-		hasGoodSniperRangeWeapons = true;
-	}
-	if( BoltsReadyToFireCount() || BulletsReadyToFireCount() || PlasmasReadyToFireCount() || InstasReadyToFireCount() ) {
-		hasGoodFarRangeWeapons = true;
-	}
-	if( RocketsReadyToFireCount() || LasersReadyToFireCount() || PlasmasReadyToFireCount() ||
-		BulletsReadyToFireCount() || ShellsReadyToFireCount() || InstasReadyToFireCount() || WavesReadyToFireCount() ) {
-		hasGoodMiddleRangeWeapons = true;
-	}
-	if( RocketsReadyToFireCount() || PlasmasReadyToFireCount() || ShellsReadyToFireCount() || WavesReadyToFireCount() ) {
-		hasGoodCloseRangeWeapons = true;
-	}
-
-	worldState->HasGoodSniperRangeWeaponsVar().SetValue( hasGoodSniperRangeWeapons );
-	worldState->HasGoodFarRangeWeaponsVar().SetValue( hasGoodFarRangeWeapons );
-	worldState->HasGoodMiddleRangeWeaponsVar().SetValue( hasGoodMiddleRangeWeapons );
-	worldState->HasGoodCloseRangeWeaponsVar().SetValue( hasGoodCloseRangeWeapons );
 
 	worldState->HasQuadVar().SetValue( ::HasQuad( self ) );
 	worldState->HasShellVar().SetValue( ::HasShell( self ) );

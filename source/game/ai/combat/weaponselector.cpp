@@ -101,11 +101,12 @@ void BotWeaponSelector::selectWeapon( const WorldState &worldState ) {
 	}
 
 	std::optional<int> maybeBuiltinWeapon;
-	if( worldState.EnemyIsOnSniperRange() ) {
+	const float distanceToEnemy = worldState.DistanceToEnemy();
+	if( distanceToEnemy > 2.0f * kLasergunRange ) {
 		maybeBuiltinWeapon = suggestSniperRangeWeapon( worldState );
-	} else if( worldState.EnemyIsOnFarRange() ) {
+	} else if( distanceToEnemy > kLasergunRange ) {
 		maybeBuiltinWeapon = suggestFarRangeWeapon( worldState );
-	} else if( worldState.EnemyIsOnMiddleRange() ) {
+	} else if( distanceToEnemy > 0.33f * kLasergunRange ) {
 		maybeBuiltinWeapon = suggestMiddleRangeWeapon( worldState );
 	} else {
 		maybeBuiltinWeapon = suggestCloseRangeWeapon( worldState );
@@ -255,23 +256,19 @@ auto BotWeaponSelector::suggestFarRangeWeapon( const WorldState &worldState ) ->
 auto BotWeaponSelector::suggestMiddleRangeWeapon( const WorldState &worldState ) -> std::optional<int> {
 	const float distance = worldState.DistanceToEnemy();
 
-	const auto *const lgDef = GS_GetWeaponDef( WEAP_LASERGUN );
-	assert( lgDef->firedef.timeout == lgDef->firedef_weak.timeout );
-	const auto lgRange = (float)lgDef->firedef.timeout;
-
 	const bool hasLG = hasWeakOrStrong( WEAP_LASERGUN );
 	if( hasLG && bot->IsInSquad() ) {
 		return WEAP_LASERGUN;
 	}
 
 	const bool hasRL = hasWeakOrStrong( WEAP_ROCKETLAUNCHER );
-	if( distance < lgRange / 2 || bot->WillAdvance() ) {
+	if( distance < 0.5f * kLasergunRange || bot->WillAdvance() ) {
 		if( hasRL ) {
 			return WEAP_ROCKETLAUNCHER;
 		}
 	}
 
-	if( distance > lgRange / 2 || bot->WillRetreat() ) {
+	if( distance > 0.5f * kLasergunRange || bot->WillRetreat() ) {
 		if( hasLG ) {
 			return WEAP_LASERGUN;
 		}
@@ -321,7 +318,7 @@ auto BotWeaponSelector::suggestMiddleRangeWeapon( const WorldState &worldState )
 
 	const bool hasIG = hasWeakOrStrong( WEAP_INSTAGUN );
 	const bool hasEB = hasWeakOrStrong( WEAP_ELECTROBOLT );
-	if( distance > lgRange / 2 && bot->WillRetreat() ) {
+	if( distance > 0.5f * kLasergunRange && bot->WillRetreat() ) {
 		if( hasIG ) {
 			return WEAP_INSTAGUN;
 		}
@@ -343,7 +340,7 @@ auto BotWeaponSelector::suggestMiddleRangeWeapon( const WorldState &worldState )
 		return WEAP_ELECTROBOLT;
 	}
 
-	if( distance > lgRange / 2 && bot->WillRetreat() ) {
+	if( distance > 0.5f * kLasergunRange && bot->WillRetreat() ) {
 		if( hasWeakOrStrong( WEAP_GRENADELAUNCHER ) ) {
 			return WEAP_GRENADELAUNCHER;
 		}
@@ -504,7 +501,8 @@ auto BotWeaponSelector::suggestInstagibWeapon( const WorldState &worldState ) ->
 	const bool hasIG = hasWeakOrStrong( WEAP_INSTAGUN );
 	const bool hasEB = hasWeakOrStrong( WEAP_ELECTROBOLT );
 	const auto *const inventory = bot->Inventory();
-	if( worldState.EnemyIsOnFarRange() || worldState.EnemyIsOnSniperRange() ) {
+	const float distanceToEnemy = worldState.DistanceToEnemy();
+	if( distanceToEnemy > kLasergunRange ) {
 		if( hasMG ) {
 			return WEAP_MACHINEGUN;
 		}
@@ -512,7 +510,7 @@ auto BotWeaponSelector::suggestInstagibWeapon( const WorldState &worldState ) ->
 			return WEAP_RIOTGUN;
 		}
 
-		if( worldState.EnemyIsOnFarRange() && bot->WillAdvance() ) {
+		if( distanceToEnemy < 2.0f * kLasergunRange && bot->WillAdvance() ) {
 			if( hasPG ) {
 				return WEAP_PLASMAGUN;
 			}
@@ -548,7 +546,7 @@ auto BotWeaponSelector::suggestInstagibWeapon( const WorldState &worldState ) ->
 	}
 
 	const bool hasRL = hasWeakOrStrong( WEAP_ROCKETLAUNCHER );
-	if( worldState.EnemyIsOnMiddleRange() || !GS_SelfDamage() ) {
+	if( distanceToEnemy > 0.5f * kLasergunRange || !GS_SelfDamage() ) {
 		if ( hasSW ) {
 			return WEAP_SHOCKWAVE;
 		}
@@ -576,8 +574,8 @@ auto BotWeaponSelector::suggestFinishWeapon( const WorldState &worldState ) -> s
 	const float damageToBeKilled = worldState.DamageToBeKilled();
 	const float damageToKill = worldState.DamageToKill();
 	const auto *const inventory = bot->Inventory();
-
-	if( worldState.EnemyIsOnCloseRange() ) {
+	const float distanceToEnemy = worldState.DistanceToEnemy();
+	if( distanceToEnemy < 0.33f * kLasergunRange ) {
 		if( inventory[WEAP_GUNBLADE] && inventory[AMMO_WEAK_GUNBLADE] ) {
 			if( damageToBeKilled > 0 && distance > 1.0f && distance < 64.0f ) {
 				Vec3 dirToEnemy( worldState.EnemyOriginVar().Value() );
@@ -615,7 +613,7 @@ auto BotWeaponSelector::suggestFinishWeapon( const WorldState &worldState ) -> s
 		return std::nullopt;
 	}
 
-	if( worldState.EnemyIsOnMiddleRange() ) {
+	if( distanceToEnemy > 0.33f * kLasergunRange && distanceToEnemy < kLasergunRange ) {
 		if( damageToBeKilled > 75 ) {
 			if( hasWeakOrStrong( WEAP_LASERGUN ) ) {
 				return WEAP_LASERGUN;

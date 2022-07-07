@@ -624,7 +624,7 @@ gs_weapon_definition_t gs_weaponDefs[] =
 			WEAPONDOWN_FRAMETIME,           // weapon down frametime
 			50,                             // reload frametime
 			0,                              // cooldown frametime
-			850,                            // projectile timeout / projectile range for instant weapons
+			(unsigned)kLasergunRange,       // projectile timeout / projectile range for instant weapons
 			true,                           // smooth refire
 
 			//damages
@@ -663,7 +663,7 @@ gs_weapon_definition_t gs_weaponDefs[] =
 			WEAPONDOWN_FRAMETIME,           // weapon down frametime
 			50,                             // reload frametime
 			0,                              // cooldown frametime
-			850,                            // projectile timeout / projectile range for instant weapons
+			(unsigned)kLasergunRange,       // projectile timeout / projectile range for instant weapons
 			true,                           // smooth refire
 
 			//damages

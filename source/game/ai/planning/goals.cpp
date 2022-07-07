@@ -73,9 +73,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 	const Vec3 botOrigin( currWorldState.BotOriginVar().Value() );
 
 	// LG range seems to be an appropriate threshold
-	const auto *weaponDef = GS_GetWeaponDef( WEAP_LASERGUN );
-	const float distanceThreshold = wsw::max( weaponDef->firedef.timeout, weaponDef->firedef_weak.timeout );
-	if( botOrigin.SquareDistanceTo( navEntity->Origin() ) > distanceThreshold * distanceThreshold ) {
+	if( botOrigin.SquareDistanceTo( navEntity->Origin() ) > wsw::square( kLasergunRange ) ) {
 		return;
 	}
 
@@ -370,18 +368,20 @@ void ReactToEnemyLostGoal::ModifyWeightForTurningBack( const WorldState &currWor
 	const float offensiveness = Self()->GetEffectiveOffensiveness();
 	// We know a certain distance threshold that losing enemy out of sight can be very dangerous. This is LG range.
 	const float distanceToEnemy = currWorldState.LostEnemyLastSeenOriginVar().DistanceTo( currWorldState.BotOriginVar() );
-	if( distanceToEnemy < GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout ) {
+	if( distanceToEnemy < kLasergunRange ) {
 		this->weight *= 1.75f + 3.0f * offensiveness;
 		return;
 	}
 
-	bool hasSniperRangeWeapons = currWorldState.EnemyHasGoodSniperRangeWeaponsVar();
-	bool hasFarRangeWeapons = currWorldState.EnemyHasGoodFarRangeWeaponsVar();
-	if( !hasSniperRangeWeapons && !hasFarRangeWeapons ) {
-		return;
-	}
+	// TODO!!!!!
+	// bool hasSniperRangeWeapons = currWorldState.EnemyHasGoodSniperRangeWeaponsVar();
+	// bool hasFarRangeWeapons = currWorldState.EnemyHasGoodFarRangeWeaponsVar();
+	//if( !hasSniperRangeWeapons && !hasFarRangeWeapons ) {
+	//	return;
+	//}
 
-	this->weight *= 1.0f + 1.0f * ( (int)hasSniperRangeWeapons + (int)hasFarRangeWeapons ) * offensiveness;
+	// TODO!!!!
+	this->weight *= 1.0f + 1.0f * offensiveness; // ( (int)hasSniperRangeWeapons + (int)hasFarRangeWeapons ) * offensiveness;
 }
 
 void ReactToEnemyLostGoal::ModifyWeightForPursuit( const WorldState &currWorldState ) {

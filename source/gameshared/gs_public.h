@@ -381,6 +381,8 @@ enum {
 
 #define INSTA_SHIELD_MAX    100.0f
 
+constexpr const float kLasergunRange = 850.0f;
+
 // gs_items - shared items definitions
 
 //==================

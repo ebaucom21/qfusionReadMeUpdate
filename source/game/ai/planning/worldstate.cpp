@@ -5,22 +5,6 @@ inline Bot *WorldState::Self() { return (Bot *)self; }
 
 inline const Bot *WorldState::Self() const { return (const Bot *)self; }
 
-const short *WorldState::GetSniperRangeTacticalSpot() {
-	return Self()->planningModule.tacticalSpotsCache.GetSniperRangeTacticalSpot( BotOriginData(), EnemyOriginData() );
-}
-
-const short *WorldState::GetFarRangeTacticalSpot() {
-	return Self()->planningModule.tacticalSpotsCache.GetFarRangeTacticalSpot( BotOriginData(), EnemyOriginData() );
-}
-
-const short *WorldState::GetMiddleRangeTacticalSpot() {
-	return Self()->planningModule.tacticalSpotsCache.GetMiddleRangeTacticalSpot( BotOriginData(), EnemyOriginData() );
-}
-
-const short *WorldState::GetCloseRangeTacticalSpot() {
-	return Self()->planningModule.tacticalSpotsCache.GetCloseRangeTacticalSpot( BotOriginData(), EnemyOriginData() );
-}
-
 const short *WorldState::GetCoverSpot() {
 	return Self()->planningModule.tacticalSpotsCache.GetCoverSpot( BotOriginData(), EnemyOriginData() );
 }
@@ -229,21 +213,6 @@ void WorldState::DebugPrint( const char *tag ) const {
 	PRINT_VAR( HasPendingRunAwayJumppad );
 	PRINT_VAR( HasPendingRunAwayElevator );
 
-	PRINT_VAR( HasGoodSniperRangeWeapons );
-	PRINT_VAR( HasGoodFarRangeWeapons );
-	PRINT_VAR( HasGoodMiddleRangeWeapons );
-	PRINT_VAR( HasGoodCloseRangeWeapons );
-
-	PRINT_VAR( EnemyHasGoodSniperRangeWeapons );
-	PRINT_VAR( EnemyHasGoodFarRangeWeapons );
-	PRINT_VAR( EnemyHasGoodMiddleRangeWeapons );
-	PRINT_VAR( EnemyHasGoodCloseRangeWeapons );
-
-	PRINT_VAR( SniperRangeTacticalSpot );
-	PRINT_VAR( FarRangeTacticalSpot );
-	PRINT_VAR( MiddleRangeTacticalSpot );
-	PRINT_VAR( CloseRangeTacticalSpot );
-
 	PRINT_VAR( RunAwayTeleportOrigin );
 	PRINT_VAR( RunAwayJumppadOrigin );
 	PRINT_VAR( RunAwayElevatorOrigin );
@@ -292,21 +261,6 @@ void WorldState::DebugPrintDiff( const WorldState &that, const char *oldTag, con
 	PRINT_DIFF( HasPendingRunAwayTeleport );
 	PRINT_DIFF( HasPendingRunAwayJumppad );
 	PRINT_DIFF( HasPendingRunAwayElevator );
-
-	PRINT_DIFF( HasGoodSniperRangeWeapons );
-	PRINT_DIFF( HasGoodFarRangeWeapons );
-	PRINT_DIFF( HasGoodSniperRangeWeapons );
-	PRINT_DIFF( HasGoodCloseRangeWeapons );
-
-	PRINT_DIFF( EnemyHasGoodSniperRangeWeapons );
-	PRINT_DIFF( EnemyHasGoodFarRangeWeapons );
-	PRINT_DIFF( EnemyHasGoodSniperRangeWeapons );
-	PRINT_DIFF( EnemyHasGoodCloseRangeWeapons );
-
-	PRINT_DIFF( SniperRangeTacticalSpot );
-	PRINT_DIFF( FarRangeTacticalSpot );
-	PRINT_DIFF( MiddleRangeTacticalSpot );
-	PRINT_DIFF( CloseRangeTacticalSpot );
 
 	PRINT_DIFF( RunAwayTeleportOrigin );
 	PRINT_DIFF( RunAwayJumppadOrigin );

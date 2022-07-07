@@ -542,10 +542,6 @@ class WorldState {
 		return var.data;
 	}
 
-	const short *GetSniperRangeTacticalSpot();
-	const short *GetFarRangeTacticalSpot();
-	const short *GetMiddleRangeTacticalSpot();
-	const short *GetCloseRangeTacticalSpot();
 	const short *GetCoverSpot();
 
 	const short *GetRunAwayTeleportOrigin();
@@ -649,16 +645,6 @@ public:
 	DECLARE_BOOL_VAR( EnemyCanHit )
 	DECLARE_BOOL_VAR( HasJustKilledEnemy )
 
-	DECLARE_BOOL_VAR( HasGoodSniperRangeWeapons )
-	DECLARE_BOOL_VAR( HasGoodFarRangeWeapons )
-	DECLARE_BOOL_VAR( HasGoodMiddleRangeWeapons )
-	DECLARE_BOOL_VAR( HasGoodCloseRangeWeapons )
-
-	DECLARE_BOOL_VAR( EnemyHasGoodSniperRangeWeapons )
-	DECLARE_BOOL_VAR( EnemyHasGoodFarRangeWeapons )
-	DECLARE_BOOL_VAR( EnemyHasGoodMiddleRangeWeapons )
-	DECLARE_BOOL_VAR( EnemyHasGoodCloseRangeWeapons )
-
 	DECLARE_ORIGIN_VAR( BotOrigin )
 	DECLARE_ORIGIN_VAR( EnemyOrigin )
 	DECLARE_ORIGIN_VAR( NavTargetOrigin )
@@ -670,10 +656,6 @@ public:
 	DECLARE_ORIGIN_VAR( ThreatPossibleOrigin )
 	DECLARE_ORIGIN_VAR( LostEnemyLastSeenOrigin )
 
-	DECLARE_ORIGIN_LAZY_VAR( SniperRangeTacticalSpot )
-	DECLARE_ORIGIN_LAZY_VAR( FarRangeTacticalSpot )
-	DECLARE_ORIGIN_LAZY_VAR( MiddleRangeTacticalSpot )
-	DECLARE_ORIGIN_LAZY_VAR( CloseRangeTacticalSpot )
 	DECLARE_ORIGIN_LAZY_VAR( CoverSpot )
 
 	DECLARE_DUAL_ORIGIN_LAZY_VAR( RunAwayTeleportOrigin )
@@ -684,35 +666,11 @@ public:
 	float DistanceToNavTarget() const { return BotOriginVar().DistanceTo( NavTargetOriginVar() ); }
 
 	void ResetTacticalSpots() {
-		SniperRangeTacticalSpotVar().Reset();
-		FarRangeTacticalSpotVar().Reset();
-		MiddleRangeTacticalSpotVar().Reset();
-		CloseRangeTacticalSpotVar().Reset();
 		CoverSpotVar().Reset();
 
 		RunAwayTeleportOriginVar().Reset();
 		RunAwayJumppadOriginVar().Reset();
 		RunAwayElevatorOriginVar().Reset();
-	}
-
-	constexpr static float FAR_RANGE_MAX = 2.5f * 900.0f;
-	constexpr static float MIDDLE_RANGE_MAX = 900.0f;
-	constexpr static float CLOSE_RANGE_MAX = 175.0f;
-
-	bool EnemyIsOnSniperRange() const {
-		return DistanceToEnemy() > FAR_RANGE_MAX;
-	}
-
-	bool EnemyIsOnFarRange() const {
-		return DistanceToEnemy() > MIDDLE_RANGE_MAX && DistanceToEnemy() <= FAR_RANGE_MAX;
-	}
-
-	bool EnemyIsOnMiddleRange() const {
-		return DistanceToEnemy() > CLOSE_RANGE_MAX && DistanceToEnemy() <= MIDDLE_RANGE_MAX;
-	}
-
-	bool EnemyIsOnCloseRange() const {
-		return DistanceToEnemy() <= CLOSE_RANGE_MAX;
 	}
 
 	float DamageToBeKilled() const {

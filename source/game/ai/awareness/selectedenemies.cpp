@@ -627,7 +627,6 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 	const auto *__restrict pvsCache = EntitiesPvsCache::Instance();
 	const auto *__restrict viewDots = GetEnemyViewDirDotToBotDirValues();
 	const auto *__restrict botOrigin = bot->Origin();
-	constexpr float squareDistanceThreshold = WorldState::MIDDLE_RANGE_MAX * WorldState::MIDDLE_RANGE_MAX;
 
 	trace_t trace;
 
@@ -693,7 +692,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 
 		// Skip enemies that are out of LG range. (Consider PG to be inefficient outside of this range too)
 		const float squareDistance = enemyOrigin.SquareDistanceTo( botOrigin );
-		if( squareDistance > squareDistanceThreshold ) {
+		if( squareDistance > wsw::square( kLasergunRange ) ) {
 			continue;
 		}
 

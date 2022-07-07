@@ -64,10 +64,6 @@ class BotTacticalSpotsCache {
 
 	Bot *const bot;
 
-	bool FindSniperRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
-	bool FindFarRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
-	bool FindMiddleRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
-	bool FindCloseRangeTacticalSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
 	bool FindCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin, vec3_t result );
 
 	template <typename ProblemParams>
@@ -148,25 +144,6 @@ public:
 		runAwayElevatorOriginsCache.Clear();
 	}
 
-	const short *GetSniperRangeTacticalSpot( const short *origin, const short *enemyOrigin ) {
-		return GetSingleOriginSpot( &sniperRangeTacticalSpotsCache, origin, enemyOrigin,
-									&BotTacticalSpotsCache::FindSniperRangeTacticalSpot );
-	}
-
-	const short *GetFarRangeTacticalSpot( const short *origin, const short *enemyOrigin ) {
-		return GetSingleOriginSpot( &farRangeTacticalSpotsCache, origin, enemyOrigin,
-									&BotTacticalSpotsCache::FindFarRangeTacticalSpot );
-	}
-
-	const short *GetMiddleRangeTacticalSpot( const short *origin, const short *enemyOrigin ) {
-		return GetSingleOriginSpot( &middleRangeTacticalSpotsCache, origin, enemyOrigin,
-									&BotTacticalSpotsCache::FindMiddleRangeTacticalSpot );
-	}
-
-	const short *GetCloseRangeTacticalSpot( const short *origin, const short *enemyOrigin ) {
-		return GetSingleOriginSpot( &closeRangeTacticalSpotsCache, origin, enemyOrigin,
-									&BotTacticalSpotsCache::FindCloseRangeTacticalSpot );
-	}
 	inline const short *GetCoverSpot( const short *origin, const short *enemyOrigin ) {
 		return GetSingleOriginSpot( &coverSpotsTacticalSpotsCache, origin, enemyOrigin,
 									&BotTacticalSpotsCache::FindCoverSpot );

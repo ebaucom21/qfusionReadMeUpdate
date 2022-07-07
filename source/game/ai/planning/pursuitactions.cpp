@@ -31,8 +31,7 @@ PlannerNode *StartLostEnemyPursuitAction::TryApply( const WorldState &worldState
 
 	// Vary pursuit max distance threshold depending of offensiveness.
 	// Never pursue enemies farther than LG range (otherwise a poor bot behaviour is observed).
-	const auto lgRange = (float)GS_GetWeaponDef( WEAP_LASERGUN )->firedef.timeout;
-	const float maxDistanceThreshold = 96.0f + ( lgRange - 96.0f ) * Self()->GetEffectiveOffensiveness();
+	const float maxDistanceThreshold = 96.0f + ( kLasergunRange - 96.0f ) * Self()->GetEffectiveOffensiveness();
 	if( distanceToEnemy > maxDistanceThreshold ) {
 		Debug( "The enemy is way too far for pursuing it\n" );
 		return nullptr;
