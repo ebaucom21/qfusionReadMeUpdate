@@ -51,12 +51,13 @@ static void CG_Event_WeaponBeam( vec3_t origin, vec3_t dir, int ownerNum, int we
 	// retrace to spawn wall impact
 	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, cg.view.POVent, MASK_SOLID );
 	if( trace.ent != -1 ) {
+		[[maybe_unused]] bool spawnDecal = ( trace.surfFlags & ( SURF_FLESH | SURF_NOMARKS ) ) == 0;
 		if( weapondef->weapon_id == WEAP_ELECTROBOLT ) {
 			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
-			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum );
+			cg.effectsSystem.spawnElectroboltHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum, spawnDecal );
 		} else if( weapondef->weapon_id == WEAP_INSTAGUN ) {
 			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
-			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum );
+			cg.effectsSystem.spawnInstagunHitEffect( trace.endpos, trace.plane.normal, invDir, ownerNum, spawnDecal );
 		}
 	}
 
@@ -1271,26 +1272,30 @@ static void handlePlasmaExplosionEvent( entity_state_t *ent, int parm, bool pred
 	}
 }
 
-static inline void decodeBoltImpact( int parm, vec3_t impactNormal, vec3_t impactDir ) {
-	const unsigned impactDirByte = ( (unsigned)parm >> 8 ) & 0xFF;
-	const unsigned impactNormalByte   = ( (unsigned)parm >> 0 ) & 0xFF;
+static inline void decodeBoltImpact( int parm, vec3_t impactNormal, vec3_t impactDir, bool *spawnWallImpact ) {
+	const unsigned impactDirByte    = ( (unsigned)parm >> 8 ) & 0xFF;
+	const unsigned impactNormalByte = ( (unsigned)parm >> 0 ) & 0xFF;
 
 	ByteToDir( (int)impactNormalByte, impactNormal );
 	ByteToDir( (int)impactDirByte, impactDir );
+
+	*spawnWallImpact = ( (unsigned)parm >> 16 ) != 0;
 }
 
 static void handleBoltExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t impactNormal, impactDir;
-	decodeBoltImpact( parm, impactNormal, impactDir );
+	bool spawnWallImpact;
+	decodeBoltImpact( parm, impactNormal, impactDir, &spawnWallImpact );
 
-	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, impactNormal, impactDir, ent->ownerNum );
+	cg.effectsSystem.spawnElectroboltHitEffect( ent->origin, impactNormal, impactDir, spawnWallImpact, ent->ownerNum );
 }
 
 static void handleInstaExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t impactNormal, impactDir;
-	decodeBoltImpact( parm, impactNormal, impactDir );
+	bool spawnWallImpact;
+	decodeBoltImpact( parm, impactNormal, impactDir, &spawnWallImpact );
 
-	cg.effectsSystem.spawnInstagunHitEffect( ent->origin, impactNormal, impactDir, ent->ownerNum );
+	cg.effectsSystem.spawnInstagunHitEffect( ent->origin, impactNormal, impactDir, spawnWallImpact, ent->ownerNum );
 }
 
 static void handleGrenadeExplosionEvent( entity_state_t *ent, int parm, bool predicted ) {

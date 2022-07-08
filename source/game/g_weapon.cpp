@@ -1033,7 +1033,8 @@ static void W_Touch_Bolt( edict_t *self, edict_t *other, cplane_t *plane, int su
 				VectorScale( self->velocity, rcpLen, velocityDir );
 				const int impactDirByte = DirToByte( velocityDir );
 				const int normalByte    = DirToByte( plane->normal );
-				parmByte = ( impactDirByte << 8 ) | normalByte;
+				const int decalByte  = ( surfFlags & ( SURF_FLESH | SURF_NOMARKS ) ) ? 0 : 1;
+				parmByte = ( decalByte << 16 ) | ( impactDirByte << 8 ) | normalByte;
 			}
 		}
 

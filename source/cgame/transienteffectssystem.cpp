@@ -397,22 +397,23 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 	}
 }
 
-void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir,
-														const float *decalColor, const float *energyColor ) {
-	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modElectroBoltWallHit );
+void TransientEffectsSystem::spawnElectroboltHitEffect( const float *origin, const float *dir, const float *decalColor,
+														const float *energyColor, bool spawnDecal ) {
+	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modElectroBoltWallHit, spawnDecal );
 }
 
-void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir,
-													 const float *decalColor, const float *energyColor ) {
-	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modInstagunWallHit );
+void TransientEffectsSystem::spawnInstagunHitEffect( const float *origin, const float *dir, const float *decalColor,
+													 const float *energyColor, bool spawnDecal ) {
+	spawnElectroboltLikeHitEffect( origin, dir, decalColor, energyColor, cgs.media.modInstagunWallHit, spawnDecal );
 }
 
 void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin, const float *dir, 
 															const float *decalColor, const float *energyColor, 
-															model_s *model ) {
-	EntityEffect *entityEffect = addModelEffect( model, origin, dir, 600u );
-	VectorSet( entityEffect->entity.shaderRGBA, (uint8_t)( decalColor[0] * 255 ),
-			   (uint8_t)( decalColor[1] * 255 ), (uint8_t)( decalColor[2] * 255 ) );
+															model_s *model, bool spawnDecal ) {
+	if( spawnDecal ) {
+		EntityEffect *entityEffect = addModelEffect( model, origin, dir, 600u );
+		VectorScale( decalColor, 255.0f, entityEffect->entity.shaderRGBA );
+	}
 
 	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
 	VectorMA( origin, 4.0f, dir, lightEffect->origin );

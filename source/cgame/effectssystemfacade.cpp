@@ -327,7 +327,7 @@ auto getTeamForOwner( int ownerNum ) -> int {
 }
 
 void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *impactNormal,
-													 const float *impactDir, int ownerNum ) {
+													 const float *impactDir, bool spawnDecal, int ownerNum ) {
 	const int team = getTeamForOwner( ownerNum );
 
 	vec4_t teamColor, decalColor, energyColor;
@@ -384,7 +384,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal, decalColor, energyColor );
+	m_transientEffectsSystem.spawnElectroboltHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
 
 static ParticleColorsForTeamHolder instagunParticleColorsHolder {
@@ -394,7 +394,7 @@ static ParticleColorsForTeamHolder instagunParticleColorsHolder {
 };
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
-												  const float *impactDir, int ownerNum ) {
+												  const float *impactDir, bool spawnDecal, int ownerNum ) {
 	vec4_t teamColor, decalColor, energyColor;
 	const int team = getTeamForOwner( ownerNum );
 	const bool useTeamColor = getInstagunTeamColor( team, teamColor );
@@ -453,7 +453,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	startSound( cgs.media.sfxElectroboltHit, soundOrigin, ATTN_STATIC );
 
-	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor );
+	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
 
 static const vec4_t kGunbladeHitInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };

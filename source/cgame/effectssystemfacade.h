@@ -42,8 +42,10 @@ public:
 
 	void spawnPlayerHitEffect( const float *origin, const float *dir, int damage );
 
-	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir, int ownerNum );
-	void spawnInstagunHitEffect( const float *origin, const float *impactNormal, const float *impactDir, int ownerNum );
+	void spawnElectroboltHitEffect( const float *origin, const float *impactNormal, const float *impactDir,
+									bool spawnDecal, int ownerNum );
+	void spawnInstagunHitEffect( const float *origin, const float *impactNormal, const float *impactDir,
+								 bool spawnDecal, int ownerNum );
 
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );

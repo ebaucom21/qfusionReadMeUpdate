@@ -40,8 +40,10 @@ public:
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
 	void spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
 									const float *bloodColor, unsigned duration );
-	void spawnElectroboltHitEffect( const float *origin, const float *dir, const float *decalColor, const float *energyColor );
-	void spawnInstagunHitEffect( const float *origin, const float *dir, const float *decalColor, const float *energyColor );
+	void spawnElectroboltHitEffect( const float *origin, const float *dir, const float *decalColor,
+									const float *energyColor, bool spawnDecal );
+	void spawnInstagunHitEffect( const float *origin, const float *dir, const float *decalColor,
+								 const float *energyColor, bool spawnDecal );
 	void spawnPlasmaImpactEffect( const float *origin, const float *dir );
 
 	void spawnGunbladeBlastImpactEffect( const float *origin, const float *dir );
@@ -104,7 +106,7 @@ private:
 						   unsigned fadeOutOffset ) -> LightEffect *;
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
-										const float *energyColor, model_s *model );
+										const float *energyColor, model_s *model, bool spawnDecal );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
