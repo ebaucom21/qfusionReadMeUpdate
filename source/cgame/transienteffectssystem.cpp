@@ -172,7 +172,7 @@ struct FireHullLayerParamsHolder {
 			.speedSpikeChance = 0.05f, .minSpeedSpike = 7.5f, .maxSpeedSpike = 15.0f,
 			.biasAlongChosenDir = 10.0f,
 			.baseInitialColor = { 1.0f, 0.5f, 0.2f, 0.7f },
-			.bulgeInitialColor = { 1.0f, 0.9f, 0.7f, 0.7f },
+			.bulgeInitialColor = { 1.0f, 0.7f, 0.4f, 0.7f },
 		},
 	};
 
@@ -203,28 +203,24 @@ struct FireHullLayerParamsHolder {
 			lightHullLayerParams[layerNum] = darkHullLayerParams[layerNum];
 			lightHullLayerParams[layerNum].colorChangeTimeline = lightColorChangeTimeline[layerNum];
 		}
-
-		assert( std::size( lightHullLayerParams ) == 5 );
-		Vector4Set( lightHullLayerParams[3].baseInitialColor, 1.0f, 0.7f, 0.4f, 0.7f );
-		Vector4Set( lightHullLayerParams[4].baseInitialColor, 1.0f, 0.6f, 0.3f, 0.7f );
 	}
 };
 
 static const FireHullLayerParamsHolder kFireHullParams;
 
 static const byte_vec4_t kSmokeFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.10f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.10f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.10f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.10f ),
-	asByteColor( 0.80f, 0.80f, 0.80f, 0.10f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.11f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.11f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.11f ),
+	asByteColor( 0.55f, 0.55f, 0.55f, 0.11f ),
+	asByteColor( 0.60f, 0.60f, 0.60f, 0.11f ),
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[4] {
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.15f, .replacementPalette = kSmokeFadeInPalette,
+		.activateAtLifetimeFraction = 0.19f, .replacementPalette = kSmokeFadeInPalette,
 		.sumOfReplacementChanceForThisSegment = 3.5f,
 		.allowIncreasingOpacity = true,
 	},
@@ -241,8 +237,8 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorC
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.15f, .replacementPalette = kSmokeFadeInPalette,
-		.sumOfReplacementChanceForThisSegment = 3.0f,
+		.activateAtLifetimeFraction = 0.19f, .replacementPalette = kSmokeFadeInPalette,
+		.sumOfReplacementChanceForThisSegment = 3.5f,
 		.allowIncreasingOpacity = true,
 	},
 	{
@@ -272,11 +268,11 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	unsigned fireHullTimeout;
 	std::span<const SimulatedHullsSystem::HullLayerParams> fireHullLayerParams;
 	if( cg_explosionsSmoke->integer ) {
-		fireHullScale       = 1.32f;
+		fireHullScale       = 1.40f;
 		fireHullTimeout     = 550;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
 	} else {
-		fireHullScale       = 1.40f;
+		fireHullScale       = 1.65f;
 		fireHullTimeout     = 500;
 		fireHullLayerParams = kFireHullParams.darkHullLayerParams;
 	}
@@ -284,7 +280,10 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, fireHullTimeout ) ) {
 		hullsSystem->setupHullVertices( hull, origin, fireHullScale, fireHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
-		hull->layers[0].useDrawOnTopHack = true;
+		hull->applyVertexViewDotFade        = true;
+		hull->layers[0].useDrawOnTopHack    = true;
+		hull->layers[0].suppressViewDotFade = true;
+		hull->layers[1].suppressViewDotFade = true;
 	}
 
 	if( cg_explosionsWave->integer ) {
@@ -518,8 +517,8 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 		.speed = 30.0f, .finalOffset = 5.0f,
 		.speedSpikeChance = 0.10f, .minSpeedSpike = 5.0f, .maxSpeedSpike = 20.0f,
 		.biasAlongChosenDir = 15.0f,
-		.baseInitialColor = { 1.0f, 1.0f, 0.6f, 1.0f },
-		.bulgeInitialColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.baseInitialColor = { 0.9f, 1.0f, 0.6f, 1.0f },
+		.bulgeInitialColor = { 0.9f, 1.0f, 1.0f, 1.0f },
 		.colorChangeTimeline = kBlastHullLayer0ColorChangeTimeline
 	},
 	{
@@ -551,7 +550,9 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 	if( auto *hull = cg.simulatedHullsSystem.allocBlastHull( m_lastTime, 450 ) ) {
 		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, 1.25f, kBlastHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
-		hull->layers[0].useDrawOnTopHack = true;
+		hull->applyVertexViewDotFade        = true;
+		hull->layers[0].useDrawOnTopHack    = true;
+		hull->layers[0].suppressViewDotFade = true;
 	}
 
 	if( cg_explosionsWave->integer ) {

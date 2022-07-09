@@ -716,7 +716,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			mesh->material               = nullptr;
 			mesh->numLods                = numLods;
 			mesh->applyVertexDynLight    = hull->applyVertexDynLight;
-			mesh->applyVertexViewDotFade = hull->applyVertexViewDotFade;
+			mesh->applyVertexViewDotFade = hull->applyVertexViewDotFade && !layer->suppressViewDotFade;
 			mesh->useDrawOnTopHack       = layer->useDrawOnTopHack;
 			assert( numLods <= ExternalMesh::kMaxLods );
 			std::copy( lods, lods + numLods, mesh->lods );

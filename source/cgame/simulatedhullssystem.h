@@ -143,6 +143,7 @@ private:
 			ColorChangeState colorChangeState;
 
 			bool useDrawOnTopHack { false };
+			bool suppressViewDotFade { false };
 		};
 
 		Layer *layers { nullptr };
