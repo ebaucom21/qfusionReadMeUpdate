@@ -283,6 +283,7 @@ struct ExternalMesh {
 	float mins[4], maxs[4];
 	const shader_s *material;
 	const vec4_t *positions;
+	const vec4_t *normals;
 	const byte_vec4_t *colors;
 	struct LodProps {
 		const uint16_t *indices;

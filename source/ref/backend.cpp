@@ -1286,6 +1286,90 @@ static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::
 	return numAffectingLights;
 }
 
+[[nodiscard]]
+static inline wsw_forceinline uint8_t calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
+																	const float *__restrict normal ) {
+	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
+	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
+
+	const float frac = std::fabs( DotProduct( viewDir, normal ) );
+	const float modifiedAlpha = frac * (float)givenAlpha;
+	return (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
+}
+
+using IcosphereVertexNeighbours = const uint16_t (*)[5];
+
+static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict resultColors,
+											const vec4_t *const __restrict positions,
+											const IcosphereVertexNeighbours neighboursOfVertices,
+											const byte_vec4_t *const __restrict givenColors,
+											const float *const __restrict viewOrigin,
+											const unsigned numVertices ) {
+	unsigned vertexNum = 0;
+	do {
+		const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
+		const float *const __restrict currVertex = positions[vertexNum];
+		vec3_t accumDir { 0.0f, 0.0f, 0.0f };
+		unsigned neighbourIndex = 0;
+		bool hasAddedDirs = false;
+		do {
+			const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
+			const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
+			vec3_t currTo2, currTo3, cross;
+			VectorSubtract( v2, currVertex, currTo2 );
+			VectorSubtract( v3, currVertex, currTo3 );
+			CrossProduct( currTo2, currTo3, cross );
+			if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
+				const float rcpLength = Q_RSqrt( squaredLength );
+				VectorMA( accumDir, rcpLength, cross, accumDir );
+				hasAddedDirs = true;
+			}
+		} while( ++neighbourIndex < 5 );
+
+		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
+		if( hasAddedDirs ) [[likely]] {
+			vec3_t viewDir;
+			VectorSubtract( currVertex, viewOrigin, viewDir );
+			const float squareDistanceToVertex = VectorLengthSquared( viewDir );
+			if( squareDistanceToVertex > 1.0f ) [[likely]] {
+				vec3_t normal;
+				VectorCopy( accumDir, normal );
+				VectorNormalizeFast( normal );
+				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+				VectorScale( viewDir, rcpDistance, viewDir );
+				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal( givenColors[vertexNum][3], viewDir, normal );
+			} else {
+				resultColors[vertexNum][3] = 0;
+			}
+		} else {
+			resultColors[vertexNum][3] = 0;
+		}
+	} while( ++vertexNum < numVertices );
+}
+
+static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
+							  const vec4_t *const __restrict positions,
+							  const vec4_t *const __restrict normals,
+							  const byte_vec4_t *const __restrict givenColors,
+							  const float *const __restrict viewOrigin,
+							  const unsigned numVertices ) {
+	unsigned vertexNum = 0;
+	do {
+		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
+		vec3_t viewDir;
+		VectorSubtract( positions[vertexNum], viewOrigin, viewDir );
+		const float squareDistanceToVertex = VectorLengthSquared( viewDir );
+		if( squareDistanceToVertex > 1.0f ) [[likely]] {
+			const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+			VectorScale( viewDir, rcpDistance, viewDir );
+			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal( givenColors[vertexNum][3],
+																	   viewDir, normals[vertexNum] );
+		} else {
+			resultColors[vertexNum][3] = 0;
+		}
+	} while( ++vertexNum < numVertices );
+}
+
 void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const ExternalMesh *externalMesh ) {
 	// Checking it this late is not a very nice things but otherwise
 	// the API gets way too complicated due to some technical details.
@@ -1322,74 +1406,35 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 
 	byte_vec4_t *overrideColors = nullptr;
 
-	if( externalMesh->applyVertexViewDotFade && chosenLod->neighbours ) {
-		using Neighbours = const uint16_t (*)[5];
-		Neighbours neighboursOfVertices;
+	if( externalMesh->applyVertexViewDotFade ) {
+		[[maybe_unused]] const ExternalMesh::LodProps *nonTessLod = nullptr;
 		unsigned numVertices;
 
 		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
 		if( chosenLod->tesselate ) {
 			assert( chosenLodIndex + 1 < externalMesh->numLods );
-			const ExternalMesh::LodProps &nonTessLod = externalMesh->lods[chosenLodIndex + 1];
-			neighboursOfVertices = (Neighbours)nonTessLod.neighbours;
-			numVertices          = nonTessLod.numVertices;
+			nonTessLod = &externalMesh->lods[chosenLodIndex + 1];
+			numVertices = nonTessLod->numVertices;
 		} else {
-			neighboursOfVertices = (Neighbours)chosenLod->neighbours;
 			numVertices = chosenLod->numVertices;
 		}
 
-		const vec4_t *const positions          = externalMesh->positions;
-		const byte_vec4_t *const givenColors   = externalMesh->colors;
-		const float *__restrict viewOrigin     = fsh->viewOrigin;
-
 		overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
 
-		unsigned vertexNum = 0;
-		do {
-			const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
-			const float *const __restrict vertexOrigin = positions[vertexNum];
-			vec3_t accumDir { 0.0f, 0.0f, 0.0f };
-			unsigned neighbourIndex = 0;
-			bool hasAddedDirs = false;
-			do {
-				const float *__restrict v1 = positions[vertexNum];
-				const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
-				const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
-				vec3_t v1To2, v1To3, cross;
-				VectorSubtract( v2, v1, v1To2 );
-				VectorSubtract( v3, v1, v1To3 );
-				CrossProduct( v1To2, v1To3, cross );
-				if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
-					const float rcpLength = Q_RSqrt( squaredLength );
-					VectorMA( accumDir, rcpLength, cross, accumDir );
-					hasAddedDirs = true;
-				}
-			} while( ++neighbourIndex < 5 );
-
-			VectorCopy( givenColors[vertexNum], overrideColors[vertexNum] );
-			if( hasAddedDirs ) [[likely]] {
-				vec3_t viewDir;
-				VectorSubtract( vertexOrigin, viewOrigin, viewDir );
-				const float squareDistanceToVertex = VectorLengthSquared( viewDir );
-				if( squareDistanceToVertex > 1.0f ) [[likely]] {
-					vec3_t normal;
-					VectorCopy( accumDir, normal );
-					VectorNormalizeFast( normal );
-					assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.1f );
-					const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
-					VectorScale( viewDir, rcpDistance, viewDir );
-					assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.1f );
-					const float frac = std::fabs( DotProduct( viewDir, normal ) );
-					const uint8_t givenByteAlpha = givenColors[vertexNum][3];
-					const float modifiedAlpha = frac * (float)givenByteAlpha;
-					overrideColors[vertexNum][3] = (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
-				} else {
-					overrideColors[vertexNum][3] = 0;
-				}
+		if( externalMesh->normals ) {
+			applyViewDotFade( overrideColors, externalMesh->positions, externalMesh->normals,
+							  externalMesh->colors, fsh->viewOrigin, numVertices );
+		} else {
+			IcosphereVertexNeighbours neighboursOfVertices;
+			if( chosenLod->tesselate ) {
+				neighboursOfVertices = (IcosphereVertexNeighbours)nonTessLod->neighbours;
 			} else {
-				overrideColors[vertexNum][3] = 0;
+				neighboursOfVertices = (IcosphereVertexNeighbours)chosenLod->neighbours;
 			}
-		} while( ++vertexNum < numVertices );
+
+			calcNormalsAndApplyViewDotFade( overrideColors, externalMesh->positions, neighboursOfVertices,
+											externalMesh->colors, fsh->viewOrigin, numVertices );
+		}
 	}
 
 	if( externalMesh->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {

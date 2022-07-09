@@ -680,6 +680,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		Vector4Copy( hull->maxs, mesh->maxs );
 
 		mesh->positions              = hull->vertexPositions[hull->positionsFrame];
+		mesh->normals                = hull->vertexNormals;
 		mesh->colors                 = hull->vertexColors;
 		mesh->material               = nullptr;
 		mesh->useDrawOnTopHack       = false;
@@ -719,6 +720,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			Vector4Copy( layer->maxs, mesh->maxs );
 
 			mesh->positions              = layer->vertexPositions;
+			mesh->normals                = nullptr;
 			mesh->colors                 = layer->vertexColors;
 			mesh->material               = nullptr;
 			mesh->numLods                = numLods;
@@ -931,9 +933,9 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 		const auto neighboursOfVertices = icosphereData.vertexNeighbours.data();
 		unsigned vertexNum = 0;
 		do {
-			const uint16_t *const neighboursOfVertex   = neighboursOfVertices[vertexNum];
-			const float *const __restrict vertexOrigin = newPositions[vertexNum];
-			float *const __restrict normal             = vertexNormals[vertexNum];
+			const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
+			const float *const __restrict currVertex = newPositions[vertexNum];
+			float *const __restrict normal           = vertexNormals[vertexNum];
 
 			unsigned neighbourIndex = 0;
 			bool hasAddedDirs = false;
@@ -941,10 +943,10 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			do {
 				const float *__restrict v2 = newPositions[neighboursOfVertex[neighbourIndex]];
 				const float *__restrict v3 = newPositions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
-				vec3_t v1To2, v1To3, cross;
-				VectorSubtract( v2, vertexOrigin, v1To2 );
-				VectorSubtract( v3, vertexOrigin, v1To3 );
-				CrossProduct( v1To2, v1To3, cross );
+				vec3_t currTo2, currTo3, cross;
+				VectorSubtract( v2, currVertex, currTo2 );
+				VectorSubtract( v3, currVertex, currTo3 );
+				CrossProduct( currTo2, currTo3, cross );
 				if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
 					const float rcpLength = Q_RSqrt( squaredLength );
 					VectorMA( normal, rcpLength, cross, normal );
