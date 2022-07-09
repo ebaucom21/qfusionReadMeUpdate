@@ -445,11 +445,13 @@ void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, co
 	std::memset( hull->vertexForceVelocities, 0, verticesSpan.size() * sizeof( hull->vertexForceVelocities[0] ) );
 
 	vec4_t *const __restrict positions       = hull->vertexPositions[0];
+	vec4_t *const __restrict vertexNormals   = hull->vertexNormals;
 	vec3_t *const __restrict burstVelocities = hull->vertexBurstVelocities;
 	vec4_t *const __restrict altPositions    = hull->vertexPositions[1];
 	byte_vec4_t *const __restrict colors     = hull->vertexColors;
 
-	for( size_t i = 0; i < verticesSpan.size(); ++i ) {
+	size_t i = 0;
+	do {
 		// Vertex positions are absolute to simplify simulation
 		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
 		const float vertexSpeed = rng->nextFloat( minSpeed, maxSpeed );
@@ -458,7 +460,12 @@ void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, co
 		// Set the 4th component to 1.0 for alternating positions once as well
 		altPositions[i][3] = 1.0f;
 		Vector4Copy( initialColor, colors[i] );
-	}
+		if( vertexNormals ) {
+			// Supply vertex directions as normals for the first simulation frame
+			VectorCopy( vertices[i], vertexNormals[i] );
+			vertexNormals[i][3] = 0.0f;
+		}
+	} while( ++i < verticesSpan.size() );
 
 	hull->minZLastFrame = originZ - 1.0f;
 	hull->maxZLastFrame = originZ + 1.0f;
@@ -738,7 +745,8 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 	vec3_t *const __restrict forceVelocities = this->vertexForceVelocities;
 	vec3_t *const __restrict burstVelocities = this->vertexBurstVelocities;
 
-	const unsigned numVertices = ::basicHullsHolder.getIcosphereForLevel( subdivLevel ).vertices.size();
+	const auto &icosphereData  = ::basicHullsHolder.getIcosphereForLevel( subdivLevel );
+	const unsigned numVertices = icosphereData.vertices.size();
 	auto *const __restrict combinedVelocities = (vec3_t *)alloca( sizeof( vec3_t ) * numVertices );
 
 	BoundsBuilder boundsBuilder;
@@ -756,30 +764,19 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			boundsBuilder.addPoint( newPositions[i] );
 		}
 	} else {
-		const float rcpDeltaZ = ( maxZLastFrame - minZLastFrame ) > 0.1f ? Q_Rcp( maxZLastFrame - minZLastFrame ) : 1.0f;
-		float maxSquareDistance2D = 0.0f;
-		for ( unsigned i = 0; i < numVertices; ++i ) {
-			const float dx = oldPositions[i][0] - avgXLastFrame;
-			const float dy = oldPositions[i][1] - avgYLastFrame;
-			maxSquareDistance2D = wsw::max( dx * dx + dy * dy, maxSquareDistance2D );
-		}
-		const float rcpMaxDistance2D = Q_RSqrt( maxSquareDistance2D );
-		for( unsigned i = 0; i < numVertices; ++i ) {
-			const float zFrac = Q_Sqrt( ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ );
-			const float archimedesAccel = std::lerp( archimedesBottomAccel, archimedesTopAccel, zFrac );
-			forceVelocities[i][2] += archimedesAccel * timeDeltaSeconds;
+		// Having vertex normals buffer is now mandatory for hulls expansion
+		const vec4_t *const __restrict normals = vertexNormals;
+		assert( normals );
 
-			vec2_t toVertex2D { oldPositions[i][0] - avgXLastFrame, oldPositions[i][1] - avgYLastFrame };
-			const float squareDistance2D = toVertex2D[0] * toVertex2D[0] + toVertex2D[1] * toVertex2D[1];
-			if( squareDistance2D > 1.0f * 1.0f ) [[likely]] {
-				const float rcpDistance2D  = Q_RSqrt( squareDistance2D );
-				const float distance2D     = Q_Rcp( rcpDistance2D );
-				const float distanceFrac   = distance2D * rcpMaxDistance2D;
-				const float expansionAccel = std::lerp( xyExpansionBottomAccel, xyExpansionTopAccel, zFrac );
-				const float multiplier     = ( expansionAccel * timeDeltaSeconds ) * ( rcpDistance2D * distanceFrac );
-				forceVelocities[i][0] += multiplier * toVertex2D[0];
-				forceVelocities[i][1] += multiplier * toVertex2D[1];
-			}
+		const float rcpDeltaZ = ( maxZLastFrame - minZLastFrame ) > 0.1f ? Q_Rcp( maxZLastFrame - minZLastFrame ) : 1.0f;
+		for( unsigned i = 0; i < numVertices; ++i ) {
+			const float zFrac               = Q_Sqrt( ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ );
+			const float archimedesAccel     = std::lerp( archimedesBottomAccel, archimedesTopAccel, zFrac );
+			const float expansionAccel      = std::lerp( xyExpansionBottomAccel, xyExpansionTopAccel, zFrac );
+			const float expansionMultiplier = expansionAccel * timeDeltaSeconds;
+			forceVelocities[i][0] += expansionMultiplier * normals[i][0];
+			forceVelocities[i][1] += expansionMultiplier * normals[i][1];
+			forceVelocities[i][2] += archimedesAccel * timeDeltaSeconds;
 
 			VectorScale( burstVelocities[i], burstSpeedDecayMultiplier, burstVelocities[i] );
 			VectorAdd( burstVelocities[i], forceVelocities[i], combinedVelocities[i] );
@@ -803,7 +800,6 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 	minZLastFrame = std::numeric_limits<float>::max();
 	maxZLastFrame = std::numeric_limits<float>::min();
-	avgXLastFrame = avgYLastFrame = 0.0f;
 
 	// int type is used to mitigate possible branching while performing bool->float conversions
 	auto *const __restrict isVertexNonContacting          = (int *)alloca( sizeof( int ) * numVertices );
@@ -875,8 +871,6 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			const float *__restrict position = newPositions[i];
 			minZLastFrame = wsw::min( minZLastFrame, position[2] );
 			maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
-			avgXLastFrame += position[0];
-			avgYLastFrame += position[1];
 
 			// Make the contacting vertex transparent
 			vertexColors[i][3] = 0;
@@ -918,8 +912,6 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 				minZLastFrame = wsw::min( minZLastFrame, position[2] );
 				maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
-				avgXLastFrame += position[0];
-				avgYLastFrame += position[1];
 			} while( ++i < numNonContactingVertices );
 		} else {
 			// Just update positions.
@@ -930,15 +922,44 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 				const float *__restrict position = newPositions[vertexIndex];
 				minZLastFrame = wsw::min( minZLastFrame, position[2] );
 				maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
-				avgXLastFrame += position[0];
-				avgYLastFrame += position[1];
 			} while( ++i < numNonContactingVertices );
 		}
 	}
 
-	const float rcpNumVertices = Q_Rcp( (float)numVertices );
-	avgXLastFrame *= rcpNumVertices;
-	avgYLastFrame *= rcpNumVertices;
+	// Once positions are defined, recalculate vertex normals
+	if( vertexNormals ) {
+		const auto neighboursOfVertices = icosphereData.vertexNeighbours.data();
+		unsigned vertexNum = 0;
+		do {
+			const uint16_t *const neighboursOfVertex   = neighboursOfVertices[vertexNum];
+			const float *const __restrict vertexOrigin = newPositions[vertexNum];
+			float *const __restrict normal             = vertexNormals[vertexNum];
+
+			unsigned neighbourIndex = 0;
+			bool hasAddedDirs = false;
+			Vector4Clear( normal );
+			do {
+				const float *__restrict v2 = newPositions[neighboursOfVertex[neighbourIndex]];
+				const float *__restrict v3 = newPositions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
+				vec3_t v1To2, v1To3, cross;
+				VectorSubtract( v2, vertexOrigin, v1To2 );
+				VectorSubtract( v3, vertexOrigin, v1To3 );
+				CrossProduct( v1To2, v1To3, cross );
+				if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
+					const float rcpLength = Q_RSqrt( squaredLength );
+					VectorMA( normal, rcpLength, cross, normal );
+					hasAddedDirs = true;
+				}
+			} while( ++neighbourIndex < 5 );
+
+			if( hasAddedDirs ) [[likely]] {
+				VectorNormalizeFast( normal );
+			} else {
+				// Copy the unit vector of the original position as a normal
+				VectorCopy( icosphereData.vertices[vertexNum], normal );
+			}
+		} while( ++vertexNum < numVertices );
+	}
 
 	const bool hasChangedColors = processColorChange( currTime, spawnTime, lifetime, colorChangeTimeline,
 													  { vertexColors, numVertices }, &colorChangeState, rng );

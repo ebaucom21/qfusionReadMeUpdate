@@ -62,6 +62,8 @@ private:
 		// Old/current
 		vec4_t *vertexPositions[2];
 
+		vec4_t *vertexNormals;
+
 		// Velocities of an initial burst, decelerate with time
 		vec3_t *vertexBurstVelocities;
 		// Velocities produced by external forces during simulation
@@ -81,8 +83,8 @@ private:
 
 		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
 		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
-		float minZLastFrame { std::numeric_limits<float>::max() }, maxZLastFrame { std::numeric_limits<float>::min() };
-		float avgXLastFrame { 0.0f }, avgYLastFrame { 0.0f };
+		float minZLastFrame { std::numeric_limits<float>::max() };
+		float maxZLastFrame { std::numeric_limits<float>::min() };
 
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];
@@ -99,20 +101,22 @@ private:
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
 
-	template <unsigned SubdivLevel>
+	template <unsigned SubdivLevel, bool CalcNormals = false>
 	struct RegularSimulatedHull : public BaseRegularSimulatedHull {
 		static constexpr auto kNumVertices = kNumVerticesForSubdivLevel[SubdivLevel];
 
-		RegularSimulatedHull<SubdivLevel> *prev { nullptr }, *next {nullptr };
+		RegularSimulatedHull<SubdivLevel, CalcNormals> *prev { nullptr }, *next { nullptr };
 
 		vec4_t storageOfPositions[2][kNumVertices];
 		vec3_t storageOfBurstVelocities[kNumVertices];
 		vec3_t storageOfForceVelocities[kNumVertices];
 		byte_vec4_t storageOfColors[kNumVertices];
+		vec4_t storageOfNormals[CalcNormals ? kNumVertices : 0];
 
 		RegularSimulatedHull() {
 			this->vertexPositions[0]    = storageOfPositions[0];
 			this->vertexPositions[1]    = storageOfPositions[1];
+			this->vertexNormals         = CalcNormals ? storageOfNormals : nullptr;
 			this->vertexBurstVelocities = storageOfBurstVelocities;
 			this->vertexForceVelocities = storageOfForceVelocities;
 			this->vertexColors          = storageOfColors;
@@ -191,7 +195,7 @@ private:
 
 	using FireHull  = ConcentricSimulatedHull<3, 5>;
 	using BlastHull = ConcentricSimulatedHull<3, 3>;
-	using SmokeHull = RegularSimulatedHull<2>;
+	using SmokeHull = RegularSimulatedHull<2, true>;
 	using WaveHull  = RegularSimulatedHull<2>;
 
 	void unlinkAndFreeFireHull( FireHull *hull );
