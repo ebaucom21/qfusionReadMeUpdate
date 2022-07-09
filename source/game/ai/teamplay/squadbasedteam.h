@@ -54,13 +54,10 @@ private:
 
 	int GetBotFloorCluster( Bot *bot ) const;
 
-	void UpdateBotRoleWeights();
-
 	int64_t lastDroppedByBotTimestamps[MAX_CLIENTS];
 	int64_t lastDroppedForBotTimestamps[MAX_CLIENTS];
 
 	void CheckMembersInventory();
-
 
 	/**
 	 * Fills an array of best weapon tiers for squad bots.
@@ -108,50 +105,9 @@ private:
 
 	// Hack! To be able to access bot's private methods, define this entity physics callback as a (static) member
 	static void SetDroppedEntityAsBotGoal( edict_t *ent );
-
-	class SquadEnemiesTracker: public AiEnemiesTracker {
-		friend class AiSquad;
-		AiSquad *squad;
-
-		float botRoleWeights[MAX_CLIENTS];
-		const TrackedEnemy *botEnemies[MAX_CLIENTS];
-
-		//unsigned GetBotSlot( const Bot *bot ) const;
-		void CheckSquadValid() const;
 protected:
-		void OnHurtByNewThreat( const edict_t *newThreat ) override;
-		bool CheckHasQuad() const override;
-		bool CheckHasShell() const override;
-		float ComputeDamageToBeKilled() const override;
-		void OnEnemyRemoved( const TrackedEnemy *enemy ) override;
-
-		void SetBotRoleWeight( const edict_t *bot, float weight ) override;
-		float GetAdditionalEnemyWeight( const edict_t *bot, const edict_t *enemy ) const override;
-		void OnBotEnemyAssigned( const edict_t *bot, const TrackedEnemy *enemy ) override;
-public:
-		SquadEnemiesTracker( AiSquad *squad_, float skill );
-	};
-
-	/**
-	 * Lets initialize it lazily.
-	 * Most reserved squads in a team class usually are not used at all.
-	 * All access to this field must be performed via {@code EnemiesTracker()} call.
-	 */
-	mutable SquadEnemiesTracker *squadEnemiesTracker;
-
-	SquadEnemiesTracker *NewEnemiesTracker();
-protected:
-	void SetFrameAffinity( unsigned modulo, unsigned offset ) override {
-		// Call super method first
-		AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
-		// Allow enemies tracker to think
-		EnemiesTracker()->SetFrameAffinity( modulo, offset );
-	}
-
 	explicit AiSquad( AiSquadBasedTeam *parent_ );
 public:
-	~AiSquad() override;
-
 	/**
 	 * Gets a zero-based index of squad that allows address arrays by squad index
 	 * (squads are arranged in a linked list and thus do not have natural indices).
@@ -162,19 +118,6 @@ public:
 	 * Gets whether the squad has been invalidated
 	 */
 	bool IsValid() const { return isValid; }
-
-	AiEnemiesTracker *EnemiesTracker() {
-		// Put the likely case first
-		if( squadEnemiesTracker ) {
-			return squadEnemiesTracker;
-		}
-		squadEnemiesTracker = NewEnemiesTracker();
-		return squadEnemiesTracker;
-	}
-
-	const AiEnemiesTracker *EnemiesTracker() const {
-		return const_cast<AiSquad *>( this )->EnemiesTracker();
-	}
 
 	/**
 	 * Must be called before a first {@code AddBot()} call
@@ -208,24 +151,6 @@ public:
 	 */
 	void DetachBots();
 
-	void OnBotViewedEnemy( const edict_t *bot, const edict_t *enemy ) {
-		EnemiesTracker()->OnEnemyViewed( enemy );
-	}
-
-	void OnBotGuessedEnemyOrigin( const edict_t *bot, const edict_t *enemy,
-								  unsigned minMillisSinceLastSeen,
-								  const float *specifiedOrigin ) {
-		EnemiesTracker()->OnEnemyOriginGuessed( enemy, minMillisSinceLastSeen, specifiedOrigin );
-	}
-
-	void OnBotPain( const edict_t *bot, const edict_t *enemy, float kick, int damage ) {
-		EnemiesTracker()->OnPain( bot, enemy, kick, damage );
-	}
-
-	void OnBotDamagedEnemy( const edict_t *bot, const edict_t *target, int damage ) {
-		EnemiesTracker()->OnEnemyDamaged( bot, target, damage );
-	}
-
 	/**
 	 * Checks whether the bot is not a carrier but a supporter for a carrier.
 	 * (there is a carrier in squad and the bot is not that carrier).
@@ -233,7 +158,6 @@ public:
 	 */
 	bool IsSupporter( const edict_t *bot ) const;
 
-	void Frame() override;
 	void Think() override;
 };
 

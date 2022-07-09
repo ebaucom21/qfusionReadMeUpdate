@@ -15,52 +15,36 @@ BotAwarenessModule::BotAwarenessModule( Bot *bot_ )
 	, eventsTracker( bot_ )
 	, keptInFovPointTracker( bot_, this )
 	, pathBlockingTracker( bot_ )
-	, ownEnemiesTracker( bot_, this ) {}
+	, enemiesTracker( bot_, this ) {}
 
 void BotAwarenessModule::OnAttachedToSquad( AiSquad *squad_ ) {
-	this->activeEnemiesTracker = squad_->EnemiesTracker();
 }
 
 void BotAwarenessModule::OnDetachedFromSquad( AiSquad *squad_ ) {
-	this->activeEnemiesTracker = &ownEnemiesTracker;
-	// Prevent use-after-free since the squad memory might be released as well, and these entities refer to it.
-	// (happens when AI team is replaced by more feature-reach in runtime on demand)
 	this->selectedEnemies.Invalidate();
 	this->lostEnemies.Invalidate();
 }
 
 void BotAwarenessModule::OnEnemyViewed( const edict_t *enemy ) {
-	ownEnemiesTracker.OnEnemyViewed( enemy );
-	if( auto *squad = bot->squad ) {
-		squad->OnBotViewedEnemy( game.edicts + bot->EntNum(), enemy );
-	}
+	enemiesTracker.OnEnemyViewed( enemy );
 }
 
 void BotAwarenessModule::OnEnemyOriginGuessed( const edict_t *enemy, unsigned minMillisSinceLastSeen, const float *guessedOrigin ) {
-	ownEnemiesTracker.OnEnemyOriginGuessed( enemy, minMillisSinceLastSeen, guessedOrigin );
-	if( auto *squad = bot->squad ) {
-		squad->OnBotGuessedEnemyOrigin( game.edicts + bot->EntNum(), enemy, minMillisSinceLastSeen, guessedOrigin );
-	}
+	enemiesTracker.OnEnemyOriginGuessed( enemy, minMillisSinceLastSeen, guessedOrigin );
 }
 
 void BotAwarenessModule::OnPain( const edict_t *enemy, float kick, int damage ) {
 	const edict_t *self = game.edicts + bot->EntNum();
-	ownEnemiesTracker.OnPain( self, enemy, kick, damage );
-	if( auto *squad = bot->squad ) {
-		squad->OnBotPain( self, enemy, kick, damage );
-	}
+	enemiesTracker.OnPain( self, enemy, kick, damage );
 }
 
 void BotAwarenessModule::OnEnemyDamaged( const edict_t *target, int damage ) {
 	const edict_t *self = game.edicts + bot->EntNum();
-	ownEnemiesTracker.OnEnemyDamaged( self, target, damage );
-	if( auto *squad = bot->squad ) {
-		squad->OnBotDamagedEnemy( self, target, damage );
-	}
+	enemiesTracker.OnEnemyDamaged( self, target, damage );
 }
 
 const TrackedEnemy *BotAwarenessModule::ChooseLostOrHiddenEnemy( unsigned timeout ) {
-	return activeEnemiesTracker->ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum(), timeout );
+	return enemiesTracker.ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum(), timeout );
 }
 
 BotAwarenessModule::EnemiesTracker::EnemiesTracker( Bot *bot_, BotAwarenessModule *module_ )
@@ -105,7 +89,7 @@ float BotAwarenessModule::EnemiesTracker::ModifyWeightForHitTarget( const edict_
 void BotAwarenessModule::Frame() {
 	AiFrameAwareComponent::Frame();
 
-	ownEnemiesTracker.Update();
+	enemiesTracker.Update();
 	eventsTracker.Update();
 }
 
@@ -139,13 +123,13 @@ void BotAwarenessModule::UpdateSelectedEnemies() {
 	lostEnemies.Invalidate();
 
 	float visibleEnemyWeight = 0.0f;
-	if( const auto *visibleEnemy = activeEnemiesTracker->ChooseVisibleEnemy( game.edicts + bot->EntNum() ) ) {
-		assert( visibleEnemy == activeEnemiesTracker->ActiveEnemiesHead() );
+	if( const auto *visibleEnemy = enemiesTracker.ChooseVisibleEnemy( game.edicts + bot->EntNum() ) ) {
+		assert( visibleEnemy == enemiesTracker.ActiveEnemiesHead() );
 		selectedEnemies.SetToListOfActive( visibleEnemy, targetChoicePeriod );
 		visibleEnemyWeight = 0.5f * ( visibleEnemy->AvgWeight() + visibleEnemy->MaxWeight() );
 	}
 
-	if( const auto *lostEnemy = activeEnemiesTracker->ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum() ) ) {
+	if( const auto *lostEnemy = enemiesTracker.ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum() ) ) {
 		float lostEnemyWeight = 0.5f * ( lostEnemy->AvgWeight() + lostEnemy->MaxWeight() );
 		// If there is a lost or hidden enemy of higher weight, store it
 		if( lostEnemyWeight > visibleEnemyWeight ) {
@@ -207,12 +191,12 @@ void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiFr
 	// Reject threats detected by bot brain if there is active squad.
 	// Otherwise there may be two calls for a single or different threats
 	// detected by squad and the bot brain enemy pool itself.
-	if( bot->IsInSquad() && threatDetector == &this->ownEnemiesTracker ) {
+	if( bot->IsInSquad() && threatDetector == &this->enemiesTracker ) {
 		return;
 	}
 
 	bool hadValidThreat = hurtEvent.IsValidFor( bot );
-	float totalInflictedDamage = activeEnemiesTracker->TotalDamageInflictedBy( newThreat );
+	float totalInflictedDamage = enemiesTracker.TotalDamageInflictedBy( newThreat );
 	if( hadValidThreat ) {
 		// The active threat is more dangerous than a new one
 		if( hurtEvent.totalDamage > totalInflictedDamage ) {

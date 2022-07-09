@@ -15,7 +15,6 @@ class Bot;
 class BotAwarenessModule: public AiFrameAwareComponent {
 	friend class Bot;
 
-	AiEnemiesTracker *activeEnemiesTracker { &ownEnemiesTracker };
 	Bot *const bot;
 
 	SelectedEnemies &selectedEnemies;
@@ -85,7 +84,7 @@ private:
 		EnemiesTracker( Bot *bot_, BotAwarenessModule *module_ );
 	};
 
-	EnemiesTracker ownEnemiesTracker;
+	EnemiesTracker enemiesTracker;
 
 	Hazard triggeredPlanningHazard { nullptr };
 
@@ -95,7 +94,7 @@ private:
 	void SetFrameAffinity( unsigned modulo, unsigned offset ) override {
 		AiFrameAwareComponent::SetFrameAffinity( modulo, offset );
 		eventsTracker.SetFrameAffinity( modulo, offset );
-		ownEnemiesTracker.SetFrameAffinity( modulo, offset );
+		enemiesTracker.SetFrameAffinity( modulo, offset );
 	}
 
 	void UpdateSelectedEnemies();
@@ -127,7 +126,7 @@ public:
 	const TrackedEnemy *ChooseLostOrHiddenEnemy( unsigned timeout = ~0u );
 
 	const TrackedEnemy *TrackedEnemiesHead() const {
-		return ( (const AiEnemiesTracker *)activeEnemiesTracker )->TrackedEnemiesHead();
+		return enemiesTracker.TrackedEnemiesHead();
 	}
 
 	const Hazard *PrimaryHazard() const {
@@ -154,14 +153,12 @@ public:
 		return keptInFovPointTracker.getActivePoint();
 	}
 
-	// In these calls use not active but bot's own enemy pool
-	// (this behaviour is expected by callers, otherwise referring to a squad enemy pool is enough)
 	inline int64_t LastAttackedByTime( const edict_t *attacker ) const {
-		return ownEnemiesTracker.LastAttackedByTime( attacker );
+		return enemiesTracker.LastAttackedByTime( attacker );
 	}
 
 	inline int64_t LastTargetTime( const edict_t *target ) const {
-		return ownEnemiesTracker.LastTargetTime( target );
+		return enemiesTracker.LastTargetTime( target );
 	}
 
 	void EnableAutoAlert( const AiAlertSpot &alertSpot,

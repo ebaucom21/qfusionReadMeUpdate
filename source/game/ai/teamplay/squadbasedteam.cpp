@@ -142,120 +142,10 @@ int ClientToClientTable::FindEntityAreas( const edict_t *ent, int *areaNums ) co
 
 static ClientToClientTable clientToClientTable;
 
-AiSquad::SquadEnemiesTracker::SquadEnemiesTracker( AiSquad *squad_, float skill )
-	: AiEnemiesTracker( skill ), squad( squad_ ) {
-	std::fill_n( botRoleWeights, MAX_CLIENTS, 0.0f );
-	std::fill_n( botEnemies, MAX_CLIENTS, nullptr );
-}
-
-void AiSquad::SquadEnemiesTracker::CheckSquadValid() const {
-	if( !squad->IsValid() ) {
-		FailWith( "The squad %s is not valid", squad->Tag() );
-	}
-}
-
-// We have to skip ghosting bots because squads itself did not think yet when enemy pool thinks
-
-void AiSquad::SquadEnemiesTracker::OnHurtByNewThreat( const edict_t *newThreat ) {
-	CheckSquadValid();
-	// TODO: Use more sophisticated bot selection?
-	for( Bot *bot = squad->botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( !bot->IsGhosting() ) {
-			bot->OnHurtByNewThreat( newThreat, this );
-		}
-	}
-}
-
-bool AiSquad::SquadEnemiesTracker::CheckHasQuad() const {
-	CheckSquadValid();
-	for( Bot *bot = squad->botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( !bot->IsGhosting() && ::HasQuad( bot->Self() ) ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool AiSquad::SquadEnemiesTracker::CheckHasShell() const {
-	CheckSquadValid();
-	for( Bot *bot = squad->botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( !bot->IsGhosting() && ::HasShell( bot->Self() ) ) {
-			return true;
-		}
-	}
-	return false;
-}
-
-float AiSquad::SquadEnemiesTracker::ComputeDamageToBeKilled() const {
-	CheckSquadValid();
-	float result = 0.0f;
-	for( Bot *bot = squad->botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( !bot->IsGhosting() ) {
-			result += DamageToKill( bot->self );
-		}
-	}
-	return result;
-}
-
-void AiSquad::SquadEnemiesTracker::OnEnemyRemoved( const TrackedEnemy *enemy ) {
-	CheckSquadValid();
-	for( Bot *bot = squad->botsListHead; bot; bot = bot->NextInSquad() ) {
-		bot->OnEnemyRemoved( enemy );
-	}
-}
-
-void AiSquad::SquadEnemiesTracker::SetBotRoleWeight( const edict_t *bot, float weight ) {
-	CheckSquadValid();
-	botRoleWeights[ENTNUM( bot ) - 1] = weight;
-}
-
-float AiSquad::SquadEnemiesTracker::GetAdditionalEnemyWeight( const edict_t *bot, const edict_t *enemy ) const {
-	CheckSquadValid();
-	if( !enemy ) {
-		FailWith( "Illegal null enemy" );
-	}
-
-	// TODO: Use something more sophisticated...
-
-	float result = 0.0f;
-	for( Bot *thatBot = squad->botsListHead; thatBot; thatBot = thatBot->NextInSquad() ) {
-		// Do not add extra score for the own enemy
-		if( thatBot->Self() == bot ) {
-			continue;
-		}
-
-		const auto thatClientNum = thatBot->ClientNum();
-		if( botEnemies[thatClientNum] && enemy == botEnemies[thatClientNum]->ent ) {
-			result += botRoleWeights[thatClientNum];
-		}
-	}
-
-	return result;
-}
-
-void AiSquad::SquadEnemiesTracker::OnBotEnemyAssigned( const edict_t *bot, const TrackedEnemy *enemy ) {
-	CheckSquadValid();
-	botEnemies[ENTNUM( bot ) - 1] = enemy;
-}
-
 AiSquad::AiSquad( AiSquadBasedTeam *parent_ )
 	: parent( parent_ ) {
 	std::fill_n( lastDroppedByBotTimestamps, MAX_SQUAD_SIZE, 0 );
 	std::fill_n( lastDroppedForBotTimestamps, MAX_SQUAD_SIZE, 0 );
-}
-
-AiSquad::~AiSquad() {
-	if( squadEnemiesTracker ) {
-		squadEnemiesTracker->~SquadEnemiesTracker();
-		Q_free( squadEnemiesTracker );
-	}
-}
-
-AiSquad::SquadEnemiesTracker *AiSquad::NewEnemiesTracker() {
-	float skillLevel = trap_Cvar_Value( "sv_skilllevel" ); // {0, 1, 2}
-	float skill = wsw::min( 1.0f, 0.33f * ( 0.1f + skillLevel + random() ) ); // (0..1)
-	void *mem = Q_malloc( sizeof( SquadEnemiesTracker ) );
-	return new( mem )SquadEnemiesTracker( this, skill );
 }
 
 void AiSquad::DetachBots() {
@@ -300,13 +190,6 @@ constexpr float CONNECTIVITY_PROXIMITY = 256.0f;
  */
 constexpr int CONNECTIVITY_MOVE_CENTISECONDS = 100;
 
-void AiSquad::Frame() {
-	// Update enemy pool
-	if( isValid ) {
-		EnemiesTracker()->Update();
-	}
-}
-
 void AiSquad::Think() {
 	if( !isValid ) {
 		return;
@@ -349,8 +232,6 @@ void AiSquad::Think() {
 		}
 	}
 #endif
-
-	UpdateBotRoleWeights();
 
 	CheckMembersInventory();
 }
@@ -438,37 +319,6 @@ int AiSquad::GetBotFloorCluster( Bot *bot ) const {
 		return clusterNum;
 	}
 	return 0;
-}
-
-void AiSquad::UpdateBotRoleWeights() {
-	if( !isValid ) {
-		return;
-	}
-
-	// Find a carrier
-	bool hasCarriers = false;
-	for( Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
-		if( !bot->IsGhosting() && IsCarrier( bot->Self() ) ) {
-			hasCarriers = true;
-			break;
-		}
-	}
-
-	// Save the result of this lazy getter
-	auto *const enemiesTracker = EnemiesTracker();
-	if( !hasCarriers ) {
-		for( Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
-			enemiesTracker->SetBotRoleWeight( bot->Self(), 0.25f );
-		}
-	} else {
-		for( Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
-			if( !bot->IsGhosting() && IsCarrier( bot->Self() ) ) {
-				enemiesTracker->SetBotRoleWeight( bot->Self(), 1.0f );
-			} else {
-				enemiesTracker->SetBotRoleWeight( bot->Self(), 0.0f );
-			}
-		}
-	}
 }
 
 class ExtendedWeaponDefsCache {
@@ -709,6 +559,31 @@ void AiSquad::CheckMembersInventory() {
 }
 
 bool AiSquad::ShouldNotDropItemsNow() const {
+	// We have to merge enemies as we no longer have a shared enemies tracker
+	wsw::StaticVector<const TrackedEnemy *, MAX_CLIENTS> mergedBotEnemies;
+	for( const Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
+		for( const TrackedEnemy *enemy = bot->TrackedEnemiesHead(); enemy; enemy = enemy->NextInTrackedList() ) {
+			// TODO: Disallow keeping invalid enemies in list
+			if( enemy->IsValid() ) [[likely]] {
+				const auto cmp = [&]( const TrackedEnemy *e ) {
+					return e->ent == enemy->ent;
+				};
+				auto it = std::find_if( mergedBotEnemies.begin(), mergedBotEnemies.end(), cmp );
+				if( it != mergedBotEnemies.end() ) {
+					// Replace by a more actual record
+					if( const TrackedEnemy *existing = *it; existing->LastSeenAt() < enemy->LastSeenAt() ) {
+						*it = enemy;
+					}
+				} else {
+					mergedBotEnemies.push_back( enemy );
+					if( mergedBotEnemies.full() ) [[unlikely]] {
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	// First, compute squad AABB
 	vec3_t mins, maxs;
 	ClearBounds( mins, maxs );
@@ -740,13 +615,10 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 		}
 	};
 
-	// First reject enemies by distance
-	wsw::StaticVector<MaybeStealer, MAX_EDICTS> maybeStealers;
-	for( const TrackedEnemy *enemy = EnemiesTracker()->TrackedEnemiesHead(); enemy; enemy = enemy->NextInTrackedList() ) {
-		// Check whether an enemy has been invalidated and invalidation is not processed yet to prevent crash
-		if( !enemy->IsValid() || G_ISGHOSTING( enemy->ent ) ) {
-			continue;
-		}
+	// First, reject enemies by distance
+	wsw::StaticVector<MaybeStealer, MAX_CLIENTS> maybeStealers;
+	for( const TrackedEnemy *enemy: mergedBotEnemies ) {
+		assert( enemy->IsValid() );
 
 		Vec3 enemyVelocityDir( enemy->LastSeenVelocity() );
 		float squareEnemySpeed = enemyVelocityDir.SquaredLength();
