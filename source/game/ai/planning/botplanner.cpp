@@ -8,10 +8,6 @@
 BotPlanner::BotPlanner( Bot *bot_, BotPlanningModule *module_ )
 	: AiPlanner( bot_ ), bot( bot_ ), module( module_ ) {}
 
-const int *BotPlanner::Inventory() const {
-	return game.edicts[bot->EntNum()].r.client->ps.inventory;
-}
-
 bool BotPlanner::FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin ) {
 	float radius = 128.0f + 192.0f * bot->Skill();
 	typedef DodgeHazardProblemSolver Solver;

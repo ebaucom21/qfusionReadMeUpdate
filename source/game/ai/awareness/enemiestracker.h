@@ -8,78 +8,6 @@
 #include "../../../gameshared/q_comref.h"
 #include <limits>
 
-template <int Weapon>
-struct WeaponAmmo {
-	static constexpr int strongAmmoTag = AMMO_NONE;
-	static constexpr int weakAmmoTag = AMMO_NONE;
-};
-
-template<>
-struct WeaponAmmo<WEAP_NONE>{
-	static constexpr int strongAmmoTag = AMMO_NONE;
-	static constexpr int weakAmmoTag = AMMO_NONE;
-};
-
-template<>
-struct WeaponAmmo<WEAP_GUNBLADE>{
-	static constexpr int strongAmmoTag = AMMO_GUNBLADE;
-	static constexpr int weakAmmoTag = AMMO_WEAK_GUNBLADE;
-};
-
-template<>
-struct WeaponAmmo<WEAP_RIOTGUN>{
-	static constexpr int strongAmmoTag = AMMO_SHELLS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_SHELLS;
-};
-
-template<>
-struct WeaponAmmo<WEAP_GRENADELAUNCHER>{
-	static constexpr int strongAmmoTag = AMMO_GRENADES;
-	static constexpr int weakAmmoTag = AMMO_WEAK_GRENADES;
-};
-
-template<>
-struct WeaponAmmo<WEAP_ROCKETLAUNCHER>{
-	static constexpr int strongAmmoTag = AMMO_ROCKETS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_ROCKETS;
-};
-
-template<>
-struct WeaponAmmo<WEAP_PLASMAGUN>{
-	static constexpr int strongAmmoTag = AMMO_PLASMA;
-	static constexpr int weakAmmoTag = AMMO_WEAK_PLASMA;
-};
-
-template<>
-struct WeaponAmmo<WEAP_LASERGUN>{
-	static constexpr int strongAmmoTag = AMMO_LASERS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_LASERS;
-};
-
-template<>
-struct WeaponAmmo<WEAP_MACHINEGUN>{
-	static constexpr int strongAmmoTag = AMMO_BULLETS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_BULLETS;
-};
-
-template<>
-struct WeaponAmmo<WEAP_ELECTROBOLT>{
-	static constexpr int strongAmmoTag = AMMO_BOLTS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_BOLTS;
-};
-
-template<>
-struct WeaponAmmo<WEAP_SHOCKWAVE>{
-	static constexpr int strongAmmoTag = AMMO_WAVES;
-	static constexpr int weakAmmoTag = AMMO_WEAK_WAVES;
-};
-
-template<>
-struct WeaponAmmo<WEAP_INSTAGUN>{
-	static constexpr int strongAmmoTag = AMMO_INSTAS;
-	static constexpr int weakAmmoTag = AMMO_WEAK_INSTAS;
-};
-
 inline bool HasQuad( const edict_t *ent ) {
 	return ent && ent->r.client && ent->r.client->ps.inventory[POWERUP_QUAD];
 }
@@ -200,14 +128,13 @@ public:
 
 	template<int Weapon>
 	inline int AmmoReadyToFireCount() const {
-		if( !ent->r.client ) {
-			return 0;
+		if( auto *client = ent->r.client ) {
+			if( const int *inventory = client->ps.inventory; inventory[Weapon] ) {
+				constexpr int indexShift = Weapon - WEAP_GUNBLADE;
+				return inventory[AMMO_GUNBLADE + indexShift] + inventory[AMMO_WEAK_GUNBLADE + indexShift];
+			}
 		}
-		const int *inventory = ent->r.client->ps.inventory;
-		if( !inventory[Weapon] ) {
-			return 0;
-		}
-		return inventory[WeaponAmmo < Weapon > ::strongAmmoTag] + inventory[WeaponAmmo < Weapon > ::weakAmmoTag];
+		return 0;
 	}
 
 	inline int ShellsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_RIOTGUN>(); }

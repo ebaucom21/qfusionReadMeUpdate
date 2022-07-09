@@ -19,26 +19,6 @@ class BotPlanner : public AiPlanner {
 	Bot *const bot;
 	BotPlanningModule *const module;
 
-	const int *Inventory() const;
-
-	template <int Weapon>
-	int AmmoReadyToFireCount() const {
-		if( !Inventory()[Weapon] ) {
-			return 0;
-		}
-		return Inventory()[WeaponAmmo < Weapon > ::strongAmmoTag] + Inventory()[WeaponAmmo < Weapon > ::weakAmmoTag];
-	}
-
-	int ShellsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_RIOTGUN>(); }
-	int GrenadesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_GRENADELAUNCHER>(); }
-	int RocketsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ROCKETLAUNCHER>(); }
-	int PlasmasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_PLASMAGUN>(); }
-	int BulletsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_MACHINEGUN>(); }
-	int LasersReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_LASERGUN>(); }
-	int BoltsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ELECTROBOLT>(); }
-	int WavesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_SHOCKWAVE>(); }
-	int InstasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_INSTAGUN>(); }
-
 	bool FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin );
 
 	void PrepareCurrWorldState( WorldState *worldState ) override;
