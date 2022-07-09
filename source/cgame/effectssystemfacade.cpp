@@ -151,10 +151,10 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.restitution   = 0.33f,
 			.minSpeed      = 150.0f,
 			.maxSpeed      = 400.0f,
-			.minShiftSpeed = 200.0f,
-			.maxShiftSpeed = 300.0f,
-			.minPercentage = 0.3f,
-			.maxPercentage = 0.6f,
+			.minShiftSpeed = 100.0f,
+			.maxShiftSpeed = 200.0f,
+			.minPercentage = 0.5f,
+			.maxPercentage = 0.8f,
 			.minTimeout    = 400,
 			.maxTimeout    = 750
 		};
@@ -168,8 +168,8 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		appearanceRules.widthSpread  = 1.0f;
 		appearanceRules.sizeBehaviour = Particle::Shrinking;
 
-		flockParams.minSpeed      = 450;
-		flockParams.maxSpeed      = 600;
+		flockParams.minSpeed      = 550;
+		flockParams.maxSpeed      = 650;
 		flockParams.drag          = 0.01f;
 		flockParams.minTimeout    = 100;
 		flockParams.maxTimeout    = 150;
@@ -177,6 +177,21 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		flockParams.maxPercentage = 1.0f;
 		flockParams.minShiftSpeed = 50.0f;
 		flockParams.maxShiftSpeed = 100.0f;
+
+		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
+
+		if( cg_explosionsSmoke->integer ) {
+			flockParams.minSpeed = 125.0f;
+			flockParams.maxSpeed = 175.0f;
+		} else {
+			flockParams.minSpeed = 150.0f;
+			flockParams.maxSpeed = 225.0f;
+		}
+
+		flockParams.minTimeout    = 350;
+		flockParams.maxTimeout    = 450;
+		flockParams.minPercentage = 1.0f;
+		flockParams.maxPercentage = 1.0f;
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
