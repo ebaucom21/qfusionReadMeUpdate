@@ -442,13 +442,17 @@ bool LeafPropsSampler::CheckAndAddHitSurfaceProps( const trace_t &trace ) {
 		return false;
 	}
 
-	if( surfFlags & ( SURF_WSW_METAL | SURF_WSW_GLASS ) ) {
+	// TODO: using enum (doesn't work with GCC 10)
+	using IM = SurfImpactMaterial;
+
+	const IM material = decodeSurfImpactMaterial( surfFlags );
+	if( material == IM::Metal || material == IM::Glass ) {
 		numRaysHitSmoothSurface++;
-	} else if( surfFlags & ( SURF_WSW_STUCCO | SURF_WSW_WOOD | SURF_WSW_DIRT | SURF_WSW_SAND ) ) {
+	} else if( material == IM::Stucco || material == IM::Dirt || material == IM::Wood || material == IM::Sand ) {
 		numRaysHitAbsorptiveSurface++;
 	}
 
-	if( surfFlags & SURF_WSW_METAL ) {
+	if( material == IM::Metal ) {
 		numRaysHitMetal++;
 	}
 

@@ -82,18 +82,31 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static_assert( SURF_NOWALLJUMP == 1 << 19 );
 
-// These flags are added post loading based on lists of known shaders for each kind of surface
-#define SURF_WSW_STONE      ( 1 << 23 )  // concrete, brick or rock surfaces, yield dust moderately
-#define SURF_WSW_STUCCO     ( 1 << 24 )  // stucco surfaces, yield lots of dust upon impact
-#define SURF_WSW_WOOD       ( 1 << 25 )  // wooden surfaces
-#define SURF_WSW_DIRT       ( 1 << 26 )  // regular soil ground, yields blobs of dirt
-#define SURF_WSW_SAND       ( 1 << 27 )  // sand-like ground, yields lots of sand dust
-#define SURF_WSW_METAL      ( 1 << 28 )  // yield lots of sparks upon impact
-#define SURF_WSW_GLASS      ( 1 << 29 )  // glass surfaces
+enum class SurfImpactMaterial : unsigned {
+	Unknown = 0, // unspecified, fall back to something moderate default
+	Stone,       // concrete, brick or rock surfaces, yield dust moderately
+	Stucco,      // stucco surfaces, yield lots of dust upon impact
+	Wood,        // wooden surfaces
+	Dirt,        // regular soil ground, yields blobs of dirt
+	Sand,        // sand-like ground, yields lots of sand dust
+	Metal,       // yield lots of sparks upon impact
+	Glass        // glass surfaces
+};
 
-// Two parameter bits for each surface class bit
-#define SURF_PARM_SHIFT     ( 30 )
-#define SURF_PARM_MASK      ( ( 1 << 30 ) | ( 1 << 31 ) )
+constexpr const unsigned kSurfImpactMaterialShift      = 26;
+constexpr const unsigned kSurfImpactMaterialMask       = 0xF << kSurfImpactMaterialShift;
+constexpr const unsigned kSurfImpactMaterialParamShift = 30;
+constexpr const unsigned kSurfImpactMaterialParamMask  = 0x3 << kSurfImpactMaterialParamShift;
+
+[[nodiscard]]
+inline auto decodeSurfImpactMaterial( unsigned surfFlags ) -> SurfImpactMaterial {
+	return (SurfImpactMaterial)( ( surfFlags & kSurfImpactMaterialMask ) >> kSurfImpactMaterialShift );
+}
+
+[[nodiscard]]
+inline auto decodeSurfImpactMaterialParam( unsigned surfFlags ) -> unsigned {
+	return ( surfFlags & kSurfImpactMaterialParamMask ) >> kSurfImpactMaterialParamShift;
+}
 
 // content masks
 #define MASK_ALL            ( -1 )

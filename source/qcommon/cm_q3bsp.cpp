@@ -143,14 +143,14 @@ void SurfExtraFlagsCache::loadIfNeeded() {
 	}
 }
 
-static const std::pair<wsw::StringView, unsigned> kCustomBitNames[] {
-	{ "stone"_asView, SURF_WSW_STONE },
-	{ "stucco"_asView, SURF_WSW_STONE },
-	{ "wood"_asView, SURF_WSW_WOOD },
-	{ "dirt"_asView, SURF_WSW_DIRT },
-	{ "sand"_asView, SURF_WSW_SAND },
-	{ "metal"_asView, SURF_WSW_METAL },
-	{ "glass"_asView, SURF_WSW_GLASS }
+static const std::pair<wsw::StringView, unsigned> kSurfImpactMaterialNames[] {
+	{ "stone"_asView,  (unsigned)SurfImpactMaterial::Stone },
+	{ "stucco"_asView, (unsigned)SurfImpactMaterial::Stucco },
+	{ "wood"_asView,   (unsigned)SurfImpactMaterial::Wood },
+	{ "dirt"_asView,   (unsigned)SurfImpactMaterial::Dirt },
+	{ "sand"_asView,   (unsigned)SurfImpactMaterial::Sand },
+	{ "metal"_asView,  (unsigned)SurfImpactMaterial::Metal },
+	{ "glass"_asView,  (unsigned)SurfImpactMaterial::Glass }
 };
 
 auto SurfExtraFlagsCache::tryParsingLine( const wsw::StringView &line, const wsw::CharLookup &separators )
@@ -176,16 +176,16 @@ auto SurfExtraFlagsCache::tryParsingLine( const wsw::StringView &line, const wsw
 					const auto cmp = [&]( const std::pair<wsw::StringView, unsigned> &pair ) -> bool {
 						return pair.first.equalsIgnoreCase( token );
 					};
-					const auto namesEnd = std::end( kCustomBitNames );
-					if( auto it = std::find_if( std::begin( kCustomBitNames ), namesEnd, cmp ); it != namesEnd ) {
-						parsedFlags |= it->second;
+					const auto end = std::end( kSurfImpactMaterialNames );
+					if( const auto it  = std::find_if( std::begin( kSurfImpactMaterialNames ), end, cmp ); it != end ) {
+						parsedFlags |= it->second << kSurfImpactMaterialShift;
 					} else {
 						error = "Unknown flags bit name";
 						break;
 					}
 				} else if( numParsedTokens == 1 ) {
-					if( const auto maybeNum = wsw::toNum<unsigned>( token ); maybeNum && maybeNum <= 3 ) {
-						parsedFlags |= *maybeNum << SURF_PARM_SHIFT;
+					if( const auto maybeNum = wsw::toNum<unsigned>( token ); maybeNum && *maybeNum <= 3 ) {
+						parsedFlags |= *maybeNum << kSurfImpactMaterialParamShift;
 					} else if( token != "-"_asView ) {
 						error = "Illegal parameter, must be in [0,3] range or be a dash";
 						break;
