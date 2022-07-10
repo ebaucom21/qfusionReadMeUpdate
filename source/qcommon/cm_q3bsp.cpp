@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "wswfs.h"
 #include "wswstaticstring.h"
 #include "wswstringsplitter.h"
+#include "wswtonum.h"
 #include "wswvector.h"
 
 #include <unordered_map>
@@ -52,14 +53,17 @@ namespace std {
 }
 
 class SurfExtraFlagsCache {
-	struct SurfClassData {
-		wsw::Vector<char> fileData;
-		std::unordered_set<wsw::StringView> simpleNames;
-		wsw::Vector<wsw::StringView> patterns;
-		unsigned surfFlag;
+public:
+	void loadIfNeeded();
 
-		[[nodiscard]]
-		bool isThisClassOfSurface( const wsw::StringView &name ) const;
+	[[nodiscard]]
+	auto getExtraFlagsForMaterial( const wsw::StringView &material ) -> unsigned;
+private:
+	struct ClassEntry {
+		// TODO: Store as Either/Variant
+		wsw::StringView simpleName;
+		wsw::StringView pattern;
+		unsigned flags;
 	};
 
 	struct CacheEntry {
@@ -67,55 +71,147 @@ class SurfExtraFlagsCache {
 		unsigned flags;
 	};
 
-	wsw::Vector<SurfClassData> m_classData;
-	std::unordered_map<wsw::StringView, CacheEntry> m_lookupCache;
+	[[nodiscard]]
+	static auto loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::Vector<char>>;
+
+	// The return type should've been Either<ErrorString, Pair<String, UInt>>
+	[[nodiscard]]
+	static auto tryParsingLine( const wsw::StringView &lineToken, const wsw::CharLookup &separators )
+		-> std::pair<const char *, std::optional<std::pair<wsw::StringView, unsigned>>>;
+
+	[[maybe_unused]]
+	static auto putZeroByteAfterStringView( wsw::Vector<char> *fileData, const wsw::StringView &view ) -> const char *;
+
 	bool m_triedLoading { false };
 
-	[[nodiscard]]
-	auto loadDataFromFile( const wsw::StringView &prefix ) -> std::optional<wsw::Vector<char>>;
-
-	void loadAndAddClass( const wsw::StringView &prefix, unsigned surfFlag );
-public:
-
-	[[nodiscard]]
-	auto getExtraFlagsForMaterial( const wsw::StringView &material ) -> unsigned;
+	wsw::Vector<char> m_rawFileData;
+	wsw::Vector<ClassEntry> m_classEntries;
+	std::unordered_map<wsw::StringView, CacheEntry> m_lookupCache;
 };
 
-void SurfExtraFlagsCache::loadAndAddClass( const wsw::StringView &prefix, unsigned surfFlag ) {
-	if( std::optional<wsw::Vector<char>> maybeFileData = loadDataFromFile( prefix ) ) {
+auto SurfExtraFlagsCache::putZeroByteAfterStringView( wsw::Vector<char> *fileData,
+													  const wsw::StringView &view ) -> const char * {
+	const auto viewOffset = (size_t)( view.data() - fileData->data() );
+	assert( viewOffset + view.length() < fileData->size() );
+	( *fileData )[viewOffset + view.length()] = '\0';
+	return fileData->data() + viewOffset;
+}
+
+void SurfExtraFlagsCache::loadIfNeeded() {
+	if( m_triedLoading ) {
+		return;
+	}
+
+	m_triedLoading = true;
+
+	// TODO: Allow multiple files, allow overriding non-pure content
+	// TODO: Add sanity limits
+	if( std::optional<wsw::Vector<char>> maybeFileData = loadDataFromFile( "maps/custom_surf_params.txt"_asView ) ) {
+		const wsw::CharLookup lineSeparators( "\0\r\n"_asView );
+		const wsw::CharLookup tokenSeparators( []( char ch ) { return std::isspace( ch ); } );
 		wsw::Vector<char> fileData( std::move( *maybeFileData ) );
-		wsw::CharLookup separators( "\0\r\n"_asView );
-		wsw::StringSplitter splitter( wsw::StringView( fileData.data(), fileData.size() ) );
-		std::unordered_set<wsw::StringView> simpleNames;
-		wsw::Vector<wsw::StringView> patterns;
-		while( const std::optional<wsw::StringView> maybeToken = splitter.getNext( separators ) ) {
-			if( const wsw::StringView rawToken = maybeToken->trim(); !rawToken.empty() ) {
-				const auto offset = (size_t)( rawToken.data() - fileData.data() );
-				assert( offset < fileData.size() );
-				// Ensure that tokens are zero-terminated
-				fileData[offset + rawToken.length()] = '\0';
-				wsw::StringView token( rawToken.data(), rawToken.size(), wsw::StringView::ZeroTerminated );
-				if( token.contains( '*' ) ) {
-					patterns.push_back( token );
-				} else {
-					simpleNames.insert( token );
+		wsw::StringSplitter lineSplitter( wsw::StringView( fileData.data(), fileData.size() ) );
+		while( const auto maybeLineTokenAndLineNum = lineSplitter.getNextWithNum( lineSeparators ) ) {
+			auto [lineToken, lineNum] = *maybeLineTokenAndLineNum;
+			// Trim other whitespaces now
+			if( const wsw::StringView line = lineToken.trim(); !line.empty() ) {
+				const auto [maybeError, maybeResults] = tryParsingLine( line, tokenSeparators );
+				if( maybeResults ) {
+					const auto [parsedString, parsedFlags] = *maybeResults;
+					putZeroByteAfterStringView( &fileData, parsedString );
+					wsw::StringView ztString( parsedString.data(), parsedString.size(), wsw::StringView::ZeroTerminated );
+					wsw::StringView simpleName, pattern;
+					// TODO: Check for bogus patterns
+					// TODO: Delegate checks to tryParsingLine
+					if( ztString.contains( '*' ) ) {
+						pattern = ztString;
+					} else {
+						simpleName = ztString;
+					}
+					m_classEntries.emplace_back( ClassEntry {
+						.simpleName = simpleName,
+						.pattern    = pattern,
+						.flags      = parsedFlags
+					});
+				} else if( maybeError ) {
+					const char *ztLine = putZeroByteAfterStringView( &fileData, line );
+					Com_Printf( S_COLOR_YELLOW "Failed to parse line %d `%s`: %s\n", (int)lineNum, ztLine, maybeError );
 				}
 			}
 		}
-		m_classData.emplace_back( SurfClassData {
-			.fileData    = std::move( fileData ),
-			.simpleNames = std::move( simpleNames ),
-			.patterns    = std::move( patterns ),
-			.surfFlag    = surfFlag,
-		});
+		m_rawFileData = std::move( fileData );
 	}
 }
 
-auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &prefix ) -> std::optional<wsw::Vector<char>> {
-	wsw::StaticString<MAX_QPATH> path;
-	path << "maps/surfaces/"_asView << prefix << ".txt"_asView;
+static const std::pair<wsw::StringView, unsigned> kCustomBitNames[] {
+	{ "stone"_asView, SURF_WSW_STONE },
+	{ "stucco"_asView, SURF_WSW_STONE },
+	{ "wood"_asView, SURF_WSW_WOOD },
+	{ "dirt"_asView, SURF_WSW_DIRT },
+	{ "sand"_asView, SURF_WSW_SAND },
+	{ "metal"_asView, SURF_WSW_METAL },
+	{ "glass"_asView, SURF_WSW_GLASS }
+};
 
-	if( std::optional<wsw::fs::ReadHandle> maybeHandle = wsw::fs::openAsReadHandle( path.asView() ) ) {
+auto SurfExtraFlagsCache::tryParsingLine( const wsw::StringView &line, const wsw::CharLookup &separators )
+	-> std::pair<const char *, std::optional<std::pair<wsw::StringView, unsigned>>> {
+	wsw::StringSplitter tokenSplitter( line );
+
+	wsw::StringView parsedString;
+	unsigned parsedFlags     = 0;
+	unsigned numParsedTokens = 0;
+	const char *error        = nullptr;
+	while( const std::optional<wsw::StringView> maybeToken = tokenSplitter.getNext() ) {
+		if( const wsw::StringView token = maybeToken->trim(); !token.empty() ) {
+			if( numParsedTokens == 3 ) {
+				error = "Extra trailing tokens";
+				break;
+			} else if( token.equals( "//"_asView ) ) {
+				if( numParsedTokens != 3 ) {
+					error = "Insufficient number of non-commented tokens";
+				}
+				break;
+			} else {
+				if( numParsedTokens == 0 ) {
+					const auto cmp = [&]( const std::pair<wsw::StringView, unsigned> &pair ) -> bool {
+						return pair.first.equalsIgnoreCase( token );
+					};
+					const auto namesEnd = std::end( kCustomBitNames );
+					if( auto it = std::find_if( std::begin( kCustomBitNames ), namesEnd, cmp ); it != namesEnd ) {
+						parsedFlags |= it->second;
+					} else {
+						error = "Unknown flags bit name";
+						break;
+					}
+				} else if( numParsedTokens == 1 ) {
+					if( const auto maybeNum = wsw::toNum<unsigned>( token ); maybeNum && maybeNum <= 3 ) {
+						parsedFlags |= *maybeNum << SURF_PARM_SHIFT;
+					} else if( token != "-"_asView ) {
+						error = "Illegal parameter, must be in [0,3] range or be a dash";
+						break;
+					}
+				} else if( numParsedTokens == 2 ) {
+					parsedString = token;
+				}
+				numParsedTokens++;
+			}
+		}
+	}
+
+	if( error ) {
+		return { error, std::nullopt };
+	}
+
+	if( numParsedTokens == 0 ) {
+		return { nullptr, std::nullopt };
+	}
+
+	assert( !parsedString.empty() && parsedFlags != 0 && numParsedTokens == 3 );
+	return { nullptr, std::make_optional( std::make_pair( parsedString, parsedFlags ) ) };
+}
+
+auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &filePath ) -> std::optional<wsw::Vector<char>> {
+	if( std::optional<wsw::fs::ReadHandle> maybeHandle = wsw::fs::openAsReadHandle( filePath ) ) {
 		if( const size_t size = maybeHandle->getInitialFileSize() ) {
 			wsw::Vector<char> result;
 			result.resize( size + 1 );
@@ -129,44 +225,27 @@ auto SurfExtraFlagsCache::loadDataFromFile( const wsw::StringView &prefix ) -> s
 	return std::nullopt;
 }
 
-bool SurfExtraFlagsCache::SurfClassData::isThisClassOfSurface( const wsw::StringView &name ) const {
-	assert( name.isZeroTerminated() );
-	if( simpleNames.find( name ) != simpleNames.end() ) {
-		return true;
-	}
-	for( const wsw::StringView &pattern: patterns ) {
-		assert( pattern.isZeroTerminated() );
-		if( glob_match( pattern.data(), name.data(), 0 ) ) {
-			return true;
-		}
-	}
-	return false;
-}
-
 auto SurfExtraFlagsCache::getExtraFlagsForMaterial( const wsw::StringView &material ) -> unsigned {
 	// Postpone loading to the first use (we would like to have logging systems initialized)
-	if( !m_triedLoading ) [[unlikely]] {
-		m_triedLoading = true;
-
-		loadAndAddClass( "stone"_asView, SURF_WSW_STONE );
-		loadAndAddClass( "stucco"_asView, SURF_WSW_STUCCO );
-		loadAndAddClass( "dirt"_asView, SURF_WSW_DIRT );
-		loadAndAddClass( "sand"_asView, SURF_WSW_SAND );
-		loadAndAddClass( "wood"_asView, SURF_WSW_WOOD );
-		loadAndAddClass( "metal"_asView, SURF_WSW_METAL );
-		loadAndAddClass( "glass"_asView, SURF_WSW_GLASS );
-	}
+	loadIfNeeded();
 
 	if( auto it = m_lookupCache.find( material ); it != m_lookupCache.end() ) {
 		return it->second.flags;
 	}
 
 	unsigned flags = 0;
-	for( const SurfClassData &classData: m_classData ) {
-		if( classData.isThisClassOfSurface( material ) ) {
-			flags |= classData.surfFlag;
-			// They are mutually exclusive for now, but things could change
-			break;
+	for( const ClassEntry &entry: m_classEntries ) {
+		if( !entry.simpleName.empty() ) {
+			if( entry.simpleName.equalsIgnoreCase( material ) ) {
+				flags = entry.flags;
+				break;
+			}
+		} else {
+			assert( !entry.pattern.empty() && entry.pattern.isZeroTerminated() && material.isZeroTerminated() );
+			if( glob_match( entry.pattern.data(), material.data(), 0 ) ) {
+				flags = entry.flags;
+				break;
+			}
 		}
 	}
 
