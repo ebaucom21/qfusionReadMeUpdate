@@ -1803,12 +1803,29 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 				}
 			}
 
+			const float ymin = -0.5f * width;
+			const float ymax = +0.5f * width;
+
+			float xmin, xmax;
 			mat3_t axis, localAxis;
 			if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
 				if( float squareDist = DistanceSquared( particle->origin, fsh->viewOrigin ); squareDist > 1.0f ) [[likely]] {
 					const float rcpSpeed = Q_RSqrt( squareSpeed );
 					const float rcpDist  = Q_RSqrt( squareDist );
-					VectorScale( particle->velocity, rcpSpeed, &axis[AXIS_FORWARD] );
+					if( particle->rotationAngle != 0.0f ) {
+						xmin = -0.5f * length, xmax = 0.5f * length;
+						vec3_t velocityDir;
+						VectorScale( particle->velocity, rcpSpeed, velocityDir );
+						assert( std::fabs( VectorLengthFast( velocityDir ) - 1.0f ) < 0.1f );
+						const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];
+						mat3_t rotationMatrix;
+						Matrix3_Rotate( axis_identity, particle->rotationAngle, rotationAxis, rotationMatrix );
+						Matrix3_TransformVector( rotationMatrix, velocityDir, &axis[AXIS_FORWARD] );
+					} else {
+						xmin = 0, xmax = length;
+						VectorScale( particle->velocity, rcpSpeed, &axis[AXIS_FORWARD] );
+					}
+					assert( std::fabs( VectorLengthFast( &axis[AXIS_FORWARD] ) - 1.0f ) < 0.1f );
 					VectorSubtract( fsh->viewOrigin, particle->origin, &axis[AXIS_RIGHT] );
 					VectorScale( &axis[AXIS_RIGHT], rcpDist, &axis[AXIS_RIGHT] );
 					CrossProduct( &axis[AXIS_FORWARD], &axis[AXIS_RIGHT], &axis[AXIS_UP] );
@@ -1820,11 +1837,6 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 			}
 
 			Matrix3_Transpose( axis, localAxis );
-
-			const float xmin = 0;
-			const float xmax = length;
-			const float ymin = -0.5f * width;
-			const float ymax = +0.5f * width;
 
 			VectorSet( xyz[0], xmin, 0, ymin );
 			VectorSet( xyz[1], xmin, 0, ymax );

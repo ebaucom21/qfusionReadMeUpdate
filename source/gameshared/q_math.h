@@ -838,6 +838,10 @@ void Matrix3_ForRotationOfDirs( const float *fromDir, const float *toDir, mat3_t
 void Matrix3_FromPoints( const vec3_t v1, const vec3_t v2, const vec3_t v3, mat3_t m );
 void Matrix3_Normalize( mat3_t m );
 
+inline void Matrix3_Rotate( const mat3_t in, float angle, const vec3_t axisDir, mat3_t out ) {
+	Matrix3_Rotate( in, angle, axisDir[0], axisDir[1], axisDir[2], out );
+}
+
 void Quat_Identity( quat_t q );
 void Quat_Copy( const quat_t q1, quat_t q2 );
 void Quat_Quat3( const vec3_t in, quat_t out );

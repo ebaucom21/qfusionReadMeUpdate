@@ -256,6 +256,8 @@ struct alignas( 16 ) Particle {
 	float oldOrigin[4];
 	float velocity[4];
 	float accel[4];
+	float rotationAngle;
+	float angularVelocity;
 
 	int64_t spawnTime;
 	// Gets updated every simulation frame prior to submission for rendering
@@ -277,6 +279,8 @@ struct alignas( 16 ) Particle {
 	uint8_t instanceMaterialIndex { 0 };
 	// Keeps an index of instance color parameters in AppearanceRules color-related spans
 	uint8_t instanceColorIndex { 0 };
+
+	uint8_t rotationAxisIndex { 0 };
 };
 
 struct ExternalMesh {

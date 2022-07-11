@@ -28,6 +28,8 @@ struct EllipsoidalFlockParams {
 	float maxSpeed { 300 };
 	float minShiftSpeed { 0.0f };
 	float maxShiftSpeed { 0.0f };
+	float minAngularVelocity { 0.0f };
+	float maxAngularVelocity { 0.0f };
 	float minPercentage { 0.0f };
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
@@ -51,6 +53,8 @@ struct ConicalFlockParams {
 	float maxSpeed { 300 };
 	float minShiftSpeed { 0.0f };
 	float maxShiftSpeed { 0.0f };
+	float minAngularVelocity { 0.0f };
+	float maxAngularVelocity { 0.0f };
 	float minPercentage { 0.0f };
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
@@ -90,6 +94,7 @@ struct alignas( 16 ) ParticleFlock {
 	float mins[4];
 	float maxs[4];
 	unsigned lastLitParticleIndex;
+	bool hasRotatingParticles;
 };
 
 class ParticleSystem {

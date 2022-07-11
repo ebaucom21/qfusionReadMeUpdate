@@ -96,13 +96,14 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	const auto [timeoutAt, numParticles] = fillParticleFlock( std::addressof( flockParams ),
 															  flock->particles, maxParticles,
 															  std::addressof( appearanceRules ), &m_rng, currTime );
-	flock->timeoutAt        = timeoutAt;
-	flock->numParticlesLeft = numParticles;
-	flock->drag             = flockParams.drag;
-	flock->restitution      = flockParams.restitution;
-	flock->minBounceCount   = flockParams.minBounceCount;
-	flock->maxBounceCount   = flockParams.maxBounceCount;
-	flock->appearanceRules  = appearanceRules;
+	flock->timeoutAt            = timeoutAt;
+	flock->numParticlesLeft     = numParticles;
+	flock->drag                 = flockParams.drag;
+	flock->restitution          = flockParams.restitution;
+	flock->hasRotatingParticles = flockParams.minAngularVelocity != 0.0f || flockParams.maxAngularVelocity != 0.0f;
+	flock->minBounceCount       = flockParams.minBounceCount;
+	flock->maxBounceCount       = flockParams.maxBounceCount;
+	flock->appearanceRules      = appearanceRules;
 
 	if( flock->minBounceCount < flock->maxBounceCount ) {
 		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
@@ -194,6 +195,8 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	assert( params->minShiftSpeed <= params->maxShiftSpeed );
 	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
 
+	assert( params->minAngularVelocity <= params->maxAngularVelocity );
+
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
 	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
@@ -204,6 +207,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool isSpherical          = params->stretchScale == 1.0f;
+	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -255,6 +259,15 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		}
 
 		p->velocity[3] = 0.0f;
+
+		p->rotationAngle = 0.0f;
+		if( hasAngularVelocity ) {
+			p->rotationAxisIndex = rng->nextBoundedFast( std::size( kPredefinedDirs ) );
+			p->angularVelocity   = rng->nextFloat( params->minAngularVelocity, params->maxAngularVelocity );
+		} else {
+			p->rotationAxisIndex = 0;
+			p->angularVelocity   = 0.0f;
+		}
 
 		p->spawnTime   = currTime;
 		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
@@ -328,6 +341,8 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	assert( params->innerAngle >= 0.0f && params->innerAngle <= 180.0f );
 	assert( params->innerAngle < params->angle );
 
+	assert( params->minAngularVelocity <= params->maxAngularVelocity );
+
 	// TODO: Supply cosine values as parameters?
 
 	float maxZ = 1.0f;
@@ -347,6 +362,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
 	const bool hasMultipleColors    = appearanceRules->numColors > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
+	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -380,6 +396,17 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		if( hasSpeedShift ) {
 			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
 			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
+		}
+
+		p->velocity[3] = 0.0f;
+
+		p->rotationAngle = 0.0f;
+		if( hasAngularVelocity ) {
+			p->rotationAxisIndex = rng->nextBoundedFast( std::size( kPredefinedDirs ) );
+			p->angularVelocity   = rng->nextFloat( params->minAngularVelocity, params->maxAngularVelocity );
+		} else {
+			p->rotationAxisIndex = 0;
+			p->angularVelocity   = 0.0f;
 		}
 
 		p->spawnTime   = currTime;
@@ -508,6 +535,12 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 			}
 			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
 			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
+
+			if( flock->hasRotatingParticles ) {
+				particle->rotationAngle += particle->angularVelocity * deltaSeconds;
+				particle->rotationAngle = AngleNormalize360( particle->rotationAngle );
+			}
+
 			// TODO: Supply this 4-component vector explicitly
 			boundsBuilder.addPoint( particle->origin );
 		}
@@ -518,6 +551,11 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
 			// TODO: Supply this 4-component vector explicitly
 			boundsBuilder.addPoint( particle->origin );
+
+			if( flock->hasRotatingParticles ) {
+				particle->rotationAngle += particle->angularVelocity * deltaSeconds;
+				particle->rotationAngle = AngleNormalize360( particle->rotationAngle );
+			}
 		}
 	}
 
@@ -646,6 +684,11 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 
 			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
 			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+
+			if( flock->hasRotatingParticles ) {
+				p->rotationAngle += p->angularVelocity * deltaSeconds;
+				p->rotationAngle = wsw::clamp( p->rotationAngle, 0.0f, 360.0f );
+			}
 
 			++i;
 		} else {
