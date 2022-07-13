@@ -54,6 +54,13 @@ public:
 
 	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total );
 
+	void spawnBulletLiquidImpactEffect( const trace_s *trace ) {
+		spawnBulletLikeLiquidImpactEffect( trace, 1.0f, { 0.70f, 0.95f } );
+	}
+	void spawnPelletLiquidImpactEffect( const trace_s *trace ) {
+		spawnBulletLikeLiquidImpactEffect( trace, 0.1f, { 0.30f, 0.90f } );
+	}
+
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
 	}
@@ -108,6 +115,9 @@ private:
 	void spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx, float radius, bool addSoundLfe );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
+
+	void spawnBulletLikeLiquidImpactEffect( const trace_s *trace, float percentageScale,
+											std::pair<float, float> randomRotationAngleCosineRange );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;
 	TransientEffectsSystem m_transientEffectsSystem;

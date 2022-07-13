@@ -476,67 +476,6 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 }
 
-static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
-static const vec4_t kWaterSplashFadedInColor { 1.0f, 1.0f, 1.0f, 0.3f };
-static const vec4_t kWaterSplashFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
-
-static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
-static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 0.3f };
-static const vec4_t kSlimeSplashFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
-
-static const vec4_t kLavaSplashInitialColor { 1.0f, 0.67f, 0.0f, 1.0f };
-static const vec4_t kLavaSplashFadedInColor { 1.0f, 0.67f, 0.0f, 1.0f };
-static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 0.0f };
-
-static void CG_LeadWaterSplash( trace_t *tr ) {
-	if( cg_particles->integer ) {
-		const vec4_t *initialColors = nullptr, *fadedInColors = nullptr, *fadedOutColors = nullptr;
-
-		if( tr->contents & CONTENTS_WATER ) {
-			initialColors  = &kWaterSplashInitialColor;
-			fadedInColors  = &kWaterSplashFadedInColor;
-			fadedOutColors = &kWaterSplashFadedOutColor;
-		} else if( tr->contents & CONTENTS_SLIME ) {
-			initialColors  = &kSlimeSplashInitialColor;
-			fadedInColors  = &kSlimeSplashFadedInColor;
-			fadedOutColors = &kSlimeSplashFadedOutColor;
-		} else if( tr->contents & CONTENTS_LAVA ) {
-			initialColors  = &kLavaSplashInitialColor;
-			fadedInColors  = &kLavaSplashFadedInColor;
-			fadedOutColors = &kLavaSplashFadedOutColor;
-		}
-
-		if( initialColors ) {
-			ConicalFlockParams flockParams {
-				.origin        = { tr->endpos[0], tr->endpos[1], tr->endpos[2] },
-				.offset        = { tr->plane.normal[0], tr->plane.normal[1], tr->plane.normal[2] },
-				.gravity       = 1.25f * GRAVITY,
-				.angle         = 18,
-				.minSpeed      = 500,
-				.maxSpeed      = 700,
-				.minPercentage = 0.5f,
-				.maxPercentage = 1.0f,
-				.minTimeout    = 75,
-				.maxTimeout    = 150,
-			};
-			Particle::AppearanceRules appearanceRules {
-				.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-				.initialColors       = initialColors,
-				.fadedInColors       = fadedInColors,
-				.fadedOutColors      = fadedOutColors,
-				.kind                = Particle::Spark,
-				.length              = 16.0f,
-				.width               = 1.5f,
-				.lengthSpread        = 5.0f,
-				.widthSpread         = 0.25f,
-				.fadeInLifetimeFrac  = 0.25f,
-				.fadeOutLifetimeFrac = 0.50f,
-			};
-			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
-		}
-	}
-}
-
 /*
 * CG_LeadBubbleTrail
 */
@@ -578,7 +517,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	water_trace = GS_TraceBullet( &trace, origin, dir, r, u, range, owner, 0 );
 	if( water_trace ) {
 		if( !VectorCompare( water_trace->endpos, origin ) ) {
-			CG_LeadWaterSplash( water_trace );
+			cg.effectsSystem.spawnBulletLiquidImpactEffect( water_trace );
 		}
 	}
 
@@ -622,7 +561,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		if( water_trace ) {
 			trace_t *tr = water_trace;
 			if( !VectorCompare( tr->endpos, start ) ) {
-				CG_LeadWaterSplash( tr );
+				cg.effectsSystem.spawnPelletLiquidImpactEffect( tr );
 			}
 		}
 

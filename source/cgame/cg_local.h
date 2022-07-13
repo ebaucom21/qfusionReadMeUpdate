@@ -798,6 +798,24 @@ bool getInstagunTeamColor( int team, float *color );
 [[nodiscard]]
 auto getTeamForOwner( int ownerNum ) -> int;
 
+struct FlockOrientation {
+	const float origin[3];
+	const float offset[3];
+	const float dir[3];
+
+	void copyToFlockParams( ConicalFlockParams *params ) const {
+		VectorCopy( this->origin, params->origin );
+		VectorCopy( this->offset, params->offset );
+		VectorCopy( this->dir, params->dir );
+	}
+
+	void copyToFlockParams( EllipsoidalFlockParams *params ) const {
+		VectorCopy( this->origin, params->origin );
+		VectorCopy( this->offset, params->offset );
+		VectorCopy( this->dir, params->stretchDir );
+	}
+};
+
 void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float minConeAngleCosine, float maxConeAngleCosine );
 void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAngleCosine );
 

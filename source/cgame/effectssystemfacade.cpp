@@ -589,31 +589,14 @@ static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
 	return true;
 }
 
-struct FlockOrientation {
-	const float origin[3];
-	const float offset[3];
-	const float dir[3];
-
-	void copyToFlockParams( ConicalFlockParams *params ) const {
-		VectorCopy( this->origin, params->origin );
-		VectorCopy( this->offset, params->offset );
-		VectorCopy( this->dir, params->dir );
-	}
-
-	void copyToFlockParams( EllipsoidalFlockParams *params ) const {
-		VectorCopy( this->origin, params->origin );
-		VectorCopy( this->offset, params->offset );
-		VectorCopy( this->dir, params->stretchDir );
-	}
-};
-
 [[nodiscard]]
-static auto makeRicochetFlockOrientation( const trace_t *impactTrace, const float *impactDir, wsw::RandomGenerator *rng )
-	-> FlockOrientation {
+static auto makeRicochetFlockOrientation( const trace_t *impactTrace, const float *impactDir, wsw::RandomGenerator *rng,
+										  const std::pair<float, float> &angleCosineRange = { 0.30f, 0.95f } )
+										  -> FlockOrientation {
 	vec3_t flockDir;
 	VectorReflect( impactDir, impactTrace->plane.normal, 0.0f, flockDir );
 
-	const float coneAngleCosine = Q_Sqrt( rng->nextFloat( 0.30f, 0.95f ) );
+	const float coneAngleCosine = Q_Sqrt( rng->nextFloat( angleCosineRange.first, angleCosineRange.second ) );
 	addRandomRotationToDir( flockDir, rng, coneAngleCosine );
 
 	return FlockOrientation {
@@ -1035,7 +1018,6 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 		.maxTimeout    = 1000,
 	};
 
-
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.initialColors       = &kDirtImpactFadedInColor,
@@ -1058,7 +1040,6 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 		.minTimeout    = 750,
 		.maxTimeout    = 1000,
 	};
-
 
 	Particle::AppearanceRules dustAppearanceRules {
 		.materials      = cgs.media.shaderFlareParticle.getAddressOfHandle(),
@@ -1272,6 +1253,200 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 		} else {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
 			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		}
+	}
+}
+
+static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
+static const vec4_t kWaterSplashFadedInColor { 1.0f, 1.0f, 1.0f, 0.3f };
+static const vec4_t kWaterSplashFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
+
+static const vec4_t kWaterDustInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kWaterDustFadedInColor { 1.0f, 1.0f, 1.0f, 0.1f };
+static const vec4_t kWaterDustFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
+
+static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 0.0f, 0.7f };
+static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 0.3f };
+static const vec4_t kSlimeSplashFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
+
+static const vec4_t kSlimeDustInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
+static const vec4_t kSlimeDustFadedInColor { 0.8f, 1.0f, 0.9f, 0.1f };
+static const vec4_t kSlimeDustFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
+
+static const vec4_t kLavaSplashInitialColor { 1.0f, 0.67f, 0.0f, 1.0f };
+static const vec4_t kLavaSplashFadedInColor { 1.0f, 0.67f, 0.0f, 1.0f };
+static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 0.0f };
+
+static const vec4_t kLavaDropsInitialColors[3] {
+	{ 1.0f, 0.67f, 0.1f, 1.0f }, { 1.0f, 0.67f, 0.1f, 1.0f }, { 1.0f, 0.67f, 0.1f, 1.0f }
+};
+
+static const vec4_t kLavaDropsFadedInColors[3] {
+	{ 1.0f, 0.67f, 0.01f, 1.0f }, { 1.0f, 0.5f, 0.1f, 1.0f }, { 0.7f, 0.39f, 0.075f, 1.0f },
+};
+
+static const vec4_t kLavaDropsFadedOutColors[3] {
+	{ 1.0f, 0.67f, 0.075f, 0.3f }, { 1.0f, 0.5f, 0.1f, 0.3f }, { 0.7f, 0.39f, 0.075f, 0.3f },
+};
+
+static const vec4_t kLavaDustInitialColor { 1.0f, 0.67f, 0.0f, 0.00f };
+static const vec4_t kLavaDustFadedInColor { 1.0f, 0.67f, 0.0f, 0.05f };
+static const vec4_t kLavaDustFadedOutColor { 0.5f, 0.3f, 0.3f, 0.00f };
+
+void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trace, float percentageScale,
+															 std::pair<float, float> randomRotationAngleCosineRange ) {
+	if( cg_particles->integer ) {
+		// TODO: Introduce some ColorLifespan type
+		const vec4_t *initialSplashColors = nullptr, *fadedInSplashColors = nullptr, *fadedOutSplashColors = nullptr;
+		const vec4_t *initialDropsColors = nullptr, *fadedInDropsColors = nullptr, *fadedOutDropsColors = nullptr;
+		const vec4_t *initialDustColors = nullptr, *fadedInDustColors = nullptr, *fadedOutDustColors = nullptr;
+
+		shader_s **materials   = nullptr;
+
+		uint8_t numDropsColors   = 0;
+		auto dropParticlesKind   = Particle::Sprite;
+		float minDropsPercentage = 0.5f;
+		float maxDropsPercentage = 1.0f;
+
+		if( trace->contents & CONTENTS_WATER ) {
+			initialSplashColors  = &kWaterSplashInitialColor;
+			fadedInSplashColors  = &kWaterSplashFadedInColor;
+			fadedOutSplashColors = &kWaterSplashFadedOutColor;
+
+			initialDustColors  = &kWaterDustInitialColor;
+			fadedInDustColors  = &kWaterDustFadedInColor;
+			fadedOutDustColors = &kWaterDustFadedOutColor;
+
+			materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		} else if( trace->contents & CONTENTS_SLIME ) {
+			// TODO: We don't actually have slime on default maps, do we?
+
+			initialSplashColors  = &kSlimeSplashInitialColor;
+			fadedInSplashColors  = &kSlimeSplashFadedInColor;
+			fadedOutSplashColors = &kSlimeSplashFadedOutColor;
+
+			initialDustColors  = &kSlimeDustInitialColor;
+			fadedInDustColors  = &kSlimeDustFadedInColor;
+			fadedOutDustColors = &kSlimeDustFadedOutColor;
+
+			materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		} else if( trace->contents & CONTENTS_LAVA ) {
+			initialSplashColors  = &kLavaSplashInitialColor;
+			fadedInSplashColors  = &kLavaSplashFadedInColor;
+			fadedOutSplashColors = &kLavaSplashFadedOutColor;
+
+			initialDropsColors  = kLavaDropsInitialColors;
+			fadedInDropsColors  = kLavaDropsFadedInColors;
+			fadedOutDropsColors = kLavaDropsFadedOutColors;
+			numDropsColors      = std::size( kLavaDropsInitialColors );
+
+			dropParticlesKind  = Particle::Spark;
+			minDropsPercentage = 0.3f;
+			maxDropsPercentage = 0.5f;
+
+			initialDustColors  = &kLavaDustInitialColor;
+			fadedInDustColors  = &kLavaDustFadedInColor;
+			fadedOutDustColors = &kLavaDustFadedOutColor;
+
+			materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+		}
+
+		if( materials ) {
+			const vec3_t impactDir { -trace->plane.normal[0], -trace->plane.normal[1], -trace->plane.normal[2] };
+			const FlockOrientation flockOrientation = makeRicochetFlockOrientation( trace, impactDir, &m_rng,
+																					randomRotationAngleCosineRange );
+
+			if( !numDropsColors ) {
+				initialDropsColors  = initialSplashColors;
+				fadedInDropsColors  = fadedInSplashColors;
+				fadedOutDropsColors = fadedOutSplashColors;
+				numDropsColors      = 1;
+			}
+
+			ConicalFlockParams splashFlockParams {
+				.gravity       = GRAVITY,
+				.angle         = 12,
+				.minSpeed      = 500,
+				.maxSpeed      = 700,
+				.minPercentage = 0.7f * percentageScale,
+				.maxPercentage = 1.0f * percentageScale,
+				.minTimeout    = 100,
+				.maxTimeout    = 200
+			};
+
+			const Particle::AppearanceRules splashAppearanceRules {
+				.materials           = materials,
+				.initialColors       = initialSplashColors,
+				.fadedInColors       = fadedInSplashColors,
+				.fadedOutColors      = fadedOutSplashColors,
+				.kind                = Particle::Spark,
+				.length              = 40.0f,
+				.width               = 4.0f,
+				.lengthSpread        = 10.0f,
+				.widthSpread         = 1.0f,
+				.sizeBehaviour       = Particle::Shrinking
+			};
+
+			ConicalFlockParams dropsFlockParams {
+				.gravity       = GRAVITY,
+				.drag          = 0.015f,
+				.angle         = 15,
+				.minBounceCount = 0,
+				.maxBounceCount = 0,
+				.minSpeed      = 300,
+				.maxSpeed      = 900,
+				.minPercentage = minDropsPercentage * percentageScale,
+				.maxPercentage = maxDropsPercentage * percentageScale,
+				.minTimeout    = 350,
+				.maxTimeout    = 700,
+			};
+
+			const Particle::AppearanceRules dropsAppearanceRules {
+				.materials           = materials,
+				.initialColors       = initialDropsColors,
+				.fadedInColors       = fadedInDropsColors,
+				.fadedOutColors      = fadedOutDropsColors,
+				.numColors           = numDropsColors,
+				.kind                = dropParticlesKind,
+				.length              = 3.0f,
+				.width               = 1.5f,
+				.radius              = 1.25f,
+				.radiusSpread        = 0.25f,
+				.sizeBehaviour       = Particle::ExpandingAndShrinking
+			};
+
+			ConicalFlockParams dustFlockParams {
+				.gravity       = 100.0f,
+				.angle         = 7.5f,
+				.minSpeed      = 50,
+				.maxSpeed      = 100,
+				.minShiftSpeed = 450.0f,
+				.maxShiftSpeed = 550.0f,
+				.minPercentage = 0.4f * percentageScale,
+				.maxPercentage = 0.7f * percentageScale,
+				.minTimeout    = 100,
+				.maxTimeout    = 150,
+			};
+
+			const Particle::AppearanceRules dustAppearanceRules {
+				.materials      = materials,
+				.initialColors  = initialDustColors,
+				.fadedInColors  = fadedInDustColors,
+				.fadedOutColors = fadedOutDustColors,
+				.kind           = Particle::Sprite,
+				.radius         = 25.0f,
+				.radiusSpread   = 7.5f,
+				.sizeBehaviour  = Particle::Expanding
+			};
+
+			flockOrientation.copyToFlockParams( &splashFlockParams );
+			cg.particleSystem.addSmallParticleFlock( splashAppearanceRules, splashFlockParams );
+
+			flockOrientation.copyToFlockParams( &dropsFlockParams );
+			cg.particleSystem.addMediumParticleFlock( dropsAppearanceRules, dropsFlockParams );
+
+			flockOrientation.copyToFlockParams( &dustFlockParams );
+			cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
 		}
 	}
 }
