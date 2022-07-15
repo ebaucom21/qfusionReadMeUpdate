@@ -43,6 +43,12 @@ constexpr wsw_forceinline auto cube( const T &v ) -> T {
 	return v * v * v;
 }
 
+template <std::integral T>
+[[nodiscard]]
+constexpr wsw_forceinline bool isPowerOf2( const T &v ) {
+	return ( v & ( v - 1 ) ) == 0;
+}
+
 }
 
 #endif

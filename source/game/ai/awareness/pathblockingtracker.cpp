@@ -50,7 +50,7 @@ public:
 
 EnemyComputationalProxy::EnemyComputationalProxy( const TrackedEnemy *enemy, float damageToKillBot, int num )
 	: aasWorld( AiAasWorld::instance() )
-	, isZooming( enemy->ent->r.client ? (bool)enemy->ent->r.client->ps.stats[PM_STAT_ZOOMTIME] : false ) {
+	, isZooming( enemy->m_ent->r.client ? (bool)enemy->m_ent->r.client->ps.stats[PM_STAT_ZOOMTIME] : false ) {
 	hitFlags = enemy->GetCheckForWeaponHitFlags( damageToKillBot );
 
 	// Lets use fairly low blocking radii that are still sufficient for narrow hallways.
@@ -161,24 +161,24 @@ bool PathBlockingTracker::IsAPotentialBlocker( const TrackedEnemy *enemy,
 	}
 
 	int enemyWeaponTier;
-	if( const auto *client = enemy->ent->r.client ) {
+	if( const auto *client = enemy->m_ent->r.client ) {
 		enemyWeaponTier = FindBestWeaponTier( client );
-		if( enemyWeaponTier < 1 && !HasPowerups( enemy->ent ) ) {
+		if( enemyWeaponTier < 1 && !HasPowerups( enemy->m_ent ) ) {
 			return false;
 		}
 	} else {
 		// Try guessing...
-		enemyWeaponTier = (int)( 1.0f + BoundedFraction( enemy->ent->aiIntrinsicEnemyWeight, 3.0f ) );
+		enemyWeaponTier = (int)( 1.0f + BoundedFraction( enemy->m_ent->aiIntrinsicEnemyWeight, 3.0f ) );
 	}
 
-	float damageToKillEnemy = DamageToKill( enemy->ent, g_armor_protection->value, g_armor_degradation->value );
+	float damageToKillEnemy = DamageToKill( enemy->m_ent, g_armor_protection->value, g_armor_degradation->value );
 
-	if( HasShell( enemy->ent ) ) {
+	if( HasShell( enemy->m_ent ) ) {
 		damageToKillEnemy *= QUAD_DAMAGE_SCALE;
 	}
 
 	// We modify "damage to kill" in order to take quad bearing into account
-	if( HasQuad( enemy->ent ) && damageToKillEnemy > 50 ) {
+	if( HasQuad( enemy->m_ent ) && damageToKillEnemy > 50 ) {
 		damageToKillEnemy *= 2.0f;
 	}
 

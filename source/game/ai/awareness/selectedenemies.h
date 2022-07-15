@@ -7,7 +7,8 @@
 class SelectedEnemies: public Selection {
 	friend class Bot;
 
-	static const auto MAX_ACTIVE_ENEMIES = AiEnemiesTracker::MAX_ACTIVE_ENEMIES;
+	// TODO
+	static const auto MAX_ACTIVE_ENEMIES = 1;
 	// Selected active enemies are kept in array for these reasons:
 	// 1) Being stable relatively to unlinking by the supplying tracker
 	// 2) Being able to address precached data by enemy index
@@ -119,7 +120,7 @@ public:
 	unsigned InstanceId() const override { return instanceId; }
 
 	bool IsPrimaryEnemy( const edict_t *ent ) const {
-		return !enemies.empty() && enemies.front()->ent == ent;
+		return !enemies.empty() && enemies.front()->m_ent == ent;
 	}
 
 	bool IsPrimaryEnemy( const TrackedEnemy *enemy ) const {
@@ -133,7 +134,7 @@ public:
 
 	Vec3 ActualOrigin() const {
 		CheckValid( "ActualOrigin" );
-		return Vec3( enemies.front()->ent->s.origin );
+		return Vec3( enemies.front()->m_ent->s.origin );
 	}
 
 	Vec3 LastSeenVelocity() const {
@@ -155,29 +156,29 @@ public:
 	typedef TrackedEnemy::SnapshotsQueue SnapshotsQueue;
 	const SnapshotsQueue &LastSeenSnapshots() const {
 		CheckValid( "LastSeenSnapshots" );
-		return enemies.front()->lastSeenSnapshots;
+		return enemies.front()->m_lastSeenSnapshots;
 	}
 
 	Vec3 ActualVelocity() const {
 		CheckValid( "ActualVelocity" );
-		return Vec3( enemies.front()->ent->velocity );
+		return Vec3( enemies.front()->m_ent->velocity );
 	}
 
 	Vec3 Mins() const {
 		CheckValid( "Mins" );
-		return Vec3( enemies.front()->ent->r.mins );
+		return Vec3( enemies.front()->m_ent->r.mins );
 	}
 
 	Vec3 Maxs() const {
 		CheckValid( "Maxs" );
-		return Vec3( enemies.front()->ent->r.maxs );
+		return Vec3( enemies.front()->m_ent->r.maxs );
 	}
 
 	Vec3 LookDir() const;
 
 	Vec3 EnemyAngles() const {
 		CheckValid( "EnemyAngles" );
-		return Vec3( enemies.front()->ent->s.angles );
+		return Vec3( enemies.front()->m_ent->s.angles );
 	}
 
 	float DamageToKill() const;
@@ -192,17 +193,17 @@ public:
 
 	const edict_t *Ent() const {
 		CheckValid( "Ent" );
-		return enemies.front()->ent;
+		return enemies.front()->m_ent;
 	}
 
 	const edict_t *TraceKey() const {
 		CheckValid( "TraceKey" );
-		return enemies.front()->ent;
+		return enemies.front()->m_ent;
 	}
 
 	bool OnGround() const {
 		CheckValid( "OnGround" );
-		return enemies.front()->ent->groundentity != nullptr;
+		return enemies.front()->m_ent->groundentity != nullptr;
 	}
 
 	bool HaveQuad() const;

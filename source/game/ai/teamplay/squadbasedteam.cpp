@@ -566,7 +566,7 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 			// TODO: Disallow keeping invalid enemies in list
 			if( enemy->IsValid() ) [[likely]] {
 				const auto cmp = [&]( const TrackedEnemy *e ) {
-					return e->ent == enemy->ent;
+					return e->m_ent == enemy->m_ent;
 				};
 				auto it = std::find_if( mergedBotEnemies.begin(), mergedBotEnemies.end(), cmp );
 				if( it != mergedBotEnemies.end() ) {
@@ -669,12 +669,12 @@ bool AiSquad::ShouldNotDropItemsNow() const {
 		MaybeStealer stealer = maybeStealers[i];
 		for( const Bot *bot = botsListHead; bot; bot = bot->NextInSquad() ) {
 			auto *const botEnt = const_cast<edict_t*>( bot->self );
-			if( !pvsCache->AreInPvs( botEnt, stealer.enemy->ent ) ) {
+			if( !pvsCache->AreInPvs( botEnt, stealer.enemy->m_ent ) ) {
 				continue;
 			}
 
 			G_Trace( &trace, botEnt->s.origin, nullptr, nullptr, stealer.extrapolatedOrigin.Data(), botEnt, MASK_AISOLID );
-			if( trace.fraction == 1.0f || game.edicts + trace.ent == stealer.enemy->ent ) {
+			if( trace.fraction == 1.0f || game.edicts + trace.ent == stealer.enemy->m_ent ) {
 				return true;
 			}
 		}

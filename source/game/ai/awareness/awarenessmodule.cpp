@@ -44,46 +44,7 @@ void BotAwarenessModule::OnEnemyDamaged( const edict_t *target, int damage ) {
 }
 
 const TrackedEnemy *BotAwarenessModule::ChooseLostOrHiddenEnemy( unsigned timeout ) {
-	return enemiesTracker.ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum(), timeout );
-}
-
-BotAwarenessModule::EnemiesTracker::EnemiesTracker( Bot *bot_, BotAwarenessModule *module_ )
-	: AiEnemiesTracker( bot_->Skill() ), bot( bot_ ), module( module_ ) {
-	SetTag( "BotAwarenessModule(%s)::EnemiesTracker", bot->Nick() );
-}
-
-void BotAwarenessModule::EnemiesTracker::OnHurtByNewThreat( const edict_t *newThreat ) {
-	module->OnHurtByNewThreat( newThreat, this );
-}
-
-bool BotAwarenessModule::EnemiesTracker::CheckHasQuad() const {
-	return ::HasQuad( game.edicts + bot->EntNum() );
-}
-
-bool BotAwarenessModule::EnemiesTracker::CheckHasShell() const {
-	return ::HasShell( game.edicts + bot->EntNum() );
-}
-
-float BotAwarenessModule::EnemiesTracker::ComputeDamageToBeKilled() const {
-	return DamageToKill( game.edicts + bot->EntNum() );
-}
-
-void BotAwarenessModule::EnemiesTracker::OnEnemyRemoved( const TrackedEnemy *enemy )  {
-	module->OnEnemyRemoved( enemy );
-}
-
-float BotAwarenessModule::EnemiesTracker::ModifyWeightForAttacker( const edict_t *enemy, float weightSoFar ) {
-	if( bot->WillRetreat() || bot->IsNavTargetATopTierItem() ) {
-		return weightSoFar;
-	}
-	return AiEnemiesTracker::ModifyWeightForAttacker( enemy, weightSoFar );
-}
-
-float BotAwarenessModule::EnemiesTracker::ModifyWeightForHitTarget( const edict_t *enemy, float weightSoFar ) {
-	if( bot->WillRetreat() || bot->IsNavTargetATopTierItem() ) {
-		return weightSoFar;
-	}
-	return AiEnemiesTracker::ModifyWeightForHitTarget( enemy, weightSoFar );
+	return enemiesTracker.ChooseLostOrHiddenEnemy( timeout );
 }
 
 void BotAwarenessModule::Frame() {
@@ -123,13 +84,12 @@ void BotAwarenessModule::UpdateSelectedEnemies() {
 	lostEnemies.Invalidate();
 
 	float visibleEnemyWeight = 0.0f;
-	if( const auto *visibleEnemy = enemiesTracker.ChooseVisibleEnemy( game.edicts + bot->EntNum() ) ) {
-		assert( visibleEnemy == enemiesTracker.ActiveEnemiesHead() );
+	if( const TrackedEnemy *visibleEnemy = enemiesTracker.ChooseVisibleEnemy() ) {
 		selectedEnemies.SetToListOfActive( visibleEnemy, targetChoicePeriod );
 		visibleEnemyWeight = 0.5f * ( visibleEnemy->AvgWeight() + visibleEnemy->MaxWeight() );
 	}
 
-	if( const auto *lostEnemy = enemiesTracker.ChooseLostOrHiddenEnemy( game.edicts + bot->EntNum() ) ) {
+	if( const TrackedEnemy *lostEnemy = enemiesTracker.ChooseLostOrHiddenEnemy() ) {
 		float lostEnemyWeight = 0.5f * ( lostEnemy->AvgWeight() + lostEnemy->MaxWeight() );
 		// If there is a lost or hidden enemy of higher weight, store it
 		if( lostEnemyWeight > visibleEnemyWeight ) {
@@ -243,14 +203,10 @@ void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiFr
 }
 
 void BotAwarenessModule::OnEnemyRemoved( const TrackedEnemy *enemy ) {
-	if( !selectedEnemies.AreValid() ) {
-		return;
+	if( selectedEnemies.Contain( enemy ) ) {
+		selectedEnemies.Invalidate();
+		bot->ForcePlanBuilding();
 	}
-	if( !selectedEnemies.Contain( enemy ) ) {
-		return;
-	}
-	selectedEnemies.Invalidate();
-	bot->ForcePlanBuilding();
 }
 
 void BotAwarenessModule::UpdateBlockedAreasStatus() {

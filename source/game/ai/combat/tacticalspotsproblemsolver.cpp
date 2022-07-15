@@ -208,7 +208,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 			VectorScale( enemyData->velocityDir2D, scale, enemyData->velocityDir2D );
 		}
 
-		if( Bot *bot = enemy->ent->bot ) {
+		if( Bot *bot = enemy->m_ent->bot ) {
 			int areaNums[2] = { 0, 0 };
 			bot->EntityPhysicsState()->PrepareRoutingStartAreas( areaNums );
 			// TODO: PrepareRoutingStartAreas() should always put grounded area first.
@@ -217,7 +217,7 @@ void TacticalSpotsProblemSolver::applyEnemiesInfluence( SpotsAndScoreVector &can
 		} else {
 			vec3_t tmpOrigin;
 			const float *testedOrigin = enemyOrigin.Data();
-			if( AiGroundTraceCache::Instance()->TryDropToFloor( enemy->ent, 64.0f, tmpOrigin ) ) {
+			if( AiGroundTraceCache::Instance()->TryDropToFloor( enemy->m_ent, 64.0f, tmpOrigin ) ) {
 				testedOrigin = tmpOrigin;
 			}
 			enemyData->groundedAreaNum = aasWorld->findAreaNum( testedOrigin );

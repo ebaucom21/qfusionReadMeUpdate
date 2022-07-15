@@ -92,10 +92,10 @@ auto KeptInFovPointTracker::selectPointBasedOnLostOrHiddenEnemy( const TrackedEn
 	float distanceThreshold = kSqrtOfFloatMax;
 	if( !m_bot->GetMiscTactics().shouldKeepXhairOnEnemy ) {
 		distanceThreshold = 384.0f;
-		if( enemy->ent ) {
+		if( enemy->m_ent ) {
 			// Compute a threat factor this "lost or hidden" enemy could have had
 			// if this enemy was included in "selected enemies"
-			distanceThreshold += 1024.0f * m_bot->GetSelectedEnemies().ComputeThreatFactor( enemy->ent );
+			distanceThreshold += 1024.0f * m_bot->GetSelectedEnemies().ComputeThreatFactor( enemy->m_ent );
 		}
 		distanceThreshold *= 0.5f + 0.5f * m_bot->GetEffectiveOffensiveness();
 	}

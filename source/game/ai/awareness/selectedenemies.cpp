@@ -38,9 +38,7 @@ void SelectedEnemies::SetToListOfActive( const TrackedEnemy *listHead, unsigned 
 	this->timeoutAt = level.time + timeout;
 
 	assert( enemies.empty() );
-	for( const auto *enemy = listHead; enemy; enemy = enemy->NextInActiveList() ) {
-		enemies.push_back( enemy );
-	}
+	enemies.push_back( listHead );
 }
 
 void SelectedEnemies::SetToLostOrHidden( const TrackedEnemy *enemy, unsigned timeout ) {
@@ -68,12 +66,12 @@ Vec3 SelectedEnemies::ClosestEnemyOrigin( const vec3_t relativelyTo ) const {
 Vec3 SelectedEnemies::LookDir() const {
 	CheckValid( "LookDir" );
 
-	if( const auto *bot = enemies.front()->ent->bot ) {
+	if( const auto *bot = enemies.front()->m_ent->bot ) {
 		return bot->EntityPhysicsState()->ForwardDir();
 	}
 
 	vec3_t lookDir;
-	AngleVectors( enemies.front()->ent->s.angles, lookDir, nullptr, nullptr );
+	AngleVectors( enemies.front()->m_ent->s.angles, lookDir, nullptr, nullptr );
 	return Vec3( lookDir );
 }
 
@@ -82,7 +80,7 @@ float SelectedEnemies::DamageToKill() const {
 
 	float result = 0.0f;
 	for( const auto *enemy: enemies ) {
-		float damageToKill = ::DamageToKill( enemy->ent, g_armor_protection->value, g_armor_degradation->value );
+		float damageToKill = ::DamageToKill( enemy->m_ent, g_armor_protection->value, g_armor_degradation->value );
 		if( enemy->HasShell() ) {
 			damageToKill *= QUAD_DAMAGE_SCALE;
 		}
@@ -94,7 +92,7 @@ float SelectedEnemies::DamageToKill() const {
 
 int SelectedEnemies::PendingWeapon() const {
 	if( const auto *enemy = enemies.front() ) {
-		if( const auto *ent = enemy->ent ) {
+		if( const auto *ent = enemy->m_ent ) {
 			if( const auto *client = ent->r.client ) {
 				return client->ps.stats[STAT_PENDING_WEAPON];
 			}
@@ -141,8 +139,6 @@ bool SelectedEnemies::HaveCarrier() const {
 }
 
 bool SelectedEnemies::Contain( const TrackedEnemy *enemy ) const {
-	CheckValid( "Contain" );
-
 	for( const auto *activeEnemy: enemies ) {
 		if( activeEnemy == enemy ) {
 			return true;
@@ -188,7 +184,7 @@ float SelectedEnemies::GetThreatFactor( unsigned enemyNum ) const {
 float SelectedEnemies::ComputeThreatFactor( unsigned enemyNum ) const {
 	assert( enemyNum >= 0 );
 	const auto *enemy = enemies[enemyNum];
-	float entFactor = ComputeThreatFactor( enemy->ent, &enemyNum );
+	float entFactor = ComputeThreatFactor( enemy->m_ent, &enemyNum );
 	if( level.time - enemy->LastAttackedByTime() < 1000 ) {
 		entFactor = Q_Sqrt( entFactor );
 	}
@@ -298,7 +294,7 @@ bool SelectedEnemies::ArePotentiallyHittable() const {
 	Vec3 viewPoint( self->s.origin );
 	viewPoint.Z() += self->viewheight;
 	for( unsigned i = 0; i < enemies.size(); ++i ) {
-		const auto *enemyEnt = enemies[i]->ent;
+		const auto *enemyEnt = enemies[i]->m_ent;
 		if( !enemyEnt ) {
 			continue;
 		}
@@ -352,7 +348,7 @@ bool SelectedEnemies::GetCanHit( unsigned enemyNum, float viewDot ) const {
 	}
 
 	value.computedAt = level.time;
-	value.value = TestCanHit( enemies[enemyNum]->ent, game.edicts + bot->EntNum(), viewDot );
+	value.value = TestCanHit( enemies[enemyNum]->m_ent, game.edicts + bot->EntNum(), viewDot );
 	return value;
 }
 
@@ -405,7 +401,7 @@ bool SelectedEnemies::CouldBeHitIfBotTurns() const {
 	}
 
 	// Lets take into account only primary enemy
-	couldHitIfTurns.value = TestCanHit( game.edicts + bot->EntNum(), enemies.front()->ent, 1.0f );
+	couldHitIfTurns.value = TestCanHit( game.edicts + bot->EntNum(), enemies.front()->m_ent, 1.0f );
 	couldHitIfTurns.computedAt = levelTime;
 	return couldHitIfTurns;
 }
@@ -578,7 +574,7 @@ bool SelectedEnemies::TestAboutToHitEBorIG( int64_t levelTime ) const {
 			continue;
 		}
 
-		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->ent ) ) {
+		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->m_ent ) ) {
 			continue;
 		}
 
@@ -595,7 +591,7 @@ bool SelectedEnemies::TestAboutToHitEBorIG( int64_t levelTime ) const {
 			continue;
 		}
 
-		const auto *const ent = enemy->ent;
+		const auto *const ent = enemy->m_ent;
 		if( !ent ) {
 			// Shouldn't happen?
 			continue;
@@ -701,7 +697,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 				continue;
 			}
 			// Check whether this PG can be matched against LG
-			const auto *ent = enemy->ent;
+			const auto *ent = enemy->m_ent;
 			if( !ent ) {
 				continue;
 			}
@@ -760,7 +756,7 @@ bool SelectedEnemies::TestAboutToHitLGorPG( int64_t levelTime ) const {
 			}
 		}
 
-		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->ent ) ) {
+		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->m_ent ) ) {
 			continue;
 		}
 
@@ -839,7 +835,7 @@ bool SelectedEnemies::TestAboutToHitRLorSW( int64_t levelTime ) const {
 			continue;
 		}
 
-		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->ent ) ) {
+		if( !pvsCache->AreInPvs( game.edicts + bot->EntNum(), enemy->m_ent ) ) {
 			continue;
 		}
 

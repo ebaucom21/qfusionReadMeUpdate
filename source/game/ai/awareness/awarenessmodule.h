@@ -64,26 +64,6 @@ public:
 private:
 	mutable HurtEvent hurtEvent;
 
-	class EnemiesTracker : public AiEnemiesTracker {
-		Bot *const bot;
-		BotAwarenessModule *const module;
-	protected:
-		void OnHurtByNewThreat( const edict_t *newThreat ) override;
-		bool CheckHasQuad() const override;
-		bool CheckHasShell() const override;
-		float ComputeDamageToBeKilled() const override;
-		void OnEnemyRemoved( const TrackedEnemy *enemy ) override;
-		// These two methods are overridden to just return the supplied value under certain conditions.
-		// This helps to avoid an unwanted positive feedback loop in these cases.
-		float ModifyWeightForAttacker( const edict_t *enemy, float weightSoFar ) override;
-		float ModifyWeightForHitTarget( const edict_t *enemy, float weightSoFar ) override;
-		void SetBotRoleWeight( const edict_t *bot_, float weight ) override {}
-		float GetAdditionalEnemyWeight( const edict_t *bot_, const edict_t *enemy ) const override { return 0; }
-		void OnBotEnemyAssigned( const edict_t *bot_, const TrackedEnemy *enemy ) override {}
-	public:
-		EnemiesTracker( Bot *bot_, BotAwarenessModule *module_ );
-	};
-
 	EnemiesTracker enemiesTracker;
 
 	Hazard triggeredPlanningHazard { nullptr };

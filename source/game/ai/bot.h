@@ -19,7 +19,7 @@
 #include "planning/actions.h"
 
 class AiSquad;
-class AiEnemiesTracker;
+class EnemiesTracker;
 
 /**
  * This can be represented as an enum but feels better in the following form.
@@ -81,7 +81,7 @@ class Bot: public Ai {
 	friend class BotPlanner;
 	friend class AiSquad;
 	friend class SquadsBuilder;
-	friend class AiEnemiesTracker;
+	friend class EnemiesTracker;
 	friend class PathBlockingTracker;
 	friend class BotAwarenessModule;
 	friend class BotFireTargetCache;

@@ -2,6 +2,7 @@
 #define WSW_3da5c088_b618_40ab_885f_273c60bffd82_H
 
 #include "../component.h"
+#include "../../../qcommon/freelistallocator.h"
 #include "../../../qcommon/wswstaticdeque.h"
 #include "../../../qcommon/wswstaticvector.h"
 #include "../vec3.h"
@@ -31,10 +32,11 @@ float DamageToKill( const edict_t *ent, float armorProtection, float armorDegrad
 
 float DamageToKill( float health, float armor, float armorProtection, float armorDegradation );
 
-class TrackedEnemy {
-	friend class AiEnemiesTracker;
-	class AiEnemiesTracker *parent { nullptr };
+class EnemiesTracker;
 
+class TrackedEnemy {
+	friend class EnemiesTracker;
+	const EnemiesTracker *const m_parent { nullptr };
 public:
 	enum class HitFlags: int {
 		NONE = 0,
@@ -43,92 +45,65 @@ public:
 		SHAFT = 4,
 		ALL = 7
 	};
+
+	TrackedEnemy *prev { nullptr }, *next { nullptr };
+
+	[[nodiscard]]
+	auto NextInTrackedList() const -> const TrackedEnemy * { return next; };
 private:
+	float m_lastSelectionWeight { 0.0f };
+	float m_avgPositiveWeightSoFar { 0.0f };
+	float m_maxPositiveWeightSoFar { 0.0f };
+	unsigned m_positiveWeightsCount { 0 };
 
-	// Intrusive list links (an instance can be linked to many lists at the same time)
-	struct Links {
-		TrackedEnemy *next, *prev;
-
-		void Clear() {
-			next = prev = nullptr;
-		}
-	};
-
-	enum { TRACKED_LIST_INDEX, ACTIVE_LIST_INDEX };
-	Links listLinks[2];
-
-	float weight;
-	float avgPositiveWeight;
-	float maxPositiveWeight;
-	unsigned positiveWeightsCount;
-
-	int entNum { -1 };
-	float scoreAsActiveEnemy;
-
-	int64_t registeredAt;
+	const int64_t m_registeredAt { 0 };
 
 	// Same as front() of lastSeenTimestamps, used for faster access
-	int64_t lastSeenAt;
+	int64_t m_lastSeenAt { 0 };
+
 	// Same as front() of lastSeenOrigins, used for faster access
-	Vec3 lastSeenOrigin { 0, 0, 0 };
+	Vec3 m_lastSeenOrigin { 0, 0, 0 };
 	// Same as front() of lastSeenVelocities, used for faster access
-	Vec3 lastSeenVelocity { 0, 0, 0 };
+	Vec3 m_lastSeenVelocity { 0, 0, 0 };
 
 	// Some intermediates that should be cached for consequent MightBlockArea() flags
-	mutable int64_t lookDirComputedAt;
-	mutable int64_t weaponHitFlagsComputedAt;
+	mutable int64_t m_lookDirComputedAt { 0 };
+	mutable int64_t m_weaponHitFlagsComputedAt { 0 };
 
-	mutable HitFlags checkForWeaponHitFlags;
-	mutable float checkForWeaponHitKillDamage;
+	mutable HitFlags m_cachedWeaponHitFlags { 0 };
+	mutable float m_cachedWeaponHitKillDamage { 0.0f };
 
-	mutable vec3_t lookDir;
-
-	TrackedEnemy *NextInTrackedList() { return listLinks[TRACKED_LIST_INDEX].next; }
-	TrackedEnemy *NextInActiveList() { return listLinks[ACTIVE_LIST_INDEX].next; }
-
-	inline bool IsInList( int listIndex ) const;
+	mutable vec3_t m_lookDir { 0.0f, 0.0f, 1.0f };
 
 	HitFlags ComputeCheckForWeaponHitFlags( float damageToKillTarget ) const;
 public:
-	const edict_t *ent;  // If null, the enemy slot is unused
+	const edict_t *const m_ent;
 
-	inline TrackedEnemy() {
-		Clear();
-	}
-
-	const TrackedEnemy *NextInTrackedList() const { return listLinks[TRACKED_LIST_INDEX].next; }
-	const TrackedEnemy *NextInActiveList() const { return listLinks[ACTIVE_LIST_INDEX].next; }
-
-	inline bool IsInTrackedList() const { return IsInList( TRACKED_LIST_INDEX ); }
-
-	inline bool IsInActiveList() const { return IsInList( ACTIVE_LIST_INDEX ); }
+	TrackedEnemy( const EnemiesTracker *parent, const edict_t *ent, int64_t registeredAt )
+		: m_parent( parent ), m_registeredAt( registeredAt ), m_ent( ent ) {}
 
 	static constexpr unsigned MAX_TRACKED_SNAPSHOTS = 16;
 
 	void Clear();
-	void OnViewed( const float *specifiedOrigin = nullptr );
-	void InitAndLink( const edict_t *ent, const float *specifiedOrigin = nullptr );
+	void OnViewed( const float *overrideEntityOrigin = nullptr );
 
 	inline const char *Nick() const {
-		if( !ent ) {
+		if( !m_ent ) {
 			return "???";
 		}
-		return ent->r.client ? ent->r.client->netname.data() : ent->classname;
+		return m_ent->r.client ? m_ent->r.client->netname.data() : m_ent->classname;
 	}
 
-	inline float AvgWeight() const { return avgPositiveWeight; }
-	inline float MaxWeight() const { return maxPositiveWeight; }
+	int EntNum() const { return m_ent->s.number; }
 
-	inline int EntNum() const { return entNum; }
-
-	inline bool HasQuad() const { return ::HasQuad( ent ); }
-	inline bool HasShell() const { return ::HasShell( ent ); }
-	inline bool HasPowerups() const { return ::HasPowerups( ent ); }
-	inline bool IsCarrier() const { return ::IsCarrier( ent ); }
+	bool HasQuad() const { return ::HasQuad( m_ent ); }
+	bool HasShell() const { return ::HasShell( m_ent ); }
+	bool HasPowerups() const { return ::HasPowerups( m_ent ); }
+	bool IsCarrier() const { return ::IsCarrier( m_ent ); }
 
 	template<int Weapon>
-	inline int AmmoReadyToFireCount() const {
-		if( auto *client = ent->r.client ) {
+	int AmmoReadyToFireCount() const {
+		if( auto *client = m_ent->r.client ) {
 			if( const int *inventory = client->ps.inventory; inventory[Weapon] ) {
 				constexpr int indexShift = Weapon - WEAP_GUNBLADE;
 				return inventory[AMMO_GUNBLADE + indexShift] + inventory[AMMO_WEAK_GUNBLADE + indexShift];
@@ -137,15 +112,15 @@ public:
 		return 0;
 	}
 
-	inline int ShellsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_RIOTGUN>(); }
-	inline int GrenadesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_GRENADELAUNCHER>(); }
-	inline int RocketsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ROCKETLAUNCHER>(); }
-	inline int PlasmasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_PLASMAGUN>(); }
-	inline int BulletsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_MACHINEGUN>(); }
-	inline int LasersReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_LASERGUN>(); }
-	inline int BoltsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ELECTROBOLT>(); }
-	inline int WavesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_SHOCKWAVE>(); }
-	inline int InstasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_INSTAGUN>(); }
+	int ShellsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_RIOTGUN>(); }
+	int GrenadesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_GRENADELAUNCHER>(); }
+	int RocketsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ROCKETLAUNCHER>(); }
+	int PlasmasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_PLASMAGUN>(); }
+	int BulletsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_MACHINEGUN>(); }
+	int LasersReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_LASERGUN>(); }
+	int BoltsReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_ELECTROBOLT>(); }
+	int WavesReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_SHOCKWAVE>(); }
+	int InstasReadyToFireCount() const { return AmmoReadyToFireCount<WEAP_INSTAGUN>(); }
 
 	bool IsShootableCurrWeapon( int weapon ) const;
 	bool IsShootableCurrOrPendingWeapon( int weapon ) const;
@@ -153,25 +128,28 @@ public:
 	bool TriesToKeepUnderXhair( const float *origin ) const;
 
 	inline unsigned FireDelay() const {
-		return ent->r.client ? ent->r.client->ps.stats[STAT_WEAPON_TIME] : 0u;
+		return m_ent->r.client ? m_ent->r.client->ps.stats[STAT_WEAPON_TIME] : 0u;
 	}
 
-	inline int64_t LastSeenAt() const { return lastSeenAt; }
-	inline const Vec3 &LastSeenOrigin() const { return lastSeenOrigin; }
-	inline const Vec3 &LastSeenVelocity() const { return lastSeenVelocity; }
+	int64_t LastSeenAt() const { return m_lastSeenAt; }
+	Vec3 LastSeenOrigin() const { return m_lastSeenOrigin; }
+	Vec3 LastSeenVelocity() const { return m_lastSeenVelocity; }
 
-	inline int64_t LastAttackedByTime() const;
-	inline float TotalInflictedDamage() const;
+	int64_t LastAttackedByTime() const;
+	float TotalInflictedDamage() const;
 
-	inline bool IsValid() const {
-		return ent && !( G_ISGHOSTING( ent ) );
+	bool IsValid() const {
+		return m_ent && !( G_ISGHOSTING( m_ent ) );
 	}
+
+	float AvgWeight() const { return m_avgPositiveWeightSoFar; }
+	float MaxWeight() const { return m_maxPositiveWeightSoFar; }
 
 	Vec3 LookDir() const;
 
 	HitFlags GetCheckForWeaponHitFlags( float damageToKillTarget ) const;
 
-	inline Vec3 Angles() const { return Vec3( ent->s.angles ); }
+	inline Vec3 Angles() const { return Vec3( m_ent->s.angles ); }
 
 	class alignas ( 4 )Snapshot {
 		Int64Align4 timestamp;
@@ -201,112 +179,95 @@ public:
 	};
 
 	using SnapshotsQueue = wsw::StaticDeque<Snapshot, MAX_TRACKED_SNAPSHOTS>;
-	SnapshotsQueue lastSeenSnapshots;
+	SnapshotsQueue m_lastSeenSnapshots;
 };
 
 class AttackStats {
-	friend class AiEnemiesTracker;
+	friend class EnemiesTracker;
 
-	// Very close to 4 game seconds
-	static constexpr unsigned MAX_KEPT_FRAMES = 64 * 4;
+	// Very close to 8 game seconds
+	static constexpr unsigned kMaxKeptFrames = 64 * 8;
 
-	static_assert( ( MAX_KEPT_FRAMES & ( MAX_KEPT_FRAMES - 1 ) ) == 0, "Should be a power of 2 for fast modulo computation" );
+	static_assert( wsw::isPowerOf2( kMaxKeptFrames ), "Should be a power of 2 for fast modulo computation" );
 
-	// A damage is saturated up to 255 units.
+	// Damage is saturated up to 255 units.
 	// Storing greater values not only does not make sense, but leads to non-efficient memory usage/cache access.
-	uint8_t frameDamages[MAX_KEPT_FRAMES];
+	uint8_t m_frameDamages[kMaxKeptFrames] {};
 
-	unsigned frameIndex;
-	unsigned totalAttacks;
-	int64_t lastDamageAt;
-	int64_t lastTouchAt;
-	float totalDamage;
-
-	const edict_t *ent;
-
-	AttackStats() { Clear(); }
+	unsigned m_frameIndex { 0 };
+	unsigned m_totalAttacks { 0 };
+	int64_t m_lastDamageAt { 0 };
+	int64_t m_lastTouchAt { 0 };
+	int m_totalDamage { 0 };
+	const int m_entNum { -1 };
 
 public:
-	void Clear() {
-		ent = nullptr;
-		totalDamage = 0;
-		totalAttacks = 0;
-		lastDamageAt = 0;
-		lastTouchAt = level.time;
-		frameIndex = 0;
-		memset( frameDamages, 0, sizeof( frameDamages ) );
-	}
+	AttackStats *prev { nullptr }, *next { nullptr };
+
+	explicit AttackStats( int entNum ) : m_entNum( entNum ) {}
 
 	// Call it once in a game frame
 	void Frame() {
-		auto overwrittenDamage = frameDamages[frameIndex];
-		frameIndex = ( frameIndex + 1 ) % MAX_KEPT_FRAMES;
-		totalDamage -= overwrittenDamage;
-		frameDamages[frameIndex] = 0;
+		const uint8_t overwrittenDamage = m_frameDamages[m_frameIndex];
+		m_frameIndex = ( m_frameIndex + 1 ) % kMaxKeptFrames;
+		m_totalDamage -= overwrittenDamage;
+		m_frameDamages[m_frameIndex] = 0;
+
 		if( overwrittenDamage > 0 ) {
-			totalAttacks--;
+			m_totalAttacks--;
 		}
 	}
 
 	// Call it after Frame() in the same frame
 	void OnDamage( float damage ) {
-		frameDamages[frameIndex] = (uint8_t)wsw::min( damage, 255.0f );
-		totalDamage += damage;
-		totalAttacks++;
-		lastDamageAt = level.time;
+		if( damage > 0.0f ) {
+			m_frameDamages[m_frameIndex] = (uint8_t)( wsw::clamp( damage, 1.0f, 255.0f ) );
+			m_totalDamage += m_frameDamages[m_frameIndex];
+			m_totalAttacks++;
+			m_lastDamageAt = level.time;
+		}
 	}
 
 	// Call it after Frame() in the same frame if damage is not registered
 	// but you want to mark frame as a frame of activity anyway
-	void Touch() { lastTouchAt = level.time; }
+	void Touch() { m_lastTouchAt = level.time; }
 
-	int64_t LastActivityAt() const { return wsw::max( lastDamageAt, lastTouchAt ); }
+	[[nodiscard]]
+	int64_t LastActivityAt() const { return wsw::max( m_lastDamageAt, m_lastTouchAt ); }
 };
 
-class AiEnemiesTracker : public AiFrameAwareComponent {
+class BotAwarenessModule;
+
+class EnemiesTracker : public AiFrameAwareComponent {
 	friend class TrackedEnemy;
 	friend class BotAwarenessModule;
 	friend class AiSquad;
-public:
-	static constexpr unsigned MAX_TRACKED_ATTACKERS = 5;
-	static constexpr unsigned MAX_TRACKED_TARGETS = 5;
 
-	// If an enemy has not been seen for this period, it gets unlinked and completely forgotten
-	// and thus cannot block an area (in general and not AAS sense) anymore.
-	static constexpr unsigned NOT_SEEN_UNLINK_TIMEOUT = 8000;
-	// If an enemy has not been seen for this period, it gets unlinked.
-	static constexpr unsigned NOT_SEEN_SUGGEST_TIMEOUT = 4000;
-	// An attacker gets evicted/forgotten if there were no hits during this period.
-	static constexpr unsigned ATTACKER_TIMEOUT = 4000;
-	// A target gets evicted/forgotten if there were no hits/selection as a target during this period.
-	static constexpr unsigned TARGET_TIMEOUT = 4000;
-
-	static constexpr unsigned MAX_ACTIVE_ENEMIES = 3;
-
+	static constexpr unsigned kAttackerTimeout = 7500;
+	static constexpr unsigned kTargetTimeout   = 5000;
 private:
-	const float avgSkill; // (0..1)
+	Bot *const m_bot;
+	BotAwarenessModule *const m_module;
 
 	// An i-th element corresponds to i-th entity
-	TrackedEnemy entityToEnemyTable[MAX_EDICTS];
+	TrackedEnemy *m_entityToEnemyTable[MAX_EDICTS] {};
+
+	AttackStats *m_entityToAttackerStatsTable[MAX_EDICTS] {};
+	AttackStats *m_entityToTargetStatsTable[MAX_EDICTS] {};
 
 	// List heads for tracked and active enemies lists
-	TrackedEnemy *listHeads[2] { nullptr, nullptr };
+	TrackedEnemy *m_trackedEnemiesHead { nullptr };
 
-	unsigned numTrackedEnemies;
-	const unsigned maxTrackedAttackers;
-	const unsigned maxTrackedTargets;
-	const unsigned maxActiveEnemies;
+	AttackStats *m_trackedAttackerStatsHead { nullptr };
+	AttackStats *m_trackedTargetStatsHead { nullptr };
 
-	const unsigned reactionTime;
-
-	int64_t prevThinkLevelTime { 0 };
-
-	wsw::StaticVector<AttackStats, MAX_TRACKED_ATTACKERS> attackers;
-	wsw::StaticVector<AttackStats, MAX_TRACKED_TARGETS> targets;
+	wsw::HeapBasedFreelistAllocator m_trackedEnemiesAllocator { sizeof( TrackedEnemy ), MAX_EDICTS };
+	wsw::HeapBasedFreelistAllocator m_attackerStatsAllocator { sizeof( AttackStats ), MAX_EDICTS };
+	wsw::HeapBasedFreelistAllocator m_targetStatsAllocator { sizeof( AttackStats ), MAX_EDICTS };
 
 	void RemoveEnemy( TrackedEnemy *enemy );
 
-	void UpdateEnemyWeight( TrackedEnemy *enemy );
+	void UpdateEnemyWeight( TrackedEnemy *enemy, int64_t reactionTime );
 
 	virtual float ComputeRawEnemyWeight( const edict_t *enemy );
 
@@ -334,145 +295,27 @@ private:
 	 */
 	virtual float ModifyWeightForDamageRatio( const edict_t *enemy, float weightSoFar );
 
-	// Returns attacker slot number
-	int EnqueueAttacker( const edict_t *attacker, int damage );
-
-	// Precache results of virtual Check* calls in these vars in PreThink()
-	bool hasQuad { false };
-	bool hasShell { false };
-	float damageToBeKilled { 0.0f };
-
-	enum {
-		TRACKED_LIST_INDEX = TrackedEnemy::TRACKED_LIST_INDEX,
-		ACTIVE_LIST_INDEX = TrackedEnemy::ACTIVE_LIST_INDEX
-	};
-
-	inline void Link( TrackedEnemy *enemy, int listIndex ) {
-		assert( listIndex == TRACKED_LIST_INDEX || listIndex == ACTIVE_LIST_INDEX );
-
-		// If there is an existing list head, set its prev link to the newly linked enemy
-		if( TrackedEnemy *currHead = listHeads[listIndex] ) {
-			currHead->listLinks[listIndex].prev = enemy;
-		}
-
-		TrackedEnemy::Links *enemyLinks = &enemy->listLinks[listIndex];
-		// This is an "invariant" of list heads
-		enemyLinks->prev = nullptr;
-		// Set the next link of the newly linked enemy to the current head
-		enemyLinks->next = this->listHeads[listIndex];
-		// Set the list head to the newly linked enemy
-		this->listHeads[listIndex] = enemy;
-	}
-
-	inline void Unlink( TrackedEnemy *enemy, int listIndex ) {
-		assert( listIndex == TRACKED_LIST_INDEX || listIndex == ACTIVE_LIST_INDEX );
-
-		TrackedEnemy::Links *enemyLinks = &enemy->listLinks[listIndex];
-		// If a next enemy in list exists, set its prev link to the prev enemy of the unlinked enemy
-		if( TrackedEnemy *nextInList = enemyLinks->next ) {
-			nextInList->listLinks[listIndex].prev = enemyLinks->prev;
-		}
-
-		// If a prev enemy in list exists
-		if( TrackedEnemy *prevInList = enemyLinks->prev ) {
-			// The unlinked enemy must not be a list head
-			assert( enemy != this->listHeads[listIndex] );
-			// Set the prev enemy next link to the next enemy in list of the unlinked enemy
-			prevInList->listLinks[listIndex].next = enemyLinks->next;
-		} else {
-			// Make sure this is the list head
-			assert( enemy == this->listHeads[listIndex] );
-			// Update the list head using the next enemy in list of the unlinked enemy
-			this->listHeads[listIndex] = enemyLinks->next;
-		}
-
-		// Prevent using dangling links
-		enemyLinks->Clear();
-	}
+	AttackStats * EnqueueAttacker( const edict_t *attacker, int damage );
 
 protected:
-	inline void LinkToTrackedList( TrackedEnemy *enemy ) {
-		Link( enemy, TRACKED_LIST_INDEX );
-	}
-
-	inline void UnlinkFromTrackedList( TrackedEnemy *enemy ) {
-		Unlink( enemy, TRACKED_LIST_INDEX );
-	}
-
-	inline void LinkToActiveList( TrackedEnemy *enemy ) {
-		Link( enemy, ACTIVE_LIST_INDEX );
-	}
-
-	inline void UnlinkFromActiveList( TrackedEnemy *enemy ) {
-		Unlink( enemy, ACTIVE_LIST_INDEX );
-	}
-
-	virtual void OnHurtByNewThreat( const edict_t *newThreat ) = 0;
-	virtual bool CheckHasQuad() const = 0;
-	virtual bool CheckHasShell() const = 0;
-	virtual void OnEnemyRemoved( const TrackedEnemy *enemy ) = 0;
-	// Used to compare enemy strength and pool owner
-	virtual float ComputeDamageToBeKilled() const = 0;
-	// Overridden method may give some additional weight to an enemy
-	// (Useful for case when a bot should have some reinforcements)
-	virtual float GetAdditionalEnemyWeight( const edict_t *bot, const edict_t *enemy ) const = 0;
-	virtual void OnBotEnemyAssigned( const edict_t *bot, const TrackedEnemy *enemy ) = 0;
-
-	inline bool HasQuad() const { return hasQuad; }
-	inline bool HasShell() const { return hasShell; }
-
-	inline float DamageToBeKilled() const { return damageToBeKilled; }
-
-	inline static float DamageToKill( const edict_t *ent ) {
-		return ::DamageToKill( ent, g_armor_protection->value, g_armor_degradation->value );
-	}
-
-	inline float AvgSkill() const { return avgSkill; }
-
-	TrackedEnemy *TrackedEnemiesHead() { return listHeads[TRACKED_LIST_INDEX]; }
-	TrackedEnemy *ActiveEnemiesHead() { return listHeads[ACTIVE_LIST_INDEX]; }
 public:
-	explicit AiEnemiesTracker( float avgSkill_ );
-	virtual ~AiEnemiesTracker() = default;
+	EnemiesTracker( Bot *bot, BotAwarenessModule *module ) : m_bot( bot ), m_module( module ) {}
+	~EnemiesTracker() override;
 
-	// If a weight is set > 0, this bot requires reinforcements
-	virtual void SetBotRoleWeight( const edict_t *bot, float weight ) = 0;
+	[[nodiscard]]
+	auto TrackedEnemiesHead() const -> const TrackedEnemy * { return m_trackedEnemiesHead; }
 
-	const TrackedEnemy *TrackedEnemiesHead() const { return listHeads[TRACKED_LIST_INDEX]; }
-	const TrackedEnemy *ActiveEnemiesHead() const { return listHeads[ACTIVE_LIST_INDEX]; }
+	void Frame() override;
 
-	unsigned NumTrackedEnemies() const { return numTrackedEnemies; }
-
-	const TrackedEnemy *EnemyForEntity( const edict_t *ent ) const {
-		return EnemyForEntity( ENTNUM( ent ) );
-	}
-
-	const TrackedEnemy *EnemyForEntity( int entNum ) const {
-		assert( (unsigned)entNum < MAX_EDICTS );
-		return entityToEnemyTable + entNum;
-	}
-
-	virtual void Frame() override;
-
-	virtual void PreThink() override;
-	virtual void Think() override;
-	virtual void PostThink() override {
-		prevThinkLevelTime = level.time;
-	}
+	void Think() override;
 
 	void OnEnemyViewed( const edict_t *enemy );
 	void OnEnemyOriginGuessed( const edict_t *enemy,
 							   unsigned minMillisSinceLastSeen,
 							   const float *guessedOrigin = nullptr );
 
-	// Force the pool to forget the enemy (for example, when bot attitude to an enemy has been changed)
-	void Forget( const edict_t *enemy );
-
-	bool WillAssignAimEnemy() const;
-
-	// Note that these methods modify this object state
-	const TrackedEnemy *ChooseVisibleEnemy( const edict_t *challenger );
-	const TrackedEnemy *ChooseLostOrHiddenEnemy( const edict_t *challenger, unsigned timeout = ( unsigned ) - 1 );
+	const TrackedEnemy *ChooseVisibleEnemy();
+	const TrackedEnemy *ChooseLostOrHiddenEnemy( std::optional<unsigned> timeout = std::nullopt );
 
 	void OnPain( const edict_t *bot, const edict_t *enemy, float kick, int damage );
 	void OnEnemyDamaged( const edict_t *bot, const edict_t *target, int damage );
@@ -486,11 +329,7 @@ public:
 	float TotalDamageInflictedBy( const edict_t *ent ) const;
 };
 
-inline int64_t TrackedEnemy::LastAttackedByTime() const { return parent->LastAttackedByTime( ent ); }
-inline float TrackedEnemy::TotalInflictedDamage() const { return parent->TotalDamageInflictedBy( ent ); }
-
-inline bool TrackedEnemy::IsInList( int listIndex ) const {
-	return listLinks[listIndex].next || listLinks[listIndex].prev || this == parent->listHeads[listIndex];
-}
+inline int64_t TrackedEnemy::LastAttackedByTime() const { return m_parent->LastAttackedByTime( m_ent ); }
+inline float TrackedEnemy::TotalInflictedDamage() const { return m_parent->TotalDamageInflictedBy( m_ent ); }
 
 #endif
