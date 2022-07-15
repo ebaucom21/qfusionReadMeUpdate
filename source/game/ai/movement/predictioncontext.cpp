@@ -527,8 +527,8 @@ inline BaseAction *PredictionContext::SuggestAnyAction() {
 	// If no action has been suggested, use a default/dummy one.
 	// We have to check the combat action since it might be disabled due to planning stack overflow.
 	if( bot->ShouldKeepXhairOnEnemy() ) {
-		const auto &selectedEnemies = bot->GetSelectedEnemies();
-		if( selectedEnemies.AreValid() && selectedEnemies.ArePotentiallyHittable() ) {
+		const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
+		if( selectedEnemy && selectedEnemy->IsPotentiallyHittable() ) {
 			if( !combatDodgeAction->IsDisabledForPlanning() ) {
 				return combatDodgeAction;
 			}

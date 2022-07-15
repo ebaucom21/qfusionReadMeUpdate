@@ -35,8 +35,9 @@ bool RunAwayAction::checkCommonPreconditionsForStartingRunningAway( const WorldS
 		return false;
 	}
 
-	const SelectedEnemies &selectedEnemies = Self()->GetSelectedEnemies();
-	if( selectedEnemies.HaveQuad() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	assert( selectedEnemy );
+	if( selectedEnemy->HasQuad() ) {
 		if( const auto *inventory = Self()->Inventory(); !inventory[POWERUP_QUAD] && !inventory[POWERUP_SHELL] ) {
 			return true;
 		}

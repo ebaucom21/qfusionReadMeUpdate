@@ -7,7 +7,7 @@ void BotWeaponSelector::Frame() {
 		return;
 	}
 
-	if( !bot->selectedEnemies.AreValid() ) {
+	if( !bot->m_selectedEnemy ) {
 		return;
 	}
 
@@ -27,7 +27,7 @@ void BotWeaponSelector::Think() {
 		return;
 	}
 
-	if( !bot->selectedEnemies.AreValid() ) {
+	if( !bot->m_selectedEnemy ) {
 		return;
 	}
 
@@ -76,7 +76,7 @@ bool BotWeaponSelector::hasWeakOrStrong( int weapon ) const {
 }
 
 void BotWeaponSelector::selectWeapon() {
-	const float distanceToEnemy = bot->GetSelectedEnemies().ActualOrigin().FastDistanceTo( bot->Origin() );
+	const float distanceToEnemy = bot->GetSelectedEnemy()->ActualOrigin().FastDistanceTo( bot->Origin() );
 	const auto timeout = weaponChoicePeriod;
 	// Use instagib selection code for quad bearers as well
 	// TODO: Select script weapon too
@@ -127,11 +127,11 @@ auto BotWeaponSelector::suggestFarOrSniperPositionalCombatWeapon( bool hasEB, bo
 		return std::nullopt;
 	}
 
-	if( bot->selectedEnemies.ActualVelocity().SquaredLength() > dodgeThreshold * dodgeThreshold ) {
+	if( bot->m_selectedEnemy->ActualVelocity().SquaredLength() > dodgeThreshold * dodgeThreshold ) {
 		return std::nullopt;
 	}
 
-	auto enemyWeapon = bot->selectedEnemies.PendingWeapon();
+	auto enemyWeapon = bot->m_selectedEnemy->PendingWeapon();
 	// Try to counter enemy EB/MG by a complementary weapon
 	if( enemyWeapon == WEAP_MACHINEGUN ) {
 		if( hasEB ) {
@@ -150,7 +150,7 @@ static constexpr float kSwitchToMGForFinishingHP = 40.0f;
 
 auto BotWeaponSelector::suggestSniperRangeWeapon( float distanceToEnemy ) -> std::optional<int> {
 	const bool hasMG = hasWeakOrStrong( WEAP_MACHINEGUN );
-	const float damageToKill = bot->GetSelectedEnemies().DamageToKill();
+	const float damageToKill = bot->GetSelectedEnemy()->DamageToKill();
 	if( damageToKill < kSwitchToMGForFinishingHP ) {
 		if( hasMG ) {
 			return WEAP_MACHINEGUN;
@@ -182,7 +182,7 @@ auto BotWeaponSelector::suggestSniperRangeWeapon( float distanceToEnemy ) -> std
 
 auto BotWeaponSelector::suggestFarRangeWeapon( float distanceToEnemy ) -> std::optional<int> {
 	const bool hasMG = hasWeakOrStrong( WEAP_MACHINEGUN );
-	if( bot->GetSelectedEnemies().DamageToKill() < kSwitchToMGForFinishingHP ) {
+	if( bot->GetSelectedEnemy()->DamageToKill() < kSwitchToMGForFinishingHP ) {
 		if( hasMG ) {
 			return WEAP_MACHINEGUN;
 		}
@@ -259,7 +259,7 @@ auto BotWeaponSelector::suggestMiddleRangeWeapon( float distanceToEnemy ) -> std
 	}
 
 	// Drop any randomness of choice in fighting against enemy LG
-	if( weaponChoiceRandom > 0.5f || bot->selectedEnemies.PendingWeapon() == WEAP_LASERGUN ) {
+	if( weaponChoiceRandom > 0.5f || bot->m_selectedEnemy->PendingWeapon() == WEAP_LASERGUN ) {
 		if ( hasLG ) {
 			return WEAP_LASERGUN;
 		}
@@ -552,24 +552,24 @@ auto BotWeaponSelector::suggestInstagibWeapon( float distanceToEnemy ) -> std::o
 }
 
 auto BotWeaponSelector::suggestFinishWeapon() -> std::optional<int> {
-	const auto &selectedEnemies  = bot->GetSelectedEnemies();
-	if( !selectedEnemies.AreValid() ) {
+	const auto &selectedEnemy = bot->GetSelectedEnemy();
+	if( !selectedEnemy ) {
 		return std::nullopt;
 	}
 
-	const float damageToKill = selectedEnemies.DamageToKill();
+	const float damageToKill = selectedEnemy->DamageToKill();
 	if( damageToKill > 50 ) {
 		return std::nullopt;
 	}
 
 	const float damageToBeKilled = DamageToKill( (float)bot->Health(), (float)bot->Armor() );
-	const float distanceToEnemy  = selectedEnemies.ActualOrigin().FastDistanceTo( bot->Origin() );
+	const float distanceToEnemy  = selectedEnemy->ActualOrigin().FastDistanceTo( bot->Origin() );
 
 	const auto *const inventory  = bot->Inventory();
 	if( distanceToEnemy < 0.33f * kLasergunRange ) {
 		if( inventory[WEAP_GUNBLADE] && inventory[AMMO_WEAK_GUNBLADE] ) {
 			if( damageToBeKilled > 0 && distanceToEnemy > 1.0f && distanceToEnemy < 64.0f ) {
-				Vec3 dirToEnemy( selectedEnemies.ActualOrigin() );
+				Vec3 dirToEnemy( selectedEnemy->ActualOrigin() );
 				dirToEnemy *= Q_Rcp( distanceToEnemy );
 				Vec3 lookDir( bot->EntityPhysicsState()->ForwardDir() );
 				if ( lookDir.Dot( dirToEnemy ) > 0.7f ) {

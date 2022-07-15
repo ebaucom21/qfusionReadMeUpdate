@@ -5,8 +5,6 @@
 
 BotAwarenessModule::BotAwarenessModule( Bot *bot_ )
 	: bot( bot_ )
-	, selectedEnemies( bot_->selectedEnemies )
-	, lostEnemies( bot_->lostEnemies )
 	, targetChoicePeriod( (unsigned)( 1500 - 500 * bot_->Skill() ) )
 	, reactionTime( 320u - (unsigned)( 300 * bot_->Skill() ) )
 	, alertTracker( bot_ )
@@ -21,8 +19,8 @@ void BotAwarenessModule::OnAttachedToSquad( AiSquad *squad_ ) {
 }
 
 void BotAwarenessModule::OnDetachedFromSquad( AiSquad *squad_ ) {
-	this->selectedEnemies.Invalidate();
-	this->lostEnemies.Invalidate();
+	bot->m_selectedEnemy = std::nullopt;
+	bot->m_lostEnemy     = std::nullopt;
 }
 
 void BotAwarenessModule::OnEnemyViewed( const edict_t *enemy ) {
@@ -52,6 +50,14 @@ void BotAwarenessModule::Frame() {
 
 	enemiesTracker.Update();
 	eventsTracker.Update();
+
+	// Check each frame. Don't let non-empty std::optionals contain timed out values.
+	if( bot->m_selectedEnemy && bot->m_selectedEnemy->ShouldInvalidate() ) {
+		bot->m_selectedEnemy = std::nullopt;
+	}
+	if( bot->m_lostEnemy && bot->m_lostEnemy->ShouldInvalidate() ) {
+		bot->m_lostEnemy = std::nullopt;
+	}
 }
 
 void BotAwarenessModule::Think() {
@@ -60,14 +66,13 @@ void BotAwarenessModule::Think() {
 	RegisterVisibleEnemies();
 	CheckForNewHazards();
 
-	if( selectedEnemies.AreValid() ) {
-		if( level.time - selectedEnemies.LastSeenAt() > wsw::min( 64u, reactionTime ) ) {
-			selectedEnemies.Invalidate();
+	if( bot->m_selectedEnemy ) {
+		if( level.time - bot->m_selectedEnemy->LastSeenAt() > wsw::min( 64u, reactionTime ) ) {
+			bot->m_selectedEnemy = std::nullopt;
 		}
 	}
-
-	if( !selectedEnemies.AreValid() ) {
-		UpdateSelectedEnemies();
+	if( !bot->m_selectedEnemy ) {
+		UpdateSelectedEnemy();
 		shouldUpdateBlockedAreasStatus = true;
 	}
 
@@ -79,21 +84,24 @@ void BotAwarenessModule::Think() {
 	TryTriggerPlanningForNewHazard();
 }
 
-void BotAwarenessModule::UpdateSelectedEnemies() {
-	selectedEnemies.Invalidate();
-	lostEnemies.Invalidate();
+void BotAwarenessModule::UpdateSelectedEnemy() {
+	bot->m_selectedEnemy = std::nullopt;
+	bot->m_lostEnemy     = std::nullopt;
 
-	float visibleEnemyWeight = 0.0f;
+	[[maybe_unused]] float visibleEnemyWeight  = 0.0f;
+	[[maybe_unused]] const unsigned instanceId = selectedEnemyInstanceId++;
+	[[maybe_unused]] const int64_t timeoutAt   = level.time + targetChoicePeriod;
 	if( const TrackedEnemy *visibleEnemy = enemiesTracker.ChooseVisibleEnemy() ) {
-		selectedEnemies.SetToListOfActive( visibleEnemy, targetChoicePeriod );
+		bot->m_selectedEnemy = SelectedEnemy( bot, visibleEnemy, timeoutAt, instanceId );
 		visibleEnemyWeight = 0.5f * ( visibleEnemy->AvgWeight() + visibleEnemy->MaxWeight() );
 	}
 
 	if( const TrackedEnemy *lostEnemy = enemiesTracker.ChooseLostOrHiddenEnemy() ) {
 		float lostEnemyWeight = 0.5f * ( lostEnemy->AvgWeight() + lostEnemy->MaxWeight() );
-		// If there is a lost or hidden enemy of higher weight, store it
+		// If there is a lost or hidden enemy of greater weight, store it
 		if( lostEnemyWeight > visibleEnemyWeight ) {
-			lostEnemies.SetToLostOrHidden( lostEnemy, targetChoicePeriod );
+			// Share the instance id with the visible enemy
+			bot->m_lostEnemy = SelectedEnemy( bot, lostEnemy, timeoutAt, instanceId );
 		}
 	}
 }
@@ -203,8 +211,16 @@ void BotAwarenessModule::OnHurtByNewThreat( const edict_t *newThreat, const AiFr
 }
 
 void BotAwarenessModule::OnEnemyRemoved( const TrackedEnemy *enemy ) {
-	if( selectedEnemies.Contain( enemy ) ) {
-		selectedEnemies.Invalidate();
+	bool wereChanges = false;
+	if( bot->m_selectedEnemy && bot->m_selectedEnemy->IsBasedOn( enemy ) ) {
+		bot->m_selectedEnemy = std::nullopt;
+		wereChanges          = true;
+	}
+	if( bot->m_lostEnemy && bot->m_lostEnemy->IsBasedOn( enemy ) ) {
+		bot->m_lostEnemy = std::nullopt;
+		wereChanges      = true;
+	}
+	if( wereChanges ) {
 		bot->ForcePlanBuilding();
 	}
 }

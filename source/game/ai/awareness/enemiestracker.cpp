@@ -234,23 +234,18 @@ void EnemiesTracker::Frame() {
 		}
 	}
 
-	// If we could see enemy entering teleportation a last Think() frame, update its tracked origin by the actual one.
-	for( TrackedEnemy *enemy = m_trackedEnemiesHead; enemy; enemy = enemy->next ) {
-		const edict_t *ent = enemy->m_ent;
-		if( !ent ) {
-			continue;
-		}
+	// Process urgent events.
+	for( TrackedEnemy *enemy = m_trackedEnemiesHead, *next; enemy; enemy = next ) { next = enemy->next;
 		// If the enemy cannot be longer valid
-		if( G_ISGHOSTING( ent ) ) {
-			continue;
+		if( G_ISGHOSTING( enemy->m_ent ) ) {
+			Debug( "The enemy %s is ghosting, should be forgot\n", enemy->Nick() );
+			RemoveEnemy( enemy );
+		} else if( enemy->m_ent->s.teleported ) {
+			// Update origin immediately by the destination
+			if( levelTime - enemy->m_lastSeenAt < 64 ) {
+				enemy->OnViewed();
+			}
 		}
-		if( !ent->s.teleported ) {
-			continue;
-		}
-		if( levelTime - enemy->m_lastSeenAt >= 64 ) {
-			continue;
-		}
-		enemy->OnViewed();
 	}
 }
 
@@ -268,11 +263,7 @@ void EnemiesTracker::Think() {
 			RemoveEnemy( enemy );
 			continue;
 		}
-		if( G_ISGHOSTING( enemy->m_ent ) ) {
-			Debug( "should forget %s (this enemy is ghosting)\n", enemy->Nick() );
-			RemoveEnemy( enemy );
-			continue;
-		}
+
 		// Do not forget, just skip
 		if( enemy->m_ent->flags & ( FL_NOTARGET | FL_BUSY ) ) {
 			continue;

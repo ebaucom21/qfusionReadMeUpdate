@@ -23,26 +23,24 @@ bool BotPlanner::FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin ) 
 void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 	worldState->setOriginVar( WorldState::BotOrigin, OriginVar( Vec3( bot->Origin() ) ) );
 
-	const auto &selectedEnemies = bot->GetSelectedEnemies();
-
-	if( selectedEnemies.AreValid() ) {
-		worldState->setOriginVar( WorldState::EnemyOrigin, OriginVar( selectedEnemies.LastSeenOrigin() ) );
-		worldState->setBoolVar( WorldState::HasThreateningEnemy, BoolVar( selectedEnemies.AreThreatening() ) );
-		worldState->setBoolVar( WorldState::CanHitEnemy, BoolVar( selectedEnemies.CanBeHit() ) );
-		worldState->setBoolVar( WorldState::EnemyCanHit, BoolVar( selectedEnemies.CanHit() ) );
+	if( const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy() ) {
+		worldState->setOriginVar( WorldState::EnemyOrigin, OriginVar( selectedEnemy->LastSeenOrigin() ) );
+		worldState->setBoolVar( WorldState::HasThreateningEnemy, BoolVar( selectedEnemy->IsThreatening() ) );
+		worldState->setBoolVar( WorldState::CanHitEnemy, BoolVar( selectedEnemy->EnemyCanBeHit() ) );
+		worldState->setBoolVar( WorldState::EnemyCanHit, BoolVar( selectedEnemy->EnemyCanHit() ) );
 	}
 
-	if( const SelectedEnemies &lostEnemies = bot->lostEnemies; lostEnemies.AreValid() ) {
-		const Vec3 &enemyOrigin( lostEnemies.LastSeenOrigin() );
+	if( const std::optional<SelectedEnemy> &lostEnemies = bot->m_lostEnemy ) {
+		const Vec3 &enemyOrigin( lostEnemies->LastSeenOrigin() );
 		worldState->setOriginVar( WorldState::LostEnemyLastSeenOrigin, OriginVar( enemyOrigin ) );
 		Vec3 toEnemiesDir( enemyOrigin - bot->Origin() );
 		if( toEnemiesDir.normalizeFast() ) {
 			if( toEnemiesDir.Dot( bot->EntityPhysicsState()->ForwardDir() ) < bot->FovDotFactor() ) {
 				edict_t *self = game.edicts + bot->EntNum();
-				if( EntitiesPvsCache::Instance()->AreInPvs( self, lostEnemies.TraceKey() ) ) {
+				if( EntitiesPvsCache::Instance()->AreInPvs( self, lostEnemies->TraceKey() ) ) {
 					trace_t trace;
 					G_Trace( &trace, self->s.origin, nullptr, nullptr, enemyOrigin.Data(), self, MASK_AISOLID );
-					if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies.TraceKey() ) {
+					if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies->TraceKey() ) {
 						worldState->setBoolVar( WorldState::MightSeeLostEnemyAfterTurn, BoolVar( true ) );
 					}
 				}

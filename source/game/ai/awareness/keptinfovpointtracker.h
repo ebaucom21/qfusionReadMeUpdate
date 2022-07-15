@@ -6,7 +6,7 @@
 
 class Bot;
 class BotAwarenessModule;
-class SelectedEnemies;
+class SelectedEnemy;
 
 /**
  * A helper class that encapsulates details of "kept in fov" point maintenance.
@@ -25,7 +25,7 @@ class KeptInFovPointTracker {
 	bool isPointInPvs( const Vec3 &point ) const;
 
 	[[nodiscard]]
-	auto selectPointBasedOnEnemies( const SelectedEnemies &selectedEnemies ) -> std::optional<Vec3>;
+	auto selectPointBasedOnEnemies( const SelectedEnemy &selectedEnemy ) -> std::optional<Vec3>;
 	[[nodiscard]]
 	auto selectPointBasedOnLostOrHiddenEnemy( const TrackedEnemy *enemy ) -> std::optional<Vec3>;
 public:

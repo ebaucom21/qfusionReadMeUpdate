@@ -13,8 +13,8 @@ void FleeToSpotActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status FleeToSpotActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	if( selectedEnemies.AreValid() && selectedEnemies.CouldBeHitIfBotTurns() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	if( selectedEnemy && selectedEnemy->CouldBeHitIfBotTurns() ) {
 		Self()->GetMiscTactics().PreferAttackRatherThanRun();
 	} else {
 		Self()->GetMiscTactics().PreferRunRatherThanAttack();

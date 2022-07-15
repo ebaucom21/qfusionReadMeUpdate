@@ -3,7 +3,7 @@
 
 #include "alerttracker.h"
 #include "enemiestracker.h"
-#include "selectedenemies.h"
+#include "selectedenemy.h"
 #include "hazardsselector.h"
 #include "eventstracker.h"
 #include "keptinfovpointtracker.h"
@@ -17,11 +17,10 @@ class BotAwarenessModule: public AiFrameAwareComponent {
 
 	Bot *const bot;
 
-	SelectedEnemies &selectedEnemies;
-	SelectedEnemies &lostEnemies;
-
 	const unsigned targetChoicePeriod;
 	const unsigned reactionTime;
+
+	unsigned selectedEnemyInstanceId { 0 };
 
 	bool shouldUpdateBlockedAreasStatus { false };
 
@@ -77,7 +76,7 @@ private:
 		enemiesTracker.SetFrameAffinity( modulo, offset );
 	}
 
-	void UpdateSelectedEnemies();
+	void UpdateSelectedEnemy();
 	void UpdateBlockedAreasStatus();
 	void TryTriggerPlanningForNewHazard();
 

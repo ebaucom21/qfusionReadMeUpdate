@@ -9,8 +9,8 @@ void KeptInFovPointTracker::update() {
 auto KeptInFovPointTracker::selectCurrentPoint() -> std::optional<Vec3> {
 	const auto &botMiscTactics = m_bot->GetMiscTactics();
 	if( !botMiscTactics.shouldRushHeadless ) {
-		if( const auto &selectedEnemies = m_bot->GetSelectedEnemies(); selectedEnemies.AreValid() ) {
-			if( auto maybePoint = selectPointBasedOnEnemies( selectedEnemies ) ) {
+		if( const std::optional<SelectedEnemy> maybeSelectedEnemy = m_bot->GetSelectedEnemy() ) {
+			if( auto maybePoint = selectPointBasedOnEnemies( *maybeSelectedEnemy ) ) {
 				return maybePoint;
 			}
 		}
@@ -67,14 +67,14 @@ static constexpr float kSqrtOfFloatMax = gcem::sqrt( std::numeric_limits<float>:
 static_assert( kSqrtOfFloatMax * kSqrtOfFloatMax > kSqrtOfFloatMax );
 static_assert( (double)kSqrtOfFloatMax * (double)kSqrtOfFloatMax <= (double)std::numeric_limits<float>::max() );
 
-auto KeptInFovPointTracker::selectPointBasedOnEnemies( const SelectedEnemies &selectedEnemies ) -> std::optional<Vec3> {
+auto KeptInFovPointTracker::selectPointBasedOnEnemies( const SelectedEnemy &selectedEnemy ) -> std::optional<Vec3> {
 	const Vec3 botOrigin( m_bot->Origin() );
-	const Vec3 enemyOrigin( selectedEnemies.ClosestEnemyOrigin( botOrigin ) );
+	const Vec3 enemyOrigin( selectedEnemy.LastSeenOrigin() );
 
 	float distanceThreshold = kSqrtOfFloatMax;
 	if( !m_bot->GetMiscTactics().shouldKeepXhairOnEnemy ) {
-		if( !selectedEnemies.HaveQuad() && !selectedEnemies.HaveCarrier() ) {
-			distanceThreshold = 768.0f + 1024.0f * selectedEnemies.MaxThreatFactor();
+		if( !selectedEnemy.HasQuad() && !selectedEnemy.IsACarrier() ) {
+			distanceThreshold = 768.0f + 1024.0f * selectedEnemy.MaxThreatFactor();
 			distanceThreshold *= 0.5f + 0.5f * m_bot->GetEffectiveOffensiveness();
 		}
 	}
@@ -95,7 +95,8 @@ auto KeptInFovPointTracker::selectPointBasedOnLostOrHiddenEnemy( const TrackedEn
 		if( enemy->m_ent ) {
 			// Compute a threat factor this "lost or hidden" enemy could have had
 			// if this enemy was included in "selected enemies"
-			distanceThreshold += 1024.0f * m_bot->GetSelectedEnemies().ComputeThreatFactor( enemy->m_ent );
+			// TODO: The "false" literal is misleading, extract separate methods
+			distanceThreshold += 1024.0f * SelectedEnemy::ComputeThreatFactor( m_bot, enemy->m_ent );
 		}
 		distanceThreshold *= 0.5f + 0.5f * m_bot->GetEffectiveOffensiveness();
 	}

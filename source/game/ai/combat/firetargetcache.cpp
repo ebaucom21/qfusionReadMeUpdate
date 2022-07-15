@@ -114,22 +114,22 @@ void ClosestFacePointSolver::Exec() {
 	SharedFaceAreasWalker::Exec();
 }
 
-void BotFireTargetCache::AdjustAimParams( const SelectedEnemies &selectedEnemies, const SelectedWeapons &selectedWeapons,
+void BotFireTargetCache::AdjustAimParams( const SelectedEnemy &selectedEnemy, const SelectedWeapons &selectedWeapons,
 										  const GenericFireDef &fireDef, AimParams *aimParams ) {
-	SetupCoarseFireTarget( selectedEnemies, fireDef, aimParams->fireOrigin, aimParams->fireTarget );
+	SetupCoarseFireTarget( selectedEnemy, fireDef, aimParams->fireOrigin, aimParams->fireTarget );
 
 	switch( fireDef.AimType() ) {
 		case AI_WEAPON_AIM_TYPE_PREDICTION_EXPLOSIVE:
-			AdjustPredictionExplosiveAimTypeParams( selectedEnemies, selectedWeapons, fireDef, aimParams );
+			AdjustPredictionExplosiveAimTypeParams( selectedEnemy, selectedWeapons, fireDef, aimParams );
 			break;
 		case AI_WEAPON_AIM_TYPE_PREDICTION:
-			AdjustPredictionAimTypeParams( selectedEnemies, selectedWeapons, fireDef, aimParams );
+			AdjustPredictionAimTypeParams( selectedEnemy, selectedWeapons, fireDef, aimParams );
 			break;
 		case AI_WEAPON_AIM_TYPE_DROP:
-			AdjustDropAimTypeParams( selectedEnemies, selectedWeapons, fireDef, aimParams );
+			AdjustDropAimTypeParams( selectedEnemy, selectedWeapons, fireDef, aimParams );
 			break;
 		default:
-			AdjustInstantAimTypeParams( selectedEnemies, selectedWeapons, fireDef, aimParams );
+			AdjustInstantAimTypeParams( selectedEnemy, selectedWeapons, fireDef, aimParams );
 			break;
 	}
 }
@@ -137,11 +137,11 @@ void BotFireTargetCache::AdjustAimParams( const SelectedEnemies &selectedEnemies
 constexpr float GENERIC_PROJECTILE_COORD_AIM_ERROR = 75.0f;
 constexpr float GENERIC_INSTANTHIT_COORD_AIM_ERROR = 100.0f;
 
-void BotFireTargetCache::AdjustForShootableEnvironment( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::AdjustForShootableEnvironment( const SelectedEnemy &selectedEnemy,
 														float splashRaidus,
 														AimParams *aimParams ) {
 	const edict_t *ignoreEnt = game.edicts + bot->EntNum();
-	const edict_t *targetEnt = selectedEnemies.TraceKey();
+	const edict_t *targetEnt = selectedEnemy.TraceKey();
 	ClosestFacePointSolver solver( aimParams->fireOrigin, aimParams->fireTarget, splashRaidus, ignoreEnt, targetEnt );
 	solver.Exec();
 	if( const float *p = solver.Result() ) {
@@ -149,16 +149,16 @@ void BotFireTargetCache::AdjustForShootableEnvironment( const SelectedEnemies &s
 	}
 }
 
-void BotFireTargetCache::AdjustPredictionExplosiveAimTypeParams( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::AdjustPredictionExplosiveAimTypeParams( const SelectedEnemy &selectedEnemy,
 																 const SelectedWeapons &selectedWeapons,
 																 const GenericFireDef &fireDef,
 																 AimParams *aimParams ) {
-	bool wasCached = cachedFireTarget.IsValidFor( selectedEnemies, selectedWeapons );
-	GetPredictedTargetOrigin( selectedEnemies, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
+	bool wasCached = cachedFireTarget.IsValidFor( selectedEnemy, selectedWeapons );
+	GetPredictedTargetOrigin( selectedEnemy, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
 	// If new generic predicted target origin has been computed, adjust it for target environment
 	if( !wasCached ) {
 		// First, modify temporary `target` value
-		AdjustForShootableEnvironment( selectedEnemies, fireDef.SplashRadius(), aimParams );
+		AdjustForShootableEnvironment( selectedEnemy, fireDef.SplashRadius(), aimParams );
 		// Copy modified `target` value to cached value
 		cachedFireTarget.origin.Set( aimParams->fireTarget );
 	}
@@ -169,7 +169,7 @@ void BotFireTargetCache::AdjustPredictionExplosiveAimTypeParams( const SelectedE
 }
 
 
-void BotFireTargetCache::AdjustPredictionAimTypeParams( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::AdjustPredictionAimTypeParams( const SelectedEnemy &selectedEnemy,
 														const SelectedWeapons &selectedWeapons,
 														const GenericFireDef &fireDef,
 														AimParams *aimParams ) {
@@ -177,18 +177,18 @@ void BotFireTargetCache::AdjustPredictionAimTypeParams( const SelectedEnemies &s
 	if( bot->Skill() < 0.66f ) {
 		aimParams->suggestedCoordError = ( 1.00f - bot->Skill() ) * GENERIC_PROJECTILE_COORD_AIM_ERROR;
 	}
-	GetPredictedTargetOrigin( selectedEnemies, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
+	GetPredictedTargetOrigin( selectedEnemy, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
 }
 
-void BotFireTargetCache::AdjustDropAimTypeParams( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::AdjustDropAimTypeParams( const SelectedEnemy &selectedEnemy,
 												  const SelectedWeapons &selectedWeapons,
 												  const GenericFireDef &fireDef,
 												  AimParams *aimParams ) {
 	// This kind of weapons is not precise by its nature, do not add any more noise.
 	aimParams->suggestedCoordError = 1.0f;
 
-	const bool wasCached = cachedFireTarget.IsValidFor( selectedEnemies, selectedWeapons );
-	GetPredictedTargetOrigin( selectedEnemies, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
+	const bool wasCached = cachedFireTarget.IsValidFor( selectedEnemy, selectedWeapons );
+	GetPredictedTargetOrigin( selectedEnemy, selectedWeapons, fireDef.ProjectileSpeed(), aimParams );
 	if( wasCached ) {
 		return;
 	}
@@ -221,21 +221,21 @@ void BotFireTargetCache::AdjustDropAimTypeParams( const SelectedEnemies &selecte
 	aimParams->fireTarget[2] += height;
 }
 
-void BotFireTargetCache::AdjustInstantAimTypeParams( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::AdjustInstantAimTypeParams( const SelectedEnemy &selectedEnemy,
 													 const SelectedWeapons &selectedWeapons,
 													 const GenericFireDef &fireDef, AimParams *aimParams ) {
 	aimParams->suggestedCoordError = 32.0f + ( 1.0f - bot->Skill() ) * ( GENERIC_INSTANTHIT_COORD_AIM_ERROR - 32.0f );
 }
 
-void BotFireTargetCache::SetupCoarseFireTarget( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::SetupCoarseFireTarget( const SelectedEnemy &selectedEnemy,
 												const GenericFireDef &fireDef,
 												vec3_t fire_origin, vec3_t target ) {
 	// For hard bots use actual enemy origin
 	// (last seen one may be outdated up to 3 frames, and it matter a lot for fast-moving enemies)
 	if( bot->Skill() < 0.66f ) {
-		VectorCopy( selectedEnemies.LastSeenOrigin().Data(), target );
+		VectorCopy( selectedEnemy.LastSeenOrigin().Data(), target );
 	} else {
-		VectorCopy( selectedEnemies.ActualOrigin().Data(), target );
+		VectorCopy( selectedEnemy.ActualOrigin().Data(), target );
 	}
 
 	const edict_t *self = game.edicts + bot->EntNum();
@@ -303,20 +303,20 @@ bool PredictProjectileNoClip( const Vec3 &fireOrigin, float projectileSpeed, vec
 	return true;
 }
 
-void BotFireTargetCache::GetPredictedTargetOrigin( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::GetPredictedTargetOrigin( const SelectedEnemy &selectedEnemy,
 												   const SelectedWeapons &selectedWeapons,
 												   float projectileSpeed, AimParams *aimParams ) {
-	if( bot->Skill() < 0.33f || selectedEnemies.IsStaticSpot() ) {
+	if( bot->Skill() < 0.33f || selectedEnemy.IsStaticSpot() ) {
 		return;
 	}
 
 	// Check whether we are shooting the same enemy and cached predicted origin is not outdated
-	if( cachedFireTarget.IsValidFor( selectedEnemies, selectedWeapons ) ) {
+	if( cachedFireTarget.IsValidFor( selectedEnemy, selectedWeapons ) ) {
 		VectorCopy( cachedFireTarget.origin.Data(), aimParams->fireTarget );
 	} else {
-		PredictProjectileShot( selectedEnemies, projectileSpeed, aimParams, true );
+		PredictProjectileShot( selectedEnemy, projectileSpeed, aimParams, true );
 		cachedFireTarget.invalidAt = level.time + 66;
-		cachedFireTarget.CacheFor( selectedEnemies, selectedWeapons, aimParams->fireTarget );
+		cachedFireTarget.CacheFor( selectedEnemy, selectedWeapons, aimParams->fireTarget );
 	}
 }
 
@@ -448,7 +448,7 @@ bool HitPointPredictor::OnPredictionStep( const Vec3 &segmentStart, const Result
 	return true;
 }
 
-void BotFireTargetCache::PredictProjectileShot( const SelectedEnemies &selectedEnemies,
+void BotFireTargetCache::PredictProjectileShot( const SelectedEnemy &selectedEnemy,
 												float projectileSpeed,
 												AimParams *aimParams,
 												bool applyTargetGravity ) {
@@ -457,13 +457,13 @@ void BotFireTargetCache::PredictProjectileShot( const SelectedEnemies &selectedE
 	}
 
 	trace_t trace;
-	auto *traceKey = const_cast<edict_t*>( selectedEnemies.TraceKey() );
+	auto *traceKey = const_cast<edict_t*>( selectedEnemy.TraceKey() );
 
 	if( applyTargetGravity ) {
 		typedef HitPointPredictor::ProblemParams ProblemParams;
 		ProblemParams predictionParams( aimParams->fireOrigin,
-										selectedEnemies.LastSeenVelocity().Data(),
-										selectedEnemies.TraceKey(),
+										selectedEnemy.LastSeenVelocity().Data(),
+										selectedEnemy.TraceKey(),
 										projectileSpeed );
 
 		if( !HitPointPredictor::Exec( predictionParams, bot->Skill(), aimParams->fireTarget ) ) {
@@ -476,7 +476,7 @@ void BotFireTargetCache::PredictProjectileShot( const SelectedEnemies &selectedE
 	if( !PredictProjectileNoClip( Vec3( aimParams->fireOrigin ),
 								  projectileSpeed,
 								  predictedTarget.Data(),
-								  selectedEnemies.LastSeenVelocity() ) ) {
+								  selectedEnemy.LastSeenVelocity() ) ) {
 		TryAimingAtGround( &trace, aimParams, traceKey );
 		return;
 	}

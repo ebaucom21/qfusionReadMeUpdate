@@ -410,8 +410,8 @@ PredictionContext::HitWhileRunningTestResult PredictionContext::MayHitWhileRunni
 		return *cachedResult;
 	}
 
-	const auto &selectedEnemies = bot->GetSelectedEnemies();
-	if( !selectedEnemies.AreValid() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
+	if( !selectedEnemy ) {
 		mayHitWhileRunningCachesStack.SetCachedValue( HitWhileRunningTestResult::Failure() );
 		// TODO: What if we use Success()?
 		return HitWhileRunningTestResult::Failure();
@@ -420,7 +420,7 @@ PredictionContext::HitWhileRunningTestResult PredictionContext::MayHitWhileRunni
 	const auto &entityPhysicsState = movementState->entityPhysicsState;
 	Vec3 botLookDir( entityPhysicsState.ForwardDir() );
 
-	Vec3 botToEnemyDir( selectedEnemies.LastSeenOrigin() );
+	Vec3 botToEnemyDir( selectedEnemy->LastSeenOrigin() );
 	botToEnemyDir -= entityPhysicsState.Origin();
 	if( !botToEnemyDir.normalizeFast() ) {
 		HitWhileRunningTestResult result;

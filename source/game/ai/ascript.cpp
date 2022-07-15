@@ -503,110 +503,6 @@ static const asClassDescriptor_t asAiSelectedNavEntityClassDescriptor =
     NULL, NULL
 };*/
 
-static bool objectSelectedEnemies_areValid(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->AreValid();
-}
-static bool objectSelectedEnemies_areThreatening(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->AreThreatening();
-}
-static unsigned objectSelectedEnemies_get_instanceId(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->InstanceId();
-}
-static bool objectSelectedEnemies_haveCarrier(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->HaveCarrier();
-}
-static bool objectSelectedEnemies_haveQuad(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->HaveQuad();
-}
-
-static inline asvec3_t ToASVector(const vec3_t v)
-{
-    asvec3_t result;
-    VectorCopy(v, result.v);
-    return result;
-}
-
-static inline asvec3_t ToASVector(const Vec3 &v) { return ToASVector(v.Data()); }
-
-static asvec3_t objectSelectedEnemies_get_lastSeenOrigin(const SelectedEnemies *obj)
-{
-    return ToASVector(CHECK_ARG(obj)->LastSeenOrigin());
-}
-static asvec3_t objectSelectedEnemies_get_actualOrigin(const SelectedEnemies *obj)
-{
-    return ToASVector(CHECK_ARG(obj)->ActualOrigin());
-}
-static asvec3_t objectSelectedEnemies_get_lookDir(const SelectedEnemies *obj)
-{
-    return ToASVector(CHECK_ARG(obj)->LookDir());
-}
-static asvec3_t objectSelectedEnemies_get_angles(const SelectedEnemies *obj)
-{
-    return ToASVector(CHECK_ARG(obj)->EnemyAngles());
-}
-
-static bool objectSelectedEnemies_isPrimaryEnemy(const SelectedEnemies *obj, const edict_t *ent)
-{
-    return CHECK_ARG(obj)->IsPrimaryEnemy(CHECK_ARG(ent));
-}
-static bool objectSelectedEnemies_isPrimaryEnemy2(const SelectedEnemies *obj, const Client *client)
-{
-    return CHECK_ARG(obj)->IsPrimaryEnemy(game.edicts + (game.clients - CHECK_ARG(client)) + 1);
-}
-static const edict_t *objectSelectedEnemies_get_traceKey(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->TraceKey();
-}
-
-static bool objectSelectedEnemies_canHit(const SelectedEnemies *obj)
-{
-    return CHECK_ARG(obj)->CanHit();
-}
-
-// There are currently no reasons to expose all methods of SelectedNavEntity or underlying NavEntity.
-// Only methods that are required for a basic GOAP support from the script side are provided.
-static const asMethod_t asAiSelectedEnemies_ObjectMethods[] =
-{
-    DECLARE_METHOD(bool, areValid, () const, objectSelectedEnemies_areValid),
-    DECLARE_METHOD(bool, areThreatening, () const, objectSelectedEnemies_areThreatening),
-    DECLARE_METHOD(uint, get_instanceId, () const, objectSelectedEnemies_get_instanceId),
-
-    DECLARE_METHOD(bool, haveCarrier, () const, objectSelectedEnemies_haveCarrier),
-    DECLARE_METHOD(bool, haveQuad, () const, objectSelectedEnemies_haveQuad),
-
-    DECLARE_METHOD(Vec3, get_lastSeenOrigin, () const, objectSelectedEnemies_get_lastSeenOrigin),
-    DECLARE_METHOD(Vec3, get_actualOrigin, () const, objectSelectedEnemies_get_actualOrigin),
-
-    DECLARE_METHOD(Vec3, get_lookDir, () const, objectSelectedEnemies_get_lookDir),
-    DECLARE_METHOD(Vec3, get_angles, () const, objectSelectedEnemies_get_angles),
-
-    DECLARE_METHOD(bool, isPrimaryEnemy, (const Entity @ent) const, objectSelectedEnemies_isPrimaryEnemy),
-    DECLARE_METHOD(bool, isPrimaryEnemy, (const Client @client) const, objectSelectedEnemies_isPrimaryEnemy2),
-    DECLARE_METHOD(const Entity @, get_traceKey, () const, objectSelectedEnemies_get_traceKey),
-
-    DECLARE_METHOD(bool, canHit, () const, objectSelectedEnemies_canHit),
-
-    ASLIB_METHOD_NULL
-};
-
-static const asClassDescriptor_t asAiSelectedEnemiesClassDescriptor =
-{
-    "AISelectedEnemies",
-    asOBJ_REF|asOBJ_NOCOUNT,
-    sizeof(SelectedEnemies),
-    EMPTY_FUNCDEFS,
-    EMPTY_BEHAVIORS,
-    asAiSelectedEnemies_ObjectMethods,
-    EMPTY_PROPERTIES,
-
-    NULL, NULL
-};
-
 static AiWeightConfigVar *objectWeightConfigVarGroup_get_varsListHead(AiWeightConfigVarGroup *obj)
 {
     return CHECK_ARG(obj)->VarsListHead();
@@ -844,9 +740,9 @@ const SelectedNavEntity *objectBot_get_selectedNavEntity(const Bot *bot)
     return &CHECK_BOT_HANDLE(bot)->GetSelectedNavEntity();
 }*/
 
-const SelectedEnemies *objectBot_get_selectedEnemies(const Bot *bot)
+const SelectedEnemy *objectBot_get_selectedEnemy(const Bot *bot)
 {
-    return &CHECK_BOT_HANDLE(bot)->GetSelectedEnemies();
+    return nullptr;
 }
 
 int objectBot_checkTravelTimeMillis(Bot *bot, const asvec3_t *from, const asvec3_t *to, bool allowUnreachable)
@@ -902,7 +798,7 @@ static const asMethod_t asbot_Methods[] =
     DECLARE_METHOD(uint, nextSimilarWorldStateInstanceId, (), objectBot_nextSimilarWorldStateInstanceId),
 
     //DECLARE_METHOD(const AISelectedNavEntity @, get_selectedNavEntity, () const, objectBot_get_selectedNavEntity),
-    DECLARE_METHOD(const AISelectedEnemies @, get_selectedEnemies, () const, objectBot_get_selectedEnemies),
+    //DECLARE_METHOD(const AISelectedEnemy @, get_selectedEnemy, () const, objectBot_get_selectedEnemy),
 
     DECLARE_METHOD(int, checkTravelTimeMillis, (const Vec3 &in from, const Vec3 &in to, bool allowUnreachable), objectBot_checkTravelTimeMillis),
 
@@ -939,7 +835,7 @@ const asClassDescriptor_t *asAIClassesDescriptors[] =
     &asAiCampingSpotClassDescriptor,
     &asAiPendingLookAtPointClassDescriptor,
     //&asAiSelectedNavEntityClassDescriptor,
-    &asAiSelectedEnemiesClassDescriptor,
+    //&asAiSelectedEnemyClassDescriptor,
     &asAiWeightConfigVarGroupClassDescriptor,
     &asAiWeightConfigVarClassDescriptor,
     &asBotClassDescriptor,

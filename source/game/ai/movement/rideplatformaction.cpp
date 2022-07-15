@@ -118,8 +118,8 @@ void RidePlatformAction::SetupIdleRidingPlatformMovement( PredictionContext *con
 
 	// The bot remains staying still on a platform in all other cases
 
-	if( bot->GetSelectedEnemies().AreValid() ) {
-		Vec3 toEnemy( bot->GetSelectedEnemies().LastSeenOrigin() );
+	if( const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy() ) {
+		Vec3 toEnemy( selectedEnemy->LastSeenOrigin() );
 		toEnemy -= context->movementState->entityPhysicsState.Origin();
 		botInput->SetIntendedLookDir( toEnemy, false );
 		return;

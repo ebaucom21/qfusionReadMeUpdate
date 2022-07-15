@@ -79,8 +79,8 @@ void BotWeaponsUsageModule::UpdateScriptWeaponsStatus() {
 }
 
 void BotWeaponsUsageModule::TryFire( BotInput *input ) {
-	const auto &selectedEnemies = bot->GetSelectedEnemies();
-	if( !selectedEnemies.AreValid() ) {
+	const auto &selectedEnemy = bot->GetSelectedEnemy();
+	if( selectedEnemy == std::nullopt ) {
 		return;
 	}
 
@@ -100,11 +100,11 @@ void BotWeaponsUsageModule::TryFire( BotInput *input ) {
 	AimParams scriptWeaponAimParams;
 
 	if( builtinFireDef ) {
-		builtinFireTargetCache.AdjustAimParams( selectedEnemies, selectedWeapons, *builtinFireDef, &builtinWeaponAimParams );
+		builtinFireTargetCache.AdjustAimParams( *selectedEnemy, selectedWeapons, *builtinFireDef, &builtinWeaponAimParams );
 	}
 
 	if( scriptFireDef ) {
-		scriptFireTargetCache.AdjustAimParams( selectedEnemies, selectedWeapons, *scriptFireDef, &scriptWeaponAimParams );
+		scriptFireTargetCache.AdjustAimParams( *selectedEnemy, selectedWeapons, *scriptFireDef, &scriptWeaponAimParams );
 	}
 
 	// Select a weapon that has a priority in adjusting view angles for it
@@ -162,7 +162,7 @@ void BotWeaponsUsageModule::LookAtEnemy( float coordError, const vec_t *fire_ori
 		return;
 	}
 
-	float multiplier = enemyTrackingSpeedHolder.UpdateAndGet( bot->GetSelectedEnemies(), selectedWeapons, bot->Skill() );
+	float multiplier = enemyTrackingSpeedHolder.UpdateAndGet( *bot->GetSelectedEnemy(), selectedWeapons, bot->Skill() );
 
 	Vec3 toTargetDir( target );
 	toTargetDir -= fire_origin;

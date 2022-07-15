@@ -33,8 +33,8 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 	}
 
 	if( bot->ShouldKeepXhairOnEnemy() ) {
-		const auto &selectedEnemies = bot->GetSelectedEnemies();
-		if( selectedEnemies.AreValid() && selectedEnemies.ArePotentiallyHittable() ) {
+		const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
+		if( selectedEnemy && selectedEnemy->IsPotentiallyHittable() ) {
 			if( !context->MayHitWhileRunning().CanHit() ) {
 				const float *currOrigin = context->movementState->entityPhysicsState.Origin();
 				const float squareDistance = originAtSequenceStart.SquareDistance2DTo( currOrigin );

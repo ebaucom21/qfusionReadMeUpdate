@@ -60,17 +60,17 @@ class BotWeaponsUsageModule {
 	// (make sure bots finish their targets)
 	struct alignas( 4 )EnemyTrackingSpeedHolder {
 		Int64Align4 trackingEnemySince;
-		unsigned selectedEnemiesInstanceId;
+		unsigned selectedEnemyInstanceId;
 		unsigned selectedWeaponsInstanceId;
 
 		EnemyTrackingSpeedHolder()
-			: trackingEnemySince( 0 ), selectedEnemiesInstanceId( 0 ), selectedWeaponsInstanceId( 0 ) {}
+			: trackingEnemySince( 0 ), selectedEnemyInstanceId( 0 ), selectedWeaponsInstanceId( 0 ) {}
 
-		float UpdateAndGet( const SelectedEnemies &selectedEnemies,
+		float UpdateAndGet( const SelectedEnemy &selectedEnemy,
 							const SelectedWeapons &selectedWeapons,
 							float skill ) {
 			int64_t levelTime = level.time;
-			if( selectedEnemies.InstanceId() != selectedEnemiesInstanceId ||
+			if( selectedEnemy.InstanceId() != selectedEnemyInstanceId ||
 				selectedWeapons.InstanceId() != selectedWeaponsInstanceId  ) {
 				trackingEnemySince = levelTime;
 			}

@@ -22,8 +22,6 @@ Bot::Bot( edict_t *self_, float skillLevel_ )
 		, skillLevel_ > 0.33f ? DEFAULT_YAW_SPEED * 1.5f : DEFAULT_YAW_SPEED
 		, skillLevel_ > 0.33f ? DEFAULT_PITCH_SPEED * 1.2f : DEFAULT_PITCH_SPEED )
 	, skillLevel( skillLevel_ )
-	, selectedEnemies( this )
-	, lostEnemies( this )
 	, m_movementSubsystem( this )
 	, awarenessModule( this )
 	, planningModule( this )
@@ -196,7 +194,8 @@ void Bot::OnBlockedTimeout() {
 // ent is dead = run this think func
 //==========================================
 void Bot::GhostingFrame() {
-	selectedEnemies.Invalidate();
+	m_selectedEnemy = std::nullopt;
+	m_lostEnemy     = std::nullopt;
 
 	planningModule.ClearGoalAndPlan();
 
@@ -255,7 +254,9 @@ void Bot::OnRespawn() {
 	VectorClear( self->r.client->ps.pmove.delta_angles );
 	self->r.client->last_activity = level.time;
 
-	selectedEnemies.Invalidate();
+	m_selectedEnemy = std::nullopt;
+	m_lostEnemy     = std::nullopt;
+
 	planningModule.ClearGoalAndPlan();
 	m_movementSubsystem.Reset();
 	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
@@ -299,8 +300,12 @@ void Bot::ActiveFrame() {
 		G_Match_Ready( self );
 	}
 
-	// Always calls Frame() and calls Think() if needed
+	// Always calls Frame() and calls Think() if needed.
 	awarenessModule.Update();
+
+	// Always calls Frame() and calls Think() if needed.
+	// Awareness stuff must be up-to date for planning.
+	planner->Update();
 
 	weaponsUsageModule.Frame( planningModule.CachedWorldState() );
 
@@ -390,7 +395,7 @@ bool Bot::NavTargetWorthRushing() const {
 	}
 
 	// Don't jump if there's no pressure from enemies
-	if( !selectedEnemies.AreValid() ) {
+	if( m_selectedEnemy == std::nullopt ) {
 		// Duel-like gametypes are an exception
 		if( !( GS_TeamBasedGametype() && GS_IndividualGameType() ) ) {
 			return false;
@@ -462,7 +467,7 @@ int Bot::GetWeaponsForWeaponJumping( int *weaponNumsBuffer ) {
 
 bool Bot::ShouldSkinBunnyInFavorOfCombatMovement() const {
 	// Return a feasible value for this case
-	if( !selectedEnemies.AreValid() ) {
+	if( m_selectedEnemy == std::nullopt ) {
 		return false;
 	}
 
@@ -472,28 +477,33 @@ bool Bot::ShouldSkinBunnyInFavorOfCombatMovement() const {
 	}
 
 	// Prepare to avoid/dodge an EB/IG shot
-	if( selectedEnemies.AreAboutToHitEBorIG() ) {
+	if( m_selectedEnemy->IsAboutToHitEBorIG() ) {
 		return true;
 	}
 
 	// Prepare to avoid/dodge beams
-	if( selectedEnemies.AreAboutToHitLGorPG() ) {
+	if( m_selectedEnemy->IsAboutToHitLGorPG() ) {
 		return true;
 	}
 
 	// As its fairly rarely gets really detected, always return true in this case
 	// (we tried first to apply an additional distance cutoff)
-	return selectedEnemies.AreAboutToHitRLorSW();
+	return m_selectedEnemy->IsAboutToHitRLorSW();
 }
 
 bool Bot::IsCombatDashingAllowed() const {
 	// Should not be called with this enemies state but lets return a feasible value for this case
-	if( !selectedEnemies.AreValid() ) {
+	if( m_selectedEnemy == std::nullopt ) {
+		return false;
+	}
+
+	// Avoid RL/EB shots
+	if( m_selectedEnemy->IsAboutToHitRLorSW() || m_selectedEnemy->IsAboutToHitEBorIG() ) {
 		return true;
 	}
 
 	// AD-AD spam vs a quad is pointless, the bot should flee away
-	if( selectedEnemies.HaveQuad() ) {
+	if( m_selectedEnemy->HasQuad() ) {
 		return true;
 	}
 
@@ -504,23 +514,19 @@ bool Bot::IsCombatDashingAllowed() const {
 		}
 	}
 
-	// Avoid RL/EB shots
-	if( selectedEnemies.AreAboutToHitRLorSW() || selectedEnemies.AreAboutToHitEBorIG() ) {
-		return true;
-	}
-
 	// Allow dashing for gaining speed to change a position
 	return WillAdvance() || WillRetreat();
 }
 
 bool Bot::IsCombatCrouchingAllowed() const {
-	if( !selectedEnemies.AreValid() ) {
+	if( m_selectedEnemy == std::nullopt ) {
 		return false;
 	}
 
 	// If they're with EB and IG and are about to hit me
-	if( selectedEnemies.AreAboutToHitEBorIG() ) {
-		if( !selectedEnemies.AreAboutToHitRLorSW() && !selectedEnemies.AreAboutToHitLGorPG() ) {
+	if( m_selectedEnemy->IsAboutToHitEBorIG() ) {
+		// TODO: Isn't that mutually exclusive?
+		if( !m_selectedEnemy->IsAboutToHitRLorSW() && !m_selectedEnemy->IsAboutToHitLGorPG() ) {
 			return true;
 		}
 	}
@@ -535,7 +541,7 @@ float Bot::GetEffectiveOffensiveness() const {
 	if( GS_MatchState() <= MATCH_STATE_WARMUP ) {
 		return 1.0f;
 	}
-	if( selectedEnemies.AreValid() && selectedEnemies.HaveCarrier() ) {
+	if( m_selectedEnemy && m_selectedEnemy->IsACarrier() ) {
 		return 0.75f;
 	}
 	return baseOffensiveness;

@@ -45,8 +45,13 @@ AiActionRecord::Status DoRunAwayViaJumppadActionRecord::UpdateStatus( const Worl
 		return COMPLETED;
 	}
 
-	if( selectedEnemiesInstanceId != Self()->GetSelectedEnemies().InstanceId() ) {
-		Debug( "New enemies have been selected\n" );
+	if( const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy() ) {
+		if( selectedEnemyInstanceId != selectedEnemy->InstanceId() ) {
+			Debug( "New enemies have been selected\n" );
+			return INVALID;
+		}
+	} else {
+		Debug( "Selected enemies have been invalidated\n" );
 		return INVALID;
 	}
 
@@ -79,8 +84,8 @@ PlannerNode *DoRunAwayViaJumppadAction::TryApply( const WorldState &worldState )
 	// Use distance from jumppad origin to target as an estimation for travel time millis
 	const float cost = ( jumppadOrigin - *pendingOriginVar ).LengthFast();
 
-	unsigned selectedEnemiesInstanceId = Self()->GetSelectedEnemies().InstanceId();
-	DoRunAwayViaJumppadActionRecord *record = pool.New( Self(), jumppadOrigin, selectedEnemiesInstanceId );
+	unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
+	DoRunAwayViaJumppadActionRecord *record = pool.New( Self(), jumppadOrigin, selectedEnemyInstanceId );
 	
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, cost );
 	if( !plannerNode ) {

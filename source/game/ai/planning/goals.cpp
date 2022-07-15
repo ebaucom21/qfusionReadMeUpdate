@@ -13,8 +13,8 @@ inline const std::optional<SelectedNavEntity> &BotGoal::getSelectedNavEntity() c
 	return Self()->GetSelectedNavEntity();
 }
 
-inline const SelectedEnemies &BotGoal::SelectedEnemies() const {
-	return Self()->GetSelectedEnemies();
+inline const std::optional<SelectedEnemy> &BotGoal::getSelectedEnemy() const {
+	return Self()->GetSelectedEnemy();
 }
 
 inline const BotWeightConfig &BotGoal::WeightConfig() const {
@@ -58,9 +58,9 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 		return;
 	}
 
-	const auto &selectedEnemies = SelectedEnemies();
+	const std::optional<SelectedEnemy> &selectedEnemy = getSelectedEnemy();
 	// Skip if there's no active threatening enemies
-	if( !selectedEnemies.AreValid() || !selectedEnemies.AreThreatening() ) {
+	if( !selectedEnemy || !selectedEnemy->IsThreatening() ) {
 		return;
 	}
 
@@ -108,7 +108,8 @@ PlannerNode *GrabItemGoal::GetWorldStateTransitions( const WorldState &worldStat
 void KillEnemyGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	if( !SelectedEnemies().AreValid() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = getSelectedEnemy();
+	if( !selectedEnemy ) {
 		return;
 	}
 
@@ -127,8 +128,8 @@ void KillEnemyGoal::UpdateWeight( const WorldState &currWorldState ) {
 	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight *= configGroup.nmyThreatCoeff;
 	} else {
-		float maxBotViewDot = SelectedEnemies().MaxDotProductOfBotViewAndDirToEnemy();
-		float maxEnemyViewDot = SelectedEnemies().MaxDotProductOfEnemyViewAndDirToBot();
+		float maxBotViewDot = selectedEnemy->GetBotViewDirDotToEnemyDir();
+		float maxEnemyViewDot = selectedEnemy->GetEnemyViewDirDotToBotDir();
 		// Do not lower the goal weight if the enemy is looking on the bot straighter than the bot does
 		if( maxEnemyViewDot > 0 && maxEnemyViewDot > maxBotViewDot ) {
 			return;
@@ -159,10 +160,8 @@ PlannerNode *KillEnemyGoal::GetWorldStateTransitions( const WorldState &worldSta
 void RunAwayGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	if( !SelectedEnemies().AreValid() ) {
-		return;
-	}
-	if( !SelectedEnemies().AreThreatening() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = getSelectedEnemy();
+	if( !selectedEnemy || !selectedEnemy->IsThreatening() ) {
 		return;
 	}
 
@@ -173,8 +172,8 @@ void RunAwayGoal::UpdateWeight( const WorldState &currWorldState ) {
 	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight *= configGroup.nmyThreatCoeff;
 	} else {
-		float maxBotViewDot = SelectedEnemies().MaxDotProductOfBotViewAndDirToEnemy();
-		float maxEnemyViewDot = SelectedEnemies().MaxDotProductOfEnemyViewAndDirToBot();
+		float maxBotViewDot = selectedEnemy->GetBotViewDirDotToEnemyDir();
+		float maxEnemyViewDot = selectedEnemy->GetEnemyViewDirDotToBotDir();
 		// Do not lower the goal weight if the enemy is looking on the bot straighter than the bot does
 		if( maxEnemyViewDot > 0 && maxEnemyViewDot > maxBotViewDot ) {
 			return;
@@ -219,13 +218,14 @@ PlannerNode *RunAwayGoal::GetWorldStateTransitions( const WorldState &worldState
 void AttackOutOfDespairGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	if( !SelectedEnemies().AreValid() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = getSelectedEnemy();
+	if( !selectedEnemy ) {
 		return;
 	}
 
 	const auto &configGroup = WeightConfig().nativeGoals.attackOutOfDespair;
 
-	if( SelectedEnemies().FireDelay() > configGroup.nmyFireDelayThreshold ) {
+	if( selectedEnemy->FireDelay() > configGroup.nmyFireDelayThreshold ) {
 		return;
 	}
 
@@ -238,7 +238,7 @@ void AttackOutOfDespairGoal::UpdateWeight( const WorldState &currWorldState ) {
 	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight += configGroup.nmyThreatExtraWeight;
 	}
-	float damageWeightPart = BoundedFraction( SelectedEnemies().TotalInflictedDamage(), configGroup.dmgUpperBound );
+	float damageWeightPart = BoundedFraction( selectedEnemy->TotalInflictedDamage(), configGroup.dmgUpperBound );
 	this->weight += configGroup.dmgFracCoeff * damageWeightPart;
 }
 

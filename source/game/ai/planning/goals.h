@@ -4,7 +4,7 @@
 #include "planner.h"
 
 class BotPlanningModule;
-class SelectedEnemies;
+class SelectedEnemy;
 class BotWeightConfig;
 
 class BotGoal : public AiGoal {
@@ -26,7 +26,7 @@ protected:
 	const Bot *Self() const { return (Bot *)self; }
 
 	const std::optional<struct SelectedNavEntity> &getSelectedNavEntity() const;
-	const class SelectedEnemies &SelectedEnemies() const;
+	const std::optional<SelectedEnemy> &getSelectedEnemy() const;
 	const class BotWeightConfig &WeightConfig() const;
 };
 

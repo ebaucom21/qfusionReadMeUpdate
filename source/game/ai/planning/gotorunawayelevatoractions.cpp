@@ -60,10 +60,9 @@ AiActionRecord::Status DoRunAwayViaElevatorActionRecord::UpdateStatus( const Wor
 	}
 
 	// If there are no valid enemies, just keep standing on the platform
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	if( selectedEnemies.AreValid() ) {
+	if( const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy() ) {
 		trace_t enemyTrace;
-		AiGroundTraceCache::Instance()->GetGroundTrace( selectedEnemies.Ent(), 128.0f, &enemyTrace );
+		AiGroundTraceCache::Instance()->GetGroundTrace( selectedEnemy->Ent(), 128.0f, &enemyTrace );
 		if( enemyTrace.fraction != 1.0f && enemyTrace.ent == selfTrace.ent ) {
 			Debug( "Enemy is on the same platform!\n" );
 			return INVALID;
@@ -93,14 +92,14 @@ PlannerNode *DoRunAwayViaElevatorAction::TryApply( const WorldState &worldState 
 	}
 
 	const Vec3 &elevatorOrigin = navTargetOrigin;
-	unsigned selectedEnemiesInstanceId = Self()->GetSelectedEnemies().InstanceId();
+	unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
 
 	const float elevatorDistance = ( elevatorOrigin - *pendingOriginVar ).LengthFast();
 	// Assume that elevator speed is 400 units per second
 	const float speedInUnitsPerMillis = 400 / 1000.0f;
 	const float cost = elevatorDistance * Q_Rcp( speedInUnitsPerMillis );
 
-	DoRunAwayViaElevatorActionRecord *record = pool.New( Self(), elevatorOrigin, selectedEnemiesInstanceId );
+	DoRunAwayViaElevatorActionRecord *record = pool.New( Self(), elevatorOrigin, selectedEnemyInstanceId );
 	
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, cost );
 	if( !plannerNode ) {

@@ -177,9 +177,6 @@ void Ai::Frame() {
 		entityPhysicsState->UpdateFromEntity( self );
 	}
 
-	// Call planner Update() (Frame() and, maybe Think())
-	planner->Update();
-
 	if( level.spawnedTimeStamp + 5000 > game.realtime || !level.canSpawnEntities ) {
 		self->nextThink = level.time + game.snapFrameTime;
 		return;

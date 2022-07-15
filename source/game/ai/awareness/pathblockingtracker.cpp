@@ -189,24 +189,18 @@ bool PathBlockingTracker::IsAPotentialBlocker( const TrackedEnemy *enemy,
 		return ( wsw::min( 1, enemyWeaponTier ) / (float)wsw::min( 1, botBestWeaponTier ) ) > 0.7f + 0.8f * offensiveness;
 	}
 
-	const auto &selectedEnemies = bot->GetSelectedEnemies();
+	const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
 	// Don't block if is in squad, except they have a quad runner
 	if( bot->IsInSquad() ) {
-		if( !( selectedEnemies.AreValid() && selectedEnemies.HaveQuad() ) ) {
+		if( !( selectedEnemy && selectedEnemy->HasQuad() ) ) {
 			return false;
 		}
 	}
 
 	float ratioThreshold = 1.25f;
-	if( selectedEnemies.AreValid() ) {
+	if( selectedEnemy ) {
 		// If the bot is outnumbered
-		if( selectedEnemies.AreThreatening() && selectedEnemies.Contain( enemy ) ) {
-			ratioThreshold *= 1.25f;
-		}
-	}
-
-	if( selectedEnemies.AreValid() && selectedEnemies.AreThreatening() && selectedEnemies.Contain( enemy ) ) {
-		if( selectedEnemies.end() - selectedEnemies.begin() > 1 ) {
+		if( selectedEnemy->IsThreatening() && selectedEnemy->IsBasedOn( enemy ) ) {
 			ratioThreshold *= 1.25f;
 		}
 	}

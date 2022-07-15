@@ -88,8 +88,8 @@ PlannerNode *TakeCoverAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	const unsigned selectedEnemiesInstanceId = Self()->GetSelectedEnemies().InstanceId();
-	TakeCoverActionRecord *record = pool.New( Self(), *navTargetOriginVar, selectedEnemiesInstanceId );
+	const unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
+	TakeCoverActionRecord *record = pool.New( Self(), *navTargetOriginVar, selectedEnemyInstanceId );
 	
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, 1.0f );
 	if( !plannerNode ) {

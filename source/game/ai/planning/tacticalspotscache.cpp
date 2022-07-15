@@ -77,13 +77,13 @@ inline void BotTacticalSpotsCache::takeEnemiesIntoAccount( ProblemParams &proble
 	if( Skill() < 0.33f ) {
 		return;
 	}
-	const auto &selectedEnemies = m_bot->GetSelectedEnemies();
-	if( !selectedEnemies.AreValid() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = m_bot->GetSelectedEnemy();
+	if( !selectedEnemy ) {
 		return;
 	}
-	// TODO: Provide PrimaryEnemy() getter?
-	assert( selectedEnemies.IsPrimaryEnemy( *selectedEnemies.begin() ) );
-	problemParams.setImpactfulEnemies( m_bot->TrackedEnemiesHead(), *selectedEnemies.begin() );
+	const TrackedEnemy *listHead = m_bot->TrackedEnemiesHead();
+	const TrackedEnemy *ignored  = selectedEnemy->GetTrackedEnemy();
+	problemParams.setImpactfulEnemies( listHead, ignored );
 }
 
 auto BotTacticalSpotsCache::findCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<Vec3> {
@@ -222,7 +222,7 @@ auto BotTacticalSpotsCache::findRunAwayTeleportOrigin( const Vec3 &origin, const
 	findReachableClassEntities( origin, kLasergunRange, "trigger_teleport", reachableEntities );
 
 	const auto *const pvsCache = EntitiesPvsCache::Instance();
-	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemy().value().Ent();
 	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
 		const auto *const ent = gameEnts + entAndScore.entNum;
@@ -257,7 +257,7 @@ auto BotTacticalSpotsCache::findRunAwayJumppadOrigin( const Vec3 &origin, const 
 	findReachableClassEntities( origin, kLasergunRange, "trigger_push", reachableEntities );
 
 	const auto *const pvsCache = EntitiesPvsCache::Instance();
-	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemy().value().Ent();
 	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
 		const auto *const ent = gameEnts + entAndScore.entNum;
@@ -284,7 +284,7 @@ auto BotTacticalSpotsCache::findRunAwayElevatorOrigin( const Vec3 &origin, const
 	findReachableClassEntities( origin, kLasergunRange, "func_plat", reachableEntities );
 
 	const auto *const pvsCache = EntitiesPvsCache::Instance();
-	const auto *const enemyEnt = m_bot->GetSelectedEnemies().Ent();
+	const auto *const enemyEnt = m_bot->GetSelectedEnemy().value().Ent();
 	const auto *const gameEnts = game.edicts;
 	for( const auto &entAndScore: reachableEntities ) {
 		const auto *const ent = gameEnts + entAndScore.entNum;

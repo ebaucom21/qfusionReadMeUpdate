@@ -140,16 +140,16 @@ DECLARE_ACTION( KillEnemyAction, 5 );
 class RunAwayActionRecord : public BotActionRecord {
 protected:
 	NavSpot navSpot { Vec3( 0, 0, 0 ), 0.0f, NavTargetFlags::NONE };
-	const unsigned selectedEnemiesInstanceId;
+	const unsigned selectedEnemyInstanceId;
 
 public:
 	RunAwayActionRecord( PoolBase *pool_,
 						 Bot *self_,
 						 const char *name_,
 						 const Vec3 &navTargetOrigin,
-						 unsigned selectedEnemiesInstanceId_ )
+						 unsigned selectedEnemyInstanceId_ )
 		: BotActionRecord( pool_, self_, name_ ),
-		selectedEnemiesInstanceId( selectedEnemiesInstanceId_ ) {
+		selectedEnemyInstanceId( selectedEnemyInstanceId_ ) {
 		navSpot.Set( navTargetOrigin, 32.0f, NavTargetFlags::REACH_ON_RADIUS );
 	}
 };
@@ -157,8 +157,8 @@ public:
 #define DECLARE_RUN_AWAY_ACTION_RECORD( recordName )                                                                 \
 class recordName : public RunAwayActionRecord {                                                                      \
 public:                                                                                                              \
-	recordName( PoolBase * pool_, Bot *self_, const Vec3 &tacticalSpotOrigin, unsigned selectedEnemiesInstanceId_ )  \
-		: RunAwayActionRecord( pool_, self_, #recordName, tacticalSpotOrigin, selectedEnemiesInstanceId_ ) {}        \
+	recordName( PoolBase * pool_, Bot *self_, const Vec3 &tacticalSpotOrigin, unsigned selectedEnemyInstanceId_ )  \
+		: RunAwayActionRecord( pool_, self_, #recordName, tacticalSpotOrigin, selectedEnemyInstanceId_ ) {}        \
 	void Activate() override;                                                                                        \
 	void Deactivate() override;                                                                                      \
 	Status UpdateStatus( const WorldState &currWorldState ) override;                                                \

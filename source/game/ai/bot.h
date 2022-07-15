@@ -333,7 +333,7 @@ protected:
 	void TouchedOtherEntity( const edict_t *entity ) override;
 private:
 	bool IsPrimaryAimEnemy( const edict_t *enemy ) const {
-		return selectedEnemies.IsPrimaryEnemy( enemy );
+		return m_selectedEnemy && m_selectedEnemy->IsBasedOn( enemy );
 	}
 
 	// Put these often accessed members first
@@ -344,8 +344,9 @@ private:
 
 	unsigned similarWorldStateInstanceId { 0 };
 
-	SelectedEnemies selectedEnemies;
-	SelectedEnemies lostEnemies;
+	// TODO: Move to the AwarenessModule?
+	std::optional<SelectedEnemy> m_selectedEnemy;
+	std::optional<SelectedEnemy> m_lostEnemy;
 	SelectedMiscTactics selectedTactics;
 	std::optional<SelectedNavEntity> m_selectedNavEntity;
 
@@ -488,7 +489,7 @@ public:
 
 	const std::optional<SelectedNavEntity> &GetOrUpdateSelectedNavEntity();
 
-	const SelectedEnemies &GetSelectedEnemies() const { return selectedEnemies; }
+	const std::optional<SelectedEnemy> &GetSelectedEnemy() const { return m_selectedEnemy; }
 
 	const Hazard *PrimaryHazard() const {
 		return awarenessModule.PrimaryHazard();

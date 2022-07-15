@@ -283,7 +283,7 @@ inline unsigned PredictionContext::MillisAheadForFrameStart( unsigned frameIndex
 
 inline BaseAction &BaseAction::DummyAction() {
 	// We have to check the combat action since it might be disabled due to planning stack overflow.
-	if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemies().AreValid() ) {
+	if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemy() != std::nullopt ) {
 		if( !m_subsystem->combatDodgeSemiRandomlyToTargetAction.IsDisabledForPlanning() ) {
 			return m_subsystem->combatDodgeSemiRandomlyToTargetAction;
 		}

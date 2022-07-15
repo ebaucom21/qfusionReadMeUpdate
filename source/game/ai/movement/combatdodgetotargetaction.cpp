@@ -80,11 +80,11 @@ void CombatDodgeSemiRandomlyToTargetAction::UpdateKeyMoveDirs( PredictionContext
 		}
 	}
 	if( !hasDefinedMoveDir ) {
-		const auto &selectedEnemies = bot->GetSelectedEnemies();
-		if( selectedEnemies.AreValid() && selectedEnemies.AreThreatening() ) {
+		const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
+		if( selectedEnemy && selectedEnemy->IsThreatening() ) {
 			const Vec3 forwardDir( entityPhysicsState.ForwardDir() ), rightDir( entityPhysicsState.RightDir() );
 
-			Vec3 enemyLookDir( selectedEnemies.LookDir() );
+			Vec3 enemyLookDir( selectedEnemy->LookDir() );
 			enemyLookDir.Z() *= Z_NO_BEND_SCALE;
 			enemyLookDir.normalizeFastOrThrow();
 
@@ -356,8 +356,8 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Predic
 
 		// We try to select a look dir if it is available according to situation priority
 		bool hasDefinedLookDir = false;
-		if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemies().AreValid() ) {
-			bot->GetSelectedEnemies().LastSeenOrigin().CopyTo( tmpDir );
+		if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemy() != std::nullopt ) {
+			bot->GetSelectedEnemy()->LastSeenOrigin().CopyTo( tmpDir );
 			hasDefinedLookDir = true;
 		} else if( const float *keptInFovPoint = bot->GetKeptInFovPoint() ) {
 			VectorCopy( keptInFovPoint, tmpDir );

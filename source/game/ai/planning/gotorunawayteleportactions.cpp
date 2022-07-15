@@ -57,8 +57,9 @@ PlannerNode *DoRunAwayViaTeleportAction::TryApply( const WorldState &worldState 
 	}
 
 	const Vec3 &teleportOrigin = navTargetOrigin;
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	DoRunAwayViaTeleportActionRecord *record = pool.New( Self(), teleportOrigin, selectedEnemies.InstanceId() );
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	assert( selectedEnemy );
+	DoRunAwayViaTeleportActionRecord *record = pool.New( Self(), teleportOrigin, selectedEnemy->InstanceId() );
 	
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, 1.0f );
 	if( !plannerNode ) {

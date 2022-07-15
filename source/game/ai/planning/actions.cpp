@@ -18,16 +18,16 @@ float BotAction::DamageToBeKilled() const {
 	if( botEnt->r.client->ps.inventory[POWERUP_SHELL] ) {
 		damageToBeKilled *= QUAD_DAMAGE_SCALE;
 	}
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	if( selectedEnemies.AreValid() && selectedEnemies.HaveQuad() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	if( selectedEnemy && selectedEnemy->HasQuad() ) {
 		damageToBeKilled *= 1.0f / QUAD_DAMAGE_SCALE;
 	}
 	return damageToBeKilled;
 }
 
 float BotAction::DamageToKill() const {
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	return selectedEnemies.AreValid() ? selectedEnemies.DamageToKill() : 0.0f;
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	return selectedEnemy ? selectedEnemy->DamageToKill() : 0.0f;
 }
 
 float BotAction::KillToBeKilledDamageRatio() const {
@@ -42,8 +42,8 @@ float BotGoal::DamageToBeKilled() const {
 	if( botEnt->r.client->ps.inventory[POWERUP_SHELL] ) {
 		damageToBeKilled *= QUAD_DAMAGE_SCALE;
 	}
-	const auto &selectedEnemies = Self()->GetSelectedEnemies();
-	if( selectedEnemies.AreValid() && selectedEnemies.HaveQuad() ) {
+	const std::optional<SelectedEnemy> &selectedEnemy = Self()->GetSelectedEnemy();
+	if( selectedEnemy && selectedEnemy->HasQuad() ) {
 		damageToBeKilled *= 1.0f / QUAD_DAMAGE_SCALE;
 	}
 	return damageToBeKilled;
