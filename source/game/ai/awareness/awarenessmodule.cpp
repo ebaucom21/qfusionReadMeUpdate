@@ -336,7 +336,7 @@ void BotAwarenessModule::RegisterVisibleEnemies() {
 	edict_t *const gameEdicts = game.edicts;
 	for( int i = 1; i < game.numentities; ++i ) {
 		edict_t *ent = gameEdicts + i;
-		if( bot->MayNotBeFeasibleEnemy( ent ) ) {
+		if( bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
 			continue;
 		}
 
@@ -379,7 +379,6 @@ void BotAwarenessModule::CheckForNewHazards() {
 		return;
 	}
 
-	eventsTracker.ResetTeammatesVisData();
 	hazardsSelector.BeginUpdate();
 
 	hazardsDetector.Exec();

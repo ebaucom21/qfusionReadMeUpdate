@@ -139,7 +139,7 @@ void Ai::TouchedEntity( edict_t *ent ) {
 	TouchedOtherEntity( ent );
 }
 
-bool Ai::MayNotBeFeasibleEnemy( const edict_t *ent ) const {
+bool Ai::IsDefinitelyNotAFeasibleEnemy( const edict_t *ent ) const {
 	if( !ent->r.inuse ) {
 		return true;
 	}
@@ -161,8 +161,7 @@ bool Ai::MayNotBeFeasibleEnemy( const edict_t *ent ) const {
 	}
 	// Skip entities that has a non-negative bot attitude.
 	// Note that by default all entities have negative attitude.
-	const int entNum = ENTNUM( const_cast<edict_t*>( ent ) );
-	if( attitude[entNum] >= 0 ) {
+	if( attitude[ENTNUM( ent )] >= 0 ) {
 		return true;
 	}
 

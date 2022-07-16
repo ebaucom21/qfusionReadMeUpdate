@@ -412,7 +412,7 @@ public:
 	// Helps to reject non-feasible enemies quickly.
 	// A false result does not guarantee that enemy is feasible.
 	// A true result guarantees that enemy is not feasible.
-	virtual bool MayNotBeFeasibleEnemy( const edict_t *ent ) const;
+	bool IsDefinitelyNotAFeasibleEnemy( const edict_t *ent ) const;
 protected:
 	const char *Nick() const {
 		return self->r.client ? self->r.client->netname.data() : self->classname;
