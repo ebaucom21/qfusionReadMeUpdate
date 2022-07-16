@@ -270,7 +270,7 @@ public:
 	/**
 	 * Returns a field of view of the bot in degrees (dependent of skill level).
 	 */
-	float Fov() const { return 110.0f + 69.0f * Skill(); }
+	float Fov() const { return 75.0f + 50.0f * Skill(); }
 	/**
 	 * Returns a value based on {@code Fov()} that is ready to be used
 	 * in comparison of dot products of normalized vectors to determine visibility.
