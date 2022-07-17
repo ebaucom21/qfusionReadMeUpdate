@@ -599,7 +599,7 @@ typedef struct {
 	unsigned distKey, sortKey;
 	unsigned surfType;
 	// Currently works just in addition to common mergeability checks.
-	unsigned mergeabilityKey;
+	unsigned mergeabilitySeparator;
 } sortedDrawSurf_t;
 
 struct FrontendToBackendShared;

@@ -794,7 +794,7 @@ void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scen
 
 void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader, float dist,
 									unsigned order, const portalSurface_t *portalSurf, const void *drawSurf,
-									unsigned surfType, unsigned mergeabilityKey ) {
+									unsigned surfType, unsigned mergeabilitySeparator ) {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
 		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
@@ -809,11 +809,11 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 				const int portalNum = portalSurf ? (int)( portalSurf - m_state.portalSurfaces ) : -1;
 
 				m_state.list->emplace_back( sortedDrawSurf_t {
-					.drawSurf        = (drawSurfaceType_t *)drawSurf,
-					.distKey         = distKey,
-					.sortKey         = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
-					.surfType        = surfType,
-					.mergeabilityKey = mergeabilityKey
+					.drawSurf              = (drawSurfaceType_t *)drawSurf,
+					.distKey               = distKey,
+					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
+					.surfType              = surfType,
+					.mergeabilitySeparator = mergeabilitySeparator
 				});
 
 				return std::addressof( m_state.list->back() );
@@ -1081,15 +1081,14 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 
 	auto *const materialCache = MaterialCache::instance();
 
-	unsigned prevShaderNum = std::numeric_limits<unsigned>::max();
-	unsigned prevEntNum    = std::numeric_limits<unsigned>::max();
-	int prevPortalNum      = std::numeric_limits<int>::min();
-	int prevFogNum         = std::numeric_limits<int>::min();
-
+	unsigned prevShaderNum                 = ~0;
+	unsigned prevEntNum                    = ~0;
+	int prevPortalNum                      = ~0;
+	int prevFogNum                         = ~0;
+	unsigned prevMergeabilitySeparator     = ~0;
+	unsigned prevSurfType                  = ~0;
+	bool prevIsDrawSurfBatched             = false;
 	const sortedDrawSurf_t *batchSpanBegin = nullptr;
-
-	unsigned prevMergeabilityKey = 0;
-	bool prevIsDrawSurfBatched   = false;
 
 	float depthmin = 0.0f, depthmax = 0.0f;
 	bool depthHack = false, cullHack = false;
@@ -1126,12 +1125,16 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 
 		// see if we need to reset mesh properties in the backend
 
+		// TODO: Use a single 64-bit compound mergeability key
+
 		bool reset = false;
 		if( !prevIsDrawSurfBatched ) {
 			reset = true;
+		} else if( surfType != prevSurfType ) {
+			reset = true;
 		} else if( shaderNum != prevShaderNum ) {
 			reset = true;
-		} else if( sds->mergeabilityKey != prevMergeabilityKey ) {
+		} else if( sds->mergeabilitySeparator != prevMergeabilitySeparator ) {
 			reset = true;
 		} else if( fogNum != prevFogNum ) {
 			reset = true;
@@ -1232,17 +1235,19 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 				r_drawSurfCb[surfType]( &fsh, entity, shader, fog, portalSurface, sds->drawSurf );
 			}
 
-			prevShaderNum = shaderNum;
-			prevEntNum = entNum;
-			prevFogNum = fogNum;
-			prevIsDrawSurfBatched = isDrawSurfBatched;
-			prevMergeabilityKey = sds->mergeabilityKey;
-			prevPortalNum = portalNum;
 			prevInfiniteProj = infiniteProj;
-			prevEntityFX = entityFX;
-			prevFog = fog;
-			prevPortalSurface = portalSurface;
 		}
+
+		prevShaderNum = shaderNum;
+		prevEntNum = entNum;
+		prevFogNum = fogNum;
+		prevIsDrawSurfBatched = isDrawSurfBatched;
+		prevSurfType = surfType;
+		prevMergeabilitySeparator = sds->mergeabilitySeparator;
+		prevPortalNum = portalNum;
+		prevEntityFX = entityFX;
+		prevFog = fog;
+		prevPortalSurface = portalSurface;
 	}
 
 	if( batchSpanBegin ) {

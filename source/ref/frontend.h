@@ -302,7 +302,7 @@ private:
 
 	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
 							  float dist, unsigned order, const portalSurface_t *portalSurf,
-							  const void *drawSurf, unsigned surfType, unsigned mergeabilityKey = 0 );
+							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 );
 
 	void submitSortedSurfacesToBackend( Scene *scene );
 public:
