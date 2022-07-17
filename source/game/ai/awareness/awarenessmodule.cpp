@@ -23,10 +23,6 @@ void BotAwarenessModule::OnDetachedFromSquad( AiSquad *squad_ ) {
 	bot->m_lostEnemy     = std::nullopt;
 }
 
-void BotAwarenessModule::OnEnemyViewed( const edict_t *enemy ) {
-	enemiesTracker.OnEnemyViewed( enemy );
-}
-
 void BotAwarenessModule::OnEnemyOriginGuessed( const edict_t *enemy, unsigned minMillisSinceLastSeen, const float *guessedOrigin ) {
 	enemiesTracker.OnEnemyOriginGuessed( enemy, minMillisSinceLastSeen, guessedOrigin );
 }
@@ -322,52 +318,45 @@ static bool IsEnemyVisible( const edict_t *self, const edict_t *enemyEnt ) {
 }
 
 void BotAwarenessModule::RegisterVisibleEnemies() {
-	if( GS_MatchState() == MATCH_STATE_COUNTDOWN || GS_ShootingDisabled() ) {
+	if( GS_MatchState() == MATCH_STATE_COUNTDOWN ) {
 		return;
 	}
 
 	// Compute look dir before loop
-	const Vec3 lookDir( bot->EntityPhysicsState()->ForwardDir() );
+	const Vec3 lookDir    = bot->EntityPhysicsState()->ForwardDir();
 	const float dotFactor = bot->FovDotFactor();
+	const edict_t *botEnt = game.edicts + bot->EntNum();
 
 	// Note: non-client entities also may be candidate targets.
 	wsw::StaticVector<EntAndDistance, MAX_EDICTS> candidateTargets;
 
-	edict_t *const gameEdicts = game.edicts;
-	for( int i = 1; i < game.numentities; ++i ) {
-		edict_t *ent = gameEdicts + i;
-		if( bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
-			continue;
-		}
+	const edict_t *const gameEdicts = game.edicts;
+	const int numGameEntities       = game.numentities;
+	for( int entNum = 1; entNum < numGameEntities; ++entNum ) {
+		const edict_t *ent = gameEdicts + entNum;
+		if( !bot->IsDefinitelyNotAFeasibleEnemy( ent ) ) {
+			// Reject targets quickly by fov
+			Vec3 toTarget( Vec3( ent->s.origin ) - bot->Origin() );
+			const float squareDistance = toTarget.SquaredLength();
 
-		// Reject targets quickly by fov
-		Vec3 toTarget( ent->s.origin );
-		toTarget -= bot->Origin();
-		float squareDistance = toTarget.SquaredLength();
-		if( squareDistance < 1 ) {
-			continue;
+			if( squareDistance > 1.0f || squareDistance < wsw::square( ent->aiVisibilityDistance ) ) [[likely]] {
+				const float rcpDistance = Q_RSqrt( squareDistance );
+				toTarget *= rcpDistance;
+				if( toTarget.Dot( lookDir ) >= dotFactor ) {
+					candidateTargets.emplace_back( { .entNum = entNum, .distance = squareDistance * rcpDistance } );
+				}
+			}
 		}
-		if( squareDistance > ent->aiVisibilityDistance * ent->aiVisibilityDistance ) {
-			continue;
-		}
-
-		float invDistance = Q_RSqrt( squareDistance );
-		toTarget *= invDistance;
-		if( toTarget.Dot( lookDir ) < dotFactor ) {
-			continue;
-		}
-
-		// It seams to be more instruction cache-friendly to just add an entity to a plain array
-		// and sort it once after the loop instead of pushing an entity in a heap on each iteration
-		candidateTargets.emplace_back( EntAndDistance( ENTNUM( ent ), 1.0f / invDistance ) );
 	}
 
+	const auto pvsFunc             = isGenericEntityInPvs;
+	const auto visFunc             = IsEnemyVisible;
+	const auto visCheckCallsQuotum = MAX_CLIENTS;
 	wsw::StaticVector<uint16_t, MAX_CLIENTS> visibleTargets;
-	const edict_t *self = game.edicts + bot->EntNum();
-	VisCheckRawEnts( candidateTargets, visibleTargets, self, MAX_CLIENTS, IsGenericEntityInPvs, IsEnemyVisible );
+	visCheckRawEnts( &candidateTargets, &visibleTargets, botEnt, visCheckCallsQuotum, pvsFunc, visFunc );
 
-	for( auto entNum: visibleTargets ) {
-		OnEnemyViewed( gameEdicts + entNum );
+	for( const auto entNum: visibleTargets ) {
+		enemiesTracker.OnEnemyViewed( gameEdicts + entNum );
 	}
 
 	alertTracker.CheckAlertSpots( visibleTargets );
@@ -375,6 +364,7 @@ void BotAwarenessModule::RegisterVisibleEnemies() {
 
 void BotAwarenessModule::CheckForNewHazards() {
 	// This call returns a value if the primary hazard is valid
+	// TODO: This is totally wrong!
 	if( PrimaryHazard() != nullptr ) {
 		return;
 	}
@@ -383,51 +373,43 @@ void BotAwarenessModule::CheckForNewHazards() {
 
 	hazardsDetector.Exec();
 
-	EntNumsVector *v;
-
-	if( !( v = &hazardsDetector.dangerousRockets )->empty() ) {
-		hazardsSelector.FindProjectileHazards( *v );
-		eventsTracker.TryGuessingProjectileOwnersOrigins( *v );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousRockets; !v.empty() ) {
+		hazardsSelector.FindProjectileHazards( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherRockets );
 	}
 
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherRockets );
-
-	if( !( v = &hazardsDetector.dangerousWaves )->empty() ) {
-		hazardsSelector.FindWaveHazards( *v );
-		eventsTracker.TryGuessingProjectileOwnersOrigins( *v );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousWaves; !v.empty() ) {
+		hazardsSelector.FindWaveHazards( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherWaves );
 	}
 
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherWaves );
-
-	if( !( v = &hazardsDetector.dangerousBlasts )->empty() ) {
-		hazardsSelector.FindProjectileHazards( *v );
-		eventsTracker.TryGuessingProjectileOwnersOrigins( *v );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousBlasts; !v.empty() ) {
+		hazardsSelector.FindProjectileHazards( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherBlasts );
 	}
 
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherBlasts );
-
-	if( !( v = &hazardsDetector.dangerousGrenades )->empty() ) {
-		hazardsSelector.FindProjectileHazards( *v );
-		eventsTracker.TryGuessingProjectileOwnersOrigins( *v );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousGrenades; !v.empty() ) {
+		hazardsSelector.FindProjectileHazards( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherGrenades );
 	}
 
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherGrenades );
-
-	// The detection is quite expensive, allow intentional failing at it (and thus rejecting quickly)
-	constexpr float pgDetectionFailureChance = 0.75f;
-	if( !( v = &hazardsDetector.dangerousPlasmas )->empty() ) {
-		hazardsSelector.FindPlasmaHazards( *v );
-		eventsTracker.TryGuessingProjectileOwnersOrigins( *v, pgDetectionFailureChance );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousPlasmas; !v.empty() ) {
+		// The detection is quite expensive, allow intentional failing at it (and thus rejecting quickly)
+		constexpr float failureChance = 0.5f;
+		hazardsSelector.FindPlasmaHazards( v );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( v, failureChance );
+		eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherPlasmas, failureChance );
 	}
 
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherPlasmas, pgDetectionFailureChance );
-
-	if( !( v = &hazardsDetector.dangerousLasers )->empty() ) {
-		hazardsSelector.FindLaserHazards( *v );
-		eventsTracker.TryGuessingBeamOwnersOrigins( *v );
+	if( const EntNumsVector &v = hazardsDetector.visibleDangerousLasers; !v.empty() ) {
+		hazardsSelector.FindLaserHazards( v );
+		eventsTracker.TryGuessingBeamOwnersOrigins( v );
+		eventsTracker.TryGuessingBeamOwnersOrigins( hazardsDetector.visibleOtherLasers );
 	}
-
-	eventsTracker.TryGuessingProjectileOwnersOrigins( hazardsDetector.visibleOtherLasers );
 
 	hazardsSelector.EndUpdate();
 }

@@ -444,7 +444,7 @@ void HazardsSelector::FindWaveHazards( const EntNumsVector &entNums ) {
 		// Now check whether the wave hits an obstacle on a safe distance.
 
 		Vec3 traceEnd( lineDir );
-		traceEnd *= HazardsDetector::DETECT_WAVE_RADIUS / waveSpeed;
+		traceEnd *= HazardsDetector::kWaveDetectionRadius * Q_Rcp( waveSpeed );
 		traceEnd += wave->s.origin;
 		G_Trace( &trace, wave->s.origin, nullptr, nullptr, traceEnd.Data(), wave, MASK_SHOT );
 		bool isDirectHit = false;

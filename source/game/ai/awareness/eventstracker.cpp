@@ -25,7 +25,7 @@ void EventsTracker::TryGuessingProjectileOwnersOrigins( const EntNumsVector &dan
 	const edict_t *const gameEdicts = game.edicts;
 	const int64_t levelTime         = level.time;
 	for( auto entNum: dangerousEntNums ) {
-		if( m_rng.tryWithChance( 1.0f - failureChance ) ) {
+		if( failureChance == 0.0f || m_rng.tryWithChance( 1.0f - failureChance ) ) {
 			const edict_t *const projectile = &gameEdicts[entNum];
 			const edict_t *const owner      = &gameEdicts[projectile->s.ownerNum];
 			if( !m_bot->IsDefinitelyNotAFeasibleEnemy( owner ) ) {

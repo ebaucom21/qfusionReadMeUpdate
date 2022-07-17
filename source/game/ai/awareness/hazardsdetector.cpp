@@ -1,20 +1,69 @@
 #include "hazardsdetector.h"
 #include "entitiespvscache.h"
+#include "../classifiedentitiescache.h"
 #include "../bot.h"
 
+[[nodiscard]]
+static inline bool isGenericProjectileVisible( const edict_t *viewer, const edict_t *ent ) {
+	const vec3_t viewOrigin { viewer->s.origin[0], viewer->s.origin[1], viewer->s.origin[2] + (float)viewer->viewheight };
+
+	trace_t trace;
+	G_Trace( &trace, viewOrigin, nullptr, nullptr, ent->s.origin, viewer, MASK_OPAQUE );
+	return trace.fraction == 1.0f || trace.ent == ENTNUM( ent );
+}
+
+[[nodiscard]]
+// Try testing both origins. Its very coarse but should produce satisfiable results in-game.
+static inline bool isLaserBeamVisible( const edict_t *viewer, const edict_t *ent ) {
+	const vec3_t viewOrigin { viewer->s.origin[0], viewer->s.origin[1], viewer->s.origin[2] + (float)viewer->viewheight };
+
+	trace_t trace;
+	G_Trace( &trace, viewOrigin, nullptr, nullptr, ent->s.origin, viewer, MASK_OPAQUE );
+	if( trace.fraction == 1.0f || trace.ent == ENTNUM( ent ) ) {
+		return true;
+	}
+
+	if( DistanceSquared( trace.endpos, ent->s.origin ) < wsw::square( 1.0f ) ) {
+		return true;
+	}
+
+	G_Trace( &trace, viewOrigin, nullptr, nullptr, ent->s.origin2, viewer, MASK_OPAQUE );
+	if( trace.fraction == 1.0f || trace.ent == ENTNUM( ent ) ) {
+		return true;
+	}
+
+	return DistanceSquared( trace.endpos, ent->s.origin2 ) < wsw::square( 1.0f );
+}
+
+[[nodiscard]]
+static inline bool isLaserBeamInPvs( const edict_t *self, const edict_t *ent ) {
+	if( EntitiesPvsCache::Instance()->AreInPvs( self, ent ) ) {
+		return true;
+	}
+	// TODO: Reuse cached leaves
+	if( trap_inPVS( self->s.origin, ent->s.origin2 ) ) {
+		return true;
+	}
+	// Try this
+	vec3_t midPoint;
+	VectorAvg( ent->s.origin, ent->s.origin2, midPoint );
+	// TODO: Reuse cached leaves
+	return trap_inPVS( self->s.origin, midPoint );
+}
+
 void HazardsDetector::Clear() {
-	maybeDangerousRockets.clear();
-	dangerousRockets.clear();
-	maybeVisibleOtherWaves.clear();
-	dangerousWaves.clear();
-	maybeDangerousPlasmas.clear();
-	dangerousPlasmas.clear();
-	maybeDangerousBlasts.clear();
-	dangerousBlasts.clear();
-	maybeDangerousGrenades.clear();
-	dangerousGrenades.clear();
-	maybeDangerousLasers.clear();
-	dangerousLasers.clear();
+	maybeVisibleDangerousRockets.clear();
+	visibleDangerousRockets.clear();
+	maybeVisibleDangerousWaves.clear();
+	visibleDangerousWaves.clear();
+	maybeVisibleDangerousPlasmas.clear();
+	visibleDangerousPlasmas.clear();
+	maybeVisibleDangerousBlasts.clear();
+	visibleDangerousBlasts.clear();
+	maybeVisibleDangerousGrenades.clear();
+	visibleDangerousGrenades.clear();
+	maybeVisibleDangerousLasers.clear();
+	visibleDangerousLasers.clear();
 
 	maybeVisibleOtherRockets.clear();
 	visibleOtherRockets.clear();
@@ -34,120 +83,136 @@ void HazardsDetector::Exec() {
 	Clear();
 
 	// Note that we always skip own rockets, plasma, etc.
-	// Otherwise all own bot shot events yield a hazard.
-	// There are some cases when an own rocket can hurt but they are either extremely rare or handled by bot fire code.
+	// Otherwise, all own bot shot events yield a hazard.
+	// There are some cases when an own rocket can hurt, but they are either extremely rare or handled by bot fire code.
 	// Own grenades are the only exception. We check grenade think time to skip grenades just fired by bot.
 	// If a grenade is about to explode and is close to bot, its likely it has bounced of the world and can hurt.
 
-	const edict_t *gameEdicts = game.edicts;
-	for( int i = gs.maxclients + 1, end = game.numentities; i < end; ++i ) {
-		const edict_t *ent = gameEdicts + i;
-		switch( ent->s.type ) {
-			case ET_ROCKET:
-				TryAddEntity( ent, DETECT_ROCKET_SQ_RADIUS, maybeDangerousRockets, maybeVisibleOtherRockets );
-				break;
-			case ET_WAVE:
-				TryAddEntity( ent, DETECT_WAVE_SQ_RADIUS, maybeDangerousWaves, maybeVisibleOtherWaves );
-				break;
-			case ET_PLASMA:
-				TryAddEntity( ent, DETECT_PLASMA_SQ_RADIUS, maybeDangerousPlasmas, maybeVisibleOtherPlasmas );
-				break;
-			case ET_BLASTER:
-				TryAddEntity( ent, DETECT_GB_BLAST_SQ_RADIUS, maybeDangerousBlasts, maybeVisibleOtherBlasts );
-				break;
-			case ET_GRENADE:
-				TryAddGrenade( ent, maybeDangerousGrenades, maybeVisibleOtherGrenades );
-				break;
-			case ET_LASERBEAM:
-				TryAddEntity( ent, DETECT_LG_BEAM_SQ_RADIUS, maybeDangerousLasers, maybeVisibleOtherLasers );
-				break;
-			default:
-				break;
+
+	const auto *const entsCache = wsw::ai::ClassifiedEntitiesCache::instance();
+	const auto *const gameEnts  = game.edicts;
+	const auto *const botEnt    = gameEnts + bot->EntNum();
+
+	struct {
+		HazardsDetector::EntsAndDistancesVector *dangerous, *other;
+		std::span<const uint16_t> entNums;
+		float distanceThreshold;
+	} regularEntitiesToTest[] {
+		{ &maybeVisibleDangerousRockets, &maybeVisibleOtherRockets, entsCache->getAllRockets(), 550.0f },
+		{ &maybeVisibleDangerousPlasmas, &maybeVisibleOtherPlasmas, entsCache->getAllPlasmas(), 750.0f },
+		{ &maybeVisibleDangerousBlasts,  &maybeVisibleOtherBlasts,  entsCache->getAllBlasts(),  950.0f },
+		{ &maybeVisibleDangerousLasers,  &maybeVisibleOtherLasers,  entsCache->getAllLasers(),  kLasergunRange + 128.0f },
+		{ &maybeVisibleDangerousWaves,   &maybeVisibleOtherWaves,   entsCache->getAllWaves(),   kWaveDetectionRadius }
+	};
+
+	const bool isTeamBasedGametype = GS_TeamBasedGametype();
+	const bool allowTeamDamage = g_allow_teamdamage->integer != 0;
+
+	for( auto &[dangerous, other, entNums, distanceThreshold]: regularEntitiesToTest ) {
+		for( const auto entNum: entNums ) {
+			const auto *ent = gameEnts + entNum;
+			assert( ent->s.type != ET_GRENADE );
+
+			if( ent->s.ownerNum != botEnt->s.number ) [[likely]] {
+				if( !isTeamBasedGametype || allowTeamDamage || ( botEnt->s.team != ent->s.team ) ) {
+					const float squareDistance = DistanceSquared( botEnt->s.origin, ent->s.origin );
+					if( squareDistance < wsw::square( distanceThreshold ) ) [[unlikely]] {
+						dangerous->emplace_back( { .entNum = ent->s.number, .distance = Q_Sqrt( squareDistance ) } );
+					} else if( !isTeamBasedGametype || ent->s.team != botEnt->s.team ) {
+						other->emplace_back( { .entNum = ent->s.number, .distance = Q_Sqrt( squareDistance ) } );
+					}
+				}
+			}
 		}
 	}
 
-	constexpr auto isGenInPvs = IsGenericEntityInPvs;
-	constexpr auto isLaserInPvs = IsLaserBeamInPvs;
-	constexpr auto isGenVisible = IsGenericProjectileVisible;
-	constexpr auto isLaserVisible = IsLaserBeamVisible;
+	if( const auto grenadeNumsSpan = entsCache->getAllGrenades(); !grenadeNumsSpan.empty() ) {
+		const auto timeout = GS_GetWeaponDef( WEAP_GRENADELAUNCHER )->firedef.timeout;
+		const bool allowSelfDamage = g_allow_selfdamage->integer != 0;
+		for( const auto entNum: grenadeNumsSpan ) {
+			const auto *ent = gameEnts + entNum;
+			assert( ent->s.type == ET_GRENADE );
+
+			const bool isOwnGrenade = ent->s.ownerNum == botEnt->s.number;
+			if( isOwnGrenade ) [[unlikely]] {
+				if( !allowSelfDamage ) {
+					continue;
+				}
+				// Ignore own grenades in first 500 millis
+				if( ent->nextThink - level.time > (int64_t) timeout - 500 ) {
+					continue;
+				}
+			} else {
+				if( isTeamBasedGametype && !allowTeamDamage && ent->s.team == botEnt->s.team ) {
+					continue;
+				}
+			}
+
+			const float squareDistance = DistanceSquared( ent->s.origin, ent->s.origin );
+			const EntAndDistance entry = { .entNum = ent->s.number, .distance = Q_Sqrt( squareDistance ) };
+			if( squareDistance < wsw::square( 300.0f ) ) [[unlikely]] {
+				maybeVisibleDangerousGrenades.push_back( entry );
+			} else if ( !isTeamBasedGametype || ent->s.team != botEnt->s.team ) {
+				maybeVisibleOtherGrenades.push_back( entry );
+			}
+		}
+	}
 
 	// If all potentially dangerous entities have been processed successfully
 	// (no entity has been rejected due to limit/capacity overflow)
 	// filter other visible entities of the same kind.
 
-	const edict_t *self = game.edicts + bot->EntNum();
-	if( VisCheckRawEnts( maybeDangerousRockets, dangerousRockets, self, 12, isGenInPvs, isGenVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherRockets, visibleOtherRockets, self, 6, isGenInPvs, isGenVisible );
-	}
-	if( VisCheckRawEnts( maybeDangerousWaves, dangerousWaves, self, 12, isGenInPvs, isGenVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherWaves, visibleOtherWaves, self, 6, isGenInPvs, isGenVisible );
-	}
-	if( VisCheckRawEnts( maybeDangerousPlasmas, dangerousPlasmas, self, 48, isGenInPvs, isGenVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherPlasmas, visibleOtherPlasmas, self, 12, isGenInPvs, isGenVisible );
-	}
-	if( VisCheckRawEnts( maybeDangerousBlasts, dangerousBlasts, self, 6, isGenInPvs, isGenVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherBlasts, visibleOtherBlasts, self, 3, isGenInPvs, isGenVisible );
-	}
-	if( VisCheckRawEnts( maybeDangerousGrenades, dangerousGrenades, self, 6, isGenInPvs, isGenVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherGrenades, visibleOtherGrenades, self, 3, isGenInPvs, isGenVisible );
-	}
-	if( VisCheckRawEnts( maybeDangerousLasers, dangerousLasers, self, 4, isLaserInPvs, isLaserVisible ) ) {
-		VisCheckRawEnts( maybeVisibleOtherLasers, visibleOtherLasers, self, 4, isLaserInPvs, isLaserVisible );
-	}
-}
+	unsigned visCheckCallsQuotum = 32;
 
-inline void HazardsDetector::TryAddEntity( const edict_t *ent,
-										   float squareDistanceThreshold,
-										   EntsAndDistancesVector &dangerousEntities,
-										   EntsAndDistancesVector &otherEntities ) {
-	assert( ent->s.type != ET_GRENADE );
+	// Process in order of importance (this gives greater quota for really dangerous stuff)
 
-	const edict_t *self = game.edicts + bot->EntNum();
-	if( ent->s.ownerNum == ENTNUM( self ) ) {
-		return;
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousRockets, &visibleDangerousRockets, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousWaves, &visibleDangerousWaves, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousGrenades, &visibleDangerousGrenades, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousLasers, &visibleDangerousLasers, botEnt,
+											visCheckCallsQuotum, ::isLaserBeamInPvs, ::isLaserBeamVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousBlasts, &visibleDangerousBlasts, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleDangerousPlasmas, &visibleDangerousPlasmas, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherRockets, &visibleOtherRockets, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherWaves, &visibleOtherWaves, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherGrenades, &visibleOtherGrenades, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherLasers, &visibleOtherLasers, botEnt,
+											visCheckCallsQuotum, ::isLaserBeamInPvs, ::isLaserBeamVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherBlasts, &visibleOtherBlasts, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+	visCheckCallsQuotum -= visCheckRawEnts( &maybeVisibleOtherPlasmas, &visibleOtherPlasmas, botEnt,
+											visCheckCallsQuotum, ::isGenericEntityInPvs, ::isGenericProjectileVisible );
+
+	// Try catching underflow
+	assert( visCheckCallsQuotum <= 32 );
+
+#if 0
+	if( visibleDangerousRockets.size() + visibleOtherRockets.size() ) {
+		Com_Printf( "Rockets  : %d, %d\n", visibleDangerousRockets.size(), visibleOtherRockets.size() );
 	}
-
-	if( GS_TeamBasedGametype() && self->s.team == ent->s.team ) {
-		if( !g_allow_teamdamage->integer ) {
-			return;
-		}
+	if( visibleDangerousGrenades.size() + visibleOtherGrenades.size() ) {
+		Com_Printf( "Grenades : %d, %d\n", visibleDangerousGrenades.size(), visibleOtherGrenades.size() );
 	}
-
-	float squareDistance = DistanceSquared( self->s.origin, ent->s.origin );
-	if( squareDistance < squareDistanceThreshold ) {
-		dangerousEntities.emplace_back( EntAndDistance( ENTNUM( ent ), sqrtf( squareDistance ) ) );
-	} else {
-		otherEntities.emplace_back( EntAndDistance( ENTNUM( ent ), sqrtf( squareDistance ) ) );
+	if( visibleDangerousBlasts.size() + visibleOtherBlasts.size() ) {
+		Com_Printf( "Blasts   : %d, %d\n", visibleDangerousBlasts.size(), visibleOtherBlasts.size() );
 	}
-}
-
-inline void HazardsDetector::TryAddGrenade( const edict_t *ent,
-											EntsAndDistancesVector &dangerousEntities,
-											EntsAndDistancesVector &otherEntities ) {
-	assert( ent->s.type == ET_GRENADE );
-
-	const edict_t *self = game.edicts + bot->EntNum();
-	if( ent->s.ownerNum == ENTNUM( self ) ) {
-		if( !g_allow_selfdamage->integer ) {
-			return;
-		}
-		const auto timeout = GS_GetWeaponDef( WEAP_GRENADELAUNCHER )->firedef.timeout;
-		// Ignore own grenades in first 500 millis
-		if( level.time - ent->nextThink > timeout - 500 ) {
-			return;
-		}
-	} else {
-		if( GS_TeamBasedGametype() && ent->s.team == self->s.team ) {
-			if( !g_allow_teamdamage->integer ) {
-				return;
-			}
-		}
+	if( visibleDangerousLasers.size() + visibleOtherLasers.size() ) {
+		Com_Printf( "Lasers   : %d, %d\n", visibleDangerousLasers.size(), visibleOtherLasers.size() );
 	}
-
-	float squareDistance = DistanceSquared( self->s.origin, ent->s.origin );
-	if( squareDistance < 300 * 300 ) {
-		dangerousEntities.emplace_back( EntAndDistance( ENTNUM( ent ), sqrtf( squareDistance ) ) );
-	} else {
-		otherEntities.emplace_back( EntAndDistance( ENTNUM( ent ), sqrtf( squareDistance ) ) );
+	if( visibleDangerousWaves.size() + visibleOtherWaves.size() ) {
+		Com_Printf( "Waves    : %d, %d\n", visibleDangerousWaves.size(), visibleOtherWaves.size() );
 	}
+	if( visibleDangerousPlasmas.size() + visibleOtherPlasmas.size() ) {
+		Com_Printf( "Plasmas  : %d, %d\n", visibleDangerousPlasmas.size(), visibleOtherPlasmas.size());
+	}
+#endif
 }

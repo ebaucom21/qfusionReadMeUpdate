@@ -79,7 +79,6 @@ public:
 	void OnHurtByNewThreat( const edict_t *newThreat, const AiFrameAwareComponent *threatDetector );
 	void OnEnemyRemoved( const TrackedEnemy *enemy );
 
-	void OnEnemyViewed( const edict_t *enemy );
 	void OnEnemyOriginGuessed( const edict_t *enemy, unsigned minMillisSinceLastSeen, const float *guessedOrigin = nullptr );
 
 	void RegisterEvent( const edict_t *ent, int event, int parm ) {

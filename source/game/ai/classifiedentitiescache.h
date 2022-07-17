@@ -22,6 +22,13 @@ private:
 	std::bitset<MAX_EDICTS> m_persistentEntitiesMask;
 	bool m_hasRetrievedPersistentEntities { false };
 
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_rockets;
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_grenades;
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_plasmas;
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_blasts;
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_lasers;
+	wsw::StaticVector<uint16_t, MAX_EDICTS> m_waves;
+
 	void retrievePersistentEntities();
 public:
 	static void init();
@@ -47,6 +54,19 @@ public:
 	auto getAllOtherTriggersInThisFrame() const -> std::span<const uint16_t> {
 		return { m_allOtherTriggers.begin(), m_allOtherTriggers.end() };
 	}
+
+	[[nodiscard]]
+	auto getAllRockets() const -> std::span<const uint16_t> { return { m_rockets.begin(), m_rockets.end() }; }
+	[[nodiscard]]
+	auto getAllGrenades() const -> std::span<const uint16_t> { return { m_grenades.begin(), m_grenades.end() }; }
+	[[nodiscard]]
+	auto getAllPlasmas() const -> std::span<const uint16_t> { return { m_plasmas.begin(), m_plasmas.end() }; }
+	[[nodiscard]]
+	auto getAllBlasts() const -> std::span<const uint16_t> { return { m_blasts.begin(), m_blasts.end() }; }
+	[[nodiscard]]
+	auto getAllLasers() const -> std::span<const uint16_t> { return { m_lasers.begin(), m_lasers.end() }; }
+	[[nodiscard]]
+	auto getAllWaves() const -> std::span<const uint16_t> { return { m_waves.begin(), m_waves.end() }; }
 };
 
 }
