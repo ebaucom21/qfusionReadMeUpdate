@@ -31,7 +31,7 @@ class BotAwarenessModule: public AiFrameAwareComponent {
 	KeptInFovPointTracker keptInFovPointTracker;
 	PathBlockingTracker pathBlockingTracker;
 public:
-	struct HurtEvent: public Selection {
+	struct HurtEvent {
 		// Initialize the inflictor by the world entity (it is never valid as one).
 		// This helps to avoid extra branching from testing for nullity.
 		const edict_t *inflictor { world };
@@ -42,21 +42,8 @@ public:
 		bool IsValidFor( const Bot *bot ) const;
 
 		void Invalidate() {
-			// We used to set zero timestamp but the timestamp acts as an instance id now
-			// and we must comply to the instance id contract
-			// (it remains the same for an invalidated Selection).
+			lastHitTimestamp = 0;
 			inflictor = world;
-		}
-
-		unsigned InstanceId() const override {
-			// This code is aware of unsigned range overflow... even if it should not realistically happen.
-			return (unsigned)( lastHitTimestamp % std::numeric_limits<unsigned>::max() );
-		}
-
-		bool ValidAsSelection() const override {
-			// This is just to comply to the Selection interface.
-			// Return true if the hurt event has not been invalidated.
-			return inflictor != world;
 		}
 	};
 

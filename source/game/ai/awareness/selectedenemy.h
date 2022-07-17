@@ -2,7 +2,6 @@
 #define WSW_0457e810_33e9_4523_9ae9_ad62853bf134_H
 
 #include "enemiestracker.h"
-#include "../selection.h"
 
 class SelectedEnemy {
 	friend class Bot;

@@ -2,7 +2,6 @@
 #define WSW_373346d9_e782_47e7_bb1a_b44a9cc7ef75_H
 
 #include "enemiestracker.h"
-#include "../selection.h"
 
 class Bot;
 class BotAwarenessModule;
