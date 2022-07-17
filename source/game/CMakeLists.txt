@@ -22,6 +22,7 @@ file(GLOB GAME_HEADERS
 	"../qcommon/md5.h"
 	"../qcommon/net.h" # constants and types for address parsing
 	"../qcommon/snap.h" # constants for the antihack system
+	"../qcommon/wswsortbyfield.h"
 )
 
 file(GLOB GAME_SOURCES
@@ -44,6 +45,7 @@ file(GLOB GAME_SOURCES
 	"../qcommon/userinfo.cpp"
 	"../qcommon/wswexceptions.cpp"
 	"../qcommon/wswstringview.cpp"
+	"../qcommon/wswsortbyfield.cpp"
 	"../qcommon/wswfs.cpp"
 )
 

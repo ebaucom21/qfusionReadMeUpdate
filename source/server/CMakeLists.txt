@@ -50,6 +50,7 @@ file(GLOB SERVER_SOURCES
     "../qcommon/wswcurl.cpp"
 	"../qcommon/wswexceptions.cpp"
 	"../qcommon/wswfs.cpp"
+	"../qcommon/wswsortbyfield.cpp"
 	"../qcommon/wswstringview.cpp"
     "../qcommon/cjson.cpp"
     "../qcommon/threads.cpp"

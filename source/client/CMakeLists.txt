@@ -67,6 +67,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/wswcurl.cpp"
 	"../qcommon/wswexceptions.cpp"
 	"../qcommon/wswfs.cpp"
+	"../qcommon/wswsortbyfield.h"
 	"../qcommon/wswstringview.cpp"
     "../server/*.cpp"
     "*.cpp"
