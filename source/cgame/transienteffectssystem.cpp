@@ -34,6 +34,9 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	for( LightEffect *effect = m_lightEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeLightEffect( effect );
 	}
+	for( DelayedEffect *effect = m_delayedEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+		unlinkAndFreeDelayedEffect( effect );
+	}
 }
 
 #define asByteColor( r, g, b, a ) {  \
@@ -740,6 +743,36 @@ auto TransientEffectsSystem::allocLightEffect( int64_t currTime, unsigned durati
 	return effect;
 }
 
+auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
+												 unsigned delay ) -> DelayedEffect * {
+	void *mem = m_delayedEffectsAllocator.allocOrNull();
+	// TODO!!!!!!!!!!!!
+	if( !mem ) {
+		DelayedEffect *oldestEffect = nullptr;
+		// TODO: Choose by nearest timeout/lifetime fraction?
+		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
+		for( DelayedEffect *effect = m_delayedEffectsHead; effect; effect = effect->next ) {
+			if( oldestSpawnTime > effect->spawnTime ) {
+				oldestSpawnTime = effect->spawnTime;
+				oldestEffect = effect;
+			}
+		}
+		assert( oldestEffect );
+		wsw::unlink( oldestEffect, &m_delayedEffectsHead );
+		oldestEffect->~DelayedEffect();
+		mem = oldestEffect;
+	}
+
+	auto *effect = new( mem )DelayedEffect;
+	effect->spawnTime  = currTime;
+	effect->spawnDelay = delay;
+	VectorCopy( origin, effect->origin );
+	VectorCopy( velocity, effect->velocity );
+
+	wsw::link( effect, &m_delayedEffectsHead );
+	return effect;
+}
+
 void TransientEffectsSystem::unlinkAndFreeEntityEffect( EntityEffect *effect ) {
 	wsw::unlink( effect, &m_entityEffectsHead );
 	effect->~EntityEffect();
@@ -752,10 +785,17 @@ void TransientEffectsSystem::unlinkAndFreeLightEffect( LightEffect *effect ) {
 	m_lightEffectsAllocator.free( effect );
 }
 
+void TransientEffectsSystem::unlinkAndFreeDelayedEffect( DelayedEffect *effect ) {
+	wsw::unlink( effect, &m_delayedEffectsHead );
+	effect->~DelayedEffect();
+	m_delayedEffectsAllocator.free( effect );
+}
+
 void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
 
+	simulateDelayedEffects( currTime, timeDeltaSeconds );
 	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 	simulateLightEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 
@@ -844,4 +884,99 @@ void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, fl
 	}
 
 	// TODO: Add and use a bulk submission of lights
+}
+
+void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds ) {
+	DelayedEffect *nextEffect = nullptr;
+	for( DelayedEffect *effect = m_delayedEffectsHead; effect; effect = nextEffect ) { nextEffect = effect->next;
+		// TODO: Normalize angles each step?
+		VectorMA( effect->angles, timeDeltaSeconds, effect->angularVelocity, effect->angles );
+
+		vec3_t idealOrigin;
+		VectorMA( effect->origin, timeDeltaSeconds, effect->velocity, idealOrigin );
+		idealOrigin[2] += 0.5f * effect->gravity * timeDeltaSeconds * timeDeltaSeconds;
+
+		effect->velocity[2] += effect->gravity * timeDeltaSeconds;
+
+		trace_t trace;
+		CM_TransformedBoxTrace( cl.cms, &trace, effect->origin, idealOrigin, vec3_origin, vec3_origin,
+								nullptr, MASK_SOLID | MASK_WATER, nullptr, nullptr, 0 );
+
+		if( trace.fraction == 1.0f ) {
+			VectorCopy( idealOrigin, effect->origin );
+		} else if( !( trace.startsolid | trace.allsolid ) ) {
+			vec3_t velocityDir;
+			VectorCopy( effect->velocity, velocityDir );
+			if( const float squareSpeed = VectorLengthSquared( velocityDir ); squareSpeed > 1.0f ) {
+				const float rcpSpeed = Q_RSqrt( squareSpeed );
+				VectorScale( velocityDir, rcpSpeed, velocityDir );
+				vec3_t reflectedDir;
+				VectorReflect( velocityDir, trace.plane.normal, 0.0f, reflectedDir );
+				addRandomRotationToDir( reflectedDir, &m_rng, 0.9f );
+				const float newSpeed = effect->restitution * squareSpeed * rcpSpeed;
+				VectorScale( reflectedDir, newSpeed, effect->velocity );
+				// This is not correct but is sufficient
+				VectorAdd( trace.endpos, trace.plane.normal, effect->origin );
+			}
+		}
+
+		const int64_t triggerAt = effect->spawnTime + effect->spawnDelay;
+		if( triggerAt <= currTime ) {
+			// Don't spawn in solid or while contacting solid
+			if( trace.fraction == 1.0f && !trace.startsolid ) {
+				if( effect->maybeSomeKindOfHull ) {
+					if( auto *hullRecord = std::get_if<RegularHullSpawnRecord>( &*effect->maybeSomeKindOfHull ) ) {
+						auto method = hullRecord->allocMethod;
+						if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
+							cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->color,
+																	   hullRecord->speed, hullRecord->speedSpread );
+						}
+					}
+					if( auto *hullRecord = std::get_if<ConcentricHullSpawnRecord>( &*effect->maybeSomeKindOfHull ) ) {
+						auto method = hullRecord->allocMethod;
+						if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
+							cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->scale,
+																	   hullRecord->layerParams );
+						}
+					}
+				}
+				if( effect->maybeParticleFlock ) {
+					const ParticleFlockSpawnRecord &flockRecord = *effect->maybeParticleFlock;
+					const Particle::AppearanceRules &arules = *flockRecord.appearanceRules;
+					// These branches use different types
+					if( flockRecord.conicalFlockParams ) {
+						ConicalFlockParams flockParams( *flockRecord.conicalFlockParams );
+						VectorCopy( effect->origin, flockParams.origin );
+						VectorClear( flockParams.offset );
+						AngleVectors( effect->angles, flockParams.dir, nullptr, nullptr );
+						// TODO: "using enum"
+						using Pfsr = ParticleFlockSpawnRecord;
+						switch( flockRecord.bin ) {
+							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
+							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
+							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;
+						}
+					} else {
+						EllipsoidalFlockParams flockParams( *flockRecord.ellipsoidalFlockParams );
+						VectorCopy( effect->origin, flockParams.origin );
+						VectorClear( flockParams.offset );
+						if( flockParams.stretchScale != 1.0f ) {
+							AngleVectors( effect->angles, flockParams.stretchDir, nullptr, nullptr );
+						}
+						// TODO: "using enum"
+						using Pfsr = ParticleFlockSpawnRecord;
+						switch( flockRecord.bin ) {
+							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
+							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
+							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;
+						}
+					}
+				}
+				unlinkAndFreeDelayedEffect( effect );
+			} else if( triggerAt + 25 < currTime ) {
+				// If the "grace" period for getting out of solid has expired
+				unlinkAndFreeDelayedEffect( effect );
+			}
+		}
+	}
 }

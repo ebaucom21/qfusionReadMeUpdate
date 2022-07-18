@@ -28,8 +28,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "simulatedhullssystem.h"
 
+#include <variant>
+
 struct CMShapeList;
 class DrawSceneRequest;
+
+struct ConicalFlockParams;
+struct EllipsoidalFlockParams;
 
 /// Manages "fire-and-forget" effects that usually get spawned upon events.
 class TransientEffectsSystem {
@@ -89,8 +94,59 @@ private:
 		float radius { 0.0f };
 	};
 
+	struct RegularHullSpawnRecord {
+		using Hull        = SimulatedHullsSystem::BaseRegularSimulatedHull;
+		using AllocMethod = Hull * (SimulatedHullsSystem::*)( int64_t, unsigned );
+
+		float scale { 1.0f };
+		float speed { 250.0f };
+		float speedSpread { 50.0f };
+		float color[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+		unsigned timeout { 250 };
+		AllocMethod allocMethod { nullptr };
+	};
+
+	struct ConcentricHullSpawnRecord {
+		using LayerParams = std::span<const SimulatedHullsSystem::HullLayerParams>;
+		using Hull        = SimulatedHullsSystem::BaseConcentricSimulatedHull;
+		using AllocMethod = Hull * (SimulatedHullsSystem::*)( int64_t, unsigned );
+
+		LayerParams layerParams;
+		float scale { 1.0f };
+		unsigned timeout { 250 };
+		AllocMethod allocMethod { nullptr };
+	};
+
+	struct ParticleFlockSpawnRecord {
+		// These pointers refer to objects with a greater, often &'static lifetime
+		const Particle::AppearanceRules *appearanceRules { nullptr };
+		const ConicalFlockParams *conicalFlockParams { nullptr };
+		const EllipsoidalFlockParams *ellipsoidalFlockParams { nullptr };
+		// TODO: Get rid of separate bins in ParticleSystem public interface
+		enum Bin { Small, Medium, Large } bin { Small };
+	};
+
+	struct DelayedEffect {
+		DelayedEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime { 0 };
+
+		unsigned spawnDelay { 250 };
+
+		float origin[3] { 0.0f, 0.0f, 0.0f };
+		float velocity[3] { 0.0f, 0.0f, 0.0f };
+		float angularVelocity[3] { 0.0f, 0.0f, 0.0f };
+		float angles[3] { 0.0f, 0.0f, 0.0f };
+		float restitution { 1.0f };
+		float gravity { 0.0f };
+
+		// Hulls and particle flocks are not mutually exclusive
+		std::optional<std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord>> maybeSomeKindOfHull;
+		std::optional<ParticleFlockSpawnRecord> maybeParticleFlock;
+	};
+
 	void unlinkAndFreeEntityEffect( EntityEffect *effect );
 	void unlinkAndFreeLightEffect( LightEffect *effect );
+	void unlinkAndFreeDelayedEffect( DelayedEffect *effect );
 
 	[[nodiscard]]
 	auto addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
@@ -105,17 +161,24 @@ private:
 	auto allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
 						   unsigned fadeOutOffset ) -> LightEffect *;
 
+	[[nodiscard]]
+	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
+							 unsigned delay ) -> DelayedEffect *;
+
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds );
 
 	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
 	wsw::HeapBasedFreelistAllocator m_lightEffectsAllocator { sizeof( LightEffect ), 72 };
+	wsw::HeapBasedFreelistAllocator m_delayedEffectsAllocator { sizeof( DelayedEffect ), 32 };
 
 	EntityEffect *m_entityEffectsHead { nullptr };
 	LightEffect *m_lightEffectsHead { nullptr };
+	DelayedEffect *m_delayedEffectsHead { nullptr };
 
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };
