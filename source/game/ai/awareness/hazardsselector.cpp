@@ -47,30 +47,30 @@ bool HazardsSelector::TryAddHazard( float damageScore,
 
 class PlasmaBeam {
 	friend class PlasmaBeamsBuilder;
-
-	PlasmaBeam() = default;
 public:
 	explicit PlasmaBeam( const edict_t *firstProjectile )
-		: startProjectile( firstProjectile )
-		, endProjectile( firstProjectile )
-		, owner( game.edicts + firstProjectile->s.ownerNum )
-		, damage( firstProjectile->projectileInfo.maxDamage ) {}
+		: m_startProjectile( firstProjectile )
+		, m_endProjectile( firstProjectile )
+		, m_ownerNum( firstProjectile->s.ownerNum )
+		, m_damage( firstProjectile->projectileInfo.maxDamage ) {}
 
-	const edict_t *startProjectile { nullptr };
-	const edict_t *endProjectile { nullptr };
-	const edict_t *owner { nullptr }; // May be null if this beam consists of projectiles of many players
-	float damage { 0.0f };
+	const edict_t *m_startProjectile { nullptr };
+	const edict_t *m_endProjectile { nullptr };
+	int m_ownerNum { 0 };
+	float m_damage { 0.0f };
 
-	inline Vec3 start() { return Vec3( startProjectile->s.origin ); }
-	inline Vec3 end() { return Vec3( endProjectile->s.origin ); }
+	[[nodiscard]]
+	auto startOrigin() const { return Vec3( m_startProjectile->s.origin ); }
+	[[nodiscard]]
+	auto endOrigin() const { return Vec3( m_endProjectile->s.origin ); }
 
-	inline void AddProjectile( const edict_t *nextProjectile ) {
-		endProjectile = nextProjectile;
-		// If the beam is combined from projectiles of many players, the beam owner is unknown
-		if( owner != nextProjectile->r.owner ) {
-			owner = nullptr;
+	void addProjectile( const edict_t *nextProjectile ) {
+		// Consider the owner to be undefined (it's the computationally cheaper alternative)
+		if( m_startProjectile->s.ownerNum != nextProjectile->s.ownerNum ) [[unlikely]] {
+			m_ownerNum = 0;
 		}
-		damage += nextProjectile->projectileInfo.maxDamage;
+		m_endProjectile = nextProjectile;
+		m_damage += nextProjectile->projectileInfo.maxDamage;
 	}
 };
 
@@ -78,322 +78,280 @@ struct EntAndLineParam {
 	int entNum;
 	float t;
 
-	inline EntAndLineParam( int entNum_, float t_ ) : entNum( entNum_ ), t( t_ ) {}
-	inline bool operator<( const EntAndLineParam &that ) const { return t < that.t; }
+	// Evict entities with lesser line parameters from the heap first
+	[[nodiscard]]
+	bool operator<( const EntAndLineParam &that ) const { return t > that.t; }
 };
+
+class PlasmaBeamsBuilder;
 
 class SameDirBeamsList {
 	friend class PlasmaBeamsBuilder;
 
-	static constexpr float DIST_TO_RAY_THRESHOLD = 200.0f;
-	static constexpr float DIR_DOT_THRESHOLD = 0.995f;
-	static constexpr float PRJ_PROXIMITY_THRESHOLD = 300.0f;
+	// Non-null for non-discarded beams
+	PlasmaBeam *m_plasmaBeams { nullptr };
+	EntAndLineParam *m_projectilesHeap { nullptr };
 
-	PlasmaBeam *plasmaBeams { nullptr };
-	EntAndLineParam *sortedProjectiles { nullptr };
-	Vec3 avgDirection;
+	Vec3 m_avgDirection;
 	// All projectiles in this list belong to this line defined as a (point, direction) pair
-	Vec3 lineEqnPoint;
-	unsigned projectilesCount { 0 };
-	unsigned plasmaBeamsCount { 0 };
-	bool isAlreadySkipped { false };
+	const Vec3 m_lineEquationPoint;
+	unsigned m_projectilesCount { 0 };
+	unsigned m_plasmaBeamsCount { 0 };
+	// These objects are kept even if they are discarded as they act as spatial bins for directions
+	bool m_isDiscarded { false };
 public:
-	SameDirBeamsList( const edict_t *firstEntity, const edict_t *bot );
+	SameDirBeamsList( const edict_t *firstEntity, const edict_t *bot, PlasmaBeamsBuilder *parent );
 
-	~SameDirBeamsList();
+	[[nodiscard]]
+	bool tryAddingProjectile( const edict_t *projectile );
 
-	bool TryAddProjectile( const edict_t *projectile );
+	void buildBeams();
 
-	void BuildBeams();
-
-	inline float ComputeLineEqnParam( const edict_t *projectile ) {
+	[[nodiscard]]
+	auto calcLineEquationParam( const edict_t *projectile ) -> float {
 		const float *origin = projectile->s.origin;
 
-		if( fabsf( avgDirection.X() ) > 0.1f ) {
-			return ( origin[0] - lineEqnPoint.X() ) / avgDirection.X();
+		if( std::fabs( m_avgDirection.X() ) > 0.1f ) {
+			return ( origin[0] - m_lineEquationPoint.X() ) * Q_Rcp( m_avgDirection.X() );
 		}
-		if( fabsf( avgDirection.Y() ) > 0.1f ) {
-			return ( origin[1] - lineEqnPoint.Y() ) / avgDirection.Y();
+		if( std::fabs( m_avgDirection.Y() ) > 0.1f ) {
+			return ( origin[1] - m_lineEquationPoint.Y() ) * Q_Rcp( m_avgDirection.Y() );
 		}
-		return ( origin[2] - lineEqnPoint.Z() ) / avgDirection.Z();
+		return ( origin[2] - m_lineEquationPoint.Z() ) * Q_Rcp( m_avgDirection.Z() );
 	}
 };
 
 class PlasmaBeamsBuilder {
-	wsw::StaticVector<SameDirBeamsList, 1024> sameDirLists;
+	static constexpr unsigned kMaxAcceptedProjectiles = 64;
+	static constexpr unsigned kNumListsForDirections  = kMaxAcceptedProjectiles;
+	static constexpr unsigned kMaxNonDiscardedLists   = 24;
 
-	static constexpr float SQ_HAZARD_RADIUS = 300.0f * 300.0f;
-
-	const edict_t *const bot;
-	HazardsSelector *const hazardSelector;
-public:
-	PlasmaBeamsBuilder( const edict_t *bot_, HazardsSelector *hazardSelector_ )
-		: bot( bot_ ), hazardSelector( hazardSelector_ ) {}
-
-	void AddProjectile( const edict_t *projectile );
-	void FindMostHazardousBeams();
-};
-
-class CachingAllocator {
-	struct alignas( 8 )Chunk {
-		Chunk *prev;
-		Chunk *next;
-		uint8_t *data;
+	struct alignas( EntAndLineParam ) EntAndLineParamBuffer {
+		char _contents[sizeof( EntAndLineParam ) * kMaxAcceptedProjectiles];
 	};
 
-	/**
-	 * We have to ensure that the returned data is at least 8-byte aligned (that's the malloc contract)
-	 */
-	enum { DATA_PADDING = sizeof( Chunk ) % 8 ? 8 - sizeof( Chunk ) % 8 : 0 };
+	struct alignas( PlasmaBeam ) PlasmaBeamsBuffer {
+		char _contents[sizeof( PlasmaBeam ) * kMaxAcceptedProjectiles];
+	};
 
-	const size_t chunkDataSize;
-	unsigned numUsedChunks { 0 };
-	Chunk *freeChunksHead { nullptr };
+	EntAndLineParamBuffer m_entAndLineParamBuffers[kMaxNonDiscardedLists];
+	PlasmaBeamsBuffer m_plasmaBeamsBuffers[kMaxNonDiscardedLists];
+	unsigned m_numBuffersInUse { 0 };
 
+	wsw::StaticVector<SameDirBeamsList, kNumListsForDirections> m_sameDirLists;
+
+	const edict_t *const m_bot;
 public:
-	explicit CachingAllocator( size_t chunkDataSize_ ): chunkDataSize( chunkDataSize_ ) {}
+	explicit PlasmaBeamsBuilder( const edict_t *bot ) : m_bot( bot ) {}
 
-	~CachingAllocator() {
-		// Everything must be released properly by a user at the moment of this call
-		assert( !numUsedChunks );
-
-		Chunk *nextChunk;
-		for( Chunk *chunk = freeChunksHead; chunk; chunk = nextChunk ) {
-			nextChunk = chunk->next;
-			Q_free( chunk );
-		}
+	[[nodiscard]]
+	auto allocNextBuffers() -> std::pair<void *, void *> {
+		assert( m_numBuffersInUse < kMaxNonDiscardedLists );
+		void *first  = &m_entAndLineParamBuffers[m_numBuffersInUse];
+		void *second = &m_plasmaBeamsBuffers[m_numBuffersInUse];
+		m_numBuffersInUse++;
+		return std::make_pair( first, second );
 	}
 
-	uint8_t *Alloc() {
-		if( freeChunksHead ) {
-			auto *const chunk = wsw::unlink( freeChunksHead, &freeChunksHead );
-			numUsedChunks++;
-			return chunk->data;
-		}
-
-		const size_t size = sizeof( Chunk ) + DATA_PADDING + chunkDataSize;
-		auto *const mem = (uint8_t *)Q_malloc( size );
-		auto *const chunk = (Chunk *)mem;
-		chunk->data = mem + sizeof( Chunk ) + DATA_PADDING;
-		numUsedChunks++;
-		return chunk->data;
-	}
-
-	void Free( void *p ) {
-		if( !p ) {
-			return;
-		}
-		auto *chunk = (Chunk *)( ( (uint8_t *)p ) - sizeof( Chunk ) - DATA_PADDING );
-		wsw::link( chunk, &freeChunksHead );
-		numUsedChunks--;
-	}
+	void addProjectilesByEntNums( const EntNumsVector &entNums );
+	void findMostHazardousBeams( HazardsSelector *hazardsSelector );
 };
 
-static wsw::StaticVector<HazardsSelectorCache, 1> instanceHolder;
-HazardsSelectorCache *HazardsSelectorCache::instance = nullptr;
+// Make sure we don't allocate on stack too much.
+// TODO: Let the caller use alloca() and supply buffers to the constructor?
+static_assert( sizeof( PlasmaBeamsBuilder ) < 1u << 16 );
 
-HazardsSelectorCache::HazardsSelectorCache() {
-	auto *mem = storageMem = (uint8_t *)Q_malloc( 2 * sizeof( CachingAllocator ) );
-	sortedProjectilesAllocator = new( mem )CachingAllocator( sizeof( EntAndLineParam ) * MAX_EDICTS );
-	mem += sizeof( CachingAllocator );
-	plasmaBeamsAllocator = new( mem )CachingAllocator( sizeof( PlasmaBeam ) * MAX_EDICTS );
-}
+SameDirBeamsList::SameDirBeamsList( const edict_t *firstEntity, const edict_t *bot, PlasmaBeamsBuilder *parent )
+	: m_avgDirection( firstEntity->velocity ), m_lineEquationPoint( firstEntity->s.origin ) {
+	if( m_avgDirection.normalizeFast() ) [[likely]] {
+		const Vec3 botToLinePoint = m_lineEquationPoint - bot->s.origin;
+		const float squaredDistToBeamLine = botToLinePoint.Cross( m_avgDirection ).SquaredLength();
+		if( squaredDistToBeamLine < wsw::square( 200.0f ) ) {
+			auto [projectilesBuffer, beamsBuffer] = parent->allocNextBuffers();
+			m_projectilesHeap = (EntAndLineParam *)projectilesBuffer;
+			m_plasmaBeams     = (PlasmaBeam *)beamsBuffer;
 
-HazardsSelectorCache::~HazardsSelectorCache() {
-	sortedProjectilesAllocator->~CachingAllocator();
-	plasmaBeamsAllocator->~CachingAllocator();
-	Q_free( storageMem );
-}
-
-void HazardsSelectorCache::Init() {
-	assert( !instance );
-	instance = new( instanceHolder.unsafe_grow_back() )HazardsSelectorCache;
-}
-
-void HazardsSelectorCache::Shutdown() {
-	if( instance ) {
-		instance = nullptr;
-		instanceHolder.clear();
-	}
-}
-
-SameDirBeamsList::SameDirBeamsList( const edict_t *firstEntity, const edict_t *bot )
-	: avgDirection( firstEntity->velocity ), lineEqnPoint( firstEntity->s.origin ) {
-	if( !avgDirection.normalizeFast() ) {
-		isAlreadySkipped = true;
-		return;
-	}
-
-	// If distance from an infinite line of beam to bot is greater than threshold, skip;
-	// Let's compute distance from bot to the beam infinite line;
-	Vec3 botOrigin( bot->s.origin );
-	float squaredDistanceToBeamLine = ( botOrigin - lineEqnPoint ).Cross( avgDirection ).SquaredLength();
-	if( squaredDistanceToBeamLine > DIST_TO_RAY_THRESHOLD * DIST_TO_RAY_THRESHOLD ) {
-		isAlreadySkipped = true;
-		return;
-	}
-
-	auto *const cache = HazardsSelectorCache::Instance();
-	sortedProjectiles = (EntAndLineParam *)cache->sortedProjectilesAllocator->Alloc();
-	plasmaBeams = (PlasmaBeam *)cache->plasmaBeamsAllocator->Alloc();
-
-	sortedProjectiles[projectilesCount++] = EntAndLineParam( ENTNUM( firstEntity ), ComputeLineEqnParam( firstEntity ) );
-}
-
-SameDirBeamsList::~SameDirBeamsList() {
-	if( isAlreadySkipped ) {
-		return;
-	}
-	auto *const cache = HazardsSelectorCache::Instance();
-	cache->sortedProjectilesAllocator->Free( sortedProjectiles );
-	cache->plasmaBeamsAllocator->Free( plasmaBeams );
-	sortedProjectiles = nullptr;
-	plasmaBeams = nullptr;
-}
-
-bool SameDirBeamsList::TryAddProjectile( const edict_t *projectile ) {
-	Vec3 direction( projectile->velocity );
-
-	if( !direction.normalizeFast() ) {
-		return false;
-	}
-
-	if( direction.Dot( avgDirection ) < DIR_DOT_THRESHOLD ) {
-		return false;
-	}
-
-	// Do not process a projectile, but "consume" it anyway...
-	if( isAlreadySkipped ) {
-		return true;
-	}
-
-	// Update average direction
-	avgDirection += direction;
-	avgDirection.normalizeFastOrThrow();
-
-	sortedProjectiles[projectilesCount++] = EntAndLineParam( ENTNUM( projectile ), ComputeLineEqnParam( projectile ) );
-	std::push_heap( sortedProjectiles, sortedProjectiles + projectilesCount );
-
-	return true;
-}
-
-void SameDirBeamsList::BuildBeams() {
-	if( isAlreadySkipped ) {
-		return;
-	}
-
-	if( projectilesCount == 0 ) {
-		AI_FailWith( "SameDirBeamsList::BuildBeams()", "Projectiles count: %d\n", projectilesCount );
-	}
-
-	const edict_t *const gameEdicts = game.edicts;
-
-	// Get the projectile that has a maximal `t`
-	std::pop_heap( sortedProjectiles, sortedProjectiles + projectilesCount );
-	const edict_t *prevProjectile = gameEdicts + sortedProjectiles[--projectilesCount].entNum;
-
-	plasmaBeams[plasmaBeamsCount++] = PlasmaBeam( prevProjectile );
-
-	while( projectilesCount > 0 ) {
-		// Get the projectile that has a maximal `t` atm
-		std::pop_heap( sortedProjectiles, sortedProjectiles + projectilesCount );
-		const edict_t *currProjectile = gameEdicts + sortedProjectiles[--projectilesCount].entNum;
-
-		float prevToCurrLen = ( Vec3( prevProjectile->s.origin ) - currProjectile->s.origin ).SquaredLength();
-		if( prevToCurrLen < PRJ_PROXIMITY_THRESHOLD * PRJ_PROXIMITY_THRESHOLD ) {
-			// Add the projectile to the last beam
-			plasmaBeams[plasmaBeamsCount - 1].AddProjectile( currProjectile );
+			m_projectilesHeap[m_projectilesCount++] = {
+				.entNum = firstEntity->s.number, .t = calcLineEquationParam( firstEntity )
+			};
 		} else {
-			// Construct new plasma beam at the end of beams array
-			plasmaBeams[plasmaBeamsCount++] = PlasmaBeam( currProjectile );
+			m_isDiscarded = true;
+		}
+	} else {
+		m_isDiscarded = true;
+	}
+}
+
+bool SameDirBeamsList::tryAddingProjectile( const edict_t *projectile ) {
+	if( Vec3 velocityDir( projectile->velocity ); velocityDir.normalizeFast() ) {
+		if( velocityDir.Dot( m_avgDirection ) > 0.995f ) {
+			// Just consume the projectile (it belongs to this spatial bin) but don't actually add
+			if( !m_isDiscarded ) {
+				// Update the average direction
+				m_avgDirection += velocityDir;
+				// This never fails as dirs are spatially close
+				(void)m_avgDirection.normalizeFast();
+
+				m_projectilesHeap[m_projectilesCount++] = {
+					.entNum = projectile->s.number, .t = calcLineEquationParam( projectile )
+				};
+				// TODO: Add/use specialized subroutines for using heaps (similar to wsw::sortByField())
+				std::push_heap( m_projectilesHeap, m_projectilesHeap + m_projectilesCount );
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+void SameDirBeamsList::buildBeams() {
+	if( !m_isDiscarded ) {
+		assert( m_projectilesCount );
+
+		const edict_t *const gameEnts = game.edicts;
+
+		// Get the projectile that has a maximal line equation parameter
+		std::pop_heap( m_projectilesHeap, m_projectilesHeap + m_projectilesCount );
+		--m_projectilesCount;
+		const edict_t *prevProjectile = gameEnts + m_projectilesHeap[m_projectilesCount].entNum;
+
+		m_plasmaBeams[m_plasmaBeamsCount++] = PlasmaBeam( prevProjectile );
+
+		while( m_projectilesCount > 0 ) {
+			// Get the projectile with the maximal line parameter remaining so far
+			std::pop_heap( m_projectilesHeap, m_projectilesHeap + m_projectilesCount );
+			--m_projectilesCount;
+			const edict_t *currProjectile = gameEnts + m_projectilesHeap[m_projectilesCount].entNum;
+
+			const float prevToCurrDistance = DistanceSquared( prevProjectile->s.origin, currProjectile->s.origin );
+			if( prevToCurrDistance < wsw::square( 300.0f ) ) {
+				// Add the projectile to the last beam
+				m_plasmaBeams[m_plasmaBeamsCount - 1].addProjectile( currProjectile );
+			} else {
+				// Construct new plasma beam at the end of beams array
+				m_plasmaBeams[m_plasmaBeamsCount++] = PlasmaBeam( currProjectile );
+			}
 		}
 	}
 }
 
-void PlasmaBeamsBuilder::AddProjectile( const edict_t *projectile ) {
-	for( unsigned i = 0; i < sameDirLists.size(); ++i ) {
-		if( sameDirLists[i].TryAddProjectile( projectile ) ) {
-			return;
+void PlasmaBeamsBuilder::addProjectilesByEntNums( const EntNumsVector &entNums ) {
+	const edict_t *const gameEnts = game.edicts;
+
+	// Don't take more than kMaxAcceptedProjectiles entities.
+	// Even if they all go to the same list, a list cannot accept more than kMaxAcceptedProjectiles entities.
+	for( unsigned i = 0, limit = wsw::min( entNums.size(), kMaxAcceptedProjectiles ); i < limit; ++i ) {
+		const edict_t *const ent = gameEnts + entNums[i];
+		assert( ent->s.type == ET_PLASMA );
+
+		bool hasAddedEntity = false;
+		for( SameDirBeamsList &listForDir: m_sameDirLists ) {
+			if( listForDir.tryAddingProjectile( ent ) ) {
+				hasAddedEntity = true;
+				break;
+			}
+		}
+
+		if( !hasAddedEntity ) {
+			if( m_numBuffersInUse < kMaxNonDiscardedLists ) {
+				void *mem = m_sameDirLists.unsafe_grow_back();
+				new( mem )SameDirBeamsList( ent, m_bot, this );
+			} else {
+				// Stop all processing at this.
+				return;
+			}
 		}
 	}
-	new ( sameDirLists.unsafe_grow_back() )SameDirBeamsList( projectile, bot );
 }
 
-void PlasmaBeamsBuilder::FindMostHazardousBeams() {
-	trace_t trace;
-	Vec3 botOrigin( bot->s.origin );
-
-	for( unsigned i = 0; i < sameDirLists.size(); ++i ) {
-		sameDirLists[i].BuildBeams();
+void PlasmaBeamsBuilder::findMostHazardousBeams( HazardsSelector *hazardsSelector ) {
+	for( SameDirBeamsList &list: m_sameDirLists ) {
+		list.buildBeams();
 	}
 
-	const auto *weaponDef = GS_GetWeaponDef( WEAP_PLASMAGUN );
-	const float splashRadius = 1.2f * 0.5f * ( weaponDef->firedef.splash_radius + weaponDef->firedef_weak.splash_radius );
-	float minDamageScore = 0.0f;
+	const auto *const weaponDef  = GS_GetWeaponDef( WEAP_PLASMAGUN );
+	const auto *const gameEnts   = game.edicts;
+	const float *const botOrigin = m_bot->s.origin;
 
-	for( const SameDirBeamsList &beamsList: sameDirLists ) {
-		if( beamsList.isAlreadySkipped ) {
+	float splashRadius = 0.0f;
+	// Consider it to be twice the average
+	splashRadius += (float)weaponDef->firedef.splash_radius;
+	splashRadius += (float)weaponDef->firedef_weak.splash_radius;
+
+	float maxDamageScoreSoFar = 0.0f;
+
+	for( const SameDirBeamsList &beamsList: m_sameDirLists ) {
+		if( beamsList.m_isDiscarded ) {
 			continue;
 		}
 
-		for( unsigned i = 0; i < beamsList.plasmaBeamsCount; ++i ) {
-			PlasmaBeam *beam = beamsList.plasmaBeams + i;
+		for( unsigned i = 0; i < beamsList.m_plasmaBeamsCount; ++i ) {
+			const PlasmaBeam *const beam = beamsList.m_plasmaBeams + i;
 
-			Vec3 botToBeamStart = beam->start() - botOrigin;
-			Vec3 botToBeamEnd = beam->end() - botOrigin;
+			// Do cheap dot product -based tests first
 
-			if( botToBeamStart.SquaredLength() > SQ_HAZARD_RADIUS && botToBeamEnd.SquaredLength() > SQ_HAZARD_RADIUS ) {
-				continue;
+			if( beam->m_startProjectile == beam->m_endProjectile ) {
+				const Vec3 botToBeam = beam->startOrigin() - botOrigin;
+				// If this projectile has entirely passed the bot and is flying away, skip it
+				if( botToBeam.Dot( beamsList.m_avgDirection ) > 0 ) {
+					continue;
+				}
+			} else {
+				const Vec3 botToBeamStart = beam->startOrigin() - botOrigin;
+				const Vec3 botToBeamEnd   = beam->endOrigin() - botOrigin;
+
+				const float dotBotToStartWithDir = botToBeamStart.Dot( beamsList.m_avgDirection );
+				const float dotBotToEndWithDir   = botToBeamEnd.Dot( beamsList.m_avgDirection );
+
+				// If the aggregate beam has entirely passed the bot and is flying away, skip it
+				if( dotBotToStartWithDir > 0 && dotBotToEndWithDir > 0 ) {
+					continue;
+				}
 			}
-
-			Vec3 beamStartToEnd = beam->end() - beam->start();
-
-			float dotBotToStartWithDir = botToBeamStart.Dot( beamStartToEnd );
-			float dotBotToEndWithDir = botToBeamEnd.Dot( beamStartToEnd );
-
-			// If the beam has entirely passed the bot and is flying away, skip it
-			if( dotBotToStartWithDir > 0 && dotBotToEndWithDir > 0 ) {
-				continue;
-			}
-
-			Vec3 tracedBeamStart = beam->start();
-			Vec3 tracedBeamEnd = beam->end();
 
 			// It works for single-projectile beams too
-			Vec3 beamDir( beam->startProjectile->velocity );
-			if( !beamDir.normalizeFast() ) {
-				continue;
-			}
+			const Vec3 tracedBeamStart = beam->startOrigin();
+			const Vec3 tracedBeamEnd   = beam->endOrigin() + 512.0f * beamsList.m_avgDirection;
 
-			tracedBeamEnd += 256.0f * beamDir;
-
-			G_Trace( &trace, tracedBeamStart.Data(), nullptr, nullptr, tracedBeamEnd.Data(), nullptr, MASK_AISOLID );
-			if( trace.fraction == 1.0f ) {
-				continue;
-			}
-
-			// Direct hit
-			if( bot == game.edicts + trace.ent ) {
-				float damageScore = beam->damage;
-				if( damageScore > minDamageScore ) {
-					if( hazardSelector->TryAddHazard( damageScore, trace.endpos,
-													  beamsList.avgDirection.Data(),
-													  beam->owner, 1.5f * splashRadius ) ) {
-						minDamageScore = damageScore;
+			trace_t trace;
+			// PVS prior checks are useless in this case.
+			// They will always pass, except some bizarre case with merging beams from different sides of a wall,
+			// which is extremely unlikely.
+			// TODO: Test against some kind of "fat" bot bounds
+			// TODO: Check line-to-bot distance, assuming hit point is past the bot with regard to line parameter
+			G_Trace( &trace, tracedBeamStart.Data(), nullptr, nullptr, tracedBeamEnd.Data(), nullptr, MASK_SHOT );
+			if( trace.fraction != 1.0f ) {
+				// Direct hit
+				if( m_bot == gameEnts + trace.ent ) {
+					// Raise score for blatant directs
+					const float damageScore = 1.5f * beam->m_damage;
+					const edict_t *owner    = beam->m_ownerNum ? gameEnts + beam->m_ownerNum : nullptr;
+					if( damageScore > maxDamageScoreSoFar ) {
+						if( hazardsSelector->TryAddHazard( damageScore, trace.endpos,
+														   beamsList.m_avgDirection.Data(),
+														   owner, splashRadius ) ) {
+							maxDamageScoreSoFar = damageScore;
+						}
 					}
-				}
-				continue;
-			}
-
-			// Splash hit
-			float hitVecLen = botOrigin.FastDistanceTo( trace.endpos );
-			if( hitVecLen < splashRadius ) {
-				float damageScore = beam->damage * ( 1.0f - hitVecLen / splashRadius );
-				if( damageScore > minDamageScore ) {
-					if( hazardSelector->TryAddHazard( damageScore, trace.endpos,
-													  beamsList.avgDirection.Data(),
-													  beam->owner, 1.5f * splashRadius ) ) {
-						minDamageScore = damageScore;
+				} else {
+					const float hitToBotDistance = DistanceFast( botOrigin, trace.endpos );
+					if( hitToBotDistance < wsw::square( splashRadius ) ) {
+						// Check also the trace between the hit point and the bot.
+						// This still fails for pillar-like environment, but it's better than nothing.
+						const Vec3 hitPoint( Vec3( trace.endpos ) + trace.plane.normal );
+						G_Trace( &trace, botOrigin, nullptr, nullptr, hitPoint.Data(), m_bot, MASK_SHOT );
+						if( trace.fraction == 1.0f ) {
+							const float distanceFrac = hitToBotDistance * Q_Rcp( splashRadius );
+							const float damageScore  = beam->m_damage * ( 1.0f - distanceFrac );
+							const edict_t *owner     = beam->m_ownerNum ? gameEnts + beam->m_ownerNum : nullptr;
+							if( damageScore > maxDamageScoreSoFar ) {
+								if( hazardsSelector->TryAddHazard( damageScore, trace.endpos,
+																	beamsList.m_avgDirection.Data(),
+																	owner, splashRadius ) ) {
+									maxDamageScoreSoFar = damageScore;
+								}
+							}
+						}
 					}
 				}
 			}
@@ -473,13 +431,9 @@ void HazardsSelector::FindWaveHazards( const EntNumsVector &entNums ) {
 }
 
 void HazardsSelector::FindPlasmaHazards( const EntNumsVector &entNums ) {
-	const edict_t *gameEdicts = game.edicts;
-	PlasmaBeamsBuilder plasmaBeamsBuilder( gameEdicts + bot->EntNum(), this );
-
-	for( unsigned i = 0; i < entNums.size(); ++i ) {
-		plasmaBeamsBuilder.AddProjectile( gameEdicts + entNums[i] );
-	}
-	plasmaBeamsBuilder.FindMostHazardousBeams();
+	PlasmaBeamsBuilder plasmaBeamsBuilder( game.edicts + bot->EntNum() );
+	plasmaBeamsBuilder.addProjectilesByEntNums( entNums );
+	plasmaBeamsBuilder.findMostHazardousBeams( this );
 }
 
 void HazardsSelector::FindLaserHazards( const EntNumsVector &entNums ) {

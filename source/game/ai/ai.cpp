@@ -171,7 +171,6 @@ void AI_InitLevel( void ) {
 	AiAasRouteCache::Init( *AiAasWorld::instance() );
 	TacticalSpotsRegistry::Init( level.mapname );
 	AiGroundTraceCache::Init();
-	HazardsSelectorCache::Init();
 
 	AiManager::Init( g_gametype->string, level.mapname );
 
@@ -199,7 +198,6 @@ void AI_AfterLevelScriptShutdown() {
 
 	wsw::ai::ClassifiedEntitiesCache::shutdown();
 	NavEntitiesRegistry::Shutdown();
-	HazardsSelectorCache::Shutdown();
 	AiGroundTraceCache::Shutdown();
 	TacticalSpotsRegistry::Shutdown();
 	AiAasRouteCache::Shutdown();
