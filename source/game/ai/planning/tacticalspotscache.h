@@ -3,6 +3,8 @@
 
 #include "../ailocal.h"
 
+#include <variant>
+
 class BotTacticalSpotsCache {
 public:
 	explicit BotTacticalSpotsCache( Bot *bot ) : m_bot( bot ) {}
@@ -37,25 +39,34 @@ public:
 private:
 	// Use just a plain array for caching spots.
 	// High number of distinct (and thus searched for) spots will kill TacticalSpotsRegistry performance first.
-	template <typename Payload>
+	template <typename Payload, unsigned MaxCachedSpots, unsigned CapacityOfArgs = 2>
 	struct SpotsCache {
+		// Should be std::any, but it is very likely to allocate Vec3 copies on heap
+		using CachedArg = std::variant<Vec3, unsigned, int, float, bool>;
+
 		struct Entry {
-			float validForBotOrigin[3];
-			float validForEnemyOrigin[3];
+			wsw::StaticVector<CachedArg, CapacityOfArgs> validForArgs;
 			std::optional<Payload> payload;
 		};
 
-		wsw::StaticVector<Entry, 3> m_entries;
+		wsw::StaticVector<Entry, MaxCachedSpots> m_entries;
 
 		void clear() { m_entries.clear(); }
 
 		[[nodiscard]]
-		auto tryGettingCached( const float *botOrigin, const float *enemyOrigin ) const -> std::optional<Payload> {
+		auto tryGettingCached( const CachedArg *argsBegin, const CachedArg *argsEnd ) const -> std::optional<Payload> {
 			for( const Entry &entry: m_entries ) {
-				if( VectorCompare( botOrigin, entry.validForBotOrigin ) ) {
-					if( VectorCompare( enemyOrigin, entry.validForEnemyOrigin ) ) {
-						return entry.payload;
+				assert( (size_t)( argsEnd - argsBegin ) == entry.validForArgs.size() );
+				// TODO: Use a lightweight <algorithm> replacement
+				bool matches = true;
+				for( unsigned i = 0; i < entry.validForArgs.size(); ++i ) {
+					if( entry.validForArgs[i] != *( argsBegin + i ) ) {
+						matches = false;
+						break;
 					}
+				}
+				if( matches ) {
+					return entry.payload;
 				}
 			}
 			return std::nullopt;
@@ -64,10 +75,10 @@ private:
 
 	Bot *const m_bot;
 
-	typedef SpotsCache<Vec3> SingleOriginSpotsCache;
+	typedef SpotsCache<Vec3, 1> SingleOriginSpotsCache;
 	SingleOriginSpotsCache m_coverSpotsTacticalSpotsCache;
 
-	typedef SpotsCache<DualOrigin> DualOriginSpotsCache;
+	typedef SpotsCache<DualOrigin, 1> DualOriginSpotsCache;
 	DualOriginSpotsCache m_runAwayTeleportOriginsCache;
 	DualOriginSpotsCache m_runAwayJumppadOriginsCache;
 	DualOriginSpotsCache m_runAwayElevatorOriginsCache;
@@ -153,9 +164,9 @@ private:
 	[[nodiscard]]
 	bool botHasAlmostSameOrigin( const Vec3 &origin ) const;
 
-	template <typename Result, typename Method>
-	auto getThroughCache( SpotsCache<Result> *cache, const float *botOrigin,
-						  const float *enemyOrigin, Method method ) -> std::optional<Result>;
+	template <typename Result, typename Cache, typename Method, typename... Args>
+	[[nodiscard]]
+	auto getThroughCache( Cache *cache, Method method, const Args &...args ) -> std::optional<Result>;
 
 	typedef std::optional<Vec3> ( BotTacticalSpotsCache::*FindSingleOriginMethod )( const Vec3 &, const Vec3 & );
 

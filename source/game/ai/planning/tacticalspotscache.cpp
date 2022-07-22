@@ -37,10 +37,12 @@ inline bool BotTacticalSpotsCache::findForOrigin( const ProblemParams &problemPa
 	return AdvantageProblemSolver( originParams, problemParams ).findSingle( result );
 }
 
-template <typename Result, typename Method>
-auto BotTacticalSpotsCache::getThroughCache( SpotsCache<Result> *cache, const float *botOrigin,
-											 const float *enemyOrigin, Method method ) -> std::optional<Result> {
-	if( std::optional<Result> cached = cache->tryGettingCached( botOrigin, enemyOrigin ) ) {
+template <typename Result, typename Cache, typename Method, typename... Args>
+auto BotTacticalSpotsCache::getThroughCache( Cache *cache, Method method, const Args &...args )
+	-> std::optional<Result> {
+	const typename Cache::CachedArg unpacked[] { args... };
+
+	if( std::optional<Result> cached = cache->tryGettingCached( std::begin( unpacked ), std::end( unpacked ) ) ) {
 		return cached;
 	}
 
@@ -48,12 +50,12 @@ auto BotTacticalSpotsCache::getThroughCache( SpotsCache<Result> *cache, const fl
 		return std::nullopt;
 	}
 
-	std::optional<Result> result = ( this->*method )( Vec3( botOrigin ), Vec3( enemyOrigin ) );
-	cache->m_entries.emplace_back( {
-		.validForBotOrigin   = { botOrigin[0], botOrigin[1], botOrigin[2] },
-		.validForEnemyOrigin = { enemyOrigin[0], enemyOrigin[1], enemyOrigin[2] },
-		.payload             = result,
-	});
+	void *const mem   = cache->m_entries.unsafe_grow_back();
+	auto *const entry = new( mem )typename Cache::Entry;
+
+	std::optional<Result> result = ( this->*method )( args... );
+	entry->validForArgs.insert( entry->validForArgs.begin(), std::begin( unpacked ), std::end( unpacked ) );
+	entry->payload = result;
 
 	return result;
 }
@@ -62,14 +64,16 @@ auto BotTacticalSpotsCache::getThroughCache( SpotsCache<Result> *cache, const fl
 auto BotTacticalSpotsCache::getSingleOriginSpot( SingleOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
 												 const Vec3 &enemyOrigin, FindSingleOriginMethod findMethod )
 												 -> std::optional<Vec3> {
-	return getThroughCache( cachedSpots, botOrigin.Data(), enemyOrigin.Data(), findMethod );
+	return getThroughCache<Vec3, SingleOriginSpotsCache, FindSingleOriginMethod, Vec3, Vec3>(
+		cachedSpots, findMethod, botOrigin, enemyOrigin );
 }
 
 [[nodiscard]]
 auto BotTacticalSpotsCache::getDualOriginSpot( DualOriginSpotsCache *cachedSpots, const Vec3 &botOrigin,
 											   const Vec3 &enemyOrigin, FindDualOriginMethod findMethod )
 											   -> std::optional<DualOrigin> {
-	return getThroughCache( cachedSpots, botOrigin.Data(), enemyOrigin.Data(), findMethod );
+	return getThroughCache<DualOrigin, DualOriginSpotsCache, FindDualOriginMethod, Vec3, Vec3>(
+		cachedSpots, findMethod, botOrigin, enemyOrigin );
 }
 
 template <typename ProblemParams>
