@@ -240,9 +240,6 @@ public:
 		PendingJumppadDest,
 		PendingTeleportDest,
 
-		HazardHitPoint,
-		HazardDirection,
-		DodgeHazardSpot,
 		ThreatPossibleOrigin,
 		LostEnemyLastSeenOrigin,
 

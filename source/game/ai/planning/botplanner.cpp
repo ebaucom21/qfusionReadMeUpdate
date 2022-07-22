@@ -8,18 +8,6 @@
 BotPlanner::BotPlanner( Bot *bot_, BotPlanningModule *module_ )
 	: AiPlanner( bot_ ), bot( bot_ ), module( module_ ) {}
 
-bool BotPlanner::FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin ) {
-	float radius = 128.0f + 192.0f * bot->Skill();
-	typedef DodgeHazardProblemSolver Solver;
-	Solver::OriginParams originParams( game.edicts + bot->EntNum(), radius, bot->RouteCache() );
-	Solver::ProblemParams problemParams( hazard.hitPoint, hazard.direction, hazard.IsSplashLike() );
-	problemParams.setCheckToAndBackReach( false );
-	problemParams.setMinHeightAdvantageOverOrigin( -64.0f );
-	// Influence values are quite low because evade direction factor must be primary
-	problemParams.setMaxFeasibleTravelTimeMillis( 2500 );
-	return Solver( originParams, problemParams ).findSingle( spotOrigin );
-}
-
 void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 	worldState->setOriginVar( WorldState::BotOrigin, OriginVar( Vec3( bot->Origin() ) ) );
 
@@ -81,16 +69,9 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		}
 	}
 
-	const Hazard *activeHazard = bot->PrimaryHazard();
-	if( bot->Skill() > 0.33f && activeHazard ) {
-		worldState->setFloatVar( WorldState::PotentialHazardDamage, FloatVar( activeHazard->damage ) );
-		worldState->setOriginVar( WorldState::HazardHitPoint, OriginVar( activeHazard->hitPoint ) );
-		// TODO: It should be some DirVar
-		worldState->setOriginVar( WorldState::HazardDirection, OriginVar( activeHazard->direction ) );
-		// TODO: Find it in a lazy fashion (use OriginLazyVar)
-		vec3_t dodgeHazardSpot;
-		if( FindDodgeHazardSpot( *activeHazard, dodgeHazardSpot ) ) {
-			worldState->setOriginVar( WorldState::DodgeHazardSpot, OriginVar( Vec3( dodgeHazardSpot ) ) );
+	if( bot->Skill() > 0.33f ) {
+		if( const Hazard *activeHazard = bot->PrimaryHazard() ) {
+			worldState->setFloatVar( WorldState::PotentialHazardDamage, FloatVar( activeHazard->damage ) );
 		}
 	}
 

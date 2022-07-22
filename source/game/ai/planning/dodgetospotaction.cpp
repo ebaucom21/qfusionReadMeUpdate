@@ -30,6 +30,11 @@ PlannerNode *DodgeToSpotAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
+	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToHazard ) ) ) {
+		Debug( "Has already reacted to hazard in the given world state\n" );
+		return nullptr;
+	}
+
 	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
 	const float *actualOrigin = Self()->Origin();
 	if( botOrigin.DistanceTo( actualOrigin ) >= 1.0f ) {
@@ -37,32 +42,34 @@ PlannerNode *DodgeToSpotAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	// TODO: Make it to be a lazy var
-	const std::optional<OriginVar> dodgeSpotVar = worldState.getOriginVar( WorldState::DodgeHazardSpot );
-	if( !dodgeSpotVar ) {
-		Debug( "Spot for dodging a hazard is missing in the given world state, can't dodge\n" );
+	const Hazard *hazard = Self()->PrimaryHazard();
+	assert( hazard && hazard->IsValid() );
+
+	std::optional<Vec3> spotOrigin = module->tacticalSpotsCache.getDodgeHazardSpot( botOrigin, hazard->hitPoint,
+																					hazard->direction,
+																					hazard->splashRadius > 0 );
+
+	if( !spotOrigin ) {
+		Debug( "Failed to find a dodge hazard spot for the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 spotOrigin = *dodgeSpotVar;
-	const int travelTimeMillis = Self()->CheckTravelTimeMillis( botOrigin, spotOrigin );
+	const int travelTimeMillis = Self()->CheckTravelTimeMillis( botOrigin, *spotOrigin );
 	if( !travelTimeMillis ) {
 		Debug( "Warning: can't find travel time from the bot origin to the spot origin in the given world state\n" );
 		return nullptr;
 	}
 	
-	DodgeToSpotActionRecord *record = pool.New( Self(), spotOrigin );
+	DodgeToSpotActionRecord *record = pool.New( Self(), *spotOrigin );
 
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, (float)travelTimeMillis );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( spotOrigin ) );
+	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( *spotOrigin ) );
 	plannerNode->worldState.setBoolVar( WorldState::HasReactedToHazard, BoolVar( true ) );
 	plannerNode->worldState.clearFloatVar( WorldState::PotentialHazardDamage );
-	plannerNode->worldState.clearOriginVar( WorldState::HazardHitPoint );
-	plannerNode->worldState.clearOriginVar( WorldState::HazardDirection );
 
 	return plannerNode;
 }

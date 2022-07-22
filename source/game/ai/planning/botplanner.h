@@ -19,8 +19,6 @@ class BotPlanner : public AiPlanner {
 	Bot *const bot;
 	BotPlanningModule *const module;
 
-	bool FindDodgeHazardSpot( const Hazard &hazard, vec3_t spotOrigin );
-
 	void PrepareCurrWorldState( WorldState *worldState ) override;
 
 	bool ShouldSkipPlanning() const override;

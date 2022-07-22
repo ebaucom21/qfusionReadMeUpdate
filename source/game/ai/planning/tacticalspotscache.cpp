@@ -2,6 +2,7 @@
 #include "../combat/tacticalspotsregistry.h"
 #include "../combat/advantageproblemsolver.h"
 #include "../combat/coverproblemsolver.h"
+#include "../combat/dodgehazardproblemsolver.h"
 
 inline const AiAasRouteCache *BotTacticalSpotsCache::RouteCache() {
 	return m_bot->RouteCache();
@@ -23,6 +24,8 @@ void BotTacticalSpotsCache::clear() {
 	m_runAwayTeleportOriginsCache.clear();
 	m_runAwayJumppadOriginsCache.clear();
 	m_runAwayElevatorOriginsCache.clear();
+
+	m_dodgeHazardSpotsCache.clear();
 }
 
 template <typename ProblemParams>
@@ -76,6 +79,14 @@ auto BotTacticalSpotsCache::getDualOriginSpot( DualOriginSpotsCache *cachedSpots
 		cachedSpots, findMethod, botOrigin, enemyOrigin );
 }
 
+[[nodiscard]]
+auto BotTacticalSpotsCache::getDodgeHazardSpot( const Vec3 &botOrigin, const Vec3 &hazardHitPoint, const Vec3 &hazardDir,
+												bool isHazardSplashLike ) -> std::optional<Vec3> {
+	auto method = &BotTacticalSpotsCache::findDodgeHazardSpot;
+	return getThroughCache<Vec3, DodgeHazardSpotsCache, decltype( method ), Vec3, Vec3, Vec3, bool>(
+		&m_dodgeHazardSpotsCache, method, botOrigin, hazardHitPoint, hazardDir, isHazardSplashLike );
+}
+
 template <typename ProblemParams>
 inline void BotTacticalSpotsCache::takeEnemiesIntoAccount( ProblemParams &problemParams ) {
 	if( Skill() < 0.33f ) {
@@ -109,6 +120,23 @@ auto BotTacticalSpotsCache::findCoverSpot( const Vec3 &origin, const Vec3 &enemy
 	TacticalSpotsRegistry::OriginParams originParams( origin.Data(), searchRadius, RouteCache() );
 	if( CoverProblemSolver( originParams, problemParams ).findSingle( result ) ) {
 		return Vec3( result );
+	}
+
+	return std::nullopt;
+}
+
+auto BotTacticalSpotsCache::findDodgeHazardSpot( const Vec3 &botOrigin, const Vec3 &hazardHitPoint, const Vec3 &hazardDir,
+												 bool isHazardSplashLike ) -> std::optional<Vec3> {
+	DodgeHazardProblemSolver::OriginParams originParams( game.edicts + m_bot->EntNum(), 256.0f, m_bot->RouteCache() );
+	DodgeHazardProblemSolver::ProblemParams problemParams( hazardHitPoint, hazardDir, isHazardSplashLike );
+	problemParams.setCheckToAndBackReach( false );
+	problemParams.setMinHeightAdvantageOverOrigin( -64.0f );
+	// Influence values are quite low because evade direction factor must be primary
+	problemParams.setMaxFeasibleTravelTimeMillis( 2500 );
+
+	vec3_t spotOrigin;
+	if( DodgeHazardProblemSolver( originParams, problemParams ).findSingle( spotOrigin ) ) {
+		return Vec3( spotOrigin );
 	}
 
 	return std::nullopt;

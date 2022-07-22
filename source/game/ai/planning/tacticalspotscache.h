@@ -17,6 +17,10 @@ public:
 									&BotTacticalSpotsCache::findCoverSpot );
 	}
 
+	[[nodiscard]]
+	auto getDodgeHazardSpot( const Vec3 &botOrigin, const Vec3 &hazardHitPoint, const Vec3 &hazardDir,
+							 bool isHazardSplashLike ) -> std::optional<Vec3>;
+
 	using DualOrigin = std::pair<Vec3, Vec3>;
 
 	[[nodiscard]]
@@ -83,8 +87,15 @@ private:
 	DualOriginSpotsCache m_runAwayJumppadOriginsCache;
 	DualOriginSpotsCache m_runAwayElevatorOriginsCache;
 
+	typedef SpotsCache<Vec3, 1, 4> DodgeHazardSpotsCache;
+	DodgeHazardSpotsCache m_dodgeHazardSpotsCache;
+
 	[[nodiscard]]
 	auto findCoverSpot( const Vec3 &origin, const Vec3 &enemyOrigin ) -> std::optional<Vec3>;
+
+	[[nodiscard]]
+	auto findDodgeHazardSpot( const Vec3 &botOrigin, const Vec3 &hazardHitPoint, const Vec3 &hazardDir,
+							  bool isHazardSplashLike ) -> std::optional<Vec3>;
 
 	template <typename ProblemParams>
 	inline void takeEnemiesIntoAccount( ProblemParams &problemParams );

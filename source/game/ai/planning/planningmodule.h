@@ -29,6 +29,7 @@ class BotPlanningModule {
 	friend class StartGotoRunAwayJumppadAction;
 
 	friend class StartGotoCoverAction;
+	friend class DodgeToSpotAction;
 
 	Bot *const bot;
 
