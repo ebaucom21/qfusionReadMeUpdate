@@ -6,26 +6,26 @@ PlannerNode *StartGotoCoverAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsRunningAway ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::IsRunningAway ) ) ) {
 		return nullptr;
 	}
 
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasRunAway ) ) ) {
 		return nullptr;
 	}
 
-	if( worldState.getOriginVar( WorldState::PendingCoverSpot ) ) {
+	if( worldState.getVec3( WorldState::PendingCoverSpot ) ) {
 		Debug( "Pending origin is already present in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 	if( botOrigin.FastDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "This action is only applicable to the actual bot origin\n" );
 		return nullptr;
 	}
 
-	const Vec3 enemyOrigin = worldState.getOriginVar( WorldState::EnemyOrigin ).value();
+	const Vec3 enemyOrigin = worldState.getVec3( WorldState::EnemyOrigin ).value();
 
 	const std::optional<Vec3> maybeSpotOrigin = module->tacticalSpotsCache.getCoverSpot( botOrigin, enemyOrigin );
 	if( !maybeSpotOrigin ) {
@@ -37,8 +37,8 @@ PlannerNode *StartGotoCoverAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, OriginVar( *maybeSpotOrigin ) );
-	plannerNode->worldState.setOriginVar( WorldState::PendingCoverSpot, OriginVar( *maybeSpotOrigin ) );
+	plannerNode->worldState.setVec3( WorldState::NavTargetOrigin, *maybeSpotOrigin );
+	plannerNode->worldState.setVec3( WorldState::PendingCoverSpot, *maybeSpotOrigin );
 
 	return plannerNode;
 }
@@ -68,28 +68,28 @@ AiActionRecord::Status TakeCoverActionRecord::UpdateStatus( const WorldState &cu
 }
 
 PlannerNode *TakeCoverAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
-	if( !navTargetOriginVar ) {
+	const std::optional<Vec3> navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin );
+	if( !navTargetOrigin ) {
 		return nullptr;
 	}
 
-	const std::optional<OriginVar> pendingOriginVar = worldState.getOriginVar( WorldState::PendingCoverSpot );
-	if( !pendingOriginVar ) {
+	const std::optional<Vec3> pendingOrigin = worldState.getVec3( WorldState::PendingCoverSpot );
+	if( !pendingOrigin ) {
 		return nullptr;
 	}
 
-	if( Vec3( *pendingOriginVar ).SquareDistanceTo( *navTargetOriginVar ) > 1.0f ) {
+	if( pendingOrigin->SquareDistanceTo( *navTargetOrigin ) > 1.0f ) {
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	if( botOrigin.SquareDistanceTo( *navTargetOriginVar ) > TACTICAL_SPOT_RADIUS ) {
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	if( botOrigin.SquareDistanceTo( *navTargetOrigin ) > TACTICAL_SPOT_RADIUS ) {
 		Debug( "Bot is too far from the nav target (pending cover spot)\n" );
 		return nullptr;
 	}
 
 	const unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
-	TakeCoverActionRecord *record = pool.New( Self(), *navTargetOriginVar, selectedEnemyInstanceId );
+	TakeCoverActionRecord *record = pool.New( Self(), *navTargetOrigin, selectedEnemyInstanceId );
 	
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, 1.0f );
 	if( !plannerNode ) {
@@ -98,12 +98,12 @@ PlannerNode *TakeCoverAction::TryApply( const WorldState &worldState ) {
 
 	// Bot origin var remains the same (it is close to nav target)
 
-	plannerNode->worldState.clearOriginVar( WorldState::PendingCoverSpot );
+	plannerNode->worldState.clearVec3( WorldState::PendingCoverSpot );
 
-	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::HasRunAway, BoolVar( true ) );
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::EnemyCanHit, BoolVar( false ) );
+	plannerNode->worldState.setBool( WorldState::IsRunningAway, false );
+	plannerNode->worldState.setBool( WorldState::HasRunAway, true );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
+	plannerNode->worldState.setBool( WorldState::EnemyCanHit, false );
 
 	return plannerNode;
 }

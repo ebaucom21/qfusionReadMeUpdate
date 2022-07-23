@@ -12,11 +12,11 @@ class Bot;
 class BotPlanningModule;
 
 [[nodiscard]]
-inline bool isSpecifiedAndTrue( const std::optional<BoolVar> &var ) {
+inline bool isSpecifiedAndTrue( const std::optional<bool> &var ) {
 	return var && *var;
 }
 [[nodiscard]]
-inline bool isUnspecifiedOrFalse( const std::optional<BoolVar> &var ) {
+inline bool isUnspecifiedOrFalse( const std::optional<bool> &var ) {
 	return !var || !*var;
 }
 

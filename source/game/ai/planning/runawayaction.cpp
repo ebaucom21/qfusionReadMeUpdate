@@ -2,29 +2,28 @@
 #include "../bot.h"
 
 bool RunAwayAction::checkCommonPreconditionsForStartingRunningAway( const WorldState &worldState ) const {
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasRunAway ) ) ) {
 		Debug( "Bot has already run away in the given world state\n" );
 		return false;
 	}
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsRunningAway ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::IsRunningAway ) ) ) {
 		Debug( "Bot is already running away in the given world state\n" );
 		return false;
 	}
 
-	const std::optional<OriginVar> botOriginVar = worldState.getOriginVar( WorldState::BotOrigin );
-	if( !botOriginVar ) {
+	const std::optional<Vec3> botOrigin = worldState.getVec3( WorldState::BotOrigin );
+	if( !botOrigin ) {
 		Debug( "Weird world state - missing bot origin\n" );
 		return false;
 	}
 
-	const std::optional<OriginVar> enemyOriginVar = worldState.getOriginVar( WorldState::EnemyOrigin );
+	const std::optional<Vec3> enemyOriginVar = worldState.getVec3( WorldState::EnemyOrigin );
 	if( !enemyOriginVar ) {
 		Debug( "Enemy is ignored in the given world state\n" );
 		return false;
 	}
 
-	const Vec3 botOrigin = *botOriginVar;
-	if( botOrigin.SquareDistanceTo( Self()->Origin() ) > 1.0f ) {
+	if( botOrigin->SquareDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "This action is only applicable to the current world state\n" );
 		return false;
 	}
@@ -43,11 +42,11 @@ bool RunAwayAction::checkCommonPreconditionsForStartingRunningAway( const WorldS
 		}
 	}
 
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasThreateningEnemy ) ) && DamageToBeKilled() < 50 ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasThreateningEnemy ) ) && DamageToBeKilled() < 50 ) {
 		return true;
 	}
 
-	const float distanceToEnemy = botOrigin.FastDistanceTo( *enemyOriginVar );
+	const float distanceToEnemy = botOrigin->FastDistanceTo( *enemyOriginVar );
 	if( distanceToEnemy > kLasergunRange ) {
 		/*
 		 * TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

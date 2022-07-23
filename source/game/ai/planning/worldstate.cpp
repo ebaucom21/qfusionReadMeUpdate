@@ -1,52 +1,53 @@
 #include "worldstate.h"
 #include "../bot.h"
 
+// TODO: Replace by std::bit_cast once it's usable
 template <typename T>
-static auto computeHash( const std::optional<T> *vars, size_t numVars ) -> uint32_t {
+[[nodiscard]]
+static inline auto bitsOf( const T &value ) -> uint32_t {
+	static_assert( sizeof( T ) <= 4 );
 	uint32_t result = 0;
-	for( size_t i = 0; i < numVars; ++i ) {
+	std::memcpy( &result, &value, sizeof( T ) );
+	return result;
+}
+
+template <typename T>
+static auto computeHash( const std::optional<T> *varsBegin, const std::optional<T> *varsEnd ) -> uint32_t {
+	uint32_t result = 0;
+	for( const std::optional<T> *varIt = varsBegin; varIt != varsEnd; ++varIt ) {
 		result = result * 31;
-		if( const std::optional<T> &var = vars[i]; var.has_value() ) {
-			result += var->computeHash();
+		if( const std::optional<T> &var = *varIt; var.has_value() ) {
+			if constexpr( std::is_same_v<T, Vec3> ) {
+				const Vec3 &varValue = *var;
+				result += bitsOf( varValue.X() );
+				result = result * 31;
+				result += bitsOf( varValue.Y() );
+				result = result * 31;
+				result += bitsOf( varValue.Z() );
+			} else {
+				static_assert( std::is_integral_v<T> || std::is_floating_point_v<T> );
+				result += bitsOf( *var );
+			}
 		}
 	}
 	return result;
 }
 
-template <typename T>
-static bool checkEquality( const std::optional<T> *theseVars, const std::optional<T> *thatVars, size_t numVars ) {
-	for( size_t i = 0; i < numVars; ++i ) {
-		const std::optional<T> &thisVar = theseVars[i];
-		const std::optional<T> &thatVar = thatVars[i];
-		if( thisVar.has_value() ) {
-			if( !thatVar.has_value() ) {
-				return false;
-			}
-			return *thisVar == *thatVar;
-		} else {
-			if( thatVar.has_value() ) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
 auto WorldState::computeHash() const -> uint32_t {
 	uint32_t result = 0;
-	result = result * 31 + ::computeHash( m_floatVars, std::size( m_floatVars ) );
-	result = result * 31 + ::computeHash( m_uintVars, std::size( m_uintVars ) );
-	result = result * 31 + ::computeHash( m_boolVars, std::size( m_boolVars ) );
-	result = result * 31 + ::computeHash( m_originVars, std::size( m_originVars ) );
+	result = result * 31 + ::computeHash( m_floatVars, std::end( m_floatVars ) );
+	result = result * 31 + ::computeHash( m_uintVars, std::end( m_uintVars ) );
+	result = result * 31 + ::computeHash( m_boolVars, std::end( m_boolVars ) );
+	result = result * 31 + ::computeHash( m_vec3Vars, std::end( m_vec3Vars ) );
 	return result;
 }
 
 bool WorldState::operator==( const WorldState &that ) const {
 	return
-		::checkEquality( m_floatVars, that.m_floatVars, std::size( m_floatVars ) ) &&
-		::checkEquality( m_uintVars, that.m_uintVars, std::size( m_uintVars ) ) &&
-		::checkEquality( m_boolVars, that.m_boolVars, std::size( m_boolVars ) ) &&
-		::checkEquality( m_originVars, that.m_originVars, std::size( m_originVars ) );
+	    std::equal( std::begin( m_floatVars ), std::end( m_floatVars ), std::begin( that.m_floatVars ) ) &&
+		std::equal( std::begin( m_uintVars ), std::end( m_uintVars ), std::begin( that.m_uintVars ) ) &&
+		std::equal( std::begin( m_boolVars ), std::end( m_boolVars ), std::begin( that.m_boolVars ) ) &&
+		std::equal( std::begin( m_vec3Vars ), std::end( m_vec3Vars ), std::begin( that.m_vec3Vars ) );
 }
 
 #define PRINT_VAR( varName ) do {} while( 0 ); // TODO

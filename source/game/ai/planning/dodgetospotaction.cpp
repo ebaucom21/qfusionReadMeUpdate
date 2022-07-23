@@ -25,17 +25,17 @@ AiActionRecord::Status DodgeToSpotActionRecord::UpdateStatus( const WorldState &
 }
 
 PlannerNode *DodgeToSpotAction::TryApply( const WorldState &worldState ) {
-	if( !worldState.getFloatVar( WorldState::PotentialHazardDamage ) ) {
+	if( !worldState.getFloat( WorldState::PotentialHazardDamage ) ) {
 		Debug( "Potential hazard damage is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToHazard ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToHazard ) ) ) {
 		Debug( "Has already reacted to hazard in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 	const float *actualOrigin = Self()->Origin();
 	if( botOrigin.DistanceTo( actualOrigin ) >= 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
@@ -67,9 +67,9 @@ PlannerNode *DodgeToSpotAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( *spotOrigin ) );
-	plannerNode->worldState.setBoolVar( WorldState::HasReactedToHazard, BoolVar( true ) );
-	plannerNode->worldState.clearFloatVar( WorldState::PotentialHazardDamage );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *spotOrigin );
+	plannerNode->worldState.setBool( WorldState::HasReactedToHazard, true );
+	plannerNode->worldState.clearFloat( WorldState::PotentialHazardDamage );
 
 	return plannerNode;
 }

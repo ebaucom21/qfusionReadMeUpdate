@@ -7,13 +7,13 @@ PlannerNode *StartGotoRunAwayElevatorAction::TryApply( const WorldState &worldSt
 		return nullptr;
 	}
 
-	if( worldState.getOriginVar( WorldState::PendingElevatorDest ) ) {
+	if( worldState.getVec3( WorldState::PendingElevatorDest ) ) {
 		Debug( "Pending origin is already present in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 enemyOrigin = worldState.getOriginVar( WorldState::EnemyOrigin ).value();
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 enemyOrigin = worldState.getVec3( WorldState::EnemyOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 	std::optional<DualOrigin> maybeFromTo = module->tacticalSpotsCache.getRunAwayElevatorOrigin( botOrigin, enemyOrigin );
 	if( !maybeFromTo ) {
 		Debug( "Failed to find a (cached) runaway elevator\n" );
@@ -25,8 +25,8 @@ PlannerNode *StartGotoRunAwayElevatorAction::TryApply( const WorldState &worldSt
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, OriginVar( maybeFromTo->first ) );
-	plannerNode->worldState.setOriginVar( WorldState::PendingElevatorDest, OriginVar( maybeFromTo->second ) );
+	plannerNode->worldState.setVec3( WorldState::NavTargetOrigin, maybeFromTo->first );
+	plannerNode->worldState.setVec3( WorldState::PendingElevatorDest, maybeFromTo->second );
 
 	return plannerNode;
 }
@@ -77,14 +77,14 @@ AiActionRecord::Status DoRunAwayViaElevatorActionRecord::UpdateStatus( const Wor
 }
 
 PlannerNode *DoRunAwayViaElevatorAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> pendingOriginVar( worldState.getOriginVar( WorldState::PendingElevatorDest ) );
-	if( !pendingOriginVar ) {
+	const std::optional<Vec3> pendingOrigin( worldState.getVec3( WorldState::PendingElevatorDest ) );
+	if( !pendingOrigin ) {
 		Debug( "The pending elevator dest origin is missing in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin       = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	const Vec3 navTargetOrigin = worldState.getOriginVar( WorldState::NavTargetOrigin ).value();
+	const Vec3 botOrigin       = worldState.getVec3( WorldState::BotOrigin ).value();
+	const Vec3 navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin ).value();
 
 	if( botOrigin.FastDistanceTo( navTargetOrigin ) > GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Bot is too far from the nav target (elevator origin)\n" );
@@ -94,7 +94,7 @@ PlannerNode *DoRunAwayViaElevatorAction::TryApply( const WorldState &worldState 
 	const Vec3 &elevatorOrigin = navTargetOrigin;
 	unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
 
-	const float elevatorDistance = ( elevatorOrigin - *pendingOriginVar ).LengthFast();
+	const float elevatorDistance = ( elevatorOrigin - *pendingOrigin ).LengthFast();
 	// Assume that elevator speed is 400 units per second
 	const float speedInUnitsPerMillis = 400 / 1000.0f;
 	const float cost = elevatorDistance * Q_Rcp( speedInUnitsPerMillis );
@@ -107,13 +107,13 @@ PlannerNode *DoRunAwayViaElevatorAction::TryApply( const WorldState &worldState 
 	}
 
 	// Set bot origin to the elevator destination
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *pendingOriginVar );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *pendingOrigin );
 	// Reset pending origin
-	plannerNode->worldState.clearOriginVar( WorldState::PendingElevatorDest );
+	plannerNode->worldState.clearVec3( WorldState::PendingElevatorDest );
 
-	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( true ) );
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::EnemyCanHit, BoolVar( false ) );
+	plannerNode->worldState.setBool( WorldState::IsRunningAway, true );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
+	plannerNode->worldState.setBool( WorldState::EnemyCanHit, false );
 
 	return plannerNode;
 }

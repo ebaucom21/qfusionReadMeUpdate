@@ -2,15 +2,15 @@
 #include "../bot.h"
 
 PlannerNode *KillEnemyAction::TryApply( const WorldState &worldState ) {
-	if( !worldState.getOriginVar( WorldState::EnemyOrigin ) ) {
+	if( !worldState.getVec3( WorldState::EnemyOrigin ) ) {
 		Debug( "Enemy is ignored in the given world state\n" );
 		return nullptr;
 	}
-	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPositionalAdvantage ) ) ) {
+	if( !isSpecifiedAndTrue( worldState.getBool( WorldState::HasPositionalAdvantage ) ) ) {
 		Debug( "Bot does not have positional advantage in the given world state\n" );
 		return nullptr;
 	}
-	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::CanHitEnemy ) ) ) {
+	if( !isSpecifiedAndTrue( worldState.getBool( WorldState::CanHitEnemy ) ) ) {
 		Debug( "Bot can't hit enemy in the given world state\n" );
 		return nullptr;
 	}
@@ -20,10 +20,10 @@ PlannerNode *KillEnemyAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	UIntVar stateDistinctionVar( Self()->NextSimilarWorldStateInstanceId() );
+	const unsigned stateDistinctionId = Self()->NextSimilarWorldStateInstanceId();
 
-	plannerNode->worldState.setBoolVar( WorldState::HasJustKilledEnemy, BoolVar( true ) );
-	plannerNode->worldState.setUIntVar( WorldState::SimilarWorldStateInstanceId, stateDistinctionVar );
+	plannerNode->worldState.setBool( WorldState::HasJustKilledEnemy, true );
+	plannerNode->worldState.setUInt( WorldState::SimilarWorldStateInstanceId, stateDistinctionId );
 
 	return plannerNode;
 }

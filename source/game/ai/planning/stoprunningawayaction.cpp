@@ -2,15 +2,15 @@
 #include "../bot.h"
 
 PlannerNode *StopRunningAwayAction::TryApply( const WorldState &worldState ) {
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsRunningAway ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::IsRunningAway ) ) ) {
 		Debug( "Bot is not running away in the given world state\n" );
 		return nullptr;
 	}
-	if( !isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) ) ) {
+	if( !isSpecifiedAndTrue( worldState.getBool( WorldState::HasRunAway ) ) ) {
 		Debug( "Bot has already run away in the given world state\n" );
 		return nullptr;
 	}
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::EnemyCanHit ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::EnemyCanHit ) ) ) {
 		Debug( "Enemy still can hit in the given world state\n" );
 		return nullptr;
 	}
@@ -20,11 +20,11 @@ PlannerNode *StopRunningAwayAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	UIntVar stateDistinctionVar( Self()->NextSimilarWorldStateInstanceId() );
+	const unsigned stateDistinctionId = Self()->NextSimilarWorldStateInstanceId();
 
-	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::HasRunAway, BoolVar( true ) );
-	plannerNode->worldState.setUIntVar( WorldState::SimilarWorldStateInstanceId, stateDistinctionVar );
+	plannerNode->worldState.setBool( WorldState::IsRunningAway, false );
+	plannerNode->worldState.setBool( WorldState::HasRunAway, true );
+	plannerNode->worldState.setUInt( WorldState::SimilarWorldStateInstanceId, stateDistinctionId );
 
 	return plannerNode;
 }

@@ -9,18 +9,18 @@ BotPlanner::BotPlanner( Bot *bot_, BotPlanningModule *module_ )
 	: AiPlanner( bot_ ), bot( bot_ ), module( module_ ) {}
 
 void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
-	worldState->setOriginVar( WorldState::BotOrigin, OriginVar( Vec3( bot->Origin() ) ) );
+	worldState->setVec3( WorldState::BotOrigin, Vec3( bot->Origin() ) );
 
 	if( const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy() ) {
-		worldState->setOriginVar( WorldState::EnemyOrigin, OriginVar( selectedEnemy->LastSeenOrigin() ) );
-		worldState->setBoolVar( WorldState::HasThreateningEnemy, BoolVar( selectedEnemy->IsThreatening() ) );
-		worldState->setBoolVar( WorldState::CanHitEnemy, BoolVar( selectedEnemy->EnemyCanBeHit() ) );
-		worldState->setBoolVar( WorldState::EnemyCanHit, BoolVar( selectedEnemy->EnemyCanHit() ) );
+		worldState->setVec3( WorldState::EnemyOrigin, selectedEnemy->LastSeenOrigin() );
+		worldState->setBool( WorldState::HasThreateningEnemy, selectedEnemy->IsThreatening() );
+		worldState->setBool( WorldState::CanHitEnemy, selectedEnemy->EnemyCanBeHit() );
+		worldState->setBool( WorldState::EnemyCanHit, selectedEnemy->EnemyCanHit() );
 	}
 
 	if( const std::optional<SelectedEnemy> &lostEnemies = bot->m_lostEnemy ) {
 		const Vec3 &enemyOrigin( lostEnemies->LastSeenOrigin() );
-		worldState->setOriginVar( WorldState::LostEnemyLastSeenOrigin, OriginVar( enemyOrigin ) );
+		worldState->setVec3( WorldState::LostEnemyLastSeenOrigin, enemyOrigin );
 		Vec3 toEnemiesDir( enemyOrigin - bot->Origin() );
 		if( toEnemiesDir.normalizeFast() ) {
 			if( toEnemiesDir.Dot( bot->EntityPhysicsState()->ForwardDir() ) < bot->FovDotFactor() ) {
@@ -29,7 +29,7 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 					trace_t trace;
 					G_Trace( &trace, self->s.origin, nullptr, nullptr, enemyOrigin.Data(), self, MASK_AISOLID );
 					if( trace.fraction == 1.0f || game.edicts + trace.ent == lostEnemies->TraceKey() ) {
-						worldState->setBoolVar( WorldState::MightSeeLostEnemyAfterTurn, BoolVar( true ) );
+						worldState->setBool( WorldState::MightSeeLostEnemyAfterTurn, true );
 					}
 				}
 			}
@@ -38,7 +38,7 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 
 	if( const std::optional<SelectedNavEntity> &currSelectedNavEntity = bot->GetOrUpdateSelectedNavEntity() ) {
 		const NavEntity *navEntity = currSelectedNavEntity->navEntity;
-		worldState->setOriginVar( WorldState::NavTargetOrigin, OriginVar( navEntity->Origin() ) );
+		worldState->setVec3( WorldState::NavTargetOrigin, navEntity->Origin() );
 
 		if( const int64_t spawnTime = navEntity->SpawnTime(); spawnTime >= level.time ) {
 			// Find a travel time to the goal itme nav entity in milliseconds
@@ -57,7 +57,7 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 				// Sanity checks
 				// TODO: What about script-spawned items?
 				assert( waitTime > 0 && waitTime < 60'000 );
-				worldState->setUIntVar( WorldState::GoalItemWaitTime, UIntVar( waitTime ) );
+				worldState->setUInt( WorldState::GoalItemWaitTime, (unsigned)waitTime );
 			}
 		}
 	} else {
@@ -65,19 +65,19 @@ void BotPlanner::PrepareCurrWorldState( WorldState *worldState ) {
 		if( bot->ShouldUseRoamSpotAsNavTarget() ) {
 			Vec3 spot( module->roamingManager.GetCachedRoamingSpot() );
 			Debug( "Using a roaming spot @ %.1f %.1f %.1f as a world state nav target var\n", spot.X(), spot.Y(), spot.Z() );
-			worldState->setOriginVar( WorldState::NavTargetOrigin, OriginVar( spot ) );
+			worldState->setVec3( WorldState::NavTargetOrigin, spot );
 		}
 	}
 
 	if( bot->Skill() > 0.33f ) {
 		if( const Hazard *activeHazard = bot->PrimaryHazard() ) {
-			worldState->setFloatVar( WorldState::PotentialHazardDamage, FloatVar( activeHazard->damage ) );
+			worldState->setFloat( WorldState::PotentialHazardDamage, activeHazard->damage );
 		}
 	}
 
 	if( const auto *activeThreat = bot->ActiveHurtEvent() ) {
-		worldState->setFloatVar( WorldState::ThreatInflictedDamage, FloatVar( activeThreat->totalDamage ) );
-		worldState->setOriginVar( WorldState::ThreatPossibleOrigin, OriginVar( activeThreat->possibleOrigin ) );
+		worldState->setFloat( WorldState::ThreatInflictedDamage, activeThreat->totalDamage );
+		worldState->setVec3( WorldState::ThreatPossibleOrigin, activeThreat->possibleOrigin );
 	}
 
 	cachedWorldState = *worldState;

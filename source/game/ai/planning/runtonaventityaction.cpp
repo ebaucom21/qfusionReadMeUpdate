@@ -56,20 +56,20 @@ bool RunToNavEntityActionRecord::ShouldUseSneakyBehaviour( const WorldState &cur
 	}
 
 	// If there's a defined enemy origin (and a defined enemy consequently)
-	if( currWorldState.getOriginVar( WorldState::EnemyOrigin ) ) {
+	if( currWorldState.getVec3( WorldState::EnemyOrigin ) ) {
 		// TODO: Lift testing of a value within the "Ignore" monad
 
 		// Interrupt sneaking immediately if there's a threatening enemy
-		if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
+		if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::HasThreateningEnemy ) ) ) {
 			return false;
 		}
 		// Don't try being sneaky if the bot can hit an enemy
 		// (we can try doing that but bot behaviour is rather poor)
-		if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::CanHitEnemy ) ) ) {
+		if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::CanHitEnemy ) ) ) {
 			return false;
 		}
 		// Interrupt sneaking immediately if an enemy can hit
-		if( !isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::EnemyCanHit ) ) ) {
+		if( !isSpecifiedAndTrue( currWorldState.getBool( WorldState::EnemyCanHit ) ) ) {
 			return false;
 		}
 	}
@@ -181,13 +181,13 @@ bool RunToNavEntityActionRecord::IsInPhsForEnemyTeam() const {
 }
 
 PlannerNode *RunToNavEntityAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
+	const std::optional<Vec3> navTargetOriginVar = worldState.getVec3( WorldState::NavTargetOrigin );
 	if( !navTargetOriginVar ) {
 		Debug( "Nav target is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 	if( botOrigin.FastDistanceTo( *navTargetOriginVar ) <= GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Distance to goal item nav target is too low in the given world state\n" );
 		return nullptr;
@@ -208,7 +208,7 @@ PlannerNode *RunToNavEntityAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *navTargetOriginVar );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *navTargetOriginVar );
 	// TODO plannerNode.WorldState().ResetTacticalSpots();
 
 	return plannerNode;

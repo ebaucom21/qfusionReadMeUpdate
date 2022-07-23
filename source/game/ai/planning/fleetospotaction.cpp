@@ -30,22 +30,21 @@ AiActionRecord::Status FleeToSpotActionRecord::UpdateStatus( const WorldState &c
 }
 
 PlannerNode *FleeToSpotAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
-	if( !navTargetOriginVar ) {
+	const std::optional<Vec3> navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin );
+	if( !navTargetOrigin ) {
 		Debug( "Nav target is absent in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	if( botOrigin.FastDistanceTo( *navTargetOriginVar ) <= GOAL_PICKUP_ACTION_RADIUS ) {
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	if( botOrigin.FastDistanceTo( *navTargetOrigin ) <= GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Bot is too close to the nav target\n" );
 		return nullptr;
 	}
 
-	const Vec3 navTargetOrigin = *navTargetOriginVar;
 	if( const std::optional<SelectedNavEntity> &maybeSelectedNavEntity = Self()->GetSelectedNavEntity() ) {
 		const Vec3 navEntityOrigin = maybeSelectedNavEntity->navEntity->Origin();
-		if( ( navEntityOrigin - navTargetOrigin ).SquaredLength() < 1.0f ) {
+		if( ( navEntityOrigin - *navTargetOrigin ).SquaredLength() < 1.0f ) {
 			Debug( "Action is not applicable for goal entities (there are specialized actions for these ones)\n" );
 			return nullptr;
 		}
@@ -55,20 +54,20 @@ PlannerNode *FleeToSpotAction::TryApply( const WorldState &worldState ) {
 	// Combat actions require simple kinds of movement to keep crosshair on enemy.
 	// Thus tactical spot should be reachable in common way for combat actions.
 	// In case of retreating, some other kinds of movement AAS is not aware of might be used.
-	int travelTimeMillis = Self()->CheckTravelTimeMillis( botOrigin, navTargetOrigin );
+	int travelTimeMillis = Self()->CheckTravelTimeMillis( botOrigin, *navTargetOrigin );
 	// If the travel time is 0, set it to maximum allowed AAS travel time
 	// (AAS stores time as seconds^-2 in a short value)
 	if( !travelTimeMillis ) {
 		travelTimeMillis = 10 * std::numeric_limits<short>::max();
 	}
 
-	FleeToSpotActionRecord *record = pool.New( Self(), navTargetOrigin );
+	FleeToSpotActionRecord *record = pool.New( Self(), *navTargetOrigin );
 	PlannerNode *const plannerNode = newNodeForRecord( record, worldState, (float)travelTimeMillis );
 	if( !plannerNode ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *navTargetOriginVar );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *navTargetOrigin );
 	// Since bot origin has been moved, tactical spots should be recomputed
 	// TODO plannerNode.WorldState().ResetTacticalSpots();
 

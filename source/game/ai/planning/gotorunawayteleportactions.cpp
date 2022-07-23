@@ -6,13 +6,13 @@ PlannerNode *StartGotoRunAwayTeleportAction::TryApply( const WorldState &worldSt
 		return nullptr;
 	}
 
-	if( worldState.getOriginVar( WorldState::PendingTeleportDest ) ) {
+	if( worldState.getVec3( WorldState::PendingTeleportDest ) ) {
 		Debug( "The pending origin is already present in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	const Vec3 enemyOrigin = worldState.getOriginVar( WorldState::EnemyOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	const Vec3 enemyOrigin = worldState.getVec3( WorldState::EnemyOrigin ).value();
 
 	std::optional<DualOrigin> maybeFromTo = module->tacticalSpotsCache.getRunAwayTeleportOrigin( botOrigin, enemyOrigin );
 	if( !maybeFromTo ) {
@@ -25,8 +25,8 @@ PlannerNode *StartGotoRunAwayTeleportAction::TryApply( const WorldState &worldSt
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, OriginVar( maybeFromTo->first ) );
-	plannerNode->worldState.setOriginVar( WorldState::PendingTeleportDest, OriginVar( maybeFromTo->second ) );
+	plannerNode->worldState.setVec3( WorldState::NavTargetOrigin, maybeFromTo->first );
+	plannerNode->worldState.setVec3( WorldState::PendingTeleportDest, maybeFromTo->second );
 
 	return plannerNode;
 }
@@ -42,14 +42,14 @@ void DoRunAwayViaTeleportActionRecord::Deactivate() {
 }
 
 PlannerNode *DoRunAwayViaTeleportAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> pendingOriginVar = worldState.getOriginVar( WorldState::PendingTeleportDest );
-	if( !pendingOriginVar ) {
+	const std::optional<Vec3> pendingOrigin = worldState.getVec3( WorldState::PendingTeleportDest );
+	if( !pendingOrigin ) {
 		Debug( "The pending teleport dest is missing in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	const Vec3 navTargetOrigin = worldState.getOriginVar( WorldState::NavTargetOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	const Vec3 navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin ).value();
 
 	if( botOrigin.SquareDistanceTo( navTargetOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
 		Debug( "Bot is too far from the nav target (teleport origin)\n" );
@@ -66,11 +66,11 @@ PlannerNode *DoRunAwayViaTeleportAction::TryApply( const WorldState &worldState 
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *pendingOriginVar );
-	plannerNode->worldState.clearOriginVar( WorldState::PendingTeleportDest );
-	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( true ) );
-	plannerNode->worldState.setBoolVar( WorldState::EnemyCanHit, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *pendingOrigin );
+	plannerNode->worldState.clearVec3( WorldState::PendingTeleportDest );
+	plannerNode->worldState.setBool( WorldState::IsRunningAway, true );
+	plannerNode->worldState.setBool( WorldState::EnemyCanHit, false );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
 
 	return plannerNode;
 }

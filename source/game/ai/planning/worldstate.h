@@ -10,86 +10,6 @@
 #include "../../../qcommon/wswexceptions.h"
 #include "../vec3.h"
 
-template <typename T, typename This>
-class OrderedComparableVar {
-	friend class WorldState;
-public:
-	static_assert( std::is_trivial_v<T> );
-
-	enum SatisfyOp : uint8_t { EQ, NE, GT, GE, LS, LE };
-
-	OrderedComparableVar() = delete;
-
-	explicit OrderedComparableVar( const T &value, SatisfyOp op = EQ ) noexcept : m_value( value ), m_op( op ) {}
-
-	[[nodiscard]]
-	operator const T &() const noexcept { return m_value; }
-
-	[[nodiscard]]
-	bool operator==( const This &that ) const {
-		return m_op == that.m_op && m_value == that.m_value;
-	}
-
-	[[nodiscard]]
-	auto computeHash() const -> uint32_t {
-		static_assert( sizeof( m_value ) <= sizeof( uint32_t ) );
-		uint32_t valueBits = 0;
-		memcpy( &valueBits, &m_value, sizeof( m_value ) );
-		return 17 + 31 * ( 31 * valueBits + (uint32_t)m_op );
-	}
-protected:
-	T m_value;
-	SatisfyOp m_op;
-};
-
-class UIntVar : public OrderedComparableVar<unsigned, UIntVar> {
-public:
-	explicit UIntVar( unsigned value, SatisfyOp op = EQ ) noexcept :
-		OrderedComparableVar<unsigned, UIntVar>( value, op ) {}
-};
-
-class FloatVar : public OrderedComparableVar<float, FloatVar> {
-public:
-	explicit FloatVar( float value, SatisfyOp op = EQ ) noexcept :
-		OrderedComparableVar<float, FloatVar>( value, op ) {}
-};
-
-class BoolVar : public OrderedComparableVar<bool, BoolVar> {
-public:
-	explicit BoolVar( bool value, SatisfyOp op = EQ ) noexcept :
-		OrderedComparableVar<bool, BoolVar>( value, op ) {}
-};
-
-class OriginVar {
-	friend class WorldState;
-public:
-	enum SatisfyOp { EQ, NE };
-
-	explicit OriginVar( const Vec3 &value, SatisfyOp op = EQ ) : m_value( value ), m_op( op ) {}
-
-	[[nodiscard]]
-	operator const Vec3 &() const noexcept { return m_value; }
-
-	[[nodiscard]]
-	bool operator==( const OriginVar &that ) const {
-		return m_value == that.m_value;
-	}
-
-	[[nodiscard]]
-	auto computeHash() const -> uint32_t {
-		uint32_t hash = 17 + (uint32_t)m_op;
-		// -fno-strict-aliasing
-		auto *const valueDWords = (const uint32_t *)m_value.Data();
-		hash = hash * 31 + valueDWords[0];
-		hash = hash * 31 + valueDWords[1];
-		hash = hash * 31 + valueDWords[2];
-		return hash;
-	}
-private:
-	Vec3 m_value { 0.0f, 0.0f, 0.0f };
-	SatisfyOp m_op { EQ };
-};
-
 class WorldState {
 public:
 	[[nodiscard]]
@@ -135,17 +55,17 @@ public:
 	};
 
 	[[nodiscard]]
-	auto getUIntVar( BuiltinUIntVarKeys key ) const -> std::optional<UIntVar> {
+	auto getUInt( BuiltinUIntVarKeys key ) const -> std::optional<unsigned> {
 		assert( key >= 0 && key < std::size( m_uintVars ) );
 		return m_uintVars[key];
 	}
 
-	void setUIntVar( BuiltinUIntVarKeys key, const UIntVar &value ) {
+	void setUInt( BuiltinUIntVarKeys key, unsigned value ) {
 		assert( key >= 0 && key < std::size( m_uintVars ) );
 		m_uintVars[key] = value;
 	}
 
-	void clearUIntVar( BuiltinUIntVarKeys key ) {
+	void clearUInt( BuiltinUIntVarKeys key ) {
 		m_uintVars[key] = std::nullopt;
 	}
 
@@ -157,17 +77,17 @@ public:
 	};
 
 	[[nodiscard]]
-	auto getFloatVar( BuiltinFloatVarKeys key ) const -> std::optional<FloatVar> {
+	auto getFloat( BuiltinFloatVarKeys key ) const -> std::optional<float> {
 		assert( key >= 0 && key < std::size( m_floatVars ) );
 		return m_floatVars[key];
 	}
 
-	auto setFloatVar( BuiltinFloatVarKeys key, const FloatVar &value ) {
+	auto setFloat( BuiltinFloatVarKeys key, float value ) {
 		assert( key >= 0 && key < std::size( m_floatVars ) );
 		m_floatVars[key] = value;
 	}
 
-	void clearFloatVar( BuiltinFloatVarKeys key ) {
+	void clearFloat( BuiltinFloatVarKeys key ) {
 		m_floatVars[key] = std::nullopt;
 	}
 
@@ -194,21 +114,21 @@ public:
 	};
 
 	[[nodiscard]]
-	auto getBoolVar( BuiltinBoolVarKeys key ) const -> std::optional<BoolVar> {
+	auto getBool( BuiltinBoolVarKeys key ) const -> std::optional<bool> {
 		assert( key >= 0 && key < std::size( m_boolVars ) );
 		return m_boolVars[key];
 	}
 
-	auto setBoolVar( BuiltinBoolVarKeys key, const BoolVar &value ) {
+	auto setBool( BuiltinBoolVarKeys key, bool value ) {
 		assert( key >= 0 && key < std::size( m_boolVars ) );
 		m_boolVars[key] = value;
 	}
 
-	void clearBoolVar( BuiltinBoolVarKeys key ) {
+	void clearBool( BuiltinBoolVarKeys key ) {
 		m_boolVars[key] = std::nullopt;
 	}
 
-	enum BuiltinOriginVarKeys {
+	enum BuiltinVec3VarKeys {
 		BotOrigin,
 		EnemyOrigin,
 		NavTargetOrigin,
@@ -221,22 +141,22 @@ public:
 		ThreatPossibleOrigin,
 		LostEnemyLastSeenOrigin,
 
-		_kBuiltinOriginVarsCount
+		_kBuiltinVec3VarsCount
 	};
 
 	[[nodiscard]]
-	auto getOriginVar( BuiltinOriginVarKeys key ) const -> std::optional<OriginVar> {
-		assert( key >= 0 && key < std::size( m_originVars ) );
-		return m_originVars[key];
+	auto getVec3( BuiltinVec3VarKeys key ) const -> std::optional<Vec3> {
+		assert( key >= 0 && key < std::size( m_vec3Vars ) );
+		return m_vec3Vars[key];
 	}
 
-	auto setOriginVar( BuiltinOriginVarKeys key, const OriginVar &value ) {
-		assert( key >= 0 && key < std::size( m_originVars ) );
-		m_originVars[key] = value;
+	auto setVec3( BuiltinVec3VarKeys key, const Vec3 &value ) {
+		assert( key >= 0 && key < std::size( m_vec3Vars ) );
+		m_vec3Vars[key] = value;
 	}
 
-	void clearOriginVar( BuiltinOriginVarKeys key ) {
-		m_originVars[key] = std::nullopt;
+	void clearVec3( BuiltinVec3VarKeys key ) {
+		m_vec3Vars[key] = std::nullopt;
 	}
 
 	[[nodiscard]]
@@ -253,10 +173,10 @@ private:
 
 	// The memory layout could be more optimal, but we no longer care that much
 
-	std::optional<UIntVar> m_uintVars[_kBuiltinUIntVarsCount];
-	std::optional<FloatVar> m_floatVars[_kBuiltinFloatVarsCount];
-	std::optional<BoolVar> m_boolVars[_kBuiltinBoolVarsCount];
-	std::optional<OriginVar> m_originVars[_kBuiltinOriginVarsCount];
+	std::optional<unsigned> m_uintVars[_kBuiltinUIntVarsCount];
+	std::optional<float> m_floatVars[_kBuiltinFloatVarsCount];
+	std::optional<bool> m_boolVars[_kBuiltinBoolVarsCount];
+	std::optional<Vec3> m_vec3Vars[_kBuiltinVec3VarsCount];
 
 #ifndef PUBLIC_BUILD
 	void copyFromOtherWorldState( const WorldState &that ) {

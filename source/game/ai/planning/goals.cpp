@@ -65,7 +65,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 	}
 
 	// Rush to the item site if it is far or is not in PVS
-	const Vec3 botOrigin( currWorldState.getOriginVar( WorldState::BotOrigin ).value() );
+	const Vec3 botOrigin( currWorldState.getVec3( WorldState::BotOrigin ).value() );
 
 	// LG range seems to be an appropriate threshold
 	if( botOrigin.SquareDistanceTo( navEntity->Origin() ) > wsw::square( kLasergunRange ) ) {
@@ -83,7 +83,7 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool GrabItemGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPickedGoalItem ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasPickedGoalItem ) );
 }
 
 #define TRY_APPLY_ACTION( action )                                                           \
@@ -125,7 +125,7 @@ void KillEnemyGoal::UpdateWeight( const WorldState &currWorldState ) {
 
 	this->weight = configGroup.baseWeight;
 	this->weight += configGroup.offCoeff * Self()->GetEffectiveOffensiveness();
-	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
+	if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight *= configGroup.nmyThreatCoeff;
 	} else {
 		float maxBotViewDot = selectedEnemy->GetBotViewDirDotToEnemyDir();
@@ -148,7 +148,7 @@ void KillEnemyGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool KillEnemyGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasJustKilledEnemy ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasJustKilledEnemy ) );
 }
 
 PlannerNode *KillEnemyGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -169,7 +169,7 @@ void RunAwayGoal::UpdateWeight( const WorldState &currWorldState ) {
 
 	this->weight = configGroup.baseWeight;
 	this->weight = configGroup.offCoeff * ( 1.0f - Self()->GetEffectiveOffensiveness() );
-	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
+	if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight *= configGroup.nmyThreatCoeff;
 	} else {
 		float maxBotViewDot = selectedEnemy->GetBotViewDirDotToEnemyDir();
@@ -190,7 +190,7 @@ void RunAwayGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool RunAwayGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasRunAway ) );
 }
 
 PlannerNode *RunAwayGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -235,7 +235,7 @@ void AttackOutOfDespairGoal::UpdateWeight( const WorldState &currWorldState ) {
 	}
 
 	this->weight = configGroup.baseWeight;
-	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasThreateningEnemy ) ) ) {
+	if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::HasThreateningEnemy ) ) ) {
 		this->weight += configGroup.nmyThreatExtraWeight;
 	}
 	float damageWeightPart = BoundedFraction( selectedEnemy->TotalInflictedDamage(), configGroup.dmgUpperBound );
@@ -243,7 +243,7 @@ void AttackOutOfDespairGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool AttackOutOfDespairGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasJustKilledEnemy ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasJustKilledEnemy ) );
 }
 
 void AttackOutOfDespairGoal::OnPlanBuildingStarted() {
@@ -264,13 +264,13 @@ PlannerNode *AttackOutOfDespairGoal::GetWorldStateTransitions( const WorldState 
 }
 
 bool ReactToHazardGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToHazard ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToHazard ) );
 }
 
 void ReactToHazardGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	const std::optional<FloatVar> hazardDamageVar = currWorldState.getFloatVar( WorldState::PotentialHazardDamage );
+	const std::optional<float> hazardDamageVar = currWorldState.getFloat( WorldState::PotentialHazardDamage );
 	if( !hazardDamageVar ) {
 		return;
 	}
@@ -296,11 +296,11 @@ PlannerNode *ReactToHazardGoal::GetWorldStateTransitions( const WorldState &worl
 void ReactToThreatGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	if( !currWorldState.getOriginVar( WorldState::ThreatPossibleOrigin ) ) {
+	if( !currWorldState.getVec3( WorldState::ThreatPossibleOrigin ) ) {
 		return;
 	}
 
-	std::optional<FloatVar> inflictedDamage = currWorldState.getFloatVar( WorldState::ThreatInflictedDamage );
+	std::optional<float> inflictedDamage = currWorldState.getFloat( WorldState::ThreatInflictedDamage );
 	if( !inflictedDamage ) {
 		// TODO!!!!!!!!!!!!!! What if the threat didn't manage to hurt yet? (like, we listen to sound events, etc)
 		return;
@@ -320,7 +320,7 @@ void ReactToThreatGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool ReactToThreatGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToThreat ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToThreat ) );
 }
 
 PlannerNode *ReactToThreatGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -334,8 +334,8 @@ PlannerNode *ReactToThreatGoal::GetWorldStateTransitions( const WorldState &worl
 void ReactToEnemyLostGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 
-	std::optional<OriginVar> lostEnemyOriginVar = currWorldState.getOriginVar( WorldState::LostEnemyLastSeenOrigin );
-	if( !lostEnemyOriginVar ) {
+	const std::optional<Vec3> lostEnemyOrigin = currWorldState.getVec3( WorldState::LostEnemyLastSeenOrigin );
+	if( !lostEnemyOrigin ) {
 		return;
 	}
 
@@ -343,10 +343,10 @@ void ReactToEnemyLostGoal::UpdateWeight( const WorldState &currWorldState ) {
 	const float offensiveness = Self()->GetEffectiveOffensiveness();
 	this->weight = configGroup.baseWeight + configGroup.offCoeff * offensiveness;
 
-	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
-		ModifyWeightForTurningBack( currWorldState, *lostEnemyOriginVar );
+	if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
+		ModifyWeightForTurningBack( currWorldState, *lostEnemyOrigin );
 	} else {
-		ModifyWeightForPursuit( currWorldState, *lostEnemyOriginVar );
+		ModifyWeightForPursuit( currWorldState, *lostEnemyOrigin );
 	}
 }
 
@@ -456,7 +456,7 @@ int ReactToEnemyLostGoal::FindNumPlayersAlive( int team ) const {
 }
 
 bool ReactToEnemyLostGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) );
+	return isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToEnemyLost ) );
 }
 
 PlannerNode *ReactToEnemyLostGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -483,7 +483,7 @@ void RoamGoal::UpdateWeight( const WorldState &currWorldState ) {
 }
 
 bool RoamGoal::IsSatisfiedBy( const WorldState &worldState ) const {
-	if( const auto maybeBotOrigin = worldState.getOriginVar( WorldState::BotOrigin ) ) {
+	if( const auto maybeBotOrigin = worldState.getVec3( WorldState::BotOrigin ) ) {
 		return Vec3( *maybeBotOrigin ).SquareDistanceTo( module->roamingManager.GetCachedRoamingSpot() ) < 1.0f;
 	}
 	return false;

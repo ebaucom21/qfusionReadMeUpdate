@@ -32,28 +32,28 @@ AiActionRecord::Status TurnToLostEnemyActionRecord::UpdateStatus( const WorldSta
 }
 
 PlannerNode *TurnToLostEnemyAction::TryApply( const WorldState &worldState ) {
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::IsReactingToEnemyLost ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::IsReactingToEnemyLost ) ) ) {
 		Debug( "Bot is already reacting to enemy lost in the given world state\n" );
 		return nullptr;
 	}
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToEnemyLost ) ) ) {
 		Debug( "Bot has already reacted to enemy lost in the given world state\n" );
 		return nullptr;
 	}
 
-	std::optional<OriginVar> lostEnemyOrigin = worldState.getOriginVar( WorldState::LostEnemyLastSeenOrigin );
+	const std::optional<Vec3> lostEnemyOrigin = worldState.getVec3( WorldState::LostEnemyLastSeenOrigin );
 	if( !lostEnemyOrigin ) {
 		Debug( "Lost enemy origin is missing in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin( worldState.getOriginVar( WorldState::BotOrigin ).value() );
+	const Vec3 botOrigin( worldState.getVec3( WorldState::BotOrigin ).value() );
 	if( botOrigin.FastDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
 	}
 
-	if( isUnspecifiedOrFalse( worldState.getBoolVar( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
+	if( isUnspecifiedOrFalse( worldState.getBool( WorldState::MightSeeLostEnemyAfterTurn ) ) ) {
 		Debug( "Bot cannot see lost enemy after turn in the given world state\n" );
 		return nullptr;
 	}
@@ -66,8 +66,8 @@ PlannerNode *TurnToLostEnemyAction::TryApply( const WorldState &worldState ) {
 	}
 
 	// Can't hit current enemy (if any) after applying this action
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::HasReactedToEnemyLost, BoolVar( true ) );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
+	plannerNode->worldState.setBool( WorldState::HasReactedToEnemyLost, true );
 
 	return plannerNode;
 }

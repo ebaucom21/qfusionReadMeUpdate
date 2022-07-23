@@ -32,18 +32,18 @@ AiActionRecord::Status TurnToThreatOriginActionRecord::UpdateStatus( const World
 }
 
 PlannerNode *TurnToThreatOriginAction::TryApply( const WorldState &worldState ) {
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToThreat ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasReactedToThreat ) ) ) {
 		Debug( "Bot has already reacted to threat in the given world state\n" );
 		return nullptr;
 	}
 
-	const std::optional<OriginVar> threatOrigin = worldState.getOriginVar( WorldState::ThreatPossibleOrigin );
+	const std::optional<Vec3> threatOrigin = worldState.getVec3( WorldState::ThreatPossibleOrigin );
 	if( !threatOrigin ) {
 		Debug( "Threat possible origin is ignored in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 	if( botOrigin.FastDistanceTo( Self()->Origin() ) > 1.0f ) {
 		Debug( "The action can be applied only to the current bot origin\n" );
 		return nullptr;
@@ -54,9 +54,9 @@ PlannerNode *TurnToThreatOriginAction::TryApply( const WorldState &worldState ) 
 		return nullptr;
 	}
 
-	plannerNode->worldState.setBoolVar( WorldState::HasReactedToThreat, BoolVar( true ) );
+	plannerNode->worldState.setBool( WorldState::HasReactedToThreat, true );
 	// If a bot has reacted to threat, he can't hit current enemy (if any)
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
 
 	return plannerNode;
 }

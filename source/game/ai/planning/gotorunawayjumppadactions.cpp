@@ -6,13 +6,13 @@ PlannerNode *StartGotoRunAwayJumppadAction::TryApply( const WorldState &worldSta
 		return nullptr;
 	}
 
-	if( worldState.getOriginVar( WorldState::PendingJumppadDest ) ) {
+	if( worldState.getVec3( WorldState::PendingJumppadDest ) ) {
 		Debug( "The pending origin is already present in the given world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
-	const Vec3 enemyOrigin = worldState.getOriginVar( WorldState::EnemyOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	const Vec3 enemyOrigin = worldState.getVec3( WorldState::EnemyOrigin ).value();
 	std::optional<DualOrigin> maybeFromTo = module->tacticalSpotsCache.getRunAwayJumppadOrigin( botOrigin, enemyOrigin );
 	if( !maybeFromTo ) {
 		Debug( "Failed to find a (cached) runaway jumppad\n" );
@@ -24,8 +24,8 @@ PlannerNode *StartGotoRunAwayJumppadAction::TryApply( const WorldState &worldSta
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::NavTargetOrigin, OriginVar( maybeFromTo->first ) );
-	plannerNode->worldState.setOriginVar( WorldState::PendingJumppadDest, OriginVar( maybeFromTo->second ) );
+	plannerNode->worldState.setVec3( WorldState::NavTargetOrigin, maybeFromTo->first );
+	plannerNode->worldState.setVec3( WorldState::PendingJumppadDest, maybeFromTo->second );
 
 	return plannerNode;
 }
@@ -66,14 +66,14 @@ AiActionRecord::Status DoRunAwayViaJumppadActionRecord::UpdateStatus( const Worl
 }
 
 PlannerNode *DoRunAwayViaJumppadAction::TryApply( const WorldState &worldState ) {
-	const std::optional<OriginVar> pendingOriginVar = worldState.getOriginVar( WorldState::PendingJumppadDest );
-	if( !pendingOriginVar ) {
+	const std::optional<Vec3> pendingOrigin = worldState.getVec3( WorldState::PendingJumppadDest );
+	if( !pendingOrigin ) {
 		Debug( "The pending jumppad dest is missing in the current world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 navTargetOrigin = worldState.getOriginVar( WorldState::NavTargetOrigin ).value();
-	const Vec3 botOrigin = worldState.getOriginVar( WorldState::BotOrigin ).value();
+	const Vec3 navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin ).value();
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
 
 	if( botOrigin.FastDistanceTo( navTargetOrigin ) > GOAL_PICKUP_ACTION_RADIUS ) {
 		Debug( "Bot is too far from the nav target (jumppad origin)" );
@@ -82,7 +82,7 @@ PlannerNode *DoRunAwayViaJumppadAction::TryApply( const WorldState &worldState )
 
 	const Vec3 &jumppadOrigin = navTargetOrigin;
 	// Use distance from jumppad origin to target as an estimation for travel time millis
-	const float cost = ( jumppadOrigin - *pendingOriginVar ).LengthFast();
+	const float cost = ( jumppadOrigin - *pendingOrigin ).LengthFast();
 
 	unsigned selectedEnemyInstanceId = Self()->GetSelectedEnemy().value().InstanceId();
 	DoRunAwayViaJumppadActionRecord *record = pool.New( Self(), jumppadOrigin, selectedEnemyInstanceId );
@@ -92,12 +92,12 @@ PlannerNode *DoRunAwayViaJumppadAction::TryApply( const WorldState &worldState )
 		return nullptr;
 	}
 
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, *pendingOriginVar );
-	plannerNode->worldState.clearOriginVar( WorldState::PendingJumppadDest );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *pendingOrigin );
+	plannerNode->worldState.clearVec3( WorldState::PendingJumppadDest );
 
-	plannerNode->worldState.setBoolVar( WorldState::IsRunningAway, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::CanHitEnemy, BoolVar( false ) );
-	plannerNode->worldState.setBoolVar( WorldState::EnemyCanHit, BoolVar( false ) );
+	plannerNode->worldState.setBool( WorldState::IsRunningAway, true );
+	plannerNode->worldState.setBool( WorldState::CanHitEnemy, false );
+	plannerNode->worldState.setBool( WorldState::EnemyCanHit, false );
 
 	return plannerNode;
 }

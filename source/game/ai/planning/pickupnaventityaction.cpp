@@ -18,7 +18,7 @@ void PickupNavEntityActionRecord::Deactivate() {
 }
 
 AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldState &currWorldState ) {
-	if( isSpecifiedAndTrue( currWorldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
+	if( isSpecifiedAndTrue( currWorldState.getBool( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Goal item has been just picked up\n" );
 		return COMPLETED;
 	}
@@ -42,25 +42,24 @@ AiActionRecord::Status PickupNavEntityActionRecord::UpdateStatus( const WorldSta
 }
 
 PlannerNode *PickupNavEntityAction::TryApply( const WorldState &worldState ) {
-	if( isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPickedGoalItem ) ) ) {
+	if( isSpecifiedAndTrue( worldState.getBool( WorldState::HasPickedGoalItem ) ) ) {
 		Debug( "Bot has just picked a goal item in the given world state\n" );
 		return nullptr;
 	}
 
-	const std::optional<OriginVar> navTargetOriginVar = worldState.getOriginVar( WorldState::NavTargetOrigin );
-	if( !navTargetOriginVar ) {
+	const std::optional<Vec3> navTargetOrigin = worldState.getVec3( WorldState::NavTargetOrigin );
+	if( !navTargetOrigin ) {
 		Debug( "The nav target origin is unspecified in the current world state\n" );
 		return nullptr;
 	}
 
-	const Vec3 navTargetOrigin( *navTargetOriginVar );
-	const Vec3 botOrigin( worldState.getOriginVar( WorldState::BotOrigin ).value() );
-	if( navTargetOrigin.SquareDistanceTo( botOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
+	const Vec3 botOrigin = worldState.getVec3( WorldState::BotOrigin ).value();
+	if( navTargetOrigin->SquareDistanceTo( botOrigin ) > wsw::square( GOAL_PICKUP_ACTION_RADIUS ) ) {
 		Debug( "Distance to goal item nav target is too large to pick up an item in the given world state\n" );
 		return nullptr;
 	}
 
-	if( worldState.getUIntVar( WorldState::GoalItemWaitTime ) ) {
+	if( worldState.getUInt( WorldState::GoalItemWaitTime ) ) {
 		Debug( "Goal item wait time is specified in the given world state\n" );
 		return nullptr;
 	}
@@ -74,8 +73,8 @@ PlannerNode *PickupNavEntityAction::TryApply( const WorldState &worldState ) {
 		return nullptr;
 	}
 
-	plannerNode->worldState.setBoolVar( WorldState::HasPickedGoalItem, BoolVar( true ) );
-	plannerNode->worldState.setOriginVar( WorldState::BotOrigin, OriginVar( navTargetOrigin ) );
+	plannerNode->worldState.setBool( WorldState::HasPickedGoalItem, true );
+	plannerNode->worldState.setVec3( WorldState::BotOrigin, *navTargetOrigin );
 
 	// plannerNode.WorldState().ResetTacticalSpots();
 
