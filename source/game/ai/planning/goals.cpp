@@ -82,8 +82,8 @@ void GrabItemGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = wsw::min( this->weight, 1.0f );
 }
 
-void GrabItemGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasPickedGoalItem, BoolVar( true ) );
+bool GrabItemGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasPickedGoalItem ) );
 }
 
 #define TRY_APPLY_ACTION( action )                                                           \
@@ -147,8 +147,8 @@ void KillEnemyGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight += additionalWeightSet;
 }
 
-void KillEnemyGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasJustKilledEnemy, BoolVar( true ) );
+bool KillEnemyGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasJustKilledEnemy ) );
 }
 
 PlannerNode *KillEnemyGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -189,8 +189,8 @@ void RunAwayGoal::UpdateWeight( const WorldState &currWorldState ) {
 	}
 }
 
-void RunAwayGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasRunAway, BoolVar( true ) );
+bool RunAwayGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasRunAway ) );
 }
 
 PlannerNode *RunAwayGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -242,8 +242,8 @@ void AttackOutOfDespairGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight += configGroup.dmgFracCoeff * damageWeightPart;
 }
 
-void AttackOutOfDespairGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasJustKilledEnemy, BoolVar( true ) );
+bool AttackOutOfDespairGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasJustKilledEnemy ) );
 }
 
 void AttackOutOfDespairGoal::OnPlanBuildingStarted() {
@@ -263,8 +263,8 @@ PlannerNode *AttackOutOfDespairGoal::GetWorldStateTransitions( const WorldState 
 	return ApplyExtraActions( firstTransition, worldState );
 }
 
-void ReactToHazardGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasReactedToHazard, BoolVar( true ) );
+bool ReactToHazardGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToHazard ) );
 }
 
 void ReactToHazardGoal::UpdateWeight( const WorldState &currWorldState ) {
@@ -319,8 +319,8 @@ void ReactToThreatGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = weight_;
 }
 
-void ReactToThreatGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasReactedToThreat, BoolVar( true ) );
+bool ReactToThreatGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToThreat ) );
 }
 
 PlannerNode *ReactToThreatGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -455,8 +455,8 @@ int ReactToEnemyLostGoal::FindNumPlayersAlive( int team ) const {
 	return result;
 }
 
-void ReactToEnemyLostGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setBoolVar( WorldState::HasReactedToEnemyLost, BoolVar( true ) );
+bool ReactToEnemyLostGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	return isSpecifiedAndTrue( worldState.getBoolVar( WorldState::HasReactedToEnemyLost ) );
 }
 
 PlannerNode *ReactToEnemyLostGoal::GetWorldStateTransitions( const WorldState &worldState ) {
@@ -482,8 +482,11 @@ void RoamGoal::UpdateWeight( const WorldState &currWorldState ) {
 	this->weight = 0.0f;
 }
 
-void RoamGoal::GetDesiredWorldState( WorldState *worldState ) {
-	worldState->setOriginVar( WorldState::BotOrigin, OriginVar( module->roamingManager.GetCachedRoamingSpot() ) );
+bool RoamGoal::IsSatisfiedBy( const WorldState &worldState ) const {
+	if( const auto maybeBotOrigin = worldState.getOriginVar( WorldState::BotOrigin ) ) {
+		return Vec3( *maybeBotOrigin ).SquareDistanceTo( module->roamingManager.GetCachedRoamingSpot() ) < 1.0f;
+	}
+	return false;
 }
 
 PlannerNode *RoamGoal::GetWorldStateTransitions( const WorldState &worldState ) {

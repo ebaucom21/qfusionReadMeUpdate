@@ -27,7 +27,7 @@ public:
 	virtual ~AiGoal() = default;
 
 	virtual void UpdateWeight( const WorldState &worldState ) = 0;
-	virtual void GetDesiredWorldState( WorldState *worldState ) = 0;
+	virtual bool IsSatisfiedBy( const WorldState &worldState ) const = 0;
 	virtual struct PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) = 0;
 
 	virtual void OnPlanBuildingStarted() {}

@@ -36,7 +36,7 @@ public:
 		: BotGoal( module_, "GrabItemGoal", COLOR_RGB( 0, 255, 0 ), 950 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -57,7 +57,7 @@ public:
 	}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -67,7 +67,7 @@ public:
 		: BotGoal( module_, "RunAwayGoal", COLOR_RGB( 0, 0, 255 ), 950 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -78,7 +78,7 @@ public:
 		: BotGoal( module_, "AttackOutOfDespairGoal", COLOR_RGB( 192, 192, 0 ), 750 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 
 	void OnPlanBuildingStarted() override;
@@ -91,7 +91,7 @@ public:
 		: BotGoal( module_, "ReactToHazardGoal", COLOR_RGB( 192, 0, 192 ), 750 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -101,7 +101,7 @@ public:
 		: BotGoal( module_, "ReactToThreatGoal", COLOR_RGB( 255, 0, 128 ), 350 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -115,7 +115,7 @@ public:
 		: BotGoal( module_, "ReactToEnemyLostGoal", COLOR_RGB( 0, 192, 192 ), 950 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 
@@ -125,7 +125,7 @@ public:
 		: BotGoal( module_, "RoamGoal", COLOR_RGB( 0, 0, 80 ), 400 ) {}
 
 	void UpdateWeight( const WorldState &currWorldState ) override;
-	void GetDesiredWorldState( WorldState *worldState ) override;
+	bool IsSatisfiedBy( const WorldState &worldState ) const override;
 	PlannerNode *GetWorldStateTransitions( const WorldState &worldState ) override;
 };
 

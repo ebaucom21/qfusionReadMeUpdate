@@ -493,9 +493,6 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 	startNode->producedByAction = startNode->worldState.producedByAction = "(Initial state)";
 #endif
 
-	WorldState goalWorldState;
-	goal->GetDesiredWorldState( &goalWorldState );
-
 	// Use prime numbers as hash bins count parameters
 	PlannerNodesHashSet<389> closedNodesSet;
 	PlannerNodesHashSet<71> openNodesSet;
@@ -511,7 +508,7 @@ AiActionRecord *AiPlanner::BuildPlan( AiGoal *goal, const WorldState &currWorldS
 		assert( currNode->producedByAction == currNode->worldState.producedByAction );
 #endif
 
-		if( goalWorldState.isSatisfiedBy( currNode->worldState ) ) {
+		if( goal->IsSatisfiedBy( currNode->worldState ) ) {
 			AiActionRecord *plan = ReconstructPlan( currNode );
 			goal->OnPlanBuildingCompleted( plan );
 			plannerNodesPool.Clear();

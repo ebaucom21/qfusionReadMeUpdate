@@ -26,19 +26,6 @@ public:
 	operator const T &() const noexcept { return m_value; }
 
 	[[nodiscard]]
-	bool isSatisfiedBy( const This &that ) const {
-		switch( m_op ) {
-			case SatisfyOp::EQ: return m_value == that.m_value;
-			case SatisfyOp::NE: return m_value != that.m_value;
-			case SatisfyOp::GT: return m_value > that.m_value;
-			case SatisfyOp::GE: return m_value >= that.m_value;
-			case SatisfyOp::LS: return m_value < that.m_value;
-			case SatisfyOp::LE: return m_value <= that.m_value;
-			default: wsw::failWithLogicError( "Unreachable" );
-		}
-	}
-
-	[[nodiscard]]
 	bool operator==( const This &that ) const {
 		return m_op == that.m_op && m_value == that.m_value;
 	}
@@ -82,15 +69,6 @@ public:
 
 	[[nodiscard]]
 	operator const Vec3 &() const noexcept { return m_value; }
-
-	[[nodiscard]]
-	bool isSatisfiedBy( const OriginVar &that ) const {
-		switch( m_op ) {
-			case SatisfyOp::EQ: return m_value.SquareDistanceTo( that.m_value ) < 1.0f;
-			case SatisfyOp::NE:	return m_value.SquareDistanceTo( that.m_value ) >= 1.0f;
-			default: wsw::failWithLogicError( "Unreachable" );
-		}
-	}
 
 	[[nodiscard]]
 	bool operator==( const OriginVar &that ) const {
@@ -266,9 +244,6 @@ public:
 
 	[[nodiscard]]
 	bool operator==( const WorldState &that ) const;
-
-	[[nodiscard]]
-	bool isSatisfiedBy( const WorldState &that ) const;
 
 	void DebugPrint( const char *tag ) const;
 

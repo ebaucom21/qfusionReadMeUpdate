@@ -32,26 +32,6 @@ static bool checkEquality( const std::optional<T> *theseVars, const std::optiona
 	return true;
 }
 
-template <typename T>
-[[nodiscard]]
-static bool checkSatisfaction( const std::optional<T> *theseVars, const std::optional<T> *thatVars, size_t numVars ) {
-	for( size_t i = 0; i < numVars; ++i ) {
-		const std::optional<T> &thisVar = theseVars[i];
-		const std::optional<T> &thatVar = thatVars[i];
-		if( thisVar ) {
-			// A present (non-std::nullopt) var cannot be satisfied by a std::nullopt var
-			if( !thatVar ) {
-				return false;
-			}
-			if( !thisVar->isSatisfiedBy( *thatVar ) ) {
-				return false;
-			}
-		}
-		// An absent (std::nullopt) var is satisfied by any value of another var
-	}
-	return true;
-}
-
 auto WorldState::computeHash() const -> uint32_t {
 	uint32_t result = 0;
 	result = result * 31 + ::computeHash( m_floatVars, std::size( m_floatVars ) );
@@ -67,14 +47,6 @@ bool WorldState::operator==( const WorldState &that ) const {
 		::checkEquality( m_uintVars, that.m_uintVars, std::size( m_uintVars ) ) &&
 		::checkEquality( m_boolVars, that.m_boolVars, std::size( m_boolVars ) ) &&
 		::checkEquality( m_originVars, that.m_originVars, std::size( m_originVars ) );
-}
-
-bool WorldState::isSatisfiedBy( const WorldState &that ) const {
-	return
-		::checkSatisfaction( m_floatVars, that.m_floatVars, std::size( m_floatVars ) ) &&
-		::checkSatisfaction( m_uintVars, that.m_uintVars, std::size( m_uintVars ) ) &&
-		::checkSatisfaction( m_boolVars, that.m_boolVars, std::size( m_boolVars ) ) &&
-		::checkSatisfaction( m_originVars, that.m_originVars, std::size( m_originVars ) );
 }
 
 #define PRINT_VAR( varName ) do {} while( 0 ); // TODO
