@@ -198,6 +198,14 @@ typedef struct refdef_s {
 	struct shader_s *colorCorrection;   // post processing color correction lookup table to apply
 } refdef_t;
 
+struct ColorLifespan {
+	float initialColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+	float fadedInColor[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+	float fadedOutColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+	float finishFadingInAtLifetimeFrac { 0.25f };
+	float startFadingOutAtLifetimeFrac { 0.75f };
+};
+
 struct alignas( 16 ) Particle {
 	enum Kind { Sprite, Spark };
 
@@ -215,16 +223,13 @@ struct alignas( 16 ) Particle {
 		shader_s **materials;
 
 		// Points to external buffers with a greater lifetime
-		const vec4_t *initialColors;
-		const vec4_t *fadedInColors;
-		const vec4_t *fadedOutColors;
+		std::span<const ColorLifespan> colors;
 
 		const float *lightColor { nullptr };
 
-		// Unfortunately, std::span can't be used for materials and colors due to value type restrictions.
+		// Unfortunately, std::span can't be used for materials due to value type restrictions.
 		// TODO: Use our custom span type
 		uint8_t numMaterials { 1 };
-		uint8_t numColors { 1 };
 
 		Kind kind { Sprite };
 
@@ -235,9 +240,6 @@ struct alignas( 16 ) Particle {
 		float lengthSpread { 0.0f };
 		float widthSpread { 0.0f };
 		float radiusSpread { 0.0f };
-
-		float fadeInLifetimeFrac { 0.25f };
-		float fadeOutLifetimeFrac { 0.25f };
 
 		float lightRadius { 0.0f };
 		uint16_t lightFrameAffinityIndex { 0 };

@@ -204,14 +204,14 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
-	const bool hasMultipleColors    = appearanceRules->numColors > 1;
+	const bool hasMultipleColors    = appearanceRules->colors.size() > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool isSpherical          = params->stretchScale == 1.0f;
 	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
-		if( const unsigned maybeMask = appearanceRules->numColors - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+		if( const unsigned maybeMask = appearanceRules->colors.size() - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
 			colorsIndexMask = maybeMask;
 		}
 	}
@@ -294,7 +294,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 			if( colorsIndexMask ) {
 				p->instanceColorIndex = rng->next() & colorsIndexMask;
 			} else {
-				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->colors.size() );
 			}
 		} else {
 			p->instanceColorIndex = 0;
@@ -360,13 +360,13 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], params->dir, transformMatrix );
 
 	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
-	const bool hasMultipleColors    = appearanceRules->numColors > 1;
+	const bool hasMultipleColors    = appearanceRules->colors.size() > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
-		if( const unsigned maybeMask = appearanceRules->numColors - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
+		if( const unsigned maybeMask = appearanceRules->colors.size() - 1; ( maybeMask & ( maybeMask + 1 ) ) == 0 ) {
 			colorsIndexMask = maybeMask;
 		}
 	}
@@ -434,7 +434,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 			if( colorsIndexMask ) {
 				p->instanceColorIndex = rng->next() & colorsIndexMask;
 			} else {
-				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->numColors );
+				p->instanceColorIndex = (uint8_t)rng->nextBounded( appearanceRules->colors.size() );
 			}
 		} else {
 			p->instanceColorIndex = 0;
@@ -499,6 +499,8 @@ void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *dra
 	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numParticlesLeft;
 	const Particle &particle = flock->particles[flock->lastLitParticleIndex];
 
+	/* TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 	float lightRadius = rules.lightRadius;
 	if( particle.lifetimeFrac < rules.fadeInLifetimeFrac ) {
 		// Fade in
@@ -513,7 +515,7 @@ void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *dra
 
 	if( lightRadius > 1.0f ) {
 		drawSceneRequest->addLight( particle.origin, lightRadius, 0.0f, rules.lightColor );
-	}
+	}*/
 }
 
 void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] ) {

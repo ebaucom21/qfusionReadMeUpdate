@@ -101,9 +101,11 @@ static vec_t *_LaserColor( vec4_t color ) {
 }
 
 static ParticleColorsForTeamHolder laserImpactParticleColorsHolder {
-	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-	.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-	.fadedOutColor = { 1.0f, 0.9f, 0.0f, 0.0f },
+	.defaultColors = {
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.9f, 0.0f, 0.0f },
+	}
 };
 
 static void _LaserImpact( trace_t *trace, vec3_t dir ) {
@@ -119,10 +121,6 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			if( cg_particles->integer ) {
-				const vec4_t *initialColors;
-				const vec4_t *fadedInColors;
-				const vec4_t *fadedOutColors;
-
 				bool useTeamColors = false;
 				if( cg_teamColoredBeams->integer ) {
 					if( const int team = laserOwner->current.team; team == TEAM_ALPHA || team == TEAM_BETA ) {
@@ -130,14 +128,15 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 					}
 				}
 
+				const ColorLifespan *singleColorAddress;
 				ParticleColorsForTeamHolder *holder = &::laserImpactParticleColorsHolder;
 				if( useTeamColors ) {
 					vec4_t teamColor;
 					const int team = laserOwner->current.team;
 					CG_TeamColor( team, teamColor );
-					std::tie( initialColors, fadedInColors, fadedOutColors ) = holder->getColorsForTeam( team, teamColor );
+					singleColorAddress = holder->getColorsForTeam( team, teamColor );
 				} else {
-					std::tie( initialColors, fadedInColors, fadedOutColors ) = holder->getDefaultColors();
+					singleColorAddress = &holder->defaultColors;
 				}
 
 				EllipsoidalFlockParams flockParams {
@@ -157,9 +156,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 				};
 				Particle::AppearanceRules appearanceRules {
 					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-					.initialColors  = initialColors,
-					.fadedInColors  = fadedInColors,
-					.fadedOutColors = fadedOutColors,
+					.colors         = { singleColorAddress, singleColorAddress + 1 },
 					.kind           = Particle::Sprite,
 					.radius         = 1.25f,
 					.radiusSpread   = 0.25f,
@@ -1115,9 +1112,11 @@ static void handlePnodeEvent( entity_state_t *ent, int parm, bool predicted ) {
 	cg.effectsSystem.spawnGameDebugBeam( ent->origin, ent->origin2, color, parm );
 }
 
-static const vec4_t kSparksInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };
-static const vec4_t kSparksFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kSparksFadedOutColor { 0.5f, 0.5f, 0.5f, 0.5f };
+static const ColorLifespan kSparksColor {
+	.initialColor  = { 1.0f, 0.5f, 0.1f, 0.0f },
+	.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.5f },
+};
 
 static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 	if( cg_particles->integer ) {
@@ -1139,13 +1138,11 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		};
 
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-			.initialColors  = &kSparksInitialColor,
-			.fadedInColors  = &kSparksFadedInColor,
-			.fadedOutColors = &kSparksFadedOutColor,
-			.kind           = Particle::Spark,
-			.length         = 4.0f,
-			.width          = 1.0f,
+			.materials = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.colors    = { &kSparksColor, 1 },
+			.kind      = Particle::Spark,
+			.length    = 4.0f,
+			.width     = 1.0f,
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );

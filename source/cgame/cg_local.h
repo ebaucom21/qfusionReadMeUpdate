@@ -820,41 +820,27 @@ void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float minCon
 void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAngleCosine );
 
 struct ParticleColorsForTeamHolder {
-	vec4_t initialColorForTeam[2];
-	vec4_t fadedInColorForTeam[2];
-	vec4_t fadedOutColorForTeam[2];
-
-	const vec4_t initialColor;
-	const vec4_t fadedInColor;
-	const vec4_t fadedOutColor;
-
-	using ColorRefsTuple = std::tuple<const vec4_t *, const vec4_t *, const vec4_t *>;
+	ColorLifespan colorsForTeam[2];
+	const ColorLifespan defaultColors;
 
 	[[nodiscard]]
-	auto getColorsForTeam( int team, const vec4_t overlayColor ) -> ColorRefsTuple {
-		float *const initialColorBuffer  = initialColorForTeam[team - TEAM_ALPHA];
-		float *const fadedInColorBuffer  = fadedInColorForTeam[team - TEAM_ALPHA];
-		float *const fadedOutColorBuffer = fadedOutColorForTeam[team - TEAM_ALPHA];
+	auto getColorsForTeam( int team, const vec4_t overlayColor ) -> const ColorLifespan * {
+		assert( team == TEAM_ALPHA || team == TEAM_BETA );
+		ColorLifespan *const resultColors = &colorsForTeam[team - TEAM_ALPHA];
 
 		// TODO: Preserve HSV value, or make consistently lighter
-		VectorCopy( overlayColor, initialColorBuffer );
-		VectorCopy( overlayColor, fadedInColorBuffer );
-		VectorCopy( overlayColor, fadedOutColorBuffer );
+		VectorCopy( overlayColor, resultColors->initialColor );
+		VectorCopy( overlayColor, resultColors->fadedInColor );
+		VectorCopy( overlayColor, resultColors->fadedOutColor );
 
 		// Preserve the reference alpha
-		initialColorBuffer[3]  = initialColor[3];
-		fadedInColorBuffer[3]  = fadedInColor[3];
-		fadedOutColorBuffer[3] = fadedOutColor[3];
+		resultColors->initialColor[3]  = defaultColors.initialColor[3];
+		resultColors->fadedInColor[3]  = defaultColors.fadedInColor[3];
+		resultColors->fadedOutColor[3] = defaultColors.fadedOutColor[3];
+		// Preserve fading properties
+		resultColors->finishFadingInAtLifetimeFrac = defaultColors.finishFadingInAtLifetimeFrac;
+		resultColors->startFadingOutAtLifetimeFrac = defaultColors.startFadingOutAtLifetimeFrac;
 
-		const vec4_t *newInitialColors  = &initialColorForTeam[team - TEAM_ALPHA];
-		const vec4_t *newFadedInColors  = &fadedInColorForTeam[team - TEAM_ALPHA];
-		const vec4_t *newFadedOutColors = &fadedOutColorForTeam[team - TEAM_ALPHA];
-
-		return { newInitialColors, newFadedInColors, newFadedOutColors };
-	}
-
-	[[nodiscard]]
-	auto getDefaultColors() -> ColorRefsTuple {
-		return { &initialColor, &fadedInColor, &fadedOutColor };
+		return resultColors;
 	}
 };

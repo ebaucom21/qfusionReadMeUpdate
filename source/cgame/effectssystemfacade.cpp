@@ -50,40 +50,43 @@ void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int 
 	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
 }
 
-static const vec4_t kExplosionSmokeInitialColors[3] {
-	{ 0.5f, 0.5f, 0.5f, 0.0f },
-	{ 0.5f, 0.5f, 0.5f, 0.0f },
-	{ 0.5f, 0.5f, 0.5f, 0.0f },
+static const ColorLifespan kExplosionSmokeColors[3] {
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+	    .fadedInColor  = { 0.25f, 0.25f, 0.25f, 0.075f },
+		.fadedOutColor = { 0.2f, 0.2f, 0.2f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.50f, 0.50f, 0.50f, 0.075f },
+		.fadedOutColor = { 0.4f, 0.4f, 0.4f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.75f, 0.75f, 0.75f, 0.075f },
+		.fadedOutColor = { 0.6f, 0.6f, 0.6f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
+	},
 };
 
-static const vec4_t kExplosionSmokeFadedInColors[3] {
-	{ 0.25f, 0.25f, 0.25f, 0.075f },
-	{ 0.50f, 0.50f, 0.50f, 0.075f },
-	{ 0.75f, 0.75f, 0.75f, 0.075f },
-};
-
-static const vec4_t kExplosionSmokeFadedOutColors[3] {
-	{ 0.2f, 0.2f, 0.2f, 0.0f },
-	{ 0.4f, 0.4f, 0.4f, 0.0f },
-	{ 0.6f, 0.6f, 0.6f, 0.0f },
-};
-
-static const vec4_t kExplosionSparksInitialColors[3] {
-	{ 1.0f, 1.0f, 1.0f, 0.0f },
-	{ 1.0f, 1.0f, 1.0f, 0.0f },
-	{ 1.0f, 1.0f, 1.0f, 0.0f },
-};
-
-static const vec4_t kExplosionSparksFadedInColors[3] {
-	{ 1.0f, 0.6f, 0.3f, 1.0f },
-	{ 1.0f, 0.8f, 0.4f, 1.0f },
-	{ 1.0f, 0.7f, 0.5f, 1.0f }
-};
-
-static const vec4_t kExplosionSparksFadedOutColors[3] {
-	{ 0.5f, 0.5f, 0.5f, 0.3f },
-	{ 0.5f, 0.5f, 0.5f, 0.3f },
-	{ 0.5f, 0.5f, 0.5f, 0.3f }
+static const ColorLifespan kExplosionSparksColors[3] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 1.0f, 0.6f, 0.3f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
 };
 
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
@@ -100,16 +103,11 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( cg_explosionsSmoke->integer ) {
 		Particle::AppearanceRules appearanceRules {
-			.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-			.initialColors       = kExplosionSmokeInitialColors,
-			.fadedInColors       = kExplosionSmokeFadedInColors,
-			.fadedOutColors      = kExplosionSmokeFadedOutColors,
-			.numColors           = std::size( kExplosionSmokeFadedInColors ),
-			.kind                = Particle::Sprite,
-			.radius              = 10.0f,
-			.radiusSpread        = 5.0f,
-			.fadeInLifetimeFrac  = 0.35,
-			.fadeOutLifetimeFrac = 0.20f
+			.materials    = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.colors       = kExplosionSmokeColors,
+			.kind         = Particle::Sprite,
+			.radius       = 10.0f,
+			.radiusSpread = 5.0f,
 		};
 
 		EllipsoidalFlockParams flockParams {
@@ -133,14 +131,11 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( cg_particles->integer ) {
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.initialColors  = kExplosionSparksInitialColors,
-			.fadedInColors  = kExplosionSparksFadedInColors,
-			.fadedOutColors = kExplosionSparksFadedOutColors,
-			.numColors      = std::size( kExplosionSparksFadedOutColors ),
-			.kind           = Particle::Sprite,
-			.radius         = 1.25f,
-			.radiusSpread   = 0.25f
+			.materials    = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.colors       = kExplosionSparksColors,
+			.kind         = Particle::Sprite,
+			.radius       = 1.25f,
+			.radiusSpread = 0.25f
 		};
 
 		EllipsoidalFlockParams flockParams {
@@ -202,9 +197,13 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
 }
 
-static const vec4_t kPlasmaInitialColor { 0.0f, 1.0f, 0.0f, 0.0f };
-static const vec4_t kPlasmaFadedInColor { 0.3f, 1.0f, 0.5f, 1.0f };
-static const vec4_t kPlasmaFadedOutColor { 0.7f, 1.0f, 0.7f, 0.0f };
+static const ColorLifespan kPlasmaParticlesColors[1] {
+	{
+		.initialColor  = { 0.0f, 1.0f, 0.0f, 0.0f },
+		.fadedInColor  = { 0.3f, 1.0f, 0.5f, 1.0f },
+		.fadedOutColor = { 0.7f, 1.0f, 0.7f, 0.0f },
+	}
+};
 
 void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const float *impactNormal, int mode ) {
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
@@ -223,9 +222,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.initialColors  = &kPlasmaInitialColor,
-			.fadedInColors  = &kPlasmaFadedInColor,
-			.fadedOutColors = &kPlasmaFadedOutColor,
+			.colors         = kPlasmaParticlesColors,
 			.kind           = Particle::Sprite,
 			.radius         = 1.5f,
 			.radiusSpread   = 0.25f,
@@ -252,38 +249,39 @@ void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
 
-static const vec4_t kBloodInitialColors[5] {
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	{ 1.0f, 0.0f, 0.0f, 1.0f },
-	{ 0.0f, 1.0f, 0.5f, 1.0f },
-	{ 0.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f }
+static const ColorLifespan kBloodColors[] {
+	{
+		.initialColor  = { 1.0f, 0.0f, 0.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.3f, 0.7f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.3f, 0.7f, 1.0f },
+	},
+	{
+		.initialColor  = { 1.0f, 0.0f, 0.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.6f, 0.3f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.5f, 0.0f, 1.0f },
+	},
+	{
+		.initialColor  = { 0.0f, 1.0f, 0.5f, 1.0f },
+		.fadedInColor  = { 0.3f, 1.0f, 0.5f, 1.0f },
+		.fadedOutColor = { 0.0f, 0.5f, 0.0f, 1.0f }
+	},
+	{
+		.initialColor  = { 0.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.3f, 0.7f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.0f, 0.7f, 1.0f, 1.0f },
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.3f, 0.3f, 0.3f, 1.0f },
+	},
 };
-
-static const vec4_t kBloodFadedInColors[5] {
-	{ 1.0f, 0.3f, 0.7f, 1.0f },
-	{ 1.0f, 0.6f, 0.3f, 1.0f },
-	{ 0.3f, 1.0f, 0.5f, 1.0f },
-	{ 0.3f, 0.7f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-};
-
-static const vec4_t kBloodFadedOutColors[5] {
-	{ 0.9f, 0.3f, 0.7f, 1.0f },
-	{ 0.9f, 0.5f, 0.0f, 1.0f },
-	{ 0.0f, 0.5f, 0.0f, 1.0f },
-	{ 0.0f, 0.7f, 1.0f, 1.0f },
-	{ 0.3f, 0.3f, 0.3f, 1.0f },
-};
-
-static_assert( std::size( kBloodInitialColors ) == std::size( kBloodFadedInColors ) );
-static_assert( std::size( kBloodInitialColors ) == std::size( kBloodFadedOutColors ) );
 
 shader_s *EffectsSystemFacade::s_bloodMaterials[3];
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( const int palette        = cg_bloodTrailPalette->integer ) {
-		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodInitialColors ) - 1 );
+		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodColors ) - 1 );
 		const int baseTime       = wsw::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
 		const int timeSpread     = wsw::max( 50, baseTime / 8 );
 
@@ -301,18 +299,13 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.maxTimeout    = (unsigned)( baseTime + timeSpread / 2 )
 		};
 		// We have to supply a buffer with a non-stack lifetime
-		if( !s_bloodMaterials[0] ) [[unlikely]] {
-			static_assert( std::size( s_bloodMaterials ) == 3 );
-			// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
-			s_bloodMaterials[0] = cgs.media.shaderBloodParticle;
-			s_bloodMaterials[1] = cgs.media.shaderBloodParticle;
-			s_bloodMaterials[2] = cgs.media.shaderBlastParticle;
-		}
+		// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
+		s_bloodMaterials[0] = cgs.media.shaderBloodParticle;
+		s_bloodMaterials[1] = cgs.media.shaderBloodParticle;
+		s_bloodMaterials[2] = cgs.media.shaderBlastParticle;
 		Particle::AppearanceRules appearanceRules {
 			.materials      = s_bloodMaterials,
-			.initialColors  = kBloodInitialColors + indexForStyle,
-			.fadedInColors  = kBloodFadedInColors + indexForStyle,
-			.fadedOutColors = kBloodFadedOutColors + indexForStyle,
+			.colors         = { &kBloodColors[indexForStyle], 1 },
 			.numMaterials   = std::size( s_bloodMaterials ),
 			.kind           = Particle::Sprite,
 			.radius         = 1.50f,
@@ -320,7 +313,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.sizeBehaviour  = Particle::Expanding
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
-		const float *effectColor = kBloodFadedInColors[indexForStyle];
+		const float *effectColor = kBloodColors[indexForStyle].fadedInColor;
 		m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damage, effectColor, (unsigned)baseTime );
 	}
 
@@ -328,9 +321,13 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 }
 
 static ParticleColorsForTeamHolder electroboltParticleColorsHolder {
-	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-	.fadedInColor  = { 0.7f, 0.7f, 1.0f, 1.0f },
-	.fadedOutColor = { 0.1f, 0.1f, 1.0f, 0.0f }
+	.defaultColors = {
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.7f, 0.7f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.1f, 0.1f, 1.0f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.05f,
+		.startFadingOutAtLifetimeFrac = 0.50f,
+	}
 };
 
 [[nodiscard]]
@@ -359,15 +356,15 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
+		const ColorLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::electroboltParticleColorsHolder;
-		const vec4_t *initialColors, *fadedInColors, *fadedOutColors;
 		if( useTeamColor ) {
-			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getColorsForTeam( team, teamColor );
+			singleColorAddress = colorsHolder->getColorsForTeam( team, teamColor );
 		} else {
-			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getDefaultColors();
+			singleColorAddress = &colorsHolder->defaultColors;
 		}
 
-		ConicalFlockParams flockParams {
+		const ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
@@ -380,19 +377,17 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 			.minTimeout    = 100,
 			.maxTimeout    = 300
 		};
-		Particle::AppearanceRules appearanceRules {
+
+		const Particle::AppearanceRules appearanceRules {
 			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.initialColors       = initialColors,
-			.fadedInColors       = fadedInColors,
-			.fadedOutColors      = fadedOutColors,
+			.colors              = { singleColorAddress, 1 },
 			.kind                = Particle::Spark,
 			.length              = 12.5f,
 			.width               = 2.0f,
 			.lengthSpread        = 2.5f,
 			.widthSpread         = 1.0f,
-			.fadeInLifetimeFrac  = 0.05f,
-			.fadeOutLifetimeFrac = 0.50f,
 		};
+
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
@@ -403,9 +398,13 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 }
 
 static ParticleColorsForTeamHolder instagunParticleColorsHolder {
-	.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-	.fadedInColor  = { 1.0f, 0.0f, 1.0f, 0.5f },
-	.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f }
+	.defaultColors = {
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.0f, 1.0f, 0.5f },
+		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.05f,
+		.startFadingOutAtLifetimeFrac = 0.75f,
+	}
 };
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
@@ -425,15 +424,15 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		vec3_t coneDir;
 		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
 
+		const ColorLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::instagunParticleColorsHolder;
-		const vec4_t *initialColors, *fadedInColors, *fadedOutColors;
 		if( useTeamColor ) {
-			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getColorsForTeam( team, teamColor );
+			singleColorAddress = colorsHolder->getColorsForTeam( team, teamColor );
 		} else {
-			std::tie( initialColors, fadedInColors, fadedOutColors ) = colorsHolder->getDefaultColors();
+			singleColorAddress = &colorsHolder->defaultColors;
 		}
 
-		ConicalFlockParams flockParams {
+		const ConicalFlockParams flockParams {
 			.origin        = { origin[0], origin[1], origin[2] },
 			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
@@ -447,18 +446,14 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 			.maxTimeout    = 225
 		};
 
-		Particle::AppearanceRules appearanceRules {
+		const Particle::AppearanceRules appearanceRules {
 			.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-			.initialColors       = initialColors,
-			.fadedInColors       = fadedInColors,
-			.fadedOutColors      = fadedOutColors,
+			.colors              = { singleColorAddress, 1 },
 			.kind                = Particle::Spark,
 			.length              = 10.0f,
 			.width               = 1.5f,
 			.lengthSpread        = 2.5f,
 			.widthSpread         = 0.5f,
-			.fadeInLifetimeFrac  = 0.05f,
-			.fadeOutLifetimeFrac = 0.25f,
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -471,9 +466,13 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
 
-static const vec4_t kGunbladeHitInitialColor { 1.0f, 0.5f, 0.1f, 0.0f };
-static const vec4_t kGunbladeHitFadedInColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kGunbladeHitFadedOutColor { 0.5f, 0.5f, 0.5f, 0.5f };
+static const ColorLifespan kGunbladeHitColors[1] {
+	{
+		.initialColor  = { 1.0f, 0.5f, 0.1f, 0.0f },
+		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.5f },
+	}
+};
 
 void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const float *dir ) {
 	// Find what are we hitting
@@ -514,9 +513,7 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 				};
 				Particle::AppearanceRules appearanceRules {
 					.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-					.initialColors  = &kGunbladeHitInitialColor,
-					.fadedInColors  = &kGunbladeHitFadedInColor,
-					.fadedOutColors = &kGunbladeHitFadedOutColor,
+					.colors         = kGunbladeHitColors,
 					.kind           = Particle::Spark,
 					.length         = 4.0f,
 					.width          = 1.0f,
@@ -529,22 +526,22 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	}
 }
 
-static const vec4_t kGunbladeBlastInitialColors[3] {
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-};
-
-static const vec4_t kGunbladeBlastFadedInColors[3] {
-	{ 1.0f, 0.8f, 0.5f, 0.7f },
-	{ 1.0f, 0.8f, 0.4f, 0.7f },
-	{ 1.0f, 0.7f, 0.4f, 0.7f },
-};
-
-static const vec4_t kGunbladeBlastFadedOutColors[3] {
-	{ 0.5f, 0.3f, 0.1f, 0.0f },
-	{ 0.7f, 0.3f, 0.1f, 0.0f },
-	{ 0.9f, 0.3f, 0.1f, 0.0f },
+static const ColorLifespan kGunbladeBlastColors[3] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.5f, 0.7f },
+		.fadedOutColor = { 0.5f, 0.3f, 0.1f, 0.0f }
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 0.7f },
+		.fadedOutColor = { 0.7f, 0.3f, 0.1f, 0.0f }
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.7f, 0.4f, 0.7f },
+		.fadedOutColor = { 0.9f, 0.3f, 0.1f, 0.0f }
+	},
 };
 
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
@@ -562,10 +559,7 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.initialColors  = kGunbladeBlastInitialColors,
-			.fadedInColors  = kGunbladeBlastFadedInColors,
-			.fadedOutColors = kGunbladeBlastFadedOutColors,
-			.numColors      = 3,
+			.colors         = kGunbladeBlastColors,
 			.kind           = Particle::Sprite,
 			.radius         = 1.50f,
 			.radiusSpread   = 0.25f
@@ -640,14 +634,16 @@ static inline void assignUpShiftAndModifyBaseSpeed( FlockParams *flockParams, fl
 	flockParams->maxSpeed = wsw::min( 999.9f, flockParams->maxSpeed * baseSpeedScale );
 }
 
-static const vec4_t kBulletRosetteInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kBulletRosetteFadedInColor { 0.9f, 0.9f, 1.0f, 1.0f };
-static const vec4_t kBulletRosetteFadedOutColor { 0.9f, 0.9f, 0.8f, 1.0f };
+static const ColorLifespan kBulletRosetteColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.9f, 0.9f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.8f, 1.0f },
+	}
+};
 
 static const Particle::AppearanceRules kBulletRosetteAppearanceRules {
-	.initialColors  = &kBulletRosetteInitialColor,
-	.fadedInColors  = &kBulletRosetteFadedInColor,
-	.fadedOutColors = &kBulletRosetteFadedOutColor,
+	.colors         = kBulletRosetteColors,
 	.kind           = Particle::Spark,
 	.length         = 16.0f,
 	.width          = 1.0f,
@@ -708,18 +704,20 @@ static void spawnBulletMetalImpactRosette( const FlockOrientation &orientation )
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static const vec4_t kBulletMetalRicochetInitialColor { 1.0f, 1.0f, 1.0f, 1.0f };
-static const vec4_t kBulletMetalRicochetFadedInColor { 0.9f, 0.9f, 1.0f, 1.0f };
-static const vec4_t kBulletMetalRicochetFadedOutColor { 0.9f, 0.9f, 0.8f, 1.0f };
+static const ColorLifespan kBulletMetalRicochetColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.9f, 0.9f, 1.0f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.8f, 1.0f },
+	}
+};
 
 static void spawnBulletMetalRicochetParticles( const FlockOrientation &orientation, float upShiftScale,
 											   float minPercentage, float maxPercentage ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.initialColors  = &kBulletMetalRicochetInitialColor,
-		.fadedInColors  = &kBulletMetalRicochetFadedInColor,
-		.fadedOutColors = &kBulletMetalRicochetFadedOutColor,
-		.lightColor     = kBulletMetalRicochetFadedInColor,
+		.colors         = kBulletMetalRicochetColors,
+		.lightColor     = kBulletMetalRicochetColors[0].fadedInColor,
 		.kind           = Particle::Spark,
 		.length         = 5.0f,
 		.width          = 0.75f,
@@ -747,32 +745,29 @@ static void spawnBulletMetalRicochetParticles( const FlockOrientation &orientati
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static const vec4_t kBulletMetalDebrisInitialColors[3] {
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-	{ 1.0f, 1.0f, 1.0f, 1.0f },
-};
-
-static const vec4_t kBulletMetalDebrisFadedInColors[3] {
-	{ 1.0f, 0.8f, 0.5f, 1.0f },
-	{ 1.0f, 0.8f, 0.4f, 1.0f },
-	{ 1.0f, 0.7f, 0.3f, 1.0f },
-};
-
-static const vec4_t kBulletMetalDebrisFadedOutColors[3] {
-	{ 1.0f, 0.8f, 0.5f, 1.0f },
-	{ 1.0f, 0.8f, 0.4f, 1.0f },
-	{ 1.0f, 0.7f, 0.3f, 1.0f },
+static const ColorLifespan kBulletMetalDebrisColors[3] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.5f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.8f, 0.5f, 1.0f }
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.8f, 0.4f, 1.0f }
+	},
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.7f, 0.3f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.7f, 0.3f, 1.0f }
+	},
 };
 
 static void spawnBulletMetalDebrisParticles( const FlockOrientation &orientation, float upShiftScale,
 											 float minPercentage, float maxPercentage ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.initialColors  = kBulletMetalDebrisInitialColors,
-		.fadedInColors  = kBulletMetalDebrisFadedInColors,
-		.fadedOutColors = kBulletMetalDebrisFadedOutColors,
-		.numColors      = std::size( kBulletMetalDebrisFadedInColors ),
+		.colors         = kBulletMetalDebrisColors,
 		.kind           = Particle::Spark,
 		.length         = 2.5f,
 		.width          = 0.75f,
@@ -800,21 +795,23 @@ static void spawnBulletMetalDebrisParticles( const FlockOrientation &orientation
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static const vec4_t kGreyDustInitialColor { 0.5f, 0.5f, 0.5f, 0.1f };
-static const vec4_t kGreyDustFadedOutColor { 0.5f, 0.5f, 0.5f, 0.0f };
+static const ColorLifespan kGreyDustColors[1] {
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.1f },
+		.fadedInColor  = { 0.5f, 0.5f, 0.5f, 0.1f },
+		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.startFadingOutAtLifetimeFrac = 0.67f
+	}
+};
 
 static void spawnStoneDustParticles( const FlockOrientation &orientation, float upShiftScale, unsigned colorParam,
 									 float dustPercentageScale = 1.0f ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kGreyDustInitialColor,
-		.fadedInColors       = &kGreyDustInitialColor,
-		.fadedOutColors      = &kGreyDustFadedOutColor,
+		.colors              = kGreyDustColors,
 		.kind                = Particle::Sprite,
 		.radius              = 35.0f,
 		.radiusSpread        = 7.5f,
-		.fadeInLifetimeFrac  = 0.33f,
-		.fadeOutLifetimeFrac = 0.33f,
 		.applyVertexDynLight = true,
 		.sizeBehaviour       = Particle::Expanding,
 	};
@@ -840,14 +837,10 @@ static void spawnStoneDustParticles( const FlockOrientation &orientation, float 
 static void spawnStuccoDustParticles( const FlockOrientation &orientation, float upShiftScale, unsigned colorParam ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kGreyDustInitialColor,
-		.fadedInColors       = &kGreyDustInitialColor,
-		.fadedOutColors      = &kGreyDustFadedOutColor,
+		.colors              = kGreyDustColors,
 		.kind                = Particle::Sprite,
 		.radius              = 55.0f,
 		.radiusSpread        = 10.0f,
-		.fadeInLifetimeFrac  = 0.33f,
-		.fadeOutLifetimeFrac = 0.33f,
 		.applyVertexDynLight = true,
 		.sizeBehaviour       = Particle::Expanding,
 	};
@@ -875,21 +868,29 @@ static void spawnStuccoDustParticles( const FlockOrientation &orientation, float
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static const vec4_t kWoodImpactInitialColor { 0.5f, 0.4f, 0.3f, 1.0f };
-static const vec4_t kWoodImpactFadedInColor { 0.5f, 0.4f, 0.3f, 1.0f };
-static const vec4_t kWoodImpactFadedOutColor { 0.5f, 0.4f, 0.3f, 1.0f };
+static const ColorLifespan kWoodImpactColors[1] {
+	{
+		.initialColor  = { 0.5f, 0.4f, 0.3f, 1.0f },
+		.fadedInColor  = { 0.5f, 0.4f, 0.3f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.4f, 0.3f, 1.0f },
+	}
+};
 
-static const vec4_t kWoodDustInitialColor { 0.5f, 0.4f, 0.3f, 0.0f };
-static const vec4_t kWoodDustFadedInColor { 0.5f, 0.4f, 0.3f, 0.1f };
-static const vec4_t kWoodDustFadedOutColor { 0.5f, 0.4f, 0.3f, 0.0f };
+static const ColorLifespan kWoodDustColors[1] {
+	{
+		.initialColor  = { 0.5f, 0.4f, 0.3f, 0.0f },
+		.fadedInColor  = { 0.5f, 0.4f, 0.3f, 0.1f },
+		.fadedOutColor = { 0.5f, 0.4f, 0.3f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.1f,
+		.startFadingOutAtLifetimeFrac = 0.7f
+	}
+};
 
 static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation, float upShiftScale,
 											float debrisPercentageScale = 1.0f ) {
 	const Particle::AppearanceRules burstAppearanceRules {
 		.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-		.initialColors  = &kWoodImpactInitialColor,
-		.fadedInColors  = &kWoodImpactFadedInColor,
-		.fadedOutColors = &kWoodImpactFadedOutColor,
+		.colors         = kWoodImpactColors,
 		.kind           = Particle::Spark,
 		.length         = 20.0f,
 		.width          = 3.0f,
@@ -910,14 +911,10 @@ static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation,
 
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kWoodDustInitialColor,
-		.fadedInColors       = &kWoodDustFadedInColor,
-		.fadedOutColors      = &kWoodDustFadedOutColor,
+		.colors              = kWoodDustColors,
 		.kind                = Particle::Sprite,
 		.radius              = 12.5f,
 		.radiusSpread        = 2.5f,
-		.fadeInLifetimeFrac  = 0.1f,
-		.fadeOutLifetimeFrac = 0.3f,
 		.applyVertexDynLight = true,
 		.sizeBehaviour       = Particle::Expanding
 	};
@@ -935,9 +932,7 @@ static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation,
 
 	const Particle::AppearanceRules debrisAppearanceRules {
 		.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-		.initialColors  = &kWoodImpactInitialColor,
-		.fadedInColors  = &kWoodImpactFadedInColor,
-		.fadedOutColors = &kWoodImpactFadedOutColor,
+		.colors         = kWoodImpactColors,
 		.kind           = Particle::Spark,
 		.length         = 5.0f,
 		.width          = 1.5f,
@@ -973,11 +968,21 @@ static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation,
 	cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
 }
 
-static const vec4_t kDirtImpactFadedInColor { 0.3f, 0.25f, 0.1f, 1.0f };
-static const vec4_t kDirtImpactFadedOutColor { 0.3f, 0.25f, 0.1f, 0.0f };
+static const ColorLifespan kDirtImpactColors[1] {
+	{
+		.initialColor  = { 0.3f, 0.25f, 0.1f, 1.0f },
+		.fadedInColor  = { 0.3f, 0.25f, 0.1f, 1.0f },
+		.fadedOutColor = { 0.3f, 0.25f, 0.1f, 0.0f },
+	}
+};
 
-static const vec4_t kDirtImpactDustFadedInColor { 0.3f, 0.25f, 0.1f, 0.3f };
-static const vec4_t kDirtImpactDustFadedOutColor { 0.3f, 0.25f, 0.1f, 0.0f };
+static const ColorLifespan kDirtDustColors[1] {
+	{
+		.initialColor  = { 0.3f, 0.25f, 0.1f, 0.0f },
+		.fadedInColor  = { 0.3f, 0.25f, 0.1f, 0.3f },
+		.fadedOutColor = { 0.3f, 0.25f, 0.1f, 0.0f },
+	}
+};
 
 static void spawnDirtImpactParticles( const FlockOrientation &orientation, float upShiftScale, unsigned materialParam ) {
 	ConicalFlockParams burstStripesFlockParams {
@@ -992,17 +997,13 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 	};
 
 	Particle::AppearanceRules burstStripesAppearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kDirtImpactFadedInColor,
-		.fadedInColors       = &kDirtImpactFadedInColor,
-		.fadedOutColors      = &kDirtImpactFadedOutColor,
-		.kind                = Particle::Spark,
-		.length              = 30.0f,
-		.width               = 4.0f,
-		.lengthSpread        = 10.0f,
-		.widthSpread         = 1.0f,
-		.fadeInLifetimeFrac  = 0.25f,
-		.fadeOutLifetimeFrac = 0.75f,
+		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.colors        = kDirtImpactColors,
+		.kind          = Particle::Spark,
+		.length        = 30.0f,
+		.width         = 4.0f,
+		.lengthSpread  = 10.0f,
+		.widthSpread   = 1.0f,
 		.sizeBehaviour = Particle::Shrinking
 	};
 
@@ -1019,22 +1020,18 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 	};
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kDirtImpactFadedInColor,
-		.fadedInColors       = &kDirtImpactFadedInColor,
-		.fadedOutColors      = &kDirtImpactFadedOutColor,
-		.kind                = Particle::Sprite,
-		.radius              = 3.0f,
-		.fadeInLifetimeFrac  = 0.25f,
-		.fadeOutLifetimeFrac = 0.75f,
+		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.colors        = kDirtImpactColors,
+		.kind          = Particle::Sprite,
+		.radius        = 3.0f,
 		.sizeBehaviour = Particle::Shrinking
 	};
 
 	ConicalFlockParams dustFlockParams {
 		.gravity       = 100.0f,
 		.angle         = 45.0f,
-		.minSpeed      = 50,
-		.maxSpeed      = 1000,
+		.minSpeed      = 25,
+		.maxSpeed      = 50,
 		.minPercentage = 0.0f,
 		.maxPercentage = 0.5f,
 		.minTimeout    = 750,
@@ -1043,9 +1040,7 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 
 	Particle::AppearanceRules dustAppearanceRules {
 		.materials      = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors  = &kDirtImpactDustFadedInColor,
-		.fadedInColors  = &kDirtImpactDustFadedInColor,
-		.fadedOutColors = &kDirtImpactDustFadedOutColor,
+		.colors         = kDirtDustColors,
 		.kind           = Particle::Sprite,
 		.radius         = 30.0f,
 		.radiusSpread   = 7.5f,
@@ -1064,11 +1059,23 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 	cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
 }
 
-static const vec4_t kSandImpactFadedInColor { 0.8f, 0.7f, 0.5f, 0.7f };
-static const vec4_t kSandImpactFadedOutColor { 0.8f, 0.7f, 0.5f, 0.0f };
+static const ColorLifespan kSandImpactColors[1] {
+	{
+		.initialColor  = { 0.8f, 0.7f, 0.5f, 0.7f },
+		.fadedInColor  = { 0.8f, 0.7f, 0.5f, 0.7f },
+		.fadedOutColor = { 0.8f, 0.7f, 0.5f, 0.0f },
+		.startFadingOutAtLifetimeFrac = 0.67f,
+	}
+};
 
-static const vec4_t kSandDustFadedInColor { 0.8f, 0.7f, 0.5f, 0.3f };
-static const vec4_t kSandDustFadedOutColor { 0.8f, 0.7f, 0.5f, 0.0f };
+static const ColorLifespan kSandDustColors[1] {
+	{
+		.initialColor  = { 0.8f, 0.7f, 0.5f, 0.3f },
+		.fadedInColor  = { 0.8f, 0.7f, 0.5f, 0.3f },
+		.fadedOutColor = { 0.8f, 0.7f, 0.5f, 0.0f },
+		.startFadingOutAtLifetimeFrac = 0.67f,
+	}
+};
 
 static void spawnSandImpactParticles( const FlockOrientation &orientation, float upShiftScale, unsigned materialParam,
 									  float dustPercentageScale = 1.0f ) {
@@ -1085,13 +1092,9 @@ static void spawnSandImpactParticles( const FlockOrientation &orientation, float
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kSandImpactFadedInColor,
-		.fadedInColors       = &kSandImpactFadedInColor,
-		.fadedOutColors      = &kSandImpactFadedOutColor,
+		.colors              = kSandImpactColors,
 		.kind                = Particle::Sprite,
 		.radius              = 3.0f,
-		.fadeInLifetimeFrac  = 0.33f,
-		.fadeOutLifetimeFrac = 0.33f,
 		.applyVertexDynLight = true,
 		.sizeBehaviour       = Particle::Shrinking
 	};
@@ -1113,14 +1116,10 @@ static void spawnSandImpactParticles( const FlockOrientation &orientation, float
 
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.initialColors       = &kSandDustFadedInColor,
-		.fadedInColors       = &kSandDustFadedInColor,
-		.fadedOutColors      = &kSandDustFadedOutColor,
+		.colors              = kSandDustColors,
 		.kind                = Particle::Sprite,
 		.radius              = 35.0f,
 		.radiusSpread        = 7.5f,
-		.fadeInLifetimeFrac  = 0.33f,
-		.fadeOutLifetimeFrac = 0.33f,
 		.applyVertexDynLight = true,
 		.sizeBehaviour       = Particle::Expanding
 	};
@@ -1130,16 +1129,18 @@ static void spawnSandImpactParticles( const FlockOrientation &orientation, float
 	cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
 }
 
-static const vec4_t kGlassDebrisInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
-static const vec4_t kGlassDebrisFadedInColor { 0.8f, 1.0f, 0.9f, 1.0f };
-static const vec4_t kGlassDebrisFadedOutColor { 0.8f, 1.0f, 0.9f, 0.1f };
+static const ColorLifespan kGlassDebrisColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 0.8f, 1.0f, 0.9f, 1.0f },
+		.fadedOutColor = { 0.8f, 1.0f, 0.9f, 0.1f },
+	}
+};
 
 static void spawnGlassImpactParticles( const FlockOrientation &orientation, float upShiftScale ) {
 	Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.initialColors  = &kGlassDebrisInitialColor,
-		.fadedInColors  = &kGlassDebrisFadedInColor,
-		.fadedOutColors = &kGlassDebrisFadedOutColor,
+		.colors         = kGlassDebrisColors,
 		.kind           = Particle::Spark,
 		.length         = 10.0f,
 		.width          = 1.0f,
@@ -1257,96 +1258,101 @@ void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const f
 	}
 }
 
-static const vec4_t kWaterSplashInitialColor { 1.0f, 1.0f, 1.0f, 0.7f };
-static const vec4_t kWaterSplashFadedInColor { 1.0f, 1.0f, 1.0f, 0.3f };
-static const vec4_t kWaterSplashFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
-
-static const vec4_t kWaterDustInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
-static const vec4_t kWaterDustFadedInColor { 1.0f, 1.0f, 1.0f, 0.1f };
-static const vec4_t kWaterDustFadedOutColor { 0.0f, 0.0f, 1.0f, 0.0f };
-
-static const vec4_t kSlimeSplashInitialColor { 1.0f, 1.0f, 0.0f, 0.7f };
-static const vec4_t kSlimeSplashFadedInColor { 0.0f, 1.0f, 0.0f, 0.3f };
-static const vec4_t kSlimeSplashFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
-
-static const vec4_t kSlimeDustInitialColor { 1.0f, 1.0f, 1.0f, 0.0f };
-static const vec4_t kSlimeDustFadedInColor { 0.8f, 1.0f, 0.9f, 0.1f };
-static const vec4_t kSlimeDustFadedOutColor { 0.0f, 1.0f, 0.0f, 0.0f };
-
-static const vec4_t kLavaSplashInitialColor { 1.0f, 0.67f, 0.0f, 1.0f };
-static const vec4_t kLavaSplashFadedInColor { 1.0f, 0.67f, 0.0f, 1.0f };
-static const vec4_t kLavaSplashFadedOutColor { 0.5f, 0.3f, 0.3f, 0.0f };
-
-static const vec4_t kLavaDropsInitialColors[3] {
-	{ 1.0f, 0.67f, 0.1f, 1.0f }, { 1.0f, 0.67f, 0.1f, 1.0f }, { 1.0f, 0.67f, 0.1f, 1.0f }
+static const ColorLifespan kWaterSplashColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.7f },
+		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 0.3f },
+		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+	}
 };
 
-static const vec4_t kLavaDropsFadedInColors[3] {
-	{ 1.0f, 0.67f, 0.01f, 1.0f }, { 1.0f, 0.5f, 0.1f, 1.0f }, { 0.7f, 0.39f, 0.075f, 1.0f },
+static const ColorLifespan kWaterDustColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 0.1f },
+		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+	}
 };
 
-static const vec4_t kLavaDropsFadedOutColors[3] {
-	{ 1.0f, 0.67f, 0.075f, 0.3f }, { 1.0f, 0.5f, 0.1f, 0.3f }, { 0.7f, 0.39f, 0.075f, 0.3f },
+static const ColorLifespan kSlimeSplashColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 0.0f, 0.7f },
+		.fadedInColor  = { 0.0f, 1.0f, 0.0f, 0.3f },
+		.fadedOutColor = { 0.0f, 1.0f, 0.0f, 0.0f },
+	}
 };
 
-static const vec4_t kLavaDustInitialColor { 1.0f, 0.67f, 0.0f, 0.00f };
-static const vec4_t kLavaDustFadedInColor { 1.0f, 0.67f, 0.0f, 0.05f };
-static const vec4_t kLavaDustFadedOutColor { 0.5f, 0.3f, 0.3f, 0.00f };
+static const ColorLifespan kSlimeDustColors[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedInColor  = { 0.8f, 1.0f, 0.9f, 0.1f },
+		.fadedOutColor = { 0.0f, 1.0f, 0.0f, 0.0f },
+	}
+};
+
+static const ColorLifespan kLavaSplashColors[1] {
+	{
+		.initialColor  = { 1.0f, 0.67f, 0.0f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.67f, 0.0f, 1.0f },
+		.fadedOutColor = { 0.5f, 0.3f, 0.3f, 0.0f },
+	}
+};
+
+static const ColorLifespan kLavaDropsColors[3] {
+	{
+		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.67f, 0.01f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.67f, 0.075f, 0.3f }
+	},
+	{
+		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedInColor  = { 1.0f, 0.5f, 0.1f, 1.0f },
+		.fadedOutColor = { 1.0f, 0.5f, 0.1f, 0.3f },
+	},
+	{
+		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedInColor  = { 0.7f, 0.39f, 0.075f, 1.0f },
+		.fadedOutColor = { 0.7f, 0.39f, 0.075f, 0.3f },
+	}
+};
+
+static const ColorLifespan kLavaDustColors[1] {
+	{
+		.initialColor  = { 1.0f, 0.67f, 0.0f, 0.00f },
+		.fadedInColor  = { 1.0f, 0.67f, 0.0f, 0.05f },
+		.fadedOutColor = { 0.5f, 0.3f, 0.3f, 0.00f },
+	}
+};
 
 void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trace, float percentageScale,
 															 std::pair<float, float> randomRotationAngleCosineRange ) {
 	if( cg_particles->integer ) {
 		// TODO: Introduce some ColorLifespan type
-		const vec4_t *initialSplashColors = nullptr, *fadedInSplashColors = nullptr, *fadedOutSplashColors = nullptr;
-		const vec4_t *initialDropsColors = nullptr, *fadedInDropsColors = nullptr, *fadedOutDropsColors = nullptr;
-		const vec4_t *initialDustColors = nullptr, *fadedInDustColors = nullptr, *fadedOutDustColors = nullptr;
+		std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
 
-		shader_s **materials   = nullptr;
-
-		uint8_t numDropsColors   = 0;
+		shader_s **materials     = nullptr;
 		auto dropParticlesKind   = Particle::Sprite;
 		float minDropsPercentage = 0.5f;
 		float maxDropsPercentage = 1.0f;
 
 		if( trace->contents & CONTENTS_WATER ) {
-			initialSplashColors  = &kWaterSplashInitialColor;
-			fadedInSplashColors  = &kWaterSplashFadedInColor;
-			fadedOutSplashColors = &kWaterSplashFadedOutColor;
-
-			initialDustColors  = &kWaterDustInitialColor;
-			fadedInDustColors  = &kWaterDustFadedInColor;
-			fadedOutDustColors = &kWaterDustFadedOutColor;
-
-			materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+			splashColors = kWaterSplashColors;
+			dustColors   = kWaterDustColors;
+			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
 		} else if( trace->contents & CONTENTS_SLIME ) {
 			// TODO: We don't actually have slime on default maps, do we?
 
-			initialSplashColors  = &kSlimeSplashInitialColor;
-			fadedInSplashColors  = &kSlimeSplashFadedInColor;
-			fadedOutSplashColors = &kSlimeSplashFadedOutColor;
-
-			initialDustColors  = &kSlimeDustInitialColor;
-			fadedInDustColors  = &kSlimeDustFadedInColor;
-			fadedOutDustColors = &kSlimeDustFadedOutColor;
-
-			materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+			splashColors = kSlimeSplashColors,
+			dustColors   = kWaterDustColors,
+			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
 		} else if( trace->contents & CONTENTS_LAVA ) {
-			initialSplashColors  = &kLavaSplashInitialColor;
-			fadedInSplashColors  = &kLavaSplashFadedInColor;
-			fadedOutSplashColors = &kLavaSplashFadedOutColor;
-
-			initialDropsColors  = kLavaDropsInitialColors;
-			fadedInDropsColors  = kLavaDropsFadedInColors;
-			fadedOutDropsColors = kLavaDropsFadedOutColors;
-			numDropsColors      = std::size( kLavaDropsInitialColors );
+			splashColors = kLavaSplashColors;
+			dustColors   = kLavaDustColors;
+			dropsColors  = kLavaDropsColors;
 
 			dropParticlesKind  = Particle::Spark;
 			minDropsPercentage = 0.3f;
 			maxDropsPercentage = 0.5f;
-
-			initialDustColors  = &kLavaDustInitialColor;
-			fadedInDustColors  = &kLavaDustFadedInColor;
-			fadedOutDustColors = &kLavaDustFadedOutColor;
 
 			materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 		}
@@ -1356,11 +1362,8 @@ void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trac
 			const FlockOrientation flockOrientation = makeRicochetFlockOrientation( trace, impactDir, &m_rng,
 																					randomRotationAngleCosineRange );
 
-			if( !numDropsColors ) {
-				initialDropsColors  = initialSplashColors;
-				fadedInDropsColors  = fadedInSplashColors;
-				fadedOutDropsColors = fadedOutSplashColors;
-				numDropsColors      = 1;
+			if( dropsColors.empty() ) {
+				dropsColors = splashColors;
 			}
 
 			ConicalFlockParams splashFlockParams {
@@ -1375,44 +1378,39 @@ void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trac
 			};
 
 			const Particle::AppearanceRules splashAppearanceRules {
-				.materials           = materials,
-				.initialColors       = initialSplashColors,
-				.fadedInColors       = fadedInSplashColors,
-				.fadedOutColors      = fadedOutSplashColors,
-				.kind                = Particle::Spark,
-				.length              = 40.0f,
-				.width               = 4.0f,
-				.lengthSpread        = 10.0f,
-				.widthSpread         = 1.0f,
-				.sizeBehaviour       = Particle::Shrinking
+				.materials     = materials,
+				.colors        = splashColors,
+				.kind          = Particle::Spark,
+				.length        = 40.0f,
+				.width         = 4.0f,
+				.lengthSpread  = 10.0f,
+				.widthSpread   = 1.0f,
+				.sizeBehaviour = Particle::Shrinking
 			};
 
 			ConicalFlockParams dropsFlockParams {
-				.gravity       = GRAVITY,
-				.drag          = 0.015f,
-				.angle         = 15,
+				.gravity        = GRAVITY,
+				.drag           = 0.015f,
+				.angle          = 15,
 				.minBounceCount = 0,
 				.maxBounceCount = 0,
-				.minSpeed      = 300,
-				.maxSpeed      = 900,
-				.minPercentage = minDropsPercentage * percentageScale,
-				.maxPercentage = maxDropsPercentage * percentageScale,
-				.minTimeout    = 350,
-				.maxTimeout    = 700,
+				.minSpeed       = 300,
+				.maxSpeed       = 900,
+				.minPercentage  = minDropsPercentage * percentageScale,
+				.maxPercentage  = maxDropsPercentage * percentageScale,
+				.minTimeout     = 350,
+				.maxTimeout     = 700,
 			};
 
 			const Particle::AppearanceRules dropsAppearanceRules {
-				.materials           = materials,
-				.initialColors       = initialDropsColors,
-				.fadedInColors       = fadedInDropsColors,
-				.fadedOutColors      = fadedOutDropsColors,
-				.numColors           = numDropsColors,
-				.kind                = dropParticlesKind,
-				.length              = 3.0f,
-				.width               = 1.5f,
-				.radius              = 1.25f,
-				.radiusSpread        = 0.25f,
-				.sizeBehaviour       = Particle::ExpandingAndShrinking
+				.materials     = materials,
+				.colors        = dropsColors,
+				.kind          = dropParticlesKind,
+				.length        = 3.0f,
+				.width         = 1.5f,
+				.radius        = 1.25f,
+				.radiusSpread  = 0.25f,
+				.sizeBehaviour = Particle::ExpandingAndShrinking
 			};
 
 			ConicalFlockParams dustFlockParams {
@@ -1430,9 +1428,7 @@ void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trac
 
 			const Particle::AppearanceRules dustAppearanceRules {
 				.materials      = materials,
-				.initialColors  = initialDustColors,
-				.fadedInColors  = fadedInDustColors,
-				.fadedOutColors = fadedOutDustColors,
+				.colors         = dustColors,
 				.kind           = Particle::Sprite,
 				.radius         = 25.0f,
 				.radiusSpread   = 7.5f,

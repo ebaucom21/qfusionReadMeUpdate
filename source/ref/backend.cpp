@@ -1856,25 +1856,29 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac < 1.0f );
 
-		const float *const __restrict initialColor  = appearanceRules->initialColors[particle->instanceColorIndex];
-		const float *const __restrict fadedInColor  = appearanceRules->fadedInColors[particle->instanceColorIndex];
-		const float *const __restrict fadedOutColor = appearanceRules->fadedOutColors[particle->instanceColorIndex];
+		const ColorLifespan &__restrict colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
+		assert( colorLifespan.finishFadingInAtLifetimeFrac > 0.01f );
+		assert( colorLifespan.startFadingOutAtLifetimeFrac < 0.99f );
+		assert( colorLifespan.finishFadingInAtLifetimeFrac + 0.01f < colorLifespan.startFadingOutAtLifetimeFrac );
 
 		vec4_t colorBuffer;
-		if( particle->lifetimeFrac < appearanceRules->fadeInLifetimeFrac ) [[unlikely]] {
+		if( particle->lifetimeFrac < colorLifespan.finishFadingInAtLifetimeFrac ) [[unlikely]] {
 			// Fade in
-			const float fadeInFrac = particle->lifetimeFrac * Q_Rcp( appearanceRules->fadeInLifetimeFrac );
-			Vector4Lerp( initialColor, fadeInFrac, fadedInColor, colorBuffer );
+			float fadeInFrac = particle->lifetimeFrac * Q_Rcp( colorLifespan.finishFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			Vector4Lerp( colorLifespan.initialColor, fadeInFrac, colorLifespan.fadedInColor, colorBuffer );
 		} else {
-			const float startFadeOutAtLifetimeFrac = 1.0f - appearanceRules->fadeOutLifetimeFrac;
-			if( particle->lifetimeFrac > startFadeOutAtLifetimeFrac ) [[unlikely]] {
+			if( particle->lifetimeFrac > colorLifespan.startFadingOutAtLifetimeFrac ) [[unlikely]] {
 				// Fade out
-				float fadeOutFrac = particle->lifetimeFrac - startFadeOutAtLifetimeFrac;
-				fadeOutFrac *= Q_Rcp( appearanceRules->fadeOutLifetimeFrac );
-				Vector4Lerp( fadedInColor, fadeOutFrac, fadedOutColor, colorBuffer );
+				float fadeOutFrac = particle->lifetimeFrac - colorLifespan.startFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - colorLifespan.startFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				Vector4Lerp( colorLifespan.fadedInColor, fadeOutFrac, colorLifespan.fadedOutColor, colorBuffer );
 			} else {
 				// Use the color of the "faded-in" state
-				Vector4Copy( fadedInColor, colorBuffer );
+				Vector4Copy( colorLifespan.fadedInColor, colorBuffer );
 			}
 		}
 
