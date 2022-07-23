@@ -89,6 +89,10 @@ public:
 		return planner.activeGoal != &attackOutOfDespairGoal;
 	}
 
+	bool IsReactingToHazard() const {
+		return planner.activeGoal == &reactToHazardGoal;
+	}
+
 	void ClearGoalAndPlan() { planner.ClearGoalAndPlan(); }
 
 	const WorldState &CachedWorldState() const { return planner.cachedWorldState; }

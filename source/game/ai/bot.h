@@ -533,6 +533,10 @@ public:
 		return ShouldKeepXhairOnEnemy() && planningModule.ShouldAimPrecisely();
 	}
 
+	bool IsReactingToHazard() const {
+		return planningModule.IsReactingToHazard();
+	}
+
 	// Whether the bot should stop bunnying even if it could produce
 	// good predicted results and concentrate on combat/dodging
 	bool ShouldSkinBunnyInFavorOfCombatMovement() const;

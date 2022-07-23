@@ -41,7 +41,9 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 				constexpr const float kShortRange = 56.0f;
 				constexpr const float kMidRange = 128.0f;
 				// Unable to hit even at the initial path part
-				if( squareDistance < wsw::square( kShortRange ) ) {
+				// Hacks: Temporarily disable this restriction so bots can use this kind of actions for dodging
+				// (bunny-hop actions produce best results so far)
+				if( squareDistance < wsw::square( kShortRange ) && !bot->IsReactingToHazard() ) {
 					Debug( "Cannot apply action: cannot hit an enemy while keeping the crosshair on it is required\n" );
 					context->SetPendingRollback();
 					this->isDisabledForPlanning = true;
@@ -50,9 +52,13 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 				// Things are very likely to change so consider the path legit.
 				// Apply a penalty if it seems to be necessary.
 				if( squareDistance < wsw::square( kMidRange ) ) {
-					float frac = ( Q_Sqrt( squareDistance ) - kShortRange );
-					frac *= 1.0f / ( kMidRange - kShortRange );
-					EnsurePathPenalty( (unsigned)( 500 - 200 * frac ) );
+					if( squareDistance > wsw::square( kShortRange ) ) {
+						float frac = ( Q_Sqrt( squareDistance ) - kShortRange );
+						frac *= 1.0f / ( kMidRange - kShortRange );
+						EnsurePathPenalty( (unsigned) ( 500 - 200 * frac ) );
+					} else {
+						EnsurePathPenalty( 500 );
+					}
 				}
 			}
 		}
