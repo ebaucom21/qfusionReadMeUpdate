@@ -566,6 +566,7 @@ extern cvar_t *cg_heavyShockwaveExplosions;
 
 extern cvar_t *cg_explosionsWave;
 extern cvar_t *cg_explosionsSmoke;
+extern cvar_t *cg_explosionsClusters;
 extern cvar_t *cg_gibs;
 extern cvar_t *cg_outlineModels;
 extern cvar_t *cg_outlineWorld;

@@ -182,6 +182,9 @@ struct FireHullLayerParamsHolder {
 	SimulatedHullsSystem::HullLayerParams lightHullLayerParams[5];
 	SimulatedHullsSystem::ColorChangeTimelineNode lightColorChangeTimeline[5][3];
 
+	SimulatedHullsSystem::HullLayerParams darkClusterHullLayerParams[2];
+	SimulatedHullsSystem::HullLayerParams lightClusterHullLayerParams[2];
+
 	FireHullLayerParamsHolder() noexcept {
 		for( size_t layerNum = 0; layerNum < std::size( darkHullLayerParams ); ++layerNum ) {
 			// Set the timeline which is not set inline to reduce boilerplate
@@ -205,6 +208,24 @@ struct FireHullLayerParamsHolder {
 
 			lightHullLayerParams[layerNum] = darkHullLayerParams[layerNum];
 			lightHullLayerParams[layerNum].colorChangeTimeline = lightColorChangeTimeline[layerNum];
+		}
+
+		assert( std::size( darkClusterHullLayerParams ) == 2 && std::size( lightClusterHullLayerParams ) == 2 );
+		darkClusterHullLayerParams[0]  = std::begin( darkHullLayerParams )[0];
+		darkClusterHullLayerParams[1]  = std::end( darkHullLayerParams )[-1];
+		lightClusterHullLayerParams[0] = std::begin( lightHullLayerParams )[0];
+		lightClusterHullLayerParams[1] = std::end( lightHullLayerParams )[-1];
+
+		for( SimulatedHullsSystem::HullLayerParams *layerParam: { &darkClusterHullLayerParams[0],
+																  &darkClusterHullLayerParams[1],
+																  &lightClusterHullLayerParams[0],
+																  &lightClusterHullLayerParams[1] } ) {
+			// Account for small lifetime relatively to the primary hull
+			layerParam->minSpeedSpike *= 3.0f;
+			layerParam->maxSpeedSpike *= 3.0f;
+			layerParam->speed         *= 3.0f;
+			// Make it more irregular as well
+			layerParam->biasAlongChosenDir *= 1.5f;
 		}
 	}
 };
@@ -275,7 +296,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 		fireHullTimeout     = 550;
 		fireHullLayerParams = kFireHullParams.lightHullLayerParams;
 	} else {
-		fireHullScale       = 1.65f;
+		fireHullScale       = 1.55f;
 		fireHullTimeout     = 500;
 		fireHullLayerParams = kFireHullParams.darkHullLayerParams;
 	}
@@ -341,6 +362,51 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			hull->applyVertexViewDotFade   = true;
 
 			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 100.0f, 12.5f );
+		}
+	}
+
+	if( cg_explosionsClusters->integer ) {
+		std::span<const SimulatedHullsSystem::HullLayerParams> clusterHullLayerParams;
+		float minSpawnerSpeed, maxSpawnerSpeed;
+		unsigned maxSpawnedClusters;
+		if( cg_explosionsSmoke->integer ) {
+			clusterHullLayerParams = ::kFireHullParams.lightClusterHullLayerParams;
+			minSpawnerSpeed = 105.0f, maxSpawnerSpeed = 125.0f;
+			maxSpawnedClusters = 7;
+		} else {
+			clusterHullLayerParams = ::kFireHullParams.darkClusterHullLayerParams;
+			minSpawnerSpeed = 115.0f, maxSpawnerSpeed = 135.0f;
+			maxSpawnedClusters = 10;
+		}
+
+		unsigned numSpawnedClusters = 0;
+		unsigned oldDirNum          = 0;
+
+		while( numSpawnedClusters < maxSpawnedClusters ) {
+			const unsigned dirNum  = m_rng.nextBoundedFast( std::size( kPredefinedDirs ) );
+			const float *randomDir = kPredefinedDirs[dirNum];
+			// Just check against the last directory so this converges faster
+			if( DotProduct( randomDir, kPredefinedDirs[oldDirNum] ) > 0.7f ) {
+				continue;
+			}
+
+			oldDirNum = dirNum;
+			numSpawnedClusters++;
+
+			vec3_t randomVelocity;
+			const float randomSpeed = m_rng.nextFloat( minSpawnerSpeed, maxSpawnerSpeed );
+			VectorScale( randomDir, randomSpeed, randomVelocity );
+
+			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
+			allocDelayedEffect( m_lastTime, origin, randomVelocity, spawnDelay, ConcentricHullSpawnRecord {
+				.layerParams = clusterHullLayerParams,
+				.scale       = m_rng.nextFloat( 0.11f, 0.37f ) * fireHullScale,
+				.timeout     = fireHullTimeout / 3,
+				.allocMethod = (ConcentricHullSpawnRecord::AllocMethod)&SimulatedHullsSystem::allocFireClusterHull,
+				.applyVertexViewDotFade    = true,
+				.useLayer0DrawOnTopHack    = true,
+				.suppressLayer0ViewDotFade = false,
+			});
 		}
 	}
 }
@@ -744,7 +810,8 @@ auto TransientEffectsSystem::allocLightEffect( int64_t currTime, unsigned durati
 }
 
 auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
-												 unsigned delay ) -> DelayedEffect * {
+												 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord )
+												 -> DelayedEffect * {
 	void *mem = m_delayedEffectsAllocator.allocOrNull();
 	// TODO!!!!!!!!!!!!
 	if( !mem ) {
@@ -763,7 +830,7 @@ auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *
 		mem = oldestEffect;
 	}
 
-	auto *effect = new( mem )DelayedEffect;
+	auto *effect = new( mem )DelayedEffect { .spawnRecord = std::move_if_noexcept( spawnRecord ) };
 	effect->spawnTime  = currTime;
 	effect->spawnDelay = delay;
 	VectorCopy( origin, effect->origin );
@@ -924,40 +991,48 @@ void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float tim
 		if( triggerAt <= currTime ) {
 			// Don't spawn in solid or while contacting solid
 			if( trace.fraction == 1.0f && !trace.startsolid ) {
-				if( effect->maybeSomeKindOfHull ) {
-					if( auto *hullRecord = std::get_if<RegularHullSpawnRecord>( &*effect->maybeSomeKindOfHull ) ) {
-						auto method = hullRecord->allocMethod;
-						if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
-							cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->color,
-																	   hullRecord->speed, hullRecord->speedSpread );
-						}
-					}
-					if( auto *hullRecord = std::get_if<ConcentricHullSpawnRecord>( &*effect->maybeSomeKindOfHull ) ) {
-						auto method = hullRecord->allocMethod;
-						if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
-							cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->scale,
-																	   hullRecord->layerParams );
-						}
+				if( const auto *hullRecord = std::get_if<RegularHullSpawnRecord>( &effect->spawnRecord ) ) {
+					auto method = hullRecord->allocMethod;
+					if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
+						cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->color,
+																   hullRecord->speed, hullRecord->speedSpread );
+						hull->colorChangeTimeline      = hullRecord->colorChangeTimeline;
+
+						hull->lodCurrLevelTangentRatio = hullRecord->lodCurrLevelTangentRatio;
+						hull->tesselateClosestLod      = hullRecord->tesselateClosestLod;
+						hull->leprNextLevelColors      = hullRecord->lerpNextLevelColors;
+						hull->applyVertexDynLight      = hullRecord->applyVertexDynLight;
+						hull->applyVertexViewDotFade   = hullRecord->applyVertexViewDotFade;
 					}
 				}
-				if( effect->maybeParticleFlock ) {
-					const ParticleFlockSpawnRecord &flockRecord = *effect->maybeParticleFlock;
-					const Particle::AppearanceRules &arules = *flockRecord.appearanceRules;
+				if( const auto *hullRecord = std::get_if<ConcentricHullSpawnRecord>( &effect->spawnRecord ) ) {
+					auto method = hullRecord->allocMethod;
+					if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
+						cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->scale,
+																   hullRecord->layerParams );
+						assert( !hull->layers[0].useDrawOnTopHack );
+						hull->applyVertexViewDotFade        = hullRecord->applyVertexViewDotFade;
+						hull->layers[0].useDrawOnTopHack    = hullRecord->useLayer0DrawOnTopHack;
+						hull->layers[0].suppressViewDotFade = hullRecord->suppressLayer0ViewDotFade;
+					}
+				}
+				if( const auto *flockRecord = std::get_if<ParticleFlockSpawnRecord>( &effect->spawnRecord ) ) {
+					const Particle::AppearanceRules &arules = *flockRecord->appearanceRules;
 					// These branches use different types
-					if( flockRecord.conicalFlockParams ) {
-						ConicalFlockParams flockParams( *flockRecord.conicalFlockParams );
+					if( flockRecord->conicalFlockParams ) {
+						ConicalFlockParams flockParams( *flockRecord->conicalFlockParams );
 						VectorCopy( effect->origin, flockParams.origin );
 						VectorClear( flockParams.offset );
 						AngleVectors( effect->angles, flockParams.dir, nullptr, nullptr );
 						// TODO: "using enum"
 						using Pfsr = ParticleFlockSpawnRecord;
-						switch( flockRecord.bin ) {
+						switch( flockRecord->bin ) {
 							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
 							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
 							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;
 						}
 					} else {
-						EllipsoidalFlockParams flockParams( *flockRecord.ellipsoidalFlockParams );
+						EllipsoidalFlockParams flockParams( *flockRecord->ellipsoidalFlockParams );
 						VectorCopy( effect->origin, flockParams.origin );
 						VectorClear( flockParams.offset );
 						if( flockParams.stretchScale != 1.0f ) {
@@ -965,7 +1040,7 @@ void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float tim
 						}
 						// TODO: "using enum"
 						using Pfsr = ParticleFlockSpawnRecord;
-						switch( flockRecord.bin ) {
+						switch( flockRecord->bin ) {
 							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
 							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
 							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;

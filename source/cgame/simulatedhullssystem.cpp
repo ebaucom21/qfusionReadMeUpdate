@@ -323,6 +323,9 @@ SimulatedHullsSystem::~SimulatedHullsSystem() {
 	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeFireHull( hull );
 	}
+	for( FireClusterHull *hull = m_fireClusterHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+		unlinkAndFreeFireClusterHull( hull );
+	}
 	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		unlinkAndFreeBlastHull( hull );
 	}
@@ -358,6 +361,12 @@ void SimulatedHullsSystem::unlinkAndFreeFireHull( FireHull *hull ) {
 	m_fireHullsAllocator.free( hull );
 }
 
+void SimulatedHullsSystem::unlinkAndFreeFireClusterHull( FireClusterHull *hull ) {
+	wsw::unlink( hull, &m_fireClusterHullsHead );
+	hull->~FireClusterHull();
+	m_fireClusterHullsAllocator.free( hull );
+}
+
 void SimulatedHullsSystem::unlinkAndFreeBlastHull( BlastHull *hull ) {
 	wsw::unlink( hull, &m_blastHullsHead );
 	hull->~BlastHull();
@@ -367,6 +376,11 @@ void SimulatedHullsSystem::unlinkAndFreeBlastHull( BlastHull *hull ) {
 [[nodiscard]]
 auto SimulatedHullsSystem::allocFireHull( int64_t currTime, unsigned lifetime ) -> FireHull * {
 	return allocHull<FireHull, false>( &m_fireHullsHead, &m_fireHullsAllocator, currTime, lifetime );
+}
+
+[[nodiscard]]
+auto SimulatedHullsSystem::allocFireClusterHull( int64_t currTime, unsigned lifetime ) -> FireClusterHull * {
+	return allocHull<FireClusterHull, false>( &m_fireClusterHullsHead, &m_fireClusterHullsAllocator, currTime, lifetime );
 }
 
 [[nodiscard]]
@@ -635,14 +649,26 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
 
-	wsw::StaticVector<BaseRegularSimulatedHull *, kMaxSmokeHulls + kMaxWaveHulls> activeRegularHulls;
-	wsw::StaticVector<BaseConcentricSimulatedHull *, kMaxFireHulls> activeConcentricHulls;
+	constexpr unsigned numRegularHulls = kMaxSmokeHulls + kMaxWaveHulls;
+	wsw::StaticVector<BaseRegularSimulatedHull *, numRegularHulls> activeRegularHulls;
+
+	constexpr unsigned numConcentricHulls = kMaxFireHulls + kMaxFireClusterHulls + kMaxBlastHulls;
+	wsw::StaticVector<BaseConcentricSimulatedHull *, numConcentricHulls> activeConcentricHulls;
+
 	for( FireHull *hull = m_fireHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
 		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
 			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
 			activeConcentricHulls.push_back( hull );
 		} else {
 			unlinkAndFreeFireHull( hull );
+		}
+	}
+	for( FireClusterHull *hull = m_fireClusterHullsHead, *next = nullptr; hull; hull = next ) { next = hull->next;
+		if( hull->spawnTime + hull->lifetime > currTime ) [[likely]] {
+			hull->simulate( currTime, timeDeltaSeconds, &m_rng );
+			activeConcentricHulls.push_back( hull );
+		} else {
+			unlinkAndFreeFireClusterHull( hull );
 		}
 	}
 	for( BlastHull *hull = m_blastHullsHead, *nextHull = nullptr; hull; hull = nextHull ) { nextHull = hull->next;
@@ -1202,13 +1228,14 @@ bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 		replacementChance = currNode.sumOfReplacementChanceForThisSegment;
 	}
 
-	// Don't let the chance drop to zero if the specified integral chance is non-zero
+	// Don't let the chance drop to zero if the specified integral chance is non-zero.
+	// Don't let it exceed 1.0 as well during rapid color changes.
 	constexpr float minDropChance = 1e-3f, minReplacementChance = 1e-3f;
 	if( currNode.sumOfDropChanceForThisSegment > 0.0f ) {
-		dropChance = wsw::max( dropChance, minDropChance );
+		dropChance = wsw::clamp( dropChance, minDropChance, 1.0f );
 	}
 	if( currNode.sumOfReplacementChanceForThisSegment > 0.0f ) {
-		replacementChance = wsw::max( replacementChance, minReplacementChance );
+		replacementChance = wsw::clamp( replacementChance, minReplacementChance, 1.0f );
 	}
 
 	const auto palette    = currNode.replacementPalette;

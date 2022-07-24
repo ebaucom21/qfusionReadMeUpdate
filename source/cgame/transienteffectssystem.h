@@ -102,8 +102,15 @@ private:
 		float speed { 250.0f };
 		float speedSpread { 50.0f };
 		float color[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+		std::span<const SimulatedHullsSystem::ColorChangeTimelineNode> colorChangeTimeline;
 		unsigned timeout { 250 };
 		AllocMethod allocMethod { nullptr };
+
+		float lodCurrLevelTangentRatio { 0.25f };
+		bool tesselateClosestLod { false };
+		bool lerpNextLevelColors { false };
+		bool applyVertexDynLight { false };
+		bool applyVertexViewDotFade { false };
 	};
 
 	struct ConcentricHullSpawnRecord {
@@ -115,6 +122,10 @@ private:
 		float scale { 1.0f };
 		unsigned timeout { 250 };
 		AllocMethod allocMethod { nullptr };
+
+		bool applyVertexViewDotFade { false };
+		bool useLayer0DrawOnTopHack { false };
+		bool suppressLayer0ViewDotFade { false };
 	};
 
 	struct ParticleFlockSpawnRecord {
@@ -139,9 +150,11 @@ private:
 		float restitution { 1.0f };
 		float gravity { 0.0f };
 
-		// Hulls and particle flocks are not mutually exclusive
-		std::optional<std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord>> maybeSomeKindOfHull;
-		std::optional<ParticleFlockSpawnRecord> maybeParticleFlock;
+		// Particles and hulls are made mutually exclusive
+		// (adding extra particles to explosion clusters does not produce good visual results)
+		using SpawnRecord = std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord, ParticleFlockSpawnRecord>;
+
+		SpawnRecord spawnRecord;
 	};
 
 	void unlinkAndFreeEntityEffect( EntityEffect *effect );
@@ -161,9 +174,9 @@ private:
 	auto allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
 						   unsigned fadeOutOffset ) -> LightEffect *;
 
-	[[nodiscard]]
+	[[maybe_unused]]
 	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
-							 unsigned delay ) -> DelayedEffect *;
+							 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

@@ -193,12 +193,14 @@ private:
 		}
 	};
 
-	using FireHull  = ConcentricSimulatedHull<3, 5>;
-	using BlastHull = ConcentricSimulatedHull<3, 3>;
-	using SmokeHull = RegularSimulatedHull<2, true>;
-	using WaveHull  = RegularSimulatedHull<2>;
+	using FireHull        = ConcentricSimulatedHull<3, 5>;
+	using FireClusterHull = ConcentricSimulatedHull<1, 2>;
+	using BlastHull       = ConcentricSimulatedHull<3, 3>;
+	using SmokeHull       = RegularSimulatedHull<2, true>;
+	using WaveHull        = RegularSimulatedHull<2>;
 
 	void unlinkAndFreeFireHull( FireHull *hull );
+	void unlinkAndFreeFireClusterHull( FireClusterHull *hull );
 	void unlinkAndFreeBlastHull( BlastHull *hull );
 	void unlinkAndFreeSmokeHull( SmokeHull *hull );
 	void unlinkAndFreeWaveHull( WaveHull *hull );
@@ -211,6 +213,8 @@ private:
 
 	[[nodiscard]]
 	auto allocFireHull( int64_t currTime, unsigned lifetime ) -> FireHull *;
+	[[nodiscard]]
+	auto allocFireClusterHull( int64_t currTime, unsigned lifetime ) -> FireClusterHull *;
 	[[nodiscard]]
 	auto allocBlastHull( int64_t currTime, unsigned lifetime ) -> BlastHull *;
 	[[nodiscard]]
@@ -248,11 +252,13 @@ private:
 	static auto setupLods( ExternalMesh::LodProps *lods, LodSetupParams &&params ) -> unsigned;
 
 	FireHull *m_fireHullsHead { nullptr };
+	FireClusterHull *m_fireClusterHullsHead { nullptr };
 	BlastHull *m_blastHullsHead { nullptr };
 	SmokeHull *m_smokeHullsHead { nullptr };
 	WaveHull *m_waveHullsHead { nullptr };
 
 	static constexpr unsigned kMaxFireHulls  = 32;
+	static constexpr unsigned kMaxFireClusterHulls = kMaxFireHulls * 2;
 	static constexpr unsigned kMaxBlastHulls = 32;
 	static constexpr unsigned kMaxSmokeHulls = kMaxFireHulls * 2;
 	static constexpr unsigned kMaxWaveHulls  = kMaxFireHulls;
@@ -261,6 +267,7 @@ private:
 	CMShapeList *m_tmpShapeList { nullptr };
 
 	wsw::HeapBasedFreelistAllocator m_fireHullsAllocator { sizeof( FireHull ), kMaxFireHulls };
+	wsw::HeapBasedFreelistAllocator m_fireClusterHullsAllocator { sizeof( FireClusterHull ), kMaxFireHulls };
 	wsw::HeapBasedFreelistAllocator m_blastHullsAllocator { sizeof( BlastHull ), kMaxBlastHulls };
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
