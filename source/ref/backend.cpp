@@ -1770,8 +1770,15 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 			}
 
 			vec3_t v_left, v_up;
-			VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
-			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+			if( particle->rotationAngle != 0.0f ) {
+				mat3_t axis;
+				Matrix3_Rotate( fsh->viewAxis, particle->rotationAngle, &fsh->viewAxis[AXIS_FORWARD], axis );
+				VectorCopy( &axis[AXIS_RIGHT], v_left );
+				VectorCopy( &axis[AXIS_UP], v_up );
+			} else {
+				VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+				VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+			}
 
 			if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
 				VectorInverse( v_left );
