@@ -204,6 +204,121 @@ struct ColorLifespan {
 	float fadedOutColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
 	float finishFadingInAtLifetimeFrac { 0.25f };
 	float startFadingOutAtLifetimeFrac { 0.75f };
+
+	void getColorForLifetimeFrac( float lifetimeFrac, float *colorRgba ) const __restrict {
+		assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
+
+		assert( finishFadingInAtLifetimeFrac > 0.01f );
+		assert( startFadingOutAtLifetimeFrac < 0.99f );
+		assert( finishFadingInAtLifetimeFrac + 0.01f < startFadingOutAtLifetimeFrac );
+
+		if( lifetimeFrac < finishFadingInAtLifetimeFrac ) [[unlikely]] {
+			// Fade in
+			float fadeInFrac = lifetimeFrac * Q_Rcp( finishFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			Vector4Lerp( initialColor, fadeInFrac, fadedInColor, colorRgba );
+		} else {
+			if( lifetimeFrac > startFadingOutAtLifetimeFrac ) [[unlikely]] {
+				// Fade out
+				float fadeOutFrac = lifetimeFrac - startFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - startFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				Vector4Lerp( fadedInColor, fadeOutFrac, fadedOutColor, colorRgba );
+			} else {
+				// Use the color of the "faded-in" state
+				Vector4Copy( fadedInColor, colorRgba );
+			}
+		}
+	}
+};
+
+struct LightLifespan {
+	float initialColor[3] { 1.0f, 1.0f, 1.0f };
+	float fadedInColor[3] { 1.0f, 1.0f, 1.0f };
+	float fadedOutColor[3] { 1.0f, 1.0f, 1.0f };
+
+	float finishColorFadingInAtLifetimeFrac { 0.25f };
+	float startColorFadingOutAtLifetimeFrac { 0.75f };
+
+	float initialRadius { 0.0f };
+	float fadedInRadius { 128.0f };
+	float fadedOutRadius { 0.0f };
+
+	float finishRadiusFadingInAtLifetimeFrac { 0.33f };
+	float startRadiusFadingOutAtLifetimeFrac { 0.67f };
+
+	void getRadiusAndColorForLifetimeFrac( float lifetimeFrac, float *radius, float *colorRgb ) const __restrict {
+		assert( finishColorFadingInAtLifetimeFrac > 0.01f );
+		assert( startColorFadingOutAtLifetimeFrac < 0.99f );
+		assert( finishColorFadingInAtLifetimeFrac + 0.01f < startColorFadingOutAtLifetimeFrac );
+
+		if( lifetimeFrac < finishColorFadingInAtLifetimeFrac ) [[unlikely]] {
+			// Fade in
+			float fadeInFrac = lifetimeFrac * Q_Rcp( finishColorFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			VectorLerp( initialColor, fadeInFrac, fadedInColor, colorRgb );
+		} else {
+			if( lifetimeFrac > startColorFadingOutAtLifetimeFrac ) [[unlikely]] {
+				// Fade out
+				float fadeOutFrac = lifetimeFrac - startColorFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - startColorFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				VectorLerp( fadedInColor, fadeOutFrac, fadedOutColor, colorRgb );
+			} else {
+				// Use the color of the "faded-in" state
+				VectorCopy( fadedInColor, colorRgb );
+			}
+		}
+
+		assert( finishRadiusFadingInAtLifetimeFrac > 0.01f );
+		assert( startRadiusFadingOutAtLifetimeFrac < 0.99f );
+		assert( finishRadiusFadingInAtLifetimeFrac + 0.01f < startRadiusFadingOutAtLifetimeFrac );
+
+		if( lifetimeFrac < finishRadiusFadingInAtLifetimeFrac ) [[unlikely]] {
+			float fadeInFrac = lifetimeFrac * Q_Rcp( finishRadiusFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			*radius = fadeInFrac * fadedInRadius + ( 1.0f - fadeInFrac ) * initialRadius;
+		} else {
+			if( lifetimeFrac > startRadiusFadingOutAtLifetimeFrac ) [[unlikely]] {
+				float fadeOutFrac = lifetimeFrac - startRadiusFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - startRadiusFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				*radius = fadeOutFrac * fadedOutRadius + ( 1.0f - fadeOutFrac ) * fadedInRadius;
+			} else {
+				*radius = fadedInRadius;
+			}
+		}
+
+		assert( finishColorFadingInAtLifetimeFrac > 0.01f );
+		assert( startColorFadingOutAtLifetimeFrac < 0.99f );
+		assert( finishColorFadingInAtLifetimeFrac + 0.01f < startColorFadingOutAtLifetimeFrac );
+
+		if( lifetimeFrac < finishColorFadingInAtLifetimeFrac ) [[unlikely]] {
+			// Fade in
+			float fadeInFrac = lifetimeFrac * Q_Rcp( finishColorFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			VectorLerp( initialColor, fadeInFrac, fadedInColor, colorRgb );
+		} else {
+			if( lifetimeFrac > startColorFadingOutAtLifetimeFrac ) [[unlikely]] {
+				// Fade out
+				float fadeOutFrac = lifetimeFrac - startColorFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - startColorFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				VectorLerp( fadedInColor, fadeOutFrac, fadedOutColor, colorRgb );
+			} else {
+				// Use the color of the "faded-in" state
+				VectorCopy( fadedInColor, colorRgb );
+			}
+		}
+	}
 };
 
 struct alignas( 16 ) Particle {
@@ -225,7 +340,12 @@ struct alignas( 16 ) Particle {
 		// Points to external buffers with a greater lifetime
 		std::span<const ColorLifespan> colors;
 
-		const float *lightColor { nullptr };
+		// Points to external buffers with a greater lifetime.
+		// Empty if no light.
+		// 1 element if the light props are the same for the entire flock.
+		// Matches length of colors if it should be addressed by Particle::instanceColorIndex.
+		// Other length options are invalid.
+		std::span<const LightLifespan> lightProps;
 
 		// Unfortunately, std::span can't be used for materials due to value type restrictions.
 		// TODO: Use our custom span type
@@ -241,7 +361,6 @@ struct alignas( 16 ) Particle {
 		float widthSpread { 0.0f };
 		float radiusSpread { 0.0f };
 
-		float lightRadius { 0.0f };
 		uint16_t lightFrameAffinityIndex { 0 };
 		uint16_t lightFrameAffinityModulo { 0 };
 

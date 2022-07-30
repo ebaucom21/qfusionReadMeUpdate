@@ -474,16 +474,16 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
 				request->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, numParticles );
 				const Particle::AppearanceRules &rules = flock->appearanceRules;
-				if( rules.lightColor ) [[unlikely]] {
+				if( !rules.lightProps.empty() ) [[unlikely]] {
 					// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
 					if( const auto modulo = (unsigned)rules.lightFrameAffinityModulo; modulo > 1 ) {
 						using CountType = decltype( cg.frameCount );
 						const auto frameIndexByModulo = cg.frameCount % (CountType)modulo;
 						if( frameIndexByModulo == (CountType)rules.lightFrameAffinityIndex ) {
-							tryAddingLight( flock, request );
+							tryAddingLight( currTime, flock, request );
 						}
 					} else {
-						tryAddingLight( flock, request );
+						tryAddingLight( currTime, flock, request );
 					}
 				}
 			}
@@ -491,31 +491,27 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	}
 }
 
-void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+void ParticleSystem::tryAddingLight( int64_t currTime, ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
 	const Particle::AppearanceRules &rules = flock->appearanceRules;
-	assert( rules.lightColor && rules.lightRadius > 0.0f );
 	assert( flock->numParticlesLeft );
+	assert( rules.lightProps.size() == 1 || rules.lightProps.size() == rules.colors.size() );
 
 	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numParticlesLeft;
 	const Particle &particle = flock->particles[flock->lastLitParticleIndex];
+	assert( particle.lifetimeFrac >= 0.0f && particle.lifetimeFrac <= 1.0f );
 
-	/* TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-	float lightRadius = rules.lightRadius;
-	if( particle.lifetimeFrac < rules.fadeInLifetimeFrac ) {
-		// Fade in
-		lightRadius *= particle.lifetimeFrac * Q_Rcp( rules.fadeInLifetimeFrac );
+	const LightLifespan *lightLifespan;
+	if( rules.lightProps.size() == 1 ) {
+		lightLifespan = rules.lightProps.data();
 	} else {
-		const float startFadeOutAtLifetimeFrac = 1.0f - rules.fadeOutLifetimeFrac;
-		if( particle.lifetimeFrac > startFadeOutAtLifetimeFrac ) {
-			// Fade out
-			lightRadius *= ( particle.lifetimeFrac - startFadeOutAtLifetimeFrac ) * Q_Rcp( rules.fadeOutLifetimeFrac );
-		}
+		lightLifespan = rules.lightProps.data() + particle.instanceColorIndex;
 	}
 
-	if( lightRadius > 1.0f ) {
-		drawSceneRequest->addLight( particle.origin, lightRadius, 0.0f, rules.lightColor );
-	}*/
+	float lightRadius, lightColor[3];
+	lightLifespan->getRadiusAndColorForLifetimeFrac( particle.lifetimeFrac, &lightRadius, lightColor );
+	if( lightRadius >= 1.0f ) {
+		drawSceneRequest->addLight( particle.origin, lightRadius, 0.0f, lightColor );
+	}
 }
 
 void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] ) {

@@ -278,13 +278,17 @@ static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
 static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
 
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 100, 300 );
-	VectorCopy( origin, lightEffect->origin );
-	VectorSet( lightEffect->color, 1.0f, 0.9f, 0.6f );
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
-	lightEffect->radius = 250.0f * radius * lightRadiusScale;
+	allocLightEffect( m_lastTime, origin, vec3_origin, 0.0f, 400u, LightLifespan {
+		.initialColor  = { 1.0f, 0.9f, 0.7f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.5f },
+		.fadedOutColor = { 1.0f, 0.5f, 0.0f },
+		.fadedInRadius = 250.0f * radius * lightRadiusScale,
+		.finishRadiusFadingInAtLifetimeFrac = 0.15f,
+		.startRadiusFadingOutAtLifetimeFrac = 0.75f,
+	});
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
 
@@ -483,10 +487,14 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 		VectorScale( decalColor, 255.0f, entityEffect->entity.shaderRGBA );
 	}
 
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500, 33, 200 );
-	VectorMA( origin, 4.0f, dir, lightEffect->origin );
-	VectorCopy( colorMagenta, lightEffect->color );
-	lightEffect->radius = 144.0f;
+	allocLightEffect( m_lastTime, origin, dir, 4.0f, 250u, LightLifespan {
+		.initialColor  = { 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { energyColor[0], energyColor[1], energyColor[2] },
+		.fadedOutColor = { energyColor[0], energyColor[1], energyColor[2] },
+		.finishColorFadingInAtLifetimeFrac  = 0.10f,
+		.fadedInRadius                      = 144.0f,
+		.finishRadiusFadingInAtLifetimeFrac = 0.10f
+	});
 
 	if( cg_explosionsWave->integer ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 200 ) ) {
@@ -501,13 +509,15 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 }
 
 void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const float *dir ) {
-	EntityEffect *const entityEffect = addModelEffect( cgs.media.modPlasmaExplosion, origin, dir, 400u );
-	entityEffect->fadedInScale = entityEffect->fadedOutScale = 5.0f;
+	EntityEffect *const entityEffect = addModelEffect( cgs.media.modPlasmaExplosion, origin, dir, 300u );
+	entityEffect->fadedInScale = entityEffect->fadedOutScale = 2.5f;
 
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 350, 33, 150 );
-	VectorMA( origin, 4.0f, dir, lightEffect->origin );
-	VectorCopy( colorGreen, lightEffect->color );
-	lightEffect->radius = 108.0f;
+	allocLightEffect( m_lastTime, origin, dir, 4.0f, 200, LightLifespan {
+		.initialColor  = { 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.0f, 1.0f, 0.3f },
+		.fadedOutColor = { 0.0f, 0.7f, 0.0f },
+		.fadedInRadius = 96.0f,
+	});
 
 	if( cg_explosionsWave->integer ) {
 		if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, 175 ) ) {
@@ -609,10 +619,12 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 };
 
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
-	LightEffect *const lightEffect = allocLightEffect( m_lastTime, 500u, 50u, 200u );
-	VectorMA( origin, 8.0f, dir, lightEffect->origin );
-	VectorCopy( colorYellow, lightEffect->color );
-	lightEffect->radius = 200.0f;
+	allocLightEffect( m_lastTime, origin, dir, 8.0f, 350u, LightLifespan {
+		.initialColor  = { 1.0f, 1.0f, 0.5f },
+		.fadedInColor  = { 1.0f, 0.8f, 0.3f },
+		.fadedOutColor = { 0.5f, 0.7f, 0.3f },
+		.fadedInRadius = 144.0f,
+	});
 
 	const vec3_t hullOrigin { origin[0] + 8.0f * dir[0], origin[1] + 8.0f * dir[1], origin[2] + 8.0f * dir[2] };
 
@@ -774,8 +786,9 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 	return effect;
 }
 
-auto TransientEffectsSystem::allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
-											   unsigned fadeOutOffset ) -> LightEffect * {
+auto TransientEffectsSystem::allocLightEffect( int64_t currTime, const float *origin, const float *offset,
+											   float offsetScale, unsigned duration,
+											   LightLifespan &&lightLifespan ) -> LightEffect * {
 	void *mem = m_lightEffectsAllocator.allocOrNull();
 	// TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Generalize
 	if( !mem ) [[unlikely]] {
@@ -795,15 +808,11 @@ auto TransientEffectsSystem::allocLightEffect( int64_t currTime, unsigned durati
 		mem = oldestEffect;
 	}
 
-	assert( fadeInDuration > 0 );
-	assert( fadeInDuration < fadeOutOffset );
-	assert( fadeOutOffset < duration );
-
-	auto *effect           = new( mem )LightEffect;
-	effect->duration       = duration;
-	effect->spawnTime      = currTime;
-	effect->fadeInDuration = fadeInDuration;
-	effect->fadeOutOffset  = fadeOutOffset;
+	auto *effect          = new( mem )LightEffect;
+	effect->duration      = duration;
+	effect->spawnTime     = currTime;
+	effect->lightLifespan = std::forward<LightLifespan>( lightLifespan );
+	VectorMA( origin, offsetScale, offset, effect->origin );
 
 	wsw::link( effect, &m_lightEffectsHead );
 	return effect;
@@ -930,23 +939,13 @@ void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, fl
 			continue;
 		}
 
-		assert( effect->fadeInDuration && effect->duration > effect->fadeOutOffset );
-		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
-		assert( lifetimeMillis < effect->duration );
+		const float lifetimeFrac = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->duration );
 
-		float scaleFrac;
-		if( lifetimeMillis < effect->fadeInDuration ) {
-			scaleFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->fadeInDuration );
-		} else if( lifetimeMillis < effect->fadeOutOffset ) {
-			scaleFrac = 1.0f;
-		} else {
-			// TODO: Precache?
-			const float rcpFadeOutDuration = Q_Rcp( (float)( effect->duration - effect->fadeOutOffset ) );
-			scaleFrac = 1.0f - (float)( lifetimeMillis - effect->fadeOutOffset ) * rcpFadeOutDuration;
-		}
+		float radius, color[3];
+		effect->lightLifespan.getRadiusAndColorForLifetimeFrac( lifetimeFrac, &radius, color );
 
-		if( const float currRadius = scaleFrac * effect->radius; currRadius >= 1.0f ) [[likely]] {
-			request->addLight( effect->origin, currRadius, 0.0f, effect->color );
+		if( radius >= 1.0f ) [[likely]] {
+			request->addLight( effect->origin, radius, 0.0f, color );
 		}
 	}
 

@@ -181,7 +181,7 @@ public:
 
 	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 
-	void tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
+	void tryAddingLight( int64_t currTime, ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
 };
 
 #endif

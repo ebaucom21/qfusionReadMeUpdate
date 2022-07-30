@@ -86,12 +86,9 @@ private:
 		LightEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
 		unsigned duration { 0 };
-		unsigned fadeInDuration { 0 };
-		unsigned fadeOutOffset { 0 };
-
 		float origin[3] { 0.0f, 0.0f, 0.0f };
-		float color[3] { 0.0f, 0.0f, 0.0f };
-		float radius { 0.0f };
+
+		LightLifespan lightLifespan;
 	};
 
 	struct RegularHullSpawnRecord {
@@ -170,9 +167,9 @@ private:
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
 
-	[[nodiscard]]
-	auto allocLightEffect( int64_t currTime, unsigned duration, unsigned fadeInDuration,
-						   unsigned fadeOutOffset ) -> LightEffect *;
+	[[maybe_unused]]
+	auto allocLightEffect( int64_t currTime, const float *origin, const float *offset, float offsetScale,
+						   unsigned duration, LightLifespan &&lightLifespan ) -> LightEffect *;
 
 	[[maybe_unused]]
 	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,

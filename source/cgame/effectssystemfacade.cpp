@@ -717,13 +717,11 @@ static void spawnBulletMetalRicochetParticles( const FlockOrientation &orientati
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalRicochetColors,
-		.lightColor     = kBulletMetalRicochetColors[0].fadedInColor,
 		.kind           = Particle::Spark,
 		.length         = 5.0f,
 		.width          = 0.75f,
 		.lengthSpread   = 1.0f,
 		.widthSpread    = 0.05f,
-		.lightRadius    = 16.0f,
 		.sizeBehaviour  = Particle::Expanding,
 	};
 
@@ -1495,16 +1493,31 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 	}
 
 	const auto timeoutSeconds = wsw::clamp( cg_ebbeam_time->value, 0.1f, 1.0f );
+	const auto timeoutMillis  = (unsigned)( 1.00f * 1000 * timeoutSeconds );
+	const auto lightTimeout   = (unsigned)( 0.25f * 1000 * timeoutSeconds );
+
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
-		.material      = material,
-		.color         = color,
-		.lightColor    = color,
-		.width         = wsw::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
-		.tileLength    = 128.0f,
-		.lightRadius   = 200.0f,
-		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
-		.lightTimeout  = (unsigned)( 0.2f * 1000 * timeoutSeconds ),
-		.fadeOutOffset = (unsigned)( 0.5f * 1000 * timeoutSeconds ),
+		.material          = material,
+		.beamColorLifespan = ColorLifespan {
+			.initialColor  = { 1.0f, 1.0f, 1.0f, color[3] },
+			.fadedInColor  = { color[0], color[1], color[2], color[3] },
+			.fadedOutColor = { color[0], color[1], color[2], 0.0f },
+			.finishFadingInAtLifetimeFrac = 0.2f,
+			.startFadingOutAtLifetimeFrac = 0.5f,
+		},
+		.lightProps        = std::pair<unsigned, LightLifespan> {
+			lightTimeout, {
+				.initialColor   = { 1.0f, 1.0f, 1.0f },
+				.fadedInColor   = { color[0], color[1], color[2] },
+				.fadedOutColor  = { color[0], color[1], color[2] },
+				.initialRadius  = 100.0f,
+				.fadedInRadius  = 250.0f,
+				.fadedOutRadius = 100.0f,
+			}
+		},
+		.width      = wsw::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
+		.tileLength = 128.0f,
+		.timeout    = timeoutMillis,
 	});
 }
 
@@ -1527,16 +1540,31 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 	}
 
 	const auto timeoutSeconds = wsw::clamp( cg_instabeam_time->value, 0.1f, 1.0f );
+	const auto timeoutMillis  = (unsigned)( 1.00f * 1000 * timeoutSeconds );
+	const auto lightTimeout   = (unsigned)( 0.25f * 1000 * timeoutSeconds );
+
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
-		.material      = cgs.media.shaderInstaBeam,
-		.color         = color,
-		.lightColor    = color,
-		.width         = wsw::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
-		.tileLength    = 128.0f,
-		.lightRadius   = 250.0f,
-		.timeout       = (unsigned)( 1.0f * 1000 * timeoutSeconds ),
-		.lightTimeout  = (unsigned)( 0.2f * 1000 * timeoutSeconds ),
-		.fadeOutOffset = (unsigned)( 0.5f * 1000 * timeoutSeconds )
+		.material          = cgs.media.shaderInstaBeam,
+		.beamColorLifespan = ColorLifespan {
+			.initialColor  = { 1.0f, 1.0f, 1.0f, color[3] },
+			.fadedInColor  = { color[0], color[1], color[2], color[3] },
+			.fadedOutColor = { color[0], color[1], color[2], 0.0f },
+			.finishFadingInAtLifetimeFrac = 0.2f,
+			.startFadingOutAtLifetimeFrac = 0.5f,
+		},
+		.lightProps        = std::pair<unsigned, LightLifespan> {
+			lightTimeout, {
+				.initialColor   = { 1.0f, 1.0f, 1.0f },
+				.fadedInColor   = { color[0], color[1], color[2] },
+				.fadedOutColor  = { color[0], color[1], color[2] },
+				.initialRadius  = 100.0f,
+				.fadedInRadius  = 250.0f,
+				.fadedOutRadius = 100.0f,
+			}
+		},
+		.width      = wsw::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
+		.tileLength = 128.0f,
+		.timeout    = timeoutMillis,
 	});
 }
 
@@ -1546,17 +1574,19 @@ void EffectsSystemFacade::spawnWorldLaserBeam( const float *from, const float *t
 	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
 		.material      = cgs.media.shaderLaser,
 		.timeout       = timeout,
-		.fadeOutOffset = timeout - 1u
 	});
 }
 
 void EffectsSystemFacade::spawnGameDebugBeam( const float *from, const float *to, const float *color, int ) {
 	// TODO: Utilize the parameter
 	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
-		.material      = cgs.media.shaderLaser,
-		.color         = color,
-		.width         = 8.0f,
-		.timeout       = 500u,
-		.fadeOutOffset = 450u
+		.material          = cgs.media.shaderLaser,
+		.beamColorLifespan = {
+			.initialColor  = { color[0], color[1], color[2] },
+			.fadedInColor  = { color[0], color[1], color[2] },
+			.fadedOutColor = { color[0], color[1], color[2] },
+		},
+		.width             = 8.0f,
+		.timeout           = 500u,
 	});
 }

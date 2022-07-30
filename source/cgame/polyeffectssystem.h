@@ -49,14 +49,11 @@ public:
 
 	struct TransientBeamParams {
 		shader_s *material { nullptr };
-		const float *color { nullptr };
-		const float *lightColor { nullptr };
+		ColorLifespan beamColorLifespan;
+		std::optional<std::pair<unsigned, LightLifespan>> lightProps;
 		float width { 0.0f };
 		float tileLength { 0.0f };
-		float lightRadius { 0.0f };
 		unsigned timeout;
-		unsigned lightTimeout;
-		unsigned fadeOutOffset;
 	};
 
 	void spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params );
@@ -86,16 +83,12 @@ private:
 	struct TransientBeamEffect {
 		TransientBeamEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime;
+		ColorLifespan colorLifespan;
 		unsigned timeout;
-		unsigned fadeOutOffset;
-		float rcpFadeOutTime;
-		vec4_t initialColor;
 		// Contrary to tracked laser beams, the light position is computed in an "immediate" mode.
 		// As these beams are multifunctional, the light appearance is more configurable.
-		vec3_t lightColor;
-		float lightRadius { 0.0f };
-		unsigned lightTimeout;
-		float rcpLightTimeout;
+		// This field is a-maybe pair of light timeout and light lifespan
+		std::optional<std::pair<unsigned, LightLifespan>> lightProps;
 		QuadPoly poly;
 	};
 
