@@ -30,6 +30,18 @@ class DrawSceneRequest;
 struct sfx_s;
 struct trace_s;
 
+struct Impact {
+	// Borrowed, not owned
+	const float *origin { nullptr };
+	// Nullable
+	const float *normal { nullptr };
+	// Nullable
+	const float *dir { nullptr };
+	// Optionally set when needed
+	int surfFlags { 0 };
+	int contents { 0 };
+};
+
 class EffectsSystemFacade {
 public:
 	void spawnRocketExplosionEffect( const float *origin, const float *impactNormal, int mode );
@@ -50,15 +62,17 @@ public:
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
-	void spawnBulletImpactEffect( const trace_s *trace, const float *impactDir );
+	void spawnBulletImpactEffect( const Impact &impact );
 
-	void spawnPelletImpactEffect( const trace_s *trace, const float *impactDir, unsigned index, unsigned total );
+	void spawnUnderwaterBulletLikeImpactEffect( const Impact &impact );
 
-	void spawnBulletLiquidImpactEffect( const trace_s *trace ) {
-		spawnBulletLikeLiquidImpactEffect( trace, 1.0f, { 0.70f, 0.95f } );
+	void spawnPelletImpactEffect( unsigned index, unsigned total, const Impact &impact );
+
+	void spawnBulletLiquidImpactEffect( const Impact &impact ) {
+		spawnBulletLikeLiquidImpactEffect( impact, 1.0f, { 0.70f, 0.95f } );
 	}
-	void spawnPelletLiquidImpactEffect( const trace_s *trace ) {
-		spawnBulletLikeLiquidImpactEffect( trace, 0.1f, { 0.30f, 0.90f } );
+	void spawnPelletLiquidImpactEffect( const Impact &impact ) {
+		spawnBulletLikeLiquidImpactEffect( impact, 0.1f, { 0.30f, 0.90f } );
 	}
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
@@ -116,7 +130,7 @@ private:
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
-	void spawnBulletLikeLiquidImpactEffect( const trace_s *trace, float percentageScale,
+	void spawnBulletLikeLiquidImpactEffect( const Impact &impact, float percentageScale,
 											std::pair<float, float> randomRotationAngleCosineRange );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;

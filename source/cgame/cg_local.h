@@ -237,6 +237,8 @@ typedef struct {
 	struct shader_s *shaderWhite;
 	struct shader_s *shaderMiniMap;
 
+	int fullclipShaderNum;
+
 	// fonts
 	char fontSystemFamily[MAX_QPATH];
 	char fontSystemMonoFamily[MAX_QPATH];

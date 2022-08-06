@@ -571,31 +571,18 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 }
 
 [[nodiscard]]
-static bool canShowBulletLikeImpactForHit( const trace_t *trace ) {
-	if( trace->surfFlags & SURF_NOIMPACT ) [[unlikely]]	{
-		return false;
-	}
-	if( const int entNum = trace->ent; entNum > 0 ) {
-		if( const unsigned entType = cg_entities[entNum].type; entType == ET_PLAYER || entType == ET_CORPSE ) {
-			return false;
-		}
-	}
-	return true;
-}
-
-[[nodiscard]]
-static auto makeRicochetFlockOrientation( const trace_t *impactTrace, const float *impactDir, wsw::RandomGenerator *rng,
+static auto makeRicochetFlockOrientation( const Impact &impact, wsw::RandomGenerator *rng,
 										  const std::pair<float, float> &angleCosineRange = { 0.30f, 0.95f } )
 										  -> FlockOrientation {
 	vec3_t flockDir;
-	VectorReflect( impactDir, impactTrace->plane.normal, 0.0f, flockDir );
+	VectorReflect( impact.dir, impact.normal, 0.0f, flockDir );
 
 	const float coneAngleCosine = Q_Sqrt( rng->nextFloat( angleCosineRange.first, angleCosineRange.second ) );
 	addRandomRotationToDir( flockDir, rng, coneAngleCosine );
 
 	return FlockOrientation {
-		.origin = { impactTrace->endpos[0], impactTrace->endpos[1], impactTrace->endpos[2] },
-		.offset = { impactTrace->plane.normal[0], impactTrace->plane.normal[1], impactTrace->plane.normal[2] },
+		.origin = { impact.origin[0], impact.origin[1], impact.origin[2] },
+		.offset = { impact.normal[0], impact.normal[1], impact.normal[2] },
 		.dir    = { flockDir[0], flockDir[1], flockDir[2] }
 	};
 }
@@ -1161,98 +1148,99 @@ static void spawnGlassImpactParticles( const FlockOrientation &orientation, floa
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-void EffectsSystemFacade::spawnBulletImpactEffect( const trace_t *trace, const float *impactDir ) {
-	if( canShowBulletLikeImpactForHit( trace ) ) {
-		[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( trace, impactDir, &m_rng );
-		[[maybe_unused]] const float *impactOrigin   = flockOrientation.origin;
-		[[maybe_unused]] const float *impactNormal   = flockOrientation.offset;
+void EffectsSystemFacade::spawnBulletImpactEffect( const Impact &impact ) {
+	[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
+	[[maybe_unused]] const float *impactOrigin   = impact.origin;
+	[[maybe_unused]] const float *impactNormal   = impact.normal;
+	[[maybe_unused]] const int surfFlags         = impact.surfFlags;
 
-		// TODO: using enum (doesn't work with GCC 10)
-		using IM = SurfImpactMaterial;
+	// TODO: using enum (doesn't work with GCC 10)
+	using IM = SurfImpactMaterial;
 
-		const IM material = decodeSurfImpactMaterial( trace->surfFlags );
-		const unsigned materialParam = decodeSurfImpactMaterialParam( trace->surfFlags );
+	const IM material = decodeSurfImpactMaterial( surfFlags );
+	const unsigned materialParam = decodeSurfImpactMaterialParam( surfFlags );
 
-		if( cg_particles->integer ) {
-			[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
-			if( material == IM::Metal ) {
-				spawnBulletMetalImpactRosette( flockOrientation );
-				spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.7f, 1.0f );
-				spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.3f, 0.9f );
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-			} else if( material == IM::Stone ) {
-				spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
-				spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam );
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-			} else if( material == IM::Stucco ) {
-				spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
-			} else if( material == IM::Wood ) {
-				spawnWoodBulletImpactParticles( flockOrientation, upShiftScale );
-			} else if( material == IM::Glass ) {
-				spawnGlassImpactParticles( flockOrientation, upShiftScale );
-			} else if( material == IM::Dirt ) {
-				spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
-			} else if( material == IM::Sand ) {
-				spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam );
-			} else {
-				spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 1.0f );
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-			}
-		} else {
+	if( cg_particles->integer ) {
+		[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
+		if( material == IM::Metal ) {
+			spawnBulletMetalImpactRosette( flockOrientation );
+			spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.7f, 1.0f );
+			spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.3f, 0.9f );
+			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		} else if( material == IM::Stone ) {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
+			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam );
+			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		} else if( material == IM::Stucco ) {
+			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+		} else if( material == IM::Wood ) {
+			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale );
+		} else if( material == IM::Glass ) {
+			spawnGlassImpactParticles( flockOrientation, upShiftScale );
+		} else if( material == IM::Dirt ) {
+			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+		} else if( material == IM::Sand ) {
+			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam );
+		} else {
+			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 1.0f );
 			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 		}
+	} else {
+		spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
+		m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 	}
 }
 
-void EffectsSystemFacade::spawnPelletImpactEffect( const trace_s *trace, const float *impactDir,
-												   unsigned index, unsigned total ) {
-	if( canShowBulletLikeImpactForHit( trace ) ) {
-		[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( trace, impactDir, &m_rng );
-		[[maybe_unused]] const float *impactOrigin   = flockOrientation.origin;
-		[[maybe_unused]] const float *impactNormal   = flockOrientation.offset;
+void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const Impact &impact ) {
+	m_transientEffectsSystem.spawnBulletLikeImpactEffect( impact.origin, impact.normal );
+}
 
-		// Spawn the impact rosette regardless of the var value
+void EffectsSystemFacade::spawnPelletImpactEffect( unsigned index, unsigned total, const Impact &impact ) {
+	[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
+	[[maybe_unused]] const float *impactOrigin   = impact.origin;
+	[[maybe_unused]] const float *impactNormal   = impact.normal;
+	[[maybe_unused]] const int surfFlags         = impact.surfFlags;
 
-		// TODO: using enum (doesn't work with GCC 10)
-		using IM = SurfImpactMaterial;
+	// Spawn the impact rosette regardless of the var value
 
-		const IM material = decodeSurfImpactMaterial( trace->surfFlags );
-		const unsigned materialParam = decodeSurfImpactMaterialParam( trace->surfFlags );
+	// TODO: using enum (doesn't work with GCC 10)
+	using IM = SurfImpactMaterial;
 
-		if( cg_particles->integer ) {
-			[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
-			if( material == IM::Metal ) {
-				spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-				if( m_rng.tryWithChance( 0.5f ) ) {
-					spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
-				}
-				if( m_rng.tryWithChance( 0.5f ) ) {
-					spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
-				}
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-			} else if( material == IM::Stone ) {
-				spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-				spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam, 0.75f );
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-			} else if( material == IM::Stucco ) {
-				spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
-			} else if( material == IM::Wood ) {
-				spawnWoodBulletImpactParticles( flockOrientation, upShiftScale, 0.5f );
-			} else if( material == IM::Glass ) {
-				spawnGlassImpactParticles( flockOrientation, upShiftScale );
-			} else if( material == IM::Dirt ) {
-				spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
-			} else if( material == IM::Sand ) {
-				spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam, 0.25f );
-			} else {
-				spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-				m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+	const IM material = decodeSurfImpactMaterial( surfFlags );
+	const unsigned materialParam = decodeSurfImpactMaterialParam( surfFlags );
+
+	if( cg_particles->integer ) {
+		[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
+		if( material == IM::Metal ) {
+			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
+			if( m_rng.tryWithChance( 0.5f ) ) {
+				spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
 			}
+			if( m_rng.tryWithChance( 0.5f ) ) {
+				spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
+			}
+			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		} else if( material == IM::Stone ) {
+			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
+			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam, 0.75f );
+			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		} else if( material == IM::Stucco ) {
+			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+		} else if( material == IM::Wood ) {
+			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale, 0.5f );
+		} else if( material == IM::Glass ) {
+			spawnGlassImpactParticles( flockOrientation, upShiftScale );
+		} else if( material == IM::Dirt ) {
+			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+		} else if( material == IM::Sand ) {
+			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam, 0.25f );
 		} else {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
 			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 		}
+	} else {
+		spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
+		m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 	}
 }
 
@@ -1322,7 +1310,7 @@ static const ColorLifespan kLavaDustColors[1] {
 	}
 };
 
-void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trace, float percentageScale,
+void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const Impact &impact, float percentageScale,
 															 std::pair<float, float> randomRotationAngleCosineRange ) {
 	if( cg_particles->integer ) {
 		// TODO: Introduce some ColorLifespan type
@@ -1333,17 +1321,17 @@ void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trac
 		float minDropsPercentage = 0.5f;
 		float maxDropsPercentage = 1.0f;
 
-		if( trace->contents & CONTENTS_WATER ) {
+		if( impact.contents & CONTENTS_WATER ) {
 			splashColors = kWaterSplashColors;
 			dustColors   = kWaterDustColors;
 			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
-		} else if( trace->contents & CONTENTS_SLIME ) {
+		} else if( impact.contents & CONTENTS_SLIME ) {
 			// TODO: We don't actually have slime on default maps, do we?
 
 			splashColors = kSlimeSplashColors,
-			dustColors   = kWaterDustColors,
+			dustColors   = kSlimeDustColors,
 			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
-		} else if( trace->contents & CONTENTS_LAVA ) {
+		} else if( impact.contents & CONTENTS_LAVA ) {
 			splashColors = kLavaSplashColors;
 			dustColors   = kLavaDustColors;
 			dropsColors  = kLavaDropsColors;
@@ -1356,8 +1344,7 @@ void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const trace_s *trac
 		}
 
 		if( materials ) {
-			const vec3_t impactDir { -trace->plane.normal[0], -trace->plane.normal[1], -trace->plane.normal[2] };
-			const FlockOrientation flockOrientation = makeRicochetFlockOrientation( trace, impactDir, &m_rng,
+			const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng,
 																					randomRotationAngleCosineRange );
 
 			if( dropsColors.empty() ) {

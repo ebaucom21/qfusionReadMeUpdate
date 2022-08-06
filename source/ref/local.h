@@ -731,6 +731,8 @@ typedef struct msurface_s {
 	// TODO: Decouple surfaces and occluders
 	mutable unsigned occludersSelectionFrame;
 
+	mutable unsigned traceFrame;
+
 	mesh_t mesh;
 
 	instancePoint_t *instances;
@@ -1577,15 +1579,6 @@ typedef struct {
 
 extern mapconfig_t mapConfig;
 
-typedef struct {
-	float fraction;             // time completed, 1.0 = didn't hit anything
-	vec3_t endpos;              // final position
-	cplane_t plane;             // surface normal at impact
-	int surfFlags;              // surface hit
-	int ent;                    // not set by CM_*() functions
-	struct shader_s *shader;    // surface shader
-} rtrace_t;
-
-msurface_t *R_TraceLine( rtrace_t *tr, const vec3_t start, const vec3_t end, int surfumask );
+struct VisualTrace;
 
 #endif // R_LOCAL_H

@@ -473,69 +473,90 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 	}
 }
 
-/*
-* CG_LeadBubbleTrail
-*/
-static void CG_LeadBubbleTrail( trace_t *tr, vec3_t water_start ) {
-	// if went through water, determine where the end and make a bubble trail
-	vec3_t dir, pos;
+[[nodiscard]]
+static bool canShowBulletImpactForSurface( const trace_t &trace ) {
+	if( trace.surfFlags & ( SURF_NOIMPACT | SURF_FLESH ) ) {
+		return false;
+	}
+	const auto entNum = trace.ent;
+	if( entNum < 0 ) {
+		return false;
+	}
+	if( const auto entType = cg_entities[entNum].current.type; entType == ET_PLAYER || entType == ET_CORPSE ) {
+		return false;
+	}
+	return true;
+}
 
-	VectorSubtract( tr->endpos, water_start, dir );
-	VectorNormalize( dir );
-	VectorMA( tr->endpos, -2, dir, pos );
+[[nodiscard]]
+static auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> int {
+	// Hacks
+	// TODO: Trace against brush submodels as well
+	if( trace.shaderNum == cgs.fullclipShaderNum ) {
+		VisualTrace visualTrace {};
+		vec3_t testPoint;
 
-	if( CG_PointContents( pos ) & MASK_WATER ) {
-		VectorCopy( pos, tr->endpos );
-	} else {
-		CG_Trace( tr, pos, vec3_origin, vec3_origin, water_start, tr->ent ? cg_entities[tr->ent].current.number : 0, MASK_WATER );
+		// Check behind
+		VectorMA( trace.endpos, +4.0f, impactDir, testPoint );
+		wsw::ref::traceAgainstBspWorld( &visualTrace, trace.endpos, testPoint );
+		if( visualTrace.fraction != 1.0f ) {
+			return visualTrace.surfFlags;
+		}
+
+		// Check in front
+		VectorMA( trace.endpos, -4.0f, impactDir, testPoint );
+		wsw::ref::traceAgainstBspWorld( &visualTrace, testPoint, trace.endpos );
+		if( visualTrace.fraction != 1.0f ) {
+			return visualTrace.surfFlags;
+		}
 	}
 
-	VectorAdd( water_start, tr->endpos, pos );
-	VectorScale( pos, 0.5, pos );
-
-	// TODO
-	//CG_BubbleTrail( water_start, tr->endpos, 32 );
+	return trace.surfFlags;
 }
 
 static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int firemode, int seed, int owner ) {
-	float r, u;
-	double alpha, s;
-	trace_t trace, *water_trace;
-	gs_weapon_definition_t *weapondef = GS_GetWeaponDef( weapon );
-	firedef_t *firedef = ( firemode ) ? &weapondef->firedef : &weapondef->firedef_weak;
-	int range = firedef->timeout, hspread = firedef->spread, vspread = firedef->v_spread;
+	const auto *weaponDef = GS_GetWeaponDef( weapon );
+	const auto *fireDef   = firemode ? &weaponDef->firedef : &weaponDef->firedef_weak;
 
 	// circle shape
-	alpha = M_PI * Q_crandom( &seed ); // [-PI ..+PI]
-	s = fabs( Q_crandom( &seed ) ); // [0..1]
-	r = s * cos( alpha ) * hspread;
-	u = s * sin( alpha ) * vspread;
+	const float alpha = M_PI * Q_crandom( &seed ); // [-PI ..+PI]
+	const float s     = fabs( Q_crandom( &seed ) ); // [0..1]
+	const float r     = s * (float)fireDef->spread * std::cos( alpha );
+	const float u     = s * (float)fireDef->v_spread * std::sin( alpha );
 
-	water_trace = GS_TraceBullet( &trace, origin, dir, r, u, range, owner, 0 );
-	if( water_trace ) {
-		if( !VectorCompare( water_trace->endpos, origin ) ) {
-			cg.effectsSystem.spawnBulletLiquidImpactEffect( water_trace );
+	VectorNormalizeFast( dir );
+
+	trace_t trace;
+
+	[[maybe_unused]]
+	const trace_t *waterTrace = GS_TraceBullet( &trace, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
+	if( waterTrace ) {
+		if( canShowBulletImpactForSurface( trace ) ) {
+			cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
+				.origin = trace.endpos, .normal = trace.plane.normal
+			});
 		}
-	}
-
-	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-		const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
-		cg.effectsSystem.spawnBulletImpactEffect( &trace, invDir );
-
-		// TODO: Delegate to the effects system
-		if( !water_trace ) {
-			if( trace.surfFlags & SURF_FLESH ||
-				( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_PLAYER ) ||
-				( trace.ent > 0 && cg_entities[trace.ent].current.type == ET_CORPSE ) ) {
-				// flesh impact sound
-			} else {
-				SoundSystem::instance()->startFixedSound( cgs.media.sfxRic[rand() % 2 ], trace.endpos, CHAN_AUTO, cg_volume_effects->value, ATTN_STATIC );
-			}
+		if( !VectorCompare( waterTrace->endpos, origin ) ) {
+			const float *impactNormal = waterTrace->plane.normal;
+			const vec3_t impactDir { -impactNormal[0], -impactNormal[1], -impactNormal[2] };
+			cg.effectsSystem.spawnBulletLiquidImpactEffect( Impact {
+				.origin = waterTrace->endpos, .normal = impactNormal,
+				.dir = impactDir, .contents = waterTrace->contents
+			});
 		}
-	}
+		//CG_LeadBubbleTrail( &trace, water_trace->endpos );
+	} else {
+		if( canShowBulletImpactForSurface( trace ) ) {
+			const vec3_t impactDir { -dir[0], -dir[1], -dir[2] };
+			cg.effectsSystem.spawnBulletImpactEffect( Impact {
+				.origin = trace.endpos, .normal = trace.plane.normal, .dir = impactDir,
+				.surfFlags = getSurfFlagsForImpact( trace, dir ),
+			});
 
-	if( water_trace ) {
-		CG_LeadBubbleTrail( &trace, water_trace->endpos );
+			// TODO: Delegate to the effects system
+			SoundSystem::instance()->startFixedSound( cgs.media.sfxRic[rand() % 2], trace.endpos, CHAN_AUTO,
+													  cg_volume_effects->value, ATTN_STATIC );
+		}
 	}
 }
 
@@ -554,61 +575,33 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		const float u = std::sin( (float)*seed + phi ) * (float)vspread * sqrtPhi;
 
 		trace_t trace;
-		trace_t *water_trace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
-		if( water_trace ) {
-			trace_t *tr = water_trace;
-			if( !VectorCompare( tr->endpos, start ) ) {
-				cg.effectsSystem.spawnPelletLiquidImpactEffect( tr );
+		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
+		if( waterTrace ) {
+			if( canShowBulletImpactForSurface( trace ) ) {
+				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
+					.origin = trace.endpos, .normal = trace.plane.normal
+				});
 			}
-		}
-
-		if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-			const vec3_t invDir { -dir[0], -dir[1], -dir[2] };
-			// TODO: Join in clusters to reduce the number of simulation regions
-			cg.effectsSystem.spawnPelletImpactEffect( &trace, invDir, (unsigned)i, (unsigned)count );
-		}
-
-		if( water_trace ) {
-			CG_LeadBubbleTrail( &trace, water_trace->endpos );
+			if( !VectorCompare( waterTrace->endpos, start ) ) {
+				const float *impactNormal = waterTrace->plane.normal;
+				const vec3_t impactDir { -impactNormal[0], -impactNormal[1], -impactNormal[2] };
+				cg.effectsSystem.spawnPelletLiquidImpactEffect( Impact {
+					.origin = waterTrace->endpos, .normal = impactNormal,
+					.dir = impactDir, .contents = waterTrace->contents
+				});
+			}
+			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
+		} else {
+			if( canShowBulletImpactForSurface( trace ) ) {
+				const vec3_t impactDir { -dir[0], -dir[1], -dir[2] };
+				cg.effectsSystem.spawnPelletImpactEffect( (unsigned)i, (unsigned)count, Impact {
+					.origin = trace.endpos, .normal = trace.plane.normal, .dir = impactDir,
+					.surfFlags = getSurfFlagsForImpact( trace, dir ),
+				});
+			}
 		}
 	}
 }
-
-#if 0
-/*
-* CG_Fire_RandomPattern
-*/
-static void CG_Fire_RandomPattern( vec3_t start, vec3_t dir, int *seed, int ignore, int count,
-								   int hspread, int vspread, int range, void ( *impact )( trace_t *tr ) ) {
-	int i;
-	float r;
-	float u;
-	trace_t trace, *water_trace;
-
-	assert( seed );
-
-	for( i = 0; i < count; i++ ) {
-		r = Q_crandom( seed ) * hspread;
-		u = Q_crandom( seed ) * vspread;
-
-		water_trace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
-		if( water_trace ) {
-			trace_t *tr = water_trace;
-			if( !VectorCompare( tr->endpos, start ) ) {
-				CG_LeadWaterSplash( tr );
-			}
-		}
-
-		if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-			impact( &trace );
-		}
-
-		if( water_trace ) {
-			CG_LeadBubbleTrail( &trace, water_trace->endpos );
-		}
-	}
-}
-#endif
 
 static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int firemode, int seed, int owner ) {
 	vec3_t dir;

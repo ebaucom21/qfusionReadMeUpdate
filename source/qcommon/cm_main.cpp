@@ -413,6 +413,17 @@ const char *CM_ShaderrefName( const cmodel_state_t *cms, int ref ) {
 	return cms->map_shaderrefs[ref].name;
 }
 
+int CM_ShaderrefForName( const cmodel_state_t *cms, const char *name ) {
+	if( name ) {
+		for( int i = 0; i < cms->numshaderrefs; ++i ) {
+			if( !Q_stricmp( cms->map_shaderrefs[i].name, name ) ) {
+				return i;
+			}
+		}
+	}
+	return -1;
+}
+
 /*
 * CM_EntityStringLen
 */

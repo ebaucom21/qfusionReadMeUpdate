@@ -1046,6 +1046,8 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 	cgs.hasGametypeMenu = false; // this will update as soon as we receive configstrings
 	cgs.gameMenuRequested = !gameStart;
 
+	cgs.fullclipShaderNum = CM_ShaderrefForName( cl.cms, "textures/common/fullclip" );
+
 	CG_InitInput();
 
 	CG_RegisterVariables();

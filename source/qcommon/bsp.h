@@ -57,4 +57,13 @@ extern const bspFormatDesc_t q3BSPFormats[];
 const bspFormatDesc_t *Q_FindBSPFormat( const bspFormatDesc_t *formats, const char *header, int version );
 const modelFormatDescr_t *Q_FindFormatDescriptor( const modelFormatDescr_t *formats, const uint8_t *buf, const bspFormatDesc_t **bspFormat );
 
+namespace wsw { class StringView; }
+
+namespace wsw::bsp {
+
+[[nodiscard]]
+auto getExtraFlagsForMaterial( const wsw::StringView &materialName ) -> uint32_t;
+
+}
+
 #endif // __BSP_H__

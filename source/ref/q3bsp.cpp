@@ -555,8 +555,13 @@ static void Mod_LoadShaderrefs( const lump_t *l ) {
 		Q_strncpyz( out[i].name, in->name, sizeof( out[i].name ) );
 		out[i].flags = LittleLong( in->flags );
 
+		// Set extra flags for visual trace results as well.
+		// This is not as expensive as it looks due to sharing the cache with the CM subsystem.
+		const wsw::StringView nameView( out[i].name );
+		out[i].flags |= (int)wsw::bsp::getExtraFlagsForMaterial( nameView );
+
 		if( newMap ) {
-			materialCache->touchMaterialsByName( wsw::StringView( out[i].name ) );
+			materialCache->touchMaterialsByName( nameView );
 		}
 	}
 

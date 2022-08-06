@@ -428,6 +428,23 @@ struct ExternalMesh {
 	bool applyVertexViewDotFade;
 };
 
+struct VisualTrace {
+	shader_s *shader;
+	const char *name;
+	float endpos[3];
+	cplane_t plane;
+	int surfFlags;
+	float fraction;
+};
+
+namespace wsw::ref {
+
+void traceAgainstBspWorld( VisualTrace *tr, const float *start, const float *end, int skipSurfMask = 0 );
+void traceAgainstBrushModel( VisualTrace *tr, const model_s *model, const float *origin,
+							 const float *axis, const float *start, const float *end, int skipSurfMask = 0 );
+
+}
+
 namespace wsw::ref { class Frontend; }
 
 class Scene {
