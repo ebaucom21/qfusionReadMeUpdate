@@ -233,35 +233,18 @@ struct FireHullLayerParamsHolder {
 static const FireHullLayerParamsHolder kFireHullParams;
 
 static const byte_vec4_t kSmokeFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.11f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.11f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.11f ),
-	asByteColor( 0.55f, 0.55f, 0.55f, 0.11f ),
-	asByteColor( 0.60f, 0.60f, 0.60f, 0.11f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.08f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.08f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.08f ),
+	asByteColor( 0.55f, 0.55f, 0.55f, 0.08f ),
+	asByteColor( 0.60f, 0.60f, 0.60f, 0.08f ),
 };
 
-static const SimulatedHullsSystem::ColorChangeTimelineNode kInnerSmokeHullColorChangeTimeline[4] {
+static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullColorChangeTimeline[4] {
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.19f, .replacementPalette = kSmokeFadeInPalette,
-		.sumOfReplacementChanceForThisSegment = 3.5f,
-		.allowIncreasingOpacity = true,
-	},
-	{
-		.activateAtLifetimeFraction = 0.40f,
-	},
-	{
-		.activateAtLifetimeFraction = 0.85f,
-		.sumOfDropChanceForThisSegment = 3.0f
-	}
-};
-
-static const SimulatedHullsSystem::ColorChangeTimelineNode kOuterSmokeHullColorChangeTimeline[4] {
-	{
-	},
-	{
-		.activateAtLifetimeFraction = 0.19f, .replacementPalette = kSmokeFadeInPalette,
+		.activateAtLifetimeFraction = 0.23f, .replacementPalette = kSmokeFadeInPalette,
 		.sumOfReplacementChanceForThisSegment = 3.5f,
 		.allowIncreasingOpacity = true,
 	},
@@ -321,52 +304,11 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 		}
 	}
 
-	// TODO: It would look better if smoke hulls are coupled together/allocated at once
-
 	if( cg_explosionsSmoke->integer ) {
-		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
-
-		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
-			hull->archimedesBottomAccel   = +45.0f;
-			hull->archimedesTopAccel      = +170.0f;
-			hull->xyExpansionTopAccel     = +75.0f;
-			hull->xyExpansionBottomAccel  = -30.0f;
-
-			hull->colorChangeTimeline      = kInnerSmokeHullColorChangeTimeline;
-			hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
-			hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
-
-			hull->expansionStartAt = m_lastTime + 150;
-
-			hull->lodCurrLevelTangentRatio = 0.10f;
-			hull->tesselateClosestLod      = true;
-			hull->leprNextLevelColors      = true;
-			hull->applyVertexDynLight      = true;
-			hull->applyVertexViewDotFade   = true;
-
-			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 85.0f, 10.0f );
-		}
-
-		if( auto *const hull = hullsSystem->allocSmokeHull( m_lastTime, 2000 ) ) {
-			hull->archimedesBottomAccel   = +35.0f;
-			hull->archimedesTopAccel      = +175.0f;
-			hull->xyExpansionTopAccel     = +95.0f;
-			hull->xyExpansionBottomAccel  = -25.0f;
-
-			hull->colorChangeTimeline      = kOuterSmokeHullColorChangeTimeline;
-			hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
-			hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
-
-			hull->expansionStartAt = m_lastTime + 150;
-
-			hull->lodCurrLevelTangentRatio = 0.10f;
-			hull->tesselateClosestLod      = true;
-			hull->leprNextLevelColors      = true;
-			hull->applyVertexDynLight      = true;
-			hull->applyVertexViewDotFade   = true;
-
-			hullsSystem->setupHullVertices( hull, origin, initialSmokeColor, 100.0f, 12.5f );
-		}
+		// TODO: It would look better if smoke hulls are coupled together/allocated at once
+		spawnSmokeHull( m_lastTime, origin, 75.0f, 10.0f, { +160.0f, +45.0f }, { +75.0f, -25.0f } );
+		spawnSmokeHull( m_lastTime, origin, 85.0f, 10.0f, { +170.0f, +40.0f }, { +85.0f, -20.0f } );
+		spawnSmokeHull( m_lastTime, origin, 95.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f } );
 	}
 
 	if( cg_explosionsClusters->integer ) {
@@ -412,6 +354,31 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 				.suppressLayer0ViewDotFade = false,
 			});
 		}
+	}
+}
+
+void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
+											 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel ) {
+	if( auto *const hull = cg.simulatedHullsSystem.allocSmokeHull( currTime, 2000 ) ) {
+		hull->archimedesTopAccel      = archimedesAccel.first;
+		hull->archimedesBottomAccel   = archimedesAccel.second;
+		hull->xyExpansionTopAccel     = xyAccel.first;
+		hull->xyExpansionBottomAccel  = xyAccel.second;
+
+		hull->colorChangeTimeline      = kSmokeHullColorChangeTimeline;
+		hull->noColorChangeIndices     = kSmokeHullNoColorChangeIndices;
+		hull->noColorChangeVertexColor = kSmokeHullNoColorChangeVertexColor;
+
+		hull->expansionStartAt = m_lastTime + 125;
+
+		hull->lodCurrLevelTangentRatio = 0.10f;
+		hull->tesselateClosestLod      = true;
+		hull->leprNextLevelColors      = true;
+		hull->applyVertexDynLight      = true;
+		hull->applyVertexViewDotFade   = true;
+
+		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
+		cg.simulatedHullsSystem.setupHullVertices( hull, origin, initialSmokeColor, speed, speedSpread );
 	}
 }
 

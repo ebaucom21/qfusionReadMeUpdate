@@ -175,6 +175,9 @@ private:
 	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
 							 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
+	void spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
+						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel );
+
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );
 
