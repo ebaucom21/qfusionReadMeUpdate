@@ -285,6 +285,48 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullHardLayerCo
 static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
 static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
 
+static const ColorLifespan kExplosionSmokeColors[3] {
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.25f, 0.25f, 0.25f, 0.23f },
+		.fadedOutColor = { 0.2f, 0.2f, 0.2f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.50f, 0.50f, 0.50f, 0.23f },
+		.fadedOutColor = { 0.4f, 0.4f, 0.4f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.75f, 0.75f, 0.75f, 0.23f },
+		.fadedOutColor = { 0.6f, 0.6f, 0.6f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
+	},
+};
+
+Particle::AppearanceRules TransientEffectsSystem::s_explosionSmokeAppearanceRules {
+	.colors       = kExplosionSmokeColors,
+	.kind         = Particle::Sprite,
+	.radius       = 9.0f,
+	.radiusSpread = 5.0f,
+};
+
+const EllipsoidalFlockParams TransientEffectsSystem::s_explosionSmokeFlockParams {
+	.stretchScale  = 1.25f,
+	.gravity       = -65.0f,
+	.restitution   = 0.33f,
+	.minSpeed      = 35.0f,
+	.maxSpeed      = 65.0f,
+	.minShiftSpeed = 55.0f,
+	.maxShiftSpeed = 70.0f,
+	.minPercentage = 0.7f,
+	.maxPercentage = 0.9f,
+	.minTimeout    = 1200,
+	.maxTimeout    = 1750,
+};
+
 void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
@@ -337,6 +379,17 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
 		spawnSmokeHull( m_lastTime, origin, 99.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f },
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
+
+		// ColorLifespan is quite limited to efficiently suppress drawing the flock at start.
+		// Let's spawn smoke particles as a delayed effect.
+
+		s_explosionSmokeAppearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+
+		allocDelayedEffect( m_lastTime, origin, vec3_origin, 300, ParticleFlockSpawnRecord {
+			.appearanceRules        = &s_explosionSmokeAppearanceRules,
+			.ellipsoidalFlockParams = &s_explosionSmokeFlockParams,
+			.bin                    = ParticleFlockSpawnRecord::Large
+		});
 	}
 
 	if( cg_explosionsClusters->integer ) {

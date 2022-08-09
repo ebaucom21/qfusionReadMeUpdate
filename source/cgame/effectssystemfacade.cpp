@@ -50,27 +50,6 @@ void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int 
 	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
 }
 
-static const ColorLifespan kExplosionSmokeColors[3] {
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-	    .fadedInColor  = { 0.25f, 0.25f, 0.25f, 0.075f },
-		.fadedOutColor = { 0.2f, 0.2f, 0.2f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
-	},
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.50f, 0.50f, 0.50f, 0.075f },
-		.fadedOutColor = { 0.4f, 0.4f, 0.4f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
-	},
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.75f, 0.75f, 0.75f, 0.075f },
-		.fadedOutColor = { 0.6f, 0.6f, 0.6f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.3f, .startFadingOutAtLifetimeFrac = 0.8f,
-	},
-};
-
 static const ColorLifespan kExplosionSparksColors[3] {
 	{
 		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
@@ -99,34 +78,6 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( addSoundLfe ) {
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
-	}
-
-	if( cg_explosionsSmoke->integer ) {
-		Particle::AppearanceRules appearanceRules {
-			.materials    = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-			.colors       = kExplosionSmokeColors,
-			.kind         = Particle::Sprite,
-			.radius       = 10.0f,
-			.radiusSpread = 5.0f,
-		};
-
-		EllipsoidalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { dir[0], dir[1], dir[2] },
-			.stretchScale  = 1.25f,
-			.gravity       = -50.0f,
-			.restitution   = 0.33f,
-			.minSpeed      = 10.0f,
-			.maxSpeed      = 60.0f,
-			.minShiftSpeed = 20.0f,
-			.maxShiftSpeed = 35.0f,
-			.minPercentage = 1.0f,
-			.maxPercentage = 1.0f,
-			.minTimeout    = 1250,
-			.maxTimeout    = 1750,
-		};
-
-		cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
 	}
 
 	if( cg_particles->integer ) {

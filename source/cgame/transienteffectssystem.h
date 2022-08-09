@@ -198,6 +198,9 @@ private:
 
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };
+
+	static Particle::AppearanceRules s_explosionSmokeAppearanceRules;
+	static const EllipsoidalFlockParams s_explosionSmokeFlockParams;
 };
 
 #endif
