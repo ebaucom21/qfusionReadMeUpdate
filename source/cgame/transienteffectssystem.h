@@ -107,7 +107,7 @@ private:
 		bool tesselateClosestLod { false };
 		bool lerpNextLevelColors { false };
 		bool applyVertexDynLight { false };
-		bool applyVertexViewDotFade { false };
+		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
 	};
 
 	struct ConcentricHullSpawnRecord {
@@ -120,9 +120,9 @@ private:
 		unsigned timeout { 250 };
 		AllocMethod allocMethod { nullptr };
 
-		bool applyVertexViewDotFade { false };
+		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
 		bool useLayer0DrawOnTopHack { false };
-		bool suppressLayer0ViewDotFade { false };
+		std::optional<ExternalMesh::ViewDotFade> overrideLayer0ViewDotFade;
 	};
 
 	struct ParticleFlockSpawnRecord {
@@ -175,8 +175,11 @@ private:
 	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
 							 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
+	using ColorChangeTimeline = std::span<const SimulatedHullsSystem::ColorChangeTimelineNode>;
+
 	void spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
-						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel );
+						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel,
+						 ExternalMesh::ViewDotFade viewDotFade, ColorChangeTimeline colorChangeTimeline );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

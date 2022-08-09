@@ -1286,19 +1286,31 @@ static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::
 	return numAffectingLights;
 }
 
+template <ExternalMesh::ViewDotFade Fade>
 [[nodiscard]]
-static inline wsw_forceinline uint8_t calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
-																	const float *__restrict normal ) {
+static inline wsw_forceinline auto calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
+																 const float *__restrict normal ) -> uint8_t {
 	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
 	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
 
-	const float frac = std::fabs( DotProduct( viewDir, normal ) );
-	const float modifiedAlpha = frac * (float)givenAlpha;
+	const float absDot = std::fabs( DotProduct( viewDir, normal ) );
+	float alphaFrac;
+	if constexpr( Fade == ExternalMesh::FadeOutContour ) {
+		alphaFrac = absDot;
+	} else if constexpr( Fade == ExternalMesh::FadeOutCenter ) {
+		// This looks best for the current purposes
+		alphaFrac = ( 1.0f - absDot ) * ( 1.0f - absDot );
+	} else {
+		alphaFrac = 1.0f;
+	}
+
+	const float modifiedAlpha = alphaFrac * (float)givenAlpha;
 	return (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
 }
 
 using IcosphereVertexNeighbours = const uint16_t (*)[5];
 
+template <ExternalMesh::ViewDotFade Fade>
 static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict resultColors,
 											const vec4_t *const __restrict positions,
 											const IcosphereVertexNeighbours neighboursOfVertices,
@@ -1337,7 +1349,8 @@ static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict result
 				VectorNormalizeFast( normal );
 				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
 				VectorScale( viewDir, rcpDistance, viewDir );
-				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal( givenColors[vertexNum][3], viewDir, normal );
+				const uint8_t givenAlpha = givenColors[vertexNum][3];
+				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normal );
 			} else {
 				resultColors[vertexNum][3] = 0;
 			}
@@ -1347,6 +1360,7 @@ static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict result
 	} while( ++vertexNum < numVertices );
 }
 
+template <ExternalMesh::ViewDotFade Fade>
 static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
 							  const vec4_t *const __restrict positions,
 							  const vec4_t *const __restrict normals,
@@ -1362,8 +1376,8 @@ static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
 		if( squareDistanceToVertex > 1.0f ) [[likely]] {
 			const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
 			VectorScale( viewDir, rcpDistance, viewDir );
-			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal( givenColors[vertexNum][3],
-																	   viewDir, normals[vertexNum] );
+			const uint8_t givenAlpha = givenColors[vertexNum][3];
+			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normals[vertexNum] );
 		} else {
 			resultColors[vertexNum][3] = 0;
 		}
@@ -1406,7 +1420,7 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 
 	byte_vec4_t *overrideColors = nullptr;
 
-	if( externalMesh->applyVertexViewDotFade ) {
+	if( externalMesh->vertexViewDotFade != ExternalMesh::NoFade ) {
 		[[maybe_unused]] const ExternalMesh::LodProps *nonTessLod = nullptr;
 		unsigned numVertices;
 
@@ -1422,8 +1436,16 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 		overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
 
 		if( externalMesh->normals ) {
-			applyViewDotFade( overrideColors, externalMesh->positions, externalMesh->normals,
-							  externalMesh->colors, fsh->viewOrigin, numVertices );
+			// Call specialized implementations for each fade func
+			if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutContour ) {
+				applyViewDotFade<ExternalMesh::FadeOutContour>( overrideColors, externalMesh->positions,
+																externalMesh->normals, externalMesh->colors,
+																fsh->viewOrigin, numVertices );
+			} else if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutCenter ) {
+				applyViewDotFade<ExternalMesh::FadeOutCenter>( overrideColors, externalMesh->positions,
+															   externalMesh->normals, externalMesh->colors,
+															   fsh->viewOrigin, numVertices );
+			}
 		} else {
 			IcosphereVertexNeighbours neighboursOfVertices;
 			if( chosenLod->tesselate ) {
@@ -1432,8 +1454,18 @@ void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const en
 				neighboursOfVertices = (IcosphereVertexNeighbours)chosenLod->neighbours;
 			}
 
-			calcNormalsAndApplyViewDotFade( overrideColors, externalMesh->positions, neighboursOfVertices,
-											externalMesh->colors, fsh->viewOrigin, numVertices );
+			// Call specialized implementations for each fade func
+			if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutContour ) {
+				calcNormalsAndApplyViewDotFade<ExternalMesh::FadeOutContour>( overrideColors, externalMesh->positions,
+																			  neighboursOfVertices, externalMesh->colors,
+																			  fsh->viewOrigin, numVertices );
+			} else if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutCenter ) {
+				calcNormalsAndApplyViewDotFade<ExternalMesh::FadeOutCenter>( overrideColors, externalMesh->positions,
+																			 neighboursOfVertices, externalMesh->colors,
+																			 fsh->viewOrigin, numVertices );
+			} else {
+				wsw::failWithRuntimeError( "Unreachable" );
+			}
 		}
 	}
 

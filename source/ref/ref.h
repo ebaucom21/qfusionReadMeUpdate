@@ -405,11 +405,6 @@ struct alignas( 16 ) Particle {
 };
 
 struct ExternalMesh {
-	float mins[4], maxs[4];
-	const shader_s *material;
-	const vec4_t *positions;
-	const vec4_t *normals;
-	const byte_vec4_t *colors;
 	struct LodProps {
 		const uint16_t *indices;
 		const void *neighbours { nullptr };
@@ -420,12 +415,24 @@ struct ExternalMesh {
 		bool lerpNextLevelColors { false };
 		bool tesselate { false };
 	};
+
+	// We could use different programs, but it's inconvenient in the current codebase state,
+	// and also we could eventually supply these parameters to the same program
+	// for a branchless selection of final vertex color, while the same program stays bound.
+	enum ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
+
+	float mins[4], maxs[4];
+	const shader_s *material;
+	const vec4_t *positions;
+	const vec4_t *normals;
+	const byte_vec4_t *colors;
+
 	static constexpr unsigned kMaxLods = 5;
 	LodProps lods[kMaxLods];
 	unsigned numLods;
 	bool useDrawOnTopHack;
 	bool applyVertexDynLight;
-	bool applyVertexViewDotFade;
+	ViewDotFade vertexViewDotFade { NoFade };
 };
 
 struct VisualTrace {

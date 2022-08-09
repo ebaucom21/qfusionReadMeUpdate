@@ -93,7 +93,7 @@ private:
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
-		bool applyVertexViewDotFade { false };
+		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
@@ -147,7 +147,7 @@ private:
 			ColorChangeState colorChangeState;
 
 			bool useDrawOnTopHack { false };
-			bool suppressViewDotFade { false };
+			std::optional<ExternalMesh::ViewDotFade> overrideHullFade;
 		};
 
 		Layer *layers { nullptr };
@@ -160,7 +160,7 @@ private:
 
 		uint8_t subdivLevel { 0 };
 		bool applyVertexDynLight { false };
-		bool applyVertexViewDotFade { false };
+		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
