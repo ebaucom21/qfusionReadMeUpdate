@@ -176,8 +176,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define PATH_INSTAGUN_MODEL     "models/weapons/instagun/instagun.md3"
 
 // ammoboxes
-#define PATH_AMMO_BOX_MODEL     "models/items/ammo/ammobox/ammobox.md3"
-#define PATH_AMMO_BOX_MODEL2        "models/items/ammo/ammobox/ammobox_icon.md3"
+#define PATH_AMMO_BOX_PREFIX        "models/items/ammo/"
 #define PATH_AMMO_PACK_MODEL        "models/items/ammo/pack/pack.md3"
 
 // health
