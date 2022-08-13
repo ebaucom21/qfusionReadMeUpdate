@@ -822,6 +822,12 @@ struct FlockOrientation {
 void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float minConeAngleCosine, float maxConeAngleCosine );
 void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAngleCosine );
 
+[[nodiscard]]
+auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> int;
+
+[[nodiscard]]
+auto makeWaterImpactForDesiredDirection( const float *origin, const float *direction, int contents ) -> Impact;
+
 struct ParticleColorsForTeamHolder {
 	ColorLifespan colorsForTeam[2];
 	const ColorLifespan defaultColors;

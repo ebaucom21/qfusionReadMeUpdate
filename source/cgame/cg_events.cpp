@@ -488,8 +488,7 @@ static bool canShowBulletImpactForSurface( const trace_t &trace ) {
 	return true;
 }
 
-[[nodiscard]]
-static auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> int {
+auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> int {
 	// Hacks
 	// TODO: Trace against brush submodels as well
 	if( trace.shaderNum == cgs.fullclipShaderNum ) {
@@ -533,23 +532,21 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	if( waterTrace ) {
 		if( canShowBulletImpactForSurface( trace ) ) {
 			cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
-				.origin = trace.endpos, .normal = trace.plane.normal
+				.origin = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+				.normal = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] }
 			});
 		}
 		if( !VectorCompare( waterTrace->endpos, origin ) ) {
-			const float *impactNormal = waterTrace->plane.normal;
-			const vec3_t impactDir { -impactNormal[0], -impactNormal[1], -impactNormal[2] };
-			cg.effectsSystem.spawnBulletLiquidImpactEffect( Impact {
-				.origin = waterTrace->endpos, .normal = impactNormal,
-				.dir = impactDir, .contents = waterTrace->contents
-			});
+			cg.effectsSystem.spawnBulletLiquidImpactEffect( makeWaterImpactForDesiredDirection(
+				waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents ) );
 		}
 		//CG_LeadBubbleTrail( &trace, water_trace->endpos );
 	} else {
 		if( canShowBulletImpactForSurface( trace ) ) {
-			const vec3_t impactDir { -dir[0], -dir[1], -dir[2] };
 			cg.effectsSystem.spawnBulletImpactEffect( Impact {
-				.origin = trace.endpos, .normal = trace.plane.normal, .dir = impactDir,
+				.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+				.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+				.dir       = { -dir[0], -dir[1], -dir[2] },
 				.surfFlags = getSurfFlagsForImpact( trace, dir ),
 			});
 
@@ -579,23 +576,21 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		if( waterTrace ) {
 			if( canShowBulletImpactForSurface( trace ) ) {
 				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
-					.origin = trace.endpos, .normal = trace.plane.normal
+					.origin = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+					.normal = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] }
 				});
 			}
 			if( !VectorCompare( waterTrace->endpos, start ) ) {
-				const float *impactNormal = waterTrace->plane.normal;
-				const vec3_t impactDir { -impactNormal[0], -impactNormal[1], -impactNormal[2] };
-				cg.effectsSystem.spawnPelletLiquidImpactEffect( Impact {
-					.origin = waterTrace->endpos, .normal = impactNormal,
-					.dir = impactDir, .contents = waterTrace->contents
-				});
+				cg.effectsSystem.spawnPelletLiquidImpactEffect( makeWaterImpactForDesiredDirection(
+					waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents ) );
 			}
 			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
 		} else {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				const vec3_t impactDir { -dir[0], -dir[1], -dir[2] };
 				cg.effectsSystem.spawnPelletImpactEffect( (unsigned)i, (unsigned)count, Impact {
-					.origin = trace.endpos, .normal = trace.plane.normal, .dir = impactDir,
+					.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+					.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+					.dir       = { -dir[0], -dir[1], -dir[2] },
 					.surfFlags = getSurfFlagsForImpact( trace, dir ),
 				});
 			}

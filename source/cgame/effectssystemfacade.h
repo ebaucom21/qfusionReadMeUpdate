@@ -31,13 +31,9 @@ struct sfx_s;
 struct trace_s;
 
 struct Impact {
-	// Borrowed, not owned
-	const float *origin { nullptr };
-	// Nullable
-	const float *normal { nullptr };
-	// Nullable
-	const float *dir { nullptr };
-	// Optionally set when needed
+	float origin[3] { 0.0f, 0.0f, 0.0f };
+	float normal[3] { 0.0f, 0.0f, -1.0f };
+	float dir[3] { 0.0f, 0.0f, -1.0f };
 	int surfFlags { 0 };
 	int contents { 0 };
 };

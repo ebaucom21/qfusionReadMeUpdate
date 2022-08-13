@@ -68,11 +68,248 @@ static const ColorLifespan kExplosionSparksColors[3] {
 	},
 };
 
+// TODO: std::optional<std::pair<Vec3, Vec3>>
+[[nodiscard]]
+static bool findWaterHitPointBetweenTwoPoints( const float *checkFromPoint, const float *pointInWater,
+											   float *waterHitPoint, float *traceDir = nullptr ) {
+	const float squareDistance = DistanceSquared( checkFromPoint, pointInWater );
+	if( squareDistance < wsw::square( 1.0f ) ) {
+		return false;
+	}
+
+	vec3_t tmpTraceDir;
+	VectorSubtract( pointInWater, checkFromPoint, tmpTraceDir );
+	VectorNormalizeFast( tmpTraceDir );
+
+	// Check if there's a solid surface between pointInWater and checkFromPoint.
+	// If there is one, continue checking from a point slightly closer to pointInWater than the check hit point.
+
+	trace_t trace;
+	vec3_t airPoint;
+	VectorCopy( checkFromPoint, airPoint );
+	CG_Trace( &trace, pointInWater, vec3_origin, vec3_origin, airPoint, 0, MASK_SOLID );
+	if( trace.fraction != 1.0f && ( trace.contents & CONTENTS_SOLID ) ) {
+		VectorMA( trace.endpos, 0.1f, tmpTraceDir, airPoint );
+	}
+
+	CG_Trace( &trace, airPoint, vec3_origin, vec3_origin, pointInWater, 0, MASK_SOLID | MASK_WATER );
+	// Make sure we didn't start in solid
+	if( trace.fraction != 1.0f && !trace.startsolid ) {
+		if( ( trace.contents & MASK_WATER ) && !( trace.contents & MASK_SOLID ) ) {
+			// Make sure we can retrace after the hit point
+			if( DistanceSquared( trace.endpos, pointInWater ) > wsw::square( 1.0f ) ) {
+				vec3_t tmpHitPoint;
+				VectorCopy( trace.endpos, tmpHitPoint );
+
+				vec3_t retraceStart;
+				VectorMA( trace.endpos, 0.1f, tmpTraceDir, retraceStart );
+
+				CG_Trace( &trace, retraceStart, vec3_origin, vec3_origin, pointInWater, 0, MASK_SOLID );
+				if( trace.fraction == 1.0f && !trace.startsolid ) {
+					if( waterHitPoint ) {
+						VectorCopy( tmpHitPoint, waterHitPoint );
+					}
+					if( traceDir ) {
+						VectorCopy( tmpTraceDir, traceDir );
+					}
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+static void addUnderwaterSplashImpactsForKnownWaterZ( const float *fireOrigin, float radius, float waterZ,
+													  wsw::RandomGenerator *rng, int impactContents,
+													  wsw::StaticVector<Impact, 12> *impacts ) {
+	assert( waterZ - fireOrigin[2] > 0.0f && "Make sure directions are normalizable" );
+
+	// TODO: Build a shape list once and clip against it in the loop
+
+	// This number of attempts is sufficient in this case
+	const unsigned maxTraceAttempts = ( 3 * impacts->capacity() ) / 2;
+	for( unsigned i = 0; i < maxTraceAttempts; ++i ) {
+		// Sample a random point on the sphere projection onto the water plane (let it actually be a donut)
+		const float phi    = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
+		const float r      = rng->nextFloat( 0.1f * radius, 1.0f * radius );
+		const float sinPhi = std::sin( phi ), cosPhi = std::cos( phi );
+		const vec3_t traceStart { fireOrigin[0] + r * sinPhi, fireOrigin[1] + r * cosPhi, waterZ + 1.0f };
+
+		trace_t trace;
+		CG_Trace( &trace, traceStart, vec3_origin, vec3_origin, fireOrigin, 0, MASK_SOLID | MASK_WATER );
+		if( trace.fraction != 1.0f && ( trace.contents & CONTENTS_WATER ) ) {
+			vec3_t desiredFlockDir;
+			VectorSubtract( traceStart, fireOrigin, desiredFlockDir );
+			VectorNormalizeFast( desiredFlockDir );
+
+			impacts->emplace_back( makeWaterImpactForDesiredDirection( trace.endpos, desiredFlockDir, impactContents ) );
+			// TODO: Vary limit of spawned impacts by explosion depth
+			if( impacts->full() ) [[unlikely]] {
+				break;
+			}
+		}
+	}
+}
+
+static void addUnderwaterSplashImpactsForUnknownWaterZ( const float *fireOrigin, float radius, float maxZ,
+														wsw::RandomGenerator *rng, int impactContents,
+														wsw::StaticVector<Impact, 12> *impacts ) {
+	assert( maxZ - fireOrigin[2] > 0.0f && "Make sure directions are normalizable" );
+
+	// TODO: Build a shape list once and clip against it in the loop
+	// TODO: Use a grid propagation instead?
+
+	const unsigned maxTraceAttempts = 6 * impacts->capacity();
+	for( unsigned i = 0; i < maxTraceAttempts; ++i ) {
+		// Sample a random point on the sphere projection onto the water plane.
+		// Let it actually be a donut with an outer radius larger than the explosion radius
+		// (otherwise this approach fails way too much).
+		const float phi    = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
+		const float r      = rng->nextFloat( 0.5f * radius, 1.5f * radius );
+		const float sinPhi = std::sin( phi ), cosPhi = std::cos( phi );
+
+		vec3_t waterHitPoint, traceDir;
+		const vec3_t startPoint { fireOrigin[0] + r * sinPhi, fireOrigin[1] + r * cosPhi, maxZ + 1.0f };
+		if( findWaterHitPointBetweenTwoPoints( startPoint, fireOrigin, waterHitPoint, traceDir ) ) {
+			vec3_t desiredFlockDir;
+			VectorNegate( traceDir, desiredFlockDir );
+
+			impacts->emplace_back( makeWaterImpactForDesiredDirection( waterHitPoint, desiredFlockDir, impactContents ) );
+			if( impacts->full() ) [[unlikely]] {
+				break;
+			}
+		}
+	}
+}
+
+static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, wsw::RandomGenerator *rng,
+										 wsw::StaticVector<Impact, 12> *solidImpacts,
+										 wsw::StaticVector<Impact, 12> *waterImpacts ) {
+	const unsigned numTraceAttempts = 3 * solidImpacts->capacity();
+	for( unsigned i = 0; i < numTraceAttempts; ++i ) {
+		trace_t trace;
+		vec3_t traceEnd;
+		// Don't check for similarity with the last direction.
+		// Otherwise, columns/flat walls do not produce noticeable effects.
+		const float *const traceDir = kPredefinedDirs[rng->nextBounded( std::size( kPredefinedDirs ) )];
+		// TODO: Make the trace depth it match the visual radius (with is not really equal to `radius`)
+		VectorMA( fireOrigin, 0.5f * radius, traceDir, traceEnd );
+		// TODO: Build a shape list and clip against it
+		CG_Trace( &trace, fireOrigin, vec3_origin, vec3_origin, traceEnd, 0, MASK_SOLID | MASK_WATER );
+		if( trace.fraction != 1.0f && !trace.startsolid && !trace.allsolid ) {
+			if( !( trace.surfFlags & ( SURF_FLESH | SURF_NOIMPACT ) ) ) {
+				// TODO: Make different impacts for solid/water (this does not suit water)
+
+				bool addedOnThisStep = false;
+				if( trace.contents & MASK_WATER ) {
+					if( !waterImpacts->full() ) {
+						vec3_t desiredFlockDir;
+						VectorReflect( traceDir, trace.plane.normal, 0.0f, desiredFlockDir );
+						waterImpacts->emplace_back( makeWaterImpactForDesiredDirection( trace.endpos, desiredFlockDir,
+																						trace.contents ) );
+						addedOnThisStep = true;
+					}
+				} else {
+					if( !solidImpacts->full() ) {
+						const auto surfFlags = getSurfFlagsForImpact( trace, traceDir );
+						// Make sure it adds something to visuals
+						if( decodeSurfImpactMaterial( (unsigned)surfFlags ) != SurfImpactMaterial::Unknown ) {
+							solidImpacts->emplace_back( Impact {
+								.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+								.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+								.dir       = { -traceDir[0], -traceDir[1], -traceDir[2] },
+								.surfFlags = surfFlags,
+							});
+							addedOnThisStep = true;
+						}
+					}
+				}
+				if( addedOnThisStep ) {
+					if( solidImpacts->full() && waterImpacts->full() ) {
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
 												float radius, bool addSoundLfe ) {
-	vec3_t spriteOrigin, almostExactOrigin;
-	VectorMA( origin, 8.0f, dir, spriteOrigin );
+	vec3_t fireOrigin, almostExactOrigin;
+	VectorMA( origin, 8.0f, dir, fireOrigin );
 	VectorAdd( origin, dir, almostExactOrigin );
+
+	wsw::StaticVector<Impact, 12> solidImpacts;
+	wsw::StaticVector<Impact, 12> waterImpacts;
+
+	trace_t fireOriginTrace;
+	CG_Trace( &fireOriginTrace, origin, vec3_origin, vec3_origin, fireOrigin, 0, MASK_SOLID );
+	if( fireOriginTrace.fraction != 1.0f ) {
+		VectorMA( origin, 0.5f * fireOriginTrace.fraction, dir, fireOrigin );
+		if( DistanceSquared( fireOriginTrace.endpos, origin ) < wsw::square( 1.0f ) ) {
+			VectorAvg( origin, fireOriginTrace.endpos, almostExactOrigin );
+		}
+	}
+
+	std::optional<int> liquidContentsAtFireOrigin;
+	if( cg_explosionsSmoke->integer || cg_particles->integer ) {
+		if( const int contents = CG_PointContents( fireOrigin ); contents & MASK_WATER ) {
+			liquidContentsAtFireOrigin = contents;
+		}
+	}
+
+	vec3_t tmpSmokeOrigin;
+	const float *smokeOrigin = nullptr;
+	if( cg_explosionsSmoke->integer || cg_particles->integer ) {
+		if( liquidContentsAtFireOrigin ) {
+			VectorCopy( fireOrigin, tmpSmokeOrigin );
+			tmpSmokeOrigin[2] += radius;
+
+			if( !( CG_PointContents( tmpSmokeOrigin ) & MASK_WATER ) ) {
+				vec3_t waterHitPoint;
+				if( findWaterHitPointBetweenTwoPoints( tmpSmokeOrigin, fireOrigin, waterHitPoint ) ) {
+					if( waterHitPoint[2] - fireOrigin[2] > 1.0f ) {
+						if( cg_explosionsSmoke->integer ) {
+							VectorCopy( waterHitPoint, tmpSmokeOrigin );
+							tmpSmokeOrigin[2] += 1.0f;
+							smokeOrigin = tmpSmokeOrigin;
+						}
+
+						waterImpacts.emplace_back( Impact {
+							.origin   = { waterHitPoint[0], waterHitPoint[1], waterHitPoint[2] },
+							.contents = *liquidContentsAtFireOrigin
+						});
+
+						const float waterZ = waterHitPoint[2];
+						addUnderwaterSplashImpactsForKnownWaterZ( fireOrigin, radius, waterZ, &m_rng,
+																  *liquidContentsAtFireOrigin, &waterImpacts );
+					} else if( radius > 2.0f ) {
+						// Generate impacts from a point above the fire origin but within the fire radius
+						const vec3_t shiftedFireOrigin { fireOrigin[0], fireOrigin[1], fireOrigin[2] + 0.75f * radius };
+						makeRegularExplosionImpacts( shiftedFireOrigin, radius, &m_rng, &solidImpacts, &waterImpacts );
+
+						if( cg_explosionsSmoke->integer ) {
+							VectorCopy( shiftedFireOrigin, tmpSmokeOrigin );
+							smokeOrigin = tmpSmokeOrigin;
+						}
+					}
+				} else {
+					const float maxZ = tmpSmokeOrigin[2];
+					addUnderwaterSplashImpactsForUnknownWaterZ( fireOrigin, radius, maxZ, &m_rng,
+																*liquidContentsAtFireOrigin, &waterImpacts );
+				}
+			}
+		} else {
+			if( cg_explosionsSmoke->integer ) {
+				smokeOrigin = fireOrigin;
+			}
+
+			makeRegularExplosionImpacts( fireOrigin, radius, &m_rng, &solidImpacts, &waterImpacts );
+		}
+	}
 
 	startSound( sfx, almostExactOrigin, ATTN_DISTANT );
 
@@ -80,7 +317,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		startSound( cgs.media.sfxExplosionLfe, almostExactOrigin, ATTN_NORM );
 	}
 
-	if( cg_particles->integer ) {
+	if( cg_particles->integer && !liquidContentsAtFireOrigin ) {
 		Particle::AppearanceRules appearanceRules {
 			.materials    = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 			.colors       = kExplosionSparksColors,
@@ -142,7 +379,14 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
-	m_transientEffectsSystem.spawnExplosion( spriteOrigin );
+	m_transientEffectsSystem.spawnExplosion( fireOrigin, smokeOrigin );
+
+	for( const Impact &impact: solidImpacts ) {
+		this->spawnPelletImpactEffect( std::addressof( impact ) - solidImpacts.data(), solidImpacts.size(), impact );
+	}
+	for( const Impact &impact: waterImpacts ) {
+		this->spawnBulletLikeLiquidImpactEffect( impact, 1.0f, { 0.7f, 0.9f } );
+	}
 }
 
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
@@ -519,6 +763,17 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 	}
 
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
+}
+
+auto makeWaterImpactForDesiredDirection( const float *origin, const float *direction, int contents ) -> Impact {
+	// TODO: Implement/check what's wrong with water flock spawning code
+	direction = &axis_identity[AXIS_UP];
+	return Impact {
+		.origin   = { origin[0], origin[1], origin[2] },
+		.normal   = { -direction[0], -direction[1], -direction[2] },
+		.dir      = { -direction[0], -direction[1], -direction[2] },
+		.contents = contents,
+	};
 }
 
 [[nodiscard]]

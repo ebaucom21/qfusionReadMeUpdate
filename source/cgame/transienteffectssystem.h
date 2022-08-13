@@ -41,7 +41,7 @@ class TransientEffectsSystem {
 public:
 	~TransientEffectsSystem();
 
-	void spawnExplosion( const float *origin, float radius = 72.0f );
+	void spawnExplosion( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
 	void spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
 									const float *bloodColor, unsigned duration );

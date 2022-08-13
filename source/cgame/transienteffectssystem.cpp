@@ -327,11 +327,11 @@ const EllipsoidalFlockParams TransientEffectsSystem::s_explosionSmokeFlockParams
 	.maxTimeout    = 1750,
 };
 
-void TransientEffectsSystem::spawnExplosion( const float *origin, float radius ) {
+void TransientEffectsSystem::spawnExplosion( const float *fireOrigin, const float *smokeOrigin, float radius ) {
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
-	allocLightEffect( m_lastTime, origin, vec3_origin, 0.0f, 400u, LightLifespan {
+	allocLightEffect( m_lastTime, fireOrigin, vec3_origin, 0.0f, 400u, LightLifespan {
 		.initialColor  = { 1.0f, 0.9f, 0.7f },
 		.fadedInColor  = { 1.0f, 0.8f, 0.5f },
 		.fadedOutColor = { 1.0f, 0.5f, 0.0f },
@@ -356,7 +356,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	}
 
 	if( auto *const hull = hullsSystem->allocFireHull( m_lastTime, fireHullTimeout ) ) {
-		hullsSystem->setupHullVertices( hull, origin, fireHullScale, fireHullLayerParams );
+		hullsSystem->setupHullVertices( hull, fireOrigin, fireHullScale, fireHullLayerParams );
 		assert( !hull->layers[0].useDrawOnTopHack );
 		hull->vertexViewDotFade          = ExternalMesh::FadeOutContour;
 		hull->layers[0].useDrawOnTopHack = true;
@@ -367,17 +367,17 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 	if( cg_explosionsWave->integer ) {
 		const vec4_t waveColor { 1.0f, 1.0f, 1.0f, 0.05f };
 		if( auto *const hull = hullsSystem->allocWaveHull( m_lastTime, 250 ) ) {
-			hullsSystem->setupHullVertices( hull, origin, waveColor, 500.0f, 50.0f );
+			hullsSystem->setupHullVertices( hull, fireOrigin, waveColor, 500.0f, 50.0f );
 		}
 	}
 
-	if( cg_explosionsSmoke->integer ) {
+	if( smokeOrigin ) {
 		// TODO: It would look better if smoke hulls are coupled together/allocated at once
-		spawnSmokeHull( m_lastTime, origin, 75.0f, 10.0f, { +160.0f, +45.0f }, { +75.0f, -25.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 75.0f, 10.0f, { +160.0f, +45.0f }, { +75.0f, -25.0f },
 						ExternalMesh::FadeOutCenter, kSmokeHullHardLayerColorChangeTimeline );
-		spawnSmokeHull( m_lastTime, origin, 90.0f, 10.0f, { +170.0f, +40.0f }, { +85.0f, -20.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 90.0f, 10.0f, { +170.0f, +40.0f }, { +85.0f, -20.0f },
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
-		spawnSmokeHull( m_lastTime, origin, 99.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 99.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f },
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
 
 		// ColorLifespan is quite limited to efficiently suppress drawing the flock at start.
@@ -385,7 +385,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 
 		s_explosionSmokeAppearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
 
-		allocDelayedEffect( m_lastTime, origin, vec3_origin, 300, ParticleFlockSpawnRecord {
+		allocDelayedEffect( m_lastTime, smokeOrigin, vec3_origin, 300, ParticleFlockSpawnRecord {
 			.appearanceRules        = &s_explosionSmokeAppearanceRules,
 			.ellipsoidalFlockParams = &s_explosionSmokeFlockParams,
 			.bin                    = ParticleFlockSpawnRecord::Large
@@ -425,7 +425,7 @@ void TransientEffectsSystem::spawnExplosion( const float *origin, float radius )
 			VectorScale( randomDir, randomSpeed, randomVelocity );
 
 			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
-			allocDelayedEffect( m_lastTime, origin, randomVelocity, spawnDelay, ConcentricHullSpawnRecord {
+			allocDelayedEffect( m_lastTime, fireOrigin, randomVelocity, spawnDelay, ConcentricHullSpawnRecord {
 				.layerParams = clusterHullLayerParams,
 				.scale       = m_rng.nextFloat( 0.11f, 0.37f ) * fireHullScale,
 				.timeout     = fireHullTimeout / 3,
