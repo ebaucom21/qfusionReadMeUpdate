@@ -54,7 +54,7 @@ public:
 	void spawnGunbladeBlastImpactEffect( const float *origin, const float *dir );
 	void spawnGunbladeBladeImpactEffect( const float *origin, const float *dir );
 
-	void spawnBulletLikeImpactEffect( const float *origin, const float *dir );
+	void spawnBulletLikeImpactModel( const float *origin, const float *dir );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 

@@ -549,10 +549,6 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 				.dir       = { -dir[0], -dir[1], -dir[2] },
 				.surfFlags = getSurfFlagsForImpact( trace, dir ),
 			});
-
-			// TODO: Delegate to the effects system
-			SoundSystem::instance()->startFixedSound( cgs.media.sfxRic[rand() % 2], trace.endpos, CHAN_AUTO,
-													  cg_volume_effects->value, ATTN_STATIC );
 		}
 	}
 }
@@ -560,7 +556,12 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int ignore, int count,
 									  int hspread, int vspread, int range ) {
 	assert( seed );
+	assert( count && count < 64 );
 	assert( std::abs( VectorLengthFast( dir ) - 1.0f ) < 0.001f );
+
+	auto *const solidImpacts  = (Impact *)alloca( sizeof( Impact ) * count );
+	auto *const liquidImpacts = (Impact *)alloca( sizeof( Impact ) * count );
+	unsigned numSolidImpacts = 0, numLiquidImpacts = 0;
 
 	for( int i = 0; i < count; i++ ) {
 		// TODO: Is this correct?
@@ -581,21 +582,24 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 				});
 			}
 			if( !VectorCompare( waterTrace->endpos, start ) ) {
-				cg.effectsSystem.spawnPelletLiquidImpactEffect( makeWaterImpactForDesiredDirection(
-					waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents ) );
+				liquidImpacts[numLiquidImpacts++] = makeWaterImpactForDesiredDirection(
+					waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents );
 			}
 			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
 		} else {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				cg.effectsSystem.spawnPelletImpactEffect( (unsigned)i, (unsigned)count, Impact {
+				solidImpacts[numSolidImpacts++] = Impact {
 					.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 					.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
 					.dir       = { -dir[0], -dir[1], -dir[2] },
 					.surfFlags = getSurfFlagsForImpact( trace, dir ),
-				});
+				};
 			}
 		}
 	}
+
+	cg.effectsSystem.spawnMultiplePelletImpactEffects( { solidImpacts, numSolidImpacts } );
+	cg.effectsSystem.spawnMultipleLiquidImpactEffects( { liquidImpacts, numLiquidImpacts }, 0.1f, { 0.3f, 0.9f } );
 }
 
 static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int firemode, int seed, int owner ) {
@@ -608,22 +612,6 @@ static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int 
 
 	CG_Fire_SunflowerPattern( origin, dir, &seed, owner, firedef->projectile_count,
 							  firedef->spread, firedef->v_spread, firedef->timeout );
-
-	// spawn a single sound at the impact
-	vec3_t end;
-	trace_t trace;
-	VectorMA( origin, firedef->timeout, dir, end );
-	CG_Trace( &trace, origin, vec3_origin, vec3_origin, end, owner, MASK_SHOT );
-
-	if( trace.ent != -1 && !( trace.surfFlags & SURF_NOIMPACT ) ) {
-		if( firedef->fire_mode == FIRE_MODE_STRONG ) {
-			SoundSystem::instance()->startFixedSound( cgs.media.sfxRiotgunStrongHit, trace.endpos, CHAN_AUTO,
-													  cg_volume_effects->value, ATTN_IDLE );
-		} else {
-			SoundSystem::instance()->startFixedSound( cgs.media.sfxRiotgunWeakHit, trace.endpos, CHAN_AUTO,
-													  cg_volume_effects->value, ATTN_IDLE );
-		}
-	}
 }
 
 
@@ -1140,8 +1128,7 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 static void handleBulletSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 	vec3_t dir;
 	ByteToDir( parm, dir );
-	SoundSystem::instance()->startFixedSound( cgs.media.sfxRic[rand() % 2], ent->origin, CHAN_AUTO,
-											  cg_volume_effects->value, ATTN_IDLE );
+	// TODO???
 }
 
 static void handleItemRespawnEvent( entity_state_t *ent, int parm, bool predicted ) {

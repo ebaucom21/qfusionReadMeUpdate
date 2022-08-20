@@ -698,7 +698,7 @@ void TransientEffectsSystem::spawnGunbladeBladeImpactEffect( const float *origin
 	// TODO: Add light when hitting metallic surfaces?
 }
 
-void TransientEffectsSystem::spawnBulletLikeImpactEffect( const float *origin, const float *dir ) {
+void TransientEffectsSystem::spawnBulletLikeImpactModel( const float *origin, const float *dir ) {
 	EntityEffect *effect = addModelEffect( cgs.media.modBladeWallExplo, origin, dir, 100u );
 	effect->fadedInScale  = 0.3f;
 	effect->fadedOutScale = 0.0f;

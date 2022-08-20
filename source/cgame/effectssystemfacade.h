@@ -38,6 +38,10 @@ struct Impact {
 	int contents { 0 };
 };
 
+enum class SurfImpactMaterial : unsigned;
+
+struct FlockOrientation;
+
 class EffectsSystemFacade {
 public:
 	void spawnRocketExplosionEffect( const float *origin, const float *impactNormal, int mode );
@@ -62,14 +66,12 @@ public:
 
 	void spawnUnderwaterBulletLikeImpactEffect( const Impact &impact );
 
-	void spawnPelletImpactEffect( unsigned index, unsigned total, const Impact &impact );
+	void spawnMultiplePelletImpactEffects( std::span<const Impact> impacts );
 
-	void spawnBulletLiquidImpactEffect( const Impact &impact ) {
-		spawnBulletLikeLiquidImpactEffect( impact, 1.0f, { 0.70f, 0.95f } );
-	}
-	void spawnPelletLiquidImpactEffect( const Impact &impact ) {
-		spawnBulletLikeLiquidImpactEffect( impact, 0.1f, { 0.30f, 0.90f } );
-	}
+	void spawnBulletLiquidImpactEffect( const Impact &impact );
+
+	void spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
+										   std::pair<float, float> randomRotationAngleCosineRange );
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
@@ -119,21 +121,43 @@ public:
 
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 private:
-	void startSound( sfx_s *sfx, const float *origin, float attenuation );
-	void startRelativeSound( sfx_s *sfx, int entNum, float attenuation );
+	void startSound( sfx_s *sfx, const float *origin, float attenuation = 1.0f );
+	void startRelativeSound( sfx_s *sfx, int entNum, float attenuation = 1.0f );
 
 	void spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx, float radius, bool addSoundLfe );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
-	void spawnBulletLikeLiquidImpactEffect( const Impact &impact, float percentageScale,
-											std::pair<float, float> randomRotationAngleCosineRange );
+	void spawnBulletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+													 SurfImpactMaterial impactMaterial, unsigned materialParam );
+	void spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+													 SurfImpactMaterial impactMaterial, unsigned materialParam,
+													 unsigned index, unsigned total );
+
+	[[nodiscard]]
+	static auto getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned;
+	[[nodiscard]]
+	static auto getImpactSfxGroupForSurfFlags( int surfFlags ) -> unsigned;
+	[[nodiscard]]
+	auto getSfxForImpactGroup( unsigned group ) -> sfx_s *;
+
+	void spawnMultipleExplosionImpactEffects( std::span<const Impact> impacts );
+
+	// std::span<> won't work for arrays of pointers
+	void spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts, sfx_s **begin, sfx_s **end );
+	void spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts );
+
+	void startSoundForImpact( sfx_s *sfx, const Impact &impact );
+
+	void spawnLiquidImpactParticleEffect( const Impact &impact, float percentageScale,
+										  std::pair<float, float> randomRotationAngleCosineRange );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;
 	TransientEffectsSystem m_transientEffectsSystem;
 	wsw::RandomGenerator m_rng;
 
-	static shader_s *s_bloodMaterials[3];
+	shader_s *m_bloodMaterials[3];
+	wsw::StaticVector<std::pair<sfx_s **, unsigned>, 5> m_impactSfxForGroups;
 };
 
 #endif

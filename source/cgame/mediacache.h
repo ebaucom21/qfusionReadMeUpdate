@@ -7,6 +7,7 @@
 #include "../gameshared/gs_public.h"
 
 #include "../qcommon/wswstringview.h"
+#include "../qcommon/wswvector.h"
 
 struct sfx_s;
 struct model_s;
@@ -49,16 +50,22 @@ public:
 	};
 
 	template <typename T>
-	class ArbitraryLengthHandlesArray {
+	class CachedHandlesArray {
 		friend class MediaCache;
 	protected:
-		ArbitraryLengthHandlesArray<T> *m_next { nullptr };
+		// TODO: Compress these references
+		CachedHandlesArray<T> *m_next { nullptr };
+		MediaCache *m_parent;
+		// TODO: Specify an offset in some shared buffer with strings?
 		const char *const m_format;
-		T **m_handles { nullptr };
-		const unsigned m_numHandles;
-		const unsigned m_indexShift;
+		uint16_t m_numHandles { 0 };
+		uint16_t m_handlesOffset { 0 };
+		const uint16_t m_indexShift;
 
-		ArbitraryLengthHandlesArray( const char *format, unsigned numHandles, unsigned indexShift = 1u );
+		CachedHandlesArray( MediaCache *parent, const char *format, unsigned indexShift )
+			: m_parent( parent ), m_format( format ), m_indexShift( indexShift ) {
+			assert( std::strlen( format ) < MAX_QPATH );
+		}
 	public:
 		[[nodiscard]]
 		auto length() const -> unsigned { return m_numHandles; }
@@ -66,49 +73,35 @@ public:
 		[[nodiscard]]
 		auto operator[]( unsigned index ) -> T * {
 			assert( index < m_numHandles );
-			return m_handles[index];
+			return (T *)m_parent->m_handlesArraysDataStorage[index + m_handlesOffset];
 		}
 		[[nodiscard]]
 		auto operator[]( unsigned index ) const -> const T * {
 			assert( index < m_numHandles );
-			return m_handles[index];
+			return (const T *)m_parent->m_handlesArraysDataStorage[index + m_handlesOffset];
 		}
+		[[nodiscard]]
+		auto getAddressOfHandles() -> T ** { return (T **)&m_parent->m_handlesArraysDataStorage[m_handlesOffset]; }
 	};
 
-	template <typename T, unsigned Length>
-	class CachedHandlesArray : public ArbitraryLengthHandlesArray<T> {
-		friend class MediaCache;
-		T *m_handlesStorage[Length];
-	protected:
-		explicit CachedHandlesArray( const char *format, unsigned indexShift = 1u );
-	};
-
-	template <unsigned Length>
-	class CachedSoundsArray : public CachedHandlesArray<sfx_s, Length> {
+	class CachedSoundsArray: public CachedHandlesArray<sfx_s> {
 		friend class MediaCache;
 		CachedSoundsArray( MediaCache *parent, const char *format, unsigned indexShift = 1u );
-	};
-
-	template <unsigned Length>
-	class CachedMaterialsArray : public CachedHandlesArray<shader_s, Length> {
-		friend class MediaCache;
-		CachedMaterialsArray( MediaCache *parent, const char *format, unsigned indexShift = 1u );
 	};
 
 	void registerSounds();
 	void registerModels();
 	void registerMaterials();
-
-	using LinkedSoundsArray = ArbitraryLengthHandlesArray<sfx_s>;
-	using LinkedMaterialsArray = ArbitraryLengthHandlesArray<shader_s>;
 private:
 	// TODO: Should we just keep precached and non-precached linked handles in different lists?
 	CachedSound *m_sounds { nullptr };
 	CachedModel *m_models { nullptr };
 	CachedMaterial *m_materials { nullptr };
 
-	LinkedSoundsArray *m_soundsArrays { nullptr };
-	LinkedMaterialsArray *m_materialsArrays { nullptr };
+	CachedSoundsArray *m_soundsArrays { nullptr };
+
+	// TODO: Use a custom lightweight type
+	wsw::Vector<void *> m_handlesArraysDataStorage;
 
 	template <typename T>
 	void link( T *item, T **head ) {
@@ -119,19 +112,20 @@ private:
 	void registerSound( CachedSound *sound );
 	void registerModel( CachedModel *model );
 	void registerMaterial( CachedMaterial *material );
-	void registerSoundsArray( LinkedSoundsArray *sound );
-	void registerMaterialsArray( LinkedMaterialsArray *material );
-
-	template <typename T>
-	[[nodiscard]]
-	auto formatName( char *buffer, ArbitraryLengthHandlesArray<T> *array, unsigned index ) -> const char *;
+	void registerSoundsArray( CachedSoundsArray *sounds );
 public:
 	MediaCache();
 
 	CachedSound sfxChat { this, wsw::StringView( S_CHAT ) };
-	CachedSoundsArray<2> sfxRic { this, "sounds/weapons/ric%d" };
-	CachedSoundsArray<4> sfxWeaponHit { this, S_WEAPON_HITS, 0 };
-	CachedSoundsArray<4> sfxWeaponHit2 { this, "sounds/misc/hit_plus_%d", 0 };
+	CachedSoundsArray sfxWeaponHit { this, S_WEAPON_HITS, 0 };
+	CachedSoundsArray sfxWeaponHit2 { this, "sounds/misc/hit_plus_%d", 0 };
+
+	CachedSoundsArray sfxImpactMetal { this, "sounds/weapons/impact_metal_%d" };
+	CachedSoundsArray sfxImpactGlass { this, "sounds/weapons/impact_glass_%d" };
+	CachedSoundsArray sfxImpactWood { this, "sounds/weapons/impact_wood_%d" };
+	CachedSoundsArray sfxImpactSoft { this, "sounds/weapons/impact_soft_%d" };
+	CachedSoundsArray sfxImpactSolid { this, "sounds/weapons/impact_solid_%d" };
+	CachedSoundsArray sfxImpactWater { this, "sounds/weapons/impact_water_%d" };
 
 	CachedSound sfxWeaponKill { this, wsw::StringView( S_WEAPON_KILL ) };
 	CachedSound sfxWeaponHitTeam { this, wsw::StringView( S_WEAPON_HIT_TEAM ) };
@@ -146,19 +140,16 @@ public:
 	CachedSound sfxTeleportOut { this, wsw::StringView( S_TELEPORT_OUT ) };
 	CachedSound sfxShellHit { this, wsw::StringView( S_SHELL_HIT ) };
 
-	CachedSoundsArray<3> sfxGunbladeWeakShot { this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3 };
-	CachedSoundsArray<3> sfxBladeFleshHit { this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3 };
-	CachedSoundsArray<2> sfxBladeWallHit { this, S_WEAPON_GUNBLADE_W_HIT_WALL_1_to_2 };
+	CachedSoundsArray sfxGunbladeWeakShot { this, S_WEAPON_GUNBLADE_W_SHOT_1_to_3 };
+	CachedSoundsArray sfxBladeFleshHit { this, S_WEAPON_GUNBLADE_W_HIT_FLESH_1_to_3 };
+	CachedSoundsArray sfxBladeWallHit { this, S_WEAPON_GUNBLADE_W_HIT_WALL_1_to_2 };
 
 	CachedSound sfxGunbladeStrongShot { this, wsw::StringView( S_WEAPON_GUNBLADE_S_SHOT ) };
 
-	CachedSoundsArray<2> sfxGunbladeStrongHit { this, S_WEAPON_GUNBLADE_S_HIT_1_to_2 };
+	CachedSoundsArray sfxGunbladeStrongHit { this, S_WEAPON_GUNBLADE_S_HIT_1_to_2 };
 
-	CachedSound sfxRiotgunWeakHit { this, wsw::StringView( S_WEAPON_RIOTGUN_W_HIT ) };
-	CachedSound sfxRiotgunStrongHit { this, wsw::StringView( S_WEAPON_RIOTGUN_S_HIT ) };
-
-	CachedSoundsArray<2> sfxGrenadeWeakBounce { this, S_WEAPON_GRENADE_W_BOUNCE_1_to_2 };
-	CachedSoundsArray<2> sfxGrenadeStrongBounce { this, S_WEAPON_GRENADE_S_BOUNCE_1_to_2, 1 };
+	CachedSoundsArray sfxGrenadeWeakBounce { this, S_WEAPON_GRENADE_W_BOUNCE_1_to_2 };
+	CachedSoundsArray sfxGrenadeStrongBounce { this, S_WEAPON_GRENADE_S_BOUNCE_1_to_2, 1 };
 
 	CachedSound sfxGrenadeWeakExplosion { this, wsw::StringView( S_WEAPON_GRENADE_W_HIT ) };
 	CachedSound sfxGrenadeStrongExplosion { this, wsw::StringView( S_WEAPON_GRENADE_S_HIT ) };
@@ -216,8 +207,6 @@ public:
 	CachedMaterial shaderChatBalloon { this, wsw::StringView( PATH_BALLONCHAT_ICON ) };
 	CachedMaterial shaderDownArrow { this, wsw::StringView( "gfx/2d/arrow_down" ) };
 
-	CachedMaterial shaderPlayerShadow { this, wsw::StringView( "gfx/decals/shadow" ) };
-
 	CachedMaterial shaderWaterBubble { this, wsw::StringView( "gfx/misc/waterBubble" ) };
 	CachedMaterial shaderSmokePuff { this, wsw::StringView( "gfx/misc/smokepuff" ) };
 
@@ -225,29 +214,12 @@ public:
 	CachedMaterial shaderSmokePuff2 { this, wsw::StringView( "gfx/misc/smokepuff2" ) };
 	CachedMaterial shaderSmokePuff3 { this, wsw::StringView( "gfx/misc/smokepuff3" ) };
 
-	CachedMaterial shaderStrongRocketFireTrailPuff { this, wsw::StringView( "gfx/misc/strong_rocket_fire" ) };
-	CachedMaterial shaderWeakRocketFireTrailPuff { this, wsw::StringView( "gfx/misc/strong_rocket_fire" ) };
-	CachedMaterial shaderTeleporterSmokePuff { this, wsw::StringView( "TeleporterSmokePuff" ) };
-	CachedMaterial shaderGrenadeTrailSmokePuff { this, wsw::StringView( "gfx/grenadetrail_smoke_puf" ) };
-	CachedMaterial shaderRocketTrailSmokePuff { this, wsw::StringView( "gfx/misc/rocketsmokepuff" ) };
-	CachedMaterial shaderBloodTrailPuff { this, wsw::StringView( "gfx/misc/bloodtrail_puff" ) };
-	CachedMaterial shaderBloodTrailLiquidPuff { this, wsw::StringView( "gfx/misc/bloodtrailliquid_puff" ) };
-	CachedMaterial shaderBloodImpactPuff { this, wsw::StringView( "gfx/misc/bloodimpact_puff" ) };
 	CachedMaterial shaderCartoonHit { this, wsw::StringView( "gfx/misc/cartoonhit" ) };
 	CachedMaterial shaderCartoonHit2 { this, wsw::StringView( "gfx/misc/cartoonhit2" ) };
 	CachedMaterial shaderCartoonHit3 { this, wsw::StringView( "gfx/misc/cartoonhit3" ) };
 	CachedMaterial shaderTeamMateIndicator { this, wsw::StringView( "gfx/indicators/teammate_indicator" ) };
 	CachedMaterial shaderTeamCarrierIndicator { this, wsw::StringView( "gfx/indicators/teamcarrier_indicator" ) };
 	CachedMaterial shaderTeleportShellGfx { this, wsw::StringView( "gfx/misc/teleportshell" ) };
-
-	CachedMaterial shaderAdditiveParticleShine { this, wsw::StringView( "additiveParticleShine" ) };
-
-	CachedMaterial shaderBladeMark { this, wsw::StringView( "gfx/decals/d_blade_hit" ) };
-	CachedMaterial shaderBulletMark { this, wsw::StringView( "gfx/decals/d_bullet_hit" ) };
-	CachedMaterial shaderExplosionMark { this, wsw::StringView( "gfx/decals/d_explode_hit" ) };
-	CachedMaterial shaderPlasmaMark { this, wsw::StringView( "gfx/decals/d_plasma_hit" ) };
-	CachedMaterial shaderElectroboltMark { this, wsw::StringView( "gfx/decals/d_electrobolt_hit" ) };
-	CachedMaterial shaderInstagunMark { this, wsw::StringView( "gfx/decals/d_instagun_hit" ) };
 
 	CachedMaterial shaderElectroBeam { this, wsw::StringView( "gfx/misc/electro" ) };
 	CachedMaterial shaderElectroBeamAlpha { this, wsw::StringView( "gfx/misc/electro_alpha" ) };
@@ -265,49 +237,6 @@ public:
 	CachedMaterial shaderFlagFlare { this, wsw::StringView( PATH_FLAG_FLARE_SHADER ) };
 
 	CachedMaterial shaderRaceGhostEffect { this, wsw::StringView( "gfx/raceghost" ) };
-
-	CachedMaterial shaderWeaponIcon[WEAP_TOTAL - 1] {
-		{ this, wsw::StringView( PATH_GUNBLADE_ICON ) },
-		{ this, wsw::StringView( PATH_MACHINEGUN_ICON ) },
-		{ this, wsw::StringView( PATH_RIOTGUN_ICON ) },
-		{ this, wsw::StringView( PATH_GRENADELAUNCHER_ICON ) },
-		{ this, wsw::StringView( PATH_ROCKETLAUNCHER_ICON ) },
-		{ this, wsw::StringView( PATH_PLASMAGUN_ICON ) },
-		{ this, wsw::StringView( PATH_LASERGUN_ICON ) },
-		{ this, wsw::StringView( PATH_ELECTROBOLT_ICON ) },
-		{ this, wsw::StringView( PATH_SHOCKWAVE_ICON ) },
-		{ this, wsw::StringView( PATH_INSTAGUN_ICON ) },
-	};
-
-	CachedMaterial shaderNoGunWeaponIcon[WEAP_TOTAL - 1] {
-		{ this, wsw::StringView( PATH_NG_GUNBLADE_ICON ) },
-		{ this, wsw::StringView( PATH_NG_MACHINEGUN_ICON ) },
-		{ this, wsw::StringView( PATH_NG_RIOTGUN_ICON ) },
-		{ this, wsw::StringView( PATH_NG_GRENADELAUNCHER_ICON ) },
-		{ this, wsw::StringView( PATH_NG_ROCKETLAUNCHER_ICON ) },
-		{ this, wsw::StringView( PATH_NG_PLASMAGUN_ICON ) },
-		{ this, wsw::StringView( PATH_NG_LASERGUN_ICON ) },
-		{ this, wsw::StringView( PATH_NG_ELECTROBOLT_ICON ) },
-		{ this, wsw::StringView( PATH_NG_SHOCKWAVE_ICON ) },
-		{ this, wsw::StringView( PATH_NG_INSTAGUN_ICON ) },
-	};
-
-	CachedMaterial shaderGunbladeBlastIcon { this, wsw::StringView( PATH_GUNBLADE_BLAST_ICON ) };
-
-	CachedMaterialsArray<3> shaderInstagunChargeIcon { this, "gfx/hud/icons/weapon/instagun_%d", 0 };
-
-	CachedMaterial shaderKeyIcon[KEYICON_TOTAL] {
-		{ this, wsw::StringView( PATH_KEYICON_FORWARD ) },
-		{ this, wsw::StringView( PATH_KEYICON_BACKWARD ) },
-		{ this, wsw::StringView( PATH_KEYICON_LEFT ) },
-		{ this, wsw::StringView( PATH_KEYICON_RIGHT ) },
-		{ this, wsw::StringView( PATH_KEYICON_FIRE ) },
-		{ this, wsw::StringView( PATH_KEYICON_JUMP ) },
-		{ this, wsw::StringView( PATH_KEYICON_CROUCH ) },
-		{ this, wsw::StringView( PATH_KEYICON_SPECIAL ) }
-	};
-
-	CachedMaterial shaderSbNums { this, wsw::StringView( "gfx/hud/sbnums" ) };
 };
 
 #endif

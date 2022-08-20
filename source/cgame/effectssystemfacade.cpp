@@ -214,8 +214,9 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 				} else {
 					if( !solidImpacts->full() ) {
 						const auto surfFlags = getSurfFlagsForImpact( trace, traceDir );
-						// Make sure it adds something to visuals
-						if( decodeSurfImpactMaterial( (unsigned)surfFlags ) != SurfImpactMaterial::Unknown ) {
+						const auto material  = decodeSurfImpactMaterial( (unsigned)surfFlags );
+						// Make sure it adds something to visuals in the desired way.
+						if( material != SurfImpactMaterial::Unknown && material != SurfImpactMaterial::Metal ) {
 							solidImpacts->emplace_back( Impact {
 								.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 								.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
@@ -381,12 +382,8 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	m_transientEffectsSystem.spawnExplosion( fireOrigin, smokeOrigin );
 
-	for( const Impact &impact: solidImpacts ) {
-		this->spawnPelletImpactEffect( std::addressof( impact ) - solidImpacts.data(), solidImpacts.size(), impact );
-	}
-	for( const Impact &impact: waterImpacts ) {
-		this->spawnBulletLikeLiquidImpactEffect( impact, 1.0f, { 0.7f, 0.9f } );
-	}
+	spawnMultipleExplosionImpactEffects( solidImpacts );
+	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f } );
 }
 
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
@@ -472,8 +469,6 @@ static const ColorLifespan kBloodColors[] {
 	},
 };
 
-shader_s *EffectsSystemFacade::s_bloodMaterials[3];
-
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( const int palette        = cg_bloodTrailPalette->integer ) {
 		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodColors ) - 1 );
@@ -495,13 +490,13 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 		};
 		// We have to supply a buffer with a non-stack lifetime
 		// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
-		s_bloodMaterials[0] = cgs.media.shaderBloodParticle;
-		s_bloodMaterials[1] = cgs.media.shaderBloodParticle;
-		s_bloodMaterials[2] = cgs.media.shaderBlastParticle;
+		m_bloodMaterials[0] = cgs.media.shaderBloodParticle;
+		m_bloodMaterials[1] = cgs.media.shaderBloodParticle;
+		m_bloodMaterials[2] = cgs.media.shaderBlastParticle;
 		Particle::AppearanceRules appearanceRules {
-			.materials      = s_bloodMaterials,
+			.materials      = m_bloodMaterials,
 			.colors         = { &kBloodColors[indexForStyle], 1 },
-			.numMaterials   = std::size( s_bloodMaterials ),
+			.numMaterials   = (uint8_t)std::size( m_bloodMaterials ),
 			.kind           = Particle::Sprite,
 			.radius         = 1.50f,
 			.radiusSpread   = 0.75f,
@@ -1355,98 +1350,154 @@ static void spawnGlassImpactParticles( const FlockOrientation &orientation, floa
 }
 
 void EffectsSystemFacade::spawnBulletImpactEffect( const Impact &impact ) {
-	[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
-	[[maybe_unused]] const float *impactOrigin   = impact.origin;
-	[[maybe_unused]] const float *impactNormal   = impact.normal;
-	[[maybe_unused]] const int surfFlags         = impact.surfFlags;
+	const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
 
-	// TODO: using enum (doesn't work with GCC 10)
-	using IM = SurfImpactMaterial;
-
-	const IM material = decodeSurfImpactMaterial( surfFlags );
-	const unsigned materialParam = decodeSurfImpactMaterialParam( surfFlags );
-
+	sfx_s *sfx = nullptr;
 	if( cg_particles->integer ) {
-		[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
-		if( material == IM::Metal ) {
+		const SurfImpactMaterial impactMaterial = decodeSurfImpactMaterial( impact.surfFlags );
+		const unsigned materialParam            = decodeSurfImpactMaterialParam( impact.surfFlags );
+		spawnBulletImpactParticleEffectForMaterial( flockOrientation, impactMaterial, materialParam );
+		// TODO: Using enum (doesn't work with GCC 10)
+		using IM = SurfImpactMaterial;
+		if( impactMaterial == IM::Metal ) {
 			spawnBulletMetalImpactRosette( flockOrientation );
-			spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.7f, 1.0f );
-			spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.3f, 0.9f );
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-		} else if( material == IM::Stone ) {
+		} else if( impactMaterial == IM::Stone ) {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
-			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam );
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-		} else if( material == IM::Stucco ) {
-			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
-		} else if( material == IM::Wood ) {
-			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale );
-		} else if( material == IM::Glass ) {
-			spawnGlassImpactParticles( flockOrientation, upShiftScale );
-		} else if( material == IM::Dirt ) {
-			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
-		} else if( material == IM::Sand ) {
-			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam );
-		} else {
+		} else if( impactMaterial == IM::Unknown ) {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 1.0f );
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
 		}
+		if( impactMaterial == IM::Metal || impactMaterial == IM::Stone || impactMaterial == IM::Unknown ) {
+			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+		}
+		sfx = getSfxForImpactGroup( getImpactSfxGroupForMaterial( impactMaterial ) );
 	} else {
 		spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
-		m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+		m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+		if( const unsigned numSfx= cgs.media.sfxImpactSolid.length() ) {
+			sfx = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
+		}
+	}
+
+	if( sfx ) {
+		startSoundForImpact( sfx, impact );
 	}
 }
 
-void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const Impact &impact ) {
-	m_transientEffectsSystem.spawnBulletLikeImpactEffect( impact.origin, impact.normal );
+void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+																	  SurfImpactMaterial impactMaterial,
+																	  unsigned materialParam ) {
+	// TODO: We used to test against impact normal Z
+	[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, flockOrientation.dir[2] ) );
+
+	switch( impactMaterial ) {
+		case SurfImpactMaterial::Unknown:
+			break;
+		case SurfImpactMaterial::Stone:
+			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Stucco:
+			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Wood:
+			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale );
+			break;
+		case SurfImpactMaterial::Dirt:
+			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Sand:
+			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Metal:
+			spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.7f, 1.0f );
+			spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.3f, 0.9f );
+			break;
+		case SurfImpactMaterial::Glass:
+			spawnGlassImpactParticles( flockOrientation, upShiftScale );
+			break;
+	}
 }
 
-void EffectsSystemFacade::spawnPelletImpactEffect( unsigned index, unsigned total, const Impact &impact ) {
-	[[maybe_unused]] const auto flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
-	[[maybe_unused]] const float *impactOrigin   = impact.origin;
-	[[maybe_unused]] const float *impactNormal   = impact.normal;
-	[[maybe_unused]] const int surfFlags         = impact.surfFlags;
-
-	// Spawn the impact rosette regardless of the var value
-
-	// TODO: using enum (doesn't work with GCC 10)
+auto EffectsSystemFacade::getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned {
 	using IM = SurfImpactMaterial;
+	if( impactMaterial == IM::Metal ) {
+		return 0;
+	}
+	if( impactMaterial == IM::Stucco || impactMaterial == IM::Dirt || impactMaterial == IM::Sand ) {
+		return 1;
+	}
+	if( impactMaterial == IM::Wood ) {
+		return 2;
+	}
+	if( impactMaterial == IM::Glass ) {
+		return 3;
+	}
+	return 4;
+}
 
-	const IM material = decodeSurfImpactMaterial( surfFlags );
-	const unsigned materialParam = decodeSurfImpactMaterialParam( surfFlags );
+auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> sfx_s * {
+	// Build in a lazy fashion, so we don't have to care of lifetimes
+	if( !m_impactSfxForGroups.full() ) [[unlikely]] {
+		auto &ma = cgs.media;
+		m_impactSfxForGroups.push_back( { ma.sfxImpactMetal.getAddressOfHandles(), ma.sfxImpactMetal.length() } );
+		m_impactSfxForGroups.push_back( { ma.sfxImpactSoft.getAddressOfHandles(), ma.sfxImpactSoft.length() } );
+		m_impactSfxForGroups.push_back( { ma.sfxImpactWood.getAddressOfHandles(), ma.sfxImpactWood.length() } );
+		m_impactSfxForGroups.push_back( { ma.sfxImpactGlass.getAddressOfHandles(), ma.sfxImpactGlass.length() } );
+		m_impactSfxForGroups.push_back( { ma.sfxImpactSolid.getAddressOfHandles(), ma.sfxImpactSolid.length() } );
+	}
 
-	if( cg_particles->integer ) {
-		[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, impactNormal[2] ) );
-		if( material == IM::Metal ) {
-			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
+	assert( m_impactSfxForGroups.full() && group < m_impactSfxForGroups.size() );
+	auto [sfxData, dataLen] = m_impactSfxForGroups[group];
+	if( dataLen ) {
+		return sfxData[m_rng.nextBounded( dataLen )];
+	}
+	return nullptr;
+}
+
+auto EffectsSystemFacade::getImpactSfxGroupForSurfFlags( int surfFlags ) -> unsigned {
+	return getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( surfFlags ) );
+}
+
+void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const Impact &impact ) {
+	m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+	// TODO: Add rings/bubbles?
+}
+
+void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+																	  SurfImpactMaterial impactMaterial,
+																	  unsigned materialParam,
+																	  unsigned index, unsigned total ) {
+	// TODO: We used to test against impact normal Z
+	[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, flockOrientation.dir[2] ) );
+
+	switch( impactMaterial ) {
+		case SurfImpactMaterial::Unknown:
+			break;
+		case SurfImpactMaterial::Stone:
+			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam, 0.75f );
+			break;
+		case SurfImpactMaterial::Stucco:
+			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Wood:
+			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale, 0.5f );
+			break;
+		case SurfImpactMaterial::Dirt:
+			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Sand:
+			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam, 0.25f );
+			break;
+		case SurfImpactMaterial::Metal:
 			if( m_rng.tryWithChance( 0.5f ) ) {
 				spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
 			}
 			if( m_rng.tryWithChance( 0.5f ) ) {
 				spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
 			}
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-		} else if( material == IM::Stone ) {
-			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam, 0.75f );
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-		} else if( material == IM::Stucco ) {
-			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
-		} else if( material == IM::Wood ) {
-			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale, 0.5f );
-		} else if( material == IM::Glass ) {
+			break;
+		case SurfImpactMaterial::Glass:
 			spawnGlassImpactParticles( flockOrientation, upShiftScale );
-		} else if( material == IM::Dirt ) {
-			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
-		} else if( material == IM::Sand ) {
-			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam, 0.25f );
-		} else {
-			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-			m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
-		}
-	} else {
-		spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 0.6f );
-		m_transientEffectsSystem.spawnBulletLikeImpactEffect( impactOrigin, impactNormal );
+			break;
 	}
 }
 
@@ -1516,125 +1567,276 @@ static const ColorLifespan kLavaDustColors[1] {
 	}
 };
 
-void EffectsSystemFacade::spawnBulletLikeLiquidImpactEffect( const Impact &impact, float percentageScale,
-															 std::pair<float, float> randomRotationAngleCosineRange ) {
+void EffectsSystemFacade::spawnLiquidImpactParticleEffect( const Impact &impact, float percentageScale,
+														   std::pair<float, float> randomRotationAngleCosineRange ) {
+	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
+
+	shader_s **materials     = nullptr;
+	auto dropParticlesKind   = Particle::Sprite;
+	float minDropsPercentage = 0.5f;
+	float maxDropsPercentage = 1.0f;
+
+	if( impact.contents & CONTENTS_WATER ) {
+		splashColors = kWaterSplashColors;
+		dustColors   = kWaterDustColors;
+		materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
+	} else if( impact.contents & CONTENTS_SLIME ) {
+		// TODO: We don't actually have slime on default maps, do we?
+
+		splashColors = kSlimeSplashColors,
+		dustColors   = kSlimeDustColors,
+		materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
+	} else if( impact.contents & CONTENTS_LAVA ) {
+		splashColors = kLavaSplashColors;
+		dustColors   = kLavaDustColors;
+		dropsColors  = kLavaDropsColors;
+
+		dropParticlesKind  = Particle::Spark;
+		minDropsPercentage = 0.3f;
+		maxDropsPercentage = 0.5f;
+
+		materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+	}
+
+	if( materials ) {
+		const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng,
+																				randomRotationAngleCosineRange );
+
+		if( dropsColors.empty() ) {
+			dropsColors = splashColors;
+		}
+
+		ConicalFlockParams splashFlockParams {
+			.gravity       = GRAVITY,
+			.angle         = 12,
+			.minSpeed      = 500,
+			.maxSpeed      = 700,
+			.minPercentage = 0.7f * percentageScale,
+			.maxPercentage = 1.0f * percentageScale,
+			.minTimeout    = 100,
+			.maxTimeout    = 200
+		};
+
+		const Particle::AppearanceRules splashAppearanceRules {
+			.materials     = materials,
+			.colors        = splashColors,
+			.kind          = Particle::Spark,
+			.length        = 40.0f,
+			.width         = 4.0f,
+			.lengthSpread  = 10.0f,
+			.widthSpread   = 1.0f,
+			.sizeBehaviour = Particle::Shrinking
+		};
+
+		ConicalFlockParams dropsFlockParams {
+			.gravity        = GRAVITY,
+			.drag           = 0.015f,
+			.angle          = 15,
+			.minBounceCount = 0,
+			.maxBounceCount = 0,
+			.minSpeed       = 300,
+			.maxSpeed       = 900,
+			.minPercentage  = minDropsPercentage * percentageScale,
+			.maxPercentage  = maxDropsPercentage * percentageScale,
+			.minTimeout     = 350,
+			.maxTimeout     = 700,
+		};
+
+		const Particle::AppearanceRules dropsAppearanceRules {
+			.materials     = materials,
+			.colors        = dropsColors,
+			.kind          = dropParticlesKind,
+			.length        = 3.0f,
+			.width         = 1.5f,
+			.radius        = 1.25f,
+			.radiusSpread  = 0.25f,
+			.sizeBehaviour = Particle::ExpandingAndShrinking
+		};
+
+		ConicalFlockParams dustFlockParams {
+			.gravity       = 100.0f,
+			.angle         = 7.5f,
+			.minSpeed      = 50,
+			.maxSpeed      = 100,
+			.minShiftSpeed = 450.0f,
+			.maxShiftSpeed = 550.0f,
+			.minPercentage = 0.4f * percentageScale,
+			.maxPercentage = 0.7f * percentageScale,
+			.minTimeout    = 100,
+			.maxTimeout    = 150,
+		};
+
+		const Particle::AppearanceRules dustAppearanceRules {
+			.materials      = materials,
+			.colors         = dustColors,
+			.kind           = Particle::Sprite,
+			.radius         = 25.0f,
+			.radiusSpread   = 7.5f,
+			.sizeBehaviour  = Particle::Expanding
+		};
+
+		flockOrientation.copyToFlockParams( &splashFlockParams );
+		cg.particleSystem.addSmallParticleFlock( splashAppearanceRules, splashFlockParams );
+
+		flockOrientation.copyToFlockParams( &dropsFlockParams );
+		cg.particleSystem.addMediumParticleFlock( dropsAppearanceRules, dropsFlockParams );
+
+		flockOrientation.copyToFlockParams( &dustFlockParams );
+		cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
+	}
+}
+
+void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const Impact &impact ) {
+	spawnLiquidImpactParticleEffect( impact, 1.0f, { 0.70f, 0.95f } );
+	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
+		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
+		startSoundForImpact( sfx, impact );
+	}
+}
+
+void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Impact> impacts ) {
 	if( cg_particles->integer ) {
-		// TODO: Introduce some ColorLifespan type
-		std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
-
-		shader_s **materials     = nullptr;
-		auto dropParticlesKind   = Particle::Sprite;
-		float minDropsPercentage = 0.5f;
-		float maxDropsPercentage = 1.0f;
-
-		if( impact.contents & CONTENTS_WATER ) {
-			splashColors = kWaterSplashColors;
-			dustColors   = kWaterDustColors;
-			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
-		} else if( impact.contents & CONTENTS_SLIME ) {
-			// TODO: We don't actually have slime on default maps, do we?
-
-			splashColors = kSlimeSplashColors,
-			dustColors   = kSlimeDustColors,
-			materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
-		} else if( impact.contents & CONTENTS_LAVA ) {
-			splashColors = kLavaSplashColors;
-			dustColors   = kLavaDustColors;
-			dropsColors  = kLavaDropsColors;
-
-			dropParticlesKind  = Particle::Spark;
-			minDropsPercentage = 0.3f;
-			maxDropsPercentage = 0.5f;
-
-			materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
-		}
-
-		if( materials ) {
-			const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng,
-																					randomRotationAngleCosineRange );
-
-			if( dropsColors.empty() ) {
-				dropsColors = splashColors;
+		for( unsigned i = 0; i < impacts.size(); ++i ) {
+			const Impact &impact               = impacts[i];
+			const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
+			const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
+			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
+			spawnPelletImpactParticleEffectForMaterial( orientation, material, materialParam, i, impacts.size() );
+			using IM = SurfImpactMaterial;
+			if( material == IM::Metal || material == IM::Stone || material == IM::Unknown ) {
+				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
+				m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
 			}
-
-			ConicalFlockParams splashFlockParams {
-				.gravity       = GRAVITY,
-				.angle         = 12,
-				.minSpeed      = 500,
-				.maxSpeed      = 700,
-				.minPercentage = 0.7f * percentageScale,
-				.maxPercentage = 1.0f * percentageScale,
-				.minTimeout    = 100,
-				.maxTimeout    = 200
-			};
-
-			const Particle::AppearanceRules splashAppearanceRules {
-				.materials     = materials,
-				.colors        = splashColors,
-				.kind          = Particle::Spark,
-				.length        = 40.0f,
-				.width         = 4.0f,
-				.lengthSpread  = 10.0f,
-				.widthSpread   = 1.0f,
-				.sizeBehaviour = Particle::Shrinking
-			};
-
-			ConicalFlockParams dropsFlockParams {
-				.gravity        = GRAVITY,
-				.drag           = 0.015f,
-				.angle          = 15,
-				.minBounceCount = 0,
-				.maxBounceCount = 0,
-				.minSpeed       = 300,
-				.maxSpeed       = 900,
-				.minPercentage  = minDropsPercentage * percentageScale,
-				.maxPercentage  = maxDropsPercentage * percentageScale,
-				.minTimeout     = 350,
-				.maxTimeout     = 700,
-			};
-
-			const Particle::AppearanceRules dropsAppearanceRules {
-				.materials     = materials,
-				.colors        = dropsColors,
-				.kind          = dropParticlesKind,
-				.length        = 3.0f,
-				.width         = 1.5f,
-				.radius        = 1.25f,
-				.radiusSpread  = 0.25f,
-				.sizeBehaviour = Particle::ExpandingAndShrinking
-			};
-
-			ConicalFlockParams dustFlockParams {
-				.gravity       = 100.0f,
-				.angle         = 7.5f,
-				.minSpeed      = 50,
-				.maxSpeed      = 100,
-				.minShiftSpeed = 450.0f,
-				.maxShiftSpeed = 550.0f,
-				.minPercentage = 0.4f * percentageScale,
-				.maxPercentage = 0.7f * percentageScale,
-				.minTimeout    = 100,
-				.maxTimeout    = 150,
-			};
-
-			const Particle::AppearanceRules dustAppearanceRules {
-				.materials      = materials,
-				.colors         = dustColors,
-				.kind           = Particle::Sprite,
-				.radius         = 25.0f,
-				.radiusSpread   = 7.5f,
-				.sizeBehaviour  = Particle::Expanding
-			};
-
-			flockOrientation.copyToFlockParams( &splashFlockParams );
-			cg.particleSystem.addSmallParticleFlock( splashAppearanceRules, splashFlockParams );
-
-			flockOrientation.copyToFlockParams( &dropsFlockParams );
-			cg.particleSystem.addMediumParticleFlock( dropsAppearanceRules, dropsFlockParams );
-
-			flockOrientation.copyToFlockParams( &dustFlockParams );
-			cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
 		}
+		spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
+	} else {
+		for( const Impact &impact: impacts ) {
+			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
+			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
+			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+		}
+		// TODO: Use spans via custom span type
+		sfx_s **sfxBegin = cgs.media.sfxImpactSolid.getAddressOfHandles();
+		sfx_s **sfxEnd   = sfxBegin + cgs.media.sfxImpactSolid.length();
+		spawnImpactSoundsWhenNeededUsingTheseSounds( impacts, sfxBegin, sfxEnd );
+	}
+}
+
+void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const Impact> impacts ) {
+	for( const Impact &impact: impacts ) {
+		const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
+		const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
+		const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
+		spawnBulletImpactParticleEffectForMaterial( orientation, material, materialParam );
+	}
+	spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
+}
+
+void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
+															std::pair<float, float> randomRotationAngleCosineRange ) {
+	for( const Impact &impact: impacts ) {
+		spawnLiquidImpactParticleEffect( impact, percentageScale, randomRotationAngleCosineRange );
+	}
+	sfx_s **sfxBegin = cgs.media.sfxImpactWater.getAddressOfHandles();
+	sfx_s **sfxEnd   = sfxBegin + cgs.media.sfxImpactWater.length();
+	spawnImpactSoundsWhenNeededUsingTheseSounds( impacts, sfxBegin, sfxEnd );
+}
+
+void EffectsSystemFacade::spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts,
+																	   sfx_s **sfxBegin, sfx_s **sfxEnd ) {
+	if( impacts.empty() ) {
+		return;
+	}
+
+	auto *const acceptedImpactNums = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
+	unsigned numAcceptedImpacts    = 0;
+
+	// Spawn the first sound
+	acceptedImpactNums[numAcceptedImpacts++] = 0;
+
+	for( unsigned i = 1; i < impacts.size(); ++i ) {
+		const Impact &thisImpact = impacts[i];
+		bool skipThisImpact      = false;
+		for( unsigned j = 0; j < numAcceptedImpacts; ++j ) {
+			const Impact &thatImpact = impacts[acceptedImpactNums[j]];
+			// TODO: Check whether they belong to the same CM leaf/are mutually visible
+			if( DistanceSquared( thisImpact.origin, thatImpact.origin ) < wsw::square( 96.0f ) ) {
+				skipThisImpact = true;
+				break;
+			}
+		}
+		if( !skipThisImpact ) {
+			acceptedImpactNums[numAcceptedImpacts++] = i;
+		}
+	}
+
+	// Now, actually do spawn sounds
+	for( unsigned i = 0; i < numAcceptedImpacts; ++i ) {
+		const Impact &impact = impacts[acceptedImpactNums[i]];
+		sfx_s *sfx           = sfxBegin[m_rng.nextBounded( (unsigned)( sfxEnd - sfxBegin ) )];
+		startSoundForImpact( sfx, impact );
+	}
+}
+
+void EffectsSystemFacade::spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts ) {
+	if( impacts.empty() ) {
+		return;
+	}
+
+	auto *const acceptedImpactNums         = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
+	auto *const sfxGroupsOfAcceptedImpacts = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
+	unsigned numAcceptedImpacts = 0;
+
+	// Use a simple greedy approach.
+	// Spawn the first spawn without conditions.
+	acceptedImpactNums[numAcceptedImpacts] = 0;
+	sfxGroupsOfAcceptedImpacts[numAcceptedImpacts] = getImpactSfxGroupForSurfFlags( ( impacts.front().surfFlags ) );
+	numAcceptedImpacts++;
+
+	for( unsigned i = 1; i < impacts.size(); ++i ) {
+		const Impact &thisImpact = impacts[i];
+		const unsigned thisGroup = getImpactSfxGroupForSurfFlags( thisImpact.surfFlags );
+		bool skipThisImpact      = false;
+		for( unsigned j = 0; j < numAcceptedImpacts; ++j ) {
+			const Impact &thatImpact = impacts[acceptedImpactNums[j]];
+			const unsigned thatGroup = sfxGroupsOfAcceptedImpacts[j];
+			if( thisGroup == thatGroup ) {
+				// TODO: Check whether they belong to the same CM leaf/are mutually visible
+				if( DistanceSquared( thisImpact.origin, thatImpact.origin ) < wsw::square( 96.0f ) ) {
+					skipThisImpact = true;
+					break;
+				}
+			}
+		}
+		if( !skipThisImpact ) {
+			acceptedImpactNums[numAcceptedImpacts] = i;
+			sfxGroupsOfAcceptedImpacts[numAcceptedImpacts] = thisGroup;
+			numAcceptedImpacts++;
+		}
+	}
+
+	// Now, actually do spawn sounds
+	for( unsigned i = 0; i < numAcceptedImpacts; ++i ) {
+		const Impact &impact = impacts[acceptedImpactNums[i]];
+		const unsigned group = sfxGroupsOfAcceptedImpacts[i];
+		startSoundForImpact( getSfxForImpactGroup( group ), impact );
+	}
+}
+
+void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const Impact &impact ) {
+	assert( std::fabs( VectorLengthFast( impact.normal ) - 1.0f ) < 1e-2f );
+	if( sfx ) {
+		vec3_t soundOrigin;
+		// HACK HACK HACK TODO Make water impacts consistent with regular ones
+		sfx_s **waterSfxBegin = cgs.media.sfxImpactWater.getAddressOfHandles();
+		sfx_s **waterSfxEnd   = waterSfxBegin + cgs.media.sfxImpactWater.length();
+		if( std::find( waterSfxBegin, waterSfxEnd, sfx ) == waterSfxEnd ) {
+			VectorAdd( impact.origin, impact.normal, soundOrigin );
+		} else {
+			VectorSubtract( impact.origin, impact.normal, soundOrigin );
+		}
+		assert( !( CG_PointContents( soundOrigin ) & ( MASK_SOLID | MASK_WATER ) ) );
+		startSound( sfx, soundOrigin );
 	}
 }
 

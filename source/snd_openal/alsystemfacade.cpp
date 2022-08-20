@@ -131,11 +131,17 @@ void ALSoundSystem::endRegistration() {
 }
 
 sfx_t *ALSoundSystem::registerSound( const char *name ) {
+	// TODO: All of that should just be sync...
 	sfx_t *sfx = S_FindBuffer( getPathForName( name, &m_tmpPathBuffer1 ) );
 	m_loadSfxCall.exec( sfx->id );
-	sfx->used = Sys_Milliseconds();
-	sfx->registration_sequence = s_registration_sequence;
-	return sfx;
+	QBufPipe_Finish( m_pipe );
+	if( sfx->buffer ) {
+		sfx->used = Sys_Milliseconds();
+		sfx->registration_sequence = s_registration_sequence;
+		return sfx;
+	}
+	S_MarkBufferFree( sfx );
+	return nullptr;
 }
 
 void ALSoundSystem::activate( bool active ) {

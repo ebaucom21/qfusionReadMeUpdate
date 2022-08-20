@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../client/snd_public.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/wswstaticstring.h"
 #include "../client/client.h"
 #include "mediacache.h"
 
@@ -39,33 +40,9 @@ MediaCache::CachedMaterial::CachedMaterial( MediaCache *parent, const wsw::Strin
 	parent->link( this, &parent->m_materials );
 }
 
-template <typename T>
-MediaCache::ArbitraryLengthHandlesArray<T>::ArbitraryLengthHandlesArray( const char *format,
-																		 unsigned int numHandles,
-																		 unsigned int indexShift )
-	: m_format( format ), m_numHandles( numHandles ), m_indexShift( indexShift ) {}
-
-template <typename T, unsigned Length>
-MediaCache::CachedHandlesArray<T, Length>::CachedHandlesArray( const char *format, unsigned indexShift )
-	: ArbitraryLengthHandlesArray<T>( format, Length, indexShift ) {
-	this->m_handles = m_handlesStorage;
-	std::fill_n( m_handlesStorage, Length, nullptr );
-}
-
-template <unsigned Length>
-MediaCache::CachedSoundsArray<Length>::CachedSoundsArray( MediaCache *parent,
-														  const char *format,
-														  unsigned indexShift )
-	: CachedHandlesArray<sfx_s, Length>( format, indexShift ) {
-	parent->link( ( MediaCache::LinkedSoundsArray *)this, &parent->m_soundsArrays );
-}
-
-template <unsigned Length>
-MediaCache::CachedMaterialsArray<Length>::CachedMaterialsArray( MediaCache *parent,
-																const char *format,
-																unsigned indexShift )
-	: CachedHandlesArray<shader_s, Length>( format, indexShift ) {
-	parent->link( ( MediaCache::LinkedMaterialsArray *)this, &parent->m_materialsArrays );
+MediaCache::CachedSoundsArray::CachedSoundsArray( MediaCache *parent, const char *format, unsigned indexShift )
+	: CachedHandlesArray<sfx_s>( parent, format, indexShift ) {
+	parent->link( this, &parent->m_soundsArrays );
 }
 
 // Make sure it's defined here so the inline setup of fields does not get replicated over inclusion places
@@ -75,7 +52,7 @@ void MediaCache::registerSounds() {
 	for( CachedSound *sound = m_sounds; sound; sound = (CachedSound *)sound->m_next ) {
 		registerSound( sound );
 	}
-	for( LinkedSoundsArray *array = m_soundsArrays; array; array = array->m_next ) {
+	for( CachedSoundsArray *array = m_soundsArrays; array; array = (CachedSoundsArray *)array->m_next ) {
 		registerSoundsArray( array );
 	}
 }
@@ -90,9 +67,6 @@ void MediaCache::registerMaterials() {
 	for( CachedMaterial *material = m_materials; material; material = (CachedMaterial *)material->m_next ) {
 		registerMaterial( material );
 	}
-	for( LinkedMaterialsArray *array = m_materialsArrays; array; array = array->m_next ) {
-		registerMaterialsArray( array );
-	}
 }
 
 void MediaCache::registerSound( CachedSound *sound ) {
@@ -102,18 +76,33 @@ void MediaCache::registerSound( CachedSound *sound ) {
 	}
 }
 
-template <typename T>
-auto MediaCache::formatName( char *buffer, ArbitraryLengthHandlesArray<T> *array, unsigned index ) -> const char * {
-	return va_r( buffer, 1024, array->m_format, index + array->m_indexShift );
-}
+void MediaCache::registerSoundsArray( MediaCache::CachedSoundsArray *array ) {
+	const size_t oldStorageSize = m_handlesArraysDataStorage.size();
 
-void MediaCache::registerSoundsArray( MediaCache::LinkedSoundsArray *array ) {
-	char buffer[1024];
-	for( unsigned i = 0; i < array->m_numHandles; ++i ) {
-		if( !array->m_handles[i] ) {
-			array->m_handles[i] = SoundSystem::instance()->registerSound( formatName( buffer, array, i ) );
+	for( unsigned i = array->m_indexShift; i < 10; ++i ) {
+		char buffer[MAX_QPATH];
+		const char *name = va_r( buffer, sizeof( buffer ), array->m_format, i );
+		if( sfx_s *sfx = SoundSystem::instance()->registerSound( name ) ) {
+			m_handlesArraysDataStorage.push_back( sfx );
+		} else {
+			break;
 		}
 	}
+
+	const size_t newStorageSize = m_handlesArraysDataStorage.size();
+	if( newStorageSize <= oldStorageSize +1 ) {
+		wsw::StaticString<MAX_QPATH> buffer;
+		buffer << wsw::StringView( array->m_format ).take( MAX_QPATH );
+		std::replace( buffer.begin(), buffer.end(), '%', '$');
+		if( oldStorageSize == newStorageSize ) {
+			Com_Printf( S_COLOR_RED "Failed to find any sound for pattern %s ($ for percent here)\n", buffer.data() );
+		} else {
+			Com_Printf( S_COLOR_RED "Too few sounds for pattern %s ($ for percent here)\n", buffer.data() );
+		}
+	}
+
+	array->m_handlesOffset = (uint16_t)oldStorageSize;
+	array->m_numHandles    = (uint16_t)( newStorageSize - oldStorageSize );
 }
 
 void MediaCache::registerModel( CachedModel *model ) {
@@ -127,15 +116,6 @@ void MediaCache::registerMaterial( CachedMaterial *material ) {
 	if( !material->m_handle ) {
 		assert( material->m_name.isZeroTerminated() );
 		material->m_handle = R_RegisterPic( material->m_name.data() );
-	}
-}
-
-void MediaCache::registerMaterialsArray( MediaCache::LinkedMaterialsArray *array ) {
-	char buffer[1024];
-	for( unsigned i = 0; i < array->m_numHandles; ++i ) {
-		if( !array->m_handles[i] ) {
-			array->m_handles[i] = R_RegisterPic( formatName( buffer, array, i ) );
-		}
 	}
 }
 
