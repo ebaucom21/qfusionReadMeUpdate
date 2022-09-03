@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ref/ref.h"
 
 #include "simulatedhullssystem.h"
+#include "particlesystem.h"
 
 #include <variant>
 
@@ -41,7 +42,7 @@ class TransientEffectsSystem {
 public:
 	~TransientEffectsSystem();
 
-	void spawnExplosion( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
+	void spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
 	void spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
 									const float *bloodColor, unsigned duration );
@@ -55,6 +56,19 @@ public:
 	void spawnGunbladeBladeImpactEffect( const float *origin, const float *dir );
 
 	void spawnBulletLikeImpactModel( const float *origin, const float *dir );
+
+	// TODO: Bins should be an implementation detail of the particle system,
+	// specify absolute numbers of desired particles count!
+	enum class ParticleFlockBin { Small, Medium, Large };
+
+	void addDelayedParticleEffect( const float *origin, const float *velocity,
+								   unsigned delay, ParticleFlockBin bin,
+								   const ConicalFlockParams &flockParams,
+								   const Particle::AppearanceRules &appearanceRules );
+	void addDelayedParticleEffect( const float *origin, const float *velocity,
+								   unsigned delay, ParticleFlockBin bin,
+								   const EllipsoidalFlockParams &flockParams,
+								   const Particle::AppearanceRules &appearanceRules );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
@@ -125,13 +139,16 @@ private:
 		std::optional<ExternalMesh::ViewDotFade> overrideLayer0ViewDotFade;
 	};
 
-	struct ParticleFlockSpawnRecord {
-		// These pointers refer to objects with a greater, often &'static lifetime
-		const Particle::AppearanceRules *appearanceRules { nullptr };
-		const ConicalFlockParams *conicalFlockParams { nullptr };
-		const EllipsoidalFlockParams *ellipsoidalFlockParams { nullptr };
-		// TODO: Get rid of separate bins in ParticleSystem public interface
-		enum Bin { Small, Medium, Large } bin { Small };
+	struct ConicalFlockSpawnRecord {
+		ConicalFlockParams flockParams;
+		Particle::AppearanceRules appearanceRules;
+		ParticleFlockBin bin;
+	};
+
+	struct EllipsoidalFlockSpawnRecord {
+		EllipsoidalFlockParams flockParams;
+		Particle::AppearanceRules appearanceRules;
+		ParticleFlockBin bin;
 	};
 
 	struct DelayedEffect {
@@ -149,7 +166,8 @@ private:
 
 		// Particles and hulls are made mutually exclusive
 		// (adding extra particles to explosion clusters does not produce good visual results)
-		using SpawnRecord = std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord, ParticleFlockSpawnRecord>;
+		using SpawnRecord = std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord,
+			ConicalFlockSpawnRecord, EllipsoidalFlockSpawnRecord>;
 
 		SpawnRecord spawnRecord;
 	};
@@ -188,6 +206,8 @@ private:
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds );
 
+	void spawnDelayedEffect( DelayedEffect *effect );
+
 	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
 	wsw::HeapBasedFreelistAllocator m_lightEffectsAllocator { sizeof( LightEffect ), 72 };
 	wsw::HeapBasedFreelistAllocator m_delayedEffectsAllocator { sizeof( DelayedEffect ), 32 };
@@ -198,9 +218,6 @@ private:
 
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };
-
-	static Particle::AppearanceRules s_explosionSmokeAppearanceRules;
-	static const EllipsoidalFlockParams s_explosionSmokeFlockParams;
 };
 
 #endif

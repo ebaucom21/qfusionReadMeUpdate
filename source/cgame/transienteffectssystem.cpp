@@ -285,49 +285,7 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullHardLayerCo
 static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
 static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
 
-static const ColorLifespan kExplosionSmokeColors[3] {
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.25f, 0.25f, 0.25f, 0.23f },
-		.fadedOutColor = { 0.2f, 0.2f, 0.2f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
-	},
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.50f, 0.50f, 0.50f, 0.23f },
-		.fadedOutColor = { 0.4f, 0.4f, 0.4f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
-	},
-	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.75f, 0.75f, 0.75f, 0.23f },
-		.fadedOutColor = { 0.6f, 0.6f, 0.6f, 0.0f },
-		.finishFadingInAtLifetimeFrac = 0.33f, .startFadingOutAtLifetimeFrac = 0.67f,
-	},
-};
-
-Particle::AppearanceRules TransientEffectsSystem::s_explosionSmokeAppearanceRules {
-	.colors       = kExplosionSmokeColors,
-	.kind         = Particle::Sprite,
-	.radius       = 9.0f,
-	.radiusSpread = 5.0f,
-};
-
-const EllipsoidalFlockParams TransientEffectsSystem::s_explosionSmokeFlockParams {
-	.stretchScale  = 1.25f,
-	.gravity       = -65.0f,
-	.restitution   = 0.33f,
-	.minSpeed      = 35.0f,
-	.maxSpeed      = 65.0f,
-	.minShiftSpeed = 55.0f,
-	.maxShiftSpeed = 70.0f,
-	.minPercentage = 0.7f,
-	.maxPercentage = 0.9f,
-	.minTimeout    = 1200,
-	.maxTimeout    = 1750,
-};
-
-void TransientEffectsSystem::spawnExplosion( const float *fireOrigin, const float *smokeOrigin, float radius ) {
+void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius ) {
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
@@ -379,17 +337,6 @@ void TransientEffectsSystem::spawnExplosion( const float *fireOrigin, const floa
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
 		spawnSmokeHull( m_lastTime, smokeOrigin, 99.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f },
 						ExternalMesh::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
-
-		// ColorLifespan is quite limited to efficiently suppress drawing the flock at start.
-		// Let's spawn smoke particles as a delayed effect.
-
-		s_explosionSmokeAppearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
-
-		allocDelayedEffect( m_lastTime, smokeOrigin, vec3_origin, 300, ParticleFlockSpawnRecord {
-			.appearanceRules        = &s_explosionSmokeAppearanceRules,
-			.ellipsoidalFlockParams = &s_explosionSmokeFlockParams,
-			.bin                    = ParticleFlockSpawnRecord::Large
-		});
 	}
 
 	if( cg_explosionsClusters->integer ) {
@@ -703,6 +650,24 @@ void TransientEffectsSystem::spawnBulletLikeImpactModel( const float *origin, co
 	effect->fadedInScale  = 0.3f;
 	effect->fadedOutScale = 0.0f;
 	// TODO: Add light when hitting metallic surfaces?
+}
+
+void TransientEffectsSystem::addDelayedParticleEffect( const float *origin, const float *velocity,
+													   unsigned delay, ParticleFlockBin bin,
+													   const ConicalFlockParams &flockParams,
+													   const Particle::AppearanceRules &appearanceRules ) {
+	allocDelayedEffect( m_lastTime, origin, velocity, delay, ConicalFlockSpawnRecord {
+		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
+	});
+}
+
+void TransientEffectsSystem::addDelayedParticleEffect( const float *origin, const float *velocity,
+													   unsigned delay, ParticleFlockBin bin,
+													   const EllipsoidalFlockParams &flockParams,
+													   const Particle::AppearanceRules &appearanceRules ) {
+	allocDelayedEffect( m_lastTime, origin, velocity, delay, EllipsoidalFlockSpawnRecord {
+		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
+	});
 }
 
 void TransientEffectsSystem::spawnDustImpactEffect( const float *origin, const float *dir, float radius ) {
@@ -1039,62 +1004,7 @@ void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float tim
 		if( triggerAt <= currTime ) {
 			// Don't spawn in solid or while contacting solid
 			if( trace.fraction == 1.0f && !trace.startsolid ) {
-				if( const auto *hullRecord = std::get_if<RegularHullSpawnRecord>( &effect->spawnRecord ) ) {
-					auto method = hullRecord->allocMethod;
-					if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
-						cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->color,
-																   hullRecord->speed, hullRecord->speedSpread );
-						hull->colorChangeTimeline      = hullRecord->colorChangeTimeline;
-
-						hull->lodCurrLevelTangentRatio = hullRecord->lodCurrLevelTangentRatio;
-						hull->tesselateClosestLod      = hullRecord->tesselateClosestLod;
-						hull->leprNextLevelColors      = hullRecord->lerpNextLevelColors;
-						hull->applyVertexDynLight      = hullRecord->applyVertexDynLight;
-						hull->vertexViewDotFade        = hullRecord->vertexViewDotFade;
-					}
-				}
-				if( const auto *hullRecord = std::get_if<ConcentricHullSpawnRecord>( &effect->spawnRecord ) ) {
-					auto method = hullRecord->allocMethod;
-					if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, hullRecord->timeout ) ) {
-						cg.simulatedHullsSystem.setupHullVertices( hull, effect->origin, hullRecord->scale,
-																   hullRecord->layerParams );
-						assert( !hull->layers[0].useDrawOnTopHack );
-						hull->vertexViewDotFade          = hullRecord->vertexViewDotFade;
-						hull->layers[0].useDrawOnTopHack = hullRecord->useLayer0DrawOnTopHack;
-						hull->layers[0].overrideHullFade = hullRecord->overrideLayer0ViewDotFade;
-					}
-				}
-				if( const auto *flockRecord = std::get_if<ParticleFlockSpawnRecord>( &effect->spawnRecord ) ) {
-					const Particle::AppearanceRules &arules = *flockRecord->appearanceRules;
-					// These branches use different types
-					if( flockRecord->conicalFlockParams ) {
-						ConicalFlockParams flockParams( *flockRecord->conicalFlockParams );
-						VectorCopy( effect->origin, flockParams.origin );
-						VectorClear( flockParams.offset );
-						AngleVectors( effect->angles, flockParams.dir, nullptr, nullptr );
-						// TODO: "using enum"
-						using Pfsr = ParticleFlockSpawnRecord;
-						switch( flockRecord->bin ) {
-							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
-							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
-							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;
-						}
-					} else {
-						EllipsoidalFlockParams flockParams( *flockRecord->ellipsoidalFlockParams );
-						VectorCopy( effect->origin, flockParams.origin );
-						VectorClear( flockParams.offset );
-						if( flockParams.stretchScale != 1.0f ) {
-							AngleVectors( effect->angles, flockParams.stretchDir, nullptr, nullptr );
-						}
-						// TODO: "using enum"
-						using Pfsr = ParticleFlockSpawnRecord;
-						switch( flockRecord->bin ) {
-							case Pfsr::Small: cg.particleSystem.addSmallParticleFlock( arules, flockParams ); break;
-							case Pfsr::Medium: cg.particleSystem.addMediumParticleFlock( arules, flockParams ); break;
-							case Pfsr::Large: cg.particleSystem.addLargeParticleFlock( arules, flockParams ); break;
-						}
-					}
-				}
+				spawnDelayedEffect( effect );
 				unlinkAndFreeDelayedEffect( effect );
 			} else if( triggerAt + 25 < currTime ) {
 				// If the "grace" period for getting out of solid has expired
@@ -1102,4 +1012,67 @@ void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float tim
 			}
 		}
 	}
+}
+
+void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
+	struct Visitor {
+		const int64_t m_lastTime;
+		DelayedEffect *const m_effect;
+		
+		void operator()( const RegularHullSpawnRecord &record ) const {
+			auto method = record.allocMethod;
+			if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, record.timeout ) ) {
+				cg.simulatedHullsSystem.setupHullVertices( hull, m_effect->origin, record.color,
+														   record.speed, record.speedSpread );
+				hull->colorChangeTimeline      = record.colorChangeTimeline;
+
+				hull->lodCurrLevelTangentRatio = record.lodCurrLevelTangentRatio;
+				hull->tesselateClosestLod      = record.tesselateClosestLod;
+				hull->leprNextLevelColors      = record.lerpNextLevelColors;
+				hull->applyVertexDynLight      = record.applyVertexDynLight;
+				hull->vertexViewDotFade        = record.vertexViewDotFade;
+			}
+		}
+		void operator()( const ConcentricHullSpawnRecord &record ) const {
+			auto method = record.allocMethod;
+			if( auto *hull = ( cg.simulatedHullsSystem.*method )( m_lastTime, record.timeout ) ) {
+				cg.simulatedHullsSystem.setupHullVertices( hull, m_effect->origin, record.scale,
+														   record.layerParams );
+				assert( !hull->layers[0].useDrawOnTopHack );
+				hull->vertexViewDotFade          = record.vertexViewDotFade;
+				hull->layers[0].useDrawOnTopHack = record.useLayer0DrawOnTopHack;
+				hull->layers[0].overrideHullFade = record.overrideLayer0ViewDotFade;
+			}
+		}
+		void operator()( const ConicalFlockSpawnRecord &record ) const {
+			ConicalFlockParams flockParams( record.flockParams );
+			VectorCopy( m_effect->origin, flockParams.origin );
+			VectorClear( flockParams.offset );
+			AngleVectors( m_effect->angles, flockParams.dir, nullptr, nullptr );
+			// TODO: "using enum"
+			using Pfb = ParticleFlockBin;
+			switch( record.bin ) {
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( record.appearanceRules, flockParams ); break;
+			}
+		}
+		void operator()( const EllipsoidalFlockSpawnRecord &record ) const {
+			EllipsoidalFlockParams flockParams( record.flockParams );
+			VectorCopy( m_effect->origin, flockParams.origin );
+			VectorClear( flockParams.offset );
+			if( flockParams.stretchScale != 1.0f ) {
+				AngleVectors( m_effect->angles, flockParams.stretchDir, nullptr, nullptr );
+			}
+			// TODO: "using enum"
+			using Pfb = ParticleFlockBin;
+			switch( record.bin ) {
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( record.appearanceRules, flockParams ); break;
+			}
+		}
+	};
+
+	std::visit( Visitor { .m_lastTime = m_lastTime, .m_effect = effect }, effect->spawnRecord );
 }

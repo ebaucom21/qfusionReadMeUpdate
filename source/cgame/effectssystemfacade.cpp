@@ -237,6 +237,48 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 	}
 }
 
+static const ColorLifespan kExplosionSmokeColors[3] {
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.5f, 0.5f, 0.5f, 0.2f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.6f, 0.6f, 0.6f, 0.2f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
+	},
+	{
+		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedInColor  = { 0.7f, 0.7f, 0.7f, 0.2f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
+	},
+};
+
+static const Particle::AppearanceRules kExplosionSmokeAppearanceRules {
+	.colors       = kExplosionSmokeColors,
+	.kind         = Particle::Sprite,
+	.radius       = 9.0f,
+	.radiusSpread = 5.0f,
+};
+
+static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
+	.stretchScale  = 1.25f,
+	.gravity       = -65.0f,
+	.restitution   = 0.33f,
+	.minSpeed      = 35.0f,
+	.maxSpeed      = 65.0f,
+	.minShiftSpeed = 55.0f,
+	.maxShiftSpeed = 70.0f,
+	.minPercentage = 0.7f,
+	.maxPercentage = 0.9f,
+	.minTimeout    = 1200,
+	.maxTimeout    = 1750,
+};
+
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
 												float radius, bool addSoundLfe ) {
 	vec3_t fireOrigin, almostExactOrigin;
@@ -380,7 +422,15 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
 
-	m_transientEffectsSystem.spawnExplosion( fireOrigin, smokeOrigin );
+	if( smokeOrigin ) {
+		Particle::AppearanceRules appearanceRules( kExplosionSmokeAppearanceRules );
+		appearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		m_transientEffectsSystem.addDelayedParticleEffect( smokeOrigin, vec3_origin, 300u,
+														   TransientEffectsSystem::ParticleFlockBin::Large,
+														   kExplosionSmokeFlockParams, appearanceRules );
+	}
+
+	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin, smokeOrigin );
 
 	spawnMultipleExplosionImpactEffects( solidImpacts );
 	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f } );
