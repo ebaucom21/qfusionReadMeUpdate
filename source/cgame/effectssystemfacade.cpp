@@ -423,17 +423,18 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 	}
 
 	if( smokeOrigin ) {
+		EllipsoidalFlockParams flockParams( kExplosionSmokeFlockParams );
+		VectorCopy( smokeOrigin, flockParams.origin );
 		Particle::AppearanceRules appearanceRules( kExplosionSmokeAppearanceRules );
 		appearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
-		m_transientEffectsSystem.addDelayedParticleEffect( smokeOrigin, vec3_origin, 300u,
-														   TransientEffectsSystem::ParticleFlockBin::Large,
-														   kExplosionSmokeFlockParams, appearanceRules );
+		m_transientEffectsSystem.addDelayedParticleEffect( 300, TransientEffectsSystem::ParticleFlockBin::Large,
+														   flockParams, appearanceRules );
 	}
 
 	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin, smokeOrigin );
 
 	spawnMultipleExplosionImpactEffects( solidImpacts );
-	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f } );
+	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f }, { 0, 100 } );
 }
 
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
@@ -898,8 +899,8 @@ static const ConicalFlockParams kBulletRosetteFlockParams {
 	.maxTimeout    = 150,
 };
 
-static void spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
-											 float minPercentage, float maxPercentage ) {
+void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
+														   float minPercentage, float maxPercentage ) {
 	Particle::AppearanceRules appearanceRules( kBulletRosetteAppearanceRules );
 	appearanceRules.materials    = cgs.media.shaderSparkParticle.getAddressOfHandle();
 	appearanceRules.length       = 0.75f * appearanceRules.length;
@@ -917,7 +918,7 @@ static void spawnBulletGenericImpactRosette( const FlockOrientation &orientation
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static void spawnBulletMetalImpactRosette( const FlockOrientation &orientation ) {
+void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation ) {
 	Particle::AppearanceRules appearanceRules( kBulletRosetteAppearanceRules );
 	appearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
 
@@ -950,8 +951,9 @@ static const ColorLifespan kBulletMetalRicochetColors[1] {
 	}
 };
 
-static void spawnBulletMetalRicochetParticles( const FlockOrientation &orientation, float upShiftScale,
-											   float minPercentage, float maxPercentage ) {
+void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, const FlockOrientation &orientation,
+															 float upShiftScale, unsigned,
+															 float minPercentage, float maxPercentage ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalRicochetColors,
@@ -978,7 +980,7 @@ static void spawnBulletMetalRicochetParticles( const FlockOrientation &orientati
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 100.0f, 150.0f );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
 static const ColorLifespan kBulletMetalDebrisColors[3] {
@@ -999,8 +1001,9 @@ static const ColorLifespan kBulletMetalDebrisColors[3] {
 	},
 };
 
-static void spawnBulletMetalDebrisParticles( const FlockOrientation &orientation, float upShiftScale,
-											 float minPercentage, float maxPercentage ) {
+void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const FlockOrientation &orientation,
+														   float upShiftScale, unsigned,
+														   float minPercentage, float maxPercentage ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalDebrisColors,
@@ -1028,7 +1031,7 @@ static void spawnBulletMetalDebrisParticles( const FlockOrientation &orientation
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 150.0f, 200.0f );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
 static const ColorLifespan kGreyDustColors[1] {
@@ -1040,8 +1043,9 @@ static const ColorLifespan kGreyDustColors[1] {
 	}
 };
 
-static void spawnStoneDustParticles( const FlockOrientation &orientation, float upShiftScale, unsigned colorParam,
-									 float dustPercentageScale = 1.0f ) {
+void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOrientation &orientation,
+												   float upShiftScale, unsigned materialParam,
+												   float dustPercentageScale ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
@@ -1067,10 +1071,11 @@ static void spawnStoneDustParticles( const FlockOrientation &orientation, float 
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 10.0f, 20.0f );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static void spawnStuccoDustParticles( const FlockOrientation &orientation, float upShiftScale, unsigned colorParam ) {
+void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
+													float upShiftScale, unsigned materialParam ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
@@ -1101,7 +1106,7 @@ static void spawnStuccoDustParticles( const FlockOrientation &orientation, float
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 20.0f, 30.0f );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
 static const ColorLifespan kWoodImpactColors[1] {
@@ -1122,8 +1127,9 @@ static const ColorLifespan kWoodDustColors[1] {
 	}
 };
 
-static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation, float upShiftScale,
-											float debrisPercentageScale = 1.0f ) {
+void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const FlockOrientation &orientation,
+														  float upShiftScale, unsigned materialParam,
+														  float debrisPercentageScale ) {
 	const Particle::AppearanceRules burstAppearanceRules {
 		.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 		.colors         = kWoodImpactColors,
@@ -1194,14 +1200,15 @@ static void spawnWoodBulletImpactParticles( const FlockOrientation &orientation,
 	};
 
 	orientation.copyToFlockParams( &burstFlockParams );
-	cg.particleSystem.addMediumParticleFlock( burstAppearanceRules, burstFlockParams );
+	spawnOrPostponeImpactParticleEffect( delay, burstFlockParams, burstAppearanceRules,
+										 TransientEffectsSystem::ParticleFlockBin::Medium );
 
 	orientation.copyToFlockParams( &dustFlockParams );
-	cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
+	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 
 	orientation.copyToFlockParams( &debrisFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &debrisFlockParams, upShiftScale, 75.0f, 125.0f );
-	cg.particleSystem.addSmallParticleFlock( debrisAppearanceRules, debrisFlockParams );
+	spawnOrPostponeImpactParticleEffect( delay, debrisFlockParams, debrisAppearanceRules );
 }
 
 static const ColorLifespan kDirtImpactColors[1] {
@@ -1220,7 +1227,8 @@ static const ColorLifespan kDirtDustColors[1] {
 	}
 };
 
-static void spawnDirtImpactParticles( const FlockOrientation &orientation, float upShiftScale, unsigned materialParam ) {
+void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockOrientation &orientation,
+													float upShiftScale, unsigned materialParam ) {
 	ConicalFlockParams burstStripesFlockParams {
 		.gravity       = GRAVITY,
 		.angle         = 12,
@@ -1284,15 +1292,17 @@ static void spawnDirtImpactParticles( const FlockOrientation &orientation, float
 	};
 
 	orientation.copyToFlockParams( &burstStripesFlockParams );
+	// Never delay stripes
 	cg.particleSystem.addSmallParticleFlock( burstStripesAppearanceRules, burstStripesFlockParams );
 
 	orientation.copyToFlockParams( &burstParticlesFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &burstParticlesFlockParams, upShiftScale, 150.0f, 200.0f );
+	// Never delay burst
 	cg.particleSystem.addMediumParticleFlock( burstParticlesAppearanceRules, burstParticlesFlockParams );
 
 	orientation.copyToFlockParams( &dustFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 50.0f, 125.0f );
-	cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
+	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 }
 
 static const ColorLifespan kSandImpactColors[1] {
@@ -1313,8 +1323,9 @@ static const ColorLifespan kSandDustColors[1] {
 	}
 };
 
-static void spawnSandImpactParticles( const FlockOrientation &orientation, float upShiftScale, unsigned materialParam,
-									  float dustPercentageScale = 1.0f ) {
+void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockOrientation &orientation,
+													float upShiftScale, unsigned materialParam,
+													float dustPercentageScale ) {
 	ConicalFlockParams burstFlockParams {
 		.gravity       = GRAVITY,
 		.angle         = 12,
@@ -1337,7 +1348,8 @@ static void spawnSandImpactParticles( const FlockOrientation &orientation, float
 
 	orientation.copyToFlockParams( &burstFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &burstFlockParams, upShiftScale, 150.0f, 200.0f );
-	cg.particleSystem.addMediumParticleFlock( burstParticlesAppearanceRules, burstFlockParams );
+	// Never delay burst
+	cg.particleSystem.addSmallParticleFlock( burstParticlesAppearanceRules, burstFlockParams );
 
 	EllipsoidalFlockParams dustFlockParams {
 		.stretchScale  = 0.33f,
@@ -1362,7 +1374,7 @@ static void spawnSandImpactParticles( const FlockOrientation &orientation, float
 
 	orientation.copyToFlockParams( &dustFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 20.0f, 30.0f );
-	cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
+	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 }
 
 static const ColorLifespan kGlassDebrisColors[1] {
@@ -1373,7 +1385,8 @@ static const ColorLifespan kGlassDebrisColors[1] {
 	}
 };
 
-static void spawnGlassImpactParticles( const FlockOrientation &orientation, float upShiftScale ) {
+void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
+													 float upShiftScale, unsigned materialParam ) {
 	Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kGlassDebrisColors,
@@ -1396,7 +1409,7 @@ static void spawnGlassImpactParticles( const FlockOrientation &orientation, floa
 	};
 
 	orientation.copyToFlockParams( &flockParams );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
 void EffectsSystemFacade::spawnBulletImpactEffect( const Impact &impact ) {
@@ -1443,26 +1456,26 @@ void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const Floc
 		case SurfImpactMaterial::Unknown:
 			break;
 		case SurfImpactMaterial::Stone:
-			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam );
+			spawnStoneDustParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Stucco:
-			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+			spawnStuccoDustParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Wood:
-			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale );
+			spawnWoodBulletImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Dirt:
-			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Sand:
-			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam );
+			spawnSandImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Metal:
-			spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.7f, 1.0f );
-			spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.3f, 0.9f );
+			spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f );
+			spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( flockOrientation, upShiftScale );
+			spawnGlassImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 	}
 }
@@ -1523,31 +1536,95 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const Floc
 		case SurfImpactMaterial::Unknown:
 			break;
 		case SurfImpactMaterial::Stone:
-			spawnStoneDustParticles( flockOrientation, upShiftScale, materialParam, 0.75f );
+			spawnStoneDustParticles( 0, flockOrientation, upShiftScale, materialParam, 0.75f );
 			break;
 		case SurfImpactMaterial::Stucco:
-			spawnStuccoDustParticles( flockOrientation, upShiftScale, materialParam );
+			spawnStuccoDustParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Wood:
-			spawnWoodBulletImpactParticles( flockOrientation, upShiftScale, 0.5f );
+			spawnWoodBulletImpactParticles( 0, flockOrientation, upShiftScale, materialParam, 0.5f );
 			break;
 		case SurfImpactMaterial::Dirt:
-			spawnDirtImpactParticles( flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Sand:
-			spawnSandImpactParticles( flockOrientation, upShiftScale, materialParam, 0.25f );
+			spawnSandImpactParticles( 0, flockOrientation, upShiftScale, materialParam, 0.25f );
 			break;
 		case SurfImpactMaterial::Metal:
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalRicochetParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
+				spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f );
 			}
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalDebrisParticles( flockOrientation, upShiftScale, 0.0f, 0.5f );
+				spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f );
 			}
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( flockOrientation, upShiftScale );
+			spawnGlassImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
+	}
+}
+
+void EffectsSystemFacade::spawnExplosionImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+																		 SurfImpactMaterial impactMaterial,
+																		 unsigned materialParam ) {
+	// TODO: We used to test against impact normal Z
+	[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, flockOrientation.dir[2] ) );
+	[[maybe_unused]] unsigned delay = 0;
+
+	switch( impactMaterial ) {
+		case SurfImpactMaterial::Unknown:
+			break;
+		case SurfImpactMaterial::Stone:
+			delay = 100 + m_rng.nextBoundedFast( 100 );
+			spawnStoneDustParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Stucco:
+			delay = 100 + m_rng.nextBoundedFast( 100 );
+			spawnStuccoDustParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Wood:
+			delay = 50 + m_rng.nextBoundedFast( 150 );
+			spawnWoodBulletImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Dirt:
+			delay = m_rng.nextBoundedFast( 300 );
+			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Sand:
+			delay = 100 + m_rng.nextBoundedFast( 300 );
+			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+		case SurfImpactMaterial::Metal:
+			delay = m_rng.nextBoundedFast( 100 );
+			if( m_rng.next() % 2 ) {
+				spawnBulletMetalRicochetParticles( delay, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f );
+			} else {
+				spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
+			}
+			break;
+		case SurfImpactMaterial::Glass:
+			delay = m_rng.nextBoundedFast( 100 );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			break;
+	}
+}
+
+template <typename FlockParams>
+void EffectsSystemFacade::spawnOrPostponeImpactParticleEffect( unsigned delay,
+															   const FlockParams &flockParams,
+															   const Particle::AppearanceRules &appearanceRules,
+															   TransientEffectsSystem::ParticleFlockBin bin ) {
+	if( delay ) {
+		m_transientEffectsSystem.addDelayedParticleEffect( delay, bin, flockParams, appearanceRules );
+	} else {
+		// TODO: Hide bins from ParticleSystem public interface
+		if( bin == TransientEffectsSystem::ParticleFlockBin::Small ) {
+			cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+		} else if( bin == TransientEffectsSystem::ParticleFlockBin::Medium ) {
+			cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
+		} else {
+			cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
+		}
 	}
 }
 
@@ -1617,7 +1694,7 @@ static const ColorLifespan kLavaDustColors[1] {
 	}
 };
 
-void EffectsSystemFacade::spawnLiquidImpactParticleEffect( const Impact &impact, float percentageScale,
+void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const Impact &impact, float percentageScale,
 														   std::pair<float, float> randomRotationAngleCosineRange ) {
 	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
 
@@ -1726,18 +1803,19 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( const Impact &impact,
 		};
 
 		flockOrientation.copyToFlockParams( &splashFlockParams );
-		cg.particleSystem.addSmallParticleFlock( splashAppearanceRules, splashFlockParams );
+		spawnOrPostponeImpactParticleEffect( delay, splashFlockParams, splashAppearanceRules );
 
 		flockOrientation.copyToFlockParams( &dropsFlockParams );
-		cg.particleSystem.addMediumParticleFlock( dropsAppearanceRules, dropsFlockParams );
+		spawnOrPostponeImpactParticleEffect( delay, dropsFlockParams, dropsAppearanceRules,
+											 TransientEffectsSystem::ParticleFlockBin::Medium );
 
 		flockOrientation.copyToFlockParams( &dustFlockParams );
-		cg.particleSystem.addSmallParticleFlock( dustAppearanceRules, dustFlockParams );
+		spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 	}
 }
 
 void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const Impact &impact ) {
-	spawnLiquidImpactParticleEffect( impact, 1.0f, { 0.70f, 0.95f } );
+	spawnLiquidImpactParticleEffect( 0, impact, 1.0f, { 0.70f, 0.95f } );
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
 		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
 		startSoundForImpact( sfx, impact );
@@ -1777,15 +1855,24 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const I
 		const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
 		const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 		const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
-		spawnBulletImpactParticleEffectForMaterial( orientation, material, materialParam );
+		spawnExplosionImpactParticleEffectForMaterial( orientation, material, materialParam );
 	}
 	spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
 }
 
 void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
-															std::pair<float, float> randomRotationAngleCosineRange ) {
-	for( const Impact &impact: impacts ) {
-		spawnLiquidImpactParticleEffect( impact, percentageScale, randomRotationAngleCosineRange );
+															std::pair<float, float> randomRotationAngleCosineRange,
+															std::pair<unsigned, unsigned> delayRange ) {
+	assert( delayRange.first <= delayRange.second );
+	if( delayRange.second > 0 && delayRange.first != delayRange.second ) {
+		for( const Impact &impact: impacts ) {
+			const unsigned delay = delayRange.first + m_rng.nextBoundedFast( delayRange.second - delayRange.first );
+			spawnLiquidImpactParticleEffect( delay, impact, percentageScale, randomRotationAngleCosineRange );
+		}
+	} else {
+		for( const Impact &impact: impacts ) {
+			spawnLiquidImpactParticleEffect( delayRange.first, impact, percentageScale, randomRotationAngleCosineRange );
+		}
 	}
 	sfx_s **sfxBegin = cgs.media.sfxImpactWater.getAddressOfHandles();
 	sfx_s **sfxEnd   = sfxBegin + cgs.media.sfxImpactWater.length();

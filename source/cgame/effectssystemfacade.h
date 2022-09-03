@@ -71,7 +71,8 @@ public:
 	void spawnBulletLiquidImpactEffect( const Impact &impact );
 
 	void spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
-										   std::pair<float, float> randomRotationAngleCosineRange );
+										   std::pair<float, float> randomRotationAngleCosineRange,
+										   std::pair<unsigned, unsigned> delayRange = { 0, 0 } );
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
@@ -128,11 +129,55 @@ private:
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
+	void spawnBulletGenericImpactRosette( const FlockOrientation &orientation, float minPercentage, float maxPercentage );
+
+	void spawnBulletMetalImpactRosette( const FlockOrientation &orientation );
+
+	// Normally `delay` would have been a last default argument,
+	// but there are already fine tune parameters,
+	// and packing parameters in a struct adds way too much clutter.
+
+	void spawnBulletMetalRicochetParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
+											unsigned materialParam, float minPercentage, float maxPercentage );
+
+	void spawnBulletMetalDebrisParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
+										  unsigned materialParam, float minPercentage, float maxPercentage );
+
+	void spawnStoneDustParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
+								  unsigned materialParam, float dustPercentageScale = 1.0f );
+
+	void spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
+								   float upShiftScale, unsigned materialParam );
+
+	void spawnWoodBulletImpactParticles( unsigned delay, const FlockOrientation &orientation,
+										 float upShiftScale, unsigned materialParam,
+										 float debrisPercentageScale = 1.0f );
+
+	void spawnDirtImpactParticles( unsigned delay, const FlockOrientation &orientation,
+								   float upShiftScale, unsigned materialParam );
+
+	void spawnSandImpactParticles( unsigned delay, const FlockOrientation &orientation,
+								   float upShiftScale, unsigned materialParam, float dustPercentageScale = 1.0f );
+
+	void spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
+									float upShiftScale, unsigned materialParam );
+
 	void spawnBulletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam );
+
 	void spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam,
 													 unsigned index, unsigned total );
+
+	// TODO: Hide bins from ParticleSystem public interface
+	template <typename FlockParams>
+	void spawnOrPostponeImpactParticleEffect( unsigned delay, const FlockParams &flockParams,
+											  const Particle::AppearanceRules &appearanceRules,
+											  TransientEffectsSystem::ParticleFlockBin bin =
+												  TransientEffectsSystem::ParticleFlockBin::Small );
+
+	void spawnExplosionImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+														SurfImpactMaterial impactMaterial, unsigned materialParam );
 
 	[[nodiscard]]
 	static auto getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned;
@@ -149,7 +194,7 @@ private:
 
 	void startSoundForImpact( sfx_s *sfx, const Impact &impact );
 
-	void spawnLiquidImpactParticleEffect( const Impact &impact, float percentageScale,
+	void spawnLiquidImpactParticleEffect( unsigned delay, const Impact &impact, float percentageScale,
 										  std::pair<float, float> randomRotationAngleCosineRange );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;

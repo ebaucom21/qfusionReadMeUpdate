@@ -367,12 +367,8 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			oldDirNum = dirNum;
 			numSpawnedClusters++;
 
-			vec3_t randomVelocity;
-			const float randomSpeed = m_rng.nextFloat( minSpawnerSpeed, maxSpawnerSpeed );
-			VectorScale( randomDir, randomSpeed, randomVelocity );
-
 			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
-			allocDelayedEffect( m_lastTime, fireOrigin, randomVelocity, spawnDelay, ConcentricHullSpawnRecord {
+			auto *const effect = allocDelayedEffect( m_lastTime, fireOrigin, spawnDelay, ConcentricHullSpawnRecord {
 				.layerParams = clusterHullLayerParams,
 				.scale       = m_rng.nextFloat( 0.11f, 0.37f ) * fireHullScale,
 				.timeout     = fireHullTimeout / 3,
@@ -381,6 +377,10 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.useLayer0DrawOnTopHack    = true,
 				.overrideLayer0ViewDotFade = ExternalMesh::NoFade,
 			});
+
+			const float randomSpeed = m_rng.nextFloat( minSpawnerSpeed, maxSpawnerSpeed );
+			VectorScale( randomDir, randomSpeed, effect->velocity );
+			effect->simulation = DelayedEffect::SimulateMovement;
 		}
 	}
 }
@@ -652,20 +652,18 @@ void TransientEffectsSystem::spawnBulletLikeImpactModel( const float *origin, co
 	// TODO: Add light when hitting metallic surfaces?
 }
 
-void TransientEffectsSystem::addDelayedParticleEffect( const float *origin, const float *velocity,
-													   unsigned delay, ParticleFlockBin bin,
+void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const ConicalFlockParams &flockParams,
 													   const Particle::AppearanceRules &appearanceRules ) {
-	allocDelayedEffect( m_lastTime, origin, velocity, delay, ConicalFlockSpawnRecord {
+	allocDelayedEffect( m_lastTime, flockParams.origin, delay, ConicalFlockSpawnRecord {
 		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
 	});
 }
 
-void TransientEffectsSystem::addDelayedParticleEffect( const float *origin, const float *velocity,
-													   unsigned delay, ParticleFlockBin bin,
+void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const EllipsoidalFlockParams &flockParams,
 													   const Particle::AppearanceRules &appearanceRules ) {
-	allocDelayedEffect( m_lastTime, origin, velocity, delay, EllipsoidalFlockSpawnRecord {
+	allocDelayedEffect( m_lastTime, flockParams.origin, delay, EllipsoidalFlockSpawnRecord {
 		.flockParams = flockParams, .appearanceRules = appearanceRules, .bin = bin
 	});
 }
@@ -832,9 +830,8 @@ auto TransientEffectsSystem::allocLightEffect( int64_t currTime, const float *or
 	return effect;
 }
 
-auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
-												 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord )
-												 -> DelayedEffect * {
+auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *origin, unsigned delay,
+												 DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect * {
 	void *mem = m_delayedEffectsAllocator.allocOrNull();
 	// TODO!!!!!!!!!!!!
 	if( !mem ) {
@@ -857,7 +854,6 @@ auto TransientEffectsSystem::allocDelayedEffect( int64_t currTime, const float *
 	effect->spawnTime  = currTime;
 	effect->spawnDelay = delay;
 	VectorCopy( origin, effect->origin );
-	VectorCopy( velocity, effect->velocity );
 
 	wsw::link( effect, &m_delayedEffectsHead );
 	return effect;
@@ -969,41 +965,45 @@ void TransientEffectsSystem::simulateLightEffectsAndSubmit( int64_t currTime, fl
 void TransientEffectsSystem::simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds ) {
 	DelayedEffect *nextEffect = nullptr;
 	for( DelayedEffect *effect = m_delayedEffectsHead; effect; effect = nextEffect ) { nextEffect = effect->next;
-		// TODO: Normalize angles each step?
-		VectorMA( effect->angles, timeDeltaSeconds, effect->angularVelocity, effect->angles );
+		bool isSpawningPossible = true;
+		if( effect->simulation == DelayedEffect::SimulateMovement ) {
+			// TODO: Normalize angles each step?
+			VectorMA( effect->angles, timeDeltaSeconds, effect->angularVelocity, effect->angles );
 
-		vec3_t idealOrigin;
-		VectorMA( effect->origin, timeDeltaSeconds, effect->velocity, idealOrigin );
-		idealOrigin[2] += 0.5f * effect->gravity * timeDeltaSeconds * timeDeltaSeconds;
+			vec3_t idealOrigin;
+			VectorMA( effect->origin, timeDeltaSeconds, effect->velocity, idealOrigin );
+			idealOrigin[2] += 0.5f * effect->gravity * timeDeltaSeconds * timeDeltaSeconds;
 
-		effect->velocity[2] += effect->gravity * timeDeltaSeconds;
+			effect->velocity[2] += effect->gravity * timeDeltaSeconds;
 
-		trace_t trace;
-		CM_TransformedBoxTrace( cl.cms, &trace, effect->origin, idealOrigin, vec3_origin, vec3_origin,
-								nullptr, MASK_SOLID | MASK_WATER, nullptr, nullptr, 0 );
+			trace_t trace;
+			CM_TransformedBoxTrace( cl.cms, &trace, effect->origin, idealOrigin, vec3_origin, vec3_origin,
+									nullptr, MASK_SOLID | MASK_WATER, nullptr, nullptr, 0 );
 
-		if( trace.fraction == 1.0f ) {
-			VectorCopy( idealOrigin, effect->origin );
-		} else if( !( trace.startsolid | trace.allsolid ) ) {
-			vec3_t velocityDir;
-			VectorCopy( effect->velocity, velocityDir );
-			if( const float squareSpeed = VectorLengthSquared( velocityDir ); squareSpeed > 1.0f ) {
-				const float rcpSpeed = Q_RSqrt( squareSpeed );
-				VectorScale( velocityDir, rcpSpeed, velocityDir );
-				vec3_t reflectedDir;
-				VectorReflect( velocityDir, trace.plane.normal, 0.0f, reflectedDir );
-				addRandomRotationToDir( reflectedDir, &m_rng, 0.9f );
-				const float newSpeed = effect->restitution * squareSpeed * rcpSpeed;
-				VectorScale( reflectedDir, newSpeed, effect->velocity );
-				// This is not correct but is sufficient
-				VectorAdd( trace.endpos, trace.plane.normal, effect->origin );
+			if( trace.fraction == 1.0f ) {
+				VectorCopy( idealOrigin, effect->origin );
+			} else if ( !( trace.startsolid | trace.allsolid ) ) {
+				vec3_t velocityDir;
+				VectorCopy( effect->velocity, velocityDir );
+				if( const float squareSpeed = VectorLengthSquared( velocityDir ); squareSpeed > 1.0f ) {
+					const float rcpSpeed = Q_RSqrt( squareSpeed );
+					VectorScale( velocityDir, rcpSpeed, velocityDir );
+					vec3_t reflectedDir;
+					VectorReflect( velocityDir, trace.plane.normal, 0.0f, reflectedDir );
+					addRandomRotationToDir( reflectedDir, &m_rng, 0.9f );
+					const float newSpeed = effect->restitution * squareSpeed * rcpSpeed;
+					VectorScale( reflectedDir, newSpeed, effect->velocity );
+					// This is not correct but is sufficient
+					VectorAdd( trace.endpos, trace.plane.normal, effect->origin );
+				}
 			}
+			// Don't spawn in solid or while contacting solid
+			isSpawningPossible = trace.fraction == 1.0f && !trace.startsolid;
 		}
 
 		const int64_t triggerAt = effect->spawnTime + effect->spawnDelay;
 		if( triggerAt <= currTime ) {
-			// Don't spawn in solid or while contacting solid
-			if( trace.fraction == 1.0f && !trace.startsolid ) {
+			if( isSpawningPossible ) {
 				spawnDelayedEffect( effect );
 				unlinkAndFreeDelayedEffect( effect );
 			} else if( triggerAt + 25 < currTime ) {
@@ -1045,31 +1045,43 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 			}
 		}
 		void operator()( const ConicalFlockSpawnRecord &record ) const {
-			ConicalFlockParams flockParams( record.flockParams );
-			VectorCopy( m_effect->origin, flockParams.origin );
-			VectorClear( flockParams.offset );
-			AngleVectors( m_effect->angles, flockParams.dir, nullptr, nullptr );
+			ConicalFlockParams modifiedFlockParams;
+			const ConicalFlockParams *flockParams   = &record.flockParams;
+			const Particle::AppearanceRules &arules = record.appearanceRules;
+			if( m_effect->simulation != TransientEffectsSystem::DelayedEffect::NoSimulation ) {
+				modifiedFlockParams = record.flockParams;
+				VectorCopy( m_effect->origin, modifiedFlockParams.origin );
+				VectorClear( modifiedFlockParams.offset );
+				AngleVectors( m_effect->angles, modifiedFlockParams.dir, nullptr, nullptr );
+				flockParams = &modifiedFlockParams;
+			}
 			// TODO: "using enum"
 			using Pfb = ParticleFlockBin;
 			switch( record.bin ) {
-				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( record.appearanceRules, flockParams ); break;
-				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( record.appearanceRules, flockParams ); break;
-				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams ); break;
 			}
 		}
 		void operator()( const EllipsoidalFlockSpawnRecord &record ) const {
-			EllipsoidalFlockParams flockParams( record.flockParams );
-			VectorCopy( m_effect->origin, flockParams.origin );
-			VectorClear( flockParams.offset );
-			if( flockParams.stretchScale != 1.0f ) {
-				AngleVectors( m_effect->angles, flockParams.stretchDir, nullptr, nullptr );
+			EllipsoidalFlockParams modifiedFlockParams;
+			const EllipsoidalFlockParams *flockParams = &record.flockParams;
+			const Particle::AppearanceRules &arules   = record.appearanceRules;
+			if( m_effect->simulation != TransientEffectsSystem::DelayedEffect::NoSimulation ) {
+				modifiedFlockParams = record.flockParams;
+				VectorCopy( m_effect->origin, modifiedFlockParams.origin );
+				VectorClear( modifiedFlockParams.offset );
+				if( modifiedFlockParams.stretchScale != 1.0f ) {
+					AngleVectors( m_effect->angles, modifiedFlockParams.stretchDir, nullptr, nullptr );
+				}
+				flockParams = &modifiedFlockParams;
 			}
 			// TODO: "using enum"
 			using Pfb = ParticleFlockBin;
 			switch( record.bin ) {
-				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( record.appearanceRules, flockParams ); break;
-				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( record.appearanceRules, flockParams ); break;
-				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( record.appearanceRules, flockParams ); break;
+				case Pfb::Small: cg.particleSystem.addSmallParticleFlock( arules, *flockParams ); break;
+				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams ); break;
+				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams ); break;
 			}
 		}
 	};

@@ -61,12 +61,10 @@ public:
 	// specify absolute numbers of desired particles count!
 	enum class ParticleFlockBin { Small, Medium, Large };
 
-	void addDelayedParticleEffect( const float *origin, const float *velocity,
-								   unsigned delay, ParticleFlockBin bin,
+	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const ConicalFlockParams &flockParams,
 								   const Particle::AppearanceRules &appearanceRules );
-	void addDelayedParticleEffect( const float *origin, const float *velocity,
-								   unsigned delay, ParticleFlockBin bin,
+	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const EllipsoidalFlockParams &flockParams,
 								   const Particle::AppearanceRules &appearanceRules );
 
@@ -157,12 +155,15 @@ private:
 
 		unsigned spawnDelay { 250 };
 
+		enum Simulation { NoSimulation, SimulateMovement };
+
 		float origin[3] { 0.0f, 0.0f, 0.0f };
 		float velocity[3] { 0.0f, 0.0f, 0.0f };
 		float angularVelocity[3] { 0.0f, 0.0f, 0.0f };
 		float angles[3] { 0.0f, 0.0f, 0.0f };
 		float restitution { 1.0f };
 		float gravity { 0.0f };
+		Simulation simulation { NoSimulation };
 
 		// Particles and hulls are made mutually exclusive
 		// (adding extra particles to explosion clusters does not produce good visual results)
@@ -190,8 +191,8 @@ private:
 						   unsigned duration, LightLifespan &&lightLifespan ) -> LightEffect *;
 
 	[[maybe_unused]]
-	auto allocDelayedEffect( int64_t currTime, const float *origin, const float *velocity,
-							 unsigned delay, DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
+	auto allocDelayedEffect( int64_t currTime, const float *origin, unsigned delay,
+							 DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
 	using ColorChangeTimeline = std::span<const SimulatedHullsSystem::ColorChangeTimelineNode>;
 
