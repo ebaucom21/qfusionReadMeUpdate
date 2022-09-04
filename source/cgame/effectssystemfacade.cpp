@@ -1977,6 +1977,40 @@ void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const Impact &impact 
 	}
 }
 
+void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
+	vec3_t tmp;
+	// TODO: Adjust for 3rd person/other players too?
+	if( owner == (int)cg.predictedPlayerState.POVnum ) {
+		VectorCopy( from, tmp );
+		tmp[2] -= 0.5f * playerbox_stand_viewheight;
+		from = tmp;
+	}
+	cg.polyEffectsSystem.spawnTracerEffect( from, to, PolyEffectsSystem::TracerParams {
+		.material = cgs.media.shaderSparkParticle,
+		.prestep  = m_rng.nextFloat( 64.0f, 96.0f ),
+		.width    = m_rng.nextFloat( 2.0f, 2.5f ),
+		.length   = 144.0f,
+	});
+}
+
+void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to ) {
+	vec3_t tmp;
+	if( owner == (int)cg.predictedPlayerState.POVnum ) {
+		VectorCopy( from, tmp );
+		tmp[2] -= 0.5f * playerbox_stand_viewheight;
+		from = tmp;
+	}
+	for( const float *v: to ) {
+		cg.polyEffectsSystem.spawnTracerEffect( from, v, PolyEffectsSystem::TracerParams {
+			.material = cgs.media.shaderSparkParticle,
+			.prestep  = m_rng.nextFloat( 72.0f, 224.0f ),
+			.width    = 1.0f,
+			.length   = 48.0f,
+			.color    = { 1.0f, 0.9f, 0.8f, 1.0f }
+		});
+	}
+}
+
 void EffectsSystemFacade::spawnDustImpactEffect( const float *origin, const float *dir, float radius ) {
 	if( !( CG_PointContents( origin ) & CONTENTS_WATER ) ) [[likely]] {
 		m_transientEffectsSystem.spawnDustImpactEffect( origin, dir, radius );

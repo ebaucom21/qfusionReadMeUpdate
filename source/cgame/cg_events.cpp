@@ -541,6 +541,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 				waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents ) );
 		}
 		//CG_LeadBubbleTrail( &trace, water_trace->endpos );
+		cg.effectsSystem.spawnBulletTracer( owner, origin, waterTrace->endpos );
 	} else {
 		if( canShowBulletImpactForSurface( trace ) ) {
 			cg.effectsSystem.spawnBulletImpactEffect( Impact {
@@ -550,10 +551,11 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 				.surfFlags = getSurfFlagsForImpact( trace, dir ),
 			});
 		}
+		cg.effectsSystem.spawnBulletTracer( owner, origin, trace.endpos );
 	}
 }
 
-static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int ignore, int count,
+static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int owner, int count,
 									  int hspread, int vspread, int range ) {
 	assert( seed );
 	assert( count && count < 64 );
@@ -561,7 +563,8 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 
 	auto *const solidImpacts  = (Impact *)alloca( sizeof( Impact ) * count );
 	auto *const liquidImpacts = (Impact *)alloca( sizeof( Impact ) * count );
-	unsigned numSolidImpacts = 0, numLiquidImpacts = 0;
+	auto *const tracerTargets = (vec3_t *)alloca( sizeof( vec3_t ) * count );
+	unsigned numSolidImpacts = 0, numLiquidImpacts = 0, numTracerTargets = 0;
 
 	for( int i = 0; i < count; i++ ) {
 		// TODO: Is this correct?
@@ -573,7 +576,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 		const float u = std::sin( (float)*seed + phi ) * (float)vspread * sqrtPhi;
 
 		trace_t trace;
-		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, ignore, 0 );
+		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
 		if( waterTrace ) {
 			if( canShowBulletImpactForSurface( trace ) ) {
 				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
@@ -586,6 +589,8 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 					waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents );
 			}
 			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
+			VectorCopy( waterTrace->endpos, tracerTargets[numTracerTargets] );
+			numTracerTargets++;
 		} else {
 			if( canShowBulletImpactForSurface( trace ) ) {
 				solidImpacts[numSolidImpacts++] = Impact {
@@ -595,9 +600,13 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int i
 					.surfFlags = getSurfFlagsForImpact( trace, dir ),
 				};
 			}
+			VectorCopy( trace.endpos, tracerTargets[numTracerTargets] );
+			numTracerTargets++;
 		}
 	}
 
+	// TODO: Pass the origin stride plus impacts?
+	cg.effectsSystem.spawnPelletTracers( owner, start, { tracerTargets, numTracerTargets } );
 	cg.effectsSystem.spawnMultiplePelletImpactEffects( { solidImpacts, numSolidImpacts } );
 	cg.effectsSystem.spawnMultipleLiquidImpactEffects( { liquidImpacts, numLiquidImpacts }, 0.1f, { 0.3f, 0.9f } );
 }

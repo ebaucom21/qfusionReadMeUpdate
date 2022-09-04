@@ -32,6 +32,9 @@ PolyEffectsSystem::~PolyEffectsSystem() {
 	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
 		destroyTransientBeamEffect( beam );
 	}
+	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
+		destroyTracerEffect( tracer );
+	}
 }
 
 auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {
@@ -225,6 +228,12 @@ void PolyEffectsSystem::destroyTransientBeamEffect( TransientBeamEffect *effect 
 	m_transientBeamsAllocator.free( effect );
 }
 
+void PolyEffectsSystem::destroyTracerEffect( TracerEffect *effect ) {
+	wsw::unlink( effect, &m_tracerEffectsHead );
+	effect->~TracerEffect();
+	m_tracerEffectsAllocator.free( effect );
+}
+
 void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params ) {
 	if( params.width < 1.0f || !params.material ) [[unlikely]] {
 		return;
@@ -280,6 +289,64 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 	wsw::link( effect, &m_transientBeamsHead );
 }
 
+static constexpr float kTracerMinSpeed      = 1000.0f;
+static constexpr unsigned kTracerTimeMillis = 100;
+
+void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) {
+	assert( params.prestep >= 1.0f && params.width > 0.0f && params.length >= 1.0f );
+
+	const float squareDistance = DistanceSquared( from, to );
+	if( squareDistance < wsw::square( params.prestep + params.length ) ) [[unlikely]] {
+		return;
+	}
+
+	vec3_t dir;
+	VectorSubtract( to, from, dir );
+	const float rcpDistance = Q_RSqrt( squareDistance );
+	VectorScale( dir, rcpDistance, dir );
+
+	void *mem = m_tracerEffectsAllocator.allocOrNull();
+	if( !mem ) [[unlikely]] {
+		assert( m_tracerEffectsHead );
+		TracerEffect *oldestEffect = m_tracerEffectsHead->next;
+		while( oldestEffect ) {
+			if( oldestEffect->next ) {
+				oldestEffect = oldestEffect->next;
+			} else {
+				break;
+			}
+		}
+		wsw::unlink( oldestEffect, &m_tracerEffectsHead );
+		oldestEffect->~TracerEffect();
+		mem = oldestEffect;
+	}
+
+	// TODO: The speed estimation does not take the fact we also advance by `length` every submission frame
+	const float distance          = squareDistance * rcpDistance;
+	const float tracerTimeSeconds = 1e-3f * (float)kTracerTimeMillis;
+	const float speed             = std::max( kTracerMinSpeed, distance * Q_Rcp( tracerTimeSeconds ) );
+
+	auto *effect            = new( mem )TracerEffect;
+	effect->spawnTime       = m_lastTime;
+	effect->speed           = speed;
+	effect->totalDistance   = distance;
+	effect->distanceSoFar   = params.prestep;
+	effect->poly.width      = params.width;
+	effect->poly.length     = params.length;
+	effect->poly.tileLength = params.length;
+	effect->poly.material   = params.material;
+
+	VectorCopy( from, effect->from );
+	effect->from[2] -= 18.0f;
+	VectorCopy( to, effect->to );
+	VectorCopy( dir, effect->poly.dir );
+	// TODO: autosprite
+	effect->poly.flags |= QuadPoly::XLike;
+	Vector4Copy( params.color, effect->poly.color );
+
+	wsw::link( effect, &m_tracerEffectsHead );
+}
+
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
 		if( beam->poly.material && beam->poly.numVertices && beam->poly.numIndices ) [[likely]] {
@@ -320,6 +387,28 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 
 			request->addPoly( &beam->poly );
 		}
+	}
+
+	const float timeDeltaSeconds = 1e-3f * std::min<float>( 33, (float)( currTime - m_lastTime ) );
+	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
+		if( tracer->spawnTime + kTracerTimeMillis <= currTime ) [[unlikely]] {
+			destroyTracerEffect( tracer );
+			continue;
+		}
+
+		assert( tracer->poly.length >= 1.0f );
+		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
+		if( tracer->distanceSoFar + tracer->poly.length >= tracer->totalDistance ) [[unlikely]] {
+			destroyTracerEffect( tracer );
+			continue;
+		}
+
+		assert( std::fabs( VectorLengthFast( tracer->poly.dir ) - 1.0f ) < 1e-3f );
+		VectorMA( tracer->from, tracer->distanceSoFar, tracer->poly.dir, tracer->poly.from );
+		VectorMA( tracer->poly.from, tracer->poly.length, tracer->poly.dir, tracer->poly.to );
+		tracer->distanceSoFar += tracer->poly.length;
+
+		request->addPoly( &tracer->poly );
 	}
 
 	m_lastTime = currTime;

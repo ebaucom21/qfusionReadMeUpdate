@@ -58,6 +58,16 @@ public:
 
 	void spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params );
 
+	struct TracerParams {
+		shader_s *material { nullptr };
+		float prestep { 0.0f };
+		float width { 0.0f };
+		float length { 0.0f };
+		float color[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+	};
+
+	void spawnTracerEffect( const float *from, const float *to, TracerParams &&params );
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct StraightBeamEffect : public StraightBeam {
@@ -92,17 +102,34 @@ private:
 		QuadPoly poly;
 	};
 
+	struct TracerEffect {
+		TracerEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime;
+		vec3_t from;
+		vec3_t to;
+		float speed { 0.0f };
+		float totalDistance { 0.0f };
+		float distanceSoFar { 0.0f };
+		QuadPoly poly;
+	};
+
 	void destroyTransientBeamEffect( TransientBeamEffect *effect );
+
+	void destroyTracerEffect( TracerEffect *effect );
 
 	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS };
 
 	wsw::HeapBasedFreelistAllocator m_transientBeamsAllocator { sizeof( TransientBeamEffect ), MAX_CLIENTS * 2 };
 
+	wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 4 };
+
 	StraightBeamEffect *m_straightLaserBeamsHead { nullptr };
 	CurvedBeamEffect *m_curvedLaserBeamsHead { nullptr };
 
 	TransientBeamEffect *m_transientBeamsHead { nullptr };
+
+	TracerEffect *m_tracerEffectsHead { nullptr };
 
 	int64_t m_lastTime { 0 };
 };

@@ -74,6 +74,10 @@ public:
 										   std::pair<float, float> randomRotationAngleCosineRange,
 										   std::pair<unsigned, unsigned> delayRange = { 0, 0 } );
 
+	void spawnBulletTracer( int owner, const float *from, const float *to );
+
+	void spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to );
+
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
 	}
