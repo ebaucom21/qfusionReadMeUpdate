@@ -34,6 +34,8 @@ struct EllipsoidalFlockParams {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
+	unsigned minActivationDelay { 0 };
+	unsigned maxActivationDelay { 0 };
 	unsigned startBounceCounterDelay { 0 };
 };
 
@@ -60,7 +62,14 @@ struct ConicalFlockParams {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
+	unsigned minActivationDelay { 0 };
+	unsigned maxActivationDelay { 0 };
 	unsigned startBounceCounterDelay { 0 };
+};
+
+struct FillFlockResult {
+	int64_t resultTimeout;
+	unsigned numParticles;
 };
 
 [[nodiscard]]
@@ -69,7 +78,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 				        unsigned maxParticles,
 				        const Particle::AppearanceRules *__restrict appearanceRules,
 				        wsw::RandomGenerator *__restrict rng,
-				        int64_t currTime ) -> std::pair<int64_t, unsigned>;
+				        int64_t currTime, signed signedStride = 1 ) -> FillFlockResult;
 
 [[nodiscard]]
 auto fillParticleFlock( const ConicalFlockParams *__restrict params,
@@ -77,7 +86,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 				        unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,
 				  		wsw::RandomGenerator *__restrict rng,
-						int64_t currTime ) -> std::pair<int64_t, unsigned>;
+						int64_t currTime, signed signedStride = 1 ) -> FillFlockResult;
 
 struct alignas( 16 ) ParticleFlock {
 	Particle::AppearanceRules appearanceRules;
@@ -86,7 +95,11 @@ struct alignas( 16 ) ParticleFlock {
 	float restitution { 0.75f };
 	Particle *particles;
 	int64_t timeoutAt;
-	unsigned numParticlesLeft;
+	unsigned numActivatedParticles { 0 };
+	unsigned numDelayedParticles { 0 };
+	// Delayed particles are kept in the same memory chunk after the spawned ones.
+	// delayedParticlesOffset should be >= numActivatedParticles.
+	unsigned delayedParticlesOffset { 0 };
 	unsigned binIndex;
 	unsigned minBounceCount { 0 }, maxBounceCount { 0 };
 	unsigned startBounceCounterDelay { 0 };
@@ -156,6 +169,9 @@ private:
 							   unsigned binIndex, unsigned maxParticles );
 
 	static void runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] );
+
+	[[nodiscard]]
+	static auto activateDelayedParticles( ParticleFlock *flock, int64_t currTime ) -> std::optional<int64_t>;
 
 	static void simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
 						  int64_t currTime, float deltaSeconds );

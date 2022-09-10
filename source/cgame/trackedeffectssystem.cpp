@@ -120,39 +120,74 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 	// Prevent an automatic disposal by the particles system
 	flock->timeoutAt = std::numeric_limits<int64_t>::max();
 
-	if( trail->lastParticleAt < currTime && flock->numParticlesLeft < trail->maxParticlesInFlock ) {
-		const float squareDistance = DistanceSquared( trail->lastDropOrigin, origin );
-		if( squareDistance >= trail->dropDistance * trail->dropDistance ) {
-			vec3_t dir, stepVec;
-			VectorSubtract( trail->lastDropOrigin, origin, dir );
+	if( trail->lastParticleAt < currTime ) {
+		if( flock->numActivatedParticles + flock->numDelayedParticles < trail->maxParticlesInFlock ) {
+			const float squareDistance = DistanceSquared( trail->lastDropOrigin, origin );
+			if( squareDistance >= trail->dropDistance * trail->dropDistance ) {
+				vec3_t dir, stepVec;
+				VectorSubtract( trail->lastDropOrigin, origin, dir );
 
-			const float rcpDistance = Q_RSqrt( squareDistance );
-			const float distance = Q_Rcp( rcpDistance );
-			// The dir is directed towards the old position
-			VectorScale( dir, rcpDistance, dir );
-			// Make steps of trail->dropDistance units towards the new position
-			VectorScale( dir, -trail->dropDistance, stepVec );
+				const float rcpDistance = Q_RSqrt( squareDistance );
+				const float distance    = squareDistance * rcpDistance;
+				// The dir is directed towards the old position
+				VectorScale( dir, rcpDistance, dir );
+				// Make steps of trail->dropDistance units towards the new position
+				VectorScale( dir, -trail->dropDistance, stepVec );
 
-			VectorCopy( trail->lastDropOrigin, params->origin );
+				VectorCopy( trail->lastDropOrigin, params->origin );
 
-			const unsigned numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( trail->dropDistance ) );
-			for( unsigned i = 0; i < numSteps; ++i ) {
-				if( flock->numParticlesLeft + trail->maxParticlesPerDrop >= trail->maxParticlesInFlock ) [[unlikely]] {
-					break;
+				const unsigned numSteps = (unsigned)wsw::max( 1.0f, distance * Q_Rcp( trail->dropDistance ) );
+				for( unsigned stepNum = 0; stepNum < numSteps; ++stepNum ) {
+					const unsigned numParticlesSoFar = flock->numActivatedParticles + flock->numDelayedParticles;
+					if( numParticlesSoFar >= trail->maxParticlesInFlock ) [[unlikely]] {
+						break;
+					}
+
+					signed fillStride;
+					unsigned initialOffset;
+					if( params->maxActivationDelay == 0 ) {
+						// Delayed particles must not be spawned in this case
+						assert( !flock->numDelayedParticles );
+						fillStride    = +1;
+						initialOffset = flock->numActivatedParticles;
+					} else {
+						fillStride = -1;
+						if( flock->delayedParticlesOffset ) {
+							initialOffset = flock->delayedParticlesOffset - 1;
+						} else {
+							initialOffset = trail->maxParticlesInFlock - 1;
+						}
+					}
+
+					const FillFlockResult fillResult = fillParticleFlock( params, flock->particles + initialOffset,
+																		  trail->maxParticlesPerDrop,
+																		  std::addressof( flock->appearanceRules ),
+																		  &m_rng, currTime, fillStride );
+					assert( fillResult.numParticles && fillResult.numParticles <= trail->maxParticlesPerDrop );
+
+					if( params->maxActivationDelay == 0 ) {
+						flock->numActivatedParticles += fillResult.numParticles;
+					} else {
+						flock->numDelayedParticles += fillResult.numParticles;
+						if( flock->delayedParticlesOffset ) {
+							assert( flock->delayedParticlesOffset >= fillResult.numParticles );
+							flock->delayedParticlesOffset -= fillResult.numParticles;
+						} else {
+							assert( trail->maxParticlesInFlock >= fillResult.numParticles );
+							flock->delayedParticlesOffset = trail->maxParticlesInFlock - fillResult.numParticles;
+						}
+						assert( flock->delayedParticlesOffset + flock->numDelayedParticles <= trail->maxParticlesInFlock );
+						assert( flock->numActivatedParticles <= flock->delayedParticlesOffset );
+					}
+
+					assert( flock->numDelayedParticles + flock->numActivatedParticles <= trail->maxParticlesInFlock );
+
+					VectorAdd( params->origin, stepVec, params->origin );
 				}
 
-				Particle *particlesToFill = flock->particles + flock->numParticlesLeft;
-				// Creates not less than 1 particle
-				const auto [_, numParticles] = fillParticleFlock( params, particlesToFill, trail->maxParticlesPerDrop,
-																  std::addressof( flock->appearanceRules ),
-																  &m_rng, currTime );
-				assert( numParticles );
-				flock->numParticlesLeft += numParticles;
-				VectorAdd( params->origin, stepVec, params->origin );
+				VectorCopy( params->origin, trail->lastDropOrigin );
+				trail->lastParticleAt = currTime;
 			}
-
-			VectorCopy( params->origin, trail->lastDropOrigin );
-			trail->lastParticleAt = currTime;
 		}
 	}
 }
@@ -184,7 +219,9 @@ static ConicalFlockParams rocketSmokeParticlesFlockParams {
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 350,
-	.maxTimeout  = 400
+	.maxTimeout  = 400,
+	.minActivationDelay = 8,
+	.maxActivationDelay = 8,
 };
 
 static ConicalFlockParams rocketFireParticlesFlockParams {
@@ -193,7 +230,9 @@ static ConicalFlockParams rocketFireParticlesFlockParams {
 	.minSpeed    = 75,
 	.maxSpeed    = 150,
 	.minTimeout  = 125,
-	.maxTimeout  = 250
+	.maxTimeout  = 250,
+	.minActivationDelay = 8,
+	.maxActivationDelay = 8,
 };
 
 void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -207,7 +246,6 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.radius                = 20.0f,
 				.radiusSpread          = 1.5f,
 				.sizeBehaviour         = Particle::Expanding,
-				.lifetimeOffsetMillis  = 8,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -224,7 +262,6 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.radius                = 7.0f,
 				.radiusSpread          = 1.0f,
 				.sizeBehaviour         = Particle::Shrinking,
-				.lifetimeOffsetMillis  = 8,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -269,7 +306,9 @@ static ConicalFlockParams grenadeSmokeParticlesFlockParams {
 	.minSpeed    = 50,
 	.maxSpeed    = 75,
 	.minTimeout  = 200,
-	.maxTimeout  = 250
+	.maxTimeout  = 250,
+	.minActivationDelay = 8,
+	.maxActivationDelay = 8,
 };
 
 void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -283,7 +322,6 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.radius                = 20.0f,
 				.radiusSpread          = 1.0f,
 				.sizeBehaviour         = Particle::Shrinking,
-				.lifetimeOffsetMillis  = 8,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -357,7 +395,9 @@ static ConicalFlockParams blastIonsParticlesFlockParams {
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,
-	.maxTimeout  = 300
+	.maxTimeout  = 300,
+	.minActivationDelay = 8,
+	.maxActivationDelay = 8,
 };
 
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -371,7 +411,6 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.radius                = 10.0f,
 				.radiusSpread          = 1.0f,
 				.sizeBehaviour         = Particle::Expanding,
-				.lifetimeOffsetMillis  = 4,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -388,7 +427,6 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.radius                = 3.0f,
 				.radiusSpread          = 0.75f,
 				.sizeBehaviour         = Particle::Shrinking,
-				.lifetimeOffsetMillis  = 4,
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -439,7 +477,9 @@ static ConicalFlockParams electroIonsParticlesFlockParams {
 	.minSpeed    = 200,
 	.maxSpeed    = 300,
 	.minTimeout  = 250,
-	.maxTimeout  = 300
+	.maxTimeout  = 300,
+	.minActivationDelay = 8,
+	.maxActivationDelay = 8,
 };
 
 void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
@@ -594,7 +634,7 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 	}
 
 	for( ParticleTrail *trail = m_lingeringTrailsHead, *next = nullptr; trail; trail = next ) { next = trail->next;
-		if( trail->particleFlock->numParticlesLeft ) {
+		if( trail->particleFlock->numActivatedParticles ) {
 			// Prevent an automatic disposal of the flock
 			trail->particleFlock->timeoutAt = std::numeric_limits<int64_t>::max();
 		} else {

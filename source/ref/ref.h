@@ -367,10 +367,6 @@ struct alignas( 16 ) Particle {
 		bool applyVertexDynLight { false };
 
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
-
-		// Keep the lifetime frac zero if lifetime is not greater than this value.
-		// This is useful for offsetting particle growth start point from some entity origin.
-		unsigned lifetimeOffsetMillis { 0 };
 	};
 
 	float origin[4];
@@ -385,6 +381,8 @@ struct alignas( 16 ) Particle {
 	float lifetimeFrac;
 
 	uint16_t lifetime;
+	uint16_t activationDelay;
+
 	uint8_t bounceCount;
 
 	static constexpr float kByteParamNormalizer = 1.0f / 128.0f;

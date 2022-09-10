@@ -79,8 +79,7 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 
 	auto *const flock = new( mem )ParticleFlock {
 		.particles = particles,
-		.numParticlesLeft = bin.maxParticlesPerFlock,
-		.binIndex = binIndex,
+		.binIndex  = binIndex,
 		.shapeList = shapeList,
 	};
 
@@ -93,11 +92,30 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 										   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles ) {
 	const int64_t currTime = cg.time;
 	ParticleFlock *flock   = createFlock( binIndex, currTime );
-	const auto [timeoutAt, numParticles] = fillParticleFlock( std::addressof( flockParams ),
-															  flock->particles, maxParticles,
-															  std::addressof( appearanceRules ), &m_rng, currTime );
-	flock->timeoutAt               = timeoutAt;
-	flock->numParticlesLeft        = numParticles;
+
+	signed fillStride;
+	unsigned initialOffset, activatedCountMultiplier, delayedCountMultiplier;
+	if( flockParams.maxActivationDelay == 0 ) {
+		fillStride               = 1;
+		initialOffset            = 0;
+		activatedCountMultiplier = 1;
+		delayedCountMultiplier   = 0;
+	} else {
+		fillStride               = -1;
+		initialOffset            = maxParticles - 1;
+		activatedCountMultiplier = 0;
+		delayedCountMultiplier   = 1;
+	}
+
+	const FillFlockResult fillResult = fillParticleFlock( std::addressof( flockParams ),
+														  flock->particles + initialOffset,
+														  maxParticles, std::addressof( appearanceRules ),
+														  &m_rng, currTime, fillStride );
+
+	flock->timeoutAt               = fillResult.resultTimeout;
+	flock->numActivatedParticles   = fillResult.numParticles * activatedCountMultiplier;
+	flock->numDelayedParticles     = fillResult.numParticles * delayedCountMultiplier;
+	flock->delayedParticlesOffset  = ( initialOffset + 1 ) - fillResult.numParticles * delayedCountMultiplier;
 	flock->drag                    = flockParams.drag;
 	flock->restitution             = flockParams.restitution;
 	flock->hasRotatingParticles    = flockParams.minAngularVelocity != 0.0f || flockParams.maxAngularVelocity != 0.0f;
@@ -153,13 +171,13 @@ auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, u
 
 	// Don't let it evict anything
 	const int64_t currTime = std::numeric_limits<int64_t>::min();
-	ParticleFlock *flock = createFlock( binIndex, currTime );
+	ParticleFlock *flock   = createFlock( binIndex, currTime );
 
 	// Externally managed
-	flock->timeoutAt = std::numeric_limits<int64_t>::max();
-	flock->numParticlesLeft = 0;
-
-	flock->appearanceRules = rules;
+	flock->timeoutAt             = std::numeric_limits<int64_t>::max();
+	flock->numActivatedParticles = 0;
+	flock->numDelayedParticles   = 0;
+	flock->appearanceRules       = rules;
 
 	return flock;
 }
@@ -169,8 +187,8 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 						unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,
 						wsw::RandomGenerator *__restrict rng,
-						int64_t currTime )
-	-> std::pair<int64_t, unsigned> {
+						int64_t currTime, signed signedStride )
+	-> FillFlockResult {
 	const vec3_t initialOrigin {
 		params->origin[0] + params->offset[0],
 		params->origin[1] + params->offset[1],
@@ -198,6 +216,9 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 
 	assert( params->minAngularVelocity <= params->maxAngularVelocity );
 
+	assert( params->minActivationDelay <= params->maxActivationDelay );
+	assert( params->maxActivationDelay <= 10'000 );
+
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
 	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
@@ -209,6 +230,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool isSpherical          = params->stretchScale == 1.0f;
 	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
+	const bool hasVariableDelay     = params->minActivationDelay < params->maxActivationDelay;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -225,7 +247,8 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	assert( std::fabs( VectorLength( params->stretchDir ) - 1.0f ) < 1e-3f );
 
 	for( unsigned i = 0; i < numParticles; ++i ) {
-		Particle *const __restrict p = particles + i;
+		Particle *const __restrict p = particles + signedStride * (signed)i;
+
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
 
@@ -274,6 +297,11 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
 		p->bounceCount = 0;
 
+		p->activationDelay = params->minActivationDelay;
+		if( hasVariableDelay ) [[unlikely]] {
+			p->activationDelay += rng->nextBoundedFast( params->maxActivationDelay - params->minActivationDelay );
+		}
+
 		// TODO: Branchless?
 		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -302,7 +330,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		}
 	}
 
-	return { resultTimeout, numParticles };
+	return FillFlockResult { .resultTimeout = resultTimeout, .numParticles = numParticles };
 }
 
 auto fillParticleFlock( const ConicalFlockParams *__restrict params,
@@ -310,8 +338,8 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 						unsigned maxParticles,
 						const Particle::AppearanceRules *__restrict appearanceRules,
 						wsw::RandomGenerator *__restrict rng,
-						int64_t currTime )
-	-> std::pair<int64_t, unsigned> {
+						int64_t currTime, signed signedStride )
+	-> FillFlockResult {
 	const vec3_t initialOrigin {
 		params->origin[0] + params->offset[0],
 		params->origin[1] + params->offset[1],
@@ -344,6 +372,9 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 
 	assert( params->minAngularVelocity <= params->maxAngularVelocity );
 
+	assert( params->minActivationDelay <= params->maxActivationDelay );
+	assert( params->maxActivationDelay <= 10'000 );
+
 	// TODO: Supply cosine values as parameters?
 
 	float maxZ = 1.0f;
@@ -364,6 +395,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	const bool hasMultipleColors    = appearanceRules->colors.size() > 1;
 	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
 	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
+	const bool hasVariableDelay     = params->maxActivationDelay != params->minActivationDelay;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -379,7 +411,8 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 
 	// TODO: Make cached conical samples for various angles?
 	for( unsigned i = 0; i < numParticles; ++i ) {
-		Particle *const __restrict p = particles + i;
+		Particle *const __restrict p = particles + signedStride * (signed)i;
+
 		Vector4Set( p->oldOrigin, initialOrigin[0], initialOrigin[1], initialOrigin[2], 0.0f );
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
 
@@ -414,6 +447,11 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
 		p->bounceCount = 0;
 
+		p->activationDelay = params->minActivationDelay;
+		if( hasVariableDelay ) [[unlikely]] {
+			p->activationDelay += rng->nextBoundedFast( params->maxActivationDelay - params->minActivationDelay );
+		}
+
 		// TODO: Branchless?
 		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
@@ -442,7 +480,7 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		}
 	}
 
-	return { resultTimeout, numParticles };
+	return FillFlockResult { .resultTimeout = resultTimeout, .numParticles = numParticles };
 }
 
 void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
@@ -456,8 +494,8 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = nextFlock ) {
 			nextFlock = flock->next;
 			if( currTime < flock->timeoutAt ) [[likely]] {
-				// Otherwise, the flock could be awaiting filling, don't modify its timeout
-				if( flock->numParticlesLeft ) [[likely]] {
+				// Otherwise, the flock could be awaiting filling externally, don't modify its timeout
+				if( flock->numActivatedParticles + flock->numDelayedParticles > 0 ) [[likely]] {
 					if( flock->shapeList ) {
 						simulate( flock, &m_rng, currTime, deltaSeconds );
 					} else {
@@ -472,7 +510,7 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 
 	for( FlocksBin &bin: m_bins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
-			if( const unsigned numParticles = flock->numParticlesLeft ) [[likely]] {
+			if( const unsigned numParticles = flock->numActivatedParticles ) [[likely]] {
 				request->addParticles( flock->mins, flock->maxs, flock->appearanceRules, flock->particles, numParticles );
 				const Particle::AppearanceRules &rules = flock->appearanceRules;
 				if( !rules.lightProps.empty() ) [[unlikely]] {
@@ -494,10 +532,10 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 
 void ParticleSystem::tryAddingLight( int64_t currTime, ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
 	const Particle::AppearanceRules &rules = flock->appearanceRules;
-	assert( flock->numParticlesLeft );
+	assert( flock->numActivatedParticles );
 	assert( rules.lightProps.size() == 1 || rules.lightProps.size() == rules.colors.size() );
 
-	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numParticlesLeft;
+	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numActivatedParticles;
 	const Particle &particle = flock->particles[flock->lastLitParticleIndex];
 	assert( particle.lifetimeFrac >= 0.0f && particle.lifetimeFrac <= 1.0f );
 
@@ -516,12 +554,12 @@ void ParticleSystem::tryAddingLight( int64_t currTime, ParticleFlock *flock, Dra
 }
 
 void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float deltaSeconds, vec3_t resultBounds[2] ) {
-	assert( flock->numParticlesLeft );
+	assert( flock->numActivatedParticles );
 
 	BoundsBuilder boundsBuilder;
 
 	if( flock->drag > 0.0f ) {
-		for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
+		for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
 			Particle *const __restrict particle = flock->particles + i;
 			if( const float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
 				const float rcpSpeed = Q_RSqrt( squareSpeed );
@@ -544,7 +582,7 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 			boundsBuilder.addPoint( particle->origin );
 		}
 	} else {
-		for( unsigned i = 0; i < flock->numParticlesLeft; ++i ) {
+		for( unsigned i = 0; i < flock->numActivatedParticles; ++i ) {
 			Particle *const __restrict particle = flock->particles + i;
 			VectorMA( particle->velocity, deltaSeconds, particle->accel, particle->velocity );
 			VectorMA( particle->oldOrigin, deltaSeconds, particle->velocity, particle->origin );
@@ -561,13 +599,11 @@ void ParticleSystem::runStepKinematics( ParticleFlock *__restrict flock, float d
 	boundsBuilder.storeToWithAddedEpsilon( resultBounds[0], resultBounds[1] );
 }
 
-
 [[nodiscard]]
 static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle &__restrict particle,
 												const Particle::AppearanceRules &__restrict rules ) -> float {
-	assert( (unsigned)rules.lifetimeOffsetMillis < (unsigned)particle.lifetime );
-	const auto offset                 = (int)rules.lifetimeOffsetMillis;
-	const auto correctedDuration      = (int)particle.lifetime - offset;
+	const auto offset                 = (int)particle.activationDelay;
+	const auto correctedDuration      = wsw::max( 1, particle.lifetime - offset );
 	const auto lifetimeSoFar          = (int)( currTime - particle.spawnTime );
 	const auto correctedLifetimeSoFar = wsw::max( 0, lifetimeSoFar - offset );
 	return (float)correctedLifetimeSoFar * Q_Rcp( (float)correctedDuration );
@@ -575,7 +611,20 @@ static inline auto computeParticleLifetimeFrac( int64_t currTime, const Particle
 
 void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGenerator *__restrict rng,
 							   int64_t currTime, float deltaSeconds ) {
-	assert( flock->shapeList && flock->numParticlesLeft );
+	assert( flock->shapeList && flock->numActivatedParticles + flock->numDelayedParticles > 0 );
+
+	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
+	if( const auto maybeTimeoutOfDelayedParticles = activateDelayedParticles( flock, currTime ) ) {
+		timeoutOfParticlesLeft = *maybeTimeoutOfDelayedParticles;
+	}
+
+	// Skip the further simulation if we do not have activated particles and did not manage to activate some.
+	if( !flock->numActivatedParticles ) {
+		// This also schedules disposal in case if all delayed particles
+		// got timed out prior to activation during the activation attempt.
+		flock->timeoutAt = timeoutOfParticlesLeft;
+		return;
+	}
 
 	vec3_t possibleBounds[2];
 	runStepKinematics( flock, deltaSeconds, possibleBounds );
@@ -591,9 +640,9 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 
 	trace_t trace;
 
-	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
-	for( unsigned i = 0; i < flock->numParticlesLeft; ) {
+	for( unsigned i = 0; i < flock->numActivatedParticles; ) {
 		Particle *const __restrict p = flock->particles + i;
+		assert( p->spawnTime + p->activationDelay <= currTime );
 		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			CM_ClipToShapeList( cl.cms, flock->shapeList, &trace, p->oldOrigin,
 								p->origin, vec3_origin, vec3_origin, MASK_SOLID );
@@ -655,26 +704,25 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 
 		// Dispose this particle
 		// TODO: Avoid this memcpy call by copying components directly via intrinsics
-		--flock->numParticlesLeft;
-		flock->particles[i] = flock->particles[flock->numParticlesLeft];
+		--flock->numActivatedParticles;
+		flock->particles[i] = flock->particles[flock->numActivatedParticles];
 	}
 
-	if( flock->numParticlesLeft ) {
-		flock->timeoutAt = timeoutOfParticlesLeft;
-	} else {
-		// Dispose next frame
-		flock->timeoutAt = 0;
-	}
+	flock->timeoutAt = timeoutOfParticlesLeft;
 }
 
 void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, int64_t currTime, float deltaSeconds ) {
-	assert( !flock->shapeList && flock->numParticlesLeft );
+	assert( !flock->shapeList && flock->numActivatedParticles + flock->numDelayedParticles > 0 );
 
 	auto timeoutOfParticlesLeft = std::numeric_limits<int64_t>::min();
+	if( const auto maybeTimeoutOfDelayedParticles = activateDelayedParticles( flock, currTime ) ) {
+		timeoutOfParticlesLeft = *maybeTimeoutOfDelayedParticles;
+	}
 
 	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < flock->numParticlesLeft; ) {
+	for( unsigned i = 0; i < flock->numActivatedParticles; ) {
 		Particle *const __restrict p = flock->particles + i;
+		assert( p->spawnTime + p->activationDelay <= currTime );
 		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
 			// TODO: Two origins are redundant for non-clipped particles
 			// TODO: Simulate drag
@@ -695,13 +743,13 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 
 			++i;
 		} else {
-			flock->numParticlesLeft--;
-			flock->particles[i] = flock->particles[flock->numParticlesLeft];
+			flock->numActivatedParticles--;
+			flock->particles[i] = flock->particles[flock->numActivatedParticles];
 		}
 	}
 
 	// We still have to compute and store bounds as they're used by the renderer culling systems
-	if( flock->numParticlesLeft ) {
+	if( flock->numActivatedParticles ) {
 		vec3_t possibleMins, possibleMaxs;
 		boundsBuilder.storeToWithAddedEpsilon( possibleMins, possibleMaxs );
 		// TODO: Let the BoundsBuilder store 4-component vectors
@@ -715,4 +763,48 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 	}
 
 	flock->timeoutAt = timeoutOfParticlesLeft;
+}
+
+auto ParticleSystem::activateDelayedParticles( ParticleFlock *flock, int64_t currTime ) -> std::optional<int64_t> {
+	int64_t timeoutOfDelayedParticles = 0;
+
+	// We must keep the delayed particles chunk "right-aligned" within the particles buffer,
+	// so the data of delayed particles does not overlap with the data of activated ones.
+
+	// Check the overlap invariant
+	assert( !flock->numDelayedParticles || flock->numActivatedParticles <= flock->delayedParticlesOffset );
+
+	const unsigned endIndexInBuffer = flock->delayedParticlesOffset + flock->numDelayedParticles;
+	for( unsigned indexInBuffer = flock->delayedParticlesOffset; indexInBuffer < endIndexInBuffer; ++indexInBuffer ) {
+		Particle *__restrict p = flock->particles + indexInBuffer;
+		bool disposeParticle = true;
+		if( const int64_t timeoutAt = p->spawnTime + p->lifetime; timeoutAt > currTime ) [[likely]] {
+			if( const int64_t activationAt = p->spawnTime + p->activationDelay; activationAt <= currTime ) {
+				//Com_Printf( "Activating: Copying delayed particle %d to %d\n", indexInBuffer, flock->numActivatedParticles );
+				// Append it to the array of activated particles
+				flock->particles[flock->numActivatedParticles++] = *p;
+			} else {
+				// The particle is kept delayed.
+				// Calculate the result timeout, so it affects timeout of the entire flock.
+				// (Newly activated particles contribute to the flock timeout in their simulation subroutines).
+				timeoutOfDelayedParticles = wsw::max( timeoutAt, timeoutOfDelayedParticles );
+				disposeParticle = false;
+			}
+		}
+		if( disposeParticle ) {
+			// Overwrite the particle data at the current index by the left-most one
+			// This condition also prevents overwriting the back of the activated particles span
+			// (that is currently harmless, but it's better to keep it correct)
+			if( indexInBuffer != flock->delayedParticlesOffset ) {
+				flock->particles[indexInBuffer] = flock->particles[flock->delayedParticlesOffset];
+			}
+			// Advance the left boundary
+			flock->delayedParticlesOffset++;
+			flock->numDelayedParticles--;
+		}
+	}
+
+	assert( !flock->numDelayedParticles || flock->numActivatedParticles <= flock->delayedParticlesOffset );
+
+	return timeoutOfDelayedParticles ? std::optional( timeoutOfDelayedParticles ) : std::nullopt;
 }
