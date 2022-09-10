@@ -34,6 +34,7 @@ struct EllipsoidalFlockParams {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
+	unsigned startBounceCounterDelay { 0 };
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
@@ -59,6 +60,7 @@ struct ConicalFlockParams {
 	float maxPercentage { 1.0f };
 	unsigned minTimeout { 300u };
 	unsigned maxTimeout { 700u };
+	unsigned startBounceCounterDelay { 0 };
 };
 
 [[nodiscard]]
@@ -87,6 +89,7 @@ struct alignas( 16 ) ParticleFlock {
 	unsigned numParticlesLeft;
 	unsigned binIndex;
 	unsigned minBounceCount { 0 }, maxBounceCount { 0 };
+	unsigned startBounceCounterDelay { 0 };
 	float keepOnImpactProbability { 1.0f };
 	CMShapeList *shapeList;
 	// TODO: Make links work with "m_"

@@ -96,14 +96,15 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	const auto [timeoutAt, numParticles] = fillParticleFlock( std::addressof( flockParams ),
 															  flock->particles, maxParticles,
 															  std::addressof( appearanceRules ), &m_rng, currTime );
-	flock->timeoutAt            = timeoutAt;
-	flock->numParticlesLeft     = numParticles;
-	flock->drag                 = flockParams.drag;
-	flock->restitution          = flockParams.restitution;
-	flock->hasRotatingParticles = flockParams.minAngularVelocity != 0.0f || flockParams.maxAngularVelocity != 0.0f;
-	flock->minBounceCount       = flockParams.minBounceCount;
-	flock->maxBounceCount       = flockParams.maxBounceCount;
-	flock->appearanceRules      = appearanceRules;
+	flock->timeoutAt               = timeoutAt;
+	flock->numParticlesLeft        = numParticles;
+	flock->drag                    = flockParams.drag;
+	flock->restitution             = flockParams.restitution;
+	flock->hasRotatingParticles    = flockParams.minAngularVelocity != 0.0f || flockParams.maxAngularVelocity != 0.0f;
+	flock->minBounceCount          = flockParams.minBounceCount;
+	flock->maxBounceCount          = flockParams.maxBounceCount;
+	flock->startBounceCounterDelay = flockParams.startBounceCounterDelay;
+	flock->appearanceRules         = appearanceRules;
 
 	if( flock->minBounceCount < flock->maxBounceCount ) {
 		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
@@ -606,13 +607,17 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 			}
 
 			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
-				p->bounceCount++;
-
 				bool keepTheParticle = true;
-				if( p->bounceCount > flock->maxBounceCount ) {
-					keepTheParticle = false;
-				} else if( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
-					keepTheParticle = rng->tryWithChance( flock->keepOnImpactProbability );
+				// Skip checking/updating the bounce counter during startBounceCounterDelay from spawn.
+				// This helps with particles that should not normally bounce but happen to touch surfaces at start.
+				// This condition always holds for a zero skipBounceCounterDelay.
+				if( p->spawnTime + flock->startBounceCounterDelay <= currTime ) [[likely]] {
+					p->bounceCount++;
+					if ( p->bounceCount > flock->maxBounceCount ) {
+						keepTheParticle = false;
+					} else if( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
+						keepTheParticle = rng->tryWithChance( flock->keepOnImpactProbability );
+					}
 				}
 
 				if( keepTheParticle ) [[likely]]  {
