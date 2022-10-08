@@ -1703,20 +1703,39 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 
 void R_SubmitComplexPolysToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
 									const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
-	mesh_t mesh;
+	constexpr auto maxStorageVertices = 256;
+	constexpr auto maxStorageIndices  = ( 3 * maxStorageVertices ) / 2;
+
+	// TODO: Point to the dynamic stream memory
+	alignas( 16 ) vec4_t positions[maxStorageVertices];
+	alignas( 16 ) vec2_t texCoords[maxStorageVertices];
+	alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
+	alignas( 16 ) uint16_t indices[maxStorageIndices];
 
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *__restrict poly = (const ComplexPoly *)sds.drawSurf;
 
+		// This call is more useful if dynamic stream memory is used directly
+		// (we can flush the existing buffer if needed and write to now-free space).
+		const auto [maxPolyVertices, maxPolyIndices] = poly->getStorageRequirements();
+		if( maxPolyVertices > maxStorageVertices || maxPolyIndices > maxStorageIndices ) [[unlikely]] {
+			continue;
+		}
+
+		const auto [numPolyVertices, numPolyIndices] = poly->fillMeshBuffers( fsh->viewOrigin, fsh->viewAxis,
+																			  positions, texCoords, colors, indices );
+
+		// TODO: Get rid of "mesh", write to the dynamic stream memory directly
+
+		mesh_t mesh;
 		memset( &mesh, 0, sizeof( mesh ) );
 
-		mesh.elems = poly->indices;
-		mesh.numElems = poly->numIndices;
-		mesh.numVerts = poly->numVertices;
-		mesh.xyzArray = poly->positions;
-		mesh.normalsArray = poly->normals;
-		mesh.stArray = poly->texcoords;
-		mesh.colorsArray[0] = poly->colors;
+		mesh.elems          = indices;
+		mesh.numElems       = numPolyIndices;
+		mesh.numVerts       = numPolyVertices;
+		mesh.xyzArray       = positions;
+		mesh.stArray        = texCoords;
+		mesh.colorsArray[0] = colors;
 
 		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 	}

@@ -41,28 +41,51 @@ auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBe
 	assert( !m_curvedLaserBeamsAllocator.isFull() );
 	auto *effect = new( m_curvedLaserBeamsAllocator.allocOrNull() )CurvedBeamEffect;
 	wsw::link( effect, &m_curvedLaserBeamsHead );
-	effect->poly.material    = material;
-	effect->poly.numVertices = 0;
-	effect->poly.numIndices  = 0;
-	effect->poly.positions   = effect->storageOfPositions;
-	effect->poly.colors      = effect->storageOfColors;
-	effect->poly.texcoords   = effect->storageOfTexCoords;
-	effect->poly.indices     = effect->storageOfIndices;
-	effect->poly.normals     = nullptr;
+	effect->poly.material = material;
 	return effect;
 }
 
-void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float *color, float width,
-												float tileLength, std::span<const vec3_t> points ) {
-	static_assert( kMaxCurvedBeamSegments == MAX_CURVELASERBEAM_SUBDIVISIONS );
-	assert( points.size() <= kMaxCurvedBeamSegments + 1 );
-
+void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float *color, float width, float tileLength,
+												std::span<const vec3_t> points ) {
 	auto *const __restrict effect = (CurvedBeamEffect *)handle;
 	assert( (uintptr_t)effect == (uintptr_t)handle );
+	assert( points.size() <= std::size( effect->poly.points ) );
+
+	Vector4Copy( color, effect->poly.color );
+	effect->poly.width      = width;
+	effect->poly.tileLength = tileLength;
+	effect->poly.numPoints  = (unsigned)points.size();
+	std::memcpy( effect->poly.points, points.data(), sizeof( vec3_t ) * points.size() );
+
+	if( !points.empty() ) [[likely]] {
+		BoundsBuilder boundsBuilder;
+		for( const float *point: points ) {
+			boundsBuilder.addPoint( point );
+		}
+		// Consider this to be a good estimation
+		boundsBuilder.storeToWithAddedEpsilon( effect->poly.cullMins, effect->poly.cullMaxs, width + 1.0f );
+	}
+}
+
+auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements() const -> std::pair<unsigned, unsigned> {
+	assert( numPoints );
+	return { 2 * 4 * numPoints, 2 * 6 * numPoints };
+}
+
+[[nodiscard]]
+auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict,
+														 const float *__restrict,
+														 vec4_t *__restrict positions,
+														 vec2_t *__restrict texCoords,
+														 byte_vec4_t *__restrict colors,
+														 uint16_t *__restrict indices ) const
+	-> std::pair<unsigned, unsigned> {
+	assert( numPoints );
+
+	assert( std::isfinite( width ) && width > 0 );
+	assert( std::isfinite( tileLength ) && tileLength > 0 );
 
 	assert( tileLength > 0.0f );
-
-	BoundsBuilder boundsBuilder;
 
 	const byte_vec4_t byteColor {
 		( uint8_t )( color[0] * 255 ),
@@ -71,8 +94,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 		( uint8_t )( color[3] * 255 )
 	};
 
-	effect->poly.numVertices = 0;
-	effect->poly.numIndices  = 0;
+	unsigned numVertices = 0;
+	unsigned numIndices  = 0;
 
 	const float ymin = -0.5f * width;
 	const float ymax = +0.5f * width;
@@ -80,13 +103,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	float totalLengthSoFar    = 0.0f;
 	const float rcpTileLength = Q_Rcp( tileLength );
 
-	vec4_t *__restrict positions   = effect->poly.positions;
-	byte_vec4_t *__restrict colors = effect->poly.colors;
-	vec2_t *__restrict texcoords   = effect->poly.texcoords;
-	uint16_t *__restrict indices   = effect->poly.indices;
-
 	// TODO:!!!!!!!!! Don't submit separate quads, utilize adjacency
-	for( unsigned segmentNum = 0; segmentNum + 1 < points.size(); ++segmentNum ) {
+	for( unsigned segmentNum = 0; segmentNum + 1 < numPoints; ++segmentNum ) {
 		const float *const from = points[segmentNum + 0];
 		const float *const to   = points[segmentNum + 1];
 		const float squaredLength = DistanceSquared( from, to );
@@ -105,7 +123,7 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 		const float stx = totalLengthSoFar * rcpTileLength;
 
 		for( unsigned planeNum = 0; planeNum < 2; ++planeNum ) {
-			const unsigned firstSegmentIndex = effect->poly.numVertices;
+			const unsigned firstSegmentIndex = numVertices;
 			VectorSet( indices + 0, firstSegmentIndex + 0, firstSegmentIndex + 1, firstSegmentIndex + 2 );
 			VectorSet( indices + 3, firstSegmentIndex + 0, firstSegmentIndex + 2, firstSegmentIndex + 3 );
 
@@ -121,23 +139,23 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 				Vector4Copy( positions[-1 - 4], positions[0] );
 				Vector4Copy( positions[-2 - 4], positions[1] );
 
-				Vector2Copy( texcoords[-1 - 4], texcoords[0] );
-				Vector2Copy( texcoords[-2 - 4], texcoords[1] );
+				Vector2Copy( texCoords[-1 - 4], texCoords[0] );
+				Vector2Copy( texCoords[-2 - 4], texCoords[1] );
 			} else {
 				firstUntransformedVertexInQuad = 0;
 
 				Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
 				Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
 
-				Vector2Set( texcoords[0], 0.0f, 0.0f );
-				Vector2Set( texcoords[1], 0.0f, 1.0f );
+				Vector2Set( texCoords[0], 0.0f, 0.0f );
+				Vector2Set( texCoords[1], 0.0f, 1.0f );
 			}
 
 			Vector4Set( positions[2], xmax, 0.0f, ymax, 1.0f );
 			Vector4Set( positions[3], xmax, 0.0f, ymin, 1.0f );
 
-			Vector2Set( texcoords[2], stx, 1.0f );
-			Vector2Set( texcoords[3], stx, 0.0f );
+			Vector2Set( texCoords[2], stx, 1.0f );
+			Vector2Set( texCoords[3], stx, 0.0f );
 
 			vec3_t dir, angles;
 			VectorSubtract( to, from, dir );
@@ -153,20 +171,17 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 				vec3_t tmp;
 				Matrix3_TransformVector( localAxis, positions[vertexInQuad], tmp );
 				VectorAdd( tmp, from, positions[vertexInQuad] );
-				boundsBuilder.addPoint( positions[vertexInQuad] );
 			}
 
-			effect->poly.numVertices += 4;
-			effect->poly.numIndices += 6;
+			numVertices += 4;
+			numIndices += 6;
 
-			positions += 4, colors += 4, texcoords += 4;
+			positions += 4, colors += 4, texCoords += 4;
 			indices += 6;
 		}
 	}
 
-	if( effect->poly.numVertices ) [[likely]] {
-		boundsBuilder.storeToWithAddedEpsilon( effect->poly.mins, effect->poly.maxs );
-	}
+	return { numVertices, numIndices };
 }
 
 void PolyEffectsSystem::destroyCurvedBeamEffect( CurvedBeam *handle ) {
@@ -349,7 +364,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
-		if( beam->poly.material && beam->poly.numVertices && beam->poly.numIndices ) [[likely]] {
+		if( beam->poly.material && beam->poly.numPoints ) [[likely]] {
 			request->addPoly( &beam->poly );
 		}
 	}

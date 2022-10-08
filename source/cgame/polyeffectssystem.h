@@ -75,19 +75,27 @@ private:
 		QuadPoly poly;
 	};
 
-	static constexpr unsigned kMaxCurvedBeamSegments = 24;
+	struct CurvedBeamPoly : public ComplexPoly {
+		vec4_t color;
+		float width;
+		float tileLength;
+		unsigned numPoints;
+		vec3_t points[24 + 1];
+
+		[[nodiscard]]
+		auto getStorageRequirements() const -> std::pair<unsigned, unsigned> override;
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  vec4_t *__restrict positions,
+							  vec2_t *__restrict texCoords,
+							  byte_vec4_t *__restrict colors,
+							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;
+	};
 
 	struct CurvedBeamEffect : public CurvedBeam {
 		CurvedBeamEffect *prev { nullptr }, *next { nullptr };
-		ComplexPoly poly;
-
-		static constexpr unsigned kNumPlanes = 2;
-
-		// TODO: We don't need that much for adjacent quads
-		vec4_t storageOfPositions[kNumPlanes * kMaxCurvedBeamSegments * 4];
-		vec2_t storageOfTexCoords[kNumPlanes * kMaxCurvedBeamSegments * 4];
-		byte_vec4_t storageOfColors[kNumPlanes * kMaxCurvedBeamSegments * 4];
-		uint16_t storageOfIndices[kNumPlanes * kMaxCurvedBeamSegments * 6];
+		CurvedBeamPoly poly;
 	};
 
 	struct TransientBeamEffect {

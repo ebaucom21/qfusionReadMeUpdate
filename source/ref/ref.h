@@ -99,13 +99,18 @@ struct QuadPoly {
 
 struct ComplexPoly {
 	struct shader_s *material;
-	vec4_t *positions;
-	vec4_t *normals;
-	vec2_t *texcoords;
-	byte_vec4_t *colors;
-	uint16_t *indices;
-	unsigned numVertices, numIndices;
-	float mins[4], maxs[4];
+	float cullMins[4], cullMaxs[4];
+
+	virtual ~ComplexPoly() = default;
+	[[nodiscard]]
+	virtual auto getStorageRequirements() const -> std::pair<unsigned, unsigned> = 0;
+	[[nodiscard]]
+	virtual auto fillMeshBuffers( const float *__restrict viewOrigin,
+								  const float *__restrict viewAxis,
+								  vec4_t *__restrict positions,
+								  vec2_t *__restrict texCoords,
+								  byte_vec4_t *__restrict colors,
+								  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> = 0;
 };
 
 typedef struct {

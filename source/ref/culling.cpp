@@ -990,7 +990,7 @@ auto Frontend::cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
 	for( unsigned i = 0; i < numPolys; ++i ) {
 		const ComplexPoly *const poly = polys[i];
 
-		LOAD_BOX_COMPONENTS( poly->mins, poly->maxs );
+		LOAD_BOX_COMPONENTS( poly->cullMins, poly->cullMaxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
 		if( nonZeroIfFullyOutside == 0 ) {
 			bool occluded = false;
