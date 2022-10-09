@@ -69,11 +69,11 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 
 auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements() const -> std::pair<unsigned, unsigned> {
 	assert( numPoints );
-	return { 2 * 4 * numPoints, 2 * 6 * numPoints };
+	return { 4 * numPoints, 6 * numPoints };
 }
 
 [[nodiscard]]
-auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict,
+auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict viewOrigin,
 														 const float *__restrict,
 														 vec4_t *__restrict positions,
 														 vec2_t *__restrict texCoords,
@@ -94,91 +94,79 @@ auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict
 		( uint8_t )( color[3] * 255 )
 	};
 
-	unsigned numVertices = 0;
-	unsigned numIndices  = 0;
-
-	const float ymin = -0.5f * width;
-	const float ymax = +0.5f * width;
+	bool hasValidPrevSegment = false;
+	unsigned numVertices = 0, numIndices = 0;
 
 	float totalLengthSoFar    = 0.0f;
 	const float rcpTileLength = Q_Rcp( tileLength );
+	const float halfWidth     = 0.5f * width;
 
-	// TODO:!!!!!!!!! Don't submit separate quads, utilize adjacency
+	// Note: we have to submit separate quads as some segments could be discarded
 	for( unsigned segmentNum = 0; segmentNum + 1 < numPoints; ++segmentNum ) {
 		const float *const from = points[segmentNum + 0];
 		const float *const to   = points[segmentNum + 1];
-		const float squaredLength = DistanceSquared( from, to );
+
+		const float squareSegmentLength = DistanceSquared( from, to );
 		// Interrupting in this case seems to be the most reasonable option.
-		if( squaredLength < 1.0f ) [[unlikely]] {
+		if( squareSegmentLength < 1.0f ) [[unlikely]] {
 			break;
 		}
 
-		const float rcpLength = Q_RSqrt( squaredLength );
-		const float length = Q_Rcp( rcpLength );
+		const float rcpSegmentLength = Q_RSqrt( squareSegmentLength );
 
-		const float xmin = 0.0f;
-		const float xmax = length;
+		vec3_t segmentDir;
+		VectorSubtract( to, from, segmentDir );
+		VectorScale( segmentDir, rcpSegmentLength, segmentDir );
 
-		totalLengthSoFar += length;
-		const float stx = totalLengthSoFar * rcpTileLength;
+		vec3_t mid, viewToMid, right;
+		VectorAvg( from, to, mid );
 
-		for( unsigned planeNum = 0; planeNum < 2; ++planeNum ) {
-			const unsigned firstSegmentIndex = numVertices;
-			VectorSet( indices + 0, firstSegmentIndex + 0, firstSegmentIndex + 1, firstSegmentIndex + 2 );
-			VectorSet( indices + 3, firstSegmentIndex + 0, firstSegmentIndex + 2, firstSegmentIndex + 3 );
-
-			for( unsigned i = 0; i < 4; ++i ) {
-				Vector4Copy( byteColor, colors[i] );
-			}
-
-			unsigned firstUntransformedVertexInQuad;
-			if( segmentNum ) [[likely]] {
-				firstUntransformedVertexInQuad = 2;
-
-				// TODO: Don't add copies of previous vertices, utilize indexing
-				Vector4Copy( positions[-1 - 4], positions[0] );
-				Vector4Copy( positions[-2 - 4], positions[1] );
-
-				Vector2Copy( texCoords[-1 - 4], texCoords[0] );
-				Vector2Copy( texCoords[-2 - 4], texCoords[1] );
-			} else {
-				firstUntransformedVertexInQuad = 0;
-
-				Vector4Set( positions[0], xmin, 0.0f, ymin, 1.0f );
-				Vector4Set( positions[1], xmin, 0.0f, ymax, 1.0f );
-
-				Vector2Set( texCoords[0], 0.0f, 0.0f );
-				Vector2Set( texCoords[1], 0.0f, 1.0f );
-			}
-
-			Vector4Set( positions[2], xmax, 0.0f, ymax, 1.0f );
-			Vector4Set( positions[3], xmax, 0.0f, ymin, 1.0f );
-
-			Vector2Set( texCoords[2], stx, 1.0f );
-			Vector2Set( texCoords[3], stx, 0.0f );
-
-			vec3_t dir, angles;
-			VectorSubtract( to, from, dir );
-			VectorScale( dir, rcpLength, dir );
-			VecToAngles( dir, angles );
-			angles[ROLL] += 90.0f * (float)planeNum;
-
-			mat3_t axis, localAxis;
-			AnglesToAxis( angles, axis );
-			Matrix3_Transpose( axis, localAxis );
-
-			for( unsigned vertexInQuad = firstUntransformedVertexInQuad; vertexInQuad < 4; ++vertexInQuad ) {
-				vec3_t tmp;
-				Matrix3_TransformVector( localAxis, positions[vertexInQuad], tmp );
-				VectorAdd( tmp, from, positions[vertexInQuad] );
-			}
-
-			numVertices += 4;
-			numIndices += 6;
-
-			positions += 4, colors += 4, texCoords += 4;
-			indices += 6;
+		VectorSubtract( mid, viewOrigin, viewToMid );
+		CrossProduct( viewToMid, segmentDir, right );
+		const float squareRightLength = VectorLengthSquared( right );
+		if( squareRightLength < wsw::square( 0.001f ) ) [[unlikely]] {
+			hasValidPrevSegment = false;
+			continue;
 		}
+
+		const float rcpRightLength = Q_RSqrt( squareRightLength );
+		VectorScale( right, rcpRightLength, right );
+
+		if( hasValidPrevSegment ) [[likely]] {
+			VectorCopy( positions[-1], positions[0] );
+			VectorCopy( positions[-2], positions[1] );
+		} else {
+			VectorMA( from, +halfWidth, right, positions[0] );
+			VectorMA( from, -halfWidth, right, positions[1] );
+		}
+
+		VectorMA( to, -halfWidth, right, positions[2] );
+		VectorMA( to, +halfWidth, right, positions[3] );
+		positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
+
+		VectorSet( indices + 0, numVertices + 0, numVertices + 1, numVertices + 2 );
+		VectorSet( indices + 3, numVertices + 0, numVertices + 2, numVertices + 3 );
+
+		for( unsigned i = 0; i < 4; ++i ) {
+			Vector4Copy( byteColor, colors[i] );
+		}
+
+		const float stx1 = totalLengthSoFar * rcpTileLength;
+		totalLengthSoFar += Q_Rcp( rcpSegmentLength );
+		const float stx2 = totalLengthSoFar * rcpTileLength;
+
+		Vector2Set( texCoords[0], stx1, 0.0f );
+		Vector2Set( texCoords[1], stx1, 1.0f );
+		Vector2Set( texCoords[2], stx2, 1.0f );
+		Vector2Set( texCoords[3], stx2, 0.0f );
+
+		numVertices += 4;
+		numIndices += 6;
+
+		positions += 4, colors += 4, texCoords += 4;
+		indices += 6;
+
+		hasValidPrevSegment = true;
 	}
 
 	return { numVertices, numIndices };
@@ -199,7 +187,6 @@ auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material ) -> Straig
 	effect->poly.material = material;
 	effect->poly.width    = 0.0f;
 	effect->poly.length   = 0.0f;
-	effect->poly.flags    = QuadPoly::XLike;
 	return effect;
 }
 
@@ -355,8 +342,6 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	effect->from[2] -= 18.0f;
 	VectorCopy( to, effect->to );
 	VectorCopy( dir, effect->poly.dir );
-	// TODO: autosprite
-	effect->poly.flags |= QuadPoly::XLike;
 	Vector4Copy( params.color, effect->poly.color );
 
 	wsw::link( effect, &m_tracerEffectsHead );

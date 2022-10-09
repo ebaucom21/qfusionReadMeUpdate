@@ -84,9 +84,6 @@ typedef struct fragment_s {
 } fragment_t;
 
 struct QuadPoly {
-	enum Flags : unsigned { XLike = 0x1 };
-
-	unsigned flags { 0 };
 	struct shader_s *material;
 	float color[4];
 	float from[3];

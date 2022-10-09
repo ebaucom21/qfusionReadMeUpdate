@@ -1619,85 +1619,65 @@ void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const ent
 
 void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog,
 								 const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
-	constexpr const unsigned kMaxPlanes = 2;
-	vec4_t positionsBuffer[kMaxPlanes * 4];
-	byte_vec4_t colorsBuffer[kMaxPlanes * 4];
-	vec2_t texcoordsBuffer[kMaxPlanes * 4];
-	uint16_t indicesBuffer[kMaxPlanes * 6];
+	uint16_t indices[6] { 0, 1, 2, 0, 2, 3 };
+
+	vec4_t positions[4];
+	byte_vec4_t colors[4];
+	vec2_t texCoords[4];
+
+	positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
 
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *__restrict p = (const QuadPoly *)sds.drawSurf;
 
-		const float xmin = 0.0f;
-		const float xmax = p->length;
-		const float ymin = -0.5f * p->width;
-		const float ymax = +0.5f * p->width;
-
 		float stx = 1.0f, sty = 1.0f;
-		if( p->tileLength > 0 && xmax > p->tileLength ) {
-			stx = xmax * Q_Rcp( p->tileLength );
+		if( p->tileLength > 0 && p->length > p->tileLength ) {
+			stx = p->length * Q_Rcp( p->tileLength );
 		}
 
-		Vector2Set( texcoordsBuffer[0], 0.0f, 0.0f );
-		Vector2Set( texcoordsBuffer[1], 0.0f, sty );
-		Vector2Set( texcoordsBuffer[2], stx, sty );
-		Vector2Set( texcoordsBuffer[3], stx, 0.0f );
+		Vector2Set( texCoords[0], 0.0f, 0.0f );
+		Vector2Set( texCoords[1], 0.0f, sty );
+		Vector2Set( texCoords[2], stx, sty );
+		Vector2Set( texCoords[3], stx, 0.0f );
 
-		colorsBuffer[0][0] = ( uint8_t )( p->color[0] * 255 );
-		colorsBuffer[0][1] = ( uint8_t )( p->color[1] * 255 );
-		colorsBuffer[0][2] = ( uint8_t )( p->color[2] * 255 );
-		colorsBuffer[0][3] = ( uint8_t )( p->color[3] * 255 );
+		colors[0][0] = ( uint8_t )( p->color[0] * 255 );
+		colors[0][1] = ( uint8_t )( p->color[1] * 255 );
+		colors[0][2] = ( uint8_t )( p->color[2] * 255 );
+		colors[0][3] = ( uint8_t )( p->color[3] * 255 );
+		Vector4Copy( colors[0], colors[1] );
+		Vector4Copy( colors[0], colors[2] );
+		Vector4Copy( colors[0], colors[3] );
 
-		unsigned numVertices = 0, numIndices = 0;
-		constexpr const float planeRollStep = 90.0f / (float)( kMaxPlanes - 1 );
-		const unsigned numPlanes = ( p->flags & QuadPoly::XLike ) ? kMaxPlanes : 1;
-		for( unsigned planeNum = 0; planeNum < numPlanes; ++planeNum ) {
-			uint16_t *const indices   = indicesBuffer + numIndices;
-			vec4_t *const positions   = positionsBuffer + numVertices;
-			byte_vec4_t *const colors = colorsBuffer + numVertices;
-			vec2_t *const texcoords   = texcoordsBuffer + numVertices;
+		vec3_t mid;
+		VectorAvg( p->from, p->to, mid );
 
-			VectorSet( indices + 0, 0 + numVertices, 1 + numVertices, 2 + numVertices );
-			VectorSet( indices + 3, 0 + numVertices, 2 + numVertices, 3 + numVertices );
+		assert( std::fabs( VectorLengthFast( p->dir ) - 1.0f ) < 1.01f );
+		vec3_t viewToMid, right;
+		VectorSubtract( mid, fsh->viewOrigin, viewToMid );
+		CrossProduct( viewToMid, p->dir, right );
+		if( const float squareLength = VectorLengthSquared( right ); squareLength > wsw::square( 0.001f ) ) [[likely]] {
+			const float rcpLength = Q_RSqrt( squareLength );
+			VectorScale( right, rcpLength, right );
 
-			Vector4Set( positions[0], xmin, 0, ymin, 1 );
-			Vector4Set( positions[1], xmin, 0, ymax, 1 );
-			Vector4Set( positions[2], xmax, 0, ymax, 1 );
-			Vector4Set( positions[3], xmax, 0, ymin, 1 );
+			const float halfWidth = 0.5f * p->width;
 
-			mat3_t axis, localAxis;
-			vec3_t angles;
-			VecToAngles( p->dir, angles );
-			angles[ROLL] += planeRollStep * (float)planeNum;
-			AnglesToAxis( angles, axis );
+			VectorMA( p->from, +halfWidth, right, positions[0] );
+			VectorMA( p->from, -halfWidth, right, positions[1] );
+			VectorMA( p->to, -halfWidth, right, positions[2] );
+			VectorMA( p->to, +halfWidth, right, positions[3] );
 
-			Matrix3_Transpose( axis, localAxis );
+			mesh_t mesh;
+			memset( &mesh, 0, sizeof( mesh ) );
 
-			for( unsigned i = 0; i < 4; ++i ) {
-				vec3_t perp;
-				Matrix3_TransformVector( localAxis, positions[i], perp );
-				VectorAdd( perp, p->from, positions[i] );
-				// Set the proper vertex color
-				Vector4Copy( colorsBuffer[0], colors[i] );
-				// Copy texcoords of the first plane
-				Vector2Copy( texcoordsBuffer[i], texcoords[i] );
-			}
+			mesh.elems          = indices;
+			mesh.numElems       = 6;
+			mesh.numVerts       = 4;
+			mesh.xyzArray       = positions;
+			mesh.stArray        = texCoords;
+			mesh.colorsArray[0] = colors;
 
-			numVertices += 4;
-			numIndices += 6;
+			RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 		}
-
-		mesh_t mesh;
-		memset( &mesh, 0, sizeof( mesh ) );
-
-		mesh.elems          = indicesBuffer;
-		mesh.numElems       = numIndices;
-		mesh.numVerts       = numVertices;
-		mesh.xyzArray       = positionsBuffer;
-		mesh.stArray        = texcoordsBuffer;
-		mesh.colorsArray[0] = colorsBuffer;
-
-		RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 	}
 }
 
@@ -1861,55 +1841,51 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 				}
 			}
 
-			const float ymin = -0.5f * width;
-			const float ymax = +0.5f * width;
-
-			float xmin, xmax;
-			mat3_t axis, localAxis;
+			vec3_t particleDir;
+			float fromFrac, toFrac;
 			if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
-				if( float squareDist = DistanceSquared( particle->origin, fsh->viewOrigin ); squareDist > 1.0f ) [[likely]] {
-					const float rcpSpeed = Q_RSqrt( squareSpeed );
-					const float rcpDist  = Q_RSqrt( squareDist );
-					if( particle->rotationAngle != 0.0f ) {
-						xmin = -0.5f * length, xmax = 0.5f * length;
-						vec3_t velocityDir;
-						VectorScale( particle->velocity, rcpSpeed, velocityDir );
-						assert( std::fabs( VectorLengthFast( velocityDir ) - 1.0f ) < 0.1f );
-						const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];
-						mat3_t rotationMatrix;
-						Matrix3_Rotate( axis_identity, particle->rotationAngle, rotationAxis, rotationMatrix );
-						Matrix3_TransformVector( rotationMatrix, velocityDir, &axis[AXIS_FORWARD] );
-					} else {
-						xmin = 0, xmax = length;
-						VectorScale( particle->velocity, rcpSpeed, &axis[AXIS_FORWARD] );
-					}
-					assert( std::fabs( VectorLengthFast( &axis[AXIS_FORWARD] ) - 1.0f ) < 0.1f );
-					VectorSubtract( fsh->viewOrigin, particle->origin, &axis[AXIS_RIGHT] );
-					VectorScale( &axis[AXIS_RIGHT], rcpDist, &axis[AXIS_RIGHT] );
-					CrossProduct( &axis[AXIS_FORWARD], &axis[AXIS_RIGHT], &axis[AXIS_UP] );
+				const float rcpSpeed = Q_RSqrt( squareSpeed );
+				if( particle->rotationAngle == 0.0f ) [[likely]] {
+					VectorScale( particle->velocity, rcpSpeed, particleDir );
+					fromFrac = 0.0f, toFrac = 1.0f;
 				} else {
-					continue;
+					vec3_t tmpParticleDir;
+					VectorScale( particle->velocity, rcpSpeed, tmpParticleDir );
+
+					mat3_t rotationMatrix;
+					const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];
+					Matrix3_Rotate( axis_identity, particle->rotationAngle, rotationAxis, rotationMatrix );
+					Matrix3_TransformVector( rotationMatrix, tmpParticleDir, particleDir );
+
+					fromFrac = -0.5f, toFrac = +0.5f;
 				}
 			} else {
 				continue;
 			}
 
-			Matrix3_Transpose( axis, localAxis );
+			assert( std::fabs( VectorLengthSquared( particleDir ) - 1.0f ) < 1.01f );
 
-			VectorSet( xyz[0], xmin, 0, ymin );
-			VectorSet( xyz[1], xmin, 0, ymax );
-			VectorSet( xyz[2], xmax, 0, ymax );
-			VectorSet( xyz[3], xmax, 0, ymin );
+			vec3_t from, to, mid;
+			VectorMA( particle->origin, fromFrac * length, particleDir, from );
+			VectorMA( particle->origin, toFrac * length, particleDir, to );
+			VectorAvg( from, to, mid );
 
-			vec3_t tmp[4];
-			Matrix3_TransformVector( localAxis, xyz[0], tmp[0] );
-			VectorAdd( tmp[0], particle->origin, xyz[0] );
-			Matrix3_TransformVector( localAxis, xyz[1], tmp[1] );
-			VectorAdd( tmp[1], particle->origin, xyz[1] );
-			Matrix3_TransformVector( localAxis, xyz[2], tmp[2] );
-			VectorAdd( tmp[2], particle->origin, xyz[2] );
-			Matrix3_TransformVector( localAxis, xyz[3], tmp[3] );
-			VectorAdd( tmp[3], particle->origin, xyz[3] );
+			vec3_t viewToMid, right;
+			VectorSubtract( mid, fsh->viewOrigin, viewToMid );
+			CrossProduct( viewToMid, particleDir, right );
+			if( const float squareLength = VectorLengthSquared( right ); squareLength > wsw::square( 0.001f ) ) [[likely]] {
+				const float rcpLength = Q_RSqrt( squareLength );
+				VectorScale( right, rcpLength, right );
+
+				const float halfWidth = 0.5f * width;
+
+				VectorMA( from, +halfWidth, right, xyz[0] );
+				VectorMA( from, -halfWidth, right, xyz[1] );
+				VectorMA( to, -halfWidth, right, xyz[2] );
+				VectorMA( to, +halfWidth, right, xyz[3] );
+			} else {
+				continue;
+			}
 		}
 
 		vec4_t colorBuffer;
