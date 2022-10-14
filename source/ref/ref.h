@@ -363,6 +363,8 @@ struct alignas( 16 ) Particle {
 		float widthSpread { 0.0f };
 		float radiusSpread { 0.0f };
 
+		float viewDirPartScale { 0.67f };
+
 		uint16_t lightFrameAffinityIndex { 0 };
 		uint16_t lightFrameAffinityModulo { 0 };
 

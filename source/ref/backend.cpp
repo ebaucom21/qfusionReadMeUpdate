@@ -1863,7 +1863,18 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 				continue;
 			}
 
-			assert( std::fabs( VectorLengthSquared( particleDir ) - 1.0f ) < 1.01f );
+			assert( std::fabs( VectorLengthSquared( particleDir ) - 1.0f ) < 0.1f );
+
+			// Reduce the viewDir-aligned part of the particleDir
+			const float *const __restrict viewDir = &fsh->viewAxis[AXIS_FORWARD];
+			assert( appearanceRules->viewDirPartScale >= 0.0f && appearanceRules->viewDirPartScale <= 1.0f );
+			const float viewDirCutScale = ( 1.0f - appearanceRules->viewDirPartScale ) * DotProduct( particleDir, viewDir );
+			if( std::fabs( viewDirCutScale ) < 0.999f ) [[likely]] {
+				VectorMA( particleDir, -viewDirCutScale, viewDir, particleDir );
+				VectorNormalizeFast( particleDir );
+			} else {
+				continue;
+			}
 
 			vec3_t from, to, mid;
 			VectorMA( particle->origin, fromFrac * length, particleDir, from );
