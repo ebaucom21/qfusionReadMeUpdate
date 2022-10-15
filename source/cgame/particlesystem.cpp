@@ -757,7 +757,7 @@ void ParticleSystem::simulateWithoutClipping( ParticleFlock *__restrict flock, i
 		VectorCopy( possibleMaxs, flock->maxs );
 		flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 	} else {
-		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::min();
+		constexpr float minVal = std::numeric_limits<float>::max(), maxVal = std::numeric_limits<float>::lowest();
 		Vector4Set( flock->mins, minVal, minVal, minVal, minVal );
 		Vector4Set( flock->maxs, maxVal, maxVal, maxVal, maxVal );
 	}

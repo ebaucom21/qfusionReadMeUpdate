@@ -264,7 +264,7 @@ float LandOnSavedAreasAction::SaveFilteredCandidateAreas( const edict_t *jumppad
 		savedLandingAreas.push_back( jumppadTargetAreaNum );
 	}
 
-	float maxAreaZ = std::numeric_limits<float>::min();
+	float maxAreaZ = std::numeric_limits<float>::lowest();
 	for( int areaNum: savedLandingAreas ) {
 		maxAreaZ = wsw::max( maxAreaZ, aasAreas[areaNum].mins[2] );
 	}

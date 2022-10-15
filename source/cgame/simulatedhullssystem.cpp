@@ -828,7 +828,7 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 	CM_ClipShapeList( cl.cms, shapeList, shapeList, verticesMins, verticesMaxs );
 
 	minZLastFrame = std::numeric_limits<float>::max();
-	maxZLastFrame = std::numeric_limits<float>::min();
+	maxZLastFrame = std::numeric_limits<float>::lowest();
 
 	// int type is used to mitigate possible branching while performing bool->float conversions
 	auto *const __restrict isVertexNonContacting          = (int *)alloca( sizeof( int ) * numVertices );

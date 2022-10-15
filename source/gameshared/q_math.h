@@ -500,7 +500,7 @@ class BoundingDopBuilder {
 public:
 	BoundingDopBuilder() noexcept {
 		constexpr float minsVal = std::numeric_limits<float>::max();
-		constexpr float maxsVal = std::numeric_limits<float>::min();
+		constexpr float maxsVal = std::numeric_limits<float>::lowest();
 
 		Vector4Set( m_mins + 0, minsVal, minsVal, minsVal, minsVal );
 		Vector4Set( m_maxs + 0, maxsVal, maxsVal, maxsVal, maxsVal );

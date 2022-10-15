@@ -176,7 +176,7 @@ void ToNumTest::test_parse_float() {
 		QVERIFY( holder.parse<float>() == std::nullopt );
 	}
 	{
-		auto val = std::numeric_limits<float>::min();
+		auto val = std::numeric_limits<float>::lowest();
 		auto parsed = convertAndParseBack<float>( val );
 		QVERIFY( parsed && fuzzyCompare( val, *parsed ) );
 	}

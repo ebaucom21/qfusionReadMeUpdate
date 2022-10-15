@@ -84,7 +84,7 @@ private:
 		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
 		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
 		float minZLastFrame { std::numeric_limits<float>::max() };
-		float maxZLastFrame { std::numeric_limits<float>::min() };
+		float maxZLastFrame { std::numeric_limits<float>::lowest() };
 
 		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
 		ExternalMesh meshSubmissionBuffer[1];

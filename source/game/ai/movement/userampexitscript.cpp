@@ -45,7 +45,7 @@ const int *TryFindBestInclinedFloorExitArea( PredictionContext *context, int ram
 	float lowestAreaHeight = std::numeric_limits<float>::max();
 	int highestAreaNum = 0;
 	int highestReachNum = 0;
-	float highestAreaHeight = std::numeric_limits<float>::min();
+	float highestAreaHeight = std::numeric_limits<float>::lowest();
 
 	const auto &rampAreaSettings = aasAreaSettings[rampAreaNum];
 	int reachNum = rampAreaSettings.firstreachablearea;

@@ -477,7 +477,7 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 	memset( loadbmodel->visleafs, 0, ( count + 1 ) * sizeof( *loadbmodel->visleafs ) );
 
 	constexpr float minsVal = std::numeric_limits<float>::max();
-	constexpr float maxsVal = std::numeric_limits<float>::min();
+	constexpr float maxsVal = std::numeric_limits<float>::lowest();
 
 	unsigned numVisLeafs = 0;
 	for( unsigned i = 0; i < count; i++ ) {
@@ -538,7 +538,7 @@ static void Mod_CalculateAutospriteBounds( msurface_t *surf, vec3_t mins, vec3_t
 	// find the longest axis
 	int longestAxis = 2;
 	vec3_t radius, center;
-	float maxDist = std::numeric_limits<float>::min();
+	float maxDist = std::numeric_limits<float>::lowest();
 	for( int i = 0; i < 3; i++ ) {
 		const float dist = maxs[i] - mins[i];
 		if( dist > maxDist ) {
