@@ -123,8 +123,9 @@ static bool findWaterHitPointBetweenTwoPoints( const float *checkFromPoint, cons
 
 static void addUnderwaterSplashImpactsForKnownWaterZ( const float *fireOrigin, float radius, float waterZ,
 													  wsw::RandomGenerator *rng, int impactContents,
-													  wsw::StaticVector<Impact, 12> *impacts ) {
+													  wsw::StaticVector<LiquidImpact, 12> *impacts ) {
 	assert( waterZ - fireOrigin[2] > 0.0f && "Make sure directions are normalizable" );
+	assert( radius > 0.0f );
 
 	// TODO: Build a shape list once and clip against it in the loop
 
@@ -135,16 +136,24 @@ static void addUnderwaterSplashImpactsForKnownWaterZ( const float *fireOrigin, f
 		const float phi    = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
 		const float r      = rng->nextFloat( 0.1f * radius, 1.0f * radius );
 		const float sinPhi = std::sin( phi ), cosPhi = std::cos( phi );
-		const vec3_t traceStart { fireOrigin[0] + r * sinPhi, fireOrigin[1] + r * cosPhi, waterZ + 1.0f };
+		const vec3_t startPoint { fireOrigin[0] + r * sinPhi, fireOrigin[1] + r * cosPhi, waterZ + 1.0f };
 
 		trace_t trace;
-		CG_Trace( &trace, traceStart, vec3_origin, vec3_origin, fireOrigin, 0, MASK_SOLID | MASK_WATER );
+		CG_Trace( &trace, startPoint, vec3_origin, vec3_origin, fireOrigin, 0, MASK_SOLID | MASK_WATER );
 		if( trace.fraction != 1.0f && ( trace.contents & CONTENTS_WATER ) ) {
-			vec3_t desiredFlockDir;
-			VectorSubtract( traceStart, fireOrigin, desiredFlockDir );
-			VectorNormalizeFast( desiredFlockDir );
+			vec3_t burstDir;
+			VectorSubtract( startPoint, fireOrigin, burstDir );
+			// Condense it towards the Z axis
+			Vector2Scale( burstDir, -0.67f, burstDir );
+			VectorNormalizeFast( burstDir );
+			assert( burstDir[2] > 0.0f );
 
-			impacts->emplace_back( makeWaterImpactForDesiredDirection( trace.endpos, desiredFlockDir, impactContents ) );
+			impacts->emplace_back( LiquidImpact {
+				.origin   = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+				.burstDir = { burstDir[0], burstDir[1], burstDir[2] },
+				.contents = impactContents,
+			});
+
 			// TODO: Vary limit of spawned impacts by explosion depth
 			if( impacts->full() ) [[unlikely]] {
 				break;
@@ -155,7 +164,7 @@ static void addUnderwaterSplashImpactsForKnownWaterZ( const float *fireOrigin, f
 
 static void addUnderwaterSplashImpactsForUnknownWaterZ( const float *fireOrigin, float radius, float maxZ,
 														wsw::RandomGenerator *rng, int impactContents,
-														wsw::StaticVector<Impact, 12> *impacts ) {
+														wsw::StaticVector<LiquidImpact, 12> *impacts ) {
 	assert( maxZ - fireOrigin[2] > 0.0f && "Make sure directions are normalizable" );
 
 	// TODO: Build a shape list once and clip against it in the loop
@@ -173,10 +182,18 @@ static void addUnderwaterSplashImpactsForUnknownWaterZ( const float *fireOrigin,
 		vec3_t waterHitPoint, traceDir;
 		const vec3_t startPoint { fireOrigin[0] + r * sinPhi, fireOrigin[1] + r * cosPhi, maxZ + 1.0f };
 		if( findWaterHitPointBetweenTwoPoints( startPoint, fireOrigin, waterHitPoint, traceDir ) ) {
-			vec3_t desiredFlockDir;
-			VectorNegate( traceDir, desiredFlockDir );
+			vec3_t burstDir;
+			VectorNegate( traceDir, burstDir );
+			Vector2Scale( burstDir, -0.75f, burstDir );
+			VectorNormalizeFast( burstDir );
+			assert( burstDir[2] > 0.0f );
 
-			impacts->emplace_back( makeWaterImpactForDesiredDirection( waterHitPoint, desiredFlockDir, impactContents ) );
+			impacts->emplace_back( LiquidImpact {
+				.origin   = { waterHitPoint[0], waterHitPoint[1], waterHitPoint[2] },
+				.burstDir = { burstDir[0], burstDir[1], burstDir[2] },
+				.contents = impactContents,
+			});
+
 			if( impacts->full() ) [[unlikely]] {
 				break;
 			}
@@ -185,8 +202,8 @@ static void addUnderwaterSplashImpactsForUnknownWaterZ( const float *fireOrigin,
 }
 
 static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, wsw::RandomGenerator *rng,
-										 wsw::StaticVector<Impact, 12> *solidImpacts,
-										 wsw::StaticVector<Impact, 12> *waterImpacts ) {
+										 wsw::StaticVector<SolidImpact, 12> *solidImpacts,
+										 wsw::StaticVector<LiquidImpact, 12> *waterImpacts ) {
 	const unsigned numTraceAttempts = 3 * solidImpacts->capacity();
 	for( unsigned i = 0; i < numTraceAttempts; ++i ) {
 		trace_t trace;
@@ -200,16 +217,20 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 		CG_Trace( &trace, fireOrigin, vec3_origin, vec3_origin, traceEnd, 0, MASK_SOLID | MASK_WATER );
 		if( trace.fraction != 1.0f && !trace.startsolid && !trace.allsolid ) {
 			if( !( trace.surfFlags & ( SURF_FLESH | SURF_NOIMPACT ) ) ) {
-				// TODO: Make different impacts for solid/water (this does not suit water)
-
 				bool addedOnThisStep = false;
 				if( trace.contents & MASK_WATER ) {
 					if( !waterImpacts->full() ) {
-						vec3_t desiredFlockDir;
-						VectorReflect( traceDir, trace.plane.normal, 0.0f, desiredFlockDir );
-						waterImpacts->emplace_back( makeWaterImpactForDesiredDirection( trace.endpos, desiredFlockDir,
-																						trace.contents ) );
-						addedOnThisStep = true;
+						// This condition produces better-looking results so far
+						if( const float absDirZ = std::fabs( traceDir[2] ); absDirZ > 0.1f && absDirZ < 0.7f ) {
+							vec3_t burstDir;
+							VectorReflect( traceDir, trace.plane.normal, 0.0f, burstDir );
+							waterImpacts->emplace_back( LiquidImpact {
+								.origin   = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+								.burstDir = { burstDir[0], burstDir[1], burstDir[2] },
+								.contents = trace.contents,
+							});
+							addedOnThisStep = true;
+						}
 					}
 				} else {
 					if( !solidImpacts->full() ) {
@@ -217,11 +238,11 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 						const auto material  = decodeSurfImpactMaterial( (unsigned)surfFlags );
 						// Make sure it adds something to visuals in the desired way.
 						if( material != SurfImpactMaterial::Unknown && material != SurfImpactMaterial::Metal ) {
-							solidImpacts->emplace_back( Impact {
-								.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
-								.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
-								.dir       = { -traceDir[0], -traceDir[1], -traceDir[2] },
-								.surfFlags = surfFlags,
+							solidImpacts->emplace_back( SolidImpact {
+								.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+								.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+								.incidentDir = { traceDir[0], traceDir[1], traceDir[2] },
+								.surfFlags   = surfFlags,
 							});
 							addedOnThisStep = true;
 						}
@@ -285,8 +306,8 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 	VectorMA( origin, 8.0f, dir, fireOrigin );
 	VectorAdd( origin, dir, almostExactOrigin );
 
-	wsw::StaticVector<Impact, 12> solidImpacts;
-	wsw::StaticVector<Impact, 12> waterImpacts;
+	wsw::StaticVector<SolidImpact, 12> solidImpacts;
+	wsw::StaticVector<LiquidImpact, 12> waterImpacts;
 
 	trace_t fireOriginTrace;
 	CG_Trace( &fireOriginTrace, origin, vec3_origin, vec3_origin, fireOrigin, 0, MASK_SOLID );
@@ -321,9 +342,10 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 							smokeOrigin = tmpSmokeOrigin;
 						}
 
-						waterImpacts.emplace_back( Impact {
+						waterImpacts.emplace_back( LiquidImpact {
 							.origin   = { waterHitPoint[0], waterHitPoint[1], waterHitPoint[2] },
-							.contents = *liquidContentsAtFireOrigin
+							.burstDir = { 0.0f, 0.0f, +1.0f },
+							.contents = *liquidContentsAtFireOrigin,
 						});
 
 						const float waterZ = waterHitPoint[2];
@@ -811,23 +833,17 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 	m_transientEffectsSystem.spawnGunbladeBlastImpactEffect( origin, dir );
 }
 
-auto makeWaterImpactForDesiredDirection( const float *origin, const float *direction, int contents ) -> Impact {
-	// TODO: Implement/check what's wrong with water flock spawning code
-	direction = &axis_identity[AXIS_UP];
-	return Impact {
-		.origin   = { origin[0], origin[1], origin[2] },
-		.normal   = { -direction[0], -direction[1], -direction[2] },
-		.dir      = { -direction[0], -direction[1], -direction[2] },
-		.contents = contents,
-	};
-}
-
 [[nodiscard]]
-static auto makeRicochetFlockOrientation( const Impact &impact, wsw::RandomGenerator *rng,
+static auto makeRicochetFlockOrientation( const SolidImpact &impact, wsw::RandomGenerator *rng,
 										  const std::pair<float, float> &angleCosineRange = { 0.30f, 0.95f } )
 										  -> FlockOrientation {
-	vec3_t flockDir;
-	VectorReflect( impact.dir, impact.normal, 0.0f, flockDir );
+	assert( std::fabs( VectorLengthFast( impact.incidentDir ) - 1.0f ) < 0.1f );
+	assert( std::fabs( VectorLengthSquared( impact.normal ) - 1.0f ) < 0.1f );
+	assert( DotProduct( impact.incidentDir, impact.normal ) <= 0 );
+
+	vec3_t oppositeDir, flockDir;
+	VectorNegate( impact.incidentDir, oppositeDir );
+	VectorReflect( oppositeDir, impact.normal, 0.0f, flockDir );
 
 	const float coneAngleCosine = Q_Sqrt( rng->nextFloat( angleCosineRange.first, angleCosineRange.second ) );
 	addRandomRotationToDir( flockDir, rng, coneAngleCosine );
@@ -1412,7 +1428,7 @@ void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const Flock
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-void EffectsSystemFacade::spawnBulletImpactEffect( const Impact &impact ) {
+void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 	const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
 
 	sfx_s *sfx = nullptr;
@@ -1520,8 +1536,8 @@ auto EffectsSystemFacade::getImpactSfxGroupForSurfFlags( int surfFlags ) -> unsi
 	return getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( surfFlags ) );
 }
 
-void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const Impact &impact ) {
-	m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const float *origin, const float *normal ) {
+	m_transientEffectsSystem.spawnBulletLikeImpactModel( origin, normal );
 	// TODO: Add rings/bubbles?
 }
 
@@ -1694,7 +1710,7 @@ static const ColorLifespan kLavaDustColors[1] {
 	}
 };
 
-void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const Impact &impact, float percentageScale,
+void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 														   std::pair<float, float> randomRotationAngleCosineRange ) {
 	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
 
@@ -1726,8 +1742,16 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 	}
 
 	if( materials ) {
-		const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng,
-																				randomRotationAngleCosineRange );
+		vec3_t flockDir { impact.burstDir[0], impact.burstDir[1], impact.burstDir[2] };
+		const auto [minCosine, maxCosine]  = randomRotationAngleCosineRange;
+		const float coneAngleCosine        = Q_Sqrt( m_rng.nextFloat( minCosine, maxCosine ) );
+		addRandomRotationToDir( flockDir, &m_rng, coneAngleCosine );
+
+		const FlockOrientation flockOrientation {
+			.origin = { impact.origin[0], impact.origin[1], impact.origin[2] },
+			.offset = { impact.burstDir[0], impact.burstDir[1], impact.burstDir[2] },
+			.dir    = { flockDir[0], flockDir[1], flockDir[2] },
+		};
 
 		if( dropsColors.empty() ) {
 			dropsColors = splashColors;
@@ -1814,7 +1838,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 	}
 }
 
-void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const Impact &impact ) {
+void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &impact ) {
 	spawnLiquidImpactParticleEffect( 0, impact, 1.0f, { 0.70f, 0.95f } );
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
 		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
@@ -1822,10 +1846,10 @@ void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const Impact &impact ) 
 	}
 }
 
-void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Impact> impacts ) {
+void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts ) {
 	if( cg_particles->integer ) {
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
-			const Impact &impact               = impacts[i];
+			const SolidImpact &impact          = impacts[i];
 			const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
 			const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
@@ -1838,7 +1862,7 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Impa
 		}
 		spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
 	} else {
-		for( const Impact &impact: impacts ) {
+		for( const SolidImpact &impact: impacts ) {
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
 			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
@@ -1850,8 +1874,8 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Impa
 	}
 }
 
-void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const Impact> impacts ) {
-	for( const Impact &impact: impacts ) {
+void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts ) {
+	for( const SolidImpact &impact: impacts ) {
 		const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
 		const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 		const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
@@ -1860,17 +1884,17 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const I
 	spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
 }
 
-void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
+void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
 															std::pair<float, float> randomRotationAngleCosineRange,
 															std::pair<unsigned, unsigned> delayRange ) {
 	assert( delayRange.first <= delayRange.second );
 	if( delayRange.second > 0 && delayRange.first != delayRange.second ) {
-		for( const Impact &impact: impacts ) {
+		for( const LiquidImpact &impact: impacts ) {
 			const unsigned delay = delayRange.first + m_rng.nextBoundedFast( delayRange.second - delayRange.first );
 			spawnLiquidImpactParticleEffect( delay, impact, percentageScale, randomRotationAngleCosineRange );
 		}
 	} else {
-		for( const Impact &impact: impacts ) {
+		for( const LiquidImpact &impact: impacts ) {
 			spawnLiquidImpactParticleEffect( delayRange.first, impact, percentageScale, randomRotationAngleCosineRange );
 		}
 	}
@@ -1879,6 +1903,7 @@ void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Impa
 	spawnImpactSoundsWhenNeededUsingTheseSounds( impacts, sfxBegin, sfxEnd );
 }
 
+template <typename Impact>
 void EffectsSystemFacade::spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts,
 																	   sfx_s **sfxBegin, sfx_s **sfxEnd ) {
 	if( impacts.empty() ) {
@@ -1915,6 +1940,7 @@ void EffectsSystemFacade::spawnImpactSoundsWhenNeededUsingTheseSounds( std::span
 	}
 }
 
+template <typename Impact>
 void EffectsSystemFacade::spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts ) {
 	if( impacts.empty() ) {
 		return;
@@ -1960,19 +1986,21 @@ void EffectsSystemFacade::spawnImpactSoundsWhenNeededCheckingMaterials( std::spa
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const Impact &impact ) {
+void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const SolidImpact &impact ) {
 	assert( std::fabs( VectorLengthFast( impact.normal ) - 1.0f ) < 1e-2f );
 	if( sfx ) {
 		vec3_t soundOrigin;
-		// HACK HACK HACK TODO Make water impacts consistent with regular ones
-		sfx_s **waterSfxBegin = cgs.media.sfxImpactWater.getAddressOfHandles();
-		sfx_s **waterSfxEnd   = waterSfxBegin + cgs.media.sfxImpactWater.length();
-		if( std::find( waterSfxBegin, waterSfxEnd, sfx ) == waterSfxEnd ) {
-			VectorAdd( impact.origin, impact.normal, soundOrigin );
-		} else {
-			VectorSubtract( impact.origin, impact.normal, soundOrigin );
-		}
-		assert( !( CG_PointContents( soundOrigin ) & ( MASK_SOLID | MASK_WATER ) ) );
+		VectorAdd( impact.origin, impact.normal, soundOrigin );
+		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
+		startSound( sfx, soundOrigin );
+	}
+}
+
+void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const LiquidImpact &impact ) {
+	if( sfx ) {
+		vec3_t soundOrigin;
+		VectorAdd( impact.origin, impact.burstDir, soundOrigin );
+		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
 		startSound( sfx, soundOrigin );
 	}
 }

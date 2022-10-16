@@ -531,24 +531,24 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	const trace_t *waterTrace = GS_TraceBullet( &trace, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
 	if( waterTrace ) {
 		if( canShowBulletImpactForSurface( trace ) ) {
-			cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
-				.origin = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
-				.normal = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] }
-			});
+			cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( trace.endpos, trace.plane.normal );
 		}
 		if( !VectorCompare( waterTrace->endpos, origin ) ) {
-			cg.effectsSystem.spawnBulletLiquidImpactEffect( makeWaterImpactForDesiredDirection(
-				waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents ) );
+			cg.effectsSystem.spawnBulletLiquidImpactEffect( LiquidImpact {
+				.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
+				.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
+				.contents = waterTrace->contents,
+			});
 		}
 		//CG_LeadBubbleTrail( &trace, water_trace->endpos );
 		cg.effectsSystem.spawnBulletTracer( owner, origin, waterTrace->endpos );
 	} else {
 		if( canShowBulletImpactForSurface( trace ) ) {
-			cg.effectsSystem.spawnBulletImpactEffect( Impact {
-				.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
-				.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
-				.dir       = { -dir[0], -dir[1], -dir[2] },
-				.surfFlags = getSurfFlagsForImpact( trace, dir ),
+			cg.effectsSystem.spawnBulletImpactEffect( SolidImpact {
+				.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+				.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+				.incidentDir = { dir[0], dir[1], dir[2] },
+				.surfFlags   = getSurfFlagsForImpact( trace, dir ),
 			});
 		}
 		cg.effectsSystem.spawnBulletTracer( owner, origin, trace.endpos );
@@ -561,8 +561,8 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 	assert( count && count < 64 );
 	assert( std::abs( VectorLengthFast( dir ) - 1.0f ) < 0.001f );
 
-	auto *const solidImpacts  = (Impact *)alloca( sizeof( Impact ) * count );
-	auto *const liquidImpacts = (Impact *)alloca( sizeof( Impact ) * count );
+	auto *const solidImpacts  = (SolidImpact *)alloca( sizeof( SolidImpact ) * count );
+	auto *const liquidImpacts = (LiquidImpact *)alloca( sizeof( LiquidImpact ) * count );
 	auto *const tracerTargets = (vec3_t *)alloca( sizeof( vec3_t ) * count );
 	unsigned numSolidImpacts = 0, numLiquidImpacts = 0, numTracerTargets = 0;
 
@@ -579,25 +579,25 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
 		if( waterTrace ) {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( Impact {
-					.origin = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
-					.normal = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] }
-				});
+				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( trace.endpos, trace.plane.normal );
 			}
 			if( !VectorCompare( waterTrace->endpos, start ) ) {
-				liquidImpacts[numLiquidImpacts++] = makeWaterImpactForDesiredDirection(
-					waterTrace->endpos, waterTrace->plane.normal, waterTrace->contents );
+				liquidImpacts[numLiquidImpacts++] = LiquidImpact {
+					.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
+					.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
+					.contents = waterTrace->contents,
+				};
 			}
 			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
 			VectorCopy( waterTrace->endpos, tracerTargets[numTracerTargets] );
 			numTracerTargets++;
 		} else {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				solidImpacts[numSolidImpacts++] = Impact {
-					.origin    = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
-					.normal    = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
-					.dir       = { -dir[0], -dir[1], -dir[2] },
-					.surfFlags = getSurfFlagsForImpact( trace, dir ),
+				solidImpacts[numSolidImpacts++] = SolidImpact {
+					.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
+					.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
+					.incidentDir = { dir[0], dir[1], dir[2] },
+					.surfFlags   = getSurfFlagsForImpact( trace, dir ),
 				};
 			}
 			VectorCopy( trace.endpos, tracerTargets[numTracerTargets] );

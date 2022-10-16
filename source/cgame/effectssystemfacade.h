@@ -30,11 +30,16 @@ class DrawSceneRequest;
 struct sfx_s;
 struct trace_s;
 
-struct Impact {
+struct SolidImpact {
 	float origin[3] { 0.0f, 0.0f, 0.0f };
-	float normal[3] { 0.0f, 0.0f, -1.0f };
-	float dir[3] { 0.0f, 0.0f, -1.0f };
+	float normal[3] { 0.0f, 0.0f, +1.0f };
+	float incidentDir[3] { 0.0f, 0.0f, -1.0f };
 	int surfFlags { 0 };
+};
+
+struct LiquidImpact {
+	float origin[3] { 0.0f, 0.0f, 0.0f };
+	float burstDir[3] { 0.0f, 0.0f, +1.0f };
 	int contents { 0 };
 };
 
@@ -62,15 +67,15 @@ public:
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
-	void spawnBulletImpactEffect( const Impact &impact );
+	void spawnBulletImpactEffect( const SolidImpact &impact );
 
-	void spawnUnderwaterBulletLikeImpactEffect( const Impact &impact );
+	void spawnUnderwaterBulletLikeImpactEffect( const float *origin, const float *normal );
 
-	void spawnMultiplePelletImpactEffects( std::span<const Impact> impacts );
+	void spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts );
 
-	void spawnBulletLiquidImpactEffect( const Impact &impact );
+	void spawnBulletLiquidImpactEffect( const LiquidImpact &impact );
 
-	void spawnMultipleLiquidImpactEffects( std::span<const Impact> impacts, float percentageScale,
+	void spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
 										   std::pair<float, float> randomRotationAngleCosineRange,
 										   std::pair<unsigned, unsigned> delayRange = { 0, 0 } );
 
@@ -190,15 +195,18 @@ private:
 	[[nodiscard]]
 	auto getSfxForImpactGroup( unsigned group ) -> sfx_s *;
 
-	void spawnMultipleExplosionImpactEffects( std::span<const Impact> impacts );
+	void spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts );
 
 	// std::span<> won't work for arrays of pointers
+	template <typename Impact>
 	void spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts, sfx_s **begin, sfx_s **end );
+	template <typename Impact>
 	void spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts );
 
-	void startSoundForImpact( sfx_s *sfx, const Impact &impact );
+	void startSoundForImpact( sfx_s *sfx, const SolidImpact &impact );
+	void startSoundForImpact( sfx_s *sfx, const LiquidImpact &impact );
 
-	void spawnLiquidImpactParticleEffect( unsigned delay, const Impact &impact, float percentageScale,
+	void spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 										  std::pair<float, float> randomRotationAngleCosineRange );
 
 	TrackedEffectsSystem m_trackedEffectsSystem;

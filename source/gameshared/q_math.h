@@ -225,6 +225,7 @@ int Q_bitcount( int v );
 
 #define Vector2Set( v, x, y )     ( ( v )[0] = ( x ), ( v )[1] = ( y ) )
 #define Vector2Copy( a, b )    ( ( b )[0] = ( a )[0], ( b )[1] = ( a )[1] )
+#define Vector2Scale( in, scale, out ) ( ( out )[0] = ( in )[0] * ( scale ), ( out )[1] = ( in )[1] * ( scale ) )
 #define Vector2Avg( a, b, c )       ( ( c )[0] = ( ( ( a[0] ) + ( b[0] ) ) * 0.5f ), ( c )[1] = ( ( ( a[1] ) + ( b[1] ) ) * 0.5f ) )
 
 #define Vector4Set( v, a, b, c, d )   ( ( v )[0] = ( a ), ( v )[1] = ( b ), ( v )[2] = ( c ), ( v )[3] = ( d ) )
