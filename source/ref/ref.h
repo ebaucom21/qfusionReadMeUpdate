@@ -332,17 +332,20 @@ struct alignas( 16 ) Particle {
 		ExpandingAndShrinking,
 	};
 
+	// Few notes on these value ranges:
+	// They are ad-hoc structs for now, as we don't need more complicated stuff at this stage.
+	// Distributions are assumed to be uniform in range (mean - spread, mean + spread) for historical reasons.
+	// Negative values are clamped to zero.
+
 	struct SpriteRules {
-		float radius { 1.0f };
-		float radiusSpread { 0.0f };
+		// TODO: Why do we have to specify the {} initializer explicitly?
+		struct { float mean { 1.0f }, spread { 0.0f }; } radius {};
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
 
 	struct SparkRules {
-		float length { 1.0f };
-		float lengthSpread { 0.0f };
-		float width { 1.0f };
-		float widthSpread { 0.0f };
+		struct { float mean { 1.0f }, spread { 0.0f }; } length {};
+		struct { float mean { 1.0f }, spread { 0.0f }; } width {};
 		float viewDirPartScale { 0.67f };
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};

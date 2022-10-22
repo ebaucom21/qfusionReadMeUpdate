@@ -97,7 +97,7 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 
 	signed fillStride;
 	unsigned initialOffset, activatedCountMultiplier, delayedCountMultiplier;
-	if( flockParams.maxActivationDelay == 0 ) {
+	if( flockParams.activationDelay.max == 0 ) {
 		fillStride               = 1;
 		initialOffset            = 0;
 		activatedCountMultiplier = 1;
@@ -120,9 +120,9 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	flock->delayedParticlesOffset  = ( initialOffset + 1 ) - fillResult.numParticles * delayedCountMultiplier;
 	flock->drag                    = flockParams.drag;
 	flock->restitution             = flockParams.restitution;
-	flock->hasRotatingParticles    = flockParams.minAngularVelocity != 0.0f || flockParams.maxAngularVelocity != 0.0f;
-	flock->minBounceCount          = flockParams.minBounceCount;
-	flock->maxBounceCount          = flockParams.maxBounceCount;
+	flock->hasRotatingParticles    = flockParams.angularVelocity.min != 0.0f || flockParams.angularVelocity.max != 0.0f;
+	flock->minBounceCount          = flockParams.bounceCount.minInclusive;
+	flock->maxBounceCount          = flockParams.bounceCount.maxInclusive;
 	flock->startBounceCounterDelay = flockParams.startBounceCounterDelay;
 
 	if( flock->minBounceCount < flock->maxBounceCount ) {
@@ -198,39 +198,39 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 	unsigned numParticles = maxParticles;
 	// We do not specify the exact bounds but a percentage
 	// so we can use the same filler for different bin flocks.
-	if( params->minPercentage != 1.0f && params->maxPercentage != 1.0f ) {
-		assert( params->minPercentage >= 0.0f && params->minPercentage <= 1.0f );
-		assert( params->maxPercentage >= 0.0f && params->minPercentage <= 1.0f );
-		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
+	if( params->percentage.min != 1.0f && params->percentage.max != 1.0f ) {
+		assert( params->percentage.min >= 0.0f && params->percentage.min <= 1.0f );
+		assert( params->percentage.max >= 0.0f && params->percentage.min <= 1.0f );
+		const float percentage = rng->nextFloat( params->percentage.min, params->percentage.max );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
 		numParticles = wsw::clamp( numParticles, 1u, maxParticles );
 	}
 
-	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
-	assert( params->maxSpeed >= 0.0f && params->maxSpeed <= 1000.0f );
-	assert( params->minSpeed <= params->maxSpeed );
+	assert( params->speed.min >= 0.0f && params->speed.min <= 1000.0f );
+	assert( params->speed.max >= 0.0f && params->speed.max <= 1000.0f );
+	assert( params->speed.min <= params->speed.max );
 
 	// Negative shift speed could be feasible
-	assert( params->minShiftSpeed <= params->maxShiftSpeed );
+	assert( params->shiftSpeed.min <= params->shiftSpeed.max );
 	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
 
-	assert( params->minAngularVelocity <= params->maxAngularVelocity );
+	assert( params->angularVelocity.min <= params->angularVelocity.max );
 
-	assert( params->minActivationDelay <= params->maxActivationDelay );
-	assert( params->maxActivationDelay <= 10'000 );
+	assert( params->activationDelay.min <= params->activationDelay.max );
+	assert( params->activationDelay.max <= 10'000 );
 
 	const vec3_t *__restrict dirs = ::kPredefinedDirs;
 
-	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
-	const unsigned timeoutSpread = params->maxTimeout - params->minTimeout;
+	assert( params->timeout.min && params->timeout.min <= params->timeout.max && params->timeout.max < 3000 );
+	const unsigned timeoutSpread = params->timeout.max - params->timeout.min;
 	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
-	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
-	const bool hasMultipleColors    = appearanceRules->colors.size() > 1;
-	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
-	const bool isSpherical          = params->stretchScale == 1.0f;
-	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
-	const bool hasVariableDelay     = params->minActivationDelay < params->maxActivationDelay;
+	const bool hasMultipleMaterials       = appearanceRules->numMaterials > 1;
+	const bool hasMultipleColors          = appearanceRules->colors.size() > 1;
+	const bool hasSpeedShift              = params->shiftSpeed.min != 0.0f || params->shiftSpeed.max != 0.0f;
+	const bool isSpherical                = params->stretchScale == 1.0f;
+	const bool hasVariableAngularVelocity = params->angularVelocity.min < params->angularVelocity.max;
+	const bool hasVariableDelay           = params->activationDelay.min < params->activationDelay.max;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -253,7 +253,7 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		Vector4Set( p->accel, 0, 0, -params->gravity, 0 );
 
 		const float *__restrict randomDir = dirs[rng->nextBounded( NUMVERTEXNORMALS )];
-		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
+		const float speed = rng->nextFloat( params->speed.min, params->speed.max );
 
 		// We try relying on branch prediction facilities
 		// TODO: Add template/if constexpr specializations
@@ -278,28 +278,28 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		}
 
 		if( hasSpeedShift ) {
-			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
+			const float shift = rng->nextFloat( params->shiftSpeed.min, params->shiftSpeed.max );
 			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
 		}
 
 		p->velocity[3] = 0.0f;
 
 		p->rotationAngle = 0.0f;
-		if( hasAngularVelocity ) {
+		if( hasVariableAngularVelocity ) {
 			p->rotationAxisIndex = rng->nextBoundedFast( std::size( kPredefinedDirs ) );
-			p->angularVelocity   = rng->nextFloat( params->minAngularVelocity, params->maxAngularVelocity );
+			p->angularVelocity   = rng->nextFloat( params->angularVelocity.min, params->angularVelocity.max );
 		} else {
 			p->rotationAxisIndex = 0;
-			p->angularVelocity   = 0.0f;
+			p->angularVelocity   = params->angularVelocity.min;
 		}
 
 		p->spawnTime   = currTime;
-		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->lifetime    = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
 		p->bounceCount = 0;
 
-		p->activationDelay = params->minActivationDelay;
+		p->activationDelay = params->activationDelay.min;
 		if( hasVariableDelay ) [[unlikely]] {
-			p->activationDelay += rng->nextBoundedFast( params->maxActivationDelay - params->minActivationDelay );
+			p->activationDelay += rng->nextBoundedFast( params->activationDelay.max - params->activationDelay.min );
 		}
 
 		// TODO: Branchless?
@@ -347,33 +347,33 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	};
 
 	unsigned numParticles = maxParticles;
-	if( params->minPercentage != 1.0f && params->maxPercentage != 1.0f ) {
-		assert( params->minPercentage >= 0.0f && params->minPercentage <= 1.0f );
-		assert( params->maxPercentage >= 0.0f && params->minPercentage <= 1.0f );
+	if( params->percentage.min != 1.0f && params->percentage.max != 1.0f ) {
+		assert( params->percentage.min >= 0.0f && params->percentage.min <= 1.0f );
+		assert( params->percentage.max >= 0.0f && params->percentage.min <= 1.0f );
 		// We do not specify the exact bounds but a percentage
 		// so we can use the same filler for different bin flocks.
-		const float percentage = rng->nextFloat( params->minPercentage, params->maxPercentage );
+		const float percentage = rng->nextFloat( params->percentage.min, params->percentage.max );
 		numParticles = (unsigned)( (float)maxParticles * percentage );
 		numParticles = wsw::clamp( numParticles, 1u, maxParticles );
 	}
 
-	assert( params->minSpeed >= 0.0f && params->minSpeed <= 1000.0f );
-	assert( params->maxSpeed >= 0.0f && params->maxSpeed <= 1000.0f );
-	assert( params->minSpeed <= params->maxSpeed );
+	assert( params->speed.min >= 0.0f && params->speed.min <= 1000.0f );
+	assert( params->speed.max >= 0.0f && params->speed.max <= 1000.0f );
+	assert( params->speed.min <= params->speed.max );
 	assert( std::fabs( VectorLength( params->dir ) - 1.0f ) < 1e-3f );
 
 	// Negative shift speed could be feasible
-	assert( params->minShiftSpeed <= params->maxShiftSpeed );
+	assert( params->shiftSpeed.min <= params->shiftSpeed.max );
 	assert( std::fabs( VectorLength( params->shiftDir ) - 1.0f ) < 1e-3f );
 
 	assert( params->angle >= 0.0f && params->angle <= 180.0f );
 	assert( params->innerAngle >= 0.0f && params->innerAngle <= 180.0f );
 	assert( params->innerAngle < params->angle );
 
-	assert( params->minAngularVelocity <= params->maxAngularVelocity );
+	assert( params->angularVelocity.min <= params->angularVelocity.max );
 
-	assert( params->minActivationDelay <= params->maxActivationDelay );
-	assert( params->maxActivationDelay <= 10'000 );
+	assert( params->activationDelay.min <= params->activationDelay.max );
+	assert( params->activationDelay.max <= 10'000 );
 
 	// TODO: Supply cosine values as parameters?
 
@@ -384,18 +384,18 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 
 	const float minZ = std::cos( (float)DEG2RAD( params->angle ) );
 
-	assert( params->minTimeout && params->minTimeout <= params->maxTimeout && params->maxTimeout < 3000 );
-	const unsigned timeoutSpread = params->maxTimeout - params->minTimeout;
+	assert( params->timeout.min && params->timeout.min <= params->timeout.max && params->timeout.max < 3000 );
+	const unsigned timeoutSpread = params->timeout.max - params->timeout.min;
 	auto resultTimeout = std::numeric_limits<int64_t>::min();
 
 	mat3_t transformMatrix;
 	Matrix3_ForRotationOfDirs( &axis_identity[AXIS_UP], params->dir, transformMatrix );
 
-	const bool hasMultipleMaterials = appearanceRules->numMaterials > 1;
-	const bool hasMultipleColors    = appearanceRules->colors.size() > 1;
-	const bool hasSpeedShift        = params->minShiftSpeed != 0.0f || params->maxShiftSpeed != 0.0f;
-	const bool hasAngularVelocity   = params->minAngularVelocity != 0.0f || params->maxAngularVelocity != 0.0f;
-	const bool hasVariableDelay     = params->maxActivationDelay != params->minActivationDelay;
+	const bool hasMultipleMaterials       = appearanceRules->numMaterials > 1;
+	const bool hasMultipleColors          = appearanceRules->colors.size() > 1;
+	const bool hasSpeedShift              = params->shiftSpeed.min != 0.0f || params->shiftSpeed.max != 0.0f;
+	const bool hasVariableAngularVelocity = params->angularVelocity.min < params->angularVelocity.max;
+	const bool hasVariableDelay           = params->activationDelay.min != params->activationDelay.max;
 
 	unsigned colorsIndexMask = 0, materialsIndexMask = 0;
 	if( hasMultipleColors ) {
@@ -421,35 +421,35 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		const float r   = Q_Sqrt( 1.0f - z * z );
 		const float phi = rng->nextFloat( 0.0f, 2.0f * (float)M_PI );
 
-		const float speed = rng->nextFloat( params->minSpeed, params->maxSpeed );
+		const float speed = rng->nextFloat( params->speed.min, params->speed.max );
 		const vec3_t untransformed { speed * r * std::cos( phi ), speed * r * std::sin( phi ), speed * z };
 		Matrix3_TransformVector( transformMatrix, untransformed, p->velocity );
 
 		// We try relying on branch prediction facilities
 		// TODO: Add template/if constexpr specializations
 		if( hasSpeedShift ) {
-			const float shift = rng->nextFloat( params->minShiftSpeed, params->maxShiftSpeed );
+			const float shift = rng->nextFloat( params->shiftSpeed.min, params->shiftSpeed.max );
 			VectorMA( p->velocity, shift, params->shiftDir, p->velocity );
 		}
 
 		p->velocity[3] = 0.0f;
 
 		p->rotationAngle = 0.0f;
-		if( hasAngularVelocity ) {
+		if( hasVariableAngularVelocity ) {
 			p->rotationAxisIndex = rng->nextBoundedFast( std::size( kPredefinedDirs ) );
-			p->angularVelocity   = rng->nextFloat( params->minAngularVelocity, params->maxAngularVelocity );
+			p->angularVelocity   = rng->nextFloat( params->angularVelocity.min, params->angularVelocity.max );
 		} else {
 			p->rotationAxisIndex = 0;
-			p->angularVelocity   = 0.0f;
+			p->angularVelocity   = params->angularVelocity.min;
 		}
 
 		p->spawnTime   = currTime;
-		p->lifetime    = params->minTimeout + rng->nextBoundedFast( timeoutSpread );
+		p->lifetime    = params->timeout.min + rng->nextBoundedFast( timeoutSpread );
 		p->bounceCount = 0;
 
-		p->activationDelay = params->minActivationDelay;
+		p->activationDelay = params->activationDelay.min;
 		if( hasVariableDelay ) [[unlikely]] {
-			p->activationDelay += rng->nextBoundedFast( params->maxActivationDelay - params->minActivationDelay );
+			p->activationDelay += rng->nextBoundedFast( params->activationDelay.max - params->activationDelay.min );
 		}
 
 		// TODO: Branchless?

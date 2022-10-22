@@ -140,25 +140,21 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 				}
 
 				EllipsoidalFlockParams flockParams {
-					.origin        = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
-					.offset        = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-					.stretchDir    = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
-					.stretchScale  = 0.5f,
-					.gravity       = 2.0f * GRAVITY,
-					.minSpeed      = 150,
-					.maxSpeed      = 200,
-					.minShiftSpeed = 100,
-					.maxShiftSpeed = 125,
-					.minPercentage = 1.0f,
-					.maxPercentage = 1.0f,
-					.minTimeout    = 150,
-					.maxTimeout    = 300,
+					.origin       = { trace->endpos[0], trace->endpos[1], trace->endpos[2] },
+					.offset       = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+					.stretchDir   = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+					.stretchScale = 0.5f,
+					.gravity      = 2.0f * GRAVITY,
+					.speed        = { .min = 150, .max = 200 },
+					.shiftSpeed   = { .min = 100, .max = 125 },
+					.percentage   = { .min = 1.0f, .max = 1.0f },
+					.timeout      = { .min = 150, .max = 300 },
 				};
 				Particle::AppearanceRules appearanceRules {
 					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 					.colors         = { singleColorAddress, singleColorAddress + 1 },
 					.geometryRules  = Particle::SpriteRules {
-						.radius = 1.25f, .radiusSpread = 0.25f, .sizeBehaviour = Particle::Shrinking
+						.radius = { .mean = 1.25f, .spread = 0.25f }, .sizeBehaviour = Particle::Shrinking
 					},
 				};
 				cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -1124,7 +1120,7 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 			.colors        = { &kSparksColor, 1 },
-			.geometryRules = Particle::SparkRules { .length = 4.0f, .width = 1.0f },
+			.geometryRules = Particle::SparkRules { .length = { .mean = 4.0f }, .width = { .mean = 1.0f } },
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );

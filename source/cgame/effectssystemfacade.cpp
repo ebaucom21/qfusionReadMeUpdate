@@ -281,21 +281,17 @@ static const ColorLifespan kExplosionSmokeColors[3] {
 
 static const Particle::AppearanceRules kExplosionSmokeAppearanceRules {
 	.colors        = kExplosionSmokeColors,
-	.geometryRules = Particle::SpriteRules { .radius = 9.0f, .radiusSpread = 5.0f },
+	.geometryRules = Particle::SpriteRules { .radius = { .mean = 9.0f, .spread = 5.0f } },
 };
 
 static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
-	.stretchScale  = 1.25f,
-	.gravity       = -65.0f,
-	.restitution   = 0.33f,
-	.minSpeed      = 35.0f,
-	.maxSpeed      = 65.0f,
-	.minShiftSpeed = 55.0f,
-	.maxShiftSpeed = 70.0f,
-	.minPercentage = 0.7f,
-	.maxPercentage = 0.9f,
-	.minTimeout    = 1200,
-	.maxTimeout    = 1750,
+	.stretchScale = 1.25f,
+	.gravity      = -65.0f,
+	.restitution  = 0.33f,
+	.speed        = { .min = 35.0f, .max = 65.0f },
+	.shiftSpeed   = { .min = 55.0f, .max = 70.0f },
+	.percentage   = { .min = 0.7f, .max = 0.9f },
+	.timeout      = { .min = 1200, .max = 1750 },
 };
 
 void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float *dir, sfx_s *sfx,
@@ -384,7 +380,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 			.colors        = kExplosionSparksColors,
-			.geometryRules = Particle::SpriteRules { .radius = 1.25f, .radiusSpread = 0.25f }
+			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.25f, .spread = 0.25f } },
 		};
 
 		EllipsoidalFlockParams flockParams {
@@ -393,50 +389,36 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.gravity       = 0.25f * GRAVITY,
 			.drag          = 0.025f,
 			.restitution   = 0.33f,
-			.minSpeed      = 150.0f,
-			.maxSpeed      = 400.0f,
-			.minShiftSpeed = 100.0f,
-			.maxShiftSpeed = 200.0f,
-			.minPercentage = 0.5f,
-			.maxPercentage = 0.8f,
-			.minTimeout    = 400,
-			.maxTimeout    = 750
+			.speed         = { .min = 150.0f, .max = 400.0f },
+			.shiftSpeed    = { .min = 100.0f, .max = 200.0f },
+			.percentage    = { .min = 0.5f, .max = 0.8f },
+			.timeout       = { .min = 400, .max = 750 },
 		};
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
 		appearanceRules.geometryRules = Particle::SparkRules {
-			.length        = 25.0f,
-			.lengthSpread  = 7.5f,
-			.width         = 4.0f,
-			.widthSpread   = 1.0f,
+			.length        = { .mean = 25.0f, .spread = 7.5f },
+			.width         = { .mean = 4.0f, .spread = 1.0f },
 			.sizeBehaviour = Particle::Shrinking,
 		};
 
-		flockParams.minSpeed      = 550;
-		flockParams.maxSpeed      = 650;
-		flockParams.drag          = 0.01f;
-		flockParams.minTimeout    = 100;
-		flockParams.maxTimeout    = 150;
-		flockParams.minPercentage = 0.5f;
-		flockParams.maxPercentage = 1.0f;
-		flockParams.minShiftSpeed = 50.0f;
-		flockParams.maxShiftSpeed = 100.0f;
+		flockParams.speed      = { .min = 550, .max = 650 };
+		flockParams.drag       = 0.01f;
+		flockParams.timeout    = { .min = 100, .max = 150 };
+		flockParams.percentage = { .min = 0.5f, .max = 1.0f };
+		flockParams.shiftSpeed = { .min = 50.0f, .max = 100.0f };
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
 		if( cg_explosionsSmoke->integer ) {
-			flockParams.minSpeed = 125.0f;
-			flockParams.maxSpeed = 175.0f;
+			flockParams.speed = { .min = 125.0f, .max = 175.0f };
 		} else {
-			flockParams.minSpeed = 150.0f;
-			flockParams.maxSpeed = 225.0f;
+			flockParams.speed = { .min = 150.0f, .max = 225.0f };
 		}
 
-		flockParams.minTimeout    = 350;
-		flockParams.maxTimeout    = 450;
-		flockParams.minPercentage = 1.0f;
-		flockParams.maxPercentage = 1.0f;
+		flockParams.timeout    = { .min = 350, .max = 450 };
+		flockParams.percentage = { .min = 1.0f, .max = 1.0f };
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -474,18 +456,16 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 
 	if( cg_particles->integer ) {
 		EllipsoidalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.gravity       = 250.0f,
-			.minPercentage = 0.5f,
-			.maxPercentage = 0.8f,
-			.minTimeout    = 125,
-			.maxTimeout    = 175,
+			.origin     = { origin[0], origin[1], origin[2] },
+			.offset     = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.gravity    = 250.0f,
+			.percentage = { .min = 0.5f, .max = 0.8f },
+			.timeout    = { .min = 125, .max = 175 },
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = kPlasmaParticlesColors,
-			.geometryRules = Particle::SpriteRules { .radius = 1.5f, .radiusSpread = 0.25f },
+			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.5f, .spread = 0.25f } },
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -549,12 +529,12 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.dir           = { dir[0], dir[1], dir[2] },
 			.gravity       = -125.0f,
 			.angle         = 60.0f,
-			.minSpeed      = 35.0f,
-			.maxSpeed      = 75.0f,
-			.minPercentage = 0.33f,
-			.maxPercentage = 0.67f,
-			.minTimeout    = (unsigned)( baseTime - timeSpread / 2 ),
-			.maxTimeout    = (unsigned)( baseTime + timeSpread / 2 )
+			.speed         = { .min = 35.0f, .max = 75.0f },
+			.percentage    = { .min = 0.33f, .max = 0.67f },
+			.timeout       = {
+				.min = (unsigned)( baseTime - timeSpread / 2 ),
+				.max = (unsigned)( baseTime + timeSpread / 2 )
+			},
 		};
 		// We have to supply a buffer with a non-stack lifetime
 		// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
@@ -566,7 +546,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.colors         = { &kBloodColors[indexForStyle], 1 },
 			.numMaterials   = (uint8_t)std::size( m_bloodMaterials ),
 			.geometryRules  = Particle::SpriteRules {
-				.radius = 1.50f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Expanding
+				.radius = { .mean = 1.50f, .spread = 0.75f }, .sizeBehaviour = Particle::Expanding
 			},
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -622,25 +602,22 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		}
 
 		const ConicalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
-			.gravity       = GRAVITY,
-			.angle         = 45.0f,
-			.minSpeed      = 500.0f,
-			.maxSpeed      = 950.0f,
-			.minPercentage = 0.33f,
-			.maxPercentage = 0.67f,
-			.minTimeout    = 100,
-			.maxTimeout    = 300
+			.origin     = { origin[0], origin[1], origin[2] },
+			.offset     = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir        = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity    = GRAVITY,
+			.angle      = 45.0f,
+			.speed      = { .min = 500.0f, .max = 950.0f },
+			.percentage = { .min = 0.33f, .max = 0.67f },
+			.timeout    = { .min = 100, .max = 300 },
 		};
 
 		const Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
-				.length = 12.5f, .lengthSpread = 2.5f,
-				.width  = 2.0f,  .widthSpread  = 1.0f,
+				.length = { .mean = 12.5f, .spread = 2.5f },
+				.width  = { .mean = 2.0f, .spread = 1.0f },
 			}
 		};
 
@@ -689,25 +666,22 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		}
 
 		const ConicalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { impactNormal[0], impactNormal[1], impactNormal[2] },
-			.dir           = { coneDir[0], coneDir[1], coneDir[2] },
-			.gravity       = GRAVITY,
-			.angle         = 45.0f,
-			.minSpeed      = 750.0f,
-			.maxSpeed      = 950.0f,
-			.minPercentage = 0.5f,
-			.maxPercentage = 1.0f,
-			.minTimeout    = 150,
-			.maxTimeout    = 225
+			.origin     = { origin[0], origin[1], origin[2] },
+			.offset     = { impactNormal[0], impactNormal[1], impactNormal[2] },
+			.dir        = { coneDir[0], coneDir[1], coneDir[2] },
+			.gravity    = GRAVITY,
+			.angle      = 45.0f,
+			.speed      = { .min = 750.0f, .max = 950.0f },
+			.percentage = { .min = 0.5f, .max = 1.0f },
+			.timeout    = { .min = 150, .max = 225 },
 		};
 
 		const Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
-				.length = 10.0f, .lengthSpread = 2.5f,
-				.width  = 1.5f,  .widthSpread  = 0.5f,
+				.length = { .mean = 10.0f, .spread = 2.5f },
+				.width  = { .mean = 1.5f, .spread = 0.5f },
 			}
 		};
 
@@ -770,8 +744,8 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 					.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 					.colors        = kGunbladeHitColors,
 					.geometryRules = Particle::SparkRules {
-						.length = 4.0f, .lengthSpread = 1.0f,
-						.width  = 1.0f, .widthSpread  = 0.25f,
+						.length = { .mean = 4.0f, .spread = 1.0f },
+						.width  = { .mean = 1.0f, .spread = 0.25f },
 					},
 				};
 				cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
@@ -803,18 +777,16 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 
 	if( cg_particles->integer ) {
 		EllipsoidalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { dir[0], dir[1], dir[2] },
-			.gravity       = -50.0f,
-			.minSpeed      = 50,
-			.maxSpeed      = 100,
-			.minPercentage = 1.0f,
-			.maxPercentage = 1.0f
+			.origin     = { origin[0], origin[1], origin[2] },
+			.offset     = { dir[0], dir[1], dir[2] },
+			.gravity    = -50.0f,
+			.speed      = { .min = 50, .max = 100 },
+			.percentage = { .min = 1.0f, .max = 1.0f },
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = kGunbladeBlastColors,
-			.geometryRules = Particle::SpriteRules { .radius = 1.50f, .radiusSpread = 0.25f },
+			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.50f, .spread = 0.25f } },
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -870,12 +842,12 @@ template <typename FlockParams>
 static inline void assignUpShiftAndModifyBaseSpeed( FlockParams *flockParams, float upShiftScale,
 													float minShiftSpeed, float maxShiftSpeed ) {
 	assert( upShiftScale >= 0.0f && upShiftScale <= 1.0f );
-	flockParams->minShiftSpeed = minShiftSpeed * upShiftScale;
-	flockParams->maxShiftSpeed = maxShiftSpeed * upShiftScale;
+	flockParams->shiftSpeed.min = minShiftSpeed * upShiftScale;
+	flockParams->shiftSpeed.max = maxShiftSpeed * upShiftScale;
 	const float baseSpeedScale = 1.0f + upShiftScale;
 	// Apply the upper bound to avoid triggering an assertion on speed feasibility
-	flockParams->minSpeed = wsw::min( 999.9f, flockParams->minSpeed * baseSpeedScale );
-	flockParams->maxSpeed = wsw::min( 999.9f, flockParams->maxSpeed * baseSpeedScale );
+	flockParams->speed.min = wsw::min( 999.9f, flockParams->speed.min * baseSpeedScale );
+	flockParams->speed.max = wsw::min( 999.9f, flockParams->speed.max * baseSpeedScale );
 }
 
 static const ColorLifespan kBulletRosetteColors[1] {
@@ -886,21 +858,10 @@ static const ColorLifespan kBulletRosetteColors[1] {
 	}
 };
 
-static const Particle::AppearanceRules kBulletRosetteAppearanceRules {
-	.colors        = kBulletRosetteColors,
-	.geometryRules = Particle::SparkRules {
-		.length = 16.0f, .lengthSpread = 4.0f,
-		.width  = 1.0f,  .widthSpread  = 0.1f,
-		.sizeBehaviour = Particle::Shrinking,
-	}
-};
-
 static const ConicalFlockParams kBulletRosetteFlockParams {
-	.gravity       = GRAVITY,
-	.minSpeed      = 550.0f,
-	.maxSpeed      = 800.0f,
-	.minTimeout    = 75,
-	.maxTimeout    = 150,
+	.gravity = GRAVITY,
+	.speed   = { .min = 550.0f, .max = 800.0f },
+	.timeout = { .min = 75, .max = 125 },
 };
 
 void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
@@ -909,19 +870,19 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientatio
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletRosetteColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 10.0f, .lengthSpread = 2.0f,
-			.width  = 1.0f,  .widthSpread  = 0.1f,
+			.length        = { .mean = 12.0f, .spread = 1.0f },
+			.width         = { .mean = 1.0f, .spread = 0.1f },
 			.sizeBehaviour = Particle::Shrinking,
 		}
 	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
-	flockParams.angle         = 45.0f;
-	flockParams.innerAngle    = 15.0f;
-	flockParams.minPercentage = minPercentage;
-	flockParams.maxPercentage = maxPercentage;
-	flockParams.minTimeout    = ( 3 * flockParams.minTimeout ) / 4;
-	flockParams.maxTimeout    = ( 3 * flockParams.maxTimeout ) / 4;
+	flockParams.angle          = 45.0f;
+	flockParams.innerAngle     = 15.0f;
+	flockParams.percentage.min = minPercentage;
+	flockParams.percentage.max = maxPercentage;
+	flockParams.timeout.min    = ( 3 * flockParams.timeout.min ) / 4;
+	flockParams.timeout.max    = ( 3 * flockParams.timeout.max ) / 4;
 
 	orientation.copyToFlockParams( &flockParams );
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -932,33 +893,33 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletRosetteColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 16.0f, .lengthSpread = 4.0f,
-			.width  = 1.0f,  .widthSpread  = 0.1f,
+			.length        = { .mean = 16.0f, .spread = 2.0f },
+			.width         = { .mean = 1.0f, .spread = 0.1f },
 			.sizeBehaviour = Particle::Shrinking,
 		}
 	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
-	flockParams.angle         = 24.0f;
-	flockParams.innerAngle    = 0.0f;
-	flockParams.minPercentage = 0.2f;
-	flockParams.maxPercentage = 0.6f;
+	flockParams.angle          = 24.0f;
+	flockParams.innerAngle     = 0.0f;
+	flockParams.percentage.min = 0.2f;
+	flockParams.percentage.max = 0.6f;
 
 	orientation.copyToFlockParams( &flockParams );
 	cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
 	appearanceRules.geometryRules = Particle::SparkRules {
-		.length = 10.0f, .lengthSpread = 3.0f,
-		.width  = 0.7f,  .widthSpread  = 0.1f,
+		.length        = { .mean = 12.0f, .spread = 2.0f },
+		.width         = { .mean = 0.7f, .spread  = 0.1f },
 		.sizeBehaviour = Particle::Shrinking,
 	};
 
-	flockParams.innerAngle    = flockParams.angle;
-	flockParams.angle         = 60.0f;
-	flockParams.minPercentage = 1.0f;
-	flockParams.maxPercentage = 1.0f;
-	flockParams.minTimeout    = ( 2 * flockParams.minTimeout ) / 3;
-	flockParams.maxTimeout    = ( 2 * flockParams.maxTimeout ) / 3;
+	flockParams.innerAngle     = flockParams.angle;
+	flockParams.angle          = 60.0f;
+	flockParams.percentage.min = 1.0f;
+	flockParams.percentage.max = 1.0f;
+	flockParams.timeout.min    = ( 2 * flockParams.timeout.min ) / 3;
+	flockParams.timeout.max    = ( 2 * flockParams.timeout.max ) / 3;
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
@@ -977,23 +938,20 @@ void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, con
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletMetalRicochetColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 5.0f,  .lengthSpread = 1.0f,
-			.width  = 0.75f, .widthSpread = 0.05f,
+			.length        = { .mean = 5.0f, .spread = 1.0f },
+			.width         = { .mean = 0.75f, .spread = 0.05f },
 			.sizeBehaviour = Particle::Expanding
 		},
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity       = GRAVITY,
-		.drag          = 0.008f,
-		.restitution   = 0.5f,
-		.angle         = 18.0f,
-		.minSpeed      = 700.0f,
-		.maxSpeed      = 950.0f,
-		.minPercentage = minPercentage,
-		.maxPercentage = maxPercentage,
-		.minTimeout    = 300,
-		.maxTimeout    = 350,
+		.gravity     = GRAVITY,
+		.drag        = 0.008f,
+		.restitution = 0.5f,
+		.angle       = 18.0f,
+		.speed       = { .min = 700.0f, .max = 950.0f },
+		.percentage  = { .min = minPercentage, .max = maxPercentage },
+		.timeout     = { .min = 300, .max = 350 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1026,24 +984,20 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalDebrisColors,
 		.geometryRules  = Particle::SparkRules {
-			.length = 2.5f,  .lengthSpread = 1.0f,
-			.width  = 0.75f, .widthSpread  = 0.05f,
+			.length        = { .mean = 2.5f, .spread = 1.0f },
+			.width         = { .mean = 0.75f, .spread  = 0.05f },
 			.sizeBehaviour = Particle::Expanding
 		}
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity        = GRAVITY,
-		.restitution    = 0.3f,
-		.angle          = 30.0f,
-		.minBounceCount = 1,
-		.maxBounceCount = 3,
-		.minSpeed       = 75.0f,
-		.maxSpeed       = 125.0f,
-		.minPercentage  = minPercentage,
-		.maxPercentage  = maxPercentage,
-		.minTimeout     = 200,
-		.maxTimeout     = 700,
+		.gravity      = GRAVITY,
+		.restitution  = 0.3f,
+		.angle        = 30.0f,
+		.bounceCount  = { .minInclusive = 1, .maxInclusive = 3 },
+		.speed        = { .min = 75.0f, .max = 125.0f },
+		.percentage   = { .min = minPercentage, .max = maxPercentage },
+		.timeout      = { .min = 200, .max = 700 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1067,22 +1021,19 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = 35.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity       = 50.0f,
-		.drag          = 0.03f,
-		.restitution   = 1.0f,
-		.angle         = 30.0f,
-		.minSpeed      = 100.0f,
-		.maxSpeed      = 500.0f,
-		.minPercentage = 0.7f * dustPercentageScale,
-		.maxPercentage = 1.0f * dustPercentageScale,
-		.minTimeout    = 750,
-		.maxTimeout    = 1000,
+		.gravity     = 50.0f,
+		.drag        = 0.03f,
+		.restitution = 1.0f,
+		.angle       = 30.0f,
+		.speed       = { .min = 100.0f, .max = 500.0f },
+		.percentage  = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
+		.timeout     = { .min = 750, .max = 1000 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1096,28 +1047,20 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = 55.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 55.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity       = 50.0f,
-		.drag          = 0.03f,
-		.restitution   = 1.0f,
-		.angle         = 30.0f,
-		.minSpeed      = 100.0f,
-		.maxSpeed      = 500.0f,
-		.minPercentage = 0.7f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 1250,
-		.maxTimeout    = 1750,
+		.gravity     = 50.0f,
+		.drag        = 0.03f,
+		.restitution = 1.0f,
+		.angle       = 30.0f,
+		.speed       = { .min = 100.0f, .max = 500.0f },
+		.percentage  = { .min = 0.7f, .max = 1.0f },
+		.timeout     = { .min = 1500, .max = 2000 },
 	};
-
-	flockParams.minPercentage = 0.7f;
-	flockParams.maxPercentage = 1.0f;
-	flockParams.minTimeout    = 1500;
-	flockParams.maxTimeout    = 2000;
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 20.0f, 30.0f );
@@ -1149,66 +1092,55 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 		.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 		.colors        = kWoodImpactColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 20.0f, .lengthSpread = 3.0f,
-			.width  = 3.0f,  .widthSpread  = 0.5f,
+			.length        = { .mean = 20.0f, .spread = 3.0f },
+			.width         = { .mean = 3.0f, .spread = 0.5f },
 			.sizeBehaviour = Particle::Shrinking,
 		}
 	};
 
 	ConicalFlockParams burstFlockParams {
-		.angle         = 15,
-		.minSpeed      = 700,
-		.maxSpeed      = 900,
-		.minPercentage = 0.3f,
-		.maxPercentage = 0.6f,
-		.minTimeout    = 75,
-		.maxTimeout    = 150,
+		.angle      = 15,
+		.speed      = { .min = 700, .max = 900 },
+		.percentage = { .min = 0.3f, .max = 0.6f },
+		.timeout    = { .min = 75, .max = 150 },
 	};
 
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kWoodDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = 12.5f, .radiusSpread = 2.5f, .sizeBehaviour = Particle::Expanding,
+			.radius = { .mean = 12.5f, .spread = 2.5f }, .sizeBehaviour = Particle::Expanding,
 		},
 		.applyVertexDynLight = true,
 	};
 
 	ConicalFlockParams dustFlockParams {
-		.gravity       = 25.0f,
-		.angle         = 24.0f,
-		.minSpeed      = 50.0f,
-		.maxSpeed      = 150.0f,
-		.minPercentage = 1.0f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 350,
-		.maxTimeout    = 450
+		.gravity    = 25.0f,
+		.angle      = 24.0f,
+		.speed      = { .min = 50.0f, .max = 150.0f },
+		.percentage = { .min = 1.0f, .max = 1.0f },
+		.timeout    = { .min = 350, .max = 450 },
 	};
 
 	const Particle::AppearanceRules debrisAppearanceRules {
 		.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 		.colors        = kWoodImpactColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 5.0f, .lengthSpread = 1.5f,
-			.width  = 1.5f, .widthSpread  = 0.5f,
+			.length = { .mean = 5.0f, .spread = 1.5f },
+			.width  = { .mean = 1.5f, .spread  = 0.5f },
 		}
 	};
 
 	ConicalFlockParams debrisFlockParams {
-		.gravity            = 0.75f * GRAVITY,
-		.drag               = 0.02f,
-		.restitution        = 0.5f,
-		.angle              = 30.0f,
-		.minBounceCount     = 2,
-		.maxBounceCount     = 3,
-		.minSpeed           = 400.0f,
-		.maxSpeed           = 700.0f,
-		.minAngularVelocity = 3.0f * 360.0f,
-		.maxAngularVelocity = 9.0f * 360.0f,
-		.minPercentage      = 0.3f * debrisPercentageScale,
-		.maxPercentage      = 0.6f * debrisPercentageScale,
-		.minTimeout         = 350,
-		.maxTimeout         = 500,
+		.gravity         = 0.75f * GRAVITY,
+		.drag            = 0.02f,
+		.restitution     = 0.5f,
+		.angle           = 30.0f,
+		.bounceCount     = { .minInclusive = 2, .maxInclusive = 3 },
+		.speed           = { .min = 400.0f, .max = 700.0f },
+		.angularVelocity = { .min = 3.0f * 360.0f, .max = 9.0f * 360.0f },
+		.percentage      = { .min = 0.3f * debrisPercentageScale, .max = 0.6f * debrisPercentageScale },
+		.timeout         = { .min = 350, .max = 500 },
 	};
 
 	orientation.copyToFlockParams( &burstFlockParams );
@@ -1242,60 +1174,51 @@ static const ColorLifespan kDirtDustColors[1] {
 void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockOrientation &orientation,
 													float upShiftScale, unsigned materialParam ) {
 	ConicalFlockParams burstStripesFlockParams {
-		.gravity       = GRAVITY,
-		.angle         = 12,
-		.minSpeed      = 500,
-		.maxSpeed      = 700,
-		.minPercentage = 0.5f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 100,
-		.maxTimeout    = 200
+		.gravity    = GRAVITY,
+		.angle      = 12,
+		.speed      = { .min = 500, .max = 700 },
+		.percentage = { .min = 0.5f, .max = 1.0f },
+		.timeout    = { .min = 100, .max = 200 },
 	};
 
 	Particle::AppearanceRules burstStripesAppearanceRules {
 		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 30.0f, .lengthSpread = 10.0f,
-			.width  = 4.0f,  .widthSpread  = 1.0f,
+			.length        = { .mean = 30.0f, .spread = 10.0f },
+			.width         = { .mean = 4.0f, .spread  = 1.0f },
 			.sizeBehaviour = Particle::Shrinking,
 		},
 	};
 
 	ConicalFlockParams burstParticlesFlockParams {
-		.gravity       = GRAVITY,
-		.drag          = 0.01f,
-		.angle         = 12,
-		.minSpeed      = 500,
-		.maxSpeed      = 700,
-		.minPercentage = 0.5f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 350,
-		.maxTimeout    = 1000,
+		.gravity    = GRAVITY,
+		.drag       = 0.01f,
+		.angle      = 12,
+		.speed      = { .min = 500, .max = 700 },
+		.percentage = { .min = 0.5f, .max = 1.0f },
+		.timeout    = { .min = 350, .max = 1000 }
 	};
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
-		.geometryRules = Particle::SpriteRules { .radius = 3.0f, .sizeBehaviour = Particle::Shrinking },
+		.geometryRules = Particle::SpriteRules { .radius = { .mean = 3.0f }, .sizeBehaviour = Particle::Shrinking },
 	};
 
 	ConicalFlockParams dustFlockParams {
-		.gravity       = 100.0f,
-		.angle         = 45.0f,
-		.minSpeed      = 25,
-		.maxSpeed      = 50,
-		.minPercentage = 0.0f,
-		.maxPercentage = 0.5f,
-		.minTimeout    = 750,
-		.maxTimeout    = 1000,
+		.gravity    = 100.0f,
+		.angle      = 45.0f,
+		.speed      = { .min = 25, .max = 50 },
+		.percentage = { .min = 0.0f, .max = 0.5f },
+		.timeout    = { .min = 750, .max = 1000 },
 	};
 
 	Particle::AppearanceRules dustAppearanceRules {
 		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors        = kDirtDustColors,
 		.geometryRules = Particle::SpriteRules {
-			.radius = 30.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 30.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
 		},
 	};
 
@@ -1335,20 +1258,19 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 													float upShiftScale, unsigned materialParam,
 													float dustPercentageScale ) {
 	ConicalFlockParams burstFlockParams {
-		.gravity       = GRAVITY,
-		.angle         = 12,
-		.minSpeed      = 300,
-		.maxSpeed      = 700,
-		.minPercentage = 0.7f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 300,
-		.maxTimeout    = 400,
+		.gravity    = GRAVITY,
+		.angle      = 12,
+		.speed      = { .min = 300, .max = 700 },
+		.percentage = { .min = 0.7f, .max = 1.0f },
+		.timeout    = { .min = 300, .max = 400 },
 	};
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kSandImpactColors,
-		.geometryRules       = Particle::SpriteRules { .radius = 3.0f, .sizeBehaviour = Particle::Shrinking },
+		.geometryRules       = Particle::SpriteRules {
+			.radius = { .mean = 3.0f }, .sizeBehaviour = Particle::Shrinking
+		},
 		.applyVertexDynLight = true,
 	};
 
@@ -1358,21 +1280,18 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	cg.particleSystem.addSmallParticleFlock( burstParticlesAppearanceRules, burstFlockParams );
 
 	EllipsoidalFlockParams dustFlockParams {
-		.stretchScale  = 0.33f,
-		.gravity       = 100.0f,
-		.minSpeed      = 20,
-		.maxSpeed      = 50,
-		.minPercentage = 0.7f * dustPercentageScale,
-		.maxPercentage = 1.0f * dustPercentageScale,
-		.minTimeout    = 750,
-		.maxTimeout    = 1000,
+		.stretchScale = 0.33f,
+		.gravity      = 100.0f,
+		.speed        = { .min = 20, .max = 50 },
+		.percentage   = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
+		.timeout      = { .min = 750, .max = 1000 },
 	};
 
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kSandDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = 35.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true,
 	};
@@ -1396,20 +1315,17 @@ void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const Flock
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kGlassDebrisColors,
 		.geometryRules = Particle::SparkRules {
-			.length = 10.0f, .lengthSpread = 2.0f,
-			.width  = 1.0f,  .widthSpread  = 0.1f,
+			.length = { .mean = 10.0f, .spread = 2.0f },
+			.width  = { .mean = 1.0f, .spread  = 0.1f },
 		},
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity       = 0.0f,
-		.angle         = 15.0f,
-		.minSpeed      = 400.0f,
-		.maxSpeed      = 700.0f,
-		.minPercentage = 1.0f,
-		.maxPercentage = 1.0f,
-		.minTimeout    = 75,
-		.maxTimeout    = 125
+		.gravity    = 0.0f,
+		.angle      = 15.0f,
+		.speed      = { .min = 400.0f, .max = 700.0f },
+		.percentage = { .min = 1.0f, .max = 1.0f },
+		.timeout    = { .min = 75, .max = 125 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1701,7 +1617,7 @@ static const ColorLifespan kLavaDustColors[1] {
 void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 														   std::pair<float, float> randomRotationAngleCosineRange ) {
 	std::variant<Particle::SpriteRules, Particle::SparkRules> dropParticlesGeometryRules = Particle::SpriteRules {
-		.radius = 1.25f, .radiusSpread = 0.25f, .sizeBehaviour = Particle::ExpandingAndShrinking
+		.radius = { .mean = 1.25f, .spread = 0.25f }, .sizeBehaviour = Particle::ExpandingAndShrinking
 	};
 
 	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
@@ -1726,7 +1642,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		dropsColors  = kLavaDropsColors;
 
 		dropParticlesGeometryRules = Particle::SparkRules {
-			.length = 3.0f, .width = 1.5f, .sizeBehaviour = Particle::ExpandingAndShrinking
+			.length = { .mean = 3.0f }, .width = { .mean = 1.5f }, .sizeBehaviour = Particle::ExpandingAndShrinking
 		};
 
 		minDropsPercentage = 0.3f;
@@ -1752,38 +1668,31 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		}
 
 		ConicalFlockParams splashFlockParams {
-			.gravity       = GRAVITY,
-			.angle         = 12,
-			.minSpeed      = 500,
-			.maxSpeed      = 700,
-			.minPercentage = 0.7f * percentageScale,
-			.maxPercentage = 1.0f * percentageScale,
-			.minTimeout    = 100,
-			.maxTimeout    = 200
+			.gravity    = GRAVITY,
+			.angle      = 12,
+			.speed      = { .min = 500, .max = 700 },
+			.percentage = { .min = 0.7f * percentageScale, .max = 1.0f * percentageScale },
+			.timeout    = { .min = 100, .max = 200 },
 		};
 
 		const Particle::AppearanceRules splashAppearanceRules {
 			.materials     = materials,
 			.colors        = splashColors,
 			.geometryRules = Particle::SparkRules {
-				.length = 40.0f, .lengthSpread = 10.0f,
-				.width  = 4.0f,  .widthSpread = 1.0f,
+				.length        = { .mean = 40.0f, .spread = 10.0f },
+				.width         = { .mean = 4.0f, .spread = 1.0f },
 				.sizeBehaviour = Particle::Shrinking,
 			},
 		};
 
 		ConicalFlockParams dropsFlockParams {
-			.gravity        = GRAVITY,
-			.drag           = 0.015f,
-			.angle          = 15,
-			.minBounceCount = 0,
-			.maxBounceCount = 0,
-			.minSpeed       = 300,
-			.maxSpeed       = 900,
-			.minPercentage  = minDropsPercentage * percentageScale,
-			.maxPercentage  = maxDropsPercentage * percentageScale,
-			.minTimeout     = 350,
-			.maxTimeout     = 700,
+			.gravity     = GRAVITY,
+			.drag        = 0.015f,
+			.angle       = 15,
+			.bounceCount = { .minInclusive = 0, .maxInclusive = 0 },
+			.speed       = { .min = 300, .max = 900 },
+			.percentage  = { .min = minDropsPercentage * percentageScale, .max = maxDropsPercentage * percentageScale },
+			.timeout     = { .min = 350, .max = 700 },
 		};
 
 		const Particle::AppearanceRules dropsAppearanceRules {
@@ -1793,23 +1702,19 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		};
 
 		ConicalFlockParams dustFlockParams {
-			.gravity       = 100.0f,
-			.angle         = 7.5f,
-			.minSpeed      = 50,
-			.maxSpeed      = 100,
-			.minShiftSpeed = 450.0f,
-			.maxShiftSpeed = 550.0f,
-			.minPercentage = 0.4f * percentageScale,
-			.maxPercentage = 0.7f * percentageScale,
-			.minTimeout    = 100,
-			.maxTimeout    = 150,
+			.gravity    = 100.0f,
+			.angle      = 7.5f,
+			.speed      = { .min = 50, .max = 100 },
+			.shiftSpeed = { .min = 450.0f, .max = 550.0f },
+			.percentage = { .min = 0.4f * percentageScale, .max = 0.7f * percentageScale },
+			.timeout    = { .min = 100, .max = 150 },
 		};
 
 		const Particle::AppearanceRules dustAppearanceRules {
 			.materials     = materials,
 			.colors        = dustColors,
 			.geometryRules = Particle::SpriteRules {
-				.radius = 25.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding,
+				.radius = { .mean = 25.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding,
 			},
 		};
 

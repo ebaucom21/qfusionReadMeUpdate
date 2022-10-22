@@ -1787,10 +1787,11 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
 		if( const auto *spriteRules = std::get_if<Particle::SpriteRules>( &appearanceRules->geometryRules ) ) {
-			assert( spriteRules->radius > 0.0f );
+			assert( spriteRules->radius.mean > 0.0f );
+			assert( spriteRules->radius.spread >= 0.0f );
 
-			const float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-			float radius           = wsw::max( 0.0f, spriteRules->radius + signedFrac * spriteRules->radiusSpread );
+			float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+			float radius     = wsw::max( 0.0f, spriteRules->radius.mean + signedFrac * spriteRules->radius.spread );
 
 			if( spriteRules->sizeBehaviour != Particle::SizeNotChanging ) {
 				radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, spriteRules->sizeBehaviour );
@@ -1824,13 +1825,14 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 			VectorMA( point, -radius, v_left, xyz[2] );
 		} else {
 			const auto *sparkRules = std::get_if<Particle::SparkRules>( &appearanceRules->geometryRules );
-			assert( sparkRules->length >= 0.1f && sparkRules->width >= 0.1f );
+			assert( sparkRules->length.mean >= 0.1f && sparkRules->width.mean >= 0.1f );
+			assert( sparkRules->length.spread >= 0.0f && sparkRules->width.spread >= 0.0f );
 
 			const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
 			const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
 
-			float length = wsw::max( 0.0f, sparkRules->length + lengthSignedFrac * sparkRules->lengthSpread );
-			float width  = wsw::max( 0.0f, sparkRules->width + widthSignedFrac * sparkRules->widthSpread );
+			float length = wsw::max( 0.0f, sparkRules->length.mean + lengthSignedFrac * sparkRules->length.spread );
+			float width  = wsw::max( 0.0f, sparkRules->width.mean + widthSignedFrac * sparkRules->width.spread );
 
 			if( sparkRules->sizeBehaviour != Particle::SizeNotChanging ) {
 				const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, sparkRules->sizeBehaviour );

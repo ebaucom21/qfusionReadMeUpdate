@@ -145,7 +145,7 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 
 					signed fillStride;
 					unsigned initialOffset;
-					if( params->maxActivationDelay == 0 ) {
+					if( params->activationDelay.max == 0 ) {
 						// Delayed particles must not be spawned in this case
 						assert( !flock->numDelayedParticles );
 						fillStride    = +1;
@@ -165,7 +165,7 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 																		  &m_rng, currTime, fillStride );
 					assert( fillResult.numParticles && fillResult.numParticles <= trail->maxParticlesPerDrop );
 
-					if( params->maxActivationDelay == 0 ) {
+					if( params->activationDelay.max == 0 ) {
 						flock->numActivatedParticles += fillResult.numParticles;
 					} else {
 						flock->numDelayedParticles += fillResult.numParticles;
@@ -213,26 +213,20 @@ static const ColorLifespan kRocketFireTrailColors[1] {
 };
 
 static ConicalFlockParams rocketSmokeParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 45,
-	.innerAngle  = 18,
-	.minSpeed    = 75,
-	.maxSpeed    = 150,
-	.minTimeout  = 350,
-	.maxTimeout  = 400,
-	.minActivationDelay = 8,
-	.maxActivationDelay = 8,
+	.gravity         = -250,
+	.angle           = 45,
+	.innerAngle      = 18,
+	.speed           = { .min = 75, .max = 150 },
+	.timeout         = { .min = 350, .max = 400 },
+	.activationDelay = { .min = 8, .max = 8 },
 };
 
 static ConicalFlockParams rocketFireParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 15,
-	.minSpeed    = 75,
-	.maxSpeed    = 150,
-	.minTimeout  = 125,
-	.maxTimeout  = 250,
-	.minActivationDelay = 8,
-	.maxActivationDelay = 8,
+	.gravity         = -250,
+	.angle           = 15,
+	.speed           = { .min = 75, .max = 150 },
+	.timeout         = { .min = 125, .max = 250 },
+	.activationDelay = { .min = 8, .max = 8 },
 };
 
 void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -243,7 +237,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kRocketSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 20.0f, .radiusSpread = 1.5f, .sizeBehaviour = Particle::Expanding
+					.radius = { .mean = 20.0f, .spread = 1.5f }, .sizeBehaviour = Particle::Expanding
 				},
 			});
 		}
@@ -258,7 +252,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kRocketFireTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 7.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+					.radius = { .mean = 7.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
 				},
 			});
 		}
@@ -288,25 +282,20 @@ static const ColorLifespan kGrenadeSmokeTrailColors[1] {
 };
 
 static ConicalFlockParams grenadeFuseParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 60,
-	.innerAngle  = 30,
-	.minSpeed    = 50,
-	.maxSpeed    = 75,
-	.minTimeout  = 100,
-	.maxTimeout  = 150
+	.gravity    = -250,
+	.angle      = 60,
+	.innerAngle = 30,
+	.speed      = { .min = 50, .max = 75 },
+	.timeout    = { .min = 100, .max = 150 },
 };
 
 static ConicalFlockParams grenadeSmokeParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 30,
-	.innerAngle  = 12,
-	.minSpeed    = 50,
-	.maxSpeed    = 75,
-	.minTimeout  = 200,
-	.maxTimeout  = 250,
-	.minActivationDelay = 8,
-	.maxActivationDelay = 8,
+	.gravity         = -250,
+	.angle           = 30,
+	.innerAngle      = 12,
+	.speed           = { .min = 50, .max = 75 },
+	.timeout         = { .min = 200, .max = 250 },
+	.activationDelay = { .min = 8, .max = 8 },
 };
 
 void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -317,7 +306,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kGrenadeSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 20.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+					.radius = { .mean = 20.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
 				},
 			});
 		}
@@ -332,7 +321,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kGrenadeFuseTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 7.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+					.radius = { .mean = 7.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
 				},
 			});
 		}
@@ -377,23 +366,18 @@ static const ColorLifespan kBlastIonsTrailColors[] {
 };
 
 static ConicalFlockParams blastSmokeParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 24,
-	.minSpeed    = 200,
-	.maxSpeed    = 300,
-	.minTimeout  = 175,
-	.maxTimeout  = 225
+	.gravity = -250,
+	.angle   = 24,
+	.speed   = { .min = 200, .max = 300 },
+	.timeout = { .min = 175, .max = 225 },
 };
 
 static ConicalFlockParams blastIonsParticlesFlockParams {
-	.gravity     = -250,
-	.angle       = 30,
-	.minSpeed    = 200,
-	.maxSpeed    = 300,
-	.minTimeout  = 250,
-	.maxTimeout  = 300,
-	.minActivationDelay = 8,
-	.maxActivationDelay = 8,
+	.gravity         = -250,
+	.angle           = 30,
+	.speed           = { .min = 200, .max = 300 },
+	.timeout         = { .min = 250, .max = 300 },
+	.activationDelay = { .min = 8, .max = 8 },
 };
 
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
@@ -404,7 +388,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kBlastSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 10.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding,
+					.radius = { .mean = 10.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding,
 				},
 			});
 		}
@@ -419,7 +403,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kBlastIonsTrailColors,
 				.geometryRules = Particle::SpriteRules {
-					.radius = 3.0f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Shrinking,
+					.radius = { .mean = 3.0f, .spread = 0.75f }, .sizeBehaviour = Particle::Shrinking,
 				},
 			});
 		}
@@ -457,23 +441,18 @@ static ParticleColorsForTeamHolder electroIonsParticleColorsHolder {
 };
 
 static ConicalFlockParams electroCloudParticlesFlockParams {
-	.gravity     = 0,
-	.angle       = 30,
-	.minSpeed    = 200,
-	.maxSpeed    = 300,
-	.minTimeout  = 150,
-	.maxTimeout  = 200
+	.gravity = 0,
+	.angle   = 30,
+	.speed   = { .min = 200, .max = 300 },
+	.timeout = { .min = 150, .max = 200 },
 };
 
 static ConicalFlockParams electroIonsParticlesFlockParams {
-	.gravity     = 0,
-	.angle       = 18,
-	.minSpeed    = 200,
-	.maxSpeed    = 300,
-	.minTimeout  = 250,
-	.maxTimeout  = 300,
-	.minActivationDelay = 8,
-	.maxActivationDelay = 8,
+	.gravity         = 0,
+	.angle           = 18,
+	.speed           = { .min = 200, .max = 300 },
+	.timeout         = { .min = 250, .max = 300 },
+	.activationDelay = { .min = 8, .max = 8 },
 };
 
 void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
@@ -508,7 +487,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 			.colors        = cloudColors,
 			.geometryRules = Particle::SpriteRules {
-				.radius = 9.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding,
+				.radius = { .mean = 9.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding,
 			},
 		});
 	}
@@ -522,7 +501,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = ionsColors,
 			.geometryRules = Particle::SpriteRules {
-				.radius = 3.0f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Shrinking,
+				.radius = { .mean = 3.0f, .spread = 0.75f }, .sizeBehaviour = Particle::Shrinking,
 			},
 		});
 	}

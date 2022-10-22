@@ -11,9 +11,23 @@ template <typename> class SingletonHolder;
 
 #include <span>
 
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+
+// Few notes on these value ranges:
+// They are ad-hoc structs for now, as we don't need more complicated stuff at this stage.
+// Distributions are obviously assumed to be uniform.
+// It should not matter whether a bound is inclusive or exclusive due to a coarse nature of the corresponding value,
+// unless it's explicitly indicated via a field name.
+
 // Mutability of fields makes adjusting parameters in a loop more convenient
 struct EllipsoidalFlockParams {
-	float origin[3] { 1.0f / 0.0f, 1.0f / 0.0f, 1.0f / 0.0f };
+	float origin[3] { 0.0f, 0.0f, 0.0f };
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
 	// So far, only stretching/flattening the sphere along the single dir seems to be useful
@@ -22,26 +36,19 @@ struct EllipsoidalFlockParams {
 	float gravity { 600 };
 	float drag { 0.0f };
 	float restitution { 0.75f };
-	unsigned minBounceCount { 1 };
-	unsigned maxBounceCount { 1 };
-	float minSpeed { 300 };
-	float maxSpeed { 300 };
-	float minShiftSpeed { 0.0f };
-	float maxShiftSpeed { 0.0f };
-	float minAngularVelocity { 0.0f };
-	float maxAngularVelocity { 0.0f };
-	float minPercentage { 0.0f };
-	float maxPercentage { 1.0f };
-	unsigned minTimeout { 300u };
-	unsigned maxTimeout { 700u };
-	unsigned minActivationDelay { 0 };
-	unsigned maxActivationDelay { 0 };
+	struct { unsigned minInclusive { 1 }, maxInclusive { 1 }; } bounceCount;
+	struct { float min { 300 }, max { 300 }; } speed;
+	struct { float min { 0.0f }, max { 0.0f }; } shiftSpeed;
+	struct { float min { 0.0f }, max { 0.0f }; } angularVelocity;
+	struct { float min { 0.0f }, max { 1.0f }; } percentage;
+	struct { unsigned min { 300u }, max { 700u }; } timeout;
+	struct { unsigned min { 0 }, max { 0 }; } activationDelay;
 	unsigned startBounceCounterDelay { 0 };
 };
 
 // Mutability of fields makes adjusting parameters in a loop more convenient
 struct ConicalFlockParams {
-	float origin[3];
+	float origin[3] { 0.0f, 0.0f, 0.0f };
 	float offset[3] { 0.0f, 0.0f, 0.0f };
 	float dir[3] { 0.0f, 0.0f, 1.0f };
 	float shiftDir[3] { 0.0f, 0.0f, 1.0f };
@@ -50,20 +57,13 @@ struct ConicalFlockParams {
 	float restitution { 0.75f };
 	float angle { 45.0f };
 	float innerAngle { 0.0f };
-	unsigned minBounceCount { 1 };
-	unsigned maxBounceCount { 1 };
-	float minSpeed { 300 };
-	float maxSpeed { 300 };
-	float minShiftSpeed { 0.0f };
-	float maxShiftSpeed { 0.0f };
-	float minAngularVelocity { 0.0f };
-	float maxAngularVelocity { 0.0f };
-	float minPercentage { 0.0f };
-	float maxPercentage { 1.0f };
-	unsigned minTimeout { 300u };
-	unsigned maxTimeout { 700u };
-	unsigned minActivationDelay { 0 };
-	unsigned maxActivationDelay { 0 };
+	struct { unsigned minInclusive { 1 }, maxInclusive { 1 }; } bounceCount;
+	struct { float min { 300 }, max { 300 }; } speed;
+	struct { float min { 0.0f }, max { 0.0f }; } shiftSpeed;
+	struct { float min { 0.0f }, max { 0.0f }; } angularVelocity;
+	struct { float min { 0.0f }, max { 1.0f }; } percentage;
+	struct { unsigned min { 300u }, max { 700u }; } timeout;
+	struct { unsigned min { 0 }, max { 0 }; } activationDelay;
 	unsigned startBounceCounterDelay { 0 };
 };
 
