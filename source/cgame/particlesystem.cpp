@@ -45,7 +45,8 @@ void ParticleSystem::unlinkAndFree( ParticleFlock *flock ) {
 	bin.allocator.free( flock );
 }
 
-auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> ParticleFlock * {
+auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime,
+								  const Particle::AppearanceRules &appearanceRules ) -> ParticleFlock * {
 	assert( binIndex < std::size( m_bins ) );
 	FlocksBin &bin = m_bins[binIndex];
 
@@ -78,9 +79,10 @@ auto ParticleSystem::createFlock( unsigned binIndex, int64_t currTime ) -> Parti
 	assert( ( (uintptr_t)particles % 16 ) == 0 );
 
 	auto *const flock = new( mem )ParticleFlock {
-		.particles = particles,
-		.binIndex  = binIndex,
-		.shapeList = shapeList,
+		.appearanceRules = appearanceRules,
+		.particles       = particles,
+		.binIndex        = binIndex,
+		.shapeList       = shapeList,
 	};
 
 	wsw::link( flock, &bin.head );
@@ -91,7 +93,7 @@ template <typename FlockParams>
 void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,
 										   const FlockParams &flockParams, unsigned binIndex, unsigned maxParticles ) {
 	const int64_t currTime = cg.time;
-	ParticleFlock *flock   = createFlock( binIndex, currTime );
+	ParticleFlock *flock   = createFlock( binIndex, currTime, appearanceRules );
 
 	signed fillStride;
 	unsigned initialOffset, activatedCountMultiplier, delayedCountMultiplier;
@@ -122,7 +124,6 @@ void ParticleSystem::addParticleFlockImpl( const Particle::AppearanceRules &appe
 	flock->minBounceCount          = flockParams.minBounceCount;
 	flock->maxBounceCount          = flockParams.maxBounceCount;
 	flock->startBounceCounterDelay = flockParams.startBounceCounterDelay;
-	flock->appearanceRules         = appearanceRules;
 
 	if( flock->minBounceCount < flock->maxBounceCount ) {
 		// Assume that probability of dropping the particle for varyingCount + 1 impacts is finalDropProbability
@@ -171,13 +172,12 @@ auto ParticleSystem::createTrailFlock( const Particle::AppearanceRules &rules, u
 
 	// Don't let it evict anything
 	const int64_t currTime = std::numeric_limits<int64_t>::min();
-	ParticleFlock *flock   = createFlock( binIndex, currTime );
+	ParticleFlock *flock   = createFlock( binIndex, currTime, rules );
 
 	// Externally managed
 	flock->timeoutAt             = std::numeric_limits<int64_t>::max();
 	flock->numActivatedParticles = 0;
 	flock->numDelayedParticles   = 0;
-	flock->appearanceRules       = rules;
 
 	return flock;
 }

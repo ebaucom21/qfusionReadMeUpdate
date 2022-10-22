@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <optional>
 #include <span>
+#include <variant>
 
 // FIXME: move these to r_local.h?
 #define MAX_DLIGHTS             32
@@ -324,13 +325,26 @@ struct LightLifespan {
 };
 
 struct alignas( 16 ) Particle {
-	enum Kind { Sprite, Spark };
-
-	enum SizeBehaviour {
+	enum SizeBehaviour : uint8_t {
 		SizeNotChanging,
 		Expanding,
 		Shrinking,
 		ExpandingAndShrinking,
+	};
+
+	struct SpriteRules {
+		float radius { 1.0f };
+		float radiusSpread { 0.0f };
+		SizeBehaviour sizeBehaviour { SizeNotChanging };
+	};
+
+	struct SparkRules {
+		float length { 1.0f };
+		float lengthSpread { 0.0f };
+		float width { 1.0f };
+		float widthSpread { 0.0f };
+		float viewDirPartScale { 0.67f };
+		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
 
 	// Common for flocks/aggregates.
@@ -342,6 +356,10 @@ struct alignas( 16 ) Particle {
 		// Points to external buffers with a greater lifetime
 		std::span<const ColorLifespan> colors;
 
+		// Unfortunately, std::span can't be used for materials due to value type restrictions.
+		// TODO: Use our custom span type
+		uint8_t numMaterials { 1 };
+
 		// Points to external buffers with a greater lifetime.
 		// Empty if no light.
 		// 1 element if the light props are the same for the entire flock.
@@ -349,28 +367,13 @@ struct alignas( 16 ) Particle {
 		// Other length options are invalid.
 		std::span<const LightLifespan> lightProps;
 
-		// Unfortunately, std::span can't be used for materials due to value type restrictions.
-		// TODO: Use our custom span type
-		uint8_t numMaterials { 1 };
-
-		Kind kind { Sprite };
-
-		float length { 0.0f };
-		float width { 0.0f };
-		float radius { 0.0f };
-
-		float lengthSpread { 0.0f };
-		float widthSpread { 0.0f };
-		float radiusSpread { 0.0f };
-
-		float viewDirPartScale { 0.67f };
+		std::variant<SpriteRules, SparkRules> geometryRules;
 
 		uint16_t lightFrameAffinityIndex { 0 };
 		uint16_t lightFrameAffinityModulo { 0 };
 
 		bool applyVertexDynLight { false };
 
-		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
 
 	float origin[4];

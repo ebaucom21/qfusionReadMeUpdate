@@ -1786,15 +1786,14 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
-		assert( appearanceRules->kind == Particle::Sprite || appearanceRules->kind == Particle::Spark );
-		if( appearanceRules->kind == Particle::Sprite ) {
-			assert( appearanceRules->radius >= 0.1f );
+		if( const auto *spriteRules = std::get_if<Particle::SpriteRules>( &appearanceRules->geometryRules ) ) {
+			assert( spriteRules->radius > 0.0f );
 
-			float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-			float radius     = wsw::max( 0.0f, appearanceRules->radius + signedFrac * appearanceRules->radiusSpread );
+			const float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+			float radius           = wsw::max( 0.0f, spriteRules->radius + signedFrac * spriteRules->radiusSpread );
 
-			if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
-				radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
+			if( spriteRules->sizeBehaviour != Particle::SizeNotChanging ) {
+				radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, spriteRules->sizeBehaviour );
 				if( radius < 0.1f ) {
 					continue;
 				}
@@ -1824,16 +1823,17 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 			VectorMA( point, radius, v_left, xyz[1] );
 			VectorMA( point, -radius, v_left, xyz[2] );
 		} else {
-			assert( appearanceRules->length >= 0.1f && appearanceRules->width >= 0.1f );
+			const auto *sparkRules = std::get_if<Particle::SparkRules>( &appearanceRules->geometryRules );
+			assert( sparkRules->length >= 0.1f && sparkRules->width >= 0.1f );
 
-			float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
-			float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+			const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
+			const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
 
-			float length = wsw::max( 0.0f, appearanceRules->length + lengthSignedFrac * appearanceRules->lengthSpread );
-			float width  = wsw::max( 0.0f, appearanceRules->width + widthSignedFrac * appearanceRules->widthSpread );
+			float length = wsw::max( 0.0f, sparkRules->length + lengthSignedFrac * sparkRules->lengthSpread );
+			float width  = wsw::max( 0.0f, sparkRules->width + widthSignedFrac * sparkRules->widthSpread );
 
-			if( appearanceRules->sizeBehaviour != Particle::SizeNotChanging ) {
-				const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, appearanceRules->sizeBehaviour );
+			if( sparkRules->sizeBehaviour != Particle::SizeNotChanging ) {
+				const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, sparkRules->sizeBehaviour );
 				length *= sizeFrac;
 				width  *= sizeFrac;
 				if( length < 0.1f || width < 0.1f ) {
@@ -1867,8 +1867,8 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 			// Reduce the viewDir-aligned part of the particleDir
 			const float *const __restrict viewDir = &fsh->viewAxis[AXIS_FORWARD];
-			assert( appearanceRules->viewDirPartScale >= 0.0f && appearanceRules->viewDirPartScale <= 1.0f );
-			const float viewDirCutScale = ( 1.0f - appearanceRules->viewDirPartScale ) * DotProduct( particleDir, viewDir );
+			assert( sparkRules->viewDirPartScale >= 0.0f && sparkRules->viewDirPartScale <= 1.0f );
+			const float viewDirCutScale = ( 1.0f - sparkRules->viewDirPartScale ) * DotProduct( particleDir, viewDir );
 			if( std::fabs( viewDirCutScale ) < 0.999f ) [[likely]] {
 				VectorMA( particleDir, -viewDirCutScale, viewDir, particleDir );
 				VectorNormalizeFast( particleDir );

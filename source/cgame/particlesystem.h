@@ -161,7 +161,7 @@ private:
 	void unlinkAndFree( ParticleFlock *flock );
 
 	[[nodiscard]]
-	auto createFlock( unsigned binIndex, int64_t currTime ) -> ParticleFlock *;
+	auto createFlock( unsigned binIndex, int64_t currTime, const Particle::AppearanceRules &rules ) -> ParticleFlock *;
 
 	template <typename FlockParams>
 	void addParticleFlockImpl( const Particle::AppearanceRules &appearanceRules,

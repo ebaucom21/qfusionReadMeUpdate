@@ -157,10 +157,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 				Particle::AppearanceRules appearanceRules {
 					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 					.colors         = { singleColorAddress, singleColorAddress + 1 },
-					.kind           = Particle::Sprite,
-					.radius         = 1.25f,
-					.radiusSpread   = 0.25f,
-					.sizeBehaviour  = Particle::Shrinking
+					.geometryRules  = Particle::SpriteRules {
+						.radius = 1.25f, .radiusSpread = 0.25f, .sizeBehaviour = Particle::Shrinking
+					},
 				};
 				cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 			}
@@ -1123,11 +1122,9 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		};
 
 		Particle::AppearanceRules appearanceRules {
-			.materials = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-			.colors    = { &kSparksColor, 1 },
-			.kind      = Particle::Spark,
-			.length    = 4.0f,
-			.width     = 1.0f,
+			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.colors        = { &kSparksColor, 1 },
+			.geometryRules = Particle::SparkRules { .length = 4.0f, .width = 1.0f },
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );

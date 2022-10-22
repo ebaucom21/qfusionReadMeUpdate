@@ -280,10 +280,8 @@ static const ColorLifespan kExplosionSmokeColors[3] {
 };
 
 static const Particle::AppearanceRules kExplosionSmokeAppearanceRules {
-	.colors       = kExplosionSmokeColors,
-	.kind         = Particle::Sprite,
-	.radius       = 9.0f,
-	.radiusSpread = 5.0f,
+	.colors        = kExplosionSmokeColors,
+	.geometryRules = Particle::SpriteRules { .radius = 9.0f, .radiusSpread = 5.0f },
 };
 
 static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
@@ -384,11 +382,9 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( cg_particles->integer && !liquidContentsAtFireOrigin ) {
 		Particle::AppearanceRules appearanceRules {
-			.materials    = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.colors       = kExplosionSparksColors,
-			.kind         = Particle::Sprite,
-			.radius       = 1.25f,
-			.radiusSpread = 0.25f
+			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.colors        = kExplosionSparksColors,
+			.geometryRules = Particle::SpriteRules { .radius = 1.25f, .radiusSpread = 0.25f }
 		};
 
 		EllipsoidalFlockParams flockParams {
@@ -409,12 +405,13 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
-		appearanceRules.kind         = Particle::Spark;
-		appearanceRules.length       = 25.0f;
-		appearanceRules.lengthSpread = 7.5f;
-		appearanceRules.width        = 4.0f;
-		appearanceRules.widthSpread  = 1.0f;
-		appearanceRules.sizeBehaviour = Particle::Shrinking;
+		appearanceRules.geometryRules = Particle::SparkRules {
+			.length        = 25.0f,
+			.lengthSpread  = 7.5f,
+			.width         = 4.0f,
+			.widthSpread   = 1.0f,
+			.sizeBehaviour = Particle::Shrinking,
+		};
 
 		flockParams.minSpeed      = 550;
 		flockParams.maxSpeed      = 650;
@@ -486,11 +483,9 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 			.maxTimeout    = 175,
 		};
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.colors         = kPlasmaParticlesColors,
-			.kind           = Particle::Sprite,
-			.radius         = 1.5f,
-			.radiusSpread   = 0.25f,
+			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.colors        = kPlasmaParticlesColors,
+			.geometryRules = Particle::SpriteRules { .radius = 1.5f, .radiusSpread = 0.25f },
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -570,10 +565,9 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.materials      = m_bloodMaterials,
 			.colors         = { &kBloodColors[indexForStyle], 1 },
 			.numMaterials   = (uint8_t)std::size( m_bloodMaterials ),
-			.kind           = Particle::Sprite,
-			.radius         = 1.50f,
-			.radiusSpread   = 0.75f,
-			.sizeBehaviour  = Particle::Expanding
+			.geometryRules  = Particle::SpriteRules {
+				.radius = 1.50f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Expanding
+			},
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 		const float *effectColor = kBloodColors[indexForStyle].fadedInColor;
@@ -642,13 +636,12 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		};
 
 		const Particle::AppearanceRules appearanceRules {
-			.materials           = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-			.colors              = { singleColorAddress, 1 },
-			.kind                = Particle::Spark,
-			.length              = 12.5f,
-			.width               = 2.0f,
-			.lengthSpread        = 2.5f,
-			.widthSpread         = 1.0f,
+			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.colors        = { singleColorAddress, 1 },
+			.geometryRules = Particle::SparkRules {
+				.length = 12.5f, .lengthSpread = 2.5f,
+				.width  = 2.0f,  .widthSpread  = 1.0f,
+			}
 		};
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
@@ -710,13 +703,12 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		};
 
 		const Particle::AppearanceRules appearanceRules {
-			.materials           = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-			.colors              = { singleColorAddress, 1 },
-			.kind                = Particle::Spark,
-			.length              = 10.0f,
-			.width               = 1.5f,
-			.lengthSpread        = 2.5f,
-			.widthSpread         = 0.5f,
+			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.colors        = { singleColorAddress, 1 },
+			.geometryRules = Particle::SparkRules {
+				.length = 10.0f, .lengthSpread = 2.5f,
+				.width  = 1.5f,  .widthSpread  = 0.5f,
+			}
 		};
 
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
@@ -775,13 +767,12 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 					.angle  = 60
 				};
 				Particle::AppearanceRules appearanceRules {
-					.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-					.colors         = kGunbladeHitColors,
-					.kind           = Particle::Spark,
-					.length         = 4.0f,
-					.width          = 1.0f,
-					.lengthSpread   = 1.0f,
-					.widthSpread    = 0.25f,
+					.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+					.colors        = kGunbladeHitColors,
+					.geometryRules = Particle::SparkRules {
+						.length = 4.0f, .lengthSpread = 1.0f,
+						.width  = 1.0f, .widthSpread  = 0.25f,
+					},
 				};
 				cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 			}
@@ -821,11 +812,9 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 			.maxPercentage = 1.0f
 		};
 		Particle::AppearanceRules appearanceRules {
-			.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.colors         = kGunbladeBlastColors,
-			.kind           = Particle::Sprite,
-			.radius         = 1.50f,
-			.radiusSpread   = 0.25f
+			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.colors        = kGunbladeBlastColors,
+			.geometryRules = Particle::SpriteRules { .radius = 1.50f, .radiusSpread = 0.25f },
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -898,13 +887,12 @@ static const ColorLifespan kBulletRosetteColors[1] {
 };
 
 static const Particle::AppearanceRules kBulletRosetteAppearanceRules {
-	.colors         = kBulletRosetteColors,
-	.kind           = Particle::Spark,
-	.length         = 16.0f,
-	.width          = 1.0f,
-	.lengthSpread   = 4.0f,
-	.widthSpread    = 0.1f,
-	.sizeBehaviour  = Particle::Shrinking,
+	.colors        = kBulletRosetteColors,
+	.geometryRules = Particle::SparkRules {
+		.length = 16.0f, .lengthSpread = 4.0f,
+		.width  = 1.0f,  .widthSpread  = 0.1f,
+		.sizeBehaviour = Particle::Shrinking,
+	}
 };
 
 static const ConicalFlockParams kBulletRosetteFlockParams {
@@ -917,10 +905,15 @@ static const ConicalFlockParams kBulletRosetteFlockParams {
 
 void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
 														   float minPercentage, float maxPercentage ) {
-	Particle::AppearanceRules appearanceRules( kBulletRosetteAppearanceRules );
-	appearanceRules.materials    = cgs.media.shaderSparkParticle.getAddressOfHandle();
-	appearanceRules.length       = 0.75f * appearanceRules.length;
-	appearanceRules.lengthSpread = 0.75f * appearanceRules.lengthSpread;
+	Particle::AppearanceRules appearanceRules {
+		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.colors        = kBulletRosetteColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 10.0f, .lengthSpread = 2.0f,
+			.width  = 1.0f,  .widthSpread  = 0.1f,
+			.sizeBehaviour = Particle::Shrinking,
+		}
+	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
 	flockParams.angle         = 45.0f;
@@ -935,8 +928,15 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientatio
 }
 
 void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation ) {
-	Particle::AppearanceRules appearanceRules( kBulletRosetteAppearanceRules );
-	appearanceRules.materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+	Particle::AppearanceRules appearanceRules {
+		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.colors        = kBulletRosetteColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 16.0f, .lengthSpread = 4.0f,
+			.width  = 1.0f,  .widthSpread  = 0.1f,
+			.sizeBehaviour = Particle::Shrinking,
+		}
+	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
 	flockParams.angle         = 24.0f;
@@ -947,8 +947,11 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 	orientation.copyToFlockParams( &flockParams );
 	cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
-	appearanceRules.length       = 0.67f * appearanceRules.length;
-	appearanceRules.lengthSpread = 0.67f * appearanceRules.lengthSpread;
+	appearanceRules.geometryRules = Particle::SparkRules {
+		.length = 10.0f, .lengthSpread = 3.0f,
+		.width  = 0.7f,  .widthSpread  = 0.1f,
+		.sizeBehaviour = Particle::Shrinking,
+	};
 
 	flockParams.innerAngle    = flockParams.angle;
 	flockParams.angle         = 60.0f;
@@ -971,14 +974,13 @@ void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, con
 															 float upShiftScale, unsigned,
 															 float minPercentage, float maxPercentage ) {
 	const Particle::AppearanceRules appearanceRules {
-		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.colors         = kBulletMetalRicochetColors,
-		.kind           = Particle::Spark,
-		.length         = 5.0f,
-		.width          = 0.75f,
-		.lengthSpread   = 1.0f,
-		.widthSpread    = 0.05f,
-		.sizeBehaviour  = Particle::Expanding,
+		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.colors        = kBulletMetalRicochetColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 5.0f,  .lengthSpread = 1.0f,
+			.width  = 0.75f, .widthSpread = 0.05f,
+			.sizeBehaviour = Particle::Expanding
+		},
 	};
 
 	ConicalFlockParams flockParams {
@@ -1023,12 +1025,11 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalDebrisColors,
-		.kind           = Particle::Spark,
-		.length         = 2.5f,
-		.width          = 0.75f,
-		.lengthSpread   = 1.0f,
-		.widthSpread    = 0.05f,
-		.sizeBehaviour  = Particle::Expanding,
+		.geometryRules  = Particle::SparkRules {
+			.length = 2.5f,  .lengthSpread = 1.0f,
+			.width  = 0.75f, .widthSpread  = 0.05f,
+			.sizeBehaviour = Particle::Expanding
+		}
 	};
 
 	ConicalFlockParams flockParams {
@@ -1065,11 +1066,10 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
-		.kind                = Particle::Sprite,
-		.radius              = 35.0f,
-		.radiusSpread        = 7.5f,
-		.applyVertexDynLight = true,
-		.sizeBehaviour       = Particle::Expanding,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = 35.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+		},
+		.applyVertexDynLight = true
 	};
 
 	ConicalFlockParams flockParams {
@@ -1095,11 +1095,10 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 	const Particle::AppearanceRules appearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
-		.kind                = Particle::Sprite,
-		.radius              = 55.0f,
-		.radiusSpread        = 10.0f,
-		.applyVertexDynLight = true,
-		.sizeBehaviour       = Particle::Expanding,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = 55.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding
+		},
+		.applyVertexDynLight = true
 	};
 
 	ConicalFlockParams flockParams {
@@ -1147,14 +1146,13 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 														  float upShiftScale, unsigned materialParam,
 														  float debrisPercentageScale ) {
 	const Particle::AppearanceRules burstAppearanceRules {
-		.materials      = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
-		.colors         = kWoodImpactColors,
-		.kind           = Particle::Spark,
-		.length         = 20.0f,
-		.width          = 3.0f,
-		.lengthSpread   = 3.0f,
-		.widthSpread    = 0.5f,
-		.sizeBehaviour  = Particle::Shrinking
+		.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+		.colors        = kWoodImpactColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 20.0f, .lengthSpread = 3.0f,
+			.width  = 3.0f,  .widthSpread  = 0.5f,
+			.sizeBehaviour = Particle::Shrinking,
+		}
 	};
 
 	ConicalFlockParams burstFlockParams {
@@ -1170,11 +1168,10 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kWoodDustColors,
-		.kind                = Particle::Sprite,
-		.radius              = 12.5f,
-		.radiusSpread        = 2.5f,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = 12.5f, .radiusSpread = 2.5f, .sizeBehaviour = Particle::Expanding,
+		},
 		.applyVertexDynLight = true,
-		.sizeBehaviour       = Particle::Expanding
 	};
 
 	ConicalFlockParams dustFlockParams {
@@ -1189,13 +1186,12 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	};
 
 	const Particle::AppearanceRules debrisAppearanceRules {
-		.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-		.colors         = kWoodImpactColors,
-		.kind           = Particle::Spark,
-		.length         = 5.0f,
-		.width          = 1.5f,
-		.lengthSpread   = 1.5f,
-		.widthSpread    = 0.5f,
+		.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+		.colors        = kWoodImpactColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 5.0f, .lengthSpread = 1.5f,
+			.width  = 1.5f, .widthSpread  = 0.5f,
+		}
 	};
 
 	ConicalFlockParams debrisFlockParams {
@@ -1259,12 +1255,11 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	Particle::AppearanceRules burstStripesAppearanceRules {
 		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
-		.kind          = Particle::Spark,
-		.length        = 30.0f,
-		.width         = 4.0f,
-		.lengthSpread  = 10.0f,
-		.widthSpread   = 1.0f,
-		.sizeBehaviour = Particle::Shrinking
+		.geometryRules = Particle::SparkRules {
+			.length = 30.0f, .lengthSpread = 10.0f,
+			.width  = 4.0f,  .widthSpread  = 1.0f,
+			.sizeBehaviour = Particle::Shrinking,
+		},
 	};
 
 	ConicalFlockParams burstParticlesFlockParams {
@@ -1282,9 +1277,7 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
-		.kind          = Particle::Sprite,
-		.radius        = 3.0f,
-		.sizeBehaviour = Particle::Shrinking
+		.geometryRules = Particle::SpriteRules { .radius = 3.0f, .sizeBehaviour = Particle::Shrinking },
 	};
 
 	ConicalFlockParams dustFlockParams {
@@ -1299,12 +1292,11 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	};
 
 	Particle::AppearanceRules dustAppearanceRules {
-		.materials      = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-		.colors         = kDirtDustColors,
-		.kind           = Particle::Sprite,
-		.radius         = 30.0f,
-		.radiusSpread   = 7.5f,
-		.sizeBehaviour  = Particle::Expanding
+		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.colors        = kDirtDustColors,
+		.geometryRules = Particle::SpriteRules {
+			.radius = 30.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+		},
 	};
 
 	orientation.copyToFlockParams( &burstStripesFlockParams );
@@ -1356,10 +1348,8 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kSandImpactColors,
-		.kind                = Particle::Sprite,
-		.radius              = 3.0f,
+		.geometryRules       = Particle::SpriteRules { .radius = 3.0f, .sizeBehaviour = Particle::Shrinking },
 		.applyVertexDynLight = true,
-		.sizeBehaviour       = Particle::Shrinking
 	};
 
 	orientation.copyToFlockParams( &burstFlockParams );
@@ -1381,11 +1371,10 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	const Particle::AppearanceRules dustAppearanceRules {
 		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 		.colors              = kSandDustColors,
-		.kind                = Particle::Sprite,
-		.radius              = 35.0f,
-		.radiusSpread        = 7.5f,
+		.geometryRules       = Particle::SpriteRules {
+			.radius = 35.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding
+		},
 		.applyVertexDynLight = true,
-		.sizeBehaviour       = Particle::Expanding
 	};
 
 	orientation.copyToFlockParams( &dustFlockParams );
@@ -1404,13 +1393,12 @@ static const ColorLifespan kGlassDebrisColors[1] {
 void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
 													 float upShiftScale, unsigned materialParam ) {
 	Particle::AppearanceRules appearanceRules {
-		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.colors         = kGlassDebrisColors,
-		.kind           = Particle::Spark,
-		.length         = 10.0f,
-		.width          = 1.0f,
-		.lengthSpread   = 2.0f,
-		.widthSpread    = 0.1f,
+		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.colors        = kGlassDebrisColors,
+		.geometryRules = Particle::SparkRules {
+			.length = 10.0f, .lengthSpread = 2.0f,
+			.width  = 1.0f,  .widthSpread  = 0.1f,
+		},
 	};
 
 	ConicalFlockParams flockParams {
@@ -1712,10 +1700,13 @@ static const ColorLifespan kLavaDustColors[1] {
 
 void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 														   std::pair<float, float> randomRotationAngleCosineRange ) {
+	std::variant<Particle::SpriteRules, Particle::SparkRules> dropParticlesGeometryRules = Particle::SpriteRules {
+		.radius = 1.25f, .radiusSpread = 0.25f, .sizeBehaviour = Particle::ExpandingAndShrinking
+	};
+
 	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
 
 	shader_s **materials     = nullptr;
-	auto dropParticlesKind   = Particle::Sprite;
 	float minDropsPercentage = 0.5f;
 	float maxDropsPercentage = 1.0f;
 
@@ -1734,7 +1725,10 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		dustColors   = kLavaDustColors;
 		dropsColors  = kLavaDropsColors;
 
-		dropParticlesKind  = Particle::Spark;
+		dropParticlesGeometryRules = Particle::SparkRules {
+			.length = 3.0f, .width = 1.5f, .sizeBehaviour = Particle::ExpandingAndShrinking
+		};
+
 		minDropsPercentage = 0.3f;
 		maxDropsPercentage = 0.5f;
 
@@ -1771,12 +1765,11 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		const Particle::AppearanceRules splashAppearanceRules {
 			.materials     = materials,
 			.colors        = splashColors,
-			.kind          = Particle::Spark,
-			.length        = 40.0f,
-			.width         = 4.0f,
-			.lengthSpread  = 10.0f,
-			.widthSpread   = 1.0f,
-			.sizeBehaviour = Particle::Shrinking
+			.geometryRules = Particle::SparkRules {
+				.length = 40.0f, .lengthSpread = 10.0f,
+				.width  = 4.0f,  .widthSpread = 1.0f,
+				.sizeBehaviour = Particle::Shrinking,
+			},
 		};
 
 		ConicalFlockParams dropsFlockParams {
@@ -1796,12 +1789,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		const Particle::AppearanceRules dropsAppearanceRules {
 			.materials     = materials,
 			.colors        = dropsColors,
-			.kind          = dropParticlesKind,
-			.length        = 3.0f,
-			.width         = 1.5f,
-			.radius        = 1.25f,
-			.radiusSpread  = 0.25f,
-			.sizeBehaviour = Particle::ExpandingAndShrinking
+			.geometryRules = dropParticlesGeometryRules,
 		};
 
 		ConicalFlockParams dustFlockParams {
@@ -1818,12 +1806,11 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		};
 
 		const Particle::AppearanceRules dustAppearanceRules {
-			.materials      = materials,
-			.colors         = dustColors,
-			.kind           = Particle::Sprite,
-			.radius         = 25.0f,
-			.radiusSpread   = 7.5f,
-			.sizeBehaviour  = Particle::Expanding
+			.materials     = materials,
+			.colors        = dustColors,
+			.geometryRules = Particle::SpriteRules {
+				.radius = 25.0f, .radiusSpread = 7.5f, .sizeBehaviour = Particle::Expanding,
+			},
 		};
 
 		flockOrientation.copyToFlockParams( &splashFlockParams );

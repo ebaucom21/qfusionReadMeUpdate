@@ -240,12 +240,11 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 	if( cg_projectileTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-				.colors                = kRocketSmokeTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 20.0f,
-				.radiusSpread          = 1.5f,
-				.sizeBehaviour         = Particle::Expanding,
+				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.colors        = kRocketSmokeTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 20.0f, .radiusSpread = 1.5f, .sizeBehaviour = Particle::Expanding
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -256,12 +255,11 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-				.colors                = kRocketFireTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 7.0f,
-				.radiusSpread          = 1.0f,
-				.sizeBehaviour         = Particle::Shrinking,
+				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.colors        = kRocketFireTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 7.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -316,12 +314,11 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 	if( cg_projectileTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-				.colors                = kGrenadeSmokeTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 20.0f,
-				.radiusSpread          = 1.0f,
-				.sizeBehaviour         = Particle::Shrinking,
+				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.colors        = kGrenadeSmokeTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 20.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -332,12 +329,11 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-				.colors                = kGrenadeFuseTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 7.0f,
-				.radiusSpread          = 1.0f,
-				.sizeBehaviour         = Particle::Shrinking,
+				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.colors        = kGrenadeFuseTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 7.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Shrinking,
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) {
@@ -405,12 +401,11 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 	if( cg_projectileTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderFlareParticle.getAddressOfHandle(),
-				.colors                = kBlastSmokeTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 10.0f,
-				.radiusSpread          = 1.0f,
-				.sizeBehaviour         = Particle::Expanding,
+				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.colors        = kBlastSmokeTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 10.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding,
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -421,12 +416,11 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
-				.materials             = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-				.colors                = kBlastIonsTrailColors,
-				.kind                  = Particle::Sprite,
-				.radius                = 3.0f,
-				.radiusSpread          = 0.75f,
-				.sizeBehaviour         = Particle::Shrinking,
+				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.colors        = kBlastIonsTrailColors,
+				.geometryRules = Particle::SpriteRules {
+					.radius = 3.0f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Shrinking,
+				},
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
@@ -513,10 +507,9 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
 			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 			.colors        = cloudColors,
-			.kind          = Particle::Sprite,
-			.radius        = 9.0f,
-			.radiusSpread  = 1.0f,
-			.sizeBehaviour = Particle::Expanding
+			.geometryRules = Particle::SpriteRules {
+				.radius = 9.0f, .radiusSpread = 1.0f, .sizeBehaviour = Particle::Expanding,
+			},
 		});
 	}
 	if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
@@ -526,12 +519,11 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 
 	if( !effects->particleTrails[1] ) [[unlikely]] {
 		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin, {
-			.materials             = cgs.media.shaderBlastParticle.getAddressOfHandle(),
-			.colors                = ionsColors,
-			.kind                  = Particle::Sprite,
-			.radius                = 3.0f,
-			.radiusSpread          = 0.75f,
-			.sizeBehaviour         = Particle::Shrinking
+			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.colors        = ionsColors,
+			.geometryRules = Particle::SpriteRules {
+				.radius = 3.0f, .radiusSpread = 0.75f, .sizeBehaviour = Particle::Shrinking,
+			},
 		});
 	}
 	if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
