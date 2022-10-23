@@ -1722,7 +1722,7 @@ void R_SubmitComplexPolysToBackend( const FrontendToBackendShared *fsh, const en
 }
 
 [[nodiscard]]
-static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::SizeBehaviour sizeBehaviour ) {
+static wsw_forceinline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::SizeBehaviour sizeBehaviour ) {
 	assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
 	// Disallowed intentionally to avoid extra branching while testing the final particle dimensions for feasibility
 	assert( sizeBehaviour != Particle::SizeNotChanging );
@@ -1747,33 +1747,41 @@ static inline float calcSizeFracForLifetimeFrac( float lifetimeFrac, Particle::S
 	return result;
 }
 
-void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
-									 const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
-	mesh_t mesh;
+static wsw_forceinline void calcAddedParticleLight( const float *__restrict particleOrigin,
+													const Scene::DynamicLight *__restrict lights,
+													std::span<const uint16_t> affectingLightIndices,
+													float *__restrict addedLight ) {
+	assert( !affectingLightIndices.empty() );
 
+	size_t lightNum = 0;
+	do {
+		const Scene::DynamicLight *light = lights + affectingLightIndices[lightNum];
+		const float squareDistance = DistanceSquared( light->origin, particleOrigin );
+		// May go outside [0.0, 1.0] as we test against the bounding box of the entire aggregate
+		float impactStrength = 1.0f - Q_Sqrt( squareDistance ) * Q_Rcp( light->maxRadius );
+		// Just clamp so the code stays branchless
+		impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
+		VectorMA( addedLight, impactStrength, light->color, addedLight );
+	} while( ++lightNum < affectingLightIndices.size() );
+}
+
+static void submitSpriteParticlesToBackend( const FrontendToBackendShared *fsh,
+											const Scene::ParticlesAggregate *aggregate,
+											const entity_t *entity,
+											const shader_t *shader,
+											std::span<const sortedDrawSurf_t> surfSpan,
+											std::span<const uint16_t> affectingLightIndices ) {
+	const auto *__restrict appearanceRules = &aggregate->appearanceRules;
+	const auto *__restrict spriteRules     = std::get_if<Particle::SpriteRules>( &appearanceRules->geometryRules );
+	const bool applyLight                  = !affectingLightIndices.empty();
+
+	// TODO: Write directly to mapped buffers
+	mesh_t mesh;
 	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
 	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
 	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
 	byte_vec4_t colors[4];
 	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
-
-	const auto *const firstDrawSurf = (const ParticleDrawSurface *)surfSpan.front().drawSurf;
-	const auto *const aggregate = fsh->particleAggregates + firstDrawSurf->aggregateIndex;
-	// Less if the aggregate is visually split by some surfaces of other kinds
-	assert( surfSpan.size() <= aggregate->numParticles );
-
-	const Particle::AppearanceRules *const __restrict appearanceRules = &aggregate->appearanceRules;
-
-	bool applyLight                 = false;
-	unsigned numAffectingLights     = 0;
-	uint16_t *affectingLightIndices = nullptr;
-	if( appearanceRules->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
-		affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) * fsh->allVisibleLightIndices.size() );
-
-		numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights, fsh->allVisibleLightIndices,
-														 aggregate->mins, aggregate->maxs, affectingLightIndices );
-		applyLight = numAffectingLights > 0;
-	}
 
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *drawSurf = (const ParticleDrawSurface *)sds.drawSurf;
@@ -1786,119 +1794,183 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
 
-		if( const auto *spriteRules = std::get_if<Particle::SpriteRules>( &appearanceRules->geometryRules ) ) {
-			assert( spriteRules->radius.mean > 0.0f );
-			assert( spriteRules->radius.spread >= 0.0f );
+		assert( spriteRules->radius.mean > 0.0f );
+		assert( spriteRules->radius.spread >= 0.0f );
 
-			float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
-			float radius     = wsw::max( 0.0f, spriteRules->radius.mean + signedFrac * spriteRules->radius.spread );
+		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+		float radius     = wsw::max( 0.0f, spriteRules->radius.mean + signedFrac * spriteRules->radius.spread );
 
-			if( spriteRules->sizeBehaviour != Particle::SizeNotChanging ) {
-				radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, spriteRules->sizeBehaviour );
-				if( radius < 0.1f ) {
-					continue;
-				}
+		if( spriteRules->sizeBehaviour != Particle::SizeNotChanging ) {
+			radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, spriteRules->sizeBehaviour );
+			if( radius < 0.1f ) {
+				continue;
 			}
+		}
 
-			vec3_t v_left, v_up;
-			if( particle->rotationAngle != 0.0f ) {
-				mat3_t axis;
-				Matrix3_Rotate( fsh->viewAxis, particle->rotationAngle, &fsh->viewAxis[AXIS_FORWARD], axis );
-				VectorCopy( &axis[AXIS_RIGHT], v_left );
-				VectorCopy( &axis[AXIS_UP], v_up );
-			} else {
-				VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
-				VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
-			}
-
-			if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
-				VectorInverse( v_left );
-			}
-
-			vec3_t point;
-			VectorMA( particle->origin, -radius, v_up, point );
-			VectorMA( point, radius, v_left, xyz[0] );
-			VectorMA( point, -radius, v_left, xyz[3] );
-
-			VectorMA( particle->origin, radius, v_up, point );
-			VectorMA( point, radius, v_left, xyz[1] );
-			VectorMA( point, -radius, v_left, xyz[2] );
+		vec3_t v_left, v_up;
+		if( particle->rotationAngle != 0.0f ) {
+			mat3_t axis;
+			Matrix3_Rotate( fsh->viewAxis, particle->rotationAngle, &fsh->viewAxis[AXIS_FORWARD], axis );
+			VectorCopy( &axis[AXIS_RIGHT], v_left );
+			VectorCopy( &axis[AXIS_UP], v_up );
 		} else {
-			const auto *sparkRules = std::get_if<Particle::SparkRules>( &appearanceRules->geometryRules );
-			assert( sparkRules->length.mean >= 0.1f && sparkRules->width.mean >= 0.1f );
-			assert( sparkRules->length.spread >= 0.0f && sparkRules->width.spread >= 0.0f );
+			VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
+			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
+		}
 
-			const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
-			const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+		if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+			VectorInverse( v_left );
+		}
 
-			float length = wsw::max( 0.0f, sparkRules->length.mean + lengthSignedFrac * sparkRules->length.spread );
-			float width  = wsw::max( 0.0f, sparkRules->width.mean + widthSignedFrac * sparkRules->width.spread );
+		vec3_t point;
+		VectorMA( particle->origin, -radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[0] );
+		VectorMA( point, -radius, v_left, xyz[3] );
 
-			if( sparkRules->sizeBehaviour != Particle::SizeNotChanging ) {
-				const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, sparkRules->sizeBehaviour );
-				length *= sizeFrac;
-				width  *= sizeFrac;
-				if( length < 0.1f || width < 0.1f ) {
-					continue;
-				}
-			}
+		VectorMA( particle->origin, radius, v_up, point );
+		VectorMA( point, radius, v_left, xyz[1] );
+		VectorMA( point, -radius, v_left, xyz[2] );
 
-			vec3_t particleDir;
-			float fromFrac, toFrac;
-			if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
-				const float rcpSpeed = Q_RSqrt( squareSpeed );
-				if( particle->rotationAngle == 0.0f ) [[likely]] {
-					VectorScale( particle->velocity, rcpSpeed, particleDir );
-					fromFrac = 0.0f, toFrac = 1.0f;
-				} else {
-					vec3_t tmpParticleDir;
-					VectorScale( particle->velocity, rcpSpeed, tmpParticleDir );
+		vec4_t colorBuffer;
+		const ColorLifespan &colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
+		colorLifespan.getColorForLifetimeFrac( particle->lifetimeFrac, colorBuffer );
 
-					mat3_t rotationMatrix;
-					const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];
-					Matrix3_Rotate( axis_identity, particle->rotationAngle, rotationAxis, rotationMatrix );
-					Matrix3_TransformVector( rotationMatrix, tmpParticleDir, particleDir );
+		if( applyLight ) {
+			vec4_t addedLight { 0.0f, 0.0f, 0.0f, 1.0f };
+			calcAddedParticleLight( particle->origin, fsh->dynamicLights, affectingLightIndices, addedLight );
 
-					fromFrac = -0.5f, toFrac = +0.5f;
-				}
-			} else {
+			// TODO: Pass as a floating-point attribute to a GPU program?
+			colorBuffer[0] = wsw::min( 1.0f, colorBuffer[0] + addedLight[0] );
+			colorBuffer[1] = wsw::min( 1.0f, colorBuffer[1] + addedLight[1] );
+			colorBuffer[2] = wsw::min( 1.0f, colorBuffer[2] + addedLight[2] );
+		}
+
+		Vector4Set( colors[0],
+					(uint8_t)( 255 * colorBuffer[0] ),
+					(uint8_t)( 255 * colorBuffer[1] ),
+					(uint8_t)( 255 * colorBuffer[2] ),
+					(uint8_t)( 255 * colorBuffer[3] ) );
+
+		Vector4Copy( colors[0], colors[1] );
+		Vector4Copy( colors[0], colors[2] );
+		Vector4Copy( colors[0], colors[3] );
+
+		// TODO: Write directly to mapped buffers
+		memset( &mesh, 0, sizeof( mesh ) );
+		mesh.numElems = 6;
+		mesh.elems = elems;
+		mesh.numVerts = 4;
+		mesh.xyzArray = xyz;
+		mesh.normalsArray = normals;
+		mesh.stArray = texcoords;
+		mesh.colorsArray[0] = colors;
+
+		RB_AddDynamicMesh( entity, shader, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	}
+}
+
+static void submitSparkParticlesToBackend( const FrontendToBackendShared *fsh,
+										   const Scene::ParticlesAggregate *aggregate,
+										   const entity_t *entity,
+										   const shader_t *shader,
+										   std::span<const sortedDrawSurf_t> surfSpan,
+										   std::span<const uint16_t> affectingLightIndices ) {
+	const auto *__restrict appearanceRules = &aggregate->appearanceRules;
+	const auto *__restrict sparkRules      = std::get_if<Particle::SparkRules>( &appearanceRules->geometryRules );
+	const bool applyLight                  = !affectingLightIndices.empty();
+
+	// TODO: Write directly to mapped buffers
+	mesh_t mesh;
+	elem_t elems[6] = { 0, 1, 2, 0, 2, 3 };
+	vec4_t xyz[4] = { {0,0,0,1}, {0,0,0,1}, {0,0,0,1}, {0,0,0,1} };
+	vec4_t normals[4] = { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} };
+	byte_vec4_t colors[4];
+	vec2_t texcoords[4] = { {0, 1}, {0, 0}, {1,0}, {1,1} };
+
+	for( const sortedDrawSurf_t &sds: surfSpan ) {
+		const auto *drawSurf = (const ParticleDrawSurface *)sds.drawSurf;
+
+		// Ensure that the aggregate is the same
+		assert( fsh->particleAggregates + drawSurf->aggregateIndex == aggregate );
+
+		assert( drawSurf->particleIndex < aggregate->numParticles );
+		const Particle *const __restrict particle = aggregate->particles + drawSurf->particleIndex;
+
+		assert( particle->lifetimeFrac >= 0.0f && particle->lifetimeFrac <= 1.0f );
+
+		assert( sparkRules->length.mean >= 0.1f && sparkRules->width.mean >= 0.1f );
+		assert( sparkRules->length.spread >= 0.0f && sparkRules->width.spread >= 0.0f );
+
+		const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
+		const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+
+		float length = wsw::max( 0.0f, sparkRules->length.mean + lengthSignedFrac * sparkRules->length.spread );
+		float width  = wsw::max( 0.0f, sparkRules->width.mean + widthSignedFrac * sparkRules->width.spread );
+
+		if( sparkRules->sizeBehaviour != Particle::SizeNotChanging ) {
+			const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, sparkRules->sizeBehaviour );
+			length *= sizeFrac;
+			width  *= sizeFrac;
+			if( length < 0.1f || width < 0.1f ) {
 				continue;
 			}
+		}
 
-			assert( std::fabs( VectorLengthSquared( particleDir ) - 1.0f ) < 0.1f );
-
-			// Reduce the viewDir-aligned part of the particleDir
-			const float *const __restrict viewDir = &fsh->viewAxis[AXIS_FORWARD];
-			assert( sparkRules->viewDirPartScale >= 0.0f && sparkRules->viewDirPartScale <= 1.0f );
-			const float viewDirCutScale = ( 1.0f - sparkRules->viewDirPartScale ) * DotProduct( particleDir, viewDir );
-			if( std::fabs( viewDirCutScale ) < 0.999f ) [[likely]] {
-				VectorMA( particleDir, -viewDirCutScale, viewDir, particleDir );
-				VectorNormalizeFast( particleDir );
+		vec3_t particleDir;
+		float fromFrac, toFrac;
+		if( float squareSpeed = VectorLengthSquared( particle->velocity ); squareSpeed > 1.0f ) [[likely]] {
+			const float rcpSpeed = Q_RSqrt( squareSpeed );
+			if( particle->rotationAngle == 0.0f ) [[likely]] {
+				VectorScale( particle->velocity, rcpSpeed, particleDir );
+				fromFrac = 0.0f, toFrac = 1.0f;
 			} else {
-				continue;
+				vec3_t tmpParticleDir;
+				VectorScale( particle->velocity, rcpSpeed, tmpParticleDir );
+
+				mat3_t rotationMatrix;
+				const float *rotationAxis = kPredefinedDirs[particle->rotationAxisIndex];
+				Matrix3_Rotate( axis_identity, particle->rotationAngle, rotationAxis, rotationMatrix );
+				Matrix3_TransformVector( rotationMatrix, tmpParticleDir, particleDir );
+
+				fromFrac = -0.5f, toFrac = +0.5f;
 			}
+		} else {
+			continue;
+		}
 
-			vec3_t from, to, mid;
-			VectorMA( particle->origin, fromFrac * length, particleDir, from );
-			VectorMA( particle->origin, toFrac * length, particleDir, to );
-			VectorAvg( from, to, mid );
+		assert( std::fabs( VectorLengthSquared( particleDir ) - 1.0f ) < 0.1f );
 
-			vec3_t viewToMid, right;
-			VectorSubtract( mid, fsh->viewOrigin, viewToMid );
-			CrossProduct( viewToMid, particleDir, right );
-			if( const float squareLength = VectorLengthSquared( right ); squareLength > wsw::square( 0.001f ) ) [[likely]] {
-				const float rcpLength = Q_RSqrt( squareLength );
-				VectorScale( right, rcpLength, right );
+		// Reduce the viewDir-aligned part of the particleDir
+		const float *const __restrict viewDir = &fsh->viewAxis[AXIS_FORWARD];
+		assert( sparkRules->viewDirPartScale >= 0.0f && sparkRules->viewDirPartScale <= 1.0f );
+		const float viewDirCutScale = ( 1.0f - sparkRules->viewDirPartScale ) * DotProduct( particleDir, viewDir );
+		if( std::fabs( viewDirCutScale ) < 0.999f ) [[likely]] {
+			VectorMA( particleDir, -viewDirCutScale, viewDir, particleDir );
+			VectorNormalizeFast( particleDir );
+		} else {
+			continue;
+		}
 
-				const float halfWidth = 0.5f * width;
+		vec3_t from, to, mid;
+		VectorMA( particle->origin, fromFrac * length, particleDir, from );
+		VectorMA( particle->origin, toFrac * length, particleDir, to );
+		VectorAvg( from, to, mid );
 
-				VectorMA( from, +halfWidth, right, xyz[0] );
-				VectorMA( from, -halfWidth, right, xyz[1] );
-				VectorMA( to, -halfWidth, right, xyz[2] );
-				VectorMA( to, +halfWidth, right, xyz[3] );
-			} else {
-				continue;
-			}
+		vec3_t viewToMid, right;
+		VectorSubtract( mid, fsh->viewOrigin, viewToMid );
+		CrossProduct( viewToMid, particleDir, right );
+		if( const float squareLength = VectorLengthSquared( right ); squareLength > wsw::square( 0.001f ) ) [[likely]] {
+			const float rcpLength = Q_RSqrt( squareLength );
+			VectorScale( right, rcpLength, right );
+
+			const float halfWidth = 0.5f * width;
+
+			VectorMA( from, +halfWidth, right, xyz[0] );
+			VectorMA( from, -halfWidth, right, xyz[1] );
+			VectorMA( to, -halfWidth, right, xyz[2] );
+			VectorMA( to, +halfWidth, right, xyz[3] );
+		} else {
+			continue;
 		}
 
 		vec4_t colorBuffer;
@@ -1907,16 +1979,8 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 
 		if( applyLight ) {
 			alignas( 16 ) vec4_t addedLight { 0.0f, 0.0f, 0.0f, 1.0f };
-			unsigned lightNum = 0;
-			do {
-				const Scene::DynamicLight *light = fsh->dynamicLights + affectingLightIndices[lightNum];
-				const float squareDistance = DistanceSquared( light->origin, particle->origin );
-				// May go outside [0.0, 1.0] as we test against the bounding box of the entire aggregate
-				float impactStrength = 1.0f - Q_Sqrt( squareDistance ) * Q_Rcp( light->maxRadius );
-				// Just clamp so the code stays branchless
-				impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
-				VectorMA( addedLight, impactStrength, light->color, addedLight );
-			} while( ++lightNum < numAffectingLights );
+			calcAddedParticleLight( particle->origin, fsh->dynamicLights, affectingLightIndices, addedLight );
+
 			// The clipping due to LDR limitations sucks...
 			// TODO: Pass as a floating-point attribute to a GPU program?
 			colorBuffer[0] = wsw::min( 1.0f, colorBuffer[0] + addedLight[0] );
@@ -1934,6 +1998,7 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 		Vector4Copy( colors[0], colors[2] );
 		Vector4Copy( colors[0], colors[3] );
 
+		// TODO: Write directly to mapped buffers
 		memset( &mesh, 0, sizeof( mesh ) );
 		mesh.numElems = 6;
 		mesh.elems = elems;
@@ -1943,7 +2008,37 @@ void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const e
 		mesh.stArray = texcoords;
 		mesh.colorsArray[0] = colors;
 
-		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+		RB_AddDynamicMesh( entity, shader, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+	}
+}
+
+void R_SubmitParticleSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+									 const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
+	assert( !surfSpan.empty() );
+
+	const auto *const firstDrawSurf = (const ParticleDrawSurface *)surfSpan.front().drawSurf;
+	const auto *const aggregate = fsh->particleAggregates + firstDrawSurf->aggregateIndex;
+	// Less if the aggregate is visually split by some surfaces of other kinds
+	assert( surfSpan.size() <= aggregate->numParticles );
+
+	const Particle::AppearanceRules *const appearanceRules = &aggregate->appearanceRules;
+
+	unsigned numAffectingLights     = 0;
+	uint16_t *affectingLightIndices = nullptr;
+	std::span<const uint16_t> lightIndicesSpan;
+	if( appearanceRules->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
+		affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) * fsh->allVisibleLightIndices.size() );
+
+		numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights, fsh->allVisibleLightIndices,
+														 aggregate->mins, aggregate->maxs, affectingLightIndices );
+
+		lightIndicesSpan = { affectingLightIndices, numAffectingLights };
+	}
+
+	if( std::holds_alternative<Particle::SpriteRules>( appearanceRules->geometryRules ) ) {
+		submitSpriteParticlesToBackend( fsh, aggregate, e, shader, surfSpan, lightIndicesSpan );
+	} else {
+		submitSparkParticlesToBackend( fsh, aggregate, e, shader, surfSpan, lightIndicesSpan );
 	}
 }
 
