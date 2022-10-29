@@ -911,19 +911,18 @@ auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate
 	return { tmpIndices, numPassedAggregates };
 }
 
-auto Frontend::cullExternalMeshes( std::span<const Scene::ExternalCompoundMesh> meshesSpan,
-								   const Frustum *__restrict primaryFrustum,
-								   std::span<const Frustum> occluderFrusta,
-								   uint16_t *tmpIndices )
-								   -> std::span<const uint16_t> {
+auto Frontend::cullCompoundDynamicMeshes( std::span<const Scene::CompoundDynamicMesh> meshesSpan,
+										  const Frustum *__restrict primaryFrustum,
+										  std::span<const Frustum> occluderFrusta,
+										  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	const auto *const meshes = meshesSpan.data();
 	const unsigned numMeshes = meshesSpan.size();
 
 	unsigned numPassedMeshes = 0;
 	for( unsigned i = 0; i < numMeshes; ++i ) {
-		const Scene::ExternalCompoundMesh *mesh = meshes + i;
+		const Scene::CompoundDynamicMesh *mesh = meshes + i;
 
-		LOAD_BOX_COMPONENTS( mesh->mins, mesh->maxs );
+		LOAD_BOX_COMPONENTS( mesh->cullMins, mesh->cullMaxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
 		if( nonZeroIfFullyOutside == 0 ) {
 			bool occluded = false;
@@ -982,15 +981,16 @@ auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 	return { tmpIndices, numPassedPolys };
 }
 
-auto Frontend::cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
-								 const Frustum *__restrict primaryFrustum,
-								 std::span<const Frustum> occluderFrusta,
-								 uint16_t *tmpIndices ) -> std::span<const uint16_t> {
-	unsigned numPassedPolys = 0;
-	for( unsigned i = 0; i < numPolys; ++i ) {
-		const ComplexPoly *const poly = polys[i];
+auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
+								  unsigned numMeshes,
+								  const Frustum *__restrict primaryFrustum,
+								  std::span<const Frustum> occluderFrusta,
+								  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+	unsigned numPassedMeshes = 0;
+	for( unsigned i = 0; i < numMeshes; ++i ) {
+		const DynamicMesh *const mesh = meshes[i];
 
-		LOAD_BOX_COMPONENTS( poly->cullMins, poly->cullMaxs );
+		LOAD_BOX_COMPONENTS( mesh->cullMins, mesh->cullMaxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
 		if( nonZeroIfFullyOutside == 0 ) {
 			bool occluded = false;
@@ -1003,12 +1003,12 @@ auto Frontend::cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
 				}
 			}
 			if( !occluded ) {
-				tmpIndices[numPassedPolys++] = i;
+				tmpIndices[numPassedMeshes++] = i;
 			}
 		}
 	}
 
-	return { tmpIndices, numPassedPolys };
+	return { tmpIndices, numPassedMeshes };
 }
 
 }

@@ -119,7 +119,7 @@ private:
 		bool tesselateClosestLod { false };
 		bool lerpNextLevelColors { false };
 		bool applyVertexDynLight { false };
-		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
+		SimulatedHullsSystem::ViewDotFade vertexViewDotFade { SimulatedHullsSystem::ViewDotFade::NoFade };
 	};
 
 	struct ConcentricHullSpawnRecord {
@@ -132,9 +132,9 @@ private:
 		unsigned timeout { 250 };
 		AllocMethod allocMethod { nullptr };
 
-		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
+		SimulatedHullsSystem::ViewDotFade vertexViewDotFade { SimulatedHullsSystem::ViewDotFade::NoFade };
 		bool useLayer0DrawOnTopHack { false };
-		std::optional<ExternalMesh::ViewDotFade> overrideLayer0ViewDotFade;
+		std::optional<SimulatedHullsSystem::ViewDotFade> overrideLayer0ViewDotFade;
 	};
 
 	struct ConicalFlockSpawnRecord {
@@ -198,7 +198,7 @@ private:
 
 	void spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
 						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel,
-						 ExternalMesh::ViewDotFade viewDotFade, ColorChangeTimeline colorChangeTimeline );
+						 SimulatedHullsSystem::ViewDotFade viewDotFade, ColorChangeTimeline colorChangeTimeline );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

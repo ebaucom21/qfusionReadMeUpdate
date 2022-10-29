@@ -11,7 +11,10 @@ struct CMShapeList;
 
 class SimulatedHullsSystem {
 	friend class TransientEffectsSystem;
+	friend class MeshTesselationHelper;
 public:
+	enum class ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
+
 	struct ColorChangeTimelineNode {
 		// Specifying it as a fraction is more flexible than absolute offsets
 		float activateAtLifetimeFraction { 0.0f };
@@ -43,6 +46,38 @@ public:
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
+
+	class HullDynamicMesh : public DynamicMesh {
+		friend class SimulatedHullsSystem;
+		friend class MeshTesselationHelper;
+
+		const vec4_t *m_simulatedPositions { nullptr };
+		const vec4_t *m_simulatedNormals { nullptr };
+		const byte_vec4_t *m_simulatedColors { nullptr };
+		unsigned m_simulatedSubdivLevel { 0 };
+		// Gets set in getStorageRequirements()
+		mutable unsigned m_chosenSubdivLevel { 0 };
+		float m_nextLodTangentRatio { 0.18f };
+		ViewDotFade m_viewDotFade { ViewDotFade::NoFade };
+		bool m_tesselateClosestLod { false };
+		bool m_lerpNextLevelColors { false };
+
+		[[nodiscard]]
+		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent ) const
+			-> std::pair<unsigned, unsigned> override;
+
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  float cameraViewTangent,
+							  const Scene::DynamicLight *lights,
+							  std::span<const uint16_t> affectingLightIndices,
+							  vec4_t *__restrict destPositions,
+							  vec4_t *__restrict destNormals,
+							  vec2_t *__restrict destTexCoords,
+							  byte_vec4_t *__restrict destColors,
+							  uint16_t *__restrict destIndices ) const -> std::pair<unsigned, unsigned> override;
+	};
 
 	struct ColorChangeState {
 		int64_t lastColorChangeAt { 0 };
@@ -86,14 +121,13 @@ private:
 		float minZLastFrame { std::numeric_limits<float>::max() };
 		float maxZLastFrame { std::numeric_limits<float>::lowest() };
 
-		// The renderer assumes external lifetime of the submitted spans. Keep the buffer within the hull.
-		ExternalMesh meshSubmissionBuffer[1];
+		// The renderer assumes external lifetime of the submitted spans. Keep it within the hull.
+		HullDynamicMesh submittedMesh;
 
-		float lodCurrLevelTangentRatio { 0.25f };
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
-		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
+		ViewDotFade vertexViewDotFade { ViewDotFade::NoFade };
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
@@ -137,7 +171,7 @@ private:
 			// Contains pairs (speed, distance from origin along the direction)
 			vec2_t *vertexSpeedsAndDistances;
 			byte_vec4_t *vertexColors;
-			ExternalMesh *submittedMesh;
+			HullDynamicMesh *submittedMesh;
 
 			// Subtracted from limitsAtDirections for this layer, must be non-negative.
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
@@ -147,10 +181,11 @@ private:
 			ColorChangeState colorChangeState;
 
 			bool useDrawOnTopHack { false };
-			std::optional<ExternalMesh::ViewDotFade> overrideHullFade;
+			std::optional<ViewDotFade> overrideHullFade;
 		};
 
 		Layer *layers { nullptr };
+		const DynamicMesh **firstSubmittedMesh;
 
 		vec4_t mins, maxs;
 		vec3_t origin;
@@ -160,7 +195,7 @@ private:
 
 		uint8_t subdivLevel { 0 };
 		bool applyVertexDynLight { false };
-		ExternalMesh::ViewDotFade vertexViewDotFade { ExternalMesh::NoFade };
+		ViewDotFade vertexViewDotFade { ViewDotFade::NoFade };
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
@@ -176,19 +211,22 @@ private:
 		vec4_t storageOfPositions[kNumVertices * NumLayers];
 		vec2_t storageOfSpeedsAndDistances[kNumVertices * NumLayers];
 		byte_vec4_t storageOfColors[kNumVertices * NumLayers];
-		ExternalMesh storageOfMeshes[NumLayers];
+		HullDynamicMesh storageOfMeshes[NumLayers];
+		const DynamicMesh *storageOfMeshPointers[NumLayers];
 
 		ConcentricSimulatedHull() {
 			this->numLayers = NumLayers;
 			this->subdivLevel = SubdivLevel;
 			this->layers = &storageOfLayers[0];
 			this->limitsAtDirections = &storageOfLimits[0];
+			this->firstSubmittedMesh = &storageOfMeshPointers[0];
 			for( unsigned i = 0; i < NumLayers; ++i ) {
 				Layer *const layer              = &layers[i];
 				layer->vertexPositions          = &storageOfPositions[i * kNumVertices];
 				layer->vertexSpeedsAndDistances = &storageOfSpeedsAndDistances[i * kNumVertices];
 				layer->vertexColors             = &storageOfColors[i * kNumVertices];
 				layer->submittedMesh            = &storageOfMeshes[i];
+				this->firstSubmittedMesh[i]     = layer->submittedMesh;
 			}
 		}
 	};
@@ -239,17 +277,6 @@ private:
 	static auto computeCurrTimelineNodeIndex( unsigned startFromIndex, int64_t currTime,
 											  int64_t spawnTime, unsigned effectDuration,
 											  std::span<const ColorChangeTimelineNode> timeline ) -> unsigned;
-
-	struct LodSetupParams {
-		unsigned currSubdivLevel;
-		unsigned minSubdivLevel;
-		float currLevelTangentRatio;
-		bool tesselateClosestLod;
-		bool lerpNextLevelColors;
-	};
-
-	[[nodiscard]]
-	static auto setupLods( ExternalMesh::LodProps *lods, LodSetupParams &&params ) -> unsigned;
 
 	FireHull *m_fireHullsHead { nullptr };
 	FireClusterHull *m_fireClusterHullsHead { nullptr };

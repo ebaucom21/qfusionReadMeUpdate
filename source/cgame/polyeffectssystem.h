@@ -81,7 +81,7 @@ private:
 		QuadPoly poly;
 	};
 
-	struct CurvedBeamPoly : public ComplexPoly {
+	struct CurvedBeamPoly : public DynamicMesh {
 		vec4_t color;
 		float width;
 		float tileLength;
@@ -89,11 +89,16 @@ private:
 		vec3_t points[24 + 1];
 
 		[[nodiscard]]
-		auto getStorageRequirements() const -> std::pair<unsigned, unsigned> override;
+		auto getStorageRequirements( const float *, const float *, float ) const -> std::pair<unsigned, unsigned> override;
+
 		[[nodiscard]]
 		auto fillMeshBuffers( const float *__restrict viewOrigin,
 							  const float *__restrict viewAxis,
+							  float,
+							  const Scene::DynamicLight *,
+							  std::span<const uint16_t>,
 							  vec4_t *__restrict positions,
+							  vec4_t *__restrict normals,
 							  vec2_t *__restrict texCoords,
 							  byte_vec4_t *__restrict colors,
 							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;

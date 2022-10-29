@@ -84,33 +84,6 @@ typedef struct fragment_s {
 	vec3_t normal;
 } fragment_t;
 
-struct QuadPoly {
-	struct shader_s *material;
-	float color[4];
-	float from[3];
-	float to[3];
-	float dir[3];
-	float width;
-	float length;
-	float tileLength;
-};
-
-struct ComplexPoly {
-	struct shader_s *material;
-	float cullMins[4], cullMaxs[4];
-
-	virtual ~ComplexPoly() = default;
-	[[nodiscard]]
-	virtual auto getStorageRequirements() const -> std::pair<unsigned, unsigned> = 0;
-	[[nodiscard]]
-	virtual auto fillMeshBuffers( const float *__restrict viewOrigin,
-								  const float *__restrict viewAxis,
-								  vec4_t *__restrict positions,
-								  vec2_t *__restrict texCoords,
-								  byte_vec4_t *__restrict colors,
-								  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> = 0;
-};
-
 typedef struct {
 	float rgb[3];                       // 0.0 - 2.0
 } lightstyle_t;
@@ -412,37 +385,6 @@ struct alignas( 16 ) Particle {
 	uint8_t rotationAxisIndex { 0 };
 };
 
-struct ExternalMesh {
-	struct LodProps {
-		const uint16_t *indices;
-		const void *neighbours { nullptr };
-		// mesh view angle tangent / fov tangent
-		float maxRatioOfViewTangentsToUse;
-		uint16_t numIndices;
-		uint16_t numVertices;
-		bool lerpNextLevelColors { false };
-		bool tesselate { false };
-	};
-
-	// We could use different programs, but it's inconvenient in the current codebase state,
-	// and also we could eventually supply these parameters to the same program
-	// for a branchless selection of final vertex color, while the same program stays bound.
-	enum ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
-
-	float mins[4], maxs[4];
-	const shader_s *material;
-	const vec4_t *positions;
-	const vec4_t *normals;
-	const byte_vec4_t *colors;
-
-	static constexpr unsigned kMaxLods = 5;
-	LodProps lods[kMaxLods];
-	unsigned numLods;
-	bool useDrawOnTopHack;
-	bool applyVertexDynLight;
-	ViewDotFade vertexViewDotFade { NoFade };
-};
-
 struct VisualTrace {
 	shader_s *shader;
 	const char *name;
@@ -461,6 +403,9 @@ void traceAgainstBrushModel( VisualTrace *tr, const model_s *model, const float 
 }
 
 namespace wsw::ref { class Frontend; }
+
+struct QuadPoly;
+struct DynamicMesh;
 
 class Scene {
 	friend class wsw::ref::Frontend;
@@ -485,9 +430,11 @@ public:
 		unsigned numParticles { 0 };
 	};
 
-	struct ExternalCompoundMesh {
-		float mins[4], maxs[4];
-		std::span<const ExternalMesh> parts;
+	struct CompoundDynamicMesh {
+		float cullMins[4], cullMaxs[4];
+		const DynamicMesh **parts;
+		unsigned numParts;
+		std::optional<uint8_t> drawOnTopPartIndex;
 	};
 protected:
 	Scene();
@@ -508,16 +455,17 @@ protected:
 
 	// These polys are externally owned with a lifetime greater than the frame
 	wsw::StaticVector<QuadPoly *, MAX_QUAD_POLYS> m_quadPolys;
-	wsw::StaticVector<ComplexPoly *, MAX_COMPLEX_POLYS> m_complexPolys;
 
 	static constexpr unsigned kMaxParticlesInAggregate = 256;
 	static constexpr unsigned kMaxParticleAggregates = 1024;
 
 	static constexpr unsigned kMaxPartsInCompoundMesh = 8;
-	static constexpr unsigned kMaxCompoundMeshes = 64;
+	static constexpr unsigned kMaxCompoundDynamicMeshes = 64;
+	static constexpr unsigned kMaxDynamicMeshes = 128;
 
 	wsw::StaticVector<ParticlesAggregate, kMaxParticleAggregates> m_particles;
-	wsw::StaticVector<ExternalCompoundMesh, kMaxCompoundMeshes> m_externalMeshes;
+	wsw::StaticVector<const DynamicMesh *, kMaxDynamicMeshes> m_dynamicMeshes;
+	wsw::StaticVector<CompoundDynamicMesh, kMaxCompoundDynamicMeshes> m_compoundDynamicMeshes;
 };
 
 // TODO: Aggregate Scene as a member?
@@ -537,7 +485,11 @@ public:
 					   const Particle::AppearanceRules &appearanceRules,
 					   const Particle *particles, unsigned numParticles );
 
-	void addExternalMesh( const float *mins, const float *maxs, std::span<const ExternalMesh> parts );
+	void addCompoundDynamicMesh( const float *mins, const float *maxs,
+								 const DynamicMesh **parts, unsigned numParts,
+								 std::optional<uint8_t> drawOnTopPartIndex = std::nullopt );
+
+	void addDynamicMesh( const DynamicMesh *mesh );
 
 	void addEntity( const entity_t *ent );
 
@@ -548,13 +500,45 @@ public:
 		}
 	}
 
-	void addPoly( ComplexPoly *poly ) {
-		if( !m_complexPolys.full() ) [[likely]] {
-			m_complexPolys.push_back( poly );
-		}
-	}
-
 	explicit DrawSceneRequest( const refdef_t &refdef ) : m_refdef( refdef ) {}
+};
+
+struct QuadPoly {
+	struct shader_s *material;
+	float color[4];
+	float from[3];
+	float to[3];
+	float dir[3];
+	float width;
+	float length;
+	float tileLength;
+};
+
+struct DynamicMesh {
+	struct shader_s *material;
+	float cullMins[4], cullMaxs[4];
+
+	bool applyVertexDynLight { false };
+
+	virtual ~DynamicMesh() = default;
+
+	[[nodiscard]]
+	virtual auto getStorageRequirements( const float *__restrict viewOrigin,
+										 const float *__restrict viewAxis,
+										 float cameraViewTangent ) const
+	-> std::pair<unsigned, unsigned> = 0;
+
+	[[nodiscard]]
+	virtual auto fillMeshBuffers( const float *__restrict viewOrigin,
+								  const float *__restrict viewAxis,
+								  float cameraViewTangent,
+								  const Scene::DynamicLight *dynamicLights,
+								  std::span<const uint16_t> affectingLightIndices,
+								  vec4_t *__restrict destPositions,
+								  vec4_t *__restrict destNormals,
+								  vec2_t *__restrict destTexCoords,
+								  byte_vec4_t *__restrict destColors,
+								  uint16_t *__restrict destIndices ) const -> std::pair<unsigned, unsigned> = 0;
 };
 
 DrawSceneRequest *CreateDrawSceneRequest( const refdef_t &refdef );

@@ -415,19 +415,17 @@ static const drawSurf_cb r_drawSurfCb[ST_MAX_TYPES] =
 	( drawSurf_cb ) &R_SubmitAliasSurfToBackend,
 	/* ST_SKELETAL */
 	( drawSurf_cb ) &R_SubmitSkeletalSurfToBackend,
-	/* ST_EXTERNAL_MESH */
-	( drawSurf_cb ) &R_SubmitExternalMeshToBackend,
 	/* ST_SPRITE */
 	nullptr,
 	/* ST_QUAD_POLY */
 	nullptr,
-	/* ST_COMPLEX_POLY */
+	/* ST_DYNAMIC_MESH */
 	nullptr,
 	/* ST_PARTICLE */
 	nullptr,
 	/* ST_CORONA */
 	nullptr,
-	/* ST_nullptrMODEL */
+	/* ST_NULLMODEL */
 	( drawSurf_cb ) & R_SubmitNullSurfToBackend,
 	};
 
@@ -441,19 +439,17 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	nullptr,
 	/* ST_SKELETAL */
 	nullptr,
-	/* ST_EXTERNAL_MESH */
-	nullptr,
 	/* ST_SPRITE */
 	( batchDrawSurf_cb ) & R_SubmitSpriteSurfsToBackend,
 	/* ST_QUAD_POLY */
 	( batchDrawSurf_cb ) & R_SubmitQuadPolysToBackend,
-	/* ST_COMPLEX_POLY */
-	( batchDrawSurf_cb ) & R_SubmitComplexPolysToBackend,
+	/* ST_DYNAMIC_MESH */
+	( batchDrawSurf_cb ) & R_SubmitDynamicMeshesToBackend,
 	/* ST_PARTICLE */
 	( batchDrawSurf_cb ) & R_SubmitParticleSurfsToBackend,
 	/* ST_CORONA */
 	( batchDrawSurf_cb ) & R_SubmitCoronaSurfsToBackend,
-	/* ST_nullptrMODEL */
+	/* ST_NULLMODEL */
 	nullptr,
 	};
 
@@ -647,7 +643,6 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 
 	unsigned dlightBits = 0;
 	if( m_numVisibleProgramLights ) {
-		const Scene::DynamicLight *const lights = lightsSpan.data();
 		const unsigned *const surfaceDlightBits = m_leafLightBitsOfSurfacesHolder.data.get();
 		const msurface_t *const worldSurfaces = rsh.worldBrushModel->surfaces;
 		const unsigned numLights = lightsSpan.size();
@@ -728,20 +723,37 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 	}
 }
 
-void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
-											const Scene::ExternalCompoundMesh *meshes,
-											std::span<const uint16_t> indicesOfMeshes ) {
-	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+void Frontend::addDynamicMeshesToSortList( const entity_t *meshEntity, const DynamicMesh **meshes,
+										   std::span<const uint16_t> indicesOfMeshes ) {
+	const float *const __restrict viewOrigin = m_state.viewOrigin;
 
-	unsigned numMeshDrawSurfaces = 0;
+	for( const unsigned meshIndex: indicesOfMeshes ) {
+		const DynamicMesh *const __restrict mesh = meshes[meshIndex];
+
+		vec3_t meshCenter;
+		VectorAvg( mesh->cullMins, mesh->cullMaxs, meshCenter );
+		const float distance = DistanceFast( meshCenter, viewOrigin );
+
+		const mfog_t *fog = nullptr;
+		const void *drawSurf = mesh;
+		const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
+		addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_DYNAMIC_MESH );
+	}
+}
+
+void Frontend::addCompoundDynamicMeshesToSortList( const entity_t *meshEntity,
+												   const Scene::CompoundDynamicMesh *meshes,
+												   std::span<const uint16_t> indicesOfMeshes ) {
+	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+	float distances[Scene::kMaxCompoundDynamicMeshes];
+
 	for( const unsigned compoundMeshIndex: indicesOfMeshes ) {
-		const Scene::ExternalCompoundMesh *const __restrict compoundMesh = meshes + compoundMeshIndex;
+		const Scene::CompoundDynamicMesh *const __restrict compoundMesh = meshes + compoundMeshIndex;
 
 		float bestDistance    = std::numeric_limits<float>::max();
-		auto *const distances = (float *)alloca( sizeof( float * ) * compoundMesh->parts.size() );
-
-		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
-			const ExternalMesh &__restrict mesh = compoundMesh->parts[partIndex];
+		for( size_t partIndex = 0; partIndex < compoundMesh->numParts; ++partIndex ) {
+			const DynamicMesh *const __restrict mesh = compoundMesh->parts[partIndex];
+			assert( mesh );
 
 			// This is very incorrect, but still produces satisfiable results
 			// with the .useDrawOnTopHack flag set appropriately and with the current appearance of hulls.
@@ -750,25 +762,26 @@ void Frontend::addExternalMeshesToSortList( const entity_t *meshEntity,
 			// but this would have huge performance impact with the current dynamic submission of vertices.
 
 			vec3_t meshCenter;
-			VectorAvg( mesh.mins, mesh.maxs, meshCenter );
+			VectorAvg( mesh->cullMins, mesh->cullMaxs, meshCenter );
 			const float distance = DistanceFast( meshCenter, viewOrigin );
 			distances[partIndex] = distance;
 			bestDistance         = wsw::min( distance, bestDistance );
 		}
 
-		for( size_t partIndex = 0; partIndex < compoundMesh->parts.size(); ++partIndex ) {
-			const ExternalMesh &__restrict mesh = compoundMesh->parts[partIndex];
+		for( size_t partIndex = 0; partIndex < compoundMesh->numParts; ++partIndex ) {
+			const DynamicMesh *const __restrict mesh = compoundMesh->parts[partIndex];
+			assert( mesh );
 
 			float distance = distances[partIndex];
-			if( mesh.useDrawOnTopHack ) [[unlikely]] {
+			if( std::optional( (uint8_t)partIndex ) == compoundMesh->drawOnTopPartIndex ) [[unlikely]] {
 				distance = wsw::max( 0.0f, bestDistance - 1.0f );
 			}
 
 			// TODO: Account for fogs
 			const mfog_t *fog        = nullptr;
-			const void *drawSurf     = std::addressof( mesh );
-			const shader_s *material = mesh.material ? mesh.material : rsh.whiteShader;
-			addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_EXTERNAL_MESH );
+			const void *drawSurf     = mesh;
+			const shader_s *material = mesh->material ? mesh->material : rsh.whiteShader;
+			addEntryToSortList( meshEntity, fog, material, distance, 0, nullptr, drawSurf, ST_DYNAMIC_MESH );
 		}
 	}
 }
@@ -825,22 +838,11 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 }
 
 void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta ) {
-	uint16_t tmpComplexIndices[MAX_COMPLEX_POLYS];
-	ComplexPoly **complexPolys = scene->m_complexPolys.data();
-
-	const auto visibleComplexPolyIndices = cullComplexPolys( complexPolys, scene->m_complexPolys.size(), &m_frustum, frusta, tmpComplexIndices );
-
 	uint16_t tmpQuadIndices[MAX_QUAD_POLYS];
 	QuadPoly **quadPolys = scene->m_quadPolys.data();
 	const auto visibleQuadPolyIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_frustum, frusta, tmpQuadIndices );
 
 	const auto *polyEntity = scene->m_polyent;
-
-	for( const unsigned index: visibleComplexPolyIndices ) {
-		ComplexPoly *const p = complexPolys[index];
-		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, p, ST_COMPLEX_POLY );
-	}
-
 	for( const unsigned index: visibleQuadPolyIndices ) {
 		QuadPoly *const p = quadPolys[index];
 		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
@@ -881,11 +883,16 @@ void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> f
 	addParticlesToSortList( scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
 }
 
-void Frontend::collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta ) {
-	uint16_t tmpIndices[256];
-	const std::span<const Scene::ExternalCompoundMesh> meshes = scene->m_externalMeshes;
-	const auto visibleMeshesIndices = cullExternalMeshes( meshes, &m_frustum, frusta, tmpIndices );
-	addExternalMeshesToSortList( scene->m_polyent, scene->m_externalMeshes.data(), visibleMeshesIndices );
+void Frontend::collectVisibleDynamicMeshes( Scene *scene, std::span<const Frustum> frusta ) {
+	uint16_t tmpIndices[wsw::max( Scene::kMaxDynamicMeshes, Scene::kMaxCompoundDynamicMeshes )];
+
+	const std::span<const DynamicMesh *> meshes = scene->m_dynamicMeshes;
+	const auto visibleDynamicMeshIndices = cullDynamicMeshes( meshes.data(), meshes.size(), &m_frustum, frusta, tmpIndices );
+	addDynamicMeshesToSortList( scene->m_polyent, scene->m_dynamicMeshes.data(), visibleDynamicMeshIndices );
+
+	const std::span<const Scene::CompoundDynamicMesh> compoundMeshes = scene->m_compoundDynamicMeshes;
+	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( compoundMeshes, &m_frustum, frusta, tmpIndices );
+	addCompoundDynamicMeshesToSortList( scene->m_polyent, scene->m_compoundDynamicMeshes.data(), visibleCompoundMeshesIndices );
 }
 
 auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
@@ -1071,7 +1078,6 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	FrontendToBackendShared fsh;
 	fsh.dynamicLights               = scene->m_dynamicLights.data();
 	fsh.particleAggregates          = scene->m_particles.data();
-	fsh.compoundMeshes              = scene->m_externalMeshes.data();
 	fsh.allVisibleLightIndices      = { m_allVisibleLightIndices, m_numAllVisibleLights };
 	fsh.visibleProgramLightIndices  = { m_visibleProgramLightIndices, m_numVisibleProgramLights };
 	fsh.renderFlags                 = m_state.renderFlags;
@@ -1436,7 +1442,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 
 	if( r_drawentities->integer ) {
 		collectVisibleEntities( scene, occluderFrusta );
-		collectVisibleExternalMeshes( scene, occluderFrusta );
+		collectVisibleDynamicMeshes( scene, occluderFrusta );
 	}
 
 	if( !shadowMap ) {
@@ -1761,13 +1767,23 @@ void DrawSceneRequest::addParticles( const float *mins, const float *maxs,
 	}
 }
 
-void DrawSceneRequest::addExternalMesh( const float *mins, const float *maxs, const std::span<const ExternalMesh> parts ) {
-	assert( parts.size() <= kMaxPartsInCompoundMesh );
-	if( !m_externalMeshes.full() ) [[likely]] {
-		m_externalMeshes.emplace_back( ExternalCompoundMesh {
-			.mins  = { mins[0], mins[1], mins[2], mins[3] },
-			.maxs  = { maxs[0], maxs[1], maxs[2], maxs[3] },
-			.parts = parts
+void DrawSceneRequest::addDynamicMesh( const DynamicMesh *mesh ) {
+	if( !m_dynamicMeshes.full() ) [[likely]] {
+		m_dynamicMeshes.push_back( mesh );
+	}
+}
+
+void DrawSceneRequest::addCompoundDynamicMesh( const float *mins, const float *maxs,
+											   const DynamicMesh **parts, unsigned numParts,
+											   std::optional<uint8_t> drawOnTopPartIndex ) {
+	assert( numParts <= kMaxPartsInCompoundMesh );
+	if( !m_compoundDynamicMeshes.full() ) [[likely]] {
+		m_compoundDynamicMeshes.emplace_back( CompoundDynamicMesh {
+			.cullMins           = { mins[0], mins[1], mins[2], mins[3] },
+			.cullMaxs           = { maxs[0], maxs[1], maxs[2], maxs[3] },
+			.parts              = parts,
+			.numParts           = numParts,
+			.drawOnTopPartIndex = drawOnTopPartIndex
 		});
 	}
 }

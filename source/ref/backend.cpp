@@ -1011,256 +1011,6 @@ void R_SubmitNullSurfToBackend( const FrontendToBackendShared *fsh, const entity
 	RB_DrawElements( fsh, 0, 6, 0, 6 );
 }
 
-class MeshTesselationHelper {
-public:
-	vec4_t *m_tmpTessPositions { nullptr };
-	vec4_t *m_tmpTessFloatColors { nullptr };
-	int8_t *m_tessNeighboursCount { nullptr };
-	vec4_t *m_tessPositions { nullptr };
-	byte_vec4_t *m_tessByteColors { nullptr };
-	uint16_t *m_neighbourLessVertices { nullptr };
-	bool *m_isVertexNeighbourLess { nullptr };
-
-	std::unique_ptr<uint8_t[]> m_allocationBuffer;
-	unsigned m_lastNumNextLevelVertices { 0 };
-	unsigned m_lastAllocationSize { 0 };
-
-	template <bool SmoothColors>
-	void exec( const ExternalMesh *mesh, const byte_vec4_t *overrideColors, unsigned numSimulatedVertices,
-			   unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
-private:
-	static constexpr unsigned kAlignment = 16;
-
-	void setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices );
-
-	template <bool SmoothColors>
-	void runPassOverOriginalVertices( const ExternalMesh *mesh, const byte_vec4_t *overrideColors,
-									  unsigned numSimulatedVertices, const uint16_t nextLevelNeighbours[][5] );
-	template <bool SmoothColors>
-	[[nodiscard]]
-	auto collectNeighbourLessVertices( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) -> unsigned;
-	template <bool SmoothColors>
-	void processNeighbourLessVertices( unsigned numNeighbourLessVertices, const uint16_t nextLevelNeighbours[][5] );
-	template <bool SmoothColors>
-	void runSmoothVerticesPass( unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
-};
-
-template <bool SmoothColors>
-void MeshTesselationHelper::exec( const ExternalMesh *mesh, const byte_vec4_t *overrideColors,
-								  unsigned numSimulatedVertices, unsigned numNextLevelVertices,
-								  const uint16_t nextLevelNeighbours[][5] ) {
-	setupBuffers( numSimulatedVertices, numNextLevelVertices );
-
-	runPassOverOriginalVertices<SmoothColors>( mesh, overrideColors, numSimulatedVertices, nextLevelNeighbours );
-	unsigned numNeighbourLessVertices = collectNeighbourLessVertices<SmoothColors>( numSimulatedVertices, numNextLevelVertices );
-	processNeighbourLessVertices<SmoothColors>( numNeighbourLessVertices, nextLevelNeighbours );
-	runSmoothVerticesPass<SmoothColors>( numNextLevelVertices, nextLevelNeighbours );
-}
-
-void MeshTesselationHelper::setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) {
-	if( m_lastNumNextLevelVertices != numNextLevelVertices ) {
-		// Compute offsets from the base ptr
-		wsw::MemSpecBuilder memSpecBuilder( wsw::MemSpecBuilder::initiallyEmpty() );
-
-		const auto tmpTessPositionsSpec       = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
-		const auto tmpTessFloatColorsSpec     = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
-		const auto tessPositionsSpec          = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
-		const auto tmpTessNeighboursCountSpec = memSpecBuilder.add<int8_t>( numNextLevelVertices );
-		const auto tessByteColorsSpec         = memSpecBuilder.add<byte_vec4_t>( numNextLevelVertices );
-		const auto neighbourLessVerticesSpec  = memSpecBuilder.add<uint16_t>( numNextLevelVertices );
-		const auto isNextVertexNeighbourLess  = memSpecBuilder.add<bool>( numNextLevelVertices );
-
-		if ( m_lastAllocationSize < memSpecBuilder.sizeSoFar() ) [[unlikely]] {
-			m_lastAllocationSize = memSpecBuilder.sizeSoFar();
-			m_allocationBuffer   = std::make_unique<uint8_t[]>( m_lastAllocationSize );
-		}
-
-		void *const basePtr     = m_allocationBuffer.get();
-		m_tmpTessPositions      = tmpTessPositionsSpec.get( basePtr );
-		m_tmpTessFloatColors    = tmpTessFloatColorsSpec.get( basePtr );
-		m_tessNeighboursCount   = tmpTessNeighboursCountSpec.get( basePtr );
-		m_tessPositions         = tessPositionsSpec.get( basePtr );
-		m_tessByteColors        = tessByteColorsSpec.get( basePtr );
-		m_neighbourLessVertices = neighbourLessVerticesSpec.get( basePtr );
-		m_isVertexNeighbourLess = isNextVertexNeighbourLess.get( basePtr );
-
-		m_lastNumNextLevelVertices = numNextLevelVertices;
-	}
-
-	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
-	const unsigned numAddedVertices = numNextLevelVertices - numSimulatedVertices;
-
-	std::memset( m_tessPositions, 0, sizeof( m_tessPositions[0] ) * numNextLevelVertices );
-	std::memset( m_tessByteColors, 0, sizeof( m_tessByteColors[0] ) * numNextLevelVertices );
-	std::memset( m_isVertexNeighbourLess, 0, sizeof( m_isVertexNeighbourLess[0] ) * numNextLevelVertices );
-
-	std::memset( m_tmpTessPositions + numSimulatedVertices, 0, sizeof( m_tmpTessPositions[0] ) * numAddedVertices );
-	std::memset( m_tmpTessFloatColors + numSimulatedVertices, 0, sizeof( m_tmpTessFloatColors[0] ) * numAddedVertices );
-	std::memset( m_tessNeighboursCount + numSimulatedVertices, 0, sizeof( m_tessNeighboursCount[0] ) * numAddedVertices );
-}
-
-template <bool SmoothColors>
-void MeshTesselationHelper::runPassOverOriginalVertices( const ExternalMesh *mesh,
-														 const byte_vec4_t *overrideColors,
-														 unsigned numSimulatedVertices,
-														 const uint16_t nextLevelNeighbours[][5] ) {
-	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
-	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
-	const byte_vec4_t *const __restrict colors   = overrideColors ? overrideColors : mesh->colors;
-	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
-	int8_t *const __restrict tessNeighboursCount = m_tessNeighboursCount;
-
-	// For each vertex in the original mesh
-	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
-		const auto byteColor  = colors[vertexIndex];
-		const float *position = mesh->positions[vertexIndex];
-
-		if constexpr( SmoothColors ) {
-			// Write the color to the accum buffer for smoothing it later
-			Vector4Copy( byteColor, tmpTessFloatColors[vertexIndex] );
-		} else {
-			// Write the color directly to the resulting color buffer
-			Vector4Copy( byteColor, tessByteColors[vertexIndex] );
-		}
-
-		// Copy for the further smooth pass
-		Vector4Copy( position, tmpTessPositions[vertexIndex] );
-
-		// For each neighbour of this vertex in the tesselated mesh
-		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-			if( neighbourIndex >= numSimulatedVertices ) {
-				VectorAdd( tmpTessPositions[neighbourIndex], position, tmpTessPositions[neighbourIndex] );
-				// Add integer values as is to the float accumulation buffer
-				Vector4Add( tmpTessFloatColors[neighbourIndex], byteColor, tmpTessFloatColors[neighbourIndex] );
-				tessNeighboursCount[neighbourIndex]++;
-			}
-		}
-	}
-}
-
-template <bool SmoothColors>
-auto MeshTesselationHelper::collectNeighbourLessVertices( unsigned numSimulatedVertices,
-														  unsigned numNextLevelVertices ) -> unsigned {
-	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
-
-	vec4_t *const __restrict tmpTessPositions        = std::assume_aligned<kAlignment>( m_tmpTessPositions );
-	vec4_t *const __restrict  tmpTessFloatColors     = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
-	int8_t *const __restrict tessNeighboursCount     = m_tessNeighboursCount;
-	uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
-	bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
-	byte_vec4_t *const __restrict tessByteColors     = m_tessByteColors;
-
-	unsigned numNeighbourLessVertices = 0;
-	for( unsigned vertexIndex = numSimulatedVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
-		// Wtf? how do such vertices exist?
-		if( !tessNeighboursCount[vertexIndex] ) [[unlikely]] {
-			neighbourLessVertices[numNeighbourLessVertices++] = vertexIndex;
-			isVertexNeighbourLess[vertexIndex] = true;
-			continue;
-		}
-
-		const float scale = Q_Rcp( (float)tessNeighboursCount[vertexIndex] );
-		VectorScale( tmpTessPositions[vertexIndex], scale, tmpTessPositions[vertexIndex] );
-		tmpTessPositions[vertexIndex][3] = 1.0f;
-
-		if constexpr( SmoothColors ) {
-			// Just scale by the averaging multiplier
-			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tmpTessFloatColors[vertexIndex] );
-		} else {
-			// Write the vertex color directly to the resulting color buffer
-			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
-		}
-	}
-
-	return numNeighbourLessVertices;
-}
-
-template <bool SmoothColors>
-void MeshTesselationHelper::processNeighbourLessVertices( unsigned numNeighbourLessVertices,
-														  const uint16_t nextLevelNeighbours[][5] ) {
-	vec4_t *const __restrict tmpTessFloatColors            = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
-	const uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
-	const bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
-	byte_vec4_t *const __restrict tessByteColors           = m_tessByteColors;
-
-	// Hack for neighbour-less vertices: apply a gathering pass
-	// (the opposite to what we do for each vertex in the original mesh)
-	for( unsigned i = 0; i < numNeighbourLessVertices; ++i ) {
-		const unsigned vertexIndex = neighbourLessVertices[i];
-		alignas( 16 ) vec4_t accumulatedColor { 0.0f, 0.0f, 0.0f, 0.0f };
-		unsigned numAccumulatedColors = 0;
-		for( unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-			if( !isVertexNeighbourLess[neighbourIndex] ) [[likely]] {
-				numAccumulatedColors++;
-				if constexpr( SmoothColors ) {
-					const float *const __restrict neighbourColor = tmpTessFloatColors[neighbourIndex];
-					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
-				} else {
-					const uint8_t *const __restrict neighbourColor = tessByteColors[neighbourIndex];
-					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
-				}
-			}
-		}
-		if( numAccumulatedColors ) [[likely]] {
-			const float scale = Q_Rcp( (float)numAccumulatedColors );
-			if constexpr( SmoothColors ) {
-				Vector4Scale( accumulatedColor, scale, tmpTessFloatColors[vertexIndex] );
-			} else {
-				Vector4Scale( accumulatedColor, scale, tessByteColors[vertexIndex] );
-			}
-		}
-	}
-}
-
-template <bool SmoothColors>
-void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices,
-												   const uint16_t nextLevelNeighbours[][5] ) {
-	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
-	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
-	vec4_t *const __restrict tessPositions       = std::assume_aligned<kAlignment>( m_tessPositions );
-	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
-
-	// Each icosphere vertex has 5 neighbours (we don't make a distinction between old and added ones for this pass)
-	constexpr float icoAvgScale = 1.0f / 5.0f;
-	constexpr float smoothFrac  = 0.5f;
-
-	// Apply the smooth pass
-	if constexpr( SmoothColors ) {
-		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
-			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
-			alignas( 16 ) vec4_t sumOfNeighbourColors { 0.0f, 0.0f, 0.0f, 0.0f };
-
-			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
-				Vector4Add( tmpTessFloatColors[neighbourIndex], sumOfNeighbourColors, sumOfNeighbourColors );
-			}
-
-			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
-
-			// Write the average color
-			Vector4Scale( sumOfNeighbourColors, icoAvgScale, tessByteColors[vertexIndex] );
-
-			// Write combined positions
-			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
-		}
-	} else {
-		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
-			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
-
-			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
-				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
-			}
-
-			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
-
-			// Write combined positions
-			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
-		}
-	}
-}
-
-static MeshTesselationHelper meshTesselationHelper;
-
 [[nodiscard]]
 static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::span<const uint16_t> lightIndicesSpan,
 										const float *mins, const float *maxs,
@@ -1284,280 +1034,6 @@ static auto findLightsThatAffectBounds( const Scene::DynamicLight *lights, std::
 	} while( ++lightIndexNum < numLights );
 
 	return numAffectingLights;
-}
-
-template <ExternalMesh::ViewDotFade Fade>
-[[nodiscard]]
-static inline wsw_forceinline auto calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
-																 const float *__restrict normal ) -> uint8_t {
-	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
-	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
-
-	const float absDot = std::fabs( DotProduct( viewDir, normal ) );
-	float alphaFrac;
-	if constexpr( Fade == ExternalMesh::FadeOutContour ) {
-		alphaFrac = absDot;
-	} else if constexpr( Fade == ExternalMesh::FadeOutCenter ) {
-		// This looks best for the current purposes
-		alphaFrac = ( 1.0f - absDot ) * ( 1.0f - absDot );
-	} else {
-		alphaFrac = 1.0f;
-	}
-
-	const float modifiedAlpha = alphaFrac * (float)givenAlpha;
-	return (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
-}
-
-using IcosphereVertexNeighbours = const uint16_t (*)[5];
-
-template <ExternalMesh::ViewDotFade Fade>
-static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict resultColors,
-											const vec4_t *const __restrict positions,
-											const IcosphereVertexNeighbours neighboursOfVertices,
-											const byte_vec4_t *const __restrict givenColors,
-											const float *const __restrict viewOrigin,
-											const unsigned numVertices ) {
-	unsigned vertexNum = 0;
-	do {
-		const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
-		const float *const __restrict currVertex = positions[vertexNum];
-		vec3_t accumDir { 0.0f, 0.0f, 0.0f };
-		unsigned neighbourIndex = 0;
-		bool hasAddedDirs = false;
-		do {
-			const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
-			const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
-			vec3_t currTo2, currTo3, cross;
-			VectorSubtract( v2, currVertex, currTo2 );
-			VectorSubtract( v3, currVertex, currTo3 );
-			CrossProduct( currTo2, currTo3, cross );
-			if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
-				const float rcpLength = Q_RSqrt( squaredLength );
-				VectorMA( accumDir, rcpLength, cross, accumDir );
-				hasAddedDirs = true;
-			}
-		} while( ++neighbourIndex < 5 );
-
-		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
-		if( hasAddedDirs ) [[likely]] {
-			vec3_t viewDir;
-			VectorSubtract( currVertex, viewOrigin, viewDir );
-			const float squareDistanceToVertex = VectorLengthSquared( viewDir );
-			if( squareDistanceToVertex > 1.0f ) [[likely]] {
-				vec3_t normal;
-				VectorCopy( accumDir, normal );
-				VectorNormalizeFast( normal );
-				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
-				VectorScale( viewDir, rcpDistance, viewDir );
-				const uint8_t givenAlpha = givenColors[vertexNum][3];
-				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normal );
-			} else {
-				resultColors[vertexNum][3] = 0;
-			}
-		} else {
-			resultColors[vertexNum][3] = 0;
-		}
-	} while( ++vertexNum < numVertices );
-}
-
-template <ExternalMesh::ViewDotFade Fade>
-static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
-							  const vec4_t *const __restrict positions,
-							  const vec4_t *const __restrict normals,
-							  const byte_vec4_t *const __restrict givenColors,
-							  const float *const __restrict viewOrigin,
-							  const unsigned numVertices ) {
-	unsigned vertexNum = 0;
-	do {
-		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
-		vec3_t viewDir;
-		VectorSubtract( positions[vertexNum], viewOrigin, viewDir );
-		const float squareDistanceToVertex = VectorLengthSquared( viewDir );
-		if( squareDistanceToVertex > 1.0f ) [[likely]] {
-			const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
-			VectorScale( viewDir, rcpDistance, viewDir );
-			const uint8_t givenAlpha = givenColors[vertexNum][3];
-			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normals[vertexNum] );
-		} else {
-			resultColors[vertexNum][3] = 0;
-		}
-	} while( ++vertexNum < numVertices );
-}
-
-void R_SubmitExternalMeshToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const ExternalMesh *externalMesh ) {
-	// Checking it this late is not a very nice things but otherwise
-	// the API gets way too complicated due to some technical details.
-	const float squareExtent = DistanceSquared( externalMesh->mins, externalMesh->maxs );
-	if( squareExtent < 1.0f ) {
-		return;
-	}
-
-	vec3_t center;
-	VectorAvg( externalMesh->mins, externalMesh->maxs, center );
-	const float squareDistance = DistanceSquared( fsh->viewOrigin, center );
-
-	unsigned chosenLodIndex = 0;
-	assert( externalMesh->numLods );
-	// Otherwise, don't even bother checking lod conditions
-	if( squareDistance > 64.0f * 64.0f ) [[likely]] {
-		const float extent       = Q_Sqrt( squareExtent );
-		const float rcpDistance  = Q_RSqrt( squareDistance );
-		const float viewTangent  = extent * rcpDistance;
-		const float tangentRatio = viewTangent * Q_Rcp( fsh->fovTangent );
-		for( unsigned lodIndex = 0; lodIndex < externalMesh->numLods; ++lodIndex ) {
-			if( externalMesh->lods[lodIndex].maxRatioOfViewTangentsToUse > tangentRatio ) {
-				chosenLodIndex = lodIndex;
-			}
-		}
-	}
-
-	const ExternalMesh::LodProps *chosenLod = &externalMesh->lods[chosenLodIndex];
-
-	RB_FlushDynamicMeshes();
-
-	mesh_t mesh;
-	memset( &mesh, 0, sizeof( mesh ) );
-
-	byte_vec4_t *overrideColors = nullptr;
-
-	if( externalMesh->vertexViewDotFade != ExternalMesh::NoFade ) {
-		[[maybe_unused]] const ExternalMesh::LodProps *nonTessLod = nullptr;
-		unsigned numVertices;
-
-		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
-		if( chosenLod->tesselate ) {
-			assert( chosenLodIndex + 1 < externalMesh->numLods );
-			nonTessLod = &externalMesh->lods[chosenLodIndex + 1];
-			numVertices = nonTessLod->numVertices;
-		} else {
-			numVertices = chosenLod->numVertices;
-		}
-
-		overrideColors = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
-
-		if( externalMesh->normals ) {
-			// Call specialized implementations for each fade func
-			if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutContour ) {
-				applyViewDotFade<ExternalMesh::FadeOutContour>( overrideColors, externalMesh->positions,
-																externalMesh->normals, externalMesh->colors,
-																fsh->viewOrigin, numVertices );
-			} else if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutCenter ) {
-				applyViewDotFade<ExternalMesh::FadeOutCenter>( overrideColors, externalMesh->positions,
-															   externalMesh->normals, externalMesh->colors,
-															   fsh->viewOrigin, numVertices );
-			}
-		} else {
-			IcosphereVertexNeighbours neighboursOfVertices;
-			if( chosenLod->tesselate ) {
-				neighboursOfVertices = (IcosphereVertexNeighbours)nonTessLod->neighbours;
-			} else {
-				neighboursOfVertices = (IcosphereVertexNeighbours)chosenLod->neighbours;
-			}
-
-			// Call specialized implementations for each fade func
-			if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutContour ) {
-				calcNormalsAndApplyViewDotFade<ExternalMesh::FadeOutContour>( overrideColors, externalMesh->positions,
-																			  neighboursOfVertices, externalMesh->colors,
-																			  fsh->viewOrigin, numVertices );
-			} else if( externalMesh->vertexViewDotFade == ExternalMesh::FadeOutCenter ) {
-				calcNormalsAndApplyViewDotFade<ExternalMesh::FadeOutCenter>( overrideColors, externalMesh->positions,
-																			 neighboursOfVertices, externalMesh->colors,
-																			 fsh->viewOrigin, numVertices );
-			} else {
-				wsw::failWithRuntimeError( "Unreachable" );
-			}
-		}
-	}
-
-	if( externalMesh->applyVertexDynLight && r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty() ) {
-		auto *const __restrict affectingLightIndices = (uint16_t *)alloca( sizeof( uint16_t ) *
-															fsh->allVisibleLightIndices.size() );
-
-		const unsigned numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights, fsh->allVisibleLightIndices,
-																		externalMesh->mins, externalMesh->maxs,
-																		affectingLightIndices );
-		if( numAffectingLights > 0 ) {
-			unsigned numVertices;
-			// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
-			if( chosenLod->tesselate ) {
-				assert( chosenLodIndex + 1 < externalMesh->numLods );
-				numVertices = externalMesh->lods[chosenLodIndex + 1].numVertices;
-			} else {
-				numVertices = chosenLod->numVertices;
-			}
-
-			const byte_vec4_t *alphaSourceColors;
-			if( overrideColors ) {
-				alphaSourceColors = overrideColors;
-			} else {
-				overrideColors    = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
-				alphaSourceColors = externalMesh->colors;
-			}
-
-			assert( numVertices );
-			unsigned vertexIndex = 0;
-			do {
-				const float *__restrict vertexOrigin  = externalMesh->positions[vertexIndex];
-				auto *const __restrict givenColor     = externalMesh->colors[vertexIndex];
-				auto *const __restrict resultingColor = overrideColors[vertexIndex];
-
-				alignas( 16 ) vec4_t accumColor;
-				VectorScale( givenColor, ( 1.0f / 255.0f ), accumColor );
-
-				unsigned lightNum = 0;
-				do {
-					const Scene::DynamicLight *light = fsh->dynamicLights + affectingLightIndices[lightNum];
-					const float squareLightToVertexDistance = DistanceSquared( light->origin, vertexOrigin );
-					// May go outside [0.0, 1.0] as we test against the bounding box of the entire hull
-					float impactStrength = 1.0f - Q_Sqrt( squareLightToVertexDistance ) * Q_Rcp( light->maxRadius );
-					// Just clamp so the code stays branchless
-					impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
-					VectorMA( accumColor, impactStrength, light->color, accumColor );
-				} while( ++lightNum < numAffectingLights );
-
-				resultingColor[0] = (uint8_t)( 255.0f * wsw::clamp( accumColor[0], 0.0f, 1.0f ) );
-				resultingColor[1] = (uint8_t)( 255.0f * wsw::clamp( accumColor[1], 0.0f, 1.0f ) );
-				resultingColor[2] = (uint8_t)( 255.0f * wsw::clamp( accumColor[2], 0.0f, 1.0f ) );
-				resultingColor[3] = alphaSourceColors[vertexIndex][3];
-			} while( ++vertexIndex < numVertices );
-		}
-	}
-
-	// HACK Perform an additional tesselation of some hulls.
-	// CPU-side tesselation is the single option in the current codebase state.
-	if( chosenLod->tesselate ) {
-		auto *nextLevelNeighbours = (const uint16_t (*)[5])chosenLod->neighbours;
-		assert( chosenLodIndex + 1 < externalMesh->numLods );
-		const auto &nonTessLod = externalMesh->lods[chosenLodIndex + 1];
-		assert( nonTessLod.numVertices < chosenLod->numVertices );
-		assert( nonTessLod.numIndices < chosenLod->numIndices );
-		const unsigned numSimulatedVertices = nonTessLod.numVertices;
-		const unsigned numNextLevelVertices = chosenLod->numVertices;
-		MeshTesselationHelper *const tesselationHelper = &::meshTesselationHelper;
-		if( chosenLod->lerpNextLevelColors ) {
-			tesselationHelper->exec<true>( externalMesh, overrideColors,
-										   numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
-		} else {
-			tesselationHelper->exec<false>( externalMesh, overrideColors,
-											numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
-		}
-		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
-		mesh.numElems       = chosenLod->numIndices;
-		mesh.numVerts       = chosenLod->numVertices;
-		mesh.xyzArray       = tesselationHelper->m_tessPositions;
-		mesh.colorsArray[0] = tesselationHelper->m_tessByteColors;
-	} else {
-		mesh.elems          = const_cast<uint16_t *>( chosenLod->indices );
-		mesh.numElems       = chosenLod->numIndices;
-		mesh.numVerts       = chosenLod->numVertices;
-		// Vertices are shared for all lods (except dynamically tesselated ones)
-		mesh.xyzArray       = const_cast<vec4_t *>( externalMesh->positions );
-		mesh.colorsArray[0] = overrideColors ? overrideColors : const_cast<byte_vec4_t *>( externalMesh->colors );
-	}
-
-	RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
-
-	RB_FlushDynamicMeshes();
 }
 
 void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
@@ -1681,43 +1157,69 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 	}
 }
 
-void R_SubmitComplexPolysToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
+void R_SubmitDynamicMeshesToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader,
 									const mfog_t *fog, const portalSurface_t *portalSurface, std::span<const sortedDrawSurf_t> surfSpan ) {
-	constexpr auto maxStorageVertices = 256;
-	constexpr auto maxStorageIndices  = ( 3 * maxStorageVertices ) / 2;
+	// Maximum supported icosphere subdiv level
+	// TODO check these values, share with the icosphere code
+	// TODO we do not have to transfer icosphere indices every frame
+	constexpr auto maxStorageVertices = 2562;
+	constexpr auto maxStorageIndices  = 15360;
 
 	// TODO: Point to the dynamic stream memory
 	alignas( 16 ) vec4_t positions[maxStorageVertices];
+	alignas( 16 ) vec4_t normals[maxStorageVertices];
 	alignas( 16 ) vec2_t texCoords[maxStorageVertices];
 	alignas( 16 ) byte_vec4_t colors[maxStorageVertices];
 	alignas( 16 ) uint16_t indices[maxStorageIndices];
 
+	uint16_t *affectingLightsStorage = nullptr;
+	const bool hasAvailableLights    = r_dynamiclight->integer && !fsh->allVisibleLightIndices.empty();
+
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
-		const auto *__restrict poly = (const ComplexPoly *)sds.drawSurf;
+		const auto *__restrict mesh = (const DynamicMesh *)sds.drawSurf;
 
 		// This call is more useful if dynamic stream memory is used directly
 		// (we can flush the existing buffer if needed and write to now-free space).
-		const auto [maxPolyVertices, maxPolyIndices] = poly->getStorageRequirements();
-		if( maxPolyVertices > maxStorageVertices || maxPolyIndices > maxStorageIndices ) [[unlikely]] {
+		const auto [maxMeshVertices, maxMeshIndices] = mesh->getStorageRequirements( fsh->viewOrigin, fsh->viewAxis,
+																					 fsh->fovTangent );
+		if( maxMeshVertices > maxStorageVertices || maxMeshIndices > maxStorageIndices ) [[unlikely]] {
 			continue;
 		}
 
-		const auto [numPolyVertices, numPolyIndices] = poly->fillMeshBuffers( fsh->viewOrigin, fsh->viewAxis,
-																			  positions, texCoords, colors, indices );
+		std::span<const uint16_t> affectingLightIndices;
+		if( mesh->applyVertexDynLight && hasAvailableLights ) {
+			// Do alloca() once per loop
+			if( !affectingLightsStorage ) [[unlikely]] {
+				affectingLightsStorage = (uint16_t *)alloca( sizeof( uint16_t ) * fsh->allVisibleLightIndices.size() );
+			}
+			const auto numAffectingLights = findLightsThatAffectBounds( fsh->dynamicLights,
+																		fsh->allVisibleLightIndices,
+																		mesh->cullMins, mesh->cullMaxs,
+																		affectingLightsStorage );
+			affectingLightIndices = { affectingLightsStorage, numAffectingLights };
+		}
 
-		// TODO: Get rid of "mesh", write to the dynamic stream memory directly
+		const auto [numPolyVertices, numPolyIndices] = mesh->fillMeshBuffers( fsh->viewOrigin, fsh->viewAxis,
+																			  fsh->fovTangent,
+																			  fsh->dynamicLights, affectingLightIndices,
+																			  positions, normals,
+																			  texCoords, colors, indices );
 
-		mesh_t mesh;
-		memset( &mesh, 0, sizeof( mesh ) );
+		// TODO....
+		RB_FlushDynamicMeshes();
+		// TODO: Get rid of "mesh_", write to the dynamic stream memory directly
 
-		mesh.elems          = indices;
-		mesh.numElems       = numPolyIndices;
-		mesh.numVerts       = numPolyVertices;
-		mesh.xyzArray       = positions;
-		mesh.stArray        = texCoords;
-		mesh.colorsArray[0] = colors;
+		mesh_t mesh_;
+		memset( &mesh_, 0, sizeof( mesh_ ) );
 
-		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+		mesh_.elems          = indices;
+		mesh_.numElems       = numPolyIndices;
+		mesh_.numVerts       = numPolyVertices;
+		mesh_.xyzArray       = positions;
+		mesh_.stArray        = texCoords;
+		mesh_.colorsArray[0] = colors;
+
+		RB_AddDynamicMesh( e, shader, fog, portalSurface, 0, &mesh_, GL_TRIANGLES, 0.0f, 0.0f );
 	}
 }
 

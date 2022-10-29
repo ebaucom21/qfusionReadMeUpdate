@@ -223,13 +223,21 @@ private:
 								 std::span<const Frustum> occluderFrusta,
 								 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
-	void collectVisibleExternalMeshes( Scene *scene, std::span<const Frustum> frusta );
+	void collectVisibleDynamicMeshes( Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto cullExternalMeshes( std::span<const Scene::ExternalCompoundMesh> meshes,
-							 const Frustum *__restrict primaryFrustum,
-							 std::span<const Frustum> occluderFrusta,
-							 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+	auto cullCompoundDynamicMeshes( std::span<const Scene::CompoundDynamicMesh> meshes,
+									const Frustum *__restrict primaryFrustum,
+									std::span<const Frustum> occluderFrusta,
+									uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// TODO: Check why spans can't be supplied
+	[[nodiscard]]
+	auto cullDynamicMeshes( const DynamicMesh **meshes,
+							unsigned numMeshes,
+							const Frustum *__restrict primaryFrustum,
+							std::span<const Frustum> occluderFrusta,
+							uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// TODO: Check why spans can't be supplied
 	[[nodiscard]]
@@ -237,13 +245,6 @@ private:
 						const Frustum *__restrict primaryFrustum,
 						std::span<const Frustum> occluderFrusta,
 						uint16_t *tmpIndices ) -> std::span<const uint16_t>;
-
-	// TODO: Check why spans can't be supplied
-	[[nodiscard]]
-	auto cullComplexPolys( ComplexPoly **polys, unsigned numPolys,
-						   const Frustum *__restrict primaryFrustum,
-						   std::span<const Frustum> occluderFrusta,
-						   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
 	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
@@ -256,8 +257,11 @@ private:
 	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
 								 std::span<const uint16_t> aggregateIndices );
 
-	void addExternalMeshesToSortList( const entity_t *meshEntity, const Scene::ExternalCompoundMesh *meshes,
-									  std::span<const uint16_t> indicesOfMeshes );
+	void addDynamicMeshesToSortList( const entity_t *meshEntity, const DynamicMesh **meshes,
+									 std::span<const uint16_t> indicesOfMeshes );
+
+	void addCompoundDynamicMeshesToSortList( const entity_t *meshEntity, const Scene::CompoundDynamicMesh *meshes,
+											 std::span<const uint16_t> indicesOfMeshes );
 
 	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );

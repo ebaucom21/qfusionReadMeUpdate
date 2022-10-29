@@ -67,7 +67,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 	}
 }
 
-auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements() const -> std::pair<unsigned, unsigned> {
+auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements( const float *, const float *, float ) const
+	-> std::pair<unsigned, unsigned> {
 	assert( numPoints );
 	return { 4 * numPoints, 6 * numPoints };
 }
@@ -75,7 +76,11 @@ auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements() const -> std::p
 [[nodiscard]]
 auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict viewOrigin,
 														 const float *__restrict,
+														 float,
+														 const Scene::DynamicLight *,
+														 std::span<const uint16_t>,
 														 vec4_t *__restrict positions,
+														 vec4_t *__restrict,
 														 vec2_t *__restrict texCoords,
 														 byte_vec4_t *__restrict colors,
 														 uint16_t *__restrict indices ) const
@@ -351,7 +356,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
 		if( beam->poly.material && beam->poly.numPoints ) [[likely]] {
-			request->addPoly( &beam->poly );
+			request->addDynamicMesh( &beam->poly );
 		}
 	}
 

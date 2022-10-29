@@ -3,7 +3,9 @@
 #include "../qcommon/links.h"
 #include "../client/client.h"
 #include "../qcommon/wswvector.h"
+#include "../qcommon/memspecbuilder.h"
 
+#include <memory>
 #include <unordered_map>
 
 struct IcosphereData {
@@ -88,11 +90,6 @@ public:
 	[[nodiscard]]
 	auto getIcosphereForLevel( unsigned level ) -> IcosphereData {
 		return m_icospheresForLevels[level];
-	}
-
-	[[nodiscard]]
-	auto getAllIcospheresForLevels() -> std::span<const IcosphereData, kMaxSubdivLevel + 1> {
-		return std::span<const IcosphereData, kMaxSubdivLevel + 1> { m_icospheresForLevels.data(), kMaxSubdivLevel + 1 };
 	}
 private:
 	struct alignas( 4 ) Vertex { float data[4]; };
@@ -610,41 +607,6 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 	hull->vertexMoveDirections = vertices;
 }
 
-auto SimulatedHullsSystem::setupLods( ExternalMesh::LodProps *lods, LodSetupParams &&params ) -> unsigned {
-	const auto &icospheresForLevels = ::basicHullsHolder.getAllIcospheresForLevels();
-	assert( params.currSubdivLevel < icospheresForLevels.size() );
-	assert( params.currSubdivLevel >= params.minSubdivLevel );
-
-	unsigned numLods = 0;
-	if( params.tesselateClosestLod && params.currSubdivLevel < BasicHullsHolder::kMaxSubdivLevel ) {
-		const IcosphereData &dynTessData = icospheresForLevels[params.currSubdivLevel + 1];
-		lods[numLods++] = {
-			.indices                     = dynTessData.indices.data(),
-			.neighbours                  = dynTessData.vertexNeighbours.data(),
-			.maxRatioOfViewTangentsToUse = std::numeric_limits<float>::max(),
-			.numIndices                  = (uint16_t)dynTessData.indices.size(),
-			.numVertices                 = (uint16_t)dynTessData.vertices.size(),
-			.lerpNextLevelColors         = params.lerpNextLevelColors,
-			.tesselate                   = true,
-		};
-	}
-
-	float lodTangentsRatio = params.currLevelTangentRatio;
-	for( int level = (signed)params.currSubdivLevel; level >= (signed)params.minSubdivLevel; --level ) {
-		const IcosphereData &levelData = icospheresForLevels[level];
-		lods[numLods++] = {
-			.indices                     = levelData.indices.data(),
-			.neighbours                  = levelData.vertexNeighbours.data(),
-			.maxRatioOfViewTangentsToUse = lodTangentsRatio,
-			.numIndices                  = (uint16_t)levelData.indices.size(),
-			.numVertices                 = (uint16_t)levelData.vertices.size(),
-		};
-		lodTangentsRatio *= 0.5f;
-	}
-
-	return numLods;
-}
-
 void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
@@ -697,68 +659,55 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 	}
 
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
-		assert( std::size( hull->meshSubmissionBuffer ) == 1 );
+		HullDynamicMesh *__restrict mesh = &hull->submittedMesh;
 		assert( hull->subdivLevel );
 
-		ExternalMesh *__restrict mesh = &hull->meshSubmissionBuffer[0];
+		Vector4Copy( hull->mins, mesh->cullMins );
+		Vector4Copy( hull->maxs, mesh->cullMaxs );
 
-		Vector4Copy( hull->mins, mesh->mins );
-		Vector4Copy( hull->maxs, mesh->maxs );
+		mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+		mesh->material               = nullptr;
 
-		mesh->positions           = hull->vertexPositions[hull->positionsFrame];
-		mesh->normals             = hull->vertexNormals;
-		mesh->colors              = hull->vertexColors;
-		mesh->material            = nullptr;
-		mesh->useDrawOnTopHack    = false;
-		mesh->applyVertexDynLight = hull->applyVertexDynLight;
-		mesh->vertexViewDotFade   = hull->vertexViewDotFade;
+		mesh->m_simulatedPositions   = hull->vertexPositions[hull->positionsFrame];
+		mesh->m_simulatedNormals     = hull->vertexNormals;
+		mesh->m_simulatedColors      = hull->vertexColors;
+		mesh->m_viewDotFade          = hull->vertexViewDotFade;
+		mesh->m_simulatedSubdivLevel = hull->subdivLevel;
+		mesh->m_tesselateClosestLod  = hull->tesselateClosestLod;
+		mesh->m_lerpNextLevelColors  = hull->leprNextLevelColors;
 
-		mesh->numLods = setupLods( mesh->lods, LodSetupParams {
-			.currSubdivLevel       = hull->subdivLevel,
-			.minSubdivLevel        = hull->subdivLevel - 1u,
-			.currLevelTangentRatio = hull->lodCurrLevelTangentRatio,
-			.tesselateClosestLod   = hull->tesselateClosestLod,
-			.lerpNextLevelColors   = hull->leprNextLevelColors
-		});
-
-		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->meshSubmissionBuffer, 1 } );
+		drawSceneRequest->addDynamicMesh( mesh );
 	}
 
 	for( const BaseConcentricSimulatedHull *__restrict hull: activeConcentricHulls ) {
 		assert( hull->numLayers );
-		// Meshes should be placed in memory continuously, so we can supply a span
-		assert( hull->layers[hull->numLayers - 1].submittedMesh - hull->layers[0].submittedMesh + 1 == hull->numLayers );
 
-		// TODO: Use different lods for different layers?
-		ExternalMesh::LodProps lods[ExternalMesh::kMaxLods];
-		const unsigned numLods = setupLods( lods, LodSetupParams {
-			.currSubdivLevel       = hull->subdivLevel,
-			.minSubdivLevel        = 0u,
-			.currLevelTangentRatio = 0.15f,
-			.tesselateClosestLod   = true,
-			.lerpNextLevelColors   = true
-		});
-
+		std::optional<uint8_t> drawOnTopPartIndex;
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {
 			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
-			ExternalMesh *__restrict mesh = hull->layers[i].submittedMesh;
+			HullDynamicMesh *__restrict mesh = hull->layers[i].submittedMesh;
 
-			Vector4Copy( layer->mins, mesh->mins );
-			Vector4Copy( layer->maxs, mesh->maxs );
+			Vector4Copy( layer->mins, mesh->cullMins );
+			Vector4Copy( layer->maxs, mesh->cullMaxs );
 
-			mesh->positions           = layer->vertexPositions;
-			mesh->normals             = nullptr;
-			mesh->colors              = layer->vertexColors;
-			mesh->material            = nullptr;
-			mesh->numLods             = numLods;
-			mesh->applyVertexDynLight = hull->applyVertexDynLight;
-			mesh->vertexViewDotFade   = layer->overrideHullFade ? *layer->overrideHullFade : hull->vertexViewDotFade;
-			mesh->useDrawOnTopHack    = layer->useDrawOnTopHack;
-			assert( numLods <= ExternalMesh::kMaxLods );
-			std::copy( lods, lods + numLods, mesh->lods );
+			mesh->m_simulatedPositions   = layer->vertexPositions;
+			mesh->m_simulatedNormals     = nullptr;
+			mesh->m_simulatedColors      = layer->vertexColors;
+			mesh->material               = nullptr;
+			mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+			mesh->m_viewDotFade          = layer->overrideHullFade ? *layer->overrideHullFade : hull->vertexViewDotFade;
+			mesh->m_simulatedSubdivLevel = hull->subdivLevel;
+			mesh->m_tesselateClosestLod  = true;
+			mesh->m_lerpNextLevelColors  = true;
+
+			if( layer->useDrawOnTopHack ) [[unlikely]] {
+				assert( drawOnTopPartIndex == std::nullopt );
+				drawOnTopPartIndex = (uint8_t)i;
+			}
 		}
 
-		drawSceneRequest->addExternalMesh( hull->mins, hull->maxs, { hull->layers[0].submittedMesh, hull->numLayers } );
+		drawSceneRequest->addCompoundDynamicMesh( hull->mins, hull->maxs,
+												  hull->firstSubmittedMesh, hull->numLayers, drawOnTopPartIndex );
 	}
 
 	m_lastTime = currTime;
@@ -1257,3 +1206,560 @@ bool SimulatedHullsSystem::processColorChange( int64_t currTime,
 
 	return true;
 }
+
+class MeshTesselationHelper {
+public:
+	vec4_t *m_tmpTessPositions { nullptr };
+	vec4_t *m_tmpTessFloatColors { nullptr };
+	int8_t *m_tessNeighboursCount { nullptr };
+	vec4_t *m_tessPositions { nullptr };
+	byte_vec4_t *m_tessByteColors { nullptr };
+	uint16_t *m_neighbourLessVertices { nullptr };
+	bool *m_isVertexNeighbourLess { nullptr };
+
+	std::unique_ptr<uint8_t[]> m_allocationBuffer;
+	unsigned m_lastNumNextLevelVertices { 0 };
+	unsigned m_lastAllocationSize { 0 };
+
+	template <bool SmoothColors>
+	void exec( const SimulatedHullsSystem::HullDynamicMesh *mesh, const byte_vec4_t *overrideColors, unsigned numSimulatedVertices,
+			   unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
+private:
+	static constexpr unsigned kAlignment = 16;
+
+	void setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices );
+
+	template <bool SmoothColors>
+	void runPassOverOriginalVertices( const SimulatedHullsSystem::HullDynamicMesh *mesh, const byte_vec4_t *overrideColors,
+									  unsigned numSimulatedVertices, const uint16_t nextLevelNeighbours[][5] );
+	template <bool SmoothColors>
+	[[nodiscard]]
+	auto collectNeighbourLessVertices( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) -> unsigned;
+	template <bool SmoothColors>
+	void processNeighbourLessVertices( unsigned numNeighbourLessVertices, const uint16_t nextLevelNeighbours[][5] );
+	template <bool SmoothColors>
+	void runSmoothVerticesPass( unsigned numNextLevelVertices, const uint16_t nextLevelNeighbours[][5] );
+};
+
+template <bool SmoothColors>
+void MeshTesselationHelper::exec( const SimulatedHullsSystem::HullDynamicMesh *mesh, const byte_vec4_t *overrideColors,
+								  unsigned numSimulatedVertices, unsigned numNextLevelVertices,
+								  const uint16_t nextLevelNeighbours[][5] ) {
+	setupBuffers( numSimulatedVertices, numNextLevelVertices );
+
+	runPassOverOriginalVertices<SmoothColors>( mesh, overrideColors, numSimulatedVertices, nextLevelNeighbours );
+	unsigned numNeighbourLessVertices = collectNeighbourLessVertices<SmoothColors>( numSimulatedVertices, numNextLevelVertices );
+	processNeighbourLessVertices<SmoothColors>( numNeighbourLessVertices, nextLevelNeighbours );
+	runSmoothVerticesPass<SmoothColors>( numNextLevelVertices, nextLevelNeighbours );
+}
+
+void MeshTesselationHelper::setupBuffers( unsigned numSimulatedVertices, unsigned numNextLevelVertices ) {
+	if( m_lastNumNextLevelVertices != numNextLevelVertices ) {
+		// Compute offsets from the base ptr
+		wsw::MemSpecBuilder memSpecBuilder( wsw::MemSpecBuilder::initiallyEmpty() );
+
+		const auto tmpTessPositionsSpec       = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tmpTessFloatColorsSpec     = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tessPositionsSpec          = memSpecBuilder.addAligned<vec4_t>( numNextLevelVertices, kAlignment );
+		const auto tmpTessNeighboursCountSpec = memSpecBuilder.add<int8_t>( numNextLevelVertices );
+		const auto tessByteColorsSpec         = memSpecBuilder.add<byte_vec4_t>( numNextLevelVertices );
+		const auto neighbourLessVerticesSpec  = memSpecBuilder.add<uint16_t>( numNextLevelVertices );
+		const auto isNextVertexNeighbourLess  = memSpecBuilder.add<bool>( numNextLevelVertices );
+
+		if ( m_lastAllocationSize < memSpecBuilder.sizeSoFar() ) [[unlikely]] {
+			m_lastAllocationSize = memSpecBuilder.sizeSoFar();
+			m_allocationBuffer   = std::make_unique<uint8_t[]>( m_lastAllocationSize );
+		}
+
+		void *const basePtr     = m_allocationBuffer.get();
+		m_tmpTessPositions      = tmpTessPositionsSpec.get( basePtr );
+		m_tmpTessFloatColors    = tmpTessFloatColorsSpec.get( basePtr );
+		m_tessNeighboursCount   = tmpTessNeighboursCountSpec.get( basePtr );
+		m_tessPositions         = tessPositionsSpec.get( basePtr );
+		m_tessByteColors        = tessByteColorsSpec.get( basePtr );
+		m_neighbourLessVertices = neighbourLessVerticesSpec.get( basePtr );
+		m_isVertexNeighbourLess = isNextVertexNeighbourLess.get( basePtr );
+
+		m_lastNumNextLevelVertices = numNextLevelVertices;
+	}
+
+	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
+	const unsigned numAddedVertices = numNextLevelVertices - numSimulatedVertices;
+
+	std::memset( m_tessPositions, 0, sizeof( m_tessPositions[0] ) * numNextLevelVertices );
+	std::memset( m_tessByteColors, 0, sizeof( m_tessByteColors[0] ) * numNextLevelVertices );
+	std::memset( m_isVertexNeighbourLess, 0, sizeof( m_isVertexNeighbourLess[0] ) * numNextLevelVertices );
+
+	std::memset( m_tmpTessPositions + numSimulatedVertices, 0, sizeof( m_tmpTessPositions[0] ) * numAddedVertices );
+	std::memset( m_tmpTessFloatColors + numSimulatedVertices, 0, sizeof( m_tmpTessFloatColors[0] ) * numAddedVertices );
+	std::memset( m_tessNeighboursCount + numSimulatedVertices, 0, sizeof( m_tessNeighboursCount[0] ) * numAddedVertices );
+}
+
+template <bool SmoothColors>
+void MeshTesselationHelper::runPassOverOriginalVertices( const SimulatedHullsSystem::HullDynamicMesh *mesh,
+														 const byte_vec4_t *overrideColors,
+														 unsigned numSimulatedVertices,
+														 const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	const byte_vec4_t *const __restrict colors   = overrideColors ? overrideColors : mesh->m_simulatedColors;
+	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
+	int8_t *const __restrict tessNeighboursCount = m_tessNeighboursCount;
+
+	// For each vertex in the original mesh
+	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
+		const auto byteColor  = colors[vertexIndex];
+		const float *position = mesh->m_simulatedPositions[vertexIndex];
+
+		if constexpr( SmoothColors ) {
+			// Write the color to the accum buffer for smoothing it later
+			Vector4Copy( byteColor, tmpTessFloatColors[vertexIndex] );
+		} else {
+			// Write the color directly to the resulting color buffer
+			Vector4Copy( byteColor, tessByteColors[vertexIndex] );
+		}
+
+		// Copy for the further smooth pass
+		Vector4Copy( position, tmpTessPositions[vertexIndex] );
+
+		// For each neighbour of this vertex in the tesselated mesh
+		for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+			if( neighbourIndex >= numSimulatedVertices ) {
+				VectorAdd( tmpTessPositions[neighbourIndex], position, tmpTessPositions[neighbourIndex] );
+				// Add integer values as is to the float accumulation buffer
+				Vector4Add( tmpTessFloatColors[neighbourIndex], byteColor, tmpTessFloatColors[neighbourIndex] );
+				tessNeighboursCount[neighbourIndex]++;
+			}
+		}
+	}
+}
+
+template <bool SmoothColors>
+auto MeshTesselationHelper::collectNeighbourLessVertices( unsigned numSimulatedVertices,
+														  unsigned numNextLevelVertices ) -> unsigned {
+	assert( numSimulatedVertices && numNextLevelVertices && numSimulatedVertices < numNextLevelVertices );
+
+	vec4_t *const __restrict tmpTessPositions        = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	vec4_t *const __restrict  tmpTessFloatColors     = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	int8_t *const __restrict tessNeighboursCount     = m_tessNeighboursCount;
+	uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
+	bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
+	byte_vec4_t *const __restrict tessByteColors     = m_tessByteColors;
+
+	unsigned numNeighbourLessVertices = 0;
+	for( unsigned vertexIndex = numSimulatedVertices; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+		// Wtf? how do such vertices exist?
+		if( !tessNeighboursCount[vertexIndex] ) [[unlikely]] {
+			neighbourLessVertices[numNeighbourLessVertices++] = vertexIndex;
+			isVertexNeighbourLess[vertexIndex] = true;
+			continue;
+		}
+
+		const float scale = Q_Rcp( (float)tessNeighboursCount[vertexIndex] );
+		VectorScale( tmpTessPositions[vertexIndex], scale, tmpTessPositions[vertexIndex] );
+		tmpTessPositions[vertexIndex][3] = 1.0f;
+
+		if constexpr( SmoothColors ) {
+			// Just scale by the averaging multiplier
+			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tmpTessFloatColors[vertexIndex] );
+		} else {
+			// Write the vertex color directly to the resulting color buffer
+			Vector4Scale( tmpTessFloatColors[vertexIndex], scale, tessByteColors[vertexIndex] );
+		}
+	}
+
+	return numNeighbourLessVertices;
+}
+
+template <bool SmoothColors>
+void MeshTesselationHelper::processNeighbourLessVertices( unsigned numNeighbourLessVertices,
+														  const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessFloatColors            = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	const uint16_t *const __restrict neighbourLessVertices = m_neighbourLessVertices;
+	const bool *const __restrict isVertexNeighbourLess     = m_isVertexNeighbourLess;
+	byte_vec4_t *const __restrict tessByteColors           = m_tessByteColors;
+
+	// Hack for neighbour-less vertices: apply a gathering pass
+	// (the opposite to what we do for each vertex in the original mesh)
+	for( unsigned i = 0; i < numNeighbourLessVertices; ++i ) {
+		const unsigned vertexIndex = neighbourLessVertices[i];
+		alignas( 16 ) vec4_t accumulatedColor { 0.0f, 0.0f, 0.0f, 0.0f };
+		unsigned numAccumulatedColors = 0;
+		for( unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+			if( !isVertexNeighbourLess[neighbourIndex] ) [[likely]] {
+				numAccumulatedColors++;
+				if constexpr( SmoothColors ) {
+					const float *const __restrict neighbourColor = tmpTessFloatColors[neighbourIndex];
+					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
+				} else {
+					const uint8_t *const __restrict neighbourColor = tessByteColors[neighbourIndex];
+					Vector4Add( neighbourColor, accumulatedColor, accumulatedColor );
+				}
+			}
+		}
+		if( numAccumulatedColors ) [[likely]] {
+			const float scale = Q_Rcp( (float)numAccumulatedColors );
+			if constexpr( SmoothColors ) {
+				Vector4Scale( accumulatedColor, scale, tmpTessFloatColors[vertexIndex] );
+			} else {
+				Vector4Scale( accumulatedColor, scale, tessByteColors[vertexIndex] );
+			}
+		}
+	}
+}
+
+template <bool SmoothColors>
+void MeshTesselationHelper::runSmoothVerticesPass( unsigned numNextLevelVertices,
+												   const uint16_t nextLevelNeighbours[][5] ) {
+	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
+	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
+	vec4_t *const __restrict tessPositions       = std::assume_aligned<kAlignment>( m_tessPositions );
+	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
+
+	// Each icosphere vertex has 5 neighbours (we don't make a distinction between old and added ones for this pass)
+	constexpr float icoAvgScale = 1.0f / 5.0f;
+	constexpr float smoothFrac  = 0.5f;
+
+	// Apply the smooth pass
+	if constexpr( SmoothColors ) {
+		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
+			alignas( 16 ) vec4_t sumOfNeighbourColors { 0.0f, 0.0f, 0.0f, 0.0f };
+
+			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+				Vector4Add( tmpTessFloatColors[neighbourIndex], sumOfNeighbourColors, sumOfNeighbourColors );
+			}
+
+			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
+
+			// Write the average color
+			Vector4Scale( sumOfNeighbourColors, icoAvgScale, tessByteColors[vertexIndex] );
+
+			// Write combined positions
+			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
+		}
+	} else {
+		for( unsigned vertexIndex = 0; vertexIndex < numNextLevelVertices; ++vertexIndex ) {
+			alignas( 16 ) vec4_t sumOfNeighbourPositions { 0.0f, 0.0f, 0.0f, 0.0f };
+
+			for( const unsigned neighbourIndex: nextLevelNeighbours[vertexIndex] ) {
+				Vector4Add( tmpTessPositions[neighbourIndex], sumOfNeighbourPositions, sumOfNeighbourPositions );
+			}
+
+			Vector4Scale( sumOfNeighbourPositions, icoAvgScale, sumOfNeighbourPositions );
+
+			// Write combined positions
+			Vector4Lerp( tmpTessPositions[vertexIndex], smoothFrac, sumOfNeighbourPositions, tessPositions[vertexIndex] );
+		}
+	}
+}
+
+static MeshTesselationHelper meshTesselationHelper;
+
+template <SimulatedHullsSystem::ViewDotFade Fade>
+[[nodiscard]]
+static inline wsw_forceinline auto calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
+																 const float *__restrict normal ) -> uint8_t {
+	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
+	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
+
+	const float absDot = std::fabs( DotProduct( viewDir, normal ) );
+	float alphaFrac;
+	if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutContour ) {
+		alphaFrac = absDot;
+	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenter ) {
+		// This looks best for the current purposes
+		alphaFrac = ( 1.0f - absDot ) * ( 1.0f - absDot );
+	} else {
+		alphaFrac = 1.0f;
+	}
+
+	const float modifiedAlpha = alphaFrac * (float)givenAlpha;
+	return (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
+}
+
+using IcosphereVertexNeighbours = const uint16_t (*)[5];
+
+template <SimulatedHullsSystem::ViewDotFade Fade>
+static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict resultColors,
+											const vec4_t *const __restrict positions,
+											const IcosphereVertexNeighbours neighboursOfVertices,
+											const byte_vec4_t *const __restrict givenColors,
+											const float *const __restrict viewOrigin,
+											const unsigned numVertices ) {
+	unsigned vertexNum = 0;
+	do {
+		const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
+		const float *const __restrict currVertex = positions[vertexNum];
+		vec3_t accumDir { 0.0f, 0.0f, 0.0f };
+		unsigned neighbourIndex = 0;
+		bool hasAddedDirs = false;
+		do {
+			const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
+			const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
+			vec3_t currTo2, currTo3, cross;
+			VectorSubtract( v2, currVertex, currTo2 );
+			VectorSubtract( v3, currVertex, currTo3 );
+			CrossProduct( currTo2, currTo3, cross );
+			if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
+				const float rcpLength = Q_RSqrt( squaredLength );
+				VectorMA( accumDir, rcpLength, cross, accumDir );
+				hasAddedDirs = true;
+			}
+		} while( ++neighbourIndex < 5 );
+
+		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
+		if( hasAddedDirs ) [[likely]] {
+			vec3_t viewDir;
+			VectorSubtract( currVertex, viewOrigin, viewDir );
+			const float squareDistanceToVertex = VectorLengthSquared( viewDir );
+			if( squareDistanceToVertex > 1.0f ) [[likely]] {
+				vec3_t normal;
+				VectorCopy( accumDir, normal );
+				VectorNormalizeFast( normal );
+				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+				VectorScale( viewDir, rcpDistance, viewDir );
+				const uint8_t givenAlpha = givenColors[vertexNum][3];
+				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normal );
+			} else {
+				resultColors[vertexNum][3] = 0;
+			}
+		} else {
+			resultColors[vertexNum][3] = 0;
+		}
+	} while( ++vertexNum < numVertices );
+}
+
+template <SimulatedHullsSystem::ViewDotFade Fade>
+static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
+							  const vec4_t *const __restrict positions,
+							  const vec4_t *const __restrict normals,
+							  const byte_vec4_t *const __restrict givenColors,
+							  const float *const __restrict viewOrigin,
+							  const unsigned numVertices ) {
+	unsigned vertexNum = 0;
+	do {
+		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
+		vec3_t viewDir;
+		VectorSubtract( positions[vertexNum], viewOrigin, viewDir );
+		const float squareDistanceToVertex = VectorLengthSquared( viewDir );
+		if( squareDistanceToVertex > 1.0f ) [[likely]] {
+			const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+			VectorScale( viewDir, rcpDistance, viewDir );
+			const uint8_t givenAlpha = givenColors[vertexNum][3];
+			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normals[vertexNum] );
+		} else {
+			resultColors[vertexNum][3] = 0;
+		}
+	} while( ++vertexNum < numVertices );
+}
+
+static void applyLightsToVertices( const vec4_t *__restrict givenPositions,
+								   const byte_vec4_t *__restrict givenColors,
+								   byte_vec4_t *__restrict destColors,
+								   const byte_vec4_t *__restrict alphaSourceColors,
+								   const Scene::DynamicLight *__restrict lights,
+								   std::span<const uint16_t> affectingLightIndices,
+								   unsigned numVertices ) {
+	const auto numAffectingLights = (unsigned)affectingLightIndices.size();
+
+	assert( numVertices );
+	unsigned vertexIndex = 0;
+	do {
+		const float *__restrict vertexOrigin  = givenPositions[vertexIndex];
+		auto *const __restrict givenColor     = givenColors[vertexIndex];
+		auto *const __restrict resultingColor = destColors[vertexIndex];
+
+		alignas( 16 ) vec4_t accumColor;
+		VectorScale( givenColor, ( 1.0f / 255.0f ), accumColor );
+
+		unsigned lightNum = 0;
+		do {
+			const Scene::DynamicLight *__restrict light = lights + affectingLightIndices[lightNum];
+			const float squareLightToVertexDistance = DistanceSquared( light->origin, vertexOrigin );
+			// May go outside [0.0, 1.0] as we test against the bounding box of the entire hull
+			float impactStrength = 1.0f - Q_Sqrt( squareLightToVertexDistance ) * Q_Rcp( light->maxRadius );
+			// Just clamp so the code stays branchless
+			impactStrength = wsw::clamp( impactStrength, 0.0f, 1.0f );
+			VectorMA( accumColor, impactStrength, light->color, accumColor );
+		} while( ++lightNum < numAffectingLights );
+
+		resultingColor[0] = (uint8_t)( 255.0f * wsw::clamp( accumColor[0], 0.0f, 1.0f ) );
+		resultingColor[1] = (uint8_t)( 255.0f * wsw::clamp( accumColor[1], 0.0f, 1.0f ) );
+		resultingColor[2] = (uint8_t)( 255.0f * wsw::clamp( accumColor[2], 0.0f, 1.0f ) );
+		resultingColor[3] = alphaSourceColors[vertexIndex][3];
+	} while( ++vertexIndex < numVertices );
+}
+
+auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float *viewOrigin,
+																	const float *viewAxis,
+																	float cameraFovTangent ) const
+	-> std::pair<unsigned, unsigned> {
+	// Get a suitable subdiv level and store it for further use during this frame
+	m_chosenSubdivLevel = m_tesselateClosestLod ? m_simulatedSubdivLevel + 1 : m_simulatedSubdivLevel;
+
+	assert( cameraFovTangent > 0.0f );
+	assert( m_nextLodTangentRatio > 0.0f && m_nextLodTangentRatio < 1.0f );
+
+	vec3_t center, extentVector;
+	VectorAvg( this->cullMins, this->cullMaxs, center );
+	VectorSubtract( this->cullMaxs, this->cullMins, extentVector );
+	const float squareExtentValue = VectorLengthSquared( extentVector );
+	if( squareExtentValue < wsw::square( 1.0f ) ) [[unlikely]] {
+		// Skip drawing
+		return { 0, 0 };
+	}
+
+	const float extentValue    = Q_Sqrt( squareExtentValue );
+	const float squareDistance = DistanceSquared( center, viewOrigin );
+	// Don't even try using lesser lods if the mesh is sufficiently close to the viewer
+	if( squareDistance > wsw::square( 0.5f * extentValue + 64.0f ) ) {
+		const float meshViewTangent  = extentValue * Q_RSqrt( squareDistance );
+		const float meshTangentRatio = meshViewTangent * Q_Rcp( cameraFovTangent );
+
+		// Diminish lod tangent ratio in the loop, drop subdiv level every step.
+		float lodTangentRatio = m_nextLodTangentRatio;
+		for(;; ) {
+			if( meshTangentRatio > lodTangentRatio ) {
+				break;
+			}
+			if( m_chosenSubdivLevel == 0 ) {
+				break;
+			}
+			m_chosenSubdivLevel--;
+			lodTangentRatio *= m_nextLodTangentRatio;
+			// Sanity check
+			if( lodTangentRatio < 1e-6 ) [[unlikely]] {
+				break;
+			}
+		};
+	}
+
+	const IcosphereData &chosenLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
+	return { (unsigned)chosenLevelData.vertices.size(), (unsigned)chosenLevelData.indices.size() };
+}
+
+auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
+															 const float *__restrict viewAxis,
+															 float cameraFovTangent,
+															 const Scene::DynamicLight *lights,
+															 std::span<const uint16_t> affectingLightIndices,
+					  										 vec4_t *__restrict destPositions,
+					  										 vec4_t *__restrict destNormals,
+					  										 vec2_t *__restrict destTexCoords,
+					  										 byte_vec4_t *__restrict destColors,
+					                                         uint16_t *__restrict destIndices ) const
+ 	-> std::pair<unsigned, unsigned> {
+	assert( m_chosenSubdivLevel <= m_simulatedSubdivLevel + 1 );
+
+	byte_vec4_t *overrideColors = nullptr;
+
+	const bool actuallyDoTesselation = m_tesselateClosestLod && m_chosenSubdivLevel > m_simulatedSubdivLevel;
+
+	if( m_viewDotFade != ViewDotFade::NoFade ) {
+		const unsigned dataLevelToUse     = actuallyDoTesselation ? m_simulatedSubdivLevel : m_chosenSubdivLevel;
+		const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( dataLevelToUse );
+
+		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
+		const auto numVertices = (unsigned)lodDataToUse.vertices.size();
+		overrideColors         = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+
+		if( m_simulatedNormals ) {
+			// Call specialized implementations for each fade func
+			if( m_viewDotFade == ViewDotFade::FadeOutContour ) {
+				applyViewDotFade<ViewDotFade::FadeOutContour>( overrideColors, m_simulatedPositions,
+															   m_simulatedNormals, m_simulatedColors,
+															   viewOrigin, numVertices );
+			} else if( m_viewDotFade == ViewDotFade::FadeOutCenter ) {
+				applyViewDotFade<ViewDotFade::FadeOutCenter>( overrideColors, m_simulatedPositions,
+															  m_simulatedNormals, m_simulatedColors,
+															  viewOrigin, numVertices );
+			} else [[unlikely]] {
+				wsw::failWithRuntimeError( "Unreachable" );
+			}
+		} else {
+			IcosphereVertexNeighbours neighboursOfVertices = lodDataToUse.vertexNeighbours.data();
+
+			// Call specialized implementations for each fade func
+			if( m_viewDotFade == ViewDotFade::FadeOutContour ) {
+				calcNormalsAndApplyViewDotFade<ViewDotFade::FadeOutContour>( overrideColors, m_simulatedPositions,
+																			 neighboursOfVertices, m_simulatedColors,
+																			 viewOrigin, numVertices );
+			} else if( m_viewDotFade == ViewDotFade::FadeOutCenter ) {
+				calcNormalsAndApplyViewDotFade<ViewDotFade::FadeOutCenter>( overrideColors, m_simulatedPositions,
+																			neighboursOfVertices, m_simulatedColors,
+																			viewOrigin, numVertices );
+			} else [[unlikely]] {
+				wsw::failWithRuntimeError( "Unreachable" );
+			}
+		}
+	}
+
+	if( this->applyVertexDynLight && !affectingLightIndices.empty() ) {
+		unsigned numVertices;
+		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
+		if( actuallyDoTesselation ) {
+			numVertices = ::basicHullsHolder.getIcosphereForLevel( m_simulatedSubdivLevel ).vertices.size();
+		} else {
+			numVertices = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel ).vertices.size();
+		}
+
+		// Copy alpha from these colors
+		const byte_vec4_t *alphaSourceColors;
+		if( overrideColors ) {
+			// We have applied view dot fade, use this view-dot-produced data
+			alphaSourceColors = overrideColors;
+		} else {
+			overrideColors    = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+			alphaSourceColors = m_simulatedColors;
+		}
+
+		applyLightsToVertices( m_simulatedPositions, m_simulatedColors, overrideColors, alphaSourceColors,
+							   lights, affectingLightIndices, numVertices );
+	}
+
+	unsigned numResultVertices, numResultIndices;
+
+	// HACK Perform an additional tesselation of some hulls.
+	// CPU-side tesselation is the single option in the current codebase state.
+	if( actuallyDoTesselation ) {
+		assert( m_simulatedSubdivLevel + 1 == m_chosenSubdivLevel );
+		const IcosphereData &nextLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
+		const IcosphereData &simLevelData  = ::basicHullsHolder.getIcosphereForLevel( m_simulatedSubdivLevel );
+
+		const IcosphereVertexNeighbours nextLevelNeighbours = nextLevelData.vertexNeighbours.data();
+
+		const auto numSimulatedVertices = (unsigned)simLevelData.vertices.size();
+		const auto numNextLevelVertices = (unsigned)nextLevelData.vertices.size();
+
+		MeshTesselationHelper *const tesselationHelper = &::meshTesselationHelper;
+		if( m_lerpNextLevelColors ) {
+			tesselationHelper->exec<true>( this, overrideColors,
+										   numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		} else {
+			tesselationHelper->exec<false>( this, overrideColors,
+											numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
+		}
+
+		numResultVertices = numNextLevelVertices;
+		numResultIndices  = (unsigned)nextLevelData.indices.size();
+
+		// TODO: Eliminate this excessive copying
+		std::memcpy( destPositions, tesselationHelper->m_tessPositions, sizeof( destPositions[0] ) * numResultVertices );
+		std::memcpy( destColors, tesselationHelper->m_tessByteColors, sizeof( destColors[0] ) * numResultVertices );
+		std::memcpy( destIndices, nextLevelData.indices.data(), sizeof( uint16_t ) * numResultIndices );
+	} else {
+		const IcosphereData &dataToUse = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
+		const byte_vec4_t *colorsToUse = overrideColors ? overrideColors : m_simulatedColors;
+
+		numResultVertices = (unsigned)dataToUse.vertices.size();
+		numResultIndices  = (unsigned)dataToUse.indices.size();
+
+		std::memcpy( destPositions, m_simulatedPositions, sizeof( m_simulatedPositions[0] ) * numResultVertices );
+		std::memcpy( destColors, colorsToUse, sizeof( colorsToUse[0] ) * numResultVertices );
+		std::memcpy( destIndices, dataToUse.indices.data(), sizeof( uint16_t ) * numResultIndices );
+	}
+
+	return { numResultVertices, numResultIndices };
+};
