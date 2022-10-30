@@ -60,10 +60,16 @@ public:
 
 	struct TracerParams {
 		shader_s *material { nullptr };
+		unsigned duration { 100 };
 		float prestep { 0.0f };
 		float width { 0.0f };
 		float length { 0.0f };
 		float color[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+		float programLightRadius { 0.0f };
+		float coronaLightRadius { 0.0f };
+		float lightColor[3] { 1.0f, 1.0f, 1.0f };
+		uint8_t lightFrameAffinityModulo { 0 };
+		uint8_t lightFrameAffinityIndex { 0 };
 	};
 
 	void spawnTracerEffect( const float *from, const float *to, TracerParams &&params );
@@ -112,13 +118,18 @@ private:
 
 	struct TracerEffect {
 		TracerEffect *prev { nullptr }, *next { nullptr };
-		int64_t spawnTime;
+		int64_t timeoutAt;
 		vec3_t from;
 		vec3_t to;
 		float speed { 0.0f };
 		float totalDistance { 0.0f };
 		float distanceSoFar { 0.0f };
 		QuadPoly poly;
+		float programLightRadius { 0.0f };
+		float coronaLightRadius { 0.0f };
+		float lightColor[3] { 1.0f, 1.0f, 1.0f };
+		uint16_t lightFrameAffinityModulo { 0 };
+		uint16_t lightFrameAffinityIndex { 0 };
 	};
 
 	void destroyTransientBeamEffect( TransientBeamEffect *effect );

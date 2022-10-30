@@ -1906,10 +1906,14 @@ void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 		from = tmp;
 	}
 	cg.polyEffectsSystem.spawnTracerEffect( from, to, PolyEffectsSystem::TracerParams {
-		.material = cgs.media.shaderSparkParticle,
-		.prestep  = m_rng.nextFloat( 64.0f, 96.0f ),
-		.width    = m_rng.nextFloat( 2.0f, 2.5f ),
-		.length   = 144.0f,
+		.material           = cgs.media.shaderSparkParticle,
+		.duration           = 75,
+		.prestep            = m_rng.nextFloat( 64.0f, 96.0f ),
+		.width              = m_rng.nextFloat( 2.0f, 2.5f ),
+		.length             = 144.0f,
+		.programLightRadius = 72.0f,
+		.coronaLightRadius  = 108.0f,
+		.lightColor         = { 0.9f, 0.8f, 1.0f }
 	});
 }
 
@@ -1920,13 +1924,19 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std:
 		tmp[2] -= 0.5f * playerbox_stand_viewheight;
 		from = tmp;
 	}
-	for( const float *v: to ) {
-		cg.polyEffectsSystem.spawnTracerEffect( from, v, PolyEffectsSystem::TracerParams {
-			.material = cgs.media.shaderSparkParticle,
-			.prestep  = m_rng.nextFloat( 72.0f, 224.0f ),
-			.width    = 1.0f,
-			.length   = 48.0f,
-			.color    = { 1.0f, 0.9f, 0.8f, 1.0f }
+	for( size_t i = 0; i < to.size(); ++i ) {
+		cg.polyEffectsSystem.spawnTracerEffect( from, to[i], PolyEffectsSystem::TracerParams {
+			.material                 = cgs.media.shaderSparkParticle,
+			.duration                 = 125,
+			.prestep                  = m_rng.nextFloat( 72.0f, 224.0f ),
+			.width                    = 1.0f,
+			.length                   = 72.0f,
+			.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
+			.programLightRadius       = 96.0f,
+			.coronaLightRadius        = 192.0f,
+			.lightColor               = { 1.0f, 0.9f, 0.8f },
+			.lightFrameAffinityModulo = (uint8_t)to.size(),
+			.lightFrameAffinityIndex  = (uint8_t)i,
 		});
 	}
 }

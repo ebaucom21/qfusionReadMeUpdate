@@ -291,11 +291,8 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 	wsw::link( effect, &m_transientBeamsHead );
 }
 
-static constexpr float kTracerMinSpeed      = 1000.0f;
-static constexpr unsigned kTracerTimeMillis = 100;
-
 void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) {
-	assert( params.prestep >= 1.0f && params.width > 0.0f && params.length >= 1.0f );
+	assert( params.duration > 50 && params.prestep >= 1.0f && params.width > 0.0f && params.length >= 1.0f );
 
 	const float squareDistance = DistanceSquared( from, to );
 	if( squareDistance < wsw::square( params.prestep + params.length ) ) [[unlikely]] {
@@ -323,13 +320,12 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 		mem = oldestEffect;
 	}
 
-	// TODO: The speed estimation does not take the fact we also advance by `length` every submission frame
 	const float distance          = squareDistance * rcpDistance;
-	const float tracerTimeSeconds = 1e-3f * (float)kTracerTimeMillis;
-	const float speed             = std::max( kTracerMinSpeed, distance * Q_Rcp( tracerTimeSeconds ) );
+	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
+	const float speed             = std::max( 1000.0f, distance * Q_Rcp( tracerTimeSeconds ) );
 
 	auto *effect            = new( mem )TracerEffect;
-	effect->spawnTime       = m_lastTime;
+	effect->timeoutAt       = m_lastTime + params.duration;
 	effect->speed           = speed;
 	effect->totalDistance   = distance;
 	effect->distanceSoFar   = params.prestep;
@@ -339,10 +335,15 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	effect->poly.material   = params.material;
 
 	VectorCopy( from, effect->from );
-	effect->from[2] -= 18.0f;
 	VectorCopy( to, effect->to );
 	VectorCopy( dir, effect->poly.dir );
 	Vector4Copy( params.color, effect->poly.color );
+
+	VectorCopy( params.lightColor, effect->lightColor );
+	effect->programLightRadius       = params.programLightRadius;
+	effect->coronaLightRadius        = params.coronaLightRadius;
+	effect->lightFrameAffinityModulo = params.lightFrameAffinityModulo;
+	effect->lightFrameAffinityIndex  = params.lightFrameAffinityIndex;
 
 	wsw::link( effect, &m_tracerEffectsHead );
 }
@@ -391,7 +392,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 
 	const float timeDeltaSeconds = 1e-3f * std::min<float>( 33, (float)( currTime - m_lastTime ) );
 	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
-		if( tracer->spawnTime + kTracerTimeMillis <= currTime ) [[unlikely]] {
+		if( tracer->timeoutAt <= currTime ) [[unlikely]] {
 			destroyTracerEffect( tracer );
 			continue;
 		}
@@ -406,9 +407,21 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		assert( std::fabs( VectorLengthFast( tracer->poly.dir ) - 1.0f ) < 1e-3f );
 		VectorMA( tracer->from, tracer->distanceSoFar, tracer->poly.dir, tracer->poly.from );
 		VectorMA( tracer->poly.from, tracer->poly.length, tracer->poly.dir, tracer->poly.to );
-		tracer->distanceSoFar += tracer->poly.length;
 
 		request->addPoly( &tracer->poly );
+
+		if( tracer->programLightRadius > 0.0f || tracer->coronaLightRadius > 0.0f ) {
+			// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
+			if( const auto modulo = (unsigned)tracer->lightFrameAffinityModulo; modulo > 1 ) {
+				using CountType = decltype( cg.frameCount );
+				const auto frameIndexByModulo = cg.frameCount % (CountType) modulo;
+				if( frameIndexByModulo == (CountType)tracer->lightFrameAffinityIndex ) {
+					request->addLight( tracer->poly.to, tracer->programLightRadius, tracer->coronaLightRadius, tracer->lightColor );
+				}
+			} else {
+				request->addLight( tracer->poly.to, tracer->programLightRadius, tracer->coronaLightRadius, tracer->lightColor );
+			}
+		}
 	}
 
 	m_lastTime = currTime;
