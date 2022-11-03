@@ -334,6 +334,8 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	effect->speed           = speed;
 	effect->totalDistance   = distance;
 	effect->distanceSoFar   = params.prestep;
+	effect->fadeInDistance  = 2.0f * params.prestep;
+	effect->fadeOutDistance = 2.0f * params.prestep;
 	effect->poly.width      = params.width;
 	effect->poly.length     = params.length;
 	effect->poly.tileLength = params.length;
@@ -403,6 +405,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		}
 
 		assert( tracer->poly.length >= 1.0f );
+		[[maybe_unused]] const float oldDistanceSoFar = tracer->distanceSoFar;
 		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
 		if( tracer->distanceSoFar + tracer->poly.length >= tracer->totalDistance ) [[unlikely]] {
 			destroyTracerEffect( tracer );
@@ -416,15 +419,31 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		request->addPoly( &tracer->poly );
 
 		if( tracer->programLightRadius > 0.0f || tracer->coronaLightRadius > 0.0f ) {
+			bool shouldAddLight = true;
 			// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
 			if( const auto modulo = (unsigned)tracer->lightFrameAffinityModulo; modulo > 1 ) {
 				using CountType = decltype( cg.frameCount );
 				const auto frameIndexByModulo = cg.frameCount % (CountType) modulo;
-				if( frameIndexByModulo == (CountType)tracer->lightFrameAffinityIndex ) {
-					request->addLight( tracer->poly.to, tracer->programLightRadius, tracer->coronaLightRadius, tracer->lightColor );
+				shouldAddLight = frameIndexByModulo == (CountType)tracer->lightFrameAffinityIndex;
+			}
+			if( shouldAddLight ) {
+				float radiusFrac = 1.0f;
+				if( tracer->fadeInDistance > 0.0f ) {
+					if( oldDistanceSoFar < tracer->fadeInDistance ) {
+						radiusFrac = oldDistanceSoFar * Q_Rcp( tracer->fadeInDistance );
+					}
+				} else if( tracer->fadeOutDistance > 0.0f ) {
+					const float distanceLeft = tracer->totalDistance - oldDistanceSoFar;
+					if( distanceLeft < tracer->fadeOutDistance ) {
+						radiusFrac = distanceLeft * Q_Rcp( tracer->fadeOutDistance );
+					}
 				}
-			} else {
-				request->addLight( tracer->poly.to, tracer->programLightRadius, tracer->coronaLightRadius, tracer->lightColor );
+				assert( radiusFrac >= 0.0f && radiusFrac < 1.01f );
+				const float programRadius = radiusFrac * tracer->programLightRadius;
+				const float coronaRadius  = radiusFrac * tracer->coronaLightRadius;
+				if( programRadius > 1.0f || coronaRadius > 1.0f ) {
+					request->addLight( tracer->poly.to, programRadius, coronaRadius, tracer->lightColor );
+				}
 			}
 		}
 	}
