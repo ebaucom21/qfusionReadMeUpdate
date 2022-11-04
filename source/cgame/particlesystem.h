@@ -109,7 +109,7 @@ struct alignas( 16 ) ParticleFlock {
 	ParticleFlock *prev { nullptr }, *next { nullptr };
 	float mins[4];
 	float maxs[4];
-	unsigned lastLitParticleIndex;
+	unsigned lastLightEmitterParticleIndex;
 	bool hasRotatingParticles;
 };
 
@@ -158,6 +158,12 @@ private:
 
 	wsw::RandomGenerator m_rng;
 
+	// TODO: Heap-allocate (we do not want to include heavyweight std headers and there's no alternative for now).
+	// Caution: Once-added data must preserve its address during frame, so relocatable vectors are not an option.
+	wsw::StaticVector<Particle::AppearanceRules, 16> m_frameFlareAppearanceRules;
+	wsw::StaticVector<ColorLifespan, 256> m_frameFlareColorLifespans;
+	wsw::StaticVector<Particle, 256> m_frameFlareParticles;
+
 	void unlinkAndFree( ParticleFlock *flock );
 
 	[[nodiscard]]
@@ -200,7 +206,8 @@ public:
 
 	void runFrame( int64_t currTime, DrawSceneRequest *drawSceneRequest );
 
-	void tryAddingLight( int64_t currTime, ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
+	void tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
+	void tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest );
 };
 
 #endif

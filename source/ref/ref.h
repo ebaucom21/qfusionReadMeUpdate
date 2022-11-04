@@ -323,6 +323,17 @@ struct alignas( 16 ) Particle {
 		SizeBehaviour sizeBehaviour { SizeNotChanging };
 	};
 
+	struct FlareProps {
+		std::span<const LightLifespan> lightProps;
+		float alphaScale { 1.0f };
+		// Flares are very cheap to process, even if the current implementation is not optimal.
+		// These options are primarily for purposes of fine-tuning appearance.
+		uint16_t flockFrameAffinityModulo { 0 };
+		uint16_t flockFrameAffinityIndex { 0 };
+		// For skipping individual particles
+		uint16_t particleFrameAffinityModulo { 0 };
+	};
+
 	// Common for flocks/aggregates.
 	// The name "rules" seems to be more appropriate than "params" for these stateless/shared objects.
 	struct AppearanceRules {
@@ -336,12 +347,23 @@ struct alignas( 16 ) Particle {
 		// TODO: Use our custom span type
 		uint8_t numMaterials { 1 };
 
-		// Points to external buffers with a greater lifetime.
+		// Program light properties.
+		// Note that only a single particle (which is cycled) in a flock may be a light emitter during scene submission.
+		// This span points to external buffers with a greater lifetime.
 		// Empty if no light.
 		// 1 element if the light props are the same for the entire flock.
 		// Matches length of colors if it should be addressed by Particle::instanceColorIndex.
 		// Other length options are invalid.
 		std::span<const LightLifespan> lightProps;
+
+		// These flares are similar to corona lights but are submitted as particle aggregates and not scene lights
+		// (even corona lights contribute something else to the scene, e.g. they could affect vertex-lit surfaces).
+		// Span values have the same meaning as lightProps ones.
+		// In the current codebase state, we should not try drawing flares
+		// during submission of spark particles due to material mismatch which leads to switching textures
+		// (this could be solved by using a texture atlas, which is not available yet (?)).
+
+		std::optional<FlareProps> flareProps;
 
 		std::variant<SpriteRules, SparkRules> geometryRules;
 
@@ -368,21 +390,27 @@ struct alignas( 16 ) Particle {
 
 	uint8_t bounceCount;
 
+	// TODO: All of this ties Particle to fixed AppearanceRules, allow supplying different instance data
+
 	static constexpr float kByteParamNormalizer = 1.0f / 128.0f;
 
 	// Should be set once upon spawn. Fractions are stored in a compact representation,
 	// floating-point values should be reconstructed by multiplying by kByteParamNormalizer
 	// The real parameter value is a multiple of this fraction by AppearanceRules:: parameter spread
-	int8_t instanceLengthFraction { 0 };
-	int8_t instanceWidthFraction { 0 };
-	int8_t instanceRadiusFraction { 0 };
+	int8_t instanceLengthSpreadFraction;
+	int8_t instanceWidthSpreadFraction;
+	int8_t instanceRadiusSpreadFraction;
+
+	uint8_t instanceLengthExtraScale;
+	uint8_t instanceWidthExtraScale;
+	uint8_t instanceRadiusExtraScale;
 
 	// Keeps an index of an instance material in the AppearanceRules span
-	uint8_t instanceMaterialIndex { 0 };
+	uint8_t instanceMaterialIndex;
 	// Keeps an index of instance color parameters in AppearanceRules color-related spans
-	uint8_t instanceColorIndex { 0 };
+	uint8_t instanceColorIndex;
 
-	uint8_t rotationAxisIndex { 0 };
+	uint8_t rotationAxisIndex;
 };
 
 struct VisualTrace {

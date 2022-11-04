@@ -306,9 +306,11 @@ auto fillParticleFlock( const EllipsoidalFlockParams *__restrict params,
 		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
 		const uint32_t randomDword = rng->next();
-		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
-		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
-		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+		p->instanceWidthSpreadFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
+		p->instanceLengthSpreadFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
+		p->instanceRadiusSpreadFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+
+		p->instanceWidthExtraScale = p->instanceLengthExtraScale = p->instanceRadiusExtraScale = 1;
 
 		if( hasMultipleMaterials ) {
 			if( materialsIndexMask ) {
@@ -456,9 +458,11 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 		resultTimeout = wsw::max( p->spawnTime + p->lifetime, resultTimeout );
 
 		const uint32_t randomDword = rng->next();
-		p->instanceWidthFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
-		p->instanceLengthFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
-		p->instanceRadiusFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+		p->instanceWidthSpreadFraction   = (int8_t)( ( randomDword >> 0 ) & 0xFF );
+		p->instanceLengthSpreadFraction  = (int8_t)( ( randomDword >> 8 ) & 0xFF );
+		p->instanceRadiusSpreadFraction  = (int8_t)( ( randomDword >> 16 ) & 0xFF );
+
+		p->instanceWidthExtraScale = p->instanceLengthExtraScale = p->instanceRadiusExtraScale = 1;
 
 		if( hasMultipleMaterials ) {
 			if( materialsIndexMask ) {
@@ -481,6 +485,17 @@ auto fillParticleFlock( const ConicalFlockParams *__restrict params,
 	}
 
 	return FillFlockResult { .resultTimeout = resultTimeout, .numParticles = numParticles };
+}
+
+[[nodiscard]]
+static inline bool canShowForCurrentCgFrame( unsigned affinityIndex, unsigned affinityModulo ) {
+	if( affinityModulo > 1 ) {
+		assert( affinityIndex < affinityModulo );
+		const auto moduloAsCountType = ( decltype( cg.frameCount ) )affinityModulo;
+		const auto indexAsCountType  = ( decltype( cg.frameCount ) )affinityIndex;
+		return indexAsCountType == cg.frameCount % moduloAsCountType;
+	}
+	return true;
 }
 
 void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
@@ -508,6 +523,10 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 		}
 	}
 
+	m_frameFlareParticles.clear();
+	m_frameFlareColorLifespans.clear();
+	m_frameFlareAppearanceRules.clear();
+
 	for( FlocksBin &bin: m_bins ) {
 		for( ParticleFlock *flock = bin.head; flock; flock = flock->next ) {
 			if( const unsigned numParticles = flock->numActivatedParticles ) [[likely]] {
@@ -515,14 +534,14 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 				const Particle::AppearanceRules &rules = flock->appearanceRules;
 				if( !rules.lightProps.empty() ) [[unlikely]] {
 					// If the light display is tied to certain frames (e.g., every 3rd one, starting from 2nd absolute)
-					if( const auto modulo = (unsigned)rules.lightFrameAffinityModulo; modulo > 1 ) {
-						using CountType = decltype( cg.frameCount );
-						const auto frameIndexByModulo = cg.frameCount % (CountType)modulo;
-						if( frameIndexByModulo == (CountType)rules.lightFrameAffinityIndex ) {
-							tryAddingLight( currTime, flock, request );
-						}
-					} else {
-						tryAddingLight( currTime, flock, request );
+					if( canShowForCurrentCgFrame( rules.lightFrameAffinityIndex, rules.lightFrameAffinityModulo ) ) {
+						tryAddingLight( flock, request );
+					}
+				}
+				if( rules.flareProps ) [[unlikely]] {
+					const Particle::FlareProps &props = *rules.flareProps;
+					if( canShowForCurrentCgFrame( props.flockFrameAffinityIndex, props.flockFrameAffinityModulo ) ) {
+						tryAddingFlares( flock, request );
 					}
 				}
 			}
@@ -530,13 +549,13 @@ void ParticleSystem::runFrame( int64_t currTime, DrawSceneRequest *request ) {
 	}
 }
 
-void ParticleSystem::tryAddingLight( int64_t currTime, ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+void ParticleSystem::tryAddingLight( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
 	const Particle::AppearanceRules &rules = flock->appearanceRules;
 	assert( flock->numActivatedParticles );
 	assert( rules.lightProps.size() == 1 || rules.lightProps.size() == rules.colors.size() );
 
-	flock->lastLitParticleIndex = ( flock->lastLitParticleIndex + 1 ) % flock->numActivatedParticles;
-	const Particle &particle = flock->particles[flock->lastLitParticleIndex];
+	flock->lastLightEmitterParticleIndex = ( flock->lastLightEmitterParticleIndex + 1 ) % flock->numActivatedParticles;
+	const Particle &particle = flock->particles[flock->lastLightEmitterParticleIndex];
 	assert( particle.lifetimeFrac >= 0.0f && particle.lifetimeFrac <= 1.0f );
 
 	const LightLifespan *lightLifespan;
@@ -550,6 +569,95 @@ void ParticleSystem::tryAddingLight( int64_t currTime, ParticleFlock *flock, Dra
 	lightLifespan->getRadiusAndColorForLifetimeFrac( particle.lifetimeFrac, &lightRadius, lightColor );
 	if( lightRadius >= 1.0f ) {
 		drawSceneRequest->addLight( particle.origin, lightRadius, 0.0f, lightColor );
+	}
+}
+
+void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *drawSceneRequest ) {
+	assert( m_frameFlareParticles.size() == m_frameFlareColorLifespans.size() );
+
+	if( m_frameFlareParticles.full() ) [[unlikely]] {
+		return;
+	}
+	if( m_frameFlareAppearanceRules.full() ) [[unlikely]] {
+		return;
+	}
+
+	assert( flock->numActivatedParticles );
+	assert( flock->appearanceRules.flareProps );
+	const Particle::FlareProps &flareProps = *flock->appearanceRules.flareProps;
+	assert( flareProps.lightProps.size() == 1 || flareProps.lightProps.size() == flock->appearanceRules.colors.size() );
+
+	const unsigned oldNumFrameFlareParticles = m_frameFlareParticles.size();
+
+	unsigned frameCountByModulo = 0;
+	if( unsigned modulo = flareProps.particleFrameAffinityModulo; modulo > 1 ) {
+		frameCountByModulo = (unsigned)( cg.frameCount % (decltype( cg.frameCount ) )modulo );
+	}
+
+	BoundsBuilder boundsBuilder;
+	unsigned numAddedParticles  = 0;
+	unsigned flockParticleIndex = 0;
+
+	do {
+		if( flareProps.particleFrameAffinityModulo > 1 ) {
+			if( ( flockParticleIndex % flareProps.particleFrameAffinityModulo ) != frameCountByModulo ) {
+				continue;
+			}
+		}
+
+		const Particle &baseParticle = flock->particles[flockParticleIndex];
+		assert( baseParticle.lifetimeFrac >= 0.0f && baseParticle.lifetimeFrac <= 1.0f );
+
+		// TODO: Lift this condition out of the loop?
+		const LightLifespan *lightLifespan;
+		if( flareProps.lightProps.size() == 1 ) {
+			lightLifespan = flareProps.lightProps.data();
+		} else {
+			lightLifespan = flareProps.lightProps.data() + baseParticle.instanceColorIndex;
+		}
+
+		float lightRadius, lightColor[3];
+		lightLifespan->getRadiusAndColorForLifetimeFrac( baseParticle.lifetimeFrac, &lightRadius, lightColor );
+		if( lightRadius >= 1.0f ) {
+			auto *const addedParticle = new( m_frameFlareParticles.unsafe_grow_back() )Particle( baseParticle );
+
+			addedParticle->lifetimeFrac          = 0.0f;
+			addedParticle->instanceColorIndex    = numAddedParticles;
+			addedParticle->instanceMaterialIndex = 0;
+
+			// Keep radius in the appearance rules the same (the thing we have to do), modify instance radius scale
+			addedParticle->instanceRadiusExtraScale = (int8_t)lightRadius;
+
+			// TODO: This kind of sucks, can't we just supply inline colors?
+			m_frameFlareColorLifespans.push_back( ColorLifespan {
+				.initialColor = { lightColor[0], lightColor[1], lightColor[2], flareProps.alphaScale },
+			});
+
+			// TODO: Load 4 components explicitly
+			boundsBuilder.addPoint( addedParticle->origin );
+			numAddedParticles++;
+
+			if( m_frameFlareParticles.full() ) [[unlikely]] {
+				break;
+			}
+		}
+	} while( ++flockParticleIndex < flock->numActivatedParticles );
+
+	assert( m_frameFlareParticles.size() == m_frameFlareColorLifespans.size() );
+
+	if( numAddedParticles ) {
+		const Particle *const addedParticles   = m_frameFlareParticles.data() + oldNumFrameFlareParticles;
+		const ColorLifespan *const addedColors = m_frameFlareColorLifespans.data() + oldNumFrameFlareParticles;
+		m_frameFlareAppearanceRules.emplace_back( Particle::AppearanceRules {
+			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.colors        = { addedColors, numAddedParticles },
+			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.0f } },
+		});
+
+		vec4_t mins, maxs;
+		boundsBuilder.storeTo( mins, maxs );
+
+		drawSceneRequest->addParticles( mins, maxs, m_frameFlareAppearanceRules.back(), addedParticles, numAddedParticles );
 	}
 }
 

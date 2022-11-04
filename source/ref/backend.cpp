@@ -1299,14 +1299,17 @@ static void submitSpriteParticlesToBackend( const FrontendToBackendShared *fsh,
 		assert( spriteRules->radius.mean > 0.0f );
 		assert( spriteRules->radius.spread >= 0.0f );
 
-		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusFraction;
+		float signedFrac = Particle::kByteParamNormalizer * (float)particle->instanceRadiusSpreadFraction;
 		float radius     = wsw::max( 0.0f, spriteRules->radius.mean + signedFrac * spriteRules->radius.spread );
+
+		radius *= (float)particle->instanceRadiusExtraScale;
 
 		if( spriteRules->sizeBehaviour != Particle::SizeNotChanging ) {
 			radius *= calcSizeFracForLifetimeFrac( particle->lifetimeFrac, spriteRules->sizeBehaviour );
-			if( radius < 0.1f ) {
-				continue;
-			}
+		}
+
+		if( radius < 0.1f ) {
+			continue;
 		}
 
 		vec3_t v_left, v_up;
@@ -1403,19 +1406,23 @@ static void submitSparkParticlesToBackend( const FrontendToBackendShared *fsh,
 		assert( sparkRules->length.mean >= 0.1f && sparkRules->width.mean >= 0.1f );
 		assert( sparkRules->length.spread >= 0.0f && sparkRules->width.spread >= 0.0f );
 
-		const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthFraction;
-		const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthFraction;
+		const float lengthSignedFrac = Particle::kByteParamNormalizer * (float)particle->instanceLengthSpreadFraction;
+		const float widthSignedFrac  = Particle::kByteParamNormalizer * (float)particle->instanceWidthSpreadFraction;
 
 		float length = wsw::max( 0.0f, sparkRules->length.mean + lengthSignedFrac * sparkRules->length.spread );
 		float width  = wsw::max( 0.0f, sparkRules->width.mean + widthSignedFrac * sparkRules->width.spread );
+
+		length *= (float)particle->instanceLengthExtraScale;
+		width  *= (float)particle->instanceWidthExtraScale;
 
 		if( sparkRules->sizeBehaviour != Particle::SizeNotChanging ) {
 			const float sizeFrac = calcSizeFracForLifetimeFrac( particle->lifetimeFrac, sparkRules->sizeBehaviour );
 			length *= sizeFrac;
 			width  *= sizeFrac;
-			if( length < 0.1f || width < 0.1f ) {
-				continue;
-			}
+		}
+
+		if( length < 0.1f || width < 0.1f ) {
+			continue;
 		}
 
 		vec3_t particleDir;
