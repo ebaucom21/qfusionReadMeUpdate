@@ -46,10 +46,14 @@ private:
 	inline static void fail_with( const char *format, ... )
 #endif
 	{
+		char buffer[1024];
+
 		va_list va;
 		va_start( va, format );
-		AI_FailWithv( "StaticDeque::fail_with()", format, va );
+		Q_vsnprintfz( buffer, sizeof( buffer ), format, va );
 		va_end( va );
+
+		Sys_Error( "%s", buffer );
 	}
 
 	inline static unsigned next_index( unsigned index ) {

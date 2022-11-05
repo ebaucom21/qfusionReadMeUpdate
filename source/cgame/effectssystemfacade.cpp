@@ -1345,7 +1345,8 @@ void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const Flock
 void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 	const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
 
-	sfx_s *sfx = nullptr;
+	sfx_s *sfx         = nullptr;
+	uintptr_t groupTag = 0;
 	if( cg_particles->integer ) {
 		const SurfImpactMaterial impactMaterial = decodeSurfImpactMaterial( impact.surfFlags );
 		const unsigned materialParam            = decodeSurfImpactMaterialParam( impact.surfFlags );
@@ -1362,17 +1363,25 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 		if( impactMaterial == IM::Metal || impactMaterial == IM::Stone || impactMaterial == IM::Unknown ) {
 			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
 		}
-		sfx = getSfxForImpactGroup( getImpactSfxGroupForMaterial( impactMaterial ) );
+		const unsigned group = getImpactSfxGroupForMaterial( impactMaterial );
+		sfx      = getSfxForImpactGroup( group );
+		groupTag = group;
 	} else {
 		spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
 		m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
-		if( const unsigned numSfx= cgs.media.sfxImpactSolid.length() ) {
-			sfx = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
+		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
+			sfx      = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
+			groupTag = 0;
 		}
 	}
 
 	if( sfx ) {
-		startSoundForImpact( sfx, impact );
+		startSoundForImpactUsingLimiter( sfx, groupTag, impact, ImpactSoundLimiterParams {
+			.dropChanceAtZeroDistance = 0.5f,
+			.startDroppingAtDistance  = 144.0f,
+			.dropChanceAtZeroTimeDiff = 1.0f,
+			.startDroppingAtTimeDiff  = 333,
+		});
 	}
 }
 
@@ -1413,29 +1422,29 @@ void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const Floc
 auto EffectsSystemFacade::getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned {
 	using IM = SurfImpactMaterial;
 	if( impactMaterial == IM::Metal ) {
-		return 0;
-	}
-	if( impactMaterial == IM::Stucco || impactMaterial == IM::Dirt || impactMaterial == IM::Sand ) {
 		return 1;
 	}
-	if( impactMaterial == IM::Wood ) {
+	if( impactMaterial == IM::Stucco || impactMaterial == IM::Dirt || impactMaterial == IM::Sand ) {
 		return 2;
 	}
-	if( impactMaterial == IM::Glass ) {
+	if( impactMaterial == IM::Wood ) {
 		return 3;
 	}
-	return 4;
+	if( impactMaterial == IM::Glass ) {
+		return 4;
+	}
+	return 0;
 }
 
 auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> sfx_s * {
 	// Build in a lazy fashion, so we don't have to care of lifetimes
 	if( !m_impactSfxForGroups.full() ) [[unlikely]] {
 		auto &ma = cgs.media;
+		m_impactSfxForGroups.push_back( { ma.sfxImpactSolid.getAddressOfHandles(), ma.sfxImpactSolid.length() } );
 		m_impactSfxForGroups.push_back( { ma.sfxImpactMetal.getAddressOfHandles(), ma.sfxImpactMetal.length() } );
 		m_impactSfxForGroups.push_back( { ma.sfxImpactSoft.getAddressOfHandles(), ma.sfxImpactSoft.length() } );
 		m_impactSfxForGroups.push_back( { ma.sfxImpactWood.getAddressOfHandles(), ma.sfxImpactWood.length() } );
 		m_impactSfxForGroups.push_back( { ma.sfxImpactGlass.getAddressOfHandles(), ma.sfxImpactGlass.length() } );
-		m_impactSfxForGroups.push_back( { ma.sfxImpactSolid.getAddressOfHandles(), ma.sfxImpactSolid.length() } );
 	}
 
 	assert( m_impactSfxForGroups.full() && group < m_impactSfxForGroups.size() );
@@ -1740,15 +1749,25 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 	}
 }
 
+const EffectsSystemFacade::ImpactSoundLimiterParams EffectsSystemFacade::kLiquidImpactSoundLimiterParams {
+	.startDroppingAtDistance = 192.0f,
+	.startDroppingAtTimeDiff = 300,
+};
+
 void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &impact ) {
 	spawnLiquidImpactParticleEffect( 0, impact, 1.0f, { 0.70f, 0.95f } );
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
-		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
-		startSoundForImpact( sfx, impact );
+		sfx_s *sfx          = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
+		const auto groupTag = (uintptr_t)cgs.media.sfxImpactWater.getAddressOfHandles();
+		startSoundForImpactUsingLimiter( sfx, groupTag, impact, kLiquidImpactSoundLimiterParams );
 	}
 }
 
 void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts ) {
+	[[maybe_unused]] const ImpactSoundLimiterParams limiterParams {
+		.startDroppingAtDistance = 144.0f,
+		.startDroppingAtTimeDiff = 250,
+	};
 	if( cg_particles->integer ) {
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
 			const SolidImpact &impact          = impacts[i];
@@ -1762,17 +1781,25 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 				m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
 			}
 		}
-		spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
+		for( const SolidImpact &impact: impacts ) {
+			const unsigned group     = getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( impact.surfFlags ) );
+			const uintptr_t groupTag = group;
+			sfx_s *sfx               = getSfxForImpactGroup( group );
+			startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
+		}
 	} else {
 		for( const SolidImpact &impact: impacts ) {
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
 			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
 		}
-		// TODO: Use spans via custom span type
-		sfx_s **sfxBegin = cgs.media.sfxImpactSolid.getAddressOfHandles();
-		sfx_s **sfxEnd   = sfxBegin + cgs.media.sfxImpactSolid.length();
-		spawnImpactSoundsWhenNeededUsingTheseSounds( impacts, sfxBegin, sfxEnd );
+		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
+			const auto groupTag   = (uintptr_t)cgs.media.sfxImpactSolid.getAddressOfHandles();
+			for( const SolidImpact &impact: impacts ) {
+				sfx_s *sfx = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
+				startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
+			}
+		}
 	}
 }
 
@@ -1783,7 +1810,16 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 		const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
 		spawnExplosionImpactParticleEffectForMaterial( orientation, material, materialParam );
 	}
-	spawnImpactSoundsWhenNeededCheckingMaterials( impacts );
+	const ImpactSoundLimiterParams limiterParams {
+		.startDroppingAtDistance = 192.0f,
+		.startDroppingAtTimeDiff = 500,
+	};
+	for( const SolidImpact &impact: impacts ) {
+		const unsigned group     = getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( impact.surfFlags ) );
+		const uintptr_t groupTag = group;
+		sfx_s *sfx               = getSfxForImpactGroup( group );
+		startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
+	}
 }
 
 void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
@@ -1800,110 +1836,90 @@ void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Liqu
 			spawnLiquidImpactParticleEffect( delayRange.first, impact, percentageScale, randomRotationAngleCosineRange );
 		}
 	}
-	sfx_s **sfxBegin = cgs.media.sfxImpactWater.getAddressOfHandles();
-	sfx_s **sfxEnd   = sfxBegin + cgs.media.sfxImpactWater.length();
-	spawnImpactSoundsWhenNeededUsingTheseSounds( impacts, sfxBegin, sfxEnd );
-}
-
-template <typename Impact>
-void EffectsSystemFacade::spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts,
-																	   sfx_s **sfxBegin, sfx_s **sfxEnd ) {
-	if( impacts.empty() ) {
-		return;
-	}
-
-	auto *const acceptedImpactNums = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
-	unsigned numAcceptedImpacts    = 0;
-
-	// Spawn the first sound
-	acceptedImpactNums[numAcceptedImpacts++] = 0;
-
-	for( unsigned i = 1; i < impacts.size(); ++i ) {
-		const Impact &thisImpact = impacts[i];
-		bool skipThisImpact      = false;
-		for( unsigned j = 0; j < numAcceptedImpacts; ++j ) {
-			const Impact &thatImpact = impacts[acceptedImpactNums[j]];
-			// TODO: Check whether they belong to the same CM leaf/are mutually visible
-			if( DistanceSquared( thisImpact.origin, thatImpact.origin ) < wsw::square( 96.0f ) ) {
-				skipThisImpact = true;
-				break;
-			}
+	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
+		const auto groupTag   = (uintptr_t)cgs.media.sfxImpactWater.getAddressOfHandles();
+		for( const LiquidImpact &impact: impacts ) {
+			sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
+			startSoundForImpactUsingLimiter( sfx, groupTag, impact, kLiquidImpactSoundLimiterParams );
 		}
-		if( !skipThisImpact ) {
-			acceptedImpactNums[numAcceptedImpacts++] = i;
-		}
-	}
-
-	// Now, actually do spawn sounds
-	for( unsigned i = 0; i < numAcceptedImpacts; ++i ) {
-		const Impact &impact = impacts[acceptedImpactNums[i]];
-		sfx_s *sfx           = sfxBegin[m_rng.nextBounded( (unsigned)( sfxEnd - sfxBegin ) )];
-		startSoundForImpact( sfx, impact );
 	}
 }
 
-template <typename Impact>
-void EffectsSystemFacade::spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts ) {
-	if( impacts.empty() ) {
-		return;
-	}
-
-	auto *const acceptedImpactNums         = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
-	auto *const sfxGroupsOfAcceptedImpacts = (unsigned *)alloca( sizeof( unsigned ) * impacts.size() );
-	unsigned numAcceptedImpacts = 0;
-
-	// Use a simple greedy approach.
-	// Spawn the first spawn without conditions.
-	acceptedImpactNums[numAcceptedImpacts] = 0;
-	sfxGroupsOfAcceptedImpacts[numAcceptedImpacts] = getImpactSfxGroupForSurfFlags( ( impacts.front().surfFlags ) );
-	numAcceptedImpacts++;
-
-	for( unsigned i = 1; i < impacts.size(); ++i ) {
-		const Impact &thisImpact = impacts[i];
-		const unsigned thisGroup = getImpactSfxGroupForSurfFlags( thisImpact.surfFlags );
-		bool skipThisImpact      = false;
-		for( unsigned j = 0; j < numAcceptedImpacts; ++j ) {
-			const Impact &thatImpact = impacts[acceptedImpactNums[j]];
-			const unsigned thatGroup = sfxGroupsOfAcceptedImpacts[j];
-			if( thisGroup == thatGroup ) {
-				// TODO: Check whether they belong to the same CM leaf/are mutually visible
-				if( DistanceSquared( thisImpact.origin, thatImpact.origin ) < wsw::square( 96.0f ) ) {
-					skipThisImpact = true;
-					break;
-				}
-			}
-		}
-		if( !skipThisImpact ) {
-			acceptedImpactNums[numAcceptedImpacts] = i;
-			sfxGroupsOfAcceptedImpacts[numAcceptedImpacts] = thisGroup;
-			numAcceptedImpacts++;
-		}
-	}
-
-	// Now, actually do spawn sounds
-	for( unsigned i = 0; i < numAcceptedImpacts; ++i ) {
-		const Impact &impact = impacts[acceptedImpactNums[i]];
-		const unsigned group = sfxGroupsOfAcceptedImpacts[i];
-		startSoundForImpact( getSfxForImpactGroup( group ), impact );
-	}
-}
-
-void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const SolidImpact &impact ) {
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t group, const SolidImpact &impact,
+														   const ImpactSoundLimiterParams &params ) {
 	assert( std::fabs( VectorLengthFast( impact.normal ) - 1.0f ) < 1e-2f );
 	if( sfx ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.normal, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
-		startSound( sfx, soundOrigin );
+		startSoundForImpactUsingLimiter( sfx, group, soundOrigin, params );
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpact( sfx_s *sfx, const LiquidImpact &impact ) {
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t group, const LiquidImpact &impact,
+														   const ImpactSoundLimiterParams &params ) {
 	if( sfx ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.burstDir, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
-		startSound( sfx, soundOrigin );
+		startSoundForImpactUsingLimiter( sfx, group, soundOrigin, params );
+	}
+}
+
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const float *origin,
+														   const ImpactSoundLimiterParams &params ) {
+	assert( params.startDroppingAtTimeDiff > 0 && params.startDroppingAtDistance > 0.0f );
+
+	// TODO: Supply as an argument/dependency
+	const int64_t currTimestamp = cg.time;
+	int64_t closestTimestamp    = std::numeric_limits<int64_t>::min();
+	float closestSquareDistance = std::numeric_limits<float>::max();
+
+	// TODO: Keep entries for different groups in different hash bins?
+	const float squareDistanceThreshold = wsw::square( params.startDroppingAtDistance );
+	const int64_t minTimestampThreshold = currTimestamp - params.startDroppingAtTimeDiff;
+	for( const ImpactSoundLimiterEntry &entry: m_impactSoundLimiterEntries ) {
+		if( entry.groupTag == groupTag ) {
+			if( entry.timestamp >= minTimestampThreshold ) {
+				const float squareDistance = DistanceSquared( origin, entry.origin );
+				// If the entry passes the distance threshold
+				if( squareDistance < squareDistanceThreshold ) {
+					closestSquareDistance = wsw::min( squareDistance, closestSquareDistance );
+					closestTimestamp      = wsw::max( entry.timestamp, closestTimestamp );
+				}
+			}
+		}
+	}
+
+	bool shouldStartSound = true;
+	if( closestSquareDistance < squareDistanceThreshold ) {
+		const float distance     = Q_Sqrt( closestSquareDistance );
+		const float distanceFrac = distance * Q_Rcp( params.startDroppingAtDistance );
+		assert( distanceFrac > -0.01f && distanceFrac < 1.01f );
+
+		const int64_t timeDiff = currTimestamp - closestTimestamp;
+		const float timeFrac   = (float)timeDiff * Q_Rcp( (float) params.startDroppingAtTimeDiff );
+		assert( timeFrac > -0.01f && timeFrac < 1.01f );
+
+		const float dropByDistanceChance = params.dropChanceAtZeroDistance * ( 1.0f - distanceFrac );
+		const float dropByTimeDiffChance = params.dropChanceAtZeroTimeDiff * ( 1.0f - timeFrac );
+
+		const float dropChance = wsw::max( dropByDistanceChance, dropByTimeDiffChance );
+		const float keepChance = wsw::clamp( 1.0f - dropChance, 0.0f, 1.0f );
+
+		shouldStartSound = m_rng.tryWithChance( keepChance );
+	}
+
+	if( shouldStartSound ) {
+		if( m_impactSoundLimiterEntries.full() ) {
+			m_impactSoundLimiterEntries.pop_front();
+		}
+		m_impactSoundLimiterEntries.emplace_back( ImpactSoundLimiterEntry {
+			.timestamp = currTimestamp,
+			.groupTag  = groupTag,
+			.origin    = { origin[0], origin[1], origin[2] },
+		});
+		startSound( sfx, origin );
 	}
 }
 

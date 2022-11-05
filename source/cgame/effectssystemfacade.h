@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "trackedeffectssystem.h"
 #include "transienteffectssystem.h"
 #include "../qcommon/randomgenerator.h"
+#include "../qcommon/wswstaticdeque.h"
 
 class DrawSceneRequest;
 struct sfx_s;
@@ -197,14 +198,22 @@ private:
 
 	void spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts );
 
-	// std::span<> won't work for arrays of pointers
-	template <typename Impact>
-	void spawnImpactSoundsWhenNeededUsingTheseSounds( std::span<const Impact> impacts, sfx_s **begin, sfx_s **end );
-	template <typename Impact>
-	void spawnImpactSoundsWhenNeededCheckingMaterials( std::span<const Impact> impacts );
+	struct ImpactSoundLimiterParams {
+		float dropChanceAtZeroDistance { 1.0f };
+		float startDroppingAtDistance { 96.0f };
+		float dropChanceAtZeroTimeDiff { 1.0f };
+		unsigned startDroppingAtTimeDiff { 100 };
+	};
 
-	void startSoundForImpact( sfx_s *sfx, const SolidImpact &impact );
-	void startSoundForImpact( sfx_s *sfx, const LiquidImpact &impact );
+	static const ImpactSoundLimiterParams kLiquidImpactSoundLimiterParams;
+
+	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const SolidImpact &impact,
+										  const ImpactSoundLimiterParams &params );
+	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const LiquidImpact &impact,
+										  const ImpactSoundLimiterParams &params );
+
+	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const float *origin,
+										  const ImpactSoundLimiterParams &params );
 
 	void spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 										  std::pair<float, float> randomRotationAngleCosineRange );
@@ -215,6 +224,14 @@ private:
 
 	shader_s *m_bloodMaterials[3];
 	wsw::StaticVector<std::pair<sfx_s **, unsigned>, 5> m_impactSfxForGroups;
+
+	struct ImpactSoundLimiterEntry {
+		int64_t timestamp;
+		uintptr_t groupTag;
+		vec3_t origin;
+	};
+
+	wsw::StaticDeque<ImpactSoundLimiterEntry, 48> m_impactSoundLimiterEntries;
 };
 
 #endif
