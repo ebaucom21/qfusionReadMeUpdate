@@ -577,6 +577,10 @@ auto getTeamForOwner( int ownerNum ) -> int {
 
 void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const float *impactNormal,
 													 const float *impactDir, bool spawnDecal, int ownerNum ) {
+	assert( std::fabs( VectorLengthFast( impactNormal ) - 1.0f ) < 0.1f );
+	assert( std::fabs( VectorLengthFast( impactDir ) - 1.0f ) < 0.1f );
+	assert( DotProduct( impactDir, impactNormal ) <= 0.0f );
+
 	const int team = getTeamForOwner( ownerNum );
 
 	vec4_t teamColor, decalColor, energyColor;
@@ -590,8 +594,9 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 	}
 
 	if( cg_particles->integer ) {
-		vec3_t coneDir;
-		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+		vec3_t invImpactDir, coneDir;
+		VectorNegate( impactDir, invImpactDir );
+		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
 
 		const ColorLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::electroboltParticleColorsHolder;
@@ -642,6 +647,10 @@ static ParticleColorsForTeamHolder instagunParticleColorsHolder {
 
 void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const float *impactNormal,
 												  const float *impactDir, bool spawnDecal, int ownerNum ) {
+	assert( std::fabs( VectorLengthFast( impactNormal ) - 1.0f ) < 0.1f );
+	assert( std::fabs( VectorLengthFast( impactDir ) - 1.0f ) < 0.1f );
+	assert( DotProduct( impactDir, impactNormal ) <= 0.0f );
+
 	vec4_t teamColor, decalColor, energyColor;
 	const int team = getTeamForOwner( ownerNum );
 	const bool useTeamColor = getInstagunTeamColor( team, teamColor );
@@ -654,8 +663,9 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	}
 
 	if( cg_particles->integer ) {
-		vec3_t coneDir;
-		VectorReflect( impactDir, impactNormal, 0.0f, coneDir );
+		vec3_t invImpactDir, coneDir;
+		VectorNegate( impactDir, invImpactDir );
+		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
 
 		const ColorLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::instagunParticleColorsHolder;
