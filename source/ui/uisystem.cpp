@@ -568,6 +568,8 @@ static bool isAPrintableChar( int ch ) {
 
 void QtUISystem::initPersistentPart() {
 	if( !s_application ) {
+		QCoreApplication::setAttribute( Qt::AA_EnableHighDpiScaling );
+
 		s_application = new QGuiApplication( s_fakeArgc, s_fakeArgv );
 		// Fix the overwritten locale, if any
 		(void)std::setlocale( LC_ALL, "C" );
