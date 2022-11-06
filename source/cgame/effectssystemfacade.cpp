@@ -1380,7 +1380,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 			.dropChanceAtZeroDistance = 0.5f,
 			.startDroppingAtDistance  = 144.0f,
 			.dropChanceAtZeroTimeDiff = 1.0f,
-			.startDroppingAtTimeDiff  = 333,
+			.startDroppingAtTimeDiff  = 250,
 		});
 	}
 }
@@ -1751,7 +1751,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 
 const EffectsSystemFacade::ImpactSoundLimiterParams EffectsSystemFacade::kLiquidImpactSoundLimiterParams {
 	.startDroppingAtDistance = 192.0f,
-	.startDroppingAtTimeDiff = 300,
+	.startDroppingAtTimeDiff = 250,
 };
 
 void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &impact ) {
@@ -1812,7 +1812,7 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 	}
 	const ImpactSoundLimiterParams limiterParams {
 		.startDroppingAtDistance = 192.0f,
-		.startDroppingAtTimeDiff = 500,
+		.startDroppingAtTimeDiff = 333,
 	};
 	for( const SolidImpact &impact: impacts ) {
 		const unsigned group     = getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( impact.surfFlags ) );
@@ -1904,10 +1904,11 @@ void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t
 		const float dropByDistanceChance = params.dropChanceAtZeroDistance * ( 1.0f - distanceFrac );
 		const float dropByTimeDiffChance = params.dropChanceAtZeroTimeDiff * ( 1.0f - timeFrac );
 
-		const float dropChance = wsw::max( dropByDistanceChance, dropByTimeDiffChance );
-		const float keepChance = wsw::clamp( 1.0f - dropChance, 0.0f, 1.0f );
+		const float keepByDistanceChance = 1.0f - dropByDistanceChance;
+		const float keepByTimeDiffChance = 1.0f - dropByTimeDiffChance;
+		const float combinedKeepChance   = wsw::clamp( keepByDistanceChance * keepByTimeDiffChance, 0.0f, 1.0f );
 
-		shouldStartSound = m_rng.tryWithChance( keepChance );
+		shouldStartSound = m_rng.tryWithChance( combinedKeepChance );
 	}
 
 	if( shouldStartSound ) {
