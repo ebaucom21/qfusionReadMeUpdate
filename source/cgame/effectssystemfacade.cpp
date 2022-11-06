@@ -868,6 +868,15 @@ static const ColorLifespan kBulletRosetteColors[1] {
 	}
 };
 
+static const LightLifespan kBulletRosetteLightProps[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.9f, 0.9f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.7f },
+		.fadedInRadius = 32.0f,
+	}
+};
+
 static const ConicalFlockParams kBulletRosetteFlockParams {
 	.gravity = GRAVITY,
 	.speed   = { .min = 550.0f, .max = 800.0f },
@@ -875,15 +884,28 @@ static const ConicalFlockParams kBulletRosetteFlockParams {
 };
 
 void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
-														   float minPercentage, float maxPercentage ) {
+														   float minPercentage, float maxPercentage,
+														   unsigned lightFrameAffinityIndex,
+														   unsigned lightFrameAffinityModulo ) {
 	Particle::AppearanceRules appearanceRules {
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletRosetteColors,
+		.lightProps    = kBulletRosetteLightProps,
+		.flareProps    = Particle::FlareProps {
+			.lightProps                  = kBulletRosetteLightProps,
+			.alphaScale                  = 0.08f,
+			.radiusScale                 = 0.75f,
+			.flockFrameAffinityIndex     = (uint16_t)lightFrameAffinityIndex,
+			.flockFrameAffinityModulo    = (uint16_t)lightFrameAffinityModulo,
+			.particleFrameAffinityModulo = 3,
+		},
 		.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 12.0f, .spread = 1.0f },
 			.width         = { .mean = 1.0f, .spread = 0.1f },
 			.sizeBehaviour = Particle::Shrinking,
-		}
+		},
+		.lightFrameAffinityIndex  = (uint16_t)lightFrameAffinityIndex,
+		.lightFrameAffinityModulo = (uint16_t)lightFrameAffinityModulo,
 	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
@@ -898,15 +920,41 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientatio
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation ) {
+void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation,
+														 unsigned lightFrameAffinityIndex,
+														 unsigned lightFrameAffinityModulo ) {
+	unsigned innerLightFrameAffinityIndex, innerLightFrameAffinityModulo;
+	unsigned outerLightFrameAffinityIndex, outerLightFrameAffinityModulo;
+	// Account for twice as many lights due to two rosettes
+	if( lightFrameAffinityModulo ) {
+		innerLightFrameAffinityModulo = outerLightFrameAffinityModulo = 2 * lightFrameAffinityModulo;
+		innerLightFrameAffinityIndex  = lightFrameAffinityIndex;
+		outerLightFrameAffinityIndex  = lightFrameAffinityIndex + lightFrameAffinityModulo;
+	} else {
+		innerLightFrameAffinityModulo = outerLightFrameAffinityModulo = 2;
+		innerLightFrameAffinityIndex = 0;
+		outerLightFrameAffinityIndex = 1;
+	}
+
 	Particle::AppearanceRules appearanceRules {
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletRosetteColors,
+		.lightProps    = kBulletRosetteLightProps,
+		.flareProps    = Particle::FlareProps {
+			.lightProps                  = kBulletRosetteLightProps,
+			.alphaScale                  = 0.08f,
+			.radiusScale                 = 1.0f,
+			.flockFrameAffinityIndex     = (uint16_t)innerLightFrameAffinityIndex,
+			.flockFrameAffinityModulo    = (uint16_t)innerLightFrameAffinityModulo,
+			.particleFrameAffinityModulo = 3,
+		},
 		.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 16.0f, .spread = 2.0f },
 			.width         = { .mean = 1.0f, .spread = 0.1f },
 			.sizeBehaviour = Particle::Shrinking,
-		}
+		},
+		.lightFrameAffinityIndex  = (uint16_t)innerLightFrameAffinityIndex,
+		.lightFrameAffinityModulo = (uint16_t)innerLightFrameAffinityModulo,
 	};
 
 	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
@@ -924,6 +972,18 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 		.sizeBehaviour = Particle::Shrinking,
 	};
 
+	appearanceRules.flareProps = Particle::FlareProps {
+		.lightProps                  = kBulletRosetteLightProps,
+		.alphaScale                  = 0.08f,
+		.radiusScale                 = 0.67f,
+		.flockFrameAffinityIndex     = (uint16_t)outerLightFrameAffinityIndex,
+		.flockFrameAffinityModulo    = (uint16_t)outerLightFrameAffinityModulo,
+		.particleFrameAffinityModulo = 3,
+	},
+
+	appearanceRules.lightFrameAffinityIndex  = (uint16_t)outerLightFrameAffinityIndex;
+	appearanceRules.lightFrameAffinityModulo = (uint16_t)outerLightFrameAffinityModulo;
+
 	flockParams.innerAngle     = flockParams.angle;
 	flockParams.angle          = 60.0f;
 	flockParams.percentage.min = 1.0f;
@@ -937,21 +997,41 @@ static const ColorLifespan kBulletMetalRicochetColors[1] {
 	{
 		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
 		.fadedInColor  = { 0.9f, 0.9f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.8f, 1.0f },
+		.fadedOutColor = { 0.9f, 0.9f, 0.7f, 1.0f },
+	}
+};
+
+static const LightLifespan kBulletMetalRicochetLightProps[1] {
+	{
+		.initialColor  = { 1.0f, 1.0f, 1.0f },
+		.fadedInColor  = { 0.9f, 0.9f, 1.0f },
+		.fadedOutColor = { 0.8f, 0.8f, 1.0f },
+		.fadedInRadius = 32.0f,
 	}
 };
 
 void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, const FlockOrientation &orientation,
 															 float upShiftScale, unsigned,
-															 float minPercentage, float maxPercentage ) {
+															 float minPercentage, float maxPercentage,
+															 unsigned lightFrameAffinityIndex,
+															 unsigned lightFrameAffinityModulo ) {
 	const Particle::AppearanceRules appearanceRules {
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kBulletMetalRicochetColors,
+		.lightProps    = kBulletMetalRicochetLightProps,
+		.flareProps    = Particle::FlareProps {
+			.lightProps                  = kBulletMetalRicochetLightProps,
+			.alphaScale                  = 0.06f,
+			.radiusScale                 = 0.5f,
+			.particleFrameAffinityModulo = 2,
+		},
 		.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 5.0f, .spread = 1.0f },
 			.width         = { .mean = 0.75f, .spread = 0.05f },
 			.sizeBehaviour = Particle::Expanding
 		},
+		.lightFrameAffinityIndex  = (uint16_t)lightFrameAffinityIndex,
+		.lightFrameAffinityModulo = (uint16_t)lightFrameAffinityModulo,
 	};
 
 	ConicalFlockParams flockParams {
@@ -987,17 +1067,48 @@ static const ColorLifespan kBulletMetalDebrisColors[3] {
 	},
 };
 
+static LightLifespan bulletMetalDebrisLightProps[3];
+static bool bulletMetalDebrisLightPropsInitialized;
+
 void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const FlockOrientation &orientation,
 														   float upShiftScale, unsigned,
-														   float minPercentage, float maxPercentage ) {
+														   float minPercentage, float maxPercentage,
+														   unsigned lightFrameAffinityIndex,
+														   unsigned lightFrameAffinityModulo ) {
+	// Tone it down for machinegun bullet impacts
+	const unsigned programLightAffinityModulo = lightFrameAffinityModulo ? lightFrameAffinityModulo : 4;
+	const unsigned programLightAffinityIndex  = lightFrameAffinityIndex;
+
+	static_assert( std::size( kBulletMetalDebrisColors ) == std::size( bulletMetalDebrisLightProps ) );
+	if( !bulletMetalDebrisLightPropsInitialized ) [[unlikely]] {
+		bulletMetalDebrisLightPropsInitialized = true;
+		for( size_t i = 0; i < std::size( kBulletMetalDebrisColors ); ++i ) {
+			const ColorLifespan *from = &kBulletMetalDebrisColors[i];
+			LightLifespan *const to   = &bulletMetalDebrisLightProps[i];
+			to->fadedInRadius         = 24.0f;
+			VectorCopy( from->initialColor,  to->initialColor );
+			VectorCopy( from->fadedInColor,  to->fadedInColor );
+			VectorCopy( from->fadedOutColor, to->fadedOutColor );
+		}
+	}
+
 	const Particle::AppearanceRules appearanceRules {
 		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalDebrisColors,
+		.lightProps     = bulletMetalDebrisLightProps,
+		.flareProps     = Particle::FlareProps {
+			.lightProps                  = bulletMetalDebrisLightProps,
+			.alphaScale                  = 0.06f,
+			.radiusScale                 = 0.5f,
+			.particleFrameAffinityModulo = 2,
+		},
 		.geometryRules  = Particle::SparkRules {
 			.length        = { .mean = 2.5f, .spread = 1.0f },
 			.width         = { .mean = 0.75f, .spread  = 0.05f },
 			.sizeBehaviour = Particle::Expanding
-		}
+		},
+		.lightFrameAffinityIndex  = (uint16_t)programLightAffinityIndex,
+		.lightFrameAffinityModulo = (uint16_t)programLightAffinityModulo,
 	};
 
 	ConicalFlockParams flockParams {
@@ -1467,7 +1578,8 @@ void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const float *or
 void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 																	  SurfImpactMaterial impactMaterial,
 																	  unsigned materialParam,
-																	  unsigned index, unsigned total ) {
+																	  unsigned lightFrameAffinityIndex,
+																	  unsigned lightFrameAffinityModulo ) {
 	// TODO: We used to test against impact normal Z
 	[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, flockOrientation.dir[2] ) );
 
@@ -1490,11 +1602,14 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const Floc
 			spawnSandImpactParticles( 0, flockOrientation, upShiftScale, materialParam, 0.25f );
 			break;
 		case SurfImpactMaterial::Metal:
+			// These conditionals make light frame affinity slightly incorrect but this is harmless
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f );
+				spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
+												   lightFrameAffinityIndex, lightFrameAffinityModulo );
 			}
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f );
+				spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
+												 lightFrameAffinityIndex, lightFrameAffinityModulo );
 			}
 			break;
 		case SurfImpactMaterial::Glass:
@@ -1505,7 +1620,9 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const Floc
 
 void EffectsSystemFacade::spawnExplosionImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 																		 SurfImpactMaterial impactMaterial,
-																		 unsigned materialParam ) {
+																		 unsigned materialParam,
+																		 unsigned lightFrameAffinityIndex,
+																		 unsigned lightFrameAffinityModulo ) {
 	// TODO: We used to test against impact normal Z
 	[[maybe_unused]] const float upShiftScale = Q_Sqrt( wsw::max( 0.0f, flockOrientation.dir[2] ) );
 	[[maybe_unused]] unsigned delay = 0;
@@ -1536,9 +1653,11 @@ void EffectsSystemFacade::spawnExplosionImpactParticleEffectForMaterial( const F
 		case SurfImpactMaterial::Metal:
 			delay = m_rng.nextBoundedFast( 100 );
 			if( m_rng.next() % 2 ) {
-				spawnBulletMetalRicochetParticles( delay, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f );
+				spawnBulletMetalRicochetParticles( delay, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f,
+												   lightFrameAffinityIndex, lightFrameAffinityModulo );
 			} else {
-				spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
+				spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f,
+												 lightFrameAffinityIndex, lightFrameAffinityModulo );
 			}
 			break;
 		case SurfImpactMaterial::Glass:
@@ -1768,17 +1887,34 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		.startDroppingAtDistance = 144.0f,
 		.startDroppingAtTimeDiff = 250,
 	};
+
 	if( cg_particles->integer ) {
+		using IM = SurfImpactMaterial;
+		assert( impacts.size() <= 64 );
+
+		uint64_t rosetteImpactsMask     = 0;
+		unsigned totalNumRosetteImpacts = 0;
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
-			const SolidImpact &impact          = impacts[i];
-			const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
-			const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
-			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
-			spawnPelletImpactParticleEffectForMaterial( orientation, material, materialParam, i, impacts.size() );
-			using IM = SurfImpactMaterial;
+			const SurfImpactMaterial material = decodeSurfImpactMaterial( impacts[i].surfFlags );
 			if( material == IM::Metal || material == IM::Stone || material == IM::Unknown ) {
-				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
+				rosetteImpactsMask |= (uint64_t)1 << i;
+				totalNumRosetteImpacts++;
+			}
+		}
+
+		unsigned numRosetteImpactsSoFar = 0;
+		for( unsigned i = 0; i < impacts.size(); ++i ) {
+			const SolidImpact &impact           = impacts[i];
+			const SurfImpactMaterial material   = decodeSurfImpactMaterial( impact.surfFlags );
+			const unsigned materialParam        = decodeSurfImpactMaterialParam( impact.surfFlags );
+			const FlockOrientation orientation  = makeRicochetFlockOrientation( impact, &m_rng );
+
+			spawnPelletImpactParticleEffectForMaterial( orientation, material, materialParam,
+														numRosetteImpactsSoFar, totalNumRosetteImpacts );
+			if( rosetteImpactsMask & ( (uint64_t)1 << i ) ) {
+				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
 				m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+				numRosetteImpactsSoFar++;
 			}
 		}
 		for( const SolidImpact &impact: impacts ) {
@@ -1788,9 +1924,10 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 			startSoundForImpactUsingLimiter( sfx, groupTag, impact, limiterParams );
 		}
 	} else {
-		for( const SolidImpact &impact: impacts ) {
+		for( unsigned i = 0; i < impacts.size(); ++i ) {
+			const SolidImpact &impact          = impacts[i];
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
-			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f );
+			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, i, impacts.size() );
 			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
 		}
 		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
@@ -1804,11 +1941,23 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 }
 
 void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts ) {
+	unsigned totalNumRosetteImpacts = 0;
+	for( const SolidImpact &impact: impacts ) {
+		// Only metal surfaces produce impact rosettes in case of explosions
+		if( decodeSurfImpactMaterial( impact.surfFlags ) == SurfImpactMaterial::Metal ) {
+			totalNumRosetteImpacts++;
+		}
+	}
+	unsigned numRosetteImpactsSoFar = 0;
 	for( const SolidImpact &impact: impacts ) {
 		const SurfImpactMaterial material  = decodeSurfImpactMaterial( impact.surfFlags );
 		const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 		const unsigned materialParam       = decodeSurfImpactMaterialParam( impact.surfFlags );
-		spawnExplosionImpactParticleEffectForMaterial( orientation, material, materialParam );
+		spawnExplosionImpactParticleEffectForMaterial( orientation, material, materialParam,
+													   numRosetteImpactsSoFar, totalNumRosetteImpacts );
+		if( material == SurfImpactMaterial::Metal ) {
+			numRosetteImpactsSoFar++;
+		}
 	}
 	const ImpactSoundLimiterParams limiterParams {
 		.startDroppingAtDistance = 192.0f,

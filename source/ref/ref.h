@@ -326,10 +326,11 @@ struct alignas( 16 ) Particle {
 	struct FlareProps {
 		std::span<const LightLifespan> lightProps;
 		float alphaScale { 1.0f };
+		float radiusScale { 1.0f };
 		// Flares are very cheap to process, even if the current implementation is not optimal.
 		// These options are primarily for purposes of fine-tuning appearance.
-		uint16_t flockFrameAffinityModulo { 0 };
 		uint16_t flockFrameAffinityIndex { 0 };
+		uint16_t flockFrameAffinityModulo { 0 };
 		// For skipping individual particles
 		uint16_t particleFrameAffinityModulo { 0 };
 	};

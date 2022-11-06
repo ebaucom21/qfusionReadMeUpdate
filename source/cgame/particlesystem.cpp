@@ -618,6 +618,10 @@ void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *dr
 
 		float lightRadius, lightColor[3];
 		lightLifespan->getRadiusAndColorForLifetimeFrac( baseParticle.lifetimeFrac, &lightRadius, lightColor );
+
+		assert( flareProps.radiusScale > 0.0f );
+		lightRadius *= flareProps.radiusScale;
+
 		if( lightRadius >= 1.0f ) {
 			auto *const addedParticle = new( m_frameFlareParticles.unsafe_grow_back() )Particle( baseParticle );
 

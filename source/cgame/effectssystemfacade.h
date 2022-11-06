@@ -139,19 +139,23 @@ private:
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
-	void spawnBulletGenericImpactRosette( const FlockOrientation &orientation, float minPercentage, float maxPercentage );
+	void spawnBulletGenericImpactRosette( const FlockOrientation &orientation, float minPercentage, float maxPercentage,
+										  unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
-	void spawnBulletMetalImpactRosette( const FlockOrientation &orientation );
+	void spawnBulletMetalImpactRosette( const FlockOrientation &orientation, unsigned lightFrameAffinityIndex = 0,
+										unsigned lightFrameAffinityModulo = 0 );
 
 	// Normally `delay` would have been a last default argument,
 	// but there are already fine tune parameters,
 	// and packing parameters in a struct adds way too much clutter.
 
 	void spawnBulletMetalRicochetParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
-											unsigned materialParam, float minPercentage, float maxPercentage );
+											unsigned materialParam, float minPercentage, float maxPercentage,
+											unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
 	void spawnBulletMetalDebrisParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
-										  unsigned materialParam, float minPercentage, float maxPercentage );
+										  unsigned materialParam, float minPercentage, float maxPercentage,
+										  unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
 	void spawnStoneDustParticles( unsigned delay, const FlockOrientation &orientation, float upShiftScale,
 								  unsigned materialParam, float dustPercentageScale = 1.0f );
@@ -177,7 +181,7 @@ private:
 
 	void spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam,
-													 unsigned index, unsigned total );
+													 unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo );
 
 	// TODO: Hide bins from ParticleSystem public interface
 	template <typename FlockParams>
@@ -187,7 +191,8 @@ private:
 												  TransientEffectsSystem::ParticleFlockBin::Small );
 
 	void spawnExplosionImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
-														SurfImpactMaterial impactMaterial, unsigned materialParam );
+														SurfImpactMaterial impactMaterial, unsigned materialParam,
+														unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo );
 
 	[[nodiscard]]
 	static auto getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned;
