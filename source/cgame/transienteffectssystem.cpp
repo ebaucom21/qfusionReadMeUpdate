@@ -241,23 +241,23 @@ static const byte_vec4_t kSmokeSoftLayerFadeInPalette[] {
 };
 
 static const byte_vec4_t kSmokeHardLayerFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.05f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.05f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.05f ),
-	asByteColor( 0.55f, 0.55f, 0.55f, 0.05f ),
-	asByteColor( 0.60f, 0.60f, 0.60f, 0.05f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.15f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.15f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.15f ),
+	asByteColor( 0.55f, 0.55f, 0.55f, 0.15f ),
+	asByteColor( 0.60f, 0.60f, 0.60f, 0.15f ),
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullSoftLayerColorChangeTimeline[4] {
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.21f, .replacementPalette = kSmokeSoftLayerFadeInPalette,
+		.activateAtLifetimeFraction = 0.20f, .replacementPalette = kSmokeSoftLayerFadeInPalette,
 		.sumOfReplacementChanceForThisSegment = 3.5f,
 		.allowIncreasingOpacity = true,
 	},
 	{
-		.activateAtLifetimeFraction = 0.40f,
+		.activateAtLifetimeFraction = 0.35f,
 	},
 	{
 		.activateAtLifetimeFraction = 0.85f,
@@ -269,16 +269,16 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullHardLayerCo
 	{
 	},
 	{
-		.activateAtLifetimeFraction = 0.23f, .replacementPalette = kSmokeHardLayerFadeInPalette,
+		.activateAtLifetimeFraction = 0.20f, .replacementPalette = kSmokeHardLayerFadeInPalette,
 		.sumOfReplacementChanceForThisSegment = 3.5f,
 		.allowIncreasingOpacity = true,
 	},
 	{
-		.activateAtLifetimeFraction = 0.40f,
+		.activateAtLifetimeFraction = 0.35f,
 	},
 	{
-		.activateAtLifetimeFraction = 0.70f,
-		.sumOfDropChanceForThisSegment = 2.5f
+		.activateAtLifetimeFraction = 0.85f,
+		.sumOfDropChanceForThisSegment = 3.0f
 	}
 };
 
@@ -331,11 +331,11 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 
 	if( smokeOrigin ) {
 		// TODO: It would look better if smoke hulls are coupled together/allocated at once
-		spawnSmokeHull( m_lastTime, smokeOrigin, 75.0f, 10.0f, { +160.0f, +45.0f }, { +75.0f, -25.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 80.0f, 1.0f, { +125.0f, +45.0f }, { +85.0f, -30.0f },
 						SimulatedHullsSystem::ViewDotFade::FadeOutCenter, kSmokeHullHardLayerColorChangeTimeline );
-		spawnSmokeHull( m_lastTime, smokeOrigin, 90.0f, 10.0f, { +170.0f, +40.0f }, { +85.0f, -20.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 90.0f, 3.0f, { +130.0f, +40.0f }, { +92.5f, -30.0f },
 						SimulatedHullsSystem::ViewDotFade::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
-		spawnSmokeHull( m_lastTime, smokeOrigin, 99.0f, 10.0f, { +180.0f, +35.0f }, { +95.0f, -15.0f },
+		spawnSmokeHull( m_lastTime, smokeOrigin, 99.9f, 3.0f, { +135.0f, +35.0f }, { +99.9f, -30.0f },
 						SimulatedHullsSystem::ViewDotFade::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
 	}
 

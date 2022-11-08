@@ -748,8 +748,8 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 		const float rcpDeltaZ = ( maxZLastFrame - minZLastFrame ) > 0.1f ? Q_Rcp( maxZLastFrame - minZLastFrame ) : 1.0f;
 		for( unsigned i = 0; i < numVertices; ++i ) {
-			const float zFrac               = Q_Sqrt( ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ );
-			const float archimedesAccel     = std::lerp( archimedesBottomAccel, archimedesTopAccel, zFrac );
+			const float zFrac               = ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ;
+			const float archimedesAccel     = std::lerp( archimedesBottomAccel, archimedesTopAccel, Q_Sqrt( zFrac ) );
 			const float expansionAccel      = std::lerp( xyExpansionBottomAccel, xyExpansionTopAccel, zFrac );
 			const float expansionMultiplier = expansionAccel * timeDeltaSeconds;
 			forceVelocities[i][0] += expansionMultiplier * normals[i][0];
@@ -1470,7 +1470,8 @@ static inline wsw_forceinline auto calcAlphaForViewDirDotNormal( uint8_t givenAl
 		alphaFrac = absDot;
 	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenter ) {
 		// This looks best for the current purposes
-		alphaFrac = ( 1.0f - absDot ) * ( 1.0f - absDot );
+		alphaFrac = ( 1.0f - absDot );
+		alphaFrac *= alphaFrac * alphaFrac;
 	} else {
 		alphaFrac = 1.0f;
 	}

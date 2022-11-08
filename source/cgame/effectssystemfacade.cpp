@@ -286,10 +286,10 @@ static const Particle::AppearanceRules kExplosionSmokeAppearanceRules {
 
 static const EllipsoidalFlockParams kExplosionSmokeFlockParams {
 	.stretchScale = 1.25f,
-	.gravity      = -65.0f,
+	.gravity      = -45.0f,
 	.restitution  = 0.33f,
-	.speed        = { .min = 35.0f, .max = 65.0f },
-	.shiftSpeed   = { .min = 55.0f, .max = 70.0f },
+	.speed        = { .min = 35.0f, .max = 55.0f },
+	.shiftSpeed   = { .min = 60.0f, .max = 65.0f },
 	.percentage   = { .min = 0.7f, .max = 0.9f },
 	.timeout      = { .min = 1200, .max = 1750 },
 };
