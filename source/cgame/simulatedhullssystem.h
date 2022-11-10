@@ -14,6 +14,7 @@ class SimulatedHullsSystem {
 	friend class MeshTesselationHelper;
 public:
 	enum class ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
+	enum class ZFade : uint8_t { NoFade, FadeOutBottom };
 
 	struct ColorChangeTimelineNode {
 		// Specifying it as a fraction is more flexible than absolute offsets
@@ -58,7 +59,10 @@ private:
 		// Gets set in getStorageRequirements()
 		mutable unsigned m_chosenSubdivLevel { 0 };
 		float m_nextLodTangentRatio { 0.18f };
+		float m_minZLastFrame { 0.0f };
+		float m_maxZLastFrame { 0.0f };
 		ViewDotFade m_viewDotFade { ViewDotFade::NoFade };
+		ZFade m_zFade { ZFade::NoFade };
 		bool m_tesselateClosestLod { false };
 		bool m_lerpNextLevelColors { false };
 
@@ -128,6 +132,7 @@ private:
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
 		ViewDotFade vertexViewDotFade { ViewDotFade::NoFade };
+		ZFade vertexZFade { ZFade::NoFade };
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };

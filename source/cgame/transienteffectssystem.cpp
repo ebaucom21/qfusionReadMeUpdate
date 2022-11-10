@@ -241,11 +241,11 @@ static const byte_vec4_t kSmokeSoftLayerFadeInPalette[] {
 };
 
 static const byte_vec4_t kSmokeHardLayerFadeInPalette[] {
-	asByteColor( 0.65f, 0.65f, 0.65f, 0.15f ),
-	asByteColor( 0.70f, 0.70f, 0.70f, 0.15f ),
-	asByteColor( 0.75f, 0.75f, 0.75f, 0.15f ),
-	asByteColor( 0.55f, 0.55f, 0.55f, 0.15f ),
-	asByteColor( 0.60f, 0.60f, 0.60f, 0.15f ),
+	asByteColor( 0.65f, 0.65f, 0.65f, 0.50f ),
+	asByteColor( 0.70f, 0.70f, 0.70f, 0.50f ),
+	asByteColor( 0.75f, 0.75f, 0.75f, 0.50f ),
+	asByteColor( 0.55f, 0.55f, 0.55f, 0.50f ),
+	asByteColor( 0.60f, 0.60f, 0.60f, 0.50f ),
 };
 
 static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullSoftLayerColorChangeTimeline[4] {
@@ -332,11 +332,14 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	if( smokeOrigin ) {
 		// TODO: It would look better if smoke hulls are coupled together/allocated at once
 		spawnSmokeHull( m_lastTime, smokeOrigin, 80.0f, 1.0f, { +125.0f, +45.0f }, { +85.0f, -30.0f },
-						SimulatedHullsSystem::ViewDotFade::FadeOutCenter, kSmokeHullHardLayerColorChangeTimeline );
+						SimulatedHullsSystem::ViewDotFade::FadeOutCenter, SimulatedHullsSystem::ZFade::FadeOutBottom,
+						kSmokeHullHardLayerColorChangeTimeline );
 		spawnSmokeHull( m_lastTime, smokeOrigin, 90.0f, 3.0f, { +130.0f, +40.0f }, { +92.5f, -30.0f },
-						SimulatedHullsSystem::ViewDotFade::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
+						SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::NoFade,
+						kSmokeHullSoftLayerColorChangeTimeline );
 		spawnSmokeHull( m_lastTime, smokeOrigin, 99.9f, 3.0f, { +135.0f, +35.0f }, { +99.9f, -30.0f },
-						SimulatedHullsSystem::ViewDotFade::FadeOutContour, kSmokeHullSoftLayerColorChangeTimeline );
+						SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::NoFade,
+						kSmokeHullSoftLayerColorChangeTimeline );
 	}
 
 	if( cg_explosionsClusters->integer ) {
@@ -388,6 +391,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
 											 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel,
 											 SimulatedHullsSystem::ViewDotFade viewDotFade,
+											 SimulatedHullsSystem::ZFade zFade,
 											 ColorChangeTimeline colorTimeline ) {
 	if( auto *const hull = cg.simulatedHullsSystem.allocSmokeHull( currTime, 2000 ) ) {
 		hull->archimedesTopAccel      = archimedesAccel.first;
@@ -405,6 +409,7 @@ void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *orig
 		hull->leprNextLevelColors      = true;
 		hull->applyVertexDynLight      = true;
 		hull->vertexViewDotFade        = viewDotFade;
+		hull->vertexZFade              = zFade;
 
 		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
 		cg.simulatedHullsSystem.setupHullVertices( hull, origin, initialSmokeColor, speed, speedSpread );
@@ -1029,6 +1034,7 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 				hull->leprNextLevelColors = record.lerpNextLevelColors;
 				hull->applyVertexDynLight = record.applyVertexDynLight;
 				hull->vertexViewDotFade   = record.vertexViewDotFade;
+				hull->vertexZFade         = record.vertexZFade;
 			}
 		}
 		void operator()( const ConcentricHullSpawnRecord &record ) const {

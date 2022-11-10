@@ -120,6 +120,7 @@ private:
 		bool lerpNextLevelColors { false };
 		bool applyVertexDynLight { false };
 		SimulatedHullsSystem::ViewDotFade vertexViewDotFade { SimulatedHullsSystem::ViewDotFade::NoFade };
+		SimulatedHullsSystem::ZFade vertexZFade { SimulatedHullsSystem::ZFade::NoFade };
 	};
 
 	struct ConcentricHullSpawnRecord {
@@ -198,7 +199,9 @@ private:
 
 	void spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
 						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel,
-						 SimulatedHullsSystem::ViewDotFade viewDotFade, ColorChangeTimeline colorChangeTimeline );
+						 SimulatedHullsSystem::ViewDotFade viewDotFade,
+						 SimulatedHullsSystem::ZFade zFade,
+						 ColorChangeTimeline colorChangeTimeline );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );

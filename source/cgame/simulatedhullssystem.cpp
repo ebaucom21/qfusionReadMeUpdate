@@ -671,7 +671,10 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		mesh->m_simulatedPositions   = hull->vertexPositions[hull->positionsFrame];
 		mesh->m_simulatedNormals     = hull->vertexNormals;
 		mesh->m_simulatedColors      = hull->vertexColors;
+		mesh->m_minZLastFrame        = hull->minZLastFrame;
+		mesh->m_maxZLastFrame        = hull->maxZLastFrame;
 		mesh->m_viewDotFade          = hull->vertexViewDotFade;
+		mesh->m_zFade                = hull->vertexZFade;
 		mesh->m_simulatedSubdivLevel = hull->subdivLevel;
 		mesh->m_tesselateClosestLod  = hull->tesselateClosestLod;
 		mesh->m_lerpNextLevelColors  = hull->leprNextLevelColors;
@@ -695,7 +698,10 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			mesh->m_simulatedColors      = layer->vertexColors;
 			mesh->material               = nullptr;
 			mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+			mesh->m_minZLastFrame        = 0.0f;
+			mesh->m_maxZLastFrame        = 0.0f;
 			mesh->m_viewDotFade          = layer->overrideHullFade ? *layer->overrideHullFade : hull->vertexViewDotFade;
+			mesh->m_zFade                = ZFade::NoFade;
 			mesh->m_simulatedSubdivLevel = hull->subdivLevel;
 			mesh->m_tesselateClosestLod  = true;
 			mesh->m_lerpNextLevelColors  = true;
@@ -1459,36 +1465,47 @@ static MeshTesselationHelper meshTesselationHelper;
 
 template <SimulatedHullsSystem::ViewDotFade Fade>
 [[nodiscard]]
-static inline wsw_forceinline auto calcAlphaForViewDirDotNormal( uint8_t givenAlpha, const float *__restrict viewDir,
-																 const float *__restrict normal ) -> uint8_t {
+static inline wsw_forceinline auto calcAlphaFracForViewDirDotNormal( const float *__restrict viewDir,
+																	 const float *__restrict normal ) -> float {
 	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
 	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
 
 	const float absDot = std::fabs( DotProduct( viewDir, normal ) );
-	float alphaFrac;
 	if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutContour ) {
-		alphaFrac = absDot;
+		return absDot;
 	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenter ) {
 		// This looks best for the current purposes
-		alphaFrac = ( 1.0f - absDot );
+		float alphaFrac = ( 1.0f - absDot );
 		alphaFrac *= alphaFrac * alphaFrac;
+		return alphaFrac;
 	} else {
-		alphaFrac = 1.0f;
+		return 1.0f;
 	}
+}
 
-	const float modifiedAlpha = alphaFrac * (float)givenAlpha;
-	return (uint8_t)( wsw::clamp( modifiedAlpha, 0.0f, 255.0f ) );
+template <SimulatedHullsSystem::ZFade ZFade>
+[[nodiscard]]
+static inline wsw_forceinline auto calcAlphaFracForDeltaZ( float z, float minZ, float rcpDeltaZ ) -> float {
+	if constexpr( ZFade == SimulatedHullsSystem::ZFade::FadeOutBottom ) {
+		assert( z >= minZ );
+		return ( z - minZ ) * rcpDeltaZ;
+	} else {
+		// Don't put an assertion here as it's often supposed to be called for default (zero) minZ values
+		return 1.0f;
+	}
 }
 
 using IcosphereVertexNeighbours = const uint16_t (*)[5];
 
-template <SimulatedHullsSystem::ViewDotFade Fade>
-static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict resultColors,
-											const vec4_t *const __restrict positions,
-											const IcosphereVertexNeighbours neighboursOfVertices,
-											const byte_vec4_t *const __restrict givenColors,
-											const float *const __restrict viewOrigin,
-											const unsigned numVertices ) {
+template <SimulatedHullsSystem::ViewDotFade ViewDotFade, SimulatedHullsSystem::ZFade ZFade>
+static void calcNormalsAndApplyAlphaFade( byte_vec4_t *const __restrict resultColors,
+										  const vec4_t *const __restrict positions,
+										  const IcosphereVertexNeighbours neighboursOfVertices,
+										  const byte_vec4_t *const __restrict givenColors,
+										  const float *const __restrict viewOrigin,
+										  unsigned numVertices, float minZ, float maxZ ) {
+	[[maybe_unused]] const float rcpDeltaZ = minZ < maxZ ? Q_Rcp( maxZ - minZ ) : 1.0f;
+
 	unsigned vertexNum = 0;
 	do {
 		const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
@@ -1521,8 +1538,11 @@ static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict result
 				VectorNormalizeFast( normal );
 				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
 				VectorScale( viewDir, rcpDistance, viewDir );
-				const uint8_t givenAlpha = givenColors[vertexNum][3];
-				resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normal );
+				const float givenAlpha        = givenColors[vertexNum][3];
+				const float viewDirAlphaFrac  = calcAlphaFracForViewDirDotNormal<ViewDotFade>( viewDir, normal );
+				const float deltaZAlphaFrac   = calcAlphaFracForDeltaZ<ZFade>( currVertex[2], minZ, rcpDeltaZ );
+				const float combinedAlphaFrac = viewDirAlphaFrac * deltaZAlphaFrac;
+				resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( givenAlpha * combinedAlphaFrac, 0.0f, 255.0f );
 			} else {
 				resultColors[vertexNum][3] = 0;
 			}
@@ -1532,13 +1552,15 @@ static void calcNormalsAndApplyViewDotFade( byte_vec4_t *const __restrict result
 	} while( ++vertexNum < numVertices );
 }
 
-template <SimulatedHullsSystem::ViewDotFade Fade>
-static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
-							  const vec4_t *const __restrict positions,
-							  const vec4_t *const __restrict normals,
-							  const byte_vec4_t *const __restrict givenColors,
-							  const float *const __restrict viewOrigin,
-							  const unsigned numVertices ) {
+template <SimulatedHullsSystem::ViewDotFade ViewDotFade, SimulatedHullsSystem::ZFade ZFade>
+static void applyAlphaFade( byte_vec4_t *const __restrict resultColors,
+							const vec4_t *const __restrict positions,
+							const vec4_t *const __restrict normals,
+							const byte_vec4_t *const __restrict givenColors,
+							const float *const __restrict viewOrigin,
+							unsigned numVertices, float minZ, float maxZ ) {
+	[[maybe_unused]] const float rcpDeltaZ = minZ < maxZ ? Q_Rcp( maxZ - minZ ) : 1.0f;
+
 	unsigned vertexNum = 0;
 	do {
 		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
@@ -1548,8 +1570,12 @@ static void applyViewDotFade( byte_vec4_t *const __restrict resultColors,
 		if( squareDistanceToVertex > 1.0f ) [[likely]] {
 			const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
 			VectorScale( viewDir, rcpDistance, viewDir );
-			const uint8_t givenAlpha = givenColors[vertexNum][3];
-			resultColors[vertexNum][3] = calcAlphaForViewDirDotNormal<Fade>( givenAlpha, viewDir, normals[vertexNum] );
+			const float givenAlpha        = givenColors[vertexNum][3];
+			const float viewDirAlphaFrac  = calcAlphaFracForViewDirDotNormal<ViewDotFade>( viewDir, normals[vertexNum] );
+			const float deltaZAlphaFrac   = calcAlphaFracForDeltaZ<ZFade>( positions[vertexNum][2], minZ, rcpDeltaZ );
+			const float combinedAlphaFrac = viewDirAlphaFrac * deltaZAlphaFrac;
+			assert( combinedAlphaFrac >= -0.01f && combinedAlphaFrac <= +1.01f );
+			resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( givenAlpha * combinedAlphaFrac, 0.0f, 255.0f );
 		} else {
 			resultColors[vertexNum][3] = 0;
 		}
@@ -1641,6 +1667,48 @@ auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float 
 	return { (unsigned)chosenLevelData.vertices.size(), (unsigned)chosenLevelData.indices.size() };
 }
 
+static const struct FadeFnHolder {
+	using CalcNormalsAndApplyAlphaFadeFn = void (*)( byte_vec4_t *,
+													 const vec4_t *,
+													 const IcosphereVertexNeighbours,
+													 const byte_vec4_t *,
+													 const float *,
+													 unsigned, float, float );
+	using ApplyAlphaFadeFn = void (*)( byte_vec4_t *,
+									   const vec4_t *,
+									   const vec4_t *,
+									   const byte_vec4_t *,
+									   const float *,
+									   unsigned, float, float );
+
+	CalcNormalsAndApplyAlphaFadeFn calcNormalsAndApplyFadeFn[6] {};
+	ApplyAlphaFadeFn applyFadeFn[6] {};
+
+#define ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade, ZFade ) \
+	do { \
+        calcNormalsAndApplyFadeFn[indexForFade( ViewDotFade, ZFade )] = &::calcNormalsAndApplyAlphaFade<ViewDotFade, ZFade>; \
+		applyFadeFn[indexForFade( ViewDotFade, ZFade )]               = &::applyAlphaFade<ViewDotFade, ZFade>; \
+	} while( 0 )
+
+	FadeFnHolder() noexcept {
+		// Add a reference to a template instantiation for each feasible combination.
+		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::NoFade, SimulatedHullsSystem::ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutCenter, SimulatedHullsSystem::ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutCenter, SimulatedHullsSystem::ZFade::FadeOutBottom );
+	}
+
+	[[nodiscard]]
+	static constexpr auto indexForFade( SimulatedHullsSystem::ViewDotFade viewDotFade,
+										SimulatedHullsSystem::ZFade zFade ) -> unsigned {
+		assert( (unsigned)viewDotFade < 3 && (unsigned)zFade < 2 );
+		return 2 * (unsigned)viewDotFade + (unsigned)zFade;
+	}
+
+#undef ADD_FN_FOR_FLAGS_TO_TABLES
+} fadeFnHolder;
+
 auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
 															 const float *__restrict viewAxis,
 															 float cameraFovTangent,
@@ -1653,12 +1721,19 @@ auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__rest
 					                                         uint16_t *__restrict destIndices ) const
  	-> std::pair<unsigned, unsigned> {
 	assert( m_chosenSubdivLevel <= m_simulatedSubdivLevel + 1 );
+	assert( m_minZLastFrame <= m_maxZLastFrame );
 
 	byte_vec4_t *overrideColors = nullptr;
 
-	const bool actuallyDoTesselation = m_tesselateClosestLod && m_chosenSubdivLevel > m_simulatedSubdivLevel;
+	const bool actuallyDoTesselation    = m_tesselateClosestLod && m_chosenSubdivLevel > m_simulatedSubdivLevel;
 
-	if( m_viewDotFade != ViewDotFade::NoFade ) {
+	const bool shouldApplyViewDotFade   = m_viewDotFade != ViewDotFade::NoFade;
+	const bool actuallyApplyViewDotFade = shouldApplyViewDotFade;
+	const bool shouldApplyZFade         = m_zFade != ZFade::NoFade;
+	const bool actuallyApplyZFade       = shouldApplyZFade && m_maxZLastFrame - m_minZLastFrame > 1.0f;
+	const ZFade effectiveZFade          = actuallyApplyZFade ? m_zFade : ZFade::NoFade;
+
+	if( actuallyApplyViewDotFade || actuallyApplyZFade ) {
 		const unsigned dataLevelToUse     = actuallyDoTesselation ? m_simulatedSubdivLevel : m_chosenSubdivLevel;
 		const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( dataLevelToUse );
 
@@ -1666,34 +1741,23 @@ auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__rest
 		const auto numVertices = (unsigned)lodDataToUse.vertices.size();
 		overrideColors         = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
 
-		if( m_simulatedNormals ) {
+		// Either we have already calculated normals or do not need normals
+		if( m_simulatedNormals || !actuallyApplyViewDotFade ) {
 			// Call specialized implementations for each fade func
-			if( m_viewDotFade == ViewDotFade::FadeOutContour ) {
-				applyViewDotFade<ViewDotFade::FadeOutContour>( overrideColors, m_simulatedPositions,
-															   m_simulatedNormals, m_simulatedColors,
-															   viewOrigin, numVertices );
-			} else if( m_viewDotFade == ViewDotFade::FadeOutCenter ) {
-				applyViewDotFade<ViewDotFade::FadeOutCenter>( overrideColors, m_simulatedPositions,
-															  m_simulatedNormals, m_simulatedColors,
-															  viewOrigin, numVertices );
-			} else [[unlikely]] {
-				wsw::failWithRuntimeError( "Unreachable" );
-			}
-		} else {
-			IcosphereVertexNeighbours neighboursOfVertices = lodDataToUse.vertexNeighbours.data();
 
+			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_viewDotFade, effectiveZFade );
+			const auto applyFadeFn = ::fadeFnHolder.applyFadeFn[fnIndex];
+
+			applyFadeFn( overrideColors, m_simulatedPositions, m_simulatedNormals, m_simulatedColors,
+						 viewOrigin,  numVertices, m_minZLastFrame, m_maxZLastFrame );
+		} else {
 			// Call specialized implementations for each fade func
-			if( m_viewDotFade == ViewDotFade::FadeOutContour ) {
-				calcNormalsAndApplyViewDotFade<ViewDotFade::FadeOutContour>( overrideColors, m_simulatedPositions,
-																			 neighboursOfVertices, m_simulatedColors,
-																			 viewOrigin, numVertices );
-			} else if( m_viewDotFade == ViewDotFade::FadeOutCenter ) {
-				calcNormalsAndApplyViewDotFade<ViewDotFade::FadeOutCenter>( overrideColors, m_simulatedPositions,
-																			neighboursOfVertices, m_simulatedColors,
-																			viewOrigin, numVertices );
-			} else [[unlikely]] {
-				wsw::failWithRuntimeError( "Unreachable" );
-			}
+
+			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_viewDotFade, effectiveZFade );
+			const auto applyFadeFn = ::fadeFnHolder.calcNormalsAndApplyFadeFn[fnIndex];
+
+			applyFadeFn( overrideColors, m_simulatedPositions, lodDataToUse.vertexNeighbours.data(),
+						 m_simulatedColors, viewOrigin, numVertices, m_minZLastFrame, m_maxZLastFrame );
 		}
 	}
 
