@@ -6,6 +6,7 @@
 #include "../ref/ref.h"
 #include "../qcommon/randomgenerator.h"
 #include "../qcommon/freelistallocator.h"
+#include "../qcommon/wswvector.h"
 
 struct CMShapeList;
 
@@ -15,6 +16,30 @@ class SimulatedHullsSystem {
 public:
 	enum class ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
 	enum class ZFade : uint8_t { NoFade, FadeOutBottom };
+
+	// TODO: Fade/light props should logically belong to these rules
+
+	struct SolidAppearanceRules {
+		shader_s *material { nullptr };
+	};
+
+	struct CloudAppearanceRules {
+		shader_s *material { nullptr };
+		vec4_t overlayColor { 1.0f, 1.0f, 1.0f, 1.0f };
+		float alphaScale { 1.0f };
+		float initialRadius { 0.0f };
+		float fadedInRadius { 16.0f };
+		float fadedOutRadius { 0.0f };
+		float finishFadingInAtLifetimeFrac { 0.33f };
+		float startFadingOutAtLifetimeFrac { 0.67f };
+	};
+
+	struct SolidAndCloudAppearanceRules {
+		SolidAppearanceRules solidRules;
+		CloudAppearanceRules cloudRules;
+	};
+
+	using AppearanceRules = std::variant<SolidAppearanceRules, CloudAppearanceRules, SolidAndCloudAppearanceRules>;
 
 	struct ColorChangeTimelineNode {
 		// Specifying it as a fraction is more flexible than absolute offsets
@@ -48,27 +73,89 @@ public:
 private:
 	static constexpr unsigned kNumVerticesForSubdivLevel[5] { 12, 42, 162, 642, 2562 };
 
+	// We have to supply solid and cloud parts separately for a proper handling of surface sorting in the renderer.
+	// Still, they share many properties.
+	struct SharedMeshData {
+		wsw::Vector<uint32_t> *overrideColorsBuffer { nullptr };
+
+		// Must be reset each frame
+		std::optional<std::variant<std::pair<unsigned, unsigned>, std::monostate>> cachedOverrideColorsSpanInBuffer;
+		std::optional<std::variant<unsigned, std::monostate>> cachedChosenSolidSubdivLevel;
+
+		const vec4_t *simulatedPositions { nullptr };
+		const vec4_t *simulatedNormals { nullptr };
+		const byte_vec4_t *simulatedColors { nullptr };
+		unsigned simulatedSubdivLevel { 0 };
+
+		float nextLodTangentRatio { 0.18f };
+		float minZLastFrame { 0.0f };
+		float maxZLastFrame { 0.0f };
+		ViewDotFade viewDotFade { ViewDotFade::NoFade };
+		ZFade zFade { ZFade::NoFade };
+		bool tesselateClosestLod { false };
+		bool lerpNextLevelColors { false };
+
+		bool hasSibling { false };
+	};
+
 	class HullDynamicMesh : public DynamicMesh {
 		friend class SimulatedHullsSystem;
 		friend class MeshTesselationHelper;
 
-		const vec4_t *m_simulatedPositions { nullptr };
-		const vec4_t *m_simulatedNormals { nullptr };
-		const byte_vec4_t *m_simulatedColors { nullptr };
-		unsigned m_simulatedSubdivLevel { 0 };
+		SharedMeshData *m_shared { nullptr };
 		// Gets set in getStorageRequirements()
 		mutable unsigned m_chosenSubdivLevel { 0 };
-		float m_nextLodTangentRatio { 0.18f };
-		float m_minZLastFrame { 0.0f };
-		float m_maxZLastFrame { 0.0f };
-		ViewDotFade m_viewDotFade { ViewDotFade::NoFade };
-		ZFade m_zFade { ZFade::NoFade };
-		bool m_tesselateClosestLod { false };
-		bool m_lerpNextLevelColors { false };
+
+		[[nodiscard]]
+		auto calcSolidSubdivLodLevel( const float *viewOrigin, float cameraViewTangent ) const -> std::optional<unsigned>;
+
+		void calcOverrideColors( byte_vec4_t *__restrict buffer,
+								 const float *__restrict viewOrigin,
+								 const float *__restrict viewAxis,
+								 const Scene::DynamicLight *lights,
+								 std::span<const uint16_t> affectingLightIndices,
+								 bool applyViewDotFade, bool applyZFade, bool applyLights ) const;
+
+		[[nodiscard]]
+		auto getOverrideColorsCheckingSiblingCache( byte_vec4_t *__restrict localBuffer,
+													const float *__restrict viewOrigin,
+													const float *__restrict viewAxis,
+													const Scene::DynamicLight *lights,
+													std::span<const uint16_t> affectingLightIndices ) const
+														-> const byte_vec4_t *;
+	};
+
+	class HullSolidDynamicMesh : public HullDynamicMesh {
+		friend class SimulatedHullsSystem;
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent ) const
-			-> std::pair<unsigned, unsigned> override;
+			-> std::optional<std::pair<unsigned, unsigned>> override;
+
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  float cameraViewTangent,
+							  const Scene::DynamicLight *lights,
+							  std::span<const uint16_t> affectingLightIndices,
+							  vec4_t *__restrict destPositions,
+							  vec4_t *__restrict destNormals,
+							  vec2_t *__restrict destTexCoords,
+							  byte_vec4_t *__restrict destColors,
+							  uint16_t *__restrict destIndices ) const -> std::pair<unsigned, unsigned> override;
+	};
+
+	class HullCloudDynamicMesh : public HullDynamicMesh {
+		friend class SimulatedHullsSystem;
+
+		vec4_t m_spriteColor { 1.0f, 1.0f, 1.0f, 1.0f };
+		// Can go above 1.0f
+		float m_alphaScale { 1.0f };
+		float m_spriteRadius { 16.0f };
+
+		[[nodiscard]]
+		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent ) const
+			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
 		auto fillMeshBuffers( const float *__restrict viewOrigin,
@@ -87,6 +174,7 @@ private:
 		int64_t lastColorChangeAt { 0 };
 		unsigned lastNodeIndex { 0 };
 	};
+
 	struct BaseRegularSimulatedHull {
 		CMShapeList *shapeList { nullptr };
 		int64_t spawnTime { 0 };
@@ -113,6 +201,8 @@ private:
 		std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 		ColorChangeState colorChangeState;
 
+		AppearanceRules appearanceRules = SolidAppearanceRules { .material = nullptr };
+
 		// It's actually cheaper to process these vertices as regular ones
 		// and overwrite possible changes after processColorChange() calls.
 		// We can't just set the alpha to zero like it used to be,
@@ -125,9 +215,6 @@ private:
 		float minZLastFrame { std::numeric_limits<float>::max() };
 		float maxZLastFrame { std::numeric_limits<float>::lowest() };
 
-		// The renderer assumes external lifetime of the submitted spans. Keep it within the hull.
-		HullDynamicMesh submittedMesh;
-
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
@@ -136,6 +223,12 @@ private:
 
 		uint8_t positionsFrame { 0 };
 		uint8_t subdivLevel { 0 };
+
+		// The renderer assumes external lifetime of the submitted spans. Keep it within the hull.
+		// TODO: Allocate on demand?
+		SharedMeshData sharedMeshData;
+		HullSolidDynamicMesh submittedSolidMesh;
+		HullCloudDynamicMesh submittedCloudMesh;
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
@@ -176,7 +269,9 @@ private:
 			// Contains pairs (speed, distance from origin along the direction)
 			vec2_t *vertexSpeedsAndDistances;
 			byte_vec4_t *vertexColors;
-			HullDynamicMesh *submittedMesh;
+			SharedMeshData *sharedMeshData;
+			HullSolidDynamicMesh *submittedSolidMesh;
+			HullCloudDynamicMesh *submittedCloudMesh;
 
 			// Subtracted from limitsAtDirections for this layer, must be non-negative.
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
@@ -187,10 +282,14 @@ private:
 
 			bool useDrawOnTopHack { false };
 			std::optional<ViewDotFade> overrideHullFade;
+			const AppearanceRules *overrideAppearanceRules;
 		};
 
+		AppearanceRules appearanceRules = SolidAppearanceRules { .material = nullptr };
+
 		Layer *layers { nullptr };
-		const DynamicMesh **firstSubmittedMesh;
+		const DynamicMesh **submittedSolidMeshesBuffer;
+		const DynamicMesh **submittedCloudMeshesBuffer;
 
 		vec4_t mins, maxs;
 		vec3_t origin;
@@ -216,22 +315,29 @@ private:
 		vec4_t storageOfPositions[kNumVertices * NumLayers];
 		vec2_t storageOfSpeedsAndDistances[kNumVertices * NumLayers];
 		byte_vec4_t storageOfColors[kNumVertices * NumLayers];
-		HullDynamicMesh storageOfMeshes[NumLayers];
-		const DynamicMesh *storageOfMeshPointers[NumLayers];
+		SharedMeshData storageOfSharedMeshData[NumLayers];
+		// TODO: Allocate dynamically on demand?
+		// TODO: Optimize the memory layout
+		HullSolidDynamicMesh storageOfSolidMeshes[NumLayers];
+		HullCloudDynamicMesh storageOfCloudMeshes[NumLayers];
+		const DynamicMesh *storageOfSolidMeshPointers[NumLayers];
+		const DynamicMesh *storageOfCloudMeshPointers[NumLayers];
 
 		ConcentricSimulatedHull() {
-			this->numLayers = NumLayers;
-			this->subdivLevel = SubdivLevel;
-			this->layers = &storageOfLayers[0];
-			this->limitsAtDirections = &storageOfLimits[0];
-			this->firstSubmittedMesh = &storageOfMeshPointers[0];
+			this->numLayers                  = NumLayers;
+			this->subdivLevel                = SubdivLevel;
+			this->layers                     = &storageOfLayers[0];
+			this->limitsAtDirections         = &storageOfLimits[0];
+			this->submittedSolidMeshesBuffer = storageOfSolidMeshPointers;
+			this->submittedCloudMeshesBuffer = storageOfCloudMeshPointers;
 			for( unsigned i = 0; i < NumLayers; ++i ) {
 				Layer *const layer              = &layers[i];
 				layer->vertexPositions          = &storageOfPositions[i * kNumVertices];
 				layer->vertexSpeedsAndDistances = &storageOfSpeedsAndDistances[i * kNumVertices];
 				layer->vertexColors             = &storageOfColors[i * kNumVertices];
-				layer->submittedMesh            = &storageOfMeshes[i];
-				this->firstSubmittedMesh[i]     = layer->submittedMesh;
+				layer->sharedMeshData           = &storageOfSharedMeshData[i];
+				layer->submittedSolidMesh       = &storageOfSolidMeshes[i];
+				layer->submittedCloudMesh       = &storageOfCloudMeshes[i];
 			}
 		}
 	};
@@ -266,10 +372,12 @@ private:
 	auto allocWaveHull( int64_t currTime, unsigned lifetime ) -> WaveHull *;
 
 	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
-							float speed, float speedSpread );
+							float speed, float speedSpread,
+							const AppearanceRules &appearanceRules = SolidAppearanceRules { nullptr } );
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
-							float scale, std::span<const HullLayerParams> paramsOfLayers );
+							float scale, std::span<const HullLayerParams> paramsOfLayers,
+							const AppearanceRules &appearanceRules = SolidAppearanceRules { nullptr } );
 
 	[[maybe_unused]]
 	static bool processColorChange( int64_t currTime, int64_t spawnTime, unsigned effectDuration,
@@ -303,6 +411,9 @@ private:
 	wsw::HeapBasedFreelistAllocator m_blastHullsAllocator { sizeof( BlastHull ), kMaxBlastHulls };
 	wsw::HeapBasedFreelistAllocator m_smokeHullsAllocator { sizeof( SmokeHull ), kMaxSmokeHulls };
 	wsw::HeapBasedFreelistAllocator m_waveHullsAllocator { sizeof( WaveHull ), kMaxWaveHulls };
+
+	// Can't specify byte_vec4_t as the template parameter
+	wsw::Vector<uint32_t> m_frameSharedOverrideColorsBuffer;
 
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };

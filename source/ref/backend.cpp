@@ -1180,8 +1180,13 @@ void R_SubmitDynamicMeshesToBackend( const FrontendToBackendShared *fsh, const e
 
 		// This call is more useful if dynamic stream memory is used directly
 		// (we can flush the existing buffer if needed and write to now-free space).
-		const auto [maxMeshVertices, maxMeshIndices] = mesh->getStorageRequirements( fsh->viewOrigin, fsh->viewAxis,
-																					 fsh->fovTangent );
+		const auto maybeMaxRequirements = mesh->getStorageRequirements( fsh->viewOrigin, fsh->viewAxis, fsh->fovTangent );
+		// Won't draw itself
+		if( !maybeMaxRequirements ) {
+			continue;
+		}
+
+		const auto [maxMeshVertices, maxMeshIndices] = *maybeMaxRequirements;
 		if( maxMeshVertices > maxStorageVertices || maxMeshIndices > maxStorageIndices ) [[unlikely]] {
 			continue;
 		}

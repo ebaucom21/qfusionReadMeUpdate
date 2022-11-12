@@ -68,9 +68,9 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 }
 
 auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements( const float *, const float *, float ) const
-	-> std::pair<unsigned, unsigned> {
+	-> std::optional<std::pair<unsigned, unsigned>> {
 	assert( numPoints );
-	return { 4 * numPoints, 6 * numPoints };
+	return std::make_pair( 4 * numPoints, 6 * numPoints );
 }
 
 [[nodiscard]]

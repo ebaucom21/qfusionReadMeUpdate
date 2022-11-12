@@ -555,7 +555,7 @@ struct DynamicMesh {
 	virtual auto getStorageRequirements( const float *__restrict viewOrigin,
 										 const float *__restrict viewAxis,
 										 float cameraViewTangent ) const
-	-> std::pair<unsigned, unsigned> = 0;
+		-> std::optional<std::pair<unsigned, unsigned>> = 0;
 
 	[[nodiscard]]
 	virtual auto fillMeshBuffers( const float *__restrict viewOrigin,

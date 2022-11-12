@@ -437,7 +437,8 @@ auto SimulatedHullsSystem::allocHull( Hull **head, wsw::FreelistAllocator *alloc
 }
 
 void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin,
-											  const float *color, float speed, float speedSpead ) {
+											  const float *color, float speed, float speedSpead,
+											  const AppearanceRules &appearanceRules ) {
 	const byte_vec4_t initialColor {
 		(uint8_t)( color[0] * 255 ),
 		(uint8_t)( color[1] * 255 ),
@@ -482,10 +483,13 @@ void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, co
 	hull->maxZLastFrame = originZ + 1.0f;
 
 	VectorCopy( origin, hull->origin );
+
+	hull->appearanceRules = appearanceRules;
 }
 
 void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
-											  float scale, std::span<const HullLayerParams> layerParams ) {
+											  float scale, std::span<const HullLayerParams> layerParams,
+											  const AppearanceRules &appearanceRules ) {
 	assert( layerParams.size() == hull->numLayers );
 
 	const float originX = origin[0], originY = origin[1], originZ = origin[2];
@@ -605,7 +609,38 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 	VectorCopy( origin, hull->origin );
 	hull->vertexMoveDirections = vertices;
+
+	hull->appearanceRules = appearanceRules;
 }
+
+[[nodiscard]]
+static auto getRadiusForCurrTime( int64_t currTime, int64_t spawnTime, unsigned lifetime,
+								  const SimulatedHullsSystem::CloudAppearanceRules &rules ) -> float {
+	assert( lifetime && currTime >= spawnTime );
+	assert( rules.finishFadingInAtLifetimeFrac > 0.01f );
+	assert( rules.startFadingOutAtLifetimeFrac < 0.99f );
+	assert( rules.finishFadingInAtLifetimeFrac + 0.01f < rules.startFadingOutAtLifetimeFrac );
+
+	const float lifetimeFrac = (float)( currTime - spawnTime ) * Q_Rcp( (float)lifetime );
+
+	if( lifetimeFrac < rules.finishFadingInAtLifetimeFrac ) [[unlikely]] {
+		// Fade in
+		float fadeInFrac = lifetimeFrac * Q_Rcp( rules.finishFadingInAtLifetimeFrac );
+		assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+		return std::lerp( rules.initialRadius, rules.fadedInRadius, wsw::clamp( fadeInFrac, 0.0f, 1.0f ) );
+	} else {
+		if( lifetimeFrac > rules.startFadingOutAtLifetimeFrac ) [[unlikely]] {
+			// Fade out
+			float fadeOutFrac = lifetimeFrac - rules.startFadingOutAtLifetimeFrac;
+			fadeOutFrac *= Q_Rcp( 1.0f - rules.startFadingOutAtLifetimeFrac );
+			assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+			fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+			return std::lerp( rules.fadedInRadius, rules.fadedOutRadius, fadeOutFrac );
+		} else {
+			return rules.fadedInRadius;
+		}
+	}
+};
 
 void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Limit the time step
@@ -658,62 +693,168 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		}
 	}
 
+	m_frameSharedOverrideColorsBuffer.clear();
+
 	for( BaseRegularSimulatedHull *__restrict hull: activeRegularHulls ) {
-		HullDynamicMesh *__restrict mesh = &hull->submittedMesh;
+		const SolidAppearanceRules *solidAppearanceRules = nullptr;
+		const CloudAppearanceRules *cloudAppearanceRules = nullptr;
+		if( const auto *solidAndCloudRules = std::get_if<SolidAndCloudAppearanceRules>( &hull->appearanceRules ) ) {
+			solidAppearanceRules = &solidAndCloudRules->solidRules;
+			cloudAppearanceRules = &solidAndCloudRules->cloudRules;
+		} else {
+			solidAppearanceRules = std::get_if<SolidAppearanceRules>( &hull->appearanceRules );
+			cloudAppearanceRules = std::get_if<CloudAppearanceRules>( &hull->appearanceRules );
+		}
+
+		assert( solidAppearanceRules || cloudAppearanceRules );
+		SharedMeshData *const __restrict sharedMeshData = &hull->sharedMeshData;
+		
+		sharedMeshData->simulatedPositions   = hull->vertexPositions[hull->positionsFrame];
+		sharedMeshData->simulatedNormals     = hull->vertexNormals;
+		sharedMeshData->simulatedColors      = hull->vertexColors;
+		sharedMeshData->minZLastFrame        = hull->minZLastFrame;
+		sharedMeshData->maxZLastFrame        = hull->maxZLastFrame;
+		sharedMeshData->viewDotFade          = hull->vertexViewDotFade;
+		sharedMeshData->zFade                = hull->vertexZFade;
+		sharedMeshData->simulatedSubdivLevel = hull->subdivLevel;
+		sharedMeshData->tesselateClosestLod  = hull->tesselateClosestLod;
+		sharedMeshData->lerpNextLevelColors  = hull->leprNextLevelColors;
+
+		sharedMeshData->cachedChosenSolidSubdivLevel     = std::nullopt;
+		sharedMeshData->cachedOverrideColorsSpanInBuffer = std::nullopt;
+		sharedMeshData->overrideColorsBuffer             = &m_frameSharedOverrideColorsBuffer;
+		sharedMeshData->hasSibling                       = solidAppearanceRules && cloudAppearanceRules;
+
 		assert( hull->subdivLevel );
+		if( solidAppearanceRules ) [[likely]] {
+			HullSolidDynamicMesh *const __restrict mesh = &hull->submittedSolidMesh;
 
-		Vector4Copy( hull->mins, mesh->cullMins );
-		Vector4Copy( hull->maxs, mesh->cullMaxs );
+			Vector4Copy( hull->mins, mesh->cullMins );
+			Vector4Copy( hull->maxs, mesh->cullMaxs );
 
-		mesh->applyVertexDynLight    = hull->applyVertexDynLight;
-		mesh->material               = nullptr;
+			mesh->applyVertexDynLight = hull->applyVertexDynLight;
+			mesh->material            = solidAppearanceRules->material;
+			mesh->m_shared            = sharedMeshData;
 
-		mesh->m_simulatedPositions   = hull->vertexPositions[hull->positionsFrame];
-		mesh->m_simulatedNormals     = hull->vertexNormals;
-		mesh->m_simulatedColors      = hull->vertexColors;
-		mesh->m_minZLastFrame        = hull->minZLastFrame;
-		mesh->m_maxZLastFrame        = hull->maxZLastFrame;
-		mesh->m_viewDotFade          = hull->vertexViewDotFade;
-		mesh->m_zFade                = hull->vertexZFade;
-		mesh->m_simulatedSubdivLevel = hull->subdivLevel;
-		mesh->m_tesselateClosestLod  = hull->tesselateClosestLod;
-		mesh->m_lerpNextLevelColors  = hull->leprNextLevelColors;
+			drawSceneRequest->addDynamicMesh( mesh );
+		}
 
-		drawSceneRequest->addDynamicMesh( mesh );
+		if( cloudAppearanceRules ) [[unlikely]] {
+			HullCloudDynamicMesh *const __restrict mesh = &hull->submittedCloudMesh;
+
+			mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime,
+														 *cloudAppearanceRules );
+			if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
+				Vector4Copy( hull->mins, mesh->cullMins );
+				Vector4Copy( hull->maxs, mesh->cullMaxs );
+
+				mesh->material     = cloudAppearanceRules->material;
+				mesh->m_alphaScale = cloudAppearanceRules->alphaScale;
+				Vector4Copy( cloudAppearanceRules->overlayColor, mesh->m_spriteColor );
+
+				mesh->applyVertexDynLight = hull->applyVertexDynLight;
+				mesh->m_shared            = sharedMeshData;
+
+				drawSceneRequest->addDynamicMesh( mesh );
+			}
+		}
 	}
 
 	for( const BaseConcentricSimulatedHull *__restrict hull: activeConcentricHulls ) {
 		assert( hull->numLayers );
 
-		std::optional<uint8_t> drawOnTopPartIndex;
+		unsigned numSubmittedSolidMeshes = 0, numSubmittedCloudMeshes = 0;
+		std::optional<uint8_t> drawOnTopSolidPartIndex, drawOnTopCloudPartIndex;
 		for( unsigned i = 0; i < hull->numLayers; ++i ) {
 			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
-			HullDynamicMesh *__restrict mesh = hull->layers[i].submittedMesh;
 
-			Vector4Copy( layer->mins, mesh->cullMins );
-			Vector4Copy( layer->maxs, mesh->cullMaxs );
+			const AppearanceRules *appearanceRules = &hull->appearanceRules;
+			if( layer->overrideAppearanceRules ) {
+				appearanceRules = std::addressof( *layer->overrideAppearanceRules );
+			}
 
-			mesh->m_simulatedPositions   = layer->vertexPositions;
-			mesh->m_simulatedNormals     = nullptr;
-			mesh->m_simulatedColors      = layer->vertexColors;
-			mesh->material               = nullptr;
-			mesh->applyVertexDynLight    = hull->applyVertexDynLight;
-			mesh->m_minZLastFrame        = 0.0f;
-			mesh->m_maxZLastFrame        = 0.0f;
-			mesh->m_viewDotFade          = layer->overrideHullFade ? *layer->overrideHullFade : hull->vertexViewDotFade;
-			mesh->m_zFade                = ZFade::NoFade;
-			mesh->m_simulatedSubdivLevel = hull->subdivLevel;
-			mesh->m_tesselateClosestLod  = true;
-			mesh->m_lerpNextLevelColors  = true;
+			const SolidAppearanceRules *solidAppearanceRules = nullptr;
+			const CloudAppearanceRules *cloudAppearanceRules = nullptr;
+			if( const auto *solidAndCloudRules = std::get_if<SolidAndCloudAppearanceRules>( appearanceRules ) ) {
+				solidAppearanceRules = &solidAndCloudRules->solidRules;
+				cloudAppearanceRules = &solidAndCloudRules->cloudRules;
+			} else {
+				solidAppearanceRules = std::get_if<SolidAppearanceRules>( &hull->appearanceRules );
+				cloudAppearanceRules = std::get_if<CloudAppearanceRules>( &hull->appearanceRules );
+			}
 
-			if( layer->useDrawOnTopHack ) [[unlikely]] {
-				assert( drawOnTopPartIndex == std::nullopt );
-				drawOnTopPartIndex = (uint8_t)i;
+			assert( solidAppearanceRules || cloudAppearanceRules );
+			SharedMeshData *const __restrict sharedMeshData = layer->sharedMeshData;
+
+			sharedMeshData->simulatedPositions   = layer->vertexPositions;
+			sharedMeshData->simulatedNormals     = nullptr;
+			sharedMeshData->simulatedColors      = layer->vertexColors;
+
+			sharedMeshData->minZLastFrame        = 0.0f;
+			sharedMeshData->maxZLastFrame        = 0.0f;
+			sharedMeshData->viewDotFade          = layer->overrideHullFade.value_or( hull->vertexViewDotFade );
+			sharedMeshData->zFade                = ZFade::NoFade;
+			sharedMeshData->simulatedSubdivLevel = hull->subdivLevel;
+			sharedMeshData->tesselateClosestLod  = true;
+			sharedMeshData->lerpNextLevelColors  = true;
+
+			sharedMeshData->cachedChosenSolidSubdivLevel     = std::nullopt;
+			sharedMeshData->cachedOverrideColorsSpanInBuffer = std::nullopt;
+			sharedMeshData->overrideColorsBuffer             = &m_frameSharedOverrideColorsBuffer;
+			sharedMeshData->hasSibling                       = solidAppearanceRules && cloudAppearanceRules;
+
+			if( solidAppearanceRules ) [[likely]] {
+				HullSolidDynamicMesh *__restrict mesh = hull->layers[i].submittedSolidMesh;
+
+				Vector4Copy( layer->mins, mesh->cullMins );
+				Vector4Copy( layer->maxs, mesh->cullMaxs );
+				
+				mesh->material            = nullptr;
+				mesh->applyVertexDynLight = hull->applyVertexDynLight;
+				mesh->m_shared            = sharedMeshData;
+				
+				if( layer->useDrawOnTopHack ) [[unlikely]] {
+					assert( drawOnTopSolidPartIndex == std::nullopt );
+					drawOnTopSolidPartIndex = (uint8_t) numSubmittedSolidMeshes;
+				}
+
+				hull->submittedSolidMeshesBuffer[numSubmittedSolidMeshes++] = mesh;
+			}
+
+			if( cloudAppearanceRules ) [[unlikely]] {
+				HullCloudDynamicMesh *__restrict mesh = hull->layers[i].submittedCloudMesh;
+
+				mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime,
+															 *cloudAppearanceRules );
+				if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
+					Vector4Copy( layer->mins, mesh->cullMins );
+					Vector4Copy( layer->maxs, mesh->cullMaxs );
+
+					mesh->material               = cloudAppearanceRules->material;
+					mesh->m_alphaScale           = cloudAppearanceRules->alphaScale;
+					Vector4Copy( cloudAppearanceRules->overlayColor, mesh->m_spriteColor );
+					mesh->applyVertexDynLight    = hull->applyVertexDynLight;
+
+					if( layer->useDrawOnTopHack ) [[unlikely]] {
+						assert( drawOnTopCloudPartIndex == std::nullopt );
+						drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
+					}
+
+					hull->submittedSolidMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
+				}
 			}
 		}
 
-		drawSceneRequest->addCompoundDynamicMesh( hull->mins, hull->maxs,
-												  hull->firstSubmittedMesh, hull->numLayers, drawOnTopPartIndex );
+		if( numSubmittedSolidMeshes ) [[likely]] {
+			drawSceneRequest->addCompoundDynamicMesh( hull->mins, hull->maxs,
+													  hull->submittedSolidMeshesBuffer, numSubmittedSolidMeshes,
+													  drawOnTopSolidPartIndex );
+		}
+		if( numSubmittedCloudMeshes ) [[unlikely]] {
+			drawSceneRequest->addCompoundDynamicMesh( hull->mins, hull->maxs,
+													  hull->submittedCloudMeshesBuffer, numSubmittedCloudMeshes,
+													  drawOnTopCloudPartIndex );
+		}
 	}
 
 	m_lastTime = currTime;
@@ -865,7 +1006,6 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 		// Update positions of non-contacting vertices
 		unsigned i;
 		if( numNonContactingVertices != numVertices ) {
-			const IcosphereData &icosphereData           = ::basicHullsHolder.getIcosphereForLevel( subdivLevel );
 			auto *const __restrict neighboursForVertices = icosphereData.vertexNeighbours.data();
 			auto *const __restrict neighboursFreeMoveSum = (int *)alloca( sizeof( int ) * numNonContactingVertices );
 
@@ -1308,14 +1448,14 @@ void MeshTesselationHelper::runPassOverOriginalVertices( const SimulatedHullsSys
 														 const uint16_t nextLevelNeighbours[][5] ) {
 	vec4_t *const __restrict tmpTessFloatColors  = std::assume_aligned<kAlignment>( m_tmpTessFloatColors );
 	vec4_t *const __restrict tmpTessPositions    = std::assume_aligned<kAlignment>( m_tmpTessPositions );
-	const byte_vec4_t *const __restrict colors   = overrideColors ? overrideColors : mesh->m_simulatedColors;
+	const byte_vec4_t *const __restrict colors   = overrideColors ? overrideColors : mesh->m_shared->simulatedColors;
 	byte_vec4_t *const __restrict tessByteColors = m_tessByteColors;
 	int8_t *const __restrict tessNeighboursCount = m_tessNeighboursCount;
 
 	// For each vertex in the original mesh
 	for( unsigned vertexIndex = 0; vertexIndex < numSimulatedVertices; ++vertexIndex ) {
 		const auto byteColor  = colors[vertexIndex];
-		const float *position = mesh->m_simulatedPositions[vertexIndex];
+		const float *position = mesh->m_shared->simulatedPositions[vertexIndex];
 
 		if constexpr( SmoothColors ) {
 			// Write the color to the accum buffer for smoothing it later
@@ -1619,15 +1759,11 @@ static void applyLightsToVertices( const vec4_t *__restrict givenPositions,
 	} while( ++vertexIndex < numVertices );
 }
 
-auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float *viewOrigin,
-																	const float *viewAxis,
-																	float cameraFovTangent ) const
-	-> std::pair<unsigned, unsigned> {
-	// Get a suitable subdiv level and store it for further use during this frame
-	m_chosenSubdivLevel = m_tesselateClosestLod ? m_simulatedSubdivLevel + 1 : m_simulatedSubdivLevel;
-
-	assert( cameraFovTangent > 0.0f );
-	assert( m_nextLodTangentRatio > 0.0f && m_nextLodTangentRatio < 1.0f );
+auto SimulatedHullsSystem::HullDynamicMesh::calcSolidSubdivLodLevel( const float *viewOrigin,
+																	 float cameraViewTangent ) const
+	-> std::optional<unsigned> {
+	assert( cameraViewTangent > 0.0f );
+	assert( m_shared->nextLodTangentRatio > 0.0f && m_shared->nextLodTangentRatio < 1.0f );
 
 	vec3_t center, extentVector;
 	VectorAvg( this->cullMins, this->cullMaxs, center );
@@ -1635,7 +1771,13 @@ auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float 
 	const float squareExtentValue = VectorLengthSquared( extentVector );
 	if( squareExtentValue < wsw::square( 1.0f ) ) [[unlikely]] {
 		// Skip drawing
-		return { 0, 0 };
+		return std::nullopt;
+	}
+
+	// Get a suitable subdiv level and store it for further use during this frame
+	unsigned chosenSubdivLevel = m_shared->simulatedSubdivLevel;
+	if( m_shared->tesselateClosestLod ) {
+		chosenSubdivLevel += 1;
 	}
 
 	const float extentValue    = Q_Sqrt( squareExtentValue );
@@ -1643,19 +1785,19 @@ auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float 
 	// Don't even try using lesser lods if the mesh is sufficiently close to the viewer
 	if( squareDistance > wsw::square( 0.5f * extentValue + 64.0f ) ) {
 		const float meshViewTangent  = extentValue * Q_RSqrt( squareDistance );
-		const float meshTangentRatio = meshViewTangent * Q_Rcp( cameraFovTangent );
+		const float meshTangentRatio = meshViewTangent * Q_Rcp( cameraViewTangent );
 
 		// Diminish lod tangent ratio in the loop, drop subdiv level every step.
-		float lodTangentRatio = m_nextLodTangentRatio;
+		float lodTangentRatio = m_shared->nextLodTangentRatio;
 		for(;; ) {
 			if( meshTangentRatio > lodTangentRatio ) {
 				break;
 			}
-			if( m_chosenSubdivLevel == 0 ) {
+			if( chosenSubdivLevel == 0 ) {
 				break;
 			}
-			m_chosenSubdivLevel--;
-			lodTangentRatio *= m_nextLodTangentRatio;
+			chosenSubdivLevel--;
+			lodTangentRatio *= m_shared->nextLodTangentRatio;
 			// Sanity check
 			if( lodTangentRatio < 1e-6 ) [[unlikely]] {
 				break;
@@ -1663,8 +1805,7 @@ auto SimulatedHullsSystem::HullDynamicMesh::getStorageRequirements( const float 
 		};
 	}
 
-	const IcosphereData &chosenLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
-	return { (unsigned)chosenLevelData.vertices.size(), (unsigned)chosenLevelData.indices.size() };
+	return chosenSubdivLevel;
 }
 
 static const struct FadeFnHolder {
@@ -1709,63 +1850,54 @@ static const struct FadeFnHolder {
 #undef ADD_FN_FOR_FLAGS_TO_TABLES
 } fadeFnHolder;
 
-auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
-															 const float *__restrict viewAxis,
-															 float cameraFovTangent,
-															 const Scene::DynamicLight *lights,
-															 std::span<const uint16_t> affectingLightIndices,
-					  										 vec4_t *__restrict destPositions,
-					  										 vec4_t *__restrict destNormals,
-					  										 vec2_t *__restrict destTexCoords,
-					  										 byte_vec4_t *__restrict destColors,
-					                                         uint16_t *__restrict destIndices ) const
- 	-> std::pair<unsigned, unsigned> {
-	assert( m_chosenSubdivLevel <= m_simulatedSubdivLevel + 1 );
-	assert( m_minZLastFrame <= m_maxZLastFrame );
+void SimulatedHullsSystem::HullDynamicMesh::calcOverrideColors( byte_vec4_t *__restrict buffer,
+																const float *__restrict viewOrigin,
+																const float *__restrict viewAxis,
+																const Scene::DynamicLight *lights,
+																std::span<const uint16_t> affectingLightIndices,
+																bool applyViewDotFade,
+																bool applyZFade,
+																bool applyLights ) const {
+	assert( applyViewDotFade || applyZFade || applyLights );
 
 	byte_vec4_t *overrideColors = nullptr;
 
-	const bool actuallyDoTesselation    = m_tesselateClosestLod && m_chosenSubdivLevel > m_simulatedSubdivLevel;
-
-	const bool shouldApplyViewDotFade   = m_viewDotFade != ViewDotFade::NoFade;
-	const bool actuallyApplyViewDotFade = shouldApplyViewDotFade;
-	const bool shouldApplyZFade         = m_zFade != ZFade::NoFade;
-	const bool actuallyApplyZFade       = shouldApplyZFade && m_maxZLastFrame - m_minZLastFrame > 1.0f;
-	const ZFade effectiveZFade          = actuallyApplyZFade ? m_zFade : ZFade::NoFade;
-
-	if( actuallyApplyViewDotFade || actuallyApplyZFade ) {
-		const unsigned dataLevelToUse     = actuallyDoTesselation ? m_simulatedSubdivLevel : m_chosenSubdivLevel;
+	if( applyViewDotFade || applyZFade ) {
+		const ZFade effectiveZFade        = applyZFade ? m_shared->zFade : ZFade::NoFade;
+		const unsigned dataLevelToUse     = wsw::min( m_chosenSubdivLevel, m_shared->simulatedSubdivLevel );
 		const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( dataLevelToUse );
 
 		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
 		const auto numVertices = (unsigned)lodDataToUse.vertices.size();
-		overrideColors         = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
+		overrideColors         = buffer;
 
 		// Either we have already calculated normals or do not need normals
-		if( m_simulatedNormals || !actuallyApplyViewDotFade ) {
+		if( m_shared->simulatedNormals || !applyViewDotFade ) {
 			// Call specialized implementations for each fade func
 
-			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_viewDotFade, effectiveZFade );
+			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_shared->viewDotFade, effectiveZFade );
 			const auto applyFadeFn = ::fadeFnHolder.applyFadeFn[fnIndex];
 
-			applyFadeFn( overrideColors, m_simulatedPositions, m_simulatedNormals, m_simulatedColors,
-						 viewOrigin,  numVertices, m_minZLastFrame, m_maxZLastFrame );
+			applyFadeFn( overrideColors, m_shared->simulatedPositions, m_shared->simulatedNormals,
+						 m_shared->simulatedColors, viewOrigin,  numVertices,
+						 m_shared->minZLastFrame, m_shared->maxZLastFrame );
 		} else {
 			// Call specialized implementations for each fade func
 
-			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_viewDotFade, effectiveZFade );
+			const unsigned fnIndex = ::fadeFnHolder.indexForFade( m_shared->viewDotFade, effectiveZFade );
 			const auto applyFadeFn = ::fadeFnHolder.calcNormalsAndApplyFadeFn[fnIndex];
 
-			applyFadeFn( overrideColors, m_simulatedPositions, lodDataToUse.vertexNeighbours.data(),
-						 m_simulatedColors, viewOrigin, numVertices, m_minZLastFrame, m_maxZLastFrame );
+			applyFadeFn( overrideColors, m_shared->simulatedPositions, lodDataToUse.vertexNeighbours.data(),
+						 m_shared->simulatedColors, viewOrigin, numVertices,
+						 m_shared->minZLastFrame, m_shared->maxZLastFrame );
 		}
 	}
 
-	if( this->applyVertexDynLight && !affectingLightIndices.empty() ) {
+	if( applyLights ) {
 		unsigned numVertices;
 		// If tesselation is going to be performed, apply light to the base non-tesselated lod colors
-		if( actuallyDoTesselation ) {
-			numVertices = ::basicHullsHolder.getIcosphereForLevel( m_simulatedSubdivLevel ).vertices.size();
+		if( m_chosenSubdivLevel > m_shared->simulatedSubdivLevel ) {
+			numVertices = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel ).vertices.size();
 		} else {
 			numVertices = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel ).vertices.size();
 		}
@@ -1776,22 +1908,147 @@ auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__rest
 			// We have applied view dot fade, use this view-dot-produced data
 			alphaSourceColors = overrideColors;
 		} else {
-			overrideColors    = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * numVertices );
-			alphaSourceColors = m_simulatedColors;
+			overrideColors    = buffer;
+			alphaSourceColors = m_shared->simulatedColors;
 		}
 
-		applyLightsToVertices( m_simulatedPositions, m_simulatedColors, overrideColors, alphaSourceColors,
+		applyLightsToVertices( m_shared->simulatedPositions, m_shared->simulatedColors,
+							   overrideColors, alphaSourceColors,
 							   lights, affectingLightIndices, numVertices );
 	}
+}
+
+auto SimulatedHullsSystem::HullDynamicMesh::getOverrideColorsCheckingSiblingCache( byte_vec4_t *__restrict localBuffer,
+																				   const float *__restrict viewOrigin,
+																				   const float *__restrict viewAxis,
+																				   const Scene::DynamicLight *lights,
+																				   std::span<const uint16_t>
+																				       affectingLightIndices ) const
+	-> const byte_vec4_t * {
+	if( m_shared->cachedOverrideColorsSpanInBuffer ) {
+		auto *maybeSpanAddress = std::addressof( *m_shared->cachedOverrideColorsSpanInBuffer );
+		if( auto *span = std::get_if<std::pair<unsigned, unsigned>>( maybeSpanAddress ) ) {
+			static_assert( sizeof( byte_vec4_t ) == sizeof( uint32_t ) );
+			return (byte_vec4_t *)( m_shared->overrideColorsBuffer->data() + span->first );
+		}
+	}
+
+	const bool shouldApplyViewDotFade   = m_shared->viewDotFade != ViewDotFade::NoFade;
+	const bool actuallyApplyViewDotFade = shouldApplyViewDotFade;
+	const bool shouldApplyZFade         = m_shared->zFade != ZFade::NoFade;
+	const bool actuallyApplyZFade       = shouldApplyZFade && m_shared->maxZLastFrame - m_shared->minZLastFrame > 1.0f;
+	const bool actuallyApplyLights      = applyVertexDynLight && !affectingLightIndices.empty();
+
+	// Nothing to do, save this fact
+	if( !( actuallyApplyViewDotFade | actuallyApplyZFade | actuallyApplyLights ) ) {
+		m_shared->cachedOverrideColorsSpanInBuffer = std::monostate();
+		return nullptr;
+	}
+
+	byte_vec4_t *buffer = localBuffer;
+	// If a dynamic allocation is worth it
+	if( m_shared->hasSibling ) {
+		// Allocate some room within the global buffer for frame colors allocation.
+		wsw::Vector<uint32_t> *const sharedBuffer = m_shared->overrideColorsBuffer;
+		const auto offset = sharedBuffer->size();
+		const auto length = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel ).vertices.size();
+		sharedBuffer->resize( sharedBuffer->size() + length );
+		// The data could have been reallocated during resize, retrieve the data pointer after the resize() call
+		static_assert( sizeof( byte_vec4_t ) == sizeof( uint32_t ) );
+		buffer = (byte_vec4_t *)( sharedBuffer->data() + offset );
+		// Store as a relative offset, so it's stable regardless of reallocations
+		m_shared->cachedOverrideColorsSpanInBuffer = std::make_pair<unsigned, unsigned>( offset, length );
+	}
+
+	calcOverrideColors( buffer, viewOrigin, viewAxis, lights, affectingLightIndices,
+						actuallyApplyViewDotFade, actuallyApplyZFade, actuallyApplyLights );
+
+	return buffer;
+}
+
+auto SimulatedHullsSystem::HullSolidDynamicMesh::getStorageRequirements( const float *viewOrigin,
+																		 const float *viewAxis,
+																		 float cameraViewTangent ) const
+	-> std::optional<std::pair<unsigned, unsigned>> {
+	if( m_shared->cachedChosenSolidSubdivLevel ) {
+		auto *drawOrSkipAddress = std::addressof( *m_shared->cachedChosenSolidSubdivLevel );
+		if( const auto *drawLevel = std::get_if<unsigned>( drawOrSkipAddress ) ) {
+			m_chosenSubdivLevel   = *drawLevel;
+		} else {
+			return std::nullopt;
+		}
+	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent ) ) {
+		m_chosenSubdivLevel                    = *drawLevel;
+		m_shared->cachedChosenSolidSubdivLevel = *drawLevel;
+	} else {
+		m_shared->cachedChosenSolidSubdivLevel = std::monostate();
+		return std::nullopt;
+	}
+
+	const IcosphereData &chosenLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
+	return std::make_pair<unsigned, unsigned>( chosenLevelData.vertices.size(), chosenLevelData.indices.size() );
+}
+
+auto SimulatedHullsSystem::HullCloudDynamicMesh::getStorageRequirements( const float *viewOrigin,
+																		 const float *viewAxis,
+																		 float cameraViewTangent ) const
+	-> std::optional<std::pair<unsigned, unsigned>> {
+	if( m_shared->cachedChosenSolidSubdivLevel ) {
+		auto *drawOrSkipAddress = std::addressof( *m_shared->cachedChosenSolidSubdivLevel );
+		if( const auto *drawLevel = std::get_if<unsigned>( drawOrSkipAddress ) ) {
+			m_chosenSubdivLevel   = *drawLevel;
+		} else {
+			return std::nullopt;
+		}
+	} else if( const std::optional<unsigned> drawLevel = calcSolidSubdivLodLevel( viewOrigin, cameraViewTangent ) ) {
+		m_chosenSubdivLevel                    = *drawLevel;
+		m_shared->cachedChosenSolidSubdivLevel = *drawLevel;
+	} else {
+		m_shared->cachedChosenSolidSubdivLevel = std::monostate();
+		return std::nullopt;
+	}
+
+	if( m_chosenSubdivLevel > m_shared->simulatedSubdivLevel ) {
+		m_chosenSubdivLevel = m_shared->simulatedSubdivLevel;
+	}
+
+	const IcosphereData &chosenLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
+	const auto numResultingSprites       = (unsigned)chosenLevelData.vertices.size();
+	return std::make_pair( 4 * numResultingSprites, 6 * numResultingSprites );
+}
+
+auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
+																  const float *__restrict viewAxis,
+																  float cameraFovTangent,
+																  const Scene::DynamicLight *lights,
+																  std::span<const uint16_t> affectingLightIndices,
+																  vec4_t *__restrict destPositions,
+																  vec4_t *__restrict destNormals,
+																  vec2_t *__restrict destTexCoords,
+																  byte_vec4_t *__restrict destColors,
+																  uint16_t *__restrict destIndices ) const
+ 	-> std::pair<unsigned, unsigned> {
+	assert( m_shared->simulatedSubdivLevel < BasicHullsHolder::kMaxSubdivLevel );
+	assert( m_chosenSubdivLevel <= m_shared->simulatedSubdivLevel + 1 );
+	assert( m_shared->minZLastFrame <= m_shared->maxZLastFrame );
+
+	// Keep always allocating the default buffer even if it's unused, so we can rely on it
+	const auto colorsBufferLevel = wsw::min( m_chosenSubdivLevel, m_shared->simulatedSubdivLevel );
+	const auto colorsBufferSize  = (unsigned)basicHullsHolder.getIcosphereForLevel( colorsBufferLevel ).vertices.size();
+	assert( colorsBufferSize && colorsBufferSize < ( 1 << 12 ) );
+	auto *const overrideColorsBuffer = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * colorsBufferSize );
+
+	const byte_vec4_t *overrideColors = getOverrideColorsCheckingSiblingCache( overrideColorsBuffer, viewOrigin,
+																			   viewAxis, lights, affectingLightIndices );
 
 	unsigned numResultVertices, numResultIndices;
 
 	// HACK Perform an additional tesselation of some hulls.
 	// CPU-side tesselation is the single option in the current codebase state.
-	if( actuallyDoTesselation ) {
-		assert( m_simulatedSubdivLevel + 1 == m_chosenSubdivLevel );
+	if( m_shared->tesselateClosestLod && m_chosenSubdivLevel > m_shared->simulatedSubdivLevel ) {
+		assert( m_shared->simulatedSubdivLevel + 1 == m_chosenSubdivLevel );
 		const IcosphereData &nextLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
-		const IcosphereData &simLevelData  = ::basicHullsHolder.getIcosphereForLevel( m_simulatedSubdivLevel );
+		const IcosphereData &simLevelData  = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel );
 
 		const IcosphereVertexNeighbours nextLevelNeighbours = nextLevelData.vertexNeighbours.data();
 
@@ -1799,7 +2056,7 @@ auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__rest
 		const auto numNextLevelVertices = (unsigned)nextLevelData.vertices.size();
 
 		MeshTesselationHelper *const tesselationHelper = &::meshTesselationHelper;
-		if( m_lerpNextLevelColors ) {
+		if( m_shared->lerpNextLevelColors ) {
 			tesselationHelper->exec<true>( this, overrideColors,
 										   numSimulatedVertices, numNextLevelVertices, nextLevelNeighbours );
 		} else {
@@ -1816,15 +2073,114 @@ auto SimulatedHullsSystem::HullDynamicMesh::fillMeshBuffers( const float *__rest
 		std::memcpy( destIndices, nextLevelData.indices.data(), sizeof( uint16_t ) * numResultIndices );
 	} else {
 		const IcosphereData &dataToUse = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
-		const byte_vec4_t *colorsToUse = overrideColors ? overrideColors : m_simulatedColors;
+		const byte_vec4_t *colorsToUse = overrideColors ? overrideColors : m_shared->simulatedColors;
 
 		numResultVertices = (unsigned)dataToUse.vertices.size();
 		numResultIndices  = (unsigned)dataToUse.indices.size();
 
-		std::memcpy( destPositions, m_simulatedPositions, sizeof( m_simulatedPositions[0] ) * numResultVertices );
+		const vec4_t *simulatedPositions = m_shared->simulatedPositions;
+		std::memcpy( destPositions, simulatedPositions, sizeof( simulatedPositions[0] ) * numResultVertices );
 		std::memcpy( destColors, colorsToUse, sizeof( colorsToUse[0] ) * numResultVertices );
 		std::memcpy( destIndices, dataToUse.indices.data(), sizeof( uint16_t ) * numResultIndices );
 	}
 
 	return { numResultVertices, numResultIndices };
+};
+
+auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
+																  const float *__restrict viewAxis,
+																  float cameraFovTangent,
+																  const Scene::DynamicLight *lights,
+																  std::span<const uint16_t> affectingLightIndices,
+																  vec4_t *__restrict destPositions,
+																  vec4_t *__restrict destNormals,
+																  vec2_t *__restrict destTexCoords,
+																  byte_vec4_t *__restrict destColors,
+																  uint16_t *__restrict destIndices ) const
+-> std::pair<unsigned, unsigned> {
+	assert( m_shared->simulatedSubdivLevel < BasicHullsHolder::kMaxSubdivLevel );
+	assert( m_chosenSubdivLevel <= m_shared->simulatedSubdivLevel + 1 );
+	assert( m_shared->minZLastFrame <= m_shared->maxZLastFrame );
+
+	const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel );
+	const auto numVertices = (unsigned)lodDataToUse.vertices.size();
+
+	// Keep always allocating the default buffer even if it's unused, so we can rely on its availability
+	const auto colorsBufferLevel = wsw::min( m_chosenSubdivLevel, m_shared->simulatedSubdivLevel );
+	const auto colorsBufferSize  = (unsigned)basicHullsHolder.getIcosphereForLevel( colorsBufferLevel ).vertices.size();
+	assert( colorsBufferSize && colorsBufferSize < ( 1 << 12 ) );
+	auto *const overrideColorsBuffer = (byte_vec4_t *)alloca( sizeof( byte_vec4_t ) * colorsBufferSize );
+
+	const byte_vec4_t *overrideColors = getOverrideColorsCheckingSiblingCache( overrideColorsBuffer, viewOrigin,
+																			   viewAxis, lights, affectingLightIndices );
+
+	const byte_vec4_t *colorsToUse = overrideColors ? overrideColors : m_shared->simulatedColors;
+
+	alignas( 16 ) vec4_t left, up;
+	// TODO: Flip if needed
+	VectorCopy( &viewAxis[AXIS_RIGHT], left );
+	VectorCopy( &viewAxis[AXIS_UP], up );
+
+	alignas( 16 ) vec4_t normal;
+	VectorNegate( &viewAxis[AXIS_FORWARD], normal );
+	normal[3] = 0.0f;
+
+	const float radius = m_spriteRadius;
+
+	unsigned numOutVertices = 0;
+	unsigned numOutIndices  = 0;
+	unsigned vertexNum      = 0;
+
+	do {
+		const float *__restrict vertexPosition      = m_shared->simulatedPositions[vertexNum];
+		const uint8_t *const __restrict vertexColor = colorsToUse[vertexNum];
+
+		vec4_t *const __restrict positions   = destPositions + numOutVertices;
+		vec4_t *const __restrict normals     = destNormals   + numOutVertices;
+		byte_vec4_t *const __restrict colors = destColors    + numOutVertices;
+		vec2_t *const __restrict texCoords   = destTexCoords + numOutVertices;
+		uint16_t *const __restrict indices   = destIndices   + numOutIndices;
+
+		vec3_t point;
+		VectorMA( vertexPosition, -radius, up, point );
+		VectorMA( point, +radius, left, positions[0] );
+		VectorMA( point, -radius, left, positions[3] );
+
+		VectorMA( vertexPosition, radius, up, point );
+		VectorMA( point, +radius, left, positions[1] );
+		VectorMA( point, -radius, left, positions[2] );
+
+		positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
+
+		byte_vec4_t resultingColor;
+		resultingColor[0] = (uint8_t)wsw::clamp( (float)vertexColor[0] * m_spriteColor[0], 0.0f, 255.0f );
+		resultingColor[1] = (uint8_t)wsw::clamp( (float)vertexColor[1] * m_spriteColor[1], 0.0f, 255.0f );
+		resultingColor[2] = (uint8_t)wsw::clamp( (float)vertexColor[2] * m_spriteColor[2], 0.0f, 255.0f );
+		resultingColor[3] = (uint8_t)wsw::clamp( (float)vertexColor[3] * m_spriteColor[3] * m_alphaScale, 0.0f, 255.0f );
+
+		Vector4Copy( resultingColor, colors[0] );
+		Vector4Copy( resultingColor, colors[1] );
+		Vector4Copy( resultingColor, colors[2] );
+		Vector4Copy( resultingColor, colors[3] );
+
+		Vector4Copy( normal, normals[0] );
+		Vector4Copy( normal, normals[1] );
+		Vector4Copy( normal, normals[2] );
+		Vector4Copy( normal, normals[3] );
+
+		VectorSet( indices + 0, numOutVertices + 0, numOutVertices + 1, numOutVertices + 2 );
+		VectorSet( indices + 3, numOutVertices + 0, numOutVertices + 2, numOutVertices + 3 );
+
+		Vector2Set( texCoords[0], 0.0f, 1.0f );
+		Vector2Set( texCoords[1], 0.0f, 0.0f );
+		Vector2Set( texCoords[2], 1.0f, 0.0f );
+		Vector2Set( texCoords[3], 1.0f, 1.0f );
+
+		numOutVertices += 4;
+		numOutIndices  += 6;
+	} while( ++vertexNum < numVertices );
+
+	assert( numOutVertices == numVertices * 4 );
+	assert( numOutIndices == numVertices * 6 );
+	return { numOutVertices, numOutIndices };
 };

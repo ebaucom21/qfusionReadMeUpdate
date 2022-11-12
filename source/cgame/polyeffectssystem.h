@@ -89,7 +89,8 @@ private:
 		vec3_t points[24 + 1];
 
 		[[nodiscard]]
-		auto getStorageRequirements( const float *, const float *, float ) const -> std::pair<unsigned, unsigned> override;
+		auto getStorageRequirements( const float *, const float *, float ) const
+			-> std::optional<std::pair<unsigned, unsigned>> override;
 
 		[[nodiscard]]
 		auto fillMeshBuffers( const float *__restrict viewOrigin,

@@ -195,13 +195,18 @@ private:
 	auto allocDelayedEffect( int64_t currTime, const float *origin, unsigned delay,
 							 DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
-	using ColorChangeTimeline = std::span<const SimulatedHullsSystem::ColorChangeTimelineNode>;
 
-	void spawnSmokeHull( int64_t currTime, const float *origin, float speed, float speedSpread,
-						 std::pair<float, float> archimedesAccel, std::pair<float, float> xyAccel,
-						 SimulatedHullsSystem::ViewDotFade viewDotFade,
-						 SimulatedHullsSystem::ZFade zFade,
-						 ColorChangeTimeline colorChangeTimeline );
+	struct SmokeHullParams {
+		struct { float mean, spread; } speed;
+		struct { float top, bottom; } archimedesAccel;
+		struct { float top, bottom; } xyExpansionAccel;
+		SimulatedHullsSystem::ViewDotFade viewDotFade;
+		SimulatedHullsSystem::ZFade zFade;
+		std::span<const SimulatedHullsSystem::ColorChangeTimelineNode> colorChangeTimeline;
+		SimulatedHullsSystem::AppearanceRules appearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
+	};
+
+	void spawnSmokeHull( int64_t currTime, const float *origin, const SmokeHullParams &smokeHullParams );
 
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );
