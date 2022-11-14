@@ -533,14 +533,26 @@ public:
 };
 
 struct QuadPoly {
+	struct ViewAlignedSpriteRules {};
+
+	struct ViewAlignedBeamRules {
+		float dir[3];
+		float width;
+		float tileLength { 0.0f };
+	};
+
+	struct OrientedSpriteRules {
+		float axis[9];
+	};
+
+	using GeometryRules = std::variant<ViewAlignedSpriteRules, ViewAlignedBeamRules, OrientedSpriteRules>;
+
 	struct shader_s *material;
 	float color[4];
-	float from[3];
-	float to[3];
-	float dir[3];
-	float width;
-	float length;
-	float tileLength;
+	float origin[3];
+	float halfExtent;
+
+	GeometryRules geometryRules { ViewAlignedSpriteRules {} };
 };
 
 struct DynamicMesh {

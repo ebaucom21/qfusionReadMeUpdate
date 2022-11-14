@@ -1103,56 +1103,102 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 
 	positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
 
+	mesh_t mesh;
+	std::memset( &mesh, 0, sizeof( mesh ) );
+
+	mesh.elems    = indices;
+	mesh.numElems = 6;
+	mesh.numVerts = 4;
+	mesh.xyzArray = positions;
+	mesh.stArray  = texCoords;
+	mesh.colorsArray[0] = colors;
+
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
-		const auto *__restrict p = (const QuadPoly *)sds.drawSurf;
+		const auto *__restrict poly = (const QuadPoly *)sds.drawSurf;
 
-		float stx = 1.0f, sty = 1.0f;
-		if( p->tileLength > 0 && p->length > p->tileLength ) {
-			stx = p->length * Q_Rcp( p->tileLength );
-		}
+		if( const auto *__restrict beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &poly->geometryRules ) ) {
+			assert( std::fabs( VectorLengthFast( beamRules->dir ) - 1.0f ) < 1.01f );
+			vec3_t viewToOrigin, right;
+			VectorSubtract( poly->origin, fsh->viewOrigin, viewToOrigin );
+			CrossProduct( viewToOrigin, beamRules->dir, right );
 
-		Vector2Set( texCoords[0], 0.0f, 0.0f );
-		Vector2Set( texCoords[1], 0.0f, sty );
-		Vector2Set( texCoords[2], stx, sty );
-		Vector2Set( texCoords[3], stx, 0.0f );
+			const float squareLength = VectorLengthSquared( right );
+			if( squareLength > wsw::square( 0.001f ) ) [[likely]] {
+				const float rcpLength = Q_RSqrt( squareLength );
+				VectorScale( right, rcpLength, right );
 
-		colors[0][0] = ( uint8_t )( p->color[0] * 255 );
-		colors[0][1] = ( uint8_t )( p->color[1] * 255 );
-		colors[0][2] = ( uint8_t )( p->color[2] * 255 );
-		colors[0][3] = ( uint8_t )( p->color[3] * 255 );
-		Vector4Copy( colors[0], colors[1] );
-		Vector4Copy( colors[0], colors[2] );
-		Vector4Copy( colors[0], colors[3] );
+				const float halfWidth = 0.5f * beamRules->width;
 
-		vec3_t mid;
-		VectorAvg( p->from, p->to, mid );
+				vec3_t from, to;
+				VectorMA( poly->origin, -poly->halfExtent, beamRules->dir, from );
+				VectorMA( poly->origin, +poly->halfExtent, beamRules->dir, to );
 
-		assert( std::fabs( VectorLengthFast( p->dir ) - 1.0f ) < 1.01f );
-		vec3_t viewToMid, right;
-		VectorSubtract( mid, fsh->viewOrigin, viewToMid );
-		CrossProduct( viewToMid, p->dir, right );
-		if( const float squareLength = VectorLengthSquared( right ); squareLength > wsw::square( 0.001f ) ) [[likely]] {
-			const float rcpLength = Q_RSqrt( squareLength );
-			VectorScale( right, rcpLength, right );
+				VectorMA( from, +halfWidth, right, positions[0] );
+				VectorMA( from, -halfWidth, right, positions[1] );
+				VectorMA( to, -halfWidth, right, positions[2] );
+				VectorMA( to, +halfWidth, right, positions[3] );
 
-			const float halfWidth = 0.5f * p->width;
+				float stx = 1.0f, sty = 1.0f;
+				if( beamRules->tileLength > 0 && poly->halfExtent > beamRules->tileLength ) {
+					stx = poly->halfExtent * Q_Rcp( beamRules->tileLength );
+				}
 
-			VectorMA( p->from, +halfWidth, right, positions[0] );
-			VectorMA( p->from, -halfWidth, right, positions[1] );
-			VectorMA( p->to, -halfWidth, right, positions[2] );
-			VectorMA( p->to, +halfWidth, right, positions[3] );
+				Vector2Set( texCoords[0], 0.0f, 0.0f );
+				Vector2Set( texCoords[1], 0.0f, sty );
+				Vector2Set( texCoords[2], stx, sty );
+				Vector2Set( texCoords[3], stx, 0.0f );
 
-			mesh_t mesh;
-			memset( &mesh, 0, sizeof( mesh ) );
+				colors[0][0] = ( uint8_t )( poly->color[0] * 255 );
+				colors[0][1] = ( uint8_t )( poly->color[1] * 255 );
+				colors[0][2] = ( uint8_t )( poly->color[2] * 255 );
+				colors[0][3] = ( uint8_t )( poly->color[3] * 255 );
 
-			mesh.elems          = indices;
-			mesh.numElems       = 6;
-			mesh.numVerts       = 4;
-			mesh.xyzArray       = positions;
-			mesh.stArray        = texCoords;
-			mesh.colorsArray[0] = colors;
+				Vector4Copy( colors[0], colors[1] );
+				Vector4Copy( colors[0], colors[2] );
+				Vector4Copy( colors[0], colors[3] );
 
-			RB_AddDynamicMesh( e, p->material, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+				RB_AddDynamicMesh( e, shader, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
+			}
+		} else {
+			vec3_t left, up;
+
+			if( const auto *orientedRules = std::get_if<QuadPoly::OrientedSpriteRules>( &poly->geometryRules ) ) {
+				VectorCopy( &orientedRules->axis[AXIS_RIGHT], left );
+				VectorCopy( &orientedRules->axis[AXIS_UP], up );
+			} else {
+				VectorCopy( &fsh->viewAxis[AXIS_RIGHT], left );
+				VectorCopy( &fsh->viewAxis[AXIS_UP], up );
+			}
+
+			if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+				VectorInverse( left );
+			}
+
+			vec3_t point;
+			const float radius = poly->halfExtent;
+			VectorMA( poly->origin, -radius, up, point );
+			VectorMA( point, +radius, left, positions[0] );
+			VectorMA( point, -radius, left, positions[3] );
+
+			VectorMA( poly->origin, radius, up, point );
+			VectorMA( point, +radius, left, positions[1] );
+			VectorMA( point, -radius, left, positions[2] );
+
+			Vector2Set( texCoords[0], 0.0f, 0.0f );
+			Vector2Set( texCoords[1], 0.0f, 1.0f );
+			Vector2Set( texCoords[2], 1.0f, 1.0f );
+			Vector2Set( texCoords[3], 1.0f, 0.0f );
+
+			colors[0][0] = ( uint8_t )( poly->color[0] * 255 );
+			colors[0][1] = ( uint8_t )( poly->color[1] * 255 );
+			colors[0][2] = ( uint8_t )( poly->color[2] * 255 );
+			colors[0][3] = ( uint8_t )( poly->color[3] * 255 );
+
+			Vector4Copy( colors[0], colors[1] );
+			Vector4Copy( colors[0], colors[2] );
+			Vector4Copy( colors[0], colors[3] );
+
+			RB_AddDynamicMesh( e, shader, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 		}
 	}
 }

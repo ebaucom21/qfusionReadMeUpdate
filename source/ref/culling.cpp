@@ -950,15 +950,19 @@ auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 	unsigned numPassedPolys = 0;
 	for( unsigned i = 0; i < numPolys; ++i ) {
 		const QuadPoly *const __restrict poly = polys[i];
-		const float width = poly->width;
 
-		// This should make an OK estimate
-		alignas( 16 ) vec4_t polyMins, polyMaxs;
-		polyMins[3] = 0.0f, polyMaxs[3] = 1.0f;
-		for( int j = 0; j < 3; ++j ) {
-			polyMins[j] = wsw::min( poly->from[j] - width, poly->to[j] - width );
-			polyMaxs[j] = wsw::max( poly->from[j] + width, poly->to[j] + width );
-		}
+		alignas( 16 ) const vec4_t polyMins {
+			poly->origin[0] - poly->halfExtent,
+			poly->origin[1] - poly->halfExtent,
+			poly->origin[2] - poly->halfExtent,
+			0.0f,
+		};
+		alignas( 16 ) const vec4_t polyMaxs {
+			poly->origin[0] + poly->halfExtent,
+			poly->origin[1] + poly->halfExtent,
+			poly->origin[2] + poly->halfExtent,
+			1.0f,
+		};
 
 		LOAD_BOX_COMPONENTS( polyMins, polyMaxs );
 		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );

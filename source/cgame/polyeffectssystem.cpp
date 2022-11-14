@@ -189,9 +189,8 @@ auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material ) -> Straig
 	assert( !m_straightLaserBeamsAllocator.isFull() );
 	auto *effect = new( m_straightLaserBeamsAllocator.allocOrNull() )StraightBeamEffect;
 	wsw::link( effect, &m_straightLaserBeamsHead );
-	effect->poly.material = material;
-	effect->poly.width    = 0.0f;
-	effect->poly.length   = 0.0f;
+	effect->poly.material   = material;
+	effect->poly.halfExtent = 0.0f;
 	return effect;
 }
 
@@ -208,15 +207,16 @@ void PolyEffectsSystem::updateStraightBeamEffect( StraightBeam *handle, const fl
 			VectorSubtract( to, from, dir );
 			VectorScale( dir, rcpLength, dir );
 			VectorCopy( color, effect->poly.color );
-			VectorCopy( from, effect->poly.from );
-			VectorCopy( to, effect->poly.to );
-			VectorCopy( dir, effect->poly.dir );
-			effect->poly.width      = width;
-			effect->poly.length     = Q_Rcp( rcpLength );
-			effect->poly.tileLength = tileLength;
+			VectorAvg( from, to, effect->poly.origin );
+			effect->poly.halfExtent = 0.5f * ( squareLength * rcpLength );
+			effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+				.dir        = { dir[0], dir[1], dir[2] },
+				.width      = width,
+				.tileLength = tileLength,
+			};
 		} else {
 			// Suppress rendering this frame
-			effect->poly.width = effect->poly.length = 0.0f;
+			effect->poly.halfExtent = 0.0f;
 		}
 	}
 }
@@ -251,11 +251,6 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 		return;
 	}
 
-	vec3_t dir;
-	VectorSubtract( to, from, dir );
-	const float rcpLength = Q_RSqrt( squareLength );
-	VectorScale( dir, rcpLength, dir );
-
 	void *mem = m_transientBeamsAllocator.allocOrNull();
 	if( !mem ) [[unlikely]] {
 		assert( m_transientBeamsHead );
@@ -284,14 +279,20 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 	effect->colorLifespan = params.beamColorLifespan,
 	effect->lightProps    = params.lightProps;
 
-	effect->poly.width      = params.width;
-	effect->poly.length     = Q_Rcp( rcpLength );
-	effect->poly.material   = params.material;
-	effect->poly.tileLength = params.tileLength;
+	vec3_t dir;
+	VectorSubtract( to, from, dir );
+	const float rcpLength = Q_RSqrt( squareLength );
+	VectorScale( dir, rcpLength, dir );
 
-	VectorCopy( from, effect->poly.from );
-	VectorCopy( to, effect->poly.to );
-	VectorCopy( dir, effect->poly.dir );
+	VectorAvg( from, to, effect->poly.origin );
+
+	effect->poly.material      = params.material;
+	effect->poly.halfExtent    = 0.5f * ( squareLength * rcpLength );
+	effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+		.dir        = { dir[0], dir[1], dir[2] },
+		.width      = params.width,
+		.tileLength = params.tileLength,
+	};
 
 	wsw::link( effect, &m_transientBeamsHead );
 }
@@ -329,21 +330,23 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
 	const float speed             = std::max( 1000.0f, distance * Q_Rcp( tracerTimeSeconds ) );
 
-	auto *effect            = new( mem )TracerEffect;
-	effect->timeoutAt       = m_lastTime + params.duration;
-	effect->speed           = speed;
-	effect->totalDistance   = distance;
-	effect->distanceSoFar   = params.prestep;
-	effect->fadeInDistance  = 2.0f * params.prestep;
-	effect->fadeOutDistance = 2.0f * params.prestep;
-	effect->poly.width      = params.width;
-	effect->poly.length     = params.length;
-	effect->poly.tileLength = params.length;
-	effect->poly.material   = params.material;
+	auto *effect               = new( mem )TracerEffect;
+	effect->timeoutAt          = m_lastTime + params.duration;
+	effect->speed              = speed;
+	effect->totalDistance      = distance;
+	effect->distanceSoFar      = params.prestep;
+	effect->fadeInDistance     = 2.0f * params.prestep;
+	effect->fadeOutDistance    = 2.0f * params.prestep;
+	effect->poly.material      = params.material;
+	effect->poly.halfExtent    = 0.5f * params.length;
+	effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+		.dir        = { dir[0], dir[1], dir[2] },
+		.width      = params.width,
+		.tileLength = params.length,
+	};
 
 	VectorCopy( from, effect->from );
 	VectorCopy( to, effect->to );
-	VectorCopy( dir, effect->poly.dir );
 	Vector4Copy( params.color, effect->poly.color );
 
 	VectorCopy( params.lightColor, effect->lightColor );
@@ -363,7 +366,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 	}
 
 	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
-		if( beam->poly.material && beam->poly.length > 1.0f && beam->poly.width > 1.0f ) [[likely]] {
+		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
 			request->addPoly( &beam->poly );
 		}
 	}
@@ -374,7 +377,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			continue;
 		}
 
-		if( beam->poly.material && beam->poly.length > 1.0f && beam->poly.width > 1.0f ) [[likely]] {
+		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
 			const float colorLifetimeFrac = (float)( currTime - beam->spawnTime ) * Q_Rcp( (float)beam->timeout );
 			beam->colorLifespan.getColorForLifetimeFrac( colorLifetimeFrac, beam->poly.color );
 
@@ -382,12 +385,19 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 				const auto &[lightTimeout, lightLifespan] = *beam->lightProps;
 				if( beam->spawnTime + lightTimeout > currTime ) {
 					const float lightLifetimeFrac = (float)( currTime - beam->spawnTime ) * Q_Rcp( (float)lightTimeout );
+					assert( lightLifetimeFrac >= 0.0f && lightLifetimeFrac < 1.01f );
 
 					float lightRadius, lightColor[3];
 					lightLifespan.getRadiusAndColorForLifetimeFrac( lightLifetimeFrac, &lightRadius, lightColor );
 					if( lightRadius > 1.0f ) {
+						const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &beam->poly.geometryRules );
 						float lightOrigin[3];
-						VectorLerp( beam->poly.from, lightLifetimeFrac, beam->poly.to, lightOrigin );
+
+						// The lifetime fraction is in [0, 1] range.
+						// The position parameter is in [-1, +1] range.
+						// The value -1 gives the "from" point, the value +1 gives the "to" point.
+						const float positionParam = 2.0f * lightLifetimeFrac - 1.0f;
+						VectorMA( beam->poly.origin, beam->poly.halfExtent * positionParam, rules->dir, lightOrigin );
 						request->addLight( lightOrigin, lightRadius, lightRadius, lightColor );
 					}
 				}
@@ -404,17 +414,25 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			continue;
 		}
 
-		assert( tracer->poly.length >= 1.0f );
+		assert( tracer->poly.halfExtent >= 0.5f );
+
 		[[maybe_unused]] const float oldDistanceSoFar = tracer->distanceSoFar;
 		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
-		if( tracer->distanceSoFar + tracer->poly.length >= tracer->totalDistance ) [[unlikely]] {
+
+		if( tracer->poly.halfExtent >= tracer->distanceSoFar ) [[unlikely]] {
+			// Hide it for now
+			continue;
+		}
+
+		if( tracer->distanceSoFar + tracer->poly.halfExtent >= tracer->totalDistance ) [[unlikely]] {
 			destroyTracerEffect( tracer );
 			continue;
 		}
 
-		assert( std::fabs( VectorLengthFast( tracer->poly.dir ) - 1.0f ) < 1e-3f );
-		VectorMA( tracer->from, tracer->distanceSoFar, tracer->poly.dir, tracer->poly.from );
-		VectorMA( tracer->poly.from, tracer->poly.length, tracer->poly.dir, tracer->poly.to );
+		const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.geometryRules );
+		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
+
+		VectorMA( tracer->from, tracer->distanceSoFar, rules->dir, tracer->poly.origin );
 
 		request->addPoly( &tracer->poly );
 
@@ -442,7 +460,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 				const float programRadius = radiusFrac * tracer->programLightRadius;
 				const float coronaRadius  = radiusFrac * tracer->coronaLightRadius;
 				if( programRadius > 1.0f || coronaRadius > 1.0f ) {
-					request->addLight( tracer->poly.to, programRadius, coronaRadius, tracer->lightColor );
+					request->addLight( tracer->poly.origin, programRadius, coronaRadius, tracer->lightColor );
 				}
 			}
 		}
