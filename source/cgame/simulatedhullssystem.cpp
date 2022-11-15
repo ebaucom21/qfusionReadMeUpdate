@@ -1060,7 +1060,6 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			float *const __restrict normal           = vertexNormals[vertexNum];
 
 			unsigned neighbourIndex = 0;
-			bool hasAddedDirs = false;
 			Vector4Clear( normal );
 			do {
 				const float *__restrict v2 = newPositions[neighboursOfVertex[neighbourIndex]];
@@ -1072,12 +1071,13 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 				if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
 					const float rcpLength = Q_RSqrt( squaredLength );
 					VectorMA( normal, rcpLength, cross, normal );
-					hasAddedDirs = true;
 				}
 			} while( ++neighbourIndex < 5 );
 
-			if( hasAddedDirs ) [[likely]] {
-				VectorNormalizeFast( normal );
+			// The sum of partial non-zero directories could be zero, check again
+			if( const float squaredLength = VectorLengthSquared( normal ); squaredLength > wsw::square( 1e-3f ) ) [[likely]] {
+				const float rcpLength = Q_RSqrt( squaredLength );
+				VectorScale( normal, rcpLength, normal );
 			} else {
 				// Copy the unit vector of the original position as a normal
 				VectorCopy( icosphereData.vertices[vertexNum], normal );
@@ -1650,9 +1650,8 @@ static void calcNormalsAndApplyAlphaFade( byte_vec4_t *const __restrict resultCo
 	do {
 		const uint16_t *const neighboursOfVertex = neighboursOfVertices[vertexNum];
 		const float *const __restrict currVertex = positions[vertexNum];
-		vec3_t accumDir { 0.0f, 0.0f, 0.0f };
+		vec3_t normal { 0.0f, 0.0f, 0.0f };
 		unsigned neighbourIndex = 0;
-		bool hasAddedDirs = false;
 		do {
 			const float *__restrict v2 = positions[neighboursOfVertex[neighbourIndex]];
 			const float *__restrict v3 = positions[neighboursOfVertex[( neighbourIndex + 1 ) % 5]];
@@ -1662,21 +1661,21 @@ static void calcNormalsAndApplyAlphaFade( byte_vec4_t *const __restrict resultCo
 			CrossProduct( currTo2, currTo3, cross );
 			if( const float squaredLength = VectorLengthSquared( cross ); squaredLength > 1.0f ) [[likely]] {
 				const float rcpLength = Q_RSqrt( squaredLength );
-				VectorMA( accumDir, rcpLength, cross, accumDir );
-				hasAddedDirs = true;
+				VectorMA( normal, rcpLength, cross, normal );
 			}
 		} while( ++neighbourIndex < 5 );
 
 		VectorCopy( givenColors[vertexNum], resultColors[vertexNum] );
-		if( hasAddedDirs ) [[likely]] {
+		// The sum of partial non-zero directories could be zero, check again
+		const float squaredNormalLength = VectorLengthSquared( normal );
+		if( squaredNormalLength > wsw::square( 1e-3f ) ) [[likely]] {
 			vec3_t viewDir;
 			VectorSubtract( currVertex, viewOrigin, viewDir );
 			const float squareDistanceToVertex = VectorLengthSquared( viewDir );
 			if( squareDistanceToVertex > 1.0f ) [[likely]] {
-				vec3_t normal;
-				VectorCopy( accumDir, normal );
-				VectorNormalizeFast( normal );
-				const float rcpDistance = Q_RSqrt( squareDistanceToVertex );
+				const float rcpNormalLength   = Q_RSqrt( squaredNormalLength );
+				const float rcpDistance       = Q_RSqrt( squareDistanceToVertex );
+				VectorScale( normal, rcpNormalLength, normal );
 				VectorScale( viewDir, rcpDistance, viewDir );
 				const float givenAlpha        = givenColors[vertexNum][3];
 				const float viewDirAlphaFrac  = calcAlphaFracForViewDirDotNormal<ViewDotFade>( viewDir, normal );
