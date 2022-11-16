@@ -336,7 +336,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.speed               = { .mean = 80.0f, .spread = 1.0f },
 				.archimedesAccel     = { .top = +125.0f, .bottom = +45.0f },
 				.xyExpansionAccel    = { .top = +85.0f, .bottom = -30.0f },
-				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenter,
+				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenterCubic,
 				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
 				.colorChangeTimeline = kSmokeHullHardLayerColorChangeTimeline,
 			},
@@ -477,15 +477,38 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
 														const float *bloodColor, unsigned duration ) {
 	if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, duration ) ) {
-		const vec4_t hullColor { bloodColor[0], bloodColor[1], bloodColor[2], 0.1f };
-		const vec3_t hullOrigin { origin[0] + dir[0], origin[1] + dir[1], origin[2] + dir[2] };
-		float speed = 100.0f;
-		if( damage < 25 ) {
-			speed = 50.0f;
-		} else if( damage < 50 ) {
-			speed = 75.0f;
+		vec3_t hullOrigin;
+		constexpr float offset = -32.0f;
+		VectorMA( origin, offset, dir, hullOrigin );
+
+		float speed, speedSpreadFrac;
+		bool tesselateClosestLod = true;
+		SimulatedHullsSystem::ViewDotFade viewDotFade;
+		// TODO: Avoid hardcoding damage values
+		// TODO: Lift the code to EffectsSystemFacade, get rid of the separate TransientEffectsSystem
+		if( damage < 20 ) {
+			speed               = 50.0f;
+			speedSpreadFrac     = 0.18f;
+			tesselateClosestLod = false;
+			viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenterLinear;
+		} else if( damage < 40 ) {
+			speed           = 80.0f;
+			speedSpreadFrac = 0.27f;
+			viewDotFade     = SimulatedHullsSystem::ViewDotFade::FadeOutCenterLinear;
+		} else if( damage < 70 ) {
+			speed           = 110.0f;
+			speedSpreadFrac = 0.39f;
+			viewDotFade     = SimulatedHullsSystem::ViewDotFade::FadeOutCenterQuadratic;
+		} else {
+			speed           = 140.0f;
+			speedSpreadFrac = 0.50f;
+			viewDotFade     = SimulatedHullsSystem::ViewDotFade::FadeOutCenterCubic;
 		}
-		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, speed, 0.1f * speed );
+
+		const vec4_t hullColor { bloodColor[0], bloodColor[1], bloodColor[2], 0.5f };
+		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, speed, speedSpreadFrac * speed );
+		hull->vertexViewDotFade   = viewDotFade;
+		hull->tesselateClosestLod = tesselateClosestLod;
 	}
 }
 

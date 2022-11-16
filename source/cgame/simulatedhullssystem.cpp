@@ -1613,11 +1613,14 @@ static inline wsw_forceinline auto calcAlphaFracForViewDirDotNormal( const float
 	const float absDot = std::fabs( DotProduct( viewDir, normal ) );
 	if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutContour ) {
 		return absDot;
-	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenter ) {
-		// This looks best for the current purposes
-		float alphaFrac = ( 1.0f - absDot );
-		alphaFrac *= alphaFrac * alphaFrac;
-		return alphaFrac;
+	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenterLinear ) {
+		return 1.0f - absDot;
+	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenterQuadratic ) {
+		const float frac = ( 1.0f - absDot );
+		return frac * frac;
+	} else if constexpr( Fade == SimulatedHullsSystem::ViewDotFade::FadeOutCenterCubic ) {
+		const float frac = ( 1.0f - absDot );
+		return frac * frac * frac;
 	} else {
 		return 1.0f;
 	}
@@ -1821,28 +1824,34 @@ static const struct FadeFnHolder {
 									   const float *,
 									   unsigned, float, float );
 
-	CalcNormalsAndApplyAlphaFadeFn calcNormalsAndApplyFadeFn[6] {};
-	ApplyAlphaFadeFn applyFadeFn[6] {};
+	CalcNormalsAndApplyAlphaFadeFn calcNormalsAndApplyFadeFn[10] {};
+	ApplyAlphaFadeFn applyFadeFn[10] {};
 
 #define ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade, ZFade ) \
 	do { \
-        calcNormalsAndApplyFadeFn[indexForFade( ViewDotFade, ZFade )] = &::calcNormalsAndApplyAlphaFade<ViewDotFade, ZFade>; \
-		applyFadeFn[indexForFade( ViewDotFade, ZFade )]               = &::applyAlphaFade<ViewDotFade, ZFade>; \
+        calcNormalsAndApplyFadeFn[indexForFade( SimulatedHullsSystem::ViewDotFade, SimulatedHullsSystem::ZFade )] = \
+			&::calcNormalsAndApplyAlphaFade<SimulatedHullsSystem::ViewDotFade, SimulatedHullsSystem::ZFade>; \
+		applyFadeFn[indexForFade( SimulatedHullsSystem::ViewDotFade, SimulatedHullsSystem::ZFade )] = \
+			&::applyAlphaFade<SimulatedHullsSystem::ViewDotFade, SimulatedHullsSystem::ZFade>; \
 	} while( 0 )
 
 	FadeFnHolder() noexcept {
 		// Add a reference to a template instantiation for each feasible combination.
-		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::NoFade, SimulatedHullsSystem::ZFade::FadeOutBottom );
-		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::NoFade );
-		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutContour, SimulatedHullsSystem::ZFade::FadeOutBottom );
-		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutCenter, SimulatedHullsSystem::ZFade::NoFade );
-		ADD_FNS_FOR_FADE_TO_TABLES( SimulatedHullsSystem::ViewDotFade::FadeOutCenter, SimulatedHullsSystem::ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::NoFade, ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutContour, ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutContour, ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterLinear, ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterLinear, ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterQuadratic, ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterQuadratic, ZFade::FadeOutBottom );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterCubic, ZFade::NoFade );
+		ADD_FNS_FOR_FADE_TO_TABLES( ViewDotFade::FadeOutCenterCubic, ZFade::FadeOutBottom );
 	}
 
 	[[nodiscard]]
 	static constexpr auto indexForFade( SimulatedHullsSystem::ViewDotFade viewDotFade,
 										SimulatedHullsSystem::ZFade zFade ) -> unsigned {
-		assert( (unsigned)viewDotFade < 3 && (unsigned)zFade < 2 );
+		assert( (unsigned)viewDotFade < 5 && (unsigned)zFade < 2 );
 		return 2 * (unsigned)viewDotFade + (unsigned)zFade;
 	}
 

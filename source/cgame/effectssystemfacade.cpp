@@ -530,7 +530,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			.gravity       = -125.0f,
 			.angle         = 60.0f,
 			.speed         = { .min = 35.0f, .max = 75.0f },
-			.percentage    = { .min = 0.33f, .max = 0.67f },
+			.percentage    = { .min = 0.33f, .max = 0.33f + 0.67f * wsw::clamp( (float)damage * 0.01f, 0.00f, 0.99f ) },
 			.timeout       = {
 				.min = (unsigned)( baseTime - timeSpread / 2 ),
 				.max = (unsigned)( baseTime + timeSpread / 2 )

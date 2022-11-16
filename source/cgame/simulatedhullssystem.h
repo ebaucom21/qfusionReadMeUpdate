@@ -14,7 +14,10 @@ class SimulatedHullsSystem {
 	friend class TransientEffectsSystem;
 	friend class MeshTesselationHelper;
 public:
-	enum class ViewDotFade : uint8_t { NoFade, FadeOutContour, FadeOutCenter };
+	// TODO: Split function and fading direction?
+	enum class ViewDotFade : uint8_t {
+		NoFade, FadeOutContour, FadeOutCenterLinear, FadeOutCenterQuadratic, FadeOutCenterCubic
+	};
 	enum class ZFade : uint8_t { NoFade, FadeOutBottom };
 
 	// TODO: Fade/light props should logically belong to these rules
