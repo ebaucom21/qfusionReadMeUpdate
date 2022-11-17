@@ -509,6 +509,7 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, speed, speedSpreadFrac * speed );
 		hull->vertexViewDotFade   = viewDotFade;
 		hull->tesselateClosestLod = tesselateClosestLod;
+		hull->minFadedOutAlpha    = 0.1f;
 	}
 }
 

@@ -93,6 +93,7 @@ private:
 		float nextLodTangentRatio { 0.18f };
 		float minZLastFrame { 0.0f };
 		float maxZLastFrame { 0.0f };
+		float minFadedOutAlpha { 0.0f };
 		ViewDotFade viewDotFade { ViewDotFade::NoFade };
 		ZFade zFade { ZFade::NoFade };
 		bool tesselateClosestLod { false };
@@ -218,6 +219,8 @@ private:
 		float minZLastFrame { std::numeric_limits<float>::max() };
 		float maxZLastFrame { std::numeric_limits<float>::lowest() };
 
+		float minFadedOutAlpha { 0.0f };
+
 		bool tesselateClosestLod { false };
 		bool leprNextLevelColors { false };
 		bool applyVertexDynLight { false };
@@ -283,9 +286,10 @@ private:
 			std::span<const ColorChangeTimelineNode> colorChangeTimeline;
 			ColorChangeState colorChangeState;
 
-			bool useDrawOnTopHack { false };
-			std::optional<ViewDotFade> overrideHullFade;
 			const AppearanceRules *overrideAppearanceRules;
+			std::optional<ViewDotFade> overrideHullFade;
+			std::optional<float> overrideMinFadedOutAlpha;
+			bool useDrawOnTopHack { false };
 		};
 
 		AppearanceRules appearanceRules = SolidAppearanceRules { .material = nullptr };
@@ -299,6 +303,8 @@ private:
 
 		unsigned numLayers { 0 };
 		unsigned lifetime { 0 };
+
+		float minFadedOutAlpha { 0.0f };
 
 		uint8_t subdivLevel { 0 };
 		bool applyVertexDynLight { false };

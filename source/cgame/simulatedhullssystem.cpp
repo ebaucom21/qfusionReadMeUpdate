@@ -714,6 +714,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		sharedMeshData->simulatedColors      = hull->vertexColors;
 		sharedMeshData->minZLastFrame        = hull->minZLastFrame;
 		sharedMeshData->maxZLastFrame        = hull->maxZLastFrame;
+		sharedMeshData->minFadedOutAlpha     = hull->minFadedOutAlpha;
 		sharedMeshData->viewDotFade          = hull->vertexViewDotFade;
 		sharedMeshData->zFade                = hull->vertexZFade;
 		sharedMeshData->simulatedSubdivLevel = hull->subdivLevel;
@@ -792,6 +793,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 
 			sharedMeshData->minZLastFrame        = 0.0f;
 			sharedMeshData->maxZLastFrame        = 0.0f;
+			sharedMeshData->minFadedOutAlpha     = layer->overrideMinFadedOutAlpha.value_or( hull->minFadedOutAlpha );
 			sharedMeshData->viewDotFade          = layer->overrideHullFade.value_or( hull->vertexViewDotFade );
 			sharedMeshData->zFade                = ZFade::NoFade;
 			sharedMeshData->simulatedSubdivLevel = hull->subdivLevel;
@@ -1646,8 +1648,11 @@ static void calcNormalsAndApplyAlphaFade( byte_vec4_t *const __restrict resultCo
 										  const IcosphereVertexNeighbours neighboursOfVertices,
 										  const byte_vec4_t *const __restrict givenColors,
 										  const float *const __restrict viewOrigin,
-										  unsigned numVertices, float minZ, float maxZ ) {
+										  unsigned numVertices, float minZ, float maxZ, float minFadedOutAlpha ) {
 	[[maybe_unused]] const float rcpDeltaZ = minZ < maxZ ? Q_Rcp( maxZ - minZ ) : 1.0f;
+	// Convert to the byte range
+	assert( minFadedOutAlpha >= 0.0f && minFadedOutAlpha <= 1.0f );
+	minFadedOutAlpha *= 255.0f;
 
 	unsigned vertexNum = 0;
 	do {
@@ -1684,7 +1689,10 @@ static void calcNormalsAndApplyAlphaFade( byte_vec4_t *const __restrict resultCo
 				const float viewDirAlphaFrac  = calcAlphaFracForViewDirDotNormal<ViewDotFade>( viewDir, normal );
 				const float deltaZAlphaFrac   = calcAlphaFracForDeltaZ<ZFade>( currVertex[2], minZ, rcpDeltaZ );
 				const float combinedAlphaFrac = viewDirAlphaFrac * deltaZAlphaFrac;
-				resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( givenAlpha * combinedAlphaFrac, 0.0f, 255.0f );
+				// Disallow boosting the alpha over the existing value (so transparent vertices remain the same)
+				const float minAlphaForVertex = wsw::min( givenAlpha, minFadedOutAlpha );
+				const float newAlpha          = wsw::max( minAlphaForVertex, givenAlpha * combinedAlphaFrac );
+				resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( newAlpha, 0.0f, 255.0f );
 			} else {
 				resultColors[vertexNum][3] = 0;
 			}
@@ -1700,8 +1708,11 @@ static void applyAlphaFade( byte_vec4_t *const __restrict resultColors,
 							const vec4_t *const __restrict normals,
 							const byte_vec4_t *const __restrict givenColors,
 							const float *const __restrict viewOrigin,
-							unsigned numVertices, float minZ, float maxZ ) {
+							unsigned numVertices, float minZ, float maxZ, float minFadedOutAlpha ) {
 	[[maybe_unused]] const float rcpDeltaZ = minZ < maxZ ? Q_Rcp( maxZ - minZ ) : 1.0f;
+	// Convert to the byte range
+	assert( minFadedOutAlpha >= 0.0f && minFadedOutAlpha <= 1.0f );
+	minFadedOutAlpha *= 255.0f;
 
 	unsigned vertexNum = 0;
 	do {
@@ -1717,7 +1728,10 @@ static void applyAlphaFade( byte_vec4_t *const __restrict resultColors,
 			const float deltaZAlphaFrac   = calcAlphaFracForDeltaZ<ZFade>( positions[vertexNum][2], minZ, rcpDeltaZ );
 			const float combinedAlphaFrac = viewDirAlphaFrac * deltaZAlphaFrac;
 			assert( combinedAlphaFrac >= -0.01f && combinedAlphaFrac <= +1.01f );
-			resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( givenAlpha * combinedAlphaFrac, 0.0f, 255.0f );
+			// Disallow boosting the alpha over the existing value (so transparent vertices remain the same)
+			const float minAlphaForVertex = wsw::min( givenAlpha, minFadedOutAlpha );
+			const float newAlpha          = wsw::max( minAlphaForVertex, givenAlpha * combinedAlphaFrac );
+			resultColors[vertexNum][3]    = (uint8_t)wsw::clamp( newAlpha, 0.0f, 255.0f );
 		} else {
 			resultColors[vertexNum][3] = 0;
 		}
@@ -1816,13 +1830,13 @@ static const struct FadeFnHolder {
 													 const IcosphereVertexNeighbours,
 													 const byte_vec4_t *,
 													 const float *,
-													 unsigned, float, float );
+													 unsigned, float, float, float );
 	using ApplyAlphaFadeFn = void (*)( byte_vec4_t *,
 									   const vec4_t *,
 									   const vec4_t *,
 									   const byte_vec4_t *,
 									   const float *,
-									   unsigned, float, float );
+									   unsigned, float, float, float );
 
 	CalcNormalsAndApplyAlphaFadeFn calcNormalsAndApplyFadeFn[10] {};
 	ApplyAlphaFadeFn applyFadeFn[10] {};
@@ -1888,7 +1902,7 @@ void SimulatedHullsSystem::HullDynamicMesh::calcOverrideColors( byte_vec4_t *__r
 
 			applyFadeFn( overrideColors, m_shared->simulatedPositions, m_shared->simulatedNormals,
 						 m_shared->simulatedColors, viewOrigin,  numVertices,
-						 m_shared->minZLastFrame, m_shared->maxZLastFrame );
+						 m_shared->minZLastFrame, m_shared->maxZLastFrame, m_shared->minFadedOutAlpha );
 		} else {
 			// Call specialized implementations for each fade func
 
@@ -1897,7 +1911,7 @@ void SimulatedHullsSystem::HullDynamicMesh::calcOverrideColors( byte_vec4_t *__r
 
 			applyFadeFn( overrideColors, m_shared->simulatedPositions, lodDataToUse.vertexNeighbours.data(),
 						 m_shared->simulatedColors, viewOrigin, numVertices,
-						 m_shared->minZLastFrame, m_shared->maxZLastFrame );
+						 m_shared->minZLastFrame, m_shared->maxZLastFrame, m_shared->minFadedOutAlpha );
 		}
 	}
 
