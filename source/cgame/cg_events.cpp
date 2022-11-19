@@ -524,7 +524,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	const trace_t *waterTrace = GS_TraceBullet( &trace, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
 	if( waterTrace ) {
 		if( canShowBulletImpactForSurface( trace ) ) {
-			cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( trace.endpos, trace.plane.normal );
+			cg.effectsSystem.spawnUnderwaterBulletImpactEffect( trace.endpos, trace.plane.normal );
 		}
 		if( !VectorCompare( waterTrace->endpos, origin ) ) {
 			cg.effectsSystem.spawnBulletLiquidImpactEffect( LiquidImpact {
@@ -572,7 +572,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
 		if( waterTrace ) {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				cg.effectsSystem.spawnUnderwaterBulletLikeImpactEffect( trace.endpos, trace.plane.normal );
+				cg.effectsSystem.spawnUnderwaterPelletImpactEffect( trace.endpos, trace.plane.normal );
 			}
 			if( !VectorCompare( waterTrace->endpos, start ) ) {
 				liquidImpacts[numLiquidImpacts++] = LiquidImpact {

@@ -37,6 +37,41 @@ class DrawSceneRequest;
 struct ConicalFlockParams;
 struct EllipsoidalFlockParams;
 
+// TODO: Lift it to the top level, use for defining some other helpers
+struct ValueLifespan {
+	float initial { 0.0f };
+	float fadedIn { 1.0f };
+	float fadedOut { 0.0f };
+	float finishFadingInAtLifetimeFrac { 0.25f };
+	float startFadingOutAtLifetimeFrac { 0.75f };
+
+	[[nodiscard]]
+	auto getValueForLifetimeFrac( float lifetimeFrac ) const __restrict -> float {
+		assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
+
+		assert( finishFadingInAtLifetimeFrac > 0.01f );
+		assert( startFadingOutAtLifetimeFrac < 0.99f );
+		assert( finishFadingInAtLifetimeFrac + 0.01f < startFadingOutAtLifetimeFrac );
+
+		if( lifetimeFrac < finishFadingInAtLifetimeFrac ) [[unlikely]] {
+			float fadeInFrac = lifetimeFrac * Q_Rcp( finishFadingInAtLifetimeFrac );
+			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
+			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
+			return fadeInFrac * fadedIn + ( 1.0f - fadeInFrac ) * initial;
+		} else {
+			if( lifetimeFrac > startFadingOutAtLifetimeFrac ) [[unlikely]] {
+				float fadeOutFrac = lifetimeFrac - startFadingOutAtLifetimeFrac;
+				fadeOutFrac *= Q_Rcp( 1.0f - startFadingOutAtLifetimeFrac );
+				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
+				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
+				return fadeOutFrac * fadedOut + ( 1.0f - fadeOutFrac ) * fadedIn;
+			} else {
+				return fadedIn;
+			}
+		}
+	}
+};
+
 /// Manages "fire-and-forget" effects that usually get spawned upon events.
 class TransientEffectsSystem {
 public:
@@ -55,7 +90,9 @@ public:
 	void spawnGunbladeBlastImpactEffect( const float *origin, const float *dir );
 	void spawnGunbladeBladeImpactEffect( const float *origin, const float *dir );
 
-	void spawnBulletLikeImpactModel( const float *origin, const float *dir );
+	void spawnBulletImpactModel( const float *origin, const float *dir );
+
+	void spawnPelletImpactModel( const float *origin, const float *dir );
 
 	// TODO: Bins should be an implementation detail of the particle system,
 	// specify absolute numbers of desired particles count!
@@ -78,19 +115,9 @@ private:
 		EntityEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
 		unsigned duration { 0 };
-		float rcpDuration { 0.0f };
-		unsigned fadeInDuration { 0 };
-		float rcpFadeInDuration { 0.0f };
-		float rcpFadeOutDuration { 0.0f };
 		float velocity[3] { 0.0f, 0.0f, 0.0f };
-		// The entity scale once it fades in
-		float fadedInScale { 1.0f };
-		// The entity scale once it fades out (no shrinking by default)
-		float fadedOutScale { 1.0f };
-		// The entity alpha upon spawn
-		float initialAlpha { 1.0f };
-		// The entity alpha once it fades out (alpha fade out is on by default)
-		float fadedOutAlpha { 0.0f };
+		ValueLifespan scaleLifespan { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f };
+		ValueLifespan alphaLifespan { .initial = 1.0f, .fadedIn = 1.0f, .fadedOut = 0.0f };
 		entity_t entity;
 	};
 
@@ -179,10 +206,10 @@ private:
 	void unlinkAndFreeDelayedEffect( DelayedEffect *effect );
 
 	[[nodiscard]]
-	auto addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
+	auto addModelEntityEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect *;
 
 	[[nodiscard]]
-	auto addSpriteEffect( shader_s *material, const float *origin, float radius, unsigned duration ) -> EntityEffect *;
+	auto addSpriteEntityEffect( shader_s *material, const float *origin, float radius, unsigned duration ) -> EntityEffect *;
 
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
@@ -194,7 +221,6 @@ private:
 	[[maybe_unused]]
 	auto allocDelayedEffect( int64_t currTime, const float *origin, unsigned delay,
 							 DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
-
 
 	struct SmokeHullParams {
 		struct { float mean, spread; } speed;

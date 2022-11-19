@@ -464,7 +464,7 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 			VectorCopy( origin, spriteOrigin );
 			spriteOrigin[2] += ( playerbox_stand_maxs[2] - playerbox_stand_mins[2] ) + 1.0f;
 
-			EntityEffect *effect = addSpriteEffect( material, spriteOrigin, radius, 700u );
+			EntityEffect *effect = addSpriteEntityEffect( material, spriteOrigin, radius, 700u );
 			effect->entity.rotation = 0.0f;
 			// TODO: Add a correct sampling of random sphere points as a random generator method
 			for( unsigned i = 0; i < 3; ++i ) {
@@ -527,7 +527,7 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 															const float *decalColor, const float *energyColor, 
 															model_s *model, bool spawnDecal ) {
 	if( spawnDecal ) {
-		EntityEffect *entityEffect = addModelEffect( model, origin, dir, 600u );
+		EntityEffect *entityEffect = addModelEntityEffect( model, origin, dir, 600u );
 		VectorScale( decalColor, 255.0f, entityEffect->entity.shaderRGBA );
 	}
 
@@ -553,8 +553,13 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 }
 
 void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const float *dir ) {
-	EntityEffect *const entityEffect = addModelEffect( cgs.media.modPlasmaExplosion, origin, dir, 300u );
-	entityEffect->fadedInScale = entityEffect->fadedOutScale = 2.5f;
+	EntityEffect *const entityEffect = addModelEntityEffect( cgs.media.modPlasmaExplosion, origin, dir, 300u );
+	entityEffect->scaleLifespan = {
+		.initial                      = 0.0f,
+		.fadedIn                      = 2.5f,
+		.fadedOut                     = 2.5f,
+		.finishFadingInAtLifetimeFrac = 0.1f,
+	};
 
 	allocLightEffect( m_lastTime, origin, dir, 4.0f, 200, LightLifespan {
 		.initialColor  = { 1.0f, 1.0f, 1.0f },
@@ -689,15 +694,30 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 }
 
 void TransientEffectsSystem::spawnGunbladeBladeImpactEffect( const float *origin, const float *dir ) {
-	(void)addModelEffect( cgs.media.modBladeWallHit, origin, dir, 300u );
+	(void)addModelEntityEffect( cgs.media.modBladeWallHit, origin, dir, 300u );
 	// TODO: Add light when hitting metallic surfaces?
 }
 
-void TransientEffectsSystem::spawnBulletLikeImpactModel( const float *origin, const float *dir ) {
-	EntityEffect *effect = addModelEffect( cgs.media.modBladeWallExplo, origin, dir, 100u );
-	effect->fadedInScale  = 0.3f;
-	effect->fadedOutScale = 0.0f;
-	// TODO: Add light when hitting metallic surfaces?
+void TransientEffectsSystem::spawnBulletImpactModel( const float *origin, const float *dir ) {
+	EntityEffect *effect = addModelEntityEffect( cgs.media.modBladeWallExplo, origin, dir, 33u );
+	effect->scaleLifespan = {
+		.initial                      = 0.0f,
+		.fadedIn                      = 0.3f,
+		.fadedOut                     = 0.3f,
+		.finishFadingInAtLifetimeFrac = 0.1f,
+		.startFadingOutAtLifetimeFrac = 0.3f,
+	};
+}
+
+void TransientEffectsSystem::spawnPelletImpactModel( const float *origin, const float *dir ) {
+	EntityEffect *effect = addModelEntityEffect( cgs.media.modBladeWallExplo, origin, dir, 108u );
+	effect->scaleLifespan = {
+		.initial                      = 0.0f,
+		.fadedIn                      = 0.3f,
+		.fadedOut                     = 0.2f,
+		.finishFadingInAtLifetimeFrac = 0.05f,
+		.startFadingOutAtLifetimeFrac = 0.35f,
+	};
 }
 
 void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
@@ -735,11 +755,9 @@ void TransientEffectsSystem::spawnDustImpactEffect( const float *origin, const f
 		VectorMA( velocity, speed * scale1, axis1, velocity );
 		VectorMA( velocity, speed * scale2, axis2, velocity );
 
-		EntityEffect *effect = addSpriteEffect( cgs.media.shaderSmokePuff2, origin, 10.0f, 700u );
-		effect->fadedInScale = 0.33f;
-		effect->fadedOutScale = 0.0f;
-		effect->initialAlpha = 0.25f;
-		effect->fadedOutAlpha = 0.0f;
+		EntityEffect *effect  = addSpriteEntityEffect( cgs.media.shaderSmokePuff2, origin, 10.0f, 700u );
+		effect->alphaLifespan = { .initial  = 0.25f, .fadedIn  = 0.25f, .fadedOut = 0.0f };
+		effect->scaleLifespan = { .initial  = 0.0f, .fadedIn  = 0.33f, .fadedOut = 0.0f };
 		VectorCopy( velocity, effect->velocity );
 	}
 }
@@ -749,15 +767,20 @@ void TransientEffectsSystem::spawnDashEffect( const float *origin, const float *
 	vec3_t angles;
 	VecToAngles( dir, angles );
 	angles[1] += 270.0f;
-	EntityEffect *effect = addModelEffect( cgs.media.modDash, origin, dir, 700u );
+	EntityEffect *effect = addModelEntityEffect( cgs.media.modDash, origin, dir, 700u );
 	AnglesToAxis( angles, effect->entity.axis );
 	// Scale Z
 	effect->entity.axis[2 * 3 + 2] *= 2.0f;
-	// Size hacks
-	effect->fadedInScale = effect->fadedOutScale = 0.15f;
+	effect->scaleLifespan = {
+		.initial                      = 0.0f,
+		.fadedIn                      = 0.15f,
+		.fadedOut                     = 0.15f,
+		.finishFadingInAtLifetimeFrac = 0.12f,
+	};
 }
 
-auto TransientEffectsSystem::addModelEffect( model_s *model, const float *origin, const float *dir, unsigned duration ) -> EntityEffect * {
+auto TransientEffectsSystem::addModelEntityEffect( model_s *model, const float *origin, const float *dir,
+												   unsigned duration ) -> EntityEffect * {
 	EntityEffect *const effect = allocEntityEffect( m_lastTime, duration );
 
 	std::memset( &effect->entity, 0, sizeof( entity_s ) );
@@ -777,8 +800,9 @@ auto TransientEffectsSystem::addModelEffect( model_s *model, const float *origin
 	return effect;
 }
 
-auto TransientEffectsSystem::addSpriteEffect( shader_s *material, const float *origin, float radius, unsigned duration ) -> EntityEffect * {
-	EntityEffect *effect = allocEntityEffect( m_lastTime, duration );
+auto TransientEffectsSystem::addSpriteEntityEffect( shader_s *material, const float *origin, float radius,
+													unsigned duration ) -> EntityEffect * {
+	EntityEffect *const effect = allocEntityEffect( m_lastTime, duration );
 
 	std::memset( &effect->entity, 0, sizeof( entity_s ) );
 	effect->entity.rtype = RT_SPRITE;
@@ -816,30 +840,10 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 		mem = oldestEffect;
 	}
 
+	assert( duration >= 16 && duration <= std::numeric_limits<uint16_t>::max() );
+
 	auto *effect = new( mem )EntityEffect;
-
-	assert( duration <= std::numeric_limits<uint16_t>::max() );
-	// Try forcing 16-bit division if a compiler fails to optimize division by constant
-	unsigned fadeInDuration = (uint16_t)duration / (uint16_t)10;
-	if( fadeInDuration > 33 ) [[likely]] {
-		fadeInDuration = 33;
-	} else if( fadeInDuration < 1 ) [[unlikely]] {
-		fadeInDuration = 1;
-	}
-
-	unsigned fadeOutDuration;
-	if( duration > fadeInDuration ) [[likely]] {
-		fadeOutDuration = duration - fadeInDuration;
-	} else {
-		fadeOutDuration = fadeInDuration;
-		duration = fadeInDuration + 1;
-	}
-
-	effect->duration = duration;
-	effect->rcpDuration = Q_Rcp( (float)duration );
-	effect->fadeInDuration = fadeInDuration;
-	effect->rcpFadeInDuration = Q_Rcp( (float)fadeInDuration );
-	effect->rcpFadeOutDuration = Q_Rcp( (float)fadeOutDuration );
+	effect->duration  = duration;
 	effect->spawnTime = currTime;
 
 	wsw::link( effect, &m_entityEffectsHead );
@@ -950,18 +954,6 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 			continue;
 		}
 
-		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
-		assert( lifetimeMillis < effect->duration );
-
-		if( lifetimeMillis >= effect->fadeInDuration ) [[likely]] {
-			assert( effect->duration > effect->fadeInDuration );
-			const float fadeOutFrac = (float)( lifetimeMillis - effect->fadeInDuration ) * effect->rcpFadeOutDuration;
-			effect->entity.scale = std::lerp( effect->fadedInScale, effect->fadedOutScale, fadeOutFrac );
-		} else {
-			const float fadeInFrac = (float)lifetimeMillis * effect->rcpFadeInDuration;
-			effect->entity.scale = effect->fadedInScale * fadeInFrac;
-		}
-
 		// Dash model hacks
 		if( effect->entity.model == dashModel ) [[unlikely]] {
 			float *const zScale = effect->entity.axis + ( 2 * 3 ) + 2;
@@ -972,15 +964,18 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 			}
 		}
 
+		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
+		assert( lifetimeMillis < effect->duration );
+		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
+
 		vec3_t moveVec;
 		VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
 		VectorAdd( effect->entity.origin, moveVec, effect->entity.origin );
 
-		const float lifetimeFrac = (float)lifetimeMillis * effect->rcpDuration;
-
-		effect->entity.backlerp = backlerp;
-		const float alpha = std::lerp( effect->initialAlpha, effect->fadedOutAlpha, lifetimeFrac );
-		effect->entity.shaderRGBA[3] = (uint8_t)( 255 * alpha );
+		effect->entity.backlerp      = backlerp;
+		effect->entity.scale         = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
+		effect->entity.shaderRGBA[3] = (uint8_t)( 255 * effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac ) );
+		effect->entity.shaderTime    = currTime;
 
 		request->addEntity( &effect->entity );
 	}

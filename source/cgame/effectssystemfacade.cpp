@@ -1472,14 +1472,14 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 1.0f );
 		}
 		if( impactMaterial == IM::Metal || impactMaterial == IM::Stone || impactMaterial == IM::Unknown ) {
-			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+			m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
 		}
 		const unsigned group = getImpactSfxGroupForMaterial( impactMaterial );
 		sfx      = getSfxForImpactGroup( group );
 		groupTag = group;
 	} else {
 		spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
-		m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+		m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
 		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
 			sfx      = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
 			groupTag = 0;
@@ -1564,15 +1564,6 @@ auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> sfx_s * {
 		return sfxData[m_rng.nextBounded( dataLen )];
 	}
 	return nullptr;
-}
-
-auto EffectsSystemFacade::getImpactSfxGroupForSurfFlags( int surfFlags ) -> unsigned {
-	return getImpactSfxGroupForMaterial( decodeSurfImpactMaterial( surfFlags ) );
-}
-
-void EffectsSystemFacade::spawnUnderwaterBulletLikeImpactEffect( const float *origin, const float *normal ) {
-	m_transientEffectsSystem.spawnBulletLikeImpactModel( origin, normal );
-	// TODO: Add rings/bubbles?
 }
 
 void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
@@ -1913,7 +1904,7 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 														numRosetteImpactsSoFar, totalNumRosetteImpacts );
 			if( rosetteImpactsMask & ( (uint64_t)1 << i ) ) {
 				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
-				m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+				m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 				numRosetteImpactsSoFar++;
 			}
 		}
@@ -1928,7 +1919,7 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 			const SolidImpact &impact          = impacts[i];
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
 			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, i, impacts.size() );
-			m_transientEffectsSystem.spawnBulletLikeImpactModel( impact.origin, impact.normal );
+			m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 		}
 		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
 			const auto groupTag   = (uintptr_t)cgs.media.sfxImpactSolid.getAddressOfHandles();

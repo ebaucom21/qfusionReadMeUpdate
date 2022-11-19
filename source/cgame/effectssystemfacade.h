@@ -70,7 +70,13 @@ public:
 
 	void spawnBulletImpactEffect( const SolidImpact &impact );
 
-	void spawnUnderwaterBulletLikeImpactEffect( const float *origin, const float *normal );
+	void spawnUnderwaterBulletImpactEffect( const float *origin, const float *normal ) {
+		m_transientEffectsSystem.spawnBulletImpactModel( origin, normal );
+	}
+
+	void spawnUnderwaterPelletImpactEffect( const float *origin, const float *normal ) {
+		m_transientEffectsSystem.spawnPelletImpactModel( origin, normal );
+	}
 
 	void spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts );
 
@@ -196,8 +202,7 @@ private:
 
 	[[nodiscard]]
 	static auto getImpactSfxGroupForMaterial( SurfImpactMaterial impactMaterial ) -> unsigned;
-	[[nodiscard]]
-	static auto getImpactSfxGroupForSurfFlags( int surfFlags ) -> unsigned;
+
 	[[nodiscard]]
 	auto getSfxForImpactGroup( unsigned group ) -> sfx_s *;
 
