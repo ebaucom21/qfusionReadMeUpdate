@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "transienteffectssystem.h"
 #include "../qcommon/randomgenerator.h"
 #include "../qcommon/wswstaticdeque.h"
+#include "../qcommon/smallassocarray.h"
 
 class DrawSceneRequest;
 struct sfx_s;
@@ -208,22 +209,22 @@ private:
 
 	void spawnMultipleExplosionImpactEffects( std::span<const SolidImpact> impacts );
 
-	struct ImpactSoundLimiterParams {
+	struct EventRateLimiterParams {
 		float dropChanceAtZeroDistance { 1.0f };
 		float startDroppingAtDistance { 96.0f };
 		float dropChanceAtZeroTimeDiff { 1.0f };
 		unsigned startDroppingAtTimeDiff { 100 };
 	};
 
-	static const ImpactSoundLimiterParams kLiquidImpactSoundLimiterParams;
+	static const EventRateLimiterParams kLiquidImpactSoundLimiterParams;
+	static const EventRateLimiterParams kLiquidImpactRingLimiterParams;
+
+	void spawnBulletLikeImpactRingUsingLimiter( const SolidImpact &impact );
 
 	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const SolidImpact &impact,
-										  const ImpactSoundLimiterParams &params );
-	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const LiquidImpact &impact,
-										  const ImpactSoundLimiterParams &params );
-
-	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const float *origin,
-										  const ImpactSoundLimiterParams &params );
+										  const EventRateLimiterParams &params );
+	void startSoundForImpactUsingLimiter( sfx_s *sfx, const LiquidImpact &impact,
+										  const EventRateLimiterParams &params );
 
 	void spawnLiquidImpactParticleEffect( unsigned delay, const LiquidImpact &impact, float percentageScale,
 										  std::pair<float, float> randomRotationAngleCosineRange );
@@ -235,13 +236,56 @@ private:
 	shader_s *m_bloodMaterials[3];
 	wsw::StaticVector<std::pair<sfx_s **, unsigned>, 5> m_impactSfxForGroups;
 
-	struct ImpactSoundLimiterEntry {
-		int64_t timestamp;
-		uintptr_t groupTag;
-		vec3_t origin;
+	class EventRateLimiter {
+	public:
+		explicit EventRateLimiter( wsw::RandomGenerator *rng ) : m_rng( rng ) {}
+
+		[[nodiscard]]
+		bool acquirePermission( int64_t timestamp, const float *origin, const EventRateLimiterParams &params );
+
+		[[nodiscard]]
+		auto getLastTimestamp() -> std::optional<int64_t> {
+			return !m_entries.empty() ? std::optional( m_entries.back().timestamp ) : std::nullopt;
+		}
+
+		void clear() { m_entries.clear(); }
+	private:
+		wsw::RandomGenerator *const m_rng;
+
+		struct Entry {
+			// TODO: pack / use a draining time instead of absolute timestamp?
+			int64_t timestamp;
+			vec3_t origin;
+		};
+
+		// TODO: Make it configurable
+		wsw::StaticDeque<Entry, 24> m_entries;
 	};
 
-	wsw::StaticDeque<ImpactSoundLimiterEntry, 48> m_impactSoundLimiterEntries;
+	class MultiGroupEventRateLimiter {
+	public:
+		explicit MultiGroupEventRateLimiter( wsw::RandomGenerator *rng ) : m_rng( rng ) {}
+
+		[[nodiscard]]
+		bool acquirePermission( int64_t timestamp, const float *origin, uintptr_t group,
+								const EventRateLimiterParams &params );
+	private:
+		wsw::RandomGenerator *const m_rng;
+
+		struct Entry {
+			uintptr_t group { 0 };
+			EventRateLimiter limiter;
+
+			explicit Entry( wsw::RandomGenerator *rng ) : limiter( rng ) {}
+		};
+
+		wsw::StaticVector<Entry, 8> m_entries;
+	};
+
+	MultiGroupEventRateLimiter m_solidImpactSoundsRateLimiter { &m_rng };
+	EventRateLimiter m_liquidImpactSoundsRateLimiter { &m_rng };
+	EventRateLimiter m_solidImpactRingsRateLimiter { &m_rng };
+	EventRateLimiter m_liquidImpactRingsRateLimiter { &m_rng };
 };
 
 #endif

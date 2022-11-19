@@ -202,6 +202,8 @@ public:
 	CachedMaterial shaderFlareParticle { this, wsw::StringView( "gfx/misc/particle_flare" ) };
 	CachedMaterial shaderElectroParticle { this, wsw::StringView( "gfx/misc/particle_electro" ) };
 
+	CachedMaterial shaderImpactRing { this, wsw::StringView( "gfx/misc/impact_ring" ) };
+
 	CachedMaterial shaderNet { this, wsw::StringView( "gfx/hud/net" ) };
 	CachedMaterial shaderSelect { this, wsw::StringView( "gfx/hud/select" ) };
 	CachedMaterial shaderChatBalloon { this, wsw::StringView( PATH_BALLONCHAT_ICON ) };
@@ -228,9 +230,6 @@ public:
 	CachedMaterial shaderWaveSparks { this, wsw::StringView( "gfx/misc/shockwave_sparks" ) };
 	CachedMaterial shaderInstaBeam { this, wsw::StringView( "gfx/misc/instagun" ) };
 	CachedMaterial shaderLaserGunBeam { this, wsw::StringView( "gfx/misc/laserbeam" ) };
-	CachedMaterial shaderRocketExplosion { this, wsw::StringView( PATH_ROCKET_EXPLOSION_SPRITE ) };
-	CachedMaterial shaderRocketExplosionRing { this, wsw::StringView( PATH_ROCKET_EXPLOSION_RING_SPRITE ) };
-	CachedMaterial shaderWaveExplosionRing { this, wsw::StringView( PATH_WAVE_EXPLOSION_RING_SPRITE ) };
 
 	CachedMaterial shaderLaser { this, wsw::StringView( "gfx/misc/laser" ) };
 

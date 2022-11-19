@@ -31,6 +31,9 @@ TransientEffectsSystem::~TransientEffectsSystem() {
 	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeEntityEffect( effect );
 	}
+	for( PolyEffect *effect = m_polyEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
+		unlinkAndFreePolyEffect( effect );
+	}
 	for( LightEffect *effect = m_lightEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeLightEffect( effect );
 	}
@@ -720,6 +723,55 @@ void TransientEffectsSystem::spawnPelletImpactModel( const float *origin, const 
 	};
 }
 
+void TransientEffectsSystem::spawnImpactRing( const float *origin, const float *axisDir, unsigned timeout,
+											  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan ) {
+	assert( std::fabs( VectorLengthFast( axisDir ) - 1.0f ) < 0.1f );
+
+	QuadPoly::OrientedSpriteRules geometryRules {};
+	VectorCopy( axisDir, geometryRules.axis );
+	MakeNormalVectors( axisDir, geometryRules.axis + 3, geometryRules.axis + 6 );
+
+	PolyEffect *const effect   = allocPolyEffect( m_lastTime, timeout );
+	effect->poly.material      = cgs.media.shaderImpactRing;
+	effect->poly.color[3]      = 0.0f;
+	effect->poly.geometryRules = geometryRules;
+
+	VectorMA( origin, 4.0f, axisDir, effect->poly.origin );
+	VectorCopy( colorWhite, effect->poly.color );
+
+	effect->scaleLifespan   = scaleLifespan;
+	effect->alphaLifespan   = alphaLifespan;
+	effect->scaleMultiplier = m_rng.nextFloat( 0.9f, 1.1f );
+}
+
+static const ValueLifespan kBulletImpactRingScaleLifespan {
+	.initial = 0.0f, .fadedIn = 72.0f, .fadedOut = 96.0f,
+	.finishFadingInAtLifetimeFrac = 0.08f, .startFadingOutAtLifetimeFrac = 0.10f,
+};
+
+static const ValueLifespan kBulletImpactRingAlphaLifespan {
+	.initial = 1.0f, .fadedIn = 0.25f, .fadedOut = 0.0f,
+	.finishFadingInAtLifetimeFrac = 0.15f, .startFadingOutAtLifetimeFrac = 0.17f,
+};
+
+void TransientEffectsSystem::spawnBulletLikeImpactRing( const float *origin, const float *axisDir ) {
+	spawnImpactRing( origin, axisDir, 250, kBulletImpactRingScaleLifespan, kBulletImpactRingAlphaLifespan );
+}
+
+static const ValueLifespan kWaterImpactRingScaleLifespan {
+	.initial = 0.0f, .fadedIn = 56.0f, .fadedOut = 72.0f,
+	.finishFadingInAtLifetimeFrac = 0.45f, .startFadingOutAtLifetimeFrac = 0.47f,
+};
+
+static const ValueLifespan kWaterImpactRingAlphaLifespan {
+	.initial = 0.0f, .fadedIn = 0.33f, .fadedOut = 0.0f,
+	.finishFadingInAtLifetimeFrac = 0.15f, .startFadingOutAtLifetimeFrac = 0.20f,
+};
+
+void TransientEffectsSystem::spawnWaterImpactRing( const float *origin, const float *axisDir ) {
+	spawnImpactRing( origin, axisDir, 575, kWaterImpactRingScaleLifespan, kWaterImpactRingAlphaLifespan );
+}
+
 void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 													   const ConicalFlockParams &flockParams,
 													   const Particle::AppearanceRules &appearanceRules ) {
@@ -850,6 +902,34 @@ auto TransientEffectsSystem::allocEntityEffect( int64_t currTime, unsigned durat
 	return effect;
 }
 
+// TODO: Generalize!!!
+auto TransientEffectsSystem::allocPolyEffect( int64_t currTime, unsigned duration ) -> PolyEffect * {
+	void *mem = m_polyEffectsAllocator.allocOrNull();
+	if( !mem ) [[unlikely]] {
+		// TODO: Prioritize effects so unimportant ones get evicted first
+		PolyEffect *oldestEffect = nullptr;
+		// TODO: Choose by nearest timeout/lifetime fraction?
+		int64_t oldestSpawnTime = std::numeric_limits<int64_t>::max();
+		for( PolyEffect *effect = m_polyEffectsHead; effect; effect = effect->next ) {
+			if( oldestSpawnTime > effect->spawnTime ) {
+				oldestSpawnTime = effect->spawnTime;
+				oldestEffect = effect;
+			}
+		}
+		assert( oldestEffect );
+		wsw::unlink( oldestEffect, &m_polyEffectsHead );
+		oldestEffect->~PolyEffect();
+		mem = oldestEffect;
+	}
+
+	auto *effect = new( mem )PolyEffect;
+	effect->duration  = duration;
+	effect->spawnTime = currTime;
+
+	wsw::link( effect, &m_polyEffectsHead );
+	return effect;
+}
+
 auto TransientEffectsSystem::allocLightEffect( int64_t currTime, const float *origin, const float *offset,
 											   float offsetScale, unsigned duration,
 											   LightLifespan &&lightLifespan ) -> LightEffect * {
@@ -917,6 +997,12 @@ void TransientEffectsSystem::unlinkAndFreeEntityEffect( EntityEffect *effect ) {
 	m_entityEffectsAllocator.free( effect );
 }
 
+void TransientEffectsSystem::unlinkAndFreePolyEffect( PolyEffect *effect ) {
+	wsw::unlink( effect, &m_polyEffectsHead );
+	effect->~PolyEffect();
+	m_polyEffectsAllocator.free( effect );
+}
+
 void TransientEffectsSystem::unlinkAndFreeLightEffect( LightEffect *effect ) {
 	wsw::unlink( effect, &m_lightEffectsHead );
 	effect->~LightEffect();
@@ -935,6 +1021,7 @@ void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawScene
 
 	simulateDelayedEffects( currTime, timeDeltaSeconds );
 	simulateEntityEffectsAndSubmit( currTime, timeDeltaSeconds, request );
+	simulatePolyEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 	simulateLightEffectsAndSubmit( currTime, timeDeltaSeconds, request );
 
 	m_lastTime = currTime;
@@ -978,6 +1065,35 @@ void TransientEffectsSystem::simulateEntityEffectsAndSubmit( int64_t currTime, f
 		effect->entity.shaderTime    = currTime;
 
 		request->addEntity( &effect->entity );
+	}
+}
+
+void TransientEffectsSystem::simulatePolyEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds,
+														   DrawSceneRequest *request ) {
+
+	PolyEffect *nextEffect = nullptr;
+	for( PolyEffect *__restrict effect = m_polyEffectsHead; effect; effect = nextEffect ) {
+		nextEffect = effect->next;
+
+		if( effect->spawnTime + effect->duration <= currTime ) [[unlikely]] {
+			unlinkAndFreePolyEffect( effect );
+			continue;
+		}
+
+		vec3_t moveVec;
+		VectorScale( effect->velocity, timeDeltaSeconds, moveVec );
+		VectorAdd( effect->poly.origin, moveVec, effect->poly.origin );
+
+		const auto lifetimeMillis = (unsigned)( currTime - effect->spawnTime );
+		assert( lifetimeMillis < effect->duration );
+		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
+
+		effect->poly.halfExtent = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
+		effect->poly.color[3]   = effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac );
+
+		effect->poly.halfExtent *= effect->scaleMultiplier;
+
+		request->addPoly( &effect->poly );
 	}
 }
 

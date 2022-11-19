@@ -94,6 +94,10 @@ public:
 
 	void spawnPelletImpactModel( const float *origin, const float *dir );
 
+	void spawnBulletLikeImpactRing( const float *origin, const float *axisDir );
+
+	void spawnWaterImpactRing( const float *origin, const float *axisDir );
+
 	// TODO: Bins should be an implementation detail of the particle system,
 	// specify absolute numbers of desired particles count!
 	enum class ParticleFlockBin { Small, Medium, Large };
@@ -119,6 +123,19 @@ private:
 		ValueLifespan scaleLifespan { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f };
 		ValueLifespan alphaLifespan { .initial = 1.0f, .fadedIn = 1.0f, .fadedOut = 0.0f };
 		entity_t entity;
+	};
+
+	// It's almost identical to EntityEffect, so it belongs here.
+	// TODO: Decouple physical simulation props and rendering rules, so we can unify these two effects?
+	struct PolyEffect {
+		PolyEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime { 0 };
+		unsigned duration { 0 };
+		float velocity[3] { 0.0f, 0.0f, 0.0f };
+		float scaleMultiplier { 1.0f };
+		ValueLifespan scaleLifespan;
+		ValueLifespan alphaLifespan;
+		QuadPoly poly;
 	};
 
 	struct LightEffect {
@@ -195,6 +212,7 @@ private:
 
 		// Particles and hulls are made mutually exclusive
 		// (adding extra particles to explosion clusters does not produce good visual results)
+		// TODO: Add poly effects?
 		using SpawnRecord = std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord,
 			ConicalFlockSpawnRecord, EllipsoidalFlockSpawnRecord>;
 
@@ -202,6 +220,7 @@ private:
 	};
 
 	void unlinkAndFreeEntityEffect( EntityEffect *effect );
+	void unlinkAndFreePolyEffect( PolyEffect *effect );
 	void unlinkAndFreeLightEffect( LightEffect *effect );
 	void unlinkAndFreeDelayedEffect( DelayedEffect *effect );
 
@@ -213,6 +232,9 @@ private:
 
 	[[nodiscard]]
 	auto allocEntityEffect( int64_t currTime, unsigned duration ) -> EntityEffect *;
+
+	[[nodiscard]]
+	auto allocPolyEffect( int64_t currTime, unsigned duration ) -> PolyEffect *;
 
 	[[maybe_unused]]
 	auto allocLightEffect( int64_t currTime, const float *origin, const float *offset, float offsetScale,
@@ -234,20 +256,26 @@ private:
 
 	void spawnSmokeHull( int64_t currTime, const float *origin, const SmokeHullParams &smokeHullParams );
 
+	void spawnImpactRing( const float *origin, const float *axisDir, unsigned timeout,
+						  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan );
+
 	void spawnElectroboltLikeHitEffect( const float *origin, const float *dir, const float *decalColor,
 										const float *energyColor, model_s *model, bool spawnDecal );
 
 	void simulateEntityEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
+	void simulatePolyEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateLightEffectsAndSubmit( int64_t currTime, float timeDeltaSeconds, DrawSceneRequest *request );
 	void simulateDelayedEffects( int64_t currTime, float timeDeltaSeconds );
 
 	void spawnDelayedEffect( DelayedEffect *effect );
 
-	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 256 };
-	wsw::HeapBasedFreelistAllocator m_lightEffectsAllocator { sizeof( LightEffect ), 72 };
+	wsw::HeapBasedFreelistAllocator m_entityEffectsAllocator { sizeof( EntityEffect ), 128 };
+	wsw::HeapBasedFreelistAllocator m_polyEffectsAllocator { sizeof( PolyEffect ), 128 };
+	wsw::HeapBasedFreelistAllocator m_lightEffectsAllocator { sizeof( LightEffect ), 64 };
 	wsw::HeapBasedFreelistAllocator m_delayedEffectsAllocator { sizeof( DelayedEffect ), 32 };
 
 	EntityEffect *m_entityEffectsHead { nullptr };
+	PolyEffect *m_polyEffectsHead { nullptr };
 	LightEffect *m_lightEffectsHead { nullptr };
 	DelayedEffect *m_delayedEffectsHead { nullptr };
 

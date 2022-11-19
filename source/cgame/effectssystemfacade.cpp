@@ -1474,6 +1474,9 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 		if( impactMaterial == IM::Metal || impactMaterial == IM::Stone || impactMaterial == IM::Unknown ) {
 			m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
 		}
+		if( impactMaterial == IM::Metal || impactMaterial == IM::Glass ) {
+			spawnBulletLikeImpactRingUsingLimiter( impact );
+		}
 		const unsigned group = getImpactSfxGroupForMaterial( impactMaterial );
 		sfx      = getSfxForImpactGroup( group );
 		groupTag = group;
@@ -1487,7 +1490,7 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 	}
 
 	if( sfx ) {
-		startSoundForImpactUsingLimiter( sfx, groupTag, impact, ImpactSoundLimiterParams {
+		startSoundForImpactUsingLimiter( sfx, groupTag, impact, EventRateLimiterParams {
 			.dropChanceAtZeroDistance = 0.5f,
 			.startDroppingAtDistance  = 144.0f,
 			.dropChanceAtZeroTimeDiff = 1.0f,
@@ -1527,6 +1530,35 @@ void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const Floc
 		case SurfImpactMaterial::Glass:
 			spawnGlassImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
 			break;
+	}
+}
+
+void EffectsSystemFacade::spawnBulletLikeImpactRingUsingLimiter( const SolidImpact &impact ) {
+	const EventRateLimiterParams limiterParams {
+		.startDroppingAtDistance = 144.0f,
+		.startDroppingAtTimeDiff = 350,
+	};
+
+	if( !m_solidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, limiterParams ) ) {
+		return;
+	}
+
+	constexpr float minDot      = 0.15f;
+	constexpr float maxDot      = 0.55f;
+	constexpr float rcpDotRange = 1.0f / ( maxDot - minDot );
+	// Limit to prevent infinite looping (it should not really happen though).
+	for( unsigned attemptNum = 0; attemptNum < 12; ++attemptNum ) {
+		const float *axisDir = kPredefinedDirs[m_rng.nextBoundedFast( std::size( kPredefinedDirs ) )];
+		const float dot      = DotProduct( axisDir, impact.incidentDir );
+		if( dot > minDot && dot < maxDot ) {
+			// Prefer values closer to the min dot
+			const float dotFrac      = ( dot - minDot ) * rcpDotRange;
+			const float acceptChance = 1.0f - dotFrac;
+			if( m_rng.tryWithChance( acceptChance ) ) {
+				m_transientEffectsSystem.spawnBulletLikeImpactRing( impact.origin, axisDir );
+				return;
+			}
+		}
 	}
 }
 
@@ -1859,22 +1891,32 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 	}
 }
 
-const EffectsSystemFacade::ImpactSoundLimiterParams EffectsSystemFacade::kLiquidImpactSoundLimiterParams {
+const EffectsSystemFacade::EventRateLimiterParams EffectsSystemFacade::kLiquidImpactSoundLimiterParams {
 	.startDroppingAtDistance = 192.0f,
 	.startDroppingAtTimeDiff = 250,
 };
 
+const EffectsSystemFacade::EventRateLimiterParams EffectsSystemFacade::kLiquidImpactRingLimiterParams {
+	.dropChanceAtZeroDistance = 0.75f,
+	.startDroppingAtDistance  = 48.0f,
+	.dropChanceAtZeroTimeDiff = 0.75f,
+	.startDroppingAtTimeDiff  = 150,
+};
+
 void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &impact ) {
 	spawnLiquidImpactParticleEffect( 0, impact, 1.0f, { 0.70f, 0.95f } );
+
+	if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
+		m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, impact.burstDir );
+	}
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
-		sfx_s *sfx          = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
-		const auto groupTag = (uintptr_t)cgs.media.sfxImpactWater.getAddressOfHandles();
-		startSoundForImpactUsingLimiter( sfx, groupTag, impact, kLiquidImpactSoundLimiterParams );
+		sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
+		startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
 	}
 }
 
 void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts ) {
-	[[maybe_unused]] const ImpactSoundLimiterParams limiterParams {
+	[[maybe_unused]] const EventRateLimiterParams limiterParams {
 		.startDroppingAtDistance = 144.0f,
 		.startDroppingAtTimeDiff = 250,
 	};
@@ -1902,6 +1944,11 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 
 			spawnPelletImpactParticleEffectForMaterial( orientation, material, materialParam,
 														numRosetteImpactsSoFar, totalNumRosetteImpacts );
+
+			if( material == SurfImpactMaterial::Glass || material == SurfImpactMaterial::Metal ) {
+				spawnBulletLikeImpactRingUsingLimiter( impact );
+			}
+
 			if( rosetteImpactsMask & ( (uint64_t)1 << i ) ) {
 				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
 				m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
@@ -1950,7 +1997,7 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 			numRosetteImpactsSoFar++;
 		}
 	}
-	const ImpactSoundLimiterParams limiterParams {
+	const EventRateLimiterParams limiterParams {
 		.startDroppingAtDistance = 192.0f,
 		.startDroppingAtTimeDiff = 333,
 	};
@@ -1976,68 +2023,78 @@ void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Liqu
 			spawnLiquidImpactParticleEffect( delayRange.first, impact, percentageScale, randomRotationAngleCosineRange );
 		}
 	}
+	// We don't care of delay for relatively slow water rings
+	for( const LiquidImpact &impact: impacts ) {
+		if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
+			// Hack: Force aligning to Z-axis for now (burst dirs could differ from it).
+			// We'd like to support non-horizontal water surfaces in further development.
+			m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, &axis_identity[AXIS_UP] );
+		}
+	}
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
-		const auto groupTag   = (uintptr_t)cgs.media.sfxImpactWater.getAddressOfHandles();
 		for( const LiquidImpact &impact: impacts ) {
 			sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
-			startSoundForImpactUsingLimiter( sfx, groupTag, impact, kLiquidImpactSoundLimiterParams );
+			startSoundForImpactUsingLimiter( sfx, impact, kLiquidImpactSoundLimiterParams );
 		}
 	}
 }
 
 void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t group, const SolidImpact &impact,
-														   const ImpactSoundLimiterParams &params ) {
+														   const EventRateLimiterParams &params ) {
 	assert( std::fabs( VectorLengthFast( impact.normal ) - 1.0f ) < 1e-2f );
 	if( sfx ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.normal, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
-		startSoundForImpactUsingLimiter( sfx, group, soundOrigin, params );
+		if( m_solidImpactSoundsRateLimiter.acquirePermission( cg.time, soundOrigin, group, params ) ) {
+			startSound( sfx, soundOrigin );
+		}
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t group, const LiquidImpact &impact,
-														   const ImpactSoundLimiterParams &params ) {
+void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, const LiquidImpact &impact,
+														   const EventRateLimiterParams &params ) {
 	if( sfx ) {
 		vec3_t soundOrigin;
 		VectorAdd( impact.origin, impact.burstDir, soundOrigin );
 		assert( !( CG_PointContents( soundOrigin ) & MASK_SOLID ) );
-		startSoundForImpactUsingLimiter( sfx, group, soundOrigin, params );
+		if( m_liquidImpactSoundsRateLimiter.acquirePermission( cg.time, soundOrigin, params ) ) {
+			startSound( sfx, soundOrigin );
+		}
 	}
 }
 
-void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const float *origin,
-														   const ImpactSoundLimiterParams &params ) {
+bool EffectsSystemFacade::EventRateLimiter::acquirePermission( int64_t timestamp, const float *origin,
+															   const EventRateLimiterParams &params ) {
+
 	assert( params.startDroppingAtTimeDiff > 0 && params.startDroppingAtDistance > 0.0f );
 
 	// TODO: Supply as an argument/dependency
-	const int64_t currTimestamp = cg.time;
 	int64_t closestTimestamp    = std::numeric_limits<int64_t>::min();
 	float closestSquareDistance = std::numeric_limits<float>::max();
 
 	// TODO: Keep entries for different groups in different hash bins?
 	const float squareDistanceThreshold = wsw::square( params.startDroppingAtDistance );
-	const int64_t minTimestampThreshold = currTimestamp - params.startDroppingAtTimeDiff;
-	for( const ImpactSoundLimiterEntry &entry: m_impactSoundLimiterEntries ) {
-		if( entry.groupTag == groupTag ) {
-			if( entry.timestamp >= minTimestampThreshold ) {
-				const float squareDistance = DistanceSquared( origin, entry.origin );
-				// If the entry passes the distance threshold
-				if( squareDistance < squareDistanceThreshold ) {
-					closestSquareDistance = wsw::min( squareDistance, closestSquareDistance );
-					closestTimestamp      = wsw::max( entry.timestamp, closestTimestamp );
-				}
+	const int64_t minTimestampThreshold = timestamp - params.startDroppingAtTimeDiff;
+	for( const Entry &entry: m_entries ) {
+		assert( entry.timestamp <= timestamp );
+		if( entry.timestamp >= minTimestampThreshold ) {
+			const float squareDistance = DistanceSquared( origin, entry.origin );
+			// If the entry passes the distance threshold
+			if( squareDistance < squareDistanceThreshold ) {
+				closestSquareDistance = wsw::min( squareDistance, closestSquareDistance );
+				closestTimestamp      = wsw::max( entry.timestamp, closestTimestamp );
 			}
 		}
 	}
 
-	bool shouldStartSound = true;
+	bool result = true;
 	if( closestSquareDistance < squareDistanceThreshold ) {
 		const float distance     = Q_Sqrt( closestSquareDistance );
 		const float distanceFrac = distance * Q_Rcp( params.startDroppingAtDistance );
 		assert( distanceFrac > -0.01f && distanceFrac < 1.01f );
 
-		const int64_t timeDiff = currTimestamp - closestTimestamp;
+		const int64_t timeDiff = timestamp - closestTimestamp;
 		const float timeFrac   = (float)timeDiff * Q_Rcp( (float) params.startDroppingAtTimeDiff );
 		assert( timeFrac > -0.01f && timeFrac < 1.01f );
 
@@ -2048,20 +2105,55 @@ void EffectsSystemFacade::startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t
 		const float keepByTimeDiffChance = 1.0f - dropByTimeDiffChance;
 		const float combinedKeepChance   = wsw::clamp( keepByDistanceChance * keepByTimeDiffChance, 0.0f, 1.0f );
 
-		shouldStartSound = m_rng.tryWithChance( combinedKeepChance );
+		result = m_rng->tryWithChance( combinedKeepChance );
 	}
 
-	if( shouldStartSound ) {
-		if( m_impactSoundLimiterEntries.full() ) {
-			m_impactSoundLimiterEntries.pop_front();
+	if( result ) {
+		if( m_entries.full() ) {
+			m_entries.pop_front();
 		}
-		m_impactSoundLimiterEntries.emplace_back( ImpactSoundLimiterEntry {
-			.timestamp = currTimestamp,
-			.groupTag  = groupTag,
-			.origin    = { origin[0], origin[1], origin[2] },
-		});
-		startSound( sfx, origin );
+		m_entries.emplace_back( Entry { .timestamp = timestamp, .origin = { origin[0], origin[1], origin[2] } } );
 	}
+
+	return result;
+}
+
+bool EffectsSystemFacade::MultiGroupEventRateLimiter::acquirePermission( int64_t timestamp,
+																		 const float *origin, uintptr_t group,
+																		 const EventRateLimiterParams &params ) {
+	for( Entry &entry: m_entries ) {
+		if( entry.group == group ) {
+			return entry.limiter.acquirePermission( timestamp, origin, params );
+		}
+	}
+
+	EventRateLimiter *chosenLimiter = nullptr;
+	if( !m_entries.full() ) {
+		auto *const entry = new( m_entries.unsafe_grow_back() )Entry( m_rng );
+		entry->group      = group;
+		chosenLimiter     = &entry->limiter;
+	} else {
+		Entry *chosenEntry      = nullptr;
+		int64_t oldestTimestamp = std::numeric_limits<int64_t>::max();
+		for( Entry &entry: m_entries ) {
+			if( std::optional<int64_t> maybeTimestamp = entry.limiter.getLastTimestamp() ) {
+				if( *maybeTimestamp < oldestTimestamp ) {
+					oldestTimestamp = *maybeTimestamp;
+					chosenEntry     = std::addressof( entry );
+				}
+			} else {
+				chosenEntry = &entry;
+				// We've found a free entry.
+				break;
+			}
+		}
+		assert( chosenEntry );
+		chosenEntry->group = group;
+		chosenEntry->limiter.clear();
+		chosenLimiter = &chosenEntry->limiter;
+	}
+
+	return chosenLimiter->acquirePermission( timestamp, origin, params );
 }
 
 void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
