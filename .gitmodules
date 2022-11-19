@@ -10,12 +10,6 @@
 [submodule "libsrcs"]
 	path = libsrcs
 	url = https://github.com/Warsow/qfusion-libsrcs.git
-[submodule "third-party/magic_enum"]
-	path = third-party/magic_enum
-	url = https://github.com/Warsow/magic_enum.git
 [submodule "third-party/stb"]
 	path = third-party/stb
 	url = https://github.com/Warsow/stb.git
-[submodule "third-party/gcem"]
-	path = third-party/gcem
-	url = https://github.com/Warsow/gcem.git

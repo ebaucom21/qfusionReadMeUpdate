@@ -1,8 +1,6 @@
 #include "bunnytestingmultipledirsaction.h"
 #include "movementlocal.h"
 
-#include "../../../../third-party/gcem/include/gcem.hpp"
-
 void BunnyTestingMultipleLookDirsAction::BeforePlanning() {
 	BunnyHopAction::BeforePlanning();
 
@@ -167,8 +165,7 @@ static DirRotatorsCache dirRotatorsCache;
 static inline bool areDirsSimilar( const Vec3 &__restrict a, const Vec3 &__restrict b ) {
 	assert( std::fabs( a.SquaredLength() - 1.0f ) < 0.1f );
 	assert( std::fabs( b.SquaredLength() - 1.0f ) < 0.1f );
-	constexpr const float dotThreshold = gcem::cos( DEG2RAD( 3.0f ) );
-	return a.Dot( b ) > dotThreshold;
+	return a.Dot( b ) > 0.998f;
 }
 
 void BunnyTestingSavedLookDirsAction::DeriveMoreDirsFromSavedDirs() {

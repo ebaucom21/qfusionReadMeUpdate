@@ -1,8 +1,6 @@
 #include "combatdodgetotargetaction.h"
 #include "movementlocal.h"
 
-#include "../../../../third-party/gcem/include/gcem.hpp"
-
 [[nodiscard]]
 static inline auto makeMoveDir( const float *__restrict fractions, const Vec3 &__restrict forwardDir,
 								const Vec3 &__restrict rightDir ) {
@@ -200,7 +198,7 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContex
 					velocity2DDir.Z() = 0;
 					velocity2DDir *= Q_Rcp( entityPhysicsState.Speed2D() );
 					assert( std::fabs( velocity2DDir.LengthFast() - 1.0f ) < 0.01f );
-					if( velocity2DDir.Dot( keyMoveDir ) > gcem::cos( DEG2RAD( 30.0f ) ) ) {
+					if( velocity2DDir.Dot( keyMoveDir ) > 0.87f ) {
 						const auto floorAreaNum = entityPhysicsState.DroppedToFloorAasAreaNum();
 						// Restrict to NOFALL areas for now
 						// TODO: Use another prediction attempt with the same direction if jumping fails

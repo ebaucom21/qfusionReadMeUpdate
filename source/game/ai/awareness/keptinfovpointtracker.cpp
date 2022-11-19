@@ -1,6 +1,5 @@
 #include "keptinfovpointtracker.h"
 #include "../bot.h"
-#include "../../../../third-party/gcem/include/gcem.hpp"
 
 void KeptInFovPointTracker::update() {
 	m_point = selectCurrentPoint();
@@ -63,13 +62,14 @@ static inline bool isWithinValidRange( const Vec3 &a, const Vec3 &b, float thres
 	return squareDistance < threshold * threshold && squareDistance > 32.0f * 32.0f;
 }
 
-static constexpr float kSqrtOfFloatMax = gcem::sqrt( std::numeric_limits<float>::max() );
-static_assert( kSqrtOfFloatMax * kSqrtOfFloatMax > kSqrtOfFloatMax );
-static_assert( (double)kSqrtOfFloatMax * (double)kSqrtOfFloatMax <= (double)std::numeric_limits<float>::max() );
+static const float kSqrtOfFloatMax = std::sqrt( std::numeric_limits<float>::max() );
 
 auto KeptInFovPointTracker::selectPointBasedOnEnemies( const SelectedEnemy &selectedEnemy ) -> std::optional<Vec3> {
 	const Vec3 botOrigin( m_bot->Origin() );
 	const Vec3 enemyOrigin( selectedEnemy.LastSeenOrigin() );
+
+	assert( kSqrtOfFloatMax * kSqrtOfFloatMax > kSqrtOfFloatMax );
+	assert( (double)kSqrtOfFloatMax * (double)kSqrtOfFloatMax <= (double)std::numeric_limits<float>::max() );
 
 	float distanceThreshold = kSqrtOfFloatMax;
 	if( !m_bot->GetMiscTactics().shouldKeepXhairOnEnemy ) {
@@ -88,6 +88,9 @@ auto KeptInFovPointTracker::selectPointBasedOnEnemies( const SelectedEnemy &sele
 
 auto KeptInFovPointTracker::selectPointBasedOnLostOrHiddenEnemy( const TrackedEnemy *enemy ) -> std::optional<Vec3> {
 	const Vec3 enemyOrigin( enemy->LastSeenOrigin() );
+
+	assert( kSqrtOfFloatMax * kSqrtOfFloatMax > kSqrtOfFloatMax );
+	assert( (double)kSqrtOfFloatMax * (double)kSqrtOfFloatMax <= (double)std::numeric_limits<float>::max() );
 
 	float distanceThreshold = kSqrtOfFloatMax;
 	if( !m_bot->GetMiscTactics().shouldKeepXhairOnEnemy ) {
