@@ -1639,16 +1639,21 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 			case ET_ROCKET:
 				CG_AddGenericEnt( cent, drawSceneRequest );
 				CG_EntityLoopSound( state, ATTN_NORM );
-				cg.effectsSystem.touchRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 				if( cent->current.effects & EF_STRONG_WEAPON ) {
+					cg.effectsSystem.touchStrongRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 					drawSceneRequest->addLight( cent->ent.origin, 300.0f, 192.0f, 1.0f, 0.7f, 0.3f );
 				} else {
+					cg.effectsSystem.touchWeakRocketTrail( cent->current.number, cent->ent.origin, cg.time );
 					drawSceneRequest->addLight( cent->ent.origin, 300.0f - 48.0f, 192.0f - 32.0f, 1.0f, 0.7f, 0.3f );
 				}
 				break;
 			case ET_GRENADE:
 				CG_AddGenericEnt( cent, drawSceneRequest );
-				cg.effectsSystem.touchGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
+				if( cent->current.effects & EF_STRONG_WEAPON ) {
+					cg.effectsSystem.touchStrongGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
+				} else {
+					cg.effectsSystem.touchWeakGrenadeTrail( cent->current.number, cent->ent.origin, cg.time );
+				}
 				CG_EntityLoopSound( state, ATTN_STATIC );
 				drawSceneRequest->addLight( cent->ent.origin, 200.0f, 96.0f, 0.0f, 0.3f, 1.0f );
 				break;
@@ -1777,6 +1782,12 @@ void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 		centity_t *cent       = &cg_entities[state->number];
 		CG_AddGenericEnt( cent, drawSceneRequest );
 		CG_EntityLoopSound( state, ATTN_STATIC );
+
+		if( state->effects & EF_STRONG_WEAPON ) {
+			cg.effectsSystem.touchStrongPlasmaTrail( cent->current.number, cent->current.origin, cg.time );
+		} else {
+			cg.effectsSystem.touchWeakPlasmaTrail( cent->current.number, cent->current.origin, cg.time );
+		}
 
 		constexpr float desiredProgramLightRadius = 128.0f;
 		float programLightRadius = 0.0f;

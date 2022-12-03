@@ -33,18 +33,27 @@ public:
 	struct CurvedBeam {};
 	struct StraightBeam {};
 
+	// Tile the image each tileLength units
+	struct UvModeTile { float tileLength; };
+	// Assign UV's as the beam is drawn using its full length
+	struct UvModeClamp {};
+	// Fit the image within the actual beam length
+	struct UvModeFit {};
+
+	using CurvedBeamUVMode = std::variant<UvModeTile, UvModeClamp, UvModeFit>;
+
 	~PolyEffectsSystem();
 
 	[[nodiscard]]
 	auto createCurvedBeamEffect( shader_s *material ) -> CurvedBeam *;
-	void updateCurvedBeamEffect( CurvedBeam *, const float *color, float width,
-								 float tileLength, std::span<const vec3_t> points );
+	void updateCurvedBeamEffect( CurvedBeam *, const float *fromColor, const float *toColor,
+								 float width, const CurvedBeamUVMode &uvMode, std::span<const vec3_t> points );
 	void destroyCurvedBeamEffect( CurvedBeam * );
 
 	[[nodiscard]]
 	auto createStraightBeamEffect( shader_s *material ) -> StraightBeam *;
-	void updateStraightBeamEffect( StraightBeam *, const float *color, float width,
-								   float tileLength, const float *from, const float *to );
+	void updateStraightBeamEffect( StraightBeam *, const float *fromColor, const float *toColor,
+								   float width, float tileLength, const float *from, const float *to );
 	void destroyStraightBeamEffect( StraightBeam * );
 
 	struct TransientBeamParams {
@@ -82,11 +91,12 @@ private:
 	};
 
 	struct CurvedBeamPoly : public DynamicMesh {
-		vec4_t color;
+		// Points to an externally owned buffer
+		std::span<const vec3_t> points;
+		float fromColor[4];
+		float toColor[4];
 		float width;
-		float tileLength;
-		unsigned numPoints;
-		vec3_t points[24 + 1];
+		CurvedBeamUVMode uvMode;
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *, const float *, float ) const
@@ -144,8 +154,8 @@ private:
 
 	void destroyTracerEffect( TracerEffect *effect );
 
-	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS };
-	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS };
+	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS * 4 };
+	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS * 4 };
 
 	wsw::HeapBasedFreelistAllocator m_transientBeamsAllocator { sizeof( TransientBeamEffect ), MAX_CLIENTS * 2 };
 

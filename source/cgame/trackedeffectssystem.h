@@ -25,6 +25,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/freelistallocator.h"
 #include "../qcommon/randomgenerator.h"
 #include "../gameshared/q_shared.h"
+// TODO:!!!!!!!!! Lift it to the top level!
+#include "../game/ai/vec3.h"
 #include "particlesystem.h"
 #include "polyeffectssystem.h"
 
@@ -36,11 +38,28 @@ public:
 	TrackedEffectsSystem() = default;
 	~TrackedEffectsSystem();
 
-	void touchRocketTrail( int entNum, const float *origin, int64_t currTime );
-	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime );
+	void touchStrongRocketTrail( int entNum, const float *origin, int64_t currTime ) {
+		touchRocketTrail( entNum, origin, currTime, false );
+	}
+
+	void touchWeakRocketTrail( int entNum, const float *origin, int64_t currTime ) {
+		touchRocketTrail( entNum, origin, currTime, true );
+	}
+
+	void touchStrongGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
+		// No strong/weak difference for now
+		touchGrenadeTrail( entNum, origin, currTime );
+	}
+
+	void touchWeakGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
+		touchGrenadeTrail( entNum, origin, currTime );
+	}
 
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime );
 	void touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime );
+
+	void touchStrongPlasmaTrail( int entNum, const float *origin, int64_t currTime );
+	void touchWeakPlasmaTrail( int entNum, const float *origin, int64_t currTime );
 
 	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
 		spawnPlayerTeleEffect( entNum, origin, model, 0 );
@@ -75,6 +94,36 @@ private:
 		std::optional<AttachmentIndices> attachmentIndices;
 	};
 
+	struct StraightPolyTrail {
+		int64_t touchedAt { 0 };
+		StraightPolyTrail *prev { nullptr }, *next { nullptr };
+		PolyEffectsSystem::StraightBeam *beam;
+		float initialOrigin[3];
+		float lastFrom[3];
+		float lastTo[3];
+		float lastWidth;
+		float lastTileLength;
+		float lastFromColor[4];
+		float lastToColor[4];
+
+		std::optional<uint16_t> attachedToEntNum;
+	};
+
+	struct CurvedPolyTrail {
+		int64_t touchedAt { 0 };
+		CurvedPolyTrail *prev { nullptr }, *next { nullptr };
+		PolyEffectsSystem::CurvedBeam *beam;
+
+		wsw::StaticVector<Vec3, 32> points;
+		wsw::StaticVector<int64_t, 32> timestamps;
+		std::span<const vec3_t> lastPointsSpan;
+		float lastWidth;
+		float lastFromColor[4];
+		float lastToColor[4];
+
+		std::optional<uint16_t> attachedToEntNum;
+	};
+
 	struct TeleEffect {
 		TeleEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
@@ -91,16 +140,32 @@ private:
 		PolyEffectsSystem::StraightBeam *straightLaserBeam { nullptr };
 		PolyEffectsSystem::CurvedBeam *curvedLaserBeam { nullptr };
 		int64_t straightLaserBeamTouchedAt { 0 }, curvedLaserBeamTouchedAt { 0 };
+		vec4_t laserColor;
+		wsw::StaticVector<Vec3, 24 + 1> curvedLaserBeamPoints;
 	};
 
 	struct AttachedEntityEffects {
+		// TODO: Access via index in the owning allocator
 		ParticleTrail *particleTrails[2] { nullptr, nullptr };
+		StraightPolyTrail *straightPolyTrail { nullptr };
+		CurvedPolyTrail *curvedPolyTrail { nullptr };
 	};
 
 	void makeParticleTrailLingering( ParticleTrail *trail );
+	void makePolyTrailLingering( StraightPolyTrail *trail );
+	void makePolyTrailLingering( CurvedPolyTrail *trail );
+
+	// TODO: Lift this helper to the top level
+	template <typename Effect>
+	void unlinkAndFreeItemsInList( Effect *head );
 
 	void unlinkAndFree( ParticleTrail *particleTrail );
+	void unlinkAndFree( StraightPolyTrail *polyTrail );
+	void unlinkAndFree( CurvedPolyTrail *polyTrail );
 	void unlinkAndFree( TeleEffect *teleEffect );
+
+	void touchRocketTrail( int entNum, const float *origin, int64_t currTime, bool useCurvedTrail );
+	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime );
 
 	[[nodiscard]]
 	auto allocParticleTrail( int entNum, unsigned trailIndex,
@@ -110,17 +175,53 @@ private:
 	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
 									  ConicalFlockParams *params, int64_t currTime );
 
+	[[nodiscard]]
+	auto allocStraightPolyTrail( int entNum, shader_s *material, const float *origin ) -> StraightPolyTrail *;
+	[[nodiscard]]
+	auto allocCurvedPolyTrail( int entNum, shader_s *material ) -> CurvedPolyTrail *;
+
+	struct StraightPolyTrailProps {
+		float maxLength { 0.0f };
+		float width { 0.0f };
+		float prestep { 32.0f };
+		float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+		float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
+	};
+
+	struct CurvedPolyTrailProps {
+		float minDistanceBetweenNodes { 8.0f };
+		unsigned maxNodeLifetime { 0 };
+		// This value is not that permissive due to long segments for some trails.
+		float maxLength { 0.0f };
+		float width { 0.0f };
+		float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+		float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
+	};
+
+	void updateAttachedStraightPolyTrail( StraightPolyTrail *trail, const float *origin, int64_t currTime,
+										  const StraightPolyTrailProps &props );
+	void updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin, int64_t currTime,
+										const CurvedPolyTrailProps &props );
+
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 
 	static constexpr unsigned kClippedTrailsBin = ParticleSystem::kClippedTrailFlocksBin;
 	static constexpr unsigned kNonClippedTrailsBin = ParticleSystem::kNonClippedTrailFlocksBin;
 
-	ParticleTrail *m_attachedTrailsHead { nullptr };
-	ParticleTrail *m_lingeringTrailsHead { nullptr };
+	ParticleTrail *m_attachedParticleTrailsHead { nullptr };
+	ParticleTrail *m_lingeringParticleTrailsHead { nullptr };
+
+	StraightPolyTrail *m_attachedStraightPolyTrailsHead { nullptr };
+	StraightPolyTrail *m_lingeringStraightPolyTrailsHead { nullptr };
+
+	CurvedPolyTrail *m_attachedCurvedPolyTrailsHead { nullptr };
+	CurvedPolyTrail *m_lingeringCurvedPolyTrailsHead { nullptr };
 
 	TeleEffect *m_teleEffectsHead { nullptr };
 
 	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
+	wsw::HeapBasedFreelistAllocator m_straightPolyTrailsAllocator { sizeof( StraightPolyTrail ), MAX_CLIENTS };
+	wsw::HeapBasedFreelistAllocator m_curvedPolyTrailsAllocator { sizeof( CurvedPolyTrail ), MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
 	AttachedEntityEffects m_attachedEntityEffects[MAX_EDICTS];

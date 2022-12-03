@@ -101,17 +101,29 @@ public:
 
 	void spawnDashEffect( const float *oldOrigin, const float *newOrigin );
 
-	void touchRocketTrail( int entNum, const float *origin, int64_t currTime ) {
-		m_trackedEffectsSystem.touchRocketTrail( entNum, origin, currTime );
+	void touchStrongRocketTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchStrongRocketTrail( entNum, origin, currTime );
 	}
-	void touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
-		m_trackedEffectsSystem.touchGrenadeTrail( entNum, origin, currTime );
+	void touchWeakRocketTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchWeakRocketTrail( entNum, origin, currTime );
+	}
+	void touchStrongGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchStrongGrenadeTrail( entNum, origin, currTime );
+	}
+	void touchWeakGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchWeakGrenadeTrail( entNum, origin, currTime );
 	}
 	void touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 		m_trackedEffectsSystem.touchBlastTrail( entNum, origin, currTime );
 	}
 	void touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
 		m_trackedEffectsSystem.touchElectroTrail( entNum, ownerNum, origin, currTime );
+	}
+	void touchStrongPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchStrongPlasmaTrail( entNum, origin, currTime );
+	}
+	void touchWeakPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchWeakPlasmaTrail( entNum, origin, currTime );
 	}
 
 	void updateStraightLaserBeam( int entNum, const float *from, const float *to, int64_t currTime ) {

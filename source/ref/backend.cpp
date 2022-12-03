@@ -1116,7 +1116,7 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 	for( const sortedDrawSurf_t &sds: surfSpan ) {
 		const auto *__restrict poly = (const QuadPoly *)sds.drawSurf;
 
-		if( const auto *__restrict beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &poly->geometryRules ) ) {
+		if( const auto *__restrict beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &poly->appearanceRules ) ) {
 			assert( std::fabs( VectorLengthFast( beamRules->dir ) - 1.0f ) < 1.01f );
 			vec3_t viewToOrigin, right;
 			VectorSubtract( poly->origin, fsh->viewOrigin, viewToOrigin );
@@ -1138,34 +1138,47 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 				VectorMA( to, -halfWidth, right, positions[2] );
 				VectorMA( to, +halfWidth, right, positions[3] );
 
-				float stx = 1.0f, sty = 1.0f;
-				if( beamRules->tileLength > 0 && poly->halfExtent > beamRules->tileLength ) {
-					stx = poly->halfExtent * Q_Rcp( beamRules->tileLength );
+				float stx = 1.0f;
+				if( beamRules->tileLength > 0 ) {
+					const float fullExtent = 2.0f * poly->halfExtent;
+					stx = fullExtent * Q_Rcp( beamRules->tileLength );
 				}
 
 				Vector2Set( texCoords[0], 0.0f, 0.0f );
-				Vector2Set( texCoords[1], 0.0f, sty );
-				Vector2Set( texCoords[2], stx, sty );
+				Vector2Set( texCoords[1], 0.0f, 1.0f );
+				Vector2Set( texCoords[2], stx, 1.0f );
 				Vector2Set( texCoords[3], stx, 0.0f );
 
-				colors[0][0] = ( uint8_t )( poly->color[0] * 255 );
-				colors[0][1] = ( uint8_t )( poly->color[1] * 255 );
-				colors[0][2] = ( uint8_t )( poly->color[2] * 255 );
-				colors[0][3] = ( uint8_t )( poly->color[3] * 255 );
+				const byte_vec4_t fromColorAsBytes {
+					(uint8_t)( beamRules->fromColor[0] * 255 ),
+					(uint8_t)( beamRules->fromColor[1] * 255 ),
+					(uint8_t)( beamRules->fromColor[2] * 255 ),
+					(uint8_t)( beamRules->fromColor[3] * 255 ),
+				};
+				const byte_vec4_t toColorAsBytes {
+					(uint8_t)( beamRules->toColor[0] * 255 ),
+					(uint8_t)( beamRules->toColor[1] * 255 ),
+					(uint8_t)( beamRules->toColor[2] * 255 ),
+					(uint8_t)( beamRules->toColor[3] * 255 ),
+				};
 
-				Vector4Copy( colors[0], colors[1] );
-				Vector4Copy( colors[0], colors[2] );
-				Vector4Copy( colors[0], colors[3] );
+				Vector4Copy( fromColorAsBytes, colors[0] );
+				Vector4Copy( fromColorAsBytes, colors[1] );
+				Vector4Copy( toColorAsBytes, colors[2] );
+				Vector4Copy( toColorAsBytes, colors[3] );
 
 				RB_AddDynamicMesh( e, shader, nullptr, nullptr, 0, &mesh, GL_TRIANGLES, 0.0f, 0.0f );
 			}
 		} else {
 			vec3_t left, up;
+			const float *color;
 
-			if( const auto *orientedRules = std::get_if<QuadPoly::OrientedSpriteRules>( &poly->geometryRules ) ) {
+			if( const auto *orientedRules = std::get_if<QuadPoly::OrientedSpriteRules>( &poly->appearanceRules ) ) {
+				color = orientedRules->color;
 				VectorCopy( &orientedRules->axis[AXIS_RIGHT], left );
 				VectorCopy( &orientedRules->axis[AXIS_UP], up );
 			} else {
+				color = std::get_if<QuadPoly::OrientedSpriteRules>( &poly->appearanceRules )->color;
 				VectorCopy( &fsh->viewAxis[AXIS_RIGHT], left );
 				VectorCopy( &fsh->viewAxis[AXIS_UP], up );
 			}
@@ -1189,10 +1202,10 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 			Vector2Set( texCoords[2], 1.0f, 1.0f );
 			Vector2Set( texCoords[3], 1.0f, 0.0f );
 
-			colors[0][0] = ( uint8_t )( poly->color[0] * 255 );
-			colors[0][1] = ( uint8_t )( poly->color[1] * 255 );
-			colors[0][2] = ( uint8_t )( poly->color[2] * 255 );
-			colors[0][3] = ( uint8_t )( poly->color[3] * 255 );
+			colors[0][0] = ( uint8_t )( color[0] * 255 );
+			colors[0][1] = ( uint8_t )( color[1] * 255 );
+			colors[0][2] = ( uint8_t )( color[2] * 255 );
+			colors[0][3] = ( uint8_t )( color[3] * 255 );
 
 			Vector4Copy( colors[0], colors[1] );
 			Vector4Copy( colors[0], colors[2] );

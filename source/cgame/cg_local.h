@@ -552,8 +552,10 @@ extern cvar_t *cg_simpleItemsSize; // simple items
 extern cvar_t *cg_volume_players; // players sound volume
 extern cvar_t *cg_volume_effects; // world sound volume
 extern cvar_t *cg_volume_announcer; // announcer sounds volume
-extern cvar_t *cg_projectileTrail;
+extern cvar_t *cg_projectileSmokeTrail;
 extern cvar_t *cg_projectileFireTrail;
+extern cvar_t *cg_projectilePolyTrail;
+extern cvar_t *cg_plasmaTrail;
 extern cvar_t *cg_bloodTrailTime;
 extern cvar_t *cg_bloodTrailPalette;
 extern cvar_t *cg_showPOVBlood;

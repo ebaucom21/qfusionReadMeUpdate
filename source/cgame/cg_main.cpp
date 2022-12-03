@@ -68,8 +68,10 @@ cvar_t *cg_volume_players;
 cvar_t *cg_volume_effects;
 cvar_t *cg_volume_announcer;
 cvar_t *cg_volume_hitsound;
-cvar_t *cg_projectileTrail;
+cvar_t *cg_projectileSmokeTrail;
 cvar_t *cg_projectileFireTrail;
+cvar_t *cg_projectilePolyTrail;
+cvar_t *cg_plasmaTrail;
 cvar_t *cg_bloodTrailPalette;
 cvar_t *cg_bloodTrailTime;
 cvar_t *cg_showPOVBlood;
@@ -621,9 +623,11 @@ static void CG_RegisterVariables( void ) {
 
 	// wsw
 	cg_handOffset =     Cvar_Get( "cg_handOffset", "5", CVAR_ARCHIVE );
-	cg_projectileTrail =    Cvar_Get( "cg_projectileTrail", "60", CVAR_ARCHIVE );
-	cg_projectileFireTrail =    Cvar_Get( "cg_projectileFireTrail", "90", CVAR_ARCHIVE );
-	cg_bloodTrailTime    =     Cvar_Get( "cg_bloodTrailTime", "300", CVAR_ARCHIVE );
+	cg_projectileSmokeTrail =    Cvar_Get( "cg_projectileSmokeTrail", "1", CVAR_ARCHIVE );
+	cg_projectileFireTrail = Cvar_Get( "cg_projectileFireTrail", "1", CVAR_ARCHIVE );
+	cg_projectilePolyTrail = Cvar_Get( "cg_projectilePolyTrail", "1", CVAR_ARCHIVE );
+	cg_plasmaTrail = Cvar_Get( "cg_plasmaTrail", "1", CVAR_ARCHIVE );
+	cg_bloodTrailTime    =   Cvar_Get( "cg_bloodTrailTime", "300", CVAR_ARCHIVE );
 	cg_bloodTrailPalette = Cvar_Get( "cg_bloodTrailPalette", "1", CVAR_ARCHIVE );
 	cg_showPOVBlood      = Cvar_Get( "cg_showPOVBlood", "1", CVAR_ARCHIVE );
 	cg_projectileFireTrailAlpha =   Cvar_Get( "cg_projectileFireTrailAlpha", "0.45", CVAR_ARCHIVE );

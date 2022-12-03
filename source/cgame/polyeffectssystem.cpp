@@ -38,26 +38,31 @@ PolyEffectsSystem::~PolyEffectsSystem() {
 }
 
 auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {
-	assert( !m_curvedLaserBeamsAllocator.isFull() );
-	auto *effect = new( m_curvedLaserBeamsAllocator.allocOrNull() )CurvedBeamEffect;
-	wsw::link( effect, &m_curvedLaserBeamsHead );
-	effect->poly.material = material;
-	return effect;
+	if( auto *mem = m_curvedLaserBeamsAllocator.allocOrNull() ) [[likely]] {
+		auto *effect = new( mem )CurvedBeamEffect;
+		wsw::link( effect, &m_curvedLaserBeamsHead );
+		effect->poly.material = material;
+		return effect;
+	}
+	return nullptr;
 }
 
-void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float *color, float width, float tileLength,
+void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float *fromColor, const float *toColor,
+												float width, const CurvedBeamUVMode &uvMode,
 												std::span<const vec3_t> points ) {
 	auto *const __restrict effect = (CurvedBeamEffect *)handle;
 	assert( (uintptr_t)effect == (uintptr_t)handle );
-	assert( points.size() <= std::size( effect->poly.points ) );
 
-	Vector4Copy( color, effect->poly.color );
-	effect->poly.width      = width;
-	effect->poly.tileLength = tileLength;
-	effect->poly.numPoints  = (unsigned)points.size();
-	std::memcpy( effect->poly.points, points.data(), sizeof( vec3_t ) * points.size() );
+	Vector4Copy( fromColor, effect->poly.fromColor );
+	Vector4Copy( toColor, effect->poly.toColor );
 
-	if( !points.empty() ) [[likely]] {
+	effect->poly.width  = width;
+	effect->poly.uvMode = uvMode;
+
+	// Caution! We borrow the reference to an external buffer
+	effect->poly.points = points;
+
+	if( points.size() > 1 ) [[likely]] {
 		BoundsBuilder boundsBuilder;
 		for( const float *point: points ) {
 			boundsBuilder.addPoint( point );
@@ -69,8 +74,8 @@ void PolyEffectsSystem::updateCurvedBeamEffect( CurvedBeam *handle, const float 
 
 auto PolyEffectsSystem::CurvedBeamPoly::getStorageRequirements( const float *, const float *, float ) const
 	-> std::optional<std::pair<unsigned, unsigned>> {
-	assert( numPoints );
-	return std::make_pair( 4 * numPoints, 6 * numPoints );
+	assert( points.size() > 1 );
+	return std::make_pair( (unsigned)( 4 * points.size() ), (unsigned)( 6 * points.size() ) );
 }
 
 [[nodiscard]]
@@ -85,39 +90,89 @@ auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict
 														 byte_vec4_t *__restrict colors,
 														 uint16_t *__restrict indices ) const
 	-> std::pair<unsigned, unsigned> {
-	assert( numPoints );
-
+	assert( points.size() > 1 && points.size() < 64 );
 	assert( std::isfinite( width ) && width > 0 );
-	assert( std::isfinite( tileLength ) && tileLength > 0 );
 
-	assert( tileLength > 0.0f );
+	// std::variant interface sucks
+	const UvModeTile *const uvModeTile   = std::get_if<UvModeTile>( &uvMode );
+	const UvModeClamp *const uvModeClamp = std::get_if<UvModeClamp>( &uvMode );
 
-	const byte_vec4_t byteColor {
-		( uint8_t )( color[0] * 255 ),
-		( uint8_t )( color[1] * 255 ),
-		( uint8_t )( color[2] * 255 ),
-		( uint8_t )( color[3] * 255 )
-	};
+	// We have to precalculate some parameters for UvModeFit.
+	// This doesn't make the code inefficient for other case.
 
-	bool hasValidPrevSegment = false;
-	unsigned numVertices = 0, numIndices = 0;
+	auto *const __restrict rcpLengthOfSegments  = (float *)alloca( sizeof( float ) * points.size() );
 
-	float totalLengthSoFar    = 0.0f;
-	const float rcpTileLength = Q_Rcp( tileLength );
-	const float halfWidth     = 0.5f * width;
-
-	// Note: we have to submit separate quads as some segments could be discarded
-	for( unsigned segmentNum = 0; segmentNum + 1 < numPoints; ++segmentNum ) {
+	bool foundDegenerateSegment    = false;
+	unsigned numDrawnSegments      = 0;
+	float totalLengthOfDrawnPart   = 0.0f;
+	float totalLengthOfPointsChain = 0.0f;
+	for( unsigned segmentNum = 0; segmentNum + 1 < points.size(); ++segmentNum ) {
 		const float *const from = points[segmentNum + 0];
 		const float *const to   = points[segmentNum + 1];
 
 		const float squareSegmentLength = DistanceSquared( from, to );
-		// Interrupting in this case seems to be the most reasonable option.
-		if( squareSegmentLength < 1.0f ) [[unlikely]] {
-			break;
-		}
+		if( !foundDegenerateSegment ) [[likely]] {
+			if( squareSegmentLength < 1.0f ) [[unlikely]] {
+				if( !uvModeClamp ) {
+					// Interrupt at this - we don't have to know the full chain length for other cases
+					break;
+				} else {
+					totalLengthOfPointsChain += Q_Sqrt( squareSegmentLength );
+					foundDegenerateSegment = true;
+				}
+			} else {
+				const float rcpSegmentLength    = Q_RSqrt( squareSegmentLength );
+				const float segmentLength       = squareSegmentLength * rcpSegmentLength;
+				rcpLengthOfSegments[segmentNum] = rcpSegmentLength;
 
-		const float rcpSegmentLength = Q_RSqrt( squareSegmentLength );
+				totalLengthOfPointsChain += segmentLength;
+				totalLengthOfDrawnPart   += segmentLength;
+				numDrawnSegments++;
+			}
+		} else {
+			totalLengthOfPointsChain += Q_Sqrt( squareSegmentLength );
+		}
+	}
+
+	assert( totalLengthOfDrawnPart <= totalLengthOfPointsChain );
+
+	// Lift reciprocal computations out of the loop
+
+	float rcpTileLength = 0.0f;
+	if( uvModeTile ) {
+		assert( uvModeTile->tileLength > 0.0f );
+		rcpTileLength = Q_Rcp( uvModeTile->tileLength );
+	}
+
+	float rcpTotalLengthOfDrawnPart = 0.0f;
+	if( !uvModeClamp && totalLengthOfDrawnPart > 0.0f ) {
+		rcpTotalLengthOfDrawnPart = Q_Rcp( totalLengthOfDrawnPart );
+	}
+
+	float rcpTotalLengthOfPointsChain = 0.0f;
+	if( uvModeClamp && totalLengthOfPointsChain > 0.0f ) {
+		rcpTotalLengthOfPointsChain = Q_Rcp( totalLengthOfPointsChain );
+	}
+
+	byte_vec4_t sharedColor;
+	const bool hasVaryingColors = !VectorCompare( fromColor, toColor ) || fromColor[3] != toColor[3];
+	if( !hasVaryingColors ) {
+		for( unsigned i = 0; i < 4; ++i ) {
+			sharedColor[i] = (uint8_t)wsw::clamp( 255.0f * fromColor[i], 0.0f, 255.0f );
+		}
+	}
+
+	bool hasValidPrevSegment = false;
+	unsigned numVertices = 0, numIndices = 0;
+
+	const float halfWidth  = 0.5f * width;
+	float totalLengthSoFar = 0.0f;
+	// Note: we have to submit separate quads as some segments could be discarded
+	for( unsigned segmentNum = 0; segmentNum < numDrawnSegments; ++segmentNum ) {
+		const float *const from = points[segmentNum + 0];
+		const float *const to   = points[segmentNum + 1];
+
+		const float rcpSegmentLength = rcpLengthOfSegments[segmentNum];
 
 		vec3_t segmentDir;
 		VectorSubtract( to, from, segmentDir );
@@ -152,18 +207,54 @@ auto PolyEffectsSystem::CurvedBeamPoly::fillMeshBuffers( const float *__restrict
 		VectorSet( indices + 0, numVertices + 0, numVertices + 1, numVertices + 2 );
 		VectorSet( indices + 3, numVertices + 0, numVertices + 2, numVertices + 3 );
 
-		for( unsigned i = 0; i < 4; ++i ) {
-			Vector4Copy( byteColor, colors[i] );
-		}
-
-		const float stx1 = totalLengthSoFar * rcpTileLength;
+		const float lengthAt1 = totalLengthSoFar;
 		totalLengthSoFar += Q_Rcp( rcpSegmentLength );
-		const float stx2 = totalLengthSoFar * rcpTileLength;
+		const float lengthAt2 = totalLengthSoFar;
+
+		float stx1, stx2;
+		if( uvModeTile ) {
+			stx1 = lengthAt1 * rcpTileLength;
+			stx2 = lengthAt2 * rcpTileLength;
+		} else if( uvModeClamp ) {
+			stx1 = wsw::clamp( lengthAt1 * rcpTotalLengthOfPointsChain, 0.0f, 1.0f );
+			stx2 = wsw::clamp( lengthAt2 * rcpTotalLengthOfPointsChain, 0.0f, 1.0f );
+		} else {
+			stx1 = wsw::clamp( lengthAt1 * rcpTotalLengthOfDrawnPart, 0.0f, 1.0f );
+			stx2 = wsw::clamp( lengthAt2 * rcpTotalLengthOfDrawnPart, 0.0f, 1.0f );
+		}
 
 		Vector2Set( texCoords[0], stx1, 0.0f );
 		Vector2Set( texCoords[1], stx1, 1.0f );
 		Vector2Set( texCoords[2], stx2, 1.0f );
 		Vector2Set( texCoords[3], stx2, 0.0f );
+
+		if( hasVaryingColors ) {
+			float colorFrac1, colorFrac2;
+			if( uvModeClamp ) {
+				colorFrac1 = lengthAt1 * rcpTotalLengthOfPointsChain;
+				colorFrac2 = lengthAt2 * rcpTotalLengthOfPointsChain;
+			} else {
+				colorFrac1 = lengthAt1 * rcpTotalLengthOfDrawnPart;
+				colorFrac2 = lengthAt2 * rcpTotalLengthOfDrawnPart;
+			}
+
+			assert( colorFrac1 >= 0.0f && colorFrac1 <= 1.01f );
+			assert( colorFrac2 >= 0.0f && colorFrac2 <= 1.01f );
+
+			vec4_t colorAt1, colorAt2;
+			Vector4Lerp( this->fromColor, colorFrac1, this->toColor, colorAt1 );
+			Vector4Lerp( this->fromColor, colorFrac2, this->toColor, colorAt2 );
+
+			for( unsigned i = 0; i < 4; ++i ) {
+				colors[0][i] = colors[1][i] = (uint8_t)wsw::clamp( 255.0f * colorAt1[i], 0.0f, 255.0f );
+				colors[2][i] = colors[3][i] = (uint8_t)wsw::clamp( 255.0f * colorAt2[i], 0.0f, 255.0f );
+			}
+		} else {
+			Vector4Copy( sharedColor, colors[0] );
+			Vector4Copy( sharedColor, colors[1] );
+			Vector4Copy( sharedColor, colors[2] );
+			Vector4Copy( sharedColor, colors[3] );
+		}
 
 		numVertices += 4;
 		numIndices += 6;
@@ -186,17 +277,18 @@ void PolyEffectsSystem::destroyCurvedBeamEffect( CurvedBeam *handle ) {
 }
 
 auto PolyEffectsSystem::createStraightBeamEffect( shader_s *material ) -> StraightBeam * {
-	assert( !m_straightLaserBeamsAllocator.isFull() );
-	auto *effect = new( m_straightLaserBeamsAllocator.allocOrNull() )StraightBeamEffect;
-	wsw::link( effect, &m_straightLaserBeamsHead );
-	effect->poly.material   = material;
-	effect->poly.halfExtent = 0.0f;
-	return effect;
+	if( void *mem = m_straightLaserBeamsAllocator.allocOrNull() ) [[likely]] {
+		auto *effect = new( mem )StraightBeamEffect;
+		wsw::link( effect, &m_straightLaserBeamsHead );
+		effect->poly.material   = material;
+		effect->poly.halfExtent = 0.0f;
+		return effect;
+	}
+	return nullptr;
 }
 
-void PolyEffectsSystem::updateStraightBeamEffect( StraightBeam *handle, const float *color,
-												  float width, float tileLength,
-												  const float *from, const float *to ) {
+void PolyEffectsSystem::updateStraightBeamEffect( StraightBeam *handle, const float *fromColor, const float *toColor,
+												  float width, float tileLength, const float *from, const float *to ) {
 	auto *effect = (StraightBeamEffect *)( handle );
 	assert( (uintptr_t)effect == (uintptr_t)handle );
 
@@ -206,13 +298,14 @@ void PolyEffectsSystem::updateStraightBeamEffect( StraightBeam *handle, const fl
 			vec3_t dir;
 			VectorSubtract( to, from, dir );
 			VectorScale( dir, rcpLength, dir );
-			VectorCopy( color, effect->poly.color );
 			VectorAvg( from, to, effect->poly.origin );
-			effect->poly.halfExtent = 0.5f * ( squareLength * rcpLength );
-			effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+			effect->poly.halfExtent      = 0.5f * ( squareLength * rcpLength );
+			effect->poly.appearanceRules = QuadPoly::ViewAlignedBeamRules {
 				.dir        = { dir[0], dir[1], dir[2] },
 				.width      = width,
 				.tileLength = tileLength,
+				.fromColor  = { fromColor[0], fromColor[1], fromColor[2], fromColor[3] },
+				.toColor    = { toColor[0], toColor[1], toColor[2], toColor[3] },
 			};
 		} else {
 			// Suppress rendering this frame
@@ -286,9 +379,9 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 
 	VectorAvg( from, to, effect->poly.origin );
 
-	effect->poly.material      = params.material;
-	effect->poly.halfExtent    = 0.5f * ( squareLength * rcpLength );
-	effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+	effect->poly.material        = params.material;
+	effect->poly.halfExtent      = 0.5f * ( squareLength * rcpLength );
+	effect->poly.appearanceRules = QuadPoly::ViewAlignedBeamRules {
 		.dir        = { dir[0], dir[1], dir[2] },
 		.width      = params.width,
 		.tileLength = params.tileLength,
@@ -330,24 +423,25 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
 	const float speed             = std::max( 1000.0f, distance * Q_Rcp( tracerTimeSeconds ) );
 
-	auto *effect               = new( mem )TracerEffect;
-	effect->timeoutAt          = m_lastTime + params.duration;
-	effect->speed              = speed;
-	effect->totalDistance      = distance;
-	effect->distanceSoFar      = params.prestep;
-	effect->fadeInDistance     = 2.0f * params.prestep;
-	effect->fadeOutDistance    = 2.0f * params.prestep;
-	effect->poly.material      = params.material;
-	effect->poly.halfExtent    = 0.5f * params.length;
-	effect->poly.geometryRules = QuadPoly::ViewAlignedBeamRules {
+	auto *effect                 = new( mem )TracerEffect;
+	effect->timeoutAt            = m_lastTime + params.duration;
+	effect->speed                = speed;
+	effect->totalDistance        = distance;
+	effect->distanceSoFar        = params.prestep;
+	effect->fadeInDistance       = 2.0f * params.prestep;
+	effect->fadeOutDistance      = 2.0f * params.prestep;
+	effect->poly.material        = params.material;
+	effect->poly.halfExtent      = 0.5f * params.length;
+	effect->poly.appearanceRules = QuadPoly::ViewAlignedBeamRules {
 		.dir        = { dir[0], dir[1], dir[2] },
 		.width      = params.width,
 		.tileLength = params.length,
+		.fromColor  = { params.color[0], params.color[1], params.color[2], params.color[3] },
+		.toColor    = { params.color[0], params.color[1], params.color[2], params.color[3] },
 	};
 
 	VectorCopy( from, effect->from );
 	VectorCopy( to, effect->to );
-	Vector4Copy( params.color, effect->poly.color );
 
 	VectorCopy( params.lightColor, effect->lightColor );
 	effect->programLightRadius       = params.programLightRadius;
@@ -360,7 +454,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
 	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
-		if( beam->poly.material && beam->poly.numPoints ) [[likely]] {
+		if( beam->poly.material && beam->poly.points.size() > 1 ) [[likely]] {
 			request->addDynamicMesh( &beam->poly );
 		}
 	}
@@ -379,7 +473,12 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 
 		if( beam->poly.material && beam->poly.halfExtent > 1.0f ) [[likely]] {
 			const float colorLifetimeFrac = (float)( currTime - beam->spawnTime ) * Q_Rcp( (float)beam->timeout );
-			beam->colorLifespan.getColorForLifetimeFrac( colorLifetimeFrac, beam->poly.color );
+
+			vec4_t color;
+			beam->colorLifespan.getColorForLifetimeFrac( colorLifetimeFrac, color );
+			auto *const rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &beam->poly.appearanceRules );
+			Vector4Copy( color, rules->fromColor );
+			Vector4Copy( color, rules->toColor );
 
 			if( beam->lightProps ) {
 				const auto &[lightTimeout, lightLifespan] = *beam->lightProps;
@@ -390,7 +489,6 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 					float lightRadius, lightColor[3];
 					lightLifespan.getRadiusAndColorForLifetimeFrac( lightLifetimeFrac, &lightRadius, lightColor );
 					if( lightRadius > 1.0f ) {
-						const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &beam->poly.geometryRules );
 						float lightOrigin[3];
 
 						// The lifetime fraction is in [0, 1] range.
@@ -429,7 +527,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			continue;
 		}
 
-		const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.geometryRules );
+		const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
 		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
 
 		VectorMA( tracer->from, tracer->distanceSoFar, rules->dir, tracer->poly.origin );

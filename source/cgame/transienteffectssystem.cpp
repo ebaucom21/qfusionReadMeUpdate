@@ -727,17 +727,15 @@ void TransientEffectsSystem::spawnImpactRing( const float *origin, const float *
 											  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan ) {
 	assert( std::fabs( VectorLengthFast( axisDir ) - 1.0f ) < 0.1f );
 
-	QuadPoly::OrientedSpriteRules geometryRules {};
-	VectorCopy( axisDir, geometryRules.axis );
-	MakeNormalVectors( axisDir, geometryRules.axis + 3, geometryRules.axis + 6 );
+	QuadPoly::OrientedSpriteRules appearanceRules {};
+	VectorCopy( axisDir, appearanceRules.axis );
+	MakeNormalVectors( axisDir, appearanceRules.axis + 3, appearanceRules.axis + 6 );
 
-	PolyEffect *const effect   = allocPolyEffect( m_lastTime, timeout );
-	effect->poly.material      = cgs.media.shaderImpactRing;
-	effect->poly.color[3]      = 0.0f;
-	effect->poly.geometryRules = geometryRules;
+	PolyEffect *const effect     = allocPolyEffect( m_lastTime, timeout );
+	effect->poly.material        = cgs.media.shaderImpactRing;
+	effect->poly.appearanceRules = appearanceRules;
 
 	VectorMA( origin, 4.0f, axisDir, effect->poly.origin );
-	VectorCopy( colorWhite, effect->poly.color );
 
 	effect->scaleLifespan   = scaleLifespan;
 	effect->alphaLifespan   = alphaLifespan;
@@ -1088,10 +1086,18 @@ void TransientEffectsSystem::simulatePolyEffectsAndSubmit( int64_t currTime, flo
 		assert( lifetimeMillis < effect->duration );
 		const float lifetimeFrac = (float)lifetimeMillis * Q_Rcp( (float)effect->duration );
 
-		effect->poly.halfExtent = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac );
-		effect->poly.color[3]   = effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac );
+		effect->poly.halfExtent = effect->scaleLifespan.getValueForLifetimeFrac( lifetimeFrac ) * effect->scaleMultiplier;
 
-		effect->poly.halfExtent *= effect->scaleMultiplier;
+		const float colorAlpha = effect->alphaLifespan.getValueForLifetimeFrac( lifetimeFrac );
+		// std::variant<> interface is awful
+		if( auto *beamRules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &effect->poly.appearanceRules ) ) {
+			beamRules->fromColor[3] = colorAlpha;
+			beamRules->toColor[3]   = colorAlpha;
+		} else if( auto *spriteRules = std::get_if<QuadPoly::ViewAlignedSpriteRules>( &effect->poly.appearanceRules ) ) {
+			spriteRules->color[3] = colorAlpha;
+		} else if( auto *orientedRules = std::get_if<QuadPoly::OrientedSpriteRules>( &effect->poly.appearanceRules ) ) {
+			orientedRules->color[3] = colorAlpha;
+		}
 
 		request->addPoly( &effect->poly );
 	}
