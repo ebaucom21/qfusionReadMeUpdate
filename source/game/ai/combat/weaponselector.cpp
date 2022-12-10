@@ -49,6 +49,12 @@ bool BotWeaponSelector::checkFastWeaponSwitchAction() {
 		return false;
 	}
 
+	// Disallow in this case.
+	// We don't care if the actual var string is invalid (this allows us to efficiently disable the action).
+	if( sv_cheats->integer && ai_forceWeapon->string[0] != '\0' ) {
+		return false;
+	}
+
 	if( bot->Skill() < 0.66f ) {
 		// Mid-skill bots do these actions in non-think frames occasionally
 		if( bot->ShouldSkipThinkFrame() && random() > bot->Skill() ) {
@@ -89,14 +95,27 @@ void BotWeaponSelector::selectWeapon() {
 	}
 
 	std::optional<int> maybeBuiltinWeapon;
-	if( distanceToEnemy > 2.0f * kLasergunRange ) {
-		maybeBuiltinWeapon = suggestSniperRangeWeapon( distanceToEnemy );
-	} else if( distanceToEnemy > kLasergunRange ) {
-		maybeBuiltinWeapon = suggestFarRangeWeapon( distanceToEnemy );
-	} else if( distanceToEnemy > 0.33f * kLasergunRange ) {
-		maybeBuiltinWeapon = suggestMiddleRangeWeapon( distanceToEnemy );
-	} else {
-		maybeBuiltinWeapon = suggestCloseRangeWeapon( distanceToEnemy );
+	if( sv_cheats->integer && ai_forceWeapon->string[0] != '\0' ) {
+		if( const gsitem_t *item = GS_FindItemByName( ai_forceWeapon->string ) ) {
+			if( item->tag >= WEAP_GUNBLADE && item->tag < WEAP_TOTAL ) {
+				const auto *const inventory = bot->Inventory();
+				if( inventory[item->tag] && ( inventory[item->weakammo_tag] + inventory[item->ammo_tag] > 0 ) ) {
+					maybeBuiltinWeapon = item->tag;
+				}
+			}
+		}
+	}
+
+	if( !maybeBuiltinWeapon ) {
+		if( distanceToEnemy > 2.0f * kLasergunRange ) {
+			maybeBuiltinWeapon = suggestSniperRangeWeapon( distanceToEnemy );
+		} else if( distanceToEnemy > kLasergunRange ) {
+			maybeBuiltinWeapon = suggestFarRangeWeapon( distanceToEnemy );
+		} else if( distanceToEnemy > 0.33f * kLasergunRange ) {
+			maybeBuiltinWeapon = suggestMiddleRangeWeapon( distanceToEnemy );
+		} else {
+			maybeBuiltinWeapon = suggestCloseRangeWeapon( distanceToEnemy );
+		}
 	}
 
 	// TODO: Report failure/replan

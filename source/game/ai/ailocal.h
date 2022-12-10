@@ -334,6 +334,7 @@ public:
 
 extern const cvar_t *ai_evolution;
 extern const cvar_t *ai_debugOutput;
+extern const cvar_t *ai_forceWeapon;
 extern const cvar_t *ai_shareRoutingCache;
 
 #endif

@@ -7,6 +7,7 @@
 
 const cvar_t *ai_evolution;
 const cvar_t *ai_debugOutput;
+const cvar_t *ai_forceWeapon;
 const cvar_t *ai_shareRoutingCache;
 
 ai_weapon_aim_type BuiltinWeaponAimType( int builtinWeapon, int fireMode ) {
@@ -164,6 +165,7 @@ static wsw::StaticVector<int, 16> hubAreas;
 void AI_InitLevel( void ) {
 	ai_evolution = trap_Cvar_Get( "ai_evolution", "0", CVAR_ARCHIVE );
 	ai_debugOutput = trap_Cvar_Get( "ai_debugOutput", "0", CVAR_ARCHIVE );
+	ai_forceWeapon = trap_Cvar_Get( "ai_forceWeapon", "", CVAR_CHEAT );
 	// We think values for this var should not be archived
 	ai_shareRoutingCache = trap_Cvar_Get( "ai_shareRoutingCache", "1", 0 );
 
