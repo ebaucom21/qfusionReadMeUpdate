@@ -229,10 +229,16 @@ void MovementSubsystem::ApplyInput( BotInput *input, PredictionContext *context 
 												   context->predictionStepMillis, input->TurnSpeedMultiplier() ) );
 			input->SetAlreadyComputedAngles( newAngles );
 		}
-		entityPhysicsState_->SetAngles( input->AlreadyComputedAngles() );
+		// There's no need to modify entityPhysicsState right now
+		// as we are going to update entityPhysicsState by PMove() results.
+		// TODO: Split the method for null context and non-null context
+		// TODO: Inline this part into context->NextMovementStep()
 	} else {
 		edict_t *self = game.edicts + bot->EntNum();
 		if( !input->hasAlreadyComputedAngles ) {
+			// TODO: We don't have to rotate if it has been already rotated during prediction.
+			// Unfortunately, we can't make the distinction in the current codebase state.
+			// TryRotateInput() checks should prevent from a double rotation.
 			TryRotateInput( input, context );
 			Vec3 newAngles( bot->GetNewViewAngles( self->s.angles, input->IntendedLookDir(),
 												   game.frametime, input->TurnSpeedMultiplier() ) );

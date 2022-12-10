@@ -769,6 +769,8 @@ typedef struct {
 
 	vec3_t mins, maxs;          // bounding box size
 
+	vec3_t forward, right;
+
 	int groundentity;
 	cplane_t groundplane;       // valid if groundentity >= 0
 	int groundsurfFlags;        // valid if groundentity >= 0

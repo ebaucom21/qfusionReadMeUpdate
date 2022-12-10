@@ -103,7 +103,14 @@ public:
 		SetVelocity( ent->velocity );
 		this->waterType = ent->watertype;
 		this->waterLevel = ( decltype( this->waterLevel ) )ent->waterlevel;
-		SetAngles( ent->s.angles );
+		// TODO: Get rid of packing
+		this->angles[0] = ANGLE2SHORT( ent->s.angles[0] );
+		this->angles[1] = ANGLE2SHORT( ent->s.angles[1] );
+		this->angles[2] = ANGLE2SHORT( ent->s.angles[2] );
+		vec3_t forward, right;
+		AngleVectors( ent->s.angles, forward, right, nullptr );
+		SetPackedDir( forward, this->forwardDir );
+		SetPackedDir( right, this->rightDir );
 		this->groundEntNum = -1;
 		if( ent->groundentity ) {
 			this->groundEntNum = ( decltype( this->groundEntNum ) )( ENTNUM( ent->groundentity ) );
@@ -120,7 +127,18 @@ public:
 		SetVelocity( pmove->playerState->pmove.velocity );
 		this->waterType = pmove->watertype;
 		this->waterLevel = ( decltype( this->waterLevel ) )pmove->waterlevel;
-		SetAngles( pmove->playerState->viewangles );
+		// TODO: Get rid of packing
+		this->angles[0] = ANGLE2SHORT( pmove->playerState->viewangles[0] );
+		this->angles[1] = ANGLE2SHORT( pmove->playerState->viewangles[1] );
+		this->angles[2] = ANGLE2SHORT( pmove->playerState->viewangles[2] );
+		SetPackedDir( pmove->forward, this->forwardDir );
+		SetPackedDir( pmove->right, this->rightDir );
+#if 0
+		[[maybe_unused]] vec3_t forward, right;
+		AngleVectors( pmove->playerState->viewangles, forward, right, nullptr );
+		assert( DotProduct( pmove->forward, forward ) > 0.999f );
+		assert( DotProduct( pmove->right, right ) > 0.999f );
+#endif
 		this->groundEntNum = ( decltype( this->groundEntNum ) )pmove->groundentity;
 		this->selfEntNum = ( decltype( this->selfEntNum ) )( pmove->playerState->playerNum + 1 );
 		SetGroundNormalZ( pmove->groundentity >= 0 ? pmove->groundplane.normal[2] : 0 );
@@ -147,13 +165,6 @@ public:
 
 	inline Vec3 Angles() const {
 		return Vec3( (float)SHORT2ANGLE( angles[0] ), (float)SHORT2ANGLE( angles[1] ), (float)SHORT2ANGLE( angles[2] ) );
-	}
-	inline void SetAngles( const Vec3 &angles_ ) { SetAngles( angles_.Data() ); }
-	inline void SetAngles( const vec3_t angles_ ) {
-		this->angles[0] = (short)ANGLE2SHORT( angles_[0] );
-		this->angles[1] = (short)ANGLE2SHORT( angles_[1] );
-		this->angles[2] = (short)ANGLE2SHORT( angles_[2] );
-		UpdateDirs( angles_ );
 	}
 
 	int CurrAasAreaNum() const { return (int)currAasAreaNum; }

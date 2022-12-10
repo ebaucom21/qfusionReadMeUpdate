@@ -1726,6 +1726,9 @@ static void PM_ApplyMouseAnglesClamp( void ) {
 	VectorCopy( pml.forward, pml.flatforward );
 	pml.flatforward[2] = 0.0f;
 	VectorNormalize( pml.flatforward );
+
+	VectorCopy( pml.forward, pm->forward );
+	VectorCopy( pml.right, pm->right );
 }
 #if defined ( _WIN32 ) && ( _MSC_VER >= 1400 )
 #pragma warning( pop )
