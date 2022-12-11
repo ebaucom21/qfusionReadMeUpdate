@@ -508,7 +508,7 @@ public:
 		return awarenessModule.GetValidHurtEvent();
 	}
 
-	const float *GetKeptInFovPoint() const {
+	const std::optional<Vec3> &GetKeptInFovPoint() const {
 		return awarenessModule.GetKeptInFovPoint();
 	}
 

@@ -261,13 +261,13 @@ bool MovementSubsystem::TryRotateInput( BotInput *input, PredictionContext *cont
 		prevRotation = &movementState.inputRotation;
 	}
 
-	const float *const keptInFovPoint = bot->GetKeptInFovPoint();
+	const std::optional<Vec3> &keptInFovPoint = bot->GetKeptInFovPoint();
 	if( !keptInFovPoint || nextRotateInputAttemptAt > level.time ) {
 		*prevRotation = InputRotation::NONE;
 		return false;
 	}
 
-	Vec3 selfToPoint( keptInFovPoint );
+	Vec3 selfToPoint( *keptInFovPoint );
 	selfToPoint -= botOrigin;
 	if( !selfToPoint.normalizeFast() ) {
 		*prevRotation = InputRotation::NONE;

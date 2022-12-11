@@ -165,8 +165,8 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 
 	// Try to keep looking at this point if it is present and use 4 direction keys.
 	// Even if there might be some faults, turning from (potential) enemies looks poor.
-	if( const float *keptInFovPoint = bot->GetKeptInFovPoint() ) {
-		if( SetupForKeptPointInFov( context, steeringTarget, keptInFovPoint ) ) {
+	if( const std::optional<Vec3> &keptInFovPoint = bot->GetKeptInFovPoint() ) {
+		if( SetupForKeptPointInFov( context, steeringTarget, keptInFovPoint->Data() ) ) {
 			return;
 		}
 	}

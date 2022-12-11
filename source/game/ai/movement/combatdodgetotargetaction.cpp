@@ -357,8 +357,8 @@ void CombatDodgeSemiRandomlyToTargetAction::OnApplicationSequenceStarted( Predic
 		if( bot->ShouldKeepXhairOnEnemy() && bot->GetSelectedEnemy() != std::nullopt ) {
 			bot->GetSelectedEnemy()->LastSeenOrigin().CopyTo( tmpDir );
 			hasDefinedLookDir = true;
-		} else if( const float *keptInFovPoint = bot->GetKeptInFovPoint() ) {
-			VectorCopy( keptInFovPoint, tmpDir );
+		} else if( const std::optional<Vec3> &keptInFovPoint = bot->GetKeptInFovPoint() ) {
+			keptInFovPoint->CopyTo( tmpDir );
 			hasDefinedLookDir = true;
 		}
 

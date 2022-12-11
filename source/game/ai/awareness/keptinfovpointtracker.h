@@ -34,7 +34,7 @@ public:
 	void update();
 
 	[[nodiscard]]
-	auto getActivePoint() const -> const float * { return m_point ? m_point->Data() : nullptr; };
+	auto getActivePoint() const -> const std::optional<Vec3> & { return m_point; }
 };
 
 #endif

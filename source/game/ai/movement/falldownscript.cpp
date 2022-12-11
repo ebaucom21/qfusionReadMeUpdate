@@ -45,8 +45,8 @@ void FallDownScript::SetupMovement( PredictionContext *context ) {
 	if( entityPhysicsState.GroundEntity() ) {
 		// Keep looking at this point.
 		// Otherwise bot spinning in front of enemy looks weird.
-		if( auto *keptInFovPoint = bot->GetKeptInFovPoint() ) {
-			Vec3 toPointVec( keptInFovPoint );
+		if( const std::optional<Vec3> &keptInFovPoint = bot->GetKeptInFovPoint() ) {
+			Vec3 toPointVec( *keptInFovPoint );
 			toPointVec -= entityPhysicsState.Origin();
 			botInput->SetIntendedLookDir( toPointVec, false );
 			int keyMoves[2];
