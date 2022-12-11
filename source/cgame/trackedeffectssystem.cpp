@@ -23,13 +23,35 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/links.h"
 #include "../cgame/cg_local.h"
 
+struct CurvedPolyTrailProps {
+	float minDistanceBetweenNodes { 8.0f };
+	unsigned maxNodeLifetime { 0 };
+	// This value is not that permissive due to long segments for some trails.
+	float maxLength { 0.0f };
+	float width { 0.0f };
+	float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+	float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
+};
+
+struct StraightPolyTrailProps {
+	float maxLength { 0.0f };
+	float tileLength { 0.0f };
+	float width { 0.0f };
+	float prestep { 32.0f };
+	float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
+	float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
+};
+
 TrackedEffectsSystem::~TrackedEffectsSystem() {
 	// TODO: unlinkAndFree() does some unnecessary extra work that slows the dtor down
 	unlinkAndFreeItemsInList( m_attachedParticleTrailsHead );
 	unlinkAndFreeItemsInList( m_lingeringParticleTrailsHead );
 
+	unlinkAndFreeItemsInList( m_attachedStraightPolyTrailsHead );
+	unlinkAndFreeItemsInList( m_lingeringStraightPolyTrailsHead );
+
 	unlinkAndFreeItemsInList( m_attachedCurvedPolyTrailsHead );
-	unlinkAndFreeItemsInList( m_lingeringParticleTrailsHead );
+	unlinkAndFreeItemsInList( m_lingeringCurvedPolyTrailsHead );
 
 	unlinkAndFreeItemsInList( m_teleEffectsHead );
 }
@@ -117,12 +139,15 @@ void TrackedEffectsSystem::spawnPlayerTeleEffect( int clientNum, const float *or
 
 auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 											   const float *origin, unsigned particleSystemBin,
+											   ConicalFlockParams *paramsTemplate,
 											   Particle::AppearanceRules &&appearanceRules ) -> ParticleTrail * {
 	// Don't try evicting other effects in case of failure
 	// (this could lead to wasting CPU cycles every frame in case when it starts kicking in)
 	// TODO: Try picking lingering trails in case if it turns out to be really needed?
 	if( void *mem = m_particleTrailsAllocator.allocOrNull() ) [[likely]] {
 		auto *__restrict trail = new( mem )ParticleTrail;
+
+		trail->paramsTemplate = paramsTemplate;
 
 		// Don't drop right now, just mark for computing direction next frames
 		trail->particleFlock = cg.particleSystem.createTrailFlock( appearanceRules, particleSystemBin );
@@ -146,8 +171,7 @@ auto TrackedEffectsSystem::allocParticleTrail( int entNum, unsigned trailIndex,
 	return nullptr;
 }
 
-void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
-														ConicalFlockParams *params, int64_t currTime ) {
+void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, const float *origin, int64_t currTime ) {
 	trail->touchedAt = currTime;
 
 	ParticleFlock *__restrict flock = trail->particleFlock;
@@ -167,6 +191,8 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 				VectorScale( dir, rcpDistance, dir );
 				// Make steps of trail->dropDistance units towards the new position
 				VectorScale( dir, -trail->dropDistance, stepVec );
+
+				ConicalFlockParams *const __restrict params = trail->paramsTemplate;
 
 				VectorCopy( trail->lastDropOrigin, params->origin );
 				VectorCopy( dir, params->dir );
@@ -227,8 +253,8 @@ void TrackedEffectsSystem::updateAttachedParticleTrail( ParticleTrail *trail, co
 	}
 }
 
-auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *material, const float *origin )
-	-> StraightPolyTrail * {
+auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *material, const float *origin,
+												   const StraightPolyTrailProps *props ) -> StraightPolyTrail * {
 	// TODO: Reuse lingering trails?
 
 	if( void *mem = m_straightPolyTrailsAllocator.allocOrNull() ) {
@@ -236,6 +262,7 @@ auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *materia
 			auto *const trail       = new( mem )StraightPolyTrail;
 			trail->attachedToEntNum = entNum;
 			trail->beam             = beam;
+			trail->props            = props;
 			VectorCopy( origin, trail->initialOrigin );
 			wsw::link( trail, &m_attachedStraightPolyTrailsHead );
 			return trail;
@@ -247,7 +274,8 @@ auto TrackedEffectsSystem::allocStraightPolyTrail( int entNum, shader_s *materia
 	return nullptr;
 }
 
-auto TrackedEffectsSystem::allocCurvedPolyTrail( int entNum, shader_s *material ) -> CurvedPolyTrail * {
+auto TrackedEffectsSystem::allocCurvedPolyTrail( int entNum, shader_s *material,
+												 const CurvedPolyTrailProps *props ) -> CurvedPolyTrail * {
 	// TODO: Reuse lingering trails?
 
 	if( void *mem = m_curvedPolyTrailsAllocator.allocOrNull() ) {
@@ -256,6 +284,7 @@ auto TrackedEffectsSystem::allocCurvedPolyTrail( int entNum, shader_s *material 
 			wsw::link( trail, &m_attachedCurvedPolyTrailsHead );
 			trail->attachedToEntNum = entNum;
 			trail->beam             = beam;
+			trail->props            = props;
 			return trail;
 		} else {
 			m_curvedPolyTrailsAllocator.free( mem );
@@ -266,13 +295,12 @@ auto TrackedEffectsSystem::allocCurvedPolyTrail( int entNum, shader_s *material 
 }
 
 void TrackedEffectsSystem::updateAttachedStraightPolyTrail( StraightPolyTrail *trail, const float *origin,
-															int64_t currTime, const StraightPolyTrailProps &props ) {
+															int64_t currTime ) {
 	trail->touchedAt = currTime;
-	trail->lastTileLength = 0;
-	Vector4Copy( props.fromColor, trail->lastFromColor );
-	Vector4Copy( props.toColor, trail->lastToColor );
 	VectorCopy( origin, trail->lastTo );
 	VectorCopy( origin, trail->lastFrom );
+
+	const StraightPolyTrailProps &__restrict props = *trail->props;
 
 	const float squareDistance = DistanceSquared( origin, trail->initialOrigin );
 	if( squareDistance > wsw::square( props.prestep ) ) {
@@ -295,14 +323,16 @@ void TrackedEffectsSystem::updateAttachedStraightPolyTrail( StraightPolyTrail *t
 		trail->lastWidth = width;
 	}
 
-	cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, trail->lastFromColor, trail->lastToColor,
-												   trail->lastWidth, trail->lastTileLength,
+	cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, props.fromColor, props.toColor,
+												   trail->lastWidth, props.tileLength,
 												   trail->lastFrom, trail->lastTo );
 }
 
 void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin,
-														  int64_t currTime, const CurvedPolyTrailProps &props ) {
+														  int64_t currTime ) {
 	assert( trail->points.size() == trail->timestamps.size() );
+
+	const CurvedPolyTrailProps &__restrict props = *trail->props;
 
 	if( !trail->points.empty() ) {
 		unsigned numTimedOutPoints = 0;
@@ -366,14 +396,10 @@ void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail
 	assert( trail->points.size() == trail->timestamps.size() );
 
 	trail->touchedAt      = currTime;
-	trail->lastWidth      = props.width;
 	trail->lastPointsSpan = { (const vec3_t *)trail->points.data(), trail->points.size() };
 
-	Vector4Copy( props.toColor, trail->lastToColor );
-	Vector4Copy( props.fromColor, trail->lastFromColor );
-
-	cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, trail->lastFromColor, trail->lastToColor,
-												 trail->lastWidth, PolyEffectsSystem::UvModeFit {},
+	cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, props.fromColor, props.toColor,
+												 props.width, PolyEffectsSystem::UvModeFit {},
 												 trail->lastPointsSpan );
 }
 
@@ -397,7 +423,7 @@ static const ColorLifespan kRocketFireTrailColors[1] {
 	}
 };
 
-static ConicalFlockParams rocketSmokeParticlesFlockParams {
+static ConicalFlockParams g_rocketSmokeParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 45,
 	.innerAngle      = 18,
@@ -406,7 +432,7 @@ static ConicalFlockParams rocketSmokeParticlesFlockParams {
 	.activationDelay = { .min = 8, .max = 8 },
 };
 
-static ConicalFlockParams rocketFireParticlesFlockParams {
+static ConicalFlockParams g_rocketFireParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 15,
 	.speed           = { .min = 75, .max = 150 },
@@ -414,11 +440,35 @@ static ConicalFlockParams rocketFireParticlesFlockParams {
 	.activationDelay = { .min = 8, .max = 8 },
 };
 
+static const StraightPolyTrailProps kRocketCombinedStraightPolyTrailProps {
+	.maxLength = 250.0f,
+	.width     = 20.0f,
+};
+
+static const StraightPolyTrailProps kRocketStandaloneStraightPolyTrailProps {
+	.maxLength = 325.0f,
+	.width     = 20.0f,
+};
+
+static const CurvedPolyTrailProps kRocketCombinedCurvedPolyTrailProps {
+	.maxNodeLifetime = 300u,
+	.maxLength       = 300.0f,
+	.width           = 20.0f,
+};
+
+static const CurvedPolyTrailProps kRocketStandaloneCurvedPolyTrailProps {
+	.maxNodeLifetime = 350u,
+	.maxLength       = 400.0f,
+	.width           = 10.0f,
+};
+
 void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, int64_t currTime, bool useCurvedTrail ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
+
 	if( cg_projectileSmokeTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
-			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
+															 &::g_rocketSmokeParticlesFlockParams, {
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kRocketSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -428,12 +478,14 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &::rocketSmokeParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
+
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
-			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
+															 &::g_rocketFireParticlesFlockParams, {
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kRocketFireTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -442,42 +494,37 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &::rocketFireParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
-	if( cg_projectilePolyTrail->integer ) {
-		const bool hasOtherTrails = cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer;
 
+	if( cg_projectilePolyTrail->integer ) {
 		[[maybe_unused]] shader_s *material;
-		[[maybe_unused]] float trailWidth;
-		if( hasOtherTrails ) {
-			material   = cgs.media.shaderBlastParticle;
-			trailWidth = 20.0f;
+		[[maybe_unused]] const StraightPolyTrailProps *straightPolyTrailProps;
+		[[maybe_unused]] const CurvedPolyTrailProps *curvedPolyTrailProps;
+		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
+			material               = cgs.media.shaderBlastParticle;
+			straightPolyTrailProps = &kRocketCombinedStraightPolyTrailProps;
+			curvedPolyTrailProps   = &kRocketCombinedCurvedPolyTrailProps;
 		} else {
-			material   = cgs.shaderWhite;
-			trailWidth = 10.0f;
+			material = cgs.shaderWhite;
+			straightPolyTrailProps = &kRocketStandaloneStraightPolyTrailProps;
+			curvedPolyTrailProps   = &kRocketStandaloneCurvedPolyTrailProps;
 		}
 
 		if( useCurvedTrail ) {
 			if( !effects->curvedPolyTrail ) [[unlikely]] {
-				effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material );
+				effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material, curvedPolyTrailProps );
 			}
 			if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) [[likely]] {
-				updateAttachedCurvedPolyTrail( trail, origin, currTime, CurvedPolyTrailProps {
-					.maxNodeLifetime = hasOtherTrails ? 300u : 350u,
-					.maxLength       = hasOtherTrails ? 300.0f : 400.0f,
-					.width           = trailWidth,
-				});
+				updateAttachedCurvedPolyTrail( trail, origin, currTime );
 			}
 		} else {
 			if( !effects->straightPolyTrail ) [[unlikely]] {
-				effects->straightPolyTrail = allocStraightPolyTrail( entNum, material, origin );
+				effects->straightPolyTrail = allocStraightPolyTrail( entNum, material, origin, straightPolyTrailProps );
 			}
 			if( StraightPolyTrail *trail = effects->straightPolyTrail ) [[likely]] {
-				updateAttachedStraightPolyTrail( trail, origin, currTime, StraightPolyTrailProps {
-					.maxLength = hasOtherTrails ? 250.0f : 325.0f,
-					.width     = trailWidth,
-				});
+				updateAttachedStraightPolyTrail( trail, origin, currTime );
 			}
 		}
 	}
@@ -502,7 +549,7 @@ static const ColorLifespan kGrenadeSmokeTrailColors[1] {
 	}
 };
 
-static ConicalFlockParams grenadeFuseParticlesFlockParams {
+static ConicalFlockParams g_grenadeFuseParticlesFlockParams {
 	.gravity    = 0,
 	.angle      = 60,
 	.innerAngle = 30,
@@ -510,7 +557,7 @@ static ConicalFlockParams grenadeFuseParticlesFlockParams {
 	.timeout    = { .min = 125, .max = 175 },
 };
 
-static ConicalFlockParams grenadeSmokeParticlesFlockParams {
+static ConicalFlockParams g_grenadeSmokeParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 24,
 	.innerAngle      = 9,
@@ -519,11 +566,29 @@ static ConicalFlockParams grenadeSmokeParticlesFlockParams {
 	.activationDelay = { .min = 8, .max = 8 },
 };
 
+static const CurvedPolyTrailProps kGrenadeCombinedPolyTrailProps {
+	.maxNodeLifetime = 300,
+	.maxLength       = 150,
+	.width           = 15,
+	.fromColor       = { 1.0f, 1.0f, 1.0f, 0.0f },
+	.toColor         = { 0.2f, 0.2f, 1.0f, 0.2f },
+};
+
+static const CurvedPolyTrailProps kGrenadeStandalonePolyTrailProps {
+	.maxNodeLifetime = 300,
+	.maxLength       = 250,
+	.width           = 12,
+	.fromColor       = { 1.0f, 1.0f, 1.0f, 0.0f },
+	.toColor         = { 0.2f, 0.2f, 1.0f, 0.2f },
+};
+
 void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
+
 	if( cg_projectileSmokeTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
-			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
+															 &::g_grenadeSmokeParticlesFlockParams, {
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kGrenadeSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -533,12 +598,14 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &::grenadeSmokeParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
+
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
-			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
+															 &::g_grenadeFuseParticlesFlockParams, {
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kGrenadeFuseTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -548,33 +615,25 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &::grenadeFuseParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
+
 	if( cg_projectilePolyTrail->integer ) {
 		[[maybe_unused]] shader_s *material;
-		[[maybe_unused]] float trailWidth;
-		[[maybe_unused]] float trailLength;
+		[[maybe_unused]] const CurvedPolyTrailProps *props;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
-			material    = cgs.media.shaderBlastParticle;
-			trailWidth  = 15.0f;
-			trailLength = 150;
+			material = cgs.media.shaderBlastParticle;
+			props    = &kGrenadeCombinedPolyTrailProps;
 		} else {
-			material    = cgs.shaderWhite;
-			trailWidth  = 12.0f;
-			trailLength = 250;
+			material = cgs.shaderWhite;
+			props    = &kGrenadeStandalonePolyTrailProps;
 		}
 		if( !effects->curvedPolyTrail ) [[unlikely]] {
-			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material );
+			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, material, props );
 		}
 		if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) [[likely]] {
-			updateAttachedCurvedPolyTrail( trail, origin, currTime, CurvedPolyTrailProps {
-				.maxNodeLifetime = 300,
-				.maxLength       = trailLength,
-				.width           = trailWidth,
-				.fromColor       = { 1.0f, 1.0f, 1.0f, 0.0f },
-				.toColor         = { 0.2f, 0.2f, 1.0f, 0.2f },
-			});
+			updateAttachedCurvedPolyTrail( trail, origin, currTime );
 		}
 	}
 }
@@ -612,25 +671,37 @@ static const ColorLifespan kBlastIonsTrailColors[] {
 	}
 };
 
-static ConicalFlockParams blastSmokeParticlesFlockParams {
+static ConicalFlockParams g_blastSmokeParticlesFlockParams {
 	.gravity = 0,
 	.angle   = 24,
 	.speed   = { .min = 200, .max = 300 },
 	.timeout = { .min = 175, .max = 225 },
 };
 
-static ConicalFlockParams blastIonsParticlesFlockParams {
+static ConicalFlockParams g_blastIonsParticlesFlockParams {
 	.gravity         = -75,
 	.angle           = 30,
 	.speed           = { .min = 200, .max = 300 },
 	.timeout         = { .min = 300, .max = 400 },
 };
 
+static const StraightPolyTrailProps kBlastCombinedTrailProps {
+	.maxLength = 250,
+	.width     = 20,
+};
+
+static const StraightPolyTrailProps kBlastStandaloneTrailProps {
+	.maxLength = 600,
+	.width     = 12,
+};
+
 void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int64_t currTime ) {
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
+
 	if( cg_projectileSmokeTrail->integer ) {
 		if( !effects->particleTrails[0] ) [[unlikely]] {
-			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin, {
+			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
+															 &::g_blastSmokeParticlesFlockParams, {
 				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 				.colors        = kBlastSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -640,12 +711,14 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		}
 		if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 			trail->dropDistance = 8.0f;
-			updateAttachedParticleTrail( trail, origin, &::blastSmokeParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
+
 	if( cg_projectileFireTrail->integer ) {
 		if( !effects->particleTrails[1] ) [[unlikely]] {
-			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin, {
+			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
+															 &::g_blastIonsParticlesFlockParams, {
 				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 				.colors        = kBlastIonsTrailColors,
 				.geometryRules = Particle::SpriteRules {
@@ -654,35 +727,30 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 			});
 		}
 		if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
-			updateAttachedParticleTrail( trail, origin, &::blastIonsParticlesFlockParams, currTime );
+			updateAttachedParticleTrail( trail, origin, currTime );
 		}
 	}
+
 	if( cg_projectilePolyTrail->integer ) {
 		[[maybe_unused]] shader_s *material;
-		[[maybe_unused]] float trailWidth;
-		[[maybe_unused]] float trailLength;
+		[[maybe_unused]] const StraightPolyTrailProps *props;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
-			material    = cgs.media.shaderBlastParticle;
-			trailWidth  = 20.0f;
-			trailLength = 250.0f;
+			material = cgs.media.shaderBlastParticle;
+			props    = &kBlastCombinedTrailProps;
 		} else {
-			material    = cgs.shaderWhite;
-			trailWidth  = 12.0f;
-			trailLength = 600.0f;
+			material = cgs.shaderWhite;
+			props    = &kBlastStandaloneTrailProps;
 		}
 		if( !effects->straightPolyTrail ) {
-			effects->straightPolyTrail = allocStraightPolyTrail( entNum, material, origin );
+			effects->straightPolyTrail = allocStraightPolyTrail( entNum, material, origin, props );
 		}
 		if( StraightPolyTrail *trail = effects->straightPolyTrail ) {
-			updateAttachedStraightPolyTrail( trail, origin, currTime, StraightPolyTrailProps {
-				.maxLength = trailLength,
-				.width     = trailWidth,
-			});
+			updateAttachedStraightPolyTrail( trail, origin, currTime );
 		}
 	}
 }
 
-static ParticleColorsForTeamHolder electroCloudTrailParticleColorsHolder {
+static ParticleColorsForTeamHolder g_electroCloudTrailParticleColorsHolder {
 	.defaultColors = {
 		.initialColor  = { 0.5f, 0.7f, 1.0f, 1.0f },
 		.fadedInColor  = { 0.7f, 0.7f, 1.0f, 0.2f },
@@ -701,7 +769,7 @@ static const ColorLifespan kElectroIonsTrailColors[5] {
 	{ { 0.3f, 0.3f, 1.0f, 1.0f }, { 0.3f, 0.3f, 1.0f, 1.0f }, { 0.3f, 0.3f, 1.0f, 1.0f } },
 };
 
-static ParticleColorsForTeamHolder electroIonsParticleColorsHolder {
+static ParticleColorsForTeamHolder g_electroIonsParticleColorsHolder {
 	.defaultColors = {
 		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
 		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
@@ -709,18 +777,23 @@ static ParticleColorsForTeamHolder electroIonsParticleColorsHolder {
 	}
 };
 
-static ConicalFlockParams electroCloudParticlesFlockParams {
+static ConicalFlockParams g_electroCloudParticlesFlockParams {
 	.gravity = 0,
 	.angle   = 30,
 	.speed   = { .min = 200, .max = 300 },
 	.timeout = { .min = 150, .max = 200 },
 };
 
-static ConicalFlockParams electroIonsParticlesFlockParams {
+static ConicalFlockParams g_electroIonsParticlesFlockParams {
 	.gravity         = 0,
 	.angle           = 18,
 	.speed           = { .min = 200, .max = 300 },
 	.timeout         = { .min = 250, .max = 300 },
+};
+
+static const StraightPolyTrailProps kElectroPolyTrailProps {
+	.maxLength = 700.0f,
+	.width     = 20.0f,
 };
 
 void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
@@ -738,12 +811,12 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 		}
 	}
 
-	ParticleColorsForTeamHolder *const cloudColorsHolder = &::electroCloudTrailParticleColorsHolder;
+	ParticleColorsForTeamHolder *const cloudColorsHolder = &::g_electroCloudTrailParticleColorsHolder;
 	if( useTeamColors ) {
 		cloudColors = { cloudColorsHolder->getColorsForTeam( team, teamColor ), 1 };
 		// Use the single color, the trail appearance looks worse than default anyway.
 		// TODO: Make ions colors lighter at least
-		ionsColors = { ::electroIonsParticleColorsHolder.getColorsForTeam( team, teamColor ), 1 };
+		ionsColors = { ::g_electroIonsParticleColorsHolder.getColorsForTeam( team, teamColor ), 1 };
 	} else {
 		cloudColors = { &cloudColorsHolder->defaultColors, 1 };
 		ionsColors = kElectroIonsTrailColors;
@@ -751,7 +824,8 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 
 	AttachedEntityEffects *const __restrict effects = &m_attachedEntityEffects[entNum];
 	if( !effects->particleTrails[0] ) [[unlikely]] {
-		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin, {
+		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin,
+														 &::g_electroCloudParticlesFlockParams, {
 			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 			.colors        = cloudColors,
 			.geometryRules = Particle::SpriteRules {
@@ -761,11 +835,12 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	}
 	if( ParticleTrail *trail = effects->particleTrails[0] ) [[likely]] {
 		trail->dropDistance = 16.0f;
-		updateAttachedParticleTrail( trail, origin, &::electroCloudParticlesFlockParams, currTime );
+		updateAttachedParticleTrail( trail, origin, currTime );
 	}
 
 	if( !effects->particleTrails[1] ) [[unlikely]] {
-		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin, {
+		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin,
+														 &::g_electroIonsParticlesFlockParams, {
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = ionsColors,
 			.geometryRules = Particle::SpriteRules {
@@ -775,34 +850,43 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	}
 	if( ParticleTrail *trail = effects->particleTrails[1] ) [[likely]] {
 		trail->dropDistance = 16.0f;
-		updateAttachedParticleTrail( trail, origin, &::electroIonsParticlesFlockParams, currTime );
+		updateAttachedParticleTrail( trail, origin, currTime );
 	}
 
 	if( !effects->straightPolyTrail ) [[unlikely]] {
-		effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderBlastParticle, origin );
+		effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderBlastParticle,
+															 origin, &kElectroPolyTrailProps );
 	}
 	if( StraightPolyTrail *trail = effects->straightPolyTrail ) [[likely]] {
-		updateAttachedStraightPolyTrail( trail, origin, currTime, StraightPolyTrailProps {
-			.maxLength = 700.0f,
-			.width     = 20.0f,
-		});
+		updateAttachedStraightPolyTrail( trail, origin, currTime );
 	}
 }
+
+static const StraightPolyTrailProps kPlasmaStrongPolyTrailProps {
+	.maxLength = 350,
+	.width     = 12.0f,
+	.fromColor = { 0.3f, 1.0f, 1.0f, 0.00f },
+	.toColor   = { 0.1f, 0.8f, 0.4f, 0.15f },
+};
+
+static const CurvedPolyTrailProps kPlasmaCurvedPolyTrailProps {
+	.maxNodeLifetime = 225,
+	.maxLength       = 400,
+	.width           = 12.0f,
+	.fromColor       = { 0.3f, 1.0f, 1.0f, 0.00f },
+	.toColor         = { 0.1f, 0.8f, 0.4f, 0.15f },
+};
 
 void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *origin, int64_t currTime ) {
 	assert( entNum > 0 && entNum < MAX_EDICTS );
 	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->straightPolyTrail ) {
-			effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderElectroParticle, origin );
+			effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderElectroParticle,
+																 origin, &kPlasmaStrongPolyTrailProps );
 		}
 		if( StraightPolyTrail *trail = effects->straightPolyTrail ) {
-			updateAttachedStraightPolyTrail( trail, origin, currTime, StraightPolyTrailProps {
-				.maxLength = 350,
-				.width     = 12.0f,
-				.fromColor = { 0.3f, 1.0f, 1.0f, 0.00f },
-				.toColor   = { 0.1f, 0.8f, 0.4f, 0.15f },
-			});
+			updateAttachedStraightPolyTrail( trail, origin, currTime );
 		}
 	}
 }
@@ -812,16 +896,11 @@ void TrackedEffectsSystem::touchWeakPlasmaTrail( int entNum, const float *origin
 	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->curvedPolyTrail ) {
-			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.media.shaderElectroParticle );
+			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.media.shaderElectroParticle,
+															 &kPlasmaCurvedPolyTrailProps );
 		}
 		if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) {
-			updateAttachedCurvedPolyTrail( trail, origin, currTime, CurvedPolyTrailProps {
-				.maxNodeLifetime = 225,
-				.maxLength       = 400,
-				.width           = 12.0f,
-				.fromColor       = { 0.3f, 1.0f, 1.0f, 0.00f },
-				.toColor         = { 0.1f, 0.8f, 0.4f, 0.15f },
-			});
+			updateAttachedCurvedPolyTrail( trail, origin, currTime );
 		}
 	}
 }
@@ -838,27 +917,42 @@ void TrackedEffectsSystem::makeParticleTrailLingering( ParticleTrail *particleTr
 	entityEffects->particleTrails[trailIndex] = nullptr;
 }
 
-void TrackedEffectsSystem::makePolyTrailLingering( StraightPolyTrail *polyTrail ) {
-	wsw::unlink( polyTrail, &m_attachedStraightPolyTrailsHead );
-	wsw::link( polyTrail, &m_lingeringStraightPolyTrailsHead );
+void TrackedEffectsSystem::tryMakingStraightPolyTrailLingering( StraightPolyTrail *trail ) {
+	assert( trail->attachedToEntNum != std::nullopt );
 
-	const unsigned entNum = *polyTrail->attachedToEntNum;
-	polyTrail->attachedToEntNum = std::nullopt;
+	// If it's worth to be kept
+	if( DistanceSquared( trail->lastFrom, trail->lastTo ) > wsw::square( 8.0f ) ) {
+		wsw::unlink( trail, &m_attachedStraightPolyTrailsHead );
+		wsw::link( trail, &m_lingeringStraightPolyTrailsHead );
 
-	AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
-	assert( entityEffects->straightPolyTrail == polyTrail );
-	entityEffects->straightPolyTrail = nullptr;
+		const unsigned entNum = *trail->attachedToEntNum;
+		trail->attachedToEntNum = std::nullopt;
+
+		AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
+		assert( entityEffects->straightPolyTrail == trail );
+		entityEffects->straightPolyTrail = nullptr;
+	} else {
+		unlinkAndFree( trail );
+	}
 }
 
-void TrackedEffectsSystem::makePolyTrailLingering( CurvedPolyTrail *polyTrail ) {
-	wsw::unlink( polyTrail, &m_attachedCurvedPolyTrailsHead );
-	wsw::link( polyTrail, &m_lingeringCurvedPolyTrailsHead );
-	const unsigned entNum = *polyTrail->attachedToEntNum;
-	polyTrail->attachedToEntNum = std::nullopt;
+void TrackedEffectsSystem::tryMakingCurvedPolyTrailLingering( CurvedPolyTrail *trail ) {
+	assert( trail->attachedToEntNum != std::nullopt );
 
-	AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
-	assert( entityEffects->curvedPolyTrail == polyTrail );
-	entityEffects->curvedPolyTrail = nullptr;
+	// If it's worth to be kept
+	if( trail->lastPointsSpan.size() > 1 ) {
+		wsw::unlink( trail, &m_attachedCurvedPolyTrailsHead );
+		wsw::link( trail, &m_lingeringCurvedPolyTrailsHead );
+
+		const unsigned entNum = *trail->attachedToEntNum;
+		trail->attachedToEntNum = std::nullopt;
+
+		AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
+		assert( entityEffects->curvedPolyTrail == trail );
+		entityEffects->curvedPolyTrail = nullptr;
+	} else {
+		unlinkAndFree( trail );
+	}
 }
 
 void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
@@ -895,11 +989,11 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 		assert( !effects->particleTrails[1] );
 	}
 	if( effects->straightPolyTrail ) {
-		makePolyTrailLingering( effects->straightPolyTrail );
+		tryMakingStraightPolyTrailLingering( effects->straightPolyTrail );
 		assert( !effects->straightPolyTrail );
 	}
 	if( effects->curvedPolyTrail ) {
-		makePolyTrailLingering( effects->curvedPolyTrail );
+		tryMakingCurvedPolyTrailLingering( effects->curvedPolyTrail );
 		assert( !effects->curvedPolyTrail );
 	}
 }
@@ -960,6 +1054,11 @@ void TrackedEffectsSystem::updateCurvedLaserBeam( int ownerNum, std::span<const 
 	}
 }
 
+static inline void copyWithAlphaScale( const float *from, float *to, float alpha ) {
+	Vector4Copy( from, to );
+	to[3] *= alpha;
+}
+
 void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Collect orphans.
 
@@ -986,24 +1085,14 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 	for( StraightPolyTrail *trail = m_attachedStraightPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
 		nextTrail = trail->next;
 		if( trail->touchedAt != currTime ) [[unlikely]] {
-			// If it is worth to be kept
-			if( DistanceSquared( trail->lastFrom, trail->lastTo ) > wsw::square( 8.0f ) ) {
-				makePolyTrailLingering( trail );
-			} else {
-				unlinkAndFree( trail );
-			}
+			tryMakingStraightPolyTrailLingering( trail );
 		}
 	}
 
 	for( CurvedPolyTrail *trail = m_attachedCurvedPolyTrailsHead, *nextTrail = nullptr; trail; trail = nextTrail ) {
 		nextTrail = trail->next;
 		if( trail->touchedAt != currTime ) [[unlikely]] {
-			// If it is worth to be kept
-			if( trail->lastPointsSpan.size() > 1 ) {
-				makePolyTrailLingering( trail );
-			} else {
-				unlinkAndFree( trail );
-			}
+			tryMakingCurvedPolyTrailLingering( trail );
 		}
 	}
 
@@ -1017,12 +1106,10 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		} else {
 			const float lingeringFrac = (float)( currTime - trail->touchedAt ) * rcpLingeringLimit;
 			vec4_t fadingOutFromColor, fadingOutToColor;
-			Vector4Copy( trail->lastFromColor, fadingOutFromColor );
-			Vector4Copy( trail->lastToColor, fadingOutToColor );
-			fadingOutFromColor[3] *= ( 1.0f - lingeringFrac );
-			fadingOutToColor[3]   *= ( 1.0f - lingeringFrac );
+			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
+			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
 			cg.polyEffectsSystem.updateStraightBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
-														   trail->lastWidth, trail->lastTileLength,
+														   trail->lastWidth, trail->props->tileLength,
 														   trail->lastFrom, trail->lastTo );
 		}
 	}
@@ -1034,12 +1121,10 @@ void TrackedEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		} else {
 			const float lingeringFrac = (float)( currTime - trail->touchedAt ) * rcpLingeringLimit;
 			vec4_t fadingOutFromColor, fadingOutToColor;
-			Vector4Copy( trail->lastFromColor, fadingOutFromColor );
-			Vector4Copy( trail->lastToColor, fadingOutToColor );
-			fadingOutFromColor[3] *= ( 1.0f - lingeringFrac );
-			fadingOutToColor[3]   *= ( 1.0f - lingeringFrac );
+			copyWithAlphaScale( trail->props->fromColor, fadingOutFromColor, 1.0f - lingeringFrac );
+			copyWithAlphaScale( trail->props->toColor, fadingOutToColor, 1.0f - lingeringFrac );
 			cg.polyEffectsSystem.updateCurvedBeamEffect( trail->beam, fadingOutFromColor, fadingOutToColor,
-														 trail->lastWidth, PolyEffectsSystem::UvModeFit {},
+														 trail->props->width, PolyEffectsSystem::UvModeFit {},
 														 trail->lastPointsSpan );
 		}
 	}

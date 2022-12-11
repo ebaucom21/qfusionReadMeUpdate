@@ -33,6 +33,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 class DrawSceneRequest;
 struct model_s;
 
+struct CurvedPolyTrailProps;
+struct StraightPolyTrailProps;
+
 class TrackedEffectsSystem {
 public:
 	TrackedEffectsSystem() = default;
@@ -79,6 +82,7 @@ private:
 	struct ParticleTrail {
 		ParticleTrail *prev { nullptr }, *next { nullptr };
 		ParticleFlock *particleFlock { nullptr };
+		ConicalFlockParams *paramsTemplate { nullptr };
 		float lastDropOrigin[3];
 		int64_t touchedAt { 0 };
 		int64_t lastParticleAt { 0 };
@@ -97,14 +101,14 @@ private:
 	struct StraightPolyTrail {
 		int64_t touchedAt { 0 };
 		StraightPolyTrail *prev { nullptr }, *next { nullptr };
-		PolyEffectsSystem::StraightBeam *beam;
+		PolyEffectsSystem::StraightBeam *beam { nullptr };
+		const StraightPolyTrailProps *props { nullptr };
+
 		float initialOrigin[3];
+
 		float lastFrom[3];
 		float lastTo[3];
 		float lastWidth;
-		float lastTileLength;
-		float lastFromColor[4];
-		float lastToColor[4];
 
 		std::optional<uint16_t> attachedToEntNum;
 	};
@@ -112,14 +116,12 @@ private:
 	struct CurvedPolyTrail {
 		int64_t touchedAt { 0 };
 		CurvedPolyTrail *prev { nullptr }, *next { nullptr };
-		PolyEffectsSystem::CurvedBeam *beam;
+		PolyEffectsSystem::CurvedBeam *beam { nullptr };
+		const CurvedPolyTrailProps *props { nullptr };
 
 		wsw::StaticVector<Vec3, 32> points;
 		wsw::StaticVector<int64_t, 32> timestamps;
 		std::span<const vec3_t> lastPointsSpan;
-		float lastWidth;
-		float lastFromColor[4];
-		float lastToColor[4];
 
 		std::optional<uint16_t> attachedToEntNum;
 	};
@@ -152,8 +154,8 @@ private:
 	};
 
 	void makeParticleTrailLingering( ParticleTrail *trail );
-	void makePolyTrailLingering( StraightPolyTrail *trail );
-	void makePolyTrailLingering( CurvedPolyTrail *trail );
+	void tryMakingStraightPolyTrailLingering( StraightPolyTrail *trail );
+	void tryMakingCurvedPolyTrailLingering( CurvedPolyTrail *trail );
 
 	// TODO: Lift this helper to the top level
 	template <typename Effect>
@@ -170,38 +172,21 @@ private:
 	[[nodiscard]]
 	auto allocParticleTrail( int entNum, unsigned trailIndex,
 							 const float *origin, unsigned particleSystemBin,
+							 ConicalFlockParams *flockParamsTemplate,
 							 Particle::AppearanceRules &&appearanceRules  ) -> ParticleTrail *;
 
-	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin,
-									  ConicalFlockParams *params, int64_t currTime );
+	void updateAttachedParticleTrail( ParticleTrail *trail, const float *origin, int64_t currTime );
 
 	[[nodiscard]]
-	auto allocStraightPolyTrail( int entNum, shader_s *material, const float *origin ) -> StraightPolyTrail *;
+	auto allocStraightPolyTrail( int entNum, shader_s *material, const float *origin,
+								 const StraightPolyTrailProps *props ) -> StraightPolyTrail *;
+
+	void updateAttachedStraightPolyTrail( StraightPolyTrail *trail, const float *origin, int64_t currTime );
+
 	[[nodiscard]]
-	auto allocCurvedPolyTrail( int entNum, shader_s *material ) -> CurvedPolyTrail *;
+	auto allocCurvedPolyTrail( int entNum, shader_s *material, const CurvedPolyTrailProps *props ) -> CurvedPolyTrail *;
 
-	struct StraightPolyTrailProps {
-		float maxLength { 0.0f };
-		float width { 0.0f };
-		float prestep { 32.0f };
-		float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
-		float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
-	};
-
-	struct CurvedPolyTrailProps {
-		float minDistanceBetweenNodes { 8.0f };
-		unsigned maxNodeLifetime { 0 };
-		// This value is not that permissive due to long segments for some trails.
-		float maxLength { 0.0f };
-		float width { 0.0f };
-		float fromColor[4] { 1.0f, 1.0f, 1.0f, 0.0f };
-		float toColor[4] { 1.0f, 1.0f, 1.0f, 0.2f };
-	};
-
-	void updateAttachedStraightPolyTrail( StraightPolyTrail *trail, const float *origin, int64_t currTime,
-										  const StraightPolyTrailProps &props );
-	void updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin, int64_t currTime,
-										const CurvedPolyTrailProps &props );
+	void updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail, const float *origin, int64_t currTime );
 
 	void spawnPlayerTeleEffect( int clientNum, const float *origin, model_s *model, int inOrOutIndex );
 

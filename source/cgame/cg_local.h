@@ -419,8 +419,8 @@ typedef struct cg_state_s {
 
 	ParticleSystem particleSystem;
 	SimulatedHullsSystem simulatedHullsSystem;
-	EffectsSystemFacade effectsSystem;
 	PolyEffectsSystem polyEffectsSystem;
+	EffectsSystemFacade effectsSystem;
 } cg_state_t;
 
 extern cg_static_t cgs;
