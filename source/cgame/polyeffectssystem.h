@@ -140,6 +140,8 @@ private:
 		float speed { 0.0f };
 		float totalDistance { 0.0f };
 		float distanceSoFar { 0.0f };
+		float initialColorAlpha { 0.0f };
+		// Actually light-only
 		float fadeInDistance { 0.0f };
 		float fadeOutDistance { 0.0f };
 		QuadPoly poly;

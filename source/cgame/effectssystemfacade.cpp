@@ -2156,20 +2156,33 @@ bool EffectsSystemFacade::MultiGroupEventRateLimiter::acquirePermission( int64_t
 	return chosenLimiter->acquirePermission( timestamp, origin, params );
 }
 
-void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
-	vec3_t tmp;
-	// TODO: Adjust for 3rd person/other players too?
+static void adjustTracerOriginForOwner( int owner, const float *givenOrigin, float *adjustedOrigin ) {
+	// This produces satisfactory results, assuming a reasonable prestep.
+
+	VectorCopy( givenOrigin, adjustedOrigin );
 	if( owner == (int)cg.predictedPlayerState.POVnum ) {
-		VectorCopy( from, tmp );
-		tmp[2] -= 0.5f * playerbox_stand_viewheight;
-		from = tmp;
+		const int handValue  = cgs.demoPlaying ? cg_hand->integer : cgs.clientInfo[owner - 1].hand;
+		const float handSign = handValue ? -1.0f : +1.0f;
+		const float offset   = wsw::clamp( handSign * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
+
+		vec3_t right;
+		AngleVectors( cg_entities[owner].current.angles, nullptr, right, nullptr );
+		VectorMA( adjustedOrigin, offset, right, adjustedOrigin );
+
+		adjustedOrigin[2] -= playerbox_stand_viewheight;
 	}
-	cg.polyEffectsSystem.spawnTracerEffect( from, to, PolyEffectsSystem::TracerParams {
+}
+
+void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
+	vec3_t adjustedFrom;
+	adjustTracerOriginForOwner( owner, from, adjustedFrom );
+
+	cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, PolyEffectsSystem::TracerParams {
 		.material           = cgs.media.shaderSparkParticle,
 		.duration           = 75,
-		.prestep            = m_rng.nextFloat( 64.0f, 96.0f ),
-		.width              = m_rng.nextFloat( 2.0f, 2.5f ),
-		.length             = 144.0f,
+		.prestep            = m_rng.nextFloat( 72.0f, 96.0f ),
+		.width              = m_rng.nextFloat( 3.0f, 3.5f ),
+		.length             = m_rng.nextFloat( 175.0f, 200.0f ),
 		.programLightRadius = 72.0f,
 		.coronaLightRadius  = 108.0f,
 		.lightColor         = { 0.9f, 0.8f, 1.0f }
@@ -2177,19 +2190,16 @@ void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 }
 
 void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to ) {
-	vec3_t tmp;
-	if( owner == (int)cg.predictedPlayerState.POVnum ) {
-		VectorCopy( from, tmp );
-		tmp[2] -= 0.5f * playerbox_stand_viewheight;
-		from = tmp;
-	}
+	vec3_t adjustedFrom;
+	adjustTracerOriginForOwner( owner, from, adjustedFrom );
+
 	for( size_t i = 0; i < to.size(); ++i ) {
-		cg.polyEffectsSystem.spawnTracerEffect( from, to[i], PolyEffectsSystem::TracerParams {
+		cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to[i], PolyEffectsSystem::TracerParams {
 			.material                 = cgs.media.shaderSparkParticle,
 			.duration                 = 125,
-			.prestep                  = m_rng.nextFloat( 72.0f, 224.0f ),
+			.prestep                  = m_rng.nextFloat( 108.0f, 224.0f ),
 			.width                    = 1.0f,
-			.length                   = 72.0f,
+			.length                   = m_rng.nextFloat( 96.0f, 144.0f ),
 			.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
 			.programLightRadius       = 96.0f,
 			.coronaLightRadius        = 192.0f,

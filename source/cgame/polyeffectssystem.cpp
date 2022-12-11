@@ -421,13 +421,14 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 	const float distance          = squareDistance * rcpDistance;
 	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
-	const float speed             = std::max( 1000.0f, distance * Q_Rcp( tracerTimeSeconds ) );
+	const float speed             = std::max( 1750.0f, distance * Q_Rcp( tracerTimeSeconds ) );
 
 	auto *effect                 = new( mem )TracerEffect;
 	effect->timeoutAt            = m_lastTime + params.duration;
 	effect->speed                = speed;
 	effect->totalDistance        = distance;
 	effect->distanceSoFar        = params.prestep;
+	effect->initialColorAlpha    = params.color[3];
 	effect->fadeInDistance       = 2.0f * params.prestep;
 	effect->fadeOutDistance      = 2.0f * params.prestep;
 	effect->poly.material        = params.material;
@@ -517,20 +518,32 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		[[maybe_unused]] const float oldDistanceSoFar = tracer->distanceSoFar;
 		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
 
-		if( tracer->poly.halfExtent >= tracer->distanceSoFar ) [[unlikely]] {
+		const float distanceOfClosestPoint = oldDistanceSoFar - tracer->poly.halfExtent;
+		const float skipDrawingDistance = 1.5f * tracer->poly.halfExtent;
+		if( distanceOfClosestPoint <= skipDrawingDistance ) [[unlikely]] {
 			// Hide it for now
 			continue;
 		}
 
-		if( tracer->distanceSoFar + tracer->poly.halfExtent >= tracer->totalDistance ) [[unlikely]] {
+		// Don't let the poly penetrate the target position
+		const float distanceOfFarthestPoint = oldDistanceSoFar + tracer->poly.halfExtent;
+		if( distanceOfFarthestPoint >= tracer->totalDistance ) [[unlikely]] {
 			destroyTracerEffect( tracer );
 			continue;
 		}
 
-		const auto *rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
+		auto *const rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
 		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
 
-		VectorMA( tracer->from, tracer->distanceSoFar, rules->dir, tracer->poly.origin );
+		VectorMA( tracer->from, oldDistanceSoFar, rules->dir, tracer->poly.origin );
+
+		rules->fromColor[3] = tracer->initialColorAlpha;
+
+		// Soften the closest edge
+		const float softenAlphaDistance = tracer->poly.halfExtent;
+		if( distanceOfClosestPoint < skipDrawingDistance + softenAlphaDistance ) {
+			rules->fromColor[3] *= ( distanceOfClosestPoint - skipDrawingDistance ) * Q_Rcp( softenAlphaDistance );
+		}
 
 		request->addPoly( &tracer->poly );
 
@@ -562,6 +575,8 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 				}
 			}
 		}
+
+		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
 	}
 
 	m_lastTime = currTime;
