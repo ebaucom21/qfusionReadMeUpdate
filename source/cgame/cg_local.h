@@ -556,6 +556,7 @@ extern cvar_t *cg_projectileSmokeTrail;
 extern cvar_t *cg_projectileFireTrail;
 extern cvar_t *cg_projectilePolyTrail;
 extern cvar_t *cg_plasmaTrail;
+extern cvar_t *cg_playerTrail;
 extern cvar_t *cg_bloodTrailTime;
 extern cvar_t *cg_bloodTrailPalette;
 extern cvar_t *cg_showPOVBlood;

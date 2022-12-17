@@ -126,6 +126,18 @@ public:
 		m_trackedEffectsSystem.touchWeakPlasmaTrail( entNum, origin, currTime );
 	}
 
+	void detachPlayerTrail( int entNum ) {
+		m_trackedEffectsSystem.detachPlayerTrail( entNum );
+	}
+
+	void touchPlayerTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchPlayerTrail( entNum, origin, currTime );
+	}
+
+	void touchCorpseTrail( int entNum, const float *origin, int64_t currTime ) {
+		m_trackedEffectsSystem.touchCorpseTrail( entNum, origin, currTime );
+	}
+
 	void updateStraightLaserBeam( int entNum, const float *from, const float *to, int64_t currTime ) {
 		m_trackedEffectsSystem.updateStraightLaserBeam( entNum, from, to, currTime );
 	}

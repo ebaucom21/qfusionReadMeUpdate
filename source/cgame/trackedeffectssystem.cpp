@@ -94,7 +94,7 @@ void TrackedEffectsSystem::unlinkAndFree( StraightPolyTrail *polyTrail ) {
 void TrackedEffectsSystem::unlinkAndFree( CurvedPolyTrail *polyTrail ) {
 	if( polyTrail->attachedToEntNum ) {
 		wsw::unlink( polyTrail, &m_attachedCurvedPolyTrailsHead );
-		m_attachedEntityEffects[*polyTrail->attachedToEntNum].curvedPolyTrail = nullptr;
+		detachCurvedPolyTrail( polyTrail, *polyTrail->attachedToEntNum );
 	} else {
 		wsw::unlink( polyTrail, &m_lingeringCurvedPolyTrailsHead );
 	}
@@ -905,6 +905,93 @@ void TrackedEffectsSystem::touchWeakPlasmaTrail( int entNum, const float *origin
 	}
 }
 
+void TrackedEffectsSystem::detachPlayerTrail( int entNum ) {
+	assert( entNum > 0 && entNum <= MAX_CLIENTS );
+	AttachedClientEffects *effects = &m_attachedClientEffects[entNum - 1];
+	if( effects->trails[0] ) {
+		for( CurvedPolyTrail *trail: effects->trails ) {
+			assert( trail );
+			tryMakingCurvedPolyTrailLingering( trail );
+		}
+	}
+}
+
+static const CurvedPolyTrailProps kPlayerPolyTrailProps[3] {
+	{
+		.maxNodeLifetime = 300,
+		.maxLength       = 300,
+		.width           = 20.0f,
+		.fromColor       = { 1.0f, 1.0f, 1.0f, 0.00f },
+		.toColor         = { 1.0f, 1.0f, 1.0f, 0.06f },
+	},
+	{
+		.maxNodeLifetime = 300,
+		.maxLength       = 300,
+		.width           = 36.0f,
+		.fromColor       = { 1.0f, 1.0f, 1.0f, 0.00f },
+		.toColor         = { 1.0f, 1.0f, 1.0f, 0.06f },
+	},
+	{
+		.maxNodeLifetime = 300,
+		.maxLength       = 300,
+		.width           = 32.0f,
+		.fromColor       = { 1.0f, 1.0f, 1.0f, 0.00f },
+		.toColor         = { 1.0f, 1.0f, 1.0f, 0.06f },
+	},
+};
+
+void TrackedEffectsSystem::touchPlayerTrail( int entNum, const float *origin, int64_t currTime ) {
+	assert( entNum > 0 && entNum <= MAX_CLIENTS );
+	// This attachment is specific for clients.
+	// Effects of attached models, if added later, should use the generic entity effects path.
+	AttachedClientEffects *effects = &m_attachedClientEffects[entNum - 1];
+	// Multiple poly trails at different height approximate the fine-grain (edge-extruding) solution relatively well.
+	// Require a complete allocation of the set of trails
+	if( !effects->trails[0] ) {
+		CurvedPolyTrail *trails[3];
+		unsigned numCreatedTrails = 0;
+		assert( std::size( trails ) == std::size( effects->trails ) );
+		assert( std::size( trails ) == std::size( kPlayerPolyTrailProps ) );
+		for(; numCreatedTrails < std::size( trails ); ++numCreatedTrails ) {
+			trails[numCreatedTrails] = allocCurvedPolyTrail( entNum, cgs.shaderWhite,
+															 &kPlayerPolyTrailProps[numCreatedTrails] );
+			if( !trails[numCreatedTrails] ) {
+				break;
+			}
+		}
+		if( numCreatedTrails == std::size( trails ) ) [[likely]] {
+			std::copy( trails, trails + std::size( trails ), effects->trails );
+		} else {
+			for( unsigned i = 0; i < numCreatedTrails; ++i ) {
+				trails[i]->attachedToEntNum = std::nullopt;
+				unlinkAndFree( trails[i] );
+			}
+		}
+	}
+	if( effects->trails[0] ) {
+		assert( std::size( effects->trails ) == 3 );
+		// TODO: Adjust properties fot the current bbox
+		const vec3_t headOrigin { origin[0], origin[1], origin[2] + 26.0f };
+		updateAttachedCurvedPolyTrail( effects->trails[0], headOrigin, currTime );
+		const vec3_t bodyOrigin { origin[0], origin[1], origin[2] + 8.0f };
+		updateAttachedCurvedPolyTrail( effects->trails[1], bodyOrigin, currTime );
+		const vec3_t legsOrigin { origin[0], origin[1], origin[2] - 6.0f };
+		updateAttachedCurvedPolyTrail( effects->trails[2], legsOrigin, currTime );
+	}
+}
+
+void TrackedEffectsSystem::touchCorpseTrail( int entNum, const float *origin, int64_t currTime ) {
+	assert( entNum > 0 && entNum < MAX_EDICTS );
+	// Can't do much in this case, a single trail should be sufficient.
+	AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
+	if( !effects->curvedPolyTrail ) {
+		effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.shaderWhite, &kPlayerPolyTrailProps[1] );
+	}
+	if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) {
+		updateAttachedCurvedPolyTrail( trail, origin, currTime );
+	}
+}
+
 void TrackedEffectsSystem::makeParticleTrailLingering( ParticleTrail *particleTrail ) {
 	wsw::unlink( particleTrail, &m_attachedParticleTrailsHead );
 	wsw::link( particleTrail, &m_lingeringParticleTrailsHead );
@@ -944,18 +1031,38 @@ void TrackedEffectsSystem::tryMakingCurvedPolyTrailLingering( CurvedPolyTrail *t
 		wsw::unlink( trail, &m_attachedCurvedPolyTrailsHead );
 		wsw::link( trail, &m_lingeringCurvedPolyTrailsHead );
 
-		const unsigned entNum = *trail->attachedToEntNum;
-		trail->attachedToEntNum = std::nullopt;
-
-		AttachedEntityEffects *entityEffects = &m_attachedEntityEffects[entNum];
-		assert( entityEffects->curvedPolyTrail == trail );
-		entityEffects->curvedPolyTrail = nullptr;
+		detachCurvedPolyTrail( trail, *trail->attachedToEntNum );
+		assert( trail->attachedToEntNum == std::nullopt );
 	} else {
 		unlinkAndFree( trail );
 	}
 }
 
+void TrackedEffectsSystem::detachCurvedPolyTrail( CurvedPolyTrail *trail, int entNum ) {
+	assert( entNum >= 0 && entNum < MAX_EDICTS );
+	assert( trail->attachedToEntNum == std::optional( entNum ) );
+
+	AttachedEntityEffects *const entityEffects = &m_attachedEntityEffects[entNum];
+	if( entityEffects->curvedPolyTrail == trail ) {
+		entityEffects->curvedPolyTrail = nullptr;
+	} else {
+		assert( (unsigned)( entNum - 1 ) < (unsigned)MAX_CLIENTS );
+		AttachedClientEffects *const clientEffects = &m_attachedClientEffects[entNum - 1];
+		[[maybe_unused]] unsigned i = 0;
+		for( ; i < std::size( clientEffects->trails ); ++i ) {
+			if( clientEffects->trails[i] == trail ) {
+				clientEffects->trails[i] = nullptr;
+				break;
+			}
+		}
+		assert( i < std::size( clientEffects->trails ) );
+	}
+	trail->attachedToEntNum = std::nullopt;
+}
+
 void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
+	assert( entNum >= 0 && entNum < MAX_EDICTS );
+
 	const int maybeValidClientNum = entNum - 1;
 	if( (unsigned)maybeValidClientNum < (unsigned)MAX_CLIENTS ) [[unlikely]] {
 		AttachedClientEffects *effects = &m_attachedClientEffects[maybeValidClientNum];
@@ -978,7 +1085,6 @@ void TrackedEffectsSystem::resetEntityEffects( int entNum ) {
 		}
 	}
 
-	assert( entNum >= 0 && entNum < MAX_EDICTS );
 	AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 	if( effects->particleTrails[0] ) {
 		makeParticleTrailLingering( effects->particleTrails[0] );

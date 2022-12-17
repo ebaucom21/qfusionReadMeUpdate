@@ -1031,13 +1031,33 @@ static void CG_AddPlayerEnt( centity_t *cent, DrawSceneRequest *drawSceneRequest
 
 	CG_AddPModel( cent, drawSceneRequest );
 
-	// corpses can never have a model in modelindex2
-	if( cent->current.type == ET_CORPSE ) {
-		return;
+	if( cg_playerTrail->integer ) {
+		if( cent->current.number != (int)cg.predictedPlayerState.POVnum ) {
+			const float timeDeltaSeconds  = 1e-3f * (float)cgs.snapFrameTime;
+			const float speedThreshold    = 0.5f * ( DEFAULT_PLAYERSPEED + DEFAULT_DASHSPEED );
+			const float distanceThreshold = speedThreshold * timeDeltaSeconds;
+			// This condition effectively detaches trails from slowly walking players/stopped corpses.
+			// A detached trail dissolves relatively quickly.
+			// Calling touch() prevents from that, even no new nodes are added due to distance threshold.
+			// TODO: Should attachment trails be immune to the speed loss?
+			if( DistanceSquared( cent->current.origin, cent->prev.origin ) > wsw::square( distanceThreshold ) ) {
+				if( cent->current.type != ET_CORPSE ) {
+					if( cent->current.teleported ) {
+						cg.effectsSystem.detachPlayerTrail( cent->current.number );
+					}
+					cg.effectsSystem.touchPlayerTrail( cent->current.number, cent->ent.origin, cg.time );
+				} else {
+					cg.effectsSystem.touchCorpseTrail( cent->current.number, cent->ent.origin, cg.time );
+				}
+			}
+		}
 	}
 
-	if( cent->current.modelindex2 ) {
-		CG_AddLinkedModel( cent, drawSceneRequest );
+	// corpses can never have a model in modelindex2
+	if( cent->current.type != ET_CORPSE ) {
+		if( cent->current.modelindex2 ) {
+			CG_AddLinkedModel( cent, drawSceneRequest );
+		}
 	}
 }
 

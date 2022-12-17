@@ -64,6 +64,10 @@ public:
 	void touchStrongPlasmaTrail( int entNum, const float *origin, int64_t currTime );
 	void touchWeakPlasmaTrail( int entNum, const float *origin, int64_t currTime );
 
+	void detachPlayerTrail( int entNum );
+	void touchPlayerTrail( int entNum, const float *origin, int64_t currTime );
+	void touchCorpseTrail( int entNum, const float *origin, int64_t currTime );
+
 	void spawnPlayerTeleInEffect( int entNum, const float *origin, model_s *model ) {
 		spawnPlayerTeleEffect( entNum, origin, model, 0 );
 	}
@@ -141,6 +145,7 @@ private:
 		TeleEffect *teleEffects[2] { nullptr, nullptr };
 		PolyEffectsSystem::StraightBeam *straightLaserBeam { nullptr };
 		PolyEffectsSystem::CurvedBeam *curvedLaserBeam { nullptr };
+		CurvedPolyTrail *trails[3] { nullptr, nullptr, nullptr };
 		int64_t straightLaserBeamTouchedAt { 0 }, curvedLaserBeamTouchedAt { 0 };
 		vec4_t laserColor;
 		wsw::StaticVector<Vec3, 24 + 1> curvedLaserBeamPoints;
@@ -156,6 +161,7 @@ private:
 	void makeParticleTrailLingering( ParticleTrail *trail );
 	void tryMakingStraightPolyTrailLingering( StraightPolyTrail *trail );
 	void tryMakingCurvedPolyTrailLingering( CurvedPolyTrail *trail );
+	void detachCurvedPolyTrail( CurvedPolyTrail *trail, int entNum );
 
 	// TODO: Lift this helper to the top level
 	template <typename Effect>
@@ -206,7 +212,7 @@ private:
 
 	wsw::HeapBasedFreelistAllocator m_particleTrailsAllocator { sizeof( ParticleTrail ), 4 * MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_straightPolyTrailsAllocator { sizeof( StraightPolyTrail ), MAX_CLIENTS };
-	wsw::HeapBasedFreelistAllocator m_curvedPolyTrailsAllocator { sizeof( CurvedPolyTrail ), MAX_CLIENTS };
+	wsw::HeapBasedFreelistAllocator m_curvedPolyTrailsAllocator { sizeof( CurvedPolyTrail ), 4 * MAX_CLIENTS };
 	wsw::HeapBasedFreelistAllocator m_teleEffectsAllocator { sizeof( TeleEffect ), 2 * MAX_CLIENTS };
 
 	AttachedEntityEffects m_attachedEntityEffects[MAX_EDICTS];
