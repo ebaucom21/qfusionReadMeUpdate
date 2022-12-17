@@ -391,10 +391,10 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 }
 
 void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) {
-	assert( params.duration > 50 && params.prestep >= 1.0f && params.width > 0.0f && params.length >= 1.0f );
+	assert( params.duration > 50 && params.prestepDistance >= 1.0f && params.width > 0.0f );
 
 	const float squareDistance = DistanceSquared( from, to );
-	if( squareDistance < wsw::square( params.prestep + params.length ) ) [[unlikely]] {
+	if( squareDistance < wsw::square( params.prestepDistance ) ) [[unlikely]] {
 		return;
 	}
 
@@ -419,24 +419,29 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 		mem = oldestEffect;
 	}
 
-	const float distance          = squareDistance * rcpDistance;
+	// Note: Don't include prestep in speed computations.
+	// Doing that makes the speed vary depending on the different prestep value.
+	const float totalDistance     = squareDistance * rcpDistance;
 	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
-	const float speed             = std::max( 1750.0f, distance * Q_Rcp( tracerTimeSeconds ) );
+	const float polyLength        = wsw::max( params.minLength, params.distancePercentage * totalDistance );
+	const float speed             = wsw::max( 1750.0f, totalDistance * Q_Rcp( tracerTimeSeconds ) );
 
 	auto *effect                 = new( mem )TracerEffect;
 	effect->timeoutAt            = m_lastTime + params.duration;
 	effect->speed                = speed;
-	effect->totalDistance        = distance;
-	effect->distanceSoFar        = params.prestep;
+	effect->prestepDistance      = params.prestepDistance;
+	effect->totalDistance        = totalDistance;
+	effect->distanceSoFar        = 0.0f;
 	effect->initialColorAlpha    = params.color[3];
-	effect->fadeInDistance       = 2.0f * params.prestep;
-	effect->fadeOutDistance      = 2.0f * params.prestep;
+	effect->lightFadeInDistance  = 2.0f * params.prestepDistance;
+	effect->lightFadeOutDistance = 2.0f * params.prestepDistance;
+	effect->smoothEdgeDistance   = params.smoothEdgeDistance;
 	effect->poly.material        = params.material;
-	effect->poly.halfExtent      = 0.5f * params.length;
+	effect->poly.halfExtent      = polyLength;
 	effect->poly.appearanceRules = QuadPoly::ViewAlignedBeamRules {
 		.dir        = { dir[0], dir[1], dir[2] },
 		.width      = params.width,
-		.tileLength = params.length,
+		.tileLength = polyLength,
 		.fromColor  = { params.color[0], params.color[1], params.color[2], params.color[3] },
 		.toColor    = { params.color[0], params.color[1], params.color[2], params.color[3] },
 	};
@@ -519,8 +524,7 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
 
 		const float distanceOfClosestPoint = oldDistanceSoFar - tracer->poly.halfExtent;
-		const float skipDrawingDistance = 1.5f * tracer->poly.halfExtent;
-		if( distanceOfClosestPoint <= skipDrawingDistance ) [[unlikely]] {
+		if( distanceOfClosestPoint <= tracer->prestepDistance ) [[unlikely]] {
 			// Hide it for now
 			continue;
 		}
@@ -540,9 +544,9 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		rules->fromColor[3] = tracer->initialColorAlpha;
 
 		// Soften the closest edge
-		const float softenAlphaDistance = tracer->poly.halfExtent;
-		if( distanceOfClosestPoint < skipDrawingDistance + softenAlphaDistance ) {
-			rules->fromColor[3] *= ( distanceOfClosestPoint - skipDrawingDistance ) * Q_Rcp( softenAlphaDistance );
+
+		if( distanceOfClosestPoint < tracer->smoothEdgeDistance ) {
+			rules->fromColor[3] *= distanceOfClosestPoint * Q_Rcp( tracer->smoothEdgeDistance );
 		}
 
 		request->addPoly( &tracer->poly );
@@ -557,14 +561,14 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			}
 			if( shouldAddLight ) {
 				float radiusFrac = 1.0f;
-				if( tracer->fadeInDistance > 0.0f ) {
-					if( oldDistanceSoFar < tracer->fadeInDistance ) {
-						radiusFrac = oldDistanceSoFar * Q_Rcp( tracer->fadeInDistance );
+				if( tracer->lightFadeInDistance > 0.0f ) {
+					if( oldDistanceSoFar < tracer->lightFadeInDistance ) {
+						radiusFrac = oldDistanceSoFar * Q_Rcp( tracer->lightFadeInDistance );
 					}
-				} else if( tracer->fadeOutDistance > 0.0f ) {
+				} else if( tracer->lightFadeOutDistance > 0.0f ) {
 					const float distanceLeft = tracer->totalDistance - oldDistanceSoFar;
-					if( distanceLeft < tracer->fadeOutDistance ) {
-						radiusFrac = distanceLeft * Q_Rcp( tracer->fadeOutDistance );
+					if( distanceLeft < tracer->lightFadeOutDistance ) {
+						radiusFrac = distanceLeft * Q_Rcp( tracer->lightFadeOutDistance );
 					}
 				}
 				assert( radiusFrac >= 0.0f && radiusFrac < 1.01f );

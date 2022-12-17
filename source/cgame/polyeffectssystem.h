@@ -70,9 +70,11 @@ public:
 	struct TracerParams {
 		shader_s *material { nullptr };
 		unsigned duration { 100 };
-		float prestep { 0.0f };
+		float prestepDistance { 0.0f };
+		float smoothEdgeDistance { 0.0f };
 		float width { 0.0f };
-		float length { 0.0f };
+		float minLength { 0.0f };
+		float distancePercentage { 0.1f };
 		float color[4] { 1.0f, 1.0f, 1.0f, 1.0f };
 		float programLightRadius { 0.0f };
 		float coronaLightRadius { 0.0f };
@@ -138,12 +140,13 @@ private:
 		vec3_t from;
 		vec3_t to;
 		float speed { 0.0f };
+		float prestepDistance { 0.0f };
 		float totalDistance { 0.0f };
 		float distanceSoFar { 0.0f };
 		float initialColorAlpha { 0.0f };
-		// Actually light-only
-		float fadeInDistance { 0.0f };
-		float fadeOutDistance { 0.0f };
+		float smoothEdgeDistance { 0.0f };
+		float lightFadeInDistance { 0.0f };
+		float lightFadeOutDistance { 0.0f };
 		QuadPoly poly;
 		float programLightRadius { 0.0f };
 		float coronaLightRadius { 0.0f };
