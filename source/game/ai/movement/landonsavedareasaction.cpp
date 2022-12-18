@@ -333,7 +333,7 @@ bool LandOnSavedAreasAction::TryLandingStepOnArea( int areaNum, PredictionContex
 	// 1) Air-control feature must be enabled
 	// 2) This should be really spinning around Z-axis (a bot should look horizontally)
 	// Neglecting the second condition was a long-term source of poor bot behaviour
-	if( context->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_AIRCONTROL ) {
+	if( context->currMinimalPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_AIRCONTROL ) {
 		if( entityPhysicsState.ForwardDir().Z() < 0.3f ) {
 			float dotRight = entityPhysicsState.RightDir().Dot( intendedLookDir );
 			if( dotRight > 0.7f ) {

@@ -60,7 +60,7 @@ void JumpOverBarrierScript::SetupMovement( PredictionContext *context ) {
 				return;
 			}
 
-			const auto *pmStats = context->currPlayerState->pmove.stats;
+			const auto *pmStats = context->currMinimalPlayerState->pmove.stats;
 			if( ( pmStats[PM_STAT_FEATURES] & PMFEAT_DASH ) && !pmStats[PM_STAT_DASHTIME] ) {
 				botInput->SetSpecialButton( true );
 			}
@@ -101,7 +101,7 @@ void JumpOverBarrierScript::SetupMovement( PredictionContext *context ) {
 	}
 
 	// Try WJ having reached the peak point
-	const auto *pmStats = context->currPlayerState->pmove.stats;
+	const auto *pmStats = context->currMinimalPlayerState->pmove.stats;
 	if( !( pmStats[PM_STAT_FEATURES] & PMFEAT_WALLJUMP ) ) {
 		return;
 	}

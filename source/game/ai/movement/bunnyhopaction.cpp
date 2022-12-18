@@ -77,7 +77,7 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 		return false;
 	}
 
-	if( !( context->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_JUMP ) ) {
+	if( !( context->currMinimalPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_JUMP ) ) {
 		Debug( "Cannot apply action: bot does not have the jump movement feature\n" );
 		context->SetPendingRollback();
 		this->isDisabledForPlanning = true;
@@ -95,7 +95,7 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 }
 
 void BunnyHopAction::SetupCommonBunnyHopInput( PredictionContext *context ) {
-	const auto *pmoveStats = context->currPlayerState->pmove.stats;
+	const auto *pmoveStats = context->currMinimalPlayerState->pmove.stats;
 
 	auto *botInput = &context->record->botInput;
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
@@ -262,7 +262,7 @@ void BunnyHopAction::TrySetWalljump( PredictionContext *context, const Vec3 &vel
 }
 
 bool BunnyHopAction::CanSetWalljump( PredictionContext *context, const Vec3 &velocity2DDir, const Vec3 &intended2DLookDir ) const {
-	const short *pmoveStats = context->currPlayerState->pmove.stats;
+	const short *pmoveStats = context->currMinimalPlayerState->pmove.stats;
 	if( !( pmoveStats[PM_STAT_FEATURES] & PMFEAT_WALLJUMP ) ) {
 		return false;
 	}

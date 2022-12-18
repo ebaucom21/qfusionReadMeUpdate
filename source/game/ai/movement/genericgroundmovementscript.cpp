@@ -96,7 +96,7 @@ bool GenericGroundMovementScript::SetupForKeptPointInFov( PredictionContext *con
 	}
 
 	bool canUseDash = true;
-	const auto *pmStats = context->currPlayerState->pmove.stats;
+	const auto *pmStats = context->currMinimalPlayerState->pmove.stats;
 	// Try jumping in case whether the bot has a relatively high speed and it conforms to the intended direction well
 	if( !( ( pmStats[PM_STAT_FEATURES] & PMFEAT_DASH ) && !pmStats[PM_STAT_DASHTIME] ) ) {
 		// Check whether jumping is allowed
@@ -154,7 +154,7 @@ void GenericGroundMovementScript::SetupMovement( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	auto *botInput = &context->record->botInput;
 	const auto &miscTactics = bot->GetMiscTactics();
-	const auto *pmStats = context->currPlayerState->pmove.stats;
+	const auto *pmStats = context->currMinimalPlayerState->pmove.stats;
 
 	vec3_t steeringTarget;
 	// Call an overridden by a child method

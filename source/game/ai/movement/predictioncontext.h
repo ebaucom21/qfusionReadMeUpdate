@@ -115,9 +115,18 @@ private:
 
 	using PredictedPath = wsw::StaticVector<PredictedMovementAction, MAX_PREDICTED_STATES>;
 
+	struct MinimalSavedPlayerState {
+		pmove_state_t pmove;
+		float viewheight;
+	};
+
 	PredictedPath predictedMovementActions;
 	wsw::StaticVector<MovementState, MAX_PREDICTED_STATES> botMovementStatesStack;
-	wsw::StaticVector<player_state_t, MAX_PREDICTED_STATES> playerStatesStack;
+	wsw::StaticVector<MinimalSavedPlayerState, MAX_PREDICTED_STATES> playerStatesStack;
+
+	player_state_t playerStateForPmove;
+
+	MinimalSavedPlayerState minimalPlayerStateForFrame0;
 
 	PredictedPath goodEnoughPath;
 	unsigned goodEnoughPathAdvancement { 0 };
@@ -155,25 +164,9 @@ private:
 			ClearBit( values.size() );
 			values.emplace_back( std::move( value ) );
 		}
-		// Should be used when the cached type cannot be copied or moved (use this pointer to allocate a value in-place)
-		T *UnsafeGrowForNonCachedValue() {
-			ClearBit( values.size() );
-			return values.unsafe_grow_back();
-		}
-		T *GetUnsafeBufferForCachedValue() {
-			SetBit( values.size() - 1 );
-			return &values[0] + ( values.size() - 1 );
-		}
 		const T *GetCached() const {
 			assert( values.size() );
 			return ( isCachedBitset & ( ( (uint64_t)1 ) << ( values.size() - 1 ) ) ) ? &values.back() : nullptr;
-		}
-		const T *GetCachedValueBelowTopOfStack() const {
-			assert( values.size() );
-			if( values.size() == 1 ) {
-				return nullptr;
-			}
-			return ( isCachedBitset & ( ( (uint64_t)1 ) << ( values.size() - 2 ) ) ) ? &values[values.size() - 2] : nullptr;
 		}
 
 		unsigned Size() const { return values.size(); }
@@ -198,8 +191,8 @@ public:
 	MovementState *movementState;
 	MovementActionRecord *record;
 
-	const player_state_t *oldPlayerState;
-	player_state_t *currPlayerState;
+	MinimalSavedPlayerState *oldMinimalPlayerState { nullptr };
+	MinimalSavedPlayerState *currMinimalPlayerState { nullptr };
 
 	BaseAction *actionSuggestedByAction;
 	BaseAction *activeAction;

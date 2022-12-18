@@ -563,8 +563,10 @@ void TryTriggerWeaponJumpAction::PlanPredictionStep( PredictionContext *context 
 
 	if( entityPhysicsState.GroundEntity() ) {
 		if( entityPhysicsState.ForwardDir().Z() < -0.8f ) {
-			if( context->oldPlayerState->stats[STAT_WEAPON] == weaponJumpState->weapon ) {
-				if( !context->oldPlayerState->stats[STAT_WEAPON_TIME] ) {
+			const short *playerStats = game.edicts[bot->EntNum()].r.client->ps.stats;
+			// CAUTION! We use non-predicted player stats (should be fine for now)
+			if( playerStats[STAT_WEAPON] == weaponJumpState->weapon ) {
+				if( !playerStats[STAT_WEAPON_TIME] ) {
 					context->record->botInput.SetAttackButton( true );
 					context->record->botInput.SetUpMovement( 1 );
 					weaponJumpState->hasTriggeredWeaponJump = true;

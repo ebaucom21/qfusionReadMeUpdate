@@ -173,7 +173,7 @@ void CombatDodgeSemiRandomlyToTargetAction::PlanPredictionStep( PredictionContex
 	// Otherwise the bot will be looking at "kept in fov" point.
 	botInput->SetIntendedLookDir( lookDir, true );
 
-	const short *pmStats = context->currPlayerState->pmove.stats;
+	const short *const pmStats = context->currMinimalPlayerState->pmove.stats;
 	if( entityPhysicsState.GroundEntity() ) {
 		assert( !botInput->IsSpecialButtonSet() && !botInput->UpMovement() );
 		assert( !botInput->ForwardMovement() && !botInput->RightMovement() );

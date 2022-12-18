@@ -33,22 +33,22 @@ constexpr float Z_NO_BEND_SCALE = 0.5f;
 // A threshold of dot product of velocity dir and intended view dir
 constexpr float STRAIGHT_MOVEMENT_DOT_THRESHOLD = 0.8f;
 
-inline float GetPMoveStatValue( const player_state_t *playerState, int statIndex, float defaultValue ) {
-	float value = playerState->pmove.stats[statIndex];
+inline float GetPMoveStatValue( const pmove_state_t *pmove, int statIndex, float defaultValue ) {
+	const float value = pmove->stats[statIndex];
 	// Put likely case (the value is not specified) first
 	return value < 0 ? defaultValue : value;
 }
 
 inline float PredictionContext::GetJumpSpeed() const {
-	return GetPMoveStatValue( this->currPlayerState, PM_STAT_JUMPSPEED, DEFAULT_JUMPSPEED * GRAVITY_COMPENSATE );
+	return GetPMoveStatValue( &this->currMinimalPlayerState->pmove, PM_STAT_JUMPSPEED, DEFAULT_JUMPSPEED * GRAVITY_COMPENSATE );
 }
 
 inline float PredictionContext::GetDashSpeed() const {
-	return GetPMoveStatValue( this->currPlayerState, PM_STAT_DASHSPEED, DEFAULT_DASHSPEED );
+	return GetPMoveStatValue( &this->currMinimalPlayerState->pmove, PM_STAT_DASHSPEED, DEFAULT_DASHSPEED );
 }
 
 inline float PredictionContext::GetRunSpeed() const {
-	return GetPMoveStatValue( this->currPlayerState, PM_STAT_MAXSPEED, DEFAULT_PLAYERSPEED );
+	return GetPMoveStatValue( &this->currMinimalPlayerState->pmove, PM_STAT_MAXSPEED, DEFAULT_PLAYERSPEED );
 }
 
 inline unsigned PredictionContext::DefaultFrameTime() const {
@@ -374,12 +374,13 @@ inline float Distance2DSquared( const vec3_t a, const vec3_t b ) {
 }
 
 static inline bool ShouldCrouchSlideNow( PredictionContext *context ) {
-	if( !( context->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_CROUCHSLIDING ) ) {
+	const auto *pmState = &context->currMinimalPlayerState->pmove;
+	if( !( pmState->stats[PM_STAT_FEATURES] & PMFEAT_CROUCHSLIDING ) ) {
 		return false;
 	}
 
-	if( context->currPlayerState->pmove.pm_flags & PMF_CROUCH_SLIDING ) {
-		if( context->currPlayerState->pmove.stats[PM_STAT_CROUCHSLIDETIME] > PM_CROUCHSLIDE_FADE ) {
+	if( pmState->pm_flags & PMF_CROUCH_SLIDING ) {
+		if( pmState->stats[PM_STAT_CROUCHSLIDETIME] > PM_CROUCHSLIDE_FADE ) {
 			return true;
 		}
 	}
@@ -394,7 +395,7 @@ static inline bool ShouldCrouchSlideNow( PredictionContext *context ) {
 // Height threshold should be set according to used time step
 // (we might miss crouch sliding activation if its low and the time step is large)
 inline bool ShouldPrepareForCrouchSliding( PredictionContext *context, float heightThreshold = 12.0f ) {
-	if( !(context->currPlayerState->pmove.stats[PM_STAT_FEATURES ] & PMFEAT_CROUCHSLIDING ) ) {
+	if( !( context->currMinimalPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_CROUCHSLIDING ) ) {
 		return false;
 	}
 

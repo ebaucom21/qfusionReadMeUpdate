@@ -459,9 +459,11 @@ void PredictionContext::SetupStackForStep() {
 		topOfStack = new( predictedMovementActions.unsafe_grow_back() )PredictedMovementAction( belowTopOfStack );
 
 		// Push a copy of previous player state onto top of the stack
-		oldPlayerState = &playerStatesStack.back();
-		playerStatesStack.push_back( *oldPlayerState );
-		currPlayerState = &playerStatesStack.back();
+		oldMinimalPlayerState = std::addressof( playerStatesStack.back() );
+
+		playerStatesStack.push_back( playerStatesStack.back() );
+		currMinimalPlayerState = std::addressof( playerStatesStack.back() );
+
 		// Push a copy of previous movement state onto top of the stack
 		botMovementStatesStack.push_back( botMovementStatesStack.back() );
 
@@ -477,13 +479,14 @@ void PredictionContext::SetupStackForStep() {
 		mayHitWhileRunningCachesStack.PopToSize( 0 );
 		environmentTestResultsStack.clear();
 
-		const edict_t *self = game.edicts + bot->EntNum();
-
 		topOfStack = new( predictedMovementActions.unsafe_grow_back() )PredictedMovementAction;
+
 		// Push the actual bot player state onto top of the stack
-		oldPlayerState = &self->r.client->ps;
-		playerStatesStack.push_back( *oldPlayerState );
-		currPlayerState = &playerStatesStack.back();
+		oldMinimalPlayerState = &minimalPlayerStateForFrame0;
+
+		currMinimalPlayerState  = playerStatesStack.unsafe_grow_back();
+		*currMinimalPlayerState = minimalPlayerStateForFrame0;
+
 		// Push the actual bot movement state onto top of the stack
 		botMovementStatesStack.push_back( m_subsystem->movementState );
 
@@ -926,12 +929,20 @@ void PredictionContext::BuildPlan() {
 	const edict_t *const groundEntity = self->groundentity;
 	const int groundEntityLinkCount = self->groundentity_linkcount;
 
+	// TODO: We don't modify these two, do we?
 	const auto savedPlayerState = self->r.client->ps;
 	const auto savedPMove = self->r.client->old_pmove;
 
 	Assert( self->bot->entityPhysicsState == &m_subsystem->movementState.entityPhysicsState );
 	// Save current entity physics state (it will be modified even for a single prediction step)
 	const AiEntityPhysicsState currEntityPhysicsState = m_subsystem->movementState.entityPhysicsState;
+
+	// Get modified every NextMovementFrame() call
+	this->playerStateForPmove = self->r.client->ps;
+
+	// Kept unmodified during plan building
+	this->minimalPlayerStateForFrame0.pmove      = playerStateForPmove.pmove;
+	this->minimalPlayerStateForFrame0.viewheight = playerStateForPmove.viewheight;
 
 	// Remember to reset these values before each planning session
 	this->totalMillisAhead = 0;
@@ -1047,31 +1058,35 @@ void PredictionContext::NextMovementStep() {
 
 	const edict_t *self = game.edicts + bot->EntNum();
 
-	// Prepare for PMove()
-	currPlayerState->POVnum = (unsigned)ENTNUM( self );
-	currPlayerState->playerNum = (unsigned)PLAYERNUM( self );
+	// We have to copy required properites to the playerStateForPmove
+	// (we can't supply currMinimalPlayerState directly)
 
-	VectorCopy( entityPhysicsState->Origin(), currPlayerState->pmove.origin );
-	VectorCopy( entityPhysicsState->Velocity(), currPlayerState->pmove.velocity );
-	Vec3 angles( entityPhysicsState->Angles() );
-	angles.CopyTo( currPlayerState->viewangles );
+	Assert( playerStateForPmove.POVnum == (unsigned)ENTNUM( self ) );
+	Assert( playerStateForPmove.playerNum == (unsigned)PLAYERNUM( self ) );
 
-	currPlayerState->pmove.gravity = (int)level.gravity;
-	currPlayerState->pmove.pm_type = PM_NORMAL;
+	// TODO: Use fast copying subroutine
+	playerStateForPmove.pmove      = currMinimalPlayerState->pmove;
+	playerStateForPmove.viewheight = currMinimalPlayerState->viewheight;
 
+	playerStateForPmove.pmove.gravity = (int)level.gravity;
+	playerStateForPmove.pmove.pm_type = PM_NORMAL;
 
+	const Vec3 angles( entityPhysicsState->Angles() );
+	VectorCopy( entityPhysicsState->Origin(), playerStateForPmove.pmove.origin );
+	VectorCopy( entityPhysicsState->Velocity(), playerStateForPmove.pmove.velocity );
+	angles.CopyTo( playerStateForPmove.viewangles );
 
 	pmove_t pm;
 	// TODO: Eliminate this call?
 	memset( &pm, 0, sizeof( pmove_t ) );
 
-	pm.playerState = currPlayerState;
+	pm.playerState = &playerStateForPmove;
 	botInput->CopyToUcmd( &pm.cmd );
 
-	for( int i = 0; i < 3; i++ )
-		pm.cmd.angles[i] = (short)ANGLE2SHORT( angles.Data()[i] ) - currPlayerState->pmove.delta_angles[i];
+	pm.cmd.angles[PITCH] = (short)ANGLE2SHORT( angles.Data()[PITCH] );
+	pm.cmd.angles[YAW]   = (short)ANGLE2SHORT( angles.Data()[YAW] );
 
-	VectorSet( currPlayerState->pmove.delta_angles, 0, 0, 0 );
+	VectorSet( playerStateForPmove.pmove.delta_angles, 0, 0, 0 );
 
 	// Check for unsigned value wrapping
 	Assert( this->predictionStepMillis && this->predictionStepMillis < 100 );
@@ -1128,6 +1143,10 @@ void PredictionContext::NextMovementStep() {
 	module_Trace = oldModuleTrace;
 	// Restore the G_PointContents4D() pointer
 	module_PointContents = oldModulePointContents;
+
+	// Update the saved player state for using in the next prediction frame
+	currMinimalPlayerState->pmove      = playerStateForPmove.pmove;
+	currMinimalPlayerState->viewheight = playerStateForPmove.viewheight;
 
 	// Update the entity physics state that is going to be used in the next prediction frame
 	entityPhysicsState->UpdateFromPMove( &pm );
@@ -1344,7 +1363,7 @@ void PredictionContext::CheatingCorrectVelocity( const vec3_t target ) {
 
 void PredictionContext::CheatingCorrectVelocity( float velocity2DDirDotToTarget2DDir, const Vec3 &toTargetDir2D ) {
 	// Respect player class movement limitations
-	if( !( this->currPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_AIRCONTROL ) ) {
+	if( !( this->currMinimalPlayerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_AIRCONTROL ) ) {
 		return;
 	}
 
