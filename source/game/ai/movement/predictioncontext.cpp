@@ -1330,18 +1330,18 @@ void PredictionContext::CheatingAccelerate( float frac ) {
 	// Note the old cheating acceleration code did not do that intentionally.
 	// This used to produce very spectacular bot movement but it leads to
 	// an increased rate of movement rejection by the prediction system
-	// once much more stricter buynnying tests were implemented.
-	float oldZ = newVelocity.Z();
-	// Convert boost direction to Z
+	// once much stricter bunny-hopping tests were implemented.
+	const float oldVelocityZ = newVelocity.Z();
+	// Nullify the boost Z velocity
 	newVelocity.Z() = 0;
-	// Normalize velocity boost direction
-	newVelocity *= 1.0f / entityPhysicsState.Speed2D();
-	// Make velocity boost vector
-	newVelocity *= ( frac * speedGainPerSecond ) * ( 0.001f * this->oldStepMillis );
+	// Normalize the velocity boost direction
+	newVelocity *= Q_Rcp( entityPhysicsState.Speed2D() );
+	// Make the velocity boost vector
+	newVelocity *= ( frac * speedGainPerSecond ) * ( 0.001f * (float)this->oldStepMillis );
 	// Add velocity boost to the entity velocity in the given physics state
 	newVelocity += entityPhysicsState.Velocity();
-	// Keep old velocity Z
-	newVelocity.Z() = oldZ;
+	// Preserve the old velocity Z
+	newVelocity.Z() = oldVelocityZ;
 
 	record->SetModifiedVelocity( newVelocity );
 }
@@ -1377,17 +1377,27 @@ void PredictionContext::CheatingCorrectVelocity( float velocity2DDirDotToTarget2
 	Assert( toTargetDir2D.LengthFast() > 0.99f && toTargetDir2D.LengthFast() < 1.01f );
 
 	Vec3 newVelocity( entityPhysicsState.Velocity() );
-	// Normalize current velocity direction
+	const float oldVelocityZ = newVelocity.Z();
+	// Normalize the current velocity direction
 	newVelocity *= Q_Rcp( speed );
-	// Modify velocity direction
-	newVelocity += 0.06f * toTargetDir2D;
-	// Normalize velocity direction again after modification
+	// Modify the velocity direction
+	newVelocity += 0.05f * toTargetDir2D;
+	// Normalize the velocity direction again after modification
 	if( !newVelocity.normalizeFast() ) {
 		return;
 	}
 
-	// Restore velocity magnitude
+	// Restore the velocity magnitude
 	newVelocity *= speed;
+	// Disallow boosting Z velocity
+	if( newVelocity.Z() > oldVelocityZ ) {
+		newVelocity.Z() = oldVelocityZ;
+		// Try normalizing again
+		if( !newVelocity.normalizeFast() ) {
+			return;
+		}
+		newVelocity *= speed;
+	}
 
 	record->SetModifiedVelocity( newVelocity );
 }
