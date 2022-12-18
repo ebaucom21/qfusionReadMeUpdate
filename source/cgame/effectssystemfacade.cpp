@@ -2179,12 +2179,12 @@ void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 
 	cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, PolyEffectsSystem::TracerParams {
 		.material           = cgs.media.shaderSparkParticle,
-		.duration           = 100,
-		.prestepDistance    = m_rng.nextFloat( 96.0f, 108.0f ),
+		.duration           = 75,
+		.prestepDistance    = m_rng.nextFloat( 56.0f, 96.0f ),
 		.smoothEdgeDistance = 172.0f,
-		.width              = m_rng.nextFloat( 3.0f, 3.5f ),
+		.width              = m_rng.nextFloat( 2.0f, 2.5f ),
 		.minLength          = m_rng.nextFloat( 64.0f, 72.0f ),
-		.distancePercentage = ( owner == (int)cg.predictedPlayerState.POVnum ) ? 0.33f : 0.21f,
+		.distancePercentage = ( owner == (int)cg.predictedPlayerState.POVnum ) ? 0.33f : 0.18f,
 		.programLightRadius = 72.0f,
 		.coronaLightRadius  = 108.0f,
 		.lightColor         = { 0.9f, 0.8f, 1.0f }
@@ -2198,11 +2198,11 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std:
 	for( size_t i = 0; i < to.size(); ++i ) {
 		cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to[i], PolyEffectsSystem::TracerParams {
 			.material                 = cgs.media.shaderSparkParticle,
-			.duration                 = 125,
-			.prestepDistance          = m_rng.nextFloat( 108.0f, 224.0f ),
-			.width                    = m_rng.nextFloat( 1.0f, 1.25f ),
+			.duration                 = 75,
+			.prestepDistance          = m_rng.nextFloat( 32.0f, 72.0f ),
+			.width                    = m_rng.nextFloat( 0.9f, 1.0f ),
 			.minLength                = m_rng.nextFloat( 72.0f, 108.0f ),
-			.distancePercentage       = 0.15f,
+			.distancePercentage       = 0.12f,
 			.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
 			.programLightRadius       = 96.0f,
 			.coronaLightRadius        = 192.0f,

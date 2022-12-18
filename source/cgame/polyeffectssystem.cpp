@@ -424,7 +424,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	const float totalDistance     = squareDistance * rcpDistance;
 	const float tracerTimeSeconds = 1e-3f * (float)params.duration;
 	const float polyLength        = wsw::max( params.minLength, params.distancePercentage * totalDistance );
-	const float speed             = wsw::max( 1750.0f, totalDistance * Q_Rcp( tracerTimeSeconds ) );
+	const float speed             = wsw::max( 3000.0f, totalDistance * Q_Rcp( tracerTimeSeconds ) );
 
 	auto *effect                 = new( mem )TracerEffect;
 	effect->timeoutAt            = m_lastTime + params.duration;
@@ -579,8 +579,6 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 				}
 			}
 		}
-
-		tracer->distanceSoFar += tracer->speed * timeDeltaSeconds;
 	}
 
 	m_lastTime = currTime;
