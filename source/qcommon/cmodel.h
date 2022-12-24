@@ -136,6 +136,7 @@ void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *
 						 const float *mins, const float *maxs, int clipMask );
 
 int CM_PossibleShapeListContents( const CMShapeList *list );
+int CM_GetNumShapesInShapeList( const CMShapeList *list );
 
 //
 void CM_Init( void );

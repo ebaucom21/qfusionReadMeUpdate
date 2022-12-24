@@ -750,74 +750,109 @@ void ParticleSystem::simulate( ParticleFlock *__restrict flock, wsw::RandomGener
 	VectorCopy( possibleBounds[1], flock->maxs );
 	flock->mins[3] = 0.0f, flock->maxs[3] = 1.0f;
 
-	trace_t trace;
+	assert( flock->restitution >= 0.0f && flock->restitution <= 1.0f );
 
-	for( unsigned i = 0; i < flock->numActivatedParticles; ) {
-		Particle *const __restrict p = flock->particles + i;
-		assert( p->spawnTime + p->activationDelay <= currTime );
-		if( const int64_t particleTimeoutAt = p->spawnTime + p->lifetime; particleTimeoutAt > currTime ) [[likely]] {
+	// Skip collision calls if the built shape list is empty
+	if( CM_GetNumShapesInShapeList( flock->shapeList ) == 0 ) {
+		unsigned particleIndex = 0;
+		do {
+			Particle *const __restrict p = flock->particles + particleIndex;
+			assert( p->spawnTime + p->activationDelay <= currTime );
+			const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
+
+			if( particleTimeoutAt > currTime ) [[likely]] {
+				// Save the current origin as the old origin
+				VectorCopy( p->origin, p->oldOrigin );
+				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
+				++particleIndex;
+			} else {
+				// Replace by the last particle
+				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+			}
+		} while( particleIndex < flock->numActivatedParticles );
+	} else {
+		trace_t trace;
+
+		unsigned particleIndex = 0;
+		do {
+			Particle *const __restrict p = flock->particles + particleIndex;
+			assert( p->spawnTime + p->activationDelay <= currTime );
+			const int64_t particleTimeoutAt = p->spawnTime + p->lifetime;
+
+			if( particleTimeoutAt <= currTime ) [[unlikely]] {
+				// Replace by the last particle
+				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+				continue;
+			}
+
 			CM_ClipToShapeList( cl.cms, flock->shapeList, &trace, p->oldOrigin,
 								p->origin, vec3_origin, vec3_origin, MASK_SOLID );
+
 			if( trace.fraction == 1.0f ) [[likely]] {
 				// Save the current origin as the old origin
 				VectorCopy( p->origin, p->oldOrigin );
 				p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
 				timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-				++i;
+				++particleIndex;
 				continue;
 			}
 
+			bool keepTheParticleByImpactRules = false;
 			if( !( trace.allsolid | trace.startsolid ) && !( trace.contents & CONTENTS_WATER ) ) [[likely]] {
-				bool keepTheParticle = true;
+				keepTheParticleByImpactRules = true;
 				// Skip checking/updating the bounce counter during startBounceCounterDelay from spawn.
 				// This helps with particles that should not normally bounce but happen to touch surfaces at start.
 				// This condition always holds for a zero skipBounceCounterDelay.
-				if( p->spawnTime + flock->startBounceCounterDelay <= currTime ) [[likely]] {
+				if ( p->spawnTime + flock->startBounceCounterDelay <= currTime ) [[likely]] {
 					p->bounceCount++;
 					if ( p->bounceCount > flock->maxBounceCount ) {
-						keepTheParticle = false;
-					} else if( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
-						keepTheParticle = rng->tryWithChance( flock->keepOnImpactProbability );
-					}
-				}
-
-				if( keepTheParticle ) [[likely]]  {
-					// Reflect the velocity
-					vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
-					const float oldSquareSpeed = VectorLengthSquared( oldVelocityDir );
-					if( oldSquareSpeed > 1.0f ) [[likely]] {
-						const float invOldSpeed = Q_RSqrt( oldSquareSpeed );
-						VectorScale( oldVelocityDir, invOldSpeed, oldVelocityDir );
-
-						vec3_t reflectedVelocityDir;
-						VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
-
-						// Hacks to overcome current issues with false positives due to spawning in solid
-						if( p->lifetime > 32 ) [[likely]] {
-							addRandomRotationToDir( reflectedVelocityDir, rng, 0.70f, 0.97f );
-						}
-
-						const float newSpeed = flock->restitution * Q_Rcp( invOldSpeed );
-						// Save the reflected velocity
-						VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
-
-						// Save the trace endpos with a slight offset as an origin for the next step.
-						// This is not really correct but is OK.
-						VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
-
-						p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
-						timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
-						++i;
-						continue;
+						keepTheParticleByImpactRules = false;
+					} else if ( flock->keepOnImpactProbability != 1.0f && p->bounceCount > flock->minBounceCount ) {
+						keepTheParticleByImpactRules = rng->tryWithChance( flock->keepOnImpactProbability );
 					}
 				}
 			}
-		}
 
-		// Dispose this particle
-		// TODO: Avoid this memcpy call by copying components directly via intrinsics
-		--flock->numActivatedParticles;
-		flock->particles[i] = flock->particles[flock->numActivatedParticles];
+			if( !keepTheParticleByImpactRules ) [[unlikely]] {
+				// Replace by the last particle
+				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+				continue;
+			}
+
+			// Reflect the velocity
+			const float oldSquareSpeed    = VectorLengthSquared( p->velocity );
+			const float oldSpeedThreshold = 1.0f;
+			const float newSpeedThreshold = oldSpeedThreshold * Q_Rcp( flock->restitution );
+			if( oldSquareSpeed < wsw::square( newSpeedThreshold ) ) [[unlikely]] {
+				// Replace by the last particle
+				flock->particles[particleIndex] = flock->particles[--flock->numActivatedParticles];
+				continue;
+			}
+
+			const float rcpOldSpeed = Q_RSqrt( oldSquareSpeed );
+			vec3_t oldVelocityDir { p->velocity[0], p->velocity[1], p->velocity[2] };
+			VectorScale( oldVelocityDir, rcpOldSpeed, oldVelocityDir );
+
+			vec3_t reflectedVelocityDir;
+			VectorReflect( oldVelocityDir, trace.plane.normal, 0, reflectedVelocityDir );
+
+			if( p->lifetime > 32 ) {
+				addRandomRotationToDir( reflectedVelocityDir, rng, 0.70f, 0.97f );
+			}
+
+			const float newSpeed = flock->restitution * ( oldSquareSpeed * rcpOldSpeed );
+			// Save the reflected velocity
+			VectorScale( reflectedVelocityDir, newSpeed, p->velocity );
+
+			// Save the trace endpos with a slight offset as an origin for the next step.
+			// This is not really correct but is OK.
+			VectorAdd( trace.endpos, reflectedVelocityDir, p->oldOrigin );
+
+			p->lifetimeFrac = computeParticleLifetimeFrac( currTime, *p, flock->appearanceRules );
+			timeoutOfParticlesLeft = wsw::max( particleTimeoutAt, timeoutOfParticlesLeft );
+			++particleIndex;
+		} while( particleIndex < flock->numActivatedParticles );
 	}
 
 	flock->timeoutAt = timeoutOfParticlesLeft;

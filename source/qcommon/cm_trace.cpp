@@ -1146,6 +1146,10 @@ int CM_PossibleShapeListContents( const CMShapeList *list ) {
 	return list->possibleContents;
 }
 
+int CM_GetNumShapesInShapeList( const CMShapeList *list ) {
+	return list->numShapes;
+}
+
 CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const float *mins, const float *maxs, int clipMask ) {
 #ifdef CM_SELF_TEST
 	cbrush_s **tmp1[1024];
