@@ -521,16 +521,21 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 	CM_BuildShapeList( cl.cms, m_tmpShapeList, growthMins, growthMaxs, MASK_SOLID );
 	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, growthMins, growthMaxs );
 
-	trace_t trace;
-	for( size_t i = 0; i < verticesSpan.size(); ++i ) {
-		// Vertices of the unit hull define directions
-		const float *dir = verticesSpan[i];
+	if( CM_GetNumShapesInShapeList( m_tmpShapeList ) == 0 ) {
+		// Limits at each direction just match the given radius in this case
+		std::fill( hull->limitsAtDirections, hull->limitsAtDirections + verticesSpan.size(), radius );
+	} else {
+		trace_t trace;
+		for( size_t i = 0; i < verticesSpan.size(); ++i ) {
+			// Vertices of the unit hull define directions
+			const float *dir = verticesSpan[i];
 
-		vec3_t limitPoint;
-		VectorMA( origin, radius, dir, limitPoint );
+			vec3_t limitPoint;
+			VectorMA( origin, radius, dir, limitPoint );
 
-		CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, origin, limitPoint, vec3_origin, vec3_origin, MASK_SOLID );
-		hull->limitsAtDirections[i] = trace.fraction * radius;
+			CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, origin, limitPoint, vec3_origin, vec3_origin, MASK_SOLID );
+			hull->limitsAtDirections[i] = trace.fraction * radius;
+		}
 	}
 
 	auto *const __restrict spikeSpeedBoost = (float *)alloca( sizeof( float ) * verticesSpan.size() );
@@ -934,73 +939,83 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 	trace_t clipTrace, slideTrace;
 	unsigned numNonContactingVertices = 0;
-	for( unsigned i = 0; i < numVertices; ++i ) {
-		CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
-							vec3_origin, vec3_origin, MASK_SOLID );
-		if( clipTrace.fraction == 1.0f ) [[likely]] {
-			isVertexNonContacting[i] = 1;
-			indicesOfNonContactingVertices[numNonContactingVertices++] = i;
-		} else {
-			isVertexNonContacting[i] = 0;
-			bool putVertexAtTheContactPosition = true;
-			if( const float squareSpeed = VectorLengthSquared( combinedVelocities[i] ); squareSpeed > 10.0f * 10.0f ) {
-				vec3_t velocityDir;
-				const float rcpSpeed = Q_RSqrt( squareSpeed );
-				VectorScale( combinedVelocities[i], rcpSpeed, velocityDir );
-				if( const float dot = std::fabs( DotProduct( velocityDir, clipTrace.plane.normal ) ); dot < 0.95f ) {
-					const float speed               = Q_Rcp( rcpSpeed );
-					const float idealMoveThisFrame  = timeDeltaSeconds * speed;
-					const float distanceToObstacle  = idealMoveThisFrame * clipTrace.fraction;
-					const float distanceAlongNormal = dot * distanceToObstacle;
+	if( CM_GetNumShapesInShapeList( shapeList ) == 0 ) {
+		unsigned i = 0;
+		do {
+			isVertexNonContacting[i]          = 1;
+			indicesOfNonContactingVertices[i] = i;
+		} while( ++i < numVertices );
+		numNonContactingVertices = numVertices;
+	} else {
+		for( unsigned i = 0; i < numVertices; ++i ) {
+			CM_ClipToShapeList( cl.cms, shapeList, &clipTrace, oldPositions[i], newPositions[i],
+								vec3_origin, vec3_origin, MASK_SOLID );
+			if( clipTrace.fraction == 1.0f ) [[likely]] {
+				isVertexNonContacting[i] = 1;
+				indicesOfNonContactingVertices[numNonContactingVertices++] = i;
+			} else {
+				isVertexNonContacting[i] = 0;
+				bool putVertexAtTheContactPosition = true;
 
-					//   a'     c'
-					//      ^ <--- ^    b' + c' = a'    | a' = lengthAlongNormal * surface normal'
-					//      |     /                     | b' = -distanceToObstacle * velocity dir'
-					//      |    /                      | c' = slide vec
-					//      |   / b'                    | P  = trace endpos
-					//      |  /
-					//      | /
-					// ____ |/__________
-					//      P
+				if( const float squareSpeed = VectorLengthSquared( combinedVelocities[i] ); squareSpeed > 10.0f * 10.0f ) {
+					vec3_t velocityDir;
+					const float rcpSpeed = Q_RSqrt( squareSpeed );
+					VectorScale( combinedVelocities[i], rcpSpeed, velocityDir );
+					if( const float dot = std::fabs( DotProduct( velocityDir, clipTrace.plane.normal ) ); dot < 0.95f ) {
+						const float speed               = Q_Rcp( rcpSpeed );
+						const float idealMoveThisFrame  = timeDeltaSeconds * speed;
+						const float distanceToObstacle  = idealMoveThisFrame * clipTrace.fraction;
+						const float distanceAlongNormal = dot * distanceToObstacle;
 
-					// c = a - b;
+						//   a'     c'
+						//      ^ <--- ^    b' + c' = a'    | a' = lengthAlongNormal * surface normal'
+						//      |     /                     | b' = -distanceToObstacle * velocity dir'
+						//      |    /                      | c' = slide vec
+						//      |   / b'                    | P  = trace endpos
+						//      |  /
+						//      | /
+						// ____ |/__________
+						//      P
 
-					vec3_t normalVec;
-					VectorScale( clipTrace.plane.normal, distanceAlongNormal, normalVec );
-					vec3_t vecToObstacle;
-					VectorScale( velocityDir, -distanceToObstacle, vecToObstacle );
-					vec3_t slideVec;
-					VectorSubtract( normalVec, vecToObstacle, slideVec );
+						// c = a - b;
 
-					// If the slide distance is sufficient for checks
-					if( VectorLengthSquared( slideVec ) > 1.0f * 1.0f ) {
-						vec3_t slideStartPoint, slideEndPoint;
-						// Add an offset from the surface while testing sliding
-						VectorAdd( clipTrace.endpos, clipTrace.plane.normal, slideStartPoint );
-						VectorAdd( slideStartPoint, slideVec, slideEndPoint );
+						vec3_t normalVec;
+						VectorScale( clipTrace.plane.normal, distanceAlongNormal, normalVec );
+						vec3_t vecToObstacle;
+						VectorScale( velocityDir, -distanceToObstacle, vecToObstacle );
+						vec3_t slideVec;
+						VectorSubtract( normalVec, vecToObstacle, slideVec );
 
-						CM_ClipToShapeList( cl.cms, shapeList, &slideTrace, slideStartPoint, slideEndPoint,
-											vec3_origin, vec3_origin, MASK_SOLID );
-						if( slideTrace.fraction == 1.0f ) {
-							VectorCopy( slideEndPoint, newPositions[i] );
-							putVertexAtTheContactPosition = false;
-							// TODO: Modify velocity as well?
+						// If the slide distance is sufficient for checks
+						if( VectorLengthSquared( slideVec ) > 1.0f * 1.0f ) {
+							vec3_t slideStartPoint, slideEndPoint;
+							// Add an offset from the surface while testing sliding
+							VectorAdd( clipTrace.endpos, clipTrace.plane.normal, slideStartPoint );
+							VectorAdd( slideStartPoint, slideVec, slideEndPoint );
+
+							CM_ClipToShapeList( cl.cms, shapeList, &slideTrace, slideStartPoint, slideEndPoint,
+												vec3_origin, vec3_origin, MASK_SOLID );
+							if( slideTrace.fraction == 1.0f ) {
+								VectorCopy( slideEndPoint, newPositions[i] );
+								putVertexAtTheContactPosition = false;
+								// TODO: Modify velocity as well?
+							}
 						}
 					}
 				}
+
+				if( putVertexAtTheContactPosition ) {
+					VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
+				}
+
+				// The final position for contacting vertices is considered to be known.
+				const float *__restrict position = newPositions[i];
+				minZLastFrame = wsw::min( minZLastFrame, position[2] );
+				maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
+
+				// Make the contacting vertex transparent
+				vertexColors[i][3] = 0;
 			}
-
-			if( putVertexAtTheContactPosition ) {
-				VectorAdd( clipTrace.endpos, clipTrace.plane.normal, newPositions[i] );
-			}
-
-			// The final position for contacting vertices is considered to be known.
-			const float *__restrict position = newPositions[i];
-			minZLastFrame = wsw::min( minZLastFrame, position[2] );
-			maxZLastFrame = wsw::max( maxZLastFrame, position[2] );
-
-			// Make the contacting vertex transparent
-			vertexColors[i][3] = 0;
 		}
 	}
 
