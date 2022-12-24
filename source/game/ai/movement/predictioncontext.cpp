@@ -902,6 +902,43 @@ void PredictionContext::SavePathTriggerNums() {
 	}
 }
 
+// TODO: Make a non-template wrapper for fixed vectors so we don't have to instantiate templates for different size
+template <unsigned N>
+static void collectNearbyTriggers( wsw::StaticVector<uint16_t, N> *__restrict dest,
+								   const float *__restrict botOrigin,
+								   std::span<const uint16_t> entNums ) {
+	const auto *const __restrict gameEdicts = game.edicts;
+
+	dest->clear();
+
+	for( const uint16_t entNum: entNums ) {
+		vec3_t triggerOrigin;
+		const edict_t *const __restrict trigger = gameEdicts + entNum;
+		// Distrust trigger->origin
+		VectorAvg( trigger->r.absmin, trigger->r.absmax, triggerOrigin );
+		const float radiusLike = 0.5f * DistanceFast( trigger->r.absmin, trigger->r.absmax );
+		if( DistanceSquared( botOrigin, triggerOrigin ) < wsw::square( radiusLike + 768.0f ) ) {
+			dest->push_back( entNum );
+			// TODO: Add an initial pass to select nearest/best in this case?
+			if( dest->full() ) [[unlikely]] {
+				break;
+			}
+		}
+	}
+}
+
+void PredictionContext::SaveNearbyEntities() {
+	const float *const origin = bot->Origin();
+	const auto *const  cache  = wsw::ai::ClassifiedEntitiesCache::instance();
+
+	collectNearbyTriggers( &m_jumppadEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapJumppads() );
+	collectNearbyTriggers( &m_teleporterEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapTeleporters() );
+	collectNearbyTriggers( &m_platformEntNumsToUseDuringPrediction, origin, cache->getAllPersistentMapPlatforms() );
+	collectNearbyTriggers( &m_otherTriggerEntNumsToUseDuringPrediction, origin, cache->getAllOtherTriggersInThisFrame() );
+
+	nearbyTriggersCache.context = this;
+}
+
 void PredictionContext::BuildPlan() {
 	for( auto *movementAction: m_subsystem->movementActions )
 		movementAction->BeforePlanning();
@@ -963,6 +1000,7 @@ void PredictionContext::BuildPlan() {
 	this->lastResortPathPenalty = std::numeric_limits<unsigned>::max();
 
 	SavePathTriggerNums();
+	SaveNearbyEntities();
 
 #ifndef CHECK_INFINITE_NEXT_STEP_LOOPS
 	for(;; ) {

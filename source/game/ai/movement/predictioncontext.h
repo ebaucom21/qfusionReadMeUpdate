@@ -70,6 +70,7 @@ class MovementSubsystem;
 
 class PredictionContext : public MovementPredictionConstants {
 	friend class FallbackAction;
+	friend struct wsw::ai::movement::NearbyTriggersCache;
 
 	Bot *const bot;
 	MovementSubsystem *const m_subsystem;
@@ -251,6 +252,20 @@ public:
 	int m_teleporterPathTriggerNum { 0 };
 	int m_platformPathTriggerNum { 0 };
 
+	// ClassifiedEntitiesCache stores parameters of all entities on the map for respective classes.
+	// Assume that we won't move more than some limit of units during prediction.
+	// We don't really predict movement past using any triggers as well.
+	// Collecting nearby entities once before prediction helps to reduce NearbyTriggersCache refilling cost
+	// which could otherwise explode on huge maps with lots of entities.
+	// Q: What's the purpose of NearbyTriggersCache?
+	// A: It's much tighter, as required for reduction of tests during each movement steps.
+	// Q: What's the purpose of ClassifiedEntitiesCache?
+	// A: It's still useful for other bots (that have a different origin) and for various other calculations.
+	wsw::StaticVector<uint16_t, 12> m_teleporterEntNumsToUseDuringPrediction;
+	wsw::StaticVector<uint16_t, 12> m_jumppadEntNumsToUseDuringPrediction;
+	wsw::StaticVector<uint16_t, 12> m_platformEntNumsToUseDuringPrediction;
+	wsw::StaticVector<uint16_t, 32> m_otherTriggerEntNumsToUseDuringPrediction;
+
 	class BaseAction *SuggestSuitableAction();
 	class BaseAction *SuggestDefaultAction();
 	class BaseAction *SuggestAnyAction();
@@ -295,6 +310,7 @@ public:
 	void NextMovementStep();
 
 	void SavePathTriggerNums();
+	void SaveNearbyEntities();
 
 	const AiEntityPhysicsState &PhysicsStateBeforeStep() const {
 		return predictedMovementActions[topOfStackIndex].entityPhysicsState;

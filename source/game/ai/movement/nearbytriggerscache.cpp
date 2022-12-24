@@ -1,4 +1,5 @@
 #include "nearbytriggerscache.h"
+#include "predictioncontext.h"
 #include "../classifiedentitiescache.h"
 #include "../ailocal.h"
 
@@ -48,13 +49,13 @@ auto NearbyTriggersCache::clipToRegion( std::span<const uint16_t> entNums, uint1
 
 void NearbyTriggersCache::ensureValidForBounds( const float *__restrict absMins,
 												const float *__restrict absMaxs ) {
-	// TODO: Simd ("withinBoundsWithDelta") this
+	// TODO: Simd ("withinBounds") this
 	int i;
 	for( i = 0; i < 3; ++i ) {
-		if( lastComputedForMins[i] + 192.0f > absMins[i] ) {
+		if( lastComputedForMins[i] >= absMins[i] ) {
 			break;
 		}
-		if( lastComputedForMaxs[i] - 192.0f < absMaxs[i] ) {
+		if( lastComputedForMaxs[i] <= absMaxs[i] ) {
 			break;
 		}
 	}
@@ -64,16 +65,15 @@ void NearbyTriggersCache::ensureValidForBounds( const float *__restrict absMins,
 		return;
 	}
 
-	VectorSet( lastComputedForMins, -256, -256, -256 );
-	VectorSet( lastComputedForMaxs, +256, +256, +256 );
+	VectorSet( lastComputedForMins, -192, -192, -192 );
+	VectorSet( lastComputedForMaxs, +192, +192, +192 );
 	VectorAdd( absMins, lastComputedForMins, lastComputedForMins );
 	VectorAdd( absMaxs, lastComputedForMaxs, lastComputedForMaxs );
 
-	const auto *const __restrict cache = wsw::ai::ClassifiedEntitiesCache::instance();
-	numTeleportEnts = clipToRegion( cache->getAllPersistentMapTeleporters(), teleportEntNums, kMaxClassEnts );
-	numJumppadEnts = clipToRegion( cache->getAllPersistentMapJumppads(), jumppadEntNums, kMaxClassEnts );
-	numPlatformEnts = clipToRegion( cache->getAllPersistentMapPlatforms(), platformEntNums, kMaxClassEnts );
-	numOtherEnts = clipToRegion( cache->getAllOtherTriggersInThisFrame(), otherEntNums, kMaxOtherEnts );
+	numTeleportEnts = clipToRegion( context->m_teleporterEntNumsToUseDuringPrediction, teleportEntNums, kMaxClassEnts );
+	numJumppadEnts  = clipToRegion( context->m_jumppadEntNumsToUseDuringPrediction, jumppadEntNums, kMaxClassEnts );
+	numPlatformEnts = clipToRegion( context->m_platformEntNumsToUseDuringPrediction, platformEntNums, kMaxClassEnts );
+	numOtherEnts    = clipToRegion( context->m_otherTriggerEntNumsToUseDuringPrediction, otherEntNums, kMaxOtherEnts );
 }
 
 }

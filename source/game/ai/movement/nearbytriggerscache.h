@@ -3,9 +3,13 @@
 
 #include "../navigation/aasworld.h"
 
+class PredictionContext;
+
 namespace wsw::ai::movement {
 
 struct NearbyTriggersCache {
+	PredictionContext *context;
+
 	vec3_t lastComputedForMins { +99999, +99999, +99999 };
 	vec3_t lastComputedForMaxs { -99999, -99999, -99999 };
 
@@ -14,7 +18,7 @@ struct NearbyTriggersCache {
 	unsigned numPlatformEnts { 0 };
 	unsigned numOtherEnts { 0 };
 
-	static constexpr const size_t kMaxClassEnts { 16 };
+	static constexpr const size_t kMaxClassEnts { 8 };
 	static constexpr const size_t kMaxOtherEnts { 16 };
 
 	uint16_t jumppadEntNums[kMaxClassEnts];
