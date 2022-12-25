@@ -1,6 +1,7 @@
 #include "bunnytestingnextreachdirsaction.h"
 #include "movementlocal.h"
 #include "floorclusterareascache.h"
+#include "../navigation/aasstaticroutetable.h"
 #include "../manager.h"
 
 BunnyTestingNextReachDirsAction::BunnyTestingNextReachDirsAction( MovementSubsystem *subsystem )
@@ -246,7 +247,7 @@ bool NextReachDirsCollector::Accept( int, const aas_reachability_t &reach, int )
 
 		// This is very likely to indicate a significant elevation of the area over the bot area.
 		// TODO: This test leads to a failure if the target area is direct-reachable via falling
-		if( !TravelTimeWalkingOrFallingShort( routeCache, areaNum, groundedStartAreaNum ) ) {
+		if( !AasStaticRouteTable::instance()->getTravelTimeWalkingOrFallingShort( areaNum, groundedStartAreaNum ) ) {
 			return true;
 		}
 	}

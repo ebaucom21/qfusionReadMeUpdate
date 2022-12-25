@@ -2,6 +2,7 @@
 #include "bestjumpablespotdetector.h"
 #include "movementlocal.h"
 #include "../navigation/aaselementsmask.h"
+#include "../navigation/aasstaticroutetable.h"
 #include "../manager.h"
 
 class WeaponJumpableSpotDetector: public BestJumpableSpotDetector {
@@ -441,12 +442,14 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 	const int targetAreaNum = context->NavTargetAasAreaNum();
 	const int currTravelTimeToTarget = context->TravelTimeToNavTarget();
 	const auto *aasWorld = AiAasWorld::instance();
+	const auto *routeTable = AasStaticRouteTable::instance();
 	const auto aasAreas = aasWorld->getAreas();
 
 	int reachNum;
 	int travelTimeFromAreaToTarget;
 	// Travel times from the bot to a spot and back
-	int directTravelTime, reverseTravelTime;
+	int directTravelTime;
+	std::optional<uint16_t> reverseTravelTime;
 	float deltaHeight;
 	vec3_t areaPoint;
 
@@ -456,6 +459,15 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 		// Always add the target area
 		if( testedAreaNum == targetAreaNum ) {
 			travelTimeFromAreaToTarget = 1;
+			goto testPassed;
+		}
+
+		// Check the travel time back from spot to the bot origin.
+		// This test is relatively cheap since the introduction of the static routing table.
+		reverseTravelTime = routeTable->getTravelTimeWalkingOrFallingShort( testedAreaNum,
+																			botAreaNums[numBotAreas - 1] );
+		// Its very likely there is a falling involved
+		if( !reverseTravelTime ) {
 			goto testPassed;
 		}
 
@@ -478,6 +490,11 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 			goto testPassed;
 		}
 
+		// Make sure that direct travel time is much greater that the reverse time
+		if( directTravelTime - *reverseTravelTime < 200 ) {
+			continue;
+		}
+
 		// We do not check a travel time from bot to area due to
 		// a triangle inequality of partial travel times and the final travel time
 
@@ -491,18 +508,6 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 			goto testPassed;
 		}
 
-		// The most expensive part, left the last (this route is unlikely to be cached).
-		// Check the travel time back from spot to the bot origin.
-		reverseTravelTime = TravelTimeWalkingOrFallingShort( routeCache, testedAreaNum, botAreaNums[numBotAreas - 1] );
-		// Its very likely there is a falling involved
-		if( !reverseTravelTime ) {
-			goto testPassed;
-		}
-
-		// Make sure that direct travel time is much greater that the reverse time
-		if( directTravelTime - reverseTravelTime < 200 ) {
-			continue;
-		}
 testPassed:;
 		passedTestAreas[numPassedTestAreas] = testedAreaNum;
 		travelTimes[numPassedTestAreas] = travelTimeFromAreaToTarget;

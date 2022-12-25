@@ -56,6 +56,22 @@ public:
 	LoadingStatus BeginReading( const char *filePath );
 
 	bool ReadLengthAndData( uint8_t **data, uint32_t *dataLength );
+
+	template <typename T>
+	bool ReadAsTypedBuffer( T **data, uint32_t *dataLength ) {
+		uint8_t *rawData;
+		uint32_t rawLength;
+		if( !ReadLengthAndData( &rawData, &rawLength ) ) {
+			return false;
+		}
+		if( rawLength % sizeof( T ) ) {
+			Q_free( data );
+			return false;
+		}
+		*data       = (T *)rawData;
+		*dataLength = rawLength / sizeof( T );
+		return true;
+	}
 };
 
 class AiPrecomputedFileWriter: public virtual AiPrecomputedFileHandler {
@@ -74,6 +90,11 @@ public:
 	bool WriteString( const char *string );
 	bool WriteString( const wsw::StringView &string );
 	bool WriteLengthAndData( const uint8_t *data, uint32_t dataLength );
+
+	template <typename T>
+	bool WriteTypedBuffer( const T *data, uint32_t dataLength ) {
+		return WriteLengthAndData( (const uint8_t *)data, sizeof( T ) * dataLength );
+	}
 };
 
 #endif

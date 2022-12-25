@@ -1,0 +1,534 @@
+#include "aasstaticroutetable.h"
+#include "aasroutecache.h"
+#include "aasworld.h"
+#include "../bot.h"
+#include "../rewriteme.h"
+#include "../../../qcommon/singletonholder.h"
+#include "../../../qcommon/wswvector.h"
+#include <cinttypes>
+
+static SingletonHolder<AasStaticRouteTable> g_instanceHolder;
+bool AasStaticRouteTable::s_isAccessibleForRouteCache;
+
+void AasStaticRouteTable::init( const char *mapName ) {
+	s_isAccessibleForRouteCache = false;
+	g_instanceHolder.init( mapName );
+	s_isAccessibleForRouteCache = true;
+}
+
+void AasStaticRouteTable::shutdown() {
+	g_instanceHolder.shutdown();
+	s_isAccessibleForRouteCache = false;
+}
+
+auto AasStaticRouteTable::instance() -> const AasStaticRouteTable * {
+	return g_instanceHolder.instance();
+}
+
+AasStaticRouteTable::AasStaticRouteTable( const char *mapName ) {
+	if( !AiAasWorld::instance()->isLoaded() ) {
+		return;
+	}
+
+	wsw::StaticString<MAX_QPATH> filePath;
+	filePath << wsw::StringView( "ai/" ) << wsw::StringView( mapName ) << wsw::StringView( ".routetable" );
+
+	if( !loadFromFile( filePath.data() ) ) {
+		if( compute() ) {
+			if( !saveToFile( filePath.data() ) ) {
+				Com_Printf( S_COLOR_RED "Failed to save the static route table to %s\n", filePath.data() );
+			} else {
+				Com_Printf( "Saved the static route table to %s successfully\n", filePath.data() );
+			}
+		} else {
+			Com_Printf( S_COLOR_RED "Failed to compute the static route table\n" );
+		}
+	} else {
+		Com_Printf( "Loaded the static route table from %s successfully\n", filePath.data() );
+	}
+}
+
+AasStaticRouteTable::~AasStaticRouteTable() {
+	Q_free( m_dataForPreferredFlags.entries );
+	Q_free( m_dataForPreferredFlags.areaNums );
+
+	Q_free( m_dataForAllowedFlags.entries );
+	Q_free( m_dataForAllowedFlags.areaNums );
+
+	Q_free( m_bufferSpans );
+}
+
+static constexpr const char *kFileTag   = "RouteTable";
+static constexpr const int kFileVersion = 1337;
+
+bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
+	AiPrecomputedFileReader reader( kFileTag, kFileVersion );
+	if( reader.BeginReading( filePath ) != AiPrecomputedFileReader::SUCCESS ) {
+		return false;
+	}
+
+	uint16_t *preferredNums = nullptr, *allowedNums = nullptr;
+	AreaEntry *preferredEntries = nullptr, *allowedEntries = nullptr;
+	uint16_t *walkingNums = nullptr, *walkingTimes = nullptr;
+	BufferSpansForFlags *spans = nullptr;
+
+	uint32_t numPreferredNums = 0, numAllowedNums = 0;
+	uint32_t numPreferredEntries = 0, numAllowedEntries = 0;
+	uint32_t numWalkingNums = 0, numWalkingTimes = 0;
+	uint32_t numSpans = 0;
+
+	wsw::StaticVector<void *, 7> allocatedData;
+
+	// TODO: The reader is defined in "rewriteme.h" for a reason...
+
+	if( reader.ReadAsTypedBuffer( &preferredNums, &numPreferredNums ) ) {
+		allocatedData.push_back( preferredNums );
+	}
+	if( reader.ReadAsTypedBuffer( &preferredEntries, &numPreferredEntries ) ) {
+		allocatedData.push_back( preferredEntries );
+	}
+	if( reader.ReadAsTypedBuffer( &allowedNums, &numAllowedNums ) ) {
+		allocatedData.push_back( allowedNums );
+	}
+	if( reader.ReadAsTypedBuffer( &allowedEntries, &numAllowedEntries ) ) {
+		allocatedData.push_back( allowedEntries );
+	}
+	if( reader.ReadAsTypedBuffer( &walkingNums, &numWalkingNums ) ) {
+		allocatedData.push_back( walkingNums );
+	}
+	if( reader.ReadAsTypedBuffer( &walkingTimes, &numWalkingTimes ) ) {
+		allocatedData.push_back( walkingTimes );
+	}
+
+	if( reader.ReadAsTypedBuffer( &spans, &numSpans ) ) {
+		allocatedData.push_back( spans );
+	}
+
+	// The second condition is a minimal validation.
+	// We should not really care about the latter once a proper checksum handling is implemented.
+	if( !allocatedData.full() || ( numSpans != AiAasWorld::instance()->getAreas().size() ) ) {
+		for( void *p : allocatedData ) {
+			assert( p );
+			Q_free( p );
+		}
+		return false;
+	}
+
+	m_dataForPreferredFlags.areaNums = preferredNums;
+	m_dataForPreferredFlags.areaNumsDataSizeInElems = numPreferredNums;
+	m_dataForPreferredFlags.entries  = preferredEntries;
+	m_dataForPreferredFlags.entriesDataSizeInElems = numPreferredEntries;
+
+	m_dataForAllowedFlags.areaNums = allowedNums;
+	m_dataForAllowedFlags.areaNumsDataSizeInElems = numAllowedNums;
+	m_dataForAllowedFlags.entries  = allowedEntries;
+	m_dataForAllowedFlags.entriesDataSizeInElems = numAllowedEntries;
+
+	m_walkingAreaNums = walkingNums;
+	m_walkingAreaNumsDataSizeInElems = numWalkingNums;
+	m_walkingTravelTimes = walkingTimes;
+	m_walkingTravelTimesDataSizeInElems = numWalkingTimes;
+
+	m_bufferSpans = spans;
+	m_numAreas    = numSpans;
+
+	return true;
+}
+
+bool AasStaticRouteTable::saveToFile( const char *filePath ) {
+	AiPrecomputedFileWriter writer( kFileTag, kFileVersion );
+	if( !writer.BeginWriting( filePath ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_dataForPreferredFlags.areaNums, m_dataForPreferredFlags.areaNumsDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_dataForPreferredFlags.entries, m_dataForPreferredFlags.entriesDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_dataForAllowedFlags.areaNums, m_dataForAllowedFlags.areaNumsDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_dataForAllowedFlags.entries, m_dataForAllowedFlags.entriesDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_walkingAreaNums, m_walkingAreaNumsDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_walkingTravelTimes, m_walkingTravelTimesDataSizeInElems ) ) {
+		return false;
+	}
+	if( !writer.WriteTypedBuffer( m_bufferSpans, m_numAreas ) ) {
+		return false;
+	}
+	return true;
+}
+
+static constexpr auto kTravelFlagsWalking = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
+
+[[nodiscard]]
+static auto calcTravelTimeWalkingOrFallingShort( AiAasRouteCache *routeCache, const AiAasWorld *aasWorld,
+												 int fromAreaNum, int toAreaNum ) -> int {
+	const auto *aasReaches = aasWorld->getReaches().data();
+
+	int travelTime = 0;
+	// Prevent infinite looping (still happens for some maps)
+	// TODO Check whether the bug is still there?
+	int numHops = 0;
+	for(;; ) {
+		if( fromAreaNum == toAreaNum ) {
+			return wsw::max( 1, travelTime );
+		}
+		if( numHops++ == 1024 ) {
+			assert( 0 );
+			return 0;
+		}
+		const int reachNum = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, kTravelFlagsWalking );
+		if( !reachNum ) {
+			return 0;
+		}
+		// Save the returned travel time once at start.
+		// It is not so inefficient as results of the previous call including travel time are cached and the cache is fast.
+		if( !travelTime ) {
+			travelTime = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, kTravelFlagsWalking );
+		}
+		const auto &reach = aasReaches[reachNum];
+		// Move to this area for the next iteration
+		fromAreaNum = reach.areanum;
+		// Check whether the travel type fits this function restrictions
+		const int travelType = reach.traveltype & TRAVELTYPE_MASK;
+		if( travelType == TRAVEL_WALK ) {
+			continue;
+		}
+		if( travelType == TRAVEL_WALKOFFLEDGE ) {
+			if( DistanceSquared( reach.start, reach.end ) < wsw::square( 0.8 * AI_JUMPABLE_HEIGHT ) ) {
+				continue;
+			}
+		}
+		return 0;
+	}
+}
+
+template <typename T>
+[[nodiscard]]
+static wsw_forceinline auto makeHeapAllocCopy( const wsw::Vector<T> &data ) -> T * {
+	auto *const result = (T *)Q_malloc( sizeof( T ) * data.size() );
+	std::memcpy( result, data.data(), sizeof( T ) * data.size() );
+	return result;
+}
+
+template <typename T>
+struct NumsAndEntriesBuilder {
+	wsw::Vector<uint16_t> nums;
+	wsw::Vector<T> entries;
+	uint64_t totalNumEntriesInSpans { 0 };
+	uint64_t maxNumEntriesInSpans { 0 };
+	uint16_t minNum { 0 }, maxNum { 0 };
+	size_t oldNumsSize { 0 }, oldEntriesSize { 0 };
+
+	void beginSpan() {
+		oldNumsSize    = nums.size();
+		oldEntriesSize = entries.size();
+		minNum         = std::numeric_limits<uint16_t>::max();
+		maxNum         = 0;
+	}
+
+	void addNumAndEntry( uint16_t num, T &&entry ) {
+		nums.push_back( num );
+		entries.emplace_back( std::forward<T>( entry ) );
+		minNum = wsw::min( minNum, num );
+		maxNum = wsw::max( maxNum, num );
+	}
+
+	[[nodiscard]]
+	auto endSpan() -> AasStaticRouteTable::BufferSpan {
+		// Ensure that each nums span size is a multiple of 16
+		if( const size_t rem = nums.size() % 16 ) {
+			nums.insert( nums.end(), 16 - rem, 0 );
+		}
+
+		const size_t numAreaNumsInSpan = nums.size() - oldNumsSize;
+		const size_t numEntriesInSpan  = entries.size() - oldEntriesSize;
+		assert( numAreaNumsInSpan <= std::numeric_limits<uint16_t>::max() );
+		assert( numEntriesInSpan  <= std::numeric_limits<uint16_t>::max() );
+		totalNumEntriesInSpans += numEntriesInSpan;
+		maxNumEntriesInSpans = wsw::max( maxNumEntriesInSpans, numEntriesInSpan );
+
+		return AasStaticRouteTable::BufferSpan {
+			.areaNumsOffset    = (unsigned)oldNumsSize,
+			.entriesOffset     = (unsigned)oldEntriesSize,
+			.numAreaNumsInSpan = (uint16_t)( numAreaNumsInSpan ),
+			.numEntriesInSpan  = (uint16_t)( numEntriesInSpan ),
+			.minNum            = minNum,
+			.maxNum            = maxNum,
+		};
+	}
+};
+
+//#define CHECK_MATCH_WITH_ROUTE_CACHE
+
+bool AasStaticRouteTable::compute() {
+	const auto *aasWorld = AiAasWorld::instance();
+	if( !aasWorld->isLoaded() ) {
+		return false;
+	}
+
+	assert( !s_isAccessibleForRouteCache );
+
+	auto *const routeCache = AiAasRouteCache::Shared();
+	const auto numAreas    = (uint16_t)aasWorld->getAreas().size();
+
+	NumsAndEntriesBuilder<AreaEntry> preferredBuilder;
+	NumsAndEntriesBuilder<AreaEntry> allowedBuilder;
+	NumsAndEntriesBuilder<uint16_t> walkingBuilder;
+	wsw::Vector<BufferSpansForFlags> spans;
+
+	spans.reserve( numAreas );
+	// Put dummy values for area 0, so we don't have to apply offsets to fromAreaNum during retrieval
+	spans.emplace_back( BufferSpansForFlags() );
+
+	constexpr auto preferredFlags = Bot::PREFERRED_TRAVEL_FLAGS;
+	constexpr auto allowedFlags   = Bot::ALLOWED_TRAVEL_FLAGS;
+
+	unsigned lastDisplayedProgress = 0;
+	const unsigned totalWorkSize   = wsw::square( numAreas - 1 );
+
+	for( uint16_t fromAreaNum = 1; fromAreaNum < numAreas; ++fromAreaNum ) {
+		const unsigned currWorkSize = ( fromAreaNum - 1 ) * ( numAreas - 1 );
+		const auto currProgress     = (unsigned)std::floor( 100.0 * ( (double)currWorkSize / (double)totalWorkSize ) );
+		if( lastDisplayedProgress != currProgress ) {
+			lastDisplayedProgress = currProgress;
+			Com_Printf( "Computing the static route table: %d%%\n", lastDisplayedProgress );
+		}
+
+		allowedBuilder.beginSpan();
+		preferredBuilder.beginSpan();
+		walkingBuilder.beginSpan();
+
+		for( uint16_t toAreaNum = 1; toAreaNum < numAreas; ++toAreaNum ) {
+			if( fromAreaNum != toAreaNum ) {
+				// TODO: Add public getters to AiAasRouteCache that allow
+				// a simultaneous retrieval (existing private ones are very poor)
+				// TODO: We actually can read the entire Dijkstra's algorithm result for the given from area
+				// (Area-by-area retrieval still works fast due to internal caching in the route cache)
+				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, preferredFlags ) ) {
+					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, preferredFlags );
+					preferredBuilder.addNumAndEntry( toAreaNum, AreaEntry {
+						.reachNum = (uint16_t)reach, .travelTime = (uint16_t)time,
+					});
+				}
+				if( const int time = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, allowedFlags ) ) {
+					const int reach = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, allowedFlags );
+					allowedBuilder.addNumAndEntry( toAreaNum, AreaEntry {
+						.reachNum = (uint16_t)reach, .travelTime = (uint16_t)time,
+					});
+				}
+				if( const int time = calcTravelTimeWalkingOrFallingShort( routeCache, aasWorld,
+																		  fromAreaNum, toAreaNum ) ) {
+					assert( (unsigned)time <= (unsigned)std::numeric_limits<uint16_t>::max() );
+					walkingBuilder.addNumAndEntry( toAreaNum, (uint16_t)time );
+				}
+			}
+		}
+
+		spans.emplace_back( BufferSpansForFlags {
+			.preferred             = preferredBuilder.endSpan(),
+			.allowed               = allowedBuilder.endSpan(),
+			.walkingOrFallingShort = walkingBuilder.endSpan(),
+		});
+	}
+
+	Com_Printf( "Num entries in spans (for preferred flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
+				preferredBuilder.totalNumEntriesInSpans / ( numAreas -  1 ), preferredBuilder.maxNumEntriesInSpans );
+	Com_Printf( "Num entries in spans   (for allowed flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
+				allowedBuilder.totalNumEntriesInSpans / ( numAreas - 1 ), allowedBuilder.maxNumEntriesInSpans );
+	Com_Printf( "Num entries in spans   (for walking flags): avg=%" PRIu64 ", max: %" PRIu64 "\n",
+				walkingBuilder.totalNumEntriesInSpans / ( numAreas - 1 ), walkingBuilder.maxNumEntriesInSpans );
+
+	// TODO: This is not exception-safe, use sane RAII buffers
+
+	m_dataForPreferredFlags.areaNums = makeHeapAllocCopy( preferredBuilder.nums );
+	m_dataForPreferredFlags.areaNumsDataSizeInElems = preferredBuilder.nums.size();
+	m_dataForPreferredFlags.entries = makeHeapAllocCopy( preferredBuilder.entries );
+	m_dataForPreferredFlags.entriesDataSizeInElems = preferredBuilder.entries.size();
+
+	m_dataForAllowedFlags.areaNums = makeHeapAllocCopy( allowedBuilder.nums );
+	m_dataForAllowedFlags.areaNumsDataSizeInElems = allowedBuilder.nums.size();
+	m_dataForAllowedFlags.entries = makeHeapAllocCopy( allowedBuilder.entries );
+	m_dataForAllowedFlags.entriesDataSizeInElems = allowedBuilder.entries.size();
+
+	m_walkingAreaNums = makeHeapAllocCopy( walkingBuilder.nums );
+	m_walkingAreaNumsDataSizeInElems = walkingBuilder.entries.size();
+	m_walkingTravelTimes = makeHeapAllocCopy( walkingBuilder.entries );
+	m_walkingTravelTimesDataSizeInElems = walkingBuilder.entries.size();
+
+	m_bufferSpans = makeHeapAllocCopy( spans );
+	m_numAreas    = numAreas;
+
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+	// Check all computed results immediately
+	for( uint16_t fromAreaNum = 1; fromAreaNum < numAreas; ++fromAreaNum ) {
+		for( uint16_t toAreaNum = 1; toAreaNum < numAreas; ++toAreaNum ) {
+			if( fromAreaNum != toAreaNum ) {
+				// Just call these methods which have themselves internal checks
+				(void)getPreferredRouteFromTo( fromAreaNum, toAreaNum );
+				(void)getAllowedRouteFromTo( fromAreaNum, toAreaNum );
+				(void) getTravelTimeWalkingOrFallingShort( fromAreaNum, toAreaNum );
+			}
+		}
+	}
+#endif
+
+	return true;
+}
+
+
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+static void checkMatchWithRouteCache( std::optional<std::pair<int, uint16_t>> tableResult,
+									  int fromAreaNum, int toAreaNum, int travelFlags ) {
+	auto *const aasWorld   = AiAasWorld::instance();
+	auto *const routeCache = AiAasRouteCache::Shared();
+	const int tableNum     = tableResult ? tableResult->first : 0;
+	const int tableTime    = tableResult ? tableResult->second : 0;
+	if( tableNum >= aasWorld->getReaches().size() ) abort();
+	const int dynamicNum   = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, travelFlags );
+	const int dynamicTime  = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, travelFlags );
+	if( tableNum != dynamicNum || tableTime != dynamicTime ) {
+		Com_Printf( "From=%d to=%d travel flags=0x%x\n", fromAreaNum, toAreaNum, travelFlags );
+		Com_Printf( "Table reach num=%d dynamic reach num=%d\n", tableNum, dynamicNum );
+		Com_Printf( "Table time=%d dynamic time=%d\n", tableTime, dynamicTime );
+		abort();
+	} else {
+		//Com_Printf( "Match with num=%d time=%d\n", tableNum, tableTime );
+	}
+}
+#endif
+
+[[nodiscard]]
+auto AasStaticRouteTable::getPreferredRouteFromTo( int fromAreaNum, int toAreaNum ) const
+	-> std::optional<std::pair<int, uint16_t>> {
+	assert( fromAreaNum != toAreaNum );
+	assert( (unsigned)( fromAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+	assert( (unsigned)( toAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+
+	auto result = getRouteFromTo( fromAreaNum, toAreaNum, m_bufferSpans[fromAreaNum].preferred, &m_dataForPreferredFlags );
+
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+	const bool wasAccessible    = s_isAccessibleForRouteCache;
+	s_isAccessibleForRouteCache = false;
+	checkMatchWithRouteCache( result, fromAreaNum, toAreaNum, Bot::PREFERRED_TRAVEL_FLAGS );
+	s_isAccessibleForRouteCache = wasAccessible;
+#endif
+
+	return result;
+}
+
+[[nodiscard]]
+auto AasStaticRouteTable::getAllowedRouteFromTo( int fromAreaNum, int toAreaNum ) const
+	-> std::optional<std::pair<int, uint16_t>> {
+	assert( fromAreaNum != toAreaNum );
+	assert( (unsigned)( fromAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+	assert( (unsigned)( toAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+
+	auto result = getRouteFromTo( fromAreaNum, toAreaNum, m_bufferSpans[fromAreaNum].allowed, &m_dataForAllowedFlags );
+
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+	const bool wasAccessible    = s_isAccessibleForRouteCache;
+	s_isAccessibleForRouteCache = false;
+	checkMatchWithRouteCache( result, fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS );
+	s_isAccessibleForRouteCache = wasAccessible;
+#endif
+
+	return result;
+}
+
+[[nodiscard]]
+static auto findIndexOrAreaInAreaNumsArray( const uint16_t *__restrict areaNums, int areaNum,
+											unsigned numAreasInSpan, unsigned numEntriesInSpan ) {
+	assert( areaNum > 0 && areaNum <= std::numeric_limits<uint16_t>::max() );
+	assert( numEntriesInSpan <= numAreasInSpan );
+	assert( numAreasInSpan < numEntriesInSpan + 16 );
+	assert( !( numAreasInSpan % 16 ) );
+	assert( !( ( (uintptr_t)areaNums ) % 16 ) );
+
+	(void)numAreasInSpan;
+	(void)numEntriesInSpan;
+
+	unsigned i = 0;
+	// Don't scan trailing zeroes in the generic version
+	for(; i < numEntriesInSpan; ++i ) {
+		if( areaNums[i] == (uint16_t)areaNum ) {
+			break;
+		}
+	}
+
+	return i;
+}
+
+[[nodiscard]]
+static inline bool isWithinInclusiveRange( int value, int minValueInclusive, int maxValueInclusive ) {
+	return (unsigned)( value - minValueInclusive ) <= (unsigned)( maxValueInclusive - minValueInclusive );
+}
+
+auto AasStaticRouteTable::getRouteFromTo( int fromAreaNum, int toAreaNum, const BufferSpan &span,
+										  const DataForTravelFlags *data )
+										  -> std::optional<std::pair<int, uint16_t>> {
+	// Check whether the toAreaNum is within the known range of area numbers in the span
+	if( !isWithinInclusiveRange( toAreaNum, span.minNum, span.maxNum ) ) {
+		return std::nullopt;
+	}
+
+	const uint16_t *areaNums   = data->areaNums + span.areaNumsOffset;
+	const unsigned indexInSpan = findIndexOrAreaInAreaNumsArray( areaNums, toAreaNum,
+																 span.numAreaNumsInSpan, span.numEntriesInSpan );
+
+	if( indexInSpan < span.numEntriesInSpan ) {
+		const AreaEntry &entry = data->entries[indexInSpan + span.entriesOffset];
+		return std::pair( entry.reachNum, entry.travelTime );
+	}
+
+	return std::nullopt;
+}
+
+auto AasStaticRouteTable::getTravelTimeWalkingOrFallingShort( int fromAreaNum, int toAreaNum ) const
+	-> std::optional<uint16_t> {
+	if( fromAreaNum == toAreaNum ) {
+		return 1;
+	}
+	assert( fromAreaNum != toAreaNum );
+	assert( (unsigned)( fromAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+	assert( (unsigned)( toAreaNum - 1 ) < (unsigned)( m_numAreas - 1 ) );
+
+	const BufferSpan &span = m_bufferSpans[fromAreaNum].walkingOrFallingShort;
+
+	// Check whether the toAreaNum is within the known range of area numbers in the span
+	if( !isWithinInclusiveRange( toAreaNum, span.minNum, span.maxNum ) ) {
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+		if( calcTravelTimeWalkingOrFallingShort( AiAasRouteCache::Shared(), AiAasWorld::instance(), fromAreaNum, toAreaNum ) ) {
+			Com_Printf( "From=%d to=%d unreachable by table data, but reachable by a dynamic computation\n",
+						fromAreaNum, toAreaNum );
+			abort();
+		}
+#endif
+		return std::nullopt;
+	}
+
+	const uint16_t *areaNums   = m_walkingAreaNums + span.areaNumsOffset;
+	const unsigned indexInSpan = findIndexOrAreaInAreaNumsArray( areaNums, toAreaNum,
+																 span.numAreaNumsInSpan, span.numEntriesInSpan );
+
+	if( indexInSpan < span.numEntriesInSpan ) {
+		const uint16_t tableTime = m_walkingTravelTimes[indexInSpan + span.entriesOffset];
+#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+		const uint16_t dynamicTime = calcTravelTimeWalkingOrFallingShort( AiAasRouteCache::Shared(), AiAasWorld::instance(),
+																		  fromAreaNum, toAreaNum );
+		if( tableTime != dynamicTime ) {
+			Com_Printf( "From=%d to=%d table time=%d dynamic time=%d\n", fromAreaNum, toAreaNum, tableTime, dynamicTime );
+			abort();
+		}
+#endif
+		return tableTime;
+	}
+
+	return std::nullopt;
+}

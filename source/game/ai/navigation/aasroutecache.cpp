@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "aasroutecache.h"
 #include "aaselementsmask.h"
-#include "../../../qcommon/wswstaticvector.h"
+#include "aasstaticroutetable.h"
 #include "../ailocal.h"
 #include "../bot.h"
 
@@ -1430,10 +1430,7 @@ AiAasRouteCache::FindSiblingCache( int clusterNum, int clusterAreaNum, int trave
 		}
 		// Make sure we're using the same digest
 		// (it's very likely we have the same blocked areas vector in this case)
-		if( that->blockedAreasDigest[0] != this->blockedAreasDigest[0] ) {
-			continue;
-		}
-		if( that->blockedAreasDigest[1] != this->blockedAreasDigest[1] ) {
+		if( !BlockedAreasDigestsMatch( that->blockedAreasDigest, this->blockedAreasDigest ) ) {
 			continue;
 		}
 
@@ -1667,8 +1664,6 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		travelFlags |= TFL_DONOTENTER;
 	}
 
-	auto *nonConstThis = const_cast<AiAasRouteCache *>( this );
-
 	const uint64_t key = ResultCache::Key( fromAreaNum, toAreaNum, travelFlags );
 	const uint16_t binIndex = ResultCache::BinIndexForKey( key );
 	if( auto *cacheNode = resultCache.GetCachedResultForKey( binIndex, key ) ) {
@@ -1677,8 +1672,42 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		return cacheNode->reachability != 0;
 	}
 
-	auto *cacheNode = nonConstThis->resultCache.AllocAndRegisterForKey( binIndex, key );
+	auto *const nonConstThis = const_cast<AiAasRouteCache *>( this );
+	auto *const cacheNode    = nonConstThis->resultCache.AllocAndRegisterForKey( binIndex, key );
+
+	// Don't try reading from the table if it explicitly blocks that
+	if( AasStaticRouteTable::s_isAccessibleForRouteCache ) [[likely]] {
+		if( travelFlags == Bot::PREFERRED_TRAVEL_FLAGS ) {
+			if( BlockedAreasDigestsMatch( blockedAreasDigest, defaultBlockedAreasDigest ) ) {
+				std::optional<std::pair<int, uint16_t>> tableResult;
+				if( ( tableResult = AasStaticRouteTable::instance()->getPreferredRouteFromTo( fromAreaNum, toAreaNum ) ) ) {
+					result->reachNum   = cacheNode->reachability = ToUint16CheckingRange( tableResult->first );
+					result->travelTime = cacheNode->travelTime   = ToUint16CheckingRange( tableResult->second );
+					return true;
+				} else {
+					cacheNode->reachability = 0;
+					cacheNode->travelTime   = 0;
+					return false;
+				}
+			}
+		} else if( travelFlags == Bot::ALLOWED_TRAVEL_FLAGS ) {
+			if( BlockedAreasDigestsMatch( blockedAreasDigest, defaultBlockedAreasDigest ) ) {
+				std::optional<std::pair<int, uint16_t>> tableResult;
+				if( ( tableResult = AasStaticRouteTable::instance()->getAllowedRouteFromTo( fromAreaNum, toAreaNum ) ) ) {
+					result->reachNum   = cacheNode->reachability = ToUint16CheckingRange( tableResult->first );
+					result->travelTime = cacheNode->travelTime   = ToUint16CheckingRange( tableResult->second );
+					return true;
+				} else {
+					cacheNode->reachability = 0;
+					cacheNode->travelTime   = 0;
+					return false;
+				}
+			}
+		}
+	}
+
 	RoutingRequest request( fromAreaNum, toAreaNum, travelFlags );
+	// TODO: It's non-obvious that RouteToGoalArea() modifies `result`
 	if( nonConstThis->RouteToGoalArea( request, result ) ) {
 		cacheNode->reachability = ToUint16CheckingRange( result->reachNum );
 		cacheNode->travelTime = ToUint16CheckingRange( result->travelTime );

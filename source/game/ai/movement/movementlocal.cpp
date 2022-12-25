@@ -232,6 +232,7 @@ bool ReachChainWalker::Exec() {
 			return false;
 		}
 		lastAreaNum = areaNum;
+		assert( (unsigned)lastReachNum < (unsigned)aasReach.size() );
 		const auto &reach = aasReach[lastReachNum];
 		if( !Accept( lastReachNum, reach, lastTravelTime ) ) {
 			return true;
@@ -240,45 +241,6 @@ bool ReachChainWalker::Exec() {
 	}
 
 	return true;
-}
-
-int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int fromAreaNum, int toAreaNum ) {
-	const auto aasReaches = AiAasWorld::instance()->getReaches();
-	constexpr const auto travelFlags = TFL_WALK | TFL_AIR | TFL_WALKOFFLEDGE;
-	int travelTime = 0;
-	// Prevent infinite looping (still happens for some maps)
-	int numHops = 0;
-	for(;; ) {
-		if( fromAreaNum == toAreaNum ) {
-			return wsw::max( 1, travelTime );
-		}
-		if( numHops++ == 48 ) {
-			return 0;
-		}
-		const int reachNum = routeCache->ReachabilityToGoalArea( fromAreaNum, toAreaNum, travelFlags );
-		if( !reachNum ) {
-			return 0;
-		}
-		// Save the returned travel time once at start.
-		// It is not so inefficient as results of the previous call including travel time are cached and the cache is fast.
-		if( !travelTime ) {
-			travelTime = routeCache->TravelTimeToGoalArea( fromAreaNum, toAreaNum, travelFlags );
-		}
-		const auto &__restrict reach = aasReaches[reachNum];
-		// Move to this area for the next iteration
-		fromAreaNum = reach.areanum;
-		// Check whether the travel type fits this function restrictions
-		const int travelType = reach.traveltype & TRAVELTYPE_MASK;
-		if( travelType == TRAVEL_WALK ) {
-			continue;
-		}
-		if( travelType == TRAVEL_WALKOFFLEDGE ) {
-			if( DistanceSquared( reach.start, reach.end ) < wsw::square( 0.8 * AI_JUMPABLE_HEIGHT ) ) {
-				continue;
-			}
-		}
-		return 0;
-	}
 }
 
 bool TraceArcInSolidWorld( const vec3_t from, const vec3_t to ) {

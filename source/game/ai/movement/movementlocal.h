@@ -599,8 +599,6 @@ public:
 	virtual bool Exec();
 };
 
-int TravelTimeWalkingOrFallingShort( const AiAasRouteCache *routeCache, int fromAreaNum, int toAreaNum );
-
 /**
  * Serves for candidate spots selection.
  * Tracing a straight line between two points fails in stairs-like environment way too often.

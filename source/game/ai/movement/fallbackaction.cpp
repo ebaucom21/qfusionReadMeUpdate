@@ -3,6 +3,7 @@
 #include "movementlocal.h"
 #include "bestjumpablespotdetector.h"
 #include "../combat/tacticalspotsregistry.h"
+#include "../navigation/aasstaticroutetable.h"
 #include "../manager.h"
 #include "../trajectorypredictor.h"
 
@@ -92,6 +93,7 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 	const auto *const routeCache = bot->RouteCache();
+	const auto *const routeTable = AasStaticRouteTable::instance();
 
 	int fromAreaNums[2] { 0, 0 };
 	const int numFromAreas = entityPhysicsState.PrepareRoutingStartAreas( fromAreaNums );
@@ -158,8 +160,9 @@ bool FallbackAction::CanWaitForLanding( PredictionContext *context ) {
 
 	// Permit having a slightly greater travel time if we can return quickly by walking in the worst case
 	for( int i = 0; i < numFromAreas; ++i ) {
-		const int backTravelTime = TravelTimeWalkingOrFallingShort( routeCache, resultAreaNum, fromAreaNums[i] );
-		if( backTravelTime && backTravelTime < 100 ) {
+		// TODO: Check whether we can lift this test to the beginning of checks as it's quite cheap now
+		const auto backTravelTime = routeTable->getTravelTimeWalkingOrFallingShort( resultAreaNum, fromAreaNums[i] );
+		if( backTravelTime && *backTravelTime < 100 ) {
 			return true;
 		}
 	}

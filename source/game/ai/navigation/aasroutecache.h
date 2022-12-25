@@ -438,6 +438,10 @@ public:
 												 std::span<const aas_portal_t> aasPortals,
 												 int clusterNum, int areaNum, int travelFlags );
 
+	static bool BlockedAreasDigestsMatch( const uint64_t digest1[2], const uint64_t digest2[2] ) {
+		return ( digest1[0] == digest2[0] ) & ( digest1[1] == digest2[1] );
+	}
+
 	const AreaOrPortalCacheTable *FindSiblingCache( int clusterNum, int clusterAreaNum, int travelFlags ) const;
 
 	void UpdatePortalRoutingCache( AreaOrPortalCacheTable *portalCache );

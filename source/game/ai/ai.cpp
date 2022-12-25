@@ -1,6 +1,7 @@
 #include "bot.h"
 #include "manager.h"
 #include "groundtracecache.h"
+#include "navigation/aasstaticroutetable.h"
 #include "teamplay/objectivebasedteam.h"
 #include "combat/tacticalspotsregistry.h"
 #include "classifiedentitiescache.h"
@@ -171,6 +172,7 @@ void AI_InitLevel( void ) {
 
 	AiAasWorld::init( wsw::StringView( level.mapname ) );
 	AiAasRouteCache::Init( *AiAasWorld::instance() );
+	AasStaticRouteTable::init( level.mapname );
 	TacticalSpotsRegistry::Init( level.mapname );
 	AiGroundTraceCache::Init();
 
@@ -202,6 +204,7 @@ void AI_AfterLevelScriptShutdown() {
 	NavEntitiesRegistry::Shutdown();
 	AiGroundTraceCache::Shutdown();
 	TacticalSpotsRegistry::Shutdown();
+	AasStaticRouteTable::shutdown();
 	AiAasRouteCache::Shutdown();
 	AiAasWorld::shutdown();
 }
