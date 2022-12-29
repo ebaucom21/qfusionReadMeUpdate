@@ -67,8 +67,6 @@ protected:
 						 const Vec3 &velocity2DDir,
 						 const Vec3 &intended2DLookDir );
 
-	void ApplyPenaltyForHavingNearbyObstacles( PredictionContext *context );
-
 	// Can be overridden for finer control over tests
 	virtual bool CheckStepSpeedGainOrLoss( PredictionContext *context );
 

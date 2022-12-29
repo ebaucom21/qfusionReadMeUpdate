@@ -205,7 +205,6 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionC
 		botInput->SetSpecialButton( false );
 		botInput->canOverrideLookVec = false;
 		botInput->canOverridePitch = false;
-		ApplyPenaltyForHavingNearbyObstacles( context );
 		return true;
 	}
 
@@ -224,7 +223,6 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionC
 				botInput->SetSpecialButton( false );
 				botInput->canOverrideLookVec = false;
 				botInput->canOverridePitch = false;
-				ApplyPenaltyForHavingNearbyObstacles( context );
 				return true;
 			}
 	}
@@ -235,7 +233,6 @@ bool BunnyHopAction::SetupBunnyHopping( const Vec3 &intendedLookVec, PredictionC
 	}
 
 	TrySetWalljump( context, velocityDir2D, toTargetDir2D );
-	ApplyPenaltyForHavingNearbyObstacles( context );
 	return true;
 }
 
@@ -290,50 +287,6 @@ bool BunnyHopAction::CanSetWalljump( PredictionContext *context, const Vec3 &vel
 	}
 
 	return velocity2DDir.Dot( entityPhysicsState.ForwardDir() ) > 0.7f && velocity2DDir.Dot( intended2DLookDir ) > 0.7f;
-}
-
-void BunnyHopAction::ApplyPenaltyForHavingNearbyObstacles( PredictionContext *context ) {
-	// Skip at start to let the bot escape any obstacles at the current in-game position
-	if( context->totalMillisAhead < 128 ) {
-		if( originAtSequenceStart.Distance2DTo( context->movementState->entityPhysicsState.Origin() ) < wsw::square( 36 ) ) {
-			return;
-		}
-	}
-
-	// While logic of this method really should belong to CheckPredictionStepResults()
-	// we find retrieval of the shape list with consequent immediate reuse here
-	// and in PredictionContext::NextMovementStep() convenient.
-
-	Assert( !thisFrameCMShapeList );
-	thisFrameCMShapeList = context->TraceCache().getShapeListForPMoveCollision( context );
-
-	const auto &physicsState = context->movementState->entityPhysicsState;
-	// Try skipping small steps/bumps while being close to the ground.
-	// Do not skip tests for "feet" while being relatively high above ground.
-	const float zOffset = physicsState.HeightOverGround() > 12.0f ? -4.0f : 8.0f;
-
-	Vec3 mins( -12, -12, zOffset );
-	Vec3 maxs( +12, +12, +8 );
-	mins += playerbox_stand_mins;
-	maxs += playerbox_stand_maxs;
-
-	trace_t trace;
-	const float *origin = physicsState.Origin();
-	GAME_IMPORT.CM_ClipToShapeList( thisFrameCMShapeList, &trace, origin, origin, mins.Data(), maxs.Data(), MASK_SOLID );
-	if( trace.fraction == 1.0f ) {
-		return;
-	}
-
-	if( sequencePathPenalty < 64 ) {
-		// Ensure a minimal penalty for being close to any obstacles once.
-		// This is sufficient to avoid immediate using of a built path
-		// without evaluating possible alternatives
-		// (including ones that could be free of any obstacles).
-		sequencePathPenalty = 64;
-	} else {
-		// Accumulate penalty for every frame with obstacles around
-		sequencePathPenalty += 2 * context->predictionStepMillis;
-	}
 }
 
 bool BunnyHopAction::CheckStepSpeedGainOrLoss( PredictionContext *context ) {
