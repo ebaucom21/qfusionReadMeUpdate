@@ -10,6 +10,10 @@
 static SingletonHolder<AasStaticRouteTable> g_instanceHolder;
 bool AasStaticRouteTable::s_isAccessibleForRouteCache;
 
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+bool AasStaticRouteTable::s_isCheckingMatchWithRouteCache;
+#endif
+
 void AasStaticRouteTable::init( const char *mapName ) {
 	s_isAccessibleForRouteCache = false;
 	g_instanceHolder.init( mapName );
@@ -265,8 +269,6 @@ struct NumsAndEntriesBuilder {
 	}
 };
 
-//#define CHECK_MATCH_WITH_ROUTE_CACHE
-
 bool AasStaticRouteTable::compute() {
 	const auto *aasWorld = AiAasWorld::instance();
 	if( !aasWorld->isLoaded() ) {
@@ -365,7 +367,7 @@ bool AasStaticRouteTable::compute() {
 	m_bufferSpans = makeHeapAllocCopy( spans );
 	m_numAreas    = numAreas;
 
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
 	// Check all computed results immediately
 	for( uint16_t fromAreaNum = 1; fromAreaNum < numAreas; ++fromAreaNum ) {
 		for( uint16_t toAreaNum = 1; toAreaNum < numAreas; ++toAreaNum ) {
@@ -383,7 +385,7 @@ bool AasStaticRouteTable::compute() {
 }
 
 
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
 static void checkMatchWithRouteCache( std::optional<std::pair<int, uint16_t>> tableResult,
 									  int fromAreaNum, int toAreaNum, int travelFlags ) {
 	auto *const aasWorld   = AiAasWorld::instance();
@@ -413,11 +415,13 @@ auto AasStaticRouteTable::getPreferredRouteFromTo( int fromAreaNum, int toAreaNu
 
 	auto result = getRouteFromTo( fromAreaNum, toAreaNum, m_bufferSpans[fromAreaNum].preferred, &m_dataForPreferredFlags );
 
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
-	const bool wasAccessible    = s_isAccessibleForRouteCache;
-	s_isAccessibleForRouteCache = false;
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+	const bool wasAccessible        = s_isAccessibleForRouteCache;
+	s_isAccessibleForRouteCache     = false;
+	s_isCheckingMatchWithRouteCache = true;
 	checkMatchWithRouteCache( result, fromAreaNum, toAreaNum, Bot::PREFERRED_TRAVEL_FLAGS );
-	s_isAccessibleForRouteCache = wasAccessible;
+	s_isCheckingMatchWithRouteCache = false;
+	s_isAccessibleForRouteCache     = wasAccessible;
 #endif
 
 	return result;
@@ -432,11 +436,13 @@ auto AasStaticRouteTable::getAllowedRouteFromTo( int fromAreaNum, int toAreaNum 
 
 	auto result = getRouteFromTo( fromAreaNum, toAreaNum, m_bufferSpans[fromAreaNum].allowed, &m_dataForAllowedFlags );
 
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
-	const bool wasAccessible    = s_isAccessibleForRouteCache;
-	s_isAccessibleForRouteCache = false;
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+	const bool wasAccessible        = s_isAccessibleForRouteCache;
+	s_isAccessibleForRouteCache     = false;
+	s_isCheckingMatchWithRouteCache = true;
 	checkMatchWithRouteCache( result, fromAreaNum, toAreaNum, Bot::ALLOWED_TRAVEL_FLAGS );
-	s_isAccessibleForRouteCache = wasAccessible;
+	s_isCheckingMatchWithRouteCache = false;
+	s_isAccessibleForRouteCache     = wasAccessible;
 #endif
 
 	return result;
@@ -503,7 +509,7 @@ auto AasStaticRouteTable::getTravelTimeWalkingOrFallingShort( int fromAreaNum, i
 
 	// Check whether the toAreaNum is within the known range of area numbers in the span
 	if( !isWithinInclusiveRange( toAreaNum, span.minNum, span.maxNum ) ) {
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
 		if( calcTravelTimeWalkingOrFallingShort( AiAasRouteCache::Shared(), AiAasWorld::instance(), fromAreaNum, toAreaNum ) ) {
 			Com_Printf( "From=%d to=%d unreachable by table data, but reachable by a dynamic computation\n",
 						fromAreaNum, toAreaNum );
@@ -519,7 +525,7 @@ auto AasStaticRouteTable::getTravelTimeWalkingOrFallingShort( int fromAreaNum, i
 
 	if( indexInSpan < span.numEntriesInSpan ) {
 		const uint16_t tableTime = m_walkingTravelTimes[indexInSpan + span.entriesOffset];
-#ifdef CHECK_MATCH_WITH_ROUTE_CACHE
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
 		const uint16_t dynamicTime = calcTravelTimeWalkingOrFallingShort( AiAasRouteCache::Shared(), AiAasWorld::instance(),
 																		  fromAreaNum, toAreaNum );
 		if( tableTime != dynamicTime ) {

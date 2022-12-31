@@ -281,6 +281,30 @@ public:
 	}
 };
 
+class alignas ( 4 )UInt64Align4 {
+	uint32_t parts[2];
+
+	inline void SetParts( uint64_t value ) {
+		parts[0] = (uint32_t)( ( (uint64_t)value >> 32 ) & 0xFFFFFFFFu );
+		parts[1] = (uint32_t)( ( (uint64_t)value >> 00 ) & 0xFFFFFFFFu );
+	}
+public:
+	operator uint64_t() const {
+		return (uint64_t)( ( (uint64_t)parts[0] << 32 ) | parts[1] );
+	}
+
+	UInt64Align4 operator=( uint64_t value ) {
+		SetParts( value );
+		return *this;
+	}
+
+	UInt64Align4() {}
+
+	UInt64Align4( uint64_t value ) {
+		SetParts( value );
+	}
+};
+
 class alignas( 2 )Int32Align2 {
 	uint16_t parts[2];
 

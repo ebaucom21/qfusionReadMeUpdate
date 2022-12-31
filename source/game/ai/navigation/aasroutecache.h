@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "aasworld.h"
 #include "../ailocal.h"
+#include "fastroutingresultscache.h"
 
 //travel flags
 #define TFL_INVALID             0x00000001  //traveling temporary not possible
@@ -336,82 +337,7 @@ class AiAasRouteCache {
 	// A table of small size bins addressed by bin size
 	class AreaAndPortalCacheAllocatorBin *areaAndPortalSmallBinsTable[128] { nullptr };
 
-	class ResultCache {
-public:
-		static constexpr unsigned MAX_CACHED_RESULTS = 512;
-		/**
-		 * A prime number. We have increased it since bin pointers have been replaced by short integers
-		 * but not very much since we would not win in space and thus in CPU cache efficiency)
-		 */
-		static constexpr unsigned NUM_HASH_BINS = 1181;
-
-		struct alignas( 8 )Node {
-			// Indices for ::Link() and ::Unlink().
-			// Now they are put first so if links are touched the key is more likely to be on the same cache line.
-			int16_t prev[2];
-			int16_t next[2];
-
-			enum { BIN_LINKS, LIST_LINKS };
-
-			// Links consume 8 bytes, so there should not be an alignment gap for the key
-			uint64_t key;
-
-			uint16_t reachability;
-			uint16_t travelTime;
-			uint16_t binIndex;
-		};
-
-		static_assert( sizeof( Node ) <= 24, "The struct size assumptions are broken" );
-
-		// Assuming that area nums are limited by 16 bits, all parameters can be composed in a single integer
-		static inline uint64_t Key( int fromAreaNum, int toAreaNum, int travelFlags ) {
-			assert( fromAreaNum >= 0 && fromAreaNum <= 0xFFFF );
-			assert( toAreaNum >= 0 && toAreaNum <= 0xFFFF );
-			return ( (uint64_t)travelFlags << 32 ) | ( (uint16_t)fromAreaNum << 16 ) | ( (uint16_t)toAreaNum );
-		}
-
-		static inline uint16_t BinIndexForKey( uint64_t key ) {
-			// Convert a 64-bit key to 32-bit hash trying to preserve bits entropy.
-			// The primary purpose of it is avoiding 64-bit division in modulo computation
-			constexpr uint32_t mask32 = 0xFFFFFFFFu;
-			uint32_t loPart32 = (uint32_t)( key & mask32 );
-			uint32_t hiPart32 = (uint32_t)( ( key >> 32 ) & mask32 );
-			uint32_t hash = loPart32 * 17 + hiPart32;
-			static_assert( NUM_HASH_BINS < 0xFFFF, "Bin indices are assumed to be short" );
-			return (uint16_t)( hash % NUM_HASH_BINS );
-		}
-private:
-		Node nodes[MAX_CACHED_RESULTS];
-		// We could keep these links as pointers since they do not require a compact storage,
-		// but its better to stay uniform and use common link/unlink methods
-		int16_t freeNode;
-		int16_t newestUsedNode;
-		int16_t oldestUsedNode;
-
-		int16_t bins[NUM_HASH_BINS];
-
-		static inline bool IsValidLink( int16_t link ) { return link >= 0; }
-		inline int16_t LinkOf( const Node *node ) { return (int16_t)( node - nodes ); }
-
-		// Constexpr usage leads to "symbol not found" crash on library loading.
-		enum { NULL_LINK = -1 };
-
-		inline void LinkToHashBin( uint16_t binIndex, Node *node );
-		inline void LinkToUsedList( Node *node );
-
-		inline Node *UnlinkOldestUsedNode();
-public:
-		inline ResultCache() { Clear(); }
-
-		void Clear();
-
-		// The key and bin index must be computed by callers using Key() and BinIndexForKey().
-		// This is a bit ugly but encourages efficient usage patterns.
-		const Node *GetCachedResultForKey( uint16_t binIndex, uint64_t key ) const;
-		Node *AllocAndRegisterForKey( uint16_t binIndex, uint64_t key );
-	};
-
-	ResultCache resultCache;
+	FastRoutingResultsCache m_resultsCache;
 
 	void LinkCache( AreaOrPortalCacheTable *cache );
 	void UnlinkCache( AreaOrPortalCacheTable *cache );

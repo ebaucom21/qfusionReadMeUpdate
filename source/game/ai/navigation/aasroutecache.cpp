@@ -315,7 +315,7 @@ void AiAasRouteCache::SetDisabledZones( DisableZoneRequest **requests, int numRe
 	newestCache = nullptr;
 	oldestCache = nullptr;
 
-	resultCache.Clear();
+	m_resultsCache.reset();
 
 	// Reset to the default digest in this case
 	if( !metCustomBlockedAreas ) {
@@ -873,80 +873,6 @@ void AreaAndPortalCacheAllocatorBin::Free( void *ptr ) {
 	}
 
 	usedSingleBlock = nullptr;
-}
-
-void AiAasRouteCache::ResultCache::Clear() {
-	nodes[0].prev[Node::LIST_LINKS] = NULL_LINK;
-	nodes[0].next[Node::LIST_LINKS] = 1;
-
-	for( unsigned i = 1; i < MAX_CACHED_RESULTS - 1; ++i ) {
-		nodes[i].prev[Node::LIST_LINKS] = (int16_t)( i - 1 );
-		nodes[i].next[Node::LIST_LINKS] = (int16_t)( i + 1 );
-	}
-
-	nodes[MAX_CACHED_RESULTS - 1].prev[Node::LIST_LINKS] = MAX_CACHED_RESULTS - 2;
-	nodes[MAX_CACHED_RESULTS - 1].next[Node::LIST_LINKS] = NULL_LINK;
-
-	freeNode = 0;
-	newestUsedNode = NULL_LINK;
-	oldestUsedNode = NULL_LINK;
-
-	std::fill_n( bins, NUM_HASH_BINS, NULL_LINK );
-}
-
-inline void AiAasRouteCache::ResultCache::LinkToHashBin( uint16_t binIndex, Node *node ) {
-	node->binIndex = binIndex;
-	wsw::link( node, &bins[binIndex], Node::BIN_LINKS, nodes );
-}
-
-inline void AiAasRouteCache::ResultCache::LinkToUsedList( Node *node ) {
-	wsw::link( node, &newestUsedNode, Node::LIST_LINKS, nodes );
-
-	// If there is no oldestUsedNode, set the node as it.
-	if( oldestUsedNode < 0 ) {
-		oldestUsedNode = LinkOf( node );
-	}
-}
-
-inline AiAasRouteCache::ResultCache::Node *AiAasRouteCache::ResultCache::UnlinkOldestUsedNode() {
-	Node *result = nodes + oldestUsedNode;
-	// Unlink the node from its bin
-	wsw::unlink( result, &bins[result->binIndex], Node::BIN_LINKS, nodes );
-	// Unlink the node from nodes list
-	wsw::unlink( result, &oldestUsedNode, Node::LIST_LINKS, nodes );
-	return result;
-}
-
-const AiAasRouteCache::ResultCache::Node *
-AiAasRouteCache::ResultCache::GetCachedResultForKey( uint16_t binIndex, uint64_t key ) const {
-	int16_t nodeIndex = bins[binIndex];
-	while( nodeIndex >= 0 ) {
-		const Node *node = nodes + nodeIndex;
-		if( node->key == key ) {
-			return node;
-		}
-		nodeIndex = node->next[Node::BIN_LINKS];
-	}
-
-	return nullptr;
-}
-
-AiAasRouteCache::ResultCache::Node *
-AiAasRouteCache::ResultCache::AllocAndRegisterForKey( uint16_t binIndex, uint64_t key ) {
-	Node *result;
-	if( freeNode >= 0 ) {
-		// Unlink the node from free list
-		result = nodes + freeNode;
-		wsw::unlink( result, &freeNode, Node::LIST_LINKS, nodes );
-	} else {
-		result = UnlinkOldestUsedNode();
-	}
-
-	LinkToHashBin( binIndex, result );
-	LinkToUsedList( result );
-
-	result->key = key;
-	return result;
 }
 
 void *AiAasRouteCache::GetClearedMemory( size_t size ) {
@@ -1664,22 +1590,31 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		travelFlags |= TFL_DONOTENTER;
 	}
 
-	const uint64_t key = ResultCache::Key( fromAreaNum, toAreaNum, travelFlags );
-	const uint16_t binIndex = ResultCache::BinIndexForKey( key );
-	if( auto *cacheNode = resultCache.GetCachedResultForKey( binIndex, key ) ) {
-		result->reachNum = cacheNode->reachability;
+	auto *const nonConstThis = const_cast<AiAasRouteCache *>( this );
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+	// Bypass the results cache due to reentrancy problems during these checks
+	if( AasStaticRouteTable::s_isCheckingMatchWithRouteCache ) [[unlikely]] {
+		RoutingRequest request( fromAreaNum, toAreaNum, travelFlags );
+		return nonConstThis->RouteToGoalArea( request, result );
+	}
+#endif
+
+	const uint64_t key      = FastRoutingResultsCache::makeKey( fromAreaNum, toAreaNum, travelFlags );
+	const uint16_t binIndex = FastRoutingResultsCache::calcBinIndexForKey( key );
+	if( const FastRoutingResultsCache::Node *cacheNode = m_resultsCache.getCachedResultForKey( binIndex, key ) ) {
+		result->reachNum   = cacheNode->reachability;
 		result->travelTime = cacheNode->travelTime;
 		return cacheNode->reachability != 0;
 	}
 
-	auto *const nonConstThis = const_cast<AiAasRouteCache *>( this );
-	auto *const cacheNode    = nonConstThis->resultCache.AllocAndRegisterForKey( binIndex, key );
+	FastRoutingResultsCache::Node *const cacheNode = nonConstThis->m_resultsCache.allocAndRegisterForKey( binIndex, key );
 
 	// Don't try reading from the table if it explicitly blocks that
 	if( AasStaticRouteTable::s_isAccessibleForRouteCache ) [[likely]] {
 		if( travelFlags == Bot::PREFERRED_TRAVEL_FLAGS ) {
 			if( BlockedAreasDigestsMatch( blockedAreasDigest, defaultBlockedAreasDigest ) ) {
 				std::optional<std::pair<int, uint16_t>> tableResult;
+				// Caution: May call RoutingResultToGoalArea() in result match checking mode
 				if( ( tableResult = AasStaticRouteTable::instance()->getPreferredRouteFromTo( fromAreaNum, toAreaNum ) ) ) {
 					result->reachNum   = cacheNode->reachability = ToUint16CheckingRange( tableResult->first );
 					result->travelTime = cacheNode->travelTime   = ToUint16CheckingRange( tableResult->second );
@@ -1693,6 +1628,7 @@ bool AiAasRouteCache::RoutingResultToGoalArea( int fromAreaNum, int toAreaNum,
 		} else if( travelFlags == Bot::ALLOWED_TRAVEL_FLAGS ) {
 			if( BlockedAreasDigestsMatch( blockedAreasDigest, defaultBlockedAreasDigest ) ) {
 				std::optional<std::pair<int, uint16_t>> tableResult;
+				// Caution: May call RoutingResultToGoalArea() in result match checking mode
 				if( ( tableResult = AasStaticRouteTable::instance()->getAllowedRouteFromTo( fromAreaNum, toAreaNum ) ) ) {
 					result->reachNum   = cacheNode->reachability = ToUint16CheckingRange( tableResult->first );
 					result->travelTime = cacheNode->travelTime   = ToUint16CheckingRange( tableResult->second );

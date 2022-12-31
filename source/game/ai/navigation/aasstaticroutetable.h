@@ -6,6 +6,10 @@
 #include <utility>
 #include <optional>
 
+#if 0
+#define CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+#endif
+
 class AasStaticRouteTable {
 	template <typename> friend class SingletonHolder;
 	template <typename> friend struct NumsAndEntriesBuilder;
@@ -25,6 +29,9 @@ public:
 	auto getTravelTimeWalkingOrFallingShort( int fromAreaNum, int toAreaNum ) const -> std::optional<uint16_t>;
 
 	static bool s_isAccessibleForRouteCache;
+#ifdef CHECK_TABLE_MATCH_WITH_ROUTE_CACHE
+	static bool s_isCheckingMatchWithRouteCache;
+#endif
 private:
 	explicit AasStaticRouteTable( const char *mapName );
 	~AasStaticRouteTable();
