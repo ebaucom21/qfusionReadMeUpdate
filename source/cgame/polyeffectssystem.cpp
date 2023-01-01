@@ -428,6 +428,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 	auto *effect                 = new( mem )TracerEffect;
 	effect->timeoutAt            = m_lastTime + params.duration;
+	effect->alignForPovNum       = params.alignForPovNum;
 	effect->speed                = speed;
 	effect->prestepDistance      = params.prestepDistance;
 	effect->totalDistance        = totalDistance;
@@ -448,6 +449,7 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 
 	VectorCopy( from, effect->from );
 	VectorCopy( to, effect->to );
+	VectorCopy( dir, effect->dir );
 
 	VectorCopy( params.lightColor, effect->lightColor );
 	effect->programLightRadius       = params.programLightRadius;
@@ -536,11 +538,10 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			continue;
 		}
 
+		assert( std::fabs( VectorLengthFast( tracer->dir ) - 1.0f ) < 1e-3f );
+		VectorMA( tracer->from, oldDistanceSoFar, tracer->dir, tracer->poly.origin );
+
 		auto *const rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
-		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
-
-		VectorMA( tracer->from, oldDistanceSoFar, rules->dir, tracer->poly.origin );
-
 		rules->fromColor[3] = tracer->initialColorAlpha;
 
 		// Soften the closest edge
@@ -548,6 +549,36 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 		if( distanceOfClosestPoint < tracer->smoothEdgeDistance ) {
 			rules->fromColor[3] *= distanceOfClosestPoint * Q_Rcp( tracer->smoothEdgeDistance );
 		}
+
+		// If we should align and are really following the initial POV
+		if( tracer->alignForPovNum == std::optional( cg.predictedPlayerState.POVnum ) ) {
+			// Pin the farthest point at it's regular origin and align the free tail towards the viewer
+			// TODO: Think of creating a separate kind of QuadPoly::AppearanceRules for this case?
+			vec3_t farthestPoint, viewOrigin, viewToFarthestPointDir;
+
+			VectorMA( tracer->from, distanceOfFarthestPoint, tracer->dir, farthestPoint );
+
+			VectorCopy( cg.predictedPlayerState.pmove.origin, viewOrigin );
+			viewOrigin[2] += cg.predictedPlayerState.viewheight;
+
+			const float squareDistance = DistanceSquared( farthestPoint, viewOrigin );
+			if( squareDistance > wsw::square( 0.1f ) ) [[likely]] {
+				const float rcpDistance = Q_RSqrt( squareDistance );
+				VectorSubtract( farthestPoint, viewOrigin, viewToFarthestPointDir );
+				VectorScale( viewToFarthestPointDir, rcpDistance, viewToFarthestPointDir );
+
+				VectorCopy( viewToFarthestPointDir, rules->dir );
+				// TODO: Without origin correction, the code actually rotates
+				// the poly around it's center instead of farthest point
+			} else {
+				VectorCopy( tracer->dir, rules->dir );
+			}
+		} else {
+			// Restore the default alignment upon the POV switch (if any)
+			VectorCopy( tracer->dir, rules->dir );
+		}
+
+		assert( std::fabs( VectorLengthFast( rules->dir ) - 1.0f ) < 1e-3f );
 
 		request->addPoly( &tracer->poly );
 

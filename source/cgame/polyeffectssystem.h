@@ -69,6 +69,7 @@ public:
 
 	struct TracerParams {
 		shader_s *material { nullptr };
+		std::optional<unsigned> alignForPovNum;
 		unsigned duration { 100 };
 		float prestepDistance { 0.0f };
 		float smoothEdgeDistance { 0.0f };
@@ -137,8 +138,10 @@ private:
 	struct TracerEffect {
 		TracerEffect *prev { nullptr }, *next { nullptr };
 		int64_t timeoutAt;
+		std::optional<unsigned> alignForPovNum;
 		vec3_t from;
 		vec3_t to;
+		vec3_t dir;
 		float speed { 0.0f };
 		float prestepDistance { 0.0f };
 		float totalDistance { 0.0f };
