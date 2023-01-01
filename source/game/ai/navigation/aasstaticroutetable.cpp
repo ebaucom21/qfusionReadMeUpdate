@@ -7,6 +7,13 @@
 #include "../../../qcommon/wswvector.h"
 #include <cinttypes>
 
+#ifdef WSW_USE_SSE2
+#include <x86intrin.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+#endif
+
 static SingletonHolder<AasStaticRouteTable> g_instanceHolder;
 bool AasStaticRouteTable::s_isAccessibleForRouteCache;
 
@@ -63,7 +70,7 @@ AasStaticRouteTable::~AasStaticRouteTable() {
 }
 
 static constexpr const char *kFileTag   = "RouteTable";
-static constexpr const int kFileVersion = 1337;
+static constexpr const int kFileVersion = 1338;
 
 bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 	AiPrecomputedFileReader reader( kFileTag, kFileVersion );
@@ -246,9 +253,16 @@ struct NumsAndEntriesBuilder {
 
 	[[nodiscard]]
 	auto endSpan() -> AasStaticRouteTable::BufferSpan {
-		// Ensure that each nums span size is a multiple of 16
-		if( const size_t rem = nums.size() % 16 ) {
-			nums.insert( nums.end(), 16 - rem, 0 );
+		// Ensure that each nums span size is a multiple of 8 (so it is a multiple of a 16-byte SIMD vector)
+		static_assert( sizeof( decltype( nums.front() ) ) == 2 );
+
+		if( const size_t rem = nums.size() % 8 ) {
+			nums.insert( nums.end(), 8 - rem, 0 );
+		} else {
+			// Ensure that we always can load at least 16 bytes of area data for comparison
+			if( nums.size() == oldNumsSize ) [[unlikely]] {
+				nums.insert( nums.end(), 8, 0 );
+			}
 		}
 
 		const size_t numAreaNumsInSpan = nums.size() - oldNumsSize;
@@ -448,27 +462,79 @@ auto AasStaticRouteTable::getAllowedRouteFromTo( int fromAreaNum, int toAreaNum 
 	return result;
 }
 
+// TODO: Lift to the top level, merge with the same thing in the CM code
+#ifndef _MSC_VER
+#define wsw_ctz( x ) __builtin_ctz( x )
+#else
+__forceinline int wsw_ctz( int x ) {
+	assert( x );
+	unsigned long result = 0;
+	_BitScanForward( &result, x );
+	return result;
+}
+#endif
+
 [[nodiscard]]
-static auto findIndexOrAreaInAreaNumsArray( const uint16_t *__restrict areaNums, int areaNum,
+static auto findIndexOrAreaInAreaNumsArray( const uint16_t *areaNums, int areaNum,
 											unsigned numAreasInSpan, unsigned numEntriesInSpan ) {
 	assert( areaNum > 0 && areaNum <= std::numeric_limits<uint16_t>::max() );
 	assert( numEntriesInSpan <= numAreasInSpan );
-	assert( numAreasInSpan < numEntriesInSpan + 16 );
-	assert( !( numAreasInSpan % 16 ) );
-	assert( !( ( (uintptr_t)areaNums ) % 16 ) );
 
 	(void)numAreasInSpan;
 	(void)numEntriesInSpan;
 
-	unsigned i = 0;
-	// Don't scan trailing zeroes in the generic version
-	for(; i < numEntriesInSpan; ++i ) {
-		if( areaNums[i] == (uint16_t)areaNum ) {
+#if !defined( WSW_USE_SSE2 ) || defined( CHECK_TABLE_MATCH_WITH_ROUTE_CACHE )
+	unsigned genericIndex = 0;
+	// Don't scan trailing zeroes in the generic version (that's why the loop is limited by numEntriesInSpan).
+	for(; genericIndex < numEntriesInSpan; ++genericIndex ) {
+		if( areaNums[genericIndex] == (uint16_t)areaNum ) {
 			break;
 		}
 	}
+#endif
 
-	return i;
+#if defined( WSW_USE_SSE2 )
+	constexpr unsigned kNumAreasPerSimdVector = sizeof( __m128i ) / sizeof( uint16_t );
+
+	assert( numAreasInSpan < numEntriesInSpan + kNumAreasPerSimdVector );
+	assert( !( numAreasInSpan % kNumAreasPerSimdVector ) );
+	assert( numAreasInSpan >= kNumAreasPerSimdVector );
+
+	// Ensure the proper alignment as well
+	assert( !( ( (uintptr_t)areaNums ) % 16 ) );
+
+	// Return the same value in case of failing to find an area as the generic version does
+	// (this is not obligatory for the function but is useful for the debug match check).
+	unsigned sseIndex            = numEntriesInSpan;
+	auto *xmmAreaNumsPtr         = (__m128i *)areaNums;
+	const auto *xmmAreaNumsEnd   = xmmAreaNumsPtr + numAreasInSpan / kNumAreasPerSimdVector;
+	const __m128i xmmSearchValue = _mm_set1_epi16( (int16_t)areaNum );
+	do {
+		const __m128i xmmAreaNums = _mm_load_si128( xmmAreaNumsPtr );
+		const __m128i xmmCmp      = _mm_cmpeq_epi16( xmmAreaNums, xmmSearchValue );
+		const int cmpBytesMask    = _mm_movemask_epi8( xmmCmp );
+		if( cmpBytesMask ) {
+			// Divide by two to convert the number of trailing zero byte sign bits to the number of trailing zero words
+			const int matchingWordIndex       = wsw_ctz( cmpBytesMask ) / 2;
+			const ptrdiff_t currVectorOffset  = (const uint16_t *)xmmAreaNumsPtr - areaNums;
+			sseIndex                          = (unsigned)( currVectorOffset + matchingWordIndex );
+			break;
+		}
+	} while( ++xmmAreaNumsPtr < xmmAreaNumsEnd );
+
+	// TODO: The name of the defined switch is quite misleading in this case
+#if defined( CHECK_TABLE_MATCH_WITH_ROUTE_CACHE )
+	if( genericIndex != sseIndex ) {
+		Com_Printf( "genericIndex=%d, sseIndex=%d, numEntriesInSpan=%d, numAreasInSpan=%d\n",
+					genericIndex, sseIndex, numEntriesInSpan, numAreasInSpan );
+		abort();
+	}
+#endif
+
+	return sseIndex;
+#else
+	return genericIndex;
+#endif
 }
 
 [[nodiscard]]
