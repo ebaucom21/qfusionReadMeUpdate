@@ -56,14 +56,14 @@ static shaderpass_t r_GLSLpasses[MAX_BUILTIN_GLSLPASSES];
 
 static void RB_SetShaderpassState( int state );
 
-static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t programFeatures );
-static void RB_RenderMeshGLSL_YUV( const shaderpass_t *pass, r_glslfeat_t programFeatures );
+static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, uint64_t programFeatures );
+static void RB_RenderMeshGLSL_YUV( const shaderpass_t *pass, uint64_t programFeatures );
 
 int RP_GetProgramObject( int elem );
 
@@ -547,7 +547,7 @@ static inline Texture *RB_ShaderpassTex( const shaderpass_t *pass ) {
 * RB_RGBAlphaGenToProgramFeatures
 */
 static int RB_RGBAlphaGenToProgramFeatures( const colorgen_t *rgbgen, const colorgen_t *alphagen ) {
-	r_glslfeat_t programFeatures;
+	uint64_t programFeatures;
 	int identity;
 
 	identity = 0;
@@ -606,7 +606,7 @@ static int RB_RGBAlphaGenToProgramFeatures( const colorgen_t *rgbgen, const colo
 /*
 * RB_BonesTransformsToProgramFeatures
 */
-static r_glslfeat_t RB_BonesTransformsToProgramFeatures( void ) {
+static uint64_t RB_BonesTransformsToProgramFeatures( void ) {
 	// check whether the current model is actually sketetal
 	if( rb.currentModelType != mod_skeletal ) {
 		return 0;
@@ -621,7 +621,7 @@ static r_glslfeat_t RB_BonesTransformsToProgramFeatures( void ) {
 /*
 * RB_DlightbitsToProgramFeatures
 */
-static r_glslfeat_t RB_DlightbitsToProgramFeatures( unsigned int dlightBits ) {
+static uint64_t RB_DlightbitsToProgramFeatures( unsigned int dlightBits ) {
 	int numDlights;
 
 	if( !dlightBits ) {
@@ -648,8 +648,8 @@ static r_glslfeat_t RB_DlightbitsToProgramFeatures( unsigned int dlightBits ) {
 /*
 * RB_AutospriteProgramFeatures
 */
-static r_glslfeat_t RB_AutospriteProgramFeatures( void ) {
-	r_glslfeat_t programFeatures = 0;
+static uint64_t RB_AutospriteProgramFeatures( void ) {
+	uint64_t programFeatures = 0;
 	if( ( rb.currentVAttribs & VATTRIB_AUTOSPRITE2_BIT ) == VATTRIB_AUTOSPRITE2_BIT ) {
 		programFeatures |= GLSL_SHADER_COMMON_AUTOSPRITE2;
 	} else if( ( rb.currentVAttribs & VATTRIB_AUTOSPRITE_BIT ) == VATTRIB_AUTOSPRITE_BIT ) {
@@ -661,8 +661,8 @@ static r_glslfeat_t RB_AutospriteProgramFeatures( void ) {
 /*
 * RB_InstancedArraysProgramFeatures
 */
-static r_glslfeat_t RB_InstancedArraysProgramFeatures( void ) {
-	r_glslfeat_t programFeatures = 0;
+static uint64_t RB_InstancedArraysProgramFeatures( void ) {
+	uint64_t programFeatures = 0;
 	if( ( rb.currentVAttribs & VATTRIB_INSTANCES_BITS ) == VATTRIB_INSTANCES_BITS ) {
 		programFeatures |= GLSL_SHADER_COMMON_INSTANCED_ATTRIB_TRANSFORMS;
 	} else if( rb.drawElements.numInstances ) {
@@ -674,8 +674,8 @@ static r_glslfeat_t RB_InstancedArraysProgramFeatures( void ) {
 /*
 * RB_FogProgramFeatures
 */
-static r_glslfeat_t RB_FogProgramFeatures( const shaderpass_t *pass, const mfog_t *fog ) {
-	r_glslfeat_t programFeatures = 0;
+static uint64_t RB_FogProgramFeatures( const shaderpass_t *pass, const mfog_t *fog ) {
+	uint64_t programFeatures = 0;
 	if( fog ) {
 		programFeatures |= GLSL_SHADER_COMMON_FOG;
 		if( fog == rb.colorFog ) {
@@ -688,7 +688,7 @@ static r_glslfeat_t RB_FogProgramFeatures( const shaderpass_t *pass, const mfog_
 /*
 * RB_AlphatestProgramFeatures
 */
-static r_glslfeat_t RB_AlphatestProgramFeatures( const shaderpass_t *pass ) {
+static uint64_t RB_AlphatestProgramFeatures( const shaderpass_t *pass ) {
 	switch( pass->flags & SHADERPASS_ALPHAFUNC ) {
 		case SHADERPASS_AFUNC_GT0:
 			return GLSL_SHADER_COMMON_AFUNC_GT0;
@@ -703,7 +703,7 @@ static r_glslfeat_t RB_AlphatestProgramFeatures( const shaderpass_t *pass ) {
 /*
 * RB_TcModsProgramFeatures
 */
-static r_glslfeat_t RB_TcModsProgramFeatures( const shaderpass_t *pass ) {
+static uint64_t RB_TcModsProgramFeatures( const shaderpass_t *pass ) {
 	if( pass->numtcmods ) {
 		return GLSL_SHADER_COMMON_TC_MOD;
 	}
@@ -715,8 +715,8 @@ static r_glslfeat_t RB_TcModsProgramFeatures( const shaderpass_t *pass ) {
 *
 * The main framebuffer is always srgb, otherwise assume linear
 */
-static r_glslfeat_t RB_sRGBProgramFeatures( const shaderpass_t *pass ) {
-	r_glslfeat_t f = 0;
+static uint64_t RB_sRGBProgramFeatures( const shaderpass_t *pass ) {
+	uint64_t f = 0;
 
 	if( pass->flags & SHADERPASS_NOSRGB ) {
 		return 0; // don't do srgb<->linear conversions at all, used for blitting framebuffers
@@ -813,7 +813,7 @@ static void RB_UpdateFogUniforms( int program, const mfog_t *fog ) {
 						  fog->shader->fog_dist, &fogPlane, &vpnPlane, dist );
 }
 
-static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, const shaderpass_t *pass, uint64_t programFeatures ) {
 	int i;
 	int program;
 	vec3_t lightDir = { 0.0f, 0.0f, 0.0f };
@@ -1069,7 +1069,7 @@ static void RB_RenderMeshGLSL_Material( const FrontendToBackendShared *fsh, cons
 /*
 * RB_RenderMeshGLSL_Distortion
 */
-static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int i;
 	int width = 1, height = 1;
 	int program;
@@ -1153,7 +1153,7 @@ static void RB_RenderMeshGLSL_Distortion( const shaderpass_t *pass, r_glslfeat_t
 /*
 * RB_RenderMeshGLSL_Outline
 */
-static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int faceCull;
 	int program;
 	mat4_t texMatrix;
@@ -1202,8 +1202,8 @@ static void RB_RenderMeshGLSL_Outline( const shaderpass_t *pass, r_glslfeat_t pr
 /*
 * RB_TcGenToProgramFeatures
 */
-r_glslfeat_t RB_TcGenToProgramFeatures( int tcgen, vec_t *tcgenVec, mat4_t texMatrix, mat4_t genVectors ) {
-	r_glslfeat_t programFeatures = 0;
+uint64_t RB_TcGenToProgramFeatures( int tcgen, vec_t *tcgenVec, mat4_t texMatrix, mat4_t genVectors ) {
+	uint64_t programFeatures = 0;
 
 	Matrix4_Identity( texMatrix );
 
@@ -1237,7 +1237,7 @@ r_glslfeat_t RB_TcGenToProgramFeatures( int tcgen, vec_t *tcgenVec, mat4_t texMa
 	return programFeatures;
 }
 
-static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, const shaderpass_t *pass, uint64_t programFeatures ) {
 	int state;
 	int program;
 	int rgbgen = pass->rgbgen.type;
@@ -1414,7 +1414,7 @@ static void RB_RenderMeshGLSL_Q3AShader( const FrontendToBackendShared *fsh, con
 	}
 }
 
-static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, uint64_t programFeatures ) {
 	const mfog_t *fog = rb.fog;
 
 	Texture *const base = pass->images[0];
@@ -1508,7 +1508,7 @@ static void RB_RenderMeshGLSL_Celshade( const shaderpass_t *pass, r_glslfeat_t p
 /*
 * RB_RenderMeshGLSL_Fog
 */
-static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int program;
 	const mfog_t *fog = rb.fog;
 	mat4_t texMatrix = { 0 };
@@ -1538,7 +1538,7 @@ static void RB_RenderMeshGLSL_Fog( const shaderpass_t *pass, r_glslfeat_t progra
 /*
 * RB_RenderMeshGLSL_FXAA
 */
-static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, uint64_t programFeatures ) {
 	bool fxaa3 = false;
 	int program;
 	const Texture *image = pass->images[0];
@@ -1574,7 +1574,7 @@ static void RB_RenderMeshGLSL_FXAA( const shaderpass_t *pass, r_glslfeat_t progr
 /*
 * RB_RenderMeshGLSL_YUV
 */
-static void RB_RenderMeshGLSL_YUV( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_YUV( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int program;
 	mat4_t texMatrix = { 0 };
 
@@ -1598,7 +1598,7 @@ static void RB_RenderMeshGLSL_YUV( const shaderpass_t *pass, r_glslfeat_t progra
 /*
 * RB_RenderMeshGLSL_ColorCorrection
 */
-static void RB_RenderMeshGLSL_ColorCorrection( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_ColorCorrection( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int i;
 	int program;
 	mat4_t texMatrix;
@@ -1653,7 +1653,7 @@ static void RB_RenderMeshGLSL_ColorCorrection( const shaderpass_t *pass, r_glslf
 /*
 * RB_RenderMeshGLSL_KawaseBlur
 */
-static void RB_RenderMeshGLSL_KawaseBlur( const shaderpass_t *pass, r_glslfeat_t programFeatures ) {
+static void RB_RenderMeshGLSL_KawaseBlur( const shaderpass_t *pass, uint64_t programFeatures ) {
 	int program;
 	mat4_t texMatrix = { 0 };
 
@@ -1677,7 +1677,7 @@ static void RB_RenderMeshGLSL_KawaseBlur( const shaderpass_t *pass, r_glslfeat_t
 }
 
 void RB_RenderMeshGLSLProgrammed( const FrontendToBackendShared *fsh, const shaderpass_t *pass, int programType ) {
-	r_glslfeat_t features = 0;
+	uint64_t features = 0;
 
 	if( rb.greyscale || pass->flags & SHADERPASS_GREYSCALE ) {
 		features |= GLSL_SHADER_COMMON_GREYSCALE;
@@ -1915,7 +1915,7 @@ void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure ) {
 * RB_RegisterProgram
 */
 int RB_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
-						const deformv_t *deforms, int numDeforms, r_glslfeat_t features ) {
+						const deformv_t *deforms, int numDeforms, uint64_t features ) {
 	int program;
 	bool noDeforms = !numDeforms;
 

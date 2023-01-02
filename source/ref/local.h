@@ -1579,4 +1579,16 @@ extern mapconfig_t mapConfig;
 
 struct VisualTrace;
 
+[[nodiscard]]
+inline bool startsWithUtf8Bom( const char *data, size_t length ) {
+	if( length > 2 ) {
+		// The data must be cast to an unsigned type first, otherwise a comparison gets elided by a compiler
+		const auto *p = (const uint8_t *)data;
+		if( ( p[0] == 0xEFu ) & ( p[1] == 0xBBu ) & ( p[2] == 0xBFu ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
 #endif // R_LOCAL_H

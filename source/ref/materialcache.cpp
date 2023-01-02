@@ -413,16 +413,7 @@ auto MaterialCache::loadFileContents( const wsw::StringView &fileName ) -> Mater
 		return nullptr;
 	}
 
-	int offsetShift = 0;
-	// Strip an UTF8 BOM (if any)
-	if( rawContents->size() > 2 ) {
-		// The data must be cast to an unsigned type first, otherwise a comparison gets elided by a compiler
-		const auto *p = (const uint8_t *)rawContents->data();
-		if( ( p[0] == 0xEFu ) && ( p[1] == 0xBBu ) && ( p[2] == 0xBFu ) ) {
-			offsetShift = 3;
-		}
-	}
-
+	const int offsetShift = startsWithUtf8Bom( rawContents->data(), rawContents->size() ) ? 3 : 0;
 	TokenSplitter splitter( rawContents->data() + offsetShift, rawContents->size() - offsetShift );
 
 	m_fileTokenSpans.clear();

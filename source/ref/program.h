@@ -20,8 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef R_PROGRAM_H
 #define R_PROGRAM_H
 
-typedef uint64_t r_glslfeat_t;
-
 #define GLSL_BIT( x )                         ( 1ULL << ( x ) )
 #define GLSL_BITS_VERSION                   16
 
@@ -186,10 +184,117 @@ enum {
 #define GLSL_SHADER_COLOR_CORRECTION_OVERBRIGHT GLSL_BIT( 34 )
 #define GLSL_SHADER_COLOR_CORRECTION_BLOOM      GLSL_BIT( 35 )
 
-void RP_Init( void );
-void RP_Shutdown( void );
+typedef struct {
+	uint64_t featureBit;
+	const char      *define;
+	const char      *suffix;
+} glsl_feature_t;
+
+struct ShaderProgram {
+	ShaderProgram *nextInHashBin { nullptr };
+	ShaderProgram *nextInList { nullptr };
+	uint64_t features { 0 };
+	wsw::StringView name;
+
+	int type { 0 };
+	unsigned index { 0 };
+
+	DeformSig deformSig;
+
+	GLuint programId { 0 };
+	GLuint vertexShaderId { 0 };
+	GLuint fragmentShaderId { 0 };
+
+	// Always set, may belong to the names allocator.
+	void *nameDataToFree { nullptr };
+	// Optional, points to the default heap if set.
+	void *deformSigDataToFree { nullptr };
+
+	struct loc_s {
+		int ModelViewMatrix,
+			ModelViewProjectionMatrix,
+
+			ZRange,
+
+			ViewOrigin,
+			ViewAxis,
+
+			MirrorSide,
+
+			Viewport,
+
+			LightDir,
+			LightAmbient,
+			LightDiffuse,
+			LightingIntensity,
+
+			TextureMatrix,
+
+			GlossFactors,
+
+			OffsetMappingScale,
+			OutlineHeight,
+			OutlineCutOff,
+
+			FrontPlane,
+			TextureParams,
+
+			EntityDist,
+			EntityOrigin,
+			EntityColor,
+			ConstColor,
+			RGBGenFuncArgs,
+			AlphaGenFuncArgs;
+
+		struct {
+			int Plane,
+				Color,
+				ScaleAndEyeDist,
+				EyePlane;
+		} Fog;
+
+		int ShaderTime,
+
+			ReflectionTexMatrix,
+			VectorTexMatrix,
+
+			DeluxemapOffset,
+			LightstyleColor[MAX_LIGHTMAPS],
+
+			DynamicLightsPosition[MAX_DLIGHTS],
+			DynamicLightsDiffuseAndInvRadius[MAX_DLIGHTS >> 2],
+			NumDynamicLights,
+
+			DualQuats,
+
+			InstancePoints,
+
+			WallColor,
+			FloorColor,
+
+			BlendMix,
+			ColorMod,
+
+			SoftParticlesScale;
+
+		int hdrGamma,
+			hdrExposure;
+
+		// builtin uniforms
+		struct {
+			int ShaderTime,
+				ViewOrigin,
+				ViewAxis,
+				MirrorSide,
+				EntityOrigin;
+		} builtin;
+	} loc;
+};
+
+void RP_Init();
+void RP_Shutdown();
 
 int RP_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
-						const deformv_t *deforms, int numDeforms, r_glslfeat_t features );
+						const deformv_t *deforms, int numDeforms, uint64_t features );
 
 #endif // R_PROGRAM_H

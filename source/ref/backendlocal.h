@@ -117,7 +117,7 @@ typedef struct r_backend_s {
 	// RP_RegisterProgram cache
 	int currentRegProgram;
 	int currentRegProgramType;
-	r_glslfeat_t currentRegProgramFeatures;
+	uint64_t currentRegProgramFeatures;
 
 	rbDynamicStream_t dynamicStreams[RB_VBO_NUM_STREAMS];
 	rbDynamicDraw_t dynamicDraws[MAX_DYNAMIC_DRAWS];
@@ -182,7 +182,7 @@ void RB_DrawWireframeElements( const FrontendToBackendShared *fsh );
 void RB_DrawShadedElements( const FrontendToBackendShared *fsh );
 
 int RB_RegisterProgram( int type, const char *name, const DeformSig &deformSig,
-						const deformv_t *deforms, int numDeforms, r_glslfeat_t features );
+						const deformv_t *deforms, int numDeforms, uint64_t features );
 int RB_BindProgram( int program );
 void RB_BindImage( int tmu, const Texture *tex );
 void RB_BindArrayBuffer( int buffer );

@@ -646,7 +646,7 @@ QGL_FUNC( void, glGetActiveUniform, ( GLuint program, GLuint index, GLsizei maxL
 QGL_FUNC( void, glGetUniformfv, ( GLuint program, GLint location, GLfloat * params ) );
 QGL_FUNC( void, glGetUniformiv, ( GLuint program, GLint location, GLint * params ) );
 
-QGL_FUNC( void, glShaderSource, ( GLuint shader, GLsizei count, const GLchar **string, const GLint * length ) );
+QGL_FUNC( void, glShaderSource, ( GLuint shader, GLsizei count, const GLchar *const *string, const GLint * length ) );
 QGL_FUNC( void, glGetShaderSource, ( GLuint obj, GLsizei maxLength, GLsizei * length, GLchar * source ) );
 QGL_FUNC( void, glCompileShader, ( GLuint shader ) );
 QGL_FUNC( void, glLinkProgram, ( GLuint program ) );

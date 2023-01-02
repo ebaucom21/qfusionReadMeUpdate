@@ -159,6 +159,10 @@ const char *QGLFunc::checkForError() {
 		return nullptr;
 	}
 
+	if( strstr( name, "UniformLocation" ) ) {
+		return nullptr;
+	}
+
 	// Hacks: never try to fetch errors for qglBufferData().
 	// This is currently the only routine that has an additional custom error handling logic.
 	// We could try using something like `qglBufferData.unchecked().operator()(...`
