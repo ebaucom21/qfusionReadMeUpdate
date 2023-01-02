@@ -70,7 +70,7 @@ AasStaticRouteTable::~AasStaticRouteTable() {
 }
 
 static constexpr const char *kFileTag   = "RouteTable";
-static constexpr const int kFileVersion = 1338;
+static constexpr const int kFileVersion = 1339;
 
 bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 	AiPrecomputedFileReader reader( kFileTag, kFileVersion );
@@ -253,15 +253,15 @@ struct NumsAndEntriesBuilder {
 
 	[[nodiscard]]
 	auto endSpan() -> AasStaticRouteTable::BufferSpan {
-		// Ensure that each nums span size is a multiple of 8 (so it is a multiple of a 16-byte SIMD vector)
 		static_assert( sizeof( decltype( nums.front() ) ) == 2 );
 
-		if( const size_t rem = nums.size() % 8 ) {
-			nums.insert( nums.end(), 8 - rem, 0 );
+		// Ensure that each nums span size is a multiple of 16 (so it is a multiple of a 2x16-byte SIMD vector)
+		if( const size_t rem = nums.size() % 16 ) {
+			nums.insert( nums.end(), 16 - rem, 0 );
 		} else {
-			// Ensure that we always can load at least 16 bytes of area data for comparison
+			// Ensure that we always can load at least 16 words of area data for comparison
 			if( nums.size() == oldNumsSize ) [[unlikely]] {
-				nums.insert( nums.end(), 8, 0 );
+				nums.insert( nums.end(), 16, 0 );
 			}
 		}
 
@@ -494,33 +494,43 @@ static auto findIndexOrAreaInAreaNumsArray( const uint16_t *areaNums, int areaNu
 #endif
 
 #if defined( WSW_USE_SSE2 )
-	constexpr unsigned kNumAreasPerSimdVector = sizeof( __m128i ) / sizeof( uint16_t );
+	constexpr unsigned kNumVectorsPerStep = 2;
+	constexpr unsigned kNumAreasPerVector = sizeof( __m128i ) / sizeof( uint16_t );
+	constexpr unsigned kNumAreasPerStep   = kNumVectorsPerStep * kNumAreasPerVector;
 
-	assert( numAreasInSpan < numEntriesInSpan + kNumAreasPerSimdVector );
-	assert( !( numAreasInSpan % kNumAreasPerSimdVector ) );
-	assert( numAreasInSpan >= kNumAreasPerSimdVector );
+	assert( numAreasInSpan < numEntriesInSpan + kNumAreasPerStep );
+	assert( !( numAreasInSpan % kNumAreasPerStep ) );
+	assert( numAreasInSpan >= kNumAreasPerStep );
 
 	// Ensure the proper alignment as well
 	assert( !( ( (uintptr_t)areaNums ) % 16 ) );
 
 	// Return the same value in case of failing to find an area as the generic version does
 	// (this is not obligatory for the function but is useful for the debug match check).
-	unsigned sseIndex            = numEntriesInSpan;
-	auto *xmmAreaNumsPtr         = (__m128i *)areaNums;
-	const auto *xmmAreaNumsEnd   = xmmAreaNumsPtr + numAreasInSpan / kNumAreasPerSimdVector;
-	const __m128i xmmSearchValue = _mm_set1_epi16( (int16_t)areaNum );
+	unsigned sseIndex                = numEntriesInSpan;
+	const auto *xmmAreaNumsPtr       = (const __m128i *)areaNums;
+	const auto *const xmmAreaNumsEnd = (const __m128i *)( areaNums + numAreasInSpan );
+	const __m128i xmmSearchValue     = _mm_set1_epi16( (int16_t)areaNum );
 	do {
-		const __m128i xmmAreaNums = _mm_load_si128( xmmAreaNumsPtr );
-		const __m128i xmmCmp      = _mm_cmpeq_epi16( xmmAreaNums, xmmSearchValue );
-		const int cmpBytesMask    = _mm_movemask_epi8( xmmCmp );
-		if( cmpBytesMask ) {
+		const __m128i xmmCmp1    = _mm_cmpeq_epi16( _mm_load_si128( xmmAreaNumsPtr + 0 ), xmmSearchValue );
+		const __m128i xmmCmp2    = _mm_cmpeq_epi16( _mm_load_si128( xmmAreaNumsPtr + 1 ), xmmSearchValue );
+		// TODO: Should we alternatively combine XMM masks first?
+		// The current version still have an advantage that it should not cross
+		// integer/floating-point execution units on older processors though (?).
+		const int cmpBitMask1    = _mm_movemask_epi8( xmmCmp1 );
+		const int cmpBitMask2    = _mm_movemask_epi8( xmmCmp2 );
+		if( ( cmpBitMask1 | cmpBitMask2 ) ) {
+			// Combine comparison results like we have compared 256-bit vectors
+			// _mm_movemask_epi8() result spans over 16 bits
+			const int combinedBitMask         = ( cmpBitMask2 << 16 ) | cmpBitMask1;
 			// Divide by two to convert the number of trailing zero byte sign bits to the number of trailing zero words
-			const int matchingWordIndex       = wsw_ctz( cmpBytesMask ) / 2;
+			const int matchingWordIndex       = wsw_ctz( combinedBitMask ) / 2;
 			const ptrdiff_t currVectorOffset  = (const uint16_t *)xmmAreaNumsPtr - areaNums;
 			sseIndex                          = (unsigned)( currVectorOffset + matchingWordIndex );
 			break;
 		}
-	} while( ++xmmAreaNumsPtr < xmmAreaNumsEnd );
+		xmmAreaNumsPtr += kNumVectorsPerStep;
+	} while( xmmAreaNumsPtr < xmmAreaNumsEnd );
 
 	// TODO: The name of the defined switch is quite misleading in this case
 #if defined( CHECK_TABLE_MATCH_WITH_ROUTE_CACHE )
