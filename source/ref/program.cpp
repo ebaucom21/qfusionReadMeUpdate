@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswfs.h"
+#include "../qcommon/wswstring.h"
 #include "../qcommon/wswstringsplitter.h"
 
 using wsw::operator""_asView;
@@ -1257,139 +1258,6 @@ static const glsl_feature_t * const glsl_programtypes_features[] =
 	"#define QF_LatLong2Norm(ll) vec3(cos((ll).y) * sin((ll).x), sin((ll).y) * sin((ll).x), cos((ll).x))\n" \
 	"\n"
 
-/*
-* R_GLSLBuildDeformv
-*
-* Converts some of the Q3A vertex deforms to a GLSL vertex shader.
-* Supported deforms are: wave, move, bulge.
-* NOTE: Autosprite deforms can only be performed in a geometry shader.
-* NULL is returned in case an unsupported deform is passed.
-*/
-static const char *R_GLSLBuildDeformv( const deformv_t *deformv, int numDeforms ) {
-	int i;
-	int funcType;
-	char tmp[256];
-	static char program[40 * 1024];
-	static const char * const funcs[] = {
-		NULL, "WAVE_SIN", "WAVE_TRIANGLE", "WAVE_SQUARE", "WAVE_SAWTOOTH", "WAVE_INVERSESAWTOOTH", NULL
-	};
-	static const int numSupportedFuncs = sizeof( funcs ) / sizeof( funcs[0] ) - 1;
-
-	if( !numDeforms ) {
-		return NULL;
-	}
-
-	program[0] = '\0';
-	Q_strncpyz( program,
-				"#define QF_APPLY_DEFORMVERTS\n"
-				"#if defined(APPLY_AUTOSPRITE) || defined(APPLY_AUTOSPRITE2)\n"
-				"qf_attribute vec4 a_SpritePoint;\n"
-				"#else\n"
-				"#define a_SpritePoint vec4(0.0)\n"
-				"#endif\n"
-				"\n"
-				"#if defined(APPLY_AUTOSPRITE2)\n"
-				"qf_attribute vec4 a_SpriteRightUpAxis;\n"
-				"#else\n"
-				"#define a_SpriteRightUpAxis vec4(0.0)\n"
-				"#endif\n"
-				"\n"
-				"void QF_DeformVerts(inout vec4 Position, inout vec3 Normal, inout vec2 TexCoord)\n"
-				"{\n"
-				"float t = 0.0;\n"
-				"vec3 dist;\n"
-				"vec3 right, up, forward, newright;\n"
-				"\n"
-				"#if defined(WAVE_SIN)\n"
-				, sizeof( program ) );
-
-	for( i = 0; i < numDeforms; i++, deformv++ ) {
-		switch( deformv->type ) {
-			case DEFORMV_WAVE:
-				funcType = deformv->func.type;
-				if( funcType <= SHADER_FUNC_NONE || funcType > numSupportedFuncs || !funcs[funcType] ) {
-					return NULL;
-				}
-
-				Q_strncatz( program, va_r( tmp, sizeof( tmp ), "Position.xyz += %s(u_QF_ShaderTime,%f,%f,%f+%f*(Position.x+Position.y+Position.z),%f) * Normal.xyz;\n",
-										   funcs[funcType], deformv->func.args[0], deformv->func.args[1], deformv->func.args[2], deformv->func.args[3] ? deformv->args[0] : 0.0, deformv->func.args[3] ),
-							sizeof( program ) );
-				break;
-			case DEFORMV_MOVE:
-				funcType = deformv->func.type;
-				if( funcType <= SHADER_FUNC_NONE || funcType > numSupportedFuncs || !funcs[funcType] ) {
-					return NULL;
-				}
-
-				Q_strncatz( program, va_r( tmp, sizeof( tmp ), "Position.xyz += %s(u_QF_ShaderTime,%f,%f,%f,%f) * vec3(%f, %f, %f);\n",
-										   funcs[funcType], deformv->func.args[0], deformv->func.args[1], deformv->func.args[2], deformv->func.args[3],
-										   deformv->args[0], deformv->args[1], deformv->args[2] ),
-							sizeof( program ) );
-				break;
-			case DEFORMV_BULGE:
-				Q_strncatz( program, va_r( tmp, sizeof( tmp ),
-										   "t = sin(TexCoord.s * %f + u_QF_ShaderTime * %f);\n"
-										   "Position.xyz += max (-1.0 + %f, t) * %f * Normal.xyz;\n",
-										   deformv->args[0], deformv->args[2], deformv->args[3], deformv->args[1] ),
-							sizeof( program ) );
-				break;
-			case DEFORMV_AUTOSPRITE:
-				Q_strncatz( program,
-							"right = (1.0 + step(0.5, TexCoord.s) * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
-							"up = (1.0 + step(0.5, TexCoord.t) * -2.0) * u_QF_ViewAxis[2];\n"
-							"forward = -1.0 * u_QF_ViewAxis[0];\n"
-							"Position.xyz = a_SpritePoint.xyz + (right + up) * a_SpritePoint.w;\n"
-							"Normal.xyz = forward;\n"
-							"TexCoord.st = vec2(step(0.5, TexCoord.s),step(0.5, TexCoord.t));\n",
-							sizeof( program ) );
-				break;
-			case DEFORMV_AUTOPARTICLE:
-				Q_strncatz( program,
-							"right = (1.0 + TexCoord.s * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
-							"up = (1.0 + TexCoord.t * -2.0) * u_QF_ViewAxis[2];\n"
-							"forward = -1.0 * u_QF_ViewAxis[0];\n"
-				            // prevent the particle from disappearing at large distances
-							"t = dot(a_SpritePoint.xyz + u_QF_EntityOrigin - u_QF_ViewOrigin, u_QF_ViewAxis[0]);\n"
-							"t = 1.5 + step(20.0, t) * t * 0.006;\n"
-							"Position.xyz = a_SpritePoint.xyz + (right + up) * t * a_SpritePoint.w;\n"
-							"Normal.xyz = forward;\n",
-							sizeof( program ) );
-				break;
-			case DEFORMV_AUTOSPRITE2:
-				Q_strncatz( program,
-				            // local sprite axes
-							"right = QF_LatLong2Norm(a_SpriteRightUpAxis.xy) * u_QF_MirrorSide;\n"
-							"up = QF_LatLong2Norm(a_SpriteRightUpAxis.zw);\n"
-
-				            // mid of quad to camera vector
-							"dist = u_QF_ViewOrigin - u_QF_EntityOrigin - a_SpritePoint.xyz;\n"
-
-				            // filter any longest-axis-parts off the camera-direction
-							"forward = normalize(dist - up * dot(dist, up));\n"
-
-				            // the right axis vector as it should be to face the camera
-							"newright = cross(up, forward);\n"
-
-				            // rotate the quad vertex around the up axis vector
-							"t = dot(right, Position.xyz - a_SpritePoint.xyz);\n"
-							"Position.xyz += t * (newright - right);\n"
-							"Normal.xyz = forward;\n",
-							sizeof( program ) );
-				break;
-			default:
-				return NULL;
-		}
-	}
-
-	Q_strncatz( program,
-				"#endif\n"
-				"}\n"
-				"\n"
-				, sizeof( program ) );
-
-	return program;
-}
-
 class ProgramSourceBuilder {
 public:
 	ProgramSourceBuilder( wsw::Vector<const char *> *strings, wsw::Vector<int> *lengths )
@@ -1413,6 +1281,13 @@ public:
 		return m_strings->size();
 	}
 
+	void resetToSize( size_t sizeToSet ) {
+		assert( m_strings->size() == m_lengths->size() );
+		assert( sizeToSet <= m_strings->size() );
+		m_strings->resize( sizeToSet );
+		m_lengths->resize( sizeToSet );
+	}
+
 	[[maybe_unused]]
 	auto add( const char *string ) -> unsigned {
 		const size_t result = m_lengths->size();
@@ -1421,12 +1296,210 @@ public:
 		return result;
 	}
 
+	[[maybe_unused]]
+	auto add( const char *string, size_t length ) -> unsigned {
+		const size_t result = m_lengths->size();
+		m_strings->push_back( string );
+		m_lengths->push_back( (int)length );
+		return result;
+	}
+
+	void addLegacyMultiline( const char *string ) {
+		wsw::StringSplitter splitter { wsw::StringView( string ) };
+		while( const auto maybeToken = splitter.getNext( '\n' ) ) {
+			assert( maybeToken->data()[maybeToken->size()] == '\n' );
+			m_strings->push_back( maybeToken->data() );
+			m_lengths->push_back( (int)( maybeToken->size() + 1 ) );
+		}
+	}
+
 private:
 	static_assert( std::is_same_v<GLchar, char> );
 	wsw::Vector<const char *> *const m_strings;
 	static_assert( std::is_same_v<int, GLint> );
 	wsw::Vector<int> *const m_lengths;
 };
+
+static const char kDeformPrologue[] =
+	"#define QF_APPLY_DEFORMVERTS\n"
+
+	"#if defined(APPLY_AUTOSPRITE) || defined(APPLY_AUTOSPRITE2)\n"
+	"qf_attribute vec4 a_SpritePoint;\n"
+	"#else\n"
+	"#define a_SpritePoint vec4(0.0)\n"
+	"#endif\n"
+	"\n"
+
+	"#if defined(APPLY_AUTOSPRITE2)\n"
+	"qf_attribute vec4 a_SpriteRightUpAxis;\n"
+	"#else\n"
+	"#define a_SpriteRightUpAxis vec4(0.0)\n"
+	"#endif\n"
+	"\n"
+
+	"void QF_DeformVerts(inout vec4 Position, inout vec3 Normal, inout vec2 TexCoord)\n"
+	"{\n"
+	"float t = 0.0;\n"
+	"vec3 dist;\n"
+	"vec3 right, up, forward, newright;\n"
+	"\n"
+
+	"#if defined(WAVE_SIN)\n";
+
+static const char kDeformEpilogue[] =
+	"#endif\n"
+	"}\n"
+	"\n";
+
+static const char kAutospriteBuiltin[] =
+	"right = (1.0 + step(0.5, TexCoord.s) * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
+	"up = (1.0 + step(0.5, TexCoord.t) * -2.0) * u_QF_ViewAxis[2];\n"
+	"forward = -1.0 * u_QF_ViewAxis[0];\n"
+	"Position.xyz = a_SpritePoint.xyz + (right + up) * a_SpritePoint.w;\n"
+	"Normal.xyz = forward;\n"
+	"TexCoord.st = vec2(step(0.5, TexCoord.s),step(0.5, TexCoord.t));\n";
+
+static const char kAutoparticleBuiltin[] =
+	"right = (1.0 + TexCoord.s * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
+	"up = (1.0 + TexCoord.t * -2.0) * u_QF_ViewAxis[2];\n"
+	"forward = -1.0 * u_QF_ViewAxis[0];\n"
+	// prevent the particle from disappearing at large distances
+	"t = dot(a_SpritePoint.xyz + u_QF_EntityOrigin - u_QF_ViewOrigin, u_QF_ViewAxis[0]);\n"
+	"t = 1.5 + step(20.0, t) * t * 0.006;\n"
+	"Position.xyz = a_SpritePoint.xyz + (right + up) * t * a_SpritePoint.w;\n"
+	"Normal.xyz = forward;\n";
+
+static const char kAutosprite2Builtin[] =
+	"right = QF_LatLong2Norm(a_SpriteRightUpAxis.xy) * u_QF_MirrorSide;\n"
+	"up = QF_LatLong2Norm(a_SpriteRightUpAxis.zw);\n"
+
+	// mid of quad to camera vector
+	"dist = u_QF_ViewOrigin - u_QF_EntityOrigin - a_SpritePoint.xyz;\n"
+
+	// filter any longest-axis-parts off the camera-direction
+	"forward = normalize(dist - up * dot(dist, up));\n"
+
+	// the right axis vector as it should be to face the camera
+	"newright = cross(up, forward);\n"
+
+	// rotate the quad vertex around the up axis vector
+	"t = dot(right, Position.xyz - a_SpritePoint.xyz);\n"
+	"Position.xyz += t * (newright - right);\n"
+	"Normal.xyz = forward;\n";
+
+static_assert( SHADER_FUNC_SIN == 1 );
+static_assert( SHADER_FUNC_TRIANGLE == 2 );
+static_assert( SHADER_FUNC_SQUARE == 3 );
+static_assert( SHADER_FUNC_SAWTOOTH == 4 );
+static_assert( SHADER_FUNC_INVERSESAWTOOTH == 5 );
+
+static constexpr const char *const kDeformFuncNames[] = {
+	"WAVE_SIN",
+	"WAVE_TRIANGLE",
+	"WAVE_SQUARE",
+	"WAVE_SAWTOOTH",
+	"WAVE_INVERSESAWTOOTH"
+};
+
+using DeformStringBuffer = wsw::StaticString<128 * MAX_SHADER_DEFORMVS>;
+
+[[nodiscard]]
+static bool addWaveDeformSourceLines( const deformv_t &deform, DeformStringBuffer *buffer, ProgramSourceBuilder *builder ) {
+	const auto func      = deform.func;
+	const auto funcIndex = func.type - 1;
+	if( (size_t)funcIndex >= std::size( kDeformFuncNames ) ) {
+		return false;
+	}
+	const auto oldBufferSize = buffer->size();
+	if( !buffer->appendf( "Position.xyz += "
+						  "%s(u_QF_ShaderTime,%f,%f,%f+%f*(Position.x+Position.y+Position.z),%f) * Normal.xyz;\n",
+						  kDeformFuncNames[funcIndex], func.args[0], func.args[1], func.args[2],
+						  func.args[3] != 0.0f ? deform.args[0] : 0.0, func.args[3] ) ) {
+		return false;
+	}
+	builder->add( buffer->data() + oldBufferSize, buffer->size() - oldBufferSize );
+	return true;
+}
+
+[[nodiscard]]
+static bool addMoveDeformSourceLines( const deformv_t &deform, DeformStringBuffer *buffer, ProgramSourceBuilder *builder ) {
+	const auto func      = deform.func;
+	const auto funcIndex = func.type - 1;
+	if( (size_t)funcIndex >= std::size( kDeformFuncNames ) ) {
+		return false;
+	}
+	const auto oldBufferSize = buffer->size();
+	if( !buffer->appendf( "Position.xyz += "
+						  "%s(u_QF_ShaderTime,%f,%f,%f,%f) * vec3(%f, %f, %f);\n",
+						  kDeformFuncNames[funcIndex], func.args[0], func.args[1], func.args[2], func.args[3],
+						  deform.args[0], deform.args[1], deform.args[2] ) ) {
+		return false;
+	}
+	builder->add( buffer->data() + oldBufferSize, buffer->size() - oldBufferSize );
+	return true;
+}
+
+[[nodiscard]]
+static auto addBulgeDeformSourceLines( const deformv_t &deform, DeformStringBuffer *buffer, ProgramSourceBuilder *builder ) {
+	const auto oldBufferSize1 = buffer->size();
+	if( !buffer->appendf( "t = sin(TexCoord.s * %f + u_QF_ShaderTime * %f);\n",
+						  deform.args[0], deform.args[2] ) ) {
+		return false;
+	}
+	builder->add( buffer->data() + oldBufferSize1, buffer->size() - oldBufferSize1 );
+	const auto oldBufferSize2 = buffer->size();
+	if( !buffer->appendf( "Position.xyz += max (-1.0 + %f, t) * %f * Normal.xyz;\n",
+						  deform.args[3], deform.args[1] ) ) {
+		return false;
+	}
+	builder->add( buffer->data() + oldBufferSize2, buffer->size() - oldBufferSize2 );
+	return true;
+}
+
+[[nodiscard]]
+static bool addDeformSourceLines( std::span<const deformv_t> deforms, DeformStringBuffer *buffer, ProgramSourceBuilder *builder ) {
+	if( deforms.empty() ) {
+		return true;
+	}
+
+	assert( deforms.size() <= MAX_SHADER_DEFORMVS );
+
+	buffer->clear();
+	builder->addLegacyMultiline( kDeformPrologue );
+
+	for( const deformv_t &deform: deforms ) {
+		switch( deform.type ) {
+			case DEFORMV_WAVE:
+				if( !addWaveDeformSourceLines( deform, buffer, builder ) ) {
+					return false;
+				}
+				break;
+			case DEFORMV_MOVE:
+				if( !addMoveDeformSourceLines( deform, buffer, builder ) ) {
+					return false;
+				}
+			case DEFORMV_BULGE:
+				if( !addBulgeDeformSourceLines( deform, buffer, builder ) ) {
+					return false;
+				}
+				break;
+			case DEFORMV_AUTOSPRITE:
+				builder->addLegacyMultiline( kAutospriteBuiltin );
+				break;
+			case DEFORMV_AUTOPARTICLE:
+				builder->addLegacyMultiline( kAutoparticleBuiltin );
+				break;
+			case DEFORMV_AUTOSPRITE2:
+				builder->addLegacyMultiline( kAutosprite2Builtin );
+				break;
+			default:
+				return false;
+		}
+	}
+
+	builder->addLegacyMultiline( kDeformEpilogue );
+	return true;
+}
 
 auto ShaderProgramCache::getProgramForParams( int type, const wsw::StringView &maybeRequestedName, uint64_t features,
 											  const DeformSig &deformSig, std::span<const deformv_t> deforms ) -> int {
@@ -1663,8 +1736,6 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 												 const wsw::StringView &shaderVersion, const wsw::StringView &maxBones ) {
 	assert( !name.empty() && name.isZeroTerminated() );
 
-
-
 	m_tmpShaderStrings.clear();
 	m_tmpShaderLengths.clear();
 	m_tmpShaderOffsets.clear();
@@ -1706,9 +1777,10 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 
 	sourceBuilder.addAll( featureStrings.strings, featureStrings.lengths );
 
-	// forward declare QF_DeformVerts
-	const char *deformv = R_GLSLBuildDeformv( deforms.data(), deforms.size() );
-	sourceBuilder.add( deformv ? deformv : "\n" );
+	DeformStringBuffer deformStringBuffer;
+	if( !addDeformSourceLines( deforms, &deformStringBuffer, &sourceBuilder ) ) {
+		return false;
+	}
 
 	if( features & GLSL_SHADER_COMMON_BONE_TRANSFORMS ) {
 		sourceBuilder.add( QF_BUILTIN_GLSL_QUAT_TRANSFORM );
