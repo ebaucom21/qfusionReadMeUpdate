@@ -31,10 +31,36 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
+class ProgramSourceBuilder;
+
 class ProgramSourceFileCache {
 	friend class ProgramSourceLoader;
 public:
+
+	// Use opaque handles for file entries of builtins
+	using KeyOfBuiltin = uintptr_t;
+
+	KeyOfBuiltin deformAutoparticle { 0 };
+	KeyOfBuiltin deformAutosprite { 0 };
+	KeyOfBuiltin deformAutosprite2 { 0 };
+	KeyOfBuiltin deformPrologue { 0 };
+	KeyOfBuiltin deformEpilogue { 0 };
+
+	KeyOfBuiltin constants { 0 };
+	KeyOfBuiltin instancedTransforms { 0 };
+	KeyOfBuiltin macros { 0 };
+	KeyOfBuiltin macros120 { 0 };
+	KeyOfBuiltin macros130 { 0 };
+	KeyOfBuiltin math { 0 };
+	KeyOfBuiltin quatTransform { 0 };
+	KeyOfBuiltin transformVerts { 0 };
+	KeyOfBuiltin uniforms { 0 };
+	KeyOfBuiltin waveFuncs { 0 };
+
 	ProgramSourceFileCache();
+
+	void precacheBuiltins();
+	void addBuiltinSourceLines( KeyOfBuiltin key, ProgramSourceBuilder *sourceBuilder ) const;
 private:
 
 	struct Span {
@@ -92,6 +118,9 @@ private:
 		return { .offset = (unsigned)( view.data() - m_stringData.data() ), .length = (unsigned)view.size() };
 	}
 
+	[[nodiscard]]
+	auto loadBuiltin( const wsw::StringView &name ) -> KeyOfBuiltin;
+
 	wsw::Vector<LineSpan> m_lineEntries;
 	wsw::Vector<char> m_stringData;
 	wsw::Vector<Include> m_includesData;
@@ -99,7 +128,7 @@ private:
 	// Their addresses must be stable, so we use a hash map
 	FileEntry *m_fileEntryHashBins[97];
 	// TODO: Allow allocating extra entries dynamically from the default heap?
-	wsw::MemberBasedFreelistAllocator<sizeof( FileEntry ), 48> m_fileEntriesAllocator;
+	wsw::MemberBasedFreelistAllocator<sizeof( FileEntry ), 72> m_fileEntriesAllocator;
 };
 
 // Kept during the entire program lifecycle
@@ -107,6 +136,31 @@ static ProgramSourceFileCache g_programSourceFileCache;
 
 ProgramSourceFileCache::ProgramSourceFileCache() {
 	std::fill( std::begin( m_fileEntryHashBins ), std::end( m_fileEntryHashBins ), nullptr );
+}
+
+void ProgramSourceFileCache::precacheBuiltins() {
+	bool succeeded = true;
+
+	succeeded &= ( ( deformAutoparticle  = loadBuiltin( "deformAutoparticle"_asView ) ) != 0 );
+	succeeded &= ( ( deformAutosprite    = loadBuiltin( "deformAutosprite"_asView ) ) != 0 );
+	succeeded &= ( ( deformAutosprite2   = loadBuiltin( "deformAutosprite2"_asView ) ) != 0 );
+	succeeded &= ( ( deformPrologue      = loadBuiltin( "deformPrologue"_asView ) ) != 0 );
+	succeeded &= ( ( deformEpilogue      = loadBuiltin( "deformEpilogue"_asView ) ) != 0 );
+
+	succeeded &= ( ( constants           = loadBuiltin( "constants"_asView ) ) != 0 );
+	succeeded &= ( ( instancedTransforms = loadBuiltin( "instancedTransforms"_asView ) ) != 0 );
+	succeeded &= ( ( macros              = loadBuiltin( "macros"_asView ) ) != 0 );
+	succeeded &= ( ( macros120           = loadBuiltin( "macros120"_asView ) ) != 0 );
+	succeeded &= ( ( macros130           = loadBuiltin( "macros130"_asView ) ) != 0 );
+	succeeded &= ( ( math                = loadBuiltin( "math"_asView ) ) != 0 );
+	succeeded &= ( ( quatTransform       = loadBuiltin( "quatTransform"_asView ) ) != 0 );
+	succeeded &= ( ( transformVerts      = loadBuiltin( "transformVerts"_asView ) ) != 0 );
+	succeeded &= ( ( uniforms            = loadBuiltin( "uniforms"_asView ) ) != 0 );
+	succeeded &= ( ( waveFuncs           = loadBuiltin( "waveFuncs"_asView ) ) != 0 );
+
+	if( !succeeded ) {
+		Com_Error( ERR_FATAL, "Failed to initialize GLSL builtins\n" );
+	}
 }
 
 auto ProgramSourceFileCache::getFileEntryForFile( const wsw::StringView &fileName ) -> const FileEntry * {
@@ -323,6 +377,13 @@ auto ProgramSourceFileCache::tryParsingIncludes( const wsw::StringView &lineToke
 	m_lineEntries.push_back( (unsigned)( m_includesData.size() - 1 ) );
 
 	return HasIncludes;
+}
+
+auto ProgramSourceFileCache::loadBuiltin( const wsw::StringView &name ) -> KeyOfBuiltin {
+	wsw::StaticString<MAX_QPATH> filePath;
+	filePath << "glsl/builtin/"_asView << name << ".glsl"_asView;
+
+	return (KeyOfBuiltin)getFileEntryForFile( filePath.asView() );
 }
 
 class ProgramSourceLoader {
@@ -587,6 +648,7 @@ static bool g_programCacheInstanceHolderInitialized;
 
 void RP_Init() {
 	if( !g_programCacheInstanceHolderInitialized ) {
+		g_programSourceFileCache.precacheBuiltins();
 		g_programCacheInstanceHolder.init();
 		g_programCacheInstanceHolderInitialized = true;
 	}
@@ -1019,245 +1081,6 @@ static const glsl_feature_t * const glsl_programtypes_features[] =
 #define QF_GLSL_ENABLE_ARB_DRAW_INSTANCED "#extension GL_ARB_draw_instanced : enable\n"
 #define QF_GLSL_ENABLE_EXT_TEXTURE_ARRAY "#extension GL_EXT_texture_array : enable\n"
 
-#define QF_BUILTIN_GLSL_MACROS "" \
-	"#if !defined(myhalf)\n" \
-	"//#if !defined(__GLSL_CG_DATA_TYPES)\n" \
-	"#define myhalf float\n" \
-	"#define myhalf2 vec2\n" \
-	"#define myhalf3 vec3\n" \
-	"#define myhalf4 vec4\n" \
-	"//#else\n" \
-	"//#define myhalf half\n" \
-	"//#define myhalf2 half2\n" \
-	"//#define myhalf3 half3\n" \
-	"//#define myhalf4 half4\n" \
-	"//#endif\n" \
-	"#endif\n" \
-	"#ifdef GL_ES\n" \
-	"#define qf_lowp_float lowp float\n" \
-	"#define qf_lowp_vec2 lowp vec2\n" \
-	"#define qf_lowp_vec3 lowp vec3\n" \
-	"#define qf_lowp_vec4 lowp vec4\n" \
-	"#else\n" \
-	"#define qf_lowp_float float\n" \
-	"#define qf_lowp_vec2 vec2\n" \
-	"#define qf_lowp_vec3 vec3\n" \
-	"#define qf_lowp_vec4 vec4\n" \
-	"#endif\n" \
-	"\n"
-
-#define QF_BUILTIN_GLSL_MACROS_GLSL120 "" \
-	"#define qf_varying varying\n" \
-	"#define qf_flat_varying varying\n" \
-	"#ifdef VERTEX_SHADER\n" \
-	"# define qf_FrontColor gl_FrontColor\n" \
-	"# define qf_attribute attribute\n" \
-	"#endif\n" \
-	"#ifdef FRAGMENT_SHADER\n" \
-	"# define qf_FrontColor gl_Color\n" \
-	"# define qf_FragColor gl_FragColor\n" \
-	"# define qf_BrightColor gl_FragData[1]\n" \
-	"#endif\n" \
-	"#define qf_texture texture2D\n" \
-	"#define qf_textureLod texture2DLod\n" \
-	"#define qf_textureCube textureCube\n" \
-	"#define qf_textureArray texture2DArray\n" \
-	"#define qf_texture3D texture3D\n" \
-	"#define qf_textureOffset(a,b,c,d) texture2DOffset(a,b,ivec2(c,d))\n" \
-	"#define qf_shadow shadow2D\n" \
-	"\n"
-
-#define QF_BUILTIN_GLSL_MACROS_GLSL130 "" \
-	"precision highp float;\n" \
-	"#ifdef VERTEX_SHADER\n" \
-	"  out myhalf4 qf_FrontColor;\n" \
-	"# define qf_varying out\n" \
-	"# define qf_flat_varying flat out\n" \
-	"# define qf_attribute in\n" \
-	"#endif\n" \
-	"#ifdef FRAGMENT_SHADER\n" \
-	"  in myhalf4 qf_FrontColor;\n" \
-	"  out myhalf4 qf_FragColor;\n" \
-	"  out myhalf4 qf_BrightColor;\n" \
-	"# define qf_varying in\n" \
-	"# define qf_flat_varying flat in\n" \
-	"#endif\n" \
-	"#define qf_texture texture\n" \
-	"#define qf_textureCube texture\n" \
-	"#define qf_textureLod textureLod\n" \
-	"#define qf_textureArray texture\n" \
-	"#define qf_texture3D texture\n" \
-	"#define qf_textureOffset(a,b,c,d) textureOffset(a,b,ivec2(c,d))\n" \
-	"#define qf_shadow texture\n" \
-	"\n"
-
-#define QF_GLSL_PI "" \
-	"#ifndef M_PI\n" \
-	"#define M_PI 3.14159265358979323846\n" \
-	"#endif\n" \
-	"#ifndef M_TWOPI\n" \
-	"#define M_TWOPI 6.28318530717958647692\n" \
-	"#endif\n"
-
-#define QF_BUILTIN_GLSL_CONSTANTS \
-	QF_GLSL_PI \
-	"\n" \
-	"#ifndef MAX_UNIFORM_INSTANCES\n" \
-	"#define MAX_UNIFORM_INSTANCES " STR_TOSTR( MAX_GLSL_UNIFORM_INSTANCES ) "\n" \
-	"#endif\n"
-
-#define QF_BUILTIN_GLSL_UNIFORMS \
-	"uniform vec3 u_QF_ViewOrigin;\n" \
-	"uniform mat3 u_QF_ViewAxis;\n" \
-	"uniform float u_QF_MirrorSide;\n" \
-	"uniform vec3 u_QF_EntityOrigin;\n" \
-	"uniform float u_QF_ShaderTime;\n"
-
-#define QF_BUILTIN_GLSL_QUAT_TRANSFORM_OVERLOAD \
-	"#ifdef QF_DUAL_QUAT_TRANSFORM_TANGENT\n" \
-	"void QF_VertexDualQuatsTransform_Tangent(inout vec4 Position, inout vec3 Normal, inout vec3 Tangent)\n" \
-	"#else\n" \
-	"void QF_VertexDualQuatsTransform(inout vec4 Position, inout vec3 Normal)\n" \
-	"#endif\n" \
-	"{\n" \
-	"	ivec4 Indices = ivec4(a_BonesIndices * 2.0);\n" \
-	"	vec4 DQReal = u_DualQuats[Indices.x];\n" \
-	"	vec4 DQDual = u_DualQuats[Indices.x + 1];\n" \
-	"#if QF_NUM_BONE_INFLUENCES >= 2\n" \
-	"	DQReal *= a_BonesWeights.x;\n" \
-	"	DQDual *= a_BonesWeights.x;\n" \
-	"	vec4 DQReal1 = u_DualQuats[Indices.y];\n" \
-	"	vec4 DQDual1 = u_DualQuats[Indices.y + 1];\n" \
-	"	float Scale = mix(-1.0, 1.0, step(0.0, dot(DQReal1, DQReal))) * a_BonesWeights.y;\n" \
-	"	DQReal += DQReal1 * Scale;\n" \
-	"	DQDual += DQDual1 * Scale;\n" \
-	"#if QF_NUM_BONE_INFLUENCES >= 3\n" \
-	"	DQReal1 = u_DualQuats[Indices.z];\n" \
-	"	DQDual1 = u_DualQuats[Indices.z + 1];\n" \
-	"	Scale = mix(-1.0, 1.0, step(0.0, dot(DQReal1, DQReal))) * a_BonesWeights.z;\n" \
-	"	DQReal += DQReal1 * Scale;\n" \
-	"	DQDual += DQDual1 * Scale;\n" \
-	"#if QF_NUM_BONE_INFLUENCES >= 4\n" \
-	"	DQReal1 = u_DualQuats[Indices.w];\n" \
-	"	DQDual1 = u_DualQuats[Indices.w + 1];\n" \
-	"	Scale = mix(-1.0, 1.0, step(0.0, dot(DQReal1, DQReal))) * a_BonesWeights.w;\n" \
-	"	DQReal += DQReal1 * Scale;\n" \
-	"	DQDual += DQDual1 * Scale;\n" \
-	"#endif // QF_NUM_BONE_INFLUENCES >= 4\n" \
-	"#endif // QF_NUM_BONE_INFLUENCES >= 3\n" \
-	"	float Len = 1.0 / length(DQReal);\n" \
-	"	DQReal *= Len;\n" \
-	"	DQDual *= Len;\n" \
-	"#endif // QF_NUM_BONE_INFLUENCES >= 2\n" \
-	"	Position.xyz += (cross(DQReal.xyz, cross(DQReal.xyz, Position.xyz) + Position.xyz * DQReal.w + DQDual.xyz) +\n" \
-	"		DQDual.xyz*DQReal.w - DQReal.xyz*DQDual.w) * 2.0;\n" \
-	"	Normal += cross(DQReal.xyz, cross(DQReal.xyz, Normal) + Normal * DQReal.w) * 2.0;\n" \
-	"#ifdef QF_DUAL_QUAT_TRANSFORM_TANGENT\n" \
-	"	Tangent += cross(DQReal.xyz, cross(DQReal.xyz, Tangent) + Tangent * DQReal.w) * 2.0;\n" \
-	"#endif\n" \
-	"}\n" \
-	"\n"
-
-#define QF_BUILTIN_GLSL_QUAT_TRANSFORM \
-	"qf_attribute vec4 a_BonesIndices, a_BonesWeights;\n" \
-	"uniform vec4 u_DualQuats[MAX_UNIFORM_BONES*2];\n" \
-	"\n" \
-	QF_BUILTIN_GLSL_QUAT_TRANSFORM_OVERLOAD \
-	"#define QF_DUAL_QUAT_TRANSFORM_TANGENT\n" \
-	QF_BUILTIN_GLSL_QUAT_TRANSFORM_OVERLOAD \
-	"#undef QF_DUAL_QUAT_TRANSFORM_TANGENT\n"
-
-#define QF_BUILTIN_GLSL_INSTANCED_TRANSFORMS \
-	"#if defined(APPLY_INSTANCED_ATTRIB_TRANSFORMS)\n" \
-	"qf_attribute vec4 a_InstanceQuat, a_InstancePosAndScale;\n" \
-	"#elif defined(GL_ARB_draw_instanced) || (defined(GL_ES) && (__VERSION__ >= 300))\n" \
-	"uniform vec4 u_InstancePoints[MAX_UNIFORM_INSTANCES*2];\n" \
-	"#define a_InstanceQuat u_InstancePoints[gl_InstanceID*2]\n" \
-	"#define a_InstancePosAndScale u_InstancePoints[gl_InstanceID*2+1]\n" \
-	"#else\n" \
-	"uniform vec4 u_InstancePoints[2];\n" \
-	"#define a_InstanceQuat u_InstancePoints[0]\n" \
-	"#define a_InstancePosAndScale u_InstancePoints[1]\n" \
-	"#endif // APPLY_INSTANCED_ATTRIB_TRANSFORMS\n" \
-	"\n" \
-	"void QF_InstancedTransform(inout vec4 Position, inout vec3 Normal)\n" \
-	"{\n" \
-	"	Position.xyz = (cross(a_InstanceQuat.xyz,\n" \
-	"		cross(a_InstanceQuat.xyz, Position.xyz) + Position.xyz*a_InstanceQuat.w)*2.0 +\n" \
-	"		Position.xyz) * a_InstancePosAndScale.w + a_InstancePosAndScale.xyz;\n" \
-	"	Normal = cross(a_InstanceQuat.xyz, cross(a_InstanceQuat.xyz, Normal) + Normal*a_InstanceQuat.w)*2.0 + Normal;\n" \
-	"}\n" \
-	"\n"
-
-// We have to use these #ifdefs here because #defining prototypes
-// of these functions to nothing results in a crash on Intel GPUs.
-#define QF_BUILTIN_GLSL_TRANSFORM_VERTS \
-	"void QF_TransformVerts(inout vec4 Position, inout vec3 Normal, inout vec2 TexCoord)\n" \
-	"{\n" \
-	"#	ifdef QF_NUM_BONE_INFLUENCES\n" \
-	"		QF_VertexDualQuatsTransform(Position, Normal);\n" \
-	"#	endif\n" \
-	"#	ifdef QF_APPLY_DEFORMVERTS\n" \
-	"		QF_DeformVerts(Position, Normal, TexCoord);\n" \
-	"#	endif\n" \
-	"#	ifdef APPLY_INSTANCED_TRANSFORMS\n" \
-	"		QF_InstancedTransform(Position, Normal);\n" \
-	"#	endif\n" \
-	"}\n" \
-	"\n" \
-	"void QF_TransformVerts_Tangent(inout vec4 Position, inout vec3 Normal, inout vec3 Tangent, inout vec2 TexCoord)\n" \
-	"{\n" \
-	"#	ifdef QF_NUM_BONE_INFLUENCES\n" \
-	"		QF_VertexDualQuatsTransform_Tangent(Position, Normal, Tangent);\n" \
-	"#	endif\n" \
-	"#	ifdef QF_APPLY_DEFORMVERTS\n" \
-	"		QF_DeformVerts(Position, Normal, TexCoord);\n" \
-	"#	endif\n" \
-	"#	ifdef APPLY_INSTANCED_TRANSFORMS\n" \
-	"		QF_InstancedTransform(Position, Normal);\n" \
-	"#	endif\n" \
-	"}\n" \
-	"\n"
-
-#define QF_GLSL_WAVEFUNCS \
-	"\n" \
-	QF_GLSL_PI \
-	"\n" \
-	"#ifndef WAVE_SIN\n" \
-	"float QF_WaveFunc_Sin(float x)\n" \
-	"{\n" \
-	"return sin(fract(x) * M_TWOPI);\n" \
-	"}\n" \
-	"float QF_WaveFunc_Triangle(float x)\n" \
-	"{\n" \
-	"x = fract(x);\n" \
-	"return step(x, 0.25) * x * 4.0 + (2.0 - 4.0 * step(0.25, x) * step(x, 0.75) * x) + ((step(0.75, x) * x - 0.75) * 4.0 - 1.0);\n" \
-	"}\n" \
-	"float QF_WaveFunc_Square(float x)\n" \
-	"{\n" \
-	"return step(fract(x), 0.5) * 2.0 - 1.0;\n" \
-	"}\n" \
-	"float QF_WaveFunc_Sawtooth(float x)\n" \
-	"{\n" \
-	"return fract(x);\n" \
-	"}\n" \
-	"float QF_WaveFunc_InverseSawtooth(float x)\n" \
-	"{\n" \
-	"return 1.0 - fract(x);\n" \
-	"}\n" \
-	"\n" \
-	"#define WAVE_SIN(time,base,amplitude,phase,freq) (((base)+(amplitude)*QF_WaveFunc_Sin((phase)+(time)*(freq))))\n" \
-	"#define WAVE_TRIANGLE(time,base,amplitude,phase,freq) (((base)+(amplitude)*QF_WaveFunc_Triangle((phase)+(time)*(freq))))\n" \
-	"#define WAVE_SQUARE(time,base,amplitude,phase,freq) (((base)+(amplitude)*QF_WaveFunc_Square((phase)+(time)*(freq))))\n" \
-	"#define WAVE_SAWTOOTH(time,base,amplitude,phase,freq) (((base)+(amplitude)*QF_WaveFunc_Sawtooth((phase)+(time)*(freq))))\n" \
-	"#define WAVE_INVERSESAWTOOTH(time,base,amplitude,phase,freq) (((base)+(amplitude)*QF_WaveFunc_InverseSawtooth((phase)+(time)*(freq))))\n" \
-	"#endif\n" \
-	"\n"
-
-#define QF_GLSL_MATH \
-	"#define QF_LatLong2Norm(ll) vec3(cos((ll).y) * sin((ll).x), sin((ll).y) * sin((ll).x), cos((ll).x))\n" \
-	"\n"
-
 class ProgramSourceBuilder {
 public:
 	ProgramSourceBuilder( wsw::Vector<const char *> *strings, wsw::Vector<int> *lengths )
@@ -1304,13 +1127,9 @@ public:
 		return result;
 	}
 
-	void addLegacyMultiline( const char *string ) {
-		wsw::StringSplitter splitter { wsw::StringView( string ) };
-		while( const auto maybeToken = splitter.getNext( '\n' ) ) {
-			assert( maybeToken->data()[maybeToken->size()] == '\n' );
-			m_strings->push_back( maybeToken->data() );
-			m_lengths->push_back( (int)( maybeToken->size() + 1 ) );
-		}
+	// A wrapper for convenience of invocation
+	void addAll( ProgramSourceFileCache::KeyOfBuiltin key, const ProgramSourceFileCache &sourceCache ) {
+		sourceCache.addBuiltinSourceLines( key, this );
 	}
 
 private:
@@ -1320,72 +1139,18 @@ private:
 	wsw::Vector<int> *const m_lengths;
 };
 
-static const char kDeformPrologue[] =
-	"#define QF_APPLY_DEFORMVERTS\n"
+void ProgramSourceFileCache::addBuiltinSourceLines( KeyOfBuiltin key, ProgramSourceBuilder *sourceBuilder ) const {
+	const auto *const fileEntry = (FileEntry *)key;
+	assert( m_fileEntriesAllocator.mayOwn( fileEntry ) );
+	assert( m_fileEntriesAllocator.hasValidOffset( fileEntry ) );
 
-	"#if defined(APPLY_AUTOSPRITE) || defined(APPLY_AUTOSPRITE2)\n"
-	"qf_attribute vec4 a_SpritePoint;\n"
-	"#else\n"
-	"#define a_SpritePoint vec4(0.0)\n"
-	"#endif\n"
-	"\n"
-
-	"#if defined(APPLY_AUTOSPRITE2)\n"
-	"qf_attribute vec4 a_SpriteRightUpAxis;\n"
-	"#else\n"
-	"#define a_SpriteRightUpAxis vec4(0.0)\n"
-	"#endif\n"
-	"\n"
-
-	"void QF_DeformVerts(inout vec4 Position, inout vec3 Normal, inout vec2 TexCoord)\n"
-	"{\n"
-	"float t = 0.0;\n"
-	"vec3 dist;\n"
-	"vec3 right, up, forward, newright;\n"
-	"\n"
-
-	"#if defined(WAVE_SIN)\n";
-
-static const char kDeformEpilogue[] =
-	"#endif\n"
-	"}\n"
-	"\n";
-
-static const char kAutospriteBuiltin[] =
-	"right = (1.0 + step(0.5, TexCoord.s) * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
-	"up = (1.0 + step(0.5, TexCoord.t) * -2.0) * u_QF_ViewAxis[2];\n"
-	"forward = -1.0 * u_QF_ViewAxis[0];\n"
-	"Position.xyz = a_SpritePoint.xyz + (right + up) * a_SpritePoint.w;\n"
-	"Normal.xyz = forward;\n"
-	"TexCoord.st = vec2(step(0.5, TexCoord.s),step(0.5, TexCoord.t));\n";
-
-static const char kAutoparticleBuiltin[] =
-	"right = (1.0 + TexCoord.s * -2.0) * u_QF_ViewAxis[1] * u_QF_MirrorSide;\n;"
-	"up = (1.0 + TexCoord.t * -2.0) * u_QF_ViewAxis[2];\n"
-	"forward = -1.0 * u_QF_ViewAxis[0];\n"
-	// prevent the particle from disappearing at large distances
-	"t = dot(a_SpritePoint.xyz + u_QF_EntityOrigin - u_QF_ViewOrigin, u_QF_ViewAxis[0]);\n"
-	"t = 1.5 + step(20.0, t) * t * 0.006;\n"
-	"Position.xyz = a_SpritePoint.xyz + (right + up) * t * a_SpritePoint.w;\n"
-	"Normal.xyz = forward;\n";
-
-static const char kAutosprite2Builtin[] =
-	"right = QF_LatLong2Norm(a_SpriteRightUpAxis.xy) * u_QF_MirrorSide;\n"
-	"up = QF_LatLong2Norm(a_SpriteRightUpAxis.zw);\n"
-
-	// mid of quad to camera vector
-	"dist = u_QF_ViewOrigin - u_QF_EntityOrigin - a_SpritePoint.xyz;\n"
-
-	// filter any longest-axis-parts off the camera-direction
-	"forward = normalize(dist - up * dot(dist, up));\n"
-
-	// the right axis vector as it should be to face the camera
-	"newright = cross(up, forward);\n"
-
-	// rotate the quad vertex around the up axis vector
-	"t = dot(right, Position.xyz - a_SpritePoint.xyz);\n"
-	"Position.xyz += t * (newright - right);\n"
-	"Normal.xyz = forward;\n";
+	const unsigned limitOfIndex = fileEntry->linesSpan.offset + fileEntry->linesSpan.length;
+	for( unsigned index = fileEntry->linesSpan.offset; index < limitOfIndex; ++index ) {
+		const Span &lineSpan = std::get<Span>( m_lineEntries[index] );
+		const wsw::StringView &string = getStringForSpan( lineSpan );
+		sourceBuilder->add( string.data(), string.length() );
+	}
+}
 
 static_assert( SHADER_FUNC_SIN == 1 );
 static_assert( SHADER_FUNC_TRIANGLE == 2 );
@@ -1465,7 +1230,8 @@ static bool addDeformSourceLines( std::span<const deformv_t> deforms, DeformStri
 	assert( deforms.size() <= MAX_SHADER_DEFORMVS );
 
 	buffer->clear();
-	builder->addLegacyMultiline( kDeformPrologue );
+
+	builder->addAll( g_programSourceFileCache.deformPrologue, g_programSourceFileCache );
 
 	for( const deformv_t &deform: deforms ) {
 		switch( deform.type ) {
@@ -1484,20 +1250,20 @@ static bool addDeformSourceLines( std::span<const deformv_t> deforms, DeformStri
 				}
 				break;
 			case DEFORMV_AUTOSPRITE:
-				builder->addLegacyMultiline( kAutospriteBuiltin );
+				builder->addAll( g_programSourceFileCache.deformAutosprite, g_programSourceFileCache );
 				break;
 			case DEFORMV_AUTOPARTICLE:
-				builder->addLegacyMultiline( kAutoparticleBuiltin );
+				builder->addAll( g_programSourceFileCache.deformAutoparticle, g_programSourceFileCache );
 				break;
 			case DEFORMV_AUTOSPRITE2:
-				builder->addLegacyMultiline( kAutosprite2Builtin );
+				builder->addAll( g_programSourceFileCache.deformAutosprite2, g_programSourceFileCache );
 				break;
 			default:
 				return false;
 		}
 	}
 
-	builder->addLegacyMultiline( kDeformEpilogue );
+	builder->addAll( g_programSourceFileCache.deformEpilogue, g_programSourceFileCache );
 	return true;
 }
 
@@ -1761,19 +1527,19 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 	sourceBuilder.add( shaderVersion.data() );
 	sourceBuilder.add( "#define VERTEX_SHADER\n" );
 
-	sourceBuilder.add( QF_BUILTIN_GLSL_MACROS );
+	sourceBuilder.addAll( g_programSourceFileCache.macros, g_programSourceFileCache );
 	if( glConfig.shadingLanguageVersion >= 130 ) {
-		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL130 );
+		sourceBuilder.addAll( g_programSourceFileCache.macros130, g_programSourceFileCache );
 	} else {
-		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL120 );
+		sourceBuilder.addAll( g_programSourceFileCache.macros120, g_programSourceFileCache );
 	}
 
-	sourceBuilder.add( QF_BUILTIN_GLSL_CONSTANTS );
+	sourceBuilder.addAll( g_programSourceFileCache.constants, g_programSourceFileCache );
 	sourceBuilder.add( maxBones.data() );
-	sourceBuilder.add( QF_BUILTIN_GLSL_UNIFORMS );
+	sourceBuilder.addAll( g_programSourceFileCache.uniforms, g_programSourceFileCache );
 
-	sourceBuilder.add( QF_GLSL_WAVEFUNCS );
-	sourceBuilder.add( QF_GLSL_MATH );
+	sourceBuilder.addAll( g_programSourceFileCache.waveFuncs, g_programSourceFileCache );
+	sourceBuilder.addAll( g_programSourceFileCache.math, g_programSourceFileCache );
 
 	sourceBuilder.addAll( featureStrings.strings, featureStrings.lengths );
 
@@ -1783,14 +1549,20 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 	}
 
 	if( features & GLSL_SHADER_COMMON_BONE_TRANSFORMS ) {
-		sourceBuilder.add( QF_BUILTIN_GLSL_QUAT_TRANSFORM );
+		sourceBuilder.add( "qf_attribute vec4 a_BonesIndices, a_BonesWeights;\n" );
+		sourceBuilder.add( "uniform vec4 u_DualQuats[MAX_UNIFORM_BONES*2];\n" );
+
+		sourceBuilder.addAll( g_programSourceFileCache.quatTransform, g_programSourceFileCache );
+		sourceBuilder.add( "#define QF_DUAL_QUAT_TRANSFORM_TANGENT\n");
+		sourceBuilder.addAll( g_programSourceFileCache.quatTransform, g_programSourceFileCache );
+		sourceBuilder.add( "#undef QF_DUAL_QUAT_TRANSFORM_TANGENT\n");
 	}
 
 	if( features & ( GLSL_SHADER_COMMON_INSTANCED_TRANSFORMS | GLSL_SHADER_COMMON_INSTANCED_ATTRIB_TRANSFORMS ) ) {
-		sourceBuilder.add( QF_BUILTIN_GLSL_INSTANCED_TRANSFORMS );
+		sourceBuilder.addAll( g_programSourceFileCache.instancedTransforms, g_programSourceFileCache );
 	}
 
-	sourceBuilder.add( QF_BUILTIN_GLSL_TRANSFORM_VERTS );
+	sourceBuilder.addAll( g_programSourceFileCache.transformVerts, g_programSourceFileCache );
 
 	char fileName[1024];
 	Q_snprintfz( fileName, sizeof( fileName ), "glsl/%s.vert.glsl", name.data() );
@@ -1839,18 +1611,18 @@ bool ShaderProgramCache::loadFragmentShaderSource( GLuint id, const wsw::StringV
 	sourceBuilder.add( shaderVersion.data() );
 	sourceBuilder.add( "#define FRAGMENT_SHADER\n" );
 
-	sourceBuilder.add( QF_BUILTIN_GLSL_MACROS );
+	sourceBuilder.addAll( g_programSourceFileCache.macros, g_programSourceFileCache );
 	if( glConfig.shadingLanguageVersion >= 130 ) {
-		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL130 );
+		sourceBuilder.addAll( g_programSourceFileCache.macros130, g_programSourceFileCache );
 	} else {
-		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL120 );
+		sourceBuilder.addAll( g_programSourceFileCache.macros120, g_programSourceFileCache );
 	}
 
-	sourceBuilder.add( QF_BUILTIN_GLSL_CONSTANTS );
+	sourceBuilder.addAll( g_programSourceFileCache.constants, g_programSourceFileCache );
 	sourceBuilder.add( maxBones.data() );
-	sourceBuilder.add( QF_BUILTIN_GLSL_UNIFORMS );
+	sourceBuilder.addAll( g_programSourceFileCache.uniforms, g_programSourceFileCache );
 
-	sourceBuilder.add( QF_GLSL_MATH );
+	sourceBuilder.addAll( g_programSourceFileCache.math, g_programSourceFileCache );
 
 	sourceBuilder.addAll( featureStrings.strings, featureStrings.lengths );
 
