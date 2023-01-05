@@ -80,22 +80,6 @@ public:
 	// once much more stricter bunnying checks are implemented
 	static constexpr unsigned MAX_PREDICTED_STATES = 32;
 
-	struct alignas ( 1 )HitWhileRunningTestResult {
-		bool canHitAsIs : 1;
-		bool mayHitOverridingPitch : 1;
-
-		HitWhileRunningTestResult()
-		{
-			static_assert( sizeof( *this ) == 1, "" );
-			*( (uint8_t *)( this ) ) = 0;
-		}
-
-		bool CanHit() const { return canHitAsIs || mayHitOverridingPitch; }
-
-		// Use the method and not a static var (the method result should be inlined w/o any static memory access)
-		static HitWhileRunningTestResult Failure() { return HitWhileRunningTestResult(); }
-	};
-
 	SameFloorClusterAreasCache sameFloorClusterAreasCache;
 	NextFloorClusterAreasCache nextFloorClusterAreasCache;
 private:
@@ -179,7 +163,6 @@ private:
 	};
 
 	CachesStack<BotInput, MAX_PREDICTED_STATES> defaultBotInputsCachesStack;
-	CachesStack<HitWhileRunningTestResult, MAX_PREDICTED_STATES> mayHitWhileRunningCachesStack;
 	wsw::StaticVector<EnvironmentTraceCache, MAX_PREDICTED_STATES> environmentTestResultsStack;
 
 	// We have decided to keep the frametime hardcoded.
@@ -300,8 +283,6 @@ public:
 	const ArrayRange<int> TravelFlags() const;
 
 	explicit PredictionContext( MovementSubsystem *m_subsystem );
-
-	HitWhileRunningTestResult MayHitWhileRunning();
 
 	void BuildPlan();
 	bool NextPredictionStep();

@@ -434,7 +434,6 @@ void PredictionContext::SetupStackForStep() {
 		Assert( playerStatesStack.size() == predictedMovementActions.size() );
 
 		Assert( defaultBotInputsCachesStack.Size() == predictedMovementActions.size() );
-		Assert( mayHitWhileRunningCachesStack.Size() == predictedMovementActions.size() );
 		Assert( environmentTestResultsStack.size() == predictedMovementActions.size() );
 
 		// topOfStackIndex already points to a needed array element in case of rolling back
@@ -448,7 +447,6 @@ void PredictionContext::SetupStackForStep() {
 			playerStatesStack.truncate( topOfStackIndex );
 
 			defaultBotInputsCachesStack.PopToSize( topOfStackIndex );
-			mayHitWhileRunningCachesStack.PopToSize( topOfStackIndex );
 			environmentTestResultsStack.truncate( topOfStackIndex );
 		} else {
 			// For case of growing stack topOfStackIndex must point at the first
@@ -476,7 +474,6 @@ void PredictionContext::SetupStackForStep() {
 		playerStatesStack.clear();
 
 		defaultBotInputsCachesStack.PopToSize( 0 );
-		mayHitWhileRunningCachesStack.PopToSize( 0 );
 		environmentTestResultsStack.clear();
 
 		topOfStack = new( predictedMovementActions.unsafe_grow_back() )PredictedMovementAction;
@@ -504,13 +501,10 @@ void PredictionContext::SetupStackForStep() {
 	this->record = &topOfStack->record;
 	this->record->pendingWeapon = -1;
 
-	Assert( mayHitWhileRunningCachesStack.Size() + 1 == predictedMovementActions.size() );
 	// Check caches size, a cache size must match the stack size after addition of a single placeholder element.
 	Assert( defaultBotInputsCachesStack.Size() + 1 == predictedMovementActions.size() );
 	// Then put placeholders for non-cached yet values onto top of caches stack
 	defaultBotInputsCachesStack.PushDummyNonCachedValue();
-	// The different method is used (there is no copy/move constructors for the template type)
-	mayHitWhileRunningCachesStack.PushDummyNonCachedValue();
 	new ( environmentTestResultsStack.unsafe_grow_back() )EnvironmentTraceCache;
 
 	this->shouldRollback = false;

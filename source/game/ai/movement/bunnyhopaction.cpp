@@ -32,38 +32,6 @@ bool BunnyHopAction::CheckCommonBunnyHopPreconditions( PredictionContext *contex
 		return false;
 	}
 
-	if( bot->ShouldKeepXhairOnEnemy() ) {
-		const std::optional<SelectedEnemy> &selectedEnemy = bot->GetSelectedEnemy();
-		if( selectedEnemy && selectedEnemy->IsPotentiallyHittable() ) {
-			if( !context->MayHitWhileRunning().CanHit() ) {
-				const float *currOrigin = context->movementState->entityPhysicsState.Origin();
-				const float squareDistance = originAtSequenceStart.SquareDistance2DTo( currOrigin );
-				constexpr const float kShortRange = 56.0f;
-				constexpr const float kMidRange = 128.0f;
-				// Unable to hit even at the initial path part
-				// Hacks: Temporarily disable this restriction so bots can use this kind of actions for dodging
-				// (bunny-hop actions produce best results so far)
-				if( squareDistance < wsw::square( kShortRange ) && !bot->IsReactingToHazard() ) {
-					Debug( "Cannot apply action: cannot hit an enemy while keeping the crosshair on it is required\n" );
-					context->SetPendingRollback();
-					this->isDisabledForPlanning = true;
-					return false;
-				}
-				// Things are very likely to change so consider the path legit.
-				// Apply a penalty if it seems to be necessary.
-				if( squareDistance < wsw::square( kMidRange ) ) {
-					if( squareDistance > wsw::square( kShortRange ) ) {
-						float frac = ( Q_Sqrt( squareDistance ) - kShortRange );
-						frac *= 1.0f / ( kMidRange - kShortRange );
-						EnsurePathPenalty( (unsigned) ( 500 - 200 * frac ) );
-					} else {
-						EnsurePathPenalty( 500 );
-					}
-				}
-			}
-		}
-	}
-
 	// Cannot find a next reachability in chain while it should exist
 	// (looks like the bot is too high above the ground)
 	if( !context->IsInNavTargetArea() && !context->NextReachNum() ) {
@@ -101,9 +69,8 @@ void BunnyHopAction::SetupCommonBunnyHopInput( PredictionContext *context ) {
 	const auto &entityPhysicsState = context->movementState->entityPhysicsState;
 
 	botInput->SetForwardMovement( 1 );
-	const auto &hitWhileRunningTestResult = context->MayHitWhileRunning();
-	botInput->canOverrideLookVec = hitWhileRunningTestResult.canHitAsIs;
-	botInput->canOverridePitch = true;
+	botInput->canOverrideLookVec = true;
+	botInput->canOverridePitch   = true;
 
 	if( ( pmoveStats[PM_STAT_FEATURES] & PMFEAT_DASH ) && !pmoveStats[PM_STAT_DASHTIME] ) {
 		bool shouldDash = false;
