@@ -498,6 +498,8 @@ bool ProgramSourceLoader::checkIncludeCondition( const wsw::StringView &conditio
 #define MAX_GLSL_PROGRAMS           1024
 #define GLSL_PROGRAMS_HASH_SIZE     256
 
+class ProgramSourceBuilder;
+
 class ShaderProgramCache {
 	template <typename> friend class SingletonHolder;
 public:
@@ -535,6 +537,24 @@ private:
 	bool loadShaderSources( const wsw::StringView &name, int type, uint64_t features, std::span<const deformv_t> deforms,
 							GLuint vertexShaderId, GLuint fragmentShaderId );
 
+	void loadSourceOfFeatures( int type, uint64_t features, ProgramSourceBuilder *sourceBuilder );
+
+	struct SpanOfSourceStrings {
+		std::span<const char *> strings;
+		std::span<int> lengths;
+	};
+
+	[[nodiscard]]
+	bool loadVertexShaderSource( GLuint id, const wsw::StringView &name, int type, uint64_t features,
+								 std::span<const deformv_t> deforms,
+								 const SpanOfSourceStrings &featureStrings,
+								 const wsw::StringView &version, const wsw::StringView &maxBones );
+
+	[[nodiscard]]
+	bool loadFragmentShaderSource( GLuint id, const wsw::StringView &name, int type, uint64_t features,
+								   const SpanOfSourceStrings &featureStrings,
+								   const wsw::StringView &version, const wsw::StringView &maxBones );
+
 	[[nodiscard]]
 	bool compileShader( GLuint id, const char *kind, std::span<const char *> strings, std::span<int> lengths );
 
@@ -549,9 +569,12 @@ private:
 	wsw::HeapBasedFreelistAllocator m_programsAllocator;
 	wsw::HeapBasedFreelistAllocator m_namesAllocator;
 
-	wsw::Vector<const char *> m_tmpStrings;
-	wsw::Vector<int> m_tmpLengths;
-	wsw::Vector<unsigned> m_tmpOffsets;
+	wsw::Vector<const char *> m_tmpCommonStrings;
+	wsw::Vector<int> m_tmpCommonOffsets;
+
+	wsw::Vector<const char *> m_tmpShaderStrings;
+	wsw::Vector<int> m_tmpShaderLengths;
+	wsw::Vector<unsigned> m_tmpShaderOffsets;
 
 	ShaderProgram *m_programListHead { nullptr };
 	ShaderProgram *m_programForIndex[MAX_GLSL_PROGRAMS];
@@ -1372,9 +1395,16 @@ public:
 	ProgramSourceBuilder( wsw::Vector<const char *> *strings, wsw::Vector<int> *lengths )
 		: m_strings( strings ), m_lengths( lengths ) {}
 
-	void truncateToSize( unsigned index ) {
-		m_strings->erase( m_strings->begin() + index, m_strings->end() );
-		m_lengths->erase( m_lengths->begin() + index, m_lengths->end() );
+	void addAll( std::span<const char *> strings, std::span<int> lengths ) {
+		assert( strings.size() == lengths.size() );
+		assert( m_strings->size() == m_lengths->size() );
+		m_strings->reserve( m_strings->size() + strings.size() );
+		m_lengths->reserve( m_lengths->size() + lengths.size() );
+		for( size_t i = 0; i < strings.size(); ++i ) {
+			m_strings->push_back( strings[i] );
+			m_lengths->push_back( lengths[i] );
+		}
+		assert( m_strings->size() == m_lengths->size() );
 	}
 
 	[[nodiscard]]
@@ -1391,22 +1421,10 @@ public:
 		return result;
 	}
 
-	[[maybe_unused]]
-	auto add( const char *string, size_t length ) -> unsigned {
-		const size_t result = m_lengths->size();
-		m_strings->push_back( string );
-		m_lengths->push_back( (int)length );
-		return result;
-	}
-
-	void setAtIndex( unsigned index, const char *string ) {
-		m_strings->operator[]( index ) = string;
-		m_lengths->operator[]( index ) = (int)std::strlen( string );
-	}
-
 private:
-	static_assert( std::is_same_v<int, GLint> );
+	static_assert( std::is_same_v<GLchar, char> );
 	wsw::Vector<const char *> *const m_strings;
+	static_assert( std::is_same_v<int, GLint> );
 	wsw::Vector<int> *const m_lengths;
 };
 
@@ -1582,16 +1600,76 @@ bool ShaderProgramCache::loadShaderSources( const wsw::StringView &name, int typ
 											GLuint vertexShaderId, GLuint fragmentShaderId ) {
 	assert( !name.empty() && name.isZeroTerminated() );
 
-	m_tmpStrings.clear();
-	m_tmpLengths.clear();
-	m_tmpOffsets.clear();
-
 	wsw::StaticString<64> shaderVersion;
 	shaderVersion << "#define QF_GLSL_VERSION "_asView << glConfig.shadingLanguageVersion << "\n"_asView;
+
 	wsw::StaticString<64> maxBones;
 	maxBones << "#define MAX_UNIFORM_BONES "_asView << glConfig.maxGLSLBones << "\n"_asView;
 
-	ProgramSourceBuilder sourceBuilder( &m_tmpStrings, &m_tmpLengths );
+	m_tmpCommonStrings.clear();
+	m_tmpCommonOffsets.clear();
+
+	ProgramSourceBuilder commonStringsBuilder( &m_tmpCommonStrings, &m_tmpCommonOffsets );
+
+	const unsigned offsetOfFeatureStrings = commonStringsBuilder.size();
+	loadSourceOfFeatures( type, features, &commonStringsBuilder );
+	const unsigned lengthOfFeatureStrings = commonStringsBuilder.size() - offsetOfFeatureStrings;
+
+	const SpanOfSourceStrings spanOfFeatureStrings {
+		{ m_tmpCommonStrings.data() + offsetOfFeatureStrings, lengthOfFeatureStrings },
+		{ m_tmpCommonOffsets.data() + offsetOfFeatureStrings, lengthOfFeatureStrings },
+	};
+
+	Com_DPrintf( "Registering GLSL program %s for features 0x%" PRIu64 "\n", name.data(), features );
+
+	if( !loadVertexShaderSource( vertexShaderId, name, type, features, deforms,
+								 spanOfFeatureStrings, shaderVersion.asView(), maxBones.asView() ) ) {
+		return false;
+	}
+
+	if( !loadFragmentShaderSource( fragmentShaderId, name, type, features,
+								   spanOfFeatureStrings, shaderVersion.asView(), maxBones.asView() ) ) {
+		return false;
+	}
+
+	return true;
+}
+
+void ShaderProgramCache::loadSourceOfFeatures( int type, uint64_t features, ProgramSourceBuilder *sourceBuilder ) {
+
+	if( const glsl_feature_t *const type_features = glsl_programtypes_features[type] ) {
+		uint64_t unsatisfiedFeatures = features;
+		int featureRowNum            = 0;
+		for(;; ) {
+			if( !unsatisfiedFeatures ) {
+				break;
+			}
+			const glsl_feature_t &featureRow = type_features[featureRowNum];
+			if( !featureRow.featureBit ) {
+				break;
+			}
+			if( ( featureRow.featureBit & unsatisfiedFeatures ) == featureRow.featureBit ) {
+				sourceBuilder->add( featureRow.define );
+				unsatisfiedFeatures &= ~featureRow.featureBit;
+			}
+			featureRowNum++;
+		}
+	}
+}
+
+bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringView &name, int type, uint64_t features,
+												 std::span<const deformv_t> deforms,
+												 const SpanOfSourceStrings &featureStrings,
+												 const wsw::StringView &shaderVersion, const wsw::StringView &maxBones ) {
+	assert( !name.empty() && name.isZeroTerminated() );
+
+
+
+	m_tmpShaderStrings.clear();
+	m_tmpShaderLengths.clear();
+	m_tmpShaderOffsets.clear();
+
+	ProgramSourceBuilder sourceBuilder( &m_tmpShaderStrings, &m_tmpShaderLengths );
 
 	if( glConfig.shadingLanguageVersion >= 140 ) {
 		sourceBuilder.add( QF_GLSL_VERSION140 );
@@ -1605,15 +1683,12 @@ bool ShaderProgramCache::loadShaderSources( const wsw::StringView &name, int typ
 		sourceBuilder.add( QF_GLSL_ENABLE_ARB_GPU_SHADER5 );
 	}
 
-	const unsigned enableTextureArrayIdx = sourceBuilder.add( "\n" );
-
-	std::optional<unsigned> enableInstancedIdx;
 	if( glConfig.shadingLanguageVersion < 400 ) {
-		enableInstancedIdx = sourceBuilder.add( QF_GLSL_ENABLE_ARB_DRAW_INSTANCED );
+		sourceBuilder.add( QF_GLSL_ENABLE_ARB_DRAW_INSTANCED );
 	}
 
 	sourceBuilder.add( shaderVersion.data() );
-	const unsigned shaderTypeIdx = sourceBuilder.add( "\n" );
+	sourceBuilder.add( "#define VERTEX_SHADER\n" );
 
 	sourceBuilder.add( QF_BUILTIN_GLSL_MACROS );
 	if( glConfig.shadingLanguageVersion >= 130 ) {
@@ -1626,105 +1701,102 @@ bool ShaderProgramCache::loadShaderSources( const wsw::StringView &name, int typ
 	sourceBuilder.add( maxBones.data() );
 	sourceBuilder.add( QF_BUILTIN_GLSL_UNIFORMS );
 
-	const unsigned wavefuncsIdx = sourceBuilder.add( QF_GLSL_WAVEFUNCS );
+	sourceBuilder.add( QF_GLSL_WAVEFUNCS );
 	sourceBuilder.add( QF_GLSL_MATH );
 
-	wsw::StaticString<1024> fullName;
-	fullName << wsw::StringView( name );
-
-	if( const glsl_feature_t *const type_features = glsl_programtypes_features[type] ) {
-		uint64_t unsatisfiedFeatures = features;
-		int featureRowNum                = 0;
-		for(;; ) {
-			if( !unsatisfiedFeatures ) {
-				break;
-			}
-			const glsl_feature_t &featureRow = type_features[featureRowNum];
-			if( !featureRow.featureBit ) {
-				break;
-			}
-			if( ( featureRow.featureBit & unsatisfiedFeatures ) == featureRow.featureBit ) {
-				sourceBuilder.add( featureRow.define );
-				fullName << wsw::StringView( featureRow.suffix );
-				unsatisfiedFeatures &= ~featureRow.featureBit;
-			}
-			featureRowNum++;
-		}
-	}
+	sourceBuilder.addAll( featureStrings.strings, featureStrings.lengths );
 
 	// forward declare QF_DeformVerts
 	const char *deformv = R_GLSLBuildDeformv( deforms.data(), deforms.size() );
-	const unsigned deformIndex = sourceBuilder.add( deformv ? deformv : "\n" );
+	sourceBuilder.add( deformv ? deformv : "\n" );
 
-	std::optional<unsigned> dualQuatsIdx;
 	if( features & GLSL_SHADER_COMMON_BONE_TRANSFORMS ) {
-		dualQuatsIdx = sourceBuilder.add( QF_BUILTIN_GLSL_QUAT_TRANSFORM );
+		sourceBuilder.add( QF_BUILTIN_GLSL_QUAT_TRANSFORM );
 	}
 
-	std::optional<unsigned> instancedIdx;
 	if( features & ( GLSL_SHADER_COMMON_INSTANCED_TRANSFORMS | GLSL_SHADER_COMMON_INSTANCED_ATTRIB_TRANSFORMS ) ) {
-		instancedIdx = sourceBuilder.add( QF_BUILTIN_GLSL_INSTANCED_TRANSFORMS );
+		sourceBuilder.add( QF_BUILTIN_GLSL_INSTANCED_TRANSFORMS );
 	}
 
-	const unsigned transformsIndex = sourceBuilder.add( QF_BUILTIN_GLSL_TRANSFORM_VERTS );
-
-	const unsigned numCommonStrings = sourceBuilder.size();
-
-	// vertex shader
-	sourceBuilder.setAtIndex( shaderTypeIdx, "#define VERTEX_SHADER\n" );
-
-	Com_DPrintf( "Registering GLSL program %s\n", fullName.data() );
+	sourceBuilder.add( QF_BUILTIN_GLSL_TRANSFORM_VERTS );
 
 	char fileName[1024];
 	Q_snprintfz( fileName, sizeof( fileName ), "glsl/%s.vert.glsl", name.data() );
 
-	ProgramSourceLoader vertexShaderLoader( &g_programSourceFileCache, &m_tmpStrings, &m_tmpLengths, &m_tmpOffsets );
+	ProgramSourceLoader vertexShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings,
+											&m_tmpShaderLengths, &m_tmpShaderOffsets );
 	if( !vertexShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
 		Com_DPrintf( "Failed to load the source of %s\n", fileName );
 		return false;
 	}
 
-	if( !compileShader( vertexShaderId, "vertex", m_tmpStrings, m_tmpLengths ) ) {
+	if( !compileShader( id, "vertex", m_tmpShaderStrings, m_tmpShaderLengths ) ) {
 		Com_DPrintf( "Failed to compile %s\n", fileName );
 		return false;
 	}
 
-	sourceBuilder.truncateToSize( numCommonStrings );
+	return true;
+}
 
-	// fragment shader
+bool ShaderProgramCache::loadFragmentShaderSource( GLuint id, const wsw::StringView &name, int type, uint64_t features,
+												   const SpanOfSourceStrings &featureStrings,
+												   const wsw::StringView &shaderVersion, const wsw::StringView &maxBones ) {
+	assert( !name.empty() && name.isZeroTerminated() );
+
+	m_tmpShaderStrings.clear();
+	m_tmpShaderLengths.clear();
+	m_tmpShaderOffsets.clear();
+
+	ProgramSourceBuilder sourceBuilder( &m_tmpShaderStrings, &m_tmpShaderLengths );
+	if( glConfig.shadingLanguageVersion >= 140 ) {
+		sourceBuilder.add( QF_GLSL_VERSION140 );
+	} else if( glConfig.shadingLanguageVersion >= 130 ) {
+		sourceBuilder.add( QF_GLSL_VERSION130 );
+	} else {
+		sourceBuilder.add( QF_GLSL_VERSION120 );
+	}
+
+	if( glConfig.ext.gpu_shader5 ) {
+		sourceBuilder.add( QF_GLSL_ENABLE_ARB_GPU_SHADER5 );
+	}
+
 	if( glConfig.ext.texture_array ) {
-		sourceBuilder.setAtIndex( enableTextureArrayIdx, QF_GLSL_ENABLE_EXT_TEXTURE_ARRAY );
+		sourceBuilder.add( QF_GLSL_ENABLE_EXT_TEXTURE_ARRAY );
 	}
 
-	if( enableInstancedIdx ) {
-		sourceBuilder.setAtIndex( *enableInstancedIdx, "\n" );
+	sourceBuilder.add( shaderVersion.data() );
+	sourceBuilder.add( "#define FRAGMENT_SHADER\n" );
+
+	sourceBuilder.add( QF_BUILTIN_GLSL_MACROS );
+	if( glConfig.shadingLanguageVersion >= 130 ) {
+		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL130 );
+	} else {
+		sourceBuilder.add( QF_BUILTIN_GLSL_MACROS_GLSL120 );
 	}
 
-	sourceBuilder.setAtIndex( shaderTypeIdx, "#define FRAGMENT_SHADER\n" );
-	sourceBuilder.setAtIndex( wavefuncsIdx, "\n" );
-	sourceBuilder.setAtIndex( deformIndex, "\n" );
-	if( dualQuatsIdx ) {
-		sourceBuilder.setAtIndex( *dualQuatsIdx, "\n" );
-	}
-	if( instancedIdx ) {
-		sourceBuilder.setAtIndex( *instancedIdx, "\n" );
-	}
-	sourceBuilder.setAtIndex( transformsIndex, "\n" );
+	sourceBuilder.add( QF_BUILTIN_GLSL_CONSTANTS );
+	sourceBuilder.add( maxBones.data() );
+	sourceBuilder.add( QF_BUILTIN_GLSL_UNIFORMS );
 
+	sourceBuilder.add( QF_GLSL_MATH );
+
+	sourceBuilder.addAll( featureStrings.strings, featureStrings.lengths );
+
+	char fileName[1024];
 	Q_snprintfz( fileName, sizeof( fileName ), "glsl/%s.frag.glsl", name.data() );
 
-	ProgramSourceLoader fragmentShaderLoader( &g_programSourceFileCache, &m_tmpStrings, &m_tmpLengths, &m_tmpOffsets );
+	ProgramSourceLoader fragmentShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings,
+											  &m_tmpShaderLengths, &m_tmpShaderOffsets );
 	if( !fragmentShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
 		Com_DPrintf( "Failed to load source of %s\n", fileName );
 		return false;
 	}
 
-	if( !compileShader( fragmentShaderId, "fragment", m_tmpStrings, m_tmpLengths ) ) {
+	if( !compileShader( id, "fragment", m_tmpShaderStrings, m_tmpShaderLengths ) ) {
 		Com_DPrintf( "Failed to compile %s\n", fileName );
 		return false;
 	}
 
-	Com_DPrintf( "Has compiled sources of %s successfully\n", name.data() );
 	return true;
 }
 
