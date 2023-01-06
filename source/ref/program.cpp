@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "local.h"
 #include "program.h"
 #include "../qcommon/links.h"
+#include "../qcommon/memspecbuilder.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswfs.h"
 #include "../qcommon/wswstring.h"
@@ -58,6 +59,7 @@ public:
 	KeyOfBuiltin waveFuncs { 0 };
 
 	ProgramSourceFileCache();
+	~ProgramSourceFileCache();
 
 	void precacheBuiltins();
 	void addBuiltinSourceLines( KeyOfBuiltin key, ProgramSourceBuilder *sourceBuilder ) const;
@@ -82,10 +84,40 @@ private:
 	using LineSpan = std::variant<Span, unsigned>;
 
 	struct FileEntry {
-		FileEntry *prev { nullptr }, *next { nullptr };
-		Span nameSpan;
-		Span linesSpan;
+		FileEntry *nextInList { nullptr };
+		FileEntry *nextInBin { nullptr };
+		const char *stringData { nullptr };
+		const LineSpan *lineData { nullptr };
+		const Include *includeData { nullptr };
+		unsigned stringDataSize { 0 };
+		unsigned numLines { 0 };
+		unsigned numIncludes { 0 };
+		// Name comes first in the string data
+		unsigned nameLength { 0 };
 		uint32_t nameHash { 0 };
+
+		[[nodiscard]]
+		auto getName() const -> wsw::StringView {
+			return getStringForSpan( { 0, nameLength } );
+		}
+
+		[[nodiscard]]
+		auto getStringForSpan( const Span &span ) const -> wsw::StringView {
+			assert( span.offset + span.length < stringDataSize );
+			return { stringData + span.offset, span.length };
+		}
+
+		[[nodiscard]]
+		auto getLineForIndex( unsigned index ) const -> const LineSpan & {
+			assert( index < numLines );
+			return lineData[index];
+		}
+
+		[[nodiscard]]
+		auto getIncludeForIndex( unsigned index ) const -> const Include & {
+			assert( index < numIncludes );
+			return includeData[index];
+		}
 	};
 
 	[[nodiscard]]
@@ -95,7 +127,8 @@ private:
 	auto loadFileEntryFromFile( const wsw::StringView &fileName ) -> FileEntry *;
 
 	[[nodiscard]]
-	bool fillFileEntryFromFile( FileEntry *entry, const wsw::StringView &fileName );
+	static bool parseFileContents( const wsw::StringView &fileName, wsw::Vector<char> *stringData,
+								   wsw::Vector<LineSpan> *lineEntries, wsw::Vector<Include> *includes );
 
 	enum ParsingIncludeResult {
 		ParsingFailure,
@@ -104,31 +137,18 @@ private:
 	};
 
 	[[nodiscard]]
-	auto tryParsingIncludes( const wsw::StringView &lineToken ) -> ParsingIncludeResult;
-
-	[[nodiscard]]
-	auto getStringForSpan( const Span &span ) const -> wsw::StringView {
-		assert( span.offset < m_stringData.size() && span.offset + span.length <= m_stringData.size() );
-		return { m_stringData.data() + span.offset, span.length };
-	}
-
-	[[nodiscard]]
-	auto getSpanOfStringView( const wsw::StringView &view ) const -> Span {
-		assert( view.data() >= m_stringData.data() && view.data() < m_stringData.data() + m_stringData.size() );
-		return { .offset = (unsigned)( view.data() - m_stringData.data() ), .length = (unsigned)view.size() };
-	}
+	static auto parseIncludes( const wsw::StringView &lineToken, char *stringsBasePtr,
+							   wsw::Vector<Include> *includes ) -> ParsingIncludeResult;
 
 	[[nodiscard]]
 	auto loadBuiltin( const wsw::StringView &name ) -> KeyOfBuiltin;
 
-	wsw::Vector<LineSpan> m_lineEntries;
-	wsw::Vector<char> m_stringData;
-	wsw::Vector<Include> m_includesData;
+	wsw::Vector<LineSpan> m_tmpLineEntries;
+	wsw::Vector<char> m_tmpStringData;
+	wsw::Vector<Include> m_tmpIncludesData;
 
-	// Their addresses must be stable, so we use a hash map
+	FileEntry *m_fileEntriesHead { nullptr };
 	FileEntry *m_fileEntryHashBins[97];
-	// TODO: Allow allocating extra entries dynamically from the default heap?
-	wsw::MemberBasedFreelistAllocator<sizeof( FileEntry ), 72> m_fileEntriesAllocator;
 };
 
 // Kept during the entire program lifecycle
@@ -136,6 +156,13 @@ static ProgramSourceFileCache g_programSourceFileCache;
 
 ProgramSourceFileCache::ProgramSourceFileCache() {
 	std::fill( std::begin( m_fileEntryHashBins ), std::end( m_fileEntryHashBins ), nullptr );
+}
+
+ProgramSourceFileCache::~ProgramSourceFileCache() {
+	for( FileEntry *entry = m_fileEntriesHead, *nextEntry; entry; entry = nextEntry ) {
+		nextEntry = entry->nextInList;
+		::free( entry );
+	}
 }
 
 void ProgramSourceFileCache::precacheBuiltins() {
@@ -168,15 +195,19 @@ auto ProgramSourceFileCache::getFileEntryForFile( const wsw::StringView &fileNam
 	const uint32_t nameHash = wsw::getHashForLength( fileName.data(), fileName.size() );
 	const uint32_t binIndex = nameHash % std::size( m_fileEntryHashBins );
 
-	for( const FileEntry *entry = m_fileEntryHashBins[binIndex]; entry; entry = entry->next ) {
-		if( entry->nameHash == nameHash && getStringForSpan( entry->nameSpan ).equalsIgnoreCase( fileName ) ) {
+	for( const FileEntry *entry = m_fileEntryHashBins[binIndex]; entry; entry = entry->nextInBin ) {
+		if( entry->nameHash == nameHash && entry->getName().equalsIgnoreCase( fileName ) ) {
 			return entry;
 		}
 	}
 
-	if( FileEntry *entry = loadFileEntryFromFile( fileName ) ) {
-		entry->nameHash = nameHash;
-		wsw::link( entry, &m_fileEntryHashBins[binIndex] );
+	if( FileEntry *const entry = loadFileEntryFromFile( fileName ) ) {
+		assert( entry->getName().equals( fileName ) );
+		entry->nameHash               = nameHash;
+		entry->nextInBin              = m_fileEntryHashBins[binIndex];
+		m_fileEntryHashBins[binIndex] = entry;
+		entry->nextInList             = m_fileEntriesHead;
+		m_fileEntriesHead             = entry;
 		return entry;
 	}
 
@@ -184,42 +215,56 @@ auto ProgramSourceFileCache::getFileEntryForFile( const wsw::StringView &fileNam
 }
 
 auto ProgramSourceFileCache::loadFileEntryFromFile( const wsw::StringView &fileName ) -> FileEntry * {
-	const size_t oldStringDataSize   = m_stringData.size();
-	const size_t oldLineEntriesSize  = m_lineEntries.size();
-	const size_t oldIncludesDataSize = m_includesData.size();
+	m_tmpStringData.clear();
+	m_tmpLineEntries.clear();
+	m_tmpIncludesData.clear();
 
-	void *mem = m_fileEntriesAllocator.allocOrNull();
+	bool parsingResult;
+	try {
+		parsingResult = parseFileContents( fileName, &m_tmpStringData, &m_tmpLineEntries, &m_tmpIncludesData );
+	} catch( ... ) {
+		parsingResult = false;
+	}
+
+	if( !parsingResult ) {
+		return nullptr;
+	}
+
+	wsw::MemSpecBuilder memSpecBuilder { wsw::MemSpecBuilder::initiallyEmpty() };
+	(void)memSpecBuilder.add<FileEntry>();
+
+	const auto stringsSpec  = memSpecBuilder.add<char>( m_tmpStringData.size() );
+	const auto linesSpec    = memSpecBuilder.add<LineSpan>( m_tmpLineEntries.size() );
+	const auto includesSpec = memSpecBuilder.add<Include>( m_tmpIncludesData.size() );
+
+	void *const mem = ::malloc( memSpecBuilder.sizeSoFar() );
 	if( !mem ) {
 		return nullptr;
 	}
 
-	auto *newEntry = new( mem )FileEntry;
+	auto *const entry = new( mem )FileEntry;
+	entry->nameLength = fileName.length();
 
-	bool result = true;
-	try {
-		result = fillFileEntryFromFile( newEntry, fileName );
-	} catch( ... ) {
-		result = false;
-	}
+	std::copy( m_tmpStringData.begin(), m_tmpStringData.end(), stringsSpec.get( mem ) );
+	entry->stringData     = stringsSpec.get( mem );
+	entry->stringDataSize = m_tmpStringData.size();
 
-	if( !result ) {
-		// This should not throw for POD's
-		m_stringData.resize( oldStringDataSize );
-		m_lineEntries.resize( oldLineEntriesSize );
-		m_includesData.resize( oldIncludesDataSize );
+	std::copy( m_tmpLineEntries.begin(), m_tmpLineEntries.end(), linesSpec.get( mem ) );
+	entry->lineData = linesSpec.get( mem );
+	entry->numLines = m_tmpLineEntries.size();
 
-		newEntry->~FileEntry();
-		m_fileEntriesAllocator.free( newEntry );
-		newEntry = nullptr;
-	}
+	std::copy( m_tmpIncludesData.begin(), m_tmpIncludesData.end(), includesSpec.get( mem ) );
+	entry->includeData = includesSpec.get( mem );
+	entry->numIncludes = m_tmpIncludesData.size();
 
-	return newEntry;
+	return entry;
 }
 
 // TODO: This should be shared at the top level...
 static const wsw::CharLookup kLineSeparatorChars( wsw::StringView( "\r\n" ) );
 
-bool ProgramSourceFileCache::fillFileEntryFromFile( FileEntry *entry, const wsw::StringView &fileName ) {
+bool ProgramSourceFileCache::parseFileContents( const wsw::StringView &fileName, wsw::Vector<char> *stringData,
+												wsw::Vector<LineSpan> *lineEntries, wsw::Vector<Include> *includes ) {
 	auto maybeFileHandle = wsw::fs::openAsReadHandle( fileName );
 	if( !maybeFileHandle ) {
 		return false;
@@ -231,61 +276,61 @@ bool ProgramSourceFileCache::fillFileEntryFromFile( FileEntry *entry, const wsw:
 		return false;
 	}
 
-	const size_t oldStringDataSize  = m_stringData.size();
-	const size_t oldLineEntriesSize = m_lineEntries.size();
+	stringData->clear();
 
-	// Allocate an extra space for 2 extra characters
-	m_stringData.resize( oldStringDataSize + rawFileSize + 2 );
-	if( !maybeFileHandle->readExact( m_stringData.data() + oldStringDataSize, rawFileSize ) ) {
+	// Put the name first in an optimistic fashion
+	stringData->insert( stringData->end(), fileName.data(), fileName.data() + fileName.size() );
+	stringData->push_back( '\0' );
+
+	const auto fileStringDataOffset = stringData->size();
+
+	// Allocate an extra space for 2 extra characters at the file end
+	stringData->resize( stringData->size() + rawFileSize + 2 );
+
+	if( !maybeFileHandle->readExact( stringData->data() + fileStringDataOffset, rawFileSize ) ) {
 		Com_Printf( S_COLOR_RED "Failed to read the source file\n" );
 		return false;
 	}
 
 	// Get rid of comments, otherwise we fail on compiling FXAA
-	const auto fileDataSize = (size_t)COM_Compress( m_stringData.data() + oldStringDataSize );
+	const auto strippedStringDataSize = (size_t)COM_Compress( stringData->data() + fileStringDataOffset );
 	// Let the freed space be used for further additions
-	m_stringData.resize( oldStringDataSize + fileDataSize + 2 );
+	stringData->resize( fileStringDataOffset + strippedStringDataSize + 2 );
 
 	// Ensure the trailing \n for GLSL (the file could miss it)
-	m_stringData[oldStringDataSize + fileDataSize + 0] = '\n';
+	stringData->operator[]( fileStringDataOffset + strippedStringDataSize + 0 ) = '\n';
 	// Ensure that the read data is zero-terminated
-	m_stringData[oldStringDataSize + fileDataSize + 1] = '\0';
+	stringData->operator[]( fileStringDataOffset + strippedStringDataSize + 1 ) = '\0';
 
-	const size_t bomShift = startsWithUtf8Bom( m_stringData.data() + oldStringDataSize, fileDataSize ) ? 3 : 0;
-	wsw::StringSplitter lineSplitter( wsw::StringView( m_stringData.data() + oldStringDataSize + bomShift, fileDataSize ) );
+	const size_t bomShift = startsWithUtf8Bom( stringData->data() + fileStringDataOffset, strippedStringDataSize ) ? 3 : 0;
+	wsw::StringSplitter lineSplitter( { stringData->data() + fileStringDataOffset + bomShift, strippedStringDataSize } );
 	while( const std::optional<wsw::StringView> &maybeLineToken = lineSplitter.getNext( kLineSeparatorChars ) ) {
 		const wsw::StringView lineToken = *maybeLineToken;
+		const unsigned oldIncludesSize  = includes->size();
 
-		const ParsingIncludeResult parseIncludeResult = tryParsingIncludes( lineToken );
+		const ParsingIncludeResult parseIncludeResult = parseIncludes( lineToken, stringData->data(), includes );
 		if( parseIncludeResult == ParsingFailure ) {
 			return false;
 		}
 		if( parseIncludeResult == HasIncludes ) {
+			assert( includes->size() == oldIncludesSize + 1 );
+			lineEntries->push_back( oldIncludesSize );
 			continue;
 		}
 
-		assert( lineToken.data() >= m_stringData.data() );
-		assert( lineToken.data() < m_stringData.data() + m_stringData.size() );
-		const ptrdiff_t offset = lineToken.data() - m_stringData.data();
-		assert( (size_t)offset < m_stringData.size() );
+		assert( lineToken.data() >= stringData->data() );
+		assert( lineToken.data() < stringData->data() + stringData->size() );
+		const ptrdiff_t offset = lineToken.data() - stringData->data();
+		assert( (size_t)offset < stringData->size() );
+
 		// Convert CR to LF
-		if( m_stringData[offset + lineToken.length()] == '\r') {
-			m_stringData[offset + lineToken.length()] = '\n';
+		if( stringData->operator[]( offset + lineToken.length() ) == '\r') {
+			stringData->operator[]( offset + lineToken.length() ) = '\n';
 		}
-		assert( m_stringData[offset + lineToken.length()] == '\n' );
-		m_lineEntries.push_back( Span { .offset = (unsigned)offset, .length = (unsigned)( lineToken.length() + 1 ) } );
+
+		assert( stringData->operator[]( offset + lineToken.length() ) == '\n' );
+		lineEntries->push_back( Span { .offset = (unsigned)offset, .length = (unsigned)( lineToken.length() + 1 ) } );
 	}
-
-	const auto fileNameOffset = m_stringData.size();
-	m_stringData.insert( m_stringData.end(), fileName.data(), fileName.data() + fileName.size() );
-	m_stringData.push_back( '\0' );
-
-	entry->nameSpan = {
-		.offset = (unsigned)fileNameOffset, .length = (unsigned)fileName.length(),
-	};
-	entry->linesSpan = {
-		.offset = (unsigned)oldLineEntriesSize, .length = (unsigned)( m_lineEntries.size() - oldLineEntriesSize ),
-	};
 
 	return true;
 }
@@ -298,7 +343,8 @@ static void sanitizeFilePath( char *chars, unsigned offset, unsigned length ) {
 	}
 }
 
-auto ProgramSourceFileCache::tryParsingIncludes( const wsw::StringView &lineToken ) -> ParsingIncludeResult {
+auto ProgramSourceFileCache::parseIncludes( const wsw::StringView &lineToken, char *stringsBasePtr,
+											wsw::Vector<Include> *includes ) -> ParsingIncludeResult {
 	wsw::StringView lineLeftover = lineToken.trimLeft();
 	if( !lineLeftover.startsWith( '#' ) ) {
 		return NoIncludes;
@@ -363,18 +409,16 @@ auto ProgramSourceFileCache::tryParsingIncludes( const wsw::StringView &lineToke
 		return ParsingFailure;
 	}
 
-	const Span fileNameSpan = getSpanOfStringView( fileName );
-	::sanitizeFilePath( m_stringData.data(), fileNameSpan.offset, fileNameSpan.length );
+	const Span fileNameSpan { (unsigned)( fileName.data() - stringsBasePtr ), (unsigned)fileName.size() };
+	::sanitizeFilePath( stringsBasePtr, fileNameSpan.offset, fileNameSpan.length );
 
 	if( hasACondition ) {
-		const Span conditionSpan = getSpanOfStringView( condition );
-		::sanitizeFilePath( m_stringData.data(), fileNameSpan.offset, fileNameSpan.length );
-		m_includesData.emplace_back( ConditionalInclude { .fileNameSpan = fileNameSpan, .conditionSpan = conditionSpan } );
+		const Span conditionSpan { (unsigned)( condition.data() - stringsBasePtr ), (unsigned)condition.size() };
+		::sanitizeFilePath( stringsBasePtr, fileNameSpan.offset, fileNameSpan.length );
+		includes->emplace_back( ConditionalInclude { .fileNameSpan = fileNameSpan, .conditionSpan = conditionSpan } );
 	} else {
-		m_includesData.emplace_back( RegularInclude { .fileNameSpan = fileNameSpan } );
+		includes->emplace_back( RegularInclude { .fileNameSpan = fileNameSpan } );
 	}
-
-	m_lineEntries.push_back( (unsigned)( m_includesData.size() - 1 ) );
 
 	return HasIncludes;
 }
@@ -388,9 +432,8 @@ auto ProgramSourceFileCache::loadBuiltin( const wsw::StringView &name ) -> KeyOf
 
 class ProgramSourceLoader {
 public:
-	ProgramSourceLoader( ProgramSourceFileCache *cache, wsw::Vector<const char *> *lines,
-						 wsw::Vector<int> *lengths, wsw::Vector<unsigned> *tmpOffsets )
-		: m_sourceFileCache( cache ), m_lines( lines ), m_lengths( lengths ), m_tmpOffsets( tmpOffsets ) {}
+	ProgramSourceLoader( ProgramSourceFileCache *cache, wsw::Vector<const char *> *lines, wsw::Vector<int> *lengths )
+		: m_sourceFileCache( cache ), m_lines( lines ), m_lengths( lengths ) {}
 
 	[[nodiscard]]
 	bool load( const wsw::StringView &rootFileName, uint64_t features, unsigned programType );
@@ -410,8 +453,6 @@ private:
 	wsw::Vector<const char *> *const m_lines;
 	wsw::Vector<int> *const m_lengths;
 
-	wsw::Vector<unsigned> *const m_tmpOffsets;
-
 	mutable wsw::StaticString<64> m_cachedRootFileDir;
 	wsw::StringView m_rootFileName;
 	uint64_t m_features { 0 };
@@ -428,17 +469,8 @@ bool ProgramSourceLoader::load( const wsw::StringView &rootFileName, uint64_t fe
 	m_features    = features;
 	m_programType = programType;
 
-	m_tmpOffsets->clear();
-
 	const bool loadResult = loadRecursively( rootFileName, 1 );
-	if( loadResult ) {
-		// We can't store pointers during recursive expansion as the cache data is not stable
-		assert( m_lines->size() + m_tmpOffsets->size() == m_lengths->size() );
-		m_lines->reserve( m_lines->size() + m_tmpOffsets->size() );
-		for( const unsigned offset: *m_tmpOffsets ) {
-			m_lines->push_back( m_sourceFileCache->m_stringData.data() + offset );
-		}
-	} else {
+	if( !loadResult ) {
 		m_lines->resize( oldSize );
 		m_lengths->resize( oldSize );
 	}
@@ -449,11 +481,10 @@ bool ProgramSourceLoader::load( const wsw::StringView &rootFileName, uint64_t fe
 
 bool ProgramSourceLoader::loadRecursively( const wsw::StringView &fileName, int depth ) {
 	if( const ProgramSourceFileCache::FileEntry *fileEntry = m_sourceFileCache->getFileEntryForFile( fileName ) ) {
-		const ProgramSourceFileCache::Span &linesSpan = fileEntry->linesSpan;
-		for( unsigned i = linesSpan.offset; i < linesSpan.offset + linesSpan.length; ++i ) {
-			const ProgramSourceFileCache::LineSpan &spanForLine = m_sourceFileCache->m_lineEntries[i];
+		for( unsigned lineIndex = 0; lineIndex < fileEntry->numLines; ++lineIndex ) {
+			const ProgramSourceFileCache::LineSpan &spanForLine = fileEntry->lineData[lineIndex];
 			if( const auto *regularLineSpan = std::get_if<ProgramSourceFileCache::Span>( &spanForLine ) ) [[likely]] {
-				m_tmpOffsets->push_back( regularLineSpan->offset );
+				m_lines->push_back( fileEntry->stringData + regularLineSpan->offset );
 				m_lengths->push_back( (int)regularLineSpan->length );
 				continue;
 			}
@@ -464,12 +495,12 @@ bool ProgramSourceLoader::loadRecursively( const wsw::StringView &fileName, int 
 			}
 
 			const auto *includeIndex = std::get_if<unsigned>( &spanForLine );
-			const ProgramSourceFileCache::Include &include = m_sourceFileCache->m_includesData[*includeIndex];
+			const ProgramSourceFileCache::Include &include = fileEntry->includeData[*includeIndex];
 			ProgramSourceFileCache::Span includeFileNameSpan;
 
 			// std::variant interface sucks
 			if( const auto *conditional = std::get_if<ProgramSourceFileCache::ConditionalInclude>( &include ) ) {
-				if( !checkIncludeCondition( m_sourceFileCache->getStringForSpan( conditional->conditionSpan ) ) ) {
+				if( !checkIncludeCondition( fileEntry->getStringForSpan( conditional->conditionSpan ) ) ) {
 					continue;
 				}
 				includeFileNameSpan  = conditional->fileNameSpan;
@@ -477,7 +508,7 @@ bool ProgramSourceLoader::loadRecursively( const wsw::StringView &fileName, int 
 				includeFileNameSpan = regular->fileNameSpan;
 			}
 
-			const wsw::StringView &includeFileName = m_sourceFileCache->getStringForSpan( includeFileNameSpan );
+			const wsw::StringView &includeFileName = fileEntry->getStringForSpan( includeFileNameSpan );
 
 			// Prepare the file name
 			wsw::StaticString<MAX_QPATH> buffer;
@@ -636,7 +667,6 @@ private:
 
 	wsw::Vector<const char *> m_tmpShaderStrings;
 	wsw::Vector<int> m_tmpShaderLengths;
-	wsw::Vector<unsigned> m_tmpShaderOffsets;
 
 	ShaderProgram *m_programListHead { nullptr };
 	ShaderProgram *m_programForIndex[MAX_GLSL_PROGRAMS];
@@ -1141,13 +1171,10 @@ private:
 
 void ProgramSourceFileCache::addBuiltinSourceLines( KeyOfBuiltin key, ProgramSourceBuilder *sourceBuilder ) const {
 	const auto *const fileEntry = (FileEntry *)key;
-	assert( m_fileEntriesAllocator.mayOwn( fileEntry ) );
-	assert( m_fileEntriesAllocator.hasValidOffset( fileEntry ) );
 
-	const unsigned limitOfIndex = fileEntry->linesSpan.offset + fileEntry->linesSpan.length;
-	for( unsigned index = fileEntry->linesSpan.offset; index < limitOfIndex; ++index ) {
-		const Span &lineSpan = std::get<Span>( m_lineEntries[index] );
-		const wsw::StringView &string = getStringForSpan( lineSpan );
+	for( unsigned lineIndex = 0; lineIndex < fileEntry->numLines; ++lineIndex ) {
+		const Span &lineSpan = std::get<Span>( fileEntry->lineData[lineIndex] );
+		const wsw::StringView &string = fileEntry->getStringForSpan( lineSpan );
 		sourceBuilder->add( string.data(), string.length() );
 	}
 }
@@ -1504,7 +1531,6 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 
 	m_tmpShaderStrings.clear();
 	m_tmpShaderLengths.clear();
-	m_tmpShaderOffsets.clear();
 
 	ProgramSourceBuilder sourceBuilder( &m_tmpShaderStrings, &m_tmpShaderLengths );
 
@@ -1567,8 +1593,7 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 	char fileName[1024];
 	Q_snprintfz( fileName, sizeof( fileName ), "glsl/%s.vert.glsl", name.data() );
 
-	ProgramSourceLoader vertexShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings,
-											&m_tmpShaderLengths, &m_tmpShaderOffsets );
+	ProgramSourceLoader vertexShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings, &m_tmpShaderLengths );
 	if( !vertexShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
 		Com_DPrintf( "Failed to load the source of %s\n", fileName );
 		return false;
@@ -1589,7 +1614,6 @@ bool ShaderProgramCache::loadFragmentShaderSource( GLuint id, const wsw::StringV
 
 	m_tmpShaderStrings.clear();
 	m_tmpShaderLengths.clear();
-	m_tmpShaderOffsets.clear();
 
 	ProgramSourceBuilder sourceBuilder( &m_tmpShaderStrings, &m_tmpShaderLengths );
 	if( glConfig.shadingLanguageVersion >= 140 ) {
@@ -1629,8 +1653,7 @@ bool ShaderProgramCache::loadFragmentShaderSource( GLuint id, const wsw::StringV
 	char fileName[1024];
 	Q_snprintfz( fileName, sizeof( fileName ), "glsl/%s.frag.glsl", name.data() );
 
-	ProgramSourceLoader fragmentShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings,
-											  &m_tmpShaderLengths, &m_tmpShaderOffsets );
+	ProgramSourceLoader fragmentShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings, &m_tmpShaderLengths );
 	if( !fragmentShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
 		Com_DPrintf( "Failed to load source of %s\n", fileName );
 		return false;
