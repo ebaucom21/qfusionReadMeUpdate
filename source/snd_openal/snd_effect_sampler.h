@@ -81,7 +81,6 @@ private:
 	void SetupPrimaryRayDirs();
 	void ProcessPrimaryEmissionResults();
 	void EmitSecondaryRays();
-	void SetMinimalReverbProps();
 
 public:
 	Effect *TryApply( const ListenerProps &listenerProps, src_t *src, const src_t *tryReusePropsSrc ) override;

@@ -411,12 +411,12 @@ auto LeafPropsSampler::ComputeLeafProps( const vec3_t origin ) -> std::optional<
 	const float smoothness = 0.5f + 0.5f * frac;
 	assert( smoothness >= 0.0f && smoothness <= 1.0f );
 
-	LeafProps props;
+	LeafProps props {};
 	props.setSmoothnessFactor( smoothness );
 	props.setRoomSizeFactor( ComputeRoomSizeFactor() );
-	const float invNumPrimaryHits = 1.0f / (float)numPrimaryHits;
-	props.setSkyFactor( Q_Sqrt( (float)numRaysHitSky * invNumPrimaryHits ) );
-	props.setMetallnessFactor( Q_Sqrt( (float)numRaysHitMetal * invNumPrimaryHits ) );
+	const float rcpNumPrimaryHits = 1.0f / (float)numPrimaryHits;
+	props.setSkyFactor( std::pow( (float)numRaysHitSky * rcpNumPrimaryHits, 0.25f ) );
+	props.setMetallnessFactor( (float)numRaysHitMetal * rcpNumPrimaryHits );
 
 	return props;
 }
@@ -470,14 +470,17 @@ LeafProps LeafPropsComputationTask::ComputeLeafProps( int leafNum ) {
 
 	LeafPropsBuilder propsBuilder;
 
+	const float unitCellSize = 96.0f;
+	const float numUnitCells = squareExtent * Q_RSqrt( unitCellSize );
+
 	int maxSamples;
 	if( fastAndCoarse ) {
-		// Use a linear growth in this case
-		maxSamples = (int)( 1 + ( sqrtf( squareExtent ) / 256.0f ) );
+		// Use a 1.5-pow growth in this case
+		maxSamples = wsw::clamp( (int)( std::pow( numUnitCells, 1.5f ) ), 32, 64 );
 	} else {
 		// Let maxSamples grow quadratic depending linearly of square extent value.
 		// Cubic growth is more "natural" but leads to way too expensive computations.
-		maxSamples = (int)( 2 + ( squareExtent / ( 256.0f * 256.0f ) ) );
+		maxSamples = wsw::clamp( (int)( numUnitCells * numUnitCells ), 48, 192 );
 	}
 
 	int numSamples = 0;

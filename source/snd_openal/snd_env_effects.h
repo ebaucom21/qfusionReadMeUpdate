@@ -5,7 +5,7 @@
 
 struct src_s;
 
-static constexpr float REVERB_ENV_DISTANCE_THRESHOLD = 2048.0f + 256.0f;
+static constexpr float REVERB_ENV_DISTANCE_THRESHOLD = 3072.0f;
 
 class Effect {
 public:
@@ -95,12 +95,10 @@ public:
 struct EfxPresetEntry;
 
 class EaxReverbEffect final: public Effect {
-	friend class EfxPresetsHolder;
 	friend class ReverbEffectSampler;
 
 	void UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin );
 
-	static constexpr float MAX_REVERB_DECAY = 5.6f + 0.001f;
 	vec3_t tmpSourceOrigin { 0, 0, 0 };
 
 	float GetAttnFracBasedOnSampledEnvironment() const;
@@ -109,23 +107,31 @@ class EaxReverbEffect final: public Effect {
 public:
 	EaxReverbEffect(): Effect( AL_EFFECT_EAXREVERB ) {}
 
-	float directObstruction;
+	float density             = AL_EAXREVERB_DEFAULT_DENSITY;
+	float diffusion           = AL_EAXREVERB_DEFAULT_DIFFUSION;
+	float gain                = 0.0f;
+	float gainLf              = AL_EAXREVERB_DEFAULT_GAINLF;
+	float gainHf              = AL_EAXREVERB_DEFAULT_GAINHF;
+	float decayTime           = AL_EAXREVERB_DEFAULT_DECAY_TIME;
+	float decayHfRatio        = AL_EAXREVERB_DEFAULT_DECAY_HFRATIO;
+	float decayLfRatio        = AL_EAXREVERB_DEFAULT_DECAY_LFRATIO;
+	float reflectionsGain     = AL_EAXREVERB_DEFAULT_REFLECTIONS_GAIN;
+	float reflectionsDelay    = AL_EAXREVERB_DEFAULT_REFLECTIONS_DELAY;
+	float lateReverbGain      = AL_EAXREVERB_DEFAULT_LATE_REVERB_GAIN;
+	float lateReverbDelay     = AL_EAXREVERB_DEFAULT_LATE_REVERB_DELAY;
+	float echoTime            = AL_EAXREVERB_DEFAULT_ECHO_TIME;
+	float echoDepth           = AL_EAXREVERB_DEFAULT_ECHO_DEPTH;
+	float airAbsorptionGainHf = AL_EAXREVERB_DEFAULT_AIR_ABSORPTION_GAINHF;
+	float lfReference         = AL_EAXREVERB_DEFAULT_LFREFERENCE;
+	float hfReference         = AL_EAXREVERB_DEFAULT_HFREFERENCE;
 
-	float density;              // [0.0 ... 1.0]    default 1.0
-	float diffusion;            // [0.0 ... 1.0]    default 1.0
-	float gainHf;               // [0.0 ... 1.0]    default 0.89
-	float decayTime;            // [0.1 ... 20.0]   default 1.49
-	float reflectionsDelay;     // [0.0 ... 0.3]    default 0.007
-	float lateReverbGain;       // [0.0 ... 10.0]   default 1.26
-	float lateReverbDelay;      // [0.0 ... 0.1]    default 0.011
-
+	float directObstruction { 0.0f };
 	// An intermediate of the reverb sampling algorithm, useful for gain adjustment
-	float secondaryRaysObstruction;
-	float hfReference; // [1000 ... 20000]  default 5000
+	float secondaryRaysObstruction { 0.0f };
 
 	// A custom parameter, [0.0 ... 1.0], 0.0 for directly reachable sources,
 	// 1.0 for very distant indirect-reachable or completely unreachable sources.
-	float indirectAttenuation;
+	float indirectAttenuation { 0.0f };
 
 	unsigned GetLingeringTimeout() const override {
 		return (unsigned)( decayTime * 1000 + 50 );

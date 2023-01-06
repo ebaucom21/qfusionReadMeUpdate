@@ -40,7 +40,7 @@ private:
 	bool ComputeNewState( bool fastAndCoarse ) override;
 	bool SaveToCache() override;
 
-	LeafPropsCache(): CachedComputation( "LeafPropsCache", ".leafprops", "LeafProps@v1340" ) {}
+	LeafPropsCache(): CachedComputation( "LeafPropsCache", ".leafprops", "LeafProps@v1343" ) {}
 public:
 	static LeafPropsCache *Instance();
 	static void Init();

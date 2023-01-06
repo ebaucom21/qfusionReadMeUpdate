@@ -116,17 +116,30 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
 	const float filterHfGainFrac = 0.1f + 0.9f * ( 1.0f - attenuation );
 	assert( filterHfGainFrac >= 0.1f && filterHfGainFrac <= 1.0f );
-	const float reverbHfGainFrac = 0.6f + 0.4f * ( 1.0f - attenuation );
-	assert( reverbHfGainFrac >= 0.6f && reverbHfGainFrac <= 1.0f );
 
 	alEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
+
 	alEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
-	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf * reverbHfGainFrac );
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->decayHfRatio );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->decayLfRatio );
+
+	alEffectf( src->effect, AL_EAXREVERB_GAIN, this->gain );
+	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf );
+	alEffectf( src->effect, AL_EAXREVERB_GAINLF, this->gainLf );
+
+	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reflectionsGain );
 	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
+
 	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->lateReverbGain );
 	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
 
+	alEffectf( src->effect, AL_EAXREVERB_ECHO_TIME, this->echoTime );
+	alEffectf( src->effect, AL_EAXREVERB_ECHO_DEPTH, this->echoDepth );
+
+	alEffectf( src->effect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, this->airAbsorptionGainHf );
+
+	alEffectf( src->effect, AL_EAXREVERB_LFREFERENCE, this->lfReference );
 	alEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->hfReference );
 
 	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
@@ -165,17 +178,31 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 	}
 
 	Interpolator interpolator( timeDelta );
-	directObstruction = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
-	density = interpolator( density, that->density, 0.0f, 1.0f );
-	diffusion = interpolator( diffusion, that->diffusion, 0.0f, 1.0f );
-	gainHf = interpolator( gainHf, that->gainHf, 0.0f, 1.0f );
-	decayTime = interpolator( decayTime, that->decayTime, 0.1f, 20.0f );
-	reflectionsDelay = interpolator( reflectionsDelay, that->reflectionsDelay, 0.0f, 0.3f );
-	lateReverbGain = interpolator( lateReverbGain, that->lateReverbGain, 0.0f, 10.0f );
-	lateReverbDelay = interpolator( lateReverbDelay, that->lateReverbDelay, 0.0f, 0.1f );
+
+	directObstruction        = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
 	secondaryRaysObstruction = interpolator( secondaryRaysObstruction, that->secondaryRaysObstruction, 0.0f, 1.0f );
-	hfReference = interpolator( hfReference, that->hfReference, 1000.0f, 20000.0f );
-	indirectAttenuation = interpolator( indirectAttenuation, that->indirectAttenuation, 0.0f, 1.0f );
+	indirectAttenuation      = interpolator( indirectAttenuation, that->indirectAttenuation, 0.0f, 1.0f );
+
+#define lerpEaxProperty( x, y, z ) interpolator( x, y, AL_EAXREVERB_MIN_##z, AL_EAXREVERB_MAX_##z )
+
+	density             = lerpEaxProperty( density, that->density, DENSITY );
+	diffusion           = lerpEaxProperty( diffusion, that->diffusion, DIFFUSION );
+	gainLf              = lerpEaxProperty( gainLf, that->gainLf, GAINLF );
+	gainHf              = lerpEaxProperty( gainHf, that->gainHf, GAINHF );
+	decayTime           = lerpEaxProperty( decayTime, that->decayTime, DECAY_TIME );
+	decayLfRatio        = lerpEaxProperty( decayLfRatio, that->decayLfRatio, DECAY_LFRATIO );
+	decayHfRatio        = lerpEaxProperty( decayHfRatio, that->decayHfRatio, DECAY_HFRATIO );
+	reflectionsGain     = lerpEaxProperty( reflectionsGain, that->reflectionsGain, REFLECTIONS_GAIN );
+	reflectionsDelay    = lerpEaxProperty( reflectionsDelay, that->reflectionsDelay, REFLECTIONS_DELAY );
+	lateReverbGain      = lerpEaxProperty( lateReverbGain, that->lateReverbGain, LATE_REVERB_GAIN );
+	lateReverbDelay     = lerpEaxProperty( lateReverbDelay, that->lateReverbDelay, LATE_REVERB_DELAY );
+	echoTime            = lerpEaxProperty( echoTime, that->echoTime, ECHO_TIME );
+	echoDepth           = lerpEaxProperty( echoDepth, that->echoDepth, ECHO_DEPTH );
+	airAbsorptionGainHf = lerpEaxProperty( airAbsorptionGainHf, that->airAbsorptionGainHf, AIR_ABSORPTION_GAINHF );
+	lfReference         = lerpEaxProperty( lfReference, that->lfReference, LFREFERENCE );
+	hfReference         = lerpEaxProperty( hfReference, that->hfReference, HFREFERENCE );
+
+#undef lerpEaxProperty
 }
 
 void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {

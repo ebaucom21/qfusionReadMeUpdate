@@ -2,6 +2,7 @@
 #include "snd_leaf_props_cache.h"
 #include "snd_effects_allocator.h"
 #include "snd_propagation.h"
+#include "efxpresetsregistry.h"
 
 #include "../gameshared/q_collision.h"
 
@@ -240,7 +241,7 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 	EmitPrimaryRays();
 
 	if( !numPrimaryHits ) {
-		SetMinimalReverbProps();
+		// Keep existing values (they are valid by default now)
 		return;
 	}
 
@@ -254,6 +255,63 @@ void ReverbEffectSampler::SetupPrimaryRayDirs() {
 	SetupSamplingRayDirs( primaryRayDirs, numPrimaryRays );
 }
 
+struct LerpPresetHelper {
+	const EFXEAXREVERBPROPERTIES *tinyOpenRoomPreset;
+	const EFXEAXREVERBPROPERTIES *tinyClosedRoomPreset;
+	const EFXEAXREVERBPROPERTIES *hugeOpenRoomPreset;
+	const EFXEAXREVERBPROPERTIES *hugeClosedRoomPreset;
+	const float skyFrac;
+	const float sizeFrac;
+
+	[[nodiscard]]
+	auto calcBiLerpValue( float (EFXEAXREVERBPROPERTIES::*fieldPtr ) ) const -> float {
+		const float tinyOpenValue   = tinyOpenRoomPreset->*fieldPtr;
+		const float tinyClosedValue = tinyClosedRoomPreset->*fieldPtr;
+		const float hugeOpenValue   = hugeOpenRoomPreset->*fieldPtr;
+		const float hugeClosedValue = hugeClosedRoomPreset->*fieldPtr;
+
+		const float tinyValue = std::lerp( tinyClosedValue, tinyOpenValue, skyFrac );
+		const float hugeValue = std::lerp( hugeClosedValue, hugeOpenValue, skyFrac );
+		return std::lerp( tinyValue, hugeValue, sizeFrac );
+	}
+};
+
+class CachedPresetTracker {
+public:
+	CachedPresetTracker( const char *varName, const char *defaultValue ) noexcept
+		: m_varName( varName ), m_defaultValue( defaultValue ) {}
+
+	[[nodiscard]]
+	auto getPreset() const -> const EFXEAXREVERBPROPERTIES * {
+		if( !m_var ) {
+			m_var = Cvar_Get( m_varName, m_defaultValue, CVAR_DEVELOPER );
+			m_var->modified = true;
+		}
+		if( m_var->modified ) {
+			m_preset = EfxPresetsRegistry::s_instance.findByName( wsw::StringView( m_var->string ) );
+			if( !m_preset ) {
+				Com_Printf( S_COLOR_YELLOW "Failed to find a preset %s for %s. Using the default value %s\n",
+							m_var->string, m_var->name, m_defaultValue );
+				Cvar_ForceSet( m_var->name, m_defaultValue );
+				m_preset = EfxPresetsRegistry::s_instance.findByName( wsw::StringView( m_var->string ) );
+				assert( m_preset );
+			}
+			m_var->modified = false;
+		}
+		return m_preset;
+	}
+private:
+	const char *const m_varName;
+	const char *const m_defaultValue;
+	mutable cvar_t *m_var { nullptr };
+	mutable const EFXEAXREVERBPROPERTIES *m_preset { nullptr };
+};
+
+static CachedPresetTracker g_tinyOpenRoomPreset { "s_tinyOpenRoomPreset", "quarry" };
+static CachedPresetTracker g_tinyClosedRoomPreset { "s_tinyClosedRoomPreset", "hallway" };
+static CachedPresetTracker g_hugeOpenRoomPreset { "s_hugeOpenRoomPreset", "outdoors_rollingplains" };
+static CachedPresetTracker g_hugeClosedRoomPreset { "s_hugeClosedRoomPreset", "city_library" };
+
 void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	// Instead of trying to compute these factors every sampling call,
 	// reuse pre-computed properties of CM map leafs that briefly resemble rooms/convex volumes.
@@ -262,97 +320,60 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	const auto *const leafPropsCache = LeafPropsCache::Instance();
 	const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
 
-	const float roomSizeFactor = leafProps.getRoomSizeFactor();
-	const float metallnessFactor = leafProps.getMetallnessFactor();
-	const float skyFactor = leafProps.getSkyFactor();
+	const LerpPresetHelper helper {
+		.tinyOpenRoomPreset   = g_tinyOpenRoomPreset.getPreset(),
+		.tinyClosedRoomPreset = g_tinyClosedRoomPreset.getPreset(),
+		.hugeOpenRoomPreset   = g_hugeOpenRoomPreset.getPreset(),
+		.hugeClosedRoomPreset = g_hugeClosedRoomPreset.getPreset(),
+		.skyFrac              = leafProps.getSkyFactor(),
+		.sizeFrac             = leafProps.getRoomSizeFactor(),
+	};
 
-	// The density must be within [0.0, 1.0] range.
-	// Lower the density is, more tinny and metallic a sound appear.
-	effect->density = 1.0f - metallnessFactor;
+	effect->gain   = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGain );
+	effect->gainHf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGainHF );
+	effect->gainLf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGainLF );
 
-	// The diffusion must be within [0.0, 1.0] range.
-	// Low values feel like a modulation and like a quickly panning echo.
-	effect->diffusion = 1.0f;
-	// Apply a non-standard diffusion only for a huge outdoor environment.
-	effect->diffusion -= roomSizeFactor * Q_Sqrt( skyFactor );
+	effect->diffusion = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDiffusion );
+	effect->decayTime = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayTime );
 
-	// The decay time should be within [0.1, 20.0] range.
-	// A reverberation starts being really heard from values greater than 0.5.
-	constexpr auto maxDecay = EaxReverbEffect::MAX_REVERB_DECAY;
-	// This is a minimal decay chosen for tiny rooms
-	constexpr auto minDecay = 0.6f;
-	// This is an additional decay time that is added on an outdoor environment
-	constexpr auto skyExtraDecay = 1.0f;
-	static_assert( maxDecay > minDecay + skyExtraDecay, "" );
+	effect->decayHfRatio = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayHFRatio );
+	effect->decayLfRatio = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayLFRatio );
 
-	effect->decayTime = minDecay + ( maxDecay - minDecay - skyExtraDecay ) * roomSizeFactor + skyExtraDecay * skyFactor;
-	assert( effect->decayTime <= maxDecay );
+	effect->reflectionsGain  = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flReflectionsGain );
+	effect->reflectionsDelay = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flReflectionsDelay );
 
-	// The late reverberation gain affects effect strength a lot.
-	// It must be within [0.0, 10.0] range.
-	// We should really limit us to values below 1.0, preferably even closer to 0.1..0.2 for a generic environment.
-	// Higher values can feel "right" for a "cinematic" scene, but are really annoying for an actual in-game experience.
+	effect->lateReverbGain  = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLateReverbGain );
+	effect->lateReverbDelay = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLateReverbDelay );
 
-	// This is a base value for huge spaces
-	const float distantGain = 0.1f;
-	// Let's try doing "energy preservation": an increased decay should lead to decreased gain.
-	// These formulae do not have any theoretical foundations but feels good.
-	// The `decayFrac` is close to 0 for tiny rooms/short decay and is close to 1 for huge rooms/long decay
-	const float decayFrac = ( effect->decayTime - minDecay ) / ( maxDecay - minDecay );
-	// This gain factor should be close to 1 for tiny rooms and quickly fall down to almost 0
-	const float gainFactorForRoomSize = std::pow( 1.0f - decayFrac, 5.0f );
-	effect->lateReverbGain = distantGain + 0.6f * gainFactorForRoomSize;
+	effect->echoTime = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flEchoTime );
+	effect->echoDepth = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flEchoDepth );
 
-	const int listenerLeafNum = listenerProps->GetLeafNum();
-	const auto *const table = PropagationTable::Instance();
-	if( table->HasDirectPath( src->envUpdateState.leafNum, listenerLeafNum ) ) {
-		effect->indirectAttenuation = 0.0f;
-	} else {
-		[[maybe_unused]] vec3_t tableDir;
-		float tableDistance = 1.0f;
-		if( table->GetIndirectPathProps( src->envUpdateState.leafNum, listenerLeafNum, tableDir, &tableDistance ) ) {
-			// The table stores a distance up to 2^16 and clamps everything above.
-			// Putting a reference limit at 2^16 does not feel good so we clamp to a value 4x lower.
-			constexpr auto maxDistance = (float)( 1u << 14u );
-			constexpr auto invMaxDistance = 1.0f / maxDistance;
-			const float frac = wsw::min( maxDistance, tableDistance ) * invMaxDistance;
-			assert( frac >= 0.0f && frac <= 1.0f );
-			effect->indirectAttenuation = Q_Sqrt( frac );
-		} else {
-			effect->indirectAttenuation = 1.0f;
-		}
-	}
+	effect->lfReference = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLFReference );
+	effect->hfReference = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flHFReference );
 
-	// Consider the indirect path distance having the same effect as the room size.
+	effect->airAbsorptionGainHf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flAirAbsorptionGainHF );
 
-	// Must be within [0.0 ... 0.1] range
-	effect->lateReverbDelay = 0.011f + 0.088f * wsw::max( effect->indirectAttenuation, roomSizeFactor );
-	// Must be within [0.0, 0.3] range.
-	effect->reflectionsDelay = 0.007f + 0.29f *
-		wsw::max( effect->indirectAttenuation, ( 0.5f + 0.5f * skyFactor ) * roomSizeFactor );
+	// Custom parameters
+
+	effect->density = 1.0f - 0.7f * leafProps.getMetallnessFactor();
 
 	// 0.5 is the value of a neutral surface
 	const float smoothness = leafProps.getSmoothnessFactor();
 	if( smoothness <= 0.5f ) {
-		// [1000, 2500]
-		effect->hfReference = 1000.0f + ( 2.0f * smoothness ) * 1500.0f;
+		const float frac = 2.0f * smoothness;
+		assert( frac >= 0.0f && frac <= 1.0f );
+		effect->hfReference = std::lerp( 1000.0f, 2500.0f, frac );
 	} else {
-		// [2500, 5000]
-		effect->hfReference = 2500.0f + ( 2.0f * ( smoothness - 0.5f ) ) * 2500.0f;
+		// The high HF reference is unpleasant for ears
+		// Use the quadratic curve, so it kicks in only in special kinds of environment.
+		const float frac = wsw::square( 2.0f * ( smoothness - 0.5f ) );
+		assert( frac >= 0.0f && frac <= 1.0f );
+		effect->hfReference = std::lerp( 2500.0f, 4000.0f, frac );
 	}
 
-	effect->gainHf = ( 0.4f + 0.4f * metallnessFactor );
-}
-
-void ReverbEffectSampler::SetMinimalReverbProps() {
-	effect->density = 1.0f;
-	effect->diffusion = 1.0f;
-	effect->decayTime = 0.60f;
-	effect->reflectionsDelay = 0.007f;
-	effect->lateReverbGain = 0.15f;
-	effect->lateReverbDelay = 0.011f;
-	effect->gainHf = 0.0f;
-	effect->hfReference = 5000.0f;
+	// Tune it down
+	effect->lateReverbGain = wsw::min( 1.0f, effect->lateReverbGain );
+	effect->gain *= 0.7f;
 }
 
 void ReverbEffectSampler::EmitSecondaryRays() {
