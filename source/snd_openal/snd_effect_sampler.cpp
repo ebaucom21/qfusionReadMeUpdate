@@ -4,7 +4,8 @@
 #include "snd_propagation.h"
 #include "efxpresetsregistry.h"
 
-#include "../gameshared/q_collision.h"
+#include "../qcommon/wswstaticvector.h"
+#include "../qcommon/wswstringsplitter.h"
 
 #include <limits>
 #include <random>
@@ -284,16 +285,16 @@ public:
 	[[nodiscard]]
 	auto getPreset() const -> const EFXEAXREVERBPROPERTIES * {
 		if( !m_var ) {
-			m_var = Cvar_Get( m_varName, m_defaultValue, CVAR_DEVELOPER );
+			m_var = Cvar_Get( m_varName, m_defaultValue, CVAR_CHEAT | CVAR_DEVELOPER );
 			m_var->modified = true;
 		}
 		if( m_var->modified ) {
-			m_preset = EfxPresetsRegistry::s_instance.findByName( wsw::StringView( m_var->string ) );
+			m_preset = getByString( wsw::StringView( m_var->string ) );
 			if( !m_preset ) {
-				Com_Printf( S_COLOR_YELLOW "Failed to find a preset %s for %s. Using the default value %s\n",
+				Com_Printf( S_COLOR_YELLOW "Failed to find a preset by string \"%s\" for %s. Using the default value \"%s\"\n",
 							m_var->string, m_var->name, m_defaultValue );
 				Cvar_ForceSet( m_var->name, m_defaultValue );
-				m_preset = EfxPresetsRegistry::s_instance.findByName( wsw::StringView( m_var->string ) );
+				m_preset = getByString( wsw::StringView( m_var->string ) );
 				assert( m_preset );
 			}
 			m_var->modified = false;
@@ -301,10 +302,67 @@ public:
 		return m_preset;
 	}
 private:
+	// This method allows for an overall nicer code, and it's totally fine assuming this is not a hot code path
+	[[nodiscard]]
+	static auto mixFieldOfParts( const float EFXEAXREVERBPROPERTIES::* field,
+								 const wsw::StaticVector<const EFXEAXREVERBPROPERTIES *, 4> &parts ) {
+		assert( !parts.empty() );
+		float value = 0.0f;
+		for( const EFXEAXREVERBPROPERTIES *preset: parts ) {
+			value += preset->*field;
+		}
+		return value / (float)parts.size();
+	}
+
+	[[nodiscard]]
+	auto getByString( const wsw::StringView &string ) const -> const EFXEAXREVERBPROPERTIES * {
+		if( string.indexOf( ' ' ) == std::nullopt ) {
+			return EfxPresetsRegistry::s_instance.findByName( string );
+		} else {
+			wsw::StringSplitter splitter( string );
+			wsw::StaticVector<const EFXEAXREVERBPROPERTIES *, 4> parts;
+			while( const auto maybeToken = splitter.getNext( ' ' ) ) {
+				if( !parts.full() ) {
+					if( const auto *preset = EfxPresetsRegistry::s_instance.findByName( *maybeToken )) {
+						parts.push_back( preset );
+					} else {
+						return nullptr;
+					}
+				} else {
+					return nullptr;
+				}
+			}
+			if( !parts.empty() ) {
+				// Note: Unused fields are not processed
+				m_mix.flDensity             = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDensity, parts );
+				m_mix.flDiffusion           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDiffusion, parts );
+				m_mix.flGain                = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGain, parts );
+				m_mix.flGainLF              = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGainLF, parts );
+				m_mix.flGainHF              = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGainHF, parts );
+				m_mix.flDecayTime           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayTime, parts );
+				m_mix.flDecayHFRatio        = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayHFRatio, parts );
+				m_mix.flDecayLFRatio        = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayLFRatio, parts );
+				m_mix.flReflectionsGain     = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flReflectionsGain, parts );
+				m_mix.flReflectionsDelay    = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flReflectionsDelay, parts );
+				m_mix.flLateReverbGain      = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLateReverbGain, parts );
+				m_mix.flLateReverbDelay     = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLateReverbDelay, parts );
+				m_mix.flEchoTime            = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flEchoTime, parts );
+				m_mix.flEchoDepth           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flEchoDepth, parts );
+				m_mix.flAirAbsorptionGainHF = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flAirAbsorptionGainHF, parts );
+				m_mix.flLFReference         = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLFReference, parts );
+				m_mix.flHFReference         = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flHFReference, parts );
+				return &m_mix;
+			} else {
+				return nullptr;
+			}
+		}
+	}
+
 	const char *const m_varName;
 	const char *const m_defaultValue;
 	mutable cvar_t *m_var { nullptr };
 	mutable const EFXEAXREVERBPROPERTIES *m_preset { nullptr };
+	mutable EFXEAXREVERBPROPERTIES m_mix {};
 };
 
 static CachedPresetTracker g_tinyOpenRoomPreset { "s_tinyOpenRoomPreset", "quarry" };
