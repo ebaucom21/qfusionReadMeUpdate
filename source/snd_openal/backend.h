@@ -18,6 +18,8 @@ public:
 	void clear();
 	void stopAllSounds( const unsigned &flags );
 
+	void processFrameUpdates();
+
 	void freeSound( const int &id );
 	void loadSound( const int &id );
 

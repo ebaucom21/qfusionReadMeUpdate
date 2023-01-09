@@ -237,6 +237,10 @@ void Backend::stopAllSounds( const unsigned &flags ) {
 	}
 }
 
+void Backend::processFrameUpdates() {
+	S_UpdateSources();
+}
+
 void Backend::freeSound( const int &id ) {
 	S_UnloadBuffer( S_GetBufferById( id ) );
 }
@@ -251,7 +255,6 @@ void Backend::setEntitySpatialParams( const int &entNum, const Vec3 &origin, con
 
 void Backend::setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis ) {
 	S_SetListener( origin.Data(), velocity.Data(), (const float *)axis.data() );
-	S_UpdateSources();
 }
 
 void Backend::startLocalSound( const int &sfx, const float &volume ) {

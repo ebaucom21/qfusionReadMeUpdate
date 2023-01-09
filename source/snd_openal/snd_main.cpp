@@ -42,6 +42,8 @@ public:
 	void updateListener( const float *, const float *, const mat3_t ) override {}
 	void activate( bool ) override {}
 
+	void processFrameUpdates() override {}
+
 	void setEntitySpatialParams( int, const float *, const float * ) override {};
 
 	[[nodiscard]]

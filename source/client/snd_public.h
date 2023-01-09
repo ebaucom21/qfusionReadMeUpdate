@@ -98,6 +98,8 @@ public:
 	virtual void updateListener( const float *origin, const float *velocity, const mat3_t axis ) = 0;
 	virtual void activate( bool isActive ) = 0;
 
+	virtual void processFrameUpdates() = 0;
+
 	virtual void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) = 0;
 
 	[[nodiscard]]

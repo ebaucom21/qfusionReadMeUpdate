@@ -165,8 +165,6 @@ void ALSoundSystem::startBackgroundTrack( const char *intro, const char *loop, i
 }
 
 void ALSoundSystem::updateListener( const vec3_t origin, const vec3_t velocity, const mat3_t axis ) {
-	m_setEntitySpatialParamsCall.flush();
-
 	std::array<Vec3, 3> argAxis {
 		Vec3 { axis[0], axis[1], axis[2] },
 		Vec3 { axis[3], axis[4], axis[5] },
@@ -174,6 +172,11 @@ void ALSoundSystem::updateListener( const vec3_t origin, const vec3_t velocity, 
 	};
 
 	m_setListenerCall.exec( Vec3( origin ), Vec3( velocity ), argAxis );
+}
+
+void ALSoundSystem::processFrameUpdates() {
+	m_setEntitySpatialParamsCall.flush();
+	m_processFrameUpdatesCall.exec();
 }
 
 }

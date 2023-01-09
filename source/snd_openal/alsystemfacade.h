@@ -39,6 +39,8 @@ public:
 
 	void activate( bool isActive ) override;
 
+	void processFrameUpdates() override;
+
 	void setEntitySpatialParams( int entNum, const float *origin, const float *velocity ) override {
 		m_setEntitySpatialParamsCall.exec( entNum, Vec3( origin ), Vec3( velocity ) );
 	}
@@ -112,6 +114,9 @@ private:
 	InterThreadCall0<Backend> m_clearCall { this, "clear", &m_backend, &Backend::clear };
 	InterThreadCall1<Backend, unsigned> m_stopAllSoundsCall {
 		this, "stopAllSounds", &m_backend, &Backend::stopAllSounds };
+
+	InterThreadCall0<Backend> m_processFrameUpdatesCall {
+		this, "processFrameUpdates", &m_backend, &Backend::processFrameUpdates };
 
 	InterThreadCall1<Backend, bool> m_activateCall { this, "activate", &m_backend, &Backend::activate };
 

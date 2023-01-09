@@ -2470,6 +2470,8 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	// advance local effects for next frame
 	SCR_RunConsole( allRealMsec );
 
+	SoundSystem::instance()->processFrameUpdates();
+
 	allRealMsec = 0;
 	allGameMsec = 0;
 
