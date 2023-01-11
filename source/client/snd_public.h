@@ -111,7 +111,7 @@ public:
 
 	virtual void startLocalSound( const char *name, float fvol ) = 0;
 	virtual void startLocalSound( sfx_s *sfx, float fvol ) = 0;
-	virtual void addLoopSound( sfx_s *sfx, int entNum, float fvol, float attenuation ) = 0;
+	virtual void addLoopSound( sfx_s *sfx, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) = 0;
 
 	virtual void startBackgroundTrack( const char *intro, const char *loop, int mode ) = 0;
 	virtual void stopBackgroundTrack() = 0;

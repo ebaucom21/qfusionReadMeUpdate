@@ -30,7 +30,7 @@ public:
 	void startFixedSound( const int &sfx, const Vec3 &origin, const int &channel, const float &volume, const float &attenuation );
 	void startGlobalSound( const int &sfx, const int &channel, const float &volume );
 	void startRelativeSound( const int &sfx, const int &entNum, const int &channel, const float &volume, const float &attenuation );
-	void addLoopSound( const int &sfx, const int &entNum, const float &volume, const float &attenuation );
+	void addLoopSound( const int &sfx, const int &entNum, const uintptr_t &identifyingToken, const float &volume, const float &attenuation );
 
 	// TODO: Discover how to send pointers, see also the general note
 	void startBackgroundTrack( const uintptr_t &introNameAddress, const uintptr_t &loopNameAddress, const int &mode );

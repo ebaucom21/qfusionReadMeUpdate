@@ -1593,7 +1593,11 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 		return;
 	}
 
-	SoundSystem::instance()->addLoopSound( cgs.soundPrecache[state->sound], state->number, cg_volume_effects->value, ISVIEWERENTITY( state->number ) ? ATTN_NONE : ATTN_IDLE );
+	sfx_s *const sfx                     = cgs.soundPrecache[state->sound];
+	const int entNum                     = state->number;
+	const uintptr_t loopIdentifyingToken = state->number;
+
+	SoundSystem::instance()->addLoopSound( sfx, entNum, loopIdentifyingToken, cg_volume_effects->value, attenuation );
 }
 
 /*

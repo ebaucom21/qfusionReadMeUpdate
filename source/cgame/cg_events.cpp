@@ -303,7 +303,9 @@ void CG_LaserBeamEffect( centity_t *owner, DrawSceneRequest *drawSceneRequest ) 
 
 	if( sound ) {
 		const float attenuation = isOwnerThePov ? ATTN_NONE : ATTN_STATIC;
-		soundSystem->addLoopSound( sound, ownerEntNum, cg_volume_effects->value, attenuation );
+		// Tokens in range [1, MAX_EDICTS] are reserved for generic server-sent attachments
+		const uintptr_t loopIdentifyingToken = ownerEntNum + MAX_EDICTS;
+		soundSystem->addLoopSound( sound, ownerEntNum, loopIdentifyingToken, cg_volume_effects->value, attenuation );
 	}
 
 	laserOwner = nullptr;

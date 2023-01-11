@@ -54,7 +54,7 @@ public:
 	void startGlobalSound( sfx_s *, int, float ) override {}
 	void startLocalSound( const char *, float ) override {}
 	void startLocalSound( sfx_s *, float ) override {}
-	void addLoopSound( sfx_s *, int, float, float ) override {}
+	void addLoopSound( sfx_s *, int, uintptr_t, float, float ) override {}
 
 	void startBackgroundTrack( const char *, const char *, int ) override {}
 	void stopBackgroundTrack() override {}

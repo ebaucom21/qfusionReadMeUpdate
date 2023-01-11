@@ -273,8 +273,9 @@ void Backend::startRelativeSound( const int &sfx, const int &entNum, const int &
 	S_StartRelativeSound( S_GetBufferById( sfx ), entNum, channel, volume, attenuation );
 }
 
-void Backend::addLoopSound( const int &sfx, const int &entNum, const float &volume, const float &attenuation ) {
-	S_AddLoopSound( S_GetBufferById( sfx ), entNum, volume, attenuation );
+void Backend::addLoopSound( const int &sfx, const int &entNum, const uintptr_t &identifyingToken,
+							const float &volume, const float &attenuation ) {
+	S_AddLoopSound( S_GetBufferById( sfx ), entNum, identifyingToken, volume, attenuation );
 }
 
 void Backend::startBackgroundTrack( const uintptr_t &introNameAddress, const uintptr_t &loopNameAddress, const int &mode ) {

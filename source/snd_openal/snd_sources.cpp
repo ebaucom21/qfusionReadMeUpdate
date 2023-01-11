@@ -33,8 +33,6 @@ int src_count = 0;
 static bool src_inited = false;
 
 typedef struct sentity_s {
-	src_t *src;
-	int touched;    // Sound present this update?
 	vec3_t origin;
 	vec3_t velocity;
 } sentity_t;
@@ -80,6 +78,7 @@ static void source_setup( src_t *src, sfx_t *sfx, bool forceStereo, int priority
 	src->isLooping = false;
 	src->isTracking = false;
 	src->isLingering = false;
+	src->touchedThisFrame = false;
 	src->volumeVar = s_volume;
 	VectorClear( src->origin );
 	VectorClear( src->velocity );
@@ -137,6 +136,8 @@ static void source_kill( src_t *src ) {
 	src->isLocked = false;
 	src->isLooping = false;
 	src->isTracking = false;
+	src->touchedThisFrame = false;
+	src->loopIdentifyingToken = 0;
 
 	src->isLingering = false;
 	src->lingeringTimeoutAt = 0;
@@ -173,61 +174,55 @@ static void source_spatialize( src_t *src ) {
 	alSourcefv( src->source, AL_VELOCITY, src->velocity );
 }
 
-/*
-* source_loop
-*/
-static void source_loop( int priority, sfx_t *sfx, int entNum, float fvol, float attenuation ) {
-	src_t *src;
-	bool new_source = false;
+static void source_loop( int priority, sfx_t *sfx, int entNum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+	assert( identifyingToken );
 
 	if( !sfx ) {
 		return;
 	}
 
+	// TODO: Allow player-local and explicitly positioned global sounds (which are not attached to entities)
 	if( entNum < 0 || entNum >= max_ents ) {
 		return;
 	}
 
-	// Do we need to start a new sound playing?
-	if( !entlist[entNum].src ) {
-		src = S_AllocSource( priority, entNum, 0 );
-		if( !src ) {
+	src_t *existing = nullptr;
+	for( int i = 0; i < src_count; ++i ) {
+		src_t *const src = &srclist[i];
+		if( src->isActive && src->loopIdentifyingToken == identifyingToken ) {
+			existing = src;
+			break;
+		}
+	}
+
+	src_t *chosenSrc = existing;
+	if( !chosenSrc ) {
+		chosenSrc = S_AllocSource( priority, entNum, 0 );
+		if( !chosenSrc ) {
 			return;
 		}
-		new_source = true;
-	} else if( entlist[entNum].src->sfx != sfx ) {
-		// Need to restart. Just re-use this channel
-		src = entlist[entNum].src;
-		source_kill( src );
-		new_source = true;
-	} else {
-		src = entlist[entNum].src;
+		source_setup( chosenSrc, sfx, false, priority, entNum, -1, fvol, attenuation );
+		alSourcei( chosenSrc->source, AL_LOOPING, AL_TRUE );
+		chosenSrc->loopIdentifyingToken = identifyingToken;
+		chosenSrc->isLooping = true;
 	}
 
-	if( new_source ) {
-		source_setup( src, sfx, false, priority, entNum, -1, fvol, attenuation );
-		alSourcei( src->source, AL_LOOPING, AL_TRUE );
-		src->isLooping = true;
+	S_AdjustGain( chosenSrc );
 
-		entlist[entNum].src = src;
-	}
+	alSourcef( chosenSrc->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
+	alSourcef( chosenSrc->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
 
-	S_AdjustGain( src );
-
-	alSourcef( src->source, AL_REFERENCE_DISTANCE, kSoundAttenuationRefDistance );
-	alSourcef( src->source, AL_MAX_DISTANCE, kSoundAttenuationMaxDistance );
-
-	if( new_source ) {
-		if( src->attenuation ) {
-			src->isTracking = true;
+	if( !existing ) {
+		if( chosenSrc->attenuation > 0.0f ) {
+			chosenSrc->isTracking = true;
 		}
 
-		source_spatialize( src );
+		source_spatialize( chosenSrc );
 
-		alSourcePlay( src->source );
+		alSourcePlay( chosenSrc->source );
 	}
 
-	entlist[entNum].touched = true;
+	chosenSrc->touchedThisFrame = true;
 }
 
 static void S_ShutdownSourceEFX( src_t *src ) {
@@ -446,7 +441,6 @@ static void S_ProcessZombieSources( src_t **zombieSources, int numZombieSources,
 * S_UpdateSources
 */
 void S_UpdateSources( void ) {
-	int i, entNum;
 	ALint state;
 
 	const int64_t millisNow = Sys_Milliseconds();
@@ -455,7 +449,7 @@ void S_UpdateSources( void ) {
 	int numZombieSources = 0;
 	int numActiveEffects = 0;
 
-	for( i = 0; i < src_count; i++ ) {
+	for( int i = 0; i < src_count; i++ ) {
 		src_t *src = &srclist[i];
 		if( !src->isActive ) {
 			continue;
@@ -473,8 +467,6 @@ void S_UpdateSources( void ) {
 			S_AdjustGain( &srclist[i] );
 		}
 
-		entNum = src->entNum;
-
 		alGetSourcei( src->source, AL_SOURCE_STATE, &state );
 		if( state == AL_STOPPED ) {
 			// Do not even bother adding the source to the list of zombie sources in these cases:
@@ -485,9 +477,6 @@ void S_UpdateSources( void ) {
 			} else {
 				zombieSources[numZombieSources++] = src;
 			}
-			if( entNum >= 0 && entNum < max_ents ) {
-				entlist[entNum].src = NULL;
-			}
 			src->entNum = -1;
 			continue;
 		}
@@ -495,16 +484,15 @@ void S_UpdateSources( void ) {
 		if( src->isLooping ) {
 			// If a looping effect hasn't been touched this frame, kill it
 			// Note: lingering produces bad results in this case
-			if( !entlist[entNum].touched ) {
+			if( !src->touchedThisFrame ) {
 				// Don't even bother adding this source to a list of zombie sources...
 				source_kill( &srclist[i] );
 				// Do not misinform zombies processing logic
 				if( src->envUpdateState.effect ) {
 					numActiveEffects--;
 				}
-				entlist[entNum].src = NULL;
 			} else {
-				entlist[entNum].touched = false;
+				src->touchedThisFrame = false;
 			}
 		}
 
@@ -707,27 +695,6 @@ src_t *S_AllocSource( int priority, int entNum, int channel ) {
 }
 
 /*
-* S_LockSource
-*/
-void S_LockSource( src_t *src ) {
-	src->isLocked = true;
-}
-
-/*
-* S_UnlockSource
-*/
-void S_UnlockSource( src_t *src ) {
-	src->isLocked = false;
-}
-
-/*
-* S_UnlockSource
-*/
-void S_KeepSourceAlive( src_t *src, bool alive ) {
-	src->keepAlive = alive;
-}
-
-/*
 * S_GetALSource
 */
 ALuint S_GetALSource( const src_t *src ) {
@@ -811,8 +778,8 @@ void S_StartGlobalSound( sfx_t *sfx, int channel, float fvol ) {
 /*
 * S_AddLoopSound
 */
-void S_AddLoopSound( sfx_t *sfx, int entnum, float fvol, float attenuation ) {
-	source_loop( SRCPRI_LOOP, sfx, entnum, fvol, attenuation );
+void S_AddLoopSound( sfx_t *sfx, int entnum, uintptr_t identifyingToken, float fvol, float attenuation ) {
+	source_loop( SRCPRI_LOOP, sfx, entnum, identifyingToken, fvol, attenuation );
 }
 
 /*

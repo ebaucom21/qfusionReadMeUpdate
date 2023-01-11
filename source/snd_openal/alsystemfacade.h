@@ -76,9 +76,10 @@ public:
 		}
 	}
 
-	void addLoopSound( sfx_s *sfx, int entNum, float volume, float attenuation ) override {
+	void addLoopSound( sfx_s *sfx, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) override {
+		assert( identifyingToken );
 		if( sfx ) {
-			m_addLoopSoundCall.exec( sfx->id, entNum, volume, attenuation );
+			m_addLoopSoundCall.exec( sfx->id, entNum, identifyingToken, volume, attenuation );
 		}
 	}
 
@@ -136,7 +137,7 @@ private:
 		this, "startGlobalSound", &m_backend, &Backend::startGlobalSound };
 	InterThreadCall5<Backend, int, int, int, float, float> m_startRelativeSoundCall {
 		this, "startRelativeSound", &m_backend, &Backend::startRelativeSound };
-	InterThreadCall4<Backend, int, int, float, float> m_addLoopSoundCall {
+	InterThreadCall5<Backend, int, int, uintptr_t, float, float> m_addLoopSoundCall {
 		this, "addLoopSound", &m_backend, &Backend::addLoopSound };
 
 	InterThreadCall3<Backend, uintptr_t, uintptr_t, int> m_startBackgroundTrackCall {

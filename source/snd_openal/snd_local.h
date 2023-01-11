@@ -90,7 +90,7 @@ void S_StartGlobalSound( struct sfx_s *sfx, int channel, float fvol );
 
 void S_StartLocalSound( sfx_t *sfx, float fvol );
 
-void S_AddLoopSound( struct sfx_s *sfx, int entnum, float fvol, float attenuation );
+void S_AddLoopSound( struct sfx_s *sfx, int entnum, uintptr_t identifyingToken, float fvol, float attenuation );
 
 void S_RawSamples2( unsigned int samples, unsigned int rate,
 					unsigned short width, unsigned short channels, const uint8_t *data, bool music, float fvol );
@@ -183,6 +183,9 @@ typedef struct src_s {
 	cvar_t *volumeVar;
 
 	int64_t lastUse;    // Last time used
+
+	uintptr_t loopIdentifyingToken;
+
 	int priority;
 	int entNum;
 	int channel;
@@ -194,8 +197,8 @@ typedef struct src_s {
 	bool isLocked;
 	bool isLooping;
 	bool isTracking;
-	bool keepAlive;
 	bool isLingering;
+	bool touchedThisFrame;
 
 	int64_t lingeringTimeoutAt;
 
