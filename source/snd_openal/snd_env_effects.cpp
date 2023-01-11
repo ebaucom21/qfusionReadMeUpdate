@@ -110,6 +110,30 @@ float EaxReverbEffect::GetSourceGain( src_t *src ) const {
 	return result;
 }
 
+[[maybe_unused]]
+static void PrintReverbProps( const EfxReverbProps &props ) {
+	Com_Printf( "====================== : %" PRId64 "\n", Sys_Milliseconds() );
+	Com_Printf( "Density                : %f\n", props.density );
+	Com_Printf( "Diffusion              : %f\n", props.diffusion );
+	Com_Printf( "Decay time             : %f\n", props.decayTime );
+	Com_Printf( "Decay HF Ratio         : %f\n", props.decayHfRatio );
+	Com_Printf( "Decay LF Ratio         : %f\n", props.decayLfRatio );
+	Com_Printf( "Gain                   : %f\n", props.gain );
+	Com_Printf( "Gain HF                : %f\n", props.gainHf );
+	Com_Printf( "Gain LF                : %f\n", props.gainLf );
+	Com_Printf( "Reflections gain       : %f\n", props.reflectionsGain );
+	Com_Printf( "Reflections delay      : %f\n", props.reflectionsDelay );
+	Com_Printf( "Late reverb gain       : %f\n", props.lateReverbGain );
+	Com_Printf( "Late reverb delay      : %f\n", props.lateReverbDelay );
+	Com_Printf( "Echo time              : %f\n", props.echoTime );
+	Com_Printf( "Echo depth             : %f\n", props.echoDepth );
+	Com_Printf( "Modulation time        : %f\n", props.modulationTime );
+	Com_Printf( "Modulation depth       : %f\n", props.modulationDepth );
+	Com_Printf( "Air absorption gain HF : %f\n", props.airAbsorptionGainHf );
+	Com_Printf( "HF reference           : %f\n", props.hfReference );
+	Com_Printf( "LF reference           : %f\n", props.lfReference );
+}
+
 void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	CheckCurrentlyBoundEffect( src );
 
@@ -117,34 +141,50 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	const float filterHfGainFrac = 0.1f + 0.9f * ( 1.0f - attenuation );
 	assert( filterHfGainFrac >= 0.1f && filterHfGainFrac <= 1.0f );
 
-	alEffectf( src->effect, AL_EAXREVERB_DENSITY, this->density );
+	//PrintReverbProps( this->reverbProps );
 
-	alEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->diffusion );
-	alEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->decayTime );
-	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->decayHfRatio );
-	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->decayLfRatio );
+	alEffectf( src->effect, AL_EAXREVERB_DENSITY, this->reverbProps.density );
+	alEffectf( src->effect, AL_EAXREVERB_DIFFUSION, this->reverbProps.diffusion );
 
-	alEffectf( src->effect, AL_EAXREVERB_GAIN, this->gain );
-	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->gainHf );
-	alEffectf( src->effect, AL_EAXREVERB_GAINLF, this->gainLf );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_TIME, this->reverbProps.decayTime );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->reverbProps.decayHfRatio );
+	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->reverbProps.decayLfRatio );
 
-	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reflectionsGain );
-	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reflectionsDelay );
+	alEffectf( src->effect, AL_EAXREVERB_GAIN, this->reverbProps.gain );
+	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->reverbProps.gainHf );
+	alEffectf( src->effect, AL_EAXREVERB_GAINLF, this->reverbProps.gainLf );
 
-	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->lateReverbGain );
-	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->lateReverbDelay );
+	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_GAIN, this->reverbProps.reflectionsGain );
+	alEffectf( src->effect, AL_EAXREVERB_REFLECTIONS_DELAY, this->reverbProps.reflectionsDelay );
 
-	alEffectf( src->effect, AL_EAXREVERB_ECHO_TIME, this->echoTime );
-	alEffectf( src->effect, AL_EAXREVERB_ECHO_DEPTH, this->echoDepth );
+	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_GAIN, this->reverbProps.lateReverbGain );
+	alEffectf( src->effect, AL_EAXREVERB_LATE_REVERB_DELAY, this->reverbProps.lateReverbDelay );
 
-	alEffectf( src->effect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, this->airAbsorptionGainHf );
+	alEffectf( src->effect, AL_EAXREVERB_ECHO_TIME, this->reverbProps.echoTime );
+	alEffectf( src->effect, AL_EAXREVERB_ECHO_DEPTH, this->reverbProps.echoDepth );
 
-	alEffectf( src->effect, AL_EAXREVERB_LFREFERENCE, this->lfReference );
-	alEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->hfReference );
+	alEffectf( src->effect, AL_EAXREVERB_MODULATION_TIME, this->reverbProps.modulationTime );
+	alEffectf( src->effect, AL_EAXREVERB_MODULATION_DEPTH, this->reverbProps.modulationDepth );
+
+	alEffectf( src->effect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, this->reverbProps.airAbsorptionGainHf );
+
+	alEffectf( src->effect, AL_EAXREVERB_LFREFERENCE, this->reverbProps.lfReference );
+	alEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->reverbProps.hfReference );
+
+	alEffecti( src->effect, AL_EAXREVERB_DECAY_HFLIMIT, this->reverbProps.decayHfLimit );
+
+	if( alGetError() != AL_NO_ERROR ) abort();
 
 	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
 
 	AttachEffect( src );
+}
+
+static float CalcLerpFracForTimeDelta( int timeDelta ) {
+	if( float rawFrac = (float)timeDelta * ( 1.0f / 200.0f ); rawFrac < 1.0f ) {
+		return 0.50f + 0.45f * rawFrac;
+	}
+	return 1.0f;
 }
 
 void UnderwaterFlangerEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
@@ -153,8 +193,7 @@ void UnderwaterFlangerEffect::InterpolateProps( const Effect *oldOne, int timeDe
 		return;
 	}
 
-	const Interpolator interpolator( timeDelta );
-	directObstruction = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
+	directObstruction = std::lerp( directObstruction, that->directObstruction, CalcLerpFracForTimeDelta( timeDelta ) );
 }
 
 bool EaxReverbEffect::ShouldKeepLingering( float sourceQualityHint, int64_t millisNow ) const {
@@ -177,46 +216,13 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 		return;
 	}
 
-	Interpolator interpolator( timeDelta );
+	const float lerpFrac = CalcLerpFracForTimeDelta( timeDelta );
 
-	directObstruction        = interpolator( directObstruction, that->directObstruction, 0.0f, 1.0f );
-	secondaryRaysObstruction = interpolator( secondaryRaysObstruction, that->secondaryRaysObstruction, 0.0f, 1.0f );
-	indirectAttenuation      = interpolator( indirectAttenuation, that->indirectAttenuation, 0.0f, 1.0f );
+	directObstruction        = std::lerp( directObstruction, that->directObstruction, lerpFrac );
+	secondaryRaysObstruction = std::lerp( secondaryRaysObstruction, that->secondaryRaysObstruction, lerpFrac );
+	indirectAttenuation      = std::lerp( indirectAttenuation, that->indirectAttenuation, lerpFrac );
 
-#define lerpEaxProperty( x, y, z ) interpolator( x, y, AL_EAXREVERB_MIN_##z, AL_EAXREVERB_MAX_##z )
-
-	density             = lerpEaxProperty( density, that->density, DENSITY );
-	diffusion           = lerpEaxProperty( diffusion, that->diffusion, DIFFUSION );
-	gainLf              = lerpEaxProperty( gainLf, that->gainLf, GAINLF );
-	gainHf              = lerpEaxProperty( gainHf, that->gainHf, GAINHF );
-	decayTime           = lerpEaxProperty( decayTime, that->decayTime, DECAY_TIME );
-	decayLfRatio        = lerpEaxProperty( decayLfRatio, that->decayLfRatio, DECAY_LFRATIO );
-	decayHfRatio        = lerpEaxProperty( decayHfRatio, that->decayHfRatio, DECAY_HFRATIO );
-	reflectionsGain     = lerpEaxProperty( reflectionsGain, that->reflectionsGain, REFLECTIONS_GAIN );
-	reflectionsDelay    = lerpEaxProperty( reflectionsDelay, that->reflectionsDelay, REFLECTIONS_DELAY );
-	lateReverbGain      = lerpEaxProperty( lateReverbGain, that->lateReverbGain, LATE_REVERB_GAIN );
-	lateReverbDelay     = lerpEaxProperty( lateReverbDelay, that->lateReverbDelay, LATE_REVERB_DELAY );
-	echoTime            = lerpEaxProperty( echoTime, that->echoTime, ECHO_TIME );
-	echoDepth           = lerpEaxProperty( echoDepth, that->echoDepth, ECHO_DEPTH );
-	airAbsorptionGainHf = lerpEaxProperty( airAbsorptionGainHf, that->airAbsorptionGainHf, AIR_ABSORPTION_GAINHF );
-	lfReference         = lerpEaxProperty( lfReference, that->lfReference, LFREFERENCE );
-	hfReference         = lerpEaxProperty( hfReference, that->hfReference, HFREFERENCE );
-
-#undef lerpEaxProperty
-}
-
-void EaxReverbEffect::CopyReverbProps( const EaxReverbEffect *that ) {
-	// Avoid doing memcpy... This is not a POD type
-	density = that->density;
-	diffusion = that->diffusion;
-	gainHf = that->gainHf;
-	decayTime = that->decayTime;
-	reflectionsDelay = that->reflectionsDelay;
-	lateReverbGain = that->lateReverbGain;
-	lateReverbDelay = that->lateReverbDelay;
-	secondaryRaysObstruction = that->secondaryRaysObstruction;
-	hfReference = that->hfReference;
-	indirectAttenuation = that->indirectAttenuation;
+	lerpReverbProps( &that->reverbProps, lerpFrac, &this->reverbProps, &this->reverbProps );
 }
 
 void EaxReverbEffect::UpdatePanning( src_s *src, const vec3_t listenerOrigin, const mat3_t listenerAxes ) {

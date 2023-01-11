@@ -69,28 +69,28 @@ static bool ENV_TryReuseSourceReverbProps( src_t *src, const src_t *tryReuseProp
 	}
 
 	// If they are very close, feel free to just copy props
-	if( squareDistance < 4.0f * 4.0f ) {
-		newEffect->CopyReverbProps( reuseEffect );
-		return true;
+	if( squareDistance > 4.0f * 4.0f ) {
+		// Do a coarse raycast test between these two sources
+		vec3_t start, end, dir;
+		VectorSubtract( tryReusePropsSrc->origin, src->origin, dir );
+		const float invDistance = 1.0f / sqrtf( squareDistance );
+		VectorScale( dir, invDistance, dir );
+		// Offset start and end by a dir unit.
+		// Ensure start and end are in "air" and not on a brush plane
+		VectorAdd( src->origin, dir, start );
+		VectorSubtract( tryReusePropsSrc->origin, dir, end );
+
+		trace_t trace;
+		S_Trace( &trace, start, end, vec3_origin, vec3_origin, MASK_SOLID );
+		if( trace.fraction != 1.0f ) {
+			return false;
+		}
 	}
 
-	// Do a coarse raycast test between these two sources
-	vec3_t start, end, dir;
-	VectorSubtract( tryReusePropsSrc->origin, src->origin, dir );
-	const float invDistance = 1.0f / sqrtf( squareDistance );
-	VectorScale( dir, invDistance, dir );
-	// Offset start and end by a dir unit.
-	// Ensure start and end are in "air" and not on a brush plane
-	VectorAdd( src->origin, dir, start );
-	VectorSubtract( tryReusePropsSrc->origin, dir, end );
-
-	trace_t trace;
-	S_Trace( &trace, start, end, vec3_origin, vec3_origin, MASK_SOLID );
-	if( trace.fraction != 1.0f ) {
-		return false;
-	}
-
-	newEffect->CopyReverbProps( reuseEffect );
+	newEffect->directObstruction        = reuseEffect->directObstruction;
+	newEffect->indirectAttenuation      = reuseEffect->indirectAttenuation;
+	newEffect->secondaryRaysObstruction = reuseEffect->secondaryRaysObstruction;
+	newEffect->reverbProps              = reuseEffect->reverbProps;
 	return true;
 }
 
@@ -230,60 +230,13 @@ void ReverbEffectSampler::ResetMutableState( const ListenerProps &listenerProps_
 	testedListenerOrigin[2] += 18.0f;
 }
 
-void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerProps_,
-												src_t *src_,
-												EaxReverbEffect *effect_ ) {
-	ResetMutableState( listenerProps_, src_, effect_ );
-
-	numPrimaryRays = GetNumSamplesForCurrentQuality( 16, MAX_REVERB_PRIMARY_RAY_SAMPLES );
-
-	SetupPrimaryRayDirs();
-
-	EmitPrimaryRays();
-
-	if( !numPrimaryHits ) {
-		// Keep existing values (they are valid by default now)
-		return;
-	}
-
-	ProcessPrimaryEmissionResults();
-	EmitSecondaryRays();
-}
-
-void ReverbEffectSampler::SetupPrimaryRayDirs() {
-	assert( numPrimaryRays );
-
-	SetupSamplingRayDirs( primaryRayDirs, numPrimaryRays );
-}
-
-struct LerpPresetHelper {
-	const EFXEAXREVERBPROPERTIES *tinyOpenRoomPreset;
-	const EFXEAXREVERBPROPERTIES *tinyClosedRoomPreset;
-	const EFXEAXREVERBPROPERTIES *hugeOpenRoomPreset;
-	const EFXEAXREVERBPROPERTIES *hugeClosedRoomPreset;
-	const float skyFrac;
-	const float sizeFrac;
-
-	[[nodiscard]]
-	auto calcBiLerpValue( float (EFXEAXREVERBPROPERTIES::*fieldPtr ) ) const -> float {
-		const float tinyOpenValue   = tinyOpenRoomPreset->*fieldPtr;
-		const float tinyClosedValue = tinyClosedRoomPreset->*fieldPtr;
-		const float hugeOpenValue   = hugeOpenRoomPreset->*fieldPtr;
-		const float hugeClosedValue = hugeClosedRoomPreset->*fieldPtr;
-
-		const float tinyValue = std::lerp( tinyClosedValue, tinyOpenValue, skyFrac );
-		const float hugeValue = std::lerp( hugeClosedValue, hugeOpenValue, skyFrac );
-		return std::lerp( tinyValue, hugeValue, sizeFrac );
-	}
-};
-
 class CachedPresetTracker {
 public:
 	CachedPresetTracker( const char *varName, const char *defaultValue ) noexcept
 		: m_varName( varName ), m_defaultValue( defaultValue ) {}
 
 	[[nodiscard]]
-	auto getPreset() const -> const EFXEAXREVERBPROPERTIES * {
+	auto getPreset() const -> const EfxReverbProps * {
 		if( !m_var ) {
 			m_var = Cvar_Get( m_varName, m_defaultValue, CVAR_CHEAT | CVAR_DEVELOPER );
 			m_var->modified = true;
@@ -302,25 +255,13 @@ public:
 		return m_preset;
 	}
 private:
-	// This method allows for an overall nicer code, and it's totally fine assuming this is not a hot code path
 	[[nodiscard]]
-	static auto mixFieldOfParts( const float EFXEAXREVERBPROPERTIES::* field,
-								 const wsw::StaticVector<const EFXEAXREVERBPROPERTIES *, 4> &parts ) {
-		assert( !parts.empty() );
-		float value = 0.0f;
-		for( const EFXEAXREVERBPROPERTIES *preset: parts ) {
-			value += preset->*field;
-		}
-		return value / (float)parts.size();
-	}
-
-	[[nodiscard]]
-	auto getByString( const wsw::StringView &string ) const -> const EFXEAXREVERBPROPERTIES * {
+	auto getByString( const wsw::StringView &string ) const -> const EfxReverbProps * {
 		if( string.indexOf( ' ' ) == std::nullopt ) {
 			return EfxPresetsRegistry::s_instance.findByName( string );
 		} else {
 			wsw::StringSplitter splitter( string );
-			wsw::StaticVector<const EFXEAXREVERBPROPERTIES *, 4> parts;
+			wsw::StaticVector<const EfxReverbProps *, 4> parts;
 			while( const auto maybeToken = splitter.getNext( ' ' ) ) {
 				if( !parts.full() ) {
 					if( const auto *preset = EfxPresetsRegistry::s_instance.findByName( *maybeToken )) {
@@ -333,25 +274,8 @@ private:
 				}
 			}
 			if( !parts.empty() ) {
-				// Note: Unused fields are not processed
-				m_mix.flDensity             = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDensity, parts );
-				m_mix.flDiffusion           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDiffusion, parts );
-				m_mix.flGain                = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGain, parts );
-				m_mix.flGainLF              = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGainLF, parts );
-				m_mix.flGainHF              = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flGainHF, parts );
-				m_mix.flDecayTime           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayTime, parts );
-				m_mix.flDecayHFRatio        = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayHFRatio, parts );
-				m_mix.flDecayLFRatio        = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flDecayLFRatio, parts );
-				m_mix.flReflectionsGain     = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flReflectionsGain, parts );
-				m_mix.flReflectionsDelay    = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flReflectionsDelay, parts );
-				m_mix.flLateReverbGain      = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLateReverbGain, parts );
-				m_mix.flLateReverbDelay     = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLateReverbDelay, parts );
-				m_mix.flEchoTime            = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flEchoTime, parts );
-				m_mix.flEchoDepth           = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flEchoDepth, parts );
-				m_mix.flAirAbsorptionGainHF = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flAirAbsorptionGainHF, parts );
-				m_mix.flLFReference         = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flLFReference, parts );
-				m_mix.flHFReference         = mixFieldOfParts( &EFXEAXREVERBPROPERTIES::flHFReference, parts );
-				return &m_mix;
+				mixReverbProps( parts.begin(), parts.end(), &m_mixStorage );
+				return &m_mixStorage;
 			} else {
 				return nullptr;
 			}
@@ -361,8 +285,8 @@ private:
 	const char *const m_varName;
 	const char *const m_defaultValue;
 	mutable cvar_t *m_var { nullptr };
-	mutable const EFXEAXREVERBPROPERTIES *m_preset { nullptr };
-	mutable EFXEAXREVERBPROPERTIES m_mix {};
+	mutable const EfxReverbProps *m_preset { nullptr };
+	mutable EfxReverbProps m_mixStorage {};
 };
 
 static CachedPresetTracker g_tinyOpenRoomPreset { "s_tinyOpenRoomPreset", "quarry" };
@@ -370,7 +294,22 @@ static CachedPresetTracker g_tinyClosedRoomPreset { "s_tinyClosedRoomPreset", "h
 static CachedPresetTracker g_hugeOpenRoomPreset { "s_hugeOpenRoomPreset", "outdoors_rollingplains" };
 static CachedPresetTracker g_hugeClosedRoomPreset { "s_hugeClosedRoomPreset", "city_library" };
 
-void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
+void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerProps_,
+												src_t *src_,
+												EaxReverbEffect *effect_ ) {
+	ResetMutableState( listenerProps_, src_, effect_ );
+
+	numPrimaryRays = GetNumSamplesForCurrentQuality( 16, MAX_REVERB_PRIMARY_RAY_SAMPLES );
+
+	SetupPrimaryRayDirs();
+
+	EmitPrimaryRays();
+
+	if( !numPrimaryHits ) {
+		// Keep existing values (they are valid by default now)
+		return;
+	}
+
 	// Instead of trying to compute these factors every sampling call,
 	// reuse pre-computed properties of CM map leafs that briefly resemble rooms/convex volumes.
 	assert( src->envUpdateState.leafNum >= 0 );
@@ -378,60 +317,33 @@ void ReverbEffectSampler::ProcessPrimaryEmissionResults() {
 	const auto *const leafPropsCache = LeafPropsCache::Instance();
 	const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
 
-	const LerpPresetHelper helper {
-		.tinyOpenRoomPreset   = g_tinyOpenRoomPreset.getPreset(),
-		.tinyClosedRoomPreset = g_tinyClosedRoomPreset.getPreset(),
-		.hugeOpenRoomPreset   = g_hugeOpenRoomPreset.getPreset(),
-		.hugeClosedRoomPreset = g_hugeClosedRoomPreset.getPreset(),
-		.skyFrac              = leafProps.getSkyFactor(),
-		.sizeFrac             = leafProps.getRoomSizeFactor(),
-	};
+	EfxReverbProps tinyClosedOpenLerpResult { EfxReverbProps::NoInit };
+	lerpReverbProps( g_tinyClosedRoomPreset.getPreset(), leafProps.getSkyFactor(),
+					 g_tinyOpenRoomPreset.getPreset(), &tinyClosedOpenLerpResult );
 
-	effect->gain   = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGain );
-	effect->gainHf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGainHF );
-	effect->gainLf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flGainLF );
+	EfxReverbProps hugeClosedOpenLerpResult { EfxReverbProps::NoInit };
+	lerpReverbProps( g_hugeClosedRoomPreset.getPreset(), leafProps.getSkyFactor(),
+					 g_hugeOpenRoomPreset.getPreset(), &hugeClosedOpenLerpResult );
 
-	effect->diffusion = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDiffusion );
-	effect->decayTime = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayTime );
+	lerpReverbProps( &tinyClosedOpenLerpResult, leafProps.getRoomSizeFactor(),
+					 &hugeClosedOpenLerpResult, &this->effect->reverbProps );
 
-	effect->decayHfRatio = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayHFRatio );
-	effect->decayLfRatio = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flDecayLFRatio );
+	// Tone it down, in general and especially for open environment and/or long decay time
 
-	effect->reflectionsGain  = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flReflectionsGain );
-	effect->reflectionsDelay = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flReflectionsDelay );
+	const float decayTimeForMinGain = 5.0f;
+	const float decayTimeFrac       = this->effect->reverbProps.decayTime * ( 1.0f / decayTimeForMinGain );
+	const float attenuationFrac     = wsw::min( 1.0f, wsw::max( leafProps.getSkyFactor(), decayTimeFrac ) );
+	const float minAttenuation      = 0.75f;
+	const float maxAttenuation      = 0.33f;
+	this->effect->reverbProps.gain *= minAttenuation - ( minAttenuation - maxAttenuation ) * attenuationFrac;
 
-	effect->lateReverbGain  = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLateReverbGain );
-	effect->lateReverbDelay = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLateReverbDelay );
+	EmitSecondaryRays();
+}
 
-	effect->echoTime = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flEchoTime );
-	effect->echoDepth = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flEchoDepth );
+void ReverbEffectSampler::SetupPrimaryRayDirs() {
+	assert( numPrimaryRays );
 
-	effect->lfReference = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flLFReference );
-	effect->hfReference = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flHFReference );
-
-	effect->airAbsorptionGainHf = helper.calcBiLerpValue( &EFXEAXREVERBPROPERTIES::flAirAbsorptionGainHF );
-
-	// Custom parameters
-
-	effect->density = 1.0f - 0.7f * leafProps.getMetallnessFactor();
-
-	// 0.5 is the value of a neutral surface
-	const float smoothness = leafProps.getSmoothnessFactor();
-	if( smoothness <= 0.5f ) {
-		const float frac = 2.0f * smoothness;
-		assert( frac >= 0.0f && frac <= 1.0f );
-		effect->hfReference = std::lerp( 1000.0f, 2500.0f, frac );
-	} else {
-		// The high HF reference is unpleasant for ears
-		// Use the quadratic curve, so it kicks in only in special kinds of environment.
-		const float frac = wsw::square( 2.0f * ( smoothness - 0.5f ) );
-		assert( frac >= 0.0f && frac <= 1.0f );
-		effect->hfReference = std::lerp( 2500.0f, 4000.0f, frac );
-	}
-
-	// Tune it down
-	effect->lateReverbGain = wsw::min( 1.0f, effect->lateReverbGain );
-	effect->gain *= 0.7f;
+	SetupSamplingRayDirs( primaryRayDirs, numPrimaryRays );
 }
 
 void ReverbEffectSampler::EmitSecondaryRays() {
