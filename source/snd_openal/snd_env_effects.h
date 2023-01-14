@@ -6,7 +6,7 @@
 
 struct src_s;
 
-static constexpr float REVERB_ENV_DISTANCE_THRESHOLD = 3072.0f;
+static constexpr float REVERB_ENV_DISTANCE_THRESHOLD = 4096.0f;
 
 class Effect {
 public:

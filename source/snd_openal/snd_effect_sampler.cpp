@@ -289,10 +289,29 @@ private:
 	mutable EfxReverbProps m_mixStorage {};
 };
 
-static CachedPresetTracker g_tinyOpenRoomPreset { "s_tinyOpenRoomPreset", "quarry" };
-static CachedPresetTracker g_tinyClosedRoomPreset { "s_tinyClosedRoomPreset", "hallway" };
-static CachedPresetTracker g_hugeOpenRoomPreset { "s_hugeOpenRoomPreset", "outdoors_rollingplains" };
-static CachedPresetTracker g_hugeClosedRoomPreset { "s_hugeClosedRoomPreset", "city_library" };
+static CachedPresetTracker g_tinyOpenRoomPreset { "s_tinyOpenRoomPreset", "quarry quarry plain" };
+static CachedPresetTracker g_largeOpenRoomPreset { "g_largeOpenRoomPreset", "outdoors_rollingplains plain" };
+static CachedPresetTracker g_hugeOpenRoomPreset { "s_hugeOpenRoomPreset", "outdoors_rollingplains plain mountains" };
+
+static CachedPresetTracker g_tinyAbsorptiveRoomPreset { "s_tinyAbsorptiveRoomPreset", "wooden_smallroom" };
+static CachedPresetTracker g_largeAbsorptiveRoomPreset { "s_largeAbsorptiveRoomPreset", "wooden_largeroom wooden_mediumroom" };
+static CachedPresetTracker g_hugeAbsorptiveRoomPreset { "s_hugeAbsorptiveRoomPreset", "wooden_hall wooden_hall hangar" };
+
+static CachedPresetTracker g_tinyNeutralRoomPreset { "s_tinyNeutralRoomPreset", "castle_smallroom wooden_smallroom" };
+static CachedPresetTracker g_largeNeutralRoomPreset { "s_largeNeutralRoomPreset",
+													  "castle_largeroom wooden_largeroom castle_mediumroom" };
+static CachedPresetTracker g_hugeNeutralRoomPreset { "s_hugeNeutralRoomPreset", "castle_hall wooden_hall hangar" };
+
+static CachedPresetTracker g_tinyReflectiveRoomPreset { "s_tinyReflectiveRoomPreset",
+														"castle_smallroom spacestation_smallroom" };
+static CachedPresetTracker g_largeReflectiveRoomPreset { "s_largeReflectiveRoomPreset",
+														 "castle_largeroom spacestation_largeroom spacestation_mediumroom" };
+static CachedPresetTracker g_hugeReflectiveRoomPreset { "s_hugeReflectiveRoomPreset",
+														"castle_hall spacestation_hall hangar" };
+
+static CachedPresetTracker g_tinyMetallicRoomPreset { "s_tinyMetallicRoomPreset", "factory_smallroom" };
+static CachedPresetTracker g_largeMetallicRoomPreset { "s_largeMetallicRoomPreset", "factory_largeroom factory_mediumroom" };
+static CachedPresetTracker g_hugeMetallicRoomPreset { "s_hugeMetallicRoomPreset", "factory_hall factory_hall hangar" };
 
 void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerProps_,
 												src_t *src_,
@@ -317,25 +336,89 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 	const auto *const leafPropsCache = LeafPropsCache::Instance();
 	const LeafProps &leafProps = leafPropsCache->GetPropsForLeaf( src->envUpdateState.leafNum );
 
-	EfxReverbProps tinyClosedOpenLerpResult { EfxReverbProps::NoInit };
-	lerpReverbProps( g_tinyClosedRoomPreset.getPreset(), leafProps.getSkyFactor(),
-					 g_tinyOpenRoomPreset.getPreset(), &tinyClosedOpenLerpResult );
+	EfxReverbProps openProps { EfxReverbProps::NoInit };
+	EfxReverbProps closedMetallicProps { EfxReverbProps::NoInit };
+	EfxReverbProps closedNonMetallicProps { EfxReverbProps::NoInit };
 
-	EfxReverbProps hugeClosedOpenLerpResult { EfxReverbProps::NoInit };
-	lerpReverbProps( g_hugeClosedRoomPreset.getPreset(), leafProps.getSkyFactor(),
-					 g_hugeOpenRoomPreset.getPreset(), &hugeClosedOpenLerpResult );
+	if( const float roomSizeFactor = leafProps.getRoomSizeFactor(); roomSizeFactor <= 0.5f ) {
+		const float sizeFrac = 2.0f * roomSizeFactor;
+		assert( sizeFrac >= 0.0f && sizeFrac <= 1.0f );
 
-	lerpReverbProps( &tinyClosedOpenLerpResult, leafProps.getRoomSizeFactor(),
-					 &hugeClosedOpenLerpResult, &this->effect->reverbProps );
+		EfxReverbProps tinyProps { EfxReverbProps::NoInit };
+		EfxReverbProps largeProps { EfxReverbProps::NoInit };
 
-	// Tone it down, in general and especially for open environment and/or long decay time
+		if( const float smoothnessFactor = leafProps.getSmoothnessFactor(); smoothnessFactor <= 0.5f ) {
+			const float smoothnessFrac = 2.0f * smoothnessFactor;
+			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
 
-	const float decayTimeForMinGain = 5.0f;
-	const float decayTimeFrac       = this->effect->reverbProps.decayTime * ( 1.0f / decayTimeForMinGain );
-	const float attenuationFrac     = wsw::min( 1.0f, wsw::max( leafProps.getSkyFactor(), decayTimeFrac ) );
-	const float minAttenuation      = 0.75f;
-	const float maxAttenuation      = 0.33f;
-	this->effect->reverbProps.gain *= minAttenuation - ( minAttenuation - maxAttenuation ) * attenuationFrac;
+			lerpReverbProps( g_tinyAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+							 g_tinyNeutralRoomPreset.getPreset(), &tinyProps );
+			lerpReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+							 g_largeNeutralRoomPreset.getPreset(), &largeProps );
+		} else {
+			const float smoothnessFrac = 2.0f * ( smoothnessFactor - 0.5f );
+			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
+
+			lerpReverbProps( g_tinyNeutralRoomPreset.getPreset(), smoothnessFrac,
+							 g_tinyReflectiveRoomPreset.getPreset(), &tinyProps );
+			lerpReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
+							 g_largeReflectiveRoomPreset.getPreset(), &largeProps );
+		}
+
+		lerpReverbProps( &tinyProps, sizeFrac, &largeProps, &closedNonMetallicProps );
+		lerpReverbProps( g_tinyOpenRoomPreset.getPreset(), sizeFrac, g_largeOpenRoomPreset.getPreset(), &openProps );
+		lerpReverbProps( g_tinyMetallicRoomPreset.getPreset(), sizeFrac,
+						 g_largeMetallicRoomPreset.getPreset(), &closedMetallicProps );
+	} else {
+		const float sizeFrac = 2.0f * ( roomSizeFactor - 0.5f );
+		assert( sizeFrac >= 0.0f && sizeFrac <= 1.0f );
+
+		EfxReverbProps largeProps { EfxReverbProps::NoInit };
+		EfxReverbProps hugeProps { EfxReverbProps::NoInit };
+
+		if( const float smoothnessFactor = leafProps.getSmoothnessFactor(); smoothnessFactor <= 0.5f ) {
+			const float smoothnessFrac = 2.0f * smoothnessFactor;
+			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
+
+			lerpReverbProps( g_largeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+							 g_largeNeutralRoomPreset.getPreset(), &largeProps );
+			lerpReverbProps( g_hugeAbsorptiveRoomPreset.getPreset(), smoothnessFrac,
+							 g_hugeNeutralRoomPreset.getPreset(), &hugeProps );
+		} else {
+			const float smoothnessFrac = 2.0f * ( smoothnessFactor - 0.5f );
+			assert( smoothnessFrac >= 0.0f && smoothnessFrac <= 1.0f );
+
+			lerpReverbProps( g_largeNeutralRoomPreset.getPreset(), smoothnessFrac,
+							 g_largeReflectiveRoomPreset.getPreset(), &largeProps );
+			lerpReverbProps( g_hugeNeutralRoomPreset.getPreset(), smoothnessFrac,
+							 g_hugeReflectiveRoomPreset.getPreset(), &hugeProps );
+		}
+
+		lerpReverbProps( &largeProps, sizeFrac, &hugeProps, &closedNonMetallicProps );
+		lerpReverbProps( g_largeOpenRoomPreset.getPreset(), sizeFrac, g_hugeOpenRoomPreset.getPreset(), &openProps );
+		lerpReverbProps( g_largeMetallicRoomPreset.getPreset(), sizeFrac,
+						 g_hugeMetallicRoomPreset.getPreset(), &closedMetallicProps );
+	}
+
+	EfxReverbProps closedProps { EfxReverbProps::NoInit };
+	lerpReverbProps( &closedNonMetallicProps, leafProps.getMetallnessFactor(), &closedMetallicProps, &closedProps );
+
+	lerpReverbProps( &closedProps, leafProps.getSkyFactor(), &openProps, &effect->reverbProps );
+
+	// Tone it down, in general and especially for open and/or reflective environment and/or long decay time
+
+	const float decayTime                 = effect->reverbProps.decayTime;
+	const float decayTimeForMinGain       = 5.0f;
+	const float decayAttenuationFrac      = wsw::min( 1.0f, decayTime * ( 1.0f / decayTimeForMinGain ) );
+	const float skyAttenuationFrac        = leafProps.getSkyFactor();
+	const float reflectiveAttenuationFrac = 2.0f * wsw::max( 0.0f, leafProps.getSmoothnessFactor() - 0.5f );
+	const float metallnessAttenuationFrac = leafProps.getMetallnessFactor();
+	const float attenuationFrac           = wsw::max( wsw::max( decayAttenuationFrac, skyAttenuationFrac ),
+													  wsw::max( reflectiveAttenuationFrac, metallnessAttenuationFrac ) );
+
+	constexpr float minAttenuation = 0.79f;
+	constexpr float maxAttenuation = 0.25f;
+	effect->reverbProps.gain *= minAttenuation - ( minAttenuation - maxAttenuation ) * attenuationFrac;
 
 	EmitSecondaryRays();
 }

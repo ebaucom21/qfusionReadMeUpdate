@@ -138,7 +138,7 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	CheckCurrentlyBoundEffect( src );
 
 	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
-	const float filterHfGainFrac = 0.1f + 0.9f * ( 1.0f - attenuation );
+	const float filterHfGainFrac = 0.1f + 0.6f * ( 1.0f - attenuation );
 	assert( filterHfGainFrac >= 0.1f && filterHfGainFrac <= 1.0f );
 
 	//PrintReverbProps( this->reverbProps );
@@ -172,8 +172,6 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	alEffectf( src->effect, AL_EAXREVERB_HFREFERENCE, this->reverbProps.hfReference );
 
 	alEffecti( src->effect, AL_EAXREVERB_DECAY_HFLIMIT, this->reverbProps.decayHfLimit );
-
-	if( alGetError() != AL_NO_ERROR ) abort();
 
 	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
 
