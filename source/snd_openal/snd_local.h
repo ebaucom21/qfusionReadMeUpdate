@@ -175,6 +175,7 @@ typedef struct src_s {
 	ALuint source;
 
 	ALuint directFilter;
+	ALuint auxiliarySendFilter;
 	ALuint effect;
 	ALuint effectSlot;
 

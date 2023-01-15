@@ -79,10 +79,6 @@ class EaxReverbEffect final: public Effect {
 	void UpdateDelegatedSpatialization( struct src_s *src, const vec3_t listenerOrigin );
 
 	vec3_t tmpSourceOrigin { 0, 0, 0 };
-
-	float GetAttnFracBasedOnSampledEnvironment() const;
-
-	float GetSourceGain( src_s *src ) const override;
 public:
 	EaxReverbEffect(): Effect( AL_EFFECT_EAXREVERB ) {
 		reverbProps.gain = 0.0f;
@@ -93,10 +89,6 @@ public:
 	float directObstruction { 0.0f };
 	// An intermediate of the reverb sampling algorithm, useful for gain adjustment
 	float secondaryRaysObstruction { 0.0f };
-
-	// A custom parameter, [0.0 ... 1.0], 0.0 for directly reachable sources,
-	// 1.0 for very distant indirect-reachable or completely unreachable sources.
-	float indirectAttenuation { 0.0f };
 
 	unsigned GetLingeringTimeout() const override {
 		return (unsigned)( reverbProps.decayTime * 1000 + 50 );

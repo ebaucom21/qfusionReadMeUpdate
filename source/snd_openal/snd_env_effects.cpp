@@ -49,7 +49,7 @@ void Effect::AttachEffect( src_t *src ) {
 	// Attach the effect to the slot
 	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
 	// Feed the slot from the source
-	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, src->auxiliarySendFilter );
 }
 
 void UnderwaterFlangerEffect::IntiallySetupEffect( src_t *src ) {
@@ -82,34 +82,6 @@ void UnderwaterFlangerEffect::BindOrUpdate( src_t *src ) {
 	AttachEffect( src );
 }
 
-float EaxReverbEffect::GetAttnFracBasedOnSampledEnvironment() const {
-	if( directObstruction == 0.0f ) {
-		return 0.0f;
-	}
-
-	assert( directObstruction >= 0.0f && directObstruction <= 1.0f );
-	assert( secondaryRaysObstruction >= 0.0f && secondaryRaysObstruction <= 1.0f );
-	assert( indirectAttenuation >= 0.0f && indirectAttenuation <= 1.0f );
-
-	// Both partial obstruction factors are within [0, 1] range, so we can get a weighted average
-	const float obstructionFrac = 0.1f * this->directObstruction + 0.9f * this->secondaryRaysObstruction;
-	assert( obstructionFrac >= 0.0f && obstructionFrac <= 1.0f );
-
-	// Q_Sqrt may go slightly out of bounds without clamping
-	return wsw::max( wsw::clamp( Q_Sqrt( indirectAttenuation ), 0.0f, 1.0f ), 0.7f * obstructionFrac );
-}
-
-float EaxReverbEffect::GetSourceGain( src_t *src ) const {
-	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
-	// Don't let it diminish to zero for legit sources
-	// (the case of indirectAttenuation == 1.0 is not that uncommon due to map quirks)
-	const float sourceGainFrac = ( 1.0f - 0.7f * attenuation );
-	assert( sourceGainFrac >= 0.3f && sourceGainFrac <= 1.0f );
-	const float result = ( src->fvol * src->volumeVar->value ) * sourceGainFrac;
-	assert( result >= 0.0f && result <= 1.0f );
-	return result;
-}
-
 [[maybe_unused]]
 static void PrintReverbProps( const EfxReverbProps &props ) {
 	Com_Printf( "====================== : %" PRId64 "\n", Sys_Milliseconds() );
@@ -136,10 +108,6 @@ static void PrintReverbProps( const EfxReverbProps &props ) {
 
 void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	CheckCurrentlyBoundEffect( src );
-
-	const float attenuation = GetAttnFracBasedOnSampledEnvironment();
-	const float filterHfGainFrac = 0.1f + 0.6f * ( 1.0f - attenuation );
-	assert( filterHfGainFrac >= 0.1f && filterHfGainFrac <= 1.0f );
 
 	//PrintReverbProps( this->reverbProps );
 
@@ -173,7 +141,25 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 
 	alEffecti( src->effect, AL_EAXREVERB_DECAY_HFLIMIT, this->reverbProps.decayHfLimit );
 
-	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, filterHfGainFrac );
+	// Configure the direct send filter parameters
+
+	assert( directObstruction >= 0.0f && directObstruction <= 1.0f );
+	assert( secondaryRaysObstruction >= 0.0f && secondaryRaysObstruction <= 1.0f );
+
+	// Both partial obstruction factors are within [0, 1] range, so we can get a weighted average
+	const float obstructionFrac = 0.3f * this->directObstruction + 0.7f * this->secondaryRaysObstruction;
+	assert( obstructionFrac >= 0.0f && obstructionFrac <= 1.0f );
+
+	// Strongly suppress the dry path on obstruction.
+	// Note: we do not touch the entire source gain.
+	alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f - 0.8f * obstructionFrac );
+
+	// There's nothing special with looping sources, their current sfx/sounds happen to benefit from that
+	if( src->isLooping ) {
+		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f - obstructionFrac );
+	} else {
+		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
+	}
 
 	AttachEffect( src );
 }
@@ -218,7 +204,6 @@ void EaxReverbEffect::InterpolateProps( const Effect *oldOne, int timeDelta ) {
 
 	directObstruction        = std::lerp( directObstruction, that->directObstruction, lerpFrac );
 	secondaryRaysObstruction = std::lerp( secondaryRaysObstruction, that->secondaryRaysObstruction, lerpFrac );
-	indirectAttenuation      = std::lerp( indirectAttenuation, that->indirectAttenuation, lerpFrac );
 
 	lerpReverbProps( &that->reverbProps, lerpFrac, &this->reverbProps, &this->reverbProps );
 }

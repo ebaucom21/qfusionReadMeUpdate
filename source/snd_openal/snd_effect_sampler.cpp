@@ -88,7 +88,6 @@ static bool ENV_TryReuseSourceReverbProps( src_t *src, const src_t *tryReuseProp
 	}
 
 	newEffect->directObstruction        = reuseEffect->directObstruction;
-	newEffect->indirectAttenuation      = reuseEffect->indirectAttenuation;
 	newEffect->secondaryRaysObstruction = reuseEffect->secondaryRaysObstruction;
 	newEffect->reverbProps              = reuseEffect->reverbProps;
 	return true;

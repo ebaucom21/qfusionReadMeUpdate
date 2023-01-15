@@ -233,11 +233,18 @@ static void S_ShutdownSourceEFX( src_t *src ) {
 		src->directFilter = 0;
 	}
 
+	// TODO: Check whether it is correct in all cases
+
 	if( src->effect && src->effectSlot ) {
 		// Detach the effect from the source
 		alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, 0 );
 		// Detach the effect from the slot
 		alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
+	}
+
+	if( src->auxiliarySendFilter ) {
+		alDeleteFilters( 1, &src->auxiliarySendFilter );
+		src->auxiliarySendFilter = 0;
 	}
 
 	if( src->effect ) {
@@ -251,72 +258,78 @@ static void S_ShutdownSourceEFX( src_t *src ) {
 	}
 
 	// Suppress errors if any
-	alGetError();
+	(void)alGetError();
 }
 
 static bool S_InitSourceEFX( src_t *src ) {
-	src->directFilter = 0;
-	src->effect = 0;
-	src->effectSlot = 0;
+	src->directFilter        = 0;
+	src->auxiliarySendFilter = 0;
+	src->effect              = 0;
+	src->effectSlot          = 0;
 
-	alGenFilters( 1, &src->directFilter );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
+	(void)alGetError();
+
+	bool succeeded = false;
+	do {
+		ALuint filters[2] { 0, 0 };
+		alGenFilters( 2, filters );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+
+		src->directFilter        = filters[0];
+		src->auxiliarySendFilter = filters[1];
+
+		alFilteri( src->directFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
+		alFilteri( src->auxiliarySendFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
+		// A single check would be sufficient
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+
+		// Set default filter values (no actual attenuation)
+		alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f );
+		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
+		alFilterf( src->auxiliarySendFilter, AL_LOWPASS_GAIN, 1.0f );
+		// Set it once and don't change
+		alFilterf( src->auxiliarySendFilter, AL_LOWPASS_GAINHF, 0.5f );
+
+		// Attach the filter to the source
+		alSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		alGenEffects( 1, &src->effect );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		alEffecti( src->effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		// Actually disable the reverb effect
+		alEffectf( src->effect, AL_REVERB_GAIN, 0.0f );
+		alGenAuxiliaryEffectSlots( 1, &src->effectSlot );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		// Attach the effect to the slot
+		alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		// Feed the slot from the source
+		alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, src->auxiliarySendFilter );
+		if( alGetError() != AL_NO_ERROR ) {
+			break;
+		}
+		succeeded = true;
+	} while( false );
+
+	if( !succeeded ) {
+		S_ShutdownSourceEFX( src );
 	}
-
-	alFilteri( src->directFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	// Set default filter values (no actual attenuation)
-	alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f );
-	alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
-
-	// Attach the filter to the source
-	alSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	alGenEffects( 1, &src->effect );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	alEffecti( src->effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	// Actually disable the reverb effect
-	alEffectf( src->effect, AL_REVERB_GAIN, 0.0f );
-	if ( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	alGenAuxiliaryEffectSlots( 1, &src->effectSlot );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	// Attach the effect to the slot
-	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	// Feed the slot from the source
-	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
-	if( alGetError() != AL_NO_ERROR ) {
-		goto cleanup;
-	}
-
-	return true;
-
-cleanup:
-	S_ShutdownSourceEFX( src );
-	return false;
+	return succeeded;
 }
 
 /*
