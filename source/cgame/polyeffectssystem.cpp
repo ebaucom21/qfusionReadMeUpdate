@@ -20,21 +20,38 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cg_local.h"
+#include "../client/client.h"
 #include "../qcommon/links.h"
 
+PolyEffectsSystem::PolyEffectsSystem() {
+	m_tmpShapeList = CM_AllocShapeList( cl.cms );
+	if( !m_tmpShapeList ) {
+		wsw::failWithBadAlloc();
+	}
+}
+
 PolyEffectsSystem::~PolyEffectsSystem() {
-	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+	for( CurvedBeamEffect *beam = m_curvedLaserBeamsHead, *next = nullptr; beam; beam = next ) {
+		next = beam->next;
 		destroyCurvedBeamEffect( beam );
 	}
-	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+	for( StraightBeamEffect *beam = m_straightLaserBeamsHead, *next = nullptr; beam; beam = next ) {
+		next = beam->next;
 		destroyStraightBeamEffect( beam );
 	}
-	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) { next = beam->next;
+	for( TransientBeamEffect *beam = m_transientBeamsHead, *next = nullptr; beam; beam = next ) {
+		next = beam->next;
 		destroyTransientBeamEffect( beam );
 	}
-	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) { next = tracer->next;
+	for( TracerEffect *tracer = m_tracerEffectsHead, *next = nullptr; tracer; tracer = next ) {
+		next = tracer->next;
 		destroyTracerEffect( tracer );
 	}
+	for( ImpactRosetteEffect *rosette = m_impactRosetteEffectsHead, *next = nullptr; rosette; rosette = next ) {
+		next = rosette->next;
+		destroyImpactRosetteEffect( rosette );
+	}
+	CM_FreeShapeList( cl.cms, m_tmpShapeList );
 }
 
 auto PolyEffectsSystem::createCurvedBeamEffect( shader_s *material ) -> CurvedBeam * {
@@ -334,6 +351,12 @@ void PolyEffectsSystem::destroyTracerEffect( TracerEffect *effect ) {
 	m_tracerEffectsAllocator.free( effect );
 }
 
+void PolyEffectsSystem::destroyImpactRosetteEffect( ImpactRosetteEffect *effect ) {
+	wsw::unlink( effect, &m_impactRosetteEffectsHead );
+	effect->~ImpactRosetteEffect();
+	m_impactRosetteEffectsAllocator.free( effect );
+}
+
 void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params ) {
 	if( params.width < 1.0f || !params.material ) [[unlikely]] {
 		return;
@@ -458,6 +481,326 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	effect->lightFrameAffinityIndex  = params.lightFrameAffinityIndex;
 
 	wsw::link( effect, &m_tracerEffectsHead );
+}
+
+void PolyEffectsSystem::spawnImpactRosette( ImpactRosetteParams &&params ) {
+	assert( params.width.mean > 0 && params.width.spread >= 0.0f );
+	assert( params.length.mean > 0 && params.length.spread >= 0.0f );
+	assert( params.timeout.min < params.timeout.max );
+	assert( params.timeout.min > 0 && params.timeout.max < 1000 );
+	assert( params.count.min <= params.count.max );
+	assert( params.innerConeAngle < params.outerConeAngle );
+	assert( params.spikeMaterial && params.flareMaterial );
+
+	vec3_t origin;
+	VectorAdd( params.origin, params.offset, origin );
+
+	vec3_t axis1, axis2;
+	MakeNormalVectors( params.dir, axis1, axis2 );
+	assert( std::fabs( VectorLengthFast( axis1 ) - 1.0f ) < 0.1f );
+	assert( std::fabs( VectorLengthFast( axis2 ) - 1.0f ) < 0.1f );
+
+	vec3_t startPoints[kMaxImpactRosetteElements];
+	vec3_t endPoints[kMaxImpactRosetteElements];
+	vec3_t dirs[kMaxImpactRosetteElements];
+	float length[kMaxImpactRosetteElements];
+	BoundsBuilder boundsBuilder;
+
+	unsigned desiredNumElements = params.count.min;
+	if( params.count.min < params.count.max ) {
+		desiredNumElements += m_rng.nextBounded( params.count.max - params.count.min );
+	}
+
+	const unsigned actualNumElements  = wsw::clamp( desiredNumElements, 1u, kMaxImpactRosetteElements );
+
+	// Randomize the initial angle as well
+	float circleAngle           = m_rng.nextFloat( 0, (float)M_PI );
+	const float circleAngleStep = (float)M_TWOPI * Q_Rcp( (float)actualNumElements );
+	for( unsigned i = 0; i < actualNumElements; ++i ) {
+		const float scale1 = std::sin( circleAngle ), scale2 = std::cos( circleAngle );
+		circleAngle += circleAngleStep;
+
+		vec3_t radialDir { 0.0f, 0.0f, 0.0f };
+		VectorMA( radialDir, scale1, axis1, radialDir );
+		VectorMA( radialDir, scale2, axis2, radialDir );
+		assert( std::fabs( VectorLengthFast( radialDir ) - 1.0f ) < 0.1f );
+
+		const float coneAngle = m_rng.nextFloat( params.innerConeAngle, params.outerConeAngle );
+
+		length[i] = params.length.mean;
+		if( const float spread = params.length.spread; spread > 0.0f ) {
+			length[i] = wsw::max( 0.1f, length[i] + m_rng.nextFloat( -spread, +spread ) );
+		}
+
+		// TODO: Can we do something smarter without these sin/cos calls?
+		const float heightOverSurface = std::cos( (float)DEG2RAD( coneAngle ) ) * length[i];
+		const float outerRadius = params.spawnRingRadius + std::sin( (float)DEG2RAD( coneAngle ) ) * length[i];
+
+		VectorMA( origin, params.spawnRingRadius, radialDir, startPoints[i] );
+
+		VectorMA( origin, outerRadius, radialDir, endPoints[i] );
+		VectorMA( endPoints[i], heightOverSurface, params.dir, endPoints[i] );
+
+		VectorSubtract( endPoints[i], startPoints[i], dirs[i] );
+
+		const float rcpLength = Q_Rcp( length[i] );
+		VectorScale( dirs[i], rcpLength, dirs[i] );
+
+		boundsBuilder.addPoint( startPoints[i] );
+		boundsBuilder.addPoint( endPoints[i] );
+	}
+
+	vec3_t bounds[2];
+	boundsBuilder.storeToWithAddedEpsilon( bounds[0], bounds[1] );
+
+	// TODO: Add a fused call
+	CM_BuildShapeList( cl.cms, m_tmpShapeList, bounds[0], bounds[1], MASK_SOLID );
+	CM_ClipShapeList( cl.cms, m_tmpShapeList, m_tmpShapeList, bounds[0], bounds[1] );
+
+	void *mem = m_impactRosetteEffectsAllocator.allocOrNull();
+	// TODO: Use links with a sentinel header...
+	if( !mem ) [[unlikely]] {
+		assert( m_impactRosetteEffectsHead );
+		ImpactRosetteEffect *oldestEffect = m_impactRosetteEffectsHead->next;
+		while( oldestEffect ) {
+			if( oldestEffect->next ) {
+				oldestEffect = oldestEffect->next;
+			} else {
+				break;
+			}
+		}
+		wsw::unlink( oldestEffect, &m_impactRosetteEffectsHead );
+		oldestEffect->~ImpactRosetteEffect();
+		mem = oldestEffect;
+	}
+
+	auto *const effect         = new( mem )ImpactRosetteEffect;
+	effect->spawnTime          = m_lastTime;
+	effect->lifetime           = 0;
+	effect->startColorLifespan = params.startColorLifespan;
+	effect->endColorLifespan   = params.endColorLifespan;
+	effect->flareColorLifespan = params.flareColorLifespan;
+	effect->lightLifespan      = params.lightLifespan;
+	effect->numElements        = actualNumElements;
+
+	effect->elementFlareFrameAffinityModulo = params.elementFlareFrameAffinityModulo;
+	effect->effectFlareFrameAffinityModulo  = params.effectFlareFrameAffinityModulo;
+	effect->effectFlareFrameAffinityIndex   = params.effectFlareFrameAffinityIndex;
+	effect->lightFrameAffinityModulo        = params.lightFrameAffinityModulo;
+	effect->lightFrameAffinityIndex         = params.lightFrameAffinityIndex;
+
+	float maxFinalLength = 0.0f;
+	for( unsigned i = 0; i < actualNumElements; ++i ) {
+		ImpactRosetteElement *const element = &effect->elements[i];
+
+		VectorCopy( startPoints[i], element->from );
+		VectorCopy( dirs[i], element->dir );
+
+		element->desiredLength = length[i];
+		element->lengthLimit   = length[i];
+
+		element->width = params.width.mean;
+		if( const float spread = params.width.spread; spread > 0.0f ) {
+			element->width = wsw::max( 0.1f, element->width + m_rng.nextFloat( -spread, +spread ) );
+		}
+
+		trace_t trace;
+		CM_ClipToShapeList( cl.cms, m_tmpShapeList, &trace, startPoints[i], endPoints[i],
+							vec3_origin, vec3_origin, MASK_SOLID );
+
+		element->lengthLimit *= trace.fraction;
+
+		element->lifetime = params.timeout.min + m_rng.nextBoundedFast( params.timeout.max - params.timeout.min );
+		effect->lifetime  = wsw::max( effect->lifetime, element->lifetime );
+		maxFinalLength    = wsw::max( element->lengthLimit, maxFinalLength );
+	}
+
+	assert( effect->lifetime > 0 );
+
+	effect->spikesPoly.parentEffect = effect;
+	effect->spikesPoly.material     = params.spikeMaterial;
+
+	VectorCopy( bounds[0], effect->spikesPoly.cullMins );
+	VectorCopy( bounds[1], effect->spikesPoly.cullMaxs );
+	effect->spikesPoly.cullMins[3] = 0.0f, effect->spikesPoly.cullMaxs[3] = 1.0f;
+
+	effect->flarePoly.parentEffect  = effect;
+	effect->flarePoly.material      = params.flareMaterial;
+
+	const vec3_t halfFlareExtents { maxFinalLength, maxFinalLength, maxFinalLength };
+	VectorSubtract( bounds[0], halfFlareExtents, effect->flarePoly.cullMins );
+	VectorAdd( bounds[1], halfFlareExtents, effect->flarePoly.cullMaxs );
+	effect->flarePoly.cullMins[3] = 0.0f, effect->flarePoly.cullMaxs[3] = 1.0f;
+
+	wsw::link( effect, &m_impactRosetteEffectsHead );
+}
+
+auto PolyEffectsSystem::ImpactRosetteSpikesPoly::getStorageRequirements( const float *, const float *, float ) const
+	-> std::optional<std::pair<unsigned, unsigned>> {
+    return std::make_pair( 4 * parentEffect->numElements, 6 * parentEffect->numElements );
+}
+
+auto PolyEffectsSystem::ImpactRosetteSpikesPoly::fillMeshBuffers( const float *__restrict viewOrigin,
+																  const float *__restrict viewAxis,
+																  float,
+																  const Scene::DynamicLight *,
+																  std::span<const uint16_t>,
+																  vec4_t *__restrict positions,
+																  vec4_t *__restrict normals,
+																  vec2_t *__restrict texCoords,
+																  byte_vec4_t *__restrict colors,
+																  uint16_t *__restrict indices ) const
+	-> std::pair<unsigned, unsigned> {
+	assert( parentEffect->numElements > 0 );
+
+	unsigned numAddedVertices = 0;
+	unsigned numAddedIndices  = 0;
+
+	unsigned spikeNum = 0;
+	do {
+		const ImpactRosetteElement &element = parentEffect->elements[spikeNum];
+		const float distance = wsw::min( element.lengthLimit, element.desiredLength * element.lifetimeFrac );
+
+		vec3_t endOrigin;
+		assert( std::fabs( VectorLengthFast( element.dir ) - 1.0f ) < 0.1f );
+		VectorMA( element.from, distance, element.dir, endOrigin );
+
+		// Looking at "bad" angles is not uncommon. Compute the right vector for both points.
+		// TODO: We don't need to care of this for lods.
+		vec3_t viewToStart, viewToEnd;
+		vec3_t startRight, endRight;
+		VectorSubtract( element.from, viewOrigin, viewToStart );
+		CrossProduct( viewToStart, element.dir, startRight );
+		VectorSubtract( endOrigin, viewOrigin, viewToEnd );
+		CrossProduct( viewToEnd, element.dir, endRight );
+
+		const float squareStartRightLength = VectorLengthSquared( startRight );
+		const float squareEndRightLength   = VectorLengthSquared( endRight );
+		// Both conditions are uncommon
+		if( squareStartRightLength < wsw::square( 0.001f ) || squareEndRightLength < wsw::square( 0.001f ) ) [[unlikely]] {
+			continue;
+		}
+
+		const float rcpStartRightLength = Q_RSqrt( squareStartRightLength );
+		const float rcpEndRightLength   = Q_RSqrt( squareEndRightLength );
+		VectorScale( startRight, rcpStartRightLength, startRight );
+		VectorScale( endRight, rcpEndRightLength, endRight );
+
+		const float halfWidth = 0.5f * element.width * element.lifetimeFrac;
+
+		VectorMA( element.from, +halfWidth, startRight, positions[numAddedVertices + 0] );
+		VectorMA( element.from, -halfWidth, startRight, positions[numAddedVertices + 1] );
+		VectorMA( endOrigin, -halfWidth, endRight, positions[numAddedVertices + 2] );
+		VectorMA( endOrigin, +halfWidth, endRight, positions[numAddedVertices + 3] );
+
+		positions[numAddedVertices + 0][3] = positions[numAddedVertices + 1][3] = 1.0f;
+		positions[numAddedVertices + 2][3] = positions[numAddedVertices + 3][3] = 1.0f;
+
+		vec4_t startColor, endColor;
+		parentEffect->startColorLifespan.getColorForLifetimeFrac( element.lifetimeFrac, startColor );
+		parentEffect->endColorLifespan.getColorForLifetimeFrac( element.lifetimeFrac, endColor );
+
+		for( unsigned j = 0; j < 4; ++j ) {
+			colors[numAddedVertices + 0][j] = colors[numAddedVertices + 2][j] = (uint8_t)( startColor[j] * 255 );
+			colors[numAddedVertices + 2][j] = colors[numAddedVertices + 3][j] = (uint8_t)( endColor[j] * 255 );
+		}
+
+		Vector2Set( texCoords[numAddedVertices + 0], 0.0f, 0.0f );
+		Vector2Set( texCoords[numAddedVertices + 1], 0.0f, 1.0f );
+		Vector2Set( texCoords[numAddedVertices + 2], 1.0f, 1.0f );
+		Vector2Set( texCoords[numAddedVertices + 3], 1.0f, 0.0f );
+
+		VectorSet( indices + numAddedIndices + 0, numAddedVertices + 0, numAddedVertices + 1, numAddedVertices + 2 );
+		VectorSet( indices + numAddedIndices + 3, numAddedVertices + 0, numAddedVertices + 2, numAddedVertices + 3 );
+
+		numAddedVertices += 4;
+		numAddedIndices  += 6;
+	} while( ++spikeNum < parentEffect->numElements );
+
+	return { numAddedVertices, numAddedIndices };
+}
+
+auto PolyEffectsSystem::ImpactRosetteFlarePoly::getStorageRequirements( const float *, const float *, float ) const
+	-> std::optional<std::pair<unsigned, unsigned>> {
+	return std::make_pair( 4 * parentEffect->numElements, 6 * parentEffect->numElements );
+}
+
+auto PolyEffectsSystem::ImpactRosetteFlarePoly::fillMeshBuffers( const float *__restrict viewOrigin,
+																 const float *__restrict viewAxis,
+																 float,
+																 const Scene::DynamicLight *,
+																 std::span<const uint16_t>,
+																 vec4_t *__restrict positions,
+																 vec4_t *__restrict normals,
+																 vec2_t *__restrict texCoords,
+																 byte_vec4_t *__restrict colors,
+																 uint16_t *__restrict indices ) const
+-> std::pair<unsigned, unsigned> {
+	assert( parentEffect->numFlareElementsThisFrame <= parentEffect->numElements );
+	assert( parentEffect->numFlareElementsThisFrame > 0 );
+
+	alignas( 16 ) vec4_t left, up;
+	// TODO: Flip if needed
+	VectorCopy( &viewAxis[AXIS_RIGHT], left );
+	VectorCopy( &viewAxis[AXIS_UP], up );
+
+	unsigned numAddedVertices = 0;
+	unsigned numAddedIndices  = 0;
+
+	unsigned flareNum = 0;
+	do {
+		assert( parentEffect->flareElementIndices[flareNum] < parentEffect->numElements );
+		const ImpactRosetteElement &element = parentEffect->elements[parentEffect->flareElementIndices[flareNum]];
+		// This radius value puts the centerPoint at the end position
+		const float radius = wsw::min( element.lengthLimit, element.desiredLength * element.lifetimeFrac );
+
+		vec3_t centerPoint, viewToCenterPoint, right;
+		assert( std::fabs( VectorLengthFast( element.dir ) - 1.0f ) < 0.1f );
+		VectorMA( element.from, radius, element.dir, centerPoint );
+
+		VectorSubtract( centerPoint, viewOrigin, viewToCenterPoint );
+		CrossProduct( viewToCenterPoint, element.dir, right );
+		const float squareRightLength = VectorLengthSquared( right );
+		if( squareRightLength < wsw::square( 0.001f ) ) [[unlikely]] {
+			continue;
+		}
+
+		vec4_t interpolatedColor;
+		parentEffect->flareColorLifespan.getColorForLifetimeFrac( element.lifetimeFrac, interpolatedColor );
+
+		byte_vec4_t resultingColor;
+		Vector4Scale( interpolatedColor, 255.0f, resultingColor );
+
+		Vector4Copy( resultingColor, colors[numAddedVertices + 0] );
+		Vector4Copy( resultingColor, colors[numAddedVertices + 1] );
+		Vector4Copy( resultingColor, colors[numAddedVertices + 2] );
+		Vector4Copy( resultingColor, colors[numAddedVertices + 3] );
+
+		vec3_t point;
+		VectorMA( centerPoint, -radius, up, point );
+		VectorMA( point, +radius, left, positions[numAddedVertices + 0] );
+		VectorMA( point, -radius, left, positions[numAddedVertices + 3] );
+
+		VectorMA( centerPoint, +radius, up, point );
+		VectorMA( point, +radius, left, positions[numAddedVertices + 1] );
+		VectorMA( point, -radius, left, positions[numAddedVertices + 2] );
+
+		positions[numAddedVertices + 0][3] = positions[numAddedVertices + 1][3] = 1.0f;
+		positions[numAddedVertices + 2][3] = positions[numAddedVertices + 3][3] = 1.0f;
+
+		Vector2Set( texCoords[numAddedVertices + 0], 0.0f, 1.0f );
+		Vector2Set( texCoords[numAddedVertices + 1], 0.0f, 0.0f );
+		Vector2Set( texCoords[numAddedVertices + 2], 1.0f, 0.0f );
+		Vector2Set( texCoords[numAddedVertices + 3], 1.0f, 1.0f );
+
+		VectorSet( indices + numAddedIndices + 0, numAddedVertices + 0, numAddedVertices + 1, numAddedVertices + 2 );
+		VectorSet( indices + numAddedIndices + 3, numAddedVertices + 0, numAddedVertices + 2, numAddedVertices + 3 );
+
+		numAddedVertices += 4;
+		numAddedIndices  += 6;
+	} while( ++flareNum < parentEffect->numFlareElementsThisFrame );
+
+	return { numAddedVertices, numAddedIndices };
 }
 
 void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
@@ -656,6 +999,93 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 					request->addLight( tracer->poly.origin, programRadius, coronaRadius, tracer->lightColor );
 				}
 			}
+		}
+	}
+
+	for( ImpactRosetteEffect *effect = m_impactRosetteEffectsHead, *next = nullptr; effect; effect = next ) {
+		next = effect->next;
+
+		bool mayAddFlaresThisFrame = false;
+		if( effect->effectFlareFrameAffinityModulo < 2 ) {
+			mayAddFlaresThisFrame = true;
+		} else {
+			assert( effect->effectFlareFrameAffinityIndex < effect->effectFlareFrameAffinityModulo );
+			if( ( cg.frameCount % effect->effectFlareFrameAffinityModulo ) == effect->effectFlareFrameAffinityIndex ) {
+				mayAddFlaresThisFrame = true;
+			}
+		}
+
+		effect->numFlareElementsThisFrame = 0;
+
+		// Check lifetime of each spike
+		for( unsigned i = 0; i < effect->numElements; ) {
+			const int64_t lifetimeMillisLeft = effect->spawnTime + effect->elements[i].lifetime - currTime;
+			if( lifetimeMillisLeft > 0 ) [[likely]] {
+				const float rcpLifetime          = Q_Rcp( (float)effect->elements[i].lifetime );
+				effect->elements[i].lifetimeFrac = 1.0f - (float)lifetimeMillisLeft * rcpLifetime;
+				assert( effect->elements[i].lifetimeFrac >= 0.0f && effect->elements[i].lifetimeFrac <= 1.0f );
+
+				bool shouldAddFlareForThisElement = false;
+				if( mayAddFlaresThisFrame ) {
+					const unsigned modulo = effect->elementFlareFrameAffinityModulo;
+					if( modulo < 2 ) {
+						shouldAddFlareForThisElement = true;
+					} else {
+						// TODO: Optimize division, force a 32-bit division at least
+						if( ( cg.frameCount % modulo ) == ( i % modulo ) ) {
+							shouldAddFlareForThisElement = true;
+						}
+					}
+				}
+
+				if( shouldAddFlareForThisElement ) {
+					effect->flareElementIndices[effect->numFlareElementsThisFrame++] = i;
+				}
+
+				++i;
+			} else {
+				effect->numElements--;
+				effect->elements[i] = effect->elements[effect->numElements];
+			}
+		}
+
+		if( effect->numElements ) [[likely]] {
+			request->addDynamicMesh( &effect->spikesPoly );
+			if( effect->numFlareElementsThisFrame ) {
+				request->addDynamicMesh( &effect->flarePoly );
+			}
+			if( const std::optional<LightLifespan> &lightLifespan = effect->lightLifespan ) {
+				bool shouldAddLight = false;
+				if( effect->lightFrameAffinityModulo < 2 ) {
+					shouldAddLight = true;
+				} else {
+					assert( effect->lightFrameAffinityIndex < effect->lightFrameAffinityModulo );
+					if( ( cg.frameCount % effect->lightFrameAffinityModulo ) == effect->lightFrameAffinityIndex ) {
+						shouldAddLight = true;
+					}
+				}
+				if( shouldAddLight ) {
+					const float effectLifetimeFrac = (float)( currTime - effect->spawnTime ) * Q_Rcp( (float)effect->lifetime );
+					assert( effectLifetimeFrac >= 0.0f && effectLifetimeFrac <= 1.0f );
+
+					float lightRadius = 0.0f, lightColor[3];
+					lightLifespan->getRadiusAndColorForLifetimeFrac( effectLifetimeFrac, &lightRadius, lightColor );
+
+					if( lightRadius > 1.0f ) [[likely]] {
+						effect->lastLightEmitterElementIndex = ( effect->lastLightEmitterElementIndex + 1 ) % effect->numElements;
+						const ImpactRosetteElement &element  = effect->elements[effect->lastLightEmitterElementIndex];
+
+						vec3_t lightOrigin;
+						const float endPointDistance = wsw::min( element.lengthLimit, element.desiredLength * element.lifetimeFrac );
+						// Prevent spawning the light in an obstacle
+						const float lightOriginDistance = wsw::max( 0.0f, endPointDistance - 1.0f );
+						VectorMA( element.from, lightOriginDistance, element.dir, lightOrigin );
+						request->addLight( lightOrigin, lightRadius, 0.0f, lightColor );
+					}
+				}
+			}
+		} else {
+			destroyImpactRosetteEffect( effect );
 		}
 	}
 

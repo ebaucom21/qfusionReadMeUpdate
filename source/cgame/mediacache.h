@@ -202,6 +202,10 @@ public:
 	CachedMaterial shaderFlareParticle { this, wsw::StringView( "gfx/misc/particle_flare" ) };
 	CachedMaterial shaderElectroParticle { this, wsw::StringView( "gfx/misc/particle_electro" ) };
 
+	CachedMaterial shaderGenericImpactRosetteSpike { this, wsw::StringView( "gfx/misc/impacts/generic_rosette_spike" ) };
+	CachedMaterial shaderMetalImpactRosetteInnerSpike { this, wsw::StringView( "gfx/misc/impacts/metal_rosette_inner_spike" ) };
+	CachedMaterial shaderMetalImpactRosetteOuterSpike { this, wsw::StringView( "gfx/misc/impacts/metal_rosette_outer_spike" ) };
+
 	CachedMaterial shaderImpactRing { this, wsw::StringView( "gfx/misc/impact_ring" ) };
 
 	CachedMaterial shaderNet { this, wsw::StringView( "gfx/hud/net" ) };

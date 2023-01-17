@@ -860,73 +860,63 @@ static inline void assignUpShiftAndModifyBaseSpeed( FlockParams *flockParams, fl
 	flockParams->speed.max = wsw::min( 999.9f, flockParams->speed.max * baseSpeedScale );
 }
 
-static const RgbaLifespan kBulletRosetteColors[1] {
-	{
-		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedIn  = { 0.9f, 0.9f, 1.0f, 1.0f },
-		.fadedOut = { 0.9f, 0.9f, 0.8f, 1.0f },
-	}
+static const RgbaLifespan kBulletRosetteSpikeColorLifespan {
+	.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedIn  = { 0.9f, 0.9f, 1.0f, 1.0f },
+	.fadedOut = { 0.9f, 0.9f, 0.8f, 1.0f },
 };
 
-static const LightLifespan kBulletRosetteLightProps[1] {
-	{
-		.colorLifespan = {
-			.initial  = { 1.0f, 1.0f, 1.0f },
-			.fadedIn  = { 0.9f, 0.9f, 1.0f },
-			.fadedOut = { 0.9f, 0.9f, 0.7f },
-		},
-		.radiusLifespan = { .fadedIn = 32.0f },
-	}
+static const RgbaLifespan kBulletRosetteFlareColorLifespan {
+	.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+	.fadedIn  = { 0.9f, 0.9f, 1.0f, 0.1f },
+	.fadedOut = { 0.9f, 0.9f, 0.8f, 0.1f },
 };
 
-static const ConicalFlockParams kBulletRosetteFlockParams {
-	.gravity = GRAVITY,
-	.speed   = { .min = 550.0f, .max = 800.0f },
-	.timeout = { .min = 75, .max = 125 },
+static const LightLifespan kBulletRosetteLightLifespan {
+	.colorLifespan = {
+		.initial  = { 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 0.9f, 0.9f, 1.0f },
+		.fadedOut = { 0.9f, 0.9f, 0.7f },
+	},
+	.radiusLifespan = { .fadedIn = 32.0f },
 };
 
 void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
 														   float minPercentage, float maxPercentage,
 														   unsigned lightFrameAffinityIndex,
 														   unsigned lightFrameAffinityModulo ) {
-	Particle::AppearanceRules appearanceRules {
-		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.colors        = kBulletRosetteColors,
-		.lightProps    = kBulletRosetteLightProps,
-		.flareProps    = Particle::FlareProps {
-			.lightProps                  = kBulletRosetteLightProps,
-			.alphaScale                  = 0.08f,
-			.radiusScale                 = 0.75f,
-			.flockFrameAffinityIndex     = (uint16_t)lightFrameAffinityIndex,
-			.flockFrameAffinityModulo    = (uint16_t)lightFrameAffinityModulo,
-			.particleFrameAffinityModulo = 3,
-		},
-		.geometryRules = Particle::SparkRules {
-			.length        = { .mean = 12.0f, .spread = 1.0f },
-			.width         = { .mean = 1.0f, .spread = 0.1f },
-			.sizeBehaviour = Particle::Shrinking,
-		},
-		.lightFrameAffinityIndex  = (uint16_t)lightFrameAffinityIndex,
-		.lightFrameAffinityModulo = (uint16_t)lightFrameAffinityModulo,
-	};
+	assert( minPercentage >= 0.0f && maxPercentage <= 1.0f );
+	assert( maxPercentage >= 0.0f && maxPercentage <= 1.0f );
+	assert( minPercentage <= maxPercentage );
 
-	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
-	flockParams.angle          = 45.0f;
-	flockParams.innerAngle     = 15.0f;
-	flockParams.percentage.min = minPercentage;
-	flockParams.percentage.max = maxPercentage;
-	flockParams.timeout.min    = ( 3 * flockParams.timeout.min ) / 4;
-	flockParams.timeout.max    = ( 3 * flockParams.timeout.max ) / 4;
+	// TODO: Fix FlockOrientation direction
+	const vec3_t dir { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] };
 
-	orientation.copyToFlockParams( &flockParams );
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+		.spikeMaterial      = cgs.media.shaderGenericImpactRosetteSpike,
+		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.origin             = orientation.origin,
+		.offset             = orientation.offset,
+		.dir                = dir,
+		.innerConeAngle     = 5.0f,
+		.outerConeAngle     = 10.0f + 50.0f * maxPercentage,
+		.spawnRingRadius    = 0.0f,
+		.length             = { .mean = 20.0f, .spread = 5.0f, },
+		.width              = { .mean = 1.75f, .spread = 0.25f },
+		.timeout            = { .min = 50, .max = 75 },
+		.count              = { .min = (unsigned)( 7 * minPercentage ), .max = (unsigned)( 12 * maxPercentage ) },
+		.startColorLifespan = kBulletRosetteSpikeColorLifespan,
+		.endColorLifespan   = kBulletRosetteSpikeColorLifespan,
+		.flareColorLifespan = kBulletRosetteFlareColorLifespan,
+		.elementFlareFrameAffinityModulo = 2,
+	});
 }
 
 void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation,
 														 unsigned lightFrameAffinityIndex,
 														 unsigned lightFrameAffinityModulo ) {
-	unsigned innerLightFrameAffinityIndex, innerLightFrameAffinityModulo;
-	unsigned outerLightFrameAffinityIndex, outerLightFrameAffinityModulo;
+	uint16_t innerLightFrameAffinityIndex, innerLightFrameAffinityModulo;
+	uint16_t outerLightFrameAffinityIndex, outerLightFrameAffinityModulo;
 	// Account for twice as many lights due to two rosettes
 	if( lightFrameAffinityModulo ) {
 		innerLightFrameAffinityModulo = outerLightFrameAffinityModulo = 2 * lightFrameAffinityModulo;
@@ -938,61 +928,52 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 		outerLightFrameAffinityIndex = 1;
 	}
 
-	Particle::AppearanceRules appearanceRules {
-		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
-		.colors        = kBulletRosetteColors,
-		.lightProps    = kBulletRosetteLightProps,
-		.flareProps    = Particle::FlareProps {
-			.lightProps                  = kBulletRosetteLightProps,
-			.alphaScale                  = 0.08f,
-			.radiusScale                 = 1.0f,
-			.flockFrameAffinityIndex     = (uint16_t)innerLightFrameAffinityIndex,
-			.flockFrameAffinityModulo    = (uint16_t)innerLightFrameAffinityModulo,
-			.particleFrameAffinityModulo = 3,
-		},
-		.geometryRules = Particle::SparkRules {
-			.length        = { .mean = 16.0f, .spread = 2.0f },
-			.width         = { .mean = 1.0f, .spread = 0.1f },
-			.sizeBehaviour = Particle::Shrinking,
-		},
-		.lightFrameAffinityIndex  = (uint16_t)innerLightFrameAffinityIndex,
-		.lightFrameAffinityModulo = (uint16_t)innerLightFrameAffinityModulo,
-	};
+	// TODO: Fix FlockOrientation direction
+	const vec3_t dir { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] };
 
-	ConicalFlockParams flockParams( kBulletRosetteFlockParams );
-	flockParams.angle          = 24.0f;
-	flockParams.innerAngle     = 0.0f;
-	flockParams.percentage.min = 0.2f;
-	flockParams.percentage.max = 0.6f;
+	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteInnerSpike,
+		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.origin             = orientation.origin,
+		.offset             = orientation.offset,
+		.dir                = dir,
+		.innerConeAngle     = 5.0f,
+		.outerConeAngle     = 15.0f,
+		.spawnRingRadius    = 0.0f,
+		.length             = { .mean = 32.5f, .spread = 7.5f },
+		.width              = { .mean = 1.75f, .spread = 0.25f },
+		.timeout            = { .min = 50, .max = 75 },
+		.count              = { .min = 4, .max = 7 },
+		.startColorLifespan = kBulletRosetteSpikeColorLifespan,
+		.endColorLifespan   = kBulletRosetteSpikeColorLifespan,
+		.flareColorLifespan = kBulletRosetteFlareColorLifespan,
+		.lightLifespan      = kBulletRosetteLightLifespan,
+		.elementFlareFrameAffinityModulo = 2,
+		.lightFrameAffinityModulo        = outerLightFrameAffinityModulo,
+		.lightFrameAffinityIndex         = outerLightFrameAffinityIndex,
+	});
 
-	orientation.copyToFlockParams( &flockParams );
-	cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
-
-	appearanceRules.geometryRules = Particle::SparkRules {
-		.length        = { .mean = 12.0f, .spread = 2.0f },
-		.width         = { .mean = 0.7f, .spread  = 0.1f },
-		.sizeBehaviour = Particle::Shrinking,
-	};
-
-	appearanceRules.flareProps = Particle::FlareProps {
-		.lightProps                  = kBulletRosetteLightProps,
-		.alphaScale                  = 0.08f,
-		.radiusScale                 = 0.67f,
-		.flockFrameAffinityIndex     = (uint16_t)outerLightFrameAffinityIndex,
-		.flockFrameAffinityModulo    = (uint16_t)outerLightFrameAffinityModulo,
-		.particleFrameAffinityModulo = 3,
-	},
-
-	appearanceRules.lightFrameAffinityIndex  = (uint16_t)outerLightFrameAffinityIndex;
-	appearanceRules.lightFrameAffinityModulo = (uint16_t)outerLightFrameAffinityModulo;
-
-	flockParams.innerAngle     = flockParams.angle;
-	flockParams.angle          = 60.0f;
-	flockParams.percentage.min = 1.0f;
-	flockParams.percentage.max = 1.0f;
-	flockParams.timeout.min    = ( 2 * flockParams.timeout.min ) / 3;
-	flockParams.timeout.max    = ( 2 * flockParams.timeout.max ) / 3;
-	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
+	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteOuterSpike,
+		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.origin             = orientation.origin,
+		.offset             = orientation.offset,
+		.dir                = dir,
+		.innerConeAngle     = 45.0f,
+		.outerConeAngle     = 75.0f,
+		.spawnRingRadius    = 1.0f,
+		.length             = { .mean = 15.0f, .spread = 5.0f },
+		.width              = { .mean = 1.25f, .spread = 0.25f },
+		.timeout            = { .min = 50, .max = 75 },
+		.count              = { .min = 7, .max = 15 },
+		.startColorLifespan = kBulletRosetteSpikeColorLifespan,
+		.endColorLifespan   = kBulletRosetteSpikeColorLifespan,
+		.flareColorLifespan = kBulletRosetteFlareColorLifespan,
+		.lightLifespan      = kBulletRosetteLightLifespan,
+		.elementFlareFrameAffinityModulo = 2,
+		.lightFrameAffinityModulo        = innerLightFrameAffinityModulo,
+		.lightFrameAffinityIndex         = innerLightFrameAffinityIndex,
+	});
 }
 
 static const RgbaLifespan kBulletMetalRicochetColors[1] {

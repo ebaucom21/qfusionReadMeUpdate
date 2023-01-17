@@ -23,9 +23,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_424d6447_3887_491d_8150_c80cf50fd066_H
 
 #include "../ref/ref.h"
+#include "../qcommon/randomgenerator.h"
 #include "../qcommon/freelistallocator.h"
 
 class DrawSceneRequest;
+
+struct CMShapeList;
 
 class PolyEffectsSystem {
 public:
@@ -42,6 +45,7 @@ public:
 
 	using CurvedBeamUVMode = std::variant<UvModeTile, UvModeClamp, UvModeFit>;
 
+    PolyEffectsSystem();
 	~PolyEffectsSystem();
 
 	[[nodiscard]]
@@ -92,6 +96,33 @@ public:
 
 	void spawnTracerEffect( const float *from, const float *to, TracerParams &&params );
 
+	struct ImpactRosetteParams {
+		shader_s *spikeMaterial { nullptr };
+		shader_s *flareMaterial { nullptr };
+		const float *origin;
+		const float *offset;
+		const float *dir;
+		float innerConeAngle { 18.0f };
+		float outerConeAngle { 30.0f };
+		float spawnRingRadius { 1.0f };
+		struct { float mean; float spread; } length;
+		struct { float mean; float spread; } width;
+		struct { unsigned min; unsigned max; } timeout;
+		struct { unsigned min; unsigned max; } count;
+		RgbaLifespan startColorLifespan;
+		RgbaLifespan endColorLifespan;
+		RgbaLifespan flareColorLifespan;
+		std::optional<LightLifespan> lightLifespan;
+		// TODO: Make fields to be of uint16_t type
+		unsigned elementFlareFrameAffinityModulo { 0 };
+		unsigned effectFlareFrameAffinityModulo { 0 };
+		unsigned effectFlareFrameAffinityIndex { 0 };
+		unsigned lightFrameAffinityModulo { 0 };
+		unsigned lightFrameAffinityIndex { 0 };
+	};
+
+	void spawnImpactRosette( ImpactRosetteParams &&params );
+
 	void simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request );
 private:
 	struct StraightBeamEffect : public StraightBeam {
@@ -104,7 +135,7 @@ private:
 		std::span<const vec3_t> points;
 		float fromColor[4];
 		float toColor[4];
-		float width;
+        float width;
 		CurvedBeamUVMode uvMode;
 
 		[[nodiscard]]
@@ -162,18 +193,98 @@ private:
 		float lightColor[3] { 1.0f, 1.0f, 1.0f };
 		uint16_t lightFrameAffinityModulo { 0 };
 		uint16_t lightFrameAffinityIndex { 0 };
+    };
+
+	struct ImpactRosetteEffect;
+
+	struct ImpactRosetteElement {
+		vec3_t from;
+		vec3_t dir;
+		float desiredLength;
+		float lengthLimit;
+		float width;
+		float lifetimeFrac;
+		unsigned lifetime;
+	};
+
+	static constexpr unsigned kMaxImpactRosetteElements = 8;
+
+	struct ImpactRosetteSpikesPoly : public DynamicMesh {
+		ImpactRosetteEffect *parentEffect;
+
+		[[nodiscard]]
+		auto getStorageRequirements( const float *, const float *, float ) const
+			-> std::optional<std::pair<unsigned, unsigned>> override;
+
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  float,
+							  const Scene::DynamicLight *,
+							  std::span<const uint16_t>,
+							  vec4_t *__restrict positions,
+							  vec4_t *__restrict normals,
+							  vec2_t *__restrict texCoords,
+							  byte_vec4_t *__restrict colors,
+							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;
+	};
+
+	struct ImpactRosetteFlarePoly : public DynamicMesh {
+		ImpactRosetteEffect *parentEffect;
+
+		[[nodiscard]]
+		auto getStorageRequirements( const float *, const float *, float ) const
+		-> std::optional<std::pair<unsigned, unsigned>> override;
+
+		[[nodiscard]]
+		auto fillMeshBuffers( const float *__restrict viewOrigin,
+							  const float *__restrict viewAxis,
+							  float,
+							  const Scene::DynamicLight *,
+							  std::span<const uint16_t>,
+							  vec4_t *__restrict positions,
+							  vec4_t *__restrict normals,
+							  vec2_t *__restrict texCoords,
+							  byte_vec4_t *__restrict colors,
+							  uint16_t *__restrict indices ) const -> std::pair<unsigned, unsigned> override;
+	};
+
+	struct ImpactRosetteEffect {
+		ImpactRosetteEffect *prev { nullptr }, *next { nullptr };
+		int64_t spawnTime;
+		unsigned lifetime;
+		RgbaLifespan startColorLifespan;
+		RgbaLifespan endColorLifespan;
+		RgbaLifespan flareColorLifespan;
+		std::optional<LightLifespan> lightLifespan;
+		unsigned elementFlareFrameAffinityModulo;
+		unsigned effectFlareFrameAffinityModulo;
+		unsigned effectFlareFrameAffinityIndex;
+		unsigned lightFrameAffinityModulo;
+		unsigned lightFrameAffinityIndex;
+		unsigned lastLightEmitterElementIndex { 0 };
+		ImpactRosetteElement elements[kMaxImpactRosetteElements];
+		unsigned numElements { 0 };
+		unsigned numFlareElementsThisFrame { 0 };
+		uint8_t flareElementIndices[kMaxImpactRosetteElements];
+		ImpactRosetteSpikesPoly spikesPoly;
+		ImpactRosetteFlarePoly flarePoly;
 	};
 
 	void destroyTransientBeamEffect( TransientBeamEffect *effect );
 
 	void destroyTracerEffect( TracerEffect *effect );
 
+	void destroyImpactRosetteEffect( ImpactRosetteEffect *effect );
+
 	wsw::HeapBasedFreelistAllocator m_straightLaserBeamsAllocator { sizeof( StraightBeamEffect ), MAX_CLIENTS * 4 };
 	wsw::HeapBasedFreelistAllocator m_curvedLaserBeamsAllocator { sizeof( CurvedBeamEffect ), MAX_CLIENTS * 4 };
 
 	wsw::HeapBasedFreelistAllocator m_transientBeamsAllocator { sizeof( TransientBeamEffect ), MAX_CLIENTS * 2 };
 
-	wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 4 };
+    wsw::HeapBasedFreelistAllocator m_tracerEffectsAllocator { sizeof( TracerEffect ), MAX_CLIENTS * 4 };
+
+    wsw::HeapBasedFreelistAllocator m_impactRosetteEffectsAllocator { sizeof( ImpactRosetteEffect ), 64 };
 
 	StraightBeamEffect *m_straightLaserBeamsHead { nullptr };
 	CurvedBeamEffect *m_curvedLaserBeamsHead { nullptr };
@@ -181,6 +292,13 @@ private:
 	TransientBeamEffect *m_transientBeamsHead { nullptr };
 
 	TracerEffect *m_tracerEffectsHead { nullptr };
+
+	ImpactRosetteEffect *m_impactRosetteEffectsHead { nullptr };
+
+	// TODO: Use the shared instance for the entire client codebase
+	wsw::RandomGenerator m_rng;
+	// TODO: Use some shared instance for the entire client codebase
+	CMShapeList *m_tmpShapeList { nullptr };
 
 	int64_t m_lastTime { 0 };
 };
