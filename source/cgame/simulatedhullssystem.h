@@ -156,6 +156,9 @@ private:
 		// Can go above 1.0f
 		float m_alphaScale { 1.0f };
 		float m_spriteRadius { 16.0f };
+		float m_lifetimeSeconds { 0.0f };
+		uint16_t m_phaseIndexShiftInTable { 0 };
+		uint16_t m_speedIndexShiftInTable { 0 };
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent ) const
