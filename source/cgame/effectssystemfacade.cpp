@@ -50,21 +50,21 @@ void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int 
 	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
 }
 
-static const ColorLifespan kExplosionSparksColors[3] {
+static const RgbaLifespan kExplosionSparksColors[3] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.6f, 0.3f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.6f, 0.3f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.4f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.3f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
 	},
 };
 
@@ -258,23 +258,23 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 	}
 }
 
-static const ColorLifespan kExplosionSmokeColors[3] {
+static const RgbaLifespan kExplosionSmokeColors[3] {
 	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.5f, 0.5f, 0.5f, 0.2f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedIn  = { 0.5f, 0.5f, 0.5f, 0.2f },
+		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
 	},
 	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.6f, 0.6f, 0.6f, 0.2f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedIn  = { 0.6f, 0.6f, 0.6f, 0.2f },
+		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
 	},
 	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 0.7f, 0.7f, 0.7f, 0.2f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.9f, 0.0f },
+		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.fadedIn  = { 0.7f, 0.7f, 0.7f, 0.2f },
+		.fadedOut = { 0.9f, 0.9f, 0.9f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.67f, .startFadingOutAtLifetimeFrac = 0.76f,
 	},
 };
@@ -441,11 +441,11 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
 }
 
-static const ColorLifespan kPlasmaParticlesColors[1] {
+static const RgbaLifespan kPlasmaParticlesColors[1] {
 	{
-		.initialColor  = { 0.0f, 1.0f, 0.0f, 0.0f },
-		.fadedInColor  = { 0.3f, 1.0f, 0.5f, 1.0f },
-		.fadedOutColor = { 0.7f, 1.0f, 0.7f, 0.0f },
+		.initial  = { 0.0f, 1.0f, 0.0f, 0.0f },
+		.fadedIn  = { 0.3f, 1.0f, 0.5f, 1.0f },
+		.fadedOut = { 0.7f, 1.0f, 0.7f, 0.0f },
 	}
 };
 
@@ -489,31 +489,31 @@ void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
 
-static const ColorLifespan kBloodColors[] {
+static const RgbaLifespan kBloodColors[] {
 	{
-		.initialColor  = { 1.0f, 0.0f, 0.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.3f, 0.7f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.3f, 0.7f, 1.0f },
+		.initial  = { 1.0f, 0.0f, 0.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.3f, 0.7f, 1.0f },
+		.fadedOut = { 0.9f, 0.3f, 0.7f, 1.0f },
 	},
 	{
-		.initialColor  = { 1.0f, 0.0f, 0.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.6f, 0.3f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.5f, 0.0f, 1.0f },
+		.initial  = { 1.0f, 0.0f, 0.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.6f, 0.3f, 1.0f },
+		.fadedOut = { 0.9f, 0.5f, 0.0f, 1.0f },
 	},
 	{
-		.initialColor  = { 0.0f, 1.0f, 0.5f, 1.0f },
-		.fadedInColor  = { 0.3f, 1.0f, 0.5f, 1.0f },
-		.fadedOutColor = { 0.0f, 0.5f, 0.0f, 1.0f }
+		.initial  = { 0.0f, 1.0f, 0.5f, 1.0f },
+		.fadedIn  = { 0.3f, 1.0f, 0.5f, 1.0f },
+		.fadedOut = { 0.0f, 0.5f, 0.0f, 1.0f }
 	},
 	{
-		.initialColor  = { 0.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.3f, 0.7f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.0f, 0.7f, 1.0f, 1.0f },
+		.initial  = { 0.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 0.3f, 0.7f, 1.0f, 1.0f },
+		.fadedOut = { 0.0f, 0.7f, 1.0f, 1.0f },
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.3f, 0.3f, 0.3f, 1.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOut = { 0.3f, 0.3f, 0.3f, 1.0f },
 	},
 };
 
@@ -550,7 +550,7 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 			},
 		};
 		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
-		const float *effectColor = kBloodColors[indexForStyle].fadedInColor;
+		const float *effectColor = kBloodColors[indexForStyle].fadedIn;
 		m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damage, effectColor, (unsigned)baseTime );
 	}
 
@@ -559,9 +559,9 @@ void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float
 
 static ParticleColorsForTeamHolder electroboltParticleColorsHolder {
 	.defaultColors = {
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.7f, 0.7f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.1f, 0.1f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 0.7f, 0.7f, 1.0f, 1.0f },
+		.fadedOut = { 0.1f, 0.1f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.05f,
 		.startFadingOutAtLifetimeFrac = 0.50f,
 	}
@@ -598,7 +598,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		VectorNegate( impactDir, invImpactDir );
 		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
 
-		const ColorLifespan *singleColorAddress;
+		const RgbaLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::electroboltParticleColorsHolder;
 		if( useTeamColor ) {
 			singleColorAddress = colorsHolder->getColorsForTeam( team, teamColor );
@@ -637,9 +637,9 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 
 static ParticleColorsForTeamHolder instagunParticleColorsHolder {
 	.defaultColors = {
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.0f, 1.0f, 0.5f },
-		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.0f, 1.0f, 0.5f },
+		.fadedOut = { 0.0f, 0.0f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.05f,
 		.startFadingOutAtLifetimeFrac = 0.75f,
 	}
@@ -667,7 +667,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		VectorNegate( impactDir, invImpactDir );
 		VectorReflect( invImpactDir, impactNormal, 0.0f, coneDir );
 
-		const ColorLifespan *singleColorAddress;
+		const RgbaLifespan *singleColorAddress;
 		ParticleColorsForTeamHolder *colorsHolder = &::instagunParticleColorsHolder;
 		if( useTeamColor ) {
 			singleColorAddress = colorsHolder->getColorsForTeam( team, teamColor );
@@ -705,11 +705,11 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 	m_transientEffectsSystem.spawnInstagunHitEffect( origin, impactNormal, decalColor, energyColor, spawnDecal );
 }
 
-static const ColorLifespan kGunbladeHitColors[1] {
+static const RgbaLifespan kGunbladeHitColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.5f, 0.1f, 0.0f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.5f },
+		.initial  = { 1.0f, 0.5f, 0.1f, 0.0f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.5f },
 	}
 };
 
@@ -764,21 +764,21 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 	}
 }
 
-static const ColorLifespan kGunbladeBlastColors[3] {
+static const RgbaLifespan kGunbladeBlastColors[3] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.5f, 0.7f },
-		.fadedOutColor = { 0.5f, 0.3f, 0.1f, 0.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.5f, 0.7f },
+		.fadedOut = { 0.5f, 0.3f, 0.1f, 0.0f }
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 0.7f },
-		.fadedOutColor = { 0.7f, 0.3f, 0.1f, 0.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.4f, 0.7f },
+		.fadedOut = { 0.7f, 0.3f, 0.1f, 0.0f }
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.4f, 0.7f },
-		.fadedOutColor = { 0.9f, 0.3f, 0.1f, 0.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.4f, 0.7f },
+		.fadedOut = { 0.9f, 0.3f, 0.1f, 0.0f }
 	},
 };
 
@@ -860,20 +860,22 @@ static inline void assignUpShiftAndModifyBaseSpeed( FlockParams *flockParams, fl
 	flockParams->speed.max = wsw::min( 999.9f, flockParams->speed.max * baseSpeedScale );
 }
 
-static const ColorLifespan kBulletRosetteColors[1] {
+static const RgbaLifespan kBulletRosetteColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.9f, 0.9f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.8f, 1.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 0.9f, 0.9f, 1.0f, 1.0f },
+		.fadedOut = { 0.9f, 0.9f, 0.8f, 1.0f },
 	}
 };
 
 static const LightLifespan kBulletRosetteLightProps[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.9f, 0.9f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.7f },
-		.fadedInRadius = 32.0f,
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 1.0f },
+			.fadedIn  = { 0.9f, 0.9f, 1.0f },
+			.fadedOut = { 0.9f, 0.9f, 0.7f },
+		},
+		.radiusLifespan = { .fadedIn = 32.0f },
 	}
 };
 
@@ -993,20 +995,22 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 	cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
 }
 
-static const ColorLifespan kBulletMetalRicochetColors[1] {
+static const RgbaLifespan kBulletMetalRicochetColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.9f, 0.9f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.9f, 0.9f, 0.7f, 1.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 0.9f, 0.9f, 1.0f, 1.0f },
+		.fadedOut = { 0.9f, 0.9f, 0.7f, 1.0f },
 	}
 };
 
 static const LightLifespan kBulletMetalRicochetLightProps[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.9f, 0.9f, 1.0f },
-		.fadedOutColor = { 0.8f, 0.8f, 1.0f },
-		.fadedInRadius = 32.0f,
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 1.0f },
+			.fadedIn  = { 0.9f, 0.9f, 1.0f },
+			.fadedOut = { 0.8f, 0.8f, 1.0f },
+		},
+		.radiusLifespan = { .fadedIn = 32.0f },
 	}
 };
 
@@ -1049,21 +1053,21 @@ void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, con
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static const ColorLifespan kBulletMetalDebrisColors[3] {
+static const RgbaLifespan kBulletMetalDebrisColors[3] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.5f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.8f, 0.5f, 1.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.5f, 1.0f },
+		.fadedOut = { 1.0f, 0.8f, 0.5f, 1.0f }
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.4f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.8f, 0.4f, 1.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.4f, 1.0f },
+		.fadedOut = { 1.0f, 0.8f, 0.4f, 1.0f }
 	},
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.3f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.7f, 0.3f, 1.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.3f, 1.0f },
+		.fadedOut = { 1.0f, 0.7f, 0.3f, 1.0f }
 	},
 };
 
@@ -1083,12 +1087,13 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 	if( !bulletMetalDebrisLightPropsInitialized ) [[unlikely]] {
 		bulletMetalDebrisLightPropsInitialized = true;
 		for( size_t i = 0; i < std::size( kBulletMetalDebrisColors ); ++i ) {
-			const ColorLifespan *from = &kBulletMetalDebrisColors[i];
-			LightLifespan *const to   = &bulletMetalDebrisLightProps[i];
-			to->fadedInRadius         = 24.0f;
-			VectorCopy( from->initialColor,  to->initialColor );
-			VectorCopy( from->fadedInColor,  to->fadedInColor );
-			VectorCopy( from->fadedOutColor, to->fadedOutColor );
+			const RgbaLifespan *from   = &kBulletMetalDebrisColors[i];
+			LightLifespan *const to    = &bulletMetalDebrisLightProps[i];
+			to->radiusLifespan.fadedIn = 24.0f;
+			// TODO: We don't copy lifetime fracs, should we?
+			VectorCopy( from->initial,  to->colorLifespan.initial );
+			VectorCopy( from->fadedIn,  to->colorLifespan.fadedIn );
+			VectorCopy( from->fadedOut, to->colorLifespan.fadedOut );
 		}
 	}
 
@@ -1126,11 +1131,11 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static const ColorLifespan kGreyDustColors[1] {
+static const RgbaLifespan kGreyDustColors[1] {
 	{
-		.initialColor  = { 0.5f, 0.5f, 0.5f, 0.1f },
-		.fadedInColor  = { 0.5f, 0.5f, 0.5f, 0.1f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.0f },
+		.initial  = { 0.5f, 0.5f, 0.5f, 0.1f },
+		.fadedIn  = { 0.5f, 0.5f, 0.5f, 0.1f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.0f },
 		.startFadingOutAtLifetimeFrac = 0.67f
 	}
 };
@@ -1188,19 +1193,19 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-static const ColorLifespan kWoodImpactColors[1] {
+static const RgbaLifespan kWoodImpactColors[1] {
 	{
-		.initialColor  = { 0.5f, 0.4f, 0.3f, 1.0f },
-		.fadedInColor  = { 0.5f, 0.4f, 0.3f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.4f, 0.3f, 1.0f },
+		.initial  = { 0.5f, 0.4f, 0.3f, 1.0f },
+		.fadedIn  = { 0.5f, 0.4f, 0.3f, 1.0f },
+		.fadedOut = { 0.5f, 0.4f, 0.3f, 1.0f },
 	}
 };
 
-static const ColorLifespan kWoodDustColors[1] {
+static const RgbaLifespan kWoodDustColors[1] {
 	{
-		.initialColor  = { 0.5f, 0.4f, 0.3f, 0.0f },
-		.fadedInColor  = { 0.5f, 0.4f, 0.3f, 0.1f },
-		.fadedOutColor = { 0.5f, 0.4f, 0.3f, 0.0f },
+		.initial  = { 0.5f, 0.4f, 0.3f, 0.0f },
+		.fadedIn  = { 0.5f, 0.4f, 0.3f, 0.1f },
+		.fadedOut = { 0.5f, 0.4f, 0.3f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.1f,
 		.startFadingOutAtLifetimeFrac = 0.7f
 	}
@@ -1276,19 +1281,19 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	spawnOrPostponeImpactParticleEffect( delay, debrisFlockParams, debrisAppearanceRules );
 }
 
-static const ColorLifespan kDirtImpactColors[1] {
+static const RgbaLifespan kDirtImpactColors[1] {
 	{
-		.initialColor  = { 0.3f, 0.25f, 0.1f, 1.0f },
-		.fadedInColor  = { 0.3f, 0.25f, 0.1f, 1.0f },
-		.fadedOutColor = { 0.3f, 0.25f, 0.1f, 0.0f },
+		.initial  = { 0.3f, 0.25f, 0.1f, 1.0f },
+		.fadedIn  = { 0.3f, 0.25f, 0.1f, 1.0f },
+		.fadedOut = { 0.3f, 0.25f, 0.1f, 0.0f },
 	}
 };
 
-static const ColorLifespan kDirtDustColors[1] {
+static const RgbaLifespan kDirtDustColors[1] {
 	{
-		.initialColor  = { 0.3f, 0.25f, 0.1f, 0.0f },
-		.fadedInColor  = { 0.3f, 0.25f, 0.1f, 0.3f },
-		.fadedOutColor = { 0.3f, 0.25f, 0.1f, 0.0f },
+		.initial  = { 0.3f, 0.25f, 0.1f, 0.0f },
+		.fadedIn  = { 0.3f, 0.25f, 0.1f, 0.3f },
+		.fadedOut = { 0.3f, 0.25f, 0.1f, 0.0f },
 	}
 };
 
@@ -1357,20 +1362,20 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 }
 
-static const ColorLifespan kSandImpactColors[1] {
+static const RgbaLifespan kSandImpactColors[1] {
 	{
-		.initialColor  = { 0.8f, 0.7f, 0.5f, 0.7f },
-		.fadedInColor  = { 0.8f, 0.7f, 0.5f, 0.7f },
-		.fadedOutColor = { 0.8f, 0.7f, 0.5f, 0.0f },
+		.initial  = { 0.8f, 0.7f, 0.5f, 0.7f },
+		.fadedIn  = { 0.8f, 0.7f, 0.5f, 0.7f },
+		.fadedOut = { 0.8f, 0.7f, 0.5f, 0.0f },
 		.startFadingOutAtLifetimeFrac = 0.67f,
 	}
 };
 
-static const ColorLifespan kSandDustColors[1] {
+static const RgbaLifespan kSandDustColors[1] {
 	{
-		.initialColor  = { 0.8f, 0.7f, 0.5f, 0.3f },
-		.fadedInColor  = { 0.8f, 0.7f, 0.5f, 0.3f },
-		.fadedOutColor = { 0.8f, 0.7f, 0.5f, 0.0f },
+		.initial  = { 0.8f, 0.7f, 0.5f, 0.3f },
+		.fadedIn  = { 0.8f, 0.7f, 0.5f, 0.3f },
+		.fadedOut = { 0.8f, 0.7f, 0.5f, 0.0f },
 		.startFadingOutAtLifetimeFrac = 0.67f,
 	}
 };
@@ -1422,11 +1427,11 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 }
 
-static const ColorLifespan kGlassDebrisColors[1] {
+static const RgbaLifespan kGlassDebrisColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 0.8f, 1.0f, 0.9f, 1.0f },
-		.fadedOutColor = { 0.8f, 1.0f, 0.9f, 0.1f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 0.8f, 1.0f, 0.9f, 1.0f },
+		.fadedOut = { 0.8f, 1.0f, 0.9f, 0.1f },
 	}
 };
 
@@ -1709,69 +1714,69 @@ void EffectsSystemFacade::spawnOrPostponeImpactParticleEffect( unsigned delay,
 	}
 }
 
-static const ColorLifespan kWaterSplashColors[1] {
+static const RgbaLifespan kWaterSplashColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.7f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 0.3f },
-		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.7f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 0.3f },
+		.fadedOut = { 0.0f, 0.0f, 1.0f, 0.0f },
 	}
 };
 
-static const ColorLifespan kWaterDustColors[1] {
+static const RgbaLifespan kWaterDustColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 0.1f },
-		.fadedOutColor = { 0.0f, 0.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 0.1f },
+		.fadedOut = { 0.0f, 0.0f, 1.0f, 0.0f },
 	}
 };
 
-static const ColorLifespan kSlimeSplashColors[1] {
+static const RgbaLifespan kSlimeSplashColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 0.0f, 0.7f },
-		.fadedInColor  = { 0.0f, 1.0f, 0.0f, 0.3f },
-		.fadedOutColor = { 0.0f, 1.0f, 0.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 0.0f, 0.7f },
+		.fadedIn  = { 0.0f, 1.0f, 0.0f, 0.3f },
+		.fadedOut = { 0.0f, 1.0f, 0.0f, 0.0f },
 	}
 };
 
-static const ColorLifespan kSlimeDustColors[1] {
+static const RgbaLifespan kSlimeDustColors[1] {
 	{
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedInColor  = { 0.8f, 1.0f, 0.9f, 0.1f },
-		.fadedOutColor = { 0.0f, 1.0f, 0.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 0.8f, 1.0f, 0.9f, 0.1f },
+		.fadedOut = { 0.0f, 1.0f, 0.0f, 0.0f },
 	}
 };
 
-static const ColorLifespan kLavaSplashColors[1] {
+static const RgbaLifespan kLavaSplashColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.67f, 0.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.67f, 0.0f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.3f, 0.3f, 0.0f },
+		.initial  = { 1.0f, 0.67f, 0.0f, 1.0f },
+		.fadedIn  = { 1.0f, 0.67f, 0.0f, 1.0f },
+		.fadedOut = { 0.5f, 0.3f, 0.3f, 0.0f },
 	}
 };
 
-static const ColorLifespan kLavaDropsColors[3] {
+static const RgbaLifespan kLavaDropsColors[3] {
 	{
-		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.67f, 0.01f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.67f, 0.075f, 0.3f }
+		.initial  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedIn  = { 1.0f, 0.67f, 0.01f, 1.0f },
+		.fadedOut = { 1.0f, 0.67f, 0.075f, 0.3f }
 	},
 	{
-		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.5f, 0.1f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.5f, 0.1f, 0.3f },
+		.initial  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedIn  = { 1.0f, 0.5f, 0.1f, 1.0f },
+		.fadedOut = { 1.0f, 0.5f, 0.1f, 0.3f },
 	},
 	{
-		.initialColor  = { 1.0f, 0.67f, 0.1f, 1.0f },
-		.fadedInColor  = { 0.7f, 0.39f, 0.075f, 1.0f },
-		.fadedOutColor = { 0.7f, 0.39f, 0.075f, 0.3f },
+		.initial  = { 1.0f, 0.67f, 0.1f, 1.0f },
+		.fadedIn  = { 0.7f, 0.39f, 0.075f, 1.0f },
+		.fadedOut = { 0.7f, 0.39f, 0.075f, 0.3f },
 	}
 };
 
-static const ColorLifespan kLavaDustColors[1] {
+static const RgbaLifespan kLavaDustColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.67f, 0.0f, 0.00f },
-		.fadedInColor  = { 1.0f, 0.67f, 0.0f, 0.05f },
-		.fadedOutColor = { 0.5f, 0.3f, 0.3f, 0.00f },
+		.initial  = { 1.0f, 0.67f, 0.0f, 0.00f },
+		.fadedIn  = { 1.0f, 0.67f, 0.0f, 0.05f },
+		.fadedOut = { 0.5f, 0.3f, 0.3f, 0.00f },
 	}
 };
 
@@ -1781,7 +1786,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		.radius = { .mean = 1.25f, .spread = 0.25f }, .sizeBehaviour = Particle::ExpandingAndShrinking
 	};
 
-	std::span<const ColorLifespan> splashColors, dropsColors, dustColors;
+	std::span<const RgbaLifespan> splashColors, dropsColors, dustColors;
 
 	shader_s **materials     = nullptr;
 	float minDropsPercentage = 0.5f;
@@ -2267,21 +2272,25 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
 		.material          = material,
-		.beamColorLifespan = ColorLifespan {
-			.initialColor  = { 1.0f, 1.0f, 1.0f, color[3] },
-			.fadedInColor  = { color[0], color[1], color[2], color[3] },
-			.fadedOutColor = { color[0], color[1], color[2], 0.0f },
+		.beamColorLifespan = RgbaLifespan {
+			.initial  = { 1.0f, 1.0f, 1.0f, color[3] },
+			.fadedIn  = { color[0], color[1], color[2], color[3] },
+			.fadedOut = { color[0], color[1], color[2], 0.0f },
 			.finishFadingInAtLifetimeFrac = 0.2f,
 			.startFadingOutAtLifetimeFrac = 0.5f,
 		},
 		.lightProps        = std::pair<unsigned, LightLifespan> {
-			lightTimeout, {
-				.initialColor   = { 1.0f, 1.0f, 1.0f },
-				.fadedInColor   = { color[0], color[1], color[2] },
-				.fadedOutColor  = { color[0], color[1], color[2] },
-				.initialRadius  = 100.0f,
-				.fadedInRadius  = 250.0f,
-				.fadedOutRadius = 100.0f,
+			lightTimeout, LightLifespan {
+				.colorLifespan = {
+					.initial  = { 1.0f, 1.0f, 1.0f },
+					.fadedIn  = { color[0], color[1], color[2] },
+					.fadedOut = { color[0], color[1], color[2] },
+				},
+				.radiusLifespan = {
+					.initial  = 100.0f,
+					.fadedIn  = 250.0f,
+					.fadedOut = 100.0f,
+				},
 			}
 		},
 		.width      = wsw::clamp( cg_ebbeam_width->value, 0.0f, 128.0f ),
@@ -2314,21 +2323,25 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 
 	cg.polyEffectsSystem.spawnTransientBeamEffect( start, end, {
 		.material          = cgs.media.shaderInstaBeam,
-		.beamColorLifespan = ColorLifespan {
-			.initialColor  = { 1.0f, 1.0f, 1.0f, color[3] },
-			.fadedInColor  = { color[0], color[1], color[2], color[3] },
-			.fadedOutColor = { color[0], color[1], color[2], 0.0f },
+		.beamColorLifespan = RgbaLifespan {
+			.initial  = { 1.0f, 1.0f, 1.0f, color[3] },
+			.fadedIn  = { color[0], color[1], color[2], color[3] },
+			.fadedOut = { color[0], color[1], color[2], 0.0f },
 			.finishFadingInAtLifetimeFrac = 0.2f,
 			.startFadingOutAtLifetimeFrac = 0.5f,
 		},
 		.lightProps        = std::pair<unsigned, LightLifespan> {
-			lightTimeout, {
-				.initialColor   = { 1.0f, 1.0f, 1.0f },
-				.fadedInColor   = { color[0], color[1], color[2] },
-				.fadedOutColor  = { color[0], color[1], color[2] },
-				.initialRadius  = 100.0f,
-				.fadedInRadius  = 250.0f,
-				.fadedOutRadius = 100.0f,
+			lightTimeout, LightLifespan {
+				.colorLifespan = {
+					.initial  = { 1.0f, 1.0f, 1.0f },
+					.fadedIn  = { color[0], color[1], color[2] },
+					.fadedOut = { color[0], color[1], color[2] },
+				},
+				.radiusLifespan = {
+					.initial  = 100.0f,
+					.fadedIn  = 250.0f,
+					.fadedOut = 100.0f,
+				},
 			}
 		},
 		.width      = wsw::clamp( cg_instabeam_width->value, 0.0f, 128.0f ),
@@ -2351,9 +2364,9 @@ void EffectsSystemFacade::spawnGameDebugBeam( const float *from, const float *to
 	cg.polyEffectsSystem.spawnTransientBeamEffect( from, to, {
 		.material          = cgs.media.shaderLaser,
 		.beamColorLifespan = {
-			.initialColor  = { color[0], color[1], color[2] },
-			.fadedInColor  = { color[0], color[1], color[2] },
-			.fadedOutColor = { color[0], color[1], color[2] },
+			.initial  = { color[0], color[1], color[2] },
+			.fadedIn  = { color[0], color[1], color[2] },
+			.fadedOut = { color[0], color[1], color[2] },
 		},
 		.width             = 8.0f,
 		.timeout           = 500u,

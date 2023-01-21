@@ -293,12 +293,16 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	// TODO: Make radius affect hulls
 	constexpr float lightRadiusScale = 1.0f / 64.0f;
 	allocLightEffect( m_lastTime, fireOrigin, vec3_origin, 0.0f, 400u, LightLifespan {
-		.initialColor  = { 1.0f, 0.9f, 0.7f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.5f },
-		.fadedOutColor = { 1.0f, 0.5f, 0.0f },
-		.fadedInRadius = 250.0f * radius * lightRadiusScale,
-		.finishRadiusFadingInAtLifetimeFrac = 0.15f,
-		.startRadiusFadingOutAtLifetimeFrac = 0.75f,
+		.colorLifespan = {
+			.initial  = { 1.0f, 0.9f, 0.7f },
+			.fadedIn  = { 1.0f, 0.8f, 0.5f },
+			.fadedOut = { 1.0f, 0.5f, 0.0f },
+		},
+		.radiusLifespan = {
+			.fadedIn = 250.0f * radius * lightRadiusScale,
+			.finishFadingInAtLifetimeFrac = 0.15f,
+			.startFadingOutAtLifetimeFrac = 0.75f,
+		},
 	});
 
 	SimulatedHullsSystem *const hullsSystem = &cg.simulatedHullsSystem;
@@ -535,12 +539,16 @@ void TransientEffectsSystem::spawnElectroboltLikeHitEffect( const float *origin,
 	}
 
 	allocLightEffect( m_lastTime, origin, dir, 4.0f, 250u, LightLifespan {
-		.initialColor  = { 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { energyColor[0], energyColor[1], energyColor[2] },
-		.fadedOutColor = { energyColor[0], energyColor[1], energyColor[2] },
-		.finishColorFadingInAtLifetimeFrac  = 0.10f,
-		.fadedInRadius                      = 144.0f,
-		.finishRadiusFadingInAtLifetimeFrac = 0.10f
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 1.0f },
+			.fadedIn  = { energyColor[0], energyColor[1], energyColor[2] },
+			.fadedOut = { energyColor[0], energyColor[1], energyColor[2] },
+			.finishFadingInAtLifetimeFrac = 0.10f,
+		},
+		.radiusLifespan = {
+			.fadedIn = 144.0f,
+			.finishFadingInAtLifetimeFrac = 0.10f,
+		},
 	});
 
 	if( cg_explosionsWave->integer ) {
@@ -565,10 +573,12 @@ void TransientEffectsSystem::spawnPlasmaImpactEffect( const float *origin, const
 	};
 
 	allocLightEffect( m_lastTime, origin, dir, 4.0f, 200, LightLifespan {
-		.initialColor  = { 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.0f, 1.0f, 0.3f },
-		.fadedOutColor = { 0.0f, 0.7f, 0.0f },
-		.fadedInRadius = 96.0f,
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 1.0f },
+			.fadedIn  = { 0.0f, 1.0f, 0.3f },
+			.fadedOut = { 0.0f, 0.7f, 0.0f },
+		},
+		.radiusLifespan = { .fadedIn = 96.0f, },
 	});
 
 	if( cg_explosionsWave->integer ) {
@@ -672,10 +682,12 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
 	allocLightEffect( m_lastTime, origin, dir, 8.0f, 350u, LightLifespan {
-		.initialColor  = { 1.0f, 1.0f, 0.5f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.3f },
-		.fadedOutColor = { 0.5f, 0.7f, 0.3f },
-		.fadedInRadius = 144.0f,
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 0.5f },
+			.fadedIn  = { 1.0f, 0.8f, 0.3f },
+			.fadedOut = { 0.5f, 0.7f, 0.3f },
+		},
+		.radiusLifespan = { .fadedIn = 144.0f, },
 	});
 
 	const vec3_t hullOrigin { origin[0] + 8.0f * dir[0], origin[1] + 8.0f * dir[1], origin[2] + 8.0f * dir[2] };

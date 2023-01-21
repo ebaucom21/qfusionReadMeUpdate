@@ -403,21 +403,21 @@ void TrackedEffectsSystem::updateAttachedCurvedPolyTrail( CurvedPolyTrail *trail
 												 trail->lastPointsSpan );
 }
 
-static const ColorLifespan kRocketSmokeTrailColors[1] {
+static const RgbaLifespan kRocketSmokeTrailColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.3f, 1.0f },
-		.fadedInColor  = { 0.7f, 0.7f, 0.7f, 0.15f },
-		.fadedOutColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+		.initial  = { 1.0f, 0.7f, 0.3f, 1.0f },
+		.fadedIn  = { 0.7f, 0.7f, 0.7f, 0.15f },
+		.fadedOut = { 0.0f, 0.0f, 0.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.4f,
 		.startFadingOutAtLifetimeFrac = 0.5f,
 	}
 };
 
-static const ColorLifespan kRocketFireTrailColors[1] {
+static const RgbaLifespan kRocketFireTrailColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.5f, 0.0f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.3f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 0.5f, 0.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.3f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.25f,
 		.startFadingOutAtLifetimeFrac = 0.50f,
 	}
@@ -530,20 +530,20 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 	}
 }
 
-static const ColorLifespan kGrenadeFuseTrailColors[1] {
+static const RgbaLifespan kGrenadeFuseTrailColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.3f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.3f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 0.7f, 0.3f, 0.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.3f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.075f,
 	}
 };
 
-static const ColorLifespan kGrenadeSmokeTrailColors[1] {
+static const RgbaLifespan kGrenadeSmokeTrailColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.3f, 0.0f },
-		.fadedInColor  = { 0.7f, 0.7f, 0.7f, 0.2f },
-		.fadedOutColor = { 0.0f, 0.0f, 0.0f, 0.0f },
+		.initial  = { 1.0f, 0.7f, 0.3f, 0.0f },
+		.fadedIn  = { 0.7f, 0.7f, 0.7f, 0.2f },
+		.fadedOut = { 0.0f, 0.0f, 0.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.25f,
 		.startFadingOutAtLifetimeFrac = 0.50f,
 	}
@@ -638,36 +638,36 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 	}
 }
 
-static const ColorLifespan kBlastSmokeTrailColors[1] {
+static const RgbaLifespan kBlastSmokeTrailColors[1] {
 	{
-		.initialColor  = { 1.0f, 0.5f, 0.5f, 0.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.5f, 0.1f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.initial  = { 1.0f, 0.5f, 0.5f, 0.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.5f, 0.1f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.1f,
 		.startFadingOutAtLifetimeFrac = 0.5f,
 	}
 };
 
-static const ColorLifespan kBlastIonsTrailColors[] {
+static const RgbaLifespan kBlastIonsTrailColors[] {
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.initial  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 1.0f },
 	},
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.8f, 0.6f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.initial  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.6f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 1.0f },
 	},
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.9f, 0.9f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.initial  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedIn  = { 1.0f, 0.9f, 0.9f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 1.0f },
 	},
 	{
-		.initialColor  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedInColor  = { 1.0f, 0.9f, 0.8f, 1.0f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.initial  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedIn  = { 1.0f, 0.9f, 0.8f, 1.0f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 1.0f },
 	}
 };
 
@@ -752,15 +752,15 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 
 static ParticleColorsForTeamHolder g_electroCloudTrailParticleColorsHolder {
 	.defaultColors = {
-		.initialColor  = { 0.5f, 0.7f, 1.0f, 1.0f },
-		.fadedInColor  = { 0.7f, 0.7f, 1.0f, 0.2f },
-		.fadedOutColor = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.initial  = { 0.5f, 0.7f, 1.0f, 1.0f },
+		.fadedIn  = { 0.7f, 0.7f, 1.0f, 0.2f },
+		.fadedOut = { 1.0f, 1.0f, 1.0f, 0.0f },
 		.finishFadingInAtLifetimeFrac = 0.1f,
 		.startFadingOutAtLifetimeFrac = 0.5f,
 	}
 };
 
-static const ColorLifespan kElectroIonsTrailColors[5] {
+static const RgbaLifespan kElectroIonsTrailColors[5] {
 	// All components are the same so we omit field designators
 	{ { 1.0f, 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f } },
 	{ { 0.5f, 0.7f, 1.0f, 1.0f }, { 0.5f, 0.7f, 1.0f, 1.0f }, { 0.5f, 0.7f, 1.0f, 1.0f } },
@@ -771,9 +771,9 @@ static const ColorLifespan kElectroIonsTrailColors[5] {
 
 static ParticleColorsForTeamHolder g_electroIonsParticleColorsHolder {
 	.defaultColors = {
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedOutColor = { 0.5f, 0.5f, 0.5f, 1.0f }
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 1.0f }
 	}
 };
 
@@ -797,7 +797,7 @@ static const StraightPolyTrailProps kElectroPolyTrailProps {
 };
 
 void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const float *origin, int64_t currTime ) {
-	std::span<const ColorLifespan> cloudColors, ionsColors;
+	std::span<const RgbaLifespan> cloudColors, ionsColors;
 
 	bool useTeamColors = false;
 	[[maybe_unused]] vec4_t teamColor;

@@ -633,8 +633,8 @@ void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *dr
 			addedParticle->instanceRadiusExtraScale = (int8_t)lightRadius;
 
 			// TODO: This kind of sucks, can't we just supply inline colors?
-			m_frameFlareColorLifespans.push_back( ColorLifespan {
-				.initialColor = { lightColor[0], lightColor[1], lightColor[2], flareProps.alphaScale },
+			m_frameFlareColorLifespans.push_back( RgbaLifespan {
+				.initial = { lightColor[0], lightColor[1], lightColor[2], flareProps.alphaScale },
 			});
 
 			// TODO: Load 4 components explicitly
@@ -651,7 +651,7 @@ void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *dr
 
 	if( numAddedParticles ) {
 		const Particle *const addedParticles   = m_frameFlareParticles.data() + oldNumFrameFlareParticles;
-		const ColorLifespan *const addedColors = m_frameFlareColorLifespans.data() + oldNumFrameFlareParticles;
+		const RgbaLifespan *const addedColors = m_frameFlareColorLifespans.data() + oldNumFrameFlareParticles;
 		m_frameFlareAppearanceRules.emplace_back( Particle::AppearanceRules {
 			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
 			.colors        = { addedColors, numAddedParticles },

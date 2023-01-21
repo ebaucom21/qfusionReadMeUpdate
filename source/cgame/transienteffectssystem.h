@@ -37,41 +37,6 @@ class DrawSceneRequest;
 struct ConicalFlockParams;
 struct EllipsoidalFlockParams;
 
-// TODO: Lift it to the top level, use for defining some other helpers
-struct ValueLifespan {
-	float initial { 0.0f };
-	float fadedIn { 1.0f };
-	float fadedOut { 0.0f };
-	float finishFadingInAtLifetimeFrac { 0.25f };
-	float startFadingOutAtLifetimeFrac { 0.75f };
-
-	[[nodiscard]]
-	auto getValueForLifetimeFrac( float lifetimeFrac ) const __restrict -> float {
-		assert( lifetimeFrac >= 0.0f && lifetimeFrac <= 1.0f );
-
-		assert( finishFadingInAtLifetimeFrac > 0.01f );
-		assert( startFadingOutAtLifetimeFrac < 0.99f );
-		assert( finishFadingInAtLifetimeFrac + 0.01f < startFadingOutAtLifetimeFrac );
-
-		if( lifetimeFrac < finishFadingInAtLifetimeFrac ) [[unlikely]] {
-			float fadeInFrac = lifetimeFrac * Q_Rcp( finishFadingInAtLifetimeFrac );
-			assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
-			fadeInFrac = wsw::clamp( fadeInFrac, 0.0f, 1.0f );
-			return fadeInFrac * fadedIn + ( 1.0f - fadeInFrac ) * initial;
-		} else {
-			if( lifetimeFrac > startFadingOutAtLifetimeFrac ) [[unlikely]] {
-				float fadeOutFrac = lifetimeFrac - startFadingOutAtLifetimeFrac;
-				fadeOutFrac *= Q_Rcp( 1.0f - startFadingOutAtLifetimeFrac );
-				assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
-				fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
-				return fadeOutFrac * fadedOut + ( 1.0f - fadeOutFrac ) * fadedIn;
-			} else {
-				return fadedIn;
-			}
-		}
-	}
-};
-
 /// Manages "fire-and-forget" effects that usually get spawned upon events.
 class TransientEffectsSystem {
 public:

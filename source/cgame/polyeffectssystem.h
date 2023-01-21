@@ -58,7 +58,7 @@ public:
 
 	struct TransientBeamParams {
 		shader_s *material { nullptr };
-		ColorLifespan beamColorLifespan;
+		RgbaLifespan beamColorLifespan;
 		std::optional<std::pair<unsigned, LightLifespan>> lightProps;
 		float width { 0.0f };
 		float tileLength { 0.0f };
@@ -126,7 +126,7 @@ private:
 	struct TransientBeamEffect {
 		TransientBeamEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime;
-		ColorLifespan colorLifespan;
+		RgbaLifespan colorLifespan;
 		unsigned timeout;
 		// Contrary to tracked laser beams, the light position is computed in an "immediate" mode.
 		// As these beams are multifunctional, the light appearance is more configurable.

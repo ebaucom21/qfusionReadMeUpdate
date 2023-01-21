@@ -829,23 +829,24 @@ void addRandomRotationToDir( float *dir, wsw::RandomGenerator *rng, float coneAn
 auto getSurfFlagsForImpact( const trace_t &trace, const float *impactDir ) -> int;
 
 struct ParticleColorsForTeamHolder {
-	ColorLifespan colorsForTeam[2];
-	const ColorLifespan defaultColors;
+	RgbaLifespan colorsForTeam[2];
+	const RgbaLifespan defaultColors;
 
 	[[nodiscard]]
-	auto getColorsForTeam( int team, const vec4_t overlayColor ) -> const ColorLifespan * {
+	auto getColorsForTeam( int team, const vec4_t overlayColor ) -> const RgbaLifespan * {
 		assert( team == TEAM_ALPHA || team == TEAM_BETA );
-		ColorLifespan *const resultColors = &colorsForTeam[team - TEAM_ALPHA];
+		RgbaLifespan *const resultColors = &colorsForTeam[team - TEAM_ALPHA];
 
 		// TODO: Preserve HSV value, or make consistently lighter
-		VectorCopy( overlayColor, resultColors->initialColor );
-		VectorCopy( overlayColor, resultColors->fadedInColor );
-		VectorCopy( overlayColor, resultColors->fadedOutColor );
+		VectorCopy( overlayColor, resultColors->initial );
+		VectorCopy( overlayColor, resultColors->fadedIn );
+		VectorCopy( overlayColor, resultColors->fadedOut );
 
 		// Preserve the reference alpha
-		resultColors->initialColor[3]  = defaultColors.initialColor[3];
-		resultColors->fadedInColor[3]  = defaultColors.fadedInColor[3];
-		resultColors->fadedOutColor[3] = defaultColors.fadedOutColor[3];
+		resultColors->initial[3]  = defaultColors.initial[3];
+		resultColors->fadedIn[3]  = defaultColors.fadedIn[3];
+		resultColors->fadedOut[3] = defaultColors.fadedOut[3];
+
 		// Preserve fading properties
 		resultColors->finishFadingInAtLifetimeFrac = defaultColors.finishFadingInAtLifetimeFrac;
 		resultColors->startFadingOutAtLifetimeFrac = defaultColors.startFadingOutAtLifetimeFrac;

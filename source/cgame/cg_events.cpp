@@ -100,9 +100,9 @@ static vec_t *_LaserColor( vec4_t color ) {
 
 static ParticleColorsForTeamHolder laserImpactParticleColorsHolder {
 	.defaultColors = {
-		.initialColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedOutColor = { 1.0f, 0.9f, 0.0f, 0.0f },
+		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
+		.fadedOut = { 1.0f, 0.9f, 0.0f, 0.0f },
 	}
 };
 
@@ -126,7 +126,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 					}
 				}
 
-				const ColorLifespan *singleColorAddress;
+				const RgbaLifespan *singleColorAddress;
 				ParticleColorsForTeamHolder *holder = &::laserImpactParticleColorsHolder;
 				if( useTeamColors ) {
 					vec4_t teamColor;
@@ -1092,10 +1092,10 @@ static void handlePnodeEvent( entity_state_t *ent, int parm, bool predicted ) {
 	cg.effectsSystem.spawnGameDebugBeam( ent->origin, ent->origin2, color, parm );
 }
 
-static const ColorLifespan kSparksColor {
-	.initialColor  = { 1.0f, 0.5f, 0.1f, 0.0f },
-	.fadedInColor  = { 1.0f, 1.0f, 1.0f, 1.0f },
-	.fadedOutColor = { 0.5f, 0.5f, 0.5f, 0.5f },
+static const RgbaLifespan kSparksColor {
+	.initial  = { 1.0f, 0.5f, 0.1f, 0.0f },
+	.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedOut = { 0.5f, 0.5f, 0.5f, 0.5f },
 };
 
 static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {

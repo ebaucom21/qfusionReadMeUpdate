@@ -1401,7 +1401,7 @@ static void submitSpriteParticlesToBackend( const FrontendToBackendShared *fsh,
 		VectorMA( point, -radius, v_left, xyz[2] );
 
 		vec4_t colorBuffer;
-		const ColorLifespan &colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
+		const RgbaLifespan &colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
 		colorLifespan.getColorForLifetimeFrac( particle->lifetimeFrac, colorBuffer );
 
 		if( applyLight ) {
@@ -1547,7 +1547,7 @@ static void submitSparkParticlesToBackend( const FrontendToBackendShared *fsh,
 		}
 
 		vec4_t colorBuffer;
-		const ColorLifespan &colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
+		const RgbaLifespan &colorLifespan = appearanceRules->colors[particle->instanceColorIndex];
 		colorLifespan.getColorForLifetimeFrac( particle->lifetimeFrac, colorBuffer );
 
 		if( applyLight ) {
