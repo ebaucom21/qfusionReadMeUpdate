@@ -68,8 +68,14 @@ public:
 	void spawnTransientBeamEffect( const float *from, const float *to, TransientBeamParams &&params );
 
 	struct TracerParams {
+		struct AlignForPovParams {
+			float originRightOffset;
+			float originZOffset;
+			unsigned povNum;
+		};
+
 		shader_s *material { nullptr };
-		std::optional<unsigned> alignForPovNum;
+		std::optional<AlignForPovParams> alignForPovParams;
 		unsigned duration { 100 };
 		float prestepDistance { 0.0f };
 		float smoothEdgeDistance { 0.0f };
@@ -138,7 +144,7 @@ private:
 	struct TracerEffect {
 		TracerEffect *prev { nullptr }, *next { nullptr };
 		int64_t timeoutAt;
-		std::optional<unsigned> alignForPovNum;
+		std::optional<TracerParams::AlignForPovParams> alignForPovParams;
 		vec3_t from;
 		vec3_t to;
 		vec3_t dir;

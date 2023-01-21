@@ -2161,36 +2161,52 @@ bool EffectsSystemFacade::MultiGroupEventRateLimiter::acquirePermission( int64_t
 	return chosenLimiter->acquirePermission( timestamp, origin, params );
 }
 
-static void adjustTracerOriginForOwner( int owner, const float *givenOrigin, float *adjustedOrigin ) {
+[[maybe_unused]]
+static auto adjustTracerOriginForOwner( int owner, const float *givenOrigin, float *adjustedOrigin ) -> std::pair<float, float> {
 	// This produces satisfactory results, assuming a reasonable prestep.
 
 	VectorCopy( givenOrigin, adjustedOrigin );
 	if( owner == (int)cg.predictedPlayerState.POVnum ) {
-		const int handValue  = cgs.demoPlaying ? cg_hand->integer : cgs.clientInfo[owner - 1].hand;
-		const float handSign = handValue ? -1.0f : +1.0f;
-		const float offset   = wsw::clamp( handSign * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
+		const int handValue     = cgs.demoPlaying ? cg_hand->integer : cgs.clientInfo[owner - 1].hand;
+		const float handSign    = handValue ? -1.0f : +1.0f;
+		const float rightOffset = wsw::clamp( handSign * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
+		const float zOffset     = -playerbox_stand_viewheight;
 
 		vec3_t right;
-		AngleVectors( cg_entities[owner].current.angles, nullptr, right, nullptr );
-		VectorMA( adjustedOrigin, offset, right, adjustedOrigin );
+		AngleVectors( cg.predictedPlayerState.viewangles, nullptr, right, nullptr );
+		VectorMA( adjustedOrigin, rightOffset, right, adjustedOrigin );
 
-		adjustedOrigin[2] -= playerbox_stand_viewheight;
+		adjustedOrigin[2] += zOffset;
+
+		return { rightOffset, zOffset };
 	}
+
+	return { 0, 0 };
 }
 
 void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
 	vec3_t adjustedFrom;
-	adjustTracerOriginForOwner( owner, from, adjustedFrom );
+	const auto [rightOffset, zOffset] = adjustTracerOriginForOwner( owner, from, adjustedFrom );
+
+	std::optional<PolyEffectsSystem::TracerParams::AlignForPovParams> alignForPovParams;
+	if( owner == (int)cg.predictedPlayerState.POVnum ) {
+		constexpr float magicRightOffsetScale = 2.0f, magicZOffsetScale = 0.5f;
+		alignForPovParams = PolyEffectsSystem::TracerParams::AlignForPovParams {
+			.originRightOffset = magicRightOffsetScale * rightOffset,
+			.originZOffset     = magicZOffsetScale * zOffset,
+			.povNum            = cg.predictedPlayerState.POVnum,
+		};
+	}
 
 	cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, PolyEffectsSystem::TracerParams {
 		.material           = cgs.media.shaderSparkParticle,
-		.alignForPovNum     = owner == (int)cg.predictedPlayerState.POVnum ? std::optional( owner ) : std::nullopt,
+		.alignForPovParams  = alignForPovParams,
 		.duration           = 200,
-		.prestepDistance    = m_rng.nextFloat( 56.0f, 96.0f ),
+		.prestepDistance    = m_rng.nextFloat( 72.0f, 96.0f ),
 		.smoothEdgeDistance = 172.0f,
 		.width              = m_rng.nextFloat( 2.0f, 2.5f ),
-		.minLength          = m_rng.nextFloat( 64.0f, 72.0f ),
-		.distancePercentage = ( owner == (int)cg.predictedPlayerState.POVnum ) ? 0.27f : 0.15f,
+		.minLength          = m_rng.nextFloat( 80.0f, 108.0f ),
+		.distancePercentage = ( owner == (int)cg.predictedPlayerState.POVnum ) ? 0.24f : 0.18f,
 		.programLightRadius = 72.0f,
 		.coronaLightRadius  = 108.0f,
 		.lightColor         = { 0.9f, 0.8f, 1.0f }
@@ -2208,7 +2224,7 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std:
 			.prestepDistance          = m_rng.nextFloat( 32.0f, 72.0f ),
 			.width                    = m_rng.nextFloat( 0.9f, 1.0f ),
 			.minLength                = m_rng.nextFloat( 72.0f, 108.0f ),
-			.distancePercentage       = 0.12f,
+			.distancePercentage       = 0.18f,
 			.color                    = { 1.0f, 0.9f, 0.8f, 1.0f },
 			.programLightRadius       = 96.0f,
 			.coronaLightRadius        = 192.0f,
