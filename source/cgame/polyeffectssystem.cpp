@@ -548,48 +548,54 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 
 		bool hasAlignedForPov = false;
 		// If we should align
-		if( tracer->alignForPovParams ) {
+		if( const std::optional<TracerParams::AlignForPovParams> &alignForPovParams = tracer->alignForPovParams ) {
 			// If we're really following the initial POV
-			if( tracer->alignForPovParams->povNum == cg.predictedPlayerState.POVnum ) {
+			if( alignForPovParams->povNum == cg.predictedPlayerState.POVnum ) {
 				const float *const actualViewOrigin = cg.predictedPlayerState.pmove.origin;
 				const float *const actualViewAngles = cg.predictedPlayerState.viewangles;
 
 				// Pin the farthest point at it's regular origin and align the free tail towards the viewer
 				// TODO: Think of creating a separate kind of QuadPoly::AppearanceRules for this case?
-				vec3_t farthestPoint, viewOrigin;
+				vec3_t farthestPoint;
 				VectorMA( tracer->from, distanceOfFarthestPoint, tracer->dir, farthestPoint );
 
-				vec3_t actualViewForward, actualViewRight;
-				AngleVectors( actualViewAngles, actualViewForward, actualViewRight, nullptr );
-
-				VectorMA( actualViewOrigin, tracer->alignForPovParams->originRightOffset, actualViewRight, viewOrigin );
-				viewOrigin[2] += tracer->alignForPovParams->originZOffset;
-
-				const float squareDistance = DistanceSquared( farthestPoint, viewOrigin );
+				const float squareDistanceToActualViewOrigin = DistanceSquared( farthestPoint, actualViewOrigin );
 				// If we can normalize the new direction vector
-				if( squareDistance > wsw::square( 0.1f ) ) [[likely]] {
-					const float rcpDistance = Q_RSqrt( squareDistance );
+				if( squareDistanceToActualViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
+					const float rcpDistanceToActualViewOrigin = Q_RSqrt( squareDistanceToActualViewOrigin );
 
-					vec3_t fullyCorrectedDir;
-					VectorSubtract( farthestPoint, viewOrigin, fullyCorrectedDir );
-					VectorScale( fullyCorrectedDir, rcpDistance, fullyCorrectedDir );
+					vec3_t actualViewOriginToTracerDir;
+					VectorSubtract( farthestPoint, actualViewOrigin, actualViewOriginToTracerDir );
+					VectorScale( actualViewOriginToTracerDir, rcpDistanceToActualViewOrigin, actualViewOriginToTracerDir );
 
 					assert( std::fabs( VectorLengthFast( tracer->dir ) - 1.0f ) < 0.1f );
-					assert( std::fabs( VectorLengthFast( fullyCorrectedDir ) - 1.0f ) < 0.1f );
+					assert( std::fabs( VectorLengthFast( actualViewOriginToTracerDir ) - 1.0f ) < 0.1f );
 
-					if( const float dot = DotProduct( fullyCorrectedDir, tracer->dir ); dot > 0.0f ) {
-						// Prevent going above 1.0f due to precision issues
-						const float correctionFrac = wsw::min( 1.0f, dot );
+					// Lower the Z offset (doing that actually hides the tracer from the view)
+					// for polys that are close to the view and/or are to the side of the view.
+
+					const float viewDotFrac  = DotProduct( actualViewOriginToTracerDir, tracer->dir );
+					const float distanceFrac = Q_Sqrt( Q_Sqrt( tracer->distanceSoFar * Q_Rcp( tracer->totalDistance ) ) );
+					const float zOffsetFrac  = wsw::square( wsw::clamp( viewDotFrac * distanceFrac, 0.0f, 1.0f ) );
+
+					vec3_t actualViewForward, actualViewRight;
+					AngleVectors( actualViewAngles, actualViewForward, actualViewRight, nullptr );
+
+					vec3_t shiftedViewOrigin;
+					VectorMA( actualViewOrigin, alignForPovParams->originRightOffset, actualViewRight, shiftedViewOrigin );
+					// Applying the offsettingFrac hides the tracer from POV
+					shiftedViewOrigin[2] += zOffsetFrac * alignForPovParams->originZOffset;
+
+					const float squareDistanceToShiftedViewOrigin = DistanceSquared( farthestPoint, shiftedViewOrigin );
+					if( squareDistanceToShiftedViewOrigin > wsw::square( 0.1f ) ) [[likely]] {
+						const float rcpDistanceToShiftedViewOrigin = Q_RSqrt( squareDistanceToShiftedViewOrigin );
 
 						// Modify the poly dir
-						VectorLerp( tracer->dir, correctionFrac, fullyCorrectedDir, rules->dir );
+						VectorSubtract( farthestPoint, shiftedViewOrigin, rules->dir );
+						VectorScale( rules->dir, rcpDistanceToShiftedViewOrigin, rules->dir );
 
-						vec3_t regularOrigin, fullyCorrectedOrigin;
-						VectorMA( tracer->from, tracer->distanceSoFar, tracer->dir, regularOrigin );
-						VectorMA( farthestPoint, -tracer->poly.halfExtent, rules->dir, fullyCorrectedOrigin );
-
-						// Modify the poly origin
-						VectorLerp( regularOrigin, correctionFrac, fullyCorrectedOrigin, tracer->poly.origin );
+						// Modify the origin
+						VectorMA( farthestPoint, -tracer->poly.halfExtent, rules->dir, tracer->poly.origin );
 
 						hasAlignedForPov = true;
 					}
