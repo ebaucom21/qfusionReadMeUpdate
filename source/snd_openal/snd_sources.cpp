@@ -242,11 +242,6 @@ static void S_ShutdownSourceEFX( src_t *src ) {
 		alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL );
 	}
 
-	if( src->auxiliarySendFilter ) {
-		alDeleteFilters( 1, &src->auxiliarySendFilter );
-		src->auxiliarySendFilter = 0;
-	}
-
 	if( src->effect ) {
 		alDeleteEffects( 1, &src->effect );
 		src->effect = 0;
@@ -262,27 +257,20 @@ static void S_ShutdownSourceEFX( src_t *src ) {
 }
 
 static bool S_InitSourceEFX( src_t *src ) {
-	src->directFilter        = 0;
-	src->auxiliarySendFilter = 0;
-	src->effect              = 0;
-	src->effectSlot          = 0;
+	src->directFilter = 0;
+	src->effect       = 0;
+	src->effectSlot   = 0;
 
 	(void)alGetError();
 
 	bool succeeded = false;
 	do {
-		ALuint filters[2] { 0, 0 };
-		alGenFilters( 2, filters );
+		alGenFilters( 1, &src->directFilter );
 		if( alGetError() != AL_NO_ERROR ) {
 			break;
 		}
 
-		src->directFilter        = filters[0];
-		src->auxiliarySendFilter = filters[1];
-
 		alFilteri( src->directFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
-		alFilteri( src->auxiliarySendFilter, AL_FILTER_TYPE, AL_FILTER_LOWPASS );
-		// A single check would be sufficient
 		if( alGetError() != AL_NO_ERROR ) {
 			break;
 		}
@@ -290,9 +278,6 @@ static bool S_InitSourceEFX( src_t *src ) {
 		// Set default filter values (no actual attenuation)
 		alFilterf( src->directFilter, AL_LOWPASS_GAIN, 1.0f );
 		alFilterf( src->directFilter, AL_LOWPASS_GAINHF, 1.0f );
-		alFilterf( src->auxiliarySendFilter, AL_LOWPASS_GAIN, 1.0f );
-		// Set it once and don't change
-		alFilterf( src->auxiliarySendFilter, AL_LOWPASS_GAINHF, 0.5f );
 
 		// Attach the filter to the source
 		alSourcei( src->source, AL_DIRECT_FILTER, src->directFilter );
@@ -319,7 +304,7 @@ static bool S_InitSourceEFX( src_t *src ) {
 			break;
 		}
 		// Feed the slot from the source
-		alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, src->auxiliarySendFilter );
+		alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
 		if( alGetError() != AL_NO_ERROR ) {
 			break;
 		}

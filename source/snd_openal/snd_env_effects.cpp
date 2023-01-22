@@ -49,7 +49,7 @@ void Effect::AttachEffect( src_t *src ) {
 	// Attach the effect to the slot
 	alAuxiliaryEffectSloti( src->effectSlot, AL_EFFECTSLOT_EFFECT, src->effect );
 	// Feed the slot from the source
-	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, src->auxiliarySendFilter );
+	alSource3i( src->source, AL_AUXILIARY_SEND_FILTER, src->effectSlot, 0, AL_FILTER_NULL );
 }
 
 void UnderwaterFlangerEffect::IntiallySetupEffect( src_t *src ) {

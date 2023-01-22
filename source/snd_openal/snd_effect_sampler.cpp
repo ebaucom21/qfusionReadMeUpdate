@@ -415,9 +415,12 @@ void ReverbEffectSampler::ComputeReverberation( const ListenerProps &listenerPro
 	const float attenuationFrac           = wsw::max( wsw::max( decayAttenuationFrac, skyAttenuationFrac ),
 													  wsw::max( reflectiveAttenuationFrac, metallnessAttenuationFrac ) );
 
-	constexpr float minAttenuation = 0.79f;
+	constexpr float minAttenuation = 0.70f;
 	constexpr float maxAttenuation = 0.25f;
+	static_assert( AL_EAXREVERB_MIN_GAIN == 0.0f );
 	effect->reverbProps.gain *= minAttenuation - ( minAttenuation - maxAttenuation ) * attenuationFrac;
+	static_assert( AL_EAXREVERB_MIN_DECAY_HFRATIO > 0.0f );
+	effect->reverbProps.decayHfRatio = wsw::max( AL_EAXREVERB_MIN_DECAY_HFRATIO, 0.6f * effect->reverbProps.decayHfRatio );
 
 	EmitSecondaryRays();
 }
