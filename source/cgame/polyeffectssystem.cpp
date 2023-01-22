@@ -537,13 +537,27 @@ void PolyEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneReque
 			continue;
 		}
 
-		auto *const rules = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
+		auto *const rules   = std::get_if<QuadPoly::ViewAlignedBeamRules>( &tracer->poly.appearanceRules );
+		rules->toColor[3]   = tracer->initialColorAlpha;
 		rules->fromColor[3] = tracer->initialColorAlpha;
 
-		// Soften the closest edge
+		// Soften edges
 
+		float softenClosestEdgeFrac = 1.0f;
 		if( distanceOfClosestPoint < tracer->smoothEdgeDistance ) {
-			rules->fromColor[3] *= distanceOfClosestPoint * Q_Rcp( tracer->smoothEdgeDistance );
+			softenClosestEdgeFrac = distanceOfClosestPoint * Q_Rcp( tracer->smoothEdgeDistance );
+			rules->fromColor[3] *= softenClosestEdgeFrac;
+		}
+
+		const float distanceToImpactPoint = tracer->totalDistance - distanceOfFarthestPoint;
+		if( distanceToImpactPoint < tracer->smoothEdgeDistance ) {
+			const float softenFarthestEdgeFrac = distanceToImpactPoint * Q_Rcp( tracer->smoothEdgeDistance );
+			rules->toColor[3] *= softenFarthestEdgeFrac;
+			// Smooth the closest edge as well in this case, if we did not do that yet.
+			// Choose the fraction of the farthest edge over the closest one.
+			if( softenFarthestEdgeFrac > softenClosestEdgeFrac ) {
+				rules->fromColor[3] = tracer->initialColorAlpha * softenFarthestEdgeFrac;
+			}
 		}
 
 		bool hasAlignedForPov = false;
