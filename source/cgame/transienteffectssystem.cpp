@@ -288,6 +288,25 @@ static const SimulatedHullsSystem::ColorChangeTimelineNode kSmokeHullHardLayerCo
 static const uint8_t kSmokeHullNoColorChangeVertexColor[4] { 127, 127, 127, 0 };
 static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104, 106, 157, 158 };
 
+static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
+	{
+		.alphaScale                      = 1.25f,
+		.initialRadius                   = 0.0f,
+		.fadedInRadius                   = 16.0f,
+		.fadedOutRadius                  = 0.0f,
+		.tessLevelShiftForMinVertexIndex = -2,
+		.tessLevelShiftForMaxVertexIndex = -1,
+	},
+	{
+		.alphaScale                      = 1.0f,
+		.initialRadius                   = 0.0f,
+		.fadedInRadius                   = 24.0f,
+		.fadedOutRadius                  = 0.0f,
+		.tessLevelShiftForMinVertexIndex = 0,
+		.tessLevelShiftForMaxVertexIndex = 0
+	},
+};
+
 void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius ) {
 	// 250 for radius of 64
 	// TODO: Make radius affect hulls
@@ -337,6 +356,9 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	}
 
 	if( smokeOrigin ) {
+		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderFlareParticle;
+		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderBlastParticle;
+
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
 			{
@@ -356,11 +378,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.colorChangeTimeline = kSmokeHullSoftLayerColorChangeTimeline,
 				.appearanceRules     = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
 					.cloudRules      = SimulatedHullsSystem::CloudAppearanceRules {
-						.material       = cgs.media.shaderFlareParticle,
-						.alphaScale     = 1.25f,
-						.initialRadius  = 0.0f,
-						.fadedInRadius  = 24.0f,
-						.fadedOutRadius = 24.0f,
+						.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps
 					},
 				},
 			},

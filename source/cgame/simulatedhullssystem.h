@@ -26,7 +26,7 @@ public:
 		shader_s *material { nullptr };
 	};
 
-	struct CloudAppearanceRules {
+	struct CloudMeshProps {
 		shader_s *material { nullptr };
 		vec4_t overlayColor { 1.0f, 1.0f, 1.0f, 1.0f };
 		float alphaScale { 1.0f };
@@ -35,6 +35,13 @@ public:
 		float fadedOutRadius { 0.0f };
 		float finishFadingInAtLifetimeFrac { 0.33f };
 		float startFadingOutAtLifetimeFrac { 0.67f };
+		// Feasible values of these properties must be non-positive
+		int tessLevelShiftForMinVertexIndex { 0 };
+		int tessLevelShiftForMaxVertexIndex { 0 };
+	};
+
+	struct CloudAppearanceRules {
+		std::span<const CloudMeshProps> spanOfMeshProps;
 	};
 
 	struct SolidAndCloudAppearanceRules {
@@ -157,6 +164,8 @@ private:
 		float m_alphaScale { 1.0f };
 		float m_spriteRadius { 16.0f };
 		float m_lifetimeSeconds { 0.0f };
+		int m_tessLevelShiftForMinVertexIndex { 0 };
+		int m_tessLevelShiftForMaxVertexIndex { 0 };
 		uint16_t m_phaseIndexShiftInTable { 0 };
 		uint16_t m_speedIndexShiftInTable { 0 };
 
@@ -237,7 +246,8 @@ private:
 		// TODO: Allocate on demand?
 		SharedMeshData sharedMeshData;
 		HullSolidDynamicMesh submittedSolidMesh;
-		HullCloudDynamicMesh submittedCloudMesh;
+		// Keep it limited to two meshes for now
+		HullCloudDynamicMesh submittedCloudMeshes[2];
 
 		void simulate( int64_t currTime, float timeDeltaSeconds, wsw::RandomGenerator *__restrict rng );
 	};
@@ -280,7 +290,7 @@ private:
 			byte_vec4_t *vertexColors;
 			SharedMeshData *sharedMeshData;
 			HullSolidDynamicMesh *submittedSolidMesh;
-			HullCloudDynamicMesh *submittedCloudMesh;
+			HullCloudDynamicMesh *submittedCloudMeshes[1];
 
 			// Subtracted from limitsAtDirections for this layer, must be non-negative.
 			// This offset is supposed to prevent hulls from ending at the same distance in the end position.
@@ -349,7 +359,10 @@ private:
 				layer->vertexColors             = &storageOfColors[i * kNumVertices];
 				layer->sharedMeshData           = &storageOfSharedMeshData[i];
 				layer->submittedSolidMesh       = &storageOfSolidMeshes[i];
-				layer->submittedCloudMesh       = &storageOfCloudMeshes[i];
+
+				// There is a single mesh per layer
+				assert( std::size( layer->submittedCloudMeshes ) == 1 );
+				layer->submittedCloudMeshes[0] = &storageOfCloudMeshes[i];
 			}
 		}
 	};

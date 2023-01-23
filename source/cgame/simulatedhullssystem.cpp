@@ -620,29 +620,29 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 
 [[nodiscard]]
 static auto getRadiusForCurrTime( int64_t currTime, int64_t spawnTime, unsigned lifetime,
-								  const SimulatedHullsSystem::CloudAppearanceRules &rules ) -> float {
+								  const SimulatedHullsSystem::CloudMeshProps &props ) -> float {
 	assert( lifetime && currTime >= spawnTime );
-	assert( rules.finishFadingInAtLifetimeFrac > 0.01f );
-	assert( rules.startFadingOutAtLifetimeFrac < 0.99f );
-	assert( rules.finishFadingInAtLifetimeFrac + 0.01f < rules.startFadingOutAtLifetimeFrac );
+	assert( props.finishFadingInAtLifetimeFrac > 0.01f );
+	assert( props.startFadingOutAtLifetimeFrac < 0.99f );
+	assert( props.finishFadingInAtLifetimeFrac + 0.01f < props.startFadingOutAtLifetimeFrac );
 
 	const float lifetimeFrac = (float)( currTime - spawnTime ) * Q_Rcp( (float)lifetime );
 
-	if( lifetimeFrac < rules.finishFadingInAtLifetimeFrac ) [[unlikely]] {
+	if( lifetimeFrac < props.finishFadingInAtLifetimeFrac ) [[unlikely]] {
 		// Fade in
-		float fadeInFrac = lifetimeFrac * Q_Rcp( rules.finishFadingInAtLifetimeFrac );
+		float fadeInFrac = lifetimeFrac * Q_Rcp( props.finishFadingInAtLifetimeFrac );
 		assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
-		return std::lerp( rules.initialRadius, rules.fadedInRadius, wsw::clamp( fadeInFrac, 0.0f, 1.0f ) );
+		return std::lerp( props.initialRadius, props.fadedInRadius, wsw::clamp( fadeInFrac, 0.0f, 1.0f ) );
 	} else {
-		if( lifetimeFrac > rules.startFadingOutAtLifetimeFrac ) [[unlikely]] {
+		if( lifetimeFrac > props.startFadingOutAtLifetimeFrac ) [[unlikely]] {
 			// Fade out
-			float fadeOutFrac = lifetimeFrac - rules.startFadingOutAtLifetimeFrac;
-			fadeOutFrac *= Q_Rcp( 1.0f - rules.startFadingOutAtLifetimeFrac );
+			float fadeOutFrac = lifetimeFrac - props.startFadingOutAtLifetimeFrac;
+			fadeOutFrac *= Q_Rcp( 1.0f - props.startFadingOutAtLifetimeFrac );
 			assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
 			fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
-			return std::lerp( rules.fadedInRadius, rules.fadedOutRadius, fadeOutFrac );
+			return std::lerp( props.fadedInRadius, props.fadedOutRadius, fadeOutFrac );
 		} else {
-			return rules.fadedInRadius;
+			return props.fadedInRadius;
 		}
 	}
 };
@@ -746,30 +746,38 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 		}
 
 		if( cloudAppearanceRules ) [[unlikely]] {
-			HullCloudDynamicMesh *const __restrict mesh = &hull->submittedCloudMesh;
+			assert( !cloudAppearanceRules->spanOfMeshProps.empty() );
+			assert( cloudAppearanceRules->spanOfMeshProps.size() <= std::size( hull->submittedCloudMeshes ) );
 
-			mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime,
-														 *cloudAppearanceRules );
-			if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
-				Vector4Copy( hull->mins, mesh->cullMins );
-				Vector4Copy( hull->maxs, mesh->cullMaxs );
+			for( size_t meshNum = 0; meshNum < cloudAppearanceRules->spanOfMeshProps.size(); ++meshNum ) {
+				const CloudMeshProps &__restrict meshProps  = cloudAppearanceRules->spanOfMeshProps[meshNum];
+				HullCloudDynamicMesh *const __restrict mesh = hull->submittedCloudMeshes + meshNum;
 
-				mesh->material     = cloudAppearanceRules->material;
-				mesh->m_alphaScale = cloudAppearanceRules->alphaScale;
-				Vector4Copy( cloudAppearanceRules->overlayColor, mesh->m_spriteColor );
+				mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime, meshProps );
+				if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
+					Vector4Copy( hull->mins, mesh->cullMins );
+					Vector4Copy( hull->maxs, mesh->cullMaxs );
 
-				mesh->applyVertexDynLight = hull->applyVertexDynLight;
-				mesh->m_shared            = sharedMeshData;
-				mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+					mesh->material     = meshProps.material;
+					mesh->m_alphaScale = meshProps.alphaScale;
+					Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
 
-				// It's more convenient to initialize it on demand
-				if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
-					const auto randomWord          = (uint16_t)m_rng.next();
-					mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
-					mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+					mesh->applyVertexDynLight = hull->applyVertexDynLight;
+					mesh->m_shared            = sharedMeshData;
+					mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+
+					mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
+					mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
+
+					// It's more convenient to initialize it on demand
+					if ( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable )) [[unlikely]] {
+						const auto randomWord = (uint16_t) m_rng.next();
+						mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
+						mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+					}
+
+					drawSceneRequest->addDynamicMesh( mesh );
 				}
-
-				drawSceneRequest->addDynamicMesh( mesh );
 			}
 		}
 	}
@@ -779,8 +787,8 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 
 		unsigned numSubmittedSolidMeshes = 0, numSubmittedCloudMeshes = 0;
 		std::optional<uint8_t> drawOnTopSolidPartIndex, drawOnTopCloudPartIndex;
-		for( unsigned i = 0; i < hull->numLayers; ++i ) {
-			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[i];
+		for( unsigned layerNum = 0; layerNum < hull->numLayers; ++layerNum ) {
+			BaseConcentricSimulatedHull::Layer *__restrict layer = &hull->layers[layerNum];
 
 			const AppearanceRules *appearanceRules = &hull->appearanceRules;
 			if( layer->overrideAppearanceRules ) {
@@ -819,7 +827,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			sharedMeshData->hasSibling                       = solidAppearanceRules && cloudAppearanceRules;
 
 			if( solidAppearanceRules ) [[likely]] {
-				HullSolidDynamicMesh *__restrict mesh = hull->layers[i].submittedSolidMesh;
+				HullSolidDynamicMesh *__restrict mesh = layer->submittedSolidMesh;
 
 				Vector4Copy( layer->mins, mesh->cullMins );
 				Vector4Copy( layer->maxs, mesh->cullMaxs );
@@ -830,39 +838,46 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 				
 				if( layer->useDrawOnTopHack ) [[unlikely]] {
 					assert( drawOnTopSolidPartIndex == std::nullopt );
-					drawOnTopSolidPartIndex = (uint8_t) numSubmittedSolidMeshes;
+					drawOnTopSolidPartIndex = (uint8_t)numSubmittedSolidMeshes;
 				}
 
 				hull->submittedSolidMeshesBuffer[numSubmittedSolidMeshes++] = mesh;
 			}
 
 			if( cloudAppearanceRules ) [[unlikely]] {
-				HullCloudDynamicMesh *__restrict mesh = hull->layers[i].submittedCloudMesh;
+				assert( !cloudAppearanceRules->spanOfMeshProps.empty() );
+				assert( cloudAppearanceRules->spanOfMeshProps.size() <= std::size( layer->submittedCloudMeshes ) );
 
-				mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime,
-															 *cloudAppearanceRules );
-				if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
-					Vector4Copy( layer->mins, mesh->cullMins );
-					Vector4Copy( layer->maxs, mesh->cullMaxs );
+				for( size_t meshNum = 0; meshNum < cloudAppearanceRules->spanOfMeshProps.size(); ++meshNum ) {
+					const CloudMeshProps &__restrict meshProps  = cloudAppearanceRules->spanOfMeshProps[meshNum];
+					HullCloudDynamicMesh *const __restrict mesh = layer->submittedCloudMeshes[meshNum];
 
-					mesh->material               = cloudAppearanceRules->material;
-					mesh->m_alphaScale           = cloudAppearanceRules->alphaScale;
-					Vector4Copy( cloudAppearanceRules->overlayColor, mesh->m_spriteColor );
-					mesh->applyVertexDynLight    = hull->applyVertexDynLight;
-					mesh->m_lifetimeSeconds      = 1e-3f * (float)( currTime - hull->spawnTime );
+					mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime, meshProps );
+					if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
+						Vector4Copy( layer->mins, mesh->cullMins );
+						Vector4Copy( layer->maxs, mesh->cullMaxs );
 
-					if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
-						const auto randomWord          = (uint16_t)m_rng.next();
-						mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
-						mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+						mesh->material     = meshProps.material;
+						mesh->m_alphaScale = meshProps.alphaScale;
+						Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
+
+						mesh->applyVertexDynLight = hull->applyVertexDynLight;
+						mesh->m_shared            = sharedMeshData;
+						mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+
+						if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
+							const auto randomWord          = (uint16_t)m_rng.next();
+							mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
+							mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+						}
+
+						if( layer->useDrawOnTopHack ) [[unlikely]] {
+							assert( drawOnTopCloudPartIndex == std::nullopt );
+							drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
+						}
+
+						hull->submittedSolidMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
 					}
-
-					if( layer->useDrawOnTopHack ) [[unlikely]] {
-						assert( drawOnTopCloudPartIndex == std::nullopt );
-						drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
-					}
-
-					hull->submittedSolidMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
 				}
 			}
 		}
@@ -2215,9 +2230,6 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 	assert( m_chosenSubdivLevel <= m_shared->simulatedSubdivLevel + 1 );
 	assert( m_shared->minZLastFrame <= m_shared->maxZLastFrame );
 
-	const IcosphereData &lodDataToUse = ::basicHullsHolder.getIcosphereForLevel( m_shared->simulatedSubdivLevel );
-	const auto numVertices = (unsigned)lodDataToUse.vertices.size();
-
 	// Keep always allocating the default buffer even if it's unused, so we can rely on its availability
 	const auto colorsBufferLevel = wsw::min( m_chosenSubdivLevel, m_shared->simulatedSubdivLevel );
 	const auto colorsBufferSize  = (unsigned)basicHullsHolder.getIcosphereForLevel( colorsBufferLevel ).vertices.size();
@@ -2242,12 +2254,36 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 
 	unsigned numOutVertices = 0;
 	unsigned numOutIndices  = 0;
-	unsigned vertexNum      = 0;
+
+	assert( m_tessLevelShiftForMinVertexIndex <= 0 );
+	assert( m_tessLevelShiftForMaxVertexIndex <= 0 );
+	assert( m_tessLevelShiftForMinVertexIndex <= m_tessLevelShiftForMaxVertexIndex );
+
+	const int getMinVertexFromThisTessLevel = (int)colorsBufferLevel + this->m_tessLevelShiftForMinVertexIndex;
+	const int getMaxVertexFromThisTessLevel = (int)colorsBufferLevel + this->m_tessLevelShiftForMaxVertexIndex;
+
+	// Start from this vertex number
+	unsigned vertexNum;
+	if( getMinVertexFromThisTessLevel > 0 ) {
+		vertexNum = (unsigned)::basicHullsHolder.getIcosphereForLevel( getMinVertexFromThisTessLevel - 1 ).vertices.size();
+	} else {
+		vertexNum = 0;
+	}
+
+	unsigned vertexNumLimit;
+	if( getMaxVertexFromThisTessLevel >= 0 ) {
+		vertexNumLimit = ::basicHullsHolder.getIcosphereForLevel( getMaxVertexFromThisTessLevel ).vertices.size();
+	} else {
+		assert( getMinVertexFromThisTessLevel < 0 );
+		vertexNumLimit = ::basicHullsHolder.getIcosphereForLevel( 0 ).vertices.size();
+	}
+
+	// We sample the random data by vertex numbers using random shifts that remain stable during the hull lifetime
+	assert( vertexNumLimit + m_phaseIndexShiftInTable <= std::size( kRandomBytes ) );
+	assert( vertexNumLimit + m_speedIndexShiftInTable <= std::size( kRandomBytes ) );
 
 	constexpr float normalizer = 1.0f / 255.0f;
-	// We sample the random data by vertex numbers using random shifts that remain stable during the hull lifetime
-	assert( numVertices + m_phaseIndexShiftInTable <= std::size( kRandomBytes ) );
-	assert( numVertices + m_speedIndexShiftInTable <= std::size( kRandomBytes ) );
+	const unsigned numVertices = vertexNumLimit - vertexNum;
 
 	do {
 		const float *__restrict vertexPosition      = m_shared->simulatedPositions[vertexNum];
@@ -2306,7 +2342,7 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 
 		numOutVertices += 4;
 		numOutIndices  += 6;
-	} while( ++vertexNum < numVertices );
+	} while( ++vertexNum < vertexNumLimit );
 
 	assert( numOutVertices == numVertices * 4 );
 	assert( numOutIndices == numVertices * 6 );
