@@ -38,10 +38,13 @@ public:
 		// Feasible values of these properties must be non-positive
 		int tessLevelShiftForMinVertexIndex { 0 };
 		int tessLevelShiftForMaxVertexIndex { 0 };
+		// Feasible values are non-positive (if zero, gets shown only for the extra tesselated lod)
+		int shiftFromDefaultLevelToHide { std::numeric_limits<int>::min() };
 	};
 
 	struct CloudAppearanceRules {
 		std::span<const CloudMeshProps> spanOfMeshProps;
+		bool applyRotation { false };
 	};
 
 	struct SolidAndCloudAppearanceRules {
@@ -166,8 +169,13 @@ private:
 		float m_lifetimeSeconds { 0.0f };
 		int m_tessLevelShiftForMinVertexIndex { 0 };
 		int m_tessLevelShiftForMaxVertexIndex { 0 };
+		int m_shiftFromDefaultLevelToHide { std::numeric_limits<int>::min() };
+		// These fields get updated by getStorageRequirements()
+		mutable unsigned m_minVertexNumThisFrame { 0 };
+		mutable unsigned m_vertexNumLimitThisFrame { 0 };
 		uint16_t m_phaseIndexShiftInTable { 0 };
 		uint16_t m_speedIndexShiftInTable { 0 };
+		bool m_applyRotation { false };
 
 		[[nodiscard]]
 		auto getStorageRequirements( const float *viewOrigin, const float *viewAxis, float cameraViewTangent ) const

@@ -765,9 +765,11 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 					mesh->applyVertexDynLight = hull->applyVertexDynLight;
 					mesh->m_shared            = sharedMeshData;
 					mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+					mesh->m_applyRotation     = cloudAppearanceRules->applyRotation;
 
 					mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
 					mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
+					mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
 
 					// It's more convenient to initialize it on demand
 					if ( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable )) [[unlikely]] {
@@ -792,7 +794,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 
 			const AppearanceRules *appearanceRules = &hull->appearanceRules;
 			if( layer->overrideAppearanceRules ) {
-				appearanceRules = std::addressof( *layer->overrideAppearanceRules );
+				appearanceRules = layer->overrideAppearanceRules;
 			}
 
 			const SolidAppearanceRules *solidAppearanceRules = nullptr;
@@ -801,8 +803,8 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 				solidAppearanceRules = &solidAndCloudRules->solidRules;
 				cloudAppearanceRules = &solidAndCloudRules->cloudRules;
 			} else {
-				solidAppearanceRules = std::get_if<SolidAppearanceRules>( &hull->appearanceRules );
-				cloudAppearanceRules = std::get_if<CloudAppearanceRules>( &hull->appearanceRules );
+				solidAppearanceRules = std::get_if<SolidAppearanceRules>( appearanceRules );
+				cloudAppearanceRules = std::get_if<CloudAppearanceRules>( appearanceRules );
 			}
 
 			assert( solidAppearanceRules || cloudAppearanceRules );
@@ -864,6 +866,11 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 						mesh->applyVertexDynLight = hull->applyVertexDynLight;
 						mesh->m_shared            = sharedMeshData;
 						mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+						mesh->m_applyRotation     = cloudAppearanceRules->applyRotation;
+
+						mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
+						mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
+						mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
 
 						if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
 							const auto randomWord          = (uint16_t)m_rng.next();
@@ -876,7 +883,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 							drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
 						}
 
-						hull->submittedSolidMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
+						hull->submittedCloudMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
 					}
 				}
 			}
@@ -2075,13 +2082,35 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::getStorageRequirements( const f
 		return std::nullopt;
 	}
 
+	assert( m_shiftFromDefaultLevelToHide <= 0 );
 	if( m_chosenSubdivLevel > m_shared->simulatedSubdivLevel ) {
 		m_chosenSubdivLevel = m_shared->simulatedSubdivLevel;
+	} else {
+		const int shiftFromDefaultLevel = (int)m_chosenSubdivLevel - (int)m_shared->simulatedSubdivLevel;
+		if( shiftFromDefaultLevel <= m_shiftFromDefaultLevelToHide ) {
+			return std::nullopt;
+		}
 	}
 
-	const IcosphereData &chosenLevelData = ::basicHullsHolder.getIcosphereForLevel( m_chosenSubdivLevel );
-	const auto numResultingSprites       = (unsigned)chosenLevelData.vertices.size();
-	return std::make_pair( 4 * numResultingSprites, 6 * numResultingSprites );
+	assert( m_tessLevelShiftForMinVertexIndex <= 0 );
+	assert( m_tessLevelShiftForMaxVertexIndex <= 0 );
+	assert( m_tessLevelShiftForMinVertexIndex <= m_tessLevelShiftForMaxVertexIndex );
+
+	if( const int level = (int)m_chosenSubdivLevel + this->m_tessLevelShiftForMinVertexIndex; level > 0 ) {
+		m_minVertexNumThisFrame = (unsigned)::basicHullsHolder.getIcosphereForLevel( level - 1 ).vertices.size();
+	} else {
+		m_minVertexNumThisFrame = 0;
+	}
+
+	if( const int level = (int)m_chosenSubdivLevel + this->m_tessLevelShiftForMaxVertexIndex; level >= 0 ) {
+		m_vertexNumLimitThisFrame = ::basicHullsHolder.getIcosphereForLevel( level ).vertices.size();
+	} else {
+		m_vertexNumLimitThisFrame = ::basicHullsHolder.getIcosphereForLevel( 0 ).vertices.size();
+	}
+
+	assert( m_minVertexNumThisFrame < m_vertexNumLimitThisFrame );
+	const unsigned numGridVertices = m_vertexNumLimitThisFrame - m_minVertexNumThisFrame;
+	return std::make_pair( 4 * numGridVertices, 6 * numGridVertices );
 }
 
 auto SimulatedHullsSystem::HullSolidDynamicMesh::fillMeshBuffers( const float *__restrict viewOrigin,
@@ -2250,40 +2279,20 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 	VectorNegate( &viewAxis[AXIS_FORWARD], normal );
 	normal[3] = 0.0f;
 
-	const float radius = m_spriteRadius;
+	const float radius         = m_spriteRadius;
+	constexpr float normalizer = 1.0f / 255.0f;
 
 	unsigned numOutVertices = 0;
 	unsigned numOutIndices  = 0;
 
-	assert( m_tessLevelShiftForMinVertexIndex <= 0 );
-	assert( m_tessLevelShiftForMaxVertexIndex <= 0 );
-	assert( m_tessLevelShiftForMinVertexIndex <= m_tessLevelShiftForMaxVertexIndex );
-
-	const int getMinVertexFromThisTessLevel = (int)colorsBufferLevel + this->m_tessLevelShiftForMinVertexIndex;
-	const int getMaxVertexFromThisTessLevel = (int)colorsBufferLevel + this->m_tessLevelShiftForMaxVertexIndex;
-
-	// Start from this vertex number
-	unsigned vertexNum;
-	if( getMinVertexFromThisTessLevel > 0 ) {
-		vertexNum = (unsigned)::basicHullsHolder.getIcosphereForLevel( getMinVertexFromThisTessLevel - 1 ).vertices.size();
-	} else {
-		vertexNum = 0;
-	}
-
-	unsigned vertexNumLimit;
-	if( getMaxVertexFromThisTessLevel >= 0 ) {
-		vertexNumLimit = ::basicHullsHolder.getIcosphereForLevel( getMaxVertexFromThisTessLevel ).vertices.size();
-	} else {
-		assert( getMinVertexFromThisTessLevel < 0 );
-		vertexNumLimit = ::basicHullsHolder.getIcosphereForLevel( 0 ).vertices.size();
-	}
-
 	// We sample the random data by vertex numbers using random shifts that remain stable during the hull lifetime
-	assert( vertexNumLimit + m_phaseIndexShiftInTable <= std::size( kRandomBytes ) );
-	assert( vertexNumLimit + m_speedIndexShiftInTable <= std::size( kRandomBytes ) );
+	assert( m_vertexNumLimitThisFrame + m_phaseIndexShiftInTable <= std::size( kRandomBytes ) );
+	assert( m_vertexNumLimitThisFrame + m_speedIndexShiftInTable <= std::size( kRandomBytes ) );
 
-	constexpr float normalizer = 1.0f / 255.0f;
-	const unsigned numVertices = vertexNumLimit - vertexNum;
+	unsigned vertexNum = m_minVertexNumThisFrame;
+	assert( vertexNum < m_vertexNumLimitThisFrame );
+
+	[[maybe_unused]] vec3_t tmpLeftStorage, tmpUpStorage;
 
 	do {
 		const float *__restrict vertexPosition      = m_shared->simulatedPositions[vertexNum];
@@ -2300,10 +2309,18 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 		const float angularSpeed    = ( (float)kRandomBytes[vertexNum + m_speedIndexShiftInTable] - 127.0f ) * normalizer;
 		const float rotationDegrees = 360.0f * ( initialPhase + angularSpeed * m_lifetimeSeconds );
 
-		vec3_t left, up;
-		// TODO: This could be probably reduced to a single sincos() calculation + few vector transforms
-		RotatePointAroundVector( left, normal, viewLeft, rotationDegrees );
-		RotatePointAroundVector( up, normal, viewUp, rotationDegrees );
+		const float *left, *up;
+		// TODO: Avoid dynamic branching, add templated specializations?
+		if( m_applyRotation ) {
+			// TODO: This could be probably reduced to a single sincos() calculation + few vector transforms
+			RotatePointAroundVector( tmpLeftStorage, normal, viewLeft, rotationDegrees );
+			RotatePointAroundVector( tmpUpStorage, normal, viewUp, rotationDegrees );
+			left = tmpLeftStorage;
+			up   = tmpUpStorage;
+		} else {
+			left = viewLeft;
+			up   = viewUp;
+		}
 
 		vec3_t point;
 		VectorMA( vertexPosition, -radius, up, point );
@@ -2342,9 +2359,9 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 
 		numOutVertices += 4;
 		numOutIndices  += 6;
-	} while( ++vertexNum < vertexNumLimit );
+	} while( ++vertexNum < m_vertexNumLimitThisFrame );
 
-	assert( numOutVertices == numVertices * 4 );
-	assert( numOutIndices == numVertices * 6 );
+	assert( numOutVertices == ( m_vertexNumLimitThisFrame - m_minVertexNumThisFrame ) * 4 );
+	assert( numOutIndices == ( m_vertexNumLimitThisFrame - m_minVertexNumThisFrame ) * 6 );
 	return { numOutVertices, numOutIndices };
 };

@@ -302,10 +302,36 @@ static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
 		.initialRadius                   = 0.0f,
 		.fadedInRadius                   = 24.0f,
 		.fadedOutRadius                  = 0.0f,
-		.tessLevelShiftForMinVertexIndex = 0,
-		.tessLevelShiftForMaxVertexIndex = 0
+		.tessLevelShiftForMinVertexIndex = -0,
+		.tessLevelShiftForMaxVertexIndex = -0,
+		.shiftFromDefaultLevelToHide     = -1,
 	},
 };
+
+// Caution: Specifying the full range of vertices would not allow the cloud to be rendered due to reaching the limit
+
+static SimulatedHullsSystem::CloudMeshProps g_fireInnerCloudMeshProps {
+	.alphaScale                      = 1.0f,
+	.initialRadius                   = 0.0f,
+	.fadedInRadius                   = 3.5f,
+	.fadedOutRadius                  = 1.0f,
+	.tessLevelShiftForMinVertexIndex = -1,
+	.tessLevelShiftForMaxVertexIndex = -0,
+	.shiftFromDefaultLevelToHide     = -1,
+};
+
+static SimulatedHullsSystem::CloudMeshProps g_fireOuterCloudMeshProps {
+	.alphaScale                      = 0.75f,
+	.initialRadius                   = 0.0f,
+	.fadedInRadius                   = 7.0f,
+	.fadedOutRadius                  = 3.0f,
+	.tessLevelShiftForMinVertexIndex = -1,
+	.tessLevelShiftForMaxVertexIndex = -0,
+	.shiftFromDefaultLevelToHide     = -1,
+};
+
+static SimulatedHullsSystem::AppearanceRules g_fireInnerCloudAppearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
+static SimulatedHullsSystem::AppearanceRules g_fireOuterCloudAppearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
 
 void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius ) {
 	// 250 for radius of 64
@@ -346,6 +372,25 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		hull->layers[0].useDrawOnTopHack = true;
 		hull->layers[0].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 		hull->layers[1].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
+
+		// We have to update material references due to invalidation upon restarts
+		g_fireInnerCloudMeshProps.material = cgs.media.shaderBlastParticle;
+		g_fireOuterCloudMeshProps.material = cgs.media.shaderBlastParticle;
+
+		g_fireInnerCloudAppearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
+			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
+				.spanOfMeshProps = { &g_fireInnerCloudMeshProps, 1 },
+			}
+		};
+
+		g_fireOuterCloudAppearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
+			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
+				.spanOfMeshProps = { &g_fireOuterCloudMeshProps, 1 },
+			}
+		};
+
+		hull->layers[0].overrideAppearanceRules                   = &g_fireInnerCloudAppearanceRules;
+		hull->layers[hull->numLayers - 1].overrideAppearanceRules = &g_fireOuterCloudAppearanceRules;
 	}
 
 	if( cg_explosionsWave->integer ) {
@@ -378,7 +423,8 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.colorChangeTimeline = kSmokeHullSoftLayerColorChangeTimeline,
 				.appearanceRules     = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
 					.cloudRules      = SimulatedHullsSystem::CloudAppearanceRules {
-						.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps
+						.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps,
+						.applyRotation   = true,
 					},
 				},
 			},
