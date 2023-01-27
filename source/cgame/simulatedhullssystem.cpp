@@ -2304,6 +2304,23 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 		vec2_t *const __restrict texCoords   = destTexCoords + numOutVertices;
 		uint16_t *const __restrict indices   = destIndices   + numOutIndices;
 
+		// Test the color alpha first for an early cutoff
+
+		byte_vec4_t resultingColor;
+		resultingColor[3] = (uint8_t)wsw::clamp( (float)vertexColor[3] * m_spriteColor[3] * m_alphaScale, 0.0f, 255.0f );
+		if( resultingColor[3] < 1 ) {
+			continue;
+		}
+
+		resultingColor[0] = (uint8_t)wsw::clamp( (float)vertexColor[0] * m_spriteColor[0], 0.0f, 255.0f );
+		resultingColor[1] = (uint8_t)wsw::clamp( (float)vertexColor[1] * m_spriteColor[1], 0.0f, 255.0f );
+		resultingColor[2] = (uint8_t)wsw::clamp( (float)vertexColor[2] * m_spriteColor[2], 0.0f, 255.0f );
+
+		Vector4Copy( resultingColor, colors[0] );
+		Vector4Copy( resultingColor, colors[1] );
+		Vector4Copy( resultingColor, colors[2] );
+		Vector4Copy( resultingColor, colors[3] );
+
 		// 1 unit is equal to a rotation of 360 degrees
 		const float initialPhase    = ( (float)kRandomBytes[vertexNum + m_phaseIndexShiftInTable] - 127.0f ) * normalizer;
 		const float angularSpeed    = ( (float)kRandomBytes[vertexNum + m_speedIndexShiftInTable] - 127.0f ) * normalizer;
@@ -2333,17 +2350,6 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 
 		positions[0][3] = positions[1][3] = positions[2][3] = positions[3][3] = 1.0f;
 
-		byte_vec4_t resultingColor;
-		resultingColor[0] = (uint8_t)wsw::clamp( (float)vertexColor[0] * m_spriteColor[0], 0.0f, 255.0f );
-		resultingColor[1] = (uint8_t)wsw::clamp( (float)vertexColor[1] * m_spriteColor[1], 0.0f, 255.0f );
-		resultingColor[2] = (uint8_t)wsw::clamp( (float)vertexColor[2] * m_spriteColor[2], 0.0f, 255.0f );
-		resultingColor[3] = (uint8_t)wsw::clamp( (float)vertexColor[3] * m_spriteColor[3] * m_alphaScale, 0.0f, 255.0f );
-
-		Vector4Copy( resultingColor, colors[0] );
-		Vector4Copy( resultingColor, colors[1] );
-		Vector4Copy( resultingColor, colors[2] );
-		Vector4Copy( resultingColor, colors[3] );
-
 		Vector4Copy( normal, normals[0] );
 		Vector4Copy( normal, normals[1] );
 		Vector4Copy( normal, normals[2] );
@@ -2361,7 +2367,5 @@ auto SimulatedHullsSystem::HullCloudDynamicMesh::fillMeshBuffers( const float *_
 		numOutIndices  += 6;
 	} while( ++vertexNum < m_vertexNumLimitThisFrame );
 
-	assert( numOutVertices == ( m_vertexNumLimitThisFrame - m_minVertexNumThisFrame ) * 4 );
-	assert( numOutIndices == ( m_vertexNumLimitThisFrame - m_minVertexNumThisFrame ) * 6 );
 	return { numOutVertices, numOutIndices };
 };
