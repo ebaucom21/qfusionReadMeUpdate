@@ -765,7 +765,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 					mesh->applyVertexDynLight = hull->applyVertexDynLight;
 					mesh->m_shared            = sharedMeshData;
 					mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
-					mesh->m_applyRotation     = cloudAppearanceRules->applyRotation;
+					mesh->m_applyRotation     = meshProps.applyRotation;
 
 					mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
 					mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
@@ -866,7 +866,7 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 						mesh->applyVertexDynLight = hull->applyVertexDynLight;
 						mesh->m_shared            = sharedMeshData;
 						mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
-						mesh->m_applyRotation     = cloudAppearanceRules->applyRotation;
+						mesh->m_applyRotation     = meshProps.applyRotation;
 
 						mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
 						mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;

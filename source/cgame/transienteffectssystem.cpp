@@ -296,6 +296,7 @@ static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
 		.fadedOutRadius                  = 0.0f,
 		.tessLevelShiftForMinVertexIndex = -2,
 		.tessLevelShiftForMaxVertexIndex = -1,
+		.applyRotation                   = true,
 	},
 	{
 		.alphaScale                      = 1.0f,
@@ -424,7 +425,6 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.appearanceRules     = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
 					.cloudRules      = SimulatedHullsSystem::CloudAppearanceRules {
 						.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps,
-						.applyRotation   = true,
 					},
 				},
 			},

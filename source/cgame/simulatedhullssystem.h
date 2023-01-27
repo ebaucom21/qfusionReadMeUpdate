@@ -40,11 +40,11 @@ public:
 		int tessLevelShiftForMaxVertexIndex { 0 };
 		// Feasible values are non-positive (if zero, gets shown only for the extra tesselated lod)
 		int shiftFromDefaultLevelToHide { std::numeric_limits<int>::min() };
+		bool applyRotation { false };
 	};
 
 	struct CloudAppearanceRules {
 		std::span<const CloudMeshProps> spanOfMeshProps;
-		bool applyRotation { false };
 	};
 
 	struct SolidAndCloudAppearanceRules {
