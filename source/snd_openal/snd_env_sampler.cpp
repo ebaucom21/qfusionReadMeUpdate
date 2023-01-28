@@ -396,10 +396,17 @@ static void ENV_UpdateSourceEnvironment( src_t *src, int64_t millisNow, const sr
 		return;
 	}
 
-	// Randomize the update period a bit.
-	// Otherwise there will be another updates spike
-	// an update period ahead after a forced/initial update.
-	updateState->nextEnvUpdateAt = (int64_t)( millisNow + 108 + 32 * random() );
+	if( src->isLooping ) {
+		updateState->nextEnvUpdateAt = (int64_t)( (double)millisNow + 250 + 50 * random() );
+	} else {
+		// Don't bother updating it after the initial update.
+		// This helps to prevent unpleasant effect property transitions, and also acts as a performance optimization.
+		if( src->sfx->durationMillis < 1000 ) {
+			updateState->nextEnvUpdateAt = std::numeric_limits<int64_t>::max();
+		} else {
+			updateState->nextEnvUpdateAt = (int64_t)( (double)millisNow + 400 + 100 * random() );
+		}
+	}
 
 	VectorCopy( src->origin, updateState->lastUpdateOrigin );
 	VectorCopy( src->velocity, updateState->lastUpdateVelocity );

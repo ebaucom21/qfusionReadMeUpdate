@@ -50,6 +50,7 @@ typedef struct sfx_s {
 	int registration_sequence;
 	ALuint buffer;      // OpenAL buffer
 	ALuint stereoBuffer;
+	unsigned durationMillis;
 	float qualityHint;  // Assumed to be in [0, 1] range for majority of sounds
 						// (but values exceeding this range are allowed),
 						// spammy sounds like ricochets, plasma explosions,

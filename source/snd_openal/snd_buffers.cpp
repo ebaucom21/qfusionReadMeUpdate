@@ -275,10 +275,10 @@ bool S_LoadBuffer( sfx_t *sfx ) {
 		return false;
 	}
 
-	sfx->buffer = monoBuffer.ReleaseOwnership();
-	sfx->stereoBuffer = stereoBuffer.ReleaseOwnership();
-
-	sfx->inMemory = true;
+	sfx->buffer         = monoBuffer.ReleaseOwnership();
+	sfx->stereoBuffer   = stereoBuffer.ReleaseOwnership();
+	sfx->durationMillis = (unsigned)( ( 1000 * (int64_t)fileInfo.samples )  / fileInfo.rate );
+	sfx->inMemory       = true;
 
 	if( s_environment_effects->integer ) {
 		S_SetQualityHint( sfx );
