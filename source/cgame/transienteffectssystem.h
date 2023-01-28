@@ -211,8 +211,8 @@ private:
 
 	struct SmokeHullParams {
 		struct { float mean, spread; } speed;
-		struct { float top, bottom; } archimedesAccel;
-		struct { float top, bottom; } xyExpansionAccel;
+		struct { ValueLifespan top, bottom; } archimedesAccel;
+		struct { ValueLifespan top, bottom; } xyExpansionAccel;
 		SimulatedHullsSystem::ViewDotFade viewDotFade;
 		SimulatedHullsSystem::ZFade zFade;
 		std::span<const SimulatedHullsSystem::ColorChangeTimelineNode> colorChangeTimeline;

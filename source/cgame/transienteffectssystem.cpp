@@ -400,17 +400,29 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
 			{
-				.speed               = { .mean = 80.0f, .spread = 1.0f },
-				.archimedesAccel     = { .top = +125.0f, .bottom = +45.0f },
-				.xyExpansionAccel    = { .top = +85.0f, .bottom = -30.0f },
+				.speed               = { .mean = 85.0f, .spread = 1.0f },
+				.archimedesAccel     = {
+					.top    = { .initial = +125.0f, .fadedIn = +100.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
+					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = +75.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
+				},
+				.xyExpansionAccel    = {
+					.top    = { .initial = 0.0f, .fadedIn = +95.0f, .fadedOut = 0.0f },
+					.bottom = { .initial = 0.0f, .fadedIn = -45.0f, .fadedOut = -55.0f },
+				},
 				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenterCubic,
 				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
 				.colorChangeTimeline = kSmokeHullHardLayerColorChangeTimeline,
 			},
 			{
-				.speed               = { .mean = 90.0f, .spread = 3.0f },
-				.archimedesAccel     = { .top = +130.0f, .bottom = +40.0f },
-				.xyExpansionAccel    = { .top = +92.5f, .bottom = -30.0f },
+				.speed               = { .mean = 85.0f, .spread = 1.0f },
+				.archimedesAccel     = {
+					.top    = { .initial = +130.0f, .fadedIn = +110.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f },
+					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = 75.0f, .startFadingOutAtLifetimeFrac = 0.5f },
+				},
+				.xyExpansionAccel    = {
+					.top    = { .initial = 0.0f, .fadedIn = +105.0f, .fadedOut = 0.0f },
+					.bottom = { .initial = 0.0f, .fadedIn = -40.0f, .fadedOut = -50.0f },
+				},
 				.viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutContour,
 				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
 				.colorChangeTimeline = kSmokeHullSoftLayerColorChangeTimeline,

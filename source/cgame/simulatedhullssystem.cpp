@@ -901,29 +901,47 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 
 	BoundsBuilder boundsBuilder;
 	assert( timeDeltaSeconds < 0.1f );
+	assert( numVertices > 0 );
 
 	// Compute ideal positions (as if there were no obstacles)
 
 	const float burstSpeedDecayMultiplier = 1.0f - 1.5f * timeDeltaSeconds;
 	if( expansionStartAt > currTime ) {
-		for( unsigned i = 0; i < numVertices; ++i ) {
+		unsigned i = 0;
+		do {
 			VectorScale( burstVelocities[i], burstSpeedDecayMultiplier, burstVelocities[i] );
 			VectorAdd( burstVelocities[i], forceVelocities[i], combinedVelocities[i] );
 			VectorMA( oldPositions[i], timeDeltaSeconds, combinedVelocities[i], newPositions[i] );
 			// TODO: We should be able to supply vec4
 			boundsBuilder.addPoint( newPositions[i] );
-		}
+		} while( ++i < numVertices );
 	} else {
 		// Having vertex normals buffer is now mandatory for hulls expansion
 		const vec4_t *const __restrict normals = vertexNormals;
 		assert( normals );
 
+		const int64_t expansionMillisSoFar = currTime - expansionStartAt;
+		const int64_t expansionDuration    = lifetime - ( expansionStartAt - spawnTime );
+
+		assert( expansionMillisSoFar >= 0 );
+		assert( expansionDuration > 0 );
+		const float expansionFrac = (float)expansionMillisSoFar * Q_Rcp( (float)expansionDuration );
+		assert( expansionFrac >= 0.0f && expansionFrac <= 1.0f );
+
+		const float archimedesTopAccelNow     = archimedesTopAccel.getValueForLifetimeFrac( expansionFrac );
+		const float archimedesBottomAccelNow  = archimedesBottomAccel.getValueForLifetimeFrac( expansionFrac );
+		const float xyExpansionTopAccelNow    = xyExpansionTopAccel.getValueForLifetimeFrac( expansionFrac );
+		const float xyExpansionBottomAccelNow = xyExpansionBottomAccel.getValueForLifetimeFrac( expansionFrac );
+
 		const float rcpDeltaZ = ( maxZLastFrame - minZLastFrame ) > 0.1f ? Q_Rcp( maxZLastFrame - minZLastFrame ) : 1.0f;
-		for( unsigned i = 0; i < numVertices; ++i ) {
+
+		unsigned i = 0;
+		do {
 			const float zFrac               = ( oldPositions[i][2] - minZLastFrame ) * rcpDeltaZ;
-			const float archimedesAccel     = std::lerp( archimedesBottomAccel, archimedesTopAccel, Q_Sqrt( zFrac ) );
-			const float expansionAccel      = std::lerp( xyExpansionBottomAccel, xyExpansionTopAccel, zFrac );
+			const float archimedesAccel     = std::lerp( archimedesBottomAccelNow, archimedesTopAccelNow, Q_Sqrt( zFrac ) );
+			const float expansionAccel      = std::lerp( xyExpansionBottomAccelNow, xyExpansionTopAccelNow, zFrac );
 			const float expansionMultiplier = expansionAccel * timeDeltaSeconds;
+
 			forceVelocities[i][0] += expansionMultiplier * normals[i][0];
 			forceVelocities[i][1] += expansionMultiplier * normals[i][1];
 			forceVelocities[i][2] += archimedesAccel * timeDeltaSeconds;
@@ -934,7 +952,7 @@ void SimulatedHullsSystem::BaseRegularSimulatedHull::simulate( int64_t currTime,
 			VectorMA( oldPositions[i], timeDeltaSeconds, combinedVelocities[i], newPositions[i] );
 			// TODO: We should be able to supply vec4
 			boundsBuilder.addPoint( newPositions[i] );
-		}
+		} while( ++i < numVertices );
 	}
 
 	vec3_t verticesMins, verticesMaxs;

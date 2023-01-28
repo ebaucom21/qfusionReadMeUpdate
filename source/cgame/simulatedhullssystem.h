@@ -245,8 +245,13 @@ private:
 		std::span<const uint16_t> noColorChangeIndices;
 		const uint8_t *noColorChangeVertexColor { nullptr };
 
-		float archimedesTopAccel { 0.0f }, archimedesBottomAccel { 0.0f };
-		float xyExpansionTopAccel { 0.0f }, xyExpansionBottomAccel { 0.0f };
+		// TODO: Make smoke hulls subtypes, move these fields to a subtype
+
+		ValueLifespan archimedesTopAccel;
+		ValueLifespan archimedesBottomAccel;
+		ValueLifespan xyExpansionTopAccel;
+		ValueLifespan xyExpansionBottomAccel;
+
 		float minZLastFrame { std::numeric_limits<float>::max() };
 		float maxZLastFrame { std::numeric_limits<float>::lowest() };
 
