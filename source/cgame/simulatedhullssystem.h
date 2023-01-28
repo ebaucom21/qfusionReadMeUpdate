@@ -29,12 +29,23 @@ public:
 	struct CloudMeshProps {
 		shader_s *material { nullptr };
 		vec4_t overlayColor { 1.0f, 1.0f, 1.0f, 1.0f };
-		float alphaScale { 1.0f };
-		float initialRadius { 0.0f };
-		float fadedInRadius { 16.0f };
-		float fadedOutRadius { 0.0f };
-		float finishFadingInAtLifetimeFrac { 0.33f };
-		float startFadingOutAtLifetimeFrac { 0.67f };
+
+		ValueLifespan alphaScaleLifespan {
+			.initial                      = 0.0f,
+			.fadedIn                      = 1.0f,
+			.fadedOut                     = 0.0f,
+			.finishFadingInAtLifetimeFrac = 0.37f,
+			.startFadingOutAtLifetimeFrac = 0.67f,
+		};
+
+		ValueLifespan radiusLifespan {
+			.initial                      = 0.0f,
+			.fadedIn                      = 16.0f,
+			.fadedOut                     = 0.0f,
+			.finishFadingInAtLifetimeFrac = 0.37f,
+			.startFadingOutAtLifetimeFrac = 0.67f,
+		};
+
 		// Feasible values of these properties must be non-positive
 		int tessLevelShiftForMinVertexIndex { 0 };
 		int tessLevelShiftForMaxVertexIndex { 0 };

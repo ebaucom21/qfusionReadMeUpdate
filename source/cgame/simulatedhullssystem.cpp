@@ -618,35 +618,6 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 	hull->appearanceRules = appearanceRules;
 }
 
-[[nodiscard]]
-static auto getRadiusForCurrTime( int64_t currTime, int64_t spawnTime, unsigned lifetime,
-								  const SimulatedHullsSystem::CloudMeshProps &props ) -> float {
-	assert( lifetime && currTime >= spawnTime );
-	assert( props.finishFadingInAtLifetimeFrac > 0.01f );
-	assert( props.startFadingOutAtLifetimeFrac < 0.99f );
-	assert( props.finishFadingInAtLifetimeFrac + 0.01f < props.startFadingOutAtLifetimeFrac );
-
-	const float lifetimeFrac = (float)( currTime - spawnTime ) * Q_Rcp( (float)lifetime );
-
-	if( lifetimeFrac < props.finishFadingInAtLifetimeFrac ) [[unlikely]] {
-		// Fade in
-		float fadeInFrac = lifetimeFrac * Q_Rcp( props.finishFadingInAtLifetimeFrac );
-		assert( fadeInFrac > -0.01f && fadeInFrac < 1.01f );
-		return std::lerp( props.initialRadius, props.fadedInRadius, wsw::clamp( fadeInFrac, 0.0f, 1.0f ) );
-	} else {
-		if( lifetimeFrac > props.startFadingOutAtLifetimeFrac ) [[unlikely]] {
-			// Fade out
-			float fadeOutFrac = lifetimeFrac - props.startFadingOutAtLifetimeFrac;
-			fadeOutFrac *= Q_Rcp( 1.0f - props.startFadingOutAtLifetimeFrac );
-			assert( fadeOutFrac > -0.01f && fadeOutFrac < 1.01f );
-			fadeOutFrac = wsw::clamp( fadeOutFrac, 0.0f, 1.0f );
-			return std::lerp( props.fadedInRadius, props.fadedOutRadius, fadeOutFrac );
-		} else {
-			return props.fadedInRadius;
-		}
-	}
-};
-
 void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
@@ -749,36 +720,42 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 			assert( !cloudAppearanceRules->spanOfMeshProps.empty() );
 			assert( cloudAppearanceRules->spanOfMeshProps.size() <= std::size( hull->submittedCloudMeshes ) );
 
+			const float hullLifetimeFrac = (float)( currTime - hull->spawnTime ) * Q_Rcp( (float)hull->lifetime );
+
 			for( size_t meshNum = 0; meshNum < cloudAppearanceRules->spanOfMeshProps.size(); ++meshNum ) {
 				const CloudMeshProps &__restrict meshProps  = cloudAppearanceRules->spanOfMeshProps[meshNum];
 				HullCloudDynamicMesh *const __restrict mesh = hull->submittedCloudMeshes + meshNum;
 
-				mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime, meshProps );
+				mesh->m_spriteRadius = meshProps.radiusLifespan.getValueForLifetimeFrac( hullLifetimeFrac );
 				if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
-					Vector4Copy( hull->mins, mesh->cullMins );
-					Vector4Copy( hull->maxs, mesh->cullMaxs );
+					mesh->m_alphaScale = meshProps.alphaScaleLifespan.getValueForLifetimeFrac( hullLifetimeFrac );
+					// We don't know the final alpha as we have to multiply it by the actual color value.
+					// Still, we can conclude that the multiplication result will be zero as a byte for this value.
+					if( mesh->m_alphaScale >= ( 1.0f / 255.0f ) ) {
+						Vector4Copy( hull->mins, mesh->cullMins );
+						Vector4Copy( hull->maxs, mesh->cullMaxs );
 
-					mesh->material     = meshProps.material;
-					mesh->m_alphaScale = meshProps.alphaScale;
-					Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
+						Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
 
-					mesh->applyVertexDynLight = hull->applyVertexDynLight;
-					mesh->m_shared            = sharedMeshData;
-					mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
-					mesh->m_applyRotation     = meshProps.applyRotation;
+						mesh->material            = meshProps.material;
+						mesh->applyVertexDynLight = hull->applyVertexDynLight;
+						mesh->m_shared            = sharedMeshData;
+						mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+						mesh->m_applyRotation     = meshProps.applyRotation;
 
-					mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
-					mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
-					mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
+						mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
+						mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
+						mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
 
-					// It's more convenient to initialize it on demand
-					if ( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable )) [[unlikely]] {
-						const auto randomWord = (uint16_t) m_rng.next();
-						mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
-						mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+						// It's more convenient to initialize it on demand
+						if ( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable )) [[unlikely]] {
+							const auto randomWord = (uint16_t) m_rng.next();
+							mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
+							mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+						}
+
+						drawSceneRequest->addDynamicMesh( mesh );
 					}
-
-					drawSceneRequest->addDynamicMesh( mesh );
 				}
 			}
 		}
@@ -850,40 +827,44 @@ void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRe
 				assert( !cloudAppearanceRules->spanOfMeshProps.empty() );
 				assert( cloudAppearanceRules->spanOfMeshProps.size() <= std::size( layer->submittedCloudMeshes ) );
 
+				const float hullLifetimeFrac = (float)( currTime - hull->spawnTime ) * Q_Rcp( (float)hull->lifetime );
+
 				for( size_t meshNum = 0; meshNum < cloudAppearanceRules->spanOfMeshProps.size(); ++meshNum ) {
 					const CloudMeshProps &__restrict meshProps  = cloudAppearanceRules->spanOfMeshProps[meshNum];
 					HullCloudDynamicMesh *const __restrict mesh = layer->submittedCloudMeshes[meshNum];
 
-					mesh->m_spriteRadius = getRadiusForCurrTime( currTime, hull->spawnTime, hull->lifetime, meshProps );
+					mesh->m_spriteRadius = meshProps.radiusLifespan.getValueForLifetimeFrac( hullLifetimeFrac );
 					if( mesh->m_spriteRadius > 1.0f ) [[likely]] {
-						Vector4Copy( layer->mins, mesh->cullMins );
-						Vector4Copy( layer->maxs, mesh->cullMaxs );
+						mesh->m_alphaScale = meshProps.alphaScaleLifespan.getValueForLifetimeFrac( hullLifetimeFrac );
+						if( mesh->m_alphaScale >= ( 1.0f / 255.0f ) ) {
+							Vector4Copy( layer->mins, mesh->cullMins );
+							Vector4Copy( layer->maxs, mesh->cullMaxs );
 
-						mesh->material     = meshProps.material;
-						mesh->m_alphaScale = meshProps.alphaScale;
-						Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
+							Vector4Copy( meshProps.overlayColor, mesh->m_spriteColor );
 
-						mesh->applyVertexDynLight = hull->applyVertexDynLight;
-						mesh->m_shared            = sharedMeshData;
-						mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
-						mesh->m_applyRotation     = meshProps.applyRotation;
+							mesh->material            = meshProps.material;
+							mesh->applyVertexDynLight = hull->applyVertexDynLight;
+							mesh->m_shared            = sharedMeshData;
+							mesh->m_lifetimeSeconds   = 1e-3f * (float)( currTime - hull->spawnTime );
+							mesh->m_applyRotation     = meshProps.applyRotation;
 
-						mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
-						mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
-						mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
+							mesh->m_tessLevelShiftForMinVertexIndex = meshProps.tessLevelShiftForMinVertexIndex;
+							mesh->m_tessLevelShiftForMaxVertexIndex = meshProps.tessLevelShiftForMaxVertexIndex;
+							mesh->m_shiftFromDefaultLevelToHide     = meshProps.shiftFromDefaultLevelToHide;
 
-						if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
-							const auto randomWord          = (uint16_t)m_rng.next();
-							mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
-							mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+							if( !( mesh->m_speedIndexShiftInTable | mesh->m_phaseIndexShiftInTable ) ) [[unlikely]] {
+								const auto randomWord          = (uint16_t)m_rng.next();
+								mesh->m_speedIndexShiftInTable = ( randomWord >> 0 ) & 0xFF;
+								mesh->m_phaseIndexShiftInTable = ( randomWord >> 8 ) & 0xFF;
+							}
+
+							if( layer->useDrawOnTopHack ) [[unlikely]] {
+								assert( drawOnTopCloudPartIndex == std::nullopt );
+								drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
+							}
+
+							hull->submittedCloudMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
 						}
-
-						if( layer->useDrawOnTopHack ) [[unlikely]] {
-							assert( drawOnTopCloudPartIndex == std::nullopt );
-							drawOnTopCloudPartIndex = (uint8_t)numSubmittedCloudMeshes;
-						}
-
-						hull->submittedCloudMeshesBuffer[numSubmittedCloudMeshes++] = mesh;
 					}
 				}
 			}

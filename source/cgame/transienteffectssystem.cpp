@@ -290,19 +290,15 @@ static const uint16_t kSmokeHullNoColorChangeIndices[] { 28, 100, 101, 103, 104,
 
 static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
 	{
-		.alphaScale                      = 1.25f,
-		.initialRadius                   = 0.0f,
-		.fadedInRadius                   = 16.0f,
-		.fadedOutRadius                  = 0.0f,
+		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.25f, .fadedOut = 1.0f },
+		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 16.0f, .fadedOut = 0.0f },
 		.tessLevelShiftForMinVertexIndex = -2,
 		.tessLevelShiftForMaxVertexIndex = -1,
 		.applyRotation                   = true,
 	},
 	{
-		.alphaScale                      = 1.0f,
-		.initialRadius                   = 0.0f,
-		.fadedInRadius                   = 24.0f,
-		.fadedOutRadius                  = 0.0f,
+		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f },
+		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 24.0f, .fadedOut = 0.0f },
 		.tessLevelShiftForMinVertexIndex = -0,
 		.tessLevelShiftForMaxVertexIndex = -0,
 		.shiftFromDefaultLevelToHide     = -1,
@@ -312,20 +308,16 @@ static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
 // Caution: Specifying the full range of vertices would not allow the cloud to be rendered due to reaching the limit
 
 static SimulatedHullsSystem::CloudMeshProps g_fireInnerCloudMeshProps {
-	.alphaScale                      = 1.0f,
-	.initialRadius                   = 0.0f,
-	.fadedInRadius                   = 3.5f,
-	.fadedOutRadius                  = 1.0f,
+	.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 0.0f },
+	.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 3.0f, .fadedOut = 1.0f },
 	.tessLevelShiftForMinVertexIndex = -1,
 	.tessLevelShiftForMaxVertexIndex = -0,
 	.shiftFromDefaultLevelToHide     = -1,
 };
 
 static SimulatedHullsSystem::CloudMeshProps g_fireOuterCloudMeshProps {
-	.alphaScale                      = 0.75f,
-	.initialRadius                   = 0.0f,
-	.fadedInRadius                   = 7.0f,
-	.fadedOutRadius                  = 3.0f,
+	.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 0.75f, .fadedOut = 0.75f },
+	.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 7.0f, .fadedOut = 3.0f },
 	.tessLevelShiftForMinVertexIndex = -1,
 	.tessLevelShiftForMaxVertexIndex = -0,
 	.shiftFromDefaultLevelToHide     = -1,
