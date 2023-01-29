@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "simulatedhullssystem.h"
 #include "particlesystem.h"
+#include "polyeffectssystem.h"
 
 #include <variant>
 
@@ -67,12 +68,16 @@ public:
 	// specify absolute numbers of desired particles count!
 	enum class ParticleFlockBin { Small, Medium, Large };
 
+	// TODO: Extract generic facilities for launching delayed effects
+
 	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const ConicalFlockParams &flockParams,
 								   const Particle::AppearanceRules &appearanceRules );
 	void addDelayedParticleEffect( unsigned delay, ParticleFlockBin bin,
 								   const EllipsoidalFlockParams &flockParams,
 								   const Particle::AppearanceRules &appearanceRules );
+
+	void addDelayedImpactRosetteEffect( unsigned delay, const PolyEffectsSystem::ImpactRosetteParams &params );
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
@@ -159,6 +164,10 @@ private:
 		ParticleFlockBin bin;
 	};
 
+	struct ImpactRosetteSpawnRecord {
+		PolyEffectsSystem::ImpactRosetteParams params;
+	};
+
 	struct DelayedEffect {
 		DelayedEffect *prev { nullptr }, *next { nullptr };
 		int64_t spawnTime { 0 };
@@ -179,7 +188,7 @@ private:
 		// (adding extra particles to explosion clusters does not produce good visual results)
 		// TODO: Add poly effects?
 		using SpawnRecord = std::variant<RegularHullSpawnRecord, ConcentricHullSpawnRecord,
-			ConicalFlockSpawnRecord, EllipsoidalFlockSpawnRecord>;
+			ConicalFlockSpawnRecord, EllipsoidalFlockSpawnRecord, ImpactRosetteSpawnRecord>;
 
 		SpawnRecord spawnRecord;
 	};

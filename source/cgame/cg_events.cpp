@@ -525,41 +525,50 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	[[maybe_unused]]
 	const trace_t *waterTrace = GS_TraceBullet( &trace, origin, dir, r, u, (int)fireDef->timeout, owner, 0 );
 	if( waterTrace ) {
+		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, origin, waterTrace->endpos );
+
 		if( canShowBulletImpactForSurface( trace ) ) {
-			cg.effectsSystem.spawnUnderwaterBulletImpactEffect( trace.endpos, trace.plane.normal );
+			cg.effectsSystem.spawnUnderwaterBulletImpactEffect( delay, trace.endpos, trace.plane.normal );
 		}
+
 		if( !VectorCompare( waterTrace->endpos, origin ) ) {
-			cg.effectsSystem.spawnBulletLiquidImpactEffect( LiquidImpact {
+			cg.effectsSystem.spawnBulletLiquidImpactEffect( delay, LiquidImpact {
 				.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
 				.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
 				.contents = waterTrace->contents,
 			});
 		}
-		//CG_LeadBubbleTrail( &trace, water_trace->endpos );
-		cg.effectsSystem.spawnBulletTracer( owner, origin, waterTrace->endpos );
 	} else {
+		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, origin, trace.endpos );
 		if( canShowBulletImpactForSurface( trace ) ) {
-			cg.effectsSystem.spawnBulletImpactEffect( SolidImpact {
+			cg.effectsSystem.spawnBulletImpactEffect( delay, SolidImpact {
 				.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 				.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
 				.incidentDir = { dir[0], dir[1], dir[2] },
 				.surfFlags   = getSurfFlagsForImpact( trace, dir ),
 			});
 		}
-		cg.effectsSystem.spawnBulletTracer( owner, origin, trace.endpos );
 	}
 }
 
 static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int owner, int count,
 									  int hspread, int vspread, int range ) {
 	assert( seed );
-	assert( count && count < 64 );
+	assert( count > 0 && count < 64 );
 	assert( std::abs( VectorLengthFast( dir ) - 1.0f ) < 0.001f );
 
 	auto *const solidImpacts  = (SolidImpact *)alloca( sizeof( SolidImpact ) * count );
 	auto *const liquidImpacts = (LiquidImpact *)alloca( sizeof( LiquidImpact ) * count );
 	auto *const tracerTargets = (vec3_t *)alloca( sizeof( vec3_t ) * count );
-	unsigned numSolidImpacts = 0, numLiquidImpacts = 0, numTracerTargets = 0;
+
+	auto *const underwaterImpactOrigins       = (vec3_t *)alloca( sizeof( vec3_t ) * count );
+	auto *const underwaterImpactNormals       = (vec3_t *)alloca( sizeof( vec3_t ) * count );
+	auto *const underwaterImpactTracerIndices = (int *)alloca( sizeof( int ) * count );
+
+	auto *const solidImpactTracerIndices  = (unsigned *)alloca( sizeof( unsigned ) * count );
+	auto *const liquidImpactTracerIndices = (unsigned *)alloca( sizeof( unsigned ) * count );
+
+	unsigned numSolidImpacts = 0, numLiquidImpacts = 0, numUnderwaterImpacts = 0, numTracerTargets = 0;
 
 	for( int i = 0; i < count; i++ ) {
 		// TODO: Is this correct?
@@ -573,37 +582,76 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 		trace_t trace;
 		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
 		if( waterTrace ) {
-			if( canShowBulletImpactForSurface( trace ) ) {
-				cg.effectsSystem.spawnUnderwaterPelletImpactEffect( trace.endpos, trace.plane.normal );
+			const bool shouldShowUnderwaterImpact = canShowBulletImpactForSurface( trace );
+			if( shouldShowUnderwaterImpact ) {
+				// We don't know the delay yet
+				VectorCopy( trace.endpos, underwaterImpactOrigins[numUnderwaterImpacts] );
+				VectorCopy( trace.plane.normal, underwaterImpactNormals[numUnderwaterImpacts] );
 			}
 			if( !VectorCompare( waterTrace->endpos, start ) ) {
-				liquidImpacts[numLiquidImpacts++] = LiquidImpact {
+				liquidImpacts[numLiquidImpacts] = LiquidImpact {
 					.origin   = { waterTrace->endpos[0], waterTrace->endpos[1], waterTrace->endpos[2] },
 					.burstDir = { waterTrace->plane.normal[0], waterTrace->plane.normal[1], waterTrace->plane.normal[2] },
 					.contents = waterTrace->contents,
 				};
+				liquidImpactTracerIndices[numLiquidImpacts] = i;
+				++numLiquidImpacts;
+				if( shouldShowUnderwaterImpact ) {
+					underwaterImpactTracerIndices[numUnderwaterImpacts] = (int)i;
+				}
+			} else {
+				if( shouldShowUnderwaterImpact ) {
+					underwaterImpactTracerIndices[numUnderwaterImpacts] = -1;
+				}
 			}
-			//CG_LeadBubbleTrail( &trace, water_trace->endpos );
+			if( shouldShowUnderwaterImpact ) {
+				numUnderwaterImpacts++;
+			}
 			VectorCopy( waterTrace->endpos, tracerTargets[numTracerTargets] );
 			numTracerTargets++;
 		} else {
 			if( canShowBulletImpactForSurface( trace ) ) {
-				solidImpacts[numSolidImpacts++] = SolidImpact {
+				solidImpacts[numSolidImpacts] = SolidImpact {
 					.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 					.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
 					.incidentDir = { dir[0], dir[1], dir[2] },
 					.surfFlags   = getSurfFlagsForImpact( trace, dir ),
 				};
+				solidImpactTracerIndices[numSolidImpacts] = i;
+				numSolidImpacts++;
 			}
 			VectorCopy( trace.endpos, tracerTargets[numTracerTargets] );
 			numTracerTargets++;
 		}
 	}
 
+	auto *const tracerDelaysBuffer = (unsigned *)alloca( sizeof( unsigned ) * count );
+	auto *const liquidImpactDelays = (unsigned *)alloca( sizeof( unsigned ) * count );
+	auto *const solidImpactDelays  = (unsigned *)alloca( sizeof( unsigned ) * count );
+
 	// TODO: Pass the origin stride plus impacts?
-	cg.effectsSystem.spawnPelletTracers( owner, start, { tracerTargets, numTracerTargets } );
-	cg.effectsSystem.spawnMultiplePelletImpactEffects( { solidImpacts, numSolidImpacts } );
-	cg.effectsSystem.spawnMultipleLiquidImpactEffects( { liquidImpacts, numLiquidImpacts }, 0.1f, { 0.3f, 0.9f } );
+	cg.effectsSystem.spawnPelletTracers( owner, start, { tracerTargets, numTracerTargets }, tracerDelaysBuffer );
+
+	for( unsigned i = 0; i < numSolidImpacts; ++i ) {
+		solidImpactDelays[i] = tracerDelaysBuffer[solidImpactTracerIndices[i]];
+	}
+	for( unsigned i = 0; i < numLiquidImpacts; ++i ) {
+		liquidImpactDelays[i] = tracerDelaysBuffer[liquidImpactTracerIndices[i]];
+	}
+
+	for( unsigned i = 0; i < numUnderwaterImpacts; ++i ) {
+		unsigned delay = 0;
+		if( const int tracerIndex = underwaterImpactTracerIndices[i]; tracerIndex >= 0 ) {
+			// Using the tracer delay is not really correct as there's underwater added distance but this issue is minor
+			delay = tracerDelaysBuffer[tracerIndex];
+		}
+		cg.effectsSystem.spawnUnderwaterPelletImpactEffect( delay, underwaterImpactOrigins[i], underwaterImpactNormals[i] );
+	}
+
+	cg.effectsSystem.spawnMultiplePelletImpactEffects( { solidImpacts, numSolidImpacts }, { solidImpactDelays, numSolidImpacts } );
+
+	cg.effectsSystem.spawnMultipleLiquidImpactEffects( { liquidImpacts, numLiquidImpacts }, 0.1f, { 0.3f, 0.9f },
+													   std::span<const unsigned> { liquidImpactDelays, numLiquidImpacts } );
 }
 
 static void CG_Event_FireRiotgun( vec3_t origin, vec3_t dirVec, int weapon, int firemode, int seed, int owner ) {

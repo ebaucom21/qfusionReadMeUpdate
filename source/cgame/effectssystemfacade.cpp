@@ -435,7 +435,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 	m_transientEffectsSystem.spawnExplosionHulls( fireOrigin, smokeOrigin );
 
 	spawnMultipleExplosionImpactEffects( solidImpacts );
-	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f }, { 0, 100 } );
+	spawnMultipleLiquidImpactEffects( waterImpacts, 1.0f, { 0.7f, 0.9f }, std::make_pair( 0u, 100u ) );
 }
 
 void EffectsSystemFacade::spawnShockwaveExplosionEffect( const float *origin, const float *dir, int mode ) {
@@ -881,7 +881,7 @@ static const LightLifespan kBulletRosetteLightLifespan {
 	.radiusLifespan = { .fadedIn = 32.0f },
 };
 
-void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientation &orientation,
+void EffectsSystemFacade::spawnBulletGenericImpactRosette( unsigned delay, const FlockOrientation &orientation,
 														   float minPercentage, float maxPercentage,
 														   unsigned lightFrameAffinityIndex,
 														   unsigned lightFrameAffinityModulo ) {
@@ -890,14 +890,13 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientatio
 	assert( minPercentage <= maxPercentage );
 
 	// TODO: Fix FlockOrientation direction
-	const vec3_t dir { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] };
 
-	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderGenericImpactRosetteSpike,
 		.flareMaterial      = cgs.media.shaderFlareParticle,
-		.origin             = orientation.origin,
-		.offset             = orientation.offset,
-		.dir                = dir,
+		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
+		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
+		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
 		.innerConeAngle     = 5.0f,
 		.outerConeAngle     = 10.0f + 50.0f * maxPercentage,
 		.spawnRingRadius    = 0.0f,
@@ -912,7 +911,7 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( const FlockOrientatio
 	});
 }
 
-void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation &orientation,
+void EffectsSystemFacade::spawnBulletMetalImpactRosette( unsigned delay, const FlockOrientation &orientation,
 														 unsigned lightFrameAffinityIndex,
 														 unsigned lightFrameAffinityModulo ) {
 	uint16_t innerLightFrameAffinityIndex, innerLightFrameAffinityModulo;
@@ -929,14 +928,13 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 	}
 
 	// TODO: Fix FlockOrientation direction
-	const vec3_t dir { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] };
 
-	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteInnerSpike,
 		.flareMaterial      = cgs.media.shaderFlareParticle,
-		.origin             = orientation.origin,
-		.offset             = orientation.offset,
-		.dir                = dir,
+		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
+		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
+		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
 		.innerConeAngle     = 5.0f,
 		.outerConeAngle     = 15.0f,
 		.spawnRingRadius    = 0.0f,
@@ -953,12 +951,12 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( const FlockOrientation 
 		.lightFrameAffinityIndex         = outerLightFrameAffinityIndex,
 	});
 
-	cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams {
+	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteOuterSpike,
 		.flareMaterial      = cgs.media.shaderFlareParticle,
-		.origin             = orientation.origin,
-		.offset             = orientation.offset,
-		.dir                = dir,
+		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
+		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
+		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
 		.innerConeAngle     = 45.0f,
 		.outerConeAngle     = 75.0f,
 		.spawnRingRadius    = 1.0f,
@@ -1439,7 +1437,7 @@ void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const Flock
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
-void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
+void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidImpact &impact ) {
 	const FlockOrientation flockOrientation = makeRicochetFlockOrientation( impact, &m_rng );
 
 	sfx_s *sfx         = nullptr;
@@ -1447,27 +1445,29 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 	if( cg_particles->integer ) {
 		const SurfImpactMaterial impactMaterial = decodeSurfImpactMaterial( impact.surfFlags );
 		const unsigned materialParam            = decodeSurfImpactMaterialParam( impact.surfFlags );
-		spawnBulletImpactParticleEffectForMaterial( flockOrientation, impactMaterial, materialParam );
+		spawnBulletImpactParticleEffectForMaterial( delay, flockOrientation, impactMaterial, materialParam );
 		// TODO: Using enum (doesn't work with GCC 10)
 		using IM = SurfImpactMaterial;
 		if( impactMaterial == IM::Metal ) {
-			spawnBulletMetalImpactRosette( flockOrientation );
+			spawnBulletMetalImpactRosette( delay, flockOrientation );
 		} else if( impactMaterial == IM::Stone ) {
-			spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
+			spawnBulletGenericImpactRosette( delay, flockOrientation, 0.5f, 1.0f );
 		} else if( impactMaterial == IM::Unknown ) {
-			spawnBulletGenericImpactRosette( flockOrientation, 0.3f, 1.0f );
+			spawnBulletGenericImpactRosette( delay, flockOrientation, 0.3f, 1.0f );
 		}
 		if( impactMaterial == IM::Metal || impactMaterial == IM::Stone || impactMaterial == IM::Unknown ) {
+			// TODO: Postpone if needed
 			m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
 		}
 		if( impactMaterial == IM::Metal || impactMaterial == IM::Glass ) {
-			spawnBulletLikeImpactRingUsingLimiter( impact );
+			spawnBulletLikeImpactRingUsingLimiter( delay, impact );
 		}
 		const unsigned group = getImpactSfxGroupForMaterial( impactMaterial );
 		sfx      = getSfxForImpactGroup( group );
 		groupTag = group;
 	} else {
-		spawnBulletGenericImpactRosette( flockOrientation, 0.5f, 1.0f );
+		spawnBulletGenericImpactRosette( delay, flockOrientation, 0.5f, 1.0f );
+		// TODO: Postpone if needed
 		m_transientEffectsSystem.spawnBulletImpactModel( impact.origin, impact.normal );
 		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
 			sfx      = cgs.media.sfxImpactSolid[m_rng.nextBounded( numSfx )];
@@ -1485,7 +1485,8 @@ void EffectsSystemFacade::spawnBulletImpactEffect( const SolidImpact &impact ) {
 	}
 }
 
-void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( unsigned delay,
+																	  const FlockOrientation &flockOrientation,
 																	  SurfImpactMaterial impactMaterial,
 																	  unsigned materialParam ) {
 	// TODO: We used to test against impact normal Z
@@ -1495,31 +1496,31 @@ void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( const Floc
 		case SurfImpactMaterial::Unknown:
 			break;
 		case SurfImpactMaterial::Stone:
-			spawnStoneDustParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnStoneDustParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Stucco:
-			spawnStuccoDustParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnStuccoDustParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Wood:
-			spawnWoodBulletImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnWoodBulletImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Dirt:
-			spawnDirtImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Sand:
-			spawnSandImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Metal:
-			spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f );
-			spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
+			spawnBulletMetalRicochetParticles( delay, flockOrientation, upShiftScale, materialParam, 0.7f, 1.0f );
+			spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 	}
 }
 
-void EffectsSystemFacade::spawnBulletLikeImpactRingUsingLimiter( const SolidImpact &impact ) {
+void EffectsSystemFacade::spawnBulletLikeImpactRingUsingLimiter( unsigned delay, const SolidImpact &impact ) {
 	const EventRateLimiterParams limiterParams {
 		.startDroppingAtDistance = 144.0f,
 		.startDroppingAtTimeDiff = 350,
@@ -1541,6 +1542,7 @@ void EffectsSystemFacade::spawnBulletLikeImpactRingUsingLimiter( const SolidImpa
 			const float dotFrac      = ( dot - minDot ) * rcpDotRange;
 			const float acceptChance = 1.0f - dotFrac;
 			if( m_rng.tryWithChance( acceptChance ) ) {
+				// TODO: Postpone if needed
 				m_transientEffectsSystem.spawnBulletLikeImpactRing( impact.origin, axisDir );
 				return;
 			}
@@ -1584,7 +1586,8 @@ auto EffectsSystemFacade::getSfxForImpactGroup( unsigned group ) -> sfx_s * {
 	return nullptr;
 }
 
-void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( unsigned delay,
+																	  const FlockOrientation &flockOrientation,
 																	  SurfImpactMaterial impactMaterial,
 																	  unsigned materialParam,
 																	  unsigned lightFrameAffinityIndex,
@@ -1596,33 +1599,33 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( const Floc
 		case SurfImpactMaterial::Unknown:
 			break;
 		case SurfImpactMaterial::Stone:
-			spawnStoneDustParticles( 0, flockOrientation, upShiftScale, materialParam, 0.75f );
+			spawnStoneDustParticles( delay, flockOrientation, upShiftScale, materialParam, 0.75f );
 			break;
 		case SurfImpactMaterial::Stucco:
-			spawnStuccoDustParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnStuccoDustParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Wood:
-			spawnWoodBulletImpactParticles( 0, flockOrientation, upShiftScale, materialParam, 0.5f );
+			spawnWoodBulletImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.5f );
 			break;
 		case SurfImpactMaterial::Dirt:
-			spawnDirtImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 		case SurfImpactMaterial::Sand:
-			spawnSandImpactParticles( 0, flockOrientation, upShiftScale, materialParam, 0.25f );
+			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.25f );
 			break;
 		case SurfImpactMaterial::Metal:
 			// These conditionals make light frame affinity slightly incorrect but this is harmless
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalRicochetParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
+				spawnBulletMetalRicochetParticles( delay, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
 												   lightFrameAffinityIndex, lightFrameAffinityModulo );
 			}
 			if( m_rng.tryWithChance( 0.5f ) ) {
-				spawnBulletMetalDebrisParticles( 0, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
+				spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.0f, 0.5f,
 												 lightFrameAffinityIndex, lightFrameAffinityModulo );
 			}
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( 0, flockOrientation, upShiftScale, materialParam );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
 			break;
 	}
 }
@@ -1692,6 +1695,15 @@ void EffectsSystemFacade::spawnOrPostponeImpactParticleEffect( unsigned delay,
 		} else {
 			cg.particleSystem.addLargeParticleFlock( appearanceRules, flockParams );
 		}
+	}
+}
+
+void EffectsSystemFacade::spawnOrPostponeImpactRosetteEffect( unsigned delay, PolyEffectsSystem::ImpactRosetteParams &&params ) {
+	if( delay ) {
+		// TODO: Use generic closures?
+		m_transientEffectsSystem.addDelayedImpactRosetteEffect( delay, params );
+	} else {
+		cg.polyEffectsSystem.spawnImpactRosette( std::forward<PolyEffectsSystem::ImpactRosetteParams>( params ) );
 	}
 }
 
@@ -1889,10 +1901,11 @@ const EffectsSystemFacade::EventRateLimiterParams EffectsSystemFacade::kLiquidIm
 	.startDroppingAtTimeDiff  = 150,
 };
 
-void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &impact ) {
-	spawnLiquidImpactParticleEffect( 0, impact, 1.0f, { 0.70f, 0.95f } );
+void EffectsSystemFacade::spawnBulletLiquidImpactEffect( unsigned delay, const LiquidImpact &impact ) {
+	spawnLiquidImpactParticleEffect( delay, impact, 1.0f, { 0.70f, 0.95f } );
 
 	if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
+		// TODO: Postpone if needed
 		m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, impact.burstDir );
 	}
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
@@ -1901,7 +1914,10 @@ void EffectsSystemFacade::spawnBulletLiquidImpactEffect( const LiquidImpact &imp
 	}
 }
 
-void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts ) {
+void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts,
+															std::span<const unsigned> delays ) {
+	assert( impacts.size() == delays.size() );
+
 	[[maybe_unused]] const EventRateLimiterParams limiterParams {
 		.startDroppingAtDistance = 144.0f,
 		.startDroppingAtTimeDiff = 250,
@@ -1924,19 +1940,21 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		unsigned numRosetteImpactsSoFar = 0;
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
 			const SolidImpact &impact           = impacts[i];
+			const unsigned delay                = delays[i];
 			const SurfImpactMaterial material   = decodeSurfImpactMaterial( impact.surfFlags );
 			const unsigned materialParam        = decodeSurfImpactMaterialParam( impact.surfFlags );
 			const FlockOrientation orientation  = makeRicochetFlockOrientation( impact, &m_rng );
 
-			spawnPelletImpactParticleEffectForMaterial( orientation, material, materialParam,
+			spawnPelletImpactParticleEffectForMaterial( delay, orientation, material, materialParam,
 														numRosetteImpactsSoFar, totalNumRosetteImpacts );
 
 			if( material == SurfImpactMaterial::Glass || material == SurfImpactMaterial::Metal ) {
-				spawnBulletLikeImpactRingUsingLimiter( impact );
+				spawnBulletLikeImpactRingUsingLimiter( delay, impact );
 			}
 
 			if( rosetteImpactsMask & ( (uint64_t)1 << i ) ) {
-				spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
+				spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
+				// TODO: Postpone if needed
 				m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 				numRosetteImpactsSoFar++;
 			}
@@ -1949,9 +1967,11 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		}
 	} else {
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
-			const SolidImpact &impact          = impacts[i];
+			const SolidImpact &impact = impacts[i];
+			const unsigned delay      = delays[i];
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
-			spawnBulletGenericImpactRosette( orientation, 0.3f, 0.6f, i, impacts.size() );
+			spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, i, impacts.size() );
+			// TODO: Postpone if needed
 			m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 		}
 		if( const unsigned numSfx = cgs.media.sfxImpactSolid.length() ) {
@@ -1997,19 +2017,30 @@ void EffectsSystemFacade::spawnMultipleExplosionImpactEffects( std::span<const S
 
 void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
 															std::pair<float, float> randomRotationAngleCosineRange,
-															std::pair<unsigned, unsigned> delayRange ) {
-	assert( delayRange.first <= delayRange.second );
-	if( delayRange.second > 0 && delayRange.first != delayRange.second ) {
-		for( const LiquidImpact &impact: impacts ) {
-			const unsigned delay = delayRange.first + m_rng.nextBoundedFast( delayRange.second - delayRange.first );
-			spawnLiquidImpactParticleEffect( delay, impact, percentageScale, randomRotationAngleCosineRange );
+															std::variant<std::span<const unsigned>,
+															    std::pair<unsigned, unsigned>> delaysOrDelayRange ) {
+	if( const auto *delayRange = std::get_if<std::pair<unsigned, unsigned>>( &delaysOrDelayRange ) ) {
+		assert( delayRange->first <= delayRange->second );
+		if( delayRange->second > 0 && delayRange->first != delayRange->second ) {
+			for( const LiquidImpact &impact: impacts ) {
+				const unsigned delay = delayRange->first + m_rng.nextBoundedFast( delayRange->second - delayRange->first );
+				spawnLiquidImpactParticleEffect( delay, impact, percentageScale, randomRotationAngleCosineRange );
+			}
+		} else {
+			for( const LiquidImpact &impact: impacts ) {
+				spawnLiquidImpactParticleEffect( delayRange->first, impact, percentageScale, randomRotationAngleCosineRange );
+			}
 		}
-	} else {
-		for( const LiquidImpact &impact: impacts ) {
-			spawnLiquidImpactParticleEffect( delayRange.first, impact, percentageScale, randomRotationAngleCosineRange );
+	} else if( const auto *individualDelays = std::get_if<std::span<const unsigned>>( &delaysOrDelayRange ) ) {
+		assert( individualDelays->size() == impacts.size() );
+		for( size_t i = 0; i < impacts.size(); ++i ) {
+			spawnLiquidImpactParticleEffect( ( *individualDelays )[i], impacts[i], percentageScale, randomRotationAngleCosineRange );
 		}
+	} else [[unlikely]] {
+		wsw::failWithRuntimeError( "Unreachable" );
 	}
-	// We don't care of delay for relatively slow water rings
+
+	// We don't care of delay for relatively slow water rings TODO?
 	for( const LiquidImpact &impact: impacts ) {
 		if( m_liquidImpactRingsRateLimiter.acquirePermission( cg.time, impact.origin, kLiquidImpactRingLimiterParams ) ) {
 			// Hack: Force aligning to Z-axis for now (burst dirs could differ from it).
@@ -2017,6 +2048,8 @@ void EffectsSystemFacade::spawnMultipleLiquidImpactEffects( std::span<const Liqu
 			m_transientEffectsSystem.spawnWaterImpactRing( impact.origin, &axis_identity[AXIS_UP] );
 		}
 	}
+
+	// We don't care of delay for sounds as well
 	if( const unsigned numSfx = cgs.media.sfxImpactWater.length() ) {
 		for( const LiquidImpact &impact: impacts ) {
 			sfx_s *sfx = cgs.media.sfxImpactWater[m_rng.nextBounded( numSfx )];
@@ -2165,7 +2198,7 @@ static auto adjustTracerOriginForOwner( int owner, const float *givenOrigin, flo
 	return { 0, 0 };
 }
 
-void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) {
+auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const float *to ) -> unsigned {
 	vec3_t adjustedFrom;
 	const auto [rightOffset, zOffset] = adjustTracerOriginForOwner( owner, from, adjustedFrom );
 
@@ -2179,7 +2212,7 @@ void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 		};
 	}
 
-	cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, PolyEffectsSystem::TracerParams {
+	const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, {
 		.material           = cgs.media.shaderSparkParticle,
 		.alignForPovParams  = alignForPovParams,
 		.duration           = 200,
@@ -2192,14 +2225,17 @@ void EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 		.coronaLightRadius  = 108.0f,
 		.lightColor         = { 0.9f, 0.8f, 1.0f }
 	});
+
+	return maybeTimeout.value_or( 0 );
 }
 
-void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to ) {
+void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to,
+											  unsigned *timeoutsBuffer ) {
 	vec3_t adjustedFrom;
 	adjustTracerOriginForOwner( owner, from, adjustedFrom );
 
 	for( size_t i = 0; i < to.size(); ++i ) {
-		cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to[i], PolyEffectsSystem::TracerParams {
+		const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to[i], {
 			.material                 = cgs.media.shaderSparkParticle,
 			.duration                 = 125,
 			.prestepDistance          = m_rng.nextFloat( 32.0f, 72.0f ),
@@ -2213,6 +2249,8 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std:
 			.lightFrameAffinityModulo = (uint8_t)to.size(),
 			.lightFrameAffinityIndex  = (uint8_t)i,
 		});
+
+		timeoutsBuffer[i] = maybeTimeout.value_or( 0u );
 	}
 }
 

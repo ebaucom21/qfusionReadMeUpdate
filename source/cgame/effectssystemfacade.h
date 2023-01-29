@@ -69,27 +69,31 @@ public:
 	void spawnGunbladeBladeHitEffect( const float *origin, const float *dir );
 	void spawnGunbladeBlastHitEffect( const float *origin, const float *dir );
 
-	void spawnBulletImpactEffect( const SolidImpact &impact );
+	void spawnBulletImpactEffect( unsigned delay, const SolidImpact &impact );
 
-	void spawnUnderwaterBulletImpactEffect( const float *origin, const float *normal ) {
+	void spawnUnderwaterBulletImpactEffect( unsigned delay, const float *origin, const float *normal ) {
+		// TODO: Postpone if needed
 		m_transientEffectsSystem.spawnBulletImpactModel( origin, normal );
 	}
 
-	void spawnUnderwaterPelletImpactEffect( const float *origin, const float *normal ) {
+	void spawnUnderwaterPelletImpactEffect( unsigned delay, const float *origin, const float *normal ) {
+		// TODO: Postpone if needed
 		m_transientEffectsSystem.spawnPelletImpactModel( origin, normal );
 	}
 
-	void spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts );
+	void spawnMultiplePelletImpactEffects( std::span<const SolidImpact> impacts, std::span<const unsigned> delays );
 
-	void spawnBulletLiquidImpactEffect( const LiquidImpact &impact );
+	void spawnBulletLiquidImpactEffect( unsigned delay, const LiquidImpact &impact );
 
 	void spawnMultipleLiquidImpactEffects( std::span<const LiquidImpact> impacts, float percentageScale,
 										   std::pair<float, float> randomRotationAngleCosineRange,
-										   std::pair<unsigned, unsigned> delayRange = { 0, 0 } );
+										   std::variant<std::span<const unsigned>,
+										       std::pair<unsigned, unsigned>> delaysOrDelayRange = std::make_pair( 0u, 0u ) );
 
-	void spawnBulletTracer( int owner, const float *from, const float *to );
+	[[nodiscard]]
+	auto spawnBulletTracer( int owner, const float *from, const float *to ) -> unsigned;
 
-	void spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to );
+	void spawnPelletTracers( int owner, const float *from, std::span<const vec3_t> to, unsigned *timeoutsBuffer );
 
 	void spawnLandingDustImpactEffect( const float *origin, const float *dir ) {
 		spawnDustImpactEffect( origin, dir, 50.0f );
@@ -170,11 +174,12 @@ private:
 
 	void spawnDustImpactEffect( const float *origin, const float *dir, float radius );
 
-	void spawnBulletGenericImpactRosette( const FlockOrientation &orientation, float minPercentage, float maxPercentage,
+	void spawnBulletGenericImpactRosette( unsigned delay, const FlockOrientation &orientation,
+										  float minPercentage, float maxPercentage,
 										  unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
-	void spawnBulletMetalImpactRosette( const FlockOrientation &orientation, unsigned lightFrameAffinityIndex = 0,
-										unsigned lightFrameAffinityModulo = 0 );
+	void spawnBulletMetalImpactRosette( unsigned delay, const FlockOrientation &orientation,
+										unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
 	// Normally `delay` would have been a last default argument,
 	// but there are already fine tune parameters,
@@ -207,10 +212,10 @@ private:
 	void spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
 									float upShiftScale, unsigned materialParam );
 
-	void spawnBulletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+	void spawnBulletImpactParticleEffectForMaterial( unsigned delay, const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam );
 
-	void spawnPelletImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
+	void spawnPelletImpactParticleEffectForMaterial( unsigned delay, const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam,
 													 unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo );
 
@@ -220,6 +225,8 @@ private:
 											  const Particle::AppearanceRules &appearanceRules,
 											  TransientEffectsSystem::ParticleFlockBin bin =
 												  TransientEffectsSystem::ParticleFlockBin::Small );
+
+	void spawnOrPostponeImpactRosetteEffect( unsigned delay, PolyEffectsSystem::ImpactRosetteParams &&params );
 
 	void spawnExplosionImpactParticleEffectForMaterial( const FlockOrientation &flockOrientation,
 														SurfImpactMaterial impactMaterial, unsigned materialParam,
@@ -243,7 +250,7 @@ private:
 	static const EventRateLimiterParams kLiquidImpactSoundLimiterParams;
 	static const EventRateLimiterParams kLiquidImpactRingLimiterParams;
 
-	void spawnBulletLikeImpactRingUsingLimiter( const SolidImpact &impact );
+	void spawnBulletLikeImpactRingUsingLimiter( unsigned delay, const SolidImpact &impact );
 
 	void startSoundForImpactUsingLimiter( sfx_s *sfx, uintptr_t groupTag, const SolidImpact &impact,
 										  const EventRateLimiterParams &params );

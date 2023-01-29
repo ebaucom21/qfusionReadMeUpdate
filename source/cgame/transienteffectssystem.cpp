@@ -866,6 +866,11 @@ void TransientEffectsSystem::addDelayedParticleEffect( unsigned delay, ParticleF
 	});
 }
 
+void TransientEffectsSystem::addDelayedImpactRosetteEffect( unsigned delay,
+															const PolyEffectsSystem::ImpactRosetteParams &params ) {
+	allocDelayedEffect( m_lastTime, vec3_origin, delay, ImpactRosetteSpawnRecord { .params = params } );
+}
+
 void TransientEffectsSystem::spawnDustImpactEffect( const float *origin, const float *dir, float radius ) {
 	vec3_t axis1, axis2;
 	PerpendicularVector( axis2, dir );
@@ -1327,6 +1332,9 @@ void TransientEffectsSystem::spawnDelayedEffect( DelayedEffect *effect ) {
 				case Pfb::Medium: cg.particleSystem.addMediumParticleFlock( arules, *flockParams ); break;
 				case Pfb::Large: cg.particleSystem.addLargeParticleFlock( arules, *flockParams ); break;
 			}
+		}
+		void operator()( const ImpactRosetteSpawnRecord &record ) const {
+			cg.polyEffectsSystem.spawnImpactRosette( PolyEffectsSystem::ImpactRosetteParams { record.params } );
 		}
 	};
 

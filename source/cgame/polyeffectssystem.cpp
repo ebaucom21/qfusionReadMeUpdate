@@ -413,12 +413,12 @@ void PolyEffectsSystem::spawnTransientBeamEffect( const float *from, const float
 	wsw::link( effect, &m_transientBeamsHead );
 }
 
-void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) {
+auto PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) -> std::optional<unsigned> {
 	assert( params.duration > 50 && params.prestepDistance >= 1.0f && params.width > 0.0f );
 
 	const float squareDistance = DistanceSquared( from, to );
 	if( squareDistance < wsw::square( params.prestepDistance ) ) [[unlikely]] {
-		return;
+		return std::nullopt;
 	}
 
 	vec3_t dir;
@@ -481,6 +481,8 @@ void PolyEffectsSystem::spawnTracerEffect( const float *from, const float *to, T
 	effect->lightFrameAffinityIndex  = params.lightFrameAffinityIndex;
 
 	wsw::link( effect, &m_tracerEffectsHead );
+
+	return (unsigned)( 1000 * totalDistance * Q_Rcp( speed ) );
 }
 
 void PolyEffectsSystem::spawnImpactRosette( ImpactRosetteParams &&params ) {

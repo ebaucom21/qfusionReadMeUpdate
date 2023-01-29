@@ -94,14 +94,16 @@ public:
 		uint8_t lightFrameAffinityIndex { 0 };
 	};
 
-	void spawnTracerEffect( const float *from, const float *to, TracerParams &&params );
+	// Returns an estimated hit time on success
+	[[nodiscard]]
+	auto spawnTracerEffect( const float *from, const float *to, TracerParams &&params ) -> std::optional<unsigned>;
 
 	struct ImpactRosetteParams {
 		shader_s *spikeMaterial { nullptr };
 		shader_s *flareMaterial { nullptr };
-		const float *origin;
-		const float *offset;
-		const float *dir;
+		float origin[3];
+		float offset[3];
+		float dir[3];
 		float innerConeAngle { 18.0f };
 		float outerConeAngle { 30.0f };
 		float spawnRingRadius { 1.0f };
