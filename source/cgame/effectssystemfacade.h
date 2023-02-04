@@ -275,7 +275,6 @@ private:
 	TransientEffectsSystem m_transientEffectsSystem;
 	wsw::RandomGenerator m_rng;
 
-	shader_s *m_bloodMaterials[3];
 	wsw::StaticVector<std::pair<sfx_s **, unsigned>, 5> m_impactSfxForGroups;
 
 	class EventRateLimiter {

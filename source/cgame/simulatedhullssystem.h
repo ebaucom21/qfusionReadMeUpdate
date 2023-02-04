@@ -394,7 +394,7 @@ private:
 	using FireHull        = ConcentricSimulatedHull<3, 5>;
 	using FireClusterHull = ConcentricSimulatedHull<1, 2>;
 	using BlastHull       = ConcentricSimulatedHull<3, 3>;
-	using SmokeHull       = RegularSimulatedHull<2, true>;
+	using SmokeHull       = RegularSimulatedHull<3, true>;
 	using WaveHull        = RegularSimulatedHull<2>;
 
 	void unlinkAndFreeFireHull( FireHull *hull );

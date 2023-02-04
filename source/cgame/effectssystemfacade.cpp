@@ -50,24 +50,6 @@ void EffectsSystemFacade::spawnGenericExplosionEffect( const float *origin, int 
 	spawnExplosionEffect( origin, dir, cgs.media.sfxRocketLauncherStrongHit, radius, true );
 }
 
-static const RgbaLifespan kExplosionSparksColors[3] {
-	{
-		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedIn  = { 1.0f, 0.6f, 0.3f, 1.0f },
-		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
-	},
-	{
-		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedIn  = { 1.0f, 0.8f, 0.4f, 1.0f },
-		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
-	},
-	{
-		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedIn  = { 1.0f, 0.7f, 0.5f, 1.0f },
-		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
-	},
-};
-
 // TODO: std::optional<std::pair<Vec3, Vec3>>
 [[nodiscard]]
 static bool findWaterHitPointBetweenTwoPoints( const float *checkFromPoint, const float *pointInWater,
@@ -258,6 +240,36 @@ static void makeRegularExplosionImpacts( const float *fireOrigin, float radius, 
 	}
 }
 
+
+static const RgbaLifespan kExplosionSparksColors[3] {
+	{
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.6f, 0.3f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
+	{
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.8f, 0.4f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
+	{
+		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
+		.fadedIn  = { 1.0f, 0.7f, 0.5f, 1.0f },
+		.fadedOut = { 0.5f, 0.5f, 0.5f, 0.3f },
+	},
+};
+
+static const LightLifespan kExplosionSparksFlareProps[1] {
+	{
+		.colorLifespan = {
+			.initial  = { 1.0f, 1.0f, 1.0f },
+			.fadedIn  = { 1.0f, 0.8f, 0.4f },
+			.fadedOut = { 1.0f, 0.6f, 0.3f }
+		},
+		.radiusLifespan = { .fadedIn = 10.0f },
+	}
+};
+
 static const RgbaLifespan kExplosionSmokeColors[3] {
 	{
 		.initial  = { 0.5f, 0.5f, 0.5f, 0.0f },
@@ -380,6 +392,11 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
 			.colors        = kExplosionSparksColors,
+			.flareProps    = Particle::FlareProps {
+				.lightProps                  = kExplosionSparksFlareProps,
+				.alphaScale                  = 0.08f,
+				.particleFrameAffinityModulo = 4,
+			},
 			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.25f, .spread = 0.25f } },
 		};
 
@@ -403,11 +420,14 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			.sizeBehaviour = Particle::Shrinking,
 		};
 
+		// Suppress the flare for sparks
+		appearanceRules.flareProps = std::nullopt;
+
 		flockParams.speed      = { .min = 550, .max = 650 };
 		flockParams.drag       = 0.01f;
 		flockParams.timeout    = { .min = 100, .max = 150 };
 		flockParams.percentage = { .min = 0.5f, .max = 1.0f };
-		flockParams.shiftSpeed = { .min = 50.0f, .max = 100.0f };
+		flockParams.shiftSpeed = { .min = 50.0f, .max = 65.0f };
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
@@ -417,8 +437,9 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 			flockParams.speed = { .min = 150.0f, .max = 225.0f };
 		}
 
-		flockParams.timeout    = { .min = 350, .max = 450 };
-		flockParams.percentage = { .min = 1.0f, .max = 1.0f };
+		flockParams.angularVelocity = { .min = 360.0f, .max = 2 * 360.0f };
+		flockParams.timeout         = { .min = 350, .max = 450 };
+		flockParams.percentage      = { .min = 1.0f, .max = 1.0f };
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -449,6 +470,17 @@ static const RgbaLifespan kPlasmaParticlesColors[1] {
 	}
 };
 
+static const LightLifespan kPlasmaParticlesFlareProps[1] {
+	{
+		.colorLifespan = {
+			.initial  = { 0.0f, 1.0f, 0.0f },
+			.fadedIn  = { 0.3f, 1.0f, 0.5f },
+			.fadedOut = { 0.7f, 1.0f, 0.7f },
+		},
+		.radiusLifespan = { .fadedIn = 10.0f },
+	}
+};
+
 void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const float *impactNormal, int mode ) {
 	const vec3_t soundOrigin { origin[0] + impactNormal[0], origin[1] + impactNormal[1], origin[2] + impactNormal[2] };
 	sfx_s *sfx = ( mode == FIRE_MODE_STRONG ) ? cgs.media.sfxPlasmaStrongHit : cgs.media.sfxPlasmaWeakHit;
@@ -460,12 +492,20 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 			.offset     = { impactNormal[0], impactNormal[1], impactNormal[2] },
 			.gravity    = 250.0f,
 			.percentage = { .min = 0.5f, .max = 0.8f },
-			.timeout    = { .min = 125, .max = 175 },
+			.timeout    = { .min = 125, .max = 150 },
 		};
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = kPlasmaParticlesColors,
-			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.5f, .spread = 0.25f } },
+			.flareProps    = Particle::FlareProps {
+				.lightProps                  = kPlasmaParticlesFlareProps,
+				.alphaScale                  = 0.08f,
+				.particleFrameAffinityModulo = 2,
+			},
+			.geometryRules = Particle::SpriteRules {
+				.radius        = { .mean = 1.5f, .spread = 0.5f },
+				.sizeBehaviour = Particle::ExpandingAndShrinking
+			},
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 	}
@@ -489,68 +529,19 @@ void EffectsSystemFacade::spawnGrenadeBounceEffect( int entNum, int mode ) {
 	startRelativeSound( sound, entNum, ATTN_IDLE );
 }
 
-static const RgbaLifespan kBloodColors[] {
-	{
-		.initial  = { 1.0f, 0.0f, 0.0f, 1.0f },
-		.fadedIn  = { 1.0f, 0.3f, 0.7f, 1.0f },
-		.fadedOut = { 0.9f, 0.3f, 0.7f, 1.0f },
-	},
-	{
-		.initial  = { 1.0f, 0.0f, 0.0f, 1.0f },
-		.fadedIn  = { 1.0f, 0.6f, 0.3f, 1.0f },
-		.fadedOut = { 0.9f, 0.5f, 0.0f, 1.0f },
-	},
-	{
-		.initial  = { 0.0f, 1.0f, 0.5f, 1.0f },
-		.fadedIn  = { 0.3f, 1.0f, 0.5f, 1.0f },
-		.fadedOut = { 0.0f, 0.5f, 0.0f, 1.0f }
-	},
-	{
-		.initial  = { 0.0f, 1.0f, 1.0f, 1.0f },
-		.fadedIn  = { 0.3f, 0.7f, 1.0f, 1.0f },
-		.fadedOut = { 0.0f, 0.7f, 1.0f, 1.0f },
-	},
-	{
-		.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedIn  = { 1.0f, 1.0f, 1.0f, 1.0f },
-		.fadedOut = { 0.3f, 0.3f, 0.3f, 1.0f },
-	},
+static const vec4_t kBloodColors[] {
+	{ 1.0f, 0.3f, 0.7f, 1.0f },
+	{ 1.0f, 0.6f, 0.3f, 1.0f },
+	{ 0.3f, 1.0f, 0.5f, 1.0f },
+	{ 0.3f, 0.7f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f, 1.0f },
 };
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
 	if( const int palette        = cg_bloodTrailPalette->integer ) {
 		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodColors ) - 1 );
 		const int baseTime       = wsw::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
-		const int timeSpread     = wsw::max( 50, baseTime / 8 );
-
-		ConicalFlockParams flockParams {
-			.origin        = { origin[0], origin[1], origin[2] },
-			.offset        = { 3.0f * dir[0], 3.0f * dir[1], 3.0f * dir[2] },
-			.dir           = { dir[0], dir[1], dir[2] },
-			.gravity       = -125.0f,
-			.angle         = 60.0f,
-			.speed         = { .min = 35.0f, .max = 75.0f },
-			.percentage    = { .min = 0.33f, .max = 0.33f + 0.67f * wsw::clamp( (float)damage * 0.01f, 0.00f, 0.99f ) },
-			.timeout       = {
-				.min = (unsigned)( baseTime - timeSpread / 2 ),
-				.max = (unsigned)( baseTime + timeSpread / 2 )
-			},
-		};
-		// We have to supply a buffer with a non-stack lifetime
-		// Looks nicer than std::fill in this case, even if it's "wrong" from a purist POV
-		m_bloodMaterials[0] = cgs.media.shaderBloodParticle;
-		m_bloodMaterials[1] = cgs.media.shaderBloodParticle;
-		m_bloodMaterials[2] = cgs.media.shaderBlastParticle;
-		Particle::AppearanceRules appearanceRules {
-			.materials      = m_bloodMaterials,
-			.colors         = { &kBloodColors[indexForStyle], 1 },
-			.numMaterials   = (uint8_t)std::size( m_bloodMaterials ),
-			.geometryRules  = Particle::SpriteRules {
-				.radius = { .mean = 1.50f, .spread = 0.75f }, .sizeBehaviour = Particle::Expanding
-			},
-		};
-		cg.particleSystem.addSmallParticleFlock( appearanceRules, flockParams );
-		const float *effectColor = kBloodColors[indexForStyle].fadedIn;
+		const float *effectColor = kBloodColors[indexForStyle];
 		m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damage, effectColor, (unsigned)baseTime );
 	}
 
@@ -782,6 +773,17 @@ static const RgbaLifespan kGunbladeBlastColors[3] {
 	},
 };
 
+static const LightLifespan kGunbladeBlastFlareProps[1] {
+	{
+		.colorLifespan = {
+			.initial  = { 1.0f, 0.8f, 0.5f },
+			.fadedIn  = { 1.0f, 0.8f, 0.4f },
+			.fadedOut = { 1.0f, 0.7f, 0.4f },
+		},
+		.radiusLifespan = { .fadedIn = 10.0f },
+	}
+};
+
 void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, const float *dir ) {
 	startSound( cgs.media.sfxGunbladeStrongHit[m_rng.nextBounded( 2 )], origin, ATTN_IDLE );
 
@@ -796,6 +798,11 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 		Particle::AppearanceRules appearanceRules {
 			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
 			.colors        = kGunbladeBlastColors,
+			.flareProps    = Particle::FlareProps {
+				.lightProps                  = kGunbladeBlastFlareProps,
+				.alphaScale                  = 0.09f,
+				.particleFrameAffinityModulo = 4,
+			},
 			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.50f, .spread = 0.25f } },
 		};
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
@@ -1041,7 +1048,7 @@ void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, con
 			.particleFrameAffinityModulo = 2,
 		},
 		.geometryRules = Particle::SparkRules {
-			.length        = { .mean = 5.0f, .spread = 1.0f },
+			.length        = { .mean = 7.0f, .spread = 1.0f },
 			.width         = { .mean = 0.75f, .spread = 0.05f },
 			.sizeBehaviour = Particle::Expanding
 		},
@@ -2017,11 +2024,11 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 				const unsigned lightAffinityModulo = totalNumRosetteImpacts;
 
 				if( maskBit & genericRosetteImpactsMask ) {
-					spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, lightAffinityIndex, lightAffinityModulo );
+					spawnBulletGenericImpactRosette( delay, orientation, 0.1f, 0.5f, lightAffinityIndex, lightAffinityModulo );
 				} else if( maskBit & metalRosetteImpactsMask ) {
 					spawnBulletMetalImpactRosette( delay, orientation, 0.1f, 0.5f, lightAffinityIndex, lightAffinityModulo );
 				} else {
-					spawnBulletGlassImpactRosette( delay, orientation, 0.3f, 0.6f, lightAffinityIndex, lightAffinityModulo );
+					spawnBulletGlassImpactRosette( delay, orientation, 0.1f, 0.5f, lightAffinityIndex, lightAffinityModulo );
 				}
 
 				// TODO: Postpone if needed
@@ -2040,7 +2047,7 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 			const SolidImpact &impact = impacts[i];
 			const unsigned delay      = delays[i];
 			const FlockOrientation orientation = makeRicochetFlockOrientation( impact, &m_rng );
-			spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, i, impacts.size() );
+			spawnBulletGenericImpactRosette( delay, orientation, 0.1f, 0.5f, i, impacts.size() );
 			// TODO: Postpone if needed
 			m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 		}
@@ -2380,7 +2387,7 @@ void EffectsSystemFacade::spawnElectroboltBeam( const vec3_t start, const vec3_t
 		.beamColorLifespan = RgbaLifespan {
 			.initial  = { 1.0f, 1.0f, 1.0f, color[3] },
 			.fadedIn  = { color[0], color[1], color[2], color[3] },
-			.fadedOut = { color[0], color[1], color[2], 0.0f },
+			.fadedOut = { 0.0f, 0.0f, 0.0f, 0.0f },
 			.finishFadingInAtLifetimeFrac = 0.2f,
 			.startFadingOutAtLifetimeFrac = 0.5f,
 		},
@@ -2431,7 +2438,7 @@ void EffectsSystemFacade::spawnInstagunBeam( const vec3_t start, const vec3_t en
 		.beamColorLifespan = RgbaLifespan {
 			.initial  = { 1.0f, 1.0f, 1.0f, color[3] },
 			.fadedIn  = { color[0], color[1], color[2], color[3] },
-			.fadedOut = { color[0], color[1], color[2], 0.0f },
+			.fadedOut = { 0.0f, 0.0f, 0.0f, 0.0f },
 			.finishFadingInAtLifetimeFrac = 0.2f,
 			.startFadingOutAtLifetimeFrac = 0.5f,
 		},

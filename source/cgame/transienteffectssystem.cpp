@@ -292,16 +292,16 @@ static SimulatedHullsSystem::CloudMeshProps g_smokeOuterLayerCloudMeshProps[2] {
 	{
 		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.25f, .fadedOut = 1.0f },
 		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 16.0f, .fadedOut = 0.0f },
-		.tessLevelShiftForMinVertexIndex = -2,
-		.tessLevelShiftForMaxVertexIndex = -1,
+		.tessLevelShiftForMinVertexIndex = -3,
+		.tessLevelShiftForMaxVertexIndex = -2,
 		.applyRotation                   = true,
 	},
 	{
 		.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 1.0f, .fadedOut = 1.0f },
 		.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 24.0f, .fadedOut = 0.0f },
-		.tessLevelShiftForMinVertexIndex = -0,
-		.tessLevelShiftForMaxVertexIndex = -0,
-		.shiftFromDefaultLevelToHide     = -1,
+		.tessLevelShiftForMinVertexIndex = -1,
+		.tessLevelShiftForMaxVertexIndex = -1,
+		.shiftFromDefaultLevelToHide     = -2,
 	},
 };
 
@@ -317,7 +317,7 @@ static SimulatedHullsSystem::CloudMeshProps g_fireInnerCloudMeshProps {
 
 static SimulatedHullsSystem::CloudMeshProps g_fireOuterCloudMeshProps {
 	.alphaScaleLifespan              = { .initial = 0.0f, .fadedIn = 0.75f, .fadedOut = 0.75f },
-	.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 7.0f, .fadedOut = 3.0f },
+	.radiusLifespan                  = { .initial = 0.0f, .fadedIn = 6.0f, .fadedOut = 3.0f },
 	.tessLevelShiftForMinVertexIndex = -1,
 	.tessLevelShiftForMaxVertexIndex = -0,
 	.shiftFromDefaultLevelToHide     = -1,
@@ -400,7 +400,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
 			{
-				.speed               = { .mean = 85.0f, .spread = 1.0f },
+				.speed               = { .mean = 85.0f, .spread = 15.0f },
 				.archimedesAccel     = {
 					.top    = { .initial = +125.0f, .fadedIn = +100.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
 					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = +75.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
@@ -414,7 +414,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.colorChangeTimeline = kSmokeHullHardLayerColorChangeTimeline,
 			},
 			{
-				.speed               = { .mean = 85.0f, .spread = 1.0f },
+				.speed               = { .mean = 85.0f, .spread = 15.0f },
 				.archimedesAccel     = {
 					.top    = { .initial = +130.0f, .fadedIn = +110.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f },
 					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = 75.0f, .startFadingOutAtLifetimeFrac = 0.5f },
@@ -470,7 +470,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			const auto spawnDelay = ( fireHullTimeout / 4 ) + m_rng.nextBoundedFast( fireHullTimeout / 4 );
 			auto *const effect = allocDelayedEffect( m_lastTime, fireOrigin, spawnDelay, ConcentricHullSpawnRecord {
 				.layerParams = clusterHullLayerParams,
-				.scale       = m_rng.nextFloat( 0.11f, 0.37f ) * fireHullScale,
+				.scale       = m_rng.nextFloat( 0.25f, 0.37f ) * fireHullScale,
 				.timeout     = fireHullTimeout / 3,
 				.allocMethod = (ConcentricHullSpawnRecord::AllocMethod)&SimulatedHullsSystem::allocFireClusterHull,
 				.vertexViewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutContour,

@@ -198,7 +198,6 @@ public:
 	CachedMaterial shaderSparkParticle { this, wsw::StringView( "gfx/misc/particle_spark" ) };
 	CachedMaterial shaderBlastParticle { this, wsw::StringView( "gfx/misc/particle_blast" ) };
 	CachedMaterial shaderDebrisParticle { this, wsw::StringView( "gfx/misc/particle_debris" ) };
-	CachedMaterial shaderBloodParticle { this, wsw::StringView( "gfx/misc/particle_blood" ) };
 	CachedMaterial shaderFlareParticle { this, wsw::StringView( "gfx/misc/particle_flare" ) };
 	CachedMaterial shaderElectroParticle { this, wsw::StringView( "gfx/misc/particle_electro" ) };
 
