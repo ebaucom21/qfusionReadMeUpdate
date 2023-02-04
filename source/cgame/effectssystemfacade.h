@@ -179,7 +179,18 @@ private:
 										  unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
 
 	void spawnBulletMetalImpactRosette( unsigned delay, const FlockOrientation &orientation,
+										float minPercentage, float maxPercentage,
 										unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
+
+	void spawnBulletGlassImpactRosette( unsigned delay, const FlockOrientation &orientation,
+										float minPercentage, float maxPercentage,
+										unsigned lightFrameAffinityIndex = 0, unsigned lightFrameAffinityModulo = 0 );
+
+	void spawnBulletImpactDoubleRosette( unsigned delay, const FlockOrientation &orientation,
+										 float minPercentage, float maxPercentage,
+										 unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo,
+										 const RgbaLifespan &startSpikeColorLifespan,
+										 const RgbaLifespan &endSpikeColorLifespan );
 
 	// Normally `delay` would have been a last default argument,
 	// but there are already fine tune parameters,
@@ -210,7 +221,7 @@ private:
 								   float upShiftScale, unsigned materialParam, float dustPercentageScale = 1.0f );
 
 	void spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
-									float upShiftScale, unsigned materialParam );
+									float upShiftScale, unsigned materialParam, float percentageScale );
 
 	void spawnBulletImpactParticleEffectForMaterial( unsigned delay, const FlockOrientation &flockOrientation,
 													 SurfImpactMaterial impactMaterial, unsigned materialParam );

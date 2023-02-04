@@ -911,9 +911,12 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( unsigned delay, const
 	});
 }
 
-void EffectsSystemFacade::spawnBulletMetalImpactRosette( unsigned delay, const FlockOrientation &orientation,
-														 unsigned lightFrameAffinityIndex,
-														 unsigned lightFrameAffinityModulo ) {
+void EffectsSystemFacade::spawnBulletImpactDoubleRosette( unsigned delay, const FlockOrientation &orientation,
+														  float minPercentage, float maxPercentage,
+														  unsigned lightFrameAffinityIndex,
+														  unsigned lightFrameAffinityModulo,
+														  const RgbaLifespan &startSpikeColorLifespan,
+														  const RgbaLifespan &endSpikeColorLifespan ) {
 	uint16_t innerLightFrameAffinityIndex, innerLightFrameAffinityModulo;
 	uint16_t outerLightFrameAffinityIndex, outerLightFrameAffinityModulo;
 	// Account for twice as many lights due to two rosettes
@@ -941,9 +944,9 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( unsigned delay, const F
 		.length             = { .mean = 32.5f, .spread = 7.5f },
 		.width              = { .mean = 1.75f, .spread = 0.25f },
 		.timeout            = { .min = 50, .max = 75 },
-		.count              = { .min = 4, .max = 7 },
-		.startColorLifespan = kBulletRosetteSpikeColorLifespan,
-		.endColorLifespan   = kBulletRosetteSpikeColorLifespan,
+		.count              = { .min = (unsigned)( 4 * minPercentage ), .max = (unsigned)( 7 * maxPercentage ) },
+		.startColorLifespan = startSpikeColorLifespan,
+		.endColorLifespan   = endSpikeColorLifespan,
 		.flareColorLifespan = kBulletRosetteFlareColorLifespan,
 		.lightLifespan      = kBulletRosetteLightLifespan,
 		.elementFlareFrameAffinityModulo = 2,
@@ -963,15 +966,44 @@ void EffectsSystemFacade::spawnBulletMetalImpactRosette( unsigned delay, const F
 		.length             = { .mean = 15.0f, .spread = 5.0f },
 		.width              = { .mean = 1.25f, .spread = 0.25f },
 		.timeout            = { .min = 50, .max = 75 },
-		.count              = { .min = 7, .max = 15 },
-		.startColorLifespan = kBulletRosetteSpikeColorLifespan,
-		.endColorLifespan   = kBulletRosetteSpikeColorLifespan,
+		.count              = { .min = (unsigned)( 7 * minPercentage ), .max = (unsigned)( 15 * maxPercentage ) },
+		.startColorLifespan = startSpikeColorLifespan,
+		.endColorLifespan   = endSpikeColorLifespan,
 		.flareColorLifespan = kBulletRosetteFlareColorLifespan,
 		.lightLifespan      = kBulletRosetteLightLifespan,
 		.elementFlareFrameAffinityModulo = 2,
 		.lightFrameAffinityModulo        = innerLightFrameAffinityModulo,
 		.lightFrameAffinityIndex         = innerLightFrameAffinityIndex,
 	});
+}
+
+void EffectsSystemFacade::spawnBulletMetalImpactRosette( unsigned delay, const FlockOrientation &orientation,
+														 float minPercentage, float maxPercentage,
+														 unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo ) {
+	spawnBulletImpactDoubleRosette( delay, orientation, minPercentage, maxPercentage,
+									lightFrameAffinityIndex, lightFrameAffinityModulo,
+									kBulletRosetteSpikeColorLifespan, kBulletRosetteSpikeColorLifespan );
+}
+
+static const RgbaLifespan kBulletGlassRosetteSpikeStartColorLifespan {
+	.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedIn  = { 1.0, 1.0, 1.0f, 1.0f },
+	.fadedOut = { 0.7f, 1.0f, 1.0f, 1.0f },
+};
+
+static const RgbaLifespan kBulletGlassRosetteSpikeEndColorLifespan {
+	.initial  = { 1.0f, 1.0f, 1.0f, 1.0f },
+	.fadedIn  = { 0.9f, 1.0f, 1.0f, 1.0f },
+	.fadedOut = { 0.3f, 1.0f, 1.0f, 1.0f },
+	.startFadingOutAtLifetimeFrac = 0.5f,
+};
+
+void EffectsSystemFacade::spawnBulletGlassImpactRosette( unsigned delay, const FlockOrientation &orientation,
+														 float minPercentage, float maxPercentage,
+														 unsigned lightFrameAffinityIndex, unsigned lightFrameAffinityModulo ) {
+	spawnBulletImpactDoubleRosette( delay, orientation, minPercentage, maxPercentage,
+									lightFrameAffinityIndex, lightFrameAffinityModulo,
+									kBulletGlassRosetteSpikeStartColorLifespan, kBulletGlassRosetteSpikeEndColorLifespan );
 }
 
 static const RgbaLifespan kBulletMetalRicochetColors[1] {
@@ -1409,32 +1441,49 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 static const RgbaLifespan kGlassDebrisColors[1] {
 	{
 		.initial  = { 1.0f, 1.0f, 1.0f, 0.0f },
-		.fadedIn  = { 0.8f, 1.0f, 0.9f, 1.0f },
-		.fadedOut = { 0.8f, 1.0f, 0.9f, 0.1f },
+		.fadedIn  = { 0.7f, 1.0f, 1.0f, 0.5f },
+		.fadedOut = { 0.7f, 1.0f, 1.0f, 0.0f },
+		.finishFadingInAtLifetimeFrac = 0.25f,
+		.startFadingOutAtLifetimeFrac = 0.50f,
 	}
 };
 
 void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
-													 float upShiftScale, unsigned materialParam ) {
+													 float upShiftScale, unsigned materialParam, float percentageScale ) {
 	Particle::AppearanceRules appearanceRules {
 		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
 		.colors        = kGlassDebrisColors,
 		.geometryRules = Particle::SparkRules {
-			.length = { .mean = 10.0f, .spread = 2.0f },
-			.width  = { .mean = 1.0f, .spread  = 0.1f },
+			.length           = { .mean = 2.5f, .spread = 1.0f },
+			.width            = { .mean = 2.5f, .spread = 1.0f },
+			.viewDirPartScale = 0.33f,
 		},
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity    = 0.0f,
-		.angle      = 15.0f,
-		.speed      = { .min = 400.0f, .max = 700.0f },
-		.percentage = { .min = 1.0f, .max = 1.0f },
-		.timeout    = { .min = 75, .max = 125 },
+		.gravity         = 1.5f * GRAVITY,
+		.drag            = 0.003f,
+		.angle           = 37.0f,
+		.speed           = { .min = 300.0f, .max = 500.0f },
+		.angularVelocity = { .min = 3 * 360.0f, .max = 7 * 360.0f },
+		.percentage      = { .min = 1.0f * percentageScale, .max = 1.0f * percentageScale },
+		.timeout         = { .min = 150, .max = 350 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
+
+	if( m_rng.tryWithChance( 0.33f ) ) {
+		appearanceRules.geometryRules = Particle::SparkRules {
+			.length           = { .mean = 5.5f, .spread = 1.5f },
+			.width            = { .mean = 5.5f, .spread = 1.5f },
+			.viewDirPartScale = 0.33f,
+		};
+
+		flockParams.percentage = { .min = 0.1f * percentageScale, .max = 0.3f * percentageScale };
+		flockParams.timeout    = { .min = 250, .max = 350 };
+		spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
+	}
 }
 
 void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidImpact &impact ) {
@@ -1449,9 +1498,11 @@ void EffectsSystemFacade::spawnBulletImpactEffect( unsigned delay, const SolidIm
 		// TODO: Using enum (doesn't work with GCC 10)
 		using IM = SurfImpactMaterial;
 		if( impactMaterial == IM::Metal ) {
-			spawnBulletMetalImpactRosette( delay, flockOrientation );
+			spawnBulletMetalImpactRosette( delay, flockOrientation, 1.0f, 1.0f );
 		} else if( impactMaterial == IM::Stone ) {
 			spawnBulletGenericImpactRosette( delay, flockOrientation, 0.5f, 1.0f );
+		} else if( impactMaterial == IM::Glass ) {
+			spawnBulletGlassImpactRosette( delay, flockOrientation, 0.5f, 1.0f );
 		} else if( impactMaterial == IM::Unknown ) {
 			spawnBulletGenericImpactRosette( delay, flockOrientation, 0.3f, 1.0f );
 		}
@@ -1515,7 +1566,7 @@ void EffectsSystemFacade::spawnBulletImpactParticleEffectForMaterial( unsigned d
 			spawnBulletMetalDebrisParticles( delay, flockOrientation, upShiftScale, materialParam, 0.3f, 0.9f );
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 1.0f );
 			break;
 	}
 }
@@ -1625,7 +1676,7 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( unsigned d
 			}
 			break;
 		case SurfImpactMaterial::Glass:
-			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.25f );
 			break;
 	}
 }
@@ -1674,7 +1725,7 @@ void EffectsSystemFacade::spawnExplosionImpactParticleEffectForMaterial( const F
 			break;
 		case SurfImpactMaterial::Glass:
 			delay = m_rng.nextBoundedFast( 100 );
-			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnGlassImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.25f );
 			break;
 	}
 }
@@ -1927,12 +1978,20 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 		using IM = SurfImpactMaterial;
 		assert( impacts.size() <= 64 );
 
-		uint64_t rosetteImpactsMask     = 0;
-		unsigned totalNumRosetteImpacts = 0;
+		uint64_t genericRosetteImpactsMask  = 0;
+		uint64_t metalRosetteImpactsMask    = 0;
+		uint64_t glassRosetteImpactsMask    = 0;
+		unsigned totalNumRosetteImpacts     = 0;
 		for( unsigned i = 0; i < impacts.size(); ++i ) {
 			const SurfImpactMaterial material = decodeSurfImpactMaterial( impacts[i].surfFlags );
-			if( material == IM::Metal || material == IM::Stone || material == IM::Unknown ) {
-				rosetteImpactsMask |= (uint64_t)1 << i;
+			if( material == IM::Stone || material == IM::Unknown ) {
+				genericRosetteImpactsMask |= (uint64_t)1 << i;
+				totalNumRosetteImpacts++;
+			} else if( material == IM::Metal ) {
+				metalRosetteImpactsMask |= (uint64_t)1 << i;
+				totalNumRosetteImpacts++;
+			} else if( material == IM::Glass ) {
+				glassRosetteImpactsMask |= (uint64_t)1 << i;
 				totalNumRosetteImpacts++;
 			}
 		}
@@ -1952,8 +2011,19 @@ void EffectsSystemFacade::spawnMultiplePelletImpactEffects( std::span<const Soli
 				spawnBulletLikeImpactRingUsingLimiter( delay, impact );
 			}
 
-			if( rosetteImpactsMask & ( (uint64_t)1 << i ) ) {
-				spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, numRosetteImpactsSoFar, totalNumRosetteImpacts );
+			const uint64_t maskBit = (uint64_t)1 << i;
+			if( maskBit & ( genericRosetteImpactsMask | metalRosetteImpactsMask | glassRosetteImpactsMask ) ) {
+				const unsigned lightAffinityIndex = numRosetteImpactsSoFar;
+				const unsigned lightAffinityModulo = totalNumRosetteImpacts;
+
+				if( maskBit & genericRosetteImpactsMask ) {
+					spawnBulletGenericImpactRosette( delay, orientation, 0.3f, 0.6f, lightAffinityIndex, lightAffinityModulo );
+				} else if( maskBit & metalRosetteImpactsMask ) {
+					spawnBulletMetalImpactRosette( delay, orientation, 0.1f, 0.5f, lightAffinityIndex, lightAffinityModulo );
+				} else {
+					spawnBulletGlassImpactRosette( delay, orientation, 0.3f, 0.6f, lightAffinityIndex, lightAffinityModulo );
+				}
+
 				// TODO: Postpone if needed
 				m_transientEffectsSystem.spawnPelletImpactModel( impact.origin, impact.normal );
 				numRosetteImpactsSoFar++;
