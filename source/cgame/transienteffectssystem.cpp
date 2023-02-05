@@ -748,6 +748,12 @@ static const SimulatedHullsSystem::HullLayerParams kBlastHullLayerParams[3] {
 	},
 };
 
+static SimulatedHullsSystem::CloudMeshProps g_blastHullCloudMeshProps {
+	.alphaScaleLifespan          = { .initial = 0.0f, .fadedIn = 0.1f, .fadedOut = 0.1f },
+	.radiusLifespan              = { .initial = 0.0f, .fadedIn = 4.0f, .fadedOut = 1.0f },
+	.shiftFromDefaultLevelToHide = -1,
+};
+
 void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin, const float *dir ) {
 	allocLightEffect( m_lastTime, origin, dir, 8.0f, 350u, LightLifespan {
 		.colorLifespan = {
@@ -766,6 +772,14 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 		hull->vertexViewDotFade          = SimulatedHullsSystem::ViewDotFade::FadeOutContour;
 		hull->layers[0].useDrawOnTopHack = true;
 		hull->layers[0].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
+
+		g_blastHullCloudMeshProps.material = cgs.media.shaderBlastParticle;
+
+		hull->appearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
+			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
+				.spanOfMeshProps = { &g_blastHullCloudMeshProps, 1 },
+			}
+		};
 	}
 
 	if( cg_explosionsWave->integer ) {
