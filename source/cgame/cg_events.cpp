@@ -149,7 +149,7 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 					.timeout      = { .min = 150, .max = 300 },
 				};
 				Particle::AppearanceRules appearanceRules {
-					.materials      = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+					.materials      = cgs.media.shaderLaserImpactParticle.getAddressOfHandle(),
 					.colors         = { singleColorAddress, singleColorAddress + 1 },
 					.geometryRules  = Particle::SpriteRules {
 						.radius = { .mean = 1.25f, .spread = 0.25f }, .sizeBehaviour = Particle::Shrinking
@@ -1166,7 +1166,7 @@ static void handleSparksEvent( entity_state_t *ent, int parm, bool predicted ) {
 		};
 
 		Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderMetalRicochetParticle.getAddressOfHandle(),
 			.colors        = { &kSparksColor, 1 },
 			.geometryRules = Particle::SparkRules { .length = { .mean = 4.0f }, .width = { .mean = 1.0f } },
 		};

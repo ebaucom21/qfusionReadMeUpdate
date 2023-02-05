@@ -469,7 +469,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_rocketSmokeParticlesFlockParams, {
-				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderRocketSmokeTrailParticle.getAddressOfHandle(),
 				.colors        = kRocketSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 20.0f, .spread = 1.5f }, .sizeBehaviour = Particle::Expanding
@@ -486,7 +486,7 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_rocketFireParticlesFlockParams, {
-				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderRocketFireTrailParticle.getAddressOfHandle(),
 				.colors        = kRocketFireTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 7.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
@@ -503,11 +503,11 @@ void TrackedEffectsSystem::touchRocketTrail( int entNum, const float *origin, in
 		[[maybe_unused]] const StraightPolyTrailProps *straightPolyTrailProps;
 		[[maybe_unused]] const CurvedPolyTrailProps *curvedPolyTrailProps;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
-			material               = cgs.media.shaderBlastParticle;
+			material               = cgs.media.shaderRocketPolyTrailCombined;
 			straightPolyTrailProps = &kRocketCombinedStraightPolyTrailProps;
 			curvedPolyTrailProps   = &kRocketCombinedCurvedPolyTrailProps;
 		} else {
-			material = cgs.shaderWhite;
+			material               = cgs.media.shaderRocketPolyTrailStandalone;
 			straightPolyTrailProps = &kRocketStandaloneStraightPolyTrailProps;
 			curvedPolyTrailProps   = &kRocketStandaloneCurvedPolyTrailProps;
 		}
@@ -589,7 +589,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_grenadeSmokeParticlesFlockParams, {
-				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderGrenadeSmokeTrailParticle.getAddressOfHandle(),
 				.colors        = kGrenadeSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 20.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
@@ -606,7 +606,7 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_grenadeFuseParticlesFlockParams, {
-				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderGrenadeFireTrailParticle.getAddressOfHandle(),
 				.colors        = kGrenadeFuseTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 7.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Shrinking,
@@ -623,10 +623,10 @@ void TrackedEffectsSystem::touchGrenadeTrail( int entNum, const float *origin, i
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const CurvedPolyTrailProps *props;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
-			material = cgs.media.shaderBlastParticle;
+			material = cgs.media.shaderGrenadePolyTrailCombined;
 			props    = &kGrenadeCombinedPolyTrailProps;
 		} else {
-			material = cgs.shaderWhite;
+			material = cgs.media.shaderGrenadePolyTrailStandalone;
 			props    = &kGrenadeStandalonePolyTrailProps;
 		}
 		if( !effects->curvedPolyTrail ) [[unlikely]] {
@@ -702,7 +702,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		if( !effects->particleTrails[0] ) [[unlikely]] {
 			effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kClippedTrailsBin,
 															 &::g_blastSmokeParticlesFlockParams, {
-				.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderBlastCloudTrailParticle.getAddressOfHandle(),
 				.colors        = kBlastSmokeTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 10.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding,
@@ -719,7 +719,7 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		if( !effects->particleTrails[1] ) [[unlikely]] {
 			effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kClippedTrailsBin,
 															 &::g_blastIonsParticlesFlockParams, {
-				.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+				.materials     = cgs.media.shaderBlastFireTrailParticle.getAddressOfHandle(),
 				.colors        = kBlastIonsTrailColors,
 				.geometryRules = Particle::SpriteRules {
 					.radius = { .mean = 3.0f, .spread = 0.75f }, .sizeBehaviour = Particle::Shrinking,
@@ -735,10 +735,10 @@ void TrackedEffectsSystem::touchBlastTrail( int entNum, const float *origin, int
 		[[maybe_unused]] shader_s *material;
 		[[maybe_unused]] const StraightPolyTrailProps *props;
 		if( cg_projectileSmokeTrail->integer || cg_projectileFireTrail->integer ) {
-			material = cgs.media.shaderBlastParticle;
+			material = cgs.media.shaderBlastPolyTrailCombined;
 			props    = &kBlastCombinedTrailProps;
 		} else {
-			material = cgs.shaderWhite;
+			material = cgs.media.shaderBlastPolyTrailStandalone;
 			props    = &kBlastStandaloneTrailProps;
 		}
 		if( !effects->straightPolyTrail ) {
@@ -826,7 +826,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	if( !effects->particleTrails[0] ) [[unlikely]] {
 		effects->particleTrails[0] = allocParticleTrail( entNum, 0, origin, kNonClippedTrailsBin,
 														 &::g_electroCloudParticlesFlockParams, {
-			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderElectroCloudTrailParticle.getAddressOfHandle(),
 			.colors        = cloudColors,
 			.geometryRules = Particle::SpriteRules {
 				.radius = { .mean = 9.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding,
@@ -841,7 +841,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	if( !effects->particleTrails[1] ) [[unlikely]] {
 		effects->particleTrails[1] = allocParticleTrail( entNum, 1, origin, kNonClippedTrailsBin,
 														 &::g_electroIonsParticlesFlockParams, {
-			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderElectroIonsTrailParticle.getAddressOfHandle(),
 			.colors        = ionsColors,
 			.geometryRules = Particle::SpriteRules {
 				.radius = { .mean = 3.0f, .spread = 0.75f }, .sizeBehaviour = Particle::Shrinking,
@@ -854,7 +854,7 @@ void TrackedEffectsSystem::touchElectroTrail( int entNum, int ownerNum, const fl
 	}
 
 	if( !effects->straightPolyTrail ) [[unlikely]] {
-		effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderBlastParticle,
+		effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderElectroPolyTrail,
 															 origin, &kElectroPolyTrailProps );
 	}
 	if( StraightPolyTrail *trail = effects->straightPolyTrail ) [[likely]] {
@@ -882,7 +882,7 @@ void TrackedEffectsSystem::touchStrongPlasmaTrail( int entNum, const float *orig
 	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->straightPolyTrail ) {
-			effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderElectroParticle,
+			effects->straightPolyTrail = allocStraightPolyTrail( entNum, cgs.media.shaderPlasmaPolyTrail,
 																 origin, &kPlasmaStrongPolyTrailProps );
 		}
 		if( StraightPolyTrail *trail = effects->straightPolyTrail ) {
@@ -896,7 +896,7 @@ void TrackedEffectsSystem::touchWeakPlasmaTrail( int entNum, const float *origin
 	if( cg_plasmaTrail->integer && cg_projectilePolyTrail->integer ) {
 		AttachedEntityEffects *effects = &m_attachedEntityEffects[entNum];
 		if( !effects->curvedPolyTrail ) {
-			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.media.shaderElectroParticle,
+			effects->curvedPolyTrail = allocCurvedPolyTrail( entNum, cgs.media.shaderPlasmaPolyTrail,
 															 &kPlasmaCurvedPolyTrailProps );
 		}
 		if( CurvedPolyTrail *trail = effects->curvedPolyTrail ) {

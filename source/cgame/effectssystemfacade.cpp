@@ -390,7 +390,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 	if( cg_particles->integer && !liquidContentsAtFireOrigin ) {
 		Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderExplosionSpriteParticle.getAddressOfHandle(),
 			.colors        = kExplosionSparksColors,
 			.flareProps    = Particle::FlareProps {
 				.lightProps                  = kExplosionSparksFlareProps,
@@ -414,13 +414,15 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 
 		cg.particleSystem.addMediumParticleFlock( appearanceRules, flockParams );
 
+		appearanceRules.materials = cgs.media.shaderExplosionSpikeParticle.getAddressOfHandle();
+
 		appearanceRules.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 25.0f, .spread = 7.5f },
 			.width         = { .mean = 4.0f, .spread = 1.0f },
 			.sizeBehaviour = Particle::Shrinking,
 		};
 
-		// Suppress the flare for sparks
+		// Suppress the flare for spikes
 		appearanceRules.flareProps = std::nullopt;
 
 		flockParams.speed      = { .min = 550, .max = 650 };
@@ -448,7 +450,7 @@ void EffectsSystemFacade::spawnExplosionEffect( const float *origin, const float
 		EllipsoidalFlockParams flockParams( kExplosionSmokeFlockParams );
 		VectorCopy( smokeOrigin, flockParams.origin );
 		Particle::AppearanceRules appearanceRules( kExplosionSmokeAppearanceRules );
-		appearanceRules.materials = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		appearanceRules.materials = cgs.media.shaderSmokeHullHardParticle.getAddressOfHandle();
 		m_transientEffectsSystem.addDelayedParticleEffect( 300, TransientEffectsSystem::ParticleFlockBin::Large,
 														   flockParams, appearanceRules );
 	}
@@ -495,7 +497,7 @@ void EffectsSystemFacade::spawnPlasmaExplosionEffect( const float *origin, const
 			.timeout    = { .min = 125, .max = 150 },
 		};
 		Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderPlasmaImpactParticle.getAddressOfHandle(),
 			.colors        = kPlasmaParticlesColors,
 			.flareProps    = Particle::FlareProps {
 				.lightProps                  = kPlasmaParticlesFlareProps,
@@ -609,7 +611,7 @@ void EffectsSystemFacade::spawnElectroboltHitEffect( const float *origin, const 
 		};
 
 		const Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderElectroImpactParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
 				.length = { .mean = 12.5f, .spread = 2.5f },
@@ -678,7 +680,7 @@ void EffectsSystemFacade::spawnInstagunHitEffect( const float *origin, const flo
 		};
 
 		const Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderInstaImpactParticle.getAddressOfHandle(),
 			.colors        = { singleColorAddress, 1 },
 			.geometryRules = Particle::SparkRules {
 				.length = { .mean = 10.0f, .spread = 2.5f },
@@ -742,7 +744,7 @@ void EffectsSystemFacade::spawnGunbladeBladeHitEffect( const float *pos, const f
 					.angle  = 60
 				};
 				Particle::AppearanceRules appearanceRules {
-					.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+					.materials     = cgs.media.shaderBladeImpactParticle.getAddressOfHandle(),
 					.colors        = kGunbladeHitColors,
 					.geometryRules = Particle::SparkRules {
 						.length = { .mean = 4.0f, .spread = 1.0f },
@@ -796,7 +798,7 @@ void EffectsSystemFacade::spawnGunbladeBlastHitEffect( const float *origin, cons
 			.percentage = { .min = 1.0f, .max = 1.0f },
 		};
 		Particle::AppearanceRules appearanceRules {
-			.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderBlastImpactParticle.getAddressOfHandle(),
 			.colors        = kGunbladeBlastColors,
 			.flareProps    = Particle::FlareProps {
 				.lightProps                  = kGunbladeBlastFlareProps,
@@ -900,7 +902,7 @@ void EffectsSystemFacade::spawnBulletGenericImpactRosette( unsigned delay, const
 
 	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderGenericImpactRosetteSpike,
-		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.flareMaterial      = cgs.media.shaderBulletImpactFlare,
 		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
 		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
 		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
@@ -941,7 +943,7 @@ void EffectsSystemFacade::spawnBulletImpactDoubleRosette( unsigned delay, const 
 
 	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteInnerSpike,
-		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.flareMaterial      = cgs.media.shaderBulletImpactFlare,
 		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
 		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
 		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
@@ -963,7 +965,7 @@ void EffectsSystemFacade::spawnBulletImpactDoubleRosette( unsigned delay, const 
 
 	spawnOrPostponeImpactRosetteEffect( delay, PolyEffectsSystem::ImpactRosetteParams {
 		.spikeMaterial      = cgs.media.shaderMetalImpactRosetteOuterSpike,
-		.flareMaterial      = cgs.media.shaderFlareParticle,
+		.flareMaterial      = cgs.media.shaderBulletImpactFlare,
 		.origin             = { orientation.origin[0], orientation.origin[1], orientation.origin[2] },
 		.offset             = { orientation.offset[0], orientation.offset[1], orientation.offset[2] },
 		.dir                = { -orientation.dir[0], -orientation.dir[1], -orientation.dir[2] },
@@ -1038,7 +1040,7 @@ void EffectsSystemFacade::spawnBulletMetalRicochetParticles( unsigned delay, con
 															 unsigned lightFrameAffinityIndex,
 															 unsigned lightFrameAffinityModulo ) {
 	const Particle::AppearanceRules appearanceRules {
-		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderMetalRicochetParticle.getAddressOfHandle(),
 		.colors        = kBulletMetalRicochetColors,
 		.lightProps    = kBulletMetalRicochetLightProps,
 		.flareProps    = Particle::FlareProps {
@@ -1116,7 +1118,7 @@ void EffectsSystemFacade::spawnBulletMetalDebrisParticles( unsigned delay, const
 	}
 
 	const Particle::AppearanceRules appearanceRules {
-		.materials      = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.materials      = cgs.media.shaderMetalDebrisParticle.getAddressOfHandle(),
 		.colors         = kBulletMetalDebrisColors,
 		.lightProps     = bulletMetalDebrisLightProps,
 		.flareProps     = Particle::FlareProps {
@@ -1162,7 +1164,7 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 												   float upShiftScale, unsigned materialParam,
 												   float dustPercentageScale ) {
 	const Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials           = cgs.media.shaderStoneDust.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
 			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
@@ -1188,7 +1190,7 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
 													float upShiftScale, unsigned materialParam ) {
 	const Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials           = cgs.media.shaderStuccoDust.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
 			.radius = { .mean = 55.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding
@@ -1233,7 +1235,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 														  float upShiftScale, unsigned materialParam,
 														  float debrisPercentageScale ) {
 	const Particle::AppearanceRules burstAppearanceRules {
-		.materials     = cgs.media.shaderDebrisParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderWoodBurstParticle.getAddressOfHandle(),
 		.colors        = kWoodImpactColors,
 		.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 20.0f, .spread = 3.0f },
@@ -1250,7 +1252,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	};
 
 	const Particle::AppearanceRules dustAppearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials           = cgs.media.shaderWoodDustParticle.getAddressOfHandle(),
 		.colors              = kWoodDustColors,
 		.geometryRules       = Particle::SpriteRules {
 			.radius = { .mean = 12.5f, .spread = 2.5f }, .sizeBehaviour = Particle::Expanding,
@@ -1267,7 +1269,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	};
 
 	const Particle::AppearanceRules debrisAppearanceRules {
-		.materials     = cgs.media.shaderBlastParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderWoodDebrisParticle.getAddressOfHandle(),
 		.colors        = kWoodImpactColors,
 		.geometryRules = Particle::SparkRules {
 			.length = { .mean = 5.0f, .spread = 1.5f },
@@ -1326,7 +1328,7 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	};
 
 	Particle::AppearanceRules burstStripesAppearanceRules {
-		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderDirtImpactBurst.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
 		.geometryRules = Particle::SparkRules {
 			.length        = { .mean = 30.0f, .spread = 10.0f },
@@ -1345,7 +1347,7 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	};
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
-		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderDirtImpactParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
 		.geometryRules = Particle::SpriteRules { .radius = { .mean = 3.0f }, .sizeBehaviour = Particle::Shrinking },
 	};
@@ -1359,7 +1361,7 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	};
 
 	Particle::AppearanceRules dustAppearanceRules {
-		.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderDirtImpactCloud.getAddressOfHandle(),
 		.colors        = kDirtDustColors,
 		.geometryRules = Particle::SpriteRules {
 			.radius = { .mean = 30.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
@@ -1410,7 +1412,7 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	};
 
 	const Particle::AppearanceRules burstParticlesAppearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials           = cgs.media.shaderSandImpactBurst.getAddressOfHandle(),
 		.colors              = kSandImpactColors,
 		.geometryRules       = Particle::SpriteRules {
 			.radius = { .mean = 3.0f }, .sizeBehaviour = Particle::Shrinking
@@ -1432,7 +1434,7 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	};
 
 	const Particle::AppearanceRules dustAppearanceRules {
-		.materials           = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+		.materials           = cgs.media.shaderSandImpactDust.getAddressOfHandle(),
 		.colors              = kSandDustColors,
 		.geometryRules       = Particle::SpriteRules {
 			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
@@ -1458,7 +1460,7 @@ static const RgbaLifespan kGlassDebrisColors[1] {
 void EffectsSystemFacade::spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
 													 float upShiftScale, unsigned materialParam, float percentageScale ) {
 	Particle::AppearanceRules appearanceRules {
-		.materials     = cgs.media.shaderSparkParticle.getAddressOfHandle(),
+		.materials     = cgs.media.shaderGlassDebrisParticle.getAddressOfHandle(),
 		.colors        = kGlassDebrisColors,
 		.geometryRules = Particle::SparkRules {
 			.length           = { .mean = 2.5f, .spread = 1.0f },
@@ -1846,13 +1848,13 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 	if( impact.contents & CONTENTS_WATER ) {
 		splashColors = kWaterSplashColors;
 		dustColors   = kWaterDustColors;
-		materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		materials    = cgs.media.shaderLiquidImpactCloud.getAddressOfHandle();
 	} else if( impact.contents & CONTENTS_SLIME ) {
 		// TODO: We don't actually have slime on default maps, do we?
 
 		splashColors = kSlimeSplashColors,
 		dustColors   = kSlimeDustColors,
-		materials    = cgs.media.shaderFlareParticle.getAddressOfHandle();
+		materials    = cgs.media.shaderLiquidImpactCloud.getAddressOfHandle();
 	} else if( impact.contents & CONTENTS_LAVA ) {
 		splashColors = kLavaSplashColors;
 		dustColors   = kLavaDustColors;
@@ -1865,7 +1867,7 @@ void EffectsSystemFacade::spawnLiquidImpactParticleEffect( unsigned delay, const
 		minDropsPercentage = 0.3f;
 		maxDropsPercentage = 0.5f;
 
-		materials = cgs.media.shaderSparkParticle.getAddressOfHandle();
+		materials = cgs.media.shaderLavaImpactDrop.getAddressOfHandle();
 	}
 
 	if( materials ) {
@@ -2290,7 +2292,7 @@ auto EffectsSystemFacade::spawnBulletTracer( int owner, const float *from, const
 	}
 
 	const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to, {
-		.material           = cgs.media.shaderSparkParticle,
+		.material           = cgs.media.shaderBulletTracer,
 		.alignForPovParams  = alignForPovParams,
 		.duration           = 200,
 		.prestepDistance    = m_rng.nextFloat( 72.0f, 96.0f ),
@@ -2313,7 +2315,7 @@ void EffectsSystemFacade::spawnPelletTracers( int owner, const float *from, std:
 
 	for( size_t i = 0; i < to.size(); ++i ) {
 		const std::optional<unsigned> maybeTimeout = cg.polyEffectsSystem.spawnTracerEffect( adjustedFrom, to[i], {
-			.material                 = cgs.media.shaderSparkParticle,
+			.material                 = cgs.media.shaderPelletTracer,
 			.duration                 = 125,
 			.prestepDistance          = m_rng.nextFloat( 32.0f, 72.0f ),
 			.width                    = m_rng.nextFloat( 0.9f, 1.0f ),

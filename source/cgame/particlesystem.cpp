@@ -650,10 +650,10 @@ void ParticleSystem::tryAddingFlares( ParticleFlock *flock, DrawSceneRequest *dr
 	assert( m_frameFlareParticles.size() == m_frameFlareColorLifespans.size() );
 
 	if( numAddedParticles ) {
-		const Particle *const addedParticles   = m_frameFlareParticles.data() + oldNumFrameFlareParticles;
+		const Particle *const addedParticles  = m_frameFlareParticles.data() + oldNumFrameFlareParticles;
 		const RgbaLifespan *const addedColors = m_frameFlareColorLifespans.data() + oldNumFrameFlareParticles;
 		m_frameFlareAppearanceRules.emplace_back( Particle::AppearanceRules {
-			.materials     = cgs.media.shaderFlareParticle.getAddressOfHandle(),
+			.materials     = cgs.media.shaderParticleFlare.getAddressOfHandle(),
 			.colors        = { addedColors, numAddedParticles },
 			.geometryRules = Particle::SpriteRules { .radius = { .mean = 1.0f } },
 		});

@@ -195,15 +195,76 @@ public:
 	CachedModel modInstagunWallHit { this, wsw::StringView( PATH_INSTABLAST_IMPACT_MODEL ) };
 	CachedModel modLasergunWallExplo { this, wsw::StringView( PATH_LASERGUN_IMPACT_MODEL ) };
 
-	CachedMaterial shaderSparkParticle { this, wsw::StringView( "gfx/misc/particle_spark" ) };
-	CachedMaterial shaderBlastParticle { this, wsw::StringView( "gfx/misc/particle_blast" ) };
-	CachedMaterial shaderDebrisParticle { this, wsw::StringView( "gfx/misc/particle_debris" ) };
-	CachedMaterial shaderFlareParticle { this, wsw::StringView( "gfx/misc/particle_flare" ) };
-	CachedMaterial shaderElectroParticle { this, wsw::StringView( "gfx/misc/particle_electro" ) };
+	CachedMaterial shaderLaserImpactParticle { this, wsw::StringView( "gfx/effects/laser_impact_particle" ) };
+	CachedMaterial shaderPlasmaImpactParticle { this, wsw::StringView( "gfx/effects/plasma_impact_particle" ) };
+	CachedMaterial shaderBlastImpactParticle { this, wsw::StringView( "gfx/effects/blast_impact_particle" ) };
 
-	CachedMaterial shaderGenericImpactRosetteSpike { this, wsw::StringView( "gfx/misc/impacts/generic_rosette_spike" ) };
-	CachedMaterial shaderMetalImpactRosetteInnerSpike { this, wsw::StringView( "gfx/misc/impacts/metal_rosette_inner_spike" ) };
-	CachedMaterial shaderMetalImpactRosetteOuterSpike { this, wsw::StringView( "gfx/misc/impacts/metal_rosette_outer_spike" ) };
+	CachedMaterial shaderWoodBurstParticle { this, wsw::StringView( "gfx/effects/wood_burst_particle" ) };
+	CachedMaterial shaderWoodDustParticle { this, wsw::StringView( "gfx/effects/wood_dust_particle" ) };
+	CachedMaterial shaderWoodDebrisParticle { this, wsw::StringView( "gfx/effects/wood_debris_particle" ) };
+
+	CachedMaterial shaderRocketSmokeTrailParticle { this, wsw::StringView( "gfx/effects/rocket_smoke_trail_particle" ) };
+	CachedMaterial shaderRocketFireTrailParticle { this, wsw::StringView( "gfx/effects/rocket_fire_trail_particle" ) };
+	CachedMaterial shaderRocketPolyTrailCombined { this, wsw::StringView( "gfx/effects/rocket_poly_trail_combined" ) };
+	CachedMaterial shaderRocketPolyTrailStandalone { this, wsw::StringView( "gfx/effects/rocket_poly_trail_standalone" ) };
+
+	CachedMaterial shaderGrenadeSmokeTrailParticle { this, wsw::StringView( "gfx/effects/grenade_smoke_trail_particle" ) };
+	CachedMaterial shaderGrenadeFireTrailParticle { this, wsw::StringView( "gfx/effects/grenade_fire_trail_particle" ) };
+	CachedMaterial shaderGrenadePolyTrailCombined { this, wsw::StringView( "gfx/effects/grenade_poly_trail_particle" ) };
+	CachedMaterial shaderGrenadePolyTrailStandalone { this, wsw::StringView( "gfx/effects/grenade_poly_trail_standalone" ) };
+
+	CachedMaterial shaderBlastCloudTrailParticle { this, wsw::StringView( "gfx/effects/blast_cloud_trail_particle" ) };
+	CachedMaterial shaderBlastFireTrailParticle { this, wsw::StringView( "gfx/effects/blast_fire_trail_particle" ) };
+	CachedMaterial shaderBlastPolyTrailCombined { this, wsw::StringView( "gfx/effects/blast_poly_trail_combined" ) };
+	CachedMaterial shaderBlastPolyTrailStandalone { this, wsw::StringView( "gfx/effects/blast_poly_trail_standalone" ) };
+
+	CachedMaterial shaderElectroCloudTrailParticle { this, wsw::StringView( "gfx/effects/electro_cloud_trail_particle" ) };
+	CachedMaterial shaderElectroIonsTrailParticle { this, wsw::StringView( "gfx/effects/electro_ions_trail_particle" ) };
+	CachedMaterial shaderElectroPolyTrail { this, wsw::StringView( "gfx/effects/electro_poly_trail" ) };
+
+	CachedMaterial shaderPlasmaPolyTrail { this, wsw::StringView( "gfx/effects/plasma_poly_trail" ) };
+
+	CachedMaterial shaderSmokeHullSoftParticle { this, wsw::StringView( "gfx/effects/smoke_hull_soft_particle" ) };
+	CachedMaterial shaderFireHullParticle { this, wsw::StringView( "gfx/effects/fire_hull_particle" ) };
+	CachedMaterial shaderBlastHullParticle { this, wsw::StringView( "gfx/effects/blast_hull_particle" ) };
+
+	CachedMaterial shaderSmokeHullHardParticle { this, wsw::StringView( "gfx/effects/smoke_hull_hard_particle" ) };
+
+	CachedMaterial shaderBulletImpactFlare { this, wsw::StringView( "gfx/effects/bullet_impact_flare" ) };
+
+	CachedMaterial shaderDirtImpactBurst { this, wsw::StringView( "gfx/effects/dirt_impact_burst" ) };
+	CachedMaterial shaderDirtImpactParticle { this, wsw::StringView( "gfx/effects/dirt_impact_particle" ) };
+	CachedMaterial shaderDirtImpactCloud { this, wsw::StringView( "gfx/effects/dirt_impact_cloud" ) };
+
+	CachedMaterial shaderSandImpactBurst { this, wsw::StringView( "gfx/effects/sand_impact_burst" )};
+
+	CachedMaterial shaderLavaImpactDrop { this, wsw::StringView( "gfx/effects/lava_impact_drop" ) };
+
+	CachedMaterial shaderLiquidImpactCloud { this, wsw::StringView( "gfx/effects/liquid_impact_cloud" ) };
+	CachedMaterial shaderSandImpactDust { this, wsw::StringView( "gfx/effects/sand_impact_dust" ) };
+	CachedMaterial shaderStoneDust { this, wsw::StringView( "gfx/effects/stone_dust" ) };
+	CachedMaterial shaderStuccoDust { this, wsw::StringView( "gfx/effects/stucco_dust" ) };
+
+	CachedMaterial shaderParticleFlare { this, wsw::StringView( "gfx/effects/particle_flare" ) };
+
+	CachedMaterial shaderExplosionSpikeParticle { this, wsw::StringView( "gfx/effects/explosion_spike_particle" ) };
+	CachedMaterial shaderExplosionSpriteParticle { this, wsw::StringView( "gfx/effects/explosion_sprite_particle" ) };
+
+	CachedMaterial shaderBulletTracer { this, wsw::StringView( "gfx/effects/bullet_tracer" ) };
+	CachedMaterial shaderPelletTracer { this, wsw::StringView( "gfx/effects/pellet_tracer" ) };
+
+	CachedMaterial shaderGenericImpactRosetteSpike { this, wsw::StringView( "gfx/effects/generic_impact_spike" ) };
+	CachedMaterial shaderMetalImpactRosetteInnerSpike { this, wsw::StringView( "gfx/effects/metal_impact_inner_spike" ) };
+	CachedMaterial shaderMetalImpactRosetteOuterSpike { this, wsw::StringView( "gfx/effects/metal_impact_outer_spike" ) };
+
+	CachedMaterial shaderElectroImpactParticle { this, wsw::StringView( "gfx/effects/electro_impact_particle" ) };
+	CachedMaterial shaderInstaImpactParticle { this, wsw::StringView( "gfx/effects/insta_impact_particle" ) };
+
+	CachedMaterial shaderMetalRicochetParticle { this, wsw::StringView( "gfx/effects/metal_ricochet_particle" ) };
+	CachedMaterial shaderMetalDebrisParticle { this, wsw::StringView( "gfx/effects/metal_debris_particle" ) };
+	CachedMaterial shaderGlassDebrisParticle { this, wsw::StringView( "gfx/effects/glass_debris_particle" ) };
+
+	CachedMaterial shaderBladeImpactParticle { this, wsw::StringView( "gfx/effects/blade_impact_particle" ) };
 
 	CachedMaterial shaderImpactRing { this, wsw::StringView( "gfx/misc/impact_ring" ) };
 

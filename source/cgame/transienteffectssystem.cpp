@@ -367,8 +367,8 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		hull->layers[1].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 
 		// We have to update material references due to invalidation upon restarts
-		g_fireInnerCloudMeshProps.material = cgs.media.shaderBlastParticle;
-		g_fireOuterCloudMeshProps.material = cgs.media.shaderBlastParticle;
+		g_fireInnerCloudMeshProps.material = cgs.media.shaderFireHullParticle;
+		g_fireOuterCloudMeshProps.material = cgs.media.shaderFireHullParticle;
 
 		g_fireInnerCloudAppearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
 			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
@@ -394,8 +394,8 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	}
 
 	if( smokeOrigin ) {
-		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderFlareParticle;
-		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderBlastParticle;
+		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderSmokeHullHardParticle;
+		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderSmokeHullSoftParticle;
 
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
@@ -773,7 +773,7 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 		hull->layers[0].useDrawOnTopHack = true;
 		hull->layers[0].overrideHullFade = SimulatedHullsSystem::ViewDotFade::NoFade;
 
-		g_blastHullCloudMeshProps.material = cgs.media.shaderBlastParticle;
+		g_blastHullCloudMeshProps.material = cgs.media.shaderBlastHullParticle;
 
 		hull->appearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
 			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
