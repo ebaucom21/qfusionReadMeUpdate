@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <limits>
 
-static ListenerProps listenerProps;
+ListenerProps listenerProps;
 
 static_assert( PanningUpdateState::MAX_POINTS == MAX_REVERB_PRIMARY_RAY_SAMPLES, "" );
 

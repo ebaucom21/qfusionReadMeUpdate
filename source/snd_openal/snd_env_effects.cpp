@@ -5,6 +5,9 @@
 #include <limits>
 #include <cmath>
 
+// TODO
+extern ListenerProps listenerProps;
+
 void Effect::CheckCurrentlyBoundEffect( src_t *src ) {
 	ALint effectType;
 
@@ -118,7 +121,10 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->reverbProps.decayHfRatio );
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->reverbProps.decayLfRatio );
 
-	alEffectf( src->effect, AL_EAXREVERB_GAIN, this->reverbProps.gain );
+	const float distanceGain = calcSoundGainForDistance( DistanceFast( src->origin, listenerProps.origin ) );
+	const float effectGain   = this->reverbProps.gain * ( 1.0f - 0.5f * distanceGain );
+
+	alEffectf( src->effect, AL_EAXREVERB_GAIN, effectGain );
 	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->reverbProps.gainHf );
 	alEffectf( src->effect, AL_EAXREVERB_GAINLF, this->reverbProps.gainLf );
 
