@@ -81,8 +81,12 @@ extern cvar_t *s_hrtf;
 
 void S_Clear( void );
 
+[[nodiscard]]
+static inline auto clampSourceGain( float givenVolume ) -> float {
+	return wsw::clamp( givenVolume, 0.0f, 1.0f );
+}
+
 // playing
-struct sfx_s *S_RegisterSound( const char *sample );
 
 void S_StartFixedSound( struct sfx_s *sfx, const vec3_t origin, int channel, float fvol, float attenuation );
 void S_StartRelativeSound( struct sfx_s *sfx, int entnum, int channel, float fvol, float attenuation );

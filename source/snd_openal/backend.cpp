@@ -325,9 +325,6 @@ static void S_Update( void ) {
 
 	S_UpdateStreams();
 
-	s_volume->modified = false; // Checked by src and stream
-	s_musicvolume->modified = false; // Checked by stream and music
-
 	if( s_doppler->modified ) {
 		if( s_doppler->value > 0.0f ) {
 			alDopplerFactor( s_doppler->value );

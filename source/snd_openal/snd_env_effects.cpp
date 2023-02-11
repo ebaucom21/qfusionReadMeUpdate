@@ -40,7 +40,7 @@ float Effect::GetSourceGain( src_s *src ) const {
 }
 
 void Effect::AdjustGain( src_t *src ) const {
-	alSourcef( src->source, AL_GAIN, GetSourceGain( src ) );
+	alSourcef( src->source, AL_GAIN, clampSourceGain( GetSourceGain( src ) ) );
 }
 
 void Effect::AttachEffect( src_t *src ) {
