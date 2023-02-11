@@ -121,8 +121,22 @@ void EaxReverbEffect::BindOrUpdate( src_t *src ) {
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_HFRATIO, this->reverbProps.decayHfRatio );
 	alEffectf( src->effect, AL_EAXREVERB_DECAY_LFRATIO, this->reverbProps.decayLfRatio );
 
-	const float distanceGain = calcSoundGainForDistance( DistanceFast( src->origin, listenerProps.origin ) );
-	const float effectGain   = this->reverbProps.gain * ( 1.0f - 0.5f * distanceGain );
+	const float globalVolumeFrac = clampSourceGain( s_volume->value );
+	assert( globalVolumeFrac >= 0.0f && globalVolumeFrac <= 1.0f );
+
+	const float distanceGainFrac = calcSoundGainForDistance( DistanceFast( src->origin, listenerProps.origin ) );
+	assert( distanceGainFrac >= 0.0f && distanceGainFrac <= 1.0f );
+
+	// The volume var is not the only thing that affects the analog output.
+	// A user could keep the var value small and raise the analog amplifier path gain.
+	// Keep the difference subtle.
+
+	// Attenuate nearby effects stronger for louder global volume
+	const float distanceDependentAttenuation   = 1.0f - ( ( 0.5f + 0.1f * globalVolumeFrac ) * distanceGainFrac );
+	// Attenuate all effects stronger for louder global value
+	const float distanceIndependentAttenuation = 1.0f - 0.1f * globalVolumeFrac;
+
+	const float effectGain = this->reverbProps.gain * distanceDependentAttenuation * distanceIndependentAttenuation;
 
 	alEffectf( src->effect, AL_EAXREVERB_GAIN, effectGain );
 	alEffectf( src->effect, AL_EAXREVERB_GAINHF, this->reverbProps.gainHf );
