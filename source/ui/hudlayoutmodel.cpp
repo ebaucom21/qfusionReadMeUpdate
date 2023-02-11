@@ -275,6 +275,16 @@ void HudEditorLayoutModel::writeAnchor( wsw::StaticString<32> *buffer, int ancho
 	( *buffer ) << first << '|' << second;
 }
 
+// -Wdeprecated-enum-enum-conversion
+[[nodiscard]]
+constexpr auto operator|( HudLayoutModel::HorizontalAnchorBits lhs, HudLayoutModel::VerticalAnchorBits rhs ) -> int {
+	return (int)lhs | (int)rhs;
+}
+[[nodiscard]]
+constexpr auto operator|( HudLayoutModel::VerticalAnchorBits lhs, HudLayoutModel::HorizontalAnchorBits rhs ) -> int {
+	return (int)lhs | (int)rhs;
+}
+
 // Pairs are arranged in their priority order
 
 const HudLayoutModel::AnchorPair HudLayoutModel::kMatchingItemAndItemAnchorPairs[] {

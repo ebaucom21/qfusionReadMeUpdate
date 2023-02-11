@@ -865,7 +865,6 @@ static const char *SV_Web_ResponseCodeMessage( http_response_code_t code ) {
 static void SV_Web_RouteRequest( const sv_http_request_t *request, sv_http_response_t *response,
 								 char **content, size_t *content_length ) {
 	const char *resource = request->resource;
-	const char *query_string = request->query_string;
 
 	*content = NULL;
 	*content_length = 0;

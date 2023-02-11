@@ -362,7 +362,7 @@ auto findFirstExtension( const wsw::StringView &name, const wsw::StringView *beg
 
 	// Compatibility conversions, should eventually be gone
 	const char *extensions[16];
-	if( end - begin >= std::size( extensions ) ) {
+	if( (size_t)( end - begin ) >= std::size( extensions ) ) {
 		return std::nullopt;
 	}
 
@@ -379,7 +379,7 @@ auto findFirstExtension( const wsw::StringView &name, const wsw::StringView *beg
 	}
 
 	// This is an additional validation for a reverse conversion, should be gone as well
-	bool found = false;
+	[[maybe_unused]] bool found = false;
 	wsw::StringView rawResultView( rawResult );
 	for( const wsw::StringView *ext = begin; ext != end; ++ext ) {
 		if( ext->equalsIgnoreCase( rawResultView ) ) {

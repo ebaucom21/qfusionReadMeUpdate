@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "snd_local.h"
-#include <snd_cmdque.h>
 #include "snd_env_effects.h"
 #include "snd_env_sampler.h"
 

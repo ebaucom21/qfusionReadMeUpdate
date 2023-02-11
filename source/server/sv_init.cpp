@@ -230,7 +230,7 @@ static void SV_SpawnServer( const char *server, bool devmap ) {
 	sv.configStrings.setMapCheckSum( tmp.asView() );
 
 	// reserve the first modelIndexes for inline models
-	for( unsigned i = 1; i < CM_NumInlineModels( svs.cms ); i++ ) {
+	for( int i = 1; i < CM_NumInlineModels( svs.cms ); i++ ) {
 		(void)tmp.assignf( "*%d", i );
 		sv.configStrings.setModel( tmp.asView(), i );
 	}

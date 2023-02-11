@@ -446,7 +446,7 @@ int ScheduleWeaponJumpAction::ReachTestNearbyTargetAreas( PredictionContext *con
 	const auto aasAreas = aasWorld->getAreas();
 
 	int reachNum;
-	int travelTimeFromAreaToTarget;
+	int travelTimeFromAreaToTarget = 0;
 	// Travel times from the bot to a spot and back
 	int directTravelTime;
 	std::optional<uint16_t> reverseTravelTime;
@@ -524,7 +524,7 @@ bool ScheduleWeaponJumpAction::TryShortcutReachChain( PredictionContext *context
 	int numRawAreas = GetCandidatesForReachChainShortcut( context, areaNums );
 	int numFilteredAreas = FilterRawCandidateAreas( context, areaNums, numRawAreas );
 
-	if( numFilteredAreas > 5 - 4.0f * EstimateMapComputationalComplexity() ) {
+	if( numFilteredAreas > (int)( 5 - 4.0f * EstimateMapComputationalComplexity() ) ) {
 		if( !TryGetComputationQuota() ) {
 			return false;
 		}

@@ -64,7 +64,7 @@ auto toNum( const char *s, const char **endPtr = nullptr ) -> std::optional<T> {
 			}
 			// Catch overflow for unsigned long long values
 			if constexpr( sizeof( T ) == 8 ) {
-				if( val == (long long)maxVal || val == (long long)minVal ) {
+				if( val == (unsigned long long)maxVal || val == (unsigned long long)minVal ) {
 					if( errno == ERANGE ) {
 						return std::nullopt;
 					}

@@ -58,7 +58,8 @@ public:
 		auto multiresult = (uint64_t)( random32bit * (uint64_t)range );
 		auto leftover    = (uint32_t)multiresult;
 		if( leftover < range ) {
-			uint32_t threshold = -range % range;
+			// Originally -range % range
+			const uint32_t threshold = ( ~range + 1u ) % range;
 			while( leftover < threshold ) {
 				random32bit = next();
 				multiresult = random32bit * range;

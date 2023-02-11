@@ -1622,8 +1622,6 @@ static void RequestActions() {
 	};
 
 	for( const edict_t *ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients; ent++ ) {
-		const Client *client = ent->r.client;
-
 		if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 			continue;
 		}

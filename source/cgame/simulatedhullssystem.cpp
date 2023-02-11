@@ -1658,7 +1658,7 @@ static MeshTesselationHelper meshTesselationHelper;
 
 template <SimulatedHullsSystem::ViewDotFade Fade>
 [[nodiscard]]
-static inline wsw_forceinline auto calcAlphaFracForViewDirDotNormal( const float *__restrict viewDir,
+static wsw_forceinline auto calcAlphaFracForViewDirDotNormal( const float *__restrict viewDir,
 																	 const float *__restrict normal ) -> float {
 	assert( std::fabs( VectorLengthFast( viewDir ) - 1.0f ) < 0.001f );
 	assert( std::fabs( VectorLengthFast( normal ) - 1.0f ) < 0.001f );
@@ -1681,7 +1681,7 @@ static inline wsw_forceinline auto calcAlphaFracForViewDirDotNormal( const float
 
 template <SimulatedHullsSystem::ZFade ZFade>
 [[nodiscard]]
-static inline wsw_forceinline auto calcAlphaFracForDeltaZ( float z, float minZ, float rcpDeltaZ ) -> float {
+static wsw_forceinline auto calcAlphaFracForDeltaZ( float z, float minZ, float rcpDeltaZ ) -> float {
 	if constexpr( ZFade == SimulatedHullsSystem::ZFade::FadeOutBottom ) {
 		assert( z >= minZ );
 		return ( z - minZ ) * rcpDeltaZ;

@@ -152,11 +152,10 @@ auto BotTacticalSpotsCache::findNearbyEntities( const Vec3 &origin, float radius
 		return {};
 	}
 
-	const unsigned maxCachedEntities = std::size( cacheEntry->entNums );
-	// Find more than maxCachedEntities entities in radius (most entities will usually be filtered out)
+	// Find more entities in radius than we can store (most entities will usually be filtered out)
 
 	int radiusEntNums[64];
-	assert( maxCachedEntities < std::size( radiusEntNums ) );
+	assert( std::size( cacheEntry->entNums ) < std::size( radiusEntNums ) );
 	int numRadiusEntities = GClip_FindInRadius( origin.Data(), radius, radiusEntNums, std::size( radiusEntNums ) );
 	// Note that this value might be greater than the buffer capacity (an actual number of entities is returned)
 	numRadiusEntities = wsw::min<int>( numRadiusEntities, std::size( radiusEntNums ) );

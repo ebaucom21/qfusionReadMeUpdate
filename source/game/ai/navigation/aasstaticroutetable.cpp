@@ -8,9 +8,10 @@
 #include <cinttypes>
 
 #ifdef WSW_USE_SSE2
-#include <x86intrin.h>
 #ifdef _MSC_VER
 #include <intrin.h>
+#else
+#include <x86intrin.h>
 #endif
 #endif
 
@@ -70,7 +71,7 @@ AasStaticRouteTable::~AasStaticRouteTable() {
 }
 
 static constexpr const char *kFileTag   = "RouteTable";
-static constexpr const int kFileVersion = 1339;
+static constexpr const int kFileVersion = 1340;
 
 bool AasStaticRouteTable::loadFromFile( const char *filePath ) {
 	AiPrecomputedFileReader reader( kFileTag, kFileVersion );
@@ -374,7 +375,7 @@ bool AasStaticRouteTable::compute() {
 	m_dataForAllowedFlags.entriesDataSizeInElems = allowedBuilder.entries.size();
 
 	m_walkingAreaNums = makeHeapAllocCopy( walkingBuilder.nums );
-	m_walkingAreaNumsDataSizeInElems = walkingBuilder.entries.size();
+	m_walkingAreaNumsDataSizeInElems = walkingBuilder.nums.size();
 	m_walkingTravelTimes = makeHeapAllocCopy( walkingBuilder.entries );
 	m_walkingTravelTimesDataSizeInElems = walkingBuilder.entries.size();
 
@@ -494,9 +495,9 @@ static auto findIndexOrAreaInAreaNumsArray( const uint16_t *areaNums, int areaNu
 #endif
 
 #if defined( WSW_USE_SSE2 )
-	constexpr unsigned kNumVectorsPerStep = 2;
-	constexpr unsigned kNumAreasPerVector = sizeof( __m128i ) / sizeof( uint16_t );
-	constexpr unsigned kNumAreasPerStep   = kNumVectorsPerStep * kNumAreasPerVector;
+	constexpr unsigned kNumVectorsPerStep                = 2;
+	constexpr unsigned kNumAreasPerVector                = sizeof( __m128i ) / sizeof( uint16_t );
+	[[maybe_unused]] constexpr unsigned kNumAreasPerStep = kNumVectorsPerStep * kNumAreasPerVector;
 
 	assert( numAreasInSpan < numEntriesInSpan + kNumAreasPerStep );
 	assert( !( numAreasInSpan % kNumAreasPerStep ) );

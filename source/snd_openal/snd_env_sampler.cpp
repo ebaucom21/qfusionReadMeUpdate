@@ -147,6 +147,10 @@ static inline void ENV_CollectForcedEnvironmentUpdates() {
 		if( !src->isActive ) {
 			continue;
 		}
+		// Music? TODO: It should not share sources with regular sounds...
+		if( !src->sfx ) {
+			continue;
+		}
 
 		if( src->priority != SRCPRI_LOCAL ) {
 			priorityQueue.AddSource( src, 1.0f );
@@ -172,6 +176,10 @@ static void ENV_CollectRegularEnvironmentUpdates() {
 
 	for( src = srclist, end = srclist + src_count; src != end; ++src ) {
 		if( !src->isActive ) {
+			continue;
+		}
+		// Music? TODO: It should not share sources with regular sounds...
+		if( !src->sfx ) {
 			continue;
 		}
 

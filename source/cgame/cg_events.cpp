@@ -111,11 +111,9 @@ static void _LaserImpact( trace_t *trace, vec3_t dir ) {
 		return;
 	}
 
-	if( laserOwner ) {
-#define TRAILTIME ( (int)( 1000.0f / 20.0f ) ) // density as quantity per second
-
+	if( laserOwner && !trace->allsolid ) {
 		// Track it regardless of cg_particles settings to prevent hacks with toggling the var on/off
-		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + TRAILTIME < cg.time ) {
+		if( laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] + 32 <= cg.time ) {
 			laserOwner->localEffects[LOCALEFFECT_LASERBEAM_SMOKE_TRAIL] = cg.time;
 
 			if( cg_particles->integer ) {
@@ -469,8 +467,15 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode ) {
 }
 
 [[nodiscard]]
-static bool canShowBulletImpactForSurface( const trace_t &trace ) {
+static bool canShowBulletImpactForDirAndTrace( const float *incidentDir, const trace_t &trace ) {
+	if( trace.allsolid ) {
+		return false;
+	}
 	if( trace.surfFlags & ( SURF_NOIMPACT | SURF_FLESH ) ) {
+		return false;
+	}
+	// Wtf how does it happen
+	if( DotProduct( trace.plane.normal, incidentDir ) > 0 ) {
 		return false;
 	}
 	const auto entNum = trace.ent;
@@ -527,7 +532,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 	if( waterTrace ) {
 		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, origin, waterTrace->endpos );
 
-		if( canShowBulletImpactForSurface( trace ) ) {
+		if( canShowBulletImpactForDirAndTrace( dir, trace ) ) {
 			cg.effectsSystem.spawnUnderwaterBulletImpactEffect( delay, trace.endpos, trace.plane.normal );
 		}
 
@@ -540,7 +545,7 @@ static void CG_Event_FireMachinegun( vec3_t origin, vec3_t dir, int weapon, int 
 		}
 	} else {
 		[[maybe_unused]] const unsigned delay = cg.effectsSystem.spawnBulletTracer( owner, origin, trace.endpos );
-		if( canShowBulletImpactForSurface( trace ) ) {
+		if( canShowBulletImpactForDirAndTrace( dir, trace ) ) {
 			cg.effectsSystem.spawnBulletImpactEffect( delay, SolidImpact {
 				.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 				.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },
@@ -582,7 +587,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 		trace_t trace;
 		const trace_t *waterTrace = GS_TraceBullet( &trace, start, dir, r, u, range, owner, 0 );
 		if( waterTrace ) {
-			const bool shouldShowUnderwaterImpact = canShowBulletImpactForSurface( trace );
+			const bool shouldShowUnderwaterImpact = canShowBulletImpactForDirAndTrace( dir, trace );
 			if( shouldShowUnderwaterImpact ) {
 				// We don't know the delay yet
 				VectorCopy( trace.endpos, underwaterImpactOrigins[numUnderwaterImpacts] );
@@ -610,7 +615,7 @@ static void CG_Fire_SunflowerPattern( vec3_t start, vec3_t dir, int *seed, int o
 			VectorCopy( waterTrace->endpos, tracerTargets[numTracerTargets] );
 			numTracerTargets++;
 		} else {
-			if( canShowBulletImpactForSurface( trace ) ) {
+			if( canShowBulletImpactForDirAndTrace( dir, trace ) ) {
 				solidImpacts[numSolidImpacts] = SolidImpact {
 					.origin      = { trace.endpos[0], trace.endpos[1], trace.endpos[2] },
 					.normal      = { trace.plane.normal[0], trace.plane.normal[1], trace.plane.normal[2] },

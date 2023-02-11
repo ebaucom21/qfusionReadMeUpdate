@@ -49,10 +49,10 @@ protected:
 	}
 
 	[[nodiscard]]
-	static constexpr auto realChunkSize(unsigned userVisibleSize, unsigned alignment ) -> unsigned {
+	static constexpr auto realChunkSize( unsigned userVisibleSize, unsigned alignment ) -> unsigned {
 		static_assert( sizeof( Header ) == 2 * sizeof( void * ) );
 		// We need to ensure that Header pointers are aligned properly too
-		return pad( userVisibleSize + sizeof( Header ), alignment >= alignof( Header ) ? alignment : alignof( Header ) );
+		return (unsigned)pad( userVisibleSize + sizeof( Header ), alignment >= alignof( Header ) ? alignment : alignof( Header ) );
 	}
 
 	void lockMembers() {

@@ -426,7 +426,7 @@ typedef struct cg_state_s {
 extern cg_static_t cgs;
 extern cg_state_t cg;
 
-#define ISVIEWERENTITY( entNum )  ( ( cg.predictedPlayerState.POVnum > 0 ) && ( (int)cg.predictedPlayerState.POVnum == entNum ) && ( cg.view.type == VIEWDEF_PLAYERVIEW ) )
+#define ISVIEWERENTITY( entNum )  ( ( cg.predictedPlayerState.POVnum > 0 ) && ( (int)cg.predictedPlayerState.POVnum == (int)( entNum ) ) && ( cg.view.type == VIEWDEF_PLAYERVIEW ) )
 #define ISBRUSHMODEL( x ) ( ( ( x > 0 ) && ( (int)x < CG_NumInlineModels() ) ) ? true : false )
 
 #define ISREALSPECTATOR()       ( cg.frame.playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR )

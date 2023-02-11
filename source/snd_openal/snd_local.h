@@ -30,7 +30,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../gameshared/q_cvar.h"
 #include "../qcommon/qcommon.h"
 #include "../client/snd_public.h"
-#include "snd_cmdque.h"
 
 #define AL_ALEXT_PROTOTYPES
 

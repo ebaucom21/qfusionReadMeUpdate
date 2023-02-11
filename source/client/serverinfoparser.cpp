@@ -252,7 +252,7 @@ bool ServerInfoParser::handleMatchTime( const wsw::StringView &value ) {
 		return false;
 	}
 
-	if( ptr - value.data() == value.size() ) {
+	if( (size_t)( ptr - value.data() ) == value.size() ) {
 		return true;
 	}
 
@@ -307,7 +307,7 @@ bool ServerInfoParser::handleMatchTime( const wsw::StringView &value ) {
 			return true;
 		}
 
-		if( ptr - value.data() >= value.size() ) {
+		if( (size_t)( ptr - value.data() ) >= value.size() ) {
 			return false;
 		}
 	}
@@ -327,16 +327,16 @@ bool ServerInfoParser::handleMatchScore( const wsw::StringView &value ) {
 	const char *const valueData = value.data();
 	const char *s = valueData;
 	for( int i = 0; i < 2; ++i ) {
-		while( *s == ' ' && ( s - valueData ) < valueLength ) {
+		while( *s == ' ' && (size_t)( s - valueData ) < valueLength ) {
 			s++;
 		}
 		offsets[i] = (unsigned)( s - valueData );
 		// Should not use strchr here (there is no zero terminator at the end of the value)
-		while( *s != ':' && ( s - valueData ) < valueLength ) {
+		while( *s != ':' && (size_t)( s - valueData ) < valueLength ) {
 			s++;
 		}
 
-		if( ( s - valueData ) >= valueLength ) {
+		if( (size_t)( s - valueData ) >= valueLength ) {
 			return false;
 		}
 		lengths[i] = (unsigned)( s - valueData ) - offsets[i];

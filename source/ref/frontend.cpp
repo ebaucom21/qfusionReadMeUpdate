@@ -273,7 +273,7 @@ void Frontend::set2DMode( bool enable ) {
 
 auto Frontend::tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t * {
 	if( shader ) {
-		if( m_state.numPortalSurfaces == MAX_PORTAL_SURFACES ) {
+		if( m_state.numPortalSurfaces < MAX_PORTAL_SURFACES ) {
 			const bool depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
 			if( !R_FASTSKY() || !depthPortal ) {
 				portalSurface_t *portalSurface = &m_state.portalSurfaces[m_state.numPortalSurfaces++];

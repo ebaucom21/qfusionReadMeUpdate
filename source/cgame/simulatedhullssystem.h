@@ -286,7 +286,16 @@ private:
 		vec3_t storageOfBurstVelocities[kNumVertices];
 		vec3_t storageOfForceVelocities[kNumVertices];
 		byte_vec4_t storageOfColors[kNumVertices];
+
+		// TODO: Allocate storage manually instead of specifying it as a member?
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable: 4200 )
+#endif
 		vec4_t storageOfNormals[CalcNormals ? kNumVertices : 0];
+#ifdef _MSC_VER
+#pragma warning( pop )
+#endif
 
 		RegularSimulatedHull() {
 			this->vertexPositions[0]    = storageOfPositions[0];

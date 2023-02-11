@@ -10,7 +10,7 @@ namespace wsw {
 enum class LogLineCategory : uint8_t { Common, Server, Client, Sound, Renderer, UI, GameShared, CGame, Game, AI };
 enum class LogLineSeverity : uint8_t { Debug, Info, Warning, Error };
 
-struct LogLineStream {
+class LogLineStream {
 	friend auto createLogLineStream( LogLineCategory, LogLineSeverity ) -> LogLineStream *;
 	friend void submitLogLineStream( LogLineStream * );
 	friend class ::LogLineStreamsAllocator;

@@ -284,8 +284,8 @@ bool ServerList::parsePlayerInfo( msg_t *msg_, ServerInfo *serverInfo ) {
 		s++;
 	}
 
-	int score, ping, team;
-	char *endptr;
+	int score = 0, ping = 0, team = 0;
+	char *endptr = nullptr;
 
 	for(;; ) {
 		if( s - chars >= bytesLeft ) {

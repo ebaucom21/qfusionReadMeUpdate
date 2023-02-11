@@ -19,9 +19,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "snd_local.h"
-#include "snd_cmdque.h"
 #include "snd_env_sampler.h"
 #include "alsystemfacade.h"
+
+typedef struct qbufPipe_s sndCmdPipe_t;
 
 static ALCdevice *alDevice;
 static ALCcontext *alContext;

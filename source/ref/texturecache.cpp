@@ -174,7 +174,7 @@ auto TextureCache::findFreePortalTexture( unsigned width, unsigned height, int f
 			// the texture is used in the current scene
 			continue;
 		}
-		if( texture->width == width && texture->height == height && texture->flags == flags ) {
+		if( (unsigned)texture->width == width && (unsigned)texture->height == height && texture->flags == flags ) {
 			return std::make_tuple( texture, i, true );
 		}
 		if( bestSlot == std::nullopt ) {

@@ -458,7 +458,7 @@ int RunStatusQuery::GetQueryField( const char *fieldName ) {
 		G_Printf( fmt, S_COLOR_YELLOW, tag, value, fieldName );
 		return -1;
 	}
-	if( (double)( (volatile int)value ) != value ) {
+	if( (double)( (int)value ) != value ) {
 		const char *fmt = "%s%s: The value %ld for field %s cannot be exactly represented as int\n";
 		G_Printf( fmt, S_COLOR_YELLOW, tag, value, fieldName );
 	}

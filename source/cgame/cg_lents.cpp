@@ -261,7 +261,6 @@ void CG_AddLocalEntities( DrawSceneRequest *drawSceneRequest ) {
 	entity_t *ent;
 	float scale, frac, fade, time, scaleIn, fadeIn;
 	float backlerp;
-	vec3_t angles;
 
 	time = (float)cg.frameTime * 0.001f;
 	backlerp = 1.0f - cg.lerpfrac;

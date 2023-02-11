@@ -71,7 +71,7 @@ Vec3 TrackedEnemy::LookDir() const {
 static inline bool HasAmmoForWeapon( const Client *client, int weapon ) {
 	assert( weapon >= WEAP_NONE && weapon < WEAP_TOTAL );
 	const auto *inventory = client->ps.inventory;
-	constexpr int shifts[2] = { ( AMMO_GUNBLADE - WEAP_GUNBLADE ), ( AMMO_WEAK_GUNBLADE - WEAP_GUNBLADE ) };
+	constexpr int shifts[2] = { (int)AMMO_GUNBLADE - (int)WEAP_GUNBLADE, (int)AMMO_WEAK_GUNBLADE - (int)WEAP_GUNBLADE };
 	static_assert( shifts[0] > 0 && shifts[1] > 0, "" );
 	return ( inventory[weapon + shifts[0]] | inventory[weapon + shifts[1]] ) != 0;
 }

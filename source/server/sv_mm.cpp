@@ -288,7 +288,7 @@ void SVStatsowFacade::CheckMatchUuid() {
 void SVFetchMatchUuidTask::OnQuerySuccess() {
 	const char *tag = "OnQuerySuccess";
 
-	ScopeGuard scopeGuard( [=]() { parent->continueFetchUuidTask = false; } );
+	ScopeGuard scopeGuard( [this]() { parent->continueFetchUuidTask = false; } );
 
 	if( !CheckResponseStatus( tag ) ) {
 		return;
@@ -338,8 +338,8 @@ void SVClientConnectTask::OnQuerySuccess() {
 		return;
 	}
 
-	ScopeGuard scopeGuard( [=]() { OnAnyOutcome(); } );
-	ScopeGuard failureGuard( [=]() { OnAnyFailure(); } );
+	ScopeGuard scopeGuard( [this]() { OnAnyOutcome(); } );
+	ScopeGuard failureGuard( [this]() { OnAnyFailure(); } );
 
 	const char *tag = "OnQuerySuccess";
 
@@ -631,7 +631,7 @@ void SVLoginTask::OnQueryFailure() {
 }
 
 void SVLoginTask::OnQuerySuccess() {
-	ScopeGuard failureGuard([=]() { OnAnyFailure(); });
+	ScopeGuard failureGuard([this]() { OnAnyFailure(); });
 
 	constexpr const char *const tag = "OnQuerySuccess";
 	if( !CheckResponseStatus( tag ) ) {

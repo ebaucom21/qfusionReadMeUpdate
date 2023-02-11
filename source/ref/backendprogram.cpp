@@ -2110,7 +2110,7 @@ void RB_DrawWireframeElements( const FrontendToBackendShared *fsh ) {
 	r_triLinesPass.rgbgen.type = RGB_GEN_CONST;
 	VectorCopy( r_triLinesColor + 0, r_triLinesPass.rgbgen.args );
 	r_triLinesPass.alphagen.type = ALPHA_GEN_CONST;
-	VectorCopy( r_triLinesColor + 3, r_triLinesPass.alphagen.args );
+	VectorSet( r_triLinesPass.alphagen.args, r_triLinesColor[3], r_triLinesColor[3], r_triLinesColor[3] );
 	r_triLinesPass.flags = 0;
 	r_triLinesPass.images[0] = TextureCache::instance()->whiteTexture();
 	r_triLinesPass.anim_fps = 0;

@@ -219,7 +219,7 @@ void AiAasRouteCache::InitTravelFlagFromType() {
 void AiAasRouteCache::InitDefaultBlockedAreasDigest( const AiAasWorld &aasWorld ) {
 	const auto aasAreaSettings = aasWorld.getAreaSettings();
 	bool *const blockedAreasTable = AasElementsMask::BlockedAreasTable();
-	for( int i = 0; i < aasAreaSettings.size(); ++i ) {
+	for( size_t i = 0; i < aasAreaSettings.size(); ++i ) {
 		blockedAreasTable[i] = (bool)( aasAreaSettings[i].areaflags & AREA_DISABLED );
 	}
 
@@ -267,7 +267,7 @@ void AiAasRouteCache::SetDisabledZones( DisableZoneRequest **requests, int numRe
 	const auto numAreas = aasAreaSettings.size();
 
 	// First, save old area statuses and set new ones as non-blocked
-	for( int i = 0; i < numAreas; ++i ) {
+	for( size_t i = 0; i < numAreas; ++i ) {
 		areaPathFindingData[i].disabledStatus.ShiftCurrToOldStatus();
 	}
 
@@ -282,7 +282,7 @@ void AiAasRouteCache::SetDisabledZones( DisableZoneRequest **requests, int numRe
 	bool metCustomBlockedAreas = false;
 	// For each selected area mark area as disabled.
 	// Put a global (static) disabled status of an area too.
-	for( int i = 0; i < numAreas; ++i ) {
+	for( size_t i = 0; i < numAreas; ++i ) {
 		// Check this before merging with global blocked status!
 		metCustomBlockedAreas = metCustomBlockedAreas | blockedAreasTable[i];
 		// Make sure we not only set disabled status but update blocked areas table as well
@@ -295,7 +295,7 @@ void AiAasRouteCache::SetDisabledZones( DisableZoneRequest **requests, int numRe
 
 	// For each area compare its old and new status
 	bool shouldClearCache = false;
-	for( int i = 0; i < numAreas; ++i ) {
+	for( size_t i = 0; i < numAreas; ++i ) {
 		const auto &status = areaPathFindingData[i].disabledStatus;
 		// TODO: We can test multiple statuses using SIMD
 		if( status.OldStatus() != status.CurrStatus() ) {
@@ -1033,7 +1033,7 @@ void AiAasRouteCache::InitClusterAreaCache() {
 	clusterAreaCache = (AreaOrPortalCacheTable ***)ptr;
 
 	ptr += numClusters * sizeof( AreaOrPortalCacheTable ** );
-	for( int i = 0; i < numClusters; i++ ) {
+	for( size_t i = 0; i < numClusters; i++ ) {
 		clusterAreaCache[i] = CastCheckingAlignment<AreaOrPortalCacheTable *>( ptr );
 		ptr += aasClusters[i].numareas * sizeof( AreaOrPortalCacheTable * );
 	}

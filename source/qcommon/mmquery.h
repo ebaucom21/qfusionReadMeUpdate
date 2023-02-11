@@ -932,8 +932,8 @@ class alignas( 8 )JsonWriter {
 
 		int64_t CheckPrecisionLoss( int64_t value ) {
 			// Try to prevent optimizing out this
-			volatile double dValue = value;
-			if( (volatile int64_t)dValue != value ) {
+			const volatile auto dValue = (double)value;
+			if( (int64_t)dValue != value ) {
 				QueryObject::FailWith( "Can't store %" PRIi64 " in double without precision loss", value );
 			}
 			return value;

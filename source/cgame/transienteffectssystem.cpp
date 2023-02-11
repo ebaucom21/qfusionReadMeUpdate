@@ -397,6 +397,10 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		g_smokeOuterLayerCloudMeshProps[0].material = cgs.media.shaderSmokeHullHardParticle;
 		g_smokeOuterLayerCloudMeshProps[1].material = cgs.media.shaderSmokeHullSoftParticle;
 
+		SimulatedHullsSystem::CloudAppearanceRules cloudRulesMsvcWorkaround {
+			.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps,
+		};
+
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
 			{
@@ -427,9 +431,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.zFade               = SimulatedHullsSystem::ZFade::FadeOutBottom,
 				.colorChangeTimeline = kSmokeHullSoftLayerColorChangeTimeline,
 				.appearanceRules     = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
-					.cloudRules      = SimulatedHullsSystem::CloudAppearanceRules {
-						.spanOfMeshProps = g_smokeOuterLayerCloudMeshProps,
-					},
+					.cloudRules      = cloudRulesMsvcWorkaround,
 				},
 			},
 		};
@@ -775,10 +777,12 @@ void TransientEffectsSystem::spawnGunbladeBlastImpactEffect( const float *origin
 
 		g_blastHullCloudMeshProps.material = cgs.media.shaderBlastHullParticle;
 
+		SimulatedHullsSystem::CloudAppearanceRules cloudRulesMsvcWorkaround {
+			.spanOfMeshProps = { &g_blastHullCloudMeshProps, 1 },
+		};
+
 		hull->appearanceRules = SimulatedHullsSystem::SolidAndCloudAppearanceRules {
-			.cloudRules = SimulatedHullsSystem::CloudAppearanceRules {
-				.spanOfMeshProps = { &g_blastHullCloudMeshProps, 1 },
-			}
+			.cloudRules = cloudRulesMsvcWorkaround,
 		};
 	}
 

@@ -505,7 +505,7 @@ public:
 	}
 
 	static const RespectToken &TokenForNum( int num ) {
-		assert( (int)num < TOKENS.size() );
+		assert( (size_t)num < TOKENS.size() );
 		assert( TOKENS[num].TokenNum() == num );
 		return TOKENS[num];
 	}

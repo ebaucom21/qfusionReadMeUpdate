@@ -56,9 +56,9 @@ int BuiltinWeaponTier( int builtinWeapon ) {
 }
 
 int FindBestWeaponTier( const Client *client ) {
-	const auto *inventory = client->ps.inventory;
-	constexpr int ammoShift = AMMO_GUNBLADE - WEAP_GUNBLADE;
-	constexpr int weakAmmoShift = AMMO_WEAK_GUNBLADE - WEAP_GUNBLADE;
+	const auto *inventory       = client->ps.inventory;
+	constexpr int ammoShift     = (int)AMMO_GUNBLADE - (int)WEAP_GUNBLADE;
+	constexpr int weakAmmoShift = (int)AMMO_WEAK_GUNBLADE - (int)WEAP_GUNBLADE;
 
 	int maxTier = 0;
 	for( int weapon = WEAP_GUNBLADE; weapon < WEAP_TOTAL; ++weapon ) {

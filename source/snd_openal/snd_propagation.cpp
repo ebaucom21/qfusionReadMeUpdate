@@ -1821,7 +1821,7 @@ void PropagationBuilderTask::BuildInfluxDirForLeaf( float *allocatedDir, const i
 			// can pass for the most part and can have much greater contribution to an actually used fake source dir.
 
 			// Lets hope this happens rarely enough to avoid caching leaf centers
-			vec3_t centers[2];
+			vec3_t centers[2] {};
 			for( int j = 0; j < 2; ++j ) {
 				const vec3_t *const bounds = S_GetLeafBounds( leafsChain[i] );
 				VectorSubtract( bounds[1], bounds[0], centers[i] );
@@ -1835,7 +1835,7 @@ void PropagationBuilderTask::BuildInfluxDirForLeaf( float *allocatedDir, const i
 		}
 
 		// Continue accumulating dirs coming from other leafs to the first one.
-		vec3_t dir;
+		vec3_t dir { 0.0f, 0.0f, 0.0f };
 		if( !graphInstance->GetDirFromLeafToLeaf( leafsChain[i], leafsChain[0], dir ) ) {
 			assert( 0 && "Should not be reached" );
 		}

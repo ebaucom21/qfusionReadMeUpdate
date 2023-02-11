@@ -110,7 +110,7 @@ void ALSoundSystem::endRegistration() {
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
-	S_ForEachBuffer( [=]( sfx_t *sfx ) {
+	S_ForEachBuffer( [this]( sfx_t *sfx ) {
 		if( sfx->filename[0] && sfx->registration_sequence != s_registration_sequence ) {
 			m_freeSfxCall.exec( sfx->id );
 		}
@@ -119,7 +119,7 @@ void ALSoundSystem::endRegistration() {
 	// wait for the queue to be processed
 	QBufPipe_Finish( m_pipe );
 
-	S_ForEachBuffer( [=]( sfx_t *sfx ) {
+	S_ForEachBuffer( []( sfx_t *sfx ) {
 		if( sfx->registration_sequence && sfx->registration_sequence != s_registration_sequence ) {
 			S_MarkBufferFree( sfx );
 		}

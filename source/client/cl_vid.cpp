@@ -283,7 +283,7 @@ static auto getBestFittingMode( int requestedWidth, int requestedHeight ) -> std
 	for( unsigned i = 0; i < vid_num_modes; ++i ) {
 		const auto &mode = vid_modes[i];
 		const auto absDiff = std::abs( mode.width - requestedWidth );
-		assert( absDiff < std::numeric_limits<unsigned>::max() >> 1 );
+		assert( absDiff < std::numeric_limits<int>::max() >> 1 );
 		// Set a penalty bit for modes with lesser than requested width
 		const unsigned penalty = ( absDiff << 1u ) | ( mode.width >= requestedWidth ? 0 : 1 );
 		if( leastWidthPenalty > penalty ) {

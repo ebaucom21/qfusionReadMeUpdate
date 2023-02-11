@@ -189,7 +189,7 @@ void SurfExtraFlagsCache::loadIfNeeded() {
 	// TODO: Add sanity limits
 	if( std::optional<wsw::Vector<char>> maybeFileData = loadDataFromFile( "maps/custom_surf_params.txt"_asView ) ) {
 		const wsw::CharLookup lineSeparators( "\0\r\n"_asView );
-		const wsw::CharLookup tokenSeparators( []( char ch ) { return std::isspace( ch ); } );
+		const wsw::CharLookup tokenSeparators( []( char ch ) { return ::isspace( ch ); } );
 		wsw::Vector<char> fileData( std::move( *maybeFileData ) );
 		wsw::StringSplitter lineSplitter( wsw::StringView( fileData.data(), fileData.size() ) );
 		while( const auto maybeLineTokenAndLineNum = lineSplitter.getNextWithNum( lineSeparators ) ) {

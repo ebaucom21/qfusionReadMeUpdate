@@ -192,25 +192,20 @@ static void G_UpdateServerInfo( void ) {
 		if( g_disable_vote_gametype->integer || !g_votable_gametypes->string || !strlen( g_votable_gametypes->string ) ) {
 			trap_Cvar_ForceSet( "g_gametypes_available", "" );
 		} else {
-			char *votable;
-			char *name;
-			size_t len;
-			int count;
-
-			len = 0;
+			size_t len = 0;
 
 			const wsw::StringView viewOfGametypesList( g_gametypes_list->string );
-			{
+			do {
 				wsw::StringSplitter splitter( viewOfGametypesList );
 				while( const auto maybeName = splitter.getNext( CHAR_GAMETYPE_SEPARATOR ) ) {
 					if( G_Gametype_IsVotable( *maybeName ) ) {
 						len += maybeName->length() + 1;
 					}
 				}
-			}
+			} while( false );
 
 			len++;
-			votable = ( char * )Q_malloc( len );
+			char *votable = ( char * )Q_malloc( len );
 			votable[0] = 0;
 
 			wsw::StringSplitter splitter( viewOfGametypesList );
@@ -786,7 +781,7 @@ public:
 	CMBenchmark() noexcept {
 		const auto *const ents = game.edicts;
 		for( int i = gs.maxclients + 1, end = game.numentities; i < end; ++i ) {
-			if( const auto *ent = &game.edicts[i]; isASuitableEntity( ent ) ) {
+			if( const auto *ent = &ents[i]; isASuitableEntity( ent ) ) {
 				m_ents.push_back( ent );
 			}
 		}

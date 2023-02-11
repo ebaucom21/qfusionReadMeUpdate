@@ -44,7 +44,7 @@ bool SideStepDodgeProblemSolver::findSingle( vec_t *spotOrigin ) {
 	}
 
 	float velocityInfluence = 0.0f;
-	vec3_t velocityDir;
+	vec3_t velocityDir { 0.0f, 0.0f, 0.0f };
 	// Perform deferred retrieval of these additional parameters
 	if( const auto *originEntity = originParams.originEntity ) {
 		if( Bot *bot = originEntity->bot ) {

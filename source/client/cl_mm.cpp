@@ -361,7 +361,7 @@ void CLConnectTask::OnQueryFailure() {
 }
 
 void CLConnectTask::OnQuerySuccess() {
-	ScopeGuard scopeGuard([=]() { OnAnyOutcome(); });
+	ScopeGuard scopeGuard([this]() { OnAnyOutcome(); });
 
 	constexpr const char *const tag = "OnQuerySuccess";
 
@@ -662,7 +662,7 @@ void CLStartLoggingInTask::OnQueryFailure() {
 void CLStartLoggingInTask::OnQuerySuccess() {
 	constexpr const char *const tag = "OnQuerySuccess";
 	
-	ScopeGuard failureGuard( [=]() {
+	ScopeGuard failureGuard( [this]() {
 		parent->ErrorMessage( name, tag, "Login failure" );
 		parent->OnLoginFailure();
 	});
@@ -692,7 +692,7 @@ void CLContinueLoggingInTask::OnQuerySuccess() {
 
 	Com_DPrintf( "%s::%s(): The raw response is `%s`\n", name, tag, query->RawResponse() ? query->RawResponse() : "" );
 
-	ScopeGuard failureGuard( [=]() {
+	ScopeGuard failureGuard( [this]() {
 		parent->ErrorMessage( name, tag, "Login failure" );
 		parent->OnLoginFailure();
 	});

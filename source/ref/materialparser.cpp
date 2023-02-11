@@ -675,9 +675,6 @@ bool MaterialParser::parseMaterial() {
 
 	pass->images[1] = pass->images[2] = pass->images[3] = nullptr;
 
-	// set defaults
-	const auto mipSize = m_minMipSize.value_or( 1 );
-
 	pass->images[1] = textureCache->getMaterial2DTexture( m_name, kNormSuffix, imageFlags );
 
 	// load glossmap image
@@ -1193,7 +1190,7 @@ auto MaterialParser::parseCondition() -> std::optional<bool> {
 
 	int numTokens = 0;
 	for(;; ) {
-		const auto oldCurrTokenNum = m_lexer->getCurrTokenNum();
+		[[maybe_unused]] const auto oldCurrTokenNum = m_lexer->getCurrTokenNum();
 		// First, just check whether there's a next token in line. This is a shared preliminary condition.
 		if( m_lexer->getNextTokenInLine() == std::nullopt ) {
 			if( numTokens == 0 ) {

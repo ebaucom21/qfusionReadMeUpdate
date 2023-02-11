@@ -229,7 +229,7 @@ static const std::pair<unsigned, GLint> kFloatInternalFormatForSamples[4] {
 };
 
 [[nodiscard]]
-auto getRegularTexImageFormats( int flags, int samples ) -> GLTexImageFormats {
+auto getRegularTexImageFormats( unsigned flags, unsigned samples ) -> GLTexImageFormats {
 	const GLint *swizzleMask = kSwizzleMaskIdentity;
 	GLenum format, type;
 	GLint internalFormat;
@@ -671,7 +671,7 @@ auto TextureFactory::createLightmapArray( unsigned w, unsigned h, unsigned numLa
 
 void TextureFactory::replaceLightmapLayer( Texture *texture, unsigned layer, const uint8_t *data ) {
 	assert( texture );
-	assert( layer < texture->layers );
+	assert( layer < (unsigned)texture->layers );
 
 	// TODO: Store these properties in a LightmapTextureArray instance
 	const auto [internalFormat, format] = getLightmapFormatsForSamples( texture->samples );
@@ -860,11 +860,11 @@ auto TextureFactory::createBuiltinParticleTexture() -> Texture * {
 
 	ptrdiff_t offset = 0;
 	constexpr int halfSide = (int)side / 2;
-	for( int pixNum = 0; pixNum < (int)side * side; ++pixNum ) {
+	for( int pixNum = 0; pixNum < (int)( side * side ); ++pixNum ) {
 		const int x = pixNum % (int)side;
 		const int y = pixNum / (int)side;
-		const auto dx = x - halfSide;
-		const auto dy = y - halfSide;
+		const int dx = x - halfSide;
+		const int dy = y - halfSide;
 		const uint8_t value = ( dx * dx + dy * dy < halfSide * halfSide ) ? 255 : 0;
 		p[offset + 0] = value;
 		p[offset + 1] = value;

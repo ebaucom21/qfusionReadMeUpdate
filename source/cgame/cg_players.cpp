@@ -217,7 +217,7 @@ static void CG_ParseClientInfo( cg_clientInfo_t *ci, const char *info ) {
 * Updates cached client info from the current CS_PLAYERINFOS configstring value
 */
 void CG_LoadClientInfo( unsigned client, const wsw::StringView &s ) {
-	assert( client < gs.maxclients );
+	assert( client < (unsigned)gs.maxclients );
 	CG_ParseClientInfo( &cgs.clientInfo[client], s.data() );
 }
 

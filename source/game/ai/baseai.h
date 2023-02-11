@@ -202,6 +202,8 @@ public:
 
 	// Returns number of start areas to use in routing
 	inline int PrepareRoutingStartAreas( int *areaNums ) const {
+		areaNums[0] = areaNums[1] = 0;
+
 		int numAreas = 0;
 
 		if( int areaNum = CurrAasAreaNum() ) {

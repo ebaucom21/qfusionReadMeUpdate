@@ -204,7 +204,7 @@ void mixReverbProps( const EfxReverbProps **begin, const EfxReverbProps **end, E
 	assert( begin < end );
 	const float normalizer = Q_Rcp( (float)( end - begin ) );
 
-	std::memset( dest, 0, sizeof( *dest ) );
+	std::memset( (void *)dest, 0, sizeof( *dest ) );
 
 	dest->decayHfLimit = ( *begin )->decayHfLimit;
 	const EfxReverbProps **ppPreset = begin;

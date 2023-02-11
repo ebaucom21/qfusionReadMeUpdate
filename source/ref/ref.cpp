@@ -632,7 +632,7 @@ void R_CopyOffsetTriangles( const elem_t *inelems, int numElems, int vertsOffset
 }
 
 void R_BuildTrifanElements( int vertsOffset, int numVerts, elem_t *elems ) {
-	for( unsigned i = 2; i < numVerts; i++, elems += 3 ) {
+	for( int i = 2; i < numVerts; i++, elems += 3 ) {
 		elems[0] = vertsOffset;
 		elems[1] = vertsOffset + i - 1;
 		elems[2] = vertsOffset + i;
@@ -1585,8 +1585,8 @@ static bool isExtensionSupported( const char *ext ) {
 	GLint numExtensions;
 	qglGetIntegerv( GL_NUM_EXTENSIONS, &numExtensions );
 	// CBA to speed it up as this is required only on starting up
-	for( unsigned i = 0; i < numExtensions; ++i ) {
-		if( !Q_stricmp( ext, (const char *)qglGetStringi( GL_EXTENSIONS, i ) ) ) {
+	for( GLint i = 0; i < numExtensions; ++i ) {
+		if( !Q_stricmp( ext, (const char *)qglGetStringi( GL_EXTENSIONS, (GLuint)i ) ) ) {
 			return true;
 		}
 	}

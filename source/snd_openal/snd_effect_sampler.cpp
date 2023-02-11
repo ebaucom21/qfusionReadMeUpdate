@@ -110,12 +110,12 @@ void ObstructedEffectSampler::SetupDirectObstructionSamplingProps( src_t *src, u
 }
 
 struct DirectObstructionOffsetsHolder {
-	enum { NUM_VALUES = 256 };
+	static constexpr unsigned NUM_VALUES = 256;
 	vec3_t offsets[NUM_VALUES];
-	enum { MAX_OFFSET = 20 };
+	static constexpr float MAX_OFFSET = 20.0f;
 
 	DirectObstructionOffsetsHolder() {
-		for( auto *v: offsets ) {
+		for( float *v: offsets ) {
 			for( int i = 0; i < 3; ++i ) {
 				v[i] = -MAX_OFFSET + 2 * MAX_OFFSET * EffectSamplers::SamplingRandom();
 			}

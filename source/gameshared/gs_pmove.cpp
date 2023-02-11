@@ -36,7 +36,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define PM_CROUCHSLIDE_TIMEDELAY 700
 #define PM_CROUCHSLIDE_CONTROL 3
 #define PM_FORWARD_ACCEL_TIMEDELAY 0 // delay before the forward acceleration kicks in
-#define PM_SKIM_TIME 230
 
 //===============================================================
 

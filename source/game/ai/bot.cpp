@@ -564,9 +564,9 @@ void Bot::PreFrame() {
 	// These statuses are used by firing methods, so actual weapon statuses are required.
 	weaponsUsageModule.UpdateScriptWeaponsStatus();
 
-	const int weakAmmoShift = AMMO_GUNBLADE - WEAP_GUNBLADE;
-	const int strongAmmoShift = AMMO_WEAK_GUNBLADE - WEAP_GUNBLADE;
-	const auto *inventory = self->r.client->ps.inventory;
+	const int weakAmmoShift   = (int)AMMO_GUNBLADE - (int)WEAP_GUNBLADE;
+	const int strongAmmoShift = (int)AMMO_WEAK_GUNBLADE - (int)WEAP_GUNBLADE;
+	const auto *inventory     = self->r.client->ps.inventory;
 
 	hasOnlyGunblade = true;
 	for( int weapon = WEAP_GUNBLADE + 1; weapon < WEAP_TOTAL; ++weapon ) {

@@ -79,7 +79,6 @@ private:
 
 	float GetEmissionRadius() const override;
 	void SetupPrimaryRayDirs();
-	void ProcessPrimaryEmissionResults();
 	void EmitSecondaryRays();
 
 public:

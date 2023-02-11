@@ -8,7 +8,7 @@ namespace wsw::_details {
 // This template gets used to actually generate specialized implementations
 
 template <typename Field, size_t Size, size_t Alignment, bool Ascending>
-wsw_forceinline inline void sortStructsByFieldImpl( void *begin, void *end, uintptr_t fieldOffset ) {
+wsw_forceinline void sortStructsByFieldImpl( void *begin, void *end, uintptr_t fieldOffset ) {
 	struct alignas( Alignment ) Struct { char _contents[Size]; };
 	static_assert( alignof( Struct ) == Alignment && sizeof( Struct ) == Size );
 
@@ -58,12 +58,4 @@ void sortStructsByUInt32FieldDescending( void *begin, void *end, size_t size, si
 	sortStructsByFieldImpl<uint32_t, 8, 4, false>( begin, end, fieldOffset );
 }
 
-}
-
-struct Bar { int x, y; };
-
-void foo() {
-	Bar bars[5];
-
-	wsw::sortByField( bars, bars + 5, &Bar::x );
 }
