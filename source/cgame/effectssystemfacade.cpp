@@ -1160,26 +1160,33 @@ static const RgbaLifespan kGreyDustColors[1] {
 	}
 };
 
+static shader_s *g_stoneDustMaterialsStorage[2];
+
 void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOrientation &orientation,
 												   float upShiftScale, unsigned materialParam,
 												   float dustPercentageScale ) {
+	g_stoneDustMaterialsStorage[0] = cgs.media.shaderStoneDustHard;
+	g_stoneDustMaterialsStorage[1] = cgs.media.shaderStoneDustSoft;
+
 	const Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderStoneDust.getAddressOfHandle(),
+		.materials           = g_stoneDustMaterialsStorage,
 		.colors              = kGreyDustColors,
+		.numMaterials        = std::size( g_stoneDustMaterialsStorage ),
 		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 25.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true
 	};
 
 	ConicalFlockParams flockParams {
-		.gravity     = 50.0f,
-		.drag        = 0.03f,
-		.restitution = 1.0f,
-		.angle       = 30.0f,
-		.speed       = { .min = 100.0f, .max = 500.0f },
-		.percentage  = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
-		.timeout     = { .min = 750, .max = 1000 },
+		.gravity         = 50.0f,
+		.drag            = 0.03f,
+		.restitution     = 1.0f,
+		.angle           = 30.0f,
+		.speed           = { .min = 100.0f, .max = 500.0f },
+		.angularVelocity = { .min = -180.0f, .max = +180.0f },
+		.percentage      = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
+		.timeout         = { .min = 750, .max = 1000 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
@@ -1187,13 +1194,15 @@ void EffectsSystemFacade::spawnStoneDustParticles( unsigned delay, const FlockOr
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
+static shader_s *g_stuccoDustMaterialsStorage[3];
+
 void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockOrientation &orientation,
 													float upShiftScale, unsigned materialParam ) {
-	const Particle::AppearanceRules appearanceRules {
-		.materials           = cgs.media.shaderStuccoDust.getAddressOfHandle(),
+	Particle::AppearanceRules appearanceRules {
+		.materials           = cgs.media.shaderStuccoDustSoft.getAddressOfHandle(),
 		.colors              = kGreyDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = 55.0f, .spread = 1.0f }, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 50.0f, .spread = 5.0f }, .sizeBehaviour = Particle::Expanding
 		},
 		.applyVertexDynLight = true
 	};
@@ -1204,12 +1213,27 @@ void EffectsSystemFacade::spawnStuccoDustParticles( unsigned delay, const FlockO
 		.restitution = 1.0f,
 		.angle       = 30.0f,
 		.speed       = { .min = 100.0f, .max = 500.0f },
-		.percentage  = { .min = 0.7f, .max = 1.0f },
+		.percentage  = { .min = 0.5f, .max = 1.0f },
 		.timeout     = { .min = 1500, .max = 2000 },
 	};
 
 	orientation.copyToFlockParams( &flockParams );
 	assignUpShiftAndModifyBaseSpeed( &flockParams, upShiftScale, 20.0f, 30.0f );
+	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
+
+	g_stuccoDustMaterialsStorage[0] = cgs.media.shaderStuccoDustMedium;
+	g_stuccoDustMaterialsStorage[1] = cgs.media.shaderStuccoDustMedium;
+	g_stuccoDustMaterialsStorage[2] = cgs.media.shaderStuccoDustHard;
+
+	appearanceRules.materials     = g_stuccoDustMaterialsStorage;
+	appearanceRules.numMaterials  = std::size( g_stuccoDustMaterialsStorage );
+	appearanceRules.geometryRules = Particle::SpriteRules {
+		.radius = { .mean = 15.0f, .spread = 2.5f }, .sizeBehaviour = Particle::Expanding,
+	};
+
+	flockParams.angularVelocity = { .min = -60.0f, .max = +60.0f };
+	flockParams.percentage      = { .min = 0.3f, .max = 0.5f };
+
 	spawnOrPostponeImpactParticleEffect( delay, flockParams, appearanceRules );
 }
 
@@ -1245,7 +1269,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 	};
 
 	ConicalFlockParams burstFlockParams {
-		.angle      = 15,
+		.angle      = 24,
 		.speed      = { .min = 700, .max = 900 },
 		.percentage = { .min = 0.3f, .max = 0.6f },
 		.timeout    = { .min = 75, .max = 150 },
@@ -1255,7 +1279,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 		.materials           = cgs.media.shaderWoodDustParticle.getAddressOfHandle(),
 		.colors              = kWoodDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = 12.5f, .spread = 2.5f }, .sizeBehaviour = Particle::Expanding,
+			.radius = { .mean = 25.0f, .spread = 5.0f }, .sizeBehaviour = Particle::Expanding,
 		},
 		.applyVertexDynLight = true,
 	};
@@ -1265,7 +1289,7 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 		.angle      = 24.0f,
 		.speed      = { .min = 50.0f, .max = 150.0f },
 		.percentage = { .min = 1.0f, .max = 1.0f },
-		.timeout    = { .min = 350, .max = 450 },
+		.timeout    = { .min = 300, .max = 500 },
 	};
 
 	const Particle::AppearanceRules debrisAppearanceRules {
@@ -1284,9 +1308,9 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 		.angle           = 30.0f,
 		.bounceCount     = { .minInclusive = 2, .maxInclusive = 3 },
 		.speed           = { .min = 400.0f, .max = 700.0f },
-		.angularVelocity = { .min = 3.0f * 360.0f, .max = 9.0f * 360.0f },
-		.percentage      = { .min = 0.3f * debrisPercentageScale, .max = 0.6f * debrisPercentageScale },
-		.timeout         = { .min = 350, .max = 500 },
+		.angularVelocity = { .min = -9.0f * 360.0f, .max = 9.0f * 360.0f },
+		.percentage      = { .min = 0.2f * debrisPercentageScale, .max = 0.5f * debrisPercentageScale },
+		.timeout         = { .min = 150, .max = 500 },
 	};
 
 	orientation.copyToFlockParams( &burstFlockParams );
@@ -1298,7 +1322,8 @@ void EffectsSystemFacade::spawnWoodBulletImpactParticles( unsigned delay, const 
 
 	orientation.copyToFlockParams( &debrisFlockParams );
 	assignUpShiftAndModifyBaseSpeed( &debrisFlockParams, upShiftScale, 75.0f, 125.0f );
-	spawnOrPostponeImpactParticleEffect( delay, debrisFlockParams, debrisAppearanceRules );
+	spawnOrPostponeImpactParticleEffect( delay, debrisFlockParams, debrisAppearanceRules,
+										 TransientEffectsSystem::ParticleFlockBin::Medium );
 }
 
 static const RgbaLifespan kDirtImpactColors[1] {
@@ -1317,13 +1342,16 @@ static const RgbaLifespan kDirtDustColors[1] {
 	}
 };
 
+static shader_s *g_dirtCloudMaterials[2];
+
 void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockOrientation &orientation,
-													float upShiftScale, unsigned materialParam ) {
+													float upShiftScale, unsigned materialParam,
+													float percentageScale, float dustSpeedScale ) {
 	ConicalFlockParams burstStripesFlockParams {
 		.gravity    = GRAVITY,
 		.angle      = 12,
 		.speed      = { .min = 500, .max = 700 },
-		.percentage = { .min = 0.5f, .max = 1.0f },
+		.percentage = { .min = 0.5f * percentageScale, .max = 1.0f * percentageScale },
 		.timeout    = { .min = 100, .max = 200 },
 	};
 
@@ -1337,34 +1365,31 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 		},
 	};
 
-	ConicalFlockParams burstParticlesFlockParams {
+	ConicalFlockParams particlesAndCloudFlockParams {
 		.gravity    = GRAVITY,
 		.drag       = 0.01f,
 		.angle      = 12,
 		.speed      = { .min = 500, .max = 700 },
-		.percentage = { .min = 0.5f, .max = 1.0f },
+		.percentage = { .min = 0.5f * percentageScale, .max = 1.0f * percentageScale },
 		.timeout    = { .min = 350, .max = 1000 }
 	};
 
-	const Particle::AppearanceRules burstParticlesAppearanceRules {
+	const Particle::AppearanceRules smallParticlesAppearanceRules {
 		.materials     = cgs.media.shaderDirtImpactParticle.getAddressOfHandle(),
 		.colors        = kDirtImpactColors,
 		.geometryRules = Particle::SpriteRules { .radius = { .mean = 3.0f }, .sizeBehaviour = Particle::Shrinking },
 	};
 
-	ConicalFlockParams dustFlockParams {
-		.gravity    = 100.0f,
-		.angle      = 45.0f,
-		.speed      = { .min = 25, .max = 50 },
-		.percentage = { .min = 0.0f, .max = 0.5f },
-		.timeout    = { .min = 750, .max = 1000 },
-	};
+	static_assert( std::size( g_dirtCloudMaterials ) == 2 );
+	g_dirtCloudMaterials[0] = cgs.media.shaderDirtImpactCloudSoft;
+	g_dirtCloudMaterials[1] = cgs.media.shaderDirtImpactCloudHard;
 
-	Particle::AppearanceRules dustAppearanceRules {
-		.materials     = cgs.media.shaderDirtImpactCloud.getAddressOfHandle(),
+	Particle::AppearanceRules cloudAppearanceRules {
+		.materials     = g_dirtCloudMaterials,
 		.colors        = kDirtDustColors,
+		.numMaterials  = std::size( g_dirtCloudMaterials ),
 		.geometryRules = Particle::SpriteRules {
-			.radius = { .mean = 30.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 10.0f, .spread = 7.5f }, .sizeBehaviour = Particle::ExpandingAndShrinking,
 		},
 	};
 
@@ -1372,14 +1397,16 @@ void EffectsSystemFacade::spawnDirtImpactParticles( unsigned delay, const FlockO
 	// Never delay stripes
 	cg.particleSystem.addSmallParticleFlock( burstStripesAppearanceRules, burstStripesFlockParams );
 
-	orientation.copyToFlockParams( &burstParticlesFlockParams );
-	assignUpShiftAndModifyBaseSpeed( &burstParticlesFlockParams, upShiftScale, 150.0f, 200.0f );
+	orientation.copyToFlockParams( &particlesAndCloudFlockParams );
+	assignUpShiftAndModifyBaseSpeed( &particlesAndCloudFlockParams, upShiftScale, 150.0f, 200.0f );
 	// Never delay burst
-	cg.particleSystem.addMediumParticleFlock( burstParticlesAppearanceRules, burstParticlesFlockParams );
+	cg.particleSystem.addMediumParticleFlock( smallParticlesAppearanceRules, particlesAndCloudFlockParams );
 
-	orientation.copyToFlockParams( &dustFlockParams );
-	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 50.0f, 125.0f );
-	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
+	particlesAndCloudFlockParams.timeout         = { .min = 350, .max = 700 };
+	particlesAndCloudFlockParams.angularVelocity = { .min = -180.0f, .max = 180.0f };
+
+	assignUpShiftAndModifyBaseSpeed( &particlesAndCloudFlockParams, upShiftScale, 50.0f, 125.0f );
+	spawnOrPostponeImpactParticleEffect( delay, particlesAndCloudFlockParams, cloudAppearanceRules );
 }
 
 static const RgbaLifespan kSandImpactColors[1] {
@@ -1402,11 +1429,12 @@ static const RgbaLifespan kSandDustColors[1] {
 
 void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockOrientation &orientation,
 													float upShiftScale, unsigned materialParam,
-													float dustPercentageScale ) {
+													float percentageScale, float dustSpeedScale ) {
+	// Don't let the percentage affect burst
 	ConicalFlockParams burstFlockParams {
 		.gravity    = GRAVITY,
 		.angle      = 12,
-		.speed      = { .min = 300, .max = 700 },
+		.speed      = { .min = 550, .max = 700 },
 		.percentage = { .min = 0.7f, .max = 1.0f },
 		.timeout    = { .min = 300, .max = 400 },
 	};
@@ -1425,25 +1453,39 @@ void EffectsSystemFacade::spawnSandImpactParticles( unsigned delay, const FlockO
 	// Never delay burst
 	cg.particleSystem.addSmallParticleFlock( burstParticlesAppearanceRules, burstFlockParams );
 
+	assert( dustSpeedScale >= 1.0f );
+	const float timeoutScale = 0.5f * ( 1.0f + Q_Rcp( dustSpeedScale ) );
+
 	EllipsoidalFlockParams dustFlockParams {
-		.stretchScale = 0.33f,
+		.stretchScale = 0.33f * Q_Rcp( dustSpeedScale ),
 		.gravity      = 100.0f,
-		.speed        = { .min = 20, .max = 50 },
-		.percentage   = { .min = 0.7f * dustPercentageScale, .max = 1.0f * dustPercentageScale },
-		.timeout      = { .min = 750, .max = 1000 },
+		.speed        = { .min = 50 * dustSpeedScale, .max = 100 * dustSpeedScale },
+		.percentage   = { .min = 0.7f * percentageScale, .max = 1.0f * percentageScale },
+		.timeout      = { .min = (unsigned)( 500 * timeoutScale ), .max = (unsigned)( 750 * timeoutScale ) },
 	};
 
-	const Particle::AppearanceRules dustAppearanceRules {
-		.materials           = cgs.media.shaderSandImpactDust.getAddressOfHandle(),
+	Particle::AppearanceRules dustAppearanceRules {
+		.materials           = cgs.media.shaderSandImpactDustSoft.getAddressOfHandle(),
 		.colors              = kSandDustColors,
 		.geometryRules       = Particle::SpriteRules {
-			.radius = { .mean = 35.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding
+			.radius = { .mean = 40.0f, .spread = 7.5f }, .sizeBehaviour = Particle::Expanding,
 		},
 		.applyVertexDynLight = true,
 	};
 
 	orientation.copyToFlockParams( &dustFlockParams );
-	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 20.0f, 30.0f );
+	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 20.0f, 50.0f );
+	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
+
+	dustAppearanceRules.materials = cgs.media.shaderSandImpactDustHard.getAddressOfHandle();
+	dustAppearanceRules.geometryRules = Particle::SpriteRules {
+		.radius = { .mean = 7.5f, .spread = 2.5f }, .sizeBehaviour = Particle::Expanding,
+	};
+
+	dustFlockParams.speed           = { .min = 30 * dustSpeedScale, .max = 50 * dustSpeedScale };
+	dustFlockParams.timeout         = { .min = (unsigned)( 200 * timeoutScale ), .max = (unsigned)( 450 * timeoutScale ) };
+	dustFlockParams.angularVelocity = { .min = -180.0f, .max = +180.0f };
+	assignUpShiftAndModifyBaseSpeed( &dustFlockParams, upShiftScale, 50.0f, 75.0f );
 	spawnOrPostponeImpactParticleEffect( delay, dustFlockParams, dustAppearanceRules );
 }
 
@@ -1668,7 +1710,7 @@ void EffectsSystemFacade::spawnPelletImpactParticleEffectForMaterial( unsigned d
 			spawnWoodBulletImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.5f );
 			break;
 		case SurfImpactMaterial::Dirt:
-			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.33f );
 			break;
 		case SurfImpactMaterial::Sand:
 			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.25f );
@@ -1716,11 +1758,11 @@ void EffectsSystemFacade::spawnExplosionImpactParticleEffectForMaterial( const F
 			break;
 		case SurfImpactMaterial::Dirt:
 			delay = m_rng.nextBoundedFast( 300 );
-			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnDirtImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.67f, 2.0f );
 			break;
 		case SurfImpactMaterial::Sand:
 			delay = 100 + m_rng.nextBoundedFast( 300 );
-			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam );
+			spawnSandImpactParticles( delay, flockOrientation, upShiftScale, materialParam, 0.67f, 2.0f );
 			break;
 		case SurfImpactMaterial::Metal:
 			delay = m_rng.nextBoundedFast( 100 );

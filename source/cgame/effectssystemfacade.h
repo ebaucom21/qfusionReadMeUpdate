@@ -215,10 +215,12 @@ private:
 										 float debrisPercentageScale = 1.0f );
 
 	void spawnDirtImpactParticles( unsigned delay, const FlockOrientation &orientation,
-								   float upShiftScale, unsigned materialParam );
+								   float upShiftScale, unsigned materialParam,
+								   float percentageScale = 1.0f, float dustSpeedScale = 1.0f );
 
 	void spawnSandImpactParticles( unsigned delay, const FlockOrientation &orientation,
-								   float upShiftScale, unsigned materialParam, float dustPercentageScale = 1.0f );
+								   float upShiftScale, unsigned materialParam,
+								   float percentageScale = 1.0f, float dustSpeedScale = 1.0f );
 
 	void spawnGlassImpactParticles( unsigned delay, const FlockOrientation &orientation,
 									float upShiftScale, unsigned materialParam, float percentageScale );

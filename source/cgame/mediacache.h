@@ -234,16 +234,24 @@ public:
 
 	CachedMaterial shaderDirtImpactBurst { this, wsw::StringView( "gfx/effects/dirt_impact_burst" ) };
 	CachedMaterial shaderDirtImpactParticle { this, wsw::StringView( "gfx/effects/dirt_impact_particle" ) };
-	CachedMaterial shaderDirtImpactCloud { this, wsw::StringView( "gfx/effects/dirt_impact_cloud" ) };
+	CachedMaterial shaderDirtImpactCloudSoft { this, wsw::StringView( "gfx/effects/dirt_impact_cloud_soft" ) };
+	CachedMaterial shaderDirtImpactCloudHard { this, wsw::StringView( "gfx/effects/dirt_impact_cloud_hard" ) };
 
 	CachedMaterial shaderSandImpactBurst { this, wsw::StringView( "gfx/effects/sand_impact_burst" )};
 
 	CachedMaterial shaderLavaImpactDrop { this, wsw::StringView( "gfx/effects/lava_impact_drop" ) };
 
 	CachedMaterial shaderLiquidImpactCloud { this, wsw::StringView( "gfx/effects/liquid_impact_cloud" ) };
-	CachedMaterial shaderSandImpactDust { this, wsw::StringView( "gfx/effects/sand_impact_dust" ) };
-	CachedMaterial shaderStoneDust { this, wsw::StringView( "gfx/effects/stone_dust" ) };
-	CachedMaterial shaderStuccoDust { this, wsw::StringView( "gfx/effects/stucco_dust" ) };
+
+	CachedMaterial shaderSandImpactDustSoft { this, wsw::StringView( "gfx/effects/sand_impact_dust_soft" ) };
+	CachedMaterial shaderSandImpactDustHard { this, wsw::StringView( "gfx/effects/sand_impact_dust_hard" ) };
+
+	CachedMaterial shaderStoneDustSoft { this, wsw::StringView( "gfx/effects/stone_dust_soft" ) };
+	CachedMaterial shaderStoneDustHard { this, wsw::StringView( "gfx/effects/stone_dust_hard" ) };
+
+	CachedMaterial shaderStuccoDustSoft { this, wsw::StringView( "gfx/effects/stucco_dust_soft" ) };
+	CachedMaterial shaderStuccoDustMedium { this, wsw::StringView( "gfx/effects/stucco_dust_medium" ) };
+	CachedMaterial shaderStuccoDustHard { this, wsw::StringView( "gfx/effects/stucco_dust_hard" ) };
 
 	CachedMaterial shaderParticleFlare { this, wsw::StringView( "gfx/effects/particle_flare" ) };
 
