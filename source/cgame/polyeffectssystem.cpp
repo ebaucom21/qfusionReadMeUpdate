@@ -703,7 +703,7 @@ auto PolyEffectsSystem::ImpactRosetteSpikesPoly::fillMeshBuffers( const float *_
 		parentEffect->endColorLifespan.getColorForLifetimeFrac( element.lifetimeFrac, endColor );
 
 		for( unsigned j = 0; j < 4; ++j ) {
-			colors[numAddedVertices + 0][j] = colors[numAddedVertices + 2][j] = (uint8_t)( startColor[j] * 255 );
+			colors[numAddedVertices + 0][j] = colors[numAddedVertices + 1][j] = (uint8_t)( startColor[j] * 255 );
 			colors[numAddedVertices + 2][j] = colors[numAddedVertices + 3][j] = (uint8_t)( endColor[j] * 255 );
 		}
 

@@ -2303,8 +2303,8 @@ static auto adjustTracerOriginForOwner( int owner, const float *givenOrigin, flo
 	VectorCopy( givenOrigin, adjustedOrigin );
 	if( owner == (int)cg.predictedPlayerState.POVnum ) {
 		const int handValue     = cgs.demoPlaying ? cg_hand->integer : cgs.clientInfo[owner - 1].hand;
-		const float handSign    = handValue ? -1.0f : +1.0f;
-		const float rightOffset = wsw::clamp( handSign * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
+		const float handScale   = ( handValue >= 0 && handValue <= 1 ) ? ( handValue ? -1.0f : +1.0f ) : 0.0f;
+		const float rightOffset = wsw::clamp( handScale * cg_handOffset->value + cg_gunx->value, -16.0f, +16.0f );
 		const float zOffset     = -playerbox_stand_viewheight;
 
 		vec3_t right;
