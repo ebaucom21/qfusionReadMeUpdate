@@ -769,11 +769,9 @@ typedef struct mleaf_s {
 
 	unsigned *visSurfaces;
 	unsigned *fragmentSurfaces;
-	unsigned *occluderSurfaces;
 
 	unsigned numVisSurfaces;
 	unsigned numFragmentSurfaces;
-	unsigned numOccluderSurfaces;
 } mleaf_t;
 
 typedef struct {
@@ -788,6 +786,17 @@ typedef struct {
 	int texLayer;
 	float texMatrix[2][2];
 } mlightmapRect_t;
+
+struct OccluderBoundsEntry {
+	float mins[4], maxs[4];
+};
+
+struct OccluderDataEntry {
+	unsigned numVertices;
+	vec4_t plane;
+	vec3_t innerPolyPoint;
+	vec3_t data[7];
+};
 
 typedef struct mbrushmodel_s {
 	const bspFormatDesc_t *format;
@@ -845,8 +854,9 @@ typedef struct mbrushmodel_s {
 	unsigned int numSuperLightStyles;
 	struct superLightStyle_s *superLightStyles;
 
-	unsigned numMiptex;
-	void            *mipTex;
+	OccluderBoundsEntry *occluderBoundsEntries;
+	OccluderDataEntry *occluderDataEntries;
+	unsigned numOccluders;
 } mbrushmodel_t;
 
 /*

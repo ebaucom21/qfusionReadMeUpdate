@@ -1235,9 +1235,6 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 		out->fragmentSurfaces = ( unsigned * )buffer;
 		buffer += numFragmentSurfaces * sizeof( unsigned );
 
-		out->occluderSurfaces = ( unsigned *)buffer;
-		buffer += numMarkSurfaces * sizeof( unsigned );
-
 		numVisSurfaces = numFragmentSurfaces = 0;
 		for( j = 0; j < numMarkSurfaces; j++ ) {
 			unsigned k = LittleLong( inMarkSurfaces[firstMarkSurface + j] );
@@ -1247,7 +1244,6 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 
 		out->numVisSurfaces = numVisSurfaces;
 		out->numFragmentSurfaces = numFragmentSurfaces;
-		out->numOccluderSurfaces = 0;
 	}
 }
 

@@ -468,6 +468,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define UI_SHADER_BIGLOGO           "gfx/ui/logo512"
 #define UI_SHADER_CURSOR            "gfx/ui/cursor"
 
+#define UI_BACKGROUND_MAP_PATH      "maps/ui.bsp"
+
 // vsay icons
 #define PATH_VSAY_GENERIC_ICON      "gfx/hud/icons/vsay/generic"
 #define PATH_VSAY_NEEDHEALTH_ICON   "gfx/hud/icons/vsay/needhealth"

@@ -103,7 +103,7 @@ private:
 	};
 
 	struct SortedOccluder {
-		unsigned surfNum;
+		unsigned occluderNum;
 		float score;
 		[[nodiscard]]
 		bool operator<( const SortedOccluder &that ) const { return score > that.score; }
@@ -113,9 +113,11 @@ private:
 	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer;
 	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer;
 
-	BufferHolder<SortedOccluder> m_visibleOccludersBuffer;
+	BufferHolder<unsigned> m_visibleOccludersBuffer;
+	BufferHolder<SortedOccluder> m_sortedOccludersBuffer;
 
-	Frustum m_occluderFrusta[64];
+	static constexpr unsigned kMaxOccluderFrusta = 64;
+	Frustum m_occluderFrusta[kMaxOccluderFrusta];
 
 	struct MergedSurfSpan {
 		int firstSurface;
@@ -273,7 +275,7 @@ private:
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccluders( std::span<const unsigned> visibleLeaves ) -> std::span<const SortedOccluder>;
+	auto collectVisibleOccluders() -> std::span<const SortedOccluder>;
 	[[nodiscard]]
 	auto buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
 

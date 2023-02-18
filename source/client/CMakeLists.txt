@@ -7,6 +7,7 @@ set(CMAKE_AUTOUIC ON)
 include_directories(${ZLIB_INCLUDE_DIR} ${CURL_INCLUDE_DIR})
 include_directories(${OGG_INCLUDE_DIR} ${VORBIS_INCLUDE_DIR} ${FREETYPE_INCLUDE_DIRS})
 include_directories("../../third-party/magic_enum/include")
+include_directories("../../third-party/recastnavigation/Recast/Include/")
 
 if (USE_SDL2 OR (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
     include_directories(${SDL2_INCLUDE_DIR})
@@ -72,6 +73,7 @@ file(GLOB CLIENT_COMMON_SOURCES
     "../server/*.cpp"
     "*.cpp"
     "../gameshared/q_*.cpp"
+	"../../third-party/recastnavigation/Recast/Source/*.cpp"
     # We have to include this for linking with shared MM facilities.
     # This also is required to run listen servers (do we allow ranked listen servers?)
     # Unused stuff should get stripped anyway.

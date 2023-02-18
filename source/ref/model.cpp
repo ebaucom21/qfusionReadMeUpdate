@@ -23,11 +23,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "iqm.h"
-#include "../qcommon/qcommon.h"
+
+#include "../../third-party/recastnavigation/Recast/Include/Recast.h"
+#include "../gameshared/gs_qrespath.h"
+#include "../game/ai/vec3.h"
 
 #include <algorithm>
 #include <numeric>
 #include <span>
+#include <unordered_map>
 
 typedef struct {
 	unsigned number;
@@ -106,367 +110,319 @@ uint8_t *Mod_ClusterPVS( int cluster, model_t *model ) {
 	return Mod_ClusterVS( cluster, ( ( mbrushmodel_t * )model->extradata )->pvs );
 }
 
-class IndexPatternsCache {
+class RecastPolyMeshBuilder {
 public:
-	// We use types of different size for every N to avoid wasting memory on unused indices
-	template <unsigned N>
-	struct Combination { uint8_t indices[N]; };
+	RecastPolyMeshBuilder( wsw::Vector<Vec3> *tmpVerticesBuffer, wsw::Vector<int> *tmpIndicesBuffer,
+						   wsw::Vector<uint8_t> *tmpAreaFlagsBuffer )
+		: m_verticesBuffer( tmpVerticesBuffer )
+		, m_indicesBuffer( tmpIndicesBuffer )
+		, m_areaFlagsBuffer( tmpAreaFlagsBuffer ) {
+		m_context.enableTimer( false );
+		m_context.enableLog( false );
 
-	template <unsigned N>
-	struct Permutation { uint8_t indices[N]; };
-
-	template <unsigned N>
-	[[nodiscard]]
-	auto getCombinationsForBound( unsigned bound ) const -> std::span<const Combination<N>> {
-		if constexpr( N == 4 ) {
-			return { m_4ElemCombinations.data(), m_max4ElemCombinationsForBound[bound] };
-		} else if constexpr( N == 5 ) {
-			return { m_5ElemCombinations.data(), m_max5ElemCombinationsForBound[bound] };
-		} else if constexpr( N == 6 ) {
-			return { m_6ElemCombinations.data(), m_max6ElemCombinationsForBound[bound] };
-		} else if constexpr( N == 7 ) {
-			return { m_7ElemCombinations.data(), m_max7ElemCombinationsForBound[bound] };
-		} else {
-			return {};
-		}
+		m_verticesBuffer->clear();
+		m_indicesBuffer->clear();
+		m_areaFlagsBuffer->clear();
 	}
 
-	template <unsigned N>
-	[[nodiscard]]
-	auto getPermutations() const -> std::span<const Permutation<N>> {
-		if constexpr( N == 4 ) {
-			return m_4ElemPermutations;
-		} else if constexpr( N == 5 ) {
-			return m_5ElemPermutations;
-		} else if constexpr( N == 6 ) {
-			return m_6ElemPermutations;
-		} else if constexpr( N == 7 ) {
-			return m_7ElemPermutations;
-		} else {
-			return {};
-		}
+	~RecastPolyMeshBuilder() {
+		rcFreeHeightField( m_heightfield );
+		rcFreeCompactHeightfield( m_compactHeightfield );
+		rcFreeContourSet( m_contourSet );
+		rcFreePolyMesh( m_polyMesh );
 	}
 
-	IndexPatternsCache();
+	void addVertex( const float *vertex ) {
+		m_verticesBoundsBuilder.addPoint( vertex );
+		m_verticesBuffer->emplace_back( Vec3( vertex ) );
+		m_indicesBuffer->push_back( (int)m_indicesBuffer->size() );
+	}
+
+	[[nodiscard]]
+	auto build() -> const rcPolyMesh * {
+		assert( !m_indicesBuffer->empty() && !m_verticesBuffer->empty() );
+		// Prepare height field
+
+		constexpr float xzCellSize  = 8.0f;
+		constexpr float yCellSize   = 8.0f;
+		constexpr float climbHeight = 8.0f;
+
+		int gridWidth = 0, gridHeight = 0;
+		const int numTris = m_indicesBuffer->size() / 3;
+
+		vec3_t mins, maxs;
+		m_verticesBoundsBuilder.storeTo( mins, maxs );
+		rcCalcGridSize( mins, maxs, xzCellSize, &gridWidth, &gridHeight );
+
+		m_heightfield = rcAllocHeightfield();
+		if( !m_heightfield ) {
+			return nullptr;
+		}
+
+		if( !rcCreateHeightfield( &m_context, *m_heightfield, gridWidth, gridHeight, mins, maxs, xzCellSize, yCellSize ) ) {
+			return nullptr;
+		}
+
+		if( !m_heightfield->width || !m_heightfield->height ) {
+			return nullptr;
+		}
+
+		m_areaFlagsBuffer->resize( numTris, 0 );
+
+		uint8_t *const areaFlags = m_areaFlagsBuffer->data();
+		const float *vertices    = (float *)m_verticesBuffer->data();
+		const int *indices       = m_indicesBuffer->data();
+		const int numVertices    = m_verticesBuffer->size();
+
+		// Keep it not greater than the necessary minimum,
+		// otherwise it can lead to mismatch between surf plane and actual poly plane
+		// which in turn can intervene with occluders selection logic producing bogus frusta
+		// TODO: Compute planes again for each invididual poly?
+		constexpr float walkableSlopeAngle = 0.1f;
+		rcMarkWalkableTriangles( &m_context, walkableSlopeAngle, vertices, numVertices, indices, numTris, areaFlags );
+
+		if( !rcRasterizeTriangles( &m_context, vertices, numVertices, indices, areaFlags, numTris, *m_heightfield ) ) {
+			return nullptr;
+		}
+
+		rcFilterLowHangingWalkableObstacles( &m_context, climbHeight, *m_heightfield );
+		rcFilterLedgeSpans( &m_context, climbHeight, climbHeight, *m_heightfield );
+		rcFilterWalkableLowHeightSpans( &m_context, climbHeight, *m_heightfield );
+
+		m_compactHeightfield = rcAllocCompactHeightfield();
+		if( !m_compactHeightfield ) {
+			return nullptr;
+		}
+
+		if( !rcBuildCompactHeightfield( &m_context, climbHeight, climbHeight, *m_heightfield, *m_compactHeightfield ) ) {
+			return nullptr;
+		}
+
+		/*
+		if( !rcErodeWalkableArea( &m_context, 1, *m_compactHeightfield ) ) {
+			return nullptr;
+		}*/
+
+		constexpr int borderSize      = 0;
+		constexpr int minRegionArea   = 16 * 16;
+		constexpr int mergeRegionArea = 32 * 32;
+
+		if( !rcBuildDistanceField( &m_context, *m_compactHeightfield ) ) {
+			return nullptr;
+		}
+
+		if( !rcBuildRegions( &m_context, *m_compactHeightfield, borderSize, minRegionArea, mergeRegionArea ) ) {
+			return nullptr;
+		}
+
+		constexpr float maxError = 1.0f;
+		constexpr int maxEdgeLen = 0;
+
+		m_contourSet = rcAllocContourSet();
+		if( !m_contourSet ) {
+			return nullptr;
+		}
+
+		if( !rcBuildContours( &m_context, *m_compactHeightfield, maxError, maxEdgeLen, *m_contourSet ) ) {
+			return nullptr;
+		}
+
+		m_polyMesh = rcAllocPolyMesh();
+		if( !m_polyMesh ) {
+			return nullptr;
+		}
+
+		if( !rcBuildPolyMesh( &m_context, *m_contourSet, 7, *m_polyMesh ) ) {
+			return nullptr;
+		}
+
+		if( !m_polyMesh->npolys ) {
+			return nullptr;
+		}
+
+		return m_polyMesh;
+	}
+
 private:
-	wsw::Vector<Combination<4>> m_4ElemCombinations;
-	wsw::Vector<Combination<5>> m_5ElemCombinations;
-	wsw::Vector<Combination<6>> m_6ElemCombinations;
-	wsw::Vector<Combination<7>> m_7ElemCombinations;
-
-	wsw::StaticVector<unsigned, 24> m_max4ElemCombinationsForBound;
-	wsw::StaticVector<unsigned, 24> m_max5ElemCombinationsForBound;
-	wsw::StaticVector<unsigned, 24> m_max6ElemCombinationsForBound;
-	wsw::StaticVector<unsigned, 24> m_max7ElemCombinationsForBound;
-
-	wsw::Vector<Permutation<4>> m_4ElemPermutations;
-	wsw::Vector<Permutation<5>> m_5ElemPermutations;
-	wsw::Vector<Permutation<6>> m_6ElemPermutations;
-	wsw::Vector<Permutation<7>> m_7ElemPermutations;
-
-	template <unsigned N>
-	void addToCombinations( wsw::Vector<Combination<N>> &v, uint32_t n ) {
-		Combination<N> combination {};
-		unsigned numIndices = 0;
-		for( unsigned i = 0; i < 32; ++i ) {
-			if( n & ( 1 << i ) ) {
-				combination.indices[numIndices] = i;
-				numIndices++;
-				if( numIndices == N ) {
-					break;
-				}
-			}
-		}
-		v.push_back( combination );
-	}
-
-	template <unsigned N>
-	void initPermutations( wsw::Vector<Permutation<N>> &v ) {
-		Permutation<N> permutation {};
-		std::iota( permutation.indices, permutation.indices + N, 0 );
-		do {
-			// This makes a deep copy
-			v.push_back( permutation );
-		} while( std::next_permutation( permutation.indices, permutation.indices + N ) );
-		v.shrink_to_fit();
-	}
+	rcContext m_context;
+	BoundsBuilder m_verticesBoundsBuilder;
+	wsw::Vector<Vec3> *const m_verticesBuffer;
+	wsw::Vector<int> *const m_indicesBuffer;
+	wsw::Vector<uint8_t> *const m_areaFlagsBuffer;
+	rcHeightfield *m_heightfield { nullptr };
+	rcCompactHeightfield *m_compactHeightfield { nullptr };
+	rcContourSet *m_contourSet { nullptr };
+	rcPolyMesh *m_polyMesh { nullptr };
 };
 
-#ifdef _MSC_VER
-#define __builtin_popcount __popcnt
-#endif
+static wsw::Vector<Vec3> g_tmpVerticesBuffer;
+static wsw::Vector<int> g_tmpIndicesBuffer;
+static wsw::Vector<uint8_t> g_tmpAreaFlagsBuffer;
 
-IndexPatternsCache::IndexPatternsCache() {
-	for( unsigned bits = 0; bits < 4; ++bits ) {
-		m_max4ElemCombinationsForBound.push_back( 0 );
-		m_max5ElemCombinationsForBound.push_back( 0 );
-		m_max6ElemCombinationsForBound.push_back( 0 );
-		m_max7ElemCombinationsForBound.push_back( 0 );
-	}
-
-	for( unsigned bits = 4; bits < 24; ++bits ) {
-		// 1000 ... 1111, 10000 ... 11111, 100'000 ... 111'111, ...
-		const unsigned minWord = 1 << ( bits - 1 );
-		const unsigned maxWord = ( 1 << bits ) - 1;
-		for( unsigned word = minWord; word <= maxWord; ++word ) {
-			switch( __builtin_popcount( word ) ) {
-				case 4: addToCombinations( m_4ElemCombinations, word ); break;
-				case 5: addToCombinations( m_5ElemCombinations, word ); break;
-				case 6: addToCombinations( m_6ElemCombinations, word ); break;
-				case 7: addToCombinations( m_7ElemCombinations, word ); break;
-				default: break;
-			}
-		}
-		m_max4ElemCombinationsForBound.push_back( (unsigned)m_4ElemCombinations.size() );
-		m_max5ElemCombinationsForBound.push_back( (unsigned)m_5ElemCombinations.size() );
-		m_max6ElemCombinationsForBound.push_back( (unsigned)m_6ElemCombinations.size() );
-		m_max7ElemCombinationsForBound.push_back( (unsigned)m_7ElemCombinations.size() );
-	}
-
-	m_4ElemCombinations.shrink_to_fit();
-	m_5ElemCombinations.shrink_to_fit();
-	m_6ElemCombinations.shrink_to_fit();
-	m_7ElemCombinations.shrink_to_fit();
-
-	initPermutations( m_4ElemPermutations );
-	initPermutations( m_5ElemPermutations );
-	initPermutations( m_6ElemPermutations );
-	initPermutations( m_7ElemPermutations );
-}
-
-static const IndexPatternsCache indexPatternsCache;
-
-[[nodiscard]]
-static auto getAreaOfArrangementDefinedPoly( const msurface_t *surf, std::span<const uint8_t> arrangement ) -> double {
-	const vec4_t *const vertices = surf->mesh.xyzArray;
-	const uint8_t *const indices = arrangement.data();
-	const size_t numIndices      = arrangement.size();
-
-	const float *__restrict firstPt = vertices[indices[0]];
-
-	double result = 0.0;
-	for( unsigned i = 1; i + 1 < numIndices; ++i ) {
-		const float *const __restrict pt1 = vertices[indices[i + 0]];
-		const float *const __restrict pt2 = vertices[indices[i + 1]];
-		double to1[3], to2[3], cross[3];
-		VectorSubtract( pt1, firstPt, to1 );
-		VectorSubtract( pt2, firstPt, to2 );
-		CrossProduct( to1, to2, cross );
-		result += std::sqrt( VectorLengthSquared( cross ) );
-	}
-
-	return 0.5 * result;
-}
-
-struct HullVertex {
-	float values[2];
-	unsigned originalIndex;
-	[[nodiscard]]
-	auto operator[]( size_t index ) const -> float { return values[index]; }
-	[[nodiscard]]
-	bool operator==( const HullVertex &that ) const {
-		return values[0] == that.values[0] && values[1] == that.values[1];
-	}
-	[[nodiscard]]
-	bool operator<( const HullVertex &that ) const {
-		return values[0] < that.values[0] || ( values[0] == that.values[0] && values[1] < that.values[1] );
-	}
-	[[nodiscard]]
-	auto squareDistanceTo( const HullVertex &that ) const -> float {
-		const float dx = that[0] - values[0];
-		const float dy = that[1] - values[1];
-		return dx * dx + dy * dy;
-	}
-};
-
-template <typename V>
-static inline auto cross2D( const V &p, const V &q, const V &r )  {
-	return ( q[1] - p[1] ) * ( r[0] - q[0] ) - ( q[0] - p[0] ) * ( r[1] - q[1] );
-}
-
-[[nodiscard]]
-static auto buildConvexHull( HullVertex *vertices, unsigned numVertices ) -> std::optional<unsigned> {
-	// Minimal safety checks
-	for( unsigned i = 0; i < numVertices; ++i ) {
-		for( unsigned j = i + 1; j < numVertices; ++j ) {
-			if( vertices[i].squareDistanceTo( vertices[j] ) < 4 * 4 ) {
-				return false;
-			}
-		}
-	}
-
-	wsw::StaticVector<HullVertex, 24> result;
-
-	// A crude gift-wrapping
-	// TODO: Replace by the monotonic chain algorithm
-
-	unsigned leftMostIndex = 0;
-	for( unsigned i = 1; i < numVertices; ++i ) {
-		const HullVertex &currVertex = vertices[i];
-		const HullVertex &leftMostVertex = vertices[leftMostIndex];
-		if( currVertex[0] < leftMostVertex[0] ) {
-			leftMostIndex = i;
-		} else if( currVertex[0] == leftMostVertex[0] ) {
-			if( currVertex[1] < leftMostVertex[1] ) {
-				leftMostIndex = i;
-			}
-		}
-	}
-
-	unsigned currIndex = leftMostIndex;
-	do {
-		unsigned nextIndex = (uint8_t)( currIndex + 1 ) % (uint8_t)numVertices;
-		for( unsigned index = 0; index < numVertices; ++index ) {
-			if( cross2D( vertices[currIndex], vertices[index], vertices[nextIndex] ) < 0 ) {
-				nextIndex = index;
-			}
-		}
-		result.push_back( vertices[nextIndex] );
-		currIndex = nextIndex;
-	} while( currIndex != leftMostIndex );
-
-	if( result.size() == numVertices ) {
-		std::memcpy( vertices, result.data(), sizeof( HullVertex ) * numVertices );
-		return numVertices;
-	}
-
-	return std::nullopt;
-}
-
-template <unsigned N>
-[[nodiscard]]
-static auto getBestPolyAreaForArrangements( msurface_t *surf, double bestAreaSoFar, uint8_t *indicesToSave,
-											unsigned *numIndicesToSave ) -> double {
-	if( const unsigned numVerts = surf->mesh.numVerts; numVerts >= N ) {
-		vec3_t extent { surf->maxs[0] - surf->mins[0], surf->maxs[1] - surf->mins[1], surf->maxs[2] - surf->mins[2] };
-		VectorSubtract( surf->maxs, surf->mins, extent );
-		// The poly is flat, we can use a viable conversion to 2D by throwing away the least-extent coord
-		const auto indexOfMin = (unsigned)( std::min_element( extent, extent + 3 ) - extent );
-		const unsigned coord1 = ( ( indexOfMin + 1 ) % 3 );
-		const unsigned coord2 = ( ( indexOfMin + 2 ) % 3 );
-
-		// TODO: We can save a lot by sorting all vertices once here
-		// and use the monotone chain algorithm for all combinations
-		const vec4_t *const surfVertices = surf->mesh.xyzArray;
-		HullVertex hullVertices[24];
-		for( unsigned i = 0; i < numVerts; ++i ) {
-			hullVertices[i].values[0] = surfVertices[i][coord1];
-			hullVertices[i].values[1] = surfVertices[i][coord2];
-			hullVertices[i].originalIndex = i;
-		}
-
-		// Caution! We require the original mesh to form a convex hull
-		// so these simple validation checks are sufficient
-		// and also the gift-wrapping algorithm does not break on collinear input for combinations.
-		// (We assume that there's no 3 collinear points in the original mesh).
-		// This is a serious limitation and must be gone in the future.
-		const std::optional<unsigned> maybeMeshHullSize = buildConvexHull( hullVertices, numVerts );
-		if( maybeMeshHullSize != std::optional( numVerts ) ) {
-			return bestAreaSoFar;
-		}
-
-		// For each combination (N-group of numVerts) indices try making an N-vertices convex hull and check it
-		for( const IndexPatternsCache::Combination<N> &c: indexPatternsCache.getCombinationsForBound<N>( numVerts ) ) {
-			// Make an input for hull building algorithm
-			unsigned indicesMask = 0;
-			for( unsigned i = 0; i < N; ++i ) {
-				const unsigned index = c.indices[i];
-				assert( index < numVerts );
-				hullVertices[i].values[0] = surfVertices[index][coord1];
-				hullVertices[i].values[1] = surfVertices[index][coord2];
-				hullVertices[i].originalIndex = index;
-				indicesMask |= ( 1u << index );
-			}
-
-			if( const auto maybeHullSize = buildConvexHull( hullVertices, N ) ) {
-				const unsigned hullSize = *maybeHullSize;
-				if( hullSize >= 4 ) {
-					// Currently, there's no hull validity checks.
-					// We assume that any combination of vertices of a convex hull mesh that is a convex hull is valid.
-					// (makes a valid conservative approximation of a mesh).
-					// In general case, we have to compute an intersection of the mesh and the hull poly
-					// and require that the hull poly exactly matches this intersection.
-					assert( hullSize <= 7 );
-					uint8_t indices[7];
-					for( unsigned i = 0; i < hullSize; ++i ) {
-						indices[i] = hullVertices[i].originalIndex;
-					}
-					const double area = getAreaOfArrangementDefinedPoly( surf, { indices, indices + hullSize } );
-					if( area > bestAreaSoFar ) {
-						bestAreaSoFar = area;
-						memcpy( indicesToSave, indices, hullSize );
-						*numIndicesToSave = hullSize;
-					}
-				}
-			}
-		}
-	}
-	return bestAreaSoFar;
-}
-
-[[nodiscard]]
-static bool setupOccluderContourPoly( msurface_t *surf ) {
-	if( surf->facetype != FACETYPE_PLANAR ) {
-		return false;
-	}
-
-	if( surf->mesh.numVerts >= 24 ) {
-		return false;
-	}
-
-	if( !surf->shader ) {
-		return false;
-	}
-
-	if( surf->shader->sort != SHADER_SORT_OPAQUE ) {
-		return false;
-	}
-
-	if( surf->wasTestedToBeAnOccluder ) {
-		if( surf->numOccluderPolyIndices ) {
-			assert( surf->numOccluderPolyIndices >= 4 && surf->numOccluderPolyIndices <= 7 );
-			return true;
-		}
-		return false;
-	}
-
-	surf->wasTestedToBeAnOccluder = true;
-	surf->numOccluderPolyIndices = 0;
-
-	uint8_t resultIndices[7] {};
-	unsigned numResultIndices = 0;
-	auto bestAreaSoFar = std::numeric_limits<double>::min();
-	bestAreaSoFar = getBestPolyAreaForArrangements<4>( surf, bestAreaSoFar, resultIndices, &numResultIndices );
-	bestAreaSoFar = getBestPolyAreaForArrangements<5>( surf, bestAreaSoFar, resultIndices, &numResultIndices );
-	bestAreaSoFar = getBestPolyAreaForArrangements<6>( surf, bestAreaSoFar, resultIndices, &numResultIndices );
-	bestAreaSoFar = getBestPolyAreaForArrangements<7>( surf, bestAreaSoFar, resultIndices, &numResultIndices );
-	if( bestAreaSoFar < 96.0 * 96.0 ) {
-		return false;
-	}
-
-	assert( numResultIndices >= 4 && numResultIndices <= 7 );
-	surf->numOccluderPolyIndices = (uint8_t)numResultIndices;
-	surf->sqrtOfOccluderPolyArea = (float)std::sqrt( bestAreaSoFar );
-	std::memcpy( surf->occluderPolyIndices, resultIndices, sizeof( uint8_t ) * numResultIndices );
-
-	// This is not a true centroid but should be fine for frusta setup
-	double innerPoint[3] { 0.0, 0.0, 0.0 };
-
+static bool Mod_AddOccludersFromListOfSurfs( const wsw::Vector<const msurface_t *> &surfs,
+											 wsw::Vector<OccluderBoundsEntry> *occluderBoundsEntries,
+											 wsw::Vector<OccluderDataEntry> *occluderDataEntries ) {
 	BoundsBuilder boundsBuilder;
-	for( unsigned i = 0; i < numResultIndices; ++i ) {
-		const float *vertex = surf->mesh.xyzArray[resultIndices[i]];
-		boundsBuilder.addPoint( vertex );
-		VectorAdd( innerPoint, vertex, innerPoint );
+	for( const msurface_t *surf: surfs ) {
+		boundsBuilder.addPoint( surf->mins );
+		boundsBuilder.addPoint( surf->maxs );
 	}
 
-	// TODO: Allow doing scalar 4-component stores explicitly
-	boundsBuilder.storeToWithAddedEpsilon( surf->occluderPolyMins, surf->occluderPolyMaxs );
-	surf->occluderPolyMins[3] = 0.0f;
-	surf->occluderPolyMaxs[3] = 1.0f;
+	vec3_t mins, maxs;
+	boundsBuilder.storeTo( mins, maxs );
+	if( DistanceSquared( mins, maxs ) < wsw::square( 192.0f ) ) {
+		return false;
+	}
 
-	VectorScale( innerPoint, 1.0 / numResultIndices, surf->occluderPolyInnerPoint );
+	RecastPolyMeshBuilder meshBuilder( &g_tmpVerticesBuffer, &g_tmpIndicesBuffer, &g_tmpAreaFlagsBuffer );
 
-	return true;
+	mat3_t toRecastXForm;
+	const vec3_t kRecastGroundNormal { 0.0f, 1.0f, 0.0f };
+	Matrix3_ForRotationOfDirs( surfs.front()->plane, kRecastGroundNormal, toRecastXForm );
+
+	for( const msurface_t *surf: surfs ) {
+		for( unsigned i = 0; i < surf->mesh.numElems; ++i ) {
+			vec3_t v;
+			const float *surfVertex = surf->mesh.xyzArray[surf->mesh.elems[i]];
+			Matrix3_TransformVector( toRecastXForm, surfVertex, v );
+			meshBuilder.addVertex( v );
+		}
+	}
+
+	const rcPolyMesh *polyMesh = meshBuilder.build();
+	if( !polyMesh ) {
+		return false;
+	}
+
+	const size_t oldOccludersCount = occluderDataEntries->size();
+
+	const int numVertsPerPoly = polyMesh->nvp;
+	const float cellSide      = polyMesh->cs;
+	const float cellHeight    = polyMesh->ch;
+	const float *const orig   = polyMesh->bmin;
+
+	mat3_t fromRecastXForm;
+	Matrix3_Transpose( toRecastXForm, fromRecastXForm );
+
+	for( int polyNum = 0; polyNum < polyMesh->npolys; ++polyNum ) {
+		if( polyMesh->areas[polyNum] != RC_WALKABLE_AREA ) {
+			continue;
+		}
+
+		int numVertices = 0;
+		const unsigned short* p = &polyMesh->polys[polyNum * numVertsPerPoly * 2];
+		for( ; numVertices < numVertsPerPoly; ++numVertices ) {
+			if( p[numVertices] == RC_MESH_NULL_IDX ) {
+				break;
+			}
+		}
+
+		assert( numVertices >= 3 && numVertices <= 7 );
+
+		// Triangular polys are often degenerate
+		if( numVertices < 4 ) {
+			continue;
+		}
+
+		occluderDataEntries->emplace_back( OccluderDataEntry {} );
+		occluderBoundsEntries->emplace_back( OccluderBoundsEntry {} );
+
+		OccluderDataEntry *const addedDataEntry     = std::addressof( occluderDataEntries->back() );
+		OccluderBoundsEntry *const addedBoundsEntry = std::addressof( occluderBoundsEntries->back() );
+
+		BoundsBuilder polyBoundsBuilder;
+		VectorClear( addedDataEntry->innerPolyPoint );
+		for( int vertexNum = 0; vertexNum < numVertices; ++vertexNum ) {
+			const unsigned short *recastShortVertex = &polyMesh->verts[3 * p[vertexNum]];
+
+			vec3_t recastFloatVertex;
+			recastFloatVertex[0] = orig[0] + recastShortVertex[0] * cellSide;
+			recastFloatVertex[1] = orig[1] + recastShortVertex[1] * cellHeight;
+			recastFloatVertex[2] = orig[2] + recastShortVertex[2] * cellSide;
+
+			float *const outVertex = addedDataEntry->data[vertexNum];
+			Matrix3_TransformVector( fromRecastXForm, recastFloatVertex, outVertex );
+
+			polyBoundsBuilder.addPoint( outVertex );
+
+			VectorAdd( outVertex, addedDataEntry->innerPolyPoint, addedDataEntry->innerPolyPoint );
+		}
+
+		addedDataEntry->numVertices = (unsigned)numVertices;
+
+		polyBoundsBuilder.storeTo( addedBoundsEntry->mins, addedBoundsEntry->maxs );
+		addedBoundsEntry->mins[3] = 0.0f, addedBoundsEntry->maxs[3] = 1.0f;
+
+		Vector4Copy( surfs.front()->plane, addedDataEntry->plane );
+
+		VectorScale( addedDataEntry->innerPolyPoint, Q_Rcp( (float)numVertices ), addedDataEntry->innerPolyPoint );
+	}
+
+	assert( occluderDataEntries->size() == occluderBoundsEntries->size() );
+	return occluderDataEntries->size() > oldOccludersCount;
+}
+
+struct PlaneKey {
+	const float *plane;
+
+	[[nodiscard]]
+	bool operator==( const PlaneKey &that ) const {
+		return VectorCompare( plane, that.plane ) && plane[3] == that.plane[3];
+	}
+};
+
+namespace std {
+	template <> struct hash<PlaneKey> {
+		[[nodiscard]]
+		auto operator()( const PlaneKey& key ) const -> size_t {
+			const auto *dwords = (const uint32_t *)key.plane;
+			return ( (size_t)dwords[0] * 17 + dwords[1] ) ^ ( (size_t)dwords[2] * 31 + dwords[3] );
+		}
+	};
+}
+
+static void Mod_BuildOccluders( model_t *model ) {
+	std::unordered_map<PlaneKey, wsw::Vector<const msurface_t *>> surfsBinnedByPlanes;
+
+	mbrushmodel_t *const loadbmodel = ( ( mbrushmodel_t * )model->extradata );
+	for( unsigned i = 0; i < loadbmodel->numModelSurfaces; i++ ) {
+		const msurface_t *const surf = loadbmodel->surfaces + i;
+		if( surf->facetype != FACETYPE_PLANAR ) {
+			continue;
+		}
+		if( !( surf->shader && surf->shader->sort == SHADER_SORT_OPAQUE ) ) {
+			continue;
+		}
+		const PlaneKey planeKey { .plane = surf->plane };
+		auto it = surfsBinnedByPlanes.find( planeKey );
+		if( it != surfsBinnedByPlanes.end() ) {
+			it->second.push_back( surf );
+		} else {
+			surfsBinnedByPlanes.insert( std::make_pair( planeKey, wsw::Vector<const msurface_t *> { surf } ) );
+		}
+	}
+
+	std::vector<OccluderBoundsEntry> occluderBoundsEntries;
+	std::vector<OccluderDataEntry> occluderDataEntries;
+
+	unsigned numSuitableSurfGroups = 0;
+	for( const auto &[_, listOfSurfs]: surfsBinnedByPlanes ) {
+		if( Mod_AddOccludersFromListOfSurfs( listOfSurfs, &occluderBoundsEntries, &occluderDataEntries ) ) {
+			numSuitableSurfGroups++;
+		}
+	}
+
+	assert( occluderBoundsEntries.size() == occluderDataEntries.size() );
+	const unsigned numOccluders = occluderDataEntries.size();
+
+	loadbmodel->numOccluders          = numOccluders;
+	loadbmodel->occluderBoundsEntries = (OccluderBoundsEntry *)Q_malloc( sizeof( OccluderBoundsEntry ) * numOccluders );
+	loadbmodel->occluderDataEntries   = (OccluderDataEntry *)Q_malloc( sizeof( OccluderDataEntry ) * numOccluders );
+
+	for( unsigned i = 0; i < numOccluders; ++i ) {
+		loadbmodel->occluderBoundsEntries[i] = occluderBoundsEntries[i];
+		loadbmodel->occluderDataEntries[i]   = occluderDataEntries[i];
+	}
 }
 
 static void Mod_CreateVisLeafs( model_t *mod ) {
@@ -493,13 +449,10 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 			leaf->fragmentSurfaces = nullptr;
 			leaf->numFragmentSurfaces = 0;
 			leaf->fragmentSurfaces = nullptr;
-			leaf->numOccluderSurfaces = 0;
-			leaf->occluderSurfaces = nullptr;
 		} else {
 			BoundingDopBuilder<14> boundingDopBuilder;
 			unsigned numVisSurfaces = 0;
 			unsigned numFragmentSurfaces = 0;
-			unsigned numOccluderSurfaces = 0;
 			for( unsigned j = 0; j < leaf->numVisSurfaces; j++ ) {
 				const unsigned surfNum = leaf->visSurfaces[j];
 				msurface_t *const surf = loadbmodel->surfaces + surfNum;
@@ -509,14 +462,10 @@ static void Mod_CreateVisLeafs( model_t *mod ) {
 					if( R_SurfPotentiallyFragmented( surf ) ) {
 						leaf->fragmentSurfaces[numFragmentSurfaces++] = surfNum;
 					}
-					if( setupOccluderContourPoly( surf ) ) {
-						leaf->occluderSurfaces[numOccluderSurfaces++] = surfNum;
-					}
 				}
 			}
 			leaf->numVisSurfaces      = numVisSurfaces;
 			leaf->numFragmentSurfaces = numFragmentSurfaces;
-			leaf->numOccluderSurfaces = numOccluderSurfaces;
 			if( numVisSurfaces ) {
 				boundingDopBuilder.storeTo( leaf->mins, leaf->maxs );
 				loadbmodel->visleafs[numVisLeafs++] = leaf;
@@ -707,7 +656,6 @@ static void Mod_SortModelSurfaces( model_t *mod, unsigned int modnum ) {
 			for( unsigned j = 0; j < leaf->numVisSurfaces; j++ ) {
 				leaf->visSurfaces[j] = map[leaf->visSurfaces[j]];
 				leaf->fragmentSurfaces[j] = map[leaf->fragmentSurfaces[j]];
-				leaf->occluderSurfaces[j] = map[leaf->occluderSurfaces[j]];
 			}
 		}
 	}
@@ -1337,6 +1285,12 @@ model_t *Mod_ForName( const char *name, bool crash ) {
 	if( mod->type == mod_brush ) {
 		Mod_FinalizeBrushModel( mod );
 		mod->touch = &Mod_TouchBrushModel;
+
+		if( mod_isworldmodel ) {
+			if( mod->name && Q_stricmp( mod->name, UI_BACKGROUND_MAP_PATH ) != 0 ) {
+				Mod_BuildOccluders( mod );
+			}
+		}
 	}
 
 	if( !descr->maxLods ) {

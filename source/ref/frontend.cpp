@@ -1007,6 +1007,9 @@ auto Frontend::cullWorldSurfaces()
 	m_occluderPassFullyVisibleLeavesBuffer.reserve( numWorldLeaves );
 	m_occluderPassPartiallyVisibleLeavesBuffer.reserve( numWorldLeaves );
 
+	m_visibleOccludersBuffer.reserve( rsh.worldBrushModel->numOccluders );
+	m_sortedOccludersBuffer.reserve( rsh.worldBrushModel->numOccluders );
+
 	m_drawSurfSurfSpans.reserve( numMergedSurfaces );
 	MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
@@ -1017,8 +1020,9 @@ auto Frontend::cullWorldSurfaces()
 	// Cull world leaves by the primary frustum
 	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves();
 
+	// TODO: Can run in parallel with leaves collection
 	// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-	const std::span<const SortedOccluder> visibleOccluders  = collectVisibleOccluders( visibleLeaves );
+	const std::span<const SortedOccluder> visibleOccluders  = collectVisibleOccluders();
 	// Build frusta of occluders, while performing some additional frusta pruning
 	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( visibleOccluders );
 

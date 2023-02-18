@@ -1018,12 +1018,11 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 		return;
 	}
 
-	constexpr const char *worldModelName = "maps/ui.bsp";
 	if( !m_hasStartedBackgroundMapLoading ) {
-		R_RegisterWorldModel( worldModelName );
+		R_RegisterWorldModel( UI_BACKGROUND_MAP_PATH );
 		m_hasStartedBackgroundMapLoading = true;
 	} else if( !m_hasSucceededBackgroundMapLoading ) {
-		if( R_RegisterModel( worldModelName ) ) {
+		if( R_RegisterModel( UI_BACKGROUND_MAP_PATH ) ) {
 			m_hasSucceededBackgroundMapLoading = true;
 		}
 	}
