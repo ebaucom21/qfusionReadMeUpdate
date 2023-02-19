@@ -776,11 +776,6 @@ void Ops::Trace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t
 		VectorCopy( end, tr->endpos );
 	} else {
 		VectorLerp( start, tr->fraction, end, tr->endpos );
-#ifdef TRACE_NOAXIAL
-		if( PlaneTypeForNormal( tr->plane.normal ) == PLANE_NONAXIAL ) {
-			VectorMA( tr->endpos, TRACE_NOAXIAL_SAFETY_OFFSET, tr->plane.normal, tr->endpos );
-		}
-#endif
 	}
 }
 
@@ -791,6 +786,13 @@ static void CompareTraceResults( const trace_t *tr, const char **tags, int count
 	}
 
 	int i;
+
+	for( i = 0; i < count; ++i ) {
+		if( tr[i].fraction < 0.0f || tr[i].fraction > 1.0f ) {
+			printf( "fraction: %f\n", tr[i].fraction );
+			abort();
+		}
+	}
 
 	for( i = 0; i < count - 1; ++i ) {
 		if( tr[i].fraction != tr[i + 1].fraction ) {
@@ -969,11 +971,6 @@ void CM_TransformedBoxTrace( const cmodel_state_t *cms, trace_t *tr,
 		VectorCopy( end, tr->endpos );
 	} else {
 		VectorLerp( start, tr->fraction, end, tr->endpos );
-#ifdef TRACE_NOAXIAL
-		if( PlaneTypeForNormal( tr->plane.normal ) == PLANE_NONAXIAL ) {
-			VectorMA( tr->endpos, TRACE_NOAXIAL_SAFETY_OFFSET, tr->plane.normal, tr->endpos );
-		}
-#endif
 	}
 }
 
@@ -1116,11 +1113,6 @@ void Ops::ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *st
 		VectorCopy( end, tr->endpos );
 	} else {
 		VectorLerp( start, tr->fraction, end, tr->endpos );
-#ifdef TRACE_NOAXIAL
-		if( PlaneTypeForNormal( tr->plane.normal ) == PLANE_NONAXIAL ) {
-			VectorMA( tr->endpos, TRACE_NOAXIAL_SAFETY_OFFSET, tr->plane.normal, tr->endpos );
-		}
-#endif
 	}
 }
 

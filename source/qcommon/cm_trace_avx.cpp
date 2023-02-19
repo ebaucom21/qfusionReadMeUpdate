@@ -350,10 +350,5 @@ void AvxOps::ClipToShapeList( const CMShapeList *__restrict list, trace_t *tr, c
 		VectorCopy( end, tr->endpos );
 	} else {
 		VectorLerp( start, tr->fraction, end, tr->endpos );
-#ifdef TRACE_NOAXIAL
-		if( PlaneTypeForNormal( tr->plane.normal ) == PLANE_NONAXIAL ) {
-			VectorMA( tr->endpos, TRACE_NOAXIAL_SAFETY_OFFSET, tr->plane.normal, tr->endpos );
-		}
-#endif
 	}
 }

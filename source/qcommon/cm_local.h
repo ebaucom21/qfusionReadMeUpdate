@@ -31,12 +31,6 @@ extern "C" {
 
 #define CM_SUBDIV_LEVEL     ( 16 )
 
-#define TRACE_NOAXIAL_SAFETY_OFFSET 0.1
-
-// keep 1/8 unit away to keep the position valid before network snapping
-// and to avoid various numeric issues
-#define SURFACE_CLIP_EPSILON    ( 0.125 )
-
 typedef struct {
 	char *name;
 	int contents;
