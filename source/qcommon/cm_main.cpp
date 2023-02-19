@@ -161,6 +161,11 @@ static void CM_Clear( cmodel_state_t *cms ) {
 		cms->numbrushsides = 0;
 	}
 
+	if( cms->map_brushsimddata ) {
+		Q_free( cms->map_brushsimddata );
+		cms->map_brushsimddata = NULL;
+	}
+
 	if( cms->map_pvs ) {
 		Q_free( cms->map_pvs );
 		cms->map_pvs = NULL;

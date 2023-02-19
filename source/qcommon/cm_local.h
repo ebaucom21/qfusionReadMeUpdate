@@ -83,9 +83,6 @@ typedef struct cbrush_s {
 
 	int contents;
 	int numsides;
-
-	// TODO: An external storage must be used instead!!!!
-	uint8_t simddata[1024];
 } cbrush_t;
 
 typedef struct cface_s {
@@ -166,6 +163,8 @@ struct cmodel_state_s {
 
 	int numbrushes;
 	cbrush_t *map_brushes;          // instance-local (is not shared)
+
+	uint8_t *map_brushsimddata;
 
 	int numfaces;
 	cface_t *map_faces;             // instance-local (is not shared)

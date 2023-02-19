@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "wswstringsplitter.h"
 #include "wswtonum.h"
 #include "wswvector.h"
+#include "memspecbuilder.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -42,6 +43,36 @@ __attribute__ ( (noinline) ) int BuildSimdBrushsideData( const cbrushside_t *sid
 #else
 __declspec( noinline ) int BuildSimdBrushsideData( const cbrushside_t *sides, int numSides, uint8_t *buffer );
 #endif
+
+static size_t CalcSimdBrushsideData( int numSides ) {
+	wsw::MemSpecBuilder memSpecBuilder( wsw::MemSpecBuilder::initiallyEmpty() );
+
+	const size_t numVectorGroups = (size_t)( numSides / 4 ) + ( ( numSides % 4 ) ? 1 : 0 );
+
+	// X, Y, Z
+	(void)memSpecBuilder.add<float>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<float>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<float>( 4 * numVectorGroups );
+
+	// X, Y, Z blends
+	(void)memSpecBuilder.add<uint32_t>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<uint32_t>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<uint32_t>( 4 * numVectorGroups );
+
+	// D
+	(void)memSpecBuilder.add<float>( 4 * numVectorGroups );
+
+	// Side nums, shader refs, surf flags
+	(void)memSpecBuilder.add<int>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<int>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<int>( 4 * numVectorGroups );
+
+	// Plane types, sign bits
+	(void)memSpecBuilder.add<uint16_t>( 4 * numVectorGroups );
+	(void)memSpecBuilder.add<uint16_t>( 4 * numVectorGroups );
+
+	return memSpecBuilder.sizeSoFar();
+}
 
 static inline float CM_AddSphericalBounds( vec_bounds_t mins, vec_bounds_t maxs, vec_bounds_t center ) {
 #ifdef CM_USE_SSE
@@ -304,30 +335,41 @@ static void CM_CreatePatch( cmodel_state_t *cms, cface_t *patch, int shadernum, 
 	}
 
 	if( patch->numfacets ) {
-		uint8_t *fdata;
+		size_t simdDataSize = 0;
+		for( i = 0; i < patch->numfacets; ++i ) {
+			simdDataSize += CalcSimdBrushsideData( facets[i].numsides );
+		}
 
-		fdata = (uint8_t *)Q_malloc( patch->numfacets * sizeof( cbrush_t ) + totalsides * ( sizeof( cbrushside_t ) + sizeof( cplane_t ) ) );
+		size_t brushDataSize = patch->numfacets * sizeof( cbrush_t );
+		size_t sideDataSize  = totalsides * ( sizeof( cbrushside_t ) );
+
+		uint8_t *fdata = (uint8_t *)Q_malloc( brushDataSize + sideDataSize + simdDataSize );
+
 		cms->map_face_brushdata[patch - cms->map_faces] = fdata;
 
-		patch->facets = ( cbrush_t * )fdata; fdata += patch->numfacets * sizeof( cbrush_t );
+		patch->facets = ( cbrush_t * )fdata;
+		fdata += patch->numfacets * sizeof( cbrush_t );
 		memcpy( patch->facets, facets, patch->numfacets * sizeof( cbrush_t ) );
+
 		for( i = 0, k = 0, facet = patch->facets; i < patch->numfacets; i++, facet++ ) {
-			cplane_t *planes;
 			cbrushside_t *s;
 
-			facet->brushsides = ( cbrushside_t * )fdata; fdata += facet->numsides * sizeof( cbrushside_t );
-			planes = ( cplane_t * )fdata; fdata += facet->numsides * sizeof( cplane_t );
+			facet->brushsides = ( cbrushside_t * )fdata;
+			fdata += facet->numsides * sizeof( cbrushside_t );
 
 			for( j = 0, s = facet->brushsides; j < facet->numsides; j++, s++ ) {
-				planes[j] = brushplanes[k++];
-				SnapPlane( planes[j].normal, &planes[j].dist );
-				CategorizePlane( &planes[j] );
-				CM_CopyRawToCMPlane( &planes[j], &s->plane );
+				cplane_t plane = brushplanes[k++];
+				SnapPlane( plane.normal, &plane.dist );
+				CategorizePlane( &plane );
+				CM_CopyRawToCMPlane( &plane, &s->plane );
 				s->surfFlags = shaderref->flags;
 				s->shaderNum = shadernum;
 			}
-			facet->numSseGroups = BuildSimdBrushsideData( facet->brushsides, facet->numsides, facet->simddata );
-			facet->simd = facet->simddata;
+
+			facet->simd = fdata;
+			fdata += CalcSimdBrushsideData( facet->numsides );
+
+			facet->numSseGroups = BuildSimdBrushsideData( facet->brushsides, facet->numsides, facet->simd );
 		}
 
 		patch->contents = shaderref->contents;
@@ -925,6 +967,7 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 	int count;
 	dbrush_t *in;
 	cbrush_t *out;
+	uint8_t *simdp;
 	int shaderref;
 
 	in = (dbrush_t *)( void * )( cms->cmod_base + l->fileofs );
@@ -939,6 +982,14 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 	out = cms->map_brushes = (cbrush_t *)Q_malloc( count * sizeof( *out ) );
 	cms->numbrushes = count;
 
+	size_t simddatasize = 0;
+	for( i = 0; i < count; i++, in++ ) {
+		simddatasize += CalcSimdBrushsideData( LittleLong( in->numsides ) );
+	}
+
+	simdp = cms->map_brushsimddata = (uint8_t *)Q_malloc( simddatasize );
+
+	in = (dbrush_t *)( void * )( cms->cmod_base + l->fileofs );
 	for( i = 0; i < count; i++, out++, in++ ) {
 		shaderref = LittleLong( in->shadernum );
 		out->contents = cms->map_shaderrefs[shaderref].contents;
@@ -947,8 +998,9 @@ static void CMod_LoadBrushes( cmodel_state_t *cms, lump_t *l ) {
 		CM_BoundBrush( cms, out );
 
 		out->globalNumber = (unsigned)( i + 1 );
-		out->numSseGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simddata );
-		out->simd = out->simddata;
+		out->simd = simdp;
+		out->numSseGroups = BuildSimdBrushsideData( out->brushsides, out->numsides, out->simd );
+		simdp += CalcSimdBrushsideData( out->numsides );
 	}
 }
 
