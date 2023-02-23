@@ -47,7 +47,6 @@ namespace wsw::ref {
 class alignas( 32 ) Frontend {
 private:
 	shader_t *m_coronaShader;
-	shader_t *m_particleShader;
 
 	static constexpr unsigned kMaxLightsInScene = 1024;
 	static constexpr unsigned kMaxProgramLightsInView = 32;
@@ -144,8 +143,6 @@ private:
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
 	auto getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t *;
-	[[nodiscard]]
-	bool isPointCompletelyFogged( const mfog_t *fog, const float *origin, float radius );
 
 	void bindFrameBuffer( int );
 
@@ -258,16 +255,7 @@ private:
 						uint16_t *tmpIndices,
 						VisTestedModel *tmpModels ) -> std::span<const uint16_t>;
 
-	[[nodiscard]]
-	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
-								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
-								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
-	// Allows supplying an array of pointers instead of a contignuous array
-	[[nodiscard]]
-	auto cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
-								  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
-								  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<const VisTestedModel> models,
 										  std::span<const uint16_t> indices );
@@ -296,6 +284,71 @@ private:
 
 	void submitDebugStuffToBackend( Scene *scene );
 
+	// The template parameter is needed just to make instatiation of the method in different translation units correct
+
+	enum : unsigned { Sse2 = 1 };
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto collectVisibleWorldLeavesArch() -> std::span<const unsigned>;
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto collectVisibleOccludersArch() -> std::span<const SortedOccluder>;
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto buildFrustaOfOccludersArch( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto cullLeavesByOccludersArch( std::span<const unsigned> indicesOfLeaves,
+									std::span<const Frustum> occluderFrusta )
+									-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+
+	template <unsigned Arch>
+	void cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned> indicesOfLeaves,
+												 std::span<const Frustum> occluderFrusta,
+												 MergedSurfSpan *mergedSurfSpans );
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto cullEntriesWithBoundsArch( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	template <unsigned Arch>
+	[[nodiscard]]
+	auto cullEntryPtrsWithBoundsArch( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+								      const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+								      uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	[[nodiscard]]
+	auto collectVisibleWorldLeavesSse2() -> std::span<const unsigned>;
+	[[nodiscard]]
+	auto collectVisibleOccludersSse2() -> std::span<const SortedOccluder>;
+	[[nodiscard]]
+	auto buildFrustaOfOccludersSse2( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+
+	[[nodiscard]]
+	auto cullLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+
+	void cullSurfacesInVisLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves,
+												 std::span<const Frustum> occluderFrusta,
+												 MergedSurfSpan *mergedSurfSpans );
+
+	[[nodiscard]]
+	auto cullEntriesWithBoundsSse2( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+									unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+									std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// Allows supplying an array of pointers instead of a contignuous array
+	[[nodiscard]]
+	auto cullEntryPtrsWithBoundsSse2( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+									  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+									  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
 	[[nodiscard]]
@@ -303,16 +356,26 @@ private:
 	[[nodiscard]]
 	auto buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
 
+	[[nodiscard]]
+	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+
 	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 											 std::span<const Frustum> occluderFrusta,
 											 MergedSurfSpan *mergedSurfSpans );
 
-	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, MergedSurfSpan *mergedSurfSpans );
-
 	[[nodiscard]]
-	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
-								std::span<const Frustum> occluderFrusta )
-								-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// Allows supplying an array of pointers instead of a contignuous array
+	[[nodiscard]]
+	auto cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+								  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+								  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, MergedSurfSpan *mergedSurfSpans );
 
 	void markLightsOfSurfaces( const Scene *scene,
 							   std::span<std::span<const unsigned>> spansOfLeaves,
@@ -360,5 +423,10 @@ public:
 };
 
 }
+
+#define SHOW_OCCLUDED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
+//#define SHOW_OCCLUDERS
+//#define SHOW_OCCLUDERS_FRUSTA
+//#define DEBUG_OCCLUDERS
 
 #endif

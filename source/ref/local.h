@@ -1601,4 +1601,40 @@ inline bool startsWithUtf8Bom( const char *data, size_t length ) {
 	return false;
 }
 
+// TODO: This is arch-dependent...
+[[nodiscard]]
+wsw_forceinline bool doOverlapTestFor14Dops( const float *mins1, const float *maxs1, const float *mins2, const float *maxs2 ) {
+	// TODO: Inline into call sites/reduce redundant loads
+
+	const __m128 xmmMins1_03 = _mm_loadu_ps( mins1 + 0 ), xmmMaxs1_03 = _mm_loadu_ps( maxs1 + 0 );
+	const __m128 xmmMins2_03 = _mm_loadu_ps( mins2 + 0 ), xmmMaxs2_03 = _mm_loadu_ps( maxs2 + 0 );
+	const __m128 xmmMins1_47 = _mm_loadu_ps( mins1 + 4 ), xmmMaxs1_47 = _mm_loadu_ps( maxs1 + 4 );
+	const __m128 xmmMins2_47 = _mm_loadu_ps( mins2 + 4 ), xmmMaxs2_47 = _mm_loadu_ps( maxs2 + 4 );
+
+	// Mins1 [0..3] > Maxs2[0..3]
+	__m128 cmp1 = _mm_cmpgt_ps( xmmMins1_03, xmmMaxs2_03 );
+	// Mins2 [0..3] > Maxs1[0..3]
+	__m128 cmp2 = _mm_cmpgt_ps( xmmMins2_03, xmmMaxs1_03 );
+	// Mins1 [4..7] > Maxs2[4..7]
+	__m128 cmp3 = _mm_cmpgt_ps( xmmMins1_47, xmmMaxs2_47 );
+	// Mins2 [4..7] > Maxs1[4..7]
+	__m128 cmp4 = _mm_cmpgt_ps( xmmMins2_47, xmmMaxs1_47 );
+	// Zero if no comparison was successful
+	return _mm_movemask_ps( _mm_or_ps( _mm_or_ps( cmp1, cmp2 ), _mm_or_ps( cmp3, cmp4 ) ) ) == 0;
+}
+
+inline unsigned R_PackSortKey( unsigned shaderNum, int fogNum,
+							   int portalNum, unsigned entNum ) {
+	return ( shaderNum & 0x7FF ) << 21 | ( entNum & 0x7FF ) << 10 |
+		   ( ( ( portalNum + 1 ) & 0x1F ) << 5 ) | ( (unsigned)( fogNum + 1 ) & 0x1F );
+}
+
+inline void R_UnpackSortKey( unsigned sortKey, unsigned *shaderNum, int *fogNum,
+							 int *portalNum, unsigned *entNum ) {
+	*shaderNum = ( sortKey >> 21 ) & 0x7FF;
+	*entNum = ( sortKey >> 10 ) & 0x7FF;
+	*portalNum = (signed int)( ( sortKey >> 5 ) & 0x1F ) - 1;
+	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
+}
+
 #endif // R_LOCAL_H
