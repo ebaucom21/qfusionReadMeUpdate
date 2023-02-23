@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <algorithm>
 
-#define SHOW_CULLED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
+#define SHOW_OCCLUDED( v1, v2, color ) do { /* addDebugLine( v1, v2, color ); */ } while( 0 )
 //#define SHOW_OCCLUDERS
 //#define SHOW_OCCLUDERS_FRUSTA
 //#define DEBUG_OCCLUDERS
@@ -532,7 +532,7 @@ auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 
 			if( !( nonZeroIfOutside | nonZeroIfPartiallyOutside ) ) {
 				wasFullyInside = true;
-				SHOW_CULLED( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
+				SHOW_OCCLUDED( leaf->mins, leaf->maxs, COLOR_RGB( 255, 0, 255 ) );
 				break;
 			}
 
@@ -594,7 +594,7 @@ void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> ind
 
 					if( !zeroIfFullyInside ) [[unlikely]] {
 						surfVisible = false;
-						SHOW_CULLED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
+						SHOW_OCCLUDED( surf->mins, surf->maxs, COLOR_RGB( 192, 0, 0 ) );
 						break;
 					}
 				} while( ++frustumNum != numBestOccluders );
@@ -633,50 +633,42 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 auto Frontend::cullNullModelEntities( std::span<const entity_t> entitiesSpan,
 									  const Frustum *__restrict primaryFrustum,
 									  std::span<const Frustum> occluderFrusta,
-									  uint16_t *tmpIndices )
+									  uint16_t *tmpIndices,
+									  VisTestedModel *tmpModels )
 									  -> std::span<const uint16_t> {
 	const auto *const entities  = entitiesSpan.data();
 	const unsigned numEntities  = entitiesSpan.size();
 
-	unsigned numPassedEntities = 0;
-	for( unsigned i = 0; i < numEntities; ++i ) {
-		const entity_t *const __restrict entity = &entities[i];
-		vec4_t mins { -16, -16, -16, -0 };
-		vec4_t maxs { +16, +16, +16, +1 };
-		VectorAdd( mins, entity->origin, mins );
-		VectorAdd( maxs, entity->origin, maxs );
-
-		LOAD_BOX_COMPONENTS( mins, maxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedEntities++] = i;
-			}
-		}
+	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
+		const entity_t *const __restrict entity = &entities[entIndex];
+		VisTestedModel *const __restrict model  = &tmpModels[entIndex];
+		Vector4Set( model->absMins, -16, -16, -16, -0 );
+		Vector4Set( model->absMaxs, +16, +16, +16, +1 );
+		VectorAdd( model->absMins, entity->origin, model->absMins );
+		VectorAdd( model->absMaxs, entity->origin, model->absMaxs );
 	}
 
-	return { tmpIndices, numPassedEntities };
+	// The number of bounds has an exact match with the number of entities in this case
+	return cullEntriesWithBounds( tmpModels, numEntities, offsetof( VisTestedModel, absMins ),
+								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 									   const Frustum *__restrict primaryFrustum,
 									   std::span<const Frustum> occluderFrusta,
-									   VisTestedModel *tmpBuffer )
-									   -> std::span<VisTestedModel> {
+									   uint16_t *tmpIndicesBuffer,
+									   VisTestedModel *selectedModelsBuffer )
+									   -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
-	unsigned numPassedEntities = 0;
-	for( unsigned i = 0; i < numEntities; ++i ) {
-		const entity_t *const __restrict entity = &entities[i];
+	unsigned weaponModelFlagEnts[16];
+	const model_t *weaponModelFlagLods[16];
+	unsigned numWeaponModelFlagEnts = 0;
+
+	unsigned numSelectedModels = 0;
+	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
+		const entity_t *const __restrict entity = &entities[entIndex];
 		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
 			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
@@ -693,58 +685,62 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 			continue;
 		}
 
-		vec4_t absMins, absMaxs;
-		R_AliasModelLerpBBox( entity, mod, absMins, absMaxs );
-		VectorAdd( absMins, entity->origin, absMins );
-		VectorAdd( absMaxs, entity->origin, absMaxs );
-
 		// Don't let it to be culled away
 		// TODO: Keep it separate from other models?
 		if( entity->flags & RF_WEAPONMODEL ) [[unlikely]] {
-			VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
-			VectorCopy( absMins, tested->absMins );
-			VectorCopy( absMaxs, tested->absMaxs );
-			tested->selectedLod = mod;
-			tested->indexInEntitiesGroup = i;
+			assert( numWeaponModelFlagEnts < std::size( weaponModelFlagEnts ) );
+			weaponModelFlagEnts[numWeaponModelFlagEnts] = entIndex;
+			weaponModelFlagLods[numWeaponModelFlagEnts] = mod;
+			numWeaponModelFlagEnts++;
 			continue;
 		}
 
-		LOAD_BOX_COMPONENTS( absMins, absMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 0, 128, 255 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
-				VectorCopy( absMins, tested->absMins );
-				VectorCopy( absMaxs, tested->absMaxs );
-				tested->selectedLod = mod;
-				tested->indexInEntitiesGroup = i;
-			}
-		}
+		VisTestedModel *__restrict visTestedModel = &selectedModelsBuffer[numSelectedModels++];
+		visTestedModel->selectedLod               = mod;
+		visTestedModel->indexInEntitiesGroup      = entIndex;
+
+		R_AliasModelLerpBBox( entity, mod, visTestedModel->absMins, visTestedModel->absMaxs );
+		VectorAdd( visTestedModel->absMins, entity->origin, visTestedModel->absMins );
+		VectorAdd( visTestedModel->absMaxs, entity->origin, visTestedModel->absMaxs );
+		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	return { tmpBuffer, numPassedEntities };
+	const size_t numPassedOtherEnts = cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels,
+															 offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
+															 primaryFrustum, occluderFrusta, tmpIndicesBuffer ).size();
+
+	for( unsigned i = 0; i < numWeaponModelFlagEnts; ++i ) {
+		VisTestedModel *__restrict visTestedModel = &selectedModelsBuffer[numSelectedModels];
+		visTestedModel->selectedLod               = weaponModelFlagLods[i];
+		visTestedModel->indexInEntitiesGroup      = weaponModelFlagEnts[i];
+
+		const entity_t *const __restrict entity = &entities[visTestedModel->indexInEntitiesGroup];
+
+		// Just for consistency?
+		R_AliasModelLerpBBox( entity, visTestedModel->selectedLod, visTestedModel->absMins, visTestedModel->absMaxs );
+		VectorAdd( visTestedModel->absMins, entity->origin, visTestedModel->absMins );
+		VectorAdd( visTestedModel->absMaxs, entity->origin, visTestedModel->absMaxs );
+		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
+
+		tmpIndicesBuffer[numPassedOtherEnts + i] = numSelectedModels;
+		numSelectedModels++;
+	}
+
+	return { tmpIndicesBuffer, numPassedOtherEnts + numWeaponModelFlagEnts };
 }
 
 auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan,
 										  const Frustum *__restrict primaryFrustum,
 										  std::span<const Frustum> occluderFrusta,
-										  VisTestedModel *tmpBuffer )
-										  -> std::span<VisTestedModel> {
+										  uint16_t *tmpIndicesBuffer,
+										  VisTestedModel *selectedModelsBuffer )
+										  -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
-	unsigned numPassedEntities = 0;
-	for( unsigned i = 0; i < numEntities; i++ ) {
-		const entity_t *const __restrict entity = &entities[i];
+	unsigned numSelectedModels = 0;
+	for( unsigned entIndex = 0; entIndex < numEntities; entIndex++ ) {
+		const entity_t *const __restrict entity = &entities[entIndex];
 		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
 			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
@@ -760,89 +756,63 @@ auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan
 			continue;
 		}
 
-		vec4_t absMins, absMaxs;
-		R_SkeletalModelLerpBBox( entity, mod, absMins, absMaxs );
-		VectorAdd( absMins, entity->origin, absMins );
-		VectorAdd( absMaxs, entity->origin, absMaxs );
+		VisTestedModel *__restrict visTestedModel = &selectedModelsBuffer[numSelectedModels++];
+		visTestedModel->selectedLod               = mod;
+		visTestedModel->indexInEntitiesGroup      = entIndex;
 
-		LOAD_BOX_COMPONENTS( absMins, absMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 0, 255, 128 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				VisTestedModel *tested = &tmpBuffer[numPassedEntities++];
-				VectorCopy( absMins, tested->absMins );
-				VectorCopy( absMaxs, tested->absMaxs );
-				tested->selectedLod = mod;
-				tested->indexInEntitiesGroup = i;
-			}
-		}
+		R_SkeletalModelLerpBBox( entity, mod, visTestedModel->absMins, visTestedModel->absMaxs );
+		VectorAdd( visTestedModel->absMins, entity->origin, visTestedModel->absMins );
+		VectorAdd( visTestedModel->absMaxs, entity->origin, visTestedModel->absMaxs );
+		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	return { tmpBuffer, numPassedEntities };
+	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
+								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndicesBuffer );
 }
 
 auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
 									   const Frustum *__restrict primaryFrustum,
 									   std::span<const Frustum> occluderFrusta,
-									   uint16_t *tmpIndices )
+									   uint16_t *tmpIndicesBuffer,
+									   VisTestedModel *selectedModelsBuffer )
 									   -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
-	unsigned numPassedEntities = 0;
-	for( unsigned i = 0; i < numEntities; ++i ) {
-		const entity_t *const __restrict entity = &entities[i];
-		const model_t *const model = entity->model;
-		const auto *const brushModel = ( mbrushmodel_t * )model->extradata;
+	unsigned numSelectedModels = 0;
+	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
+		const entity_t *const __restrict entity = &entities[entIndex];
+		const model_t *const model              = entity->model;
+		const auto *const brushModel            = ( mbrushmodel_t * )model->extradata;
 		if( !brushModel->numModelDrawSurfaces ) [[unlikely]] {
 			continue;
 		}
 
-		vec4_t absMins, absMaxs;
-		// Returns absolute bounds
-		R_BrushModelBBox( entity, absMins, absMaxs );
+		VisTestedModel *__restrict visTestedModel = &selectedModelsBuffer[numSelectedModels++];
+		visTestedModel->selectedLod               = model;
+		visTestedModel->indexInEntitiesGroup      = entIndex;
 
-		LOAD_BOX_COMPONENTS( absMins, absMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( absMins, absMaxs, COLOR_RGB( 128, 255, 128 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedEntities++] = i;
-			}
-		}
+		// Returns absolute bounds
+		R_BrushModelBBox( entity, visTestedModel->absMins, visTestedModel->absMaxs );
+		visTestedModel->absMins[3] = 0.0f, visTestedModel->absMaxs[3] = 1.0f;
 	}
 
-	return { tmpIndices, numPassedEntities };
+	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
+								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndicesBuffer );
 }
 
 auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 								   const Frustum *__restrict primaryFrustum,
 								   std::span<const Frustum> occluderFrusta,
-								   uint16_t *tmpIndices )
+								   uint16_t *tmpIndices, uint16_t *tmpIndices2, VisTestedModel *tmpModels )
 								   -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
-	unsigned numPassedEntities = 0;
-	for( unsigned i = 0; i < numEntities; ++i ) {
-		const entity_t *const __restrict entity = &entities[i];
+	unsigned numResultEntities    = 0;
+	unsigned numVisTestedEntities = 0;
+	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
+		const entity_t *const __restrict entity = &entities[entIndex];
 		// TODO: This condition should be eliminated from this path
 		if( entity->flags & RF_NOSHADOW ) [[unlikely]] {
 			if( m_state.renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
@@ -856,34 +826,29 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 
 		// Hacks for ET_RADAR indicators
 		if( entity->flags & RF_NODEPTHTEST ) [[unlikely]] {
-			tmpIndices[numPassedEntities++] = i;
+			tmpIndices[numResultEntities++] = entIndex;
 			continue;
 		}
 
+		VisTestedModel *__restrict visTestedModel = &tmpModels[numVisTestedEntities++];
+		visTestedModel->indexInEntitiesGroup      = entIndex;
+
 		const float *origin = entity->origin;
 		const float halfRadius = 0.5f * entity->radius;
-		const vec4_t mins { origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f };
-		const vec4_t maxs { origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f };
-		// TODO: Add frustum/sphere tests
-		LOAD_BOX_COMPONENTS( mins, maxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( mins, maxs, COLOR_RGB( 255, 96, 255 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedEntities++] = i;
-			}
-		}
+
+		Vector4Set( visTestedModel->absMins, origin[0] - halfRadius, origin[1] - halfRadius, origin[2] - halfRadius, 0.0f );
+		Vector4Set( visTestedModel->absMaxs, origin[0] + halfRadius, origin[1] + halfRadius, origin[2] + halfRadius, 1.0f );
 	}
 
-	return { tmpIndices, numPassedEntities };
+	const auto passedTestIndices = cullEntriesWithBounds( tmpModels, numVisTestedEntities,
+														  offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
+														  primaryFrustum, occluderFrusta, tmpIndices2 );
+
+	for( const auto testedModelIndex: passedTestIndices ) {
+		tmpIndices[numResultEntities++] = tmpModels[testedModelIndex].indexInEntitiesGroup;
+	}
+
+	return { tmpIndices, numResultEntities };
 }
 
 auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
@@ -897,38 +862,23 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 	const auto *const lights = lightsSpan.data();
 	const unsigned numLights = lightsSpan.size();
 
-	unsigned numAllPassedLights     = 0;
+	static_assert( offsetof( Scene::DynamicLight, mins ) + 4 * sizeof( float ) == offsetof( Scene::DynamicLight, maxs ) );
+	const auto visibleAllLightIndices = cullEntriesWithBounds( lights, numLights, offsetof( Scene::DynamicLight, mins ),
+															   sizeof( Scene::DynamicLight ), primaryFrustum,
+															   occluderFrusta, tmpAllLightIndices );
+
 	unsigned numPassedCoronaLights  = 0;
 	unsigned numPassedProgramLights = 0;
 
-	for( unsigned i = 0; i < numLights; ++i ) {
-		const Scene::DynamicLight *const __restrict light = &lights[i];
-
-		// TODO: Add frustum/sphere tests
-		LOAD_BOX_COMPONENTS( light->mins, light->maxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside )
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( light->mins, light->maxs, COLOR_RGB( 0, 255, 0 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpAllLightIndices[numAllPassedLights] = i;
-				numAllPassedLights += 1;
-				tmpCoronaLightIndices[numPassedCoronaLights] = i;
-				numPassedCoronaLights += light->hasCoronaLight;
-				tmpProgramLightIndices[numPassedProgramLights] = i;
-				numPassedProgramLights += light->hasProgramLight;
-			}
-		}
+	for( const auto index: visibleAllLightIndices ) {
+		const Scene::DynamicLight *light               = &lights[index];
+		tmpCoronaLightIndices[numPassedCoronaLights]   = index;
+		tmpProgramLightIndices[numPassedProgramLights] = index;
+		numPassedCoronaLights  += light->hasCoronaLight;
+		numPassedProgramLights += light->hasProgramLight;
 	}
 
-	return { { tmpAllLightIndices,     numAllPassedLights },
+	return { visibleAllLightIndices,
 			 { tmpCoronaLightIndices,  numPassedCoronaLights },
 			 { tmpProgramLightIndices, numPassedProgramLights } };
 }
@@ -938,106 +888,38 @@ auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate
 									   std::span<const Frustum> occluderFrusta,
 									   uint16_t *tmpIndices )
 									   -> std::span<const uint16_t> {
-	const auto *const aggregates = aggregatesSpan.data();
-	const unsigned numAggregates = aggregatesSpan.size();
-
-	unsigned numPassedAggregates = 0;
-	for( unsigned i = 0; i < numAggregates; ++i ) {
-		const Scene::ParticlesAggregate *aggregate = aggregates + i;
-
-		LOAD_BOX_COMPONENTS( aggregate->mins, aggregate->maxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( aggregate->mins, aggregate->maxs, COLOR_RGB( 255, 255, 0 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedAggregates++] = i;
-			}
-		}
-	}
-
-	return { tmpIndices, numPassedAggregates };
+	static_assert( offsetof( Scene::ParticlesAggregate, mins ) + 16 == offsetof( Scene::ParticlesAggregate, maxs ) );
+	return cullEntriesWithBounds( aggregatesSpan.data(), aggregatesSpan.size(), offsetof( Scene::ParticlesAggregate, mins ),
+								  sizeof( Scene::ParticlesAggregate ), primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullCompoundDynamicMeshes( std::span<const Scene::CompoundDynamicMesh> meshesSpan,
 										  const Frustum *__restrict primaryFrustum,
 										  std::span<const Frustum> occluderFrusta,
 										  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
-	const auto *const meshes = meshesSpan.data();
-	const unsigned numMeshes = meshesSpan.size();
-
-	unsigned numPassedMeshes = 0;
-	for( unsigned i = 0; i < numMeshes; ++i ) {
-		const Scene::CompoundDynamicMesh *mesh = meshes + i;
-
-		LOAD_BOX_COMPONENTS( mesh->cullMins, mesh->cullMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( mesh->cullMins, mesh->cullMaxs, COLOR_RGB( 255, 128, 128 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedMeshes++] = i;
-			}
-		}
-	}
-
-	return { tmpIndices, numPassedMeshes };
+	static_assert( offsetof( Scene::CompoundDynamicMesh, cullMins ) + 16 == offsetof( Scene::CompoundDynamicMesh, cullMaxs ) );
+	return cullEntriesWithBounds( meshesSpan.data(), meshesSpan.size(), offsetof( Scene::CompoundDynamicMesh, cullMins ),
+								  sizeof( Scene::CompoundDynamicMesh ), primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 							  const Frustum *__restrict primaryFrustum,
 							  std::span<const Frustum> occluderFrusta,
-							  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
-	unsigned numPassedPolys = 0;
-	for( unsigned i = 0; i < numPolys; ++i ) {
-		const QuadPoly *const __restrict poly = polys[i];
+							  uint16_t *tmpIndices,
+							  VisTestedModel *tmpModels )
+							  -> std::span<const uint16_t> {
+	for( unsigned polyNum = 0; polyNum < numPolys; ++polyNum ) {
+		const QuadPoly *const __restrict poly  = polys[polyNum];
+		VisTestedModel *const __restrict model = &tmpModels[polyNum];
 
-		alignas( 16 ) const vec4_t polyMins {
-			poly->origin[0] - poly->halfExtent,
-			poly->origin[1] - poly->halfExtent,
-			poly->origin[2] - poly->halfExtent,
-			0.0f,
-		};
-		alignas( 16 ) const vec4_t polyMaxs {
-			poly->origin[0] + poly->halfExtent,
-			poly->origin[1] + poly->halfExtent,
-			poly->origin[2] + poly->halfExtent,
-			1.0f,
-		};
-
-		LOAD_BOX_COMPONENTS( polyMins, polyMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( polyMins, polyMaxs, COLOR_RGB( 255, 144, 172 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedPolys++] = i;
-			}
-		}
+		Vector4Set( model->absMins, -poly->halfExtent, -poly->halfExtent, -poly->halfExtent, -0 );
+		Vector4Set( model->absMaxs, +poly->halfExtent, +poly->halfExtent, +poly->halfExtent, +1 );
+		VectorAdd( model->absMins, poly->origin, model->absMins );
+		VectorAdd( model->absMaxs, poly->origin, model->absMaxs );
 	}
 
-	return { tmpIndices, numPassedPolys };
+	return cullEntriesWithBounds( tmpModels, numPolys, offsetof( VisTestedModel, absMins ),
+								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
@@ -1045,29 +927,122 @@ auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
 								  const Frustum *__restrict primaryFrustum,
 								  std::span<const Frustum> occluderFrusta,
 								  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
-	unsigned numPassedMeshes = 0;
-	for( unsigned i = 0; i < numMeshes; ++i ) {
-		const DynamicMesh *const mesh = meshes[i];
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+	constexpr unsigned boundsFieldOffset = offsetof( DynamicMesh, cullMins );
+	static_assert( offsetof( DynamicMesh, cullMins ) + 4 * sizeof( float ) == offsetof( DynamicMesh, cullMaxs ) );
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
-		LOAD_BOX_COMPONENTS( mesh->cullMins, mesh->cullMaxs );
-		COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
-		if( nonZeroIfFullyOutside == 0 ) {
-			bool occluded = false;
-			for( const Frustum &__restrict f: occluderFrusta ) {
-				COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( std::addressof( f ), const int zeroIfFullyInside )
-				if( zeroIfFullyInside == 0 ) {
-					SHOW_CULLED( mesh->cullMins, mesh->cullMaxs, COLOR_RGB( 255, 144, 172 ) );
-					occluded = true;
-					break;
-				}
-			}
-			if( !occluded ) {
-				tmpIndices[numPassedMeshes++] = i;
-			}
-		}
+	return cullEntryPtrsWithBounds( (const void **)meshes, numMeshes, boundsFieldOffset, primaryFrustum, occluderFrusta, tmpIndices );
+}
+
+auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset, unsigned strideInBytes,
+									  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+									  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+	if( !numEntries ) [[unlikely]] {
+		return { tmpIndices, 0 };
 	}
 
-	return { tmpIndices, numPassedMeshes };
+	const Frustum *const __restrict frustaPtr = occluderFrusta.data();
+
+	unsigned entryNum         = 0;
+	unsigned growingOffset    = boundsFieldOffset;
+	unsigned numPassedEntries = 0;
+
+	if( !occluderFrusta.empty() ) [[likely]] {
+		do {
+			const auto *__restrict bounds = (const vec4_t *)( (const uint8_t *)entries + growingOffset );
+			LOAD_BOX_COMPONENTS( bounds[0], bounds[1] );
+			COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+			if( nonZeroIfFullyOutside == 0 ) {
+				bool occluded = false;
+				unsigned frustumNum = 0;
+				do {
+					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( frustaPtr + frustumNum, const int zeroIfFullyInside );
+					if( zeroIfFullyInside == 0 ) {
+						SHOW_OCCLUDED( bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
+						occluded = true;
+						break;
+					}
+				} while( ++frustumNum < occluderFrusta.size() );
+
+				tmpIndices[numPassedEntries] = (uint16_t)entryNum;
+				numPassedEntries += !occluded;
+			}
+
+			++entryNum;
+			growingOffset += strideInBytes;
+		} while ( entryNum < numEntries );
+	} else {
+		do {
+			const auto *__restrict bounds = (const vec4_t *)( (const uint8_t *)entries + growingOffset );
+			LOAD_BOX_COMPONENTS( bounds[0], bounds[1] );
+			COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+
+			tmpIndices[numPassedEntries] = (uint16_t)entryNum;
+			numPassedEntries += ( nonZeroIfFullyOutside == 0 );
+
+			++entryNum;
+			growingOffset += strideInBytes;
+		} while( entryNum < numEntries );
+	}
+
+	return { tmpIndices, numPassedEntries };
+}
+
+[[nodiscard]]
+auto Frontend::cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+										const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+										uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+	if( !numEntries ) [[unlikely]] {
+		return { tmpIndices, 0 };
+	}
+
+	const Frustum *const __restrict frustaPtr = occluderFrusta.data();
+
+	unsigned entryNum         = 0;
+	unsigned numPassedEntries = 0;
+	if( !occluderFrusta.empty() ) [[likely]] {
+		do {
+			const auto *__restrict bounds = (const vec4_t *)( (const uint8_t *)entryPtrs[entryNum] + boundsFieldOffset );
+			LOAD_BOX_COMPONENTS( bounds[0], bounds[1] );
+			COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+			if ( nonZeroIfFullyOutside == 0 ) {
+				bool occluded = false;
+				unsigned frustumNum = 0;
+				do {
+					COMPUTE_RESULT_OF_FULLY_INSIDE_TEST_FOR_8_PLANES( frustaPtr + frustumNum, const int zeroIfFullyInside );
+					if( zeroIfFullyInside == 0 ) {
+						SHOW_OCCLUDED( bounds[0], bounds[1], COLOR_RGB( 255, 192, 255 ) );
+						occluded = true;
+						break;
+					}
+				} while( ++frustumNum < occluderFrusta.size() );
+
+				tmpIndices[numPassedEntries] = (uint16_t)entryNum;
+				numPassedEntries += !occluded;
+			}
+
+			++entryNum;
+		} while( entryNum < numEntries );
+	} else {
+		do {
+			const auto *__restrict bounds = (const vec4_t *)( (const uint8_t *)entryPtrs[entryNum] + boundsFieldOffset );
+			LOAD_BOX_COMPONENTS( bounds[0], bounds[1] );
+			COMPUTE_RESULT_OF_FULLY_OUTSIDE_TEST_FOR_4_PLANES( primaryFrustum, const int nonZeroIfFullyOutside );
+
+			tmpIndices[numPassedEntries] = (uint16_t)entryNum;
+			numPassedEntries += ( nonZeroIfFullyOutside == 0 );
+
+			++entryNum;
+		} while( entryNum < numEntries );
+	}
+
+	return { tmpIndices, numPassedEntries };
 }
 
 }

@@ -126,12 +126,15 @@ private:
 
 	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpans;
 
-	struct VisTestedModel {
+	struct alignas( 16 ) VisTestedModel {
+		vec4_t absMins, absMaxs;
 		// TODO: Pass lod number?
 		const model_t *selectedLod;
-		vec3_t absMins, absMaxs;
 		unsigned indexInEntitiesGroup;
 	};
+
+	// Make sure it can be supplied to the generic culling subroutine
+	static_assert( offsetof( VisTestedModel, absMins ) + 4 * sizeof( float ) == offsetof( VisTestedModel, absMaxs ) );
 
 	BufferHolder<VisTestedModel> m_visTestedModelsBuffer;
 
@@ -177,35 +180,40 @@ private:
 	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
 								const Frustum *__restrict primaryFrustum,
 								std::span<const Frustum> occluderFrusta,
-								uint16_t *tmpIndices )
+								uint16_t *tmpIndices,
+								VisTestedModel *tmpModels )
 								-> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto cullAliasModelEntities( std::span<const entity_t> aliasModelEntities,
 								 const Frustum *__restrict primaryFrustum,
 								 std::span<const Frustum> occluderFrusta,
-								 VisTestedModel *tmpBuffer )
-								 -> std::span<VisTestedModel>;
+								 uint16_t *tmpIndicesBuffer,
+								 VisTestedModel *selectedModelsBuffer )
+								 -> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto cullSkeletalModelEntities( std::span<const entity_t> skeletalModelEntities,
 									const Frustum *__restrict primaryFrustum,
 									std::span<const Frustum> occluderFrusta,
-									VisTestedModel *tmpBuffer )
-									-> std::span<VisTestedModel>;
+									uint16_t *tmpIndicesBuffer,
+									VisTestedModel *selectedModelsBuffer )
+									-> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto cullBrushModelEntities( std::span<const entity_t> brushModelEntities,
 								 const Frustum *__restrict primaryFrustum,
 								 std::span<const Frustum> occluderFrusta,
-								 uint16_t *tmpIndices )
+								 uint16_t *tmpIndicesBuffer,
+								 VisTestedModel *selectedModelsBuffer )
 								 -> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto cullSpriteEntities( std::span<const entity_t> spriteEntities,
 							 const Frustum *__restrict primaryFrustum,
 							 std::span<const Frustum> occluderFrusta,
-							 uint16_t *tmpIndices )
+							 uint16_t *tmpIndices, uint16_t *tmpIndices2,
+							 VisTestedModel *tmpModels )
 							 -> std::span<const uint16_t>;
 
 	[[nodiscard]]
@@ -242,18 +250,34 @@ private:
 							uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// TODO: Check why spans can't be supplied
+	// TODO: We can avoid supplying tmpModels argument if a generic sphere culling subroutine is available
 	[[nodiscard]]
 	auto cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 						const Frustum *__restrict primaryFrustum,
 						std::span<const Frustum> occluderFrusta,
-						uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+						uint16_t *tmpIndices,
+						VisTestedModel *tmpModels ) -> std::span<const uint16_t>;
 
-	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<VisTestedModel> indices );
-	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<VisTestedModel> indices );
+	[[nodiscard]]
+	auto cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+								unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// Allows supplying an array of pointers instead of a contignuous array
+	[[nodiscard]]
+	auto cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+								  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+								  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<const VisTestedModel> models,
+										  std::span<const uint16_t> indices );
+	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<const VisTestedModel> models,
+											 std::span<const uint16_t> indices );
 
 	void addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices );
-	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices,
-										  std::span<const Scene::DynamicLight> lights );
+	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const VisTestedModel> models,
+										  std::span<const uint16_t> indices, std::span<const Scene::DynamicLight> lights );
+
 	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
 
 	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,

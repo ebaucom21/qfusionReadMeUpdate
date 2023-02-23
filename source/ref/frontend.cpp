@@ -456,9 +456,11 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 static drawSurfaceType_t spriteDrawSurf = ST_SPRITE;
 
 void Frontend::addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities,
-												std::span<VisTestedModel> visibleModels ) {
-	for( const VisTestedModel &visTestedModel: visibleModels ) {
-		const entity_t *const __restrict entity = aliasModelEntities + visTestedModel.indexInEntitiesGroup;
+												std::span<const VisTestedModel> models,
+												std::span<const uint16_t> indices ) {
+	for( const auto modelIndex: indices ) {
+		const VisTestedModel &__restrict visTestedModel = models[modelIndex];
+		const entity_t *const __restrict entity          = aliasModelEntities + visTestedModel.indexInEntitiesGroup;
 
 		float distance;
 		// make sure weapon model is always closest to the viewer
@@ -501,9 +503,11 @@ void Frontend::addAliasModelEntitiesToSortList( const entity_t *aliasModelEntiti
 }
 
 void Frontend::addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities,
-												   std::span<VisTestedModel> visibleModels ) {
-	for( const VisTestedModel &visTestedModel: visibleModels ) {
-		const entity_t *const __restrict entity = skeletalModelEntities + visTestedModel.indexInEntitiesGroup;
+												   std::span<const VisTestedModel> models,
+												   std::span<const uint16_t> indices ) {
+	for( const auto modelIndex: indices ) {
+		const VisTestedModel &__restrict visTestedModel = models[modelIndex];
+		const entity_t *const __restrict entity         = skeletalModelEntities + visTestedModel.indexInEntitiesGroup;
 
 		float distance;
 		// make sure weapon model is always closest to the viewer
@@ -546,20 +550,20 @@ void Frontend::addNullModelEntitiesToSortList( const entity_t *nullModelEntities
 	}
 }
 
-void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const uint16_t> indices,
-												std::span<const Scene::DynamicLight> lights ) {
+void Frontend::addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const VisTestedModel> models,
+												std::span<const uint16_t> indices, std::span<const Scene::DynamicLight> lights ) {
 	drawSurfaceBSP_t *const mergedSurfaces = rsh.worldBrushModel->drawSurfaces;
 	msurface_s *const surfaces = rsh.worldBrushModel->surfaces;
 
-	for( const auto index: indices ) {
-		const entity_t *const __restrict entity = brushModelEntities + index;
-		const model_t *const model = entity->model;
-		const auto *const brushModel = ( mbrushmodel_t * )model->extradata;
+	for( const auto modelIndex: indices ) {
+		const VisTestedModel &visTestedModel = models[modelIndex];
+		const auto *const model              = visTestedModel.selectedLod;
+		const auto *const entity             = brushModelEntities + visTestedModel.indexInEntitiesGroup;
+		const auto *const brushModel         = ( mbrushmodel_t * )model->extradata;
 		assert( brushModel->numModelDrawSurfaces );
 
 		vec3_t origin;
-		VectorAdd( entity->model->mins, entity->model->maxs, origin );
-		VectorMA( entity->origin, 0.5, origin, origin );
+		VectorAvg( visTestedModel.absMins, visTestedModel.absMaxs, origin );
 
 		for( unsigned i = 0; i < brushModel->numModelDrawSurfaces; i++ ) {
 			const unsigned surfNum = brushModel->firstModelDrawSurface + i;
@@ -838,42 +842,45 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 }
 
 void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta ) {
-	uint16_t tmpQuadIndices[MAX_QUAD_POLYS];
-	QuadPoly **quadPolys = scene->m_quadPolys.data();
-	const auto visibleQuadPolyIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_frustum, frusta, tmpQuadIndices );
+	VisTestedModel *tmpModels = m_visTestedModelsBuffer.data.get();
+	QuadPoly **quadPolys      = scene->m_quadPolys.data();
+
+	uint16_t tmpIndices[MAX_QUAD_POLYS];
+	const auto visibleIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_frustum, frusta, tmpIndices, tmpModels );
 
 	const auto *polyEntity = scene->m_polyent;
-	for( const unsigned index: visibleQuadPolyIndices ) {
+	for( const unsigned index: visibleIndices ) {
 		QuadPoly *const p = quadPolys[index];
 		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
 	}
 }
 
 void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta ) {
-	uint16_t indices[MAX_ENTITIES];
+	uint16_t indices[MAX_ENTITIES], indices2[MAX_ENTITIES];
 	m_visTestedModelsBuffer.reserve( MAX_ENTITIES );
 	VisTestedModel *const visModels = m_visTestedModelsBuffer.data.get();
 
 	const std::span<const entity_t> nullModelEntities = scene->m_nullModelEntities;
-	const auto visibleNullModelEntityIndices = cullNullModelEntities( nullModelEntities, &m_frustum, frusta, indices );
-	addNullModelEntitiesToSortList( nullModelEntities.data(), visibleNullModelEntityIndices );
+	const auto nullModelIndices = cullNullModelEntities( nullModelEntities, &m_frustum, frusta, indices, visModels );
+	addNullModelEntitiesToSortList( nullModelEntities.data(), nullModelIndices );
 
 	const std::span<const entity_t> aliasModelEntities = scene->m_aliasModelEntities;
-	const auto visibleAliasModels = cullAliasModelEntities( aliasModelEntities, &m_frustum, frusta, visModels );
-	addAliasModelEntitiesToSortList( aliasModelEntities.data(), visibleAliasModels );
+	const auto aliasModelIndices = cullAliasModelEntities( aliasModelEntities, &m_frustum, frusta, indices, visModels );
+	addAliasModelEntitiesToSortList( aliasModelEntities.data(), { visModels, aliasModelIndices.size() }, aliasModelIndices );
 
 	const std::span<const entity_t> skeletalModelEntities = scene->m_skeletalModelEntities;
-	const auto visibleSkeletalModels = cullSkeletalModelEntities( skeletalModelEntities, &m_frustum, frusta, visModels );
-	addSkeletalModelEntitiesToSortList( skeletalModelEntities.data(), visibleSkeletalModels );
+	const auto skeletalModelIndices = cullSkeletalModelEntities( skeletalModelEntities, &m_frustum, frusta, indices, visModels );
+	addSkeletalModelEntitiesToSortList( skeletalModelEntities.data(), { visModels, skeletalModelIndices.size() }, skeletalModelIndices );
 
 	const std::span<const entity_t> brushModelEntities = scene->m_brushModelEntities;
-	const auto visibleBrushModelEntityIndices = cullBrushModelEntities( brushModelEntities, &m_frustum, frusta, indices );
-	std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
-	addBrushModelEntitiesToSortList( brushModelEntities.data(), visibleBrushModelEntityIndices, dynamicLights );
+	const auto brushModelIndices = cullBrushModelEntities( brushModelEntities, &m_frustum, frusta, indices, visModels );
+	const std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
+	const std::span<const VisTestedModel> brushVisModels { visModels, brushModelIndices.size() };
+	addBrushModelEntitiesToSortList( brushModelEntities.data(), brushVisModels, brushModelIndices, dynamicLights );
 
 	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
-	const auto visibleSpriteEntityIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices );
-	addSpriteEntitiesToSortList( spriteEntities.data(), visibleSpriteEntityIndices );
+	const auto spriteModelIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices, indices2, visModels );
+	addSpriteEntitiesToSortList( spriteEntities.data(), spriteModelIndices );
 }
 
 void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta ) {
