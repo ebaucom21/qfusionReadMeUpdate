@@ -1407,16 +1407,6 @@ static void R_FinishMapConfig( const model_t *mod ) {
 		ColorNormalize( mapConfig.ambient,  mapConfig.ambient );
 	}
 
-	// A dirty hack for fixing a crooked sky appearance
-	if( const char *name = mod->name ) {
-		for( const char *map : { "maps/wdm1.bsp", "maps/wdm15.bsp" } ) {
-			if( !Q_stricmp( name, map ) ) {
-				mapConfig.skipSky = true;
-				break;
-			}
-		}
-	}
-
 	mod_mapConfigs[mod - mod_known] = mapConfig;
 }
 

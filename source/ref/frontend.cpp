@@ -35,10 +35,10 @@ void R_Set2DMode( bool enable ) {
 
 namespace wsw::ref {
 
-auto Frontend::getDefaultFarClip() const -> float {
+auto Frontend::getDefaultFarClip( const refdef_s *fd ) const -> float {
 	float dist;
 
-	if( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) {
+	if( fd->rdflags & RDF_NOWORLDMODEL ) {
 		dist = 1024;
 	} else if( rsh.worldModel && rsh.worldBrushModel->globalfog ) {
 		dist = rsh.worldBrushModel->globalfog->shader->fog_dist;
@@ -51,16 +51,18 @@ auto Frontend::getDefaultFarClip() const -> float {
 }
 
 auto Frontend::getFogForBounds( const float *mins, const float *maxs ) -> mfog_t * {
-	if( !rsh.worldModel || ( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) || !rsh.worldBrushModel->numfogs ) {
+	if( m_stateForActiveCamera->refdef.rdflags & RDF_NOWORLDMODEL ) {
 		return nullptr;
 	}
-	if( m_state.renderFlags & RF_SHADOWMAPVIEW ) {
+	if( !rsh.worldModel || !rsh.worldBrushModel || !rsh.worldBrushModel->numfogs ) {
+		return nullptr;
+	}
+	if( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) {
 		return nullptr;
 	}
 	if( rsh.worldBrushModel->globalfog ) {
 		return rsh.worldBrushModel->globalfog;
 	}
-
 	for( unsigned i = 0; i < rsh.worldBrushModel->numfogs; i++ ) {
 		mfog_t *const fog = rsh.worldBrushModel->fogs;
 		if( fog->shader ) {

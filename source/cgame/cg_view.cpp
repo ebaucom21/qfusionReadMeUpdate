@@ -647,10 +647,6 @@ static int CG_RenderFlags( void ) {
 		rdflags |= RDF_WORLDOUTLINES;
 	}
 
-	if( cg.view.flipped ) {
-		rdflags |= RDF_FLIPPED;
-	}
-
 	rdflags |= CG_SkyPortal();
 
 	return rdflags;
@@ -889,7 +885,6 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	//
 
 	view->type = type;
-	view->flipped = cg_flip->integer != 0;
 
 	if( view->type == VIEWDEF_PLAYERVIEW ) {
 		view->POVent = cg.frame.playerState.POVnum;
@@ -978,9 +973,6 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	}
 
 	Matrix3_FromAngles( view->angles, view->axis );
-	if( view->flipped ) {
-		VectorInverse( &view->axis[AXIS_RIGHT] );
-	}
 
 	// view rectangle size
 	view->refdef.x = scr_vrect.x;

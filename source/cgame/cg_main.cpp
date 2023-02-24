@@ -45,8 +45,6 @@ cvar_t *cg_addDecals;
 
 cvar_t *cg_gun;
 
-cvar_t *cg_flip;
-
 cvar_t *cg_thirdPerson;
 cvar_t *cg_thirdPersonAngle;
 cvar_t *cg_thirdPersonRange;
@@ -603,8 +601,6 @@ static void CG_RegisterVariables( void ) {
 	cg_addDecals =      Cvar_Get( "cg_decals", "1", CVAR_ARCHIVE );
 
 	//cg_footSteps =	    Cvar_Get( "cg_footSteps", "1", 0 );
-
-	cg_flip = Cvar_Get( "cg_flip", "0", CVAR_ARCHIVE );
 
 	cg_thirdPerson =    Cvar_Get( "cg_thirdPerson", "0", CVAR_CHEAT );
 	cg_thirdPersonAngle =   Cvar_Get( "cg_thirdPersonAngle", "0", 0 );

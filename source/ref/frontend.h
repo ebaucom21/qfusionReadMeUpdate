@@ -45,7 +45,70 @@ struct alignas( 32 )Frustum {
 namespace wsw::ref {
 
 class alignas( 32 ) Frontend {
+public:
+	Frontend();
+
+	static void init();
+	static void shutdown();
+
+	[[nodiscard]]
+	static auto instance() -> Frontend *;
+
+	[[nodiscard]]
+	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
+	void submitDrawSceneRequest( DrawSceneRequest *request );
+
+	void initVolatileAssets();
+
+	void destroyVolatileAssets();
+
+	void renderScene( Scene *scene, const refdef_t *rd );
+
+	void set2DMode( bool enable );
+
+	void dynLightDirForOrigin( const float *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
+
 private:
+	struct alignas( alignof( Frustum ) ) StateForCamera {
+		Frustum frustum;
+
+		unsigned renderFlags { 0 };
+
+		int renderTarget { 0 };
+
+		int viewCluster { -1 };
+		int viewArea { -1 };
+
+		int scissor[4] { 0, 0, 0, 0 };
+		int viewport[4] { 0, 0, 0, 0 };
+
+		vec3_t viewOrigin;
+		mat3_t viewAxis;
+		float farClip;
+
+		vec3_t lodOrigin;
+		vec3_t pvsOrigin;
+
+		mat4_t cameraMatrix;
+
+		mat4_t projectionMatrix;
+
+		mat4_t cameraProjectionMatrix;                  // cameraMatrix * projectionMatrix
+		mat4_t modelviewProjectionMatrix;               // modelviewMatrix * projectionMatrix
+
+		float lodScaleForFov;
+
+		unsigned numPortalSurfaces;
+		unsigned numDepthPortalSurfaces;
+
+		portalSurface_t portalSurfaces[MAX_PORTAL_SURFACES];
+
+		refdef_t refdef;
+
+		// TODO: We don't really need a growable vector, preallocate at it start
+		wsw::Vector<sortedDrawSurf_t> *list;
+	};
+
 	shader_t *m_coronaShader;
 
 	static constexpr unsigned kMaxLightsInScene = 1024;
@@ -62,9 +125,13 @@ private:
 		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates )
 	};
 
-	refinst_t m_state;
-	// TODO: Put in the state
-	Frustum m_frustum;
+	// Ignored in 2D mode
+	StateForCamera *m_stateForActiveCamera { nullptr };
+
+	alignas( alignof( StateForCamera ) ) uint8_t m_bufferForRegularState[sizeof( StateForCamera )];
+	alignas( alignof( StateForCamera ) ) uint8_t m_bufferForPortalState[sizeof( StateForCamera )];
+
+	unsigned m_visFrameCount { 0 };
 
 	unsigned m_occludersSelectionFrame { 0 };
 	unsigned m_occlusionCullingFrame { 0 };
@@ -144,12 +211,14 @@ private:
 	[[nodiscard]]
 	auto getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t *;
 
-	void bindFrameBuffer( int );
+	void bindFrameBufferAndViewport( int, const StateForCamera *stateForCamera );
 
 	[[nodiscard]]
-	auto getDefaultFarClip() const -> float;
+	auto getDefaultFarClip( const refdef_t *fd ) const -> float;
 
-	void renderViewFromThisCamera( Scene *scene, const refdef_t *fd );
+	void setupStateForCamera( StateForCamera *stateForCamera, const refdef_t *fd );
+
+	void renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
 	[[nodiscard]]
 	auto tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
@@ -386,9 +455,6 @@ private:
 							 std::span<const uint16_t> visibleLightIndices,
 							 unsigned *lightBitsOfSurfaces );
 
-	void setupViewMatrices();
-	void clearActiveFrameBuffer();
-
 	void addMergedBspSurfToSortList( const entity_t *entity, drawSurfaceBSP_t *drawSurf,
 									 msurface_t *firstVisSurf, msurface_t *lastVisSurf,
 									 const float *maybeOrigin, std::span<const Scene::DynamicLight> lights );
@@ -398,28 +464,6 @@ private:
 							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 );
 
 	void submitSortedSurfacesToBackend( Scene *scene );
-public:
-	Frontend();
-
-	static void init();
-	static void shutdown();
-
-	[[nodiscard]]
-	static auto instance() -> Frontend *;
-
-	[[nodiscard]]
-	auto createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest *;
-	void submitDrawSceneRequest( DrawSceneRequest *request );
-
-	void initVolatileAssets();
-
-	void destroyVolatileAssets();
-
-	void renderScene( Scene *scene, const refdef_t *rd );
-
-	void set2DMode( bool enable );
-
-	void dynLightDirForOrigin( const float *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
 };
 
 }

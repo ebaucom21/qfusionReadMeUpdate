@@ -1607,7 +1607,7 @@ void CG_EntityLoopSound( entity_state_t *state, float attenuation ) {
 void CG_AddEntities( DrawSceneRequest *drawSceneRequest ) {
 	vec3_t autorotate;
 	// bonus items rotate at a fixed rate
-	VectorSet( autorotate, 0, ( cg.time % 3600 ) * 0.1 * ( cg.view.flipped ? -1.0f : 1.0f ), 0 );
+	VectorSet( autorotate, 0, ( cg.time % 3600 ) * 0.1, 0 );
 	AnglesToAxis( autorotate, cg.autorotateAxis );
 
 	// TODO: Sort all other entities by type as well

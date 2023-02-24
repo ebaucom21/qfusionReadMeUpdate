@@ -563,17 +563,11 @@ unsigned int CG_GetButtonBits( void ) {
 * @param flipped    horizontal flipping direction
 */
 void CG_AddViewAngles( vec3_t viewAngles ) {
-	vec3_t am;
-	bool flipped = cg_flip->integer != 0;
-	
-	VectorClear( am );
+	vec3_t am { 0.0f, 0.0f, 0.0f };
 
 	CG_AddKeysViewAngles( am );
 	CG_AddMouseViewAngles( am );
 
-	if( flipped ) {
-		am[YAW] = -am[YAW];
-	}
 	VectorAdd( viewAngles, am, viewAngles );
 
 	if( cg_inputCenterView ) {
@@ -586,16 +580,10 @@ void CG_AddViewAngles( vec3_t viewAngles ) {
 * CG_AddMovement
 */
 void CG_AddMovement( vec3_t movement ) {
-	vec3_t dm;
-	bool flipped = cg_flip->integer != 0;
-
-	VectorClear( dm );
+	vec3_t dm { 0.0f, 0.0f, 0.0f };
 
 	CG_AddKeysMovement( dm );
 
-	if( flipped ) {
-		dm[0] = dm[0] * -1.0;
-	}
 	VectorAdd( movement, dm, movement );
 }
 

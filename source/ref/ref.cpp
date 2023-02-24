@@ -475,9 +475,6 @@ void R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor ) {
 	}
 }
 
-void R_RenderDebugSurface( const refdef_t *fd ) {
-}
-
 void R_BeginFrame( bool forceClear, int swapInterval ) {
 	GLimp_BeginFrame();
 

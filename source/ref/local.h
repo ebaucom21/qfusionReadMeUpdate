@@ -674,7 +674,7 @@ void RB_SetDlightBits( unsigned int dlightBits );
 void RB_SetBonesData( int numBones, dualquat_t *dualQuats, int maxWeights );
 void RB_SetPortalSurface( const struct portalSurface_s *portalSurface );
 void RB_SetRenderFlags( int flags );
-void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure );
+void RB_SetLightParams( float minLight, bool noWorldLight, float hdrExposure = 1.0f );
 void RB_SetShaderStateMask( int ANDmask, int ORmask );
 void RB_SetCamera( const vec3_t cameraOrigin, const mat3_t cameraAxis );
 bool RB_EnableWireframe( bool enable );
@@ -1141,55 +1141,6 @@ typedef struct portalSurface_s {
 	skyportal_t     *skyPortal;
 } portalSurface_t;
 
-struct refinst_t {
-	unsigned int renderFlags;
-	unsigned int dlightBits;
-
-	int renderTarget;                       // target framebuffer object
-	bool multisampleDepthResolved;
-
-	int scissor[4];
-	int viewport[4];
-
-	//
-	// view origin
-	//
-	vec3_t viewOrigin;
-	mat3_t viewAxis;
-	cplane_t frustum[6];
-	float farClip;
-	unsigned int clipFlags;
-	vec3_t visMins, visMaxs;
-	float visFarClip;
-	float hdrExposure;
-
-	vec3_t lodOrigin;
-	vec3_t pvsOrigin;
-	cplane_t clipPlane;
-
-	mat4_t cameraMatrix;
-
-	mat4_t projectionMatrix;
-
-	mat4_t cameraProjectionMatrix;                  // cameraMatrix * projectionMatrix
-	mat4_t modelviewProjectionMatrix;               // modelviewMatrix * projectionMatrix
-
-	drawSurfaceSky_t skyDrawSurface;
-
-	float lod_dist_scale_for_fov;
-
-	unsigned int numPortalSurfaces;
-	unsigned int numDepthPortalSurfaces;
-	portalSurface_t portalSurfaces[MAX_PORTAL_SURFACES];
-	portalSurface_t *skyportalSurface;
-
-	refdef_t refdef;
-
-	// TODO: We don't really need a growable vector, preallocate at it start
-	wsw::Vector<sortedDrawSurf_t> *list;
-	mfog_t          *fog_eye;
-};
-
 //====================================================
 
 // globals shared by the frontend and the backend
@@ -1229,13 +1180,6 @@ typedef struct {
 	int frameBufferWidth, frameBufferHeight;
 
 	int swapInterval;
-
-	int worldModelSequence;
-
-	// used for dlight push checking
-	unsigned int frameCount;
-
-	int viewcluster, viewarea;
 
 	struct {
 		unsigned average;        // updates 4 times per second
@@ -1398,7 +1342,8 @@ void        R_BatchCoronaSurf(  const entity_t *e, const shader_t *shader, const
 //
 // r_main.c
 //
-#define R_FASTSKY() ( r_fastsky->integer || rf.viewcluster == -1 || mapConfig.skipSky )
+
+#define R_FASTSKY() ( r_fastsky->integer || m_stateForActiveCamera->viewCluster < 0 )
 
 int         R_LoadFile_( const char *path, int flags, void **buffer, const char *filename, int fileline );
 void        R_FreeFile_( void *buffer, const char *filename, int fileline );
@@ -1413,7 +1358,6 @@ int         R_SetSwapInterval( int swapInterval, int oldSwapInterval );
 void        R_SetGamma( float gamma );
 void        R_SetWallFloorColors( const vec3_t wallColor, const vec3_t floorColor );
 void        R_Set2DMode( bool enable );
-void        R_RenderDebugSurface( const refdef_t *fd );
 void        R_Flush( void );
 
 /**

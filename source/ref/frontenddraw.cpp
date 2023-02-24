@@ -82,21 +82,22 @@ static void R_TransformForEntity( const entity_t *e ) {
 
 namespace wsw::ref {
 
-void Frontend::bindFrameBuffer( int ) {
-	const int width = glConfig.width;
+void Frontend::bindFrameBufferAndViewport( int, const StateForCamera *stateForCamera ) {
+	// TODO: This is for the default render target
+	const int width  = glConfig.width;
 	const int height = glConfig.height;
 
-	rf.frameBufferWidth = width;
+	rf.frameBufferWidth  = width;
 	rf.frameBufferHeight = height;
 
 	RB_BindFrameBufferObject();
 
-	RB_Viewport( m_state.viewport[0], m_state.viewport[1], m_state.viewport[2], m_state.viewport[3] );
-	RB_Scissor( m_state.scissor[0], m_state.scissor[1], m_state.scissor[2], m_state.scissor[3] );
+	RB_Viewport( stateForCamera->viewport[0], stateForCamera->viewport[1], stateForCamera->viewport[2], stateForCamera->viewport[3] );
+	RB_Scissor( stateForCamera->scissor[0], stateForCamera->scissor[1], stateForCamera->scissor[2], stateForCamera->scissor[3] );
 }
 
 void Frontend::set2DMode( bool enable ) {
-	const int width = rf.frameBufferWidth;
+	const int width  = rf.frameBufferWidth;
 	const int height = rf.frameBufferHeight;
 
 	if( rf.in2D == true && enable == true && width == rf.width2D && height == rf.height2D ) {
@@ -107,18 +108,23 @@ void Frontend::set2DMode( bool enable ) {
 
 	rf.in2D = enable;
 
+	// TODO: We have to use a different camera!
+
 	if( enable ) {
-		rf.width2D = width;
+		m_stateForActiveCamera = nullptr;
+
+		rf.width2D  = width;
 		rf.height2D = height;
 
-		Matrix4_OrthogonalProjection( 0, width, height, 0, -99999, 99999, m_state.projectionMatrix );
-		Matrix4_Copy( m_state.projectionMatrix, m_state.cameraProjectionMatrix );
+		mat4_t projectionMatrix;
+
+		Matrix4_OrthogonalProjection( 0, width, height, 0, -99999, 99999, projectionMatrix );
 
 		// set 2D virtual screen size
 		RB_Scissor( 0, 0, width, height );
 		RB_Viewport( 0, 0, width, height );
 
-		RB_LoadProjectionMatrix( m_state.projectionMatrix );
+		RB_LoadProjectionMatrix( projectionMatrix );
 		RB_LoadCameraMatrix( mat4x4_identity );
 		RB_LoadObjectMatrix( mat4x4_identity );
 
@@ -182,7 +188,7 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 	};
 
 void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
-	const auto *list = m_state.list;
+	const auto *list = m_stateForActiveCamera->list;
 	if( list->empty() ) {
 		return;
 	}
@@ -192,10 +198,10 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	fsh.particleAggregates          = scene->m_particles.data();
 	fsh.allVisibleLightIndices      = { m_allVisibleLightIndices, m_numAllVisibleLights };
 	fsh.visibleProgramLightIndices  = { m_visibleProgramLightIndices, m_numVisibleProgramLights };
-	fsh.renderFlags                 = m_state.renderFlags;
-	fsh.fovTangent                  = m_state.lod_dist_scale_for_fov;
-	std::memcpy( fsh.viewAxis, m_state.viewAxis, sizeof( mat3_t ) );
-	VectorCopy( m_state.viewOrigin, fsh.viewOrigin );
+	fsh.renderFlags                 = m_stateForActiveCamera->renderFlags;
+	fsh.fovTangent                  = m_stateForActiveCamera->lodScaleForFov;
+	std::memcpy( fsh.viewAxis, m_stateForActiveCamera->viewAxis, sizeof( mat3_t ) );
+	VectorCopy( m_stateForActiveCamera->viewOrigin, fsh.viewOrigin );
 
 	auto *const materialCache = MaterialCache::instance();
 
@@ -235,7 +241,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 		const shader_t *shader    = materialCache->getMaterialById( shaderNum );
 		const entity_t *entity    = scene->m_entities[entNum];
 		const mfog_t *fog         = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const auto *portalSurface = portalNum >= 0 ? m_state.portalSurfaces + portalNum : nullptr;
+		const auto *portalSurface = portalNum >= 0 ? m_stateForActiveCamera->portalSurfaces + portalNum : nullptr;
 		const int entityFX        = entity->renderfx;
 
 		// TODO?
@@ -317,11 +323,11 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 				RB_FlushDynamicMeshes();
 				if( infiniteProj ) {
 					mat4_t projectionMatrix;
-					Matrix4_Copy( m_state.projectionMatrix, projectionMatrix );
+					Matrix4_Copy( m_stateForActiveCamera->projectionMatrix, projectionMatrix );
 					Matrix4_PerspectiveProjectionToInfinity( Z_NEAR, projectionMatrix, glConfig.depthEpsilon );
 					RB_LoadProjectionMatrix( projectionMatrix );
 				} else {
-					RB_LoadProjectionMatrix( m_state.projectionMatrix );
+					RB_LoadProjectionMatrix( m_stateForActiveCamera->projectionMatrix );
 				}
 			}
 
@@ -391,168 +397,105 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	RB_BindFrameBufferObject();
 }
 
-void Frontend::setupViewMatrices() {
-	refdef_t *rd = &m_state.refdef;
-
-	Matrix4_Modelview( rd->vieworg, rd->viewaxis, m_state.cameraMatrix );
-	//Com_Printf( "RD vieworg: %f %f %f\n", rd->vieworg[0], rd->vieworg[1], rd->vieworg[2] );
-
-	if( rd->rdflags & RDF_USEORTHO ) {
-		Matrix4_OrthogonalProjection( -rd->ortho_x, rd->ortho_x, -rd->ortho_y, rd->ortho_y,
-									  -m_state.farClip, m_state.farClip, m_state.projectionMatrix );
-	} else {
-		Matrix4_PerspectiveProjection( rd->fov_x, rd->fov_y, Z_NEAR, m_state.farClip, m_state.projectionMatrix );
-	}
-
-	if( rd->rdflags & RDF_FLIPPED ) {
-		m_state.projectionMatrix[0] = -m_state.projectionMatrix[0];
-		m_state.renderFlags |= RF_FLIPFRONTFACE;
-	}
-
-	Matrix4_Multiply( m_state.projectionMatrix, m_state.cameraMatrix, m_state.cameraProjectionMatrix );
-}
-
-void Frontend::clearActiveFrameBuffer() {
-	const bool rgbShadow = ( m_state.renderFlags & (RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB ) ) == (RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB );
-	const bool depthPortal = ( m_state.renderFlags & (RF_MIRRORVIEW | RF_PORTALVIEW ) ) != 0 && ( m_state.renderFlags & RF_PORTAL_CAPTURE ) == 0;
-
-	bool clearColor = false;
-	vec4_t envColor;
-	if( rgbShadow ) {
-		clearColor = true;
-		Vector4Set( envColor, 1, 1, 1, 1 );
-	} else if( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) {
-		clearColor = m_state.renderTarget != 0;
-		Vector4Set( envColor, 1, 1, 1, 0 );
-	} else {
-		clearColor = !m_state.numDepthPortalSurfaces || R_FASTSKY();
-		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
-			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, envColor );
-		} else {
-			Vector4Scale( mapConfig.environmentColor, 1.0 / 255.0, envColor );
-		}
-	}
-
-	int bits = 0;
-	if( !depthPortal ) {
-		bits |= GL_DEPTH_BUFFER_BIT;
-	}
-	if( clearColor ) {
-		bits |= GL_COLOR_BUFFER_BIT;
-	}
-
-	RB_Clear( bits, envColor[0], envColor[1], envColor[2], envColor[3] );
-}
-
 void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 	set2DMode( false );
 
 	RB_SetTime( fd->time );
 
-	m_state.refdef = *fd;
-	if( !m_state.refdef.minLight ) {
-		m_state.refdef.minLight = 0.1f;
+	std::memset( m_bufferForRegularState, 0, sizeof( StateForCamera ) );
+	auto *stateForSceneCamera = new( m_bufferForRegularState )StateForCamera;
+
+	stateForSceneCamera->list = &m_meshDrawList;
+	setupStateForCamera( stateForSceneCamera, fd );
+
+	if( stateForSceneCamera->refdef.minLight < 0.1f ) {
+		stateForSceneCamera->refdef.minLight = 0.1f;
 	}
 
-	fd = &m_state.refdef;
+	bindFrameBufferAndViewport( 0, stateForSceneCamera );
 
-	m_state.renderFlags = RF_NONE;
+	renderViewFromThisCamera( scene, stateForSceneCamera );
 
-	m_state.farClip = getDefaultFarClip();
-	m_state.clipFlags = 15;
-	if( rsh.worldModel && !( fd->rdflags & RDF_NOWORLDMODEL ) && rsh.worldBrushModel->globalfog ) {
-		m_state.clipFlags |= 16;
-	}
-
-	m_state.list = &m_meshDrawList;
-	m_state.dlightBits = 0;
-
-	m_state.renderTarget = 0;
-	m_state.multisampleDepthResolved = false;
-
-	// clip new scissor region to the one currently set
-	Vector4Set( m_state.scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
-	Vector4Set( m_state.viewport, fd->x, fd->y, fd->width, fd->height );
-	VectorCopy( fd->vieworg, m_state.pvsOrigin );
-	VectorCopy( fd->vieworg, m_state.lodOrigin );
-
-	bindFrameBuffer( 0 );
-
-	renderViewFromThisCamera( scene, fd );
-
-	R_RenderDebugSurface( fd );
-
-	bindFrameBuffer( 0 );
+	bindFrameBufferAndViewport( 0, stateForSceneCamera );
 
 	set2DMode( true );
 }
 
-void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
-	const bool shadowMap = m_state.renderFlags & RF_SHADOWMAPVIEW ? true : false;
+void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef_t *fd ) {
+	stateForCamera->refdef      = *fd;
+	stateForCamera->farClip     = getDefaultFarClip( fd );
 
-	m_state.refdef = *fd;
-
-	// load view matrices with default far clip value
-	setupViewMatrices();
-
-	m_state.fog_eye = nullptr;
-	m_state.hdrExposure = 1;
-
-	m_state.dlightBits = 0;
-
-	m_state.numPortalSurfaces = 0;
-	m_state.numDepthPortalSurfaces = 0;
-	m_state.skyportalSurface = nullptr;
-
-	if( r_novis->integer ) {
-		m_state.renderFlags |= RF_NOVIS;
-	}
-
+	stateForCamera->renderFlags = 0;
 	if( r_lightmap->integer ) {
-		m_state.renderFlags |= RF_LIGHTMAP;
+		stateForCamera->renderFlags |= RF_LIGHTMAP;
 	}
 
 	if( r_drawflat->integer ) {
-		m_state.renderFlags |= RF_DRAWFLAT;
+		stateForCamera->renderFlags |= RF_DRAWFLAT;
 	}
 
-	m_state.list->clear();
-	if( rsh.worldBrushModel ) {
-		m_state.list->reserve( rsh.worldBrushModel->numDrawSurfaces );
-	}
+	VectorCopy( stateForCamera->refdef.vieworg, stateForCamera->viewOrigin );
+	Matrix3_Copy( stateForCamera->refdef.viewaxis, stateForCamera->viewAxis );
 
-	if( !rsh.worldModel && !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		return;
-	}
+	stateForCamera->lodScaleForFov = std::tan( stateForCamera->refdef.fov_x * ( M_PI / 180 ) * 0.5f );
 
-	// build the transformation matrix for the given view angles
-	VectorCopy( m_state.refdef.vieworg, m_state.viewOrigin );
-	Matrix3_Copy( m_state.refdef.viewaxis, m_state.viewAxis );
+	Vector4Set( stateForCamera->scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
+	Vector4Set( stateForCamera->viewport, fd->x, fd->y, fd->width, fd->height );
+	VectorCopy( fd->vieworg, stateForCamera->pvsOrigin );
+	VectorCopy( fd->vieworg, stateForCamera->lodOrigin );
 
-	m_state.lod_dist_scale_for_fov = std::tan( m_state.refdef.fov_x * ( M_PI / 180 ) * 0.5f );
+	stateForCamera->numPortalSurfaces      = 0;
+	stateForCamera->numDepthPortalSurfaces = 0;
 
-	// current viewcluster
-	if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		mleaf_t *leaf = Mod_PointInLeaf( m_state.pvsOrigin, rsh.worldModel );
-		rf.viewcluster = leaf->cluster;
-		rf.viewarea = leaf->area;
+	Matrix4_Modelview( fd->vieworg, fd->viewaxis, stateForCamera->cameraMatrix );
 
-		if( rf.worldModelSequence != rsh.worldModelSequence ) {
-			rf.frameCount = 0;
-			rf.worldModelSequence = rsh.worldModelSequence;
-		}
+	if( fd->rdflags & RDF_USEORTHO ) {
+		Matrix4_OrthogonalProjection( -fd->ortho_x, fd->ortho_x, -fd->ortho_y, fd->ortho_y,
+									  -stateForCamera->farClip,
+									  +stateForCamera->farClip,
+									  stateForCamera->projectionMatrix );
 	} else {
-		rf.viewcluster = -1;
-		rf.viewarea = -1;
+		Matrix4_PerspectiveProjection( fd->fov_x, fd->fov_y, Z_NEAR, stateForCamera->farClip,
+									   stateForCamera->projectionMatrix );
 	}
 
-	rf.frameCount++;
+	if( fd->rdflags & RDF_FLIPPED ) {
+		stateForCamera->projectionMatrix[0] = -stateForCamera->projectionMatrix[0];
+		stateForCamera->renderFlags |= RF_FLIPFRONTFACE;
+	}
 
-	// TODO: This should be a member of m_state
-	m_frustum.setupFor4Planes( fd->vieworg, fd->viewaxis, fd->fov_x, fd->fov_y );
+	Matrix4_Multiply( stateForCamera->projectionMatrix,
+					  stateForCamera->cameraMatrix,
+					  stateForCamera->cameraProjectionMatrix );
 
-	// we know the initial farclip at this point after determining visible world leafs
-	// R_DrawEntities can make adjustments as well
+	bool shouldDrawWorldModel = false;
+	if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		if( rsh.worldModel && rsh.worldBrushModel ) {
+			shouldDrawWorldModel = true;
+		}
+	}
+
+	stateForCamera->list->clear();
+	if( shouldDrawWorldModel ) {
+		stateForCamera->list->reserve( rsh.worldBrushModel->numDrawSurfaces );
+	}
+
+	if( shouldDrawWorldModel ) {
+		const mleaf_t *const leaf   = Mod_PointInLeaf( stateForCamera->pvsOrigin, rsh.worldModel );
+		stateForCamera->viewCluster = leaf->cluster;
+		stateForCamera->viewArea    = leaf->area;
+	} else {
+		stateForCamera->viewCluster = -1;
+		stateForCamera->viewArea    = -1;
+	}
+
+	stateForCamera->frustum.setupFor4Planes( fd->vieworg, fd->viewaxis, fd->fov_x, fd->fov_y );
+}
+
+void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera ) {
+	m_stateForActiveCamera = stateForCamera;
+
+	m_visFrameCount++;
 
 	std::span<const Frustum> occluderFrusta;
 	std::span<const unsigned> nonOccludedLeaves;
@@ -563,19 +506,15 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 
 	bool drawWorld = false;
 
-	if( !shadowMap ) {
-		if( !( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-			if( r_drawworld->integer && rsh.worldModel ) {
-				drawWorld = true;
-				std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces();
-			}
+	if( !( m_stateForActiveCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		if( r_drawworld->integer && rsh.worldModel ) {
+			drawWorld = true;
+			std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces();
+			// TODO: Update far clip, update view matrices
 		}
-
-		m_state.fog_eye = getFogForSphere( m_state.viewOrigin, 0.5f );
-		m_state.hdrExposure = 1.0f;
-
-		collectVisiblePolys( scene, occluderFrusta );
 	}
+
+	collectVisiblePolys( scene, occluderFrusta );
 
 	if( const int dynamicLightValue = r_dynamiclight->integer ) {
 		[[maybe_unused]]
@@ -600,77 +539,96 @@ void Frontend::renderViewFromThisCamera( Scene *scene, const refdef_t *fd ) {
 		collectVisibleDynamicMeshes( scene, occluderFrusta );
 	}
 
-	if( !shadowMap ) {
-		collectVisibleParticles( scene, occluderFrusta );
+	collectVisibleParticles( scene, occluderFrusta );
 
-		// now set  the real far clip value and reload view matrices
-		m_state.farClip = getDefaultFarClip();
+	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
+		// TODO: Avoid runtime coposition of keys
+		const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
+		const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
+		return lhsKey < rhsKey;
+	};
 
-		setupViewMatrices();
+	std::sort( m_stateForActiveCamera->list->begin(), m_stateForActiveCamera->list->end(), cmp );
 
-		// render to depth textures, mark shadowed entities and surfaces
-		// TODO
-	}
+	bindFrameBufferAndViewport( m_stateForActiveCamera->renderTarget, m_stateForActiveCamera );
 
-	if( !r_draworder->integer ) {
-		const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
-			// TODO: Avoid runtime coposition of keys
-			const auto lhsKey = ( (uint64_t)lhs.distKey << 32 ) | (uint64_t)lhs.sortKey;
-			const auto rhsKey = ( (uint64_t)rhs.distKey << 32 ) | (uint64_t)rhs.sortKey;
-			return lhsKey < rhsKey;
-		};
-		std::sort( m_state.list->begin(), m_state.list->end(), cmp );
-	}
+	const int *const scissor = m_stateForActiveCamera->scissor;
+	RB_Scissor( scissor[0], scissor[1], scissor[2], scissor[3] );
 
-	bindFrameBuffer( m_state.renderTarget );
+	const int *const viewport = m_stateForActiveCamera->viewport;
+	RB_Viewport( viewport[0], viewport[1], viewport[2], viewport[3] );
 
-	RB_Scissor( m_state.scissor[0], m_state.scissor[1], m_state.scissor[2], m_state.scissor[3] );
-	RB_Viewport( m_state.viewport[0], m_state.viewport[1], m_state.viewport[2], m_state.viewport[3] );
+	const unsigned renderFlags = m_stateForActiveCamera->renderFlags;
 
-	if( m_state.renderFlags & RF_CLIPPLANE ) {
-		cplane_t *p = &m_state.clipPlane;
-		Matrix4_ObliqueNearClipping( p->normal, -p->dist, m_state.cameraMatrix, m_state.projectionMatrix );
-	}
-
-	RB_SetZClip( Z_NEAR, m_state.farClip );
-	RB_SetCamera( m_state.viewOrigin, m_state.viewAxis );
-	RB_SetLightParams( m_state.refdef.minLight, ( m_state.refdef.rdflags & RDF_NOWORLDMODEL ) != 0, m_state.hdrExposure );
-	RB_SetRenderFlags( m_state.renderFlags );
-	RB_LoadProjectionMatrix( m_state.projectionMatrix );
-	RB_LoadCameraMatrix( m_state.cameraMatrix );
+	RB_SetZClip( Z_NEAR, m_stateForActiveCamera->farClip );
+	RB_SetCamera( m_stateForActiveCamera->viewOrigin, m_stateForActiveCamera->viewAxis );
+	RB_SetLightParams( m_stateForActiveCamera->refdef.minLight, !drawWorld );
+	RB_SetRenderFlags( renderFlags );
+	RB_LoadProjectionMatrix( m_stateForActiveCamera->projectionMatrix );
+	RB_LoadCameraMatrix( m_stateForActiveCamera->cameraMatrix );
 	RB_LoadObjectMatrix( mat4x4_identity );
 
-	if( m_state.renderFlags & RF_FLIPFRONTFACE ) {
+	if( renderFlags & RF_FLIPFRONTFACE ) {
 		RB_FlipFrontFace();
 	}
 
-	if( ( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( renderFlags & RF_SHADOWMAPVIEW ) {
 		RB_SetShaderStateMask( ~0, GLSTATE_NO_COLORWRITE );
 	}
 
 	//drawPortals();
 
-	if( r_portalonly->integer && !( m_state.renderFlags & (RF_MIRRORVIEW | RF_PORTALVIEW ) ) ) {
-		return;
+	// Unused?
+	const bool isDrawingRgbShadow =
+		( renderFlags & ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB ) ) == ( RF_SHADOWMAPVIEW | RF_SHADOWMAPVIEW_RGB );
+
+	const bool didDrawADepthMask =
+		( renderFlags & ( RF_MIRRORVIEW | RF_PORTALVIEW ) ) != 0 && ( renderFlags & RF_PORTAL_CAPTURE ) == 0;
+
+	bool shouldClearColor = false;
+	vec4_t clearColor;
+	if( isDrawingRgbShadow ) {
+		shouldClearColor = true;
+		Vector4Set( clearColor, 1, 1, 1, 1 );
+	} else if( drawWorld ) {
+		shouldClearColor = m_stateForActiveCamera->renderTarget != 0;
+		Vector4Set( clearColor, 1, 1, 1, 0 );
+	} else {
+		shouldClearColor = !m_stateForActiveCamera->numDepthPortalSurfaces || R_FASTSKY();
+		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
+			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, clearColor );
+		} else {
+			Vector4Scale( mapConfig.environmentColor, 1.0 / 255.0, clearColor );
+		}
 	}
 
-	clearActiveFrameBuffer();
+	int clearBits = 0;
+	if( !didDrawADepthMask ) {
+		clearBits |= GL_DEPTH_BUFFER_BIT;
+	}
+	if( shouldClearColor ) {
+		clearBits |= GL_COLOR_BUFFER_BIT;
+	}
+
+	RB_Clear( clearBits, clearColor[0], clearColor[1], clearColor[2], clearColor[3] );
 
 	submitSortedSurfacesToBackend( scene );
 
-	if( r_showtris->integer && !( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( r_showtris->integer && !( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_EnableWireframe( true );
+
 		submitSortedSurfacesToBackend( scene );
+
 		RB_EnableWireframe( false );
 	}
 
 	R_TransformForWorld();
 
-	if( ( m_state.renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( ( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_SetShaderStateMask( ~0, 0 );
 	}
 
-	if( m_state.renderFlags & RF_FLIPFRONTFACE ) {
+	if( m_stateForActiveCamera->renderFlags & RF_FLIPFRONTFACE ) {
 		RB_FlipFrontFace();
 	}
 

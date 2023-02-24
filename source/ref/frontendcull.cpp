@@ -135,7 +135,8 @@ void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frust
 	QuadPoly **quadPolys      = scene->m_quadPolys.data();
 
 	uint16_t tmpIndices[MAX_QUAD_POLYS];
-	const auto visibleIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_frustum, frusta, tmpIndices, tmpModels );
+	const auto visibleIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_stateForActiveCamera->frustum,
+											   frusta, tmpIndices, tmpModels );
 
 	const auto *polyEntity = scene->m_polyent;
 	for( const unsigned index: visibleIndices ) {
@@ -147,47 +148,51 @@ void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frust
 void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t indices[MAX_ENTITIES], indices2[MAX_ENTITIES];
 	m_visTestedModelsBuffer.reserve( MAX_ENTITIES );
+
 	VisTestedModel *const visModels = m_visTestedModelsBuffer.data.get();
+	const Frustum *const frustum    = &m_stateForActiveCamera->frustum;
 
 	const std::span<const entity_t> nullModelEntities = scene->m_nullModelEntities;
-	const auto nullModelIndices = cullNullModelEntities( nullModelEntities, &m_frustum, frusta, indices, visModels );
+	const auto nullModelIndices = cullNullModelEntities( nullModelEntities, frustum, frusta, indices, visModels );
 	addNullModelEntitiesToSortList( nullModelEntities.data(), nullModelIndices );
 
 	const std::span<const entity_t> aliasModelEntities = scene->m_aliasModelEntities;
-	const auto aliasModelIndices = cullAliasModelEntities( aliasModelEntities, &m_frustum, frusta, indices, visModels );
+	const auto aliasModelIndices = cullAliasModelEntities( aliasModelEntities, frustum, frusta, indices, visModels );
 	addAliasModelEntitiesToSortList( aliasModelEntities.data(), { visModels, aliasModelIndices.size() }, aliasModelIndices );
 
 	const std::span<const entity_t> skeletalModelEntities = scene->m_skeletalModelEntities;
-	const auto skeletalModelIndices = cullSkeletalModelEntities( skeletalModelEntities, &m_frustum, frusta, indices, visModels );
+	const auto skeletalModelIndices = cullSkeletalModelEntities( skeletalModelEntities, frustum, frusta, indices, visModels );
 	addSkeletalModelEntitiesToSortList( skeletalModelEntities.data(), { visModels, skeletalModelIndices.size() }, skeletalModelIndices );
 
 	const std::span<const entity_t> brushModelEntities = scene->m_brushModelEntities;
-	const auto brushModelIndices = cullBrushModelEntities( brushModelEntities, &m_frustum, frusta, indices, visModels );
+	const auto brushModelIndices = cullBrushModelEntities( brushModelEntities, frustum, frusta, indices, visModels );
 	const std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
 	const std::span<const VisTestedModel> brushVisModels { visModels, brushModelIndices.size() };
 	addBrushModelEntitiesToSortList( brushModelEntities.data(), brushVisModels, brushModelIndices, dynamicLights );
 
 	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
-	const auto spriteModelIndices = cullSpriteEntities( spriteEntities, &m_frustum, frusta, indices, indices2, visModels );
+	const auto spriteModelIndices = cullSpriteEntities( spriteEntities, frustum, frusta, indices, indices2, visModels );
 	addSpriteEntitiesToSortList( spriteEntities.data(), spriteModelIndices );
 }
 
 void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t tmpIndices[1024];
-	const std::span<const Scene::ParticlesAggregate> particleAggregates = scene->m_particles;
-	const auto visibleAggregateIndices = cullParticleAggregates( particleAggregates, &m_frustum, frusta, tmpIndices );
+	const auto visibleAggregateIndices = cullParticleAggregates( scene->m_particles, &m_stateForActiveCamera->frustum,
+																 frusta, tmpIndices );
 	addParticlesToSortList( scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
 }
 
 void Frontend::collectVisibleDynamicMeshes( Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t tmpIndices[wsw::max( Scene::kMaxDynamicMeshes, Scene::kMaxCompoundDynamicMeshes )];
 
+	const Frustum *const frustum = &m_stateForActiveCamera->frustum;
+
 	const std::span<const DynamicMesh *> meshes = scene->m_dynamicMeshes;
-	const auto visibleDynamicMeshIndices = cullDynamicMeshes( meshes.data(), meshes.size(), &m_frustum, frusta, tmpIndices );
+	const auto visibleDynamicMeshIndices = cullDynamicMeshes( meshes.data(), meshes.size(), frustum, frusta, tmpIndices );
 	addDynamicMeshesToSortList( scene->m_polyent, scene->m_dynamicMeshes.data(), visibleDynamicMeshIndices );
 
 	const std::span<const Scene::CompoundDynamicMesh> compoundMeshes = scene->m_compoundDynamicMeshes;
-	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( compoundMeshes, &m_frustum, frusta, tmpIndices );
+	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( compoundMeshes, frustum, frusta, tmpIndices );
 	addCompoundDynamicMeshesToSortList( scene->m_polyent, scene->m_compoundDynamicMeshes.data(), visibleCompoundMeshesIndices );
 }
 
@@ -196,7 +201,7 @@ auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occl
 	static_assert( decltype( Scene::m_dynamicLights )::capacity() == kMaxLightsInScene );
 
 	const auto [allVisibleLightIndices, visibleCoronaLightIndices, visibleProgramLightIndices] =
-		cullLights( scene->m_dynamicLights, &m_frustum, occluderFrusta,
+		cullLights( scene->m_dynamicLights, &m_stateForActiveCamera->frustum, occluderFrusta,
 					m_allVisibleLightIndices, m_visibleCoronaLightIndices, m_visibleProgramLightIndices );
 
 	assert( m_numVisibleProgramLights == 0 );
@@ -207,8 +212,8 @@ auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occl
 
 	// Prune m_visibleProgramLightIndices in-place
 	if( visibleProgramLightIndices.size() > kMaxProgramLightsInView ) {
-		const float *const __restrict viewOrigin = m_state.viewOrigin;
-		const Scene::DynamicLight *const lights = scene->m_dynamicLights.data();
+		const float *const __restrict viewOrigin = m_stateForActiveCamera->viewOrigin;
+		const Scene::DynamicLight *const lights  = scene->m_dynamicLights.data();
 		wsw::StaticVector<std::pair<unsigned, float>, kMaxLightsInScene> lightsHeap;
 		const auto cmp = []( const std::pair<unsigned, float> &lhs, const std::pair<unsigned, float> &rhs ) {
 			return lhs.second > rhs.second;
@@ -345,12 +350,12 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
 		const entity_t *const __restrict entity = &entities[entIndex];
 		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
-			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+			if( !( m_stateForActiveCamera->renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
 			}
 		}
 
-		const model_t *mod = R_AliasModelLOD( entity, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
+		const model_t *mod = R_AliasModelLOD( entity, m_stateForActiveCamera->lodOrigin, m_stateForActiveCamera->lodScaleForFov );
 		const auto *aliasmodel = ( const maliasmodel_t * )mod->extradata;
 		// TODO: Could this ever happen
 		if( !aliasmodel ) [[unlikely]] {
@@ -413,16 +418,20 @@ auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
+	const float *const stateLodOrigin = m_stateForActiveCamera->lodOrigin;
+	const float stateLodScaleForFov   = m_stateForActiveCamera->lodScaleForFov;
+	const unsigned stateRenderFlags   = m_stateForActiveCamera->renderFlags;
+
 	unsigned numSelectedModels = 0;
 	for( unsigned entIndex = 0; entIndex < numEntities; entIndex++ ) {
 		const entity_t *const __restrict entity = &entities[entIndex];
 		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
-			if( !( m_state.renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+			if( !( stateRenderFlags & (RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
 				continue;
 			}
 		}
 
-		const model_t *mod = R_SkeletalModelLOD( entity, m_state.lodOrigin, m_state.lod_dist_scale_for_fov );
+		const model_t *mod = R_SkeletalModelLOD( entity, stateLodOrigin, stateLodScaleForFov );
 		const mskmodel_t *skmodel = ( const mskmodel_t * )mod->extradata;
 		if( !skmodel ) [[unlikely]] {
 			continue;
@@ -490,7 +499,7 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 		const entity_t *const __restrict entity = &entities[entIndex];
 		// TODO: This condition should be eliminated from this path
 		if( entity->flags & RF_NOSHADOW ) [[unlikely]] {
-			if( m_state.renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
+			if( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
 				continue;
 			}
 		}

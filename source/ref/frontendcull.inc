@@ -8,11 +8,11 @@ static vec3_t lockedViewAxis;
 
 template <unsigned Arch>
 auto Frontend::collectVisibleWorldLeavesArch() -> std::span<const unsigned> {
-	const auto *const pvs             = Mod_ClusterPVS( rf.viewcluster, rsh.worldModel );
+	const auto *const pvs             = Mod_ClusterPVS( m_stateForActiveCamera->viewCluster, rsh.worldModel );
 	const unsigned numWorldLeaves     = rsh.worldBrushModel->numvisleafs;
 	const auto leaves                 = rsh.worldBrushModel->visleafs;
 	unsigned *const visibleLeaves     = m_visibleLeavesBuffer.data.get();
-	const Frustum *__restrict frustum = &m_frustum;
+	const Frustum *__restrict frustum = &m_stateForActiveCamera->frustum;
 
 	unsigned numVisibleLeaves = 0;
 	for( unsigned leafNum = 0; leafNum < numWorldLeaves; ++leafNum ) {
@@ -33,7 +33,7 @@ auto Frontend::collectVisibleWorldLeavesArch() -> std::span<const unsigned> {
 
 template <unsigned Arch>
 auto Frontend::collectVisibleOccludersArch() -> std::span<const SortedOccluder> {
-	const Frustum *__restrict frustum = &m_frustum;
+	const Frustum *__restrict frustum = &m_stateForActiveCamera->frustum;
 	unsigned *const visibleOccluders  = m_visibleOccludersBuffer.data.get();
 	unsigned numVisibleOccluders      = 0;
 
@@ -63,8 +63,8 @@ auto Frontend::collectVisibleOccludersArch() -> std::span<const SortedOccluder> 
 #endif
 	}
 
-	const float *__restrict viewOrigin = m_state.viewOrigin;
-	const float *__restrict viewAxis   = m_state.viewAxis;
+	const float *__restrict viewOrigin = m_stateForActiveCamera->viewOrigin;
+	const float *__restrict viewAxis   = m_stateForActiveCamera->viewAxis;
 	if( isLockingOccluders ) {
 		viewOrigin = lockedViewOrigin;
 		viewAxis   = lockedViewAxis;
@@ -128,8 +128,8 @@ auto Frontend::buildFrustaOfOccludersArch( std::span<const SortedOccluder> sorte
 	const unsigned maxOccluders       = wsw::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
 	constexpr float selfOcclusionBias = 1.0f;
 
-	const float *__restrict viewOrigin                = m_state.viewOrigin;
-	[[maybe_unused]] const float *__restrict viewAxis = m_state.viewAxis;
+	const float *__restrict viewOrigin                = m_stateForActiveCamera->viewOrigin;
+	[[maybe_unused]] const float *__restrict viewAxis = m_stateForActiveCamera->viewAxis;
 
 #ifdef DEBUG_OCCLUDERS
 	if( isLockingOccluders ) {

@@ -90,7 +90,7 @@ void Frontend::addAliasModelEntitiesToSortList( const entity_t *aliasModelEntiti
 		if( entity->renderfx & RF_WEAPONMODEL ) {
 			distance = 0;
 		} else {
-			distance = Distance( entity->origin, m_state.viewOrigin ) + 1;
+			distance = Distance( entity->origin, m_stateForActiveCamera->viewOrigin ) + 1;
 		}
 
 		const mfog_t *const fog = getFogForBounds( visTestedModel.absMins, visTestedModel.absMaxs );
@@ -137,7 +137,7 @@ void Frontend::addSkeletalModelEntitiesToSortList( const entity_t *skeletalModel
 		if( entity->renderfx & RF_WEAPONMODEL ) {
 			distance = 0;
 		} else {
-			distance = Distance( entity->origin, m_state.viewOrigin ) + 1;
+			distance = Distance( entity->origin, m_stateForActiveCamera->viewOrigin ) + 1;
 		}
 
 		const mfog_t *const fog = getFogForBounds( visTestedModel.absMins, visTestedModel.absMaxs );
@@ -203,8 +203,8 @@ void Frontend::addSpriteEntitiesToSortList( const entity_t *spriteEntities, std:
 		const entity_t *const __restrict entity = spriteEntities + index;
 
 		vec3_t eyeToSprite;
-		VectorSubtract( entity->origin, m_state.refdef.vieworg, eyeToSprite );
-		if( const float dist = DotProduct( eyeToSprite, &m_state.viewAxis[0] ); dist > 0 ) [[likely]] {
+		VectorSubtract( entity->origin, m_stateForActiveCamera->refdef.vieworg, eyeToSprite );
+		if( const float dist = DotProduct( eyeToSprite, &m_stateForActiveCamera->viewAxis[0] ); dist > 0 ) [[likely]] {
 			const mfog_t *const fog = getFogForSphere( entity->origin, entity->radius );
 			addEntryToSortList( entity, fog, entity->customShader, dist, 0, nullptr, &spriteDrawSurf, ST_SPRITE );
 		}
@@ -216,7 +216,7 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 										   msurface_t *firstVisSurf, msurface_t *lastVisSurf,
 										   const float *maybeOrigin,
 										   std::span<const Scene::DynamicLight> lightsSpan ) {
-	assert( ( drawSurf->visFrame != rf.frameCount ) && "Should not be duplicated for now" );
+	assert( ( drawSurf->visFrame != m_visFrameCount ) && "Should not be duplicated for now" );
 
 	portalSurface_t *portalSurface = nullptr;
 	const shader_t *shader = drawSurf->shader;
@@ -228,7 +228,7 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 	const unsigned drawOrder = R_PackOpaqueOrder( fog, shader, drawSurf->numLightmaps, false );
 
 	drawSurf->dlightBits = 0;
-	drawSurf->visFrame = rf.frameCount;
+	drawSurf->visFrame = m_visFrameCount;
 	drawSurf->listSurf = addEntryToSortList( entity, fog, shader, WORLDSURF_DIST, drawOrder, portalSurface, drawSurf, ST_BSP );
 	if( !drawSurf->listSurf ) {
 		return;
@@ -298,8 +298,8 @@ void Frontend::addMergedBspSurfToSortList( const entity_t *entity,
 
 void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
 									   std::span<const uint16_t> aggregateIndices ) {
-	const float *const __restrict forwardAxis = m_state.viewAxis;
-	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+	const float *const __restrict forwardAxis = m_stateForActiveCamera->viewAxis;
+	const float *const __restrict viewOrigin  = m_stateForActiveCamera->viewOrigin;
 
 	unsigned numParticleDrawSurfaces = 0;
 	ParticleDrawSurface *const particleDrawSurfaces  = m_particleDrawSurfaces.get();
@@ -331,7 +331,7 @@ void Frontend::addParticlesToSortList( const entity_t *particleEntity, const Sce
 
 void Frontend::addDynamicMeshesToSortList( const entity_t *meshEntity, const DynamicMesh **meshes,
 										   std::span<const uint16_t> indicesOfMeshes ) {
-	const float *const __restrict viewOrigin = m_state.viewOrigin;
+	const float *const __restrict viewOrigin = m_stateForActiveCamera->viewOrigin;
 
 	for( const unsigned meshIndex: indicesOfMeshes ) {
 		const DynamicMesh *const __restrict mesh = meshes[meshIndex];
@@ -350,7 +350,8 @@ void Frontend::addDynamicMeshesToSortList( const entity_t *meshEntity, const Dyn
 void Frontend::addCompoundDynamicMeshesToSortList( const entity_t *meshEntity,
 												   const Scene::CompoundDynamicMesh *meshes,
 												   std::span<const uint16_t> indicesOfMeshes ) {
-	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+	const float *const __restrict viewOrigin  = m_stateForActiveCamera->viewOrigin;
+
 	float distances[Scene::kMaxCompoundDynamicMeshes];
 
 	for( const unsigned compoundMeshIndex: indicesOfMeshes ) {
@@ -394,8 +395,8 @@ void Frontend::addCompoundDynamicMeshesToSortList( const entity_t *meshEntity,
 
 void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
 										  std::span<const uint16_t> indices ) {
-	const float *const __restrict forwardAxis = m_state.viewAxis;
-	const float *const __restrict viewOrigin  = m_state.viewOrigin;
+	const float *const __restrict forwardAxis = m_stateForActiveCamera->viewAxis;
+	const float *const __restrict viewOrigin  = m_stateForActiveCamera->viewOrigin;
 
 	for( const unsigned index: indices ) {
 		const Scene::DynamicLight *light = &lights[index];
@@ -414,8 +415,8 @@ void Frontend::addCoronaLightsToSortList( const entity_t *polyEntity, const Scen
 void Frontend::addVisibleWorldSurfacesToSortList( Scene *scene ) {
 	auto *const worldEnt = scene->m_worldent;
 
-	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_state.refdef.rdflags & RDF_WORLDOUTLINES );
-	if( worldOutlines && ( rf.viewcluster != -1 ) && r_outlines_scale->value > 0 ) {
+	const bool worldOutlines = mapConfig.forceWorldOutlines || ( m_stateForActiveCamera->refdef.rdflags & RDF_WORLDOUTLINES );
+	if( worldOutlines && ( m_stateForActiveCamera->viewCluster != -1 ) && r_outlines_scale->value > 0 ) {
 		// TODO: Shouldn't it affect culling?
 		worldEnt->outlineHeight = wsw::max( 0.0f, r_outlines_world->value );
 	} else {
@@ -445,7 +446,7 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 									unsigned surfType, unsigned mergeabilitySeparator ) {
 	if( shader ) [[likely]] {
 		// TODO: This should be moved to an outer loop
-		if( !( m_state.renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
+		if( !( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) || !Shader_ReadDepth( shader ) ) [[likely]] {
 			// TODO: This should be moved to an outer loop
 			if( !rsh.worldBrushModel ) [[unlikely]] {
 				fog = nullptr;
@@ -454,9 +455,9 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 			if( const unsigned distKey = R_PackDistKey( e->renderfx, shader, dist, order ) ) [[likely]] {
 
 				const int fogNum = fog ? (int)( fog - rsh.worldBrushModel->fogs ) : -1;
-				const int portalNum = portalSurf ? (int)( portalSurf - m_state.portalSurfaces ) : -1;
+				const int portalNum = portalSurf ? (int)( portalSurf - m_stateForActiveCamera->portalSurfaces ) : -1;
 
-				m_state.list->emplace_back( sortedDrawSurf_t {
+				m_stateForActiveCamera->list->emplace_back( sortedDrawSurf_t {
 					.drawSurf              = (drawSurfaceType_t *)drawSurf,
 					.distKey               = distKey,
 					.sortKey               = R_PackSortKey( shader->id, fogNum, portalNum, e->number ),
@@ -464,7 +465,7 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 					.mergeabilitySeparator = mergeabilitySeparator
 				});
 
-				return std::addressof( m_state.list->back() );
+				return std::addressof( m_stateForActiveCamera->list->back() );
 			}
 		}
 	}
@@ -474,10 +475,11 @@ void *Frontend::addEntryToSortList( const entity_t *e, const mfog_t *fog, const 
 
 auto Frontend::tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t * {
 	if( shader ) {
-		if( m_state.numPortalSurfaces < MAX_PORTAL_SURFACES ) {
+		// TODO: Should be state-specific
+		if( m_stateForActiveCamera->numPortalSurfaces < MAX_PORTAL_SURFACES ) {
 			const bool depthPortal = !( shader->flags & ( SHADER_PORTAL_CAPTURE | SHADER_PORTAL_CAPTURE2 ) );
 			if( !R_FASTSKY() || !depthPortal ) {
-				portalSurface_t *portalSurface = &m_state.portalSurfaces[m_state.numPortalSurfaces++];
+				portalSurface_t *portalSurface = &m_stateForActiveCamera->portalSurfaces[m_stateForActiveCamera->numPortalSurfaces++];
 				memset( portalSurface, 0, sizeof( portalSurface_t ) );
 				portalSurface->entity = ent;
 				portalSurface->shader = shader;
@@ -486,7 +488,7 @@ auto Frontend::tryAddingPortalSurface( const entity_t *ent, const shader_t *shad
 				memset( portalSurface->texures, 0, sizeof( portalSurface->texures ) );
 
 				if( depthPortal ) {
-					m_state.numDepthPortalSurfaces++;
+					m_stateForActiveCamera->numDepthPortalSurfaces++;
 				}
 
 				return portalSurface;
@@ -527,7 +529,7 @@ void Frontend::updatePortalSurface( portalSurface_t *portalSurface, const mesh_t
 
 		VectorMA( ent->origin, 0.25, centre, centre );
 
-		VectorNegate( &m_state.viewAxis[AXIS_FORWARD], plane.normal );
+		VectorNegate( &m_stateForActiveCamera->viewAxis[AXIS_FORWARD], plane.normal );
 		plane.dist = DotProduct( plane.normal, centre );
 		CategorizePlane( &plane );
 	} else {
@@ -551,7 +553,7 @@ void Frontend::updatePortalSurface( portalSurface_t *portalSurface, const mesh_t
 	}
 
 	float dist;
-	if(( dist = PlaneDiff( m_state.viewOrigin, &plane ) ) <= BACKFACE_EPSILON ) {
+	if(( dist = PlaneDiff( m_stateForActiveCamera->viewOrigin, &plane ) ) <= BACKFACE_EPSILON ) {
 		// behind the portal plane
 		if( !( shader->flags & SHADER_PORTAL_CAPTURE2 ) ) {
 			return;
@@ -585,7 +587,7 @@ auto Frontend::tryUpdatingPortalSurfaceAndDistance( drawSurfaceBSP_t *drawSurf, 
 		R_UnpackSortKey( sds->sortKey, &shaderNum, &fogNum, &portalNum, &entNum );
 
 		if( portalNum >= 0 ) {
-			portalSurface_t *const portalSurface = m_state.portalSurfaces + portalNum;
+			portalSurface_t *const portalSurface = m_stateForActiveCamera->portalSurfaces + portalNum;
 			vec3_t center;
 			if( origin ) {
 				VectorCopy( origin, center );
@@ -593,7 +595,7 @@ auto Frontend::tryUpdatingPortalSurfaceAndDistance( drawSurfaceBSP_t *drawSurf, 
 				VectorAdd( surf->mins, surf->maxs, center );
 				VectorScale( center, 0.5, center );
 			}
-			float dist = Distance( m_state.refdef.vieworg, center );
+			float dist = Distance( m_stateForActiveCamera->refdef.vieworg, center );
 			// draw portals in front-to-back order
 			dist = 1024 - dist / 100.0f;
 			if( dist < 1 ) {
