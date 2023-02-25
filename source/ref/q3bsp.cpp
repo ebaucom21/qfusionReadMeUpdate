@@ -1782,7 +1782,7 @@ void Mod_DestroyQ3BrushModel( mbrushmodel_t *model ) {
 	Q_free( model->visleafs );
 	Q_free( model->leafs );
 	Q_free( model->surfaces );
-	Q_free( model->drawSurfaces );
+	Q_free( model->mergedSurfaces );
 	Q_free( model->submodels );
 	Q_free( model->inlines );
 }

@@ -31,21 +31,23 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 namespace wsw::ref {
 
-auto Frontend::collectVisibleWorldLeavesSse2() -> std::span<const unsigned> {
-	return collectVisibleWorldLeavesArch<Sse2>();
+auto Frontend::collectVisibleWorldLeavesSse2( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
+	return collectVisibleWorldLeavesArch<Sse2>( stateForCamera );
 }
 
-auto Frontend::collectVisibleOccludersSse2() -> std::span<const SortedOccluder> {
-	return collectVisibleOccludersArch<Sse2>();
+auto Frontend::collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+	return collectVisibleOccludersArch<Sse2>( stateForCamera );
 }
 
-auto Frontend::buildFrustaOfOccludersSse2( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum> {
-	return buildFrustaOfOccludersArch<Sse2>( sortedOccluders );
+auto Frontend::buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+	-> std::span<const Frustum> {
+	return buildFrustaOfOccludersArch<Sse2>( stateForCamera, sortedOccluders );
 }
 
-auto Frontend::cullLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+auto Frontend::cullLeavesByOccludersSse2( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+										  std::span<const Frustum> occluderFrusta )
 	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	return cullLeavesByOccludersArch<Sse2>( indicesOfLeaves, occluderFrusta );
+	return cullLeavesByOccludersArch<Sse2>( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
 void Frontend::cullSurfacesInVisLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves,

@@ -1442,10 +1442,6 @@ void RF_TransformVectorToScreen( const refdef_t *rd, const vec3_t in, vec2_t out
 		Matrix4_InfinitePerspectiveProjection( rd->fov_x, rd->fov_y, Z_NEAR, p, glConfig.depthEpsilon );
 	}
 
-	if( rd->rdflags & RDF_FLIPPED ) {
-		p[0] = -p[0];
-	}
-
 	mat4_t m;
 	Matrix4_Modelview( rd->vieworg, rd->viewaxis, m );
 

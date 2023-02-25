@@ -69,8 +69,66 @@ public:
 	void dynLightDirForOrigin( const float *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
 
 private:
+
+	template <typename T>
+	struct BufferHolder {
+		std::unique_ptr<T[]> data;
+		unsigned capacity { 0 };
+
+		void reserve( size_t newSize ) {
+			if( newSize > capacity ) [[unlikely]] {
+				data = std::make_unique<T[]>( newSize );
+				capacity = newSize;
+			}
+		}
+
+		void reserveZeroed( size_t newSize ) {
+			if( newSize > capacity ) [[unlikely]] {
+				data = std::make_unique<T[]>( newSize );
+				capacity = newSize;
+			}
+			std::memset( data.get(), 0, sizeof( T ) * newSize );
+		}
+	};
+
+	struct SortedOccluder {
+		unsigned occluderNum;
+		float score;
+		[[nodiscard]]
+		bool operator<( const SortedOccluder &that ) const { return score > that.score; }
+	};
+
+	struct MergedSurfSpan {
+		int firstSurface;
+		int lastSurface;
+	};
+
+	struct alignas( 16 ) VisTestedModel {
+		vec4_t absMins, absMaxs;
+		// TODO: Pass lod number?
+		const model_t *selectedLod;
+		unsigned indexInEntitiesGroup;
+	};
+
+	// Make sure it can be supplied to the generic culling subroutine
+	static_assert( offsetof( VisTestedModel, absMins ) + 4 * sizeof( float ) == offsetof( VisTestedModel, absMaxs ) );
+
+	static constexpr unsigned kMaxOccluderFrusta = 64;
+
+	static constexpr unsigned kMaxLightsInScene       = 1024;
+	static constexpr unsigned kMaxProgramLightsInView = 32;
+
 	struct alignas( alignof( Frustum ) ) StateForCamera {
-		Frustum frustum;
+		alignas( alignof( Frustum ) )Frustum frustum;
+		alignas( alignof( Frustum ) )Frustum occluderFrusta[kMaxOccluderFrusta];
+		// TODO: Can we share/cache dops for different camera states
+		alignas( 16 ) struct { float mins[8], maxs[8]; } lightBoundingDops[kMaxProgramLightsInView];
+
+		unsigned numVisibleProgramLights { 0 };
+		unsigned numAllVisibleLights { 0 };
+		uint16_t visibleProgramLightIndices[kMaxProgramLightsInView];
+		uint16_t allVisibleLightIndices[kMaxLightsInScene];
+		uint16_t visibleCoronaLightIndices[kMaxLightsInScene];
 
 		unsigned renderFlags { 0 };
 
@@ -106,284 +164,184 @@ private:
 		refdef_t refdef;
 
 		// TODO: We don't really need a growable vector, preallocate at it start
-		wsw::Vector<sortedDrawSurf_t> *list;
+		wsw::Vector<sortedDrawSurf_t> *sortList;
+
+		BufferHolder<unsigned> *visibleLeavesBuffer;
+		BufferHolder<unsigned> *occluderPassFullyVisibleLeavesBuffer;
+		BufferHolder<unsigned> *occluderPassPartiallyVisibleLeavesBuffer;
+
+		BufferHolder<unsigned> *visibleOccludersBuffer;
+		BufferHolder<SortedOccluder> *sortedOccludersBuffer;
+
+		// TODO: Merge these two? Keeping it separate can be more cache-friendly though
+		BufferHolder<drawSurfaceBSP_t> *bspDrawSurfacesBuffer;
+		BufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
+
+		BufferHolder<VisTestedModel> *visTestedModelsBuffer;
+		BufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
+
+		ParticleDrawSurface *particleDrawSurfaces;
 	};
 
-	shader_t *m_coronaShader;
-
-	static constexpr unsigned kMaxLightsInScene = 1024;
-	static constexpr unsigned kMaxProgramLightsInView = 32;
-
-	unsigned m_numVisibleProgramLights { 0 };
-	unsigned m_numAllVisibleLights { 0 };
-	uint16_t m_visibleProgramLightIndices[kMaxProgramLightsInView];
-	uint16_t m_allVisibleLightIndices[kMaxLightsInScene];
-	uint16_t m_visibleCoronaLightIndices[kMaxLightsInScene];
-	struct { float mins[8], maxs[8]; } m_lightBoundingDops[kMaxProgramLightsInView];
-
-	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfaces {
-		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates )
-	};
-
-	// Ignored in 2D mode
-	StateForCamera *m_stateForActiveCamera { nullptr };
-
-	alignas( alignof( StateForCamera ) ) uint8_t m_bufferForRegularState[sizeof( StateForCamera )];
-	alignas( alignof( StateForCamera ) ) uint8_t m_bufferForPortalState[sizeof( StateForCamera )];
-
-	unsigned m_visFrameCount { 0 };
-
-	unsigned m_occludersSelectionFrame { 0 };
-	unsigned m_occlusionCullingFrame { 0 };
-
-	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
-
-	struct DebugLine {
-		float p1[3];
-		float p2[3];
-		int color;
-	};
-	wsw::Vector<DebugLine> m_debugLines;
-
-	wsw::Vector<sortedDrawSurf_t> m_meshDrawList;
-
-	template <typename T>
-	struct BufferHolder {
-		std::unique_ptr<T[]> data;
-		unsigned capacity { 0 };
-
-		void reserve( size_t newSize ) {
-			if( newSize > capacity ) [[unlikely]] {
-				data = std::make_unique<T[]>( newSize );
-				capacity = newSize;
-			}
-		}
-
-		void reserveZeroed( size_t newSize ) {
-			if( newSize > capacity ) [[unlikely]] {
-				data = std::make_unique<T[]>( newSize );
-				capacity = newSize;
-			}
-			std::memset( data.get(), 0, sizeof( T ) * newSize );
-		}
-	};
-
-	struct SortedOccluder {
-		unsigned occluderNum;
-		float score;
-		[[nodiscard]]
-		bool operator<( const SortedOccluder &that ) const { return score > that.score; }
-	};
-
-	BufferHolder<unsigned> m_visibleLeavesBuffer;
-	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer;
-	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer;
-
-	BufferHolder<unsigned> m_visibleOccludersBuffer;
-	BufferHolder<SortedOccluder> m_sortedOccludersBuffer;
-
-	static constexpr unsigned kMaxOccluderFrusta = 64;
-	Frustum m_occluderFrusta[kMaxOccluderFrusta];
-
-	struct MergedSurfSpan {
-		int firstSurface;
-		int lastSurface;
-	};
-
-	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpans;
-
-	struct alignas( 16 ) VisTestedModel {
-		vec4_t absMins, absMaxs;
-		// TODO: Pass lod number?
-		const model_t *selectedLod;
-		unsigned indexInEntitiesGroup;
-	};
-
-	// Make sure it can be supplied to the generic culling subroutine
-	static_assert( offsetof( VisTestedModel, absMins ) + 4 * sizeof( float ) == offsetof( VisTestedModel, absMaxs ) );
-
-	BufferHolder<VisTestedModel> m_visTestedModelsBuffer;
-
-	BufferHolder<uint32_t> m_leafLightBitsOfSurfacesHolder;
-
-	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )() -> std::span<const unsigned>;
-	auto ( Frontend::*m_collectVisibleOccludersArchMethod )() -> std::span<const SortedOccluder>;
-	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( std::span<const SortedOccluder> ) -> std::span<const Frustum>;
-	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( std::span<const unsigned>, std::span<const Frustum> )
-		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
-	void ( Frontend::*m_cullSurfacesInVisLeavesByOccludersArchMethod )
-		( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan * );
-	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
-														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
-	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
-															 std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
+	static_assert( sizeof( StateForCamera ) % alignof( Frustum ) == 0 );
 
 	[[nodiscard]]
-	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
+	auto getFogForBounds( const StateForCamera *stateForCamera, const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
-	auto getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t *;
+	auto getFogForSphere( const StateForCamera *stateForCamera, const vec3_t centre, const float radius ) -> mfog_t *;
 
 	void bindFrameBufferAndViewport( int, const StateForCamera *stateForCamera );
 
 	[[nodiscard]]
 	auto getDefaultFarClip( const refdef_t *fd ) const -> float;
 
-	void setupStateForCamera( StateForCamera *stateForCamera, const refdef_t *fd );
+	struct CameraOverrideParams {
+		const float *pvsOrigin { nullptr };
+		const float *lodOrigin { nullptr };
+		unsigned renderFlagsToAdd { 0 };
+		unsigned renderFlagsToClear { 0 };
+	};
+
+	// Regulates which temporary buffers to use
+	enum class CameraStateGroup { Primary, Portal };
+
+	[[nodiscard]]
+	auto setupStateForCamera( CameraStateGroup stateGroup, const refdef_t *fd,
+							  const std::optional<CameraOverrideParams> &overrideParams = std::nullopt ) -> StateForCamera *;
 
 	void renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera );
 
 	[[nodiscard]]
-	auto tryAddingPortalSurface( const entity_t *ent, const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
+	auto tryAddingPortalSurface( StateForCamera *stateForCamera, const entity_t *ent,
+								 const shader_t *shader, void *drawSurf ) -> portalSurface_t *;
 
 	[[nodiscard]]
-	auto tryUpdatingPortalSurfaceAndDistance( drawSurfaceBSP_t *drawSurf, const msurface_t *surf, const float *origin ) -> std::optional<float>;
+	auto tryUpdatingPortalSurfaceAndDistance( StateForCamera *stateForCamera, drawSurfaceBSP_t *drawSurf,
+											  const msurface_t *surf, const float *origin ) -> std::optional<float>;
 
-	void updatePortalSurface( portalSurface_t *portalSurface, const mesh_t *mesh,
+	void updatePortalSurface( StateForCamera *stateForCamera, portalSurface_t *portalSurface, const mesh_t *mesh,
 							  const float *mins, const float *maxs, const shader_t *shader, void *drawSurf );
 
-	void collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta );
+	void collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto cullWorldSurfaces() -> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>>;
+	auto cullWorldSurfaces( StateForCamera *stateForCamera )
+		-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>>;
 
-	void addVisibleWorldSurfacesToSortList( Scene *scene );
+	void addVisibleWorldSurfacesToSortList( StateForCamera *stateForCamera, Scene *scene );
 
-	void collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta );
+	void collectVisibleEntities( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto collectVisibleLights( Scene *scene, std::span<const Frustum> frusta )
+	auto collectVisibleLights( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta )
 		-> std::pair<std::span<const uint16_t>, std::span<const uint16_t>>;
 
 	[[nodiscard]]
-	auto cullNullModelEntities( std::span<const entity_t> nullModelEntities,
-								const Frustum *__restrict primaryFrustum,
-								std::span<const Frustum> occluderFrusta,
-								uint16_t *tmpIndices,
-								VisTestedModel *tmpModels )
-								-> std::span<const uint16_t>;
+	auto cullNullModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> nullModelEntities,
+								std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices,
+								VisTestedModel *tmpModels ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto cullAliasModelEntities( std::span<const entity_t> aliasModelEntities,
-								 const Frustum *__restrict primaryFrustum,
-								 std::span<const Frustum> occluderFrusta,
-								 uint16_t *tmpIndicesBuffer,
-								 VisTestedModel *selectedModelsBuffer )
-								 -> std::span<const uint16_t>;
+	auto cullAliasModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> aliasModelEntities,
+								 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+								 VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto cullSkeletalModelEntities( std::span<const entity_t> skeletalModelEntities,
-									const Frustum *__restrict primaryFrustum,
-									std::span<const Frustum> occluderFrusta,
-									uint16_t *tmpIndicesBuffer,
-									VisTestedModel *selectedModelsBuffer )
-									-> std::span<const uint16_t>;
+	auto cullSkeletalModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> skeletalModelEntities,
+									std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+									VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto cullBrushModelEntities( std::span<const entity_t> brushModelEntities,
-								 const Frustum *__restrict primaryFrustum,
-								 std::span<const Frustum> occluderFrusta,
-								 uint16_t *tmpIndicesBuffer,
-								 VisTestedModel *selectedModelsBuffer )
-								 -> std::span<const uint16_t>;
+	auto cullBrushModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> brushModelEntities,
+								 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+								 VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto cullSpriteEntities( std::span<const entity_t> spriteEntities,
-							 const Frustum *__restrict primaryFrustum,
-							 std::span<const Frustum> occluderFrusta,
-							 uint16_t *tmpIndices, uint16_t *tmpIndices2,
-							 VisTestedModel *tmpModels )
-							 -> std::span<const uint16_t>;
+	auto cullSpriteEntities( StateForCamera *stateForCamera, std::span<const entity_t> spriteEntities,
+							 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices, uint16_t *tmpIndices2,
+							 VisTestedModel *tmpModels ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto cullLights( std::span<const Scene::DynamicLight> lights,
-					 const Frustum *__restrict primaryFrustum,
-					 std::span<const Frustum> occluderFrusta,
-					 uint16_t *tmpAllLightIndices,
-					 uint16_t *tmpCoronaLightIndices,
-					 uint16_t *tmpProgramLightIndices )
-					 -> std::tuple<std::span<const uint16_t>, std::span<const uint16_t>, std::span<const uint16_t>>;
+	auto cullLights( StateForCamera *stateForCamera, std::span<const Scene::DynamicLight> lights,
+					 std::span<const Frustum> occluderFrusta, uint16_t *tmpAllLightIndices,
+					 uint16_t *tmpCoronaLightIndices, uint16_t *tmpProgramLightIndices )
+					 	-> std::tuple<std::span<const uint16_t>, std::span<const uint16_t>, std::span<const uint16_t>>;
 
-	void collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta );
+	void collectVisibleParticles( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto cullParticleAggregates( std::span<const Scene::ParticlesAggregate> aggregates,
-								 const Frustum *__restrict primaryFrustum,
-								 std::span<const Frustum> occluderFrusta,
-								 uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+	auto cullParticleAggregates( StateForCamera *stateForCamera, std::span<const Scene::ParticlesAggregate> aggregates,
+								 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
-	void collectVisibleDynamicMeshes( Scene *scene, std::span<const Frustum> frusta );
+	void collectVisibleDynamicMeshes( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta );
 
 	[[nodiscard]]
-	auto cullCompoundDynamicMeshes( std::span<const Scene::CompoundDynamicMesh> meshes,
-									const Frustum *__restrict primaryFrustum,
-									std::span<const Frustum> occluderFrusta,
-									uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+	auto cullCompoundDynamicMeshes( StateForCamera *stateForCamera, std::span<const Scene::CompoundDynamicMesh> meshes,
+									std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// TODO: Check why spans can't be supplied
 	[[nodiscard]]
-	auto cullDynamicMeshes( const DynamicMesh **meshes,
-							unsigned numMeshes,
-							const Frustum *__restrict primaryFrustum,
-							std::span<const Frustum> occluderFrusta,
-							uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+	auto cullDynamicMeshes( StateForCamera *stateForCamera, const DynamicMesh **meshes, unsigned numMeshes,
+							std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	// TODO: Check why spans can't be supplied
 	// TODO: We can avoid supplying tmpModels argument if a generic sphere culling subroutine is available
 	[[nodiscard]]
-	auto cullQuadPolys( QuadPoly **polys, unsigned numPolys,
-						const Frustum *__restrict primaryFrustum,
-						std::span<const Frustum> occluderFrusta,
-						uint16_t *tmpIndices,
+	auto cullQuadPolys( StateForCamera *stateForCamera, QuadPoly **polys, unsigned numPolys,
+						std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices,
 						VisTestedModel *tmpModels ) -> std::span<const uint16_t>;
 
+	void addAliasModelEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *aliasModelEntities,
+										  std::span<const VisTestedModel> models, std::span<const uint16_t> indices );
+	void addSkeletalModelEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *skeletalModelEntities,
+											 std::span<const VisTestedModel> models, std::span<const uint16_t> indices );
 
-
-	void addAliasModelEntitiesToSortList( const entity_t *aliasModelEntities, std::span<const VisTestedModel> models,
-										  std::span<const uint16_t> indices );
-	void addSkeletalModelEntitiesToSortList( const entity_t *skeletalModelEntities, std::span<const VisTestedModel> models,
-											 std::span<const uint16_t> indices );
-
-	void addNullModelEntitiesToSortList( const entity_t *nullModelEntities, std::span<const uint16_t> indices );
-	void addBrushModelEntitiesToSortList( const entity_t *brushModelEntities, std::span<const VisTestedModel> models,
+	void addNullModelEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *nullModelEntities,
+										 std::span<const uint16_t> indices );
+	void addBrushModelEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *brushModelEntities,
+										  std::span<const VisTestedModel> models,
 										  std::span<const uint16_t> indices, std::span<const Scene::DynamicLight> lights );
 
-	void addSpriteEntitiesToSortList( const entity_t *spriteEntities, std::span<const uint16_t> indices );
+	void addSpriteEntitiesToSortList( StateForCamera *stateForCamera, const entity_t *spriteEntities,
+									  std::span<const uint16_t> indices );
 
-	void addParticlesToSortList( const entity_t *particleEntity, const Scene::ParticlesAggregate *particles,
-								 std::span<const uint16_t> aggregateIndices );
+	void addParticlesToSortList( StateForCamera *stateForCamera, const entity_t *particleEntity,
+								 const Scene::ParticlesAggregate *particles, std::span<const uint16_t> aggregateIndices );
 
-	void addDynamicMeshesToSortList( const entity_t *meshEntity, const DynamicMesh **meshes,
+	void addDynamicMeshesToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity, const DynamicMesh **meshes,
 									 std::span<const uint16_t> indicesOfMeshes );
 
-	void addCompoundDynamicMeshesToSortList( const entity_t *meshEntity, const Scene::CompoundDynamicMesh *meshes,
-											 std::span<const uint16_t> indicesOfMeshes );
+	void addCompoundDynamicMeshesToSortList( StateForCamera *stateForCamera, const entity_t *meshEntity,
+											 const Scene::CompoundDynamicMesh *meshes, std::span<const uint16_t> indicesOfMeshes );
 
-	void addCoronaLightsToSortList( const entity_t *polyEntity, const Scene::DynamicLight *lights,
+	void addCoronaLightsToSortList( StateForCamera *stateForCamera, const entity_t *polyEntity, const Scene::DynamicLight *lights,
 									std::span<const uint16_t> indices );
 
 	void addDebugLine( const float *p1, const float *p2, int color = COLOR_RGB( 255, 255, 255 ) );
 
 	void submitDebugStuffToBackend( Scene *scene );
 
-	// The template parameter is needed just to make instatiation of the method in different translation units correct
+	// The template parameter is needed just to make instatiation of methods in different translation units correct
 
 	enum : unsigned { Sse2 = 1, Sse41 = 2 };
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto collectVisibleWorldLeavesArch() -> std::span<const unsigned>;
+	auto collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto collectVisibleOccludersArch() -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto buildFrustaOfOccludersArch( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+		-> std::span<const Frustum>;
 
 	template <unsigned Arch>
 	[[nodiscard]]
-	auto cullLeavesByOccludersArch( std::span<const unsigned> indicesOfLeaves,
+	auto cullLeavesByOccludersArch( StateForCamera *stateForCamera,
+									std::span<const unsigned> indicesOfLeaves,
 									std::span<const Frustum> occluderFrusta )
 									-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
@@ -405,14 +363,16 @@ private:
 								      uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto collectVisibleWorldLeavesSse2() -> std::span<const unsigned>;
+	auto collectVisibleWorldLeavesSse2( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccludersSse2() -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersSse2( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
 	[[nodiscard]]
-	auto buildFrustaOfOccludersSse2( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccludersSse2( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+		-> std::span<const Frustum>;
 
 	[[nodiscard]]
-	auto cullLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+	auto cullLeavesByOccludersSse2( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+									std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	void cullSurfacesInVisLeavesByOccludersSse2( std::span<const unsigned> indicesOfLeaves,
@@ -431,14 +391,16 @@ private:
 									  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto collectVisibleWorldLeavesSse41() -> std::span<const unsigned>;
+	auto collectVisibleWorldLeavesSse41( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccludersSse41() -> std::span<const SortedOccluder>;
+	auto collectVisibleOccludersSse41( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
 	[[nodiscard]]
-	auto buildFrustaOfOccludersSse41( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccludersSse41( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+		-> std::span<const Frustum>;
 
 	[[nodiscard]]
-	auto cullLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+	auto cullLeavesByOccludersSse41( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+									 std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	void cullSurfacesInVisLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves,
@@ -457,14 +419,16 @@ private:
 									   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
-	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;
+	auto collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned>;
 	[[nodiscard]]
-	auto collectVisibleOccluders() -> std::span<const SortedOccluder>;
+	auto collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder>;
 	[[nodiscard]]
-	auto buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+	auto buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+		-> std::span<const Frustum>;
 
 	[[nodiscard]]
-	auto cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+	auto cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+								std::span<const Frustum> occluderFrusta )
 		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
 
 	void cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
@@ -484,24 +448,92 @@ private:
 
 	void markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves, MergedSurfSpan *mergedSurfSpans );
 
-	void markLightsOfSurfaces( const Scene *scene,
+	void markLightsOfSurfaces( StateForCamera *stateForCamera, const Scene *scene,
 							   std::span<std::span<const unsigned>> spansOfLeaves,
 							   std::span<const uint16_t> visibleLightIndices );
 
-	void markLightsOfLeaves( const Scene *scene,
+	void markLightsOfLeaves( StateForCamera *stateForCamera, const Scene *scene,
 							 std::span<const unsigned> indicesOfLeaves,
 							 std::span<const uint16_t> visibleLightIndices,
 							 unsigned *lightBitsOfSurfaces );
 
-	void addMergedBspSurfToSortList( const entity_t *entity, drawSurfaceBSP_t *drawSurf,
+	void addMergedBspSurfToSortList( StateForCamera *stateForCamera, const entity_t *entity, drawSurfaceBSP_t *drawSurf,
 									 msurface_t *firstVisSurf, msurface_t *lastVisSurf,
 									 const float *maybeOrigin, std::span<const Scene::DynamicLight> lights );
 
-	void *addEntryToSortList( const entity_t *e, const mfog_t *fog, const shader_t *shader,
-							  float dist, unsigned order, const portalSurface_t *portalSurf,
-							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 );
+	[[maybe_unused]]
+	auto addEntryToSortList( StateForCamera *stateForCamera, const entity_t *e, const mfog_t *fog,
+							  const shader_t *shader, float dist, unsigned order, const portalSurface_t *portalSurf,
+							  const void *drawSurf, unsigned surfType, unsigned mergeabilitySeparator = 0 ) -> void *;
 
-	void submitSortedSurfacesToBackend( Scene *scene );
+	void drawPortals( StateForCamera *stateForPrimaryCamera, Scene *scene );
+	void drawPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene );
+
+	enum DrawPortalFlags : unsigned {
+		DrawPortalMirror     = 0x1,
+		DrawPortalRefraction = 0x2,
+		DrawPortalToTexture  = 0x4,
+	};
+
+	[[nodiscard]]
+	auto drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface,
+								Scene *scene, const entity_t *portalEntity, unsigned drawPortalFlags ) -> Texture *;
+
+	[[nodiscard]]
+	auto findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t *;
+
+	void submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Scene *scene );
+
+	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )( StateForCamera * ) -> std::span<const unsigned>;
+	auto ( Frontend::*m_collectVisibleOccludersArchMethod )( StateForCamera * ) -> std::span<const SortedOccluder>;
+	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( StateForCamera *, std::span<const SortedOccluder> ) -> std::span<const Frustum>;
+	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( StateForCamera *, std::span<const unsigned>, std::span<const Frustum> )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+	void ( Frontend::*m_cullSurfacesInVisLeavesByOccludersArchMethod )
+		( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan * );
+	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
+														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
+	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
+															 std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
+
+	shader_t *m_coronaShader { nullptr };
+
+	unsigned m_occludersSelectionFrame { 0 };
+	unsigned m_occlusionCullingFrame { 0 };
+
+	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
+
+	struct DebugLine {
+		float p1[3];
+		float p2[3];
+		int color;
+	};
+	wsw::Vector<DebugLine> m_debugLines;
+
+	struct StateForCameraStorage { uint8_t data[sizeof( StateForCamera )]; };
+	alignas( alignof( StateForCamera ) ) StateForCameraStorage m_buffersForStateForCamera[2];
+
+	// Use separate temporary buffers for a primary camera and for camerae of portals
+
+	wsw::Vector<sortedDrawSurf_t> m_meshSortList[2];
+
+	BufferHolder<unsigned> m_visibleLeavesBuffer[2];
+	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer[2];
+	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer[2];
+
+	BufferHolder<unsigned> m_visibleOccludersBuffer[2];
+	BufferHolder<SortedOccluder> m_sortedOccludersBuffer[2];
+
+	BufferHolder<drawSurfaceBSP_t> m_bspDrawSurfacesBuffer[2];
+	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpansBuffer[2];
+
+	BufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
+	BufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];
+
+	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfacesBuffer[2] {
+		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates ),
+		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticleAggregates * Scene::kMaxParticleAggregates ),
+	};
 };
 
 }

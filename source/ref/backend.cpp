@@ -982,23 +982,24 @@ void R_SubmitSkeletalSurfToBackend( const FrontendToBackendShared *fsh, const en
 }
 
 void R_SubmitBSPSurfToBackend( const FrontendToBackendShared *fsh, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, const drawSurfaceBSP_t *drawSurf ) {
+	const MergedBspSurface *mergedBspSurf = drawSurf->mergedBspSurf;
 	// shadowBits are shared for all rendering instances (normal view, portals, etc)
 	const unsigned dlightBits = drawSurf->dlightBits;
 
 	const unsigned numVerts = drawSurf->numSpanVerts;
 	assert( numVerts );
 	const unsigned numElems = drawSurf->numSpanElems;
-	const unsigned firstVert = drawSurf->firstVboVert + drawSurf->firstSpanVert;
-	const unsigned firstElem = drawSurf->firstVboElem + drawSurf->firstSpanElem;
+	const unsigned firstVert = mergedBspSurf->firstVboVert + drawSurf->firstSpanVert;
+	const unsigned firstElem = mergedBspSurf->firstVboElem + drawSurf->firstSpanElem;
 
-	RB_BindVBO( drawSurf->vbo->index, GL_TRIANGLES );
+	RB_BindVBO( mergedBspSurf->vbo->index, GL_TRIANGLES );
 
 	RB_SetDlightBits( dlightBits );
 
-	RB_SetLightstyle( drawSurf->superLightStyle );
+	RB_SetLightstyle( mergedBspSurf->superLightStyle );
 
-	if( drawSurf->numInstances ) {
-		RB_DrawElementsInstanced( fsh, firstVert, numVerts, firstElem, numElems, drawSurf->numInstances, drawSurf->instances );
+	if( mergedBspSurf->numInstances ) {
+		RB_DrawElementsInstanced( fsh, firstVert, numVerts, firstElem, numElems, mergedBspSurf->numInstances, mergedBspSurf->instances );
 	} else {
 		RB_DrawElements( fsh, firstVert, numVerts, firstElem, numElems );
 	}
@@ -1051,7 +1052,7 @@ void R_SubmitSpriteSurfsToBackend( const FrontendToBackendShared *fsh, const ent
 			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 		}
 
-		if( fsh->renderFlags & (RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		if( fsh->renderFlags & RF_MIRRORVIEW ) {
 			VectorInverse( v_left );
 		}
 
@@ -1183,7 +1184,7 @@ void R_SubmitQuadPolysToBackend( const FrontendToBackendShared *fsh, const entit
 				VectorCopy( &fsh->viewAxis[AXIS_UP], up );
 			}
 
-			if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+			if( fsh->renderFlags & RF_MIRRORVIEW ) {
 				VectorInverse( left );
 			}
 
@@ -1387,7 +1388,7 @@ static void submitSpriteParticlesToBackend( const FrontendToBackendShared *fsh,
 			VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 		}
 
-		if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+		if( fsh->renderFlags & RF_MIRRORVIEW ) {
 			VectorInverse( v_left );
 		}
 
@@ -1628,7 +1629,7 @@ void R_SubmitCoronaSurfsToBackend( const FrontendToBackendShared *fsh, const ent
 	VectorCopy( &fsh->viewAxis[AXIS_RIGHT], v_left );
 	VectorCopy( &fsh->viewAxis[AXIS_UP], v_up );
 
-	if( fsh->renderFlags & ( RF_MIRRORVIEW | RF_FLIPFRONTFACE ) ) {
+	if( fsh->renderFlags & RF_MIRRORVIEW ) {
 		VectorInverse( v_left );
 	}
 

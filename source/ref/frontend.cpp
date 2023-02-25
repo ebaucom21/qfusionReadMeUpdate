@@ -50,14 +50,14 @@ auto Frontend::getDefaultFarClip( const refdef_s *fd ) const -> float {
 	return wsw::max( Z_NEAR, dist ) + Z_BIAS;
 }
 
-auto Frontend::getFogForBounds( const float *mins, const float *maxs ) -> mfog_t * {
-	if( m_stateForActiveCamera->refdef.rdflags & RDF_NOWORLDMODEL ) {
+auto Frontend::getFogForBounds( const StateForCamera *stateForCamera, const float *mins, const float *maxs ) -> mfog_t * {
+	if( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) {
 		return nullptr;
 	}
 	if( !rsh.worldModel || !rsh.worldBrushModel || !rsh.worldBrushModel->numfogs ) {
 		return nullptr;
 	}
-	if( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) {
+	if( stateForCamera->renderFlags & RF_SHADOWMAPVIEW ) {
 		return nullptr;
 	}
 	if( rsh.worldBrushModel->globalfog ) {
@@ -75,13 +75,13 @@ auto Frontend::getFogForBounds( const float *mins, const float *maxs ) -> mfog_t
 	return nullptr;
 }
 
-auto Frontend::getFogForSphere( const vec3_t centre, const float radius ) -> mfog_t * {
+auto Frontend::getFogForSphere( const StateForCamera *stateForCamera, const vec3_t centre, const float radius ) -> mfog_t * {
 	vec3_t mins, maxs;
 	for( unsigned i = 0; i < 3; i++ ) {
 		mins[i] = centre[i] - radius;
 		maxs[i] = centre[i] + radius;
 	}
-	return getFogForBounds( mins, maxs );
+	return getFogForBounds( stateForCamera, mins, maxs );
 }
 
 auto Frontend::createDrawSceneRequest( const refdef_t &refdef ) -> DrawSceneRequest * {
@@ -184,10 +184,14 @@ void DrawSceneRequest::addEntity( const entity_t *ent ) {
 				m_nullModelEntities.push_back( *ent );
 				added = std::addressof( m_nullModelEntities.back() );
 			}
-		} else if( ent->rtype == RT_SPRITE ) {
+		} else if( ent->rtype == RT_SPRITE ) [[unlikely]] {
 			m_spriteEntities.push_back( *ent );
 			added = std::addressof( m_spriteEntities.back() );
 			// simplifies further checks
+			added->model = nullptr;
+		} else if( ent->rtype == RT_PORTALSURFACE ) [[unlikely]] {
+			m_portalSurfaceEntities.push_back( *ent );
+			added = std::addressof( m_portalSurfaceEntities.back() );
 			added->model = nullptr;
 		}
 

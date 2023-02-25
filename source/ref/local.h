@@ -725,7 +725,7 @@ typedef struct msurface_s {
 	unsigned facetype, flags;
 	unsigned firstDrawSurfVert, firstDrawSurfElem;
 	unsigned numInstances;
-	unsigned drawSurf;
+	unsigned mergedSurfNum;
 
 	mutable unsigned occlusionCullingFrame;
 	// TODO: Decouple surfaces and occluders
@@ -810,8 +810,8 @@ typedef struct mbrushmodel_s {
 	unsigned int numModelSurfaces;
 	unsigned int firstModelSurface;
 
-	unsigned int numModelDrawSurfaces;
-	unsigned int firstModelDrawSurface;
+	unsigned int numModelMergedSurfaces;
+	unsigned int firstModelMergedSurface;
 
 	msurface_t      *modelSurfaces;
 
@@ -845,8 +845,8 @@ typedef struct mbrushmodel_s {
 	vec3_t gridMins;
 	int gridBounds[4];
 
-	unsigned int numDrawSurfaces;
-	drawSurfaceBSP_t *drawSurfaces;
+	unsigned int numMergedSurfaces;
+	MergedBspSurface *mergedSurfaces;
 
 	unsigned int numLightmapImages;
 	Texture **lightmapImages;
@@ -1117,7 +1117,6 @@ void        Mod_StripLODSuffix( char *name );
 #define RF_PORTALVIEW           RF_BIT( 1 )
 #define RF_ENVVIEW              RF_BIT( 2 )
 #define RF_SHADOWMAPVIEW        RF_BIT( 3 )
-#define RF_FLIPFRONTFACE        RF_BIT( 4 )
 #define RF_DRAWFLAT             RF_BIT( 5 )
 #define RF_CLIPPLANE            RF_BIT( 6 )
 #define RF_NOVIS                RF_BIT( 7 )
@@ -1133,12 +1132,11 @@ void        Mod_StripLODSuffix( char *name );
 #define MAX_REF_ENTITIES        ( MAX_ENTITIES + 48 ) // must not exceed 2048 because of sort key packing
 
 typedef struct portalSurface_s {
-	const entity_t  *entity;
+	vec4_t mins, maxs;
+	const entity_t *entity;
 	cplane_t plane, untransformed_plane;
-	const shader_t  *shader;
-	vec3_t mins, maxs, centre;
-	Texture         *texures[2];            // front and back portalmaps
-	skyportal_t     *skyPortal;
+	const shader_t *shader;
+	Texture *texures[2];            // front and back portalmaps
 } portalSurface_t;
 
 //====================================================
@@ -1342,8 +1340,6 @@ void        R_BatchCoronaSurf(  const entity_t *e, const shader_t *shader, const
 //
 // r_main.c
 //
-
-#define R_FASTSKY() ( r_fastsky->integer || m_stateForActiveCamera->viewCluster < 0 )
 
 int         R_LoadFile_( const char *path, int flags, void **buffer, const char *filename, int fileline );
 void        R_FreeFile_( void *buffer, const char *filename, int fileline );

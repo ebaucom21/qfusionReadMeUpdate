@@ -28,12 +28,12 @@ static vec3_t lockedViewOrigin;
 static vec3_t lockedViewAxis;
 
 template <unsigned Arch>
-auto Frontend::collectVisibleWorldLeavesArch() -> std::span<const unsigned> {
-	const auto *const pvs             = Mod_ClusterPVS( m_stateForActiveCamera->viewCluster, rsh.worldModel );
+auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
+	const auto *const pvs             = Mod_ClusterPVS( stateForCamera->viewCluster, rsh.worldModel );
 	const unsigned numWorldLeaves     = rsh.worldBrushModel->numvisleafs;
 	const auto leaves                 = rsh.worldBrushModel->visleafs;
-	unsigned *const visibleLeaves     = m_visibleLeavesBuffer.data.get();
-	const Frustum *__restrict frustum = &m_stateForActiveCamera->frustum;
+	unsigned *const visibleLeaves     = stateForCamera->visibleLeavesBuffer->data.get();
+	const Frustum *__restrict frustum = &stateForCamera->frustum;
 
 	unsigned numVisibleLeaves = 0;
 	for( unsigned leafNum = 0; leafNum < numWorldLeaves; ++leafNum ) {
@@ -53,16 +53,17 @@ auto Frontend::collectVisibleWorldLeavesArch() -> std::span<const unsigned> {
 }
 
 template <unsigned Arch>
-auto Frontend::collectVisibleOccludersArch() -> std::span<const SortedOccluder> {
-	const Frustum *__restrict frustum = &m_stateForActiveCamera->frustum;
-	unsigned *const visibleOccluders  = m_visibleOccludersBuffer.data.get();
+auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+	const Frustum *__restrict frustum = &stateForCamera->frustum;
+	unsigned *const visibleOccluders  = stateForCamera->visibleOccludersBuffer->data.get();
 	unsigned numVisibleOccluders      = 0;
 
 #ifdef DEBUG_OCCLUDERS
+	// TODO: Don't do that for portal camerae
 	if( Cvar_Integer( "lockOccluders" ) ) {
 		if( !isLockingOccluders ) {
-			VectorCopy( m_state.viewOrigin, lockedViewOrigin );
-			VectorCopy( m_state.viewAxis, lockedViewAxis );
+			VectorCopy( stateForCamera->viewOrigin, lockedViewOrigin );
+			VectorCopy( stateForCamera->viewAxis, lockedViewAxis );
 			isLockingOccluders = true;
 		}
 	}
@@ -84,14 +85,14 @@ auto Frontend::collectVisibleOccludersArch() -> std::span<const SortedOccluder> 
 #endif
 	}
 
-	const float *__restrict viewOrigin = m_stateForActiveCamera->viewOrigin;
-	const float *__restrict viewAxis   = m_stateForActiveCamera->viewAxis;
+	const float *__restrict viewOrigin = stateForCamera->viewOrigin;
+	const float *__restrict viewAxis   = stateForCamera->viewAxis;
 	if( isLockingOccluders ) {
 		viewOrigin = lockedViewOrigin;
 		viewAxis   = lockedViewAxis;
 	}
 
-	SortedOccluder *const sortedOccluders = m_sortedOccludersBuffer.data.get();
+	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->data.get();
 	unsigned numSortedOccluders           = 0;
 
 	for( unsigned i = 0; i < numVisibleOccluders; ++i ) {
@@ -144,13 +145,14 @@ auto Frontend::collectVisibleOccludersArch() -> std::span<const SortedOccluder> 
 }
 
 template <unsigned Arch>
-auto Frontend::buildFrustaOfOccludersArch( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum> {
-	Frustum *const occluderFrusta     = m_occluderFrusta;
-	const unsigned maxOccluders       = wsw::min<unsigned>( sortedOccluders.size(), std::size( m_occluderFrusta ) );
+auto Frontend::buildFrustaOfOccludersArch( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+	-> std::span<const Frustum> {
+	Frustum *const occluderFrusta     = stateForCamera->occluderFrusta;
+	const unsigned maxOccluders       = wsw::min<unsigned>( sortedOccluders.size(), std::size( stateForCamera->occluderFrusta ) );
 	constexpr float selfOcclusionBias = 1.0f;
 
-	const float *__restrict viewOrigin                = m_stateForActiveCamera->viewOrigin;
-	[[maybe_unused]] const float *__restrict viewAxis = m_stateForActiveCamera->viewAxis;
+	const float *__restrict viewOrigin                = stateForCamera->viewOrigin;
+	[[maybe_unused]] const float *__restrict viewAxis = stateForCamera->viewAxis;
 
 #ifdef DEBUG_OCCLUDERS
 	if( isLockingOccluders ) {
@@ -164,7 +166,7 @@ auto Frontend::buildFrustaOfOccludersArch( std::span<const SortedOccluder> sorte
 	// Best occluders come first so they should make their way into the final result.
 	alignas( 16 )bool isCulledByOtherTable[kMaxOccluderFrusta];
 	// MSVC fails to get the member array count in compile time
-	assert( std::size( isCulledByOtherTable ) == std::size( m_occluderFrusta ) );
+	assert( std::size( isCulledByOtherTable ) == std::size( stateForCamera->occluderFrusta ) );
 	std::memset( isCulledByOtherTable, 0, sizeof( bool ) * maxOccluders );
 
 	// Note: An outer loop over all surfaces would have been allowed to avoid redundant component shuffles
@@ -325,17 +327,19 @@ auto Frontend::buildFrustaOfOccludersArch( std::span<const SortedOccluder> sorte
 }
 
 template <unsigned Arch>
-auto Frontend::cullLeavesByOccludersArch( std::span<const unsigned> indicesOfLeaves,
+auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
+										  std::span<const unsigned> indicesOfLeaves,
 										  std::span<const Frustum> occluderFrusta )
 	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
 #ifdef DEBUG_OCCLUDERS
 	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
 #endif
 
-	unsigned *const partiallyVisibleLeaves = m_occluderPassPartiallyVisibleLeavesBuffer.data.get();
-	unsigned *const fullyVisibleLeaves     = m_occluderPassPartiallyVisibleLeavesBuffer.data.get();
-	const unsigned numOccluders = occluderFrusta.size();
-	const auto leaves           = rsh.worldBrushModel->visleafs;
+	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->data.get();
+	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->data.get();
+
+	const unsigned numOccluders        = occluderFrusta.size();
+	const auto leaves                  = rsh.worldBrushModel->visleafs;
 	unsigned numPartiallyVisibleLeaves = 0;
 	unsigned numFullyVisibleLeaves     = 0;
 
@@ -403,7 +407,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
 			const msurface_t *const __restrict surf = surfaces + surfNum;
-			if( surf->occlusionCullingFrame != occlusionCullingFrame ) {
+			if( surf->occlusionCullingFrame != occlusionCullingFrame || true ) {
 				surf->occlusionCullingFrame = occlusionCullingFrame;
 
 				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
@@ -429,8 +433,8 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 				} while( ++frustumNum != numBestOccluders );
 
 				if( surfVisible ) {
-					assert( surf->drawSurf > 0 );
-					const unsigned mergedSurfNum = surf->drawSurf - 1;
+					assert( surf->mergedSurfNum > 0 );
+					const unsigned mergedSurfNum = surf->mergedSurfNum - 1;
 					MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
 					// TODO: Branchless min/max
 					span->firstSurface = wsw::min( span->firstSurface, (int)surfNum );

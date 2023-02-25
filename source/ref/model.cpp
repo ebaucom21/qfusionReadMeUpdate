@@ -586,8 +586,8 @@ static void Mod_SetupSubmodels( model_t *mod ) {
 		bmodel->firstModelSurface = bm->firstModelSurface;
 		bmodel->numModelSurfaces = bm->numModelSurfaces;
 
-		bmodel->firstModelDrawSurface = bm->firstModelDrawSurface;
-		bmodel->numModelDrawSurfaces = bm->numModelDrawSurfaces;
+		bmodel->firstModelMergedSurface = bm->firstModelDrawSurface;
+		bmodel->numModelMergedSurfaces = bm->numModelDrawSurfaces;
 
 		starmod->extradata = bmodel;
 		if( i == 0 ) {
@@ -610,13 +610,13 @@ static void Mod_SetupSubmodels( model_t *mod ) {
 	}
 }
 
-static int R_CompareSurfacesByDrawSurf( const void *ps1, const void *ps2 ) {
+static int R_CompareSurfacesByMergedSurf( const void *ps1, const void *ps2 ) {
 	const auto *const s1 = (msortedSurface_t *)ps1;
 	const auto *const s2 = (msortedSurface_t *)ps2;
-	if( s1->surf->drawSurf > s2->surf->drawSurf ) {
+	if( s1->surf->mergedSurfNum > s2->surf->mergedSurfNum ) {
 		return 1;
 	}
-	if( s1->surf->drawSurf < s2->surf->drawSurf ) {
+	if( s1->surf->mergedSurfNum < s2->surf->mergedSurfNum ) {
 		return -1;
 	}
 	return (int)s1->surf->firstDrawSurfVert - (int)s2->surf->firstDrawSurfVert;
@@ -644,7 +644,7 @@ static void Mod_SortModelSurfaces( model_t *mod, unsigned int modnum ) {
 	}
 
 	memcpy( backupSurfaces, loadbmodel->surfaces + firstSurface, numSurfaces * sizeof( msurface_t ) );
-	qsort( sortedSurfaces, numSurfaces, sizeof( msortedSurface_t ), &R_CompareSurfacesByDrawSurf );
+	qsort( sortedSurfaces, numSurfaces, sizeof( msortedSurface_t ), &R_CompareSurfacesByMergedSurf );
 
 	for( unsigned i = 0; i < numSurfaces; i++ ) {
 		map[sortedSurfaces[i].number] = i;
@@ -664,17 +664,17 @@ static void Mod_SortModelSurfaces( model_t *mod, unsigned int modnum ) {
 		*(loadbmodel->surfaces + firstSurface + i) = backupSurfaces[sortedSurfaces[i].number];
 	}
 
-	unsigned lastDrawSurf = loadbmodel->numDrawSurfaces + 1;
+	unsigned lastMergedSurf = loadbmodel->numMergedSurfaces + 1;
 	for( unsigned i = 0; i < numSurfaces; i++ ) {
 		msurface_t *const surf = loadbmodel->surfaces + firstSurface + i;
-		if( surf->drawSurf ) {
-			drawSurfaceBSP_t *const drawSurf = &loadbmodel->drawSurfaces[surf->drawSurf - 1];
-			if( lastDrawSurf != surf->drawSurf ) {
-				drawSurf->numWorldSurfaces = 0;
-				drawSurf->firstWorldSurface = firstSurface + i;
-				lastDrawSurf = surf->drawSurf;
+		if( surf->mergedSurfNum ) {
+			MergedBspSurface *const mergedSurf = &loadbmodel->mergedSurfaces[surf->mergedSurfNum - 1];
+			if( lastMergedSurf != surf->mergedSurfNum ) {
+				mergedSurf->numWorldSurfaces = 0;
+				mergedSurf->firstWorldSurface = firstSurface + i;
+				lastMergedSurf = surf->mergedSurfNum;
 			}
-			drawSurf->numWorldSurfaces++;
+			mergedSurf->numWorldSurfaces++;
 		}
 	}
 
@@ -703,7 +703,7 @@ static int Mod_CreateSubmodelBufferObjects( model_t *mod, unsigned modnum ) {
 	unsigned maxTempVBOs = 1024;
 
 	auto *tempVBOs = ( mesh_vbo_t * )Q_malloc( maxTempVBOs * sizeof( mesh_vbo_t ) );
-	const unsigned startDrawSurface = loadbmodel->numDrawSurfaces;
+	const unsigned startDrawSurface = loadbmodel->numMergedSurfaces;
 
 	bm->numModelDrawSurfaces = 0;
 	bm->firstModelDrawSurface = startDrawSurface;
@@ -821,7 +821,7 @@ static int Mod_CreateSubmodelBufferObjects( model_t *mod, unsigned modnum ) {
 				msurface_t *const surf2 = surfaces[j];
 
 				// already merged
-				if( surf2->drawSurf ) {
+				if( surf2->mergedSurfNum ) {
 					continue;
 				}
 
@@ -898,17 +898,16 @@ merge:
 			vbo->index = numTempVBOs;
 		}
 
-		// allocate a drawsurf
-		drawSurfaceBSP_t *const drawSurf = &loadbmodel->drawSurfaces[loadbmodel->numDrawSurfaces++];
-		drawSurf->superLightStyle = surf->superLightStyle;
-		drawSurf->instances = surf->instances;
-		drawSurf->numInstances = surf->numInstances;
-		drawSurf->fog = surf->fog;
-		drawSurf->shader = surf->shader;
-		drawSurf->numLightmaps = 0;
+		MergedBspSurface *const mergedSurf = &loadbmodel->mergedSurfaces[loadbmodel->numMergedSurfaces++];
+		mergedSurf->superLightStyle = surf->superLightStyle;
+		mergedSurf->instances = surf->instances;
+		mergedSurf->numInstances = surf->numInstances;
+		mergedSurf->fog = surf->fog;
+		mergedSurf->shader = surf->shader;
+		mergedSurf->numLightmaps = 0;
 
 		// upload vertex and elements data for face itself
-		surf->drawSurf = loadbmodel->numDrawSurfaces;
+		surf->mergedSurfNum = loadbmodel->numMergedSurfaces;
 		surf->firstDrawSurfVert = 0;
 		surf->firstDrawSurfElem = 0;
 
@@ -921,7 +920,7 @@ merge:
 			if( lightmapStyle == 255 ) {
 				break;
 			}
-			drawSurf->numLightmaps++;
+			mergedSurf->numLightmaps++;
 		}
 
 		// now if there are any merged faces upload them to the same VBO
@@ -929,7 +928,7 @@ merge:
 			for( unsigned j = i + 1; j <= lastMerged; j++ ) {
 				if( surfmap[j] == surf ) {
 					msurface_t *const surf2 = surfaces[j];
-					surf2->drawSurf = loadbmodel->numDrawSurfaces;
+					surf2->mergedSurfNum = loadbmodel->numMergedSurfaces;
 					surf2->firstDrawSurfVert = numVerts;
 					surf2->firstDrawSurfElem = numElems;
 					numVerts += surf2->mesh.numVerts;
@@ -939,8 +938,8 @@ merge:
 			}
 		}
 
-		drawSurf->numVerts = numVerts;
-		drawSurf->numElems = numElems;
+		mergedSurf->numVerts = numVerts;
+		mergedSurf->numElems = numElems;
 	}
 
 	assert( numUnmappedSurfaces == 0 );
@@ -960,9 +959,9 @@ merge:
 				if( vbo2->index == 0 ) {
 					if( vbo2->vertexAttribs == vbo->vertexAttribs ) {
 						if( vbo->numVerts + vbo2->numVerts < USHRT_MAX ) {
-							drawSurfaceBSP_t *const drawSurf = &loadbmodel->drawSurfaces[startDrawSurface + j];
-							drawSurf->firstVboVert = vbo->numVerts;
-							drawSurf->firstVboElem = vbo->numElems;
+							MergedBspSurface *const mergedSurf = &loadbmodel->mergedSurfaces[startDrawSurface + j];
+							mergedSurf->firstVboVert = vbo->numVerts;
+							mergedSurf->firstVboElem = vbo->numElems;
 
 							vbo->numVerts += vbo2->numVerts;
 							vbo->numElems += vbo2->numElems;
@@ -1002,20 +1001,20 @@ merge:
 			continue;
 		}
 
-		drawSurfaceBSP_t *drawSurf = &loadbmodel->drawSurfaces[startDrawSurface + i];
+		MergedBspSurface *mergedSurf = &loadbmodel->mergedSurfaces[startDrawSurface + i];
 
 		// don't use half-floats for XYZ due to precision issues
-		vbo->owner = R_CreateMeshVBO( drawSurf, vbo->numVerts, vbo->numElems, drawSurf->numInstances,
+		vbo->owner = R_CreateMeshVBO( mergedSurf, vbo->numVerts, vbo->numElems, mergedSurf->numInstances,
 									  vbo->vertexAttribs, VBO_TAG_WORLD, vbo->vertexAttribs & ~floatVattribs );
-		drawSurf->vbo = (mesh_vbo_s *)vbo->owner;
+		mergedSurf->vbo = (mesh_vbo_s *)vbo->owner;
 
-		if( drawSurf->numInstances == 0 ) {
+		if( mergedSurf->numInstances == 0 ) {
 			for( unsigned j = i + 1; j < numTempVBOs; j++ ) {
 				mesh_vbo_t *vbo2 = &tempVBOs[j];
 				if( vbo2->index == i + 1 ) {
 					vbo2->owner = vbo->owner;
-					drawSurf = &loadbmodel->drawSurfaces[startDrawSurface + j];
-					drawSurf->vbo = (mesh_vbo_s *)vbo->owner;
+					mergedSurf = &loadbmodel->mergedSurfaces[startDrawSurface + j];
+					mergedSurf->vbo = (mesh_vbo_s *)vbo->owner;
 					numUnmergedVBOs--;
 				}
 			}
@@ -1030,8 +1029,8 @@ merge:
 	// upload data to merged VBO's and assign offsets to drawSurfs
 	for( unsigned i = 0; i < numSurfaces; i++ ) {
 		msurface_t *const surf = surfaces[i];
-		if( surf->drawSurf ) {
-			drawSurfaceBSP_t *const drawSurf = &loadbmodel->drawSurfaces[surf->drawSurf - 1];
+		if( surf->mergedSurfNum ) {
+			MergedBspSurface *const drawSurf = &loadbmodel->mergedSurfaces[surf->mergedSurfNum - 1];
 			const mesh_t *mesh = &surf->mesh;
 			mesh_vbo_t *const vbo = drawSurf->vbo;
 
@@ -1044,7 +1043,7 @@ merge:
 		}
 	}
 
-	bm->numModelDrawSurfaces = loadbmodel->numDrawSurfaces - bm->firstModelDrawSurface;
+	bm->numModelDrawSurfaces = loadbmodel->numMergedSurfaces - bm->firstModelDrawSurface;
 
 	Q_free( tempVBOs );
 	Q_free( surfmap );
@@ -1071,8 +1070,8 @@ void Mod_CreateVertexBufferObjects( model_t *mod ) {
 	}
 
 	// allocate memory for drawsurfs
-	loadbmodel->numDrawSurfaces = 0;
-	loadbmodel->drawSurfaces = (drawSurfaceBSP_t *)Q_malloc( sizeof( *loadbmodel->drawSurfaces ) * loadbmodel->numsurfaces );
+	loadbmodel->numMergedSurfaces = 0;
+	loadbmodel->mergedSurfaces    = (MergedBspSurface *)Q_malloc( sizeof( *loadbmodel->mergedSurfaces ) * loadbmodel->numsurfaces );
 
 	for( unsigned i = 0; i < loadbmodel->numsubmodels; i++ ) {
 		Mod_CreateSubmodelBufferObjects( mod, i );
@@ -1102,10 +1101,10 @@ static void Mod_TouchBrushModel( model_t *model ) {
 
 	// touch all shaders and vertex buffer objects for this bmodel
 
-	for( unsigned i = 0; i < loadbmodel->numDrawSurfaces; i++ ) {
-		drawSurfaceBSP_t *drawSurf = &loadbmodel->drawSurfaces[i];
-		R_TouchShader( drawSurf->shader );
-		R_TouchMeshVBO( drawSurf->vbo );
+	for( unsigned i = 0; i < loadbmodel->numMergedSurfaces; i++ ) {
+		MergedBspSurface *mergedSurf = &loadbmodel->mergedSurfaces[i];
+		R_TouchShader( mergedSurf->shader );
+		R_TouchMeshVBO( mergedSurf->vbo );
 	}
 
 	for( unsigned i = 0; i < loadbmodel->numfogs; i++ ) {

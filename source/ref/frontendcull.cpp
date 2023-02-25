@@ -77,40 +77,42 @@ void Frustum::setupFor4Planes( const float *viewOrigin, const mat3_t viewAxis, f
 
 namespace wsw::ref {
 
-auto Frontend::cullWorldSurfaces()
+auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>> {
 
 	m_occludersSelectionFrame++;
 	m_occlusionCullingFrame++;
 
-	const unsigned numMergedSurfaces = rsh.worldBrushModel->numDrawSurfaces;
-	const unsigned numWorldSurfaces = rsh.worldBrushModel->numModelSurfaces;
-	const unsigned numWorldLeaves = rsh.worldBrushModel->numvisleafs;
+	const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;
+	const unsigned numWorldSurfaces  = rsh.worldBrushModel->numModelSurfaces;
+	const unsigned numWorldLeaves    = rsh.worldBrushModel->numvisleafs;
+	const unsigned numOccluders      = rsh.worldBrushModel->numOccluders;
 
 	// Put the allocation code here, so we don't bloat the arch-specific code
-	m_visibleLeavesBuffer.reserve( numWorldLeaves );
-	m_visibleOccludersBuffer.reserve( numWorldSurfaces );
-	m_occluderPassFullyVisibleLeavesBuffer.reserve( numWorldLeaves );
-	m_occluderPassPartiallyVisibleLeavesBuffer.reserve( numWorldLeaves );
+	stateForCamera->visibleLeavesBuffer->reserve( numWorldLeaves );
+	stateForCamera->visibleOccludersBuffer->reserve( numWorldSurfaces );
+	stateForCamera->occluderPassFullyVisibleLeavesBuffer->reserve( numWorldLeaves );
+	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->reserve( numWorldLeaves );
 
-	m_visibleOccludersBuffer.reserve( rsh.worldBrushModel->numOccluders );
-	m_sortedOccludersBuffer.reserve( rsh.worldBrushModel->numOccluders );
+	stateForCamera->visibleOccludersBuffer->reserve( numOccluders );
+	stateForCamera->sortedOccludersBuffer->reserve( numOccluders );
 
-	m_drawSurfSurfSpans.reserve( numMergedSurfaces );
-	MergedSurfSpan *const mergedSurfSpans = m_drawSurfSurfSpans.data.get();
+	stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
+	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
+	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->data.get();
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
 		mergedSurfSpans[i].firstSurface = std::numeric_limits<int>::max();
-		mergedSurfSpans[i].lastSurface = std::numeric_limits<int>::min();
+		mergedSurfSpans[i].lastSurface  = std::numeric_limits<int>::min();
 	}
 
 	// Cull world leaves by the primary frustum
-	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves();
+	const std::span<const unsigned> visibleLeaves = collectVisibleWorldLeaves( stateForCamera );
 
 	// TODO: Can run in parallel with leaves collection
 	// Collect occluder surfaces of leaves that fall into the primary frustum and that are "good enough"
-	const std::span<const SortedOccluder> visibleOccluders  = collectVisibleOccluders();
+	const std::span<const SortedOccluder> visibleOccluders = collectVisibleOccluders( stateForCamera );
 	// Build frusta of occluders, while performing some additional frusta pruning
-	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( visibleOccluders );
+	const std::span<const Frustum> occluderFrusta = buildFrustaOfOccluders( stateForCamera, visibleOccluders );
 
 	std::span<const unsigned> nonOccludedLeaves;
 	std::span<const unsigned> partiallyOccludedLeaves;
@@ -121,7 +123,8 @@ auto Frontend::cullWorldSurfaces()
 		nonOccludedLeaves = visibleLeaves;
 	} else {
 		// Test every leaf that falls into the primary frustum against frusta of occluders
-		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( visibleLeaves, occluderFrusta );
+		std::tie( nonOccludedLeaves, partiallyOccludedLeaves ) = cullLeavesByOccluders( stateForCamera,
+																						visibleLeaves, occluderFrusta );
 		markSurfacesOfLeavesAsVisible( nonOccludedLeaves, mergedSurfSpans );
 		// Test every surface that belongs to partially occluded leaves
 		cullSurfacesInVisLeavesByOccluders( partiallyOccludedLeaves, occluderFrusta, mergedSurfSpans );
@@ -130,89 +133,90 @@ auto Frontend::cullWorldSurfaces()
 	return { occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves };
 }
 
-void Frontend::collectVisiblePolys( Scene *scene, std::span<const Frustum> frusta ) {
-	VisTestedModel *tmpModels = m_visTestedModelsBuffer.data.get();
+void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
+	VisTestedModel *tmpModels = stateForCamera->visTestedModelsBuffer->data.get();
 	QuadPoly **quadPolys      = scene->m_quadPolys.data();
 
 	uint16_t tmpIndices[MAX_QUAD_POLYS];
-	const auto visibleIndices = cullQuadPolys( quadPolys, scene->m_quadPolys.size(), &m_stateForActiveCamera->frustum,
-											   frusta, tmpIndices, tmpModels );
+	const auto visibleIndices = cullQuadPolys( stateForCamera, quadPolys, scene->m_quadPolys.size(), frusta, tmpIndices, tmpModels );
 
 	const auto *polyEntity = scene->m_polyent;
 	for( const unsigned index: visibleIndices ) {
 		QuadPoly *const p = quadPolys[index];
-		(void)addEntryToSortList( polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
+		addEntryToSortList( stateForCamera, polyEntity, nullptr, p->material, 0, index, nullptr, quadPolys[index], ST_QUAD_POLY );
 	}
 }
 
-void Frontend::collectVisibleEntities( Scene *scene, std::span<const Frustum> frusta ) {
+void Frontend::collectVisibleEntities( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t indices[MAX_ENTITIES], indices2[MAX_ENTITIES];
-	m_visTestedModelsBuffer.reserve( MAX_ENTITIES );
+	stateForCamera->visTestedModelsBuffer->reserve( MAX_ENTITIES );
 
-	VisTestedModel *const visModels = m_visTestedModelsBuffer.data.get();
-	const Frustum *const frustum    = &m_stateForActiveCamera->frustum;
+	VisTestedModel *const visModels = stateForCamera->visTestedModelsBuffer->data.get();
 
 	const std::span<const entity_t> nullModelEntities = scene->m_nullModelEntities;
-	const auto nullModelIndices = cullNullModelEntities( nullModelEntities, frustum, frusta, indices, visModels );
-	addNullModelEntitiesToSortList( nullModelEntities.data(), nullModelIndices );
+	const auto nullModelIndices = cullNullModelEntities( stateForCamera, nullModelEntities, frusta, indices, visModels );
+	addNullModelEntitiesToSortList( stateForCamera, nullModelEntities.data(), nullModelIndices );
 
 	const std::span<const entity_t> aliasModelEntities = scene->m_aliasModelEntities;
-	const auto aliasModelIndices = cullAliasModelEntities( aliasModelEntities, frustum, frusta, indices, visModels );
-	addAliasModelEntitiesToSortList( aliasModelEntities.data(), { visModels, aliasModelIndices.size() }, aliasModelIndices );
+	const auto aliasModelIndices = cullAliasModelEntities( stateForCamera, aliasModelEntities, frusta, indices, visModels );
+	addAliasModelEntitiesToSortList( stateForCamera,  aliasModelEntities.data(),
+									 { visModels, aliasModelIndices.size() }, aliasModelIndices );
 
 	const std::span<const entity_t> skeletalModelEntities = scene->m_skeletalModelEntities;
-	const auto skeletalModelIndices = cullSkeletalModelEntities( skeletalModelEntities, frustum, frusta, indices, visModels );
-	addSkeletalModelEntitiesToSortList( skeletalModelEntities.data(), { visModels, skeletalModelIndices.size() }, skeletalModelIndices );
+	const auto skeletalModelIndices = cullSkeletalModelEntities( stateForCamera, skeletalModelEntities, frusta, indices, visModels );
+	addSkeletalModelEntitiesToSortList( stateForCamera, skeletalModelEntities.data(),
+										{ visModels, skeletalModelIndices.size() }, skeletalModelIndices );
 
 	const std::span<const entity_t> brushModelEntities = scene->m_brushModelEntities;
-	const auto brushModelIndices = cullBrushModelEntities( brushModelEntities, frustum, frusta, indices, visModels );
+	const auto brushModelIndices = cullBrushModelEntities( stateForCamera, brushModelEntities, frusta, indices, visModels );
 	const std::span<const Scene::DynamicLight> dynamicLights { scene->m_dynamicLights.data(), scene->m_dynamicLights.size() };
 	const std::span<const VisTestedModel> brushVisModels { visModels, brushModelIndices.size() };
-	addBrushModelEntitiesToSortList( brushModelEntities.data(), brushVisModels, brushModelIndices, dynamicLights );
+	addBrushModelEntitiesToSortList( stateForCamera, brushModelEntities.data(), brushVisModels, brushModelIndices, dynamicLights );
 
 	const std::span<const entity_t> spriteEntities = scene->m_spriteEntities;
-	const auto spriteModelIndices = cullSpriteEntities( spriteEntities, frustum, frusta, indices, indices2, visModels );
-	addSpriteEntitiesToSortList( spriteEntities.data(), spriteModelIndices );
+	const auto spriteModelIndices = cullSpriteEntities( stateForCamera, spriteEntities, frusta, indices, indices2, visModels );
+	addSpriteEntitiesToSortList( stateForCamera, spriteEntities.data(), spriteModelIndices );
 }
 
-void Frontend::collectVisibleParticles( Scene *scene, std::span<const Frustum> frusta ) {
+void Frontend::collectVisibleParticles( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t tmpIndices[1024];
-	const auto visibleAggregateIndices = cullParticleAggregates( scene->m_particles, &m_stateForActiveCamera->frustum,
-																 frusta, tmpIndices );
-	addParticlesToSortList( scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
+	const auto visibleAggregateIndices = cullParticleAggregates( stateForCamera, scene->m_particles, frusta, tmpIndices );
+	addParticlesToSortList( stateForCamera, scene->m_polyent, scene->m_particles.data(), visibleAggregateIndices );
 }
 
-void Frontend::collectVisibleDynamicMeshes( Scene *scene, std::span<const Frustum> frusta ) {
+void Frontend::collectVisibleDynamicMeshes( StateForCamera *stateForCamera,  Scene *scene, std::span<const Frustum> occluderFrusta ) {
 	uint16_t tmpIndices[wsw::max( Scene::kMaxDynamicMeshes, Scene::kMaxCompoundDynamicMeshes )];
 
-	const Frustum *const frustum = &m_stateForActiveCamera->frustum;
-
 	const std::span<const DynamicMesh *> meshes = scene->m_dynamicMeshes;
-	const auto visibleDynamicMeshIndices = cullDynamicMeshes( meshes.data(), meshes.size(), frustum, frusta, tmpIndices );
-	addDynamicMeshesToSortList( scene->m_polyent, scene->m_dynamicMeshes.data(), visibleDynamicMeshIndices );
+	const auto visibleDynamicMeshIndices = cullDynamicMeshes( stateForCamera, meshes.data(),
+															  meshes.size(), occluderFrusta, tmpIndices );
+	addDynamicMeshesToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicMeshes.data(), visibleDynamicMeshIndices );
 
 	const std::span<const Scene::CompoundDynamicMesh> compoundMeshes = scene->m_compoundDynamicMeshes;
-	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( compoundMeshes, frustum, frusta, tmpIndices );
-	addCompoundDynamicMeshesToSortList( scene->m_polyent, scene->m_compoundDynamicMeshes.data(), visibleCompoundMeshesIndices );
+	const auto visibleCompoundMeshesIndices = cullCompoundDynamicMeshes( stateForCamera, compoundMeshes,
+																		 occluderFrusta, tmpIndices );
+	addCompoundDynamicMeshesToSortList( stateForCamera, scene->m_polyent,
+										scene->m_compoundDynamicMeshes.data(), visibleCompoundMeshesIndices );
 }
 
-auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occluderFrusta )
+auto Frontend::collectVisibleLights( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> occluderFrusta )
 	-> std::pair<std::span<const uint16_t>, std::span<const uint16_t>> {
 	static_assert( decltype( Scene::m_dynamicLights )::capacity() == kMaxLightsInScene );
 
 	const auto [allVisibleLightIndices, visibleCoronaLightIndices, visibleProgramLightIndices] =
-		cullLights( scene->m_dynamicLights, &m_stateForActiveCamera->frustum, occluderFrusta,
-					m_allVisibleLightIndices, m_visibleCoronaLightIndices, m_visibleProgramLightIndices );
+		cullLights( stateForCamera, scene->m_dynamicLights, occluderFrusta,
+					stateForCamera->allVisibleLightIndices, stateForCamera->visibleCoronaLightIndices,
+					stateForCamera->visibleProgramLightIndices );
 
-	assert( m_numVisibleProgramLights == 0 );
-	assert( m_numAllVisibleLights == 0 );
+	assert( stateForCamera->numVisibleProgramLights == 0 );
+	assert( stateForCamera->numAllVisibleLights == 0 );
 
-	m_numAllVisibleLights     = allVisibleLightIndices.size();
-	m_numVisibleProgramLights = visibleProgramLightIndices.size();
+	stateForCamera->numAllVisibleLights     = allVisibleLightIndices.size();
+	stateForCamera->numVisibleProgramLights = visibleProgramLightIndices.size();
 
 	// Prune m_visibleProgramLightIndices in-place
 	if( visibleProgramLightIndices.size() > kMaxProgramLightsInView ) {
-		const float *const __restrict viewOrigin = m_stateForActiveCamera->viewOrigin;
+		const float *const __restrict viewOrigin = stateForCamera->viewOrigin;
 		const Scene::DynamicLight *const lights  = scene->m_dynamicLights.data();
 		wsw::StaticVector<std::pair<unsigned, float>, kMaxLightsInScene> lightsHeap;
 		const auto cmp = []( const std::pair<unsigned, float> &lhs, const std::pair<unsigned, float> &rhs ) {
@@ -229,31 +233,32 @@ auto Frontend::collectVisibleLights( Scene *scene, std::span<const Frustum> occl
 		do {
 			std::pop_heap( lightsHeap.begin(), lightsHeap.end(), cmp );
 			const unsigned lightIndex = lightsHeap.back().first;
-			m_visibleProgramLightIndices[numVisibleProgramLights++] = lightIndex;
+			stateForCamera->visibleProgramLightIndices[numVisibleProgramLights++] = lightIndex;
 			lightsHeap.pop_back();
 		} while( numVisibleProgramLights < kMaxProgramLightsInView );
-		m_numVisibleProgramLights = numVisibleProgramLights;
+		stateForCamera->numVisibleProgramLights = numVisibleProgramLights;
 	}
 
-	for( unsigned i = 0; i < m_numVisibleProgramLights; ++i ) {
-		Scene::DynamicLight *const light = scene->m_dynamicLights.data() + m_visibleProgramLightIndices[i];
-		float *const mins = m_lightBoundingDops[i].mins, *const maxs = m_lightBoundingDops[i].maxs;
+	for( unsigned i = 0; i < stateForCamera->numVisibleProgramLights; ++i ) {
+		Scene::DynamicLight *const light = scene->m_dynamicLights.data() + stateForCamera->visibleProgramLightIndices[i];
+		float *const mins = stateForCamera->lightBoundingDops[i].mins;
+		float *const maxs = stateForCamera->lightBoundingDops[i].maxs;
 		createBounding14DopForSphere( mins, maxs, light->origin, light->programRadius );
 	}
 
-	return { { m_visibleProgramLightIndices, m_numVisibleProgramLights }, visibleCoronaLightIndices };
+	return { { stateForCamera->visibleProgramLightIndices, stateForCamera->numVisibleProgramLights }, visibleCoronaLightIndices };
 }
 
 void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesOfLeaves,
 											  MergedSurfSpan *mergedSurfSpans ) {
 	const auto surfaces = rsh.worldBrushModel->surfaces;
-	const auto leaves = rsh.worldBrushModel->visleafs;
+	const auto leaves   = rsh.worldBrushModel->visleafs;
 	for( const unsigned leafNum: indicesOfLeaves ) {
 		const auto *__restrict leaf = leaves[leafNum];
 		for( unsigned i = 0; i < leaf->numVisSurfaces; ++i ) {
 			const unsigned surfNum = leaf->visSurfaces[i];
-			assert( surfaces[surfNum].drawSurf > 0 );
-			const unsigned mergedSurfNum = surfaces[surfNum].drawSurf - 1;
+			assert( surfaces[surfNum].mergedSurfNum > 0 );
+			const unsigned mergedSurfNum = surfaces[surfNum].mergedSurfNum - 1;
 			MergedSurfSpan *const __restrict span = &mergedSurfSpans[mergedSurfNum];
 			// TODO: Branchless min/max
 			span->firstSurface = wsw::min( span->firstSurface, (int)surfNum );
@@ -262,26 +267,26 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 	}
 }
 
-void Frontend::markLightsOfSurfaces( const Scene *scene,
+void Frontend::markLightsOfSurfaces( StateForCamera *stateForCamera, const Scene *scene,
 									 std::span<std::span<const unsigned>> spansOfLeaves,
 									 std::span<const uint16_t> visibleLightIndices ) {
 	// TODO: Fuse these calls
-	m_leafLightBitsOfSurfacesHolder.reserveZeroed( rsh.worldBrushModel->numsurfaces );
-	unsigned *const lightBitsOfSurfaces = m_leafLightBitsOfSurfacesHolder.data.get();
+	stateForCamera->leafLightBitsOfSurfacesBuffer->reserveZeroed( rsh.worldBrushModel->numsurfaces );
+	unsigned *const lightBitsOfSurfaces = stateForCamera->leafLightBitsOfSurfacesBuffer->data.get();
 
 	if( !visibleLightIndices.empty() ) {
 		for( const std::span<const unsigned> &leaves: spansOfLeaves ) {
-			markLightsOfLeaves( scene, leaves, visibleLightIndices, lightBitsOfSurfaces );
+			markLightsOfLeaves( stateForCamera, scene, leaves, visibleLightIndices, lightBitsOfSurfaces );
 		}
 	}
 }
 
-void Frontend::markLightsOfLeaves( const Scene *scene,
+void Frontend::markLightsOfLeaves( StateForCamera *stateForCamera, const Scene *scene,
 								   std::span<const unsigned> indicesOfLeaves,
 								   std::span<const uint16_t> visibleLightIndices,
 								   unsigned *leafLightBitsOfSurfaces ) {
 	const unsigned numVisibleLights = visibleLightIndices.size();
-	const auto leaves = rsh.worldBrushModel->visleafs;
+	const auto leaves               = rsh.worldBrushModel->visleafs;
 
 	assert( numVisibleLights && numVisibleLights <= kMaxProgramLightsInView );
 
@@ -291,7 +296,7 @@ void Frontend::markLightsOfLeaves( const Scene *scene,
 
 		unsigned programLightNum = 0;
 		do {
-			const auto *lightDop = &m_lightBoundingDops[programLightNum];
+			const auto *__restrict lightDop = &stateForCamera->lightBoundingDops[programLightNum];
 			if( doOverlapTestFor14Dops( lightDop->mins, lightDop->maxs, leaf->mins, leaf->maxs ) ) {
 				leafLightBits |= ( 1u << programLightNum );
 			}
@@ -310,12 +315,9 @@ void Frontend::markLightsOfLeaves( const Scene *scene,
 	}
 }
 
-auto Frontend::cullNullModelEntities( std::span<const entity_t> entitiesSpan,
-									  const Frustum *__restrict primaryFrustum,
-									  std::span<const Frustum> occluderFrusta,
-									  uint16_t *tmpIndices,
-									  VisTestedModel *tmpModels )
-									  -> std::span<const uint16_t> {
+auto Frontend::cullNullModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> entitiesSpan,
+									  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices,
+									  VisTestedModel *tmpModels ) -> std::span<const uint16_t> {
 	const auto *const entities  = entitiesSpan.data();
 	const unsigned numEntities  = entitiesSpan.size();
 
@@ -330,15 +332,12 @@ auto Frontend::cullNullModelEntities( std::span<const entity_t> entitiesSpan,
 
 	// The number of bounds has an exact match with the number of entities in this case
 	return cullEntriesWithBounds( tmpModels, numEntities, offsetof( VisTestedModel, absMins ),
-								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndices );
+								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
-									   const Frustum *__restrict primaryFrustum,
-									   std::span<const Frustum> occluderFrusta,
-									   uint16_t *tmpIndicesBuffer,
-									   VisTestedModel *selectedModelsBuffer )
-									   -> std::span<const uint16_t> {
+auto Frontend::cullAliasModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> entitiesSpan,
+									   std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+									   VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
@@ -350,12 +349,17 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 	for( unsigned entIndex = 0; entIndex < numEntities; ++entIndex ) {
 		const entity_t *const __restrict entity = &entities[entIndex];
 		if( entity->flags & RF_VIEWERMODEL ) [[unlikely]] {
-			if( !( m_stateForActiveCamera->renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+			if( !( stateForCamera->renderFlags & ( RF_MIRRORVIEW | RF_SHADOWMAPVIEW ) ) ) {
+				continue;
+			}
+		}
+		if( entity->flags & RF_WEAPONMODEL ) [[unlikely]] {
+			if( stateForCamera->renderFlags & RF_NONVIEWERREF ) {
 				continue;
 			}
 		}
 
-		const model_t *mod = R_AliasModelLOD( entity, m_stateForActiveCamera->lodOrigin, m_stateForActiveCamera->lodScaleForFov );
+		const model_t *mod = R_AliasModelLOD( entity, stateForCamera->lodOrigin, stateForCamera->lodScaleForFov );
 		const auto *aliasmodel = ( const maliasmodel_t * )mod->extradata;
 		// TODO: Could this ever happen
 		if( !aliasmodel ) [[unlikely]] {
@@ -387,7 +391,7 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 
 	const size_t numPassedOtherEnts = cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels,
 															 offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
-															 primaryFrustum, occluderFrusta, tmpIndicesBuffer ).size();
+															 &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer ).size();
 
 	for( unsigned i = 0; i < numWeaponModelFlagEnts; ++i ) {
 		VisTestedModel *__restrict visTestedModel = &selectedModelsBuffer[numSelectedModels];
@@ -409,18 +413,15 @@ auto Frontend::cullAliasModelEntities( std::span<const entity_t> entitiesSpan,
 	return { tmpIndicesBuffer, numPassedOtherEnts + numWeaponModelFlagEnts };
 }
 
-auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan,
-										  const Frustum *__restrict primaryFrustum,
-										  std::span<const Frustum> occluderFrusta,
-										  uint16_t *tmpIndicesBuffer,
-										  VisTestedModel *selectedModelsBuffer )
-										  -> std::span<const uint16_t> {
+auto Frontend::cullSkeletalModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> entitiesSpan,
+										  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+										  VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
-	const float *const stateLodOrigin = m_stateForActiveCamera->lodOrigin;
-	const float stateLodScaleForFov   = m_stateForActiveCamera->lodScaleForFov;
-	const unsigned stateRenderFlags   = m_stateForActiveCamera->renderFlags;
+	const float *const stateLodOrigin = stateForCamera->lodOrigin;
+	const float stateLodScaleForFov   = stateForCamera->lodScaleForFov;
+	const unsigned stateRenderFlags   = stateForCamera->renderFlags;
 
 	unsigned numSelectedModels = 0;
 	for( unsigned entIndex = 0; entIndex < numEntities; entIndex++ ) {
@@ -451,15 +452,12 @@ auto Frontend::cullSkeletalModelEntities( std::span<const entity_t> entitiesSpan
 	}
 
 	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
-								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndicesBuffer );
+								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer );
 }
 
-auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
-									   const Frustum *__restrict primaryFrustum,
-									   std::span<const Frustum> occluderFrusta,
-									   uint16_t *tmpIndicesBuffer,
-									   VisTestedModel *selectedModelsBuffer )
-									   -> std::span<const uint16_t> {
+auto Frontend::cullBrushModelEntities( StateForCamera *stateForCamera, std::span<const entity_t> entitiesSpan,
+									   std::span<const Frustum> occluderFrusta, uint16_t *tmpIndicesBuffer,
+									   VisTestedModel *selectedModelsBuffer ) -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
@@ -468,7 +466,7 @@ auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
 		const entity_t *const __restrict entity = &entities[entIndex];
 		const model_t *const model              = entity->model;
 		const auto *const brushModel            = ( mbrushmodel_t * )model->extradata;
-		if( !brushModel->numModelDrawSurfaces ) [[unlikely]] {
+		if( !brushModel->numModelMergedSurfaces ) [[unlikely]] {
 			continue;
 		}
 
@@ -482,14 +480,12 @@ auto Frontend::cullBrushModelEntities( std::span<const entity_t> entitiesSpan,
 	}
 
 	return cullEntriesWithBounds( selectedModelsBuffer, numSelectedModels, offsetof( VisTestedModel, absMins ),
-								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndicesBuffer );
+								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndicesBuffer );
 }
 
-auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
-								   const Frustum *__restrict primaryFrustum,
-								   std::span<const Frustum> occluderFrusta,
-								   uint16_t *tmpIndices, uint16_t *tmpIndices2, VisTestedModel *tmpModels )
-								   -> std::span<const uint16_t> {
+auto Frontend::cullSpriteEntities( StateForCamera *stateForCamera, std::span<const entity_t> entitiesSpan,
+								   std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices,
+								   uint16_t *tmpIndices2, VisTestedModel *tmpModels ) -> std::span<const uint16_t> {
 	const auto *const entities = entitiesSpan.data();
 	const unsigned numEntities = entitiesSpan.size();
 
@@ -499,7 +495,7 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 		const entity_t *const __restrict entity = &entities[entIndex];
 		// TODO: This condition should be eliminated from this path
 		if( entity->flags & RF_NOSHADOW ) [[unlikely]] {
-			if( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
+			if( stateForCamera->renderFlags & RF_SHADOWMAPVIEW ) [[unlikely]] {
 				continue;
 			}
 		}
@@ -526,7 +522,7 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 
 	const auto passedTestIndices = cullEntriesWithBounds( tmpModels, numVisTestedEntities,
 														  offsetof( VisTestedModel, absMins ), sizeof( VisTestedModel ),
-														  primaryFrustum, occluderFrusta, tmpIndices2 );
+														  &stateForCamera->frustum, occluderFrusta, tmpIndices2 );
 
 	for( const auto testedModelIndex: passedTestIndices ) {
 		tmpIndices[numResultEntities++] = tmpModels[testedModelIndex].indexInEntitiesGroup;
@@ -535,8 +531,8 @@ auto Frontend::cullSpriteEntities( std::span<const entity_t> entitiesSpan,
 	return { tmpIndices, numResultEntities };
 }
 
-auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
-						   const Frustum *__restrict primaryFrustum,
+auto Frontend::cullLights( StateForCamera *stateForCamera,
+						   std::span<const Scene::DynamicLight> lightsSpan,
 						   std::span<const Frustum> occluderFrusta,
 						   uint16_t *tmpAllLightIndices,
 						   uint16_t *tmpCoronaLightIndices,
@@ -548,7 +544,7 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 
 	static_assert( offsetof( Scene::DynamicLight, mins ) + 4 * sizeof( float ) == offsetof( Scene::DynamicLight, maxs ) );
 	const auto visibleAllLightIndices = cullEntriesWithBounds( lights, numLights, offsetof( Scene::DynamicLight, mins ),
-															   sizeof( Scene::DynamicLight ), primaryFrustum,
+															   sizeof( Scene::DynamicLight ), &stateForCamera->frustum,
 															   occluderFrusta, tmpAllLightIndices );
 
 	unsigned numPassedCoronaLights  = 0;
@@ -567,31 +563,23 @@ auto Frontend::cullLights( std::span<const Scene::DynamicLight> lightsSpan,
 			 { tmpProgramLightIndices, numPassedProgramLights } };
 }
 
-auto Frontend::cullParticleAggregates( std::span<const Scene::ParticlesAggregate> aggregatesSpan,
-									   const Frustum *__restrict primaryFrustum,
-									   std::span<const Frustum> occluderFrusta,
-									   uint16_t *tmpIndices )
-									   -> std::span<const uint16_t> {
+auto Frontend::cullParticleAggregates( StateForCamera *stateForCamera, std::span<const Scene::ParticlesAggregate> aggregatesSpan,
+									   std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	static_assert( offsetof( Scene::ParticlesAggregate, mins ) + 16 == offsetof( Scene::ParticlesAggregate, maxs ) );
 	return cullEntriesWithBounds( aggregatesSpan.data(), aggregatesSpan.size(), offsetof( Scene::ParticlesAggregate, mins ),
-								  sizeof( Scene::ParticlesAggregate ), primaryFrustum, occluderFrusta, tmpIndices );
+								  sizeof( Scene::ParticlesAggregate ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullCompoundDynamicMeshes( std::span<const Scene::CompoundDynamicMesh> meshesSpan,
-										  const Frustum *__restrict primaryFrustum,
-										  std::span<const Frustum> occluderFrusta,
-										  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
+auto Frontend::cullCompoundDynamicMeshes( StateForCamera *stateForCamera, std::span<const Scene::CompoundDynamicMesh> meshesSpan,
+										  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 	static_assert( offsetof( Scene::CompoundDynamicMesh, cullMins ) + 16 == offsetof( Scene::CompoundDynamicMesh, cullMaxs ) );
 	return cullEntriesWithBounds( meshesSpan.data(), meshesSpan.size(), offsetof( Scene::CompoundDynamicMesh, cullMins ),
-								  sizeof( Scene::CompoundDynamicMesh ), primaryFrustum, occluderFrusta, tmpIndices );
+								  sizeof( Scene::CompoundDynamicMesh ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
-							  const Frustum *__restrict primaryFrustum,
-							  std::span<const Frustum> occluderFrusta,
-							  uint16_t *tmpIndices,
-							  VisTestedModel *tmpModels )
-							  -> std::span<const uint16_t> {
+auto Frontend::cullQuadPolys( StateForCamera *stateForCamera, QuadPoly **polys, unsigned numPolys,
+							  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices,
+							  VisTestedModel *tmpModels ) -> std::span<const uint16_t> {
 	for( unsigned polyNum = 0; polyNum < numPolys; ++polyNum ) {
 		const QuadPoly *const __restrict poly  = polys[polyNum];
 		VisTestedModel *const __restrict model = &tmpModels[polyNum];
@@ -603,12 +591,11 @@ auto Frontend::cullQuadPolys( QuadPoly **polys, unsigned numPolys,
 	}
 
 	return cullEntriesWithBounds( tmpModels, numPolys, offsetof( VisTestedModel, absMins ),
-								  sizeof( VisTestedModel ), primaryFrustum, occluderFrusta, tmpIndices );
+								  sizeof( VisTestedModel ), &stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
-								  unsigned numMeshes,
-								  const Frustum *__restrict primaryFrustum,
+auto Frontend::cullDynamicMeshes( StateForCamera *stateForCamera,
+								  const DynamicMesh **meshes, unsigned numMeshes,
 								  std::span<const Frustum> occluderFrusta,
 								  uint16_t *tmpIndices ) -> std::span<const uint16_t> {
 #ifdef __GNUC__
@@ -621,24 +608,27 @@ auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
 #pragma GCC diagnostic pop
 #endif
 
-	return cullEntryPtrsWithBounds( (const void **)meshes, numMeshes, boundsFieldOffset, primaryFrustum, occluderFrusta, tmpIndices );
+	return cullEntryPtrsWithBounds( (const void **)meshes, numMeshes, boundsFieldOffset,
+									&stateForCamera->frustum, occluderFrusta, tmpIndices );
 }
 
-auto Frontend::collectVisibleWorldLeaves() -> std::span<const unsigned> {
-	return ( this->*m_collectVisibleWorldLeavesArchMethod )();
+auto Frontend::collectVisibleWorldLeaves( StateForCamera *stateForCamera ) -> std::span<const unsigned> {
+	return ( this->*m_collectVisibleWorldLeavesArchMethod )( stateForCamera );
 }
 
-auto Frontend::collectVisibleOccluders() -> std::span<const SortedOccluder> {
-	return ( this->*m_collectVisibleOccludersArchMethod )();
+auto Frontend::collectVisibleOccluders( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
+	return ( this->*m_collectVisibleOccludersArchMethod )( stateForCamera );
 }
 
-auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum> {
-	return ( this->*m_buildFrustaOfOccludersArchMethod )( sortedOccluders );
+auto Frontend::buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
+	-> std::span<const Frustum> {
+	return ( this->*m_buildFrustaOfOccludersArchMethod )( stateForCamera, sortedOccluders );
 }
 
-auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+auto Frontend::cullLeavesByOccluders( StateForCamera *stateForCamera, std::span<const unsigned> indicesOfLeaves,
+									  std::span<const Frustum> occluderFrusta )
 	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	return ( this->*m_cullLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta );
+	return ( this->*m_cullLeavesByOccludersArchMethod )( stateForCamera, indicesOfLeaves, occluderFrusta );
 }
 
 void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,

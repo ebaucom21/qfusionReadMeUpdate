@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "local.h"
 #include "frontend.h"
+#include "program.h"
 #include "materiallocal.h"
 
 #include <algorithm>
@@ -113,8 +114,6 @@ void Frontend::set2DMode( bool enable ) {
 	// TODO: We have to use a different camera!
 
 	if( enable ) {
-		m_stateForActiveCamera = nullptr;
-
 		rf.width2D  = width;
 		rf.height2D = height;
 
@@ -189,21 +188,21 @@ static const batchDrawSurf_cb r_batchDrawSurfCb[ST_MAX_TYPES] =
 		nullptr,
 	};
 
-void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
-	const auto *list = m_stateForActiveCamera->list;
-	if( list->empty() ) {
+void Frontend::submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Scene *scene ) {
+	const auto *sortList = stateForCamera->sortList;
+	if( sortList->empty() ) [[unlikely]] {
 		return;
 	}
 
 	FrontendToBackendShared fsh;
 	fsh.dynamicLights               = scene->m_dynamicLights.data();
 	fsh.particleAggregates          = scene->m_particles.data();
-	fsh.allVisibleLightIndices      = { m_allVisibleLightIndices, m_numAllVisibleLights };
-	fsh.visibleProgramLightIndices  = { m_visibleProgramLightIndices, m_numVisibleProgramLights };
-	fsh.renderFlags                 = m_stateForActiveCamera->renderFlags;
-	fsh.fovTangent                  = m_stateForActiveCamera->lodScaleForFov;
-	std::memcpy( fsh.viewAxis, m_stateForActiveCamera->viewAxis, sizeof( mat3_t ) );
-	VectorCopy( m_stateForActiveCamera->viewOrigin, fsh.viewOrigin );
+	fsh.allVisibleLightIndices      = { stateForCamera->allVisibleLightIndices, stateForCamera->numAllVisibleLights };
+	fsh.visibleProgramLightIndices  = { stateForCamera->visibleProgramLightIndices, stateForCamera->numVisibleProgramLights };
+	fsh.renderFlags                 = stateForCamera->renderFlags;
+	fsh.fovTangent                  = stateForCamera->lodScaleForFov;
+	std::memcpy( fsh.viewAxis, stateForCamera->viewAxis, sizeof( mat3_t ) );
+	VectorCopy( stateForCamera->viewOrigin, fsh.viewOrigin );
 
 	auto *const materialCache = MaterialCache::instance();
 
@@ -224,8 +223,8 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 	const mfog_t *prevFog = nullptr;
 	const portalSurface_t *prevPortalSurface = nullptr;
 
-	const size_t numDrawSurfs = list->size();
-	const sortedDrawSurf_t *const drawSurfs = list->data();
+	const size_t numDrawSurfs = sortList->size();
+	const sortedDrawSurf_t *const drawSurfs = sortList->data();
 	for( size_t i = 0; i < numDrawSurfs; i++ ) {
 		const sortedDrawSurf_t *sds = drawSurfs + i;
 		const unsigned sortKey      = sds->sortKey;
@@ -243,7 +242,7 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 		const shader_t *shader    = materialCache->getMaterialById( shaderNum );
 		const entity_t *entity    = scene->m_entities[entNum];
 		const mfog_t *fog         = fogNum >= 0 ? rsh.worldBrushModel->fogs + fogNum : nullptr;
-		const auto *portalSurface = portalNum >= 0 ? m_stateForActiveCamera->portalSurfaces + portalNum : nullptr;
+		const auto *portalSurface = portalNum >= 0 ? stateForCamera->portalSurfaces + portalNum : nullptr;
 		const int entityFX        = entity->renderfx;
 
 		// TODO?
@@ -325,11 +324,11 @@ void Frontend::submitSortedSurfacesToBackend( Scene *scene ) {
 				RB_FlushDynamicMeshes();
 				if( infiniteProj ) {
 					mat4_t projectionMatrix;
-					Matrix4_Copy( m_stateForActiveCamera->projectionMatrix, projectionMatrix );
+					Matrix4_Copy( stateForCamera->projectionMatrix, projectionMatrix );
 					Matrix4_PerspectiveProjectionToInfinity( Z_NEAR, projectionMatrix, glConfig.depthEpsilon );
 					RB_LoadProjectionMatrix( projectionMatrix );
 				} else {
-					RB_LoadProjectionMatrix( m_stateForActiveCamera->projectionMatrix );
+					RB_LoadProjectionMatrix( stateForCamera->projectionMatrix );
 				}
 			}
 
@@ -404,11 +403,7 @@ void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 
 	RB_SetTime( fd->time );
 
-	std::memset( m_bufferForRegularState, 0, sizeof( StateForCamera ) );
-	auto *stateForSceneCamera = new( m_bufferForRegularState )StateForCamera;
-
-	stateForSceneCamera->list = &m_meshDrawList;
-	setupStateForCamera( stateForSceneCamera, fd );
+	StateForCamera *const stateForSceneCamera = setupStateForCamera( CameraStateGroup::Primary, fd );
 
 	if( stateForSceneCamera->refdef.minLight < 0.1f ) {
 		stateForSceneCamera->refdef.minLight = 0.1f;
@@ -423,7 +418,25 @@ void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 	set2DMode( true );
 }
 
-void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef_t *fd ) {
+auto Frontend::setupStateForCamera( CameraStateGroup stateGroup, const refdef_t *fd,
+									const std::optional<CameraOverrideParams> &overrideParams ) -> StateForCamera * {
+	const auto stateIndex = (unsigned)stateGroup;
+	assert( stateIndex == 0 || stateIndex == 1 );
+
+	auto *const stateForCamera = new( m_buffersForStateForCamera[stateIndex].data )StateForCamera;
+
+	stateForCamera->sortList                                 = &m_meshSortList[stateIndex];
+	stateForCamera->visibleLeavesBuffer                      = &m_visibleLeavesBuffer[stateIndex];
+	stateForCamera->occluderPassFullyVisibleLeavesBuffer     = &m_occluderPassFullyVisibleLeavesBuffer[stateIndex];
+	stateForCamera->occluderPassPartiallyVisibleLeavesBuffer = &m_occluderPassPartiallyVisibleLeavesBuffer[stateIndex];
+	stateForCamera->visibleOccludersBuffer                   = &m_visibleOccludersBuffer[stateIndex];
+	stateForCamera->sortedOccludersBuffer                    = &m_sortedOccludersBuffer[stateIndex];
+	stateForCamera->drawSurfSurfSpansBuffer                  = &m_drawSurfSurfSpansBuffer[stateIndex];
+	stateForCamera->bspDrawSurfacesBuffer                    = &m_bspDrawSurfacesBuffer[stateIndex];
+	stateForCamera->visTestedModelsBuffer                    = &m_visTestedModelsBuffer[stateIndex];
+	stateForCamera->leafLightBitsOfSurfacesBuffer            = &m_leafLightBitsOfSurfacesBuffer[stateIndex];
+	stateForCamera->particleDrawSurfaces                     = m_particleDrawSurfacesBuffer[stateIndex].get();
+	
 	stateForCamera->refdef      = *fd;
 	stateForCamera->farClip     = getDefaultFarClip( fd );
 
@@ -436,6 +449,11 @@ void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef
 		stateForCamera->renderFlags |= RF_DRAWFLAT;
 	}
 
+	if( overrideParams ) {
+		stateForCamera->renderFlags |= overrideParams->renderFlagsToAdd;
+		stateForCamera->renderFlags &= ~overrideParams->renderFlagsToClear;
+	}
+
 	VectorCopy( stateForCamera->refdef.vieworg, stateForCamera->viewOrigin );
 	Matrix3_Copy( stateForCamera->refdef.viewaxis, stateForCamera->viewAxis );
 
@@ -443,8 +461,17 @@ void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef
 
 	Vector4Set( stateForCamera->scissor, fd->scissor_x, fd->scissor_y, fd->scissor_width, fd->scissor_height );
 	Vector4Set( stateForCamera->viewport, fd->x, fd->y, fd->width, fd->height );
-	VectorCopy( fd->vieworg, stateForCamera->pvsOrigin );
-	VectorCopy( fd->vieworg, stateForCamera->lodOrigin );
+
+	if( overrideParams && overrideParams->pvsOrigin ) {
+		VectorCopy( overrideParams->pvsOrigin, stateForCamera->pvsOrigin );
+	} else {
+		VectorCopy( fd->vieworg, stateForCamera->pvsOrigin );
+	}
+	if( overrideParams && overrideParams->lodOrigin ) {
+		VectorCopy( overrideParams->lodOrigin, stateForCamera->lodOrigin );
+	} else {
+		VectorCopy( fd->vieworg, stateForCamera->lodOrigin );
+	}
 
 	stateForCamera->numPortalSurfaces      = 0;
 	stateForCamera->numDepthPortalSurfaces = 0;
@@ -461,11 +488,6 @@ void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef
 									   stateForCamera->projectionMatrix );
 	}
 
-	if( fd->rdflags & RDF_FLIPPED ) {
-		stateForCamera->projectionMatrix[0] = -stateForCamera->projectionMatrix[0];
-		stateForCamera->renderFlags |= RF_FLIPFRONTFACE;
-	}
-
 	Matrix4_Multiply( stateForCamera->projectionMatrix,
 					  stateForCamera->cameraMatrix,
 					  stateForCamera->cameraProjectionMatrix );
@@ -477,9 +499,9 @@ void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef
 		}
 	}
 
-	stateForCamera->list->clear();
+	stateForCamera->sortList->clear();
 	if( shouldDrawWorldModel ) {
-		stateForCamera->list->reserve( rsh.worldBrushModel->numDrawSurfaces );
+		stateForCamera->sortList->reserve( rsh.worldBrushModel->numMergedSurfaces );
 	}
 
 	if( shouldDrawWorldModel ) {
@@ -491,57 +513,57 @@ void Frontend::setupStateForCamera( StateForCamera *stateForCamera, const refdef
 		stateForCamera->viewArea    = -1;
 	}
 
+	// TODO: Add capping planes
 	stateForCamera->frustum.setupFor4Planes( fd->vieworg, fd->viewaxis, fd->fov_x, fd->fov_y );
+
+	return stateForCamera;
 }
 
 void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForCamera ) {
-	m_stateForActiveCamera = stateForCamera;
-
-	m_visFrameCount++;
-
 	std::span<const Frustum> occluderFrusta;
 	std::span<const unsigned> nonOccludedLeaves;
 	std::span<const unsigned> partiallyOccludedLeaves;
 
-	m_numAllVisibleLights     = 0;
-	m_numVisibleProgramLights = 0;
-
 	bool drawWorld = false;
 
-	if( !( m_stateForActiveCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+	if( !( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) ) {
 		if( r_drawworld->integer && rsh.worldModel ) {
 			drawWorld = true;
-			std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces();
+			std::tie( occluderFrusta, nonOccludedLeaves, partiallyOccludedLeaves ) = cullWorldSurfaces( stateForCamera );
 			// TODO: Update far clip, update view matrices
 		}
 	}
 
-	collectVisiblePolys( scene, occluderFrusta );
+	collectVisiblePolys( stateForCamera, scene, occluderFrusta );
 
 	if( const int dynamicLightValue = r_dynamiclight->integer ) {
 		[[maybe_unused]]
-		const auto [visibleProgramLightIndices, visibleCoronaLightIndices] = collectVisibleLights( scene, occluderFrusta );
+		const auto [visibleProgramLightIndices, visibleCoronaLightIndices] =
+			collectVisibleLights( stateForCamera, scene, occluderFrusta );
 		if( dynamicLightValue & 2 ) {
-			addCoronaLightsToSortList( scene->m_polyent, scene->m_dynamicLights.data(), visibleCoronaLightIndices );
+			addCoronaLightsToSortList( stateForCamera, scene->m_polyent, scene->m_dynamicLights.data(),
+									   visibleCoronaLightIndices );
 		}
 		if( dynamicLightValue & 1 ) {
 			std::span<const unsigned> spansStorage[2] { nonOccludedLeaves, partiallyOccludedLeaves };
 			std::span<std::span<const unsigned>> spansOfLeaves = { spansStorage, 2 };
-			markLightsOfSurfaces( scene, spansOfLeaves, visibleProgramLightIndices );
+			markLightsOfSurfaces( stateForCamera, scene, spansOfLeaves, visibleProgramLightIndices );
 		}
 	}
 
 	if( drawWorld ) {
 		// We must know lights at this point
-		addVisibleWorldSurfacesToSortList( scene );
+		addVisibleWorldSurfacesToSortList( stateForCamera, scene );
 	}
 
 	if( r_drawentities->integer ) {
-		collectVisibleEntities( scene, occluderFrusta );
-		collectVisibleDynamicMeshes( scene, occluderFrusta );
+		collectVisibleEntities( stateForCamera, scene, occluderFrusta );
+		collectVisibleDynamicMeshes( stateForCamera, scene, occluderFrusta );
 	}
 
-	collectVisibleParticles( scene, occluderFrusta );
+	collectVisibleParticles( stateForCamera, scene, occluderFrusta );
+
+	const unsigned renderFlags = stateForCamera->renderFlags;
 
 	const auto cmp = []( const sortedDrawSurf_t &lhs, const sortedDrawSurf_t &rhs ) {
 		// TODO: Avoid runtime coposition of keys
@@ -550,35 +572,37 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 		return lhsKey < rhsKey;
 	};
 
-	std::sort( m_stateForActiveCamera->list->begin(), m_stateForActiveCamera->list->end(), cmp );
+	std::sort( stateForCamera->sortList->begin(), stateForCamera->sortList->end(), cmp );
 
-	bindFrameBufferAndViewport( m_stateForActiveCamera->renderTarget, m_stateForActiveCamera );
+	// Don't recurse into portals
+	if( !( renderFlags & ( RF_PORTALVIEW | RF_MIRRORVIEW ) ) ) {
+		if( stateForCamera->viewCluster >= 0 && !r_fastsky->integer ) {
+			drawPortals( stateForCamera, scene );
+			if( r_portalonly->integer ) {
+				return;
+			}
+		}
+	}
 
-	const int *const scissor = m_stateForActiveCamera->scissor;
+	bindFrameBufferAndViewport( stateForCamera->renderTarget, stateForCamera );
+
+	const int *const scissor = stateForCamera->scissor;
 	RB_Scissor( scissor[0], scissor[1], scissor[2], scissor[3] );
 
-	const int *const viewport = m_stateForActiveCamera->viewport;
+	const int *const viewport = stateForCamera->viewport;
 	RB_Viewport( viewport[0], viewport[1], viewport[2], viewport[3] );
 
-	const unsigned renderFlags = m_stateForActiveCamera->renderFlags;
-
-	RB_SetZClip( Z_NEAR, m_stateForActiveCamera->farClip );
-	RB_SetCamera( m_stateForActiveCamera->viewOrigin, m_stateForActiveCamera->viewAxis );
-	RB_SetLightParams( m_stateForActiveCamera->refdef.minLight, !drawWorld );
+	RB_SetZClip( Z_NEAR, stateForCamera->farClip );
+	RB_SetCamera( stateForCamera->viewOrigin, stateForCamera->viewAxis );
+	RB_SetLightParams( stateForCamera->refdef.minLight, !drawWorld );
 	RB_SetRenderFlags( renderFlags );
-	RB_LoadProjectionMatrix( m_stateForActiveCamera->projectionMatrix );
-	RB_LoadCameraMatrix( m_stateForActiveCamera->cameraMatrix );
+	RB_LoadProjectionMatrix( stateForCamera->projectionMatrix );
+	RB_LoadCameraMatrix( stateForCamera->cameraMatrix );
 	RB_LoadObjectMatrix( mat4x4_identity );
-
-	if( renderFlags & RF_FLIPFRONTFACE ) {
-		RB_FlipFrontFace();
-	}
 
 	if( renderFlags & RF_SHADOWMAPVIEW ) {
 		RB_SetShaderStateMask( ~0, GLSTATE_NO_COLORWRITE );
 	}
-
-	//drawPortals();
 
 	// Unused?
 	const bool isDrawingRgbShadow =
@@ -592,11 +616,11 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 	if( isDrawingRgbShadow ) {
 		shouldClearColor = true;
 		Vector4Set( clearColor, 1, 1, 1, 1 );
-	} else if( drawWorld ) {
-		shouldClearColor = m_stateForActiveCamera->renderTarget != 0;
+	} else if( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) {
+		shouldClearColor = stateForCamera->renderTarget != 0;
 		Vector4Set( clearColor, 1, 1, 1, 0 );
 	} else {
-		shouldClearColor = !m_stateForActiveCamera->numDepthPortalSurfaces || R_FASTSKY();
+		shouldClearColor = stateForCamera->numDepthPortalSurfaces == 0 || r_fastsky->integer || stateForCamera->viewCluster < 0;
 		if( rsh.worldBrushModel && rsh.worldBrushModel->globalfog && rsh.worldBrushModel->globalfog->shader ) {
 			Vector4Scale( rsh.worldBrushModel->globalfog->shader->fog_color, 1.0 / 255.0, clearColor );
 		} else {
@@ -604,34 +628,30 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 		}
 	}
 
-	int clearBits = 0;
+	int bits = 0;
 	if( !didDrawADepthMask ) {
-		clearBits |= GL_DEPTH_BUFFER_BIT;
+		bits |= GL_DEPTH_BUFFER_BIT;
 	}
 	if( shouldClearColor ) {
-		clearBits |= GL_COLOR_BUFFER_BIT;
+		bits |= GL_COLOR_BUFFER_BIT;
 	}
 
-	RB_Clear( clearBits, clearColor[0], clearColor[1], clearColor[2], clearColor[3] );
+	RB_Clear( bits, clearColor[0], clearColor[1], clearColor[2], clearColor[3] );
 
-	submitSortedSurfacesToBackend( scene );
+	submitSortedSurfacesToBackend( stateForCamera, scene );
 
-	if( r_showtris->integer && !( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( r_showtris->integer && !( renderFlags & RF_SHADOWMAPVIEW ) ) {
 		RB_EnableWireframe( true );
 
-		submitSortedSurfacesToBackend( scene );
+		submitSortedSurfacesToBackend( stateForCamera, scene );
 
 		RB_EnableWireframe( false );
 	}
 
 	R_TransformForWorld();
 
-	if( ( m_stateForActiveCamera->renderFlags & RF_SHADOWMAPVIEW ) ) {
+	if( stateForCamera->renderFlags & RF_SHADOWMAPVIEW ) {
 		RB_SetShaderStateMask( ~0, 0 );
-	}
-
-	if( m_stateForActiveCamera->renderFlags & RF_FLIPFRONTFACE ) {
-		RB_FlipFrontFace();
 	}
 
 	RB_SetShaderStateMask( ~0, GLSTATE_NO_DEPTH_TEST );
@@ -639,6 +659,239 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 	submitDebugStuffToBackend( scene );
 
 	RB_SetShaderStateMask( ~0, 0 );
+}
+
+void Frontend::drawPortals( StateForCamera *stateForPrimaryCamera, Scene *scene ) {
+	for( unsigned i = 0; i < stateForPrimaryCamera->numPortalSurfaces; ++i ) {
+		drawPortalSurface( stateForPrimaryCamera, &stateForPrimaryCamera->portalSurfaces[i], scene );
+	}
+}
+
+auto Frontend::findNearestPortalEntity( const portalSurface_t *portalSurface, Scene *scene ) -> const entity_t * {
+	vec3_t center;
+	VectorAvg( portalSurface->mins, portalSurface->maxs, center );
+
+	const entity_t *bestEnt = nullptr;
+	float bestDist          = std::numeric_limits<float>::max();
+	for( const entity_t &ent: scene->m_portalSurfaceEntities ) {
+		if( std::fabs( PlaneDiff( ent.origin, &portalSurface->untransformed_plane ) ) < 64.0f ) {
+			const float centerDist = Distance( ent.origin, center );
+			if( centerDist < bestDist ) {
+				bestDist = centerDist;
+				bestEnt  = std::addressof( ent );
+			}
+		}
+	}
+
+	return bestEnt;
+}
+
+void Frontend::drawPortalSurface( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface, Scene *scene ) {
+	const shader_s *surfaceMaterial = portalSurface->shader;
+
+	int startFromTextureIndex = -1;
+	bool shouldDoReflection   = true;
+	bool shouldDoRefraction   = ( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE2 ) != 0;
+
+	if( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE ) {
+		startFromTextureIndex = 0;
+
+		for( unsigned i = 0; i < surfaceMaterial->numpasses; i++ ) {
+			const shaderpass_t *const pass = &portalSurface->shader->passes[i];
+			if( pass->program_type == GLSL_PROGRAM_TYPE_DISTORTION ) {
+				if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 1 ) ) {
+					shouldDoRefraction = false;
+				} else if( ( pass->alphagen.type == ALPHA_GEN_CONST && pass->alphagen.args[0] == 0 ) ) {
+					shouldDoReflection = false;
+				}
+				break;
+			}
+		}
+	}
+
+	cplane_t *const portalPlane   = &portalSurface->plane;
+	const float distToPortalPlane = PlaneDiff( stateForPrimaryCamera->viewOrigin, portalPlane );
+	const bool canDoReflection    = shouldDoReflection && distToPortalPlane > BACKFACE_EPSILON;
+	if( !canDoReflection ) {
+		if( shouldDoRefraction ) {
+			// Even if we're behind the portal, we still need to capture the second portal image for refraction
+			startFromTextureIndex = 1;
+			if( distToPortalPlane < 0 ) {
+				VectorInverse( portalPlane->normal );
+				portalPlane->dist = -portalPlane->dist;
+			}
+		} else {
+			return;
+		}
+	}
+
+	// default to mirror view
+	unsigned drawPortalFlags = DrawPortalMirror;
+
+	// TODO: Shouldn't it be performed upon loading?
+
+	const entity_t *portalEntity = findNearestPortalEntity( portalSurface, scene );
+	if( !portalEntity ) {
+		if( startFromTextureIndex < 0 ) {
+			return;
+		}
+	} else {
+		if( !VectorCompare( portalEntity->origin, portalEntity->origin2 ) ) {
+			drawPortalFlags &= ~DrawPortalMirror;
+		}
+		// TODO Prevent reusing the entity
+	}
+
+	if( startFromTextureIndex >= 0 ) {
+		drawPortalFlags |= DrawPortalToTexture;
+		if( startFromTextureIndex > 0 ) {
+			drawPortalFlags |= DrawPortalRefraction;
+		}
+		portalSurface->texures[startFromTextureIndex] = drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface,
+																			   scene, portalEntity, drawPortalFlags );
+		if( shouldDoRefraction && startFromTextureIndex < 1 && ( surfaceMaterial->flags & SHADER_PORTAL_CAPTURE2 ) ) {
+			drawPortalFlags |= DrawPortalRefraction;
+			portalSurface->texures[1] = drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface,
+															   scene, portalEntity, drawPortalFlags );
+		}
+	} else {
+		(void)drawPortalSurfaceSide( stateForPrimaryCamera, portalSurface, scene, portalEntity, drawPortalFlags );
+	}
+}
+
+auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, portalSurface_t *portalSurface,
+									  Scene *scene, const entity_t *portalEntity, unsigned drawPortalFlags ) -> Texture * {
+	vec3_t origin;
+	mat3_t axis;
+
+	unsigned renderFlagsToAdd   = 0;
+	unsigned renderFlagsToClear = 0;
+
+	const float *newPvsOrigin = nullptr;
+	const float *newLodOrigin = nullptr;
+
+	cplane_s *const portalPlane = &portalSurface->plane;
+	if( drawPortalFlags & DrawPortalRefraction ) {
+		VectorInverse( portalPlane->normal );
+		portalPlane->dist = -portalPlane->dist;
+		CategorizePlane( portalPlane );
+		VectorCopy( stateForPrimaryCamera->viewOrigin, origin );
+		Matrix3_Copy( stateForPrimaryCamera->refdef.viewaxis, axis );
+
+		newPvsOrigin = stateForPrimaryCamera->viewOrigin;
+
+		renderFlagsToAdd |= RF_PORTALVIEW;
+	} else if( drawPortalFlags & DrawPortalMirror ) {
+		VectorReflect( stateForPrimaryCamera->viewOrigin, portalPlane->normal, portalPlane->dist, origin );
+
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_FORWARD], portalPlane->normal, 0, &axis[AXIS_FORWARD] );
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_RIGHT], portalPlane->normal, 0, &axis[AXIS_RIGHT] );
+		VectorReflect( &stateForPrimaryCamera->viewAxis[AXIS_UP], portalPlane->normal, 0, &axis[AXIS_UP] );
+
+		Matrix3_Normalize( axis );
+
+		newPvsOrigin = stateForPrimaryCamera->viewOrigin;
+
+		renderFlagsToAdd = stateForPrimaryCamera->renderFlags | RF_MIRRORVIEW;
+	} else {
+		vec3_t tvec;
+		mat3_t A, B, C, rot;
+
+		// build world-to-portal rotation matrix
+		VectorNegate( portalPlane->normal, tvec );
+		NormalVectorToAxis( tvec, A );
+
+		// build portal_dest-to-world rotation matrix
+		ByteToDir( portalEntity->frame, tvec );
+		NormalVectorToAxis( tvec, B );
+		Matrix3_Transpose( B, C );
+
+		// multiply to get world-to-world rotation matrix
+		Matrix3_Multiply( C, A, rot );
+
+		// translate view origin
+		VectorSubtract( stateForPrimaryCamera->viewOrigin, portalEntity->origin, tvec );
+		Matrix3_TransformVector( rot, tvec, origin );
+		VectorAdd( origin, portalEntity->origin2, origin );
+
+		// !!!!!!!!!!!
+		VectorCopy( portalEntity->origin2, origin );
+
+		Matrix3_Transpose( A, B );
+		// TODO: Why do we use a view-dependent axis TODO: Check Q3 code
+		Matrix3_Multiply( stateForPrimaryCamera->viewAxis, B, rot );
+		Matrix3_Multiply( portalEntity->axis, rot, B );
+		Matrix3_Transpose( C, A );
+		Matrix3_Multiply( B, A, axis );
+
+		// set up portalPlane
+		VectorCopy( &axis[AXIS_FORWARD], portalPlane->normal );
+		portalPlane->dist = DotProduct( portalEntity->origin2, portalPlane->normal );
+		CategorizePlane( portalPlane );
+
+		// for portals, vis data is taken from portal origin, not
+		// view origin, because the view point moves around and
+		// might fly into (or behind) a wall
+		newPvsOrigin = portalEntity->origin2;
+		newLodOrigin = portalEntity->origin2;
+
+		renderFlagsToAdd |= RF_PORTALVIEW;
+
+		// ignore entities, if asked politely
+		if( portalEntity->renderfx & RF_NOPORTALENTS ) {
+			renderFlagsToAdd |= RF_ENVVIEW;
+		}
+	}
+
+	refdef_t newRefdef = stateForPrimaryCamera->refdef;
+	newRefdef.rdflags &= ~( RDF_UNDERWATER | RDF_CROSSINGWATER );
+
+	renderFlagsToAdd   |= RF_CLIPPLANE;
+	renderFlagsToClear |= RF_SOFT_PARTICLES;
+
+	Texture *captureTexture = nullptr;
+	if( drawPortalFlags & DrawPortalToTexture ) {
+		//int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
+
+		// TODO:
+		//captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
+		//									 rsc.frameCount );
+		//portalTexures[captureTextureId] = captureTexture;
+
+		if( false ) {
+			Com_Printf( "No capture texture id\n" );
+			// couldn't register a slot for this plane
+			//goto done;
+		}
+
+		int x = 0, y = 0;
+		int w = 1024; //captureTexture->width;
+		int h = 1024; //captureTexture->height;
+
+		newRefdef.x      = newRefdef.scissor_x      = x;
+		newRefdef.y      = newRefdef.scissor_y      = y;
+		newRefdef.width  = newRefdef.scissor_width  = w;
+		newRefdef.height = newRefdef.scissor_height = h;
+
+		// TODO.... rn.renderTarget = captureTexture->fbo;
+		renderFlagsToAdd |= RF_PORTAL_CAPTURE;
+	} else {
+		renderFlagsToClear |= RF_PORTAL_CAPTURE;
+	}
+
+	VectorCopy( origin, newRefdef.vieworg );
+	Matrix3_Copy( axis, newRefdef.viewaxis );
+
+	auto *stateForPortalCamera = setupStateForCamera( CameraStateGroup::Portal, &newRefdef, CameraOverrideParams {
+		.pvsOrigin          = newPvsOrigin,
+		.lodOrigin          = newLodOrigin,
+		.renderFlagsToAdd   = renderFlagsToAdd,
+		.renderFlagsToClear = renderFlagsToClear,
+	});
+
+	renderViewFromThisCamera( scene, stateForPortalCamera );
+
+	return captureTexture;
 }
 
 void Frontend::submitDebugStuffToBackend( Scene *scene ) {

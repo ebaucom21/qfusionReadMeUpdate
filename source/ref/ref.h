@@ -58,11 +58,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define RDF_OLDAREABITS         0x4     // forces R_MarkLeaves if not set
 #define RDF_PORTALINVIEW        0x8     // cull entities using vis too because pvs\areabits are merged serverside
 #define RDF_SKYPORTALINVIEW     0x10    // draw skyportal instead of regular sky
-#define RDF_FLIPPED             0x20
 #define RDF_WORLDOUTLINES       0x40    // draw cell outlines for world surfaces
 #define RDF_CROSSINGWATER       0x80    // potentially crossing water surface
 #define RDF_USEORTHO            0x100   // use orthographic projection
-#define RDF_BLURRED             0x200
 
 // skm flags
 #define SKM_ATTACHMENT_BONE     1
@@ -359,6 +357,7 @@ protected:
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_skeletalModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_brushModelEntities;
 	wsw::StaticVector<entity_t, MAX_ENTITIES> m_spriteEntities;
+	wsw::StaticVector<entity_t, MAX_ENTITIES> m_portalSurfaceEntities;
 
 	// These polys are externally owned with a lifetime greater than the frame
 	wsw::StaticVector<QuadPoly *, MAX_QUAD_POLYS> m_quadPolys;

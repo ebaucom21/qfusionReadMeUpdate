@@ -35,41 +35,27 @@ enum drawSurfaceType_t : unsigned {
 	ST_MAX_TYPES,
 };
 
-typedef struct {
-	unsigned visFrame;          // should be drawn when node is crossed
-
-	unsigned dlightBits;
-	unsigned dlightFrame;
-
-	unsigned numVerts;
-	unsigned numElems;
-
-	unsigned firstVboVert, firstVboElem;
-
-	unsigned firstWorldSurface, numWorldSurfaces;
-
-	unsigned numInstances;
-	instancePoint_t *instances;
-
-	unsigned numLightmaps;
-
+struct MergedBspSurface {
 	struct shader_s *shader;
 	struct mfog_s *fog;
 	struct mesh_vbo_s *vbo;
 	struct superLightStyle_s *superLightStyle;
+	instancePoint_t *instances;
+	unsigned numVerts, numElems;
+	unsigned firstVboVert, firstVboElem;
+	unsigned firstWorldSurface, numWorldSurfaces;
+	unsigned numInstances;
+	unsigned numLightmaps;
+};
 
+typedef struct {
 	void *listSurf;                 // only valid if visFrame == rf.frameCount
+	MergedBspSurface *mergedBspSurf;
 
+	unsigned dlightBits;
 	unsigned firstSpanVert, numSpanVerts;
 	unsigned firstSpanElem, numSpanElems;
 } drawSurfaceBSP_t;
-
-typedef struct {
-	drawSurfaceType_t type;
-
-	float skyMins[2][6];
-	float skyMaxs[2][6];
-} drawSurfaceSky_t;
 
 typedef struct {
 	struct maliasmesh_s *mesh;
