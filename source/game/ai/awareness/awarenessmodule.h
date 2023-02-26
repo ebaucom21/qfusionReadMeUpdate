@@ -70,6 +70,7 @@ private:
 	void RegisterVisibleEnemies();
 
 	void CheckForNewHazards();
+	void InvalidateSelectedEnemiesIfNeeded();
 public:
 	BotAwarenessModule( Bot *bot_ );
 

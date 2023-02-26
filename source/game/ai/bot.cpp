@@ -177,10 +177,6 @@ void Bot::ChangeWeapons( const SelectedWeapons &selectedWeapons_ ) {
 	}
 }
 
-//==========================================
-// BOT_DMClass_BlockedTimeout
-// the bot has been blocked for too long
-//==========================================
 void Bot::OnBlockedTimeout() {
 	self->health = 0;
 	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
@@ -189,10 +185,6 @@ void Bot::OnBlockedTimeout() {
 	self->nextThink = level.time + 1;
 }
 
-//==========================================
-// BOT_DMclass_DeadFrame
-// ent is dead = run this think func
-//==========================================
 void Bot::GhostingFrame() {
 	m_selectedEnemy = std::nullopt;
 	m_lostEnemy     = std::nullopt;
@@ -201,53 +193,32 @@ void Bot::GhostingFrame() {
 
 	m_movementSubsystem.Reset();
 
-	navTarget = nullptr;
+	navTarget           = nullptr;
 	m_selectedNavEntity = std::nullopt;
+	blockedTimeoutAt    = level.time + BLOCKED_TIMEOUT;
 
-	blockedTimeoutAt = level.time + BLOCKED_TIMEOUT;
-	self->nextThink = level.time + 100;
-
-	// wait 4 seconds after entering the level
-	if( self->r.client->levelTimestamp + 4000 > level.time || !level.canSpawnEntities ) {
-		return;
-	}
-
-	if( self->r.client->team == TEAM_SPECTATOR ) {
-		// try to join a team
-		// note that G_Teams_JoinAnyTeam is quite slow so only call it per frame
-		if( !self->r.client->queueTimeStamp && self == level.think_client_entity ) {
-			G_Teams_JoinAnyTeam( self, false );
-		}
-
-		if( self->r.client->team == TEAM_SPECTATOR ) { // couldn't join, delay the next think
-			self->nextThink = level.time + 2000 + (int)( 4000 * random() );
+	// wait 3 seconds after entering the level
+	if( self->r.client->levelTimestamp + 3000 < level.time && level.canSpawnEntities ) {
+		bool trySpawning;
+		if( self->r.client->team == TEAM_SPECTATOR ) {
+			trySpawning = false;
+			if( !self->r.client->queueTimeStamp && self == level.think_client_entity ) {
+				G_Teams_JoinAnyTeam( self, false );
+				if( self->r.client->team != TEAM_SPECTATOR ) {
+					trySpawning = true;
+				}
+			}
 		} else {
-			self->nextThink = level.time + 1;
+			// ask for respawn if the minimum bot respawning time passed
+			trySpawning = level.time > self->deathTimeStamp + 3000;
 		}
-		return;
+
+		if( trySpawning ) {
+			m_pendingClientThinkInput = BotInput {};
+			m_pendingClientThinkInput->isUcmdSet = true;
+			m_pendingClientThinkInput->SetAttackButton( true );
+		}
 	}
-
-	BotInput botInput;
-	botInput.isUcmdSet = true;
-	// ask for respawn if the minimum bot respawning time passed
-	if( level.time > self->deathTimeStamp + 3000 ) {
-		botInput.SetAttackButton( true );
-	}
-
-	CallGhostingClientThink( botInput );
-}
-
-void Bot::CallGhostingClientThink( const BotInput &input ) {
-	usercmd_t ucmd;
-	// Shut an analyzer up
-	memset( &ucmd, 0, sizeof( usercmd_t ) );
-	input.CopyToUcmd( &ucmd );
-	// set approximate ping and show values
-	ucmd.serverTimeStamp = game.serverTime;
-	ucmd.msec = (uint8_t)game.frametime;
-	self->r.client->m_ping = 0;
-
-	ClientThink( self, &ucmd, 0 );
 }
 
 void Bot::OnRespawn() {
@@ -265,25 +236,23 @@ void Bot::OnRespawn() {
 }
 
 void Bot::Think() {
+	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
+
 	// Call superclass method first
 	Ai::Think();
 
-	if( IsGhosting() ) {
-		return;
-	}
-
-	// TODO: Let the weapons usage module decide?
-	if( CanChangeWeapons() ) {
-		weaponsUsageModule.Think( planningModule.CachedWorldState() );
-		ChangeWeapons( weaponsUsageModule.GetSelectedWeapons() );
+	if( !IsGhosting() ) {
+		// TODO: Let the weapons usage module decide?
+		if( CanChangeWeapons() ) {
+			weaponsUsageModule.Think( planningModule.CachedWorldState() );
+			ChangeWeapons( weaponsUsageModule.GetSelectedWeapons() );
+		}
 	}
 }
 
-//==========================================
-// BOT_DMclass_RunFrame
-// States Machine & call client movement
-//==========================================
 void Bot::Frame() {
+	m_pendingClientThinkInput = std::nullopt;
+
 	// Call superclass method first
 	Ai::Frame();
 
@@ -292,6 +261,8 @@ void Bot::Frame() {
 	} else {
 		ActiveFrame();
 	}
+
+	assert( !m_selectedEnemy || !m_selectedEnemy->ShouldInvalidate() );
 }
 
 void Bot::ActiveFrame() {
@@ -309,39 +280,43 @@ void Bot::ActiveFrame() {
 
 	weaponsUsageModule.Frame( planningModule.CachedWorldState() );
 
-	BotInput botInput;
+	m_pendingClientThinkInput = BotInput {};
+
 	// Might modify botInput
-	m_movementSubsystem.Frame( &botInput );
+	m_movementSubsystem.Frame( std::addressof( *m_pendingClientThinkInput ) );
 
 	CheckTargetProximity();
 
 	// Might modify botInput
 	if( ShouldAttack() ) {
-		weaponsUsageModule.TryFire( &botInput );
+		weaponsUsageModule.TryFire( std::addressof( *m_pendingClientThinkInput ) );
 	}
 
 	// Apply modified botInput
-	m_movementSubsystem.ApplyInput( &botInput );
-	CallActiveClientThink( botInput );
+	m_movementSubsystem.ApplyInput( std::addressof( *m_pendingClientThinkInput ) );
 }
 
-void Bot::CallActiveClientThink( const BotInput &input ) {
-	usercmd_t ucmd;
-	// Shut an analyzer up
-	memset( &ucmd, 0, sizeof( usercmd_t ) );
-	input.CopyToUcmd( &ucmd );
+void Bot::PostFrame() {
+	if( m_pendingClientThinkInput ) {
+		usercmd_t ucmd {};
 
-	//set up for pmove
-	for( int i = 0; i < 3; i++ )
-		ucmd.angles[i] = (short)ANGLE2SHORT( self->s.angles[i] ) - self->r.client->ps.pmove.delta_angles[i];
+		m_pendingClientThinkInput->CopyToUcmd( &ucmd );
 
-	VectorSet( self->r.client->ps.pmove.delta_angles, 0, 0, 0 );
+		for( int i = 0; i < 3; i++ ) {
+			ucmd.angles[i] = (short)ANGLE2SHORT( self->s.angles[i] ) - self->r.client->ps.pmove.delta_angles[i];
+		}
 
-	// set approximate ping and show values
-	ucmd.msec = (uint8_t)game.frametime;
-	ucmd.serverTimeStamp = game.serverTime;
+		VectorSet( self->r.client->ps.pmove.delta_angles, 0, 0, 0 );
 
-	ClientThink( self, &ucmd, 0 );
+		// set approximate ping and show values
+		ucmd.msec            = (uint8_t)game.frametime;
+		ucmd.serverTimeStamp = game.serverTime;
+
+		ClientThink( self, &ucmd, 0 );
+
+		m_pendingClientThinkInput = std::nullopt;
+	}
+
 	self->nextThink = level.time + 1;
 }
 

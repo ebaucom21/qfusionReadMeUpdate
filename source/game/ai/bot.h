@@ -360,6 +360,8 @@ private:
 
 	BotWeaponsUsageModule weaponsUsageModule;
 
+	std::optional<BotInput> m_pendingClientThinkInput;
+
 	/**
 	 * {@code next[]} and {@code prev[]} links below are addressed by these indices
 	 */
@@ -418,8 +420,8 @@ private:
 	void OnBlockedTimeout() override;
 	void GhostingFrame();
 	void ActiveFrame();
-	void CallGhostingClientThink( const BotInput &input );
-	void CallActiveClientThink( const BotInput &input );
+
+	void PostFrame() override;
 
 	void OnRespawn();
 

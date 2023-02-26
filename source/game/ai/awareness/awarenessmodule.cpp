@@ -41,12 +41,7 @@ const TrackedEnemy *BotAwarenessModule::ChooseLostOrHiddenEnemy( unsigned timeou
 	return enemiesTracker.ChooseLostOrHiddenEnemy( timeout );
 }
 
-void BotAwarenessModule::Frame() {
-	AiFrameAwareComponent::Frame();
-
-	enemiesTracker.Update();
-	eventsTracker.Update();
-
+void BotAwarenessModule::InvalidateSelectedEnemiesIfNeeded() {
 	// Check each frame. Don't let non-empty std::optionals contain timed out values.
 	if( bot->m_selectedEnemy && bot->m_selectedEnemy->ShouldInvalidate() ) {
 		bot->m_selectedEnemy = std::nullopt;
@@ -54,6 +49,18 @@ void BotAwarenessModule::Frame() {
 	if( bot->m_lostEnemy && bot->m_lostEnemy->ShouldInvalidate() ) {
 		bot->m_lostEnemy = std::nullopt;
 	}
+}
+
+void BotAwarenessModule::Frame() {
+	// TODO: Make the control flow clear
+	InvalidateSelectedEnemiesIfNeeded();
+
+	AiFrameAwareComponent::Frame();
+
+	enemiesTracker.Update();
+	eventsTracker.Update();
+
+	InvalidateSelectedEnemiesIfNeeded();
 }
 
 void BotAwarenessModule::Think() {
