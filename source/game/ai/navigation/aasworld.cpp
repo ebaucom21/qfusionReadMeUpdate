@@ -804,60 +804,52 @@ void AiAasWorld::trySettingAreaNoFallFlags( int areaNum ) {
 }
 
 void AiAasWorld::trySettingAreaSkipCollisionFlags() {
-	trace_t trace;
+	const float extentsForFlags[3] = { 64, 48, 32 };
+	int flagsToSet[3]              = { AREA_SKIP_COLLISION_64, AREA_SKIP_COLLISION_48, AREA_SKIP_COLLISION_32 };
 
-	const float extents[3] = { 64, 48, 32 };
-	int flagsToSet[3] = { AREA_SKIP_COLLISION_64, AREA_SKIP_COLLISION_48, AREA_SKIP_COLLISION_32 };
-	// Leftmost flags also imply all rightmost flags presence
-	for( int i = 0; i < 2; ++i ) {
-		for( int j = i + 1; j < 3; ++j ) {
-			flagsToSet[i] |= flagsToSet[j];
+	// Set all "lesser" flags for a specific flag if a collision test for the flag passes
+	for( int flagNum = 0; flagNum < 2; ++flagNum ) {
+		for( int rightFlagNum = flagNum + 1; rightFlagNum < 3; ++rightFlagNum ) {
+			flagsToSet[flagNum] |= flagsToSet[rightFlagNum];
 		}
 	}
 
-	const int clipMask = MASK_PLAYERSOLID | MASK_WATER | CONTENTS_TRIGGER | CONTENTS_JUMPPAD | CONTENTS_TELEPORTER;
-	const float playerHeight = playerbox_stand_maxs[2] - playerbox_stand_maxs[2];
+	const int clipMask       = MASK_PLAYERSOLID | MASK_WATER | CONTENTS_TRIGGER | CONTENTS_JUMPPAD | CONTENTS_TELEPORTER;
+	const float playerHeight = playerbox_stand_maxs[2] - playerbox_stand_mins[2];
 	const float playerRadius = 0.5f * ( M_SQRT2 * ( playerbox_stand_maxs[0] - playerbox_stand_mins[0] ) );
-	for( int i = 1; i < m_numareas; ++i ) {
-		int *const areaFlags = &m_areasettings[i].areaflags;
+	for( int areaNum = 1; areaNum < m_numareas; ++areaNum ) {
+		int *const areaFlags = &m_areasettings[areaNum].areaflags;
 		// If it is already known that the area is bounded by a solid wall or is an inclined floor area
-		if( *areaFlags & ( AREA_WALL | AREA_INCLINED_FLOOR ) ) {
-			continue;
-		}
+		if( !( *areaFlags & ( AREA_WALL | AREA_INCLINED_FLOOR ) ) ) {
+			const aas_area_t &area      = m_areas[areaNum];
+			const Vec3 areaRelativeMins = Vec3( area.mins ) - area.center;
+			const Vec3 areaRelativeMaxs = Vec3( area.maxs ) - area.center;
+			const float addedMinsZ      = ( *areaFlags & AREA_GROUNDED ) ? 1.0f : 0.0f;
 
-		auto &area = m_areas[i];
-		for( int j = 0; j < 3; ++j ) {
-			const float extent = extents[j];
-			// Now make a bounding box not lesser than the area bounds or player bounds
+			for( int flagNum = 0; flagNum < 3; ++flagNum ) {
+				const float extent = extentsForFlags[flagNum];
 
-			// Set some extent, except for the bottom side
-			Vec3 mins( -extent - playerRadius, -extent - playerRadius, 0 );
-			// Ensure that there's always a room for a player above
-			// even if a player barely touches area top by their feet
-			Vec3 maxs( +extent + playerRadius, +extent + playerRadius, playerHeight );
-			mins += area.mins;
-			maxs += area.maxs;
-			// Convert bounds to relative
-			maxs -= area.center;
-			mins -= area.center;
+				const Vec3 addedMins( -extent - playerRadius, -extent - playerRadius, addedMinsZ );
+				// Ensure that there's always a room for a player above
+				// even if a player barely touches area top by their feet
+				const Vec3 addedMaxs( +extent + playerRadius, +extent + playerRadius, playerHeight );
 
-			float minMaxsZ = playerHeight + extent;
-			if( maxs.Z() < minMaxsZ ) {
-				maxs.Z() = minMaxsZ;
-			}
+				Vec3 testedMins = areaRelativeMins + addedMins;
+				Vec3 testedMaxs = areaRelativeMaxs + addedMaxs;
 
-			// Add an offset from ground if necessary (otherwise a trace is likely to start in solid)
-			if( *areaFlags & AREA_GROUNDED ) {
-				mins.Z() += 1.0f;
-			}
+				float minMaxsZ = playerHeight + extent;
+				if( testedMaxs.Z() < minMaxsZ ) {
+					testedMaxs.Z() = minMaxsZ;
+				}
 
-			G_Trace( &trace, area.center, mins.Data(), maxs.Data(), area.center, nullptr, clipMask );
-			if( trace.fraction == 1.0f && !trace.startsolid ) {
-			    *areaFlags |= flagsToSet[j];
-			    goto nextArea;
+				trace_t trace;
+				G_Trace( &trace, area.center, testedMins.Data(), testedMaxs.Data(), area.center, nullptr, clipMask );
+				if ( trace.fraction == 1.0f && !trace.startsolid ) {
+					*areaFlags |= flagsToSet[flagNum];
+					break;
+				}
 			}
 		}
-nextArea:;
 	}
 }
 
