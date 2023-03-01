@@ -98,6 +98,23 @@ void Frontend::submitDrawSceneRequest( DrawSceneRequest *request ) {
 }
 
 Frontend::Frontend() {
+	if( Q_CPU_FEATURE_SSE41 & Sys_GetProcessorFeatures() ) {
+		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse41;
+		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse41;
+		m_buildFrustaOfOccludersArchMethod             = &Frontend::buildFrustaOfOccludersSse41;
+		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse41;
+		m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse41;
+		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse41;
+		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse41;
+	} else {
+		m_collectVisibleWorldLeavesArchMethod          = &Frontend::collectVisibleWorldLeavesSse2;
+		m_collectVisibleOccludersArchMethod            = &Frontend::collectVisibleOccludersSse2;
+		m_buildFrustaOfOccludersArchMethod             = &Frontend::buildFrustaOfOccludersSse2;
+		m_cullLeavesByOccludersArchMethod              = &Frontend::cullLeavesByOccludersSse2;
+		m_cullSurfacesInVisLeavesByOccludersArchMethod = &Frontend::cullSurfacesInVisLeavesByOccludersSse2;
+		m_cullEntriesWithBoundsArchMethod              = &Frontend::cullEntriesWithBoundsSse2;
+		m_cullEntryPtrsWithBoundsArchMethod            = &Frontend::cullEntryPtrsWithBoundsSse2;
+	}
 }
 
 alignas( 32 ) static SingletonHolder<Frontend> sceneInstanceHolder;

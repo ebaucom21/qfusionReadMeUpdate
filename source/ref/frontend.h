@@ -206,6 +206,18 @@ private:
 
 	BufferHolder<uint32_t> m_leafLightBitsOfSurfacesHolder;
 
+	auto ( Frontend::*m_collectVisibleWorldLeavesArchMethod )() -> std::span<const unsigned>;
+	auto ( Frontend::*m_collectVisibleOccludersArchMethod )() -> std::span<const SortedOccluder>;
+	auto ( Frontend::*m_buildFrustaOfOccludersArchMethod )( std::span<const SortedOccluder> ) -> std::span<const Frustum>;
+	auto ( Frontend::*m_cullLeavesByOccludersArchMethod )( std::span<const unsigned>, std::span<const Frustum> )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+	void ( Frontend::*m_cullSurfacesInVisLeavesByOccludersArchMethod )
+		( std::span<const unsigned>, std::span<const Frustum>, MergedSurfSpan * );
+	auto ( Frontend::*m_cullEntriesWithBoundsArchMethod )( const void *, unsigned, unsigned, unsigned, const Frustum *,
+														   std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
+	auto ( Frontend::*m_cullEntryPtrsWithBoundsArchMethod )( const void **, unsigned, unsigned, const Frustum *,
+															 std::span<const Frustum>, uint16_t * ) -> std::span<const uint16_t>;
+
 	[[nodiscard]]
 	auto getFogForBounds( const float *mins, const float *maxs ) -> mfog_t *;
 	[[nodiscard]]
@@ -355,7 +367,7 @@ private:
 
 	// The template parameter is needed just to make instatiation of the method in different translation units correct
 
-	enum : unsigned { Sse2 = 1 };
+	enum : unsigned { Sse2 = 1, Sse41 = 2 };
 
 	template <unsigned Arch>
 	[[nodiscard]]
@@ -417,6 +429,32 @@ private:
 	auto cullEntryPtrsWithBoundsSse2( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
 									  const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 									  uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	[[nodiscard]]
+	auto collectVisibleWorldLeavesSse41() -> std::span<const unsigned>;
+	[[nodiscard]]
+	auto collectVisibleOccludersSse41() -> std::span<const SortedOccluder>;
+	[[nodiscard]]
+	auto buildFrustaOfOccludersSse41( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum>;
+
+	[[nodiscard]]
+	auto cullLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
+		-> std::pair<std::span<const unsigned>, std::span<const unsigned>>;
+
+	void cullSurfacesInVisLeavesByOccludersSse41( std::span<const unsigned> indicesOfLeaves,
+												  std::span<const Frustum> occluderFrusta,
+												  MergedSurfSpan *mergedSurfSpans );
+
+	[[nodiscard]]
+	auto cullEntriesWithBoundsSse41( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
+									 unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
+									 std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices ) -> std::span<const uint16_t>;
+
+	// Allows supplying an array of pointers instead of a contignuous array
+	[[nodiscard]]
+	auto cullEntryPtrsWithBoundsSse41( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
+									   const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
+									   uint16_t *tmpIndices ) -> std::span<const uint16_t>;
 
 	[[nodiscard]]
 	auto collectVisibleWorldLeaves() -> std::span<const unsigned>;

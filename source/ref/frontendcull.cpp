@@ -624,46 +624,43 @@ auto Frontend::cullDynamicMeshes( const DynamicMesh **meshes,
 	return cullEntryPtrsWithBounds( (const void **)meshes, numMeshes, boundsFieldOffset, primaryFrustum, occluderFrusta, tmpIndices );
 }
 
-// For now, just call the only existing implementation directly.
-
 auto Frontend::collectVisibleWorldLeaves() -> std::span<const unsigned> {
-	return collectVisibleWorldLeavesSse2();
+	return ( this->*m_collectVisibleWorldLeavesArchMethod )();
 }
 
 auto Frontend::collectVisibleOccluders() -> std::span<const SortedOccluder> {
-	return collectVisibleOccludersSse2();
+	return ( this->*m_collectVisibleOccludersArchMethod )();
 }
 
 auto Frontend::buildFrustaOfOccluders( std::span<const SortedOccluder> sortedOccluders ) -> std::span<const Frustum> {
-	return buildFrustaOfOccludersSse2( sortedOccluders );
+	return ( this->*m_buildFrustaOfOccludersArchMethod )( sortedOccluders );
 }
-
 
 auto Frontend::cullLeavesByOccluders( std::span<const unsigned> indicesOfLeaves, std::span<const Frustum> occluderFrusta )
 	-> std::pair<std::span<const unsigned>, std::span<const unsigned>> {
-	return cullLeavesByOccludersSse2( indicesOfLeaves, occluderFrusta );
+	return ( this->*m_cullLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta );
 }
 
 void Frontend::cullSurfacesInVisLeavesByOccluders( std::span<const unsigned> indicesOfLeaves,
 												   std::span<const Frustum> occluderFrusta,
 												   MergedSurfSpan *mergedSurfSpans ) {
-	return cullSurfacesInVisLeavesByOccludersSse2( indicesOfLeaves, occluderFrusta, mergedSurfSpans );
+	return ( this->*m_cullSurfacesInVisLeavesByOccludersArchMethod )( indicesOfLeaves, occluderFrusta, mergedSurfSpans );
 }
 
 auto Frontend::cullEntriesWithBounds( const void *entries, unsigned numEntries, unsigned boundsFieldOffset,
 									  unsigned strideInBytes, const Frustum *__restrict primaryFrustum,
 									  std::span<const Frustum> occluderFrusta, uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return cullEntriesWithBoundsSse2( entries, numEntries, boundsFieldOffset, strideInBytes,
-									  primaryFrustum, occluderFrusta, tmpIndices );
+	return ( this->*m_cullEntriesWithBoundsArchMethod )( entries, numEntries, boundsFieldOffset, strideInBytes,
+														 primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 auto Frontend::cullEntryPtrsWithBounds( const void **entryPtrs, unsigned numEntries, unsigned boundsFieldOffset,
 										const Frustum *__restrict primaryFrustum, std::span<const Frustum> occluderFrusta,
 										uint16_t *tmpIndices )
 	-> std::span<const uint16_t> {
-	return cullEntryPtrsWithBoundsSse2( entryPtrs, numEntries, boundsFieldOffset,
-										primaryFrustum, occluderFrusta, tmpIndices );
+	return ( this->*m_cullEntryPtrsWithBoundsArchMethod )( entryPtrs, numEntries, boundsFieldOffset,
+														   primaryFrustum, occluderFrusta, tmpIndices );
 }
 
 }
