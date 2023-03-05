@@ -156,7 +156,10 @@ typedef struct entity_s {
 	};
 } entity_t;
 
+class RenderTargetComponents;
+
 typedef struct refdef_s {
+	RenderTargetComponents *renderTarget;
 	int x, y, width, height;            // viewport, in virtual screen coordinates
 	int scissor_x, scissor_y, scissor_width, scissor_height;
 	int ortho_x, ortho_y;

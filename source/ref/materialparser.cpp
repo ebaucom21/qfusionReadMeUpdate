@@ -354,12 +354,12 @@ bool MaterialParser::parseDepthFunc() {
 		return false;
 	}
 
+	// Keep the original behaviour
+
 	auto *const pass = currPass();
-	pass->flags &= ~( GLSTATE_DEPTHFUNC_EQ|GLSTATE_DEPTHFUNC_GT );
+	pass->flags &= ~( GLSTATE_DEPTHFUNC_EQ );
 	if( *maybeFunc == DepthFunc::EQ ) {
 		pass->flags |= GLSTATE_DEPTHFUNC_EQ;
-	} else if( *maybeFunc == DepthFunc::GT ) {
-		pass->flags |= GLSTATE_DEPTHFUNC_GT;
 	}
 
 	return true;

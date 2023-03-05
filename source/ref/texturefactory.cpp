@@ -948,65 +948,109 @@ void TextureFactory::releaseMaterialCubemap( MaterialCubemap *cubemap ) {
 	m_materialCubemapsAllocator.free( cubemap );
 }
 
-static void wsw_stb_write_func( void *context, void *data, int size ) {
-	auto handle = *( (int *)( context ) );
-	FS_Write( data, size, handle );
+auto TextureFactory::createRenderTargetTexture( unsigned width, unsigned height ) -> RenderTargetTexture * {
+	if( void *const mem = m_renderTargetTexturesAllocator.allocOrNull() ) {
+		(void)qglGetError();
+
+		GLuint id = 0;
+		qglGenTextures( 1, &id );
+		bindToModify( GL_TEXTURE_2D, id );
+		// TODO: Add floating-point formats if needed
+		// TODO: We don't need sRGB rendering for portals
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr );
+		// TODO: Add a separate enumeration
+		setupFilterMode( GL_TEXTURE_2D, IT_DEPTH );
+		setupWrapMode( GL_TEXTURE_2D, IT_CLAMP );
+		unbindModified( GL_TEXTURE_2D, id );
+
+		if( qglGetError() == GL_NO_ERROR ) {
+			auto *const texture = new( mem )RenderTargetTexture;
+			texture->texnum     = id;
+			texture->width      = width;
+			texture->height     = height;
+			texture->samples    = 4;
+			texture->tags       = IMAGE_TAG_BUILTIN;
+			texture->layers     = 0;
+			texture->target     = GL_TEXTURE_2D;
+
+			return texture;
+		} else {
+			if( id ) {
+				qglDeleteTextures( 1, &id );
+			}
+			m_renderTargetTexturesAllocator.free( mem );
+			return nullptr;
+		}
+	}
+	return nullptr;
 }
 
-/*
-* R_ScreenShot
-*/
-void R_ScreenShot( const char *filename, int x, int y, int width, int height, int quality, bool silent ) {
-	const char *extension = COM_FileExtension( filename );
-	if( !extension ) {
-		Com_Printf( "R_ScreenShot: Invalid filename\n" );
-		return;
+auto TextureFactory::createRenderTargetDepthBuffer( unsigned width, unsigned height ) -> RenderTargetDepthBuffer * {
+	if( void *const mem = m_renderTargetDepthBufferAllocator.allocOrNull() ) {
+		(void)qglGetError();
+
+		GLuint id = 0;
+		qglGenRenderbuffers( 1, &id );
+		qglBindRenderbuffer( GL_RENDERBUFFER, id );
+		qglRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height );
+		qglBindRenderbuffer( GL_RENDERBUFFER, 0 );
+		if( qglGetError() == GL_NO_ERROR ) {
+			auto *const buffer = new( mem )RenderTargetDepthBuffer;
+			buffer->rboId      = id;
+			return buffer;
+		} else {
+			if( id ) {
+				qglDeleteRenderbuffers( 1, &id );
+			}
+			m_renderTargetDepthBufferAllocator.free( mem );
+			return nullptr;
+		}
 	}
-
-	const bool isJpeg = !Q_stricmp( extension, ".jpg" );
-	const size_t bufferSize = width * ( height + 1 ) * ( isJpeg ? 3 : 4 );
-	// We've purged the demoavi code so nobody takes screenshots every frame.
-	// Doing a short-living allocation in this case is fine.
-	std::unique_ptr<uint8_t[]> buffer( new uint8_t[bufferSize] );
-	if( isJpeg ) {
-		qglReadPixels( 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, buffer.get() );
-	} else {
-		qglReadPixels( 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer.get() );
-	}
-
-	// TODO: Flip
-
-	// TODO: Add wsw::fs interfaces for doing that
-	int handle = 0;
-	if( FS_FOpenAbsoluteFile( filename, &handle, FS_WRITE ) < 0 ) {
-		Com_Printf( "R_ScreenShot: Failed to open %s\n", filename );
-		return;
-	}
-
-	auto *context = (void *)&handle;
-	int result;
-	if( isJpeg ) {
-		result = stbi_write_jpg_to_func( wsw_stb_write_func, context, width, height, 3, buffer.get(), quality );
-	} else {
-		result = stbi_write_tga_to_func( wsw_stb_write_func, context, width, height, 4, buffer.get() );
-	}
-
-	FS_FCloseFile( handle );
-
-	if( result ) {
-		Com_Printf( "Wrote %s\n", filename );
-	}
-
+	return nullptr;
 }
 
-auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight, std::optional<unsigned> inLimit )
-	-> std::pair<unsigned, unsigned> {
-	// limit the texture size to either screen resolution in case we can't use FBO
-	// or hardware limits and ensure it's a POW2-texture if we don't support such textures
-	unsigned limit = glConfig.maxRenderbufferSize;
-	if( inLimit ) {
-		limit = wsw::min( limit, *inLimit );
+auto TextureFactory::createRenderTarget() -> RenderTarget * {
+	if( void *const mem = m_renderTargetsAllocator.allocOrNull() ) {
+		(void)qglGetError();
+
+		GLuint id = 0;
+		qglGenFramebuffers( 1, &id );
+		if( qglGetError() == GL_NO_ERROR ) {
+			auto *const target = new( mem )RenderTarget;
+			target->fboId      = id;
+			return target;
+		} else {
+			if( id ) {
+				qglDeleteFramebuffers( 1, &id );
+			}
+			m_renderTargetsAllocator.free( mem );
+			return nullptr;
+		}
 	}
-	limit = wsw::max( 1u, limit );
-	return std::make_pair( wsw::min( inWidth, limit ), wsw::min( inHeight, limit ) );
+	return nullptr;
+}
+
+void TextureFactory::releaseRenderTargetTexture( RenderTargetTexture *texture ) {
+	if( texture ) {
+		assert( !texture->attachedToRenderTarget );
+		qglDeleteTextures( 1, &texture->texnum );
+		m_renderTargetTexturesAllocator.free( texture );
+	}
+}
+
+void TextureFactory::releaseRenderTargetDepthBuffer( RenderTargetDepthBuffer *renderTargetDepthBuffer ) {
+	if( renderTargetDepthBuffer ) {
+		assert( !renderTargetDepthBuffer->attachedToRenderTarget );
+		qglDeleteRenderbuffers( 1, &renderTargetDepthBuffer->rboId );
+		m_renderTargetDepthBufferAllocator.free( renderTargetDepthBuffer );
+	}
+}
+
+void TextureFactory::releaseRenderTarget( RenderTarget *renderTarget ) {
+	if( renderTarget ) {
+		assert( !renderTarget->attachedTexture );
+		assert( !renderTarget->attachedDepthBuffer );
+		qglDeleteFramebuffers( 1, &renderTarget->fboId );
+		m_renderTargetsAllocator.free( renderTarget );
+	}
 }

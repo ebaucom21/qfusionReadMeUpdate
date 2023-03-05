@@ -1337,7 +1337,7 @@ void RF_AppActivate( bool active, bool minimize, bool destroy ) {
 
 void RF_Shutdown( bool verbose ) {
 	if( TextureCache *instance = TextureCache::maybeInstance() ) {
-		instance->releaseRenderTargetAttachments();
+		instance->releasePrimaryRenderTargetAttachments();
 	}
 
 	RB_Shutdown();
@@ -2150,7 +2150,7 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 	}
 
 	if( TextureCache *instance = TextureCache::maybeInstance() ) {
-		instance->releaseRenderTargetAttachments();
+		instance->releasePrimaryRenderTargetAttachments();
 	}
 
 	RB_Shutdown();
@@ -2169,7 +2169,7 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 
 	RB_Init();
 
-	TextureCache::instance()->createRenderTargetAttachments();
+	TextureCache::instance()->createPrimaryRenderTargetAttachments();
 
 	//
 	// TODO

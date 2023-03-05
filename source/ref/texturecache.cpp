@@ -51,26 +51,74 @@ auto TextureCache::maybeInstance() -> TextureCache * {
 
 TextureCache::TextureCache() {
 	std::fill( std::begin( m_builtinTextures ), std::end( m_builtinTextures ), nullptr );
-	m_builtinTextures[(unsigned)BuiltinTexNum::No] = m_factory.createBuiltinNoTextureTexture();
-	m_builtinTextures[(unsigned)BuiltinTexNum::White] = m_factory.createSolidColorBuiltinTexture( colorWhite );
-	m_builtinTextures[(unsigned)BuiltinTexNum::WhiteCubemap] = m_factory.createBuiltinWhiteCubemap();
-	m_builtinTextures[(unsigned)BuiltinTexNum::Black] = m_factory.createSolidColorBuiltinTexture( colorBlack );
-	m_builtinTextures[(unsigned)BuiltinTexNum::Grey] = m_factory.createSolidColorBuiltinTexture( colorMdGrey );
-	m_builtinTextures[(unsigned)BuiltinTexNum::BlankBump] = m_factory.createBuiltinBlankNormalmap();
-	m_builtinTextures[(unsigned)BuiltinTexNum::Particle] = m_factory.createBuiltinParticleTexture();
-	m_builtinTextures[(unsigned)BuiltinTexNum::Corona] = m_factory.createBuiltinCoronaTexture();
 
-	std::fill( std::begin( m_portalTextures ), std::end( m_portalTextures ), nullptr );
+	m_builtinTextures[(unsigned)BuiltinTexNum::No]           = m_factory.createBuiltinNoTextureTexture();
+	m_builtinTextures[(unsigned)BuiltinTexNum::White]        = m_factory.createSolidColorBuiltinTexture( colorWhite );
+	m_builtinTextures[(unsigned)BuiltinTexNum::WhiteCubemap] = m_factory.createBuiltinWhiteCubemap();
+	m_builtinTextures[(unsigned)BuiltinTexNum::Black]        = m_factory.createSolidColorBuiltinTexture( colorBlack );
+	m_builtinTextures[(unsigned)BuiltinTexNum::Grey]         = m_factory.createSolidColorBuiltinTexture( colorMdGrey );
+	m_builtinTextures[(unsigned)BuiltinTexNum::BlankBump]    = m_factory.createBuiltinBlankNormalmap();
+	m_builtinTextures[(unsigned)BuiltinTexNum::Particle]     = m_factory.createBuiltinParticleTexture();
+	m_builtinTextures[(unsigned)BuiltinTexNum::Corona]       = m_factory.createBuiltinCoronaTexture();
 
 	m_uiTextureWrapper = m_factory.createUITextureHandleWrapper();
+
+	const auto side = wsw::min<unsigned>( 1 << Q_log2( wsw::max( 1, r_portalmaps_maxtexsize->integer ) ),
+										  wsw::min( 1024, glConfig.maxRenderbufferSize ) );
+
+	// TODO: Should we use separate depth buffers?
+	m_renderTargetDepthBuffer = m_factory.createRenderTargetDepthBuffer( side, side );
+	if( m_renderTargetDepthBuffer ) {
+		do {
+			RenderTarget *renderTarget = m_factory.createRenderTarget();
+			if( !renderTarget ) {
+				break;
+			}
+			RenderTargetTexture *texture = m_factory.createRenderTargetTexture( side, side );
+			if( !texture ) {
+				m_factory.releaseRenderTarget( renderTarget );
+				break;
+			}
+			auto *const components   = new( m_portalRenderTargets.unsafe_grow_back() )PortalRenderTargetComponents;
+			components->renderTarget = renderTarget;
+			components->texture      = texture;
+			components->depthBuffer  = m_renderTargetDepthBuffer;
+		} while( !m_portalRenderTargets.full() );
+	}
 }
 
 TextureCache::~TextureCache() {
-	// TODO: Portal textures
 	m_factory.releaseBuiltinTexture( m_uiTextureWrapper );
 	for( Texture *texture: m_builtinTextures ) {
 		m_factory.releaseBuiltinTexture( texture );
 	}
+
+	for( RenderTargetComponents &components : m_portalRenderTargets ) {
+		if( RenderTarget *attachmentTarget = components.texture->attachedToRenderTarget ) {
+			qglBindFramebuffer( GL_FRAMEBUFFER, attachmentTarget->fboId );
+			qglFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0 );
+			components.texture->attachedToRenderTarget = nullptr;
+			attachmentTarget->attachedTexture          = nullptr;
+			m_factory.releaseRenderTargetTexture( components.texture );
+		}
+	}
+
+	if( m_renderTargetDepthBuffer ) {
+		if( RenderTarget *attachmentTarget = m_renderTargetDepthBuffer->attachedToRenderTarget ) {
+			qglBindFramebuffer( GL_FRAMEBUFFER, attachmentTarget->fboId );
+			qglFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0 );
+			m_renderTargetDepthBuffer->attachedToRenderTarget = nullptr;
+			attachmentTarget->attachedDepthBuffer             = nullptr;
+		}
+
+		m_factory.releaseRenderTargetDepthBuffer( m_renderTargetDepthBuffer );
+	}
+
+	for( RenderTargetComponents &components : m_portalRenderTargets ) {
+		m_factory.releaseRenderTarget( components.renderTarget );
+	}
+
+	qglBindFramebuffer( GL_FRAMEBUFFER, 0 );
 }
 
 auto TextureManagementShared::makeCleanName( const wsw::StringView &rawName, const wsw::StringView &suffix )
@@ -150,96 +198,10 @@ auto TextureCache::wrapUITextureHandle( GLuint externalHandle ) -> Texture * {
 	assert( m_uiTextureWrapper );
 	Texture *texture = m_uiTextureWrapper;
 	texture->texnum = externalHandle;
-	texture->width = rf.width2D;
-	texture->height = rf.height2D;
+	texture->width = glConfig.width;
+	texture->height = glConfig.height;
 	texture->samples = 1;
 	return texture;
-}
-
-auto TextureCache::findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
-	-> std::optional<std::tuple<PortalTexture *, unsigned, bool>> {
-	std::optional<unsigned> bestSlot;
-	std::optional<unsigned> freeSlot;
-	for( unsigned i = 0; i < std::size( m_portalTextures ); ++i ) {
-		PortalTexture *const texture = m_portalTextures[i];
-		if( !texture ) {
-			if( freeSlot == std::nullopt ) {
-				freeSlot = i;
-			}
-			continue;
-		}
-		// TODO: Don't mark images, track used images on their own.
-		// Even if the framenum approach is used it should not belong to the Texture class
-		if( texture->framenum == frameNum ) {
-			// the texture is used in the current scene
-			continue;
-		}
-		if( (unsigned)texture->width == width && (unsigned)texture->height == height && texture->flags == flags ) {
-			return std::make_tuple( texture, i, true );
-		}
-		if( bestSlot == std::nullopt ) {
-			bestSlot = i;
-		}
-	}
-	if( bestSlot ) {
-		return std::make_tuple( m_portalTextures[*bestSlot], *bestSlot, false );
-	}
-	if( freeSlot ) {
-		return std::make_tuple( nullptr, *freeSlot, false );
-	}
-	return std::nullopt;
-}
-
-auto TextureCache::getPortalTexture( unsigned viewportWidth, unsigned viewportHeight,
-									   int flags, unsigned frameNum ) -> Texture * {
-	if( PortalTexture *texture = getPortalTexture_( viewportWidth, viewportHeight, flags, frameNum ) ) {
-		texture->framenum = frameNum;
-		return texture;
-	}
-	return nullptr;
-}
-
-auto TextureCache::getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight,
-									  int flags, unsigned frameNum ) -> PortalTexture * {
-	const auto sizeLimit = (unsigned)wsw::max( 0, r_portalmaps_maxtexsize->integer );
-	const auto [realWidth, realHeight] = R_GetRenderBufferSize( viewportWidth, viewportHeight, sizeLimit );
-
-	const int realFlags = IT_SPECIAL | IT_FRAMEBUFFER | IT_DEPTHRB | flags;
-	auto maybeResult = findFreePortalTexture( realWidth, realHeight, realFlags, frameNum );
-	if( !maybeResult ) {
-		return nullptr;
-	}
-
-	auto [existing, slotNum, perfectMatch] = *maybeResult;
-	if( perfectMatch ) {
-		return existing;
-	}
-
-	if( existing ) {
-		// TODO:!!!!!!!!
-		// bindToModify( existing );
-		// Just resize/change format
-		// unbindModified( existing );
-		// TODO: Update attached FBOS!!!!!!!!!!!!!!!!!!!!
-		// update FBO, if attached
-		/*
-		if( t->fbo ) {
-			RFB_UnregisterObject( t->fbo );
-			t->fbo = 0;
-		}
-		if( t->flags & IT_FRAMEBUFFER ) {
-			t->fbo = RFB_RegisterObject( t->upload_width, t->upload_height, ( tags & IMAGE_TAG_BUILTIN ) != 0,
-										 ( flags & IT_DEPTHRB ) != 0, ( flags & IT_STENCIL ) != 0, false, 0, false );
-			RFB_AttachTextureToObject( t->fbo, ( t->flags & IT_DEPTH ) != 0, 0, t );
-		}*/
-		return existing;
-	}
-
-	abort();
-
-	// TODO: Create FBOS if needed!!!!!!!!!!!!!!!!!!!!!!
-
-	// Create a new texture
 }
 
 const std::pair<wsw::StringView, TextureManagementShared::TextureFilter> TextureManagementShared::kTextureFilterNames[3] {
@@ -381,4 +343,15 @@ void TextureCache::freeUnusedWorldTextures() {
 
 void TextureCache::freeAllUnusedTextures() {
 	freeUnusedWorldTextures();
+}
+
+auto TextureCache::getPortalRenderTarget( unsigned drawSceneFrameNum ) -> RenderTargetComponents * {
+	for( PortalRenderTargetComponents &components : m_portalRenderTargets ) {
+		if( components.drawSceneFrameNum != drawSceneFrameNum ) {
+			components.drawSceneFrameNum = drawSceneFrameNum;
+			return std::addressof( components );
+		}
+	}
+
+	return nullptr;
 }

@@ -208,11 +208,6 @@ class Raw2DTexture : public Texture {
 	}
 };
 
-class PortalTexture : public Texture {
-public:
-	unsigned framenum { 0 };
-};
-
 class MaterialTexture : public Texture {
 	const wsw::HashedStringView m_name;
 protected:
@@ -245,6 +240,33 @@ class MaterialCubemap : public MaterialTexture {
 		: MaterialTexture( name, handle, GL_TEXTURE_CUBE_MAP, bitmapProps, flags ) {}
 };
 
+class RenderTarget;
+
+class RenderTargetTexture : public Texture {
+public:
+	RenderTarget *attachedToRenderTarget { nullptr };
+};
+
+class RenderTargetDepthBuffer {
+public:
+	RenderTarget *attachedToRenderTarget { nullptr };
+	GLuint rboId { 0 };
+};
+
+class RenderTarget {
+public:
+	RenderTargetTexture *attachedTexture;
+	RenderTargetDepthBuffer *attachedDepthBuffer;
+	GLuint fboId { 0 };
+};
+
+class RenderTargetComponents {
+public:
+	RenderTarget *renderTarget { nullptr };
+	RenderTargetTexture *texture { nullptr };
+	RenderTargetDepthBuffer *depthBuffer { nullptr };
+};
+
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/freelistallocator.h"
 
@@ -256,6 +278,8 @@ class ImageBuffer;
 class TextureManagementShared {
 	static wsw::StaticString<64> s_cleanNameBuffer;
 protected:
+	static constexpr auto kMaxPortalRenderTargets = 4u;
+
 	// This terminology is valid only for 2D textures but it's is trivial/convenient to use
 	enum TextureFilter {
 		Nearest,
@@ -295,15 +319,16 @@ private:
 
 	static constexpr auto kMaxBuiltinTextures = 16u;
 
-	using Allocator = wsw::HeapBasedFreelistAllocator;
-	
-	// TODO: This is not exception-safe !!!!!!!!!!!!!
-	Allocator m_materialTexturesAllocator { sizeof( Material2DTexture ), kMaxMaterialTextures };
-	Allocator m_materialCubemapsAllocator { sizeof( MaterialCubemap ), kMaxMaterialCubemaps };
-	Allocator m_raw2DTexturesAllocator { sizeof( Raw2DTexture ), kMaxRaw2DTextures };
-	Allocator m_fontMasksAllocator { sizeof( FontMask ), kMaxFontMasks };
-	Allocator m_lightmapsAllocator { wsw::max( sizeof( Lightmap ), sizeof( LightmapArray ) ), kMaxLightmaps };
-	Allocator m_builtinTexturesAllocator { sizeof( Texture ), kMaxBuiltinTextures };
+	wsw::HeapBasedFreelistAllocator m_materialTexturesAllocator { sizeof( Material2DTexture ), kMaxMaterialTextures };
+	wsw::HeapBasedFreelistAllocator m_materialCubemapsAllocator { sizeof( MaterialCubemap ), kMaxMaterialCubemaps };
+	wsw::HeapBasedFreelistAllocator m_raw2DTexturesAllocator { sizeof( Raw2DTexture ), kMaxRaw2DTextures };
+	wsw::HeapBasedFreelistAllocator m_fontMasksAllocator { sizeof( FontMask ), kMaxFontMasks };
+	wsw::HeapBasedFreelistAllocator m_lightmapsAllocator { wsw::max( sizeof( Lightmap ), sizeof( LightmapArray ) ), kMaxLightmaps };
+	wsw::HeapBasedFreelistAllocator m_builtinTexturesAllocator { sizeof( Texture ), kMaxBuiltinTextures };
+
+	wsw::MemberBasedFreelistAllocator<sizeof( RenderTargetTexture ), kMaxPortalRenderTargets> m_renderTargetTexturesAllocator;
+	wsw::MemberBasedFreelistAllocator<sizeof( RenderTarget ), kMaxPortalRenderTargets> m_renderTargetsAllocator;
+	wsw::MemberBasedFreelistAllocator<sizeof( RenderTargetDepthBuffer ), 2> m_renderTargetDepthBufferAllocator;
 
 	static constexpr unsigned kMaxNameLen = 63;
 	static constexpr unsigned kNameDataStride = kMaxNameLen + 1;
@@ -366,6 +391,17 @@ private:
 
 	void releaseMaterialTexture( Material2DTexture *texture );
 	void releaseMaterialCubemap( MaterialCubemap *cubemap );
+
+	[[nodiscard]]
+	auto createRenderTargetTexture( unsigned width, unsigned height ) -> RenderTargetTexture *;
+	[[nodiscard]]
+	auto createRenderTargetDepthBuffer( unsigned width, unsigned height ) -> RenderTargetDepthBuffer *;
+	[[nodiscard]]
+	auto createRenderTarget() -> RenderTarget *;
+
+	void releaseRenderTargetTexture( RenderTargetTexture * );
+	void releaseRenderTargetDepthBuffer( RenderTargetDepthBuffer * );
+	void releaseRenderTarget( RenderTarget * );
 public:
 	TextureFactory();
 
@@ -405,13 +441,17 @@ public:
 };
 
 class TextureCache : TextureManagementShared {
-	static constexpr unsigned kMaxPortalTextures = 16;
-
 	TextureFactory m_factory;
-	// TODO: Why are portal textures included
-	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0 + kMaxPortalTextures] {};
-	PortalTexture *m_portalTextures[kMaxPortalTextures];
+
+	Texture *m_builtinTextures[(size_t)BuiltinTexNum::Portal0] {};
 	Texture *m_uiTextureWrapper { nullptr };
+
+	struct PortalRenderTargetComponents : public RenderTargetComponents {
+		unsigned drawSceneFrameNum { 0 };
+	};
+
+	wsw::StaticVector<PortalRenderTargetComponents, kMaxPortalRenderTargets> m_portalRenderTargets;
+	RenderTargetDepthBuffer *m_renderTargetDepthBuffer { nullptr };
 
 	static constexpr unsigned kNumHashBins = 101;
 
@@ -420,13 +460,6 @@ class TextureCache : TextureManagementShared {
 
 	Material2DTexture *m_materialTexturesHead { nullptr };
 	MaterialCubemap *m_materialCubemapsHead { nullptr };
-
-	[[nodiscard]]
-	auto findFreePortalTexture( unsigned width, unsigned height, int flags, unsigned frameNum )
-		-> std::optional<std::tuple<PortalTexture *, unsigned, bool>>;
-
-	[[nodiscard]]
-	auto getPortalTexture_( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> PortalTexture *;
 
 	template <typename T>
 	[[nodiscard]]
@@ -496,24 +529,17 @@ public:
 	[[nodiscard]]
 	auto wrapUITextureHandle( GLuint externalTexNum ) -> Texture *;
 
-	[[nodiscard]]
-	auto getPortalTexture( unsigned viewportWidth, unsigned viewportHeight, int flags, unsigned frameNum ) -> Texture *;
-
-	void createRenderTargetAttachments() {}
-	void releaseRenderTargetAttachments() {}
+	void createPrimaryRenderTargetAttachments() {}
+	void releasePrimaryRenderTargetAttachments() {}
 
 	void touchTexture( Texture *texture, unsigned tags );
 
 	void freeUnusedWorldTextures();
 	void freeAllUnusedTextures();
+
+	[[nodiscard]]
+	auto getPortalRenderTarget( unsigned drawSceneFrameNum ) -> RenderTargetComponents *;
 };
-
-// TODO: This should belong to RenderTargetManager
-[[nodiscard]]
-auto R_GetRenderBufferSize( unsigned inWidth, unsigned inHeight,
-							std::optional<unsigned> inLimit = std::nullopt ) -> std::pair<unsigned, unsigned>;
-
-void R_ScreenShot( const char *filename, int x, int y, int width, int height, int quality, bool silent );
 
 class ImageBuffer {
 	static inline ImageBuffer *s_head;
@@ -652,7 +678,7 @@ void RB_Viewport( int x, int y, int w, int h );
 void RB_Clear( int bits, float r, float g, float b, float a );
 void RB_SetZClip( float zNear, float zFar );
 
-void RB_BindFrameBufferObject();
+void RB_BindFrameBufferObject( RenderTargetComponents *renderTargetComponents );
 
 void RB_BindVBO( int id, int primitive );
 
@@ -1119,7 +1145,7 @@ void        Mod_StripLODSuffix( char *name );
 #define RF_SHADOWMAPVIEW        RF_BIT( 3 )
 #define RF_DRAWFLAT             RF_BIT( 5 )
 #define RF_CLIPPLANE            RF_BIT( 6 )
-#define RF_NOVIS                RF_BIT( 7 )
+#define RF_NOOCCLUSIONCULLING   RF_BIT( 7 )
 #define RF_LIGHTMAP             RF_BIT( 8 )
 #define RF_SOFT_PARTICLES       RF_BIT( 9 )
 #define RF_PORTAL_CAPTURE       RF_BIT( 10 )

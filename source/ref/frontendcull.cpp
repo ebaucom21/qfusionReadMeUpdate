@@ -622,6 +622,11 @@ auto Frontend::collectVisibleOccluders( StateForCamera *stateForCamera ) -> std:
 
 auto Frontend::buildFrustaOfOccluders( StateForCamera *stateForCamera, std::span<const SortedOccluder> sortedOccluders )
 	-> std::span<const Frustum> {
+	// Put the check here so it does not get replicated for every arch
+	if( stateForCamera->renderFlags & RF_NOOCCLUSIONCULLING ) {
+		return { stateForCamera->occluderFrusta, 0 };
+	}
+
 	return ( this->*m_buildFrustaOfOccludersArchMethod )( stateForCamera, sortedOccluders );
 }
 

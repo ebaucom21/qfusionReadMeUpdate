@@ -85,15 +85,15 @@ static void R_TransformForEntity( const entity_t *e ) {
 
 namespace wsw::ref {
 
-void Frontend::bindFrameBufferAndViewport( int, const StateForCamera *stateForCamera ) {
+void Frontend::bindRenderTargetAndViewport( RenderTargetComponents *components, const StateForCamera *stateForCamera ) {
 	// TODO: This is for the default render target
-	const int width  = glConfig.width;
-	const int height = glConfig.height;
+	const int width  = components ? components->texture->width : glConfig.width;
+	const int height = components ? components->texture->height : glConfig.height;
 
 	rf.frameBufferWidth  = width;
 	rf.frameBufferHeight = height;
 
-	RB_BindFrameBufferObject();
+	RB_BindFrameBufferObject( components );
 
 	RB_Viewport( stateForCamera->viewport[0], stateForCamera->viewport[1], stateForCamera->viewport[2], stateForCamera->viewport[3] );
 	RB_Scissor( stateForCamera->scissor[0], stateForCamera->scissor[1], stateForCamera->scissor[2], stateForCamera->scissor[3] );
@@ -394,12 +394,12 @@ void Frontend::submitSortedSurfacesToBackend( StateForCamera *stateForCamera, Sc
 	if( cullHack ) {
 		RB_FlipFrontFace();
 	}
-
-	RB_BindFrameBufferObject();
 }
 
 void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 	set2DMode( false );
+
+	m_drawSceneFrame++;
 
 	RB_SetTime( fd->time );
 
@@ -409,11 +409,12 @@ void Frontend::renderScene( Scene *scene, const refdef_s *fd ) {
 		stateForSceneCamera->refdef.minLight = 0.1f;
 	}
 
-	bindFrameBufferAndViewport( 0, stateForSceneCamera );
+	// TODO: Is this first call really needed
+	bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
 
 	renderViewFromThisCamera( scene, stateForSceneCamera );
 
-	bindFrameBufferAndViewport( 0, stateForSceneCamera );
+	bindRenderTargetAndViewport( nullptr, stateForSceneCamera );
 
 	set2DMode( true );
 }
@@ -584,7 +585,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 		}
 	}
 
-	bindFrameBufferAndViewport( stateForCamera->renderTarget, stateForCamera );
+	bindRenderTargetAndViewport( stateForCamera->refdef.renderTarget, stateForCamera );
 
 	const int *const scissor = stateForCamera->scissor;
 	RB_Scissor( scissor[0], scissor[1], scissor[2], scissor[3] );
@@ -617,7 +618,7 @@ void Frontend::renderViewFromThisCamera( Scene *scene, StateForCamera *stateForC
 		shouldClearColor = true;
 		Vector4Set( clearColor, 1, 1, 1, 1 );
 	} else if( stateForCamera->refdef.rdflags & RDF_NOWORLDMODEL ) {
-		shouldClearColor = stateForCamera->renderTarget != 0;
+		shouldClearColor = stateForCamera->refdef.renderTarget != nullptr;
 		Vector4Set( clearColor, 1, 1, 1, 0 );
 	} else {
 		shouldClearColor = stateForCamera->numDepthPortalSurfaces == 0 || r_fastsky->integer || stateForCamera->viewCluster < 0;
@@ -814,9 +815,6 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 		Matrix3_TransformVector( rot, tvec, origin );
 		VectorAdd( origin, portalEntity->origin2, origin );
 
-		// !!!!!!!!!!!
-		VectorCopy( portalEntity->origin2, origin );
-
 		Matrix3_Transpose( A, B );
 		// TODO: Why do we use a view-dependent axis TODO: Check Q3 code
 		Matrix3_Multiply( stateForPrimaryCamera->viewAxis, B, rot );
@@ -849,32 +847,28 @@ auto Frontend::drawPortalSurfaceSide( StateForCamera *stateForPrimaryCamera, por
 	renderFlagsToAdd   |= RF_CLIPPLANE;
 	renderFlagsToClear |= RF_SOFT_PARTICLES;
 
+	if( newPvsOrigin ) {
+		// TODO: Try using a different frustum for selection of occluders in this case?
+		if( Mod_PointInLeaf( origin, rsh.worldModel )->cluster < 0 ) {
+			renderFlagsToAdd |= RF_NOOCCLUSIONCULLING;
+		}
+	}
+
 	Texture *captureTexture = nullptr;
 	if( drawPortalFlags & DrawPortalToTexture ) {
-		//int texFlags = shader->flags & SHADER_NO_TEX_FILTERING ? IT_NOFILTERING : 0;
+		if( RenderTargetComponents *components = TextureCache::instance()->getPortalRenderTarget( m_drawSceneFrame ) ) {
+			newRefdef.renderTarget = components;
+			captureTexture         = components->texture;
 
-		// TODO:
-		//captureTexture = R_GetPortalTexture( rsc.refdef.width, rsc.refdef.height, texFlags,
-		//									 rsc.frameCount );
-		//portalTexures[captureTextureId] = captureTexture;
+			newRefdef.x      = newRefdef.scissor_x      = 0;
+			newRefdef.y      = newRefdef.scissor_y      = 0;
+			newRefdef.width  = newRefdef.scissor_width  = components->texture->width;
+			newRefdef.height = newRefdef.scissor_height = components->texture->height;
 
-		if( false ) {
-			Com_Printf( "No capture texture id\n" );
-			// couldn't register a slot for this plane
-			//goto done;
+			renderFlagsToAdd |= RF_PORTAL_CAPTURE;
+		} else {
+			return nullptr;
 		}
-
-		int x = 0, y = 0;
-		int w = 1024; //captureTexture->width;
-		int h = 1024; //captureTexture->height;
-
-		newRefdef.x      = newRefdef.scissor_x      = x;
-		newRefdef.y      = newRefdef.scissor_y      = y;
-		newRefdef.width  = newRefdef.scissor_width  = w;
-		newRefdef.height = newRefdef.scissor_height = h;
-
-		// TODO.... rn.renderTarget = captureTexture->fbo;
-		renderFlagsToAdd |= RF_PORTAL_CAPTURE;
 	} else {
 		renderFlagsToClear |= RF_PORTAL_CAPTURE;
 	}

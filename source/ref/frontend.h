@@ -132,8 +132,6 @@ private:
 
 		unsigned renderFlags { 0 };
 
-		int renderTarget { 0 };
-
 		int viewCluster { -1 };
 		int viewArea { -1 };
 
@@ -190,7 +188,7 @@ private:
 	[[nodiscard]]
 	auto getFogForSphere( const StateForCamera *stateForCamera, const vec3_t centre, const float radius ) -> mfog_t *;
 
-	void bindFrameBufferAndViewport( int, const StateForCamera *stateForCamera );
+	void bindRenderTargetAndViewport( RenderTargetComponents *renderTargetComponents, const StateForCamera *stateForCamera );
 
 	[[nodiscard]]
 	auto getDefaultFarClip( const refdef_t *fd ) const -> float;
@@ -500,6 +498,7 @@ private:
 
 	unsigned m_occludersSelectionFrame { 0 };
 	unsigned m_occlusionCullingFrame { 0 };
+	unsigned m_drawSceneFrame { 0 };
 
 	wsw::StaticVector<DrawSceneRequest, 1> m_drawSceneRequestHolder;
 

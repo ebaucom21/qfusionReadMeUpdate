@@ -293,16 +293,6 @@ public:
 
 static AlphaFuncMatcher alphaFuncMatcher;
 
-class DepthFuncMatcher : public wsw::EnumTokenMatcher<DepthFunc> {
-public:
-	DepthFuncMatcher() noexcept {
-		add( "Equal"_asView, DepthFunc::EQ );
-		add( "Greater"_asView, DepthFunc::GT );
-	}
-};
-
-static DepthFuncMatcher depthFuncMatcher;
-
 class TCModMatcher : public wsw::EnumTokenMatcher<TCMod> {
 public:
 	TCModMatcher() noexcept {
@@ -373,10 +363,20 @@ IMPLEMENT_GET_ENUM_METHOD( SrcBlend, getSrcBlend, srcBlendMatcher )
 IMPLEMENT_GET_ENUM_METHOD( DstBlend, getDstBlend, dstBlendMatcher )
 IMPLEMENT_GET_ENUM_METHOD( UnaryBlendFunc, getUnaryBlendFunc, unaryBlendFuncMatcher )
 IMPLEMENT_GET_ENUM_METHOD( AlphaFunc, getAlphaFunc, alphaFuncMatcher )
-IMPLEMENT_GET_ENUM_METHOD( DepthFunc, getDepthFunc, depthFuncMatcher )
 IMPLEMENT_GET_ENUM_METHOD( TCMod, getTCMod, tcModMatcher )
 IMPLEMENT_GET_ENUM_METHOD( TCGen, getTCGen, tcGenMatcher )
 IMPLEMENT_GET_ENUM_METHOD( SkySide, getSkySide, skySideMatcher )
+
+static const wsw::StringView kEqualLiteral( "equal" );
+
+[[nodiscard]]
+auto MaterialLexer::getDepthFunc() -> std::optional<DepthFunc> {
+	// Keep the original behaviour
+	if( const auto maybeToken = getNextTokenInLine() ) {
+		return maybeToken->equalsIgnoreCase( kEqualLiteral ) ? DepthFunc::EQ : DepthFunc::GT;
+	}
+	return std::nullopt;
+}
 
 static const wsw::StringView kTrueLiteral( "true" );
 static const wsw::StringView kFalseLiteral( "false" );
