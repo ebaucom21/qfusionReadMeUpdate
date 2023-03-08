@@ -38,9 +38,32 @@
 #include <QScopedPointer>
 #include <QFontDatabase>
 #include <QQmlProperty>
+#include <QtPlugin>
 
 #include <clocale>
 #include <span>
+
+#ifdef _WIN32
+Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
+#else
+Q_IMPORT_PLUGIN(QXcbIntegrationPlugin)
+Q_IMPORT_PLUGIN(QXcbGlxIntegrationPlugin)
+#endif
+#if QT_VERSION > QT_VERSION_CHECK(5, 13, 2)
+Q_IMPORT_PLUGIN(QtQmlPlugin);
+#endif
+Q_IMPORT_PLUGIN(QtQuick2Plugin);
+Q_IMPORT_PLUGIN(QtQuick2WindowPlugin);
+Q_IMPORT_PLUGIN(QtQuickLayoutsPlugin);
+Q_IMPORT_PLUGIN(QtGraphicalEffectsPlugin);
+Q_IMPORT_PLUGIN(QtGraphicalEffectsPrivatePlugin);
+Q_IMPORT_PLUGIN(QtQuickControls2Plugin);
+Q_IMPORT_PLUGIN(QtQuickControls2MaterialStylePlugin);
+Q_IMPORT_PLUGIN(QtQuickTemplates2Plugin);
+Q_IMPORT_PLUGIN(QMultimediaDeclarativeModule);
+Q_IMPORT_PLUGIN(QmlShapesPlugin);
+Q_IMPORT_PLUGIN(QSvgPlugin);
+Q_IMPORT_PLUGIN(QTgaPlugin);
 
 QVariant VID_GetMainContextHandle();
 

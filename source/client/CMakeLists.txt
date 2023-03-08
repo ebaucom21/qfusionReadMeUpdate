@@ -9,6 +9,27 @@ include_directories(${OGG_INCLUDE_DIR} ${VORBIS_INCLUDE_DIR} ${FREETYPE_INCLUDE_
 include_directories("../../third-party/magic_enum/include")
 include_directories("../../third-party/recastnavigation/Recast/Include/")
 
+# TODO: Is there something smarter
+get_filename_component(Qt5_CMAKEDIR ${Qt5_DIR} DIRECTORY)
+get_filename_component(Qt5_LIBDIR ${Qt5_CMAKEDIR} DIRECTORY)
+get_filename_component(Qt5_HOMEDIR ${Qt5_LIBDIR} DIRECTORY)
+
+link_directories("${Qt5_HOMEDIR}\\lib")
+link_directories("${Qt5_HOMEDIR}\\plugins\\imageformats")
+link_directories("${Qt5_HOMEDIR}\\plugins\\platforms")
+link_directories("${Qt5_HOMEDIR}\\plugins\\xcbglintegrations")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQml")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtMultimedia")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtGraphicalEffects")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtGraphicalEffects\\private")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick.2")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Shapes")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Window.2")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Templates.2")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Layouts")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Controls.2")
+link_directories("${Qt5_HOMEDIR}\\qml\\QtQuick\\Controls.2\\Material")
+
 if (USE_SDL2 OR (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
     include_directories(${SDL2_INCLUDE_DIR})
 endif()
@@ -22,19 +43,16 @@ endif()
 
 file(GLOB CLIENT_HEADERS
     "*.h"
-	"../gameshared/q_*.h"
-	"../gameshared/anorms.h"
-	"../gameshared/config.h"
+	"../gameshared/*.h"
 	"../qcommon/*.h"
 	"../angelwrap/qas_public.h"
 	"../ref/r_public.h"
 	"../cgame/cg_public.h"
 	"../cgame/ref.h"
 	"../game/g_public.h"
-	"../ui/ui_public.h"
-	"../ftlib/ftlib_public.h"
-	"../steamlib/steamlib_public.h"
-	"../cin/cin_public.h"
+	"../ui/*.h"
+	"../cgame/*.h"
+	"../ftlib/*.h"
 	"../server/*.h"
 )
 
@@ -72,7 +90,10 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/wswstringview.cpp"
     "../server/*.cpp"
     "*.cpp"
-    "../gameshared/q_*.cpp"
+	"../ui/*.cpp"
+	"../cgame/*.cpp"
+	"../ftlib/*.cpp"
+    "../gameshared/*.cpp"
 	"../../third-party/recastnavigation/Recast/Source/*.cpp"
     # We have to include this for linking with shared MM facilities.
     # This also is required to run listen servers (do we allow ranked listen servers?)
@@ -116,33 +137,6 @@ else()
 	endif()
 endif()
 
-file(GLOB FTLIB_HEADERS
-		"../ftlib/*.h"
-		"../gameshared/q_*.h"
-		)
-
-file(GLOB FTLIB_SOURCES
-		"../ftlib/*.cpp"
-		"../gameshared/q_*.c"
-		)
-
-file(GLOB CGAME_HEADES
-		"../cgame/*.h"
-		"../gameshared/*.h"
-		)
-
-file(GLOB CGAME_SOURCES
-		"../cgame/*.cpp"
-		"../gameshared/*.cpp"
-		)
-
-file(GLOB UI_HEADERS
-		"../ui/*.h"
-		)
-
-file(GLOB UI_SOURCES
-		"../ui/*.cpp")
-
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	file(GLOB CLIENT_PLATFORM_HEADERS
 		"../win32/resource.h"
@@ -171,6 +165,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
             "../win32/qfusion.rc"
         )
 
+		# TODO: Setup UI dependencies if SDL gets eventually used
         set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} ${SDL2MAIN_LIBRARY} "ws2_32.lib" "winmm.lib" "Ole32.lib")
     else()
         file(GLOB CLIENT_PLATFORM_SOURCES
@@ -191,7 +186,8 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
             "../win32/qfusion.rc"
         )
 
-        set(CLIENT_PLATFORM_LIBRARIES "ws2_32.lib" "winmm.lib" "Ole32.lib")
+		# TODO: Get rid of the automation stuff
+        set(CLIENT_PLATFORM_LIBRARIES "ws2_32.lib" "winmm.lib" "Ole32.lib" "qwindows" "Wtsapi32" Qt5WindowsUIAutomationSupport)
     endif()
 
     set(CLIENT_BINARY_TYPE WIN32)
@@ -258,7 +254,16 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 		"../sdl/sdl_client.cpp"
 		)
 
-	set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "m" "dl" "rt" "uuid")
+	# TODO: Discover how to get rid of all of this?
+	set(QT_XCB_DEPENDENCY_LIBRARIES
+		xkbcommon xkbcommon-x11 xcb-keysyms xcb-xkb xcb-sync xcb-shape xcb-shm xcb-randr
+		xcb-xfixes xcb-xinput xcb-image xcb-render xcb-render-util xcb-glx xcb-xinerama xcb-icccm xcb X11 X11-xcb)
+	# Must get rid of this for the release
+	set(QT_PLATFORM_DEPENDENCY_LIBRARIES ${QT_XCB_DEPENDENCY_LIBRARIES} dbus-1)
+	set(CLIENT_PLATFORM_LIBRARIES
+		${SDL2_LIBRARY} ${FREETYPE_LIBRARY} pthread m dl rt uuid
+		qxcb qxcb-glx-integration Qt5XcbQpa Qt5XkbCommonSupport Qt5ServiceSupport Qt5EdidSupport Qt5GlxSupport Qt5DBus
+		${QT_PLATFORM_DEPENDENCY_LIBRARIES})
     set(CLIENT_BINARY_TYPE "")
 
     set(BUNDLE_RESOURCES "../ui/ui.qrc")
@@ -274,7 +279,17 @@ else()
 	set_source_files_properties("../../third-party/sqlite-amalgamation/sqlite3.c" PROPERTIES COMPILE_FLAGS "-fno-fast-math")
 endif()
 
-add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE} ${CLIENT_HEADERS} ${CLIENT_PLATFORM_HEADERS} ${CLIENT_COMMON_SOURCES} ${CLIENT_PLATFORM_SOURCES} ${REF_HEADERS} ${REF_COMMON_SOURCES} ${REF_PLATFORM_SOURCES} ${FTLIB_SOURCES} ${CIN_SOURCES} ${CGAME_HEADERS} ${CGAME_SOURCES} ${UI_HEADERS} ${UI_SOURCES} ${BUNDLE_RESOURCES})
+add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE}
+		       ${CLIENT_HEADERS}
+		       ${CLIENT_PLATFORM_HEADERS}
+		       ${CLIENT_COMMON_SOURCES}
+		       ${CLIENT_PLATFORM_SOURCES}
+		       ${REF_HEADERS}
+		       ${REF_COMMON_SOURCES}
+		       ${REF_PLATFORM_SOURCES}
+		       ${BUNDLE_RESOURCES}
+)
+
 add_dependencies(${QFUSION_CLIENT_NAME} game snd_openal_soft)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -297,5 +312,46 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     add_custom_command(TARGET ${QFUSION_CLIENT_NAME} POST_BUILD COMMAND ${COPY_DYLIBS})
 endif()
 
-target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE ${CURL_LIBRARY} ${ZLIB_LIBRARY} ${REF_PLATFORM_LIBRARIES} ${OGG_LIBRARY} ${VORBIS_LIBRARIES} ${FREETYPE_LIBRARIES} ${CLIENT_PLATFORM_LIBRARIES} snd_openal_soft Qt5::Core Qt5::Concurrent Qt5::Quick Qt5::Gui Qt5::Svg Qt5::Multimedia)
+set(QT_COMMON_LIBRARIES Qt5::Core Qt5::Concurrent Qt5::Quick Qt5::Gui Qt5::Svg Qt5::Multimedia)
+
+set(QT_STATIC_EXPLICIT_LIBRARIES
+	Qt5QuickControls2
+	Qt5QuickTemplates2
+	Qt5FontDatabaseSupport
+	Qt5EventDispatcherSupport
+	Qt5ThemeSupport
+	Qt5MultimediaQuick
+	Qt5QuickShapes
+	# Qt5QmlWorkerScript # 5.15
+)
+
+set(QT_STATIC_EXPLICIT_PLUGINS
+	qtquick2plugin
+	windowplugin
+	qquicklayoutsplugin
+	qtquickcontrols2plugin
+	qtquicktemplates2plugin
+	qtgraphicaleffectsplugin
+	qtgraphicaleffectsprivate
+	qtquickcontrols2materialstyleplugin # 5.13
+	#qqc2materialstyleplugin # 5.15
+	declarative_multimedia
+	qmlshapesplugin
+	#qmlplugin # 5.15
+	qsvg qtga qtfreetype
+)
+
+target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE
+					  snd_openal_soft
+					  ${CURL_LIBRARY}
+					  ${ZLIB_LIBRARY}
+					  ${REF_PLATFORM_LIBRARIES}
+					  ${OGG_LIBRARY}
+					  ${VORBIS_LIBRARIES}
+					  ${QT_STATIC_EXPLICIT_PLUGINS}
+					  ${QT_STATIC_EXPLICIT_LIBRARIES}
+					  ${QT_COMMON_LIBRARIES}
+					  ${CLIENT_PLATFORM_LIBRARIES}
+)
+
 qf_set_output_dir(${QFUSION_CLIENT_NAME} "")

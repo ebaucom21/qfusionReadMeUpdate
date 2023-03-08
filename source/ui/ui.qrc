@@ -108,7 +108,6 @@
         <file>WswCheckBox.qml</file>
         <file>WswTabBar.qml</file>
         <file>WswTabButton.qml</file>
-        <file>logo.webp</file>
         <file>qtquickcontrols2.conf</file>
         <!-- TODO: Load from the game FS -->
         <file>ModelLeftArrow.svg</file>

@@ -56,7 +56,7 @@ Item {
 		Image {
 			id: logo
 			anchors.centerIn: parent
-			source: "logo.webp"
+			source: "image://wsw/gfx/ui/loadinglogo"
 		}
 	}
 

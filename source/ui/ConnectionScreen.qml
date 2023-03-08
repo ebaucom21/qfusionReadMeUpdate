@@ -41,7 +41,7 @@ Item {
             Image {
                 anchors.centerIn: parent
                 fillMode: Image.PreserveAspectFit
-                source: "logo.webp"
+			    source: "image://wsw/gfx/ui/loadinglogo"
             }
         }
     }
