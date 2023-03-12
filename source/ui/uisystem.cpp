@@ -785,6 +785,13 @@ void QtUISystem::refresh() {
 	if( !m_isValidAndReady ) {
 		return;
 	}
+
+	// Force a garbage collection every "active" in-game frame.
+	// Otherwise, rely on the default behaviour.
+	if( !( m_activeMenuMask & ( MainMenu | InGameMenu | ConnectionScreen ) ) && !Con_HasKeyboardFocus() ) {
+		m_engine->collectGarbage();
+	}
+
 	if( !m_hasPendingSceneChange && !m_hasPendingRedraw ) {
 		return;
 	}
