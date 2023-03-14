@@ -7,33 +7,71 @@ import net.warsow 2.6
 Item {
     id: root
     property string filePath
-    property var altImagePath
+    property var stubImagePath
     property color overlayColor: Material.background
+    property color stubColor: "white"
     property real videoOpacity: 0.5
     property real overlayOpacity: 0.1
+    property real stubImageOpacity: 0.5
+    property real stubRectangleOpacity: 0.1
 
     WswVideoSource {
         id: videoSource
         filePath: root.filePath
     }
 
-    VideoOutput {
-        anchors.fill: parent
-        source: videoSource
-        opacity: videoOpacity
+    Component {
+        id: outputComponent
+        VideoOutput {
+            width: root.width
+            height: root.height
+            source: videoSource
+            opacity: 0.0
+            NumberAnimation on opacity {
+                running: true
+                to: videoOpacity
+                duration: 33
+            }
+        }
     }
 
-    Loader {
-        anchors.fill: parent
-        active: (videoSource.status === WswVideoSource.Error) && !!altImagePath
-        sourceComponent: Image {
+    Component {
+        id: stubImageComponent
+        Image {
             width: root.width
             height: root.height
             fillMode: Image.PreserveAspectCrop
             smooth: true
             mipmap: true
-            source: altImagePath
+            source: stubImagePath
+            opacity: 0.0
+            NumberAnimation on opacity {
+                to: stubImageOpacity
+                duration: 33
+            }
         }
+    }
+
+    Component {
+        id: stubRectangleComponent
+        Rectangle {
+            width: root.width
+            height: root.height
+            color: stubColor
+            opacity: 0.0
+            NumberAnimation on opacity {
+                running: true
+                to: stubRectangleOpacity
+                duration: 33
+            }
+        }
+    }
+
+    Loader {
+        anchors.fill: parent
+        sourceComponent:
+            videoSource.status === WswVideoSource.Running ? outputComponent :
+                (!!stubImagePath ? stubImageComponent : stubRectangleComponent)
     }
 
     Rectangle {

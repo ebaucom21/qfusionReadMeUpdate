@@ -23,8 +23,6 @@ class WswImageResponse : public QQuickImageResponse {
 	[[nodiscard]]
 	bool loadSvg( const QByteArray &fileData );
 	[[nodiscard]]
-	bool loadTga( const QByteArray &fileData );
-	[[nodiscard]]
 	bool loadOther( const QByteArray &fileData, const char *ext );
 public:
 	WswImageResponse( const QString &name, const QSize &requestedSize )

@@ -45,7 +45,6 @@ public:
 	enum Status { Idle, Running, Error };
 	Q_ENUM( Status );
 
-private:
 	Q_SIGNAL void filePathChanged( const QByteArray &filePath );
 	Q_PROPERTY( QByteArray filePath MEMBER m_filePath WRITE setFilePath NOTIFY filePathChanged );
 
@@ -55,6 +54,7 @@ private:
 	Q_SIGNAL void statusChanged( Status status );
 	Q_PROPERTY( Status status MEMBER m_status NOTIFY statusChanged );
 
+private:
 	Q_SIGNAL void updateRequested( int64_t timestamp );
 	Q_SIGNAL void deleteDecoder();
 

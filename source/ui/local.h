@@ -22,9 +22,6 @@ auto wrapInColorTags( const wsw::StringView &text, int rgb ) -> QString;
 [[nodiscard]]
 auto formatPing( int ping ) -> QByteArray;
 
-[[nodiscard]]
-auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QImage;
-
 class NameChangesTracker {
 	std::array<unsigned, 32> m_nameCounters;
 	std::array<unsigned, 32> m_clanCounters;
@@ -51,6 +48,14 @@ public:
 };
 
 inline NameChangesTracker NameChangesTracker::s_instance;
+
+}
+
+// The contained stuff is defined in the client code
+namespace wsw {
+
+[[nodiscard]]
+auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QImage;
 
 }
 

@@ -7,6 +7,9 @@
 #include "../qcommon/links.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/singletonholder.h"
+#include "../client/imageloading.h"
+
+#include <QDebug>
 
 namespace wsw::ui {
 
@@ -51,7 +54,6 @@ void VideoSource::setVideoSurface( QAbstractVideoSurface *videoSurface ) {
 			for( const QVideoFrame::PixelFormat &pixelFormat: videoSurface->supportedPixelFormats() ) {
 				if( pixelFormat == desiredFormat ) {
 					supportsDesiredFormat = true;
-					break;
 				}
 			}
 			if( !supportsDesiredFormat ) {
@@ -86,13 +88,19 @@ void VideoSource::onFrameAvailable( const QVideoFrame &frame ) {
 	if( m_videoSurface ) {
 		Status status = m_status;
 		if( frame.isValid() ) {
-			if( !m_videoSurface->present( frame ) ) {
+			if( !m_videoSurface->isFormatSupported( QVideoSurfaceFormat( frame.size(), frame.pixelFormat() ) ) ) {
 				status = Error;
+			} else {
+				if( !m_videoSurface->present( frame ) ) {
+					status = Error;
+				}
 			}
 		} else {
 			status = Error;
 		}
 		applyStatus( status );
+	} else {
+		applyStatus( Idle );
 	}
 }
 
@@ -138,11 +146,12 @@ void VideoDecoder::onUpdateRequested( int64_t timestamp ) {
 [[nodiscard]]
 static auto findJpegEndFrameDelimiter( const uint8_t *__restrict data, unsigned dataSize ) -> std::optional<unsigned> {
 	if( dataSize > 1 ) {
-		for( unsigned i = 0; i < dataSize - 1; ++i ) {
-			if( data[i] == 0xFF && data[i + 1] == 0xD9 ) {
+		unsigned i = 0;
+		do {
+			if( ( data[i] == 0xFF ) & ( data[i + 1] == 0xD9 ) ) {
 				return i + 2;
 			}
-		}
+		} while( ++i < dataSize - 1 );
 	}
 	return std::nullopt;
 }
@@ -150,10 +159,14 @@ static auto findJpegEndFrameDelimiter( const uint8_t *__restrict data, unsigned 
 auto VideoDecoder::decodeNextFrame() -> QImage {
 	for(;; ) {
 		if( const auto maybeDelimiter = findJpegEndFrameDelimiter( m_dataBuffer.data(), m_dataBuffer.size() ) ) {
-			QImage image( QImage::fromData( m_dataBuffer.data(), (int)*maybeDelimiter ) );
+			unsigned width = 0, height = 0;
+			uint8_t *bytes = wsw::decodeImageData( m_dataBuffer.data(), *maybeDelimiter, &width, &height, nullptr, 4 );
 			// This should be a circular buffer... but still, JPEG decoding is much more expensive than this memmove()
 			m_dataBuffer.erase( m_dataBuffer.begin(), m_dataBuffer.begin() + *maybeDelimiter );
-			return image;
+			if( bytes ) {
+				return QImage( bytes, width, height, QImage::Format_ARGB32, ::free );
+			}
+			return QImage();
 		}
 
 		if( m_handle.isAtEof() ) {

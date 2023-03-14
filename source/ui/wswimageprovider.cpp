@@ -9,9 +9,8 @@
 
 #include "local.h"
 #include "../qcommon/wswfs.h"
+#include "../client/imageloading.h"
 #include "../ref/ref.h"
-
-#include "../../third-party/stb/stb_image.h"
 
 namespace wsw::ui {
 
@@ -74,24 +73,15 @@ void WswImageResponse::exec() {
 	if( !strcmp( ext, ".svg" ) ) {
 		// No resize needed
 		(void)loadSvg( fileData );
-		return;
-	}
-
-	if( !strcmp( ext, ".tga" ) ) {
-		if( !loadTga( fileData ) ) {
-			return;
-		}
 	} else {
-		if( !loadOther( fileData, ext ) ) {
-			return;
-		}
-	}
-
-	if( m_requestedSize.isValid() ) {
-		m_image = m_image.scaled( m_requestedSize );
-		if( m_image.isNull() ) {
-			auto [w, h] = std::make_pair( m_requestedSize.width(), m_requestedSize.height() );
-			Com_Printf( S_COLOR_YELLOW "%s: Failed to scale %s to %dx%d\n", kTag, m_name.constData(), w, h );
+		if( loadOther( fileData, ext ) ) {
+			if( m_requestedSize.isValid() ) {
+				m_image = m_image.scaled( m_requestedSize );
+				if( m_image.isNull() ) {
+					auto [w, h] = std::make_pair( m_requestedSize.width(), m_requestedSize.height() );
+					Com_Printf( S_COLOR_YELLOW "%s: Failed to scale %s to %dx%d\n", kTag, m_name.constData(), w, h );
+				}
+			}
 		}
 	}
 }
@@ -113,42 +103,30 @@ bool WswImageResponse::loadSvg( const QByteArray &fileData ) {
 	return true;
 }
 
-bool WswImageResponse::loadTga( const QByteArray &fileData ) {
-	int w = 0, h = 0, chans = 0;
-	// No in-place loading wtf?
-	// How does this thing get broadly suggested in the internets?
-	stbi_uc *bytes = stbi_load_from_memory((stbi_uc *)fileData.data(), fileData.length(), &w, &h, &chans, 0 );
+bool WswImageResponse::loadOther( const QByteArray &fileData, const char *ext ) {
+	unsigned w = 0, h = 0, chans = 0;
+
+	uint8_t *bytes = wsw::decodeImageData( fileData.constData(), (size_t)fileData.length(), &w, &h, &chans );
 	if( !bytes ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.tga from data\n", kTag, m_name.constData() );
+		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.%s from data\n", kTag, m_name.constData(), ext );
 		return false;
 	}
 
 	if( chans == 3 ) {
-		m_image = QImage( bytes, w, h, QImage::Format_RGB888, stbi_image_free, bytes );
+		m_image = QImage( bytes, w, h, QImage::Format_RGB888, ::free, bytes );
 	} else if( chans == 4 ) {
-		m_image = QImage( bytes, w, h, QImage::Format_RGBA8888, stbi_image_free, bytes );
+		m_image = QImage( bytes, w, h, QImage::Format_RGBA8888, ::free, bytes );
 	} else {
-		Com_Printf( S_COLOR_YELLOW "%s: Weird number of %s.tga image channels %d\n", kTag, m_name.constData(), chans );
-		stbi_image_free( bytes );
+		Com_Printf( S_COLOR_YELLOW "%s: Weird number of %s.%s image channels %d\n", kTag, m_name.constData(), ext, chans );
+		free( bytes );
 		return false;
 	}
 
 	if( m_image.isNull() ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.tga", kTag, m_name.constData() );
+		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.%s", kTag, m_name.constData(), ext );
 		return false;
 	}
 
-	return true;
-}
-
-bool WswImageResponse::loadOther( const QByteArray &fileData, const char *ext ) {
-	QBuffer buffer( const_cast<QByteArray *>( std::addressof( fileData ) ) );
-	QImageReader reader( &buffer );
-	if( !reader.read( &m_image ) ) {
-		const char *format = S_COLOR_YELLOW "%s: Failed to load %s from data with %s\n";
-		Com_Printf( format, kTag, m_name.constData(), ext, reader.errorString().constData() );
-		return false;
-	}
 	return true;
 }
 

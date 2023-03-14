@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswfs.h"
 #include "../qcommon/singletonholder.h"
+#include "../client/imageloading.h"
 
 using wsw::operator""_asView;
 using wsw::operator""_asHView;
@@ -30,18 +31,6 @@ using wsw::operator""_asHView;
 #include <tuple>
 #include <memory>
 #include <utility>
-
-// TODO: This is a cheap hack to make the stuff working
-namespace wsw::ui {
-[[nodiscard]]
-auto rasterizeSvg( const void *rawSvgData, size_t rawSvgDataSize, void *dest, size_t destCapacity,
-				   const ImageOptions &options ) -> std::optional<std::pair<unsigned, unsigned>>;
-}
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../third-party/stb/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../../third-party/stb/stb_image_write.h"
 
 TextureFactory::TextureFactory() {
 	// Cubemap names are put after material ones in the same chunk
@@ -351,7 +340,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 		return std::nullopt;
 	}
 
-	int width = 0, height = 0, samples = 0;
+	unsigned width = 0, height = 0, samples = 0;
 	size_t imageDataSize = 0;
 	uint8_t *bytes = nullptr;
 	if( isSvg ) {
@@ -365,7 +354,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 		const auto [desiredWidth, desiredHeight] = *options.desiredSize;
 		const auto bufferDataSize = (size_t)desiredWidth * (size_t)desiredHeight * (size_t)samples;
 		bytes = conversionBuffer->reserveAndGet( bufferDataSize );
-		const auto maybeSize = wsw::ui::rasterizeSvg( fileBufferBytes, fileSize, bytes, bufferDataSize, options );
+		const auto maybeSize = wsw::rasterizeSvg( fileBufferBytes, fileSize, bytes, bufferDataSize, options );
 		if( !maybeSize ) {
 			return std::nullopt;
 		}
@@ -373,7 +362,7 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 		imageDataSize = (size_t)width * (size_t)height * (size_t)samples;
 		assert( imageDataSize <= bufferDataSize );
 	} else {
-		bytes = stbi_load_from_memory( (const stbi_uc *)fileBufferBytes, (int)fileSize, &width, &height, &samples, 0 );
+		bytes = wsw::decodeImageData( fileBufferBytes, fileSize, &width, &height, &samples );
 		if( !bytes ) {
 			return std::nullopt;
 		}
@@ -399,10 +388,8 @@ auto TextureFactory::loadTextureDataFromFile( const wsw::StringView &name,
 	}
 
 	if( !isSvg ) {
-		// This is not that easy as we use stb in the UI code as well.
-		// TODO: Provide allocators for stb that use the loading buffer?
-		// TODO: Unify image loading code with the UI?
-		stbi_image_free( bytes );
+		// TODO: Use custom allocators for decoding buffers
+		free( bytes );
 	}
 
 	return std::make_pair( imageData, BitmapProps { (uint16_t)width, (uint16_t)height, (uint16_t)samples } );
