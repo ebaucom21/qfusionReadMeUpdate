@@ -63,6 +63,10 @@ private:
 	void setFilePath( const QByteArray &filePath );
 	void setVideoSurface( QAbstractVideoSurface *videoSurface );
 
+	void detachDecoder();
+	void stopVideoSurface();
+	void applyStatus( Status status );
+
 	QByteArray m_filePath;
 	QAbstractVideoSurface *m_videoSurface { nullptr };
 	VideoDecoder *m_decoder { nullptr };

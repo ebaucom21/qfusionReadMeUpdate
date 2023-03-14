@@ -5,6 +5,7 @@
 #include <QVideoSurfaceFormat>
 
 #include "../qcommon/links.h"
+#include "../qcommon/qcommon.h"
 #include "../qcommon/singletonholder.h"
 
 namespace wsw::ui {
@@ -13,15 +14,12 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 	if( m_filePath != filePath ) {
 		m_filePath = filePath;
 
-		if( m_decoder ) {
-			Q_EMIT deleteDecoder();
-			disconnect( m_decoder );
-			m_decoder = nullptr;
-		}
+		detachDecoder();
+		stopVideoSurface();
 
-		const Status oldStatus = m_status;
+		Status status = m_status;
 		if( filePath.isEmpty() ) {
-			m_status = Idle;
+			status = Idle;
 		} else if( auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( filePath.data(), filePath.size() ) ) ) {
 			m_decoder = m_playbackSystem->newDecoder( this, std::move( *maybeHandle ) );
 
@@ -32,24 +30,21 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 			connect( m_decoder, &VideoDecoder::frameAvailable,
 					 this, &VideoSource::onFrameAvailable, Qt::QueuedConnection );
 
-			m_status = Running;
+			status = Running;
 		} else {
 			Com_Printf( S_COLOR_YELLOW "Failed to open the video file %s\n", filePath.data() );
-			m_status = Error;
+			status = Error;
 		}
 
 		Q_EMIT filePathChanged( filePath );
-
-		if( oldStatus != m_status ) {
-			Q_EMIT statusChanged( m_status );
-		}
+		applyStatus( status );
 	}
 }
 
 void VideoSource::setVideoSurface( QAbstractVideoSurface *videoSurface ) {
 	if( m_videoSurface != videoSurface ) {
 		m_videoSurface = videoSurface;
-		const Status oldStatus = m_status;
+		Status status = m_status;
 		if( videoSurface ) {
 			bool supportsDesiredFormat = false;
 			const auto desiredFormat = QVideoFrame::Format_ARGB32;
@@ -60,24 +55,17 @@ void VideoSource::setVideoSurface( QAbstractVideoSurface *videoSurface ) {
 				}
 			}
 			if( !supportsDesiredFormat ) {
-				m_status = Error;
+				status = Error;
 			} else {
 				if( !videoSurface->start( QVideoSurfaceFormat( QSize(), desiredFormat ) ) ) {
-					m_status = Error;
+					status = Error;
 				}
 			}
 		} else {
-			if( m_decoder ) {
-				Q_EMIT deleteDecoder();
-				disconnect( m_decoder );
-				m_decoder = nullptr;
-			}
-			m_status = Idle;
+			status = Idle;
 		}
 		Q_EMIT videoSurfaceChanged( videoSurface );
-		if( oldStatus != m_status ) {
-			Q_EMIT statusChanged( m_status );
-		}
+		applyStatus( status );
 	}
 }
 
@@ -90,22 +78,52 @@ VideoSource::~VideoSource() {
 		Q_EMIT deleteDecoder();
 		m_decoder = nullptr;
 	}
+	stopVideoSurface();
 	VideoPlaybackSystem::instance()->unregisterSource( this );
 }
 
 void VideoSource::onFrameAvailable( const QVideoFrame &frame ) {
 	if( m_videoSurface ) {
-		const Status oldStatus = m_status;
+		Status status = m_status;
 		if( frame.isValid() ) {
 			if( !m_videoSurface->present( frame ) ) {
-				m_status = Error;
+				status = Error;
 			}
 		} else {
-			m_status = Error;
+			status = Error;
 		}
-		if( oldStatus != m_status ) {
-			Q_EMIT statusChanged( m_status );
+		applyStatus( status );
+	}
+}
+
+void VideoSource::detachDecoder() {
+	if( m_decoder ) {
+		Q_EMIT deleteDecoder();
+		disconnect( m_decoder );
+		m_decoder = nullptr;
+	}
+}
+
+void VideoSource::stopVideoSurface() {
+	if( m_videoSurface ) {
+		m_videoSurface->stop();
+	}
+}
+
+void VideoSource::applyStatus( Status status ) {
+	if( m_status != status ) {
+		switch( status ) {
+			case Idle: Com_DPrintf( "Video source status=Idle filePath=%s\n", m_filePath.constData() ); break;
+			case Running: Com_DPrintf( "Video source status=Running filePath=%s\n", m_filePath.constData() ); break;
+			case Error: Com_DPrintf( "Video source status=Error filePath=%s\n", m_filePath.constData() ); break;
 		}
+		if( status != Running ) {
+			detachDecoder();
+			stopVideoSurface();
+			m_filePath.clear();
+		}
+		m_status = status;
+		Q_EMIT statusChanged( status );
 	}
 }
 
