@@ -20,7 +20,9 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 		}
 
 		const Status oldStatus = m_status;
-		if( auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( filePath.data(), filePath.size() ) ) ) {
+		if( filePath.isEmpty() ) {
+			m_status = Idle;
+		} else if( auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( filePath.data(), filePath.size() ) ) ) {
 			m_decoder = m_playbackSystem->newDecoder( this, std::move( *maybeHandle ) );
 
 			connect( this, &VideoSource::updateRequested,
@@ -32,6 +34,7 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 
 			m_status = Running;
 		} else {
+			Com_Printf( S_COLOR_YELLOW "Failed to open the video file %s\n", filePath.data() );
 			m_status = Error;
 		}
 

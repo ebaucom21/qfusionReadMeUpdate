@@ -93,12 +93,12 @@ Item {
                         }
                     }
                     function selectProps() {
-                        gametypePage.detailed = true
                         selectedGametypeTitle = title
                         selectedGametypeName = name
                         selectedGametypeIndex = index
                         selectedGametypeDesc = desc
                         gametypeMapsList = maps
+                        gametypePage.detailed = true
                     }
                 }
             }
@@ -159,12 +159,12 @@ Item {
                         }
                     }
                     function selectProps() {
-                        mapPage.detailed = true
                         selectedMapName = modelData["name"]
                         selectedMapTitle = modelData["title"]
                         selectedMapIndex = index
                         selectedMapMinPlayers = modelData["minPlayers"]
                         selectedMapMaxPlayers = modelData["maxPlayers"]
+                        mapPage.detailed = true
                     }
                 }
             }
