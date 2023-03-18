@@ -754,8 +754,6 @@ typedef struct msurface_s {
 	unsigned mergedSurfNum;
 
 	mutable unsigned occlusionCullingFrame;
-	// TODO: Decouple surfaces and occluders
-	mutable unsigned occludersSelectionFrame;
 
 	mutable unsigned traceFrame;
 
@@ -767,16 +765,6 @@ typedef struct msurface_s {
 	mfog_t *fog;
 
 	struct superLightStyle_s *superLightStyle;
-
-	vec4_t occluderPolyMins, occluderPolyMaxs;
-	vec3_t occluderPolyInnerPoint;
-
-	uint8_t occluderPolyIndices[7];
-	uint8_t numOccluderPolyIndices;
-	// TODO: Should not be a member unless there's free room due to alignment
-	bool wasTestedToBeAnOccluder;
-	// Converted to ^(1/2) as a sorting criterion
-	float sqrtOfOccluderPolyArea;
 } msurface_t;
 
 typedef struct mnode_s {

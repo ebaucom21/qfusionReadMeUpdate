@@ -496,7 +496,6 @@ private:
 
 	shader_t *m_coronaShader { nullptr };
 
-	unsigned m_occludersSelectionFrame { 0 };
 	unsigned m_occlusionCullingFrame { 0 };
 	unsigned m_drawSceneFrame { 0 };
 

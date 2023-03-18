@@ -80,7 +80,6 @@ namespace wsw::ref {
 auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 	-> std::tuple<std::span<const Frustum>, std::span<const unsigned>, std::span<const unsigned>> {
 
-	m_occludersSelectionFrame++;
 	m_occlusionCullingFrame++;
 
 	const unsigned numMergedSurfaces = rsh.worldBrushModel->numMergedSurfaces;

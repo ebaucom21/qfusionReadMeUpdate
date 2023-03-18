@@ -407,7 +407,7 @@ void Frontend::cullSurfacesInVisLeavesByOccludersArch( std::span<const unsigned>
 		for( unsigned surfIndex = 0; surfIndex < numLeafSurfaces; ++surfIndex ) {
 			const unsigned surfNum = leafSurfaceNums[surfIndex];
 			const msurface_t *const __restrict surf = surfaces + surfNum;
-			if( surf->occlusionCullingFrame != occlusionCullingFrame || true ) {
+			if( surf->occlusionCullingFrame != occlusionCullingFrame ) {
 				surf->occlusionCullingFrame = occlusionCullingFrame;
 
 				LOAD_BOX_COMPONENTS( surf->mins, surf->maxs );
