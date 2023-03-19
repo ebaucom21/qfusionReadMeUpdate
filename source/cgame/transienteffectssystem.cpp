@@ -566,8 +566,8 @@ void TransientEffectsSystem::spawnCartoonHitEffect( const float *origin, const f
 	}
 }
 
-void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
-														const float *bloodColor, unsigned duration ) {
+void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, const float *dir, unsigned damageLevel,
+														const float *bloodColor, unsigned duration, float scale ) {
 	if( auto *hull = cg.simulatedHullsSystem.allocWaveHull( m_lastTime, duration ) ) {
 		vec3_t hullOrigin;
 		constexpr float offset = -32.0f;
@@ -576,18 +576,17 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 		float speed, speedSpreadFrac;
 		bool tesselateClosestLod = true;
 		SimulatedHullsSystem::ViewDotFade viewDotFade;
-		// TODO: Avoid hardcoding damage values
 		// TODO: Lift the code to EffectsSystemFacade, get rid of the separate TransientEffectsSystem
-		if( damage < 20 ) {
+		if( damageLevel == 1 ) {
 			speed               = 50.0f;
 			speedSpreadFrac     = 0.18f;
 			tesselateClosestLod = false;
 			viewDotFade         = SimulatedHullsSystem::ViewDotFade::FadeOutCenterLinear;
-		} else if( damage < 40 ) {
+		} else if( damageLevel == 2 ) {
 			speed           = 80.0f;
 			speedSpreadFrac = 0.27f;
 			viewDotFade     = SimulatedHullsSystem::ViewDotFade::FadeOutCenterLinear;
-		} else if( damage < 70 ) {
+		} else if( damageLevel == 3 ) {
 			speed           = 110.0f;
 			speedSpreadFrac = 0.39f;
 			viewDotFade     = SimulatedHullsSystem::ViewDotFade::FadeOutCenterQuadratic;
@@ -598,7 +597,7 @@ void TransientEffectsSystem::spawnBleedingVolumeEffect( const float *origin, con
 		}
 
 		const vec4_t hullColor { bloodColor[0], bloodColor[1], bloodColor[2], 0.5f };
-		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, speed, speedSpreadFrac * speed );
+		cg.simulatedHullsSystem.setupHullVertices( hull, hullOrigin, hullColor, scale * speed, scale * speedSpreadFrac * speed );
 		hull->vertexViewDotFade   = viewDotFade;
 		hull->tesselateClosestLod = tesselateClosestLod;
 		hull->minFadedOutAlpha    = 0.1f;

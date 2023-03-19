@@ -821,7 +821,7 @@ void CG_Event_Pain( entity_state_t *state, int parm ) {
 														 cg_volume_players->value, state->attenuation );
 		}
 	} else {
-		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * ( parm + 1 ) ),
+		CG_SexedSound( state->number, CHAN_PAIN, va( S_PLAYER_PAINS, 25 * parm ),
 					   cg_volume_players->value, state->attenuation );
 	}
 

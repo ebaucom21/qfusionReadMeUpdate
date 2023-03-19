@@ -780,14 +780,18 @@ enum {
 };
 #endif
 enum {
-	PAIN_20,
-	PAIN_30,
-	PAIN_60,
-	PAIN_100,
 	PAIN_WARSHELL,
+	PAIN_1,
+	PAIN_2,
+	PAIN_3,
+	PAIN_4,
 
 	PAIN_TOTAL
 };
+
+constexpr float kPain1UpperInclusiveBound = 20.0f;
+constexpr float kPain2UpperInclusiveBound = 35.0f;
+constexpr float kPain3UpperInclusiveBound = 60.0f;
 
 //fire modes as event parm
 enum {

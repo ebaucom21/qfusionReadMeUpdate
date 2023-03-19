@@ -451,14 +451,14 @@ static void G_SnapEntities( void ) {
 							} else if( !G_IsDead( ent ) ) {
 								if( ent->r.client->ps.inventory[POWERUP_SHELL] > 0 ) {
 									G_AddEvent( ent, EV_PAIN, PAIN_WARSHELL, true );
-								} else if( ent->health <= 20 ) {
-									G_AddEvent( ent, EV_PAIN, PAIN_20, true );
-								} else if( ent->health <= 35 ) {
-									G_AddEvent( ent, EV_PAIN, PAIN_30, true );
-								} else if( ent->health <= 60 ) {
-									G_AddEvent( ent, EV_PAIN, PAIN_60, true );
+								} else if( ent->health <= kPain1UpperInclusiveBound ) {
+									G_AddEvent( ent, EV_PAIN, PAIN_1, true );
+								} else if( ent->health <= kPain2UpperInclusiveBound ) {
+									G_AddEvent( ent, EV_PAIN, PAIN_2, true );
+								} else if( ent->health <= kPain3UpperInclusiveBound ) {
+									G_AddEvent( ent, EV_PAIN, PAIN_3, true );
 								} else {
-									G_AddEvent( ent, EV_PAIN, PAIN_100, true );
+									G_AddEvent( ent, EV_PAIN, PAIN_4, true );
 								}
 
 								ent->pain_debounce_time = level.time + 400;

@@ -45,8 +45,8 @@ public:
 
 	void spawnExplosionHulls( const float *fireOrigin, const float *smokeOrigin, float radius = 72.0f );
 	void spawnCartoonHitEffect( const float *origin, const float *dir, int damage );
-	void spawnBleedingVolumeEffect( const float *origin, const float *dir, int damage,
-									const float *bloodColor, unsigned duration );
+	void spawnBleedingVolumeEffect( const float *origin, const float *dir, unsigned damageLevel,
+									const float *bloodColor, unsigned duration, float scale = 1.0f );
 	void spawnElectroboltHitEffect( const float *origin, const float *dir, const float *decalColor,
 									const float *energyColor, bool spawnDecal );
 	void spawnInstagunHitEffect( const float *origin, const float *dir, const float *decalColor,

@@ -540,11 +540,83 @@ static const vec4_t kBloodColors[] {
 };
 
 void EffectsSystemFacade::spawnPlayerHitEffect( const float *origin, const float *dir, int damage ) {
-	if( const int palette        = cg_bloodTrailPalette->integer ) {
-		const int indexForStyle  = wsw::clamp<int>( palette - 1, 0, std::size( kBloodColors ) - 1 );
-		const int baseTime       = wsw::clamp<int>( cg_bloodTrailTime->integer, 200, 400 );
-		const float *effectColor = kBloodColors[indexForStyle];
-		m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damage, effectColor, (unsigned)baseTime );
+	if( const int bloodStyle = cg_bloodStyle->integer ) {
+		const int indexForPalette = wsw::clamp<int>( cg_bloodPalette->integer, 0, std::size( kBloodColors ) - 1 );
+		const int baseTime        = wsw::clamp<int>( cg_bloodTime->integer, 200, 400 );
+		const float *effectColor  = kBloodColors[indexForPalette];
+
+		if( bloodStyle < 0 ) {
+			unsigned damageLevel;
+			if( damage <= kPain1UpperInclusiveBound ) {
+				damageLevel = 1;
+			} else if( damage <= kPain2UpperInclusiveBound ) {
+				damageLevel = 2;
+			} else if( damage <= kPain3UpperInclusiveBound ) {
+				damageLevel = 3;
+			} else {
+				damageLevel = 4;
+			}
+			m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, damageLevel, effectColor, (unsigned)baseTime );
+		} else {
+			unsigned numParts;
+			if( damage <= kPain1UpperInclusiveBound ) {
+				numParts = 1;
+			} else if( damage <= kPain2UpperInclusiveBound ) {
+				numParts = 3;
+			} else if( damage <= kPain3UpperInclusiveBound ) {
+				numParts = 4;
+			} else {
+				numParts = 5;
+			}
+			if( numParts == 1 ) {
+				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor, (unsigned)baseTime, 1.0f );
+			} else {
+				m_transientEffectsSystem.spawnBleedingVolumeEffect( origin, dir, 1, effectColor, (unsigned)baseTime, 1.1f );
+
+				// TODO: Avoid hardcoding it
+				const float offset = 18.0f;
+				vec3_t usedOrigins[6];
+				// Don't pick a dir that is close to the last one
+				const float *lastOffsetDir = kPredefinedDirs[0];
+				for( unsigned partNum = 1; partNum < numParts; ++partNum ) {
+					bool didPickPartOrigin = false;
+					vec3_t newPartOrigin;
+
+					// Protect from infinite looping
+					for( unsigned attemptNum = 0; attemptNum < 16; ++attemptNum ) {
+						const float *offsetDir = kPredefinedDirs[m_rng.nextBounded( std::size( kPredefinedDirs ) )];
+						if( DotProduct( offsetDir, lastOffsetDir ) > 0.7f ) {
+							continue;
+						}
+
+						VectorMA( origin, offset, offsetDir, newPartOrigin );
+
+						bool isOccupedByOtherPart = false;
+						for( unsigned spawnedPartNum = 1; spawnedPartNum < partNum; ++spawnedPartNum ) {
+							const float *spawnedPartOrigin = usedOrigins[spawnedPartNum - 1];
+							if( DistanceSquared( spawnedPartOrigin, newPartOrigin ) < wsw::square( 0.75f * offset ) ) {
+								isOccupedByOtherPart = true;
+								break;
+							}
+						}
+						if( !isOccupedByOtherPart ) {
+							lastOffsetDir     = offsetDir;
+							didPickPartOrigin = true;
+							break;
+						}
+					}
+
+					// Interrupt at this
+					if( !didPickPartOrigin ) {
+						break;
+					}
+
+					const float scale = m_rng.nextFloat( 0.5f, 0.9f );
+					VectorCopy( newPartOrigin, usedOrigins[partNum - 1] );
+					m_transientEffectsSystem.spawnBleedingVolumeEffect( newPartOrigin, dir, 1, effectColor, baseTime, scale );
+				}
+			}
+		}
 	}
 
 	m_transientEffectsSystem.spawnCartoonHitEffect( origin, dir, damage );
