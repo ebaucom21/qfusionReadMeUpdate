@@ -219,7 +219,7 @@ private:
 							 DelayedEffect::SpawnRecord &&spawnRecord ) -> DelayedEffect *;
 
 	struct SmokeHullParams {
-		struct { float mean, spread; } speed;
+		struct { float mean, spread, maxSpike; } speed;
 		struct { ValueLifespan top, bottom; } archimedesAccel;
 		struct { ValueLifespan top, bottom; } xyExpansionAccel;
 		SimulatedHullsSystem::ViewDotFade viewDotFade;
@@ -228,7 +228,8 @@ private:
 		SimulatedHullsSystem::AppearanceRules appearanceRules = SimulatedHullsSystem::SolidAppearanceRules {};
 	};
 
-	void spawnSmokeHull( int64_t currTime, const float *origin, const SmokeHullParams &smokeHullParams );
+	void spawnSmokeHull( int64_t currTime, const float *origin, const float *spikeSpeedMask,
+						 const SmokeHullParams &smokeHullParams );
 
 	void spawnImpactRing( const float *origin, const float *axisDir, unsigned timeout,
 						  const ValueLifespan &scaleLifespan, const ValueLifespan &alphaLifespan );

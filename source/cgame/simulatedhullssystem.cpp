@@ -439,7 +439,8 @@ auto SimulatedHullsSystem::allocHull( Hull **head, wsw::FreelistAllocator *alloc
 
 void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin,
 											  const float *color, float speed, float speedSpead,
-											  const AppearanceRules &appearanceRules ) {
+											  const AppearanceRules &appearanceRules,
+											  const float *spikeSpeedMask, float maxSpikeSpeed ) {
 	const byte_vec4_t initialColor {
 		(uint8_t)( color[0] * 255 ),
 		(uint8_t)( color[1] * 255 ),
@@ -467,7 +468,10 @@ void SimulatedHullsSystem::setupHullVertices( BaseRegularSimulatedHull *hull, co
 	do {
 		// Vertex positions are absolute to simplify simulation
 		Vector4Set( positions[i], originX, originY, originZ, 1.0f );
-		const float vertexSpeed = rng->nextFloat( minSpeed, maxSpeed );
+		float vertexSpeed = rng->nextFloat( minSpeed, maxSpeed );
+		if( spikeSpeedMask ) {
+			vertexSpeed += maxSpikeSpeed * spikeSpeedMask[i];
+		}
 		// Unit vertices define directions
 		VectorScale( vertices[i], vertexSpeed, burstVelocities[i] );
 		// Set the 4th component to 1.0 for alternating positions once as well
@@ -617,6 +621,115 @@ void SimulatedHullsSystem::setupHullVertices( BaseConcentricSimulatedHull *hull,
 	hull->vertexMoveDirections = vertices;
 
 	hull->appearanceRules = appearanceRules;
+}
+
+void SimulatedHullsSystem::calcSmokeBulgeSpeedMask( float *__restrict vertexSpeedMask, unsigned subdivLevel, unsigned maxSpikes ) {
+	assert( subdivLevel < 4 );
+	assert( maxSpikes && maxSpikes < 10 );
+
+	const IcosphereData &icosphereData    = ::basicHullsHolder.getIcosphereForLevel( subdivLevel );
+	const vec4_t *__restrict hullVertices = icosphereData.vertices.data();
+	const unsigned numHullVertices        = icosphereData.vertices.size();
+
+	vec3_t spikeDirs[10];
+	unsigned numChosenSpikes = 0;
+	for( unsigned attemptNum = 0; attemptNum < 4 * maxSpikes; ++attemptNum ) {
+		const unsigned vertexNum    = m_rng.nextBounded( numHullVertices );
+		const float *__restrict dir = kPredefinedDirs[vertexNum];
+		if( dir[2] < -0.1f || dir[2] > 0.7f ) {
+			continue;
+		}
+
+		bool foundASimilarDir = false;
+		for( unsigned spikeNum = 0; spikeNum < numChosenSpikes; ++spikeNum ) {
+			if( DotProduct( spikeDirs[spikeNum], dir ) > 0.7f ) {
+				foundASimilarDir = true;
+				break;
+			}
+		}
+		if( !foundASimilarDir ) {
+			VectorCopy( dir, spikeDirs[numChosenSpikes] );
+			numChosenSpikes++;
+			if( numChosenSpikes == maxSpikes ) {
+				break;
+			}
+		}
+	}
+
+	std::fill( vertexSpeedMask, vertexSpeedMask + numHullVertices, 0.0f );
+
+	unsigned vertexNum = 0;
+	do {
+		const float *__restrict vertexDir = hullVertices[vertexNum];
+		float spikeStrength = 0.0f;
+		unsigned spikeNum   = 0;
+		do {
+			// Must be non-negative to contribute to the spike strength
+			const float dot = wsw::max( 0.0f, DotProduct( vertexDir, spikeDirs[spikeNum] ) );
+			spikeStrength += dot * dot * dot;
+		} while( ++spikeNum < numChosenSpikes );
+		spikeStrength = wsw::min( 1.0f, spikeStrength );
+		spikeStrength *= ( 1.0f - std::fabs( vertexDir[2] ) );
+		vertexSpeedMask[vertexNum] = spikeStrength;
+	} while( ++vertexNum < numHullVertices );
+}
+
+void SimulatedHullsSystem::calcSmokeSpikeSpeedMask( float *__restrict vertexSpeedMask, unsigned subdivLevel, unsigned maxSpikes ) {
+	assert( subdivLevel < 4 );
+	assert( maxSpikes && maxSpikes < 10 );
+
+	const IcosphereData &icosphereData = ::basicHullsHolder.getIcosphereForLevel( subdivLevel );
+	const unsigned numHullVertices     = icosphereData.vertices.size();
+
+	unsigned spikeVertexNums[10];
+	unsigned numChosenSpikes = 0;
+	for( unsigned numAttempts = 0; numAttempts < 4 * maxSpikes; numAttempts++ ) {
+		const unsigned vertexNum    = m_rng.nextBounded( numHullVertices );
+		const float *__restrict dir = icosphereData.vertices[vertexNum];
+		if( dir[2] < -0.1f || dir[2] > 0.7f ) {
+			continue;
+		}
+
+		bool foundASimilarDir = false;
+		for( unsigned spikeNum = 0; spikeNum < numChosenSpikes; ++spikeNum ) {
+			if( DotProduct( icosphereData.vertices[spikeVertexNums[spikeNum]], dir ) > 0.7f ) {
+				foundASimilarDir = true;
+				break;
+			}
+		}
+		if( !foundASimilarDir ) {
+			spikeVertexNums[numChosenSpikes++] = vertexNum;
+			if( numChosenSpikes == maxSpikes ) {
+				break;
+			}
+		}
+	}
+
+	std::fill( vertexSpeedMask, vertexSpeedMask + numHullVertices, 0.0f );
+
+	const auto *__restrict hullVertexNeighbours = icosphereData.vertexNeighbours.data();
+
+	unsigned spikeNum = 0;
+	do {
+		const unsigned spikeVertexNum = spikeVertexNums[spikeNum];
+		vertexSpeedMask[spikeVertexNum] += 1.0f;
+		unsigned neighbourIndex = 0;
+		const auto *neighbours = hullVertexNeighbours[spikeVertexNum];
+		do {
+			const unsigned neighbourVertexNum = neighbours[neighbourIndex];
+			vertexSpeedMask[neighbourVertexNum] += 0.67f;
+			const auto *nextNeighbours = hullVertexNeighbours[neighbourVertexNum];
+			unsigned nextNeighbourIndex = 0;
+			do {
+				vertexSpeedMask[nextNeighbours[nextNeighbourIndex]] += 0.37f;
+			} while( ++nextNeighbourIndex < 5 );
+		} while( ++neighbourIndex < 5 );
+	} while( ++spikeNum < numChosenSpikes );
+
+	unsigned vertexNum = 0;
+	do {
+		vertexSpeedMask[vertexNum] = wsw::min( 1.0f, vertexSpeedMask[vertexNum] );
+	} while( ++vertexNum < numHullVertices );
 }
 
 void SimulatedHullsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *drawSceneRequest ) {

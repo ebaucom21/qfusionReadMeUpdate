@@ -404,7 +404,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		// Cannot be declared with a static lifetime due to material dependency
 		const TransientEffectsSystem::SmokeHullParams spawnSmokeHullParams[] {
 			{
-				.speed               = { .mean = 85.0f, .spread = 15.0f },
+				.speed               = { .mean = 60.0f, .spread = 15.0f, .maxSpike = 40.0f },
 				.archimedesAccel     = {
 					.top    = { .initial = +125.0f, .fadedIn = +100.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
 					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = +75.0f, .startFadingOutAtLifetimeFrac = 0.5f, },
@@ -418,7 +418,7 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 				.colorChangeTimeline = kSmokeHullHardLayerColorChangeTimeline,
 			},
 			{
-				.speed               = { .mean = 85.0f, .spread = 15.0f },
+				.speed               = { .mean = 60.0f, .spread = 7.5f, .maxSpike = 37.5f },
 				.archimedesAccel     = {
 					.top    = { .initial = +130.0f, .fadedIn = +110.0f, .fadedOut = 0.0f, .startFadingOutAtLifetimeFrac = 0.5f },
 					.bottom = { .initial = 0.0f, .fadedIn = +75.0f, .fadedOut = 75.0f, .startFadingOutAtLifetimeFrac = 0.5f },
@@ -436,8 +436,22 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 			},
 		};
 
+		// TODO: Avoid hardcoding the size
+		constexpr unsigned kSubdivLevel            = 3;
+		constexpr unsigned kSubdivLevelVertices    = 642;
+		constexpr unsigned kSubdivLevelStorageSize = kSubdivLevelVertices + ( 16 - kSubdivLevelVertices % 16 );
+
+		alignas( 16 ) float spikeSpeedMask1[kSubdivLevelStorageSize], spikeSpeedMask2[kSubdivLevelStorageSize];
+		cg.simulatedHullsSystem.calcSmokeBulgeSpeedMask( spikeSpeedMask1, kSubdivLevel, 5 );
+		cg.simulatedHullsSystem.calcSmokeSpikeSpeedMask( spikeSpeedMask2, kSubdivLevel, 9 );
+
+		unsigned vertexNum = 0;
+		do {
+			spikeSpeedMask1[vertexNum] = 0.5f * ( spikeSpeedMask1[vertexNum] + spikeSpeedMask2[vertexNum] );
+		} while( ++vertexNum < kSubdivLevelStorageSize );
+
 		for( const SmokeHullParams &hullSpawnParams: spawnSmokeHullParams ) {
-			spawnSmokeHull( m_lastTime, smokeOrigin, hullSpawnParams );
+			spawnSmokeHull( m_lastTime, smokeOrigin, spikeSpeedMask1, hullSpawnParams );
 		}
 	}
 
@@ -487,7 +501,8 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 	}
 }
 
-void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *origin, const SmokeHullParams &params ) {
+void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *origin, const float *spikeSpeedMask,
+											 const SmokeHullParams &params ) {
 	if( auto *const hull = cg.simulatedHullsSystem.allocSmokeHull( currTime, 2000 ) ) {
 		hull->archimedesTopAccel      = params.archimedesAccel.top;
 		hull->archimedesBottomAccel   = params.archimedesAccel.bottom;
@@ -507,8 +522,8 @@ void TransientEffectsSystem::spawnSmokeHull( int64_t currTime, const float *orig
 		hull->vertexZFade         = params.zFade;
 
 		const vec4_t initialSmokeColor { 0.0f, 0.0f, 0.0f, 0.03f };
-		cg.simulatedHullsSystem.setupHullVertices( hull, origin, initialSmokeColor,
-												   params.speed.mean, params.speed.spread, params.appearanceRules );
+		cg.simulatedHullsSystem.setupHullVertices( hull, origin, initialSmokeColor, params.speed.mean, params.speed.spread,
+												   params.appearanceRules, spikeSpeedMask, params.speed.maxSpike );
 	}
 }
 

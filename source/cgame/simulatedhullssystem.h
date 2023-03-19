@@ -431,11 +431,15 @@ private:
 
 	void setupHullVertices( BaseRegularSimulatedHull *hull, const float *origin, const float *color,
 							float speed, float speedSpread,
-							const AppearanceRules &appearanceRules = SolidAppearanceRules { nullptr } );
+							const AppearanceRules &appearanceRules = SolidAppearanceRules { nullptr },
+							const float *spikeImpactMask = nullptr, float maxSpikeSpeed = 0.0f );
 
 	void setupHullVertices( BaseConcentricSimulatedHull *hull, const float *origin,
 							float scale, std::span<const HullLayerParams> paramsOfLayers,
 							const AppearanceRules &appearanceRules = SolidAppearanceRules { nullptr } );
+
+	void calcSmokeBulgeSpeedMask( float *__restrict vertexSpeedMask, unsigned subdivLevel, unsigned maxSpikes );
+	void calcSmokeSpikeSpeedMask( float *__restrict vertexSpeedMask, unsigned subdivLevel, unsigned maxSpikes );
 
 	[[maybe_unused]]
 	static bool processColorChange( int64_t currTime, int64_t spawnTime, unsigned effectDuration,
