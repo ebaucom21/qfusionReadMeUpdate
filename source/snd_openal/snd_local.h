@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_public.h"
 
 #define AL_ALEXT_PROTOTYPES
+#define AL_LIBTYPE_STATIC
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -289,8 +290,6 @@ unsigned S_GetRawSamplesLength( void );
 
 void S_Trace( trace_s *tr, const float *start, const float *end, const float *mins,
 			  const float *maxs, int mask, int topNodeHint = 0 );
-
-wsw::StringView S_ShaderrefName( int shaderNum );
 
 int S_PointContents( const float *p, int topNodeHint = 0 );
 int S_PointLeafNum( const float *p, int topNodeHint = 0 );

@@ -9,6 +9,16 @@ include_directories(${OGG_INCLUDE_DIR} ${VORBIS_INCLUDE_DIR} ${FREETYPE_INCLUDE_
 include_directories("../../third-party/magic_enum/include")
 include_directories("../../third-party/recastnavigation/Recast/Include/")
 
+set(OPENAL_SOFT_DIR "../../third-party/openal-soft")
+include_directories("${OPENAL_SOFT_DIR}/include")
+if (NOT WIN32)
+set(OPENAL_SOFT_LIBRARY "openal")
+link_directories("${OPENAL_SOFT_DIR}")
+else()
+set(OPENAL_SOFT_LIBRARY "OpenAL32")
+link_directories(${OPENAL_SOFT_DIR}/cmake-build-release/)
+endif()
+
 # TODO: Is there something smarter
 get_filename_component(Qt5_CMAKEDIR ${Qt5_DIR} DIRECTORY)
 get_filename_component(Qt5_LIBDIR ${Qt5_CMAKEDIR} DIRECTORY)
@@ -54,6 +64,7 @@ file(GLOB CLIENT_HEADERS
 	"../cgame/*.h"
 	"../ftlib/*.h"
 	"../server/*.h"
+	"../snd_openal/*.h"
 )
 
 file(GLOB CLIENT_COMMON_SOURCES
@@ -93,7 +104,8 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../ui/*.cpp"
 	"../cgame/*.cpp"
 	"../ftlib/*.cpp"
-    "../gameshared/*.cpp"
+	"../snd_openal/*.cpp"
+	"../gameshared/*.cpp"
 	"../../third-party/recastnavigation/Recast/Source/*.cpp"
     # We have to include this for linking with shared MM facilities.
     # This also is required to run listen servers (do we allow ranked listen servers?)
@@ -290,7 +302,7 @@ add_executable(${QFUSION_CLIENT_NAME} ${CLIENT_BINARY_TYPE}
 		       ${BUNDLE_RESOURCES}
 )
 
-add_dependencies(${QFUSION_CLIENT_NAME} game snd_openal_soft)
+add_dependencies(${QFUSION_CLIENT_NAME} game)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set_target_properties(${QFUSION_CLIENT_NAME} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${QFUSION_MAC_INFO_PLIST})
@@ -342,12 +354,12 @@ set(QT_STATIC_EXPLICIT_PLUGINS
 )
 
 target_link_libraries(${QFUSION_CLIENT_NAME} PRIVATE
-					  snd_openal_soft
 					  ${CURL_LIBRARY}
 					  ${ZLIB_LIBRARY}
 					  ${REF_PLATFORM_LIBRARIES}
 					  ${OGG_LIBRARY}
 					  ${VORBIS_LIBRARIES}
+					  ${OPENAL_SOFT_LIBRARY}
 					  ${QT_STATIC_EXPLICIT_PLUGINS}
 					  ${QT_STATIC_EXPLICIT_LIBRARIES}
 					  ${QT_COMMON_LIBRARIES}

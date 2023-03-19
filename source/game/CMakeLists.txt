@@ -1,8 +1,9 @@
 project (game)
 
-include_directories(${ANGELSCRIPT_INCLUDE_DIR})
-include_directories("../../third-party/recastnavigation/Recast/Include")
-include_directories("../../third-party/recastnavigation/Detour/Include")
+set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
+
+include_directories(${ANGELSCRIPT_DIR}/include)
+link_directories(${ANGELSCRIPT_DIR}/lib)
 
 file(GLOB GAME_HEADERS
 	"*.h"

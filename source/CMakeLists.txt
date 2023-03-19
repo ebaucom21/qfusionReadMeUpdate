@@ -54,16 +54,6 @@ option(USE_SDL2 "Build using SDL2" OFF)
 option(GAME_MODULES_ONLY "Only build game modules" OFF)
 option(SERVER_ONLY "Only build server binaries and game modules" OFF)
 
-# We build angelscript and libRocket from source
-
-set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
-set(ANGELSCRIPT_INCLUDE_DIR ${ANGELSCRIPT_DIR}/include/)
-add_subdirectory(${ANGELSCRIPT_DIR}/projects/cmake ${ANGELSCRIPT_DIR}/lib/)
-
-set(LIBROCKET_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/libRocket)
-set(LIBROCKET_INCLUDE_DIR ${LIBROCKET_DIR}/Include)
-set(LIBROCKET_SOURCE_DIR ${LIBROCKET_DIR}/Source)
-
 # Windows specific settings
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     set(QFUSION_WINDOWS_ARCH "x86")
@@ -80,7 +70,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         "../libsrcs/src/zlib"
         "../libsrcs/src/libfreetype"
         "../libsrcs/src/SDL2/include"
-        "../libsrcs/src/OpenAL-MOB/include/AL"
     )
 
     add_definitions(-D_CRT_SECURE_NO_WARNINGS -DCURL_STATICLIB -DWIN32 -D_WINDOWS)
@@ -182,7 +171,6 @@ if (NOT GAME_MODULES_ONLY)
         find_package(Ogg REQUIRED)
         find_package(Vorbis REQUIRED)
         find_package(Freetype REQUIRED)
-        find_package(OpenAL)
         find_package(Qt5 COMPONENTS Core Concurrent Quick Gui Svg Multimedia REQUIRED)
 
         # We need SDL only on non-Windows platforms or when with SDL2-backend
@@ -223,12 +211,10 @@ if (NOT GAME_MODULES_ONLY)
     if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         find_windows_release_libs(ZLIB_LIBRARY)
         find_windows_release_libs(CURL_LIBRARY)
-        find_windows_release_libs(ANGELSCRIPT_LIBRARY)
         if (NOT SERVER_ONLY)
             find_windows_release_libs(FREETYPE_LIBRARIES)
             find_windows_release_libs(OGG_LIBRARY)
             find_windows_release_libs(VORBIS_LIBRARIES)
-            find_windows_release_libs(THEORA_LIBRARY)
             find_windows_release_libs(SDL2_LIBRARIES)
         endif()
     endif()
@@ -269,7 +255,6 @@ if (NOT GAME_MODULES_ONLY)
     add_subdirectory(server)
 
     if (NOT SERVER_ONLY)
-        add_subdirectory(snd_openal)
         add_subdirectory(client)
     endif()
 endif()

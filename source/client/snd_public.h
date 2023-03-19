@@ -71,12 +71,6 @@ public:
 		return s_instance;
 	}
 
-	// TODO: Build within the client code so we don't need this
-	[[nodiscard]]
-	auto getClient() -> client_state_s * { return m_client; }
-	[[nodiscard]]
-	auto getClient() const -> const client_state_s * { return m_client; }
-
 	virtual ~SoundSystem() = default;
 
 	// TODO: Fix this

@@ -213,8 +213,8 @@ const char *S_ErrorMessage( ALenum error ) {
 void S_Trace( trace_t *tr, const vec3_t start,
 			  const vec3_t end, const vec3_t mins,
 			  const vec3_t maxs, int mask, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		CM_TransformedBoxTrace( cms, tr, start, end, mins, maxs, nullptr, mask, nullptr, nullptr, topNodeHint );
+	if( cl.cms ) {
+		CM_TransformedBoxTrace( cl.cms, tr, start, end, mins, maxs, nullptr, mask, nullptr, nullptr, topNodeHint );
 		return;
 	}
 
@@ -222,60 +222,51 @@ void S_Trace( trace_t *tr, const vec3_t start,
 	tr->fraction = 1.0f;
 }
 
-wsw::StringView S_ShaderrefName( int shaderNum ) {
-	const char *s = nullptr;
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		s = CM_ShaderrefName( cms, shaderNum );
-	}
-	// Should really always return a valid name ref
-	return s ? wsw::StringView( s ) : wsw::StringView();
-}
-
 int S_PointContents( const float *p, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_TransformedPointContents( cms, p, nullptr, nullptr, nullptr, topNodeHint );
+	if( cl.cms ) {
+		return CM_TransformedPointContents( cl.cms, p, nullptr, nullptr, nullptr, topNodeHint );
 	}
 	return 0;
 }
 
 int S_PointLeafNum( const vec3_t p, int topNodeHint ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_PointLeafnum( cms, p, topNodeHint );
+	if( cl.cms ) {
+		return CM_PointLeafnum( cl.cms, p, topNodeHint );
 	}
 	return 0;
 }
 
 int S_NumLeafs() {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_NumLeafs( cms );
+	if( cl.cms ) {
+		return CM_NumLeafs( cl.cms );
 	}
 	return 0;
 }
 
 const vec3_t *S_GetLeafBounds( int leafnum ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_GetLeafBounds( cms, leafnum );
+	if( cl.cms ) {
+		return CM_GetLeafBounds( cl.cms, leafnum );
 	}
 	return nullptr;
 }
 
 bool S_LeafsInPVS( int leafNum1, int leafNum2 ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return ( leafNum1 == leafNum2 ) || CM_LeafsInPVS( cms, leafNum1, leafNum2 );
+	if( cl.cms ) {
+		return ( leafNum1 == leafNum2 ) || CM_LeafsInPVS( cl.cms, leafNum1, leafNum2 );
 	}
 	return true;
 }
 
 int S_FindTopNodeForBox( const vec3_t mins, const vec3_t maxs ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_FindTopNodeForBox( cms, mins, maxs );
+	if( cl.cms ) {
+		return CM_FindTopNodeForBox( cl.cms, mins, maxs );
 	}
 	return 0;
 }
 
 int S_FindTopNodeForSphere( const vec3_t center, float radius ) {
-	if( const auto *cms = SoundSystem::instance()->getClient()->cms ) {
-		return CM_FindTopNodeForSphere( cms, center, radius );
+	if( cl.cms ) {
+		return CM_FindTopNodeForSphere( cl.cms, center, radius );
 	}
 	return 0;
 }
