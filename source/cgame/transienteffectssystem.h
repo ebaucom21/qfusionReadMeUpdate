@@ -254,6 +254,9 @@ private:
 	LightEffect *m_lightEffectsHead { nullptr };
 	DelayedEffect *m_delayedEffectsHead { nullptr };
 
+	// TODO: Replace by a fixed vector/fixed buffer
+	wsw::Vector<uint8_t> m_cachedSmokeBulgeMasksBuffer;
+
 	wsw::RandomGenerator m_rng;
 	int64_t m_lastTime { 0 };
 };

@@ -27,6 +27,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cstdlib>
 #include <cstring>
 
+static constexpr unsigned kCachedSmokeBulgeSubdivLevel = 3;
+static constexpr unsigned kCachedSmokeBulgeMaskSize    = 642;
+static constexpr unsigned kNumCachedSmokeBulgeMasks    = 8;
+
 TransientEffectsSystem::~TransientEffectsSystem() {
 	for( EntityEffect *effect = m_entityEffectsHead, *next = nullptr; effect; effect = next ) { next = effect->next;
 		unlinkAndFreeEntityEffect( effect );
@@ -439,19 +443,24 @@ void TransientEffectsSystem::spawnExplosionHulls( const float *fireOrigin, const
 		// TODO: Avoid hardcoding the size
 		constexpr unsigned kSubdivLevel            = 3;
 		constexpr unsigned kSubdivLevelVertices    = 642;
-		constexpr unsigned kSubdivLevelStorageSize = kSubdivLevelVertices + ( 16 - kSubdivLevelVertices % 16 );
 
-		alignas( 16 ) float spikeSpeedMask1[kSubdivLevelStorageSize], spikeSpeedMask2[kSubdivLevelStorageSize];
-		cg.simulatedHullsSystem.calcSmokeBulgeSpeedMask( spikeSpeedMask1, kSubdivLevel, 5 );
-		cg.simulatedHullsSystem.calcSmokeSpikeSpeedMask( spikeSpeedMask2, kSubdivLevel, 9 );
+		static_assert( kSubdivLevel == kCachedSmokeBulgeSubdivLevel );
+		static_assert( kSubdivLevelVertices == kCachedSmokeBulgeMaskSize );
+
+		alignas( 16 ) float spikeSpeedMask[kSubdivLevelVertices];
+		cg.simulatedHullsSystem.calcSmokeSpikeSpeedMask( spikeSpeedMask, kSubdivLevel, 9 );
+
+		assert( !m_cachedSmokeBulgeMasksBuffer.empty() );
+		const uint8_t *const __restrict bulgeMask = m_cachedSmokeBulgeMasksBuffer.data() +
+			kCachedSmokeBulgeMaskSize * m_rng.nextBounded( kNumCachedSmokeBulgeMasks );
 
 		unsigned vertexNum = 0;
 		do {
-			spikeSpeedMask1[vertexNum] = 0.5f * ( spikeSpeedMask1[vertexNum] + spikeSpeedMask2[vertexNum] );
-		} while( ++vertexNum < kSubdivLevelStorageSize );
+			spikeSpeedMask[vertexNum] = 0.5f * ( spikeSpeedMask[vertexNum] + ( 1.0f / 255.0f ) * (float)bulgeMask[vertexNum] );
+		} while( ++vertexNum < kSubdivLevelVertices );
 
 		for( const SmokeHullParams &hullSpawnParams: spawnSmokeHullParams ) {
-			spawnSmokeHull( m_lastTime, smokeOrigin, spikeSpeedMask1, hullSpawnParams );
+			spawnSmokeHull( m_lastTime, smokeOrigin, spikeSpeedMask, hullSpawnParams );
 		}
 	}
 
@@ -1131,6 +1140,24 @@ void TransientEffectsSystem::unlinkAndFreeDelayedEffect( DelayedEffect *effect )
 }
 
 void TransientEffectsSystem::simulateFrameAndSubmit( int64_t currTime, DrawSceneRequest *request ) {
+	// Can't be computed in a constructor due to initialization order issues
+	// TODO: This should get changed once we get rid of most globals
+	if( m_cachedSmokeBulgeMasksBuffer.empty() ) [[unlikely]] {
+		float floatMaskBuffer[kCachedSmokeBulgeMaskSize];
+		std::fill( floatMaskBuffer + kCachedSmokeBulgeMaskSize, floatMaskBuffer + kCachedSmokeBulgeMaskSize, 0.0f );
+
+		m_cachedSmokeBulgeMasksBuffer.reserve( kCachedSmokeBulgeMaskSize * kNumCachedSmokeBulgeMasks );
+
+		for ( unsigned i = 0; i < kNumCachedSmokeBulgeMasks; ++i ) {
+			cg.simulatedHullsSystem.calcSmokeBulgeSpeedMask( floatMaskBuffer, kCachedSmokeBulgeSubdivLevel, 7 );
+			for( unsigned vertexNum = 0; vertexNum < kCachedSmokeBulgeMaskSize; ++vertexNum ) {
+				m_cachedSmokeBulgeMasksBuffer.push_back( (uint8_t)( 255.0f * floatMaskBuffer[vertexNum] ) );
+			}
+		}
+
+		m_cachedSmokeBulgeMasksBuffer.shrink_to_fit();
+	}
+
 	// Limit the time step
 	const float timeDeltaSeconds = 1e-3f * (float)wsw::min<int64_t>( 33, currTime - m_lastTime );
 

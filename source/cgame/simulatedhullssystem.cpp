@@ -4,6 +4,7 @@
 #include "../client/client.h"
 #include "../qcommon/wswvector.h"
 #include "../qcommon/memspecbuilder.h"
+#include "../qcommon/mmcommon.h"
 
 #include <memory>
 #include <unordered_map>
@@ -303,6 +304,12 @@ private:
 static BasicHullsHolder basicHullsHolder;
 
 SimulatedHullsSystem::SimulatedHullsSystem() {
+	const auto seedUuid  = mm_uuid_t::Random();
+	const auto qwordSeed = seedUuid.loPart ^ seedUuid.hiPart;
+	const auto dwordSeed = (uint32_t)( ( qwordSeed >> 32 ) ^ ( qwordSeed & 0xFFFFFFFFu ) );
+	// TODO: Use the same instance for all effect subsystems
+	m_rng.setSeed( dwordSeed );
+
 	// TODO: Take care of exception-safety
 	while( !m_freeShapeLists.full() ) {
 		if( auto *shapeList = CM_AllocShapeList( cl.cms ) ) [[likely]] {
@@ -634,7 +641,7 @@ void SimulatedHullsSystem::calcSmokeBulgeSpeedMask( float *__restrict vertexSpee
 	vec3_t spikeDirs[10];
 	unsigned numChosenSpikes = 0;
 	for( unsigned attemptNum = 0; attemptNum < 4 * maxSpikes; ++attemptNum ) {
-		const unsigned vertexNum    = m_rng.nextBounded( numHullVertices );
+		const unsigned vertexNum    = m_rng.nextBounded( std::size( kPredefinedDirs ) );
 		const float *__restrict dir = kPredefinedDirs[vertexNum];
 		if( dir[2] < -0.1f || dir[2] > 0.7f ) {
 			continue;
