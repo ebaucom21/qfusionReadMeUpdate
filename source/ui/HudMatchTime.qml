@@ -16,7 +16,7 @@ Item {
     }
 
     readonly property real sideMargin: 8
-    readonly property string matchState: hudDataModel.matchState
+    readonly property string matchStateString: hudDataModel.matchStateString
 
     Label {
         id: minutesLabel
@@ -65,7 +65,7 @@ Item {
 
     Label {
         id: matchStateLabel
-        visible: matchState.length > 0
+        visible: matchStateString.length > 0
         height: visible ? implicitHeight : 0
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: separator.bottom
@@ -76,6 +76,6 @@ Item {
         font.letterSpacing: 1.75
         style: Text.Raised
         textFormat: Text.PlainText
-        text: matchState
+        text: matchStateString
     }
 }

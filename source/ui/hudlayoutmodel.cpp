@@ -1042,13 +1042,13 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 		case InventoryBar: return AlivePovOnly;
 		case WeaponStatus: return AlivePovOnly;
 		case MatchTime: return NoFlags;
-		case AlphaScore: return TeamBasedOnly;
-		case BetaScore: return TeamBasedOnly;
+		case AlphaScore: return (Flags)( TeamBasedOnly | AllowPostmatch );
+		case BetaScore: return (Flags)( TeamBasedOnly | AllowPostmatch );
 		case Chat: return NoFlags;
 		case TeamInfo: return (Flags)( TeamBasedOnly | PovOnly );
 		case FragsFeed: return NoFlags;
 		case MessageFeed: return NoFlags;
-		case AwardsArea: return NoFlags;
+		case AwardsArea: return AllowPostmatch;
 		case StatusMessage: return NoFlags;
 		case ObjectiveStatus: return NoFlags;
 		default: wsw::failWithLogicError( "unreachable" );

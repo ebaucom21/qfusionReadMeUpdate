@@ -281,7 +281,7 @@ class HudDataModel : public QObject {
 
 	QByteArray m_formattedSeconds;
 	QByteArray m_formattedMinutes;
-	QByteArray m_displayedMatchState;
+	QByteArray m_matchStateString;
 	int m_matchTimeSeconds { 0 };
 	int m_matchTimeMinutes { 0 };
 
@@ -290,6 +290,8 @@ class HudDataModel : public QObject {
 	int m_activeWeaponStrongAmmo { 0 };
 
 	int m_health { 0 }, m_armor { 0 };
+
+	bool m_isInPostmatchState { false };
 
 	bool m_hasLocations { false };
 
@@ -369,8 +371,11 @@ public:
 	Q_PROPERTY( const QByteArray matchTimeSeconds MEMBER m_formattedSeconds NOTIFY matchTimeSecondsChanged );
 	Q_SIGNAL void matchTimeMinutesChanged( const QByteArray &minutes );
 	Q_PROPERTY( const QByteArray matchTimeMinutes MEMBER m_formattedMinutes NOTIFY matchTimeMinutesChanged );
-	Q_SIGNAL void matchStateChanged( const QByteArray &matchState );
-	Q_PROPERTY( const QByteArray matchState MEMBER m_displayedMatchState NOTIFY matchStateChanged );
+	Q_SIGNAL void matchStateStringChanged( const QByteArray &matchStateString );
+	Q_PROPERTY( const QByteArray matchStateString MEMBER m_matchStateString NOTIFY matchStateStringChanged );
+
+	Q_SIGNAL void isInPostmatchStateChanged( bool isInPostmatchState );
+	Q_PROPERTY( bool isInPostmatchState MEMBER m_isInPostmatchState NOTIFY isInPostmatchStateChanged );
 
 	Q_SIGNAL void activeWeaponIconChanged( const QByteArray &activeWeaponIcon );
 	Q_PROPERTY( QByteArray activeWeaponIcon READ getActiveWeaponIcon NOTIFY activeWeaponIconChanged );

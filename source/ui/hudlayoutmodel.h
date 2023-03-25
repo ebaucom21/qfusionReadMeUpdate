@@ -53,10 +53,11 @@ public:
 
 	// Could be useful for the editor model as well, so lift it here
 	enum Flags {
-		NoFlags       = 0x0,
-		TeamBasedOnly = 0x1,
-		PovOnly       = 0x2,
-		AlivePovOnly  = 0x2 | 0x4
+		NoFlags        = 0x0,
+		TeamBasedOnly  = 0x1,
+		PovOnly        = 0x2,
+		AlivePovOnly   = 0x2 | 0x4,
+		AllowPostmatch = 0x8,
 	};
 	Q_ENUM( Flags );
 

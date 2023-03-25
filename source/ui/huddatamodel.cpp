@@ -999,18 +999,23 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT matchTimeSecondsChanged( m_formattedSeconds );
 	}
 
-	const QByteArray *displayedMatchState = &kNoMatchState;
+	const QByteArray *newMatchStateString = &kNoMatchState;
 	const int rawMatchState = GS_MatchState();
 	if( rawMatchState == MATCH_STATE_WARMUP ) {
-		displayedMatchState = &kWarmup;
+		newMatchStateString = &kWarmup;
 	} else if( rawMatchState == MATCH_STATE_COUNTDOWN ) {
-		displayedMatchState = &kCountdown;
+		newMatchStateString = &kCountdown;
 	} else if( GS_MatchExtended() ) {
-		displayedMatchState = &kOvertime;
+		newMatchStateString = &kOvertime;
 	}
-	if( m_displayedMatchState.compare( *displayedMatchState ) != 0 ) {
-		m_displayedMatchState = *displayedMatchState;
-		Q_EMIT matchStateChanged( m_displayedMatchState );
+	if( m_matchStateString.compare( *newMatchStateString ) != 0 ) {
+		m_matchStateString = *newMatchStateString;
+		Q_EMIT matchStateStringChanged( m_matchStateString );
+	}
+
+	const bool wasInPostmatchState = m_isInPostmatchState;
+	if( wasInPostmatchState != ( m_isInPostmatchState = rawMatchState > MATCH_STATE_PLAYTIME ) ) {
+		Q_EMIT isInPostmatchStateChanged( m_isInPostmatchState );
 	}
 
 	const auto oldActiveWeapon = m_activeWeapon;

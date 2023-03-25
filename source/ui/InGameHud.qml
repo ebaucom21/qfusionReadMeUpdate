@@ -50,6 +50,7 @@ Item {
                 onHasTwoTeamsChanged: itemLoader.updateItemVisibility()
                 onHasActivePovChanged: itemLoader.updateItemVisibility()
                 onIsPovAliveChanged: itemLoader.updateItemVisibility()
+                onIsInPostmatchStateChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
@@ -105,6 +106,8 @@ Item {
                     } else if (!hudDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
                         item.visible = false
                     } else if (!hudDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
+                        item.visible = false
+                    } else if (hudDataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
                         item.visible = false
                     } else {
                         // Put the expensive test last
