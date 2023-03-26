@@ -435,7 +435,6 @@ private:
 		DemoPlaybackMenu     = 0x8
 	};
 
-	unsigned m_backupMenuMask { 0 };
 	unsigned m_activeMenuMask { 0 };
 
 	bool m_shouldShowScoreboard { false };
@@ -567,7 +566,7 @@ private:
 
 	void updateCVarAwareControls();
 	void checkPropertyChanges();
-	void setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask = std::nullopt );
+	void setActiveMenuMask( unsigned activeMask );
 	void renderQml();
 
 	[[nodiscard]]
@@ -1101,19 +1100,16 @@ void QtUISystem::showMainMenu() {
 }
 
 void QtUISystem::returnFromInGameMenu() {
-	unsigned newMask = m_activeMenuMask & ~InGameMenu;
-	// TODO: We need more than a single element in the backup stack
 	if( m_isPlayingADemo ) {
-		newMask |= DemoPlaybackMenu;
+		setActiveMenuMask( DemoPlaybackMenu );
+	} else {
+		setActiveMenuMask( 0 );
 	}
-	setActiveMenuMask( newMask, 0 );
 }
 
 void QtUISystem::returnFromMainMenu() {
-	if( m_backupMenuMask ) {
-		setActiveMenuMask( m_backupMenuMask, 0 );
-	} else if( m_isPlayingADemo ) {
-		setActiveMenuMask( DemoPlaybackMenu, 0 );
+	if( m_clientState == CA_ACTIVE ) {
+		setActiveMenuMask( InGameMenu );
 	}
 }
 
@@ -1134,11 +1130,8 @@ void QtUISystem::closeChatPopup() {
 	}
 }
 
-void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned> backupMask ) {
+void QtUISystem::setActiveMenuMask( unsigned activeMask ) {
 	if( m_activeMenuMask == activeMask ) {
-		if( backupMask ) {
-			m_backupMenuMask = *backupMask;
-		}
 		return;
 	}
 
@@ -1149,7 +1142,6 @@ void QtUISystem::setActiveMenuMask( unsigned activeMask, std::optional<unsigned>
 	const bool wasShowingInGameMenu = isShowingInGameMenu();
 	const bool wasShowingDemoPlaybackMenu = isShowingDemoPlaybackMenu();
 
-	m_backupMenuMask = backupMask ? *backupMask : m_activeMenuMask;
 	m_activeMenuMask = activeMask;
 
 	const bool _isShowingMainMenu = isShowingMainMenu();
@@ -1204,24 +1196,24 @@ void QtUISystem::checkPropertyChanges() {
 		if( m_pendingConnectionFailKind ) {
 			m_connectionFailKind = m_pendingConnectionFailKind;
 			m_pendingConnectionFailKind = std::nullopt;
-			setActiveMenuMask( ConnectionScreen, 0 );
+			setActiveMenuMask( ConnectionScreen );
 			Q_EMIT connectionFailKindChanged( getConnectionFailKind() );
 			Q_EMIT connectionFailMessageChanged( getConnectionFailMessage() );
 		} else if( actualClientState == CA_DISCONNECTED ) {
-			setActiveMenuMask( MainMenu, 0 );
+			setActiveMenuMask( MainMenu );
 			m_chatProxy.clear();
 			m_teamChatProxy.clear();
 		} else if( actualClientState == CA_ACTIVE ) {
 			if( isPlayingADemo ) {
-				setActiveMenuMask( DemoPlaybackMenu, 0 );
+				setActiveMenuMask( DemoPlaybackMenu );
 			} else {
-				setActiveMenuMask( InGameMenu, 0 );
+				setActiveMenuMask( InGameMenu );
 			}
 			m_callvotesModel.reload();
 			m_scoreboardModel.reload();
 			m_gametypeOptionsModel.reload();
 		} else if( actualClientState >= CA_GETTING_TICKET && actualClientState <= CA_LOADING ) {
-			setActiveMenuMask( ConnectionScreen, 0 );
+			setActiveMenuMask( ConnectionScreen );
 		}
 		// Hide scoreboard upon state changes
 		m_isShowingScoreboard = false;
@@ -1454,7 +1446,7 @@ void QtUISystem::handleEscapeKey() {
 		bool propagateEvent = true;
 		if( m_activeMenuMask == 0 && m_clientState == CA_ACTIVE ) {
 			if( !m_shouldShowChatPopup && !m_shouldShowTeamChatPopup ) {
-				setActiveMenuMask( InGameMenu, m_activeMenuMask );
+				setActiveMenuMask( InGameMenu );
 				propagateEvent = false;
 			}
 		}
