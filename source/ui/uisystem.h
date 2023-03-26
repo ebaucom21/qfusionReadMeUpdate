@@ -46,7 +46,7 @@ public:
 	[[nodiscard]]
 	virtual bool handleMouseMove( int frameTime, int dx, int dy ) = 0;
 
-	virtual void toggleInGameMenu() = 0;
+	virtual void handleEscapeKey() = 0;
 
 	virtual void addToChat( const wsw::cl::ChatMessage &message ) = 0;
 	virtual void addToTeamChat( const wsw::cl::ChatMessage &message ) = 0;

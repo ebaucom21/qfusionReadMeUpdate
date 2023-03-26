@@ -151,15 +151,6 @@ void CL_GameModule_Shutdown( void ) {
 }
 
 /*
-* CL_GameModule_EscapeKey
-*/
-void CL_GameModule_EscapeKey( void ) {
-	if( cge ) {
-		CG_EscapeKey();
-	}
-}
-
-/*
 * CL_GameModule_GetEntitySoundOrigin
 */
 void CL_GameModule_GetEntitySpatilization( int entNum, vec3_t origin, vec3_t velocity ) {

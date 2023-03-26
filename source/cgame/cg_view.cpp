@@ -1278,10 +1278,6 @@ void CG_DrawRSpeeds( int x, int y, int align, struct qfontface_s *font, const ve
 	}
 }
 
-void CG_EscapeKey( void ) {
-	wsw::ui::UISystem::instance()->toggleInGameMenu();
-}
-
 void CG_LoadingString( const char *str ) {
 	Q_strncpyz( cgs.loadingstring, str, sizeof( cgs.loadingstring ) );
 }

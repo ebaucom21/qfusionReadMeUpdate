@@ -88,7 +88,6 @@ namespace wsw { class StringView; }
 void CG_ConfigString( int i, const wsw::StringView &string );
 
 void CG_GameCommand( const char *command );
-void CG_EscapeKey();
 void CG_GetEntitySpatilization( int entNum, vec3_t origin, vec3_t velocity );
 float CG_GetSensitivityScale( float sens, float zoomSens );
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe );

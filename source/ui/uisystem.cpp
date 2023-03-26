@@ -107,7 +107,7 @@ public:
 	[[nodiscard]]
 	bool handleMouseMove( int frameTime, int dx, int dy ) override;
 
-	void toggleInGameMenu() override;
+	void handleEscapeKey() override;
 
 	void addToChat( const wsw::cl::ChatMessage &message ) override;
 	void addToTeamChat( const wsw::cl::ChatMessage &message ) override;
@@ -1096,25 +1096,24 @@ void QtUISystem::beginRegistration() {
 void QtUISystem::endRegistration() {
 }
 
-void QtUISystem::toggleInGameMenu() {
-	if( isShowingInGameMenu() ) {
-		setActiveMenuMask( m_activeMenuMask & ~InGameMenu );
-	} else {
-		setActiveMenuMask( m_activeMenuMask | InGameMenu );
-	}
-}
-
 void QtUISystem::showMainMenu() {
 	setActiveMenuMask( MainMenu );
 }
 
 void QtUISystem::returnFromInGameMenu() {
-	setActiveMenuMask( m_activeMenuMask & ~InGameMenu, 0 );
+	unsigned newMask = m_activeMenuMask & ~InGameMenu;
+	// TODO: We need more than a single element in the backup stack
+	if( m_isPlayingADemo ) {
+		newMask |= DemoPlaybackMenu;
+	}
+	setActiveMenuMask( newMask, 0 );
 }
 
 void QtUISystem::returnFromMainMenu() {
 	if( m_backupMenuMask ) {
 		setActiveMenuMask( m_backupMenuMask, 0 );
+	} else if( m_isPlayingADemo ) {
+		setActiveMenuMask( DemoPlaybackMenu, 0 );
 	}
 }
 
@@ -1446,6 +1445,24 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 
 bool QtUISystem::requestsKeyboardFocus() const {
 	return m_activeMenuMask != 0 || ( m_isShowingChatPopup || m_isShowingTeamChatPopup );
+}
+
+void QtUISystem::handleEscapeKey() {
+	if( m_shouldShowScoreboard ) {
+		m_shouldShowScoreboard = false;
+	} else {
+		bool propagateEvent = true;
+		if( m_activeMenuMask == 0 && m_clientState == CA_ACTIVE ) {
+			if( !m_shouldShowChatPopup && !m_shouldShowTeamChatPopup ) {
+				setActiveMenuMask( InGameMenu, m_activeMenuMask );
+				propagateEvent = false;
+			}
+		}
+		if( propagateEvent ) {
+			QKeyEvent keyEvent( QEvent::KeyPress, Qt::Key_Escape, getPressedKeyboardModifiers());
+			QCoreApplication::sendEvent( m_window, &keyEvent );
+		}
+	}
 }
 
 bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {

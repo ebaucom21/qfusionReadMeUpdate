@@ -409,7 +409,6 @@ void CL_GameModule_Shutdown( void );
 
 void CL_GameModule_ConfigString( int number, const wsw::StringView &s );
 
-void CL_GameModule_EscapeKey( void );
 bool CL_GameModule_NewSnapshot( int pendingSnapshot );
 void CL_GameModule_RenderView();
 void CL_GameModule_InputFrame( int frameTime );

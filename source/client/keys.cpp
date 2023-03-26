@@ -493,12 +493,7 @@ void KeyHandlingSystem::handleEscapeKey() {
 	} else if( cls.state != CA_ACTIVE && cls.state != CA_DISCONNECTED ) {
 		Cbuf_AddText( "disconnect\n" );
 	} else {
-		auto *const uiSystem = wsw::ui::UISystem::instance();
-		if( uiSystem->isShowingScoreboard() ) {
-			uiSystem->setScoreboardShown( false );
-		} else if( !uiSystem->handleKeyEvent( K_ESCAPE, true ) ) {
-			CL_GameModule_EscapeKey();
-		}
+		wsw::ui::UISystem::instance()->handleEscapeKey();
 	}
 }
 
