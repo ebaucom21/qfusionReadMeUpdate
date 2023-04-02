@@ -85,8 +85,8 @@ static bool G_Teleport( edict_t *ent, vec3_t origin, vec3_t angles ) {
 *
 * Give items to a client
 */
-static void Cmd_Give_f( edict_t *ent ) {
-	char *name;
+static void Cmd_Give_f( edict_t *ent, const CmdArgs &cmdArgs ) {
+	const char *name;
 	gsitem_t    *it;
 	int i;
 	bool give_all;
@@ -223,7 +223,7 @@ static void Cmd_Give_f( edict_t *ent ) {
 * Sets client to godmode
 * argv(0) god
 */
-static void Cmd_God_f( edict_t *ent ) {
+static void Cmd_God_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	const char *msg;
 
 	if( !sv_cheats->integer ) {
@@ -246,7 +246,7 @@ static void Cmd_God_f( edict_t *ent ) {
 *
 * argv(0) noclip
 */
-static void Cmd_Noclip_f( edict_t *ent ) {
+static void Cmd_Noclip_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	const char *msg;
 
 	if( !sv_cheats->integer ) {
@@ -268,7 +268,7 @@ static void Cmd_Noclip_f( edict_t *ent ) {
 /*
 * Cmd_GameOperator_f
 */
-static void Cmd_GameOperator_f( edict_t *ent ) {
+static void Cmd_GameOperator_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( !g_operator_password->string[0] ) {
 		G_PrintMsg( ent, "Operator is disabled in this server\n" );
 		return;
@@ -295,7 +295,7 @@ static void Cmd_GameOperator_f( edict_t *ent ) {
 * Cmd_Use_f
 * Use an inventory item
 */
-static void Cmd_Use_f( edict_t *ent ) {
+static void Cmd_Use_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	gsitem_t    *it;
 
 	assert( ent && ent->r.client );
@@ -311,7 +311,7 @@ static void Cmd_Use_f( edict_t *ent ) {
 /*
 * Cmd_Kill_f
 */
-static void Cmd_Kill_f( edict_t *ent ) {
+static void Cmd_Kill_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( ent->r.solid == SOLID_NOT ) {
 		return;
 	}
@@ -329,25 +329,25 @@ static void Cmd_Kill_f( edict_t *ent ) {
 	G_Killed( ent, ent, ent, 100000, vec3_origin, MOD_SUICIDE );
 }
 
-void Cmd_ChaseNext_f( edict_t *ent ) {
+void Cmd_ChaseNext_f( edict_t *ent, const CmdArgs & ) {
 	G_ChaseStep( ent, 1 );
 }
 
-void Cmd_ChasePrev_f( edict_t *ent ) {
+void Cmd_ChasePrev_f( edict_t *ent, const CmdArgs & ) {
 	G_ChaseStep( ent, -1 );
 }
 
 /*
 * Cmd_PutAway_f
 */
-static void Cmd_PutAway_f( edict_t *ent ) {
+static void Cmd_PutAway_f( edict_t *ent, const CmdArgs & ) {
 	ent->r.client->showscores = false;
 }
 
 /*
 * Cmd_Score_f
 */
-static void Cmd_Score_f( edict_t *ent ) {
+static void Cmd_Score_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	bool newvalue;
 
 	if( trap_Cmd_Argc() == 2 ) {
@@ -362,7 +362,7 @@ static void Cmd_Score_f( edict_t *ent ) {
 /*
 * Cmd_CvarInfo_f - Contains a cvar name and string provided by the client
 */
-static void Cmd_CvarInfo_f( edict_t *ent ) {
+static void Cmd_CvarInfo_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( trap_Cmd_Argc() < 2 ) {
 		G_PrintMsg( ent, "Cmd_CvarInfo_f: invalid argument count\n" );
 		return;
@@ -391,21 +391,22 @@ static bool CheckStateForPositionCmd( edict_t *ent ) {
 
 class PositionArgSeqMatcher {
 protected:
+	const CmdArgs &cmdArgs;
 	const char *const name;
 	vec3_t values { 0, 0, 0 };
 	const int numExpectedValues;
 	bool hasResult { false };
 
-	static float ArgToFloat( int argNum );
+	float ArgToFloat( int argNum );
 	virtual int Parse( int startArgNum );
 
 	template <typename Iterable>
-	static int MatchByFirst( edict_t *user, int argNum, const char *prefix, const Iterable &matchers );
+	int MatchByFirst( edict_t *user, int argNum, const char *prefix, const Iterable &matchers );
 
 	virtual const char *Validate() { return nullptr; }
 public:
-	explicit PositionArgSeqMatcher( const char *name_, int numExpectedValues_ )
-		: name( name_ ), numExpectedValues( numExpectedValues_ ) {}
+	explicit PositionArgSeqMatcher( const CmdArgs &cmdArgs, const char *name_, int numExpectedValues_ )
+		: cmdArgs( cmdArgs ), name( name_ ), numExpectedValues( numExpectedValues_ ) {}
 
 	virtual ~PositionArgSeqMatcher() = default;
 
@@ -431,11 +432,11 @@ public:
 	}
 
 	template <typename Iterable>
-	static bool MatchAndValidate( edict_t *user, int startArgNum, const char *argSeqPrefix, const Iterable &matchers );
+	bool MatchAndValidate( edict_t *user, int startArgNum, const char *argSeqPrefix, const Iterable &matchers );
 };
 
 struct OriginMatcher : public PositionArgSeqMatcher {
-	OriginMatcher() : PositionArgSeqMatcher( "origin", 3 ) {}
+	OriginMatcher( const CmdArgs &cmdArgs ) : PositionArgSeqMatcher( cmdArgs, "origin", 3 ) {}
 
 	const char *Validate() override {
 		vec3_t worldMins, worldMaxs;
@@ -452,7 +453,7 @@ struct OriginMatcher : public PositionArgSeqMatcher {
 };
 
 struct AnglesMatcher : public PositionArgSeqMatcher {
-	AnglesMatcher() : PositionArgSeqMatcher( "angles", 2 ) {}
+	AnglesMatcher( const CmdArgs &cmdArgs ) : PositionArgSeqMatcher( cmdArgs, "angles", 2 ) {}
 
 	const char *Validate() override {
 		if( values[PITCH] < -90.0f || values[PITCH] > +90.0f ) {
@@ -469,7 +470,7 @@ struct AnglesMatcher : public PositionArgSeqMatcher {
 };
 
 struct VelocityMatcher : public PositionArgSeqMatcher {
-	VelocityMatcher() : PositionArgSeqMatcher( "velocity", 3 ) {}
+	VelocityMatcher( const CmdArgs &cmdArgs ) : PositionArgSeqMatcher( cmdArgs, "velocity", 3 ) {}
 
 	const char *Validate() override {
 		if( VectorLengthSquared( values ) > 9999 * 9999 ) {
@@ -480,7 +481,7 @@ struct VelocityMatcher : public PositionArgSeqMatcher {
 };
 
 struct SpeedMatcher : public PositionArgSeqMatcher {
-	SpeedMatcher(): PositionArgSeqMatcher( "speed", 1 ) {}
+	SpeedMatcher( const CmdArgs &cmdArgs ): PositionArgSeqMatcher( cmdArgs, "speed", 1 ) {}
 
 	const char *Validate() override {
 		if( std::fabs( values[0] ) > 9999 ) {
@@ -580,7 +581,7 @@ int PositionArgSeqMatcher::MatchByFirst( edict_t *user, int argNum, const char *
 	return -1;
 }
 
-static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const char *verb, bool tryLoadingMissing ) {
+static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const char *verb, bool tryLoadingMissing, const CmdArgs &cmdArgs ) {
 	vec3_t origin { 0, 0, 0 };
 	vec3_t angles { 0, 0, 0 };
 
@@ -590,12 +591,12 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 		VectorCopy( ent->r.client->position_angles, angles );
 	}
 
-	OriginMatcher originMatcher;
-	AnglesMatcher anglesMatcher;
-	VelocityMatcher velocityMatcher;
-	SpeedMatcher speedMatcher;
+	OriginMatcher originMatcher( cmdArgs );
+	AnglesMatcher anglesMatcher( cmdArgs );
+	VelocityMatcher velocityMatcher( cmdArgs );
+	SpeedMatcher speedMatcher( cmdArgs );
 	PositionArgSeqMatcher *matchers[] = { &originMatcher, &anglesMatcher, &velocityMatcher, &speedMatcher };
-	if( !PositionArgSeqMatcher::MatchAndValidate( ent, 2, argSeqPrefix, matchers ) ) {
+	if( !originMatcher.MatchAndValidate( ent, 2, argSeqPrefix, matchers ) ) {
 		return;
 	}
 
@@ -652,7 +653,7 @@ static void SetOrLoadPosition( edict_t *ent, const char *argSeqPrefix, const cha
 /*
 * Cmd_Position_f
 */
-static void Cmd_Position_f( edict_t *ent ) {
+static void Cmd_Position_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	// flood protect
 	if( ent->r.client->position_lastcmd + 500 > game.realtime ) {
 		return;
@@ -686,14 +687,14 @@ static void Cmd_Position_f( edict_t *ent ) {
 
 	if( !Q_stricmp( action, "load" ) ) {
 		if( CheckStateForPositionCmd( ent ) ) {
-			SetOrLoadPosition( ent, "with", "loaded", true );
+			SetOrLoadPosition( ent, "with", "loaded", true, cmdArgs );
 		}
 		return;
 	}
 
 	if( !Q_stricmp( action, "set" ) ) {
 		if( CheckStateForPositionCmd( ent ) ) {
-			SetOrLoadPosition( ent, "", "set", false );
+			SetOrLoadPosition( ent, "", "set", false, cmdArgs );
 		}
 		return;
 	}
@@ -750,7 +751,7 @@ static void Cmd_Position_f( edict_t *ent ) {
 /*
 * Cmd_PlayersExt_f
 */
-static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs ) {
+static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs, const CmdArgs &cmdArgs ) {
 	int i;
 	int count = 0;
 	int start = 0;
@@ -815,15 +816,15 @@ static void Cmd_PlayersExt_f( edict_t *ent, bool onlyspecs ) {
 /*
 * Cmd_Players_f
 */
-static void Cmd_Players_f( edict_t *ent ) {
-	Cmd_PlayersExt_f( ent, false );
+static void Cmd_Players_f( edict_t *ent, const CmdArgs &cmdArgs ) {
+	Cmd_PlayersExt_f( ent, false, cmdArgs );
 }
 
 /*
 * Cmd_Spectators_f
 */
-static void Cmd_Spectators_f( edict_t *ent ) {
-	Cmd_PlayersExt_f( ent, true );
+static void Cmd_Spectators_f( edict_t *ent, const CmdArgs &cmdArgs ) {
+	Cmd_PlayersExt_f( ent, true, cmdArgs );
 }
 
 void ChatHandlersChain::frame() {
@@ -919,7 +920,7 @@ auto FloodFilter::detectFlood( const ChatMessage &message, unsigned flags ) -> s
 	return detectFlood( PLAYERENT( message.clientNum ), flags );
 }
 
-static void Cmd_CoinToss_f( edict_t *ent ) {
+static void Cmd_CoinToss_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	bool qtails;
 	char *s;
 	char upper[MAX_STRING_CHARS];
@@ -962,7 +963,7 @@ static void sendMessageFault( edict_t *ent, const MessageFault &fault ) {
 	trap_GameCmd( ent, buffer.data() );
 }
 
-void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum ) {
+void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) {
 	if( trap_Cmd_Argc() < 2 ) {
 		return;
 	}
@@ -982,11 +983,11 @@ void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum ) {
 	}
 }
 
-static void Cmd_SayCmd_f( edict_t *ent, uint64_t clientCommandNum ) {
-	Cmd_Say_f( ent, clientCommandNum );
+static void Cmd_SayCmd_f( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) {
+	Cmd_Say_f( ent, clientCommandNum, cmdArgs );
 }
 
-static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientCommandNum ) {
+static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) {
 	auto *const filter = ChatHandlersChain::instance();
 	auto maybeFloodProtectionMillis = filter->detectFlood( ent, FloodFilter::TeamOnly | FloodFilter::DontPrint );
 	if( !maybeFloodProtectionMillis ) {
@@ -1006,16 +1007,16 @@ static void Cmd_SayTeam_f( edict_t *ent, uint64_t clientCommandNum ) {
 /*
 * Cmd_Join_f
 */
-static void Cmd_Join_f( edict_t *ent ) {
+static void Cmd_Join_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( !ChatHandlersChain::instance()->detectFlood( ent ) ) {
-		G_Teams_Join_Cmd( ent );
+		G_Teams_Join_Cmd( ent, cmdArgs );
 	}
 }
 
 /*
 * Cmd_Timeout_f
 */
-static void Cmd_Timeout_f( edict_t *ent ) {
+static void Cmd_Timeout_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	int num;
 
 	if( ent->s.team == TEAM_SPECTATOR || GS_MatchState() != MATCH_STATE_PLAYTIME ) {
@@ -1059,7 +1060,7 @@ static void Cmd_Timeout_f( edict_t *ent ) {
 /*
 * Cmd_Timeout_f
 */
-static void Cmd_Timein_f( edict_t *ent ) {
+static void Cmd_Timein_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	int num;
 
 	if( ent->s.team == TEAM_SPECTATOR ) {
@@ -1101,7 +1102,7 @@ static void Cmd_Timein_f( edict_t *ent ) {
 /*
 * Cmd_Awards_f
 */
-static void Cmd_Awards_f( edict_t *ent ) {
+static void Cmd_Awards_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	Client *client;
 	static char entry[MAX_TOKEN_CHARS];
 
@@ -1183,7 +1184,7 @@ char *G_StatsMessage( edict_t *ent ) {
 /*
 * Cmd_ShowStats_f
 */
-static void Cmd_ShowStats_f( edict_t *ent ) {
+static void Cmd_ShowStats_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	edict_t *target;
 
 	if( trap_Cmd_Argc() > 2 ) {
@@ -1216,7 +1217,7 @@ static void Cmd_ShowStats_f( edict_t *ent ) {
 /*
 * Cmd_Whois_f
 */
-static void Cmd_Whois_f( edict_t *ent ) {
+static void Cmd_Whois_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	edict_t *target;
 	Client *cl;
 
@@ -1260,7 +1261,7 @@ static void Cmd_Whois_f( edict_t *ent ) {
 *
 * Update client on the state of things
 */
-static void Cmd_Upstate_f( edict_t *ent ) {
+static void Cmd_Upstate_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	G_UpdatePlayerMatchMsg( ent, true );
 	G_SetPlayerHelpMessage( ent, ent->r.client->helpmessage, true );
 }
@@ -1306,7 +1307,7 @@ bool ClientCommandsHandler::checkNotWriteProtected( const wsw::StringView &name 
 	return true;
 }
 
-void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) ) {
+void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, const CmdArgs & ) ) {
 	// Getting the name from varargs is tricky so it is called explicitly
 	if( checkNotWriteProtected( name ) ) {
 		addAndNotify( new( m_allocator.allocOrNull() )Builtin1ArgCallback( name, handler ), false );
@@ -1314,7 +1315,7 @@ void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name, void 
 }
 
 void ClientCommandsHandler::addBuiltin( const wsw::HashedStringView &name,
-										void (*handler)( edict_t *, uint64_t ) ) {
+										void (*handler)( edict_t *, uint64_t, const CmdArgs &cmdArgs ) ) {
 	if( checkNotWriteProtected( name ) ) {
 		addAndNotify( new( m_allocator.allocOrNull() )Builtin2ArgsCallback( name, handler ), false );
 	}
@@ -1390,7 +1391,7 @@ ClientCommandsHandler::ClientCommandsHandler() {
 	addBuiltin( "upstate"_asHView, Cmd_Upstate_f );
 }
 
-void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientCommandNum ) {
+void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) {
 	// Check whether the client is fully in-game
 	if( ent->r.client && trap_GetClientState( PLAYERNUM( ent ) ) >= CS_SPAWNED ) {
 		const wsw::HashedStringView name( trap_Cmd_Argv( 0 ) );
@@ -1402,7 +1403,7 @@ void ClientCommandsHandler::handleClientCommand( edict_t *ent, uint64_t clientCo
 
 		bool callResult = false;
 		if( Callback *callback = findByName( name ) ) {
-			callResult = callback->operator()( ent, clientCommandNum );
+			callResult = callback->operator()( ent, clientCommandNum, cmdArgs );
 		}
 
 		if( !callResult ) {
@@ -1430,7 +1431,7 @@ void ClientCommandsHandler::addAndNotify( Callback *newCallback, [[maybe_unused]
 	}
 }
 
-bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t ) {
+bool ClientCommandsHandler::ScriptCommandCallback::operator()( edict_t *ent, uint64_t, const CmdArgs &cmdArgs ) {
 	const auto name( getName() );
 	assert( name.isZeroTerminated() );
 	return GT_asCallGameCommand( ent->r.client, name.data(), trap_Cmd_Args(), trap_Cmd_Argc() - 1 );

@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 #include "q_trie.h"
+#include "cmdargs.h"
 
 #include "wswstringsplitter.h"
 #include "wswstringview.h"
@@ -246,8 +247,8 @@ static int ML_PatternMatchesMap( void *map, void *pattern ) {
 * ML_MapListCmd
 * Handler for console command "maplist"
 */
-static void ML_MapListCmd( void ) {
-	char *pattern;
+static void ML_MapListCmd( const CmdArgs &cmdArgs ) {
+	const char *pattern;
 	mapinfo_t *map;
 	int argc = Cmd_Argc();
 	unsigned int i;
@@ -277,7 +278,7 @@ static void ML_MapListCmd( void ) {
 		}
 	}
 
-	Trie_DumpIf( mlist_filenames_trie, "", TRIE_DUMP_VALUES, ML_PatternMatchesMap, pattern, &dump );
+	Trie_DumpIf( mlist_filenames_trie, "", TRIE_DUMP_VALUES, ML_PatternMatchesMap, (void *)pattern, &dump );
 	for( i = 0; i < dump->size; i++ ) {
 		map = ( mapinfo_t * )( dump->key_value_vector[i].value );
 		Com_Printf( "%s: %s\n", map->filename, map->fullname );

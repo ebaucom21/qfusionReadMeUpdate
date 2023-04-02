@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "../ui/uisystem.h"
 #include "../qcommon/demometadata.h"
+#include "../qcommon/cmdargs.h"
 
 using wsw::operator""_asView;
 
@@ -48,7 +49,7 @@ void CL_WriteDemoMessage( msg_t *msg ) {
 *
 * stop recording a demo
 */
-void CL_Stop_f( void ) {
+void CL_Stop_f( const CmdArgs &cmdArgs ) {
 	int arg;
 	bool silent, cancel;
 
@@ -127,7 +128,7 @@ void CL_Stop_f( void ) {
 *
 * Begins recording a demo from the current position
 */
-void CL_Record_f( void ) {
+void CL_Record_f( const CmdArgs &cmdArgs ) {
 	char *name;
 	size_t name_size;
 	bool silent;
@@ -403,7 +404,7 @@ char **CL_DemoComplete( const char *partial ) {
 *
 * demo <demoname>
 */
-void CL_PlayDemo_f( void ) {
+void CL_PlayDemo_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "demo <demoname> [pause_on_stop]\n" );
 		return;
@@ -421,7 +422,7 @@ static void CL_PauseDemo( bool paused ) {
 /*
 * CL_PauseDemo_f
 */
-void CL_PauseDemo_f( void ) {
+void CL_PauseDemo_f( const CmdArgs &cmdArgs ) {
 	if( !cls.demoPlayer.playing ) {
 		Com_Printf( "Can only demopause when playing a demo.\n" );
 		return;
@@ -442,10 +443,10 @@ void CL_PauseDemo_f( void ) {
 /*
 * CL_DemoJump_f
 */
-void CL_DemoJump_f( void ) {
+void CL_DemoJump_f( const CmdArgs &cmdArgs ) {
 	bool relative;
 	int time;
-	char *p;
+	const char *p;
 
 	if( !cls.demoPlayer.playing ) {
 		Com_Printf( "Can only demojump when playing a demo\n" );

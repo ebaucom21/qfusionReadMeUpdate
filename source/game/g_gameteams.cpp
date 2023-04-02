@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "g_local.h"
+#include "../qcommon/cmdargssplitter.h"
 #include "chat.h"
 
 //==========================================================
@@ -250,8 +251,8 @@ void G_Teams_RemoveInvites( void ) {
 /*
 * G_Teams_Invite_f
 */
-void G_Teams_Invite_f( edict_t *ent ) {
-	char *text;
+void G_Teams_Invite_f( edict_t *ent, const CmdArgs &cmdArgs ) {
+	const char *text;
 	edict_t *toinvite;
 	int team;
 
@@ -470,18 +471,18 @@ bool G_Teams_JoinTeam( edict_t *ent, int team ) {
 			G_PrintMsg( ent, "Can't join %s in %s\n", GS_TeamName( team ),
 						gs.gametypeName );
 		} else if( error == ER_TEAM_CHALLENGERS ) {
-			G_Teams_JoinChallengersQueue( ent );
+			G_Teams_JoinChallengersQueue( ent, {} );
 		} else if( error == ER_TEAM_FULL ) {
 			G_PrintMsg( ent, "Team %s is FULL\n", GS_TeamName( team ) );
-			G_Teams_JoinChallengersQueue( ent );
+			G_Teams_JoinChallengersQueue( ent, {} );
 		} else if( error == ER_TEAM_LOCKED ) {
 			G_PrintMsg( ent, "Team %s is LOCKED\n", GS_TeamName( team ) );
-			G_Teams_JoinChallengersQueue( ent );
+			G_Teams_JoinChallengersQueue( ent, {} );
 		} else if( error == ER_TEAM_MATCHSTATE ) {
 			G_PrintMsg( ent, "Can't join %s at this moment\n", GS_TeamName( team ) );
 		} else if( error == ER_TEAM_UNEVEN ) {
 			G_PrintMsg( ent, "Can't join %s because of uneven teams\n", GS_TeamName( team ) ); // FIXME: need more suitable message :P
-			G_Teams_JoinChallengersQueue( ent );
+			G_Teams_JoinChallengersQueue( ent, {} );
 		}
 		return false;
 	}
@@ -551,7 +552,7 @@ bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent ) {
 			}
 		}
 		if( GS_MatchState() <= MATCH_STATE_PLAYTIME && !silent ) {
-			G_Teams_JoinChallengersQueue( ent );
+			G_Teams_JoinChallengersQueue( ent, {} );
 		}
 	}
 
@@ -566,8 +567,8 @@ bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent ) {
 /*
 * G_Teams_Join_Cmd
 */
-void G_Teams_Join_Cmd( edict_t *ent ) {
-	char *t;
+void G_Teams_Join_Cmd( edict_t *ent, const CmdArgs &cmdArgs ) {
+	const char *t;
 	int team;
 
 	if( !ent->r.client || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
@@ -583,7 +584,7 @@ void G_Teams_Join_Cmd( edict_t *ent ) {
 	team = GS_Teams_TeamFromName( t );
 	if( team != -1 ) {
 		if( team == TEAM_SPECTATOR ) { // special handling for spectator team
-			Cmd_Spec_f( ent );
+			Cmd_Spec_f( ent, cmdArgs );
 			return;
 		}
 		if( team == ent->s.team ) {
@@ -812,7 +813,7 @@ void G_Teams_AdvanceChallengersQueue( void ) {
 /*
 * G_Teams_LeaveChallengersQueue
 */
-void G_Teams_LeaveChallengersQueue( edict_t *ent ) {
+void G_Teams_LeaveChallengersQueue( edict_t *ent, const CmdArgs & ) {
 	if( !GS_HasChallengers() ) {
 		ent->r.client->queueTimeStamp = 0;
 		return;
@@ -833,7 +834,7 @@ void G_Teams_LeaveChallengersQueue( edict_t *ent ) {
 /*
 * G_Teams_JoinChallengersQueue
 */
-void G_Teams_JoinChallengersQueue( edict_t *ent ) {
+void G_Teams_JoinChallengersQueue( edict_t *ent, const CmdArgs & ) {
 	int pos = 0;
 	edict_t *e;
 
@@ -1116,7 +1117,12 @@ void G_Say_Team( edict_t *who, const char *inmsg, uint64_t clientCommandNum ) {
 	char current_color[3];
 
 	if( who->s.team != TEAM_SPECTATOR && ( !GS_TeamBasedGametype() || GS_IndividualGameType() ) ) {
-		Cmd_Say_f( who, clientCommandNum );
+		assert( std::size( msgbuf ) > MAX_CHAT_BYTES + 16 );
+		msgbuf[0] = '\0';
+		Q_strncatz( msgbuf, "say ", sizeof( msgbuf ) );
+		Q_strncatz( msgbuf, inmsg, sizeof( msgbuf ) );
+		static CmdArgsSplitter argsSplitter;
+		Cmd_Say_f( who, clientCommandNum, argsSplitter.exec( wsw::StringView( msgbuf ) ) );
 		return;
 	}
 
@@ -1212,7 +1218,7 @@ void G_Say_Team( edict_t *who, const char *inmsg ) {
 
 // coach
 
-void G_Teams_Coach( edict_t *ent ) {
+void G_Teams_Coach( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( GS_TeamBasedGametype() && !GS_IndividualGameType() && ent->s.team != TEAM_SPECTATOR ) {
 		if( !teamlist[ent->s.team].has_coach ) {
 			if( GS_MatchState() > MATCH_STATE_WARMUP && !GS_MatchPaused() ) {
@@ -1227,7 +1233,7 @@ void G_Teams_Coach( edict_t *ent ) {
 				G_ChasePlayer( ent, NULL, true, 0 );
 
 				//clear up his scores
-				G_Match_Ready( ent ); // set ready and check readys
+				G_Match_Ready( ent, {} ); // set ready and check readys
 				ent->r.client->stats.Clear();
 
 				teamlist[ent->s.team].has_coach = true;
@@ -1248,7 +1254,7 @@ void G_Teams_Coach( edict_t *ent ) {
 	}
 }
 
-void G_Teams_CoachLockTeam( edict_t *ent ) {
+void G_Teams_CoachLockTeam( edict_t *ent, const CmdArgs & ) {
 	if( ent->r.client->is_coach ) {
 		if( !G_Teams_TeamIsLocked( ent->s.team ) ) {
 			G_Teams_LockTeam( ent->s.team );
@@ -1258,7 +1264,7 @@ void G_Teams_CoachLockTeam( edict_t *ent ) {
 	}
 }
 
-void G_Teams_CoachUnLockTeam( edict_t *ent ) {
+void G_Teams_CoachUnLockTeam( edict_t *ent, const CmdArgs & ) {
 	if( ent->r.client->is_coach ) {
 		if( G_Teams_TeamIsLocked( ent->s.team ) ) {
 			G_Teams_UnLockTeam( ent->s.team );

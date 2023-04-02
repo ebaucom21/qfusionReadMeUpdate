@@ -5,39 +5,40 @@
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstring.h"
 #include "../qcommon/commandshandler.h"
+#include "../qcommon/cmdargs.h"
 
-class ClientCommandsHandler : public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t>> {
+class ClientCommandsHandler : public wsw::CommandsHandler<wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, const CmdArgs &>> {
 	static inline const wsw::StringView kScriptTag { "script" };
 	static inline const wsw::StringView kBuiltinTag { "builtin" };
 
-	using Callback = wsw::VarArgCommandCallback<bool, edict_t *, uint64_t>;
+	using Callback = wsw::VarArgCommandCallback<bool, edict_t *, uint64_t, const CmdArgs &>;
 
 	class ScriptCommandCallback final : public Callback {
 	public:
 		explicit ScriptCommandCallback( wsw::String &&name ): Callback( kScriptTag, std::move( name ) ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *arg, uint64_t ) override;
+		bool operator()( edict_t *arg, uint64_t, const CmdArgs &cmdArgs ) override;
 	};
 
 	class Builtin1ArgCallback final : public Callback {
-		void (*m_fn)( edict_t * );
+		void (*m_fn)( edict_t *, const CmdArgs &cmdArgs );
 	public:
-		Builtin1ArgCallback( const wsw::HashedStringView &name, void (*fn)( edict_t * ) )
+		Builtin1ArgCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, const CmdArgs & ) )
 			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *ent, uint64_t ) override {
-			m_fn( ent ); return true;
+		bool operator()( edict_t *ent, uint64_t, const CmdArgs &cmdArgs ) override {
+			m_fn( ent, cmdArgs ); return true;
 		}
 	};
 
 	class Builtin2ArgsCallback final : public Callback {
-		void (*m_fn)( edict_t *, uint64_t );
+		void (*m_fn)( edict_t *, uint64_t, const CmdArgs & );
 	public:
-		Builtin2ArgsCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, uint64_t ) )
+		Builtin2ArgsCallback( const wsw::HashedStringView &name, void (*fn)( edict_t *, uint64_t, const CmdArgs & ) )
 			: Callback( kBuiltinTag, name ), m_fn( fn ) {}
 		[[nodiscard]]
-		bool operator()( edict_t *ent, uint64_t clientCommandNum ) override {
-			m_fn( ent, clientCommandNum ); return true;
+		bool operator()( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) override {
+			m_fn( ent, clientCommandNum, cmdArgs ); return true;
 		}
 	};
 
@@ -60,11 +61,11 @@ public:
 
 	void precacheCommands();
 
-	void handleClientCommand( edict_t *ent, uint64_t clientCommandNum );
+	void handleClientCommand( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs );
 	void addScriptCommand( const wsw::StringView &name );
 
-	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t * ) );
-	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t ) );
+	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, const CmdArgs & ) );
+	void addBuiltin( const wsw::HashedStringView &name, void (*handler)( edict_t *, uint64_t, const CmdArgs & ) );
 };
 
 #endif

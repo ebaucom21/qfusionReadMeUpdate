@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_gametypes.h"
 
 #include "../qcommon/mmrating.h"
+#include "../qcommon/cmdargs.h"
 
 #include <array>
 #include <cmath>
@@ -385,29 +386,29 @@ extern cvar_t *g_asGC_interval;
 extern cvar_t *g_skillRating;
 
 edict_t **G_Teams_ChallengersQueue( void );
-void G_Teams_Join_Cmd( edict_t *ent );
+void G_Teams_Join_Cmd( edict_t *ent, const CmdArgs &cmdArgs );
 bool G_Teams_JoinTeam( edict_t *ent, int team );
 void G_Teams_UnInvitePlayer( int team, edict_t *ent );
 void G_Teams_RemoveInvites( void );
 bool G_Teams_TeamIsLocked( int team );
 bool G_Teams_LockTeam( int team );
 bool G_Teams_UnLockTeam( int team );
-void G_Teams_Invite_f( edict_t *ent );
+void G_Teams_Invite_f( edict_t *ent, const CmdArgs & );
 void G_Teams_UpdateMembersList( void );
 bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent );
 void G_Teams_SetTeam( edict_t *ent, int team );
 
-void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum );
+void Cmd_Say_f( edict_t *ent, uint64_t clientCommandNum, const CmdArgs & );
 void G_Say_Team( edict_t *who, const char *inmsg );
 
-void G_Match_Ready( edict_t *ent );
-void G_Match_NotReady( edict_t *ent );
-void G_Match_ToggleReady( edict_t *ent );
+void G_Match_Ready( edict_t *ent, const CmdArgs & );
+void G_Match_NotReady( edict_t *ent, const CmdArgs & );
+void G_Match_ToggleReady( edict_t *ent, const CmdArgs & );
 void G_Match_CheckReadys( void );
 void G_EndMatch( void );
 
-void G_Teams_JoinChallengersQueue( edict_t *ent );
-void G_Teams_LeaveChallengersQueue( edict_t *ent );
+void G_Teams_JoinChallengersQueue( edict_t *ent, const CmdArgs & );
+void G_Teams_LeaveChallengersQueue( edict_t *ent, const CmdArgs & );
 void G_InitChallengersQueue( void );
 
 void G_MoveClientToPostMatchScoreBoards( edict_t *ent, edict_t *spawnpoint );
@@ -518,7 +519,7 @@ bool G_asCallMapEntitySpawnScript( const char *classname, edict_t *ent );
 void G_asInitGameModuleEngine( void );
 void G_asShutdownGameModuleEngine( void );
 void G_asGarbageCollect( bool force );
-void G_asDumpAPI_f( void );
+void G_asDumpAPI_f( const CmdArgs & );
 
 #define world   ( (edict_t *)game.edicts )
 
@@ -692,10 +693,10 @@ void G_CallVotes_Init( void );
 void G_FreeCallvotes( void );
 void G_CallVotes_Reset( void );
 void G_CallVotes_ResetClient( int n );
-void G_CallVotes_CmdVote( edict_t *ent );
+void G_CallVotes_CmdVote( edict_t *ent, const CmdArgs & );
 void G_CallVotes_Think( void );
-void G_CallVote_Cmd( edict_t *ent );
-void G_OperatorVote_Cmd( edict_t *ent );
+void G_CallVote_Cmd( edict_t *ent, const CmdArgs & );
+void G_OperatorVote_Cmd( edict_t *ent, const CmdArgs & );
 void G_RegisterGametypeScriptCallvote( const char *name, const char *usage, const char *type, const char *help );
 
 // Warning: not reentrant
@@ -835,9 +836,9 @@ void Use_Weapon( edict_t *ent, const gsitem_t *item );
 void G_SpectatorMode( edict_t *ent );
 void G_ChasePlayer( edict_t *ent, const char *name, bool teamonly, int followmode );
 void G_ChaseStep( edict_t *ent, int step );
-void Cmd_SwitchChaseCamMode_f( edict_t *ent );
-void Cmd_ChaseCam_f( edict_t *ent );
-void Cmd_Spec_f( edict_t *ent );
+void Cmd_SwitchChaseCamMode_f( edict_t *ent, const CmdArgs & );
+void Cmd_ChaseCam_f( edict_t *ent, const CmdArgs & );
+void Cmd_Spec_f( edict_t *ent, const CmdArgs & );
 void G_EndServerFrames_UpdateChaseCam( void );
 
 //

@@ -965,7 +965,7 @@ void FTLIB_ShutdownSubsystems( bool verbose ) {
 /*
 * FTLIB_PrintFontList
 */
-void FTLIB_PrintFontList( void ) {
+void FTLIB_PrintFontList( const CmdArgs & ) {
 	qfontfamily_t *qfamily;
 	qfontface_t *qface;
 

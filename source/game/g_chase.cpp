@@ -544,7 +544,7 @@ void G_ChaseStep( edict_t *ent, int step ) {
 /*
 * Cmd_ChaseCam_f
 */
-void Cmd_ChaseCam_f( edict_t *ent ) {
+void Cmd_ChaseCam_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	bool team_only;
 	const char *arg1;
 
@@ -603,7 +603,7 @@ void Cmd_ChaseCam_f( edict_t *ent ) {
 		G_ChasePlayer( ent, arg1, team_only, 0 );
 	}
 
-	G_Teams_LeaveChallengersQueue( ent );
+	G_Teams_LeaveChallengersQueue( ent, cmdArgs );
 }
 
 /*
@@ -634,20 +634,20 @@ void G_SpectatorMode( edict_t *ent ) {
 /*
 * Cmd_Spec_f
 */
-void Cmd_Spec_f( edict_t *ent ) {
+void Cmd_Spec_f( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( ent->s.team == TEAM_SPECTATOR && !ent->r.client->queueTimeStamp ) {
 		G_PrintMsg( ent, "You are already a spectator.\n" );
 		return;
 	}
 
 	G_SpectatorMode( ent );
-	G_Teams_LeaveChallengersQueue( ent );
+	G_Teams_LeaveChallengersQueue( ent, cmdArgs );
 }
 
 /*
 * Cmd_SwitchChaseCamMode_f
 */
-void Cmd_SwitchChaseCamMode_f( edict_t *ent ) {
+void Cmd_SwitchChaseCamMode_f( edict_t *ent, const CmdArgs & ) {
 	if( ent->s.team == TEAM_SPECTATOR ) {
 		if( ent->r.client->chase.active ) {
 			G_SpectatorMode( ent );

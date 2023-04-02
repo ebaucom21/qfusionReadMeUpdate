@@ -22,14 +22,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "chat.h"
 #include "../qcommon/net.h"
 #include "../qcommon/links.h"
+#include "../qcommon/cmdargs.h"
 
 #include <new>
 
 /*
 * Cmd_ConsoleSay_f
 */
-static void Cmd_ConsoleSay_f( void ) {
-	ChatPrintHelper chatPrintHelper( "%s", trap_Cmd_Args() );
+static void Cmd_ConsoleSay_f( const CmdArgs &cmdArgs ) {
+	ChatPrintHelper chatPrintHelper( "%s", cmdArgs.argsString.data() );
 	chatPrintHelper.printToEverybody();
 }
 
@@ -37,7 +38,7 @@ static void Cmd_ConsoleSay_f( void ) {
 /*
 * Cmd_ConsoleKick_f
 */
-static void Cmd_ConsoleKick_f( void ) {
+static void Cmd_ConsoleKick_f( const CmdArgs &cmdArgs ) {
 	edict_t *ent;
 
 	if( trap_Cmd_Argc() != 2 ) {
@@ -62,7 +63,7 @@ static void Cmd_ConsoleKick_f( void ) {
 /*
 * Cmd_Match_f
 */
-static void Cmd_Match_f( void ) {
+static void Cmd_Match_f( const CmdArgs &cmdArgs ) {
 	const char *cmd;
 
 	if( trap_Cmd_Argc() != 2 ) {
@@ -1178,7 +1179,7 @@ static void Cmd_PrintIPCmdResult( int result ) {
 /*
 * Cmd_AddIP_f
 */
-static void Cmd_AddIP_f( void ) {
+static void Cmd_AddIP_f( const CmdArgs &cmdArgs ) {
 	int argc = trap_Cmd_Argc();
 	int64_t timeout = GIPFilter::NO_TIMEOUT;
 
@@ -1204,7 +1205,7 @@ static void Cmd_AddIP_f( void ) {
 /*
 * Cmd_RemoveIP_f
 */
-static void Cmd_RemoveIP_f( void ) {
+static void Cmd_RemoveIP_f( const CmdArgs &cmdArgs ) {
 	if( trap_Cmd_Argc() < 2 ) {
 		G_Printf( "Usage: removeip <ip-mask>\n" );
 		return;
@@ -1216,7 +1217,7 @@ static void Cmd_RemoveIP_f( void ) {
 /*
 * Cmd_ListIP_f
 */
-static void Cmd_ListIP_f( void ) {
+static void Cmd_ListIP_f( const CmdArgs & ) {
 	char string[MAX_STRING_CHARS];
 
 	G_Printf( "Filter list:\n" );
@@ -1230,7 +1231,7 @@ static void Cmd_ListIP_f( void ) {
 /*
 * Cmd_WriteIP_f
 */
-static void Cmd_WriteIP_f( void ) {
+static void Cmd_WriteIP_f( const CmdArgs & ) {
 	SV_WriteIPList();
 }
 
@@ -1238,7 +1239,7 @@ static void Cmd_WriteIP_f( void ) {
 /*
 * Cmd_Match_IP_f()
 */
-static void Cmd_MatchIP_f( void ) {
+static void Cmd_MatchIP_f( const CmdArgs &cmdArgs ) {
 	// We always expect a port in the command input because we want to simulate an actual address parsing
 	constexpr const char *usage = "Usage: matchip <address>:<port>, an IPv6 address must be enclosed in brackets";
 	if( trap_Cmd_Argc() < 2 ) {
@@ -1257,7 +1258,7 @@ static void Cmd_MatchIP_f( void ) {
 /*
 * Cmd_ListLocations_f
 */
-static void Cmd_ListLocations_f( void ) {
+static void Cmd_ListLocations_f( const CmdArgs & ) {
 	int i;
 
 	for( i = 0; i < MAX_LOCATIONS; i++ ) {

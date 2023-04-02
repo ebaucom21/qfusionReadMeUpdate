@@ -3993,7 +3993,7 @@ static void G_asDumpAPIToFile( const char *path ) {
 *
 * Dump all classes, global functions and variables into a file
 */
-void G_asDumpAPI_f( void ) {
+void G_asDumpAPI_f( const CmdArgs & ) {
 	char path[MAX_QPATH];
 
 	Q_snprintfz( path, sizeof( path ), "AS_API/v%.g/", trap_Cvar_Value( "version" ) );

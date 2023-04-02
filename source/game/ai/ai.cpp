@@ -420,7 +420,7 @@ void AI_RemoveBots() {
 	AiManager::Instance()->AfterLevelScriptShutdown();
 }
 
-void AI_Cheat_NoTarget( edict_t *ent ) {
+void AI_Cheat_NoTarget( edict_t *ent, const CmdArgs & ) {
 	if( !sv_cheats->integer ) {
 		return;
 	}

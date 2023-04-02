@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cmd.c -- Quake script command processing module
 
 #include "qcommon.h"
+#include "cmdargssplitter.h"
 #include "../qcommon/q_trie.h"
 #include "../client/console.h"
 
@@ -55,7 +56,7 @@ static int Cmd_Archive( void *alias, void *ignored ) {
 * next frame.  This allows commands like:
 * bind g "impulse 5 ; +attack ; wait ; -attack ; impulse 2"
 */
-static void Cmd_Wait_f( void ) {
+static void Cmd_Wait_f( const CmdArgs & ) {
 	cmd_wait = true;
 }
 
@@ -410,7 +411,7 @@ SCRIPT COMMANDS
 /*
 * Cmd_Exec_f
 */
-static void Cmd_Exec_f( void ) {
+static void Cmd_Exec_f( const CmdArgs &cmdArgs ) {
 	char *f = NULL, *name;
 	const char *arg = Cmd_Argv( 1 );
 	bool silent = Cmd_Argc() >= 3 && !Q_stricmp( Cmd_Argv( 2 ), "silent" );
@@ -471,7 +472,7 @@ static void Cmd_Exec_f( void ) {
 *
 * Just prints the rest of the line to the console
 */
-static void Cmd_Echo_f( void ) {
+static void Cmd_Echo_f( const CmdArgs &cmdArgs ) {
 	int i;
 	for( i = 1; i < Cmd_Argc(); ++i )
 		Com_Printf( "%s ", Cmd_Argv( i ) );
@@ -483,12 +484,12 @@ static void Cmd_Echo_f( void ) {
 *
 * Creates a new command that executes a command string (possibly ; separated)
 */
-static void Cmd_Alias_f_( bool archive ) {
+static void Cmd_Alias_f_( bool archive, const CmdArgs &cmdArgs ) {
 	cmd_alias_t *a;
 	char cmd[1024];
 	int i, c;
 	size_t len;
-	char *s;
+	const char *s;
 
 	if( Cmd_Argc() == 1 ) {
 		Com_Printf( "usage: alias <name> <command>\n" );
@@ -540,15 +541,15 @@ static void Cmd_Alias_f_( bool archive ) {
 /*
 * Cmd_Alias_f
 */
-static void Cmd_Alias_f( void ) {
-	Cmd_Alias_f_( false );
+static void Cmd_Alias_f( const CmdArgs &cmdArgs ) {
+	Cmd_Alias_f_( false, cmdArgs );
 }
 
 /*
 * Cmd_Aliasa_f
 */
-static void Cmd_Aliasa_f( void ) {
-	Cmd_Alias_f_( true );
+static void Cmd_Aliasa_f( const CmdArgs &cmdArgs ) {
+	Cmd_Alias_f_( true, cmdArgs );
 }
 
 /*
@@ -556,8 +557,8 @@ static void Cmd_Aliasa_f( void ) {
 *
 * Removes an alias command
 */
-static void Cmd_Unalias_f( void ) {
-	char *s;
+static void Cmd_Unalias_f( const CmdArgs &cmdArgs ) {
+	const char *s;
 	cmd_alias_t *a;
 
 	if( Cmd_Argc() == 1 ) {
@@ -585,7 +586,7 @@ static void Cmd_Unalias_f( void ) {
 *
 * Removes an alias command
 */
-static void Cmd_UnaliasAll_f( void ) {
+static void Cmd_UnaliasAll_f( const CmdArgs & ) {
 	struct trie_dump_s *dump;
 	unsigned int i;
 
@@ -637,116 +638,8 @@ typedef struct cmd_function_s {
 	xcompletionf_t completion_func;
 } cmd_function_t;
 
-
-static int cmd_argc;
-static char *cmd_argv[MAX_STRING_TOKENS];
-static size_t cmd_argv_sizes[MAX_STRING_TOKENS];
-static char cmd_null_string[1] = { '\0' };
-static char cmd_args[MAX_STRING_CHARS];
-
 static trie_t *cmd_function_trie = NULL;
 static const trie_casing_t CMD_FUNCTION_TRIE_CASING = CON_CASE_SENSITIVE ? TRIE_CASE_SENSITIVE : TRIE_CASE_INSENSITIVE;
-
-// The functions that execute commands get their parameters with these
-// functions. Cmd_Argv () will return an empty string, not a NULL
-// if arg > argc, so string operations are always safe.
-
-/*
-* Cmd_Argc
-*/
-int Cmd_Argc( void ) {
-	return cmd_argc;
-}
-
-/*
-* Cmd_Argv
-*/
-char *Cmd_Argv( int arg ) {
-	if( arg >= cmd_argc ) {
-		return cmd_null_string;
-	}
-	return cmd_argv[arg];
-}
-
-/*
-* Cmd_Args
-*
-* Returns a single string containing argv(1) to argv(argc()-1)
-*/
-char *Cmd_Args( void ) {
-	return cmd_args;
-}
-
-/*
-* Cmd_TokenizeString
-*
-* Parses the given string into command line tokens.
-* $Cvars will be expanded unless they are in a quoted token
-* Takes a null terminated string.  Does not need to be /n terminated.
-*/
-void Cmd_TokenizeString( const char *text ) {
-	char *com_token;
-
-	cmd_argc = 0;
-	cmd_args[0] = 0;
-
-	if( !text ) {
-		return;
-	}
-
-	for(;; ) {
-		// skip whitespace up to a /n
-		while( *text && (unsigned char)*text <= ' ' && *text != '\n' )
-			text++;
-
-		if( *text == '\n' ) {
-			// a newline separates commands in the buffer
-			text++;
-			break;
-		}
-
-		if( !*text ) {
-			return;
-		}
-
-		// set cmd_args to everything after the first arg
-		if( cmd_argc == 1 ) {
-			size_t l;
-
-			strncpy( cmd_args, text, sizeof( cmd_args ) - 1 );
-			cmd_args[sizeof( cmd_args ) - 1] = 0;
-
-			// strip off any trailing whitespace
-			// use > 0 and -1 instead of >= 0 since size_t can be unsigned
-			l = strlen( cmd_args );
-			for(; l > 0; l-- )
-				if( (unsigned char)cmd_args[l - 1] <= ' ' ) {
-					cmd_args[l - 1] = 0;
-				} else {
-					break;
-				}
-		}
-
-		com_token = COM_Parse( &text );
-		if( !text ) {
-			return;
-		}
-
-		if( cmd_argc < MAX_STRING_TOKENS ) {
-			size_t size = strlen( com_token ) + 1;
-			if( cmd_argv_sizes[cmd_argc] < size ) {
-				cmd_argv_sizes[cmd_argc] = wsw::min( size + 64, (size_t)MAX_TOKEN_CHARS );
-				if( cmd_argv[cmd_argc] ) {
-					Q_free( cmd_argv[cmd_argc] );
-				}
-				cmd_argv[cmd_argc] = (char *)Q_malloc( cmd_argv_sizes[cmd_argc] );
-			}
-			strcpy( cmd_argv[cmd_argc], com_token );
-			cmd_argc++;
-		}
-	}
-}
-
 
 /*
 * Cmd_AddCommand
@@ -841,7 +734,7 @@ void Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func
 /*
 * Cmd_VStr_f
 */
-static void Cmd_VStr_f( void ) {
+static void Cmd_VStr_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() != 2 ) {
 		Com_Printf( "vstr <variable> : execute a variable command\n" );
 	} else {
@@ -890,18 +783,17 @@ bool Cmd_CheckForCommand( char *text ) {
 * FIXME: lookupnoadd the token to speed search?
 */
 void Cmd_ExecuteString( const char *text ) {
-	char *str;
 	cmd_function_t *cmd;
 	cmd_alias_t *a;
 
-	Cmd_TokenizeString( text );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( text ) );
 
-	// execute the command line
-	if( !Cmd_Argc() ) {
+	if( cmdArgs.allArgs.empty() ) {
 		return; // no tokens
-
 	}
-	str = cmd_argv[0];
+
+	const char *str = cmdArgs[0].data();
 
 	// FIXME: This routine defines the order in which identifiers are looked-up, but
 	// there are no checks for name-clashes. If a user sets a cvar with the name of
@@ -918,7 +810,7 @@ void Cmd_ExecuteString( const char *text ) {
 			// forward to server command
 			Cmd_ExecuteString( va( "cmd %s", text ) );
 		} else {
-			cmd->function();
+			cmd->function( cmdArgs );
 		}
 	} else if( Trie_Find( cmd_alias_trie, str, TRIE_EXACT_MATCH, (void **)&a ) == TRIE_OK ) {
 		// check alias
@@ -929,7 +821,7 @@ void Cmd_ExecuteString( const char *text ) {
 		}
 		Cbuf_InsertText( "\n" );
 		Cbuf_InsertText( a->value );
-	} else if( Cvar_Command() ) {
+	} else if( Cvar_Command( cmdArgs ) ) {
 		// check cvars
 		;
 	} else {
@@ -994,12 +886,6 @@ void Cmd_Shutdown( void ) {
 		Cmd_RemoveCommand( "alias" );
 		Cmd_RemoveCommand( "wait" );
 		Cmd_RemoveCommand( "vstr" );
-
-		// this is somewhat ugly IMO
-		for( i = 0; i < MAX_STRING_TOKENS && cmd_argv_sizes[i]; i++ ) {
-			Q_free( cmd_argv[i] );
-			cmd_argv_sizes[i] = 0;
-		}
 
 		Trie_Dump( cmd_function_trie, "", TRIE_DUMP_VALUES, &dump );
 		for( i = 0; i < dump->size; ++i ) {

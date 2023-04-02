@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 
 #include "../qcommon/wswtonum.h"
-#include "../qcommon/qcommon.h"
+#include "../qcommon/cmdargssplitter.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
@@ -37,14 +37,14 @@ SERVER COMMANDS
 /*
 * CG_SC_Print
 */
-static void CG_SC_Print( void ) {
+static void CG_SC_Print( const CmdArgs &cmdArgs ) {
 	CG_LocalPrint( "%s", Cmd_Argv( 1 ) );
 }
 
 /*
 * CG_SC_ChatPrint
 */
-static void CG_SC_ChatPrint( void ) {
+static void CG_SC_ChatPrint( const CmdArgs &cmdArgs ) {
 	const wsw::StringView commandName( Cmd_Argv( 0 ) );
 	const bool teamonly = commandName.startsWith( 't' );
 	std::optional<uint64_t> sendCommandNum;
@@ -79,7 +79,7 @@ static void CG_SC_ChatPrint( void ) {
 	}
 }
 
-static void CG_SC_IgnoreCommand() {
+static void CG_SC_IgnoreCommand( const CmdArgs &cmdArgs ) {
 	const char *firstArg = Cmd_Argv( 1 );
 	// TODO: Is there a more generic method of setting client vars?
 	// In fact this is actually a safer alternative so it should be kept
@@ -105,7 +105,7 @@ static void CG_SC_IgnoreCommand() {
 	CG_LocalPrint( format, cgs.clientInfo[who - 1].name );
 }
 
-static void CG_SC_MessageFault() {
+static void CG_SC_MessageFault( const CmdArgs &cmdArgs ) {
 	const char *const commandNumString = Cmd_Argv( 1 );
 	const char *const faultKindString  = Cmd_Argv( 2 );
 	const char *const timeoutString    = Cmd_Argv( 3 );
@@ -136,14 +136,14 @@ static void CG_SC_MessageFault() {
 /*
 * CG_SC_CenterPrint
 */
-static void CG_SC_CenterPrint( void ) {
+static void CG_SC_CenterPrint( const CmdArgs &cmdArgs ) {
 	CG_CenterPrint( Cmd_Argv( 1 ) );
 }
 
 /*
 * CG_SC_CenterPrintFormat
 */
-static void CG_SC_CenterPrintFormat( void ) {
+static void CG_SC_CenterPrintFormat( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 8 ) {
 		CG_CenterPrint( va( Cmd_Argv( 1 ), Cmd_Argv( 2 ), Cmd_Argv( 3 ), Cmd_Argv( 4 ), Cmd_Argv( 5 ), Cmd_Argv( 6 ), Cmd_Argv( 7 ) ) );
 	} else if( Cmd_Argc() == 7 ) {
@@ -366,7 +366,7 @@ static const char *CG_MatchMessageString( matchmessage_t mm ) {
 /*
 * CG_SC_MatchMessage
 */
-static void CG_SC_MatchMessage( void ) {
+static void CG_SC_MatchMessage( const CmdArgs &cmdArgs ) {
 	matchmessage_t mm;
 	const char *matchmessage;
 
@@ -384,7 +384,7 @@ static void CG_SC_MatchMessage( void ) {
 /*
 * CG_SC_HelpMessage
 */
-static void CG_SC_HelpMessage( void ) {
+static void CG_SC_HelpMessage( const CmdArgs &cmdArgs ) {
 	cg.helpmessage[0] = '\0';
 
 	unsigned index = atoi( Cmd_Argv( 1 ) );
@@ -442,7 +442,7 @@ static void CG_SC_HelpMessage( void ) {
 * CG_Cmd_DemoGet_f
 */
 static bool demo_requested = false;
-static void CG_Cmd_DemoGet_f( void ) {
+static void CG_Cmd_DemoGet_f( const CmdArgs &cmdArgs ) {
 	if( demo_requested ) {
 		Com_Printf( "Already requesting a demo\n" );
 		return;
@@ -463,7 +463,7 @@ static void CG_Cmd_DemoGet_f( void ) {
 /*
 * CG_SC_DemoGet
 */
-static void CG_SC_DemoGet( void ) {
+static void CG_SC_DemoGet( const CmdArgs &cmdArgs ) {
 	const char *filename, *extension;
 
 	if( cgs.demoPlaying ) {
@@ -497,8 +497,8 @@ static void CG_SC_DemoGet( void ) {
 /*
 * CG_SC_MOTD
 */
-static void CG_SC_MOTD( void ) {
-	char *motd;
+static void CG_SC_MOTD( const CmdArgs &cmdArgs ) {
+	const char *motd;
 
 	if( cg.motd ) {
 		Q_free(   cg.motd );
@@ -524,14 +524,14 @@ static void CG_SC_MOTD( void ) {
 /*
 * CG_SC_AddAward
 */
-static void CG_SC_AddAward( void ) {
+static void CG_SC_AddAward( const CmdArgs &cmdArgs ) {
 	const char *str = Cmd_Argv( 1 );
 	if( str && *str ) {
 		wsw::ui::UISystem::instance()->addAward( wsw::StringView( str ) );
 	}
 }
 
-static void CG_SC_ActionRequest() {
+static void CG_SC_ActionRequest( const CmdArgs &cmdArgs ) {
 	int argNum = 1;
 	// Expect a timeout
 	if( const auto maybeTimeout = wsw::toNum<unsigned>( wsw::StringView( Cmd_Argv( argNum++ ) ) ) ) {
@@ -561,13 +561,13 @@ static void CG_SC_ActionRequest() {
 	}
 }
 
-static void CG_SC_OptionsStatus() {
+static void CG_SC_OptionsStatus( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 2 ) {
 		wsw::ui::UISystem::instance()->handleOptionsStatusCommand( wsw::StringView( Cmd_Argv( 1 ) ) );
 	}
 }
 
-static void CG_SC_PlaySound() {
+static void CG_SC_PlaySound( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
 		return;
 	}
@@ -575,11 +575,11 @@ static void CG_SC_PlaySound() {
 	SoundSystem::instance()->startLocalSound( Cmd_Argv( 1 ), 1.0f );
 }
 
-void CG_SC_ResetFragsFeed() {
+void CG_SC_ResetFragsFeed( const CmdArgs &cmdArgs ) {
 	wsw::ui::UISystem::instance()->resetFragsFeed();
 }
 
-static void CG_SC_FragEvent() {
+static void CG_SC_FragEvent( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 4 ) {
 		unsigned args[3];
 		for( int i = 0; i < 3; ++i ) {
@@ -626,7 +626,7 @@ static void CG_SC_FragEvent() {
 typedef struct
 {
 	const char *name;
-	void ( *func )( void );
+	void ( *func )( const CmdArgs & );
 } svcmd_t;
 
 static const svcmd_t cg_svcmds[] =
@@ -662,20 +662,18 @@ static const svcmd_t cg_svcmds[] =
 * CG_GameCommand
 */
 void CG_GameCommand( const char *command ) {
-	char *s;
-	const svcmd_t *cmd;
 
-	Cmd_TokenizeString( command );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( command ) );
 
-	s = Cmd_Argv( 0 );
-	for( cmd = cg_svcmds; cmd->name; cmd++ ) {
-		if( !strcmp( s, cmd->name ) ) {
-			cmd->func();
+	for( const svcmd_t *cmd = cg_svcmds; cmd->name; cmd++ ) {
+		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
+			cmd->func( cmdArgs );
 			return;
 		}
 	}
 
-	Com_Printf( "Unknown game command: %s\n", s );
+	Com_Printf( "Unknown game command: %s\n", cmdArgs[0].data() );
 }
 
 /*
@@ -714,7 +712,7 @@ void CG_UseItem( const char *name ) {
 /*
 * CG_Cmd_UseItem_f
 */
-static void CG_Cmd_UseItem_f( void ) {
+static void CG_Cmd_UseItem_f( const CmdArgs &cmdArgs ) {
 	if( !Cmd_Argc() ) {
 		Com_Printf( "Usage: 'use <item name>' or 'use <item index>'\n" );
 		return;
@@ -726,7 +724,7 @@ static void CG_Cmd_UseItem_f( void ) {
 /*
 * CG_Cmd_NextWeapon_f
 */
-static void CG_Cmd_NextWeapon_f( void ) {
+static void CG_Cmd_NextWeapon_f( const CmdArgs & ) {
 	gsitem_t *item;
 
 	if( !cg.frame.valid ) {
@@ -749,7 +747,7 @@ static void CG_Cmd_NextWeapon_f( void ) {
 /*
 * CG_Cmd_PrevWeapon_f
 */
-static void CG_Cmd_PrevWeapon_f( void ) {
+static void CG_Cmd_PrevWeapon_f( const CmdArgs & ) {
 	gsitem_t *item;
 
 	if( !cg.frame.valid ) {
@@ -772,7 +770,7 @@ static void CG_Cmd_PrevWeapon_f( void ) {
 /*
 * CG_Cmd_PrevWeapon_f
 */
-static void CG_Cmd_LastWeapon_f( void ) {
+static void CG_Cmd_LastWeapon_f( const CmdArgs & ) {
 	gsitem_t *item;
 
 	if( !cg.frame.valid || cgs.demoPlaying ) {
@@ -795,7 +793,7 @@ static void CG_Cmd_LastWeapon_f( void ) {
 /*
 * CG_Viewpos_f
 */
-static void CG_Viewpos_f( void ) {
+static void CG_Viewpos_f( const CmdArgs & ) {
 	Com_Printf( "\"origin\" \"%i %i %i\"\n", (int)cg.view.origin[0], (int)cg.view.origin[1], (int)cg.view.origin[2] );
 	Com_Printf( "\"angles\" \"%i %i %i\"\n", (int)cg.view.angles[0], (int)cg.view.angles[1], (int)cg.view.angles[2] );
 }
@@ -805,7 +803,7 @@ static void CG_Viewpos_f( void ) {
 /*
 * CG_GametypeMenuCmdAdd_f
 */
-static void CG_GametypeMenuCmdAdd_f( void ) {
+static void CG_GametypeMenuCmdAdd_f( const CmdArgs & ) {
 	cgs.hasGametypeMenu = true;
 }
 
@@ -859,28 +857,28 @@ static char **CG_TeamPlayerNamesCompletion_f( const char *partial ) {
 /*
 * CG_SayCmdAdd_f
 */
-static void CG_SayCmdAdd_f( void ) {
+static void CG_SayCmdAdd_f( const CmdArgs & ) {
 	Cmd_SetCompletionFunc( "say", &CG_PlayerNamesCompletion_f );
 }
 
 /*
 * CG_SayTeamCmdAdd_f
 */
-static void CG_SayTeamCmdAdd_f( void ) {
+static void CG_SayTeamCmdAdd_f( const CmdArgs & ) {
 	Cmd_SetCompletionFunc( "say_team", &CG_TeamPlayerNamesCompletion_f );
 }
 
 /*
 * CG_StatsCmdAdd_f
 */
-static void CG_StatsCmdAdd_f( void ) {
+static void CG_StatsCmdAdd_f( const CmdArgs & ) {
 	Cmd_SetCompletionFunc( "stats", &CG_PlayerNamesCompletion_f );
 }
 
 /*
 * CG_WhoisCmdAdd_f
 */
-static void CG_WhoisCmdAdd_f( void ) {
+static void CG_WhoisCmdAdd_f( const CmdArgs & ) {
 	Cmd_SetCompletionFunc( "whois", &CG_PlayerNamesCompletion_f );
 }
 
@@ -900,7 +898,7 @@ static svcmd_t cg_consvcmds[] =
 typedef struct
 {
 	const char *name;
-	void ( *func )( void );
+	void ( *func )( const CmdArgs & );
 	bool allowdemo;
 } cgcmd_t;
 
@@ -956,7 +954,8 @@ void CG_RegisterCGameCommands( void ) {
 			for( svcmd = cg_consvcmds; svcmd->name; svcmd++ ) {
 				if( !Q_stricmp( svcmd->name, name.data() ) ) {
 					if( svcmd->func ) {
-						svcmd->func();
+						// TODO!!!!!!!!!!!!!!!!!!!!!!!!!
+						svcmd->func( CmdArgs {} );
 					}
 					break;
 				}

@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
+#include "../qcommon/cmdargssplitter.h"
 
 static void CL_InitServerDownload( const char *filename, size_t size, unsigned checksum, bool allow_localhttpdownload,
 								   const char *url, bool initial );
@@ -218,7 +219,7 @@ void CL_DownloadDone( void ) {
 	if( cls.download.pending_reconnect ) {
 		cls.download.pending_reconnect = false;
 		CL_FreeDownloadList();
-		CL_ServerReconnect_f();
+		CL_ServerReconnect_f( {} );
 		return;
 	}
 
@@ -551,7 +552,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 /*
 * CL_InitDownload_f
 */
-static void CL_InitDownload_f( void ) {
+static void CL_InitDownload_f( const CmdArgs &cmdArgs ) {
 	const char *filename;
 	const char *url;
 	int size;
@@ -647,7 +648,7 @@ void CL_CheckDownloadTimeout( void ) {
 /*
 * CL_DownloadStatus_f
 */
-void CL_DownloadStatus_f( void ) {
+void CL_DownloadStatus_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
 		Com_Printf( "No download active\n" );
 		return;
@@ -665,7 +666,7 @@ void CL_DownloadStatus_f( void ) {
 /*
 * CL_DownloadCancel_f
 */
-void CL_DownloadCancel_f( void ) {
+void CL_DownloadCancel_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
 		Com_Printf( "No download active\n" );
 		return;
@@ -957,7 +958,7 @@ static void CL_ParseFrame( msg_t *msg ) {
 /*
 * CL_Multiview_f
 */
-static void CL_Multiview_f( void ) {
+static void CL_Multiview_f( const CmdArgs &cmdArgs ) {
 	cls.mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
 	Com_Printf( "multiview: %i\n", cls.mv );
 }
@@ -965,9 +966,9 @@ static void CL_Multiview_f( void ) {
 /*
 * CL_CvarInfoRequest_f
 */
-static void CL_CvarInfoRequest_f( void ) {
+static void CL_CvarInfoRequest_f( const CmdArgs &cmdArgs ) {
 	char string[MAX_STRING_CHARS];
-	char *cvarName;
+	const char *cvarName;
 	const char *cvarString;
 
 	if( cls.demoPlayer.playing ) {
@@ -1088,7 +1089,7 @@ static void CL_AddConfigStringFragment( int index, int fragmentNum, int numFragm
 	CL_GameModule_ConfigString( index, view );
 }
 
-static void CL_ParseConfigstringCommand() {
+static void CL_ParseConfigstringCommand( const CmdArgs &cmdArgs ) {
 	const int argc = Cmd_Argc();
 	if( argc < 3 ) {
 		return;
@@ -1103,7 +1104,7 @@ static void CL_ParseConfigstringCommand() {
 	}
 }
 
-static void CL_ParseConfigStringFragmentCommand() {
+static void CL_ParseConfigStringFragmentCommand( const CmdArgs &cmdArgs ) {
 	const int argc = Cmd_Argc();
 	if( argc != 6 ) {
 		return;
@@ -1119,7 +1120,7 @@ static void CL_ParseConfigStringFragmentCommand() {
 
 typedef struct {
 	const char *name;
-	void ( *func )();
+	void ( *func )( const CmdArgs & );
 } svcmd_t;
 
 svcmd_t svcmds[] =
@@ -1144,14 +1145,13 @@ svcmd_t svcmds[] =
 * CL_ParseServerCommand
 */
 static void CL_ParseServerCommand( msg_t *msg ) {
-	const char *s;
 	char *text;
 	svcmd_t *cmd;
 
 	text = MSG_ReadString( msg );
 
-	Cmd_TokenizeString( text );
-	s = Cmd_Argv( 0 );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( text ) );
 
 	if( cl_debug_serverCmd->integer && ( cls.state < CA_ACTIVE || cls.demoPlayer.playing ) ) {
 		Com_Printf( "CL_ParseServerCommand: \"%s\"\n", text );
@@ -1159,13 +1159,13 @@ static void CL_ParseServerCommand( msg_t *msg ) {
 
 	// filter out these server commands to be called from the client
 	for( cmd = svcmds; cmd->name; cmd++ ) {
-		if( !strcmp( s, cmd->name ) ) {
-			cmd->func();
+		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
+			cmd->func( cmdArgs );
 			return;
 		}
 	}
 
-	Com_Printf( "Unknown server command: %s\n", s );
+	Com_Printf( "Unknown server command: %s\n", cmdArgs[0].data() );
 }
 
 /*

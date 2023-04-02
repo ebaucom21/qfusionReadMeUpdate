@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/cmdargs.h"
 #include "../client/client.h"
 
 // Thanks to Xavatar (xavatar2004@hotmail.com) for the path spline implementation
@@ -216,7 +217,7 @@ bool CG_DemoCam_IsFree( void ) {
 /*
 * CG_DemoFreeFly_Cmd_f
 */
-static void CG_DemoFreeFly_Cmd_f( void ) {
+static void CG_DemoFreeFly_Cmd_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() > 1 ) {
 		if( !Q_stricmp( Cmd_Argv( 1 ), "on" ) ) {
 			CamIsFree = true;
@@ -233,7 +234,7 @@ static void CG_DemoFreeFly_Cmd_f( void ) {
 /*
 * CG_CamSwitch_Cmd_f
 */
-static void CG_CamSwitch_Cmd_f( void ) {
+static void CG_CamSwitch_Cmd_f( const CmdArgs & ) {
 
 }
 

@@ -62,6 +62,8 @@ public:
 	void printToEverybody( const ChatHandlersChain *filter = nullptr ) { dispatchWithFilter( filter, false ); }
 };
 
+struct CmdArgs;
+
 class IgnoreFilter {
 	struct ClientEntry {
 		static_assert( MAX_CLIENTS <= 64, "" );
@@ -100,8 +102,8 @@ class IgnoreFilter {
 	void sendChangeFilterVarCommand( const edict_s *ent );
 	void printIgnoreCommandUsage( const edict_s *ent, bool ignore );
 public:
-	void handleIgnoreCommand( const edict_s *ent, bool ignore );
-	void handleIgnoreListCommand( const edict_s *ent );
+	void handleIgnoreCommand( const edict_s *ent, bool ignore, const CmdArgs &cmdArgs );
+	void handleIgnoreListCommand( const edict_s *ent, const CmdArgs &cmdArgs );
 
 	void reset();
 
@@ -349,16 +351,16 @@ public:
 		m_ignoreFilter.notifyOfIgnoredMessage( target, source );
 	}
 
-	static void handleIgnoreCommand( edict_s *ent ) {
-		instance()->m_ignoreFilter.handleIgnoreCommand( ent, true );
+	static void handleIgnoreCommand( edict_s *ent, const CmdArgs &cmdArgs ) {
+		instance()->m_ignoreFilter.handleIgnoreCommand( ent, true, cmdArgs );
 	}
 
-	static void handleUnignoreCommand( edict_s *ent ) {
-		instance()->m_ignoreFilter.handleIgnoreCommand( ent, false );
+	static void handleUnignoreCommand( edict_s *ent, const CmdArgs &cmdArgs ) {
+		instance()->m_ignoreFilter.handleIgnoreCommand( ent, false, cmdArgs );
 	}
 
-	static void handleIgnoreListCommand( edict_s *ent ) {
-		instance()->m_ignoreFilter.handleIgnoreListCommand( ent );
+	static void handleIgnoreListCommand( edict_s *ent, const CmdArgs &cmdArgs ) {
+		instance()->m_ignoreFilter.handleIgnoreListCommand( ent, cmdArgs );
 	}
 
 	void onUserInfoChanged( const edict_s *ent ) {

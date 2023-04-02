@@ -990,7 +990,7 @@ void SV_SetupSnapTables( cmodel_state_t *cms ) {
 
 bool con_initialized;
 
-static void Key_Bind_Null_f( void ) {
+static void Key_Bind_Null_f( const CmdArgs & ) {
 }
 
 void CL_Init( void ) {

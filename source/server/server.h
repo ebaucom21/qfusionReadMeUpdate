@@ -416,7 +416,7 @@ void SV_Map( const char *level, bool devmap );
 void SV_SetServerConfigStrings( void );
 
 void SV_AddPureFile( const wsw::StringView &fileName );
-void SV_PureList_f( void );
+void SV_PureList_f( const CmdArgs & );
 
 //
 // sv_phys.c
@@ -516,13 +516,13 @@ void SV_ShutdownGameProgs( void );
 // sv_demos.c
 //
 void SV_Demo_WriteSnap( void );
-void SV_Demo_Start_f( void );
-void SV_Demo_Stop_f( void );
-void SV_Demo_Cancel_f( void );
-void SV_Demo_Purge_f( void );
+void SV_Demo_Start_f( const CmdArgs & );
+void SV_Demo_Stop_f( const CmdArgs & );
+void SV_Demo_Cancel_f( const CmdArgs & );
+void SV_Demo_Purge_f( const CmdArgs & );
 
-void SV_DemoList_f( client_t *client );
-void SV_DemoGet_f( client_t *client );
+void SV_DemoList_f( client_t *client, const CmdArgs & );
+void SV_DemoGet_f( client_t *client, const CmdArgs & );
 
 bool SV_IsDemoDownloadRequest( const char *request );
 
@@ -530,7 +530,7 @@ bool SV_IsDemoDownloadRequest( const char *request );
 // sv_motd.c
 //
 void SV_MOTD_Update( void );
-void SV_MOTD_Get_f( client_t *client );
+void SV_MOTD_Get_f( client_t *client, const CmdArgs & );
 
 void SV_Web_Init( void );
 void SV_Web_Shutdown( void );

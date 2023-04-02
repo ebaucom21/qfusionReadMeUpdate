@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswstaticvector.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/cmdargs.h"
 
 #include <tuple>
 #include <algorithm>
@@ -262,7 +263,7 @@ void KeyBindingsSystem::unbindAll() {
 
 }
 
-static void Key_Unbind_f() {
+static void Key_Unbind_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() != 2 ) {
 		Com_Printf( "unbind <key> : remove commands from a key\n" );
 		return;
@@ -276,14 +277,14 @@ static void Key_Unbind_f() {
 	}
 }
 
-static void Key_Unbindall() {
+static void Key_Unbindall( const CmdArgs & ) {
 	wsw::cl::KeyBindingsSystem::instance()->unbindAll();
 }
 
 /*
 * Key_Bind_f
 */
-static void Key_Bind_f() {
+static void Key_Bind_f( const CmdArgs &cmdArgs ) {
 	const int argc = Cmd_Argc();
 	if( argc < 2 ) {
 		Com_Printf( "bind <key> [command] : attach a command to a key\n" );
@@ -341,7 +342,7 @@ void Key_WriteBindings( int file ) {
 	}
 }
 
-static void Key_Bindlist_f() {
+static void Key_Bindlist_f( const CmdArgs & ) {
 	const auto *const bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
 	for( int i = 0; i < 256; i++ ) {
 		if( const auto maybePair = bindingsSystem->getBindingAndNameForKey( i ) ) {
@@ -384,7 +385,7 @@ void Key_Shutdown() {
 	Cmd_RemoveCommand( "unbindall" );
 	Cmd_RemoveCommand( "bindlist" );
 
-	Key_Unbindall();
+	Key_Unbindall( CmdArgs {} );
 
 	wsw::cl::KeyHandlingSystem::shutdown();
 	wsw::cl::KeyBindingsSystem::shutdown();
@@ -489,7 +490,7 @@ bool KeyHandlingSystem::updateAutoRepeatStatus( int key, bool down ) {
 
 void KeyHandlingSystem::handleEscapeKey() {
 	if( Con_HasKeyboardFocus() ) {
-		Con_ToggleConsole_f();
+		Con_ToggleConsole_f( {} );
 	} else if( cls.state != CA_ACTIVE && cls.state != CA_DISCONNECTED ) {
 		Cbuf_AddText( "disconnect\n" );
 	} else {
@@ -564,7 +565,7 @@ void KeyHandlingSystem::handleKeyEvent( int key, bool down, int64_t time ) {
 
 	if( isAToggleConsoleKey( key ) ) {
 		if( down ) {
-			Con_ToggleConsole_f();
+			Con_ToggleConsole_f( {} );
 		}
 		return;
 	}

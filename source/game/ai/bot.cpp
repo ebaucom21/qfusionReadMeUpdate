@@ -268,7 +268,7 @@ void Bot::Frame() {
 void Bot::ActiveFrame() {
 	//get ready if in the game
 	if( GS_MatchState() <= MATCH_STATE_WARMUP && !IsReady() && self->r.client->teamStateTimestamp + 4000 < level.time ) {
-		G_Match_Ready( self );
+		G_Match_Ready( self, {} );
 	}
 
 	// Always calls Frame() and calls Think() if needed.

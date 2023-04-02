@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // console.c
 
 #include "client.h"
+#include "../qcommon/cmdargs.h"
 
 #define CON_MAXLINES    500
 typedef struct {
@@ -146,7 +147,7 @@ void Con_Close( void ) {
 /*
 * Con_ToggleConsole_f
 */
-void Con_ToggleConsole_f( void ) {
+void Con_ToggleConsole_f( const CmdArgs & ) {
 	SCR_EndLoadingPlaque(); // get rid of loading plaque
 
 	if( cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING || cls.state == CA_CONNECTED ) {
@@ -162,7 +163,7 @@ void Con_ToggleConsole_f( void ) {
 /*
 * Con_Clear_f
 */
-void Con_Clear_f( void ) {
+void Con_Clear_f( const CmdArgs & ) {
 	int i;
 
 	QMutex_Lock( con.mutex );
@@ -251,7 +252,7 @@ static size_t Con_RemoveBufferColorTokens( const char *in, size_t in_size, char 
 *
 * Save the console contents out to a file
 */
-static void Con_Dump_f( void ) {
+static void Con_Dump_f( const CmdArgs &cmdArgs ) {
 	int file;
 	size_t buffer_size;
 	char *buffer;
@@ -411,7 +412,7 @@ void Con_Shutdown( void ) {
 		return;
 	}
 
-	Con_Clear_f();  // free scrollback text
+	Con_Clear_f( CmdArgs {} );  // free scrollback text
 
 	Cmd_RemoveCommand( "toggleconsole" );
 	Cmd_RemoveCommand( "clear" );

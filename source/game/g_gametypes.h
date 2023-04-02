@@ -709,10 +709,9 @@ bool G_Match_SuddenDeathFinished( void );
 bool G_Match_TimelimitHit( void );
 
 //coach
-void G_Teams_Coach( edict_t *ent );
-void G_Teams_CoachLockTeam( edict_t *ent );
-void G_Teams_CoachUnLockTeam( edict_t *ent );
-void G_Teams_CoachRemovePlayer( edict_t *ent );
+void G_Teams_Coach( edict_t *ent, const CmdArgs & );
+void G_Teams_CoachLockTeam( edict_t *ent, const CmdArgs & );
+void G_Teams_CoachUnLockTeam( edict_t *ent, const CmdArgs & );
 
 bool G_Gametype_Exists( const char *name );
 

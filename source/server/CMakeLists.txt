@@ -17,6 +17,7 @@ file(GLOB SERVER_SOURCES
 	"../qcommon/asyncstream.cpp"
 	"../qcommon/autoupdate.cpp"
 	"../qcommon/cm_*.cpp"
+	"../qcommon/cmdargssplitter.cpp"
 	"../qcommon/compression.cpp"
 	"../qcommon/configstringstorage.cpp"
 	"../qcommon/base64.cpp"

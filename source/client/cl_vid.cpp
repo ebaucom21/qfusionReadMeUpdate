@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // qfusion refresh engine.
 #include "client.h"
 #include "../ui/uisystem.h"
+#include "../qcommon/cmdargs.h"
 
 cvar_t *vid_width, *vid_height;
 cvar_t *vid_xpos;          // X coordinate of window position
@@ -68,7 +69,7 @@ void VID_Restart( bool verbose, bool soundRestart ) {
 	vid_ref_sound_restart = soundRestart;
 }
 
-void VID_Restart_f( void ) {
+void VID_Restart_f( const CmdArgs &cmdArgs ) {
 	VID_Restart( ( Cmd_Argc() >= 2 ? true : false ), false );
 }
 
@@ -93,7 +94,7 @@ bool VID_GetModeInfo( int *width, int *height, unsigned int mode ) {
 /*
 ** VID_ModeList_f
 */
-static void VID_ModeList_f( void ) {
+static void VID_ModeList_f( const CmdArgs & ) {
 	unsigned int i;
 
 	for( i = 0; i < vid_num_modes; i++ )
@@ -389,7 +390,7 @@ static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
 	FTLIB_PrecacheFonts( verbose );
 
 	if( vid_ref_was_active ) {
-		IN_Restart();
+		IN_Restart( CmdArgs {} );
 	}
 
 	CL_InitMedia();

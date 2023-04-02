@@ -370,7 +370,9 @@ then searches for a command or variable that matches the first token.
 
 */
 
-typedef void ( *xcommand_t )( void );
+struct CmdArgs;
+
+typedef void ( *xcommand_t )( const CmdArgs & );
 typedef char ** ( *xcompletionf_t )( const char *partial );
 
 void        Cmd_PreInit( void );
@@ -382,9 +384,10 @@ bool    Cmd_Exists( const char *cmd_name );
 bool    Cmd_CheckForCommand( char *text );
 void        Cmd_WriteAliases( int file );
 
-int         Cmd_Argc( void );
-char        *Cmd_Argv( int arg );
-char        *Cmd_Args( void );
+#define Cmd_Argc()      ( cmdArgs.size() )
+#define Cmd_Argv( arg ) ( cmdArgs[arg].data() )
+#define Cmd_Args( arg ) ( cmdArgs.argsString.data() )
+
 void        Cmd_TokenizeString( const char *text );
 void        Cmd_ExecuteString( const char *text );
 void        Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func );
@@ -726,12 +729,12 @@ void        Com_DeferConsoleLogReopen( void );
 void Com_Printf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
 void Com_DPrintf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
 void Com_Error( com_error_code_t code, const char *format, ... ) __attribute__( ( format( printf, 2, 3 ) ) ) __attribute__( ( noreturn ) );
-void Com_Quit( void ) __attribute__( ( noreturn ) );
+void Com_Quit( const CmdArgs & ) __attribute__( ( noreturn ) );
 #else
 void Com_Printf( _Printf_format_string_ const char *format, ... );
 void Com_DPrintf( _Printf_format_string_ const char *format, ... );
 __declspec( noreturn ) void Com_Error( com_error_code_t code, _Printf_format_string_ const char *format, ... );
-__declspec( noreturn ) void Com_Quit( void );
+__declspec( noreturn ) void Com_Quit( const CmdArgs & );
 #endif
 
 void        Com_DeferQuit( void );

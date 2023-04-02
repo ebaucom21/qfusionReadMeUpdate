@@ -44,6 +44,8 @@ static inline void      Cvar_UnsetModified( cvar_t *var );
 // that the client knows to send it to the server
 extern bool userinfo_modified;
 
+struct CmdArgs;
+
 /*
 
    cvar_t variables are used to hold scalar or string variables that can be changed or displayed at the console or prog code as well as accessed directly
@@ -72,7 +74,7 @@ char **Cvar_CompleteBuildList( const char *partial );
 char *Cvar_TabComplete( const char *partial );
 void        Cvar_GetLatchedVars( cvar_flag_t flags );
 void        Cvar_FixCheatVars( void );
-bool    Cvar_Command( void );
+bool    Cvar_Command( const CmdArgs & );
 void        Cvar_WriteVariables( int file );
 void        Cvar_PreInit( void );
 void        Cvar_Init( void );

@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cl_mm.h"
 
 #include "../qcommon/asyncstream.h"
+#include "../qcommon/cmdargssplitter.h"
 #include "../qcommon/hash.h"
 #include "../ui/uisystem.h"
 
@@ -153,7 +154,7 @@ void CL_UpdateClientCommandsToServer( msg_t *msg ) {
 /*
 * CL_ForwardToServer_f
 */
-void CL_ForwardToServer_f( void ) {
+void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
 	if( cls.demoPlayer.playing ) {
 		return;
 	}
@@ -172,7 +173,7 @@ void CL_ForwardToServer_f( void ) {
 /*
 * CL_ServerDisconnect_f
 */
-void CL_ServerDisconnect_f( void ) {
+void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
 	char menuparms[MAX_STRING_CHARS];
 	int type;
 	char reason[MAX_STRING_CHARS];
@@ -184,7 +185,7 @@ void CL_ServerDisconnect_f( void ) {
 
 	Q_strncpyz( reason, Cmd_Argv( 2 ), sizeof( reason ) );
 
-	CL_Disconnect_f();
+	CL_Disconnect_f( {} );
 
 	Com_Printf( "Connection was closed by server: %s\n", reason );
 
@@ -199,13 +200,13 @@ void CL_ServerDisconnect_f( void ) {
 */
 void CL_Quit( void ) {
 	CL_Disconnect( NULL );
-	Com_Quit();
+	Com_Quit( {} );
 }
 
 /*
 * CL_Quit_f
 */
-static void CL_Quit_f( void ) {
+static void CL_Quit_f( const CmdArgs & ) {
 	CL_Quit();
 }
 
@@ -397,7 +398,7 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 /*
 * CL_Connect_Cmd_f
 */
-static void CL_Connect_Cmd_f( socket_type_t socket ) {
+static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 	netadr_t serveraddress;
 	char *servername, password[64], autowatch[64] = { 0 };
 	const char *extension;
@@ -480,8 +481,8 @@ static void CL_Connect_Cmd_f( socket_type_t socket ) {
 /*
 * CL_Connect_f
 */
-static void CL_Connect_f( void ) {
-	CL_Connect_Cmd_f( SOCKET_UDP );
+static void CL_Connect_f( const CmdArgs &cmdArgs ) {
+	CL_Connect_Cmd_f( SOCKET_UDP, cmdArgs );
 }
 
 /*
@@ -500,7 +501,7 @@ static void CL_TCPConnect_f( void ) {
 * Send the rest of the command line over as
 * an unconnected command.
 */
-static void CL_Rcon_f( void ) {
+static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 	char message[1024];
 	int i;
 	const socket_t *socket;
@@ -729,7 +730,7 @@ void CL_ClearState( void ) {
 *
 * Next is used to set an action which is executed at disconnecting.
 */
-static void CL_SetNext_f( void ) {
+static void CL_SetNext_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "USAGE: next <commands>\n" );
 		return;
@@ -822,7 +823,7 @@ void CL_Disconnect( const char *message ) {
 	cls.rejected = false;
 
 	if( cls.demoRecorder.recording ) {
-		CL_Stop_f();
+		CL_Stop_f( {} );
 	}
 
 	if( cls.demoPlayer.playing ) {
@@ -891,7 +892,7 @@ done:
 	CL_ExecuteNext(); // start next action if any is defined
 }
 
-void CL_Disconnect_f( void ) {
+void CL_Disconnect_f( const CmdArgs & ) {
 	cl_connectChain[0] = '\0';
 	cl_nextString[0] = '\0';
 
@@ -910,7 +911,7 @@ void CL_Disconnect_f( void ) {
 * Just sent as a hint to the client that they should
 * drop to full console
 */
-void CL_Changing_f( void ) {
+void CL_Changing_f( const CmdArgs & ) {
 	//ZOID
 	//if we are downloading, we don't change!  This so we don't suddenly stop downloading a map
 	if( cls.download.filenum || cls.download.web ) {
@@ -918,7 +919,7 @@ void CL_Changing_f( void ) {
 	}
 
 	if( cls.demoRecorder.recording ) {
-		CL_Stop_f();
+		CL_Stop_f( {} );
 	}
 
 	Com_DPrintf( "CL:Changing\n" );
@@ -936,7 +937,7 @@ void CL_Changing_f( void ) {
 *
 * The server is changing levels
 */
-void CL_ServerReconnect_f( void ) {
+void CL_ServerReconnect_f( const CmdArgs & ) {
 	if( cls.demoPlayer.playing ) {
 		return;
 	}
@@ -953,7 +954,7 @@ void CL_ServerReconnect_f( void ) {
 	}
 
 	if( cls.demoRecorder.recording ) {
-		CL_Stop_f();
+		CL_Stop_f( {} );
 	}
 
 	cls.connect_count = 0;
@@ -981,7 +982,7 @@ void CL_ServerReconnect_f( void ) {
 *
 * User reconnect command.
 */
-void CL_Reconnect_f( void ) {
+void CL_Reconnect_f( const CmdArgs & ) {
 	char *servername;
 	socket_type_t servertype;
 	netadr_t serveraddress;
@@ -1008,13 +1009,10 @@ void CL_Reconnect_f( void ) {
 * Responses to broadcasts, etc
 */
 static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
-	char *s;
-	char *c;
-
 	MSG_BeginReading( msg );
 	MSG_ReadInt32( msg ); // skip the -1
 
-	s = MSG_ReadStringLine( msg );
+	const char *s = MSG_ReadStringLine( msg );
 
 	if( !strncmp( s, "getserversResponse", 18 ) ) {
 		Com_DPrintf( "%s: %s\n", NET_AddressToString( address ), "getserversResponse" );
@@ -1022,8 +1020,10 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		return;
 	}
 
-	Cmd_TokenizeString( s );
-	c = Cmd_Argv( 0 );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( s ) );
+
+	const char *c = cmdArgs[0].data();
 
 	Com_DPrintf( "%s: %s\n", NET_AddressToString( address ), s );
 
@@ -1337,7 +1337,7 @@ void CL_ReadPackets( void ) {
 /*
 * CL_Userinfo_f
 */
-static void CL_Userinfo_f( void ) {
+static void CL_Userinfo_f( const CmdArgs & ) {
 	Com_Printf( "User info settings:\n" );
 	Info_Print( Cvar_Userinfo() );
 }
@@ -1602,7 +1602,7 @@ void CL_RequestNextDownload( void ) {
 * The server will send this command right
 * before allowing the client into the server
 */
-void CL_Precache_f( void ) {
+void CL_Precache_f( const CmdArgs &cmdArgs ) {
 	FS_RemovePurePaks();
 
 	if( cls.demoPlayer.playing ) {
@@ -1662,7 +1662,7 @@ static void CL_WriteConfiguration( const char *name, bool warn ) {
 /*
 * CL_WriteConfig_f
 */
-static void CL_WriteConfig_f( void ) {
+static void CL_WriteConfig_f( const CmdArgs &cmdArgs ) {
 	char *name;
 	int name_size;
 
@@ -1690,7 +1690,7 @@ static void CL_WriteConfig_f( void ) {
 	Q_free( name );
 }
 
-static void CL_Help_f() {
+static void CL_Help_f( const CmdArgs & ) {
 	Com_Printf( "Type commands here. Use TAB key for getting suggestions. Use PgUp/PgDn keys for scrolling.\n");
 	Com_Printf( "These commands can be useful:\n" );
 	Com_Printf( "cvarlist - Displays the list of all console vars\n" );
@@ -1840,7 +1840,7 @@ void CL_RestartMedia( void ) {
 *
 * Restart the sound subsystem so it can pick up new parameters and flush all sounds
 */
-void CL_S_Restart( bool noVideo ) {
+void CL_S_Restart( bool noVideo, const CmdArgs &cmdArgs ) {
 	bool verbose = ( Cmd_Argc() >= 2 ? true : false );
 
 	// The cgame and game must also be forced to restart because handles will become invalid
@@ -1859,21 +1859,21 @@ void CL_S_Restart( bool noVideo ) {
 *
 * Restart the sound subsystem so it can pick up new parameters and flush all sounds
 */
-static void CL_S_Restart_f( void ) {
-	CL_S_Restart( false );
+static void CL_S_Restart_f( const CmdArgs &cmdArgs ) {
+	CL_S_Restart( false, cmdArgs );
 }
 
 /*
 * CL_ShowIP_f - wsw : jal : taken from Q3 (it only shows the ip when server was started)
 */
-static void CL_ShowIP_f( void ) {
+static void CL_ShowIP_f( const CmdArgs & ) {
 	NET_ShowIP();
 }
 
 /*
 * CL_ShowServerIP_f - wsw : pb : show the ip:port of the server the client is connected to
 */
-static void CL_ShowServerIP_f( void ) {
+static void CL_ShowServerIP_f( const CmdArgs & ) {
 	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
 		Com_Printf( "Not connected to a server\n" );
 		return;

@@ -75,6 +75,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/cjson.cpp"
 	"../qcommon/cm_*.cpp"
 	"../qcommon/cmd.cpp"
+	"../qcommon/cmdargssplitter.cpp"
 	"../qcommon/common.cpp"
 	"../qcommon/compression.cpp"
 	"../qcommon/configstringstorage.cpp"

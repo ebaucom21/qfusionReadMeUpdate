@@ -25,17 +25,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/mmcommon.h"
 #include "../qcommon/mmquery.h"
 #include "../qcommon/mmnetworktask.h"
+#include "../qcommon/cmdargs.h"
 
 #include "../qcommon/base64.h"
 #include "../qcommon/singletonholder.h"
 
 #include <errno.h>
 
-static void CL_MM_Logout_f() {
+static void CL_MM_Logout_f( const CmdArgs & ) {
 	CLStatsowFacade::Instance()->Logout( false );
 }
 
-static void CL_MM_Login_f() {
+static void CL_MM_Login_f( const CmdArgs &cmdArgs ) {
 	const char *user = nullptr, *password = nullptr;
 
 	// first figure out the user

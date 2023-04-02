@@ -937,7 +937,7 @@ void IN_Shutdown( void ) {
 /*
 * IN_Restart
 */
-void IN_Restart( void ) {
+void IN_Restart( const CmdArgs & ) {
 	IN_Shutdown();
 	IN_Init();
 }

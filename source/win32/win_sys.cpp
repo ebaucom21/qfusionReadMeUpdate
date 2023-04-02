@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sys_win.h
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/cmdargs.h"
 #include "../client/keys.h"
 
 #include "winquake.h"
@@ -337,7 +338,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 		while( PeekMessageW( &msg, NULL, 0, 0, PM_NOREMOVE ) ) {
 			if( !GetMessageW( &msg, NULL, 0, 0 ) ) {
-				Com_Quit();
+				Com_Quit( {} );
 			}
 			sys_msg_time = msg.time;
 			myTranslateMessage( &msg );

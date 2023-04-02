@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/sys_library.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/cmdargs.h"
 
 server_constant_t svc;              // constant server info (trully persistant since sv_init)
 server_static_t svs;                // persistant server info
@@ -121,7 +122,7 @@ static void SV_CreateBaseline( void ) {
 /*
 * SV_PureList_f
 */
-void SV_PureList_f( void ) {
+void SV_PureList_f( const CmdArgs & ) {
 	purelist_t *purefile;
 
 	Com_Printf( "Pure files:\n" );
@@ -461,7 +462,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 	}
 
 	if( svs.demo.file ) {
-		SV_Demo_Stop_f();
+		SV_Demo_Stop_f( CmdArgs {} );
 	}
 
 	if( svs.clients ) {
@@ -535,7 +536,7 @@ void SV_Map( const char *level, bool devmap ) {
 	int i;
 
 	if( svs.demo.file ) {
-		SV_Demo_Stop_f();
+		SV_Demo_Stop_f( CmdArgs {} );
 	}
 
 	// skip the end-of-unit flag if necessary

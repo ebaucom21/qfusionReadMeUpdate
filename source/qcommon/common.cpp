@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "loglines.h"
 #include "freelistallocator.h"
+#include "cmdargs.h"
 #include "wswstaticvector.h"
 
 #include <clocale>
@@ -435,7 +436,7 @@ void Com_DeferQuit( void ) {
 * Both client and server can use this, and it will
 * do the apropriate things.
 */
-void Com_Quit( void ) {
+void Com_Quit( const CmdArgs & ) {
 	SV_Shutdown( "Server quit\n" );
 	CL_Shutdown();
 	MM_Shutdown();
@@ -731,7 +732,7 @@ void SCR_EndLoadingPlaque( void );
 * test error shutdown procedures
 */
 #ifndef PUBLIC_BUILD
-static void Com_Error_f( void ) {
+static void Com_Error_f( const CmdArgs &cmdArgs ) {
 	Com_Error( ERR_FATAL, "%s", Cmd_Argv( 1 ) );
 }
 #endif
@@ -740,7 +741,7 @@ static void Com_Error_f( void ) {
 * Com_Lag_f
 */
 #ifndef PUBLIC_BUILD
-static void Com_Lag_f( void ) {
+static void Com_Lag_f( const CmdArgs &cmdArgs ) {
 	int msecs;
 
 	if( Cmd_Argc() != 2 || atoi( Cmd_Argv( 1 ) ) <= 0 ) {
@@ -982,7 +983,7 @@ void Qcommon_Frame( unsigned int realMsec ) {
 	static unsigned int gameMsec;
 
 	if( com_quit ) {
-		Com_Quit();
+		Com_Quit( {} );
 	}
 
 	if( setjmp( abortframe ) ) {

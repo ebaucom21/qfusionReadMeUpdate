@@ -379,18 +379,18 @@ void CL_SetClientState( int state );
 connstate_t CL_GetClientState( void );  // wsw : aiwa : we need this information for graphical plugins (e.g. IRC)
 void CL_ClearState( void );
 void CL_ReadPackets( void );
-void CL_Disconnect_f( void );
+void CL_Disconnect_f( const CmdArgs & );
 void CL_S_Restart( bool noVideo );
 
 bool CL_IsBrowserAvailable( void );
 void CL_OpenURLInBrowser( const char *url );
 
-void CL_Reconnect_f( void );
-void CL_ServerReconnect_f( void );
-void CL_Changing_f( void );
-void CL_Precache_f( void );
-void CL_ForwardToServer_f( void );
-void CL_ServerDisconnect_f( void );
+void CL_Reconnect_f( const CmdArgs & );
+void CL_ServerReconnect_f( const CmdArgs & );
+void CL_Changing_f( const CmdArgs & );
+void CL_Precache_f( const CmdArgs & );
+void CL_ForwardToServer_f( const CmdArgs & );
+void CL_ServerDisconnect_f( const CmdArgs & );
 
 size_t CL_GetBaseServerURL( char *buffer, size_t buffer_size );
 
@@ -445,13 +445,13 @@ void CL_ClearInputState( void );
 //
 void CL_WriteDemoMessage( msg_t *msg );
 void CL_DemoCompleted( void );
-void CL_PlayDemo_f( void );
+void CL_PlayDemo_f( const CmdArgs & );
 void CL_ReadDemoPackets( void );
 void CL_LatchedDemoJump( void );
-void CL_Stop_f( void );
-void CL_Record_f( void );
-void CL_PauseDemo_f( void );
-void CL_DemoJump_f( void );
+void CL_Stop_f( const CmdArgs & );
+void CL_Record_f( const CmdArgs & );
+void CL_PauseDemo_f( const CmdArgs & );
+void CL_DemoJump_f( const CmdArgs & );
 size_t CL_ReadDemoMetaData( const char *demopath, char *meta_data, size_t meta_data_size );
 char **CL_DemoComplete( const char *partial );
 
@@ -465,8 +465,8 @@ void CL_FreeDownloadList( void );
 bool CL_CheckOrDownloadFile( const char *filename );
 
 bool CL_DownloadRequest( const char *filename, bool requestpak );
-void CL_DownloadStatus_f( void );
-void CL_DownloadCancel_f( void );
+void CL_DownloadStatus_f( const CmdArgs & );
+void CL_DownloadCancel_f( const CmdArgs & );
 void CL_DownloadDone( void );
 void CL_RequestNextDownload( void );
 void CL_CheckDownloadTimeout( void );

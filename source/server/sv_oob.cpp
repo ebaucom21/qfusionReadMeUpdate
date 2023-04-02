@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "sv_mm.h"
+#include "../qcommon/cmdargssplitter.h"
 
 typedef struct sv_infoserver_s {
 	netadr_t address;
@@ -377,7 +378,7 @@ static char *SV_ShortInfoString( void ) {
 /*
 * SVC_Ack
 */
-static void SVC_Ack( const socket_t *socket, const netadr_t *address ) {
+static void SVC_Ack( const socket_t *socket, const netadr_t *address, const CmdArgs & ) {
 	Com_Printf( "Ping acknowledge from %s\n", NET_AddressToString( address ) );
 }
 
@@ -385,7 +386,7 @@ static void SVC_Ack( const socket_t *socket, const netadr_t *address ) {
 * SVC_Ping
 * Just responds with an acknowledgement
 */
-static void SVC_Ping( const socket_t *socket, const netadr_t *address ) {
+static void SVC_Ping( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
 	// send any arguments back with ack
 	Netchan_OutOfBandPrint( socket, address, "ack %s", Cmd_Args() );
 }
@@ -396,7 +397,7 @@ static void SVC_Ping( const socket_t *socket, const netadr_t *address ) {
 * Responds with short info for broadcast scans
 * The second parameter should be the current protocol version number.
 */
-static void SVC_InfoResponse( const socket_t *socket, const netadr_t *address ) {
+static void SVC_InfoResponse( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
 	int i, count;
 	char *string;
 	bool allow_empty = false, allow_full = false;
@@ -461,7 +462,7 @@ static void SVC_InfoResponse( const socket_t *socket, const netadr_t *address ) 
 /*
 * SVC_SendInfoString
 */
-static void SVC_SendInfoString( const socket_t *socket, const netadr_t *address, const char *requestType, const char *responseType, bool fullStatus ) {
+static void SVC_SendInfoString( const socket_t *socket, const netadr_t *address, const char *requestType, const char *responseType, bool fullStatus, const CmdArgs &cmdArgs ) {
 	char *string;
 
 	if( sv_showInfoQueries->integer ) {
@@ -494,15 +495,15 @@ static void SVC_SendInfoString( const socket_t *socket, const netadr_t *address,
 /*
 * SVC_GetInfoResponse
 */
-static void SVC_GetInfoResponse( const socket_t *socket, const netadr_t *address ) {
-	SVC_SendInfoString( socket, address, "GetInfo", "infoResponse", false );
+static void SVC_GetInfoResponse( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
+	SVC_SendInfoString( socket, address, "GetInfo", "infoResponse", false, cmdArgs );
 }
 
 /*
 * SVC_GetStatusResponse
 */
-static void SVC_GetStatusResponse( const socket_t *socket, const netadr_t *address ) {
-	SVC_SendInfoString( socket, address, "GetStatus", "statusResponse", true );
+static void SVC_GetStatusResponse( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
+	SVC_SendInfoString( socket, address, "GetStatus", "statusResponse", true, cmdArgs );
 }
 
 
@@ -515,7 +516,7 @@ static void SVC_GetStatusResponse( const socket_t *socket, const netadr_t *addre
 * flood the server with invalid connection IPs.  With a
 * challenge, they must give a valid IP address.
 */
-static void SVC_GetChallenge( const socket_t *socket, const netadr_t *address ) {
+static void SVC_GetChallenge( const socket_t *socket, const netadr_t *address, const CmdArgs & ) {
 	int i;
 	int oldest;
 	int oldestTime;
@@ -553,7 +554,7 @@ static void SVC_GetChallenge( const socket_t *socket, const netadr_t *address ) 
 /*
 * SVC_DirectConnect
 */
-static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address ) {
+static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
 #ifdef TCP_ALLOW_CONNECT
 	int incoming = 0;
 #endif
@@ -833,7 +834,7 @@ int SVC_FakeConnect( const char *fakeUserinfo, const char *fakeSocketType, const
 /*
 * Rcon_Validate
 */
-static int Rcon_Validate( void ) {
+static int Rcon_Validate( const CmdArgs &cmdArgs ) {
 	if( !strlen( rcon_password->string ) ) {
 		return 0;
 	}
@@ -852,12 +853,12 @@ static int Rcon_Validate( void ) {
 * Shift down the remaining args
 * Redirect all printfs
 */
-static void SVC_RemoteCommand( const socket_t *socket, const netadr_t *address ) {
+static void SVC_RemoteCommand( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
 	int i;
 	char remaining[1024];
 	flush_params_t extra;
 
-	i = Rcon_Validate();
+	i = Rcon_Validate( cmdArgs );
 
 	if( i == 0 ) {
 		Com_Printf( "Bad rcon from %s:\n%s\n", NET_AddressToString( address ), Cmd_Args() );
@@ -873,7 +874,7 @@ static void SVC_RemoteCommand( const socket_t *socket, const netadr_t *address )
 		Com_Printf( "Rcon Packet %s\n", NET_AddressToString( address ) );
 	}
 
-	if( !Rcon_Validate() ) {
+	if( !Rcon_Validate( cmdArgs ) ) {
 		Com_Printf( "Bad rcon_password.\n" );
 	} else {
 		remaining[0] = 0;
@@ -918,7 +919,7 @@ static void SV_GetSteamTags( char *tags ) {
 
 typedef struct {
 	const char *name;
-	void ( *func )( const socket_t *socket, const netadr_t *address );
+	void ( *func )( const socket_t *socket, const netadr_t *address, const CmdArgs & );
 } connectionless_cmd_t;
 
 connectionless_cmd_t connectionless_cmds[] =
@@ -945,25 +946,21 @@ connectionless_cmd_t connectionless_cmds[] =
 * connectionless packets.
 */
 void SV_ConnectionlessPacket( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
-	connectionless_cmd_t *cmd;
-	char *s, *c;
 
 	MSG_BeginReading( msg );
 	MSG_ReadInt32( msg );    // skip the -1 marker
 
-	s = MSG_ReadStringLine( msg );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( MSG_ReadStringLine( msg ) ) );
 
-	Cmd_TokenizeString( s );
+	Com_DPrintf( "Packet %s : %s\n", NET_AddressToString( address ), cmdArgs[0].data() );
 
-	c = Cmd_Argv( 0 );
-	Com_DPrintf( "Packet %s : %s\n", NET_AddressToString( address ), c );
-
-	for( cmd = connectionless_cmds; cmd->name; cmd++ ) {
-		if( !strcmp( c, cmd->name ) ) {
-			cmd->func( socket, address );
+	for( const connectionless_cmd_t *cmd = connectionless_cmds; cmd->name; cmd++ ) {
+		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
+			cmd->func( socket, address, cmdArgs );
 			return;
 		}
 	}
 
-	Com_DPrintf( "Bad connectionless packet from %s:\n%s\n", NET_AddressToString( address ), s );
+	Com_DPrintf( "Bad connectionless packet from %s:\n%s\n", NET_AddressToString( address ), cmdArgs[0].data() );
 }

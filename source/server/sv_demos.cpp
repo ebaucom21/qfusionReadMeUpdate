@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sv_snap.h"
 #include "../qcommon/demometadata.h"
+#include "../qcommon/cmdargs.h"
 
 using wsw::operator""_asView;
 
@@ -68,7 +69,7 @@ void SV_Demo_WriteSnap( void ) {
 	}
 	if( i == sv_maxclients->integer ) { // FIXME
 		Com_Printf( "No players left, stopping server side demo recording\n" );
-		SV_Demo_Stop_f();
+		SV_Demo_Stop_f( CmdArgs {} );
 		return;
 	}
 
@@ -111,7 +112,7 @@ static void SV_Demo_InitClient( void ) {
 *
 * Begins server demo recording.
 */
-void SV_Demo_Start_f( void ) {
+void SV_Demo_Start_f( const CmdArgs &cmdArgs ) {
 	int demofilename_size, i;
 
 	if( Cmd_Argc() < 2 ) {
@@ -266,7 +267,7 @@ static void SV_Demo_Stop( bool cancel, bool silent ) {
 *
 * Console command for stopping server demo recording.
 */
-void SV_Demo_Stop_f( void ) {
+void SV_Demo_Stop_f( const CmdArgs &cmdArgs ) {
 	SV_Demo_Stop( false, atoi( Cmd_Argv( 1 ) ) != 0 );
 }
 
@@ -275,7 +276,7 @@ void SV_Demo_Stop_f( void ) {
 *
 * Cancels the server demo recording (stop, remove file)
 */
-void SV_Demo_Cancel_f( void ) {
+void SV_Demo_Cancel_f( const CmdArgs &cmdArgs ) {
 	SV_Demo_Stop( true, atoi( Cmd_Argv( 1 ) ) != 0 );
 }
 
@@ -284,7 +285,7 @@ void SV_Demo_Cancel_f( void ) {
 *
 * Removes the server demo files
 */
-void SV_Demo_Purge_f( void ) {
+void SV_Demo_Purge_f( const CmdArgs &cmdArgs ) {
 	char *buffer;
 	char *p, *s, num[8];
 	char path[256];
@@ -374,7 +375,7 @@ void SV_Demo_Purge_f( void ) {
 * SV_DemoList_f
 */
 #define DEMOS_PER_VIEW  30
-void SV_DemoList_f( client_t *client ) {
+void SV_DemoList_f( client_t *client, const CmdArgs &cmdArgs ) {
 	char message[MAX_STRING_CHARS];
 	char numpr[16];
 	char buffer[MAX_STRING_CHARS];
@@ -478,7 +479,7 @@ void SV_DemoList_f( client_t *client ) {
 * Responds to clients demoget request with: demoget "filename"
 * If nothing is found, responds with demoget without filename, so client knowns it wasn't found
 */
-void SV_DemoGet_f( client_t *client ) {
+void SV_DemoGet_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int num, numdemos;
 	char message[MAX_STRING_CHARS];
 	char buffer[MAX_STRING_CHARS];

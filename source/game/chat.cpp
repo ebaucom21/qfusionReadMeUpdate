@@ -870,7 +870,7 @@ void RespectHandler::ClientEntry::addToReportStats( RespectStats *reportedStats 
 	}
 }
 
-void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore ) {
+void IgnoreFilter::handleIgnoreCommand( const edict_t *ent, bool ignore, const CmdArgs &cmdArgs ) {
 	const int numArgs = wsw::min( trap_Cmd_Argc(), MAX_CLIENTS );
 	if( numArgs < 2 ) {
 		printIgnoreCommandUsage( ent, ignore );
@@ -981,7 +981,7 @@ void IgnoreFilter::sendChangeFilterVarCommand( const edict_t *ent ) {
 	trap_GameCmd( ent, va( "ign setVar %d", value ) );
 }
 
-void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent ) {
+void IgnoreFilter::handleIgnoreListCommand( const edict_t *ent, const CmdArgs &cmdArgs ) {
 	const edict_t *player = G_PlayerForText( trap_Cmd_Argv( 1 ) );
 	if( !player ) {
 		if( trap_Cmd_Argc() >= 2 ) {

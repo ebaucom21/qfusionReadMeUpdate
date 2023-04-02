@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "qcommon.h"
+#include "cmdargs.h"
 
 #include "sys_fs.h"
 #include "sys_threads.h"
@@ -505,7 +506,7 @@ const char *FS_PakNameForFile( const char *filename ) {
 /*
 * Cmd_PakFile_f
 */
-static void Cmd_PakFile_f( void ) {
+static void Cmd_PakFile_f( const CmdArgs &cmdArgs ) {
 	const char *s = FS_PakNameForFile( Cmd_Argv( 1 ) );
 
 	if( !s ) {
@@ -2984,7 +2985,7 @@ const char *FS_RuntimeDirectory( void ) {
 /*
 * FS_Path_f
 */
-static void FS_Path_f( void ) {
+static void FS_Path_f( const CmdArgs & ) {
 	searchpath_t *s;
 
 	Com_Printf( "Current search path:\n" );
@@ -3506,8 +3507,8 @@ int FS_RemoveNotifications( int bitmask ) {
 /*
 * Cmd_FS_SearchExt_f
 */
-static void Cmd_FS_SearchExt_f( int cantHaveFlags, int mustHaveFlags ) {
-	char *pattern;
+static void Cmd_FS_SearchExt_f( int cantHaveFlags, int mustHaveFlags, const CmdArgs &cmdArgs ) {
+	const char *pattern;
 	int argc = Cmd_Argc();
 	int total;
 	searchpath_t *search;
@@ -3535,8 +3536,7 @@ static void Cmd_FS_SearchExt_f( int cantHaveFlags, int mustHaveFlags ) {
 			continue;
 		}
 
-		trie_err = Trie_DumpIf( pack->trie, "", TRIE_DUMP_VALUES,
-								FS_PatternMatchesPackfile, pattern, &trie_dump );
+		trie_err = Trie_DumpIf( pack->trie, "", TRIE_DUMP_VALUES, FS_PatternMatchesPackfile, (void *)pattern, &trie_dump );
 
 		if( trie_err == TRIE_OK ) {
 			first = true;
@@ -3570,21 +3570,21 @@ static void Cmd_FS_SearchExt_f( int cantHaveFlags, int mustHaveFlags ) {
 /*
 * Cmd_FS_Search_f
 */
-static void Cmd_FS_Search_f( void ) {
-	Cmd_FS_SearchExt_f( 0, 0 );
+static void Cmd_FS_Search_f( const CmdArgs &cmdArgs ) {
+	Cmd_FS_SearchExt_f( 0, 0, cmdArgs );
 }
 
 /*
 * Cmd_FS_Untouched_f
 */
-static void Cmd_FS_Untouched_f( void ) {
-	Cmd_FS_SearchExt_f( FS_PACKFILE_DIRECTORY | FS_PACKFILE_COHERENT, 0 );
+static void Cmd_FS_Untouched_f( const CmdArgs &cmdArgs ) {
+	Cmd_FS_SearchExt_f( FS_PACKFILE_DIRECTORY | FS_PACKFILE_COHERENT, 0, cmdArgs );
 }
 
 /*
 * Cmd_FileChecksum_f
 */
-static void Cmd_FileChecksum_f( void ) {
+static void Cmd_FileChecksum_f( const CmdArgs &cmdArgs ) {
 	unsigned int checksum, checksum2;
 	const char *filename;
 
@@ -3618,7 +3618,7 @@ static void Cmd_FileChecksum_f( void ) {
 /*
 * Cmd_FileMTime_f
 */
-static void Cmd_FileMTime_f( void ) {
+static void Cmd_FileMTime_f( const CmdArgs &cmdArgs ) {
 	time_t mtime;
 	const char *filename;
 	struct tm *newtime;

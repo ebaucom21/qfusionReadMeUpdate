@@ -559,9 +559,6 @@ void SV_InitGameProgs( void ) {
 	import.Cvar_Value = Cvar_Value;
 	import.Cvar_String = Cvar_String;
 
-	import.Cmd_Argc = Cmd_Argc;
-	import.Cmd_Argv = Cmd_Argv;
-	import.Cmd_Args = Cmd_Args;
 	import.Cmd_AddCommand = Cmd_AddCommand;
 	import.Cmd_RemoveCommand = Cmd_RemoveCommand;
 

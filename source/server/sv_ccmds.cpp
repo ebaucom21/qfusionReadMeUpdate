@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "server.h"
-
+#include "../qcommon/cmdargs.h"
 
 //===============================================================================
 //
@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 * SV_FindPlayer
 * Helper for the functions below. It finds the client_t for the given name or id
 */
-static client_t *SV_FindPlayer( char *s ) {
+static client_t *SV_FindPlayer( const char *s ) {
 	client_t *cl;
 	client_t *player;
 	int i;
@@ -85,8 +85,8 @@ found_player:
 * devmap: restart game, enable cheats, and start map
 * gamemap: just start the map
 */
-static void SV_Map_f( void ) {
-	char *map;
+static void SV_Map_f( const CmdArgs &cmdArgs ) {
+	const char *map;
 	char mapname[MAX_QPATH];
 	bool found = false;
 
@@ -165,7 +165,7 @@ static char **SV_MapComplete_f( const char *partial ) {
 /*
 * SV_Status_f
 */
-void SV_Status_f( void ) {
+void SV_Status_f( const CmdArgs & ) {
 	int i, j, l;
 	client_t *cl;
 	const char *s;
@@ -235,7 +235,7 @@ void SV_Status_f( void ) {
 /*
 * SV_Heartbeat_f
 */
-static void SV_Heartbeat_f( void ) {
+static void SV_Heartbeat_f( const CmdArgs & ) {
 	svc.nextHeartbeat = Sys_Milliseconds();
 }
 
@@ -243,7 +243,7 @@ static void SV_Heartbeat_f( void ) {
 * SV_Serverinfo_f
 * Examine or change the serverinfo string
 */
-static void SV_Serverinfo_f( void ) {
+static void SV_Serverinfo_f( const CmdArgs & ) {
 	Com_Printf( "Server info settings:\n" );
 	Info_Print( Cvar_Serverinfo() );
 }
@@ -252,7 +252,7 @@ static void SV_Serverinfo_f( void ) {
 * SV_DumpUser_f
 * Examine all a users info strings
 */
-static void SV_DumpUser_f( void ) {
+static void SV_DumpUser_f( const CmdArgs &cmdArgs ) {
 	client_t *client;
 	if( Cmd_Argc() != 2 ) {
 		Com_Printf( "Usage: info <userid>\n" );
@@ -273,7 +273,7 @@ static void SV_DumpUser_f( void ) {
 * SV_KillServer_f
 * Kick everyone off, possibly in preparation for a new game
 */
-static void SV_KillServer_f( void ) {
+static void SV_KillServer_f( const CmdArgs & ) {
 	if( !svs.initialized ) {
 		return;
 	}
@@ -285,7 +285,7 @@ static void SV_KillServer_f( void ) {
 * SV_CvarCheck_f
 * Ask the client to inform us of the current value of a cvar
 */
-static void SV_CvarCheck_f( void ) {
+static void SV_CvarCheck_f( const CmdArgs &cmdArgs ) {
 	client_t *client;
 	int i;
 

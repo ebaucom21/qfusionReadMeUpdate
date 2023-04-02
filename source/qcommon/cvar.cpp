@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "q_trie.h"
 #include "../client/console.h"
+#include "../qcommon/cmdargs.h"
 
 static bool cvar_initialized = false;
 static bool cvar_preinitialized = false;
@@ -424,17 +425,17 @@ void Cvar_FixCheatVars( void ) {
 * command.  Returns true if the command was a variable reference that
 * was handled. (print or change)
 */
-bool Cvar_Command( void ) {
+bool Cvar_Command( const CmdArgs &cmdArgs ) {
 	cvar_t *v;
 
 	// check variables
-	v = Cvar_Find( Cmd_Argv( 0 ) );
+	v = Cvar_Find( cmdArgs[0].data() );
 	if( !v ) {
 		return false;
 	}
 
 	// perform a variable print or set
-	if( Cmd_Argc() == 1 ) {
+	if( cmdArgs.size() == 1 ) {
 		Com_Printf( "\"%s\" is \"%s%s\" default: \"%s%s\"\n", v->name,
 					v->string, Q_ColorStringTerminator( v->string, ColorIndex( COLOR_WHITE ) ),
 					v->dvalue, Q_ColorStringTerminator( v->dvalue, ColorIndex( COLOR_WHITE ) ) );
@@ -455,7 +456,7 @@ bool Cvar_Command( void ) {
 *
 * Allows setting and defining of arbitrary cvars from console
 */
-static void Cvar_Set_f( void ) {
+static void Cvar_Set_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() != 3 ) {
 		Com_Printf( "usage: set <variable> <value>\n" );
 		return;
@@ -463,7 +464,7 @@ static void Cvar_Set_f( void ) {
 	Cvar_Set( Cmd_Argv( 1 ), Cmd_Argv( 2 ) );
 }
 
-static void Cvar_SetWithFlag_f( cvar_flag_t flag ) {
+static void Cvar_SetWithFlag_f( const CmdArgs &cmdArgs, cvar_flag_t flag ) {
 	if( Cmd_Argc() != 3 ) {
 		Com_Printf( "usage: %s <variable> <value>\n", Cmd_Argv( 0 ) );
 		return;
@@ -471,27 +472,27 @@ static void Cvar_SetWithFlag_f( cvar_flag_t flag ) {
 	Cvar_FullSet( Cmd_Argv( 1 ), Cmd_Argv( 2 ), flag, false );
 }
 
-static void Cvar_Seta_f( void ) {
-	Cvar_SetWithFlag_f( CVAR_ARCHIVE );
+static void Cvar_Seta_f( const CmdArgs &cmdArgs ) {
+	Cvar_SetWithFlag_f( cmdArgs, CVAR_ARCHIVE );
 }
 
-static void Cvar_Setau_f( void ) {
-	Cvar_SetWithFlag_f( CVAR_ARCHIVE | CVAR_USERINFO );
+static void Cvar_Setau_f( const CmdArgs &cmdArgs ) {
+	Cvar_SetWithFlag_f( cmdArgs, CVAR_ARCHIVE | CVAR_USERINFO );
 }
 
-static void Cvar_Setas_f( void ) {
-	Cvar_SetWithFlag_f( CVAR_ARCHIVE | CVAR_SERVERINFO );
+static void Cvar_Setas_f( const CmdArgs &cmdArgs ) {
+	Cvar_SetWithFlag_f( cmdArgs, CVAR_ARCHIVE | CVAR_SERVERINFO );
 }
 
-static void Cvar_Sets_f( void ) {
-	Cvar_SetWithFlag_f( CVAR_SERVERINFO );
+static void Cvar_Sets_f( const CmdArgs &cmdArgs ) {
+	Cvar_SetWithFlag_f( cmdArgs, CVAR_SERVERINFO );
 }
 
-static void Cvar_Setu_f( void ) {
-	Cvar_SetWithFlag_f( CVAR_USERINFO );
+static void Cvar_Setu_f( const CmdArgs &cmdArgs ) {
+	Cvar_SetWithFlag_f( cmdArgs, CVAR_USERINFO );
 }
 
-static void Cvar_Reset_f( void ) {
+static void Cvar_Reset_f( const CmdArgs &cmdArgs ) {
 	cvar_t *v;
 
 	if( Cmd_Argc() != 2 ) {
@@ -510,7 +511,7 @@ static void Cvar_Reset_f( void ) {
 /*
 * Cvar_Toggle_f
 */
-static void Cvar_Toggle_f( void ) {
+static void Cvar_Toggle_f( const CmdArgs &cmdArgs ) {
 	int i;
 	cvar_t *var;
 
@@ -575,10 +576,10 @@ void Cvar_WriteVariables( int file ) {
 /*
 * Cvar_List_f
 */
-static void Cvar_List_f( void ) {
+static void Cvar_List_f( const CmdArgs &cmdArgs ) {
 	struct trie_dump_s *dump = NULL;
 	unsigned int i;
-	char *pattern;
+	const char *pattern;
 
 	if( Cmd_Argc() == 1 ) {
 		pattern = NULL;
@@ -588,7 +589,7 @@ static void Cvar_List_f( void ) {
 
 	assert( cvar_trie );
 	QMutex_Lock( cvar_mutex );
-	Trie_DumpIf( cvar_trie, "", TRIE_DUMP_VALUES, Cvar_PatternMatches, pattern, &dump );
+	Trie_DumpIf( cvar_trie, "", TRIE_DUMP_VALUES, Cvar_PatternMatches, (void *)pattern, &dump );
 	QMutex_Unlock( cvar_mutex );
 
 	Com_Printf( "\nConsole variables:\n" );
@@ -640,7 +641,7 @@ static void Cvar_List_f( void ) {
 /*
 * Cvar_ArchiveList_f
 */
-static void Cvar_ArchiveList_f( void ) {
+static void Cvar_ArchiveList_f( const CmdArgs & ) {
 	struct trie_dump_s *dump;
 	unsigned int i;
 

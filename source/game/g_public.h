@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    81
+#define GAME_API_VERSION    82
 
 //===============================================================
 
@@ -75,6 +75,8 @@ namespace wsw {
 }
 
 struct CMShapeList;
+
+struct CmdArgs;
 
 #include "../qcommon/maplist.h"
 
@@ -150,11 +152,13 @@ typedef struct {
 	const char *( *Cvar_String )( const char *name );
 
 	// ClientCommand and ServerCommand parameter access
+	/*
 	int ( *Cmd_Argc )( void );
 	char *( *Cmd_Argv )( int arg );
 	char *( *Cmd_Args )( void );        // concatenation of all argv >= 1
+	*/
 
-	void ( *Cmd_AddCommand )( const char *name, void ( *cmd )( void ) );
+	void ( *Cmd_AddCommand )( const char *name, void ( *cmd )( const CmdArgs & ) );
 	void ( *Cmd_RemoveCommand )( const char *cmd_name );
 
 	// files will be memory mapped read only
@@ -232,7 +236,7 @@ typedef struct {
 	void ( *ClientUserinfoChanged )( edict_t *ent, char *userinfo );
 	bool ( *ClientMultiviewChanged )( edict_t *ent, bool multiview );
 	void ( *ClientDisconnect )( edict_t *ent, const char *reason );
-	void ( *ClientCommand )( edict_t *ent, uint64_t clientCommandNum );
+	void ( *ClientCommand )( edict_t *ent, uint64_t clientCommandNum, const CmdArgs & );
 	void ( *ClientThink )( edict_t *ent, usercmd_t *cmd, int timeDelta );
 
 	void ( *RunFrame )( unsigned int msec, int64_t serverTime );

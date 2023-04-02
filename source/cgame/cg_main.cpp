@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../gameshared/gs_public.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/cmdargs.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
@@ -883,7 +884,7 @@ void CG_Reset( void ) {
 	CG_ResetDamageIndicator();
 	CG_ResetItemTimers();
 
-	CG_SC_ResetFragsFeed();
+	CG_SC_ResetFragsFeed( {} );
 
 	CG_ClearLocalEntities();
 
@@ -1099,7 +1100,7 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 * CG_Shutdown
 */
 void CG_Shutdown( void ) {
-	CG_SC_ResetFragsFeed();
+	CG_SC_ResetFragsFeed( {} );
 	CG_FreeLocalEntities();
 	CG_DemocamShutdown();
 	CG_UnregisterCGameCommands();

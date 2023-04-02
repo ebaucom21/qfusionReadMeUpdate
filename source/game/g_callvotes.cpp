@@ -67,7 +67,7 @@ typedef struct callvotetype_s
 	bool ( *validate )( callvotedata_t *data, bool first );
 	void ( *execute )( callvotedata_t *vote );
 	const char *( *current )( void );
-	void ( *extraHelp )( edict_t *ent );
+	void ( *extraHelp )( edict_t *ent, const CmdArgs & );
 	void ( *describeClientArgs )( int configStringIndex );
 	char *argument_format;
 	char *help;
@@ -129,7 +129,7 @@ static void G_DescribeMinutesArg( int configStringIndex ) {
 
 const wsw::CharLookup kMapListSeparators( ", "_asView );
 
-static void G_VoteMapExtraHelp( edict_t *ent ) {
+static void G_VoteMapExtraHelp( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( g_enforce_map_pool->integer && strlen( g_map_pool->string ) > 2 ) {
 		G_PrintMsg( ent, "Maps available [map pool enforced]:\n %s\n", g_map_pool->string );
 		return;
@@ -417,7 +417,7 @@ static const char *G_VoteTimelimitCurrent( void ) {
 * gametype
 */
 
-static void G_VoteGametypeExtraHelp( edict_t *ent ) {
+static void G_VoteGametypeExtraHelp( edict_t *ent, const CmdArgs &cmdArgs ) {
 	wsw::StaticString<MAX_STRING_CHARS> message;
 
 	if( const auto *latched = g_gametype->latched_string ) {
@@ -760,7 +760,7 @@ static void G_VoteUnlockPassed( callvotedata_t *vote ) {
 * remove
 */
 
-static void G_VoteRemoveExtraHelp( edict_t *ent ) {
+static void G_VoteRemoveExtraHelp( edict_t *ent, const CmdArgs &cmdArgs ) {
 	int i;
 	edict_t *e;
 	char msg[1024];
@@ -869,7 +869,7 @@ static void G_VoteRemovePassed( callvotedata_t *vote ) {
 * kick
 */
 
-static void G_VoteHelp_ShowPlayersList( edict_t *ent ) {
+static void G_VoteHelp_ShowPlayersList( edict_t *ent, const CmdArgs & ) {
 	int i;
 	edict_t *e;
 	char msg[1024];
@@ -1545,7 +1545,7 @@ static void G_CallVotes_PrintUsagesToPlayer( edict_t *ent ) {
 /*
 * G_CallVotes_PrintHelpToPlayer
 */
-static void G_CallVotes_PrintHelpToPlayer( edict_t *ent, callvotetype_t *callvote ) {
+static void G_CallVotes_PrintHelpToPlayer( edict_t *ent, callvotetype_t *callvote, const CmdArgs &cmdArgs ) {
 
 	if( !callvote ) {
 		return;
@@ -1556,7 +1556,7 @@ static void G_CallVotes_PrintHelpToPlayer( edict_t *ent, callvotetype_t *callvot
 				( callvote->current ? va( "Current: %s\n", callvote->current() ) : "" ),
 				( callvote->help ? "- " : "" ), ( callvote->help ? callvote->help : "" ) );
 	if( callvote->extraHelp != NULL ) {
-		callvote->extraHelp( ent );
+		callvote->extraHelp( ent, cmdArgs );
 	}
 }
 
@@ -1722,7 +1722,7 @@ static void G_CallVotes_CheckState( void ) {
 /*
 * G_CallVotes_CmdVote
 */
-void G_CallVotes_CmdVote( edict_t *ent ) {
+void G_CallVotes_CmdVote( edict_t *ent, const CmdArgs &cmdArgs ) {
 	const char *vote;
 	int vote_id;
 
@@ -1827,7 +1827,7 @@ static bool G_CallVotes_CheckFlood( const edict_t *ent ) {
 /*
 * G_CallVote
 */
-static void G_CallVote( edict_t *ent, bool isopcall ) {
+static void G_CallVote( edict_t *ent, bool isopcall, const CmdArgs &cmdArgs ) {
 	int i;
 	const char *votename;
 	callvotetype_t *callvote;
@@ -1917,7 +1917,7 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 		if( callvote->expectedargs != -1 &&
 			( callvote->expectedargs != -2 || trap_Cmd_Argc() - 2 > 0 ) ) {
 			// wrong number of parametres
-			G_CallVotes_PrintHelpToPlayer( ent, callvote );
+			G_CallVotes_PrintHelpToPlayer( ent, callvote, cmdArgs );
 			return;
 		}
 	}
@@ -1935,7 +1935,7 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 		// Hack... save the old timestamp before G_CallVotes_Reset()
 		// and restore it afterwards. All of this begs for refactoring anyway.
 		const auto oldClientTimestamp = ent->r.client->callvote_when;
-		G_CallVotes_PrintHelpToPlayer( ent, callvote );
+		G_CallVotes_PrintHelpToPlayer( ent, callvote, cmdArgs );
 		G_CallVotes_Reset(); // free the args
 		ent->r.client->callvote_when = oldClientTimestamp;
 		return;
@@ -1978,17 +1978,17 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 /*
 * G_CallVote_Cmd
 */
-void G_CallVote_Cmd( edict_t *ent ) {
+void G_CallVote_Cmd( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( ( ent->r.svflags & SVF_FAKECLIENT ) ) {
 		return;
 	}
-	G_CallVote( ent, false );
+	G_CallVote( ent, false, cmdArgs );
 }
 
 /*
 * G_OperatorVote_Cmd
 */
-void G_OperatorVote_Cmd( edict_t *ent ) {
+void G_OperatorVote_Cmd( edict_t *ent, const CmdArgs &cmdArgs ) {
 	edict_t *other;
 	int forceVote;
 
@@ -2041,8 +2041,8 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 	}
 
 	if( !Q_stricmp( trap_Cmd_Argv( 1 ), "putteam" ) ) {
-		char *splayer = trap_Cmd_Argv( 2 );
-		char *steam = trap_Cmd_Argv( 3 );
+		const char *splayer = trap_Cmd_Argv( 2 );
+		const char *steam = trap_Cmd_Argv( 3 );
 		edict_t *playerEnt;
 		int newTeam;
 
@@ -2072,7 +2072,7 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 		return;
 	}
 
-	G_CallVote( ent, true );
+	G_CallVote( ent, true, cmdArgs );
 }
 
 /*

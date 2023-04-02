@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "sv_mm.h"
-
+#include "../qcommon/cmdargssplitter.h"
 
 //============================================================================
 //
@@ -268,7 +268,7 @@ CLIENT COMMAND EXECUTION
 * Sends the first message from the server to a connected client.
 * This will be sent on the initial connection and upon each server load.
 */
-static void SV_New_f( client_t *client ) {
+static void SV_New_f( client_t *client, const CmdArgs & ) {
 	int playernum;
 	unsigned int numpure;
 	purelist_t *purefile;
@@ -362,7 +362,7 @@ static void SV_New_f( client_t *client ) {
 /*
 * SV_Configstrings_f
 */
-static void SV_Configstrings_f( client_t *client ) {
+static void SV_Configstrings_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int start;
 
 	if( client->state == CS_CONNECTING ) {
@@ -413,7 +413,7 @@ static void SV_Configstrings_f( client_t *client ) {
 /*
 * SV_Baselines_f
 */
-static void SV_Baselines_f( client_t *client ) {
+static void SV_Baselines_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int start;
 	entity_state_t nullstate;
 	entity_state_t *base;
@@ -428,7 +428,7 @@ static void SV_Baselines_f( client_t *client ) {
 	// handle the case of a level changing while a client was connecting
 	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
 		Com_Printf( "SV_Baselines_f from different level\n" );
-		SV_New_f( client );
+		SV_New_f( client, cmdArgs );
 		return;
 	}
 
@@ -465,7 +465,7 @@ static void SV_Baselines_f( client_t *client ) {
 /*
 * SV_Begin_f
 */
-static void SV_Begin_f( client_t *client ) {
+static void SV_Begin_f( client_t *client, const CmdArgs &cmdArgs ) {
 	Com_DPrintf( "Begin() from %s\n", client->name );
 
 	// wsw : r1q2[start] : could be abused to respawn or cause spam/other mod-specific problems
@@ -501,7 +501,7 @@ static void SV_Begin_f( client_t *client ) {
 * Responds to reliable nextdl packet with unreliable download packet
 * If nextdl packet's offet information is negative, download will be stopped
 */
-static void SV_NextDownload_f( client_t *client ) {
+static void SV_NextDownload_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int blocksize;
 	int offset;
 	uint8_t data[FRAGMENT_SIZE * 2];
@@ -649,7 +649,7 @@ static bool SV_FilenameForDownloadRequest( const char *requestname, bool request
 * SV_BeginDownload_f
 * Responds to reliable download packet with reliable initdownload packet
 */
-static void SV_BeginDownload_f( client_t *client ) {
+static void SV_BeginDownload_f( client_t *client, const CmdArgs &cmdArgs ) {
 	const char *requestname;
 	const char *uploadname;
 	size_t alloc_size;
@@ -770,7 +770,7 @@ local_download:
 * SV_Disconnect_f
 * The client is going to disconnect, so remove the connection immediately
 */
-static void SV_Disconnect_f( client_t *client ) {
+static void SV_Disconnect_f( client_t *client, const CmdArgs & ) {
 	SV_DropClient( client, DROP_TYPE_GENERAL, NULL );
 }
 
@@ -779,15 +779,15 @@ static void SV_Disconnect_f( client_t *client ) {
 * SV_ShowServerinfo_f
 * Dumps the serverinfo info string
 */
-static void SV_ShowServerinfo_f( client_t *client ) {
+static void SV_ShowServerinfo_f( client_t *client, const CmdArgs & ) {
 	Info_Print( Cvar_Serverinfo() );
 }
 
 /*
 * SV_UserinfoCommand_f
 */
-static void SV_UserinfoCommand_f( client_t *client ) {
-	char *info;
+static void SV_UserinfoCommand_f( client_t *client, const CmdArgs &cmdArgs ) {
+	const char *info;
 	int64_t time;
 
 	info = Cmd_Argv( 1 );
@@ -812,7 +812,7 @@ static void SV_UserinfoCommand_f( client_t *client ) {
 /*
 * SV_NoDelta_f
 */
-static void SV_NoDelta_f( client_t *client ) {
+static void SV_NoDelta_f( client_t *client, const CmdArgs & ) {
 	client->nodelta = true;
 	client->nodelta_frame = 0;
 	client->lastframe = -1; // jal : I'm not sure about this. Seems like it's missing but...
@@ -821,7 +821,7 @@ static void SV_NoDelta_f( client_t *client ) {
 /*
 * SV_Multiview_f
 */
-static void SV_Multiview_f( client_t *client ) {
+static void SV_Multiview_f( client_t *client, const CmdArgs &cmdArgs ) {
 	bool mv;
 
 	mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
@@ -855,7 +855,7 @@ static void SV_Multiview_f( client_t *client ) {
 
 typedef struct {
 	const char *name;
-	void ( *func )( client_t *client );
+	void ( *func )( client_t *client, const CmdArgs &cmdArgs );
 } ucmd_t;
 
 ucmd_t ucmds[] =
@@ -891,18 +891,19 @@ ucmd_t ucmds[] =
 * SV_ExecuteUserCommand
 */
 static void SV_ExecuteUserCommand( client_t *client, uint64_t clientCommandNum, const char *s ) {
-	Cmd_TokenizeString( s );
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( s ) );
 
 	ucmd_t *u;
 	for( u = ucmds; u->name; u++ ) {
-		if( !strcmp( Cmd_Argv( 0 ), u->name ) ) {
-			u->func( client );
+		if( !strcmp( cmdArgs[0].data(), u->name ) ) {
+			u->func( client, cmdArgs );
 			break;
 		}
 	}
 
 	if( client->state >= CS_SPAWNED && !u->name && sv.state == ss_game ) {
-		ge->ClientCommand( client->edict, clientCommandNum );
+		ge->ClientCommand( client->edict, clientCommandNum, cmdArgs );
 	}
 }
 

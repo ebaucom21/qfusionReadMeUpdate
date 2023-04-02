@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_env_sampler.h"
 #include "../client/client.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/cmdargs.h"
 #include "alsystemfacade.h"
 
 class NullSoundSystem : public SoundSystem {
@@ -80,7 +81,7 @@ cvar_t *s_hrtf;
 cvar_t *s_stereo2mono;
 cvar_t *s_globalfocus;
 
-static void SF_Music_f() {
+static void SF_Music_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() == 2 ) {
 		SoundSystem::instance()->startBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 1 ), 0 );
 	} else if( Cmd_Argc() == 3 ) {
@@ -91,19 +92,19 @@ static void SF_Music_f() {
 	}
 }
 
-static void SF_StopBackgroundTrack() {
+static void SF_StopBackgroundTrack( const CmdArgs & ) {
 	SoundSystem::instance()->stopBackgroundTrack();
 }
 
-static void SF_PrevBackgroundTrack() {
+static void SF_PrevBackgroundTrack( const CmdArgs & ) {
 	SoundSystem::instance()->prevBackgroundTrack();
 }
 
-static void SF_NextBackgroundTrack() {
+static void SF_NextBackgroundTrack( const CmdArgs & ) {
 	SoundSystem::instance()->nextBackgroundTrack();
 }
 
-static void SF_PauseBackgroundTrack() {
+static void SF_PauseBackgroundTrack( const CmdArgs & ) {
 	SoundSystem::instance()->pauseBackgroundTrack();
 }
 

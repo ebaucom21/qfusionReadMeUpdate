@@ -2134,20 +2134,20 @@ bool CG_IsScoreboardShown() {
 	return wsw::ui::UISystem::instance()->isShowingScoreboard();
 }
 
-void CG_ScoresOn_f() {
+void CG_ScoresOn_f( const CmdArgs & ) {
 	wsw::ui::UISystem::instance()->setScoreboardShown( true );
 }
 
-void CG_ScoresOff_f() {
+void CG_ScoresOff_f( const CmdArgs & ) {
 	wsw::ui::UISystem::instance()->setScoreboardShown( false );
 }
 
-void CG_MessageMode() {
+void CG_MessageMode( const CmdArgs & ) {
 	wsw::ui::UISystem::instance()->toggleChatPopup();
 	CL_ClearInputState();
 }
 
-void CG_MessageMode2() {
+void CG_MessageMode2( const CmdArgs & ) {
 	wsw::ui::UISystem::instance()->toggleTeamChatPopup();
 	CL_ClearInputState();
 }

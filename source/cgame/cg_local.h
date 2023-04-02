@@ -523,17 +523,17 @@ void CG_DrawNet( int x, int y, int w, int h, int align, vec4_t color );
 
 void CG_ClearPointedNum( void );
 
-void CG_SC_ResetFragsFeed( void );
+void CG_SC_ResetFragsFeed( const CmdArgs & );
 
 //
 // cg_scoreboard.c
 //
-void CG_ScoresOn_f();
-void CG_ScoresOff_f();
+void CG_ScoresOn_f( const CmdArgs & );
+void CG_ScoresOff_f( const CmdArgs & );
 bool CG_IsScoreboardShown();
 
-void CG_MessageMode();
-void CG_MessageMode2();
+void CG_MessageMode( const CmdArgs & );
+void CG_MessageMode2( const CmdArgs & );
 
 //
 // cg_main.c

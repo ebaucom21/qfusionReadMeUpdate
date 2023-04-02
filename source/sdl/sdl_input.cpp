@@ -505,7 +505,7 @@ void IN_Shutdown() {
 /**
  * Restart the input subsystem.
  */
-void IN_Restart( void ) {
+void IN_Restart( const CmdArgs & ) {
 	IN_Shutdown();
 	IN_Init();
 }

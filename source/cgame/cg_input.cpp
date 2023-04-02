@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/qcommon.h"
 #include "../client/input.h"
 #include "../client/keys.h"
+#include "../qcommon/cmdargs.h"
 
 static int64_t cg_inputTime;
 static int cg_inputFrameTime;
@@ -80,7 +81,7 @@ static cvar_t *cl_anglespeedkey;
 /*
 * CG_KeyDown
 */
-static void CG_KeyDown( kbutton_t *b ) {
+static void CG_KeyDown( kbutton_t *b, const CmdArgs &cmdArgs ) {
 	int k;
 	const char *c;
 
@@ -121,7 +122,7 @@ static void CG_KeyDown( kbutton_t *b ) {
 /*
 * CG_KeyUp
 */
-static void CG_KeyUp( kbutton_t *b ) {
+static void CG_KeyUp( kbutton_t *b, const CmdArgs &cmdArgs ) {
 	int k;
 	const char *c;
 	int uptime;
@@ -163,40 +164,40 @@ static void CG_KeyUp( kbutton_t *b ) {
 	b->state |= 4;  // impulse up
 }
 
-static void IN_KLookDown( void ) { CG_KeyDown( &in_klook ); }
-static void IN_KLookUp( void ) { CG_KeyUp( &in_klook ); }
-static void IN_UpDown( void ) { CG_KeyDown( &in_up ); }
-static void IN_UpUp( void ) { CG_KeyUp( &in_up ); }
-static void IN_DownDown( void ) { CG_KeyDown( &in_down ); }
-static void IN_DownUp( void ) { CG_KeyUp( &in_down ); }
-static void IN_LeftDown( void ) { CG_KeyDown( &in_left ); }
-static void IN_LeftUp( void ) { CG_KeyUp( &in_left ); }
-static void IN_RightDown( void ) { CG_KeyDown( &in_right ); }
-static void IN_RightUp( void ) { CG_KeyUp( &in_right ); }
-static void IN_ForwardDown( void ) { CG_KeyDown( &in_forward ); }
-static void IN_ForwardUp( void ) { CG_KeyUp( &in_forward ); }
-static void IN_BackDown( void ) { CG_KeyDown( &in_back ); }
-static void IN_BackUp( void ) { CG_KeyUp( &in_back ); }
-static void IN_LookupDown( void ) { CG_KeyDown( &in_lookup ); }
-static void IN_LookupUp( void ) { CG_KeyUp( &in_lookup ); }
-static void IN_LookdownDown( void ) { CG_KeyDown( &in_lookdown ); }
-static void IN_LookdownUp( void ) { CG_KeyUp( &in_lookdown ); }
-static void IN_MoveleftDown( void ) { CG_KeyDown( &in_moveleft ); }
-static void IN_MoveleftUp( void ) { CG_KeyUp( &in_moveleft ); }
-static void IN_MoverightDown( void ) { CG_KeyDown( &in_moveright ); }
-static void IN_MoverightUp( void ) { CG_KeyUp( &in_moveright ); }
-static void IN_SpeedDown( void ) { CG_KeyDown( &in_speed ); }
-static void IN_SpeedUp( void ) { CG_KeyUp( &in_speed ); }
-static void IN_StrafeDown( void ) { CG_KeyDown( &in_strafe ); }
-static void IN_StrafeUp( void ) { CG_KeyUp( &in_strafe ); }
-static void IN_AttackDown( void ) { CG_KeyDown( &in_attack ); }
-static void IN_AttackUp( void ) { CG_KeyUp( &in_attack ); }
-static void IN_UseDown( void ) { CG_KeyDown( &in_use ); }
-static void IN_UseUp( void ) { CG_KeyUp( &in_use ); }
-static void IN_SpecialDown( void ) { CG_KeyDown( &in_special ); }
-static void IN_SpecialUp( void ) { CG_KeyUp( &in_special ); }
-static void IN_ZoomDown( void ) { CG_KeyDown( &in_zoom ); }
-static void IN_ZoomUp( void ) { CG_KeyUp( &in_zoom ); }
+static void IN_KLookDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_klook, cmdArgs ); }
+static void IN_KLookUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_klook, cmdArgs ); }
+static void IN_UpDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_up, cmdArgs ); }
+static void IN_UpUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_up, cmdArgs ); }
+static void IN_DownDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_down, cmdArgs ); }
+static void IN_DownUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_down, cmdArgs ); }
+static void IN_LeftDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_left, cmdArgs ); }
+static void IN_LeftUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_left, cmdArgs ); }
+static void IN_RightDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_right, cmdArgs ); }
+static void IN_RightUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_right, cmdArgs ); }
+static void IN_ForwardDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_forward, cmdArgs ); }
+static void IN_ForwardUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_forward, cmdArgs ); }
+static void IN_BackDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_back, cmdArgs ); }
+static void IN_BackUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_back, cmdArgs ); }
+static void IN_LookupDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_lookup, cmdArgs ); }
+static void IN_LookupUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_lookup, cmdArgs ); }
+static void IN_LookdownDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_lookdown, cmdArgs ); }
+static void IN_LookdownUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_lookdown, cmdArgs ); }
+static void IN_MoveleftDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_moveleft, cmdArgs ); }
+static void IN_MoveleftUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_moveleft, cmdArgs ); }
+static void IN_MoverightDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_moveright, cmdArgs ); }
+static void IN_MoverightUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_moveright, cmdArgs ); }
+static void IN_SpeedDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_speed, cmdArgs ); }
+static void IN_SpeedUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_speed, cmdArgs ); }
+static void IN_StrafeDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_strafe, cmdArgs ); }
+static void IN_StrafeUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_strafe, cmdArgs ); }
+static void IN_AttackDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_attack, cmdArgs ); }
+static void IN_AttackUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_attack, cmdArgs ); }
+static void IN_UseDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_use, cmdArgs ); }
+static void IN_UseUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_use, cmdArgs ); }
+static void IN_SpecialDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_special, cmdArgs ); }
+static void IN_SpecialUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_special, cmdArgs ); }
+static void IN_ZoomDown( const CmdArgs &cmdArgs ) { CG_KeyDown( &in_zoom, cmdArgs ); }
+static void IN_ZoomUp( const CmdArgs &cmdArgs ) { CG_KeyUp( &in_zoom, cmdArgs ); }
 
 
 /*
@@ -440,7 +441,7 @@ COMMON
 /*
 * CG_CenterView
 */
-static void CG_CenterView( void ) {
+static void CG_CenterView( const CmdArgs & ) {
 	cg_inputCenterView = true;
 }
 

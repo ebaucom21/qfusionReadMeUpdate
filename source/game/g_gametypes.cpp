@@ -946,7 +946,7 @@ void G_Match_CheckReadys( void ) {
 /*
 * G_Match_Ready
 */
-void G_Match_Ready( edict_t *ent ) {
+void G_Match_Ready( edict_t *ent, const CmdArgs & ) {
 	if( ent->r.svflags & SVF_FAKECLIENT && level.ready[PLAYERNUM( ent )] == true ) {
 		return;
 	}
@@ -980,7 +980,7 @@ void G_Match_Ready( edict_t *ent ) {
 /*
 * G_Match_NotReady
 */
-void G_Match_NotReady( edict_t *ent ) {
+void G_Match_NotReady( edict_t *ent, const CmdArgs & ) {
 	if( ent->s.team == TEAM_SPECTATOR ) {
 		G_PrintMsg( ent, "Join the game first\n" );
 		return;
@@ -1008,11 +1008,11 @@ void G_Match_NotReady( edict_t *ent ) {
 /*
 * G_Match_ToggleReady
 */
-void G_Match_ToggleReady( edict_t *ent ) {
+void G_Match_ToggleReady( edict_t *ent, const CmdArgs &cmdArgs ) {
 	if( !level.ready[PLAYERNUM( ent )] ) {
-		G_Match_Ready( ent );
+		G_Match_Ready( ent, cmdArgs );
 	} else {
-		G_Match_NotReady( ent );
+		G_Match_NotReady( ent, cmdArgs );
 	}
 }
 

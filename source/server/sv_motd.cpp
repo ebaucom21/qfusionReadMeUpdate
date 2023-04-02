@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/cmdargs.h"
 
 /*
 * SV_MOTD_SetMOTD
@@ -102,7 +103,7 @@ void SV_MOTD_Update( void ) {
 *
 * Comand to return MOTD
 */
-void SV_MOTD_Get_f( client_t *client ) {
+void SV_MOTD_Get_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int flag = ( Cmd_Argc() > 1 ? 1 : 0 );
 
 	if( sv_MOTD->integer && svs.motd && svs.motd[0] ) {

@@ -100,6 +100,6 @@ void        AI_RemoveBot( const wsw::StringView &name );
 void        AI_RemoveBots();
 void        AI_Respawn( edict_t *ent );
 
-void        AI_Cheat_NoTarget( edict_t *ent );
+void        AI_Cheat_NoTarget( edict_t *ent, const CmdArgs & );
 
 #endif
