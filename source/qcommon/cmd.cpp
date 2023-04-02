@@ -46,11 +46,6 @@ static int Cmd_Archive( void *alias, void *ignored ) {
 	return ( (cmd_alias_t *) alias )->archive;
 }
 
-static int Cmd_PatternMatchesAlias( void *alias, void *pattern ) {
-	assert( alias );
-	return !pattern || Com_GlobMatch( (const char *) pattern, ( (cmd_alias_t *) alias )->name, false );
-}
-
 //=============================================================================
 
 /*
@@ -472,13 +467,6 @@ static void Cmd_Exec_f( void ) {
 }
 
 /*
-* CL_CompleteExecBuildList
-*/
-static char **CL_CompleteExecBuildList( const char *partial ) {
-	return Cmd_CompleteFileList( partial, "", ".cfg", true );
-}
-
-/*
 * Cmd_Echo_f
 *
 * Just prints the rest of the line to the console
@@ -488,39 +476,6 @@ static void Cmd_Echo_f( void ) {
 	for( i = 1; i < Cmd_Argc(); ++i )
 		Com_Printf( "%s ", Cmd_Argv( i ) );
 	Com_Printf( "\n" );
-}
-
-/*
-* Cmd_AliasList_f
-*/
-static void Cmd_AliasList_f( void ) {
-	char *pattern;
-	unsigned int size;
-	unsigned int i;
-	struct trie_dump_s *dump = NULL;
-
-	assert( cmd_alias_trie );
-
-	Trie_GetSize( cmd_alias_trie, &size );
-	if( !size ) {
-		Com_Printf( "No alias commands\n" );
-		return;
-	}
-
-	if( Cmd_Argc() == 1 ) {
-		pattern = NULL; // no wildcard
-	} else {
-		pattern = Cmd_Args();
-	}
-
-	Com_Printf( "\nAlias commands:\n" );
-	Trie_DumpIf( cmd_alias_trie, "", TRIE_DUMP_VALUES, Cmd_PatternMatchesAlias, pattern, &dump );
-	for( i = 0; i < dump->size; ++i ) {
-		cmd_alias_t *const a = (cmd_alias_t *) dump->key_value_vector[i].value;
-		Com_Printf( "%s : %s\n", a->name, a->value );
-	}
-	Trie_FreeDump( dump );
-	Com_Printf( "%i commands\n", i );
 }
 
 /*
@@ -691,11 +646,6 @@ static char cmd_args[MAX_STRING_CHARS];
 
 static trie_t *cmd_function_trie = NULL;
 static const trie_casing_t CMD_FUNCTION_TRIE_CASING = CON_CASE_SENSITIVE ? TRIE_CASE_SENSITIVE : TRIE_CASE_INSENSITIVE;
-
-static int Cmd_PatternMatchesFunction( void *cmd, void *pattern ) {
-	assert( cmd );
-	return !pattern || Com_GlobMatch( (const char *) pattern, ( (cmd_function_t *) cmd )->name, false );
-}
 
 // The functions that execute commands get their parameters with these
 // functions. Cmd_Argv () will return an empty string, not a NULL
@@ -899,275 +849,6 @@ static void Cmd_VStr_f( void ) {
 	}
 }
 
-
-
-/*
-* Cmd_CompleteCountPossible
-*/
-int Cmd_CompleteCountPossible( const char *partial ) {
-	assert( partial );
-	if( !partial[0] ) {
-		return 0;
-	} else {
-		unsigned int matches;
-		assert( cmd_function_trie );
-		Trie_NoOfMatches( cmd_function_trie, partial, &matches );
-		return matches;
-	}
-}
-
-/*
-* Cmd_CompleteBuildList
-*/
-char **Cmd_CompleteBuildList( const char *partial ) {
-	struct trie_dump_s *dump;
-	char **buf;
-	unsigned int i;
-
-	assert( cmd_function_trie );
-	assert( partial );
-	Trie_Dump( cmd_function_trie, partial, TRIE_DUMP_VALUES, &dump );
-	buf = (char **) Q_malloc( sizeof( char * ) * ( dump->size + 1 ) );
-	for( i = 0; i < dump->size; ++i )
-		buf[i] = ( (cmd_function_t *) ( dump->key_value_vector[i].value ) )->name;
-	buf[dump->size] = NULL;
-	Trie_FreeDump( dump );
-	return buf;
-}
-
-/*
-* Cmd_CompleteBuildArgListExt
-*
-* Find a possible single matching command
-*/
-char **Cmd_CompleteBuildArgListExt( const char *command, const char *arguments ) {
-	cmd_function_t *cmd = NULL;
-
-	if( Trie_Find( cmd_function_trie, command, TRIE_EXACT_MATCH, (void **)&cmd ) != TRIE_OK ) {
-		return NULL;
-	}
-	if( cmd->completion_func ) {
-		return cmd->completion_func( arguments );
-	}
-	return NULL;
-}
-
-/*
-* Cmd_CompleteBuildArgList
-*
-* Find a possible single matching command
-*/
-char **Cmd_CompleteBuildArgList( const char *partial ) {
-	const char *p;
-
-	p = strstr( partial, " " );
-	if( p ) {
-		Cmd_TokenizeString( partial );
-		return Cmd_CompleteBuildArgListExt( cmd_argv[0], cmd_args );
-	}
-
-	return NULL;
-}
-
-/*
-* Cmd_CompleteFileList
-*
-* Find matching files
-*/
-char **Cmd_CompleteFileList( const char *partial, const char *basedir, const char *extension, bool subdirectories ) {
-	const char *p;
-	char dir[MAX_QPATH];
-	char subdir[MAX_QPATH];
-	char prefix[MAX_QPATH];
-	int prefix_length;
-	int subdir_length;
-	int total;
-	size_t size;
-	size_t buf_size;
-	size_t total_size;
-	char **buf;
-	char *list;
-	char *ext;
-	int i, j, len;
-	int numitems;
-	int pass;
-	int numpasses;
-	int numdirs, numdirs_added;
-
-	// locate the basename (prefix) of the partial name
-	for( p = partial + strlen( partial ); p >= partial && *p != '/'; p-- )
-		;
-	p++;
-
-	Q_strncpyz( prefix, p, sizeof( prefix ) );
-	prefix_length = strlen( prefix );
-
-	// determine the searching directory
-	// if we are searching in a subdirectory, this subdirectory will have
-	// to be prepended to all results
-	strcpy( dir, basedir );
-	subdir[0] = '\0';
-	if( p > partial ) {
-		size_t subdir_len;
-
-		if( !subdirectories ) {
-			return NULL;
-		}
-		if( dir[0] ) {
-			Q_strncatz( dir, "/", sizeof( dir ) );
-		}
-		Q_strncpyz( subdir, partial, wsw::min( (int)( p - partial ), (int)sizeof( subdir ) ) );
-		for( subdir_len = strlen( subdir ); subdir[subdir_len - 1] == '/'; subdir_len-- ) subdir[subdir_len - 1] = '\0';
-		Q_strncatz( dir, subdir, sizeof( dir ) );
-		Q_strncatz( subdir, "/", sizeof( subdir ) );
-	}
-
-	total = 0;
-	total_size = 0;
-	numpasses = 0;
-
-	numdirs = 0;
-	numdirs_added = 0;
-	if( subdirectories ) {
-		// count the total amount of subdirectories in the directory
-		numdirs = FS_GetFileListExt( dir, "/", NULL, &size, 0, 0 );
-		if( numdirs ) {
-			total += numdirs;
-			total_size += size;
-			numpasses++;
-		}
-	}
-
-	// count the total amount of files in the directory
-	numitems = FS_GetFileListExt( dir, extension, NULL, &size, 0, 0 );
-	total += numitems;
-	total_size += size;
-	numpasses++;
-
-	if( !total ) {
-		return NULL;
-	}
-
-	subdir_length = strlen( subdir );
-	buf_size =  ( total + 1 ) * sizeof( char * )    // resulting pointer list with NULL ending
-			   + total_size                         // actual strings
-			   + total * subdir_length;             // extra space to prepend subdirs
-	buf = ( char ** )Q_malloc( buf_size );
-	list = ( char * )buf + ( total + 1 ) * sizeof( char * );
-
-	// get all files in the directory
-
-	size = total_size;
-	for( pass = 0; pass < numpasses; pass++ ) {
-		if( pass > 0 ) {
-			// prepend subdirectories
-			j = 0;
-			numitems = FS_GetFileList( dir, "/", list, size, 0, 0 );
-		} else {
-			// take advantage of FS_GetFileList caching
-			j = numdirs;
-			numitems = FS_GetFileList( dir, extension, list, size, 0, 0 );
-		}
-
-		for( i = 0; i < numitems; i++ ) {
-			len = strlen( list );
-			if( !Q_strnicmp( prefix, list, prefix_length ) ) {
-				ext = extension && *extension ? list + len - strlen( extension ) : NULL;
-				if( list[len - 1] == '/' ) {
-					if( !subdirectories || pass == 0 ) {
-						// ignore directories
-						list += len + 1;
-						size -= len + 1;
-						continue;
-					}
-					numdirs_added++;
-				} else if( !ext ) {
-					// do nothing
-				} else if( ext >= list && !Q_stricmp( ext, extension ) ) {
-					// remove the extension
-					*ext = '\0';
-				} else {
-					// ignore other files
-					list += len + 1;
-					size -= len + 1;
-					continue;
-				}
-
-				if( *subdir ) {
-					// searching in a subdirectory, prepend it
-					memmove( list + subdir_length, list, size );
-					memcpy( list, subdir, subdir_length );
-
-					len += subdir_length;
-					size += subdir_length;
-				}
-				buf[j++] = list;
-			}
-
-			list += len + 1;
-			size -= len + 1;
-		}
-	}
-	buf[total] = NULL;
-
-	if( numdirs > numdirs_added ) {
-		memmove( buf + numdirs_added, buf + numdirs, ( total - numdirs + 1 ) * sizeof( char * ) );
-	}
-
-	return buf;
-}
-
-/*
-Cmd_CompleteAlias
-*/
-char *Cmd_CompleteAlias( const char *partial ) {
-	size_t len;
-	cmd_alias_t *a;
-
-	assert( partial );
-	len = strlen( partial );
-	assert( cmd_alias_trie );
-	if( len && ( Trie_Find( cmd_alias_trie, partial, TRIE_PREFIX_MATCH, (void **)&a ) == TRIE_OK ) ) {
-		return a->name;
-	} else {
-		return NULL;
-	}
-}
-
-/*
-Cmd_CompleteAliasCountPossible
-*/
-int Cmd_CompleteAliasCountPossible( const char *partial ) {
-	assert( partial );
-	if( !strlen( partial ) ) {
-		return 0;
-	} else {
-		unsigned int matches;
-		assert( cmd_alias_trie );
-		Trie_NoOfMatches( cmd_alias_trie, partial, &matches );
-		return matches;
-	}
-}
-
-/*
-Cmd_CompleteAliasBuildList
-*/
-char **Cmd_CompleteAliasBuildList( const char *partial ) {
-	struct trie_dump_s *dump;
-	char **buf;
-	unsigned int i;
-
-	assert( cmd_alias_trie );
-	assert( partial );
-	Trie_Dump( cmd_alias_trie, partial, TRIE_DUMP_VALUES, &dump );
-	buf = (char **) Q_malloc( sizeof( char * ) * ( dump->size + 1 ) );
-	for( i = 0; i < dump->size; ++i )
-		buf[i] = ( (cmd_alias_t *) ( dump->key_value_vector[i].value ) )->name;
-	buf[dump->size] = NULL;
-	Trie_FreeDump( dump );
-	return buf;
-}
-
 /*
 * Cmd_CheckForCommand
 *
@@ -1257,31 +938,6 @@ void Cmd_ExecuteString( const char *text ) {
 }
 
 /*
-* Cmd_List_f
-*/
-static void Cmd_List_f( void ) {
-	struct trie_dump_s *dump = NULL;
-	unsigned int i;
-	char *pattern;
-
-	if( Cmd_Argc() == 1 ) {
-		pattern = NULL; // no wildcard
-	} else {
-		pattern = Cmd_Args();
-	}
-
-	Com_Printf( "\nCommands:\n" );
-	assert( cmd_function_trie );
-	Trie_DumpIf( cmd_function_trie, "", TRIE_DUMP_VALUES, Cmd_PatternMatchesFunction, pattern, &dump );
-	for( i = 0; i < dump->size; ++i ) {
-		cmd_function_t *const cmd = (cmd_function_t *) dump->key_value_vector[i].value;
-		Com_Printf( "%s\n", cmd->name );
-	}
-	Trie_FreeDump( dump );
-	Com_Printf( "%i commands\n", i );
-}
-
-/*
 * Cmd_PreInit
 */
 void Cmd_PreInit( void ) {
@@ -1310,21 +966,14 @@ void Cmd_Init( void ) {
 	//
 	// register our commands
 	//
-	Cmd_AddCommand( "cmdlist", Cmd_List_f );
 	Cmd_AddCommand( "exec", Cmd_Exec_f );
 	Cmd_AddCommand( "echo", Cmd_Echo_f );
-	Cmd_AddCommand( "aliaslist", Cmd_AliasList_f );
 	Cmd_AddCommand( "aliasa", Cmd_Aliasa_f );
 	Cmd_AddCommand( "unalias", Cmd_Unalias_f );
 	Cmd_AddCommand( "unaliasall", Cmd_UnaliasAll_f );
 	Cmd_AddCommand( "alias", Cmd_Alias_f );
 	Cmd_AddCommand( "wait", Cmd_Wait_f );
 	Cmd_AddCommand( "vstr", Cmd_VStr_f );
-
-	Cmd_SetCompletionFunc( "alias", Cmd_CompleteAliasBuildList );
-	Cmd_SetCompletionFunc( "aliasa", Cmd_CompleteAliasBuildList );
-	Cmd_SetCompletionFunc( "unalias", Cmd_CompleteAliasBuildList );
-	Cmd_SetCompletionFunc( "exec", CL_CompleteExecBuildList );
 
 	cmd_initialized = true;
 }
@@ -1337,10 +986,8 @@ void Cmd_Shutdown( void ) {
 		assert( cmd_alias_trie );
 		assert( cmd_function_trie );
 
-		Cmd_RemoveCommand( "cmdlist" );
 		Cmd_RemoveCommand( "exec" );
 		Cmd_RemoveCommand( "echo" );
-		Cmd_RemoveCommand( "aliaslist" );
 		Cmd_RemoveCommand( "aliasa" );
 		Cmd_RemoveCommand( "unalias" );
 		Cmd_RemoveCommand( "unaliasall" );

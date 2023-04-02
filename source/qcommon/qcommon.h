@@ -381,13 +381,7 @@ void        Cmd_RemoveCommand( const char *cmd_name );
 bool    Cmd_Exists( const char *cmd_name );
 bool    Cmd_CheckForCommand( char *text );
 void        Cmd_WriteAliases( int file );
-int         Cmd_CompleteAliasCountPossible( const char *partial );
-char        **Cmd_CompleteAliasBuildList( const char *partial );
-int         Cmd_CompleteCountPossible( const char *partial );
-char        **Cmd_CompleteBuildList( const char *partial );
-char        **Cmd_CompleteBuildArgList( const char *partial );
-char        **Cmd_CompleteBuildArgListExt( const char *command, const char *arguments );
-char        **Cmd_CompleteFileList( const char *partial, const char *basedir, const char *extension, bool subdirectories );
+
 int         Cmd_Argc( void );
 char        *Cmd_Argv( int arg );
 char        *Cmd_Args( void );
