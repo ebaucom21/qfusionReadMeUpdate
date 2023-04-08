@@ -852,8 +852,6 @@ void Qcommon_Init( int argc, char **argv ) {
 	// cvar and command buffer management
 	COM_InitArgv( argc, argv );
 
-	Cbuf_Init();
-
 	// initialize cmd/cvar tries
 	Cmd_PreInit();
 	Cvar_PreInit();
@@ -1090,7 +1088,6 @@ void Qcommon_Shutdown( void ) {
 
 	Cvar_Shutdown();
 	Cmd_Shutdown();
-	Cbuf_Shutdown();
 
 	QMutex_Destroy( &com_print_mutex );
 

@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cmdargssplitter.h"
 #include "../qcommon/q_trie.h"
 #include "../client/console.h"
+#include "../qcommon/wswstaticstring.h"
 
 #define MAX_ALIAS_NAME      64
 #define ALIAS_LOOP_COUNT    16
@@ -69,160 +70,93 @@ COMMAND BUFFER
 =============================================================================
 */
 
-/*
-* Command buffer is a cyclical dynamically allocated buffer
-* It must never be totally full, since cbuf_text_head points to first free
-* position in the buffer
-*/
+class CmdTextBuffer {
+public:
+	void prepend( const wsw::StringView &text );
+	void append( const wsw::StringView &text );
+	[[nodiscard]]
+	auto fetchNextCmd() -> std::optional<wsw::StringView>;
+	void shrinkToFit();
+private:
+	wsw::Vector<char> m_data;
+	unsigned m_headOffset { 0 };
+};
 
-static bool cbuf_initialized = false;
-
-#define MIN_CMD_TEXT_SIZE 1024
-
-static size_t cbuf_text_size, cbuf_text_head, cbuf_text_tail;
-static char *cbuf_text;
-
-/*
-* Cbuf_Init
-*/
-void Cbuf_Init( void ) {
-	assert( !cbuf_initialized );
-
-	cbuf_text_size = MIN_CMD_TEXT_SIZE;
-	cbuf_text = (char *)Q_malloc( cbuf_text_size );
-	cbuf_text_head = 0;
-	cbuf_text_tail = 0;
-
-	cbuf_initialized = true;
-}
-
-/*
-* Cbuf_Shutdown
-*/
-void Cbuf_Shutdown( void ) {
-	if( !cbuf_initialized ) {
-		return;
-	}
-
-	Q_free( cbuf_text );
-	cbuf_text = NULL;
-	cbuf_text_size = 0;
-	cbuf_text_head = 0;
-	cbuf_text_tail = 0;
-
-	cbuf_initialized = false;
-}
-
-/*
-* Q_freeSpace
-*
-* Frees some space, if we have too big buffer in use
-*/
-static void Q_freeSpace( void ) {
-	char *old;
-	size_t used, old_size;
-
-	if( cbuf_text_head >= cbuf_text_tail ) {
-		used = cbuf_text_head - cbuf_text_tail;
-	} else {
-		used = cbuf_text_size - cbuf_text_tail + cbuf_text_head;
-	}
-
-	if( used < cbuf_text_size / 2 && used < cbuf_text_size - MIN_CMD_TEXT_SIZE ) {
-		old = cbuf_text;
-		old_size = cbuf_text_size;
-
-		cbuf_text_size = used + MIN_CMD_TEXT_SIZE;
-		cbuf_text = (char *)Q_malloc( cbuf_text_size );
-
-		if( cbuf_text_head >= cbuf_text_tail ) {
-			memcpy( cbuf_text, old + cbuf_text_tail, used );
+void CmdTextBuffer::prepend( const wsw::StringView &text ) {
+	if( !text.endsWith( '\n' ) && !text.endsWith( ';' ) ) {
+		if( text.isZeroTerminated() ) {
+			// Copy including the zero character just to overwrite it
+			m_data.insert( m_data.begin() + m_headOffset, text.begin(), text.end() + 1 );
+			m_data[m_headOffset + text.length()] = '\n';
 		} else {
-			memcpy( cbuf_text, old + cbuf_text_tail, old_size - cbuf_text_tail );
-			memcpy( cbuf_text + ( old_size - cbuf_text_tail ), old, cbuf_text_head );
+			m_data.insert( m_data.begin() + m_headOffset, text.begin(), text.end() );
+			m_data.insert( m_data.begin() + m_headOffset + text.length(), '\n' );
 		}
-		cbuf_text_tail = 0;
-		cbuf_text_head = used;
-
-		Q_free( old );
-	}
-}
-
-/*
-* Cbuf_EnsureSpace
-*/
-static void Cbuf_EnsureSpace( size_t size ) {
-	size_t free;
-	size_t diff;
-
-	if( cbuf_text_head >= cbuf_text_tail ) {
-		free = cbuf_text_size - cbuf_text_head + cbuf_text_tail;
 	} else {
-		free = cbuf_text_tail - cbuf_text_head;
-	}
-
-	if( free >= size ) {
-		return;
-	}
-
-	diff = ( size - free ) + MIN_CMD_TEXT_SIZE;
-	cbuf_text_size += diff;
-	cbuf_text = (char *)Q_realloc( cbuf_text, cbuf_text_size );
-
-	if( cbuf_text_head < cbuf_text_tail ) {
-		memmove( cbuf_text + cbuf_text_tail + diff, cbuf_text + cbuf_text_tail, cbuf_text_size - diff - cbuf_text_tail );
-		cbuf_text_tail += diff;
+		m_data.insert( m_data.begin() + m_headOffset, text.begin(), text.end() );
 	}
 }
 
-/*
-* Cbuf_AddText
-*
-* Adds command text at the end of the buffer
-*/
+void CmdTextBuffer::append( const wsw::StringView &text ) {
+	m_data.insert( m_data.end(), text.begin(), text.end() );
+	// TODO: Is this mandatory?
+	if( !text.endsWith( '\n' ) && !text.endsWith( ';' ) ) {
+		m_data.push_back( '\n' );
+	}
+}
+
+auto CmdTextBuffer::fetchNextCmd() -> std::optional<wsw::StringView> {
+	const unsigned oldHeadOffset = m_headOffset;
+
+	bool isInsideQuotes       = false;
+	bool hasPendingEscapeChar = false;
+
+	while( m_headOffset < m_data.size() ) {
+		const char ch = m_data[m_headOffset];
+
+		if( hasPendingEscapeChar ) [[unlikely]] {
+			hasPendingEscapeChar = false;
+		} else {
+			if( ch == '"' ) {
+				isInsideQuotes = !isInsideQuotes;
+			} else if( ch == '\\' ) {
+				hasPendingEscapeChar = true;
+			}
+		}
+
+		++m_headOffset;
+
+		if( ch == '\n' || ( !isInsideQuotes && ch == ';' ) ) {
+			break;
+		}
+	}
+
+	if( m_headOffset > oldHeadOffset ) [[likely]] {
+		return wsw::StringView( m_data.data() + oldHeadOffset, m_headOffset - oldHeadOffset );
+	}
+
+	return std::nullopt;
+}
+
+void CmdTextBuffer::shrinkToFit() {
+	const unsigned charsToClear = m_headOffset;
+	constexpr unsigned limit    = 4 * 4096u;
+	m_data.erase( m_data.begin(), m_data.begin() + charsToClear );
+	if( charsToClear > limit || m_data.size() > limit ) [[unlikely]] {
+		m_data.shrink_to_fit();
+	}
+	m_headOffset = 0;
+}
+
+static CmdTextBuffer g_cmdTextBuffer;
+
 void Cbuf_AddText( const char *text ) {
-	size_t textlen = strlen( text );
-
-	Cbuf_EnsureSpace( textlen );
-
-	if( cbuf_text_size - cbuf_text_head < textlen ) {
-		size_t endsize = cbuf_text_size - cbuf_text_head;
-
-		memcpy( cbuf_text + cbuf_text_head, text, endsize );
-		memcpy( cbuf_text, text + endsize, textlen - endsize );
-		cbuf_text_head = textlen - endsize;
-	} else {
-		memcpy( cbuf_text + cbuf_text_head, text, textlen );
-		cbuf_text_head += textlen;
-		if( cbuf_text_head == cbuf_text_size ) {
-			cbuf_text_head = 0;
-		}
-	}
+	g_cmdTextBuffer.append( wsw::StringView( text ) );
 }
 
-/*
-* Cbuf_InsertText
-*
-* When a command wants to issue other commands immediately, the text is
-* inserted at the beginning of the buffer, before any remaining unexecuted
-* commands.
-* Adds a \n to the text
-*/
 void Cbuf_InsertText( const char *text ) {
-	size_t textlen = strlen( text );
-
-	Cbuf_EnsureSpace( textlen );
-
-	if( cbuf_text_tail < textlen ) {
-		memcpy( cbuf_text + cbuf_text_size - ( textlen - cbuf_text_tail ), text, textlen - cbuf_text_tail );
-		memcpy( cbuf_text, text + textlen - cbuf_text_tail, cbuf_text_tail );
-		cbuf_text_tail = cbuf_text_size - ( textlen - cbuf_text_tail );
-	} else {
-		memcpy( cbuf_text + cbuf_text_tail - textlen, text, textlen );
-		cbuf_text_tail -= textlen;
-	}
+	g_cmdTextBuffer.prepend( wsw::StringView( text ) );
 }
-
 
 /*
 * Cbuf_ExecuteText
@@ -243,66 +177,6 @@ void Cbuf_ExecuteText( int exec_when, const char *text ) {
 			Com_Error( ERR_FATAL, "Cbuf_ExecuteText: bad exec_when" );
 	}
 }
-
-/*
-* Cbuf_Execute
-* // Pulls off \n terminated lines of text from the command buffer and sends
-* // them through Cmd_ExecuteString.  Stops when the buffer is empty.
-* // Normally called once per frame, but may be explicitly invoked.
-* // Do not call inside a command function!
-*/
-void Cbuf_Execute( void ) {
-	size_t i;
-	int c;
-	char line[MAX_STRING_CHARS];
-	bool quotes, quoteskip;
-
-	alias_count = 0;    // don't allow infinite alias loops
-
-	while( cbuf_text_tail != cbuf_text_head ) {
-		// find a \n or ; line break
-		i = 0;
-		quotes = false;
-		quoteskip = false;
-		while( cbuf_text_tail != cbuf_text_head && i < sizeof( line ) - 1 ) {
-			c = cbuf_text[cbuf_text_tail];
-
-			if( !quoteskip && c == '"' ) {
-				quotes = !quotes;
-			}
-
-			if( !quoteskip && c == '\\' ) {
-				quoteskip = true;
-			} else {
-				quoteskip = false;
-			}
-
-			line[i] = c;
-
-			cbuf_text_tail = ( cbuf_text_tail + 1 ) % cbuf_text_size;
-
-			if( ( c == '\n' ) || ( !quotes && c == ';' ) ) {
-				break;
-			}
-
-			i++;
-		}
-		line[i] = 0;
-
-		// execute the command line
-		Cmd_ExecuteString( line );
-
-		if( cmd_wait ) {
-			// skip out while text still remains in buffer, leaving it
-			// for next frame
-			cmd_wait = false;
-			break;
-		}
-	}
-
-	Q_freeSpace();
-}
-
 
 /*
 * Cbuf_AddEarlyCommands
@@ -782,12 +656,12 @@ bool Cmd_CheckForCommand( char *text ) {
 * // as if it was typed at the console
 * FIXME: lookupnoadd the token to speed search?
 */
-void Cmd_ExecuteString( const char *text ) {
+void Cmd_ExecuteString( const wsw::StringView &text ) {
 	cmd_function_t *cmd;
 	cmd_alias_t *a;
 
 	static CmdArgsSplitter argsSplitter;
-	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( text ) );
+	const CmdArgs &cmdArgs = argsSplitter.exec( text );
 
 	if( cmdArgs.allArgs.empty() ) {
 		return; // no tokens
@@ -808,7 +682,9 @@ void Cmd_ExecuteString( const char *text ) {
 		// check functions
 		if( !cmd->function ) {
 			// forward to server command
-			Cmd_ExecuteString( va( "cmd %s", text ) );
+			wsw::StaticString<MAX_TOKEN_CHARS> forwardingBuffer;
+			forwardingBuffer << wsw::StringView( "cmd " ) << text;
+			Cmd_ExecuteString( forwardingBuffer.asView() );
 		} else {
 			cmd->function( cmdArgs );
 		}
@@ -827,6 +703,31 @@ void Cmd_ExecuteString( const char *text ) {
 	} else {
 		Com_Printf( "Unknown command \"%s" S_COLOR_WHITE "\"\n", str );
 	}
+}
+
+void Cmd_ExecuteString( const char *cmd ) {
+	Cmd_ExecuteString( wsw::StringView( cmd ) );
+}
+
+/*
+* Cbuf_Execute
+* // Pulls off \n terminated lines of text from the command buffer and sends
+* // them through Cmd_ExecuteString.  Stops when the buffer is empty.
+* // Normally called once per frame, but may be explicitly invoked.
+* // Do not call inside a command function!
+*/
+void Cbuf_Execute( void ) {
+	alias_count = 0;    // don't allow infinite alias loops
+
+	while( const std::optional<wsw::StringView> maybeNextCmd = g_cmdTextBuffer.fetchNextCmd() ) {
+		Cmd_ExecuteString( *maybeNextCmd );
+		if( cmd_wait ) {
+			cmd_wait = false;
+			break;
+		}
+	}
+
+	g_cmdTextBuffer.shrinkToFit();
 }
 
 /*

@@ -351,8 +351,6 @@ servers can also send across commands and entire text files can be execed.
 The + command line options are also added to the command buffer.
 */
 
-void        Cbuf_Init( void );
-void        Cbuf_Shutdown( void );
 void        Cbuf_AddText( const char *text );
 void        Cbuf_InsertText( const char *text );
 void        Cbuf_ExecuteText( int exec_when, const char *text );
@@ -388,7 +386,6 @@ void        Cmd_WriteAliases( int file );
 #define Cmd_Argv( arg ) ( cmdArgs[arg].data() )
 #define Cmd_Args( arg ) ( cmdArgs.argsString.data() )
 
-void        Cmd_TokenizeString( const char *text );
 void        Cmd_ExecuteString( const char *text );
 void        Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func );
 
