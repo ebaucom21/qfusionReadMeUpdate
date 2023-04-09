@@ -254,8 +254,8 @@ void CG_DemocamInit( void ) {
 	}
 
 	// add console commands
-	Cmd_AddCommand( "demoFreeFly", CG_DemoFreeFly_Cmd_f );
-	Cmd_AddCommand( "camswitch", CG_CamSwitch_Cmd_f );
+	CL_Cmd_Register( "demoFreeFly", CG_DemoFreeFly_Cmd_f );
+	CL_Cmd_Register( "camswitch", CG_CamSwitch_Cmd_f );
 }
 
 /*
@@ -267,8 +267,8 @@ void CG_DemocamShutdown( void ) {
 	}
 
 	// remove console commands
-	Cmd_RemoveCommand( "demoFreeFly" );
-	Cmd_RemoveCommand( "camswitch" );
+	CL_Cmd_Unregister( "demoFreeFly" );
+	CL_Cmd_Unregister( "camswitch" );
 }
 
 /*

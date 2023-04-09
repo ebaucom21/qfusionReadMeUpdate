@@ -325,24 +325,24 @@ static void SV_CvarCheck_f( const CmdArgs &cmdArgs ) {
 * SV_InitOperatorCommands
 */
 void SV_InitOperatorCommands( void ) {
-	Cmd_AddCommand( "heartbeat", SV_Heartbeat_f );
-	Cmd_AddCommand( "status", SV_Status_f );
-	Cmd_AddCommand( "serverinfo", SV_Serverinfo_f );
-	Cmd_AddCommand( "dumpuser", SV_DumpUser_f );
+	SV_Cmd_Register( "heartbeat", SV_Heartbeat_f );
+	SV_Cmd_Register( "status", SV_Status_f );
+	SV_Cmd_Register( "serverinfo", SV_Serverinfo_f );
+	SV_Cmd_Register( "dumpuser", SV_DumpUser_f );
 
-	Cmd_AddCommand( "map", SV_Map_f );
-	Cmd_AddCommand( "devmap", SV_Map_f );
-	Cmd_AddCommand( "gamemap", SV_Map_f );
-	Cmd_AddCommand( "killserver", SV_KillServer_f );
+	SV_Cmd_Register( "map", SV_Map_f );
+	SV_Cmd_Register( "devmap", SV_Map_f );
+	SV_Cmd_Register( "gamemap", SV_Map_f );
+	SV_Cmd_Register( "killserver", SV_KillServer_f );
 
-	Cmd_AddCommand( "serverrecord", SV_Demo_Start_f );
-	Cmd_AddCommand( "serverrecordstop", SV_Demo_Stop_f );
-	Cmd_AddCommand( "serverrecordcancel", SV_Demo_Cancel_f );
-	Cmd_AddCommand( "serverrecordpurge", SV_Demo_Purge_f );
+	SV_Cmd_Register( "serverrecord", SV_Demo_Start_f );
+	SV_Cmd_Register( "serverrecordstop", SV_Demo_Stop_f );
+	SV_Cmd_Register( "serverrecordcancel", SV_Demo_Cancel_f );
+	SV_Cmd_Register( "serverrecordpurge", SV_Demo_Purge_f );
 
-	Cmd_AddCommand( "purelist", SV_PureList_f );
+	SV_Cmd_Register( "purelist", SV_PureList_f );
 
-	Cmd_AddCommand( "cvarcheck", SV_CvarCheck_f );
+	SV_Cmd_Register( "cvarcheck", SV_CvarCheck_f );
 
 	Cmd_SetCompletionFunc( "map", SV_MapComplete_f );
 	Cmd_SetCompletionFunc( "devmap", SV_MapComplete_f );
@@ -353,22 +353,22 @@ void SV_InitOperatorCommands( void ) {
 * SV_ShutdownOperatorCommands
 */
 void SV_ShutdownOperatorCommands( void ) {
-	Cmd_RemoveCommand( "heartbeat" );
-	Cmd_RemoveCommand( "status" );
-	Cmd_RemoveCommand( "serverinfo" );
-	Cmd_RemoveCommand( "dumpuser" );
+	SV_Cmd_Unregister( "heartbeat" );
+	SV_Cmd_Unregister( "status" );
+	SV_Cmd_Unregister( "serverinfo" );
+	SV_Cmd_Unregister( "dumpuser" );
 
-	Cmd_RemoveCommand( "map" );
-	Cmd_RemoveCommand( "devmap" );
-	Cmd_RemoveCommand( "gamemap" );
-	Cmd_RemoveCommand( "killserver" );
+	SV_Cmd_Unregister( "map" );
+	SV_Cmd_Unregister( "devmap" );
+	SV_Cmd_Unregister( "gamemap" );
+	SV_Cmd_Unregister( "killserver" );
 
-	Cmd_RemoveCommand( "serverrecord" );
-	Cmd_RemoveCommand( "serverrecordstop" );
-	Cmd_RemoveCommand( "serverrecordcancel" );
-	Cmd_RemoveCommand( "serverrecordpurge" );
+	SV_Cmd_Unregister( "serverrecord" );
+	SV_Cmd_Unregister( "serverrecordstop" );
+	SV_Cmd_Unregister( "serverrecordcancel" );
+	SV_Cmd_Unregister( "serverrecordpurge" );
 
-	Cmd_RemoveCommand( "purelist" );
+	SV_Cmd_Unregister( "purelist" );
 
-	Cmd_RemoveCommand( "cvarcheck" );
+	SV_Cmd_Unregister( "cvarcheck" );
 }

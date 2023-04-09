@@ -18,6 +18,9 @@
 
  */
 
+#ifndef WSW_43c64bed_a1ec_442c_a8cb_2fa107edfa89_H
+#define WSW_43c64bed_a1ec_442c_a8cb_2fa107edfa89_H
+
 #include "../gameshared/q_keycodes.h"
 
 #include "../qcommon/wswstaticvector.h"
@@ -180,4 +183,6 @@ void Key_WriteBindings( int file );
 
 void Key_Init( void );
 void Key_Shutdown( void );
+
+#endif
 

@@ -359,7 +359,7 @@ static void IN_HandleEvents( void ) {
 				break;
 
 			case SDL_QUIT:
-				Cbuf_ExecuteText( EXEC_NOW, "quit" );
+				CL_Cmd_ExecuteNow( "quit" );
 				break;
 
 			case SDL_WINDOWEVENT:

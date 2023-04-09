@@ -559,8 +559,8 @@ void SV_InitGameProgs( void ) {
 	import.Cvar_Value = Cvar_Value;
 	import.Cvar_String = Cvar_String;
 
-	import.Cmd_AddCommand = Cmd_AddCommand;
-	import.Cmd_RemoveCommand = Cmd_RemoveCommand;
+	import.Cmd_AddCommand = SV_Cmd_Register;
+	import.Cmd_RemoveCommand = SV_Cmd_Unregister;
 
 	import.ML_Update = ML_Update;
 	import.ML_GetListSize = ML_GetListSize;
@@ -570,8 +570,8 @@ void SV_InitGameProgs( void ) {
 
 	import.Compress = PF_Compress;
 
-	import.Cmd_ExecuteText = Cbuf_ExecuteText;
-	import.Cbuf_Execute = Cbuf_Execute;
+	import.Cmd_ExecuteText = SV_Cmd_ExecuteText;
+	import.Cbuf_Execute = SV_Cbuf_ExecutePendingCommands;
 
 	import.FakeClientConnect = SVC_FakeConnect;
 	import.DropClient = PF_DropClient;

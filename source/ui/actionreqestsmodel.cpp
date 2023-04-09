@@ -1,5 +1,6 @@
 #include "actionrequestmodel.h"
 #include "local.h"
+#include "../client/client.h"
 
 namespace wsw::ui {
 
@@ -120,8 +121,8 @@ bool ActionRequestsModel::handleKeyEvent( int quakeKey ) {
 	for( const auto &entry: m_entries ) {
 		if( const auto maybeCommand = entry.getMatchingAction( quakeKey ) ) {
 			assert( maybeCommand->isZeroTerminated() );
-			Cbuf_AddText( maybeCommand->data() );
-			Cbuf_AddText( "\n" );
+			CL_Cbuf_AppendCommand( maybeCommand->data() );
+			CL_Cbuf_AppendCommand( "\n" );
 			removeAt( (unsigned)( std::addressof( entry ) - m_entries.begin() ) );
 			return true;
 		}

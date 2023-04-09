@@ -21,6 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sv_mm.h"
 #include "sv_snap.h"
+#include "../qcommon/cmdsystem.h"
+#include "../qcommon/singletonholder.h"
+
+using wsw::operator""_asView;
 
 static bool sv_initialized = false;
 
@@ -633,7 +637,7 @@ static void SV_CheckDefaultMap( void ) {
 	svc.autostarted = true;
 	if( dedicated->integer ) {
 		if( ( sv.state == ss_dead ) && sv_defaultmap && strlen( sv_defaultmap->string ) && !strlen( sv.mapname ) ) {
-			Cbuf_ExecuteText( EXEC_APPEND, va( "map %s\n", sv_defaultmap->string ) );
+			SV_Cbuf_AppendCommand( va( "map %s\n", sv_defaultmap->string ) );
 		}
 	}
 }
@@ -986,6 +990,122 @@ void SV_SetupSnapTables( cmodel_state_t *cms ) {
 	SnapShadowTable::Init();
 }
 
+class SVCmdSystem: public CmdSystem {
+	void registerSystemCommands() override {
+		registerCommand( "exec"_asView, handlerOfExec );
+		registerCommand( "echo"_asView, handlerOfEcho );
+		registerCommand( "alias"_asView, handlerOfAlias );
+		registerCommand( "aliasa"_asView, handlerOfAliasa );
+		registerCommand( "unalias"_asView, handlerOfUnalias );
+		registerCommand( "unaliasall"_asView, handlerOfUnaliasall );
+		registerCommand( "wait"_asView, handlerOfWait );
+		registerCommand( "vstr"_asView, handlerOfVstr );
+	}
+
+	static void handlerOfExec( const CmdArgs & );
+	static void handlerOfEcho( const CmdArgs & );
+	static void handlerOfAlias( const CmdArgs & );
+	static void handlerOfAliasa( const CmdArgs & );
+	static void handlerOfUnalias( const CmdArgs & );
+	static void handlerOfUnaliasall( const CmdArgs & );
+	static void handlerOfWait( const CmdArgs & );
+	static void handlerOfVstr( const CmdArgs & );
+};
+
+static SingletonHolder<SVCmdSystem> g_svCmdSystemHolder;
+
+void SVCmdSystem::handlerOfExec( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfExec( cmdArgs );
+}
+
+void SVCmdSystem::handlerOfEcho( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfEcho( cmdArgs );
+}
+
+void SVCmdSystem::handlerOfAlias( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfAlias( false, cmdArgs );
+}
+
+void SVCmdSystem::handlerOfAliasa( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfAlias( true, cmdArgs );
+}
+
+void SVCmdSystem::handlerOfUnalias( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfUnalias( cmdArgs );
+}
+
+void SVCmdSystem::handlerOfUnaliasall( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfUnaliasall( cmdArgs );
+}
+
+void SVCmdSystem::handlerOfWait( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfWait( cmdArgs );
+}
+
+void SVCmdSystem::handlerOfVstr( const CmdArgs &cmdArgs ) {
+	g_svCmdSystemHolder.instance()->helperForHandlerOfVstr( cmdArgs );
+}
+
+void SV_InitCmdSystem() {
+	g_svCmdSystemHolder.init();
+}
+
+CmdSystem *SV_GetCmdSystem() {
+	return g_svCmdSystemHolder.instance();
+}
+
+void SV_ShutdownCmdSystem() {
+	g_svCmdSystemHolder.shutdown();
+}
+
+void SV_Cmd_ExecuteText( int when, const char *text ) {
+	switch( when ) {
+		case EXEC_NOW:
+			g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text ) );
+			break;
+		case EXEC_APPEND:
+			g_svCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
+			break;
+		case EXEC_INSERT:
+			g_svCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
+			break;
+		default:
+			Sys_Error( "Illegal EXEC_WHEN code" );
+	}
+}
+
+void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
+	g_svCmdSystemHolder.instance()->registerCommand( wsw::StringView( name ), handler );
+}
+
+void SV_Cmd_Unregister( const char *name ) {
+	g_svCmdSystemHolder.instance()->unregisterCommand( wsw::StringView( name ) );
+}
+
+void SV_Cmd_ExecuteNow( const char *text ) {
+	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView( text ) );
+}
+
+void SV_Cbuf_AppendCommand( const char *text ) {
+	g_svCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
+}
+
+void SV_Cbuf_AppendCommand( const wsw::StringView &text ) {
+	g_svCmdSystemHolder.instance()->appendCommand( text );
+}
+
+void SV_Cbuf_PrependCommand( const char *text ) {
+	g_svCmdSystemHolder.instance()->prependCommand( wsw::StringView( text ) );
+}
+
+void SV_Cbuf_PrependCommand( const wsw::StringView &text ) {
+	g_svCmdSystemHolder.instance()->prependCommand( text );
+}
+
+void SV_Cbuf_ExecutePendingCommands() {
+	g_svCmdSystemHolder.instance()->executeBufferCommands();
+}
+
 #if DEDICATED_ONLY
 
 bool con_initialized;
@@ -1028,11 +1148,11 @@ void SCR_ChangeSystemFontSmallSize( int ch ) {
 }
 
 void Key_Init( void ) {
-	Cmd_AddCommand( "bind", Key_Bind_Null_f );
+	//Cmd_AddCommand( "bind", Key_Bind_Null_f );
 }
 
 void Key_Shutdown( void ) {
-	Cmd_RemoveCommand( "bind" );
+	//Cmd_RemoveCommand( "bind" );
 }
 
 struct qfontface_s *SCR_RegisterFont( const char *name ) {

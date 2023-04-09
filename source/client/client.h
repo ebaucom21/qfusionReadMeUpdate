@@ -361,6 +361,20 @@ extern entity_state_t cl_baselines[MAX_EDICTS];
 void CL_Init( void );
 void CL_Quit( void );
 
+void CL_Cmd_Register( const wsw::StringView &name, void ( *handler )( const CmdArgs & ) );
+void CL_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) );
+void CL_Cmd_Unregister( const char *name );
+bool CL_Cmd_Exists( const wsw::StringView &name );
+void CL_Cmd_ExecuteNow( const char *text );
+void CL_Cmd_ExecuteNow( const wsw::StringView &text );
+
+void CL_Cbuf_AppendCommand( const char *text );
+void CL_Cbuf_AppendCommand( const wsw::StringView &text );
+void CL_Cbuf_PrependCommand( const char *text );
+void CL_Cbuf_PrependCommand( const wsw::StringView &text );
+
+void CL_Cbuf_ExecutePendingCommands();
+
 void CL_UpdateClientCommandsToServer( msg_t *msg );
 void CL_AddReliableCommand( const char *cmd );
 void CL_Netchan_Transmit( msg_t *msg );

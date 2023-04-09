@@ -1240,7 +1240,7 @@ void QtUISystem::checkPropertyChanges() {
 
 	const bool hadTeamChat = m_hasTeamChat;
 	m_hasTeamChat = false;
-	if( Cmd_Exists( "say_team" ) ) {
+	if( CL_Cmd_Exists( "say_team"_asView ) ) {
 		m_hasTeamChat = CG_IsSpectator() || ( GS_TeamBasedGametype() && !GS_IndividualGameType() );
 	}
 
@@ -1834,10 +1834,10 @@ void QtUISystem::commitPendingCVarChanges() {
 	Q_EMIT hasPendingCVarChangesChanged( false );
 
 	if( restartVideo ) {
-		Cbuf_ExecuteText( EXEC_APPEND, "vid_restart" );
+		CL_Cbuf_AppendCommand( "vid_restart" );
 	}
 	if( restartSound ) {
-		Cbuf_ExecuteText( EXEC_APPEND, "s_restart" );
+		CL_Cbuf_AppendCommand( "s_restart" );
 	}
 }
 
@@ -1894,41 +1894,41 @@ void QtUISystem::updateCVarAwareControls() {
 }
 
 void QtUISystem::quit() {
-	Cbuf_AddText( "quit\n" );
+	CL_Cbuf_AppendCommand( "quit\n" );
 }
 
 void QtUISystem::disconnect() {
-	Cbuf_AddText( "disconnect\n" );
+	CL_Cbuf_AppendCommand( "disconnect\n" );
 }
 
 void QtUISystem::spectate() {
 	assert( m_canSpectate );
-	Cbuf_AddText( "spec\n" );
+	CL_Cbuf_AppendCommand( "spec\n" );
 }
 
 void QtUISystem::join() {
 	assert( m_canJoin );
-	Cbuf_AddText( "join\n" );
+	CL_Cbuf_AppendCommand( "join\n" );
 }
 
 void QtUISystem::joinAlpha() {
 	assert( m_canJoinAlpha );
-	Cbuf_AddText( "join alpha\n" );
+	CL_Cbuf_AppendCommand( "join alpha\n" );
 }
 
 void QtUISystem::joinBeta() {
 	assert( m_canJoinBeta );
-	Cbuf_AddText( "join beta\n" );
+	CL_Cbuf_AppendCommand( "join beta\n" );
 }
 
 void QtUISystem::toggleReady() {
 	assert( m_canBeReady );
-	Cbuf_AddText( "ready\n" );
+	CL_Cbuf_AppendCommand( "ready\n" );
 }
 
 void QtUISystem::toggleChallengerStatus() {
 	assert( m_canToggleChallengerStatus );
-	Cbuf_AddText( m_isInChallengersQueue ? "spec\n" : "join\n" );
+	CL_Cbuf_AppendCommand( m_isInChallengersQueue ? "spec\n" : "join\n" );
 }
 
 void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool isOperatorCall ) {
@@ -1941,7 +1941,7 @@ void QtUISystem::callVote( const QByteArray &name, const QByteArray &value, bool
 	command << ' ' << wsw::StringView( name.data(), (unsigned)name.size() );
 	command << ' ' << wsw::StringView( value.data(), (unsigned)value.size() );
 	command << '\n';
-	Cbuf_AddText( command.data() );
+	CL_Cbuf_AppendCommand( command.data() );
 }
 
 auto QtUISystem::colorFromRgbString( const QString &string ) const -> QVariant {
@@ -2087,25 +2087,25 @@ void QtUISystem::appendSetCVarCommand( const wsw::StringView &name, const Value 
 	assert( !name.contains( ' ' ) && !name.contains( '\t' ) );
 	command << "set "_asView << name << " \""_asView << value << "\";"_asView;
 	Com_Printf( "%s\n", command.data() );
-	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+	CL_Cbuf_AppendCommand( command.data() );
 }
 
 void QtUISystem::connectToAddress( const QByteArray &address ) {
 	wsw::StaticString<256> command;
 	command << "connect "_asView << wsw::StringView( address.data(), (unsigned)address.size() );
-	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+	CL_Cbuf_AppendCommand( command.data() );
 }
 
 void QtUISystem::reconnectWithPassword( const QByteArray &password ) {
 	wsw::StaticString<256> command;
 	appendSetCVarCommand( "password"_asView, wsw::StringView( password.data(), password.size() ) );
-	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
+	CL_Cbuf_AppendCommand( "reconnect" );
 	m_clearFailedConnectionState = true;
 }
 
 void QtUISystem::reconnect() {
 	// TODO: Check whether we actually can reconnect
-	Cbuf_ExecuteText( EXEC_APPEND, "reconnect" );
+	CL_Cbuf_AppendCommand( "reconnect" );
 	// Protect from sticking in this state
 	m_clearFailedConnectionState = true;
 }
@@ -2118,7 +2118,7 @@ void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray
 
 	wsw::StaticString<256> command;
 	command << "map "_asView << map;
-	Cbuf_ExecuteText( EXEC_APPEND, command.data() );
+	CL_Cbuf_AppendCommand( command.data() );
 }
 
 bool QtUISystem::isShown() const {

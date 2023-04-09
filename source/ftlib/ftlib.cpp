@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswstringview.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/wswfs.h"
+#include "../client/client.h"
 
 using wsw::operator""_asView;
 
@@ -1026,7 +1027,7 @@ const char *FTLIB_FontShaderName( qfontface_t *qfont, unsigned int shaderNum ) {
 bool FTLIB_Init( bool verbose ) {
 	FTLIB_InitSubsystems( verbose );
 
-	Cmd_AddCommand( "fontlist", &FTLIB_PrintFontList );
+	CL_Cmd_Register( "fontlist", &FTLIB_PrintFontList );
 
 	return true;
 }
@@ -1037,7 +1038,7 @@ bool FTLIB_Init( bool verbose ) {
 void FTLIB_Shutdown( bool verbose ) {
 	FTLIB_ShutdownSubsystems( verbose );
 
-	Cmd_RemoveCommand( "fontlist" );
+	CL_Cmd_Unregister( "fontlist" );
 }
 
 /*

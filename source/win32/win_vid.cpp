@@ -421,11 +421,11 @@ LONG WINAPI MainWndProc(
 
 		case WM_SYSKEYDOWN:
 			if( wParam == VK_RETURN ) {
-				Cbuf_ExecuteText( EXEC_APPEND, "toggle vid_fullscreen\n" );
+				CL_Cbuf_AppendCommand( "toggle vid_fullscreen\n" );
 				return 0;
 			}
 			if( wParam == VK_F4 ) {
-				Cbuf_ExecuteText( EXEC_NOW, "quit\n" );
+				CL_Cmd_ExecuteNow( "quit\n" );
 				return 0;
 			}
 			if( wParam == VK_F10 ) {
@@ -454,7 +454,7 @@ LONG WINAPI MainWndProc(
 			break;
 
 		case WM_CLOSE:
-			Cbuf_ExecuteText( EXEC_NOW, "quit" );
+			CL_Cmd_ExecuteNow( "quit" );
 			break;
 
 		case WM_KILLFOCUS:

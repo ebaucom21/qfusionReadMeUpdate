@@ -365,10 +365,10 @@ void Key_Init() {
 	//
 	// register our functions
 	//
-	Cmd_AddCommand( "bind", Key_Bind_f );
-	Cmd_AddCommand( "unbind", Key_Unbind_f );
-	Cmd_AddCommand( "unbindall", Key_Unbindall );
-	Cmd_AddCommand( "bindlist", Key_Bindlist_f );
+	CL_Cmd_Register( "bind", Key_Bind_f );
+	CL_Cmd_Register( "unbind", Key_Unbind_f );
+	CL_Cmd_Register( "unbindall", Key_Unbindall );
+	CL_Cmd_Register( "bindlist", Key_Bindlist_f );
 
 	in_debug = Cvar_Get( "in_debug", "0", 0 );
 
@@ -380,10 +380,10 @@ void Key_Shutdown() {
 		return;
 	}
 
-	Cmd_RemoveCommand( "bind" );
-	Cmd_RemoveCommand( "unbind" );
-	Cmd_RemoveCommand( "unbindall" );
-	Cmd_RemoveCommand( "bindlist" );
+	CL_Cmd_Unregister( "bind" );
+	CL_Cmd_Unregister( "unbind" );
+	CL_Cmd_Unregister( "unbindall" );
+	CL_Cmd_Unregister( "bindlist" );
 
 	Key_Unbindall( CmdArgs {} );
 
@@ -492,7 +492,7 @@ void KeyHandlingSystem::handleEscapeKey() {
 	if( Con_HasKeyboardFocus() ) {
 		Con_ToggleConsole_f( {} );
 	} else if( cls.state != CA_ACTIVE && cls.state != CA_DISCONNECTED ) {
-		Cbuf_AddText( "disconnect\n" );
+		CL_Cbuf_AppendCommand( "disconnect\n" );
 	} else {
 		wsw::ui::UISystem::instance()->handleEscapeKey();
 	}
@@ -527,14 +527,14 @@ void KeyHandlingSystem::handleKeyBinding( int key, bool down, bool wasDown, int6
 		wsw::StaticString<1024> cmd;
 		if( down ) {
 			cmd << binding << ' ' << key << ' ' << time << '\n';
-			Cbuf_AddText( cmd.data() );
+			CL_Cbuf_AppendCommand( cmd.asView() );
 		} else if( wasDown ) {
 			cmd << '-' << binding.drop( 1 ) << ' ' << key << ' ' << time << '\n';
-			Cbuf_AddText( cmd.data() );
+			CL_Cbuf_AppendCommand( cmd.asView() );
 		}
 	} else if( down ) {
-		Cbuf_AddText( binding.data() );
-		Cbuf_AddText( "\n" );
+		CL_Cbuf_AppendCommand( binding.data() );
+		CL_Cbuf_AppendCommand( "\n" );
 	}
 }
 
@@ -550,7 +550,7 @@ void KeyHandlingSystem::handleKeyEvent( int key, bool down, int64_t time ) {
 #if !defined( WIN32 ) && !defined( __ANDROID__ )
 	// switch between fullscreen/windowed when ALT+ENTER is pressed
 	if ( key == K_ENTER && down && ( isKeyDown( K_LALT ) || isKeyDown( K_RALT ) ) ) {
-		Cbuf_ExecuteText( EXEC_APPEND, "toggle vid_fullscreen\n" );
+		CL_Cbuf_AppendCommand( "toggle vid_fullscreen\n" );
 		return;
 	}
 #endif
@@ -558,7 +558,7 @@ void KeyHandlingSystem::handleKeyEvent( int key, bool down, int64_t time ) {
 #if defined ( __MACOSX__ )
 	// quit the game when Control + q is pressed
 	if( key == 'q' && down && isKeyDown( K_COMMAND ) ) {
-		Cbuf_ExecuteText( EXEC_APPEND, "quit\n" );
+		CL_Cbuf_AppendCommand( "quit\n" );
 		return;
 	}
 #endif

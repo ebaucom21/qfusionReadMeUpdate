@@ -28,7 +28,7 @@ file(GLOB SERVER_SOURCES
 	"../qcommon/glob.cpp"
 	"../qcommon/hash.cpp"
 	"../qcommon/half_float.cpp"
-    "../qcommon/cmd.cpp"
+	"../qcommon/cmdsystem.cpp"
     "../qcommon/mem.cpp"
     "../qcommon/net.cpp"
     "../qcommon/net_chan.cpp"

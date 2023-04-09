@@ -691,22 +691,22 @@ void DemoPlayer::play( const QByteArray &fileName ) {
 	}
 	wsw::StaticString<MAX_QPATH> buffer;
 	buffer << "demo "_asView << demoName;
-	Cbuf_ExecuteText( EXEC_APPEND, buffer.data() );
+	CL_Cbuf_AppendCommand( buffer.data() );
 }
 
 void DemoPlayer::pause() {
-	Cbuf_ExecuteText( EXEC_APPEND, "demopause" );
+	CL_Cbuf_AppendCommand( "demopause" );
 }
 
 void DemoPlayer::stop() {
-	Cbuf_ExecuteText( EXEC_APPEND, "disconnect" );
+	CL_Cbuf_AppendCommand( "disconnect" );
 }
 
 void DemoPlayer::seek( qreal frac ) {
 	const int totalSeconds = wsw::clamp( (int)( std::round( m_duration * frac + 0.5 ) ), 0, m_duration );
 	const auto [seconds, minutes] = std::div( totalSeconds, 60 );
 	wsw::StaticString<32> buffer( "demojump %02d:%02d", (int)seconds, (int)minutes );
-	Cbuf_ExecuteText( EXEC_APPEND, buffer.data() );
+	CL_Cbuf_AppendCommand( buffer.data() );
 }
 
 auto DemoPlayer::formatDuration( int durationSeconds ) -> QByteArray {

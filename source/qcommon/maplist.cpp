@@ -322,7 +322,7 @@ void ML_Init( void ) {
 	Trie_Create( MLIST_TRIE_CASING, &mlist_filenames_trie );
 	Trie_Create( MLIST_TRIE_CASING, &mlist_fullnames_trie );
 
-	Cmd_AddCommand( "maplist", ML_MapListCmd );
+	Cmd_AddClientAndServerCommand( "maplist", ML_MapListCmd );
 
 	if( auto maybeReader = wsw::fs::openAsBufferedReader( wsw::StringView( MLIST_CACHE ), wsw::fs::UseCacheFS ) ) {
 		ML_InitFromCache( *maybeReader );
@@ -349,7 +349,7 @@ void ML_Shutdown( void ) {
 
 	ml_initialized = false;
 
-	Cmd_RemoveCommand( "maplist" );
+	Cmd_RemoveClientAndServerCommand( "maplist" );
 
 	Trie_Destroy( mlist_filenames_trie );
 	Trie_Destroy( mlist_fullnames_trie );

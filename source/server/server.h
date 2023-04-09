@@ -418,6 +418,19 @@ void SV_SetServerConfigStrings( void );
 void SV_AddPureFile( const wsw::StringView &fileName );
 void SV_PureList_f( const CmdArgs & );
 
+void SV_Cmd_ExecuteText( int when, const char *text );
+
+void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) );
+void SV_Cmd_Unregister( const char *name );
+void SV_Cmd_ExecuteNow( const char *text );
+
+void SV_Cbuf_AppendCommand( const char *text );
+void SV_Cbuf_AppendCommand( const wsw::StringView &text );
+void SV_Cbuf_PrependCommand( const char *text );
+void SV_Cbuf_PrependCommand( const wsw::StringView &text );
+
+void SV_Cbuf_ExecutePendingCommands();
+
 //
 // sv_phys.c
 //

@@ -204,7 +204,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 		CG_LoadClientInfo( i - CS_PLAYERINFOS, string );
 	} else if( i >= CS_GAMECOMMANDS && i < CS_GAMECOMMANDS + MAX_GAMECOMMANDS ) {
 		if( !cgs.demoPlaying ) {
-			Cmd_AddCommand( string.data(), NULL );
+			CL_Cmd_Register( string, NULL );
 			if( string.equalsIgnoreCase( kGametypeMenu ) ) {
 				cgs.hasGametypeMenu = true;
 			}
@@ -291,30 +291,30 @@ void CG_SC_AutoRecordAction( const char *action ) {
 
 	if( !Q_stricmp( action, "start" ) ) {
 		if( cg_autoaction_demo->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			Cbuf_ExecuteText( EXEC_NOW, "stop silent" );
-			Cbuf_ExecuteText( EXEC_NOW, va( "record autorecord/%s/%s silent",
+			CL_Cmd_ExecuteNow( "stop silent" );
+			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
 												gs.gametypeName, name ) );
 			autorecording = true;
 		}
 	} else if( !Q_stricmp( action, "altstart" ) ) {
 		if( cg_autoaction_demo->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			Cbuf_ExecuteText( EXEC_NOW, va( "record autorecord/%s/%s silent",
+			CL_Cmd_ExecuteNow( va( "record autorecord/%s/%s silent",
 												gs.gametypeName, name ) );
 			autorecording = true;
 		}
 	} else if( !Q_stricmp( action, "stop" ) ) {
 		if( autorecording ) {
-			Cbuf_ExecuteText( EXEC_NOW, "stop silent" );
+			CL_Cmd_ExecuteNow( "stop silent" );
 			autorecording = false;
 		}
 
 		if( cg_autoaction_screenshot->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			Cbuf_ExecuteText( EXEC_NOW, va( "screenshot autorecord/%s/%s silent",
+			CL_Cmd_ExecuteNow( va( "screenshot autorecord/%s/%s silent",
 												gs.gametypeName, name ) );
 		}
 	} else if( !Q_stricmp( action, "cancel" ) ) {
 		if( autorecording ) {
-			Cbuf_ExecuteText( EXEC_NOW, "stop cancel silent" );
+			CL_Cmd_ExecuteNow( "stop cancel silent" );
 			autorecording = false;
 		}
 	} else if( developer->integer ) {
@@ -455,7 +455,7 @@ static void CG_Cmd_DemoGet_f( const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	Cbuf_ExecuteText( EXEC_NOW, va( "cmd demoget %s", Cmd_Argv( 1 ) ) );
+	CL_Cmd_ExecuteNow( va( "cmd demoget %s", Cmd_Argv( 1 ) ) );
 
 	demo_requested = true;
 }
@@ -705,7 +705,7 @@ void CG_UseItem( const char *name ) {
 			cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
 		}
 
-		Cbuf_ExecuteText( EXEC_NOW, va( "cmd use %i", item->tag ) );
+		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 	}
 }
 
@@ -739,7 +739,7 @@ static void CG_Cmd_NextWeapon_f( const CmdArgs & ) {
 	item = GS_Cmd_NextWeapon_f( &cg.frame.playerState, cg.predictedWeaponSwitch );
 	if( item ) {
 		CG_Predict_ChangeWeapon( item->tag );
-		Cbuf_ExecuteText( EXEC_NOW, va( "cmd use %i", item->tag ) );
+		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 		cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
 	}
 }
@@ -762,7 +762,7 @@ static void CG_Cmd_PrevWeapon_f( const CmdArgs & ) {
 	item = GS_Cmd_PrevWeapon_f( &cg.frame.playerState, cg.predictedWeaponSwitch );
 	if( item ) {
 		CG_Predict_ChangeWeapon( item->tag );
-		Cbuf_ExecuteText( EXEC_NOW, va( "cmd use %i", item->tag ) );
+		CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 		cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
 	}
 }
@@ -784,7 +784,7 @@ static void CG_Cmd_LastWeapon_f( const CmdArgs & ) {
 				CG_Predict_ChangeWeapon( item->tag );
 			}
 
-			Cbuf_ExecuteText( EXEC_NOW, va( "cmd use %i", item->tag ) );
+			CL_Cmd_ExecuteNow( va( "cmd use %i", item->tag ) );
 			cg.lastWeapon = cg.predictedPlayerState.stats[STAT_PENDING_WEAPON];
 		}
 	}
@@ -948,7 +948,7 @@ void CG_RegisterCGameCommands( void ) {
 				continue;
 			}
 
-			Cmd_AddCommand( name.data(), NULL );
+			CL_Cmd_Register( name.data(), NULL );
 
 			// check for server commands we might want to do some special things for..
 			for( svcmd = cg_consvcmds; svcmd->name; svcmd++ ) {
@@ -968,7 +968,7 @@ void CG_RegisterCGameCommands( void ) {
 		if( cgs.demoPlaying && !cmd->allowdemo ) {
 			continue;
 		}
-		Cmd_AddCommand( cmd->name, cmd->func );
+		CL_Cmd_Register( cmd->name, cmd->func );
 	}
 }
 
@@ -997,7 +997,7 @@ void CG_UnregisterCGameCommands( void ) {
 				continue;
 			}
 
-			Cmd_RemoveCommand( name.data() );
+			CL_Cmd_Unregister( name.data() );
 		}
 
 		cgs.hasGametypeMenu = false;
@@ -1008,6 +1008,6 @@ void CG_UnregisterCGameCommands( void ) {
 		if( cgs.demoPlaying && !cmd->allowdemo ) {
 			continue;
 		}
-		Cmd_RemoveCommand( cmd->name );
+		CL_Cmd_Unregister( cmd->name );
 	}
 }

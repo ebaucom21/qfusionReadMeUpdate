@@ -398,9 +398,9 @@ void Con_Init( void ) {
 	con_printText  = Cvar_Get( "con_printText", "1", CVAR_ARCHIVE );
 	con_chatmode = Cvar_Get( "con_chatmode", "3", CVAR_ARCHIVE );
 
-	Cmd_AddCommand( "toggleconsole", Con_ToggleConsole_f );
-	Cmd_AddCommand( "clear", Con_Clear_f );
-	Cmd_AddCommand( "condump", Con_Dump_f );
+	CL_Cmd_Register( "toggleconsole", Con_ToggleConsole_f );
+	CL_Cmd_Register( "clear", Con_Clear_f );
+	CL_Cmd_Register( "condump", Con_Dump_f );
 	con_initialized = true;
 }
 
@@ -414,9 +414,9 @@ void Con_Shutdown( void ) {
 
 	Con_Clear_f( CmdArgs {} );  // free scrollback text
 
-	Cmd_RemoveCommand( "toggleconsole" );
-	Cmd_RemoveCommand( "clear" );
-	Cmd_RemoveCommand( "condump" );
+	CL_Cmd_Unregister( "toggleconsole" );
+	CL_Cmd_Unregister( "clear" );
+	CL_Cmd_Unregister( "condump" );
 
 	QMutex_Destroy( &con.mutex );
 
@@ -944,12 +944,12 @@ static void Con_Key_Paste( void ) {
 
 			if( tok != NULL ) {
 				if( key_lines[edit_line][1] == '\\' || key_lines[edit_line][1] == '/' ) {
-					Cbuf_AddText( key_lines[edit_line] + 2 ); // skip the >
+					CL_Cbuf_AppendCommand( key_lines[edit_line] + 2 ); // skip the >
 				} else {
-					Cbuf_AddText( key_lines[edit_line] + 1 ); // valid command
+					CL_Cbuf_AppendCommand( key_lines[edit_line] + 1 ); // valid command
 
 				}
-				Cbuf_AddText( "\n" );
+				CL_Cbuf_AppendCommand( "\n" );
 				Com_Printf( "%s\n", key_lines[edit_line] );
 				edit_line = ( edit_line + 1 ) & 31;
 				history_line = edit_line;
@@ -990,7 +990,7 @@ static void Con_CharEvent( wchar_t key ) {
 			return;
 
 		case 12: // CTRL - L : clear
-			Cbuf_AddText( "clear\n" );
+			CL_Cbuf_AppendCommand( "clear\n" );
 			return;
 
 		/*
@@ -1114,16 +1114,16 @@ uint64_t Con_SendChatMessage( const char *text, bool team ) {
 			*p = '\'';
 		}
 
-	if( team && Cmd_Exists( "say_team" ) ) {
+	if( team && CL_Cmd_Exists( wsw::StringView( "say_team" ) ) ) {
 		cmd = "say_team";
-	} else if( Cmd_Exists( "say" ) ) {
+	} else if( CL_Cmd_Exists( wsw::StringView( "say" ) ) ) {
 		cmd = "say";
 	} else {
 		cmd = "cmd say";
 	}
 
 	const auto oldCmdNum = cls.reliableSequence;
-	Cmd_ExecuteString( va( "%s \"%s\"\n", cmd, buf ) );
+	CL_Cmd_ExecuteNow( va( "%s \"%s\"\n", cmd, buf ) );
 	assert( oldCmdNum + 1 == cls.reliableSequence );
 	return oldCmdNum;
 }
@@ -1184,8 +1184,8 @@ static void Con_Key_Enter( void ) {
 			if( *p == '\\' || ( *p == '/' && p[1] != '/' ) ) {
 				p++;
 			}
-			Cbuf_AddText( p );
-			Cbuf_AddText( "\n" );
+			CL_Cbuf_AppendCommand( p );
+			CL_Cbuf_AppendCommand( "\n" );
 			break;
 	}
 

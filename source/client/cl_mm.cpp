@@ -502,7 +502,7 @@ void CLStatsowFacade::CheckOrWaitForPendingMatch() {
 	}
 
 	Com_Printf( "About to append a connect command using address `%s`\n", matchAddress.c_str() );
-	Cbuf_ExecuteText( EXEC_APPEND, va( "connect \"%s\"", matchAddress.c_str() ) );
+	CL_Cbuf_AppendCommand( va( "connect \"%s\"", matchAddress.c_str() ) );
 }
 
 void CLStatsowFacade::PollLoginStatus() {
@@ -1047,8 +1047,8 @@ CLStatsowFacade::CLStatsowFacade()
 	/*
 	* add commands
 	*/
-	Cmd_AddCommand( "mm_login", CL_MM_Login_f );
-	Cmd_AddCommand( "mm_logout", CL_MM_Logout_f );
+	CL_Cmd_Register( "mm_login", CL_MM_Login_f );
+	CL_Cmd_Register( "mm_logout", CL_MM_Logout_f );
 
 	Cvar_ForceSet( cl_mm_session->name, "" );
 }
@@ -1073,6 +1073,6 @@ CLStatsowFacade::~CLStatsowFacade() {
 
 	Cvar_ForceSet( cl_mm_session->name, "0" );
 
-	Cmd_RemoveCommand( "mm_login" );
-	Cmd_RemoveCommand( "mm_logout" );
+	CL_Cmd_Unregister( "mm_login" );
+	CL_Cmd_Unregister( "mm_logout" );
 }

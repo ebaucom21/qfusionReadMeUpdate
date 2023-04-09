@@ -342,31 +342,6 @@ servers can also send across commands and entire text files can be execed.
 The + command line options are also added to the command buffer.
 */
 
-void        Cbuf_AddText( const char *text );
-void        Cbuf_InsertText( const char *text );
-void        Cbuf_ExecuteText( int exec_when, const char *text );
-
-namespace wsw {
-	class StringView;
-	template <typename, unsigned> class StaticVector;
-}
-
-// TODO: Use generic growable vectors. It's just easier to forward-declare the static one.
-
-void classifyExecutableCmdArgs( int argc, char **argv,
-								wsw::StaticVector<wsw::StringView, 64> *setArgs,
-								wsw::StaticVector<wsw::StringView, 64> *setAndExecArgs,
-								wsw::StaticVector<std::optional<wsw::StringView>, 2 * 64> *otherArgs );
-
-// TODO: Supply arguments as std::span<> (can't be forward-declared)
-
-void Cbuf_AddEarlySetCommands( const wsw::StringView *args, size_t numArgs );
-void Cbuf_AddEarlySetAndExecCommands( const wsw::StringView *args, size_t numArgs );
-void Cbuf_AddLateCommands( const std::optional<wsw::StringView> *args, size_t numArgs );
-
-void        Cbuf_Execute( void );
-
-
 //===========================================================================
 
 /*
@@ -381,21 +356,19 @@ struct CmdArgs;
 typedef void ( *xcommand_t )( const CmdArgs & );
 typedef char ** ( *xcompletionf_t )( const char *partial );
 
-void        Cmd_PreInit( void );
-void        Cmd_Init( void );
-void        Cmd_Shutdown( void );
-void        Cmd_AddCommand( const char *cmd_name, xcommand_t function );
-void        Cmd_RemoveCommand( const char *cmd_name );
-bool    Cmd_Exists( const char *cmd_name );
-bool    Cmd_CheckForCommand( char *text );
-void        Cmd_WriteAliases( int file );
+// These subroutines should be used if executing a command via both server and client command systems
+// by the same handler makes sense and is correct. Cvar-related commands are an obvious example.
+void Cmd_AddClientAndServerCommand( const char *cmd_name, xcommand_t function );
+void Cmd_RemoveClientAndServerCommand( const char *cmd_name );
+
+bool Cmd_CheckForCommand( char *text );
+void Cmd_WriteAliases( int file );
 
 #define Cmd_Argc()      ( cmdArgs.size() )
 #define Cmd_Argv( arg ) ( cmdArgs[arg].data() )
-#define Cmd_Args( arg ) ( cmdArgs.argsString.data() )
+#define Cmd_Args()      ( cmdArgs.argsString.data() )
 
-void        Cmd_ExecuteString( const char *text );
-void        Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func );
+void  Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func );
 
 /*
 ==============================================================

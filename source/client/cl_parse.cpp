@@ -1238,7 +1238,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 			case svc_serverdata:
 				if( cls.state == CA_HANDSHAKE ) {
-					Cbuf_Execute(); // make sure any stuffed commands are done
+					CL_Cbuf_ExecutePendingCommands(); // make sure any stuffed commands are done
 					CL_ParseServerData( msg );
 				} else {
 					return; // ignore rest of the packet (serverdata is always sent alone)

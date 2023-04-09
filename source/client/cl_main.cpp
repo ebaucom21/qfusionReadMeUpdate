@@ -23,13 +23,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cl_mm.h"
 
 #include "../qcommon/asyncstream.h"
-#include "../qcommon/cmdargssplitter.h"
+#include "../qcommon/cmdsystem.h"
+#include "../qcommon/singletonholder.h"
 #include "../qcommon/hash.h"
 #include "../ui/uisystem.h"
 
 #include "serverlist.h"
 
 #include <random>
+
+using wsw::operator""_asView;
 
 cvar_t *cl_stereo_separation;
 cvar_t *cl_stereo;
@@ -192,7 +195,7 @@ void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
 	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
 				 DROP_REASON_CONNTERMINATED, cls.servername, type, reason );
 
-	Cbuf_ExecuteText( EXEC_NOW, menuparms );
+	CL_Cmd_ExecuteNow( menuparms );
 }
 
 /*
@@ -435,7 +438,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 		temp = (char *)Q_malloc( temp_size );
 		Q_snprintfz( temp, temp_size, "demo %s%s", http_scheme, connectstring );
 
-		Cbuf_ExecuteText( EXEC_NOW, temp );
+		CL_Cmd_ExecuteNow( temp );
 
 		Q_free( temp );
 		Q_free( connectstring_base );
@@ -751,7 +754,7 @@ static void CL_ExecuteNext( void ) {
 		return;
 	}
 
-	Cbuf_ExecuteText( EXEC_APPEND, cl_nextString );
+	CL_Cbuf_AppendCommand( cl_nextString );
 	memset( cl_nextString, 0, sizeof( cl_nextString ) );
 }
 
@@ -1132,8 +1135,8 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		}
 		Sys_AppActivate();
 		s = MSG_ReadString( msg );
-		Cbuf_AddText( s );
-		Cbuf_AddText( "\n" );
+		CL_Cbuf_AppendCommand( s );
+		CL_Cbuf_AppendCommand( "\n" );
 		return;
 	}
 	// print command from somewhere
@@ -1557,7 +1560,7 @@ void CL_RequestNextDownload( void ) {
 
 			if( vid_restart ) {
 				// no media is going to survive a vid_restart...
-				Cbuf_ExecuteText( EXEC_NOW, "s_restart 1\n" );
+				CL_Cmd_ExecuteNow( "s_restart 1\n" );
 			} else {
 				// make sure all media assets will be freed
 				CL_EndRegistration();
@@ -1986,29 +1989,29 @@ static void CL_InitLocal( void ) {
 	//
 	// register our commands
 	//
-	Cmd_AddCommand( "s_restart", CL_S_Restart_f );
-	Cmd_AddCommand( "cmd", CL_ForwardToServer_f );
-	Cmd_AddCommand( "userinfo", CL_Userinfo_f );
-	Cmd_AddCommand( "disconnect", CL_Disconnect_f );
-	Cmd_AddCommand( "record", CL_Record_f );
-	Cmd_AddCommand( "stop", CL_Stop_f );
-	Cmd_AddCommand( "quit", CL_Quit_f );
-	Cmd_AddCommand( "connect", CL_Connect_f );
+	CL_Cmd_Register( "s_restart", CL_S_Restart_f );
+	CL_Cmd_Register( "cmd", CL_ForwardToServer_f );
+	CL_Cmd_Register( "userinfo", CL_Userinfo_f );
+	CL_Cmd_Register( "disconnect", CL_Disconnect_f );
+	CL_Cmd_Register( "record", CL_Record_f );
+	CL_Cmd_Register( "stop", CL_Stop_f );
+	CL_Cmd_Register( "quit", CL_Quit_f );
+	CL_Cmd_Register( "connect", CL_Connect_f );
 #if defined( TCP_ALLOW_CONNECT ) && defined( TCP_ALLOW_CONNECT_CLIENT )
-	Cmd_AddCommand( "tcpconnect", CL_TCPConnect_f );
+	CL_Cmd_Register( "tcpconnect", CL_TCPConnect_f );
 #endif
-	Cmd_AddCommand( "reconnect", CL_Reconnect_f );
-	Cmd_AddCommand( "rcon", CL_Rcon_f );
-	Cmd_AddCommand( "writeconfig", CL_WriteConfig_f );
-	Cmd_AddCommand( "showip", CL_ShowIP_f ); // jal : wsw : print our ip
-	Cmd_AddCommand( "demo", CL_PlayDemo_f );
-	Cmd_AddCommand( "next", CL_SetNext_f );
-	Cmd_AddCommand( "demopause", CL_PauseDemo_f );
-	Cmd_AddCommand( "demojump", CL_DemoJump_f );
-	Cmd_AddCommand( "showserverip", CL_ShowServerIP_f );
-	Cmd_AddCommand( "downloadstatus", CL_DownloadStatus_f );
-	Cmd_AddCommand( "downloadcancel", CL_DownloadCancel_f );
-	Cmd_AddCommand( "help", CL_Help_f );
+	CL_Cmd_Register( "reconnect", CL_Reconnect_f );
+	CL_Cmd_Register( "rcon", CL_Rcon_f );
+	CL_Cmd_Register( "writeconfig", CL_WriteConfig_f );
+	CL_Cmd_Register( "showip", CL_ShowIP_f ); // jal : wsw : print our ip
+	CL_Cmd_Register( "demo", CL_PlayDemo_f );
+	CL_Cmd_Register( "next", CL_SetNext_f );
+	CL_Cmd_Register( "demopause", CL_PauseDemo_f );
+	CL_Cmd_Register( "demojump", CL_DemoJump_f );
+	CL_Cmd_Register( "showserverip", CL_ShowServerIP_f );
+	CL_Cmd_Register( "downloadstatus", CL_DownloadStatus_f );
+	CL_Cmd_Register( "downloadcancel", CL_DownloadCancel_f );
+	CL_Cmd_Register( "help", CL_Help_f );
 
 	Cmd_SetCompletionFunc( "demo", CL_DemoComplete );
 }
@@ -2020,29 +2023,29 @@ static void CL_ShutdownLocal( void ) {
 	cls.state = CA_UNINITIALIZED;
 	Com_SetClientState( CA_UNINITIALIZED );
 
-	Cmd_RemoveCommand( "s_restart" );
-	Cmd_RemoveCommand( "cmd" );
-	Cmd_RemoveCommand( "userinfo" );
-	Cmd_RemoveCommand( "disconnect" );
-	Cmd_RemoveCommand( "record" );
-	Cmd_RemoveCommand( "stop" );
-	Cmd_RemoveCommand( "quit" );
-	Cmd_RemoveCommand( "connect" );
+	CL_Cmd_Unregister( "s_restart" );
+	CL_Cmd_Unregister( "cmd" );
+	CL_Cmd_Unregister( "userinfo" );
+	CL_Cmd_Unregister( "disconnect" );
+	CL_Cmd_Unregister( "record" );
+	CL_Cmd_Unregister( "stop" );
+	CL_Cmd_Unregister( "quit" );
+	CL_Cmd_Unregister( "connect" );
 #if defined( TCP_ALLOW_CONNECT )
-	Cmd_RemoveCommand( "tcpconnect" );
+	CL_Cmd_Unregister( "tcpconnect" );
 #endif
-	Cmd_RemoveCommand( "reconnect" );
-	Cmd_RemoveCommand( "rcon" );
-	Cmd_RemoveCommand( "writeconfig" );
-	Cmd_RemoveCommand( "showip" );
-	Cmd_RemoveCommand( "demo" );
-	Cmd_RemoveCommand( "next" );
-	Cmd_RemoveCommand( "demopause" );
-	Cmd_RemoveCommand( "demojump" );
-	Cmd_RemoveCommand( "showserverip" );
-	Cmd_RemoveCommand( "downloadstatus" );
-	Cmd_RemoveCommand( "downloadcancel" );
-	Cmd_RemoveCommand( "help" );
+	CL_Cmd_Unregister( "reconnect" );
+	CL_Cmd_Unregister( "rcon" );
+	CL_Cmd_Unregister( "writeconfig" );
+	CL_Cmd_Unregister( "showip" );
+	CL_Cmd_Unregister( "demo" );
+	CL_Cmd_Unregister( "next" );
+	CL_Cmd_Unregister( "demopause" );
+	CL_Cmd_Unregister( "demojump" );
+	CL_Cmd_Unregister( "showserverip" );
+	CL_Cmd_Unregister( "downloadstatus" );
+	CL_Cmd_Unregister( "downloadcancel" );
+	CL_Cmd_Unregister( "help" );
 }
 
 //============================================================================
@@ -2679,4 +2682,116 @@ void CL_Shutdown( void ) {
 
 	cls.state = CA_UNINITIALIZED;
 	cl_initialized = false;
+}
+
+class CLCmdSystem : public CmdSystem {
+	void registerSystemCommands() override {
+		registerCommand( "exec"_asView, handlerOfExec );
+		registerCommand( "echo"_asView, handlerOfEcho );
+		registerCommand( "alias"_asView, handlerOfAlias );
+		registerCommand( "aliasa"_asView, handlerOfAliasa );
+		registerCommand( "unalias"_asView, handlerOfUnalias );
+		registerCommand( "unaliasall"_asView, handlerOfUnaliasall );
+		registerCommand( "wait"_asView, handlerOfWait );
+		registerCommand( "vstr"_asView, handlerOfVstr );
+	}
+
+	static void handlerOfExec( const CmdArgs & );
+	static void handlerOfEcho( const CmdArgs & );
+	static void handlerOfAlias( const CmdArgs & );
+	static void handlerOfAliasa( const CmdArgs & );
+	static void handlerOfUnalias( const CmdArgs & );
+	static void handlerOfUnaliasall( const CmdArgs & );
+	static void handlerOfWait( const CmdArgs & );
+	static void handlerOfVstr( const CmdArgs & );
+};
+
+static SingletonHolder<CLCmdSystem> g_clCmdSystemHolder;
+
+void CLCmdSystem::handlerOfExec( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfExec( cmdArgs );
+}
+
+void CLCmdSystem::handlerOfEcho( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfEcho( cmdArgs );
+}
+
+void CLCmdSystem::handlerOfAlias( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfAlias( false, cmdArgs );
+}
+
+void CLCmdSystem::handlerOfAliasa( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfAlias( true, cmdArgs );
+}
+
+void CLCmdSystem::handlerOfUnalias( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfUnalias( cmdArgs );
+}
+
+void CLCmdSystem::handlerOfUnaliasall( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfUnaliasall( cmdArgs );
+}
+
+void CLCmdSystem::handlerOfWait( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfWait( cmdArgs );
+}
+
+void CLCmdSystem::handlerOfVstr( const CmdArgs &cmdArgs ) {
+	g_clCmdSystemHolder.instance()->helperForHandlerOfVstr( cmdArgs );
+}
+
+void CL_InitCmdSystem() {
+	g_clCmdSystemHolder.init();
+}
+
+CmdSystem *CL_GetCmdSystem() {
+	return g_clCmdSystemHolder.instance();
+}
+
+void CL_ShutdownCmdSystem() {
+	g_clCmdSystemHolder.shutdown();
+}
+
+void CL_Cmd_Register( const wsw::StringView &name, void ( *handler )( const CmdArgs & ) ) {
+	g_clCmdSystemHolder.instance()->registerCommand( name, handler );
+}
+
+void CL_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
+	g_clCmdSystemHolder.instance()->registerCommand( wsw::StringView( name ), handler );
+}
+
+void CL_Cmd_Unregister( const char *name ) {
+	g_clCmdSystemHolder.instance()->unregisterCommand( wsw::StringView( name ) );
+}
+
+bool CL_Cmd_Exists( const wsw::StringView &name ) {
+	return g_clCmdSystemHolder.instance()->isARegisteredCommand( name );
+}
+
+void CL_Cmd_ExecuteNow( const char *text ) {
+	g_clCmdSystemHolder.instance()->executeNow( wsw::StringView( text ) );
+}
+
+void CL_Cmd_ExecuteNow( const wsw::StringView &text ) {
+	g_clCmdSystemHolder.instance()->executeNow( text );
+}
+
+void CL_Cbuf_AppendCommand( const char *text ) {
+	g_clCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
+}
+
+void CL_Cbuf_AppendCommand( const wsw::StringView &text ) {
+	g_clCmdSystemHolder.instance()->appendCommand( text );
+}
+
+void CL_Cbuf_PrependCommand( const char *text ) {
+	g_clCmdSystemHolder.instance()->prependCommand( wsw::StringView( text ) );
+}
+
+void CL_Cbuf_PrependCommand( const wsw::StringView &text ) {
+	g_clCmdSystemHolder.instance()->prependCommand( text );
+}
+
+void CL_Cbuf_ExecutePendingCommands() {
+	g_clCmdSystemHolder.instance()->executeBufferCommands();
 }

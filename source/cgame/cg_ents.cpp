@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cg_local.h"
 #include "../qcommon/cvar.h"
-#include "../qcommon/qcommon.h"
+#include "../client/client.h"
 #include "../ui/uisystem.h"
 #include "../client/snd_public.h"
 
@@ -410,7 +410,7 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	if( cg.firstFrame && !cgs.demoPlaying ) {
 		// request updates on our private state
-		Cbuf_ExecuteText( EXEC_NOW, "upstate" );
+		CL_Cmd_ExecuteNow( "upstate" );
 	}
 
 	cg.firstFrame = false; // not the first frame anymore

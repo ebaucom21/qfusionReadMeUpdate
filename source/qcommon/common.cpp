@@ -48,9 +48,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/cjson.h"
 #include "mmcommon.h"
 #include "compression.h"
+#include "cmdsystem.h"
 
 #include <setjmp.h>
 #include <mutex>
+
+using wsw::operator""_asView;
 
 static bool commands_intialized = false;
 
@@ -76,6 +79,23 @@ static cvar_t *logconsole_timestamp;
 static cvar_t *com_introPlayed3;
 
 static qmutex_t *com_print_mutex;
+
+static bool cmd_preinitialized = false;
+static bool cmd_initialized = false;
+
+#ifndef DEDICATED_ONLY
+void CL_InitCmdSystem();
+CmdSystem *CL_GetCmdSystem();
+void CL_ShutdownCmdSystem();
+#endif
+
+void SV_InitCmdSystem();
+CmdSystem *SV_GetCmdSystem();
+void SV_ShutdownCmdSystem();
+
+void Cmd_PreInit( void );
+void Cmd_Init( void );
+void Cmd_Shutdown( void );
 
 // TODO: Use magic_enum to get the enum cardinality?
 static const char *kLogLineColorForSeverity[4] {
@@ -724,12 +744,12 @@ void Qcommon_InitCommands( void ) {
 	assert( !commands_intialized );
 
 #ifndef PUBLIC_BUILD
-	Cmd_AddCommand( "error", Com_Error_f );
-	Cmd_AddCommand( "lag", Com_Lag_f );
+	Cmd_AddClientAndServerCommand( "error", Com_Error_f );
+	Cmd_AddClientAndServerCommand( "lag", Com_Lag_f );
 #endif
 
 	if( dedicated->integer ) {
-		Cmd_AddCommand( "quit", Com_Quit );
+		Cmd_AddClientAndServerCommand( "quit", Com_Quit );
 	}
 
 	commands_intialized = true;
@@ -744,12 +764,12 @@ void Qcommon_ShutdownCommands( void ) {
 	}
 
 #ifndef PUBLIC_BUILD
-	Cmd_RemoveCommand( "error" );
-	Cmd_RemoveCommand( "lag" );
+	Cmd_RemoveClientAndServerCommand( "error" );
+	Cmd_RemoveClientAndServerCommand( "lag" );
 #endif
 
 	if( dedicated->integer ) {
-		Cmd_RemoveCommand( "quit" );
+		Cmd_RemoveClientAndServerCommand( "quit" );
 	}
 
 	commands_intialized = false;
@@ -765,14 +785,10 @@ void Qcommon_Init( int argc, char **argv ) {
 		Sys_Error( "Error during initialization: %s", com_errormsg );
 	}
 
-	if( argc > 64 ) {
-		Sys_Error( "Too many executable arguments" );
-	}
-
-	wsw::StaticVector<wsw::StringView, 64> setArgs;
-	wsw::StaticVector<wsw::StringView, 64> setAndExecArgs;
-	wsw::StaticVector<std::optional<wsw::StringView>, 2 * 64> otherArgs;
-	classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
+	wsw::Vector<wsw::StringView> setArgs;
+	wsw::Vector<wsw::StringView> setAndExecArgs;
+	wsw::Vector<std::optional<wsw::StringView>> otherArgs;
+	CmdSystem::classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
 
 	// reset hooks to malloc and free
 	cJSON_InitHooks( NULL );
@@ -802,8 +818,17 @@ void Qcommon_Init( int argc, char **argv ) {
 	// config files, but we want other parms to override
 	// the settings of the config files
 
-	Cbuf_AddEarlySetCommands( setArgs.data(), setArgs.size() );
-	Cbuf_Execute();
+	CmdSystem *primaryCmdSystem;
+	CmdSystem *svCmdSystem = SV_GetCmdSystem();
+#ifdef DEDICATED_ONLY
+	primaryCmdSystem = svCmdSystem;
+#else
+	CmdSystem *clCmdSystem = CL_GetCmdSystem();
+	primaryCmdSystem = clCmdSystem;
+#endif
+
+	primaryCmdSystem->appendEarlySetCommands( setArgs );
+	primaryCmdSystem->executeBufferCommands();
 
 #ifdef DEDICATED_ONLY
 	dedicated =     Cvar_Get( "dedicated", "1", CVAR_NOSET );
@@ -825,16 +850,20 @@ void Qcommon_Init( int argc, char **argv ) {
 
 	FS_Init();
 
-	Cbuf_AddText( "exec default.cfg\n" );
-	if( !dedicated->integer ) {
-		Cbuf_AddText( "exec config.cfg\n" );
-		Cbuf_AddText( "exec autoexec.cfg\n" );
-	} else {
-		Cbuf_AddText( "exec dedicated_autoexec.cfg\n" );
-	}
+	primaryCmdSystem->appendCommand( "exec default.cfg\n"_asView );
+	primaryCmdSystem->executeBufferCommands();
 
-	Cbuf_AddEarlySetAndExecCommands( setAndExecArgs.data(), setAndExecArgs.size() );
-	Cbuf_Execute();
+#ifndef DEDICATED_ONLY
+	clCmdSystem->appendCommand( "exec config.cfg\n"_asView );
+	clCmdSystem->appendCommand( "exec autoexec.cfg\n"_asView );
+	clCmdSystem->executeBufferCommands();
+#else
+	svCmdSystem->appendCommand( "exec dedicated_autoexec.cfg\n"_asView );
+	svCmdSystem->executeBufferCommands();
+#endif
+
+	primaryCmdSystem->appendEarlySetAndExecCommands( setAndExecArgs );
+	primaryCmdSystem->executeBufferCommands();
 
 	//
 	// init commands and vars
@@ -876,11 +905,13 @@ void Qcommon_Init( int argc, char **argv ) {
 
 	SCR_EndLoadingPlaque();
 
-	if( !dedicated->integer ) {
-		Cbuf_AddText( "exec autoexec_postinit.cfg\n" );
-	} else {
-		Cbuf_AddText( "exec dedicated_autoexec_postinit.cfg\n" );
-	}
+#ifndef DEDICATED_ONLY
+	clCmdSystem->appendCommand( "exec autoexec_postinit.cfg\n"_asView );
+	clCmdSystem->executeBufferCommands();
+#else
+	svCmdSystem->appendCommand( "exec dedicated_autoexec_postinit.cfg\n"_asView );
+	svCmdSystem->executeBufferCommands();
+#endif
 
 	// if the user didn't give any commands, run default action
 	if( otherArgs.empty() ) {
@@ -893,7 +924,7 @@ void Qcommon_Init( int argc, char **argv ) {
 		}
 	} else {
 		// add + commands from command line
-		Cbuf_AddLateCommands( otherArgs.data(), otherArgs.size() );
+		primaryCmdSystem->appendLateCommands( otherArgs );
 		// the user asked for something explicit
 		// so drop the loading plaque
 		SCR_EndLoadingPlaque();
@@ -901,14 +932,16 @@ void Qcommon_Init( int argc, char **argv ) {
 
 	Com_Printf( "\n====== %s Initialized ======\n", APPLICATION );
 
-	Cbuf_Execute();
-}
+#ifndef DEDICATED_ONLY
+	clCmdSystem->executeBufferCommands();
+#endif
+	svCmdSystem->executeBufferCommands();
+};
 
 /*
 * Qcommon_Frame
 */
 void Qcommon_Frame( unsigned int realMsec ) {
-	char *s;
 	int time_before = 0, time_between = 0, time_after = 0;
 	static unsigned int gameMsec;
 
@@ -942,16 +975,18 @@ void Qcommon_Frame( unsigned int realMsec ) {
 
 	Steam_RunFrame();
 
-	if( dedicated->integer ) {
-		do {
-			s = Sys_ConsoleInput();
-			if( s ) {
-				Cbuf_AddText( va( "%s\n", s ) );
-			}
-		} while( s );
-
-		Cbuf_Execute();
+#ifdef DEDICATED_ONLY
+	CmdSystem *svCmdSystem = SV_GetCmdSystem();
+	for(;; ) {
+		if( const char *consoleInput = Sys_ConsoleInput() ) {
+			svCmdSystem->appendCommand( wsw::StringView( va( "%s\n", consoleInput ) ) );
+		} else {
+			break;
+		}
 	}
+
+	svCmdSystem->executeBufferCommands();
+#endif
 
 	// keep the random time dependent
 	rand();
@@ -1024,6 +1059,147 @@ void Qcommon_Shutdown( void ) {
 	QMutex_Destroy( &com_print_mutex );
 
 	QThreads_Shutdown();
+}
+
+/*
+* Cmd_SetCompletionFunc
+*/
+void Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func ) {
+}
+
+/*
+* Cmd_CheckForCommand
+*
+* Used by console code to check if text typed is a command/cvar/alias or chat
+*/
+bool Cmd_CheckForCommand( char *text ) {
+	char cmd[MAX_STRING_CHARS];
+	unsigned i;
+
+	// this is not exactly what cbuf does when extracting lines
+	// for execution, but it works unless you do weird things like
+	// putting the command in quotes
+	for( i = 0; i < MAX_STRING_CHARS - 1; i++ ) {
+		if( (unsigned char)text[i] <= ' ' || text[i] == ';' ) {
+			break;
+		} else {
+			cmd[i] = text[i];
+		}
+	}
+	cmd[i] = 0;
+
+	CmdSystem *cmdSystem;
+#ifndef DEDICATED_ONLY
+	cmdSystem = CL_GetCmdSystem();
+#else
+	cmdSystem = SV_GetCmdSystem();
+#endif
+
+	if( cmdSystem->isARegisteredCommand( wsw::StringView( cmd, i ) ) ) {
+		return true;
+	}
+	if( Cvar_Find( cmd ) ) {
+		return true;
+	}
+	if( cmdSystem->isARegisteredAlias( wsw::StringView( cmd, i ) ) ) {
+		return true;
+	}
+
+	return false;
+}
+
+/*
+* Cmd_PreInit
+*/
+void Cmd_PreInit( void ) {
+	assert( !cmd_preinitialized );
+	assert( !cmd_initialized );
+
+#ifndef DEDICATED_ONLY
+	CL_InitCmdSystem();
+#endif
+	SV_InitCmdSystem();
+
+	cmd_preinitialized = true;
+}
+
+void Cmd_AddClientAndServerCommand( const char *name, void ( *handler )( const CmdArgs & ) ) {
+	const wsw::StringView nameView( name );
+#ifndef DEDICATED_ONLY
+	CL_GetCmdSystem()->registerCommand( nameView, handler );
+#endif
+	SV_GetCmdSystem()->registerCommand( nameView, handler );
+}
+
+void Cmd_RemoveClientAndServerCommand( const char *name ) {
+	const wsw::StringView nameView( name );
+#ifndef DEDICATED_ONLY
+	CL_GetCmdSystem()->unregisterCommand( nameView );
+#endif
+	SV_GetCmdSystem()->unregisterCommand( nameView );
+}
+
+void Cmd_WriteAliases( int ) {
+}
+
+/*
+* Cmd_Init
+*/
+void Cmd_Init( void ) {
+	assert( !cmd_initialized );
+	assert( cmd_preinitialized );
+
+#ifndef DEDICATED_ONLY
+	CL_GetCmdSystem()->registerSystemCommands();
+#endif
+	SV_GetCmdSystem()->registerSystemCommands();
+
+	//
+	// register our commands
+	//
+	/*
+	Cmd_AddCommand( "exec", Cmd_Exec_f );
+	Cmd_AddCommand( "echo", Cmd_Echo_f );
+	Cmd_AddCommand( "aliasa", Cmd_Aliasa_f );
+	Cmd_AddCommand( "unalias", Cmd_Unalias_f );
+	Cmd_AddCommand( "unaliasall", Cmd_UnaliasAll_f );
+	Cmd_AddCommand( "alias", Cmd_Alias_f );
+	Cmd_AddCommand( "wait", Cmd_Wait_f );
+	Cmd_AddCommand( "vstr", Cmd_VStr_f );
+	*/
+
+	cmd_initialized = true;
+}
+
+void Cmd_Shutdown( void ) {
+	if( cmd_initialized ) {
+		/*
+		Cmd_RemoveCommand( "exec" );
+		Cmd_RemoveCommand( "echo" );
+		Cmd_RemoveCommand( "aliasa" );
+		Cmd_RemoveCommand( "unalias" );
+		Cmd_RemoveCommand( "unaliasall" );
+		Cmd_RemoveCommand( "alias" );
+		Cmd_RemoveCommand( "wait" );
+		Cmd_RemoveCommand( "vstr" );
+		*/
+
+#ifndef DEDICATED_ONLY
+		CL_GetCmdSystem()->unregisterSystemCommands();
+#endif
+		SV_GetCmdSystem()->unregisterSystemCommands();
+
+		cmd_initialized = false;
+	}
+
+	if( cmd_preinitialized ) {
+#ifndef DEDICATED_ONLY
+		CL_ShutdownCmdSystem();
+#endif
+		SV_ShutdownCmdSystem();
+
+		cmd_preinitialized = false;
+	}
 }
 
 unsigned Sys_GetProcessorFeatures() {

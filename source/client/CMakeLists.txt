@@ -74,7 +74,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/bsp.cpp"
 	"../qcommon/cjson.cpp"
 	"../qcommon/cm_*.cpp"
-	"../qcommon/cmd.cpp"
+	"../qcommon/cmdsystem.cpp"
 	"../qcommon/cmdargssplitter.cpp"
 	"../qcommon/common.cpp"
 	"../qcommon/compression.cpp"

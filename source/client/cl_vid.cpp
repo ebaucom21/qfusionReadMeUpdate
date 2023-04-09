@@ -534,8 +534,8 @@ void VID_Init( void ) {
 	win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
 
 	/* Add some console commands that we want to handle */
-	Cmd_AddCommand( "vid_restart", VID_Restart_f );
-	Cmd_AddCommand( "vid_modelist", VID_ModeList_f );
+	CL_Cmd_Register( "vid_restart", VID_Restart_f );
+	CL_Cmd_Register( "vid_modelist", VID_ModeList_f );
 
 	/* Start the graphics mode and load refresh DLL */
 	vid_ref_modified = true;
@@ -565,8 +565,8 @@ void VID_Shutdown( void ) {
 
 	FTLIB_Shutdown( true );
 
-	Cmd_RemoveCommand( "vid_restart" );
-	Cmd_RemoveCommand( "vid_modelist" );
+	CL_Cmd_Unregister( "vid_restart" );
+	CL_Cmd_Unregister( "vid_modelist" );
 
 	Q_free( vid_modes );
 

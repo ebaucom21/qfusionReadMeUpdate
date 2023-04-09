@@ -360,7 +360,7 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 	}
 
 	// make sure a local server is killed
-	Cbuf_ExecuteText( EXEC_NOW, "killserver\n" );
+	CL_Cmd_ExecuteNow( "killserver\n" );
 	CL_Disconnect( NULL );
 
 	memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );

@@ -92,7 +92,7 @@ void GametypeOptionsModel::select( int optionRow, int indexInRow ) {
 	wsw::StaticString<64> commandText;
 	static_assert( commandText.capacity() > kMaxCommandLen + 10 );
 	commandText << commandName << ' ' << indexInRow;
-	Cbuf_ExecuteText( EXEC_APPEND, commandText.data() );
+	CL_Cbuf_AppendCommand( commandText.data() );
 }
 
 bool GametypeOptionsModel::parseEntryParts( const wsw::StringView &string,
@@ -124,12 +124,12 @@ void GametypeOptionsModel::reload() {
 	beginResetModel();
 	clear();
 
-	const char *command = "requestoptionsstatus";
-	if( Cmd_Exists( command ) ) {
+	const wsw::StringView command( "requestoptionsstatus"_asView );
+	if( CL_Cmd_Exists( command ) ) {
 		if( !doReload() ) {
 			clear();
 		} else {
-			Cbuf_ExecuteText( EXEC_APPEND, command );
+			CL_Cbuf_AppendCommand( command );
 		}
 	}
 

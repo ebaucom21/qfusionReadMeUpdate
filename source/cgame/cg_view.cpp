@@ -75,7 +75,7 @@ bool CG_ChaseStep( int step ) {
 	}
 	
 	if( !cgs.demoPlaying ) {
-		Cbuf_ExecuteText( EXEC_NOW, step > 0 ? "chasenext" : "chaseprev" );
+		CL_Cmd_ExecuteNow( step > 0 ? "chasenext" : "chaseprev" );
 		return true;
 	}
 
@@ -813,7 +813,7 @@ bool CG_SwitchChaseCamMode( void ) {
 			if( realSpec ) {
 				if( ++chaseCam.mode >= CAM_MODES ) {
 					// if exceeds the cycle, start free fly
-					Cbuf_ExecuteText( EXEC_NOW, "camswitch" );
+					CL_Cmd_ExecuteNow( "camswitch" );
 					chaseCam.mode = 0;
 				}
 				return true;
@@ -826,7 +826,7 @@ bool CG_SwitchChaseCamMode( void ) {
 	}
 
 	if( realSpec && ( CG_DemoCam_IsFree() || cg.frame.playerState.pmove.pm_type == PM_SPECTATOR ) ) {
-		Cbuf_ExecuteText( EXEC_NOW, "camswitch" );
+		CL_Cmd_ExecuteNow( "camswitch" );
 		return true;
 	}
 
@@ -1098,7 +1098,7 @@ void CG_RenderView( int frameTime, int realFrameTime, int64_t realTime, int64_t 
 	if( !cgs.demoPlaying ) {
 		if( ISREALSPECTATOR() && !cg.firstFrame ) {
 			if( !cgs.gameMenuRequested ) {
-				Cbuf_ExecuteText( EXEC_NOW, "gamemenu\n" );
+				CL_Cmd_ExecuteNow( "gamemenu\n" );
 			}
 			cgs.gameMenuRequested = true;
 		}

@@ -3667,12 +3667,12 @@ void FS_Init( void ) {
 	fs_fh_mutex = QMutex_Create();
 	fs_searchpaths_mutex = QMutex_Create();
 
-	Cmd_AddCommand( "fs_path", FS_Path_f );
-	Cmd_AddCommand( "fs_pakfile", Cmd_PakFile_f );
-	Cmd_AddCommand( "fs_search", Cmd_FS_Search_f );
-	Cmd_AddCommand( "fs_checksum", Cmd_FileChecksum_f );
-	Cmd_AddCommand( "fs_mtime", Cmd_FileMTime_f );
-	Cmd_AddCommand( "fs_untoched", Cmd_FS_Untouched_f );
+	Cmd_AddClientAndServerCommand( "fs_path", FS_Path_f );
+	Cmd_AddClientAndServerCommand( "fs_pakfile", Cmd_PakFile_f );
+	Cmd_AddClientAndServerCommand( "fs_search", Cmd_FS_Search_f );
+	Cmd_AddClientAndServerCommand( "fs_checksum", Cmd_FileChecksum_f );
+	Cmd_AddClientAndServerCommand( "fs_mtime", Cmd_FileMTime_f );
+	Cmd_AddClientAndServerCommand( "fs_untoched", Cmd_FS_Untouched_f );
 
 	fs_numsearchfiles = FS_MIN_SEARCHFILES;
 	fs_searchfiles = ( searchfile_t* )Q_malloc( sizeof( searchfile_t ) * fs_numsearchfiles );
@@ -3776,12 +3776,12 @@ void FS_Shutdown( void ) {
 		return;
 	}
 
-	Cmd_RemoveCommand( "fs_path" );
-	Cmd_RemoveCommand( "fs_pakfile" );
-	Cmd_RemoveCommand( "fs_search" );
-	Cmd_RemoveCommand( "fs_checksum" );
-	Cmd_RemoveCommand( "fs_mtime" );
-	Cmd_RemoveCommand( "fs_untoched" );
+	Cmd_RemoveClientAndServerCommand( "fs_path" );
+	Cmd_RemoveClientAndServerCommand( "fs_pakfile" );
+	Cmd_RemoveClientAndServerCommand( "fs_search" );
+	Cmd_RemoveClientAndServerCommand( "fs_checksum" );
+	Cmd_RemoveClientAndServerCommand( "fs_mtime" );
+	Cmd_RemoveClientAndServerCommand( "fs_untoched" );
 
 	FS_FreeSearchFiles();
 	Q_free( fs_searchfiles );

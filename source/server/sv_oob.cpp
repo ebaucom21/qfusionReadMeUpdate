@@ -885,7 +885,7 @@ static void SVC_RemoteCommand( const socket_t *socket, const netadr_t *address, 
 			Q_strncatz( remaining, "\" ", sizeof( remaining ) );
 		}
 
-		Cmd_ExecuteString( remaining );
+		SV_Cmd_ExecuteNow( remaining );
 	}
 
 	Com_EndRedirect();

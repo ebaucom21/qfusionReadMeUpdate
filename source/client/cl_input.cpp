@@ -84,7 +84,7 @@ void CL_UserInputFrame( int realMsec ) {
 	CL_CreateNewUserCommand( realMsec );
 
 	// process console commands
-	Cbuf_Execute();
+	CL_Cbuf_ExecutePendingCommands();
 }
 
 /*
@@ -95,7 +95,7 @@ void CL_InitInput( void ) {
 		return;
 	}
 
-	Cmd_AddCommand( "in_restart", IN_Restart );
+	CL_Cmd_Register( "in_restart", IN_Restart );
 
 	IN_Init();
 
@@ -124,7 +124,7 @@ void CL_ShutdownInput( void ) {
 		return;
 	}
 
-	Cmd_RemoveCommand( "in_restart" );
+	CL_Cmd_Unregister( "in_restart" );
 
 	IN_Shutdown();
 

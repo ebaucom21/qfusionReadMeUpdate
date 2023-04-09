@@ -841,7 +841,7 @@ static void CG_RegisterConfigStrings( void ) {
 
 	GS_SetGametypeName( cgs.configStrings.getGametypeName().value_or( wsw::StringView() ).data() );
 
-	Cbuf_ExecuteText( EXEC_NOW, va( "exec configs/client/%s.cfg silent", gs.gametypeName ) );
+	CL_Cmd_ExecuteNow( va( "exec configs/client/%s.cfg silent", gs.gametypeName ) );
 
 	CG_SC_AutoRecordAction( cgs.configStrings.getAutoRecordState().value_or( wsw::StringView() ).data() );
 }

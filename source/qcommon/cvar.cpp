@@ -828,15 +828,15 @@ void Cvar_Init( void ) {
 
 	assert( cvar_trie );
 
-	Cmd_AddCommand( "set", Cvar_Set_f );
-	Cmd_AddCommand( "seta", Cvar_Seta_f );
-	Cmd_AddCommand( "setau", Cvar_Setau_f );
-	Cmd_AddCommand( "setas", Cvar_Setas_f );
-	Cmd_AddCommand( "setu", Cvar_Setu_f );
-	Cmd_AddCommand( "sets", Cvar_Sets_f );
-	Cmd_AddCommand( "reset", Cvar_Reset_f );
-	Cmd_AddCommand( "toggle", Cvar_Toggle_f );
-	Cmd_AddCommand( "cvarlist", Cvar_List_f );
+	Cmd_AddClientAndServerCommand( "set", Cvar_Set_f );
+	Cmd_AddClientAndServerCommand( "seta", Cvar_Seta_f );
+	Cmd_AddClientAndServerCommand( "setau", Cvar_Setau_f );
+	Cmd_AddClientAndServerCommand( "setas", Cvar_Setas_f );
+	Cmd_AddClientAndServerCommand( "setu", Cvar_Setu_f );
+	Cmd_AddClientAndServerCommand( "sets", Cvar_Sets_f );
+	Cmd_AddClientAndServerCommand( "reset", Cvar_Reset_f );
+	Cmd_AddClientAndServerCommand( "toggle", Cvar_Toggle_f );
+	Cmd_AddClientAndServerCommand( "cvarlist", Cvar_List_f );
 
 	Cmd_SetCompletionFunc( "set", Cvar_CompleteBuildList );
 	Cmd_SetCompletionFunc( "seta", Cvar_CompleteBuildList );
@@ -848,7 +848,7 @@ void Cvar_Init( void ) {
 	Cmd_SetCompletionFunc( "sets", Cvar_CompleteBuildListServer );
 
 #ifndef PUBLIC_BUILD
-	Cmd_AddCommand( "cvararchivelist", Cvar_ArchiveList_f );
+	Cmd_AddClientAndServerCommand( "cvararchivelist", Cvar_ArchiveList_f );
 #endif
 
 	cvar_initialized = true;
@@ -879,17 +879,17 @@ void Cvar_Shutdown( void ) {
 		con_printText = NULL;
 #endif
 
-		Cmd_RemoveCommand( "set" );
-		Cmd_RemoveCommand( "seta" );
-		Cmd_RemoveCommand( "setau" );
-		Cmd_RemoveCommand( "setas" );
-		Cmd_RemoveCommand( "setu" );
-		Cmd_RemoveCommand( "sets" );
-		Cmd_RemoveCommand( "reset" );
-		Cmd_RemoveCommand( "toggle" );
-		Cmd_RemoveCommand( "cvarlist" );
+		Cmd_RemoveClientAndServerCommand( "set" );
+		Cmd_RemoveClientAndServerCommand( "seta" );
+		Cmd_RemoveClientAndServerCommand( "setau" );
+		Cmd_RemoveClientAndServerCommand( "setas" );
+		Cmd_RemoveClientAndServerCommand( "setu" );
+		Cmd_RemoveClientAndServerCommand( "sets" );
+		Cmd_RemoveClientAndServerCommand( "reset" );
+		Cmd_RemoveClientAndServerCommand( "toggle" );
+		Cmd_RemoveClientAndServerCommand( "cvarlist" );
 #ifndef PUBLIC_BUILD
-		Cmd_RemoveCommand( "cvararchivelist" );
+		Cmd_RemoveClientAndServerCommand( "cvararchivelist" );
 #endif
 
 		QMutex_Lock( cvar_mutex );

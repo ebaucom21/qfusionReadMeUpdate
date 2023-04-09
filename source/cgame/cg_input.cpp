@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/qcommon.h"
 #include "../client/input.h"
 #include "../client/keys.h"
+#include "../client/client.h"
 #include "../qcommon/cmdargs.h"
 
 static int64_t cg_inputTime;
@@ -449,43 +450,43 @@ static void CG_CenterView( const CmdArgs & ) {
 * CG_InputInit
 */
 void CG_InitInput( void ) {
-	Cmd_AddCommand( "+moveup", IN_UpDown );
-	Cmd_AddCommand( "-moveup", IN_UpUp );
-	Cmd_AddCommand( "+movedown", IN_DownDown );
-	Cmd_AddCommand( "-movedown", IN_DownUp );
-	Cmd_AddCommand( "+left", IN_LeftDown );
-	Cmd_AddCommand( "-left", IN_LeftUp );
-	Cmd_AddCommand( "+right", IN_RightDown );
-	Cmd_AddCommand( "-right", IN_RightUp );
-	Cmd_AddCommand( "+forward", IN_ForwardDown );
-	Cmd_AddCommand( "-forward", IN_ForwardUp );
-	Cmd_AddCommand( "+back", IN_BackDown );
-	Cmd_AddCommand( "-back", IN_BackUp );
-	Cmd_AddCommand( "+lookup", IN_LookupDown );
-	Cmd_AddCommand( "-lookup", IN_LookupUp );
-	Cmd_AddCommand( "+lookdown", IN_LookdownDown );
-	Cmd_AddCommand( "-lookdown", IN_LookdownUp );
-	Cmd_AddCommand( "+strafe", IN_StrafeDown );
-	Cmd_AddCommand( "-strafe", IN_StrafeUp );
-	Cmd_AddCommand( "+moveleft", IN_MoveleftDown );
-	Cmd_AddCommand( "-moveleft", IN_MoveleftUp );
-	Cmd_AddCommand( "+moveright", IN_MoverightDown );
-	Cmd_AddCommand( "-moveright", IN_MoverightUp );
-	Cmd_AddCommand( "+speed", IN_SpeedDown );
-	Cmd_AddCommand( "-speed", IN_SpeedUp );
-	Cmd_AddCommand( "+attack", IN_AttackDown );
-	Cmd_AddCommand( "-attack", IN_AttackUp );
-	Cmd_AddCommand( "+use", IN_UseDown );
-	Cmd_AddCommand( "-use", IN_UseUp );
-	Cmd_AddCommand( "+klook", IN_KLookDown );
-	Cmd_AddCommand( "-klook", IN_KLookUp );
+	CL_Cmd_Register( "+moveup", IN_UpDown );
+	CL_Cmd_Register( "-moveup", IN_UpUp );
+	CL_Cmd_Register( "+movedown", IN_DownDown );
+	CL_Cmd_Register( "-movedown", IN_DownUp );
+	CL_Cmd_Register( "+left", IN_LeftDown );
+	CL_Cmd_Register( "-left", IN_LeftUp );
+	CL_Cmd_Register( "+right", IN_RightDown );
+	CL_Cmd_Register( "-right", IN_RightUp );
+	CL_Cmd_Register( "+forward", IN_ForwardDown );
+	CL_Cmd_Register( "-forward", IN_ForwardUp );
+	CL_Cmd_Register( "+back", IN_BackDown );
+	CL_Cmd_Register( "-back", IN_BackUp );
+	CL_Cmd_Register( "+lookup", IN_LookupDown );
+	CL_Cmd_Register( "-lookup", IN_LookupUp );
+	CL_Cmd_Register( "+lookdown", IN_LookdownDown );
+	CL_Cmd_Register( "-lookdown", IN_LookdownUp );
+	CL_Cmd_Register( "+strafe", IN_StrafeDown );
+	CL_Cmd_Register( "-strafe", IN_StrafeUp );
+	CL_Cmd_Register( "+moveleft", IN_MoveleftDown );
+	CL_Cmd_Register( "-moveleft", IN_MoveleftUp );
+	CL_Cmd_Register( "+moveright", IN_MoverightDown );
+	CL_Cmd_Register( "-moveright", IN_MoverightUp );
+	CL_Cmd_Register( "+speed", IN_SpeedDown );
+	CL_Cmd_Register( "-speed", IN_SpeedUp );
+	CL_Cmd_Register( "+attack", IN_AttackDown );
+	CL_Cmd_Register( "-attack", IN_AttackUp );
+	CL_Cmd_Register( "+use", IN_UseDown );
+	CL_Cmd_Register( "-use", IN_UseUp );
+	CL_Cmd_Register( "+klook", IN_KLookDown );
+	CL_Cmd_Register( "-klook", IN_KLookUp );
 	// wsw
-	Cmd_AddCommand( "+special", IN_SpecialDown );
-	Cmd_AddCommand( "-special", IN_SpecialUp );
-	Cmd_AddCommand( "+zoom", IN_ZoomDown );
-	Cmd_AddCommand( "-zoom", IN_ZoomUp );
+	CL_Cmd_Register( "+special", IN_SpecialDown );
+	CL_Cmd_Register( "-special", IN_SpecialUp );
+	CL_Cmd_Register( "+zoom", IN_ZoomDown );
+	CL_Cmd_Register( "-zoom", IN_ZoomUp );
 
-	Cmd_AddCommand( "centerview", CG_CenterView );
+	CL_Cmd_Register( "centerview", CG_CenterView );
 }
 
 void CG_InitInputVars() {
@@ -511,43 +512,43 @@ void CG_InitInputVars() {
 * CG_ShutdownInput
 */
 void CG_ShutdownInput( void ) {
-	Cmd_RemoveCommand( "+moveup" );
-	Cmd_RemoveCommand( "-moveup" );
-	Cmd_RemoveCommand( "+movedown" );
-	Cmd_RemoveCommand( "-movedown" );
-	Cmd_RemoveCommand( "+left" );
-	Cmd_RemoveCommand( "-left" );
-	Cmd_RemoveCommand( "+right" );
-	Cmd_RemoveCommand( "-right" );
-	Cmd_RemoveCommand( "+forward" );
-	Cmd_RemoveCommand( "-forward" );
-	Cmd_RemoveCommand( "+back" );
-	Cmd_RemoveCommand( "-back" );
-	Cmd_RemoveCommand( "+lookup" );
-	Cmd_RemoveCommand( "-lookup" );
-	Cmd_RemoveCommand( "+lookdown" );
-	Cmd_RemoveCommand( "-lookdown" );
-	Cmd_RemoveCommand( "+strafe" );
-	Cmd_RemoveCommand( "-strafe" );
-	Cmd_RemoveCommand( "+moveleft" );
-	Cmd_RemoveCommand( "-moveleft" );
-	Cmd_RemoveCommand( "+moveright" );
-	Cmd_RemoveCommand( "-moveright" );
-	Cmd_RemoveCommand( "+speed" );
-	Cmd_RemoveCommand( "-speed" );
-	Cmd_RemoveCommand( "+attack" );
-	Cmd_RemoveCommand( "-attack" );
-	Cmd_RemoveCommand( "+use" );
-	Cmd_RemoveCommand( "-use" );
-	Cmd_RemoveCommand( "+klook" );
-	Cmd_RemoveCommand( "-klook" );
+	CL_Cmd_Unregister( "+moveup" );
+	CL_Cmd_Unregister( "-moveup" );
+	CL_Cmd_Unregister( "+movedown" );
+	CL_Cmd_Unregister( "-movedown" );
+	CL_Cmd_Unregister( "+left" );
+	CL_Cmd_Unregister( "-left" );
+	CL_Cmd_Unregister( "+right" );
+	CL_Cmd_Unregister( "-right" );
+	CL_Cmd_Unregister( "+forward" );
+	CL_Cmd_Unregister( "-forward" );
+	CL_Cmd_Unregister( "+back" );
+	CL_Cmd_Unregister( "-back" );
+	CL_Cmd_Unregister( "+lookup" );
+	CL_Cmd_Unregister( "-lookup" );
+	CL_Cmd_Unregister( "+lookdown" );
+	CL_Cmd_Unregister( "-lookdown" );
+	CL_Cmd_Unregister( "+strafe" );
+	CL_Cmd_Unregister( "-strafe" );
+	CL_Cmd_Unregister( "+moveleft" );
+	CL_Cmd_Unregister( "-moveleft" );
+	CL_Cmd_Unregister( "+moveright" );
+	CL_Cmd_Unregister( "-moveright" );
+	CL_Cmd_Unregister( "+speed" );
+	CL_Cmd_Unregister( "-speed" );
+	CL_Cmd_Unregister( "+attack" );
+	CL_Cmd_Unregister( "-attack" );
+	CL_Cmd_Unregister( "+use" );
+	CL_Cmd_Unregister( "-use" );
+	CL_Cmd_Unregister( "+klook" );
+	CL_Cmd_Unregister( "-klook" );
 	// wsw
-	Cmd_RemoveCommand( "+special" );
-	Cmd_RemoveCommand( "-special" );
-	Cmd_RemoveCommand( "+zoom" );
-	Cmd_RemoveCommand( "-zoom" );
+	CL_Cmd_Unregister( "+special" );
+	CL_Cmd_Unregister( "-special" );
+	CL_Cmd_Unregister( "+zoom" );
+	CL_Cmd_Unregister( "-zoom" );
 
-	Cmd_RemoveCommand( "centerview" );
+	CL_Cmd_Unregister( "centerview" );
 }
 
 /*

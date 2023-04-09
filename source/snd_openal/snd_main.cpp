@@ -121,11 +121,11 @@ bool SoundSystem::init( client_state_t *client, const InitOptions &options ) {
 	s_effects_number_threshold     = Cvar_Get( "s_effects_number_threshold", "15", CVAR_ARCHIVE );
 	s_hrtf                         = Cvar_Get( "s_hrtf", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
 
-	Cmd_AddCommand( "music", SF_Music_f );
-	Cmd_AddCommand( "stopmusic", SF_StopBackgroundTrack );
-	Cmd_AddCommand( "prevmusic", SF_PrevBackgroundTrack );
-	Cmd_AddCommand( "nextmusic", SF_NextBackgroundTrack );
-	Cmd_AddCommand( "pausemusic", SF_PauseBackgroundTrack );
+	CL_Cmd_Register( "music", SF_Music_f );
+	CL_Cmd_Register( "stopmusic", SF_StopBackgroundTrack );
+	CL_Cmd_Register( "prevmusic", SF_PrevBackgroundTrack );
+	CL_Cmd_Register( "nextmusic", SF_NextBackgroundTrack );
+	CL_Cmd_Register( "pausemusic", SF_PauseBackgroundTrack );
 
 	if( !options.useNullSystem ) {
 		s_instance = wsw::snd::ALSoundSystem::tryCreate( client, options.verbose );
@@ -142,11 +142,11 @@ bool SoundSystem::init( client_state_t *client, const InitOptions &options ) {
 }
 
 void SoundSystem::shutdown( bool verbose ) {
-	Cmd_RemoveCommand( "music" );
-	Cmd_RemoveCommand( "stopmusic" );
-	Cmd_RemoveCommand( "prevmusic" );
-	Cmd_RemoveCommand( "nextmusic" );
-	Cmd_RemoveCommand( "pausemusic" );
+	CL_Cmd_Unregister( "music" );
+	CL_Cmd_Unregister( "stopmusic" );
+	CL_Cmd_Unregister( "prevmusic" );
+	CL_Cmd_Unregister( "nextmusic" );
+	CL_Cmd_Unregister( "pausemusic" );
 
 	if( s_instance ) {
 		s_instance->deleteSelf( verbose );
