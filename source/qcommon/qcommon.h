@@ -202,15 +202,6 @@ size_t SNAP_ReadDemoMetaData( int demofile, char *meta_data, size_t meta_data_si
 
 //============================================================================
 
-int COM_Argc( void );
-const char *COM_Argv( int arg );  // range and null checked
-void COM_ClearArgv( int arg );
-int COM_CheckParm( char *parm );
-void COM_AddParm( char *parm );
-
-void COM_Init( void );
-void COM_InitArgv( int argc, char **argv );
-
 int Com_GlobMatch( const char *pattern, const char *text, const bool casecmp );
 
 void Info_Print( char *s );
@@ -354,8 +345,25 @@ The + command line options are also added to the command buffer.
 void        Cbuf_AddText( const char *text );
 void        Cbuf_InsertText( const char *text );
 void        Cbuf_ExecuteText( int exec_when, const char *text );
-void        Cbuf_AddEarlyCommands( bool clear );
-bool    Cbuf_AddLateCommands( void );
+
+namespace wsw {
+	class StringView;
+	template <typename, unsigned> class StaticVector;
+}
+
+// TODO: Use generic growable vectors. It's just easier to forward-declare the static one.
+
+void classifyExecutableCmdArgs( int argc, char **argv,
+								wsw::StaticVector<wsw::StringView, 64> *setArgs,
+								wsw::StaticVector<wsw::StringView, 64> *setAndExecArgs,
+								wsw::StaticVector<std::optional<wsw::StringView>, 2 * 64> *otherArgs );
+
+// TODO: Supply arguments as std::span<> (can't be forward-declared)
+
+void Cbuf_AddEarlySetCommands( const wsw::StringView *args, size_t numArgs );
+void Cbuf_AddEarlySetAndExecCommands( const wsw::StringView *args, size_t numArgs );
+void Cbuf_AddLateCommands( const std::optional<wsw::StringView> *args, size_t numArgs );
+
 void        Cbuf_Execute( void );
 
 

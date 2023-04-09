@@ -52,12 +52,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <setjmp.h>
 #include <mutex>
 
-#define MAX_NUM_ARGVS   50
-
 static bool commands_intialized = false;
 
-static int com_argc;
-static char *com_argv[MAX_NUM_ARGVS + 1];
 static char com_errormsg[MAX_PRINTMSG];
 
 static bool com_quit;
@@ -504,74 +500,6 @@ unsigned int Com_DaysSince1900( void ) {
 
 //============================================================================
 
-/*
-* COM_CheckParm
-*
-* Returns the position (1 to argc-1) in the program's argument list
-* where the given parameter apears, or 0 if not present
-*/
-int COM_CheckParm( char *parm ) {
-	int i;
-
-	for( i = 1; i < com_argc; i++ ) {
-		if( !strcmp( parm, com_argv[i] ) ) {
-			return i;
-		}
-	}
-
-	return 0;
-}
-
-int COM_Argc( void ) {
-	return com_argc;
-}
-
-const char *COM_Argv( int arg ) {
-	if( arg < 0 || arg >= com_argc || !com_argv[arg] ) {
-		return "";
-	}
-	return com_argv[arg];
-}
-
-void COM_ClearArgv( int arg ) {
-	if( arg < 0 || arg >= com_argc || !com_argv[arg] ) {
-		return;
-	}
-	com_argv[arg][0] = '\0';
-}
-
-
-/*
-* COM_InitArgv
-*/
-void COM_InitArgv( int argc, char **argv ) {
-	int i;
-
-	if( argc > MAX_NUM_ARGVS ) {
-		Com_Error( ERR_FATAL, "argc > MAX_NUM_ARGVS" );
-	}
-	com_argc = argc;
-	for( i = 0; i < argc; i++ ) {
-		if( !argv[i] || strlen( argv[i] ) >= MAX_TOKEN_CHARS ) {
-			com_argv[i][0] = '\0';
-		} else {
-			com_argv[i] = argv[i];
-		}
-	}
-}
-
-/*
-* COM_AddParm
-*
-* Adds the given string at the end of the current argument list
-*/
-void COM_AddParm( char *parm ) {
-	if( com_argc == MAX_NUM_ARGVS ) {
-		Com_Error( ERR_FATAL, "COM_AddParm: MAX_NUM_ARGVS" );
-	}
-	com_argv[com_argc++] = parm;
-}
-
 int Com_GlobMatch( const char *pattern, const char *text, const bool casecmp ) {
 	return glob_match( pattern, text, casecmp );
 }
@@ -837,6 +765,15 @@ void Qcommon_Init( int argc, char **argv ) {
 		Sys_Error( "Error during initialization: %s", com_errormsg );
 	}
 
+	if( argc > 64 ) {
+		Sys_Error( "Too many executable arguments" );
+	}
+
+	wsw::StaticVector<wsw::StringView, 64> setArgs;
+	wsw::StaticVector<wsw::StringView, 64> setAndExecArgs;
+	wsw::StaticVector<std::optional<wsw::StringView>, 2 * 64> otherArgs;
+	classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
+
 	// reset hooks to malloc and free
 	cJSON_InitHooks( NULL );
 
@@ -847,10 +784,6 @@ void Qcommon_Init( int argc, char **argv ) {
 	// Force doing this early as this could fork for executing shell commands on UNIX.
 	// Required being able to call Com_Printf().
 	systemFeaturesHolder.EnsureInitialized();
-
-	// prepare enough of the subsystems to handle
-	// cvar and command buffer management
-	COM_InitArgv( argc, argv );
 
 	// initialize cmd/cvar tries
 	Cmd_PreInit();
@@ -868,7 +801,8 @@ void Qcommon_Init( int argc, char **argv ) {
 	// a basepath or cdpath needs to be set before execing
 	// config files, but we want other parms to override
 	// the settings of the config files
-	Cbuf_AddEarlyCommands( false );
+
+	Cbuf_AddEarlySetCommands( setArgs.data(), setArgs.size() );
 	Cbuf_Execute();
 
 #ifdef DEDICATED_ONLY
@@ -899,7 +833,7 @@ void Qcommon_Init( int argc, char **argv ) {
 		Cbuf_AddText( "exec dedicated_autoexec.cfg\n" );
 	}
 
-	Cbuf_AddEarlyCommands( true );
+	Cbuf_AddEarlySetAndExecCommands( setAndExecArgs.data(), setAndExecArgs.size() );
 	Cbuf_Execute();
 
 	//
@@ -948,20 +882,18 @@ void Qcommon_Init( int argc, char **argv ) {
 		Cbuf_AddText( "exec dedicated_autoexec_postinit.cfg\n" );
 	}
 
-	// add + commands from command line
-	if( !Cbuf_AddLateCommands() ) {
-		// if the user didn't give any commands, run default action
-
+	// if the user didn't give any commands, run default action
+	if( otherArgs.empty() ) {
 		if( !dedicated->integer ) {
 			// only play the introduction sequence once
 			if( !com_introPlayed3->integer ) {
 				Cvar_ForceSet( com_introPlayed3->name, "1" );
-#if ( !defined( __ANDROID__ ) || defined ( __i386__ ) || defined ( __x86_64__ ) )
-				Cbuf_AddText( "cinematic intro.roq\n" );
-#endif
+				// TODO: Actually play the intro
 			}
 		}
 	} else {
+		// add + commands from command line
+		Cbuf_AddLateCommands( otherArgs.data(), otherArgs.size() );
 		// the user asked for something explicit
 		// so drop the loading plaque
 		SCR_EndLoadingPlaque();

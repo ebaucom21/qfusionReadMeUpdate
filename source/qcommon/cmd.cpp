@@ -23,8 +23,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cmdargssplitter.h"
 #include "../client/console.h"
 #include "../qcommon/wswstaticstring.h"
+#include "../qcommon/wswstaticvector.h"
+#include "../qcommon/wswexceptions.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/links.h"
+
+using wsw::operator""_asView;
 
 static bool cmd_preinitialized = false;
 static bool cmd_initialized = false;
@@ -364,6 +368,89 @@ void Cbuf_InsertText( const char *text ) {
 	g_cmdSystemHolder.instance()->prependCommand( wsw::StringView( text ) );
 }
 
+void classifyExecutableCmdArgs( int argc, char **argv, wsw::StaticVector<wsw::StringView, 64> *setArgs,
+								wsw::StaticVector<wsw::StringView, 64> *setAndExecArgs,
+								wsw::StaticVector<std::optional<wsw::StringView>, 2 * 64> *otherArgs ) {
+	assert( (size_t)argc < setArgs->capacity() && (size_t)argc < setAndExecArgs->capacity() && (size_t)argc < otherArgs->capacity() );
+
+	for( int i = 1; i < argc; ++i ) {
+		const wsw::StringView arg( argv[i] );
+		if( arg.startsWith( "+set"_asView ) ) {
+			if( i + 2 < argc ) {
+				const wsw::StringView args[] { arg.drop( 1 ), wsw::StringView( argv[i + 1] ), wsw::StringView( argv[i + 2] ) };
+				setArgs->insert( setArgs->end(), std::begin( args ), std::end( args ) );
+				setAndExecArgs->insert( setAndExecArgs->end(), std::begin( args ), std::end( args ) );
+				i += 2;
+			}
+		} else if( arg.startsWith( "+exec"_asView ) ) {
+			if( i + 1 < argc ) {
+				setAndExecArgs->push_back( arg.drop( 1 ) );
+				setAndExecArgs->push_back( wsw::StringView( argv[i + 1 ] ) );
+				i += 1;
+			}
+		} else {
+			if( arg.startsWith( '+' ) ) {
+				if( arg.length() > 1 ) {
+					otherArgs->push_back( std::nullopt );
+					otherArgs->push_back( arg.drop( 1 ) );
+				}
+			} else {
+				otherArgs->push_back( arg );
+			}
+		}
+	}
+}
+
+void Cbuf_AddEarlySetCommands( const wsw::StringView *args, size_t numArgs ) {
+	assert( numArgs % 3 == 0 );
+	for( size_t i = 0; i < numArgs; i += 3 ) {
+		wsw::StaticString<MAX_TOKEN_CHARS> text;
+		text << args[i + 0] << " \""_asView << args[i + 1] << "\" \""_asView << args[i + 2] << "\"\n"_asView;
+		Cbuf_AddText( text.data() );
+	}
+}
+
+void Cbuf_AddEarlySetAndExecCommands( const wsw::StringView *args, size_t numArgs ) {
+	size_t i = 0;
+	while( i < numArgs ) {
+		const wsw::StringView &cmdName = args[0];
+		if( cmdName.startsWith( "set"_asView ) ) {
+			wsw::StaticString<MAX_TOKEN_CHARS> text;
+			text << cmdName << " \""_asView << args[i + 1] << "\" \""_asView << args[i + 2] << "\"\n"_asView;
+			Cbuf_AddText( text.data() );
+			i += 3;
+		} else if( cmdName.startsWith( "exec"_asView ) ) {
+			wsw::StaticString<MAX_TOKEN_CHARS> text;
+			text << cmdName << " \""_asView << args[i + 1] << "\"\n"_asView;
+			Cbuf_AddText( text.data() );
+			i += 2;
+		} else {
+			wsw::failWithLogicError( "Unexpected command name" );
+		}
+	}
+}
+
+void Cbuf_AddLateCommands( const std::optional<wsw::StringView> *args, size_t numArgs ) {
+	assert( numArgs );
+
+	wsw::String text;
+	for( size_t i = 0; i < numArgs; ++i ) {
+		const std::optional<wsw::StringView> &argOrNewCmdSeparator = args[i];
+		if( argOrNewCmdSeparator.has_value() ) {
+			text.push_back( '"' );
+			text.append( argOrNewCmdSeparator->data(), argOrNewCmdSeparator->size() );
+			text.push_back( '"' );
+		} else {
+			text.push_back( '\n' );
+		}
+	}
+	if( !text.ends_with( '\n' ) ) {
+		text.push_back( '\n' );
+	}
+
+	Cbuf_AddText( text.data() );
+}
+
 /*
 * Cbuf_ExecuteText
 * This can be used in place of either Cbuf_AddText or Cbuf_InsertText
@@ -382,83 +469,6 @@ void Cbuf_ExecuteText( int exec_when, const char *text ) {
 		default:
 			Com_Error( ERR_FATAL, "Cbuf_ExecuteText: bad exec_when" );
 	}
-}
-
-/*
-* Cbuf_AddEarlyCommands
-*
-* Adds all the +set commands from the command line:
-*
-* Adds command line parameters as script statements
-* Commands lead with a +, and continue until another +
-*
-* Set and exec commands are added early, so they are guaranteed to be set before
-* the client and server initialize for the first time.
-*
-* This command is first run before autoexec.cfg and config.cfg to allow changing
-* fs_basepath etc. The second run is after those files has been execed in order
-* to allow overwriting values set in them.
-*
-* Other commands are added late, after all initialization is complete.
-*/
-void Cbuf_AddEarlyCommands( bool second_run ) {
-	for( int i = 1; i < COM_Argc(); ++i ) {
-		const char *s = COM_Argv( i );
-		if( !Q_strnicmp( s, "+set", 4 ) ) {
-			if( strlen( s ) > 4 ) {
-				Cbuf_AddText( va( "\"set%s\" \"%s\" \"%s\"\n", s + 4, COM_Argv( i + 1 ), COM_Argv( i + 2 ) ) );
-			} else {
-				Cbuf_AddText( va( "\"set\" \"%s\" \"%s\"\n", COM_Argv( i + 1 ), COM_Argv( i + 2 ) ) );
-			}
-			if( second_run ) {
-				COM_ClearArgv( i );
-				COM_ClearArgv( i + 1 );
-				COM_ClearArgv( i + 2 );
-			}
-			i += 2;
-		} else if( second_run && !Q_stricmp( s, "+exec" ) ) {
-			Cbuf_AddText( va( "exec \"%s\"\n", COM_Argv( i + 1 ) ) );
-			COM_ClearArgv( i );
-			COM_ClearArgv( i + 1 );
-			i += 1;
-		}
-	}
-}
-
-/*
-* Cbuf_AddLateCommands
-*
-* Adds command line parameters as script statements
-* Commands lead with a + and continue until another + or -
-* quake +map amlev1
-*
-* Returns true if any late commands were added, which
-* will keep the demoloop from immediately starting
-*/
-bool Cbuf_AddLateCommands( void ) {
-	wsw::String text;
-
-	for( int i = 1; i < COM_Argc(); i++ ) {
-		const char *arg = COM_Argv( i );
-		if( arg[0] != '\0' ) {
-			if( arg[0] == '+' ) {
-				text.push_back( '\n' );
-				arg = arg + 1;
-			}
-			text.push_back( '"' );
-			text.append( arg );
-			text.push_back( '"' );
-			text.push_back( ' ' );
-		}
-	}
-
-	if( text.empty() ) {
-		return false;
-	}
-
-	text.push_back( '\n' );
-	Cbuf_AddText( text.data() );
-	return true;
 }
 
 /*
