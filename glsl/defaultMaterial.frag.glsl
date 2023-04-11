@@ -92,8 +92,7 @@ void main()
 	myhalf4 diffuse;
 
 #ifdef APPLY_DRAWFLAT
-	myhalf n = myhalf(step(DRAWFLAT_NORMAL_STEP, abs(v_StrMatrix[2].z)));
-	diffuse = myhalf4(mix(u_WallColor, u_FloorColor, n), myhalf(qf_texture(u_BaseTexture, v_TexCoord).a));
+	diffuse = myhalf4(mix(u_WallColor, u_FloorColor, abs(v_StrMatrix[2].z)), myhalf(qf_texture(u_BaseTexture, v_TexCoord).a));
 #else
 	diffuse = myhalf4(qf_texture(u_BaseTexture, v_TexCoord));
 #endif

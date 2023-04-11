@@ -1,5 +1,3 @@
-#define DRAWFLAT_NORMAL_STEP	0.5		// floor or ceiling if < abs(normal.z)
-
 myhalf LinearFromsRGB(myhalf c)
 {
 	myhalf falsePathVal = c * (1.0f / 12.92f);

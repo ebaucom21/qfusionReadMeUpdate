@@ -78,8 +78,7 @@ void main(void)
 #endif
 
 #ifdef APPLY_DRAWFLAT
-	myhalf n = myhalf(step(DRAWFLAT_NORMAL_STEP, abs(v_Normal.z)));
-	diffuse.rgb = myhalf3(mix(LinearColor(u_WallColor), LinearColor(u_FloorColor), n));
+	diffuse.rgb = myhalf3(mix(LinearColor(u_WallColor), LinearColor(u_FloorColor), abs(v_Normal.z)));
 #endif
 
 #ifdef APPLY_ALPHA_MASK
