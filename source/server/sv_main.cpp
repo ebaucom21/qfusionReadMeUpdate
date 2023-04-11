@@ -990,6 +990,8 @@ void SV_SetupSnapTables( cmodel_state_t *cms ) {
 	SnapShadowTable::Init();
 }
 
+CmdSystem *CL_GetCmdSystem();
+
 class SVCmdSystem: public CmdSystem {
 	void registerSystemCommands() override {
 		registerCommand( "exec"_asView, handlerOfExec );
@@ -1075,11 +1077,27 @@ void SV_Cmd_ExecuteText( int when, const char *text ) {
 }
 
 void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
-	g_svCmdSystemHolder.instance()->registerCommand( wsw::StringView( name ), handler );
+	const wsw::StringView nameView( name );
+	g_svCmdSystemHolder.instance()->registerCommand( nameView, handler );
+#ifndef DEDICATED_ONLY
+	CL_GetCmdSystem()->registerCommand( nameView, []( const CmdArgs &cmdArgs ) {
+		wsw::StaticString<MAX_STRING_CHARS> text;
+		// TODO: Preserve the original string?
+		for( const wsw::StringView &arg: cmdArgs.allArgs ) {
+			text << arg << ' ';
+		}
+		text[text.size() - 1] = '\n';
+		g_svCmdSystemHolder.instance()->executeNow( text.asView() );
+	});
+#endif
 }
 
 void SV_Cmd_Unregister( const char *name ) {
-	g_svCmdSystemHolder.instance()->unregisterCommand( wsw::StringView( name ) );
+	const wsw::StringView nameView( name );
+	g_svCmdSystemHolder.instance()->unregisterCommand( nameView );
+#ifndef DEDICATED_ONLY
+	CL_GetCmdSystem()->unregisterCommand( nameView );
+#endif
 }
 
 void SV_Cmd_ExecuteNow( const char *text ) {
