@@ -24,7 +24,6 @@
 #include "../ref/ref.h"
 #include "../cgame/cg_public.h"
 #include "../ftlib/ftlib.h"
-#include "../qcommon/mmrating.h"
 #include "snd_public.h"
 #include "../qcommon/steam.h"
 

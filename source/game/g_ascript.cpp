@@ -1356,23 +1356,27 @@ static const asClassDescriptor_t asScoreStatsClassDescriptor =
 };
 
 static bool objectRunStatusQuery_isReady( RunStatusQuery *self ) {
-	return self->IsReady();
+	return false;
+	//return self->IsReady();
 }
 
 static bool objectRunStatusQuery_hasFailed( RunStatusQuery *self ) {
-	return self->HasFailed();
+	// return self->HasFailed();
+	return false;
 }
 
 static int objectRunStatusQuery_personalRank( RunStatusQuery *self ) {
-	return self->PersonalRank();
+	return 1;
+	// return self->PersonalRank();
 }
 
 static int objectRunStatusQuery_worldRank( RunStatusQuery *self ) {
-	return self->WorldRank();
+	return 1;
+	// return self->WorldRank();
 }
 
 static void objectRunStatusQuery_deleteSelf( RunStatusQuery *self ) {
-	return self->DeleteSelf();
+	//return self->DeleteSelf();
 }
 
 // Why is it even needed to declare empty trait arrays for every declared type...
@@ -1844,7 +1848,7 @@ static void objectGameClient_NewRaceRun( int numSectors, Client *self ) {
 		return;
 	}
 
-	StatsowFacade::Instance()->NewRaceRun( PLAYERENT( playerNum ), numSectors );
+	// StatsowFacade::Instance()->NewRaceRun( PLAYERENT( playerNum ), numSectors );
 }
 
 static void objectGameClient_SetSectorTime( int sector, uint32_t time, Client *self ) {
@@ -1855,7 +1859,7 @@ static void objectGameClient_SetSectorTime( int sector, uint32_t time, Client *s
 		return;
 	}
 
-	StatsowFacade::Instance()->SetSectorTime( PLAYERENT( playerNum ), sector, time );
+	// StatsowFacade::Instance()->SetSectorTime( PLAYERENT( playerNum ), sector, time );
 }
 
 static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, Client *self ) {
@@ -1865,7 +1869,8 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun( uint32_t finalTime, Cli
 		return nullptr;
 	}
 
-	return StatsowFacade::Instance()->CompleteRun( PLAYERENT( playerNum ), finalTime );
+	// return StatsowFacade::Instance()->CompleteRun( PLAYERENT( playerNum ), finalTime );
+	return nullptr;
 }
 
 static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, const asstring_t *tag, Client *self ) {
@@ -1875,12 +1880,15 @@ static RunStatusQuery *objectGameClient_CompleteRaceRun2( uint32_t finalTime, co
 		return nullptr;
 	}
 
+	/*
 	edict_t *playerEnt = PLAYERENT( playerNum );
 	if( !tag || !tag->size ) {
 		return StatsowFacade::Instance()->CompleteRun( playerEnt, finalTime );
 	}
 
 	return StatsowFacade::Instance()->CompleteRun( playerEnt, finalTime, tag->buffer );
+	*/
+	return nullptr;
 }
 
 static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, Client *self ) {
@@ -1890,7 +1898,7 @@ static void objectGameClient_AddToRacePlayTime( int64_t timeToAdd, Client *self 
 		return;
 	}
 
-	StatsowFacade::Instance()->AddToRacePlayTime( self, timeToAdd );
+	//StatsowFacade::Instance()->AddToRacePlayTime( self, timeToAdd );
 }
 
 static void objectGameClient_SetHelpMessage( unsigned int index, Client *self ) {

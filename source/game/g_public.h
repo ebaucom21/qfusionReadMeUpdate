@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    82
+#define GAME_API_VERSION    83
 
 //===============================================================
 
@@ -207,12 +207,6 @@ typedef struct {
 
 	wsw::LogLineStream *( *createLogLineStream )( wsw::LogLineCategory, wsw::LogLineSeverity );
 	void ( *submitLogLineStream )( wsw::LogLineStream * );
-
-	class QueryObject *( *MM_NewPostQuery )( const char *url );
-	class QueryObject *( *MM_NewGetQuery )( const char *url );
-	void ( *MM_DeleteQuery )( class QueryObject *query );
-	bool ( *MM_SendQuery )( class QueryObject *query );
-	void ( *MM_EnqueueReport )( class QueryObject *query );
 } game_import_t;
 
 //
@@ -247,10 +241,4 @@ typedef struct {
 	const ReplicatedScoreboardData *( *GetRawScoreboardData )( unsigned clientNum );
 
 	bool ( *AllowDownload )( edict_t *ent, const char *requestname, const char *uploadname );
-
-	// gameside rating library
-	struct clientRating_s *( *AddDefaultRating )( edict_t * ent, const char *gametype );
-	struct clientRating_s *( *AddRating )( edict_t * ent, const char *gametype, float rating, float deviation );
-	void ( *RemoveRating )( edict_t *ent );
-	void ( *AddRaceRecords )( edict_t *ent, int numRecords, unsigned int *records );
 } game_export_t;

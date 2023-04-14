@@ -385,9 +385,6 @@ void RespectHandler::ClientEntry::announceMisconductBehaviour( const char *actio
 	(void)action;
 
 	char message[256] = S_COLOR_YELLOW "'" S_COLOR_CYAN "Fair play" S_COLOR_YELLOW "' award lost";
-	if( !StatsowFacade::Instance()->IsMatchReportDiscarded() ) {
-		Q_strncatz( message, ". No rating gain", sizeof( message ) );
-	}
 
 	G_PrintMsg( ent, "%s!\n", message );
 }
@@ -830,13 +827,18 @@ void RespectHandler::ClientEntry::onClientJoinedTeam( int newTeam ) {
 		return;
 	}
 
+	/*
 	auto *respectStats = StatsowFacade::Instance()->FindRespectStatsById( clientSessionId );
 	if( !respectStats ) {
 		return;
-	}
+	}*/
 
+	/*
 	this->hasViolatedCodex = respectStats->hasViolatedCodex;
 	this->hasIgnoredCodex = respectStats->hasIgnoredCodex;
+	*/
+	this->hasViolatedCodex = false;
+	this->hasIgnoredCodex  = false;
 }
 
 void RespectHandler::ClientEntry::addToReportStats( RespectStats *reportedStats ) {

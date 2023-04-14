@@ -72,7 +72,6 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/autoupdate.cpp"
 	"../qcommon/base64.cpp"
 	"../qcommon/bsp.cpp"
-	"../qcommon/cjson.cpp"
 	"../qcommon/cm_*.cpp"
 	"../qcommon/cmdsystem.cpp"
 	"../qcommon/cmdargssplitter.cpp"
@@ -108,10 +107,6 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../snd_openal/*.cpp"
 	"../gameshared/*.cpp"
 	"../../third-party/recastnavigation/Recast/Source/*.cpp"
-    # We have to include this for linking with shared MM facilities.
-    # This also is required to run listen servers (do we allow ranked listen servers?)
-    # Unused stuff should get stripped anyway.
-    "../../third-party/sqlite-amalgamation/sqlite3.c"
 )
 
 file(GLOB REF_HEADERS

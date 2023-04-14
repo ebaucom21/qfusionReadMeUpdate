@@ -315,7 +315,7 @@ void G_Teams_SetTeam( edict_t *ent, int team ) {
 	assert( ent && ent->r.inuse && ent->r.client );
 	assert( team >= TEAM_SPECTATOR && team < GS_MAX_TEAMS );
 
-	StatsowFacade::Instance()->OnClientJoinedTeam( ent, team );
+	//StatsowFacade::Instance()->OnClientJoinedTeam( ent, team );
 
 	if( ent->r.client->team != TEAM_SPECTATOR && team != TEAM_SPECTATOR ) {
 		// keep scores when switching between non-spectating teams

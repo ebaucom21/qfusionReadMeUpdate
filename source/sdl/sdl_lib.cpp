@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <dlfcn.h>
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/sys_library.h"
@@ -32,19 +33,19 @@ const char *Sys_Library_GetGameLibPath( const char *name, int64_t time, int rand
 * Sys_Library_Open
 */
 void *Sys_Library_Open( const char *name ) {
-	return SDL_LoadObject( name );
+	return dlopen( name, RTLD_NOW );
 }
 
 /*
 * Sys_Library_ProcAddress
 */
 void *Sys_Library_ProcAddress( void *lib, const char *apifuncname ) {
-	return SDL_LoadFunction( lib, apifuncname );
+	return dlsym( lib, apifuncname );
 }
 
 /*
 * Sys_Library_ErrorString
 */
 const char *Sys_Library_ErrorString( void ) {
-	return (char *)SDL_GetError();
+	return dlerror();
 }

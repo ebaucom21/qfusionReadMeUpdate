@@ -116,7 +116,6 @@ void Client::reset() {
 	socket.clear();
 
 	mm_session = Uuid_ZeroUuid();
-	ratings = nullptr;
 
 	connecting = false;
 	multiview = false;
@@ -1095,13 +1094,15 @@ void Client::handleUserInfoChanges() {
 		}
 	}
 
+	/*
 	if( const auto maybeSessionString = m_userInfo.get( kInfoKeyMMSession ) ) {
 		if( const auto maybeUuid = Uuid_FromString( *maybeSessionString ) ) {
 			mm_session = *maybeUuid;
 		} else {
 			mm_session = Uuid_ZeroUuid();
 		}
-	}
+	}*/
+	mm_session = Uuid_ZeroUuid();
 
 	if( !G_ISGHOSTING( getEntity() ) && trap_GetClientState( PLAYERNUM( getEntity() ) ) >= CS_SPAWNED ) {
 		setSkinFromInfo();
@@ -1213,7 +1214,7 @@ void ClientDisconnect( edict_t *ent, const char *reason ) {
 		return;
 	}
 
-	StatsowFacade::Instance()->OnClientDisconnected( ent );
+	//StatsowFacade::Instance()->OnClientDisconnected( ent );
 	ChatHandlersChain::instance()->resetForClient( ENTNUM( ent ) - 1 );
 
 	for( int team = TEAM_PLAYERS; team < GS_MAX_TEAMS; team++ )
@@ -1770,7 +1771,7 @@ void Client::executeUcmd( const usercmd_t &ucmd_, int timeDelta_ ) {
 
 	if( ps.pmove.pm_type == PM_NORMAL ) {
 		stats.had_playtime = true;
-		StatsowFacade::Instance()->OnClientHadPlaytime( this );
+		// StatsowFacade::Instance()->OnClientHadPlaytime( this );
 	}
 
 	snap.plrkeys |= ucmdToPlayerKeys();

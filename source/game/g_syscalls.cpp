@@ -23,18 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 game_import_t GAME_IMPORT;
 
-static clientRating_t *G_AddDefaultRating( edict_t * ent, const char *gametype ) {
-	return StatsowFacade::Instance()->AddDefaultRating( ent, gametype );
-}
-
-static clientRating_t *G_AddRating( edict_t * ent, const char *gametype, float rating, float deviation ) {
-	return StatsowFacade::Instance()->AddRating( ent, gametype, rating, deviation );
-}
-
-static void G_RemoveRating( edict_t *ent ) {
-	StatsowFacade::Instance()->RemoveRating( ent );
-}
-
 static void ClientCommand( edict_t *ent, uint64_t clientCommandNum, const CmdArgs &cmdArgs ) {
 	ClientCommandsHandler::instance()->handleClientCommand( ent, clientCommandNum, cmdArgs );
 }
@@ -73,10 +61,6 @@ extern "C" QF_DLL_EXPORT game_export_t * GetGameAPI( game_import_t * import )
 	globals.GetRawScoreboardData = G_GetScoreboardData;
 
 	globals.AllowDownload = G_AllowDownload;
-
-	globals.AddDefaultRating = G_AddDefaultRating;
-	globals.AddRating = G_AddRating;
-	globals.RemoveRating = G_RemoveRating;
 
 	return &globals;
 }

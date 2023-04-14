@@ -58,7 +58,7 @@ void G_PlayerAward( const edict_t *ent, const char *awardMsg ) {
 	teamlist[ent->s.team].stats.awards++;
 	G_Gametype_ScoreEvent( ent->r.client, "award", awardMsg );
 
-	StatsowFacade::Instance()->AddAward( ent, awardMsg );
+	//StatsowFacade::Instance()->AddAward( ent, awardMsg );
 
 	// add it to every player who's chasing this player
 	for( edict_t *other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ ) {
@@ -82,7 +82,7 @@ void G_PlayerMetaAward( const edict_t *ent, const char *awardMsg ) {
 		return;
 	}
 
-	StatsowFacade::Instance()->AddMetaAward( ent, awardMsg );
+	//StatsowFacade::Instance()->AddMetaAward( ent, awardMsg );
 }
 
 #define COMBO_FLAG( a )   ( 1 << ( a - 1 ) )
@@ -238,7 +238,7 @@ void G_AwardPlayerKilled( edict_t *self, edict_t *inflictor, edict_t *attacker, 
 	}
 
 	// First let the StatsowFacade decide whether to log the frag
-	StatsowFacade::Instance()->AddFrag( attacker, self, mod );
+	// StatsowFacade::Instance()->AddFrag( attacker, self, mod );
 
 	if( !attacker->r.client ) {
 		return;

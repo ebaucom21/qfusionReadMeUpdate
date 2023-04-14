@@ -858,7 +858,6 @@ void G_RunFrame( unsigned int msec, int64_t serverTime ) {
 	G_CallVotes_Think();
 
 	ChatHandlersChain::instance()->frame();
-	StatsowFacade::Instance()->Frame();
 
 	if( GS_MatchPaused() ) {
 		// freeze match clock and linear projectiles

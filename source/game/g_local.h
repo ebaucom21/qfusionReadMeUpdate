@@ -31,7 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "g_syscalls.h"
 #include "g_gametypes.h"
 
-#include "../qcommon/mmrating.h"
+#include "../qcommon/mmcommon.h"
 #include "../qcommon/cmdargs.h"
 
 #include <array>
@@ -1146,7 +1146,6 @@ struct Client : public ServersideClientBase {
 	// is an all-bits-set UUID if the session is local
 	// is a valid UUID if a client is authenticated
 	mm_uuid_t mm_session;
-	clientRating_t *ratings;        // list of ratings for gametypes
 
 	bool connecting;
 	bool multiview;
@@ -1300,136 +1299,6 @@ struct RespectStats : public GVariousStats {
 
 	bool hasIgnoredCodex { false };
 	bool hasViolatedCodex { false };
-};
-
-class StatsowFacade {
-	friend class ChatHandlersChain;
-	friend class RespectHandler;
-	friend class RunStatusQuery;
-
-	struct ClientEntry {
-		ClientEntry *next { nullptr };
-		score_stats_t stats;
-		char netname[MAX_NAME_BYTES];
-		mm_uuid_t mm_session { Uuid_ZeroUuid() };
-		int64_t timePlayed { 0 };
-		int team { 0 };
-		bool final { false };
-
-		RespectStats respectStats;
-
-		ClientEntry() {
-			netname[0] = '\0';
-		}
-
-		void WriteToReport( class JsonWriter &writer, bool teamGame, const char **weaponNames );
-		void AddAwards( class JsonWriter &writer );
-		void AddWeapons( class JsonWriter &writer, const char **weaponNames );
-	};
-
-	ClientEntry *clientEntriesHead { nullptr };
-	clientRating_t *ratingsHead { nullptr };
-
-	RunStatusQuery *runQueriesHead { nullptr };
-
-	StatsSequence<LoggedFrag> fragsSequence;
-
-	struct PlayTimeEntry {
-		mm_uuid_t clientSessionId;
-		int64_t timeToAdd { 0 };
-
-		explicit PlayTimeEntry( const mm_uuid_t &id_ ) : clientSessionId( id_ ) {}
-	};
-
-	StatsSequence<PlayTimeEntry> bufferedPlayTimes;
-	int64_t lastPlayTimesFlushAt { 0 };
-
-	bool isDiscarded { false };
-
-	void AddPlayerReport( edict_t *ent, bool final );
-
-	void AddToExistingEntry( edict_t *ent, bool final, ClientEntry *e );
-	void MergeAwards( StatsSequence<LoggedAward> &to, StatsSequence<LoggedAward> &&from );
-
-	ClientEntry *FindEntryById( const mm_uuid_t &playerSessionId );
-	RespectStats *FindRespectStatsById( const mm_uuid_t &playerSessionId );
-
-	ClientEntry *NewPlayerEntry( edict_t *ent, bool final );
-
-	void SendMatchStartedReport() {
-		SendGenericMatchStateEvent( "started" );
-	}
-
-	void SendMatchAbortedReport() {
-		SendGenericMatchStateEvent( "aborted" );
-	}
-
-	void SendGenericMatchStateEvent( const char *event );
-
-	void ValidateRaceRun( const char *tag, const edict_t *owner );
-
-	void DeleteRunStatusQuery( RunStatusQuery *query );
-
-	RunStatusQuery *AddRunStatusQuery( const mm_uuid_t &runId );
-
-	PlayTimeEntry *FindPlayTimeEntry( const mm_uuid_t &clientSessionId );
-
-	void FlushRacePlayTimes();
-
-	static mm_uuid_t SessionOf( const edict_t *ent );
-public:
-	static void Init();
-	static void Shutdown();
-
-	static StatsowFacade *Instance();
-
-	bool IsValid() const;
-
-	void Frame();
-
-	~StatsowFacade();
-
-	void ClearEntries();
-
-	RaceRun *NewRaceRun( const edict_t *owner, int numSectors );
-	void SetSectorTime( edict_t *owner, int sector, uint32_t time );
-	RunStatusQuery *CompleteRun( edict_t *owner, uint32_t finalTime, const char *runTag = nullptr );
-
-	void WriteHeaderFields( class JsonWriter &writer, int teamGame );
-
-	RunStatusQuery *SendRaceRunReport( RaceRun *raceRun, const char *runTag = nullptr );
-
-	void AddToRacePlayTime( const Client *client, int64_t timeToAdd );
-
-	void SendMatchFinishedReport();
-
-	void SendFinalReport();
-
-	void AddAward( const edict_t *ent, const char *awardMsg );
-	void AddMetaAward( const edict_t *ent, const char *awardMsg );
-	void AddFrag( const edict_t *attacker, const edict_t *victim, int mod );
-
-	void OnClientDisconnected( edict_t *ent );
-	void OnClientJoinedTeam( edict_t *ent, int newTeam );
-	void OnMatchStateLaunched( int oldState, int newState );
-
-	void UpdateAverageRating();
-
-	void TransferRatings();
-	clientRating_t *AddDefaultRating( edict_t *ent, const char *gametype );
-	clientRating_t *AddRating( edict_t *ent, const char *gametype, float rating, float deviation );
-
-	void TryUpdatingGametypeRating( const Client *client,
-									const clientRating_t *addedRating,
-									const char *addedForGametype );
-
-	void RemoveRating( edict_t *ent );
-
-	bool IsMatchReportDiscarded() const {
-		return !IsValid();
-	}
-
-	void OnClientHadPlaytime( const Client *client );
 };
 
 class ChatHandlersChain;

@@ -45,7 +45,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "steam.h"
 #include "glob.h"
 #include "md5.h"
-#include "../qcommon/cjson.h"
 #include "mmcommon.h"
 #include "compression.h"
 #include "cmdsystem.h"
@@ -428,7 +427,6 @@ void Com_Error( com_error_code_t code, const char *format, ... ) {
 		Com_Printf( "********************\nERROR: %s\n********************\n", msg );
 		SV_Shutdown( va( "Server fatal crashed: %s\n", msg ) );
 		CL_Shutdown();
-		MM_Shutdown();
 	}
 
 	if( log_file ) {
@@ -455,7 +453,6 @@ void Com_DeferQuit( void ) {
 void Com_Quit( const CmdArgs & ) {
 	SV_Shutdown( "Server quit\n" );
 	CL_Shutdown();
-	MM_Shutdown();
 
 	Sys_Quit();
 }
@@ -790,9 +787,6 @@ void Qcommon_Init( int argc, char **argv ) {
 	wsw::Vector<std::optional<wsw::StringView>> otherArgs;
 	CmdSystem::classifyExecutableCmdArgs( argc, argv, &setArgs, &setAndExecArgs, &otherArgs );
 
-	// reset hooks to malloc and free
-	cJSON_InitHooks( NULL );
-
 	QThreads_Init();
 
 	com_print_mutex = QMutex_Create();
@@ -897,8 +891,6 @@ void Qcommon_Init( int argc, char **argv ) {
 #if APP_STEAMID
 	Steam_LoadLibrary();
 #endif
-
-	MM_Init();
 
 	SV_Init();
 	CL_Init();
@@ -1020,8 +1012,6 @@ void Qcommon_Frame( unsigned int realMsec ) {
 		Com_Printf( "all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n",
 					all, sv, gm, cl, rf );
 	}
-
-	MM_Frame( realMsec );
 }
 
 /*

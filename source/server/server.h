@@ -25,7 +25,7 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/configstringstorage.h"
 #include "../qcommon/wswstaticstring.h"
-#include "../qcommon/mmrating.h"
+#include "../qcommon/mmcommon.h"
 #include "../game/g_public.h"
 
 #include <cstdlib>

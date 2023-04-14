@@ -38,10 +38,6 @@ file(GLOB SERVER_SOURCES
     "../qcommon/library.cpp"
 	"../qcommon/md5.cpp"
 	"../qcommon/mmcommon.cpp"
-	"../qcommon/mmlocalstorage.cpp"
-	"../qcommon/mmquery.cpp"
-	"../qcommon/mmrating.cpp"
-	"../qcommon/mmreliablepipe.cpp"
     "../qcommon/maplist.cpp"
     "../qcommon/svnrev.cpp"
     "../qcommon/snap_demos.cpp"
@@ -54,13 +50,11 @@ file(GLOB SERVER_SOURCES
 	"../qcommon/wswfs.cpp"
 	"../qcommon/wswsortbyfield.cpp"
 	"../qcommon/wswstringview.cpp"
-    "../qcommon/cjson.cpp"
     "../qcommon/threads.cpp"
     "../qcommon/steam.cpp"
 	"../qcommon/q_trie.cpp"
     "*.cpp"
     "../gameshared/q_*.cpp"
-	"../../third-party/sqlite-amalgamation/sqlite3.c"
 )
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")

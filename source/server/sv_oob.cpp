@@ -19,7 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "server.h"
-#include "sv_mm.h"
 #include "../qcommon/cmdargssplitter.h"
 
 typedef struct sv_infoserver_s {
@@ -339,14 +338,6 @@ static char *SV_ShortInfoString( void ) {
 
 	if( bots ) {
 		Q_snprintfz( entry, sizeof( entry ), "b\\\\%2i\\\\", bots > 99 ? 99 : bots );
-		if( MAX_SVCINFOSTRING_LEN - len > strlen( entry ) ) {
-			Q_strncatz( string, entry, sizeof( string ) );
-			len = strlen( string );
-		}
-	}
-
-	if( SVStatsowFacade::Instance()->IsValid() ) {
-		Q_snprintfz( entry, sizeof( entry ), "mm\\\\1\\\\" );
 		if( MAX_SVCINFOSTRING_LEN - len > strlen( entry ) ) {
 			Q_strncatz( string, entry, sizeof( string ) );
 			len = strlen( string );

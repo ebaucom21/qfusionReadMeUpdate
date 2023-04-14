@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_main.c  -- client main loop
 
 #include "client.h"
-#include "cl_mm.h"
 
 #include "../qcommon/asyncstream.h"
 #include "../qcommon/cmdsystem.h"
@@ -222,7 +221,7 @@ static void CL_Quit_f( const CmdArgs & ) {
 static void CL_SendConnectPacket( void ) {
 	userinfo_modified = false;
 
-	const char *ticketString = CLStatsowFacade::Instance()->GetTicketString().data();
+	const char *ticketString = ""; // CLStatsowFacade::Instance()->GetTicketString().data();
 	Netchan_OutOfBandPrint( cls.socket, &cls.serveraddress, "connect %i %i %i \"%s\" %i %s\n",
 							APP_PROTOCOL_VERSION, Netchan_GamePort(), cls.challenge, Cvar_Userinfo(), 0, ticketString );
 }
@@ -379,12 +378,13 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 
 	// If the server supports matchmaking and that we are authenticated, try getting a matchmaking ticket before joining the server
 	newstate = CA_CONNECTING;
+	/*
 	if( CLStatsowFacade::Instance()->IsValid() ) {
 		// if( MM_GetStatus() == MM_STATUS_AUTHENTICATED && CL_MM_GetTicket( serversession ) )
 		if( CLStatsowFacade::Instance()->StartConnecting( &cls.serveraddress ) ) {
 			newstate = CA_GETTING_TICKET;
 		}
-	}
+	}*/
 	CL_SetClientState( newstate );
 
 	if( serverchain[0] ) {
@@ -471,7 +471,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 
 	// wait until MM allows us to connect to a server
 	// (not in a middle of login process or anything)
-	CLStatsowFacade::Instance()->WaitUntilConnectionAllowed();
+	// CLStatsowFacade::Instance()->WaitUntilConnectionAllowed();
 
 	servername = Q_strdup( connectstring );
 	CL_Connect( servername, ( serveraddress.type == NA_LOOPBACK ? SOCKET_LOOPBACK : socket ),
@@ -2391,8 +2391,6 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	CL_UserInputFrame( realMsec );
 	CL_NetFrame( realMsec, gameMsec );
 
-	CLStatsowFacade::Instance()->Frame();
-
 	if( cls.state == CA_DISCONNECTED ) {
 		maxFps = 60;
 		minMsec = 1000.0f / maxFps;
@@ -2589,10 +2587,6 @@ void CL_Init( void ) {
 
 	CL_Sys_Init();
 
-	Steam_Init();
-	// Do this before UI initialization!
-	CLStatsowFacade::Init();
-
 	VID_Init();
 
 	CL_ClearState();
@@ -2645,8 +2639,6 @@ void CL_Shutdown( void ) {
 	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
 	ML_Shutdown();
-
-	CLStatsowFacade::Shutdown();
 
 	CL_WriteConfiguration( "config.cfg", true );
 

@@ -19,7 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "server.h"
-#include "sv_mm.h"
 #include "sv_snap.h"
 #include "../qcommon/cmdsystem.h"
 #include "../qcommon/singletonholder.h"
@@ -682,9 +681,6 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 		// write snap to server demo file
 		SV_Demo_WriteSnap();
 
-		// run matchmaker stuff
-		SVStatsowFacade::Instance()->Frame();
-
 		// send a heartbeat to info servers if needed
 		SV_InfoServerHeartbeat();
 
@@ -938,8 +934,6 @@ void SV_Init( void ) {
 
 	SV_InitInfoServers();
 
-	SVStatsowFacade::Init();
-
 	ML_Init();
 
 	SV_Web_Init();
@@ -962,10 +956,6 @@ void SV_Shutdown( const char *finalmsg ) {
 	ML_Shutdown();
 
 	SV_ShutdownGame( finalmsg, false );
-
-	// Call this after the game has been shut down
-	// (SV_DropClient() gets called from the game module and expects an initialized SVStatsowFacade)
-	SVStatsowFacade::Shutdown();
 
 	SV_ShutdownOperatorCommands();
 }

@@ -298,25 +298,3 @@ static inline void trap_DropClient( edict_t *ent, int type, const char *message 
 static inline void trap_LocateEntities( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts ) {
 	GAME_IMPORT.LocateEntities( edicts, edict_size, num_edicts, max_edicts );
 }
-
-// Matchmaking
-
-inline class QueryObject *trap_MM_NewGetQuery( const char *url ) {
-	return GAME_IMPORT.MM_NewGetQuery( url );
-}
-
-inline class QueryObject *trap_MM_NewPostQuery( const char *url ) {
-	return GAME_IMPORT.MM_NewPostQuery( url );
-}
-
-inline void trap_MM_DeleteQuery( class QueryObject *query ) {
-	return GAME_IMPORT.MM_DeleteQuery( query );
-}
-
-inline void trap_MM_SendQuery( class QueryObject *query ) {
-	GAME_IMPORT.MM_SendQuery( query );
-}
-
-inline void trap_MM_EnqueueReport( class QueryObject *matchReport ) {
-	GAME_IMPORT.MM_EnqueueReport( matchReport );
-}

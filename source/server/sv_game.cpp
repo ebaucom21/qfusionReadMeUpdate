@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sv_game.c -- interface to the game dll
 
 #include "server.h"
-#include "sv_mm.h"
 #include "../qcommon/compression.h"
 #include "../qcommon/loglines.h"
 
@@ -122,25 +121,6 @@ void PF_CM_ClipToShapeList( const CMShapeList *list, trace_t *tr, const float *s
 	CM_ClipToShapeList( svs.cms, list, tr, start, end, mins, maxs, clipMask );
 }
 
-static QueryObject *SV_MM_NewGetQuery( const char *url ) {
-	return QueryObject::NewGetQuery( url, sv_ip->string );
-}
-
-static QueryObject *SV_MM_NewPostQuery( const char *url ) {
-	return QueryObject::NewPostQuery( url, sv_ip->string );
-}
-
-static void SV_MM_DeleteQuery( class QueryObject *query ) {
-	QueryObject::DeleteQuery( query );
-}
-
-static bool SV_MM_SendQuery( class QueryObject *query ) {
-	return SVStatsowFacade::Instance()->SendGameQuery( query );
-}
-
-static void SV_MM_EnqueueReport( class QueryObject *query ) {
-	return SVStatsowFacade::Instance()->EnqueueMatchReport( query );
-}
 //======================================================================
 
 /*
@@ -582,12 +562,6 @@ void SV_InitGameProgs( void ) {
 
 	import.createLogLineStream = wsw::createLogLineStream;
 	import.submitLogLineStream = wsw::submitLogLineStream;
-
-	import.MM_NewGetQuery = SV_MM_NewGetQuery;
-	import.MM_NewPostQuery = SV_MM_NewPostQuery;
-	import.MM_DeleteQuery = SV_MM_DeleteQuery;
-	import.MM_SendQuery = SV_MM_SendQuery;
-	import.MM_EnqueueReport = SV_MM_EnqueueReport;
 
 	// clear module manifest string
 	assert( sizeof( manifest ) >= MAX_INFO_STRING );

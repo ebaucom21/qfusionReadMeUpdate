@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sv_client.c -- server code for moving users
 
 #include "server.h"
-#include "sv_mm.h"
 #include "../qcommon/cmdargssplitter.h"
 
 //============================================================================
@@ -99,14 +98,15 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 	memset( client, 0, sizeof( *client ) );
 
 	// Try starting validation of a client session and ticket
-	session_id = SVStatsowFacade::Instance()->OnClientConnected( client, address, userinfo, ticket_id, session_id );
+	// session_id = SVStatsowFacade::Instance()->OnClientConnected( client, address, userinfo, ticket_id, session_id );
+	session_id = Uuid_FFFsUuid();
 	// rej* user info strings would be set properly in this case
-	if( session_id.IsZero() ) {
-		return false;
-	}
+	//if( session_id.IsZero() ) {
+	//	return false;
+	//}
 
 	// Make sure the session id has been set
-	assert( ::strlen( Info_ValueForKey( userinfo, "cl_mm_session" ) ) == UUID_DATA_LENGTH );
+	// assert( ::strlen( Info_ValueForKey( userinfo, "cl_mm_session" ) ) == UUID_DATA_LENGTH );
 
 	// get the game a chance to reject this connection or modify the userinfo
 	if( !ge->ClientConnect( ent, userinfo, fakeClient ) ) {
@@ -168,7 +168,7 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 
 
 	// create default rating for the client and current gametype
-	ge->AddDefaultRating( ent, NULL );
+	// ge->AddDefaultRating( ent, NULL );
 
 	// parse some info from the info strings
 	client->userinfoLatchTimeout = Sys_Milliseconds() + USERINFO_UPDATE_COOLDOWN_MSEC;
@@ -205,7 +205,7 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
 
 	// remove the rating of the client
 	if( drop->edict ) {
-		ge->RemoveRating( drop->edict );
+		// ge->RemoveRating( drop->edict );
 	}
 
 	// add the disconnect
@@ -230,7 +230,7 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
 		}
 	}
 
-	SVStatsowFacade::Instance()->OnClientDisconnected( drop );
+	// SVStatsowFacade::Instance()->OnClientDisconnected( drop );
 
 	SNAP_FreeClientFrames( drop );
 

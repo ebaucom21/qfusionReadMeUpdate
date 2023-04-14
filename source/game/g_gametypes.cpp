@@ -415,6 +415,7 @@ void G_Match_LaunchState( int matchState ) {
 
 	if( matchState == MATCH_STATE_PLAYTIME ) {
 		if( !*trap_GetConfigString( CS_MATCHUUID ) ) {
+			/*
 			const auto countdownTime = game.serverTime - gs.gameState.stats[GAMESTAT_MATCHSTART];
 			if( countdownTime < 5000 ) {
 				return;
@@ -459,6 +460,8 @@ void G_Match_LaunchState( int matchState ) {
 			// This allows the server "fetch id" task to stop
 			// (it may be interrupted by presence of a well-formed UUID config string).
 			// This value won't be actually used.
+			*/
+
 			trap_ConfigString( CS_MATCHUUID, "ffffffff-ffff-ffff-ffff-ffffffffffff" );
 		}
 	}
@@ -476,7 +479,7 @@ void G_Match_LaunchState( int matchState ) {
 	}
 
 	const auto oldState = (int)gs.gameState.stats[GAMESTAT_MATCHSTATE];
-	StatsowFacade::Instance()->OnMatchStateLaunched( oldState, matchState );
+	// StatsowFacade::Instance()->OnMatchStateLaunched( oldState, matchState );
 
 	switch( matchState ) {
 		default:
@@ -1630,6 +1633,6 @@ void G_Gametype_Init( void ) {
 	// ch : if new gametype has been initialized, transfer the
 	// client-specific ratings to gametype-specific list
 	if( changed ) {
-		StatsowFacade::Instance()->TransferRatings();
+		// StatsowFacade::Instance()->TransferRatings();
 	}
 }

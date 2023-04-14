@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cstdlib>
 #include <utility>
 
-#include "../qcommon/mmrating.h"
+#include "../qcommon/mmcommon.h"
 
 //g_gametypes.c
 extern cvar_t *g_warmup_timelimit;
@@ -552,7 +552,7 @@ typedef struct score_stats_s: public GVariousStats {
 
 	StatsSequence<LoggedAward> awardsSequence;
 
-	RaceRun *currentRun;
+	struct RaceRun *currentRun;
 
 	score_stats_s( const score_stats_s &that ) = delete;
 	score_stats_s &operator=( const score_stats_s &that ) = delete;

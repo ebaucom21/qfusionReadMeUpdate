@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2011 Christian Holmberg
+Copyright (C) 2023 Chasseur de bots
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,79 +18,112 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include "mmcommon.h"
 #include "qcommon.h"
 #include "base64.h"
 #include "wswcurl.h"
-#include "mmreliablepipe.h"
 
-cvar_t *mm_url;
+#include <errno.h>
 
-// returns static internal string
-static const char *MM_PasswordFilename( const char *user ) {
-	static char filename[MAX_STRING_CHARS];
-	char *user64;
+#include "../gameshared/q_math.h"
+#include "wswstaticstring.h"
+#include "qcommon.h"
 
-	user64 = (char*)base64_encode( (unsigned char*)user, strlen( user ), NULL );
-
-	Q_snprintfz( filename, sizeof( filename ), "%s.profile", user64 );
-
-	free( user64 );
-
-	return filename;
+auto Uuid_FromString( const wsw::StringView &string ) -> std::optional<mm_uuid_t> {
+	if( string.length() == UUID_DATA_LENGTH ) {
+		wsw::StaticString<UUID_DATA_LENGTH> buffer;
+		buffer << string;
+		mm_uuid_t uuid;
+		if( Uuid_FromString( buffer.data(), &uuid ) ) {
+			return uuid;
+		}
+	}
+	return std::nullopt;
 }
 
-// returns static string of md5 contents
-const char *MM_PasswordRead( const char *user ) {
-	static char buffer[MAX_STRING_CHARS];
-	const char *filename;
-	int filenum;
-	size_t bytes;
+#ifndef _WIN32
 
-	Com_DPrintf( "MM_PasswordRead %s\n", user );
+#include <uuid/uuid.h>
 
-	filename = MM_PasswordFilename( user );
-	if( FS_FOpenFile( filename, &filenum, FS_READ ) == -1 ) {
-		Com_Printf( "MM_PasswordRead: Couldnt open file %s\n", filename );
-		return NULL;
+mm_uuid_t *Uuid_FromString( const char *buffer, mm_uuid_t *dest ) {
+	if( ::uuid_parse( buffer, (uint8_t *)dest ) < 0 ) {
+		return nullptr;
 	}
+	return dest;
+}
 
-	bytes = FS_Read( buffer, sizeof( buffer ) - 1,  filenum );
-	FS_FCloseFile( filenum );
-
-	if( bytes == 0 || bytes >= sizeof( buffer ) - 1 ) {
-		return NULL;
-	}
-
-	buffer[bytes] = '\0';
-
+char *Uuid_ToString( char *buffer, mm_uuid_t uuid ) {
+	::uuid_unparse( (uint8_t *)&uuid, buffer );
 	return buffer;
 }
 
-void MM_PasswordWrite( const char *user, const char *password ) {
-	const char *filename;
-	int filenum;
+mm_uuid_t mm_uuid_t::Random() {
+	mm_uuid_t result;
+	::uuid_generate( (uint8_t *)&result );
+	return result;
+}
 
-	Com_DPrintf( "MM_PasswordWrite: %s %s\n", user, password );
+#else
 
-	filename = MM_PasswordFilename( user );
-	if( FS_FOpenFile( filename, &filenum, FS_WRITE ) == -1 ) {
-		Com_Printf( "MM_PasswordWrite: Failed to open %s for writing\n", filename );
-		return;
+// It's better to avoid using platform formatting routines on Windows.
+// A brief look at the API's provided (some allocations are involved)
+// is sufficient to alienate a coder.
+
+mm_uuid_t *Uuid_FromString( const char *buffer, mm_uuid_t *dest ) {
+	unsigned long long groups[5];
+	int expectedHyphenIndices[4] = { 8, 13, 18, 23 };
+	char stub[1] = { '\0' };
+	char *endptr = stub;
+
+	if( !buffer ) {
+		return NULL;
 	}
 
-	FS_Write( password, strlen( password ), filenum );
-	FS_FCloseFile( filenum );
+	const char *currptr = buffer;
+	for( int i = 0; i < 5; ++i ) {
+		groups[i] = strtoull( currptr, &endptr, 16 );
+		if( groups[i] == ULLONG_MAX && errno == ERANGE ) {
+			return NULL;
+		}
+		if( *endptr != '-' ) {
+			if( i != 4 && *endptr != '\0' ) {
+				return NULL;
+			}
+		} else if( endptr - buffer != expectedHyphenIndices[i] ) {
+			return NULL;
+		}
+		currptr = endptr + 1;
+	}
 
-	Com_DPrintf( "MM_PasswordWrite: wrote %s\n", filename );
+	// If there are any trailing characters
+	if( *endptr != '\0' ) {
+		return NULL;
+	}
+
+	dest->hiPart = ( ( ( groups[0] << 16 ) | groups[1] ) << 16 ) | groups[2];
+	dest->loPart = ( groups[3] << 48 ) | groups[4];
+	return dest;
 }
 
-void MM_Frame( int ) {
+char *Uuid_ToString( char *buffer, const mm_uuid_t uuid ) {
+	const char *format = "%08" PRIx64 "-%04" PRIx64 "-%04" PRIx64 "-%04" PRIx64 "-%012" PRIx64;
+	uint64_t groups[5];
+	groups[0] = ( uuid.hiPart >> 32 ) & 0xFFFFFFFFull;
+	groups[1] = ( uuid.hiPart >> 16 ) & 0xFFFF;
+	groups[2] = ( uuid.hiPart >> 00 ) & 0xFFFF;
+	groups[3] = ( uuid.loPart >> 48 ) & 0xFFFF;
+	groups[4] = ( uuid.loPart >> 00 ) & 0xFFFFFFFFFFFFull;
+	Q_snprintfz( buffer, UUID_BUFFER_SIZE, format, groups[0], groups[1], groups[2], groups[3], groups[4] );
+	return buffer;
 }
 
-void MM_Init() {
-	mm_url = Cvar_Get( "mm_url", APP_MATCHMAKER_URL, CVAR_ARCHIVE | CVAR_NOSET );
+#include <Objbase.h>
+
+mm_uuid_t mm_uuid_t::Random() {
+	static_assert( sizeof( mm_uuid_t ) == sizeof( GUID ), "" );
+	mm_uuid_t result;
+	(void)::CoCreateGuid( (GUID *)&result );
+	return result;
 }
 
-void MM_Shutdown() {
-	mm_url = NULL;
-}
+#endif
