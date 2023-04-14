@@ -188,10 +188,6 @@ void SV_Demo_Start_f( const CmdArgs &cmdArgs ) {
 	svs.demo.localtime = time( NULL );
 	SV_Demo_WriteStartMessages();
 
-	// Clearing tables won't harm...
-	SnapVisTable::Instance()->Clear();
-	SnapShadowTable::Instance()->Clear();
-
 	// write one nodelta frame
 	svs.demo.client.nodelta = true;
 	SV_Demo_WriteSnap();

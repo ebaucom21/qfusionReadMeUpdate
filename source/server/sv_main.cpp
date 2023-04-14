@@ -676,12 +676,6 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 
 	// let everything in the world think and move
 	if( SV_RunGameFrame( gamemsec ) ) {
-		// CAUTION! This is important.
-		// The game has built snapshots if we have entered this branch.
-		// Clear tables once and then reuse cached results for sending client messages and writing demos.
-		SnapVisTable::Instance()->Clear();
-		SnapShadowTable::Instance()->Clear();
-
 		// send messages back to the clients that had packets read this frame
 		SV_SendClientMessages();
 
@@ -964,10 +958,6 @@ void SV_Shutdown( const char *finalmsg ) {
 	}
 	sv_initialized = false;
 
-	// This is safe to call multiple times
-	SnapShadowTable::Shutdown();
-	SnapVisTable::Shutdown();
-
 	SV_Web_Shutdown();
 	ML_Shutdown();
 
@@ -978,16 +968,6 @@ void SV_Shutdown( const char *finalmsg ) {
 	SVStatsowFacade::Shutdown();
 
 	SV_ShutdownOperatorCommands();
-}
-
-void SV_SetupSnapTables( cmodel_state_t *cms ) {
-	assert( cms );
-
-	SnapShadowTable::Shutdown();
-	SnapVisTable::Shutdown();
-
-	SnapVisTable::Init( cms );
-	SnapShadowTable::Init();
 }
 
 CmdSystem *CL_GetCmdSystem();

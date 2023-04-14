@@ -25,28 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static inline void SNAP_WriteDeltaEntity( msg_t *msg, const entity_state_t *from, const entity_state_t *to,
 										  const client_snapshot_t *frame, bool force ) {
-	if( !to ) {
-		MSG_WriteDeltaEntity( msg, from, to, force );
-		return;
-	}
-
-	if( !SnapShadowTable::Instance()->IsEntityShadowed( frame->ps->playerNum, to->number ) ) {
-		MSG_WriteDeltaEntity( msg, from, to, force );
-		return;
-	}
-
-
-	// Too bad `angles` is the only field we can really shadow
-	vec2_t backupAngles;
-	Vector2Copy( to->angles, backupAngles );
-
-	for( int i = 0; i < 2; ++i ) {
-		( (float *)( to->angles ) )[i] = -180.0f + 360.0f * random();
-	}
-
 	MSG_WriteDeltaEntity( msg, from, to, force );
-
-	Vector2Copy( backupAngles, (float *)( to->angles ) );
 }
 
 /*
@@ -561,9 +540,9 @@ static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
 
 	const bool snd_cull_only = SNAP_IsSoundCullOnlyEntity( ent );
 	const bool snd_use_pvs = ( snapHintFlags & SNAP_HINT_CULL_SOUND_WITH_PVS ) != 0;
-	const bool use_raycasting = ( snapHintFlags & SNAP_HINT_USE_RAYCAST_CULLING ) != 0;
+	// const bool use_raycasting = ( snapHintFlags & SNAP_HINT_USE_RAYCAST_CULLING ) != 0;
 	const bool use_viewdir_culling = ( snapHintFlags & SNAP_HINT_USE_VIEW_DIR_CULLING ) != 0;
-	const bool shadow_real_events_data = ( snapHintFlags & SNAP_HINT_SHADOW_EVENTS_DATA ) != 0;
+	// const bool shadow_real_events_data = ( snapHintFlags & SNAP_HINT_SHADOW_EVENTS_DATA ) != 0;
 
 	if( snd_use_pvs ) {
 		// Don't even bother about calling SnapCullSoundEntity() except the entity has only a sound to transmit
@@ -587,14 +566,13 @@ static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
 		if( ent->s.sound || ent->s.events[0] ) {
 			// If sound attenuation is not sufficient to cutoff the entity
 			if( !SNAP_SnapCullSoundEntity( cms, ent, vieworg, ent->s.attenuation ) ) {
+				/*
 				if( shadow_real_events_data ) {
 					// If the entity would have been culled if there were no events
 					if( !( ent->r.svflags & SVF_TRANSMITORIGIN2 ) ) {
-						if( SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
-							SnapShadowTable::Instance()->MarkEntityAsShadowed( frame->ps->playerNum, ent->s.number );
-						}
+						// TODO: Check whether it can be visually culled, cache this check result
 					}
-				}
+				}*/
 				return false;
 			}
 		}
@@ -604,9 +582,10 @@ static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
 			return false;
 		}
 
+		/*
 		if( use_raycasting && SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
 			return true;
-		}
+		}*/
 
 		if( use_viewdir_culling && SNAP_ViewDirCullEntity( clent, ent ) ) {
 			return true;
@@ -630,14 +609,13 @@ static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
 
 	// If sound attenuation is not sufficient to cutoff the entity
 	if( !snd_culled ) {
+		/*
 		if( shadow_real_events_data ) {
 			// If the entity would have been culled if there were no events
 			if( !( ent->r.svflags & SVF_TRANSMITORIGIN2 ) ) {
-				if( SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
-					SnapShadowTable::Instance()->MarkEntityAsShadowed( frame->ps->playerNum, ent->s.number );
-				}
+				// TODO: Check whether it can be visually culled, cache this check result
 			}
-		}
+		}*/
 		return false;
 	}
 
@@ -650,9 +628,10 @@ static bool SNAP_SnapCullEntity( const cmodel_state_t *cms, const edict_t *ent,
 		return false;
 	}
 
+	/*
 	if( use_raycasting && SnapVisTable::Instance()->TryCullingByCastingRays( clent, vieworg, ent ) ) {
 		return true;
-	}
+	}*/
 
 	if( use_viewdir_culling && SNAP_ViewDirCullEntity( clent, ent ) ) {
 		return true;

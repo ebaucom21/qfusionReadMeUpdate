@@ -471,12 +471,6 @@ typedef struct {
 void SV_FlushRedirect( int sv_redirected, const char *outputbuf, const void *extra );
 void SV_SendClientMessages( void );
 
-/**
- * Just a workaround to prevent inclusion of tables headers in other parts of server code than {@code sv_main.cpp}.
- * @param cms a CM for a newly loaded map
- */
-void SV_SetupSnapTables( cmodel_state_t *cms );
-
 #ifndef _MSC_VER
 void SV_BroadcastCommand( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
 #else
