@@ -211,13 +211,13 @@ static void S_SetListener( const vec3_t origin, const vec3_t velocity, const mat
 
 namespace wsw::snd {
 
-void Backend::init( const bool &verbose ) {
+void Backend::init( bool verbose ) {
 	if( S_Init( nullptr, MAX_EDICTS, verbose ) ) {
 		m_initialized = true;
 	}
 }
 
-void Backend::shutdown( const bool &verbose ) {
+void Backend::shutdown( bool verbose ) {
 	S_Shutdown( verbose );
 
 	// Note: this is followed by a separate "terminate pipe" call
@@ -227,7 +227,7 @@ void Backend::clear() {
 	S_Clear();
 }
 
-void Backend::stopAllSounds( const unsigned &flags ) {
+void Backend::stopAllSounds( unsigned flags ) {
 	S_StopStreams();
 	S_StopAllSources();
 	if( flags & SoundSystem::StopMusic ) {
@@ -242,47 +242,45 @@ void Backend::processFrameUpdates() {
 	S_UpdateSources();
 }
 
-void Backend::freeSound( const int &id ) {
+void Backend::freeSound( int id ) {
 	S_UnloadBuffer( S_GetBufferById( id ) );
 }
 
-void Backend::loadSound( const int &id ) {
+void Backend::loadSound( int id ) {
 	S_LoadBuffer( S_GetBufferById( id ) );
 }
 
-void Backend::setEntitySpatialParams( const int &entNum, const Vec3 &origin, const Vec3 &velocity ) {
-	S_SetEntitySpatialization( entNum, origin.Data(), velocity.Data() );
+void Backend::setEntitySpatialParams( const EntitySpatialParamsBatch &batch ) {
+	for( unsigned i = 0; i < batch.count; ++i ) {
+		S_SetEntitySpatialization( batch.entNums[i], batch.origins[i], batch.velocities[i] );
+	}
 }
 
 void Backend::setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis ) {
 	S_SetListener( origin.Data(), velocity.Data(), (const float *)axis.data() );
 }
 
-void Backend::startLocalSound( const int &sfx, const float &volume ) {
-	S_StartLocalSound( S_GetBufferById( sfx ), volume );
+void Backend::startLocalSound( int id, float volume ) {
+	S_StartLocalSound( S_GetBufferById( id ), volume );
 }
 
-void Backend::startFixedSound( const int &sfx, const Vec3 &origin, const int &channel, const float &volume, const float &attenuation ) {
-	S_StartFixedSound( S_GetBufferById( sfx ), origin.Data(), channel, volume, attenuation );
+void Backend::startFixedSound( int id, const Vec3 &origin, int channel, float volume, float attenuation ) {
+	S_StartFixedSound( S_GetBufferById( id ), origin.Data(), channel, volume, attenuation );
 }
 
-void Backend::startGlobalSound( const int &sfx, const int &channel, const float &volume ) {
-	S_StartGlobalSound( S_GetBufferById( sfx ), channel, volume );
+void Backend::startGlobalSound( int id, int channel, float volume ) {
+	S_StartGlobalSound( S_GetBufferById( id ), channel, volume );
 }
 
-void Backend::startRelativeSound( const int &sfx, const int &entNum, const int &channel, const float &volume, const float &attenuation ) {
-	S_StartRelativeSound( S_GetBufferById( sfx ), entNum, channel, volume, attenuation );
+void Backend::startRelativeSound( int id, int entNum, int channel, float volume, float attenuation ) {
+	S_StartRelativeSound( S_GetBufferById( id ), entNum, channel, volume, attenuation );
 }
 
-void Backend::addLoopSound( const int &sfx, const int &entNum, const uintptr_t &identifyingToken,
-							const float &volume, const float &attenuation ) {
-	S_AddLoopSound( S_GetBufferById( sfx ), entNum, identifyingToken, volume, attenuation );
+void Backend::addLoopSound( int id, int entNum, uintptr_t identifyingToken, float volume, float attenuation ) {
+	S_AddLoopSound( S_GetBufferById( id ), entNum, identifyingToken, volume, attenuation );
 }
 
-void Backend::startBackgroundTrack( const uintptr_t &introNameAddress, const uintptr_t &loopNameAddress, const int &mode ) {
-	auto *intro = (char *)introNameAddress;
-	auto *loop  = (char *)loopNameAddress;
-
+void Backend::startBackgroundTrack( char *intro, char *loop, int mode ) {
 	S_StartBackgroundTrack( intro, loop, mode );
 
 	Q_free( intro );
@@ -293,19 +291,21 @@ void Backend::stopBackgroundTrack() {
 	S_StopBackgroundTrack();
 }
 
-void Backend::lockBackgroundTrack( const bool &lock ) {
+void Backend::lockBackgroundTrack( bool lock ) {
 	S_LockBackgroundTrack( lock );
 }
 
-void Backend::advanceBackgroundTrack( const int &value ) {
+void Backend::advanceBackgroundTrack( int value ) {
 	if( value < 0 ) {
 		S_PrevBackgroundTrack();
 	} else if( value > 0 ) {
 		S_NextBackgroundTrack();
+	} else {
+		S_PauseBackgroundTrack();
 	}
 }
 
-void Backend::activate( const bool &active ) {
+void Backend::activate( bool active ) {
 	S_Clear();
 
 	S_LockBackgroundTrack( !active );
@@ -350,15 +350,14 @@ static void S_Update( void ) {
 	}
 }
 
-static int S_EnqueuedCmdsWaiter( sndCmdPipe_t *queue, void *handlerObj, PipeHandlerFn handlerFn, bool timeout ) {
-	int read = QBufPipe_ReadCmds( queue, handlerObj, handlerFn );
-	int64_t now = Sys_Milliseconds();
-
+static int S_EnqueuedCmdsWaiter( sndCmdPipe_t *queue, bool timeout ) {
+	const int read = QBufPipe_ReadCmds( queue );
 	if( read < 0 ) {
 		// shutdown
 		return read;
 	}
 
+	const int64_t now = Sys_Milliseconds();
 	if( timeout || now >= s_last_update_time + UPDATE_MSEC ) {
 		s_last_update_time = now;
 		S_Update();
@@ -367,21 +366,16 @@ static int S_EnqueuedCmdsWaiter( sndCmdPipe_t *queue, void *handlerObj, PipeHand
 	return read;
 }
 
-static size_t S_EnqueuedCmdsReader( void *arg, int cmd, uint8_t *data ) {
-	return ( (wsw::snd::ALSoundSystem *)arg )->handlePipeCmd( cmd, data );
-}
-
 void *S_BackgroundUpdateProc( void *param ) {
 	using namespace wsw::snd;
 
-	auto *arg               = ( ALSoundSystem::ThreadProcArg *)param;
-	qbufPipe_s *pipe        = arg->pipe;
-	ALSoundSystem *instance = arg->instance;
+	auto *arg        = ( ALSoundSystem::ThreadProcArg *)param;
+	qbufPipe_s *pipe = arg->pipe;
 
 	// Don't hold the arg heap memory forever
 	Q_free( arg );
 
-	QBufPipe_Wait( pipe, S_EnqueuedCmdsWaiter, instance, S_EnqueuedCmdsReader, UPDATE_MSEC );
+	QBufPipe_Wait( pipe, S_EnqueuedCmdsWaiter, UPDATE_MSEC );
 
 	return NULL;
 }

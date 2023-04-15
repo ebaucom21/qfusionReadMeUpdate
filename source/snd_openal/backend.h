@@ -3,41 +3,48 @@
 
 // TODO: lift it to the top level
 #include "../game/ai/vec3.h"
-
+#include "../qcommon/wswstring.h"
+#include "../qcommon/wswstaticvector.h"
 #include <array>
 
 namespace wsw::snd {
 
-// TODO: Discover how can we avoid making all arguments to be const references so methods can be used by PipeAdapter
 class Backend {
 	friend class ALSoundSystem;
 public:
-	void init( const bool &verbose );
-	void shutdown( const bool &verbose );
+	void init( bool verbose );
+	void shutdown( bool verbose );
 
 	void clear();
-	void stopAllSounds( const unsigned &flags );
+	void stopAllSounds( unsigned flags );
 
 	void processFrameUpdates();
 
-	void freeSound( const int &id );
-	void loadSound( const int &id );
+	void freeSound( int id );
+	void loadSound( int id );
 
-	void setEntitySpatialParams( const int &entNum, const Vec3 &origin, const Vec3 &velocity );
+	struct EntitySpatialParamsBatch {
+		int entNums[8];
+		vec3_t origins[8];
+		vec3_t velocities[8];
+		unsigned count { 0 };
+	};
+
+	void setEntitySpatialParams( const EntitySpatialParamsBatch &batch );
+
 	void setListener( const Vec3 &origin, const Vec3 &velocity, const std::array<Vec3, 3> &axis );
 
-	void startLocalSound( const int &sfx, const float &volume );
-	void startFixedSound( const int &sfx, const Vec3 &origin, const int &channel, const float &volume, const float &attenuation );
-	void startGlobalSound( const int &sfx, const int &channel, const float &volume );
-	void startRelativeSound( const int &sfx, const int &entNum, const int &channel, const float &volume, const float &attenuation );
-	void addLoopSound( const int &sfx, const int &entNum, const uintptr_t &identifyingToken, const float &volume, const float &attenuation );
+	void startLocalSound( int id, float volume );
+	void startFixedSound( int id, const Vec3 &origin, int channel, float volume, float attenuation );
+	void startGlobalSound( int id, int channel, float volume );
+	void startRelativeSound( int id, int entNum, int channel, float volume, float attenuation );
+	void addLoopSound( int id, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
 
-	// TODO: Discover how to send pointers, see also the general note
-	void startBackgroundTrack( const uintptr_t &introNameAddress, const uintptr_t &loopNameAddress, const int &mode );
+	void startBackgroundTrack( char *intro, char *loop, int mode );
 	void stopBackgroundTrack();
-	void lockBackgroundTrack( const bool &lock );
-	void advanceBackgroundTrack( const int &value );
-	void activate( const bool &active );
+	void lockBackgroundTrack( bool lock );
+	void advanceBackgroundTrack( int value );
+	void activate( bool active );
 
 private:
 	bool m_initialized { false };

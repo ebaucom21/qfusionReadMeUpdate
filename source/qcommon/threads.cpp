@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "qcommon.h"
+#include "pipeutils.h"
 #include "sys_threads.h"
 
 /*
@@ -231,6 +232,17 @@ static void QBufPipe_BufLenAdd( qbufPipe_t *pipe, int val ) {
 	Sys_Atomic_Add( &pipe->cmdbuf_len, val, pipe->cmdbuf_mutex );
 }
 
+struct RewindCmd final : public PipeCmd {
+	[[nodiscard]]
+	auto exec() -> unsigned override { return kResultRewind; }
+};
+
+static_assert( sizeof( RewindCmd ) <= PipeCmd::kAlignment );
+static_assert( sizeof( RewindCmd ) <= sizeof( void * ) );
+static_assert( alignof( RewindCmd ) <= PipeCmd::kAlignment );
+
+static constexpr unsigned kMinCmdSize = PipeCmd::kAlignment;
+
 /*
 * QBufPipe_WriteCmd
 *
@@ -241,9 +253,6 @@ static void QBufPipe_BufLenAdd( qbufPipe_t *pipe, int val ) {
 * to erroneously drop cmd's instead of stepping on the reader's toes.
 */
 void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdvance, unsigned bytesOfCmdToCopy ) {
-	void *buf;
-	unsigned write_remains;
-
 	if( !pipe ) {
 		return;
 	}
@@ -256,9 +265,8 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		pipe->write_pos = 0;
 	}
 
-	write_remains = pipe->bufSize - pipe->write_pos;
-
-	if( sizeof( int ) > write_remains ) {
+	const unsigned write_remains = pipe->bufSize - pipe->write_pos;
+	if( kMinCmdSize > write_remains ) {
 		while( pipe->cmdbuf_len + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
@@ -271,9 +279,7 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		QBufPipe_BufLenAdd( pipe, write_remains ); // atomic
 		pipe->write_pos = 0;
 	} else if( bytesToAdvance > write_remains ) {
-		int *cmd;
-
-		while( pipe->cmdbuf_len + sizeof( int ) + bytesToAdvance + write_remains > pipe->bufSize ) {
+		while( pipe->cmdbuf_len + kMinCmdSize + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
 				continue;
@@ -282,10 +288,10 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		}
 
 		// explicit pointer reset cmd
-		cmd = (int *)QBufPipe_AllocCmd( pipe, sizeof( int ) );
-		*cmd = -1;
+		auto *const allocatedPipeBytes = QBufPipe_AllocCmd( pipe, kMinCmdSize );
+		new( allocatedPipeBytes )RewindCmd;
 
-		QBufPipe_BufLenAdd( pipe, sizeof( *cmd ) + write_remains ); // atomic
+		QBufPipe_BufLenAdd( pipe, kMinCmdSize + write_remains ); // atomic
 		pipe->write_pos = 0;
 	} else {
 		while( pipe->cmdbuf_len + bytesToAdvance > pipe->bufSize ) {
@@ -297,7 +303,7 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		}
 	}
 
-	buf = QBufPipe_AllocCmd( pipe, bytesToAdvance );
+	void *buf = QBufPipe_AllocCmd( pipe, bytesToAdvance );
 	memcpy( buf, pcmd, bytesOfCmdToCopy );
 	QBufPipe_BufLenAdd( pipe, bytesToAdvance ); // atomic
 
@@ -307,76 +313,65 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 	QMutex_Unlock( pipe->nonempty_mutex );
 }
 
-static size_t CallLegacyHandlers( void *arg, int cmd, uint8_t *data ) {
-	auto handlers = ( unsigned( ** )( const void * ) )arg;
-	return (size_t)handlers[cmd]( data );
-}
-
-int QBufPipe_ReadCmds( qbufPipe_t *queue, unsigned( **cmdHandlers )( const void * ) ) {
-	return QBufPipe_ReadCmds( queue, cmdHandlers, CallLegacyHandlers );
-}
-
-int QBufPipe_ReadCmds( qbufPipe_t *pipe, void *handlerArg, PipeHandlerFn handlerFn ) {
-	int read = 0;
-
+int QBufPipe_ReadCmds( qbufPipe_t *pipe ) {
 	if( !pipe ) {
 		return -1;
 	}
 
+	int numCmdsRead = 0;
 	while( Sys_Atomic_CAS( &pipe->cmdbuf_len, 0, 0, pipe->cmdbuf_mutex ) == false && !pipe->terminated ) {
-		int cmd;
-		int cmd_size;
-		int read_remains;
-
 		assert( pipe->bufSize >= pipe->read_pos );
 		if( pipe->bufSize < pipe->read_pos ) {
 			pipe->read_pos = 0;
 		}
 
-		read_remains = pipe->bufSize - pipe->read_pos;
-
-		if( (int )sizeof( int ) > read_remains ) {
+		const int read_remains = pipe->bufSize - pipe->read_pos;
+		if( read_remains < (int)kMinCmdSize ) {
 			// implicit reset
 			pipe->read_pos = 0;
 			QBufPipe_BufLenAdd( pipe, -read_remains );
 		}
 
-		cmd = *( (int *)( pipe->buf + pipe->read_pos ) );
-		if( cmd == -1 ) {
+		assert( ( ( (uintptr_t)( pipe->buf + pipe->read_pos ) ) % PipeCmd::kAlignment ) == 0 );
+
+		PipeCmd *const cmd       = (PipeCmd *)( pipe->buf + pipe->read_pos );
+		const unsigned cmdResult = cmd->exec();
+		// Caution! See PipeCmd definition for the remark
+		// cmd->~PipeCmd();
+
+		if( cmdResult == PipeCmd::kResultRewind ) {
 			// this cmd is special
 			pipe->read_pos = 0;
-			QBufPipe_BufLenAdd( pipe, -( (int)( sizeof( int ) + read_remains ) ) ); // atomic
+			static_assert( sizeof( RewindCmd ) <= kMinCmdSize );
+			QBufPipe_BufLenAdd( pipe, -( (int)kMinCmdSize + read_remains ) ); // atomic
 			continue;
 		}
 
-		cmd_size = (int)handlerFn( handlerArg, cmd, (uint8_t *)( pipe->buf + pipe->read_pos ) );
+		numCmdsRead++;
 
-		read++;
-
-		if( !cmd_size ) {
+		if( cmdResult == PipeCmd::kResultTerminate ) {
 			pipe->terminated = 1;
 			return -1;
 		}
 
-		if( cmd_size > pipe->cmdbuf_len ) {
+		if( (int)cmdResult > pipe->cmdbuf_len ) {
 			assert( 0 );
 			pipe->terminated = 1;
 			return -1;
 		}
 
-		pipe->read_pos += cmd_size;
-		QBufPipe_BufLenAdd( pipe, -cmd_size ); // atomic
+		pipe->read_pos += cmdResult;
+		QBufPipe_BufLenAdd( pipe, -( (int)cmdResult ) ); // atomic
 	}
 
-	return read;
+	return numCmdsRead;
 }
 
 /*
 * QBufPipe_Wait
 */
-void QBufPipe_Wait( qbufPipe_t *pipe, PipeWaiterFn waiterFn, void *handlerArg, PipeHandlerFn handlerFn, unsigned timeout_msec ) {
+void QBufPipe_Wait( qbufPipe_t *pipe, PipeWaiterFn waiterFn, unsigned timeout_msec ) {
 	while( !pipe->terminated ) {
-		int res;
 		bool timeout = false;
 
 		while( Sys_Atomic_CAS( &pipe->cmdbuf_len, 0, 0, pipe->cmdbuf_mutex ) == true ) {
@@ -391,8 +386,7 @@ void QBufPipe_Wait( qbufPipe_t *pipe, PipeWaiterFn waiterFn, void *handlerArg, P
 
 		// we're guaranteed at this point that either cmdbuf_len is > 0
 		// or that waiting on the condition variable has timed out
-		res = waiterFn( pipe, handlerArg, handlerFn, timeout );
-		if( res < 0 ) {
+		if( waiterFn( pipe, timeout ) < 0 ) {
 			// done
 			return;
 		}
