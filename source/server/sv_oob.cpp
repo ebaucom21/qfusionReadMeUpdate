@@ -546,9 +546,6 @@ static void SVC_GetChallenge( const socket_t *socket, const netadr_t *address, c
 * SVC_DirectConnect
 */
 static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address, const CmdArgs &cmdArgs ) {
-#ifdef TCP_ALLOW_CONNECT
-	int incoming = 0;
-#endif
 	char userinfo[MAX_INFO_STRING];
 	client_t *cl, *newcl;
 	int i, version, game_port, challenge;
@@ -611,26 +608,6 @@ static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address, 
 	} else {
 		ticket_id = session_id = Uuid_ZeroUuid();
 	}
-
-#ifdef TCP_ALLOW_CONNECT
-	if( socket->type == SOCKET_TCP ) {
-		// find the connection
-		for( i = 0; i < MAX_INCOMING_CONNECTIONS; i++ ) {
-			if( !svs.incoming[i].active ) {
-				continue;
-			}
-
-			if( NET_CompareAddress( &svs.incoming[i].address, address ) && socket == &svs.incoming[i].socket ) {
-				break;
-			}
-		}
-		if( i == MAX_INCOMING_CONNECTIONS ) {
-			Com_Error( ERR_FATAL, "Incoming connection not found.\n" );
-			return;
-		}
-		incoming = i;
-	}
-#endif
 
 	// see if the challenge is valid
 	for( i = 0; i < MAX_CHALLENGES; i++ ) {
@@ -749,14 +726,6 @@ static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address, 
 
 	// send the connect packet to the client
 	Netchan_OutOfBandPrint( socket, address, "client_connect\n%s", newcl->session );
-
-	// free the incoming entry
-#ifdef TCP_ALLOW_CONNECT
-	if( socket->type == SOCKET_TCP ) {
-		svs.incoming[incoming].active = false;
-		svs.incoming[incoming].socket.open = false;
-	}
-#endif
 }
 
 /*

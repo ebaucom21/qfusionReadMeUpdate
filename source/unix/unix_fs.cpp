@@ -33,10 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#ifdef __ANDROID__
-#include "../android/android_sys.h"
-#endif
-
 // Mac OS X and FreeBSD don't know the readdir64 and dirent64
 #if ( defined ( __FreeBSD__ ) || defined ( __ANDROID__ ) || !defined( _LARGEFILE64_SOURCE ) )
 #define readdir64 readdir
@@ -263,10 +259,6 @@ const char *Sys_FS_GetCacheDirectory( void ) {
 	static char cache[PATH_MAX] = { '\0' };
 
 	if( cache[0] == '\0' ) {
-#ifdef __ANDROID__
-		Q_snprintfz( cache, sizeof( cache ), "%s/cache/%d.%d",
-					 sys_android_internalDataPath, APP_VERSION_MAJOR, APP_VERSION_MINOR );
-#else
 		const char *homeEnv = getenv( "HOME" );
 		const char *base = NULL, *local = "";
 
@@ -291,7 +283,6 @@ const char *Sys_FS_GetCacheDirectory( void ) {
 						 ( (const char *)APPLICATION ) + 1, APP_VERSION_MAJOR, APP_VERSION_MINOR );
 #endif
 		}
-#endif
 	}
 
 	if( cache[0] == '\0' ) {

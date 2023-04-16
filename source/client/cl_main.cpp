@@ -277,42 +277,6 @@ static void CL_CheckForResend( void ) {
 			return;
 		}
 
-#ifdef TCP_ALLOW_CONNECT
-		if( cls.socket->type == SOCKET_TCP && !cls.socket->connected ) {
-			connection_status_t status;
-
-			if( !cls.connect_count ) {
-				Com_Printf( "Connecting to %s...\n", cls.servername );
-
-				status = NET_Connect( cls.socket, &cls.serveraddress );
-			} else {
-				Com_Printf( "Checking connection to %s...\n", cls.servername );
-
-				status = NET_CheckConnect( cls.socket );
-			}
-
-			cls.connect_count++;
-			cls.connect_time = realtime;
-
-			if( status == CONNECTION_FAILED ) {
-				CL_Disconnect( va( "TCP connection failed: %s", NET_ErrorString() ) );
-				return;
-			}
-
-			if( status == CONNECTION_INPROGRESS ) {
-				return;
-			}
-
-			Com_Printf( "Connection made, asking for challenge %s...\n", cls.servername );
-			Netchan_OutOfBandPrint( cls.socket, &cls.serveraddress, "getchallenge\n" );
-			return;
-		}
-#endif
-
-		if( realtime - cls.connect_time < 10000 ) {
-			return;
-		}
-
 		CL_Disconnect( "Connection timed out" );
 	}
 }
@@ -344,19 +308,6 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 			cls.socket = ( address->type == NA_IP6 ?  &cls.socket_udp6 :  &cls.socket_udp );
 			cls.reliable = false;
 			break;
-
-#ifdef TCP_ALLOW_CONNECT
-		case SOCKET_TCP:
-			NET_InitAddress( &socketaddress, address->type );
-			if( !NET_OpenSocket( &cls.socket_tcp, SOCKET_TCP, &socketaddress, false ) ) {
-				Com_Error( ERR_FATAL, "Couldn't open the TCP socket\n" ); // FIXME
-				return;
-			}
-			NET_SetSocketNoDelay( &cls.socket_tcp, 1 );
-			cls.socket = &cls.socket_tcp;
-			cls.reliable = true;
-			break;
-#endif
 
 		default:
 			assert( false );
@@ -487,16 +438,6 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 static void CL_Connect_f( const CmdArgs &cmdArgs ) {
 	CL_Connect_Cmd_f( SOCKET_UDP, cmdArgs );
 }
-
-/*
-* CL_TCPConnect_f
-*/
-#if defined( TCP_ALLOW_CONNECT )
-static void CL_TCPConnect_f( void ) {
-	CL_Connect_Cmd_f( SOCKET_TCP );
-}
-#endif
-
 
 /*
 * CL_Rcon_f
@@ -968,12 +909,7 @@ void CL_ServerReconnect_f( const CmdArgs & ) {
 
 	Com_Printf( "Reconnecting...\n" );
 
-#ifdef TCP_ALLOW_CONNECT
-	cls.connect_time = Sys_Milliseconds();
-#else
 	cls.connect_time = Sys_Milliseconds() - 1500;
-#endif
-
 	cl.configStrings.clear();
 
 	CL_SetClientState( CA_HANDSHAKE );
@@ -1239,21 +1175,12 @@ void CL_ReadPackets( void ) {
 		&cls.socket_loopback,
 		&cls.socket_udp,
 		&cls.socket_udp6,
-#ifdef TCP_ALLOW_CONNECT
-		&cls.socket_tcp
-#endif
 	};
 
 	MSG_Init( &msg, msgData, sizeof( msgData ) );
 
 	for( socketind = 0; socketind < (int)( sizeof( sockets ) / sizeof( sockets[0] ) ); socketind++ ) {
 		socket = sockets[socketind];
-
-#ifdef TCP_ALLOW_CONNECT
-		if( socket->type == SOCKET_TCP && !socket->connected ) {
-			continue;
-		}
-#endif
 
 		while( socket->open && ( ret = NET_GetPacket( socket, &address, &msg ) ) != 0 ) {
 			if( ret == -1 ) {
@@ -1302,13 +1229,6 @@ void CL_ReadPackets( void ) {
 			}
 			CL_ParseServerMessage( &msg );
 			cls.lastPacketReceivedTime = cls.realtime;
-
-#ifdef TCP_ALLOW_CONNECT
-			// we might have just been disconnected
-			if( socket->type == SOCKET_TCP && !socket->connected ) {
-				break;
-			}
-#endif
 		}
 	}
 
@@ -1997,9 +1917,6 @@ static void CL_InitLocal( void ) {
 	CL_Cmd_Register( "stop", CL_Stop_f );
 	CL_Cmd_Register( "quit", CL_Quit_f );
 	CL_Cmd_Register( "connect", CL_Connect_f );
-#if defined( TCP_ALLOW_CONNECT ) && defined( TCP_ALLOW_CONNECT_CLIENT )
-	CL_Cmd_Register( "tcpconnect", CL_TCPConnect_f );
-#endif
 	CL_Cmd_Register( "reconnect", CL_Reconnect_f );
 	CL_Cmd_Register( "rcon", CL_Rcon_f );
 	CL_Cmd_Register( "writeconfig", CL_WriteConfig_f );
@@ -2031,9 +1948,6 @@ static void CL_ShutdownLocal( void ) {
 	CL_Cmd_Unregister( "stop" );
 	CL_Cmd_Unregister( "quit" );
 	CL_Cmd_Unregister( "connect" );
-#if defined( TCP_ALLOW_CONNECT )
-	CL_Cmd_Unregister( "tcpconnect" );
-#endif
 	CL_Cmd_Unregister( "reconnect" );
 	CL_Cmd_Unregister( "rcon" );
 	CL_Cmd_Unregister( "writeconfig" );
