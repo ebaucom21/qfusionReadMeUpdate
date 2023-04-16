@@ -279,9 +279,11 @@ void SV_InitGame( void ) {
 	netadr_t address, ipv6_address;
 	bool socket_opened = false;
 
+#ifndef DEDICATED_ONLY
 	// make sure the client is down
 	CL_Disconnect( NULL );
 	SCR_BeginLoadingPlaque();
+#endif
 
 	if( svs.initialized ) {
 		// cause any connected clients to reconnect
@@ -574,7 +576,9 @@ void SV_Map( const char *level, bool devmap ) {
 
 	SV_MOTD_Update();
 
+#ifndef DEDICATED_ONLY
 	SCR_BeginLoadingPlaque();       // for local system
+#endif
 	SV_BroadcastCommand( "changing\n" );
 	SV_SendClientMessages();
 	SV_SpawnServer( level, devmap );

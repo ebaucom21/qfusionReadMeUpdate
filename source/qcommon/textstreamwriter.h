@@ -1,6 +1,7 @@
 #ifndef WSW_9595d89d_d3d4_4235_b7a4_608538f78cc9_H
 #define WSW_9595d89d_d3d4_4235_b7a4_608538f78cc9_H
 
+#include <cassert>
 #include <cstdint>
 #include <cinttypes>
 #include <limits>

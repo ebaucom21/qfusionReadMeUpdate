@@ -85,7 +85,9 @@ void Sys_Quit( void ) {
 	timeEndPeriod( 1 );
 
 	SV_Shutdown( "Server quit\n" );
+#ifndef DEDICATED_ONLY
 	CL_Shutdown();
+#endif
 
 	if( ( dedicated && dedicated->integer ) || ( developer && developer->integer ) ) {
 		FreeConsole();

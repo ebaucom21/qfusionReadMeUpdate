@@ -702,6 +702,8 @@ void        Com_BeginRedirect( int target, char *buffer, int buffersize,
 							   void ( *flush )( int, const char*, const void* ), const void *extra );
 void        Com_EndRedirect( void );
 void        Com_DeferConsoleLogReopen( void );
+void        Com_ReopenConsoleLog();
+void        Com_CloseConsoleLog( bool lock, bool shutdown );
 
 #ifndef _MSC_VER
 void Com_Printf( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
@@ -728,18 +730,9 @@ void        Com_SetServerState( int state );
 struct cmodel_state_s *Com_ServerCM( unsigned *checksum );
 void        Com_SetServerCM( struct cmodel_state_s *cms, unsigned checksum );
 
-unsigned int Com_DaysSince1900( void );
-
 extern cvar_t *developer;
 extern cvar_t *dedicated;
-extern cvar_t *host_speeds;
 extern cvar_t *versioncvar;
-
-// host_speeds times
-extern int64_t time_before_game;
-extern int64_t time_after_game;
-extern int64_t time_before_ref;
-extern int64_t time_after_ref;
 
 void *Q_malloc( size_t size );
 void *Q_realloc( void *buf, size_t newsize );
@@ -814,6 +807,7 @@ CPU FEATURES
 #define Q_CPU_FEATURE_AVX     ( 0x8u )
 
 unsigned Sys_GetProcessorFeatures();
+void Sys_InitProcessorFeatures();
 
 bool Sys_GetNumberOfProcessors( unsigned *physical, unsigned *logical );
 

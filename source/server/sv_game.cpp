@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "../qcommon/compression.h"
-#include "../qcommon/loglines.h"
+#include "../qcommon/printlines.h"
 
 game_export_t *ge;
 
@@ -560,8 +560,8 @@ void SV_InitGameProgs( void ) {
 
 	import.LocateEntities = SV_LocateEntities;
 
-	import.createLogLineStream = wsw::createLogLineStream;
-	import.submitLogLineStream = wsw::submitLogLineStream;
+	import.createPrintLineStream = wsw::createPrintLineStream;
+	import.submitPrintLineStream = wsw::submitPrintLineStream;
 
 	// clear module manifest string
 	assert( sizeof( manifest ) >= MAX_INFO_STRING );

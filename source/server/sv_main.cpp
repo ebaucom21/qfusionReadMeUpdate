@@ -523,15 +523,7 @@ static bool SV_RunGameFrame( int msec ) {
 			accTime = 0;
 		}
 
-		if( host_speeds->integer ) {
-			time_before_game = Sys_Milliseconds();
-		}
-
 		ge->RunFrame( moduleTime, svs.gametime );
-
-		if( host_speeds->integer ) {
-			time_after_game = Sys_Milliseconds();
-		}
 	}
 
 	// if we don't have to send a snapshot we are done here
@@ -653,8 +645,6 @@ void SV_UpdateActivity( void ) {
 * SV_Frame
 */
 void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
-	time_before_game = time_after_game = 0;
-
 	// if server is not active, do nothing
 	if( !svs.initialized ) {
 		SV_CheckDefaultMap();
@@ -1093,98 +1083,3 @@ void SV_Cbuf_PrependCommand( const wsw::StringView &text ) {
 void SV_Cbuf_ExecutePendingCommands() {
 	g_svCmdSystemHolder.instance()->executeBufferCommands();
 }
-
-#if DEDICATED_ONLY
-
-bool con_initialized;
-
-static void Key_Bind_Null_f( const CmdArgs & ) {
-}
-
-void CL_Init( void ) {
-}
-
-void CL_Disconnect( const char *message ) {
-}
-
-void CL_Shutdown( void ) {
-}
-
-void CL_Frame( int realmsec, int gamemsec ) {
-}
-
-void CL_ParseServerMessage( msg_t *msg ) {
-}
-
-void CL_Netchan_Transmit( msg_t *msg ) {
-}
-
-void Con_Print( const char *text ) {
-}
-
-int CL_GetClientState( void ) {
-	return 0; // CA_UNINITIALIZED
-}
-
-void SCR_BeginLoadingPlaque( void ) {
-}
-
-void SCR_EndLoadingPlaque( void ) {
-}
-
-void SCR_ChangeSystemFontSmallSize( int ch ) {
-}
-
-void Key_Init( void ) {
-	//Cmd_AddCommand( "bind", Key_Bind_Null_f );
-}
-
-void Key_Shutdown( void ) {
-	//Cmd_RemoveCommand( "bind" );
-}
-
-struct qfontface_s *SCR_RegisterFont( const char *name ) {
-	return NULL;
-}
-
-void SCR_DrawString( int x, int y, int align, const char *str, struct qfontface_s *font, vec4_t color ) {
-}
-
-int SCR_DrawStringWidth( int x, int y, int align, const char *str, int maxwidth, struct qfontface_s *font, vec4_t color ) {
-	return 0;
-}
-
-void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, struct qfontface_s *font, vec4_t color ) {
-}
-
-void SCR_DrawRawChar( int x, int y, wchar_t num, struct qfontface_s *font, vec4_t color ) {
-}
-
-size_t SCR_FontHeight( struct qfontface_s *font ) {
-	return 0;
-}
-
-size_t SCR_strWidth( const char *str, struct qfontface_s *font, int maxlen ) {
-	return 0;
-}
-
-size_t SCR_StrlenForWidth( const char *str, struct qfontface_s *font, size_t maxwidth ) {
-	return 0;
-}
-
-struct shader_s *SCR_RegisterPic( const char *name ) {
-	return NULL;
-}
-
-void SCR_DrawStretchPic( int x, int y, int w, int h, float s1, float t1, float s2, float t2, const float *color, const struct shader_s *shader ) {
-}
-
-unsigned int SCR_GetScreenWidth( void ) {
-	return 0;
-}
-
-unsigned int SCR_GetScreenHeight( void ) {
-	return 0;
-}
-
-#endif

@@ -2448,14 +2448,7 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	// allow rendering DLL change
 	VID_CheckChanges();
 
-	// update the screen
-	if( host_speeds->integer ) {
-		time_before_ref = Sys_Milliseconds();
-	}
 	SCR_UpdateScreen();
-	if( host_speeds->integer ) {
-		time_after_ref = Sys_Milliseconds();
-	}
 
 	// update audio
 	if( cls.state != CA_ACTIVE ) {
