@@ -40,7 +40,7 @@ public:
 	void startRelativeSound( int id, int entNum, int channel, float volume, float attenuation );
 	void addLoopSound( int id, int entNum, uintptr_t identifyingToken, float volume, float attenuation );
 
-	void startBackgroundTrack( char *intro, char *loop, int mode );
+	void startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode );
 	void stopBackgroundTrack();
 	void lockBackgroundTrack( bool lock );
 	void advanceBackgroundTrack( int value );

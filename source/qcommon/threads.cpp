@@ -244,20 +244,23 @@ static_assert( alignof( RewindCmd ) <= PipeCmd::kAlignment );
 static constexpr unsigned kMinCmdSize = PipeCmd::kAlignment;
 
 /*
-* QBufPipe_WriteCmd
-*
-* Add new command to buffer. Never allow the distance between the reader
+* Never allow the distance between the reader
 * and the writer to grow beyond the size of the buffer.
 *
 * Note that there are race conditions here but in the worst case we're going
 * to erroneously drop cmd's instead of stepping on the reader's toes.
 */
-void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdvance, unsigned bytesOfCmdToCopy ) {
-	if( !pipe ) {
-		return;
+uint8_t *QBufPipe_AcquireWritableBytes( qbufPipe_t *pipe, unsigned bytesToAdvance ) {
+	assert( !( bytesToAdvance % kMinCmdSize ) );
+
+	if( !pipe ) [[unlikely]] {
+		return nullptr;
 	}
-	if( pipe->terminated ) {
-		return;
+
+	assert( !( (uintptr_t)pipe->buf % kMinCmdSize ) );
+
+	if( pipe->terminated ) [[unlikely]] {
+		return nullptr;
 	}
 
 	assert( pipe->bufSize >= pipe->write_pos );
@@ -270,9 +273,9 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		while( pipe->cmdbuf_len + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
-				continue;
+			} else {
+				return nullptr;
 			}
-			return;
 		}
 
 		// not enough space to enpipe even the reset cmd, rewind
@@ -282,9 +285,9 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		while( pipe->cmdbuf_len + kMinCmdSize + bytesToAdvance + write_remains > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
-				continue;
+			} else {
+				return nullptr;
 			}
-			return;
 		}
 
 		// explicit pointer reset cmd
@@ -297,15 +300,19 @@ void QBufPipe_WriteCmd( qbufPipe_t *pipe, const void *pcmd, unsigned bytesToAdva
 		while( pipe->cmdbuf_len + bytesToAdvance > pipe->bufSize ) {
 			if( pipe->blockWrite ) {
 				QThread_Yield();
-				continue;
+			} else {
+				return nullptr;
 			}
-			return;
 		}
 	}
 
-	void *buf = QBufPipe_AllocCmd( pipe, bytesToAdvance );
-	memcpy( buf, pcmd, bytesOfCmdToCopy );
-	QBufPipe_BufLenAdd( pipe, bytesToAdvance ); // atomic
+	return (uint8_t *)QBufPipe_AllocCmd( pipe, bytesToAdvance );
+}
+
+void QBufPipe_SubmitWrittenBytes( qbufPipe_t *pipe, unsigned bytesToSubmit ) {
+	assert( !( bytesToSubmit % kMinCmdSize ) );
+
+	QBufPipe_BufLenAdd( pipe, bytesToSubmit ); // atomic
 
 	// wake the other thread waiting for signal
 	QMutex_Lock( pipe->nonempty_mutex );
@@ -336,8 +343,8 @@ int QBufPipe_ReadCmds( qbufPipe_t *pipe ) {
 
 		PipeCmd *const cmd       = (PipeCmd *)( pipe->buf + pipe->read_pos );
 		const unsigned cmdResult = cmd->exec();
-		// Caution! See PipeCmd definition for the remark
-		// cmd->~PipeCmd();
+
+		cmd->~PipeCmd();
 
 		if( cmdResult == PipeCmd::kResultRewind ) {
 			// this cmd is special

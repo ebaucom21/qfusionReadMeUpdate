@@ -57,7 +57,8 @@ qbufPipe_t *QBufPipe_Create( size_t bufSize, int flags );
 void QBufPipe_Destroy( qbufPipe_t **pqueue );
 void QBufPipe_Finish( qbufPipe_t *queue );
 
-void QBufPipe_WriteCmd( qbufPipe_t *queue, const void *cmd, unsigned bytesToAdvance, unsigned bytesOfCmdToCopy );
+uint8_t *QBufPipe_AcquireWritableBytes( qbufPipe_t *queue, unsigned bytesToAcquire );
+void QBufPipe_SubmitWrittenBytes( qbufPipe_t *queue, unsigned bytesToSubmit );
 
 using PipeWaiterFn = int (*)( qbufPipe_t *, bool );
 

@@ -26,7 +26,7 @@ SoundSystem *SoundSystem::s_instance = nullptr;
 
 auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
 	if( !name ) {
-		return nullptr;
+		return "";
 	}
 	if( COM_FileExtension( name ) ) {
 		return name;

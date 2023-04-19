@@ -24,40 +24,42 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <cstdint>
 #include <cassert>
 #include <new>
-#include <type_traits>
 
 #include "qthreads.h"
 
-// Caution! Descendants must be memcpy()-relocatable, so there's even no virtual destructor.
-// (as of now, we can't instantiate command instances directly in the buffer tape).
-// TODO: Split the pipe write API into begin/allocate/commit parts so we don't have to use a temporary buffer.
 class PipeCmd {
 public:
 	static constexpr unsigned kAlignment       = 8u;
 	static constexpr unsigned kResultRewind    = ~0u;
 	static constexpr unsigned kResultTerminate = 0u;
 
+	virtual ~PipeCmd() = default;
+
 	[[nodiscard]]
 	virtual auto exec() -> unsigned = 0;
 
 	template <typename T>
 	[[nodiscard]]
-	static auto sizeWithPadding() -> unsigned {
+	static constexpr auto sizeWithPadding() -> unsigned {
 		return sizeof( T ) % kAlignment ? ( sizeof( T ) + kAlignment - sizeof( T ) % kAlignment ) : sizeof( T );
 	}
 };
 
+#define WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, ... )                          \
+	do {                                                                      \
+		const unsigned numBytes = PipeCmd::sizeWithPadding<CmdClosure>();     \
+		uint8_t *const mem = QBufPipe_AcquireWritableBytes( pipe, numBytes ); \
+		new( mem )CmdClosure( __VA_ARGS__ );                                  \
+		QBufPipe_SubmitWrittenBytes( pipe, numBytes );                        \
+	} while( 0 );
+
 inline void sendTerminateCmd( qbufPipe_s *pipe ) {
-	struct TerminatePipeCmd final : public PipeCmd {
+	struct CmdClosure final : public PipeCmd {
 		[[nodiscard]]
 		virtual auto exec() -> unsigned { return kResultTerminate; }
 	};
 
-	// Construct the object in-place to avoid calling the destructor on this side of the pipe
-	alignas( TerminatePipeCmd ) uint8_t buffer[sizeof( TerminatePipeCmd )];
-	new( buffer )TerminatePipeCmd;
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<TerminatePipeCmd>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe );
 }
 
 #if 0
@@ -75,10 +77,7 @@ void callOverPipe( qbufPipe_t *pipe, Func func ) {
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( func );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, func );
 }
 
 template <typename Func, typename Arg1>
@@ -96,10 +95,7 @@ void callOverPipe( qbufPipe_t *pipe, Func func, const Arg1 &arg1 ) {
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( func, arg1 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, func, arg1 );
 }
 
 template <typename Func, typename Arg1, typename Arg2>
@@ -118,10 +114,7 @@ void callOverPipe( qbufPipe_t *pipe, Func func, const Arg1 &arg1, const Arg2 &ar
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( func, arg1, arg2 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, func, arg1, arg2 );
 }
 
 template <typename Func, typename Arg1, typename Arg2, typename Arg3>
@@ -142,10 +135,7 @@ void callOverPipe( qbufPipe_t *pipe, Func func, const Arg1 &arg1, const Arg2 &ar
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( func, arg1, arg2, arg3 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, func, arg1, arg2, arg3 );
 }
 
 template <typename Func, typename Arg1, typename Arg2, typename Arg3, typename Arg4>
@@ -167,10 +157,7 @@ void callOverPipe( qbufPipe_t *pipe, Func func, const Arg1 &arg1, const Arg2 &ar
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( func, arg1, arg2, arg3, arg4 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, func, arg1, arg2, arg3, arg4 );
 }
 
 #endif
@@ -190,10 +177,7 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod );
 }
 
 template <typename HandlerObject, typename HandlerMethod, typename Arg1>
@@ -213,10 +197,7 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod, arg1 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1 );
 }
 
 template <typename HandlerObject, typename HandlerMethod, typename Arg1, typename Arg2>
@@ -237,10 +218,7 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod, arg1, arg2 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2 );
 }
 
 template <typename HandlerObject, typename HandlerMethod, typename Arg1, typename Arg2, typename Arg3>
@@ -263,10 +241,7 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod, arg1, arg2, arg3 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2, arg3 );
 }
 
 template <typename HandlerObject, typename HandlerMethod, typename Arg1, typename Arg2, typename Arg3, typename Arg4>
@@ -291,10 +266,7 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod, arg1, arg2, arg3, arg4 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2, arg3, arg4 );
 }
 
 template <typename HandlerObject, typename HandlerMethod, typename Arg1, typename Arg2, typename Arg3, typename Arg4, typename Arg5>
@@ -320,10 +292,9 @@ void callMethodOverPipe( qbufPipe_t *pipe, HandlerObject *handlerObject, Handler
 		}
 	};
 
-	alignas( CmdClosure ) uint8_t buffer[sizeof( CmdClosure )];
-	new( buffer )CmdClosure( handlerObject, handlerMethod, arg1, arg2, arg3, arg4, arg5 );
-
-	QBufPipe_WriteCmd( pipe, buffer, sizeof( buffer ), PipeCmd::sizeWithPadding<CmdClosure>() );
+	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe, handlerObject, handlerMethod, arg1, arg2, arg3, arg4, arg5 );
 }
+
+#undef WRITE_CLOSURE_WITH_ARGS_TO_PIPE
 
 #endif

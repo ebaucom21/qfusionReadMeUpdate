@@ -280,11 +280,8 @@ void Backend::addLoopSound( int id, int entNum, uintptr_t identifyingToken, floa
 	S_AddLoopSound( S_GetBufferById( id ), entNum, identifyingToken, volume, attenuation );
 }
 
-void Backend::startBackgroundTrack( char *intro, char *loop, int mode ) {
-	S_StartBackgroundTrack( intro, loop, mode );
-
-	Q_free( intro );
-	Q_free( loop );
+void Backend::startBackgroundTrack( const wsw::String &intro, const wsw::String &loop, int mode ) {
+	S_StartBackgroundTrack( intro.c_str(), loop.c_str(), mode );
 }
 
 void Backend::stopBackgroundTrack() {

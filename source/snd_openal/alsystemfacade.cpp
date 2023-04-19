@@ -20,7 +20,7 @@ wsw::snd::ALSoundSystem *wsw::snd::ALSoundSystem::tryCreate( client_state_s *cli
 		return nullptr;
 	}
 
-	qbufPipe_s *pipe = QBufPipe_Create( 0x100000, 0 );
+	qbufPipe_s *pipe = QBufPipe_Create( 0x100000, 1 );
 	if( !pipe ) {
 		Q_free( arg );
 		return nullptr;
@@ -206,10 +206,7 @@ void ALSoundSystem::startBackgroundTrack( const char *intro, const char *loop, i
 	const char *introPath = getPathForName( intro, &m_tmpPathBuffer1 );
 	const char *loopPath  = getPathForName( loop, &m_tmpPathBuffer2 );
 
-	char *const boxedIntroPath = introPath ? Q_strdup( introPath ) : nullptr;
-	char *const boxedLoopPath  = loopPath ? Q_strdup( loopPath ) : nullptr;
-
-	callMethodOverPipe( m_pipe, &m_backend, &Backend::startBackgroundTrack, boxedIntroPath, boxedLoopPath, mode );
+	callMethodOverPipe( m_pipe, &m_backend, &Backend::startBackgroundTrack, introPath, loopPath, mode );
 }
 
 void ALSoundSystem::stopBackgroundTrack() {
