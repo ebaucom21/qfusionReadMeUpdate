@@ -101,6 +101,9 @@ int main( int argc, char **argv ) {
 
 	Qcommon_Init( argc, argv );
 
+	unsigned gameMsec = 0;
+	float extraTime = 0.0f;
+
 	oldtime = Sys_Milliseconds();
 	while( true ) {
 		int time;
@@ -115,7 +118,7 @@ int main( int argc, char **argv ) {
 		} while( 1 );
 		oldtime = newtime;
 
-		Qcommon_Frame( time );
+		Qcommon_Frame( time, &gameMsec, &extraTime );
 	}
 
 	SDL_Quit();

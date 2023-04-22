@@ -2086,7 +2086,6 @@ void QtUISystem::appendSetCVarCommand( const wsw::StringView &name, const Value 
 	wsw::StaticString<256> command;
 	assert( !name.contains( ' ' ) && !name.contains( '\t' ) );
 	command << "set "_asView << name << " \""_asView << value << "\";"_asView;
-	Com_Printf( "%s\n", command.data() );
 	CL_Cbuf_AppendCommand( command.data() );
 }
 

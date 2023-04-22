@@ -55,6 +55,7 @@ auto CmdSystem::TextBuffer::fetchNextCmd() -> std::optional<wsw::StringView> {
 
 	bool isInsideQuotes       = false;
 	bool hasPendingEscapeChar = false;
+	unsigned numCmdChars      = 0;
 
 	while( m_headOffset < m_data.size() ) {
 		const char ch = m_data[m_headOffset];
@@ -74,10 +75,12 @@ auto CmdSystem::TextBuffer::fetchNextCmd() -> std::optional<wsw::StringView> {
 		if( ch == '\n' || ( !isInsideQuotes && ch == ';' ) ) {
 			break;
 		}
+
+		++numCmdChars;
 	}
 
 	if( m_headOffset > oldHeadOffset ) [[likely]] {
-		return wsw::StringView( m_data.data() + oldHeadOffset, m_headOffset - oldHeadOffset );
+		return wsw::StringView( m_data.data() + oldHeadOffset, numCmdChars );
 	}
 
 	return std::nullopt;

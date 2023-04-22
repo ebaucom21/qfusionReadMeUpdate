@@ -62,7 +62,7 @@ inline void sendTerminateCmd( qbufPipe_s *pipe ) {
 	WRITE_CLOSURE_WITH_ARGS_TO_PIPE( pipe );
 }
 
-#if 0
+#if 1
 
 template <typename Func>
 void callOverPipe( qbufPipe_t *pipe, Func func ) {

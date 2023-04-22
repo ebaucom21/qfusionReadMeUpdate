@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "sv_snap.h"
 #include "../qcommon/cmdsystem.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/pipeutils.h"
 
 using wsw::operator""_asView;
 
@@ -556,6 +557,11 @@ void SV_UpdateActivity( void ) {
 	//Com_Printf( "Server activity\n" );
 }
 
+#ifndef DEDICATED_ONLY
+extern qbufPipe_t *g_svCmdPipe;
+extern qbufPipe_t *g_clCmdPipe;
+#endif
+
 /*
 * SV_Frame
 */
@@ -947,19 +953,40 @@ void SV_Cmd_ExecuteText( int when, const char *text ) {
 	}
 }
 
+#ifndef DEDICATED_ONLY
+
+static void SV_Cmd_ExecuteNow2( const wsw::String &string ) {
+	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView { string.data(), string.size() } );
+}
+
+static void redirectToBuiltinServer( const CmdArgs &cmdArgs ) {
+	wsw::StaticString<MAX_STRING_CHARS> text;
+	// TODO: Preserve the original string?
+	for ( const wsw::StringView &arg: cmdArgs.allArgs ) {
+		text << arg << ' ';
+	}
+	text[text.size() - 1] = '\n';
+
+	const wsw::String boxed( text.data(), text.size());
+	callOverPipe( g_svCmdPipe, &SV_Cmd_ExecuteNow2, boxed );
+}
+
+static void registerBuiltinServerCmdOnClientSide( const wsw::String &name ) {
+	const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
+	CL_GetCmdSystem()->registerCommand( nameView, redirectToBuiltinServer );
+}
+
+static void unregisterBuiltinServerCmdOnClientSide( const wsw::String &name ) {
+	CL_GetCmdSystem()->unregisterCommand( wsw::StringView { name.data(), name.size(), wsw::StringView::ZeroTerminated } );
+}
+
+#endif
+
 void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
 	const wsw::StringView nameView( name );
 	g_svCmdSystemHolder.instance()->registerCommand( nameView, handler );
 #ifndef DEDICATED_ONLY
-	CL_GetCmdSystem()->registerCommand( nameView, []( const CmdArgs &cmdArgs ) {
-		wsw::StaticString<MAX_STRING_CHARS> text;
-		// TODO: Preserve the original string?
-		for( const wsw::StringView &arg: cmdArgs.allArgs ) {
-			text << arg << ' ';
-		}
-		text[text.size() - 1] = '\n';
-		g_svCmdSystemHolder.instance()->executeNow( text.asView() );
-	});
+	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::String { nameView.data(), nameView.size() } );
 #endif
 }
 
@@ -967,7 +994,7 @@ void SV_Cmd_Unregister( const char *name ) {
 	const wsw::StringView nameView( name );
 	g_svCmdSystemHolder.instance()->unregisterCommand( nameView );
 #ifndef DEDICATED_ONLY
-	CL_GetCmdSystem()->unregisterCommand( nameView );
+	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::String( nameView.data(), nameView.size() ) );
 #endif
 }
 

@@ -727,8 +727,6 @@ void        Com_SetDemoPlaying( bool state );
 
 int         Com_ServerState( void );        // this should have just been a cvar...
 void        Com_SetServerState( int state );
-struct cmodel_state_s *Com_ServerCM( unsigned *checksum );
-void        Com_SetServerCM( struct cmodel_state_s *cms, unsigned checksum );
 
 extern cvar_t *developer;
 extern cvar_t *dedicated;
@@ -740,7 +738,7 @@ void Q_free( void *buf );
 char *Q_strdup( const char *str );
 
 void Qcommon_Init( int argc, char **argv );
-void Qcommon_Frame( unsigned int realMsec );
+void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime );
 void Qcommon_Shutdown( void );
 
 /*
@@ -820,7 +818,7 @@ CLIENT / SERVER SYSTEMS
 */
 
 void CL_Init( void );
-void CL_Disconnect( const char *message );
+void CL_Disconnect( const char *message, bool isCalledByBuiltinServer = false );
 void CL_Shutdown( void );
 void CL_Frame( int realMsec, int gameMsec );
 void CL_ParseServerMessage( msg_t *msg );

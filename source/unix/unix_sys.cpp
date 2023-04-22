@@ -293,6 +293,9 @@ int main( int argc, char **argv ) {
 
 	fcntl( 0, F_SETFL, fcntl( 0, F_GETFL, 0 ) | O_NONBLOCK );
 
+	unsigned gameMsec = 0;
+	float extraTime = 0.0f;
+
 	oldtime = Sys_Milliseconds();
 	while( true ) {
 		// find time spent rendering last frame
@@ -308,7 +311,7 @@ int main( int argc, char **argv ) {
 		} while( 1 );
 		oldtime = newtime;
 
-		Qcommon_Frame( time );
+		Qcommon_Frame( time, &gameMsec, &extraTime );
 	}
 #if defined ( __MACOSX__ ) && !defined ( DEDICATED_ONLY )
 	SDL_Quit();

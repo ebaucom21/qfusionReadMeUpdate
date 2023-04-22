@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "mmcommon.h"
 #include "compression.h"
 #include "cmdsystem.h"
+#include "pipeutils.h"
 
 #include <setjmp.h>
 
@@ -77,12 +78,9 @@ static void Cmd_PreInit( void );
 static void Cmd_Init( void );
 static void Cmd_Shutdown( void );
 
-static int server_state = CA_UNINITIALIZED;
-static int client_state = CA_UNINITIALIZED;
-static bool demo_playing = false;
-
-static struct cmodel_state_s *server_cms = NULL;
-static unsigned server_map_checksum = 0;
+static volatile int server_state = CA_UNINITIALIZED;
+static volatile int client_state = CA_UNINITIALIZED;
+static volatile bool demo_playing = false;
 
 void Com_Error( com_error_code_t code, const char *format, ... ) {
 	va_list argptr;
@@ -145,16 +143,6 @@ void Com_SetServerState( int state ) {
 	server_state = state;
 }
 
-struct cmodel_state_s *Com_ServerCM( unsigned *checksum ) {
-	*checksum = server_map_checksum;
-	return server_cms;
-}
-
-void Com_SetServerCM( struct cmodel_state_s *cms, unsigned checksum ) {
-	server_cms = cms;
-	server_map_checksum = checksum;
-}
-
 int Com_ClientState( void ) {
 	return client_state;
 }
@@ -171,6 +159,59 @@ void Com_SetDemoPlaying( bool state ) {
 	demo_playing = state;
 }
 
+#ifndef DEDICATED_ONLY
+
+qbufPipe_t *g_clCmdPipe;
+qbufPipe_t *g_svCmdPipe;
+
+static qthread_s *g_svThread;
+
+// TODO: !!!!! We should merge this thread with the sound background thread
+
+static void *SV_Thread( void * ) {
+	uint64_t oldtime = 0, newtime;
+
+	unsigned gameMsec = 0;
+	float extraTime   = 0.0f;
+
+	while( true ) {
+		int realMsec;
+		do {
+			newtime = Sys_Milliseconds();
+			realMsec = newtime - oldtime;
+			if( realMsec > 0 ) {
+				break;
+			}
+			if( Com_ServerState() >= CA_CONNECTED ) {
+				Sys_Sleep( 0 );
+			} else {
+				// TODO: We can just wait on pipe cmds, especially if we process sound too
+				Sys_Sleep( 16 );
+			}
+		} while( true );
+		oldtime = newtime;
+
+		if( fixedtime->integer > 0 ) {
+			gameMsec = fixedtime->integer;
+		} else if( timescale->value >= 0 ) {
+			gameMsec = extraTime + (float)realMsec * timescale->value;
+			extraTime = ( extraTime + (float)realMsec * timescale->value ) - (float)gameMsec;
+		} else {
+			gameMsec = realMsec;
+		}
+
+		if( QBufPipe_ReadCmds( g_svCmdPipe ) < 0 ) {
+			break;
+		}
+
+		SV_Frame( realMsec, gameMsec );
+	}
+
+	return nullptr;
+}
+
+#endif
+
 void Qcommon_Init( int argc, char **argv ) {
 	(void)std::setlocale( LC_ALL, "C" );
 
@@ -186,6 +227,11 @@ void Qcommon_Init( int argc, char **argv ) {
 	QThreads_Init();
 
 	com_print_mutex = QMutex_Create();
+
+#ifndef DEDICATED_ONLY
+	g_svCmdPipe = QBufPipe_Create( 16 * 1024, 1 );
+	g_clCmdPipe = QBufPipe_Create( 16 * 1024, 1 );
+#endif
 
 	// Force doing this early as this could fork for executing shell commands on UNIX.
 	// Required being able to call Com_Printf().
@@ -323,6 +369,10 @@ void Qcommon_Init( int argc, char **argv ) {
 #endif
 	}
 
+#ifndef DEDICATED_ONLY
+	g_svThread = QThread_Create( SV_Thread, nullptr );
+#endif
+
 	Com_Printf( "\n====== %s Initialized ======\n", APPLICATION );
 
 #ifndef DEDICATED_ONLY
@@ -331,8 +381,7 @@ void Qcommon_Init( int argc, char **argv ) {
 	svCmdSystem->executeBufferCommands();
 };
 
-void Qcommon_Frame( unsigned int realMsec ) {
-	static unsigned int gameMsec;
+void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 
 	if( com_quit ) {
 		Com_Quit( {} );
@@ -349,13 +398,12 @@ void Qcommon_Frame( unsigned int realMsec ) {
 	}
 
 	if( fixedtime->integer > 0 ) {
-		gameMsec = fixedtime->integer;
+		*gameMsec = fixedtime->integer;
 	} else if( timescale->value >= 0 ) {
-		static float extratime = 0.0f;
-		gameMsec = extratime + (float)realMsec * timescale->value;
-		extratime = ( extratime + (float)realMsec * timescale->value ) - (float)gameMsec;
+		*gameMsec = *extraTime + (float)realMsec * timescale->value;
+		*extraTime = ( *extraTime + (float)realMsec * timescale->value ) - (float)*gameMsec;
 	} else {
-		gameMsec = realMsec;
+		*gameMsec = realMsec;
 	}
 
 	wswcurl_perform();
@@ -380,10 +428,10 @@ void Qcommon_Frame( unsigned int realMsec ) {
 	// keep the random time dependent
 	rand();
 
-	SV_Frame( realMsec, gameMsec );
-
-#ifndef DEDICATED_ONLY
-	CL_Frame( realMsec, gameMsec );
+#ifdef DEDICATED_ONLY
+	SV_Frame( realMsec, *gameMsec );
+#else
+	CL_Frame( realMsec, *gameMsec );
 #endif
 }
 
@@ -395,6 +443,16 @@ void Qcommon_Shutdown( void ) {
 		return;
 	}
 	isdown = true;
+
+#ifndef DEDICATED_ONLY
+	sendTerminateCmd( g_svCmdPipe );
+	QBufPipe_Finish( g_svCmdPipe );
+
+	QThread_Join( g_svThread );
+
+	QBufPipe_Destroy( &g_svCmdPipe );
+	QBufPipe_Destroy( &g_clCmdPipe );
+#endif
 
 	CM_Shutdown();
 	Netchan_Shutdown();

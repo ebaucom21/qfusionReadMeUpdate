@@ -32,43 +32,8 @@ static inline void CM_SetBuiltinBrushBounds( vec_bounds_t mins, vec_bounds_t max
 	}
 }
 
-static GenericOps genericOps;
-static Sse42Ops sse42Ops;
-static AvxOps avxOps;
-
-static Ops *selectedOps = nullptr;
-
-struct Ops *CM_GetOps( cmodel_state_t *cms ) {
-	// This is mostly to avoid annoying console spam on every map loading
-	if( selectedOps ) {
-		// Just set the appropriate cms pointer
-		// (the selected computer once it's selected remains the same during the entire executable lifetime).
-		// Warning: If different cms instances (e.g. cloned ones)
-		// are used simultaneously, this is plain wrong in environment of that kind.
-		// Instantiate separate trace computer instances in such cases.
-		selectedOps->cms = cms;
-		return selectedOps;
-	}
-
-	Ops *ops[] = { &avxOps, &sse42Ops };
-	unsigned featureBits[] = { Q_CPU_FEATURE_AVX, Q_CPU_FEATURE_SSE42 };
-	const char *tags[] = { "AVX", "SSE4.2" };
-
-	const char *selectedTag = "generic";
-	selectedOps = &genericOps;
-	const auto features = Sys_GetProcessorFeatures();
-	for( unsigned i = 0; i < std::size( ops ); ++i ) {
-		if( featureBits[i] & features ) {
-			selectedOps = ops[i];
-			selectedTag = tags[i];
-			break;
-		}
-	}
-
-	Com_Printf( "Using the %s collision code path\n", selectedTag );
-	selectedOps->cms = cms;
-	return selectedOps;
-}
+static_assert( sizeof( GenericOps ) <= 16 && sizeof( Sse42Ops ) <= 16 && sizeof( AvxOps ) <= 16 );
+static_assert( alignof( GenericOps ) <= alignof( void * ) && alignof( Sse42Ops ) <= alignof( void * ) && alignof( AvxOps ) <= alignof( void * ) );
 
 /*
 * CM_InitBoxHull
@@ -1164,7 +1129,7 @@ CMShapeList *CM_BuildShapeList( cmodel_state_t *cms, CMShapeList *list, const fl
 	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
 #endif
 
-	CM_GetOps( cms )->BuildShapeList( list, mins, maxs, clipMask );
+	cms->ops->BuildShapeList( list, mins, maxs, clipMask );
 	return list;
 }
 
@@ -1192,7 +1157,7 @@ void CM_ClipShapeList( cmodel_state_t *cms, CMShapeList *list,
 	if( std::memcmp( tmp1, tmp2, list->numShapes * 8 ) ) abort();
 #endif
 
-	CM_GetOps( cms )->ClipShapeList( list, baseList, mins, maxs );
+	cms->ops->ClipShapeList( list, baseList, mins, maxs );
 }
 
 void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *tr,
@@ -1223,5 +1188,5 @@ void CM_ClipToShapeList( cmodel_state_t *cms, const CMShapeList *list, trace_t *
 	CompareTraceResults( traces, tags, 3 );
 #endif
 
-	CM_GetOps( cms )->ClipToShapeList( list, tr, start, end, mins, maxs, clipMask );
+	cms->ops->ClipToShapeList( list, tr, start, end, mins, maxs, clipMask );
 }

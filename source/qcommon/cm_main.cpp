@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 #include "cm_local.h"
+#include "cm_trace.h"
 #include "md5.h"
 
 static bool cm_initialized = false;
@@ -917,7 +918,23 @@ cmodel_state_t *CM_New() {
 	cms->map_areas = &cms->map_area_empty;
 	cms->map_entitystring = &cms->map_entitystring_empty;
 
-	cms->ops = CM_GetOps( cms );
+	[[maybe_unused]] const char *archTag;
+	const unsigned cpuFeatures = Sys_GetProcessorFeatures();
+	if( cpuFeatures & Q_CPU_FEATURE_AVX ) {
+		cms->ops = new( cms->opsStorage )AvxOps;
+		archTag  = "AVX";
+	} else if( cpuFeatures & Q_CPU_FEATURE_SSE42 ) {
+		cms->ops = new( cms->opsStorage )Sse42Ops;
+		archTag  = "SSE4.2";
+	} else {
+		cms->ops = new( cms->opsStorage )GenericOps;
+		archTag  = "generic";
+	}
+
+	// See the Ops definition for the remark - we don't really need Ops
+	cms->ops->cms = cms;
+
+	Com_Printf( "Using %s collision code path\n", archTag );
 
 	return cms;
 }

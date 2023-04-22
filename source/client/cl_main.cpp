@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/asyncstream.h"
 #include "../qcommon/cmdsystem.h"
 #include "../qcommon/singletonholder.h"
+#include "../qcommon/pipeutils.h"
 #include "../qcommon/hash.h"
 #include "../ui/uisystem.h"
 
@@ -714,6 +715,8 @@ static void CL_Disconnect_SendCommand( void ) {
 	CL_SendMessagesToServer( true );
 }
 
+extern qbufPipe_s *g_svCmdPipe;
+
 /*
 * CL_Disconnect
 *
@@ -721,7 +724,7 @@ static void CL_Disconnect_SendCommand( void ) {
 * Sends a disconnect message to the server
 * This is also called on Com_Error, so it shouldn't cause any errors
 */
-void CL_Disconnect( const char *message ) {
+void CL_Disconnect( const char *message, bool isCalledByBuiltinServer /* TODO!!!!! */ ) {
 	// We have to shut down webdownloading first
 	if( cls.download.web && !cls.download.disconnect ) {
 		cls.download.disconnect = true;
@@ -735,7 +738,10 @@ void CL_Disconnect( const char *message ) {
 		goto done;
 	}
 
-	SV_ShutdownGame( "Owner left the listen server", false );
+	if( !isCalledByBuiltinServer ) {
+		callOverPipe( g_svCmdPipe, SV_ShutdownGame, nullptr, false );
+		QBufPipe_Finish( g_svCmdPipe );
+	}
 
 	if( cl_timedemo && cl_timedemo->integer ) {
 		int i;
@@ -1284,14 +1290,11 @@ static unsigned int CL_LoadMap( const char *name ) {
 
 	assert( !cl.cms );
 
-	// if local server is running, share the collision model,
-	// increasing the ref counter
-	if( Com_ServerState() ) {
-		cl.cms = Com_ServerCM( &map_checksum );
-	} else {
-		cl.cms = CM_New();
-		CM_LoadMap( cl.cms, name, true, &map_checksum );
-	}
+	// TODO: If local server is running, share the collision model, increasing the ref counter
+	// TODO: That requires making some calls that modify cms state reentrant
+
+	cl.cms = CM_New();
+	CM_LoadMap( cl.cms, name, true, &map_checksum );
 
 	CM_AddReference( cl.cms );
 
@@ -2267,10 +2270,16 @@ static void CL_NetFrame( int realMsec, int gameMsec ) {
 	ServerList::instance()->frame();
 }
 
+extern qbufPipe_t *g_clCmdPipe;
+
 /*
 * CL_Frame
 */
 void CL_Frame( int realMsec, int gameMsec ) {
+#ifndef DEDICATED_ONLY
+	(void)QBufPipe_ReadCmds( g_clCmdPipe );
+#endif
+
 	static int allRealMsec = 0, allGameMsec = 0, extraMsec = 0;
 	static float roundingMsec = 0.0f;
 	int minMsec;

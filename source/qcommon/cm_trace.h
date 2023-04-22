@@ -37,6 +37,7 @@ struct CMTraceContext {
 
 struct CMShapeList;
 
+// TODO: We don't need Ops, just set method pointers in the cms instance
 struct Ops {
 	struct cmodel_state_s *cms;
 

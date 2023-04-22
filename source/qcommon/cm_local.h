@@ -215,11 +215,10 @@ struct cmodel_state_s {
 	mutable int leaf_topnode;
 
 	struct Ops *ops;
+	alignas( alignof( void * ) ) uint8_t opsStorage[16];
 };
 
 //=======================================================================
-
-struct Ops *CM_GetOps( cmodel_state_t *cms );
 
 void CM_InitBoxHull( cmodel_state_t *cms );
 

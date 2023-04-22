@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/sys_library.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/pipeutils.h"
 
 server_constant_t svc;              // constant server info (trully persistant since sv_init)
 server_static_t svs;                // persistant server info
@@ -260,14 +261,16 @@ static void SV_SpawnServer( const char *server, bool devmap ) {
 
 	SV_CreateBaseline(); // create a baseline for more efficient communications
 
-	Com_SetServerCM( svs.cms, checksum );
-
 	// all precaches are complete
 	sv.state = ss_game;
 	Com_SetServerState( sv.state );
 
 	Com_Printf( "-------------------------------------\n" );
 }
+
+#ifndef DEDICATED_ONLY
+extern qbufPipe_s *g_clCmdPipe;
+#endif
 
 /*
 * SV_InitGame
@@ -281,8 +284,9 @@ void SV_InitGame( void ) {
 
 #ifndef DEDICATED_ONLY
 	// make sure the client is down
-	CL_Disconnect( NULL );
-	SCR_BeginLoadingPlaque();
+	callOverPipe( g_clCmdPipe, CL_Disconnect, nullptr, true );
+	callOverPipe( g_clCmdPipe, SCR_BeginLoadingPlaque );
+	QBufPipe_Finish( g_clCmdPipe );
 #endif
 
 	if( svs.initialized ) {
@@ -458,8 +462,6 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 		svs.cms = NULL;
 	}
 
-	Com_SetServerCM( NULL, 0 );
-
 	sv.clear();
 	Com_SetServerState( sv.state );
 
@@ -533,7 +535,7 @@ void SV_Map( const char *level, bool devmap ) {
 	SV_MOTD_Update();
 
 #ifndef DEDICATED_ONLY
-	SCR_BeginLoadingPlaque();       // for local system
+	//callOverPipe( g_clCmdPipe, SCR_BeginLoadingPlaque );
 #endif
 	SV_BroadcastCommand( "changing\n" );
 	SV_SendClientMessages();

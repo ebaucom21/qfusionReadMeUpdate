@@ -331,6 +331,9 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	oldtime = Sys_Milliseconds();
 
+	unsigned gameMsec = 0;
+	float extraTime   = 0.0f;
+
 	/* main window message loop */
 	while( 1 ) {
 		// if at a full screen console, don't update unless needed
@@ -361,7 +364,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		// do as q3 (use the default floating point precision)
 		//	_controlfp( ~( _EM_ZERODIVIDE /*| _EM_INVALID*/ ), _MCW_EM );
 		//_controlfp( _PC_24, _MCW_PC );
-		Qcommon_Frame( time );
+		Qcommon_Frame( time, &gameMsec, &extraTime );
 	}
 
 	// never gets here
