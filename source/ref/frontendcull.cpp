@@ -98,7 +98,8 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 
 	stateForCamera->drawSurfSurfSpansBuffer->reserve( numMergedSurfaces );
 	stateForCamera->bspDrawSurfacesBuffer->reserve( numMergedSurfaces );
-	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->data.get();
+
+	MergedSurfSpan *const mergedSurfSpans = stateForCamera->drawSurfSurfSpansBuffer->get( numMergedSurfaces );
 	for( unsigned i = 0; i < numMergedSurfaces; ++i ) {
 		mergedSurfSpans[i].firstSurface = std::numeric_limits<int>::max();
 		mergedSurfSpans[i].lastSurface  = std::numeric_limits<int>::min();
@@ -133,7 +134,7 @@ auto Frontend::cullWorldSurfaces( StateForCamera *stateForCamera )
 }
 
 void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
-	VisTestedModel *tmpModels = stateForCamera->visTestedModelsBuffer->data.get();
+	VisTestedModel *tmpModels = stateForCamera->visTestedModelsBuffer->reserveAndGet( MAX_QUAD_POLYS );
 	QuadPoly **quadPolys      = scene->m_quadPolys.data();
 
 	uint16_t tmpIndices[MAX_QUAD_POLYS];
@@ -148,9 +149,8 @@ void Frontend::collectVisiblePolys( StateForCamera *stateForCamera, Scene *scene
 
 void Frontend::collectVisibleEntities( StateForCamera *stateForCamera, Scene *scene, std::span<const Frustum> frusta ) {
 	uint16_t indices[MAX_ENTITIES], indices2[MAX_ENTITIES];
-	stateForCamera->visTestedModelsBuffer->reserve( MAX_ENTITIES );
 
-	VisTestedModel *const visModels = stateForCamera->visTestedModelsBuffer->data.get();
+	VisTestedModel *const visModels = stateForCamera->visTestedModelsBuffer->reserveAndGet( MAX_ENTITIES );
 
 	const std::span<const entity_t> nullModelEntities = scene->m_nullModelEntities;
 	const auto nullModelIndices = cullNullModelEntities( stateForCamera, nullModelEntities, frusta, indices, visModels );
@@ -269,9 +269,8 @@ void Frontend::markSurfacesOfLeavesAsVisible( std::span<const unsigned> indicesO
 void Frontend::markLightsOfSurfaces( StateForCamera *stateForCamera, const Scene *scene,
 									 std::span<std::span<const unsigned>> spansOfLeaves,
 									 std::span<const uint16_t> visibleLightIndices ) {
-	// TODO: Fuse these calls
-	stateForCamera->leafLightBitsOfSurfacesBuffer->reserveZeroed( rsh.worldBrushModel->numsurfaces );
-	unsigned *const lightBitsOfSurfaces = stateForCamera->leafLightBitsOfSurfacesBuffer->data.get();
+	unsigned *const lightBitsOfSurfaces = stateForCamera->leafLightBitsOfSurfacesBuffer
+		->reserveZeroedAndGet( rsh.worldBrushModel->numsurfaces );
 
 	if( !visibleLightIndices.empty() ) {
 		for( const std::span<const unsigned> &leaves: spansOfLeaves ) {

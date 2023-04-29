@@ -22,8 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef WSW_63ccf348_3b16_4f9c_9a49_cd5849918618_H
 #define WSW_63ccf348_3b16_4f9c_9a49_cd5849918618_H
 
-#include <memory>
 #include <span>
+
+#include "../qcommon/podbufferholder.h"
 
 struct alignas( 32 )Frustum {
 	alignas( 32 ) float planeX[8];
@@ -69,28 +70,6 @@ public:
 	void dynLightDirForOrigin( const float *origin, float radius, vec3_t dir, vec3_t diffuseLocal, vec3_t ambientLocal );
 
 private:
-
-	template <typename T>
-	struct BufferHolder {
-		std::unique_ptr<T[]> data;
-		unsigned capacity { 0 };
-
-		void reserve( size_t newSize ) {
-			if( newSize > capacity ) [[unlikely]] {
-				data = std::make_unique<T[]>( newSize );
-				capacity = newSize;
-			}
-		}
-
-		void reserveZeroed( size_t newSize ) {
-			if( newSize > capacity ) [[unlikely]] {
-				data = std::make_unique<T[]>( newSize );
-				capacity = newSize;
-			}
-			std::memset( data.get(), 0, sizeof( T ) * newSize );
-		}
-	};
-
 	struct SortedOccluder {
 		unsigned occluderNum;
 		float score;
@@ -164,19 +143,19 @@ private:
 		// TODO: We don't really need a growable vector, preallocate at it start
 		wsw::Vector<sortedDrawSurf_t> *sortList;
 
-		BufferHolder<unsigned> *visibleLeavesBuffer;
-		BufferHolder<unsigned> *occluderPassFullyVisibleLeavesBuffer;
-		BufferHolder<unsigned> *occluderPassPartiallyVisibleLeavesBuffer;
+		PodBufferHolder<unsigned> *visibleLeavesBuffer;
+		PodBufferHolder<unsigned> *occluderPassFullyVisibleLeavesBuffer;
+		PodBufferHolder<unsigned> *occluderPassPartiallyVisibleLeavesBuffer;
 
-		BufferHolder<unsigned> *visibleOccludersBuffer;
-		BufferHolder<SortedOccluder> *sortedOccludersBuffer;
+		PodBufferHolder<unsigned> *visibleOccludersBuffer;
+		PodBufferHolder<SortedOccluder> *sortedOccludersBuffer;
 
 		// TODO: Merge these two? Keeping it separate can be more cache-friendly though
-		BufferHolder<drawSurfaceBSP_t> *bspDrawSurfacesBuffer;
-		BufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
+		PodBufferHolder<drawSurfaceBSP_t> *bspDrawSurfacesBuffer;
+		PodBufferHolder<MergedSurfSpan> *drawSurfSurfSpansBuffer;
 
-		BufferHolder<VisTestedModel> *visTestedModelsBuffer;
-		BufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
+		PodBufferHolder<VisTestedModel> *visTestedModelsBuffer;
+		PodBufferHolder<uint32_t> *leafLightBitsOfSurfacesBuffer;
 
 		ParticleDrawSurface *particleDrawSurfaces;
 	};
@@ -515,18 +494,18 @@ private:
 
 	wsw::Vector<sortedDrawSurf_t> m_meshSortList[2];
 
-	BufferHolder<unsigned> m_visibleLeavesBuffer[2];
-	BufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer[2];
-	BufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer[2];
+	PodBufferHolder<unsigned> m_visibleLeavesBuffer[2];
+	PodBufferHolder<unsigned> m_occluderPassFullyVisibleLeavesBuffer[2];
+	PodBufferHolder<unsigned> m_occluderPassPartiallyVisibleLeavesBuffer[2];
 
-	BufferHolder<unsigned> m_visibleOccludersBuffer[2];
-	BufferHolder<SortedOccluder> m_sortedOccludersBuffer[2];
+	PodBufferHolder<unsigned> m_visibleOccludersBuffer[2];
+	PodBufferHolder<SortedOccluder> m_sortedOccludersBuffer[2];
 
-	BufferHolder<drawSurfaceBSP_t> m_bspDrawSurfacesBuffer[2];
-	BufferHolder<MergedSurfSpan> m_drawSurfSurfSpansBuffer[2];
+	PodBufferHolder<drawSurfaceBSP_t> m_bspDrawSurfacesBuffer[2];
+	PodBufferHolder<MergedSurfSpan> m_drawSurfSurfSpansBuffer[2];
 
-	BufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
-	BufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];
+	PodBufferHolder<VisTestedModel> m_visTestedModelsBuffer[2];
+	PodBufferHolder<uint32_t> m_leafLightBitsOfSurfacesBuffer[2];
 
 	std::unique_ptr<ParticleDrawSurface[]> m_particleDrawSurfacesBuffer[2] {
 		std::make_unique<ParticleDrawSurface[]>( Scene::kMaxParticlesInAggregate * Scene::kMaxParticleAggregates ),

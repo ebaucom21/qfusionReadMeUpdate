@@ -32,7 +32,7 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 	const auto *const pvs             = Mod_ClusterPVS( stateForCamera->viewCluster, rsh.worldModel );
 	const unsigned numWorldLeaves     = rsh.worldBrushModel->numvisleafs;
 	const auto leaves                 = rsh.worldBrushModel->visleafs;
-	unsigned *const visibleLeaves     = stateForCamera->visibleLeavesBuffer->data.get();
+	unsigned *const visibleLeaves     = stateForCamera->visibleLeavesBuffer->get( numWorldLeaves );
 	const Frustum *__restrict frustum = &stateForCamera->frustum;
 
 	unsigned numVisibleLeaves = 0;
@@ -54,9 +54,10 @@ auto Frontend::collectVisibleWorldLeavesArch( StateForCamera *stateForCamera ) -
 
 template <unsigned Arch>
 auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> std::span<const SortedOccluder> {
-	const Frustum *__restrict frustum = &stateForCamera->frustum;
-	unsigned *const visibleOccluders  = stateForCamera->visibleOccludersBuffer->data.get();
-	unsigned numVisibleOccluders      = 0;
+	const Frustum *__restrict frustum     = &stateForCamera->frustum;
+	const unsigned numWorldModelOccluders = rsh.worldBrushModel->numOccluders;
+	unsigned *const visibleOccluders      = stateForCamera->visibleOccludersBuffer->get( numWorldModelOccluders );
+	unsigned numVisibleOccluders          = 0;
 
 #ifdef DEBUG_OCCLUDERS
 	// TODO: Don't do that for portal camerae
@@ -71,7 +72,6 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 
 	const OccluderBoundsEntry *const occluderBoundsEntries = rsh.worldBrushModel->occluderBoundsEntries;
 	const OccluderDataEntry *const occluderDataEntries     = rsh.worldBrushModel->occluderDataEntries;
-	const unsigned numWorldModelOccluders                  = rsh.worldBrushModel->numOccluders;
 
 	for( unsigned occluderNum = 0; occluderNum < numWorldModelOccluders; ++occluderNum ) {
 		visibleOccluders[numVisibleOccluders] = occluderNum;
@@ -92,7 +92,7 @@ auto Frontend::collectVisibleOccludersArch( StateForCamera *stateForCamera ) -> 
 		viewAxis   = lockedViewAxis;
 	}
 
-	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->data.get();
+	SortedOccluder *const sortedOccluders = stateForCamera->sortedOccludersBuffer->get( numVisibleOccluders );
 	unsigned numSortedOccluders           = 0;
 
 	for( unsigned i = 0; i < numVisibleOccluders; ++i ) {
@@ -335,8 +335,9 @@ auto Frontend::cullLeavesByOccludersArch( StateForCamera *stateForCamera,
 	const int pinnedOccluderNum = Cvar_Integer( "pinnedOccluderNum" );
 #endif
 
-	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->data.get();
-	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->data.get();
+	const unsigned numLeaves               = rsh.worldBrushModel->numvisleafs;
+	unsigned *const partiallyVisibleLeaves = stateForCamera->occluderPassPartiallyVisibleLeavesBuffer->get( numLeaves );
+	unsigned *const fullyVisibleLeaves     = stateForCamera->occluderPassFullyVisibleLeavesBuffer->get( numLeaves );
 
 	const unsigned numOccluders        = occluderFrusta.size();
 	const auto leaves                  = rsh.worldBrushModel->visleafs;

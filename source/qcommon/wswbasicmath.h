@@ -49,6 +49,18 @@ constexpr wsw_forceinline bool isPowerOf2( const T &v ) {
 	return ( v & ( v - 1 ) ) == 0;
 }
 
+template <std::unsigned_integral T>
+[[nodiscard]]
+constexpr wsw_forceinline auto ceilPowerOf2( const T &v ) -> T {
+	// TODO: Use arch-specific code for non-std::is_constant_evaluated() contexts
+	// (Handling boundary cases could be tricky)
+	T result = 1;
+	while( result < v ) {
+		result = result << 1;
+	}
+	return result;
+}
+
 }
 
 #endif
