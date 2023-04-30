@@ -495,6 +495,7 @@ void SCR_BeginLoadingPlaque( void );
 void SCR_EndLoadingPlaque( void );
 void SCR_DebugGraph( float value, float r, float g, float b );
 void SCR_RunConsole( int msec );
+void SCR_CloseConsole();
 void SCR_RegisterConsoleMedia( void );
 void SCR_ShutDownConsoleMedia( void );
 void SCR_ResetSystemFontConsoleSize( void );
@@ -514,9 +515,6 @@ void CL_ShutdownMedia( void );
 void CL_RestartMedia( void );
 
 void CL_AddNetgraph( void );
-
-extern float scr_con_current;
-extern float scr_conlines;       // lines of console to display
 
 //
 // sys import

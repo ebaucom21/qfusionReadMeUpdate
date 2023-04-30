@@ -34,9 +34,8 @@ end of unit intermissions
 #include "client.h"
 #include "../ui/uisystem.h"
 
-float scr_con_current;    // aproaches scr_conlines at scr_conspeed
-float scr_con_previous;
-float scr_conlines;       // 0.0 to 1.0 lines of console to display
+static float scr_con_current;    // aproaches scr_conlines at scr_conspeed
+static float scr_conlines;       // 0.0 to 1.0 lines of console to display
 
 static bool scr_initialized;    // ready to draw
 
@@ -365,7 +364,6 @@ void SCR_RunConsole( int msec ) {
 		scr_conlines = 0;
 	}
 
-	scr_con_previous = scr_con_current;
 	if( scr_conlines < scr_con_current ) {
 		scr_con_current -= scr_conspeed->value * msec * 0.001f;
 		if( scr_conlines > scr_con_current ) {
@@ -380,15 +378,9 @@ void SCR_RunConsole( int msec ) {
 	}
 }
 
-static void SCR_DrawConsole( void ) {
-	if( scr_con_current ) {
-		Con_DrawConsole();
-		return;
-	}
-}
-
-static void SCR_DrawNotify( void ) {
-	Con_DrawNotify();
+void SCR_CloseConsole() {
+	scr_con_current = 0.0f;
+	Con_Close();
 }
 
 void SCR_BeginLoadingPlaque( void ) {
@@ -496,7 +488,7 @@ void SCR_UpdateScreen( void ) {
 	}
 
 	if( canDrawConsoleNotify ) {
-		SCR_DrawNotify();
+		Con_DrawNotify( viddef.width, viddef.height );
 	}
 
 	uiSystem->drawSelfInMainContext();
@@ -506,7 +498,9 @@ void SCR_UpdateScreen( void ) {
 	}
 
 	if( canDrawConsole ) {
-		SCR_DrawConsole();
+		if( scr_con_current > 0.0f ) {
+			Con_DrawConsole( viddef.width, viddef.height * scr_con_current );
+		}
 	}
 
 	RF_EndFrame();

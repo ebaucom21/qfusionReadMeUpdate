@@ -397,11 +397,11 @@ static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
 
 	cls.disable_screen = 0;
 
-	Con_Close();
+	SCR_CloseConsole();
 
 	if( cgameActive ) {
 		CL_GameModule_Init();
-		Con_Close();
+		SCR_CloseConsole();
 	}
 
 	RF_EndRegistration();

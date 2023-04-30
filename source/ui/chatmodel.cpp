@@ -270,7 +270,13 @@ void ChatProxy::sendMessage( const QString &text ) {
 	// TODO: Must be unicode-aware
 	const QString clearText( text.trimmed().replace( '\r', ' ' ).replace( '\n', ' ' ).constData() );
 	if( !clearText.isEmpty() ) {
-		Con_SendChatMessage( clearText.toUtf8().constData(), m_kind == TeamChat );
+		const QByteArray &utf8Text = clearText.toUtf8();
+		const wsw::StringView textView( utf8Text.data(), (unsigned)utf8Text.size() );
+		if( m_kind == TeamChat ) {
+			Con_SendTeamChatMessage( textView );
+		} else {
+			Con_SendCommonChatMessage( textView );
+		}
 	}
 }
 

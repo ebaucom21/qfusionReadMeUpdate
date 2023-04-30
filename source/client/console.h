@@ -34,16 +34,13 @@ extern volatile bool con_initialized;
 void Con_CheckResize( void );
 void Con_Init( void );
 void Con_Shutdown( void );
-void Con_DrawConsole( void );
+void Con_DrawConsole( unsigned width, unsigned height );
 void Con_Print( const char *txt );
 void Con_PrintSilent( const char *txt );
-void Con_Clear_f( const CmdArgs & );
-void Con_DrawNotify( void );
+void Con_DrawNotify( unsigned width, unsigned height );
 void Con_ClearNotify( void );
 void Con_ToggleConsole_f( const CmdArgs & );
 void Con_Close( void );
-void Con_ResetFontSize( void );
-void Con_ChangeFontSize( int ch );
 
 /**
  * Returns pixel ratio that is suitable for use in the console.
@@ -59,8 +56,8 @@ bool Con_HasKeyboardFocus();
 bool Con_HandleKeyEvent( int key, bool down );
 [[nodiscard]]
 bool Con_HandleCharEvent( wchar_t key );
-[[maybe_unused]]
-uint64_t Con_SendChatMessage( const char *text, bool team );
 
-int Q_ColorCharCount( const char *s, int byteofs );
-int Q_ColorCharOffset( const char *s, int charcount );
+[[maybe_unused]]
+uint64_t Con_SendCommonChatMessage( const wsw::StringView &text );
+[[maybe_unused]]
+uint64_t Con_SendTeamChatMessage( const wsw::StringView &text );

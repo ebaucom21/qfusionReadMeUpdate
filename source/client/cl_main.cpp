@@ -1640,24 +1640,24 @@ void CL_SetClientState( int state ) {
 
 	switch( state ) {
 		case CA_DISCONNECTED:
-			Con_Close();
+			SCR_CloseConsole();
 			break;
 		case CA_GETTING_TICKET:
 		case CA_CONNECTING:
 			cls.cgameActive = false;
-			Con_Close();
+			SCR_CloseConsole();
 			SoundSystem::instance()->stopBackgroundTrack();
 			SoundSystem::instance()->clear();
 			break;
 		case CA_CONNECTED:
 			cls.cgameActive = false;
-			Con_Close();
+			SCR_CloseConsole();
 			Cvar_FixCheatVars();
 			break;
 		case CA_ACTIVE:
 			cl_connectChain[0] = '\0';
 			CL_EndRegistration();
-			Con_Close();
+			SCR_CloseConsole();
 			CL_AddReliableCommand( "svmotd 1" );
 			SoundSystem::instance()->clear();
 			break;

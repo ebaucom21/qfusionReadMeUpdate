@@ -864,9 +864,6 @@ void Cvar_Shutdown( void ) {
 		unsigned int i;
 		struct trie_dump_s *dump;
 		extern cvar_t *developer;
-#ifndef DEDICATED_ONLY
-		extern cvar_t *con_printText;
-#endif
 
 		assert( cvar_trie );
 
@@ -875,9 +872,6 @@ void Cvar_Shutdown( void ) {
 		// reset the pointers to NULL
 		developer = NULL;
 		dedicated = NULL;
-#ifndef DEDICATED_ONLY
-		con_printText = NULL;
-#endif
 
 		Cmd_RemoveClientAndServerCommand( "set" );
 		Cmd_RemoveClientAndServerCommand( "seta" );

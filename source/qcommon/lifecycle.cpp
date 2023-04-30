@@ -492,7 +492,7 @@ void Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func
 *
 * Used by console code to check if text typed is a command/cvar/alias or chat
 */
-bool Cmd_CheckForCommand( char *text ) {
+bool Cmd_CheckForCommand( const char *text ) {
 	char cmd[MAX_STRING_CHARS];
 	unsigned i;
 

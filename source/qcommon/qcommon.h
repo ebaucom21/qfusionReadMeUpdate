@@ -361,7 +361,7 @@ typedef char ** ( *xcompletionf_t )( const char *partial );
 void Cmd_AddClientAndServerCommand( const char *cmd_name, xcommand_t function );
 void Cmd_RemoveClientAndServerCommand( const char *cmd_name );
 
-bool Cmd_CheckForCommand( char *text );
+bool Cmd_CheckForCommand( const char *text );
 void Cmd_WriteAliases( int file );
 
 #define Cmd_Argc()      ( cmdArgs.size() )
