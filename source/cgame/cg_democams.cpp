@@ -20,7 +20,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 #include "../client/client.h"
+
+using wsw::operator""_asView;
 
 // Thanks to Xavatar (xavatar2004@hotmail.com) for the path spline implementation
 
@@ -254,8 +257,8 @@ void CG_DemocamInit( void ) {
 	}
 
 	// add console commands
-	CL_Cmd_Register( "demoFreeFly", CG_DemoFreeFly_Cmd_f );
-	CL_Cmd_Register( "camswitch", CG_CamSwitch_Cmd_f );
+	CL_Cmd_Register( "demoFreeFly"_asView, CG_DemoFreeFly_Cmd_f );
+	CL_Cmd_Register( "camswitch"_asView, CG_CamSwitch_Cmd_f );
 }
 
 /*
@@ -267,8 +270,8 @@ void CG_DemocamShutdown( void ) {
 	}
 
 	// remove console commands
-	CL_Cmd_Unregister( "demoFreeFly" );
-	CL_Cmd_Unregister( "camswitch" );
+	CL_Cmd_Unregister( "demoFreeFly"_asView );
+	CL_Cmd_Unregister( "camswitch"_asView );
 }
 
 /*

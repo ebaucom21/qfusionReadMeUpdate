@@ -24,6 +24,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "../ui/uisystem.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
+
+using wsw::operator""_asView;
 
 cvar_t *vid_width, *vid_height;
 cvar_t *vid_xpos;          // X coordinate of window position
@@ -534,8 +537,8 @@ void VID_Init( void ) {
 	win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
 
 	/* Add some console commands that we want to handle */
-	CL_Cmd_Register( "vid_restart", VID_Restart_f );
-	CL_Cmd_Register( "vid_modelist", VID_ModeList_f );
+	CL_Cmd_Register( "vid_restart"_asView, VID_Restart_f );
+	CL_Cmd_Register( "vid_modelist"_asView, VID_ModeList_f );
 
 	/* Start the graphics mode and load refresh DLL */
 	vid_ref_modified = true;
@@ -565,8 +568,8 @@ void VID_Shutdown( void ) {
 
 	FTLIB_Shutdown( true );
 
-	CL_Cmd_Unregister( "vid_restart" );
-	CL_Cmd_Unregister( "vid_modelist" );
+	CL_Cmd_Unregister( "vid_restart"_asView );
+	CL_Cmd_Unregister( "vid_modelist"_asView );
 
 	Q_free( vid_modes );
 

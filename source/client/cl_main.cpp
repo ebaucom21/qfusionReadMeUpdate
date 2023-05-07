@@ -25,12 +25,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/cmdsystem.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/pipeutils.h"
+#include "../qcommon/maplist.h"
 #include "../qcommon/hash.h"
+#include "../qcommon/q_trie.h"
 #include "../ui/uisystem.h"
 
 #include "serverlist.h"
 
 #include <random>
+#include <unordered_map>
 
 using wsw::operator""_asView;
 
@@ -1912,28 +1915,26 @@ static void CL_InitLocal( void ) {
 	//
 	// register our commands
 	//
-	CL_Cmd_Register( "s_restart", CL_S_Restart_f );
-	CL_Cmd_Register( "cmd", CL_ForwardToServer_f );
-	CL_Cmd_Register( "userinfo", CL_Userinfo_f );
-	CL_Cmd_Register( "disconnect", CL_Disconnect_f );
-	CL_Cmd_Register( "record", CL_Record_f );
-	CL_Cmd_Register( "stop", CL_Stop_f );
-	CL_Cmd_Register( "quit", CL_Quit_f );
-	CL_Cmd_Register( "connect", CL_Connect_f );
-	CL_Cmd_Register( "reconnect", CL_Reconnect_f );
-	CL_Cmd_Register( "rcon", CL_Rcon_f );
-	CL_Cmd_Register( "writeconfig", CL_WriteConfig_f );
-	CL_Cmd_Register( "showip", CL_ShowIP_f ); // jal : wsw : print our ip
-	CL_Cmd_Register( "demo", CL_PlayDemo_f );
-	CL_Cmd_Register( "next", CL_SetNext_f );
-	CL_Cmd_Register( "demopause", CL_PauseDemo_f );
-	CL_Cmd_Register( "demojump", CL_DemoJump_f );
-	CL_Cmd_Register( "showserverip", CL_ShowServerIP_f );
-	CL_Cmd_Register( "downloadstatus", CL_DownloadStatus_f );
-	CL_Cmd_Register( "downloadcancel", CL_DownloadCancel_f );
-	CL_Cmd_Register( "help", CL_Help_f );
-
-	Cmd_SetCompletionFunc( "demo", CL_DemoComplete );
+	CL_Cmd_Register( "s_restart"_asView, CL_S_Restart_f );
+	CL_Cmd_Register( "cmd"_asView, CL_ForwardToServer_f );
+	CL_Cmd_Register( "userinfo"_asView, CL_Userinfo_f );
+	CL_Cmd_Register( "disconnect"_asView, CL_Disconnect_f );
+	CL_Cmd_Register( "record"_asView, CL_Record_f );
+	CL_Cmd_Register( "stop"_asView, CL_Stop_f );
+	CL_Cmd_Register( "quit"_asView, CL_Quit_f );
+	CL_Cmd_Register( "connect"_asView, CL_Connect_f );
+	CL_Cmd_Register( "reconnect"_asView, CL_Reconnect_f );
+	CL_Cmd_Register( "rcon"_asView, CL_Rcon_f );
+	CL_Cmd_Register( "writeconfig"_asView, CL_WriteConfig_f );
+	CL_Cmd_Register( "showip"_asView, CL_ShowIP_f ); // jal : wsw : print our ip
+	CL_Cmd_Register( "demo"_asView, CL_PlayDemo_f );
+	CL_Cmd_Register( "next"_asView, CL_SetNext_f );
+	CL_Cmd_Register( "demopause"_asView, CL_PauseDemo_f );
+	CL_Cmd_Register( "demojump"_asView, CL_DemoJump_f );
+	CL_Cmd_Register( "showserverip"_asView, CL_ShowServerIP_f );
+	CL_Cmd_Register( "downloadstatus"_asView, CL_DownloadStatus_f );
+	CL_Cmd_Register( "downloadcancel"_asView, CL_DownloadCancel_f );
+	CL_Cmd_Register( "help"_asView, CL_Help_f );
 }
 
 /*
@@ -1943,26 +1944,26 @@ static void CL_ShutdownLocal( void ) {
 	cls.state = CA_UNINITIALIZED;
 	Com_SetClientState( CA_UNINITIALIZED );
 
-	CL_Cmd_Unregister( "s_restart" );
-	CL_Cmd_Unregister( "cmd" );
-	CL_Cmd_Unregister( "userinfo" );
-	CL_Cmd_Unregister( "disconnect" );
-	CL_Cmd_Unregister( "record" );
-	CL_Cmd_Unregister( "stop" );
-	CL_Cmd_Unregister( "quit" );
-	CL_Cmd_Unregister( "connect" );
-	CL_Cmd_Unregister( "reconnect" );
-	CL_Cmd_Unregister( "rcon" );
-	CL_Cmd_Unregister( "writeconfig" );
-	CL_Cmd_Unregister( "showip" );
-	CL_Cmd_Unregister( "demo" );
-	CL_Cmd_Unregister( "next" );
-	CL_Cmd_Unregister( "demopause" );
-	CL_Cmd_Unregister( "demojump" );
-	CL_Cmd_Unregister( "showserverip" );
-	CL_Cmd_Unregister( "downloadstatus" );
-	CL_Cmd_Unregister( "downloadcancel" );
-	CL_Cmd_Unregister( "help" );
+	CL_Cmd_Unregister( "s_restart"_asView );
+	CL_Cmd_Unregister( "cmd"_asView );
+	CL_Cmd_Unregister( "userinfo"_asView );
+	CL_Cmd_Unregister( "disconnect"_asView );
+	CL_Cmd_Unregister( "record"_asView );
+	CL_Cmd_Unregister( "stop"_asView );
+	CL_Cmd_Unregister( "quit"_asView );
+	CL_Cmd_Unregister( "connect"_asView );
+	CL_Cmd_Unregister( "reconnect"_asView );
+	CL_Cmd_Unregister( "rcon"_asView );
+	CL_Cmd_Unregister( "writeconfig"_asView );
+	CL_Cmd_Unregister( "showip"_asView );
+	CL_Cmd_Unregister( "demo"_asView );
+	CL_Cmd_Unregister( "next"_asView );
+	CL_Cmd_Unregister( "demopause"_asView );
+	CL_Cmd_Unregister( "demojump"_asView );
+	CL_Cmd_Unregister( "showserverip"_asView );
+	CL_Cmd_Unregister( "downloadstatus"_asView );
+	CL_Cmd_Unregister( "downloadcancel"_asView );
+	CL_Cmd_Unregister( "help"_asView );
 }
 
 //============================================================================
@@ -2592,7 +2593,79 @@ void CL_Shutdown( void ) {
 	cl_initialized = false;
 }
 
+template <>
+struct std::hash<wsw::HashedStringView> {
+	[[nodiscard]]
+	auto operator()( const wsw::HashedStringView &view ) const noexcept -> std::size_t {
+		return view.getHash();
+	}
+};
+
 class CLCmdSystem : public CmdSystem {
+public:
+	void submitCompletionRequest( const wsw::StringView &name, unsigned requestId, const wsw::StringView &partial ) {
+		if( const auto it = m_completionEntries.find( wsw::HashedStringView( name ) ); it != m_completionEntries.end() ) {
+			it->second.executionFunc( name, requestId, partial, it->second.queryFunc );
+		}
+	}
+
+	[[maybe_unused]]
+	bool registerCommandWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
+										CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
+		assert( queryFunc && executionFunc );
+		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
+			const CmdEntry *cmdEntry = findCmdEntryByName( name );
+			// Let the map key reside in the cmdEntry memory block
+			m_completionEntries[cmdEntry->nameAndHash] = CompletionEntry { queryFunc, executionFunc };
+			return true;
+		}
+		return false;
+	}
+
+	bool registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) override {
+		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
+			// The method resets/overrides all callbacks, if any. This means removing completion callbacks.
+			m_completionEntries.erase( wsw::HashedStringView( name ) );
+			return true;
+		}
+		return false;
+	}
+
+	bool unregisterCommand( const wsw::StringView &name ) override {
+		// Prevent use-after-free by removing the entry first
+		if( const CmdEntry *cmdEntry = findCmdEntryByName( name ) ) {
+			m_completionEntries.erase( cmdEntry->nameAndHash );
+		}
+		return CmdSystem::unregisterCommand( name );
+	}
+
+	[[nodiscard]]
+	auto getPossibleCommands( const wsw::StringView &partial ) const -> CompletionResult {
+		// TODO: Introduce a usable trie, keep entries in this kind of trie
+		trie_t *trie = nullptr;
+		Trie_Create( TRIE_CASE_INSENSITIVE, &trie );
+		for( const CmdEntry *binHead: m_cmdEntryBins ) {
+			for( const CmdEntry *entry = binHead; entry; entry = entry->next ) {
+				assert( entry->nameAndHash.isZeroTerminated() );
+				Trie_Insert( trie, entry->nameAndHash.data(), (void *)(uintptr_t)entry->nameAndHash.length() );
+			}
+		}
+		trie_dump_s *dump = nullptr;
+		Trie_Dump( trie, wsw::String( partial.data(), partial.size() ).data(), TRIE_DUMP_BOTH, &dump );
+		CompletionResult result;
+		for( unsigned i = 0; i < dump->size; ++i ) {
+			result.add( wsw::StringView( dump->key_value_vector[i].key, (uintptr_t)dump->key_value_vector[i].value ) );
+		}
+		Trie_FreeDump( dump );
+		Trie_Destroy( trie );
+		return result;
+	}
+
+	[[nodiscard]]
+	auto getPossibleAliases( const wsw::StringView &partial ) const -> CompletionResult {
+		return {};
+	}
+private:
 	void registerSystemCommands() override {
 		registerCommand( "exec"_asView, handlerOfExec );
 		registerCommand( "echo"_asView, handlerOfEcho );
@@ -2612,6 +2685,13 @@ class CLCmdSystem : public CmdSystem {
 	static void handlerOfUnaliasall( const CmdArgs & );
 	static void handlerOfWait( const CmdArgs & );
 	static void handlerOfVstr( const CmdArgs & );
+
+	struct CompletionEntry {
+		CompletionQueryFunc queryFunc;
+		CompletionExecutionFunc executionFunc;
+	};
+
+	std::unordered_map<wsw::HashedStringView, CompletionEntry> m_completionEntries;
 };
 
 static SingletonHolder<CLCmdSystem> g_clCmdSystemHolder;
@@ -2660,16 +2740,41 @@ void CL_ShutdownCmdSystem() {
 	g_clCmdSystemHolder.shutdown();
 }
 
-void CL_Cmd_Register( const wsw::StringView &name, void ( *handler )( const CmdArgs & ) ) {
-	g_clCmdSystemHolder.instance()->registerCommand( name, handler );
+void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &completionResult );
+
+void CL_RunCompletionFuncSync( const wsw::StringView &, unsigned requestId, const wsw::StringView &partial,
+							   CompletionQueryFunc queryFunc ) {
+	Con_AcceptCompletionResult( requestId, queryFunc( partial ) );
 }
 
-void CL_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
-	g_clCmdSystemHolder.instance()->registerCommand( wsw::StringView( name ), handler );
+void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc ) {
+	if( completionQueryFunc ) {
+		g_clCmdSystemHolder.instance()->registerCommandWithCompletion( name, cmdFunc, completionQueryFunc,
+																	   CL_RunCompletionFuncSync );
+	} else {
+		g_clCmdSystemHolder.instance()->registerCommand( name, cmdFunc );
+	}
 }
 
-void CL_Cmd_Unregister( const char *name ) {
-	g_clCmdSystemHolder.instance()->unregisterCommand( wsw::StringView( name ) );
+void CL_Cmd_Unregister( const wsw::StringView &name ) {
+	g_clCmdSystemHolder.instance()->unregisterCommand( name );
+}
+
+void CL_Cmd_SubmitCompletionRequest( const wsw::StringView &name, unsigned requestId, const wsw::StringView &partial ) {
+	g_clCmdSystemHolder.instance()->submitCompletionRequest( name, requestId, partial );
+}
+
+void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
+								   CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
+	g_clCmdSystemHolder.instance()->registerCommandWithCompletion( name, cmdFunc, queryFunc, executionFunc );
+}
+
+CompletionResult CL_GetPossibleCommands( const wsw::StringView &partial ) {
+	return g_clCmdSystemHolder.instance()->getPossibleCommands( partial );
+}
+
+CompletionResult CL_GetPossibleAliases( const wsw::StringView &partial ) {
+	return g_clCmdSystemHolder.instance()->getPossibleAliases( partial );
 }
 
 bool CL_Cmd_Exists( const wsw::StringView &name ) {

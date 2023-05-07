@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../ui/uisystem.h"
 #include "../qcommon/demometadata.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 
 using wsw::operator""_asView;
 
@@ -390,13 +391,6 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 
 	Q_free( name );
 	Q_free( servername );
-}
-
-/*
-* CL_DemoComplete
-*/
-char **CL_DemoComplete( const char *partial ) {
-	return nullptr;
 }
 
 /*

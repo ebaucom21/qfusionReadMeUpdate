@@ -23,7 +23,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 #include "alsystemfacade.h"
+
+using wsw::operator""_asView;
 
 class NullSoundSystem : public SoundSystem {
 public:
@@ -121,11 +124,11 @@ bool SoundSystem::init( client_state_t *client, const InitOptions &options ) {
 	s_effects_number_threshold     = Cvar_Get( "s_effects_number_threshold", "15", CVAR_ARCHIVE );
 	s_hrtf                         = Cvar_Get( "s_hrtf", "1", CVAR_ARCHIVE | CVAR_LATCH_SOUND );
 
-	CL_Cmd_Register( "music", SF_Music_f );
-	CL_Cmd_Register( "stopmusic", SF_StopBackgroundTrack );
-	CL_Cmd_Register( "prevmusic", SF_PrevBackgroundTrack );
-	CL_Cmd_Register( "nextmusic", SF_NextBackgroundTrack );
-	CL_Cmd_Register( "pausemusic", SF_PauseBackgroundTrack );
+	CL_Cmd_Register( "music"_asView, SF_Music_f );
+	CL_Cmd_Register( "stopmusic"_asView, SF_StopBackgroundTrack );
+	CL_Cmd_Register( "prevmusic"_asView, SF_PrevBackgroundTrack );
+	CL_Cmd_Register( "nextmusic"_asView, SF_NextBackgroundTrack );
+	CL_Cmd_Register( "pausemusic"_asView, SF_PauseBackgroundTrack );
 
 	if( !options.useNullSystem ) {
 		s_instance = wsw::snd::ALSoundSystem::tryCreate( client, options.verbose );
@@ -142,11 +145,11 @@ bool SoundSystem::init( client_state_t *client, const InitOptions &options ) {
 }
 
 void SoundSystem::shutdown( bool verbose ) {
-	CL_Cmd_Unregister( "music" );
-	CL_Cmd_Unregister( "stopmusic" );
-	CL_Cmd_Unregister( "prevmusic" );
-	CL_Cmd_Unregister( "nextmusic" );
-	CL_Cmd_Unregister( "pausemusic" );
+	CL_Cmd_Unregister( "music"_asView );
+	CL_Cmd_Unregister( "stopmusic"_asView );
+	CL_Cmd_Unregister( "prevmusic"_asView );
+	CL_Cmd_Unregister( "nextmusic"_asView );
+	CL_Cmd_Unregister( "pausemusic"_asView );
 
 	if( s_instance ) {
 		s_instance->deleteSelf( verbose );

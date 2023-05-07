@@ -20,6 +20,7 @@
 // client.h -- primary header for client
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/cmdcompat.h"
 #include "../qcommon/configstringstorage.h"
 #include "../ref/ref.h"
 #include "../cgame/cg_public.h"
@@ -360,10 +361,11 @@ extern entity_state_t cl_baselines[MAX_EDICTS];
 void CL_Init( void );
 void CL_Quit( void );
 
-void CL_Cmd_Register( const wsw::StringView &name, void ( *handler )( const CmdArgs & ) );
-void CL_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) );
-void CL_Cmd_Unregister( const char *name );
+void CL_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc = nullptr );
+void CL_Cmd_Unregister( const wsw::StringView &name );
+
 bool CL_Cmd_Exists( const wsw::StringView &name );
+
 void CL_Cmd_ExecuteNow( const char *text );
 void CL_Cmd_ExecuteNow( const wsw::StringView &text );
 
@@ -466,7 +468,6 @@ void CL_Record_f( const CmdArgs & );
 void CL_PauseDemo_f( const CmdArgs & );
 void CL_DemoJump_f( const CmdArgs & );
 size_t CL_ReadDemoMetaData( const char *demopath, char *meta_data, size_t meta_data_size );
-char **CL_DemoComplete( const char *partial );
 
 //
 // cl_parse.c

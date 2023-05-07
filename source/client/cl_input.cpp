@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "../ui/uisystem.h"
 
+using wsw::operator""_asView;
+
 static bool in_initialized = false;
 
 cvar_t *cl_ucmdMaxResend;
@@ -92,7 +94,7 @@ void CL_InitInput( void ) {
 		return;
 	}
 
-	CL_Cmd_Register( "in_restart", IN_Restart );
+	CL_Cmd_Register( "in_restart"_asView, IN_Restart );
 
 	IN_Init();
 
@@ -110,7 +112,7 @@ void CL_ShutdownInput( void ) {
 		return;
 	}
 
-	CL_Cmd_Unregister( "in_restart" );
+	CL_Cmd_Unregister( "in_restart"_asView );
 
 	IN_Shutdown();
 

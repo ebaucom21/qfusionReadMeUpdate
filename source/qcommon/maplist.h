@@ -2,6 +2,7 @@
 #define WSW_MAPLIST_H
 
 #include "wswstringview.h"
+#include "cmdcompat.h"
 
 void ML_Init( void );
 void ML_Shutdown( void );
@@ -25,6 +26,6 @@ bool ML_FilenameExists( const char *filename );
 bool ML_ValidateFilename( const char *filename );
 bool ML_ValidateFullname( const char *fullname );
 
-char **ML_CompleteBuildList( const char *partial );
+CompletionResult ML_CompleteBuildList( const wsw::StringView &partial );
 
 #endif

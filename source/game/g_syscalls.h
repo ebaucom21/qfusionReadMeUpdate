@@ -173,22 +173,9 @@ static inline const char *trap_Cvar_String( const char *name ) {
 	return GAME_IMPORT.Cvar_String( name );
 }
 
-/*
-static inline int trap_Cmd_Argc( void ) {
-	return GAME_IMPORT.Cmd_Argc();
-}
-
-static inline char *trap_Cmd_Argv( int arg ) {
-	return GAME_IMPORT.Cmd_Argv( arg );
-}
-
-static inline char *trap_Cmd_Args( void ) {
-	return GAME_IMPORT.Cmd_Args();
-}*/
-
 #define trap_Cmd_Argc()      ( cmdArgs.size() )
 #define trap_Cmd_Argv( arg ) ( cmdArgs[arg].data() )
-#define trap_Cmd_Args( arg ) ( cmdArgs.argsString.data() )
+#define trap_Cmd_Args()      ( cmdArgs.argsString.data() )
 
 static inline void trap_Cmd_AddCommand( const char *name, void ( *cmd )( const CmdArgs & ) ) {
 	GAME_IMPORT.Cmd_AddCommand( name, cmd );

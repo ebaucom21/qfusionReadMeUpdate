@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
+#include "../qcommon/cmdsystem.h"
 #include "../qcommon/freelistallocator.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstringsplitter.h"
@@ -29,6 +31,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswfs.h"
 
 #include <mutex>
+
+using wsw::operator""_asView;
+
+CmdSystem *CL_GetCmdSystem();
+void CL_Cmd_SubmitCompletionRequest( const wsw::StringView &name, unsigned requestId, const wsw::StringView &partial );
+CompletionResult CL_GetPossibleCommands( const wsw::StringView &partial );
+CompletionResult CL_GetPossibleAliases( const wsw::StringView &partial );
+CompletionResult Cvar_CompleteBuildList( const wsw::StringView &partial );
 
 // TODO: Generalize, lift to the top level
 // We didn't initially lean to this design as it has a poor compatibility with non-POD types
@@ -87,6 +97,8 @@ public:
 	void handleKeyDownEvent( int quakeKey );
 	void handleCharInputEvent( int key );
 
+	void acceptCommandCompletionResult( unsigned requestId, const CompletionResult &result );
+
 	[[nodiscard]]
 	auto dumpLinesToBuffer() const -> wsw::Vector<char>;
 private:
@@ -114,6 +126,12 @@ private:
 
 	void addToHistory( wsw::StringView line );
 	void setCurrHistoryEntry( HistoryEntry *historyEntry );
+
+	[[nodiscard]]
+	bool isAwaitingAsyncCompletion() const;
+
+	void printCompletionResultAsList( const char *color, const char *itemSingular, const char *itemPlural,
+									  const CompletionResult &completionResult );
 
 	void handleSubmitKeyAction();
 	void handleCompleteKeyAction();
@@ -148,6 +166,12 @@ private:
 
 	wsw::StaticString<kInputLengthLimit> m_inputLine;
 	unsigned m_inputPos { 0 };
+
+	unsigned m_completionRequestIdsCounter { 0 };
+	unsigned m_lastAsyncCompletionRequestId { 0 };
+	unsigned m_lastAsyncCompletionKeepLength { 0 };
+	unsigned m_lastAsyncCompletionFullLength { 0 };
+	int64_t m_lastAsyncCompletionRequestAt { 0 };
 };
 
 static SingletonHolder<Console> g_console;
@@ -200,6 +224,12 @@ void Console::clearNotifications() {
 void Console::clearInput() {
 	m_inputLine.clear();
 	m_inputPos = 0;
+
+	// Discard pending completion results, if any
+	m_lastAsyncCompletionRequestId  = 0;
+	m_lastAsyncCompletionRequestAt  = 0;
+	m_lastAsyncCompletionKeepLength = 0;
+	m_lastAsyncCompletionFullLength = 0;
 }
 
 void Console::addText( wsw::StringView text, NotificationBehaviour notificationBehaviour ) {
@@ -525,7 +555,161 @@ void Console::setCurrHistoryEntry( HistoryEntry *historyEntry ) {
 	m_inputPos = m_inputLine.size();
 }
 
+void Console::printCompletionResultAsList( const char *color, const char *itemSingular, const char *itemPlural,
+										   const CompletionResult &completionResult ) {
+	// TODO: Add column-wise formatting as a custom line wrap function for a line entry
+	wsw::String lineBuffer;
+	for( const wsw::StringView &view: completionResult ) {
+		lineBuffer.append( view.data(), view.size() );
+		lineBuffer.push_back( ' ' );
+	}
+
+	const char *itemNoun = completionResult.size() == 1 ? itemSingular : itemPlural;
+	Com_Printf( "%s%d %s possible\n", color, completionResult.size(), itemNoun );
+	Com_Printf( "%s\n", lineBuffer.data() );
+}
+
+[[nodiscard]]
+static bool isExactlyACommand( const wsw::StringView &text ) {
+	return CL_GetCmdSystem()->isARegisteredCommand( text );
+}
+
+[[nodiscard]]
+static bool isExactlyAVar( const wsw::StringView &text ) {
+	if( text.size() <= MAX_STRING_CHARS ) {
+		if( text.isZeroTerminated() ) {
+			return Cvar_Find( text.data() );
+		}
+		return Cvar_Find( wsw::StaticString<MAX_STRING_CHARS>( text ).data() );
+	}
+	return false;
+}
+
+[[nodiscard]]
+static bool isExactlyAnAlias( const wsw::StringView &text ) {
+	return CL_GetCmdSystem()->isARegisteredAlias( text );
+}
+
+[[nodiscard]]
+static auto takeCommandLikePrefix( const wsw::StringView &text ) -> wsw::StringView {
+	return text.takeWhile( []( char ch ) { return (size_t)ch > (size_t)' ' && ch != ';'; } );
+}
+
+bool Console::isAwaitingAsyncCompletion() const {
+	return m_lastAsyncCompletionRequestAt + 500 > cls.realtime;
+}
+
+void Console::acceptCommandCompletionResult( unsigned requestId, const CompletionResult &result ) {
+	// Timed out/obsolete?
+	if( m_lastAsyncCompletionRequestId != requestId ) {
+		return;
+	}
+
+	if( !result.empty() ) {
+		// Sanity checks
+		if( m_lastAsyncCompletionFullLength == m_inputLine.length() && m_inputLine.length() < kInputLengthLimit ) {
+			// Sanity checks
+			if( m_lastAsyncCompletionKeepLength <= m_lastAsyncCompletionFullLength ) {
+				const unsigned maxCharsToAdd = kInputLengthLimit - m_inputLine.size();
+				m_inputLine.erase( m_lastAsyncCompletionKeepLength );
+				m_inputLine.append( ' ' );
+				if( result.size() == 1 ) {
+					m_inputLine.append( result.front().take( maxCharsToAdd ) );
+				} else {
+					m_inputLine.append( result.getLongestCommonPrefix().take( maxCharsToAdd ) );
+					printCompletionResultAsList( S_COLOR_GREEN, "argument", "arguments", result );
+				}
+				m_inputPos = m_inputLine.size();
+			}
+		}
+	}
+
+	m_lastAsyncCompletionRequestId  = 0;
+	m_lastAsyncCompletionRequestAt  = 0;
+	m_lastAsyncCompletionKeepLength = 0;
+	m_lastAsyncCompletionFullLength = 0;
+}
+
 void Console::handleCompleteKeyAction() {
+	if( isAwaitingAsyncCompletion() ) {
+		return;
+	}
+
+	// Don't make a completion attempt while the cursor is in the middle of the line (should we?)
+	if( m_inputPos != m_inputLine.size() ) {
+		return;
+	}
+	if( m_inputLine.full() ) [[unlikely]] {
+		return;
+	}
+
+	bool droppedFirstChar     = false;
+	wsw::StringView inputText = m_inputLine.asView();
+	if( inputText.startsWith( '/' ) || inputText.startsWith( '\\' ) ) {
+		inputText        = inputText.drop( 1 );
+		droppedFirstChar = true;
+	}
+
+	const wsw::StringView &maybeCommandLikePrefix = takeCommandLikePrefix( inputText );
+	if( maybeCommandLikePrefix.empty() ) [[unlikely]] {
+		return;
+	}
+
+	if( isExactlyACommand( maybeCommandLikePrefix ) ) {
+		const wsw::StringView &partial = inputText.drop( maybeCommandLikePrefix.size() ).trim();
+
+		m_lastAsyncCompletionRequestId = ++m_completionRequestIdsCounter;
+		if( !m_lastAsyncCompletionRequestId ) {
+			// Don't let the resulting id be zero TODO: Use std::optional<> ?
+			m_lastAsyncCompletionRequestId = ++m_completionRequestIdsCounter;
+		}
+
+		m_lastAsyncCompletionRequestAt  = cls.realtime;
+		m_lastAsyncCompletionKeepLength = maybeCommandLikePrefix.size() + ( droppedFirstChar ? 1 : 0 );
+		m_lastAsyncCompletionFullLength = m_inputLine.size();
+
+		CL_Cmd_SubmitCompletionRequest( maybeCommandLikePrefix, m_lastAsyncCompletionRequestId, partial );
+	} else if( isExactlyAVar( maybeCommandLikePrefix ) ) {
+		// TODO: Implement completion for command values?
+		;
+	} else if( isExactlyAnAlias( maybeCommandLikePrefix ) ) {
+		// TODO: Could aliases accept args?
+		;
+	} else if( maybeCommandLikePrefix.size() == inputText.size() ) {
+		const CompletionResult &cmdCompletionResult   = CL_GetPossibleCommands( maybeCommandLikePrefix );
+		const CompletionResult &varCompletionResult   = Cvar_CompleteBuildList( maybeCommandLikePrefix );
+		const CompletionResult &aliasCompletionResult = CL_GetPossibleAliases( maybeCommandLikePrefix );
+
+		const size_t totalSize = cmdCompletionResult.size() + varCompletionResult.size() + aliasCompletionResult.size();
+		if( totalSize == 0 ) {
+			Com_Printf( "No matching aliases, commands or vars were found\n" );
+		} else if( totalSize == 1 ) {
+			wsw::StringView chosenCompletion;
+			if( !cmdCompletionResult.empty() ) {
+				chosenCompletion = cmdCompletionResult.front();
+			} else if( !varCompletionResult.empty() ) {
+				chosenCompletion = varCompletionResult.front();
+			} else if( !aliasCompletionResult.empty() ) {
+				chosenCompletion = aliasCompletionResult.front();
+			} else {
+				wsw::failWithLogicError( "Unreachable" );
+			}
+			assert( !chosenCompletion.empty() );
+			m_inputLine.erase( droppedFirstChar ? 1 : 0 );
+			m_inputLine.append( chosenCompletion.take( kInputLengthLimit - m_inputLine.size() ) );
+			m_inputPos = m_inputLine.size();
+		} else {
+			if( !cmdCompletionResult.empty() ) {
+				printCompletionResultAsList( S_COLOR_RED, "command", "commands", cmdCompletionResult );
+			}
+			if( !varCompletionResult.empty() ) {
+				printCompletionResultAsList( S_COLOR_CYAN, "var", "vars", varCompletionResult );
+			}
+			if( !aliasCompletionResult.empty() ) {
+				printCompletionResultAsList( S_COLOR_MAGENTA, "alias", "aliases", aliasCompletionResult );
+			}
+		}
+	}
 }
 
 void Console::handleBackspaceKeyAction() {
@@ -672,10 +856,15 @@ void Console::handleSubmitKeyAction() {
 		type = Command;
 	} else if( isCtrlKeyDown() ) {
 		type = Teamchat;
-	} else if( ( con_chatmode && con_chatmode->integer == 1 ) || !Cmd_CheckForCommand( m_inputLine.data() ) ) {
+	} else if( con_chatmode && con_chatmode->integer == 1 ) {
 		type = Chat;
 	} else {
-		type = Command;
+		const wsw::StringView &prefix = takeCommandLikePrefix( m_inputLine.asView() );
+		if( isExactlyACommand( prefix ) || isExactlyAVar( prefix ) || isExactlyAnAlias( prefix ) ) {
+			type = Command;
+		} else {
+			type = Chat;
+		}
 	}
 
 	// do appropriate action
@@ -703,6 +892,10 @@ void Console::handleSubmitKeyAction() {
 }
 
 void Console::handleKeyDownEvent( int key ) {
+	if( isAwaitingAsyncCompletion() ) {
+		return;
+	}
+
 	if( ( key == K_INS || key == KP_INS ) && ( isKeyDown( K_LSHIFT ) || isKeyDown( K_RSHIFT ) ) ) {
 		return handleClipboardPasteKeyAction();
 	}
@@ -747,6 +940,10 @@ void Console::handleKeyDownEvent( int key ) {
 }
 
 void Console::handleCharInputEvent( int key ) {
+	if( isAwaitingAsyncCompletion() ) {
+		return;
+	}
+
 	switch( key ) {
 		case 22: // CTRL+V
 			return handleClipboardPasteKeyAction();
@@ -850,6 +1047,12 @@ bool Con_HandleKeyEvent( int key, bool down ) {
 	return false;
 }
 
+void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &result ) {
+	if( con_initialized ) {
+		g_console.instance()->acceptCommandCompletionResult( requestId, result );
+	}
+}
+
 void Con_Close( void ) {
 	if( con_initialized ) {
 		g_console.instance()->clearInput();
@@ -936,9 +1139,9 @@ void Con_Init( void ) {
 	con_maxNotificationLines = Cvar_Get( "con_maxNotificationLines", "4", CVAR_ARCHIVE );
 	con_chatmode             = Cvar_Get( "con_chatmode", "3", CVAR_ARCHIVE );
 
-	CL_Cmd_Register( "toggleconsole", Con_ToggleConsole_f );
-	CL_Cmd_Register( "clear", Con_Clear_f );
-	CL_Cmd_Register( "condump", Con_Dump_f );
+	CL_Cmd_Register( "toggleconsole"_asView, Con_ToggleConsole_f );
+	CL_Cmd_Register( "clear"_asView, Con_Clear_f );
+	CL_Cmd_Register( "condump"_asView, Con_Dump_f );
 	con_initialized = true;
 }
 
@@ -947,9 +1150,9 @@ void Con_Shutdown( void ) {
 		return;
 	}
 
-	CL_Cmd_Unregister( "toggleconsole" );
-	CL_Cmd_Unregister( "clear" );
-	CL_Cmd_Unregister( "condump" );
+	CL_Cmd_Unregister( "toggleconsole"_asView );
+	CL_Cmd_Unregister( "clear"_asView );
+	CL_Cmd_Unregister( "condump"_asView );
 
 	g_console.shutdown();
 

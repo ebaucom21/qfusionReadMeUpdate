@@ -351,24 +351,7 @@ then searches for a command or variable that matches the first token.
 
 */
 
-struct CmdArgs;
 
-typedef void ( *xcommand_t )( const CmdArgs & );
-typedef char ** ( *xcompletionf_t )( const char *partial );
-
-// These subroutines should be used if executing a command via both server and client command systems
-// by the same handler makes sense and is correct. Cvar-related commands are an obvious example.
-void Cmd_AddClientAndServerCommand( const char *cmd_name, xcommand_t function );
-void Cmd_RemoveClientAndServerCommand( const char *cmd_name );
-
-bool Cmd_CheckForCommand( const char *text );
-void Cmd_WriteAliases( int file );
-
-#define Cmd_Argc()      ( cmdArgs.size() )
-#define Cmd_Argv( arg ) ( cmdArgs[arg].data() )
-#define Cmd_Args()      ( cmdArgs.argsString.data() )
-
-void  Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func );
 
 /*
 ==============================================================
@@ -832,26 +815,6 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect );
 void SV_Frame( unsigned realMsec, unsigned gameMsec );
 bool SV_SendMessageToClient( struct client_s *client, msg_t *msg );
 void SV_ParseClientMessage( struct client_s *client, msg_t *msg );
-
-/*
-==============================================================
-
-ANTICHEAT SYSTEMS
-
-==============================================================
-*/
-bool AC_LoadServerLibrary( void *exports, void *imports );
-bool AC_LoadClientLibrary( void *exports, void *imports );
-
-/*
-==============================================================
-
-MAPLIST SUBSYSTEM
-
-==============================================================
-*/
-
-#include "maplist.h"
 
 /*
 ==============================================================

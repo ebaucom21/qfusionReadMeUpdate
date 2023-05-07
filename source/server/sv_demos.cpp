@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "sv_snap.h"
 #include "../qcommon/demometadata.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 
 using wsw::operator""_asView;
 

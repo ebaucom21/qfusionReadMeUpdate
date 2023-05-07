@@ -28,6 +28,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/keys.h"
 #include "../client/client.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
+
+using wsw::operator""_asView;
 
 static int64_t cg_inputTime;
 static int cg_inputFrameTime;
@@ -450,43 +453,43 @@ static void CG_CenterView( const CmdArgs & ) {
 * CG_InputInit
 */
 void CG_InitInput( void ) {
-	CL_Cmd_Register( "+moveup", IN_UpDown );
-	CL_Cmd_Register( "-moveup", IN_UpUp );
-	CL_Cmd_Register( "+movedown", IN_DownDown );
-	CL_Cmd_Register( "-movedown", IN_DownUp );
-	CL_Cmd_Register( "+left", IN_LeftDown );
-	CL_Cmd_Register( "-left", IN_LeftUp );
-	CL_Cmd_Register( "+right", IN_RightDown );
-	CL_Cmd_Register( "-right", IN_RightUp );
-	CL_Cmd_Register( "+forward", IN_ForwardDown );
-	CL_Cmd_Register( "-forward", IN_ForwardUp );
-	CL_Cmd_Register( "+back", IN_BackDown );
-	CL_Cmd_Register( "-back", IN_BackUp );
-	CL_Cmd_Register( "+lookup", IN_LookupDown );
-	CL_Cmd_Register( "-lookup", IN_LookupUp );
-	CL_Cmd_Register( "+lookdown", IN_LookdownDown );
-	CL_Cmd_Register( "-lookdown", IN_LookdownUp );
-	CL_Cmd_Register( "+strafe", IN_StrafeDown );
-	CL_Cmd_Register( "-strafe", IN_StrafeUp );
-	CL_Cmd_Register( "+moveleft", IN_MoveleftDown );
-	CL_Cmd_Register( "-moveleft", IN_MoveleftUp );
-	CL_Cmd_Register( "+moveright", IN_MoverightDown );
-	CL_Cmd_Register( "-moveright", IN_MoverightUp );
-	CL_Cmd_Register( "+speed", IN_SpeedDown );
-	CL_Cmd_Register( "-speed", IN_SpeedUp );
-	CL_Cmd_Register( "+attack", IN_AttackDown );
-	CL_Cmd_Register( "-attack", IN_AttackUp );
-	CL_Cmd_Register( "+use", IN_UseDown );
-	CL_Cmd_Register( "-use", IN_UseUp );
-	CL_Cmd_Register( "+klook", IN_KLookDown );
-	CL_Cmd_Register( "-klook", IN_KLookUp );
+	CL_Cmd_Register( "+moveup"_asView, IN_UpDown );
+	CL_Cmd_Register( "-moveup"_asView, IN_UpUp );
+	CL_Cmd_Register( "+movedown"_asView, IN_DownDown );
+	CL_Cmd_Register( "-movedown"_asView, IN_DownUp );
+	CL_Cmd_Register( "+left"_asView, IN_LeftDown );
+	CL_Cmd_Register( "-left"_asView, IN_LeftUp );
+	CL_Cmd_Register( "+right"_asView, IN_RightDown );
+	CL_Cmd_Register( "-right"_asView, IN_RightUp );
+	CL_Cmd_Register( "+forward"_asView, IN_ForwardDown );
+	CL_Cmd_Register( "-forward"_asView, IN_ForwardUp );
+	CL_Cmd_Register( "+back"_asView, IN_BackDown );
+	CL_Cmd_Register( "-back"_asView, IN_BackUp );
+	CL_Cmd_Register( "+lookup"_asView, IN_LookupDown );
+	CL_Cmd_Register( "-lookup"_asView, IN_LookupUp );
+	CL_Cmd_Register( "+lookdown"_asView, IN_LookdownDown );
+	CL_Cmd_Register( "-lookdown"_asView, IN_LookdownUp );
+	CL_Cmd_Register( "+strafe"_asView, IN_StrafeDown );
+	CL_Cmd_Register( "-strafe"_asView, IN_StrafeUp );
+	CL_Cmd_Register( "+moveleft"_asView, IN_MoveleftDown );
+	CL_Cmd_Register( "-moveleft"_asView, IN_MoveleftUp );
+	CL_Cmd_Register( "+moveright"_asView, IN_MoverightDown );
+	CL_Cmd_Register( "-moveright"_asView, IN_MoverightUp );
+	CL_Cmd_Register( "+speed"_asView, IN_SpeedDown );
+	CL_Cmd_Register( "-speed"_asView, IN_SpeedUp );
+	CL_Cmd_Register( "+attack"_asView, IN_AttackDown );
+	CL_Cmd_Register( "-attack"_asView, IN_AttackUp );
+	CL_Cmd_Register( "+use"_asView, IN_UseDown );
+	CL_Cmd_Register( "-use"_asView, IN_UseUp );
+	CL_Cmd_Register( "+klook"_asView, IN_KLookDown );
+	CL_Cmd_Register( "-klook"_asView, IN_KLookUp );
 	// wsw
-	CL_Cmd_Register( "+special", IN_SpecialDown );
-	CL_Cmd_Register( "-special", IN_SpecialUp );
-	CL_Cmd_Register( "+zoom", IN_ZoomDown );
-	CL_Cmd_Register( "-zoom", IN_ZoomUp );
+	CL_Cmd_Register( "+special"_asView, IN_SpecialDown );
+	CL_Cmd_Register( "-special"_asView, IN_SpecialUp );
+	CL_Cmd_Register( "+zoom"_asView, IN_ZoomDown );
+	CL_Cmd_Register( "-zoom"_asView, IN_ZoomUp );
 
-	CL_Cmd_Register( "centerview", CG_CenterView );
+	CL_Cmd_Register( "centerview"_asView, CG_CenterView );
 }
 
 void CG_InitInputVars() {
@@ -512,43 +515,43 @@ void CG_InitInputVars() {
 * CG_ShutdownInput
 */
 void CG_ShutdownInput( void ) {
-	CL_Cmd_Unregister( "+moveup" );
-	CL_Cmd_Unregister( "-moveup" );
-	CL_Cmd_Unregister( "+movedown" );
-	CL_Cmd_Unregister( "-movedown" );
-	CL_Cmd_Unregister( "+left" );
-	CL_Cmd_Unregister( "-left" );
-	CL_Cmd_Unregister( "+right" );
-	CL_Cmd_Unregister( "-right" );
-	CL_Cmd_Unregister( "+forward" );
-	CL_Cmd_Unregister( "-forward" );
-	CL_Cmd_Unregister( "+back" );
-	CL_Cmd_Unregister( "-back" );
-	CL_Cmd_Unregister( "+lookup" );
-	CL_Cmd_Unregister( "-lookup" );
-	CL_Cmd_Unregister( "+lookdown" );
-	CL_Cmd_Unregister( "-lookdown" );
-	CL_Cmd_Unregister( "+strafe" );
-	CL_Cmd_Unregister( "-strafe" );
-	CL_Cmd_Unregister( "+moveleft" );
-	CL_Cmd_Unregister( "-moveleft" );
-	CL_Cmd_Unregister( "+moveright" );
-	CL_Cmd_Unregister( "-moveright" );
-	CL_Cmd_Unregister( "+speed" );
-	CL_Cmd_Unregister( "-speed" );
-	CL_Cmd_Unregister( "+attack" );
-	CL_Cmd_Unregister( "-attack" );
-	CL_Cmd_Unregister( "+use" );
-	CL_Cmd_Unregister( "-use" );
-	CL_Cmd_Unregister( "+klook" );
-	CL_Cmd_Unregister( "-klook" );
+	CL_Cmd_Unregister( "+moveup"_asView );
+	CL_Cmd_Unregister( "-moveup"_asView );
+	CL_Cmd_Unregister( "+movedown"_asView );
+	CL_Cmd_Unregister( "-movedown"_asView );
+	CL_Cmd_Unregister( "+left"_asView );
+	CL_Cmd_Unregister( "-left"_asView );
+	CL_Cmd_Unregister( "+right"_asView );
+	CL_Cmd_Unregister( "-right"_asView );
+	CL_Cmd_Unregister( "+forward"_asView );
+	CL_Cmd_Unregister( "-forward"_asView );
+	CL_Cmd_Unregister( "+back"_asView );
+	CL_Cmd_Unregister( "-back"_asView );
+	CL_Cmd_Unregister( "+lookup"_asView );
+	CL_Cmd_Unregister( "-lookup"_asView );
+	CL_Cmd_Unregister( "+lookdown"_asView );
+	CL_Cmd_Unregister( "-lookdown"_asView );
+	CL_Cmd_Unregister( "+strafe"_asView );
+	CL_Cmd_Unregister( "-strafe"_asView );
+	CL_Cmd_Unregister( "+moveleft"_asView );
+	CL_Cmd_Unregister( "-moveleft"_asView );
+	CL_Cmd_Unregister( "+moveright"_asView );
+	CL_Cmd_Unregister( "-moveright"_asView );
+	CL_Cmd_Unregister( "+speed"_asView );
+	CL_Cmd_Unregister( "-speed"_asView );
+	CL_Cmd_Unregister( "+attack"_asView );
+	CL_Cmd_Unregister( "-attack"_asView );
+	CL_Cmd_Unregister( "+use"_asView );
+	CL_Cmd_Unregister( "-use"_asView );
+	CL_Cmd_Unregister( "+klook"_asView );
+	CL_Cmd_Unregister( "-klook"_asView );
 	// wsw
-	CL_Cmd_Unregister( "+special" );
-	CL_Cmd_Unregister( "-special" );
-	CL_Cmd_Unregister( "+zoom" );
-	CL_Cmd_Unregister( "-zoom" );
+	CL_Cmd_Unregister( "+special"_asView );
+	CL_Cmd_Unregister( "-special"_asView );
+	CL_Cmd_Unregister( "+zoom"_asView );
+	CL_Cmd_Unregister( "-zoom"_asView );
 
-	CL_Cmd_Unregister( "centerview" );
+	CL_Cmd_Unregister( "centerview"_asView );
 }
 
 /*

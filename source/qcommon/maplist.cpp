@@ -21,8 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // MAPLIST FUNCTIONS
 
 #include "qcommon.h"
+#include "maplist.h"
 #include "q_trie.h"
 #include "cmdargs.h"
+#include "cmdcompat.h"
 
 #include "wswstringsplitter.h"
 #include "wswstringview.h"
@@ -288,26 +290,23 @@ static void ML_MapListCmd( const CmdArgs &cmdArgs ) {
 	Com_Printf( "%d map(s) %s\n", i, pattern ? "matching" : "total" );
 }
 
-/*
-* ML_CompleteBuildList
-*/
-char **ML_CompleteBuildList( const char *partial ) {
-	struct trie_dump_s *dump;
-	char **buf;
-	unsigned int i;
+CompletionResult ML_CompleteBuildList( const wsw::StringView &partial ) {
+	const wsw::String ztPartial( partial.data(), partial.size() );
 
 	assert( mlist_filenames_trie );
-	assert( partial );
 
-	Trie_Dump( mlist_filenames_trie, partial, TRIE_DUMP_VALUES, &dump );
-	buf = (char **) Q_malloc( sizeof( char * ) * ( dump->size + 1 ) );
-	for( i = 0; i < dump->size; ++i )
-		buf[i] = ( (mapinfo_t *) ( dump->key_value_vector[i].value ) )->filename;
-	buf[dump->size] = NULL;
+	struct trie_dump_s *dump = nullptr;
+	Trie_Dump( mlist_filenames_trie, ztPartial.data(), TRIE_DUMP_VALUES, &dump );
+
+	CompletionResult result;
+
+	for( unsigned i = 0; i < dump->size; ++i ) {
+		result.add( wsw::StringView( ( (const mapinfo_t *) ( dump->key_value_vector[i].value ))->filename ) );
+	}
 
 	Trie_FreeDump( dump );
 
-	return buf;
+	return result;
 }
 
 /*

@@ -453,7 +453,13 @@ static void SV_LocateEntities( struct edict_s *edicts, int edict_size, int num_e
 	sv.gi.max_clients = wsw::min( num_edicts, sv_maxclients->integer );
 }
 
-uint64_t NextServerSideCommandCounter();
+static void PF_SV_Cmd_Register( const char *name, CmdFunc cmdFunc ) {
+	SV_Cmd_Register( wsw::StringView( name ), cmdFunc );
+}
+
+static void PF_SV_Cmd_Unregister( const char *name ) {
+	SV_Cmd_Unregister( wsw::StringView( name ) );
+}
 
 /*
 * SV_InitGameProgs
@@ -539,8 +545,8 @@ void SV_InitGameProgs( void ) {
 	import.Cvar_Value = Cvar_Value;
 	import.Cvar_String = Cvar_String;
 
-	import.Cmd_AddCommand = SV_Cmd_Register;
-	import.Cmd_RemoveCommand = SV_Cmd_Unregister;
+	import.Cmd_AddCommand = PF_SV_Cmd_Register;
+	import.Cmd_RemoveCommand = PF_SV_Cmd_Unregister;
 
 	import.ML_Update = ML_Update;
 	import.ML_GetListSize = ML_GetListSize;

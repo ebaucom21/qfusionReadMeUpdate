@@ -23,6 +23,7 @@
 #define QFUSION_SERVER_H
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/cmdcompat.h"
 #include "../qcommon/configstringstorage.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/mmcommon.h"
@@ -403,8 +404,9 @@ void SV_PureList_f( const CmdArgs & );
 
 void SV_Cmd_ExecuteText( int when, const char *text );
 
-void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) );
-void SV_Cmd_Unregister( const char *name );
+void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc = nullptr );
+void SV_Cmd_Unregister( const wsw::StringView &name );
+
 void SV_Cmd_ExecuteNow( const char *text );
 
 void SV_Cbuf_AppendCommand( const char *text );

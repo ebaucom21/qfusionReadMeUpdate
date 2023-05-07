@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 #include "../qcommon/cmdargssplitter.h"
+#include "../qcommon/cmdcompat.h"
+#include "../qcommon/maplist.h"
 
 static void CL_InitServerDownload( const char *filename, size_t size, unsigned checksum, bool allow_localhttpdownload,
 								   const char *url, bool initial );

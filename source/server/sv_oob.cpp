@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "../qcommon/cmdargssplitter.h"
+#include "../qcommon/cmdcompat.h"
 
 typedef struct sv_infoserver_s {
 	netadr_t address;

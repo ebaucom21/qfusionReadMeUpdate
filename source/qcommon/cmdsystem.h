@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WSW_a84d2200_4f2e_4b79_bc26_b210c74cbdb6_H
 
 #include "cmdargssplitter.h"
+#include "cmdcompat.h"
 #include "wswstringview.h"
 
 class CmdSystem {
@@ -40,8 +41,10 @@ public:
 
 	void executeNow( const wsw::StringView &text );
 
-	void registerCommand( const wsw::StringView &name, void ( *handler )( const CmdArgs & ) );
-	void unregisterCommand( const wsw::StringView &name );
+	[[maybe_unused]]
+	virtual bool registerCommand( const wsw::StringView &name, CmdFunc cmdFunc );
+	[[maybe_unused]]
+	virtual bool unregisterCommand( const wsw::StringView &name );
 
 	[[nodiscard]]
 	bool isARegisteredCommand( const wsw::StringView &name ) const {
@@ -74,12 +77,12 @@ protected:
 	void helperForHandlerOfUnaliasall( const CmdArgs &cmdArgs );
 	void helperForHandlerOfWait( const CmdArgs &cmdArgs );
 	void helperForHandlerOfVstr( const CmdArgs &cmdArgs );
-private:
+
 	struct CmdEntry {
 		CmdEntry *prev { nullptr }, *next { nullptr };
 		wsw::HashedStringView nameAndHash;
 		unsigned binIndex;
-		void ( *handler )( const CmdArgs & );
+		CmdFunc cmdFunc { nullptr };
 	};
 
 	struct AliasEntry {

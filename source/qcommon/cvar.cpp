@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "q_trie.h"
 #include "../client/console.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 
 static bool cvar_initialized = false;
 static bool cvar_preinitialized = false;
@@ -726,78 +727,55 @@ static int Cvar_NotDeveloper( void *cvar, void *nothing ) {
 }
 #endif
 
-/*
-* CVar_CompleteCountPossible
-*/
-int Cvar_CompleteCountPossible( const char *partial ) {
-	unsigned int matches;
+CompletionResult Cvar_CompleteBuildList( const wsw::StringView &partial ) {
+	const wsw::String ztPartial( partial.data(), partial.size() );
+
 	assert( cvar_trie );
-	assert( partial );
 	QMutex_Lock( cvar_mutex );
+
+	struct trie_dump_s *dump = nullptr;
 #ifdef PUBLIC_BUILD
-	Trie_NoOfMatchesIf( cvar_trie, partial, Cvar_NotDeveloper, NULL, &matches );
+	Trie_DumpIf( cvar_trie, ztPartial.data(), TRIE_DUMP_VALUES, Cvar_NotDeveloper, NULL, &dump );
 #else
-	Trie_NoOfMatches( cvar_trie, partial, &matches );
+	Trie_Dump( cvar_trie, ztPartial.data(), TRIE_DUMP_VALUES, &dump );
 #endif
 	QMutex_Unlock( cvar_mutex );
-	return matches;
+
+	CompletionResult result;
+	for( unsigned i = 0; i < dump->size; ++i ) {
+		result.add( wsw::StringView( ( (cvar_t *)dump->key_value_vector[i].value )->name ) );
+	}
+
+	Trie_FreeDump( dump );
+
+	return result;
 }
 
-/*
-* CVar_CompleteBuildList
-*/
-char **Cvar_CompleteBuildList( const char *partial ) {
-	struct trie_dump_s *dump = NULL;
-	char **buf;
-	unsigned int i;
+static CompletionResult Cvar_CompleteBuildListWithFlag( const wsw::StringView &partial, cvar_flag_t flag ) {
+	const wsw::String ztPartial( partial.data(), partial.size() );
 
 	assert( cvar_trie );
 	QMutex_Lock( cvar_mutex );
-#ifdef PUBLIC_BUILD
-	Trie_DumpIf( cvar_trie, partial, TRIE_DUMP_VALUES, Cvar_NotDeveloper, NULL, &dump );
-#else
-	Trie_Dump( cvar_trie, partial, TRIE_DUMP_VALUES, &dump );
-#endif
+
+	struct trie_dump_s *dump = nullptr;
+	Trie_DumpIf( cvar_trie, ztPartial.data(), TRIE_DUMP_VALUES, Cvar_HasFlags, &flag, &dump );
 	QMutex_Unlock( cvar_mutex );
-	buf = (char **) Q_malloc( sizeof( char * ) * ( dump->size + 1 ) );
-	for( i = 0; i < dump->size; ++i )
-		buf[i] = ( (cvar_t *) ( dump->key_value_vector[i].value ) )->name;
-	buf[dump->size] = NULL;
+
+	CompletionResult result;
+	for( unsigned i = 0; i < dump->size; ++i ) {
+		result.add( wsw::StringView( ( (cvar_t *)dump->key_value_vector[i].value )->name ) );
+	}
+
 	Trie_FreeDump( dump );
-	return buf;
+
+	return result;
 }
 
-/*
-* Cvar_CompleteBuildListWithFlag
-*/
-char **Cvar_CompleteBuildListWithFlag( const char *partial, cvar_flag_t flag ) {
-	struct trie_dump_s *dump = NULL;
-	char **buf;
-	unsigned int i;
-
-	assert( cvar_trie );
-	QMutex_Lock( cvar_mutex );
-	Trie_DumpIf( cvar_trie, partial, TRIE_DUMP_VALUES, Cvar_HasFlags, &flag, &dump );
-	QMutex_Unlock( cvar_mutex );
-	buf = (char **) Q_malloc( sizeof( char * ) * ( dump->size + 1 ) );
-	for( i = 0; i < dump->size; ++i )
-		buf[i] = ( (cvar_t *) ( dump->key_value_vector[i].value ) )->name;
-	buf[dump->size] = NULL;
-	Trie_FreeDump( dump );
-	return buf;
-}
-
-/*
-* Cvar_CompleteBuildListUser
-*/
-char **Cvar_CompleteBuildListUser( const char *partial ) {
+static CompletionResult Cvar_CompleteBuildListUser( const wsw::StringView &partial ) {
 	return Cvar_CompleteBuildListWithFlag( partial, CVAR_USERINFO );
 }
 
-/*
-* Cvar_CompleteBuildListServer
-*/
-char **Cvar_CompleteBuildListServer( const char *partial ) {
+static CompletionResult Cvar_CompleteBuildListServer( const wsw::StringView &partial ) {
 	return Cvar_CompleteBuildListWithFlag( partial, CVAR_SERVERINFO );
 }
 
@@ -828,24 +806,15 @@ void Cvar_Init( void ) {
 
 	assert( cvar_trie );
 
-	Cmd_AddClientAndServerCommand( "set", Cvar_Set_f );
-	Cmd_AddClientAndServerCommand( "seta", Cvar_Seta_f );
-	Cmd_AddClientAndServerCommand( "setau", Cvar_Setau_f );
-	Cmd_AddClientAndServerCommand( "setas", Cvar_Setas_f );
-	Cmd_AddClientAndServerCommand( "setu", Cvar_Setu_f );
-	Cmd_AddClientAndServerCommand( "sets", Cvar_Sets_f );
-	Cmd_AddClientAndServerCommand( "reset", Cvar_Reset_f );
-	Cmd_AddClientAndServerCommand( "toggle", Cvar_Toggle_f );
+	Cmd_AddClientAndServerCommand( "set", Cvar_Set_f, Cvar_CompleteBuildList );
+	Cmd_AddClientAndServerCommand( "seta", Cvar_Seta_f, Cvar_CompleteBuildList );
+	Cmd_AddClientAndServerCommand( "setau", Cvar_Setau_f, Cvar_CompleteBuildListUser );
+	Cmd_AddClientAndServerCommand( "setas", Cvar_Setas_f, Cvar_CompleteBuildListServer );
+	Cmd_AddClientAndServerCommand( "setu", Cvar_Setu_f, Cvar_CompleteBuildListUser );
+	Cmd_AddClientAndServerCommand( "sets", Cvar_Sets_f, Cvar_CompleteBuildListServer );
+	Cmd_AddClientAndServerCommand( "reset", Cvar_Reset_f, Cvar_CompleteBuildList );
+	Cmd_AddClientAndServerCommand( "toggle", Cvar_Toggle_f, Cvar_CompleteBuildList );
 	Cmd_AddClientAndServerCommand( "cvarlist", Cvar_List_f );
-
-	Cmd_SetCompletionFunc( "set", Cvar_CompleteBuildList );
-	Cmd_SetCompletionFunc( "seta", Cvar_CompleteBuildList );
-	Cmd_SetCompletionFunc( "reset", Cvar_CompleteBuildList );
-	Cmd_SetCompletionFunc( "toggle", Cvar_CompleteBuildList );
-	Cmd_SetCompletionFunc( "setau", Cvar_CompleteBuildListUser );
-	Cmd_SetCompletionFunc( "setas", Cvar_CompleteBuildListServer );
-	Cmd_SetCompletionFunc( "setu", Cvar_CompleteBuildListUser );
-	Cmd_SetCompletionFunc( "sets", Cvar_CompleteBuildListServer );
 
 #ifndef PUBLIC_BUILD
 	Cmd_AddClientAndServerCommand( "cvararchivelist", Cvar_ArchiveList_f );

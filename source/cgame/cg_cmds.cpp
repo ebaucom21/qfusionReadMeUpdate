@@ -22,9 +22,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/wswtonum.h"
 #include "../qcommon/cmdargssplitter.h"
+#include "../qcommon/cmdcompat.h"
 #include "../client/snd_public.h"
 #include "../client/client.h"
 #include "../ui/uisystem.h"
+
+using wsw::operator""_asView;
 
 /*
 ==========================================================================
@@ -204,7 +207,7 @@ void CG_ConfigString( int i, const wsw::StringView &string ) {
 		CG_LoadClientInfo( i - CS_PLAYERINFOS, string );
 	} else if( i >= CS_GAMECOMMANDS && i < CS_GAMECOMMANDS + MAX_GAMECOMMANDS ) {
 		if( !cgs.demoPlaying ) {
-			CL_Cmd_Register( string, NULL );
+			CL_Cmd_Register( wsw::StringView( string ), NULL );
 			if( string.equalsIgnoreCase( kGametypeMenu ) ) {
 				cgs.hasGametypeMenu = true;
 			}
@@ -798,102 +801,6 @@ static void CG_Viewpos_f( const CmdArgs & ) {
 	Com_Printf( "\"angles\" \"%i %i %i\"\n", (int)cg.view.angles[0], (int)cg.view.angles[1], (int)cg.view.angles[2] );
 }
 
-// ======================================================================
-
-/*
-* CG_GametypeMenuCmdAdd_f
-*/
-static void CG_GametypeMenuCmdAdd_f( const CmdArgs & ) {
-	cgs.hasGametypeMenu = true;
-}
-
-/*
-* CG_PlayerNamesCompletionExt_f
-*
-* Helper function
-*/
-static char **CG_PlayerNamesCompletionExt_f( const char *partial, bool teamOnly ) {
-	int i;
-	int team = cg_entities[cgs.playerNum + 1].current.team;
-	char **matches = NULL;
-	int num_matches = 0;
-
-	if( partial ) {
-		size_t partial_len = strlen( partial );
-
-		matches = (char **) Q_malloc( sizeof( char * ) * ( gs.maxclients + 1 ) );
-		for( i = 0; i < gs.maxclients; i++ ) {
-			cg_clientInfo_t *info = cgs.clientInfo + i;
-			if( !info->cleanname[0] ) {
-				continue;
-			}
-			if( teamOnly && ( cg_entities[i + 1].current.team != team ) ) {
-				continue;
-			}
-			if( !Q_strnicmp( info->cleanname, partial, partial_len ) ) {
-				matches[num_matches++] = info->cleanname;
-			}
-		}
-		matches[num_matches] = NULL;
-	}
-
-	return matches;
-}
-
-/*
-* CG_PlayerNamesCompletion_f
-*/
-static char **CG_PlayerNamesCompletion_f( const char *partial ) {
-	return CG_PlayerNamesCompletionExt_f( partial, false );
-}
-
-/*
-* CG_TeamPlayerNamesCompletion_f
-*/
-static char **CG_TeamPlayerNamesCompletion_f( const char *partial ) {
-	return CG_PlayerNamesCompletionExt_f( partial, true );
-}
-
-/*
-* CG_SayCmdAdd_f
-*/
-static void CG_SayCmdAdd_f( const CmdArgs & ) {
-	Cmd_SetCompletionFunc( "say", &CG_PlayerNamesCompletion_f );
-}
-
-/*
-* CG_SayTeamCmdAdd_f
-*/
-static void CG_SayTeamCmdAdd_f( const CmdArgs & ) {
-	Cmd_SetCompletionFunc( "say_team", &CG_TeamPlayerNamesCompletion_f );
-}
-
-/*
-* CG_StatsCmdAdd_f
-*/
-static void CG_StatsCmdAdd_f( const CmdArgs & ) {
-	Cmd_SetCompletionFunc( "stats", &CG_PlayerNamesCompletion_f );
-}
-
-/*
-* CG_WhoisCmdAdd_f
-*/
-static void CG_WhoisCmdAdd_f( const CmdArgs & ) {
-	Cmd_SetCompletionFunc( "whois", &CG_PlayerNamesCompletion_f );
-}
-
-// server commands
-static svcmd_t cg_consvcmds[] =
-{
-	{ "gametypemenu", CG_GametypeMenuCmdAdd_f },
-	{ "say", CG_SayCmdAdd_f },
-	{ "say_team", CG_SayTeamCmdAdd_f },
-	{ "stats", CG_StatsCmdAdd_f },
-	{ "whois", CG_WhoisCmdAdd_f },
-
-	{ NULL, NULL }
-};
-
 // local cgame commands
 typedef struct
 {
@@ -926,8 +833,6 @@ static const cgcmd_t cgcmds[] =
 */
 void CG_RegisterCGameCommands( void ) {
 	if( !cgs.demoPlaying ) {
-		const svcmd_t *svcmd;
-
 		// add game side commands
 		for( unsigned i = 0; i < MAX_GAMECOMMANDS; i++ ) {
 			const auto maybeName = cgs.configStrings.getGameCommand( i );
@@ -948,18 +853,7 @@ void CG_RegisterCGameCommands( void ) {
 				continue;
 			}
 
-			CL_Cmd_Register( name.data(), NULL );
-
-			// check for server commands we might want to do some special things for..
-			for( svcmd = cg_consvcmds; svcmd->name; svcmd++ ) {
-				if( !Q_stricmp( svcmd->name, name.data() ) ) {
-					if( svcmd->func ) {
-						// TODO!!!!!!!!!!!!!!!!!!!!!!!!!
-						svcmd->func( CmdArgs {} );
-					}
-					break;
-				}
-			}
+			CL_Cmd_Register( name, NULL );
 		}
 	}
 
@@ -968,7 +862,7 @@ void CG_RegisterCGameCommands( void ) {
 		if( cgs.demoPlaying && !cmd->allowdemo ) {
 			continue;
 		}
-		CL_Cmd_Register( cmd->name, cmd->func );
+		CL_Cmd_Register( wsw::StringView( cmd->name ), cmd->func );
 	}
 }
 
@@ -997,7 +891,7 @@ void CG_UnregisterCGameCommands( void ) {
 				continue;
 			}
 
-			CL_Cmd_Unregister( name.data() );
+			CL_Cmd_Unregister( name );
 		}
 
 		cgs.hasGametypeMenu = false;
@@ -1008,6 +902,6 @@ void CG_UnregisterCGameCommands( void ) {
 		if( cgs.demoPlaying && !cmd->allowdemo ) {
 			continue;
 		}
-		CL_Cmd_Unregister( cmd->name );
+		CL_Cmd_Unregister( wsw::StringView( cmd->name ) );
 	}
 }

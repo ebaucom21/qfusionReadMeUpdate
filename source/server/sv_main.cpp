@@ -869,6 +869,8 @@ void SV_Shutdown( const char *finalmsg ) {
 
 CmdSystem *CL_GetCmdSystem();
 
+void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc );
+
 class SVCmdSystem: public CmdSystem {
 	void registerSystemCommands() override {
 		registerCommand( "exec"_asView, handlerOfExec );
@@ -955,25 +957,45 @@ void SV_Cmd_ExecuteText( int when, const char *text ) {
 
 #ifndef DEDICATED_ONLY
 
-static void SV_Cmd_ExecuteNow2( const wsw::String &string ) {
+static void executeCmdByBuiltinServer( const wsw::String &string ) {
 	g_svCmdSystemHolder.instance()->executeNow( wsw::StringView { string.data(), string.size() } );
 }
 
-static void redirectToBuiltinServer( const CmdArgs &cmdArgs ) {
+static void redirectCmdExecutionToBuiltinServer( const CmdArgs &cmdArgs ) {
 	wsw::StaticString<MAX_STRING_CHARS> text;
 	// TODO: Preserve the original string?
-	for ( const wsw::StringView &arg: cmdArgs.allArgs ) {
+	for( const wsw::StringView &arg: cmdArgs.allArgs ) {
 		text << arg << ' ';
 	}
 	text[text.size() - 1] = '\n';
 
-	const wsw::String boxed( text.data(), text.size());
-	callOverPipe( g_svCmdPipe, &SV_Cmd_ExecuteNow2, boxed );
+	const wsw::String boxedText( text.data(), text.size() );
+	callOverPipe( g_svCmdPipe, &executeCmdByBuiltinServer, boxedText );
 }
 
-static void registerBuiltinServerCmdOnClientSide( const wsw::String &name ) {
+void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &result );
+
+static void executeCmdCompletionByBuiltinServer( unsigned requestId, const wsw::String &partial, CompletionQueryFunc queryFunc ) {
+	// The point is in executing the queryFunc safely in the server thread in a robust fashion
+	CompletionResult queryResult = queryFunc( wsw::StringView { partial.data(), partial.size() } );
+	callOverPipe( g_clCmdPipe, Con_AcceptCompletionResult, requestId, queryResult );
+}
+
+static void redirectCmdCompletionToBuiltinServer( const wsw::StringView &, unsigned requestId,
+												  const wsw::StringView &partial, CompletionQueryFunc queryFunc ) {
+	wsw::String boxedPartial { partial.data(), partial.size() };
+
+	callOverPipe( g_svCmdPipe, executeCmdCompletionByBuiltinServer, requestId, boxedPartial, queryFunc );
+}
+
+static void registerBuiltinServerCmdOnClientSide( const wsw::String &name, CompletionQueryFunc completionFunc ) {
 	const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
-	CL_GetCmdSystem()->registerCommand( nameView, redirectToBuiltinServer );
+	if( completionFunc ) {
+		CL_RegisterCmdWithCompletion( nameView, redirectCmdExecutionToBuiltinServer, completionFunc,
+									  redirectCmdCompletionToBuiltinServer );
+	} else {
+		CL_GetCmdSystem()->registerCommand( nameView, redirectCmdExecutionToBuiltinServer );
+	}
 }
 
 static void unregisterBuiltinServerCmdOnClientSide( const wsw::String &name ) {
@@ -982,19 +1004,17 @@ static void unregisterBuiltinServerCmdOnClientSide( const wsw::String &name ) {
 
 #endif
 
-void SV_Cmd_Register( const char *name, void ( *handler )( const CmdArgs & ) ) {
-	const wsw::StringView nameView( name );
-	g_svCmdSystemHolder.instance()->registerCommand( nameView, handler );
+void SV_Cmd_Register( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc ) {
+	g_svCmdSystemHolder.instance()->registerCommand( name, cmdFunc );
 #ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::String { nameView.data(), nameView.size() } );
+	callOverPipe( g_clCmdPipe, registerBuiltinServerCmdOnClientSide, wsw::String { name.data(), name.size() }, completionFunc );
 #endif
 }
 
-void SV_Cmd_Unregister( const char *name ) {
-	const wsw::StringView nameView( name );
-	g_svCmdSystemHolder.instance()->unregisterCommand( nameView );
+void SV_Cmd_Unregister( const wsw::StringView &name ) {
+	g_svCmdSystemHolder.instance()->unregisterCommand( name );
 #ifndef DEDICATED_ONLY
-	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::String( nameView.data(), nameView.size() ) );
+	callOverPipe( g_clCmdPipe, unregisterBuiltinServerCmdOnClientSide, wsw::String( name.data(), name.size() ) );
 #endif
 }
 

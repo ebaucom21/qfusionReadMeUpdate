@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
 
 #include <tuple>
 #include <algorithm>
@@ -365,10 +366,10 @@ void Key_Init() {
 	//
 	// register our functions
 	//
-	CL_Cmd_Register( "bind", Key_Bind_f );
-	CL_Cmd_Register( "unbind", Key_Unbind_f );
-	CL_Cmd_Register( "unbindall", Key_Unbindall );
-	CL_Cmd_Register( "bindlist", Key_Bindlist_f );
+	CL_Cmd_Register( "bind"_asView, Key_Bind_f );
+	CL_Cmd_Register( "unbind"_asView, Key_Unbind_f );
+	CL_Cmd_Register( "unbindall"_asView, Key_Unbindall );
+	CL_Cmd_Register( "bindlist"_asView, Key_Bindlist_f );
 
 	in_debug = Cvar_Get( "in_debug", "0", 0 );
 
@@ -380,10 +381,10 @@ void Key_Shutdown() {
 		return;
 	}
 
-	CL_Cmd_Unregister( "bind" );
-	CL_Cmd_Unregister( "unbind" );
-	CL_Cmd_Unregister( "unbindall" );
-	CL_Cmd_Unregister( "bindlist" );
+	CL_Cmd_Unregister( "bind"_asView );
+	CL_Cmd_Unregister( "unbind"_asView );
+	CL_Cmd_Unregister( "unbindall"_asView );
+	CL_Cmd_Unregister( "bindlist"_asView );
 
 	Key_Unbindall( CmdArgs {} );
 

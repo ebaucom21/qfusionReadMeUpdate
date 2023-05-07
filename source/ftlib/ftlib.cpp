@@ -1027,7 +1027,7 @@ const char *FTLIB_FontShaderName( qfontface_t *qfont, unsigned int shaderNum ) {
 bool FTLIB_Init( bool verbose ) {
 	FTLIB_InitSubsystems( verbose );
 
-	CL_Cmd_Register( "fontlist", &FTLIB_PrintFontList );
+	CL_Cmd_Register( wsw::StringView( "fontlist" ), &FTLIB_PrintFontList );
 
 	return true;
 }
@@ -1038,7 +1038,7 @@ bool FTLIB_Init( bool verbose ) {
 void FTLIB_Shutdown( bool verbose ) {
 	FTLIB_ShutdownSubsystems( verbose );
 
-	CL_Cmd_Unregister( "fontlist" );
+	CL_Cmd_Unregister( wsw::StringView( "fontlist" ) );
 }
 
 /*

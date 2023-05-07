@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "cmdsystem.h"
+#include "cmdcompat.h"
 #include "../qcommon/links.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstaticstring.h"
@@ -122,30 +123,30 @@ auto CmdSystem::findEntryByName( const wsw::HashedStringView &nameAndHash, const
 	return nullptr;
 }
 
-void CmdSystem::registerCommand( const wsw::StringView &name, void (*handler)( const CmdArgs & ) ) {
+bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) {
 	if( name.empty() ) {
 		Com_Printf( S_COLOR_RED "Failed to register command: Empty command name\n" );
-		return;
+		return false;
 	}
 
 	assert( name.isZeroTerminated() );
 	if( Cvar_String( name.data() )[0] ) {
 		Com_Printf( S_COLOR_RED "Failed to register command: %s is already defined as a var\n", name.data() );
-		return;
+		return false;
 	}
 
 	const wsw::HashedStringView nameAndHash( name );
 	const auto binIndex = nameAndHash.getHash() % std::size( m_cmdEntryBins );
 	if( CmdEntry *existing = const_cast<CmdEntry *>( findEntryByName( nameAndHash, m_cmdEntryBins, binIndex ) ) ) {
 		Com_DPrintf( "The command %s is already registered, just updating the handler\n", name.data() );
-		existing->handler = handler;
-		return;
+		existing->cmdFunc = cmdFunc;
+		return true;
 	}
 
 	void *const mem = ::malloc( sizeof( CmdEntry ) + nameAndHash.length() + 1 );
 	if( !mem ) {
 		Com_Printf( S_COLOR_RED "Failed to register command: allocation failure\n" );
-		return;
+		return false;
 	}
 
 	auto *entry = new( mem )CmdEntry;
@@ -153,25 +154,29 @@ void CmdSystem::registerCommand( const wsw::StringView &name, void (*handler)( c
 	nameAndHash.copyTo( chars, nameAndHash.size() + 1 );
 
 	entry->nameAndHash = wsw::HashedStringView( chars, name.length(), wsw::StringView::ZeroTerminated );
-	entry->handler     = handler;
+	entry->cmdFunc     = cmdFunc;
 	entry->binIndex    = binIndex;
 
 	wsw::link( entry, &m_cmdEntryBins[binIndex] );
+	return true;
 }
 
-void CmdSystem::unregisterCommand( const wsw::StringView &name ) {
+bool CmdSystem::unregisterCommand( const wsw::StringView &name ) {
 	if( !name.empty() ) {
 		assert( name.isZeroTerminated() );
 		auto *entry = const_cast<CmdEntry *>( findCmdEntryByName( name ) );
 		if( !entry ) {
 			Com_Printf( S_COLOR_RED "Failed to unregister command: %s not registered\n", name.data() );
+			return false;
 		} else {
 			wsw::unlink( entry, &m_cmdEntryBins[entry->binIndex] );
 			entry->~CmdEntry();
 			::free( entry );
+			return true;
 		}
 	} else {
 		Com_Printf( S_COLOR_RED "Failed to unregister command: Empty command name\n" );
+		return false;
 	}
 }
 
@@ -201,8 +206,8 @@ void CmdSystem::executeNow( const wsw::StringView &text ) {
 		// Aiwa, 07-14-2006
 
 		if( const CmdEntry *cmdEntry = findCmdEntryByName( cmdArgs[0] ) ) {
-			if( cmdEntry->handler ) {
-				cmdEntry->handler( cmdArgs );
+			if( cmdEntry->cmdFunc ) {
+				cmdEntry->cmdFunc( cmdArgs );
 			} else {
 				// forward to server command
 				wsw::StaticString<MAX_TOKEN_CHARS> forwardingBuffer;

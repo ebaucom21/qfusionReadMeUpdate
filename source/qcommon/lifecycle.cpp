@@ -20,9 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // common.c -- misc functions used in client and server
 #include "qcommon.h"
 #include "cmdargs.h"
-
-#include <clocale>
-
+#include "cmdcompat.h"
 #include "wswcurl.h"
 #include "steam.h"
 #include "mmcommon.h"
@@ -30,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cmdsystem.h"
 #include "pipeutils.h"
 
+#include <clocale>
 #include <setjmp.h>
 
 static char com_errormsg[MAX_PRINTMSG];
@@ -64,6 +63,8 @@ static bool cmd_initialized = false;
 void CL_InitCmdSystem();
 CmdSystem *CL_GetCmdSystem();
 void CL_ShutdownCmdSystem();
+
+void CL_RunCompletionFuncSync( const wsw::StringView &, unsigned, const wsw::StringView &, CompletionQueryFunc );
 
 void Key_Init( void );
 void Key_Shutdown( void );
@@ -484,50 +485,6 @@ void Qcommon_Shutdown( void ) {
 	QThreads_Shutdown();
 }
 
-void Cmd_SetCompletionFunc( const char *cmd_name, xcompletionf_t completion_func ) {
-}
-
-/*
-* Cmd_CheckForCommand
-*
-* Used by console code to check if text typed is a command/cvar/alias or chat
-*/
-bool Cmd_CheckForCommand( const char *text ) {
-	char cmd[MAX_STRING_CHARS];
-	unsigned i;
-
-	// this is not exactly what cbuf does when extracting lines
-	// for execution, but it works unless you do weird things like
-	// putting the command in quotes
-	for( i = 0; i < MAX_STRING_CHARS - 1; i++ ) {
-		if( (unsigned char)text[i] <= ' ' || text[i] == ';' ) {
-			break;
-		} else {
-			cmd[i] = text[i];
-		}
-	}
-	cmd[i] = 0;
-
-	CmdSystem *cmdSystem;
-#ifndef DEDICATED_ONLY
-	cmdSystem = CL_GetCmdSystem();
-#else
-	cmdSystem = SV_GetCmdSystem();
-#endif
-
-	if( cmdSystem->isARegisteredCommand( wsw::StringView( cmd, i ) ) ) {
-		return true;
-	}
-	if( Cvar_Find( cmd ) ) {
-		return true;
-	}
-	if( cmdSystem->isARegisteredAlias( wsw::StringView( cmd, i ) ) ) {
-		return true;
-	}
-
-	return false;
-}
-
 void Cmd_PreInit( void ) {
 	assert( !cmd_preinitialized );
 	assert( !cmd_initialized );
@@ -540,12 +497,22 @@ void Cmd_PreInit( void ) {
 	cmd_preinitialized = true;
 }
 
-void Cmd_AddClientAndServerCommand( const char *name, void ( *handler )( const CmdArgs & ) ) {
+
+void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc, CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc );
+
+void CL_RunCompletionFuncSync( const wsw::StringView &, unsigned requestId, const wsw::StringView &partial,
+							   CompletionQueryFunc queryFunc );
+
+void Cmd_AddClientAndServerCommand( const char *name, CmdFunc cmdFunc, CompletionQueryFunc completionQueryFunc ) {
 	const wsw::StringView nameView( name );
 #ifndef DEDICATED_ONLY
-	CL_GetCmdSystem()->registerCommand( nameView, handler );
+	if( completionQueryFunc ) {
+		CL_RegisterCmdWithCompletion( nameView, cmdFunc, completionQueryFunc, CL_RunCompletionFuncSync );
+	} else {
+		CL_GetCmdSystem()->registerCommand( nameView, cmdFunc );
+	}
 #endif
-	SV_GetCmdSystem()->registerCommand( nameView, handler );
+	SV_GetCmdSystem()->registerCommand( nameView, cmdFunc );
 }
 
 void Cmd_RemoveClientAndServerCommand( const char *name ) {

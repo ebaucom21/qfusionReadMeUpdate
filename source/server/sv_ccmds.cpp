@@ -20,6 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/cmdcompat.h"
+
+using wsw::operator""_asView;
 
 //===============================================================================
 //
@@ -151,13 +154,6 @@ static void SV_Map_f( const CmdArgs &cmdArgs ) {
 
 	// archive server state
 	Q_strncpyz( svs.mapcmd, mapname, sizeof( svs.mapcmd ) );
-}
-
-/*
-* SV_MapComplete_f
-*/
-static char **SV_MapComplete_f( const char *partial ) {
-	return ML_CompleteBuildList( partial );
 }
 
 //===============================================================
@@ -325,50 +321,46 @@ static void SV_CvarCheck_f( const CmdArgs &cmdArgs ) {
 * SV_InitOperatorCommands
 */
 void SV_InitOperatorCommands( void ) {
-	SV_Cmd_Register( "heartbeat", SV_Heartbeat_f );
-	SV_Cmd_Register( "status", SV_Status_f );
-	SV_Cmd_Register( "serverinfo", SV_Serverinfo_f );
-	SV_Cmd_Register( "dumpuser", SV_DumpUser_f );
+	SV_Cmd_Register( "heartbeat"_asView, SV_Heartbeat_f );
+	SV_Cmd_Register( "status"_asView, SV_Status_f );
+	SV_Cmd_Register( "serverinfo"_asView, SV_Serverinfo_f );
+	SV_Cmd_Register( "dumpuser"_asView, SV_DumpUser_f );
 
-	SV_Cmd_Register( "map", SV_Map_f );
-	SV_Cmd_Register( "devmap", SV_Map_f );
-	SV_Cmd_Register( "gamemap", SV_Map_f );
-	SV_Cmd_Register( "killserver", SV_KillServer_f );
+	SV_Cmd_Register( "map"_asView, SV_Map_f, ML_CompleteBuildList );
+	SV_Cmd_Register( "devmap"_asView, SV_Map_f, ML_CompleteBuildList );
+	SV_Cmd_Register( "gamemap"_asView, SV_Map_f, ML_CompleteBuildList );
+	SV_Cmd_Register( "killserver"_asView, SV_KillServer_f );
 
-	SV_Cmd_Register( "serverrecord", SV_Demo_Start_f );
-	SV_Cmd_Register( "serverrecordstop", SV_Demo_Stop_f );
-	SV_Cmd_Register( "serverrecordcancel", SV_Demo_Cancel_f );
-	SV_Cmd_Register( "serverrecordpurge", SV_Demo_Purge_f );
+	SV_Cmd_Register( "serverrecord"_asView, SV_Demo_Start_f );
+	SV_Cmd_Register( "serverrecordstop"_asView, SV_Demo_Stop_f );
+	SV_Cmd_Register( "serverrecordcancel"_asView, SV_Demo_Cancel_f );
+	SV_Cmd_Register( "serverrecordpurge"_asView, SV_Demo_Purge_f );
 
-	SV_Cmd_Register( "purelist", SV_PureList_f );
+	SV_Cmd_Register( "purelist"_asView, SV_PureList_f );
 
-	SV_Cmd_Register( "cvarcheck", SV_CvarCheck_f );
-
-	Cmd_SetCompletionFunc( "map", SV_MapComplete_f );
-	Cmd_SetCompletionFunc( "devmap", SV_MapComplete_f );
-	Cmd_SetCompletionFunc( "gamemap", SV_MapComplete_f );
+	SV_Cmd_Register( "cvarcheck"_asView, SV_CvarCheck_f );
 }
 
 /*
 * SV_ShutdownOperatorCommands
 */
 void SV_ShutdownOperatorCommands( void ) {
-	SV_Cmd_Unregister( "heartbeat" );
-	SV_Cmd_Unregister( "status" );
-	SV_Cmd_Unregister( "serverinfo" );
-	SV_Cmd_Unregister( "dumpuser" );
+	SV_Cmd_Unregister( "heartbeat"_asView );
+	SV_Cmd_Unregister( "status"_asView );
+	SV_Cmd_Unregister( "serverinfo"_asView );
+	SV_Cmd_Unregister( "dumpuser"_asView );
 
-	SV_Cmd_Unregister( "map" );
-	SV_Cmd_Unregister( "devmap" );
-	SV_Cmd_Unregister( "gamemap" );
-	SV_Cmd_Unregister( "killserver" );
+	SV_Cmd_Unregister( "map"_asView );
+	SV_Cmd_Unregister( "devmap"_asView );
+	SV_Cmd_Unregister( "gamemap"_asView );
+	SV_Cmd_Unregister( "killserver"_asView );
 
-	SV_Cmd_Unregister( "serverrecord" );
-	SV_Cmd_Unregister( "serverrecordstop" );
-	SV_Cmd_Unregister( "serverrecordcancel" );
-	SV_Cmd_Unregister( "serverrecordpurge" );
+	SV_Cmd_Unregister( "serverrecord"_asView );
+	SV_Cmd_Unregister( "serverrecordstop"_asView );
+	SV_Cmd_Unregister( "serverrecordcancel"_asView );
+	SV_Cmd_Unregister( "serverrecordpurge"_asView );
 
-	SV_Cmd_Unregister( "purelist" );
+	SV_Cmd_Unregister( "purelist"_asView );
 
-	SV_Cmd_Unregister( "cvarcheck" );
+	SV_Cmd_Unregister( "cvarcheck"_asView );
 }
