@@ -70,6 +70,9 @@ public:
 
 	[[nodiscard]] auto front() const -> wsw::StringView { return m_storage.front(); }
 	[[nodiscard]] auto back() const -> wsw::StringView { return m_storage.back(); }
+
+	[[nodiscard]]
+	auto operator[]( unsigned index ) const -> wsw::StringView { return m_storage[index]; }
 private:
 	unsigned m_currLongestPrefixIndex { 0 };
 	unsigned m_currLongestPrefixLength { 0 };

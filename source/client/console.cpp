@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/cmdcompat.h"
 #include "../qcommon/cmdsystem.h"
 #include "../qcommon/freelistallocator.h"
+#include "../qcommon/podbufferholder.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstringsplitter.h"
 #include "../qcommon/wswstaticstring.h"
@@ -97,25 +98,133 @@ public:
 	void handleKeyDownEvent( int quakeKey );
 	void handleCharInputEvent( int key );
 
-	void acceptCommandCompletionResult( unsigned requestId, const CompletionResult &result );
+	void acceptCommandCompletionResult( unsigned requestId, CompletionResult &&result );
 
 	[[nodiscard]]
 	auto dumpLinesToBuffer() const -> wsw::Vector<char>;
 private:
-	static constexpr unsigned kMaxLines                = 512u;
-	static constexpr unsigned kUseDefaultHeapLineLimit = 192u;
+	static constexpr unsigned kMaxLines                = 1024u;
+	static constexpr unsigned kUseDefaultHeapLineLimit = 128u;
 	static constexpr unsigned kInputLengthLimit        = 256u;
 	static constexpr unsigned kLineTruncationLimit     = 4u * 4096u;
 
+	class DrawnLinesBuilder;
+
 	struct LineEntry {
-		int64_t timestamp { 0 };
+		virtual ~LineEntry() = default;
+
+		[[nodiscard]]
+		virtual auto getRequiredCapacityForDumping() const -> unsigned { wsw::failWithLogicError( "Unreachable" ); };
+		[[nodiscard]]
+		virtual auto dumpCharsToBuffer( char *buffer ) const -> unsigned { wsw::failWithLogicError( "Unreachable" ); };
+		[[nodiscard]]
+		virtual auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+			wsw::failWithLogicError( "Unreachable" );
+		};
+		[[nodiscard]]
+		virtual auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+											 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> {
+			wsw::failWithLogicError( "Unreachable" );
+		};
+
 		LineEntry *prev { nullptr }, *next { nullptr };
-		char *data { nullptr };
-		unsigned dataSize { 0 };
-		unsigned capacity { 0 };
-		NotificationBehaviour notificationBehaviour { DrawNotification };
-		bool isFrozenForAddition { false };
 	};
+
+	struct RegularEntry final : public LineEntry {
+		struct alignas( 2 ) WordSpan {
+			uint16_t offset;
+			uint16_t length;
+			uint16_t startColor;
+		};
+
+		struct WordSpansCache {
+			WordSpan *wordSpans { nullptr };
+			unsigned numWordSpans { 0 };
+			unsigned lastDataSize { 0 };
+		};
+
+		struct MeasureCache {
+			unsigned lastResizeId { 0 };
+			unsigned lastDataSize { 0 };
+			unsigned numLines { 0 };
+		};
+
+		int64_t m_timestamp { 0 };
+		char *m_data { nullptr };
+		unsigned m_dataSize { 0 };
+		unsigned m_capacity { 0 };
+
+		mutable WordSpansCache m_wordSpansCache;
+		mutable MeasureCache m_measureCache;
+
+		NotificationBehaviour m_notificationBehaviour { DrawNotification };
+		// Using this flag instead simplifies drawing/managing of new lines
+		// (new nodes are going to be created only on demand, if a current entry has this flag set).
+		bool m_isFrozenForAddition { false };
+		// Either the limits were reached, or reallocation failure did not let add characters to the line
+		bool m_isTruncated { false };
+
+		~RegularEntry() override { std::free( m_wordSpansCache.wordSpans ); }
+
+		[[nodiscard]]
+		auto getRequiredCapacityForDumping() const -> unsigned override;
+		[[nodiscard]]
+		auto dumpCharsToBuffer( char *buffer ) const -> unsigned override;
+		[[nodiscard]]
+		auto measureNumberOfLines( unsigned resizeId, unsigned width, unsigned widthLimit ) const -> unsigned override;
+		[[nodiscard]]
+		auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+									 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> override;
+		[[nodiscard]]
+		auto getWordSpans() const -> std::span<const WordSpan>;
+	};
+
+	struct CompletionEntry final: public LineEntry {
+		explicit CompletionEntry( CompletionResult &&completionResult )
+			: m_completionResult( std::forward<CompletionResult>( completionResult ) ) {}
+
+		CompletionResult m_completionResult;
+		char *m_headingData { nullptr };
+		unsigned m_headingSize { 0 };
+
+		struct MeasureCache {
+			unsigned resizeId { 0 };
+			unsigned numColumns { 0 };
+			unsigned maxTokenLength { 0 };
+			bool fitsASingleLine { false };
+		};
+
+		mutable MeasureCache m_measureCache;
+
+		[[nodiscard]]
+		auto getRequiredCapacityForDumping() const -> unsigned override;
+		[[nodiscard]]
+		auto dumpCharsToBuffer( char *buffer ) const -> unsigned override;
+		[[nodiscard]]
+		auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned override;
+		[[nodiscard]]
+		auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+									 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> override;
+
+		[[nodiscard]]
+		bool checkIfFitsSingleLine( unsigned glyphWidth, unsigned widthLimit ) const;
+
+		void updateMeasureCache( MeasureCache *cache, unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const;
+	};
+
+	// This should be faster than regular dynamic_cast<>, and also this design prevents it from spreading over codebase
+
+	[[nodiscard]]
+	static auto asRegularEntry( LineEntry *lineEntry ) -> RegularEntry * {
+		return lineEntry && typeid( *lineEntry ) == typeid( RegularEntry ) ?
+			static_cast<RegularEntry *>( lineEntry ) : nullptr;
+	};
+
+	[[nodiscard]]
+	static auto asRegularEntry( const LineEntry *lineEntry ) -> const RegularEntry * {
+		return lineEntry && typeid( *lineEntry ) == typeid( RegularEntry ) ?
+			   static_cast<const RegularEntry *>( lineEntry ) : nullptr;
+	}
 
 	struct HistoryEntry {
 		HistoryEntry *prev { nullptr }, *next { nullptr };
@@ -124,9 +233,10 @@ private:
 	};
 
 	void addCharsToCurrentLine( wsw::StringView chars );
-	void startNewLine( NotificationBehaviour notificationBehaviour );
+	void startNewLine( NotificationBehaviour notificationBehaviour, size_t sizeHint );
 	void destroyLineEntry( LineEntry *entry );
 	void destroyAllLines();
+	void destroyOldestLineIfNeeded();
 
 	void addToHistory( wsw::StringView line );
 	void setCurrHistoryEntry( HistoryEntry *historyEntry );
@@ -134,8 +244,8 @@ private:
 	[[nodiscard]]
 	bool isAwaitingAsyncCompletion() const;
 
-	void printCompletionResultAsList( const char *color, const char *itemSingular, const char *itemPlural,
-									  const CompletionResult &completionResult );
+	void addCompletionEntry( char color, const wsw::StringView &itemSingular, const wsw::StringView &itemPlural,
+							 CompletionResult &&completionResult );
 
 	void handleSubmitKeyAction();
 	void handleCompleteKeyAction();
@@ -154,19 +264,25 @@ private:
 	void handlePositionPageAtStartAction();
 	void handlePositionPageAtEndAction();
 
-	wsw::HeapBasedFreelistAllocator m_linesAllocator { sizeof( LineEntry ) + kUseDefaultHeapLineLimit + 1, kMaxLines };
+	wsw::HeapBasedFreelistAllocator m_linesAllocator { sizeof( RegularEntry ) + kUseDefaultHeapLineLimit + 1, kMaxLines };
 	wsw::HeapBasedFreelistAllocator m_historyAllocator { sizeof( HistoryEntry ) + kInputLengthLimit + 1, 32 };
 
 	mutable std::mutex m_mutex;
 
-	LineEntry m_lineEntriesHeadnode {};
+	// TODO: That's why headnode-based design is painful for non-POD types
+	// TODO: Extract Linux-like container_of()-based utilities? That won't function that good for non-POD types as well.
+	struct : public LineEntry {} m_lineEntriesHeadnode {};
+
 	HistoryEntry m_historyEntriesHeadnode {};
 
 	HistoryEntry *m_currHistoryEntry { nullptr };
 
 	unsigned m_numLines { 0 };
+	unsigned m_paneResizeId { 1 };
+	unsigned m_lastPaneWidth { 0 };
+	unsigned m_lastPaneHeight { 0 };
+
 	unsigned m_requestedLineNumOffset { 0 };
-	size_t m_totalNumChars { 0 };
 
 	wsw::StaticString<kInputLengthLimit> m_inputLine;
 	unsigned m_inputPos { 0 };
@@ -176,6 +292,28 @@ private:
 	unsigned m_lastAsyncCompletionKeepLength { 0 };
 	unsigned m_lastAsyncCompletionFullLength { 0 };
 	int64_t m_lastAsyncCompletionRequestAt { 0 };
+
+	class DrawnLinesBuilder {
+	public:
+		void clear();
+		void addShallowCopyOfCompleteLine( const wsw::StringView &line );
+		void addCharsToCurrentLine( const wsw::StringView &chars );
+		void addCharsWithPrefixHighlight( const wsw::StringView &chars, unsigned prefixLen,
+										  char prefixColor, char bodyStartColor, char bodyColor );
+		void padCurrentLineByChars( char ch, unsigned count );
+		void completeCurrentLine();
+		[[nodiscard]]
+		auto getFinalSpans() -> std::span<const wsw::StringView>;
+	private:
+		wsw::Vector<wsw::StringView> m_tmpSpans;
+		wsw::Vector<unsigned> m_tmpOffsets;
+		wsw::Vector<char> m_tmpChars;
+		const char *m_oldCharsData { nullptr };
+		unsigned m_charsSizeAtLineStart { 0 };
+	};
+
+	DrawnLinesBuilder m_drawnLinesBuilder;
+	static inline wsw::Vector<char> s_tmpCompletionTokenPrefixColors;
 };
 
 static SingletonHolder<Console> g_console;
@@ -210,6 +348,15 @@ void Console::destroyAllLines() {
 	assert( m_lineEntriesHeadnode.next = &m_lineEntriesHeadnode );
 }
 
+void Console::destroyOldestLineIfNeeded() {
+	if( m_numLines == kMaxLines ) {
+		assert( m_lineEntriesHeadnode.prev != &m_lineEntriesHeadnode );
+		LineEntry *oldestEntry = unlink( m_lineEntriesHeadnode.prev );
+		assert( oldestEntry );
+		destroyLineEntry( oldestEntry );
+	}
+}
+
 void Console::clearLines() {
 	destroyAllLines();
 	m_requestedLineNumOffset = 0;
@@ -219,8 +366,10 @@ void Console::clearNotifications() {
 	[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( m_mutex );
 
 	for( LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		if( entry->notificationBehaviour == DrawNotification ) {
-			entry->timestamp = std::numeric_limits<decltype( entry->timestamp )>::min();
+		if( RegularEntry *const regularEntry = asRegularEntry( entry ) ) {
+			if( regularEntry->m_notificationBehaviour == DrawNotification ) {
+				regularEntry->m_timestamp = std::numeric_limits<decltype( regularEntry->m_timestamp )>::min();
+			}
 		}
 	}
 }
@@ -249,86 +398,131 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 
 	wsw::StringSplitter splitter( text );
 	while( const auto maybeLine = splitter.getNext( kSeparatorChars, wsw::StringSplitter::AllowEmptyTokens ) ) {
-		const LineEntry *formerCurrLineEntry = m_lineEntriesHeadnode.next;
-		if( formerCurrLineEntry == &m_lineEntriesHeadnode ) [[unlikely]] {
-			startNewLine( notificationBehaviour );
-		} else if( formerCurrLineEntry->isFrozenForAddition ) {
-			startNewLine( notificationBehaviour );
+		const bool newCharsEndWithLineFeed = maybeLine->data() + maybeLine->length() < text.data() + text.size();
+		wsw::StringView charsToAdd;
+		if( newCharsEndWithLineFeed ) {
+			charsToAdd = maybeLine->trimRight();
+		} else {
+			charsToAdd = *maybeLine;
 		}
 
-		const bool endsWithLineFeed = maybeLine->data() + maybeLine->length() < text.data() + text.size();
-		if( endsWithLineFeed ) {
-			// Trim trailing whitespaces to the left of the line feed
-			addCharsToCurrentLine( maybeLine->trimRight() );
+		if( const RegularEntry *const regularLineEntry = asRegularEntry( m_lineEntriesHeadnode.next ) ) {
+			if( regularLineEntry->m_isFrozenForAddition ) {
+				startNewLine( notificationBehaviour, charsToAdd.size() );
+			}
 		} else {
-			addCharsToCurrentLine( *maybeLine );
+			startNewLine( notificationBehaviour, charsToAdd.size() );
 		}
+
+		addCharsToCurrentLine( charsToAdd );
+
+		assert( asRegularEntry( m_lineEntriesHeadnode.next ) != nullptr );
 
 		// Could change during execution of the loop step
-		LineEntry *actualCurrLineEntry = m_lineEntriesHeadnode.next;
+		auto *const actualCurrLineEntry = static_cast<RegularEntry *>( m_lineEntriesHeadnode.next );
+
 		if( notificationBehaviour != SuppressNotification ) {
 			// Bump notification properties in this case
-			actualCurrLineEntry->notificationBehaviour = notificationBehaviour;
-			actualCurrLineEntry->timestamp             = cls.realtime;
+			actualCurrLineEntry->m_notificationBehaviour = notificationBehaviour;
+			actualCurrLineEntry->m_timestamp             = cls.realtime;
 		}
-		if( endsWithLineFeed ) {
-			actualCurrLineEntry->isFrozenForAddition = true;
+		if( newCharsEndWithLineFeed ) {
+			actualCurrLineEntry->m_isFrozenForAddition = true;
 		}
 	}
 }
 
 void Console::addCharsToCurrentLine( wsw::StringView chars ) {
-	LineEntry *lineEntry = m_lineEntriesHeadnode.next;
-	assert( lineEntry != &m_lineEntriesHeadnode );
+	assert( asRegularEntry( m_lineEntriesHeadnode.next ) != nullptr );
 
-	// TODO: Mark as truncated as well?
-	chars = chars.take( kLineTruncationLimit );
+	auto *lineEntry = static_cast<RegularEntry *>( m_lineEntriesHeadnode.next );
+	assert( (LineEntry *)lineEntry != (LineEntry *)&m_lineEntriesHeadnode );
 
-	if( lineEntry->dataSize + chars.size() < lineEntry->capacity ) [[likely]] {
-		std::memcpy( lineEntry->data + lineEntry->dataSize, chars.data(), chars.size() );
-		lineEntry->dataSize += chars.size();
-		lineEntry->data[lineEntry->dataSize] = '\0';
+	// Don't try adding extra characters in this case, even if we may manage to allocate memory at this point.
+	if( lineEntry->m_isTruncated ) [[unlikely]] {
+		return;
+	}
+
+	assert( lineEntry->m_dataSize <= kLineTruncationLimit );
+	if( lineEntry->m_dataSize + chars.size() > kLineTruncationLimit ) {
+		const size_t numCharsToAdd = kLineTruncationLimit - lineEntry->m_dataSize;
+		chars = chars.take( numCharsToAdd );
+		lineEntry->m_isTruncated = true;
+	}
+
+	// This also handles an empty original argument, as well as truncation
+	if( chars.empty() ) [[unlikely]] {
+		return;
+	}
+
+	// The addition of characters is going to invalidate word spans.
+	// Also, this is the single real operation ~RegularLineEntry() does, so we are free to forget calling it.
+	std::free( lineEntry->m_wordSpansCache.wordSpans );
+	lineEntry->m_wordSpansCache.wordSpans = nullptr;
+
+	if( lineEntry->m_dataSize + chars.size() < lineEntry->m_capacity ) [[likely]] {
+		std::memcpy( lineEntry->m_data + lineEntry->m_dataSize, chars.data(), chars.size() );
+		lineEntry->m_dataSize += chars.size();
+		lineEntry->m_data[lineEntry->m_dataSize] = '\0';
 	} else {
 		LineEntry *const prev = lineEntry->prev;
 		LineEntry *const next = lineEntry->next;
 
-		LineEntry *newEntry = nullptr;
+		RegularEntry *newEntry = nullptr;
 		// The buffer for short lines has a fixed size, so the capacity of short lines can't grow.
 		// Allocate a new line on the default heap in this case.
 		if( m_linesAllocator.mayOwn( lineEntry ) ) {
-			void *mem = std::malloc( sizeof( LineEntry ) + lineEntry->dataSize + chars.size() + 1 );
+			void *mem = std::malloc( sizeof( RegularEntry ) + lineEntry->m_dataSize + chars.size() + 1 );
 			if( !mem ) [[unlikely]] {
+				lineEntry->m_isTruncated = true;
 				return;
 			}
 
-			newEntry                        = new( mem )LineEntry;
-			newEntry->data                  = (char *)( newEntry + 1 );
-			newEntry->dataSize              = lineEntry->dataSize + chars.size();
-			newEntry->capacity              = lineEntry->dataSize + chars.size();
-			newEntry->timestamp             = lineEntry->timestamp;
-			newEntry->notificationBehaviour = lineEntry->notificationBehaviour;
+			newEntry                          = new( mem )RegularEntry;
+			newEntry->m_data                  = (char *)( newEntry + 1 );
+			newEntry->m_dataSize              = lineEntry->m_dataSize + chars.size();
+			newEntry->m_capacity              = lineEntry->m_dataSize + chars.size();
+			newEntry->m_timestamp             = lineEntry->m_timestamp;
+			newEntry->m_notificationBehaviour = lineEntry->m_notificationBehaviour;
 
-			std::memcpy( newEntry->data, lineEntry->data, lineEntry->dataSize );
-			std::memcpy( newEntry->data + lineEntry->dataSize, chars.data(), chars.size() );
-			newEntry->data[newEntry->dataSize] = '\0';
+			std::memcpy( newEntry->m_data, lineEntry->m_data, lineEntry->m_dataSize );
+			std::memcpy( newEntry->m_data + lineEntry->m_dataSize, chars.data(), chars.size() );
+			newEntry->m_data[newEntry->m_dataSize] = '\0';
 
-			lineEntry->~LineEntry();
 			m_linesAllocator.free( lineEntry );
 		} else {
-			const unsigned newCapacity = ( 3 * lineEntry->dataSize + chars.size() ) / 2;
-			// Just relocate the existing entry
-			// It should be perfectly relocatable, assuming VPTRs, if any, are
-			newEntry = (LineEntry *)std::realloc( lineEntry, sizeof( LineEntry ) + newCapacity + 1 );
-			if( !newEntry ) [[unlikely]] {
+			unsigned newCapacity = ( 3u * ( lineEntry->m_dataSize + chars.size() ) ) / 2;
+			// Don't let it allocate extra bytes as the data never grows beyond this limit
+			if( newCapacity > kLineTruncationLimit ) {
+				newCapacity = kLineTruncationLimit;
+			}
+
+			// Make a backup of fields that should be preserved.
+			// Note that formatting cache fields would get reset to a default state.
+			const auto oldDataSize              = lineEntry->m_dataSize;
+			const auto oldTimestamp             = lineEntry->m_timestamp;
+			const auto oldNotificationBehaviour = lineEntry->m_notificationBehaviour;
+
+			// Try reallocating the underlying chunk
+			void *mem = std::realloc( (void *)lineEntry, sizeof( RegularEntry ) + newCapacity + 1 );
+			if( !mem ) [[unlikely]] {
+				lineEntry->m_isTruncated = true;
 				return;
 			}
-			// Patch the data pointer, so it points right after the entry header again
-			newEntry->data = (char *)( newEntry + 1 );
+
+			// Construct a new object in the same place.
+			// Patch the data pointer, so it points right after the entry header again.
+			newEntry         = new( mem )RegularEntry;
+			newEntry->m_data = ( char *)( newEntry + 1 );
+
+			newEntry->m_dataSize              = oldDataSize + chars.size();
+			newEntry->m_capacity              = newCapacity;
+			newEntry->m_timestamp             = oldTimestamp;
+			newEntry->m_notificationBehaviour = oldNotificationBehaviour;
+
 			// Copy only new characters (old ones were relocated)
-			std::memcpy( newEntry->data + newEntry->dataSize, chars.data(), chars.size() );
-			newEntry->dataSize += chars.size();
-			newEntry->capacity = newCapacity;
-			newEntry->data[newEntry->dataSize] = '\0';
+			std::memcpy( newEntry->m_data + oldDataSize, chars.data(), chars.size() );
+			newEntry->m_data[newEntry->m_dataSize] = '\0';
 		}
 
 		// Patch links, including siblings
@@ -341,35 +535,45 @@ void Console::addCharsToCurrentLine( wsw::StringView chars ) {
 		lineEntry = newEntry;
 	}
 
-	assert( lineEntry->data[lineEntry->dataSize] == '\0' );
-	assert( wsw::StringView( lineEntry->data, lineEntry->dataSize ).endsWith( chars ) );
-
-	m_totalNumChars += chars.size();
+	assert( lineEntry->m_data[lineEntry->m_dataSize] == '\0' );
+	assert( wsw::StringView( lineEntry->m_data, lineEntry->m_dataSize ).endsWith( chars ) );
 }
 
-void Console::startNewLine( NotificationBehaviour notificationBehaviour ) {
-	if( m_numLines == kMaxLines ) {
-		assert( m_lineEntriesHeadnode.prev != &m_lineEntriesHeadnode );
-		LineEntry *oldestEntry = unlink( m_lineEntriesHeadnode.prev );
-		assert( oldestEntry );
-		destroyLineEntry( oldestEntry );
+void Console::startNewLine( NotificationBehaviour notificationBehaviour, size_t sizeHint ) {
+	destroyOldestLineIfNeeded();
+
+	assert( !m_linesAllocator.isFull() );
+
+	void *newEntryMem = nullptr;
+	unsigned capacity = kUseDefaultHeapLineLimit;
+	// Allocate directly in the default heap from the beginning
+	if( sizeHint > kUseDefaultHeapLineLimit ) {
+		newEntryMem = std::malloc( sizeof( RegularEntry ) + sizeHint + 1 );
+		// Fall back to the freelist allocator (let a truncation happen later)
+		if( !newEntryMem ) [[unlikely]] {
+			newEntryMem = m_linesAllocator.allocOrNull();
+		} else {
+			capacity = sizeHint;
+		}
+	} else {
+		newEntryMem = m_linesAllocator.allocOrNull();
 	}
 
-	void *mem = m_linesAllocator.allocOrNull();
-	assert( mem );
+	auto *const newEntry              = new( newEntryMem )RegularEntry;
+	newEntry->m_data                  = (char *)( newEntry + 1 );
+	newEntry->m_dataSize              = 0;
+	newEntry->m_capacity              = capacity;
+	newEntry->m_timestamp             = cls.realtime;
+	newEntry->m_notificationBehaviour = notificationBehaviour;
 
-	auto *const newEntry            = new( mem )LineEntry;
-	newEntry->data                  = (char *)( newEntry + 1 );
-	newEntry->dataSize              = 0;
-	newEntry->capacity              = kUseDefaultHeapLineLimit;
-	newEntry->timestamp             = cls.realtime;
-	newEntry->notificationBehaviour = notificationBehaviour;
+	// Make sure that our assumptions on tight packing are valid
+	assert( (uintptr_t)newEntry->m_data == (uintptr_t)newEntryMem + sizeof( RegularEntry ) );
 
-	link( newEntry, &m_lineEntriesHeadnode );
+	link( (LineEntry *)newEntry, (LineEntry *)&m_lineEntriesHeadnode );
 	m_numLines++;
 
 	if( m_requestedLineNumOffset ) {
-		if( m_requestedLineNumOffset < kMaxLines ) {
+		if( m_requestedLineNumOffset < std::numeric_limits<decltype( m_requestedLineNumOffset )>::max() ) {
 			m_requestedLineNumOffset++;
 		}
 	}
@@ -378,10 +582,10 @@ void Console::startNewLine( NotificationBehaviour notificationBehaviour ) {
 void Console::destroyLineEntry( LineEntry *entry ) {
 	unlink( entry );
 
-	m_totalNumChars -= entry->dataSize;
 	m_numLines--;
 
 	entry->~LineEntry();
+	// We assume that all but maybe regular line entries are allocated in the default heap
 	if( m_linesAllocator.mayOwn( entry ) ) {
 		m_linesAllocator.free( entry );
 	} else {
@@ -450,6 +654,21 @@ void Console::drawPane( unsigned width, unsigned height ) {
 		return;
 	}
 
+	const float pixelRatio = Con_GetPixelRatio();
+	const int sideMargin   = 8 * pixelRatio;
+	if( width < (unsigned)sideMargin ) {
+		return;
+	}
+
+	if( m_lastPaneWidth != width || m_lastPaneHeight != height ) {
+		m_lastPaneWidth  = width;
+		m_lastPaneHeight = height;
+		m_paneResizeId++;
+		if( m_paneResizeId == 0 ) [[unlikely]] {
+			m_paneResizeId++;
+		}
+	}
+
 	// get date from system
 	time_t long_time;
 	time( &long_time );
@@ -462,9 +681,6 @@ void Console::drawPane( unsigned width, unsigned height ) {
 		Q_strncatz( version, " ", sizeof( version ) );
 		Q_strncatz( version, APP_VERSION_STAGE, sizeof( version ) );
 	}
-
-	const float pixelRatio = Con_GetPixelRatio();
-	const int sideMargin   = 8 * pixelRatio;
 
 	// draw the background
 	R_DrawStretchPic( 0, 0, width, height, 0, 0, 1, 1, colorWhite, cls.consoleShader );
@@ -511,17 +727,25 @@ void Console::drawPane( unsigned width, unsigned height ) {
 	}
 
 	int lineY = height - smallCharHeight - inputReservedHeight;
+	const unsigned lineWidthLimit = width - 2 * sideMargin;
 
 	// Lock during drawing lines
 
 	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
 
 	if( m_requestedLineNumOffset ) {
+		// Check how many visual lines are going to be there
+		// This should be relatively fast due to caching
+		unsigned totalNumLines = 0;
+		for( LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
+			totalNumLines += entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit );
+		}
+
 		// Patch it each frame
 		const unsigned numFittingLines = lineY / smallCharHeight;
-		if( m_numLines > numFittingLines ) {
-			if( m_requestedLineNumOffset > m_numLines - numFittingLines ) {
-				m_requestedLineNumOffset = m_numLines - numFittingLines;
+		if( totalNumLines > numFittingLines ) {
+			if( m_requestedLineNumOffset > totalNumLines - numFittingLines ) {
+				m_requestedLineNumOffset = totalNumLines - numFittingLines;
 			}
 		} else {
 			m_requestedLineNumOffset = 0;
@@ -541,19 +765,457 @@ void Console::drawPane( unsigned width, unsigned height ) {
 		lineY -= smallCharHeight;
 	}
 
+	// TODO: Get rid of this copying, allow supplying spans directly
+	wsw::String scrDrawStringBuffer;
+
 	// draw from the bottom up
-	unsigned numSkippedEntries = 0;
+	unsigned numSkippedLines = 0;
 	for( const LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		if( numSkippedEntries < m_requestedLineNumOffset ) {
-			numSkippedEntries++;
+		const unsigned numEntryLines = entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit );
+		if( numSkippedLines + numEntryLines <= m_requestedLineNumOffset ) {
+			numSkippedLines += numEntryLines;
 		} else {
-			SCR_DrawString( sideMargin, lineY, ALIGN_LEFT_TOP, entry->data, cls.consoleFont, colorWhite, 0 );
-			lineY -= smallCharHeight;
+			std::span<const wsw::StringView> spansToDraw = entry->getCharSpansForDrawing( m_paneResizeId, promptWidth,
+																						  lineWidthLimit, &m_drawnLinesBuilder );
+			assert( spansToDraw.size() == numEntryLines );
+			unsigned numLinesToSkip = 0;
+			if( numSkippedLines < m_requestedLineNumOffset ) {
+				numLinesToSkip = m_requestedLineNumOffset - numSkippedLines;
+				numSkippedLines += numLinesToSkip;
+			}
+
+			// TODO: Account for partial display
+			auto it = std::make_reverse_iterator( spansToDraw.end() );
+			std::advance( it, numLinesToSkip );
+
+			const auto end = std::make_reverse_iterator( spansToDraw.begin() );
+			for(; it != end; ++it ) {
+				scrDrawStringBuffer.assign( it->data(), it->size() );
+				SCR_DrawString( sideMargin, lineY, ALIGN_LEFT_TOP, scrDrawStringBuffer.data(), cls.consoleFont, colorWhite, 0 );
+				lineY -= smallCharHeight;
+				if( lineY < -smallCharHeight ) {
+					break;
+				}
+			}
 			if( lineY < -smallCharHeight ) {
 				break;
 			}
 		}
 	}
+}
+
+auto Console::RegularEntry::getRequiredCapacityForDumping() const -> unsigned {
+	if( m_dataSize ) {
+		if( m_dataSize > 1 && m_data[m_dataSize - 2] == '\r' && m_data[m_dataSize - 1] == '\n' ) {
+			return m_dataSize;
+		}
+		return m_dataSize + 2;
+	}
+	return 0;
+}
+
+auto Console::RegularEntry::dumpCharsToBuffer( char *buffer ) const -> unsigned {
+	if( m_dataSize ) {
+		std::memcpy( buffer, m_data, m_dataSize );
+		if( m_dataSize > 1 && m_data[m_dataSize - 2] == '\r' && m_data[m_dataSize - 1] == '\n' ) {
+			return m_dataSize;
+		}
+		buffer[m_dataSize + 0] = '\r';
+		buffer[m_dataSize + 1] = '\n';
+		return m_dataSize + 2;
+	}
+	return 0;
+}
+
+auto Console::RegularEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+	if( m_dataSize * glyphWidth <= widthLimit ) [[likely]] {
+		return 1;
+	}
+
+	if( m_measureCache.lastResizeId == resizeId && m_measureCache.lastDataSize == m_dataSize ) {
+		return m_measureCache.numLines;
+	}
+
+	unsigned numLines          = 1;
+	unsigned lineWidthSoFar    = 0;
+	unsigned prevSpanEndOffset = 0;
+	for( const WordSpan &wordSpan: getWordSpans() ) {
+		const unsigned spanWidth    = glyphWidth * wordSpan.length;
+		const unsigned charsBetween = wordSpan.offset - prevSpanEndOffset;
+		const unsigned advance      = spanWidth + glyphWidth * charsBetween;
+		if( lineWidthSoFar + advance <= widthLimit ) [[likely]] {
+			lineWidthSoFar += advance;
+		} else if( spanWidth <= widthLimit ) [[likely]] {
+			lineWidthSoFar = spanWidth;
+			++numLines;
+		} else {
+			lineWidthSoFar += advance;
+		}
+		prevSpanEndOffset = wordSpan.offset + wordSpan.length;
+	}
+
+	assert( m_dataSize <= std::numeric_limits<uint16_t>::max() );
+	assert( numLines <= std::numeric_limits<unsigned>::max() );
+
+	m_measureCache = MeasureCache { .lastResizeId = resizeId, .lastDataSize = m_dataSize, .numLines = numLines };
+	return numLines;
+}
+
+void Console::DrawnLinesBuilder::clear() {
+	m_tmpOffsets.clear();
+	m_tmpChars.clear();
+	m_tmpSpans.clear();
+
+	m_oldCharsData = m_tmpChars.data();
+	m_charsSizeAtLineStart = 0;
+}
+
+void Console::DrawnLinesBuilder::addShallowCopyOfCompleteLine( const wsw::StringView &line ) {
+	// Make sure that the dynamically built line is empty/is complete
+	assert( m_charsSizeAtLineStart == m_tmpChars.size() );
+	m_tmpOffsets.push_back( ~0u );
+	m_tmpSpans.push_back( line );
+}
+
+void Console::DrawnLinesBuilder::addCharsToCurrentLine( const wsw::StringView &chars ) {
+	m_tmpChars.insert( m_tmpChars.end(), chars.begin(), chars.end() );
+}
+
+void Console::DrawnLinesBuilder::addCharsWithPrefixHighlight( const wsw::StringView &chars, unsigned prefixLen,
+															  char prefixColor, char bodyStartColor, char bodyColor ) {
+	m_tmpChars.push_back( '^' );
+	m_tmpChars.push_back( prefixColor );
+	addCharsToCurrentLine( chars.take( prefixLen ) );
+	if( chars.size() > prefixLen ) [[likely]] {
+		m_tmpChars.push_back( '^' );
+		m_tmpChars.push_back( bodyStartColor );
+		m_tmpChars.push_back( chars[prefixLen] );
+		if( chars.size() > prefixLen + 1 ) [[likely]] {
+			m_tmpChars.push_back( '^' );
+			m_tmpChars.push_back( bodyColor );
+			addCharsToCurrentLine( chars.drop( prefixLen + 1 ) );
+		}
+	}
+}
+
+void Console::DrawnLinesBuilder::padCurrentLineByChars( char ch, unsigned count ) {
+	m_tmpChars.insert( m_tmpChars.end(), count, ch );
+}
+
+void Console::DrawnLinesBuilder::completeCurrentLine() {
+	m_tmpOffsets.push_back( m_charsSizeAtLineStart );
+	m_tmpSpans.push_back( { m_tmpChars.data() + m_charsSizeAtLineStart, m_tmpChars.size() - m_charsSizeAtLineStart } );
+	m_charsSizeAtLineStart = m_tmpChars.size();
+}
+
+auto Console::DrawnLinesBuilder::getFinalSpans() -> std::span<const wsw::StringView> {
+	assert( m_charsSizeAtLineStart == m_tmpChars.size() );
+	assert( m_tmpOffsets.size() == m_tmpSpans.size() );
+	if( m_oldCharsData != m_tmpChars.data() ) {
+		for( size_t i = 0; i < m_tmpSpans.size(); ++i ) {
+			// Patch pointers in string views that point to the tmpChars buffer
+			if( const unsigned maybeOffset = m_tmpOffsets[i]; maybeOffset != ~0u ) {
+				const wsw::StringView oldSpan = m_tmpSpans[i];
+				m_tmpSpans[i] = wsw::StringView( m_tmpChars.data() + maybeOffset, oldSpan.size() );
+			}
+		}
+	}
+	return m_tmpSpans;
+}
+
+auto Console::RegularEntry::getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+													DrawnLinesBuilder *drawnLinesBuilder ) const
+													-> std::span<const wsw::StringView> {
+	drawnLinesBuilder->clear();
+
+	if( m_dataSize * glyphWidth <= widthLimit ) [[likely]] {
+		// Submit data as-is
+		drawnLinesBuilder->addShallowCopyOfCompleteLine( wsw::StringView( m_data, m_dataSize ) );
+		return drawnLinesBuilder->getFinalSpans();
+	}
+
+	(void)resizeId;
+	// TODO: Share with measureNumberOfLines(), modify lastResizeId?
+
+	unsigned lineWidthSoFar    = 0;
+	unsigned prevSpanEndOffset = 0;
+	unsigned lineStartOffset   = 0;
+	int lineStartColorIndex    = COLOR_WHITE - '0';
+	for( const WordSpan &wordSpan: getWordSpans() ) {
+		const unsigned spanWidth    = glyphWidth * wordSpan.length;
+		const unsigned charsBetween = wordSpan.offset - prevSpanEndOffset;
+		const unsigned widthAdvance = spanWidth + glyphWidth * charsBetween;
+		if( lineWidthSoFar + widthAdvance <= widthLimit ) [[likely]] {
+			lineWidthSoFar += widthAdvance;
+		} else if( spanWidth <= widthLimit ) [[likely]] {
+			assert( lineStartOffset <= prevSpanEndOffset );
+			const size_t lineLength = prevSpanEndOffset - lineStartOffset;
+			if( lineStartColorIndex == COLOR_WHITE - '0' ) {
+				drawnLinesBuilder->addShallowCopyOfCompleteLine( wsw::StringView( m_data + lineStartOffset, lineLength ) );
+			} else {
+				const char prefix[2] = { '^', (char)( lineStartColorIndex + '0' ) };
+				drawnLinesBuilder->addCharsToCurrentLine( { prefix, 2 } );
+				drawnLinesBuilder->addCharsToCurrentLine( { m_data + lineStartOffset, lineLength } );
+				drawnLinesBuilder->completeCurrentLine();
+			}
+
+			// Start new line
+			lineStartOffset     = wordSpan.offset;
+			lineWidthSoFar      = spanWidth;
+			lineStartColorIndex = wordSpan.startColor;
+		} else {
+			lineWidthSoFar += widthAdvance;
+		}
+		prevSpanEndOffset = wordSpan.offset + wordSpan.length;
+	}
+
+	// Handle the last line (checking after the loop)
+	if( lineStartColorIndex == COLOR_WHITE - '0' ) {
+		drawnLinesBuilder->addShallowCopyOfCompleteLine( { m_data + lineStartOffset, m_dataSize - lineStartOffset } );
+	} else {
+		const char prefix[2] = { '^', (char)( lineStartColorIndex + '0' ) };
+		drawnLinesBuilder->addCharsToCurrentLine( { prefix, 2 } );
+		drawnLinesBuilder->addCharsToCurrentLine( { m_data + lineStartOffset, m_dataSize - lineStartOffset } );
+		drawnLinesBuilder->completeCurrentLine();
+	}
+
+	return drawnLinesBuilder->getFinalSpans();
+}
+
+auto Console::RegularEntry::getWordSpans() const -> std::span<const Console::RegularEntry::WordSpan> {
+	if( m_wordSpansCache.lastDataSize == m_dataSize ) {
+		assert( m_wordSpansCache.wordSpans != nullptr || m_dataSize == 0 );
+		return { m_wordSpansCache.wordSpans, m_wordSpansCache.numWordSpans };
+	}
+
+	assert( m_dataSize <= std::numeric_limits<uint16_t>::max() );
+	assert( m_data[m_dataSize] == '\0' );
+
+	// TODO: Implement a custom wsw::Vector template that allows transferring the underlying buffer ownership
+	// TODO: What to do in case of allocation failure?
+	PodBufferHolder<WordSpan> builtSpansHolder;
+	builtSpansHolder.reserve( 32u );
+	unsigned numBuiltSpans = 0;
+
+	const char *p = m_data;
+	assert( *p != '\0' );
+
+	bool isInsideAWord      = true;
+	const char *wordStart   = p;
+
+	int lastColorIndex      = COLOR_WHITE - '0';
+	int wordStartColorIndex = lastColorIndex;
+	for(;; ) {
+		wchar_t wchar     = 0;
+		int colorIndex    = 0;
+		const char *oldp  = p;
+		const int grabRes = Q_GrabWCharFromColorString( &p, &wchar, &colorIndex );
+
+		if( grabRes == GRABCHAR_CHAR ) {
+			assert( p - oldp > 0 );
+			assert( oldp - wordStart >= 0 );
+			if( Q_IsBreakingSpaceChar( wchar ) ) {
+				if( isInsideAWord ) {
+					if( oldp - wordStart > 0 ) {
+						// Note: growth to a ceil power of 2 is perfectly fine there
+						const size_t countToReserve = wsw::ceilPowerOf2( numBuiltSpans + 1 );
+						void *mem = builtSpansHolder.reserveAndGet( countToReserve ) + numBuiltSpans;
+						new( mem )WordSpan {
+							.offset     = (uint16_t)( wordStart - m_data ),
+							.length     = (uint16_t)( oldp - wordStart ),
+							.startColor = (uint16_t)wordStartColorIndex
+						};
+						numBuiltSpans++;
+					}
+					isInsideAWord = false;
+				}
+			} else {
+				if( !isInsideAWord ) {
+					isInsideAWord       = true;
+					wordStart           = oldp;
+					wordStartColorIndex = lastColorIndex;
+				}
+			}
+		} else if( grabRes == GRABCHAR_COLOR ) {
+			// Just update the currently tracked color
+			assert( p - oldp > 0 );
+			lastColorIndex = colorIndex;
+		} else {
+			break;
+		}
+	}
+	if( isInsideAWord ) {
+		void *mem = builtSpansHolder.reserveAndGet( numBuiltSpans + 1 ) + numBuiltSpans;
+		new( mem )WordSpan {
+			.offset     = (uint16_t)( wordStart - m_data ),
+			.length     = (uint16_t)( p - wordStart ),
+			.startColor = (uint16_t)wordStartColorIndex,
+		};
+		numBuiltSpans++;
+	}
+
+	assert( numBuiltSpans <= std::numeric_limits<unsigned>::max() );
+
+	m_wordSpansCache = WordSpansCache {
+		.wordSpans    = builtSpansHolder.releaseOwnership(),
+		.numWordSpans = numBuiltSpans,
+		.lastDataSize = m_dataSize,
+	};
+	return { m_wordSpansCache.wordSpans, m_wordSpansCache.numWordSpans };
+}
+
+auto Console::CompletionEntry::getRequiredCapacityForDumping() const -> unsigned {
+	unsigned result = m_headingSize + 2;
+	if( !m_completionResult.empty() ) {
+		for( const wsw::StringView &token: m_completionResult ) {
+			result += token.size() + 1;
+		}
+		result++;
+	}
+	return result;
+}
+
+auto Console::CompletionEntry::dumpCharsToBuffer( char *buffer ) const -> unsigned {
+	unsigned offset = m_headingSize + 2;
+	std::memcpy( buffer, m_headingData, m_headingSize );
+	buffer[offset - 2] = '\r';
+	buffer[offset - 1] = '\n';
+
+	if( !m_completionResult.empty() ) {
+		for( const wsw::StringView &token: m_completionResult ) {
+			std::memcpy( buffer + offset, token.data(), token.size() );
+			offset += token.size() + 1;
+			buffer[offset - 1] = ' ';
+		}
+
+		if( !m_completionResult.empty() ) {
+			buffer[offset - 1] = '\r';
+			buffer[offset - 0] = '\n';
+		}
+	}
+
+	return offset;
+}
+
+bool Console::CompletionEntry::checkIfFitsSingleLine( unsigned glyphWidth, unsigned widthLimit ) const {
+	unsigned totalWidth = 0;
+	for( auto it = m_completionResult.cbegin(); it != m_completionResult.cend(); ) {
+		totalWidth += glyphWidth * ( *it ).length();
+		if( totalWidth > widthLimit ) {
+			return false;
+		}
+		// TODO: Make the iterator support random access/advance, so we don't need this in the body
+		++it;
+		if( totalWidth == widthLimit && it != m_completionResult.cend() ) {
+			return false;
+		}
+		// Account for trailing space
+		totalWidth += glyphWidth;
+	}
+	return true;
+}
+
+void Console::CompletionEntry::updateMeasureCache( MeasureCache *cache, unsigned resizeId,
+												   unsigned glyphWidth, unsigned widthLimit ) const {
+	if( cache->resizeId != resizeId ) {
+		// Reset all fields to prevent misuse
+		*cache = MeasureCache { .resizeId = resizeId };
+
+		cache->fitsASingleLine = checkIfFitsSingleLine( glyphWidth, widthLimit );
+		if( !cache->fitsASingleLine ) {
+			unsigned maxTokenLength = 0;
+			for( const wsw::StringView &token: m_completionResult ) {
+				maxTokenLength = wsw::max<unsigned>( maxTokenLength, token.length() );
+			}
+			// TODO: This calculation assumes a trailing space after the last column
+			if( glyphWidth * ( maxTokenLength + 1 ) < widthLimit / 2 ) [[likely]] {
+				cache->numColumns     = widthLimit / ( glyphWidth * ( maxTokenLength + 1 ) );
+				cache->maxTokenLength = maxTokenLength;
+			}
+		}
+	}
+}
+
+auto Console::CompletionEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+	updateMeasureCache( &m_measureCache, resizeId, glyphWidth, widthLimit );
+	if( m_measureCache.fitsASingleLine ) {
+		return 2;
+	}
+	if( m_measureCache.numColumns ) {
+		unsigned numRows = m_completionResult.size() / m_measureCache.numColumns;
+		if( numRows * m_measureCache.numColumns < m_completionResult.size() ) {
+			numRows++;
+		}
+		return 1 + numRows;
+	}
+	return 1 + m_completionResult.size();
+}
+
+auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+													   DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> {
+	updateMeasureCache( &m_measureCache, resizeId, glyphWidth, widthLimit );
+
+	builder->clear();
+	builder->addShallowCopyOfCompleteLine( wsw::StringView( m_headingData, m_headingSize ) );
+
+	struct ColorTracker {
+		char lastCharUpper { '\0' };
+		unsigned lastColorIndex { ~0u };
+		[[nodiscard]]
+		char nextBodyColorForToken( const wsw::StringView &token, unsigned prefixLen ) {
+			constexpr char allowedColors[] { COLOR_GREEN, COLOR_YELLOW, COLOR_CYAN, COLOR_MAGENTA, COLOR_ORANGE };
+			if( token.length() > prefixLen ) [[likely]] {
+				if( const char currCharUpper = std::toupper( token[prefixLen] ); currCharUpper != lastCharUpper ) {
+					lastColorIndex = ( lastColorIndex + 1 ) % std::size( allowedColors );
+					lastCharUpper  = currCharUpper;
+				}
+				return allowedColors[lastColorIndex];
+			} else {
+				lastColorIndex = ( lastColorIndex + 1 ) % std::size( allowedColors );
+				return COLOR_BLACK;
+			}
+		}
+	} colorTracker;
+
+	const unsigned prefixLen = m_completionResult.getLongestCommonPrefix().length();
+	if( m_measureCache.fitsASingleLine ) {
+		for( const wsw::StringView &token: m_completionResult ) {
+			const char bodyStartColor = colorTracker.nextBodyColorForToken( token, prefixLen );
+			builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+			builder->padCurrentLineByChars( ' ', 1 );
+		}
+		builder->completeCurrentLine();
+	} else if( m_measureCache.numColumns ) {
+		unsigned numRows = m_completionResult.size() / m_measureCache.numColumns;
+		if( numRows * m_measureCache.numColumns < m_completionResult.size() ) {
+			numRows++;
+		}
+		s_tmpCompletionTokenPrefixColors.clear();
+		for( const wsw::StringView &token: m_completionResult ) {
+			s_tmpCompletionTokenPrefixColors.push_back( colorTracker.nextBodyColorForToken( token, prefixLen ) );
+		}
+		for( unsigned rowNum = 0; rowNum < numRows; ++rowNum ) {
+			for( unsigned columnNum = 0; columnNum < m_measureCache.numColumns; ++columnNum ) {
+				// Note: The stride is the number of rows in this layout
+				const unsigned tokenIndex = columnNum * numRows + rowNum;
+				if( tokenIndex >= m_completionResult.size() ) [[unlikely]] {
+					break;
+				}
+				const wsw::StringView &token = m_completionResult[tokenIndex];
+				const char bodyStartColor    = s_tmpCompletionTokenPrefixColors[tokenIndex];
+				builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+				builder->padCurrentLineByChars( ' ', m_measureCache.maxTokenLength + 1 - token.length() );
+			}
+			builder->completeCurrentLine();
+		}
+	} else {
+		for( const wsw::StringView &token: m_completionResult ) {
+			const char bodyStartColor = colorTracker.nextBodyColorForToken( token, prefixLen );
+			builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+			builder->completeCurrentLine();
+		}
+	}
+	return builder->getFinalSpans();
 }
 
 void Console::drawNotifications( unsigned width, unsigned height ) {
@@ -567,13 +1229,15 @@ void Console::drawNotifications( unsigned width, unsigned height ) {
 	const int64_t minTimestamp = cls.realtime - 1000 * wsw::max( 0, con_maxNotificationTime->integer );
 
 	// TODO: Allow specifying a filter to match?
-	wsw::StaticVector<const LineEntry *, kMaxLines> matchingLines;
+	wsw::StaticVector<const RegularEntry *, kMaxLines> matchingLines;
 	for( const LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		if( entry->notificationBehaviour == Console::DrawNotification ) {
-			if( entry->timestamp >= minTimestamp && entry->dataSize > 0 ) {
-				matchingLines.push_back( entry );
-				if( matchingLines.size() == maxLines ) {
-					break;
+		if( const RegularEntry *regularEntry = asRegularEntry( entry ) ) {
+			if( regularEntry->m_notificationBehaviour == Console::DrawNotification ) {
+				if( regularEntry->m_timestamp >= minTimestamp && regularEntry->m_dataSize > 0 ) {
+					matchingLines.push_back( regularEntry );
+					if( matchingLines.size() == maxLines ) {
+						break;
+					}
 				}
 			}
 		}
@@ -593,8 +1257,9 @@ void Console::drawNotifications( unsigned width, unsigned height ) {
 
 	int textY = 0;
 	const int textX = 8 * pixelRatio;
-	for( const LineEntry *line: matchingLines ) {
-		SCR_DrawString( textX, textY, ALIGN_LEFT_TOP, line->data, cls.consoleFont, colorWhite, 0 );
+	for( const RegularEntry *line: matchingLines ) {
+		// TODO: Is it guaranteed to be zero-terminated?
+		SCR_DrawString( textX, textY, ALIGN_LEFT_TOP, line->m_data, cls.consoleFont, colorWhite, 0 );
 		textY += fontHeight;
 	}
 }
@@ -638,18 +1303,36 @@ void Console::setCurrHistoryEntry( HistoryEntry *historyEntry ) {
 	m_inputPos = m_inputLine.size();
 }
 
-void Console::printCompletionResultAsList( const char *color, const char *itemSingular, const char *itemPlural,
-										   const CompletionResult &completionResult ) {
-	// TODO: Add column-wise formatting as a custom line wrap function for a line entry
-	wsw::String lineBuffer;
-	for( const wsw::StringView &view: completionResult ) {
-		lineBuffer.append( view.data(), view.size() );
-		lineBuffer.push_back( ' ' );
-	}
+void Console::addCompletionEntry( char color, const wsw::StringView &itemSingular, const wsw::StringView &itemPlural,
+								  CompletionResult &&completionResult ) {
+	wsw::StaticString<16> countPrefix;
+	countPrefix << completionResult.size() << ' ';
+	const wsw::StringView suffix( " available:" );
+	const wsw::StringView &itemDesc = completionResult.size() != 1 ? itemPlural : itemSingular;
 
-	const char *itemNoun = completionResult.size() == 1 ? itemSingular : itemPlural;
-	Com_Printf( "%s%d %s possible\n", color, completionResult.size(), itemNoun );
-	Com_Printf( "%s\n", lineBuffer.data() );
+	const size_t allocationSize = sizeof( CompletionEntry ) + countPrefix.size() + itemDesc.size() + suffix.size() + 3;
+	if( void *mem = std::malloc( allocationSize ) ) [[likely]] {
+		// Moving the completion result won't fail
+		auto *newEntry  = new( mem )CompletionEntry( std::forward<CompletionResult>( completionResult ) );
+
+		newEntry->m_headingData    = (char *)( newEntry + 1 );
+		newEntry->m_headingData[0] = '^';
+		newEntry->m_headingData[1] = color;
+		newEntry->m_headingSize    = 2;
+
+		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, countPrefix.data(), countPrefix.size() );
+		newEntry->m_headingSize += countPrefix.size();
+		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, itemDesc.data(), itemDesc.size() );
+		newEntry->m_headingSize += itemDesc.size();
+		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, suffix.data(), suffix.size() );
+		newEntry->m_headingSize += suffix.size();
+		newEntry->m_headingData[newEntry->m_headingSize] = '\0';
+
+		destroyOldestLineIfNeeded();
+
+		link( (LineEntry *)newEntry, (LineEntry *)&m_lineEntriesHeadnode );
+		m_numLines++;
+	}
 }
 
 [[nodiscard]]
@@ -682,7 +1365,7 @@ bool Console::isAwaitingAsyncCompletion() const {
 	return m_lastAsyncCompletionRequestAt + 500 > cls.realtime;
 }
 
-void Console::acceptCommandCompletionResult( unsigned requestId, const CompletionResult &result ) {
+void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResult &&result ) {
 	// Timed out/obsolete?
 	if( m_lastAsyncCompletionRequestId != requestId ) {
 		return;
@@ -700,7 +1383,8 @@ void Console::acceptCommandCompletionResult( unsigned requestId, const Completio
 					m_inputLine.append( result.front().take( maxCharsToAdd ) );
 				} else {
 					m_inputLine.append( result.getLongestCommonPrefix().take( maxCharsToAdd ) );
-					printCompletionResultAsList( S_COLOR_GREEN, "argument", "arguments", result );
+					[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
+					addCompletionEntry( COLOR_GREEN, "argument"_asView, "arguments"_asView, std::move( result ) );
 				}
 				m_inputPos = m_inputLine.size();
 			}
@@ -759,9 +1443,9 @@ void Console::handleCompleteKeyAction() {
 		// TODO: Could aliases accept args?
 		;
 	} else if( maybeCommandLikePrefix.size() == inputText.size() ) {
-		const CompletionResult &cmdCompletionResult   = CL_GetPossibleCommands( maybeCommandLikePrefix );
-		const CompletionResult &varCompletionResult   = Cvar_CompleteBuildList( maybeCommandLikePrefix );
-		const CompletionResult &aliasCompletionResult = CL_GetPossibleAliases( maybeCommandLikePrefix );
+		CompletionResult cmdCompletionResult   = CL_GetPossibleCommands( maybeCommandLikePrefix );
+		CompletionResult varCompletionResult   = Cvar_CompleteBuildList( maybeCommandLikePrefix );
+		CompletionResult aliasCompletionResult = CL_GetPossibleAliases( maybeCommandLikePrefix );
 
 		const size_t totalSize = cmdCompletionResult.size() + varCompletionResult.size() + aliasCompletionResult.size();
 		if( totalSize == 0 ) {
@@ -782,14 +1466,16 @@ void Console::handleCompleteKeyAction() {
 			m_inputLine.append( chosenCompletion.take( kInputLengthLimit - m_inputLine.size() ) );
 			m_inputPos = m_inputLine.size();
 		} else {
+			// Add up to 3 entries in an atomic fashion
+			[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
 			if( !cmdCompletionResult.empty() ) {
-				printCompletionResultAsList( S_COLOR_RED, "command", "commands", cmdCompletionResult );
+				addCompletionEntry( COLOR_MAGENTA, "command"_asView, "commands"_asView, std::move( cmdCompletionResult ));
 			}
 			if( !varCompletionResult.empty() ) {
-				printCompletionResultAsList( S_COLOR_CYAN, "var", "vars", varCompletionResult );
+				addCompletionEntry( COLOR_CYAN, "var"_asView, "vars"_asView, std::move( varCompletionResult ) );
 			}
 			if( !aliasCompletionResult.empty() ) {
-				printCompletionResultAsList( S_COLOR_MAGENTA, "alias", "aliases", aliasCompletionResult );
+				addCompletionEntry( COLOR_ORANGE, "alias"_asView, "aliases"_asView, std::move( aliasCompletionResult ) );
 			}
 		}
 	}
@@ -866,19 +1552,19 @@ void Console::handleHistoryDownKeyAction() {
 }
 
 void Console::handleScrollUpKeyAction() {
-	if( m_requestedLineNumOffset < kMaxLines ) {
+	if( m_requestedLineNumOffset < std::numeric_limits<decltype( m_requestedLineNumOffset )>::max() ) {
 		m_requestedLineNumOffset++;
 	}
 }
 
 void Console::handleScrollDownKeyAction() {
-	if( m_requestedLineNumOffset ) {
+	if( m_requestedLineNumOffset > 0 ) {
 		m_requestedLineNumOffset--;
 	}
 }
 
 void Console::handlePositionPageAtStartAction() {
-	m_requestedLineNumOffset = kMaxLines;
+	m_requestedLineNumOffset = std::numeric_limits<decltype( m_requestedLineNumOffset )>::max();
 }
 
 void Console::handlePositionPageAtEndAction() {
@@ -1060,19 +1746,21 @@ void Console::handleCharInputEvent( int key ) {
 auto Console::dumpLinesToBuffer() const -> wsw::Vector<char> {
 	[[maybe_unused]] volatile std::lock_guard lock( m_mutex );
 
-	const size_t bufferSize = m_totalNumChars + 2 * m_numLines + 1;
-	wsw::Vector<char> result;
-	result.reserve( bufferSize );
-
-	assert( m_totalNumChars + 2 * m_numLines < bufferSize );
-
+	size_t bufferSize = 0;
 	for( LineEntry *entry = m_lineEntriesHeadnode.prev; entry != &m_lineEntriesHeadnode; entry = entry->prev ) {
-		result.insert( result.end(), entry->data, entry->data + entry->dataSize );
-		result.push_back( '\r' );
-		result.push_back( '\n' );
+		bufferSize += entry->getRequiredCapacityForDumping();
 	}
 
-	result.push_back( '\0' );
+	wsw::Vector<char> result;
+	result.resize( bufferSize + 1 );
+
+	char *writePtr = result.data();
+	for( LineEntry *entry = m_lineEntriesHeadnode.prev; entry != &m_lineEntriesHeadnode; entry = entry->prev ) {
+		const unsigned advance = entry->dumpCharsToBuffer( writePtr );
+		writePtr += advance;
+	}
+
+	result.back() = '\0';
 	return result;
 }
 
@@ -1132,7 +1820,8 @@ bool Con_HandleKeyEvent( int key, bool down ) {
 
 void Con_AcceptCompletionResult( unsigned requestId, const CompletionResult &result ) {
 	if( con_initialized ) {
-		g_console.instance()->acceptCommandCompletionResult( requestId, result );
+		// TODO: Move the completion result properly
+		g_console.instance()->acceptCommandCompletionResult( requestId, CompletionResult { result } );
 	}
 }
 

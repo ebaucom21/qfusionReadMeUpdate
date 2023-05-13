@@ -20,6 +20,14 @@ public:
 	PodBufferHolder( const PodBufferHolder<T> & ) = delete;
 	auto operator=( const PodBufferHolder<T> & ) -> PodBufferHolder<T> & = delete;
 
+	[[nodiscard]]
+	auto releaseOwnership() -> T * {
+		T *result  = m_data;
+		m_data     = nullptr;
+		m_capacity = 0;
+		return result;
+	}
+
 	PodBufferHolder( PodBufferHolder<T> &&that ) noexcept {
 		m_data     = that.m_data;
 		m_capacity = that.m_capacity;
