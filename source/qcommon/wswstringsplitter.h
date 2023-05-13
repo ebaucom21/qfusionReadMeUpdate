@@ -1,5 +1,5 @@
-#ifndef WSW_WSWSTRINGSPLITTER_H
-#define WSW_WSWSTRINGSPLITTER_H
+#ifndef WSW_27409e02_9398_49e5_989a_f64535e0ec7a_H
+#define WSW_27409e02_9398_49e5_989a_f64535e0ec7a_H
 
 #include "wswstringview.h"
 #include <type_traits>
@@ -14,6 +14,8 @@ class StringSplitter {
 	[[nodiscard]]
 	static auto lenOf( Separator separator ) -> unsigned {
 		if constexpr( std::is_same_v<wsw::StringView, std::remove_cvref_t<Separator>> ) {
+			// Make sure we are going to avdance
+			assert( separator.length() > 0 );
 			return separator.length();
 		}
 		return 1;
@@ -21,12 +23,12 @@ class StringSplitter {
 
 	template <typename Separator>
 	[[nodiscard]]
-	auto getNext_( Separator separator ) -> std::optional<wsw::StringView> {
+	auto getNext_( Separator separator, unsigned options ) -> std::optional<wsw::StringView> {
 		for(;; ) {
 			if( auto maybeIndex = m_data.indexOf( separator ) ) {
 				auto index = *maybeIndex;
 				// Disallow empty tokens
-				if( index ) {
+				if( index || ( options & AllowEmptyTokens ) ) {
 					auto result = m_data.take( index );
 					m_data = m_data.drop( index + lenOf( separator ) );
 					m_tokenNum++;
@@ -48,11 +50,11 @@ class StringSplitter {
 
 	template <typename Separator>
 	[[nodiscard]]
-	auto getNextWithNum_( Separator separator ) -> std::optional<std::pair<wsw::StringView, size_t>> {
+	auto getNextWithNum_( Separator separator, unsigned options ) -> std::optional<std::pair<wsw::StringView, size_t>> {
 		for(;; ) {
 			if( auto maybeIndex = m_data.indexOf( separator ) ) {
 				auto index = *maybeIndex;
-				if( index ) {
+				if( index || ( options & AllowEmptyTokens ) ) {
 					auto view = m_data.take( index );
 					m_data = m_data.drop( index + lenOf( separator ) );
 					auto num = m_tokenNum;
@@ -82,36 +84,38 @@ public:
 		return m_tokenNum - 1;
 	}
 
+	enum : unsigned { AllowEmptyTokens = 0x1 };
+
 	[[nodiscard]]
-	auto getNext( char separator = ' ' ) -> std::optional<wsw::StringView> {
-		return getNext_( separator );
+	auto getNext( char separator = ' ', unsigned options = 0 ) -> std::optional<wsw::StringView> {
+		return getNext_( separator, options );
 	}
 
 	[[nodiscard]]
-	auto getNext( const wsw::CharLookup &separatorChars ) -> std::optional<wsw::StringView> {
-		return getNext_( separatorChars );
+	auto getNext( const wsw::CharLookup &separatorChars, unsigned options = 0 ) -> std::optional<wsw::StringView> {
+		return getNext_( separatorChars, options );
 	}
 
 	[[nodiscard]]
-	auto getNext( const wsw::StringView &separatorString ) -> std::optional<wsw::StringView> {
+	auto getNext( const wsw::StringView &separatorString, unsigned options = 0 ) -> std::optional<wsw::StringView> {
 		assert( !separatorString.empty() );
-		return getNext_( separatorString );
+		return getNext_( separatorString, options );
 	}
 
 	[[nodiscard]]
-	auto getNextWithNum( char separator = ' ' ) -> std::optional<std::pair<wsw::StringView, size_t>> {
-		return getNextWithNum_( separator );
+	auto getNextWithNum( char separator = ' ', unsigned options = 0 ) -> std::optional<std::pair<wsw::StringView, size_t>> {
+		return getNextWithNum_( separator, options );
 	}
 
 	[[nodiscard]]
-	auto getNextWithNum( const wsw::CharLookup &separatorChars ) -> std::optional<std::pair<wsw::StringView, size_t>> {
-		return getNextWithNum_( separatorChars );
+	auto getNextWithNum( const wsw::CharLookup &separatorChars, unsigned options = 0 ) -> std::optional<std::pair<wsw::StringView, size_t>> {
+		return getNextWithNum_( separatorChars, options );
 	}
 
 	[[nodiscard]]
-	auto getNextWithNum( const wsw::StringView &separatorString ) -> std::optional<std::pair<wsw::StringView, size_t>> {
+	auto getNextWithNum( const wsw::StringView &separatorString, unsigned options = 0 ) -> std::optional<std::pair<wsw::StringView, size_t>> {
 		assert( !separatorString.empty() );
-		return getNextWithNum_( separatorString );
+		return getNextWithNum_( separatorString, options );
 	}
 };
 

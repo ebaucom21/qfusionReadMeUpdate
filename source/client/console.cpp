@@ -103,15 +103,18 @@ public:
 	auto dumpLinesToBuffer() const -> wsw::Vector<char>;
 private:
 	static constexpr unsigned kMaxLines                = 512u;
-	static constexpr unsigned kUseDefaultHeapLineLimit = 256u;
+	static constexpr unsigned kUseDefaultHeapLineLimit = 192u;
 	static constexpr unsigned kInputLengthLimit        = 256u;
+	static constexpr unsigned kLineTruncationLimit     = 4u * 4096u;
 
 	struct LineEntry {
 		int64_t timestamp { 0 };
 		LineEntry *prev { nullptr }, *next { nullptr };
-		const char *data { nullptr };
+		char *data { nullptr };
 		unsigned dataSize { 0 };
+		unsigned capacity { 0 };
 		NotificationBehaviour notificationBehaviour { DrawNotification };
+		bool isFrozenForAddition { false };
 	};
 
 	struct HistoryEntry {
@@ -120,7 +123,8 @@ private:
 		unsigned dataSize { 0 };
 	};
 
-	void addLine( wsw::StringView line, NotificationBehaviour notificationBehaviour );
+	void addCharsToCurrentLine( wsw::StringView chars );
+	void startNewLine( NotificationBehaviour notificationBehaviour );
 	void destroyLineEntry( LineEntry *entry );
 	void destroyAllLines();
 
@@ -150,7 +154,7 @@ private:
 	void handlePositionPageAtStartAction();
 	void handlePositionPageAtEndAction();
 
-	wsw::HeapBasedFreelistAllocator m_linesAllocator { sizeof( LineEntry ) + kUseDefaultHeapLineLimit, kMaxLines };
+	wsw::HeapBasedFreelistAllocator m_linesAllocator { sizeof( LineEntry ) + kUseDefaultHeapLineLimit + 1, kMaxLines };
 	wsw::HeapBasedFreelistAllocator m_historyAllocator { sizeof( HistoryEntry ) + kInputLengthLimit + 1, 32 };
 
 	mutable std::mutex m_mutex;
@@ -232,6 +236,10 @@ void Console::clearInput() {
 	m_lastAsyncCompletionFullLength = 0;
 }
 
+// TODO: This is not really correct, we should try matching "\r\n" sequence first.
+// Luckily, practically everything uses just a single "\n".
+static wsw::CharLookup kSeparatorChars( wsw::StringView( "\r\n" ) );
+
 void Console::addText( wsw::StringView text, NotificationBehaviour notificationBehaviour ) {
 	if( text.empty() ) [[unlikely]] {
 		return;
@@ -240,17 +248,106 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 	[[maybe_unused]] volatile std::scoped_lock<std::mutex> mutexLock( m_mutex );
 
 	wsw::StringSplitter splitter( text );
-	while( const std::optional<wsw::StringView> maybeLine = splitter.getNext( wsw::StringView( "\r\n" ) ) ) {
-		addLine( *maybeLine, notificationBehaviour );
+	while( const auto maybeLine = splitter.getNext( kSeparatorChars, wsw::StringSplitter::AllowEmptyTokens ) ) {
+		const LineEntry *formerCurrLineEntry = m_lineEntriesHeadnode.next;
+		if( formerCurrLineEntry == &m_lineEntriesHeadnode ) [[unlikely]] {
+			startNewLine( notificationBehaviour );
+		} else if( formerCurrLineEntry->isFrozenForAddition ) {
+			startNewLine( notificationBehaviour );
+		}
+
+		const bool endsWithLineFeed = maybeLine->data() + maybeLine->length() < text.data() + text.size();
+		if( endsWithLineFeed ) {
+			// Trim trailing whitespaces to the left of the line feed
+			addCharsToCurrentLine( maybeLine->trimRight() );
+		} else {
+			addCharsToCurrentLine( *maybeLine );
+		}
+
+		// Could change during execution of the loop step
+		LineEntry *actualCurrLineEntry = m_lineEntriesHeadnode.next;
+		if( notificationBehaviour != SuppressNotification ) {
+			// Bump notification properties in this case
+			actualCurrLineEntry->notificationBehaviour = notificationBehaviour;
+			actualCurrLineEntry->timestamp             = cls.realtime;
+		}
+		if( endsWithLineFeed ) {
+			actualCurrLineEntry->isFrozenForAddition = true;
+		}
 	}
 }
 
-void Console::addLine( wsw::StringView line, NotificationBehaviour notificationBehaviour ) {
-	line = line.trimRight();
-	if( line.empty() ) [[unlikely]] {
-		return;
+void Console::addCharsToCurrentLine( wsw::StringView chars ) {
+	LineEntry *lineEntry = m_lineEntriesHeadnode.next;
+	assert( lineEntry != &m_lineEntriesHeadnode );
+
+	// TODO: Mark as truncated as well?
+	chars = chars.take( kLineTruncationLimit );
+
+	if( lineEntry->dataSize + chars.size() < lineEntry->capacity ) [[likely]] {
+		std::memcpy( lineEntry->data + lineEntry->dataSize, chars.data(), chars.size() );
+		lineEntry->dataSize += chars.size();
+		lineEntry->data[lineEntry->dataSize] = '\0';
+	} else {
+		LineEntry *const prev = lineEntry->prev;
+		LineEntry *const next = lineEntry->next;
+
+		LineEntry *newEntry = nullptr;
+		// The buffer for short lines has a fixed size, so the capacity of short lines can't grow.
+		// Allocate a new line on the default heap in this case.
+		if( m_linesAllocator.mayOwn( lineEntry ) ) {
+			void *mem = std::malloc( sizeof( LineEntry ) + lineEntry->dataSize + chars.size() + 1 );
+			if( !mem ) [[unlikely]] {
+				return;
+			}
+
+			newEntry                        = new( mem )LineEntry;
+			newEntry->data                  = (char *)( newEntry + 1 );
+			newEntry->dataSize              = lineEntry->dataSize + chars.size();
+			newEntry->capacity              = lineEntry->dataSize + chars.size();
+			newEntry->timestamp             = lineEntry->timestamp;
+			newEntry->notificationBehaviour = lineEntry->notificationBehaviour;
+
+			std::memcpy( newEntry->data, lineEntry->data, lineEntry->dataSize );
+			std::memcpy( newEntry->data + lineEntry->dataSize, chars.data(), chars.size() );
+			newEntry->data[newEntry->dataSize] = '\0';
+
+			lineEntry->~LineEntry();
+			m_linesAllocator.free( lineEntry );
+		} else {
+			const unsigned newCapacity = ( 3 * lineEntry->dataSize + chars.size() ) / 2;
+			// Just relocate the existing entry
+			// It should be perfectly relocatable, assuming VPTRs, if any, are
+			newEntry = (LineEntry *)std::realloc( lineEntry, sizeof( LineEntry ) + newCapacity + 1 );
+			if( !newEntry ) [[unlikely]] {
+				return;
+			}
+			// Patch the data pointer, so it points right after the entry header again
+			newEntry->data = (char *)( newEntry + 1 );
+			// Copy only new characters (old ones were relocated)
+			std::memcpy( newEntry->data + newEntry->dataSize, chars.data(), chars.size() );
+			newEntry->dataSize += chars.size();
+			newEntry->capacity = newCapacity;
+			newEntry->data[newEntry->dataSize] = '\0';
+		}
+
+		// Patch links, including siblings
+		prev->next     = newEntry;
+		newEntry->prev = prev;
+
+		next->prev     = newEntry;
+		newEntry->next = next;
+
+		lineEntry = newEntry;
 	}
 
+	assert( lineEntry->data[lineEntry->dataSize] == '\0' );
+	assert( wsw::StringView( lineEntry->data, lineEntry->dataSize ).endsWith( chars ) );
+
+	m_totalNumChars += chars.size();
+}
+
+void Console::startNewLine( NotificationBehaviour notificationBehaviour ) {
 	if( m_numLines == kMaxLines ) {
 		assert( m_lineEntriesHeadnode.prev != &m_lineEntriesHeadnode );
 		LineEntry *oldestEntry = unlink( m_lineEntriesHeadnode.prev );
@@ -258,32 +355,18 @@ void Console::addLine( wsw::StringView line, NotificationBehaviour notificationB
 		destroyLineEntry( oldestEntry );
 	}
 
-	void *mem = nullptr;
-	if( line.size() >= kUseDefaultHeapLineLimit ) {
-		mem = std::malloc( sizeof( LineEntry ) + line.size() + 1 );
-		if( !mem ) {
-			// TODO: Truncate it correctly
-			line = line.take( kUseDefaultHeapLineLimit );
-		}
-	}
+	void *mem = m_linesAllocator.allocOrNull();
+	assert( mem );
 
-	if( !mem ) {
-		mem = m_linesAllocator.allocOrNull();
-		assert( mem );
-	}
-
-	auto *const newEntry = new( mem )LineEntry;
-	auto *const textData = (char *)( newEntry + 1 );
-	line.copyTo( textData, line.size() + 1 );
-
-	newEntry->data                  = textData;
-	newEntry->dataSize              = line.size();
+	auto *const newEntry            = new( mem )LineEntry;
+	newEntry->data                  = (char *)( newEntry + 1 );
+	newEntry->dataSize              = 0;
+	newEntry->capacity              = kUseDefaultHeapLineLimit;
 	newEntry->timestamp             = cls.realtime;
 	newEntry->notificationBehaviour = notificationBehaviour;
 
 	link( newEntry, &m_lineEntriesHeadnode );
 	m_numLines++;
-	m_totalNumChars += line.size();
 
 	if( m_requestedLineNumOffset ) {
 		if( m_requestedLineNumOffset < kMaxLines ) {
