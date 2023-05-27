@@ -1336,12 +1336,12 @@ void Console::addCompletionEntry( char color, const wsw::StringView &itemSingula
 }
 
 [[nodiscard]]
-static bool isExactlyACommand( const wsw::StringView &text ) {
+static bool isExactlyACommand( const wsw::HashedStringView &text ) {
 	return CL_GetCmdSystem()->isARegisteredCommand( text );
 }
 
 [[nodiscard]]
-static bool isExactlyAVar( const wsw::StringView &text ) {
+static bool isExactlyAVar( const wsw::HashedStringView &text ) {
 	if( text.size() <= MAX_STRING_CHARS ) {
 		if( text.isZeroTerminated() ) {
 			return Cvar_Find( text.data() );
@@ -1352,7 +1352,7 @@ static bool isExactlyAVar( const wsw::StringView &text ) {
 }
 
 [[nodiscard]]
-static bool isExactlyAnAlias( const wsw::StringView &text ) {
+static bool isExactlyAnAlias( const wsw::HashedStringView &text ) {
 	return CL_GetCmdSystem()->isARegisteredAlias( text );
 }
 
@@ -1417,7 +1417,7 @@ void Console::handleCompleteKeyAction() {
 		droppedFirstChar = true;
 	}
 
-	const wsw::StringView &maybeCommandLikePrefix = takeCommandLikePrefix( inputText );
+	const wsw::HashedStringView maybeCommandLikePrefix( takeCommandLikePrefix( inputText ) );
 	if( maybeCommandLikePrefix.empty() ) [[unlikely]] {
 		return;
 	}
@@ -1628,7 +1628,7 @@ void Console::handleSubmitKeyAction() {
 	} else if( con_chatmode && con_chatmode->integer == 1 ) {
 		type = Chat;
 	} else {
-		const wsw::StringView &prefix = takeCommandLikePrefix( m_inputLine.asView() );
+		const wsw::HashedStringView prefix( takeCommandLikePrefix( m_inputLine.asView() ) );
 		if( isExactlyACommand( prefix ) || isExactlyAVar( prefix ) || isExactlyAnAlias( prefix ) ) {
 			type = Command;
 		} else {

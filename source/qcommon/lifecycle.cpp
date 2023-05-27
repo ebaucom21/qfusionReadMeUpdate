@@ -523,9 +523,6 @@ void Cmd_RemoveClientAndServerCommand( const char *name ) {
 	SV_GetCmdSystem()->unregisterCommand( nameView );
 }
 
-void Cmd_WriteAliases( int ) {
-}
-
 static void Cmd_Init( void ) {
 	assert( !cmd_initialized );
 	assert( cmd_preinitialized );

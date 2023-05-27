@@ -91,8 +91,6 @@ using CompletionExecutionFunc = void (*)( const wsw::StringView &name, unsigned 
 void Cmd_AddClientAndServerCommand( const char *cmd_name, CmdFunc cmdFunc, CompletionQueryFunc completionFunc = nullptr );
 void Cmd_RemoveClientAndServerCommand( const char *cmd_name );
 
-void Cmd_WriteAliases( int file );
-
 #define Cmd_Argc()      ( cmdArgs.size() )
 #define Cmd_Argv( arg ) ( cmdArgs[arg].data() )
 #define Cmd_Args()      ( cmdArgs.argsString.data() )

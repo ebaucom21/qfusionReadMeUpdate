@@ -24,11 +24,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cmdargssplitter.h"
 #include "cmdcompat.h"
-#include "wswstringview.h"
+#include "mapofboxednamedentries.h"
 
 class CmdSystem {
 public:
-	virtual ~CmdSystem();
+	virtual ~CmdSystem() = default;
 
 	// TODO: Check whether no command text is submitted partially, track submitted boundaries
 
@@ -47,12 +47,12 @@ public:
 	virtual bool unregisterCommand( const wsw::StringView &name );
 
 	[[nodiscard]]
-	bool isARegisteredCommand( const wsw::StringView &name ) const {
-		return findCmdEntryByName( name ) != nullptr;
+	bool isARegisteredCommand( const wsw::HashedStringView &name ) const {
+		return m_cmdEntries.constFindByName( name ) != nullptr;
 	}
 	[[nodiscard]]
-	bool isARegisteredAlias( const wsw::StringView &name ) const {
-		return findAliasEntryByName( name ) != nullptr;
+	bool isARegisteredAlias( const wsw::HashedStringView &name ) const {
+		return m_aliasEntries.constFindByName( name ) != nullptr;
 	}
 
 	void executeBufferCommands();
@@ -78,38 +78,16 @@ protected:
 	void helperForHandlerOfWait( const CmdArgs &cmdArgs );
 	void helperForHandlerOfVstr( const CmdArgs &cmdArgs );
 
-	struct CmdEntry {
-		CmdEntry *prev { nullptr }, *next { nullptr };
-		wsw::HashedStringView nameAndHash;
-		unsigned binIndex;
-		CmdFunc cmdFunc { nullptr };
+	struct CmdEntry : public BoxedHashMapNamedEntry<CmdEntry>, public BoxedListEntry<CmdEntry> {
+		friend class CmdSystem;
+		CmdFunc m_cmdFunc { nullptr };
 	};
 
-	struct AliasEntry {
-		AliasEntry *prev { nullptr }, *next { nullptr };
-		wsw::HashedStringView nameAndHash;
-		wsw::StringView text;
-		unsigned binIndex;
-		bool isArchive { false };
+	struct AliasEntry : public BoxedHashMapNamedEntry<AliasEntry>, public BoxedListEntry<AliasEntry> {
+		friend class CmdSystem;
+		wsw::StringView m_text;
+		bool m_isArchive { false };
 	};
-
-	// TODO: We need a reusable hash map that relies on intrusive links
-
-	[[nodiscard]]
-	auto findCmdEntryByName( const wsw::StringView &name ) const -> const CmdEntry * {
-		wsw::HashedStringView nameAndHash( name );
-		return findEntryByName( nameAndHash, m_cmdEntryBins, nameAndHash.getHash() % std::size( m_cmdEntryBins ) );
-	}
-
-	[[nodiscard]]
-	auto findAliasEntryByName( const wsw::StringView &name ) const -> const AliasEntry * {
-		wsw::HashedStringView nameAndHash( name );
-		return findEntryByName( nameAndHash, m_aliasEntryBins, nameAndHash.getHash() % std::size( m_aliasEntryBins ) );
-	}
-
-	template <typename T>
-	[[nodiscard]]
-	auto findEntryByName( const wsw::HashedStringView &nameAndHash, const T *const *bins, unsigned binIndex ) const -> const T *;
 
 	class TextBuffer {
 	public:
@@ -123,8 +101,8 @@ protected:
 		unsigned m_headOffset { 0 };
 	};
 
-	CmdEntry *m_cmdEntryBins[37] {};
-	AliasEntry *m_aliasEntryBins[37] {};
+	MapOfBoxedNamedEntries<CmdEntry, 51, wsw::IgnoreCase> m_cmdEntries;
+	MapOfBoxedNamedEntries<AliasEntry, 37, wsw::IgnoreCase> m_aliasEntries;
 
 	TextBuffer m_textBuffer;
 	CmdArgsSplitter m_argsSplitter;

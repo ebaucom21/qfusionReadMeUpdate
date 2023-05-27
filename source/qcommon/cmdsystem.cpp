@@ -97,32 +97,6 @@ void CmdSystem::TextBuffer::shrinkToFit() {
 	m_headOffset = 0;
 }
 
-CmdSystem::~CmdSystem() {
-	for( unsigned i = 0; i < std::size( m_cmdEntryBins ); ++i ) {
-		for( CmdEntry *entry = m_cmdEntryBins[i], *next; entry; entry = next ) { next = entry->next;
-			entry->~CmdEntry();
-			::free( entry );
-		}
-	}
-	for( unsigned i = 0; i < std::size( m_aliasEntryBins ); ++i ) {
-		for( AliasEntry *entry = m_aliasEntryBins[i], *next = nullptr; entry; entry = next ) { next = entry->next;
-			entry->~AliasEntry();
-			::free( entry );
-		}
-	}
-}
-
-template <typename T>
-auto CmdSystem::findEntryByName( const wsw::HashedStringView &nameAndHash, const T *const *bins,
-								 unsigned binIndex ) const -> const T * {
-	for( const T *entry = bins[binIndex]; entry; entry = entry->next ) {
-		if( entry->nameAndHash.equalsIgnoreCase( nameAndHash ) ) {
-			return entry;
-		}
-	}
-	return nullptr;
-}
-
 bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) {
 	if( name.empty() ) {
 		Com_Printf( S_COLOR_RED "Failed to register command: Empty command name\n" );
@@ -136,10 +110,9 @@ bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) 
 	}
 
 	const wsw::HashedStringView nameAndHash( name );
-	const auto binIndex = nameAndHash.getHash() % std::size( m_cmdEntryBins );
-	if( CmdEntry *existing = const_cast<CmdEntry *>( findEntryByName( nameAndHash, m_cmdEntryBins, binIndex ) ) ) {
+	if( CmdEntry *existing = m_cmdEntries.findByName( nameAndHash ) ) {
 		Com_DPrintf( "The command %s is already registered, just updating the handler\n", name.data() );
-		existing->cmdFunc = cmdFunc;
+		existing->m_cmdFunc = cmdFunc;
 		return true;
 	}
 
@@ -153,26 +126,23 @@ bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) 
 	auto *chars = (char *)( entry + 1 );
 	nameAndHash.copyTo( chars, nameAndHash.size() + 1 );
 
-	entry->nameAndHash = wsw::HashedStringView( chars, name.length(), wsw::StringView::ZeroTerminated );
-	entry->cmdFunc     = cmdFunc;
-	entry->binIndex    = binIndex;
+	entry->m_nameAndHash = wsw::HashedStringView( chars, name.length(), wsw::StringView::ZeroTerminated );
+	entry->m_cmdFunc     = cmdFunc;
 
-	wsw::link( entry, &m_cmdEntryBins[binIndex] );
+	m_cmdEntries.insertUniqueTakingOwneship( entry );
+
 	return true;
 }
 
 bool CmdSystem::unregisterCommand( const wsw::StringView &name ) {
 	if( !name.empty() ) {
-		assert( name.isZeroTerminated() );
-		auto *entry = const_cast<CmdEntry *>( findCmdEntryByName( name ) );
-		if( !entry ) {
+		if( CmdEntry *entry = m_cmdEntries.findByName( wsw::HashedStringView( name ) ) ) {
+			m_cmdEntries.remove( entry );
+			return true;
+		} else {
+			assert( name.isZeroTerminated() );
 			Com_Printf( S_COLOR_RED "Failed to unregister command: %s not registered\n", name.data() );
 			return false;
-		} else {
-			wsw::unlink( entry, &m_cmdEntryBins[entry->binIndex] );
-			entry->~CmdEntry();
-			::free( entry );
-			return true;
 		}
 	} else {
 		Com_Printf( S_COLOR_RED "Failed to unregister command: Empty command name\n" );
@@ -195,9 +165,7 @@ void CmdSystem::executeBufferCommands() {
 }
 
 void CmdSystem::executeNow( const wsw::StringView &text ) {
-	const CmdArgs &cmdArgs = m_argsSplitter.exec( text );
-
-	if( !cmdArgs.allArgs.empty() ) {
+	if( const CmdArgs &cmdArgs = m_argsSplitter.exec( text ); !cmdArgs.allArgs.empty() ) {
 		// FIXME: This routine defines the order in which identifiers are looked-up, but
 		// there are no checks for name-clashes. If a user sets a cvar with the name of
 		// an existing command, alias, or dynvar, that cvar becomes shadowed!
@@ -205,20 +173,21 @@ void CmdSystem::executeNow( const wsw::StringView &text ) {
 		// that does not break seperation of concerns.
 		// Aiwa, 07-14-2006
 
-		if( const CmdEntry *cmdEntry = findCmdEntryByName( cmdArgs[0] ) ) {
-			if( cmdEntry->cmdFunc ) {
-				cmdEntry->cmdFunc( cmdArgs );
+		const wsw::HashedStringView testedName( cmdArgs[0] );
+		if( const CmdEntry *cmdEntry = m_cmdEntries.findByName( testedName ) ) {
+			if( cmdEntry->m_cmdFunc ) {
+				cmdEntry->m_cmdFunc( cmdArgs );
 			} else {
 				// forward to server command
 				wsw::StaticString<MAX_TOKEN_CHARS> forwardingBuffer;
 				forwardingBuffer << wsw::StringView( "cmd " ) << text;
 				executeNow( forwardingBuffer.asView() );
 			}
-		} else if( const AliasEntry *aliasEntry = findAliasEntryByName( cmdArgs[0] ) ) {
+		} else if( const AliasEntry *aliasEntry = m_aliasEntries.findByName( testedName ) ) {
 			m_aliasRecursionDepth++;
 			if( m_aliasRecursionDepth < 16 ) {
 				prependCommand( wsw::StringView( "\n" ) );
-				prependCommand( aliasEntry->text );
+				prependCommand( aliasEntry->m_text );
 			} else {
 				Com_Printf( S_COLOR_RED "Alias recursion depth has reached its limit\n" );
 				m_aliasRecursionDepth = 0;
@@ -397,14 +366,144 @@ void CmdSystem::helperForHandlerOfWait( const CmdArgs & ) {
 	m_interruptExecutionLoop = true;
 }
 
-void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs & ) {
-	;
+[[maybe_unused]]
+static auto writeAliasText( char *buffer, const CmdArgs &cmdArgs ) -> unsigned {
+	unsigned totalTextSize = 0;
+	for( int i = 2; i < cmdArgs.size(); ++i ) {
+		const wsw::StringView &arg = cmdArgs[i];
+		if( buffer ) {
+			arg.copyTo( buffer + totalTextSize, arg.size() + 1 );
+		}
+		totalTextSize += arg.size();
+		if( i + 1 < cmdArgs.size() ) {
+			if( buffer ) {
+				buffer[totalTextSize] = ' ';
+			}
+			totalTextSize++;
+		}
+	}
+	if( buffer ) {
+		buffer[totalTextSize] = '\0';
+	}
+	return totalTextSize;
 }
 
-void CmdSystem::helperForHandlerOfUnalias( const CmdArgs & ) {
-	;
+void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) {
+	if( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: alias <name> <command>\n" );
+		return;
+	}
+
+	constexpr auto kMaxNameLength = 32u;
+	constexpr auto kMaxTextSize   = 1024u;
+
+	const wsw::StringView &name = cmdArgs[1];
+	assert( name.isZeroTerminated() );
+	if( name.length() > kMaxNameLength ) {
+		Com_Printf( "Failed to register alias: the alias name is too long\n" );
+		return;
+	}
+
+	if( Cvar_String( name.data() )[0] ) {
+		Com_Printf( S_COLOR_RED "Failed to register alias: %s is already defined as a var\n", name.data() );
+		return;
+	}
+
+	const wsw::HashedStringView nameAndHash( name );
+	assert( nameAndHash.isZeroTerminated() );
+
+	if( m_cmdEntries.findByName( nameAndHash ) ) {
+		Com_Printf( S_COLOR_RED "Failed to register alias: %s is already defined as a command\n", nameAndHash.data() );
+		return;
+	}
+
+	[[maybe_unused]] unsigned requiredTextSize = 0;
+	if( Cmd_Argc() > 2 ) {
+		requiredTextSize = writeAliasText( nullptr, cmdArgs );
+		if( requiredTextSize > kMaxTextSize ) {
+			Com_Printf( S_COLOR_RED "Failed to register alias: the alias text is too long\n" );
+		}
+	}
+
+	AliasEntry *existing = m_aliasEntries.findByName( nameAndHash );
+	if( existing ) {
+		if( Cmd_Argc() == 2 ) {
+			assert( existing->m_text.isZeroTerminated() );
+			Com_Printf( "alias \"%s\" is \"%s\"\n", nameAndHash.data(), existing->m_text.data() );
+			if( archive ) {
+				existing->m_isArchive = true;
+			}
+			return;
+		}
+		existing = m_aliasEntries.releaseOwnership( existing );
+	} else {
+		if( Cmd_Argc() == 2 ) {
+			Com_Printf( "Failed to register alias: empty text\n" );
+			return;
+		}
+	}
+
+	// Try reusing the same entry, as the reallocation could fail
+	if( existing && existing->m_text.size() <= requiredTextSize ) {
+		const auto textDataOffset  = (uintptr_t)existing->m_text.data() - (uintptr_t)existing;
+		char *const writableText   = (char *)existing + textDataOffset;
+		writeAliasText( writableText, cmdArgs );
+		existing->m_text       = wsw::StringView( writableText, requiredTextSize, wsw::StringView::ZeroTerminated );
+		existing->m_isArchive = archive;
+		m_aliasEntries.insertUniqueTakingOwneship( existing );
+		return;
+	}
+
+	// TODO: Try reallocating the old memory block?
+
+	const size_t allocationSize = sizeof( AliasEntry ) + name.size() + 1 + requiredTextSize + 1;
+	void *const mem = std::malloc( allocationSize );
+	if( mem ) {
+		if( existing ) {
+			existing->~AliasEntry();
+			std::free( existing );
+		}
+	} else {
+		Com_Printf( "Failed to register alias: failed to allocate memory\n" );
+		if( existing ) {
+			// TODO: Should we keep it in this case?
+			m_aliasEntries.insertUniqueTakingOwneship( existing );
+		}
+		return;
+	}
+
+	auto *const newEntry     = new( mem )AliasEntry;
+	auto *const writableName = (char *)( newEntry + 1 );
+	auto *const writableText = (char *)( newEntry + 1 ) + name.size() + 1;
+
+	name.copyTo( writableName, name.size() + 1 );
+	const unsigned actualTextSize = writeAliasText( writableText, cmdArgs );
+	assert( actualTextSize == requiredTextSize );
+
+	newEntry->m_nameAndHash = wsw::HashedStringView( writableName, name.size(), wsw::StringView::ZeroTerminated );
+	newEntry->m_text        = wsw::StringView( writableText, actualTextSize, wsw::StringView::ZeroTerminated );
+	newEntry->m_isArchive   = archive;
+
+	m_aliasEntries.insertUniqueTakingOwneship( newEntry );
+}
+
+void CmdSystem::helperForHandlerOfUnalias( const CmdArgs &cmdArgs ) {
+	if( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: unalias <name>\n" );
+		return;
+	}
+
+	for( int i = 1; i < cmdArgs.size(); ++i ) {
+		const wsw::StringView &arg = cmdArgs[i];
+		if( AliasEntry *entry = m_aliasEntries.findByName( wsw::HashedStringView( arg ) ) ) {
+			m_aliasEntries.remove( entry );
+		} else {
+			assert( arg.isZeroTerminated() );
+			Com_Printf( "Failed to unalias \"%s\": not found\n", arg.data() );
+		}
+	}
 }
 
 void CmdSystem::helperForHandlerOfUnaliasall( const CmdArgs &cmdArgs ) {
-	;
+	m_aliasEntries.clear();
 }

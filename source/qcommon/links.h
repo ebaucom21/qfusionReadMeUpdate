@@ -5,6 +5,40 @@
 
 namespace wsw {
 
+// TODO: Get rid of overload with indices, make remaining of the old subroutines be based on the field ptr one
+
+template <typename Item>
+[[maybe_unused]]
+inline auto link( Item *item, Item **listHeadRef, Item *( Item::*prevField ), Item *( Item::*nextField ) ) -> Item * {
+	if( *listHeadRef ) [[likely]] {
+		( *listHeadRef )->*prevField = item;
+	}
+
+	item->*prevField = nullptr;
+	item->*nextField = *listHeadRef;
+	*listHeadRef     = item;
+
+	return item;
+}
+
+template <typename Item>
+[[maybe_unused]]
+inline auto unlink( Item *item, Item **listHeadRef, Item *( Item::*prevField ), Item *( Item::*nextField ) ) -> Item * {
+	if( Item *const next = item->*nextField ) [[likely]] {
+		next->*prevField = item->*prevField;
+	}
+	if( Item *const prev = item->*prevField ) [[likely]] {
+		prev->*nextField = item->*nextField;
+	} else {
+		assert( item == *listHeadRef );
+		*listHeadRef = item->*nextField;
+	}
+
+	item->*prevField = nullptr;
+	item->*nextField = nullptr;
+	return item;
+}
+
 /**
  * Links an item that has an intrusive array of links to a list head.
  * The item becomes the list head, the former head is linked to the "next" link

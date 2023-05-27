@@ -1556,6 +1556,8 @@ void CL_Precache_f( const CmdArgs &cmdArgs ) {
 	CL_RequestNextDownload();
 }
 
+static void CL_Cmd_WriteAliases( int file );
+
 /*
 * CL_WriteConfiguration
 *
@@ -1582,7 +1584,7 @@ static void CL_WriteConfiguration( const char *name, bool warn ) {
 	Cvar_WriteVariables( file );
 
 	FS_Printf( file, "\r\n// aliases\r\n" );
-	Cmd_WriteAliases( file );
+	CL_Cmd_WriteAliases( file );
 
 	FS_FCloseFile( file );
 }
@@ -2614,9 +2616,9 @@ public:
 										CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
 		assert( queryFunc && executionFunc );
 		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
-			const CmdEntry *cmdEntry = findCmdEntryByName( name );
+			const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) );
 			// Let the map key reside in the cmdEntry memory block
-			m_completionEntries[cmdEntry->nameAndHash] = CompletionEntry { queryFunc, executionFunc };
+			m_completionEntries[cmdEntry->m_nameAndHash] = CompletionEntry { queryFunc, executionFunc };
 			return true;
 		}
 		return false;
@@ -2633,21 +2635,46 @@ public:
 
 	bool unregisterCommand( const wsw::StringView &name ) override {
 		// Prevent use-after-free by removing the entry first
-		if( const CmdEntry *cmdEntry = findCmdEntryByName( name ) ) {
-			m_completionEntries.erase( cmdEntry->nameAndHash );
+		if( const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) ) ) {
+			m_completionEntries.erase( cmdEntry->m_nameAndHash );
 		}
 		return CmdSystem::unregisterCommand( name );
 	}
 
 	[[nodiscard]]
 	auto getPossibleCommands( const wsw::StringView &partial ) const -> CompletionResult {
-		// TODO: Introduce a usable trie, keep entries in this kind of trie
+		return getPossibleCompletions( partial, m_cmdEntries );
+	}
+
+	[[nodiscard]]
+	auto getPossibleAliases( const wsw::StringView &partial ) const -> CompletionResult {
+		return getPossibleCompletions( partial, m_aliasEntries );
+	}
+
+	void writeAliases( int file ) {
+		const CompletionResult sortedNames( getPossibleAliases( wsw::StringView() ) );
+		for( const wsw::StringView &name: sortedNames ) {
+			const AliasEntry *entry = m_aliasEntries.findByName( wsw::HashedStringView( name ) );
+			if( entry && entry->m_isArchive ) {
+				assert( entry->m_nameAndHash.isZeroTerminated() && entry->m_text.isZeroTerminated() );
+				FS_Printf( file, "aliasa %s \"%s\"\r\n", entry->m_nameAndHash.data(), entry->m_text.data() );
+			}
+		}
+
+	}
+private:
+	template <typename Entry, unsigned N>
+	[[nodiscard]]
+	auto getPossibleCompletions( const wsw::StringView &partial,
+								 const MapOfBoxedNamedEntries<Entry, N, wsw::IgnoreCase> &container ) const -> CompletionResult {
+		// TODO: Make the CompletionResult be trie-based, so we don't have to output so much duplicated character data
 		trie_t *trie = nullptr;
 		Trie_Create( TRIE_CASE_INSENSITIVE, &trie );
-		for( const CmdEntry *binHead: m_cmdEntryBins ) {
-			for( const CmdEntry *entry = binHead; entry; entry = entry->next ) {
-				assert( entry->nameAndHash.isZeroTerminated() );
-				Trie_Insert( trie, entry->nameAndHash.data(), (void *)(uintptr_t)entry->nameAndHash.length() );
+		for( const auto *entry: container ) {
+			assert( entry->m_nameAndHash.isZeroTerminated() );
+			// TODO: Add case insensitive wsw::StringView::startsWith()
+			if( entry->m_nameAndHash.length() >= partial.length() ) {
+				Trie_Insert( trie, entry->m_nameAndHash.data(), (void *)(uintptr_t)entry->m_nameAndHash.length() );
 			}
 		}
 		trie_dump_s *dump = nullptr;
@@ -2661,11 +2688,6 @@ public:
 		return result;
 	}
 
-	[[nodiscard]]
-	auto getPossibleAliases( const wsw::StringView &partial ) const -> CompletionResult {
-		return {};
-	}
-private:
 	void registerSystemCommands() override {
 		registerCommand( "exec"_asView, handlerOfExec );
 		registerCommand( "echo"_asView, handlerOfEcho );
@@ -2769,6 +2791,10 @@ void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
 	g_clCmdSystemHolder.instance()->registerCommandWithCompletion( name, cmdFunc, queryFunc, executionFunc );
 }
 
+void CL_Cmd_WriteAliases( int file ) {
+	g_clCmdSystemHolder.instance()->writeAliases( file );
+}
+
 CompletionResult CL_GetPossibleCommands( const wsw::StringView &partial ) {
 	return g_clCmdSystemHolder.instance()->getPossibleCommands( partial );
 }
@@ -2778,7 +2804,7 @@ CompletionResult CL_GetPossibleAliases( const wsw::StringView &partial ) {
 }
 
 bool CL_Cmd_Exists( const wsw::StringView &name ) {
-	return g_clCmdSystemHolder.instance()->isARegisteredCommand( name );
+	return g_clCmdSystemHolder.instance()->isARegisteredCommand( wsw::HashedStringView( name ) );
 }
 
 void CL_Cmd_ExecuteNow( const char *text ) {
