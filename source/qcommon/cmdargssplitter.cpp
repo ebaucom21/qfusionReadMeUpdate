@@ -38,6 +38,7 @@ auto CmdArgsSplitter::exec( const wsw::StringView &cmdString ) -> CmdArgs {
 	m_argsStringBuffer.clear();
 
 	const char *const oldArgsDataAddress = m_argsDataBuffer.data();
+	bool hadArgsDataReallocations        = false;
 
 	wsw::StringView rest( m_tmpStringBuffer.data(), m_tmpStringBuffer.size() - 1, wsw::StringView::ZeroTerminated );
 	std::optional<wsw::StringView> argsStringStart;
@@ -73,9 +74,11 @@ auto CmdArgsSplitter::exec( const wsw::StringView &cmdString ) -> CmdArgs {
 		const auto oldSize  = (unsigned)m_argsDataBuffer.size();
 		// Include the trailing "\0" of the parsed token
 		m_argsDataBuffer.insert( m_argsDataBuffer.end(), token, token + tokenLen + 1 );
+		hadArgsDataReallocations |= ( m_argsDataBuffer.data() != oldArgsDataAddress );
+
 		m_tmpSpansBuffer.push_back( { oldSize, tokenLen } );
 		// Append a view optimistically, assuming there won't be relocations
-		if( m_argsDataBuffer.data() == oldArgsDataAddress ) {
+		if( !hadArgsDataReallocations ) {
 			m_argsViewsBuffer.push_back( { m_argsDataBuffer.data() + oldSize, tokenLen, wsw::StringView::ZeroTerminated } );
 		}
 
@@ -89,7 +92,7 @@ auto CmdArgsSplitter::exec( const wsw::StringView &cmdString ) -> CmdArgs {
 
 	// Patch string views if there were data relocations.
 	// This should be rarely needed assuming reuse of the splitter instance.
-	if( m_argsDataBuffer.data() != oldArgsDataAddress ) {
+	if( hadArgsDataReallocations ) {
 		m_argsViewsBuffer.clear();
 		for( const auto &[off, len]: m_tmpSpansBuffer ) {
 			m_argsViewsBuffer.push_back( { m_argsDataBuffer.data() + off, len, wsw::StringView::ZeroTerminated } );

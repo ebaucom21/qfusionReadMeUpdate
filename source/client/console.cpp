@@ -321,7 +321,6 @@ private:
 		wsw::Vector<wsw::StringView> m_tmpSpans;
 		wsw::Vector<unsigned> m_tmpOffsets;
 		wsw::Vector<char> m_tmpChars;
-		const char *m_oldCharsData { nullptr };
 		unsigned m_charsSizeAtLineStart { 0 };
 	};
 
@@ -881,7 +880,6 @@ void Console::DrawnLinesBuilder::clear() {
 	m_tmpChars.clear();
 	m_tmpSpans.clear();
 
-	m_oldCharsData = m_tmpChars.data();
 	m_charsSizeAtLineStart = 0;
 }
 
@@ -932,7 +930,11 @@ void Console::DrawnLinesBuilder::completeCurrentLine() {
 auto Console::DrawnLinesBuilder::getFinalSpans() -> std::span<const wsw::StringView> {
 	assert( m_charsSizeAtLineStart == m_tmpChars.size() );
 	assert( m_tmpOffsets.size() == m_tmpSpans.size() );
-	if( m_oldCharsData != m_tmpChars.data() ) {
+
+	// If there were chars added to this buffer, it's also likely that there were reallocations.
+	// Note: A match of initial and final data pointers doesn't guarantee that there weren't reallocations in-between.
+	// TODO: Use a custom vector type that counts reallocations
+	if( !m_tmpChars.empty() ) {
 		for( size_t i = 0; i < m_tmpSpans.size(); ++i ) {
 			// Patch pointers in string views that point to the tmpChars buffer
 			if( const unsigned maybeOffset = m_tmpOffsets[i]; maybeOffset != ~0u ) {
