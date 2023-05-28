@@ -58,7 +58,8 @@ extern "C" QF_DLL_EXPORT game_export_t * GetGameAPI( game_import_t * import )
 	globals.ClearSnap = G_ClearSnap;
 
 	globals.GetGameState = G_GetGameState;
-	globals.GetRawScoreboardData = G_GetScoreboardData;
+	globals.GetScoreboardDataForClient = G_GetScoreboardDataForClient;
+	globals.GetScoreboardDataForDemo   = G_GetScoreboardDataForDemo;
 
 	globals.AllowDownload = G_AllowDownload;
 

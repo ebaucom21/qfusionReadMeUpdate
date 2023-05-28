@@ -441,12 +441,16 @@ void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags ) {
 		}
 	}
 
-	const auto clientNum = (unsigned)( client->edict->s.number - 1 );
-	assert( clientNum < (unsigned)MAX_CLIENTS );
+	const ReplicatedScoreboardData *scoreboardData;
+	if( client->edict ) {
+		scoreboardData = ge->GetScoreboardDataForClient( client->edict->s.number - 1 );
+	} else {
+		scoreboardData = ge->GetScoreboardDataForDemo();
+	}
 
 	svs.fatvis.skyorg = skyorg;     // HACK HACK HACK
 	SNAP_BuildClientFrameSnap( svs.cms, &sv.gi, sv.framenum, svs.gametime, &svs.fatvis,
-							   client, ge->GetGameState(), ge->GetRawScoreboardData( clientNum ),
+							   client, ge->GetGameState(), scoreboardData,
 							   &svs.client_entities, snapHintFlags );
 	svs.fatvis.skyorg = NULL;
 }

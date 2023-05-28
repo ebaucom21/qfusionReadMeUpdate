@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    84
+#define GAME_API_VERSION    85
 
 //===============================================================
 
@@ -238,7 +238,8 @@ typedef struct {
 	void ( *ClearSnap )( void );
 
 	const game_state_t *( *GetGameState )();
-	const ReplicatedScoreboardData *( *GetRawScoreboardData )( unsigned clientNum );
+	const ReplicatedScoreboardData *( *GetScoreboardDataForClient )( unsigned clientNum );
+	const ReplicatedScoreboardData *( *GetScoreboardDataForDemo )();
 
 	bool ( *AllowDownload )( edict_t *ent, const char *requestname, const char *uploadname );
 } game_export_t;

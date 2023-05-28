@@ -843,24 +843,26 @@ void SNAP_BuildClientFrameSnap( cmodel_state_t *cms, ginfo_t *gi, int64_t frameN
 	// TODO: We can write here
 	frame->scoreboardData = *scoreboardData;
 
-	const int povTeam = client->edict->s.team;
-	if( povTeam != TEAM_SPECTATOR ) {
-		const unsigned povPlayerNum = client->edict->s.number - 1;
-		auto *const transmittedData = &frame->scoreboardData;
-		if( povTeam == TEAM_PLAYERS ) {
-			for( unsigned playerIndex = 0; playerIndex < (unsigned)MAX_CLIENTS; ++playerIndex ) {
-				if( transmittedData->getPlayerTeam( playerIndex ) > TEAM_SPECTATOR ) {
-					if( transmittedData->getPlayerNum( playerIndex ) != povPlayerNum ) {
-						transmittedData->shadowPrivateData( playerIndex );
+	if( clent ) {
+		const int povTeam = clent->s.team;
+		if( povTeam != TEAM_SPECTATOR ) {
+			const unsigned povPlayerNum = clent->s.number - 1;
+			auto *const transmittedData = &frame->scoreboardData;
+			if( povTeam == TEAM_PLAYERS ) {
+				for( unsigned playerIndex = 0; playerIndex < (unsigned)MAX_CLIENTS; ++playerIndex ) {
+					if( transmittedData->getPlayerTeam( playerIndex ) > TEAM_SPECTATOR ) {
+						if( transmittedData->getPlayerNum( playerIndex ) != povPlayerNum ) {
+							transmittedData->shadowPrivateData( playerIndex );
+						}
 					}
 				}
-			}
-		} else {
-			for( unsigned playerIndex = 0; playerIndex < MAX_CLIENTS; ++playerIndex ) {
-				const int team = frame->scoreboardData.getPlayerTeam( playerIndex );
-				if( team > TEAM_SPECTATOR && team != povTeam ) {
-					if( transmittedData->getPlayerNum( playerIndex ) != povPlayerNum ) {
-						transmittedData->shadowPrivateData( playerIndex );
+			} else {
+				for( unsigned playerIndex = 0; playerIndex < MAX_CLIENTS; ++playerIndex ) {
+					const int team = frame->scoreboardData.getPlayerTeam( playerIndex );
+					if( team > TEAM_SPECTATOR && team != povTeam ) {
+						if( transmittedData->getPlayerNum( playerIndex ) != povPlayerNum ) {
+							transmittedData->shadowPrivateData( playerIndex );
+						}
 					}
 				}
 			}

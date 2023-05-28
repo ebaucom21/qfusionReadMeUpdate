@@ -6,8 +6,12 @@
 
 using wsw::operator""_asView;
 
-const ReplicatedScoreboardData *G_GetScoreboardData( unsigned clientNum ) {
-	return wsw::g::Scoreboard::instance()->getRawReplicatedData( clientNum );
+const ReplicatedScoreboardData *G_GetScoreboardDataForClient( unsigned clientNum ) {
+	return wsw::g::Scoreboard::instance()->getRawReplicatedDataForClient( clientNum );
+}
+
+const ReplicatedScoreboardData *G_GetScoreboardDataForDemo() {
+	return wsw::g::Scoreboard::instance()->getRawReplicatedDataForDemo();
 }
 
 namespace wsw::g {
@@ -430,7 +434,7 @@ void Scoreboard::update() {
 	endUpdating();
 }
 
-auto Scoreboard::getRawReplicatedData( unsigned clientNum ) -> const ReplicatedScoreboardData * {
+auto Scoreboard::getRawReplicatedDataForClient( unsigned clientNum ) -> const ReplicatedScoreboardData * {
 	// TODO: Cache the index <-> playerNum relation?
 	for( unsigned i = 0; i < (unsigned)gs.maxclients; ++i ) {
 		if( m_replicatedData.getPlayerNum( i ) == clientNum ) {
@@ -438,6 +442,11 @@ auto Scoreboard::getRawReplicatedData( unsigned clientNum ) -> const ReplicatedS
 		}
 	}
 	wsw::failWithLogicError( "unreachable" );
+}
+
+auto Scoreboard::getRawReplicatedDataForDemo() -> const ReplicatedScoreboardData * {
+	m_replicatedData.povChaseMask = 0;
+	return &m_replicatedData;
 }
 
 [[nodiscard]]

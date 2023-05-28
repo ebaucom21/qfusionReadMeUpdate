@@ -938,7 +938,8 @@ void G_RestartLevel( void );
 void    G_Timeout_Reset( void );
 
 const game_state_t *G_GetGameState();
-const ReplicatedScoreboardData *G_GetScoreboardData( unsigned clientNum );
+const ReplicatedScoreboardData *G_GetScoreboardDataForClient( unsigned clientNum );
+const ReplicatedScoreboardData *G_GetScoreboardDataForDemo();
 
 bool G_AllowDownload( edict_t *ent, const char *requestname, const char *uploadname );
 

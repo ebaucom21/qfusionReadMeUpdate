@@ -51,7 +51,9 @@ public:
 	static auto instance() -> Scoreboard *;
 
 	[[nodiscard]]
-	auto getRawReplicatedData( unsigned clientNum ) -> const ReplicatedScoreboardData *;
+	auto getRawReplicatedDataForClient( unsigned clientNum ) -> const ReplicatedScoreboardData *;
+	[[nodiscard]]
+	auto getRawReplicatedDataForDemo() -> const ReplicatedScoreboardData *;
 
 	void beginDefiningSchema();
 	void endDefiningSchema();
