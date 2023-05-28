@@ -121,4 +121,23 @@ auto StringView::trim( const wsw::StringView &chars ) const -> wsw::StringView {
 	return wsw::StringView( left, right - left, terminated );
 }
 
+auto StringView::getCommonPrefixLength( const wsw::StringView &that, wsw::CaseSensitivity caseSensitivity ) const -> size_t {
+	const size_t limit = wsw::min( length(), that.length() );
+	if( caseSensitivity == MatchCase ) {
+		// TODO: Optimize if needed
+		for( size_t i = 0; i < limit; ++i ) {
+			if( m_s[i] != that.m_s[i] ) {
+				return i;
+			}
+		}
+	} else {
+		for( size_t i = 0; i < limit; ++i ) {
+			if( std::toupper( m_s[i] ) != std::toupper( m_s[i] ) ) {
+				return i;
+			}
+		}
+	}
+	return limit;
+}
+
 }

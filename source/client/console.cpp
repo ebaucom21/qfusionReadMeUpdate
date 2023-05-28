@@ -118,12 +118,14 @@ private:
 		[[nodiscard]]
 		virtual auto dumpCharsToBuffer( char *buffer ) const -> unsigned { wsw::failWithLogicError( "Unreachable" ); };
 		[[nodiscard]]
-		virtual auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+		virtual auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth,
+										   unsigned widthLimit, Console *console ) const -> unsigned {
 			wsw::failWithLogicError( "Unreachable" );
 		};
 		[[nodiscard]]
 		virtual auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
-											 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> {
+											 Console *console, DrawnLinesBuilder *builder ) const
+											 -> std::span<const wsw::StringView> {
 			wsw::failWithLogicError( "Unreachable" );
 		};
 
@@ -171,10 +173,10 @@ private:
 		[[nodiscard]]
 		auto dumpCharsToBuffer( char *buffer ) const -> unsigned override;
 		[[nodiscard]]
-		auto measureNumberOfLines( unsigned resizeId, unsigned width, unsigned widthLimit ) const -> unsigned override;
+		auto measureNumberOfLines( unsigned resizeId, unsigned width, unsigned widthLimit, Console * ) const -> unsigned override;
 		[[nodiscard]]
 		auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
-									 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> override;
+									 Console *, DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> override;
 		[[nodiscard]]
 		auto getWordSpans() const -> std::span<const WordSpan>;
 	};
@@ -184,8 +186,11 @@ private:
 			: m_completionResult( std::forward<CompletionResult>( completionResult ) ) {}
 
 		CompletionResult m_completionResult;
+		char *m_requestData { nullptr };
 		char *m_headingData { nullptr };
-		unsigned m_headingSize { 0 };
+		unsigned m_requestDataSize { 0 };
+		unsigned m_headingDataSize { 0 };
+		unsigned m_requestId { 0 };
 
 		struct MeasureCache {
 			unsigned resizeId { 0 };
@@ -201,10 +206,12 @@ private:
 		[[nodiscard]]
 		auto dumpCharsToBuffer( char *buffer ) const -> unsigned override;
 		[[nodiscard]]
-		auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned override;
+		auto measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
+								   Console *console ) const -> unsigned override;
 		[[nodiscard]]
 		auto getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
-									 DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> override;
+									 Console *console, DrawnLinesBuilder *builder ) const
+									 -> std::span<const wsw::StringView> override;
 
 		[[nodiscard]]
 		bool checkIfFitsSingleLine( unsigned glyphWidth, unsigned widthLimit ) const;
@@ -214,16 +221,18 @@ private:
 
 	// This should be faster than regular dynamic_cast<>, and also this design prevents it from spreading over codebase
 
+	template <typename T>
 	[[nodiscard]]
-	static auto asRegularEntry( LineEntry *lineEntry ) -> RegularEntry * {
-		return lineEntry && typeid( *lineEntry ) == typeid( RegularEntry ) ?
-			static_cast<RegularEntry *>( lineEntry ) : nullptr;
+	static auto entryAs( LineEntry *lineEntry ) -> T * {
+		static_assert( std::is_base_of_v<LineEntry, T> && std::is_final_v<T> );
+		return lineEntry && typeid( *lineEntry ) == typeid( T ) ? static_cast<T *>( lineEntry ) : nullptr;
 	};
 
+	template <typename T>
 	[[nodiscard]]
-	static auto asRegularEntry( const LineEntry *lineEntry ) -> const RegularEntry * {
-		return lineEntry && typeid( *lineEntry ) == typeid( RegularEntry ) ?
-			   static_cast<const RegularEntry *>( lineEntry ) : nullptr;
+	static auto entryAs( const LineEntry *lineEntry ) -> const T * {
+		static_assert( std::is_base_of_v<LineEntry, T> && std::is_final_v<T> );
+		return lineEntry && typeid( *lineEntry ) == typeid( T ) ? static_cast<const T *>( lineEntry ) : nullptr;
 	}
 
 	struct HistoryEntry {
@@ -244,8 +253,11 @@ private:
 	[[nodiscard]]
 	bool isAwaitingAsyncCompletion() const;
 
-	void addCompletionEntry( char color, const wsw::StringView &itemSingular, const wsw::StringView &itemPlural,
-							 CompletionResult &&completionResult );
+	void addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest, char color,
+							 const wsw::StringView &itemName, CompletionResult &&completionResult );
+
+	[[nodiscard]]
+	auto getNextCompletionRequestId();
 
 	void handleSubmitKeyAction();
 	void handleCompleteKeyAction();
@@ -298,6 +310,7 @@ private:
 		void clear();
 		void addShallowCopyOfCompleteLine( const wsw::StringView &line );
 		void addCharsToCurrentLine( const wsw::StringView &chars );
+		void addCharsToCurrentLine( char color, const wsw::StringView &chars );
 		void addCharsWithPrefixHighlight( const wsw::StringView &chars, unsigned prefixLen,
 										  char prefixColor, char bodyStartColor, char bodyColor );
 		void padCurrentLineByChars( char ch, unsigned count );
@@ -313,7 +326,7 @@ private:
 	};
 
 	DrawnLinesBuilder m_drawnLinesBuilder;
-	static inline wsw::Vector<char> s_tmpCompletionTokenPrefixColors;
+	wsw::Vector<char> m_tmpCompletionTokenPrefixColors;
 };
 
 static SingletonHolder<Console> g_console;
@@ -366,7 +379,7 @@ void Console::clearNotifications() {
 	[[maybe_unused]] volatile std::scoped_lock<std::mutex> lock( m_mutex );
 
 	for( LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		if( RegularEntry *const regularEntry = asRegularEntry( entry ) ) {
+		if( RegularEntry *const regularEntry = entryAs<RegularEntry>( entry ) ) {
 			if( regularEntry->m_notificationBehaviour == DrawNotification ) {
 				regularEntry->m_timestamp = std::numeric_limits<decltype( regularEntry->m_timestamp )>::min();
 			}
@@ -406,7 +419,7 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 			charsToAdd = *maybeLine;
 		}
 
-		if( const RegularEntry *const regularLineEntry = asRegularEntry( m_lineEntriesHeadnode.next ) ) {
+		if( const RegularEntry *const regularLineEntry = entryAs<RegularEntry>( m_lineEntriesHeadnode.next ) ) {
 			if( regularLineEntry->m_isFrozenForAddition ) {
 				startNewLine( notificationBehaviour, charsToAdd.size() );
 			}
@@ -416,7 +429,7 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 
 		addCharsToCurrentLine( charsToAdd );
 
-		assert( asRegularEntry( m_lineEntriesHeadnode.next ) != nullptr );
+		assert( entryAs<RegularEntry>( m_lineEntriesHeadnode.next ) != nullptr );
 
 		// Could change during execution of the loop step
 		auto *const actualCurrLineEntry = static_cast<RegularEntry *>( m_lineEntriesHeadnode.next );
@@ -433,7 +446,7 @@ void Console::addText( wsw::StringView text, NotificationBehaviour notificationB
 }
 
 void Console::addCharsToCurrentLine( wsw::StringView chars ) {
-	assert( asRegularEntry( m_lineEntriesHeadnode.next ) != nullptr );
+	assert( entryAs<RegularEntry>( m_lineEntriesHeadnode.next ) != nullptr );
 
 	auto *lineEntry = static_cast<RegularEntry *>( m_lineEntriesHeadnode.next );
 	assert( (LineEntry *)lineEntry != (LineEntry *)&m_lineEntriesHeadnode );
@@ -738,7 +751,7 @@ void Console::drawPane( unsigned width, unsigned height ) {
 		// This should be relatively fast due to caching
 		unsigned totalNumLines = 0;
 		for( LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-			totalNumLines += entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit );
+			totalNumLines += entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit, this );
 		}
 
 		// Patch it each frame
@@ -771,12 +784,13 @@ void Console::drawPane( unsigned width, unsigned height ) {
 	// draw from the bottom up
 	unsigned numSkippedLines = 0;
 	for( const LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		const unsigned numEntryLines = entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit );
+		const unsigned numEntryLines = entry->measureNumberOfLines( m_paneResizeId, promptWidth, lineWidthLimit, this );
 		if( numSkippedLines + numEntryLines <= m_requestedLineNumOffset ) {
 			numSkippedLines += numEntryLines;
 		} else {
 			std::span<const wsw::StringView> spansToDraw = entry->getCharSpansForDrawing( m_paneResizeId, promptWidth,
-																						  lineWidthLimit, &m_drawnLinesBuilder );
+																						  lineWidthLimit, this,
+																						  &m_drawnLinesBuilder );
 			assert( spansToDraw.size() == numEntryLines );
 			unsigned numLinesToSkip = 0;
 			if( numSkippedLines < m_requestedLineNumOffset ) {
@@ -827,7 +841,8 @@ auto Console::RegularEntry::dumpCharsToBuffer( char *buffer ) const -> unsigned 
 	return 0;
 }
 
-auto Console::RegularEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+auto Console::RegularEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth,
+												  unsigned widthLimit, Console * ) const -> unsigned {
 	if( m_dataSize * glyphWidth <= widthLimit ) [[likely]] {
 		return 1;
 	}
@@ -881,6 +896,12 @@ void Console::DrawnLinesBuilder::addCharsToCurrentLine( const wsw::StringView &c
 	m_tmpChars.insert( m_tmpChars.end(), chars.begin(), chars.end() );
 }
 
+void Console::DrawnLinesBuilder::addCharsToCurrentLine( char color, const wsw::StringView &chars ) {
+	m_tmpChars.push_back( '^' );
+	m_tmpChars.push_back( color );
+	m_tmpChars.insert( m_tmpChars.end(), chars.begin(), chars.end() );
+}
+
 void Console::DrawnLinesBuilder::addCharsWithPrefixHighlight( const wsw::StringView &chars, unsigned prefixLen,
 															  char prefixColor, char bodyStartColor, char bodyColor ) {
 	m_tmpChars.push_back( '^' );
@@ -924,7 +945,7 @@ auto Console::DrawnLinesBuilder::getFinalSpans() -> std::span<const wsw::StringV
 }
 
 auto Console::RegularEntry::getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
-													DrawnLinesBuilder *drawnLinesBuilder ) const
+													Console *, DrawnLinesBuilder *drawnLinesBuilder ) const
 													-> std::span<const wsw::StringView> {
 	drawnLinesBuilder->clear();
 
@@ -1065,7 +1086,7 @@ auto Console::RegularEntry::getWordSpans() const -> std::span<const Console::Reg
 }
 
 auto Console::CompletionEntry::getRequiredCapacityForDumping() const -> unsigned {
-	unsigned result = m_headingSize + 2;
+	unsigned result = m_headingDataSize + 2;
 	if( !m_completionResult.empty() ) {
 		for( const wsw::StringView &token: m_completionResult ) {
 			result += token.size() + 1;
@@ -1076,8 +1097,8 @@ auto Console::CompletionEntry::getRequiredCapacityForDumping() const -> unsigned
 }
 
 auto Console::CompletionEntry::dumpCharsToBuffer( char *buffer ) const -> unsigned {
-	unsigned offset = m_headingSize + 2;
-	std::memcpy( buffer, m_headingData, m_headingSize );
+	unsigned offset = m_headingDataSize + 2;
+	std::memcpy( buffer, m_headingData, m_headingDataSize );
 	buffer[offset - 2] = '\r';
 	buffer[offset - 1] = '\n';
 
@@ -1136,7 +1157,8 @@ void Console::CompletionEntry::updateMeasureCache( MeasureCache *cache, unsigned
 	}
 }
 
-auto Console::CompletionEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit ) const -> unsigned {
+auto Console::CompletionEntry::measureNumberOfLines( unsigned resizeId, unsigned glyphWidth,
+													 unsigned widthLimit, Console * ) const -> unsigned {
 	updateMeasureCache( &m_measureCache, resizeId, glyphWidth, widthLimit );
 	if( m_measureCache.fitsASingleLine ) {
 		return 2;
@@ -1151,12 +1173,26 @@ auto Console::CompletionEntry::measureNumberOfLines( unsigned resizeId, unsigned
 	return 1 + m_completionResult.size();
 }
 
+[[nodiscard]]
+static auto takeCommandLikePrefix( const wsw::StringView &text ) -> wsw::StringView {
+	return text.takeWhile( []( char ch ) { return (size_t)ch > (size_t)' ' && ch != ';'; } );
+}
+
 auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsigned glyphWidth, unsigned widthLimit,
-													   DrawnLinesBuilder *builder ) const -> std::span<const wsw::StringView> {
+													   Console *console, DrawnLinesBuilder *builder ) const
+													   -> std::span<const wsw::StringView> {
 	updateMeasureCache( &m_measureCache, resizeId, glyphWidth, widthLimit );
 
 	builder->clear();
-	builder->addShallowCopyOfCompleteLine( wsw::StringView( m_headingData, m_headingSize ) );
+#if 1
+	builder->addShallowCopyOfCompleteLine( wsw::StringView( m_headingData, m_headingDataSize ) );
+#else
+	builder->addCharsToCurrentLine( { m_headingData, m_headingDataSize } );
+	builder->addCharsToCurrentLine( COLOR_WHITE, wsw::StringView( " (valid for `" ) );
+	builder->addCharsToCurrentLine( { m_requestData, m_requestDataSize } );
+	builder->addCharsToCurrentLine( { "`)", 1 } );
+	builder->completeCurrentLine();
+#endif
 
 	struct ColorTracker {
 		char lastCharUpper { '\0' };
@@ -1177,11 +1213,69 @@ auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsign
 		}
 	} colorTracker;
 
-	const unsigned prefixLen = m_completionResult.getLongestCommonPrefix().length();
+	bool shouldAttemptToHighlight = false;
+	// If the entry belongs to the last completion attempt
+	// TODO: This condition breaks if the counter is used for things that do not add CompletionEntry instances
+	if( m_requestId == console->m_completionRequestIdsCounter ) {
+		// The completion entry must be the most recent one in the console.
+		// Iterate for all entries, starting from the newest one.
+		const LineEntry *entry = console->m_lineEntriesHeadnode.next;
+		for(; entry != &console->m_lineEntriesHeadnode; entry = entry->next ) {
+			if( entry == this ) {
+				shouldAttemptToHighlight = true;
+				break;
+			}
+			// Keep iterating if other entries in front of this one belong to the same completion request.
+			const auto *const otherCompletionEntry = entryAs<const CompletionEntry>( entry );
+			if( !otherCompletionEntry || otherCompletionEntry->m_requestId != m_requestId ) {
+				break;
+			}
+		}
+	}
+
+	[[maybe_unused]] const wsw::StringView &requestPrefix = wsw::StringView { m_requestData, m_requestDataSize };
+	[[maybe_unused]] wsw::StringView inputToMatch         = console->m_inputLine.asView();
+
+	[[maybe_unused]] bool isHighlightingPrefixes       = false;
+	[[maybe_unused]] bool shouldPruneBroadAlterantives = false;
+	[[maybe_unused]] unsigned highlightedPrefixLen     = 0;
+
+	if( shouldAttemptToHighlight ) {
+		// Make sure the request was the same or broader than the input line
+		if( inputToMatch.startsWith( requestPrefix, wsw::IgnoreCase ) ) {
+			highlightedPrefixLen         = inputToMatch.length();
+			isHighlightingPrefixes       = true;
+			shouldPruneBroadAlterantives = inputToMatch.length() > requestPrefix.length();
+			// Account for command argument completion TODO: Make this distinction explicit during completion handling?
+			if( const auto &prefix = takeCommandLikePrefix( inputToMatch ); prefix.length() < inputToMatch.length() ) {
+				const auto oldLength = inputToMatch.length();
+				inputToMatch         = inputToMatch.drop( prefix.length() ).trimLeft();
+				highlightedPrefixLen -= ( oldLength - inputToMatch.length() );
+			}
+		}
+	}
+
+	[[maybe_unused]] const auto addHighlightedTokenTrackingColors = [&]( const wsw::StringView &token ) {
+		bool shouldHighlight = true;
+		// Check whether the input line mismatches the token
+		if( shouldPruneBroadAlterantives ) {
+			shouldHighlight = token.startsWith( inputToMatch, wsw::IgnoreCase );
+		}
+		if( shouldHighlight ) {
+			const char bodyStartColor = colorTracker.nextBodyColorForToken( token, highlightedPrefixLen );
+			builder->addCharsWithPrefixHighlight( token, highlightedPrefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+		} else {
+			builder->addCharsToCurrentLine( COLOR_BLACK, token );
+		}
+	};
+
 	if( m_measureCache.fitsASingleLine ) {
 		for( const wsw::StringView &token: m_completionResult ) {
-			const char bodyStartColor = colorTracker.nextBodyColorForToken( token, prefixLen );
-			builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+			if( isHighlightingPrefixes ) {
+				addHighlightedTokenTrackingColors( token );
+			} else {
+				builder->addCharsToCurrentLine( token );
+			}
 			builder->padCurrentLineByChars( ' ', 1 );
 		}
 		builder->completeCurrentLine();
@@ -1190,9 +1284,25 @@ auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsign
 		if( numRows * m_measureCache.numColumns < m_completionResult.size() ) {
 			numRows++;
 		}
-		s_tmpCompletionTokenPrefixColors.clear();
-		for( const wsw::StringView &token: m_completionResult ) {
-			s_tmpCompletionTokenPrefixColors.push_back( colorTracker.nextBodyColorForToken( token, prefixLen ) );
+		[[maybe_unused]] const auto addHighlightedTokenUsingColorsTable = [&]( const wsw::StringView &token, unsigned index ) {
+			bool shouldHighlight = true;
+			// Check whether the input line mismatches the token
+			if( shouldPruneBroadAlterantives ) {
+				shouldHighlight = token.startsWith( inputToMatch, wsw::IgnoreCase );
+			}
+			if( shouldHighlight ) {
+				const char bodyStartColor = console->m_tmpCompletionTokenPrefixColors[index];
+				builder->addCharsWithPrefixHighlight( token, highlightedPrefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+			} else {
+				builder->addCharsToCurrentLine( COLOR_BLACK, token );
+			}
+		};
+		if( isHighlightingPrefixes ) {
+			console->m_tmpCompletionTokenPrefixColors.clear();
+			for( const wsw::StringView &token: m_completionResult ) {
+				const char bodyStartColor = colorTracker.nextBodyColorForToken( token, highlightedPrefixLen );
+				console->m_tmpCompletionTokenPrefixColors.push_back( bodyStartColor );
+			}
 		}
 		for( unsigned rowNum = 0; rowNum < numRows; ++rowNum ) {
 			for( unsigned columnNum = 0; columnNum < m_measureCache.numColumns; ++columnNum ) {
@@ -1202,16 +1312,22 @@ auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsign
 					break;
 				}
 				const wsw::StringView &token = m_completionResult[tokenIndex];
-				const char bodyStartColor    = s_tmpCompletionTokenPrefixColors[tokenIndex];
-				builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+				if( isHighlightingPrefixes ) {
+					addHighlightedTokenUsingColorsTable( token, tokenIndex );
+				} else {
+					builder->addCharsToCurrentLine( token );
+				}
 				builder->padCurrentLineByChars( ' ', m_measureCache.maxTokenLength + 1 - token.length() );
 			}
 			builder->completeCurrentLine();
 		}
 	} else {
 		for( const wsw::StringView &token: m_completionResult ) {
-			const char bodyStartColor = colorTracker.nextBodyColorForToken( token, prefixLen );
-			builder->addCharsWithPrefixHighlight( token, prefixLen, COLOR_WHITE, bodyStartColor, COLOR_GREY );
+			if( isHighlightingPrefixes ) {
+				addHighlightedTokenTrackingColors( token );
+			} else {
+				builder->addCharsToCurrentLine( token );
+			}
 			builder->completeCurrentLine();
 		}
 	}
@@ -1231,7 +1347,7 @@ void Console::drawNotifications( unsigned width, unsigned height ) {
 	// TODO: Allow specifying a filter to match?
 	wsw::StaticVector<const RegularEntry *, kMaxLines> matchingLines;
 	for( const LineEntry *entry = m_lineEntriesHeadnode.next; entry != &m_lineEntriesHeadnode; entry = entry->next ) {
-		if( const RegularEntry *regularEntry = asRegularEntry( entry ) ) {
+		if( const RegularEntry *regularEntry = entryAs<RegularEntry>( entry ) ) {
 			if( regularEntry->m_notificationBehaviour == Console::DrawNotification ) {
 				if( regularEntry->m_timestamp >= minTimestamp && regularEntry->m_dataSize > 0 ) {
 					matchingLines.push_back( regularEntry );
@@ -1303,30 +1419,51 @@ void Console::setCurrHistoryEntry( HistoryEntry *historyEntry ) {
 	m_inputPos = m_inputLine.size();
 }
 
-void Console::addCompletionEntry( char color, const wsw::StringView &itemSingular, const wsw::StringView &itemPlural,
-								  CompletionResult &&completionResult ) {
+auto Console::getNextCompletionRequestId() {
+	unsigned result = ++m_completionRequestIdsCounter;
+	// Never let it go to zero due to wrapping
+	if( result == 0 ) [[unlikely]] {
+		result = ++m_completionRequestIdsCounter;
+	}
+	return result;
+}
+
+void Console::addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest, char color,
+								  const wsw::StringView &itemName, CompletionResult &&completionResult ) {
 	wsw::StaticString<16> countPrefix;
 	countPrefix << completionResult.size() << ' ';
-	const wsw::StringView suffix( " available:" );
-	const wsw::StringView &itemDesc = completionResult.size() != 1 ? itemPlural : itemSingular;
+	wsw::StringView suffix( "s available:" );
+	// Just use "s" to make plural forms of all actual arguments
+	if( completionResult.size() == 1 ) {
+		suffix = suffix.drop( 1 );
+	}
 
-	const size_t allocationSize = sizeof( CompletionEntry ) + countPrefix.size() + itemDesc.size() + suffix.size() + 3;
+	size_t allocationSize = sizeof( CompletionEntry );
+	allocationSize += originalRequest.size() + 1;
+	allocationSize += 2 + countPrefix.size() + itemName.size() + suffix.size() + 1;
+
 	if( void *mem = std::malloc( allocationSize ) ) [[likely]] {
 		// Moving the completion result won't fail
-		auto *newEntry  = new( mem )CompletionEntry( std::forward<CompletionResult>( completionResult ) );
+		auto *const newEntry  = new( mem )CompletionEntry( std::forward<CompletionResult>( completionResult ) );
+		newEntry->m_requestId = requestId;
 
-		newEntry->m_headingData    = (char *)( newEntry + 1 );
-		newEntry->m_headingData[0] = '^';
-		newEntry->m_headingData[1] = color;
-		newEntry->m_headingSize    = 2;
+		newEntry->m_requestData     = (char *)( newEntry + 1 );
+		newEntry->m_requestDataSize = originalRequest.size();
+		originalRequest.copyTo( newEntry->m_requestData, newEntry->m_requestDataSize + 1 );
+		assert( newEntry->m_requestData[newEntry->m_requestDataSize] == '\0' );
 
-		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, countPrefix.data(), countPrefix.size() );
-		newEntry->m_headingSize += countPrefix.size();
-		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, itemDesc.data(), itemDesc.size() );
-		newEntry->m_headingSize += itemDesc.size();
-		std::memcpy( newEntry->m_headingData + newEntry->m_headingSize, suffix.data(), suffix.size() );
-		newEntry->m_headingSize += suffix.size();
-		newEntry->m_headingData[newEntry->m_headingSize] = '\0';
+		newEntry->m_headingData     = newEntry->m_requestData + newEntry->m_requestDataSize + 1;
+		newEntry->m_headingData[0]  = '^';
+		newEntry->m_headingData[1]  = color;
+		newEntry->m_headingDataSize = 2;
+
+		countPrefix.copyTo( newEntry->m_headingData + newEntry->m_headingDataSize, countPrefix.size() + 1 );
+		newEntry->m_headingDataSize += countPrefix.size();
+		itemName.copyTo( newEntry->m_headingData + newEntry->m_headingDataSize, itemName.size() + 1 );
+		newEntry->m_headingDataSize += itemName.size();
+		suffix.copyTo( newEntry->m_headingData + newEntry->m_headingDataSize, suffix.size() + 1 );
+		newEntry->m_headingDataSize += suffix.size();
+		assert( newEntry->m_headingData[newEntry->m_headingDataSize] == '\0' );
 
 		destroyOldestLineIfNeeded();
 
@@ -1356,11 +1493,6 @@ static bool isExactlyAnAlias( const wsw::HashedStringView &text ) {
 	return CL_GetCmdSystem()->isARegisteredAlias( text );
 }
 
-[[nodiscard]]
-static auto takeCommandLikePrefix( const wsw::StringView &text ) -> wsw::StringView {
-	return text.takeWhile( []( char ch ) { return (size_t)ch > (size_t)' ' && ch != ';'; } );
-}
-
 bool Console::isAwaitingAsyncCompletion() const {
 	return m_lastAsyncCompletionRequestAt + 500 > cls.realtime;
 }
@@ -1372,7 +1504,7 @@ void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResul
 	}
 
 	if( !result.empty() ) {
-		// Sanity checks
+		// Sanity checks TODO: Track modification id's for robustness?
 		if( m_lastAsyncCompletionFullLength == m_inputLine.length() && m_inputLine.length() < kInputLengthLimit ) {
 			// Sanity checks
 			if( m_lastAsyncCompletionKeepLength <= m_lastAsyncCompletionFullLength ) {
@@ -1384,7 +1516,12 @@ void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResul
 				} else {
 					m_inputLine.append( result.getLongestCommonPrefix().take( maxCharsToAdd ) );
 					[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
-					addCompletionEntry( COLOR_GREEN, "argument"_asView, "arguments"_asView, std::move( result ) );
+					// TODO: Keep an original request within a completion result?
+					wsw::StringView originalRequest = m_inputLine.asView().take( m_lastAsyncCompletionFullLength );
+					if( originalRequest.startsWith( '\\' ) || originalRequest.startsWith( '/' ) ) {
+						originalRequest = originalRequest.drop( 1 );
+					}
+					addCompletionEntry( requestId, originalRequest, COLOR_GREEN, "argument"_asView, std::move( result ) );
 				}
 				m_inputPos = m_inputLine.size();
 			}
@@ -1425,12 +1562,7 @@ void Console::handleCompleteKeyAction() {
 	if( isExactlyACommand( maybeCommandLikePrefix ) ) {
 		const wsw::StringView &partial = inputText.drop( maybeCommandLikePrefix.size() ).trim();
 
-		m_lastAsyncCompletionRequestId = ++m_completionRequestIdsCounter;
-		if( !m_lastAsyncCompletionRequestId ) {
-			// Don't let the resulting id be zero TODO: Use std::optional<> ?
-			m_lastAsyncCompletionRequestId = ++m_completionRequestIdsCounter;
-		}
-
+		m_lastAsyncCompletionRequestId       = getNextCompletionRequestId();
 		m_lastAsyncCompletionRequestAt  = cls.realtime;
 		m_lastAsyncCompletionKeepLength = maybeCommandLikePrefix.size() + ( droppedFirstChar ? 1 : 0 );
 		m_lastAsyncCompletionFullLength = m_inputLine.size();
@@ -1466,16 +1598,21 @@ void Console::handleCompleteKeyAction() {
 			m_inputLine.append( chosenCompletion.take( kInputLengthLimit - m_inputLine.size() ) );
 			m_inputPos = m_inputLine.size();
 		} else {
+			// Make sure they are identified by the same request id, so they are highlighted interactively as a whole
+			const unsigned requestId = getNextCompletionRequestId();
 			// Add up to 3 entries in an atomic fashion
 			[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
 			if( !cmdCompletionResult.empty() ) {
-				addCompletionEntry( COLOR_MAGENTA, "command"_asView, "commands"_asView, std::move( cmdCompletionResult ));
+				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_MAGENTA, "command"_asView,
+									std::forward<CompletionResult>( cmdCompletionResult ) );
 			}
 			if( !varCompletionResult.empty() ) {
-				addCompletionEntry( COLOR_CYAN, "var"_asView, "vars"_asView, std::move( varCompletionResult ) );
+				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_CYAN, "var"_asView,
+									std::forward<CompletionResult>( varCompletionResult ) );
 			}
 			if( !aliasCompletionResult.empty() ) {
-				addCompletionEntry( COLOR_ORANGE, "alias"_asView, "aliases"_asView, std::move( aliasCompletionResult ) );
+				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_ORANGE, "alias"_asView,
+									std::forward<CompletionResult>( aliasCompletionResult ) );
 			}
 		}
 	}

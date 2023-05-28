@@ -7,8 +7,6 @@
 #include <type_traits>
 #include <cstdlib>
 
-namespace wsw { enum CaseSensitivity { MatchCase, IgnoreCase }; }
-
 template <typename Derived>
 struct BoxedHashMapNamedEntry {
 	template <typename, unsigned, wsw::CaseSensitivity> friend class MapOfBoxedNamedEntries;

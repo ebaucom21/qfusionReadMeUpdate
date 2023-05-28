@@ -12,6 +12,8 @@
 
 namespace wsw {
 
+enum CaseSensitivity { IgnoreCase, MatchCase };
+
 [[nodiscard]]
 auto getHashAndLength( const char *s ) -> std::pair<uint32_t, size_t>;
 [[nodiscard]]
@@ -123,8 +125,14 @@ public:
 	bool empty() const { return !m_len; }
 
 	[[nodiscard]]
-	bool equals( const wsw::StringView &that ) const {
-		return m_len == that.m_len && !::strncmp( m_s, that.m_s, m_len );
+	bool equals( const wsw::StringView &that, CaseSensitivity caseSensitivity = MatchCase ) const {
+		if( m_len == that.m_len ) {
+			if( caseSensitivity == MatchCase ) {
+				return !std::memcmp( m_s, that.m_s, m_len );
+			}
+			return !Q_strnicmp( m_s, that.m_s, m_len );
+		}
+		return false;
 	}
 
 	[[nodiscard]]
@@ -240,13 +248,25 @@ public:
 	}
 
 	[[nodiscard]]
-	bool startsWith( const wsw::StringView &prefix ) const {
-		return prefix.length() <= m_len && !::memcmp( m_s, prefix.m_s, prefix.length() );
+	bool startsWith( const wsw::StringView &prefix, wsw::CaseSensitivity caseSensitivity = MatchCase ) const {
+		if( prefix.length() <= m_len ) {
+			if( caseSensitivity == MatchCase ) {
+				return !std::memcmp( m_s, prefix.m_s, prefix.length() );
+			}
+			return !Q_strnicmp( m_s, prefix.m_s, prefix.length() );
+		}
+		return false;
 	}
 
 	[[nodiscard]]
-	bool endsWith( const wsw::StringView &suffix ) const {
-		return suffix.length() <= m_len && !::memcmp( m_s + m_len - suffix.length(), suffix.m_s, suffix.length() );
+	bool endsWith( const wsw::StringView &suffix, wsw::CaseSensitivity caseSensitivity = MatchCase ) const {
+		if( suffix.length() <= m_len ) {
+			if( caseSensitivity == MatchCase ) {
+				return !std::memcmp( m_s + m_len - suffix.length(), suffix.m_s, suffix.length() );
+			}
+			return !::Q_strnicmp( m_s + m_len - suffix.length(), suffix.m_s, suffix.length() );
+		}
+		return false;
 	}
 
 	[[nodiscard]]
@@ -279,6 +299,9 @@ public:
 
 	[[nodiscard]]
 	auto trim( const wsw::StringView &chars ) const -> wsw::StringView;
+
+	[[nodiscard]]
+	auto getCommonPrefixLength( const wsw::StringView &that, wsw::CaseSensitivity caseSensitivity = wsw::MatchCase ) const -> size_t;
 
 	[[nodiscard]]
 	auto take( size_t n ) const -> wsw::StringView {

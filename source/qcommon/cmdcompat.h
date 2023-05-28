@@ -40,13 +40,7 @@ public:
 			// Don't bother doing further checks if it's already zero
 			if( m_currLongestPrefixLength > 0 ) [[likely]] {
 				const wsw::StringView &prefix = m_storage[m_currLongestPrefixIndex].take( m_currLongestPrefixLength );
-				const size_t limit            = prefix.length() < entry.length() ? prefix.length() : entry.length();
-				size_t length  = 0;
-				for(; length < limit; ++length ) {
-					if( prefix[length] != entry[length] ) [[unlikely]] {
-						break;
-					}
-				}
+				const auto length             = (unsigned)prefix.getCommonPrefixLength( entry, wsw::IgnoreCase );
 				if( m_currLongestPrefixLength > length ) [[unlikely]] {
 					m_currLongestPrefixLength = length;
 					m_currLongestPrefixIndex  = oldSize;
