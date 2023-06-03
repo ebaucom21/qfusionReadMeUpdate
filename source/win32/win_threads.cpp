@@ -173,6 +173,10 @@ void Sys_Thread_Yield( void ) {
 	Sys_Sleep( 0 );
 }
 
+uint64_t Sys_Thread_GetId() {
+	return GetCurrentThreadId();
+}
+
 /*
 * Sys_Atomic_Add
 */

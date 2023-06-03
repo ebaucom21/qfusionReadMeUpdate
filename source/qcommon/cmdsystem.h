@@ -25,8 +25,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cmdargssplitter.h"
 #include "cmdcompat.h"
 #include "mapofboxednamedentries.h"
+#include "qthreads.h"
 
-class CmdSystem {
+class CmdSystem : protected CallingThreadChecker {
 public:
 	virtual ~CmdSystem() = default;
 
@@ -69,6 +70,9 @@ public:
 	void appendEarlySetCommands( std::span<const wsw::StringView> args );
 	void appendEarlySetAndExecCommands( std::span<const wsw::StringView> args );
 	void appendLateCommands( std::span<const std::optional<wsw::StringView>> args );
+
+	using CallingThreadChecker::markCurrentThreadForFurtherAccessChecks;
+	using CallingThreadChecker::clearThreadForFurtherAccessChecks;
 protected:
 	void helperForHandlerOfExec( const CmdArgs &cmdArgs );
 	void helperForHandlerOfEcho( const CmdArgs &cmdArgs );

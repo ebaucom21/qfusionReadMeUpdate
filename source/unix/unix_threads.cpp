@@ -120,6 +120,11 @@ void Sys_Thread_Yield( void ) {
 	sched_yield();
 }
 
+uint64_t Sys_Thread_GetId() {
+	static_assert( std::is_integral_v<decltype( pthread_self() )> && sizeof( decltype( pthread_self() ) ) <= 8 );
+	return (uint64_t)pthread_self();
+}
+
 /*
 * Sys_Atomic_Add
 */

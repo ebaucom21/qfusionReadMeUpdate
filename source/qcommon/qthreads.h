@@ -65,4 +65,27 @@ using PipeWaiterFn = int (*)( qbufPipe_t *, bool );
 int QBufPipe_ReadCmds( qbufPipe_t *queue );
 void QBufPipe_Wait( qbufPipe_t *queue, PipeWaiterFn waiterFn, unsigned timeout_msec );
 
+#ifndef CHECK_CALLING_THREAD
+#ifdef _DEBUG
+#define CHECK_CALLING_THREAD
+#endif
+#endif
+
+class CallingThreadChecker {
+public:
+#ifdef CHECK_CALLING_THREAD
+	void markCurrentThreadForFurtherAccessChecks();
+	void clearThreadForFurtherAccessChecks();
+	void checkCallingThread( const char *file = __builtin_FILE(), int line = __builtin_LINE() ) const;
+#else
+	void markCurrentThreadForFurtherAccessChecks() {}
+	void clearThreadForFurtherAccessChecks() {}
+	void checkCallingThread( const char *file = nullptr, int line = 0 ) const {}
+#endif
+private:
+#ifdef CHECK_CALLING_THREAD
+	uint64_t m_threadId { 0 };
+#endif
+};
+
 #endif // Q_THREADS_H

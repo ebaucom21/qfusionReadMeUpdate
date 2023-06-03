@@ -399,3 +399,25 @@ void QBufPipe_Wait( qbufPipe_t *pipe, PipeWaiterFn waiterFn, unsigned timeout_ms
 		}
 	}
 }
+
+#ifdef CHECK_CALLING_THREAD
+
+void CallingThreadChecker::markCurrentThreadForFurtherAccessChecks() {
+	m_threadId = Sys_Thread_GetId();
+}
+
+void CallingThreadChecker::clearThreadForFurtherAccessChecks() {
+	m_threadId = 0;
+}
+
+void CallingThreadChecker::checkCallingThread( const char *file, int line ) const {
+	if( m_threadId ) {
+		if( const uint64_t id = Sys_Thread_GetId(); id != m_threadId ) {
+			// TODO: Print thread names (adding names to threads is a quite complicated topic so we ditch it for now)
+			Com_Printf( "Illegal thread id %" PRIu64 ", only %" PRIu64 " is allowed to call this object", id, m_threadId );
+			abort();
+		}
+	}
+}
+
+#endif

@@ -873,6 +873,7 @@ void CL_RegisterCmdWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
 
 class SVCmdSystem: public CmdSystem {
 	void registerSystemCommands() override {
+		checkCallingThread();
 		registerCommand( "exec"_asView, handlerOfExec );
 		registerCommand( "echo"_asView, handlerOfEcho );
 		registerCommand( "alias"_asView, handlerOfAlias );

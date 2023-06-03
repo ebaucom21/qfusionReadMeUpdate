@@ -98,6 +98,8 @@ void CmdSystem::TextBuffer::shrinkToFit() {
 }
 
 bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) {
+	checkCallingThread();
+
 	if( name.empty() ) {
 		Com_Printf( S_COLOR_RED "Failed to register command: Empty command name\n" );
 		return false;
@@ -135,6 +137,8 @@ bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) 
 }
 
 bool CmdSystem::unregisterCommand( const wsw::StringView &name ) {
+	checkCallingThread();
+
 	if( !name.empty() ) {
 		if( CmdEntry *entry = m_cmdEntries.findByName( wsw::HashedStringView( name ) ) ) {
 			m_cmdEntries.remove( entry );
@@ -151,6 +155,8 @@ bool CmdSystem::unregisterCommand( const wsw::StringView &name ) {
 }
 
 void CmdSystem::executeBufferCommands() {
+	checkCallingThread();
+
 	m_aliasRecursionDepth = 0;
 
 	while( const std::optional<wsw::StringView> maybeNextCmd = m_textBuffer.fetchNextCmd() ) {
@@ -165,6 +171,8 @@ void CmdSystem::executeBufferCommands() {
 }
 
 void CmdSystem::executeNow( const wsw::StringView &text ) {
+	checkCallingThread();
+
 	if( const CmdArgs &cmdArgs = m_argsSplitter.exec( text ); !cmdArgs.allArgs.empty() ) {
 		// FIXME: This routine defines the order in which identifiers are looked-up, but
 		// there are no checks for name-clashes. If a user sets a cvar with the name of
@@ -199,6 +207,8 @@ void CmdSystem::executeNow( const wsw::StringView &text ) {
 }
 
 void CmdSystem::unregisterSystemCommands() {
+	checkCallingThread();
+
 	unregisterCommand( "exec"_asView );
 	unregisterCommand( "echo"_asView );
 	unregisterCommand( "alias"_asView );
@@ -242,6 +252,8 @@ void CmdSystem::classifyExecutableCmdArgs( int argc, char **argv,
 }
 
 void CmdSystem::appendEarlySetCommands( std::span<const wsw::StringView> args ) {
+	checkCallingThread();
+
 	assert( args.size() % 3 == 0 );
 	for( size_t i = 0; i < args.size(); i += 3 ) {
 		wsw::StaticString<MAX_TOKEN_CHARS> text;
@@ -251,6 +263,8 @@ void CmdSystem::appendEarlySetCommands( std::span<const wsw::StringView> args ) 
 }
 
 void CmdSystem::appendEarlySetAndExecCommands( std::span<const wsw::StringView> args ) {
+	checkCallingThread();
+
 	size_t i = 0;
 	while( i < args.size() ) {
 		const wsw::StringView &cmdName = args[0];
@@ -271,6 +285,8 @@ void CmdSystem::appendEarlySetAndExecCommands( std::span<const wsw::StringView> 
 }
 
 void CmdSystem::appendLateCommands( std::span<const std::optional<wsw::StringView>> args ) {
+	checkCallingThread();
+
 	assert( !args.empty() );
 
 	wsw::String text;
@@ -292,6 +308,8 @@ void CmdSystem::appendLateCommands( std::span<const std::optional<wsw::StringVie
 }
 
 void CmdSystem::helperForHandlerOfExec( const CmdArgs &cmdArgs ) {
+	checkCallingThread();
+
 	char *f = NULL, *name;
 	const char *arg = Cmd_Argv( 1 );
 	bool silent = Cmd_Argc() >= 3 && !Q_stricmp( Cmd_Argv( 2 ), "silent" );
@@ -348,6 +366,7 @@ void CmdSystem::helperForHandlerOfExec( const CmdArgs &cmdArgs ) {
 }
 
 void CmdSystem::helperForHandlerOfEcho( const CmdArgs &cmdArgs ) {
+	checkCallingThread();
 	for( size_t i = 1; i < cmdArgs.allArgs.size(); ++i ) {
 		Com_Printf( "%s", cmdArgs.allArgs[i].data() );
 	}
@@ -355,6 +374,8 @@ void CmdSystem::helperForHandlerOfEcho( const CmdArgs &cmdArgs ) {
 }
 
 void CmdSystem::helperForHandlerOfVstr( const CmdArgs &cmdArgs ) {
+	checkCallingThread();
+
 	if( Cmd_Argc() != 2 ) {
 		Com_Printf( "vstr <variable> : execute a variable command\n" );
 	} else {
@@ -363,6 +384,7 @@ void CmdSystem::helperForHandlerOfVstr( const CmdArgs &cmdArgs ) {
 }
 
 void CmdSystem::helperForHandlerOfWait( const CmdArgs & ) {
+	checkCallingThread();
 	m_interruptExecutionLoop = true;
 }
 
@@ -389,6 +411,8 @@ static auto writeAliasText( char *buffer, const CmdArgs &cmdArgs ) -> unsigned {
 }
 
 void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) {
+	checkCallingThread();
+
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "Usage: alias <name> <command>\n" );
 		return;
@@ -488,6 +512,8 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 }
 
 void CmdSystem::helperForHandlerOfUnalias( const CmdArgs &cmdArgs ) {
+	checkCallingThread();
+
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "Usage: unalias <name>\n" );
 		return;
@@ -505,5 +531,6 @@ void CmdSystem::helperForHandlerOfUnalias( const CmdArgs &cmdArgs ) {
 }
 
 void CmdSystem::helperForHandlerOfUnaliasall( const CmdArgs &cmdArgs ) {
+	checkCallingThread();
 	m_aliasEntries.clear();
 }

@@ -2606,6 +2606,7 @@ struct std::hash<wsw::HashedStringView> {
 class CLCmdSystem : public CmdSystem {
 public:
 	void submitCompletionRequest( const wsw::StringView &name, unsigned requestId, const wsw::StringView &partial ) {
+		checkCallingThread();
 		if( const auto it = m_completionEntries.find( wsw::HashedStringView( name ) ); it != m_completionEntries.end() ) {
 			it->second.executionFunc( name, requestId, partial, it->second.queryFunc );
 		}
@@ -2615,6 +2616,7 @@ public:
 	bool registerCommandWithCompletion( const wsw::StringView &name, CmdFunc cmdFunc,
 										CompletionQueryFunc queryFunc, CompletionExecutionFunc executionFunc ) {
 		assert( queryFunc && executionFunc );
+		checkCallingThread();
 		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
 			const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) );
 			// Let the map key reside in the cmdEntry memory block
@@ -2625,6 +2627,7 @@ public:
 	}
 
 	bool registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) override {
+		checkCallingThread();
 		if( CmdSystem::registerCommand( name, cmdFunc ) ) {
 			// The method resets/overrides all callbacks, if any. This means removing completion callbacks.
 			m_completionEntries.erase( wsw::HashedStringView( name ) );
@@ -2634,6 +2637,7 @@ public:
 	}
 
 	bool unregisterCommand( const wsw::StringView &name ) override {
+		checkCallingThread();
 		// Prevent use-after-free by removing the entry first
 		if( const CmdEntry *cmdEntry = m_cmdEntries.findByName( wsw::HashedStringView( name ) ) ) {
 			m_completionEntries.erase( cmdEntry->m_nameAndHash );
@@ -2652,6 +2656,7 @@ public:
 	}
 
 	void writeAliases( int file ) {
+		checkCallingThread();
 		const CompletionResult sortedNames( getPossibleAliases( wsw::StringView() ) );
 		for( const wsw::StringView &name: sortedNames ) {
 			const AliasEntry *entry = m_aliasEntries.findByName( wsw::HashedStringView( name ) );
@@ -2667,6 +2672,8 @@ private:
 	[[nodiscard]]
 	auto getPossibleCompletions( const wsw::StringView &partial,
 								 const MapOfBoxedNamedEntries<Entry, N, wsw::IgnoreCase> &container ) const -> CompletionResult {
+		checkCallingThread();
+
 		// TODO: Make the CompletionResult be trie-based, so we don't have to output so much duplicated character data
 		trie_t *trie = nullptr;
 		Trie_Create( TRIE_CASE_INSENSITIVE, &trie );
@@ -2689,6 +2696,7 @@ private:
 	}
 
 	void registerSystemCommands() override {
+		checkCallingThread();
 		registerCommand( "exec"_asView, handlerOfExec );
 		registerCommand( "echo"_asView, handlerOfEcho );
 		registerCommand( "alias"_asView, handlerOfAlias );

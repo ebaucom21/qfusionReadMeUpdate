@@ -75,6 +75,8 @@ void SV_InitCmdSystem();
 CmdSystem *SV_GetCmdSystem();
 void SV_ShutdownCmdSystem();
 
+static void SV_StopThread();
+
 static void Cmd_PreInit( void );
 static void Cmd_Init( void );
 static void Cmd_Shutdown( void );
@@ -109,6 +111,7 @@ void Com_Error( com_error_code_t code, const char *format, ... ) {
 		longjmp( abortframe, -1 );
 	} else {
 		Com_Printf( "********************\nERROR: %s\n********************\n", msg );
+		SV_StopThread();
 		SV_Shutdown( va( "Server fatal crashed: %s\n", msg ) );
 #ifndef DEDICATED_ONLY
 		CL_Shutdown();
@@ -128,6 +131,7 @@ void Com_DeferQuit( void ) {
 }
 
 void Com_Quit( const CmdArgs & ) {
+	SV_StopThread();
 	SV_Shutdown( "Server quit\n" );
 #ifndef DEDICATED_ONLY
 	CL_Shutdown();
@@ -170,6 +174,8 @@ static qthread_s *g_svThread;
 // TODO: !!!!! We should merge this thread with the sound background thread
 
 static void *SV_Thread( void * ) {
+	SV_GetCmdSystem()->markCurrentThreadForFurtherAccessChecks();
+
 	uint64_t oldtime = 0, newtime;
 
 	unsigned gameMsec = 0;
@@ -208,6 +214,8 @@ static void *SV_Thread( void * ) {
 		SV_Frame( realMsec, gameMsec );
 	}
 
+	// Allow accessing the cmd system from the main thread during shutdown
+	SV_GetCmdSystem()->clearThreadForFurtherAccessChecks();
 	return nullptr;
 }
 
@@ -263,6 +271,7 @@ void Qcommon_Init( int argc, char **argv ) {
 	primaryCmdSystem = svCmdSystem;
 #else
 	CmdSystem *clCmdSystem = CL_GetCmdSystem();
+	clCmdSystem->markCurrentThreadForFurtherAccessChecks();
 	primaryCmdSystem = clCmdSystem;
 #endif
 
@@ -378,8 +387,11 @@ void Qcommon_Init( int argc, char **argv ) {
 
 #ifndef DEDICATED_ONLY
 	clCmdSystem->executeBufferCommands();
-#endif
+	callMethodOverPipe( g_svCmdPipe, svCmdSystem, &CmdSystem::executeBufferCommands );
+	QBufPipe_Finish( g_svCmdPipe );
+#else
 	svCmdSystem->executeBufferCommands();
+#endif
 };
 
 void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
@@ -436,6 +448,15 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 #endif
 }
 
+static void SV_StopThread() {
+#ifndef DEDICATED_ONLY
+	sendTerminateCmd( g_svCmdPipe );
+	QBufPipe_Finish( g_svCmdPipe );
+
+	QThread_Join( g_svThread );
+#endif
+}
+
 void Qcommon_Shutdown( void ) {
 	static bool isdown = false;
 
@@ -446,11 +467,6 @@ void Qcommon_Shutdown( void ) {
 	isdown = true;
 
 #ifndef DEDICATED_ONLY
-	sendTerminateCmd( g_svCmdPipe );
-	QBufPipe_Finish( g_svCmdPipe );
-
-	QThread_Join( g_svThread );
-
 	QBufPipe_Destroy( &g_svCmdPipe );
 	QBufPipe_Destroy( &g_clCmdPipe );
 #endif
