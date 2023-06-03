@@ -53,7 +53,7 @@ public:
 	[[nodiscard]] auto size() const -> unsigned { return m_storage.size(); }
 
 	[[nodiscard]]
-	auto getLongestCommonPrefix() const -> wsw::StringView {
+	auto getCommonPrefix() const -> wsw::StringView {
 		return m_storage[m_currLongestPrefixIndex].take( m_currLongestPrefixLength );
 	}
 

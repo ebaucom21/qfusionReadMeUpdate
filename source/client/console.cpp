@@ -1542,7 +1542,7 @@ void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResul
 				if( result.size() == 1 ) {
 					m_inputLine.append( result.front().take( maxCharsToAdd ) );
 				} else {
-					m_inputLine.append( result.getLongestCommonPrefix().take( maxCharsToAdd ) );
+					m_inputLine.append( result.getCommonPrefix().take( maxCharsToAdd ) );
 					[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
 					// TODO: Keep an original request within a completion result?
 					wsw::StringView originalRequest = m_inputLine.asView().take( m_lastAsyncCompletionFullLength );
@@ -1591,7 +1591,7 @@ void Console::handleCompleteKeyAction() {
 	if( isExactlyACommand( maybeCommandLikePrefix ) ) {
 		const wsw::StringView &partial = inputText.drop( maybeCommandLikePrefix.size() ).trim();
 
-		m_lastAsyncCompletionRequestId       = getNextCompletionRequestId();
+		m_lastAsyncCompletionRequestId  = getNextCompletionRequestId();
 		m_lastAsyncCompletionRequestAt  = cls.realtime;
 		m_lastAsyncCompletionKeepLength = maybeCommandLikePrefix.size() + ( droppedFirstChar ? 1 : 0 );
 		m_lastAsyncCompletionFullLength = m_inputLine.size();
@@ -1608,40 +1608,63 @@ void Console::handleCompleteKeyAction() {
 		CompletionResult varCompletionResult   = Cvar_CompleteBuildList( maybeCommandLikePrefix );
 		CompletionResult aliasCompletionResult = CL_GetPossibleAliases( maybeCommandLikePrefix );
 
-		const size_t totalSize = cmdCompletionResult.size() + varCompletionResult.size() + aliasCompletionResult.size();
-		if( totalSize == 0 ) {
+		wsw::StaticVector<std::tuple<CompletionResult *, wsw::StringView, char>, 3> nonEmptyResults;
+		if( !cmdCompletionResult.empty() ) {
+			nonEmptyResults.push_back( std::make_tuple( &cmdCompletionResult, "command"_asView, COLOR_MAGENTA ) );
+		}
+		if( !varCompletionResult.empty() ) {
+			nonEmptyResults.push_back( std::make_tuple( &varCompletionResult, "var"_asView, COLOR_CYAN ) );
+		}
+		if( !aliasCompletionResult.empty() ) {
+			nonEmptyResults.push_back( std::make_tuple( &aliasCompletionResult, "alias"_asView, COLOR_ORANGE ) );
+		}
+
+		if( nonEmptyResults.empty() ) {
 			Com_Printf( "No matching aliases, commands or vars were found\n" );
-		} else if( totalSize == 1 ) {
-			wsw::StringView chosenCompletion;
-			if( !cmdCompletionResult.empty() ) {
-				chosenCompletion = cmdCompletionResult.front();
-			} else if( !varCompletionResult.empty() ) {
-				chosenCompletion = varCompletionResult.front();
-			} else if( !aliasCompletionResult.empty() ) {
-				chosenCompletion = aliasCompletionResult.front();
-			} else {
-				wsw::failWithLogicError( "Unreachable" );
-			}
-			assert( !chosenCompletion.empty() );
-			m_inputLine.erase( droppedFirstChar ? 1 : 0 );
-			m_inputLine.append( chosenCompletion.take( kInputLengthLimit - m_inputLine.size() ) );
-			m_inputPos = m_inputLine.size();
 		} else {
-			// Make sure they are identified by the same request id, so they are highlighted interactively as a whole
-			const unsigned requestId = getNextCompletionRequestId();
-			// Add up to 3 entries in an atomic fashion
-			[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
-			if( !cmdCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_MAGENTA,
-									"command"_asView, std::forward<CompletionResult>( cmdCompletionResult ) );
+			const auto replaceInputBy = [&]( const wsw::StringView &charsToUse ) {
+				m_inputLine.erase( droppedFirstChar ? 1 : 0 );
+				m_inputLine.append( charsToUse.take( kInputLengthLimit - m_inputLine.size() ) );
+				m_inputPos = m_inputLine.size();
+			};
+
+			bool didAnInstantCompletion = false;
+			if( nonEmptyResults.size() == 1 ) {
+				if( const auto *completionResult = std::get<0>( nonEmptyResults.front() ); completionResult->size() == 1 ) {
+					replaceInputBy( completionResult->front() );
+					didAnInstantCompletion = true;
+				}
 			}
-			if( !varCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_CYAN,
-									"var"_asView, std::forward<CompletionResult>( varCompletionResult ) );
-			}
-			if( !aliasCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_ORANGE,
-									"alias"_asView, std::forward<CompletionResult>( aliasCompletionResult ) );
+
+			if( !didAnInstantCompletion ) {
+				wsw::StringView commonPrefix = std::get<0>( nonEmptyResults.front() )->getCommonPrefix();
+				if( !commonPrefix.empty() ) {
+					for( unsigned i = 1; i < nonEmptyResults.size(); ++i ) {
+						const wsw::StringView &nextPrefix = std::get<0>( nonEmptyResults[i] )->getCommonPrefix();
+						commonPrefix = commonPrefix.take( commonPrefix.getCommonPrefixLength( nextPrefix, wsw::IgnoreCase ) );
+						if( commonPrefix.empty() ) {
+							break;
+						}
+					}
+				}
+				if( !commonPrefix.empty() ) {
+					// If the common prefix of results adds something to the current input
+					if( maybeCommandLikePrefix.length() < commonPrefix.length() ) {
+						replaceInputBy( commonPrefix );
+					}
+				}
+
+				// Make sure they are identified by the same request id, so they are highlighted interactively as a whole
+				const unsigned requestId = getNextCompletionRequestId();
+				// Add up to 3 entries in an atomic fashion
+				[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
+				for( auto &nonEmptyResultTuple: nonEmptyResults ) {
+					CompletionResult *completionResult = std::get<0>( nonEmptyResultTuple );
+					const wsw::StringView &itemDesc    = std::get<1>( nonEmptyResultTuple );
+					const char color                   = std::get<2>( nonEmptyResultTuple );
+					addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, color,
+										itemDesc, std::forward<CompletionResult>( *completionResult ) );
+				}
 			}
 		}
 	}

@@ -132,7 +132,7 @@ auto StringView::getCommonPrefixLength( const wsw::StringView &that, wsw::CaseSe
 		}
 	} else {
 		for( size_t i = 0; i < limit; ++i ) {
-			if( std::toupper( m_s[i] ) != std::toupper( m_s[i] ) ) {
+			if( std::toupper( m_s[i] ) != std::toupper( that.m_s[i] ) ) {
 				return i;
 			}
 		}
