@@ -191,6 +191,7 @@ private:
 		unsigned m_requestDataSize { 0 };
 		unsigned m_headingDataSize { 0 };
 		unsigned m_requestId { 0 };
+		enum CompletionMode { Name, Arg } m_completionMode { Name };
 
 		struct MeasureCache {
 			unsigned resizeId { 0 };
@@ -253,7 +254,8 @@ private:
 	[[nodiscard]]
 	bool isAwaitingAsyncCompletion() const;
 
-	void addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest, char color,
+	void addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest,
+							 CompletionEntry::CompletionMode intendedMode, char color,
 							 const wsw::StringView &itemName, CompletionResult &&completionResult );
 
 	[[nodiscard]]
@@ -1235,25 +1237,47 @@ auto Console::CompletionEntry::getCharSpansForDrawing( unsigned resizeId, unsign
 		}
 	}
 
-	[[maybe_unused]] const wsw::StringView &requestPrefix = wsw::StringView { m_requestData, m_requestDataSize };
-	[[maybe_unused]] wsw::StringView inputToMatch         = console->m_inputLine.asView();
-
+	[[maybe_unused]] wsw::StringView inputToMatch      = console->m_inputLine.asView();
 	[[maybe_unused]] bool isHighlightingPrefixes       = false;
 	[[maybe_unused]] bool shouldPruneBroadAlterantives = false;
 	[[maybe_unused]] unsigned highlightedPrefixLen     = 0;
 
 	if( shouldAttemptToHighlight ) {
-		// Make sure the request was the same or broader than the input line
-		if( inputToMatch.startsWith( requestPrefix, wsw::IgnoreCase ) ) {
-			highlightedPrefixLen         = inputToMatch.length();
-			isHighlightingPrefixes       = true;
-			shouldPruneBroadAlterantives = inputToMatch.length() > requestPrefix.length();
-			// Account for command argument completion TODO: Make this distinction explicit during completion handling?
-			if( const auto &prefix = takeCommandLikePrefix( inputToMatch ); prefix.length() < inputToMatch.length() ) {
-				const auto oldLength = inputToMatch.length();
-				inputToMatch         = inputToMatch.drop( prefix.length() ).trimLeft();
-				highlightedPrefixLen -= ( oldLength - inputToMatch.length() );
+		[[maybe_unused]] wsw::StringView originalRequest = wsw::StringView { m_requestData, m_requestDataSize };
+		// "Normalize" for comparisons
+		if( originalRequest.startsWith( '\\' ) || originalRequest.startsWith( '/' ) ) {
+			originalRequest = originalRequest.drop( 1 );
+		}
+		if( inputToMatch.startsWith( '\\' ) || inputToMatch.startsWith( '/' ) ) {
+			inputToMatch = inputToMatch.drop( 1 );
+		}
+
+		if( m_completionMode == CompletionMode::Name ) {
+			// Make sure the request was the same or more broad than the input line
+			if( inputToMatch.startsWith( originalRequest, wsw::IgnoreCase ) ) {
+				// Make sure there's a single command-like token without trailing characters
+				if( takeCommandLikePrefix( inputToMatch ).length() == inputToMatch.length() ) {
+					highlightedPrefixLen         = inputToMatch.length();
+					isHighlightingPrefixes       = true;
+					shouldPruneBroadAlterantives = inputToMatch.length() > originalRequest.length();
+				}
 			}
+		} else if( m_completionMode == CompletionMode::Arg ) {
+			const wsw::StringView &originalPrefix = takeCommandLikePrefix( originalRequest );
+			const wsw::StringView &inputPrefix    = takeCommandLikePrefix( inputToMatch );
+			// Make sure the commands/command-like tokens match
+			if( originalPrefix.equalsIgnoreCase( inputPrefix ) ) {
+				originalRequest = originalRequest.drop( originalPrefix.length() ).trim();
+				inputToMatch    = inputToMatch.drop( inputPrefix.length() ).trim();
+				// Make sure the argument request is the same or more broad than the input line
+				if( inputToMatch.startsWith( originalRequest, wsw::IgnoreCase ) ) {
+					highlightedPrefixLen         = inputToMatch.length();
+					isHighlightingPrefixes       = true;
+					shouldPruneBroadAlterantives = inputToMatch.length() > originalRequest.length();
+				}
+			}
+		} else {
+			wsw::failWithLogicError( "Unreachable" );
 		}
 	}
 
@@ -1430,7 +1454,8 @@ auto Console::getNextCompletionRequestId() {
 	return result;
 }
 
-void Console::addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest, char color,
+void Console::addCompletionEntry( unsigned requestId, const wsw::StringView &originalRequest,
+								  CompletionEntry::CompletionMode intendedMode, char color,
 								  const wsw::StringView &itemName, CompletionResult &&completionResult ) {
 	wsw::StaticString<16> countPrefix;
 	countPrefix << completionResult.size() << ' ';
@@ -1446,8 +1471,9 @@ void Console::addCompletionEntry( unsigned requestId, const wsw::StringView &ori
 
 	if( void *mem = std::malloc( allocationSize ) ) [[likely]] {
 		// Moving the completion result won't fail
-		auto *const newEntry  = new( mem )CompletionEntry( std::forward<CompletionResult>( completionResult ) );
-		newEntry->m_requestId = requestId;
+		auto *const newEntry       = new( mem )CompletionEntry( std::forward<CompletionResult>( completionResult ) );
+		newEntry->m_requestId      = requestId;
+		newEntry->m_completionMode = intendedMode;
 
 		newEntry->m_requestData     = (char *)( newEntry + 1 );
 		newEntry->m_requestDataSize = originalRequest.size();
@@ -1523,7 +1549,8 @@ void Console::acceptCommandCompletionResult( unsigned requestId, CompletionResul
 					if( originalRequest.startsWith( '\\' ) || originalRequest.startsWith( '/' ) ) {
 						originalRequest = originalRequest.drop( 1 );
 					}
-					addCompletionEntry( requestId, originalRequest, COLOR_GREEN, "argument"_asView, std::move( result ) );
+					addCompletionEntry( requestId, originalRequest, CompletionEntry::Arg,
+										COLOR_GREEN, "argument"_asView, std::forward<CompletionResult>( result ) );
 				}
 				m_inputPos = m_inputLine.size();
 			}
@@ -1605,16 +1632,16 @@ void Console::handleCompleteKeyAction() {
 			// Add up to 3 entries in an atomic fashion
 			[[maybe_unused]] volatile std::scoped_lock lock( m_mutex );
 			if( !cmdCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_MAGENTA, "command"_asView,
-									std::forward<CompletionResult>( cmdCompletionResult ) );
+				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_MAGENTA,
+									"command"_asView, std::forward<CompletionResult>( cmdCompletionResult ) );
 			}
 			if( !varCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_CYAN, "var"_asView,
-									std::forward<CompletionResult>( varCompletionResult ) );
+				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_CYAN,
+									"var"_asView, std::forward<CompletionResult>( varCompletionResult ) );
 			}
 			if( !aliasCompletionResult.empty() ) {
-				addCompletionEntry( requestId, maybeCommandLikePrefix, COLOR_ORANGE, "alias"_asView,
-									std::forward<CompletionResult>( aliasCompletionResult ) );
+				addCompletionEntry( requestId, maybeCommandLikePrefix, CompletionEntry::Name, COLOR_ORANGE,
+									"alias"_asView, std::forward<CompletionResult>( aliasCompletionResult ) );
 			}
 		}
 	}
