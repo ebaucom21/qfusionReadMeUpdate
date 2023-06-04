@@ -69,9 +69,9 @@ typedef struct {
 //===============================================================
 
 namespace wsw {
-	class PrintLineStream;
-	enum class PrintLineCategory : uint8_t;
-	enum class PrintLineSeverity : uint8_t;
+	class OutputMessageStream;
+	enum class MessageCategory : uint8_t;
+	enum class MessageSeverity : uint8_t;
 }
 
 struct CMShapeList;
@@ -205,8 +205,8 @@ typedef struct {
 	// can vary in size from one game to another.
 	void ( *LocateEntities )( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts );
 
-	wsw::PrintLineStream *( *createPrintLineStream )( wsw::PrintLineCategory, wsw::PrintLineSeverity );
-	void ( *submitPrintLineStream )( wsw::PrintLineStream * );
+	wsw::OutputMessageStream *( *createMessageStream )( wsw::MessageCategory, wsw::MessageSeverity );
+	void ( *submitMessageStream )( wsw::OutputMessageStream * );
 } game_import_t;
 
 //

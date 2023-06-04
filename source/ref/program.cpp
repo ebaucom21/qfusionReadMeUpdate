@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/wswfs.h"
 #include "../qcommon/wswstring.h"
 #include "../qcommon/wswstringsplitter.h"
+#include "../qcommon/textstreamwriterextras.h"
 
 using wsw::operator""_asView;
 
@@ -272,7 +273,7 @@ bool ProgramSourceFileCache::parseFileContents( const wsw::StringView &fileName,
 
 	const size_t rawFileSize = maybeFileHandle->getInitialFileSize();
 	if( rawFileSize > ( 1 << 20 ) ) {
-		Com_Printf( S_COLOR_RED "Bogus source file size for %s: %lu\n", fileName.data(), rawFileSize );
+		rError() << "Bogus source file size" << rawFileSize << "for" << fileName;
 		return false;
 	}
 
@@ -288,7 +289,7 @@ bool ProgramSourceFileCache::parseFileContents( const wsw::StringView &fileName,
 	stringData->resize( stringData->size() + rawFileSize + 2 );
 
 	if( !maybeFileHandle->readExact( stringData->data() + fileStringDataOffset, rawFileSize ) ) {
-		Com_Printf( S_COLOR_RED "Failed to read the source file\n" );
+		rError() << "Failed to read the source file" << fileName;
 		return false;
 	}
 
@@ -490,7 +491,7 @@ bool ProgramSourceLoader::loadRecursively( const wsw::StringView &fileName, int 
 			}
 
 			if( depth + 1 >= 16 ) {
-				Com_Printf( "Too many nested includes\n" );
+				rWarning() << "Too many nested includes";
 				return false;
 			}
 
@@ -1323,7 +1324,7 @@ auto ShaderProgramCache::getProgramForParams( int type, const wsw::StringView &m
 			}
 		}
 		if( requestedNameToUse.empty() ) {
-			Com_Printf( S_COLOR_RED "Failed to find an existing program for the type 0x%X\n", type );
+			rError() << "Failed to find an existing program for the type" << wsw::xfmt( type );
 			return 0;
 		}
 	}
@@ -1331,13 +1332,13 @@ auto ShaderProgramCache::getProgramForParams( int type, const wsw::StringView &m
 	assert( requestedNameToUse.isZeroTerminated() );
 
 	if( m_programsAllocator.isFull() ) {
-		Com_Printf( S_COLOR_RED "Failed to create a program %s: too many programs\n", requestedNameToUse.data() );
+		rError() << "Failed to create a program" << requestedNameToUse << ": too many programs";
 		return 0;
 	}
 
 	const auto maybeObjectIds = createProgramFromSource( requestedNameToUse, type, features, deforms );
 	if( !maybeObjectIds ) {
-		Com_Printf( S_COLOR_RED "Failed to create a program %s from source\n", requestedNameToUse.data() );
+		rError() << "Failed to create a program" << requestedNameToUse << "from source";
 		return 0;
 	}
 
@@ -1427,7 +1428,7 @@ auto ShaderProgramCache::createProgramFromSource( const wsw::StringView &name, i
 			succeeded = true;
 		} while( false );
 	} catch( std::exception &ex ) {
-		Com_Printf( S_COLOR_RED "Caught an exception while trying to create a program: %s\n", ex.what() );
+		rError() << "Caught an exception while trying to create a program:" << wsw::StringView( ex.what() );
 		succeeded = false;
 	} catch( ... ) {
 		succeeded = false;
@@ -1595,12 +1596,12 @@ bool ShaderProgramCache::loadVertexShaderSource( GLuint id, const wsw::StringVie
 
 	ProgramSourceLoader vertexShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings, &m_tmpShaderLengths );
 	if( !vertexShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
-		Com_DPrintf( "Failed to load the source of %s\n", fileName );
+		rError() << "Failed to load the source of" << wsw::StringView( fileName );
 		return false;
 	}
 
 	if( !compileShader( id, "vertex", m_tmpShaderStrings, m_tmpShaderLengths ) ) {
-		Com_DPrintf( "Failed to compile %s\n", fileName );
+		rError() << "Failed to compile" << wsw::StringView( fileName );
 		return false;
 	}
 
@@ -1655,12 +1656,12 @@ bool ShaderProgramCache::loadFragmentShaderSource( GLuint id, const wsw::StringV
 
 	ProgramSourceLoader fragmentShaderLoader( &g_programSourceFileCache, &m_tmpShaderStrings, &m_tmpShaderLengths );
 	if( !fragmentShaderLoader.load( wsw::StringView( fileName ), features, type ) ) {
-		Com_DPrintf( "Failed to load source of %s\n", fileName );
+		rError() << "Failed to load source of", wsw::StringView( fileName );
 		return false;
 	}
 
 	if( !compileShader( id, "fragment", m_tmpShaderStrings, m_tmpShaderLengths ) ) {
-		Com_DPrintf( "Failed to compile %s\n", fileName );
+		rError() << "Failed to compile %s\n", wsw::StringView( fileName );
 		return false;
 	}
 
@@ -1680,7 +1681,9 @@ bool ShaderProgramCache::compileShader( GLuint id, const char *kind, std::span<c
 		GLsizei logLength = 0;
 		qglGetShaderInfoLog( id, (GLsizei)sizeof( log ), &logLength, log );
 		log[logLength] = log[sizeof( log ) - 1] = '\0';
-		Com_Printf( "Failed to compile a %s shader: %s\n", kind, log );
+		// TODO: Split log lines
+		rError() << "Failed to compile a" << wsw::unquoted( wsw::StringView( kind ) )
+			<< "shader" << wsw::unquoted( wsw::StringView( log, logLength ) );
 		return false;
 	}
 
@@ -1699,7 +1702,8 @@ bool ShaderProgramCache::linkProgram( GLuint programId, GLuint vertexShaderId, G
 		GLsizei logLength = 0;
 		qglGetProgramInfoLog( programId, (GLsizei)sizeof( log ), &logLength, log );
 		log[logLength] = log[sizeof( log ) - 1] = '\0';
-		Com_Printf( "Failed to link a program: %s\n", log );
+		// TODO: Split log lines
+		rError() << "Failed to link a program:" << wsw::unquoted( wsw::StringView( log, logLength ) );
 		return false;
 	}
 

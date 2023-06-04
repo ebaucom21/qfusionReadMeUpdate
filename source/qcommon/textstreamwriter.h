@@ -25,22 +25,22 @@ protected:
 
 	template <typename T>
 	wsw_forceinline void writeFloatingPointValue( T value ) {
-		using Limits = std::numeric_limits<T>;
+		static_assert( std::is_same_v<std::remove_cvref<T>, float> || std::is_same_v<std::remove_cvref<T>, double> );
 		const size_t separatorLen  = ( hasPendingSeparator ? 1 : 0 );
-		const size_t sizeToReserve = separatorLen + Limits::max_digits10 + 1;
+		// TODO: Is it sufficient for edge cases?
+		constexpr size_t numberLen = std::is_same_v<std::remove_cvref<T>, float> ? 32 : 96;
+		const size_t sizeToReserve = separatorLen + numberLen + 1;
 		if( char *bufferChars = m_stream->reserve( sizeToReserve ) ) [[likely]] {
 			bufferChars[0] = separatorChar;
 			int res;
 			// Unfortunately, we have to fall back to snprintf due to
 			// a lack of full std::to_chars/std::format() support
-			if constexpr( std::is_same_v<std::remove_cvref_t<T>, long double> ) {
-				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%Lf", value );
-			} else if constexpr( std::is_same_v<std::remove_cvref_t<T>, double> ) {
-				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%lf", value );
+			if constexpr( std::is_same_v<std::remove_cvref_t<T>, double> ) {
+				res = snprintf( bufferChars + separatorLen, numberLen + 1, "%lf", value );
 			} else {
-				res = snprintf( bufferChars + separatorLen, Limits::max_digits10 + 1, "%f", value );
+				res = snprintf( bufferChars + separatorLen, numberLen + 1, "%f", value );
 			}
-			if( res > 0 && (size_t)res <= Limits::max_digits10 ) {
+			if( res > 0 && (size_t)res <= numberLen ) {
 				const size_t charsWritten = (size_t)res + separatorLen;
 				m_stream->advance( charsWritten );
 				hasPendingSeparator = usePendingSeparators;
@@ -56,13 +56,13 @@ protected:
 
 	template <typename T>
 	wsw_forceinline void writeIntegralValue( T value ) {
-		using Limits = std::numeric_limits<T>;
-		const size_t separatorLen = ( hasPendingSeparator ? 1 : 0 );
-		const size_t sizeToReserve = Limits::digits10 + separatorLen;
+		const size_t separatorLen  = ( hasPendingSeparator ? 1 : 0 );
+		constexpr size_t numberLen = 32; // TODO???
+		const size_t sizeToReserve = numberLen + separatorLen;
 		if( char *const bufferChars = m_stream->reserve( sizeToReserve ) ) [[likely]] {
 			bufferChars[0] = separatorChar;
 			char *const toCharsBegin = bufferChars + separatorLen;
-			char *const toCharsEnd  = bufferChars + separatorLen + Limits::digits10;
+			char *const toCharsEnd  = bufferChars + separatorLen + numberLen;
 			const auto [ptr, err] = std::to_chars( toCharsBegin, toCharsEnd, value );
 			if( err == std::errc() ) [[likely]] {
 				m_stream->advance( (size_t)( ptr - toCharsBegin ) + separatorLen );
@@ -128,6 +128,7 @@ protected:
 
 public:
 	char separatorChar { ' ' };
+	char quotesChar { '\'' };
 	bool hasPendingSeparator { false };
 	bool usePendingSeparators { true };
 
@@ -216,8 +217,15 @@ public:
 
 	template <typename Chars>
 	[[maybe_unused]]
-	wsw_forceinline auto operator<<( const Chars &chars ) -> TextStreamWriter & {
-		writeChars( chars.data(), chars.size() ); return *this;
+	wsw_noinline auto operator<<( const Chars &chars ) -> TextStreamWriter & {
+		writeQuotedChars( chars.data(), chars.size() );
+		return *this;
+	}
+
+	[[maybe_unused]]
+	wsw_forceinline auto operator<<( TextStreamWriter<Stream> &(*fn)( TextStreamWriter<Stream> & ) ) -> TextStreamWriter & {
+		fn( *this );
+		return *this;
 	}
 
 	wsw_noinline void writeChars( const char *chars, size_t numGivenChars ) {
@@ -227,6 +235,21 @@ public:
 			if( char *bufferChars = m_stream->reserve( charsToWrite ) ) [[likely]] {
 				bufferChars[0] = separatorChar;
 				std::memcpy( bufferChars + separatorLen, chars, numGivenChars );
+				m_stream->advance( charsToWrite );
+				hasPendingSeparator = usePendingSeparators;
+			}
+		}
+	}
+
+	wsw_noinline void writeQuotedChars( const char *chars, size_t numGivenChars ) {
+		if( numGivenChars ) [[likely]] {
+			const size_t separatorLen = ( hasPendingSeparator ? 1 : 0 );
+			const size_t charsToWrite = separatorLen + numGivenChars + 2;
+			if( char *bufferChars = m_stream->reserve( charsToWrite ) ) [[likely]] {
+				bufferChars[0] = separatorChar;
+				bufferChars[separatorLen] = quotesChar;
+				std::memcpy( bufferChars + separatorLen + 1, chars, numGivenChars );
+				bufferChars[separatorLen + 1 + numGivenChars] = quotesChar;
 				m_stream->advance( charsToWrite );
 				hasPendingSeparator = usePendingSeparators;
 			}

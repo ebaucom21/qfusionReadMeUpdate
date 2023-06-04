@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "compression.h"
 #include "cmdsystem.h"
 #include "pipeutils.h"
+#include "local.h"
+#include "textstreamwriterextras.h"
 
 #include <clocale>
 #include <setjmp.h>
@@ -41,8 +43,9 @@ cvar_t *developer;
 cvar_t *timescale;
 cvar_t *dedicated;
 cvar_t *versioncvar;
-cvar_t *com_printCategoryMask;
-cvar_t *com_printSeverityMask;
+cvar_t *com_outputCategoryMask;
+cvar_t *com_outputSeverityMask;
+cvar_t *com_enableOutputCategoryPrefix;
 
 static cvar_t *fixedtime;
 static cvar_t *com_introPlayed3;
@@ -287,11 +290,14 @@ void Qcommon_Init( int argc, char **argv ) {
 	developer = Cvar_Get( "developer", "0", 0 );
 
 	if( developer->integer ) {
-		com_printCategoryMask = Cvar_Get( "com_printCategoryMask", "-1", 0 );
-		com_printSeverityMask = Cvar_Get( "com_printSeverityMask", "-1", 0 );
+		com_outputCategoryMask         = Cvar_Get( "com_outputCategoryMask", "-1", 0 );
+		com_outputSeverityMask         = Cvar_Get( "com_outputSeverityMask", "-1", 0 );
+		com_enableOutputCategoryPrefix = Cvar_Get( "com_enableOutputCategoryPrefix", "1", 0 );
 	} else {
-		com_printCategoryMask = Cvar_Get( "com_printCategoryMask", "-1", CVAR_NOSET );
-		com_printSeverityMask = Cvar_Get( "com_printSeverityMask", "14", CVAR_NOSET );
+		com_outputCategoryMask         = Cvar_Get( "com_outputCategoryMask", "-1", CVAR_NOSET );
+		com_outputSeverityMask         = Cvar_Get( "com_outputSeverityMask", "14", CVAR_NOSET );
+		// Disable it for now
+		com_enableOutputCategoryPrefix = Cvar_Get( "com_enableOutputCategoryPrefix", "0", CVAR_NOSET );
 	}
 
 	Com_LoadCompressionLibraries();
@@ -383,7 +389,7 @@ void Qcommon_Init( int argc, char **argv ) {
 	g_svThread = QThread_Create( SV_Thread, nullptr );
 #endif
 
-	Com_Printf( "\n====== %s Initialized ======\n", APPLICATION );
+	comNotice() << "=====" << APPLICATION << "Initialized =====";
 
 #ifndef DEDICATED_ONLY
 	clCmdSystem->executeBufferCommands();

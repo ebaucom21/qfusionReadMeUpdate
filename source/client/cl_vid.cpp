@@ -214,7 +214,7 @@ static rserr_t VID_ChangeMode( void ) {
 		// TODO: Take the borderless flag into account (could it fail?)
 
 		if( err == rserr_invalid_fullscreen ) {
-			Com_Printf( "VID_ChangeMode() - fullscreen unavailable in this mode\n" );
+			clWarning() << "Fullscreen unavailable in this mode";
 
 			Cvar_ForceSet( vid_fullscreen->name, "0" );
 			vid_fullscreen->modified = false;
@@ -225,7 +225,7 @@ static rserr_t VID_ChangeMode( void ) {
 		}
 
 		if( err == rserr_invalid_mode ) {
-			Com_Printf( "VID_ChangeMode() - invalid mode\n" );
+			clWarning() << "Invalid video mode";
 
 			// Try setting it back to something safe
 			if( w != vid_ref_prevwidth || h != vid_ref_prevheight ) {
@@ -236,7 +236,7 @@ static rserr_t VID_ChangeMode( void ) {
 
 				err = R_TrySettingMode( x, y, w, h, frequency, options );
 				if( err == rserr_invalid_fullscreen ) {
-					Com_Printf( "VID_ChangeMode() - could not revert to safe fullscreen mode\n" );
+					clWarning() << "Could not revert to safe fullscreen mode";
 
 					Cvar_ForceSet( vid_fullscreen->name, "0" );
 					vid_fullscreen->modified = false;
@@ -248,7 +248,7 @@ static rserr_t VID_ChangeMode( void ) {
 			}
 
 			if( err != rserr_ok ) {
-				Com_Printf( "VID_ChangeMode() - could not revert to safe mode\n" );
+				clWarning() << "Could not revert to safe mode";
 			}
 		}
 	}

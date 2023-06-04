@@ -22,6 +22,7 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/cmdcompat.h"
 #include "../qcommon/configstringstorage.h"
+#include "../qcommon/outputmessages.h"
 #include "../ref/ref.h"
 #include "../cgame/cg_public.h"
 #include "../ftlib/ftlib.h"
@@ -530,3 +531,9 @@ void CL_Sys_Init( void );
  * Shuts down the client parts of the platform module.
  */
 void CL_Sys_Shutdown( void );
+
+#define clDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Debug ) ).getWriter()
+#define clNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Info ) ).getWriter()
+#define clWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Warning ) ).getWriter()
+#define clError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Error ) ).getWriter()
+

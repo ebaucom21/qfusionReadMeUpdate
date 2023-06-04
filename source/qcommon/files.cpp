@@ -29,6 +29,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "wswcurl.h"
 #include "md5.h"
 #include "q_trie.h"
+#include "local.h"
+#include "textstreamwriterextras.h"
 
 /*
 =============================================================================
@@ -511,9 +513,9 @@ static void Cmd_PakFile_f( const CmdArgs &cmdArgs ) {
 	const char *s = FS_PakNameForFile( Cmd_Argv( 1 ) );
 
 	if( !s ) {
-		Com_Printf( "Pakfile: File is not loaded from pak file.\n" );
+		comNotice() << "Pakfile: File is not loaded from pak file";
 	} else {
-		Com_Printf( "Pakfile: %s\n", s );
+		comNotice() << "Pakfile:" << wsw::StringView( s );
 	}
 }
 
@@ -1289,7 +1291,7 @@ int FS_Printf( int file, const char *format, ... ) {
 	va_start( argptr, format );
 	if( ( len = Q_vsnprintfz( msg, sizeof( msg ), format, argptr ) ) >= sizeof( msg ) - 1 ) {
 		msg[sizeof( msg ) - 1] = '\0';
-		Com_Printf( "FS_Printf: Buffer overflow" );
+		comWarning() << "FS_Printf: Buffer overflow";
 	}
 	va_end( argptr );
 
@@ -2242,7 +2244,7 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 	handle = Sys_FS_LockFile( packfilename );
 	if( handle == NULL ) {
 		if( !silent ) {
-			Com_Printf( "Error locking a zip pak file: %s\n", packfilename );
+			comError() << "Error locking a zip pak file" << wsw::StringView( packfilename );
 		}
 		goto error;
 	}
@@ -2250,26 +2252,26 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 	fin = fopen( packfilename, "rb" );
 	if( fin == NULL ) {
 		if( !silent ) {
-			Com_Printf( "Error opening a zip pak file: %s\n", packfilename );
+			comError() << "Error opening a zip pak file" << wsw::StringView( packfilename );
 		}
 		goto error;
 	}
 	centralPos = FS_ZipSearchCentralDir( fin );
 	if( centralPos == 0 ) {
 		if( !silent ) {
-			Com_Printf( "No central directory found for a zip pak file: %s\n", packfilename );
+			comError() << "No central directory found for a zip pak file" << wsw::StringView( packfilename );
 		}
 		goto error;
 	}
 	if( fseek( fin, centralPos, SEEK_SET ) != 0 ) {
 		if( !silent ) {
-			Com_Printf( "Error seeking a zip pak file: %s\n", packfilename );
+			comError() << "Error seeking a zip pak file" << wsw::StringView( packfilename );
 		}
 		goto error;
 	}
 	if( fread( zipHeader, 1, sizeof( zipHeader ), fin ) != sizeof( zipHeader ) ) {
 		if( !silent ) {
-			Com_Printf( "Error reading a zip pak file: %s\n", packfilename );
+			comError() << "Error reading a zip pak file" << wsw::StringView( packfilename );
 		}
 		goto error;
 	}
@@ -2278,14 +2280,14 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 	numFiles = LittleShortRaw( &zipHeader[8] );
 	if( !numFiles ) {
 		if( !silent ) {
-			Com_Printf( "%s is not a valid zip pak file\n", packfilename );
+			comError() << wsw::StringView( packfilename ) << "is not a valid zip pak file";
 		}
 		goto error;
 	}
 	if( LittleShortRaw( &zipHeader[10] ) != numFiles || LittleShortRaw( &zipHeader[6] ) != 0
 		|| LittleShortRaw( &zipHeader[4] ) != 0 ) {
 		if( !silent ) {
-			Com_Printf( "%s is not a valid zip pak file\n", packfilename );
+			comError() << wsw::StringView( packfilename ) << "is not a valid zip pak file";
 		}
 		goto error;
 	}
@@ -2297,7 +2299,7 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 	offsetCentralDir = LittleLongRaw( &zipHeader[16] );
 	if( centralPos < offsetCentralDir + sizeCentralDir ) {
 		if( !silent ) {
-			Com_Printf( "%s is not a valid zip pak file\n", packfilename );
+			comError() << wsw::StringView( packfilename ) << "s not a valid zip pak file";
 		}
 		goto error;
 	}
@@ -2307,7 +2309,7 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 		offset = FS_ZipGetFileInfo( fin, centralPos, byteBeforeTheZipFile, NULL, &len, NULL );
 		if( !offset ) {
 			if( !silent ) {
-				Com_Printf( "%s is not a valid zip pak file\n", packfilename );
+				comError() << wsw::StringView() << "is not a valid zip pak file";
 			}
 			goto error; // something wrong occured
 		}
@@ -2413,7 +2415,7 @@ static pack_t *FS_LoadZipFile( const char *packfilename, bool silent ) {
 	}
 
 	if( !silent ) {
-		Com_Printf( "Added a zip pak file %s (%i files)\n", pack->filename, pack->numFiles );
+		comNotice() << "Added a zip pak file" << wsw::StringView( pack->filename ) << pack->numFiles << "files";
 	}
 
 	return pack;
@@ -3515,7 +3517,7 @@ static void Cmd_FS_SearchExt_f( int cantHaveFlags, int mustHaveFlags, const CmdA
 	searchpath_t *search;
 
 	if( argc != 2 ) {
-		Com_Printf( "Usage: %s <pattern>\n", Cmd_Argv( 0 ) );
+		comNotice() << "Usage:" << wsw::unquoted( cmdArgs[0] ) << "<pattern>";
 		return;
 	}
 

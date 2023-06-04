@@ -196,7 +196,7 @@ bool AiManager::CheckCanSpawnBots() {
 		return true;
 	}
 
-	Com_Printf( "AI: Can't spawn bots without a valid navigation file\n" );
+	aiWarning() << "Can't spawn bots without a valid navigation file";
 	if( g_numbots->integer ) {
 		trap_Cvar_Set( "g_numbots", "0" );
 	}
@@ -217,7 +217,7 @@ float AiManager::MakeSkillForNewBot( const Client *client ) const {
 		Q_clamp( skillLevel, 0.10f, 0.99f );
 	}
 
-	G_Printf( "%s skill %i\n", client->netname.data(), (int)( skillLevel * 100 ) );
+	aiNotice() << client->netname << "skill" << (int)( skillLevel * 100 );
 	return skillLevel;
 }
 

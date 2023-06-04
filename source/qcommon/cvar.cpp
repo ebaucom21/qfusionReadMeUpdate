@@ -21,8 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "q_trie.h"
 #include "../client/console.h"
-#include "../qcommon/cmdargs.h"
-#include "../qcommon/cmdcompat.h"
+#include "cmdargs.h"
+#include "cmdcompat.h"
+#include "local.h"
+#include "textstreamwriterextras.h"
 
 static bool cvar_initialized = false;
 static bool cvar_preinitialized = false;
@@ -131,7 +133,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 
 	if( Cvar_FlagIsSet( flags, CVAR_USERINFO ) || Cvar_FlagIsSet( flags, CVAR_SERVERINFO ) ) {
 		if( !Cvar_InfoValidate( var_name, true ) ) {
-			Com_Printf( "invalid info cvar name\n" );
+			comError() << "invalid info cvar name" << wsw::StringView( var_name );
 			return NULL;
 		}
 	}
@@ -188,7 +190,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 
 	if( Cvar_FlagIsSet( flags, CVAR_USERINFO ) || Cvar_FlagIsSet( flags, CVAR_SERVERINFO ) ) {
 		if( !Cvar_InfoValidate( var_value, false ) ) {
-			Com_Printf( "invalid info cvar value\n" );
+			comError() << "Invalid info cvar value" << wsw::StringView( var_value );
 			return NULL;
 		}
 	}
@@ -234,13 +236,13 @@ static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) 
 #else
 		if( Cvar_FlagIsSet( var->flags, CVAR_NOSET ) || Cvar_FlagIsSet( var->flags, CVAR_READONLY ) ) {
 #endif
-			Com_Printf( "%s is write protected.\n", var_name );
+			comNotice() << wsw::StringView( var_name ) << "is write protected";
 			return var;
 		}
 
 		if( Cvar_FlagIsSet( var->flags, CVAR_CHEAT ) && strcmp( value, var->dvalue ) ) {
 			if( !Cvar_CheatsAllowed() ) {
-				Com_Printf( "%s is cheat protected.\n", var_name );
+				comNotice() << wsw::StringView( var_name ) << "is cheat protected";
 				return var;
 			}
 		}
@@ -259,14 +261,14 @@ static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) 
 			}
 
 			if( Com_ServerState() ) {
-				Com_Printf( "%s will be changed upon restarting.\n", var->name );
+				comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting";
 				var->latched_string = Q_strdup( (char *) value );
 			} else {
 				if( Cvar_FlagIsSet( var->flags, CVAR_LATCH_VIDEO ) ) {
-					Com_Printf( "%s will be changed upon restarting video.\n", var->name );
+					comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting video";
 					var->latched_string = Q_strdup( (char *) value );
 				} else if( Cvar_FlagIsSet( var->flags, CVAR_LATCH_SOUND ) ) {
-					Com_Printf( "%s will be changed upon restarting sound.\n", var->name );
+					comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting sound";
 					var->latched_string = Q_strdup( (char *) value );
 				} else {
 					Q_free( var->string ); // free the old value string
@@ -459,7 +461,7 @@ bool Cvar_Command( const CmdArgs &cmdArgs ) {
 */
 static void Cvar_Set_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() != 3 ) {
-		Com_Printf( "usage: set <variable> <value>\n" );
+		comNotice() << "usage: set <variable> <value>";
 		return;
 	}
 	Cvar_Set( Cmd_Argv( 1 ), Cmd_Argv( 2 ) );
@@ -467,7 +469,7 @@ static void Cvar_Set_f( const CmdArgs &cmdArgs ) {
 
 static void Cvar_SetWithFlag_f( const CmdArgs &cmdArgs, cvar_flag_t flag ) {
 	if( Cmd_Argc() != 3 ) {
-		Com_Printf( "usage: %s <variable> <value>\n", Cmd_Argv( 0 ) );
+		comNotice() << "usage:" << wsw::unquoted( cmdArgs[0] ) << "<variable> <value>";
 		return;
 	}
 	Cvar_FullSet( Cmd_Argv( 1 ), Cmd_Argv( 2 ), flag, false );
@@ -497,7 +499,7 @@ static void Cvar_Reset_f( const CmdArgs &cmdArgs ) {
 	cvar_t *v;
 
 	if( Cmd_Argc() != 2 ) {
-		Com_Printf( "usage: reset <variable>\n" );
+		comNotice() << "usage: reset <variable>";
 		return;
 	}
 
@@ -517,14 +519,14 @@ static void Cvar_Toggle_f( const CmdArgs &cmdArgs ) {
 	cvar_t *var;
 
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: toggle <list of variables>\n" );
+		comNotice() << "Usage: toggle <list of variables>";
 		return;
 	}
 
 	for( i = 1; i < Cmd_Argc(); i++ ) {
 		var = Cvar_Find( Cmd_Argv( i ) );
 		if( !var ) {
-			Com_Printf( "No such variable: \"%s\"\n", Cmd_Argv( i ) );
+			comNotice() << "No such variable:" << cmdArgs[i];
 			return;
 		}
 		Cvar_Set( var->name, var->integer ? "0" : "1" );

@@ -118,7 +118,7 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 	alcMakeContextCurrent( alContext );
 
 	if( verbose ) {
-		Com_Printf( "OpenAL initialized\n" );
+		sNotice() << "OpenAL initialized";
 
 		if( numDevices ) {
 			int i;
@@ -137,11 +137,11 @@ static bool S_Init( void *hwnd, int maxEntities, bool verbose ) {
 			Com_Printf( "\n" );
 		}
 
-		Com_Printf( "  Device:     %s\n", alcGetString( alDevice, ALC_DEVICE_SPECIFIER ) );
-		Com_Printf( "  Vendor:     %s\n", alGetString( AL_VENDOR ) );
-		Com_Printf( "  Version:    %s\n", alGetString( AL_VERSION ) );
-		Com_Printf( "  Renderer:   %s\n", alGetString( AL_RENDERER ) );
-		Com_Printf( "  Extensions: %s\n", alGetString( AL_EXTENSIONS ) );
+		sNotice() << "  Device:     " << wsw::StringView( alcGetString( alDevice, ALC_DEVICE_SPECIFIER ) );
+		sNotice() << "  Vendor:     " << wsw::StringView( alGetString( AL_VENDOR ) );
+		sNotice() << "  Version:    " << wsw::StringView( alGetString( AL_VERSION ) );
+		sNotice() << "  Renderer:   " << wsw::StringView( alGetString( AL_RENDERER ) );
+		sNotice() << "  Extensions: " << wsw::StringView( alGetString( AL_EXTENSIONS ) );
 	}
 
 	alDopplerFactor( s_doppler->value );

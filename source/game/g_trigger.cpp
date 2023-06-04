@@ -706,7 +706,7 @@ static void old_teleporter_touch( edict_t *self, edict_t *other, cplane_t *plane
 	dest = G_Find( NULL, FOFS( targetname ), self->target );
 	if( !dest ) {
 		if( developer->integer ) {
-			G_Printf( "Couldn't find destination.\n" );
+			gWarning() << "Couldn't find destination";
 		}
 		return;
 	}
@@ -732,7 +732,7 @@ static void old_teleporter_touch( edict_t *self, edict_t *other, cplane_t *plane
 void SP_trigger_teleport( edict_t *ent ) {
 	if( !ent->target ) {
 		if( developer->integer ) {
-			G_Printf( "teleporter without a target.\n" );
+			gWarning() << "teleporter without a target";
 		}
 		G_FreeEdict( ent );
 		return;

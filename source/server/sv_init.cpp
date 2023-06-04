@@ -201,8 +201,8 @@ static void SV_SpawnServer( const char *server, bool devmap ) {
 	}
 	Cvar_FixCheatVars();
 
-	Com_Printf( "------- Server Initialization -------\n" );
-	Com_Printf( "SpawnServer: %s\n", server );
+	svNotice() << "----- Server Initialization -----";
+	svNotice() << "SpawnServer:" << wsw::StringView( server );
 
 	svs.spawncount++;   // any partially connected client will be restarted
 
@@ -265,7 +265,7 @@ static void SV_SpawnServer( const char *server, bool devmap ) {
 	sv.state = ss_game;
 	Com_SetServerState( sv.state );
 
-	Com_Printf( "-------------------------------------\n" );
+	svNotice() << "-------------------------------------";
 }
 
 #ifndef DEDICATED_ONLY

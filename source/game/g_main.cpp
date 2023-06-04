@@ -215,7 +215,7 @@ static void G_InitGameShared( void ) {
 void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char *demoExtension ) {
 	cvar_t *g_maxentities;
 
-	G_Printf( "==== G_Init ====\n" );
+	gNotice() << "==== G_Init ====";
 
 	srand( seed );
 
@@ -375,7 +375,7 @@ void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char
 void G_Shutdown( void ) {
 	int i;
 
-	G_Printf( "==== G_Shutdown ====\n" );
+	gNotice() << "==== G_Shutdown ====";
 
 	GT_asCallShutdown();
 	G_asCallMapExit();
@@ -810,12 +810,12 @@ int FS_Seek( int file, int offset, int whence ) {
 
 namespace wsw {
 
-auto createLineStream( wsw::PrintLineCategory category, wsw::PrintLineSeverity severity ) -> wsw::PrintLineStream * {
-	return GAME_IMPORT.createPrintLineStream( category, severity );
+auto createMessageStream( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
+	return GAME_IMPORT.createMessageStream( category, severity );
 }
 
-void submitLineStream( wsw::PrintLineStream *stream ) {
-	return GAME_IMPORT.submitPrintLineStream( stream );
+void submitMessageStream( wsw::OutputMessageStream *stream ) {
+	return GAME_IMPORT.submitMessageStream( stream );
 }
 
 }

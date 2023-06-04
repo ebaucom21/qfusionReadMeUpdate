@@ -67,7 +67,7 @@ void CL_Stop_f( const CmdArgs &cmdArgs ) {
 
 	if( !cls.demoRecorder.recording ) {
 		if( !silent ) {
-			Com_Printf( "Not recording a demo.\n" );
+			clNotice() << "Not recording a demo";
 		}
 		return;
 	}
@@ -94,7 +94,7 @@ void CL_Stop_f( const CmdArgs &cmdArgs ) {
 
 	const auto [metadataSize, wasComplete] = writer.markCurrentResult();
 	if( !wasComplete ) {
-		Com_Printf( S_COLOR_YELLOW "The demo metadata was truncated\n" );
+		clWarning() << "The demo metadata was truncated";
 	}
 
 	SNAP_WriteDemoMetaData( cls.demoRecorder.filename, metadata, metadataSize );
@@ -103,15 +103,15 @@ void CL_Stop_f( const CmdArgs &cmdArgs ) {
 	if( cancel ) {
 		// remove the file that correspond to cls.demoRecorder.file
 		if( !silent ) {
-			Com_Printf( "Canceling demo: %s\n", cls.demoRecorder.filename );
+			clNotice() << "Canceling demo" << wsw::StringView( cls.demoRecorder.filename );
 		}
 		if( !FS_RemoveFile( cls.demoRecorder.filename ) && !silent ) {
-			Com_Printf( "Error canceling demo." );
+			clWarning() << "Error canceling demo";
 		}
 	}
 
 	if( !silent ) {
-		Com_Printf( "Stopped demo: %s\n", cls.demoRecorder.filename );
+		clNotice() << "Stopped demo" << wsw::StringView( cls.demoRecorder.filename );
 	}
 
 	cls.demoRecorder.file = 0; // file id
@@ -136,12 +136,12 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 	const char *demoname;
 
 	if( cls.state != CA_ACTIVE ) {
-		Com_Printf( "You must be in a level to record.\n" );
+		clNotice() << "You must be in a level to record";
 		return;
 	}
 
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "record <demoname>\n" );
+		clNotice() << "record <demoname>";
 		return;
 	}
 
@@ -153,14 +153,14 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 
 	if( cls.demoPlayer.playing ) {
 		if( !silent ) {
-			Com_Printf( "You can't record from another demo.\n" );
+			clNotice() << "You can't record from another demo";
 		}
 		return;
 	}
 
 	if( cls.demoRecorder.recording ) {
 		if( !silent ) {
-			Com_Printf( "Already recording.\n" );
+			clNotice() << "Already recording";
 		}
 		return;
 	}
@@ -178,20 +178,20 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 
 	if( !COM_ValidateRelativeFilename( name ) ) {
 		if( !silent ) {
-			Com_Printf( "Invalid filename.\n" );
+			clNotice() << "Invalid filename";
 		}
 		Q_free( name );
 		return;
 	}
 
 	if( FS_FOpenFile( name, &cls.demoRecorder.file, FS_WRITE | SNAP_DEMO_GZ ) == -1 ) {
-		Com_Printf( "Error: Couldn't create the demo file.\n" );
+		clWarning() << "Couldn't create the demo file" << wsw::StringView( name );
 		Q_free( name );
 		return;
 	}
 
 	if( !silent ) {
-		Com_Printf( "Recording demo: %s\n", name );
+		clNotice() << "Recording demo" << wsw::StringView( name );
 	}
 
 	// store the name in case we need it later
@@ -230,7 +230,7 @@ void CL_DemoCompleted( void ) {
 
 	CL_PauseDemo( false );
 
-	Com_Printf( "Demo completed\n" );
+	clNotice() << "Demo completed";
 
 	memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );
 }
@@ -353,7 +353,7 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 	}
 
 	if( !tempdemofilehandle ) {
-		Com_Printf( "No valid demo file found\n" );
+		clWarning() << "No valid demo file found";
 		FS_FCloseFile( tempdemofilehandle );
 		Q_free( name );
 		Q_free( servername );
@@ -400,10 +400,10 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 */
 void CL_PlayDemo_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "demo <demoname> [pause_on_stop]\n" );
-		return;
+		clNotice() << "demo <demoname> [pause_on_stop]\n";
+	} else {
+		CL_StartDemo(Cmd_Argv( 1 ), atoi(Cmd_Argv( 2 )) != 0 );
 	}
-	CL_StartDemo( Cmd_Argv( 1 ), atoi( Cmd_Argv( 2 ) ) != 0 );
 }
 
 /*
@@ -418,7 +418,7 @@ static void CL_PauseDemo( bool paused ) {
 */
 void CL_PauseDemo_f( const CmdArgs &cmdArgs ) {
 	if( !cls.demoPlayer.playing ) {
-		Com_Printf( "Can only demopause when playing a demo.\n" );
+		clNotice() << "Can only demopause when playing a demo";
 		return;
 	}
 
@@ -443,14 +443,14 @@ void CL_DemoJump_f( const CmdArgs &cmdArgs ) {
 	const char *p;
 
 	if( !cls.demoPlayer.playing ) {
-		Com_Printf( "Can only demojump when playing a demo\n" );
+		clNotice() << "Can only demojump when playing a demo";
 		return;
 	}
 
 	if( Cmd_Argc() != 2 ) {
-		Com_Printf( "Usage: demojump <time>\n" );
-		Com_Printf( "Time format is [minutes:]seconds\n" );
-		Com_Printf( "Use '+' or '-' in front of the time to specify it in relation to current position\n" );
+		clNotice() << "Usage: demojump <time>";
+		clNotice() << "Time format is [minutes:]seconds";
+		clNotice() << "Use '+' or '-' in front of the time to specify it in relation to current position";
 		return;
 	}
 

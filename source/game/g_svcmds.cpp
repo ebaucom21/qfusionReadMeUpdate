@@ -42,13 +42,13 @@ static void Cmd_ConsoleKick_f( const CmdArgs &cmdArgs ) {
 	edict_t *ent;
 
 	if( trap_Cmd_Argc() != 2 ) {
-		Com_Printf( "Usage: kick <id or name>\n" );
+		gNotice() << "Usage: kick <id or name>";
 		return;
 	}
 
 	ent = G_PlayerForText( trap_Cmd_Argv( 1 ) );
 	if( !ent ) {
-		Com_Printf( "No such player\n" );
+		gNotice() << "No such player";
 		return;
 	}
 
@@ -67,7 +67,7 @@ static void Cmd_Match_f( const CmdArgs &cmdArgs ) {
 	const char *cmd;
 
 	if( trap_Cmd_Argc() != 2 ) {
-		Com_Printf( "Usage: match <option: restart|advance|status>\n" );
+		gNotice() << "Usage: match <option: restart|advance|status>";
 		return;
 	}
 

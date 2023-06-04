@@ -8,6 +8,7 @@
 #include "../qcommon/qcommon.h"
 #include "../qcommon/singletonholder.h"
 #include "../client/imageloading.h"
+#include "local.h"
 
 #include <QDebug>
 
@@ -35,7 +36,7 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 
 			status = Running;
 		} else {
-			Com_Printf( S_COLOR_YELLOW "Failed to open the video file %s\n", filePath.data() );
+			uiWarning() << "Failed to open the video file" << filePath;
 			status = Error;
 		}
 
@@ -121,9 +122,9 @@ void VideoSource::stopVideoSurface() {
 void VideoSource::applyStatus( Status status ) {
 	if( m_status != status ) {
 		switch( status ) {
-			case Idle: Com_DPrintf( "Video source status=Idle filePath=%s\n", m_filePath.constData() ); break;
-			case Running: Com_DPrintf( "Video source status=Running filePath=%s\n", m_filePath.constData() ); break;
-			case Error: Com_DPrintf( "Video source status=Error filePath=%s\n", m_filePath.constData() ); break;
+			case Idle: uiDebug() << "Video source status=Idle filePath=" << m_filePath; break;
+			case Running: uiDebug() << "Video source status=Running filePath=" << m_filePath; break;
+			case Error: uiDebug() << "Video source status=Error filePath=" << m_filePath; break;
 		}
 		if( status != Running ) {
 			detachDecoder();

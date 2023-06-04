@@ -387,7 +387,7 @@ auto MaterialCache::readRawContents( const wsw::StringView &fileName ) -> const 
 	pathName.append( fileName.data(), fileName.size() );
 
 	if ( r_showShaderCache && r_showShaderCache->integer ) {
-		Com_Printf( "...loading '%s'\n", pathName.data() );
+		rNotice() << "Loading" << pathName;
 	}
 
 	auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( pathName.data(), pathName.size() ) );
@@ -498,9 +498,7 @@ bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents 
 
 		auto nextToken = *maybeNextToken;
 		if( nextToken.length() != 1 || nextToken[0] != '{' ) {
-			// TODO: Include the line and the token in report
-			// TODO: Use new logging facilities
-			Com_Printf( S_COLOR_YELLOW "Expected an opening brace after the name\n" );
+			rWarning() << "Expected an opening brace after the name" << *maybeNameToken;
 			return false;
 		}
 
@@ -513,9 +511,7 @@ bool MaterialCache::tryAddingFileContents( const MaterialFileContents *contents 
 				depth += ( ch == '{' ) ? +1 : 0;
 				depth += ( ch == '}' ) ? -1 : 0;
 			} else {
-				Com_Printf( S_COLOR_YELLOW "Missing closing brace(s) at the end of file\n" );
-				// TODO: Include the line and the token in report
-				// TODO: Use new logging facilities
+				rWarning() << "Missing closing brace(s) at the end of file";
 				return false;
 			}
 		}
@@ -586,18 +582,18 @@ auto MaterialCache::readSkinFileData( const wsw::StringView &name, char *buffer,
 
 	auto maybeHandle = wsw::fs::openAsReadHandle( filePath );
 	if( !maybeHandle ) {
-		Com_Printf( "Failed to load skin %s: Failed to open %s\n", name.data(), pathBuffer.data() );
+		rError() << "Failed to load skin" << name << ": Failed to open" << pathBuffer;
 		return std::nullopt;
 	}
 
 	const auto fileSize = maybeHandle->getInitialFileSize();
 	if( !fileSize || fileSize >= bufferSize ) {
-		Com_Printf( "Failed to load skin %s: The file %s has a bogus size\n", name.data(), pathBuffer.data() );
+		rError() << "Failed to load skin" << name << ": The file" << pathBuffer << "has a bogus size" << fileSize;
 		return std::nullopt;
 	}
 
 	if( !maybeHandle->readExact( buffer, fileSize ) ) {
-		Com_Printf( "Failed to load %s: Failed to read %s\n", name.data(), pathBuffer.data() );
+		rError() << "Failed to load skin" << name << ": Failed to read" << pathBuffer;
 		return std::nullopt;
 	}
 
@@ -682,7 +678,7 @@ auto MaterialCache::registerSkin( const wsw::StringView &name ) -> Skin * {
 
 	assert( name.isZeroTerminated() && name.size() < MAX_QPATH );
 	if( m_skinsAllocator.isFull() ) {
-		Com_Printf( "Failed to load skin %s: Too many skins\n", name.data() );
+		rError() << "Failed to load skin" << name << ": Too many skins";
 		return nullptr;
 	}
 

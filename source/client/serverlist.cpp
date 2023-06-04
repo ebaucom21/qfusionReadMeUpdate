@@ -119,7 +119,7 @@ void *ServerList::resolverThreadFunc( void *param ) {
 
 	// We held the string for printing it in this case
 	if( !resolved ) {
-		Com_Printf( "Failed to resolve info server address: %s\n", string );
+		clWarning() << "Failed to resolve info server address" << wsw::StringView( string );
 	}
 
 	delete[] string;
@@ -130,8 +130,6 @@ void ServerList::parseGetServersResponse( const socket_t *socket, const netadr_t
 	if( !m_listener ) {
 		return;
 	}
-
-	constexpr const char *function = "ServerList::parseGetServersResponse()";
 
 	// TODO: Check whether the packet came from an actual info server server
 	// TODO: Is it possible at all? (We're talking about UDP packets).
@@ -167,12 +165,12 @@ void ServerList::parseGetServersResponse( const socket_t *socket, const netadr_t
 			destBytes = readAddress.address.ipv6.ip;
 			destPort = &readAddress.address.ipv6.port;
 		} else {
-			Com_DPrintf( "%s: Warning: Illegal address prefix `%c`\n", function, startPrefix );
+			clWarning() << "Illegal address prefix" << startPrefix;
 			return;
 		}
 
 		if( MSG_BytesLeft( msg ) < numAddressBytes + 2 ) {
-			Com_DPrintf( "%s: Warning: Too few bytes in message for an address\n", function );
+			clWarning() << "Too few bytes in message for an address";
 			return;
 		}
 
@@ -211,7 +209,7 @@ void ServerList::parseGetInfoResponse( const socket_t *socket, const netadr_t &a
 	}
 
 	if( MSG_BytesLeft( msg ) > 0 ) {
-		Com_Printf( "ServerList::ParseGetInfoResponse(): There are extra bytes in the message\n" );
+		clWarning() << "Extra bytes in getinfo response, dropping the info";
 		delete parsedServerInfo;
 		return;
 	}

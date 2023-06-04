@@ -158,7 +158,6 @@ void NativelyDrawnImage::drawSelfNatively( int64_t, int64_t ) {
 		const int y = qmlY + (int)height() / 2;
 		const int w = m_sourceSize.width();
 		const int h = m_sourceSize.height();
-		//Com_Printf( "Source size: %d %d\n", w, h );
 		R_DrawStretchPic( x - w / 2, y - w / 2, w, h, 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );
 	} else {
 		R_DrawStretchPic( qmlX, qmlY, (int)width(), (int)height(), 0.0f, 0.0f, 1.0f, 1.0f, color, m_material );

@@ -361,4 +361,9 @@ extern const cvar_t *ai_debugOutput;
 extern const cvar_t *ai_forceWeapon;
 extern const cvar_t *ai_shareRoutingCache;
 
+#define aiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Debug ) ).getWriter()
+#define aiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Info ) ).getWriter()
+#define aiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Warning ) ).getWriter()
+#define aiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Error ) ).getWriter()
+
 #endif

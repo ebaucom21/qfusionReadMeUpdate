@@ -447,14 +447,14 @@ static void CG_SC_HelpMessage( const CmdArgs &cmdArgs ) {
 static bool demo_requested = false;
 static void CG_Cmd_DemoGet_f( const CmdArgs &cmdArgs ) {
 	if( demo_requested ) {
-		Com_Printf( "Already requesting a demo\n" );
+		cgNotice() << "Already requesting a demo";
 		return;
 	}
 
 	if( Cmd_Argc() != 2 || ( atoi( Cmd_Argv( 1 ) ) <= 0 && Cmd_Argv( 1 )[0] != '.' ) ) {
-		Com_Printf( "Usage: demoget <number>\n" );
-		Com_Printf( "Downloads a demo from the server\n" );
-		Com_Printf( "Use the demolist command to see list of demos on the server\n" );
+		cgNotice() << "Usage: demoget <number>";
+		cgNotice() << "Downloads a demo from the server";
+		cgNotice() << "Use the demolist command to see list of demos on the server";
 		return;
 	}
 
@@ -475,14 +475,14 @@ static void CG_SC_DemoGet( const CmdArgs &cmdArgs ) {
 	}
 
 	if( !demo_requested ) {
-		Com_Printf( "Warning: demoget when not requested, ignored\n" );
+		cgWarning() << cmdArgs[0] << "when not requested, ignored";
 		return;
 	}
 
 	demo_requested = false;
 
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "No such demo found\n" );
+		cgWarning() << "No such demo found";
 		return;
 	}
 
@@ -490,7 +490,7 @@ static void CG_SC_DemoGet( const CmdArgs &cmdArgs ) {
 	extension = COM_FileExtension( filename );
 	if( !COM_ValidateRelativeFilename( filename ) ||
 		!extension || Q_stricmp( extension, cgs.demoExtension ) ) {
-		Com_Printf( "Warning: demoget: Invalid filename, ignored\n" );
+		cgWarning() << cmdArgs[0] << "Invalid filename, ignored";
 		return;
 	}
 
@@ -676,7 +676,7 @@ void CG_GameCommand( const char *command ) {
 		}
 	}
 
-	Com_Printf( "Unknown game command: %s\n", cmdArgs[0].data() );
+	cgNotice() << "Unknown game command" << cmdArgs[0];
 }
 
 /*
@@ -717,7 +717,7 @@ void CG_UseItem( const char *name ) {
 */
 static void CG_Cmd_UseItem_f( const CmdArgs &cmdArgs ) {
 	if( !Cmd_Argc() ) {
-		Com_Printf( "Usage: 'use <item name>' or 'use <item index>'\n" );
+		cgNotice() << "Usage: 'use <item name>' or 'use <item index>'";
 		return;
 	}
 

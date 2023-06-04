@@ -195,28 +195,27 @@ static const char *lastNoLookDirAction = "";
 static const char *lastNoUcmdAction = "";
 
 void MovementSubsystem::ApplyInput( BotInput *input, PredictionContext *context ) {
-	constexpr const char *tag = "MovementSubsystem::ApplyInput";
 	// While these conditions can hold from time to time and that's not a bug
 	// it's better to eliminate these cases eventually completely.
 	if( !input->isLookDirSet ) {
 		if( context ) {
 			if( strcmp( lastNoLookDirAction, context->ActiveActionName() ) != 0 ) {
-				Com_Printf( S_COLOR_RED "%s FIXME %s: No look dir set\n", tag, context->ActiveActionName() );
+				aiWarning() << "FIXME " << wsw::StringView( context->ActiveActionName() ) << " No look dir set";
 				lastNoLookDirAction = context->ActiveActionName();
 			}
 		} else {
-			Com_Printf( S_COLOR_RED "%s FIXME: No look dir set\n", tag );
+			aiWarning() << "FIXME: No look dir set";
 		}
 		return;
 	}
 	if( !input->isUcmdSet ) {
 		if( context ) {
 			if( strcmp( lastNoUcmdAction, context->ActiveActionName() ) != 0 ) {
-				Com_Printf( S_COLOR_RED "%s: FIXME %s: No ucmd set\n", tag, context->ActiveActionName() );
+				aiWarning() << "FIXME" << wsw::StringView( context->ActiveActionName() ) << "No ucmd set";
 				lastNoUcmdAction = context->ActiveActionName();
 			}
 		} else {
-			Com_Printf( S_COLOR_RED "%s: FIXME: No ucmd set\n", tag );
+			aiWarning() << "FIXME: No ucmd set";
 		}
 		return;
 	}

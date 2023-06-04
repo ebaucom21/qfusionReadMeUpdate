@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/mmcommon.h"
 #include "../qcommon/cmdargs.h"
+#include "../qcommon/outputmessages.h"
 
 #include <array>
 #include <cmath>
@@ -1499,3 +1500,8 @@ void *Q_malloc( size_t size );
 void *Q_realloc( void *buf, size_t newsize );
 void Q_free( void *buf );
 char *Q_strdup( const char *str );
+
+#define gDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Game, wsw::MessageSeverity::Debug ) ).getWriter()
+#define gNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Game, wsw::MessageSeverity::Info ) ).getWriter()
+#define gWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Game, wsw::MessageSeverity::Warning ) ).getWriter()
+#define gError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Game, wsw::MessageSeverity::Error ) ).getWriter()

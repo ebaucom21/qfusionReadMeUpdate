@@ -51,25 +51,17 @@ void CL_SoundModule_Init( bool verbose ) {
 	// unload anything we have now
 	CL_SoundModule_Shutdown( verbose );
 
-	if( verbose ) {
-		Com_Printf( "------- sound initialization -------\n" );
-	}
-
 	Cvar_GetLatchedVars( CVAR_LATCH_SOUND );
 
 	if( s_module->integer < 0 || s_module->integer > 1 ) {
-		Com_Printf( "Invalid value for s_module (%i), reseting to default\n", s_module->integer );
-		Cvar_ForceSet( s_module->name, "0" );
+		clNotice() << "Invalid value for s_module" << s_module->integer << "reseting to default\n";
+		Cvar_ForceSet( s_module->name, "1" );
 	}
 
 	const SoundSystem::InitOptions options { .verbose = verbose, .useNullSystem = !s_module->integer };
 	// TODO: Is the HWND really needed?
 	if( !SoundSystem::init( &cl, options ) ) {
 		Cvar_ForceSet( s_module->name, "0" );
-	}
-
-	if( verbose ) {
-		Com_Printf( "------------------------------------\n" );
 	}
 }
 

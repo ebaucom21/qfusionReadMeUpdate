@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../gameshared/q_shared.h"
 #include "../gameshared/q_cvar.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/outputmessages.h"
 #include "../client/snd_public.h"
 
 #define AL_ALEXT_PROTOTYPES
@@ -303,5 +304,10 @@ int S_FindTopNodeForBox( const float *mins, const float *maxs );
 int S_FindTopNodeForSphere( const float *center, float radius );
 
 const char *S_GetConfigString( int index );
+
+#define sDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Sound, wsw::MessageSeverity::Debug ) ).getWriter()
+#define sNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Sound, wsw::MessageSeverity::Info ) ).getWriter()
+#define sWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Sound, wsw::MessageSeverity::Warning ) ).getWriter()
+#define sError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Sound, wsw::MessageSeverity::Error ) ).getWriter()
 
 #endif

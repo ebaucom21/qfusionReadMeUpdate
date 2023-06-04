@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/maplist.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/q_trie.h"
+#include "../qcommon/textstreamwriterextras.h"
 #include "../ui/uisystem.h"
 
 #include "serverlist.h"
@@ -166,7 +167,7 @@ void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
 	}
 
 	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
-		Com_Printf( "Can't \"%s\", not connected\n", Cmd_Argv( 0 ) );
+		clNotice() << "Can't" << cmdArgs[0] << "not connected";
 		return;
 	}
 
@@ -193,7 +194,7 @@ void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
 
 	CL_Disconnect_f( {} );
 
-	Com_Printf( "Connection was closed by server: %s\n", reason );
+	clNotice() << "Connection was closed by server" << wsw::StringView( reason );
 
 	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
 				 DROP_REASON_CONNTERMINATED, cls.servername, type, reason );
@@ -271,7 +272,7 @@ static void CL_CheckForResend( void ) {
 		cls.connect_count++;
 		cls.connect_time = realtime; // for retransmit requests
 
-		Com_Printf( "Connecting to %s...\n", cls.servername );
+		clNotice() << "Connecting to" << wsw::StringView( cls.servername );
 
 		Netchan_OutOfBandPrint( cls.socket, &cls.serveraddress, "getchallenge\n" );
 	}
@@ -365,7 +366,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 	const char *serverchain;
 
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: %s <server>\n", Cmd_Argv( 0 ) );
+		clNotice() << "Usage:" << wsw::unquoted( cmdArgs[0] ) << "<server>";
 		return;
 	}
 
@@ -420,7 +421,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 
 	if( !NET_StringToAddress( connectstring, &serveraddress ) ) {
 		Q_free( connectstring_base );
-		Com_Printf( "Bad server address\n" );
+		clNotice() << "Bad server address";
 		return;
 	}
 
@@ -460,13 +461,13 @@ static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 	}
 
 	if( rcon_client_password->string[0] == '\0' ) {
-		Com_Printf( "You must set 'rcon_password' before issuing an rcon command.\n" );
+		clNotice() << "You must set 'rcon_password' before issuing an rcon command";
 		return;
 	}
 
 	// wsw : jal : check for msg len abuse (thx to r1Q2)
 	if( strlen( Cmd_Args() ) + strlen( rcon_client_password->string ) + 16 >= sizeof( message ) ) {
-		Com_Printf( "Length of password + command exceeds maximum allowed length.\n" );
+		clNotice() << "Length of password + command exceeds maximum allowed length";
 		return;
 	}
 
@@ -492,13 +493,13 @@ static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 		address = &cls.netchan.remoteAddress;
 	} else {
 		if( !strlen( rcon_address->string ) ) {
-			Com_Printf( "You must be connected, or set the 'rcon_address' cvar to issue rcon commands\n" );
+			clNotice() << "You must be connected, or set the 'rcon_address' cvar to issue rcon commands";
 			return;
 		}
 
 		if( rcon_address->modified ) {
 			if( !NET_StringToAddress( rcon_address->string, &cls.rconaddress ) ) {
-				Com_Printf( "Bad rcon_address.\n" );
+				clNotice() << "Bad rcon_address";
 				return; // we don't clear modified, so it will whine the next time too
 			}
 			if( NET_GetAddressPort( &cls.rconaddress ) == 0 ) {
@@ -680,14 +681,14 @@ void CL_ClearState( void ) {
 */
 static void CL_SetNext_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "USAGE: next <commands>\n" );
+		clNotice() << "Usage: next <commands>\n";
 		return;
 	}
 
 	// jalfixme: I'm afraid of this being too powerful, since it basically
 	// is allowed to execute everything. Shall we check for something?
 	Q_strncpyz( cl_nextString, Cmd_Args(), sizeof( cl_nextString ) );
-	Com_Printf( "NEXT: %s\n", cl_nextString );
+	clNotice() << "Next:" << wsw::StringView( cl_nextString );
 }
 
 
@@ -916,7 +917,7 @@ void CL_ServerReconnect_f( const CmdArgs & ) {
 	CL_GameModule_Shutdown();
 	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
-	Com_Printf( "Reconnecting...\n" );
+	clNotice() << "Reconnecting";
 
 	cls.connect_time = Sys_Milliseconds() - 1500;
 	cl.configStrings.clear();
@@ -936,7 +937,7 @@ void CL_Reconnect_f( const CmdArgs & ) {
 	netadr_t serveraddress;
 
 	if( !cls.servername ) {
-		Com_Printf( "Can't reconnect, never connected\n" );
+		clNotice() << "Can't reconnect, never connected";
 		return;
 	}
 
@@ -994,16 +995,16 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 	// server connection
 	if( !strcmp( c, "client_connect" ) ) {
 		if( cls.state == CA_CONNECTED ) {
-			Com_Printf( "Dup connect received.  Ignored.\n" );
+			clWarning() << "Dup connect received, ignored";
 			return;
 		}
 		// these two are from Q3
 		if( cls.state != CA_CONNECTING ) {
-			Com_Printf( "client_connect packet while not connecting.  Ignored.\n" );
+			clWarning() << "client_connect packet while not connecting, ignored";
 			return;
 		}
 		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			Com_Printf( "client_connect from a different address.  Ignored.\n" );
+			clWarning() << "client_connect from a different address, ignored";
 			Com_Printf( "Was %s should have been %s\n", NET_AddressToString( address ),
 						NET_AddressToString( &cls.serveraddress ) );
 			return;
@@ -1025,11 +1026,11 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		int rejectflag;
 
 		if( cls.state != CA_CONNECTING ) {
-			Com_Printf( "reject packet while not connecting, ignored\n" );
+			clWarning() << "reject packet while not connecting, ignored";
 			return;
 		}
 		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			Com_Printf( "reject from a different address, ignored\n" );
+			clWarning() << "reject from a different address, ignored";
 			Com_Printf( "Was %s should have been %s\n", NET_AddressToString( address ),
 						NET_AddressToString( &cls.serveraddress ) );
 			return;
@@ -1051,11 +1052,11 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 			cls.rejectmessage[strlen( cls.rejectmessage )] = '.';
 		}
 
-		Com_Printf( "Connection refused: %s\n", cls.rejectmessage );
+		clNotice() << "Connection refused" << wsw::StringView( cls.rejectmessage );
 		if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
-			Com_Printf( "Automatic reconnecting allowed.\n" );
+			clNotice() << "Automatic reconnecting allowed";
 		} else {
-			Com_Printf( "Automatic reconnecting not allowed.\n" );
+			clNotice() << "Automatic reconnecting not allowed";
 			const auto dropType = cls.rejecttype;
 			CL_Disconnect( nullptr );
 			using Kind = wsw::ui::UISystem::ConnectionFailKind;
@@ -1075,7 +1076,7 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 	// remote command from gui front end
 	if( !strcmp( c, "cmd" ) ) {
 		if( !NET_IsLocalAddress( address ) ) {
-			Com_Printf( "Command packet from remote host, ignored\n" );
+			clWarning() << "Command packet from remote host, ignored";
 			return;
 		}
 		Sys_AppActivate();
@@ -1094,7 +1095,7 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 			Com_Printf( "%s", s );
 			return;
 		} else {
-			Com_Printf( "Print packet from unknown host, ignored\n" );
+			clWarning() << "Print packet from unknown host, ignored";
 			return;
 		}
 	}
@@ -1115,11 +1116,11 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 	if( !strcmp( c, "challenge" ) ) {
 		// these two are from Q3
 		if( cls.state != CA_CONNECTING ) {
-			Com_Printf( "challenge packet while not connecting, ignored\n" );
+			clWarning() << "challenge packet while not connecting, ignored";
 			return;
 		}
 		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			Com_Printf( "challenge from a different address, ignored\n" );
+			clWarning() << "challenge from a different address, ignored";
 			Com_Printf( "Was %s", NET_AddressToString( address ) );
 			Com_Printf( " should have been %s\n", NET_AddressToString( &cls.serveraddress ) );
 			return;
@@ -1161,7 +1162,7 @@ static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 		zerror = Netchan_DecompressMessage( msg );
 		if( zerror < 0 ) {
 			// compression error. Drop the packet
-			Com_Printf( "CL_ProcessPacket: Compression error %i. Dropping packet\n", zerror );
+			clWarning() << "CL_ProcessPacket: Compression error" << zerror << "Dropping packet";
 			return false;
 		}
 	}
@@ -1254,7 +1255,7 @@ void CL_ReadPackets( void ) {
 	if( cls.state >= CA_HANDSHAKE && cls.lastPacketReceivedTime ) {
 		if( cls.lastPacketReceivedTime + cl_timeout->value * 1000 < cls.realtime ) {
 			if( ++cl.timeoutcount > 5 ) { // timeoutcount saves debugger
-				Com_Printf( "\nServer connection timed out.\n" );
+				clNotice() << "Server connection timed out";
 				CL_Disconnect( "Connection timed out" );
 				return;
 			}
@@ -1270,7 +1271,7 @@ void CL_ReadPackets( void ) {
 * CL_Userinfo_f
 */
 static void CL_Userinfo_f( const CmdArgs & ) {
-	Com_Printf( "User info settings:\n" );
+	clNotice() << "User info settings";
 	Info_Print( Cvar_Userinfo() );
 }
 
@@ -1482,7 +1483,7 @@ void CL_RequestNextDownload( void ) {
 		CL_BeginRegistration();
 
 		if( restart ) {
-			Com_Printf( "%s\n", restart_msg );
+			clNotice() << wsw::StringView( restart_msg );
 
 			if( vid_restart ) {
 				// no media is going to survive a vid_restart...
@@ -1567,7 +1568,7 @@ static void CL_WriteConfiguration( const char *name, bool warn ) {
 	int file;
 
 	if( FS_FOpenFile( name, &file, FS_WRITE ) == -1 ) {
-		Com_Printf( "Couldn't write %s.\n", name );
+		clWarning() << "Couldn't write" << wsw::StringView( name );
 		return;
 	}
 
@@ -1598,7 +1599,7 @@ static void CL_WriteConfig_f( const CmdArgs &cmdArgs ) {
 	int name_size;
 
 	if( Cmd_Argc() != 2 ) {
-		Com_Printf( "Usage: writeconfig <filename>\n" );
+		clNotice() << "Usage: writeconfig <filename>";
 		return;
 	}
 
@@ -1608,28 +1609,28 @@ static void CL_WriteConfig_f( const CmdArgs &cmdArgs ) {
 	COM_SanitizeFilePath( name );
 
 	if( !COM_ValidateRelativeFilename( name ) ) {
-		Com_Printf( "Invalid filename" );
+		clNotice() << "Invalid filename";
 		Q_free( name );
 		return;
 	}
 
 	COM_DefaultExtension( name, ".cfg", name_size );
 
-	Com_Printf( "Writing: %s\n", name );
+	clNotice() << "Writing" << wsw::StringView( name );
 	CL_WriteConfiguration( name, false );
 
 	Q_free( name );
 }
 
 static void CL_Help_f( const CmdArgs & ) {
-	Com_Printf( "Type commands here. Use TAB key for getting suggestions. Use PgUp/PgDn keys for scrolling.\n");
-	Com_Printf( "These commands can be useful:\n" );
-	Com_Printf( "cvarlist - Displays the list of all console vars\n" );
-	Com_Printf( "cvarlist <pattern> - Displays a list of console vars that match the pattern\n" );
-	Com_Printf( "Example: cvarlist zoom* - Displays a list of console vars that are related to zoom\n" );
-	Com_Printf( "cmdlist - Displays the list of all console commands\n" );
-	Com_Printf( "cmdlist <pattern> - Displays a list of console commands that match the pattern\n" );
-	Com_Printf( "Example: cmdlist *restart - Displays a list of commands that restart their corresponding subsystems\n" );
+	clNotice() << "Type commands here. Use TAB key for getting suggestions. Use PgUp/PgDn keys for scrolling";
+	clNotice() << "These commands can be useful:";
+	clNotice() << "cvarlist - Displays the list of all console vars";
+	clNotice() << "cvarlist <pattern> - Displays a list of console vars that match the pattern";
+	clNotice() << "Example: cvarlist zoom* - Displays a list of console vars that are related to zoom";
+	clNotice() << "cmdlist - Displays the list of all console commands";
+	clNotice() << "cmdlist <pattern> - Displays a list of console commands that match the pattern";
+	clNotice() << "Example: cmdlist *restart - Displays a list of commands that restart their corresponding subsystems";
 }
 
 /*
@@ -1806,13 +1807,13 @@ static void CL_ShowIP_f( const CmdArgs & ) {
 */
 static void CL_ShowServerIP_f( const CmdArgs & ) {
 	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
-		Com_Printf( "Not connected to a server\n" );
+		clNotice() << "Not connected to a server";
 		return;
 	}
 
-	Com_Printf( "Connected to server:\n" );
-	Com_Printf( "Name: %s\n", cls.servername );
-	Com_Printf( "Address: %s\n", NET_AddressToString( &cls.serveraddress ) );
+	clNotice() << "Connected to server";
+	clNotice() << wsw::named( "Name", wsw::StringView( cls.servername ) );
+	clNotice() << wsw::named( "Address", wsw::StringView( NET_AddressToString( &cls.serveraddress ) ) );
 }
 
 /*
@@ -2161,7 +2162,7 @@ static bool CL_MaxPacketsReached( void ) {
 	}
 
 	if( cl_pps->integer > 62 || cl_pps->integer < 20 ) {
-		Com_Printf( "'cl_pps' value is out of valid range, resetting to default\n" );
+		clWarning() << "'cl_pps' value is out of valid range, resetting to default";
 		Cvar_ForceSet( "cl_pps", va( "%s", cl_pps->dvalue ) );
 	}
 

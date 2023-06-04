@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "program.h"
 #include "materiallocal.h"
 #include "frontend.h"
+#include "../qcommon/textstreamwriterextras.h"
 
 r_globals_t rf;
 
@@ -942,7 +943,7 @@ static int R_UploadLightmap( const char *name, uint8_t *data, int w, int h, int 
 	}
 	if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
 		// not sure what I'm supposed to do here.. an unrealistic scenario
-		Com_Printf( S_COLOR_YELLOW "Warning: r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES\n" );
+		rWarning() << "r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES";
 		return 0;
 	}
 
@@ -1116,8 +1117,8 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 		}
 
 		if( mapConfig.deluxeMappingEnabled && ( ( size == w ) || ( size == h ) ) ) {
-			Com_Printf( S_COLOR_YELLOW "Lightmap blocks larger than %ix%i aren't supported"
-						", deluxemaps will be disabled\n", size, size );
+			rWarning() << "Lightmap blocks larger than " << wsw::noSep( size ) << wsw::noSep( 'x' )
+				<< size << "aren't supported, deluxemaps will be disabled";
 			mapConfig.deluxeMappingEnabled = false;
 		}
 
@@ -1151,7 +1152,7 @@ void R_BuildLightmaps( model_t *mod, int numLightmaps, int w, int h, const uint8
 			if( !layer ) {
 				if( r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES ) {
 					// not sure what I'm supposed to do here.. an unrealistic scenario
-					Com_Printf( S_COLOR_YELLOW "Warning: r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES\n" );
+					rWarning() << "r_numUploadedLightmaps == MAX_LIGHTMAP_IMAGES";
 					break;
 				}
 				lightmapNum = r_numUploadedLightmaps++;
@@ -1656,8 +1657,7 @@ static bool R_RegisterGLExtensions( void ) {
 
 				// whine about buggy driver
 				if( *extension->prefix ) {
-					Com_Printf( "R_RegisterGLExtensions: broken %s support, contact your video card vendor\n",
-								cvar->name );
+					rWarning() << "Broken" << wsw::StringView( cvar->name ) << "support, contact your video card vendor";
 				}
 
 				// reset previously initialized functions back to NULL
@@ -1702,7 +1702,11 @@ static void R_PrintGLExtensionsInfo( void ) {
 	for( i = 0, lastOffset = 0, extension = gl_extensions_decl; i < num_gl_extensions; i++, extension++ ) {
 		if( lastOffset != extension->offset ) {
 			lastOffset = extension->offset;
-			Com_Printf( "%s: %s\n", extension->name, GLINF_FROM( &glConfig.ext, lastOffset ) ? "enabled" : "disabled" );
+			if( GLINF_FROM( &glConfig.ext, lastOffset ) ) {
+				rNotice() << wsw::StringView( extension->name ) << "enabled";
+			} else {
+				rNotice() << wsw::StringView( extension->name ) << "disabled";
+			}
 		}
 	}
 }
@@ -1953,47 +1957,6 @@ static void R_Register( const char *screenshotsPrefix ) {
 }
 
 static void R_PrintInfo() {
-	Com_Printf( "\n" );
-	Com_Printf( "GL_VENDOR: %s\n", glConfig.vendorString );
-	Com_Printf( "GL_RENDERER: %s\n", glConfig.rendererString );
-	Com_Printf( "GL_VERSION: %s\n", glConfig.versionString );
-	Com_Printf( "GL_SHADING_LANGUAGE_VERSION: %s\n", glConfig.shadingLanguageVersionString );
-
-	Com_Printf( "GL_EXTENSIONS:\n" );
-	GLint numExtensions;
-	qglGetIntegerv( GL_NUM_EXTENSIONS, &numExtensions );
-	for( int i = 0; i < numExtensions; ++i ) {
-		Com_Printf( "%s ", (const char *)qglGetStringi( GL_EXTENSIONS, i ) );
-	}
-	Com_Printf( "\n" );
-
-	Com_Printf( "GLXW_EXTENSIONS:\n%s\n", qglGetGLWExtensionsString() );
-
-	Com_Printf( "GL_MAX_TEXTURE_SIZE: %i\n", glConfig.maxTextureSize );
-	Com_Printf( "GL_MAX_TEXTURE_IMAGE_UNITS: %i\n", glConfig.maxTextureUnits );
-	Com_Printf( "GL_MAX_CUBE_MAP_TEXTURE_SIZE: %i\n", glConfig.maxTextureCubemapSize );
-	Com_Printf( "GL_MAX_3D_TEXTURE_SIZE: %i\n", glConfig.maxTexture3DSize );
-	if( glConfig.ext.texture_array ) {
-		Com_Printf( "GL_MAX_ARRAY_TEXTURE_LAYERS: %i\n", glConfig.maxTextureLayers );
-	}
-	if( glConfig.ext.texture_filter_anisotropic ) {
-		Com_Printf( "GL_MAX_TEXTURE_MAX_ANISOTROPY: %i\n", glConfig.maxTextureFilterAnisotropic );
-	}
-	Com_Printf( "GL_MAX_RENDERBUFFER_SIZE: %i\n", glConfig.maxRenderbufferSize );
-	Com_Printf( "GL_MAX_VARYING_FLOATS: %i\n", glConfig.maxVaryingFloats );
-	Com_Printf( "GL_MAX_VERTEX_UNIFORM_COMPONENTS: %i\n", glConfig.maxVertexUniformComponents );
-	Com_Printf( "GL_MAX_VERTEX_ATTRIBS: %i\n", glConfig.maxVertexAttribs );
-	Com_Printf( "GL_MAX_FRAGMENT_UNIFORM_COMPONENTS: %i\n", glConfig.maxFragmentUniformComponents );
-	Com_Printf( "GL_MAX_SAMPLES: %i\n", glConfig.maxFramebufferSamples );
-	Com_Printf( "\n" );
-
-	Com_Printf( "mode: %ix%i%s\n", glConfig.width, glConfig.height,
-				glConfig.fullScreen ? ", fullscreen" : ", windowed" );
-	Com_Printf( "picmip: %i\n", r_picmip->integer );
-	Com_Printf( "texturefilter: %s\n", r_texturefilter->string );
-	Com_Printf( "anisotropic filtering: %i\n", r_anisolevel->integer );
-	Com_Printf( "vertical sync: %s\n", ( r_swapinterval->integer || r_swapinterval_min->integer ) ? "enabled" : "disabled" );
-
 	R_PrintGLExtensionsInfo();
 }
 
@@ -2157,7 +2120,7 @@ rserr_t R_TrySettingMode( int x, int y, int width, int height, int displayFreque
 
 	rserr_t err = GLimp_SetMode( x, y, width, height, displayFrequency, options );
 	if( err != rserr_ok ) {
-		Com_Printf( "Could not GLimp_SetMode()\n" );
+		rError() << "Could not GLimp_SetMode()";
 	} else if( r_postinit ) {
 		err = R_PostInit();
 		r_postinit = false;

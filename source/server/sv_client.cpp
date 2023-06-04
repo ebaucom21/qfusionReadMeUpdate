@@ -359,20 +359,20 @@ static void SV_Configstrings_f( client_t *client, const CmdArgs &cmdArgs ) {
 	int start;
 
 	if( client->state == CS_CONNECTING ) {
-		Com_DPrintf( "Start Configstrings() from %s\n", client->name );
+		svDebug() << "Start Configstrings() from" << wsw::StringView( client->name );
 		client->state = CS_CONNECTED;
 	} else {
-		Com_DPrintf( "Configstrings() from %s\n", client->name );
+		svDebug() << "Configstrings() from" << wsw::StringView( client->name );
 	}
 
 	if( client->state != CS_CONNECTED ) {
-		Com_Printf( "configstrings not valid -- already spawned\n" );
+		svWarning() << "configstrings not valid -- already spawned";
 		return;
 	}
 
 	// handle the case of a level changing while a client was connecting
 	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
-		Com_Printf( "SV_Configstrings_f from different level\n" );
+		svWarning() << "SV_Configstrings_f from different level";
 		SV_SendServerCommand( client, "reconnect" );
 		return;
 	}
@@ -411,16 +411,16 @@ static void SV_Baselines_f( client_t *client, const CmdArgs &cmdArgs ) {
 	entity_state_t nullstate;
 	entity_state_t *base;
 
-	Com_DPrintf( "Baselines() from %s\n", client->name );
+	svDebug() << "Baselines() from" << wsw::StringView( client->name );
 
 	if( client->state != CS_CONNECTED ) {
-		Com_Printf( "baselines not valid -- already spawned\n" );
+		svWarning() << "baselines not valid -- already spawned";
 		return;
 	}
 
 	// handle the case of a level changing while a client was connecting
 	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
-		Com_Printf( "SV_Baselines_f from different level\n" );
+		svWarning() << "SV_Baselines_f from different level";
 		SV_New_f( client, cmdArgs );
 		return;
 	}
@@ -459,12 +459,12 @@ static void SV_Baselines_f( client_t *client, const CmdArgs &cmdArgs ) {
 * SV_Begin_f
 */
 static void SV_Begin_f( client_t *client, const CmdArgs &cmdArgs ) {
-	Com_DPrintf( "Begin() from %s\n", client->name );
+	svDebug() << "Begin() from" << wsw::StringView( client->name );
 
 	// wsw : r1q2[start] : could be abused to respawn or cause spam/other mod-specific problems
 	if( client->state != CS_CONNECTED ) {
 		if( dedicated->integer ) {
-			Com_Printf( "SV_Begin_f: 'Begin' from already spawned client: %s.\n", client->name );
+			svWarning() << "SV_Begin_f: 'Begin' from already spawned client" << wsw::StringView( client->name );
 		}
 		SV_DropClient( client, DROP_TYPE_GENERAL, "Error: Begin while connected" );
 		return;
@@ -473,7 +473,7 @@ static void SV_Begin_f( client_t *client, const CmdArgs &cmdArgs ) {
 
 	// handle the case of a level changing while a client was connecting
 	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
-		Com_Printf( "SV_Begin_f from different level\n" );
+		svWarning() << "SV_Begin_f from different level";
 		SV_SendServerCommand( client, "changing" );
 		SV_SendServerCommand( client, "reconnect" );
 		return;

@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../gameshared/q_collision.h"
 
 #include "../gameshared/gs_public.h"
+#include "../qcommon/outputmessages.h"
 #include "../ref/ref.h"
 
 #include "cg_public.h"
@@ -853,3 +854,8 @@ struct ParticleColorsForTeamHolder {
 		return resultColors;
 	}
 };
+
+#define cgDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::CGame, wsw::MessageSeverity::Debug ) ).getWriter()
+#define cgNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::CGame, wsw::MessageSeverity::Info ) ).getWriter()
+#define cgWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::CGame, wsw::MessageSeverity::Warning ) ).getWriter()
+#define cgError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::CGame, wsw::MessageSeverity::Error ) ).getWriter()

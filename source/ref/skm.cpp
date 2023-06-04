@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "iqm.h"
 #include "frontend.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/textstreamwriterextras.h"
 
 // typedefs
 typedef struct iqmheader iqmheader_t;
@@ -181,14 +182,14 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 
 	// check IQM magic
 	if( memcmp( header->magic, "INTERQUAKEMODEL", 16 ) ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s is not an Inter-Quake Model\n", mod->name );
+		rError() << wsw::StringView( mod->name ) << "is not an Inter-Quake Model";
 		goto error;
 	}
 
 	// check header version
 	header->version = LittleLong( header->version );
 	if( header->version != IQM_VERSION ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s has wrong type number (%i should be %i)\n", mod->name, header->version, IQM_VERSION );
+		rError() << wsw::StringView( mod->name ) << "has wrong type number" << header->version << "should be" << IQM_VERSION;
 		goto error;
 	}
 
@@ -223,15 +224,16 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 #undef H_SWAP
 
 	if( header->num_triangles < 1 || header->num_vertexes < 3 || header->num_vertexarrays < 1 || header->num_meshes < 1 ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s has no geometry\n", mod->name );
+		rError() << wsw::StringView( mod->name ) << "has no geometry";
 		goto error;
 	}
 	if( header->num_vertexes >= USHRT_MAX ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s has too many vertices\n", mod->name );
+		rError() << wsw::StringView( mod->name ) << "has too many vertices";
 		goto error;
 	}
 	if( header->num_joints != header->num_poses ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s has an invalid number of poses: %i vs %i\n", mod->name, header->num_joints, header->num_poses );
+		rError() << wsw::StringView( mod->name ) << "has an invalid number of poses"
+			<< wsw::named( "num joints", header->num_joints ) << wsw::named( "num poses", header->num_poses );
 		goto error;
 	}
 
@@ -247,7 +249,7 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 		|| header->ofs_meshes + header->num_meshes * sizeof( iqmmesh_t ) > filesize
 		|| header->ofs_bounds + header->num_frames * sizeof( iqmbounds_t ) > filesize
 		) {
-		Com_Printf( S_COLOR_RED "ERROR: %s has invalid size or offset information\n", mod->name );
+		rError() << wsw::StringView( mod->name ) << "has invalid size or offset information";
 		goto error;
 	}
 
@@ -354,7 +356,7 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 	}
 
 	if( !vposition || !vtexcoord ) {
-		Com_Printf( S_COLOR_RED "ERROR: %s is missing vertex array data\n", mod->name );
+		rError() << wsw::StringView( mod->name ) << "is missing vertex array data";
 		goto error;
 	}
 
@@ -388,7 +390,7 @@ void Mod_LoadSkeletalModel( model_t *mod, model_t *parent, void *buffer, bspForm
 		}
 
 		if( joints[i].parent >= (int)i ) {
-			Com_Printf( S_COLOR_RED "ERROR: %s bone[%i].parent(%i) >= %i\n", mod->name, i, joint.parent, i );
+			rError() << wsw::StringView( mod->name ) << "bone at" << i << "parent" << joint.parent << ">=" << i;
 			goto error;
 		}
 

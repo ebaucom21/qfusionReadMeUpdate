@@ -27,6 +27,7 @@
 #include "../qcommon/configstringstorage.h"
 #include "../qcommon/wswstaticstring.h"
 #include "../qcommon/mmcommon.h"
+#include "../qcommon/outputmessages.h"
 #include "../game/g_public.h"
 
 #include <cstdlib>
@@ -530,5 +531,10 @@ bool SV_Web_Running( void );
 const char *SV_Web_UpstreamBaseUrl( void );
 bool SV_Web_AddGameClient( const char *session, int clientNum, const netadr_t *netAdr );
 void SV_Web_RemoveGameClient( const char *session );
+
+#define svDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Debug ) ).getWriter()
+#define svNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Info ) ).getWriter()
+#define svWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Warning ) ).getWriter()
+#define svError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Error ) ).getWriter()
 
 #endif

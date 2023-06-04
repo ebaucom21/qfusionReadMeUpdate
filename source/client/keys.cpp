@@ -266,7 +266,7 @@ void KeyBindingsSystem::unbindAll() {
 
 static void Key_Unbind_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() != 2 ) {
-		Com_Printf( "unbind <key> : remove commands from a key\n" );
+		clNotice() << "unbind <key> : remove commands from a key";
 		return;
 	}
 
@@ -274,7 +274,7 @@ static void Key_Unbind_f( const CmdArgs &cmdArgs ) {
 	if( const auto maybeKey = bindingsSystem->getKeyForName( wsw::StringView( Cmd_Argv( 1 ) ) ) ) {
 		bindingsSystem->setBinding( *maybeKey, wsw::StringView() );
 	} else {
-		Com_Printf( "\"%s\" isn't a valid key\n", Cmd_Argv( 1 ) );
+		clNotice() << cmdArgs[1] << "isn't a valid key";
 	}
 }
 
@@ -288,14 +288,14 @@ static void Key_Unbindall( const CmdArgs & ) {
 static void Key_Bind_f( const CmdArgs &cmdArgs ) {
 	const int argc = Cmd_Argc();
 	if( argc < 2 ) {
-		Com_Printf( "bind <key> [command] : attach a command to a key\n" );
+		clNotice() << "bind <key> [command] : attach a command to a key";
 		return;
 	}
 
 	auto *const bindingsSystem = wsw::cl::KeyBindingsSystem::instance();
 	const auto maybeKey = bindingsSystem->getKeyForName( wsw::StringView( Cmd_Argv( 1 ) ) );
 	if( !maybeKey ) {
-		Com_Printf( "\"%s\" isn't a valid key\n", Cmd_Argv( 1 ) );
+		clNotice() << cmdArgs[1] << "isn't a valid key";
 		return;
 	}
 
@@ -313,7 +313,7 @@ static void Key_Bind_f( const CmdArgs &cmdArgs ) {
 	for( int i = 2; i < argc; i++ ) {
 		wsw::StringView argView( Cmd_Argv( i ) );
 		if( argView.size() + cmd.size() + 1 > cmd.capacity() ) {
-			Com_Printf( "%s: Binding overflow\n", bindingsSystem->getNameForKey( *maybeKey )->data() );
+			clWarning() << bindingsSystem->getNameForKey( *maybeKey ).value_or( wsw::StringView() ) << ": Binding overflow";
 			return;
 		}
 		cmd << argView;

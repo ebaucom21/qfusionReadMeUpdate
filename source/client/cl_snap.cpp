@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/qcommon.h"
 #include "../cgame/cg_public.h"
+#include "client.h"
 
 /*
 =========================================================================
@@ -302,16 +303,16 @@ static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, int 
 		newframe->valid = true; // uncompressed frame
 	} else {
 		if( newframe->deltaFrameNum <= 0 ) {
-			Com_Printf( "Invalid delta frame (not supposed to happen!).\n" );
+			clWarning() << "Invalid delta frame (not supposed to happen!)";
 		} else if( backup ) {
 			snapshot_t *deltaframe = &backup[newframe->deltaFrameNum & UPDATE_MASK];
 			if( !deltaframe->valid ) {
 				// should never happen
-				Com_Printf( "Delta from invalid frame (not supposed to happen!).\n" );
+				clWarning() << "Delta from invalid frame (not supposed to happen!)";
 			} else if( deltaframe->serverFrame != newframe->deltaFrameNum ) {
 				// The frame that the server did the delta from
 				// is too old, so we can't reconstruct it properly.
-				Com_Printf( "Delta frame too old.\n" );
+				clWarning() << "Delta frame too old";
 			} else {
 				newframe->valid = true; // valid delta parse
 			}

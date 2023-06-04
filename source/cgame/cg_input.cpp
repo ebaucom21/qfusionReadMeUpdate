@@ -105,7 +105,7 @@ static void CG_KeyDown( kbutton_t *b, const CmdArgs &cmdArgs ) {
 	} else if( !b->down[1] ) {
 		b->down[1] = k;
 	} else {
-		Com_Printf( "Three keys down for a button!\n" );
+		cgWarning() << "Three keys down for a button!";
 		return;
 	}
 

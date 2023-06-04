@@ -240,7 +240,7 @@ auto AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_,
 			tstack_p->nodenum = aasnode->children[0];
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
-				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
+				aiError() << "traceAreas() stack overflow";
 				return { areas_, areas_ + numAreas };
 			}
 		}
@@ -252,7 +252,7 @@ auto AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_,
 			tstack_p->nodenum = aasnode->children[1];
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
-				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
+				aiError() << "traceAreas() stack overflow";
 				return { areas_, areas_ + numAreas };
 			}
 		}
@@ -280,7 +280,7 @@ auto AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_,
 			tstack_p->nodenum = aasnode->children[!side];
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
-				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
+				aiError() << "traceAreas() stack overflow";
 				return { areas_, areas_ + numAreas };
 			}
 			//now put the part near the start of the line on the stack so we will
@@ -292,7 +292,7 @@ auto AiAasWorld::traceAreas( const vec3_t start, const vec3_t end, int *areas_,
 			tstack_p->nodenum = aasnode->children[side];
 			tstack_p++;
 			if( tstack_p >= &tracestack[127] ) {
-				G_Printf( S_COLOR_RED "AiAasWorld::TraceAreas(): stack overflow\n" );
+				aiError() << "traceAreas() stack overflow";
 				return { areas_, areas_ + numAreas };
 			}
 		}

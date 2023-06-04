@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/bsp.h"
 #include "../qcommon/patch.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/outputmessages.h"
 
 #ifdef ALIGN
 #undef ALIGN
@@ -1590,5 +1591,10 @@ inline void R_UnpackSortKey( unsigned sortKey, unsigned *shaderNum, int *fogNum,
 	*portalNum = (signed int)( ( sortKey >> 5 ) & 0x1F ) - 1;
 	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
 }
+
+#define rDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Debug ) ).getWriter()
+#define rNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Info ) ).getWriter()
+#define rWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Warning ) ).getWriter()
+#define rError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Error ) ).getWriter()
 
 #endif // R_LOCAL_H

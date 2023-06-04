@@ -430,7 +430,7 @@ void SCR_UpdateScreen( void ) {
 	if( cls.disable_screen ) {
 		if( Sys_Milliseconds() - cls.disable_screen > 120000 ) {
 			cls.disable_screen = 0;
-			Com_Printf( "Loading plaque timed out.\n" );
+			clNotice() << "Loading plaque timed out";
 		}
 		return;
 	}

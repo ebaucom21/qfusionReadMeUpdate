@@ -48,15 +48,15 @@ AasStaticRouteTable::AasStaticRouteTable( const char *mapName ) {
 	if( !loadFromFile( filePath.data() ) ) {
 		if( compute() ) {
 			if( !saveToFile( filePath.data() ) ) {
-				Com_Printf( S_COLOR_RED "Failed to save the static route table to %s\n", filePath.data() );
+				aiError() << "Failed to save the static route table to" << filePath;
 			} else {
-				Com_Printf( "Saved the static route table to %s successfully\n", filePath.data() );
+				aiError() << "Saved the static route table to" << filePath << "successfully";
 			}
 		} else {
-			Com_Printf( S_COLOR_RED "Failed to compute the static route table\n" );
+			aiError() << "Failed to compute the static route table";
 		}
 	} else {
-		Com_Printf( "Loaded the static route table from %s successfully\n", filePath.data() );
+		aiNotice() << "Loaded the static route table from" << filePath << "successfully";
 	}
 }
 

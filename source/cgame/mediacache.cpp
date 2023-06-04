@@ -97,9 +97,9 @@ void MediaCache::registerSoundsArray( MediaCache::CachedSoundsArray *array ) {
 		buffer << wsw::StringView( array->m_format ).take( MAX_QPATH );
 		std::replace( buffer.begin(), buffer.end(), '%', '$');
 		if( oldStorageSize == newStorageSize ) {
-			Com_Printf( S_COLOR_RED "Failed to find any sound for pattern %s ($ for percent here)\n", buffer.data() );
+			cgWarning() << "Failed to find any sound for pattern" << buffer << "($ for percent here)";
 		} else {
-			Com_Printf( S_COLOR_RED "Too few sounds for pattern %s ($ for percent here)\n", buffer.data() );
+			cgWarning() << "Too few sounds for pattern" << buffer << "($ for percent here)";
 		}
 	}
 

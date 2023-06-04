@@ -479,8 +479,7 @@ void DemosResolver::runQuery() {
 	runQueryUsingWordMatcher<WordsMatcher>( m_lastQuery.asView() );
 
 	if( devMode ) {
-		const auto microsTaken = (int)( Sys_Microseconds() - startMicros );
-		Com_Printf( "Running a query `%s` took %d micros\n", m_lastQuery.data(), microsTaken );
+		uiDebug() << "Running a query" << m_lastQuery << "took" << ( Sys_Microseconds() - startMicros ) << "micros";
 	}
 
 	Q_EMIT runQueryTasksReady( true );

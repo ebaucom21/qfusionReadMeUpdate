@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../../gameshared/q_math.h"
 #include "../../gameshared/q_shared.h"
 #include "../../gameshared/q_cvar.h"
+#include "../../game/g_local.h"
 #include "ascript.h"
 #include "addon/addon_math.h"
 #include "addon/addon_scriptarray.h"
@@ -278,7 +279,7 @@ static char *qasLoadScriptSection( const char *rootDir, const char *dir, const w
 	FS_Read( data, length, filenum );
 	FS_FCloseFile( filenum );
 
-	Com_Printf( "* Loaded script section '%s'\n", filename );
+	gNotice() << "Loaded script section" << wsw::StringView( filename );
 	return (char *)data;
 }
 
@@ -287,11 +288,11 @@ static char *qasLoadScriptSection( const char *rootDir, const char *dir, const w
 */
 static asIScriptModule *qasBuildScriptProject( asIScriptEngine *asEngine, const char *moduleName, const char *rootDir, const char *dir, const char *scriptName, const char *script ) {
 	if( asEngine == NULL ) {
-		Com_Printf( S_COLOR_RED "qasBuildGameScript: Angelscript API unavailable\n" );
+		gError() << "Angelscript API unavailable";
 		return NULL;
 	}
 
-	Com_Printf( "* Initializing script '%s'\n", scriptName );
+	gNotice() << "Initializing script" << wsw::StringView( scriptName );
 
 	const wsw::StringView scriptView( script );
 	// count referenced script sections

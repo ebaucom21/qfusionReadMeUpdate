@@ -288,8 +288,7 @@ void TextureCache::applyFilterOrAnisoInList( Texture *listHead, TextureFilter fi
 void TextureCache::applyFilter( const wsw::StringView &name, int anisoLevel ) {
 	const auto maybeFilter = findFilterByName( name );
 	if( !maybeFilter ) {
-		assert( name.isZeroTerminated() );
-		Com_Printf( "Failed to find a texture filter by name %s\n", name.data() );
+		rWarning() << "Failed to find a texture filter by name" << name;
 		return;
 	}
 

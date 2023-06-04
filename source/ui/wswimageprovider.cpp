@@ -44,14 +44,13 @@ void WswImageRunnable::run() {
 }
 
 static const char *kExtensions[] = { ".svg", ".tga", ".png", ".webp", ".jpg" };
-static const char *kTag = "WswImageResponse";
 
 void WswImageResponse::exec() {
 	// TODO: Use some sane API
 	const auto numExtensions = (int)( std::end( kExtensions ) - std::begin( kExtensions ) );
 	const char *ext = FS_FirstExtension( m_name.constData(), kExtensions, numExtensions );
 	if( !ext ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to find a first extension for %s\n", kTag, m_name.constData() );
+		uiWarning() << "Failed to find a first extension for" << m_name;
 		return;
 	}
 
@@ -60,13 +59,13 @@ void WswImageResponse::exec() {
 
 	auto fileHandle = wsw::fs::openAsReadHandle( path.asView() );
 	if( !fileHandle ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to open %s\n", kTag, path.data() );
+		uiWarning() << "Failed to open" << path;
 		return;
 	}
 
 	QByteArray fileData( fileHandle->getInitialFileSize(), Qt::Uninitialized );
 	if( fileHandle->read( fileData.data(), fileData.size() ) != std::optional( fileData.size() ) ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to read %s\n", kTag, path.data() );
+		uiWarning() << "Failed to read" << path;
 		return;
 	}
 
@@ -78,8 +77,7 @@ void WswImageResponse::exec() {
 			if( m_requestedSize.isValid() ) {
 				m_image = m_image.scaled( m_requestedSize );
 				if( m_image.isNull() ) {
-					auto [w, h] = std::make_pair( m_requestedSize.width(), m_requestedSize.height() );
-					Com_Printf( S_COLOR_YELLOW "%s: Failed to scale %s to %dx%d\n", kTag, m_name.constData(), w, h );
+					uiWarning() << "Failed to scale" << m_name << "to" << m_requestedSize;
 				}
 			}
 		}
@@ -88,8 +86,7 @@ void WswImageResponse::exec() {
 
 bool WswImageResponse::loadSvg( const QByteArray &fileData ) {
 	if( !m_requestedSize.isValid() || m_requestedSize.isEmpty() ) {
-		Com_Printf( S_COLOR_YELLOW "%s: A valid size must be specified for loading an SVG image %s\n", kTag,
-					m_name.constData() );
+		uiWarning() << "A valid size must be specified for loading an SVG image %s\n" << m_name;
 		return false;
 	}
 	ImageOptions imageOptions;
@@ -97,7 +94,7 @@ bool WswImageResponse::loadSvg( const QByteArray &fileData ) {
 	imageOptions.fitSizeForCrispness = true;
 	m_image = rasterizeSvg( fileData, imageOptions );
 	if( m_image.isNull() ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to parse SVG for %s\n", kTag, m_name.constData() );
+		uiWarning() << "Failed to parse SVG for %s\n" << m_name;
 		return false;
 	}
 	return true;
@@ -108,7 +105,7 @@ bool WswImageResponse::loadOther( const QByteArray &fileData, const char *ext ) 
 
 	uint8_t *bytes = wsw::decodeImageData( fileData.constData(), (size_t)fileData.length(), &w, &h, &chans );
 	if( !bytes ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.%s from data\n", kTag, m_name.constData(), ext );
+		uiWarning() << "Failed to load" << m_name << wsw::StringView( ext ) << "from data";
 		return false;
 	}
 
@@ -117,13 +114,13 @@ bool WswImageResponse::loadOther( const QByteArray &fileData, const char *ext ) 
 	} else if( chans == 4 ) {
 		m_image = QImage( bytes, w, h, QImage::Format_RGBA8888, ::free, bytes );
 	} else {
-		Com_Printf( S_COLOR_YELLOW "%s: Weird number of %s.%s image channels %d\n", kTag, m_name.constData(), ext, chans );
+		uiWarning() << "Weird number of" << m_name << wsw::StringView( ext ) << "image channels" << chans;
 		free( bytes );
 		return false;
 	}
 
 	if( m_image.isNull() ) {
-		Com_Printf( S_COLOR_YELLOW "%s: Failed to load %s.%s", kTag, m_name.constData(), ext );
+		uiWarning() << "Failed to load" << m_name << wsw::StringView( ext );
 		return false;
 	}
 

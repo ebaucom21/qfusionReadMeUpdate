@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "cm_local.h"
 #include "cm_trace.h"
+#include "local.h"
 #include "md5.h"
 
 static bool cm_initialized = false;
@@ -934,7 +935,7 @@ cmodel_state_t *CM_New() {
 	// See the Ops definition for the remark - we don't really need Ops
 	cms->ops->cms = cms;
 
-	Com_Printf( "Using %s collision code path\n", archTag );
+	comNotice() << "Using" << wsw::StringView( archTag ) << "collision code path";
 
 	return cms;
 }

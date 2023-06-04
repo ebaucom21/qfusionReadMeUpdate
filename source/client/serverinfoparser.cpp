@@ -3,6 +3,7 @@
 #include "../qcommon/wswtonum.h"
 #include "serverinfoparser.h"
 #include "serverlist.h"
+#include "client.h"
 
 ServerInfoParser::ServerInfoParser() {
 	std::fill( std::begin( m_handlersHashMap ), std::end( m_handlersHashMap ), nullptr );
@@ -146,17 +147,13 @@ bool ServerInfoParser::handleInteger( const wsw::StringView &value, T *result ) 
 
 template<unsigned N>
 bool ServerInfoParser::handleString( const wsw::StringView &value, wsw::StaticString<N> *result ) const {
-	// Its better to pass a caller name but we do not really want adding extra parameters to this method
-	constexpr const char *function = "ServerList::ServerInfoParser::HandleString()";
-
-	const char *s = value.data();
 	if( value.size() > std::numeric_limits<uint8_t>::max() ) {
-		Com_Printf( "Warning: %s: the value `%s` exceeds result size limits\n", function, s );
+		clWarning() << "The server info value" << value << "exceeds result size limits";
 		return false;
 	}
 
 	if( value.size() >= result->capacity() ) {
-		Com_Printf( "Warning: %s: the value `%s` exceeds a result capacity %d\n", function, s, (int)result->capacity() );
+		clWarning() << "The server info value" << value << "exceeds the result capacity" << result->capacity();
 		return false;
 	}
 

@@ -690,7 +690,8 @@ static bool QFT_LoadFamily( const char *fileName, uint8_t *data, size_t dataSize
 	fontFamilies = qfamily;
 
 	if( verbose ) {
-		Com_Printf( "Loaded font '%s %s' from '%s'\n", familyName, styleName, fileName );
+		clNotice() << "Loaded font" << wsw::StringView( familyName )
+			<< wsw::StringView( styleName ) << "from" << wsw::StringView( fileName );
 	}
 	return true;
 }

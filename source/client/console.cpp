@@ -1620,7 +1620,7 @@ void Console::handleCompleteKeyAction() {
 		}
 
 		if( nonEmptyResults.empty() ) {
-			Com_Printf( "No matching aliases, commands or vars were found\n" );
+			clNotice() << "No matching aliases, commands or vars were found";
 		} else {
 			const auto replaceInputBy = [&]( const wsw::StringView &charsToUse ) {
 				m_inputLine.erase( droppedFirstChar ? 1 : 0 );
@@ -1842,7 +1842,7 @@ void Console::handleSubmitKeyAction() {
 	}
 
 	// echo to the console and cycle command history
-	Com_Printf( "]%s\n", m_inputLine.data() );
+	clNotice() << m_inputLine;
 
 	addToHistory( m_inputLine.asView() );
 
@@ -2044,7 +2044,7 @@ static void Con_Dump_f( const CmdArgs &cmdArgs ) {
 	}
 
 	if( cmdArgs.size() < 2 ) {
-		Com_Printf( "Usage: condump <filename>\n" );
+		clNotice() << "Usage: condump <filename>";
 		return;
 	}
 
@@ -2056,18 +2056,18 @@ static void Con_Dump_f( const CmdArgs &cmdArgs ) {
 	name.erase( std::strlen( name.data() ) );
 
 	if( !COM_ValidateRelativeFilename( name.data() ) ) {
-		Com_Printf( "Invalid filename\n" );
+		clNotice() << "Invalid filename";
 	} else {
 		const wsw::StringView nameView( name.data(), name.size(), wsw::StringView::ZeroTerminated );
 		if( auto maybeHandle = wsw::fs::openAsWriteHandle( nameView ) ) {
 			const wsw::Vector<char> &dump = g_console.instance()->dumpLinesToBuffer();
 			if( !maybeHandle->write( dump.data(), dump.size() - 1 ) ) {
-				Com_Printf( "Failed to write %s\n", name.data() );
+				clWarning() << "Failed to write" << name;
 			} else {
-				Com_Printf( "Dumped console text to %s\n", name.data() );
+				clNotice() << "Dumped console text to" << name;
 			}
 		} else {
-			Com_Printf( "Failed to open %s\n", name.data() );
+			clWarning() << "Failed to open" << name;
 		}
 	}
 }
@@ -2094,7 +2094,7 @@ void Con_Init( void ) {
 
 	g_console.init();
 
-	Com_Printf( "Console initialized.\n" );
+	clNotice() << "Console initialized";
 
 	con_maxNotificationTime  = Cvar_Get( "con_maxNotificationTime", "3", CVAR_ARCHIVE );
 	con_maxNotificationLines = Cvar_Get( "con_maxNotificationLines", "4", CVAR_ARCHIVE );

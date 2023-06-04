@@ -21,10 +21,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "cmdsystem.h"
 #include "cmdcompat.h"
-#include "../qcommon/links.h"
-#include "../qcommon/qcommon.h"
-#include "../qcommon/wswstaticstring.h"
-#include "../qcommon/wswexceptions.h"
+#include "local.h"
+#include "links.h"
+#include "qcommon.h"
+#include "wswstaticstring.h"
+#include "wswexceptions.h"
 
 using wsw::operator""_asView;
 
@@ -101,26 +102,26 @@ bool CmdSystem::registerCommand( const wsw::StringView &name, CmdFunc cmdFunc ) 
 	checkCallingThread();
 
 	if( name.empty() ) {
-		Com_Printf( S_COLOR_RED "Failed to register command: Empty command name\n" );
+		comError() << "Failed to register a command: The name is empty";
 		return false;
 	}
 
 	assert( name.isZeroTerminated() );
 	if( Cvar_String( name.data() )[0] ) {
-		Com_Printf( S_COLOR_RED "Failed to register command: %s is already defined as a var\n", name.data() );
+		comError() << "Failed to register a command:" << name << "is already defined as a var";
 		return false;
 	}
 
 	const wsw::HashedStringView nameAndHash( name );
 	if( CmdEntry *existing = m_cmdEntries.findByName( nameAndHash ) ) {
-		Com_DPrintf( "The command %s is already registered, just updating the handler\n", name.data() );
+		comDebug() << "The command" << name << "is already registered, just updating the handler";
 		existing->m_cmdFunc = cmdFunc;
 		return true;
 	}
 
 	void *const mem = ::malloc( sizeof( CmdEntry ) + nameAndHash.length() + 1 );
 	if( !mem ) {
-		Com_Printf( S_COLOR_RED "Failed to register command: allocation failure\n" );
+		comDebug() << "Failed to register a command: Allocation failure";
 		return false;
 	}
 
@@ -145,11 +146,11 @@ bool CmdSystem::unregisterCommand( const wsw::StringView &name ) {
 			return true;
 		} else {
 			assert( name.isZeroTerminated() );
-			Com_Printf( S_COLOR_RED "Failed to unregister command: %s not registered\n", name.data() );
+			comWarning() << "Failed to unregister a command: the name" << name << "is not registered";
 			return false;
 		}
 	} else {
-		Com_Printf( S_COLOR_RED "Failed to unregister command: Empty command name\n" );
+		comWarning() << "Failed to unregister a command: the name is empty";
 		return false;
 	}
 }
@@ -197,11 +198,11 @@ void CmdSystem::executeNow( const wsw::StringView &text ) {
 				prependCommand( wsw::StringView( "\n" ) );
 				prependCommand( aliasEntry->m_text );
 			} else {
-				Com_Printf( S_COLOR_RED "Alias recursion depth has reached its limit\n" );
+				comError() << "Alias recursion depth has reached its limit";
 				m_aliasRecursionDepth = 0;
 			}
 		} else if( !Cvar_Command( cmdArgs ) ) {
-			Com_Printf( "Unknown command: \"%s\"\n", cmdArgs[0].data() );
+			comWarning() << "Unknown command:" << cmdArgs[0];
 		}
 	}
 }
@@ -317,7 +318,7 @@ void CmdSystem::helperForHandlerOfExec( const CmdArgs &cmdArgs ) {
 	const char *basename;
 
 	if( Cmd_Argc() < 2 || !arg[0] ) {
-		Com_Printf( "Usage: exec <filename>\n" );
+		comNotice() << "Usage: exec <filename>";
 		return;
 	}
 
@@ -329,7 +330,7 @@ void CmdSystem::helperForHandlerOfExec( const CmdArgs &cmdArgs ) {
 
 	if( !COM_ValidateRelativeFilename( name ) ) {
 		if( !silent ) {
-			Com_Printf( "Invalid filename\n" );
+			comError() << "The filename" << wsw::StringView( name ) << "is invalid";
 		}
 		Q_free( name );
 		return;
@@ -344,14 +345,14 @@ void CmdSystem::helperForHandlerOfExec( const CmdArgs &cmdArgs ) {
 
 	if( !f ) {
 		if( !silent ) {
-			Com_Printf( "Couldn't execute: %s\n", name );
+			comWarning() << "Couldn't execute" << wsw::StringView( name );
 		}
 		Q_free( name );
 		return;
 	}
 
 	if( !silent ) {
-		Com_Printf( "Executing: %s\n", name );
+		comNotice() << "Executing" << wsw::StringView( name );
 	}
 
 	prependCommand( "\n"_asView );
@@ -377,7 +378,7 @@ void CmdSystem::helperForHandlerOfVstr( const CmdArgs &cmdArgs ) {
 	checkCallingThread();
 
 	if( Cmd_Argc() != 2 ) {
-		Com_Printf( "vstr <variable> : execute a variable command\n" );
+		comNotice() << "vstr <variable> : execute a variable command";
 	} else {
 		prependCommand( wsw::StringView( Cvar_String( Cmd_Argv( 1 ) ) ) );
 	};
@@ -424,12 +425,12 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 	const wsw::StringView &name = cmdArgs[1];
 	assert( name.isZeroTerminated() );
 	if( name.length() > kMaxNameLength ) {
-		Com_Printf( "Failed to register alias: the alias name is too long\n" );
+		comError() << "Failed to register an alias: The alias name" << name << "is too long";
 		return;
 	}
 
 	if( Cvar_String( name.data() )[0] ) {
-		Com_Printf( S_COLOR_RED "Failed to register alias: %s is already defined as a var\n", name.data() );
+		comError() << "Failed to register an alias: The name" << name << "is already defined as a var";
 		return;
 	}
 
@@ -437,7 +438,7 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 	assert( nameAndHash.isZeroTerminated() );
 
 	if( m_cmdEntries.findByName( nameAndHash ) ) {
-		Com_Printf( S_COLOR_RED "Failed to register alias: %s is already defined as a command\n", nameAndHash.data() );
+		comError() << "Failed to register an alias: The name" << name << "is already defined as a command";
 		return;
 	}
 
@@ -445,7 +446,8 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 	if( Cmd_Argc() > 2 ) {
 		requiredTextSize = writeAliasText( nullptr, cmdArgs );
 		if( requiredTextSize > kMaxTextSize ) {
-			Com_Printf( S_COLOR_RED "Failed to register alias: the alias text is too long\n" );
+			comError() << "Failed to register an alias: The alias text is too long";
+			return;
 		}
 	}
 
@@ -453,7 +455,7 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 	if( existing ) {
 		if( Cmd_Argc() == 2 ) {
 			assert( existing->m_text.isZeroTerminated() );
-			Com_Printf( "alias \"%s\" is \"%s\"\n", nameAndHash.data(), existing->m_text.data() );
+			comNotice() << "alias" << nameAndHash << "is" << existing->m_text;
 			if( archive ) {
 				existing->m_isArchive = true;
 			}
@@ -462,7 +464,7 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 		existing = m_aliasEntries.releaseOwnership( existing );
 	} else {
 		if( Cmd_Argc() == 2 ) {
-			Com_Printf( "Failed to register alias: empty text\n" );
+			comError() << "Failed to register an alias: The alias text is empty";
 			return;
 		}
 	}
@@ -488,7 +490,7 @@ void CmdSystem::helperForHandlerOfAlias( bool archive, const CmdArgs &cmdArgs ) 
 			std::free( existing );
 		}
 	} else {
-		Com_Printf( "Failed to register alias: failed to allocate memory\n" );
+		comError() << "Failed to register an alias: Allocation failure";
 		if( existing ) {
 			// TODO: Should we keep it in this case?
 			m_aliasEntries.insertUniqueTakingOwneship( existing );
@@ -515,7 +517,7 @@ void CmdSystem::helperForHandlerOfUnalias( const CmdArgs &cmdArgs ) {
 	checkCallingThread();
 
 	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: unalias <name>\n" );
+		comNotice() << "Usage: unalias <name>";
 		return;
 	}
 
@@ -524,8 +526,7 @@ void CmdSystem::helperForHandlerOfUnalias( const CmdArgs &cmdArgs ) {
 		if( AliasEntry *entry = m_aliasEntries.findByName( wsw::HashedStringView( arg ) ) ) {
 			m_aliasEntries.remove( entry );
 		} else {
-			assert( arg.isZeroTerminated() );
-			Com_Printf( "Failed to unalias \"%s\": not found\n", arg.data() );
+			comError() << "Failed to unalias an alias: Failed to find an alias with name" << arg;
 		}
 	}
 }

@@ -747,21 +747,20 @@ void QtUISystem::onSceneChanged() {
 void QtUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
 	if ( QQmlComponent::Ready != status ) {
 		if( status == QQmlComponent::Error ) {
-			Com_Printf( S_COLOR_RED "The root Qml component loading has failed: %s\n",
-				m_component->errorString().toUtf8().constData() );
+			uiError() << "The root Qml component loading has failed:" << m_component->errorString();
 		}
 		return;
 	}
 
 	QObject *const rootObject = m_component->create();
 	if( !rootObject ) {
-		Com_Printf( S_COLOR_RED "Failed to finish the root Qml component creation\n" );
+		uiError() << "Failed to finish the root Qml component creation";
 		return;
 	}
 
 	auto *const rootItem = qobject_cast<QQuickItem*>( rootObject );
 	if( !rootItem ) {
-		Com_Printf( S_COLOR_RED "The root Qml component is not a QQuickItem\n" );
+		uiError() << "The root Qml component is not a QQuickItem";
 		return;
 	}
 
@@ -830,7 +829,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_externalContext = new QOpenGLContext;
 	m_externalContext->setNativeHandle( VID_GetMainContextHandle() );
 	if( !m_externalContext->create() ) {
-		Com_Printf( S_COLOR_RED "Failed to create a Qt wrapper of the main rendering context\n" );
+		uiError() << "Failed to create a Qt wrapper of the main rendering context";
 		return;
 	}
 
@@ -838,7 +837,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_sharedContext->setFormat( format );
 	m_sharedContext->setShareContext( m_externalContext );
 	if( !m_sharedContext->create() ) {
-		Com_Printf( S_COLOR_RED "Failed to create a dedicated Qt OpenGL rendering context\n" );
+		uiError() << "Failed to create a dedicated Qt OpenGL rendering context";
 		return;
 	}
 
@@ -855,7 +854,7 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	m_surface->setFormat( m_sharedContext->format() );
 	m_surface->create();
 	if ( !m_surface->isValid() ) {
-		Com_Printf( S_COLOR_RED "Failed to create a dedicated Qt OpenGL offscreen surface\n" );
+		uiError() << "Failed to create a dedicated Qt OpenGL offscreen surface";
 		return;
 	}
 
@@ -872,13 +871,13 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 		m_window->resetOpenGLState();
 		hadErrors = m_sharedContext->functions()->glGetError() != GL_NO_ERROR;
 	} else {
-		Com_Printf( S_COLOR_RED "Failed to make the dedicated Qt OpenGL rendering context current\n" );
+		uiError() << "Failed to make the dedicated Qt OpenGL rendering context current";
 	}
 
 	leaveUIRenderingMode();
 
 	if( hadErrors ) {
-		Com_Printf( S_COLOR_RED "Failed to initialize the Qt Quick render control from the given GL context\n" );
+		uiError() << "Failed to initialize the Qt Quick render control from the given GL context";
 		return;
 	}
 
@@ -1747,7 +1746,7 @@ void QtUISystem::setCVarValue( const QString &name, const QVariant &value ) {
 
 	// TODO: What to do with that?
 	if( ( cvar->flags & CVAR_LATCH_VIDEO ) || ( cvar->flags & CVAR_LATCH_SOUND ) ) {
-		Com_Printf( "Refusing to apply a video/sound-latched var %s value immediately\n", nameBytes.constData() );
+		uiWarning() << "Refusing to apply a video/sound-latched var" << name << "value immediately";
 		return;
 	}
 

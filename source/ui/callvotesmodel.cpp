@@ -175,7 +175,7 @@ void CallvotesModelProxy::reload() {
 		m_entries.clear();
 		m_options.clear();
 		m_groupDataStorage.clear();
-		Com_Printf( "%s\n", maybeError->data() );
+		uiError() << wsw::StringView( maybeError->data() );
 		abort();
 	}
 

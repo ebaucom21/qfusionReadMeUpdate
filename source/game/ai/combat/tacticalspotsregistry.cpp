@@ -321,7 +321,7 @@ void TacticalSpotsRegistry::SavePrecomputedData( const char *mapName ) {
 
 	spotsGrid.Save( writer );
 
-	G_Printf( "The precomputed tactical spots data has been saved successfully to %s\n", fileName );
+	aiNotice() << "The precomputed tactical spots data has been saved successfully to" << fileName;
 }
 
 void TacticalSpotsRegistry::PrecomputedSpotsGrid::Save( AiPrecomputedFileWriter &writer ) {
@@ -389,7 +389,7 @@ TacticalSpotsRegistry::~TacticalSpotsRegistry() {
 }
 
 void TacticalSpotsBuilder::ComputeMutualSpotsVisibility() {
-	G_Printf( "Computing mutual tactical spots visibility (it might take a while)...\n" );
+	aiNotice() << "Computing mutual tactical spots visibility (it might take a while)...";
 
 	unsigned uNumSpots = (unsigned)numSpots;
 	spotVisibilityTable = (unsigned char *)Q_malloc( uNumSpots * uNumSpots );
@@ -464,7 +464,7 @@ void TacticalSpotsBuilder::ComputeMutualSpotsVisibility() {
 }
 
 void TacticalSpotsBuilder::ComputeTravelTimeTable() {
-	G_Printf( "Computing mutual travel time between spots and areas (it might take a while)...\n" );
+	aiNotice() << "Computing mutual travel time between spots and areas (it might take a while)...";
 
 	const auto *const aasWorld = AiAasWorld::instance();
 	const auto *const routeCache = AiAasRouteCache::Shared();
@@ -541,7 +541,7 @@ bool TacticalSpotsBuilder::TestAas() {
 }
 
 void TacticalSpotsBuilder::PickTacticalSpots() {
-	G_Printf( "Picking tactical spots (it might take a while)...\n" );
+	aiNotice() << "Picking tactical spots (it might take a while)...";
 	FindCandidatePoints();
 	for( int i = 0; i < numCandidatePoints; ++i ) {
 		TryAddSpotFromPoint( candidatePoints[i] );

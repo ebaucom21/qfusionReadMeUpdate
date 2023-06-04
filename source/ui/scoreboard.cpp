@@ -32,7 +32,7 @@ void Scoreboard::reload() {
 
 	if( const auto maybeError = doReload() ) {
 		assert( maybeError->isZeroTerminated() );
-		Com_Printf( S_COLOR_RED "ScoreboardModelProxy: %s\n", maybeError->data() );
+		uiError() << "Failed to reload scoreboard schema" << *maybeError;
 		clearSchema();
 	}
 

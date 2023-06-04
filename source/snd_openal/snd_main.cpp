@@ -90,7 +90,7 @@ static void SF_Music_f( const CmdArgs &cmdArgs ) {
 	} else if( Cmd_Argc() == 3 ) {
 		SoundSystem::instance()->startBackgroundTrack( Cmd_Argv( 1 ), Cmd_Argv( 2 ), 0 );
 	} else {
-		Com_Printf( "music <intro|playlist> [loop|shuffle]\n" );
+		sNotice() << "music <intro|playlist> [loop|shuffle]";
 		return;
 	}
 }

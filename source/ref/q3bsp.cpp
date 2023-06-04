@@ -613,7 +613,7 @@ static int Mod_AddUpdatePatchGroup( const rdface_t *in ) {
 	if( i == loadmodel_numpatchgroups ) {
 		if( i == loadmodel_maxpatchgroups ) {
 			assert( 0 );
-			Com_Printf( S_COLOR_YELLOW "Mod_AddUpdatePatchGroup: i == loadmodel_maxpatchgroups\n" );
+			rWarning() << "Mod_AddUpdatePatchGroup: i == loadmodel_maxpatchgroups";
 			return -1;
 		}
 
@@ -1196,12 +1196,12 @@ static void Mod_LoadLeafs( const lump_t *l, const lump_t *msLump ) {
 		out->cluster = LittleLong( in->cluster );
 
 		if( i && ( badBounds || VectorCompare( out->mins, out->maxs ) ) && out->cluster >= 0 ) {
-			Com_DPrintf( S_COLOR_YELLOW "WARNING: bad leaf bounds\n" );
+			rDebug() << "bad leaf bounds";
 			out->cluster = -1;
 		}
 
 		if( loadbmodel->pvs && ( out->cluster >= loadbmodel->pvs->numclusters ) ) {
-			Com_Printf( S_COLOR_YELLOW "WARNING: leaf cluster > numclusters" );
+			rWarning() << "leaf cluster > numclusters";
 			out->cluster = -1;
 		}
 

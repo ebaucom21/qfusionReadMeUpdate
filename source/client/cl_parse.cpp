@@ -38,18 +38,18 @@ void CL_StopServerDownload( void );
 */
 bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 	if( cls.download.requestname ) {
-		Com_Printf( "Can't download: %s. Download already in progress.\n", filename );
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "A download is already in progress";
 		return false;
 	}
 
 	if( !COM_ValidateRelativeFilename( filename ) ) {
-		Com_Printf( "Can't download: %s. Invalid filename.\n", filename );
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "Invalid filename";
 		return false;
 	}
 
 	if( FS_CheckPakExtension( filename ) ) {
 		if( FS_PakFileExists( filename ) ) {
-			Com_Printf( "Can't download: %s. File already exists.\n", filename );
+			clWarning() << "Can't download" << wsw::StringView( filename ) << "The file already exists";
 			return false;
 		}
 
@@ -58,7 +58,7 @@ bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 		}
 	} else {
 		if( FS_FOpenFile( filename, NULL, FS_READ ) != -1 ) {
-			Com_Printf( "Can't download: %s. File already exists.\n", filename );
+			clWarning() << "Can't download" << wsw::StringView( filename ) << "File already exists";
 			return false;
 		}
 
@@ -68,18 +68,18 @@ bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 			// only allow demo downloads
 			extension = COM_FileExtension( filename );
 			if( !extension || Q_stricmp( extension, APP_DEMO_EXTENSION_STR ) ) {
-				Com_Printf( "Can't download, got arbitrary file type: %s\n", filename );
+				clWarning() << "Can't download, got arbitrary file type" << wsw::StringView( filename );
 				return false;
 			}
 		}
 	}
 
 	if( cls.socket->type == SOCKET_LOOPBACK ) {
-		Com_DPrintf( "Can't download: %s. Loopback server.\n", filename );
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "Loopback server";
 		return false;
 	}
 
-	Com_Printf( "Asking to download: %s\n", filename );
+	clNotice() << "Asking to download" << wsw::StringView( filename );
 
 	cls.download.requestpak = requestpak;
 	cls.download.requestname = (char *)Q_malloc( sizeof( char ) * ( strlen( filename ) + 1 ) );
@@ -147,27 +147,27 @@ static void CL_DownloadComplete( void ) {
 	// verify checksum
 	if( FS_CheckPakExtension( cls.download.name ) ) {
 		if( !FS_IsPakValid( cls.download.tempname, &checksum ) ) {
-			Com_Printf( "Downloaded file is not a valid pack file. Removing\n" );
+			clWarning() << "Downloaded file is not a valid pack file. Removing it";
 			FS_RemoveBaseFile( cls.download.tempname );
 			return;
 		}
 	} else {
 		length = FS_LoadBaseFile( cls.download.tempname, NULL, NULL, 0 );
 		if( length < 0 ) {
-			Com_Printf( "Error: Couldn't load downloaded file\n" );
+			clWarning() << "Couldn't load downloaded file";
 			return;
 		}
 		checksum = FS_ChecksumBaseFile( cls.download.tempname, false );
 	}
 
 	if( cls.download.checksum != checksum ) {
-		Com_Printf( "Downloaded file has wrong checksum. Removing: %u %u %s\n", cls.download.checksum, checksum, cls.download.tempname );
+		clWarning() << "Downloaded file has wrong checksum. Removing it";
 		FS_RemoveBaseFile( cls.download.tempname );
 		return;
 	}
 
 	if( !FS_MoveBaseFile( cls.download.tempname, cls.download.name ) ) {
-		Com_Printf( "Failed to rename the downloaded file\n" );
+		clWarning() << "Failed to rename the downloaded file";
 		return;
 	}
 
@@ -240,7 +240,7 @@ static void CL_WebDownloadDoneCb( int status, const char *contentType, void *pri
 	bool success = ( download.offset == download.size ) && ( status > -1 );
 	bool try_non_official = download.web_official && !download.web_official_only;
 
-	Com_Printf( "Web download %s: %s (%i)\n", success ? "successful" : "failed", download.tempname, status );
+	clNotice() << "Web download" << wsw::StringView( download.tempname ) << wsw::StringView( success ? "successful" : "failed" );
 
 	if( success ) {
 		CL_DownloadComplete();
@@ -323,36 +323,37 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 	}
 
 	if( !cls.download.requestname ) {
-		Com_Printf( "Got init download message without request\n" );
+		clWarning() << "Got init download message without request";
 		return;
 	}
 
 	if( cls.download.filenum || cls.download.web ) {
-		Com_Printf( "Got init download message while already downloading\n" );
+		clWarning() << "Got init download message while already downloading";
 		return;
 	}
 
 	if( size == (size_t)-1 ) {
 		// means that download was refused
-		Com_Printf( "Server refused download request: %s\n", url ); // if it's refused, url field holds the reason
+		// if it's refused, url field holds the reason
+		clWarning() << "Server refused download request" << wsw::StringView( url );
 		CL_DownloadDone();
 		return;
 	}
 
 	if( size <= 0 ) {
-		Com_Printf( "Server gave invalid size, not downloading\n" );
+		clWarning() << "Server gave invalid size, not downloading";
 		CL_DownloadDone();
 		return;
 	}
 
 	if( checksum == 0 ) {
-		Com_Printf( "Server didn't provide checksum, not downloading\n" );
+		clWarning() << "Server didn't provide checksum, not downloading";
 		CL_DownloadDone();
 		return;
 	}
 
 	if( !COM_ValidateRelativeFilename( filename ) ) {
-		Com_Printf( "Not downloading, invalid filename: %s\n", filename );
+		clWarning() << "Not downloading, invalid filename" << wsw::StringView( filename );
 		CL_DownloadDone();
 		return;
 	}
@@ -366,23 +367,22 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 	}
 
 	if( !strchr( filename, '/' ) ) {
-		Com_Printf( "Refusing to download file with no gamedir: %s\n", filename );
+		clWarning() << "Refusing to download file with no gamedir", wsw::StringView( filename );
 		CL_DownloadDone();
 		return;
 	}
 
 	// check that it is in game or basegame dir
 	const wsw::StringView fileNameView( filename );
-	if( !fileNameView.startsWith( kDataDirectory ) ||
-	    fileNameView.maybeAt( kDataDirectory.size() ) != std::optional( '/' ) ) {
-		Com_Printf( "Can't download, invalid game directory: %s\n", filename );
+	if( !fileNameView.startsWith( kDataDirectory ) || fileNameView.maybeAt( kDataDirectory.size() ) != std::optional( '/' ) ) {
+		clWarning() << "Can't download, invalid game directory: %s\n" << wsw::StringView( filename );
 		CL_DownloadDone();
 		return;
 	}
 
 	if( FS_CheckPakExtension( filename ) ) {
 		if( strchr( strchr( filename, '/' ) + 1, '/' ) ) {
-			Com_Printf( "Refusing to download pack file to subdirectory: %s\n", filename );
+			clWarning() << "Refusing to download pack file to subdirectory: %s\n" << wsw::StringView( filename );
 			CL_DownloadDone();
 			return;
 		}
@@ -395,7 +395,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		}
 
 		if( FS_PakFileExists( filename ) ) {
-			Com_Printf( "Can't download, file already exists: %s\n", filename );
+			clWarning() << "Can't download, file already exists" << wsw::StringView( filename );
 			CL_DownloadDone();
 			return;
 		}
@@ -403,7 +403,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		explicit_pure_download = FS_IsExplicitPurePak( filename, NULL );
 	} else {
 		if( strcmp( cls.download.requestname, strchr( filename, '/' ) + 1 ) ) {
-			Com_Printf( "Can't download, got different file than requested: %s\n", filename );
+			clWarning() << "Can't download, got different file than requested" << wsw::StringView( filename );
 			CL_DownloadDone();
 			return;
 		}
@@ -414,7 +414,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 			dl = cls.download.list;
 			while( dl != NULL ) {
 				if( !Q_stricmp( dl->filename, filename ) ) {
-					Com_Printf( "Skipping, already tried downloading: %s\n", filename );
+					clWarning() << "Skipping, already tried downloading" << wsw::StringView( filename );
 					CL_DownloadDone();
 					return;
 				}
@@ -434,7 +434,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		Q_snprintfz( cls.download.name, alloc_size, "%s", filename );
 	} else {
 		if( FS_DownloadsDirectory() == NULL ) {
-			Com_Printf( "Can't download, downloads directory is disabled\n" );
+			clWarning() << "Can't download, downloads directory is disabled";
 			CL_DownloadDone();
 			return;
 		}
@@ -619,7 +619,7 @@ void CL_StopServerDownload( void ) {
 */
 static void CL_RetryDownload( void ) {
 	if( ++cls.download.retries > 5 ) {
-		Com_Printf( "Download timed out: %s\n", cls.download.name );
+		clNotice() << "Download timed out" << wsw::StringView( cls.download.name );
 
 		// let the server know we're done
 		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) );
@@ -642,7 +642,7 @@ void CL_CheckDownloadTimeout( void ) {
 	if( cls.download.filenum ) {
 		CL_RetryDownload();
 	} else {
-		Com_Printf( "Download request timed out.\n" );
+		clWarning() << "Download request timed out";
 		CL_DownloadDone();
 	}
 }
@@ -652,7 +652,7 @@ void CL_CheckDownloadTimeout( void ) {
 */
 void CL_DownloadStatus_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
-		Com_Printf( "No download active\n" );
+		clNotice() << "No download active";
 		return;
 	}
 
@@ -670,17 +670,17 @@ void CL_DownloadStatus_f( const CmdArgs & ) {
 */
 void CL_DownloadCancel_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
-		Com_Printf( "No download active\n" );
+		clNotice() << "No download active";
 		return;
 	}
 
 	if( !cls.download.name ) {
 		CL_DownloadDone();
-		Com_Printf( "Canceled download request\n" );
+		clNotice() << "Canceled download request";
 		return;
 	}
 
-	Com_Printf( "Canceled download of %s\n", cls.download.name );
+	clNotice() << "Canceled download of" << wsw::StringView( cls.download.name );
 
 	cls.download.cancelled = true;
 
@@ -710,32 +710,32 @@ static void CL_ParseDownload( msg_t *msg ) {
 	}
 
 	if( msg->readcount + size > msg->cursize ) {
-		Com_Printf( "Error: Download message didn't have as much data as it promised\n" );
+		clWarning() << "Download message didn't have as much data as it promised";
 		CL_RetryDownload();
 		return;
 	}
 
 	if( !cls.download.filenum ) {
-		Com_Printf( "Error: Download message while not dowloading\n" );
+		clWarning() << "Download message while not dowloading";
 		msg->readcount += size;
 		return;
 	}
 
 	if( Q_stricmp( cls.download.name, svFilename ) ) {
-		Com_Printf( "Error: Download message for wrong file\n" );
+		clWarning() << "Download message for wrong file";
 		msg->readcount += size;
 		return;
 	}
 
 	if( offset + size > cls.download.size ) {
-		Com_Printf( "Error: Invalid download message\n" );
+		clWarning() << "Invalid download message";
 		msg->readcount += size;
 		CL_RetryDownload();
 		return;
 	}
 
 	if( cls.download.offset != offset ) {
-		Com_Printf( "Error: Download message for wrong position\n" );
+		clWarning() << "Download message for wrong position";
 		msg->readcount += size;
 		CL_RetryDownload();
 		return;
@@ -755,7 +755,7 @@ static void CL_ParseDownload( msg_t *msg ) {
 
 		CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
 	} else {
-		Com_Printf( "Download complete: %s\n", cls.download.name );
+		clWarning() << "Download complete" << wsw::StringView( cls.download.name );
 
 		CL_DownloadComplete();
 
@@ -782,7 +782,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	int http_portnum;
 	bool old_sv_pure;
 
-	Com_DPrintf( "Serverdata packet received.\n" );
+	clDebug() << "Serverdata packet received";
 
 	// wipe the client_state_t struct
 
@@ -883,9 +883,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 		Steam_AdvertiseGame( cls.serveraddress.address.ipv4.ip, NET_GetAddressPort( &cls.serveraddress ) );
 	}
 
-	// separate the printfs so the server message can have a color
-	Com_Printf( S_COLOR_WHITE "\n" "=====================================\n" );
-	Com_Printf( S_COLOR_WHITE "%s\n\n", cl.servermessage );
+	clNotice() << wsw::StringView( cl.servermessage );
 }
 
 /*
@@ -930,7 +928,7 @@ static void CL_ParseFrame( msg_t *msg ) {
 
 		if( cl_debug_timeDelta->integer ) {
 			if( oldSnap != NULL && ( oldSnap->serverFrame + 1 != snap->serverFrame ) ) {
-				Com_Printf( S_COLOR_RED "***** SnapShot lost\n" );
+				clWarning() << "Snapshot lost";
 			}
 		}
 
@@ -962,7 +960,7 @@ static void CL_ParseFrame( msg_t *msg ) {
 */
 static void CL_Multiview_f( const CmdArgs &cmdArgs ) {
 	cls.mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
-	Com_Printf( "multiview: %i\n", cls.mv );
+	clNotice() << "Multiview:" << cls.mv;
 }
 
 /*

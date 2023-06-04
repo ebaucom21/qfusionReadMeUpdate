@@ -245,7 +245,7 @@ static void SV_ReadPackets( void ) {
 
 				addr_port = NET_GetAddressPort( &address );
 				if( NET_GetAddressPort( &cl->netchan.remoteAddress ) != addr_port ) {
-					Com_Printf( "SV_ReadPackets: fixing up a translated port\n" );
+					svNotice() << "SV_ReadPackets: fixing up a translated port";
 					NET_SetAddressPort( &cl->netchan.remoteAddress, addr_port );
 				}
 

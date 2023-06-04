@@ -71,9 +71,7 @@ auto MaterialParser::exec() -> shader_t * {
 		if( !token.equals( wsw::StringView( "{" ) ) ) {
 			m_lexer->unGetToken();
 			if( !parseKey() ) {
-				wsw::String tokenString( token.data(), token.size() );
-				assert( m_name.isZeroTerminated() );
-				Com_Printf( S_COLOR_YELLOW "Failed to parse a key `%s` in %s\n", tokenString.data(), m_name.data() );
+				rWarning() << "Failed to parse a key" << token << "in" << m_name;
 				return nullptr;
 			}
 
@@ -85,7 +83,7 @@ auto MaterialParser::exec() -> shader_t * {
 		}
 
 		if( m_passes.full() ) {
-			Com_Printf( S_COLOR_YELLOW "Too many passes\n" );
+			rWarning() << "Too many passes in" << m_name;
 			return nullptr;
 		}
 
@@ -93,19 +91,19 @@ auto MaterialParser::exec() -> shader_t * {
 		memset( newPass, 0, sizeof( shaderpass_t ) );
 
 		if( !parsePass() ) {
-			Com_Printf( S_COLOR_YELLOW "Failed to parse a pass in %s\n", m_name.data() );
+			rWarning() << "Failed to parse a pass in" << m_name;
 			return nullptr;
 		}
 
 		auto maybeNextToken = m_lexer->getNextToken();
 		if( !maybeNextToken ) {
-			Com_Printf( S_COLOR_YELLOW "Missing a closing brace of a pass\n" );
+			rWarning() << "Missing a closing brace of a pass";
 			return nullptr;
 		}
 
 		auto nextToken = *maybeNextToken;
 		if( !nextToken.equals( wsw::StringView( "}" ) ) ) {
-			Com_Printf( S_COLOR_YELLOW "Missing a closing brace of a pass\n" );
+			rWarning() << "Missing a closing brace of a pass";
 			return nullptr;
 		}
 
@@ -130,7 +128,7 @@ auto MaterialParser::exec() -> shader_t * {
 	}
 
 	if( m_conditionalBlockDepth ) {
-		Com_Printf( S_COLOR_YELLOW "Syntax error. Is an `endif` missing?\n" );
+		rWarning() << "Syntax error. Is an `endif` missing?";
 		return nullptr;
 	}
 
@@ -141,7 +139,7 @@ bool MaterialParser::parsePass() {
 	for(;;) {
 		const auto maybeToken = m_lexer->getNextToken();
 		if( !maybeToken ) {
-			Com_Printf( S_COLOR_YELLOW "Failed to get a next token in a pass\n" );
+			rWarning() << "Failed to get a next token in pass";
 			return false;
 		}
 
@@ -159,8 +157,7 @@ bool MaterialParser::parsePass() {
 		}
 
 		if( !parsePassKey() ) {
-			wsw::String s( token.data(), token.size() );
-			Com_Printf( "Failed to parse a key (len=%d) %s in %s\n", (int)token.size(), s.data(), m_name.data() );
+			rWarning() << "Failed to parse the pass key" << token << "in" << m_name;
 			return false;
 		}
 
@@ -1092,8 +1089,7 @@ bool MaterialParser::parseGlossIntensity() {
 
 bool MaterialParser::parseTemplate() {
 	if( m_lexer != &m_defaultLexer ) {
-		// TODO:
-		Com_Printf( "Recursive template" );
+		rWarning() << "Recursive template in" << m_name;
 		return false;
 	}
 

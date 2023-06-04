@@ -6,6 +6,7 @@
 #include <array>
 
 #include "../qcommon/wswexceptions.h"
+#include "../qcommon/outputmessages.h"
 
 namespace wsw { class StringView; }
 
@@ -57,6 +58,29 @@ namespace wsw {
 [[nodiscard]]
 auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QImage;
 
+}
+
+#define uiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Debug ) ).getWriter()
+#define uiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Info ) ).getWriter()
+#define uiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Warning ) ).getWriter()
+#define uiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Error ) ).getWriter()
+
+template <typename Stream>
+[[maybe_unused]]
+inline auto operator<<( wsw::TextStreamWriter<Stream> &writer, const QString &string ) -> wsw::TextStreamWriter<Stream> & {
+	writer << string.toUtf8();
+	return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+inline auto operator<<( wsw::TextStreamWriter<Stream> &writer, const QSize &size ) -> wsw::TextStreamWriter<Stream> & {
+	writer << size.width();
+	writer.hasPendingSeparator = false;
+	writer << 'x';
+	writer.hasPendingSeparator = false;
+	writer << size.height();
+	return writer;
 }
 
 #endif
