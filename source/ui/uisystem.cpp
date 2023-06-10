@@ -320,6 +320,8 @@ public:
 	Q_PROPERTY( qreal maxStrongCrosshairSize MEMBER s_maxStrongCrosshairSize CONSTANT );
 	Q_PROPERTY( qreal crosshairSizeStep MEMBER s_crosshairSizeStep CONSTANT );
 	Q_PROPERTY( qreal fullscreenOverlayOpacity MEMBER s_fullscreenOverlayOpacity CONSTANT );
+	Q_PROPERTY( qreal mainMenuButtonWidthDp MEMBER s_mainMenuButtonWidthDp CONSTANT );
+	Q_PROPERTY( qreal mainMenuButtonTrailWidthDp MEMBER s_mainMenuButtonTrailWidthDp CONSTANT )
 	Q_PROPERTY( QString regularFontFamily MEMBER s_regularFontFamily CONSTANT );
 	Q_PROPERTY( QString headingFontFamily MEMBER s_headingFontFamily CONSTANT );
 	Q_PROPERTY( QString numbersFontFamily MEMBER s_numbersFontFamily CONSTANT );
@@ -360,6 +362,8 @@ private:
 	static inline const qreal s_maxStrongCrosshairSize { kStrongCrosshairSizeProps.maxSize };
 	static inline const qreal s_crosshairSizeStep { 1.0 };
 	static inline const qreal s_fullscreenOverlayOpacity { 0.90 };
+	static inline const qreal s_mainMenuButtonWidthDp { 224.0 };
+	static inline const qreal s_mainMenuButtonTrailWidthDp { 224.0 * 1.25 };
 
 	static inline const QString s_regularFontFamily { "Ubuntu" };
 	static inline const QString s_headingFontFamily { "IBM Plex Sans" };

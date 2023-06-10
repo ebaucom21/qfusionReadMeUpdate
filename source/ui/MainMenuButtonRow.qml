@@ -12,6 +12,7 @@ Item {
 	property string text
 	property bool leaningRight: false
 	property real expansionFrac: 0.0
+	property bool enableSlidingOvershoot: true
 
 	signal clicked()
 
@@ -59,12 +60,22 @@ Item {
 		}
 	]
 
-	transitions: Transition {
-		AnchorAnimation {
-			duration: 333
-			easing.type: Easing.OutBack
-		}
-	}
+	transitions: [
+	    Transition {
+	        to: "centered"
+		    AnchorAnimation {
+			    duration: 333
+			    easing.type: Easing.OutBack
+		    }
+	    },
+	    Transition {
+	        from: "centered"
+	        AnchorAnimation {
+	            duration: 333
+	            easing.type: enableSlidingOvershoot ? Easing.OutBack : Easing.OutCubic
+	        }
+	    }
+	]
 
 	state: "centered"
 
@@ -77,7 +88,7 @@ Item {
 
 	Component {
 		id: leftTrailComponent
-		CentralOverlayButtonTrail {
+		MainMenuButtonTrail {
 			leftColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 			rightColor: root.trailDecayColor
 			transformMatrix: root.transformMatrix
@@ -103,7 +114,7 @@ Item {
 	Rectangle {
 		id: contentRow
 		height: 40
-		width: mouseArea.containsMouse ? 224 + 12 : 224
+		width: mouseArea.containsMouse ? wsw.mainMenuButtonWidthDp + 12 : wsw.mainMenuButtonWidthDp
 		radius: 3
 		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 		Behavior on width { SmoothedAnimation { duration: 333 } }
@@ -161,7 +172,7 @@ Item {
 
 	Component {
 		id: rightTrailComponent
-		CentralOverlayButtonTrail {
+		MainMenuButtonTrail {
 			leftColor: root.trailDecayColor
 			rightColor: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 			transformMatrix: root.transformMatrix

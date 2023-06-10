@@ -2,17 +2,14 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
 import QtQuick.Layouts 1.12
+import net.warsow 2.6
 
 Item {
 	id: root
-    anchors.centerIn: parent
-    width: Math.max(parent.width, minFrameWidth)
-    height: parent.height
 
-    readonly property real minFrameWidth: 1600
+    property bool shouldShowExpandedButtons
 
-    readonly property bool shouldHideExpandedButtons: parent.width < minFrameWidth
-    readonly property bool areButtonsVisible: !shouldHideExpandedButtons || settingsButton.expansionFrac < 1.0
+    readonly property bool areButtonsVisible: shouldShowExpandedButtons || someOverlayButton.expansionFrac < 1.0
 
 	property real expansionFrac: someOverlayButton.expansionFrac
 
@@ -31,22 +28,6 @@ Item {
     readonly property int pageHelp: 7
     readonly property int pageQuit: 8
     readonly property int pageTagMax: 8
-
-    ToolButton {
-        enabled: !areButtonsVisible
-        visible: !areButtonsVisible
-        anchors.top: parent.top
-        anchors.topMargin: 8
-        anchors.left: parent.left
-        anchors.leftMargin: Math.max(0.5 * (minFrameWidth - root.parent.width) + 8, 0)
-        contentItem: Label {
-            font.family: wsw.symbolsFontFamily
-            font.weight: Font.Medium
-            font.pointSize: 12
-            text: "\u276E"
-        }
-        onClicked: handleKeyBack()
-    }
 
 	Item {
 		id: logoHolder
@@ -68,37 +49,41 @@ Item {
 		anchors.right: parent.right
 		spacing: 18
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageNews
 			id: someOverlayButton
 			text: "News"
 			leaningRight: true
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageNews)
 			onExpansionFracChanged: logoHolder.opacity = 1.0 - someOverlayButton.expansionFrac
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageProfile
 			text: "Profile"
 			leaningRight: true
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageProfile)
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pagePlayOnline
 			text: "Play online"
 			leaningRight: true
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pagePlayOnline)
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageLocalGame
 			text: "Local game"
 			leaningRight: true
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageLocalGame)
 		}
 	}
@@ -111,36 +96,39 @@ Item {
 		anchors.right: parent.right
 		spacing: 16
 
-		CentralOverlayButton {
-		    id: settingsButton
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageSettings
 			text: "Settings"
 			leaningRight: false
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageSettings)
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageDemos
 			text: "Demos"
 			leaningRight: false
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageDemos)
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageHelp
 			text: "Help"
 			leaningRight: false
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageHelp)
 		}
 
-		CentralOverlayButton {
+		MainMenuButtonRow {
 		    highlighted: root.highlightedPageTag === root.pageQuit
 			text: "Quit"
 			leaningRight: false
 			Layout.fillWidth: true
+			enableSlidingOvershoot: root.shouldShowExpandedButtons
 			onClicked: root.handleButtonClicked(root.pageQuit)
 		}
 	}
@@ -227,7 +215,7 @@ Item {
     }
 
     function _handleKeyEvent(event) {
-        if (shouldHideExpandedButtons && expansionFrac > 0.0) {
+        if (!shouldShowExpandedButtons && expansionFrac > 0.0) {
             if (event.key === Qt.Key_Escape) {
                 return handleKeyBack()
             }

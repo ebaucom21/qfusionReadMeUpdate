@@ -1,6 +1,7 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
+import net.warsow 2.6
 
 Row {
 	id: root
@@ -9,16 +10,19 @@ Row {
 	property var transformMatrix
 	property color leftColor
 	property color rightColor
+	readonly property real elementWidth: 20
+	readonly property real elementsCount: Math.floor(wsw.mainMenuButtonTrailWidthDp / (elementWidth + root.spacing))
 
 	Repeater {
-		model: 10
+		model: elementsCount
 		Rectangle {
-			property real frac: index / 10.0
+			property real frac: index / elementsCount
+			// TODO: Must use gamma-correct lerp
 			color: Qt.rgba(leftColor.r * frac + rightColor.r * (1.0 - frac),
 						   leftColor.g * frac + rightColor.g * (1.0 - frac),
 						   leftColor.b * frac + rightColor.b * (1.0 - frac),
 						   leftColor.a * frac + rightColor.a * (1.0 - frac));
-			width: 20
+			width: elementWidth
 			height: 40
 			radius: 3
 

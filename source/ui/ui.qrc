@@ -5,9 +5,6 @@
         <file>AutoFittingComboBox.qml</file>
         <file>BindableCommand.qml</file>
         <file>BindableCommandsColumn.qml</file>
-        <file>CentralOverlayButton.qml</file>
-        <file>CentralOverlayButtonTrail.qml</file>
-        <file>CentralOverlayGroup.qml</file>
         <file>ColorPickerItem.qml</file>
         <file>ColorPickerColorItem.qml</file>
         <file>CommandsPane.qml</file>
@@ -19,7 +16,7 @@
         <file>CVarAwareModelSelector.qml</file>
         <file>CVarAwareSegmentedRow.qml</file>
         <file>CVarAwareSlider.qml</file>
-	<file>CVarAwareSliderWithBox.qml</file>
+	    <file>CVarAwareSliderWithBox.qml</file>
         <file>CVarAwareTextField.qml</file>
         <file>CVarAwareVideoModesComboBox.qml</file>
         <file>DemoPlaybackMenu.qml</file>
@@ -70,6 +67,9 @@
         <file>LocalGameDetailArrangement.qml</file>
         <file>LocalGameListDelegate.qml</file>
         <file>MainMenu.qml</file>
+        <file>MainMenuButtonRow.qml</file>
+        <file>MainMenuButtonTrail.qml</file>
+        <file>MainMenuPrimaryMenu.qml</file>
         <file>MouseButtonShape.qml</file>
         <file>MouseKey.qml</file>
         <file>MouseKeysPane.qml</file>

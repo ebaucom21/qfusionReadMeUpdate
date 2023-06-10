@@ -31,7 +31,7 @@ Item {
         anchors.fill: parent
         horizontalRadius: parent.width
         // Stretches it vertically making it almost a column in the expanded state
-        verticalRadius: parent.height * (1.0 + 3.0 * centralOverlay.expansionFrac)
+        verticalRadius: parent.height * (1.0 + 3.0 * primaryMenu.expansionFrac)
         gradient: Gradient {
             GradientStop {
                 position: 0.00
@@ -40,13 +40,17 @@ Item {
             GradientStop {
                 position: 1.00
 	            // The gradient makes it look denser so the base value is slightly lower
-                color: wsw.colorWithAlpha(Material.backgroundColor, wsw.fullscreenOverlayOpacity - 0.05)
+                color: wsw.colorWithAlpha(Qt.darker(Material.backgroundColor, 1.2), wsw.fullscreenOverlayOpacity - 0.05)
             }
         }
     }
 
-	CentralOverlayGroup {
-		id: centralOverlay
+	MainMenuPrimaryMenu {
+		id: primaryMenu
+		anchors.centerIn: parent
+		shouldShowExpandedButtons: parent.width >= 2400 && (parent.width / parent.height) >= 2.0
+        width: parent.width + (shouldShowExpandedButtons ? 0 : 2 * (wsw.mainMenuButtonWidthDp + wsw.mainMenuButtonTrailWidthDp))
+        height: parent.height
 	}
 
 	Component {
@@ -88,15 +92,15 @@ Item {
         id: quitComponent
         QuitPage {
             backTrigger: () => {
-                centralOverlay.handleKeyBack()
+                primaryMenu.handleKeyBack()
             }
         }
     }
 
     StackView {
 		id: contentPane
-		hoverEnabled: centralOverlay.expansionFrac >= 1.0
-		opacity: centralOverlay.expansionFrac
+		hoverEnabled: primaryMenu.expansionFrac >= 1.0
+		opacity: primaryMenu.expansionFrac
 		anchors.top: parent.top
 		anchors.bottom: parent.bottom
 		anchors.horizontalCenter: parent.horizontalCenter
@@ -104,28 +108,28 @@ Item {
 	}
 
     Connections {
-        target: centralOverlay
+        target: primaryMenu
         onActivePageTagChanged: {
-            let tag = centralOverlay.activePageTag
+            let tag = primaryMenu.activePageTag
             if (!tag) {
                 contentPane.clear()
                 return
             }
-            if (tag === centralOverlay.pageNews) {
+            if (tag === primaryMenu.pageNews) {
                 contentPane.replace(newsComponent)
-            } else if (tag === centralOverlay.pageProfile) {
+            } else if (tag === primaryMenu.pageProfile) {
                 contentPane.replace(profileComponent)
-            } else if (tag === centralOverlay.pagePlayOnline) {
+            } else if (tag === primaryMenu.pagePlayOnline) {
                 contentPane.replace(playOnlineComponent)
-            } else if (tag === centralOverlay.pageLocalGame) {
+            } else if (tag === primaryMenu.pageLocalGame) {
                 contentPane.replace(localGameComponent)
-            } else if (tag === centralOverlay.pageSettings) {
+            } else if (tag === primaryMenu.pageSettings) {
                 contentPane.replace(settingsComponent)
-            } else if (tag === centralOverlay.pageDemos) {
+            } else if (tag === primaryMenu.pageDemos) {
                 contentPane.replace(demosComponent)
-            } else if (tag === centralOverlay.pageHelp) {
+            } else if (tag === primaryMenu.pageHelp) {
                 contentPane.replace(helpComponent)
-            } else if (tag === centralOverlay.pageQuit) {
+            } else if (tag === primaryMenu.pageQuit) {
                 contentPane.replace(quitComponent)
             }
             contentPane.currentItem.forceActiveFocus()
@@ -147,7 +151,7 @@ Item {
 	            }
 	        }
 	    }
-	    if (centralOverlay.handleKeyEvent(event)) {
+	    if (primaryMenu.handleKeyEvent(event)) {
             return
         }
 
