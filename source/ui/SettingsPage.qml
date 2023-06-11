@@ -68,9 +68,10 @@ Item {
 
     Loader {
         anchors.bottom: parent.bottom
+        anchors.bottomMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
-        width: parent.width
-        height: 64
+        width: 2 * parent.width / 3
+        height: 72
         active: wsw.hasPendingCVarChanges
         sourceComponent: applyChangesComponent
     }
@@ -85,10 +86,10 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                radius: 2
-                width: parent.width - 20
-                height: parent.height - 20
-                color: Qt.lighter(Material.background, 1.5)
+                radius: 4
+                width: parent.width - 16
+                height: parent.height - 16
+                color: wsw.colorWithAlpha(Qt.darker(Material.background, 1.25), 0.67)
             }
 
             Button {
@@ -99,6 +100,7 @@ Item {
                 }
                 text: "Revert"
                 flat: true
+                width: wsw.popupButtonWidth
                 onClicked: wsw.rollbackPendingCVarChanges()
             }
 
@@ -110,6 +112,7 @@ Item {
                 }
                 text: "Accept"
                 flat: false
+                width: wsw.popupButtonWidth
                 highlighted: true
                 onClicked: wsw.commitPendingCVarChanges()
             }

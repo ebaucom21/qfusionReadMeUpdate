@@ -37,6 +37,7 @@ Item {
 
         contentItem: PopupContentItem {
             title: "Quit the game?"
+            active: popup.visible
             hasAcceptButton: true
             hasRejectButton: true
             acceptButtonText: "Go back"

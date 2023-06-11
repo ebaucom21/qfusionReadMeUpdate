@@ -60,6 +60,7 @@ Item {
                 width: popupLikeBackground.width
                 height: popupLikeBackground.height
                 title: "Connection refused"
+                active: true
                 anchors.centerIn: parent
                 buttonsRowBottomMargin: +4
                 buttonsRowRightMargin: +8

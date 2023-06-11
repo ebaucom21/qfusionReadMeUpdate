@@ -8,7 +8,7 @@ Rectangle {
     id: root
     Rectangle {
         width: parent.width
-        height: 3
+        height: 4
         anchors.top: parent.top
         color: Material.accentColor
     }

@@ -13,6 +13,7 @@ Item {
     default property Component contentComponent
 
     property string title
+    property bool active
     property string acceptButtonText: "OK"
     property string rejectButtonText: "Cancel"
 
@@ -50,6 +51,7 @@ Item {
 
     Loader {
         id: loader
+        active: root.active
         anchors.top: titleLabel.bottom
         anchors.bottom: buttonsRow.top
         anchors.left: parent.left
@@ -72,6 +74,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.right: acceptButton.left
             anchors.rightMargin: 12
+            width: wsw.popupButtonWidth
             visible: hasRejectButton
             enabled: rejectButtonEnabled
             flat: true
@@ -103,6 +106,7 @@ Item {
             id: acceptButton
             anchors.bottom: parent.bottom
             anchors.right: parent.right
+            width: wsw.popupButtonWidth
             visible: hasAcceptButton
             enabled: acceptButtonEnabled
             highlighted: acceptButtonEnabled

@@ -232,6 +232,7 @@ RowLayout {
 
         contentItem: PopupContentItem {
             title: "Select a color"
+            active: popup.visible
             hasAcceptButton: popup.hasChanges
             acceptButtonText: "Select"
             onAccepted: {
@@ -241,21 +242,26 @@ RowLayout {
             onRejected: popup.closeSelf()
             onDismissed: popup.closeSelf()
 
-            contentComponent: Item {
-                RowLayout {
-                    id: slidersRow
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: 24
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 8
-                    spacing: -8
+            contentComponent: RowLayout {
+                Rectangle {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 32
+                    Layout.rightMargin: 32
+                    width: 32; height: 32; radius: 3
+                    color: popup.selectedColor ? popup.selectedColor : "transparent"
+                }
+
+                ColumnLayout {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 8
+                    Layout.rightMargin: 8
+                    spacing: -12
 
                     Slider {
                         id: rSlider
                         value: popup.initialSliderRValue
                         Layout.fillHeight: true
-                        orientation: Qt.Vertical
+                        Layout.fillWidth: true
                         Material.accent: Qt.rgba(1.0, 0.0, 0.0, 1.0)
                         onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
                     }
@@ -263,7 +269,7 @@ RowLayout {
                         id: gSlider
                         value: popup.initialSliderGValue
                         Layout.fillHeight: true
-                        orientation: Qt.Vertical
+                        Layout.fillWidth: true
                         Material.accent: Qt.rgba(0.0, 1.0, 0.0, 1.0)
                         onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
                     }
@@ -271,29 +277,17 @@ RowLayout {
                         id: bSlider
                         value: popup.initialSliderBValue
                         Layout.fillHeight: true
-                        orientation: Qt.Vertical
+                        Layout.fillWidth: true
                         Material.accent: Qt.rgba(0.0, 0.0, 1.0, 1.0)
                         onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
                     }
                 }
 
                 Rectangle {
-                    anchors {
-                        verticalCenter: slidersRow.verticalCenter
-                        left: parent.left
-                        leftMargin: 32
-                    }
-                    width: 28; height: 28; radius: 2
-                    color: popup.selectedColor ? popup.selectedColor : "transparent"
-                }
-
-                Rectangle {
-                    anchors {
-                        verticalCenter: slidersRow.verticalCenter
-                        right: parent.right
-                        rightMargin: 32
-                    }
-                    width: 28; height: 28; radius: 2
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 32
+                    Layout.rightMargin: 32
+                    width: 32; height: 32; radius: 3
                     color: popup.selectedColor ? popup.selectedColor : "transparent"
                 }
             }
