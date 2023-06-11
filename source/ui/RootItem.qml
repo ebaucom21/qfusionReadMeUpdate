@@ -108,11 +108,13 @@ Item {
         }
     }
 
-    function enablePopupOverlay() {
+    function enterPopupMode() {
         popupOverlay.visible = true
     }
 
-    function disablePopupOverlay() {
+    function leavePopupMode() {
         popupOverlay.visible = false
+        // TODO: Try tracking Window::activeFocusItem?
+        rootItem.forceActiveFocus()
     }
 }

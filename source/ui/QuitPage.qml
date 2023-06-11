@@ -21,14 +21,14 @@ Item {
 
         function openSelf() {
             popup.parent = rootItem.windowContentItem
-            rootItem.enablePopupOverlay()
+            rootItem.enterPopupMode()
             popup.open()
         }
 
         function closeSelf() {
             if (opened) {
                 popup.close()
-                rootItem.disablePopupOverlay()
+                rootItem.leavePopupMode()
                 quitPage.backTrigger()
             }
         }

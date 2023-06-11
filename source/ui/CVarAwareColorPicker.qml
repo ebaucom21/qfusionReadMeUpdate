@@ -202,7 +202,7 @@ RowLayout {
             popup.selectedColor = customColor
             popup.hasChanges = false
             popup.parent = rootItem.windowContentItem
-            rootItem.enablePopupOverlay()
+            rootItem.enterPopupMode()
             wsw.registerNativelyDrawnItemsOccluder(background)
             popup.open()
         }
@@ -212,7 +212,7 @@ RowLayout {
                 popup.close()
                 popup.selectedColor = undefined
                 popup.hasChanges = false
-                rootItem.disablePopupOverlay()
+                rootItem.leavePopupMode()
                 wsw.unregisterNativelyDrawnItemsOccluder(background)
             }
         }
