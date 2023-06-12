@@ -10,6 +10,10 @@ Item {
 
     property var windowContentItem
 
+    property bool isBlurringBackground
+    property bool isBlurringLimitedToRect
+    property rect blurRect
+
     Window.onWindowChanged: {
         if (Window.window) {
             Window.window.requestActivate()
@@ -80,25 +84,27 @@ Item {
     }
 
     ShaderEffectSource {
-        visible: popupOverlay.visible
         id: effectSource
-        hideSource: popupOverlay.visible
-        anchors.centerIn: shaderSourceItem
-        width: popupOverlay.visible ? sourceItem.width : 0
-        height: popupOverlay.visible ? sourceItem.height : 0
+        visible: false
+        hideSource: isBlurringBackground && !isBlurringLimitedToRect
+        x: blurRect.x
+        y: blurRect.y
+        width: blurRect.width
+        height: blurRect.height
         sourceItem: shaderSourceItem
+        sourceRect: blurRect
     }
 
     FastBlur {
-        visible: popupOverlay.visible
+        visible: isBlurringBackground
         anchors.fill: effectSource
         source: effectSource
-        radius: 64
+        radius: 32
     }
 
     MouseArea {
         id: popupOverlay
-        visible: false
+        visible: isBlurringBackground && !isBlurringLimitedToRect
         hoverEnabled: true
         anchors.fill: parent
 
@@ -108,12 +114,21 @@ Item {
         }
     }
 
-    function enterPopupMode() {
-        popupOverlay.visible = true
+    function enterPopupMode(limitToItem) {
+        if (limitToItem) {
+            isBlurringLimitedToRect = true
+            blurRect                = Qt.rect(limitToItem.x, limitToItem.y, limitToItem.width, limitToItem.height)
+        } else {
+            isBlurringLimitedToRect = false
+            blurRect = Qt.rect(0, 0, rootItem.width, rootItem.height)
+        }
+        isBlurringBackground = true
     }
 
     function leavePopupMode() {
-        popupOverlay.visible = false
+        isBlurringBackground    = false
+        isBlurringLimitedToRect = false
+        blurRect                = Qt.rect(0, 0, 0, 0)
         // TODO: Try tracking Window::activeFocusItem?
         rootItem.forceActiveFocus()
     }
