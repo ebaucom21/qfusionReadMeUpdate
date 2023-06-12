@@ -46,10 +46,9 @@ RowLayout {
         haloColor: Material.accentColor
         onMouseEnter: root.expandAt(index)
         onMouseLeave: root.shrinkBack()
-        onClicked: popup.openSelf(root.customColor)
+        onClicked: popup.openForColor(root.customColor)
 
-        readonly property color crossColor:
-            containsMouse ? Material.accentColor : Material.foreground
+        readonly property color crossColor: containsMouse ? Material.accentColor : Material.foreground
 
         contentItem: Item {
             anchors.fill: parent
@@ -179,42 +178,28 @@ RowLayout {
 
     Popup {
         id: popup
-        modal: true
         focus: true
         dim: false
-        closePolicy: Popup.NoAutoClose
-        anchors.centerIn: parent
-        width: wsw.desiredPopupWidth
-        height: wsw.desiredPopupHeight
 
-        // TODO: Figure out a better way to pass args to the contentComopnent instance
-        property real initialSliderRValue: 1.0
-        property real initialSliderGValue: 1.0
-        property real initialSliderBValue: 1.0
+        x: root.width - 24
+        y: -12
+        width: 128 + 64 + 16
+        height: 128
+        transformOrigin: Item.Top
+        topMargin: 12
+        bottomMargin: 12
+        verticalPadding: 8
 
         property var selectedColor
         property bool hasChanges: false
 
-        function openSelf(customColor) {
-            popup.initialSliderRValue = customColor ? customColor.r : 1.0
-            popup.initialSliderGValue = customColor ? customColor.g : 1.0
-            popup.initialSliderBValue = customColor ? customColor.b : 1.0
+        function openForColor(customColor) {
+            rSlider.value = customColor ? customColor.r : 1.0
+            gSlider.value = customColor ? customColor.g : 1.0
+            bSlider.value = customColor ? customColor.b : 1.0
             popup.selectedColor = customColor
-            popup.hasChanges = false
-            popup.parent = rootItem.windowContentItem
-            rootItem.enterPopupMode()
-            wsw.registerNativelyDrawnItemsOccluder(background)
+            popup.hasChanges    = false
             popup.open()
-        }
-
-        function closeSelf() {
-            if (opened) {
-                popup.close()
-                popup.selectedColor = undefined
-                popup.hasChanges = false
-                rootItem.leavePopupMode()
-                wsw.unregisterNativelyDrawnItemsOccluder(background)
-            }
         }
 
         function updateSelectedColor(r, g, b) {
@@ -228,67 +213,132 @@ RowLayout {
             }
         }
 
-        background: PopupBackground {}
+        background: Rectangle {
+            radius: 5
+            color: Material.background
+            opacity: 0.67
 
-        contentItem: PopupContentItem {
-            title: "Select a color"
-            active: popup.visible
-            hasAcceptButton: popup.hasChanges
-            acceptButtonText: "Select"
-            onAccepted: {
-                 root.setSelectedCustomColor(popup.selectedColor)
-                 popup.closeSelf()
+            layer.enabled: true
+            layer.effect: ElevationEffect { elevation: 16 }
+        }
+
+        onVisibleChanged: repositionBlurRegion()
+        onXChanged: repositionBlurRegion()
+        onYChanged: repositionBlurRegion()
+        onWidthChanged: repositionBlurRegion()
+        onHeightChanged: repositionBlurRegion()
+
+        onAboutToHide: {
+            rootItem.leavePopupMode()
+        }
+
+        function repositionBlurRegion() {
+            if (popup.visible) {
+                const globalPos = parent.mapToGlobal(0, 0)
+                const inset     = 2
+
+                // TODO: It should not be named "enter/leave" as we violate balancing semantics of calls
+                rootItem.enterPopupMode(Qt.rect(globalPos.x + inset + popup.x, globalPos.y + inset + popup.y,
+                    background.width - 2 * inset, background.height - 2 * inset))
             }
-            onRejected: popup.closeSelf()
-            onDismissed: popup.closeSelf()
+        }
 
-            contentComponent: RowLayout {
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 32
-                    Layout.rightMargin: 32
-                    width: 32; height: 32; radius: 3
-                    color: popup.selectedColor ? popup.selectedColor : "transparent"
+        contentItem: ColumnLayout {
+            Material.theme: Material.Dark
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.leftMargin: 2
+                    Layout.preferredWidth: 24
+                    color: rSlider.Material.accent
+                    text: Math.round(rSlider.value * 255)
+                    font.weight: Font.Medium
+                    style: Text.Raised
+                }
+                Slider {
+                    id: rSlider
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    Material.accent: Qt.rgba(1.0, 0.0, 0.0, 1.0)
+                    Material.foreground: Material.accent
+                    onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.leftMargin: 2
+                    Layout.preferredWidth: 24
+                    color: gSlider.Material.accent
+                    text: Math.round(gSlider.value * 255)
+                    font.weight: Font.Medium
+                    style: Text.Raised
+                }
+                Slider {
+                    id: gSlider
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    Material.accent: Qt.rgba(0.0, 1.0, 0.0, 1.0)
+                    onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.leftMargin: 2
+                    Layout.preferredWidth: 24
+                    color: bSlider.Material.accent
+                    text: Math.round(bSlider.value * 255)
+                    font.weight: Font.Medium
+                    style: Text.Raised
+                }
+                Slider {
+                    id: bSlider
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    Material.accent: Qt.rgba(0.0, 0.0, 1.0, 1.0)
+                    onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: -8
+                Layout.bottomMargin: -8
+
+                RoundButton {
+                    Layout.leftMargin: -4
+                    flat: true
+                    text: "\u2714"
+                    font.family: wsw.symbolsFontFamily
+                    enabled: !!popup.selectedColor && popup.hasChanges
+                    onClicked: {
+                        root.setSelectedCustomColor(popup.selectedColor)
+                        popup.close()
+                    }
                 }
 
-                ColumnLayout {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 8
-                    Layout.rightMargin: 8
-                    spacing: -12
-
-                    Slider {
-                        id: rSlider
-                        value: popup.initialSliderRValue
-                        Layout.fillHeight: true
-                        Layout.fillWidth: true
-                        Material.accent: Qt.rgba(1.0, 0.0, 0.0, 1.0)
-                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
-                    }
-                    Slider {
-                        id: gSlider
-                        value: popup.initialSliderGValue
-                        Layout.fillHeight: true
-                        Layout.fillWidth: true
-                        Material.accent: Qt.rgba(0.0, 1.0, 0.0, 1.0)
-                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
-                    }
-                    Slider {
-                        id: bSlider
-                        value: popup.initialSliderBValue
-                        Layout.fillHeight: true
-                        Layout.fillWidth: true
-                        Material.accent: Qt.rgba(0.0, 0.0, 1.0, 1.0)
-                        onValueChanged: popup.updateSelectedColor(rSlider.value, gSlider.value, bSlider.value)
-                    }
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 4
+                    Layout.preferredHeight: 12
+                    radius: 3
+                    color: popup.selectedColor ? popup.selectedColor : "transparent"
+                    border.width: popup.selectedColor ? 0 : 1
+                    border.color: Qt.rgba(0.5, 0.5, 0.5, 0.25)
                 }
 
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: 32
-                    Layout.rightMargin: 32
-                    width: 32; height: 32; radius: 3
-                    color: popup.selectedColor ? popup.selectedColor : "transparent"
+                RoundButton {
+                    Layout.rightMargin: -4
+                    flat: true
+                    text: "\u2716"
+                    font.family: wsw.symbolsFontFamily
+                    onClicked: popup.close()
                 }
             }
         }
