@@ -6,145 +6,103 @@ import net.warsow 2.6
 
 Item {
     id: root
-    readonly property var availableCrosshairs: hudDataModel.getAvailableCrosshairs()
+    readonly property var availableRegularCrosshairs: hudDataModel.getAvailableRegularCrosshairs()
     readonly property var availableStrongCrosshairs: hudDataModel.getAvailableStrongCrosshairs()
-    readonly property bool isNotInTransition: root.StackView.view && !root.StackView.view.busy
-    readonly property color underlayColor: Qt.rgba(1.0, 1.0, 1.0, 0.07)
+    readonly property bool drawNativeParts: root.StackView.view && !root.StackView.view.busy
     readonly property real innerPaneMargin: 20.0
     readonly property real innerPaneWidth: 0.5 * root.width - innerPaneMargin
 
-    Column {
+    ColumnLayout {
+        width: 0.66 * root.width
         anchors.centerIn: parent
-        spacing: 36
-        ColumnLayout {
-            id: regularSettingsColumn
-            width: 0.66 * root.width
-            spacing: 12
+        spacing: 12
 
-            SettingsRow {
-                text: "Mouse sensitivity"
-                CVarAwareSliderWithBox {
-                    from: 0.1
-                    to: 10.0
-                    cvarName: "sensitivity"
-                }
-            }
+        SettingsLabel {
+            text: "Input settings"
+            Layout.topMargin: 16
+            Layout.bottomMargin: 16
+            Layout.maximumWidth: 99999
+            horizontalAlignment: Qt.AlignHCenter
+        }
 
-            SettingsRow {
-                text: "Crosshair damage color"
-                CVarAwareColorPicker {
-                    cvarName: "cg_crosshair_damage_color"
-                }
-            }
-
-            SettingsRow {
-                text: "Additional strong crosshair"
-                CVarAwareCrosshairSelector {
-                    drawNativePart: root.isNotInTransition
-                    nativePartOpacity: popupOverlay.visible ? 0.3 : 1.0
-                    desiredWidthOrHeight: strongSizeSlider.value
-                    fieldWidth: wsw.maxStrongCrosshairSize
-                    underlayColor: root.underlayColor
-                    model: availableStrongCrosshairs
-                    cvarName: "cg_crosshair_strong"
-                }
-            }
-
-            SettingsRow {
-                text: "Strong crosshair size"
-                CVarAwareSliderWithBox {
-                    id: strongSizeSlider
-                    from: wsw.minStrongCrosshairSize
-                    to: wsw.maxStrongCrosshairSize
-                    stepSize: wsw.crosshairSizeStep
-                    cvarName: "cg_crosshair_strong_size"
-                    fractionalPartDigits: 0
-                }
-            }
-
-            SettingsRow {
-                text: "Use separate settings per weapon"
-                CVarAwareCheckBox {
-                    id: separateSettingsCheckBox
-                    cvarName: "cg_separate_weapon_settings"
-                }
-            }
-
-            SettingsLabel {
-                text: "Weapon-specific settings"
-                Layout.topMargin: 16
-                Layout.maximumWidth: 99999
-                horizontalAlignment: Qt.AlignHCenter
+        SettingsRow {
+            text: "Mouse sensitivity"
+            CVarAwareSliderWithBox {
+                from: 0.1
+                to: 10.0
+                cvarName: "sensitivity"
             }
         }
 
-        Loader {
-            id: loader
-            width: 0.67 * root.width
-            height: item.implicitHeight
-            sourceComponent: separateSettingsCheckBox.checked ? separateCrosshairsComponent : sameCrosshairComponent
-        }
-    }
-
-    Component {
-        id: sameCrosshairComponent
-        ColumnLayout {
-            width: 0.67 * root.width
-            spacing: 12
-            opacity: 0.0
-            Behavior on opacity { NumberAnimation { duration: 200 } }
-            Component.onCompleted: opacity = 1.0
-
-            SettingsRow {
-                text: "Crosshair"
-                CVarAwareCrosshairSelector {
-                    drawNativePart: root.isNotInTransition
-                    nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
-                    desiredWidthOrHeight: sizeSlider.value
-                    fieldWidth: wsw.maxRegularCrosshairSize
-                    underlayColor: root.underlayColor
-                    color: colorPicker.selectedColor || "white"
-                    model: availableCrosshairs
-                    cvarName: "cg_crosshair"
-                }
-            }
-
-            SettingsRow {
-                text: "Crosshair size"
-                CVarAwareSliderWithBox {
-                    id: sizeSlider
-                    from: wsw.minRegularCrosshairSize
-                    to: wsw.maxRegularCrosshairSize
-                    stepSize: wsw.crosshairSizeStep
-                    cvarName: "cg_crosshair_size"
-                    fractionalPartDigits: 0
-                }
-            }
-
-            SettingsRow {
-                text: "Crosshair color"
-                CVarAwareColorPicker {
-                    id: colorPicker
-                    cvarName: "cg_crosshair_color"
-                }
+        SettingsRow {
+            text: "Smooth mouse"
+            Layout.topMargin: -12
+            CVarAwareCheckBox {
+                cvarName: "m_filter"
             }
         }
-    }
 
-    Component {
-        id: separateCrosshairsComponent
+        SettingsLabel {
+            text: "Crosshair settings"
+            Layout.topMargin: 16
+            Layout.bottomMargin: 16
+            Layout.maximumWidth: 99999
+            horizontalAlignment: Qt.AlignHCenter
+        }
+
+        SettingsRow {
+            text: "Crosshair damage color"
+            CVarAwareColorPicker {
+                cvarName: "cg_crosshair_damage_color"
+            }
+        }
+
+        SettingsRow {
+            text: "Additional strong crosshair"
+            CVarAwareComboBox {
+                id: strongComboBox
+                knownHeadingsAndValues: [["(none)"].concat(availableStrongCrosshairs), [""].concat(availableStrongCrosshairs)]
+                cvarName: "cg_crosshair_strong"
+            }
+        }
+
+        SettingsRow {
+            text: "Strong crosshair color"
+            CVarAwareColorPicker {
+                id: strongColorPicker
+                cvarName: "cg_crosshair_strong_color"
+            }
+        }
+
+        SettingsRow {
+            text: "Strong crosshair size"
+            CVarAwareSliderWithBox {
+                id: strongSizeSlider
+                from: wsw.minStrongCrosshairSize
+                to: wsw.maxStrongCrosshairSize
+                stepSize: wsw.crosshairSizeStep
+                cvarName: "cg_crosshair_strong_size"
+                fractionalPartDigits: 0
+            }
+        }
+
+        CVarAwareCheckBox {
+            id: separateCheckBox
+            Layout.alignment: Qt.AlignHCenter
+            text: "Separate per weapon"
+            cvarName: "cg_separate_weapon_settings"
+        }
 
         Item {
-            id: separateCrosshairsPane
-            implicitWidth: root.width
-            width: root.width
-            implicitHeight: Math.max(weaponsList.height, detailsPane.height)
+            id: weaponsPane
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(weaponsList.height, controlsPane.height)
             opacity: 0.0
             Behavior on opacity { NumberAnimation { duration: 200 } }
             Component.onCompleted: opacity = 1.0
 
             property int selectedIndex: 0
-            property string weaponShortName: hudDataModel.getWeaponShortName(selectedIndex + 1)
+            property string weaponShortName: hudDataModel.getWeaponShortName(weaponsPane.selectedIndex + 1)
 
             ListView {
                 id: weaponsList
@@ -162,11 +120,14 @@ Item {
                     verticalAlignment: Qt.AlignVCenter
                     font.pointSize: 12
                     font.weight: Font.Bold
-                    font.capitalization: Font.AllUppercase
-                    font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
+                    //font.capitalization: Font.AllUppercase
+                    font.letterSpacing: mouseArea.containsMouse ? 2.0 : 1.25
                     Behavior on font.letterSpacing { NumberAnimation { duration: 67 } }
-                    color: (mouseArea.containsMouse || selectedIndex === index) ? Material.accent : Material.foreground
+                    color: enabled ? ((mouseArea.containsMouse || weaponsPane.selectedIndex === index) ?
+                        Material.accent : Material.foreground) : "grey"
+                    opacity: enabled ? 1.0 : 0.5
                     text: hudDataModel.getWeaponFullName(index + 1)
+                    enabled: separateCheckBox.checked
                     MouseArea {
                         id: mouseArea
                         anchors.verticalCenter: parent.verticalCenter
@@ -174,56 +135,61 @@ Item {
                         width: parent.implicitWidth
                         height: parent.height
                         hoverEnabled: true
-                        onClicked: selectedIndex = index
+                        onClicked: weaponsPane.selectedIndex = index
                     }
                 }
             }
 
             ColumnLayout {
-                id: detailsPane
+                id: controlsPane
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.horizontalCenter
-                anchors.leftMargin: innerPaneMargin
+                anchors.leftMargin: innerPaneMargin + 12
                 width: innerPaneWidth
                 spacing: 8
 
                 Rectangle {
-                    Layout.preferredWidth: 192
-                    Layout.preferredHeight: 192
+                    Layout.preferredWidth: 172
+                    Layout.preferredHeight: 172
                     Layout.alignment: Qt.AlignLeft
-                    Layout.leftMargin: 12
                     Layout.bottomMargin: 32
-                    color: root.underlayColor
+                    color: Qt.rgba(1.0, 1.0, 1.0, 0.07)
 
-                    NativelyDrawnModel {
-                        visible: root.isNotInTransition
-                        anchors.fill: parent
-                        modelName: hudDataModel.getWeaponModelPath(selectedIndex + 1)
-                        viewOrigin: Qt.vector3d(48.0, 0.0, 20.0)
-                        modelOrigin: Qt.vector3d(0.0, 0.0, 0.0)
-                        desiredModelHeight: 16.0
-                        rotationSpeed: -60.0
-                        outlineHeight: 0.5
+                    NativelyDrawnImage {
+                        visible: drawNativeParts
+                        anchors.centerIn: parent
+                        desiredSize: Qt.size(strongSizeSlider.value, strongSizeSlider.value)
+                        borderWidth: 1
+                        materialName: strongComboBox.currentIndex < 0 ? "" :
+                            hudDataModel.getStrongCrosshairFilePath(strongComboBox.values[strongComboBox.currentIndex])
+                        useOutlineEffect: true
+                        fitSizeForCrispness: true
+                        color: strongColorPicker.selectedColor
+                    }
+
+                    NativelyDrawnImage {
+                        visible: drawNativeParts
+                        anchors.centerIn: parent
+                        desiredSize: Qt.size(regularSizeSlider.value, regularSizeSlider.value)
+                        borderWidth: 1
+                        materialName: regularComboBox.currentIndex < 0 ? "" :
+                            hudDataModel.getRegularCrosshairFilePath(regularComboBox.values[regularComboBox.currentIndex])
+                        useOutlineEffect: true
+                        fitSizeForCrispness: true
+                        color: regularColorPicker.selectedColor
                     }
                 }
 
-                CVarAwareCrosshairSelector {
-                    drawNativePart: root.isNotInTransition
-                    nativePartOpacity: popupOverlay.visible ? 0.1 : 1.0
-                    desiredWidthOrHeight: separateSizeSlider.value
-                    color: separateColorPicker.selectedColor || "white"
-                    fieldWidth: wsw.maxRegularCrosshairSize
-                    Layout.preferredWidth: implicitWidth
-                    Layout.preferredHeight: implicitHeight
-                    underlayColor: root.underlayColor
-                    cvarName: "cg_crosshair_" + weaponShortName
-                    model: availableCrosshairs
+                CVarAwareComboBox {
+                    id: regularComboBox
+                    knownHeadingsAndValues: [["(none)"].concat(availableRegularCrosshairs), [""].concat(availableRegularCrosshairs)]
+                    cvarName: separateCheckBox.checked ? "cg_crosshair_" + weaponsPane.weaponShortName : "cg_crosshair"
                 }
 
                 CVarAwareSliderWithBox {
-                    id: separateSizeSlider
+                    id: regularSizeSlider
                     Layout.alignment: Qt.AlignLeft
-                    cvarName: "cg_crosshair_size_" + weaponShortName
+                    cvarName: separateCheckBox.checked ? "cg_crosshair_size_" + weaponsPane.weaponShortName : "cg_crosshair_size"
                     from: wsw.minRegularCrosshairSize
                     to: wsw.maxRegularCrosshairSize
                     stepSize: wsw.crosshairSizeStep
@@ -231,9 +197,9 @@ Item {
                 }
 
                 CVarAwareColorPicker {
-                    id: separateColorPicker
+                    id: regularColorPicker
                     Layout.alignment: Qt.AlignLeft
-                    cvarName: "cg_crosshair_color_" + weaponShortName
+                    cvarName: separateCheckBox.checked ? "cg_crosshair_color_" + weaponsPane.weaponShortName : "cg_crosshair_color"
                 }
             }
         }

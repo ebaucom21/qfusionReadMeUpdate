@@ -318,6 +318,9 @@ class HudDataModel : public QObject {
 	auto getActiveWeaponName() const -> QByteArray;
 
 	[[nodiscard]]
+	static auto getCrosshairFilePath( const wsw::StringView &prefix, const QByteArray &fileName ) -> QByteArray;
+
+	[[nodiscard]]
 	bool getIsMessageFeedFadingOut() const { return m_messageFeedModel.isFadingOut(); }
 
 	[[nodiscard]]
@@ -426,9 +429,14 @@ public:
 	Q_INVOKABLE QColor getWeaponColor( int weapon ) const;
 
 	[[nodiscard]]
-	Q_INVOKABLE QStringList getAvailableCrosshairs() const;
+	Q_INVOKABLE QStringList getAvailableRegularCrosshairs() const;
 	[[nodiscard]]
 	Q_INVOKABLE QStringList getAvailableStrongCrosshairs() const;
+
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getRegularCrosshairFilePath( const QByteArray &fileName ) const;
+	[[nodiscard]]
+	Q_INVOKABLE QByteArray getStrongCrosshairFilePath( const QByteArray &fileName ) const;
 
 	[[nodiscard]]
 	Q_INVOKABLE QVariant getIndicator1State() { return QVariant::fromValue( m_indicatorStates[0] ); }

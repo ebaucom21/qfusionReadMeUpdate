@@ -40,8 +40,8 @@ class WeaponPropsCache {
 	};
 
 	wsw::StaticVector<Entry, WEAP_TOTAL - 1> m_entries;
-	QStringList m_availableStrongCrosshairs;
-	QStringList m_availableCrosshairs;
+	mutable QStringList m_availableRegularCrosshairs;
+	mutable QStringList m_availableStrongCrosshairs;
 public:
 	WeaponPropsCache() {
 		QByteArray iconPrefix( "image://wsw/gfx/hud/icons/weapon/" );
@@ -87,18 +87,6 @@ public:
 			"Instagun", "ig", QColor::fromRgbF( 0.0, 1.0, 1.0 ),
 			iconPrefix + "instagun", modelPrefix + "instagun/instagun.md3"
 		});
-
-		QString buffer;
-		m_availableCrosshairs.reserve( kNumRegularCrosshairs );
-		for( unsigned i = 1; i < kNumRegularCrosshairs + 1; ++i ) {
-			CrosshairState::makePath<QString, QLatin1String>( &buffer, CrosshairState::Weak, i );
-			m_availableCrosshairs.append( buffer );
-		}
-		m_availableStrongCrosshairs.reserve( kNumStrongCrosshairs );
-		for( unsigned i = 1; i < kNumStrongCrosshairs + 1; ++i ) {
-			CrosshairState::makePath<QString, QLatin1String>( &buffer, CrosshairState::Strong, i );
-			m_availableStrongCrosshairs.append( buffer );
-		}
 	}
 
 	[[nodiscard]]
@@ -132,9 +120,28 @@ public:
 	}
 
 	[[nodiscard]]
-	auto getAvailableCrosshairs() const -> QStringList { return m_availableCrosshairs; }
+	auto getAvailableRegularCrosshairs() const -> QStringList {
+		if( m_availableRegularCrosshairs.empty() ) {
+			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = CrosshairState::getRegularCrosshairs();
+			m_availableRegularCrosshairs.reserve( crosshairs.size() );
+			for( const wsw::StringView &name: crosshairs ) {
+				m_availableRegularCrosshairs.append( QString::fromLatin1( name.data(), name.size() ) );
+			}
+		}
+		return m_availableRegularCrosshairs;
+	}
+
 	[[nodiscard]]
-	auto getAvailableStrongCrosshairs() const -> QStringList { return m_availableStrongCrosshairs; }
+	auto getAvailableStrongCrosshairs() const -> QStringList {
+		if( m_availableStrongCrosshairs.empty() ) {
+			const wsw::StringSpanStorage<unsigned, unsigned> &crosshairs = CrosshairState::getStrongCrosshairs();
+			m_availableStrongCrosshairs.reserve( crosshairs.size() );
+			for( const wsw::StringView &name: crosshairs ) {
+				m_availableStrongCrosshairs.append( QString::fromLatin1( name.data(), name.size() ) );
+			}
+		}
+		return m_availableStrongCrosshairs;
+	}
 
 	[[nodiscard]]
 	auto getFragsFeedIconPath( unsigned meansOfDeath ) const -> QByteArray {
@@ -711,12 +718,29 @@ auto HudDataModel::getWeaponColor( int weapon ) const -> QColor {
 	return weaponPropsCache.getWeaponColor( weapon );
 }
 
-auto HudDataModel::getAvailableCrosshairs() const -> QStringList {
-	return weaponPropsCache.getAvailableCrosshairs();
+auto HudDataModel::getAvailableRegularCrosshairs() const -> QStringList {
+	return weaponPropsCache.getAvailableRegularCrosshairs();
 }
 
 auto HudDataModel::getAvailableStrongCrosshairs() const -> QStringList {
 	return weaponPropsCache.getAvailableStrongCrosshairs();
+}
+
+auto HudDataModel::getRegularCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
+	return getCrosshairFilePath( CrosshairState::kRegularCrosshairsDirName, fileName );
+}
+
+auto HudDataModel::getStrongCrosshairFilePath( const QByteArray &fileName ) const -> QByteArray {
+	return getCrosshairFilePath( CrosshairState::kStrongCrosshairsDirName, fileName );
+}
+
+auto HudDataModel::getCrosshairFilePath( const wsw::StringView &prefix, const QByteArray &fileName ) -> QByteArray {
+	QByteArray result;
+	if( !fileName.isEmpty() ) {
+		const wsw::StringView fileNameView( fileName.data(), (size_t)fileName.size() );
+		CrosshairState::makeFilePath<QByteArray, QLatin1String>( &result, prefix, fileNameView );
+	}
+	return result;
 }
 
 static const QByteArray kIconPathPrefix( "image://wsw/" );

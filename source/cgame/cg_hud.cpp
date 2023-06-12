@@ -158,12 +158,10 @@ void CG_DrawCrosshair() {
 		return;
 	}
 
-	if( cg.strongCrosshairState.canBeDrawn() && ( firedef->fire_mode == FIRE_MODE_STRONG ) ) {
+	if( firedef->fire_mode == FIRE_MODE_STRONG ) {
 		::drawCrosshair( &cg.strongCrosshairState );
 	}
-	if( cg.crosshairState.canBeDrawn() ) {
-		::drawCrosshair( &cg.crosshairState );
-	}
+	::drawCrosshair( &cg.crosshairState );
 }
 
 /*

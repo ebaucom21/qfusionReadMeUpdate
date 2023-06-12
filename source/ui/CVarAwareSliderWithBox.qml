@@ -6,8 +6,8 @@ import net.warsow 2.6
 Item {
     id: root
 
-    implicitWidth: slider.implicitWidth + 8 + textField.width
-    implicitHeight: Math.max(slider.implicitHeight, textField.implicitHeight)
+    implicitWidth: slider.implicitWidth + 16
+    implicitHeight: slider.implicitHeight
 
     property string cvarName: ""
     property bool applyImmediately: true
@@ -131,6 +131,7 @@ Item {
 
     Slider {
         id: slider
+        width: root.implicitWidth - textField.width - 8
 
         anchors.verticalCenter: parent.verticalCenter
 

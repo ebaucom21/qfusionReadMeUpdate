@@ -7,11 +7,9 @@
 #include "../gameshared/q_comref.h"
 #include "../gameshared/q_cvar.h"
 #include "../gameshared/gs_public.h"
+#include "../qcommon/stringspanstorage.h"
 
 struct shader_s;
-
-constexpr const unsigned kNumRegularCrosshairs = 10;
-constexpr const unsigned kNumStrongCrosshairs = 6;
 
 struct SizeProps { unsigned minSize, maxSize, defaultSize; };
 
@@ -36,6 +34,7 @@ private:
 	static inline cvar_t *cg_crosshair_color { nullptr };
 	static inline cvar_t *cg_crosshair_strong { nullptr };
 	static inline cvar_t *cg_crosshair_strong_size { nullptr };
+	static inline cvar_t *cg_crosshair_strong_color { nullptr };
 	static inline cvar_t *cg_crosshair_damage_color { nullptr };
 	static inline cvar_t *cg_separate_weapon_settings { nullptr };
 	static inline float s_damageColor[4] {};
@@ -54,12 +53,9 @@ private:
 	// Don't use var->modified flags as this is error-prone (multiple subsystems could reset it).
 	// Just check values caching whether its needed. We do the same for the UI var tracking code.
 
-	static void checkValueVar( cvar_t *var, unsigned numCrosshairs );
+	static void checkValueVar( cvar_t *var, const class CrosshairMaterialCache &cache );
 	static void checkSizeVar( cvar_t *var, const SizeProps &sizeProps );
 	static void checkColorVar( cvar_t *var, float *cachedColor = nullptr, int *oldPackedColor = nullptr );
-
-	static inline const wsw::StringView kWeakPathPrefix { "gfx/hud/crosshair_" };
-	static inline const wsw::StringView kStrongPathPrefix { "gfx/hud/crosshair_strong_" };
 public:
 	CrosshairState( Style style, unsigned decayTime ) noexcept
 		: m_decayTime( (int)decayTime ), m_invDecayTime( 1.0f / (float)decayTime ), m_style( style ) {}
@@ -71,28 +67,6 @@ public:
 	static void handleCGameShutdown();
 	static void updateSharedPart();
 
-	template <typename Buffer, typename AppendArg = wsw::StringView>
-	static void makePath( Buffer *buffer, Style style, unsigned num ) {
-		buffer->clear();
-		if( style == Weak ) {
-			buffer->append( AppendArg( kWeakPathPrefix.data(), kWeakPathPrefix.size() ) );
-		} else {
-			buffer->append( AppendArg( kStrongPathPrefix.data(), kStrongPathPrefix.size() ) );
-		}
-		assert( num && num < 20 );
-		// This is the most compatible approach for tiny numbers
-		char numData[2];
-		if( num < 10 ) {
-			numData[0] = (char)( '0' + (int)num );
-			buffer->append( AppendArg( numData, 1 ) );
-		} else {
-			numData[0] = (char)( '0' + ( (int)num / 10 ) );
-			numData[1] = (char)( '0' + ( (int)num % 10 ) );
-			buffer->append( AppendArg( numData, 2 ) );
-		}
-		buffer->append( AppendArg( ".svg", 4 ) );
-	}
-
 	void update( unsigned weapon );
 	void clear();
 
@@ -101,13 +75,24 @@ public:
 	[[nodiscard]]
 	auto getDrawingMaterial() -> std::optional<std::tuple<shader_s *, unsigned, unsigned>>;
 
+	// TODO: Return a java-style iterator
 	[[nodiscard]]
-	bool canBeDrawn() const {
-		if( m_style == Weak ) {
-			assert( m_valueVar && m_sizeVar );
-			return m_valueVar->integer && m_sizeVar->integer;
-		}
-		return true;
+	static auto getRegularCrosshairs() -> const wsw::StringSpanStorage<unsigned, unsigned> &;
+
+	// TODO: Return a java-style iterator
+	[[nodiscard]]
+	static auto getStrongCrosshairs() -> const wsw::StringSpanStorage<unsigned, unsigned> &;
+
+	static constexpr wsw::StringView kRegularCrosshairsDirName { "/gfx/hud/crosshairs/regular" };
+	static constexpr wsw::StringView kStrongCrosshairsDirName { "/gfx/hud/crosshairs/strong" };
+
+	template <typename Container, typename Appendable = wsw::StringView>
+	static void makeFilePath( Container *container, const wsw::StringView &prefix, const wsw::StringView &fileName ) {
+		container->clear();
+		container->append( Appendable( prefix.data(), prefix.size() ) );
+		container->append( Appendable( "/", 1 ) );
+		container->append( Appendable( fileName.data(), fileName.size() ) );
+		container->append( Appendable( ".svg", 4 ) );
 	}
 };
 
