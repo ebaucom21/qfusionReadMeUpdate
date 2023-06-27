@@ -27,6 +27,7 @@
         <file>HelpPage.qml</file>
         <file>HudAwardsArea.qml</file>
         <file>HudChat.qml</file>
+        <file>HudRootItem.qml</file>
         <file>HudEditorAnchorsMarker.qml</file>
         <file>HudEditor.qml</file>
         <file>HudEditorWizard.qml</file>
@@ -69,6 +70,7 @@
         <file>MainMenuButtonRow.qml</file>
         <file>MainMenuButtonTrail.qml</file>
         <file>MainMenuPrimaryMenu.qml</file>
+        <file>MenuRootItem.qml</file>
         <file>MouseButtonShape.qml</file>
         <file>MouseKey.qml</file>
         <file>MouseKeysPane.qml</file>
@@ -83,7 +85,6 @@
         <file>PopupContentItem.qml</file>
         <file>QuitPage.qml</file>
         <file>RichChatList.qml</file>
-        <file>RootItem.qml</file>
         <file>ScoreboardScreen.qml</file>
         <file>ScoreboardSpecsPane.qml</file>
         <file>ScoreboardStatsPane.qml</file>

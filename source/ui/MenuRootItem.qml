@@ -23,8 +23,7 @@ Item {
     }
 
     Keys.forwardTo: [
-        mainMenuLoader.item, connectionScreenLoader.item,
-        demoPlaybackMenuLoader.item, inGameMenuLoader.item, hudLoader.item
+        mainMenuLoader.item, connectionScreenLoader.item, demoPlaybackMenuLoader.item, inGameMenuLoader.item
     ]
 
     Item {
@@ -63,23 +62,6 @@ Item {
             active: wsw.isShowingScoreboard
             anchors.fill: parent
             sourceComponent: ScoreboardScreen {}
-        }
-
-        Loader {
-            id: hudLoader
-            active: wsw.isShowingHud || wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
-            anchors.fill: parent
-            sourceComponent: InGameHud {}
-        }
-
-        Loader {
-            active: wsw.isShowingActionRequests
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.right: parent.right
-            anchors.margins: 16
-            width: 480
-            sourceComponent: ActionRequestArea {}
         }
     }
 

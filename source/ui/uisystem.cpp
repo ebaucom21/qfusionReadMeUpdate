@@ -42,6 +42,7 @@
 
 #include <clocale>
 #include <span>
+#include "../qcommon/qcommon.h"
 
 #ifdef _WIN32
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
@@ -81,6 +82,38 @@ int CG_MyRealTeam();
 std::optional<unsigned> CG_ActiveChasePov();
 
 namespace wsw::ui {
+
+class QmlSandbox : public QObject {
+	friend class QtUISystem;
+
+	Q_OBJECT
+public:
+
+	Q_SLOT void onSceneGraphInitialized();
+	Q_SLOT void onRenderRequested();
+	Q_SLOT void onSceneChanged();
+	Q_SLOT void onComponentStatusChanged( QQmlComponent::Status status );
+
+	[[nodiscard]]
+	bool requestsRendering() const { return m_hasPendingRedraw || m_hasPendingSceneChange; }
+private:
+	explicit QmlSandbox( QtUISystem *uiSystem ) : m_uiSystem( uiSystem ) {};
+	~QmlSandbox() override;
+
+	QPointer<QOpenGLContext> m_sharedContext;
+	QPointer<QQuickRenderControl> m_control;
+	QScopedPointer<QOpenGLFramebufferObject> m_framebufferObject;
+	QPointer<QOffscreenSurface> m_surface { nullptr };
+	QPointer<QQuickWindow> m_window { nullptr };
+	QPointer<QQmlEngine> m_engine;
+	QPointer<QQmlComponent> m_component;
+	QtUISystem *const m_uiSystem;
+
+	GLuint m_vao { 0 };
+	bool m_hasPendingSceneChange { false };
+	bool m_hasPendingRedraw { false };
+	bool m_isValidAndReady { false };
+};
 
 class QtUISystem : public QObject, public UISystem {
 	Q_OBJECT
@@ -154,6 +187,8 @@ public:
 	[[nodiscard]]
 	auto getFrameTimestamp() const -> int64_t { return ::cls.realtime; }
 
+	[[nodiscard]]
+	bool isInUIRenderingMode() { return m_isInUIRenderingMode; }
 	void enterUIRenderingMode();
 	void leaveUIRenderingMode();
 
@@ -342,12 +377,6 @@ signals:
 	Q_SIGNAL void isShowingDemoPlaybackMenuChanged( bool isShowingDemoMenu );
 	Q_SIGNAL void isDebuggingNativelyDrawnItemsChanged( bool isDebuggingNativelyDrawnItems );
 	Q_SIGNAL void hasPendingCVarChangesChanged( bool hasPendingCVarChanges );
-public slots:
-	Q_SLOT void onSceneGraphInitialized();
-	Q_SLOT void onRenderRequested();
-	Q_SLOT void onSceneChanged();
-
-	Q_SLOT void onComponentStatusChanged( QQmlComponent::Status status );
 private:
 	static inline QGuiApplication *s_application { nullptr };
 	static inline int s_fakeArgc { 0 };
@@ -388,20 +417,13 @@ private:
 	int64_t m_lastDrawFrameTimestamp { 0 };
 
 	int64_t m_lastActiveMaskTime { 0 };
+	// Single instance
 	QPointer<QOpenGLContext> m_externalContext;
-	QPointer<QOpenGLContext> m_sharedContext;
-	QPointer<QQuickRenderControl> m_control;
-	QScopedPointer<QOpenGLFramebufferObject> m_framebufferObject;
-	QPointer<QOffscreenSurface> m_surface { nullptr };
-	QPointer<QQuickWindow> m_window { nullptr };
-	QPointer<QQmlEngine> m_engine;
-	QPointer<QQmlComponent> m_component;
-	GLuint m_vao { 0 };
 
-	bool m_hasPendingSceneChange { false };
-	bool m_hasPendingRedraw { false };
+	QPointer<QmlSandbox> m_menuSandbox;
+	QPointer<QmlSandbox> m_hudSandbox;
+
 	bool m_isInUIRenderingMode { false };
-	bool m_isValidAndReady { false };
 	bool m_skipDrawingSelf { false };
 
 	ServerListModel m_serverListModel;
@@ -499,6 +521,9 @@ private:
 	void registerContextProperties( QQmlContext *context );
 
 	[[nodiscard]]
+	auto createQmlSandbox( int initialWidth, int initialHeight, const char *rootItem ) -> QPointer<QmlSandbox>;
+
+	[[nodiscard]]
 	static auto colorForNum( int num ) -> QColor {
 		const auto *v = color_table[num];
 		return QColor::fromRgbF( v[0], v[1], v[2] );
@@ -566,14 +591,18 @@ private:
 	void updateCVarAwareControls();
 	void checkPropertyChanges();
 	void setActiveMenuMask( unsigned activeMask );
-	void renderQml();
+
+	void renderQml( QmlSandbox *sandbox );
 
 	[[nodiscard]]
 	auto getPressedMouseButtons() const -> Qt::MouseButtons;
 	[[nodiscard]]
 	auto getPressedKeyboardModifiers() const -> Qt::KeyboardModifiers;
 
+	[[nodiscard]]
 	bool tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown );
+	[[nodiscard]]
+	auto getTargetWindowForKeyboardInput() -> QQuickWindow *;
 
 	void drawBackgroundMapIfNeeded();
 
@@ -736,21 +765,40 @@ void QtUISystem::retrieveVideoModes() {
 	}
 }
 
-void QtUISystem::onSceneGraphInitialized() {
-	auto attachment = QOpenGLFramebufferObject::CombinedDepthStencil;
-	m_framebufferObject.reset( new QOpenGLFramebufferObject( m_window->size(), attachment ) );
+QmlSandbox::~QmlSandbox() {
+	if( m_sharedContext ) {
+		const bool wasInUIRenderingMode = m_uiSystem->isInUIRenderingMode();
+		if( !wasInUIRenderingMode ) {
+			m_uiSystem->enterUIRenderingMode();
+		}
+		if( m_sharedContext->makeCurrent( m_surface ) ) {
+			if( m_vao ) {
+				auto *const f = m_sharedContext->extraFunctions();
+				f->glBindVertexArray( 0 );
+				f->glDeleteVertexArrays( 1, &m_vao );
+			}
+		}
+		m_sharedContext.clear();
+		if( !wasInUIRenderingMode ) {
+			m_uiSystem->leaveUIRenderingMode();
+		}
+	}
+}
+
+void QmlSandbox::onSceneGraphInitialized() {
+	m_framebufferObject.reset( new QOpenGLFramebufferObject( m_window->size(), QOpenGLFramebufferObject::CombinedDepthStencil ) );
 	m_window->setRenderTarget( m_framebufferObject.get() );
 }
 
-void QtUISystem::onRenderRequested() {
+void QmlSandbox::onRenderRequested() {
 	m_hasPendingRedraw = true;
 }
 
-void QtUISystem::onSceneChanged() {
+void QmlSandbox::onSceneChanged() {
 	m_hasPendingSceneChange = true;
 }
 
-void QtUISystem::onComponentStatusChanged( QQmlComponent::Status status ) {
+void QmlSandbox::onComponentStatusChanged( QQmlComponent::Status status ) {
 	if ( QQmlComponent::Ready != status ) {
 		if( status == QQmlComponent::Error ) {
 			uiError() << "The root Qml component loading has failed:" << m_component->errorString();
@@ -802,27 +850,36 @@ void QtUISystem::refresh() {
 
 	checkPropertyChanges();
 
-	if( !m_isValidAndReady ) {
-		return;
+	if( m_menuSandbox && m_menuSandbox->requestsRendering() ) {
+		enterUIRenderingMode();
+		renderQml( m_menuSandbox.data() );
+		leaveUIRenderingMode();
 	}
-
-	// Force a garbage collection every "active" in-game frame.
-	// Otherwise, rely on the default behaviour.
-	if( !( m_activeMenuMask & ( MainMenu | InGameMenu | ConnectionScreen ) ) && !Con_HasKeyboardFocus() ) {
-		m_engine->collectGarbage();
+	if( m_hudSandbox && m_hudSandbox->requestsRendering() ) {
+		enterUIRenderingMode();
+		renderQml( m_hudSandbox.data() );
+		leaveUIRenderingMode();
 	}
-
-	if( !m_hasPendingSceneChange && !m_hasPendingRedraw ) {
-		return;
-	}
-
-	enterUIRenderingMode();
-	renderQml();
-	leaveUIRenderingMode();
 }
 
 QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	initPersistentPart();
+
+	m_externalContext = new QOpenGLContext;
+	m_externalContext->setNativeHandle( VID_GetMainContextHandle() );
+	if( !m_externalContext->create() ) {
+		uiError() << "Failed to create a Qt wrapper of the main rendering context";
+		return;
+	}
+
+	m_menuSandbox = createQmlSandbox( initialWidth, initialHeight, "qrc:///MenuRootItem.qml" );
+	m_hudSandbox  = createQmlSandbox( initialWidth, initialHeight, "qrc:///HudRootItem.qml" );
+
+	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudDataModel, &HudDataModel::onHudUpdated );
+}
+
+auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, const char *rootItem ) -> QPointer<QmlSandbox> {
+	QPointer<QmlSandbox> sandbox( new QmlSandbox( this ) );
 
 	QSurfaceFormat format;
 	format.setDepthBufferSize( 24 );
@@ -832,95 +889,96 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 	format.setRenderableType( QSurfaceFormat::OpenGL );
 	format.setProfile( QSurfaceFormat::CoreProfile );
 
-	m_externalContext = new QOpenGLContext;
-	m_externalContext->setNativeHandle( VID_GetMainContextHandle() );
-	if( !m_externalContext->create() ) {
-		uiError() << "Failed to create a Qt wrapper of the main rendering context";
-		return;
+	assert( m_externalContext );
+
+	sandbox->m_sharedContext = new QOpenGLContext;
+	sandbox->m_sharedContext->setFormat( format );
+	sandbox->m_sharedContext->setShareContext( m_externalContext );
+	if( !sandbox->m_sharedContext->create() ) {
+		uiError() << "Failed to create a dedicated OpenGL context for a Qml sandbox";
+		return nullptr;
 	}
 
-	m_sharedContext = new QOpenGLContext;
-	m_sharedContext->setFormat( format );
-	m_sharedContext->setShareContext( m_externalContext );
-	if( !m_sharedContext->create() ) {
-		uiError() << "Failed to create a dedicated Qt OpenGL rendering context";
-		return;
-	}
+	sandbox->m_control = new QQuickRenderControl;
+	sandbox->m_window  = new QQuickWindow( sandbox->m_control );
+	sandbox->m_window->setGeometry( 0, 0, initialWidth, initialHeight );
+	sandbox->m_window->setColor( Qt::transparent );
 
-	m_control = new QQuickRenderControl();
-	m_window = new QQuickWindow( m_control );
-	m_window->setGeometry( 0, 0, initialWidth, initialHeight );
-	m_window->setColor( Qt::transparent );
+	connect( sandbox->m_window, &QQuickWindow::sceneGraphInitialized, sandbox, &QmlSandbox::onSceneGraphInitialized );
+	connect( sandbox->m_control, &QQuickRenderControl::renderRequested, sandbox, &QmlSandbox::onRenderRequested );
+	connect( sandbox->m_control, &QQuickRenderControl::sceneChanged, sandbox, &QmlSandbox::onSceneChanged );
 
-	QObject::connect( m_window, &QQuickWindow::sceneGraphInitialized, this, &QtUISystem::onSceneGraphInitialized );
-	QObject::connect( m_control, &QQuickRenderControl::renderRequested, this, &QtUISystem::onRenderRequested );
-	QObject::connect( m_control, &QQuickRenderControl::sceneChanged, this, &QtUISystem::onSceneChanged );
-
-	m_surface = new QOffscreenSurface;
-	m_surface->setFormat( m_sharedContext->format() );
-	m_surface->create();
-	if ( !m_surface->isValid() ) {
+	sandbox->m_surface = new QOffscreenSurface;
+	sandbox->m_surface->setFormat( sandbox->m_sharedContext->format() );
+	sandbox->m_surface->create();
+	if( !sandbox->m_surface->isValid() ) {
 		uiError() << "Failed to create a dedicated Qt OpenGL offscreen surface";
-		return;
+		return nullptr;
 	}
 
-	enterUIRenderingMode();
+	const bool wasInUIRenderingMode = isInUIRenderingMode();
+	if( !wasInUIRenderingMode ) {
+		enterUIRenderingMode();
+	}
 
 	bool hadErrors = true;
-	if( m_sharedContext->makeCurrent( m_surface ) ) {
+	if( sandbox->m_sharedContext->makeCurrent( sandbox->m_surface ) ) {
 		// Bind a dummy VAO in the Qt context. That's something it fails to do on its own.
-		auto *const f = m_sharedContext->extraFunctions();
-		// TODO: Take care about the VAO lifetime
-		f->glGenVertexArrays( 1, &m_vao );
-		f->glBindVertexArray( m_vao );
-		m_control->initialize( m_sharedContext );
-		m_window->resetOpenGLState();
-		hadErrors = m_sharedContext->functions()->glGetError() != GL_NO_ERROR;
+		auto *const f = sandbox->m_sharedContext->extraFunctions();
+		f->glGenVertexArrays( 1, &sandbox->m_vao );
+		f->glBindVertexArray( sandbox->m_vao );
+		sandbox->m_control->initialize( sandbox->m_sharedContext );
+		sandbox->m_window->resetOpenGLState();
+		hadErrors = f->glGetError() != GL_NO_ERROR;
 	} else {
 		uiError() << "Failed to make the dedicated Qt OpenGL rendering context current";
 	}
 
-	leaveUIRenderingMode();
+	if( wasInUIRenderingMode ) {
+		leaveUIRenderingMode();
+	}
 
 	if( hadErrors ) {
 		uiError() << "Failed to initialize the Qt Quick render control from the given GL context";
-		return;
+		return nullptr;
 	}
 
-	m_engine = new QQmlEngine;
-	m_engine->addImageProvider( "wsw", new wsw::ui::WswImageProvider );
+	sandbox->m_engine = new QQmlEngine;
+	sandbox->m_engine->addImageProvider( "wsw", new wsw::ui::WswImageProvider );
 
-	registerContextProperties( m_engine->rootContext() );
+	registerContextProperties( sandbox->m_engine->rootContext() );
 
-	m_component = new QQmlComponent( m_engine );
+	sandbox->m_component = new QQmlComponent( sandbox->m_engine );
 
-	connect( m_component, &QQmlComponent::statusChanged, this, &QtUISystem::onComponentStatusChanged );
-	m_component->loadUrl( QUrl( "qrc:/RootItem.qml" ) );
+	connect( sandbox->m_component, &QQmlComponent::statusChanged, sandbox, &QmlSandbox::onComponentStatusChanged );
 
-	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudDataModel, &HudDataModel::onHudUpdated );
+	sandbox->m_component->loadUrl( QUrl( rootItem ) );
+
+	// Check onComponentStatusChanged() results
+	return sandbox->m_isValidAndReady ? sandbox : nullptr;
 }
 
-void QtUISystem::renderQml() {
-	assert( m_isValidAndReady );
-	assert( m_hasPendingSceneChange || m_hasPendingRedraw );
+void QtUISystem::renderQml( QmlSandbox *qmlScope ) {
+	assert( qmlScope->m_isValidAndReady );
+	assert( qmlScope->m_hasPendingSceneChange || qmlScope->m_hasPendingRedraw );
 
-	if( m_hasPendingSceneChange ) {
-		m_control->polishItems();
-		m_control->sync();
+	if( qmlScope->m_hasPendingSceneChange ) {
+		qmlScope->m_control->polishItems();
+		qmlScope->m_control->sync();
 	}
 
-	m_hasPendingSceneChange = m_hasPendingRedraw = false;
+	qmlScope->m_hasPendingSceneChange = qmlScope->m_hasPendingRedraw = false;
 
-	if( !m_sharedContext->makeCurrent( m_surface ) ) {
+	if( !qmlScope->m_sharedContext->makeCurrent( qmlScope->m_surface ) ) {
 		// Consider this a fatal error
 		Com_Error( ERR_FATAL, "Failed to make the dedicated Qt OpenGL rendering context current\n" );
 	}
 
-	m_control->render();
+	qmlScope->m_control->render();
 
-	m_window->resetOpenGLState();
+	qmlScope->m_window->resetOpenGLState();
 
-	auto *const f = m_sharedContext->functions();
+	auto *const f = qmlScope->m_sharedContext->functions();
 	f->glFlush();
 	f->glFinish();
 }
@@ -944,7 +1002,7 @@ void QtUISystem::leaveUIRenderingMode() {
 }
 
 void QtUISystem::drawSelfInMainContext() {
-	if( !m_isValidAndReady || m_skipDrawingSelf ) {
+	if( !m_menuSandbox || m_skipDrawingSelf ) {
 		return;
 	}
 
@@ -1015,9 +1073,20 @@ void QtUISystem::drawSelfInMainContext() {
 
 	NativelyDrawn::recycleResourcesInMainContext();
 
-	R_Set2DMode( true );
-	R_DrawExternalTextureOverlay( m_framebufferObject->texture() );
-	R_Set2DMode( false );
+	if( m_menuSandbox ) {
+		if( m_activeMenuMask || m_isShowingScoreboard ) {
+			R_Set2DMode( true );
+			R_DrawExternalTextureOverlay( m_menuSandbox->m_framebufferObject->texture() );
+			R_Set2DMode( false );
+		}
+	}
+	if( m_hudSandbox ) {
+		if( m_isShowingHud || m_isShowingChatPopup || m_isShowingTeamChatPopup || m_isShowingActionRequests ) {
+			R_Set2DMode( true );
+			R_DrawExternalTextureOverlay( m_hudSandbox->m_framebufferObject->texture() );
+			R_Set2DMode( false );
+		}
+	}
 
 	while( !overlayHeap.empty() ) {
 		std::pop_heap( overlayHeap.begin(), overlayHeap.end(), cmp );
@@ -1066,7 +1135,7 @@ void QtUISystem::drawBackgroundMapIfNeeded() {
 	memset( &rdf, 0, sizeof( rdf ) );
 	rdf.areabits = nullptr;
 
-	const auto widthAndHeight = std::make_pair( m_window->width(), m_window->height() );
+	const auto widthAndHeight = std::make_pair( m_menuSandbox->m_window->width(), m_menuSandbox->m_window->height() );
 	std::tie( rdf.x, rdf.y ) = std::make_pair( 0, 0 );
 	std::tie( rdf.width, rdf.height ) = widthAndHeight;
 
@@ -1398,7 +1467,8 @@ void QtUISystem::checkPropertyChanges() {
 }
 
 bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
-	if( !m_activeMenuMask ) {
+	// Mouse handling is only available for the main menu
+	if( !m_activeMenuMask || !m_menuSandbox ) {
 		return false;
 	}
 
@@ -1406,7 +1476,7 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 		return true;
 	}
 
-	const int bounds[2] = { m_window->width(), m_window->height() };
+	const int bounds[2] = { m_menuSandbox->m_window->width(), m_menuSandbox->m_window->height() };
 	const int deltas[2] = { dx, dy };
 
 	if( s_sensitivityVar->modified ) {
@@ -1441,7 +1511,7 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 
 	QPointF point( m_mouseXY[0], m_mouseXY[1] );
 	QMouseEvent event( QEvent::MouseMove, point, Qt::NoButton, getPressedMouseButtons(), getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( m_window, &event );
+	QCoreApplication::sendEvent( m_menuSandbox->m_window, &event );
 	return true;
 }
 
@@ -1481,19 +1551,20 @@ void QtUISystem::handleEscapeKey() {
 	}
 
 	if( !didSpecialHandling ) {
-		QKeyEvent keyEvent( QEvent::KeyPress, Qt::Key_Escape, getPressedKeyboardModifiers() );
-		QCoreApplication::sendEvent( m_window, &keyEvent );
+		if( QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput() ) {
+			QKeyEvent keyEvent( QEvent::KeyPress, Qt::Key_Escape, getPressedKeyboardModifiers() );
+			QCoreApplication::sendEvent( targetWindow, &keyEvent );
+		}
 	}
 }
 
 bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
-	if( !m_activeMenuMask ) {
-		if( !( m_isShowingChatPopup || m_isShowingTeamChatPopup ) ) {
-			if( keyDown ) {
-				return m_actionRequestsModel.handleKeyEvent( quakeKey );
-			}
-			return false;
+	QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput();
+	if( !targetWindow ) {
+		if( keyDown ) {
+			return m_actionRequestsModel.handleKeyEvent( quakeKey );
 		}
+		return false;
 	}
 
 	if( tryHandlingKeyEventAsAMouseEvent( quakeKey, keyDown ) ) {
@@ -1507,28 +1578,26 @@ bool QtUISystem::handleKeyEvent( int quakeKey, bool keyDown ) {
 
 	const auto type = keyDown ? QEvent::KeyPress : QEvent::KeyRelease;
 	QKeyEvent keyEvent( type, *maybeQtKey, getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( m_window, &keyEvent );
+	QCoreApplication::sendEvent( targetWindow, &keyEvent );
 	return true;
 }
 
 bool QtUISystem::handleCharEvent( int ch ) {
-	if( !m_activeMenuMask ) {
-		if( !( m_isShowingChatPopup || m_isShowingTeamChatPopup ) ) {
-			return false;
-		}
-	}
-
 	if( !isAPrintableChar( ch ) ) {
 		return true;
+	}
+	QQuickWindow *const targetWindow = getTargetWindowForKeyboardInput();
+	if( !targetWindow ) {
+		return false;
 	}
 
 	const auto modifiers = getPressedKeyboardModifiers();
 	// The plain cast of `ch` to Qt::Key seems to be correct in this case
 	// (all printable characters seem to map 1-1 to Qt key codes)
 	QKeyEvent pressEvent( QEvent::KeyPress, (Qt::Key)ch, modifiers, s_charStrings[ch] );
-	QCoreApplication::sendEvent( m_window, &pressEvent );
+	QCoreApplication::sendEvent( targetWindow, &pressEvent );
 	QKeyEvent releaseEvent( QEvent::KeyRelease, (Qt::Key)ch, modifiers );
-	QCoreApplication::sendEvent( m_window, &releaseEvent );
+	QCoreApplication::sendEvent( targetWindow, &releaseEvent );
 	return true;
 }
 
@@ -1579,8 +1648,23 @@ bool QtUISystem::tryHandlingKeyEventAsAMouseEvent( int quakeKey, bool keyDown ) 
 	QPointF point( m_mouseXY[0], m_mouseXY[1] );
 	QEvent::Type eventType = keyDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
 	QMouseEvent event( eventType, point, button, getPressedMouseButtons(), getPressedKeyboardModifiers() );
-	QCoreApplication::sendEvent( m_window, &event );
+	QCoreApplication::sendEvent( m_menuSandbox->m_window, &event );
 	return true;
+}
+
+auto QtUISystem::getTargetWindowForKeyboardInput() -> QQuickWindow * {
+	if( m_activeMenuMask ) {
+		if( m_menuSandbox ) {
+			return m_menuSandbox->m_window;
+		}
+	} else {
+		if( m_hudSandbox ) {
+			if( m_isShowingChatPopup || m_isShowingTeamChatPopup ) {
+				return m_hudSandbox->m_window;
+			}
+		}
+	}
+	return nullptr;
 }
 
 auto QtUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Qt::Key> {
@@ -1894,7 +1978,7 @@ void QtUISystem::updateCVarAwareControls() {
 	}
 
 	for( QQuickItem *control : m_cvarAwareControls ) {
-		QMetaObject::invokeMethod( control, "checkCVarChanges" );
+		QMetaObject::invokeMethod( control, "checkCVarChanges", QGenericReturnArgument() );
 	}
 }
 
@@ -2126,7 +2210,7 @@ void QtUISystem::launchLocalServer( const QByteArray &gametype, const QByteArray
 }
 
 bool QtUISystem::isShown() const {
-	if( m_isValidAndReady ) {
+	if( m_menuSandbox->m_isValidAndReady ) {
 		return ( m_activeMenuMask || m_isShowingScoreboard || m_isShowingChatPopup || m_isShowingTeamChatPopup );
 	}
 	return false;
