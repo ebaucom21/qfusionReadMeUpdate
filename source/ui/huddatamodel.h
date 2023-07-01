@@ -241,7 +241,6 @@ class HudDataModel : public QObject {
 
 	InGameHudLayoutModel m_clientLayoutModel;
 	InGameHudLayoutModel m_specLayoutModel;
-	QAbstractItemModel *m_activeLayoutModel { nullptr };
 	cvar_t *m_clientHudVar { nullptr };
 	cvar_t *m_specHudVar { nullptr };
 
@@ -302,7 +301,9 @@ class HudDataModel : public QObject {
 	bool m_hasSetAwardsModelOwnership { false };
 
 	[[nodiscard]]
-	auto getActiveLayoutModel() -> QObject * { return m_activeLayoutModel; }
+	auto getClientLayoutModel() -> QObject * { return &m_clientLayoutModel; }
+	[[nodiscard]]
+	auto getSpecLayoutModel() -> QObject * { return &m_specLayoutModel; }
 
 	[[nodiscard]]
 	static auto toQColor( int color ) -> QColor {
@@ -329,8 +330,8 @@ class HudDataModel : public QObject {
 
 	void checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName );
 public:
-	Q_SIGNAL void activeLayoutModelChanged( QObject *activeLayoutModel );
-	Q_PROPERTY( QObject *activeLayoutModel READ getActiveLayoutModel NOTIFY activeLayoutModelChanged );
+	Q_PROPERTY( QObject *clientLayoutModel READ getClientLayoutModel CONSTANT );
+	Q_PROPERTY( QObject *specLayoutModel READ getSpecLayoutModel CONSTANT );
 
 	Q_SIGNAL void alphaNameChanged( const QByteArray &alphaName );
 	Q_PROPERTY( const QByteArray alphaName MEMBER m_styledAlphaName NOTIFY alphaNameChanged );

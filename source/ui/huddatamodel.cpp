@@ -899,11 +899,6 @@ void HudDataModel::onHudUpdated( const QByteArray &name ) {
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 	checkHudVarChanges( m_clientHudVar, &m_clientLayoutModel, &m_clientHudName );
 	checkHudVarChanges( m_specHudVar, &m_specLayoutModel, &m_specHudName );
-	const auto *const oldLayoutModel = m_activeLayoutModel;
-	m_activeLayoutModel = ( CG_ActiveChasePov() != std::nullopt ) ? &m_clientLayoutModel : &m_specLayoutModel;
-	if( oldLayoutModel != m_activeLayoutModel ) {
-		Q_EMIT activeLayoutModelChanged( m_activeLayoutModel );
-	}
 
 	if( const bool hadTwoTeams = m_hasTwoTeams; hadTwoTeams != ( m_hasTwoTeams = CG_HasTwoTeams() ) ) {
 		Q_EMIT hasTwoTeamsChanged( m_hasTwoTeams );

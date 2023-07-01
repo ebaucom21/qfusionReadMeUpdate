@@ -417,8 +417,21 @@ private:
 	int64_t m_lastDrawFrameTimestamp { 0 };
 
 	int64_t m_lastActiveMaskTime { 0 };
-	// Single instance
+	// Shared for sandbox instances (it is a shared context as well)
 	QPointer<QOpenGLContext> m_externalContext;
+
+	NativelyDrawn *m_nativelyDrawnListHead { nullptr };
+
+	static constexpr const int kMaxNativelyDrawnItems = 32;
+	static constexpr const int kMaxOccludersOfNativelyDrawnItems = 16;
+
+	int m_numNativelyDrawnItems { 0 };
+
+	wsw::Vector<QQuickItem *> m_hudOccluders;
+	wsw::Vector<QQuickItem *> m_nativelyDrawnItemsOccluders;
+
+	QSet<QQuickItem *> m_cvarAwareControls;
+	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
 
 	QPointer<QmlSandbox> m_menuSandbox;
 	QPointer<QmlSandbox> m_hudSandbox;
@@ -497,20 +510,6 @@ private:
 	bool m_hasSucceededBackgroundMapLoading { false };
 
 	qreal m_mouseXY[2] { 0.0, 0.0 };
-
-	NativelyDrawn *m_nativelyDrawnListHead { nullptr };
-
-	static constexpr const int kMaxNativelyDrawnItems = 32;
-	static constexpr const int kMaxOccludersOfNativelyDrawnItems = 16;
-
-	int m_numNativelyDrawnItems { 0 };
-
-	wsw::Vector<QQuickItem *> m_hudOccluders;
-	wsw::Vector<QQuickItem *> m_nativelyDrawnItemsOccluders;
-
-	QSet<QQuickItem *> m_cvarAwareControls;
-
-	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
 
 	static void initPersistentPart();
 	static void registerFonts();

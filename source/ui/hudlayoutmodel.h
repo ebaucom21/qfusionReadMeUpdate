@@ -67,7 +67,7 @@ public:
 	Q_INVOKABLE bool load( const QByteArray &fileName );
 
 	[[nodiscard]]
-	bool load( const wsw::StringView &fileName );
+	virtual bool load( const wsw::StringView &fileName );
 protected:
 	// Either this stuff is typed or we keep getting bugs
 	class AnchorItem {
@@ -343,6 +343,14 @@ public:
 };
 
 class InGameHudLayoutModel : public HudLayoutModel {
+	Q_OBJECT
+public:
+	Q_SIGNAL void nameChanged( const QString &name );
+	Q_PROPERTY( const QString &name MEMBER m_fileName NOTIFY nameChanged );
+
+	[[nodiscard]]
+	bool load( const wsw::StringView &fileName ) override;
+private:
 	enum Role {
 		ItemKind = Qt::UserRole + 1,
 		Flags,
@@ -368,6 +376,7 @@ class InGameHudLayoutModel : public HudLayoutModel {
 	};
 
 	wsw::Vector<Entry> m_entries;
+	QString m_fileName;
 
 	[[nodiscard]]
 	bool acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) override;

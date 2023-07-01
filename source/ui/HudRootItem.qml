@@ -8,9 +8,10 @@ import net.warsow 2.6
 Item {
     id: rootItem
 
-    property bool isBlurringBackground
-    property bool isBlurringLimitedToRect
-    property rect blurRect
+    // These conditions try to prevent activating the loader until the status of models is well-defined.
+    readonly property bool useDifferentHuds:
+        hudDataModel.specLayoutModel.name.length > 0 && hudDataModel.clientLayoutModel.name.length > 0 &&
+            hudDataModel.specLayoutModel.name.toUpperCase() != hudDataModel.clientLayoutModel.name.toUpperCase()
 
     Window.onWindowChanged: {
         if (Window.window) {
@@ -19,11 +20,22 @@ Item {
         }
     }
 
+    // Try reusing the same instance due to Qml GC quirks
     InGameHud {
-        id: inGameHud
-        visible: wsw.isShowingHud
+        visible: wsw.isShowingHud && (hudDataModel.hasActivePov || !useDifferentHuds)
         anchors.fill: parent
-        focus: true
+        model: hudDataModel.clientLayoutModel
+    }
+
+    Loader {
+        // Using separate HUD files for client and spec should be discouraged for now.
+        active: useDifferentHuds
+        anchors.fill: parent
+        sourceComponent: InGameHud {
+            // Toggle the visibility once it's loaded for the same GC-related reasons
+            visible: wsw.isShowingHud && !hudDataModel.hasActivePov
+            model: hudDataModel.specLayoutModel
+        }
     }
 
     Loader {

@@ -1104,6 +1104,19 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 	return QVariant();
 }
 
+bool InGameHudLayoutModel::load( const wsw::StringView &fileName ) {
+	const bool result = HudLayoutModel::load( fileName );
+	if( result ) {
+		const QLatin1String operableBytes( fileName.data(), (int)fileName.size() );
+		if( m_fileName.compare( operableBytes, Qt::CaseInsensitive ) != 0 ) {
+			m_fileName.clear();
+			m_fileName.append( operableBytes );
+			Q_EMIT nameChanged( m_fileName );
+		}
+	}
+	return result;
+}
+
 bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&fileEntries ) {
 	beginResetModel();
 	m_entries.clear();

@@ -9,10 +9,11 @@ Item {
 
     property real alphaNameWidth
     property real betaNameWidth
+    property var model
 
     Repeater {
         id: repeater
-        model: hudDataModel.activeLayoutModel
+        model: hudField.model
 
         property int numInstantiatedItems: 0
 
