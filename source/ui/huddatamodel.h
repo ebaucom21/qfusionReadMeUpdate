@@ -277,6 +277,7 @@ class HudDataModel : public QObject {
 	bool m_isSpectator { true };
 	bool m_hasActivePov { false };
 	bool m_isPovAlive { false };
+	int m_activeItemsMask { 0 };
 
 	QByteArray m_formattedSeconds;
 	QByteArray m_formattedMinutes;
@@ -370,6 +371,9 @@ public:
 	Q_PROPERTY( bool hasActivePov MEMBER m_hasActivePov NOTIFY hasActivePovChanged );
 	Q_SIGNAL void isPovAliveChanged( bool isPovAlive );
 	Q_PROPERTY( bool isPovAlive MEMBER m_isPovAlive NOTIFY isPovAliveChanged );
+
+	Q_SIGNAL void activeItemsMaskChanged( int activeItemsMask );
+	Q_PROPERTY( int activeItemsMask MEMBER m_activeItemsMask NOTIFY activeItemsMaskChanged );
 
 	Q_SIGNAL void matchTimeSecondsChanged( const QByteArray &seconds );
 	Q_PROPERTY( const QByteArray matchTimeSeconds MEMBER m_formattedSeconds NOTIFY matchTimeSecondsChanged );

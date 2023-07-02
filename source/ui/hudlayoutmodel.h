@@ -61,6 +61,15 @@ public:
 	};
 	Q_ENUM( Flags );
 
+	// We have to use bits instead of direct strings due to Qml GC issues
+	enum ShownItemBits {
+		NoShownItemBits = 0x0,
+		ShowTeamInfo    = 0x1,
+		ShowFragsFeed   = 0x2,
+		ShowMessageFeed = 0x4,
+		ShowAwards      = 0x8,
+	};
+
 	static inline const unsigned kMaxHudNameLength = 16u;
 
 	[[nodiscard]]
@@ -120,7 +129,6 @@ protected:
 		int kind;
 		QSize size;
 		QColor color;
-		const std::optional<wsw::StringView> controllingCVar;
 	};
 
 	static const EditorProps kEditorPropsForKind[];
@@ -130,6 +138,9 @@ protected:
 
 	[[nodiscard]]
 	static auto getFlagsForKind( Kind kind ) -> Flags;
+
+	[[nodiscard]]
+	static auto getShownItemBitsForKind( Kind kind ) -> ShownItemBits;
 
 	[[nodiscard]]
 	static auto getAnchorNames( int anchors ) -> std::pair<wsw::StringView, wsw::StringView>;
@@ -357,7 +368,7 @@ private:
 		SelfAnchors,
 		AnchorItemIndex,
 		AnchorItemAnchors,
-		ControllingCVar
+		IndividualMask,
 	};
 
 	struct Entry {
@@ -365,14 +376,6 @@ private:
 		int selfAnchors;
 		int otherAnchors;
 		AnchorItem anchorItem;
-		std::optional<wsw::StringView> controllingCVar;
-		[[nodiscard]]
-		auto getControllingCVarAsQVariant() const -> QVariant {
-			if( controllingCVar ) {
-				return QByteArray::fromRawData( controllingCVar->data(), controllingCVar->size() );
-			}
-			return QVariant();
-		}
 	};
 
 	wsw::Vector<Entry> m_entries;

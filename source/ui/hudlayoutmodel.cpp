@@ -649,20 +649,20 @@ bool HudEditorLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 }
 
 const HudLayoutModel::EditorProps HudLayoutModel::kEditorPropsForKind[] {
-	{ "Health"_asView, HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ), std::nullopt },
-	{ "Armor"_asView, ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ), std::nullopt },
-	{ "Inventory"_asView, InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ), std::nullopt },
-	{ "Weapon status"_asView, WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ), std::nullopt },
-	{ "Match time"_asView, MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ), std::nullopt },
-	{ "Alpha score"_asView, AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ), std::nullopt },
-	{ "Beta score"_asView, BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ), std::nullopt },
-	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ), std::nullopt },
-	{ "Team info"_asView, TeamInfo, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ), "cg_showTeamInfo"_asView },
-	{ "Frags feed"_asView, FragsFeed, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ), "cg_showFragsFeed"_asView },
-	{ "Message feed"_asView, MessageFeed, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ), "cg_showMessageFeed"_asView },
-	{ "Awards area"_asView, AwardsArea, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.9 ), "cg_showAwards"_asView },
-	{ "Status message"_asView, StatusMessage, QSize( 192, 32 ), QColor::fromRgbF( 0.3, 0.9, 0.7 ), std::nullopt },
-	{ "Objective status"_asView, ObjectiveStatus, QSize( 96, 64 ), QColor::fromRgbF( 0.9, 0.6, 0.3 ), std::nullopt }
+	{ "Health"_asView, HealthBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.5, 1.0 ) },
+	{ "Armor"_asView, ArmorBar, QSize( 144, 32 ), QColor::fromRgbF( 1.0, 0.3, 0.0 ) },
+	{ "Inventory"_asView, InventoryBar, QSize( 256, 48 ), QColor::fromRgbF( 1.0, 0.8, 0.0 ) },
+	{ "Weapon status"_asView, WeaponStatus, QSize( 96, 96 ), QColor::fromRgbF( 1.0, 0.5, 0.0 ) },
+	{ "Match time"_asView, MatchTime, QSize( 128, 64 ), QColor::fromRgbF( 0.7, 0.7, 0.7 ) },
+	{ "Alpha score"_asView, AlphaScore, QSize( 128, 56 ), QColor::fromRgbF( 1.0, 0.0, 0.0 ) },
+	{ "Beta score"_asView, BetaScore, QSize( 128, 56 ), QColor::fromRgbF( 0.0, 1.0, 0.0 ) },
+	{ "Chat"_asView, Chat, QSize( 256, 72 ), QColor::fromRgbF( 0.7, 1.0, 0.3 ) },
+	{ "Team info"_asView, TeamInfo, QSize( 256, 128 ), QColor::fromRgbF( 0.0, 0.3, 0.7 ) },
+	{ "Frags feed"_asView, FragsFeed, QSize( 144, 108 ), QColor::fromRgbF( 0.3, 0.0, 0.7 ) },
+	{ "Message feed"_asView, MessageFeed, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.7 ) },
+	{ "Awards area"_asView, AwardsArea, QSize( 256, 64 ), QColor::fromRgbF( 0.0, 0.7, 0.9 ) },
+	{ "Status message"_asView, StatusMessage, QSize( 192, 32 ), QColor::fromRgbF( 0.3, 0.9, 0.7 ) },
+	{ "Objective status"_asView, ObjectiveStatus, QSize( 96, 64 ), QColor::fromRgbF( 0.9, 0.6, 0.3 ) }
 };
 
 void HudEditorModel::setFieldAreaSize( qreal width, qreal height ) {
@@ -1055,6 +1055,26 @@ auto HudLayoutModel::getFlagsForKind( Kind kind ) -> Flags {
 	}
 }
 
+auto HudLayoutModel::getShownItemBitsForKind( Kind kind ) -> ShownItemBits {
+	switch( kind ) {
+		case HealthBar: return NoShownItemBits;
+		case ArmorBar: return NoShownItemBits;
+		case InventoryBar: return NoShownItemBits;
+		case WeaponStatus: return NoShownItemBits;
+		case MatchTime: return NoShownItemBits;
+		case AlphaScore: return NoShownItemBits;
+		case BetaScore: return NoShownItemBits;
+		case Chat: return NoShownItemBits;
+		case TeamInfo: return NoShownItemBits;
+		case FragsFeed: return ShowFragsFeed;
+		case MessageFeed: return ShowMessageFeed;
+		case AwardsArea: return ShowAwards;
+		case StatusMessage: return NoShownItemBits;
+		case ObjectiveStatus: return NoShownItemBits;
+		default: wsw::failWithLogicError( "unreachable" );
+	}
+}
+
 HudEditorModel::HudEditorModel() {
 	reloadExistingHuds();
 
@@ -1079,7 +1099,7 @@ auto InGameHudLayoutModel::roleNames() const -> QHash<int, QByteArray> {
 		{ SelfAnchors, "selfAnchors" },
 		{ AnchorItemAnchors, "anchorItemAnchors" },
 		{ AnchorItemIndex, "anchorItemIndex" },
-		{ ControllingCVar, "controllingCVar" }
+		{ IndividualMask, "individualMask" }
 	};
 }
 
@@ -1096,7 +1116,7 @@ auto InGameHudLayoutModel::data( const QModelIndex &index, int role ) const -> Q
 				case SelfAnchors: return m_entries[row].selfAnchors;
 				case AnchorItemAnchors: return m_entries[row].otherAnchors;
 				case AnchorItemIndex: return m_entries[row].anchorItem.toRawValue();
-				case ControllingCVar: return m_entries[row].getControllingCVarAsQVariant();
+				case IndividualMask: return getShownItemBitsForKind( m_entries[row].kind );
 				default: return QVariant();
 			}
 		}
@@ -1128,7 +1148,6 @@ bool InGameHudLayoutModel::acceptDeserializedEntries( wsw::Vector<FileEntry> &&f
 			.selfAnchors     = fileEntry.selfAnchors,
 			.otherAnchors    = fileEntry.otherAnchors,
 			.anchorItem      = fileEntry.anchorItem,
-			.controllingCVar = kEditorPropsForKind[fileEntry.kind - 1].controllingCVar,
 		});
 	}
 	endResetModel();

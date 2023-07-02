@@ -22,8 +22,7 @@ Item {
             width: item ? item.implicitWidth : 0
             height: item ? item.implicitHeight : 0
 
-            readonly property var controllingCVar: model.controllingCVar
-            property bool isCVarOn: false
+            readonly property int individualMask: model.individualMask
 
             states: [
                 State {
@@ -52,6 +51,7 @@ Item {
                 onHasActivePovChanged: itemLoader.updateItemVisibility()
                 onIsPovAliveChanged: itemLoader.updateItemVisibility()
                 onIsInPostmatchStateChanged: itemLoader.updateItemVisibility()
+                onActiveItemsMaskChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
@@ -73,34 +73,17 @@ Item {
             anchors.onBottomChanged: itemLoader.updateItemVisibility()
 
             Component.onCompleted: {
-                if (itemLoader.controllingCVar) {
-                    wsw.registerCVarAwareControl(itemLoader)
-                    checkCVarChanges()
-                }
                 updateItemVisibility()
                 repeater.numInstantiatedItems++;
             }
 
             Component.onDestruction: {
-                if (itemLoader.controllingCVar) {
-                    wsw.unregisterCVarAwareControl(itemLoader)
-                }
                 repeater.numInstantiatedItems--;
-            }
-
-            function checkCVarChanges() {
-                const wasCVarOn = itemLoader.isCVarOn
-                const stringValue = wsw.getCVarValue(controllingCVar)
-                const numericValue = parseInt(stringValue, 10)
-                itemLoader.isCVarOn = numericValue && !isNaN(numericValue)
-                if (wasCVarOn !== itemLoader.isCVarOn) {
-                    updateItemVisibility()
-                }
             }
 
             function updateItemVisibility() {
                 if (item) {
-                    if (itemLoader.controllingCVar && !itemLoader.isCVarOn) {
+                    if (itemLoader.individualMask && !(itemLoader.individualMask & hudDataModel.activeItemsMask)) {
                         item.visible = false
                     } else if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false

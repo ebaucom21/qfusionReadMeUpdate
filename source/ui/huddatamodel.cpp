@@ -918,6 +918,29 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT hasActivePovChanged( m_hasActivePov );
 	}
 
+	// The best we can get in the current codebase state...
+	const auto isCVarSet = []( const char *name ) -> bool {
+		const float value = Cvar_Value( name ); return Q_rint( value ) != 0;
+	};
+
+	int newActiveItemsMask = 0;
+	if( isCVarSet( "cg_showTeamInfo" ) ) {
+		newActiveItemsMask |= (int)HudLayoutModel::ShowTeamInfo;
+	}
+	if( isCVarSet( "cg_showFragsFeed" ) ) {
+		newActiveItemsMask |= (int)HudLayoutModel::ShowFragsFeed;
+	}
+	if( isCVarSet( "cg_showMessageFeed" ) ) {
+		newActiveItemsMask |= (int)HudLayoutModel::ShowMessageFeed;
+	}
+	if( isCVarSet( "cg_showAwards" ) ) {
+		newActiveItemsMask |= (int)HudLayoutModel::ShowAwards;
+	}
+	if( m_activeItemsMask != newActiveItemsMask ) {
+		m_activeItemsMask = newActiveItemsMask;
+		Q_EMIT activeItemsMaskChanged( newActiveItemsMask );
+	}
+
 	if( m_pendingAlphaScore != m_alphaScore ) {
 		m_alphaScore = m_pendingAlphaScore;
 		Q_EMIT alphaScoreChanged( m_alphaScore );
