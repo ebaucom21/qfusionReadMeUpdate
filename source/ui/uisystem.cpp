@@ -88,6 +88,7 @@ class QmlSandbox : public QObject {
 
 	Q_OBJECT
 public:
+	~QmlSandbox() override;
 
 	Q_SLOT void onSceneGraphInitialized();
 	Q_SLOT void onRenderRequested();
@@ -98,15 +99,15 @@ public:
 	bool requestsRendering() const { return m_hasPendingRedraw || m_hasPendingSceneChange; }
 private:
 	explicit QmlSandbox( QtUISystem *uiSystem ) : m_uiSystem( uiSystem ) {};
-	~QmlSandbox() override;
 
 	QPointer<QOpenGLContext> m_sharedContext;
 	QPointer<QQuickRenderControl> m_control;
 	QScopedPointer<QOpenGLFramebufferObject> m_framebufferObject;
 	QPointer<QOffscreenSurface> m_surface { nullptr };
 	QPointer<QQuickWindow> m_window { nullptr };
-	QPointer<QQmlEngine> m_engine;
-	QPointer<QQmlComponent> m_component;
+	std::unique_ptr<QQmlEngine> m_engine;
+	std::unique_ptr<QQmlComponent> m_component;
+	QObject *m_rootObject { nullptr };
 	QtUISystem *const m_uiSystem;
 
 	GLuint m_vao { 0 };
@@ -433,8 +434,8 @@ private:
 	QSet<QQuickItem *> m_cvarAwareControls;
 	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
 
-	QPointer<QmlSandbox> m_menuSandbox;
-	QPointer<QmlSandbox> m_hudSandbox;
+	std::unique_ptr<QmlSandbox> m_menuSandbox;
+	std::unique_ptr<QmlSandbox> m_hudSandbox;
 
 	bool m_isInUIRenderingMode { false };
 	bool m_skipDrawingSelf { false };
@@ -517,10 +518,12 @@ private:
 	static void registerFont( const wsw::StringView &path );
 	static void registerCustomQmlTypes();
 	static void retrieveVideoModes();
-	void registerContextProperties( QQmlContext *context );
+
+	enum SandboxKind { MenuSandbox, HudSandbox };
+	void registerContextProperties( QQmlContext *context, SandboxKind sandboxKind );
 
 	[[nodiscard]]
-	auto createQmlSandbox( int initialWidth, int initialHeight, const char *rootItem ) -> QPointer<QmlSandbox>;
+	auto createQmlSandbox( int initialWidth, int initialHeight, SandboxKind kind ) -> std::unique_ptr<QmlSandbox>;
 
 	[[nodiscard]]
 	static auto colorForNum( int num ) -> QColor {
@@ -580,6 +583,7 @@ private:
 	};
 
 	explicit QtUISystem( int width, int height );
+	~QtUISystem() override;
 
 	template <typename Value>
 	void appendSetCVarCommand( const wsw::StringView &name, const Value &value );
@@ -652,7 +656,7 @@ void QtUISystem::initPersistentPart() {
 void QtUISystem::registerCustomQmlTypes() {
 	const QString reason( "This type is a native code bridge and cannot be instantiated" );
 	const char *const uri = "net.warsow";
-	qmlRegisterUncreatableType<QtUISystem>( uri, 2, 6, "Wsw", reason );
+	qmlRegisterUncreatableType<QtUISystem>( uri, 2, 6, "UISystem", reason );
 	qmlRegisterUncreatableType<ChatProxy>( uri, 2, 6, "ChatProxy", reason );
 	qmlRegisterUncreatableType<CallvotesListModel>( uri, 2, 6, "CallvotesModel", reason );
 	qmlRegisterUncreatableType<GametypeDef>( uri, 2, 6, "GametypeDef", reason );
@@ -671,6 +675,8 @@ void QtUISystem::registerCustomQmlTypes() {
 	qmlRegisterType<NativelyDrawnImage>( uri, 2, 6, "NativelyDrawnImage_Native" );
 	qmlRegisterType<NativelyDrawnModel>( uri, 2, 6, "NativelyDrawnModel_Native" );
 	qmlRegisterType<VideoSource>( uri, 2, 6, "WswVideoSource" );
+	qmlRegisterSingletonType( QUrl( "qrc:///Hud.qml" ), uri, 2, 6, "Hud" );
+	qmlRegisterSingletonType( QUrl( "qrc:///UI.qml" ), uri, 2, 6, "UI" );
 }
 
 static const char *kUbuntuFontSuffixes[] {
@@ -728,31 +734,39 @@ void QtUISystem::registerFont( const wsw::StringView &path ) {
 	wsw::failWithRuntimeError( message.data() );
 }
 
-void QtUISystem::registerContextProperties( QQmlContext *context ) {
-	context->setContextProperty( "wsw", this );
-	context->setContextProperty( "serverListModel", &m_serverListModel );
-	context->setContextProperty( "keysAndBindings", &m_keysAndBindingsModel );
-	context->setContextProperty( "gametypesModel", &m_gametypesModel );
-	context->setContextProperty( "chatProxy", &m_chatProxy );
-	context->setContextProperty( "teamChatProxy", &m_teamChatProxy );
-	context->setContextProperty( "regularCallvotesModel", m_callvotesModel.getRegularModel() );
-	context->setContextProperty( "operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
-	context->setContextProperty( "scoreboard", &m_scoreboardModel );
-	context->setContextProperty( "scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
-	context->setContextProperty( "scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
-	context->setContextProperty( "scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
-	context->setContextProperty( "scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
-	context->setContextProperty( "scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
-	context->setContextProperty( "scoreboardChasersModel", m_scoreboardModel.getChasersModel() );
-	context->setContextProperty( "scoreboardChallengersModel", m_scoreboardModel.getChallengersModel() );
-	context->setContextProperty( "demosModel", &m_demosModel );
-	context->setContextProperty( "demosResolver", &m_demosResolver );
-	context->setContextProperty( "demoPlayer", &m_demoPlayer );
-	context->setContextProperty( "playersModel", &m_playersModel );
-	context->setContextProperty( "actionRequestsModel", &m_actionRequestsModel );
-	context->setContextProperty( "gametypeOptionsModel", &m_gametypeOptionsModel );
-	context->setContextProperty( "hudEditorModel", &m_hudEditorModel );
-	context->setContextProperty( "hudDataModel", &m_hudDataModel );
+void QtUISystem::registerContextProperties( QQmlContext *context, SandboxKind sandboxKind ) {
+	context->setContextProperty( "__ui", this );
+	// TODO: Show hud popups in the menu sandbox/context?
+	context->setContextProperty( "__chatProxy", &m_chatProxy );
+	context->setContextProperty( "__teamChatProxy", &m_teamChatProxy );
+	context->setContextProperty( "__hudDataModel", &m_hudDataModel );
+
+	// This condition not only helps to avoid global namespace pollution,
+	// but first and foremost is aimed to prevent keeping excessive GC roots.
+
+	if( sandboxKind == HudSandbox ) {
+		context->setContextProperty( "__actionRequestsModel", &m_actionRequestsModel );
+	} else {
+		context->setContextProperty( "__serverListModel", &m_serverListModel );
+		context->setContextProperty( "__keysAndBindings", &m_keysAndBindingsModel );
+		context->setContextProperty( "__gametypesModel", &m_gametypesModel );
+		context->setContextProperty( "__gametypeOptionsModel", &m_gametypeOptionsModel );
+		context->setContextProperty( "__regularCallvotesModel", m_callvotesModel.getRegularModel() );
+		context->setContextProperty( "__operatorCallvotesModel", m_callvotesModel.getOperatorModel() );
+		context->setContextProperty( "__scoreboard", &m_scoreboardModel );
+		context->setContextProperty( "__scoreboardSpecsModel", m_scoreboardModel.getSpecsModel() );
+		context->setContextProperty( "__scoreboardPlayersModel", m_scoreboardModel.getPlayersModel() );
+		context->setContextProperty( "__scoreboardAlphaModel", m_scoreboardModel.getAlphaModel() );
+		context->setContextProperty( "__scoreboardBetaModel", m_scoreboardModel.getBetaModel() );
+		context->setContextProperty( "__scoreboardMixedModel", m_scoreboardModel.getMixedModel() );
+		context->setContextProperty( "__scoreboardChasersModel", m_scoreboardModel.getChasersModel() );
+		context->setContextProperty( "__scoreboardChallengersModel", m_scoreboardModel.getChallengersModel() );
+		context->setContextProperty( "__demosModel", &m_demosModel );
+		context->setContextProperty( "__demosResolver", &m_demosResolver );
+		context->setContextProperty( "__demoPlayer", &m_demoPlayer );
+		context->setContextProperty( "__playersModel", &m_playersModel );
+		context->setContextProperty( "__hudEditorModel", &m_hudEditorModel );
+	}
 }
 
 void QtUISystem::retrieveVideoModes() {
@@ -765,6 +779,14 @@ void QtUISystem::retrieveVideoModes() {
 }
 
 QmlSandbox::~QmlSandbox() {
+	if( m_rootObject ) {
+		if( auto *const item = qobject_cast<QQuickItem *>( m_rootObject ) ) {
+			item->setParentItem( nullptr );
+			item->setParent( nullptr );
+		}
+		delete m_rootObject;
+		m_rootObject = nullptr;
+	}
 	if( m_sharedContext ) {
 		const bool wasInUIRenderingMode = m_uiSystem->isInUIRenderingMode();
 		if( !wasInUIRenderingMode ) {
@@ -775,6 +797,9 @@ QmlSandbox::~QmlSandbox() {
 				auto *const f = m_sharedContext->extraFunctions();
 				f->glBindVertexArray( 0 );
 				f->glDeleteVertexArrays( 1, &m_vao );
+			}
+			if( m_framebufferObject ) {
+				m_framebufferObject.reset( nullptr );
 			}
 		}
 		m_sharedContext.clear();
@@ -805,13 +830,13 @@ void QmlSandbox::onComponentStatusChanged( QQmlComponent::Status status ) {
 		return;
 	}
 
-	QObject *const rootObject = m_component->create();
-	if( !rootObject ) {
+	m_rootObject = m_component->create();
+	if( !m_rootObject ) {
 		uiError() << "Failed to finish the root Qml component creation";
 		return;
 	}
 
-	auto *const rootItem = qobject_cast<QQuickItem*>( rootObject );
+	auto *rootItem = qobject_cast<QQuickItem*>( m_rootObject );
 	if( !rootItem ) {
 		uiError() << "The root Qml component is not a QQuickItem";
 		return;
@@ -821,6 +846,7 @@ void QmlSandbox::onComponentStatusChanged( QQmlComponent::Status status ) {
 	const QSizeF size( m_window->width(), m_window->height() );
 	parentItem->setSize( size );
 	rootItem->setParentItem( parentItem );
+	rootItem->setParent( parentItem );
 	rootItem->setSize( size );
 
 	m_isValidAndReady = true;
@@ -849,14 +875,21 @@ void QtUISystem::refresh() {
 
 	checkPropertyChanges();
 
+	/*
+	if( m_hudSandbox ) {
+		const auto before = Sys_Microseconds();
+		m_hudSandbox->m_engine->collectGarbage();
+		uiNotice() << "Collecting garbage took" << ( Sys_Microseconds() - before ) << "micros";
+	}*/
+
 	if( m_menuSandbox && m_menuSandbox->requestsRendering() ) {
 		enterUIRenderingMode();
-		renderQml( m_menuSandbox.data() );
+		renderQml( m_menuSandbox.get() );
 		leaveUIRenderingMode();
 	}
 	if( m_hudSandbox && m_hudSandbox->requestsRendering() ) {
 		enterUIRenderingMode();
-		renderQml( m_hudSandbox.data() );
+		renderQml( m_hudSandbox.get() );
 		leaveUIRenderingMode();
 	}
 }
@@ -871,14 +904,20 @@ QtUISystem::QtUISystem( int initialWidth, int initialHeight ) {
 		return;
 	}
 
-	m_menuSandbox = createQmlSandbox( initialWidth, initialHeight, "qrc:///MenuRootItem.qml" );
-	m_hudSandbox  = createQmlSandbox( initialWidth, initialHeight, "qrc:///HudRootItem.qml" );
+	m_menuSandbox = createQmlSandbox( initialWidth, initialHeight, MenuSandbox );
+	m_hudSandbox  = createQmlSandbox( initialWidth, initialHeight, HudSandbox );
 
 	connect( &m_hudEditorModel, &HudEditorModel::hudUpdated, &m_hudDataModel, &HudDataModel::onHudUpdated );
 }
 
-auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, const char *rootItem ) -> QPointer<QmlSandbox> {
-	QPointer<QmlSandbox> sandbox( new QmlSandbox( this ) );
+QtUISystem::~QtUISystem() {
+	// Ensure that sandboxes are deleted prior to the enclosing object
+	m_menuSandbox.reset();
+	m_hudSandbox.reset();
+}
+
+auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, SandboxKind kind ) -> std::unique_ptr<QmlSandbox> {
+	std::unique_ptr<QmlSandbox> sandbox( new QmlSandbox( this ) );
 
 	QSurfaceFormat format;
 	format.setDepthBufferSize( 24 );
@@ -903,9 +942,9 @@ auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, const ch
 	sandbox->m_window->setGeometry( 0, 0, initialWidth, initialHeight );
 	sandbox->m_window->setColor( Qt::transparent );
 
-	connect( sandbox->m_window, &QQuickWindow::sceneGraphInitialized, sandbox, &QmlSandbox::onSceneGraphInitialized );
-	connect( sandbox->m_control, &QQuickRenderControl::renderRequested, sandbox, &QmlSandbox::onRenderRequested );
-	connect( sandbox->m_control, &QQuickRenderControl::sceneChanged, sandbox, &QmlSandbox::onSceneChanged );
+	connect( sandbox->m_window, &QQuickWindow::sceneGraphInitialized, sandbox.get(), &QmlSandbox::onSceneGraphInitialized );
+	connect( sandbox->m_control, &QQuickRenderControl::renderRequested, sandbox.get(), &QmlSandbox::onRenderRequested );
+	connect( sandbox->m_control, &QQuickRenderControl::sceneChanged, sandbox.get(), &QmlSandbox::onSceneChanged );
 
 	sandbox->m_surface = new QOffscreenSurface;
 	sandbox->m_surface->setFormat( sandbox->m_sharedContext->format() );
@@ -933,7 +972,7 @@ auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, const ch
 		uiError() << "Failed to make the dedicated Qt OpenGL rendering context current";
 	}
 
-	if( wasInUIRenderingMode ) {
+	if( !wasInUIRenderingMode ) {
 		leaveUIRenderingMode();
 	}
 
@@ -942,19 +981,22 @@ auto QtUISystem::createQmlSandbox( int initialWidth, int initialHeight, const ch
 		return nullptr;
 	}
 
-	sandbox->m_engine = new QQmlEngine;
+	sandbox->m_engine.reset( new QQmlEngine );
 	sandbox->m_engine->addImageProvider( "wsw", new wsw::ui::WswImageProvider );
 
-	registerContextProperties( sandbox->m_engine->rootContext() );
+	registerContextProperties( sandbox->m_engine->rootContext(), kind );
 
-	sandbox->m_component = new QQmlComponent( sandbox->m_engine );
+	sandbox->m_component.reset( new QQmlComponent( sandbox->m_engine.get() ) );
 
-	connect( sandbox->m_component, &QQmlComponent::statusChanged, sandbox, &QmlSandbox::onComponentStatusChanged );
+	connect( sandbox->m_component.get(), &QQmlComponent::statusChanged, sandbox.get(), &QmlSandbox::onComponentStatusChanged );
 
-	sandbox->m_component->loadUrl( QUrl( rootItem ) );
+	sandbox->m_component->loadUrl( QUrl( kind == MenuSandbox ? "qrc:///MenuRootItem.qml" : "qrc:///HudRootItem.qml" ) );
 
 	// Check onComponentStatusChanged() results
-	return sandbox->m_isValidAndReady ? sandbox : nullptr;
+	if( sandbox->m_isValidAndReady ) {
+		return sandbox;
+	}
+	return nullptr;
 }
 
 void QtUISystem::renderQml( QmlSandbox *qmlScope ) {

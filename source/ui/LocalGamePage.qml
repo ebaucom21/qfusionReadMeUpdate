@@ -78,7 +78,7 @@ Item {
 
             listComponent: ListView {
                 id: gametypesListView
-                model: gametypesModel
+                model: UI.gametypesModel
                 interactive: false
                 delegate: LocalGameListDelegate {
                     detailed: gametypePage.detailed
@@ -223,7 +223,7 @@ Item {
 
             SwipeView.onIsCurrentItemChanged: {
                 if (SwipeView.isCurrentItem) {
-                    const botConfig  = gametypesModel.getBotConfig(selectedGametypeIndex, selectedMapIndex)
+                    const botConfig  = UI.gametypesModel.getBotConfig(selectedGametypeIndex, selectedMapIndex)
                     isNumBotsDefined = !!(botConfig["defined"])
                     if (isNumBotsDefined) {
                         isNumBotsFixed       = !!(botConfig["fixed"])
@@ -340,12 +340,12 @@ Item {
                 } else {
                     let flags = 0
                     if (selectedInsta) {
-                        flags |= Wsw.LocalServerInsta
+                        flags |= UISystem.LocalServerInsta
                     }
                     if (selectedPublic) {
-                        flags |= Wsw.LocalServerPublic
+                        flags |= UISystem.LocalServerPublic
                     }
-                    wsw.launchLocalServer(selectedGametypeName, selectedMapName, flags, selectedNumBots);
+                    UI.ui.launchLocalServer(selectedGametypeName, selectedMapName, flags, selectedNumBots);
                 }
             }
         }

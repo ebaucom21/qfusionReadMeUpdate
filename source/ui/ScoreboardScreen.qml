@@ -8,7 +8,7 @@ import net.warsow 2.6
 Rectangle {
     id: root
 
-    color: wsw.colorWithAlpha(Material.background, wsw.fullscreenOverlayOpacity)
+    color: UI.ui.colorWithAlpha(Material.background, UI.ui.fullscreenOverlayOpacity)
 
     readonly property real baseCellWidth: 64
     readonly property real clanCellWidth: 96
@@ -24,11 +24,11 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.horizontalCenterOffset: 0.5 * root.baseCellWidth
         sourceComponent: {
-            if (!hudDataModel.hasTwoTeams) {
+            if (!UI.hudDataModel.hasTwoTeams) {
                 playersDisplayComponent
-            } else if (scoreboard.layout === Scoreboard.Mixed) {
+            } else if (UI.scoreboard.layout === Scoreboard.Mixed) {
                 mixedTeamsDisplayComponent
-            } else if (scoreboard.layout === Scoreboard.SideBySide && root.width > 2 * root.tableWidth) {
+            } else if (UI.scoreboard.layout === Scoreboard.SideBySide && root.width > 2 * root.tableWidth) {
                 sideBySideTeamsDisplayComponent
             } else {
                 columnWiseTeamsDisplayComponent
@@ -43,12 +43,12 @@ Rectangle {
         width: Math.max(teamTablesLoader.item.width, specsPane.width)
         height: teamTablesLoader.item.height + column.anchors.topMargin + column.height
 
-        Component.onCompleted: wsw.registerHudOccluder(hudOccluder)
-        Component.onDestruction: wsw.unregisterHudOccluder(hudOccluder)
-        onWidthChanged: wsw.updateHudOccluder(hudOccluder)
-        onHeightChanged: wsw.updateHudOccluder(hudOccluder)
-        onXChanged: wsw.updateHudOccluder(hudOccluder)
-        onYChanged: wsw.updateHudOccluder(hudOccluder)
+        Component.onCompleted: UI.ui.registerHudOccluder(hudOccluder)
+        Component.onDestruction: UI.ui.unregisterHudOccluder(hudOccluder)
+        onWidthChanged: UI.ui.updateHudOccluder(hudOccluder)
+        onHeightChanged: UI.ui.updateHudOccluder(hudOccluder)
+        onXChanged: UI.ui.updateHudOccluder(hudOccluder)
+        onYChanged: UI.ui.updateHudOccluder(hudOccluder)
     }
 
     Column {
@@ -63,7 +63,7 @@ Rectangle {
             playersInFirstRow: 2
             width: root.tableWidth - root.baseCellWidth
             height: implicitHeight
-            model: scoreboard.challengersModel
+            model: UI.scoreboard.challengersModel
             title: "Challengers"
         }
 
@@ -73,17 +73,17 @@ Rectangle {
             playersInFirstRow: 3
             width: root.tableWidth - root.baseCellWidth
             height: implicitHeight
-            model: scoreboard.specsModel
+            model: UI.scoreboard.specsModel
             title: "Spectators"
         }
 
         ScoreboardSpecsPane {
             playersPerRow: 3
             playersInFirstRow: 3
-            visible: scoreboard.hasChasers && scoreboard.chasersModel.length
+            visible: UI.scoreboard.hasChasers && UI.scoreboard.chasersModel.length
             width: root.tableWidth - root.baseCellWidth
             height: implicitHeight
-            model: scoreboard.chasersModel
+            model: UI.scoreboard.chasersModel
             title: "Chasers"
         }
 
@@ -99,7 +99,7 @@ Rectangle {
 
         ScoreboardTeamPane {
             width: root.tableWidth
-            model: scoreboardPlayersModel
+            model: UI.scoreboardPlayersModel
             baseColor: Qt.lighter(Material.background)
             baseCellWidth: root.baseCellWidth
             clanCellWidth: root.clanCellWidth
@@ -112,15 +112,15 @@ Rectangle {
         Row {
             ScoreboardTeamPane {
                 width: root.tableWidth
-                model: scoreboardAlphaModel
-                baseColor: Qt.darker(hudDataModel.alphaColor)
+                model: UI.scoreboardAlphaModel
+                baseColor: Qt.darker(UI.hudDataModel.alphaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
             }
             ScoreboardTeamPane {
                 width: root.tableWidth
-                model: scoreboardBetaModel
-                baseColor: Qt.darker(hudDataModel.betaColor)
+                model: UI.scoreboardBetaModel
+                baseColor: Qt.darker(UI.hudDataModel.betaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
             }
@@ -134,16 +134,16 @@ Rectangle {
             spacing: 32
             ScoreboardTeamPane {
                 width: root.tableWidth
-                model: scoreboardAlphaModel
-                baseColor: Qt.darker(hudDataModel.alphaColor)
+                model: UI.scoreboardAlphaModel
+                baseColor: Qt.darker(UI.hudDataModel.alphaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
             }
             ScoreboardTeamPane {
                 width: root.tableWidth
-                model: scoreboardBetaModel
+                model: UI.scoreboardBetaModel
                 displayHeader: false
-                baseColor: Qt.darker(hudDataModel.betaColor)
+                baseColor: Qt.darker(UI.hudDataModel.betaColor)
                 baseCellWidth: root.baseCellWidth
                 clanCellWidth: root.clanCellWidth
             }
@@ -155,10 +155,10 @@ Rectangle {
 
         ScoreboardTeamPane {
             width: root.tableWidth
-            model: scoreboardMixedModel
+            model: UI.scoreboardMixedModel
             mixedTeamsMode: true
-            baseAlphaColor: Qt.darker(hudDataModel.alphaColor)
-            baseBetaColor: Qt.darker(hudDataModel.betaColor)
+            baseAlphaColor: Qt.darker(UI.hudDataModel.alphaColor)
+            baseBetaColor: Qt.darker(UI.hudDataModel.betaColor)
             baseCellWidth: root.baseCellWidth
             clanCellWidth: root.clanCellWidth
         }

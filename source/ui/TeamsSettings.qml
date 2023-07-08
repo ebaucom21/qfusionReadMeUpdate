@@ -29,7 +29,7 @@ Item {
                 Layout.preferredWidth: root.modelSelectorWidth
                 modelSelectorWidth: root.modelSelectorWidth
                 modelSelectorHeight: root.modelSelectorHeight
-                defaultModel: wsw.defaultTeamAlphaModel
+                defaultModel: UI.ui.defaultTeamAlphaModel
                 drawNativePart: root.drawNativePart
                 teamName: "ALPHA"
             }
@@ -40,7 +40,7 @@ Item {
                 Layout.preferredWidth: root.modelSelectorWidth
                 modelSelectorWidth: root.modelSelectorWidth
                 modelSelectorHeight: root.modelSelectorHeight
-                defaultModel: wsw.defaultTeamPlayersModel
+                defaultModel: UI.ui.defaultTeamPlayersModel
                 hasForceColorVar: true
                 drawNativePart: root.drawNativePart
                 teamName: "PLAYERS"
@@ -52,7 +52,7 @@ Item {
                 Layout.preferredWidth: root.modelSelectorWidth
                 modelSelectorWidth: root.modelSelectorWidth
                 modelSelectorHeight: root.modelSelectorHeight
-                defaultModel: wsw.defaultTeamBetaModel
+                defaultModel: UI.ui.defaultTeamBetaModel
                 drawNativePart: root.drawNativePart
                 teamName: "BETA"
             }

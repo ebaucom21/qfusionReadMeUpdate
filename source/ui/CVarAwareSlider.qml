@@ -14,9 +14,9 @@ Slider {
     property bool suppressSignals: true
 
     function checkCVarChanges() {
-        let newValue = wsw.getCVarValue(cvarName)
+        let newValue = UI.ui.getCVarValue(cvarName)
         if (value != newValue) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 value = newValue
             }
         }
@@ -24,25 +24,25 @@ Slider {
 
     function rollbackChanges() {
         suppressSignals = true
-        value = wsw.getCVarValue(cvarName)
+        value = UI.ui.getCVarValue(cvarName)
         suppressSignals = false
     }
 
     onValueChanged: {
         if (!suppressSignals) {
             if (applyImmediately) {
-                wsw.setCVarValue(cvarName, value)
+                UI.ui.setCVarValue(cvarName, value)
             } else {
-                wsw.markPendingCVarChanges(root, cvarName, value)
+                UI.ui.markPendingCVarChanges(root, cvarName, value)
             }
         }
     }
 
     Component.onCompleted: {
-        value = wsw.getCVarValue(cvarName)
-        wsw.registerCVarAwareControl(root)
+        value = UI.ui.getCVarValue(cvarName)
+        UI.ui.registerCVarAwareControl(root)
         suppressSignals = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

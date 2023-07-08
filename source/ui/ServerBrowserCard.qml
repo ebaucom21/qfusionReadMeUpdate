@@ -55,7 +55,7 @@ Item {
                 id: addressLinkMouseArea
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: wsw.connectToAddress(address)
+                onClicked: UI.ui.connectToAddress(address)
             }
         }
 
@@ -68,7 +68,7 @@ Item {
             anchors.leftMargin: 8
             text: serverName
             textFormat: Text.StyledText
-            font.family: wsw.headingFontFamily
+            font.family: UI.ui.headingFontFamily
             font.pointSize: 12
             font.letterSpacing: 0.5
             font.weight: Font.DemiBold

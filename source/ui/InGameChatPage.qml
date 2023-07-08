@@ -19,7 +19,7 @@ Item {
 
         Button {
             flat: true
-            visible: wsw.hasTeamChat
+            visible: UI.ui.hasTeamChat
             Material.theme: Material.Dark
             text: isDisplayingTeamChat ? "switch to common" : "switch to team"
             onClicked: isDisplayingTeamChat = !isDisplayingTeamChat
@@ -29,7 +29,7 @@ Item {
     }
 
     Connections {
-        target: wsw
+        target: UI.ui
         onHasTeamChatChanged: {
             isDisplayingTeamChat = false
         }
@@ -37,7 +37,7 @@ Item {
 
     RichChatList {
         id: chatList
-        model: isDisplayingTeamChat ? teamChatProxy.getRichModel() : chatProxy.getRichModel()
+        model: isDisplayingTeamChat ? UI.teamChatProxy.getRichModel() : UI.chatProxy.getRichModel()
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: header.bottom
@@ -93,9 +93,9 @@ Item {
             Keys.onPressed: {
                 if (event.key === Qt.Key_Enter) {
                     if (isDisplayingTeamChat) {
-                        teamChatProxy.sendMessage(text)
+                        UI.teamChatProxy.sendMessage(text)
                     } else {
-                        chatProxy.sendMessage(text)
+                        UI.chatProxy.sendMessage(text)
                     }
                     // We should clear the key that is being entered now, defer to the next frame
                     clearOnNextFrameTimer.start()

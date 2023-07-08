@@ -19,7 +19,7 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup
+        active: Hud.ui.isShowingChatPopup || Hud.ui.isShowingTeamChatPopup
         sourceComponent: chatComponent
     }
 
@@ -34,14 +34,14 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
-                color: wsw.isShowingTeamChatPopup ? Material.accent : "black"
+                color: Hud.ui.isShowingTeamChatPopup ? Material.accent : "black"
                 radius: 5
                 opacity: 0.7
             }
 
             TextField {
                 id: input
-                Material.accent: wsw.isShowingTeamChatPopup ? "white" : defaultMaterialAccent
+                Material.accent: Hud.ui.isShowingTeamChatPopup ? "white" : defaultMaterialAccent
 
                 anchors.top: parent.top
                 anchors.left: parent.left
@@ -56,17 +56,17 @@ Item {
                 Component.onCompleted: forceActiveFocus()
 
                 onEditingFinished: {
-                    if (wsw.isShowingTeamChatPopup) {
-                        teamChatProxy.sendMessage(text)
+                    if (Hud.ui.isShowingTeamChatPopup) {
+                        Hud.teamChatProxy.sendMessage(text)
                     } else {
-                        chatProxy.sendMessage(text)
+                        Hud.chatProxy.sendMessage(text)
                     }
                     text = ""
                 }
             }
 
             ListView {
-                model: wsw.isShowingTeamChatPopup ? teamChatProxy.getCompactModel() : chatProxy.getCompactModel()
+                model: Hud.ui.isShowingTeamChatPopup ? Hud.teamChatProxy.getCompactModel() : Hud.chatProxy.getCompactModel()
                 verticalLayoutDirection: ListView.TopToBottom
                 spacing: 4
                 clip: true
@@ -109,9 +109,9 @@ Item {
     }
 
     Keys.onPressed: {
-        if (wsw.isShowingChatPopup || wsw.isShowingTeamChatPopup) {
+        if (Hud.ui.isShowingChatPopup || Hud.ui.isShowingTeamChatPopup) {
             if (event.key == Qt.Key_Escape || event.key == Qt.Key_Back) {
-                wsw.closeChatPopup()
+                Hud.ui.closeChatPopup()
             }
         }
     }

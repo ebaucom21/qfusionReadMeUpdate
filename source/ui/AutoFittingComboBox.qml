@@ -70,7 +70,7 @@ ComboBox {
             root.background.visible  = wasVisible
 
             rootItem.leavePopupMode()
-            wsw.unregisterHudOccluder(background)
+            UI.ui.unregisterHudOccluder(background)
         }
 
         function repositionBlurRegion() {
@@ -88,7 +88,7 @@ ComboBox {
                 rootItem.enterPopupMode(Qt.rect(globalPos.x + inset, globalPos.y + inset,
                     background.width - 2 * inset, background.height - 2 * inset))
 
-                wsw.registerHudOccluder(background)
+                UI.ui.registerHudOccluder(background)
             }
         }
     }

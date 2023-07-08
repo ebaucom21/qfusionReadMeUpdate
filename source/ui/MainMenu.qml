@@ -35,12 +35,12 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0.00
-                color: wsw.colorWithAlpha(Qt.tint(Material.background, wsw.colorWithAlpha(Material.accent, 0.05)), 0.99)
+                color: UI.ui.colorWithAlpha(Qt.tint(Material.background, UI.ui.colorWithAlpha(Material.accent, 0.05)), 0.99)
             }
             GradientStop {
                 position: 1.00
 	            // The gradient makes it look denser so the base value is slightly lower
-                color: wsw.colorWithAlpha(Qt.darker(Material.backgroundColor, 1.2), wsw.fullscreenOverlayOpacity - 0.05)
+                color: UI.ui.colorWithAlpha(Qt.darker(Material.backgroundColor, 1.2), UI.ui.fullscreenOverlayOpacity - 0.05)
             }
         }
     }
@@ -49,7 +49,7 @@ Item {
 		id: primaryMenu
 		anchors.centerIn: parent
 		shouldShowExpandedButtons: parent.width >= 2400 && (parent.width / parent.height) >= 2.0
-        width: parent.width + (shouldShowExpandedButtons ? 0 : 2 * (wsw.mainMenuButtonWidthDp + wsw.mainMenuButtonTrailWidthDp))
+        width: parent.width + (shouldShowExpandedButtons ? 0 : 2 * (UI.ui.mainMenuButtonWidthDp + UI.ui.mainMenuButtonTrailWidthDp))
         height: parent.height
 	}
 
@@ -158,7 +158,7 @@ Item {
 	    if (event.key !== Qt.Key_Escape) {
 	        return
 	    }
-	    wsw.returnFromMainMenu()
+	    UI.ui.returnFromMainMenu()
 	    root.forceActiveFocus()
 	    event.accepted = true
 	}

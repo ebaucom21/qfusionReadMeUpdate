@@ -32,7 +32,7 @@ Item {
         height: parent.height > contentHeight ? contentHeight : parent.height
         boundsBehavior: parent.height > contentHeight ? Flickable.StopAtBounds : Flickable.OvershootBounds
         spacing: parent.height > contentHeight ? 48 : 36
-        model: gametypeOptionsModel
+        model: UI.gametypeOptionsModel
 
         delegate: Item {
             id: option
@@ -88,7 +88,7 @@ Item {
                                 Layout.preferredWidth: optionWidth
                                 checked: booleanOptionPredicates[index](option.optionCurrent)
                                 iconPath: booleanOptionIcons[index]
-                                onClicked: gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
+                                onClicked: UI.gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
                             }
                         }
 
@@ -99,7 +99,7 @@ Item {
                                 Layout.preferredWidth: optionWidth
                                 checked: booleanOptionPredicates[index](option.optionCurrent)
                                 iconPath: booleanOptionIcons[index]
-                                onClicked: gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
+                                onClicked: UI.gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
                             }
                         }
                     }
@@ -133,9 +133,9 @@ Item {
                                     GametypeCardOption {
                                         readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
                                         checked: flatIndex === option.optionCurrent
-                                        iconPath: gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
-                                        text: gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
-                                        onClicked: gametypeOptionsModel.select(option.optionRow, flatIndex)
+                                        iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
+                                        text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
+                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
                                     }
                                 }
 
@@ -144,9 +144,9 @@ Item {
                                     GametypeSlantedOption {
                                         readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
                                         checked: flatIndex === option.optionCurrent
-                                        iconPath: gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
-                                        text: gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
-                                        onClicked: gametypeOptionsModel.select(option.optionRow, flatIndex)
+                                        iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
+                                        text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
+                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
                                     }
                                 }
                             }

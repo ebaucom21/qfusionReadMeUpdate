@@ -10,8 +10,8 @@ Item {
 
     // These conditions try to prevent activating the loader until the status of models is well-defined.
     readonly property bool useDifferentHuds:
-        hudDataModel.specLayoutModel.name.length > 0 && hudDataModel.clientLayoutModel.name.length > 0 &&
-            hudDataModel.specLayoutModel.name.toUpperCase() != hudDataModel.clientLayoutModel.name.toUpperCase()
+        Hud.dataModel.specLayoutModel.name.length > 0 && Hud.dataModel.clientLayoutModel.name.length > 0 &&
+            Hud.dataModel.specLayoutModel.name.toUpperCase() != Hud.dataModel.clientLayoutModel.name.toUpperCase()
 
     Window.onWindowChanged: {
         if (Window.window) {
@@ -22,9 +22,9 @@ Item {
 
     // Try reusing the same instance due to Qml GC quirks
     InGameHud {
-        visible: wsw.isShowingHud && (hudDataModel.hasActivePov || !useDifferentHuds)
+        visible: Hud.ui.isShowingHud && (Hud.dataModel.hasActivePov || !useDifferentHuds)
         anchors.fill: parent
-        model: hudDataModel.clientLayoutModel
+        model: Hud.dataModel.clientLayoutModel
     }
 
     Loader {
@@ -33,13 +33,13 @@ Item {
         anchors.fill: parent
         sourceComponent: InGameHud {
             // Toggle the visibility once it's loaded for the same GC-related reasons
-            visible: wsw.isShowingHud && !hudDataModel.hasActivePov
-            model: hudDataModel.specLayoutModel
+            visible: Hud.ui.isShowingHud && !Hud.dataModel.hasActivePov
+            model: Hud.dataModel.specLayoutModel
         }
     }
 
     Loader {
-        active: wsw.isShowingActionRequests
+        active: Hud.ui.isShowingActionRequests
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right

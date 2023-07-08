@@ -27,13 +27,13 @@ Item {
         anchors.top: back.top
         anchors.topMargin: 12
         anchors.horizontalCenter: back.horizontalCenter
-        font.family: wsw.headingFontFamily
+        font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.letterSpacing: 1.25
         font.pointSize: 13
         font.capitalization: Font.AllUppercase
         textFormat: Text.PlainText
-        text: hudDataModel.activeWeaponName
+        text: Hud.dataModel.activeWeaponName
     }
 
     Image {
@@ -44,12 +44,12 @@ Item {
         height: 96
         smooth: true
         mipmap: true
-        source: hudDataModel.activeWeaponIcon
+        source: Hud.dataModel.activeWeaponIcon
     }
 
 
-    readonly property real strongAmmo: hudDataModel.activeWeaponStrongAmmo
-    readonly property real weakAmmo: hudDataModel.activeWeaponWeakAmmo
+    readonly property real strongAmmo: Hud.dataModel.activeWeaponStrongAmmo
+    readonly property real weakAmmo: Hud.dataModel.activeWeaponWeakAmmo
     readonly property real primaryAmmo: strongAmmo || weakAmmo
 
     readonly property string infinity: "\u221E"
@@ -61,7 +61,7 @@ Item {
         anchors.left: primaryCountLabel.left
         anchors.bottom: primaryCountLabel.top
         anchors.bottomMargin: weakAmmo >= 0 ? -4 : -24
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.weight: Font.Black
         font.letterSpacing: 1.25
         font.pointSize: weakAmmo >= 0 ? 16 : 24

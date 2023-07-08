@@ -29,9 +29,9 @@ RowLayout {
     onSelectedValueChanged: {
         if (!suppressSignals) {
             if (applyImmediately) {
-                wsw.setCVarValue(cvarName, selectedValue)
+                UI.ui.setCVarValue(cvarName, selectedValue)
             } else {
-                wsw.markPendingCVarChanges(root, cvarName, value)
+                UI.ui.markPendingCVarChanges(root, cvarName, value)
             }
         }
     }
@@ -53,17 +53,17 @@ RowLayout {
 
     Component.onCompleted: {
         setupRepeaterModel()
-        selectedIndex = mapValueToIndex(wsw.getCVarValue(cvarName))
+        selectedIndex = mapValueToIndex(UI.ui.getCVarValue(cvarName))
         if (selectedIndex >= 0) {
             selectedValue = modelValues[selectedIndex]
         } else {
             selectedValue = undefined
         }
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         suppressSignals = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 
     function setupRepeaterModel() {
         const realModelTitles = []
@@ -77,7 +77,7 @@ RowLayout {
     }
 
     function checkCVarChanges() {
-        const actualValue = wsw.getCVarValue(cvarName)
+        const actualValue = UI.ui.getCVarValue(cvarName)
         const index = mapValueToIndex(actualValue)
         // TODO: Is it redundant?
         if (selectedIndex !== index) {
@@ -87,7 +87,7 @@ RowLayout {
 
     function rollbackChanges() {
         suppressSignals = true
-        selectedIndex = mapValueToIndex(wsw.getCVarValue(cvarName))
+        selectedIndex = mapValueToIndex(UI.ui.getCVarValue(cvarName))
         suppressSignals = false
     }
 

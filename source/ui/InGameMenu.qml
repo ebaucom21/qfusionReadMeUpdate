@@ -6,9 +6,9 @@ import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
 Rectangle {
-    color: wsw.colorWithAlpha(Material.background, wsw.fullscreenOverlayOpacity)
+    color: UI.ui.colorWithAlpha(Material.background, UI.ui.fullscreenOverlayOpacity)
 
-    readonly property bool canShowLoadouts: gametypeOptionsModel.available && !hudDataModel.isSpectator
+    readonly property bool canShowLoadouts: UI.gametypeOptionsModel.available && !UI.hudDataModel.isSpectator
 
     // Reserve some space for a slight default expansion of an active button
     property real tabButtonWidth: (tabBar.width - 8) / (canShowLoadouts ? 4 : 3)
@@ -22,12 +22,12 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         background: null
 
-        Component.onCompleted: wsw.registerHudOccluder(tabBar)
-        Component.onDestruction: wsw.unregisterHudOccluder(tabBar)
-        onWidthChanged: wsw.updateHudOccluder(tabBar)
-        onHeightChanged: wsw.updateHudOccluder(tabBar)
-        onXChanged: wsw.updateHudOccluder(tabBar)
-        onYChanged: wsw.updateHudOccluder(tabBar)
+        Component.onCompleted: UI.ui.registerHudOccluder(tabBar)
+        Component.onDestruction: UI.ui.unregisterHudOccluder(tabBar)
+        onWidthChanged: UI.ui.updateHudOccluder(tabBar)
+        onHeightChanged: UI.ui.updateHudOccluder(tabBar)
+        onXChanged: UI.ui.updateHudOccluder(tabBar)
+        onYChanged: UI.ui.updateHudOccluder(tabBar)
 
         WswTabButton {
             readonly property var component: generalComponent
@@ -48,7 +48,7 @@ Rectangle {
             readonly property var component: Component { InGameGametypeOptionsPage {} }
             visible: canShowLoadouts
             width: visible ? tabButtonWidth : 0
-            text: gametypeOptionsModel.tabTitle
+            text: UI.gametypeOptionsModel.tabTitle
         }
 
         onCurrentItemChanged: stackView.replace(currentItem.component)
@@ -70,12 +70,12 @@ Rectangle {
             clip: true
         }
 
-        Component.onCompleted: wsw.registerHudOccluder(mainPane)
-        Component.onDestruction: wsw.unregisterHudOccluder(mainPane)
-        onWidthChanged: wsw.updateHudOccluder(mainPane)
-        onHeightChanged: wsw.updateHudOccluder(mainPane)
-        onXChanged: wsw.updateHudOccluder(mainPane)
-        onYChanged: wsw.updateHudOccluder(mainPane)
+        Component.onCompleted: UI.ui.registerHudOccluder(mainPane)
+        Component.onDestruction: UI.ui.unregisterHudOccluder(mainPane)
+        onWidthChanged: UI.ui.updateHudOccluder(mainPane)
+        onHeightChanged: UI.ui.updateHudOccluder(mainPane)
+        onXChanged: UI.ui.updateHudOccluder(mainPane)
+        onYChanged: UI.ui.updateHudOccluder(mainPane)
     }
 
     Component {
@@ -99,7 +99,7 @@ Rectangle {
     }
 
     Connections {
-        target: gametypeOptionsModel
+        target: UI.gametypeOptionsModel
         onAvailableChanged: {
             if (!available) {
                 stackView.replace(generalComponent)
@@ -144,7 +144,7 @@ Rectangle {
         }
 
         if (stackView.depth === 1) {
-            wsw.returnFromInGameMenu()
+            UI.ui.returnFromInGameMenu()
             return
         }
 

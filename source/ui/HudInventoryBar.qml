@@ -21,7 +21,7 @@ Item {
         anchors.centerIn: parent
         width: contentWidth
         height: cardHeight
-        model: hudDataModel.getInventoryModel()
+        model: Hud.dataModel.getInventoryModel()
         orientation: ListView.Horizontal
         boundsBehavior: Flickable.StopAtBounds
         spacing: 24
@@ -101,7 +101,7 @@ Item {
                 anchors.top: frame.top
                 anchors.topMargin: strongAmmoCount >= 0 ? 6 : 4
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.family: wsw.numbersFontFamily
+                font.family: Hud.ui.numbersFontFamily
                 font.weight: Font.Black
                 font.pointSize: strongAmmoCount >= 0 ? 14 : 18
                 font.letterSpacing: 1.0
@@ -115,7 +115,7 @@ Item {
                 anchors.bottom: frame.bottom
                 anchors.bottomMargin: weakAmmoCount >= 0 ? 6 : 4
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.family: wsw.numbersFontFamily
+                font.family: Hud.ui.numbersFontFamily
                 font.weight: Font.Black
                 font.pointSize: weakAmmoCount >= 0 ? 14 : 18
                 font.letterSpacing: 1.0

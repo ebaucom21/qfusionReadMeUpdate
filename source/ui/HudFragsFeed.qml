@@ -14,7 +14,7 @@ Item {
 
     ListView {
         id: list
-        model: hudDataModel.getFragsFeedModel()
+        model: Hud.dataModel.getFragsFeedModel()
         width: parent.width - 16
         height: contentHeight
         anchors.centerIn: parent

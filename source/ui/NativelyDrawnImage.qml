@@ -33,13 +33,13 @@ Item {
         height: parent.height
         anchors.centerIn: parent
 
-        Component.onCompleted: wsw.registerNativelyDrawnItem(underlying)
-        Component.onDestruction: wsw.unregisterNativelyDrawnItem(underlying)
+        Component.onCompleted: UI.ui.registerNativelyDrawnItem(underlying)
+        Component.onDestruction: UI.ui.unregisterNativelyDrawnItem(underlying)
     }
 
     Loader {
         anchors.fill: parent
-        sourceComponent: wsw.isDebuggingNativelyDrawnItems ? debuggingPlaceholder : null
+        sourceComponent: UI.ui.isDebuggingNativelyDrawnItems ? debuggingPlaceholder : null
     }
 
     Component {

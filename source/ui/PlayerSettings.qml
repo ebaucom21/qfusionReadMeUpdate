@@ -33,7 +33,7 @@ Item {
             modelColor: colorPicker.selectedColor
             fullbright: fullbrightCheckBox.checked
             drawNativePart: root.StackView.view && !root.StackView.view.busy
-            defaultModel: wsw.defaultPlayerModel
+            defaultModel: UI.ui.defaultPlayerModel
             cvarName: "model"
         }
 

@@ -13,7 +13,7 @@ Item {
         anchors.centerIn: parent
         height: contentHeight
         width: parent.width
-        model: hudDataModel.getAwardsModel()
+        model: Hud.dataModel.getAwardsModel()
         verticalLayoutDirection: ListView.BottomToTop
         spacing: 8
 

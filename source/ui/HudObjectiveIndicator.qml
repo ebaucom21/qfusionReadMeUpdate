@@ -43,7 +43,7 @@ Item {
         color: "transparent"
         border.color: indicatorColor
         border.width: borderWidth
-        opacity: Math.min(1.0, baseOpacity + (wsw.isShowingScoreboard ? 0.0 : 0.1))
+        opacity: Math.min(1.0, baseOpacity + (Hud.ui.isShowingScoreboard ? 0.0 : 0.1))
         radius: 24
 
         function restoreDefaultProperties() {
@@ -63,7 +63,7 @@ Item {
         height: 32
         smooth: true
         mipmap: true
-        source: hudDataModel.getIndicatorIconPath(indicatorState.iconNum)
+        source: Hud.dataModel.getIndicatorIconPath(indicatorState.iconNum)
 
         function restoreDefaultProperties() {
             if (!iconAlertAnim.running) {
@@ -128,7 +128,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width - 2 * root.barMargin
         height: root.barHeight
-        color: wsw.colorWithAlpha(indicatorColor, 0.6)
+        color: Hud.ui.colorWithAlpha(indicatorColor, 0.6)
 
         Rectangle {
             visible: indicatorProgress

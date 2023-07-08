@@ -23,7 +23,7 @@ Item {
         anchors.centerIn: parent
         width: parent.width
         height: Math.min(contentHeight, parent.height)
-        model: playersModel
+        model: UI.playersModel
 
         delegate: SelectableLabel {
             width: root.width

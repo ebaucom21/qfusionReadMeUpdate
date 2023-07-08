@@ -8,7 +8,7 @@ Item {
     id: root
 
     readonly property int weaponsPerRow: 3
-    readonly property var accuracyModel: scoreboard.accuracyModel
+    readonly property var accuracyModel: UI.scoreboard.accuracyModel
     readonly property int numWeapons: accuracyModel.length
 
     visible: numWeapons
@@ -27,7 +27,7 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
-        font.family: wsw.headingFontFamily
+        font.family: UI.ui.headingFontFamily
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1.0
         font.pointSize: 12
@@ -61,19 +61,19 @@ Item {
                             id: nameLabel
                             anchors.left: parent.left
                             anchors.baseline: parent.bottom
-                            font.family: wsw.regularFontFamily
+                            font.family: UI.ui.regularFontFamily
                             font.pointSize: 12
                             font.weight: Font.Bold
                             font.capitalization: Font.AllUppercase
                             font.letterSpacing: 1.25
-                            color: hudDataModel.getWeaponColor(entry["weapon"])
-                            text: hudDataModel.getWeaponShortName(entry["weapon"])
+                            color: UI.hudDataModel.getWeaponColor(entry["weapon"])
+                            text: UI.hudDataModel.getWeaponShortName(entry["weapon"])
                         }
                         Label {
                             id: valuesLabel
                             anchors.right: parent.right
                             anchors.baseline: parent.bottom
-                            font.family: wsw.numbersFontFamily
+                            font.family: UI.ui.numbersFontFamily
                             font.pointSize: 12
                             font.weight: Font.Bold
                             font.capitalization: Font.AllUppercase

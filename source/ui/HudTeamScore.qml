@@ -93,7 +93,7 @@ Item {
         radius: 1
         height: 28
         color: Qt.rgba(root.color.r, root.color.g, root.color.b, 1.0)
-        opacity: wsw.isShowingScoreboard ? 0.5 : 0.6
+        opacity: Hud.ui.isShowingScoreboard ? 0.5 : 0.6
     }
 
     Label {
@@ -104,7 +104,7 @@ Item {
         anchors.leftMargin: 24
         anchors.rightMargin: 24
         horizontalAlignment: Qt.AlignHCenter
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.weight: Font.Black
         font.letterSpacing: 3
         font.pointSize: 56
@@ -120,7 +120,7 @@ Item {
     Label {
         id: clanLabel
         anchors.verticalCenter: colorBar.verticalCenter
-        font.family: wsw.headingFontFamily
+        font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.letterSpacing: 1.75
         font.pointSize: 16
@@ -134,7 +134,7 @@ Item {
         id: nameLabel
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: colorBar.height + 8 - 0.5 * nameLabel.height
-        font.family: wsw.headingFontFamily
+        font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.pointSize: 25
         font.letterSpacing: 1.75
@@ -150,7 +150,7 @@ Item {
         anchors.rightMargin: 6
         anchors.verticalCenter: colorBar.verticalCenter
         anchors.verticalCenterOffset: +2
-        font.family: wsw.symbolsFontFamily
+        font.family: Hud.ui.symbolsFontFamily
         font.weight: Font.ExtraBold
         font.pointSize: 14
         style: Text.Raised

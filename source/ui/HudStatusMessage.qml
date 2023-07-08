@@ -8,7 +8,7 @@ Item {
     implicitHeight: stackView.height
 
     Connections {
-        target: hudDataModel
+        target: Hud.dataModel
         onStatusMessageChanged: {
             stackView.clear(StackView.Immediate)
             stackView.push(component, {"message": statusMessage}, StackView.PushTransition)

@@ -12,7 +12,7 @@ Item {
     opacity: 0.9
 
     Connections {
-        target: hudDataModel
+        target: Hud.dataModel
         onIsMessageFeedFadingOutChanged: {
             if (isMessageFeedFadingOut) {
                 fadeOutAnim.start()
@@ -36,7 +36,7 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 10
         anchors.horizontalCenter: parent.horizontalCenter
-        model: hudDataModel.getMessageFeedModel()
+        model: Hud.dataModel.getMessageFeedModel()
         width: parent.width - 20
         height: contentHeight
         spacing: 3

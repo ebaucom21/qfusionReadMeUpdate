@@ -11,7 +11,7 @@ Item {
     height: implicitHeight
 
     // TODO: Make the native code track the longest string length and give a hint?
-    implicitWidth: 256 + 32 + 32 + (hudDataModel.hasLocations ? 128 + 32 : 0)
+    implicitWidth: 256 + 32 + 32 + (Hud.dataModel.hasLocations ? 128 + 32 : 0)
     implicitHeight: list.height + 32
 
     readonly property color evenRowColor: Qt.rgba(0.0, 0.0, 0.0, 0.7)
@@ -22,7 +22,7 @@ Item {
         anchors.centerIn: parent
         height: contentHeight
         width: root.width - 32
-        model: hudDataModel.getTeamListModel()
+        model: Hud.dataModel.getTeamListModel()
         layer.enabled: count
         layer.effect: ElevationEffect { elevation: 64 }
         delegate: Rectangle {
@@ -48,7 +48,7 @@ Item {
                 Label {
                     Layout.preferredWidth: 32
                     horizontalAlignment: Qt.AlignRight
-                    font.family: wsw.numbersFontFamily
+                    font.family: Hud.ui.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     font.letterSpacing: 0.5
@@ -57,7 +57,7 @@ Item {
                     text: health
                 }
                 Label {
-                    font.family: wsw.numbersFontFamily
+                    font.family: Hud.ui.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     style: Text.Raised
@@ -67,7 +67,7 @@ Item {
                 Label {
                     Layout.preferredWidth: 32
                     horizontalAlignment: Qt.AlignLeft
-                    font.family: wsw.numbersFontFamily
+                    font.family: Hud.ui.numbersFontFamily
                     font.weight: Font.ExtraBold
                     font.pointSize: 12
                     font.letterSpacing: 0.5
@@ -116,7 +116,7 @@ Item {
                     elide: Text.ElideMiddle
                 }
                 Label {
-                    visible: hudDataModel.hasLocations
+                    visible: Hud.dataModel.hasLocations
                     Layout.fillWidth: true
                     Layout.preferredWidth: 0.75
                     horizontalAlignment: Qt.AlignRight

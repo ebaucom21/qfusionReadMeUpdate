@@ -84,7 +84,7 @@ Rectangle {
         anchors.bottom: wheelShape.top
         anchors.bottomMargin: -8
         anchors.horizontalCenter: wheelShape.horizontalCenter
-        font.family: wsw.symbolsFontFamily
+        font.family: UI.ui.symbolsFontFamily
         font.pointSize: 16
         text: "\u25B4"
         color: "transparent"
@@ -95,7 +95,7 @@ Rectangle {
         anchors.top: wheelShape.bottom
         anchors.topMargin: -2
         anchors.horizontalCenter: wheelShape.horizontalCenter
-        font.family: wsw.symbolsFontFamily
+        font.family: UI.ui.symbolsFontFamily
         font.pointSize: 16
         text: "\u25BE"
         color: "transparent"
@@ -106,7 +106,7 @@ Rectangle {
         anchors.horizontalCenter: wheelShape.horizontalCenter
         anchors.verticalCenter: wheelShape.verticalCenter
         anchors.verticalCenterOffset: +3
-        font.family: wsw.symbolsFontFamily
+        font.family: UI.ui.symbolsFontFamily
         font.pointSize: 16
         text: "\u25AA"
         color: "transparent"
@@ -132,7 +132,7 @@ Rectangle {
         id: leftButtonKey
         text: "L"
         isInEditorMode: root.isInEditorMode
-        quakeKey: keysAndBindings.getMouseButtonKeyCode(1)
+        quakeKey: UI.keysAndBindings.getMouseButtonKeyCode(1)
         width: drawnButtonWidth
         height: buttonHeight
         anchors.right: mouseBody.left
@@ -146,7 +146,7 @@ Rectangle {
         id: rightButtonKey
         text: "R"
         isInEditorMode: root.isInEditorMode
-        quakeKey: keysAndBindings.getMouseButtonKeyCode(2)
+        quakeKey: UI.keysAndBindings.getMouseButtonKeyCode(2)
         width: drawnButtonWidth
         height: buttonHeight
         anchors.left: mouseBody.right
@@ -157,9 +157,9 @@ Rectangle {
     }
 
     readonly property var wheelKeysModel: [
-        { text: "\u25B4", quakeKey: keysAndBindings.getMouseWheelKeyCode(true), shape: scrollUpShape },
-        { text: "\u25AA", quakeKey: keysAndBindings.getMouseButtonKeyCode(3), shape: middleButtonShape },
-        { text: "\u25BE", quakeKey: keysAndBindings.getMouseWheelKeyCode(false), shape: scrollDownShape }
+        { text: "\u25B4", quakeKey: UI.keysAndBindings.getMouseWheelKeyCode(true), shape: scrollUpShape },
+        { text: "\u25AA", quakeKey: UI.keysAndBindings.getMouseButtonKeyCode(3), shape: middleButtonShape },
+        { text: "\u25BE", quakeKey: UI.keysAndBindings.getMouseWheelKeyCode(false), shape: scrollDownShape }
     ]
 
     ColumnLayout {
@@ -206,7 +206,7 @@ Rectangle {
             MouseKey {
                 text: "#" + (index + 4)
                 isInEditorMode: root.isInEditorMode
-                quakeKey: keysAndBindings.getMouseButtonKeyCode(index + 4)
+                quakeKey: UI.keysAndBindings.getMouseButtonKeyCode(index + 4)
                 Layout.preferredWidth: otherButtonWidth
                 Layout.preferredHeight: buttonHeight
                 onBindingRequested: root.bindingRequested(quakeKey)
@@ -228,7 +228,7 @@ Rectangle {
             MouseKey {
                 text: "#" + (index + 6)
                 isInEditorMode: root.isInEditorMode
-                quakeKey: keysAndBindings.getMouseButtonKeyCode(index + 6)
+                quakeKey: UI.keysAndBindings.getMouseButtonKeyCode(index + 6)
                 Layout.preferredWidth: otherButtonWidth
                 Layout.preferredHeight: buttonHeight
                 onBindingRequested: root.bindingRequested(quakeKey)

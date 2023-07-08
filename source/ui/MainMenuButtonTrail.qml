@@ -11,7 +11,7 @@ Row {
 	property color leftColor
 	property color rightColor
 	readonly property real elementWidth: 20
-	readonly property real elementsCount: Math.floor(wsw.mainMenuButtonTrailWidthDp / (elementWidth + root.spacing))
+	readonly property real elementsCount: Math.floor(UI.ui.mainMenuButtonTrailWidthDp / (elementWidth + root.spacing))
 
 	Repeater {
 		model: elementsCount

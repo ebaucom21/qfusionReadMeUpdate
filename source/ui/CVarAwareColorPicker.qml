@@ -15,15 +15,15 @@ RowLayout {
 
     property var customColor
     property int selectedIndex: -1
-    property color selectedColor: typeof(customColor) !== "undefined" ? customColor : wsw.consoleColors[selectedIndex]
+    property color selectedColor: typeof(customColor) !== "undefined" ? customColor : UI.ui.consoleColors[selectedIndex]
 
     Repeater {
-        model: wsw.consoleColors
+        model: UI.ui.consoleColors
 
         delegate: ColorPickerColorItem {
             layoutIndex: index
             selected: layoutIndex === root.selectedIndex
-            color: wsw.consoleColors[index]
+            color: UI.ui.consoleColors[index]
             onMouseEnter: root.expandAt(index)
             onMouseLeave: root.shrinkBack()
             onClicked: root.selectedIndex = index
@@ -32,17 +32,17 @@ RowLayout {
 
     ColorPickerColorItem {
         visible: !!customColor
-        layoutIndex: wsw.consoleColors.length
+        layoutIndex: UI.ui.consoleColors.length
         selected: layoutIndex === root.selectedIndex
         color: customColor ? customColor : "transparent"
         onMouseEnter: root.expandAt(index)
         onMouseLeave: root.shrinkBack()
-        onClicked: root.selectedIndex = wsw.consoleColors.length
+        onClicked: root.selectedIndex = UI.ui.consoleColors.length
     }
 
     ColorPickerItem {
         id: cross
-        layoutIndex: wsw.consoleColors.length + 1
+        layoutIndex: UI.ui.consoleColors.length + 1
         haloColor: Material.accentColor
         onMouseEnter: root.expandAt(index)
         onMouseLeave: root.shrinkBack()
@@ -70,7 +70,7 @@ RowLayout {
     function checkCVarChanges() {
         let [index, maybeNewCustomColor] = getCVarData()
         if (index !== selectedIndex || maybeNewCustomColor !== customColor) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 customColor = maybeNewCustomColor
                 selectedIndex = index
             }
@@ -84,7 +84,7 @@ RowLayout {
     }
 
     function indexOfColor(maybeColor) {
-        let colors = wsw.consoleColors
+        let colors = UI.ui.consoleColors
         // Compare by hex strings
         let givenString = '' + maybeColor
         for (let i = 0; i < colors.length; ++i) {
@@ -96,8 +96,8 @@ RowLayout {
     }
 
     function getCVarData() {
-        let rawString = wsw.getCVarValue(cvarName)
-        let maybeColor = wsw.colorFromRgbString(rawString)
+        let rawString = UI.ui.getCVarValue(cvarName)
+        let maybeColor = UI.ui.colorFromRgbString(rawString)
         if (!maybeColor) {
             return [-1, undefined]
         }
@@ -105,7 +105,7 @@ RowLayout {
         if (index != -1) {
             return [index, undefined]
         }
-        return [wsw.consoleColors.length, maybeColor]
+        return [UI.ui.consoleColors.length, maybeColor]
     }
 
     function expandAt(hoveredIndex) {
@@ -143,15 +143,15 @@ RowLayout {
     function updateCVarColor(color) {
         let value = toQuakeColorString(color)
         if (applyImmediately) {
-            wsw.setCVarValue(cvarName, value)
+            UI.ui.setCVarValue(cvarName, value)
         } else {
-            wsw.markPendingCVarChanges(root, cvarName, value)
+            UI.ui.markPendingCVarChanges(root, cvarName, value)
         }
     }
 
     function setSelectedCustomColor(color) {
         customColor = color
-        let customColorIndex = wsw.consoleColors.length
+        let customColorIndex = UI.ui.consoleColors.length
         if (selectedIndex != customColorIndex) {
             // This triggers updateCVarColor()
             selectedIndex = customColorIndex
@@ -163,18 +163,18 @@ RowLayout {
 
     onSelectedIndexChanged: {
         if (selectedIndex >= 0) {
-            updateCVarColor(wsw.consoleColors[selectedIndex] || customColor)
+            updateCVarColor(UI.ui.consoleColors[selectedIndex] || customColor)
         }
     }
 
     Component.onCompleted: {
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         let [index, maybeCustomColor] = getCVarData()
         customColor = maybeCustomColor
         selectedIndex = index
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 
     Popup {
         id: popup
@@ -314,7 +314,7 @@ RowLayout {
                     Layout.leftMargin: -4
                     flat: true
                     text: "\u2714"
-                    font.family: wsw.symbolsFontFamily
+                    font.family: UI.ui.symbolsFontFamily
                     enabled: !!popup.selectedColor && popup.hasChanges
                     onClicked: {
                         root.setSelectedCustomColor(popup.selectedColor)
@@ -337,7 +337,7 @@ RowLayout {
                     Layout.rightMargin: -4
                     flat: true
                     text: "\u2716"
-                    font.family: wsw.symbolsFontFamily
+                    font.family: UI.ui.symbolsFontFamily
                     onClicked: popup.close()
                 }
             }

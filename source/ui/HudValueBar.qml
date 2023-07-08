@@ -80,7 +80,7 @@ Item {
         anchors.left: image.right
         anchors.leftMargin: 8
         anchors.verticalCenter: image.verticalCenter
-        font.family: wsw.headingFontFamily
+        font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.letterSpacing: 1.25
         font.pointSize: 13
@@ -95,7 +95,7 @@ Item {
         anchors.rightMargin: 8
         anchors.verticalCenter: parent.verticalCenter
         horizontalAlignment: Qt.AlignRight
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.pointSize: 28
         font.weight: Font.Black
         font.letterSpacing: 1.25

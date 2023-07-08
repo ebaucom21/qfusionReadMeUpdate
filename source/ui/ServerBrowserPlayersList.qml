@@ -74,7 +74,7 @@ ListView {
             ServerBrowserDataLabel {
                 width: 48
                 horizontalAlignment: Qt.AlignHCenter
-                text: wsw.formatPing(modelData["ping"])
+                text: UI.ui.formatPing(modelData["ping"])
             }
         }
     }

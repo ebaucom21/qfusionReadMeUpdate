@@ -6,8 +6,8 @@ import net.warsow 2.6
 
 Item {
     id: root
-    readonly property var availableRegularCrosshairs: hudDataModel.getAvailableRegularCrosshairs()
-    readonly property var availableStrongCrosshairs: hudDataModel.getAvailableStrongCrosshairs()
+    readonly property var availableRegularCrosshairs: UI.hudDataModel.getAvailableRegularCrosshairs()
+    readonly property var availableStrongCrosshairs: UI.hudDataModel.getAvailableStrongCrosshairs()
     readonly property bool drawNativeParts: root.StackView.view && !root.StackView.view.busy
     readonly property real innerPaneMargin: 20.0
     readonly property real innerPaneWidth: 0.5 * root.width - innerPaneMargin
@@ -78,9 +78,9 @@ Item {
             text: "Strong crosshair size"
             CVarAwareSliderWithBox {
                 id: strongSizeSlider
-                from: wsw.minStrongCrosshairSize
-                to: wsw.maxStrongCrosshairSize
-                stepSize: wsw.crosshairSizeStep
+                from: UI.ui.minStrongCrosshairSize
+                to: UI.ui.maxStrongCrosshairSize
+                stepSize: UI.ui.crosshairSizeStep
                 cvarName: "cg_crosshair_strong_size"
                 fractionalPartDigits: 0
             }
@@ -102,7 +102,7 @@ Item {
             Component.onCompleted: opacity = 1.0
 
             property int selectedIndex: 0
-            property string weaponShortName: hudDataModel.getWeaponShortName(weaponsPane.selectedIndex + 1)
+            property string weaponShortName: UI.hudDataModel.getWeaponShortName(weaponsPane.selectedIndex + 1)
 
             ListView {
                 id: weaponsList
@@ -126,7 +126,7 @@ Item {
                     color: enabled ? ((mouseArea.containsMouse || weaponsPane.selectedIndex === index) ?
                         Material.accent : Material.foreground) : "grey"
                     opacity: enabled ? 1.0 : 0.5
-                    text: hudDataModel.getWeaponFullName(index + 1)
+                    text: UI.hudDataModel.getWeaponFullName(index + 1)
                     enabled: separateCheckBox.checked
                     MouseArea {
                         id: mouseArea
@@ -161,7 +161,7 @@ Item {
                         desiredSize: Qt.size(strongSizeSlider.value, strongSizeSlider.value)
                         borderWidth: 1
                         materialName: strongComboBox.currentIndex < 0 ? "" :
-                            hudDataModel.getStrongCrosshairFilePath(strongComboBox.values[strongComboBox.currentIndex])
+                            UI.hudDataModel.getStrongCrosshairFilePath(strongComboBox.values[strongComboBox.currentIndex])
                         useOutlineEffect: true
                         fitSizeForCrispness: true
                         color: strongColorPicker.selectedColor
@@ -173,7 +173,7 @@ Item {
                         desiredSize: Qt.size(regularSizeSlider.value, regularSizeSlider.value)
                         borderWidth: 1
                         materialName: regularComboBox.currentIndex < 0 ? "" :
-                            hudDataModel.getRegularCrosshairFilePath(regularComboBox.values[regularComboBox.currentIndex])
+                            UI.hudDataModel.getRegularCrosshairFilePath(regularComboBox.values[regularComboBox.currentIndex])
                         useOutlineEffect: true
                         fitSizeForCrispness: true
                         color: regularColorPicker.selectedColor
@@ -190,9 +190,9 @@ Item {
                     id: regularSizeSlider
                     Layout.alignment: Qt.AlignLeft
                     cvarName: separateCheckBox.checked ? "cg_crosshair_size_" + weaponsPane.weaponShortName : "cg_crosshair_size"
-                    from: wsw.minRegularCrosshairSize
-                    to: wsw.maxRegularCrosshairSize
-                    stepSize: wsw.crosshairSizeStep
+                    from: UI.ui.minRegularCrosshairSize
+                    to: UI.ui.maxRegularCrosshairSize
+                    stepSize: UI.ui.crosshairSizeStep
                     fractionalPartDigits: 0
                 }
 

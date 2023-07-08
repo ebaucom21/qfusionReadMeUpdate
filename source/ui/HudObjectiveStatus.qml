@@ -20,7 +20,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         // Don't leave the gap between team score elements even if all indicators are hidden
-        color: (row.width || hudDataModel.hasTwoTeams) ? Qt.rgba(0.0, 0.0, 0.0, 0.6) : "transparent"
+        color: (row.width || Hud.dataModel.hasTwoTeams) ? Qt.rgba(0.0, 0.0, 0.0, 0.6) : "transparent"
         radius: 1
 
         layer.enabled: row.width
@@ -35,17 +35,17 @@ Item {
         HudObjectiveIndicator {
             id: indicator1
             barHeightFrac: root.barHeightFrac
-            indicatorState: hudDataModel.indicator1State
+            indicatorState: Hud.dataModel.indicator1State
         }
         HudObjectiveIndicator {
             id: indicator2
             barHeightFrac: root.barHeightFrac
-            indicatorState: hudDataModel.indicator2State
+            indicatorState: Hud.dataModel.indicator2State
         }
         HudObjectiveIndicator {
             id: indicator3
             barHeightFrac: root.barHeightFrac
-            indicatorState: hudDataModel.indicator3State
+            indicatorState: Hud.dataModel.indicator3State
         }
     }
 }

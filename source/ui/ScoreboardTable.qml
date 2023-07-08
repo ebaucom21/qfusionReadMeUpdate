@@ -28,7 +28,7 @@ TableView {
     function getCellColor(row, column, tableStyle) {
         let c = baseColor
         if (mixedTeamsMode) {
-            c = scoreboard.isMixedListRowAlpha(row) ? baseAlphaColor : baseBetaColor
+            c = UI.scoreboard.isMixedListRowAlpha(row) ? baseAlphaColor : baseBetaColor
         }
         switch (tableStyle) {
             case Scoreboard.Checkerboard: {
@@ -50,7 +50,7 @@ TableView {
     }
 
     delegate: Item {
-        readonly property int kind: scoreboard.getColumnKind(column)
+        readonly property int kind: UI.scoreboard.getColumnKind(column)
         readonly property bool isColumnTextual: (kind === Scoreboard.Nickname) || (kind === Scoreboard.Clan)
         readonly property bool isColumnStatusOne: kind === Scoreboard.Status
         readonly property bool isDisplayingGlyph: (kind === Scoreboard.Glyph) || (isColumnStatusOne && value >= 32)
@@ -72,7 +72,7 @@ TableView {
             anchors.fill: parent
             visible: !isColumnStatusOne
             opacity: 0.7
-            color: isColumnStatusOne ? "transparent" : getCellColor(row, column, scoreboard.tableStyle)
+            color: isColumnStatusOne ? "transparent" : getCellColor(row, column, UI.scoreboard.tableStyle)
         }
 
         Label {
@@ -85,7 +85,7 @@ TableView {
             text: value
             textFormat: Text.StyledText
             font.family: ((kind !== Scoreboard.Glyph && kind !== Scoreboard.Status) || value < 256) ?
-                wsw.regularFontFamily : wsw.symbolsFontFamily
+                UI.ui.regularFontFamily : UI.ui.symbolsFontFamily
             font.weight: Font.Bold
             font.pointSize: 12
             font.letterSpacing: 1
@@ -104,7 +104,7 @@ TableView {
                 mipmap: true
                 width: 20
                 height: 20
-                source: scoreboard.getImageAssetPath(value)
+                source: UI.scoreboard.getImageAssetPath(value)
             }
         }
     }

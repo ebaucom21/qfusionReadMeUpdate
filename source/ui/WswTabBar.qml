@@ -66,7 +66,7 @@ TabBar {
                 height: 3
                 width: parent.width
                 y: root.position === TabBar.Footer ? 0 : parent.height - height
-                color: wsw.colorWithAlpha(root.Material.accentColor, root.enabled ? 1.0 : 0.7)
+                color: UI.ui.colorWithAlpha(root.Material.accentColor, root.enabled ? 1.0 : 0.7)
             }
         }
     }

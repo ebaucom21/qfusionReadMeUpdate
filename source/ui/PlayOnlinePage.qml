@@ -13,17 +13,17 @@ Item {
         applyFilter()
     }
 
-    Component.onDestruction: wsw.stopServerListUpdates()
+    Component.onDestruction: UI.ui.stopServerListUpdates()
 
     function applyFilter() {
         let flags = 0
         if (fullCheckBox.checked) {
-            flags |= Wsw.ShowFullServers
+            flags |= UISystem.ShowFullServers
         }
         if (emptyCheckBox.checked) {
-            flags |= Wsw.ShowEmptyServers
+            flags |= UISystem.ShowEmptyServers
         }
-        wsw.startServerListUpdates(flags)
+        UI.ui.startServerListUpdates(flags)
     }
 
     RowLayout {

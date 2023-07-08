@@ -50,7 +50,7 @@ Item {
                             text: root.model[listIndex]["name"]
                         }
                         ServerBrowserDataLabel {
-                            text: wsw.formatPing(root.model[listIndex]["ping"])
+                            text: UI.ui.formatPing(root.model[listIndex]["ping"])
                         }
                     }
                 }

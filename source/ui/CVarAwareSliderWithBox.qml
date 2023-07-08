@@ -73,9 +73,9 @@ Item {
 
         if (!root.suppressSignals) {
             if (applyImmediately) {
-                wsw.setCVarValue(cvarName, value)
+                UI.ui.setCVarValue(cvarName, value)
             } else {
-                wsw.markPendingCVarChanges(root, cvarName, value)
+                UI.ui.markPendingCVarChanges(root, cvarName, value)
             }
         }
     }
@@ -83,7 +83,7 @@ Item {
     function checkCVarChanges() {
         let newValue = getCurrNumericVarValue()
         if (value != newValue) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 value = newValue
             }
         }
@@ -114,20 +114,20 @@ Item {
     }
 
     function getCurrNumericVarValue() {
-        return textToValue(wsw.getCVarValue(cvarName))
+        return textToValue(UI.ui.getCVarValue(cvarName))
     }
 
     Component.onCompleted: {
         value                     = getCurrNumericVarValue()
         slider.value              = value
         textField.text            = valueToText(value)
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         suppressSignals           = false
         slider.suppressSignals    = false
         textField.suppressSignals = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 
     Slider {
         id: slider

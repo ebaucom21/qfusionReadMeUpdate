@@ -30,7 +30,7 @@ Item {
     property var selectedTimestamp
     property var selectedTags
 
-    Component.onCompleted: demosResolver.reload()
+    Component.onCompleted: UI.demosResolver.reload()
 
     TextField {
         id: queryField
@@ -50,7 +50,7 @@ Item {
     Label {
         anchors.left: queryField.right
         anchors.verticalCenter: queryField.verticalCenter
-        font.family: wsw.emojiFontFamily
+        font.family: UI.ui.emojiFontFamily
         text: "\uD83D\uDD0D"
         visible: !queryField.text.length
     }
@@ -59,23 +59,23 @@ Item {
         anchors.centerIn: parent
         text: "Nothing found"
         font.pointSize: 11
-        visible: demosResolver.isReady && !listView.count
+        visible: UI.demosResolver.isReady && !listView.count
     }
 
     function submitQuery(query) {
         selectedIndex = -1
-        if (demosResolver.isReady) {
-            demosResolver.query(query)
+        if (UI.demosResolver.isReady) {
+            UI.demosResolver.query(query)
         } else {
             pendingQuery = query
         }
     }
 
     Connections {
-        target: demosResolver
+        target: UI.demosResolver
         onIsReadyChanged: {
-            if (demosResolver.isReady && pendingQuery) {
-                demosResolver.query(pendingQuery)
+            if (UI.demosResolver.isReady && pendingQuery) {
+                UI.demosResolver.query(pendingQuery)
                 pendingQuery = undefined
             }
         }
@@ -137,7 +137,7 @@ Item {
 
     ListView {
         id: listView
-        model: demosModel
+        model: UI.demosModel
         anchors.top: listHeader.bottom
         anchors.topMargin: 16
         anchors.bottom: parent.bottom
@@ -275,13 +275,13 @@ Item {
                 anchors.right: parent.right
                 width: 56
                 highlighted: true
-                font.family: wsw.symbolsFontFamily
+                font.family: UI.ui.symbolsFontFamily
                 text: "\u25B6"
                 contentItem.anchors.verticalCenterOffset: +4
 
                 onClicked: {
                     selectedIndex = -1
-                    demoPlayer.play(selectedFileName)
+                    UI.demoPlayer.play(selectedFileName)
                 }
             }
         }

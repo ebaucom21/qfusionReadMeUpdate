@@ -14,7 +14,7 @@ Item {
 
     signal clicked()
 
-    readonly property var fullHeightTransformMatrix: wsw.makeSkewXMatrix(height, 20.0)
+    readonly property var fullHeightTransformMatrix: UI.ui.makeSkewXMatrix(height, 20.0)
 
     MouseArea {
         id: mouseArea
@@ -66,7 +66,7 @@ Item {
         height: 12
         radius: 1
         opacity: mouseArea.containsMouse ? 1.0 : 0.7
-        transform: Matrix4x4 { matrix: wsw.makeSkewXMatrix(height, 19.0) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 19.0) }
     }
 
     Label {
@@ -82,6 +82,6 @@ Item {
 
         Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 
-        transform: Matrix4x4 { matrix: wsw.makeSkewXMatrix(height, 16.0) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 16.0) }
     }
 }

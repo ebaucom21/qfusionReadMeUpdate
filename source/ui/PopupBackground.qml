@@ -13,8 +13,8 @@ Rectangle {
         color: Material.accentColor
     }
 
-    implicitWidth: wsw.desiredPopupWidth
-    implicitHeight: wsw.desiredPopupHeight
+    implicitWidth: UI.ui.desiredPopupWidth
+    implicitHeight: UI.ui.desiredPopupHeight
     color: Material.backgroundColor
     radius: 3
     layer.enabled: root.enabled

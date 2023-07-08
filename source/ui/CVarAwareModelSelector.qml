@@ -17,7 +17,7 @@ Rectangle {
     property string cvarName
     property string defaultModel
     property int defaultModelIndex: -1
-    readonly property var models: wsw.playerModels
+    readonly property var models: UI.ui.playerModels
 
     ToolButton {
         width: 56; height: 56
@@ -64,9 +64,9 @@ Rectangle {
         selectedValue = models[selectedIndex]
         if (!suppressSignals) {
             if (applyImmediately) {
-                wsw.setCVarValue(cvarName, selectedValue)
+                UI.ui.setCVarValue(cvarName, selectedValue)
             } else {
-                wsw.markPendingCVarChanges(root, cvarName, selectedValue)
+                UI.ui.markPendingCVarChanges(root, cvarName, selectedValue)
             }
         }
     }
@@ -81,7 +81,7 @@ Rectangle {
     }
 
     function getActualIndex() {
-        return mapValueToIndex(wsw.getCVarValue(cvarName).toLowerCase())
+        return mapValueToIndex(UI.ui.getCVarValue(cvarName).toLowerCase())
     }
 
     function checkCVarChanges() {
@@ -102,9 +102,9 @@ Rectangle {
         console.assert(defaultModelIndex >= 0, "Failed to find an index for a default model")
         selectedIndex = getActualIndex()
         selectedValue = models[selectedIndex]
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         suppressSignals = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

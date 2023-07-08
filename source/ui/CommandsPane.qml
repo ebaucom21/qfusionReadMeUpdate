@@ -14,10 +14,10 @@ RowLayout {
     property bool isInEditorMode
     property bool allowMultiBind
 
-    readonly property color movementGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.MovementGroup)
-    readonly property color weaponGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.WeaponGroup)
-    readonly property color actionGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.ActionGroup)
-    readonly property color respectGroupColor: keysAndBindings.colorForGroup(KeysAndBindings.RespectGroup)
+    readonly property color movementGroupColor: UI.keysAndBindings.colorForGroup(KeysAndBindings.MovementGroup)
+    readonly property color weaponGroupColor: UI.keysAndBindings.colorForGroup(KeysAndBindings.WeaponGroup)
+    readonly property color actionGroupColor: UI.keysAndBindings.colorForGroup(KeysAndBindings.ActionGroup)
+    readonly property color respectGroupColor: UI.keysAndBindings.colorForGroup(KeysAndBindings.RespectGroup)
 
     ColumnLayout {
         width: movementColumn.width
@@ -38,7 +38,7 @@ RowLayout {
         BindableCommandsColumn {
             id: movementColumn
             Layout.alignment: Qt.AlignTop
-            model: keysAndBindings.commandsMovementColumn
+            model: UI.keysAndBindings.commandsMovementColumn
             highlightColor: movementGroupColor
             isInEditorMode: root.isInEditorMode
             allowMultiBind: root.allowMultiBind
@@ -69,7 +69,7 @@ RowLayout {
 
             BindableCommandsColumn {
                 Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsWeaponsColumn1
+                model: UI.keysAndBindings.commandsWeaponsColumn1
                 highlightColor: weaponGroupColor
                 isInEditorMode: root.isInEditorMode
                 allowMultiBind: root.allowMultiBind
@@ -79,7 +79,7 @@ RowLayout {
 
             BindableCommandsColumn {
                 Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsWeaponsColumn2
+                model: UI.keysAndBindings.commandsWeaponsColumn2
                 highlightColor: weaponGroupColor
                 isInEditorMode: root.isInEditorMode
                 allowMultiBind: root.allowMultiBind
@@ -108,7 +108,7 @@ RowLayout {
         BindableCommandsColumn {
             id: actionsColumn
             Layout.alignment: Qt.AlignTop
-            model: keysAndBindings.commandsActionsColumn
+            model: UI.keysAndBindings.commandsActionsColumn
             highlightColor: actionGroupColor
             isInEditorMode: root.isInEditorMode
             allowMultiBind: root.allowMultiBind
@@ -139,7 +139,7 @@ RowLayout {
 
             BindableCommandsColumn {
                 Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsRespectColumn1
+                model: UI.keysAndBindings.commandsRespectColumn1
                 highlightColor: respectGroupColor
                 isInEditorMode: root.isInEditorMode
                 allowMultiBind: root.allowMultiBind
@@ -149,7 +149,7 @@ RowLayout {
 
             BindableCommandsColumn {
                 Layout.alignment: Qt.AlignTop
-                model: keysAndBindings.commandsRespectColumn2
+                model: UI.keysAndBindings.commandsRespectColumn2
                 highlightColor: respectGroupColor
                 isInEditorMode: root.isInEditorMode
                 allowMultiBind: root.allowMultiBind

@@ -1,0 +1,2 @@
+singleton Hud 2.6 Hud.qml
+singleton UI 2.6 UI.qml

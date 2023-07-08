@@ -16,7 +16,7 @@ Item {
     }
 
     readonly property real sideMargin: 8
-    readonly property string matchStateString: hudDataModel.matchStateString
+    readonly property string matchStateString: Hud.dataModel.matchStateString
 
     Label {
         id: minutesLabel
@@ -24,13 +24,13 @@ Item {
         anchors.rightMargin: sideMargin
         anchors.baseline: separator.baseline
         transform: scaleTransform
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.weight: Font.Black
         font.pointSize: 40
         font.letterSpacing: 3
         style: Text.Raised
         textFormat: Text.PlainText
-        text: hudDataModel.matchTimeMinutes
+        text: Hud.dataModel.matchTimeMinutes
     }
 
     Label {
@@ -40,7 +40,7 @@ Item {
         // TextMetrics didn't turn to be really useful
         anchors.topMargin: -12
         transform: scaleTransform
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.weight: Font.Black
         font.pointSize: 48
         style: Text.Raised
@@ -54,13 +54,13 @@ Item {
         anchors.leftMargin: sideMargin
         anchors.baseline: separator.baseline
         transform: scaleTransform
-        font.family: wsw.numbersFontFamily
+        font.family: Hud.ui.numbersFontFamily
         font.weight: Font.Black
         font.pointSize: 40
         font.letterSpacing: 1.75
         style: Text.Raised
         textFormat: Text.PlainText
-        text: hudDataModel.matchTimeSeconds
+        text: Hud.dataModel.matchTimeSeconds
     }
 
     Label {
@@ -70,7 +70,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: separator.bottom
         anchors.topMargin: -20
-        font.family: wsw.headingFontFamily
+        font.family: Hud.ui.headingFontFamily
         font.weight: Font.Black
         font.pointSize: 13
         font.letterSpacing: 1.75

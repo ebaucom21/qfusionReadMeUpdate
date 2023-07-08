@@ -6,8 +6,8 @@ import net.warsow 2.6
 Item {
     id: root
 
-    implicitWidth: wsw.desiredPopupWidth
-    implicitHeight: wsw.desiredPopupHeight
+    implicitWidth: UI.ui.desiredPopupWidth
+    implicitHeight: UI.ui.desiredPopupHeight
     focus: true
 
     default property Component contentComponent
@@ -41,7 +41,7 @@ Item {
         horizontalAlignment: Qt.AlignHCenter
         elide: Text.ElideRight
         maximumLineCount: 2
-        font.family: wsw.headingFontFamily
+        font.family: UI.ui.headingFontFamily
         font.pointSize: 14
         font.letterSpacing: 1.25
         font.weight: Font.Medium
@@ -74,7 +74,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.right: acceptButton.left
             anchors.rightMargin: 12
-            width: wsw.popupButtonWidth
+            width: UI.ui.popupButtonWidth
             visible: hasRejectButton
             enabled: rejectButtonEnabled
             flat: true
@@ -106,7 +106,7 @@ Item {
             id: acceptButton
             anchors.bottom: parent.bottom
             anchors.right: parent.right
-            width: wsw.popupButtonWidth
+            width: UI.ui.popupButtonWidth
             visible: hasAcceptButton
             enabled: acceptButtonEnabled
             highlighted: acceptButtonEnabled

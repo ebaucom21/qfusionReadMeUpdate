@@ -15,16 +15,16 @@ Item {
         layer.effect: ElevationEffect { elevation: 64 }
 
         Component.onCompleted: {
-            wsw.registerHudOccluder(pane)
+            UI.ui.registerHudOccluder(pane)
             x = 0.5 * (parent.width - width)
             y = 0.75 * parent.height
         }
 
-        Component.onDestruction: wsw.unregisterHudOccluder(pane)
-        onWidthChanged: wsw.updateHudOccluder(pane)
-        onHeightChanged: wsw.updateHudOccluder(pane)
-        onXChanged: wsw.updateHudOccluder(pane)
-        onYChanged: wsw.updateHudOccluder(pane)
+        Component.onDestruction: UI.ui.unregisterHudOccluder(pane)
+        onWidthChanged: UI.ui.updateHudOccluder(pane)
+        onHeightChanged: UI.ui.updateHudOccluder(pane)
+        onXChanged: UI.ui.updateHudOccluder(pane)
+        onYChanged: UI.ui.updateHudOccluder(pane)
 
         MouseArea {
             id: mouseArea
@@ -33,7 +33,7 @@ Item {
             onClicked: {
                 if (mouse.y >= progressBar.y - 4 && mouse.y <= progressBar.y + 12) {
                     if (mouse.x >= progressBar.x && mouse.x <= progressBar.x + progressBar.width) {
-                        demoPlayer.seek((mouse.x - progressBar.x) / progressBar.width)
+                        UI.demoPlayer.seek((mouse.x - progressBar.x) / progressBar.width)
                     }
                 }
             }
@@ -56,35 +56,35 @@ Item {
             width: progressBar.width
 
             Label {
-                font.family: wsw.headingFontFamily
+                font.family: UI.ui.headingFontFamily
                 font.pointSize: 11
                 font.letterSpacing: 1
                 font.weight: Font.Bold
                 font.capitalization: Font.AllUppercase
                 style: Text.Raised
-                text: demoPlayer.mapName + " - " + demoPlayer.gametype
+                text: UI.demoPlayer.mapName + " - " + UI.demoPlayer.gametype
             }
 
             Label {
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 horizontalAlignment: Qt.AlignHCenter
-                font.family: wsw.headingFontFamily
+                font.family: UI.ui.headingFontFamily
                 font.pointSize: 11
                 font.capitalization: Font.AllUppercase
                 font.letterSpacing: 1
                 font.weight: Font.Bold
                 style: Text.Raised
-                text: demoPlayer.demoName
+                text: UI.demoPlayer.demoName
             }
 
             Label {
-                font.family: wsw.numbersFontFamily
+                font.family: UI.ui.numbersFontFamily
                 font.pointSize: 11
                 font.letterSpacing: 1
                 font.weight: Font.Bold
                 style: Text.Raised
-                text: demoPlayer.timestamp
+                text: UI.demoPlayer.timestamp
             }
         }
 
@@ -95,11 +95,11 @@ Item {
             width: parent.width - 32
             anchors.horizontalCenter: parent.horizontalCenter
 
-            indeterminate: demoPlayer.isPaused
+            indeterminate: UI.demoPlayer.isPaused
 
             from: 0.0
-            to: demoPlayer.duration
-            value: demoPlayer.progress
+            to: UI.demoPlayer.duration
+            value: UI.demoPlayer.progress
         }
 
 
@@ -107,8 +107,8 @@ Item {
             anchors.left: progressBar.left
             anchors.top: progressBar.bottom
             anchors.topMargin: 8
-            text: demoPlayer.formatDuration(demoPlayer.progress)
-            font.family: wsw.numbersFontFamily
+            text: UI.demoPlayer.formatDuration(UI.demoPlayer.progress)
+            font.family: UI.ui.numbersFontFamily
             font.weight: Font.Bold
             font.letterSpacing: 1
             font.pointSize: 11
@@ -119,8 +119,8 @@ Item {
             anchors.right: progressBar.right
             anchors.top: progressBar.bottom
             anchors.topMargin: 8
-            text: demoPlayer.formatDuration(demoPlayer.duration)
-            font.family: wsw.numbersFontFamily
+            text: UI.demoPlayer.formatDuration(UI.demoPlayer.duration)
+            font.family: UI.ui.numbersFontFamily
             font.weight: Font.Bold
             font.letterSpacing: 1
             font.pointSize: 11
@@ -136,9 +136,9 @@ Item {
                 display: AbstractButton.TextOnly
                 Layout.preferredWidth: 64
                 text: "\u23EF"
-                font.family: wsw.emojiFontFamily
+                font.family: UI.ui.emojiFontFamily
                 font.pointSize: 20
-                onClicked: demoPlayer.pause()
+                onClicked: UI.demoPlayer.pause()
             }
 
             Button {
@@ -146,9 +146,9 @@ Item {
                 display: AbstractButton.TextOnly
                 Layout.preferredWidth: 64
                 text: "\u23F9"
-                font.family: wsw.emojiFontFamily
+                font.family: UI.ui.emojiFontFamily
                 font.pointSize: 20
-                onClicked: demoPlayer.stop()
+                onClicked: UI.demoPlayer.stop()
             }
         }
     }

@@ -7,8 +7,8 @@ import net.warsow 2.6
 Item {
     id: root
 
-    Component.onCompleted: keysAndBindings.startTrackingUpdates()
-    Component.onDestruction: keysAndBindings.stopTrackingUpdates()
+    Component.onCompleted: UI.keysAndBindings.startTrackingUpdates()
+    Component.onDestruction: UI.keysAndBindings.stopTrackingUpdates()
 
     property int pendingKeyToBind: 0
     // TODO: Make feasible commands start from 1
@@ -45,7 +45,7 @@ Item {
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 text: 'Select a key to bind the command <b><font color="orange">' +
-                        keysAndBindings.getCommandNameToDisplay(pendingCommandToBind) +
+                        UI.keysAndBindings.getCommandNameToDisplay(pendingCommandToBind) +
                         '</font></b> to. Press <b><font color="orange">ESC</font></b> to cancel.'
                 font.weight: headingFontWeight
                 font.pointSize: headingFontSize
@@ -63,7 +63,7 @@ Item {
         isInEditorMode: pendingCommandToBind >= 0
         onUnbindingRequested: {
             if (!isAnimating) {
-                keysAndBindings.unbind(quakeKey)
+                UI.keysAndBindings.unbind(quakeKey)
             }
         }
         onBindingRequested: {
@@ -75,7 +75,7 @@ Item {
             if (!isAnimating) {
                 const command = pendingCommandToBind
                 pendingCommandToBind = -1
-                keysAndBindings.bind(quakeKey, command)
+                UI.keysAndBindings.bind(quakeKey, command)
             }
         }
     }
@@ -107,7 +107,7 @@ Item {
             Label {
                 Layout.alignment: Qt.AlignHCenter
                 text: 'Select a command to bind to the key <b><font color="orange">' +
-                        keysAndBindings.getKeyNameToDisplay(pendingKeyToBind) +
+                        UI.keysAndBindings.getKeyNameToDisplay(pendingKeyToBind) +
                         '</font></b>. Press <b><font color="orange">ESC</font></b> to cancel.'
                 font.weight: headingFontWeight
                 font.pointSize: headingFontSize
@@ -142,7 +142,7 @@ Item {
             if (!isAnimating) {
                 const key = pendingKeyToBind
                 pendingKeyToBind = 0
-                keysAndBindings.bind(key, command)
+                UI.keysAndBindings.bind(key, command)
             }
         }
     }

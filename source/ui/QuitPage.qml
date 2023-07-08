@@ -16,8 +16,8 @@ Item {
         dim: false
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: parent
-        width: wsw.desiredPopupWidth
-        height: wsw.desiredPopupHeight
+        width: UI.ui.desiredPopupWidth
+        height: UI.ui.desiredPopupHeight
 
         function openSelf() {
             popup.parent = rootItem.windowContentItem
@@ -43,7 +43,7 @@ Item {
             acceptButtonText: "Go back"
             rejectButtonText: "Quit"
             onAccepted: popup.closeSelf()
-            onRejected: wsw.quit()
+            onRejected: UI.ui.quit()
             onDismissed: popup.closeSelf()
         }
     }

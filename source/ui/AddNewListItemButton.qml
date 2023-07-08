@@ -42,7 +42,7 @@ FocusScope {
         font.pointSize: 12
         font.letterSpacing: 1.25
         font.capitalization: Font.AllUppercase
-        maximumLength: hudEditorModel.maxHudNameLength
+        maximumLength: UI.hudEditorModel.maxHudNameLength
         validator: RegExpValidator { regExp: /[0-9a-zA-Z_]+/ }
         onEditingFinished: {
             if (text.length > 0) {

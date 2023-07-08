@@ -50,13 +50,13 @@ Item {
             color: Qt.rgba(1.0, 1.0, 1.0, 0.03)
         }
         HudEditorAnchorsMarker {
-            displayedAnchors: hudEditorModel.displayedFieldAnchors
+            displayedAnchors: UI.hudEditorModel.displayedFieldAnchors
         }
     }
 
     Repeater {
         id: itemsRepeater
-        model: hudEditorModel.getLayoutModel()
+        model: UI.hudEditorModel.getLayoutModel()
 
         property int numInstantiatedItems: 0
         readonly property bool canArrangeItems: numInstantiatedItems === count
@@ -160,9 +160,9 @@ Item {
             function handleCoordChanges() {
                 if (itemsRepeater.canArrangeItems) {
                     if (mouseArea.drag.active) {
-                        hudEditorModel.trackDragging(index, element.x, element.y)
+                        UI.hudEditorModel.trackDragging(index, element.x, element.y)
                     } else {
-                        hudEditorModel.updateElementPosition(index, element.x, element.y)
+                        UI.hudEditorModel.updateElementPosition(index, element.x, element.y)
                     }
                 }
             }
@@ -179,12 +179,12 @@ Item {
                 hoverEnabled: false
                 drag.onActiveChanged: {
                     if (!drag.active) {
-                        hudEditorModel.finishDragging(index)
+                        UI.hudEditorModel.finishDragging(index)
                     }
                 }
                 onContainsMouseChanged: {
                     if (!containsMouse) {
-                        hudEditorModel.clearDisplayedMarkers(index)
+                        UI.hudEditorModel.clearDisplayedMarkers(index)
                     }
                 }
             }
@@ -214,7 +214,7 @@ Item {
     // Toolbox items must be siblings of hud items so they are instantiated within the same parent
     Repeater {
         id: toolboxRepeater
-        model: hudEditorModel.getToolboxModel()
+        model: UI.hudEditorModel.getToolboxModel()
         delegate: Item {
             id: toolboxItem
             width: model.size.width
@@ -259,7 +259,7 @@ Item {
                 toolboxNextX += toolboxItem.width + toolboxXSpacing
                 toolboxRowHeightSoFar = Math.max(toolboxItem.height, toolboxRowHeightSoFar)
                 toolboxMaxXSoFar = Math.max(toolboxNextX, toolboxMaxXSoFar)
-                hudEditorModel.updatePlaceholderPosition(index, toolboxItem.x, toolboxItem.y)
+                UI.hudEditorModel.updatePlaceholderPosition(index, toolboxItem.x, toolboxItem.y)
             }
         }
     }

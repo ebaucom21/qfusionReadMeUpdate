@@ -25,7 +25,7 @@ Item {
     property string selectedVoteCurrent
     property var selectedVoteChosen
 
-    property var activeCallvotesModel: wsw.isOperator ? operatorCallvotesModel : regularCallvotesModel
+    property var activeCallvotesModel: UI.ui.isOperator ? UI.operatorCallvotesModel : UI.regularCallvotesModel
 
     onActiveCallvotesModelChanged: {
         stackView.clear()
@@ -257,7 +257,7 @@ Item {
                     Layout.fillWidth: true
                 }
                 Button {
-                    visible: wsw.isOperator && (selectedVoteFlags & CallvotesModel.Operator)
+                    visible: UI.ui.isOperator && (selectedVoteFlags & CallvotesModel.Operator)
                     enabled: argsSelectionLoader.item && argsSelectionLoader.item.canProceed
                     highlighted: enabled
                     text: "opcall"
@@ -281,9 +281,9 @@ Item {
     }
 
     function startVote(chosenValue, isOperatorCall) {
-        wsw.callVote(selectedVoteName, chosenValue, isOperatorCall)
+        UI.ui.callVote(selectedVoteName, chosenValue, isOperatorCall)
         stackView.replace(voteSelectionComponent)
-        wsw.returnFromInGameMenu()
+        UI.ui.returnFromInGameMenu()
     }
 
     function handleKeyEvent(event) {

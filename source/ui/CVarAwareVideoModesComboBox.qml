@@ -14,10 +14,10 @@ AutoFittingComboBox {
 
     property bool skipIndexChangeSignal: true
 
-    readonly property var knownWidthValues: wsw.videoModeWidthValuesList
-    readonly property var knownHeightValues: wsw.videoModeHeightValuesList
+    readonly property var knownWidthValues: UI.ui.videoModeWidthValuesList
+    readonly property var knownHeightValues: UI.ui.videoModeHeightValuesList
 
-    property var headings: wsw.videoModeHeadingsList
+    property var headings: UI.ui.videoModeHeadingsList
     property var widthValues: knownWidthValues
     property var heightValues: knownHeightValues
 
@@ -28,14 +28,14 @@ AutoFittingComboBox {
         return value === value ? value : 0
     }
 
-    function getWidth() { return parse(wsw.getCVarValue("vid_width")) }
-    function getHeight() { return parse(wsw.getCVarValue("vid_height")) }
+    function getWidth() { return parse(UI.ui.getCVarValue("vid_width")) }
+    function getHeight() { return parse(UI.ui.getCVarValue("vid_height")) }
 
     function checkCVarChanges() {
         const width = getWidth()
         const height = getHeight()
         if (width !== oldWidth || height !== oldHeight) {
-            if (!wsw.hasControlPendingCVarChanges(root)) {
+            if (!UI.ui.hasControlPendingCVarChanges(root)) {
                 setNewValues(width, height)
             }
         }
@@ -91,8 +91,8 @@ AutoFittingComboBox {
         if (!skipIndexChangeSignal) {
             const width = widthValues[currentIndex]
             const height = heightValues[currentIndex]
-            wsw.markPendingCVarChanges(root, "vid_width", width, true)
-            wsw.markPendingCVarChanges(root, "vid_height", height, true)
+            UI.ui.markPendingCVarChanges(root, "vid_width", width, true)
+            UI.ui.markPendingCVarChanges(root, "vid_height", height, true)
         }
     }
 
@@ -100,9 +100,9 @@ AutoFittingComboBox {
         console.assert(heightValues.length === widthValues.length)
         console.assert(headings.length === widthValues.length)
         setNewValues(getWidth(), getHeight())
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         skipIndexChangeSignal = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

@@ -50,7 +50,7 @@ TabButton {
         // Hacks to disable darkening of tab buttons under the "accept/decline" settings overlay
         contentItem.color = Qt.binding(() => {
             const color = (root.down || root.checked) ? root.Material.accentColor : root.Material.foreground
-            return wsw.colorWithAlpha(color, root.enabled ? 1.0 : 0.7)
+            return UI.ui.colorWithAlpha(color, root.enabled ? 1.0 : 0.7)
         })
     }
 }

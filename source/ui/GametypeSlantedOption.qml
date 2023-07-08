@@ -27,7 +27,7 @@ MouseArea {
         color: "transparent"
         layer.enabled: true
         layer.effect: ElevationEffect { elevation: 12 }
-        transform: Matrix4x4 { matrix: wsw.makeSkewXMatrix(height, 15.0) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 15.0) }
     }
 
     // We have to separate these items due to antialiasing/layer conflicts
@@ -37,7 +37,7 @@ MouseArea {
         height: shadowCaster.height
         radius: 3
         color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.35)
-        transform: Matrix4x4 { matrix: wsw.makeSkewXMatrix(height, 15.0) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 15.0) }
     }
 
     Image {

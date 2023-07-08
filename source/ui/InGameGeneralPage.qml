@@ -14,60 +14,60 @@ Item {
 
         InGameButton {
             text: "Main menu"
-            onClicked: wsw.showMainMenu()
+            onClicked: UI.ui.showMainMenu()
         }
         InGameButton {
-            visible: wsw.canBeReady
-            text: wsw.isReady ? "Not ready" : "Ready"
+            visible: UI.ui.canBeReady
+            text: UI.ui.isReady ? "Not ready" : "Ready"
             onClicked: {
-                wsw.toggleReady()
-                wsw.returnFromInGameMenu()
+                UI.ui.toggleReady()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
-            visible: (!hudDataModel.hasTwoTeams && wsw.canJoin) ||
-                     (hudDataModel.hasTwoTeams && wsw.canJoinAlpha && wsw.canJoinBeta)
+            visible: (!UI.hudDataModel.hasTwoTeams && UI.ui.canJoin) ||
+                     (UI.hudDataModel.hasTwoTeams && UI.ui.canJoinAlpha && UI.ui.canJoinBeta)
             text: "Join"
             onClicked: {
-                wsw.join()
-                wsw.returnFromInGameMenu()
+                UI.ui.join()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
-            visible: wsw.canToggleChallengerStatus
-            text: wsw.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
+            visible: UI.ui.canToggleChallengerStatus
+            text: UI.ui.isInChallengersQueue ? "Leave the queue" : "Enter the queue"
             onClicked: {
-                wsw.toggleChallengerStatus()
-                wsw.returnFromInGameMenu()
+                UI.ui.toggleChallengerStatus()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
-            visible: wsw.canJoinAlpha
-            text: "Join '" + hudDataModel.alphaName + "'"
+            visible: UI.ui.canJoinAlpha
+            text: "Join '" + UI.hudDataModel.alphaName + "'"
             onClicked: {
-                wsw.joinAlpha()
-                wsw.returnFromInGameMenu()
+                UI.ui.joinAlpha()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
-            visible: wsw.canJoinBeta
-            text: "Join '" + hudDataModel.betaName + "'"
+            visible: UI.ui.canJoinBeta
+            text: "Join '" + UI.hudDataModel.betaName + "'"
             onClicked: {
-                wsw.joinBeta()
-                wsw.returnFromInGameMenu()
+                UI.ui.joinBeta()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
-            visible: wsw.canSpectate
+            visible: UI.ui.canSpectate
             text: "Spectate"
             onClicked: {
-                wsw.spectate()
-                wsw.returnFromInGameMenu()
+                UI.ui.spectate()
+                UI.ui.returnFromInGameMenu()
             }
         }
         InGameButton {
             text: "Disconnect"
-            onClicked: wsw.disconnect()
+            onClicked: UI.ui.disconnect()
         }
     }
 }

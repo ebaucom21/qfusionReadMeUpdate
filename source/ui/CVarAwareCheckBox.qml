@@ -14,15 +14,15 @@ WswCheckBox {
     property var valueConverters: undefined
 
     function checkCVarChanges() {
-        const value = fromNative(wsw.getCVarValue(cvarName))
+        const value = fromNative(UI.ui.getCVarValue(cvarName))
         if (checked != value) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 checked = value
             }
         }
     }
 
-    function rollbackChanges() { checked = fromNative(wsw.getCVarValue(cvarName)) }
+    function rollbackChanges() { checked = fromNative(UI.ui.getCVarValue(cvarName)) }
 
     function fromNative(value) { return value != 0; }
     function toNative(value) { return value ? "1" : "0"; }
@@ -30,16 +30,16 @@ WswCheckBox {
     onClicked: {
         const convertedValue = toNative(checked)
         if (applyImmediately) {
-            wsw.setCVarValue(cvarName, convertedValue)
+            UI.ui.setCVarValue(cvarName, convertedValue)
         } else {
-            wsw.markPendingCVarChanges(root, cvarName, convertedValue)
+            UI.ui.markPendingCVarChanges(root, cvarName, convertedValue)
         }
     }
 
     Component.onCompleted: {
-        checked = fromNative(wsw.getCVarValue(cvarName))
-        wsw.registerCVarAwareControl(root)
+        checked = fromNative(UI.ui.getCVarValue(cvarName))
+        UI.ui.registerCVarAwareControl(root)
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

@@ -27,12 +27,12 @@ Item {
         width: parent.width
         rowHeight: 26
         rowModels: [
-            keysAndBindings.keyboardMainPadRow1,
-            keysAndBindings.keyboardMainPadRow2,
-            keysAndBindings.keyboardMainPadRow3,
-            keysAndBindings.keyboardMainPadRow4,
-            keysAndBindings.keyboardMainPadRow5,
-            keysAndBindings.keyboardMainPadRow6
+            UI.keysAndBindings.keyboardMainPadRow1,
+            UI.keysAndBindings.keyboardMainPadRow2,
+            UI.keysAndBindings.keyboardMainPadRow3,
+            UI.keysAndBindings.keyboardMainPadRow4,
+            UI.keysAndBindings.keyboardMainPadRow5,
+            UI.keysAndBindings.keyboardMainPadRow6
         ]
 
         onBindingRequested: root.bindingRequested(quakeKey)
@@ -71,11 +71,11 @@ Item {
         width: mainKeyboardPane.width / 5
         rowHeight: 26
         rowModels: [
-            keysAndBindings.keyboardArrowPadRow1,
-            keysAndBindings.keyboardArrowPadRow2,
-            keysAndBindings.keyboardArrowPadRow3,
-            keysAndBindings.keyboardArrowPadRow4,
-            keysAndBindings.keyboardArrowPadRow5
+            UI.keysAndBindings.keyboardArrowPadRow1,
+            UI.keysAndBindings.keyboardArrowPadRow2,
+            UI.keysAndBindings.keyboardArrowPadRow3,
+            UI.keysAndBindings.keyboardArrowPadRow4,
+            UI.keysAndBindings.keyboardArrowPadRow5
         ]
 
         onBindingRequested: root.bindingRequested(quakeKey)
@@ -97,11 +97,11 @@ Item {
         width: 4 * arrowPadPane.width / 3
         rowHeight: 26
         rowModels: [
-            keysAndBindings.keyboardNumPadRow1,
-            keysAndBindings.keyboardNumPadRow2,
-            keysAndBindings.keyboardNumPadRow3,
-            keysAndBindings.keyboardNumPadRow4,
-            keysAndBindings.keyboardNumPadRow5,
+            UI.keysAndBindings.keyboardNumPadRow1,
+            UI.keysAndBindings.keyboardNumPadRow2,
+            UI.keysAndBindings.keyboardNumPadRow3,
+            UI.keysAndBindings.keyboardNumPadRow4,
+            UI.keysAndBindings.keyboardNumPadRow5,
         ]
 
         onBindingRequested: root.bindingRequested(quakeKey)

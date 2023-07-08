@@ -41,12 +41,12 @@ Item {
             ]
 
             Connections {
-                target: wsw
+                target: Hud.ui
                 onHudOccludersChanged: itemLoader.updateItemVisibility()
             }
 
             Connections {
-                target: hudDataModel
+                target: Hud.dataModel
                 onHasTwoTeamsChanged: itemLoader.updateItemVisibility()
                 onHasActivePovChanged: itemLoader.updateItemVisibility()
                 onIsPovAliveChanged: itemLoader.updateItemVisibility()
@@ -83,19 +83,19 @@ Item {
 
             function updateItemVisibility() {
                 if (item) {
-                    if (itemLoader.individualMask && !(itemLoader.individualMask & hudDataModel.activeItemsMask)) {
+                    if (itemLoader.individualMask && !(itemLoader.individualMask & Hud.dataModel.activeItemsMask)) {
                         item.visible = false
-                    } else if (!hudDataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
+                    } else if (!Hud.dataModel.hasTwoTeams && (flags & HudLayoutModel.TeamBasedOnly)) {
                         item.visible = false
-                    } else if (!hudDataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
+                    } else if (!Hud.dataModel.hasActivePov && (flags & HudLayoutModel.PovOnly)) {
                         item.visible = false
-                    } else if (!hudDataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
+                    } else if (!Hud.dataModel.isPovAlive && (flags & HudLayoutModel.AlivePovOnly)) {
                         item.visible = false
-                    } else if (hudDataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
+                    } else if (Hud.dataModel.isInPostmatchState && !(flags & HudLayoutModel.AllowPostmatch)){
                         item.visible = false
                     } else {
                         // Put the expensive test last
-                        item.visible = !wsw.isHudItemOccluded(item)
+                        item.visible = !Hud.ui.isHudItemOccluded(item)
                     }
                 }
             }
@@ -138,11 +138,11 @@ Item {
                 id: healthBarComponent
                 HudValueBar {
                     text: "HEALTH"
-                    color: hudDataModel.health > 100 ? "deeppink" :
-                                                        (hudDataModel.health >= 50 ? "white" : "orangered")
-                    value: hudDataModel.health
-                    frac: 0.01 * Math.min(100.0, Math.max(0, hudDataModel.health))
-                    iconPath: hudDataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
+                    color: Hud.dataModel.health > 100 ? "deeppink" :
+                                                        (Hud.dataModel.health >= 50 ? "white" : "orangered")
+                    value: Hud.dataModel.health
+                    frac: 0.01 * Math.min(100.0, Math.max(0, Hud.dataModel.health))
+                    iconPath: Hud.dataModel.health > 100 ? "image://wsw/gfx/hud/icons/health/100" :
                                                           "image://wsw/gfx/hud/icons/health/50"
                 }
             }
@@ -151,12 +151,12 @@ Item {
                 id: armorBarComponent
                 HudValueBar {
                     text: "ARMOR"
-                    value: hudDataModel.armor
-                    frac: 0.01 * Math.min(100.0, hudDataModel.armor)
-                    color: hudDataModel.armor >= 125 ? "red" : (hudDataModel.armor >= 75 ? "gold" : "green")
+                    value: Hud.dataModel.armor
+                    frac: 0.01 * Math.min(100.0, Hud.dataModel.armor)
+                    color: Hud.dataModel.armor >= 125 ? "red" : (Hud.dataModel.armor >= 75 ? "gold" : "green")
                     iconPath: {
-                        hudDataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
-                        (hudDataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
+                        Hud.dataModel.armor >= 125 ? "image://wsw/gfx/hud/icons/armor/ra" :
+                        (Hud.dataModel.armor >= 75 ? "image://wsw/gfx/hud/icons/armor/ya" :
                                                     "image://wsw/gfx/hud/icons/armor/ga")
                     }
                 }
@@ -180,13 +180,13 @@ Item {
             Component {
                 id: alphaScoreComponent
                 HudTeamScore {
-                    visible: hudDataModel.hasTwoTeams
+                    visible: Hud.dataModel.hasTwoTeams
                     leftAligned: true
-                    color: hudDataModel.alphaColor
-                    name: hudDataModel.alphaName
-                    clan: hudDataModel.alphaClan
-                    score: hudDataModel.alphaScore
-                    playersStatus: hudDataModel.alphaPlayersStatus
+                    color: Hud.dataModel.alphaColor
+                    name: Hud.dataModel.alphaName
+                    clan: Hud.dataModel.alphaClan
+                    score: Hud.dataModel.alphaScore
+                    playersStatus: Hud.dataModel.alphaPlayersStatus
                     siblingNameWidth: hudField.betaNameWidth
                     onNameWidthChanged: hudField.alphaNameWidth = nameWidth
                 }
@@ -195,13 +195,13 @@ Item {
             Component {
                 id: betaScoreComponent
                 HudTeamScore {
-                    visible: hudDataModel.hasTwoTeams
+                    visible: Hud.dataModel.hasTwoTeams
                     leftAligned: false
-                    color: hudDataModel.betaColor
-                    name: hudDataModel.betaName
-                    clan: hudDataModel.betaClan
-                    score: hudDataModel.betaScore
-                    playersStatus: hudDataModel.betaPlayersStatus
+                    color: Hud.dataModel.betaColor
+                    name: Hud.dataModel.betaName
+                    clan: Hud.dataModel.betaClan
+                    score: Hud.dataModel.betaScore
+                    playersStatus: Hud.dataModel.betaPlayersStatus
                     siblingNameWidth: hudField.alphaNameWidth
                     onNameWidthChanged: hudField.betaNameWidth = nameWidth
                 }

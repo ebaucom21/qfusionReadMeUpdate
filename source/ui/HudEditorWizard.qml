@@ -10,7 +10,7 @@ Item {
     property var selectedForSavingFileName
     signal exitRequested()
 
-    readonly property var existingHuds: hudEditorModel.existingHuds
+    readonly property var existingHuds: UI.hudEditorModel.existingHuds
     readonly property real listItemWidth: 300
 
     Label {
@@ -120,8 +120,8 @@ Item {
                 width: parent.width
                 height: parent.height - 48
                 Component.onCompleted: {
-                    hudEditorModel.setDragAreaSize(width, height)
-                    hudEditorModel.setFieldAreaSize(fieldWidth, fieldHeight)
+                    UI.hudEditorModel.setDragAreaSize(width, height)
+                    UI.hudEditorModel.setFieldAreaSize(fieldWidth, fieldHeight)
                 }
             }
         }
@@ -283,7 +283,7 @@ Item {
             visible: swipeView.currentItem.canGoNext
             onClicked: {
                 if (swipeView.currentIndex === 0) {
-                    if (hudEditorModel.load(selectedForLoadingFileName)) {
+                    if (UI.hudEditorModel.load(selectedForLoadingFileName)) {
                         swipeView.currentIndex = 1
                     } else {
                         console.warn("Failed to load the HUD editor model from", selectedForLoadingFileName)
@@ -292,7 +292,7 @@ Item {
                 } else if (swipeView.currentIndex === 1) {
                     swipeView.currentIndex = 2
                 } else {
-                    if (!hudEditorModel.save(selectedForSavingFileName)) {
+                    if (!UI.hudEditorModel.save(selectedForSavingFileName)) {
                         console.warn("Failed to save the HUD editor model to", selectedForSavingFileName)
                     }
                     root.exitRequested()

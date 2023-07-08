@@ -31,7 +31,7 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
-        font.family: wsw.headingFontFamily
+        font.family: UI.ui.headingFontFamily
         font.capitalization: Font.AllUppercase
         font.letterSpacing: 1.0
         font.pointSize: 12

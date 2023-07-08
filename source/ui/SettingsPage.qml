@@ -14,11 +14,11 @@ Item {
     }
 
     // A safety guard
-    Component.onDestruction: wsw.rollbackPendingCVarChanges()
+    Component.onDestruction: UI.ui.rollbackPendingCVarChanges()
 
     WswTabBar {
         id: tabBar
-        enabled: !wsw.hasPendingCVarChanges
+        enabled: !UI.ui.hasPendingCVarChanges
         background: null
         anchors.top: parent.top
         anchors.left: parent.left
@@ -72,7 +72,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: 2 * parent.width / 3
         height: 72
-        active: wsw.hasPendingCVarChanges
+        active: UI.ui.hasPendingCVarChanges
         sourceComponent: applyChangesComponent
     }
 
@@ -89,7 +89,7 @@ Item {
                 radius: 4
                 width: parent.width - 16
                 height: parent.height - 16
-                color: wsw.colorWithAlpha(Qt.darker(Material.background, 1.25), 0.67)
+                color: UI.ui.colorWithAlpha(Qt.darker(Material.background, 1.25), 0.67)
             }
 
             Button {
@@ -100,8 +100,8 @@ Item {
                 }
                 text: "Revert"
                 flat: true
-                width: wsw.popupButtonWidth
-                onClicked: wsw.rollbackPendingCVarChanges()
+                width: UI.ui.popupButtonWidth
+                onClicked: UI.ui.rollbackPendingCVarChanges()
             }
 
             Button {
@@ -112,9 +112,9 @@ Item {
                 }
                 text: "Accept"
                 flat: false
-                width: wsw.popupButtonWidth
+                width: UI.ui.popupButtonWidth
                 highlighted: true
-                onClicked: wsw.commitPendingCVarChanges()
+                onClicked: UI.ui.commitPendingCVarChanges()
             }
         }
     }

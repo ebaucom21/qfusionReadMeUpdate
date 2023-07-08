@@ -32,34 +32,34 @@ Item {
 
         Loader {
             id: mainMenuLoader
-            active: wsw.isShowingMainMenu
+            active: UI.ui.isShowingMainMenu
             anchors.fill: parent
             sourceComponent: MainMenu {}
         }
 
         Loader {
             id: connectionScreenLoader
-            active: wsw.isShowingConnectionScreen
+            active: UI.ui.isShowingConnectionScreen
             anchors.fill: parent
             sourceComponent: ConnectionScreen {}
         }
 
         Loader {
             id: demoPlaybackMenuLoader
-            active: wsw.isShowingDemoPlaybackMenu
+            active: UI.ui.isShowingDemoPlaybackMenu
             anchors.fill: parent
             sourceComponent: DemoPlaybackMenu {}
         }
 
         Loader {
             id: inGameMenuLoader
-            active: wsw.isShowingInGameMenu
+            active: UI.ui.isShowingInGameMenu
             anchors.fill: parent
             sourceComponent: InGameMenu {}
         }
 
         Loader {
-            active: wsw.isShowingScoreboard
+            active: UI.ui.isShowingScoreboard
             anchors.fill: parent
             sourceComponent: ScoreboardScreen {}
         }

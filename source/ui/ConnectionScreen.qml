@@ -65,19 +65,19 @@ Item {
                 buttonsRowBottomMargin: +4
                 buttonsRowRightMargin: +8
                 acceptButtonText: "Retry"
-                hasAcceptButton: wsw.connectionFailKind !== Wsw.DontReconnect
-                acceptButtonEnabled: wsw.connectionFailKind === Wsw.TryReconnecting ||
-                                     (wsw.connectionFailKind === Wsw.PasswordRequired && text.length)
+                hasAcceptButton: UI.ui.connectionFailKind !== UISystem.DontReconnect
+                acceptButtonEnabled: UI.ui.connectionFailKind === UISystem.TryReconnecting ||
+                                     (UI.ui.connectionFailKind === UISystem.PasswordRequired && text.length)
                 rejectButtonText: hasAcceptButton ? "Cancel" : "OK"
                 onAccepted: {
-                    if (wsw.connectionFailKind === Wsw.PasswordRequired) {
-                        wsw.reconnectWithPassword(text)
+                    if (UI.ui.connectionFailKind === UISystem.PasswordRequired) {
+                        UI.ui.reconnectWithPassword(text)
                     } else {
-                        wsw.reconnect()
+                        UI.ui.reconnect()
                     }
                 }
-                onRejected: wsw.clearFailedConnectionState()
-                onDismissed: wsw.clearFailedConnectionState()
+                onRejected: UI.ui.clearFailedConnectionState()
+                onDismissed: UI.ui.clearFailedConnectionState()
                 contentComponent: Item {
                     Label {
                         id: descLabel
@@ -94,12 +94,12 @@ Item {
                         lineHeight: 1.25
                         font.pointSize: 12
                         font.letterSpacing: 0.5
-                        text: wsw.connectionFailMessage
+                        text: UI.ui.connectionFailMessage
                     }
 
                     TextField {
                         id: passwordInput
-                        visible: wsw.connectionFailKind === Wsw.PasswordRequired
+                        visible: UI.ui.connectionFailKind === UISystem.PasswordRequired
                         enabled: visible
                         Material.theme: activeFocus ? Material.Light : Material.Dark
                         anchors.top: descLabel.bottom
@@ -109,7 +109,7 @@ Item {
                         width: 128
                         maximumLength: 16
                         echoMode: TextInput.Password
-                        onEditingFinished: wsw.reconnectWithPassword(text)
+                        onEditingFinished: UI.ui.reconnectWithPassword(text)
                     }
                 }
             }
@@ -117,9 +117,9 @@ Item {
     }
 
     Connections {
-        target: wsw
+        target: UI.ui
         onConnectionFailKindChanged: {
-            if (wsw.connectionFailKind) {
+            if (UI.ui.connectionFailKind) {
                 stackView.clear(StackView.Immediate)
                 stackView.push(dialogComponent, null, StackView.ReplaceTransition)
             } else {
@@ -131,8 +131,8 @@ Item {
 
     Keys.onPressed: {
         if (event.key === Qt.Key_Escape) {
-            wsw.clearFailedConnectionState()
-            wsw.disconnect()
+            UI.ui.clearFailedConnectionState()
+            UI.ui.disconnect()
         }
     }
 }

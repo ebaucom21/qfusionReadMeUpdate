@@ -13,30 +13,30 @@ TextField {
     property bool applyImmediately: true
 
     function checkCVarChanges() {
-        let actualValue = wsw.getCVarValue(cvarName)
+        let actualValue = UI.ui.getCVarValue(cvarName)
         if (actualValue != text) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 text = actualValue
             }
         }
     }
 
     function rollbackChanges() {
-        text = wsw.getCVarValue(cvarName)
+        text = UI.ui.getCVarValue(cvarName)
     }
 
     onTextEdited: {
         if (applyImmediately) {
-            wsw.setCVarValue(cvarName, text)
+            UI.ui.setCVarValue(cvarName, text)
         } else {
-            wsw.markPendingCVarChanges(root, cvarName, text)
+            UI.ui.markPendingCVarChanges(root, cvarName, text)
         }
     }
 
     Component.onCompleted: {
-        text = wsw.getCVarValue(cvarName)
-        wsw.registerCVarAwareControl(root)
+        text = UI.ui.getCVarValue(cvarName)
+        UI.ui.registerCVarAwareControl(root)
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

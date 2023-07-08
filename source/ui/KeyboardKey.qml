@@ -29,7 +29,7 @@ Item {
     property bool isASpecialGlyph: (root.text.length === 1 && root.text.charCodeAt(0) > 127)
     property real fontPointSize: 11
 
-    readonly property color highlightColor: keysAndBindings.colorForGroup(root.group)
+    readonly property color highlightColor: UI.keysAndBindings.colorForGroup(root.group)
     readonly property color highlightBackground: Qt.rgba(highlightColor.r, highlightColor.g, highlightColor.b, 0.075)
 
     readonly property bool isActionAvailable: mouseArea.containsMouse && mouseArea.mouseX < 16 && !isInEditorMode
@@ -49,8 +49,8 @@ Item {
             left: parent.left
         }
 
-        Component.onCompleted: keysAndBindings.registerKeyItem(root, quakeKey)
-        Component.onDestruction: keysAndBindings.unregisterKeyItem(root, quakeKey)
+        Component.onCompleted: UI.keysAndBindings.registerKeyItem(root, quakeKey)
+        Component.onDestruction: UI.keysAndBindings.unregisterKeyItem(root, quakeKey)
 
         Rectangle {
             anchors {
@@ -71,7 +71,7 @@ Item {
             anchors.leftMargin: 5
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: 2
-            font.family: wsw.symbolsFontFamily
+            font.family: UI.ui.symbolsFontFamily
             font.pointSize: 13
             text: group ? String.fromCodePoint(0x1F7A9) : String.fromCodePoint(0x1F7A2)
         }
@@ -85,7 +85,7 @@ Item {
             height: parent.height - 10
             onContainsMouseChanged: {
                 if (!isInEditorMode) {
-                    keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
+                    UI.keysAndBindings.onKeyItemContainsMouseChanged(root, quakeKey, mouseArea.containsMouse)
                 }
             }
             onClicked: {
@@ -104,7 +104,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: root.isASpecialGlyph ? +2 : 0
             text: !root.hidden ? root.text : ""
-            font.family: root.isASpecialGlyph ? wsw.symbolsFontFamily : wsw.regularFontFamily
+            font.family: root.isASpecialGlyph ? UI.ui.symbolsFontFamily : UI.ui.regularFontFamily
             font.pointSize: root.fontPointSize
             font.weight: Font.Medium
             color: Material.foreground

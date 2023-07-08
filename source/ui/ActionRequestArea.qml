@@ -7,7 +7,7 @@ import net.warsow 2.6
 
 ListView {
     spacing: 16
-    model: actionRequestsModel
+    model: Hud.actionRequestsModel
 
     delegate: Item {
         width: parent.width

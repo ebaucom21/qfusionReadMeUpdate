@@ -1,0 +1,26 @@
+pragma Singleton
+import QtQuick 2.12
+import net.warsow 2.6
+
+QtObject {
+    readonly property var ui: __ui
+    readonly property var hudDataModel: __hudDataModel
+    readonly property var hudEditorModel: __hudEditorModel
+    readonly property var keysAndBindings: __keysAndBindings
+    readonly property var demosModel: __demosModel
+    readonly property var demosResolver: __demosResolver
+    readonly property var demoPlayer: __demoPlayer
+    readonly property var gametypesModel: __gametypesModel
+    readonly property var gametypeOptionsModel: __gametypeOptionsModel
+    readonly property var regularCallvotesModel: __regularCallvotesModel
+    readonly property var operatorCallvotesModel: __operatorCallvotesModel
+    readonly property var chatProxy: __chatProxy
+    readonly property var teamChatProxy: __teamChatProxy
+    readonly property var playersModel: __playersModel
+    readonly property var scoreboard: __scoreboard
+    readonly property var scoreboardSpecsModel: __scoreboardSpecsModel
+    readonly property var scoreboardPlayersModel: __scoreboardPlayersModel
+    readonly property var scoreboardAlphaModel: __scoreboardAlphaModel
+    readonly property var scoreboardBetaModel: __scoreboardBetaModel
+    readonly property var scoreboardMixedModel: __scoreboardMixedModel
+}

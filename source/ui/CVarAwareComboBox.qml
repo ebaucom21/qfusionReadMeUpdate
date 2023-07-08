@@ -24,7 +24,7 @@ AutoFittingComboBox {
     readonly property string placeholder: "- -"
 
     onKnownHeadingsAndValuesChanged: {
-        const value = wsw.getCVarValue(cvarName)
+        const value = UI.ui.getCVarValue(cvarName)
         // Make deep copies
         headings = [...knownHeadingsAndValues[0]]
         values = [...knownHeadingsAndValues[1]]
@@ -38,9 +38,9 @@ AutoFittingComboBox {
     }
 
     function checkCVarChanges() {
-        let value = wsw.getCVarValue(cvarName)
+        let value = UI.ui.getCVarValue(cvarName)
         if (value != oldValue) {
-            if (applyImmediately || !wsw.hasControlPendingCVarChanges(root)) {
+            if (applyImmediately || !UI.ui.hasControlPendingCVarChanges(root)) {
                 setNewValue(value)
             }
         }
@@ -85,7 +85,7 @@ AutoFittingComboBox {
 
     function rollbackChanges() {
         skipIndexChangeSignal = true
-        setNewValue(wsw.getCVarValue(cvarName))
+        setNewValue(UI.ui.getCVarValue(cvarName))
         skipIndexChangeSignal = false
     }
 
@@ -96,17 +96,17 @@ AutoFittingComboBox {
 
         let value = values[currentIndex]
         if (applyImmediately) {
-            wsw.setCVarValue(cvarName, value)
+            UI.ui.setCVarValue(cvarName, value)
         } else {
-            wsw.markPendingCVarChanges(root, cvarName, value)
+            UI.ui.markPendingCVarChanges(root, cvarName, value)
         }
     }
 
     Component.onCompleted: {
         // Values are already set in onKnownHeadingsAndValuesChanged handler
-        wsw.registerCVarAwareControl(root)
+        UI.ui.registerCVarAwareControl(root)
         skipIndexChangeSignal = false
     }
 
-    Component.onDestruction: wsw.unregisterCVarAwareControl(root)
+    Component.onDestruction: UI.ui.unregisterCVarAwareControl(root)
 }

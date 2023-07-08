@@ -24,10 +24,10 @@ Item {
 		}
 	}
 
-	readonly property var transformMatrix: wsw.makeSkewXMatrix(root.height, 20.0)
+	readonly property var transformMatrix: UI.ui.makeSkewXMatrix(root.height, 20.0)
 
 	readonly property color foregroundColor: Qt.lighter(Material.backgroundColor, 1.5)
-	readonly property color trailDecayColor: wsw.colorWithAlpha(Material.backgroundColor, 0.0)
+	readonly property color trailDecayColor: UI.ui.colorWithAlpha(Material.backgroundColor, 0.0)
 	readonly property color highlightedColor: Material.accentColor
 
 	states: [
@@ -114,7 +114,7 @@ Item {
 	Rectangle {
 		id: contentRow
 		height: 40
-		width: mouseArea.containsMouse ? wsw.mainMenuButtonWidthDp + 12 : wsw.mainMenuButtonWidthDp
+		width: mouseArea.containsMouse ? UI.ui.mainMenuButtonWidthDp + 12 : UI.ui.mainMenuButtonWidthDp
 		radius: 3
 		color: highlighted || mouseArea.containsMouse ? highlightedColor : foregroundColor
 		Behavior on width { SmoothedAnimation { duration: 333 } }
@@ -140,7 +140,7 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
-			font.family: wsw.headingFontFamily
+			font.family: UI.ui.headingFontFamily
 			font.pointSize: 14
 			font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
 			text: root.text

@@ -27,7 +27,7 @@ Item {
         text: alphaTeamName || ""
         maximumLineCount: 1
         elide: Text.ElideRight
-        font.family: wsw.numbersFontFamily
+        font.family: UI.ui.numbersFontFamily
         font.letterSpacing: 4
         font.weight: Font.Black
         font.pointSize: 16
@@ -39,7 +39,7 @@ Item {
         anchors.right: parent.horizontalCenter
         anchors.rightMargin: scoreMargin
         anchors.verticalCenter: parent.verticalCenter
-        font.family: wsw.headingFontFamily
+        font.family: UI.ui.headingFontFamily
         font.weight: Font.Black
         font.pointSize: 24
         text: typeof(alphaTeamList) !== "undefined" && typeof(alphaTeamScore) !== "undefined" ? alphaTeamScore : "-"
@@ -52,7 +52,7 @@ Item {
         anchors.left: parent.horizontalCenter
         anchors.leftMargin: scoreMargin - 8 // WTF?
         anchors.verticalCenter: parent.verticalCenter
-        font.family: wsw.numbersFontFamily
+        font.family: UI.ui.numbersFontFamily
         font.weight: Font.Black
         font.pointSize: 24
         text: typeof(betaTeamList) !== "undefined" && typeof(betaTeamScore) !== "undefined" ? betaTeamScore : "-"
@@ -71,7 +71,7 @@ Item {
         text: betaTeamName || ""
         maximumLineCount: 1
         elide: Text.ElideLeft
-        font.family: wsw.headingFontFamily
+        font.family: UI.ui.headingFontFamily
         font.letterSpacing: 4
         font.weight: Font.Black
         font.pointSize: 16

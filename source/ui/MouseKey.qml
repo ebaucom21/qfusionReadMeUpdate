@@ -5,14 +5,14 @@ import net.warsow 2.6
 
 KeyboardKey {
     Connections {
-        target: keysAndBindings
+        target: UI.keysAndBindings
         onMouseKeyBindingChanged: {
             if (changedQuakeKey === quakeKey) {
-                group = keysAndBindings.getMouseKeyBindingGroup(quakeKey)
+                group = UI.keysAndBindings.getMouseKeyBindingGroup(quakeKey)
             }
         }
     }
     Component.onCompleted: {
-        group = keysAndBindings.getMouseKeyBindingGroup(quakeKey)
+        group = UI.keysAndBindings.getMouseKeyBindingGroup(quakeKey)
     }
 }

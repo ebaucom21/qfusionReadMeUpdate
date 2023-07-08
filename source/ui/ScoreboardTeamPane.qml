@@ -22,7 +22,7 @@ Item {
     implicitHeight: activeItem ? activeItem.implicitHeight + (header.status === Loader.Ready ? 40 : 0) : 0
 
     readonly property var activeItem: (front.status === Loader.Ready) ? front.item : back.item
-    readonly property int columnsCount: scoreboard.getColumnsCount()
+    readonly property int columnsCount: UI.scoreboard.getColumnsCount()
 
     Loader {
         id: header
@@ -43,9 +43,9 @@ Item {
 
                     delegate: Label {
                         id: title
-                        readonly property int kind: scoreboard.getColumnKind(index)
+                        readonly property int kind: UI.scoreboard.getColumnKind(index)
                         readonly property bool isTextual: kind == Scoreboard.Nickname || kind === Scoreboard.Clan
-                        readonly property int span: scoreboard.getTitleColumnSpan(index)
+                        readonly property int span: UI.scoreboard.getTitleColumnSpan(index)
                         width: (kind === Scoreboard.Nickname) ?
                                    root.width - clanCellWidth - baseCellWidth * (columnsCount - 2) :
                                    (kind === Scoreboard.Clan ? clanCellWidth : span * baseCellWidth)
@@ -54,8 +54,8 @@ Item {
                         height: 40
                         verticalAlignment: Qt.AlignVCenter
                         horizontalAlignment: isTextual ? Qt.AlignLeft : Qt.AlignHCenter
-                        text: scoreboard.getColumnTitle(index)
-                        font.family: wsw.headingFontFamily
+                        text: UI.scoreboard.getColumnTitle(index)
+                        font.family: UI.ui.headingFontFamily
                         font.pointSize: 12
                         font.weight: Font.Bold
                         font.capitalization: Font.AllUppercase
@@ -104,7 +104,7 @@ Item {
     }
 
     Connections {
-        target: scoreboard
+        target: UI.scoreboard
         onTeamReset: {
             if (resetTeamTag === model.teamTag) {
                 bufferIndex = (bufferIndex + 1) % 2
