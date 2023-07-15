@@ -25,6 +25,7 @@ Item {
 
         layer.enabled: row.width
         layer.effect: ElevationEffect { elevation: 16 }
+        Component.onDestruction: Hud.destroyLayer(layer)
     }
 
     Row {

@@ -41,6 +41,7 @@ Item {
         height: contentHeight
         spacing: 3
         delegate: Label {
+            id: listDelegate
             width: list.width
             horizontalAlignment: Qt.AlignLeft
             elide: Text.ElideRight
@@ -54,6 +55,7 @@ Item {
 
             opacity: 0.0
             Component.onCompleted: opacity = 1.0
+            Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
             Behavior on opacity { NumberAnimation { duration: 100 } }
         }
     }

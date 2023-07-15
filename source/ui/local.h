@@ -83,4 +83,23 @@ inline auto operator<<( wsw::TextStreamWriter<Stream> &writer, const QSize &size
 	return writer;
 }
 
+
+template <typename Stream>
+[[maybe_unused]]
+inline auto operator<<( wsw::TextStreamWriter<Stream> &streamWriter, const QObject *object ) -> wsw::TextStreamWriter<Stream> & {
+	const char *objectName    = "QObject";
+	const void *objectAddress = object;
+	if( object ) {
+		objectName = object->metaObject()->className();
+	}
+	streamWriter.writeChars( objectName, std::strlen( objectName ) );
+	streamWriter.hasPendingSeparator = false;
+	streamWriter << '(';
+	streamWriter.hasPendingSeparator = false;
+	streamWriter << objectAddress;
+	streamWriter.hasPendingSeparator = false;
+	streamWriter << ')';
+	return streamWriter;
+}
+
 #endif

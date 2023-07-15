@@ -31,6 +31,7 @@ Item {
             height: root.height
             layer.enabled: true
             layer.effect: ElevationEffect { elevation: 64 }
+            Component.onDestruction: Hud.destroyLayer(layer)
 
             Rectangle {
                 anchors.fill: parent

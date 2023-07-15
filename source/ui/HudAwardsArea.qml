@@ -79,6 +79,8 @@ Item {
         }
 
         delegate: Label {
+            id: listDelegate
+            Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
             property real transformXScale
             property real transformYScale
             transform: Scale {

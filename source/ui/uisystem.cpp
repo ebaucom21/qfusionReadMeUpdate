@@ -240,6 +240,8 @@ public:
 	Q_INVOKABLE void registerCVarAwareControl( QQuickItem *control );
 	Q_INVOKABLE void unregisterCVarAwareControl( QQuickItem *control );
 
+	Q_INVOKABLE void ensureObjectDestruction( QObject *object );
+
 	Q_INVOKABLE void showMainMenu();
 	Q_INVOKABLE void returnFromInGameMenu();
 	Q_INVOKABLE void returnFromMainMenu();
@@ -2020,6 +2022,16 @@ void QtUISystem::updateCVarAwareControls() {
 
 	for( QQuickItem *control : m_cvarAwareControls ) {
 		QMetaObject::invokeMethod( control, "checkCVarChanges", QGenericReturnArgument() );
+	}
+}
+
+void QtUISystem::ensureObjectDestruction( QObject *object ) {
+	if( object ) [[likely]] {
+		if( object->parent() ) [[unlikely]] {
+			uiWarning() << "Attempt to ensure destruction of an object" << object << "with a present parent";
+		} else {
+			QQmlEngine::setObjectOwnership( object, QQmlEngine::JavaScriptOwnership );
+		}
 	}
 }
 

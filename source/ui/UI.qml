@@ -23,4 +23,12 @@ QtObject {
     readonly property var scoreboardAlphaModel: __scoreboardAlphaModel
     readonly property var scoreboardBetaModel: __scoreboardBetaModel
     readonly property var scoreboardMixedModel: __scoreboardMixedModel
+
+    function destroyLayer(layer) {
+        if (layer) {
+            layer.enabled = false
+            layer.effect  = null
+            ui.ensureObjectDestruction(layer)
+        }
+    }
 }

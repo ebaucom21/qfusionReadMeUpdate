@@ -25,10 +25,16 @@ Item {
         model: Hud.dataModel.getTeamListModel()
         layer.enabled: count
         layer.effect: ElevationEffect { elevation: 64 }
+        Component.onDestruction: Hud.destroyLayer(layer)
         delegate: Rectangle {
+            id: listDelegate
             width: list.width
             implicitHeight: 40
             color: index % 2 ? oddRowColor : evenRowColor
+            Component.onDestruction: {
+                Hud.ui.ensureObjectDestruction(model)
+                Hud.ui.ensureObjectDestruction(listDelegate)
+            }
 
             RowLayout {
                 anchors.left: parent.left

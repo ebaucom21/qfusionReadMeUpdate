@@ -8,4 +8,12 @@ QtObject {
     readonly property var actionRequestsModel: __actionRequestsModel
     readonly property var chatProxy: __chatProxy
     readonly property var teamChatProxy: __teamChatProxy
+
+    function destroyLayer(layer) {
+        if (layer) {
+            layer.enabled = false
+            layer.effect  = null
+            ui.ensureObjectDestruction(layer)
+        }
+    }
 }

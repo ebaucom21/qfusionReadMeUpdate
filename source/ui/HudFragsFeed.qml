@@ -21,11 +21,13 @@ Item {
         spacing: 4
 
         delegate: RowLayout {
+            id: listDelegate
             width: list.width
             height: 27
             // Something is wrong with transitions (the don't always complete, wtf?). Use a simpler approach.
             opacity: 0.0
             Component.onCompleted: opacity = 1.0
+            Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
             Behavior on opacity { NumberAnimation { duration: 200 } }
             Label {
                 Layout.fillWidth: true

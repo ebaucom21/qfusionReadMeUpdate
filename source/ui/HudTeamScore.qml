@@ -82,6 +82,7 @@ Item {
 
         layer.enabled: true
         layer.effect: ElevationEffect { elevation: 16 }
+        Component.onDestruction: Hud.destroyLayer(layer)
     }
 
     Rectangle {

@@ -20,6 +20,7 @@ Item {
         opacity: 0.7
         layer.enabled: true
         layer.effect: ElevationEffect { elevation: 64 }
+        Component.onDestruction: Hud.destroyLayer(layer)
     }
 
     Label {

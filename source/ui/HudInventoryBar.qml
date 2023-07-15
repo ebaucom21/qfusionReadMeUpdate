@@ -54,8 +54,14 @@ Item {
         }
 
         delegate: Item {
+            id: listDelegate
             width: cardWidth
             height: cardHeight
+
+            Component.onDestruction: {
+                Hud.ui.ensureObjectDestruction(model)
+                Hud.ui.ensureObjectDestruction(listDelegate)
+            }
 
             Rectangle {
                 id: frame
@@ -67,6 +73,7 @@ Item {
                 opacity: 0.7
                 layer.enabled: true
                 layer.effect: ElevationEffect { elevation: 16 }
+                Component.onDestruction: Hud.destroyLayer(layer)
             }
 
             Rectangle {

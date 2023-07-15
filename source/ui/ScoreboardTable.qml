@@ -50,6 +50,8 @@ TableView {
     }
 
     delegate: Item {
+        id: tableDelegate
+        Component.onDestruction: UI.ui.ensureObjectDestruction(tableDelegate)
         readonly property int kind: UI.scoreboard.getColumnKind(column)
         readonly property bool isColumnTextual: (kind === Scoreboard.Nickname) || (kind === Scoreboard.Clan)
         readonly property bool isColumnStatusOne: kind === Scoreboard.Status

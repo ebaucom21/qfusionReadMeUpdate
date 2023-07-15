@@ -15,7 +15,9 @@ Row {
 
 	Repeater {
 		model: elementsCount
-		Rectangle {
+		delegate: Rectangle {
+		    id: delegateItem
+		    Component.onDestruction: UI.ui.ensureObjectDestruction(delegateItem)
 			property real frac: index / elementsCount
 			// TODO: Must use gamma-correct lerp
 			color: Qt.rgba(leftColor.r * frac + rightColor.r * (1.0 - frac),

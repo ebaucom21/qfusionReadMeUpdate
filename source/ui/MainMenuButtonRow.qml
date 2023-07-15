@@ -108,6 +108,7 @@ Item {
 		    transform: Matrix4x4 { matrix: root.transformMatrix }
             layer.enabled: true
             layer.effect: ElevationEffect { elevation: 16 }
+            Component.onDestruction: UI.destroyLayer(layer)
         }
     }
 

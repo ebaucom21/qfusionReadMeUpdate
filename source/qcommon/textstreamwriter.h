@@ -216,6 +216,11 @@ public:
 	}
 
 	template <typename Chars>
+	requires
+		requires( const Chars &ch ) {
+			{ ch.data() } -> std::same_as<const char *>;
+			{ ch.size() } -> std::integral;
+		}
 	[[maybe_unused]]
 	wsw_noinline auto operator<<( const Chars &chars ) -> TextStreamWriter & {
 		writeQuotedChars( chars.data(), chars.size() );

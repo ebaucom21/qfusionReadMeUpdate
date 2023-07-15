@@ -10,6 +10,8 @@ ListView {
     model: Hud.actionRequestsModel
 
     delegate: Item {
+        id: listDelegate
+        Component.onDestruction: Hud.ui.ensureObjectDestruction(listDelegate)
         width: parent.width
         height: Math.max(96, contentColumn.implicitHeight + 32)
         Rectangle {
@@ -19,6 +21,7 @@ ListView {
             opacity: 0.8
             layer.enabled: true
             layer.effect: ElevationEffect { elevation: 64 }
+            Component.onDestruction: Hud.destroyLayer(layer)
         }
 
         ColumnLayout {

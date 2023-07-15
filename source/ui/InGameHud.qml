@@ -79,6 +79,8 @@ Item {
 
             Component.onDestruction: {
                 repeater.numInstantiatedItems--;
+                Hud.ui.ensureObjectDestruction(model)
+                Hud.ui.ensureObjectDestruction(itemLoader)
             }
 
             function updateItemVisibility() {
