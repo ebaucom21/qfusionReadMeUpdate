@@ -214,6 +214,11 @@ static void *SV_Thread( void * ) {
 			break;
 		}
 
+		// As we have moved the builtin server to a separate thread, it needs its own call for pumping commands.
+		// The old shared command buffer processing used to be initiated by the client code every frame.
+		// The client code is kept untouched with regard to this, but it does not longer manage server commands.
+		// The command buffer of the dedicated server gets executed in Qcommon_Frame().
+		SV_GetCmdSystem()->executeBufferCommands();
 		SV_Frame( realMsec, gameMsec );
 	}
 

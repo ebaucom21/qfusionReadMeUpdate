@@ -949,7 +949,7 @@ void SV_Cmd_ExecuteText( int when, const char *text ) {
 			g_svCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
 			break;
 		case EXEC_INSERT:
-			g_svCmdSystemHolder.instance()->appendCommand( wsw::StringView( text ) );
+			g_svCmdSystemHolder.instance()->prependCommand( wsw::StringView( text ) );
 			break;
 		default:
 			Sys_Error( "Illegal EXEC_WHEN code" );
