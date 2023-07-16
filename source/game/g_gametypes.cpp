@@ -1267,45 +1267,44 @@ static bool G_EachNewSecond( void ) {
 * G_CheckNumBots
 */
 static void G_CheckNumBots( void ) {
-	if( level.spawnedTimeStamp + 5000 > game.realtime ) {
-		return;
-	}
-
-	// check sanity of g_numbots
-	if( g_numbots->integer < 0 ) {
-		trap_Cvar_Set( "g_numbots", "0" );
-	}
-
-	const int maxNumBots = developer->integer ? gs.maxclients : wsw::min( 9, gs.maxclients );
-	if( g_numbots->integer > maxNumBots ) {
-		trap_Cvar_Set( "g_numbots", va( "%i", maxNumBots ) );
-	}
-
-	if( level.gametype.numBots > maxNumBots ) {
-		level.gametype.numBots = maxNumBots;
-	}
-
-	const int desiredNumBots = level.gametype.numBots ? level.gametype.numBots : g_numbots->integer;
-	assert( desiredNumBots <= maxNumBots );
-
-	if( desiredNumBots < game.numBots ) {
-		// kick one bot
-		for( edict_t *ent = game.edicts + gs.maxclients; PLAYERNUM( ent ) >= 0; ent-- ) {
-			if( !ent->r.inuse || !( ent->r.svflags & SVF_FAKECLIENT ) ) {
-				continue;
-			}
-			if( ent->bot ) {
-				AI_RemoveBot( ent->r.client->netname.asView() );
-				break;
-			}
+	if( level.spawnedTimeStamp + 3000 < game.realtime ) {
+		if( g_numbots->integer < 0 ) {
+			trap_Cvar_Set( "g_numbots", "0" );
 		}
-		return;
-	}
 
-	if( desiredNumBots > game.numBots && AI_CanSpawnBots() ) { // add a bot if there is room
-		for( edict_t *ent = game.edicts + 1; PLAYERNUM( ent ) < gs.maxclients && game.numBots < desiredNumBots; ent++ ) {
-			if( !ent->r.inuse && trap_GetClientState( PLAYERNUM( ent ) ) == CS_FREE ) {
-				AI_SpawnBot( NULL );
+		const int maxNumBots = developer->integer ? gs.maxclients : wsw::min( 11, gs.maxclients );
+		if( g_numbots->integer > maxNumBots ) {
+			trap_Cvar_Set( "g_numbots", va( "%i", maxNumBots ) );
+		}
+
+		if( level.gametype.numBots > maxNumBots ) {
+			level.gametype.numBots = maxNumBots;
+		}
+
+		const int desiredNumBots = level.gametype.numBots ? level.gametype.numBots : g_numbots->integer;
+		assert( desiredNumBots <= maxNumBots );
+
+		[[maybe_unused]] const int minPlayerEntNum = 1;
+		[[maybe_unused]] const int maxPlayerEntNum = gs.maxclients;
+
+		// Limit applied changes to a single bot per the subroutine invocation
+
+		if( desiredNumBots < game.numBots ) {
+			for( int entNum = minPlayerEntNum; entNum <= maxPlayerEntNum; ++entNum ) {
+				if( const edict_t *ent = game.edicts + entNum; ent->bot != nullptr ) {
+					AI_RemoveBot( ent->r.client->netname.asView() );
+					break;
+				}
+			}
+		} else if( desiredNumBots > game.numBots ) {
+			if( AI_CanSpawnBots() && GS_MatchState() < MATCH_STATE_POSTMATCH ) {
+				for( int entNum = maxPlayerEntNum; entNum >= minPlayerEntNum; --entNum ) {
+					const edict_t *ent = game.edicts + entNum;
+					if( !ent->r.inuse && trap_GetClientState( PLAYERNUM( ent ) ) == CS_FREE ) {
+						AI_SpawnBot( nullptr );
+						break;
+					}
+				}
 			}
 		}
 	}
