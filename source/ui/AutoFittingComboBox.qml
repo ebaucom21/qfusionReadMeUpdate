@@ -5,6 +5,7 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
 import QtQuick.Controls.Material.impl 2.12
+import net.warsow 2.6
 
 ComboBox {
     id: root
@@ -13,6 +14,7 @@ ComboBox {
     property real minimumWidth
     property real menuItemWidth
     property bool wasVisible
+    property bool hasRegisteredHudOccluder
 
     background.opacity: 0.67
     
@@ -69,8 +71,11 @@ ComboBox {
             root.indicator.visible   = wasVisible
             root.background.visible  = wasVisible
 
-            rootItem.leavePopupMode()
-            UI.ui.unregisterHudOccluder(background)
+            rootItem.resetPopupMode()
+            if (root.hasRegisteredHudOccluder) {
+                UI.ui.unregisterHudOccluder(background)
+                root.hasRegisteredHudOccluder = false
+            }
         }
 
         function repositionBlurRegion() {
@@ -84,11 +89,13 @@ ComboBox {
                 const globalPos = parent.mapToGlobal(0, 0)
                 const inset     = popup.background.radius
 
-                // TODO: It should not be named "enter/leave" as we violate balancing semantics of calls
-                rootItem.enterPopupMode(Qt.rect(globalPos.x + inset, globalPos.y + inset,
+                rootItem.setOrUpdatePopupMode(Qt.rect(globalPos.x + inset, globalPos.y + inset,
                     background.width - 2 * inset, background.height - 2 * inset))
 
-                UI.ui.registerHudOccluder(background)
+                if (!root.hasRegisteredHudOccluder) {
+                    UI.ui.registerHudOccluder(background)
+                    root.hasRegisteredHudOccluder = true
+                }
             }
         }
     }

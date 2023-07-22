@@ -22,7 +22,7 @@ Flickable {
         SettingsRow {
             text: "FPS Limit"
             CVarAwareComboBox {
-                knownHeadingsAndValues: [[1000, 500, 333, 250, 125, 60], [1000, 500, 333, 250, 125, 60]]
+                knownHeadingsAndValues: [["(none)", 1000, 500, 333, 250, 125, 60], [0, 1000, 500, 333, 250, 125, 60]]
                 cvarName: "cl_maxfps"
             }
         }

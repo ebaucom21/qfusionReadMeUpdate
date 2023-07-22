@@ -37,6 +37,7 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
+import net.warsow 2.6
 
 // This markup is derived from the qtquickcontrols2 Material template in order to modify the highlight style
 

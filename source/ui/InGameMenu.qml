@@ -14,6 +14,15 @@ Rectangle {
     property real tabButtonWidth: (tabBar.width - 8) / (canShowLoadouts ? 4 : 3)
     Behavior on tabButtonWidth { SmoothedAnimation { duration: 66 } }
 
+    // Force redrawing stuff every frame
+    ProgressBar {
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        indeterminate: true
+        Material.accent: parent.Material.background
+    }
+
     WswTabBar {
         id: tabBar
         visible: stackView.depth < 2

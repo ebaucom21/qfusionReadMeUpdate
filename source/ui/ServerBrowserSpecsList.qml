@@ -37,6 +37,8 @@ Item {
         Repeater {
             model: numPlayers ? Math.max(numPlayers / playersPerRow, 1) : 0
             delegate: Row {
+                id: outerDelegate
+                Component.onDestruction: UI.ui.ensureObjectDestruction(outerDelegate)
                 readonly property int rowIndex: index
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 12
@@ -44,6 +46,8 @@ Item {
                     model: (rowIndex !== Math.floor(numPlayers / playersPerRow)) ?
                         playersPerRow : (numPlayers % playersPerRow)
                     delegate: Row {
+                        id: innerDelegate
+                        Component.onDestruction: UI.ui.ensureObjectDestruction(innerDelegate)
                         spacing: 8
                         readonly property int listIndex: rowIndex * playersPerRow + index
                         ServerBrowserDataLabel {

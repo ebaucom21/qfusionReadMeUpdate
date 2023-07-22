@@ -96,7 +96,7 @@ Item {
         }
     }
 
-    function enterPopupMode(limitToItem) {
+    function setOrUpdatePopupMode(limitToItem) {
         if (limitToItem) {
             isBlurringLimitedToRect = true
             blurRect                = Qt.rect(limitToItem.x, limitToItem.y, limitToItem.width, limitToItem.height)
@@ -107,7 +107,7 @@ Item {
         isBlurringBackground = true
     }
 
-    function leavePopupMode() {
+    function resetPopupMode() {
         isBlurringBackground    = false
         isBlurringLimitedToRect = false
         blurRect                = Qt.rect(0, 0, 0, 0)

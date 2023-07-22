@@ -3,6 +3,7 @@ import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.12
 import QtQuick.Controls.Material.impl 2.12
 import QtQuick.Layouts 1.12
+import net.warsow 2.6
 
 Item {
 	id: root
@@ -108,7 +109,6 @@ Item {
 		    transform: Matrix4x4 { matrix: root.transformMatrix }
             layer.enabled: true
             layer.effect: ElevationEffect { elevation: 16 }
-            Component.onDestruction: UI.destroyLayer(layer)
         }
     }
 

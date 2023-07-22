@@ -79,7 +79,7 @@ Item {
             }
         }
 
-        model: serverListModel
+        model: UI.serverListModel
 
         delegate: ServerBrowserCard {
             implicitWidth: root.width / 2
@@ -112,7 +112,7 @@ Item {
         }
 
         Connections {
-            target: serverListModel
+            target: UI.serverListModel
             onWasReset: tableView.forceLayout()
         }
     }
@@ -165,7 +165,7 @@ Item {
                 highlighted: true
                 text: "Play offline"
                 // TODO: This should be less hacky
-                onClicked: centralOverlay.activePageTag = centralOverlay.pageLocalGame
+                onClicked: primaryMenu.activePageTag = primaryMenu.pageLocalGame
             }
         }
     }

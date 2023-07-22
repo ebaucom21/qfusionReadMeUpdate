@@ -21,17 +21,18 @@ Item {
 
         function openSelf() {
             popup.parent = rootItem.windowContentItem
-            rootItem.enterPopupMode()
+            rootItem.setOrUpdatePopupMode()
             popup.open()
         }
 
         function closeSelf() {
             if (opened) {
                 popup.close()
-                rootItem.leavePopupMode()
                 quitPage.backTrigger()
             }
         }
+
+        onAboutToHide: rootItem.resetPopupMode()
 
         background: PopupBackground {}
 

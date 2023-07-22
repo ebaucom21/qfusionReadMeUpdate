@@ -46,8 +46,10 @@ ListView {
     }
 
     delegate: Item {
+        id: delegateItem
         width: root.width
         height: 24
+        Component.onDestruction: UI.ui.ensureObjectDestruction(delegateItem)
 
         ServerBrowserDataLabel {
             text: modelData["name"]
