@@ -26,320 +26,282 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
-class DeformTokenMatcher : public wsw::EnumTokenMatcher<Deform> {
+class DeformTokenMatcher : public wsw::EnumTokenMatcher<Deform, DeformTokenMatcher> {
 public:
-	DeformTokenMatcher() noexcept {
-		add( "Wave"_asView, Deform::Wave );
-		add( "Bulge"_asView, Deform::Bulge );
-		add( "Move"_asView, Deform::Move );
-		add( "Autosprite"_asView, Deform::Autosprite );
-		add( "Autosprite2"_asView, Deform::Autosprite2 );
-		add( "Autoparticle"_asView, Deform::Autoparticle );
-	}
+	DeformTokenMatcher() : EnumTokenMatcher({
+		{ "Wave"_asView, Deform::Wave },
+		{ "Bulge"_asView, Deform::Bulge },
+		{ "Move"_asView, Deform::Move },
+		{ "Autosprite"_asView, Deform::Autosprite },
+		{ "Autosprite2"_asView, Deform::Autosprite2 },
+		{ "Autoparticle"_asView, Deform::Autoparticle },
+	}) {}
 };
 
-static DeformTokenMatcher deformTokenMatcher;
-
-class FuncTokenMatcher : public wsw::EnumTokenMatcher<Func> {
+class FuncTokenMatcher : public wsw::EnumTokenMatcher<Func, FuncTokenMatcher> {
 public:
-	FuncTokenMatcher() noexcept {
-		add( "Sin"_asView, Func::Sin );
-		add( "Triangle"_asView, Func::Triangle );
-		add( "Square"_asView, Func::Square );
-		add( "Sawtooth"_asView, Func::Sawtooth );
-		add( "InvSawtooth"_asView, Func::InvSawtooth );
-		add( "InverseSawtooth"_asView, Func::InvSawtooth );
-		add( "Noize"_asView, Func::Noize );
-		add( "DistanceRamp"_asView, Func::DistanceRamp );
-	}
+	FuncTokenMatcher() : EnumTokenMatcher({
+		{ "Sin"_asView, Func::Sin },
+		{ "Triangle"_asView, Func::Triangle },
+		{ "Square"_asView, Func::Square },
+		{ "Sawtooth"_asView, Func::Sawtooth },
+		{ "InvSawtooth"_asView, Func::InvSawtooth },
+		{ "InverseSawtooth"_asView, Func::InvSawtooth },
+		{ "Noize"_asView, Func::Noize },
+		{ "DistanceRamp"_asView, Func::DistanceRamp },
+	}) {}
 };
 
-static FuncTokenMatcher funcTokenMatcher;
-
-class PassKeyMatcher : public wsw::EnumTokenMatcher<PassKey> {
+class PassKeyMatcher : public wsw::EnumTokenMatcher<PassKey, PassKeyMatcher> {
 public:
-	PassKeyMatcher() noexcept {
-		add( "RgbGen"_asView, PassKey::RgbGen );
-		add( "BlendFunc"_asView, PassKey::BlendFunc );
-		add( "DepthFunc"_asView, PassKey::DepthFunc );
-		add( "DepthWrite"_asView, PassKey::DepthWrite );
-		add( "AlphaFunc"_asView, PassKey::AlphaFunc );
-		add( "TCMod"_asView, PassKey::TCMod );
-		add( "Map"_asView, PassKey::Map );
-		add( "AnimMap"_asView, PassKey::AnimMap );
-		add( "CubeMap"_asView, PassKey::CubeMap );
-		add( "ShadeCubeMap"_asView, PassKey::ShadeCubeMap );
-		add( "ClampMap"_asView, PassKey::ClampMap );
-		add( "AnimClampMap"_asView, PassKey::AnimClampMap );
-		add( "Material"_asView, PassKey::Material );
-		add( "Distortion"_asView, PassKey::Distortion );
-		add( "CelShade"_asView, PassKey::CelShade );
-		add( "TCGen"_asView, PassKey::TCGen );
-		add( "AlphaGen"_asView, PassKey::AlphaGen );
-		add( "Detail"_asView, PassKey::Detail );
-		add( "Greyscale"_asView, PassKey::Grayscale );
-		add( "Grayscale"_asView, PassKey::Grayscale );
-		add( "Skip"_asView, PassKey::Skip );
-	}
+	PassKeyMatcher() : EnumTokenMatcher({
+		{ "RgbGen"_asView, PassKey::RgbGen },
+		{ "BlendFunc"_asView, PassKey::BlendFunc },
+		{ "DepthFunc"_asView, PassKey::DepthFunc },
+		{ "DepthWrite"_asView, PassKey::DepthWrite },
+		{ "AlphaFunc"_asView, PassKey::AlphaFunc },
+		{ "TCMod"_asView, PassKey::TCMod },
+		{ "Map"_asView, PassKey::Map },
+		{ "AnimMap"_asView, PassKey::AnimMap },
+		{ "CubeMap"_asView, PassKey::CubeMap },
+		{ "ShadeCubeMap"_asView, PassKey::ShadeCubeMap },
+		{ "ClampMap"_asView, PassKey::ClampMap },
+		{ "AnimClampMap"_asView, PassKey::AnimClampMap },
+		{ "Material"_asView, PassKey::Material },
+		{ "Distortion"_asView, PassKey::Distortion },
+		{ "CelShade"_asView, PassKey::CelShade },
+		{ "TCGen"_asView, PassKey::TCGen },
+		{ "AlphaGen"_asView, PassKey::AlphaGen },
+		{ "Detail"_asView, PassKey::Detail },
+		{ "Greyscale"_asView, PassKey::Grayscale },
+		{ "Grayscale"_asView, PassKey::Grayscale },
+		{ "Skip"_asView, PassKey::Skip },
+	}) {}
 };
 
-static PassKeyMatcher passKeyMatcher;
-
-class IntConditionVarMatcher : public wsw::EnumTokenMatcher<IntConditionVar> {
+class IntConditionVarMatcher : public wsw::EnumTokenMatcher<IntConditionVar, IntConditionVarMatcher> {
 public:
-	IntConditionVarMatcher() noexcept {
-		add( "MaxTextureSize"_asView, IntConditionVar::MaxTextureSize );
-		add( "MaxTextureCubemapSize"_asView, IntConditionVar::MaxTextureCubemapSize );
-		add( "MaxTextureUnits"_asView, IntConditionVar::MaxTextureUnits );
-	}
+	IntConditionVarMatcher() : EnumTokenMatcher({
+		{ "MaxTextureSize"_asView, IntConditionVar::MaxTextureSize },
+		{ "MaxTextureCubemapSize"_asView, IntConditionVar::MaxTextureCubemapSize },
+		{ "MaxTextureUnits"_asView, IntConditionVar::MaxTextureUnits },
+	}) {}
 };
 
-static IntConditionVarMatcher intVarMatcher;
-
-class BoolConditionVarMatcher : public wsw::EnumTokenMatcher<BoolConditionVar> {
+class BoolConditionVarMatcher : public wsw::EnumTokenMatcher<BoolConditionVar, BoolConditionVarMatcher> {
 public:
-	BoolConditionVarMatcher() noexcept {
-		add( "TextureCubeMap"_asView, BoolConditionVar::TextureCubeMap );
-		add( "Glsl"_asView, BoolConditionVar::Glsl );
-		add( "Deluxe"_asView, BoolConditionVar::DeluxeMaps );
-		add( "DeluxeMaps"_asView, BoolConditionVar::DeluxeMaps );
-		add( "PortalMaps"_asView, BoolConditionVar::PortalMaps );
-	}
+	BoolConditionVarMatcher() : EnumTokenMatcher({
+		{ "TextureCubeMap"_asView, BoolConditionVar::TextureCubeMap },
+		{ "Glsl"_asView, BoolConditionVar::Glsl },
+		{ "Deluxe"_asView, BoolConditionVar::DeluxeMaps },
+		{ "DeluxeMaps"_asView, BoolConditionVar::DeluxeMaps },
+		{ "PortalMaps"_asView, BoolConditionVar::PortalMaps },
+	}) {}
 };
 
-static BoolConditionVarMatcher boolVarMatcher;
-
-class LogicOpMatcher : public wsw::EnumTokenMatcher<LogicOp, 2> {
+class LogicOpMatcher : public wsw::EnumTokenMatcher<LogicOp, LogicOpMatcher> {
 public:
-	LogicOpMatcher() noexcept {
-		add( "&&"_asView, LogicOp::And );
-		add( "||"_asView, LogicOp::Or );
-	}
+	LogicOpMatcher() : EnumTokenMatcher({
+		{ "&&"_asView, LogicOp::And },
+		{ "||"_asView, LogicOp::Or },
+	}) {}
 };
 
-static LogicOpMatcher logicOpMatcher;
-
-class CmpOpMatcher : public wsw::EnumTokenMatcher<CmpOp, 2> {
+class CmpOpMatcher : public wsw::EnumTokenMatcher<CmpOp, CmpOpMatcher> {
 public:
-	CmpOpMatcher() noexcept {
-		add( "<"_asView, CmpOp::LS );
-		add( "<="_asView, CmpOp::LE );
-		add( ">"_asView, CmpOp::GT );
-		add( ">="_asView, CmpOp::GE );
-		add( "!="_asView, CmpOp::NE );
-		add( "=="_asView, CmpOp::EQ );
-	}
+	CmpOpMatcher() : EnumTokenMatcher({
+		{ "<"_asView, CmpOp::LS },
+		{ "<="_asView, CmpOp::LE },
+		{ ">"_asView, CmpOp::GT },
+		{ ">="_asView, CmpOp::GE },
+		{ "!="_asView, CmpOp::NE },
+		{ "=="_asView, CmpOp::EQ },
+	}) {}
 };
 
-static CmpOpMatcher cmpOpMatcher;
-
-class CullModeMatcher : public wsw::EnumTokenMatcher<CullMode> {
+class CullModeMatcher : public wsw::EnumTokenMatcher<CullMode, CullModeMatcher> {
 public:
-	CullModeMatcher() noexcept {
-		add( "None"_asView, CullMode::None );
-		add( "Disable"_asView, CullMode::None );
-		add( "Twosided"_asView, CullMode::None );
+	CullModeMatcher() : EnumTokenMatcher({
+		{ "None"_asView, CullMode::None },
+		{ "Disable"_asView, CullMode::None },
+		{ "Twosided"_asView, CullMode::None },
 
-		add( "Back"_asView, CullMode::Back );
-		add( "Backside"_asView, CullMode::Back );
-		add( "Backsided"_asView, CullMode::Back );
+		{ "Back"_asView, CullMode::Back },
+		{ "Backside"_asView, CullMode::Back },
+		{ "Backsided"_asView, CullMode::Back },
 
-		add( "Front"_asView, CullMode::Front );
-	}
+		{ "Front"_asView, CullMode::Front },
+	}) {}
 };
 
-static CullModeMatcher cullModeMatcher;
-
-class SortModeMatcher : public wsw::EnumTokenMatcher<SortMode> {
+class SortModeMatcher : public wsw::EnumTokenMatcher<SortMode, SortModeMatcher> {
 public:
-	SortModeMatcher() noexcept {
-		add( "Portal"_asView, SortMode::Portal );
-		add( "Sky"_asView, SortMode::Sky );
-		add( "Opaque"_asView, SortMode::Opaque );
-		add( "Banner"_asView, SortMode::Banner );
-		add( "Underwater"_asView, SortMode::Underwater );
-		add( "Additive"_asView, SortMode::Additive );
-		add( "Nearest"_asView, SortMode::Nearest );
-	}
+	SortModeMatcher() : EnumTokenMatcher({
+		{ "Portal"_asView, SortMode::Portal },
+		{ "Sky"_asView, SortMode::Sky },
+		{ "Opaque"_asView, SortMode::Opaque },
+		{ "Banner"_asView, SortMode::Banner },
+		{ "Underwater"_asView, SortMode::Underwater },
+		{ "Additive"_asView, SortMode::Additive },
+		{ "Nearest"_asView, SortMode::Nearest },
+	}) {}
 };
 
-static SortModeMatcher sortModeMatcher;
-
-class MaterialKeyParser : public wsw::EnumTokenMatcher<MaterialKey> {
+class MaterialKeyMatcher : public wsw::EnumTokenMatcher<MaterialKey, MaterialKeyMatcher> {
 public:
-	MaterialKeyParser() noexcept {
-		add( "Cull"_asView, MaterialKey::Cull );
-		add( "SkyParams"_asView, MaterialKey::SkyParams );
-		add( "SkyParams2"_asView, MaterialKey::SkyParams2 );
-		add( "SkyParamsSides"_asView, MaterialKey::SkyParamsSides );
-		add( "FogParams"_asView, MaterialKey::FogParams );
-		add( "NoMipMaps"_asView, MaterialKey::NoMipMaps );
-		add( "NoPicMip"_asView, MaterialKey::NoPicMip );
-		add( "NoCompress"_asView, MaterialKey::NoCompress );
-		add( "NoFiltering"_asView, MaterialKey::NoFiltering );
-		add( "SmallestMipSize"_asView, MaterialKey::SmallestMipSize );
-		add( "PolygonOffset"_asView, MaterialKey::PolygonOffset );
-		add( "StencilTest"_asView, MaterialKey::StencilTest );
-		add( "Sort"_asView, MaterialKey::Sort );
-		add( "DeformVertexes"_asView, MaterialKey::DeformVertexes );
-		add( "Portal"_asView, MaterialKey::Portal );
-		add( "EntityMergable"_asView, MaterialKey::EntityMergable );
-		add( "If"_asView, MaterialKey::If );
-		add( "EndIf"_asView, MaterialKey::EndIf );
-		add( "OffsetMappingScale"_asView, MaterialKey::OffsetMappingScale );
-		add( "GlossExponent"_asView, MaterialKey::GlossExponent );
-		add( "GlossIntensity"_asView, MaterialKey::GlossIntensity );
-		add( "Template"_asView, MaterialKey::Template );
-		add( "Skip"_asView, MaterialKey::Skip );
-		add( "SoftParticle"_asView, MaterialKey::SoftParticle );
-		add( "ForceWorldOutlines"_asView, MaterialKey::ForceWorldOutlines );
-	}
+	MaterialKeyMatcher() : EnumTokenMatcher({
+		{ "Cull"_asView, MaterialKey::Cull },
+		{ "SkyParams"_asView, MaterialKey::SkyParams },
+		{ "SkyParams2"_asView, MaterialKey::SkyParams2 },
+		{ "SkyParamsSides"_asView, MaterialKey::SkyParamsSides },
+		{ "FogParams"_asView, MaterialKey::FogParams },
+		{ "NoMipMaps"_asView, MaterialKey::NoMipMaps },
+		{ "NoPicMip"_asView, MaterialKey::NoPicMip },
+		{ "NoCompress"_asView, MaterialKey::NoCompress },
+		{ "NoFiltering"_asView, MaterialKey::NoFiltering },
+		{ "SmallestMipSize"_asView, MaterialKey::SmallestMipSize },
+		{ "PolygonOffset"_asView, MaterialKey::PolygonOffset },
+		{ "StencilTest"_asView, MaterialKey::StencilTest },
+		{ "Sort"_asView, MaterialKey::Sort },
+		{ "DeformVertexes"_asView, MaterialKey::DeformVertexes },
+		{ "Portal"_asView, MaterialKey::Portal },
+		{ "EntityMergable"_asView, MaterialKey::EntityMergable },
+		{ "If"_asView, MaterialKey::If },
+		{ "EndIf"_asView, MaterialKey::EndIf },
+		{ "OffsetMappingScale"_asView, MaterialKey::OffsetMappingScale },
+		{ "GlossExponent"_asView, MaterialKey::GlossExponent },
+		{ "GlossIntensity"_asView, MaterialKey::GlossIntensity },
+		{ "Template"_asView, MaterialKey::Template },
+		{ "Skip"_asView, MaterialKey::Skip },
+		{ "SoftParticle"_asView, MaterialKey::SoftParticle },
+		{ "ForceWorldOutlines"_asView, MaterialKey::ForceWorldOutlines },
+	}) {}
 };
 
-static MaterialKeyParser materialKeyParser;
-
-class RgbGenMatcher : public wsw::EnumTokenMatcher<RgbGen> {
+class RgbGenMatcher : public wsw::EnumTokenMatcher<RgbGen, RgbGenMatcher> {
 public:
-	RgbGenMatcher() noexcept {
-		add( "Identity"_asView, RgbGen::Identity );
-		add( "IdentityLighting"_asView, RgbGen::Identity );
-		add( "LightingIdentity"_asView, RgbGen::Identity );
-		add( "Wave"_asView, RgbGen::Wave );
-		add( "ColorWave"_asView, RgbGen::ColorWave );
-		add( "Custom"_asView, RgbGen::Custom );
-		add( "CustomWave"_asView, RgbGen::Custom );
-		add( "TeamColor"_asView, RgbGen::Custom );
-		add( "CustomColorWave"_asView, RgbGen::Custom );
-		add( "TeamColorWave"_asView, RgbGen::CustomWave );
-		add( "Entity"_asView, RgbGen::Entity );
-		add( "EntityWave"_asView, RgbGen::EntityWave );
-		add( "OneMinusEntity"_asView, RgbGen::OneMinusEntity );
-		add( "Vertex"_asView, RgbGen::Vertex );
-		add( "OneMinusVertex"_asView, RgbGen::OneMinusVertex );
-		add( "LightingDiffuse"_asView, RgbGen::LightingDiffuse );
-		add( "ExactVertex"_asView, RgbGen::ExactVertex );
-		add( "Const"_asView, RgbGen::Const );
-		add( "Constant"_asView, RgbGen::Const );
-	}
+	RgbGenMatcher() : EnumTokenMatcher({
+		{ "Identity"_asView, RgbGen::Identity },
+		{ "IdentityLighting"_asView, RgbGen::Identity },
+		{ "LightingIdentity"_asView, RgbGen::Identity },
+		{ "Wave"_asView, RgbGen::Wave },
+		{ "ColorWave"_asView, RgbGen::ColorWave },
+		{ "Custom"_asView, RgbGen::Custom },
+		{ "CustomWave"_asView, RgbGen::Custom },
+		{ "TeamColor"_asView, RgbGen::Custom },
+		{ "CustomColorWave"_asView, RgbGen::Custom },
+		{ "TeamColorWave"_asView, RgbGen::CustomWave },
+		{ "Entity"_asView, RgbGen::Entity },
+		{ "EntityWave"_asView, RgbGen::EntityWave },
+		{ "OneMinusEntity"_asView, RgbGen::OneMinusEntity },
+		{ "Vertex"_asView, RgbGen::Vertex },
+		{ "OneMinusVertex"_asView, RgbGen::OneMinusVertex },
+		{ "LightingDiffuse"_asView, RgbGen::LightingDiffuse },
+		{ "ExactVertex"_asView, RgbGen::ExactVertex },
+		{ "Const"_asView, RgbGen::Const },
+		{ "Constant"_asView, RgbGen::Const },
+	}) {}
 };
 
-static RgbGenMatcher rgbGenMatcher;
-
-class AlphaGenMatcher : public wsw::EnumTokenMatcher<AlphaGen> {
+class AlphaGenMatcher : public wsw::EnumTokenMatcher<AlphaGen, AlphaGenMatcher> {
 public:
-	AlphaGenMatcher() noexcept {
-		add( "Vertex"_asView, AlphaGen::Vertex );
-		add( "OneMinusVertex"_asView, AlphaGen::OneMinusVertex );
-		add( "Entity"_asView, AlphaGen::Entity );
-		add( "Wave"_asView, AlphaGen::Wave );
-		add( "Const"_asView, AlphaGen::Const );
-		add( "Constant"_asView, AlphaGen::Const );
-	}
+	AlphaGenMatcher() : EnumTokenMatcher({
+		{ "Vertex"_asView, AlphaGen::Vertex },
+		{ "OneMinusVertex"_asView, AlphaGen::OneMinusVertex },
+		{ "Entity"_asView, AlphaGen::Entity },
+		{ "Wave"_asView, AlphaGen::Wave },
+		{ "Const"_asView, AlphaGen::Const },
+		{ "Constant"_asView, AlphaGen::Const },
+	}) {}
 };
 
-static AlphaGenMatcher alphaGenMatcher;
-
-class SrcBlendMatcher : public wsw::EnumTokenMatcher<SrcBlend> {
+class SrcBlendMatcher : public wsw::EnumTokenMatcher<SrcBlend, SrcBlendMatcher> {
 public:
-	SrcBlendMatcher() noexcept {
-		add( "GL_zero"_asView, SrcBlend::Zero );
-		add( "GL_one"_asView, SrcBlend::One );
-		add( "GL_dst_color"_asView, SrcBlend::DstColor );
-		add( "GL_one_minus_dst_color"_asView, SrcBlend::OneMinusDstColor );
-		add( "GL_src_alpha"_asView, SrcBlend::SrcAlpha );
-		add( "GL_one_minus_src_alpha"_asView, SrcBlend::OneMinusSrcAlpha );
-		add( "GL_dst_alpha"_asView, SrcBlend::DstAlpha );
-		add( "GL_one_minus_dst_alpha"_asView, SrcBlend::OneMinusDstAlpha );
-	}
+	SrcBlendMatcher() : EnumTokenMatcher({
+		{ "GL_zero"_asView, SrcBlend::Zero },
+		{ "GL_one"_asView, SrcBlend::One },
+		{ "GL_dst_color"_asView, SrcBlend::DstColor },
+		{ "GL_one_minus_dst_color"_asView, SrcBlend::OneMinusDstColor },
+		{ "GL_src_alpha"_asView, SrcBlend::SrcAlpha },
+		{ "GL_one_minus_src_alpha"_asView, SrcBlend::OneMinusSrcAlpha },
+		{ "GL_dst_alpha"_asView, SrcBlend::DstAlpha },
+		{ "GL_one_minus_dst_alpha"_asView, SrcBlend::OneMinusDstAlpha },
+	}) {}
 };
 
-static SrcBlendMatcher srcBlendMatcher;
-
-class DstBlendMatcher : public wsw::EnumTokenMatcher<DstBlend> {
+class DstBlendMatcher : public wsw::EnumTokenMatcher<DstBlend, DstBlendMatcher> {
 public:
-	DstBlendMatcher() noexcept {
-		add( "GL_zero"_asView, DstBlend::Zero );
-		add( "GL_one"_asView, DstBlend::One );
-		add( "GL_src_color"_asView, DstBlend::SrcColor );
-		add( "GL_one_minus_src_color"_asView, DstBlend::OneMinusSrcColor );
-		add( "GL_src_alpha"_asView, DstBlend::SrcAlpha );
-		add( "GL_one_minus_src_alpha"_asView, DstBlend::OneMinusSrcAlpha );
-		add( "GL_dst_alpha"_asView, DstBlend::DstAlpha );
-		add( "GL_one_minus_dst_alpha"_asView, DstBlend::OneMinusDstAlpha );
-	}
+	DstBlendMatcher() : EnumTokenMatcher({
+		{ "GL_zero"_asView, DstBlend::Zero },
+		{ "GL_one"_asView, DstBlend::One },
+		{ "GL_src_color"_asView, DstBlend::SrcColor },
+		{ "GL_one_minus_src_color"_asView, DstBlend::OneMinusSrcColor },
+		{ "GL_src_alpha"_asView, DstBlend::SrcAlpha },
+		{ "GL_one_minus_src_alpha"_asView, DstBlend::OneMinusSrcAlpha },
+		{ "GL_dst_alpha"_asView, DstBlend::DstAlpha },
+		{ "GL_one_minus_dst_alpha"_asView, DstBlend::OneMinusDstAlpha },
+	}) {}
 };
 
-static DstBlendMatcher dstBlendMatcher;
-
-class UnaryBlendFuncMatcher : public wsw::EnumTokenMatcher<UnaryBlendFunc> {
+class UnaryBlendFuncMatcher : public wsw::EnumTokenMatcher<UnaryBlendFunc, UnaryBlendFuncMatcher> {
 public:
-	UnaryBlendFuncMatcher() noexcept {
-		add( "Blend"_asView, UnaryBlendFunc::Blend );
-		add( "Filter"_asView, UnaryBlendFunc::Filter );
-		add( "Add"_asView, UnaryBlendFunc::Add );
-	}
+	UnaryBlendFuncMatcher() : EnumTokenMatcher({
+		{ "Blend"_asView, UnaryBlendFunc::Blend },
+		{ "Filter"_asView, UnaryBlendFunc::Filter },
+		{ "Add"_asView, UnaryBlendFunc::Add },
+	}) {}
 };
 
-static UnaryBlendFuncMatcher unaryBlendFuncMatcher;
-
-class AlphaFuncMatcher : public wsw::EnumTokenMatcher<AlphaFunc> {
+class AlphaFuncMatcher : public wsw::EnumTokenMatcher<AlphaFunc, AlphaFuncMatcher> {
 public:
-	AlphaFuncMatcher() noexcept {
-		add( "Gt0"_asView, AlphaFunc::GT0 );
-		add( "Lt128"_asView, AlphaFunc::LT128 );
-		add( "Ge128"_asView, AlphaFunc::GE128 );
-	}
+	AlphaFuncMatcher() : EnumTokenMatcher({
+		{ "Gt0"_asView, AlphaFunc::GT0 },
+		{ "Lt128"_asView, AlphaFunc::LT128 },
+		{ "Ge128"_asView, AlphaFunc::GE128 },
+	}) {}
 };
 
-static AlphaFuncMatcher alphaFuncMatcher;
-
-class TCModMatcher : public wsw::EnumTokenMatcher<TCMod> {
+class TCModMatcher : public wsw::EnumTokenMatcher<TCMod, TCModMatcher> {
 public:
-	TCModMatcher() noexcept {
-		add( "Rotate"_asView, TCMod::Rotate );
-		add( "Scale"_asView, TCMod::Scale );
-		add( "Scroll"_asView, TCMod::Scroll );
-		add( "Stretch"_asView, TCMod::Stretch );
-		add( "Transform"_asView, TCMod::Transform );
-		add( "Turb"_asView, TCMod::Turb );
-	}
+	TCModMatcher() : EnumTokenMatcher({
+		{ "Rotate"_asView, TCMod::Rotate },
+		{ "Scale"_asView, TCMod::Scale },
+		{ "Scroll"_asView, TCMod::Scroll },
+		{ "Stretch"_asView, TCMod::Stretch },
+		{ "Transform"_asView, TCMod::Transform },
+		{ "Turb"_asView, TCMod::Turb },
+	}) {}
 };
 
-static TCModMatcher tcModMatcher;
-
-class TCGenMatcher : public wsw::EnumTokenMatcher<TCGen> {
+class TCGenMatcher : public wsw::EnumTokenMatcher<TCGen, TCGenMatcher> {
 public:
-	TCGenMatcher() noexcept {
-		add( "Base"_asView, TCGen::Base );
-		add( "Lightmap"_asView, TCGen::Lightmap );
-		add( "Environment"_asView, TCGen::Environment );
-		add( "Vector"_asView, TCGen::Vector );
-		add( "Reflection"_asView, TCGen::Reflection );
-		add( "Celshade"_asView, TCGen::Celshade );
-		add( "Surround"_asView, TCGen::Surround );
-	}
+	TCGenMatcher() : EnumTokenMatcher({
+		{ "Base"_asView, TCGen::Base },
+		{ "Lightmap"_asView, TCGen::Lightmap },
+		{ "Environment"_asView, TCGen::Environment },
+		{ "Vector"_asView, TCGen::Vector },
+		{ "Reflection"_asView, TCGen::Reflection },
+		{ "Celshade"_asView, TCGen::Celshade },
+		{ "Surround"_asView, TCGen::Surround },
+	}) {}
 };
 
-static TCGenMatcher tcGenMatcher;
-
-class SkySideMatcher : public wsw::EnumTokenMatcher<SkySide> {
+class SkySideMatcher : public wsw::EnumTokenMatcher<SkySide, SkySideMatcher> {
 public:
-	SkySideMatcher() noexcept {
-		add( "Rt"_asView, SkySide::Right );
-		add( "Bk"_asView, SkySide::Back );
-		add( "Lf"_asView, SkySide::Left );
-		add( "Rt"_asView, SkySide::Right );
-		add( "Up"_asView, SkySide::Up );
-		add( "Dn"_asView, SkySide::Down );
-	}
+	SkySideMatcher() : EnumTokenMatcher({
+		{ "Rt"_asView, SkySide::Right },
+		{ "Bk"_asView, SkySide::Back },
+		{ "Lf"_asView, SkySide::Left },
+		{ "Rt"_asView, SkySide::Right },
+		{ "Up"_asView, SkySide::Up },
+		{ "Dn"_asView, SkySide::Down },
+	}) {}
 };
 
-static SkySideMatcher skySideMatcher;
-
-#define IMPLEMENT_GET_ENUM_METHOD( type, method, matcher ) \
+#define IMPLEMENT_GET_ENUM_METHOD( type, method, Matcher ) \
 auto MaterialLexer::method() -> std::optional<type> {\
 	if( const auto token = getNextTokenInLine() ) {\
-		if( const auto func = ::matcher.match( *token ) ) {\
+		if( const auto func = Matcher::instance().match( *token ) ) {\
 			return func;\
 		}\
 		unGetToken();\
@@ -347,25 +309,25 @@ auto MaterialLexer::method() -> std::optional<type> {\
 	return std::nullopt;\
 }
 
-IMPLEMENT_GET_ENUM_METHOD( Func, getFunc, funcTokenMatcher )
-IMPLEMENT_GET_ENUM_METHOD( Deform, getDeform, deformTokenMatcher )
-IMPLEMENT_GET_ENUM_METHOD( PassKey, getPassKey, passKeyMatcher )
-IMPLEMENT_GET_ENUM_METHOD( IntConditionVar, getIntConditionVar, intVarMatcher )
-IMPLEMENT_GET_ENUM_METHOD( BoolConditionVar, getBoolConditionVar, boolVarMatcher )
-IMPLEMENT_GET_ENUM_METHOD( LogicOp, getLogicOp, logicOpMatcher )
-IMPLEMENT_GET_ENUM_METHOD( CmpOp, getCmpOp, cmpOpMatcher )
-IMPLEMENT_GET_ENUM_METHOD( CullMode, getCullMode, cullModeMatcher )
-IMPLEMENT_GET_ENUM_METHOD( SortMode, getSortMode, sortModeMatcher )
-IMPLEMENT_GET_ENUM_METHOD( MaterialKey, getMaterialKey, materialKeyParser )
-IMPLEMENT_GET_ENUM_METHOD( RgbGen, getRgbGen, rgbGenMatcher )
-IMPLEMENT_GET_ENUM_METHOD( AlphaGen, getAlphaGen, alphaGenMatcher )
-IMPLEMENT_GET_ENUM_METHOD( SrcBlend, getSrcBlend, srcBlendMatcher )
-IMPLEMENT_GET_ENUM_METHOD( DstBlend, getDstBlend, dstBlendMatcher )
-IMPLEMENT_GET_ENUM_METHOD( UnaryBlendFunc, getUnaryBlendFunc, unaryBlendFuncMatcher )
-IMPLEMENT_GET_ENUM_METHOD( AlphaFunc, getAlphaFunc, alphaFuncMatcher )
-IMPLEMENT_GET_ENUM_METHOD( TCMod, getTCMod, tcModMatcher )
-IMPLEMENT_GET_ENUM_METHOD( TCGen, getTCGen, tcGenMatcher )
-IMPLEMENT_GET_ENUM_METHOD( SkySide, getSkySide, skySideMatcher )
+IMPLEMENT_GET_ENUM_METHOD( Func, getFunc, FuncTokenMatcher )
+IMPLEMENT_GET_ENUM_METHOD( Deform, getDeform, DeformTokenMatcher )
+IMPLEMENT_GET_ENUM_METHOD( PassKey, getPassKey, PassKeyMatcher )
+IMPLEMENT_GET_ENUM_METHOD( IntConditionVar, getIntConditionVar, IntConditionVarMatcher )
+IMPLEMENT_GET_ENUM_METHOD( BoolConditionVar, getBoolConditionVar, BoolConditionVarMatcher )
+IMPLEMENT_GET_ENUM_METHOD( LogicOp, getLogicOp, LogicOpMatcher )
+IMPLEMENT_GET_ENUM_METHOD( CmpOp, getCmpOp, CmpOpMatcher )
+IMPLEMENT_GET_ENUM_METHOD( CullMode, getCullMode, CullModeMatcher )
+IMPLEMENT_GET_ENUM_METHOD( SortMode, getSortMode, SortModeMatcher )
+IMPLEMENT_GET_ENUM_METHOD( MaterialKey, getMaterialKey, MaterialKeyMatcher )
+IMPLEMENT_GET_ENUM_METHOD( RgbGen, getRgbGen, RgbGenMatcher )
+IMPLEMENT_GET_ENUM_METHOD( AlphaGen, getAlphaGen, AlphaGenMatcher )
+IMPLEMENT_GET_ENUM_METHOD( SrcBlend, getSrcBlend, SrcBlendMatcher )
+IMPLEMENT_GET_ENUM_METHOD( DstBlend, getDstBlend, DstBlendMatcher )
+IMPLEMENT_GET_ENUM_METHOD( UnaryBlendFunc, getUnaryBlendFunc, UnaryBlendFuncMatcher )
+IMPLEMENT_GET_ENUM_METHOD( AlphaFunc, getAlphaFunc, AlphaFuncMatcher )
+IMPLEMENT_GET_ENUM_METHOD( TCMod, getTCMod, TCModMatcher )
+IMPLEMENT_GET_ENUM_METHOD( TCGen, getTCGen, TCGenMatcher )
+IMPLEMENT_GET_ENUM_METHOD( SkySide, getSkySide, SkySideMatcher )
 
 static const wsw::StringView kEqualLiteral( "equal" );
 
