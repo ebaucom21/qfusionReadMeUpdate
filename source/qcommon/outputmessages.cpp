@@ -1,13 +1,59 @@
 #include "outputmessages.h"
+#include "enumtokenmatcher.h"
+#include "configvars.h"
 #include "freelistallocator.h"
 #include "wswstaticvector.h"
 #include "qcommon.h"
 
 #include <mutex>
 
-extern cvar_t *com_outputCategoryMask;
-extern cvar_t *com_outputSeverityMask;
-extern cvar_t *com_enableOutputCategoryPrefix;
+using wsw::operator""_asView;
+
+class CategoryMatcher : public wsw::EnumTokenMatcher<wsw::MessageCategory, CategoryMatcher> {
+public:
+	CategoryMatcher() : wsw::EnumTokenMatcher<wsw::MessageCategory, CategoryMatcher>( {
+		{ "Common"_asView, wsw::MessageCategory::Common },
+		{ "COM"_asView, wsw::MessageCategory::Common },
+		{ "Server"_asView, wsw::MessageCategory::Server },
+		{ "SV"_asView, wsw::MessageCategory::Server },
+		{ "Client"_asView, wsw::MessageCategory::Client },
+		{ "CL"_asView, wsw::MessageCategory::Client },
+		{ "Sound"_asView, wsw::MessageCategory::Sound },
+		{ "S"_asView, wsw::MessageCategory::Sound },
+		{ "Renderer"_asView, wsw::MessageCategory::Renderer },
+		{ "R"_asView, wsw::MessageCategory::Renderer },
+		{ "UI"_asView, wsw::MessageCategory::UI },
+		{ "CGame"_asView, wsw::MessageCategory::CGame },
+		{ "CG"_asView, wsw::MessageCategory::CGame },
+		{ "Game"_asView, wsw::MessageCategory::Game },
+		{ "G"_asView, wsw::MessageCategory::Game },
+		{ "AI"_asView, wsw::MessageCategory::AI },
+	}) {}
+};
+
+class SeverityMatcher : public wsw::EnumTokenMatcher<wsw::MessageSeverity, SeverityMatcher> {
+public:
+	SeverityMatcher() : wsw::EnumTokenMatcher<wsw::MessageSeverity, SeverityMatcher>( {
+		{ "Debug"_asView, wsw::MessageSeverity::Debug },
+		{ "Info"_asView, wsw::MessageSeverity::Info },
+		{ "Warning"_asView, wsw::MessageSeverity::Warning },
+		{ "Error"_asView, wsw::MessageSeverity::Error },
+	}) {}
+};
+
+// TODO: there should be separate masks for every category
+
+static EnumFlagsConfigVar<wsw::MessageCategory, CategoryMatcher> v_outputCategoryMask( "com_outputCategoryMask"_asView, {
+	.byDefault = (wsw::MessageCategory)~0, .flags = CVAR_ARCHIVE,
+});
+
+static EnumFlagsConfigVar<wsw::MessageSeverity, SeverityMatcher> v_outputSeverityMask( "com_outputSeverityMask"_asView, {
+	.byDefault = (wsw::MessageSeverity)~0, .flags = CVAR_ARCHIVE,
+});
+
+static BoolConfigVar v_enableOutputCategoryPrefix { "com_enableOutputCategoryPrefix"_asView, {
+	.byDefault = false, .flags = CVAR_ARCHIVE,
+}};
 
 extern qmutex_t *com_print_mutex;
 extern cvar_t *logconsole;
@@ -38,11 +84,11 @@ class alignas( 16 ) MessageStreamsAllocator {
 public:
 	MessageStreamsAllocator() : m_allocator( kSize, kCapacity ) {
 		// TODO: This is very flaky, but alternatives aren't perfect either...
-		for( unsigned i = 0; i < kCategoriesCount; ++i ) {
-			assert( std::strlen( kPrintedMessagePrefixForCategory[i] ) == 3 );
-			const auto category( ( wsw::MessageCategory( i ) ) );
-			for( unsigned j = 0; j < kSeveritiesCount; ++j ) {
-				const auto severity( ( wsw::MessageSeverity )j );
+		for( unsigned categoryIndex = 0; categoryIndex < kCategoriesCount; ++categoryIndex ) {
+			assert( std::strlen( kPrintedMessagePrefixForCategory[categoryIndex] ) == 3 );
+			const auto category( ( wsw::MessageCategory)( 1 << categoryIndex ) );
+			for( unsigned severityIndex = 0; severityIndex < kSeveritiesCount; ++severityIndex ) {
+				const auto severity( ( wsw::MessageSeverity )( 1 << severityIndex ) );
 				new( m_nullStreams.unsafe_grow_back() )wsw::OutputMessageStream( nullptr, 0, category, severity );
 			}
 		}
@@ -50,7 +96,10 @@ public:
 
 	[[nodiscard]]
 	auto nullStreamFor( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
-		return std::addressof( m_nullStreams[(unsigned)category * kSeveritiesCount + (unsigned)severity] );
+		assert( wsw::isPowerOf2( (unsigned)category ) && wsw::isPowerOf2( (unsigned)severity ) );
+		const auto indexForCategory = (unsigned)std::countr_zero( (unsigned)category );
+		const auto indexForSeverity = (unsigned)std::countr_zero( (unsigned)severity );
+		return std::addressof( m_nullStreams[indexForCategory * kSeveritiesCount + indexForSeverity] );
 	}
 
 	[[nodiscard]]
@@ -90,13 +139,13 @@ public:
 static MessageStreamsAllocator g_logLineStreamsAllocator;
 
 auto wsw::createMessageStream( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
-	if( com_outputCategoryMask ) [[likely]] {
-		if( !( com_outputCategoryMask->integer & ( 1 << (unsigned)category ) ) ) {
+	if( v_outputCategoryMask.initialized() ) [[likely]] {
+		if( !( v_outputCategoryMask.isAnyBitSet( category ) ) ) {
 			return ::g_logLineStreamsAllocator.nullStreamFor( category, severity );
 		}
 	}
-	if( com_outputSeverityMask ) [[likely]] {
-		if( !( com_outputSeverityMask->integer & ( 1 << (unsigned)severity ) ) ) {
+	if( v_outputSeverityMask.initialized() ) [[likely]] {
+		if( !( v_outputSeverityMask.isAnyBitSet( severity ) ) ) {
 			return ::g_logLineStreamsAllocator.nullStreamFor( category, severity );
 		}
 	}
@@ -104,28 +153,39 @@ auto wsw::createMessageStream( wsw::MessageCategory category, wsw::MessageSeveri
 }
 
 void wsw::submitMessageStream( wsw::OutputMessageStream *stream ) {
-	if( com_outputCategoryMask ) [[likely]] {
-		if( !( (unsigned)com_outputCategoryMask->integer & ( 1u << (unsigned)stream->m_category ) ) ) {
-			return;
+	bool isAcceptedByFilters = true;
+	if( v_outputCategoryMask.initialized() ) [[likely]] {
+		if( !v_outputCategoryMask.isAnyBitSet( stream->m_category ) ) {
+			isAcceptedByFilters = false;
 		}
 	}
-	if( com_outputSeverityMask ) [[likely]] {
-		if( !( (unsigned)com_outputSeverityMask->integer & ( 1u << (unsigned) stream->m_severity ) ) ) {
-			return;
+	if( isAcceptedByFilters ) {
+		if( v_outputSeverityMask.initialized() ) [[likely]] {
+			if( !v_outputSeverityMask.isAnyBitSet( stream->m_severity ) ) {
+				isAcceptedByFilters = false;
+			}
 		}
 	}
-	// TODO: Eliminate Com_Printf()
-	if( !::g_logLineStreamsAllocator.isANullStream( stream ) ) {
-		stream->m_data[wsw::min( stream->m_limit, stream->m_offset )] = '\0';
-		const char *color = kPrintedMessageColorForSeverity[(unsigned)stream->m_severity];
-		if( com_enableOutputCategoryPrefix && com_enableOutputCategoryPrefix->integer ) {
-			const char *prefix = kPrintedMessagePrefixForCategory[(unsigned)stream->m_category];
-			Com_Printf( S_COLOR_GREY "[%s] %s%s\n", prefix, color, stream->m_data );
+	if( isAcceptedByFilters ) {
+		// TODO: Eliminate Com_Printf()
+		if( !::g_logLineStreamsAllocator.isANullStream( stream ) ) {
+			stream->m_data[wsw::min( stream->m_limit, stream->m_offset )] = '\0';
+			assert( wsw::isPowerOf2( (unsigned)stream->m_severity ) );
+			const auto indexForSeverity = (unsigned)std::countr_zero( (unsigned)stream->m_severity );
+			assert( indexForSeverity <= std::size( kPrintedMessagePrefixForCategory ) );
+			const char *color = kPrintedMessageColorForSeverity[indexForSeverity];
+			if( v_enableOutputCategoryPrefix.initialized() && v_enableOutputCategoryPrefix.get() ) {
+				assert( wsw::isPowerOf2( (unsigned)stream->m_category ) );
+				const auto indexForCategory = (unsigned)std::countr_zero( (unsigned)stream->m_severity );
+				assert( indexForCategory <= std::size( kPrintedMessagePrefixForCategory ) );
+				const char *prefix = kPrintedMessagePrefixForCategory[indexForCategory];
+				Com_Printf( S_COLOR_GREY "[%s] %s%s\n", prefix, color, stream->m_data );
+			} else {
+				Com_Printf( "%s%s\n", color, stream->m_data );
+			}
 		} else {
-			Com_Printf( "%s%s\n", color, stream->m_data );
+			Com_Printf( S_COLOR_RED "A null line stream was used. The line content was discarded\n" );
 		}
-	} else {
-		Com_Printf( S_COLOR_RED "A null line stream was used. The line content was discarded\n" );
 	}
 	::g_logLineStreamsAllocator.free( stream );
 }

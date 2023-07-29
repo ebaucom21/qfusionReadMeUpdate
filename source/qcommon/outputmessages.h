@@ -7,8 +7,24 @@ class MessageStreamsAllocator;
 
 namespace wsw {
 
-enum class MessageCategory : uint8_t { Common, Server, Client, Sound, Renderer, UI, CGame, Game, AI };
-enum class MessageSeverity : uint8_t { Debug, Info, Warning, Error };
+enum class MessageCategory : uint16_t {
+	Common   = 1 << 0,
+	Server   = 1 << 1,
+	Client   = 1 << 2,
+	Sound    = 1 << 3,
+	Renderer = 1 << 4,
+	UI       = 1 << 5,
+	CGame    = 1 << 6,
+	Game     = 1 << 7,
+	AI       = 1 << 8,
+};
+
+enum class MessageSeverity : uint16_t {
+	Debug   = 1 << 0,
+	Info    = 1 << 1,
+	Warning = 1 << 2,
+	Error   = 1 << 3,
+};
 
 class OutputMessageStream {
 	friend auto createMessageStream( MessageCategory, MessageSeverity ) -> OutputMessageStream *;

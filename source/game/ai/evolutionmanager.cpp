@@ -63,7 +63,7 @@ void BotEvolutionManager::Init() {
 		AI_FailWith( "BotEvolutionManager::Init()", "An instance is already present" );
 	}
 
-	if( ai_evolution->integer ) {
+	if( v_evolution.get() ) {
 		if( void *scriptObject = GT_asGetScriptBotEvolutionManager() ) {
 			void *mem = scriptEvolutionManagerInstanceHolder.unsafe_grow_back();
 			instance = new(mem)ScriptBotEvolutionManager( scriptObject );
@@ -159,7 +159,7 @@ void CopyWeightConfigRandomizing( const AiWeightConfigVarGroup *from, AiWeightCo
 }
 
 void DefaultBotEvolutionManager::OnBotConnected( edict_t *ent ) {
-	if( !ai_evolution->integer ) {
+	if( v_evolution.get() ) {
 		ent->bot->WeightConfig().CopyValues( referenceConfig );
 		return;
 	}
@@ -232,7 +232,7 @@ float DefaultBotEvolutionManager::DefaultEvolutionScore( const edict_t *ent ) co
 }
 
 void DefaultBotEvolutionManager::SaveEvolutionResults() {
-	if( !ai_evolution->integer ) {
+	if( !v_evolution.get() ) {
 		return;
 	}
 

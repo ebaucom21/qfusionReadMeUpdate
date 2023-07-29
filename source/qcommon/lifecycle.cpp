@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "cmdargs.h"
 #include "cmdcompat.h"
+#include "configvars.h"
 #include "wswcurl.h"
 #include "steam.h"
 #include "mmcommon.h"
@@ -33,6 +34,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <clocale>
 #include <setjmp.h>
 
+using wsw::operator""_asView;
+
 static char com_errormsg[MAX_PRINTMSG];
 
 static bool com_quit;
@@ -43,12 +46,11 @@ cvar_t *developer;
 cvar_t *timescale;
 cvar_t *dedicated;
 cvar_t *versioncvar;
-cvar_t *com_outputCategoryMask;
-cvar_t *com_outputSeverityMask;
-cvar_t *com_enableOutputCategoryPrefix;
 
-static cvar_t *fixedtime;
+//static cvar_t *fixedtime;
 static cvar_t *com_introPlayed3;
+
+static UnsignedConfigVar v_fixedTime( "fixedtime"_asView, { .byDefault = 0, .flags = CVAR_CHEAT } );
 
 cvar_t *logconsole;
 cvar_t *logconsole_append;
@@ -87,6 +89,9 @@ static void Cmd_Shutdown( void );
 static volatile int server_state = CA_UNINITIALIZED;
 static volatile int client_state = CA_UNINITIALIZED;
 static volatile bool demo_playing = false;
+
+// Another list is defined in the game module
+DeclaredConfigVar *DeclaredConfigVar::s_listHead;
 
 void Com_Error( com_error_code_t code, const char *format, ... ) {
 	va_list argptr;
@@ -201,8 +206,8 @@ static void *SV_Thread( void * ) {
 		} while( true );
 		oldtime = newtime;
 
-		if( fixedtime->integer > 0 ) {
-			gameMsec = fixedtime->integer;
+		if( const unsigned fixedTime = v_fixedTime.get(); fixedTime > 0 ) {
+			gameMsec = fixedTime;
 		} else if( timescale->value >= 0 ) {
 			gameMsec = extraTime + (float)realMsec * timescale->value;
 			extraTime = ( extraTime + (float)realMsec * timescale->value ) - (float)gameMsec;
@@ -294,17 +299,6 @@ void Qcommon_Init( int argc, char **argv ) {
 #endif
 	developer = Cvar_Get( "developer", "0", 0 );
 
-	if( developer->integer ) {
-		com_outputCategoryMask         = Cvar_Get( "com_outputCategoryMask", "-1", 0 );
-		com_outputSeverityMask         = Cvar_Get( "com_outputSeverityMask", "-1", 0 );
-		com_enableOutputCategoryPrefix = Cvar_Get( "com_enableOutputCategoryPrefix", "1", 0 );
-	} else {
-		com_outputCategoryMask         = Cvar_Get( "com_outputCategoryMask", "-1", CVAR_NOSET );
-		com_outputSeverityMask         = Cvar_Get( "com_outputSeverityMask", "14", CVAR_NOSET );
-		// Disable it for now
-		com_enableOutputCategoryPrefix = Cvar_Get( "com_enableOutputCategoryPrefix", "0", CVAR_NOSET );
-	}
-
 	Com_LoadCompressionLibraries();
 
 	FS_Init();
@@ -329,7 +323,7 @@ void Qcommon_Init( int argc, char **argv ) {
 #endif
 
 	timescale = Cvar_Get( "timescale", "1.0", CVAR_CHEAT );
-	fixedtime = Cvar_Get( "fixedtime", "0", CVAR_CHEAT );
+	//fixedtime = Cvar_Get( "fixedtime", "0", CVAR_CHEAT );
 
 	if( dedicated->integer ) {
 		logconsole = Cvar_Get( "logconsole", "wswconsole.log", CVAR_ARCHIVE );
@@ -421,8 +415,8 @@ void Qcommon_Frame( unsigned realMsec, unsigned *gameMsec, float *extraTime ) {
 		Com_ReopenConsoleLog();
 	}
 
-	if( fixedtime->integer > 0 ) {
-		*gameMsec = fixedtime->integer;
+	if( const unsigned fixedTime = v_fixedTime.get(); fixedTime > 0 ) {
+		*gameMsec = fixedTime;
 	} else if( timescale->value >= 0 ) {
 		*gameMsec = *extraTime + (float)realMsec * timescale->value;
 		*extraTime = ( *extraTime + (float)realMsec * timescale->value ) - (float)*gameMsec;

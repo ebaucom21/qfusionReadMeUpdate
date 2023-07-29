@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GAME_QCVAR_H
 
 #include "q_arch.h"
+#include <atomic>
 
 //==========================================================
 //
@@ -44,12 +45,21 @@ typedef int cvar_flag_t;
 #define CVAR_READONLY       256     // don't allow changing by user, ever
 #define CVAR_DEVELOPER      512     // allow changing in dev builds, hide in release builds
 
+class DeclaredConfigVar;
+
 // nothing outside the Cvar_*() functions should access these fields!!!
 typedef struct cvar_s {
+	std::atomic<uint64_t> modificationId;
+
+	DeclaredConfigVar *controller;
+
 	char *name;
+	// raw string TODO: Should be an atomic shared ptr
 	char *string;
+	// default value
 	char *dvalue;
-	char *latched_string;       // for CVAR_LATCH vars
+	// for CVAR_LATCH* vars
+	char *latched_string;
 	cvar_flag_t flags;
 	bool modified;          // set each time the cvar is changed
 	float value;

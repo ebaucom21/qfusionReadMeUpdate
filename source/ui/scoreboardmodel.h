@@ -117,11 +117,6 @@ public:
 
 	ScoreboardAccuracyData m_accuracyModel;
 
-	cvar_s *m_layoutVar { nullptr };
-	cvar_s *m_tableStyleVar { nullptr };
-	std::pair<int, int> m_layoutValueBounds;
-	std::pair<int, int> m_tableStyleValueBounds;
-
 	Layout m_layout { SideBySide };
 	TableStyle m_tableStyle { Checkerboard };
 	bool m_hasChasers { false };

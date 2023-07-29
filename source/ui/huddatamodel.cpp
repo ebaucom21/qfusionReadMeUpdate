@@ -1,6 +1,7 @@
 #include "huddatamodel.h"
 #include "local.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/configvars.h"
 #include "../gameshared/gs_public.h"
 #include "../client/client.h"
 #include "../cgame/crosshairstate.h"
@@ -27,6 +28,13 @@ bool CG_IsPovAlive();
 wsw::StringView CG_PlayerName( unsigned playerNum );
 wsw::StringView CG_PlayerClan( unsigned playerClan );
 wsw::StringView CG_LocationName( unsigned location );
+
+using wsw::operator""_asView;
+
+static StringConfigVar v_clientHud { "cg_clientHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
+static StringConfigVar v_specHud { "cg_specHud"_asView, { .byDefault = "default"_asView, .flags = CVAR_ARCHIVE } };
+static VarModificationTracker g_clientHudChangesTracker { &v_clientHud };
+static VarModificationTracker g_specHudChangesTracker { &v_specHud };
 
 namespace wsw::ui {
 
@@ -782,11 +790,6 @@ HudDataModel::HudDataModel() {
 	assert( !m_matchTimeMinutes && !m_matchTimeSeconds );
 	setFormattedTime( &m_formattedMinutes, m_matchTimeMinutes );
 	setFormattedTime( &m_formattedSeconds, m_matchTimeSeconds );
-
-	m_clientHudVar = Cvar_Get( "cg_clientHUD", "default", CVAR_ARCHIVE );
-	m_clientHudVar->modified = true;
-	m_specHudVar = Cvar_Get( "cg_specHUD", "default", CVAR_ARCHIVE );
-	m_specHudVar->modified = true;
 }
 
 auto HudDataModel::getInventoryModel() -> QObject * {
@@ -853,19 +856,18 @@ void HudDataModel::addFragEvent( const std::pair<wsw::StringView, int> &victimAn
 
 static const wsw::StringView kDefaultHudName( "default"_asView );
 
-void HudDataModel::checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName ) {
+void HudDataModel::handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName ) {
 	// TODO: We try avoiding using this flag since it assumes a control from a single place in code
-	if( var->modified ) {
-		wsw::StringView name( var->string );
+		wsw::StringView name( var->get() );
 		// Protect from redundant load() calls
 		if( !name.equalsIgnoreCase( currName->asView() ) ) {
 			if( name.length() > HudLayoutModel::kMaxHudNameLength ) {
-				Cvar_ForceSet( var->name, kDefaultHudName.data() );
+				var->setImmediately( kDefaultHudName );
 				name = kDefaultHudName;
 			}
 			if( !model->load( name ) ) {
 				if( !name.equalsIgnoreCase( kDefaultHudName ) ) {
-					Cvar_ForceSet( var->name, kDefaultHudName.data() );
+					var->setImmediately( kDefaultHudName );
 					name = kDefaultHudName;
 					// This could fail as well but we assume that the data of the default HUD is not corrupt.
 					// A HUD won't be displayed in case of a failure.
@@ -874,20 +876,21 @@ void HudDataModel::checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model,
 			}
 			currName->assign( name );
 		}
-		var->modified = false;
-	}
 }
 
 void HudDataModel::onHudUpdated( const QByteArray &name ) {
-	std::pair<InGameHudLayoutModel *, const cvar_s *> modelsAndVars[2] {
-		{ &m_clientLayoutModel, m_clientHudVar }, { &m_specLayoutModel, m_specHudVar }
+	std::pair<InGameHudLayoutModel *, StringConfigVar *> modelsAndVars[2] {
+		{ &m_clientLayoutModel, &v_clientHud }, { &m_specLayoutModel, &v_specHud }
 	};
 	const wsw::StringView nameView( name.data(), (size_t)name.size() );
 	for( auto [model, var] : modelsAndVars ) {
-		if( name.compare( var->string, Qt::CaseInsensitive ) == 0 ) {
+		// If the updated HUD name matches the var value
+		if( nameView.equalsIgnoreCase( var->get() ) ) {
+			// Try (re-)loading the respective model
 			if( !model->load( nameView ) ) {
-				if( nameView.equalsIgnoreCase( kDefaultHudName ) ) {
-					Cvar_ForceSet( var->name, kDefaultHudName.data() );
+				// In case of failure, try loading the default HUD
+				if( !nameView.equalsIgnoreCase( kDefaultHudName ) ) {
+					var->setImmediately( kDefaultHudName );
 					// See checkHudVarChanges()
 					(void)model->load( kDefaultHudName );
 				}
@@ -897,8 +900,12 @@ void HudDataModel::onHudUpdated( const QByteArray &name ) {
 }
 
 void HudDataModel::checkPropertyChanges( int64_t currTime ) {
-	checkHudVarChanges( m_clientHudVar, &m_clientLayoutModel, &m_clientHudName );
-	checkHudVarChanges( m_specHudVar, &m_specLayoutModel, &m_specHudName );
+	if( g_clientHudChangesTracker.checkAndReset() ) {
+		handleVarChanges( &v_clientHud, &m_clientLayoutModel, &m_clientHudName );
+	}
+	if( g_specHudChangesTracker.checkAndReset() ) {
+		handleVarChanges( &v_specHud, &m_specLayoutModel, &m_specHudName );
+	}
 
 	if( const bool hadTwoTeams = m_hasTwoTeams; hadTwoTeams != ( m_hasTwoTeams = CG_HasTwoTeams() ) ) {
 		Q_EMIT hasTwoTeamsChanged( m_hasTwoTeams );

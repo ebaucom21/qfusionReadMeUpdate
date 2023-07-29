@@ -82,6 +82,27 @@ public:
 		static Derived s_instance;
 		return s_instance;
 	}
+
+	// DeclaredConfigVar - compatibility stuff
+	template <typename DesiredType>
+	[[nodiscard]]
+	static auto matchFn( const void *obj, const wsw::StringView &token ) -> std::optional<DesiredType> {
+		const std::optional<Enum> matched = ( ( const EnumTokenMatcher<Enum, Derived> *)obj )->match( token );
+		return matched ? std::optional( (DesiredType)*matched ) : std::nullopt;
+	}
+
+	template <typename DesiredType>
+	// TODO: A fixed vector/fixed heap-alloc array is sufficient
+	[[nodiscard]]
+	auto getEnumValues() -> wsw::Vector<DesiredType> {
+		static_assert( sizeof( DesiredType ) >= sizeof( Enum ) );
+		wsw::Vector<DesiredType> result;
+		// values->reserve( matcher->m_patterns.size() ); // turned off to reduce code size
+		for( const TokenPattern &pattern: m_patterns ) {
+			result.push_back( (DesiredType)pattern.value );
+		}
+		return result;
+	}
 protected:
 	struct TokenPattern {
 		wsw::StringView name;

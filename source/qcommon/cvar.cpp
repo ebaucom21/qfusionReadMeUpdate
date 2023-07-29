@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/console.h"
 #include "cmdargs.h"
 #include "cmdcompat.h"
+#include "configvars.h"
 #include "local.h"
 #include "textstreamwriterextras.h"
 
@@ -118,13 +119,46 @@ int Cvar_Integer( const char *var_name ) {
 		   : 0;
 }
 
+[[nodiscard]]
+static auto getCorrectedValue( const cvar_t *var, const char *string ) -> char * {
+	if( DeclaredConfigVar *const controller = var->controller ) {
+		wsw::String tmpBuffer;
+		const wsw::StringView stringView( string );
+		if( const auto maybeCorrectedValue = controller->correctValue( stringView, &tmpBuffer ) ) {
+			assert( maybeCorrectedValue->isZeroTerminated() );
+			comWarning() << "Correcting the value" << stringView << "to" << *maybeCorrectedValue << "for" << wsw::StringView( var->name );
+			return Q_strdup( maybeCorrectedValue->data() );
+		} else {
+			return Q_strdup( string );
+		}
+	} else {
+		return Q_strdup( string );
+	}
+}
+
+static void setValueString( cvar_t *var, const char *string ) {
+	if( DeclaredConfigVar *const controller = var->controller ) {
+		wsw::String tmpBuffer;
+		const wsw::StringView stringView( string );
+		if( const auto maybeCorrectedValue = controller->handleValueChanges( stringView, &tmpBuffer ) ) {
+			assert( maybeCorrectedValue->isZeroTerminated() );
+			comWarning() << "Correcting the value" << stringView << "to" << *maybeCorrectedValue << "for" << wsw::StringView( var->name );
+			var->string = Q_strdup( maybeCorrectedValue->data() );
+		} else {
+			var->string = Q_strdup( string );
+		}
+	} else {
+		var->string = Q_strdup( string );
+	}
+}
+
 /*
 * Cvar_Get
 * Creates the variable if it doesn't exist.
 * If the variable already exists, the value will not be set
 * The flags will be or'ed and default value overwritten in if the variable exists.
 */
-cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags ) {
+cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags, DeclaredConfigVar *controller ) {
 	cvar_t *var;
 
 	if( !var_name || !var_name[0] ) {
@@ -150,12 +184,19 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 	if( var ) {
 		bool reset = false;
 
-		if( !var->dvalue || strcmp( var->dvalue, var_value ) ) {
-			if( var->dvalue ) {
-				Q_free( var->dvalue ); // free the old default value string
+		// Update the controller prior to resetting the default value
+		if( var->controller != controller ) {
+			if( var->controller && controller ) {
+				comWarning() << "replacing a controller for cvar" << var_name;
 			}
-			var->dvalue = Q_strdup( (char *) var_value );
+			var->controller = controller;
+			reset = true;
 		}
+
+		if( var->dvalue ) {
+			Q_free( var->dvalue ); // free the old default value string
+		}
+		var->dvalue = getCorrectedValue( var, var_value );
 
 		if( Cvar_FlagIsSet( flags, CVAR_USERINFO ) || Cvar_FlagIsSet( flags, CVAR_SERVERINFO ) ) {
 			if( var->string && !Cvar_InfoValidate( var->string, false ) ) {
@@ -169,15 +210,13 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 		reset = reset || ( Cvar_FlagIsSet( flags, CVAR_READONLY ) );
 #endif
 		if( reset ) {
-			if( !var->string || strcmp( var->string, var_value ) ) {
-				if( var->string ) {
-					Q_free( var->string );
-				}
-				var->string = Q_strdup( (char *) var_value );
-				var->value = atof( var->string );
-				var->integer = Q_rint( var->value );
+			if( var->string ) {
+				Q_free( var->string );
 			}
-			var->flags = flags;
+			setValueString( var, var_value );
+			var->value   = atof( var->string );
+			var->integer = Q_rint( var->value );
+			var->flags   = flags;
 		}
 
 		if( Cvar_FlagIsSet( flags, CVAR_USERINFO ) && !Cvar_FlagIsSet( var->flags, CVAR_USERINFO ) ) {
@@ -196,13 +235,14 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 	}
 
 	var = (cvar_t *)Q_malloc( (int)( sizeof( *var ) + strlen( var_name ) + 1 ) );
+	var->controller = controller;
 	var->name = (char *)( (uint8_t *)var + sizeof( *var ) );
 	strcpy( var->name, var_name );
-	var->dvalue = Q_strdup( (char *) var_value );
-	var->string = Q_strdup( (char *) var_value );
-	var->value = atof( var->string );
+	setValueString( var, var_value );
+	var->dvalue  = Q_strdup( var->string );
+	var->value   = atof( var->string );
 	var->integer = Q_rint( var->value );
-	var->flags = flags;
+	var->flags   = flags;
 	Cvar_SetModified( var );
 
 	QMutex_Lock( cvar_mutex );
@@ -215,7 +255,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 /*
 * Cvar_Set2
 */
-static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) {
+cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) {
 	cvar_t *var = Cvar_Find( var_name );
 
 	if( !var ) {
@@ -247,12 +287,8 @@ static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) 
 			}
 		}
 
-		if( Cvar_FlagIsSet( var->flags, CVAR_LATCH ) || Cvar_FlagIsSet( var->flags, CVAR_LATCH_VIDEO ) ||
-			Cvar_FlagIsSet( var->flags, CVAR_LATCH_SOUND ) ) {
+		if( Cvar_FlagIsSet( var->flags, CVAR_LATCH ) || Cvar_FlagIsSet( var->flags, CVAR_LATCH_VIDEO ) || Cvar_FlagIsSet( var->flags, CVAR_LATCH_SOUND ) ) {
 			if( var->latched_string ) {
-				if( !strcmp( value, var->latched_string ) ) {
-					return var;
-				}
 				Q_free( var->latched_string );
 			} else {
 				if( !strcmp( value, var->string ) ) {
@@ -262,18 +298,19 @@ static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) 
 
 			if( Com_ServerState() ) {
 				comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting";
-				var->latched_string = Q_strdup( (char *) value );
+				// TODO: Don't modify var contents!
+				var->latched_string = getCorrectedValue( var, value );
 			} else {
 				if( Cvar_FlagIsSet( var->flags, CVAR_LATCH_VIDEO ) ) {
 					comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting video";
-					var->latched_string = Q_strdup( (char *) value );
+					var->latched_string = getCorrectedValue( var, value );
 				} else if( Cvar_FlagIsSet( var->flags, CVAR_LATCH_SOUND ) ) {
 					comNotice() << wsw::StringView( var->name ) << "will be changed upon restarting sound";
-					var->latched_string = Q_strdup( (char *) value );
+					var->latched_string = getCorrectedValue( var, value );
 				} else {
 					Q_free( var->string ); // free the old value string
-					var->string = Q_strdup( value );
-					var->value = atof( var->string );
+					setValueString( var, value );
+					var->value   = atof( var->string );
 					var->integer = Q_rint( var->value );
 					Cvar_SetModified( var );
 				}
@@ -289,16 +326,15 @@ static cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) 
 
 	if( !strcmp( value, var->string ) ) {
 		return var; // not changed
-
 	}
 	if( Cvar_FlagIsSet( var->flags, CVAR_USERINFO ) ) {
 		userinfo_modified = true; // transmit at next oportunity
-
 	}
+
 	Q_free( var->string ); // free the old value string
 
-	var->string = Q_strdup( (char *) value );
-	var->value = atof( var->string );
+	setValueString( var, value );
+	var->value   = atof( var->string );
 	var->integer = Q_rint( var->value );
 	Cvar_SetModified( var );
 
@@ -822,6 +858,7 @@ void Cvar_Init( void ) {
 	Cmd_AddClientAndServerCommand( "cvararchivelist", Cvar_ArchiveList_f );
 #endif
 
+	DeclaredConfigVar::registerAllVars( DeclaredConfigVar::s_listHead );
 	cvar_initialized = true;
 }
 
@@ -832,6 +869,8 @@ void Cvar_Init( void ) {
 */
 void Cvar_Shutdown( void ) {
 	if( cvar_initialized ) {
+		DeclaredConfigVar::unregisterAllVars( DeclaredConfigVar::s_listHead );
+
 		unsigned int i;
 		struct trie_dump_s *dump;
 		extern cvar_t *developer;

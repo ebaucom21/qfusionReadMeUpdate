@@ -40,6 +40,7 @@ file(GLOB GAME_SOURCES
 	"ascript/addon/*.cpp"
 	"../gameshared/*.cpp"
 	"../qcommon/cmdargssplitter.cpp"
+	"../qcommon/configvars.cpp"
 	"../qcommon/base64.cpp"
 	"../qcommon/md5.cpp"
 	"../qcommon/hash.cpp"

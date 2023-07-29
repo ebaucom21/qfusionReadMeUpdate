@@ -27,6 +27,7 @@ in NO WAY supported by Steve Yeager.
 #define WSW_6e462ea5_4ee8_482b_a00a_74ab3719bacf_H
 
 #include "../g_local.h"
+#include "../../qcommon/configvars.h"
 #include "../../gameshared/q_collision.h"
 
 // First try to include <math.h> for M_* defines
@@ -356,10 +357,10 @@ public:
 	}
 };
 
-extern const cvar_t *ai_evolution;
-extern const cvar_t *ai_debugOutput;
-extern const cvar_t *ai_forceWeapon;
-extern const cvar_t *ai_shareRoutingCache;
+extern const BoolConfigVar v_evolution;
+extern const BoolConfigVar v_debugOutput;
+extern const BoolConfigVar v_shareRoutingCache;
+extern const StringConfigVar v_forceWeapon;
 
 #define aiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Debug ) ).getWriter()
 #define aiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Info ) ).getWriter()

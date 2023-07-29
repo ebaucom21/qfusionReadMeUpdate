@@ -51,7 +51,7 @@ bool BotWeaponSelector::checkFastWeaponSwitchAction() {
 
 	// Disallow in this case.
 	// We don't care if the actual var string is invalid (this allows us to efficiently disable the action).
-	if( sv_cheats->integer && ai_forceWeapon->string[0] != '\0' ) {
+	if( sv_cheats->integer && !v_forceWeapon.get().empty() ) {
 		return false;
 	}
 
@@ -95,12 +95,15 @@ void BotWeaponSelector::selectWeapon() {
 	}
 
 	std::optional<int> maybeBuiltinWeapon;
-	if( sv_cheats->integer && ai_forceWeapon->string[0] != '\0' ) {
-		if( const gsitem_t *item = GS_FindItemByName( ai_forceWeapon->string ) ) {
-			if( item->tag >= WEAP_GUNBLADE && item->tag < WEAP_TOTAL ) {
-				const auto *const inventory = bot->Inventory();
-				if( inventory[item->tag] && ( inventory[item->weakammo_tag] + inventory[item->ammo_tag] > 0 ) ) {
-					maybeBuiltinWeapon = item->tag;
+	if( sv_cheats->integer ) {
+		if( const wsw::StringView &forceWeapon = v_forceWeapon.get(); !forceWeapon.empty() ) {
+			assert( forceWeapon.isZeroTerminated() );
+			if( const gsitem_t *item = GS_FindItemByName( forceWeapon.data() ) ) {
+				if( item->tag >= WEAP_GUNBLADE && item->tag < WEAP_TOTAL ) {
+					const auto *const inventory = bot->Inventory();
+					if( inventory[item->tag] && ( inventory[item->weakammo_tag] + inventory[item->ammo_tag] > 0 ) ) {
+						maybeBuiltinWeapon = item->tag;
+					}
 				}
 			}
 		}

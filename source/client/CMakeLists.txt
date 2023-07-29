@@ -79,6 +79,7 @@ file(GLOB CLIENT_COMMON_SOURCES
 	"../qcommon/compression.cpp"
 	"../qcommon/configstringstorage.cpp"
 	"../qcommon/cvar.cpp"
+	"../qcommon/configvars.cpp"
 	"../qcommon/files.cpp"
 	"../qcommon/glob.cpp"
 	"../qcommon/half_float.cpp"

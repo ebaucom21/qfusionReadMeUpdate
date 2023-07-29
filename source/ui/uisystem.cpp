@@ -1,4 +1,5 @@
 #include "uisystem.h"
+#include "../qcommon/configvars.h"
 #include "../qcommon/links.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/wswstaticvector.h"
@@ -65,6 +66,8 @@ Q_IMPORT_PLUGIN(QmlShapesPlugin);
 Q_IMPORT_PLUGIN(QSvgPlugin);
 Q_IMPORT_PLUGIN(QTgaPlugin);
 
+using wsw::operator""_asView;
+
 QVariant VID_GetMainContextHandle();
 
 bool GLimp_BeginUIRenderingHacks();
@@ -79,6 +82,17 @@ bool CG_CanBeReady();
 bool CG_IsReady();
 int CG_MyRealTeam();
 std::optional<unsigned> CG_ActiveChasePov();
+
+static FloatConfigVar v_mouseSensitivity { "ui_mouseSensitivity"_asView, {
+	.byDefault = 1.0f, .minInclusive = 0.1f, .maxInclusive = 5.0f, .flags = CVAR_ARCHIVE, }
+};
+static FloatConfigVar v_mouseAccel { "ui_mouseAccel"_asView, {
+	.byDefault = 0.2f, .minInclusive = 0.01f, .maxInclusive = 1.0f, .flags = CVAR_ARCHIVE, }
+};
+static BoolConfigVar v_debugNativelyDrawnItems { "ui_debugNativelyDrawnItems"_asView, {
+	.byDefault = false, .flags = CVAR_DEVELOPER, }
+};
+static VarModificationTracker g_debugNativelyDrawnItemsChangesTracker { &v_debugNativelyDrawnItems };
 
 namespace wsw::ui {
 
@@ -385,9 +399,6 @@ private:
 	static inline int s_fakeArgc { 0 };
 	static inline char **s_fakeArgv { nullptr };
 	static inline QString s_charStrings[128];
-	static inline cvar_t *s_sensitivityVar { nullptr };
-	static inline cvar_t *s_mouseAccelVar { nullptr };
-	static inline cvar_t *s_debugNativelyDrawnItemsVar { nullptr };
 
 	static inline const qreal s_minRegularCrosshairSize { kRegularCrosshairSizeProps.minSize };
 	static inline const qreal s_maxRegularCrosshairSize { kRegularCrosshairSizeProps.maxSize };
@@ -646,10 +657,6 @@ void QtUISystem::initPersistentPart() {
 		}
 
 		retrieveVideoModes();
-
-		s_sensitivityVar = Cvar_Get( "ui_sensitivity", "1.0", CVAR_ARCHIVE );
-		s_mouseAccelVar = Cvar_Get( "ui_mouseAccel", "0.25", CVAR_ARCHIVE );
-		s_debugNativelyDrawnItemsVar = Cvar_Get( "ui_debugNativelyDrawnItems", "0", 0 );
 	}
 }
 
@@ -1428,9 +1435,8 @@ void QtUISystem::checkPropertyChanges() {
 		Q_EMIT isShowingActionRequestsChanged( m_isShowingActionRequests );
 	}
 
-	if( s_debugNativelyDrawnItemsVar->modified ) {
-		Q_EMIT isDebuggingNativelyDrawnItemsChanged( s_debugNativelyDrawnItemsVar->integer != 0 );
-		s_debugNativelyDrawnItemsVar->modified = false;
+	if( g_debugNativelyDrawnItemsChangesTracker.checkAndReset() ) {
+		Q_EMIT isDebuggingNativelyDrawnItemsChanged( v_debugNativelyDrawnItems.get() );
 	}
 
 	if( const bool oldCanBeReady = m_canBeReady; oldCanBeReady != ( m_canBeReady = CG_CanBeReady() ) ) {
@@ -1517,21 +1523,9 @@ bool QtUISystem::handleMouseMove( int frameTime, int dx, int dy ) {
 	const int bounds[2] = { m_menuSandbox->m_window->width(), m_menuSandbox->m_window->height() };
 	const int deltas[2] = { dx, dy };
 
-	if( s_sensitivityVar->modified ) {
-		if( s_sensitivityVar->value <= 0.0f || s_sensitivityVar->value > 10.0f ) {
-			Cvar_ForceSet( s_sensitivityVar->name, "1.0" );
-		}
-	}
-
-	if( s_mouseAccelVar->modified ) {
-		if( s_mouseAccelVar->value < 0.0f || s_mouseAccelVar->value > 1.0f ) {
-			Cvar_ForceSet( s_mouseAccelVar->name, "0.25" );
-		}
-	}
-
-	float sensitivity = s_sensitivityVar->value;
+	float sensitivity = v_mouseSensitivity.get();
 	if( frameTime > 0 ) {
-		sensitivity += (float)s_mouseAccelVar->value * std::sqrt( dx * dx + dy * dy ) / (float)( frameTime );
+		sensitivity += v_mouseAccel.get() * std::sqrt( dx * dx + dy * dy ) / (float)( frameTime );
 	}
 
 	for( int i = 0; i < 2; ++i ) {
@@ -1767,7 +1761,7 @@ auto QtUISystem::convertQuakeKeyToQtKey( int quakeKey ) const -> std::optional<Q
 }
 
 bool QtUISystem::isDebuggingNativelyDrawnItems() const {
-	return s_debugNativelyDrawnItemsVar->integer != 0;
+	return v_debugNativelyDrawnItems.get();
 }
 
 void QtUISystem::registerNativelyDrawnItem( QQuickItem *item ) {

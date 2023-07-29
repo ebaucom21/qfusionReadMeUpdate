@@ -11,6 +11,7 @@
 #include "hudlayoutmodel.h"
 
 struct ReplicatedScoreboardData;
+class StringConfigVar;
 
 namespace wsw::ui {
 
@@ -241,8 +242,6 @@ class HudDataModel : public QObject {
 
 	InGameHudLayoutModel m_clientLayoutModel;
 	InGameHudLayoutModel m_specLayoutModel;
-	cvar_t *m_clientHudVar { nullptr };
-	cvar_t *m_specHudVar { nullptr };
 
 	using HudNameString = wsw::StaticString<HudLayoutModel::kMaxHudNameLength>;
 	HudNameString m_clientHudName, m_specHudName;
@@ -329,7 +328,7 @@ class HudDataModel : public QObject {
 	auto getStatusForNumberOfPlayers( int numPlayers ) const -> QByteArray;
 	void updateTeamPlayerStatuses( const ReplicatedScoreboardData &scoreboardData );
 
-	void checkHudVarChanges( cvar_t *var, InGameHudLayoutModel *model, HudNameString *currName );
+	void handleVarChanges( StringConfigVar *var, InGameHudLayoutModel *model, HudNameString *currName );
 public:
 	Q_PROPERTY( QObject *clientLayoutModel READ getClientLayoutModel CONSTANT );
 	Q_PROPERTY( QObject *specLayoutModel READ getSpecLayoutModel CONSTANT );

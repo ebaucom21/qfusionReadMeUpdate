@@ -6,10 +6,12 @@
 #include "combat/tacticalspotsregistry.h"
 #include "classifiedentitiescache.h"
 
-const cvar_t *ai_evolution;
-const cvar_t *ai_debugOutput;
-const cvar_t *ai_forceWeapon;
-const cvar_t *ai_shareRoutingCache;
+using wsw::operator""_asView;
+
+const BoolConfigVar v_evolution { "ai_evolution"_asView, { .byDefault = false, .flags = 0, } };
+const BoolConfigVar v_debugOutput { "ai_debugOutput"_asView, { .byDefault = false, .flags = 0, } };
+const BoolConfigVar v_shareRoutingCache { "ai_shareRoutingCache"_asView, { .byDefault = true, .flags = 0, } };
+const StringConfigVar v_forceWeapon { "ai_forceWeapon"_asView, { .byDefault = {}, .flags = CVAR_CHEAT, } };
 
 ai_weapon_aim_type BuiltinWeaponAimType( int builtinWeapon, int fireMode ) {
 	assert( fireMode == FIRE_MODE_STRONG || fireMode == FIRE_MODE_WEAK );
@@ -107,7 +109,7 @@ void AI_Debug( const char *nick, const char *format, ... ) {
 }
 
 void AI_Debugv( const char *nick, const char *format, va_list va ) {
-	if( !ai_debugOutput->integer ) {
+	if( !v_debugOutput.get() ) {
 		return;
 	}
 
@@ -164,12 +166,6 @@ static wsw::StaticVector<int, 16> hubAreas;
 // Inits Map local parameters
 //==========================================
 void AI_InitLevel( void ) {
-	ai_evolution = trap_Cvar_Get( "ai_evolution", "0", CVAR_ARCHIVE );
-	ai_debugOutput = trap_Cvar_Get( "ai_debugOutput", "0", CVAR_ARCHIVE );
-	ai_forceWeapon = trap_Cvar_Get( "ai_forceWeapon", "", CVAR_CHEAT );
-	// We think values for this var should not be archived
-	ai_shareRoutingCache = trap_Cvar_Get( "ai_shareRoutingCache", "1", 0 );
-
 	AiAasWorld::init( wsw::StringView( level.mapname ) );
 	AiAasRouteCache::Init( *AiAasWorld::instance() );
 	AasStaticRouteTable::init( level.mapname );

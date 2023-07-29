@@ -1,4 +1,6 @@
 #include "scoreboardmodel.h"
+#include "../qcommon/enumtokenmatcher.h"
+#include "../qcommon/configvars.h"
 #include "uisystem.h"
 #include "local.h"
 
@@ -10,7 +12,41 @@
 extern cvar_t *cg_showChasers;
 std::optional<unsigned> CG_ActiveChasePov();
 
+using wsw::operator""_asView;
+
 namespace wsw::ui {
+
+// TODO: Can't we just reuse QMetaEnum instead of declaring these matches manually?
+// For now, we can limit themselves to existing solutions.
+// The mentioned option should be considered if future additions of such vars are planned.
+
+class LayoutMatcher : public wsw::EnumTokenMatcher<ScoreboardModelProxy::Layout, LayoutMatcher> {
+public:
+	LayoutMatcher() : wsw::EnumTokenMatcher<ScoreboardModelProxy::Layout, LayoutMatcher>( {
+		{ "SideBySide"_asView, ScoreboardModelProxy::SideBySide },
+		{ "ColumnWise"_asView, ScoreboardModelProxy::ColumnWise },
+		{ "Mixed"_asView, ScoreboardModelProxy::Mixed },
+	}) {}
+};
+
+class TableStyleMatcher : public wsw::EnumTokenMatcher<ScoreboardModelProxy::TableStyle, TableStyleMatcher> {
+public:
+	TableStyleMatcher() : wsw::EnumTokenMatcher<ScoreboardModelProxy::TableStyle, TableStyleMatcher>( {
+		{ "Checkerboard"_asView, ScoreboardModelProxy::Checkerboard },
+		{ "RowStripes"_asView, ScoreboardModelProxy::RowStripes },
+		{ "ColumnStripes"_asView, ScoreboardModelProxy::ColumnStripes },
+		{ "Flat"_asView, ScoreboardModelProxy::Flat },
+	}) {}
+};
+
+static ::EnumValueConfigVar<ScoreboardModelProxy::Layout, LayoutMatcher> v_layout { "scb_layout"_asView, {
+	.byDefault = ScoreboardModelProxy::SideBySide, .flags = CVAR_ARCHIVE },
+};
+static ::EnumValueConfigVar<ScoreboardModelProxy::TableStyle, TableStyleMatcher> v_tableStyle { "scb_tableStyle"_asView, {
+	.byDefault = ScoreboardModelProxy::Checkerboard, .flags = CVAR_ARCHIVE },
+};
+static VarModificationTracker g_layoutModificationTracker { &v_layout };
+static VarModificationTracker g_tableStyleModificationTracker { &v_tableStyle };
 
 [[nodiscard]]
 static inline auto formatGlyph( int codePoint ) -> QChar {
@@ -166,39 +202,11 @@ bool ScoreboardModelProxy::isMixedListRowAlpha( int row ) const {
 	return m_scoreboard.getPlayerTeam( nums[row] ) == TEAM_ALPHA;
 }
 
-template <typename E>
-[[nodiscard]]
-static auto getEnumValueBounds() -> std::pair<int, int> {
-	const auto meta = QMetaEnum::fromType<E>();
-	// Don't make assumptions on values order
-	int minValue = std::numeric_limits<int>::max();
-	int maxValue = std::numeric_limits<int>::min();
-	for( int i = 0, keyCount = meta.keyCount(); i < keyCount; ++i ) {
-		if( const char *const key = meta.key( i ) ) {
-			bool ok = false;
-			if( const int value = meta.keyToValue( key, &ok ); ok ) {
-				minValue = wsw::min( minValue, value );
-				maxValue = wsw::max( maxValue, value );
-			}
-		}
-	}
-	if( minValue > maxValue ) {
-		wsw::failWithLogicError( "Failed to retrieve enum value bounds" );
-	}
-	return { minValue, maxValue };
-}
-
 ScoreboardModelProxy::ScoreboardModelProxy() {
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_PLAYERS );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_ALPHA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA );
 	new( m_teamModelsHolder.unsafe_grow_back() )ScoreboardTeamModel( this, TEAM_BETA + 1 );
-
-	m_layoutVar = Cvar_Get( "scb_layout", "0", CVAR_ARCHIVE );
-	m_layoutValueBounds = getEnumValueBounds<Layout>();
-
-	m_tableStyleVar = Cvar_Get( "scb_tableStyle", "0", CVAR_ARCHIVE );
-	m_tableStyleValueBounds = getEnumValueBounds<TableStyle>();
 
 	checkVars();
 }
@@ -265,26 +273,17 @@ void ScoreboardModelProxy::dispatchPlayerRowUpdates( const PlayerUpdates &update
 }
 
 void ScoreboardModelProxy::checkVars() {
-	char buffer[16];
-
-	const auto oldLayout = m_layout;
-	m_layout = (Layout)m_layoutVar->integer;
-	if( m_layout < m_layoutValueBounds.first || m_layout > m_layoutValueBounds.second ) {
-		m_layout = (Layout)m_layoutValueBounds.first;
-		Cvar_ForceSet( m_layoutVar->name, va_r( buffer, sizeof( buffer ), "%d", (int)m_layout ) );
+	if( g_layoutModificationTracker.checkAndReset() ) {
+		if( const Layout newLayout = v_layout.get(); newLayout != m_layout ) {
+			m_layout = newLayout;
+			Q_EMIT layoutChanged( newLayout );
+		}
 	}
-	if( m_layout != oldLayout ) {
-		Q_EMIT layoutChanged( m_layout );
-	}
-
-	const auto oldTableStyle = m_tableStyle;
-	m_tableStyle = (TableStyle)m_tableStyleVar->integer;
-	if( m_tableStyle < m_tableStyleValueBounds.first || m_tableStyle > m_tableStyleValueBounds.second ) {
-		m_tableStyle = (TableStyle)m_tableStyleValueBounds.first;
-		Cvar_ForceSet( m_tableStyleVar->name, va_r( buffer, sizeof( buffer ), "%d", (int)m_tableStyle ) );
-	}
-	if( m_tableStyle != oldTableStyle ) {
-		Q_EMIT tableStyleChanged( m_tableStyle );
+	if( g_tableStyleModificationTracker.checkAndReset() ) {
+		if( const TableStyle newTableStyle = v_tableStyle.get(); newTableStyle != m_tableStyle ) {
+			m_tableStyle = newTableStyle;
+			Q_EMIT tableStyleChanged( m_tableStyle );
+		}
 	}
 
 	const auto oldHasChasers = m_hasChasers;

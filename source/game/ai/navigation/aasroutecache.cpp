@@ -1342,7 +1342,7 @@ const AiAasRouteCache::AreaOrPortalCacheTable *
 AiAasRouteCache::FindSiblingCache( int clusterNum, int clusterAreaNum, int travelFlags ) const {
 	// We're not 100% confident yet whether the implementation is valid.
 	// Add an option to override the sharing behaviour if sharing cache for some maps lead to troubles.
-	if( !ai_shareRoutingCache->integer ) {
+	if( !v_shareRoutingCache.get() ) {
 		return nullptr;
 	}
 

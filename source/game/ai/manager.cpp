@@ -208,7 +208,7 @@ float AiManager::MakeSkillForNewBot( const Client *client ) const {
 	float skillLevel;
 
 	// Always use the same skill for bots that are subject of evolution
-	if( ai_evolution->integer ) {
+	if( v_evolution.get() ) {
 		skillLevel = 0.75f;
 	} else {
 		skillLevel = ( trap_Cvar_Value( "sv_skilllevel" ) + random() ) / 3.0f;

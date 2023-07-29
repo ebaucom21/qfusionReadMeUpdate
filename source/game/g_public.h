@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    85
+#define GAME_API_VERSION    86
 
 //===============================================================
 
@@ -70,13 +70,15 @@ typedef struct {
 
 namespace wsw {
 	class OutputMessageStream;
-	enum class MessageCategory : uint8_t;
-	enum class MessageSeverity : uint8_t;
+	enum class MessageCategory : uint16_t;
+	enum class MessageSeverity : uint16_t;
 }
 
 struct CMShapeList;
 
 struct CmdArgs;
+
+class DeclaredConfigVar;
 
 #include "../qcommon/maplist.h"
 
@@ -144,19 +146,12 @@ typedef struct {
 	void ( *Mem_Free )( void *data, const char *filename, int fileline );
 
 	// console variable interaction
-	cvar_t *( *Cvar_Get )( const char *name, const char *value, int flags );
+	cvar_t *( *Cvar_Get )( const char *name, const char *value, int flags, class DeclaredConfigVar *controller );
 	cvar_t *( *Cvar_Set )( const char *name, const char *value );
 	void ( *Cvar_SetValue )( const char *name, float value );
 	cvar_t *( *Cvar_ForceSet )( const char *name, const char *value );  // will return 0 0 if not found
 	float ( *Cvar_Value )( const char *name );
 	const char *( *Cvar_String )( const char *name );
-
-	// ClientCommand and ServerCommand parameter access
-	/*
-	int ( *Cmd_Argc )( void );
-	char *( *Cmd_Argv )( int arg );
-	char *( *Cmd_Args )( void );        // concatenation of all argv >= 1
-	*/
 
 	void ( *Cmd_AddCommand )( const char *name, void ( *cmd )( const CmdArgs & ) );
 	void ( *Cmd_RemoveCommand )( const char *cmd_name );

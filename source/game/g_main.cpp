@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "scoreboard.h"
 #include "chat.h"
 #include "commandshandler.h"
+#include "../qcommon/configvars.h"
 
 game_locals_t game;
 level_locals_t level;
@@ -213,6 +214,11 @@ static void G_InitGameShared( void ) {
 * only happens when a new game is started or a save game is loaded.
 */
 void G_Init( unsigned int seed, unsigned int framemsec, int protocol, const char *demoExtension ) {
+#ifndef GAME_HARD_LINKED
+	// Register all vars that are declared in this dynamically linked binary
+	DeclaredConfigVar::registerAllVars( DeclaredConfigVar::s_listHead );
+#endif
+
 	cvar_t *g_maxentities;
 
 	gNotice() << "==== G_Init ====";
@@ -419,6 +425,11 @@ void G_Shutdown( void ) {
 
 	Q_free( game.clients );
 	game.clients = nullptr;
+
+#ifndef GAME_HARD_LINKED
+	// Unregister all vars that are declared in this dynamically linked binary
+	DeclaredConfigVar::unregisterAllVars( DeclaredConfigVar::s_listHead );
+#endif
 }
 
 //======================================================================
@@ -752,12 +763,16 @@ char *Q_strdup( const char *str ) {
 // Adapters for linking angelwrap
 // TODO: Remove all of this once the game code gets linked statically to the server executable
 
-cvar_t *Cvar_Get( const char *var_name, const char *value, cvar_flag_t flags ) {
-	return trap_Cvar_Get( var_name, value, flags );
+cvar_t *Cvar_Get( const char *var_name, const char *value, cvar_flag_t flags, DeclaredConfigVar *controller ) {
+	return trap_Cvar_Get( var_name, value, flags, controller );
 }
 
 cvar_t *Cvar_Set( const char *var_name, const char *value ) {
 	return trap_Cvar_Set( var_name, value );
+}
+
+cvar_t *Cvar_Set2( const char *var_name, const char *value, bool force ) {
+	return ( force ? trap_Cvar_ForceSet : trap_Cvar_Set )( var_name, value );
 }
 
 cvar_t *Cvar_ForceSet( const char *var_name, const char *value ) {
@@ -807,6 +822,9 @@ const char *FS_FirstExtension( const char *filename, const char *extension[], in
 int FS_Seek( int file, int offset, int whence ) {
 	return trap_FS_Seek( file, offset, whence );
 }
+
+// All vars that are declared in this dynamically linked binary get linked to this list, not the list of the main executable
+DeclaredConfigVar *DeclaredConfigVar::s_listHead;
 
 namespace wsw {
 

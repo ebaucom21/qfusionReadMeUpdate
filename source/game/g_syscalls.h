@@ -149,8 +149,8 @@ inline int trap_CM_FindTopNodeForSphere( const vec3_t center, float radius, unsi
 }
 
 // cvars
-static inline cvar_t *trap_Cvar_Get( const char *name, const char *value, int flags ) {
-	return GAME_IMPORT.Cvar_Get( name, value, flags );
+static inline cvar_t *trap_Cvar_Get( const char *name, const char *value, int flags, DeclaredConfigVar *controller = nullptr ) {
+	return GAME_IMPORT.Cvar_Get( name, value, flags, controller );
 }
 
 static inline cvar_t *trap_Cvar_Set( const char *name, const char *value ) {
