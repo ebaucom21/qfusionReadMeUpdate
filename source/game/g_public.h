@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // g_public.h -- game dll information visible to server
 
-#define GAME_API_VERSION    86
+#define GAME_API_VERSION    87
 
 //===============================================================
 
@@ -70,8 +70,8 @@ typedef struct {
 
 namespace wsw {
 	class OutputMessageStream;
-	enum class MessageCategory : uint16_t;
-	enum class MessageSeverity : uint16_t;
+	enum class MessageDomain : uint8_t;
+	enum class MessageCategory : uint8_t;
 }
 
 struct CMShapeList;
@@ -200,7 +200,7 @@ typedef struct {
 	// can vary in size from one game to another.
 	void ( *LocateEntities )( struct edict_s *edicts, int edict_size, int num_edicts, int max_edicts );
 
-	wsw::OutputMessageStream *( *createMessageStream )( wsw::MessageCategory, wsw::MessageSeverity );
+	wsw::OutputMessageStream *( *createMessageStream )( wsw::MessageDomain, wsw::MessageCategory );
 	void ( *submitMessageStream )( wsw::OutputMessageStream * );
 } game_import_t;
 

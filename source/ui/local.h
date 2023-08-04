@@ -60,10 +60,10 @@ auto rasterizeSvg( const QByteArray &data, const ImageOptions &options ) -> QIma
 
 }
 
-#define uiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Debug ) ).getWriter()
-#define uiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Info ) ).getWriter()
-#define uiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Warning ) ).getWriter()
-#define uiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::UI, wsw::MessageSeverity::Error ) ).getWriter()
+#define uiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Debug ) ).getWriter()
+#define uiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Notice ) ).getWriter()
+#define uiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Warning ) ).getWriter()
+#define uiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::UI, wsw::MessageCategory::Error ) ).getWriter()
 
 template <typename Stream>
 [[maybe_unused]]

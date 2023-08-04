@@ -532,9 +532,9 @@ const char *SV_Web_UpstreamBaseUrl( void );
 bool SV_Web_AddGameClient( const char *session, int clientNum, const netadr_t *netAdr );
 void SV_Web_RemoveGameClient( const char *session );
 
-#define svDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Debug ) ).getWriter()
-#define svNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Info ) ).getWriter()
-#define svWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Warning ) ).getWriter()
-#define svError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Server, wsw::MessageSeverity::Error ) ).getWriter()
+#define svDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Debug ) ).getWriter()
+#define svNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Notice ) ).getWriter()
+#define svWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Warning ) ).getWriter()
+#define svError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Server, wsw::MessageCategory::Error ) ).getWriter()
 
 #endif

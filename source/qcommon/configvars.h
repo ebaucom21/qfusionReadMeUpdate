@@ -290,12 +290,12 @@ private:
 	[[nodiscard]]
 	auto parseValueFromString( const wsw::StringView &string ) const -> std::optional<unsigned>;
 	[[nodiscard]]
-	bool isAValidValue( unsigned value ) const;
+	bool isAnAcceptableValue( unsigned value ) const;
 
 	const MatcherObj m_matcherObj;
 	const MatcherFn m_matcherFn;
 	const wsw::Vector<unsigned> m_enumValues;
-	const unsigned m_defaultValue;
+	unsigned m_defaultValue;
 	unsigned m_allBitsInEnumValues { 0 };
 	unsigned m_allBitsSetValueForType { 0 };
 	std::atomic<unsigned> m_cachedValue { 0 };

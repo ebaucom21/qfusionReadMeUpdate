@@ -7,33 +7,33 @@ class MessageStreamsAllocator;
 
 namespace wsw {
 
-enum class MessageCategory : uint16_t {
-	Common   = 1 << 0,
-	Server   = 1 << 1,
-	Client   = 1 << 2,
-	Sound    = 1 << 3,
-	Renderer = 1 << 4,
-	UI       = 1 << 5,
-	CGame    = 1 << 6,
-	Game     = 1 << 7,
-	AI       = 1 << 8,
+enum class MessageDomain : uint8_t {
+	Common,
+	Server,
+	Client,
+	Sound,
+	Renderer,
+	UI,
+	CGame,
+	Game,
+	AI,
 };
 
-enum class MessageSeverity : uint16_t {
-	Debug   = 1 << 0,
-	Info    = 1 << 1,
-	Warning = 1 << 2,
-	Error   = 1 << 3,
+enum class MessageCategory : uint8_t {
+	Debug,
+	Notice,
+	Warning,
+	Error,
 };
 
 class OutputMessageStream {
-	friend auto createMessageStream( MessageCategory, MessageSeverity ) -> OutputMessageStream *;
+	friend auto createMessageStream( MessageDomain, MessageCategory ) -> OutputMessageStream *;
 	friend void submitMessageStream( OutputMessageStream * );
 
 	friend class ::MessageStreamsAllocator;
 public:
-	OutputMessageStream( char *data, unsigned limit, MessageCategory category, MessageSeverity severity ) noexcept
-		: m_data( data ), m_limit( limit ), m_category( category ), m_severity( severity ) {}
+	OutputMessageStream( char *data, unsigned limit, MessageDomain domain, MessageCategory category ) noexcept
+		: m_data( data ), m_limit( limit ), m_domain( domain ), m_category( category ) {}
 
 	[[nodiscard]]
 	auto reserve( size_t size ) noexcept -> char * {
@@ -48,12 +48,12 @@ private:
 	char *const m_data;
 	const unsigned m_limit { 0 };
 	unsigned m_offset { 0 };
+	const MessageDomain m_domain;
 	const MessageCategory m_category;
-	const MessageSeverity m_severity;
 };
 
 [[nodiscard]]
-auto createMessageStream( MessageCategory, MessageSeverity ) -> OutputMessageStream *;
+auto createMessageStream( MessageDomain, MessageCategory ) -> OutputMessageStream *;
 
 void submitMessageStream( OutputMessageStream * );
 
@@ -65,7 +65,7 @@ public:
 	[[nodiscard]]
 	auto getWriter() -> TextStreamWriter<OutputMessageStream> & { return m_writer; }
 private:
-	wsw::OutputMessageStream *m_stream;
+	wsw::OutputMessageStream *const m_stream;
 	wsw::TextStreamWriter<OutputMessageStream> m_writer;
 };
 

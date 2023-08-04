@@ -458,7 +458,8 @@ UntypedEnumFlagsConfigVar::UntypedEnumFlagsConfigVar( const wsw::StringView &nam
 													  wsw::Vector<unsigned> &&enumValues,
 													  size_t typeSizeInBytes, unsigned defaultValue )
 	: DeclaredConfigVar( name, registrationFlags ), m_matcherObj( matcherObj ), m_matcherFn( matcherFn )
-	, m_enumValues( std::forward<wsw::Vector<unsigned>>( enumValues ) ), m_defaultValue( defaultValue ) {
+	, m_enumValues( std::forward<wsw::Vector<unsigned>>( enumValues ) ) {
+	assert( !m_enumValues.empty() );
 	m_allBitsInEnumValues = 0;
 	m_hasZeroInValues     = false;
 	for( const unsigned value: m_enumValues ) {
@@ -467,6 +468,7 @@ UntypedEnumFlagsConfigVar::UntypedEnumFlagsConfigVar( const wsw::StringView &nam
 			m_hasZeroInValues = true;
 		}
 	}
+	m_defaultValue = defaultValue & m_allBitsInEnumValues;
 	// We can't just use "~0u" as lesser than "~0u" all-bits-set default values may be specified for types of lesser size
 	assert( typeSizeInBytes == 1 || typeSizeInBytes == 2 || typeSizeInBytes == 4 );
 	m_allBitsSetValueForType = 255;
@@ -478,7 +480,7 @@ UntypedEnumFlagsConfigVar::UntypedEnumFlagsConfigVar( const wsw::StringView &nam
 void UntypedEnumFlagsConfigVar::getDefaultValueText( wsw::String *defaultValueBuffer ) const {
 	assert( defaultValueBuffer->empty() );
 	// TODO: retrieve the default value string using the matcher?
-	if( m_defaultValue != m_allBitsSetValueForType ) {
+	if( m_defaultValue != m_allBitsSetValueForType && m_defaultValue != m_allBitsInEnumValues ) {
 		defaultValueBuffer->append( std::to_string( m_defaultValue ) );
 	} else {
 		// Try displaying it nicer
@@ -486,10 +488,12 @@ void UntypedEnumFlagsConfigVar::getDefaultValueText( wsw::String *defaultValueBu
 	}
 }
 
+// Note: We do not correct "-1", despite internally truncating it. Let users type "-1" without hassle.
+
 auto UntypedEnumFlagsConfigVar::correctValue( const wsw::StringView &newValue, wsw::String *tmpBuffer ) const -> std::optional<wsw::StringView> {
 	std::optional<unsigned> validatedValue;
 	if( const auto maybeNum = wsw::toNum<unsigned>( newValue ) ) {
-		if( isAValidValue( *maybeNum ) ) {
+		if( isAnAcceptableValue( *maybeNum ) ) {
 			return std::nullopt;
 		}
 	} else {
@@ -505,9 +509,12 @@ auto UntypedEnumFlagsConfigVar::correctValue( const wsw::StringView &newValue, w
 auto UntypedEnumFlagsConfigVar::handleValueChanges( const wsw::StringView &newValue, wsw::String *tmpBuffer ) -> std::optional<wsw::StringView> {
 	std::optional<unsigned> validatedValue;
 	if( const auto maybeNum = wsw::toNum<unsigned>( newValue ) ) {
-		if( isAValidValue( *maybeNum ) ) {
-			validatedValue = maybeNum;
+		if( isAnAcceptableValue( *maybeNum ) ) {
+			// While accepting (enum-type)~0u, make sure that it does not contain extra bits
+			validatedValue = *maybeNum & m_allBitsInEnumValues;
 		}
+	} else if( wsw::toNum<int>( newValue ) == std::optional<int>( -1 ) ) {
+		validatedValue = m_allBitsInEnumValues;
 	} else {
 		// Try parsing '|' - separated string of tokens or values
 		validatedValue = parseValueFromString( newValue );
@@ -551,7 +558,7 @@ auto UntypedEnumFlagsConfigVar::parseValueFromString( const wsw::StringView &str
 	return newValueBits;
 }
 
-bool UntypedEnumFlagsConfigVar::isAValidValue( unsigned value ) const {
+bool UntypedEnumFlagsConfigVar::isAnAcceptableValue( unsigned value ) const {
 	// If it matches some bits (or is zero and zeroes are allowed)
 	if( ( m_allBitsInEnumValues & value ) || ( m_hasZeroInValues && !value ) ) {
 		// If it does not add extra bits, with the exception of the all-bits-set value
@@ -573,11 +580,14 @@ auto UntypedEnumFlagsConfigVar::helperOfGet() const -> unsigned {
 
 void UntypedEnumFlagsConfigVar::helperOfSet( unsigned value, bool force ) {
 	if( m_underlying ) [[likely]] {
-		if( !isAValidValue( value ) ) {
-			value = m_defaultValue;
+		if( isAnAcceptableValue( value ) ) {
+			m_cachedValue = value & m_allBitsInEnumValues;
+		} else {
+			assert( !( m_defaultValue & ~m_allBitsInEnumValues ) );
+			m_cachedValue = m_defaultValue;
 		}
-		m_cachedValue = value;
-		if( value != m_allBitsSetValueForType ) {
+		m_cachedValue = value & m_allBitsInEnumValues;
+		if( value != m_allBitsSetValueForType && value != m_allBitsInEnumValues ) {
 			Cvar_Set2( m_name.data(), std::to_string( value ).data(), force );
 		} else {
 			Cvar_Set2( m_name.data(), "-1", force );

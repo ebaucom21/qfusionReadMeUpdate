@@ -828,8 +828,8 @@ DeclaredConfigVar *DeclaredConfigVar::s_listHead;
 
 namespace wsw {
 
-auto createMessageStream( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
-	return GAME_IMPORT.createMessageStream( category, severity );
+auto createMessageStream( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
+	return GAME_IMPORT.createMessageStream( domain, category );
 }
 
 void submitMessageStream( wsw::OutputMessageStream *stream ) {

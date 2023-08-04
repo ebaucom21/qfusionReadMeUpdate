@@ -3,9 +3,9 @@
 
 #include "outputmessages.h"
 
-#define comDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Common, wsw::MessageSeverity::Debug ) ).getWriter()
-#define comNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Common, wsw::MessageSeverity::Info ) ).getWriter()
-#define comWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Common, wsw::MessageSeverity::Warning ) ).getWriter()
-#define comError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Common, wsw::MessageSeverity::Error ) ).getWriter()
+#define comDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Common, wsw::MessageCategory::Debug ) ).getWriter()
+#define comNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Common, wsw::MessageCategory::Notice ) ).getWriter()
+#define comWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Common, wsw::MessageCategory::Warning ) ).getWriter()
+#define comError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Common, wsw::MessageCategory::Error ) ).getWriter()
 
 #endif

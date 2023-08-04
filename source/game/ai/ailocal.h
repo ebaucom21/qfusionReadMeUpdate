@@ -362,9 +362,9 @@ extern const BoolConfigVar v_debugOutput;
 extern const BoolConfigVar v_shareRoutingCache;
 extern const StringConfigVar v_forceWeapon;
 
-#define aiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Debug ) ).getWriter()
-#define aiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Info ) ).getWriter()
-#define aiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Warning ) ).getWriter()
-#define aiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::AI, wsw::MessageSeverity::Error ) ).getWriter()
+#define aiDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::AI, wsw::MessageCategory::Debug ) ).getWriter()
+#define aiNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::AI, wsw::MessageCategory::Notice ) ).getWriter()
+#define aiWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::AI, wsw::MessageCategory::Warning ) ).getWriter()
+#define aiError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::AI, wsw::MessageCategory::Error ) ).getWriter()
 
 #endif

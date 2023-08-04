@@ -532,8 +532,8 @@ void CL_Sys_Init( void );
  */
 void CL_Sys_Shutdown( void );
 
-#define clDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Debug ) ).getWriter()
-#define clNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Info ) ).getWriter()
-#define clWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Warning ) ).getWriter()
-#define clError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Client, wsw::MessageSeverity::Error ) ).getWriter()
+#define clDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Client, wsw::MessageCategory::Debug ) ).getWriter()
+#define clNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Client, wsw::MessageCategory::Notice ) ).getWriter()
+#define clWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Client, wsw::MessageCategory::Warning ) ).getWriter()
+#define clError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Client, wsw::MessageCategory::Error ) ).getWriter()
 

@@ -1592,9 +1592,9 @@ inline void R_UnpackSortKey( unsigned sortKey, unsigned *shaderNum, int *fogNum,
 	*fogNum = (signed int)( sortKey & 0x1F ) - 1;
 }
 
-#define rDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Debug ) ).getWriter()
-#define rNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Info ) ).getWriter()
-#define rWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Warning ) ).getWriter()
-#define rError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageCategory::Renderer, wsw::MessageSeverity::Error ) ).getWriter()
+#define rDebug()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Renderer, wsw::MessageCategory::Debug ) ).getWriter()
+#define rNotice()  wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Renderer, wsw::MessageCategory::Notice ) ).getWriter()
+#define rWarning() wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Renderer, wsw::MessageCategory::Warning ) ).getWriter()
+#define rError()   wsw::PendingOutputMessage( wsw::createMessageStream( wsw::MessageDomain::Renderer, wsw::MessageCategory::Error ) ).getWriter()
 
 #endif // R_LOCAL_H

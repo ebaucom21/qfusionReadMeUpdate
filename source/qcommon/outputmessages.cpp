@@ -9,49 +9,88 @@
 
 using wsw::operator""_asView;
 
-class CategoryMatcher : public wsw::EnumTokenMatcher<wsw::MessageCategory, CategoryMatcher> {
+// We dislike the idea to add "null" values to the base enum definitions, as well as making them flags per se.
+// At the same time we do not want EnumFlagsConfigVar to convert sequential values
+// to untyped bit masks automatically (TODO!!!!!: Should we rather consider this option?).
+// Thus, we have to define the mapping from sequential values to flags manually.
+
+enum class MessageDomainFlags : unsigned {
+	None     = 0u,
+	Common   = 1u << (unsigned)wsw::MessageDomain::Common,
+	Server   = 1u << (unsigned)wsw::MessageDomain::Server,
+	Client   = 1u << (unsigned)wsw::MessageDomain::Client,
+	Sound    = 1u << (unsigned)wsw::MessageDomain::Sound,
+	Renderer = 1u << (unsigned)wsw::MessageDomain::Renderer,
+	UI       = 1u << (unsigned)wsw::MessageDomain::UI,
+	CGame    = 1u << (unsigned)wsw::MessageDomain::CGame,
+	Game     = 1u << (unsigned)wsw::MessageDomain::Game,
+	AI       = 1u << (unsigned)wsw::MessageDomain::AI,
+};
+
+enum class MessageCategoryFlags : unsigned {
+	None    = 0u,
+	Debug   = 1u << (unsigned)wsw::MessageCategory::Debug,
+	Notice  = 1u << (unsigned)wsw::MessageCategory::Notice,
+	Warning = 1u << (unsigned)wsw::MessageCategory::Warning,
+	Error   = 1u << (unsigned)wsw::MessageCategory::Error,
+};
+
+class DomainMatcher : public wsw::EnumTokenMatcher<MessageDomainFlags, DomainMatcher> {
 public:
-	CategoryMatcher() : wsw::EnumTokenMatcher<wsw::MessageCategory, CategoryMatcher>( {
-		{ "Common"_asView, wsw::MessageCategory::Common },
-		{ "COM"_asView, wsw::MessageCategory::Common },
-		{ "Server"_asView, wsw::MessageCategory::Server },
-		{ "SV"_asView, wsw::MessageCategory::Server },
-		{ "Client"_asView, wsw::MessageCategory::Client },
-		{ "CL"_asView, wsw::MessageCategory::Client },
-		{ "Sound"_asView, wsw::MessageCategory::Sound },
-		{ "S"_asView, wsw::MessageCategory::Sound },
-		{ "Renderer"_asView, wsw::MessageCategory::Renderer },
-		{ "R"_asView, wsw::MessageCategory::Renderer },
-		{ "UI"_asView, wsw::MessageCategory::UI },
-		{ "CGame"_asView, wsw::MessageCategory::CGame },
-		{ "CG"_asView, wsw::MessageCategory::CGame },
-		{ "Game"_asView, wsw::MessageCategory::Game },
-		{ "G"_asView, wsw::MessageCategory::Game },
-		{ "AI"_asView, wsw::MessageCategory::AI },
+	// We guess, there's no need to handle non-abbreviated string values
+	// (while that is perfectly possible just by declaring respective entries in the list)
+	DomainMatcher() : wsw::EnumTokenMatcher<MessageDomainFlags, DomainMatcher>( {
+		{ "None"_asView, MessageDomainFlags::None },
+		{ "COM"_asView, MessageDomainFlags::Common },
+		{ "SV"_asView, MessageDomainFlags::Server },
+		{ "CL"_asView, MessageDomainFlags::Client },
+		{ "S"_asView, MessageDomainFlags::Sound },
+		{ "R"_asView, MessageDomainFlags::Renderer },
+		{ "UI"_asView, MessageDomainFlags::UI },
+		{ "CG"_asView, MessageDomainFlags::CGame },
+		{ "G"_asView, MessageDomainFlags::Game },
+		{ "AI"_asView, MessageDomainFlags::AI },
 	}) {}
 };
 
-class SeverityMatcher : public wsw::EnumTokenMatcher<wsw::MessageSeverity, SeverityMatcher> {
+class CategoryMatcher : public wsw::EnumTokenMatcher<MessageCategoryFlags, CategoryMatcher> {
 public:
-	SeverityMatcher() : wsw::EnumTokenMatcher<wsw::MessageSeverity, SeverityMatcher>( {
-		{ "Debug"_asView, wsw::MessageSeverity::Debug },
-		{ "Info"_asView, wsw::MessageSeverity::Info },
-		{ "Warning"_asView, wsw::MessageSeverity::Warning },
-		{ "Error"_asView, wsw::MessageSeverity::Error },
+	CategoryMatcher() : wsw::EnumTokenMatcher<MessageCategoryFlags, CategoryMatcher>( {
+		{ "None"_asView, MessageCategoryFlags::None },
+		{ "Debug"_asView, MessageCategoryFlags::Debug },
+		{ "Info"_asView, MessageCategoryFlags::Notice },
+		{ "Warning"_asView, MessageCategoryFlags::Warning },
+		{ "Error"_asView, MessageCategoryFlags::Error },
 	}) {}
 };
 
-// TODO: there should be separate masks for every category
+// We guess, we should not save values of these vars, as it could seriously affect basic console interaction.
+// Uses which really may utilize functionality of these vars should set these vars via the executable command line.
 
-static EnumFlagsConfigVar<wsw::MessageCategory, CategoryMatcher> v_outputCategoryMask( "com_outputCategoryMask"_asView, {
-	.byDefault = (wsw::MessageCategory)~0, .flags = CVAR_ARCHIVE,
+static EnumFlagsConfigVar<MessageDomainFlags, DomainMatcher> v_outputDomainMask( "com_outputDomainMask"_asView, {
+	.byDefault = (MessageDomainFlags)~0, .flags = 0,
 });
 
-static EnumFlagsConfigVar<wsw::MessageSeverity, SeverityMatcher> v_outputSeverityMask( "com_outputSeverityMask"_asView, {
-	.byDefault = (wsw::MessageSeverity)~0, .flags = CVAR_ARCHIVE,
+static EnumFlagsConfigVar<MessageCategoryFlags, CategoryMatcher> v_outputCategoryMask( "com_outputCategoryMask"_asView, {
+	.byDefault = (MessageCategoryFlags)~0, .flags = 0,
 });
 
-static BoolConfigVar v_enableOutputCategoryPrefix { "com_enableOutputCategoryPrefix"_asView, {
+static const struct DomainTraits {
+	const char *printedPrefix;
+	EnumFlagsConfigVar<MessageCategoryFlags, CategoryMatcher> overridenCategoryMask;
+} g_domainTraits[9] {
+	{ "COM", { "com_overrideOutputCategoryMask_COM"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "SV", { "com_overrideOutputCategoryMask_SV"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "CL", { "com_overrideOutputCategoryMask_CL"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "S", { "com_overrideOutputCategoryMask_S"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "R", { "com_overrideOutputCategoryMask_R"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "UI", { "com_overrideOutputCategoryMask_UI"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "CG", { "com_overrideOutputCategoryMask_CG"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "G", { "com_overrideOutputCategoryMask_G"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+	{ "AI", { "com_overrideOutputCategoryMask_AI"_asView, { .byDefault = MessageCategoryFlags::None, .flags = 0 } } },
+};
+
+static BoolConfigVar v_enableOutputDomainPrefix { "com_enableOutputDomainPrefix"_asView, {
 	.byDefault = false, .flags = CVAR_ARCHIVE,
 }};
 
@@ -62,12 +101,8 @@ extern cvar_t *logconsole_flush;
 extern cvar_t *logconsole_timestamp;
 extern int log_file;
 
-static const char *kPrintedMessageColorForSeverity[4] {
+static const char *kPrintedMessageColorForCategory[4] {
 	S_COLOR_GREY, S_COLOR_WHITE, S_COLOR_YELLOW, S_COLOR_RED
-};
-
-static const char *kPrintedMessagePrefixForCategory[9] {
-	"COM", " SV", " CL", "  S", "  R", " UI", " CG", "  G", " AI"
 };
 
 class alignas( 16 ) MessageStreamsAllocator {
@@ -77,29 +112,27 @@ class alignas( 16 ) MessageStreamsAllocator {
 	static constexpr size_t kSize = MAX_PRINTMSG + sizeof( wsw::OutputMessageStream );
 	static constexpr size_t kCapacity = 1024;
 
-	static constexpr size_t kSeveritiesCount = std::size( kPrintedMessageColorForSeverity );
-	static constexpr size_t kCategoriesCount = std::size( kPrintedMessagePrefixForCategory );
+	static constexpr size_t kCategoryCount = std::size( kPrintedMessageColorForCategory );
+	static constexpr size_t kDomainCount = std::size( g_domainTraits );
 
-	wsw::StaticVector<wsw::OutputMessageStream, kSeveritiesCount * kCategoriesCount> m_nullStreams;
+	wsw::StaticVector<wsw::OutputMessageStream, kCategoryCount * kDomainCount> m_nullStreams;
 public:
 	MessageStreamsAllocator() : m_allocator( kSize, kCapacity ) {
 		// TODO: This is very flaky, but alternatives aren't perfect either...
-		for( unsigned categoryIndex = 0; categoryIndex < kCategoriesCount; ++categoryIndex ) {
-			assert( std::strlen( kPrintedMessagePrefixForCategory[categoryIndex] ) == 3 );
-			const auto category( ( wsw::MessageCategory)( 1 << categoryIndex ) );
-			for( unsigned severityIndex = 0; severityIndex < kSeveritiesCount; ++severityIndex ) {
-				const auto severity( ( wsw::MessageSeverity )( 1 << severityIndex ) );
-				new( m_nullStreams.unsafe_grow_back() )wsw::OutputMessageStream( nullptr, 0, category, severity );
+		for( unsigned domainIndex = 0; domainIndex < kDomainCount; ++domainIndex ) {
+			const auto domain( ( wsw::MessageDomain)( domainIndex ) );
+			for( unsigned categoryIndex = 0; categoryIndex < kCategoryCount; ++categoryIndex ) {
+				const auto category( ( wsw::MessageCategory )( categoryIndex ) );
+				new( m_nullStreams.unsafe_grow_back() )wsw::OutputMessageStream( nullptr, 0, domain, category );
 			}
 		}
 	}
 
 	[[nodiscard]]
-	auto nullStreamFor( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
-		assert( wsw::isPowerOf2( (unsigned)category ) && wsw::isPowerOf2( (unsigned)severity ) );
-		const auto indexForCategory = (unsigned)std::countr_zero( (unsigned)category );
-		const auto indexForSeverity = (unsigned)std::countr_zero( (unsigned)severity );
-		return std::addressof( m_nullStreams[indexForCategory * kSeveritiesCount + indexForSeverity] );
+	auto nullStreamFor( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
+		const auto indexForDomain   = (unsigned)domain;
+		const auto indexForCategory = (unsigned)category;
+		return std::addressof( m_nullStreams[indexForDomain * kCategoryCount + indexForCategory] );
 	}
 
 	[[nodiscard]]
@@ -108,17 +141,17 @@ public:
 	}
 
 	[[nodiscard]]
-	auto alloc( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
+	auto alloc( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
 		[[maybe_unused]] volatile std::lock_guard guard( m_mutex );
 		if( !m_allocator.isFull() ) [[likely]] {
 			uint8_t *mem = m_allocator.allocOrNull();
 			auto *buffer = (char *)( mem + sizeof( wsw::OutputMessageStream ) );
-			return new( mem )wsw::OutputMessageStream( buffer, MAX_PRINTMSG, category, severity );
+			return new( mem )wsw::OutputMessageStream( buffer, MAX_PRINTMSG, domain, category );
 		} else if( auto *mem = (uint8_t *)::malloc( kSize ) ) {
 			auto *buffer = (char *)( mem + sizeof( wsw::OutputMessageStream ) );
-			return new( mem )wsw::OutputMessageStream( buffer, MAX_PRINTMSG, category, severity );
+			return new( mem )wsw::OutputMessageStream( buffer, MAX_PRINTMSG, domain, category );
 		} else {
-			return nullStreamFor( category, severity );
+			return nullStreamFor( domain, category );
 		}
 	}
 
@@ -138,47 +171,59 @@ public:
 
 static MessageStreamsAllocator g_logLineStreamsAllocator;
 
-auto wsw::createMessageStream( wsw::MessageCategory category, wsw::MessageSeverity severity ) -> wsw::OutputMessageStream * {
-	if( v_outputCategoryMask.initialized() ) [[likely]] {
-		if( !( v_outputCategoryMask.isAnyBitSet( category ) ) ) {
-			return ::g_logLineStreamsAllocator.nullStreamFor( category, severity );
+[[nodiscard]]
+static bool isMessageAcceptedByFilters( wsw::MessageDomain domain, wsw::MessageCategory category ) {
+	if( v_outputDomainMask.initialized() ) [[likely]] {
+		if( !v_outputDomainMask.isAnyBitSet( (MessageDomainFlags)( 1u << (unsigned)domain ) ) ) {
+			return false;
 		}
 	}
-	if( v_outputSeverityMask.initialized() ) [[likely]] {
-		if( !( v_outputSeverityMask.isAnyBitSet( severity ) ) ) {
-			return ::g_logLineStreamsAllocator.nullStreamFor( category, severity );
+	const auto &overriddenCategoryMaskVar = g_domainTraits[(unsigned)domain].overridenCategoryMask;
+	if( overriddenCategoryMaskVar.initialized() ) [[likely]] {
+		// Check whether some mask bits are set (this is generally unlikely)
+		// We retrieve an unsigned value once to reduce the number of value lookups.
+		if( const auto maskBits = (unsigned)overriddenCategoryMaskVar.get() ) [[unlikely]] {
+			// TODO: Should the override mask bits fully replace general bits, like they do for now?
+			return ( maskBits & ( 1 << (unsigned)category ) ) != 0;
 		}
 	}
-	return ::g_logLineStreamsAllocator.alloc( category, severity );
+	if( category != wsw::MessageCategory::Debug ) {
+		if( v_outputCategoryMask.initialized() ) [[likely]] {
+			// If the category bit is unset
+			if( !v_outputCategoryMask.isAnyBitSet( (MessageCategoryFlags )( 1u << (unsigned)category ) ) ) {
+				return false;
+			}
+		}
+	} else {
+		// Hacks for the Debug category - let the developer var control it.
+		// Note that we still can enable/suppress Debug messages using individual masks.
+		// TODO: Should we rather patch the category mask value dynamically?
+		if( developer ) [[likely]] {
+			return developer->integer != 0;
+		}
+	}
+	return true;
+}
+
+auto wsw::createMessageStream( wsw::MessageDomain domain, wsw::MessageCategory category ) -> wsw::OutputMessageStream * {
+	if( isMessageAcceptedByFilters( domain, category ) ) {
+		return ::g_logLineStreamsAllocator.alloc( domain, category );
+	}
+	return ::g_logLineStreamsAllocator.nullStreamFor( domain, category );
 }
 
 void wsw::submitMessageStream( wsw::OutputMessageStream *stream ) {
-	bool isAcceptedByFilters = true;
-	if( v_outputCategoryMask.initialized() ) [[likely]] {
-		if( !v_outputCategoryMask.isAnyBitSet( stream->m_category ) ) {
-			isAcceptedByFilters = false;
-		}
-	}
-	if( isAcceptedByFilters ) {
-		if( v_outputSeverityMask.initialized() ) [[likely]] {
-			if( !v_outputSeverityMask.isAnyBitSet( stream->m_severity ) ) {
-				isAcceptedByFilters = false;
-			}
-		}
-	}
-	if( isAcceptedByFilters ) {
+	if( isMessageAcceptedByFilters( stream->m_domain, stream->m_category ) ) {
 		// TODO: Eliminate Com_Printf()
 		if( !::g_logLineStreamsAllocator.isANullStream( stream ) ) {
 			stream->m_data[wsw::min( stream->m_limit, stream->m_offset )] = '\0';
-			assert( wsw::isPowerOf2( (unsigned)stream->m_severity ) );
-			const auto indexForSeverity = (unsigned)std::countr_zero( (unsigned)stream->m_severity );
-			assert( indexForSeverity <= std::size( kPrintedMessagePrefixForCategory ) );
-			const char *color = kPrintedMessageColorForSeverity[indexForSeverity];
-			if( v_enableOutputCategoryPrefix.initialized() && v_enableOutputCategoryPrefix.get() ) {
-				assert( wsw::isPowerOf2( (unsigned)stream->m_category ) );
-				const auto indexForCategory = (unsigned)std::countr_zero( (unsigned)stream->m_severity );
-				assert( indexForCategory <= std::size( kPrintedMessagePrefixForCategory ) );
-				const char *prefix = kPrintedMessagePrefixForCategory[indexForCategory];
+			const auto indexForCategory = (unsigned)stream->m_category;
+			assert( indexForCategory <= std::size( kPrintedMessageColorForCategory ) );
+			const char *color = kPrintedMessageColorForCategory[indexForCategory];
+			if( v_enableOutputDomainPrefix.initialized() && v_enableOutputDomainPrefix.get() ) {
+				const auto indexForDomain = (unsigned)stream->m_domain;
+				assert( indexForDomain <= std::size( g_domainTraits ) );
+				const char *prefix = g_domainTraits[indexForDomain].printedPrefix;
 				Com_Printf( S_COLOR_GREY "[%s] %s%s\n", prefix, color, stream->m_data );
 			} else {
 				Com_Printf( "%s%s\n", color, stream->m_data );
