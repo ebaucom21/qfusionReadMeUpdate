@@ -23,9 +23,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/asyncstream.h"
 #include "../qcommon/cmdsystem.h"
+#include "../qcommon/demometadata.h"
 #include "../qcommon/singletonholder.h"
 #include "../qcommon/pipeutils.h"
 #include "../qcommon/maplist.h"
+#include "../qcommon/mmcommon.h"
 #include "../qcommon/hash.h"
 #include "../qcommon/q_trie.h"
 #include "../qcommon/textstreamwriterextras.h"
@@ -38,22 +40,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 using wsw::operator""_asView;
 
-cvar_t *cl_stereo_separation;
-cvar_t *cl_stereo;
+static cvar_t *rcon_client_password;
+static cvar_t *rcon_address;
 
-cvar_t *rcon_client_password;
-cvar_t *rcon_address;
+static cvar_t *cl_timeout;
+static cvar_t *cl_maxfps;
+static cvar_t *cl_sleep;
+static cvar_t *cl_pps;
+static cvar_t *cl_shownet;
 
-cvar_t *cl_timeout;
-cvar_t *cl_maxfps;
-cvar_t *cl_sleep;
-cvar_t *cl_pps;
-cvar_t *cl_shownet;
+static cvar_t *cl_extrapolationTime;
+static cvar_t *cl_extrapolate;
 
-cvar_t *cl_extrapolationTime;
-cvar_t *cl_extrapolate;
-
-cvar_t *cl_timedemo;
+static cvar_t *cl_timedemo;
 
 cvar_t *sensitivity;
 cvar_t *zoomsens;
@@ -62,28 +61,22 @@ cvar_t *m_accelStyle;
 cvar_t *m_accelOffset;
 cvar_t *m_accelPow;
 cvar_t *m_filter;
-cvar_t *m_filterStrength;
 cvar_t *m_sensCap;
 
 cvar_t *m_pitch;
 cvar_t *m_yaw;
 
-//
-// userinfo
-//
-cvar_t *info_password;
-cvar_t *rate;
-
-cvar_t *cl_infoservers;
+static cvar_t *info_password;
+static cvar_t *cl_infoservers;
 
 // wsw : debug netcode
-cvar_t *cl_debug_serverCmd;
-cvar_t *cl_debug_timeDelta;
+static cvar_t *cl_debug_serverCmd;
+static cvar_t *cl_debug_timeDelta;
 
-cvar_t *cl_downloads;
-cvar_t *cl_downloads_from_web;
-cvar_t *cl_downloads_from_web_timeout;
-cvar_t *cl_download_allow_modules;
+static cvar_t *cl_downloads;
+static cvar_t *cl_downloads_from_web;
+static cvar_t *cl_downloads_from_web_timeout;
+static cvar_t *cl_download_allow_modules;
 
 static char cl_nextString[MAX_STRING_CHARS];
 static char cl_connectChain[MAX_STRING_CHARS];
@@ -91,22 +84,1454 @@ static char cl_connectChain[MAX_STRING_CHARS];
 client_static_t cls;
 client_state_t cl;
 
-entity_state_t cl_baselines[MAX_EDICTS];
+static entity_state_t cl_baselines[MAX_EDICTS];
 
 static bool cl_initialized = false;
+static bool in_initialized = false;
 
 static async_stream_module_t *cl_async_stream;
 
-//======================================================================
+cvar_t *cl_ucmdMaxResend;
+cvar_t *cl_ucmdFPS;
 
+static int precache_check; // for autodownload of precache items
+static int precache_spawncount;
+static int precache_tex;
+static int precache_pure;
+
+static cvar_t *s_module = nullptr;
+
+SoundSystem *SoundSystem::s_instance = nullptr;
+
+static unsigned vid_num_modes;
+static unsigned vid_max_width_mode_index;
+static unsigned vid_max_height_mode_index;
+static vidmode_t *vid_modes;
+
+static cvar_t *vid_width, *vid_height;
+cvar_t *vid_xpos;          // X coordinate of window position
+cvar_t *vid_ypos;          // Y coordinate of window position
+cvar_t *vid_fullscreen;
+static cvar_t *vid_borderless;
+cvar_t *vid_displayfrequency;
+cvar_t *vid_multiscreen_head;
+static cvar_t *vid_parentwid;      // parent window identifier
+cvar_t *win_noalttab;
+cvar_t *win_nowinkeys;
+
+// Global variables used internally by this module
+viddef_t viddef;             // global video state; used by other modules
+
+static int vid_ref_prevwidth, vid_ref_prevheight;
+static bool vid_ref_modified;
+static bool vid_ref_verbose;
+static bool vid_ref_sound_restart;
+static bool vid_ref_active;
+static bool vid_initialized;
+static bool vid_app_active;
+static bool vid_app_minimized;
+
+static float scr_con_current;    // aproaches scr_conlines at scr_conspeed
+static float scr_conlines;       // 0.0 to 1.0 lines of console to display
+
+static bool scr_initialized;    // ready to draw
+
+static int scr_draw_loading;
+
+static cvar_t *scr_consize;
+static cvar_t *scr_conspeed;
+static cvar_t *scr_netgraph;
+static cvar_t *scr_timegraph;
+static cvar_t *scr_debuggraph;
+static cvar_t *scr_graphheight;
+static cvar_t *scr_graphscale;
+static cvar_t *scr_graphshift;
+
+static cvar_t *con_fontSystemFamily;
+static cvar_t *con_fontSystemFallbackFamily;
+static cvar_t *con_fontSystemMonoFamily;
+static cvar_t *con_fontSystemConsoleSize;
+
+typedef struct {
+	float value;
+	vec4_t color;
+} graphsamp_t;
+
+static int netgraph_current;
+static graphsamp_t values[1024];
+
+#define PLAYER_MULT 5
+
+// ENV_CNT is map load
+#define ENV_CNT ( CS_PLAYERINFOS + MAX_CLIENTS * PLAYER_MULT )
+#define TEXTURE_CNT ( ENV_CNT + 1 )
+
+extern qbufPipe_s *g_svCmdPipe;
+extern qbufPipe_s *g_clCmdPipe;
+
+static void *cge = nullptr;
+static void *module_handle;
+
+// These are system specific functions
+// wrapper around R_Init
+rserr_t VID_Sys_Init( const char *applicationName, const char *screenshotsPrefix, int startupColor, const int *iconXPM,
+					  void *parentWindow, bool verbose );
+void VID_UpdateWindowPosAndSize( int x, int y );
+void VID_EnableAltTab( bool enable );
+void VID_EnableWinKeys( bool enable );
+
+static void CL_InitServerDownload( const char *filename, size_t size, unsigned checksum, bool allow_localhttpdownload,
+								   const char *url, bool initial );
+void CL_StopServerDownload( void );
+
+int CG_NumInlineModels( void ) {
+	return CM_NumInlineModels( cl.cms );
+}
+
+int CG_TransformedPointContents( const vec3_t p, const cmodel_s *cmodel, const vec3_t origin, const vec3_t angles ) {
+	return CM_TransformedPointContents( cl.cms, p, cmodel, origin, angles );
+}
+
+void CG_TransformedBoxTrace( trace_t *tr, const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+							 const cmodel_s *cmodel, int brushmask, const vec3_t origin, const vec3_t angles ) {
+	CM_TransformedBoxTrace( cl.cms, tr, start, end, mins, maxs, cmodel, brushmask, origin, angles );
+}
+
+const cmodel_s *CG_InlineModel( int num ) {
+	return CM_InlineModel( cl.cms, num );
+}
+
+void CG_InlineModelBounds( const cmodel_s *cmodel, vec3_t mins, vec3_t maxs ) {
+	CM_InlineModelBounds( cl.cms, cmodel, mins, maxs );
+}
+
+const cmodel_s *CG_ModelForBBox( const vec3_t mins, const vec3_t maxs ) {
+	return CM_ModelForBBox( cl.cms, mins, maxs );
+}
+
+const cmodel_s *CG_OctagonModelForBBox( const vec3_t mins, const vec3_t maxs ) {
+	return CM_OctagonModelForBBox( cl.cms, mins, maxs );
+}
+
+void NET_GetUserCmd( int frame, usercmd_t *cmd ) {
+	if( cmd ) {
+		if( frame < 0 ) {
+			frame = 0;
+		}
+		*cmd = cl.cmds[frame & CMD_MASK];
+	}
+}
+
+int NET_GetCurrentUserCmdNum( void ) {
+	return cls.ucmdHead;
+}
+
+void NET_GetCurrentState( int64_t *incomingAcknowledged, int64_t *outgoingSequence, int64_t *outgoingSent ) {
+	if( incomingAcknowledged ) {
+		*incomingAcknowledged = cls.ucmdAcknowledged;
+	}
+	if( outgoingSequence ) {
+		*outgoingSequence = cls.ucmdHead;
+	}
+	if( outgoingSent ) {
+		*outgoingSent = cls.ucmdSent;
+	}
+}
+
+void CL_GameModule_Init( void ) {
+	int64_t start;
+
+	// stop all playing sounds
+	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+	CL_GameModule_Shutdown();
+
+	SCR_EnableQuickMenu( false );
+
+	start = Sys_Milliseconds();
+	CG_Init( cls.servername, cl.playernum,
+			 viddef.width, viddef.height, VID_GetPixelRatio(),
+			 cls.demoPlayer.playing, cls.demoPlayer.playing ? cls.demoPlayer.filename : "",
+			 cls.sv_pure, cl.snapFrameTime, APP_PROTOCOL_VERSION, APP_DEMO_EXTENSION_STR,
+			 cls.mediaRandomSeed, cl.gamestart );
+
+	cge = (void *)1;
+
+	Com_DPrintf( "CL_GameModule_Init: %.2f seconds\n", (float)( Sys_Milliseconds() - start ) * 0.001f );
+
+	cl.gamestart = false;
+	cls.cgameActive = true;
+}
+
+void CL_GameModule_Reset( void ) {
+	if( cge ) {
+		CG_Reset();
+	}
+}
+
+void CL_GameModule_Shutdown( void ) {
+	if( !cge ) {
+		return;
+	}
+
+	cls.cgameActive = false;
+
+	CG_Shutdown();
+	Com_UnloadGameLibrary( &module_handle );
+	cge = NULL;
+}
+
+void CL_GameModule_ConfigString( int number, const wsw::StringView &string ) {
+	if( cge ) {
+		CG_ConfigString( number, string );
+	}
+}
+
+bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
+	snapshot_t *currentSnap, *newSnap;
+
+	if( cge ) {
+		currentSnap = ( cl.currentSnapNum <= 0 ) ? NULL : &cl.snapShots[cl.currentSnapNum & UPDATE_MASK];
+		newSnap = &cl.snapShots[pendingSnapshot & UPDATE_MASK];
+		return CG_NewFrameSnap( newSnap, currentSnap );
+	}
+
+	return false;
+}
+
+void CL_GameModule_RenderView() {
+	if( cge && cls.cgameActive ) {
+		unsigned extrapolationTime = cl_extrapolate->integer && !cls.demoPlayer.playing ? cl_extrapolationTime->integer : 0;
+		CG_RenderView( cls.frametime, cls.realFrameTime, cls.realtime, cl.serverTime, extrapolationTime );
+	}
+}
+
+void CL_GameModule_InputFrame( int frameTime ) {
+	if( cge ) {
+		CG_InputFrame( frameTime );
+	}
+}
+
+void CL_GameModule_ClearInputState( void ) {
+	if( cge ) {
+		CG_ClearInputState();
+	}
+}
+
+unsigned CL_GameModule_GetButtonBits( void ) {
+	if( cge ) {
+		return CG_GetButtonBits();
+	}
+	return 0;
+}
+
+void CL_GameModule_AddViewAngles( vec3_t viewAngles ) {
+	if( cge ) {
+		CG_AddViewAngles( viewAngles );
+	}
+}
+
+void CL_GameModule_AddMovement( vec3_t movement ) {
+	if( cge ) {
+		CG_AddMovement( movement );
+	}
+}
+
+void CL_GameModule_MouseMove( int dx, int dy ) {
+	if( cge ) {
+		CG_MouseMove( dx, dy );
+	}
+}
+
+bool CG_HasKeyboardFocus() {
+	return cge && !Con_HasKeyboardFocus() && !wsw::ui::UISystem::instance()->requestsKeyboardFocus();
+}
+
+static void CL_CreateNewUserCommand( int realMsec );
+
+void CL_ClearInputState( void ) {
+	wsw::cl::KeyHandlingSystem::instance()->clearStates();
+
+	if( CG_HasKeyboardFocus() ) {
+		CL_GameModule_ClearInputState();
+	}
+}
 
 /*
-=======================================================================
-
-CLIENT RELIABLE COMMAND COMMUNICATION
-
-=======================================================================
+* CL_UpdateGameInput
+*
+* Notifies cgame of new frame, refreshes input timings, coordinates and angles
 */
+static void CL_UpdateGameInput( int frameTime ) {
+	int mx, my;
+
+	IN_GetMouseMovement( &mx, &my );
+
+	// refresh input in cgame
+	CL_GameModule_InputFrame( frameTime );
+
+	if( !wsw::ui::UISystem::instance()->handleMouseMove( frameTime, mx, my ) ) {
+		CL_GameModule_MouseMove( mx, my );
+		// TODO: Check whether a console is open?
+		CL_GameModule_AddViewAngles( cl.viewangles );
+	}
+}
+
+void CL_UserInputFrame( int realMsec ) {
+	// let the mouse activate or deactivate
+	IN_Frame();
+
+	// get new key events
+	Sys_SendKeyEvents();
+
+	// get new key events from mice or external controllers
+	IN_Commands();
+
+	// refresh mouse angles and movement velocity
+	CL_UpdateGameInput( realMsec );
+
+	// create a new usercmd_t structure for this frame
+	CL_CreateNewUserCommand( realMsec );
+
+	// process console commands
+	CL_Cbuf_ExecutePendingCommands();
+}
+
+void CL_InitInput( void ) {
+	if( in_initialized ) {
+		return;
+	}
+
+	CL_Cmd_Register( "in_restart"_asView, IN_Restart );
+
+	IN_Init();
+
+	cl_ucmdMaxResend =  Cvar_Get( "cl_ucmdMaxResend", "3", CVAR_ARCHIVE );
+	cl_ucmdFPS =        Cvar_Get( "cl_ucmdFPS", "62", CVAR_DEVELOPER );
+
+	in_initialized = true;
+}
+
+void CL_ShutdownInput( void ) {
+	if( !in_initialized ) {
+		return;
+	}
+
+	CL_Cmd_Unregister( "in_restart"_asView );
+
+	IN_Shutdown();
+
+	in_initialized = true;
+}
+
+static void CL_SetUcmdMovement( usercmd_t *ucmd ) {
+	vec3_t movement = { 0.0f, 0.0f, 0.0f };
+
+	if( CG_HasKeyboardFocus() ) {
+		CL_GameModule_AddMovement( movement );
+	}
+
+	ucmd->sidemove = bound( -127, (int)(movement[0] * 127.0f), 127 );
+	ucmd->forwardmove = bound( -127, (int)(movement[1] * 127.0f), 127 );
+	ucmd->upmove = bound( -127, (int)(movement[2] * 127.0f), 127 );
+}
+
+static void CL_SetUcmdButtons( usercmd_t *ucmd ) {
+	if( CG_HasKeyboardFocus() ) {
+		ucmd->buttons |= CL_GameModule_GetButtonBits();
+		if( wsw::cl::KeyHandlingSystem::instance()->isAnyKeyDown() ) {
+			ucmd->buttons |= BUTTON_ANY;
+		}
+		return;
+	}
+
+	// add chat/console/ui icon as a button
+	ucmd->buttons |=  BUTTON_BUSYICON;
+}
+
+static void CL_RefreshUcmd( usercmd_t *ucmd, int msec, bool ready ) {
+	ucmd->msec += msec;
+
+	if( ucmd->msec ) {
+		CL_SetUcmdMovement( ucmd );
+
+		CL_SetUcmdButtons( ucmd );
+	}
+
+	if( ready ) {
+		ucmd->serverTimeStamp = cl.serverTime; // return the time stamp to the server
+
+		if( cl.cmdNum > 0 ) {
+			ucmd->msec = ucmd->serverTimeStamp - cl.cmds[( cl.cmdNum - 1 ) & CMD_MASK].serverTimeStamp;
+		} else {
+			ucmd->msec = 20;
+		}
+		if( ucmd->msec < 1 ) {
+			ucmd->msec = 1;
+		}
+	}
+
+	ucmd->angles[0] = ANGLE2SHORT( cl.viewangles[0] );
+	ucmd->angles[1] = ANGLE2SHORT( cl.viewangles[1] );
+	ucmd->angles[2] = ANGLE2SHORT( cl.viewangles[2] );
+}
+
+void CL_WriteUcmdsToMessage( msg_t *msg ) {
+	usercmd_t *cmd;
+	usercmd_t *oldcmd;
+	usercmd_t nullcmd;
+	unsigned int resendCount;
+	unsigned int i;
+	unsigned int ucmdFirst;
+	unsigned int ucmdHead;
+
+	if( !msg || cls.state < CA_ACTIVE || cls.demoPlayer.playing ) {
+		return;
+	}
+
+	// find out what ucmds we have to send
+	ucmdFirst = cls.ucmdAcknowledged + 1;
+	ucmdHead = cl.cmdNum + 1;
+
+	if( cl_ucmdMaxResend->integer > CMD_BACKUP * 0.5 ) {
+		Cvar_SetValue( "cl_ucmdMaxResend", CMD_BACKUP * 0.5 );
+	} else if( cl_ucmdMaxResend->integer < 1 ) {
+		Cvar_SetValue( "cl_ucmdMaxResend", 1 );
+	}
+
+	// find what is our resend count (resend doesn't include the newly generated ucmds)
+	// and move the start back to the resend start
+	if( ucmdFirst <= cls.ucmdSent + 1 ) {
+		resendCount = 0;
+	} else {
+		resendCount = ( cls.ucmdSent + 1 ) - ucmdFirst;
+	}
+	if( resendCount > (unsigned int)cl_ucmdMaxResend->integer ) {
+		resendCount = (unsigned int)cl_ucmdMaxResend->integer;
+	}
+
+	if( ucmdFirst > ucmdHead ) {
+		ucmdFirst = ucmdHead;
+	}
+
+	// if this happens, the player is in a freezing lag. Send him the less possible data
+	if( ( ucmdHead - ucmdFirst ) + resendCount > CMD_MASK * 0.5 ) {
+		resendCount = 0;
+	}
+
+	// move the start backwards to the resend point
+	ucmdFirst = ( ucmdFirst > resendCount ) ? ucmdFirst - resendCount : ucmdFirst;
+
+	if( ( ucmdHead - ucmdFirst ) > CMD_MASK ) { // ran out of updates, seduce the send to try to recover activity
+		ucmdFirst = ucmdHead - 3;
+	}
+
+	// begin a client move command
+	MSG_WriteUint8( msg, clc_move );
+
+	// (acknowledge server frame snap)
+	// let the server know what the last frame we
+	// got was, so the next message can be delta compressed
+	if( cl.receivedSnapNum <= 0 ) {
+		MSG_WriteInt32( msg, -1 );
+	} else {
+		MSG_WriteInt32( msg, cl.snapShots[cl.receivedSnapNum & UPDATE_MASK].serverFrame );
+	}
+
+	// Write the actual ucmds
+
+	// write the id number of first ucmd to be sent, and the count
+	MSG_WriteInt32( msg, ucmdHead );
+	MSG_WriteUint8( msg, (uint8_t)( ucmdHead - ucmdFirst ) );
+
+	// write the ucmds
+	for( i = ucmdFirst; i < ucmdHead; i++ ) {
+		if( i == ucmdFirst ) { // first one isn't delta-compressed
+			cmd = &cl.cmds[i & CMD_MASK];
+			memset( &nullcmd, 0, sizeof( nullcmd ) );
+			MSG_WriteDeltaUsercmd( msg, &nullcmd, cmd );
+		} else {   // delta compress to previous written
+			cmd = &cl.cmds[i & CMD_MASK];
+			oldcmd = &cl.cmds[( i - 1 ) & CMD_MASK];
+			MSG_WriteDeltaUsercmd( msg, oldcmd, cmd );
+		}
+	}
+
+	cls.ucmdSent = i;
+}
+
+static bool CL_NextUserCommandTimeReached( int realMsec ) {
+	static int minMsec = 1, allMsec = 0, extraMsec = 0;
+	static float roundingMsec = 0.0f;
+	float maxucmds;
+
+	if( cls.state < CA_ACTIVE ) {
+		maxucmds = 10; // reduce ratio while connecting
+	} else {
+		maxucmds = cl_ucmdFPS->value;
+	}
+
+	// the cvar is developer only
+	//clamp( maxucmds, 10, 90 ); // don't let people abuse cl_ucmdFPS
+
+	if( cls.demoPlayer.playing ) {
+		minMsec = 1;
+	} else {
+		minMsec = ( 1000.0f / maxucmds );
+		roundingMsec += ( 1000.0f / maxucmds ) - minMsec;
+	}
+
+	if( roundingMsec >= 1.0f ) {
+		minMsec += (int)roundingMsec;
+		roundingMsec -= (int)roundingMsec;
+	}
+
+	if( minMsec > extraMsec ) { // remove, from min frametime, the extra time we spent in last frame
+		minMsec -= extraMsec;
+	}
+
+	allMsec += realMsec;
+	if( allMsec < minMsec ) {
+		//if( !cls.netchan.unsentFragments ) {
+		//	NET_Sleep( minMsec - allMsec );
+		return false;
+	}
+
+	extraMsec = allMsec - minMsec;
+	if( extraMsec > minMsec ) {
+		extraMsec = minMsec - 1;
+	}
+
+	allMsec = 0;
+
+	if( cls.state < CA_ACTIVE ) {
+		return false;
+	}
+
+	// send a new user command message to the server
+	return true;
+}
+
+static void CL_CreateNewUserCommand( int realMsec ) {
+	usercmd_t *ucmd;
+
+	if( !CL_NextUserCommandTimeReached( realMsec ) ) {
+		// refresh current command with up to date data for movement prediction
+		CL_RefreshUcmd( &cl.cmds[cls.ucmdHead & CMD_MASK], realMsec, false );
+		return;
+	}
+
+	cl.cmdNum = cls.ucmdHead;
+	cl.cmd_time[cl.cmdNum & CMD_MASK] = cls.realtime;
+
+	ucmd = &cl.cmds[cl.cmdNum & CMD_MASK];
+
+	CL_RefreshUcmd( ucmd, realMsec, true );
+
+	// advance head and init the new command
+	cls.ucmdHead++;
+	ucmd = &cl.cmds[cls.ucmdHead & CMD_MASK];
+	memset( ucmd, 0, sizeof( usercmd_t ) );
+
+	// start up with the most recent viewangles
+	CL_RefreshUcmd( ucmd, 0, false );
+}
+
+auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
+	if( !name ) {
+		return "";
+	}
+	if( COM_FileExtension( name ) ) {
+		return name;
+	}
+
+	reuse->clear();
+	reuse->append( name );
+
+	if( const char *extension = FS_FirstExtension( name, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
+		reuse->append( extension );
+	}
+
+	// if not found, we just pass it without the extension
+	return reuse->c_str();
+}
+
+void CL_SoundModule_Init( bool verbose ) {
+	if( !s_module ) {
+		s_module = Cvar_Get( "s_module", "1", CVAR_LATCH_SOUND );
+	}
+
+	// unload anything we have now
+	CL_SoundModule_Shutdown( verbose );
+
+	Cvar_GetLatchedVars( CVAR_LATCH_SOUND );
+
+	if( s_module->integer < 0 || s_module->integer > 1 ) {
+		clNotice() << "Invalid value for s_module" << s_module->integer << "reseting to default\n";
+		Cvar_ForceSet( s_module->name, "1" );
+	}
+
+	const SoundSystem::InitOptions options { .verbose = verbose, .useNullSystem = !s_module->integer };
+	// TODO: Is the HWND really needed?
+	if( !SoundSystem::init( &cl, options ) ) {
+		Cvar_ForceSet( s_module->name, "0" );
+	}
+}
+
+void CL_SoundModule_Shutdown( bool verbose ) {
+	SoundSystem::shutdown( verbose );
+}
+
+/*
+** VID_Restart_f
+*
+* Console command to re-start the video mode and refresh DLL. We do this
+* simply by setting the vid_ref_modified variable, which will
+* cause the entire video mode and refresh DLL to be reset on the next frame.
+*/
+void VID_Restart( bool verbose, bool soundRestart ) {
+	vid_ref_modified = true;
+	vid_ref_verbose = verbose;
+	vid_ref_sound_restart = soundRestart;
+}
+
+void VID_Restart_f( const CmdArgs &cmdArgs ) {
+	VID_Restart( ( Cmd_Argc() >= 2 ? true : false ), false );
+}
+
+bool VID_GetModeInfo( int *width, int *height, unsigned int mode ) {
+	if( mode >= vid_num_modes ) {
+		return false;
+	}
+
+	*width  = vid_modes[mode].width;
+	*height = vid_modes[mode].height;
+	return true;
+}
+
+static void VID_ModeList_f( const CmdArgs & ) {
+	for( unsigned i = 0; i < vid_num_modes; i++ )
+		Com_Printf( "* %ix%i\n", vid_modes[i].width, vid_modes[i].height );
+}
+
+static void VID_NewWindow( int width, int height ) {
+	viddef.width  = width;
+	viddef.height = height;
+}
+
+static rserr_t VID_Sys_Init_( void *parentWindow, bool verbose ) {
+	return VID_Sys_Init( APPLICATION_UTF8, APP_SCREENSHOTS_PREFIX, APP_STARTUP_COLOR, nullptr, parentWindow, verbose );
+}
+
+void VID_AppActivate( bool active, bool minimize, bool destroy ) {
+	vid_app_active = active;
+	vid_app_minimized = minimize;
+	RF_AppActivate( active, minimize, destroy );
+}
+
+bool VID_AppIsActive( void ) {
+	return vid_app_active;
+}
+
+bool VID_AppIsMinimized( void ) {
+	return vid_app_minimized;
+}
+
+bool VID_RefreshIsActive( void ) {
+	return vid_ref_active;
+}
+
+int VID_GetWindowWidth( void ) {
+	return viddef.width;
+}
+
+int VID_GetWindowHeight( void ) {
+	return viddef.height;
+}
+
+static rserr_t VID_ChangeMode( void ) {
+	vid_fullscreen->modified = false;
+
+	const int frequency = vid_displayfrequency->integer;
+
+	VidModeOptions options { .fullscreen = vid_fullscreen->integer != 0, .borderless = vid_borderless->integer != 0 };
+
+	int x, y, w, h;
+	if( options.fullscreen && options.borderless ) {
+		x = 0, y = 0;
+		if( !VID_GetDefaultMode( &w, &h ) ) {
+			w = vid_modes[0].width;
+			h = vid_modes[0].height;
+		}
+	} else {
+		x = vid_xpos->integer;
+		y = vid_ypos->integer;
+		w = vid_width->integer;
+		h = vid_height->integer;
+	}
+
+	if( vid_ref_active && ( w != (int)viddef.width || h != (int)viddef.height ) ) {
+		return rserr_restart_required;
+	}
+
+	rserr_t err = R_TrySettingMode( x, y, w, h, frequency, options );
+	if( err == rserr_restart_required ) {
+		return err;
+	}
+
+	if( err == rserr_ok ) {
+		// store fallback mode
+		vid_ref_prevwidth = w;
+		vid_ref_prevheight = h;
+	} else {
+		/* Try to recover from all possible kinds of mode-related failures.
+		 *
+		 * rserr_invalid_fullscreen may be returned only if fullscreen is requested, but at this
+		 * point the system may not be totally sure whether the requested mode is windowed-only
+		 * or totally unsupported, so there's a possibility of rserr_invalid_mode as well.
+		 *
+		 * However, the previously working mode may be windowed-only, but the user may request
+		 * fullscreen, so this case is handled too.
+		 *
+		 * In the end, in the worst case, the windowed safe mode will be selected, and the system
+		 * should not return rserr_invalid_fullscreen or rserr_invalid_mode anymore.
+		 */
+
+		// TODO: Take the borderless flag into account (could it fail?)
+
+		if( err == rserr_invalid_fullscreen ) {
+			clWarning() << "Fullscreen unavailable in this mode";
+
+			Cvar_ForceSet( vid_fullscreen->name, "0" );
+			vid_fullscreen->modified = false;
+
+			// Try again without the fullscreen flag
+			options.fullscreen = false;
+			err = R_TrySettingMode( x, y, w, h, frequency, options );
+		}
+
+		if( err == rserr_invalid_mode ) {
+			clWarning() << "Invalid video mode";
+
+			// Try setting it back to something safe
+			if( w != vid_ref_prevwidth || h != vid_ref_prevheight ) {
+				w = vid_ref_prevwidth;
+				Cvar_ForceSet( vid_width->name, va( "%i", w ) );
+				h = vid_ref_prevheight;
+				Cvar_ForceSet( vid_height->name, va( "%i", h ) );
+
+				err = R_TrySettingMode( x, y, w, h, frequency, options );
+				if( err == rserr_invalid_fullscreen ) {
+					clWarning() << "Could not revert to safe fullscreen mode";
+
+					Cvar_ForceSet( vid_fullscreen->name, "0" );
+					vid_fullscreen->modified = false;
+
+					// Try again without the fullscreen flag
+					options.fullscreen = false;
+					err = R_TrySettingMode( x, y, w, h, frequency, options );
+				}
+			}
+
+			if( err != rserr_ok ) {
+				clWarning() << "Could not revert to safe mode";
+			}
+		}
+	}
+
+	if( err == rserr_ok ) {
+		// let the sound and input subsystems know about the new window
+		VID_NewWindow( w, h );
+	}
+
+	return err;
+}
+
+static void VID_UnloadRefresh( void ) {
+	if( !vid_ref_active ) {
+		return;
+	}
+
+	RF_Shutdown( false );
+	vid_ref_active = false;
+}
+
+static bool VID_LoadRefresh() {
+	VID_UnloadRefresh();
+
+	Com_Printf( "\n" );
+	return true;
+}
+
+[[nodiscard]]
+static auto getBestFittingMode( int requestedWidth, int requestedHeight ) -> std::pair<int, int> {
+	assert( vid_num_modes );
+
+	int width = -1;
+	unsigned leastWidthPenalty = std::numeric_limits<unsigned>::max();
+	// Get a best matching mode for width first (which has a priority over height)
+	for( unsigned i = 0; i < vid_num_modes; ++i ) {
+		const auto &mode = vid_modes[i];
+		const auto absDiff = std::abs( mode.width - requestedWidth );
+		assert( absDiff < std::numeric_limits<int>::max() >> 1 );
+		// Set a penalty bit for modes with lesser than requested width
+		const unsigned penalty = ( absDiff << 1u ) | ( mode.width >= requestedWidth ? 0 : 1 );
+		if( leastWidthPenalty > penalty ) {
+			leastWidthPenalty = penalty;
+			width = mode.width;
+			if( width == requestedWidth ) [[unlikely]] {
+				break;
+			}
+		}
+	}
+
+	int height = -1;
+	unsigned leastHeightPenalty = std::numeric_limits<unsigned>::max();
+	// Get a best matching mode for height preserving the selected width
+	for( unsigned i = 0; i < vid_num_modes; ++i ) {
+		// Require an exact match of the chosen width
+		if( const auto &mode = vid_modes[i]; mode.width == width ) {
+			const auto absDiff = (unsigned)std::abs( mode.height - requestedHeight );
+			assert( absDiff < std::numeric_limits<unsigned>::max() >> 1 );
+			// Set a penalty bit for modes with lesser than requested height
+			const unsigned penalty = ( absDiff << 1u ) | ( mode.height >= requestedHeight ? 0 : 1 );
+			if( leastHeightPenalty > penalty ) {
+				leastHeightPenalty = penalty;
+				height = mode.height;
+				if( height == requestedHeight ) [[unlikely]] {
+					break;
+				}
+			}
+		}
+	}
+
+	assert( width > 0 && height > 0 );
+	return { width, height };
+}
+
+static void RestartVideoAndAllMedia( bool vid_ref_was_active, bool verbose ) {
+	const bool cgameActive = cls.cgameActive;
+	cls.disable_screen = 1;
+
+	CL_ShutdownMedia();
+
+	// stop and free all sounds
+	CL_SoundModule_Shutdown( false );
+
+	FTLIB_FreeFonts( false );
+
+	Cvar_GetLatchedVars( CVAR_LATCH_VIDEO );
+
+	// TODO: Eliminate this
+	if( !VID_LoadRefresh() ) {
+		Sys_Error( "VID_LoadRefresh() failed" );
+	}
+
+	char buffer[16];
+
+	// handle vid size changes
+	if( ( vid_width->integer <= 0 ) || ( vid_height->integer <= 0 ) ) {
+		// set the mode to the default
+		int w, h;
+		if( !VID_GetDefaultMode( &w, &h ) ) {
+			w = vid_modes[0].width;
+			h = vid_modes[0].height;
+		}
+		Cvar_ForceSet( vid_width->name, va_r( buffer, sizeof( buffer ), "%d", w ) );
+		Cvar_ForceSet( vid_height->name, va_r( buffer, sizeof( buffer ), "%d", h ) );
+	}
+
+	if( const auto &mode = vid_modes[vid_max_width_mode_index]; vid_width->integer > mode.width ) {
+		Cvar_ForceSet( vid_width->name, va_r( buffer, sizeof( buffer ), "%d", mode.width ) );
+	}
+	if( const auto &mode = vid_modes[vid_max_height_mode_index]; vid_height->integer > mode.height ) {
+		Cvar_ForceSet( vid_height->name, va_r( buffer, sizeof( buffer ), "%d", mode.width ) );
+	}
+
+	if( vid_fullscreen->integer ) {
+		// snap to the closest fullscreen resolution, width has priority over height
+		const int requestedWidth = vid_width->integer;
+		const int requestedHeight = vid_height->integer;
+		const auto [bestWidth, bestHeight] = getBestFittingMode( requestedWidth, requestedHeight );
+		if( bestWidth != requestedWidth ) {
+			Cvar_ForceSet( vid_width->name, va_r( buffer, sizeof( buffer ), "%d", bestWidth ) );
+		}
+		if( bestHeight != requestedHeight ) {
+			Cvar_ForceSet( vid_height->name, va_r( buffer, sizeof( buffer ), "%d", bestHeight ) );
+		}
+	}
+
+	if( rserr_t err = VID_Sys_Init_( STR_TO_POINTER( vid_parentwid->string ), vid_ref_verbose ); err != rserr_ok ) {
+		Sys_Error( "VID_Init() failed with code %i", err );
+	}
+	if( rserr_t err = VID_ChangeMode(); err != rserr_ok ) {
+		Sys_Error( "VID_ChangeMode() failed with code %i", err );
+	}
+
+	vid_ref_active = true;
+
+	// stop and free all sounds
+	CL_SoundModule_Init( verbose );
+
+	RF_BeginRegistration();
+	SoundSystem::instance()->beginRegistration();
+
+	FTLIB_PrecacheFonts( verbose );
+
+	if( vid_ref_was_active ) {
+		IN_Restart( CmdArgs {} );
+	}
+
+	CL_InitMedia();
+
+	cls.disable_screen = 0;
+
+	SCR_CloseConsole();
+
+	if( cgameActive ) {
+		CL_GameModule_Init();
+		SCR_CloseConsole();
+	}
+
+	RF_EndRegistration();
+	SoundSystem::instance()->endRegistration();
+
+	vid_ref_modified = false;
+	vid_ref_verbose = true;
+}
+
+/*
+** VID_CheckChanges
+*
+* This function gets called once just before drawing each frame, and its sole purpose in life
+* is to check to see if any of the video mode parameters have changed, and if they have to
+* update the rendering DLL and/or video mode to match.
+*/
+void VID_CheckChanges( void ) {
+	const bool vid_ref_was_active = vid_ref_active;
+	const bool verbose = vid_ref_verbose || vid_ref_sound_restart;
+
+	if( win_noalttab->modified ) {
+		VID_EnableAltTab( win_noalttab->integer ? false : true );
+		win_noalttab->modified = false;
+	}
+
+	if( win_nowinkeys->modified ) {
+		VID_EnableWinKeys( win_nowinkeys->integer ? false : true );
+		win_nowinkeys->modified = false;
+	}
+
+	if( vid_fullscreen->modified ) {
+		if( vid_ref_active ) {
+			// try to change video mode without vid_restart
+			if( const rserr_t err = VID_ChangeMode(); err == rserr_restart_required ) {
+				vid_ref_modified = true;
+			}
+		}
+
+		vid_fullscreen->modified = false;
+	}
+
+	if( vid_ref_modified ) {
+		RestartVideoAndAllMedia( vid_ref_was_active, verbose );
+	}
+
+	if( vid_xpos->modified || vid_ypos->modified ) {
+		if( !vid_fullscreen->integer && !vid_borderless->integer ) {
+			VID_UpdateWindowPosAndSize( vid_xpos->integer, vid_ypos->integer );
+		}
+		vid_xpos->modified = false;
+		vid_ypos->modified = false;
+	}
+}
+
+static int VID_CompareModes( const vidmode_t *first, const vidmode_t *second ) {
+	if( first->width == second->width ) {
+		return first->height - second->height;
+	}
+
+	return first->width - second->width;
+}
+
+void VID_InitModes( void ) {
+	const unsigned numAllModes = VID_GetSysModes( nullptr );
+	if( !numAllModes ) {
+		Sys_Error( "Failed to get video modes" );
+	}
+
+	assert( !vid_modes );
+	vid_modes = (vidmode_t *)Q_malloc( numAllModes * sizeof( vidmode_t ) );
+
+	if( const unsigned nextNumAllModes = VID_GetSysModes( vid_modes ); nextNumAllModes != numAllModes ) {
+		Sys_Error( "Failed to get video modes again" );
+	}
+
+	unsigned numModes = 0;
+	for( unsigned i = 0; i < numAllModes; ++i ) {
+		if( vid_modes[i].width >= 1024 && vid_modes[i].height >= 720 ) {
+			vid_modes[numModes++] = vid_modes[i];
+		}
+	}
+
+	if( !numModes ) {
+		Sys_Error( "Failed to find at least a single supported video mode" );
+	}
+
+	qsort( vid_modes, numModes, sizeof( vidmode_t ), ( int ( * )( const void *, const void * ) )VID_CompareModes );
+
+	// Remove duplicate modes in case the sys code failed to do so.
+	vid_num_modes = 0;
+	vid_max_height_mode_index = 0;
+	int prevWidth = 0, prevHeight = 0;
+	for( unsigned i = 0; i < numModes; i++ ) {
+		const int width = vid_modes[i].width;
+		const int height = vid_modes[i].height;
+		if( width != prevWidth || height != prevHeight ) {
+			if( height > vid_modes[vid_max_height_mode_index].height ) {
+				vid_max_height_mode_index = i;
+			}
+			vid_modes[vid_num_modes++] = vid_modes[i];
+			prevWidth = width;
+			prevHeight = height;
+		}
+	}
+
+	vid_max_width_mode_index = vid_num_modes - 1;
+}
+
+void VID_Init( void ) {
+	if( vid_initialized ) {
+		return;
+	}
+
+	VID_InitModes();
+
+	vid_width = Cvar_Get( "vid_width", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	vid_height = Cvar_Get( "vid_height", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	vid_xpos = Cvar_Get( "vid_xpos", "0", CVAR_ARCHIVE );
+	vid_ypos = Cvar_Get( "vid_ypos", "0", CVAR_ARCHIVE );
+	vid_fullscreen = Cvar_Get( "vid_fullscreen", "1", CVAR_ARCHIVE );
+	vid_borderless = Cvar_Get( "vid_borderless", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	vid_displayfrequency = Cvar_Get( "vid_displayfrequency", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	vid_multiscreen_head = Cvar_Get( "vid_multiscreen_head", "-1", CVAR_ARCHIVE );
+	vid_parentwid = Cvar_Get( "vid_parentwid", "0", CVAR_NOSET );
+
+	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
+	win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
+
+	/* Add some console commands that we want to handle */
+	CL_Cmd_Register( "vid_restart"_asView, VID_Restart_f );
+	CL_Cmd_Register( "vid_modelist"_asView, VID_ModeList_f );
+
+	/* Start the graphics mode and load refresh DLL */
+	vid_ref_modified = true;
+	vid_ref_active = false;
+	vid_ref_verbose = true;
+	vid_initialized = true;
+	vid_ref_sound_restart = false;
+	vid_fullscreen->modified = false;
+	vid_borderless->modified = false;
+	vid_ref_prevwidth = vid_modes[0].width; // the smallest mode is the "safe mode"
+	vid_ref_prevheight = vid_modes[0].height;
+
+	FTLIB_Init( true );
+
+	VID_CheckChanges();
+}
+
+void VID_Shutdown( void ) {
+	if( !vid_initialized ) {
+		return;
+	}
+
+	VID_UnloadRefresh();
+
+	FTLIB_Shutdown( true );
+
+	CL_Cmd_Unregister( "vid_restart"_asView );
+	CL_Cmd_Unregister( "vid_modelist"_asView );
+
+	Q_free( vid_modes );
+
+	vid_initialized = false;
+}
+
+qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size ) {
+	return FTLIB_RegisterFont( family, con_fontSystemFallbackFamily->string, style, size );
+}
+
+static void SCR_RegisterConsoleFont( void ) {
+	const char *con_fontSystemFamilyName;
+	const int con_fontSystemStyle = DEFAULT_SYSTEM_FONT_STYLE;
+	int size;
+	float pixelRatio = Con_GetPixelRatio();
+
+	// register system fonts
+	con_fontSystemFamilyName = con_fontSystemMonoFamily->string;
+	if( !con_fontSystemConsoleSize->integer ) {
+		Cvar_SetValue( con_fontSystemConsoleSize->name, DEFAULT_SYSTEM_FONT_SMALL_SIZE );
+	} else if( con_fontSystemConsoleSize->integer > DEFAULT_SYSTEM_FONT_SMALL_SIZE * 2 ) {
+		Cvar_SetValue( con_fontSystemConsoleSize->name, DEFAULT_SYSTEM_FONT_SMALL_SIZE * 2 );
+	} else if( con_fontSystemConsoleSize->integer < DEFAULT_SYSTEM_FONT_SMALL_SIZE / 2 ) {
+		Cvar_SetValue( con_fontSystemConsoleSize->name, DEFAULT_SYSTEM_FONT_SMALL_SIZE / 2 );
+	}
+
+	size = ceil( con_fontSystemConsoleSize->integer * pixelRatio );
+	cls.consoleFont = SCR_RegisterFont( con_fontSystemFamilyName, con_fontSystemStyle, size );
+	if( !cls.consoleFont ) {
+		Cvar_ForceSet( con_fontSystemMonoFamily->name, con_fontSystemMonoFamily->dvalue );
+		con_fontSystemFamilyName = con_fontSystemMonoFamily->dvalue;
+
+		size = DEFAULT_SYSTEM_FONT_SMALL_SIZE;
+		cls.consoleFont = SCR_RegisterFont( con_fontSystemFamilyName, con_fontSystemStyle, size );
+		if( !cls.consoleFont ) {
+			Com_Error( ERR_FATAL, "Couldn't load default font \"%s\"", con_fontSystemMonoFamily->dvalue );
+		}
+
+		Con_CheckResize();
+	}
+}
+
+static void SCR_InitFonts( void ) {
+	con_fontSystemFamily = Cvar_Get( "con_fontSystemFamily", DEFAULT_SYSTEM_FONT_FAMILY, CVAR_ARCHIVE );
+	con_fontSystemMonoFamily = Cvar_Get( "con_fontSystemMonoFamily", DEFAULT_SYSTEM_FONT_FAMILY_MONO, CVAR_ARCHIVE );
+	con_fontSystemFallbackFamily = Cvar_Get( "con_fontSystemFallbackFamily", DEFAULT_SYSTEM_FONT_FAMILY_FALLBACK, CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+	con_fontSystemConsoleSize = Cvar_Get( "con_fontSystemConsoleSize", STR_TOSTR( DEFAULT_SYSTEM_FONT_SMALL_SIZE ), CVAR_ARCHIVE );
+
+	SCR_RegisterConsoleFont();
+}
+
+static void SCR_ShutdownFonts( void ) {
+	cls.consoleFont = NULL;
+
+	con_fontSystemFamily = NULL;
+	con_fontSystemConsoleSize = NULL;
+}
+
+static void SCR_CheckSystemFontsModified( void ) {
+	if( !con_fontSystemMonoFamily ) {
+		return;
+	}
+
+	if( con_fontSystemMonoFamily->modified || con_fontSystemConsoleSize->modified ) {
+		SCR_RegisterConsoleFont();
+		con_fontSystemMonoFamily->modified = false;
+		con_fontSystemConsoleSize->modified = false;
+	}
+}
+
+static int SCR_HorizontalAlignForString( const int x, int align, int width ) {
+	int nx = x;
+
+	if( align % 3 == 0 ) { // left
+		nx = x;
+	}
+	if( align % 3 == 1 ) { // center
+		nx = x - width / 2;
+	}
+	if( align % 3 == 2 ) { // right
+		nx = x - width;
+	}
+
+	return nx;
+}
+
+static int SCR_VerticalAlignForString( const int y, int align, int height ) {
+	int ny = y;
+
+	if( align / 3 == 0 ) { // top
+		ny = y;
+	} else if( align / 3 == 1 ) { // middle
+		ny = y - height / 2;
+	} else if( align / 3 == 2 ) { // bottom
+		ny = y - height;
+	}
+
+	return ny;
+}
+
+size_t SCR_FontHeight( qfontface_t *font ) {
+	return FTLIB_FontHeight( font );
+}
+
+size_t SCR_strWidth( const char *str, qfontface_t *font, size_t maxlen, int flags ) {
+	return FTLIB_StringWidth( str, font, maxlen, flags );
+}
+
+void SCR_DrawRawChar( int x, int y, wchar_t num, qfontface_t *font, const vec4_t color ) {
+	FTLIB_DrawRawChar( x, y, num, font, color );
+}
+
+
+void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color, int flags ) {
+	FTLIB_DrawClampString( x, y, str, xmin, ymin, xmax, ymax, font, color, flags );
+}
+
+int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags ) {
+	int width;
+	int fontHeight;
+
+	if( !str ) {
+		return 0;
+	}
+
+	if( !font ) {
+		font = cls.consoleFont;
+	}
+	fontHeight = FTLIB_FontHeight( font );
+
+	if( ( align % 3 ) != 0 ) { // not left - don't precalculate the width if not needed
+		x = SCR_HorizontalAlignForString( x, align, FTLIB_StringWidth( str, font, 0, flags ) );
+	}
+	y = SCR_VerticalAlignForString( y, align, fontHeight );
+
+	FTLIB_DrawRawString( x, y, str, 0, &width, font, color, flags );
+
+	return width;
+}
+
+void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color ) {
+	R_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, color, cls.whiteShader );
+}
+
+/*
+* CL_AddNetgraph
+*
+* A new packet was just parsed
+*/
+void CL_AddNetgraph( void ) {
+	int i;
+	int ping;
+
+	// if using the debuggraph for something else, don't
+	// add the net lines
+	if( scr_timegraph->integer ) {
+		return;
+	}
+
+	for( i = 0; i < cls.netchan.dropped; i++ )
+		SCR_DebugGraph( 30.0f, 0.655f, 0.231f, 0.169f );
+
+	for( i = 0; i < cl.suppressCount; i++ )
+		SCR_DebugGraph( 30.0f, 0.0f, 1.0f, 0.0f );
+
+	// see what the latency was on this packet
+	ping = cls.realtime - cl.cmd_time[cls.ucmdAcknowledged & CMD_MASK];
+	ping /= 30;
+	if( ping > 30 ) {
+		ping = 30;
+	}
+	SCR_DebugGraph( ping, 1.0f, 0.75f, 0.06f );
+}
+
+void SCR_DebugGraph( float value, float r, float g, float b ) {
+	values[netgraph_current].value = value;
+	values[netgraph_current].color[0] = r;
+	values[netgraph_current].color[1] = g;
+	values[netgraph_current].color[2] = b;
+	values[netgraph_current].color[3] = 1.0f;
+
+	netgraph_current++;
+	netgraph_current &= 1023;
+}
+
+static void SCR_DrawDebugGraph( void ) {
+	int a, x, y, w, i, h, s;
+	float v;
+
+	//
+	// draw the graph
+	//
+	w = viddef.width;
+	x = 0;
+	y = 0 + viddef.height;
+	SCR_DrawFillRect( x, y - scr_graphheight->integer,
+					  w, scr_graphheight->integer, colorBlack );
+
+	s = ( w + 1024 - 1 ) / 1024; //scale for resolutions with width >1024
+
+	for( a = 0; a < w; a++ ) {
+		i = ( netgraph_current - 1 - a + 1024 ) & 1023;
+		v = values[i].value;
+		v = v * scr_graphscale->integer + scr_graphshift->integer;
+
+		if( v < 0 ) {
+			v += scr_graphheight->integer * ( 1 + (int)( -v / scr_graphheight->integer ) );
+		}
+		h = (int)v % scr_graphheight->integer;
+		SCR_DrawFillRect( x + w - 1 - a * s, y - h, s, h, values[i].color );
+	}
+}
+
+void SCR_InitScreen( void ) {
+	scr_consize = Cvar_Get( "scr_consize", "0.4", CVAR_ARCHIVE );
+	scr_conspeed = Cvar_Get( "scr_conspeed", "3", CVAR_ARCHIVE );
+	scr_netgraph = Cvar_Get( "netgraph", "0", 0 );
+	scr_timegraph = Cvar_Get( "timegraph", "0", 0 );
+	scr_debuggraph = Cvar_Get( "debuggraph", "0", 0 );
+	scr_graphheight = Cvar_Get( "graphheight", "32", 0 );
+	scr_graphscale = Cvar_Get( "graphscale", "1", 0 );
+	scr_graphshift = Cvar_Get( "graphshift", "0", 0 );
+
+	scr_initialized = true;
+}
+
+void SCR_ShutdownScreen( void ) {
+	scr_initialized = false;
+}
+
+void SCR_EnableQuickMenu( bool enable ) {
+	cls.quickmenu = enable;
+}
+
+void SCR_RunConsole( int msec ) {
+	// decide on the height of the console
+	if( Con_HasKeyboardFocus() ) {
+		scr_conlines = bound( 0.1f, scr_consize->value, 1.0f );
+	} else {
+		scr_conlines = 0;
+	}
+
+	if( scr_conlines < scr_con_current ) {
+		scr_con_current -= scr_conspeed->value * msec * 0.001f;
+		if( scr_conlines > scr_con_current ) {
+			scr_con_current = scr_conlines;
+		}
+
+	} else if( scr_conlines > scr_con_current ) {
+		scr_con_current += scr_conspeed->value * msec * 0.001f;
+		if( scr_conlines < scr_con_current ) {
+			scr_con_current = scr_conlines;
+		}
+	}
+}
+
+void SCR_CloseConsole() {
+	scr_con_current = 0.0f;
+	Con_Close();
+}
+
+void SCR_BeginLoadingPlaque( void ) {
+	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+	cl.configStrings.clear();
+
+	scr_conlines = 0;       // none visible
+	scr_draw_loading = 2;   // clear to black first
+
+	SCR_UpdateScreen();
+}
+
+void SCR_EndLoadingPlaque( void ) {
+	cls.disable_screen = 0;
+	Con_ClearNotify();
+}
+
+void SCR_RegisterConsoleMedia() {
+	cls.whiteShader = R_RegisterPic( "$whiteimage" );
+	cls.consoleShader = R_RegisterPic( "gfx/ui/console" );
+
+	SCR_InitFonts();
+}
+
+void SCR_ShutDownConsoleMedia( void ) {
+	SCR_ShutdownFonts();
+}
+
+static void SCR_RenderView( bool timedemo ) {
+	if( timedemo ) {
+		if( !cl.timedemo.startTime ) {
+			cl.timedemo.startTime = Sys_Milliseconds();
+		}
+		cl.timedemo.frames++;
+	}
+
+	// frame is not valid until we load the CM data
+	if( cl.cms != NULL ) {
+		CL_GameModule_RenderView();
+	}
+}
+
+void SCR_UpdateScreen( void ) {
+	// if the screen is disabled (loading plaque is up, or vid mode changing)
+	// do nothing at all
+	if( cls.disable_screen ) {
+		if( Sys_Milliseconds() - cls.disable_screen > 120000 ) {
+			cls.disable_screen = 0;
+			clNotice() << "Loading plaque timed out";
+		}
+		return;
+	}
+
+	if( !scr_initialized || !con_initialized || !cls.mediaInitialized ) {
+		return;     // not ready yet
+	}
+
+	Con_CheckResize();
+
+	SCR_CheckSystemFontsModified();
+
+	bool canRenderView = false;
+	bool canDrawConsole = false;
+	bool canDrawDebugGraph = false;
+	bool canDrawConsoleNotify = false;
+
+	if( scr_draw_loading == 2 ) {
+		// loading plaque over APP_STARTUP_COLOR screen
+		scr_draw_loading = 0;
+	} else if( cls.state == CA_DISCONNECTED ) {
+		canDrawConsole = true;
+	} else if( cls.state == CA_CONNECTED ) {
+		if( cls.cgameActive ) {
+			canRenderView = true;
+		}
+	} else if( cls.state == CA_ACTIVE ) {
+		canRenderView = true;
+
+		if( scr_timegraph->integer ) {
+			SCR_DebugGraph( cls.frametime * 0.3f, 1, 1, 1 );
+		}
+
+		if( scr_debuggraph->integer || scr_timegraph->integer || scr_netgraph->integer ) {
+			canDrawDebugGraph = true;
+		}
+
+		canDrawConsole = true;
+		canDrawConsoleNotify = true;
+	}
+
+	// Perform UI refresh (that may include binding UI GL context and unbinding it) first
+	auto *const uiSystem = wsw::ui::UISystem::instance();
+	uiSystem->refresh();
+
+	// TODO: Pass as flags
+	const bool forcevsync = ( cls.state == CA_DISCONNECTED && scr_con_current );
+	const bool forceclear = true;
+	const bool timedemo = cl_timedemo->integer && cls.demoPlayer.playing;
+
+	RF_BeginFrame( forceclear, forcevsync, timedemo );
+
+	if( canRenderView ) {
+		SCR_RenderView( timedemo );
+	}
+	if( canDrawConsoleNotify ) {
+		Con_DrawNotify( viddef.width, viddef.height );
+	}
+
+	uiSystem->drawSelfInMainContext();
+
+	if( canDrawDebugGraph ) {
+		SCR_DrawDebugGraph();
+	}
+
+	if( canDrawConsole ) {
+		if( scr_con_current > 0.0f ) {
+			Con_DrawConsole( viddef.width, viddef.height * scr_con_current );
+		}
+	}
+
+	RF_EndFrame();
+}
 
 /*
 * CL_AddReliableCommand
@@ -158,9 +1583,6 @@ void CL_UpdateClientCommandsToServer( msg_t *msg ) {
 	}
 }
 
-/*
-* CL_ForwardToServer_f
-*/
 void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
 	if( cls.demoPlayer.playing ) {
 		return;
@@ -177,9 +1599,6 @@ void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
 	}
 }
 
-/*
-* CL_ServerDisconnect_f
-*/
 void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
 	char menuparms[MAX_STRING_CHARS];
 	int type;
@@ -202,17 +1621,11 @@ void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
 	CL_Cmd_ExecuteNow( menuparms );
 }
 
-/*
-* CL_Quit
-*/
 void CL_Quit( void ) {
 	CL_Disconnect( NULL );
 	Com_Quit( {} );
 }
 
-/*
-* CL_Quit_f
-*/
 static void CL_Quit_f( const CmdArgs & ) {
 	CL_Quit();
 }
@@ -286,9 +1699,6 @@ static void CL_CheckForResend( void ) {
 	}
 }
 
-/*
-* CL_Connect
-*/
 static void CL_Connect( const char *servername, socket_type_t type, netadr_t *address, const char *serverchain ) {
 	netadr_t socketaddress;
 	connstate_t newstate;
@@ -354,9 +1764,6 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 	cls.mv = false;
 }
 
-/*
-* CL_Connect_Cmd_f
-*/
 static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 	netadr_t serveraddress;
 	char *servername, password[64], autowatch[64] = { 0 };
@@ -425,10 +1832,6 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	// wait until MM allows us to connect to a server
-	// (not in a middle of login process or anything)
-	// CLStatsowFacade::Instance()->WaitUntilConnectionAllowed();
-
 	servername = Q_strdup( connectstring );
 	CL_Connect( servername, ( serveraddress.type == NA_LOOPBACK ? SOCKET_LOOPBACK : socket ),
 				&serveraddress, serverchain );
@@ -437,9 +1840,6 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 	Q_free( connectstring_base );
 }
 
-/*
-* CL_Connect_f
-*/
 static void CL_Connect_f( const CmdArgs &cmdArgs ) {
 	CL_Connect_Cmd_f( SOCKET_UDP, cmdArgs );
 }
@@ -516,44 +1916,26 @@ static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 	NET_SendPacket( socket, message, (int)strlen( message ) + 1, address );
 }
 
-/*
-* CL_GetClipboardData
-*/
 char *CL_GetClipboardData( void ) {
 	return Sys_GetClipboardData();
 }
 
-/*
-* CL_SetClipboardData
-*/
 void CL_SetClipboardData( const char *data ) {
 	Sys_SetClipboardData( data );
 }
 
-/*
-* CL_FreeClipboardData
-*/
 void CL_FreeClipboardData( char *data ) {
 	Sys_FreeClipboardData( data );
 }
 
-/*
-* CL_IsBrowserAvailable
-*/
 bool CL_IsBrowserAvailable( void ) {
 	return Sys_IsBrowserAvailable();
 }
 
-/*
-* CL_OpenURLInBrowser
-*/
 void CL_OpenURLInBrowser( const char *url ) {
 	Sys_OpenURLInBrowser( url );
 }
 
-/*
-* CL_GetBaseServerURL
-*/
 size_t CL_GetBaseServerURL( char *buffer, size_t buffer_size ) {
 	const char *web_url = cls.httpbaseurl;
 
@@ -569,16 +1951,10 @@ size_t CL_GetBaseServerURL( char *buffer, size_t buffer_size ) {
 	return strlen( web_url );
 }
 
-/*
-* CL_ResetServerCount
-*/
 void CL_ResetServerCount( void ) {
 	cl.servercount = -1;
 }
 
-/*
-* CL_BeginRegistration
-*/
 static void CL_BeginRegistration( void ) {
 	if( cls.registrationOpen ) {
 		return;
@@ -591,9 +1967,6 @@ static void CL_BeginRegistration( void ) {
 	SoundSystem::instance()->beginRegistration();
 }
 
-/*
-* CL_EndRegistration
-*/
 static void CL_EndRegistration( void ) {
 	if( !cls.registrationOpen ) {
 		return;
@@ -607,9 +1980,6 @@ static void CL_EndRegistration( void ) {
 	SoundSystem::instance()->endRegistration();
 }
 
-/*
-* CL_ClearState
-*/
 void CL_ClearState( void ) {
 	if( cl.cms ) {
 		CM_ReleaseReference( cl.cms );
@@ -673,7 +2043,6 @@ void CL_ClearState( void ) {
 	}
 }
 
-
 /*
 * CL_SetNext_f
 *
@@ -691,10 +2060,6 @@ static void CL_SetNext_f( const CmdArgs &cmdArgs ) {
 	clNotice() << "Next:" << wsw::StringView( cl_nextString );
 }
 
-
-/*
-* CL_ExecuteNext
-*/
 static void CL_ExecuteNext( void ) {
 	if( !strlen( cl_nextString ) ) {
 		return;
@@ -719,7 +2084,6 @@ static void CL_Disconnect_SendCommand( void ) {
 	CL_SendMessagesToServer( true );
 }
 
-extern qbufPipe_s *g_svCmdPipe;
 
 /*
 * CL_Disconnect
@@ -1144,9 +2508,6 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 	Com_Printf( "Unknown connectionless packet from %s\n%s\n", NET_AddressToString( address ), c );
 }
 
-/*
-* CL_ProcessPacket
-*/
 static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 	int zerror;
 
@@ -1170,9 +2531,6 @@ static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 	return true;
 }
 
-/*
-* CL_ReadPackets
-*/
 void CL_ReadPackets( void ) {
 	static msg_t msg;
 	static uint8_t msgData[MAX_MSGLEN];
@@ -1265,26 +2623,2062 @@ void CL_ReadPackets( void ) {
 	}
 }
 
-//=============================================================================
+/*
+* CL_DownloadRequest
+*
+* Request file download
+* return false if couldn't request it for some reason
+* Files with .pk3 or .pak extension have to have gamedir attached
+* Other files must not have gamedir
+*/
+bool CL_DownloadRequest( const char *filename, bool requestpak ) {
+	if( cls.download.requestname ) {
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "A download is already in progress";
+		return false;
+	}
+
+	if( !COM_ValidateRelativeFilename( filename ) ) {
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "Invalid filename";
+		return false;
+	}
+
+	if( FS_CheckPakExtension( filename ) ) {
+		if( FS_PakFileExists( filename ) ) {
+			clWarning() << "Can't download" << wsw::StringView( filename ) << "The file already exists";
+			return false;
+		}
+
+		if( !Q_strnicmp( COM_FileBase( filename ), "modules", strlen( "modules" ) ) ) {
+			return false;
+		}
+	} else {
+		if( FS_FOpenFile( filename, NULL, FS_READ ) != -1 ) {
+			clWarning() << "Can't download" << wsw::StringView( filename ) << "File already exists";
+			return false;
+		}
+
+		if( !requestpak ) {
+			const char *extension;
+
+			// only allow demo downloads
+			extension = COM_FileExtension( filename );
+			if( !extension || Q_stricmp( extension, APP_DEMO_EXTENSION_STR ) ) {
+				clWarning() << "Can't download, got arbitrary file type" << wsw::StringView( filename );
+				return false;
+			}
+		}
+	}
+
+	if( cls.socket->type == SOCKET_LOOPBACK ) {
+		clWarning() << "Can't download" << wsw::StringView( filename ) << "Loopback server";
+		return false;
+	}
+
+	clNotice() << "Asking to download" << wsw::StringView( filename );
+
+	cls.download.requestpak = requestpak;
+	cls.download.requestname = (char *)Q_malloc( sizeof( char ) * ( strlen( filename ) + 1 ) );
+	Q_strncpyz( cls.download.requestname, filename, sizeof( char ) * ( strlen( filename ) + 1 ) );
+	cls.download.timeout = Sys_Milliseconds() + 5000;
+	CL_AddReliableCommand( va( "download %i \"%s\"", requestpak, filename ) );
+
+	return true;
+}
 
 /*
-* CL_Userinfo_f
+* CL_CheckOrDownloadFile
+*
+* Returns true if the file exists or couldn't send download request
+* Files with .pk3 or .pak extension have to have gamedir attached
+* Other files must not have gamedir
 */
+bool CL_CheckOrDownloadFile( const char *filename ) {
+	const char *ext;
+
+	if( !cl_downloads->integer ) {
+		return true;
+	}
+
+	if( !COM_ValidateRelativeFilename( filename ) ) {
+		return true;
+	}
+
+	ext = COM_FileExtension( filename );
+	if( !ext ) {
+		return true;
+	}
+
+	if( FS_CheckPakExtension( filename ) ) {
+		if( FS_PakFileExists( filename ) ) {
+			return true;
+		}
+	} else {
+		if( FS_FOpenFile( filename, NULL, FS_READ ) != -1 ) {
+			return true;
+		}
+	}
+
+	if( !CL_DownloadRequest( filename, true ) ) {
+		return true;
+	}
+
+	cls.download.requestnext = true; // call CL_RequestNextDownload when done
+
+	return false;
+}
+
+/*
+* CL_DownloadComplete
+*
+* Checks downloaded file's checksum, renames it and adds to the filesystem.
+*/
+static void CL_DownloadComplete( void ) {
+	unsigned checksum = 0;
+	int length;
+
+	FS_FCloseFile( cls.download.filenum );
+	cls.download.filenum = 0;
+
+	// verify checksum
+	if( FS_CheckPakExtension( cls.download.name ) ) {
+		if( !FS_IsPakValid( cls.download.tempname, &checksum ) ) {
+			clWarning() << "Downloaded file is not a valid pack file. Removing it";
+			FS_RemoveBaseFile( cls.download.tempname );
+			return;
+		}
+	} else {
+		length = FS_LoadBaseFile( cls.download.tempname, NULL, NULL, 0 );
+		if( length < 0 ) {
+			clWarning() << "Couldn't load downloaded file";
+			return;
+		}
+		checksum = FS_ChecksumBaseFile( cls.download.tempname, false );
+	}
+
+	if( cls.download.checksum != checksum ) {
+		clWarning() << "Downloaded file has wrong checksum. Removing it";
+		FS_RemoveBaseFile( cls.download.tempname );
+		return;
+	}
+
+	if( !FS_MoveBaseFile( cls.download.tempname, cls.download.name ) ) {
+		clWarning() << "Failed to rename the downloaded file";
+		return;
+	}
+
+	// Maplist hook so we also know when a new map is added
+	if( FS_CheckPakExtension( cls.download.name ) ) {
+		ML_Update();
+	}
+
+	cls.download.successCount++;
+	cls.download.timeout = 0;
+}
+
+void CL_FreeDownloadList( void ) {
+	download_list_t *next;
+
+	while( cls.download.list ) {
+		next = cls.download.list->next;
+		Q_free( cls.download.list->filename );
+		Q_free( cls.download.list );
+		cls.download.list = next;
+	}
+}
+
+void CL_DownloadDone( void ) {
+	bool requestnext;
+
+	if( cls.download.name ) {
+		CL_StopServerDownload();
+	}
+
+	Q_free( cls.download.requestname );
+	cls.download.requestname = NULL;
+
+	requestnext = cls.download.requestnext;
+	cls.download.requestnext = false;
+	cls.download.requestpak = false;
+	cls.download.timeout = 0;
+	cls.download.timestart = 0;
+	cls.download.offset = cls.download.baseoffset = 0;
+	cls.download.web = false;
+	cls.download.filenum = 0;
+	cls.download.cancelled = false;
+
+	// the server has changed map during the download
+	if( cls.download.pending_reconnect ) {
+		cls.download.pending_reconnect = false;
+		CL_FreeDownloadList();
+		CL_ServerReconnect_f( {} );
+		return;
+	}
+
+	if( requestnext && cls.state > CA_DISCONNECTED ) {
+		CL_RequestNextDownload();
+	}
+}
+
+static void CL_WebDownloadDoneCb( int status, const char *contentType, void *privatep ) {
+	download_t download = cls.download;
+	bool disconnect = download.disconnect;
+	bool cancelled = download.cancelled;
+	bool success = ( download.offset == download.size ) && ( status > -1 );
+	bool try_non_official = download.web_official && !download.web_official_only;
+
+	clNotice() << "Web download" << wsw::StringView( download.tempname ) << wsw::StringView( success ? "successful" : "failed" );
+
+	if( success ) {
+		CL_DownloadComplete();
+	}
+	if( cancelled ) {
+		cls.download.requestnext = false;
+	}
+
+	// check if user pressed escape to stop the downloa
+	if( disconnect ) {
+		CL_Disconnect( NULL ); // this also calls CL_DownloadDone()
+		return;
+	}
+
+	// try a non-official mirror (the builtin HTTP server or a remote mirror)
+	if( !success && !cancelled && try_non_official ) {
+		int size = download.size;
+		char *filename = Q_strdup( download.origname );
+		unsigned checksum = download.checksum;
+		char *url = Q_strdup( download.web_url );
+		bool allow_localhttp = download.web_local_http;
+
+		cls.download.cancelled = true; // remove the temp file
+		CL_StopServerDownload();
+		CL_InitServerDownload( filename, size, checksum, allow_localhttp, url, false );
+
+		Q_free( filename );
+		Q_free( url );
+		return;
+	}
+
+	CL_DownloadDone();
+}
+
+static size_t CL_WebDownloadReadCb( const void *buf, size_t numb, float percentage, int status,
+									const char *contentType, void *privatep ) {
+	bool stop = cls.download.disconnect || cls.download.cancelled || status < 0 || status >= 300;
+	size_t write = 0;
+
+	if( !stop ) {
+		write = FS_Write( buf, numb, cls.download.filenum );
+	}
+
+	// ignore percentage passed by the downloader as it doesn't account for total file size
+	// of resumed downloads
+	cls.download.offset += write;
+	cls.download.percent = (double)cls.download.offset / (double)cls.download.size;
+	Q_clamp( cls.download.percent, 0, 1 );
+
+	Cvar_ForceSet( "cl_download_percent", va( "%.1f", cls.download.percent * 100 ) );
+
+	cls.download.timeout = 0;
+
+	// abort if disconnected, canclled or writing failed
+	return stop ? !numb : write;
+}
+
+/*
+* CL_InitDownload
+*
+* Hanldles server's initdownload message, starts web or server download if possible
+*/
+static void CL_InitServerDownload( const char *filename, size_t size, unsigned checksum, bool allow_localhttpdownload,
+								   const char *url, bool initial ) {
+	size_t alloc_size;
+	bool modules_download = false;
+	bool explicit_pure_download = false;
+	bool force_web_official = initial && cls.download.requestpak;
+	bool official_web_download = false;
+	bool official_web_only = false;
+	const char *baseurl;
+	download_list_t *dl;
+
+	// ignore download commands coming from demo files
+	if( cls.demoPlayer.playing ) {
+		return;
+	}
+
+	if( !cls.download.requestname ) {
+		clWarning() << "Got init download message without request";
+		return;
+	}
+
+	if( cls.download.filenum || cls.download.web ) {
+		clWarning() << "Got init download message while already downloading";
+		return;
+	}
+
+	if( size == (size_t)-1 ) {
+		// means that download was refused
+		// if it's refused, url field holds the reason
+		clWarning() << "Server refused download request" << wsw::StringView( url );
+		CL_DownloadDone();
+		return;
+	}
+
+	if( size <= 0 ) {
+		clWarning() << "Server gave invalid size, not downloading";
+		CL_DownloadDone();
+		return;
+	}
+
+	if( checksum == 0 ) {
+		clWarning() << "Server didn't provide checksum, not downloading";
+		CL_DownloadDone();
+		return;
+	}
+
+	if( !COM_ValidateRelativeFilename( filename ) ) {
+		clWarning() << "Not downloading, invalid filename" << wsw::StringView( filename );
+		CL_DownloadDone();
+		return;
+	}
+
+	if( FS_CheckPakExtension( filename ) != cls.download.requestpak ) {
+		const char *requested = cls.download.requestpak ? "pak" : "normal";
+		const char *got = cls.download.requestpak ? "normal" : "pak";
+		Com_Printf( "Got a %s file when requesting a %s file, not downloading\n", got, requested );
+		CL_DownloadDone();
+		return;
+	}
+
+	if( !strchr( filename, '/' ) ) {
+		clWarning() << "Refusing to download file with no gamedir", wsw::StringView( filename );
+		CL_DownloadDone();
+		return;
+	}
+
+	// check that it is in game or basegame dir
+	const wsw::StringView fileNameView( filename );
+	if( !fileNameView.startsWith( kDataDirectory ) || fileNameView.maybeAt( kDataDirectory.size() ) != std::optional( '/' ) ) {
+		clWarning() << "Can't download, invalid game directory: %s\n" << wsw::StringView( filename );
+		CL_DownloadDone();
+		return;
+	}
+
+	if( FS_CheckPakExtension( filename ) ) {
+		if( strchr( strchr( filename, '/' ) + 1, '/' ) ) {
+			clWarning() << "Refusing to download pack file to subdirectory: %s\n" << wsw::StringView( filename );
+			CL_DownloadDone();
+			return;
+		}
+
+		modules_download = !Q_strnicmp( COM_FileBase( filename ), "modules", strlen( "modules" ) );
+
+		if( modules_download ) {
+			CL_DownloadDone();
+			return;
+		}
+
+		if( FS_PakFileExists( filename ) ) {
+			clWarning() << "Can't download, file already exists" << wsw::StringView( filename );
+			CL_DownloadDone();
+			return;
+		}
+
+		explicit_pure_download = FS_IsExplicitPurePak( filename, NULL );
+	} else {
+		if( strcmp( cls.download.requestname, strchr( filename, '/' ) + 1 ) ) {
+			clWarning() << "Can't download, got different file than requested" << wsw::StringView( filename );
+			CL_DownloadDone();
+			return;
+		}
+	}
+
+	if( initial ) {
+		if( cls.download.requestnext ) {
+			dl = cls.download.list;
+			while( dl != NULL ) {
+				if( !Q_stricmp( dl->filename, filename ) ) {
+					clWarning() << "Skipping, already tried downloading" << wsw::StringView( filename );
+					CL_DownloadDone();
+					return;
+				}
+				dl = dl->next;
+			}
+		}
+	}
+
+	official_web_only = modules_download || explicit_pure_download;
+	official_web_download = force_web_official || official_web_only;
+
+	alloc_size = strlen( "downloads" ) + 1 /* '/' */ + strlen( filename ) + 1;
+	cls.download.name = (char *)Q_malloc( alloc_size );
+	if( official_web_download || !cls.download.requestpak ) {
+		// it's an official pak, otherwise
+		// if we're not downloading a pak, this must be a demo so drop it into the gamedir
+		Q_snprintfz( cls.download.name, alloc_size, "%s", filename );
+	} else {
+		if( FS_DownloadsDirectory() == NULL ) {
+			clWarning() << "Can't download, downloads directory is disabled";
+			CL_DownloadDone();
+			return;
+		}
+		Q_snprintfz( cls.download.name, alloc_size, "%s/%s", "downloads", filename );
+	}
+
+	alloc_size = strlen( cls.download.name ) + strlen( ".tmp" ) + 1;
+	cls.download.tempname = (char *)Q_malloc( alloc_size );
+	Q_snprintfz( cls.download.tempname, alloc_size, "%s.tmp", cls.download.name );
+
+	cls.download.origname = Q_strdup( filename );
+	cls.download.web = false;
+	cls.download.web_official = official_web_download;
+	cls.download.web_official_only = official_web_only;
+	cls.download.web_url = Q_strdup( url );
+	cls.download.web_local_http = allow_localhttpdownload;
+	cls.download.cancelled = false;
+	cls.download.disconnect = false;
+	cls.download.size = size;
+	cls.download.checksum = checksum;
+	cls.download.percent = 0;
+	cls.download.timeout = 0;
+	cls.download.retries = 0;
+	cls.download.timestart = Sys_Milliseconds();
+	cls.download.offset = 0;
+	cls.download.baseoffset = 0;
+	cls.download.pending_reconnect = false;
+
+	Cvar_ForceSet( "cl_download_name", COM_FileBase( filename ) );
+	Cvar_ForceSet( "cl_download_percent", "0" );
+
+	if( initial ) {
+		if( cls.download.requestnext ) {
+			dl = (download_list_t *)Q_malloc( sizeof( download_list_t ) );
+			dl->filename = Q_strdup( filename );
+			dl->next = cls.download.list;
+			cls.download.list = dl;
+		}
+	}
+
+	baseurl = cls.httpbaseurl;
+	if( official_web_download ) {
+		baseurl = APP_UPDATE_URL APP_SERVER_UPDATE_DIRECTORY;
+		allow_localhttpdownload = false;
+	}
+
+	if( official_web_download ) {
+		cls.download.web = true;
+		Com_Printf( "Web download: %s from %s/%s\n", cls.download.tempname, baseurl, filename );
+	} else if( cl_downloads_from_web->integer && allow_localhttpdownload && url && url[0] != 0 ) {
+		cls.download.web = true;
+		Com_Printf( "Web download: %s from %s/%s\n", cls.download.tempname, baseurl, url );
+	} else if( cl_downloads_from_web->integer && url && url[0] != 0 ) {
+		cls.download.web = true;
+		Com_Printf( "Web download: %s from %s\n", cls.download.tempname, url );
+	} else {
+		Com_Printf( "Server download: %s\n", cls.download.tempname );
+	}
+
+	cls.download.baseoffset = cls.download.offset =
+		(size_t)FS_FOpenBaseFile( cls.download.tempname, &cls.download.filenum, FS_APPEND );
+
+	if( !cls.download.filenum ) {
+		Com_Printf( "Can't download, couldn't open %s for writing\n", cls.download.tempname );
+		CL_DownloadDone();
+		return;
+	}
+
+	if( cls.download.web ) {
+		char *referer, *fullurl;
+		const char *headers[] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+
+		if( cls.download.offset == cls.download.size ) {
+			// special case for completed downloads to avoid passing empty HTTP range
+			CL_WebDownloadDoneCb( 200, "", NULL );
+			return;
+		}
+
+		alloc_size = strlen( APP_URI_SCHEME ) + strlen( NET_AddressToString( &cls.serveraddress ) ) + 1;
+		referer = (char *)alloca( alloc_size );
+		Q_snprintfz( referer, alloc_size, APP_URI_SCHEME "%s", NET_AddressToString( &cls.serveraddress ) );
+		Q_strlwr( referer );
+
+		if( official_web_download ) {
+			alloc_size = strlen( baseurl ) + 1 + strlen( filename ) + 1;
+			fullurl = (char *)alloca( alloc_size );
+			Q_snprintfz( fullurl, alloc_size, "%s/%s", baseurl, filename );
+		} else if( allow_localhttpdownload ) {
+			alloc_size = strlen( baseurl ) + 1 + strlen( url ) + 1;
+			fullurl = (char *)alloca( alloc_size );
+			Q_snprintfz( fullurl, alloc_size, "%s/%s", baseurl, url );
+		} else {
+			size_t url_len = strlen( url );
+			alloc_size = url_len + 1 + strlen( filename ) * 3 + 1;
+			fullurl = (char *)alloca( alloc_size );
+			Q_snprintfz( fullurl, alloc_size, "%s/", url );
+			Q_urlencode_unsafechars( filename, fullurl + url_len + 1, alloc_size - url_len - 1 );
+		}
+
+		headers[0] = "Referer";
+		headers[1] = referer;
+
+		CL_AddSessionHttpRequestHeaders( fullurl, &headers[2] );
+
+		CL_AsyncStreamRequest( fullurl, headers, cl_downloads_from_web_timeout->integer / 100, (int)cls.download.offset,
+							   CL_WebDownloadReadCb, CL_WebDownloadDoneCb, NULL, NULL, false );
+
+		return;
+	}
+
+	cls.download.timeout = Sys_Milliseconds() + 3000;
+	cls.download.retries = 0;
+
+	CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
+}
+
+static void CL_InitDownload_f( const CmdArgs &cmdArgs ) {
+	const char *filename;
+	const char *url;
+	int size;
+	unsigned checksum;
+	bool allow_localhttpdownload;
+
+	// ignore download commands coming from demo files
+	if( cls.demoPlayer.playing ) {
+		return;
+	}
+
+	// read the data
+	filename = Cmd_Argv( 1 );
+	size = atoi( Cmd_Argv( 2 ) );
+	checksum = (unsigned)strtoul( Cmd_Argv( 3 ), NULL, 10 );
+	allow_localhttpdownload = ( atoi( Cmd_Argv( 4 ) ) != 0 ) && cls.httpbaseurl != NULL;
+	url = Cmd_Argv( 5 );
+
+	CL_InitServerDownload( filename, size, (unsigned)checksum, allow_localhttpdownload, url, true );
+}
+
+void CL_StopServerDownload( void ) {
+	if( cls.download.filenum > 0 ) {
+		FS_FCloseFile( cls.download.filenum );
+		cls.download.filenum = 0;
+	}
+
+	if( cls.download.cancelled ) {
+		FS_RemoveBaseFile( cls.download.tempname );
+	}
+
+	Q_free( cls.download.name );
+	cls.download.name = NULL;
+
+	Q_free( cls.download.tempname );
+	cls.download.tempname = NULL;
+
+	Q_free( cls.download.origname );
+	cls.download.origname = NULL;
+
+	Q_free( cls.download.web_url );
+	cls.download.web_url = NULL;
+
+	cls.download.offset = 0;
+	cls.download.size = 0;
+	cls.download.percent = 0;
+	cls.download.timeout = 0;
+	cls.download.retries = 0;
+	cls.download.web = false;
+
+	Cvar_ForceSet( "cl_download_name", "" );
+	Cvar_ForceSet( "cl_download_percent", "0" );
+}
+
+/*
+* CL_RetryDownload
+* Resends download request
+* Also aborts download if we have retried too many times
+*/
+static void CL_RetryDownload( void ) {
+	if( ++cls.download.retries > 5 ) {
+		clNotice() << "Download timed out" << wsw::StringView( cls.download.name );
+
+		// let the server know we're done
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) );
+		CL_DownloadDone();
+	} else {
+		cls.download.timeout = Sys_Milliseconds() + 3000;
+		CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
+	}
+}
+
+/*
+* CL_CheckDownloadTimeout
+* Retry downloading if too much time has passed since last download packet was received
+*/
+void CL_CheckDownloadTimeout( void ) {
+	if( !cls.download.timeout || cls.download.timeout > Sys_Milliseconds() ) {
+		return;
+	}
+
+	if( cls.download.filenum ) {
+		CL_RetryDownload();
+	} else {
+		clWarning() << "Download request timed out";
+		CL_DownloadDone();
+	}
+}
+
+void CL_DownloadStatus_f( const CmdArgs & ) {
+	if( !cls.download.requestname ) {
+		clNotice() << "No download active";
+		return;
+	}
+
+	if( !cls.download.name ) {
+		Com_Printf( "%s: Requesting\n", COM_FileBase( cls.download.requestname ) );
+		return;
+	}
+
+	Com_Printf( "%s: %s download %3.2f%c done\n", COM_FileBase( cls.download.name ),
+				( cls.download.web ? "Web" : "Server" ), cls.download.percent * 100.0f, '%' );
+}
+
+void CL_DownloadCancel_f( const CmdArgs & ) {
+	if( !cls.download.requestname ) {
+		clNotice() << "No download active";
+		return;
+	}
+
+	if( !cls.download.name ) {
+		CL_DownloadDone();
+		clNotice() << "Canceled download request";
+		return;
+	}
+
+	clNotice() << "Canceled download of" << wsw::StringView( cls.download.name );
+
+	cls.download.cancelled = true;
+
+	if( !cls.download.web ) {
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) ); // let the server know we're done
+		CL_DownloadDone();
+	}
+}
+
+/*
+* CL_ParseDownload
+* Handles download message from the server.
+* Writes data to the file and requests next download block.
+*/
+static void CL_ParseDownload( msg_t *msg ) {
+	size_t size, offset;
+	char *svFilename;
+
+	// read the data
+	svFilename = MSG_ReadString( msg );
+	offset = MSG_ReadInt32( msg );
+	size = MSG_ReadInt32( msg );
+
+	if( cls.demoPlayer.playing ) {
+		// ignore download commands coming from demo files
+		return;
+	}
+
+	if( msg->readcount + size > msg->cursize ) {
+		clWarning() << "Download message didn't have as much data as it promised";
+		CL_RetryDownload();
+		return;
+	}
+
+	if( !cls.download.filenum ) {
+		clWarning() << "Download message while not dowloading";
+		msg->readcount += size;
+		return;
+	}
+
+	if( Q_stricmp( cls.download.name, svFilename ) ) {
+		clWarning() << "Download message for wrong file";
+		msg->readcount += size;
+		return;
+	}
+
+	if( offset + size > cls.download.size ) {
+		clWarning() << "Invalid download message";
+		msg->readcount += size;
+		CL_RetryDownload();
+		return;
+	}
+
+	if( cls.download.offset != offset ) {
+		clWarning() << "Download message for wrong position";
+		msg->readcount += size;
+		CL_RetryDownload();
+		return;
+	}
+
+	FS_Write( msg->data + msg->readcount, size, cls.download.filenum );
+	msg->readcount += size;
+	cls.download.offset += size;
+	cls.download.percent = (double)cls.download.offset / (double)cls.download.size;
+	Q_clamp( cls.download.percent, 0, 1 );
+
+	Cvar_ForceSet( "cl_download_percent", va( "%.1f", cls.download.percent * 100 ) );
+
+	if( cls.download.offset < cls.download.size ) {
+		cls.download.timeout = Sys_Milliseconds() + 3000;
+		cls.download.retries = 0;
+
+		CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
+	} else {
+		clWarning() << "Download complete" << wsw::StringView( cls.download.name );
+
+		CL_DownloadComplete();
+
+		// let the server know we're done
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -1 ) );
+
+		CL_DownloadDone();
+	}
+}
+
+static void CL_ParseServerData( msg_t *msg ) {
+	int i, sv_bitflags, numpure;
+	int http_portnum;
+	bool old_sv_pure;
+
+	clDebug() << "Serverdata packet received";
+
+	// wipe the client_state_t struct
+
+	CL_ClearState();
+	CL_SetClientState( CA_CONNECTED );
+
+	// parse protocol version number
+	i = MSG_ReadInt32( msg );
+
+	if( i != APP_PROTOCOL_VERSION && !( cls.demoPlayer.playing && i == APP_DEMO_PROTOCOL_VERSION ) ) {
+		Com_Error( ERR_DROP, "Server returned version %i, not %i", i, APP_PROTOCOL_VERSION );
+	}
+
+	cl.servercount = MSG_ReadInt32( msg );
+	cl.snapFrameTime = (unsigned int)MSG_ReadInt16( msg );
+	cl.gamestart = true;
+
+	// set extrapolation time to half snapshot time
+	Cvar_ForceSet( "cl_extrapolationTime", va( "%i", (unsigned int)( cl.snapFrameTime * 0.5 ) ) );
+	cl_extrapolationTime->modified = false;
+
+	// parse player entity number
+	cl.playernum = MSG_ReadInt16( msg );
+
+	// get the full level name
+	Q_strncpyz( cl.servermessage, MSG_ReadString( msg ), sizeof( cl.servermessage ) );
+
+	sv_bitflags = MSG_ReadUint8( msg );
+
+	if( cls.demoPlayer.playing ) {
+		cls.reliable = ( sv_bitflags & SV_BITFLAGS_RELIABLE );
+	} else {
+		if( cls.reliable != ( ( sv_bitflags & SV_BITFLAGS_RELIABLE ) != 0 ) ) {
+			Com_Error( ERR_DROP, "Server and client disagree about connection reliability" );
+		}
+	}
+
+	// builting HTTP server port
+	if( cls.httpbaseurl ) {
+		Q_free( cls.httpbaseurl );
+		cls.httpbaseurl = NULL;
+	}
+
+	if( ( sv_bitflags & SV_BITFLAGS_HTTP ) != 0 ) {
+		if( ( sv_bitflags & SV_BITFLAGS_HTTP_BASEURL ) != 0 ) {
+			// read base upstream url
+			cls.httpbaseurl = Q_strdup( MSG_ReadString( msg ) );
+		} else {
+			http_portnum = MSG_ReadInt16( msg ) & 0xffff;
+			cls.httpaddress = cls.serveraddress;
+			if( cls.httpaddress.type == NA_IP6 ) {
+				cls.httpaddress.address.ipv6.port = BigShort( http_portnum );
+			} else {
+				cls.httpaddress.address.ipv4.port = BigShort( http_portnum );
+			}
+			if( http_portnum ) {
+				if( cls.httpaddress.type == NA_LOOPBACK ) {
+					cls.httpbaseurl = Q_strdup( va( "http://localhost:%hu/", (unsigned short)http_portnum ) );
+				} else {
+					cls.httpbaseurl = Q_strdup( va( "http://%s/", NET_AddressToString( &cls.httpaddress ) ) );
+				}
+			}
+		}
+	}
+
+	// pure list
+
+	// clean old, if necessary
+	Com_FreePureList( &cls.purelist );
+
+	// add new
+	numpure = MSG_ReadInt16( msg );
+	while( numpure > 0 ) {
+		const char *pakname = MSG_ReadString( msg );
+		const unsigned checksum = MSG_ReadInt32( msg );
+
+		Com_AddPakToPureList( &cls.purelist, pakname, checksum );
+
+		numpure--;
+	}
+
+	//assert( numpure == 0 );
+
+	// get the configstrings request
+	CL_AddReliableCommand( va( "configstrings %i 0", cl.servercount ) );
+
+	old_sv_pure = cls.sv_pure;
+	cls.sv_pure = ( sv_bitflags & SV_BITFLAGS_PURE ) != 0;
+	cls.pure_restart = cls.sv_pure && old_sv_pure == false;
+
+#ifdef PURE_CHEAT
+	cls.sv_pure = cls.pure_restart = false;
+#endif
+
+	cls.wakelock = Sys_AcquireWakeLock();
+
+	if( !cls.demoPlayer.playing && ( cls.serveraddress.type == NA_IP ) ) {
+		Steam_AdvertiseGame( cls.serveraddress.address.ipv4.ip, NET_GetAddressPort( &cls.serveraddress ) );
+	}
+
+	clNotice() << wsw::StringView( cl.servermessage );
+}
+
+static void CL_ParseBaseline( msg_t *msg ) {
+	SNAP_ParseBaseline( msg, cl_baselines );
+}
+
+static void CL_ParseFrame( msg_t *msg ) {
+	snapshot_t *snap, *oldSnap;
+	int delta;
+
+	oldSnap = ( cl.receivedSnapNum > 0 ) ? &cl.snapShots[cl.receivedSnapNum & UPDATE_MASK] : NULL;
+
+	snap = SNAP_ParseFrame( msg, oldSnap, &cl.suppressCount, cl.snapShots, cl_baselines, cl_shownet->integer );
+	if( snap->valid ) {
+		cl.receivedSnapNum = snap->serverFrame;
+
+		if( cls.demoRecorder.recording ) {
+			if( cls.demoRecorder.waiting && !snap->delta ) {
+				cls.demoRecorder.waiting = false; // we can start recording now
+				cls.demoRecorder.basetime = snap->serverTime;
+				cls.demoRecorder.localtime = time( NULL );
+
+				// write out messages to hold the startup information
+				SNAP_BeginDemoRecording( cls.demoRecorder.file, 0x10000 + cl.servercount, cl.snapFrameTime,
+										 cl.servermessage, cls.reliable ? SV_BITFLAGS_RELIABLE : 0, cls.purelist,
+										 cl.configStrings, cl_baselines );
+
+				// the rest of the demo file will be individual frames
+			}
+
+			if( !cls.demoRecorder.waiting ) {
+				cls.demoRecorder.duration = snap->serverTime - cls.demoRecorder.basetime;
+			}
+			cls.demoRecorder.time = cls.demoRecorder.duration;
+		}
+
+		if( cl_debug_timeDelta->integer ) {
+			if( oldSnap != NULL && ( oldSnap->serverFrame + 1 != snap->serverFrame ) ) {
+				clWarning() << "Snapshot lost";
+			}
+		}
+
+		// the first snap, fill all the timeDeltas with the same value
+		// don't let delta add big jumps to the smoothing ( a stable connection produces jumps inside +-3 range)
+		delta = ( snap->serverTime - cl.snapFrameTime ) - cls.gametime;
+		if( cl.currentSnapNum <= 0 || delta < cl.newServerTimeDelta - 175 || delta > cl.newServerTimeDelta + 175 ) {
+			CL_RestartTimeDeltas( delta );
+		} else {
+			if( cl_debug_timeDelta->integer ) {
+				if( delta < cl.newServerTimeDelta - (int)cl.snapFrameTime ) {
+					Com_Printf( S_COLOR_CYAN "***** timeDelta low clamp\n" );
+				} else if( delta > cl.newServerTimeDelta + (int)cl.snapFrameTime ) {
+					Com_Printf( S_COLOR_CYAN "***** timeDelta high clamp\n" );
+				}
+			}
+
+			Q_clamp( delta, cl.newServerTimeDelta - (int)cl.snapFrameTime, cl.newServerTimeDelta + (int)cl.snapFrameTime );
+
+			cl.serverTimeDeltas[cl.receivedSnapNum & MASK_TIMEDELTAS_BACKUP] = delta;
+		}
+	}
+}
+
+static void CL_Multiview_f( const CmdArgs &cmdArgs ) {
+	cls.mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
+	clNotice() << "Multiview:" << cls.mv;
+}
+
+static void CL_CvarInfoRequest_f( const CmdArgs &cmdArgs ) {
+	char string[MAX_STRING_CHARS];
+	const char *cvarName;
+	const char *cvarString;
+
+	if( cls.demoPlayer.playing ) {
+		return;
+	}
+
+	if( Cmd_Argc() < 1 ) {
+		return;
+	}
+
+	cvarName = Cmd_Argv( 1 );
+
+	string[0] = 0;
+	Q_strncatz( string, "cvarinfo \"", sizeof( string ) );
+
+	if( strlen( string ) + strlen( cvarName ) + 1 /*quote*/ + 1 /*space*/ >= MAX_STRING_CHARS - 1 ) {
+		CL_AddReliableCommand( "cvarinfo \"invalid\"" );
+		return;
+	}
+
+	Q_strncatz( string, cvarName, sizeof( string ) );
+	Q_strncatz( string, "\" ", sizeof( string ) );
+
+	cvarString = Cvar_String( cvarName );
+	if( !cvarString[0] ) {
+		cvarString = "not found";
+	}
+
+	if( strlen( string ) + strlen( cvarString ) + 2 /*quotes*/ >= MAX_STRING_CHARS - 1 ) {
+		if( strlen( string ) + strlen( " \"too long\"" ) < MAX_STRING_CHARS - 1 ) {
+			CL_AddReliableCommand( va( "%s\"too long\"", string ) );
+		} else {
+			CL_AddReliableCommand( "cvarinfo \"invalid\"" );
+		}
+
+		return;
+	}
+
+	Q_strncatz( string, "\"", sizeof( string ) );
+	Q_strncatz( string, cvarString, sizeof( string ) );
+	Q_strncatz( string, "\"", sizeof( string ) );
+
+	CL_AddReliableCommand( string );
+}
+
+static void CL_UpdateConfigString( int idx, const char *s ) {
+	if( !s ) {
+		return;
+	}
+
+	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demoPlayer.playing ) ) {
+		Com_Printf( "CL_ParseConfigstringCommand(%i): \"%s\"\n", idx, s );
+	}
+
+	if( idx < 0 || idx >= MAX_CONFIGSTRINGS ) {
+		Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
+	}
+
+	if( !COM_ValidateConfigstring( s ) ) {
+		Com_Printf( "%sWARNING:%s Invalid Configstring (%i): %s\n", S_COLOR_YELLOW, S_COLOR_WHITE, idx, s );
+		return;
+	}
+
+	const wsw::StringView string( s );
+	cl.configStrings.set( idx, string );
+	CL_GameModule_ConfigString( idx, string );
+}
+
+static void CL_AddConfigStringFragment( int index, int fragmentNum, int numFragments, int specifiedLen, const char *s ) {
+	if( (unsigned)index >= (unsigned)MAX_CONFIGSTRINGS ) {
+		Com_Error( ERR_DROP, "A configstring fragment index > MAX_CONFIGSTRINGS" );
+	}
+
+	if( (unsigned)numFragments >= kMaxConfigStringFragments ) {
+		Com_Error( ERR_DROP, "A configstring fragment numFragments >= kMaxConfigStringFragments" );
+	}
+
+	if( (unsigned)fragmentNum >= (unsigned)numFragments ) {
+		Com_Error( ERR_DROP, "configstring fragment fragmentNum is out of a valid range" );
+	}
+
+	// TODO: We should accept a string view parameter
+
+	const size_t actualLen = std::strlen( s );
+	if( (size_t)specifiedLen != actualLen ) {
+		Com_Error( ERR_DROP, "A configstring fragment len mismatches the specified one" );
+	}
+
+	if( cl.configStringFragmentIndex && cl.configStringFragmentIndex != index ) {
+		Com_Error( ERR_DROP, "Got a configstring fragment while the current one is incompletely assembled" );
+	}
+
+	if( cl.configStringFragmentNum && cl.configStringFragmentNum + 1 != fragmentNum ) {
+		Com_Error( ERR_DROP, "Got an illegal configstring fragments sequence" );
+	}
+
+	const size_t fragmentOffset = fragmentNum * kMaxConfigStringFragmentLen;
+	std::memcpy( cl.configStringFragmentsBuffer + fragmentOffset, s, specifiedLen );
+
+	if( fragmentNum + 1 != numFragments ) {
+		cl.configStringFragmentIndex = index;
+		cl.configStringFragmentNum = fragmentNum;
+		return;
+	}
+
+	cl.configStringFragmentIndex = 0;
+	cl.configStringFragmentNum = 0;
+
+	const size_t combinedLen = fragmentOffset + specifiedLen;
+	cl.configStringFragmentsBuffer[combinedLen] = '\0';
+
+	const wsw::StringView view( cl.configStringFragmentsBuffer, combinedLen, wsw::StringView::ZeroTerminated );
+
+	cl.configStrings.set( index, view );
+	CL_GameModule_ConfigString( index, view );
+}
+
+static void CL_ParseConfigstringCommand( const CmdArgs &cmdArgs ) {
+	const int argc = Cmd_Argc();
+	if( argc < 3 ) {
+		return;
+	}
+
+	// ch : configstrings may come batched now, so lets loop through them
+	for( int i = 1; i < argc - 1; i += 2 ) {
+		const int idx = atoi( Cmd_Argv( i ) );
+		const char *s = Cmd_Argv( i + 1 );
+
+		CL_UpdateConfigString( idx, s );
+	}
+}
+
+static void CL_ParseConfigStringFragmentCommand( const CmdArgs &cmdArgs ) {
+	const int argc = Cmd_Argc();
+	if( argc != 6 ) {
+		return;
+	}
+
+	const int index = atoi( Cmd_Argv( 1 ) );
+	const int fragmentNum = atoi( Cmd_Argv( 2 ) );
+	const int numFragments = atoi( Cmd_Argv( 3 ) );
+	const int specifiedLen = atoi( Cmd_Argv( 4 ) );
+
+	CL_AddConfigStringFragment( index, fragmentNum, numFragments, specifiedLen, Cmd_Argv( 5 ) );
+}
+
+typedef struct {
+	const char *name;
+	void ( *func )( const CmdArgs & );
+} svcmd_t;
+
+static svcmd_t svcmds[] =
+	{
+		{ "forcereconnect", CL_Reconnect_f },
+		{ "reconnect", CL_ServerReconnect_f },
+		{ "changing", CL_Changing_f },
+		{ "precache", CL_Precache_f },
+		{ "cmd", CL_ForwardToServer_f },
+		{ "cs", CL_ParseConfigstringCommand },
+		{ "csf", CL_ParseConfigStringFragmentCommand },
+		{ "disconnect", CL_ServerDisconnect_f },
+		{ "initdownload", CL_InitDownload_f },
+		{ "multiview", CL_Multiview_f },
+		{ "cvarinfo", CL_CvarInfoRequest_f },
+
+		{ NULL, NULL }
+	};
+
+static void CL_ParseServerCommand( msg_t *msg ) {
+	const char *text = MSG_ReadString( msg );
+
+	static CmdArgsSplitter argsSplitter;
+	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( text ) );
+
+	if( cl_debug_serverCmd->integer && ( cls.state < CA_ACTIVE || cls.demoPlayer.playing ) ) {
+		Com_Printf( "CL_ParseServerCommand: \"%s\"\n", text );
+	}
+
+	// filter out these server commands to be called from the client
+	for( svcmd_t *cmd = svcmds; cmd->name; cmd++ ) {
+		if( !strcmp( cmdArgs[0].data(), cmd->name ) ) {
+			cmd->func( cmdArgs );
+			return;
+		}
+	}
+
+	Com_Printf( "Unknown server command: %s\n", cmdArgs[0].data() );
+}
+
+void CL_ParseServerMessage( msg_t *msg ) {
+	if( cl_shownet->integer == 1 ) {
+		Com_Printf( "%" PRIu64 " ", (uint64_t)msg->cursize );
+	} else if( cl_shownet->integer >= 2 ) {
+		Com_Printf( "------------------\n" );
+	}
+
+	// parse the message
+	while( msg->readcount < msg->cursize ) {
+		int cmd;
+		int ext, len;
+		size_t meta_data_maxsize;
+
+		cmd = MSG_ReadUint8( msg );
+		if( cl_debug_serverCmd->integer & 4 ) {
+			const char *format = "%3" PRIi64 ":CMD %i %s\n";
+			Com_Printf( format, (int64_t)( msg->readcount - 1 ), cmd, !svc_strings[cmd] ? "bad" : svc_strings[cmd] );
+		}
+
+		if( cl_shownet->integer >= 2 ) {
+			if( !svc_strings[cmd] ) {
+				const char *format = "%3" PRIi64 ":BAD CMD %i\n";
+				Com_Printf( format, (int64_t)( msg->readcount - 1 ), cmd );
+			} else {
+				SHOWNET( msg, svc_strings[cmd] );
+			}
+		}
+
+		// other commands
+		switch( cmd ) {
+			default:
+				Com_Error( ERR_DROP, "CL_ParseServerMessage: Illegible server message" );
+				break;
+
+			case svc_nop:
+				// Com_Printf( "svc_nop\n" );
+				break;
+
+			case svc_servercmd:
+				if( !cls.reliable ) {
+					int cmdNum = MSG_ReadInt32( msg );
+					if( cmdNum < 0 ) {
+						Com_Error( ERR_DROP, "CL_ParseServerMessage: Invalid cmdNum value received: %i\n",
+								   cmdNum );
+						return;
+					}
+					if( cmdNum <= cls.lastExecutedServerCommand ) {
+						MSG_ReadString( msg ); // read but ignore
+						break;
+					}
+					cls.lastExecutedServerCommand = cmdNum;
+				}
+				// fall through
+			case svc_servercs: // configstrings from demo files. they don't have acknowledge
+				CL_ParseServerCommand( msg );
+				break;
+
+			case svc_serverdata:
+				if( cls.state == CA_HANDSHAKE ) {
+					CL_Cbuf_ExecutePendingCommands(); // make sure any stuffed commands are done
+					CL_ParseServerData( msg );
+				} else {
+					return; // ignore rest of the packet (serverdata is always sent alone)
+				}
+				break;
+
+			case svc_spawnbaseline:
+				CL_ParseBaseline( msg );
+				break;
+
+			case svc_download:
+				CL_ParseDownload( msg );
+				break;
+
+			case svc_clcack:
+				if( cls.reliable ) {
+					Com_Error( ERR_DROP, "CL_ParseServerMessage: clack message for reliable client\n" );
+					return;
+				}
+				cls.reliableAcknowledge = MSG_ReadUintBase128( msg );
+				cls.ucmdAcknowledged = MSG_ReadUintBase128( msg );
+				if( cl_debug_serverCmd->integer & 4 ) {
+					const char *format = "svc_clcack:reliable cmd ack:%" PRIi64 " ucmdack:%" PRIi64 "\n";
+					Com_Printf( format, cls.reliableAcknowledge, cls.ucmdAcknowledged );
+				}
+				break;
+
+			case svc_frame:
+				CL_ParseFrame( msg );
+				break;
+
+			case svc_demoinfo:
+				assert( cls.demoPlayer.playing );
+
+				MSG_ReadInt32( msg );
+				MSG_ReadInt32( msg );
+				cls.demoPlayer.meta_data_realsize = (size_t)MSG_ReadInt32( msg );
+				meta_data_maxsize = (size_t)MSG_ReadInt32( msg );
+
+				// sanity check
+				if( cls.demoPlayer.meta_data_realsize > meta_data_maxsize ) {
+					cls.demoPlayer.meta_data_realsize = meta_data_maxsize;
+				}
+				if( cls.demoPlayer.meta_data_realsize > sizeof( cls.demoPlayer.meta_data ) ) {
+					cls.demoPlayer.meta_data_realsize = sizeof( cls.demoPlayer.meta_data );
+				}
+
+				MSG_ReadData( msg, cls.demoPlayer.meta_data, cls.demoPlayer.meta_data_realsize );
+				MSG_SkipData( msg, meta_data_maxsize - cls.demoPlayer.meta_data_realsize );
+				break;
+
+			case svc_playerinfo:
+			case svc_packetentities:
+			case svc_match:
+				Com_Error( ERR_DROP, "Out of place frame data" );
+				break;
+
+			case svc_extension:
+				ext = MSG_ReadUint8( msg );  // extension id
+				MSG_ReadUint8( msg );        // version number
+				len = MSG_ReadInt16( msg ); // command length
+
+				switch( ext ) {
+					default:
+						// unsupported
+						MSG_SkipData( msg, len );
+						break;
+				}
+				break;
+		}
+	}
+
+	if( msg->readcount > msg->cursize ) {
+		Com_Error( ERR_DROP, "CL_ParseServerMessage: Bad server message" );
+		return;
+	}
+
+	if( cl_debug_serverCmd->integer & 4 ) {
+		Com_Printf( "%3" PRIi64 ":CMD %i %s\n", (int64_t)( msg->readcount ), -1, "EOF" );
+	}
+	SHOWNET( msg, "END OF MESSAGE" );
+
+	CL_AddNetgraph();
+
+	//
+	// if recording demos, copy the message out
+	//
+	//
+	// we don't know if it is ok to save a demo message until
+	// after we have parsed the frame
+	//
+	if( cls.demoRecorder.recording && !cls.demoRecorder.waiting ) {
+		CL_WriteDemoMessage( msg );
+	}
+}
+
+const char * const svc_strings[256] =
+	{
+		"svc_bad",
+		"svc_nop",
+		"svc_servercmd",
+		"svc_serverdata",
+		"svc_spawnbaseline",
+		"svc_download",
+		"svc_playerinfo",
+		"svc_packetentities",
+		"svc_gamecommands",
+		"svc_match",
+		"svc_clcack",
+		"svc_servercs", // reliable command as unreliable for demos
+		"svc_frame",
+		"svc_demoinfo",
+		"svc_extension"
+	};
+
+void _SHOWNET( msg_t *msg, const char *s, int shownet ) {
+	if( shownet >= 2 ) {
+		Com_Printf( "%3" PRIi64 ":%s\n", (int64_t)( msg->readcount - 1 ), s );
+	}
+}
+
+static void SNAP_ParseDeltaGameState( msg_t *msg, snapshot_t *oldframe, snapshot_t *newframe ) {
+	MSG_ReadDeltaGameState( msg, oldframe ? &oldframe->gameState : NULL, &newframe->gameState );
+}
+
+static void SNAP_ParsePlayerstate( msg_t *msg, const player_state_t *oldstate, player_state_t *state ) {
+	MSG_ReadDeltaPlayerState( msg, oldstate, state );
+}
+
+static void SNAP_ParseScoreboard( msg_t *msg, snapshot_t *oldframe, snapshot_t *newframe ) {
+	MSG_ReadDeltaScoreboardData( msg, oldframe ? &oldframe->scoreboardData : NULL, &newframe->scoreboardData );
+}
+
+/*
+* SNAP_ParseDeltaEntity
+*
+* Parses deltas from the given base and adds the resulting entity to the current frame
+*/
+static void SNAP_ParseDeltaEntity( msg_t *msg, snapshot_t *frame, int newnum, entity_state_t *old, unsigned byteMask ) {
+	entity_state_t *state = &frame->parsedEntities[frame->numEntities & ( MAX_PARSE_ENTITIES - 1 )];
+	frame->numEntities++;
+	MSG_ReadDeltaEntity( msg, old, state, newnum, byteMask );
+}
+
+void SNAP_ParseBaseline( msg_t *msg, entity_state_t *baselines ) {
+	bool remove = false;
+	unsigned byteMask = 0;
+	const int newnum = MSG_ReadEntityNumber( msg, &remove, &byteMask );
+	assert( remove == false );
+
+	if( !remove ) {
+		entity_state_t nullstate, tmp;
+		memset( &nullstate, 0, sizeof( nullstate ) );
+
+		entity_state_t *const es = ( baselines ? &baselines[newnum] : &tmp );
+		MSG_ReadDeltaEntity( msg, &nullstate, es, newnum, byteMask );
+	}
+}
+
+/*
+* SNAP_ParsePacketEntities
+*
+* An svc_packetentities has just been parsed, deal with the
+* rest of the data stream.
+*/
+static void SNAP_ParsePacketEntities( msg_t *msg, snapshot_t *oldframe, snapshot_t *newframe, entity_state_t *baselines, int shownet ) {
+	int newnum;
+	bool remove;
+	unsigned byteMask;
+	entity_state_t *oldstate = NULL;
+	int oldindex, oldnum;
+
+	newframe->numEntities = 0;
+
+	// delta from the entities present in oldframe
+	oldindex = 0;
+	if( !oldframe ) {
+		oldnum = 99999;
+	} else if( oldindex >= oldframe->numEntities ) {
+		oldnum = 99999;
+	} else {
+		oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
+		oldnum = oldstate->number;
+	}
+
+	while( true ) {
+		newnum = MSG_ReadEntityNumber( msg, &remove, &byteMask );
+		if( newnum >= MAX_EDICTS ) {
+			Com_Error( ERR_DROP, "CL_ParsePacketEntities: bad number:%i", newnum );
+		}
+		if( msg->readcount > msg->cursize ) {
+			Com_Error( ERR_DROP, "CL_ParsePacketEntities: end of message" );
+		}
+
+		if( !newnum ) {
+			break;
+		}
+
+		while( oldnum < newnum ) {
+			// one or more entities from the old packet are unchanged
+			if( shownet == 3 ) {
+				Com_Printf( "   unchanged: %i\n", oldnum );
+			}
+
+			SNAP_ParseDeltaEntity( msg, newframe, oldnum, oldstate, 0 );
+
+			oldindex++;
+			if( oldindex >= oldframe->numEntities ) {
+				oldnum = 99999;
+			} else {
+				oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
+				oldnum = oldstate->number;
+			}
+		}
+
+		// delta from baseline
+		if( oldnum > newnum ) {
+			if( remove ) {
+				Com_Printf( "U_REMOVE: oldnum > newnum (can't remove from baseline!)\n" );
+				continue;
+			}
+
+			// delta from baseline
+			if( shownet == 3 ) {
+				Com_Printf( "   baseline: %i\n", newnum );
+			}
+
+			SNAP_ParseDeltaEntity( msg, newframe, newnum, &baselines[newnum], byteMask );
+			continue;
+		}
+
+		if( oldnum == newnum ) {
+			if( remove ) {
+				// the entity present in oldframe is not in the current frame
+				if( shownet == 3 ) {
+					Com_Printf( "   remove: %i\n", newnum );
+				}
+
+				if( oldnum != newnum ) {
+					Com_Printf( "U_REMOVE: oldnum != newnum\n" );
+				}
+
+				oldindex++;
+				if( oldindex >= oldframe->numEntities ) {
+					oldnum = 99999;
+				} else {
+					oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
+					oldnum = oldstate->number;
+				}
+				continue;
+			}
+
+			// delta from previous state
+			if( shownet == 3 ) {
+				Com_Printf( "   delta: %i\n", newnum );
+			}
+
+			SNAP_ParseDeltaEntity( msg, newframe, newnum, oldstate, byteMask );
+
+			oldindex++;
+			if( oldindex >= oldframe->numEntities ) {
+				oldnum = 99999;
+			} else {
+				oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
+				oldnum = oldstate->number;
+			}
+			continue;
+		}
+	}
+
+	// any remaining entities in the old frame are copied over
+	while( oldnum != 99999 ) {
+		// one or more entities from the old packet are unchanged
+		if( shownet == 3 ) {
+			Com_Printf( "   unchanged: %i\n", oldnum );
+		}
+
+		SNAP_ParseDeltaEntity( msg, newframe, oldnum, oldstate, 0 );
+
+		oldindex++;
+		if( oldindex >= oldframe->numEntities ) {
+			oldnum = 99999;
+		} else {
+			oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
+			oldnum = oldstate->number;
+		}
+	}
+}
+
+static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, int *suppressCount, snapshot_t *backup, bool skipBody ) {
+	// get total length
+	int len = MSG_ReadInt16( msg );
+	int pos = msg->readcount;
+
+	// get the snapshot id
+	const int64_t serverTime = MSG_ReadIntBase128( msg );
+	const int snapNum = MSG_ReadUintBase128( msg );
+
+	if( backup ) {
+		newframe = &backup[snapNum & UPDATE_MASK];
+	}
+
+	int areabytes = newframe->areabytes;
+	uint8_t *areabits = newframe->areabits;
+	memset( newframe, 0, sizeof( snapshot_t ) );
+	newframe->areabytes = areabytes;
+	newframe->areabits = areabits;
+
+	newframe->serverTime = serverTime;
+	newframe->serverFrame = snapNum;
+	newframe->deltaFrameNum = MSG_ReadUintBase128( msg );
+	newframe->ucmdExecuted = MSG_ReadUintBase128( msg );
+
+	const int flags = MSG_ReadUint8( msg );
+	newframe->delta = ( flags & FRAMESNAP_FLAG_DELTA ) ? true : false;
+	newframe->multipov = ( flags & FRAMESNAP_FLAG_MULTIPOV ) ? true : false;
+	newframe->allentities = ( flags & FRAMESNAP_FLAG_ALLENTITIES ) ? true : false;
+
+	const int supCnt = MSG_ReadUint8( msg );
+	if( suppressCount ) {
+		*suppressCount = supCnt;
+#ifdef RATEKILLED
+		*suppressCount = 0;
+#endif
+	}
+
+	// validate the new frame
+	newframe->valid = false;
+
+	// If the frame is delta compressed from data that we
+	// no longer have available, we must suck up the rest of
+	// the frame, but not use it, then ask for a non-compressed
+	// message
+	if( !newframe->delta ) {
+		newframe->valid = true; // uncompressed frame
+	} else {
+		if( newframe->deltaFrameNum <= 0 ) {
+			clWarning() << "Invalid delta frame (not supposed to happen!)";
+		} else if( backup ) {
+			snapshot_t *deltaframe = &backup[newframe->deltaFrameNum & UPDATE_MASK];
+			if( !deltaframe->valid ) {
+				// should never happen
+				clWarning() << "Delta from invalid frame (not supposed to happen!)";
+			} else if( deltaframe->serverFrame != newframe->deltaFrameNum ) {
+				// The frame that the server did the delta from
+				// is too old, so we can't reconstruct it properly.
+				clWarning() << "Delta frame too old";
+			} else {
+				newframe->valid = true; // valid delta parse
+			}
+		} else {
+			newframe->valid = skipBody;
+		}
+	}
+
+	if( skipBody ) {
+		MSG_SkipData( msg, len - ( msg->readcount - pos ) );
+	}
+
+	return newframe;
+}
+
+void SNAP_SkipFrame( msg_t *msg, snapshot_t *header ) {
+	static snapshot_t frame;
+	SNAP_ParseFrameHeader( msg, header ? header : &frame, NULL, NULL, true );
+}
+
+snapshot_t *SNAP_ParseFrame( msg_t *msg, snapshot_t *lastFrame, int *suppressCount, snapshot_t *backup, entity_state_t *baselines, int showNet ) {
+	// read header
+	snapshot_t *newframe = SNAP_ParseFrameHeader( msg, NULL, suppressCount, backup, false );
+	snapshot_t *deltaframe = NULL;
+
+	if( showNet == 3 ) {
+		Com_Printf( "   frame:%" PRIi64 "  old:%" PRIi64 "%s\n", newframe->serverFrame, newframe->deltaFrameNum,
+					( newframe->delta ? "" : " no delta" ) );
+	}
+
+	if( newframe->delta ) {
+		if( newframe->deltaFrameNum > 0 ) {
+			deltaframe = &backup[newframe->deltaFrameNum & UPDATE_MASK];
+		}
+	}
+
+	// read game commands
+	int cmd = MSG_ReadUint8( msg );
+	if( cmd != svc_gamecommands ) {
+		Com_Error( ERR_DROP, "SNAP_ParseFrame: not gamecommands" );
+	}
+
+	int numtargets = 0, framediff;
+	while( ( framediff = MSG_ReadInt16( msg ) ) != -1 ) {
+		const char *text = MSG_ReadString( msg );
+
+		// see if it's valid and not yet handled
+		if( newframe->valid && ( !lastFrame || !lastFrame->valid || newframe->serverFrame > lastFrame->serverFrame + framediff ) ) {
+			newframe->numgamecommands++;
+			if( newframe->numgamecommands > MAX_PARSE_GAMECOMMANDS ) {
+				Com_Error( ERR_DROP, "SNAP_ParseFrame: too many gamecommands" );
+			}
+			if( newframe->gamecommandsDataHead + strlen( text ) >= sizeof( newframe->gamecommandsData ) ) {
+				Com_Error( ERR_DROP, "SNAP_ParseFrame: too much gamecommands" );
+			}
+
+			gcommand_t *gcmd = &newframe->gamecommands[newframe->numgamecommands - 1];
+			gcmd->all = true;
+
+			Q_strncpyz( newframe->gamecommandsData + newframe->gamecommandsDataHead, text,
+						sizeof( newframe->gamecommandsData ) - newframe->gamecommandsDataHead );
+			gcmd->commandOffset = newframe->gamecommandsDataHead;
+			newframe->gamecommandsDataHead += strlen( text ) + 1;
+
+			if( newframe->multipov ) {
+				numtargets = MSG_ReadUint8( msg );
+				if( numtargets ) {
+					if( numtargets > (int)sizeof( gcmd->targets ) ) {
+						Com_Error( ERR_DROP, "SNAP_ParseFrame: too many gamecommand targets" );
+					}
+					gcmd->all = false;
+					MSG_ReadData( msg, gcmd->targets, numtargets );
+				}
+			}
+		} else if( newframe->multipov ) {   // otherwise, ignore it
+			numtargets = MSG_ReadUint8( msg );
+			MSG_SkipData( msg, numtargets );
+		}
+	}
+
+	// read areabits
+	const size_t len = (size_t)MSG_ReadUint8( msg );
+	if( len > newframe->areabytes ) {
+		Com_Error( ERR_DROP, "Invalid areabits size: %" PRIu64 " > %" PRIu64, (uint64_t)len, (uint64_t)newframe->areabytes );
+	}
+
+	memset( newframe->areabits, 0, newframe->areabytes );
+	MSG_ReadData( msg, newframe->areabits, len );
+
+	// read match info
+	cmd = MSG_ReadUint8( msg );
+	_SHOWNET( msg, svc_strings[cmd], showNet );
+	if( cmd != svc_match ) {
+		Com_Error( ERR_DROP, "SNAP_ParseFrame: not match info" );
+	}
+	SNAP_ParseDeltaGameState( msg, deltaframe, newframe );
+	cmd = MSG_ReadUint8( msg );
+	if( cmd != svc_scoreboard ) {
+		Com_Error( ERR_DROP, "SNAP_ParseFrame: not scoreboard" );
+	}
+	SNAP_ParseScoreboard( msg, deltaframe, newframe );
+
+	// read playerinfos
+	int numplayers = 0;
+	while( ( cmd = MSG_ReadUint8( msg ) ) ) {
+		_SHOWNET( msg, svc_strings[cmd], showNet );
+		if( cmd != svc_playerinfo ) {
+			Com_Error( ERR_DROP, "SNAP_ParseFrame: not playerinfo" );
+		}
+		if( deltaframe && deltaframe->numplayers >= numplayers ) {
+			SNAP_ParsePlayerstate( msg, &deltaframe->playerStates[numplayers], &newframe->playerStates[numplayers] );
+		} else {
+			SNAP_ParsePlayerstate( msg, NULL, &newframe->playerStates[numplayers] );
+		}
+		numplayers++;
+	}
+	newframe->numplayers = numplayers;
+	newframe->playerState = newframe->playerStates[0];
+
+	// read packet entities
+	cmd = MSG_ReadUint8( msg );
+	_SHOWNET( msg, svc_strings[cmd], showNet );
+	if( cmd != svc_packetentities ) {
+		Com_Error( ERR_DROP, "SNAP_ParseFrame: not packetentities" );
+	}
+	SNAP_ParsePacketEntities( msg, deltaframe, newframe, baselines, showNet );
+
+	return newframe;
+}
+
+static void CL_PauseDemo( bool paused );
+
+/*
+* CL_WriteDemoMessage
+*
+* Dumps the current net message, prefixed by the length
+*/
+void CL_WriteDemoMessage( msg_t *msg ) {
+	if( cls.demoRecorder.file <= 0 ) {
+		cls.demoRecorder.recording = false;
+		return;
+	}
+
+	// the first eight bytes are just packet sequencing stuff
+	SNAP_RecordDemoMessage( cls.demoRecorder.file, msg, 8 );
+}
+
+
+/*
+* CL_Stop_f
+*
+* stop recording a demo
+*/
+void CL_Stop_f( const CmdArgs &cmdArgs ) {
+	// look through all the args
+	bool silent = false;
+	bool cancel = false;
+	for( int arg = 1; arg < Cmd_Argc(); arg++ ) {
+		if( !Q_stricmp( Cmd_Argv( arg ), "silent" ) ) {
+			silent = true;
+		} else if( !Q_stricmp( Cmd_Argv( arg ), "cancel" ) ) {
+			cancel = true;
+		}
+	}
+
+	if( !cls.demoRecorder.recording ) {
+		if( !silent ) {
+			clNotice() << "Not recording a demo";
+		}
+		return;
+	}
+
+	// finish up
+	SNAP_StopDemoRecording( cls.demoRecorder.file );
+
+	using namespace wsw;
+
+	char metadata[SNAP_MAX_DEMO_META_DATA_SIZE];
+	DemoMetadataWriter writer( metadata );
+
+	// write some meta information about the match/demo
+	writer.writePair( kDemoKeyServerName, ::cl.configStrings.getHostName().value() );
+	writer.writePair( kDemoKeyTimestamp, wsw::StringView( va( "%" PRIu64, (uint64_t)cls.demoRecorder.localtime ) ) );
+	writer.writePair( kDemoKeyDuration, wsw::StringView( va( "%u", (int)ceil( cls.demoRecorder.duration / 1000.0f ) ) ) );
+	writer.writePair( kDemoKeyMapName, ::cl.configStrings.getMapName().value() );
+	writer.writePair( kDemoKeyMapChecksum, ::cl.configStrings.getMapCheckSum().value() );
+	writer.writePair( kDemoKeyGametype, ::cl.configStrings.getGametypeName().value() );
+
+	writer.writeTag( kDemoTagSinglePov );
+
+	FS_FCloseFile( cls.demoRecorder.file );
+
+	const auto [metadataSize, wasComplete] = writer.markCurrentResult();
+	if( !wasComplete ) {
+		clWarning() << "The demo metadata was truncated";
+	}
+
+	SNAP_WriteDemoMetaData( cls.demoRecorder.filename, metadata, metadataSize );
+
+	// cancel the demos
+	if( cancel ) {
+		// remove the file that correspond to cls.demoRecorder.file
+		if( !silent ) {
+			clNotice() << "Canceling demo" << wsw::StringView( cls.demoRecorder.filename );
+		}
+		if( !FS_RemoveFile( cls.demoRecorder.filename ) && !silent ) {
+			clWarning() << "Error canceling demo";
+		}
+	}
+
+	if( !silent ) {
+		clNotice() << "Stopped demo" << wsw::StringView( cls.demoRecorder.filename );
+	}
+
+	cls.demoRecorder.file = 0; // file id
+	Q_free( cls.demoRecorder.filename );
+	Q_free( cls.demoRecorder.name );
+	cls.demoRecorder.filename = NULL;
+	cls.demoRecorder.name = NULL;
+	cls.demoRecorder.recording = false;
+}
+
+/*
+* CL_Record_f
+*
+* record <demoname>
+*
+* Begins recording a demo from the current position
+*/
+void CL_Record_f( const CmdArgs &cmdArgs ) {
+	char *name;
+	size_t name_size;
+	bool silent;
+	const char *demoname;
+
+	if( cls.state != CA_ACTIVE ) {
+		clNotice() << "You must be in a level to record";
+		return;
+	}
+
+	if( Cmd_Argc() < 2 ) {
+		clNotice() << "record <demoname>";
+		return;
+	}
+
+	if( Cmd_Argc() > 2 && !Q_stricmp( Cmd_Argv( 2 ), "silent" ) ) {
+		silent = true;
+	} else {
+		silent = false;
+	}
+
+	if( cls.demoPlayer.playing ) {
+		if( !silent ) {
+			clNotice() << "You can't record from another demo";
+		}
+		return;
+	}
+
+	if( cls.demoRecorder.recording ) {
+		if( !silent ) {
+			clNotice() << "Already recording";
+		}
+		return;
+	}
+
+	//
+	// open the demo file
+	//
+	demoname = Cmd_Argv( 1 );
+	name_size = sizeof( char ) * ( strlen( "demos/" ) + strlen( demoname ) + strlen( APP_DEMO_EXTENSION_STR ) + 1 );
+	name = (char *)Q_malloc( name_size );
+
+	Q_snprintfz( name, name_size, "demos/%s", demoname );
+	COM_SanitizeFilePath( name );
+	COM_DefaultExtension( name, APP_DEMO_EXTENSION_STR, name_size );
+
+	if( !COM_ValidateRelativeFilename( name ) ) {
+		if( !silent ) {
+			clNotice() << "Invalid filename";
+		}
+		Q_free( name );
+		return;
+	}
+
+	if( FS_FOpenFile( name, &cls.demoRecorder.file, FS_WRITE | SNAP_DEMO_GZ ) == -1 ) {
+		clWarning() << "Couldn't create the demo file" << wsw::StringView( name );
+		Q_free( name );
+		return;
+	}
+
+	if( !silent ) {
+		clNotice() << "Recording demo" << wsw::StringView( name );
+	}
+
+	// store the name in case we need it later
+	cls.demoRecorder.filename = name;
+	cls.demoRecorder.recording = true;
+	cls.demoRecorder.basetime = cls.demoRecorder.duration = cls.demoRecorder.time = 0;
+	cls.demoRecorder.name = Q_strdup( demoname );
+
+	// don't start saving messages until a non-delta compressed message is received
+	CL_AddReliableCommand( "nodelta" ); // request non delta compressed frame from server
+	cls.demoRecorder.waiting = true;
+}
+
+
+
+/*
+* CL_DemoCompleted
+*
+* Close the demo file and disable demo state. Called from disconnection proccess
+*/
+void CL_DemoCompleted( void ) {
+	if( cls.demoPlayer.demofilehandle ) {
+		FS_FCloseFile( cls.demoPlayer.demofilehandle );
+		cls.demoPlayer.demofilehandle = 0;
+	}
+	cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal = 0;
+
+	cls.demoPlayer.playing = false;
+	cls.demoPlayer.time = 0;
+	Q_free( cls.demoPlayer.filename );
+	cls.demoPlayer.filename = NULL;
+	Q_free( cls.demoPlayer.name );
+	cls.demoPlayer.name = NULL;
+
+	Com_SetDemoPlaying( false );
+
+	CL_PauseDemo( false );
+
+	clNotice() << "Demo completed";
+
+	memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );
+}
+
+/*
+* CL_ReadDemoMessage
+*
+* Read a packet from the demo file and send it to the messages parser
+*/
+static void CL_ReadDemoMessage( void ) {
+	static uint8_t msgbuf[MAX_MSGLEN];
+	static msg_t demomsg;
+	static bool init = true;
+	int read;
+
+	if( !cls.demoPlayer.demofilehandle ) {
+		CL_Disconnect( NULL );
+		return;
+	}
+
+	if( init ) {
+		MSG_Init( &demomsg, msgbuf, sizeof( msgbuf ) );
+		init = false;
+	}
+
+	read = SNAP_ReadDemoMessage( cls.demoPlayer.demofilehandle, &demomsg );
+	if( read == -1 ) {
+		if( cls.demoPlayer.pause_on_stop ) {
+			cls.demoPlayer.paused = true;
+		} else {
+			CL_Disconnect( NULL );
+		}
+		return;
+	}
+
+	CL_ParseServerMessage( &demomsg );
+}
+
+/*
+* CL_ReadDemoPackets
+*
+* See if it's time to read a new demo packet
+*/
+void CL_ReadDemoPackets( void ) {
+	if( cls.demoPlayer.paused ) {
+		return;
+	}
+
+	while( cls.demoPlayer.playing && ( cl.receivedSnapNum <= 0 || !cl.snapShots[cl.receivedSnapNum & UPDATE_MASK].valid || cl.snapShots[cl.receivedSnapNum & UPDATE_MASK].serverTime < cl.serverTime ) ) {
+		CL_ReadDemoMessage();
+		if( cls.demoPlayer.paused ) {
+			return;
+		}
+	}
+
+	cls.demoPlayer.time = cls.gametime;
+	cls.demoPlayer.play_jump = false;
+}
+
+/*
+* CL_LatchedDemoJump
+*
+* See if it's time to read a new demo packet
+*/
+void CL_LatchedDemoJump( void ) {
+	if( cls.demoPlayer.paused || !cls.demoPlayer.play_jump_latched ) {
+		return;
+	}
+
+	cls.gametime = cls.demoPlayer.play_jump_time;
+
+	if( cl.serverTime < cl.snapShots[cl.receivedSnapNum & UPDATE_MASK].serverTime ) {
+		cl.pendingSnapNum = 0;
+	}
+
+	CL_AdjustServerTime( 1 );
+
+	if( cl.serverTime < cl.snapShots[cl.receivedSnapNum & UPDATE_MASK].serverTime ) {
+		cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal;
+		FS_Seek( cls.demoPlayer.demofilehandle, 0, FS_SEEK_SET );
+		cl.currentSnapNum = cl.receivedSnapNum = 0;
+	}
+
+	cls.demoPlayer.play_jump = true;
+	cls.demoPlayer.play_jump_latched = false;
+}
+
+static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
+	// have to copy the argument now, since next actions will lose it
+	char *servername = Q_strdup( demoname );
+	COM_SanitizeFilePath( servername );
+
+	size_t name_size = sizeof( char ) * ( strlen( "demos/" ) + strlen( servername ) + strlen( APP_DEMO_EXTENSION_STR ) + 1 );
+	char *name = (char *)Q_malloc( name_size );
+
+	Q_snprintfz( name, name_size, "demos/%s", servername );
+	COM_DefaultExtension( name, APP_DEMO_EXTENSION_STR, name_size );
+
+	const char *filename = NULL;
+	if( COM_ValidateRelativeFilename( name ) ) {
+		filename = name;
+	}
+
+	int tempdemofilehandle = 0, tempdemofilelen = -1;
+	if( filename ) {
+		tempdemofilelen = FS_FOpenFile( filename, &tempdemofilehandle, FS_READ | SNAP_DEMO_GZ );  // open the demo file
+	}
+
+	if( !tempdemofilehandle ) {
+		// relative filename didn't work, try launching a demo from absolute path
+		Q_snprintfz( name, name_size, "%s", servername );
+		COM_DefaultExtension( name, APP_DEMO_EXTENSION_STR, name_size );
+		tempdemofilelen = FS_FOpenAbsoluteFile( name, &tempdemofilehandle, FS_READ | SNAP_DEMO_GZ );
+	}
+
+	if( !tempdemofilehandle ) {
+		clWarning() << "No valid demo file found";
+		FS_FCloseFile( tempdemofilehandle );
+		Q_free( name );
+		Q_free( servername );
+		return;
+	}
+
+	// make sure a local server is killed
+	CL_Cmd_ExecuteNow( "killserver\n" );
+	CL_Disconnect( NULL );
+
+	memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );
+
+	cls.demoPlayer.demofilehandle = tempdemofilehandle;
+	cls.demoPlayer.demofilelentotal = tempdemofilelen;
+	cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal;
+
+	cls.servername = Q_strdup( COM_FileBase( servername ) );
+	COM_StripExtension( cls.servername );
+
+	CL_SetClientState( CA_HANDSHAKE );
+	Com_SetDemoPlaying( true );
+	cls.demoPlayer.playing = true;
+	cls.demoPlayer.time = 0;
+
+	cls.demoPlayer.pause_on_stop = pause_on_stop;
+	cls.demoPlayer.play_ignore_next_frametime = false;
+	cls.demoPlayer.play_jump = false;
+	cls.demoPlayer.filename = Q_strdup( name );
+	cls.demoPlayer.name = Q_strdup( servername );
+
+	CL_PauseDemo( false );
+
+	// set up for timedemo settings
+	memset( &cl.timedemo, 0, sizeof( cl.timedemo ) );
+
+	Q_free( name );
+	Q_free( servername );
+}
+
+/*
+* CL_PlayDemo_f
+*
+* demo <demoname>
+*/
+void CL_PlayDemo_f( const CmdArgs &cmdArgs ) {
+	if( Cmd_Argc() < 2 ) {
+		clNotice() << "demo <demoname> [pause_on_stop]\n";
+	} else {
+		CL_StartDemo(Cmd_Argv( 1 ), atoi(Cmd_Argv( 2 )) != 0 );
+	}
+}
+
+static void CL_PauseDemo( bool paused ) {
+	cls.demoPlayer.paused = paused;
+}
+
+void CL_PauseDemo_f( const CmdArgs &cmdArgs ) {
+	if( !cls.demoPlayer.playing ) {
+		clNotice() << "Can only demopause when playing a demo";
+		return;
+	}
+
+	if( Cmd_Argc() > 1 ) {
+		if( !Q_stricmp( Cmd_Argv( 1 ), "on" ) ) {
+			CL_PauseDemo( true );
+		} else if( !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
+			CL_PauseDemo( false );
+		}
+		return;
+	}
+
+	CL_PauseDemo( !cls.demoPlayer.paused );
+}
+
+void CL_DemoJump_f( const CmdArgs &cmdArgs ) {
+	if( !cls.demoPlayer.playing ) {
+		clNotice() << "Can only demojump when playing a demo";
+		return;
+	}
+
+	if( Cmd_Argc() != 2 ) {
+		clNotice() << "Usage: demojump <time>";
+		clNotice() << "Time format is [minutes:]seconds";
+		clNotice() << "Use '+' or '-' in front of the time to specify it in relation to current position";
+		return;
+	}
+
+	const char *p = Cmd_Argv( 1 );
+
+	bool relative;
+	if( Cmd_Argv( 1 )[0] == '+' || Cmd_Argv( 1 )[0] == '-' ) {
+		relative = true;
+		p++;
+	} else {
+		relative = false;
+	}
+
+	int time;
+	if( strchr( p, ':' ) ) {
+		time = ( atoi( p ) * 60 + atoi( strchr( p, ':' ) + 1 ) ) * 1000;
+	} else {
+		time = atoi( p ) * 1000;
+	}
+
+	if( Cmd_Argv( 1 )[0] == '-' ) {
+		time = -time;
+	}
+
+	if( relative ) {
+		cls.demoPlayer.play_jump_time = cls.gametime + time;
+	} else {
+		cls.demoPlayer.play_jump_time = time; // gametime always starts from 0
+	}
+	cls.demoPlayer.play_jump_latched = true;
+}
+
 static void CL_Userinfo_f( const CmdArgs & ) {
 	clNotice() << "User info settings";
 	Info_Print( Cvar_Userinfo() );
 }
-
-static int precache_check; // for autodownload of precache items
-static int precache_spawncount;
-static int precache_tex;
-static int precache_pure;
-
-#define PLAYER_MULT 5
-
-// ENV_CNT is map load
-#define ENV_CNT ( CS_PLAYERINFOS + MAX_CLIENTS * PLAYER_MULT )
-#define TEXTURE_CNT ( ENV_CNT + 1 )
 
 static unsigned int CL_LoadMap( const char *name ) {
 	int i;
@@ -1672,16 +5066,10 @@ void CL_SetClientState( int state ) {
 	}
 }
 
-/*
-* CL_GetClientState
-*/
 connstate_t CL_GetClientState( void ) {
 	return cls.state;
 }
 
-/*
-* CL_InitMedia
-*/
 void CL_InitMedia( void ) {
 	if( cls.mediaInitialized ) {
 		return;
@@ -1712,9 +5100,6 @@ void CL_InitMedia( void ) {
 	wsw::ui::UISystem::init( VID_GetWindowWidth(), VID_GetWindowHeight() );
 }
 
-/*
-* CL_ShutdownMedia
-*/
 void CL_ShutdownMedia( void ) {
 	if( !cls.mediaInitialized ) {
 		return;
@@ -1736,9 +5121,6 @@ void CL_ShutdownMedia( void ) {
 	SCR_ShutDownConsoleMedia();
 }
 
-/*
-* CL_RestartMedia
-*/
 void CL_RestartMedia( void ) {
 	if( !VID_RefreshIsActive() ) {
 		return;
@@ -1816,20 +5198,11 @@ static void CL_ShowServerIP_f( const CmdArgs & ) {
 	clNotice() << wsw::named( "Address", wsw::StringView( NET_AddressToString( &cls.serveraddress ) ) );
 }
 
-/*
-* CL_InitLocal
-*/
 static void CL_InitLocal( void ) {
 	cvar_t *name, *color;
 
 	cls.state = CA_DISCONNECTED;
 	Com_SetClientState( CA_DISCONNECTED );
-
-	//
-	// register our variables
-	//
-	cl_stereo_separation =  Cvar_Get( "cl_stereo_separation", "0.4", CVAR_ARCHIVE );
-	cl_stereo =     Cvar_Get( "cl_stereo", "0", CVAR_ARCHIVE );
 
 	cl_maxfps =     Cvar_Get( "cl_maxfps", "250", CVAR_ARCHIVE );
 	cl_sleep =      Cvar_Get( "cl_sleep", "1", CVAR_ARCHIVE );
@@ -1860,39 +5233,23 @@ static void CL_InitLocal( void ) {
 	// userinfo
 	//
 	info_password =     Cvar_Get( "password", "", CVAR_USERINFO );
-	rate =          Cvar_Get( "rate", "60000", CVAR_DEVELOPER ); // FIXME
 
 	name = Cvar_Get( "name", "", CVAR_USERINFO | CVAR_ARCHIVE );
 	if( !name->string[0] ) {
-		char steamname[MAX_NAME_BYTES * 4], *steamnameIn = steamname, *steamnameOut = steamname, c;
-		steamname[0] = '\0';
-		Steam_GetPersonaName( steamname, sizeof( steamname ) );
-		while( ( c = *steamnameIn ) != '\0' ) {
-			steamnameIn++;
-			if( ( c < 32 ) || ( c >= 127 ) || ( c == '\\' ) || ( c == ';' ) || ( c == '"' ) ) {
-				continue;
-			}
-
-			*( steamnameOut++ ) = c;
+		char buffer[MAX_NAME_BYTES];
+		// Avoid using the default random() macro as it has a default seed.
+		std::minstd_rand0 randomEngine( (std::minstd_rand0::result_type)time( nullptr ) );
+		// Avoid using black and grey colors.
+		int colorNum;
+		do {
+			colorNum = (int)( randomEngine() % 10 );
+		} while( colorNum == 0 || colorNum == 9 );
+		int parts[3];
+		for( int &part: parts ) {
+			part = (int)( randomEngine() % 100 );
 		}
-		*steamnameOut = '\0';
-
-		if( !( COM_RemoveColorTokens( steamname )[0] ) ) {
-			// Avoid using the default random() macro as it has a default seed.
-			std::minstd_rand0 randomEngine( (std::minstd_rand0::result_type)time( nullptr ) );
-			// Avoid using black and grey colors.
-			int colorNum;
-			do {
-				colorNum = (int)( randomEngine() % 10 );
-			} while( colorNum == 0 || colorNum == 9 );
-			int parts[3];
-			for( int &part: parts ) {
-				part = (int)( randomEngine() % 100 );
-			}
-			Q_snprintfz( steamname, sizeof( steamname ), "^%dplayer%02d%02d%02d", colorNum, parts[0], parts[1], parts[2] );
-		}
-
-		Cvar_Set( name->name, steamname );
+		Q_snprintfz( buffer, sizeof( buffer ), "^%dplayer%02d%02d%02d", colorNum, parts[0], parts[1], parts[2] );
+		Cvar_Set( name->name, buffer );
 	}
 
 	Cvar_Get( "clan", "", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -1940,9 +5297,6 @@ static void CL_InitLocal( void ) {
 	CL_Cmd_Register( "help"_asView, CL_Help_f );
 }
 
-/*
-* CL_ShutdownLocal
-*/
 static void CL_ShutdownLocal( void ) {
 	cls.state = CA_UNINITIALIZED;
 	Com_SetClientState( CA_UNINITIALIZED );
@@ -1969,11 +5323,6 @@ static void CL_ShutdownLocal( void ) {
 	CL_Cmd_Unregister( "help"_asView );
 }
 
-//============================================================================
-
-/*
-* CL_TimedemoStats
-*/
 static void CL_TimedemoStats( void ) {
 	if( cl_timedemo->integer && cls.demoPlayer.playing ) {
 		int64_t lastTime = cl.timedemo.lastTime;
@@ -1996,9 +5345,6 @@ static void CL_TimedemoStats( void ) {
 	}
 }
 
-/*
-* CL_AdjustServerTime - adjust delta to new frame snap timestamp
-*/
 void CL_AdjustServerTime( unsigned int gameMsec ) {
 	// hurry up if coming late (unless in demos)
 	if( !cls.demoPlayer.playing ) {
@@ -2028,9 +5374,6 @@ void CL_AdjustServerTime( unsigned int gameMsec ) {
 	}
 }
 
-/*
-* CL_RestartTimeDeltas
-*/
 void CL_RestartTimeDeltas( int newTimeDelta ) {
 	int i;
 
@@ -2043,9 +5386,6 @@ void CL_RestartTimeDeltas( int newTimeDelta ) {
 	}
 }
 
-/*
-* CL_SmoothTimeDeltas
-*/
 int CL_SmoothTimeDeltas( void ) {
 	int i, count;
 	double delta;
@@ -2079,9 +5419,6 @@ int CL_SmoothTimeDeltas( void ) {
 	return (int)( delta / (double)count );
 }
 
-/*
-* CL_UpdateSnapshot - Check for pending snapshots, and fire if needed
-*/
 void CL_UpdateSnapshot( void ) {
 	snapshot_t  *snap;
 	int i;
@@ -2130,9 +5467,6 @@ void CL_UpdateSnapshot( void ) {
 	}
 }
 
-/*
-* CL_Netchan_Transmit
-*/
 void CL_Netchan_Transmit( msg_t *msg ) {
 	// if we got here with unsent fragments, fire them all now
 	Netchan_PushAllFragments( &cls.netchan );
@@ -2148,9 +5482,6 @@ void CL_Netchan_Transmit( msg_t *msg ) {
 	cls.lastPacketSentTime = cls.realtime;
 }
 
-/*
-* CL_MaxPacketsReached
-*/
 static bool CL_MaxPacketsReached( void ) {
 	static int64_t lastPacketTime = 0;
 	static float roundingMsec = 0.0f;
@@ -2195,9 +5526,6 @@ static bool CL_MaxPacketsReached( void ) {
 	return true;
 }
 
-/*
-* CL_SendMessagesToServer
-*/
 void CL_SendMessagesToServer( bool sendNow ) {
 	msg_t message;
 	uint8_t messageData[MAX_MSGLEN];
@@ -2246,9 +5574,6 @@ void CL_SendMessagesToServer( bool sendNow ) {
 	}
 }
 
-/*
-* CL_NetFrame
-*/
 static void CL_NetFrame( int realMsec, int gameMsec ) {
 	// read packets from server
 	if( realMsec > 5000 ) { // if in the debugger last frame, don't timeout
@@ -2274,11 +5599,6 @@ static void CL_NetFrame( int realMsec, int gameMsec ) {
 	ServerList::instance()->frame();
 }
 
-extern qbufPipe_t *g_clCmdPipe;
-
-/*
-* CL_Frame
-*/
 void CL_Frame( int realMsec, int gameMsec ) {
 #ifndef DEDICATED_ONLY
 	(void)QBufPipe_ReadCmds( g_clCmdPipe );
@@ -2346,8 +5666,7 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	if( allRealMsec + extraMsec < minMsec ) {
 		// let CPU sleep while playing fullscreen video, while minimized
 		// or when cl_sleep is enabled
-		bool sleep = cl_sleep->integer != 0 || cls.state == CA_DISCONNECTED ||
-			!VID_AppIsActive() || VID_AppIsMinimized(); // FIXME: not sure about listen server here..
+		bool sleep = cl_sleep->integer != 0 || cls.state == CA_DISCONNECTED || !VID_AppIsActive() || VID_AppIsMinimized(); // FIXME: not sure about listen server here..
 
 		if( sleep && minMsec - extraMsec > 1 ) {
 			Sys_Sleep( minMsec - extraMsec - 1 );
@@ -2399,32 +5718,18 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	cls.framecount++;
 }
 
-//============================================================================
-
-/*
-* CL_AsyncStream_Alloc
-*/
 static void *CL_AsyncStream_Alloc( size_t size, const char *filename, int fileline ) {
 	return Q_malloc( size );
 }
 
-/*
-* CL_AsyncStream_Free
-*/
 static void CL_AsyncStream_Free( void *data, const char *filename, int fileline ) {
 	Q_free( data );
 }
 
-/*
-* CL_InitAsyncStream
-*/
 static void CL_InitAsyncStream( void ) {
 	cl_async_stream = AsyncStream_InitModule( "Client", CL_AsyncStream_Alloc, CL_AsyncStream_Free );
 }
 
-/*
-* CL_ShutdownAsyncStream
-*/
 static void CL_ShutdownAsyncStream( void ) {
 	if( !cl_async_stream ) {
 		return;
@@ -2434,9 +5739,6 @@ static void CL_ShutdownAsyncStream( void ) {
 	cl_async_stream = NULL;
 }
 
-/*
-* CL_AddSessionHttpRequestHeaders
-*/
 int CL_AddSessionHttpRequestHeaders( const char *url, const char **headers ) {
 	static char pH[32];
 
@@ -2454,9 +5756,6 @@ int CL_AddSessionHttpRequestHeaders( const char *url, const char **headers ) {
 	return 0;
 }
 
-/*
-* CL_AsyncStreamRequest
-*/
 void CL_AsyncStreamRequest( const char *url, const char **headers, int timeout, int resumeFrom,
 							size_t ( *read_cb )( const void *, size_t, float, int, const char *, void * ),
 							void ( *done_cb )( int, const char *, void * ),
@@ -2483,11 +5782,6 @@ void CL_AsyncStreamRequest( const char *url, const char **headers, int timeout, 
 	}
 }
 
-//============================================================================
-
-/*
-* CL_Init
-*/
 void CL_Init( void ) {
 	netadr_t address;
 	cvar_t *cl_port;

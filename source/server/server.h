@@ -62,38 +62,6 @@ typedef struct ginfo_s {
 	int max_clients;        // <= sv_maxclients, <= max_edicts
 } ginfo_t;
 
-typedef struct server_s {
-	server_state_t state;       // precache commands are only valid during load
-
-	int64_t nextSnapTime;              // always sv.framenum * svc.snapFrameTime msec
-	int64_t framenum;
-
-	char mapname[MAX_QPATH];               // map name
-
-	wsw::ConfigStringStorage configStrings;
-
-	entity_state_t baselines[MAX_EDICTS];
-	int num_mv_clients;     // current number, <= sv_maxmvclients
-
-	//
-	// global variables shared between game and server
-	//
-	ginfo_t gi;
-
-	void clear() {
-		memset( &state, 0, sizeof( state ) );
-		nextSnapTime = 0;
-		framenum = 0;
-		mapname[0] = '\0';
-
-		configStrings.clear();
-
-		memset( &baselines, 0, sizeof( baselines ) );
-		num_mv_clients = 0;
-		memset( &gi, 0, sizeof( gi ) );
-	}
-} server_t;
-
 struct Client : public ServersideClientBase {};
 
 struct edict_s {
@@ -136,7 +104,6 @@ typedef struct {
 } game_command_t;
 
 #define LATENCY_COUNTS  16
-#define RATE_MESSAGES   25  // wsw : jal : was 10: I think it must fit sv_pps, I have to calculate it
 
 #define HTTP_CLIENT_SESSION_SIZE 16
 
@@ -149,9 +116,6 @@ typedef struct client_s {
 
 	bool reliable;                  // no need for acks, connection is reliable
 	bool mv;                        // send multiview data to the client
-	bool individual_socket;         // client has it's own socket that has to be checked separately
-
-	socket_t socket;
 
 	wsw::StaticString<MAX_STRING_CHARS> reliableCommands[MAX_RELIABLE_COMMANDS];
 	int64_t reliableSequence;      // last added reliable message, not necesarily sent or acknowledged yet
@@ -179,11 +143,6 @@ typedef struct client_s {
 
 	int frame_latency[LATENCY_COUNTS];
 	int ping;
-#ifndef RATEKILLED
-	//int				message_size[RATE_MESSAGES];	// used to rate drop packets
-	int rate;
-	int suppressCount;              // number of messages rate suppressed
-#endif
 	edict_t *edict;                 // EDICT_NUM(clientnum+1)
 	char name[MAX_INFO_VALUE];      // extracted from userinfo, high bits masked
 	char session[HTTP_CLIENT_SESSION_SIZE];  // session id for HTTP requests
@@ -218,26 +177,6 @@ typedef struct client_s {
 // to be sent to a client into a snap. It's used for finding size of the backup storage
 #define MAX_SNAP_ENTITIES 64
 
-typedef struct {
-	netadr_t adr;
-	int challenge;
-	int64_t time;
-} challenge_t;
-
-// for server side demo recording
-typedef struct {
-	int file;
-	char *filename;
-	char *tempname;
-	time_t localtime;
-	int64_t basetime, duration;
-	client_t client;                // special client for writing the messages
-} server_static_demo_t;
-
-typedef server_static_demo_t demorec_t;
-
-#define MAX_MOTD_LEN 1024
-
 typedef struct client_entities_s {
 	unsigned num_entities;              // maxclients->integer*UPDATE_BACKUP*MAX_PACKET_ENTITIES
 	unsigned next_entities;             // next client_entity to use
@@ -249,65 +188,11 @@ typedef struct fatvis_s {
 	uint8_t pvs[MAX_MAP_LEAFS / 8];
 } fatvis_t;
 
-typedef struct {
-	bool initialized;               // sv_init has completed
-	int64_t realtime;               // real world time - always increasing, no clamping, etc
-	int64_t gametime;               // game world time - always increasing, no clamping, etc
-
-	socket_t socket_udp;
-	socket_t socket_udp6;
-	socket_t socket_loopback;
-
-	char mapcmd[MAX_TOKEN_CHARS];       // ie: *intro.cin+base
-
-	int spawncount;                     // incremented each server start
-	                                    // used to check late spawns
-
-	client_t *clients;                  // [sv_maxclients->integer];
-	client_entities_t client_entities;
-
-	challenge_t challenges[MAX_CHALLENGES]; // to prevent invalid IPs from connecting
-
-	server_static_demo_t demo;
-
-	purelist_t *purelist;               // pure file support
-
-	cmodel_state_t *cms;                // passed to CM-functions
-
-	fatvis_t fatvis;
-
-	char *motd;
-
-	void *wakelock;
-} server_static_t;
-
-typedef struct {
-	int64_t nextHeartbeat;
-	int64_t lastActivity;
-	unsigned int snapFrameTime;     // msecs between server packets
-	unsigned int gameFrameTime;     // msecs between game code executions
-	bool autostarted;
-	int64_t lastInfoServerResolve;
-	unsigned int autoUpdateMinute;  // the minute number we should run the autoupdate check, in the range 0 to 59
-} server_constant_t;
-
-//=============================================================================
-
-// shared message buffer to be used for occasional messages
-extern msg_t tmpMessage;
-extern uint8_t tmpMessageData[MAX_MSGLEN];
-
-extern server_constant_t svc;              // constant server info (trully persistant since sv_init)
-extern server_static_t svs;                // persistant server info
-extern server_t sv;                 // local server
-
 extern cvar_t *sv_ip;
 extern cvar_t *sv_port;
 
 extern cvar_t *sv_ip6;
 extern cvar_t *sv_port6;
-
-extern cvar_t *sv_tcp;
 
 #ifdef HTTP_SUPPORT
 extern cvar_t *sv_http;
@@ -319,60 +204,12 @@ extern cvar_t *sv_http_upstream_ip;
 extern cvar_t *sv_http_upstream_realip_header;
 #endif
 
-extern cvar_t *sv_skilllevel;
 extern cvar_t *sv_maxclients;
-extern cvar_t *sv_maxmvclients;
-
-extern cvar_t *sv_enforcetime;
-extern cvar_t *sv_showRcon;
-extern cvar_t *sv_showChallenge;
-extern cvar_t *sv_showInfoQueries;
-extern cvar_t *sv_highchars;
-
-//wsw : jal
-extern cvar_t *sv_maxrate;
-extern cvar_t *sv_compresspackets;
-extern cvar_t *sv_public;         // should heartbeats be sent
-
-// wsw : debug netcode
-extern cvar_t *sv_debug_serverCmd;
 
 extern cvar_t *sv_uploads_http;
 extern cvar_t *sv_uploads_baseurl;
 extern cvar_t *sv_uploads_demos;
 extern cvar_t *sv_uploads_demos_baseurl;
-
-extern cvar_t *sv_pure;
-
-// MOTD: 0=disable MOTD
-//       1=Enable MOTD
-extern cvar_t *sv_MOTD;
-// File to read MOTD from
-extern cvar_t *sv_MOTDFile;
-// String to display
-extern cvar_t *sv_MOTDString;
-extern cvar_t *sv_lastAutoUpdate;
-extern cvar_t *sv_defaultmap;
-
-extern cvar_t *sv_demodir;
-
-extern cvar_t *sv_snap_aggressive_sound_culling;
-extern cvar_t *sv_snap_raycast_players_culling;
-// "fov" sounds more clear than "view dir" though its not very accurate
-extern cvar_t *sv_snap_aggressive_fov_culling;
-extern cvar_t *sv_snap_shadow_events_data;
-
-//===========================================================
-
-//
-// sv_main.c
-//
-int SV_ModelIndex( const char *name );
-int SV_SoundIndex( const char *name );
-int SV_ImageIndex( const char *name );
-int SV_SkinIndex( const char *name );
-
-void SV_WriteClientdataToMessage( client_t *client, msg_t *msg );
 
 void SV_InitOperatorCommands( void );
 void SV_ShutdownOperatorCommands( void );
@@ -386,16 +223,10 @@ int SVC_FakeConnect( const char *fakeUserinfo, const char *fakeSocketType, const
 
 void SV_UpdateActivity( void );
 
-//
-// sv_oob.c
-//
 void SV_ConnectionlessPacket( const socket_t *socket, const netadr_t *address, msg_t *msg );
 void SV_InitInfoServers( void );
 void SV_UpdateInfoServers( void );
 
-//
-// sv_init.c
-//
 void SV_InitGame( void );
 void SV_Map( const char *level, bool devmap );
 void SV_SetServerConfigStrings( void );
@@ -411,20 +242,9 @@ void SV_Cmd_Unregister( const wsw::StringView &name );
 void SV_Cmd_ExecuteNow( const char *text );
 
 void SV_Cbuf_AppendCommand( const char *text );
-void SV_Cbuf_AppendCommand( const wsw::StringView &text );
-void SV_Cbuf_PrependCommand( const char *text );
-void SV_Cbuf_PrependCommand( const wsw::StringView &text );
 
 void SV_Cbuf_ExecutePendingCommands();
 
-//
-// sv_phys.c
-//
-void SV_PrepWorldFrame( void );
-
-//
-// sv_send.c
-//
 bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg );
 void SV_SendServerCommand( client_t *cl, const char *format, ... );
 void SV_AddGameCommand( client_t *client, const char *cmd );
@@ -435,19 +255,6 @@ bool SV_SendMessageToClient( client_t *client, msg_t *msg );
 void SV_ResetClientFrameCounters( void );
 void SV_AddServerCommand( client_t *client, const wsw::StringView &cmd );
 void SV_SendConfigString( client_t *cl, int index, const wsw::StringView &string );
-
-typedef enum { RD_NONE, RD_PACKET } redirect_t;
-
-// destination class for SV_multicast
-typedef enum {
-	MULTICAST_ALL,
-	MULTICAST_PHS,
-	MULTICAST_PVS
-} multicast_t;
-
-#define SV_OUTPUTBUF_LENGTH ( MAX_MSGLEN - 16 )
-
-extern char sv_outputbuf[SV_OUTPUTBUF_LENGTH];
 
 typedef struct {
 	const socket_t *socket;
@@ -463,9 +270,6 @@ void SV_BroadcastCommand( const char *format, ... ) __attribute__( ( format( pri
 void SV_BroadcastCommand( _Printf_format_string_ const char *format, ... );
 #endif
 
-//
-// sv_client.c
-//
 void SV_ParseClientMessage( client_t *client, msg_t *msg );
 bool SV_ClientConnect( const socket_t *socket, const netadr_t *address,
 					   client_t *client, char *userinfo,
@@ -482,48 +286,25 @@ void SV_ExecuteClientThinks( int clientNum );
 void SV_ClientResetCommandBuffers( client_t *client );
 void SV_ClientCloseDownload( client_t *client );
 
-//
-// sv_ccmds.c
-//
-void SV_Status_f( void );
-
-//
-// sv_ents.c
-//
 void SV_WriteFrameSnapToClient( client_t *client, msg_t *msg );
 void SV_BuildClientFrameSnap( client_t *client, int snapHintFlags );
-
-
-//
-// sv_game.c
-//
-extern game_export_t *ge;
 
 void SV_InitGameProgs( void );
 void SV_ShutdownGameProgs( void );
 
-
-//============================================================
-
-//
-// sv_demos.c
-//
 void SV_Demo_WriteSnap( void );
 void SV_Demo_Start_f( const CmdArgs & );
 void SV_Demo_Stop_f( const CmdArgs & );
 void SV_Demo_Cancel_f( const CmdArgs & );
 void SV_Demo_Purge_f( const CmdArgs & );
 
-void SV_DemoList_f( client_t *client, const CmdArgs & );
-void SV_DemoGet_f( client_t *client, const CmdArgs & );
+void HandleClientCommand_Demolist( client_t *client, const CmdArgs &cmdArgs );
+void HandleClientCommand_Demoget( client_t *client, const CmdArgs &cmdArgs );
+void HandleClientCommand_Motd( client_t *client, const CmdArgs &cmdArgs );
 
 bool SV_IsDemoDownloadRequest( const char *request );
 
-//
-// sv_motd.c
-//
 void SV_MOTD_Update( void );
-void SV_MOTD_Get_f( client_t *client, const CmdArgs & );
 
 void SV_Web_Init( void );
 void SV_Web_Shutdown( void );

@@ -333,29 +333,6 @@ struct ChatMessage {
 
 }
 
-//=============================================================================
-
-extern cvar_t *cl_shownet;
-
-extern cvar_t *cl_extrapolationTime;
-extern cvar_t *cl_extrapolate;
-
-extern cvar_t *cl_timedemo;
-
-// wsw : debug netcode
-extern cvar_t *cl_debug_serverCmd;
-extern cvar_t *cl_debug_timeDelta;
-
-extern cvar_t *cl_downloads;
-extern cvar_t *cl_downloads_from_web;
-extern cvar_t *cl_downloads_from_web_timeout;
-extern cvar_t *cl_download_allow_modules;
-
-// delta from this if not from a previous frame
-extern entity_state_t cl_baselines[MAX_EDICTS];
-
-//=============================================================================
-
 //
 // cl_main.c
 //
@@ -500,14 +477,10 @@ void SCR_RunConsole( int msec );
 void SCR_CloseConsole();
 void SCR_RegisterConsoleMedia( void );
 void SCR_ShutDownConsoleMedia( void );
-void SCR_ResetSystemFontConsoleSize( void );
-void SCR_ChangeSystemFontConsoleSize( int ch );
 qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size );
 size_t SCR_FontHeight( qfontface_t *font );
 size_t SCR_strWidth( const char *str, qfontface_t *font, size_t maxlen, int flags = 0 );
-size_t SCR_StrlenForWidth( const char *str, qfontface_t *font, size_t maxwidth, int flags = 0 );
 int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags = 0 );
-size_t SCR_DrawStringWidth( int x, int y, int align, const char *str, size_t maxwidth, qfontface_t *font, const vec4_t color, int flags = 0 );
 void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color, int flags = 0 );
 void SCR_DrawRawChar( int x, int y, wchar_t num, qfontface_t *font, const vec4_t color );
 void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color );
