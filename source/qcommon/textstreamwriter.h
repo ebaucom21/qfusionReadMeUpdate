@@ -25,7 +25,7 @@ protected:
 
 	template <typename T>
 	wsw_forceinline void writeFloatingPointValue( T value ) {
-		static_assert( std::is_same_v<std::remove_cvref<T>, float> || std::is_same_v<std::remove_cvref<T>, double> );
+		static_assert( std::is_same_v<std::remove_cvref_t<T>, float> || std::is_same_v<std::remove_cvref_t<T>, double> );
 		const size_t separatorLen  = ( hasPendingSeparator ? 1 : 0 );
 		// TODO: Is it sufficient for edge cases?
 		constexpr size_t numberLen = std::is_same_v<std::remove_cvref<T>, float> ? 32 : 96;
@@ -48,12 +48,6 @@ protected:
 		}
 	}
 
-	// We try generating non-inlined implementations to suppress call sites code bloat
-
-	wsw_noinline void writeFloat( float value ) { writeFloatingPointValue( value ); }
-	wsw_noinline void writeDouble( double value ) { writeFloatingPointValue( value ); }
-	wsw_noinline void writeLongDouble( long double value ) { writeFloatingPointValue( value ); }
-
 	template <typename T>
 	wsw_forceinline void writeIntegralValue( T value ) {
 		const size_t separatorLen  = ( hasPendingSeparator ? 1 : 0 );
@@ -70,6 +64,20 @@ protected:
 			}
 		}
 	}
+
+public:
+	explicit TextStreamWriter( Stream *stream ) : m_stream( stream ) {}
+
+	TextStreamWriter( const TextStreamWriter & ) = delete;
+	TextStreamWriter( TextStreamWriter && ) = delete;
+	auto operator=( const TextStreamWriter & ) = delete;
+	auto operator=( TextStreamWriter && ) = delete;
+
+	// We try generating non-inlined implementations to suppress call sites code bloat
+	// Note: these methods are made public to avoid hassle with declaring global operators as friends.
+
+	wsw_noinline void writeFloat( float value ) { writeFloatingPointValue( value ); }
+	wsw_noinline void writeDouble( double value ) { writeFloatingPointValue( value ); }
 
 	wsw_noinline void writeInt8( int8_t value ) { writeIntegralValue( value ); }
 	wsw_noinline void writeInt16( int16_t value ) { writeIntegralValue( value ); }
@@ -126,112 +134,10 @@ protected:
 		}
 	}
 
-public:
 	char separatorChar { ' ' };
 	char quotesChar { '\'' };
 	bool hasPendingSeparator { false };
 	bool usePendingSeparators { true };
-
-	TextStreamWriter( const TextStreamWriter & ) = delete;
-	TextStreamWriter( TextStreamWriter && ) = delete;
-	auto operator=( const TextStreamWriter & ) = delete;
-	auto operator=( TextStreamWriter && ) = delete;
-
-	explicit TextStreamWriter( Stream *stream ) : m_stream( stream ) {}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( bool value ) -> TextStreamWriter & {
-		writeBool( value ); return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( char value ) -> TextStreamWriter & {
-		writeChar( value ); return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( int8_t value ) -> TextStreamWriter & {
-		writeInt8( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( int16_t value ) -> TextStreamWriter & {
-		writeInt16( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( int32_t value ) -> TextStreamWriter & {
-		writeInt32( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( int64_t value ) -> TextStreamWriter & {
-		writeInt8( value ); return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( uint8_t value ) -> TextStreamWriter & {
-		writeUInt8( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( uint16_t value ) -> TextStreamWriter & {
-		writeUInt16( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( uint32_t value ) -> TextStreamWriter & {
-		writeUInt32( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( uint64_t value ) -> TextStreamWriter & {
-		writeUInt64( value ); return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( float value ) -> TextStreamWriter & {
-		writeFloat( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( double value ) -> TextStreamWriter & {
-		writeDouble( value ); return *this;
-	}
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( long double value ) -> TextStreamWriter & {
-		writeLongDouble( value ); return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( const void *value ) -> TextStreamWriter & {
-		writePtr( value ); return *this;
-	}
-
-	template <size_t N>
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( const char ( &array )[N] ) -> TextStreamWriter & {
-		if( N ) {
-			// Protect from adding \0 to the output. This only covers the prevalent case.
-			if( array[N - 1] == '\0' ) [[likely]] {
-				writeChars( array, N - 1 );
-			} else {
-				writeChars( array, N );
-			}
-		}
-		return *this;
-	}
-
-	template <typename Chars>
-	requires
-		requires( const Chars &ch ) {
-			{ ch.data() } -> std::same_as<const char *>;
-			{ ch.size() } -> std::integral;
-		}
-	[[maybe_unused]]
-	wsw_noinline auto operator<<( const Chars &chars ) -> TextStreamWriter & {
-		writeQuotedChars( chars.data(), chars.size() );
-		return *this;
-	}
-
-	[[maybe_unused]]
-	wsw_forceinline auto operator<<( TextStreamWriter<Stream> &(*fn)( TextStreamWriter<Stream> & ) ) -> TextStreamWriter & {
-		fn( *this );
-		return *this;
-	}
 
 	wsw_noinline void writeChars( const char *chars, size_t numGivenChars ) {
 		if( numGivenChars ) [[likely]] {
@@ -261,6 +167,118 @@ public:
 		}
 	}
 };
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, char value ) -> TextStreamWriter<Stream> & {
+	writer.writeChar( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, int8_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeInt8( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, int16_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeInt16( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, int32_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeInt32( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, int64_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeInt64( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, uint8_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeUInt8( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, uint16_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeUInt16( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, uint32_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeUInt32( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, uint64_t value ) -> TextStreamWriter<Stream> & {
+	writer.writeUInt64( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, float value ) -> TextStreamWriter<Stream> & {
+	writer.writeFloat( value ); return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, double value ) -> TextStreamWriter<Stream> & {
+	writer.writeDouble( value ); return writer;
+}
+
+// https://stackoverflow.com/a/74922953
+struct StringLiteral {
+private:
+	[[nodiscard]]
+	static consteval auto trimTrailingZeros( const char *s, size_t n ) -> size_t {
+		while( n && s[n - 1] == '\0' ) {
+			n--;
+		}
+		return n;
+	}
+public:
+	template<class T, std::size_t N, std::enable_if_t<std::is_same_v<T, const char>>...>
+	consteval StringLiteral( T ( &chars )[N] ) : data( chars ), length( trimTrailingZeros( chars, N ) ) {}
+
+	const char *const data;
+	const size_t length;
+};
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, const StringLiteral &literal ) -> TextStreamWriter<Stream> & {
+	if( literal.length ) [[likely]] {
+		writer.writeChars( literal.data, literal.length );
+	}
+	return writer;
+}
+
+template <typename Stream, typename Chars>
+	requires
+		requires( const Chars &ch ) {
+		{ ch.data() } -> std::same_as<const char *>;
+		{ ch.size() } -> std::integral;
+	}
+[[maybe_unused]]
+wsw_noinline auto operator<<( TextStreamWriter<Stream> &writer, const Chars &chars ) -> TextStreamWriter<Stream> & {
+	writer.writeQuotedChars( chars.data(), chars.size() );
+	return writer;
+}
+
+template <typename Stream>
+[[maybe_unused]]
+wsw_forceinline auto operator<<( TextStreamWriter<Stream> &writer, TextStreamWriter<Stream> &(*fn)( TextStreamWriter<Stream> & ) ) -> TextStreamWriter<Stream> & {
+	fn( writer );
+	return writer;
+}
 
 }
 

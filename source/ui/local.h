@@ -94,11 +94,11 @@ inline auto operator<<( wsw::TextStreamWriter<Stream> &streamWriter, const QObje
 	}
 	streamWriter.writeChars( objectName, std::strlen( objectName ) );
 	streamWriter.hasPendingSeparator = false;
-	streamWriter << '(';
+	streamWriter.writeChar( '(' );
 	streamWriter.hasPendingSeparator = false;
-	streamWriter << objectAddress;
+	streamWriter.writePtr( objectAddress );
 	streamWriter.hasPendingSeparator = false;
-	streamWriter << ')';
+	streamWriter.writeChar( ')' );
 	return streamWriter;
 }
 

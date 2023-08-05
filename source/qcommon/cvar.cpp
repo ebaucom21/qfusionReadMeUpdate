@@ -187,7 +187,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, cvar_flag_t flags
 		// Update the controller prior to resetting the default value
 		if( var->controller != controller ) {
 			if( var->controller && controller ) {
-				comWarning() << "replacing a controller for cvar" << var_name;
+				comWarning() << "replacing a controller for cvar" << wsw::StringView( var_name );
 			}
 			var->controller = controller;
 			reset = true;

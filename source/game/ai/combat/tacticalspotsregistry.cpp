@@ -321,7 +321,7 @@ void TacticalSpotsRegistry::SavePrecomputedData( const char *mapName ) {
 
 	spotsGrid.Save( writer );
 
-	aiNotice() << "The precomputed tactical spots data has been saved successfully to" << fileName;
+	aiNotice() << "The precomputed tactical spots data has been saved successfully to" << wsw::StringView( fileName );
 }
 
 void TacticalSpotsRegistry::PrecomputedSpotsGrid::Save( AiPrecomputedFileWriter &writer ) {
