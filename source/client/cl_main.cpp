@@ -239,8 +239,6 @@ void NET_GetCurrentState( int64_t *incomingAcknowledged, int64_t *outgoingSequen
 }
 
 void CL_GameModule_Init( void ) {
-	int64_t start;
-
 	// stop all playing sounds
 	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
@@ -248,7 +246,7 @@ void CL_GameModule_Init( void ) {
 
 	SCR_EnableQuickMenu( false );
 
-	start = Sys_Milliseconds();
+	const int64_t start = Sys_Milliseconds();
 	CG_Init( cls.servername, cl.playernum,
 			 viddef.width, viddef.height, VID_GetPixelRatio(),
 			 cls.demoPlayer.playing, cls.demoPlayer.playing ? cls.demoPlayer.filename : "",
@@ -270,15 +268,13 @@ void CL_GameModule_Reset( void ) {
 }
 
 void CL_GameModule_Shutdown( void ) {
-	if( !cge ) {
-		return;
+	if( cge ) {
+		cls.cgameActive = false;
+
+		CG_Shutdown();
+		Com_UnloadGameLibrary( &module_handle );
+		cge = NULL;
 	}
-
-	cls.cgameActive = false;
-
-	CG_Shutdown();
-	Com_UnloadGameLibrary( &module_handle );
-	cge = NULL;
 }
 
 void CL_GameModule_ConfigString( int number, const wsw::StringView &string ) {
@@ -288,11 +284,9 @@ void CL_GameModule_ConfigString( int number, const wsw::StringView &string ) {
 }
 
 bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
-	snapshot_t *currentSnap, *newSnap;
-
 	if( cge ) {
-		currentSnap = ( cl.currentSnapNum <= 0 ) ? NULL : &cl.snapShots[cl.currentSnapNum & UPDATE_MASK];
-		newSnap = &cl.snapShots[pendingSnapshot & UPDATE_MASK];
+		snapshot_t *currentSnap = ( cl.currentSnapNum <= 0 ) ? NULL : &cl.snapShots[cl.currentSnapNum & UPDATE_MASK];
+		snapshot_t *newSnap = &cl.snapShots[pendingSnapshot & UPDATE_MASK];
 		return CG_NewFrameSnap( newSnap, currentSnap );
 	}
 
@@ -364,7 +358,6 @@ void CL_ClearInputState( void ) {
 */
 static void CL_UpdateGameInput( int frameTime ) {
 	int mx, my;
-
 	IN_GetMouseMovement( &mx, &my );
 
 	// refresh input in cgame
@@ -398,30 +391,26 @@ void CL_UserInputFrame( int realMsec ) {
 }
 
 void CL_InitInput( void ) {
-	if( in_initialized ) {
-		return;
+	if( !in_initialized ) {
+		CL_Cmd_Register( "in_restart"_asView, IN_Restart );
+
+		IN_Init();
+
+		cl_ucmdMaxResend =  Cvar_Get( "cl_ucmdMaxResend", "3", CVAR_ARCHIVE );
+		cl_ucmdFPS =        Cvar_Get( "cl_ucmdFPS", "62", CVAR_DEVELOPER );
+
+		in_initialized = true;
 	}
-
-	CL_Cmd_Register( "in_restart"_asView, IN_Restart );
-
-	IN_Init();
-
-	cl_ucmdMaxResend =  Cvar_Get( "cl_ucmdMaxResend", "3", CVAR_ARCHIVE );
-	cl_ucmdFPS =        Cvar_Get( "cl_ucmdFPS", "62", CVAR_DEVELOPER );
-
-	in_initialized = true;
 }
 
 void CL_ShutdownInput( void ) {
-	if( !in_initialized ) {
-		return;
+	if( in_initialized ) {
+		CL_Cmd_Unregister( "in_restart"_asView );
+
+		IN_Shutdown();
+
+		in_initialized = false;
 	}
-
-	CL_Cmd_Unregister( "in_restart"_asView );
-
-	IN_Shutdown();
-
-	in_initialized = true;
 }
 
 static void CL_SetUcmdMovement( usercmd_t *ucmd ) {
@@ -431,9 +420,9 @@ static void CL_SetUcmdMovement( usercmd_t *ucmd ) {
 		CL_GameModule_AddMovement( movement );
 	}
 
-	ucmd->sidemove = bound( -127, (int)(movement[0] * 127.0f), 127 );
+	ucmd->sidemove    = bound( -127, (int)(movement[0] * 127.0f), 127 );
 	ucmd->forwardmove = bound( -127, (int)(movement[1] * 127.0f), 127 );
-	ucmd->upmove = bound( -127, (int)(movement[2] * 127.0f), 127 );
+	ucmd->upmove      = bound( -127, (int)(movement[2] * 127.0f), 127 );
 }
 
 static void CL_SetUcmdButtons( usercmd_t *ucmd ) {
@@ -442,11 +431,10 @@ static void CL_SetUcmdButtons( usercmd_t *ucmd ) {
 		if( wsw::cl::KeyHandlingSystem::instance()->isAnyKeyDown() ) {
 			ucmd->buttons |= BUTTON_ANY;
 		}
-		return;
+	} else {
+		// add chat/console/ui icon as a button
+		ucmd->buttons |=  BUTTON_BUSYICON;
 	}
-
-	// add chat/console/ui icon as a button
-	ucmd->buttons |=  BUTTON_BUSYICON;
 }
 
 static void CL_RefreshUcmd( usercmd_t *ucmd, int msec, bool ready ) {
@@ -477,21 +465,14 @@ static void CL_RefreshUcmd( usercmd_t *ucmd, int msec, bool ready ) {
 }
 
 void CL_WriteUcmdsToMessage( msg_t *msg ) {
-	usercmd_t *cmd;
-	usercmd_t *oldcmd;
-	usercmd_t nullcmd;
-	unsigned int resendCount;
-	unsigned int i;
-	unsigned int ucmdFirst;
-	unsigned int ucmdHead;
-
+	// TODO: Convert to assertions?
 	if( !msg || cls.state < CA_ACTIVE || cls.demoPlayer.playing ) {
 		return;
 	}
 
 	// find out what ucmds we have to send
-	ucmdFirst = cls.ucmdAcknowledged + 1;
-	ucmdHead = cl.cmdNum + 1;
+	unsigned ucmdFirst = cls.ucmdAcknowledged + 1;
+	const unsigned ucmdHead = cl.cmdNum + 1;
 
 	if( cl_ucmdMaxResend->integer > CMD_BACKUP * 0.5 ) {
 		Cvar_SetValue( "cl_ucmdMaxResend", CMD_BACKUP * 0.5 );
@@ -501,6 +482,7 @@ void CL_WriteUcmdsToMessage( msg_t *msg ) {
 
 	// find what is our resend count (resend doesn't include the newly generated ucmds)
 	// and move the start back to the resend start
+	unsigned resendCount;
 	if( ucmdFirst <= cls.ucmdSent + 1 ) {
 		resendCount = 0;
 	} else {
@@ -545,14 +527,16 @@ void CL_WriteUcmdsToMessage( msg_t *msg ) {
 	MSG_WriteUint8( msg, (uint8_t)( ucmdHead - ucmdFirst ) );
 
 	// write the ucmds
+	unsigned i;
 	for( i = ucmdFirst; i < ucmdHead; i++ ) {
 		if( i == ucmdFirst ) { // first one isn't delta-compressed
-			cmd = &cl.cmds[i & CMD_MASK];
+			usercmd_t *cmd = &cl.cmds[i & CMD_MASK];
+			usercmd_t nullcmd;
 			memset( &nullcmd, 0, sizeof( nullcmd ) );
 			MSG_WriteDeltaUsercmd( msg, &nullcmd, cmd );
 		} else {   // delta compress to previous written
-			cmd = &cl.cmds[i & CMD_MASK];
-			oldcmd = &cl.cmds[( i - 1 ) & CMD_MASK];
+			usercmd_t *cmd = &cl.cmds[i & CMD_MASK];
+			usercmd_t *oldcmd = &cl.cmds[( i - 1 ) & CMD_MASK];
 			MSG_WriteDeltaUsercmd( msg, oldcmd, cmd );
 		}
 	}
@@ -563,8 +547,8 @@ void CL_WriteUcmdsToMessage( msg_t *msg ) {
 static bool CL_NextUserCommandTimeReached( int realMsec ) {
 	static int minMsec = 1, allMsec = 0, extraMsec = 0;
 	static float roundingMsec = 0.0f;
-	float maxucmds;
 
+	float maxucmds;
 	if( cls.state < CA_ACTIVE ) {
 		maxucmds = 10; // reduce ratio while connecting
 	} else {
@@ -592,49 +576,39 @@ static bool CL_NextUserCommandTimeReached( int realMsec ) {
 
 	allMsec += realMsec;
 	if( allMsec < minMsec ) {
-		//if( !cls.netchan.unsentFragments ) {
-		//	NET_Sleep( minMsec - allMsec );
 		return false;
+	} else {
+		extraMsec = allMsec - minMsec;
+		if( extraMsec > minMsec ) {
+			extraMsec = minMsec - 1;
+		}
+
+		allMsec = 0;
+		// send a new user command message to the server
+		return cls.state >= CA_ACTIVE;
 	}
-
-	extraMsec = allMsec - minMsec;
-	if( extraMsec > minMsec ) {
-		extraMsec = minMsec - 1;
-	}
-
-	allMsec = 0;
-
-	if( cls.state < CA_ACTIVE ) {
-		return false;
-	}
-
-	// send a new user command message to the server
-	return true;
 }
 
 static void CL_CreateNewUserCommand( int realMsec ) {
-	usercmd_t *ucmd;
-
 	if( !CL_NextUserCommandTimeReached( realMsec ) ) {
 		// refresh current command with up to date data for movement prediction
 		CL_RefreshUcmd( &cl.cmds[cls.ucmdHead & CMD_MASK], realMsec, false );
-		return;
+	} else {
+		cl.cmdNum = cls.ucmdHead;
+		cl.cmd_time[cl.cmdNum & CMD_MASK] = cls.realtime;
+
+		usercmd_t *ucmd = &cl.cmds[cl.cmdNum & CMD_MASK];
+
+		CL_RefreshUcmd( ucmd, realMsec, true );
+
+		// advance head and init the new command
+		cls.ucmdHead++;
+		ucmd = &cl.cmds[cls.ucmdHead & CMD_MASK];
+		memset( ucmd, 0, sizeof( usercmd_t ) );
+
+		// start up with the most recent viewangles
+		CL_RefreshUcmd( ucmd, 0, false );
 	}
-
-	cl.cmdNum = cls.ucmdHead;
-	cl.cmd_time[cl.cmdNum & CMD_MASK] = cls.realtime;
-
-	ucmd = &cl.cmds[cl.cmdNum & CMD_MASK];
-
-	CL_RefreshUcmd( ucmd, realMsec, true );
-
-	// advance head and init the new command
-	cls.ucmdHead++;
-	ucmd = &cl.cmds[cls.ucmdHead & CMD_MASK];
-	memset( ucmd, 0, sizeof( usercmd_t ) );
-
-	// start up with the most recent viewangles
-	CL_RefreshUcmd( ucmd, 0, false );
 }
 
 auto SoundSystem::getPathForName( const char *name, wsw::String *reuse ) -> const char * {
@@ -700,18 +674,18 @@ void VID_Restart_f( const CmdArgs &cmdArgs ) {
 }
 
 bool VID_GetModeInfo( int *width, int *height, unsigned int mode ) {
-	if( mode >= vid_num_modes ) {
-		return false;
+	if( mode < vid_num_modes ) {
+		*width  = vid_modes[mode].width;
+		*height = vid_modes[mode].height;
+		return true;
 	}
-
-	*width  = vid_modes[mode].width;
-	*height = vid_modes[mode].height;
-	return true;
+	return false;
 }
 
 static void VID_ModeList_f( const CmdArgs & ) {
-	for( unsigned i = 0; i < vid_num_modes; i++ )
+	for( unsigned i = 0; i < vid_num_modes; i++ ) {
 		Com_Printf( "* %ix%i\n", vid_modes[i].width, vid_modes[i].height );
+	}
 }
 
 static void VID_NewWindow( int width, int height ) {
@@ -848,18 +822,16 @@ static rserr_t VID_ChangeMode( void ) {
 }
 
 static void VID_UnloadRefresh( void ) {
-	if( !vid_ref_active ) {
-		return;
+	if( vid_ref_active ) {
+		RF_Shutdown( false );
+		vid_ref_active = false;
 	}
-
-	RF_Shutdown( false );
-	vid_ref_active = false;
 }
 
 static bool VID_LoadRefresh() {
 	VID_UnloadRefresh();
 
-	Com_Printf( "\n" );
+	// TODO: Try applying changes immediately?
 	return true;
 }
 
@@ -1100,60 +1072,56 @@ void VID_InitModes( void ) {
 }
 
 void VID_Init( void ) {
-	if( vid_initialized ) {
-		return;
+	if( !vid_initialized ) {
+		VID_InitModes();
+
+		vid_width = Cvar_Get( "vid_width", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+		vid_height = Cvar_Get( "vid_height", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+		vid_xpos = Cvar_Get( "vid_xpos", "0", CVAR_ARCHIVE );
+		vid_ypos = Cvar_Get( "vid_ypos", "0", CVAR_ARCHIVE );
+		vid_fullscreen = Cvar_Get( "vid_fullscreen", "1", CVAR_ARCHIVE );
+		vid_borderless = Cvar_Get( "vid_borderless", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+		vid_displayfrequency = Cvar_Get( "vid_displayfrequency", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
+		vid_multiscreen_head = Cvar_Get( "vid_multiscreen_head", "-1", CVAR_ARCHIVE );
+		vid_parentwid = Cvar_Get( "vid_parentwid", "0", CVAR_NOSET );
+
+		win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
+		win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
+
+		/* Add some console commands that we want to handle */
+		CL_Cmd_Register( "vid_restart"_asView, VID_Restart_f );
+		CL_Cmd_Register( "vid_modelist"_asView, VID_ModeList_f );
+
+		/* Start the graphics mode and load refresh DLL */
+		vid_ref_modified = true;
+		vid_ref_active = false;
+		vid_ref_verbose = true;
+		vid_initialized = true;
+		vid_ref_sound_restart = false;
+		vid_fullscreen->modified = false;
+		vid_borderless->modified = false;
+		vid_ref_prevwidth = vid_modes[0].width; // the smallest mode is the "safe mode"
+		vid_ref_prevheight = vid_modes[0].height;
+
+		FTLIB_Init( true );
+
+		VID_CheckChanges();
 	}
-
-	VID_InitModes();
-
-	vid_width = Cvar_Get( "vid_width", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
-	vid_height = Cvar_Get( "vid_height", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
-	vid_xpos = Cvar_Get( "vid_xpos", "0", CVAR_ARCHIVE );
-	vid_ypos = Cvar_Get( "vid_ypos", "0", CVAR_ARCHIVE );
-	vid_fullscreen = Cvar_Get( "vid_fullscreen", "1", CVAR_ARCHIVE );
-	vid_borderless = Cvar_Get( "vid_borderless", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
-	vid_displayfrequency = Cvar_Get( "vid_displayfrequency", "0", CVAR_ARCHIVE | CVAR_LATCH_VIDEO );
-	vid_multiscreen_head = Cvar_Get( "vid_multiscreen_head", "-1", CVAR_ARCHIVE );
-	vid_parentwid = Cvar_Get( "vid_parentwid", "0", CVAR_NOSET );
-
-	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
-	win_nowinkeys = Cvar_Get( "win_nowinkeys", "0", CVAR_ARCHIVE );
-
-	/* Add some console commands that we want to handle */
-	CL_Cmd_Register( "vid_restart"_asView, VID_Restart_f );
-	CL_Cmd_Register( "vid_modelist"_asView, VID_ModeList_f );
-
-	/* Start the graphics mode and load refresh DLL */
-	vid_ref_modified = true;
-	vid_ref_active = false;
-	vid_ref_verbose = true;
-	vid_initialized = true;
-	vid_ref_sound_restart = false;
-	vid_fullscreen->modified = false;
-	vid_borderless->modified = false;
-	vid_ref_prevwidth = vid_modes[0].width; // the smallest mode is the "safe mode"
-	vid_ref_prevheight = vid_modes[0].height;
-
-	FTLIB_Init( true );
-
-	VID_CheckChanges();
 }
 
 void VID_Shutdown( void ) {
-	if( !vid_initialized ) {
-		return;
+	if( vid_initialized ) {
+		VID_UnloadRefresh();
+
+		FTLIB_Shutdown( true );
+
+		CL_Cmd_Unregister( "vid_restart"_asView );
+		CL_Cmd_Unregister( "vid_modelist"_asView );
+
+		Q_free( vid_modes );
+
+		vid_initialized = false;
 	}
-
-	VID_UnloadRefresh();
-
-	FTLIB_Shutdown( true );
-
-	CL_Cmd_Unregister( "vid_restart"_asView );
-	CL_Cmd_Unregister( "vid_modelist"_asView );
-
-	Q_free( vid_modes );
-
-	vid_initialized = false;
 }
 
 qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size ) {
@@ -1161,13 +1129,11 @@ qfontface_t *SCR_RegisterFont( const char *family, int style, unsigned int size 
 }
 
 static void SCR_RegisterConsoleFont( void ) {
-	const char *con_fontSystemFamilyName;
 	const int con_fontSystemStyle = DEFAULT_SYSTEM_FONT_STYLE;
-	int size;
-	float pixelRatio = Con_GetPixelRatio();
+	const float pixelRatio = Con_GetPixelRatio();
 
 	// register system fonts
-	con_fontSystemFamilyName = con_fontSystemMonoFamily->string;
+	const char *con_fontSystemFamilyName = con_fontSystemMonoFamily->string;
 	if( !con_fontSystemConsoleSize->integer ) {
 		Cvar_SetValue( con_fontSystemConsoleSize->name, DEFAULT_SYSTEM_FONT_SMALL_SIZE );
 	} else if( con_fontSystemConsoleSize->integer > DEFAULT_SYSTEM_FONT_SMALL_SIZE * 2 ) {
@@ -1176,7 +1142,7 @@ static void SCR_RegisterConsoleFont( void ) {
 		Cvar_SetValue( con_fontSystemConsoleSize->name, DEFAULT_SYSTEM_FONT_SMALL_SIZE / 2 );
 	}
 
-	size = ceil( con_fontSystemConsoleSize->integer * pixelRatio );
+	int size = ceil( con_fontSystemConsoleSize->integer * pixelRatio );
 	cls.consoleFont = SCR_RegisterFont( con_fontSystemFamilyName, con_fontSystemStyle, size );
 	if( !cls.consoleFont ) {
 		Cvar_ForceSet( con_fontSystemMonoFamily->name, con_fontSystemMonoFamily->dvalue );
@@ -1209,14 +1175,12 @@ static void SCR_ShutdownFonts( void ) {
 }
 
 static void SCR_CheckSystemFontsModified( void ) {
-	if( !con_fontSystemMonoFamily ) {
-		return;
-	}
-
-	if( con_fontSystemMonoFamily->modified || con_fontSystemConsoleSize->modified ) {
-		SCR_RegisterConsoleFont();
-		con_fontSystemMonoFamily->modified = false;
-		con_fontSystemConsoleSize->modified = false;
+	if( con_fontSystemMonoFamily && con_fontSystemConsoleSize ) {
+		if( con_fontSystemMonoFamily->modified || con_fontSystemConsoleSize->modified ) {
+			SCR_RegisterConsoleFont();
+			con_fontSystemMonoFamily->modified = false;
+			con_fontSystemConsoleSize->modified = false;
+		}
 	}
 }
 
@@ -1262,15 +1226,11 @@ void SCR_DrawRawChar( int x, int y, wchar_t num, qfontface_t *font, const vec4_t
 	FTLIB_DrawRawChar( x, y, num, font, color );
 }
 
-
 void SCR_DrawClampString( int x, int y, const char *str, int xmin, int ymin, int xmax, int ymax, qfontface_t *font, const vec4_t color, int flags ) {
 	FTLIB_DrawClampString( x, y, str, xmin, ymin, xmax, ymax, font, color, flags );
 }
 
 int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font, const vec4_t color, int flags ) {
-	int width;
-	int fontHeight;
-
 	if( !str ) {
 		return 0;
 	}
@@ -1278,13 +1238,15 @@ int SCR_DrawString( int x, int y, int align, const char *str, qfontface_t *font,
 	if( !font ) {
 		font = cls.consoleFont;
 	}
-	fontHeight = FTLIB_FontHeight( font );
+
+	const int fontHeight = FTLIB_FontHeight( font );
 
 	if( ( align % 3 ) != 0 ) { // not left - don't precalculate the width if not needed
 		x = SCR_HorizontalAlignForString( x, align, FTLIB_StringWidth( str, font, 0, flags ) );
 	}
 	y = SCR_VerticalAlignForString( y, align, fontHeight );
 
+	int width = 0;
 	FTLIB_DrawRawString( x, y, str, 0, &width, font, color, flags );
 
 	return width;
@@ -1300,23 +1262,17 @@ void SCR_DrawFillRect( int x, int y, int w, int h, const vec4_t color ) {
 * A new packet was just parsed
 */
 void CL_AddNetgraph( void ) {
-	int i;
-	int ping;
-
 	// if using the debuggraph for something else, don't
 	// add the net lines
 	if( scr_timegraph->integer ) {
 		return;
 	}
 
-	for( i = 0; i < cls.netchan.dropped; i++ )
+	for( int i = 0; i < cls.netchan.dropped; i++ )
 		SCR_DebugGraph( 30.0f, 0.655f, 0.231f, 0.169f );
 
-	for( i = 0; i < cl.suppressCount; i++ )
-		SCR_DebugGraph( 30.0f, 0.0f, 1.0f, 0.0f );
-
 	// see what the latency was on this packet
-	ping = cls.realtime - cl.cmd_time[cls.ucmdAcknowledged & CMD_MASK];
+	int ping = cls.realtime - cl.cmd_time[cls.ucmdAcknowledged & CMD_MASK];
 	ping /= 30;
 	if( ping > 30 ) {
 		ping = 30;
@@ -1336,29 +1292,26 @@ void SCR_DebugGraph( float value, float r, float g, float b ) {
 }
 
 static void SCR_DrawDebugGraph( void ) {
-	int a, x, y, w, i, h, s;
-	float v;
-
 	//
 	// draw the graph
 	//
-	w = viddef.width;
-	x = 0;
-	y = 0 + viddef.height;
+	int w = viddef.width;
+	int x = 0;
+	int y = 0 + viddef.height;
 	SCR_DrawFillRect( x, y - scr_graphheight->integer,
 					  w, scr_graphheight->integer, colorBlack );
 
-	s = ( w + 1024 - 1 ) / 1024; //scale for resolutions with width >1024
+	int s = ( w + 1024 - 1 ) / 1024; //scale for resolutions with width >1024
 
-	for( a = 0; a < w; a++ ) {
-		i = ( netgraph_current - 1 - a + 1024 ) & 1023;
-		v = values[i].value;
+	for( int a = 0; a < w; a++ ) {
+		int i = ( netgraph_current - 1 - a + 1024 ) & 1023;
+		float v = values[i].value;
 		v = v * scr_graphscale->integer + scr_graphshift->integer;
 
 		if( v < 0 ) {
 			v += scr_graphheight->integer * ( 1 + (int)( -v / scr_graphheight->integer ) );
 		}
-		h = (int)v % scr_graphheight->integer;
+		int h = (int)v % scr_graphheight->integer;
 		SCR_DrawFillRect( x + w - 1 - a * s, y - h, s, h, values[i].color );
 	}
 }
@@ -1391,13 +1344,11 @@ void SCR_RunConsole( int msec ) {
 	} else {
 		scr_conlines = 0;
 	}
-
 	if( scr_conlines < scr_con_current ) {
 		scr_con_current -= scr_conspeed->value * msec * 0.001f;
 		if( scr_conlines > scr_con_current ) {
 			scr_con_current = scr_conlines;
 		}
-
 	} else if( scr_conlines > scr_con_current ) {
 		scr_con_current += scr_conspeed->value * msec * 0.001f;
 		if( scr_conlines < scr_con_current ) {
@@ -1419,7 +1370,8 @@ void SCR_BeginLoadingPlaque( void ) {
 	scr_conlines = 0;       // none visible
 	scr_draw_loading = 2;   // clear to black first
 
-	SCR_UpdateScreen();
+	//
+	//SCR_UpdateScreen();
 }
 
 void SCR_EndLoadingPlaque( void ) {
@@ -1453,19 +1405,7 @@ static void SCR_RenderView( bool timedemo ) {
 }
 
 void SCR_UpdateScreen( void ) {
-	// if the screen is disabled (loading plaque is up, or vid mode changing)
-	// do nothing at all
-	if( cls.disable_screen ) {
-		if( Sys_Milliseconds() - cls.disable_screen > 120000 ) {
-			cls.disable_screen = 0;
-			clNotice() << "Loading plaque timed out";
-		}
-		return;
-	}
-
-	if( !scr_initialized || !con_initialized || !cls.mediaInitialized ) {
-		return;     // not ready yet
-	}
+	assert( !cls.disable_screen && scr_initialized && con_initialized && cls.mediaInitialized );
 
 	Con_CheckResize();
 
@@ -1540,20 +1480,18 @@ void SCR_UpdateScreen( void ) {
 * not have future usercmd_t executed before it is executed
 */
 void CL_AddReliableCommand( const char *cmd ) {
-	if( !cmd || !strlen( cmd ) ) {
-		return;
-	}
+	if( cmd && std::strlen( cmd ) > 0 ) {
+		// if we would be losing an old command that hasn't been acknowledged,
+		// we must drop the connection
+		if( cls.reliableSequence > cls.reliableAcknowledge + MAX_RELIABLE_COMMANDS ) {
+			cls.reliableAcknowledge = cls.reliableSequence; // try to avoid loops
+			Com_Error( ERR_DROP, "Client command overflow %" PRIi64 "%" PRIi64, cls.reliableAcknowledge, cls.reliableSequence );
+		}
 
-	// if we would be losing an old command that hasn't been acknowledged,
-	// we must drop the connection
-	if( cls.reliableSequence > cls.reliableAcknowledge + MAX_RELIABLE_COMMANDS ) {
-		cls.reliableAcknowledge = cls.reliableSequence; // try to avoid loops
-		Com_Error( ERR_DROP, "Client command overflow %" PRIi64 "%" PRIi64, cls.reliableAcknowledge, cls.reliableSequence );
+		cls.reliableSequence++;
+		const auto index = (int)( cls.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 ) );
+		Q_strncpyz( cls.reliableCommands[index], cmd, sizeof( cls.reliableCommands[index] ) );
 	}
-
-	cls.reliableSequence++;
-	const auto index = (int)( cls.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 ) );
-	Q_strncpyz( cls.reliableCommands[index], cmd, sizeof( cls.reliableCommands[index] ) );
 }
 
 /*
@@ -1562,19 +1500,16 @@ void CL_AddReliableCommand( const char *cmd ) {
 * Add the pending commands to the message
 */
 void CL_UpdateClientCommandsToServer( msg_t *msg ) {
-	int64_t i;
-
 	// write any unacknowledged clientCommands
-	for( i = cls.reliableAcknowledge + 1; i <= cls.reliableSequence; i++ ) {
-		if( !strlen( cls.reliableCommands[i & ( MAX_RELIABLE_COMMANDS - 1 )] ) ) {
-			continue;
+	for( int64_t i = cls.reliableAcknowledge + 1; i <= cls.reliableSequence; i++ ) {
+		const char *cmd = cls.reliableCommands[i & ( MAX_RELIABLE_COMMANDS - 1 )];
+		if( std::strlen( cmd ) > 0 ) {
+			MSG_WriteUint8( msg, clc_clientcommand );
+			if( !cls.reliable ) {
+				MSG_WriteIntBase128( msg, i );
+			}
+			MSG_WriteString( msg, cmd );
 		}
-
-		MSG_WriteUint8( msg, clc_clientcommand );
-		if( !cls.reliable ) {
-			MSG_WriteIntBase128( msg, i );
-		}
-		MSG_WriteString( msg, cls.reliableCommands[i & ( MAX_RELIABLE_COMMANDS - 1 )] );
 	}
 
 	cls.reliableSent = cls.reliableSequence;
@@ -1584,37 +1519,32 @@ void CL_UpdateClientCommandsToServer( msg_t *msg ) {
 }
 
 void CL_ForwardToServer_f( const CmdArgs &cmdArgs ) {
-	if( cls.demoPlayer.playing ) {
-		return;
-	}
-
-	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
-		clNotice() << "Can't" << cmdArgs[0] << "not connected";
-		return;
-	}
-
-	// don't forward the first argument
-	if( Cmd_Argc() > 1 ) {
-		CL_AddReliableCommand( Cmd_Args() );
+	if( !cls.demoPlayer.playing ) {
+		if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
+			clNotice() << "Can't" << cmdArgs[0] << "not connected";
+		} else {
+			// don't forward the first argument
+			if( Cmd_Argc() > 1 ) {
+				CL_AddReliableCommand( Cmd_Args() );
+			}
+		}
 	}
 }
 
 void CL_ServerDisconnect_f( const CmdArgs &cmdArgs ) {
-	char menuparms[MAX_STRING_CHARS];
-	int type;
-	char reason[MAX_STRING_CHARS];
-
-	type = atoi( Cmd_Argv( 1 ) );
+	int type = atoi( Cmd_Argv( 1 ) );
 	if( type < 0 || type >= DROP_TYPE_TOTAL ) {
 		type = DROP_TYPE_GENERAL;
 	}
 
+	char reason[MAX_STRING_CHARS];
 	Q_strncpyz( reason, Cmd_Argv( 2 ), sizeof( reason ) );
 
 	CL_Disconnect_f( {} );
 
 	clNotice() << "Connection was closed by server" << wsw::StringView( reason );
 
+	char menuparms[MAX_STRING_CHARS];
 	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
 				 DROP_REASON_CONNTERMINATED, cls.servername, type, reason );
 
@@ -1650,59 +1580,50 @@ static void CL_SendConnectPacket( void ) {
 * Resend a connect message if the last one has timed out
 */
 static void CL_CheckForResend( void ) {
-	// FIXME: should use cls.realtime, but it can be old here after starting a server
-	int64_t realtime = Sys_Milliseconds();
-
 	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
-	// if the local server is running and we aren't then connect
-	if( cls.state == CA_DISCONNECTED && Com_ServerState() ) {
-		CL_SetClientState( CA_CONNECTING );
-		if( cls.servername ) {
-			Q_free( cls.servername );
+	if( cls.state == CA_DISCONNECTED ) {
+		// if the local server is running and we aren't then connect
+		if( Com_ServerState() ) {
+			CL_SetClientState( CA_CONNECTING );
+			if( cls.servername ) {
+				Q_free( cls.servername );
+			}
+			cls.servername = Q_strdup( "localhost" );
+			cls.servertype = SOCKET_LOOPBACK;
+			NET_InitAddress( &cls.serveraddress, NA_LOOPBACK );
+			if( !NET_OpenSocket( &cls.socket_loopback, cls.servertype, &cls.serveraddress, false ) ) {
+				Com_Error( ERR_FATAL, "Couldn't open the loopback socket\n" );
+			}
+			cls.socket = &cls.socket_loopback;
 		}
-		cls.servername = Q_strdup( "localhost" );
-		cls.servertype = SOCKET_LOOPBACK;
-		NET_InitAddress( &cls.serveraddress, NA_LOOPBACK );
-		if( !NET_OpenSocket( &cls.socket_loopback, cls.servertype, &cls.serveraddress, false ) ) {
-			Com_Error( ERR_FATAL, "Couldn't open the loopback socket\n" );
-			return;
+	} else if( cls.state == CA_CONNECTING ) {
+		// FIXME: should use cls.realtime, but it can be old here after starting a server
+		const int64_t realtime = Sys_Milliseconds();
+		if( cls.reliable ) {
+			if( realtime - cls.connect_time >= 3000 ) {
+				CL_Disconnect( "Connection timed out" );
+			}
+		} else {
+			if( realtime - cls.connect_time >= 3000 ) {
+				if( cls.connect_count > 3 ) {
+					CL_Disconnect( "Connection timed out" );
+				} else {
+					cls.connect_count++;
+					cls.connect_time = realtime; // for retransmit requests
+
+					clNotice() << "Connecting to" << wsw::StringView( cls.servername );
+
+					Netchan_OutOfBandPrint( cls.socket, &cls.serveraddress, "getchallenge\n" );
+				}
+			}
 		}
-		cls.socket = &cls.socket_loopback;
-	}
-
-	// resend if we haven't gotten a reply yet
-	if( cls.state == CA_CONNECTING && !cls.reliable ) {
-		if( realtime - cls.connect_time < 3000 ) {
-			return;
-		}
-		if( cls.connect_count > 3 ) {
-			CL_Disconnect( "Connection timed out" );
-			return;
-		}
-		cls.connect_count++;
-		cls.connect_time = realtime; // for retransmit requests
-
-		clNotice() << "Connecting to" << wsw::StringView( cls.servername );
-
-		Netchan_OutOfBandPrint( cls.socket, &cls.serveraddress, "getchallenge\n" );
-	}
-
-	if( cls.state == CA_CONNECTING && cls.reliable ) {
-		if( realtime - cls.connect_time < 3000 ) {
-			return;
-		}
-
-		CL_Disconnect( "Connection timed out" );
 	}
 }
 
 static void CL_Connect( const char *servername, socket_type_t type, netadr_t *address, const char *serverchain ) {
-	netadr_t socketaddress;
-	connstate_t newstate;
-
 	cl_connectChain[0] = '\0';
 	cl_nextString[0] = '\0';
 
@@ -1710,10 +1631,10 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 
 	switch( type ) {
 		case SOCKET_LOOPBACK:
+			netadr_t socketaddress;
 			NET_InitAddress( &socketaddress, NA_LOOPBACK );
 			if( !NET_OpenSocket( &cls.socket_loopback, SOCKET_LOOPBACK, &socketaddress, false ) ) {
 				Com_Error( ERR_FATAL, "Couldn't open the loopback socket: %s\n", NET_ErrorString() ); // FIXME
-				return;
 			}
 			cls.socket = &cls.socket_loopback;
 			cls.reliable = false;
@@ -1725,8 +1646,7 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 			break;
 
 		default:
-			assert( false );
-			return;
+			wsw::failWithLogicError( "Unreachable" );
 	}
 
 	cls.servertype = type;
@@ -1743,7 +1663,7 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 	cl.configStrings.clear();
 
 	// If the server supports matchmaking and that we are authenticated, try getting a matchmaking ticket before joining the server
-	newstate = CA_CONNECTING;
+	connstate_t newstate = CA_CONNECTING;
 	/*
 	if( CLStatsowFacade::Instance()->IsValid() ) {
 		// if( MM_GetStatus() == MM_STATUS_AUTHENTICATED && CL_MM_GetTicket( serversession ) )
@@ -1765,21 +1685,16 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 }
 
 static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
-	netadr_t serveraddress;
-	char *servername, password[64], autowatch[64] = { 0 };
-	const char *extension;
-	char *connectstring, *connectstring_base;
-	const char *tmp, *scheme = APP_URI_SCHEME, *proto_scheme = APP_URI_PROTO_SCHEME;
-	const char *serverchain;
-
 	if( Cmd_Argc() < 2 ) {
 		clNotice() << "Usage:" << wsw::unquoted( cmdArgs[0] ) << "<server>";
 		return;
 	}
 
-	connectstring_base = Q_strdup( Cmd_Argv( 1 ) );
-	connectstring = connectstring_base;
-	serverchain = Cmd_Argc() >= 3 ? Cmd_Argv( 2 ) : "";
+	const char *const scheme = APP_URI_SCHEME, *const proto_scheme = APP_URI_PROTO_SCHEME;
+
+	char *connectstring_base = Q_strdup( Cmd_Argv( 1 ) );
+	char *connectstring = connectstring_base;
+	const char *const serverchain = Cmd_Argc() >= 3 ? Cmd_Argv( 2 ) : "";
 
 	if( !Q_strnicmp( connectstring, proto_scheme, strlen( proto_scheme ) ) ) {
 		connectstring += strlen( proto_scheme );
@@ -1787,7 +1702,7 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 		connectstring += strlen( scheme );
 	}
 
-	extension = COM_FileExtension( connectstring );
+	const char *extension = COM_FileExtension( connectstring );
 	if( extension && !Q_stricmp( extension, APP_DEMO_EXTENSION_STR ) ) {
 		char *temp;
 		size_t temp_size;
@@ -1805,39 +1720,41 @@ static void CL_Connect_Cmd_f( socket_type_t socket, const CmdArgs &cmdArgs ) {
 
 		Q_free( temp );
 		Q_free( connectstring_base );
-		return;
+	} else {
+		const char *tmp;
+		char password[64] {}, autowatch[64] {};
+
+		if( ( tmp = Q_strrstr( connectstring, "@" ) ) != NULL ) {
+			assert( tmp - connectstring >= 0 );
+			Q_strncpyz( password, connectstring, wsw::min( sizeof( password ), (size_t)( tmp - connectstring + 1 ) ) );
+			Cvar_Set( "password", password );
+			connectstring = connectstring + ( tmp - connectstring ) + 1;
+		}
+
+		if( ( tmp = Q_strrstr( connectstring, "#" ) ) != NULL ) {
+			Q_strncpyz( autowatch, COM_RemoveColorTokens( tmp + 1 ), sizeof( autowatch ) );
+			connectstring[tmp - connectstring] = '\0';
+		}
+
+		if( ( tmp = Q_strrstr( connectstring, "/" ) ) != NULL ) {
+			connectstring[tmp - connectstring] = '\0';
+		}
+
+		Cvar_ForceSet( "autowatch", autowatch );
+
+		netadr_t serveraddress;
+		if( !NET_StringToAddress( connectstring, &serveraddress ) ) {
+			Q_free( connectstring_base );
+			clNotice() << "Bad server address";
+		} else {
+			char *servername = Q_strdup( connectstring );
+			CL_Connect( servername, ( serveraddress.type == NA_LOOPBACK ? SOCKET_LOOPBACK : socket ),
+					&serveraddress, serverchain );
+
+			Q_free( servername );
+			Q_free( connectstring_base );
+		}
 	}
-
-	if( ( tmp = Q_strrstr( connectstring, "@" ) ) != NULL ) {
-		assert( tmp - connectstring >= 0 );
-		Q_strncpyz( password, connectstring, wsw::min( sizeof( password ), (size_t)( tmp - connectstring + 1 ) ) );
-		Cvar_Set( "password", password );
-		connectstring = connectstring + ( tmp - connectstring ) + 1;
-	}
-
-	if( ( tmp = Q_strrstr( connectstring, "#" ) ) != NULL ) {
-		Q_strncpyz( autowatch, COM_RemoveColorTokens( tmp + 1 ), sizeof( autowatch ) );
-		connectstring[tmp - connectstring] = '\0';
-	}
-
-	if( ( tmp = Q_strrstr( connectstring, "/" ) ) != NULL ) {
-		connectstring[tmp - connectstring] = '\0';
-	}
-
-	Cvar_ForceSet( "autowatch", autowatch );
-
-	if( !NET_StringToAddress( connectstring, &serveraddress ) ) {
-		Q_free( connectstring_base );
-		clNotice() << "Bad server address";
-		return;
-	}
-
-	servername = Q_strdup( connectstring );
-	CL_Connect( servername, ( serveraddress.type == NA_LOOPBACK ? SOCKET_LOOPBACK : socket ),
-				&serveraddress, serverchain );
-
-	Q_free( servername );
-	Q_free( connectstring_base );
 }
 
 static void CL_Connect_f( const CmdArgs &cmdArgs ) {
@@ -1851,11 +1768,6 @@ static void CL_Connect_f( const CmdArgs &cmdArgs ) {
 * an unconnected command.
 */
 static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
-	char message[1024];
-	int i;
-	const socket_t *socket;
-	const netadr_t *address;
-
 	if( cls.demoPlayer.playing ) {
 		return;
 	}
@@ -1865,10 +1777,30 @@ static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 		return;
 	}
 
+	char message[1024];
 	// wsw : jal : check for msg len abuse (thx to r1Q2)
 	if( strlen( Cmd_Args() ) + strlen( rcon_client_password->string ) + 16 >= sizeof( message ) ) {
 		clNotice() << "Length of password + command exceeds maximum allowed length";
 		return;
+	}
+
+	if( cls.state < CA_CONNECTED ) {
+		if( !strlen( rcon_address->string ) ) {
+			clNotice() << "You must be connected, or set the 'rcon_address' cvar to issue rcon commands";
+			return;
+		}
+		if( rcon_address->modified ) {
+			if( NET_StringToAddress( rcon_address->string, &cls.rconaddress ) ) {
+				if( NET_GetAddressPort( &cls.rconaddress ) == 0 ) {
+					NET_SetAddressPort( &cls.rconaddress, PORT_SERVER );
+				}
+				rcon_address->modified = false;
+			} else {
+				clNotice() << "Bad rcon_address";
+				// we don't clear modified, so it will whine the next time too
+				return;
+			}
+		}
 	}
 
 	message[0] = (uint8_t)255;
@@ -1882,33 +1814,18 @@ static void CL_Rcon_f( const CmdArgs &cmdArgs ) {
 	Q_strncatz( message, rcon_client_password->string, sizeof( message ) );
 	Q_strncatz( message, " ", sizeof( message ) );
 
-	for( i = 1; i < Cmd_Argc(); i++ ) {
+	for( int i = 1; i < Cmd_Argc(); i++ ) {
 		Q_strncatz( message, "\"", sizeof( message ) );
 		Q_strncatz( message, Cmd_Argv( i ), sizeof( message ) );
 		Q_strncatz( message, "\" ", sizeof( message ) );
 	}
 
+	const socket_t *socket;
+	const netadr_t *address;
 	if( cls.state >= CA_CONNECTED ) {
 		socket = cls.netchan.socket;
 		address = &cls.netchan.remoteAddress;
 	} else {
-		if( !strlen( rcon_address->string ) ) {
-			clNotice() << "You must be connected, or set the 'rcon_address' cvar to issue rcon commands";
-			return;
-		}
-
-		if( rcon_address->modified ) {
-			if( !NET_StringToAddress( rcon_address->string, &cls.rconaddress ) ) {
-				clNotice() << "Bad rcon_address";
-				return; // we don't clear modified, so it will whine the next time too
-			}
-			if( NET_GetAddressPort( &cls.rconaddress ) == 0 ) {
-				NET_SetAddressPort( &cls.rconaddress, PORT_SERVER );
-			}
-
-			rcon_address->modified = false;
-		}
-
 		socket = ( cls.rconaddress.type == NA_IP6 ? &cls.socket_udp6 : &cls.socket_udp );
 		address = &cls.rconaddress;
 	}
@@ -1956,28 +1873,24 @@ void CL_ResetServerCount( void ) {
 }
 
 static void CL_BeginRegistration( void ) {
-	if( cls.registrationOpen ) {
-		return;
+	if( !cls.registrationOpen ) {
+		cls.registrationOpen = true;
+
+		RF_BeginRegistration();
+		wsw::ui::UISystem::instance()->beginRegistration();
+		SoundSystem::instance()->beginRegistration();
 	}
-
-	cls.registrationOpen = true;
-
-	RF_BeginRegistration();
-	wsw::ui::UISystem::instance()->beginRegistration();
-	SoundSystem::instance()->beginRegistration();
 }
 
 static void CL_EndRegistration( void ) {
-	if( !cls.registrationOpen ) {
-		return;
+	if( cls.registrationOpen ) {
+		cls.registrationOpen = false;
+
+		FTLIB_TouchAllFonts();
+		RF_EndRegistration();
+		wsw::ui::UISystem::instance()->endRegistration();
+		SoundSystem::instance()->endRegistration();
 	}
-
-	cls.registrationOpen = false;
-
-	FTLIB_TouchAllFonts();
-	RF_EndRegistration();
-	wsw::ui::UISystem::instance()->endRegistration();
-	SoundSystem::instance()->endRegistration();
 }
 
 void CL_ClearState( void ) {
@@ -2051,39 +1964,20 @@ void CL_ClearState( void ) {
 static void CL_SetNext_f( const CmdArgs &cmdArgs ) {
 	if( Cmd_Argc() < 2 ) {
 		clNotice() << "Usage: next <commands>\n";
-		return;
+	} else {
+		// jalfixme: I'm afraid of this being too powerful, since it basically
+		// is allowed to execute everything. Shall we check for something?
+		Q_strncpyz( cl_nextString, Cmd_Args(), sizeof( cl_nextString ) );
+		clNotice() << "Next:" << wsw::StringView( cl_nextString );
 	}
-
-	// jalfixme: I'm afraid of this being too powerful, since it basically
-	// is allowed to execute everything. Shall we check for something?
-	Q_strncpyz( cl_nextString, Cmd_Args(), sizeof( cl_nextString ) );
-	clNotice() << "Next:" << wsw::StringView( cl_nextString );
 }
 
 static void CL_ExecuteNext( void ) {
-	if( !strlen( cl_nextString ) ) {
-		return;
+	if( std::strlen( cl_nextString ) > 0 ) {
+		CL_Cbuf_AppendCommand( cl_nextString );
+		memset( cl_nextString, 0, sizeof( cl_nextString ) );
 	}
-
-	CL_Cbuf_AppendCommand( cl_nextString );
-	memset( cl_nextString, 0, sizeof( cl_nextString ) );
 }
-
-/*
-* CL_Disconnect_SendCommand
-*
-* Sends a disconnect message to the server
-*/
-static void CL_Disconnect_SendCommand( void ) {
-	// wsw : jal : send the packet 3 times to make sure isn't lost
-	CL_AddReliableCommand( "disconnect" );
-	CL_SendMessagesToServer( true );
-	CL_AddReliableCommand( "disconnect" );
-	CL_SendMessagesToServer( true );
-	CL_AddReliableCommand( "disconnect" );
-	CL_SendMessagesToServer( true );
-}
-
 
 /*
 * CL_Disconnect
@@ -2102,106 +1996,106 @@ void CL_Disconnect( const char *message, bool isCalledByBuiltinServer /* TODO!!!
 	if( cls.state == CA_UNINITIALIZED ) {
 		return;
 	}
-	if( cls.state == CA_DISCONNECTED ) {
-		goto done;
-	}
 
-	if( !isCalledByBuiltinServer ) {
-		callOverPipe( g_svCmdPipe, SV_ShutdownGame, nullptr, false );
-		QBufPipe_Finish( g_svCmdPipe );
-	}
+	if( cls.state != CA_DISCONNECTED ) {
+		if( !isCalledByBuiltinServer ) {
+			callOverPipe( g_svCmdPipe, SV_ShutdownGame, nullptr, false );
+			QBufPipe_Finish( g_svCmdPipe );
+		}
 
-	if( cl_timedemo && cl_timedemo->integer ) {
-		int i;
-		int64_t sumcounts = 0;
+		if( cl_timedemo && cl_timedemo->integer ) {
+			int64_t sumcounts = 0;
 
-		Com_Printf( "\n" );
-		for( i = 1; i < 100; i++ ) {
-			if( cl.timedemo.counts[i] > 0 ) {
-				float fps, perc;
-				
-				fps = 1000.0 / i;
-				perc = cl.timedemo.counts[i] * 100.0 / cl.timedemo.frames;
-				sumcounts += i * cl.timedemo.counts[i];
+			Com_Printf( "\n" );
+			for( int i = 1; i < 100; i++ ) {
+				if( cl.timedemo.counts[i] > 0 ) {
+					float fps = 1000.0 / i;
+					float perc = cl.timedemo.counts[i] * 100.0 / cl.timedemo.frames;
+					sumcounts += i * cl.timedemo.counts[i];
 
-				Com_Printf( "%2ims - %7.2ffps: %6.2f%%\n", i, fps, perc );
+					Com_Printf( "%2ims - %7.2ffps: %6.2f%%\n", i, fps, perc );
+				}
+			}
+
+			Com_Printf( "\n" );
+			if( sumcounts ) {
+				float mean = 1000.0 / (double)sumcounts * cl.timedemo.frames;
+				int64_t duration = Sys_Milliseconds() - cl.timedemo.startTime;
+				Com_Printf( "%3.1f seconds: %3.1f mean fps\n", duration / 1000.0, mean );
 			}
 		}
 
-		Com_Printf( "\n" );
-		if( sumcounts ) {
-			float mean = 1000.0 / (double)sumcounts * cl.timedemo.frames;
-			int64_t duration = Sys_Milliseconds() - cl.timedemo.startTime;
-			Com_Printf( "%3.1f seconds: %3.1f mean fps\n", duration / 1000.0, mean );
+		cls.connect_time = 0;
+		cls.connect_count = 0;
+		cls.rejected = false;
+
+		if( cls.demoRecorder.recording ) {
+			CL_Stop_f( {} );
 		}
-	}
 
-	cls.connect_time = 0;
-	cls.connect_count = 0;
-	cls.rejected = false;
-
-	if( cls.demoRecorder.recording ) {
-		CL_Stop_f( {} );
-	}
-
-	if( cls.demoPlayer.playing ) {
-		CL_DemoCompleted();
-	} else {
-		CL_Disconnect_SendCommand(); // send a disconnect message to the server
-
-	}
-	FS_RemovePurePaks();
-
-	Com_FreePureList( &cls.purelist );
-
-	cls.sv_pure = false;
-
-	// udp is kept open all the time, for connectionless messages
-	if( cls.socket && cls.socket->type != SOCKET_UDP ) {
-		NET_CloseSocket( cls.socket );
-	}
-
-	cls.socket = NULL;
-	cls.reliable = false;
-	cls.mv = false;
-
-	if( cls.httpbaseurl ) {
-		Q_free( cls.httpbaseurl );
-		cls.httpbaseurl = NULL;
-	}
-
-	R_Finish();
-
-	CL_EndRegistration();
-
-	CL_RestartMedia();
-
-	CL_ClearState();
-	CL_SetClientState( CA_DISCONNECTED );
-
-	if( cls.download.requestname ) {
-		cls.download.pending_reconnect = false;
-		cls.download.cancelled = true;
-		CL_DownloadDone();
-	}
-
-	if( cl_connectChain[0] == '\0' ) {
-		if( message ) {
-			const auto kind = wsw::ui::UISystem::ConnectionFailKind::TryReconnecting;
-			auto *uiSystem = wsw::ui::UISystem::instance();
-			uiSystem->notifyOfFailedConnection( wsw::StringView( message ), kind );
-		}
-	} else {
-		const char *s = strchr( cl_connectChain, ',' );
-		if( s ) {
-			cl_connectChain[s - cl_connectChain] = '\0';
+		if( cls.demoPlayer.playing ) {
+			CL_DemoCompleted();
 		} else {
-			s = cl_connectChain + strlen( cl_connectChain ) - 1;
+			// send a disconnect message to the server
+			// wsw : jal : send the packet 3 times to make sure isn't lost
+			for( int i = 0; i < 3; ++i ) {
+				CL_AddReliableCommand( "disconnect" );
+				CL_SendMessagesToServer( true );
+			}
 		}
-		Q_snprintfz( cl_nextString, sizeof( cl_nextString ), "connect \"%s\" \"%s\"", cl_connectChain, s + 1 );
+
+		FS_RemovePurePaks();
+
+		Com_FreePureList( &cls.purelist );
+
+		cls.sv_pure = false;
+
+		// udp is kept open all the time, for connectionless messages
+		if( cls.socket && cls.socket->type != SOCKET_UDP ) {
+			NET_CloseSocket( cls.socket );
+		}
+
+		cls.socket = NULL;
+		cls.reliable = false;
+		cls.mv = false;
+
+		if( cls.httpbaseurl ) {
+			Q_free( cls.httpbaseurl );
+			cls.httpbaseurl = NULL;
+		}
+
+		R_Finish();
+
+		CL_EndRegistration();
+
+		CL_RestartMedia();
+
+		CL_ClearState();
+		CL_SetClientState( CA_DISCONNECTED );
+
+		if( cls.download.requestname ) {
+			cls.download.pending_reconnect = false;
+			cls.download.cancelled = true;
+			CL_DownloadDone();
+		}
+
+		if( cl_connectChain[0] == '\0' ) {
+			if( message ) {
+				const auto kind = wsw::ui::UISystem::ConnectionFailKind::TryReconnecting;
+				auto *uiSystem = wsw::ui::UISystem::instance();
+				uiSystem->notifyOfFailedConnection( wsw::StringView( message ), kind );
+			}
+		} else {
+			const char *s = strchr( cl_connectChain, ',' );
+			if( s ) {
+				cl_connectChain[s - cl_connectChain] = '\0';
+			} else {
+				s = cl_connectChain + strlen( cl_connectChain ) - 1;
+			}
+			Q_snprintfz( cl_nextString, sizeof( cl_nextString ), "connect \"%s\" \"%s\"", cl_connectChain, s + 1 );
+		}
 	}
 
-done:
 	SCR_EndLoadingPlaque(); // get rid of loading plaque
 
 	// in case we disconnect while in download phase
@@ -2217,10 +2111,9 @@ void CL_Disconnect_f( const CmdArgs & ) {
 	// We have to shut down webdownloading first
 	if( cls.download.web ) {
 		cls.download.disconnect = true;
-		return;
+	} else {
+		CL_Disconnect( NULL );
 	}
-
-	CL_Disconnect( NULL );
 }
 
 /*
@@ -2232,22 +2125,20 @@ void CL_Disconnect_f( const CmdArgs & ) {
 void CL_Changing_f( const CmdArgs & ) {
 	//ZOID
 	//if we are downloading, we don't change!  This so we don't suddenly stop downloading a map
-	if( cls.download.filenum || cls.download.web ) {
-		return;
+	if( ( cls.download.filenum || cls.download.web ) ) {
+		if( cls.demoRecorder.recording ) {
+			CL_Stop_f( {} );
+		}
+
+		Com_DPrintf( "CL:Changing\n" );
+
+		cl.configStrings.clear();
+
+		// ignore snapshots from previous connection
+		cl.pendingSnapNum = cl.currentSnapNum = cl.receivedSnapNum = 0;
+
+		CL_SetClientState( CA_CONNECTED ); // not active anymore, but not disconnected
 	}
-
-	if( cls.demoRecorder.recording ) {
-		CL_Stop_f( {} );
-	}
-
-	Com_DPrintf( "CL:Changing\n" );
-
-	cl.configStrings.clear();
-
-	// ignore snapshots from previous connection
-	cl.pendingSnapNum = cl.currentSnapNum = cl.receivedSnapNum = 0;
-
-	CL_SetClientState( CA_CONNECTED ); // not active anymore, but not disconnected
 }
 
 /*
@@ -2268,26 +2159,25 @@ void CL_ServerReconnect_f( const CmdArgs & ) {
 
 	if( cls.state < CA_CONNECTED ) {
 		Com_Printf( "Error: CL_ServerReconnect_f while not connected\n" );
-		return;
+	} else {
+		if( cls.demoRecorder.recording ) {
+			CL_Stop_f( {} );
+		}
+
+		cls.connect_count = 0;
+		cls.rejected = false;
+
+		CL_GameModule_Shutdown();
+		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+		clNotice() << "Reconnecting";
+
+		cls.connect_time = Sys_Milliseconds() - 1500;
+		cl.configStrings.clear();
+
+		CL_SetClientState( CA_HANDSHAKE );
+		CL_AddReliableCommand( "new" );
 	}
-
-	if( cls.demoRecorder.recording ) {
-		CL_Stop_f( {} );
-	}
-
-	cls.connect_count = 0;
-	cls.rejected = false;
-
-	CL_GameModule_Shutdown();
-	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
-
-	clNotice() << "Reconnecting";
-
-	cls.connect_time = Sys_Milliseconds() - 1500;
-	cl.configStrings.clear();
-
-	CL_SetClientState( CA_HANDSHAKE );
-	CL_AddReliableCommand( "new" );
 }
 
 /*
@@ -2296,10 +2186,6 @@ void CL_ServerReconnect_f( const CmdArgs & ) {
 * User reconnect command.
 */
 void CL_Reconnect_f( const CmdArgs & ) {
-	char *servername;
-	socket_type_t servertype;
-	netadr_t serveraddress;
-
 	if( !cls.servername ) {
 		clNotice() << "Can't reconnect, never connected";
 		return;
@@ -2308,12 +2194,125 @@ void CL_Reconnect_f( const CmdArgs & ) {
 	cl_connectChain[0] = '\0';
 	cl_nextString[0] = '\0';
 
-	servername = Q_strdup( cls.servername );
-	servertype = cls.servertype;
-	serveraddress = cls.serveraddress;
+	char *servername = Q_strdup( cls.servername );
+	socket_type_t servertype = cls.servertype;
+	netadr_t serveraddress = cls.serveraddress;
 	CL_Disconnect( NULL );
 	CL_Connect( servername, servertype, &serveraddress, "" );
 	Q_free( servername );
+}
+
+[[nodiscard]]
+static bool CheckOobConnectionAddress( const netadr_t *address, const char *command ) {
+	// these two are from Q3
+	if( cls.state != CA_CONNECTING ) {
+		clWarning() << "client_connect packet while not connecting, ignored";
+		return false;
+	}
+	if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
+		wsw::StaticString<64> addressString, serverAddressString;
+		addressString.append( wsw::StringView( NET_AddressToString( address ) ) );
+		serverAddressString.append( wsw::StringView( NET_AddressToString( &cls.serveraddress ) ) );
+		clWarning() << wsw::StringView( command ) << "from a different address, ignored: was"_asView
+					<< addressString << "should have been"_asView << serverAddressString;
+		return false;
+	}
+	return true;
+}
+
+static void HandleOob_ClientConnect( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
+	if( cls.state == CA_CONNECTED ) {
+		clWarning() << "Dup connect received, ignored";
+		return;
+	}
+	if( !CheckOobConnectionAddress( address, "client_connect" ) ) {
+		return;
+	}
+
+	cls.rejected = false;
+
+	Q_strncpyz( cls.session, MSG_ReadStringLine( msg ), sizeof( cls.session ) );
+
+	Netchan_Setup( &cls.netchan, socket, address, Netchan_GamePort() );
+	cl.configStrings.clear();
+	CL_SetClientState( CA_HANDSHAKE );
+	CL_AddReliableCommand( "new" );
+}
+
+static void HandleOob_Reject( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
+	if( !CheckOobConnectionAddress( address, "reject" ) ) {
+		return;
+	}
+
+	cls.rejected = true;
+
+	cls.rejecttype = atoi( MSG_ReadStringLine( msg ) );
+	if( cls.rejecttype < 0 || cls.rejecttype >= DROP_TYPE_TOTAL ) {
+		cls.rejecttype = DROP_TYPE_GENERAL;
+	}
+
+	const int rejectflag = atoi( MSG_ReadStringLine( msg ) );
+
+	Q_strncpyz( cls.rejectmessage, MSG_ReadStringLine( msg ), sizeof( cls.rejectmessage ) );
+	if( strlen( cls.rejectmessage ) > sizeof( cls.rejectmessage ) - 2 ) {
+		cls.rejectmessage[strlen( cls.rejectmessage ) - 2] = '.';
+		cls.rejectmessage[strlen( cls.rejectmessage ) - 1] = '.';
+		cls.rejectmessage[strlen( cls.rejectmessage )] = '.';
+	}
+
+	clNotice() << "Connection refused" << wsw::StringView( cls.rejectmessage );
+	if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
+		clNotice() << "Automatic reconnecting allowed";
+	} else {
+		clNotice() << "Automatic reconnecting not allowed";
+		const auto dropType = cls.rejecttype;
+		CL_Disconnect( nullptr );
+		using Kind = wsw::ui::UISystem::ConnectionFailKind;
+		auto *const uiSystem = wsw::ui::UISystem::instance();
+		if( dropType == DROP_TYPE_GENERAL ) {
+			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::TryReconnecting );
+		} else if( dropType == DROP_TYPE_PASSWORD ) {
+			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::PasswordRequired );
+		} else {
+			uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::DontReconnect );
+		}
+	}
+}
+
+static void HandleOob_Cmd( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
+	if( !NET_IsLocalAddress( address ) ) {
+		clWarning() << "Command packet from remote host, ignored";
+	} else {
+		Sys_AppActivate();
+		const char *s = MSG_ReadString( msg );
+		CL_Cbuf_AppendCommand( s );
+		CL_Cbuf_AppendCommand( "\n" );
+	}
+}
+
+static void HandleOob_Print( const socket_t *socket, const netadr_t *address, msg_t *msg ) {
+	// CA_CONNECTING is allowed, because old servers send protocol mismatch connection error message with it
+	if( ( ( cls.state != CA_UNINITIALIZED && cls.state != CA_DISCONNECTED ) &&
+		  NET_CompareAddress( address, &cls.serveraddress ) ) ||
+		( rcon_address->string[0] != '\0' && NET_CompareAddress( address, &cls.rconaddress ) ) ) {
+		const char *s = MSG_ReadString( msg );
+		Com_Printf( "%s", s );
+	} else {
+		clWarning() << "Print packet from unknown host, ignored";
+	}
+}
+
+static void HandleOob_Challenge( const socket_t *socket, const netadr_t *address, msg_t *msg, const char *challenge ) {
+	if( !CheckOobConnectionAddress( address, "challenge" ) ) {
+		return;
+	}
+
+	cls.challenge = atoi( challenge );
+	//wsw : r1q2[start]
+	//r1: reset the timer so we don't send dup. getchallenges
+	cls.connect_time = Sys_Milliseconds();
+	//wsw : r1q2[end]
+	CL_SendConnectPacket();
 }
 
 /*
@@ -2326,202 +2325,62 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 	MSG_ReadInt32( msg ); // skip the -1
 
 	const char *s = MSG_ReadStringLine( msg );
-
-	if( !strncmp( s, "getserversResponse", 18 ) ) {
-		Com_DPrintf( "%s: %s\n", NET_AddressToString( address ), "getserversResponse" );
-		ServerList::instance()->parseGetServersResponse( socket, *address, msg );
-		return;
-	}
-
-	static CmdArgsSplitter argsSplitter;
-	const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( s ) );
-
-	const char *c = cmdArgs[0].data();
-
 	Com_DPrintf( "%s: %s\n", NET_AddressToString( address ), s );
 
-	// jal : wsw
-	// server responding to a detailed info broadcast
-	if( !strcmp( c, "infoResponse" ) ) {
-		ServerList::instance()->parseGetInfoResponse( socket, *address, msg );
-		return;
-	}
-	if( !strcmp( c, "statusResponse" ) ) {
-		ServerList::instance()->parseGetStatusResponse( socket, *address, msg );
-		return;
-	}
+	if( !strncmp( s, "getserversResponse", 18 ) ) {
+		ServerList::instance()->parseGetServersResponse( socket, *address, msg );
+	} else {
+		static CmdArgsSplitter argsSplitter;
+		const CmdArgs &cmdArgs = argsSplitter.exec( wsw::StringView( s ) );
+		const char *cmdName    = cmdArgs[0].data();
 
-	if( cls.demoPlayer.playing ) {
-		Com_DPrintf( "Received connectionless cmd \"%s\" from %s while playing a demo\n", s, NET_AddressToString( address ) );
-		return;
-	}
-
-	// server connection
-	if( !strcmp( c, "client_connect" ) ) {
-		if( cls.state == CA_CONNECTED ) {
-			clWarning() << "Dup connect received, ignored";
-			return;
-		}
-		// these two are from Q3
-		if( cls.state != CA_CONNECTING ) {
-			clWarning() << "client_connect packet while not connecting, ignored";
-			return;
-		}
-		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			clWarning() << "client_connect from a different address, ignored";
-			Com_Printf( "Was %s should have been %s\n", NET_AddressToString( address ),
-						NET_AddressToString( &cls.serveraddress ) );
-			return;
-		}
-
-		cls.rejected = false;
-
-		Q_strncpyz( cls.session, MSG_ReadStringLine( msg ), sizeof( cls.session ) );
-
-		Netchan_Setup( &cls.netchan, socket, address, Netchan_GamePort() );
-		cl.configStrings.clear();
-		CL_SetClientState( CA_HANDSHAKE );
-		CL_AddReliableCommand( "new" );
-		return;
-	}
-
-	// reject packet, used to inform the client that connection attemp didn't succeed
-	if( !strcmp( c, "reject" ) ) {
-		int rejectflag;
-
-		if( cls.state != CA_CONNECTING ) {
-			clWarning() << "reject packet while not connecting, ignored";
-			return;
-		}
-		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			clWarning() << "reject from a different address, ignored";
-			Com_Printf( "Was %s should have been %s\n", NET_AddressToString( address ),
-						NET_AddressToString( &cls.serveraddress ) );
-			return;
-		}
-
-		cls.rejected = true;
-
-		cls.rejecttype = atoi( MSG_ReadStringLine( msg ) );
-		if( cls.rejecttype < 0 || cls.rejecttype >= DROP_TYPE_TOTAL ) {
-			cls.rejecttype = DROP_TYPE_GENERAL;
-		}
-
-		rejectflag = atoi( MSG_ReadStringLine( msg ) );
-
-		Q_strncpyz( cls.rejectmessage, MSG_ReadStringLine( msg ), sizeof( cls.rejectmessage ) );
-		if( strlen( cls.rejectmessage ) > sizeof( cls.rejectmessage ) - 2 ) {
-			cls.rejectmessage[strlen( cls.rejectmessage ) - 2] = '.';
-			cls.rejectmessage[strlen( cls.rejectmessage ) - 1] = '.';
-			cls.rejectmessage[strlen( cls.rejectmessage )] = '.';
-		}
-
-		clNotice() << "Connection refused" << wsw::StringView( cls.rejectmessage );
-		if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
-			clNotice() << "Automatic reconnecting allowed";
+		// jal : wsw
+		// server responding to a detailed info broadcast
+		if( !strcmp( cmdName, "infoResponse" ) ) {
+			ServerList::instance()->parseGetInfoResponse( socket, *address, msg );
+		} else if( !strcmp( cmdName, "statusResponse" ) ) {
+			ServerList::instance()->parseGetStatusResponse( socket, *address, msg );
 		} else {
-			clNotice() << "Automatic reconnecting not allowed";
-			const auto dropType = cls.rejecttype;
-			CL_Disconnect( nullptr );
-			using Kind = wsw::ui::UISystem::ConnectionFailKind;
-			auto *const uiSystem = wsw::ui::UISystem::instance();
-			if( dropType == DROP_TYPE_GENERAL ) {
-				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::TryReconnecting );
-			} else if( dropType == DROP_TYPE_PASSWORD ) {
-				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::PasswordRequired );
+			if( cls.demoPlayer.playing ) {
+				Com_DPrintf( "Received connectionless cmd \"%s\" from %s while playing a demo\n", s, NET_AddressToString( address ) );
 			} else {
-				uiSystem->notifyOfFailedConnection( wsw::StringView( cls.rejectmessage ), Kind::DontReconnect );
+				if( !strcmp( cmdName, "client_connect" ) ) {
+					HandleOob_ClientConnect( socket, address, msg );
+				} else if( !strcmp( cmdName, "reject" ) ) {
+					HandleOob_Reject( socket, address, msg );
+				} else if( !strcmp( cmdName, "cmd" ) ) {
+					HandleOob_Cmd( socket, address, msg );
+				} else if( !strcmp( cmdName, "print" ) ) {
+					HandleOob_Print( socket, address, msg );
+				} else if( !strcmp( cmdName, "ping" ) ) {
+					// send any args back with the acknowledgement
+					Netchan_OutOfBandPrint( socket, address, "ack %s", Cmd_Args() );
+				} else if( !strcmp( cmdName, "ack" ) ) {
+					;
+				} else if( !strcmp( cmdName, "challenge" ) ) {
+					HandleOob_Challenge( socket, address, msg, Cmd_Argv( 1 ) );
+				} else if( !strcmp( cmdName, "echo" ) ) {
+					Netchan_OutOfBandPrint( socket, address, "%s", Cmd_Argv( 1 ));
+				} else {
+					Com_Printf( "Unknown connectionless packet from %s\n%s\n", NET_AddressToString( address ), cmdName );
+				}
 			}
 		}
-
-		return;
 	}
-
-	// remote command from gui front end
-	if( !strcmp( c, "cmd" ) ) {
-		if( !NET_IsLocalAddress( address ) ) {
-			clWarning() << "Command packet from remote host, ignored";
-			return;
-		}
-		Sys_AppActivate();
-		s = MSG_ReadString( msg );
-		CL_Cbuf_AppendCommand( s );
-		CL_Cbuf_AppendCommand( "\n" );
-		return;
-	}
-	// print command from somewhere
-	if( !strcmp( c, "print" ) ) {
-		// CA_CONNECTING is allowed, because old servers send protocol mismatch connection error message with it
-		if( ( ( cls.state != CA_UNINITIALIZED && cls.state != CA_DISCONNECTED ) &&
-			  NET_CompareAddress( address, &cls.serveraddress ) ) ||
-			( rcon_address->string[0] != '\0' && NET_CompareAddress( address, &cls.rconaddress ) ) ) {
-			s = MSG_ReadString( msg );
-			Com_Printf( "%s", s );
-			return;
-		} else {
-			clWarning() << "Print packet from unknown host, ignored";
-			return;
-		}
-	}
-
-	// ping from somewhere
-	if( !strcmp( c, "ping" ) ) {
-		// send any args back with the acknowledgement
-		Netchan_OutOfBandPrint( socket, address, "ack %s", Cmd_Args() );
-		return;
-	}
-
-	// ack from somewhere
-	if( !strcmp( c, "ack" ) ) {
-		return;
-	}
-
-	// challenge from the server we are connecting to
-	if( !strcmp( c, "challenge" ) ) {
-		// these two are from Q3
-		if( cls.state != CA_CONNECTING ) {
-			clWarning() << "challenge packet while not connecting, ignored";
-			return;
-		}
-		if( !NET_CompareAddress( address, &cls.serveraddress ) ) {
-			clWarning() << "challenge from a different address, ignored";
-			Com_Printf( "Was %s", NET_AddressToString( address ) );
-			Com_Printf( " should have been %s\n", NET_AddressToString( &cls.serveraddress ) );
-			return;
-		}
-
-		cls.challenge = atoi( Cmd_Argv( 1 ) );
-		//wsw : r1q2[start]
-		//r1: reset the timer so we don't send dup. getchallenges
-		cls.connect_time = Sys_Milliseconds();
-		//wsw : r1q2[end]
-		CL_SendConnectPacket();
-		return;
-	}
-
-	// echo request from server
-	if( !strcmp( c, "echo" ) ) {
-		Netchan_OutOfBandPrint( socket, address, "%s", Cmd_Argv( 1 ) );
-		return;
-	}
-
-	Com_Printf( "Unknown connectionless packet from %s\n%s\n", NET_AddressToString( address ), c );
 }
 
 static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
-	int zerror;
-
+	// wasn't accepted for some reason
 	if( !Netchan_Process( netchan, msg ) ) {
-		return false; // wasn't accepted for some reason
-
+		return false;
 	}
+
 	// now if compressed, expand it
 	MSG_BeginReading( msg );
 	MSG_ReadInt32( msg ); // sequence
 	MSG_ReadInt32( msg ); // sequence_ack
 	if( msg->compressed ) {
-		zerror = Netchan_DecompressMessage( msg );
-		if( zerror < 0 ) {
+		if( int zerror = Netchan_DecompressMessage( msg ); zerror < 0 ) {
 			// compression error. Drop the packet
 			clWarning() << "CL_ProcessPacket: Compression error" << zerror << "Dropping packet";
 			return false;
@@ -2532,94 +2391,70 @@ static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 }
 
 void CL_ReadPackets( void ) {
+	// TODO: Should be members or locals
 	static msg_t msg;
 	static uint8_t msgData[MAX_MSGLEN];
-	int socketind, ret;
-	socket_t *socket;
-	netadr_t address;
-
-	socket_t* sockets [] =
-	{
-		&cls.socket_loopback,
-		&cls.socket_udp,
-		&cls.socket_udp6,
-	};
 
 	MSG_Init( &msg, msgData, sizeof( msgData ) );
 
-	for( socketind = 0; socketind < (int)( sizeof( sockets ) / sizeof( sockets[0] ) ); socketind++ ) {
-		socket = sockets[socketind];
-
+	for( socket_t *const socket : { &cls.socket_loopback, &cls.socket_udp, &cls.socket_udp6 } ) {
+		int ret;
+		netadr_t address;
 		while( socket->open && ( ret = NET_GetPacket( socket, &address, &msg ) ) != 0 ) {
 			if( ret == -1 ) {
 				Com_Printf( "Error receiving packet with %s: %s\n", NET_SocketToString( socket ), NET_ErrorString() );
 				if( cls.reliable && cls.socket == socket ) {
 					CL_Disconnect( va( "Error receiving packet: %s\n", NET_ErrorString() ) );
 				}
-
-				continue;
+			} else {
+				// remote command packet
+				if( *(int *)msg.data == -1 ) {
+					CL_ConnectionlessPacket( socket, &address, &msg );
+				} else {
+					if( !cls.demoPlayer.playing ) {
+						if( cls.state == CA_DISCONNECTED || cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING ) {
+							Com_DPrintf( "%s: Not connected\n", NET_AddressToString( &address ) );
+						} else {
+							// TODO: Move this condition to CL_ProcessPacket()/Netchan_Process()?
+							if( msg.cursize < 8 ) {
+								//wsw : r1q2[start]
+								Com_DPrintf( "%s: Runt packet\n", NET_AddressToString( &address ) );
+								//wsw : r1q2[end]
+							} else {
+								if( !NET_CompareAddress( &address, &cls.netchan.remoteAddress ) ) {
+									Com_DPrintf( "%s: Sequenced packet without connection\n", NET_AddressToString( &address ) );
+								} else {
+									if( CL_ProcessPacket( &cls.netchan, &msg ) ) {
+										CL_ParseServerMessage( &msg );
+										cls.lastPacketReceivedTime = cls.realtime;
+									}
+									// Otherwise, wasn't accepted for some reason, like only one fragment of bigger message
+								}
+							}
+						}
+					}
+				}
 			}
+		}
+	}
 
-			// remote command packet
-			if( *(int *)msg.data == -1 ) {
-				CL_ConnectionlessPacket( socket, &address, &msg );
-				continue;
-			}
-
-			if( cls.demoPlayer.playing ) {
-				// only allow connectionless packets during demo playback
-				continue;
-			}
-
-			if( cls.state == CA_DISCONNECTED || cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING ) {
-				Com_DPrintf( "%s: Not connected\n", NET_AddressToString( &address ) );
-				continue; // dump it if not connected
-			}
-
-			if( msg.cursize < 8 ) {
-				//wsw : r1q2[start]
-				//r1: delegated to DPrintf (someone could spam your console with crap otherwise)
-				Com_DPrintf( "%s: Runt packet\n", NET_AddressToString( &address ) );
-				//wsw : r1q2[end]
-				continue;
-			}
-
-			//
-			// packet from server
-			//
-			if( !NET_CompareAddress( &address, &cls.netchan.remoteAddress ) ) {
-				Com_DPrintf( "%s: Sequenced packet without connection\n", NET_AddressToString( &address ) );
-				continue;
-			}
-			if( !CL_ProcessPacket( &cls.netchan, &msg ) ) {
-				continue; // wasn't accepted for some reason, like only one fragment of bigger message
-
-			}
-			CL_ParseServerMessage( &msg );
+	if( !cls.demoPlayer.playing ) {
+		// not expected, but could happen if cls.realtime is cleared and lastPacketReceivedTime is not
+		if( cls.lastPacketReceivedTime > cls.realtime ) {
 			cls.lastPacketReceivedTime = cls.realtime;
 		}
-	}
 
-	if( cls.demoPlayer.playing ) {
-		return;
-	}
-
-	// not expected, but could happen if cls.realtime is cleared and lastPacketReceivedTime is not
-	if( cls.lastPacketReceivedTime > cls.realtime ) {
-		cls.lastPacketReceivedTime = cls.realtime;
-	}
-
-	// check timeout
-	if( cls.state >= CA_HANDSHAKE && cls.lastPacketReceivedTime ) {
-		if( cls.lastPacketReceivedTime + cl_timeout->value * 1000 < cls.realtime ) {
-			if( ++cl.timeoutcount > 5 ) { // timeoutcount saves debugger
-				clNotice() << "Server connection timed out";
-				CL_Disconnect( "Connection timed out" );
-				return;
+		// check timeout
+		if( cls.state >= CA_HANDSHAKE && cls.lastPacketReceivedTime ) {
+			if( cls.lastPacketReceivedTime + cl_timeout->value * 1000 < cls.realtime ) {
+				if( ++cl.timeoutcount > 5 ) { // timeoutcount saves debugger
+					clNotice() << "Server connection timed out";
+					CL_Disconnect( "Connection timed out" );
+				}
 			}
+		} else {
+			cl.timeoutcount = 0;
 		}
-	} else {
-		cl.timeoutcount = 0;
 	}
 }
 
@@ -2647,7 +2482,6 @@ bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 			clWarning() << "Can't download" << wsw::StringView( filename ) << "The file already exists";
 			return false;
 		}
-
 		if( !Q_strnicmp( COM_FileBase( filename ), "modules", strlen( "modules" ) ) ) {
 			return false;
 		}
@@ -2656,12 +2490,9 @@ bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 			clWarning() << "Can't download" << wsw::StringView( filename ) << "File already exists";
 			return false;
 		}
-
 		if( !requestpak ) {
-			const char *extension;
-
 			// only allow demo downloads
-			extension = COM_FileExtension( filename );
+			const char *extension = COM_FileExtension( filename );
 			if( !extension || Q_stricmp( extension, APP_DEMO_EXTENSION_STR ) ) {
 				clWarning() << "Can't download, got arbitrary file type" << wsw::StringView( filename );
 				return false;
@@ -2693,8 +2524,6 @@ bool CL_DownloadRequest( const char *filename, bool requestpak ) {
 * Other files must not have gamedir
 */
 bool CL_CheckOrDownloadFile( const char *filename ) {
-	const char *ext;
-
 	if( !cl_downloads->integer ) {
 		return true;
 	}
@@ -2703,7 +2532,7 @@ bool CL_CheckOrDownloadFile( const char *filename ) {
 		return true;
 	}
 
-	ext = COM_FileExtension( filename );
+	const char *ext = COM_FileExtension( filename );
 	if( !ext ) {
 		return true;
 	}
@@ -2733,26 +2562,28 @@ bool CL_CheckOrDownloadFile( const char *filename ) {
 * Checks downloaded file's checksum, renames it and adds to the filesystem.
 */
 static void CL_DownloadComplete( void ) {
-	unsigned checksum = 0;
-	int length;
-
 	FS_FCloseFile( cls.download.filenum );
 	cls.download.filenum = 0;
 
-	// verify checksum
+	unsigned checksum = 0;
+	bool isAValidFile = false;
+
 	if( FS_CheckPakExtension( cls.download.name ) ) {
-		if( !FS_IsPakValid( cls.download.tempname, &checksum ) ) {
-			clWarning() << "Downloaded file is not a valid pack file. Removing it";
-			FS_RemoveBaseFile( cls.download.tempname );
-			return;
+		if( FS_IsPakValid( cls.download.tempname, &checksum ) ) {
+			isAValidFile = true;
 		}
 	} else {
-		length = FS_LoadBaseFile( cls.download.tempname, NULL, NULL, 0 );
-		if( length < 0 ) {
-			clWarning() << "Couldn't load downloaded file";
-			return;
+		// TODO: Just stat() it?
+		if( const int length = FS_LoadBaseFile( cls.download.tempname, NULL, NULL, 0 ); length < 0 ) {
+			checksum = FS_ChecksumBaseFile( cls.download.tempname, false );
+			isAValidFile = true;
 		}
-		checksum = FS_ChecksumBaseFile( cls.download.tempname, false );
+	}
+
+	if( !isAValidFile ) {
+		clWarning() << "Downloaded file is corrupt. Removing it";
+		FS_RemoveBaseFile( cls.download.tempname );
+		return;
 	}
 
 	if( cls.download.checksum != checksum ) {
@@ -2776,19 +2607,16 @@ static void CL_DownloadComplete( void ) {
 }
 
 void CL_FreeDownloadList( void ) {
-	download_list_t *next;
-
 	while( cls.download.list ) {
-		next = cls.download.list->next;
+		download_list_t *next = cls.download.list->next;
 		Q_free( cls.download.list->filename );
 		Q_free( cls.download.list );
 		cls.download.list = next;
 	}
+	cls.download.list = nullptr;
 }
 
 void CL_DownloadDone( void ) {
-	bool requestnext;
-
 	if( cls.download.name ) {
 		CL_StopServerDownload();
 	}
@@ -2796,7 +2624,7 @@ void CL_DownloadDone( void ) {
 	Q_free( cls.download.requestname );
 	cls.download.requestname = NULL;
 
-	requestnext = cls.download.requestnext;
+	const bool requestnext = cls.download.requestnext;
 	cls.download.requestnext = false;
 	cls.download.requestpak = false;
 	cls.download.timeout = 0;
@@ -2811,20 +2639,19 @@ void CL_DownloadDone( void ) {
 		cls.download.pending_reconnect = false;
 		CL_FreeDownloadList();
 		CL_ServerReconnect_f( {} );
-		return;
-	}
-
-	if( requestnext && cls.state > CA_DISCONNECTED ) {
-		CL_RequestNextDownload();
+	} else {
+		if( requestnext && cls.state > CA_DISCONNECTED ) {
+			CL_RequestNextDownload();
+		}
 	}
 }
 
 static void CL_WebDownloadDoneCb( int status, const char *contentType, void *privatep ) {
-	download_t download = cls.download;
-	bool disconnect = download.disconnect;
-	bool cancelled = download.cancelled;
-	bool success = ( download.offset == download.size ) && ( status > -1 );
-	bool try_non_official = download.web_official && !download.web_official_only;
+	const download_t download = cls.download;
+	const bool disconnect = download.disconnect;
+	const bool cancelled = download.cancelled;
+	const bool success = ( download.offset == download.size ) && ( status > -1 );
+	const bool try_non_official = download.web_official && !download.web_official_only;
 
 	clNotice() << "Web download" << wsw::StringView( download.tempname ) << wsw::StringView( success ? "successful" : "failed" );
 
@@ -2838,27 +2665,25 @@ static void CL_WebDownloadDoneCb( int status, const char *contentType, void *pri
 	// check if user pressed escape to stop the downloa
 	if( disconnect ) {
 		CL_Disconnect( NULL ); // this also calls CL_DownloadDone()
-		return;
+	} else {
+		// try a non-official mirror (the builtin HTTP server or a remote mirror)
+		if( !success && !cancelled && try_non_official ) {
+			const int size = download.size;
+			char *filename = Q_strdup( download.origname );
+			const unsigned checksum = download.checksum;
+			char *url = Q_strdup( download.web_url );
+			const bool allow_localhttp = download.web_local_http;
+
+			cls.download.cancelled = true; // remove the temp file
+			CL_StopServerDownload();
+			CL_InitServerDownload( filename, size, checksum, allow_localhttp, url, false );
+
+			Q_free( filename );
+			Q_free( url );
+		} else {
+			CL_DownloadDone();
+		}
 	}
-
-	// try a non-official mirror (the builtin HTTP server or a remote mirror)
-	if( !success && !cancelled && try_non_official ) {
-		int size = download.size;
-		char *filename = Q_strdup( download.origname );
-		unsigned checksum = download.checksum;
-		char *url = Q_strdup( download.web_url );
-		bool allow_localhttp = download.web_local_http;
-
-		cls.download.cancelled = true; // remove the temp file
-		CL_StopServerDownload();
-		CL_InitServerDownload( filename, size, checksum, allow_localhttp, url, false );
-
-		Q_free( filename );
-		Q_free( url );
-		return;
-	}
-
-	CL_DownloadDone();
 }
 
 static size_t CL_WebDownloadReadCb( const void *buf, size_t numb, float percentage, int status,
@@ -2891,15 +2716,6 @@ static size_t CL_WebDownloadReadCb( const void *buf, size_t numb, float percenta
 */
 static void CL_InitServerDownload( const char *filename, size_t size, unsigned checksum, bool allow_localhttpdownload,
 								   const char *url, bool initial ) {
-	size_t alloc_size;
-	bool modules_download = false;
-	bool explicit_pure_download = false;
-	bool force_web_official = initial && cls.download.requestpak;
-	bool official_web_download = false;
-	bool official_web_only = false;
-	const char *baseurl;
-	download_list_t *dl;
-
 	// ignore download commands coming from demo files
 	if( cls.demoPlayer.playing ) {
 		return;
@@ -2963,6 +2779,8 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		return;
 	}
 
+	bool modules_download = false;
+	bool explicit_pure_download = false;
 	if( FS_CheckPakExtension( filename ) ) {
 		if( strchr( strchr( filename, '/' ) + 1, '/' ) ) {
 			clWarning() << "Refusing to download pack file to subdirectory: %s\n" << wsw::StringView( filename );
@@ -2971,7 +2789,6 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		}
 
 		modules_download = !Q_strnicmp( COM_FileBase( filename ), "modules", strlen( "modules" ) );
-
 		if( modules_download ) {
 			CL_DownloadDone();
 			return;
@@ -2994,7 +2811,7 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 
 	if( initial ) {
 		if( cls.download.requestnext ) {
-			dl = cls.download.list;
+			download_list_s *dl = cls.download.list;
 			while( dl != NULL ) {
 				if( !Q_stricmp( dl->filename, filename ) ) {
 					clWarning() << "Skipping, already tried downloading" << wsw::StringView( filename );
@@ -3006,10 +2823,12 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 		}
 	}
 
-	official_web_only = modules_download || explicit_pure_download;
-	official_web_download = force_web_official || official_web_only;
+	const bool force_web_official = initial && cls.download.requestpak;
 
-	alloc_size = strlen( "downloads" ) + 1 /* '/' */ + strlen( filename ) + 1;
+	const bool official_web_only = modules_download || explicit_pure_download;
+	const bool official_web_download = force_web_official || official_web_only;
+
+	size_t alloc_size = strlen( "downloads" ) + 1 /* '/' */ + strlen( filename ) + 1;
 	cls.download.name = (char *)Q_malloc( alloc_size );
 	if( official_web_download || !cls.download.requestpak ) {
 		// it's an official pak, otherwise
@@ -3051,14 +2870,14 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 
 	if( initial ) {
 		if( cls.download.requestnext ) {
-			dl = (download_list_t *)Q_malloc( sizeof( download_list_t ) );
+			download_list_s *dl = (download_list_t *)Q_malloc( sizeof( download_list_t ) );
 			dl->filename = Q_strdup( filename );
 			dl->next = cls.download.list;
 			cls.download.list = dl;
 		}
 	}
 
-	baseurl = cls.httpbaseurl;
+	const char *baseurl = cls.httpbaseurl;
 	if( official_web_download ) {
 		baseurl = APP_UPDATE_URL APP_SERVER_UPDATE_DIRECTORY;
 		allow_localhttpdownload = false;
@@ -3124,34 +2943,28 @@ static void CL_InitServerDownload( const char *filename, size_t size, unsigned c
 
 		CL_AsyncStreamRequest( fullurl, headers, cl_downloads_from_web_timeout->integer / 100, (int)cls.download.offset,
 							   CL_WebDownloadReadCb, CL_WebDownloadDoneCb, NULL, NULL, false );
+	} else {
+		// TODO: Get rid of non-HTTP downloads?
 
-		return;
+		cls.download.timeout = Sys_Milliseconds() + 3000;
+		cls.download.retries = 0;
+
+		CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
 	}
-
-	cls.download.timeout = Sys_Milliseconds() + 3000;
-	cls.download.retries = 0;
-
-	CL_AddReliableCommand( va( "nextdl \"%s\" %" PRIu64, cls.download.name, (uint64_t)cls.download.offset ) );
 }
 
 static void CL_InitDownload_f( const CmdArgs &cmdArgs ) {
-	const char *filename;
-	const char *url;
-	int size;
-	unsigned checksum;
-	bool allow_localhttpdownload;
-
 	// ignore download commands coming from demo files
 	if( cls.demoPlayer.playing ) {
 		return;
 	}
 
 	// read the data
-	filename = Cmd_Argv( 1 );
-	size = atoi( Cmd_Argv( 2 ) );
-	checksum = (unsigned)strtoul( Cmd_Argv( 3 ), NULL, 10 );
-	allow_localhttpdownload = ( atoi( Cmd_Argv( 4 ) ) != 0 ) && cls.httpbaseurl != NULL;
-	url = Cmd_Argv( 5 );
+	const char *filename = Cmd_Argv( 1 );
+	const int size = atoi( Cmd_Argv( 2 ) );
+	const unsigned checksum = (unsigned)strtoul( Cmd_Argv( 3 ), NULL, 10 );
+	const bool allow_localhttpdownload = ( atoi( Cmd_Argv( 4 ) ) != 0 ) && cls.httpbaseurl != NULL;
+	const char *url = Cmd_Argv( 5 );
 
 	CL_InitServerDownload( filename, size, (unsigned)checksum, allow_localhttpdownload, url, true );
 }
@@ -3197,7 +3010,6 @@ void CL_StopServerDownload( void ) {
 static void CL_RetryDownload( void ) {
 	if( ++cls.download.retries > 5 ) {
 		clNotice() << "Download timed out" << wsw::StringView( cls.download.name );
-
 		// let the server know we're done
 		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) );
 		CL_DownloadDone();
@@ -3212,52 +3024,40 @@ static void CL_RetryDownload( void ) {
 * Retry downloading if too much time has passed since last download packet was received
 */
 void CL_CheckDownloadTimeout( void ) {
-	if( !cls.download.timeout || cls.download.timeout > Sys_Milliseconds() ) {
-		return;
-	}
-
-	if( cls.download.filenum ) {
-		CL_RetryDownload();
-	} else {
-		clWarning() << "Download request timed out";
-		CL_DownloadDone();
+	if( cls.download.timeout && cls.download.timeout <= Sys_Milliseconds() ) {
+		if( cls.download.filenum ) {
+			CL_RetryDownload();
+		} else {
+			clWarning() << "Download request timed out";
+			CL_DownloadDone();
+		}
 	}
 }
 
 void CL_DownloadStatus_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
 		clNotice() << "No download active";
-		return;
-	}
-
-	if( !cls.download.name ) {
+	} else if( !cls.download.name ) {
 		Com_Printf( "%s: Requesting\n", COM_FileBase( cls.download.requestname ) );
-		return;
+	} else {
+		Com_Printf( "%s: %s download %3.2f%c done\n", COM_FileBase( cls.download.name ),
+			( cls.download.web ? "Web" : "Server" ), cls.download.percent * 100.0f, '%' );
 	}
-
-	Com_Printf( "%s: %s download %3.2f%c done\n", COM_FileBase( cls.download.name ),
-				( cls.download.web ? "Web" : "Server" ), cls.download.percent * 100.0f, '%' );
 }
 
 void CL_DownloadCancel_f( const CmdArgs & ) {
 	if( !cls.download.requestname ) {
 		clNotice() << "No download active";
-		return;
-	}
-
-	if( !cls.download.name ) {
+	} else if( !cls.download.name ) {
 		CL_DownloadDone();
 		clNotice() << "Canceled download request";
-		return;
-	}
-
-	clNotice() << "Canceled download of" << wsw::StringView( cls.download.name );
-
-	cls.download.cancelled = true;
-
-	if( !cls.download.web ) {
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) ); // let the server know we're done
-		CL_DownloadDone();
+	} else {
+		clNotice() << "Canceled download of" << wsw::StringView( cls.download.name );
+		cls.download.cancelled = true;
+		if( !cls.download.web ) {
+			CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) ); // let the server know we're done
+			CL_DownloadDone();
+		}
 	}
 }
 
@@ -3266,14 +3066,11 @@ void CL_DownloadCancel_f( const CmdArgs & ) {
 * Handles download message from the server.
 * Writes data to the file and requests next download block.
 */
+// TODO: Get rid of non-HTTP downloads
 static void CL_ParseDownload( msg_t *msg ) {
-	size_t size, offset;
-	char *svFilename;
-
-	// read the data
-	svFilename = MSG_ReadString( msg );
-	offset = MSG_ReadInt32( msg );
-	size = MSG_ReadInt32( msg );
+	const char *svFilename = MSG_ReadString( msg );
+	const size_t offset = MSG_ReadInt32( msg );
+	const size_t size = MSG_ReadInt32( msg );
 
 	if( cls.demoPlayer.playing ) {
 		// ignore download commands coming from demo files
@@ -3338,10 +3135,6 @@ static void CL_ParseDownload( msg_t *msg ) {
 }
 
 static void CL_ParseServerData( msg_t *msg ) {
-	int i, sv_bitflags, numpure;
-	int http_portnum;
-	bool old_sv_pure;
-
 	clDebug() << "Serverdata packet received";
 
 	// wipe the client_state_t struct
@@ -3350,10 +3143,10 @@ static void CL_ParseServerData( msg_t *msg ) {
 	CL_SetClientState( CA_CONNECTED );
 
 	// parse protocol version number
-	i = MSG_ReadInt32( msg );
+	const int version = MSG_ReadInt32( msg );
 
-	if( i != APP_PROTOCOL_VERSION && !( cls.demoPlayer.playing && i == APP_DEMO_PROTOCOL_VERSION ) ) {
-		Com_Error( ERR_DROP, "Server returned version %i, not %i", i, APP_PROTOCOL_VERSION );
+	if( version != APP_PROTOCOL_VERSION && !( cls.demoPlayer.playing && version == APP_DEMO_PROTOCOL_VERSION ) ) {
+		Com_Error( ERR_DROP, "Server returned version %i, not %i", version, APP_PROTOCOL_VERSION );
 	}
 
 	cl.servercount = MSG_ReadInt32( msg );
@@ -3370,7 +3163,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	// get the full level name
 	Q_strncpyz( cl.servermessage, MSG_ReadString( msg ), sizeof( cl.servermessage ) );
 
-	sv_bitflags = MSG_ReadUint8( msg );
+	const int sv_bitflags = MSG_ReadUint8( msg );
 
 	if( cls.demoPlayer.playing ) {
 		cls.reliable = ( sv_bitflags & SV_BITFLAGS_RELIABLE );
@@ -3391,7 +3184,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 			// read base upstream url
 			cls.httpbaseurl = Q_strdup( MSG_ReadString( msg ) );
 		} else {
-			http_portnum = MSG_ReadInt16( msg ) & 0xffff;
+			const int http_portnum = MSG_ReadInt16( msg ) & 0xffff;
 			cls.httpaddress = cls.serveraddress;
 			if( cls.httpaddress.type == NA_IP6 ) {
 				cls.httpaddress.address.ipv6.port = BigShort( http_portnum );
@@ -3414,7 +3207,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	Com_FreePureList( &cls.purelist );
 
 	// add new
-	numpure = MSG_ReadInt16( msg );
+	int numpure = MSG_ReadInt16( msg );
 	while( numpure > 0 ) {
 		const char *pakname = MSG_ReadString( msg );
 		const unsigned checksum = MSG_ReadInt32( msg );
@@ -3429,7 +3222,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	// get the configstrings request
 	CL_AddReliableCommand( va( "configstrings %i 0", cl.servercount ) );
 
-	old_sv_pure = cls.sv_pure;
+	const bool old_sv_pure = cls.sv_pure;
 	cls.sv_pure = ( sv_bitflags & SV_BITFLAGS_PURE ) != 0;
 	cls.pure_restart = cls.sv_pure && old_sv_pure == false;
 
@@ -3451,12 +3244,8 @@ static void CL_ParseBaseline( msg_t *msg ) {
 }
 
 static void CL_ParseFrame( msg_t *msg ) {
-	snapshot_t *snap, *oldSnap;
-	int delta;
-
-	oldSnap = ( cl.receivedSnapNum > 0 ) ? &cl.snapShots[cl.receivedSnapNum & UPDATE_MASK] : NULL;
-
-	snap = SNAP_ParseFrame( msg, oldSnap, &cl.suppressCount, cl.snapShots, cl_baselines, cl_shownet->integer );
+	snapshot_t *oldSnap = ( cl.receivedSnapNum > 0 ) ? &cl.snapShots[cl.receivedSnapNum & UPDATE_MASK] : NULL;
+	const snapshot_t *snap = SNAP_ParseFrame( msg, oldSnap, cl.snapShots, cl_baselines, cl_shownet->integer );
 	if( snap->valid ) {
 		cl.receivedSnapNum = snap->serverFrame;
 
@@ -3488,7 +3277,7 @@ static void CL_ParseFrame( msg_t *msg ) {
 
 		// the first snap, fill all the timeDeltas with the same value
 		// don't let delta add big jumps to the smoothing ( a stable connection produces jumps inside +-3 range)
-		delta = ( snap->serverTime - cl.snapFrameTime ) - cls.gametime;
+		int delta = ( snap->serverTime - cl.snapFrameTime ) - cls.gametime;
 		if( cl.currentSnapNum <= 0 || delta < cl.newServerTimeDelta - 175 || delta > cl.newServerTimeDelta + 175 ) {
 			CL_RestartTimeDeltas( delta );
 		} else {
@@ -3532,55 +3321,48 @@ static void CL_CvarInfoRequest_f( const CmdArgs &cmdArgs ) {
 
 	if( strlen( string ) + strlen( cvarName ) + 1 /*quote*/ + 1 /*space*/ >= MAX_STRING_CHARS - 1 ) {
 		CL_AddReliableCommand( "cvarinfo \"invalid\"" );
-		return;
-	}
+	} else {
+		Q_strncatz( string, cvarName, sizeof( string ) );
+		Q_strncatz( string, "\" ", sizeof( string ) );
 
-	Q_strncatz( string, cvarName, sizeof( string ) );
-	Q_strncatz( string, "\" ", sizeof( string ) );
-
-	cvarString = Cvar_String( cvarName );
-	if( !cvarString[0] ) {
-		cvarString = "not found";
-	}
-
-	if( strlen( string ) + strlen( cvarString ) + 2 /*quotes*/ >= MAX_STRING_CHARS - 1 ) {
-		if( strlen( string ) + strlen( " \"too long\"" ) < MAX_STRING_CHARS - 1 ) {
-			CL_AddReliableCommand( va( "%s\"too long\"", string ) );
-		} else {
-			CL_AddReliableCommand( "cvarinfo \"invalid\"" );
+		cvarString = Cvar_String( cvarName );
+		if( !cvarString[0] ) {
+			cvarString = "not found";
 		}
 
-		return;
+		if( strlen( string ) + strlen( cvarString ) + 2 /*quotes*/ >= MAX_STRING_CHARS - 1 ) {
+			if( strlen( string ) + strlen( " \"too long\"" ) < MAX_STRING_CHARS - 1 ) {
+				CL_AddReliableCommand( va( "%s\"too long\"", string ) );
+			} else {
+				CL_AddReliableCommand( "cvarinfo \"invalid\"" );
+			}
+		} else {
+			Q_strncatz( string, "\"", sizeof( string ) );
+			Q_strncatz( string, cvarString, sizeof( string ) );
+			Q_strncatz( string, "\"", sizeof( string ) );
+
+			CL_AddReliableCommand( string );
+		}
 	}
-
-	Q_strncatz( string, "\"", sizeof( string ) );
-	Q_strncatz( string, cvarString, sizeof( string ) );
-	Q_strncatz( string, "\"", sizeof( string ) );
-
-	CL_AddReliableCommand( string );
 }
 
 static void CL_UpdateConfigString( int idx, const char *s ) {
-	if( !s ) {
-		return;
-	}
+	if( s ) {
+		if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demoPlayer.playing ) ) {
+			Com_Printf( "CL_UpdateConfigString(%i): \"%s\"\n", idx, s );
+		}
 
-	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demoPlayer.playing ) ) {
-		Com_Printf( "CL_ParseConfigstringCommand(%i): \"%s\"\n", idx, s );
-	}
+		if( idx < 0 || idx >= MAX_CONFIGSTRINGS ) {
+			Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
+		}
+		if( !COM_ValidateConfigstring( s ) ) {
+			Com_Error( ERR_DROP, "Invalid configstring (%i): %s", idx, s );
+		}
 
-	if( idx < 0 || idx >= MAX_CONFIGSTRINGS ) {
-		Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
+		const wsw::StringView string( s );
+		cl.configStrings.set( idx, string );
+		CL_GameModule_ConfigString( idx, string );
 	}
-
-	if( !COM_ValidateConfigstring( s ) ) {
-		Com_Printf( "%sWARNING:%s Invalid Configstring (%i): %s\n", S_COLOR_YELLOW, S_COLOR_WHITE, idx, s );
-		return;
-	}
-
-	const wsw::StringView string( s );
-	cl.configStrings.set( idx, string );
-	CL_GameModule_ConfigString( idx, string );
 }
 
 static void CL_AddConfigStringFragment( int index, int fragmentNum, int numFragments, int specifiedLen, const char *s ) {
@@ -3617,19 +3399,18 @@ static void CL_AddConfigStringFragment( int index, int fragmentNum, int numFragm
 	if( fragmentNum + 1 != numFragments ) {
 		cl.configStringFragmentIndex = index;
 		cl.configStringFragmentNum = fragmentNum;
-		return;
+	} else {
+		cl.configStringFragmentIndex = 0;
+		cl.configStringFragmentNum = 0;
+
+		const size_t combinedLen = fragmentOffset + specifiedLen;
+		cl.configStringFragmentsBuffer[combinedLen] = '\0';
+
+		const wsw::StringView view( cl.configStringFragmentsBuffer, combinedLen, wsw::StringView::ZeroTerminated );
+
+		cl.configStrings.set( index, view );
+		CL_GameModule_ConfigString( index, view );
 	}
-
-	cl.configStringFragmentIndex = 0;
-	cl.configStringFragmentNum = 0;
-
-	const size_t combinedLen = fragmentOffset + specifiedLen;
-	cl.configStringFragmentsBuffer[combinedLen] = '\0';
-
-	const wsw::StringView view( cl.configStringFragmentsBuffer, combinedLen, wsw::StringView::ZeroTerminated );
-
-	cl.configStrings.set( index, view );
-	CL_GameModule_ConfigString( index, view );
 }
 
 static void CL_ParseConfigstringCommand( const CmdArgs &cmdArgs ) {
@@ -3713,11 +3494,9 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 	// parse the message
 	while( msg->readcount < msg->cursize ) {
-		int cmd;
-		int ext, len;
 		size_t meta_data_maxsize;
 
-		cmd = MSG_ReadUint8( msg );
+		const int cmd = MSG_ReadUint8( msg );
 		if( cl_debug_serverCmd->integer & 4 ) {
 			const char *format = "%3" PRIi64 ":CMD %i %s\n";
 			Com_Printf( format, (int64_t)( msg->readcount - 1 ), cmd, !svc_strings[cmd] ? "bad" : svc_strings[cmd] );
@@ -3756,7 +3535,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 					}
 					cls.lastExecutedServerCommand = cmdNum;
 				}
-				// fall through
+				[[fallthrough]];
 			case svc_servercs: // configstrings from demo files. they don't have acknowledge
 				CL_ParseServerCommand( msg );
 				break;
@@ -3822,9 +3601,9 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				break;
 
 			case svc_extension:
-				ext = MSG_ReadUint8( msg );  // extension id
+				const int ext = MSG_ReadUint8( msg );  // extension id
 				MSG_ReadUint8( msg );        // version number
-				len = MSG_ReadInt16( msg ); // command length
+				const int len = MSG_ReadInt16( msg ); // command length
 
 				switch( ext ) {
 					default:
@@ -3930,133 +3709,128 @@ void SNAP_ParseBaseline( msg_t *msg, entity_state_t *baselines ) {
 * rest of the data stream.
 */
 static void SNAP_ParsePacketEntities( msg_t *msg, snapshot_t *oldframe, snapshot_t *newframe, entity_state_t *baselines, int shownet ) {
-	int newnum;
-	bool remove;
-	unsigned byteMask;
-	entity_state_t *oldstate = NULL;
-	int oldindex, oldnum;
-
 	newframe->numEntities = 0;
 
-	// delta from the entities present in oldframe
-	oldindex = 0;
+	int oldEntNum;
+	int oldEntIndex          = 0;
+	entity_state_t *oldstate = nullptr;
 	if( !oldframe ) {
-		oldnum = 99999;
-	} else if( oldindex >= oldframe->numEntities ) {
-		oldnum = 99999;
+		oldEntNum = 99999;
+	} else if( oldEntIndex >= oldframe->numEntities ) {
+		oldEntNum = 99999;
 	} else {
-		oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
-		oldnum = oldstate->number;
+		oldstate = &oldframe->parsedEntities[oldEntIndex & ( MAX_PARSE_ENTITIES - 1 )];
+		oldEntNum = oldstate->number;
 	}
 
-	while( true ) {
-		newnum = MSG_ReadEntityNumber( msg, &remove, &byteMask );
-		if( newnum >= MAX_EDICTS ) {
-			Com_Error( ERR_DROP, "CL_ParsePacketEntities: bad number:%i", newnum );
+	// TODO: This logic is convoluted, clean it up
+	for(;;) {
+		bool remove         = false;
+		unsigned byteMask   = 0;
+		const int newEntNum = MSG_ReadEntityNumber( msg, &remove, &byteMask );
+		if( newEntNum >= MAX_EDICTS ) {
+			Com_Error( ERR_DROP, "CL_ParsePacketEntities: bad number:%i", newEntNum );
 		}
 		if( msg->readcount > msg->cursize ) {
 			Com_Error( ERR_DROP, "CL_ParsePacketEntities: end of message" );
 		}
 
-		if( !newnum ) {
+		if( !newEntNum ) {
 			break;
 		}
 
-		while( oldnum < newnum ) {
-			// one or more entities from the old packet are unchanged
+		// One or more entities from the old packet are unchanged.
+		// Add these entities to the new frame.
+		while( oldEntNum < newEntNum ) {
 			if( shownet == 3 ) {
-				Com_Printf( "   unchanged: %i\n", oldnum );
+				Com_Printf( "   unchanged: %i\n", oldEntNum );
 			}
 
-			SNAP_ParseDeltaEntity( msg, newframe, oldnum, oldstate, 0 );
+			// TODO: The name should make the fact that it adds an entity to frame obvious
+			SNAP_ParseDeltaEntity( msg, newframe, oldEntNum, oldstate, 0 );
 
-			oldindex++;
-			if( oldindex >= oldframe->numEntities ) {
-				oldnum = 99999;
+			oldEntIndex++;
+			if( oldEntIndex >= oldframe->numEntities ) {
+				oldEntNum = 99999;
 			} else {
-				oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
-				oldnum = oldstate->number;
+				oldstate = &oldframe->parsedEntities[oldEntIndex & ( MAX_PARSE_ENTITIES - 1 )];
+				oldEntNum = oldstate->number;
 			}
 		}
+
+		assert( oldEntNum >= newEntNum );
 
 		// delta from baseline
-		if( oldnum > newnum ) {
+		if( oldEntNum > newEntNum ) {
 			if( remove ) {
 				Com_Printf( "U_REMOVE: oldnum > newnum (can't remove from baseline!)\n" );
-				continue;
+			} else {
+				// delta from baseline
+				if( shownet == 3 ) {
+					Com_Printf( "   baseline: %i\n", newEntNum );
+				}
+				SNAP_ParseDeltaEntity( msg, newframe, newEntNum, &baselines[newEntNum], byteMask );
 			}
-
-			// delta from baseline
-			if( shownet == 3 ) {
-				Com_Printf( "   baseline: %i\n", newnum );
-			}
-
-			SNAP_ParseDeltaEntity( msg, newframe, newnum, &baselines[newnum], byteMask );
-			continue;
-		}
-
-		if( oldnum == newnum ) {
+		} else {
 			if( remove ) {
 				// the entity present in oldframe is not in the current frame
 				if( shownet == 3 ) {
-					Com_Printf( "   remove: %i\n", newnum );
+					Com_Printf( "   remove: %i\n", newEntNum );
 				}
 
-				if( oldnum != newnum ) {
+				if( oldEntNum != newEntNum ) {
 					Com_Printf( "U_REMOVE: oldnum != newnum\n" );
 				}
 
-				oldindex++;
-				if( oldindex >= oldframe->numEntities ) {
-					oldnum = 99999;
+				oldEntIndex++;
+				if( oldEntIndex >= oldframe->numEntities ) {
+					oldEntNum = 99999;
 				} else {
-					oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
-					oldnum = oldstate->number;
+					oldstate = &oldframe->parsedEntities[oldEntIndex & ( MAX_PARSE_ENTITIES - 1 )];
+					oldEntNum = oldstate->number;
 				}
-				continue;
-			}
-
-			// delta from previous state
-			if( shownet == 3 ) {
-				Com_Printf( "   delta: %i\n", newnum );
-			}
-
-			SNAP_ParseDeltaEntity( msg, newframe, newnum, oldstate, byteMask );
-
-			oldindex++;
-			if( oldindex >= oldframe->numEntities ) {
-				oldnum = 99999;
 			} else {
-				oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
-				oldnum = oldstate->number;
+				// delta from previous state
+				if( shownet == 3 ) {
+					Com_Printf( "   delta: %i\n", newEntNum );
+				}
+
+				SNAP_ParseDeltaEntity( msg, newframe, newEntNum, oldstate, byteMask );
+
+				oldEntIndex++;
+				if( oldEntIndex >= oldframe->numEntities ) {
+					oldEntNum = 99999;
+				} else {
+					oldstate = &oldframe->parsedEntities[oldEntIndex & ( MAX_PARSE_ENTITIES - 1 )];
+					oldEntNum = oldstate->number;
+				}
 			}
-			continue;
 		}
 	}
 
 	// any remaining entities in the old frame are copied over
-	while( oldnum != 99999 ) {
+	while( oldEntNum != 99999 ) {
 		// one or more entities from the old packet are unchanged
 		if( shownet == 3 ) {
-			Com_Printf( "   unchanged: %i\n", oldnum );
+			Com_Printf( "   unchanged: %i\n", oldEntNum );
 		}
 
-		SNAP_ParseDeltaEntity( msg, newframe, oldnum, oldstate, 0 );
+		SNAP_ParseDeltaEntity( msg, newframe, oldEntNum, oldstate, 0 );
 
-		oldindex++;
-		if( oldindex >= oldframe->numEntities ) {
-			oldnum = 99999;
+		oldEntIndex++;
+		if( oldEntIndex >= oldframe->numEntities ) {
+			oldEntNum = 99999;
 		} else {
-			oldstate = &oldframe->parsedEntities[oldindex & ( MAX_PARSE_ENTITIES - 1 )];
-			oldnum = oldstate->number;
+			oldstate = &oldframe->parsedEntities[oldEntIndex & ( MAX_PARSE_ENTITIES - 1 )];
+			oldEntNum = oldstate->number;
 		}
 	}
 }
 
-static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, int *suppressCount, snapshot_t *backup, bool skipBody ) {
+static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, snapshot_t *backup, bool skipBody ) {
 	// get total length
-	int len = MSG_ReadInt16( msg );
-	int pos = msg->readcount;
+	const int len = MSG_ReadInt16( msg );
+	const int pos = msg->readcount;
 
 	// get the snapshot id
 	const int64_t serverTime = MSG_ReadIntBase128( msg );
@@ -4082,13 +3856,8 @@ static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, int 
 	newframe->multipov = ( flags & FRAMESNAP_FLAG_MULTIPOV ) ? true : false;
 	newframe->allentities = ( flags & FRAMESNAP_FLAG_ALLENTITIES ) ? true : false;
 
-	const int supCnt = MSG_ReadUint8( msg );
-	if( suppressCount ) {
-		*suppressCount = supCnt;
-#ifdef RATEKILLED
-		*suppressCount = 0;
-#endif
-	}
+	// Skip suppress count (TODO remove it)
+	(void)MSG_ReadUint8( msg );
 
 	// validate the new frame
 	newframe->valid = false;
@@ -4128,12 +3897,12 @@ static snapshot_t *SNAP_ParseFrameHeader( msg_t *msg, snapshot_t *newframe, int 
 
 void SNAP_SkipFrame( msg_t *msg, snapshot_t *header ) {
 	static snapshot_t frame;
-	SNAP_ParseFrameHeader( msg, header ? header : &frame, NULL, NULL, true );
+	SNAP_ParseFrameHeader( msg, header ? header : &frame, NULL, true );
 }
 
-snapshot_t *SNAP_ParseFrame( msg_t *msg, snapshot_t *lastFrame, int *suppressCount, snapshot_t *backup, entity_state_t *baselines, int showNet ) {
+snapshot_t *SNAP_ParseFrame( msg_t *msg, snapshot_t *lastFrame, snapshot_t *backup, entity_state_t *baselines, int showNet ) {
 	// read header
-	snapshot_t *newframe = SNAP_ParseFrameHeader( msg, NULL, suppressCount, backup, false );
+	snapshot_t *newframe = SNAP_ParseFrameHeader( msg, NULL, backup, false );
 	snapshot_t *deltaframe = NULL;
 
 	if( showNet == 3 ) {
@@ -4251,13 +4020,11 @@ static void CL_PauseDemo( bool paused );
 void CL_WriteDemoMessage( msg_t *msg ) {
 	if( cls.demoRecorder.file <= 0 ) {
 		cls.demoRecorder.recording = false;
-		return;
+	} else {
+		// the first eight bytes are just packet sequencing stuff
+		SNAP_RecordDemoMessage( cls.demoRecorder.file, msg, 8 );
 	}
-
-	// the first eight bytes are just packet sequencing stuff
-	SNAP_RecordDemoMessage( cls.demoRecorder.file, msg, 8 );
 }
-
 
 /*
 * CL_Stop_f
@@ -4341,11 +4108,6 @@ void CL_Stop_f( const CmdArgs &cmdArgs ) {
 * Begins recording a demo from the current position
 */
 void CL_Record_f( const CmdArgs &cmdArgs ) {
-	char *name;
-	size_t name_size;
-	bool silent;
-	const char *demoname;
-
 	if( cls.state != CA_ACTIVE ) {
 		clNotice() << "You must be in a level to record";
 		return;
@@ -4356,12 +4118,7 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 		return;
 	}
 
-	if( Cmd_Argc() > 2 && !Q_stricmp( Cmd_Argv( 2 ), "silent" ) ) {
-		silent = true;
-	} else {
-		silent = false;
-	}
-
+	const bool silent = Cmd_Argc() > 2 && !Q_stricmp( Cmd_Argv( 2 ), "silent" );
 	if( cls.demoPlayer.playing ) {
 		if( !silent ) {
 			clNotice() << "You can't record from another demo";
@@ -4379,9 +4136,9 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 	//
 	// open the demo file
 	//
-	demoname = Cmd_Argv( 1 );
-	name_size = sizeof( char ) * ( strlen( "demos/" ) + strlen( demoname ) + strlen( APP_DEMO_EXTENSION_STR ) + 1 );
-	name = (char *)Q_malloc( name_size );
+	const char *demoname = Cmd_Argv( 1 );
+	const size_t name_size = sizeof( char ) * ( strlen( "demos/" ) + strlen( demoname ) + strlen( APP_DEMO_EXTENSION_STR ) + 1 );
+	char *name = (char *)Q_malloc( name_size );
 
 	Q_snprintfz( name, name_size, "demos/%s", demoname );
 	COM_SanitizeFilePath( name );
@@ -4392,31 +4149,27 @@ void CL_Record_f( const CmdArgs &cmdArgs ) {
 			clNotice() << "Invalid filename";
 		}
 		Q_free( name );
-		return;
+	} else {
+		if( FS_FOpenFile( name, &cls.demoRecorder.file, FS_WRITE | SNAP_DEMO_GZ ) == -1 ) {
+			clWarning() << "Couldn't create the demo file" << wsw::StringView( name );
+			Q_free( name );
+		} else {
+			if( !silent ) {
+				clNotice() << "Recording demo" << wsw::StringView( name );
+			}
+
+			// store the name in case we need it later
+			cls.demoRecorder.filename = name;
+			cls.demoRecorder.recording = true;
+			cls.demoRecorder.basetime = cls.demoRecorder.duration = cls.demoRecorder.time = 0;
+			cls.demoRecorder.name = Q_strdup( demoname );
+
+			// don't start saving messages until a non-delta compressed message is received
+			CL_AddReliableCommand( "nodelta" ); // request non delta compressed frame from server
+			cls.demoRecorder.waiting = true;
+		}
 	}
-
-	if( FS_FOpenFile( name, &cls.demoRecorder.file, FS_WRITE | SNAP_DEMO_GZ ) == -1 ) {
-		clWarning() << "Couldn't create the demo file" << wsw::StringView( name );
-		Q_free( name );
-		return;
-	}
-
-	if( !silent ) {
-		clNotice() << "Recording demo" << wsw::StringView( name );
-	}
-
-	// store the name in case we need it later
-	cls.demoRecorder.filename = name;
-	cls.demoRecorder.recording = true;
-	cls.demoRecorder.basetime = cls.demoRecorder.duration = cls.demoRecorder.time = 0;
-	cls.demoRecorder.name = Q_strdup( demoname );
-
-	// don't start saving messages until a non-delta compressed message is received
-	CL_AddReliableCommand( "nodelta" ); // request non delta compressed frame from server
-	cls.demoRecorder.waiting = true;
 }
-
-
 
 /*
 * CL_DemoCompleted
@@ -4428,6 +4181,7 @@ void CL_DemoCompleted( void ) {
 		FS_FCloseFile( cls.demoPlayer.demofilehandle );
 		cls.demoPlayer.demofilehandle = 0;
 	}
+
 	cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal = 0;
 
 	cls.demoPlayer.playing = false;
@@ -4452,32 +4206,31 @@ void CL_DemoCompleted( void ) {
 * Read a packet from the demo file and send it to the messages parser
 */
 static void CL_ReadDemoMessage( void ) {
-	static uint8_t msgbuf[MAX_MSGLEN];
-	static msg_t demomsg;
-	static bool init = true;
-	int read;
-
+	// TODO: Is it reachable???
 	if( !cls.demoPlayer.demofilehandle ) {
 		CL_Disconnect( NULL );
 		return;
 	}
+
+	// TODO: This should be a member or a local
+	static uint8_t msgbuf[MAX_MSGLEN];
+	static msg_t demomsg;
+	static bool init = true;
 
 	if( init ) {
 		MSG_Init( &demomsg, msgbuf, sizeof( msgbuf ) );
 		init = false;
 	}
 
-	read = SNAP_ReadDemoMessage( cls.demoPlayer.demofilehandle, &demomsg );
-	if( read == -1 ) {
+	if( const int read = SNAP_ReadDemoMessage( cls.demoPlayer.demofilehandle, &demomsg ); read == -1 ) {
 		if( cls.demoPlayer.pause_on_stop ) {
 			cls.demoPlayer.paused = true;
 		} else {
 			CL_Disconnect( NULL );
 		}
-		return;
+	} else {
+		CL_ParseServerMessage( &demomsg );
 	}
-
-	CL_ParseServerMessage( &demomsg );
 }
 
 /*
@@ -4560,39 +4313,36 @@ static void CL_StartDemo( const char *demoname, bool pause_on_stop ) {
 	if( !tempdemofilehandle ) {
 		clWarning() << "No valid demo file found";
 		FS_FCloseFile( tempdemofilehandle );
-		Q_free( name );
-		Q_free( servername );
-		return;
+	} else {
+		// make sure a local server is killed
+		CL_Cmd_ExecuteNow( "killserver\n" );
+		CL_Disconnect( NULL );
+
+		memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );
+
+		cls.demoPlayer.demofilehandle = tempdemofilehandle;
+		cls.demoPlayer.demofilelentotal = tempdemofilelen;
+		cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal;
+
+		cls.servername = Q_strdup( COM_FileBase( servername ) );
+		COM_StripExtension( cls.servername );
+
+		CL_SetClientState( CA_HANDSHAKE );
+		Com_SetDemoPlaying( true );
+		cls.demoPlayer.playing = true;
+		cls.demoPlayer.time = 0;
+
+		cls.demoPlayer.pause_on_stop = pause_on_stop;
+		cls.demoPlayer.play_ignore_next_frametime = false;
+		cls.demoPlayer.play_jump = false;
+		cls.demoPlayer.filename = Q_strdup( name );
+		cls.demoPlayer.name = Q_strdup( servername );
+
+		CL_PauseDemo( false );
+
+		// set up for timedemo settings
+		memset( &cl.timedemo, 0, sizeof( cl.timedemo ) );
 	}
-
-	// make sure a local server is killed
-	CL_Cmd_ExecuteNow( "killserver\n" );
-	CL_Disconnect( NULL );
-
-	memset( &cls.demoPlayer, 0, sizeof( cls.demoPlayer ) );
-
-	cls.demoPlayer.demofilehandle = tempdemofilehandle;
-	cls.demoPlayer.demofilelentotal = tempdemofilelen;
-	cls.demoPlayer.demofilelen = cls.demoPlayer.demofilelentotal;
-
-	cls.servername = Q_strdup( COM_FileBase( servername ) );
-	COM_StripExtension( cls.servername );
-
-	CL_SetClientState( CA_HANDSHAKE );
-	Com_SetDemoPlaying( true );
-	cls.demoPlayer.playing = true;
-	cls.demoPlayer.time = 0;
-
-	cls.demoPlayer.pause_on_stop = pause_on_stop;
-	cls.demoPlayer.play_ignore_next_frametime = false;
-	cls.demoPlayer.play_jump = false;
-	cls.demoPlayer.filename = Q_strdup( name );
-	cls.demoPlayer.name = Q_strdup( servername );
-
-	CL_PauseDemo( false );
-
-	// set up for timedemo settings
-	memset( &cl.timedemo, 0, sizeof( cl.timedemo ) );
 
 	Q_free( name );
 	Q_free( servername );
@@ -4627,10 +4377,9 @@ void CL_PauseDemo_f( const CmdArgs &cmdArgs ) {
 		} else if( !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
 			CL_PauseDemo( false );
 		}
-		return;
+	} else {
+		CL_PauseDemo( !cls.demoPlayer.paused );
 	}
-
-	CL_PauseDemo( !cls.demoPlayer.paused );
 }
 
 void CL_DemoJump_f( const CmdArgs &cmdArgs ) {
@@ -4681,17 +4430,13 @@ static void CL_Userinfo_f( const CmdArgs & ) {
 }
 
 static unsigned int CL_LoadMap( const char *name ) {
-	int i;
-	int areas;
-
-	unsigned int map_checksum;
-
 	assert( !cl.cms );
 
 	// TODO: If local server is running, share the collision model, increasing the ref counter
 	// TODO: That requires making some calls that modify cms state reentrant
 
 	cl.cms = CM_New();
+	unsigned map_checksum = 0;
 	CM_LoadMap( cl.cms, name, true, &map_checksum );
 
 	CM_AddReference( cl.cms );
@@ -4699,11 +4444,10 @@ static unsigned int CL_LoadMap( const char *name ) {
 	assert( cl.cms );
 
 	// allocate memory for areabits
-	areas = CM_NumAreas( cl.cms );
-	areas *= CM_AreaRowSize( cl.cms );
+	const int areas = CM_NumAreas( cl.cms ) * CM_AreaRowSize( cl.cms );
 
 	cl.frames_areabits = (uint8_t *)Q_malloc( UPDATE_BACKUP * areas );
-	for( i = 0; i < UPDATE_BACKUP; i++ ) {
+	for( int i = 0; i < UPDATE_BACKUP; i++ ) {
 		cl.snapShots[i].areabytes = areas;
 		cl.snapShots[i].areabits = cl.frames_areabits + i * areas;
 	}
@@ -4711,79 +4455,66 @@ static unsigned int CL_LoadMap( const char *name ) {
 	return map_checksum;
 }
 
-void CL_RequestNextDownload( void ) {
-	char tempname[MAX_QPATH + 4];
-	purelist_t *purefile;
-	int i;
-
-	if( cls.state != CA_CONNECTED ) {
-		return;
-	}
-
-	// pure list
-	if( cls.sv_pure ) {
-		// skip
-		if( !cl_downloads->integer ) {
-			precache_pure = -1;
+[[nodiscard]]
+static bool TryStartingPureFileDownloadIfNeeded() {
+	// try downloading
+	if( precache_pure != -1 ) {
+		int skipped = 0;
+		purelist_t *purefile = cls.purelist;
+		while( skipped < precache_pure && purefile ) {
+			purefile = purefile->next;
+			skipped++;
 		}
 
-		// try downloading
-		if( precache_pure != -1 ) {
-			i = 0;
-			purefile = cls.purelist;
-			while( i < precache_pure && purefile ) {
-				purefile = purefile->next;
-				i++;
+		while( purefile ) {
+			precache_pure++;
+			if( !CL_CheckOrDownloadFile( purefile->filename ) ) {
+				return true;
 			}
-
-			while( purefile ) {
-				precache_pure++;
-				if( !CL_CheckOrDownloadFile( purefile->filename ) ) {
-					return;
-				}
-				purefile = purefile->next;
-			}
-			precache_pure = -1;
+			purefile = purefile->next;
 		}
-
-		if( precache_pure == -1 ) {
-			bool failed = false;
-			char message[MAX_STRING_CHARS];
-
-			Q_snprintfz( message, sizeof( message ), "Pure check failed:" );
-
-			purefile = cls.purelist;
-			while( purefile ) {
-				Com_DPrintf( "Adding pure file: %s\n", purefile->filename );
-				if( !FS_AddPurePak( purefile->checksum ) ) {
-					failed = true;
-					Q_strncatz( message, " ", sizeof( message ) );
-					Q_strncatz( message, purefile->filename, sizeof( message ) );
-				}
-				purefile = purefile->next;
-			}
-
-			if( failed ) {
-				Com_Error( ERR_DROP, "%s", message );
-				return;
-			}
-		}
+		precache_pure = -1;
 	}
 
-	// skip if download not allowed
-	if( !cl_downloads->integer && precache_check < ENV_CNT ) {
-		precache_check = ENV_CNT;
+	return false;
+}
+
+[[nodiscard]]
+static bool CheckPureFiles( wsw::String *errorMessage ) {
+	errorMessage->clear();
+
+	purelist_t *purefile = cls.purelist;
+	while( purefile ) {
+		Com_DPrintf( "Adding pure file: %s\n", purefile->filename );
+		if( !FS_AddPurePak( purefile->checksum ) ) {
+			errorMessage->append( " " );
+			errorMessage->append( purefile->filename );
+		}
+		purefile = purefile->next;
 	}
 
+	if( !errorMessage->empty() ) {
+		errorMessage->insert( 0, "Pure check failed:" );
+		return false;
+	}
+	return true;
+}
+
+[[nodiscard]]
+static bool TryStartingMapDownloadIfNeeded() {
 	//ZOID
 	if( precache_check == CS_WORLDMODEL ) { // confirm map
 		precache_check = CS_MODELS; // 0 isn't used
 
 		if( !CL_CheckOrDownloadFile( cl.configStrings.getWorldModel()->data() ) ) {
-			return; // started a download
+			return true; // started a download
 		}
 	}
+	return false;
+}
 
+[[nodiscard]]
+static bool TryStartingModelDownloadIfNeeded() {
 	if( precache_check >= CS_MODELS && precache_check < CS_MODELS + MAX_MODELS ) {
 		for(;; ) {
 			if( precache_check >= CS_MODELS + MAX_MODELS ) {
@@ -4798,18 +4529,21 @@ void CL_RequestNextDownload( void ) {
 			precache_check++;
 
 			// disable playermodel downloading for now
-			if( string.startsWith( '*' ) || string.startsWith( '$' ) || string.startsWith( '#' ) ) {
-				continue;
-			}
-
-			// started a download
-			if( !CL_CheckOrDownloadFile( string.data() ) ) {
-				return;
+			if( !string.startsWith( '*' ) && !string.startsWith( '$' ) && !string.startsWith( '#' ) ) {
+				// started a download
+				if( !CL_CheckOrDownloadFile( string.data() ) ) {
+					return true;
+				}
 			}
 		}
 		precache_check = CS_SOUNDS;
 	}
 
+	return false;
+}
+
+[[nodiscard]]
+static bool TryStartingSoundDownloadIfNeeded() {
 	if( precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS + MAX_SOUNDS ) {
 		if( precache_check == CS_SOUNDS ) {
 			precache_check++; // zero is blank
@@ -4826,41 +4560,93 @@ void CL_RequestNextDownload( void ) {
 			const auto string = *maybeConfigString;
 			precache_check++;
 
-			// sexed sounds
-			if( string.startsWith( '*' ) ) {
-				continue;
-			}
-
-			Q_strncpyz( tempname, string.data(), sizeof( tempname ) );
-			if( !COM_FileExtension( tempname ) ) {
-				if( !FS_FirstExtension( tempname, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
-					COM_DefaultExtension( tempname, ".wav", sizeof( tempname ) );
-					if( !CL_CheckOrDownloadFile( tempname ) ) {
-						return; // started a download
+			// ignore sexed sounds
+			if( !string.startsWith( '*' ) ) {
+				char tempname[MAX_QPATH + 4];
+				Q_strncpyz( tempname, string.data(), sizeof( tempname ) );
+				if( !COM_FileExtension( tempname ) ) {
+					if( !FS_FirstExtension( tempname, SOUND_EXTENSIONS, NUM_SOUND_EXTENSIONS ) ) {
+						COM_DefaultExtension( tempname, ".wav", sizeof( tempname ) );
+						if( !CL_CheckOrDownloadFile( tempname ) ) {
+							return true; // started a download
+						}
 					}
-				}
-			} else {
-				if( !CL_CheckOrDownloadFile( tempname ) ) {
-					return; // started a download
+				} else {
+					if( !CL_CheckOrDownloadFile( tempname ) ) {
+						return true; // started a download
+					}
 				}
 			}
 		}
 		precache_check = CS_IMAGES;
 	}
+
+	return false;
+}
+
+[[nodiscard]]
+static bool TryStartingImageDownloadIfNeeded() {
+	// TODO: Why don't we download images?
 	if( precache_check >= CS_IMAGES && precache_check < CS_IMAGES + MAX_IMAGES ) {
 		if( precache_check == CS_IMAGES ) {
 			precache_check++; // zero is blank
-
 		}
 		// precache phase completed
 		precache_check = ENV_CNT;
+	}
+
+	return false;
+}
+
+void CL_RequestNextDownload( void ) {
+	// TODO: Convert this to assertion?
+	if( cls.state != CA_CONNECTED ) {
+		return;
+	}
+
+	// pure list
+	if( cls.sv_pure ) {
+		// skip
+		if( !cl_downloads->integer ) {
+			precache_pure = -1;
+		} else {
+			if( TryStartingPureFileDownloadIfNeeded() ) {
+				return;
+			}
+		}
+		if( precache_pure == -1 ) {
+			wsw::String errorMessage;
+			if( !CheckPureFiles( &errorMessage ) ) {
+				Com_Error( ERR_DROP, "%s", errorMessage.data() );
+				return;
+			}
+		}
+	}
+
+	// skip if download not allowed
+	if( !cl_downloads->integer && precache_check < ENV_CNT ) {
+		precache_check = ENV_CNT;
+	} else {
+		// TODO: The state modification should be transparent
+		// TODO: Change function pointers for "what to do next" actions, so we don't have to check everything each call?
+		if( TryStartingMapDownloadIfNeeded() ) {
+			return;
+		}
+		if( TryStartingModelDownloadIfNeeded() ) {
+			return;
+		}
+		if( TryStartingSoundDownloadIfNeeded() ) {
+			return;
+		}
+		if( TryStartingImageDownloadIfNeeded() ) {
+			return;
+		}
 	}
 
 	if( precache_check == ENV_CNT ) {
 		bool restart = false;
 		bool vid_restart = false;
 		const char *restart_msg = "";
-		unsigned map_checksum;
 
 		// we're done with the download phase, so clear the list
 		CL_FreeDownloadList();
@@ -4881,7 +4667,7 @@ void CL_RequestNextDownload( void ) {
 
 			if( vid_restart ) {
 				// no media is going to survive a vid_restart...
-				CL_Cmd_ExecuteNow( "s_restart 1\n" );
+				CL_Cmd_ExecuteNow( "vid_restart\n" );
 			} else {
 				// make sure all media assets will be freed
 				CL_EndRegistration();
@@ -4895,13 +4681,13 @@ void CL_RequestNextDownload( void ) {
 
 		cls.download.successCount = 0;
 
-		map_checksum = CL_LoadMap( cl.configStrings.getWorldModel()->data() );
+		const unsigned map_checksum = CL_LoadMap( cl.configStrings.getWorldModel()->data() );
 		if( map_checksum != (unsigned)atoi( cl.configStrings.getMapCheckSum()->data() ) ) {
 			Com_Error( ERR_DROP, "Local map version differs from server: %u != '%s'",
 					   map_checksum, cl.configStrings.getMapCheckSum()->data() );
-			return;
 		}
 
+		// TODO: We don't download textures, do we?
 		precache_check = TEXTURE_CNT;
 	}
 
@@ -4940,15 +4726,13 @@ void CL_Precache_f( const CmdArgs &cmdArgs ) {
 		}
 
 		cls.demoPlayer.play_ignore_next_frametime = true;
+	} else {
+		precache_pure = 0;
+		precache_check = CS_WORLDMODEL;
+		precache_spawncount = atoi( Cmd_Argv( 1 ) );
 
-		return;
+		CL_RequestNextDownload();
 	}
-
-	precache_pure = 0;
-	precache_check = CS_WORLDMODEL;
-	precache_spawncount = atoi( Cmd_Argv( 1 ) );
-
-	CL_RequestNextDownload();
 }
 
 static void CL_Cmd_WriteAliases( int file );
@@ -4959,8 +4743,7 @@ static void CL_Cmd_WriteAliases( int file );
 * Writes key bindings, archived cvars and aliases to a config file
 */
 static void CL_WriteConfiguration( const char *name, bool warn ) {
-	int file;
-
+	int file = 0;
 	if( FS_FOpenFile( name, &file, FS_WRITE ) == -1 ) {
 		clWarning() << "Couldn't write" << wsw::StringView( name );
 		return;
@@ -4989,29 +4772,23 @@ static void CL_WriteConfiguration( const char *name, bool warn ) {
 * CL_WriteConfig_f
 */
 static void CL_WriteConfig_f( const CmdArgs &cmdArgs ) {
-	char *name;
-	int name_size;
-
 	if( Cmd_Argc() != 2 ) {
 		clNotice() << "Usage: writeconfig <filename>";
 		return;
 	}
 
-	name_size = sizeof( char ) * ( strlen( Cmd_Argv( 1 ) ) + strlen( ".cfg" ) + 1 );
-	name = (char *)Q_malloc( name_size );
+	int name_size = sizeof( char ) * ( strlen( Cmd_Argv( 1 ) ) + strlen( ".cfg" ) + 1 );
+	char *name = (char *)Q_malloc( name_size );
 	Q_strncpyz( name, Cmd_Argv( 1 ), name_size );
 	COM_SanitizeFilePath( name );
 
 	if( !COM_ValidateRelativeFilename( name ) ) {
 		clNotice() << "Invalid filename";
-		Q_free( name );
-		return;
+	} else {
+		COM_DefaultExtension( name, ".cfg", name_size );
+		clNotice() << "Writing" << wsw::StringView( name );
+		CL_WriteConfiguration( name, false );
 	}
-
-	COM_DefaultExtension( name, ".cfg", name_size );
-
-	clNotice() << "Writing" << wsw::StringView( name );
-	CL_WriteConfiguration( name, false );
 
 	Q_free( name );
 }
@@ -5027,9 +4804,6 @@ static void CL_Help_f( const CmdArgs & ) {
 	clNotice() << "Example: cmdlist *restart - Displays a list of commands that restart their corresponding subsystems";
 }
 
-/*
-* CL_SetClientState
-*/
 void CL_SetClientState( int state ) {
 	cls.state = (connstate_t)state;
 	Com_SetClientState( state );
@@ -5066,87 +4840,73 @@ void CL_SetClientState( int state ) {
 	}
 }
 
-connstate_t CL_GetClientState( void ) {
+connstate_t CL_GetClientState() {
 	return cls.state;
 }
 
-void CL_InitMedia( void ) {
-	if( cls.mediaInitialized ) {
-		return;
+void CL_InitMedia() {
+	// TODO: Should some of these guards be omitted/turned into assertions?
+	if( !cls.mediaInitialized && cls.state != CA_UNINITIALIZED && VID_RefreshIsActive() ) {
+		// random seed to be shared among game modules so pseudo-random stuff is in sync
+		if( cls.state != CA_CONNECTED ) {
+			srand( time( NULL ) );
+			cls.mediaRandomSeed = rand();
+		}
+
+		cls.mediaInitialized = true;
+
+		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+		// register console font and background
+		SCR_RegisterConsoleMedia();
+
+		SCR_EnableQuickMenu( false );
+
+		// load user interface
+		wsw::ui::UISystem::init( VID_GetWindowWidth(), VID_GetWindowHeight() );
 	}
-	if( cls.state == CA_UNINITIALIZED ) {
-		return;
-	}
-	if( !VID_RefreshIsActive() ) {
-		return;
-	}
-
-	// random seed to be shared among game modules so pseudo-random stuff is in sync
-	if( cls.state != CA_CONNECTED ) {
-		srand( time( NULL ) );
-		cls.mediaRandomSeed = rand();
-	}
-
-	cls.mediaInitialized = true;
-
-	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
-
-	// register console font and background
-	SCR_RegisterConsoleMedia();
-
-	SCR_EnableQuickMenu( false );
-
-	// load user interface
-	wsw::ui::UISystem::init( VID_GetWindowWidth(), VID_GetWindowHeight() );
 }
 
 void CL_ShutdownMedia( void ) {
-	if( !cls.mediaInitialized ) {
-		return;
-	}
-	if( !VID_RefreshIsActive() ) {
-		return;
-	}
+	if( cls.mediaInitialized && VID_RefreshIsActive() ) {
+		cls.mediaInitialized = false;
 
-	cls.mediaInitialized = false;
+		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
 
-	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
-
-	// shutdown cgame
-	CL_GameModule_Shutdown();
-
-	// shutdown user interface
-	wsw::ui::UISystem::shutdown();
-
-	SCR_ShutDownConsoleMedia();
-}
-
-void CL_RestartMedia( void ) {
-	if( !VID_RefreshIsActive() ) {
-		return;
-	}
-
-	if( cls.mediaInitialized ) {
 		// shutdown cgame
 		CL_GameModule_Shutdown();
 
-		cls.mediaInitialized = false;
+		// shutdown user interface
+		wsw::ui::UISystem::shutdown();
+
+		SCR_ShutDownConsoleMedia();
 	}
+}
 
-	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+void CL_RestartMedia( void ) {
+	if( VID_RefreshIsActive() ) {
+		if( cls.mediaInitialized ) {
+			// shutdown cgame
+			CL_GameModule_Shutdown();
 
-	// random seed to be shared among game modules so pseudo-random stuff is in sync
-	if( cls.state != CA_CONNECTED ) {
-		srand( time( NULL ) );
-		cls.mediaRandomSeed = rand();
+			cls.mediaInitialized = false;
+		}
+
+		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+		// random seed to be shared among game modules so pseudo-random stuff is in sync
+		if( cls.state != CA_CONNECTED ) {
+			srand( time( NULL ) );
+			cls.mediaRandomSeed = rand();
+		}
+
+		cls.mediaInitialized = true;
+
+		FTLIB_TouchAllFonts();
+
+		// register console font and background
+		SCR_RegisterConsoleMedia();
 	}
-
-	cls.mediaInitialized = true;
-
-	FTLIB_TouchAllFonts();
-
-	// register console font and background
-	SCR_RegisterConsoleMedia();
 }
 
 /*
@@ -5190,12 +4950,11 @@ static void CL_ShowIP_f( const CmdArgs & ) {
 static void CL_ShowServerIP_f( const CmdArgs & ) {
 	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
 		clNotice() << "Not connected to a server";
-		return;
+	} else {
+		clNotice() << "Connected to server";
+		clNotice() << wsw::named( "Name", wsw::StringView( cls.servername ) );
+		clNotice() << wsw::named( "Address", wsw::StringView( NET_AddressToString( &cls.serveraddress ) ) );
 	}
-
-	clNotice() << "Connected to server";
-	clNotice() << wsw::named( "Name", wsw::StringView( cls.servername ) );
-	clNotice() << wsw::named( "Address", wsw::StringView( NET_AddressToString( &cls.serveraddress ) ) );
 }
 
 static void CL_InitLocal( void ) {
@@ -5264,11 +5023,9 @@ static void CL_InitLocal( void ) {
 	color = Cvar_Get( "color", "", CVAR_ARCHIVE | CVAR_USERINFO );
 	if( COM_ReadColorRGBString( color->string ) == -1 ) {
 		time_t long_time; // random isn't working fine at this point.
-		unsigned int hash; // so we get the user local time and use its hash
-		int rgbcolor;
 		time( &long_time );
-		hash = COM_SuperFastHash64BitInt( ( uint64_t )long_time );
-		rgbcolor = COM_ValidatePlayerColor( COLOR_RGB( hash & 0xff, ( hash >> 8 ) & 0xff, ( hash >> 16 ) & 0xff ) );
+		const unsigned hash = COM_SuperFastHash64BitInt( ( uint64_t )long_time );
+		const int rgbcolor = COM_ValidatePlayerColor( COLOR_RGB( hash & 0xff, ( hash >> 8 ) & 0xff, ( hash >> 16 ) & 0xff ) );
 		Cvar_Set( color->name, va( "%i %i %i", COLOR_R( rgbcolor ), COLOR_G( rgbcolor ), COLOR_B( rgbcolor ) ) );
 	}
 
@@ -5325,23 +5082,19 @@ static void CL_ShutdownLocal( void ) {
 
 static void CL_TimedemoStats( void ) {
 	if( cl_timedemo->integer && cls.demoPlayer.playing ) {
-		int64_t lastTime = cl.timedemo.lastTime;
+		const int64_t lastTime = cl.timedemo.lastTime;
 		if( lastTime != 0 ) {
-			int msec;
-			int64_t curTime;
-
-			msec = RF_GetAverageFrametime();
-
-			curTime = Sys_Milliseconds();
+			const int msec = RF_GetAverageFrametime();
+			const int64_t curTime = Sys_Milliseconds();
 			if( msec  >= 100 ) {
 				cl.timedemo.counts[99]++;
 			} else {
 				cl.timedemo.counts[msec]++;
 			}
 			cl.timedemo.lastTime = curTime;
-			return;
+		} else {
+			cl.timedemo.lastTime = Sys_Milliseconds();
 		}
-		cl.timedemo.lastTime = Sys_Milliseconds();
 	}
 }
 
@@ -5375,10 +5128,8 @@ void CL_AdjustServerTime( unsigned int gameMsec ) {
 }
 
 void CL_RestartTimeDeltas( int newTimeDelta ) {
-	int i;
-
 	cl.serverTimeDelta = cl.newServerTimeDelta = newTimeDelta;
-	for( i = 0; i < MAX_TIMEDELTAS_BACKUP; i++ )
+	for( int i = 0; i < MAX_TIMEDELTAS_BACKUP; i++ )
 		cl.serverTimeDeltas[i] = newTimeDelta;
 
 	if( cl_debug_timeDelta->integer ) {
@@ -5387,25 +5138,22 @@ void CL_RestartTimeDeltas( int newTimeDelta ) {
 }
 
 int CL_SmoothTimeDeltas( void ) {
-	int i, count;
-	double delta;
-	snapshot_t  *snap;
-
 	if( cls.demoPlayer.playing ) {
 		if( cl.currentSnapNum <= 0 ) { // if first snap
 			return cl.serverTimeDeltas[cl.pendingSnapNum & MASK_TIMEDELTAS_BACKUP];
 		}
-
 		return cl.serverTimeDeltas[cl.currentSnapNum & MASK_TIMEDELTAS_BACKUP];
 	}
 
-	i = cl.receivedSnapNum - wsw::min( MAX_TIMEDELTAS_BACKUP, 8 );
+	int i = cl.receivedSnapNum - wsw::min( MAX_TIMEDELTAS_BACKUP, 8 );
 	if( i < 0 ) {
 		i = 0;
 	}
 
-	for( delta = 0, count = 0; i <= cl.receivedSnapNum; i++ ) {
-		snap = &cl.snapShots[i & UPDATE_MASK];
+	int count;
+	double delta = 0.0;
+	for( count = 0; i <= cl.receivedSnapNum; i++ ) {
+		snapshot_t *snap = &cl.snapShots[i & UPDATE_MASK];
 		if( snap->valid && snap->serverFrame == i ) {
 			delta += (double)cl.serverTimeDeltas[i & MASK_TIMEDELTAS_BACKUP];
 			count++;
@@ -5420,13 +5168,10 @@ int CL_SmoothTimeDeltas( void ) {
 }
 
 void CL_UpdateSnapshot( void ) {
-	snapshot_t  *snap;
-	int i;
-
 	// see if there is any pending snap to be fired
 	if( !cl.pendingSnapNum && ( cl.currentSnapNum != cl.receivedSnapNum ) ) {
-		snap = NULL;
-		for( i = cl.currentSnapNum + 1; i <= cl.receivedSnapNum; i++ ) {
+		snapshot_t *snap = NULL;
+		for( int i = cl.currentSnapNum + 1; i <= cl.receivedSnapNum; i++ ) {
 			if( cl.snapShots[i & UPDATE_MASK].valid && ( cl.snapShots[i & UPDATE_MASK].serverFrame > cl.currentSnapNum ) ) {
 				snap = &cl.snapShots[i & UPDATE_MASK];
 				//torbenh: this break was the source of the lag bug at cl_fps < sv_pps
@@ -5472,8 +5217,8 @@ void CL_Netchan_Transmit( msg_t *msg ) {
 	Netchan_PushAllFragments( &cls.netchan );
 
 	if( msg->cursize > 60 ) {
-		int zerror = Netchan_CompressMessage( msg );
-		if( zerror < 0 ) { // it's compression error, just send uncompressed
+		// it's compression error, just send uncompressed
+		if( const int zerror = Netchan_CompressMessage( msg ); zerror < 0 ) {
 			Com_DPrintf( "CL_Netchan_Transmit (ignoring compression): Compression error %i\n", zerror );
 		}
 	}
@@ -5485,8 +5230,6 @@ void CL_Netchan_Transmit( msg_t *msg ) {
 static bool CL_MaxPacketsReached( void ) {
 	static int64_t lastPacketTime = 0;
 	static float roundingMsec = 0.0f;
-	int minpackettime;
-	int elapsedTime;
 
 	if( lastPacketTime > cls.realtime ) {
 		lastPacketTime = cls.realtime;
@@ -5497,7 +5240,8 @@ static bool CL_MaxPacketsReached( void ) {
 		Cvar_ForceSet( "cl_pps", va( "%s", cl_pps->dvalue ) );
 	}
 
-	elapsedTime = cls.realtime - lastPacketTime;
+	int minpackettime;
+	const int elapsedTime = cls.realtime - lastPacketTime;
 	if( cls.mv ) {
 		minpackettime = ( 1000.0f / 2 );
 	} else {
@@ -5527,9 +5271,6 @@ static bool CL_MaxPacketsReached( void ) {
 }
 
 void CL_SendMessagesToServer( bool sendNow ) {
-	msg_t message;
-	uint8_t messageData[MAX_MSGLEN];
-
 	if( cls.state == CA_DISCONNECTED || cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING ) {
 		return;
 	}
@@ -5538,6 +5279,8 @@ void CL_SendMessagesToServer( bool sendNow ) {
 		return;
 	}
 
+	msg_t message;
+	uint8_t messageData[MAX_MSGLEN];
 	MSG_Init( &message, messageData, sizeof( messageData ) );
 	MSG_Clear( &message );
 
@@ -5581,9 +5324,12 @@ static void CL_NetFrame( int realMsec, int gameMsec ) {
 	}
 
 	if( cls.demoPlayer.playing ) {
-		CL_ReadDemoPackets(); // fetch results from demo file
+		// Fetch results from demo file
+		CL_ReadDemoPackets();
 	}
-	CL_ReadPackets(); // fetch results from server
+
+	// Fetch results from server (TODO: is it needed during demo playback?)
+	CL_ReadPackets();
 
 	// send packets to server
 	if( cls.netchan.unsentFragments ) {
@@ -5606,12 +5352,8 @@ void CL_Frame( int realMsec, int gameMsec ) {
 
 	static int allRealMsec = 0, allGameMsec = 0, extraMsec = 0;
 	static float roundingMsec = 0.0f;
-	int minMsec;
-	float maxFps;
 
-	if( dedicated->integer ) {
-		return;
-	}
+	assert( !dedicated->integer );
 
 	cls.realtime += realMsec;
 
@@ -5638,6 +5380,8 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	CL_UserInputFrame( realMsec );
 	CL_NetFrame( realMsec, gameMsec );
 
+	int minMsec;
+	float maxFps;
 	if( cls.state == CA_DISCONNECTED ) {
 		maxFps = 60;
 		minMsec = 1000.0f / maxFps;
@@ -5666,56 +5410,57 @@ void CL_Frame( int realMsec, int gameMsec ) {
 	if( allRealMsec + extraMsec < minMsec ) {
 		// let CPU sleep while playing fullscreen video, while minimized
 		// or when cl_sleep is enabled
-		bool sleep = cl_sleep->integer != 0 || cls.state == CA_DISCONNECTED || !VID_AppIsActive() || VID_AppIsMinimized(); // FIXME: not sure about listen server here..
+		const bool sleep = cl_sleep->integer != 0 || cls.state == CA_DISCONNECTED || !VID_AppIsActive() || VID_AppIsMinimized(); // FIXME: not sure about listen server here..
 
 		if( sleep && minMsec - extraMsec > 1 ) {
 			Sys_Sleep( minMsec - extraMsec - 1 );
 		}
-		return;
-	}
-
-	cls.frametime = allGameMsec;
-	cls.realFrameTime = allRealMsec;
+	} else {
+		cls.frametime = allGameMsec;
+		cls.realFrameTime = allRealMsec;
 #if 1
-	if( allRealMsec < minMsec ) { // is compensating for a too slow frame
-		extraMsec -= ( minMsec - allRealMsec );
-		Q_clamp( extraMsec, 0, 100 );
-	} else {   // too slow, or exact frame
-		extraMsec = allRealMsec - minMsec;
-		Q_clamp( extraMsec, 0, 100 );
-	}
+		if( allRealMsec < minMsec ) { // is compensating for a too slow frame
+			extraMsec -= ( minMsec - allRealMsec );
+			Q_clamp( extraMsec, 0, 100 );
+		} else {   // too slow, or exact frame
+			extraMsec = allRealMsec - minMsec;
+			Q_clamp( extraMsec, 0, 100 );
+		}
 #else
-	extraMsec = allRealMsec - minMsec;
-	Q_clamp( extraMsec, 0, minMsec );
+		extraMsec = allRealMsec - minMsec;
+		Q_clamp( extraMsec, 0, minMsec );
 #endif
 
-	CL_TimedemoStats();
+		CL_TimedemoStats();
 
-	// allow rendering DLL change
-	VID_CheckChanges();
+		// allow rendering DLL change
+		VID_CheckChanges();
 
-	SCR_UpdateScreen();
-
-	// update audio
-	if( cls.state != CA_ACTIVE ) {
-		// if the loading plaque is up, clear everything out to make sure we aren't looping a dirty
-		// dma buffer while loading
-		if( cls.disable_screen ) {
-			SoundSystem::instance()->clear();
-		} else {
-			SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
+		if( !cls.disable_screen && scr_initialized && con_initialized && cls.mediaInitialized ) {
+			SCR_UpdateScreen();
 		}
+
+		// update audio
+		if( cls.state != CA_ACTIVE ) {
+			// if the loading plaque is up, clear everything out to make sure we aren't looping a dirty
+			// dma buffer while loading
+			if( cls.disable_screen ) {
+				SoundSystem::instance()->clear();
+			} else {
+				SoundSystem::instance()->updateListener( vec3_origin, vec3_origin, axis_identity );
+			}
+		}
+
+		// advance local effects for next frame
+		SCR_RunConsole( allRealMsec );
+
+		SoundSystem::instance()->processFrameUpdates();
+
+		allRealMsec = 0;
+		allGameMsec = 0;
+
+		cls.framecount++;
 	}
-
-	// advance local effects for next frame
-	SCR_RunConsole( allRealMsec );
-
-	SoundSystem::instance()->processFrameUpdates();
-
-	allRealMsec = 0;
-	allGameMsec = 0;
-
-	cls.framecount++;
 }
 
 static void *CL_AsyncStream_Alloc( size_t size, const char *filename, int fileline ) {
@@ -5732,11 +5477,9 @@ static void CL_InitAsyncStream( void ) {
 
 static void CL_ShutdownAsyncStream( void ) {
 	if( !cl_async_stream ) {
-		return;
+		AsyncStream_ShutdownModule( cl_async_stream );
+		cl_async_stream = NULL;
 	}
-
-	AsyncStream_ShutdownModule( cl_async_stream );
-	cl_async_stream = NULL;
 }
 
 int CL_AddSessionHttpRequestHeaders( const char *url, const char **headers ) {
@@ -5783,16 +5526,10 @@ void CL_AsyncStreamRequest( const char *url, const char **headers, int timeout, 
 }
 
 void CL_Init( void ) {
-	netadr_t address;
-	cvar_t *cl_port;
-	cvar_t *cl_port6;
 
 	assert( !cl_initialized );
+	assert( !dedicated->integer );
 
-	if( dedicated->integer ) {
-		return; // nothing running on the client
-
-	}
 	cl_initialized = true;
 
 	// all archived variables will now be loaded
@@ -5806,8 +5543,9 @@ void CL_Init( void ) {
 	CL_ClearState();
 
 	// IPv4
+	netadr_t address;
 	NET_InitAddress( &address, NA_IP );
-	cl_port = Cvar_Get( "cl_port", "0", CVAR_NOSET );
+	cvar_t *cl_port = Cvar_Get( "cl_port", "0", CVAR_NOSET );
 	NET_SetAddressPort( &address, cl_port->integer );
 	if( !NET_OpenSocket( &cls.socket_udp, SOCKET_UDP, &address, false ) ) {
 		Com_Error( ERR_FATAL, "Couldn't open UDP socket: %s", NET_ErrorString() );
@@ -5815,7 +5553,7 @@ void CL_Init( void ) {
 
 	// IPv6
 	NET_InitAddress( &address, NA_IP6 );
-	cl_port6 = Cvar_Get( "cl_port6", "0", CVAR_NOSET );
+	cvar_t *cl_port6 = Cvar_Get( "cl_port6", "0", CVAR_NOSET );
 	NET_SetAddressPort( &address, cl_port6->integer );
 	if( !NET_OpenSocket( &cls.socket_udp6, SOCKET_UDP, &address, false ) ) {
 		Com_Printf( "Error: Couldn't open UDP6 socket: %s", NET_ErrorString() );
@@ -5846,48 +5584,46 @@ void CL_Init( void ) {
 * to run quit through here before the final handoff to the sys code.
 */
 void CL_Shutdown( void ) {
-	if( !cl_initialized ) {
-		return;
+	if( cl_initialized ) {
+		SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
+
+		ML_Shutdown();
+
+		CL_WriteConfiguration( "config.cfg", true );
+
+		CL_Disconnect( NULL );
+		NET_CloseSocket( &cls.socket_udp );
+		NET_CloseSocket( &cls.socket_udp6 );
+		// TOCHECK: Shouldn't we close the TCP socket too?
+		if( cls.servername ) {
+			Q_free( cls.servername );
+			cls.servername = NULL;
+		}
+
+		wsw::ui::UISystem::shutdown();
+		CL_GameModule_Shutdown();
+		CL_SoundModule_Shutdown( true );
+		CL_ShutdownInput();
+		VID_Shutdown();
+
+		CL_ShutdownMedia();
+
+		CL_ShutdownAsyncStream();
+		ServerList::shutdown();
+
+		CL_ShutdownLocal();
+
+		SCR_ShutdownScreen();
+
+		Steam_Shutdown();
+
+		CL_Sys_Shutdown();
+
+		Con_Shutdown();
+
+		cls.state = CA_UNINITIALIZED;
+		cl_initialized = false;
 	}
-
-	SoundSystem::instance()->stopAllSounds( SoundSystem::StopAndClear | SoundSystem::StopMusic );
-
-	ML_Shutdown();
-
-	CL_WriteConfiguration( "config.cfg", true );
-
-	CL_Disconnect( NULL );
-	NET_CloseSocket( &cls.socket_udp );
-	NET_CloseSocket( &cls.socket_udp6 );
-	// TOCHECK: Shouldn't we close the TCP socket too?
-	if( cls.servername ) {
-		Q_free( cls.servername );
-		cls.servername = NULL;
-	}
-
-	wsw::ui::UISystem::shutdown();
-	CL_GameModule_Shutdown();
-	CL_SoundModule_Shutdown( true );
-	CL_ShutdownInput();
-	VID_Shutdown();
-
-	CL_ShutdownMedia();
-
-	CL_ShutdownAsyncStream();
-	ServerList::shutdown();
-
-	CL_ShutdownLocal();
-
-	SCR_ShutdownScreen();
-
-	Steam_Shutdown();
-
-	CL_Sys_Shutdown();
-
-	Con_Shutdown();
-
-	cls.state = CA_UNINITIALIZED;
-	cl_initialized = false;
 }
 
 template <>

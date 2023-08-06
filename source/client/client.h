@@ -92,7 +92,6 @@ typedef struct client_state_s {
 	int pendingSnapNum;
 	int currentSnapNum;
 	int previousSnapNum;
-	int suppressCount;              // number of messages rate suppressed
 	snapshot_t *snapShots;          // [CMD_BACKUP]
 	uint8_t *frames_areabits;
 

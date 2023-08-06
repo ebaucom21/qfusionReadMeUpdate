@@ -145,8 +145,7 @@ void Com_FreePureList( purelist_t **purelist );
 
 void SNAP_ParseBaseline( struct msg_s *msg, entity_state_t *baselines );
 void SNAP_SkipFrame( struct msg_s *msg, struct snapshot_s *header );
-struct snapshot_s *SNAP_ParseFrame( struct msg_s *msg, struct snapshot_s *lastFrame, int *suppressCount,
-									struct snapshot_s *backup, entity_state_t *baselines, int showNet );
+struct snapshot_s *SNAP_ParseFrame( struct msg_s *msg, struct snapshot_s *lastFrame, struct snapshot_s *backup, entity_state_t *baselines, int showNet );
 
 void SNAP_WriteFrameSnapToClient( const struct ginfo_s *gi, struct client_s *client, struct msg_s *msg,
 								  int64_t frameNum, int64_t gameTime,
