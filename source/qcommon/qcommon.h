@@ -543,8 +543,8 @@ bool Netchan_Process( netchan_t *chan, msg_t *msg );
 bool Netchan_Transmit( netchan_t *chan, msg_t *msg );
 bool Netchan_PushAllFragments( netchan_t *chan );
 bool Netchan_TransmitNextFragment( netchan_t *chan );
-int Netchan_CompressMessage( msg_t *msg );
-int Netchan_DecompressMessage( msg_t *msg );
+int Netchan_CompressMessage( msg_t *msg, uint8_t tmpBuffer[MAX_MSGLEN] );
+int Netchan_DecompressMessage( msg_t *msg, uint8_t tmpBuffer[MAX_MSGLEN] );
 void Netchan_OutOfBand( const socket_t *socket, const netadr_t *address, size_t length, const uint8_t *data );
 
 #ifndef _MSC_VER

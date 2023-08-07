@@ -172,6 +172,9 @@ extern qbufPipe_s *g_clCmdPipe;
 static void *cge = nullptr;
 static void *module_handle;
 
+static uint8_t g_netchanCompressionBuffer[MAX_MSGLEN];
+static netchan_t g_netchanInstanceBackup;
+
 // These are system specific functions
 // wrapper around R_Init
 rserr_t VID_Sys_Init( const char *applicationName, const char *screenshotsPrefix, int startupColor, const int *iconXPM,
@@ -2370,6 +2373,8 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 }
 
 static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
+	// TODO: Do something more sophisticated
+	g_netchanInstanceBackup = *netchan;
 	// wasn't accepted for some reason
 	if( !Netchan_Process( netchan, msg ) ) {
 		return false;
@@ -2380,9 +2385,10 @@ static bool CL_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 	MSG_ReadInt32( msg ); // sequence
 	MSG_ReadInt32( msg ); // sequence_ack
 	if( msg->compressed ) {
-		if( int zerror = Netchan_DecompressMessage( msg ); zerror < 0 ) {
+		if( const int zerror = Netchan_DecompressMessage( msg, g_netchanCompressionBuffer ); zerror < 0 ) {
 			// compression error. Drop the packet
 			clWarning() << "CL_ProcessPacket: Compression error" << zerror << "Dropping packet";
+			*netchan = g_netchanInstanceBackup;
 			return false;
 		}
 	}
@@ -5218,7 +5224,7 @@ void CL_Netchan_Transmit( msg_t *msg ) {
 
 	if( msg->cursize > 60 ) {
 		// it's compression error, just send uncompressed
-		if( const int zerror = Netchan_CompressMessage( msg ); zerror < 0 ) {
+		if( const int zerror = Netchan_CompressMessage( msg, g_netchanCompressionBuffer ); zerror < 0 ) {
 			Com_DPrintf( "CL_Netchan_Transmit (ignoring compression): Compression error %i\n", zerror );
 		}
 	}

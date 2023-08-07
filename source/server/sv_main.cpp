@@ -201,6 +201,9 @@ char sv_outputbuf[SV_OUTPUTBUF_LENGTH];
 static msg_t tmpMessage;
 static uint8_t tmpMessageData[MAX_MSGLEN];
 
+static uint8_t g_netchanCompressionBuffer[MAX_MSGLEN];
+static netchan_t g_netchanInstanceBackup;
+
 typedef struct sv_infoserver_s {
 	netadr_t address;
 	bool steam;
@@ -771,6 +774,8 @@ static void SV_CalcPings( void ) {
 }
 
 static bool SV_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
+	// TODO: Do something more sophisticated
+	g_netchanInstanceBackup = *netchan;
 	if( !Netchan_Process( netchan, msg ) ) {
 		return false; // wasn't accepted for some reason
 	}
@@ -781,9 +786,10 @@ static bool SV_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 	MSG_ReadInt32( msg ); // sequence_ack
 	MSG_ReadInt16( msg ); // game_port
 	if( msg->compressed ) {
-		if( int zerror = Netchan_DecompressMessage( msg ); zerror < 0 ) {
+		if( const int zerror = Netchan_DecompressMessage( msg, g_netchanCompressionBuffer ); zerror < 0 ) {
 			// compression error. Drop the packet
 			Com_DPrintf( "SV_ProcessPacket: Compression error %i. Dropping packet\n", zerror );
+			*netchan = g_netchanInstanceBackup;
 			return false;
 		}
 	}
@@ -3024,7 +3030,7 @@ bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg ) {
 
 	if( sv_compresspackets->integer ) {
 		// it's compression error, just send uncompressed
-		if( const int zerror = Netchan_CompressMessage( msg ); zerror < 0 ) {
+		if( const int zerror = Netchan_CompressMessage( msg, g_netchanCompressionBuffer ); zerror < 0 ) {
 			Com_DPrintf( "SV_Netchan_Transmit (ignoring compression): Compression error %i\n", zerror );
 		}
 	}

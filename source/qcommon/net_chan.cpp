@@ -114,7 +114,7 @@ void Netchan_OutOfBand( const socket_t *socket, const netadr_t *address, size_t 
 */
 void Netchan_OutOfBandPrint( const socket_t *socket, const netadr_t *address, const char *format, ... ) {
 	va_list argptr;
-	static char string[MAX_PACKETLEN - 4];
+	char string[MAX_PACKETLEN - 4];
 
 	va_start( argptr, format );
 	Q_vsnprintfz( string, sizeof( string ), format, argptr );
@@ -137,9 +137,6 @@ void Netchan_Setup( netchan_t *chan, const socket_t *socket, const netadr_t *add
 	chan->incomingSequence = 0;
 	chan->outgoingSequence = 1;
 }
-
-
-static uint8_t msg_process_data[MAX_MSGLEN];
 
 //=============================================================
 // Zlib compression
@@ -210,7 +207,7 @@ static int Netchan_ZLibDecompressChunk( const uint8_t *source, unsigned long sou
 /*
 * Netchan_CompressMessage
 */
-int Netchan_CompressMessage( msg_t *msg ) {
+int Netchan_CompressMessage( msg_t *msg, uint8_t *tmpBuffer ) {
 	int length;
 
 	if( msg == NULL || !msg->data ) {
@@ -219,11 +216,10 @@ int Netchan_CompressMessage( msg_t *msg ) {
 
 	// zero-fill our buffer
 	length = 0;
-	memset( msg_process_data, 0, sizeof( msg_process_data ) );
+	memset( tmpBuffer, 0, MAX_MSGLEN );
 
 	//compress the message
-	length = Netchan_ZLibCompressChunk( msg->data, msg->cursize,
-										msg_process_data, sizeof( msg_process_data ), Z_BEST_COMPRESSION, -MAX_WBITS );
+	length = Netchan_ZLibCompressChunk( msg->data, msg->cursize, tmpBuffer, MAX_MSGLEN, Z_BEST_COMPRESSION, -MAX_WBITS );
 	if( length < 0 ) { // failed to compress, return the error
 		return length;
 	}
@@ -234,7 +230,7 @@ int Netchan_CompressMessage( msg_t *msg ) {
 
 	//write it back into the original container
 	MSG_Clear( msg );
-	MSG_CopyData( msg, msg_process_data, length );
+	MSG_CopyData( msg, tmpBuffer, length );
 	msg->compressed = true;
 
 	return length; // return the new size
@@ -243,7 +239,7 @@ int Netchan_CompressMessage( msg_t *msg ) {
 /*
 * Netchan_DecompressMessage
 */
-int Netchan_DecompressMessage( msg_t *msg ) {
+int Netchan_DecompressMessage( msg_t *msg, uint8_t *tmpBuffer ) {
 	int length;
 
 	if( msg == NULL || !msg->data ) {
@@ -254,7 +250,7 @@ int Netchan_DecompressMessage( msg_t *msg ) {
 		return 0;
 	}
 
-	length = Netchan_ZLibDecompressChunk( msg->data + msg->readcount, msg->cursize - msg->readcount, msg_process_data, ( sizeof( msg_process_data ) - msg->readcount ), -MAX_WBITS );
+	length = Netchan_ZLibDecompressChunk( msg->data + msg->readcount, msg->cursize - msg->readcount, tmpBuffer, MAX_MSGLEN - msg->readcount, -MAX_WBITS );
 	if( length < 0 ) {
 		return length;
 	}
@@ -266,7 +262,7 @@ int Netchan_DecompressMessage( msg_t *msg ) {
 
 	//write it back into the original container
 	msg->cursize = msg->readcount;
-	MSG_CopyData( msg, msg_process_data, length );
+	MSG_CopyData( msg, tmpBuffer, length );
 	msg->compressed = false;
 
 	return length;
