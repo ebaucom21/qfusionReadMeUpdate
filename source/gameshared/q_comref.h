@@ -758,6 +758,8 @@ typedef struct {
 	// A flag for disabling occasional ladder usage for bots without intrusive changes to bot code (in)
 	bool skipLadders;
 
+	bool snapInitially;
+
 	// results (out)
 	int numtouch;
 	int touchents[MAXTOUCH];

@@ -961,66 +961,88 @@ static void PM_Move( void ) {
 }
 
 /*
-* PM_GroundTrace
-*
-* If the player hull point one-quarter unit down is solid, the player is on ground
-*/
-static void PM_GroundTrace( trace_t *trace ) {
-	vec3_t point;
-
-	if( pm->skipCollision ) {
-		memset( trace, 0, sizeof( trace_t ) );
-		trace->fraction = 1.0f;
-		return;
-	}
-
-	// see if standing on something solid
-	point[0] = pml.origin[0];
-	point[1] = pml.origin[1];
-	point[2] = pml.origin[2] - 0.25;
-
-	module_Trace( trace, pml.origin, pm->mins, pm->maxs, point, pm->playerState->POVnum, pm->contentmask, 0 );
-}
-
-/*
 * PM_GoodPosition
 */
-static bool PM_GoodPosition( vec3_t origin, trace_t *trace ) {
+static bool PM_GoodPosition( vec3_t origin ) {
 	if( pm->playerState->pmove.pm_type == PM_SPECTATOR ) {
 		return true;
 	}
 
-	module_Trace( trace, origin, pm->mins, pm->maxs, origin, pm->playerState->POVnum, pm->contentmask, 0 );
+	trace_t trace;
+	module_Trace( &trace, origin, pm->mins, pm->maxs, origin, pm->playerState->POVnum, pm->contentmask, 0 );
 
-	return !trace->allsolid;
+	return trace.fraction == 1.0f && !trace.startsolid;
+}
+
+enum CalcPositionResult {
+	WasGood,
+	Corrected,
+	Unsolved,
+};
+
+// TODO: Constexpr math. Unfortunately, gcem library cannot be used due to license reasons.
+static const auto oneOverSqrt2 = 1.0f / sqrtf( 2.0f );
+static const auto oneOverSqrt3 = 1.0f / sqrtf( 3.0f );
+
+[[nodiscard]]
+static CalcPositionResult PM_CalcGoodPosition( const vec3_t givenOrigin, vec3_t resultOrigin ) {
+	constexpr float sideShiftsSigns[3] { 0.0f, -1.0f, +1.0f };
+	// Push up first, if tests on the original height fail
+	constexpr float zShiftSigns[3] { 0.0f, +1.0f, -1.0f };
+
+	for( unsigned zIndex = 0; zIndex < 3; zIndex++ ) {
+		for( unsigned yIndex = 0; yIndex < 3; yIndex++ ) {
+			for( unsigned xIndex = 0; xIndex < 3; xIndex++ ) {
+				vec3_t shift;
+				shift[0] = sideShiftsSigns[xIndex];
+				shift[1] = sideShiftsSigns[yIndex];
+				shift[2] = zShiftSigns[zIndex];
+
+				const auto numShiftDirs = (unsigned)( xIndex > 0 ) + (unsigned)( yIndex > 0 ) + (unsigned)( zIndex > 0 );
+				if( numShiftDirs ) {
+					// It was not unit in the id Software code as well, for different (coord snapping) reasons though.
+					// We think that using shift of the same length for every combination is a good idea.
+					constexpr float shiftDistance = 1.0f / 8.0f;
+					float scale = shiftDistance;
+					if( numShiftDirs == 2 ) {
+						scale *= oneOverSqrt2;
+					} else if( numShiftDirs == 3 ) {
+						scale *= oneOverSqrt3;
+					}
+					VectorScale( shift, scale, shift );
+					assert( fabs( VectorLengthFast( shift ) - shiftDistance ) < 0.001f );
+				}
+
+				vec3_t shiftedOrigin;
+				VectorAdd( givenOrigin, shift, shiftedOrigin );
+				if( PM_GoodPosition( shiftedOrigin ) ) {
+					VectorCopy( shiftedOrigin, resultOrigin );
+					if( numShiftDirs ) {
+						return Corrected;
+					}
+					return WasGood;
+				}
+			}
+		}
+	}
+	return Unsolved;
 }
 
 /*
 * PM_UnstickPosition
 */
-static void PM_UnstickPosition( trace_t *trace ) {
-	int j;
-	vec3_t origin;
-
-	VectorCopy( pml.origin, origin );
-
-	// try all combinations
-	for( j = 0; j < 8; j++ ) {
-		VectorCopy( pml.origin, origin );
-
-		origin[0] += ( ( j & 1 ) ? -1 : 1 );
-		origin[1] += ( ( j & 2 ) ? -1 : 1 );
-		origin[2] += ( ( j & 4 ) ? -1 : 1 );
-
-		if( PM_GoodPosition( origin, trace ) ) {
-			VectorCopy( origin, pml.origin );
-			PM_GroundTrace( trace );
-			return;
+static void PM_UnstickPosition() {
+	if( !pm->skipCollision ) {
+		vec3_t goodOrigin;
+		const CalcPositionResult positionResult = PM_CalcGoodPosition( pml.origin, goodOrigin );
+		if( positionResult != WasGood ) {
+			if( positionResult == Corrected ) {
+				VectorCopy( goodOrigin, pml.origin );
+			} else {
+				VectorCopy( pml.previous_origin, pml.origin );
+			}
 		}
 	}
-
-	// go back to the last position
-	VectorCopy( pml.previous_origin, pml.origin );
 }
 
 /*
@@ -1037,13 +1059,17 @@ static void PM_CategorizePosition( void ) {
 		pm->groundentity = -1;
 	} else {
 		trace_t trace;
+		if( !pm->skipCollision ) {
+			// if the player hull point one-quarter unit down is solid, the player is on ground
+			// see if standing on something solid
+			point[0] = pml.origin[0];
+			point[1] = pml.origin[1];
+			point[2] = pml.origin[2] - 0.25;
 
-		// see if standing on something solid
-		PM_GroundTrace( &trace );
-
-		if( trace.allsolid ) {
-			// try to unstick position
-			PM_UnstickPosition( &trace );
+			module_Trace( &trace, pml.origin, pm->mins, pm->maxs, point, pm->playerState->POVnum, pm->contentmask, 0 );
+		} else {
+			memset( &trace, 0, sizeof( trace_t ) );
+			trace.fraction = 1.0f;
 		}
 
 		pml.groundplane = trace.plane;
@@ -1747,6 +1773,14 @@ static void PM_BeginMove( void ) {
 	// clear all pmove local vars
 	memset( &pml, 0, sizeof( pml ) );
 
+	if( !pm->skipCollision && pm->snapInitially ) {
+		vec3_t goodOrigin;
+		const CalcPositionResult positionResult = PM_CalcGoodPosition( pm->playerState->pmove.origin, goodOrigin );
+		if( positionResult == Corrected ) {
+			VectorCopy( goodOrigin, pm->playerState->pmove.origin );
+		}
+	}
+
 	VectorCopy( pm->playerState->pmove.origin, pml.origin );
 	VectorCopy( pm->playerState->pmove.velocity, pml.velocity );
 
@@ -1758,6 +1792,11 @@ static void PM_BeginMove( void ) {
 * PM_EndMove
 */
 static void PM_EndMove( void ) {
+#if 0
+	if( !PM_GoodPosition( pml.origin ) ) {
+		module_Printf( "Stuck!\n" );
+	}
+#endif
 	VectorCopy( pml.origin, pm->playerState->pmove.origin );
 	VectorCopy( pml.velocity, pm->playerState->pmove.velocity );
 }
@@ -1966,6 +2005,7 @@ void Pmove( pmove_t *pmove ) {
 			pml.upPush = 0;
 		}
 
+		PM_UnstickPosition();
 		PM_EndMove();
 		return;
 	}
@@ -2041,9 +2081,9 @@ void Pmove( pmove_t *pmove ) {
 		}
 	}
 
+	PM_UnstickPosition();
 	// set groundentity, watertype, and waterlevel for final spot
 	PM_CategorizePosition();
-
 	PM_EndMove();
 
 	// falling event

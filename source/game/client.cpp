@@ -1814,6 +1814,11 @@ void Client::runPMove( pmove_t *pm ) {
 		pm->skipLadders = true;
 	}
 
+	// TODO: Comparing structs via memcmp is a bug waiting to happen
+	if( std::memcmp( (const void *)&old_pmove, (const void *)&ps.pmove, sizeof( pmove_state_t ) ) != 0 ) {
+		pm->snapInitially = true;
+	}
+
 	// perform a pmove
 	Pmove( pm );
 

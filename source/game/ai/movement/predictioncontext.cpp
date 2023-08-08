@@ -1115,6 +1115,15 @@ void PredictionContext::NextMovementStep() {
 	pm.playerState = &playerStateForPmove;
 	botInput->CopyToUcmd( &pm.cmd );
 
+	// Skip for trajectory prediction
+	// TODO: Provide a cheaper PM_CalcGoodPosition subroutine as well
+#if 0
+	// TODO: Comparing structs via memcmp is a bug waiting to happen
+	if( std::memcmp( (const void *)&oldMinimalPlayerState->pmove, (const void *)&currMinimalPlayerState->pmove, sizeof( pmove_state_t ) ) != 0 ) {
+		pm.snapInitially = true;
+	}
+#endif
+
 	pm.cmd.angles[PITCH] = (short)ANGLE2SHORT( angles.Data()[PITCH] );
 	pm.cmd.angles[YAW]   = (short)ANGLE2SHORT( angles.Data()[YAW] );
 
