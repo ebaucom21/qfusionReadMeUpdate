@@ -12,48 +12,52 @@ Item {
         id: playerSettingsComponent
         PlayerSettings {}
     }
+    Component {
+        id: teamsSettingsComponent
+        TeamsSettings {}
+    }
+    Component {
+        id: graphicsSettingsComponent
+        GraphicsSettings {}
+    }
+    Component {
+        id: soundSettingsComponent
+        SoundSettings {}
+    }
+    Component {
+        id: mouseSettingsComponent
+        MouseSettings {}
+    }
+    Component {
+        id: keyboardSettingsComponent
+        KeyboardSettings {}
+    }
+    Component {
+        id: hudSettingsComponent
+        HudSettings {}
+    }
 
     // A safety guard
     Component.onDestruction: UI.ui.rollbackPendingCVarChanges()
 
-    WswTabBar {
+    CarouselTabBar {
         id: tabBar
         enabled: !UI.ui.hasPendingCVarChanges
-        background: null
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
 
-        onCurrentItemChanged: stackView.replace(currentItem.component)
+        onCurrentIndexChanged: stackView.replace(model[currentIndex]["component"])
 
-        WswTabButton {
-            readonly property var component: playerSettingsComponent
-            text: "Player"
-        }
-        WswTabButton {
-            readonly property var component: Component { TeamsSettings {} }
-            text: "Teams"
-        }
-        WswTabButton {
-            readonly property var component: Component { GraphicsSettings {} }
-            text: "Graphics"
-        }
-        WswTabButton {
-            readonly property var component: Component { SoundSettings {} }
-            text: "Sound"
-        }
-        WswTabButton {
-            readonly property var component: Component { MouseSettings {} }
-            text: "Mouse"
-        }
-        WswTabButton {
-            readonly property var component: Component { KeyboardSettings {} }
-            text: "Keyboard"
-        }
-        WswTabButton {
-            readonly property var component: Component { HudSettings {} }
-            text: "HUD"
-        }
+        model: [
+            {"text": "Player", "component" : playerSettingsComponent},
+            {"text": "Teams", "component" : teamsSettingsComponent },
+            {"text": "Graphics", "component" : graphicsSettingsComponent },
+            {"text": "Sound", "component" : soundSettingsComponent },
+            {"text": "Mouse", "component" : mouseSettingsComponent },
+            {"text": "Keyboard", "component" : keyboardSettingsComponent },
+            {"text": "HUD", "component" : hudSettingsComponent },
+        ]
     }
 
     StackView {

@@ -10,10 +10,6 @@ Rectangle {
 
     readonly property bool canShowLoadouts: UI.gametypeOptionsModel.available && !UI.hudDataModel.isSpectator
 
-    // Reserve some space for a slight default expansion of an active button
-    property real tabButtonWidth: (tabBar.width - 8) / (canShowLoadouts ? 4 : 3)
-    Behavior on tabButtonWidth { SmoothedAnimation { duration: 66 } }
-
     // Force redrawing stuff every frame
     ProgressBar {
         anchors.bottom: parent.bottom
@@ -23,45 +19,30 @@ Rectangle {
         Material.accent: parent.Material.background
     }
 
-    WswTabBar {
+    CarouselTabBar {
         id: tabBar
-        visible: stackView.depth < 2
-        width: mainPane.width
+        // Limit it to an uneven number for a nice alignment
+        pathItemCount: 3
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        background: null
-
-        Component.onCompleted: UI.ui.registerHudOccluder(tabBar)
-        Component.onDestruction: UI.ui.unregisterHudOccluder(tabBar)
-        onWidthChanged: UI.ui.updateHudOccluder(tabBar)
-        onHeightChanged: UI.ui.updateHudOccluder(tabBar)
-        onXChanged: UI.ui.updateHudOccluder(tabBar)
-        onYChanged: UI.ui.updateHudOccluder(tabBar)
-
-        WswTabButton {
-            readonly property var component: generalComponent
-            width: tabButtonWidth
-            text: "General"
-        }
-        WswTabButton {
-            readonly property var component: Component { InGameChatPage {} }
-            width: tabButtonWidth
-            text: "Chat"
-        }
-        WswTabButton {
-            readonly property var component: Component { InGameCallvotesPage {} }
-            width: tabButtonWidth
-            text: "Callvotes"
-        }
-        WswTabButton {
-            readonly property var component: Component { InGameGametypeOptionsPage {} }
-            visible: canShowLoadouts
-            width: visible ? tabButtonWidth : 0
-            text: UI.gametypeOptionsModel.tabTitle
-        }
-
-        onCurrentItemChanged: stackView.replace(currentItem.component)
+        width: canShowLoadouts ? Math.min(1.25 * mainPane.width, parent.width) : mainPane.width
+        height: implicitHeight
+        model: canShowLoadouts ? loadoutButtonsModel : regularButtonsModel
+        onCurrentIndexChanged: stackView.replace(model[currentIndex]["component"])
     }
+
+    readonly property var regularButtonsModel: [
+        {"text" : "General", "component": generalComponent},
+        {"text" : "Chat", "component" : chatComponent},
+        {"text" : "Callvotes", "component" : callvotesComponent},
+    ]
+
+    readonly property var loadoutButtonsModel: [
+        {"text" : "General", "component": generalComponent},
+        {"text" : "Chat", "component" : chatComponent},
+        {"text" : UI.gametypeOptionsModel.tabTitle, "component" : gametypeOptionsComponent},
+        {"text" : "Callvotes", "component" : callvotesComponent},
+    ]
 
     Item {
         id: mainPane
@@ -122,47 +103,29 @@ Rectangle {
         }
     }
 
-    onCanShowLoadoutsChanged: {
-        // TODO: Is there a better approach for the forceful page selection?
-        if (!canShowLoadouts) {
-            tabBar.setCurrentIndex(0)
-        }
-    }
-
     Keys.onPressed: {
-        if (!visible) {
-            return
-        }
-
-        let currentItem = stackView.currentItem
-        if (currentItem && currentItem.hasOwnProperty("handleKeyEvent")) {
-            let handler = currentItem.handleKeyEvent
-            if (handler && handler(event)) {
-                return
+        if (visible) {
+            const currentItem = stackView.currentItem
+            if (currentItem) {
+                // Check if the current item can handle the event on its own
+                const handler = currentItem["handleKeyEvent"]
+                if (handler && handler(event)) {
+                    return
+                }
+                if (event.key === Qt.Key_Escape) {
+                    event.accepted = true
+                    // Check if the current item can handle back navigation on its own
+                    const handler = currentItem["handleKeyBack"]
+                    if (handler && handler(event)) {
+                        return
+                    }
+                    if (tabBar.currentIndex) {
+                        tabBar.currentIndex = 0
+                    } else {
+                        UI.ui.returnFromInGameMenu()
+                    }
+                }
             }
         }
-
-        if (event.key !== Qt.Key_Escape) {
-            return
-        }
-
-        event.accepted = true
-        if (tabBar.currentIndex) {
-            tabBar.currentIndex = 0
-            return
-        }
-
-        if (stackView.depth === 1) {
-            UI.ui.returnFromInGameMenu()
-            return
-        }
-
-        let handler = stackView.currentItem.handleKeyBack
-        if (handler && handler()) {
-            return
-        }
-
-        // .pop() API quirks
-        stackView.pop(stackView.get(stackView.depth - 2))
     }
 }
