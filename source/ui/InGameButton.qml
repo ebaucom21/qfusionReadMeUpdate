@@ -5,12 +5,16 @@ import QtQuick.Controls.Material.impl 2.12
 import QtQuick.Layouts 1.12
 import net.warsow 2.6
 
+// TODO: Unify with SlantedGametypeOption
 Item {
     id: root
-    Layout.fillWidth: true
-    height: 40
+    implicitWidth: label.implicitWidth + iconPlaceholder.implicitWidth + 20 + 16
+    implicitHeight: 40
 
     property string text
+    property bool highlighted
+    // TODO: Hack, use different states for icon/alignment
+    property bool displayIconPlaceholder: true
 
     signal clicked()
 
@@ -50,7 +54,7 @@ Item {
         width: mouseArea.containsMouse ? parent.width + 16 : parent.width
         radius: 3
 
-        color: mouseArea.containsMouse ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.35)
+        color: mouseArea.containsMouse || root.highlighted ? Material.accentColor : Qt.lighter(Material.backgroundColor, 1.35)
 
         transform: Matrix4x4 { matrix: fullHeightTransformMatrix }
 
@@ -59,6 +63,7 @@ Item {
 
     Rectangle {
         id: iconPlaceholder
+        visible: root.displayIconPlaceholder
         anchors.left: body.left
         anchors.verticalCenter: body.verticalCenter
         anchors.leftMargin: 20
@@ -75,13 +80,13 @@ Item {
         anchors.verticalCenter: iconPlaceholder.verticalCenter
         anchors.leftMargin: 16
         text: root.text
-        font.pointSize: 13.5
+        font.pointSize: 12
         font.weight: Font.ExtraBold
         font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
         font.capitalization: Font.AllUppercase
 
         Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
 
-        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 16.0) }
+        transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 15.0) }
     }
 }

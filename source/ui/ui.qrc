@@ -22,7 +22,6 @@
         <file>DemoPlaybackMenu.qml</file>
         <file>DemosListDelegate.qml</file>
         <file>DemosPage.qml</file>
-        <file>GametypeCardOption.qml</file>
         <file>GametypeSlantedOption.qml</file>
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
@@ -56,7 +55,7 @@
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
         <file>InGameGametypeOptionsPage.qml</file>
-        <file>InGameGeneralPage.qml</file>
+        <file>InGameConfirmationPage.qml</file>
         <file>InGameHud.qml</file>
         <file>InGameMenu.qml</file>
         <file>KeyboardAndMouse.qml</file>

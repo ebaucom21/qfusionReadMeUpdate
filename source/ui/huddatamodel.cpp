@@ -1062,6 +1062,11 @@ void HudDataModel::checkPropertyChanges( int64_t currTime ) {
 		Q_EMIT matchStateStringChanged( m_matchStateString );
 	}
 
+	const bool wasInWarmupState = m_isInWarmupState;
+	if( wasInWarmupState != ( m_isInWarmupState = rawMatchState <= MATCH_STATE_WARMUP ) ) {
+		Q_EMIT isInWarmupStateChanged( m_isInWarmupState );
+	}
+
 	const bool wasInPostmatchState = m_isInPostmatchState;
 	if( wasInPostmatchState != ( m_isInPostmatchState = rawMatchState > MATCH_STATE_PLAYTIME ) ) {
 		Q_EMIT isInPostmatchStateChanged( m_isInPostmatchState );

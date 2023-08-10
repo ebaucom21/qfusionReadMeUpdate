@@ -23,6 +23,7 @@ MouseArea {
         anchors.centerIn: parent
         width: root.containsMouse ? root.width + 12 : root.width
         height: root.containsMouse ? root.height + 4 : root.height
+        radius: 3
         Behavior on width { SmoothedAnimation { duration: 333 } }
         Behavior on height { SmoothedAnimation { duration: 333 } }
         color: "transparent"
@@ -36,7 +37,7 @@ MouseArea {
         anchors.centerIn: parent
         width: shadowCaster.width
         height: shadowCaster.height
-        radius: 3
+        radius: shadowCaster.radius
         color: root.highlighted ? Material.accent : Qt.lighter(Material.background, 1.35)
         transform: Matrix4x4 { matrix: UI.ui.makeSkewXMatrix(height, 15.0) }
     }
@@ -70,8 +71,10 @@ MouseArea {
         maximumLineCount: 1
         elide: Text.ElideMiddle
         text: root.text
-        font.weight: Font.Medium
-        font.letterSpacing: 1
+        font.pointSize: 12
+        font.weight: Font.ExtraBold
+        font.letterSpacing: root.containsMouse ? 1.75 : 1.25
         font.capitalization: Font.AllUppercase
+        Behavior on font.letterSpacing { SmoothedAnimation { duration: 333 } }
     }
 }

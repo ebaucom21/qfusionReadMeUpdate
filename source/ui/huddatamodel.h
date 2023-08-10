@@ -290,6 +290,7 @@ class HudDataModel : public QObject {
 
 	int m_health { 0 }, m_armor { 0 };
 
+	bool m_isInWarmupState { false };
 	bool m_isInPostmatchState { false };
 
 	bool m_hasLocations { false };
@@ -380,6 +381,9 @@ public:
 	Q_PROPERTY( const QByteArray matchTimeMinutes MEMBER m_formattedMinutes NOTIFY matchTimeMinutesChanged );
 	Q_SIGNAL void matchStateStringChanged( const QByteArray &matchStateString );
 	Q_PROPERTY( const QByteArray matchStateString MEMBER m_matchStateString NOTIFY matchStateStringChanged );
+
+	Q_SIGNAL void isInWarmupStateChanged( bool isInWarmupState );
+	Q_PROPERTY( bool isInWarmupState MEMBER m_isInWarmupState NOTIFY isInWarmupStateChanged );
 
 	Q_SIGNAL void isInPostmatchStateChanged( bool isInPostmatchState );
 	Q_PROPERTY( bool isInPostmatchState MEMBER m_isInPostmatchState NOTIFY isInPostmatchStateChanged );

@@ -7,18 +7,9 @@ import net.warsow 2.6
 Item {
     id: root
 
-    property bool useOptionCards: false
-    readonly property real optionWidth: useOptionCards ? 72 + 16 : 72 + 24
-    readonly property real optionSpacing: useOptionCards ? 12 : 18
-    readonly property real maxOptionsPerRow: useOptionCards ? 5 : 3
-
-    ToolButton {
-        anchors.right: parent.right
-        anchors.top: parent.top
-        text: "Switch"
-        checkable: false
-        onClicked: useOptionCards = !useOptionCards
-    }
+    readonly property real optionWidth: 72 + 24
+    readonly property real optionSpacing: 18
+    readonly property real maxOptionsPerRow: 3
 
     readonly property var booleanOptionTexts: ["Off", "On"]
     readonly property var booleanOptionVals: [0, 1]
@@ -50,8 +41,8 @@ Item {
                 horizontalAlignment: Qt.AlignHCenter
                 text: title
                 font.weight: Font.Medium
-                font.pointSize: 13
-                font.capitalization: Font.AllUppercase
+                font.pointSize: 15
+                font.capitalization: Font.SmallCaps
                 font.letterSpacing: 1
             }
 
@@ -76,32 +67,16 @@ Item {
 
                         Repeater {
                             model: 2
-                            delegate: useOptionCards ? booleanCardOption : booleanSlantedOption
+                            delegate: GametypeSlantedOption {
+                                text: booleanOptionTexts[index]
+                                Layout.preferredWidth: optionWidth
+                                checked: booleanOptionPredicates[index](option.optionCurrent)
+                                iconPath: booleanOptionIcons[index]
+                                onClicked: UI.gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
+                            }
                         }
 
                         Item { Layout.fillWidth: true }
-
-                        Component {
-                            id: booleanCardOption
-                            GametypeCardOption {
-                                text: booleanOptionTexts[index]
-                                Layout.preferredWidth: optionWidth
-                                checked: booleanOptionPredicates[index](option.optionCurrent)
-                                iconPath: booleanOptionIcons[index]
-                                onClicked: UI.gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
-                            }
-                        }
-
-                        Component {
-                            id: booleanSlantedOption
-                            GametypeSlantedOption {
-                                text: booleanOptionTexts[index]
-                                Layout.preferredWidth: optionWidth
-                                checked: booleanOptionPredicates[index](option.optionCurrent)
-                                iconPath: booleanOptionIcons[index]
-                                onClicked: UI.gametypeOptionsModel.select(option.optionRow, booleanOptionVals[index])
-                            }
-                        }
                     }
                 }
 
@@ -123,32 +98,16 @@ Item {
                                 Repeater {
                                     model: rowIndex != Math.floor(option.optionModel / maxOptionsPerRow) ?
                                         maxOptionsPerRow : option.optionModel % maxOptionsPerRow
-                                    delegate: useOptionCards ? selectorCardOption : selectorSlantedOption
+                                    delegate: GametypeSlantedOption {
+                                        readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
+                                        checked: flatIndex === option.optionCurrent
+                                        iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
+                                        text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
+                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
+                                    }
                                 }
 
                                 Item { Layout.fillWidth: true }
-
-                                Component {
-                                    id: selectorCardOption
-                                    GametypeCardOption {
-                                        readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
-                                        checked: flatIndex === option.optionCurrent
-                                        iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
-                                        text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
-                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
-                                    }
-                                }
-
-                                Component {
-                                    id: selectorSlantedOption
-                                    GametypeSlantedOption {
-                                        readonly property int flatIndex: rowIndex * maxOptionsPerRow + index
-                                        checked: flatIndex === option.optionCurrent
-                                        iconPath: UI.gametypeOptionsModel.getSelectorItemIcon(option.optionRow, flatIndex)
-                                        text: UI.gametypeOptionsModel.getSelectorItemTitle(option.optionRow, flatIndex)
-                                        onClicked: UI.gametypeOptionsModel.select(option.optionRow, flatIndex)
-                                    }
-                                }
                             }
                         }
                     }

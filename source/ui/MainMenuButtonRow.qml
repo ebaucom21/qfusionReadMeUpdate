@@ -142,7 +142,7 @@ Item {
 			anchors.leftMargin: 12
 			anchors.rightMargin: 12
 			font.family: UI.ui.headingFontFamily
-			font.pointSize: 14
+			font.pointSize: 12
 			font.letterSpacing: mouseArea.containsMouse ? 1.75 : 1.25
 			text: root.text
 			font.weight: Font.ExtraBold
