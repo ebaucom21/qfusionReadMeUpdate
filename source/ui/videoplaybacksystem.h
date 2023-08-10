@@ -8,6 +8,9 @@
 #include "../qcommon/wswfs.h"
 #include "../qcommon/wswvector.h"
 
+extern "C" struct plm_t;
+extern "C" struct plm_buffer_t;
+
 namespace wsw::ui {
 
 class VideoSource;
@@ -18,21 +21,23 @@ class VideoDecoder : public QObject {
 	friend class VideoSource;
 	friend class VideoPlaybackSystem;
 
+public:
+	~VideoDecoder() noexcept override;
+
 	Q_SIGNAL void frameAvailable( QVideoFrame frame );
-
 	Q_SLOT void onUpdateRequested( int64_t timestamp );
-
-	[[nodiscard]]
-	auto decodeNextFrame() -> QImage;
+private:
+	static constexpr size_t kPlmBufferInitialCapacity = 1024 * 1024;
+	static void fillBufferCallback( plm_buffer_t *buffer, void *userData );
+	static void decodeVideoCallback( plm_t *plm, void *opaqueFrame, void *userData );
 
 	int64_t m_lastUpdateTimestamp { 0 };
-	int64_t m_frameTime { 32 };
-	VideoSource *const m_source;
-	wsw::fs::ReadHandle m_handle;
-	wsw::Vector<uint8_t> m_dataBuffer;
+	std::optional<wsw::fs::ReadHandle> m_fileHandle;
 
-	VideoDecoder( VideoSource *source, wsw::fs::ReadHandle &&handle )
-		: m_source( source ), m_handle( std::forward<wsw::fs::ReadHandle>( handle ) ) {}
+	uint8_t m_readFileBuffer[4 * 4096];
+
+	plm_t *m_plm { nullptr };
+	plm_buffer_t *m_plmBuffer { nullptr };
 };
 
 class VideoPlaybackSystem;
@@ -100,7 +105,7 @@ public:
 	void unregisterSource( VideoSource *source );
 
 	[[nodiscard]]
-	auto newDecoder( VideoSource *source, wsw::fs::ReadHandle &&handle ) -> VideoDecoder *;
+	auto createDecoderForPath( VideoSource *source, const QByteArray &path ) -> VideoDecoder *;
 
 	void update( int64_t timestamp );
 };

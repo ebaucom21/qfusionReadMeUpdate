@@ -1,3 +1,44 @@
+/*
+Copyright (C) 2023 Chasseur de Bots
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+*/
+
+// The video playback parts are derived from a reference code distributed under following terms
+
+/*
+Copyright(c) 2019 Dominic Szablewski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files(the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and / or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions :
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #include "videoplaybacksystem.h"
 
 #include <QThread>
@@ -7,8 +48,11 @@
 #include "../qcommon/links.h"
 #include "../qcommon/qcommon.h"
 #include "../qcommon/singletonholder.h"
-#include "../client/imageloading.h"
+#include "../qcommon/textstreamwriterextras.h"
 #include "local.h"
+
+#define PL_MPEG_IMPLEMENTATION
+#include "../../third-party/pl_mpeg/pl_mpeg.h"
 
 #include <QDebug>
 
@@ -24,15 +68,12 @@ void VideoSource::setFilePath( const QByteArray &filePath ) {
 		Status status = m_status;
 		if( filePath.isEmpty() ) {
 			status = Idle;
-		} else if( auto maybeHandle = wsw::fs::openAsReadHandle( wsw::StringView( filePath.data(), filePath.size() ) ) ) {
-			m_decoder = m_playbackSystem->newDecoder( this, std::move( *maybeHandle ) );
+		} else if( VideoDecoder *const decoder = m_playbackSystem->createDecoderForPath( this, filePath ) ) {
+			m_decoder = decoder;
 
-			connect( this, &VideoSource::updateRequested,
-					 m_decoder, &VideoDecoder::onUpdateRequested, Qt::QueuedConnection );
-			connect( this, &VideoSource::deleteDecoder,
-					 m_decoder, &VideoDecoder::deleteLater, Qt::QueuedConnection );
-			connect( m_decoder, &VideoDecoder::frameAvailable,
-					 this, &VideoSource::onFrameAvailable, Qt::QueuedConnection );
+			connect( this, &VideoSource::updateRequested, m_decoder, &VideoDecoder::onUpdateRequested, Qt::QueuedConnection );
+			connect( this, &VideoSource::deleteDecoder, m_decoder, &VideoDecoder::deleteLater, Qt::QueuedConnection );
+			connect( m_decoder, &VideoDecoder::frameAvailable, this, &VideoSource::onFrameAvailable, Qt::QueuedConnection );
 
 			status = Running;
 		} else {
@@ -136,63 +177,81 @@ void VideoSource::applyStatus( Status status ) {
 	}
 }
 
+VideoDecoder::~VideoDecoder() noexcept {
+	if( m_plm ) {
+		plm_destroy( m_plm );
+	}
+	if( m_plmBuffer ) {
+		plm_buffer_destroy( m_plmBuffer );
+	}
+}
+
 void VideoDecoder::onUpdateRequested( int64_t timestamp ) {
-	if( m_lastUpdateTimestamp + m_frameTime <= timestamp ) {
-		// Update it prior to decoding
-		m_lastUpdateTimestamp = timestamp;
-		Q_EMIT frameAvailable( QVideoFrame( decodeNextFrame() ) );
+	if( !plm_has_ended( m_plm ) ) {
+		if( const int64_t diffMillis = timestamp - m_lastUpdateTimestamp; diffMillis > 0 ) {
+			const double frameSeconds = wsw::min( (double)diffMillis * 1e-3, 1.0 / 30.0 );
+			// May call the decoder callback, which in turn emits frameAvailable()
+			plm_decode( m_plm, frameSeconds );
+		}
+	} else {
+		// Signal termination
+		Q_EMIT frameAvailable( QVideoFrame() );
 	}
+
+	m_lastUpdateTimestamp = timestamp;
 }
 
-[[nodiscard]]
-static auto findJpegEndFrameDelimiter( const uint8_t *__restrict data, unsigned dataSize ) -> std::optional<unsigned> {
-	if( dataSize > 1 ) {
-		unsigned i = 0;
-		do {
-			if( ( data[i] == 0xFF ) & ( data[i + 1] == 0xD9 ) ) {
-				return i + 2;
-			}
-		} while( ++i < dataSize - 1 );
+void VideoDecoder::fillBufferCallback( plm_buffer_t *buffer, void *userData ) {
+	plm_buffer_discard_read_bytes( buffer );
+
+	const size_t oldBufferSize = plm_buffer_get_size( buffer );
+	// Should not happen?
+	if( oldBufferSize >= kPlmBufferInitialCapacity ) {
+		uiWarning() << "Won't fill the buffer over the initial capacity";
+		return;
 	}
-	return std::nullopt;
+
+	const size_t totalBytesToRead = kPlmBufferInitialCapacity - oldBufferSize;
+	assert( totalBytesToRead <= kPlmBufferInitialCapacity );
+
+	// TODO: Can't we read directly into the PLM buffer
+	size_t totalBytesRead = 0;
+	auto *const decoder   = (VideoDecoder *)userData;
+	while( totalBytesRead < totalBytesToRead ) {
+		// Read exactly the number of bytes needed.
+		// While the buffer can grow internally at its own, this is not a desired behavior.
+		size_t bytesToReadThisStep = std::size( decoder->m_readFileBuffer );
+		if( totalBytesRead + bytesToReadThisStep > totalBytesToRead ) {
+			bytesToReadThisStep = totalBytesToRead - totalBytesRead;
+			assert( bytesToReadThisStep < std::size( decoder->m_readFileBuffer ) );
+		}
+		assert( decoder->m_fileHandle != std::nullopt );
+		if( !decoder->m_fileHandle->readExact( decoder->m_readFileBuffer, std::size( decoder->m_readFileBuffer ) ) ) {
+			uiError() << "Failed to read" << totalBytesToRead << "of file data";
+			break;
+		}
+		totalBytesRead += bytesToReadThisStep;
+		plm_buffer_write( buffer, decoder->m_readFileBuffer, bytesToReadThisStep );
+	}
+
+	assert( plm_buffer_get_size( buffer ) <= kPlmBufferInitialCapacity );
 }
 
-auto VideoDecoder::decodeNextFrame() -> QImage {
-	for(;; ) {
-		if( const auto maybeDelimiter = findJpegEndFrameDelimiter( m_dataBuffer.data(), m_dataBuffer.size() ) ) {
-			unsigned width = 0, height = 0;
-			uint8_t *bytes = wsw::decodeImageData( m_dataBuffer.data(), *maybeDelimiter, &width, &height, nullptr, 4 );
-			// This should be a circular buffer... but still, JPEG decoding is much more expensive than this memmove()
-			m_dataBuffer.erase( m_dataBuffer.begin(), m_dataBuffer.begin() + *maybeDelimiter );
-			if( bytes ) {
-				return QImage( bytes, width, height, QImage::Format_ARGB32, ::free );
-			}
-			return QImage();
-		}
+void VideoDecoder::decodeVideoCallback( plm_t *plm, void *opaqueFrame, void *userData ) {
+	auto *const decoder = (VideoDecoder *)userData;
+	auto *const frame   = (plm_frame_t *)opaqueFrame;
 
-		if( m_handle.isAtEof() ) {
-			(void)m_handle.rewind();
-			continue;
-		}
+	const auto sizeInBytes = (int)( frame->width * frame->height * 4 );
+	const auto lineStride  = (int)( frame->width * 4 );
+	const QSize frameSize( (int)frame->width, (int)frame->height );
 
-		// Append additional read bytes to the end of the buffer and continue finding the delimiter on the next step
+	// TODO: How to send 3 planes without this slow conversion
+	QVideoFrame qFrame( sizeInBytes, frameSize, lineStride, QVideoFrame::Format_ARGB32 );
+	qFrame.map( QAbstractVideoBuffer::WriteOnly );
+	plm_frame_to_argb( frame, qFrame.bits(), lineStride );
+	qFrame.unmap();
 
-		const auto oldSize = m_dataBuffer.size();
-		constexpr auto chunkSize = 16u * 4096u;
-		m_dataBuffer.resize( m_dataBuffer.size() + chunkSize );
-
-		const auto maybeBytesRead = m_handle.read( m_dataBuffer.data() + oldSize, chunkSize );
-		if( maybeBytesRead == std::nullopt ) {
-			return QImage();
-		}
-
-		const auto bytesRead = *maybeBytesRead;
-		if( bytesRead < chunkSize ) {
-			const auto unusedTailSize = ( chunkSize - bytesRead );
-			assert( m_dataBuffer.size() > unusedTailSize );
-			m_dataBuffer.resize( m_dataBuffer.size() - unusedTailSize );
-		}
-	}
+	Q_EMIT decoder->frameAvailable( qFrame );
 }
 
 static SingletonHolder<VideoPlaybackSystem> g_instanceHolder;
@@ -218,17 +277,69 @@ void VideoPlaybackSystem::unregisterSource( VideoSource *source ) {
 	wsw::unlink( source, &m_sourcesHead );
 }
 
-auto VideoPlaybackSystem::newDecoder( VideoSource *source, wsw::fs::ReadHandle &&handle ) -> VideoDecoder * {
-	auto *decoder = new VideoDecoder( source, std::move( handle ) );
+auto VideoPlaybackSystem::createDecoderForPath( VideoSource *source, const QByteArray &filePath ) -> VideoDecoder * {
+	const wsw::StringView pathView( filePath.data(), (size_t)filePath.size() );
+	if( !pathView.endsWith( wsw::StringView( ".mpeg" ), wsw::IgnoreCase ) ) {
+		uiError() << "The video path" << filePath << "must have a .mpeg extension";
+		return nullptr;
+	}
+
+	std::optional<wsw::fs::ReadHandle> maybeHandle = wsw::fs::openAsReadHandle( pathView );
+	if( !maybeHandle ) {
+		uiError() << "Failed to open the video file" << filePath;
+		return nullptr;
+	}
+
+	std::unique_ptr<VideoDecoder> decoder( new VideoDecoder );
+	// TODO: PLM error handling leaves a lot to be desired. We hope of never running into OOM.
+	decoder->m_plmBuffer = plm_buffer_create_with_capacity( VideoDecoder::kPlmBufferInitialCapacity );
+	plm_buffer_set_load_callback( decoder->m_plmBuffer, &VideoDecoder::fillBufferCallback, decoder.get() );
+	decoder->m_fileHandle = std::move( maybeHandle );
+	decoder->m_plm = plm_create_with_buffer( decoder->m_plmBuffer, 0 );
+
+	// Try figuring out whether we've managed to load valid data using retrieval of these properties
+
+	const int width        = plm_get_width( decoder->m_plm );
+	const int height       = plm_get_height( decoder->m_plm );
+	const double framerate = plm_get_framerate( decoder->m_plm );
+
+	bool hadValidationErrors = false;
+	if( width < 192 || width > 4096 ) {
+		uiError() << "The width of the video" << width << "is out of expected bounds";
+		hadValidationErrors = true;
+	}
+	if( height < 192 || height > 4096 ) {
+		uiError() << "The height of the video" << height << "is out of expected bounds";
+		hadValidationErrors = true;
+	}
+	if( framerate < 15.0 || framerate > 90.0 ) {
+		uiError() << "The framerate of the video" << framerate << "is out of expected bounds";
+		hadValidationErrors = true;
+	}
+	if( hadValidationErrors ) {
+		uiError() << "The video file" << filePath << "seems to be corrupt or having unsupported format";
+		return nullptr;
+	}
+
+	uiDebug() << wsw::named( "width", width ) << wsw::named( "height", height ) << wsw::named( "framerate", framerate );
+
+	plm_set_video_decode_callback( decoder->m_plm, (plm_video_decode_callback)&VideoDecoder::decodeVideoCallback, decoder.get() );
+
+	plm_set_loop( decoder->m_plm, 1 );
+	plm_set_audio_enabled( decoder->m_plm, 0 );
+	plm_set_video_enabled( decoder->m_plm, 1 );
+
+	// TODO: Protect from failure
 	if( !m_decoderThread ) {
 		m_decoderThread = new QThread;
 		m_decoderThread->start( QThread::NormalPriority );
 	}
+
 	decoder->moveToThread( m_decoderThread );
-	connect( decoder, &QObject::destroyed, this, &VideoPlaybackSystem::decoderDestroyed, Qt::QueuedConnection );
+	connect( decoder.get(), &QObject::destroyed, this, &VideoPlaybackSystem::decoderDestroyed, Qt::QueuedConnection );
 	assert( m_numActiveDecoders >= 0 );
 	m_numActiveDecoders++;
-	return decoder;
+	return decoder.release();
 }
 
 void VideoPlaybackSystem::decoderDestroyed( QObject * ) {

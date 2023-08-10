@@ -16,3 +16,6 @@
 [submodule "third-party/recastnavigation"]
 	path = third-party/recastnavigation
 	url = https://github.com/recastnavigation/recastnavigation.git
+[submodule "third-party/pl_mpeg"]
+	path = third-party/pl_mpeg
+	url = https://github.com/Warsow/pl_mpeg.git

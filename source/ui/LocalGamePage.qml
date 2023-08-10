@@ -117,7 +117,7 @@ Item {
                 SimpleVideoDecoration {
                     Layout.preferredWidth: gametypePage.expectedDetailsWidth
                     Layout.preferredHeight: gametypePage.expectedDetailsWidth * (9 / 16.0)
-                    filePath: "videos/gametypes/" + selectedGametypeName + ".mjpeg"
+                    filePath: "videos/gametypes/" + selectedGametypeName + ".mpeg"
                 }
                 Label {
                     Layout.preferredWidth: gametypePage.expectedDetailsWidth - 16
@@ -191,7 +191,7 @@ Item {
                 SimpleVideoDecoration {
                     Layout.preferredWidth: gametypePage.expectedDetailsWidth
                     Layout.preferredHeight: gametypePage.expectedDetailsWidth * (9 / 16.0)
-                    filePath: "videos/maps/" + selectedMapName + ".mjpeg"
+                    filePath: "videos/maps/" + selectedMapName + ".mpeg"
                 }
                 Label {
                     Layout.fillWidth: true
